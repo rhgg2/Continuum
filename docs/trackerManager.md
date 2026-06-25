@@ -12,14 +12,14 @@ automatically whenever mm or cm fires.
 | kind     | shape                                  | source                    |
 |----------|----------------------------------------|---------------------------|
 | `notes`  | dense array, index = lane              | mm notes (lane in metadata) |
-| `pb`     | singleton column or nil                | mm cc, msgType=`pb`       |
-| `pc`     | singleton column or nil                | mm cc, msgType=`pc`       |
-| `at`     | singleton column or nil                | mm cc, msgType=`at`       |
-| `ccs`    | sparse dict keyed by CC number         | mm cc, msgType=`cc`       |
+| `pb`     | singleton column or nil                | mm cc, evType=`pb`       |
+| `pc`     | singleton column or nil                | mm cc, evType=`pc`       |
+| `at`     | singleton column or nil                | mm cc, evType=`at`       |
+| `ccs`    | sparse dict keyed by CC number         | mm cc, evType=`cc`       |
 
-Every column has `events` (array sorted by **intent** ppq). `cc` columns
+Every column has `events` (array sorted by **logical** ppq). `cc` columns
 additionally carry `cc` (the controller number). Presentation order is a
-vm concern — tm imposes none.
+tv concern — tm imposes none.
 
 Poly-aftertouch (`pa`) events do **not** get their own column. They
 attach to the note column whose voice they modulate (see *PA binding*
@@ -34,7 +34,7 @@ under the `lane` key. Lane counts are stable across rebuilds via
 `cfg.extraColumns[chan].notes`, a per-channel high-water mark:
 
 - rebuild grows it when live allocation exceeds it;
-- lanes only shrink via explicit user action in vm.
+- lanes only shrink via explicit user action in tv.
 
 `extraColumns` is also the single source of "columns the user has opened
 per channel" — columns present in extras but not backed by events are
@@ -51,20 +51,24 @@ extraColumns[chan] = {
 
 ## Update manager (um)
 
-tm's private write-side object. All mutations — from vm and from tm's
-own rebuild-time housekeeping — funnel through `um`, which applies them
-to a local cache and accumulates mm-facing ops. `um:flush()` commits the
-batch in one `mm:modify` call. `um` is re-created once per rebuild, so
-its view of mm matches tm's own.
+tm's write side — a staging layer folded into tm's own scope (the source
+banners it `-- UPDATE MANAGER`), not a separate object. All mutations —
+from tv and from tm's own rebuild-time housekeeping — funnel through
+`tm:addEvent` / `tm:assignEvent` / `tm:deleteEvent`, which apply to a
+local cache (`byToken`, `byUuid`, per-channel `chans`) and accumulate
+mm-facing ops in `adds`/`assigns`/`deletes`. `tm:flush()` commits the
+batch in one `mm:modify` call. `reload()` rebuilds that cache from
+`mm:events()` — at module init and at the tail of every rebuild — so um's
+view of mm always matches tm's own.
 
-The sections below reference `um` by name because its frame and
-encoding choices (cents not raw, realised not intent) are the reason
-several conventions exist.
+The sections below reference um by name because its frame and encoding
+choices (cents not raw; realisation toward mm, logical at the public
+surface) are the reason several conventions exist.
 
 ## Pitchbend: tm's role in the tuning model
 
 See `docs/tuning.md` for the cross-cutting model — detune as intent,
-pb as realisation, the fake-pb absorber invariant, and the
+pb as realisation, the absorber invariant, and the
 orthogonality rule. tm is where the model is implemented. The
 tm-specific facts:
 
@@ -73,22 +77,22 @@ tm-specific facts:
   and at flush (`centsToRaw`). The cents window is
   `cm:get('pbRange') * 100` per side.
 - **Lane-1 drives detune.** Every note has a `detune` field, but
-  only lane-1 notes feed the pb-realisation logic — `detuneAt` /
-  `detuneBefore` walk only `chans[chan].notes`, which is built from
-  lane-1 entries (see `addLowlevel`). Higher lanes' detune is dead
-  data for realisation purposes; it survives so display layers and
-  any future lane-promotion paths can read it back.
-- **Fake-pb persistence.** Absorbers carry `fake=true` as cc
-  metadata via `mm:assignCC` / `mm:addCC`'s lazy-sidecar path. Fake
-  pbs are hidden from the pb column unless an interp shape pulls
-  them into view (`hidden = cc.fake and (shape==nil or 'step')`);
-  the host note for delay inheritance is the lane-1 note at exactly
-  `cc.ppq` whenever `cc.fake` is set.
-- **Helpers.** `markFake` / `unmarkFake` toggle the flag;
-  `reconcileBoundary` runs the both-directions absorber check
-  (drop-redundant + seat-missing) after every detune mutation that
-  crosses a seat. The host note carries no marker — it's recovered
-  geometrically.
+  only lane-1 notes feed the pb-realisation logic — `detuneAt` walks
+  only `chans[chan].notes`, which is built from lane-1 entries (see
+  `addLowlevel`). Higher lanes' detune is dead data for realisation
+  purposes; it survives so display layers and any future
+  lane-promotion paths can read it back.
+- **Absorber persistence.** Absorbers carry `derived='absorber'` as
+  pb metadata via mm's lazy-sidecar path. They are hidden from the pb
+  column unless an interp shape pulls them into view
+  (`hidden = pb.derived and (shape==nil or shape=='step')`); the host
+  note for delay inheritance is the lane-1 note at the absorber's seat
+  (`pb.ppq`), recovered geometrically — the host carries no marker.
+- **No per-mutation upkeep.** There is no `markFake`/`reconcileBoundary`
+  machinery: absorbers are not maintained on each edit. Rebuild step 4.9
+  reseats the whole absorber set against the final post-walk lane-1
+  layout, so a detune edit just writes `n.detune` and lets the next
+  rebuild reconcile.
 
 ### Implementation invariants
 
@@ -104,50 +108,54 @@ mechanism did:
 - **I7 — Delay topology.** A pure delay change on a lane-1 note
   shifts the absorber along with the host. Pb count and the
   logical stream are preserved; only the realised ppq of host and
-  absorber move together. Implemented by routing delay changes
-  through `realiseNoteUpdate` → `resizeNote`, which deletes the
-  fake at the old seat and reconciles a fresh one at the new seat.
+  absorber move together. Delay edits route through
+  `realiseNoteUpdate` → `resizeNote` (which moves the host's raw
+  onset); rebuild step 4.9 then reseats the absorber to the new seat.
 - **I8 — Round-trip stability.** flush → rebuild → flush produces
-  an identical pb dump. `fake=true` survives via cc-sidecar
-  metadata; absorbers inherit host delay at rebuild so `tidyCol`
-  shifts host and absorber into intent together.
+  an identical pb dump. `derived='absorber'` survives via pb-sidecar
+  metadata; an absorber's seat is the host's lane-1 onset, so step 5
+  projects host and absorber onto the same logical row together.
 
-Mutation entry points that touch detune realisation —
-`addNote`, `assignNote`-detune, `resizeNote`, `deleteNote` — all
-gate on `n.lane == 1` to uphold I3. The fake-pb cleanup,
-`retuneLowlevel`, and `reconcileBoundary` calls are lane-1-only.
+Only lane-1 notes drive detune realisation (I3), enforced in rebuild's
+absorber pass (step 4.9): it reads only lane-1 onsets, so higher-lane
+detune never reaches the pb stream. Mutation entry points (`addNote`,
+`assignNote`, `resizeNote`, `deleteNote`) write detune as plain
+metadata; the next rebuild does the realisation.
 
 ## Where tm sits in the timing model
 
-See `docs/timing.md` for the three-frame model (logical / intent /
-realisation) and the full conversion stack. tm's role in it:
+See `docs/timing.md` for the two-frame model (logical / realisation,
+connected by swing) and the full conversion stack. Delay is a per-note
+offset on the raw note-on, not a frame of its own. tm's role:
 
-- **Public surface is intent.** Channel events expose intent ppq,
-  sorted by intent ppq; `endppq` is intent at every layer.
-- **`um` and rebuild work in realisation** — REAPER's storage frame.
-  `tidyCol` is the sole shift into intent at rebuild's tail;
-  `um:addEvent` / `um:assignEvent` add delay back on writes to mm.
+- **Public surface is logical.** Channel events expose logical ppq,
+  sorted by logical ppq; `endppq` leaves as the authored logical
+  ceiling (`endppqL`, or `util.OPEN`).
+- **um and rebuild work in realisation** — REAPER's storage frame.
+  Rebuild step 5 (`projectToLogical`) is the sole shift to logical at
+  rebuild's tail; `tm:addEvent` / `tm:assignEvent` translate logical to
+  raw (adding delay back) on writes to mm.
 
-A delay change with no ppq update pins intent and shifts realised
-onset by the delta (`realiseNoteUpdate`).
+A delay change with no ppq update pins the logical onset and shifts the
+realised onset by the delta (`realiseNoteUpdate`).
 
-Fake pbs inherit their host note's `delay` at rebuild time so
-`tidyCol` shifts host and absorber into intent together. Without
-this, a delayed note and its absorber would desynchronise at the vm
-boundary.
+An absorber's seat is its host's lane-1 onset, so step 5 projects host
+and absorber onto the same logical row. Without this a delayed note and
+its absorber would desynchronise at the tv boundary.
 
 ## Swing
 
-tm is only a registry here: `cfg.swing` (global) and `cfg.colSwing[c]`
-(per column) hold slot names referring into `cfg.swings`. The
+tm is only a registry here. The named-swing library lives in
+`cm:get('swings')`; per-channel assignments live in `ds:get('swing')`
+(`chan → name`); `cm:get('defaultSwing')` is the global fallback. The
 semantics — what a slot *is*, how factors compose, how
-logical↔intent works — live in `docs/timing.md`.
+logical↔realisation works — live in `docs/timing.md`.
 
-`tm:swingSnapshot(override)` hands callers a frozen view of the
-currently registered swing with `fromLogical`/`toLogical` closures
-ready to use. Pass `override` to substitute alternative slot names or
-shadow the library (preset edits need the authoring and target
-composites for the same name side-by-side).
+tm exposes the resolved transforms as `tm:fromLogical(chan, ppqL, off)`
+and `tm:toLogical(chan, ppq)`, cached per `(cm, mm)` in `swingSnap` and
+cleared at the head of each rebuild (`clearSwing`). `tm:markSwingStale`
+flags channels whose resolved swing changed so the next rebuild
+rederives their raw ppqs from `ppqL`.
 
 ## Mutation contract
 
@@ -157,20 +165,22 @@ rebuild, **don't cache `loc` values across a flush** — their validity
 ends there.
 
 ```
-tm:addEvent(type, evt)               -- local apply + stage add
-tm:assignEvent(type, evt, upd)       -- local apply + stage assign
-tm:deleteEvent(type, evt)            -- local apply + stage delete
+tm:addEvent(evt)                     -- local apply + stage add
+tm:assignEvent(evt, update)          -- local apply + stage assign
+tm:deleteEvent(evt)                  -- local apply + stage delete
 tm:flush()                           -- commit staged ops in one mm:modify
 ```
 
 Semantics:
 
-- **Rejected updates.** Changing a note's `chan` or `lane` via
-  `assignEvent` is rejected (prints a warning and drops the call).
+- **Rejected updates.** Changing a note's `lane` via `assignEvent` is
+  rejected (prints a warning, drops the call) — column membership is
+  rebuild-owned. A `chan` change is accepted; rebuild's absorber pass
+  reconciles fakes across both channels.
 - **Single voice per (chan, pitch) — realised space.** MIDI permits
   one voice per `(chan, pitch)`, so a realised collision must shorten
-  or drop a note regardless of intent geometry. vm writes authored
-  intent verbatim; `tm:rebuild` step 4.8 (universal tail walk,
+  or drop a note regardless of intent geometry. tv writes authored
+  logical verbatim; `tm:rebuild` step 4.8 (universal tail walk,
   grouped by pitch within channel) is the sole gate — it clamps each
   note's realised onset against the next same-pitch onset and
   surfaces the divergence as `endppq ≠ endppqC` in the projection.
@@ -180,9 +190,9 @@ Semantics:
   `rawTime = true` on the payload — `tm:rescaleLength`'s
   plan-then-mutate path is the sole such caller; the flag is consumed
   in realise so it never reaches mm.
-- **Detune changes (col-1 notes).** `assignNote` seats a pb at the
-  boundary if needed, retunes the raw stream forward to the next note,
-  then drops the boundary if it became redundant.
+- **Detune changes (lane-1 notes).** `assignEvent` writes the new
+  detune as plain metadata; rebuild step 4.9 reseats absorbers and
+  recomputes the raw pb stream from the final post-walk layout.
 - **PA follows host.** Resizing or moving a note shifts attached PAs
   with it when the shift preserves the window; otherwise PAs outside
   the new window are deleted and the last trimmed PA's value becomes
@@ -190,9 +200,9 @@ Semantics:
   distinct from `P2`: for an open tail `stampEndppq` plants a provisional
   raw note-off (`ppq+1`) that the tail pass later overwrites, so culling
   against `P2` would drop every PA past the onset.
-- **Fake-pb housekeeping.** Adding a pb unmarks fake on the affected
-  boundary; deleting one either really deletes or re-marks fake
-  depending on whether detune and neighbour detune agree.
+- **Pb edits don't maintain absorbers.** Adding or deleting a real pb
+  stages only that pb; the absorber set is reconciled wholesale by
+  rebuild step 4.9, never adjusted per-edit.
 - **Flush re-entrancy.** `flush` snapshots and clears `adds/assigns/
   deletes` **before** calling `mm:modify`, because mm's callbacks can
   reach back into the same um (e.g. via `setMutedChannels`). Without
@@ -217,72 +227,68 @@ retaining tv's last rendered frame. This is the same liveTake guard every
 other mm consumer applies; without it a foreign-track `configChanged` fired
 during arrange's take-delete sequence would crash on a nil resolution.
 
-Steps:
+The step numbers are historical labels — steps were inserted between
+existing ones over time, so numeric order is not execution order.
+Execution order, with a pointer to each step's detail:
 
-1. **Seed + normalise notes.** Walk mm notes once. Any note lacking
-   `detune`/`delay` is seeded with `0` via metadata-only `assignNote`
-   (no lock). Under `trackerMode`, missing `sample` is also seeded —
-   from the prevailing PC at the note's realised onset (or `0` if no
-   prior PC). Same rule serves the on-toggle reverse-derive and the
-   steady-state default. Build `(chan,pitch)` groups, then truncate
-   overlaps under a single `mm:modify` so every subsequent walk sees
-   clean intervals.
-2. **Allocate lanes.** A *stamped* note (`ppqL ~= nil`: authored
-   tracker data) is model-governed — the universal tail pass clips its
-   realised note-off to its lane neighbour, so it can never overlap;
-   `allocateNoteColumn` returns its authored `note.lane` verbatim,
-   pushing columns until it exists. Only an *unstamped* raw note
-   (`ppqL == nil`: foreign-MIDI import) runs first-fit and spills to a
-   new column. Lane changes write back via `mm:assignNote`.
-3. **Single CC walk.** Distributes by `msgType`:
-   - `pb` — emit logical-cents events with detune context and hidden
-     flag; accumulate per channel so the column installs only when at
-     least one event is visible.
-   - `pa` — attach to note column containing `(pitch, ppq)`.
-   - `cc` — append to `ccs[cc]`.
-   - `at` / `pc` — append to the channel's singleton column.
-
-   All four branches go through `projectCC(cc, loc, overlay)`, which
-   strips only the routing fields the destination col owns
-   (`chan`, `msgType`, `cc`) and overlays the per-msgType derived
-   fields. Anything else on the source — including custom metadata
-   fields not yet known here — rides through verbatim. The strip set
-   is rule-based, not a fixed allowlist, so future event metadata
-   reaches `col.events` without changes to this layer.
+0. **Partition into internal / external.** Split mm notes into stamped-
+   and-consistent *internals* and foreign-or-diverged *externals*, parse
+   derived fxNotes out, and set up carrier routing from the prior
+   rebuild. → § Rebuild: step 0.
+2. **Allocate internal lanes.** Each stamped internal clones into its
+   authored lane via `pickStampedLane`, which pushes columns until that
+   lane exists and returns it verbatim (the tail walk clips its note-off,
+   so it can never overlap). Externals are placed later, at step 6.
+3. **Single CC walk.** Reconcile each non-derived CC's `(raw, ppqL)` under
+   the current swing, then project `cc`/`at`/`pc` into columns. pb column
+   projection is deferred to 4.9, pa dispatch to 6.5. → § Rebuild: step 3.
 4. **Reconcile extras.** Grow `extraColumns[chan].notes` if live
-   allocation exceeded it; pad empty note lanes; materialise
-   user-opened singletons/ccs that carry no events. Writes back via
-   `cm:set` if the high-water mark grew.
-4.6. **Macro expansion.** Each lane-1 note carrying `fx` runs its
-   generator (`generators.<kind>`, a pure module); the derived `fxNote`s
-   reconcile against the set parsed out at step 0 — `reconcileFx`: keep
-   geometry-identical, add new, drop stale, mirroring `reconcilePCsForChan`
-   at the note level. fxNotes carry `derived = <hostUuid>` and route out
-   of columns (invisible to vm, the absorber pass, render), but union
-   into the tail walk — so the host's realised tail truncates to fxNote 2
-   and fxNotes clip each other with no bespoke truncation — and into PC
-   synthesis, carrying the host's `sample`. See `design/note-macros.md`.
-   After reconcile, `fxLive` (the post-expansion derived set the tail walk
-   and PC synthesis consume) is rebuilt by re-scanning `mm:notes()` for fresh
-   tokens — but only when reconcile actually churned the take. On a no-churn
-   rebuild the derived set is untouched, so `fxExisting` (gathered at step 0)
-   already lists it with current tokens, and the full re-scan is skipped.
-4½. **PC synthesis (trackerMode only).** For each channel, group lane
-   events (still in realised frame here, so `realised(n) = n.ppq`
-   directly) by realised ppq. Leftmost lane wins: its sample becomes
-   the PC val, others get `n.sampleShadowed = true` for renderer
-   dimming. Synthesised PCs land at realised ppq with `delay=0`, so
-   tidyCol below is a no-op for them. The reconcile helper
-   (`reconcilePCsForChan`) carries locs forward where `(ppq, val)`
-   matches existing fake PCs — steady state writes nothing. After the
-   `mm:modify`, mm's reindex moves PC locs around (sort by `(ppq,
-   chan, ...)`), so `c.pc.events` is refreshed from a fresh
-   `mm:ccs()` walk to give flush-time reconciles stable locs.
-5. **tidyCol.** Strip delay into intent frame and sort each column's
-   events by intent ppq.
+   allocation exceeded it; pad empty note lanes; materialise user-opened
+   singleton/cc columns that carry no events. Writes back via `ds:assign`
+   if the high-water mark grew.
+4.7. **Reseat stale-swing notes.** For channels in `staleSwing`, rederive
+   each note's `raw` from its `ppqL` under the new swing (see
+   `docs/timing.md` §"Rebuild rule"). CCs are reseated by step 3; the raw
+   note-off is owned by step 4.8, never here.
+4.6. **Macro expansion.** Every note (any lane) carrying `fx` runs its
+   generator; the derived fxNotes reconcile against the step-0 set
+   (`reconcileFx`), and continuous deltas colour into carrier CC codes.
+   The post-expansion derived set `fxLive` feeds the tail walk and PC
+   synthesis. fxLive is re-scanned from `mm:notes()` for fresh tokens only
+   when the reconcile actually churned the take; on a no-churn rebuild the
+   step-0 `fxExisting` already lists the set with current tokens, so the
+   re-scan is skipped. See `design/note-macros.md`.
+6. **Reintroduce externals.** In raw-ppq order, pack each external a lane
+   against the now-settled internals, stamp `ppqL`/`endppqL` from raw, and
+   backfill missing metadata. → § Rebuild: step 6.
+4.8. **Unified tail/onset walk.** Clamp same-pitch onset collisions, then
+   clip each internal's realised note-off against its same-lane and
+   same-pitch successors. Externals are blockers only — never written.
+   → § Rebuild: step 4.8.
+4.9. **Absorber reconciliation + pb resynthesis.** Reseat absorber pbs
+   against the post-walk lane-1 layout, recompute their raw
+   vals, and project the pb column. See `docs/tuning.md` § Absorber
+   reconciliation.
+6.5. **PA dispatch.** Attach each `pa` to the note column whose voice it
+   modulates. Runs after step 6 so foreign-MIDI PAs can find their host.
+4.5. **PC synthesis (trackerMode only).** Re-derive each channel's PC
+   stream from current note state. Runs here, after externals, so a
+   foreign-MIDI note inherits its sample from the prevailing PC.
+   → § PC synthesis under trackerMode.
+5. **Project to logical.** Shift every column event onto the logical frame
+   (`evt.ppq = evt.ppqL`), derive the `delayC`/`endppqC` render cues, and
+   sort each column by logical ppq. → § Rebuild: step 5.
 
-Then `um = createUpdateManager()` and tm fires the `'rebuild'` signal
-(no payload).
+All projection runs through `projectCC(cc, token, overlay)`: it clones the
+source event, strips only `chan` and `cc`, and applies the caller's
+`overlay` of derived fields. Everything else — including metadata not
+known here — rides through verbatim, so new event fields reach
+`col.events` without a change to this layer.
+
+Then `reload()` reloads tm's local cache from mm and clears the staging
+buffers, and tm fires the `'rebuild'` signal carrying the `takeChanged`
+boolean — true only when this rebuild followed a `bindTake` (a take-tier
+reload).
 
 The universal tail pass (step 4.8) resolves each note's realised
 note-off against its same-lane and same-pitch successors. The "strict
@@ -317,28 +323,28 @@ bug that leaked synthetic PCs onto a non-tracker take's note-ons).
 
 Synthesis runs in two places:
 
-- **Rebuild step 4½** does the full sweep: re-derives every channel's
+- **Rebuild step 4.5** does the full sweep: re-derives every channel's
   PC stream from current note state and writes the delta to mm.
-- **Flush-time reconcile** (in `um:flush`, gated on `dirtyPcChans`)
+- **Flush-time reconcile** (in `flush()`, gated on `dirtyPcChans`)
   does the same per-channel for any channel whose notes mutated since
   the last flush. `addNote`, `deleteNote`, and `assignNote` updates
   to `sample` / `ppq` (where ppq covers delay too — `realiseNoteUpdate`
   maps delay→ppq before assignNote sees it) all dirty the channel.
 
-Both call sites build a `records` list `{ ppq, lane, sample, key }`
-from their available source (lane events for rebuild; `notesByLoc` +
-pending adds for flush) and feed it through the same pure
-`reconcilePCsForChan` helper. The `key` is a record-identity opaque
-to the helper — callers receive a `shadowed` set keyed by it and
-stamp `sampleShadowed = true` on whichever object should render
-dimmed. At flush time that's the lane event found via a one-pass
-`loc → laneEvent` cross-walk; at rebuild it's the lane event itself.
+Both call sites build a `records` list from their available source
+(lane events for rebuild; `byToken` notes + pending adds for flush) and
+feed it through the same pure `reconcilePCsForChan` helper. Only the
+rebuild path passes a `key` (the lane event itself), so only it receives
+the shadow marking — records lost to lane priority get
+`sampleShadowed = true` for renderer dimming. The flush path builds
+keyless records: it refreshes the PC stream but marks no shadows (the
+next rebuild re-derives them).
 
-Group membership is by **realised** ppq, not intent — same-channel
+Group membership is by **realised** ppq, not logical — same-channel
 simultaneity is a MIDI-realisation constraint (one PC stream per
 channel at any moment), so the leftmost-wins rule fires only when
 realised onsets actually collide. Notes split apart by delay get
-their own PC each, even if their intent ppqs match.
+their own PC each, even if their logical ppqs match.
 
 ## Column allocation rules
 
@@ -378,48 +384,31 @@ with no matching pitch anywhere in the channel are dropped.
 
 ## Muting
 
-vm owns the effective mute set (persistent mute ∪ solo-implied mute)
+tv owns the effective mute set (persistent mute ∪ solo-implied mute)
 and pushes it via `tm:setMutedChannels(set)`. tm:
 
 - stores it in `lastMuteSet` (used to tag later-added notes in um);
 - idempotently syncs REAPER's native muted flag on every existing note
   through `um:assignEvent`, then flushes.
 
-Mute state is a vm-side concern — it **does not** trigger a structural
+Mute state is a tv-side concern — it **does not** trigger a structural
 rebuild (see `vmOnlyKeys`).
-
-## Aliases
-
-tm holds the alias substrate: the spec-tree walker that runs inside
-`rebuild`, two side tables (`specOf` keyed by uuid, `nodeMeta` keyed
-by spec-node identity) for in-memory navigation, and the routing /
-severance / cascade-delete primitives consumed by vm. The model and
-the contract for each primitive are in `docs/aliases.md`. Two
-tm-local commitments worth recording here:
-
-- **Side-table lifetime.** Both maps are cleared at the head of every
-  `rebuild` and rebuilt by the walker. They never persist. Code outside
-  tm reaches them only through `tm:specOf` / `tm:nodeMeta`; reaching
-  past those accessors couples to the rebuild boundary.
-- **Mutation primitives flush nothing.** `tm:routeRelative`,
-  `tm:severBatch`, `tm:sever`, `tm:deleteAliased`, `tm:createAlias`
-  stage ops on `um` and return. The caller drives a single `tm:flush`
-  across a batch, so a structural delete that promotes ten children
-  flushes once.
 
 ## Conventions
 
 - **Channels 1..16**, inherited from mm.
-- **Ppq throughout.** Intent frame at the vm boundary, realised frame
+- **Ppq throughout.** Logical frame at the tv boundary, realised frame
   inside um and toward mm. `timing.delayToPPQ` is the sole converter.
 - **pb.val in cents** inside tm; raw conversion only at load and flush.
-- **Fake pb flag.** `pb.fake` is the sole marker (persisted as cc
-  metadata); always toggle through `markFake`/`unmarkFake`.
+- **Absorber marker.** `pb.derived == 'absorber'` is the sole marker
+  (persisted as pb metadata); reconciled by rebuild step 4.9, never
+  toggled per-edit.
 - **`util.REMOVE`** as a value in `assignEvent` deletes the field
   (passed through to mm).
-- **Location lifetime.** `loc` values are valid only within a single
-  rebuild-to-flush window; um's `notesByLoc` / `ccsByLoc` are rebuilt
-  fresh each rebuild.
+- **Token lifetime.** A `token` is content-keyed and re-keyed each
+  rebuild, valid only within one rebuild-to-flush window; um's
+  `byToken` / `byUuid` caches are rebuilt fresh each rebuild. Use `uuid`
+  (`tm:byUuid`) for a durable cross-rebuild handle.
 
 ## Staged-update bounds
 
@@ -467,8 +456,8 @@ Copies whose shifted ppq lands at-or-past `newPpq` are dropped; note
 Shrinks fall through to `setLength`.
 
 Walks mm-level events directly rather than column-projected ones because
-projection strips fields a verbatim replica needs (cc number, pb fake
-flag, user metadata). Since `oldPpq` sits on a swing-period boundary
+projection strips fields a verbatim replica needs (cc number, pb derived
+marker, user metadata). Since `oldPpq` sits on a swing-period boundary
 (take length aligns to QN), shifting by `k·oldPpq` is identical in
 logical and realised frames — one delta serves both `ppq` and `ppqL`
 paths.
@@ -490,7 +479,7 @@ retain the intent. This divergence is intentional and surfaces as
 
 ## Rebuild: step 3 — CC walk
 
-Reconciles each non-fake CC's `(raw, ppqL)` under the current swing, then
+Reconciles each non-derived CC's `(raw, ppqL)` under the current swing, then
 projects non-pb CCs into columns:
 
 - `staleSwing[chan]`: ppqL is truth; reseat `raw = fromLogical(ppqL)`.
@@ -501,10 +490,10 @@ Reconcile updates are mutated into the live cc record so the subsequent
 column-event clone sees up-to-date values; `mm:assign` propagates them at
 the end of the walk.
 
-Fakes are handled separately: fake pbs by step 4.9 (whole absorber pass
-against post-walk lane-1 layout); fake PCs by step 4.5. Pb column
-projection is deferred to step 4.9 so it sees the final reconciled fakes
-and recomputed raw vals.
+Derived events are handled separately: absorber pbs by step 4.9 (whole
+absorber pass against post-walk lane-1 layout); synthesised PCs by
+step 4.5. Pb column projection is deferred to step 4.9 so it sees the
+final reconciled absorbers and recomputed raw vals.
 
 ## Rebuild: step 6 — externals
 

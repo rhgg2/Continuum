@@ -297,34 +297,6 @@ touching the user clipboard: it calls `clipboard:collect()` and
 off, not the end — so selection follows and repeated invocations stack
 cleanly.
 
-## Aliases
-
-vm's contact with the alias machinery is one derived index and a set
-of routing decisions in editing commands. The model proper lives in
-`docs/aliases.md`.
-
-`aliasIdx` is a per-rebuild visual index, keyed by uuid (record gives
-grid coordinates plus `treeParent`) and by `treeParent` (sorted list of
-records). `treeParent` is the **spec-tree** parent uuid — the root for
-top-level aliases, an intermediate alias for nested ones — derived
-from `tm.nodeMeta`, not from `evt.parentUuid` (which always points at
-the root because the walker emits flat). Consumers are alias-tree
-navigation and the transient focus highlight.
-
-Editing commands route through tm's primitives:
-
-- **Relative edits** (nudge, shift, scale, quantize) call
-  `tm:routeRelative`, which composes into the spec node's xform. Each
-  command knows the field-and-op map it wants; vm threads coupled
-  fields (e.g. `ppqL` + `durL` under `scale`) in a single call.
-- **`quantizeKeepRealised`** severs aliased planned events before
-  writing — the realised-preservation promise rides on per-emit delay,
-  which the alias vocabulary does not carry.
-- **`scale` and similar selection-shape mutators** filter through
-  `aliases.localRoots` so a descendant whose parent is also selected
-  is skipped; the parent's mutation re-derives it through the spec
-  tree.
-
 ## Quantize
 
 vm exposes paired domain verbs `vm:quantize{Selection,All}` and
