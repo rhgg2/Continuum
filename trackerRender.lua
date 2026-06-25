@@ -1788,14 +1788,15 @@ end
 local renderer = {}
 
 
------ Note FX editor (retrig + vibrato + slide)
+----- Note FX editor (retrig + trill + vibrato + slide)
 
 -- Three toggleable sections (one per kind); FX_FIELDS is pure data so a new kind ships a
 -- generator + one entry. Cursor: Up/Down pick a row, Left/Right adjust. see design/note-macros.md § UI.
-local FX_KINDS    = { 'retrig', 'vibrato', 'slide' }
-local KIND_LABELS = { retrig = 'Retrig', vibrato = 'Vibrato', slide = 'Slide' }
+local FX_KINDS    = { 'retrig', 'trill', 'vibrato', 'slide' }
+local KIND_LABELS = { retrig = 'Retrig', trill = 'Trill', vibrato = 'Vibrato', slide = 'Slide' }
 local FX_DEFAULTS = {
   retrig  = { kind = 'retrig',  period = { 1, 4 }, ramp  = 0 },
+  trill   = { kind = 'trill',   period = { 1, 4 }, step  = 2 },
   vibrato = { kind = 'vibrato', period = { 1, 2 }, depth = 30, onset = 1 },
   slide   = { kind = 'slide',   over   = { 1, 2 }, target = 'next' },
 }
@@ -1813,6 +1814,10 @@ local FX_FIELDS = {
   retrig = {
     { field = 'period', label = 'Period', widget = 'choice', options = PERIODS },
     { field = 'ramp',   label = 'Ramp',   widget = 'int', base = 1, coarse = 10, min = -127, max = 127 },
+  },
+  trill = {
+    { field = 'period', label = 'Period', widget = 'choice', options = PERIODS },
+    { field = 'step',   label = 'Step',   widget = 'int', base = 1, coarse = 12, min = -24, max = 24 },  -- signed scale steps
   },
   vibrato = {
     { field = 'period', label = 'Period', widget = 'choice', options = PERIODS },

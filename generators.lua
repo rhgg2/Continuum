@@ -7,7 +7,7 @@
 
 --invariant: pure module -- no module-level state; a generator is fn(host, params, ctx) -> { notes, delta }
 --invariant: host = { window={startppqL,endppqL}, events={note,...}, id=uuid, chan }
---invariant: ctx binds resolution, pbRangeCents, nextLane1Note(host) -- flush-time
+--invariant: ctx binds resolution, pbRangeCents, nextLane1Note(host), step(pitch,detune,n) -- flush-time
 --invariant: periods are QN per the periodQN convention -- scalar or {num,den}
 --shape: result = { notes = { {ppqL,endppqL,pitch,vel,detune}, ... }, delta = { {ppqL,val,shape,[tension]}, ... } }
 
@@ -34,6 +34,29 @@ function M.retrig(host, params, ctx)
       pitch   = h.pitch,
       vel     = math.max(1, math.min(127, h.vel + i * ramp)),
       detune  = h.detune or 0,
+    }
+    i = i + 1
+  end
+  return { notes = notes, delta = {} }
+end
+
+--contract: trill alternates host pitch with a note `step` scale-steps away (via ctx.step); host is fxNote 1
+function M.trill(host, params, ctx)
+  local startL, endL = host.window[1], host.window[2]
+  local step  = periodTicks(params.period, ctx.resolution)
+  local h     = host.events[1]
+  -- The alternation note: `step` scale steps from the host, resolved through the temper.
+  local altPitch, altDetune = ctx.step(h.pitch, h.detune or 0, params.step or 0)
+  local notes = {}
+  local i = 1
+  while startL + i * step < endL do
+    local odd = i % 2 == 1   -- fxNote 1 (the host) is even tile 0; odd tiles carry the alternation
+    notes[#notes + 1] = {
+      ppqL    = startL + i * step,
+      endppqL = math.min(startL + (i + 1) * step, endL),
+      pitch   = odd and altPitch  or h.pitch,
+      vel     = h.vel,
+      detune  = odd and altDetune or (h.detune or 0),
     }
     i = i + 1
   end

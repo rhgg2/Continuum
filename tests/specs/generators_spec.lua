@@ -131,4 +131,37 @@ return {
     end,
   },
 
+  ----- trill: window tiling + temper-resolved alternation
+
+  {
+    name = 'trill tiles the window, alternating host pitch with the stepped note (host is fxNote 1)',
+    run = function()
+      local seen
+      local ctx = { resolution = 240,
+                    step = function(p, d, n) seen = { p, d, n }; return p + n, (d or 0) + 7 end }
+      local host = { window = { 0, 240 }, events = { { pitch = 60, vel = 100, detune = 0 } } }
+      local out = generators.trill(host, { kind = 'trill', period = { 1, 4 }, step = 2 }, ctx)
+      t.eq(#out.delta, 0, 'structural: no continuous delta')
+      t.deepEq(seen, { 60, 0, 2 }, 'ctx.step receives the host pitch, detune, and step count')
+      t.eq(#out.notes, 3, '1/4-QN period over a 1-QN window: 3 fxNotes (host is fxNote 1)')
+      local n = out.notes
+      t.deepEq({ n[1].ppqL, n[2].ppqL, n[3].ppqL }, { 60, 120, 180 }, 'tiled onsets')
+      t.deepEq({ n[1].endppqL, n[2].endppqL, n[3].endppqL }, { 120, 180, 240 }, 'tails clip to next / window end')
+      t.deepEq({ n[1].pitch, n[2].pitch, n[3].pitch }, { 62, 60, 62 }, 'odd tiles step; even tiles return to host')
+      t.deepEq({ n[1].detune, n[2].detune, n[3].detune }, { 7, 0, 7 }, 'stepped detune on odd; host detune on even')
+      t.eq(n[1].vel, 100, 'host velocity carried (no ramp)')
+    end,
+  },
+
+  {
+    name = 'trill carries host detune verbatim on the return (even) tiles',
+    run = function()
+      local ctx = { resolution = 240, step = function(p, d, n) return p + n, 99 end }
+      local host = { window = { 0, 240 }, events = { { pitch = 60, vel = 80, detune = 12 } } }
+      local out = generators.trill(host, { kind = 'trill', period = { 1, 4 }, step = 1 }, ctx)
+      t.eq(out.notes[2].detune, 12, 'even tile inherits the host detune')
+      t.eq(out.notes[1].detune, 99, 'odd tile takes the stepped detune')
+    end,
+  },
+
 }

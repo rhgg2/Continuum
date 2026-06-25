@@ -222,8 +222,10 @@ one-off inline reaches:
 - `nextLane1Note(host)` — the neighbour lookup; slide's `'next'` is
   `interval(host, ctx.nextLane1Note(host))`. **Landed.**
 - `pbRangeCents` — the pb ceiling slide clamps its target to. **Landed.**
-- `step(basePitch, scaleSteps) → (pitch, detune)` — temper arithmetic,
-  the one genuinely temper-bound op; trill and arp will share it.
+- `step(pitch, detune, scaleSteps) → (pitch, detune)` — temper arithmetic
+  (a degree is identified by pitch+detune, not pitch alone, so the host's
+  detune is threaded too); the one genuinely temper-bound op, shared by trill
+  (and arp). **Landed.**
 
 `interval(a, b) = Δpitch·100 + Δdetune` is the instructive non-example:
 it *looks* temper-bound but isn't — the microtonal offset already rides
@@ -509,7 +511,13 @@ modal's row-cursor key dispatch is verified in REAPER). **Slide rides it too**
 as a third independent section — `over` on the shared QN-fraction ladder, and
 `target` chooses `Next` (glide to the next lane-1 note) or `Fixed`: a `cents`
 demand stored temper-agnostically, authored as host-relative temper steps via
-the `stepInterval` widget.
+the `stepInterval` widget. **Trill rides the same chassis** as a fourth
+section (Retrig · Trill · Vibrato · Slide): `period` on the shared ladder and
+`step` (signed scale steps) resolved through the temper to per-fxNote
+(pitch, detune) at flush via the new `ctx.step`; the alternation's microtonal
+detune realises through the existing absorber machinery, the 4.9 gather now
+unioning derived lane-1 fxNotes. `tm_trill_spec` pins G4 microtonally (19EDO,
+swing + delay) plus the absorber seats.
 Flush-time reconcile (`dirtyFxHosts`) and the R2/R4 refactors are
 deferred fast-follows — correctness rides the rebuild path, which every
 flush triggers. **Vibrato's Lua slice has now landed** (`tm_vibrato_spec`):

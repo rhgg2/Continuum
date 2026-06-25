@@ -155,8 +155,10 @@ end
 
 ----- fxNote reconciliation (the PC-synthesis skeleton, note-shaped)
 
--- Identity is geometry: (host, ppq, pitch, vel, detune, sample). endppq is
--- owned by the tail walk, never matched. Twin of reconcilePCsForChan.
+-- Identity is geometry: (host, ppq, endppqL, pitch, vel, detune, sample).
+-- endppqL is the generator's logical extent (the tile end) -- a kept note with
+-- a stale endppqL caps the tail walk at the old ceiling, so it IS matched.
+-- (Realised endppq is tail-walk-owned and stays out.) Twin of reconcilePCsForChan.
 -- Predicted ppq is a Lua integer; REAPER's MIDI_GetNote returns a float, and
 -- util.key stringifies -- canonicalise or 3072 vs 3072.0 churns every fxNote each rebuild.
 local function canon(x)
@@ -164,8 +166,9 @@ local function canon(x)
   return x
 end
 local function fxKey(spec)
-  return util.key(canon(spec.derived), canon(spec.ppq), canon(spec.pitch),
-                  canon(spec.vel), canon(spec.detune or 0), canon(spec.sample or 0))
+  return util.key(canon(spec.derived), canon(spec.ppq), canon(spec.endppqL or 0),
+                  canon(spec.pitch), canon(spec.vel), canon(spec.detune or 0),
+                  canon(spec.sample or 0))
 end
 
 local function reconcileFx(existing, predicted)
@@ -1252,6 +1255,10 @@ do
     do
       local res = mm:resolution()
       local pbRangeCents = cm:get('pbRange') * 100   -- slide clamps its target to what pb can reach
+      local temper = tuning.findTemper(cm:get('temper'), cm:get('tempers'))
+      local function stepOp(pitch, detune, n)        -- trill: scale steps -> (pitch, detune) via the temper
+        return tuning.transposeStep(temper, pitch, detune, n)
+      end
       local takeLen = tm:length()
       local extras  = ds:get('extraColumns') or {}   -- authored columns block carrier codes
       local churned = false
@@ -1281,7 +1288,7 @@ do
           return p and lane1ByPpq[p]
         end
         local chanCtx = { resolution = res, pbRangeCents = pbRangeCents,
-                          nextLane1Note = nextLane1Note }
+                          nextLane1Note = nextLane1Note, step = stepOp }
 
         -- Pass A: run every generator. Structural notes commit per lane; continuous deltas
         -- stash with their window for colouring (channel-wide, not note-tied). see design/note-macros.md § Continuous realisation
@@ -1329,6 +1336,19 @@ do
             for _, e    in ipairs(toRemove) do mm:delete(e.token) end
             for _, spec in ipairs(toAdd)    do mm:add(spec)       end
           end)
+        end
+
+        -- TEMP FXDBG (remove): what the fxNote reconcile sees vs what it predicts.
+        if #predicted > 0 or #fxExisting[chan] > 0 then
+          local function fmt(n)
+            return string.format('[%s..%s L%s]p%s d%s', tostring(n.ppq),
+              tostring(n.endppq), tostring(n.endppqL), tostring(n.pitch), tostring(n.detune))
+          end
+          local ex, pr = {}, {}
+          for _, n in ipairs(fxExisting[chan]) do ex[#ex+1] = fmt(n) end
+          for _, n in ipairs(predicted)        do pr[#pr+1] = fmt(n) end
+          print(string.format('[FXDBG ch%d reconcile] EXIST %s || PRED %s || remove %d add %d',
+            chan, table.concat(ex, ' '), table.concat(pr, ' '), #toRemove, #toAdd))
         end
 
         -- Pass B: per target, interval-colour stashed instances -- overlapping carriers get
@@ -1586,9 +1606,31 @@ do
       applyAssigns(clamps)
       applyAssigns(clips)
 
+      -- TEMP FXDBG (remove): capture each host's realised clip (to fxNote 2)
+      -- before the view-restore below overwrites it with the authored tail.
+      local hostRealised = {}
+      for host in pairs(fxHostEnd) do hostRealised[host] = host.endppq end
+
       -- Restore pre-fx tail onto column events so the view sees the authored
       -- note; mm is untouched, so the take and G4 round-trip are unaffected.
       for host, rawEnd in pairs(fxHostEnd) do host.endppq = rawEnd end
+
+      -- TEMP FXDBG (remove): final realised fxNote geometry + each host's clip.
+      for ch = 1, 16 do
+        if #fxLive[ch] > 0 then
+          local parts = {}
+          for _, w in ipairs(fxLive[ch]) do
+            local n = w.evt
+            parts[#parts+1] = string.format('[%s..%s L%s]p%s', tostring(n.ppq),
+              tostring(n.endppq), tostring(n.endppqL), tostring(n.pitch))
+          end
+          print(string.format('[FXDBG ch%d realised] %s', ch, table.concat(parts, ' ')))
+        end
+      end
+      for host, realisedEnd in pairs(hostRealised) do
+        print(string.format('[FXDBG host] p%s ppq=%s realisedClip=%s authoredEndL=%s',
+          tostring(host.pitch), tostring(host.ppq), tostring(realisedEnd), tostring(host.endppqL)))
+      end
     end
 
     -- 4.9) Absorber reconciliation + pb wire/column resynthesis.
@@ -1610,8 +1652,13 @@ do
           for _, n in ipairs(lane1.events) do
             if n.type ~= 'pa' then util.add(list, n) end
           end
-          table.sort(list, function(a, b) return a.ppq < b.ppq end)
         end
+        -- Derived lane-1 fxNotes (a trill's per-fxNote detune) are routed out of
+        -- columns; union them so the absorber pass seats their detune jumps.
+        for _, w in ipairs(fxLive[chan]) do
+          if w.lane == 1 then util.add(list, w.evt) end
+        end
+        table.sort(list, function(a, b) return a.ppq < b.ppq end)
         lane1ByChan[chan] = list
       end
 

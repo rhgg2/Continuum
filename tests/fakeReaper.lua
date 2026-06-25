@@ -995,7 +995,8 @@ function M.new()
     table.remove(m.notes, i + 1)
     if n then
       for ti, e in ipairs(m.texts) do
-        local c0, p = e.eventtype == 15 and e.msg:match('^NOTE%s+(%d+)%s+(%d+)%s+custom')
+        local c0, p
+        if e.eventtype == 15 then c0, p = e.msg:match('^NOTE%s+(%d+)%s+(%d+)%s+custom') end
         if c0 and e.ppq == n.ppq and tonumber(c0) == n.chan and tonumber(p) == n.pitch then
           table.remove(m.texts, ti)
           break
