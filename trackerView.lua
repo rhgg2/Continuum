@@ -510,11 +510,10 @@ function tv:setTemperSlot(name)
   cm:set('project', 'temper', name)
 end
 
---contract: seed a fresh take's swing map from its seed tier on bind; no-op once set
+--contract: bind materialises a take's swing from defaultSwing (identity floor); no-op once set
 function tv:seedSharedSlots()
   if ds:get('swing') == nil then
-    local seed = cm:getAt('track', 'defaultSwing') or cm:getAt('project', 'defaultSwing')
-    if seed then ds:assign('swing', seed) end
+    ds:assign('swing', cm:get('defaultSwing'))   -- merged read floors to identity, so an Off take sticks
   end
 end
 

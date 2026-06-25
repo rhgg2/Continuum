@@ -113,3 +113,16 @@ for a take or channel (`setSwingSlot` / `setColSwingSlot` → `localizeSwing`)
 copies its composite into the project tier if absent, before writing the
 name into the take map. `identity` is never localized. `temperEditor`
 mirrors this for tempers (`pickTemper`, with `12EDO` as the floor).
+
+## Bind-time seeding
+
+A take's swing map seeds from `defaultSwing` (`tv:seedSharedSlots`) the
+first time it binds. The read is `cm:get` — the full-tier merge — so an
+unset default floors to the schema's `{ global = 'identity' }` rather
+than `nil`. That floor fixes a recurring bug: picking a swing on one
+take stamps `defaultSwing` at the project and track tiers, and a
+*different* take that was never given a swing would, on its next bind,
+inherit that value — silently changing (and mis-timing) a take the user
+left at Off. Materialising the floor on first bind makes the map
+non-`nil`, so the `no-op once set` guard blocks every later re-seed: an
+explicit Off sticks.

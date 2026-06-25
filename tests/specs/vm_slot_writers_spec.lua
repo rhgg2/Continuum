@@ -158,11 +158,24 @@ return {
     end,
   },
   {
-    name = 'seedSharedSlots is a no-op when no seed tier has been recorded',
+    name = 'seedSharedSlots materialises the identity floor when no seed tier is set',
     run = function(harness)
       local h = harness.mk()
       h.vm:seedSharedSlots()
-      t.eq(h.ds:get('swing'), nil, 'no spurious swing map written')
+      t.eq(h.ds:get('swing').global, 'identity', 'unseeded take is pinned to Off, not left nil')
+    end,
+  },
+  {
+    -- Regression: Off take must not inherit a later-written default; materialising
+    -- identity on first bind is what makes the no-op guard block every rebind.
+    name = 'seedSharedSlots: a take left at Off is not re-seeded after the default changes',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:seedSharedSlots()                                   -- first bind: Off materialised
+      h.cm:set('project', 'defaultSwing', { global = 'c58' })  -- another take picks a swing
+      h.cm:set('track',   'defaultSwing', { global = 'c58' })
+      h.vm:seedSharedSlots()                                   -- rebind the Off take
+      t.eq(h.ds:get('swing').global, 'identity', 'Off sticks; default pollution ignored')
     end,
   },
 }
