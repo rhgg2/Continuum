@@ -96,6 +96,10 @@ end
 function tv:resolveSelectionTake()
   local trackIdx = selectedTrackIdx()
   if not trackIdx then return nil end
+  -- A page switch leaves the track tier unbound (tracker's unbind clears cm context); re-key it to
+  -- the selection's track before any trackerSlot read/write, exactly as selectTrack does.
+  local track = arrange().trackHandle(trackIdx)
+  if track and track ~= cm:boundTrack() then cm:setTrack(track) end
   local stored    = cm:getAt('track', 'trackerSlot')
   local effective = recoverSlot(arrange().midiSlots(trackIdx), stored)
   if effective == nil then return nil end

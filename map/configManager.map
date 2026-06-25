@@ -1,4 +1,4 @@
-@module configManager  src=configManager.lua  loc=524  sha=e69cb6f  mode=chunk
+@module configManager  src=configManager.lua  loc=527  sha=a5d6834  mode=chunk
 @deps ps
 
 # Invariants & contracts
@@ -58,7 +58,7 @@
   @fn checkKey(key)  @ 375
   -- PUBLIC INTERFACE
   -- Reading
-  @fn mergedKey(key)  @ 428
+  @fn mergedKey(key)  @ 431
       -- Per-subkey union of a single key's tables across defaults→tiers; most-specific tier wins.
       -- Non-table contributions are skipped, so the result is always a table.
 
@@ -69,24 +69,26 @@
   @api cm:clearTake()  @ 404
   @api cm:boundTake()  @ 412
       @contract  bound take pointer; nil when context is cleared (take/track tiers resolve off empty)
-  @api cm:setTrack(newTrack)  @ 414
-  @api cm:pollUndo()  @ 422
+  @api cm:boundTrack()  @ 415
+      @contract  bound track pointer; nil when context is cleared (track tier resolves off empty)
+  @api cm:setTrack(newTrack)  @ 417
+  @api cm:pollUndo()  @ 425
       @contract  delegates to the engine watcher; cm's watch group reloads tiers and fires configChanged
-  @api cm:isDeclared(key)  @ 444
+  @api cm:isDeclared(key)  @ 447
       @contract  non-raising existence test against the schema; true iff key is declared
-  @api cm:get(key, opts)  @ 448
+  @api cm:get(key, opts)  @ 451
       @contract  returns deep-copy of merged value (defaults + all tiers); raises on unknown key
       @contract  opts.mergeTiers=true → per-subkey union across defaults+tiers; table-valued keys only
-  @api cm:getAt(level, key)  @ 455
+  @api cm:getAt(level, key)  @ 458
       @contract  reads single tier only (no merge, no defaults); key nil → whole-cache clone
-  @api cm:seedGlobalFromDefault(key, exclude)  @ 467
+  @api cm:seedGlobalFromDefault(key, exclude)  @ 470
       @contract  seeds global tier for key from its default catalogue when empty; excluded names omitted
   -- Writing
-  @api cm:set(level, key, value)  @ 480
+  @api cm:set(level, key, value)  @ 483
       @contract  deep-copies value into tier cache, persists, fires targeted configChanged
-  @api cm:remove(level, key)  @ 493
+  @api cm:remove(level, key)  @ 496
       @contract  removes key from named tier; no-op (no signal) if that tier's cache is unloaded
-  @api cm:assign(level, updates)  @ 507
+  @api cm:assign(level, updates)  @ 510
       @contract  validates all keys before any write (all-or-nothing); REMOVE deletes; fires signal
 
 # Signals emitted (via util.installHooks)
@@ -95,16 +97,16 @@
 # Uses (outbound edges)
   @use call    ps.assign  @ 332, 333, 336, 340
   @use call    ps.boundTake  @ 340, 412
-  @use call    ps.boundTrack  @ 335
+  @use call    ps.boundTrack  @ 335, 415
   @use call    ps.clearTake  @ 405
   @use call    ps.get  @ 324, 325, 326, 327
-  @use call    ps.pollUndo  @ 422
+  @use call    ps.pollUndo  @ 425
   @use call    ps.setTake  @ 398
-  @use call    ps.setTrack  @ 415
+  @use call    ps.setTrack  @ 418
   @use call    ps.watch  @ 388
   @use call    util.add  @ 235, 236, 244, 245
   @use call    util.assign  @ 363
-  @use call    util.deepClone  @ 79, 284, 463
+  @use call    util.deepClone  @ 79, 284, 466
   @use call    util.installHooks  @ 384
   @use call    util.print  @ 19
   @use require tuning  @ 13

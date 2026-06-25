@@ -421,6 +421,15 @@ edits. A writer's take-swap lags one frame (it mutates cm; the next
 triggers `bind()` on the same activation. When `trackerTrack` is unset
 (fresh project) `bindFromSelection` seeds it once from the arrange cursor.
 
+`trackerSlot` lives at the **track** tier, so `resolveSelectionTake` re-keys
+the track tier to `trackerTrack` first (`cm:setTrack`, guarded on staleness).
+A page switch unbinds the tier — the tracker's own `unbind` runs
+`cm:setContext(nil)` — so without the re-key the next `bindFromSelection`
+(re-entering the tracker, or rendering a stale frame mid-switch: `coordinator`
+captures the active page before the toolbar switcher fires) writes
+`trackerSlot` against no bound track and raises *No track context for config
+storage*.
+
 ### Dive
 
 Arrange's dive is the one cross-page entry: the `tracker` facade's `diveTo`

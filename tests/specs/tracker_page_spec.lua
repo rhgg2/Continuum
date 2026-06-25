@@ -214,11 +214,17 @@ return {
       local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
       fakeArrange.takeByKey['0:0'] = 'tr1/t1'
       tp:bindFromSelection()                -- initial bind to the selection take
-      tp:unbind()                           -- switch away: page goes dormant
-      local got = {}
+      tp:unbind()                           -- switch away: cm context cleared, track tier unbound
+      local got, errored = {}, false
       h.cm.setContext = function(_, take) got[#got+1] = take end
-      tp:bindFromSelection()                -- return: selection unchanged
+      local origShow = _G.reaper.ShowConsoleMsg
+      _G.reaper.ShowConsoleMsg = function(m)
+        if m:find('No track context', 1, true) then errored = true end
+      end
+      tp:bindFromSelection()                -- return: selection unchanged; must re-key the track tier first
+      _G.reaper.ShowConsoleMsg = origShow
       t.eq(got[#got], 'tr1/t1', 're-asserts cm context despite the unchanged take')
+      t.eq(errored, false, 'resolveSelectionTake re-keys the track tier before writing trackerSlot')
     end,
   },
 }

@@ -411,6 +411,9 @@ end
 --contract: bound take pointer; nil when context is cleared (take/track tiers resolve off empty)
 function cm:boundTake() return ps:boundTake() end
 
+--contract: bound track pointer; nil when context is cleared (track tier resolves off empty)
+function cm:boundTrack() return ps:boundTrack() end
+
 function cm:setTrack(newTrack)
   ps:setTrack(newTrack)
   cache.track = loaders.track()
