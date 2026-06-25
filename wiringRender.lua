@@ -16,8 +16,8 @@ package.path = reaper.ImGui_GetBuiltinPath() .. '/?.lua;' .. package.path
 local ImGui = require 'imgui' '0.10'
 local painter = require 'painter'
 
-local cm, cmgr, chrome, gui, modalHost, wv =
-  (...).cm, (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).wv
+local cm, cmgr, chrome, gui, modalHost, wv, facade =
+  (...).cm, (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).wv, (...).facade
 
 local ctx      = gui and gui.ctx or nil
 local wireFont = gui and gui.wireFont or nil
@@ -2570,8 +2570,9 @@ local function commitFx(pck, fx)
     if fx.bus then
       wv:addBusNode(pck.x, pck.y, fx.orient)
     else
-      wv:addFx(pck.x, pck.y, { name = fx.name, ident = fx.ident },
-               { sourcePos = { x = pck.sx, y = pck.sy } })
+      local _, sourceGuid = wv:addFx(pck.x, pck.y, { name = fx.name, ident = fx.ident },
+                                     { sourcePos = { x = pck.sx, y = pck.sy } })
+      if sourceGuid then facade.get('tracker').selectNewParkedTake(sourceGuid) end
     end
   end)
 end

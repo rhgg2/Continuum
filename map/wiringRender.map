@@ -1,5 +1,5 @@
-@module wiringRender  src=wiringRender.lua  loc=2633  sha=18faabd  mode=chunk
-@deps cm, cmgr, chrome, gui, modalHost, wv
+@module wiringRender  src=wiringRender.lua  loc=2634  sha=a3a8e0b  mode=chunk
+@deps cm, cmgr, chrome, gui, modalHost, wv, facade
 
 # Invariants & contracts
   @invariant  render + input only — holds wv only, never wm/rm; all queries/mutations go through wv.
@@ -103,7 +103,7 @@
   @state SELECTED_INFLATE = 0  @ 155   -- outline traces the body edge tightly; >0 leaves a moat where the popup bg bleeds through
   @state SELECTED_STROKE = 2  @ 156
   @state SOURCE_PAD = 24  @ 2531
-  @state wiring = cmgr:scope('wiring')  @ 2623
+  @state wiring = cmgr:scope('wiring')  @ 2624
 
 # Private functions
   -- Drag / band state (page-local; ephemeral, never persisted)
@@ -342,15 +342,16 @@
   @use call    chrome.popChromeWindow  @ 2295, 2342, 2364
   @use call    chrome.pushChromeWindow  @ 2275, 2303, 2355
   @use call    cmgr.invoke  @ 2034
-  @use call    cmgr.scope  @ 2623
-  @use call    imgui.BeginChild  @ 2489, 2613
+  @use call    cmgr.scope  @ 2624
+  @use call    facade.get  @ 2575
+  @use call    imgui.BeginChild  @ 2489, 2614
   @use call    imgui.BeginPopup  @ 2277, 2305, 2357
   @use call    imgui.BeginTooltip  @ 325, 934
   @use call    imgui.Button  @ 2416, 2419
   @use call    imgui.CalcTextSize  @ 200, 260, 264, 345, 349
-  @use call    imgui.CloseCurrentPopup  @ 2287, 2311, 2315, 2324, 2334, 2567, 2608
+  @use call    imgui.CloseCurrentPopup  @ 2287, 2311, 2315, 2324, 2334, 2567, 2609
   @use call    imgui.Dummy  @ 2379
-  @use call    imgui.EndChild  @ 2496, 2619
+  @use call    imgui.EndChild  @ 2496, 2620
   @use call    imgui.EndPopup  @ 2290, 2337, 2359
   @use call    imgui.EndTooltip  @ 327, 936
   @use call    imgui.GetCursorScreenPos  @ 1663, 2487
@@ -362,17 +363,17 @@
   @use call    imgui.GetWindowSize  @ 2285, 2332
   @use call    imgui.GetWindowViewport  @ 2352
   @use call    imgui.Indent  @ 2429
-  @use call    imgui.InputText  @ 2583
+  @use call    imgui.InputText  @ 2584
   @use call    imgui.InvisibleButton  @ 314, 928
   @use call    imgui.IsAnyItemActive  @ 2520
   @use call    imgui.IsItemActive  @ 2441
   @use call    imgui.IsItemHovered  @ 319, 929
-  @use call    imgui.IsKeyPressed  @ 1930, 1933, 2585, 2586, 2600, 2601, 2607
+  @use call    imgui.IsKeyPressed  @ 1930, 1933, 2586, 2587, 2601, 2602, 2608
   @use call    imgui.IsMouseClicked  @ 1688, 1940, 1985, 2043, 2056, 2252
   @use call    imgui.IsMouseDoubleClicked  @ 1975, 2028
   @use call    imgui.IsMouseDown  @ 1792, 2170, 2213, 2223, 2230, 2238
   @use call    imgui.IsMouseDragging  @ 2442
-  @use call    imgui.IsWindowAppearing  @ 2283, 2330, 2580, 2596
+  @use call    imgui.IsWindowAppearing  @ 2283, 2330, 2581, 2597
   @use call    imgui.IsWindowHovered  @ 1675
   @use call    imgui.OpenPopup  @ 2256, 2263, 2561
   @use call    imgui.PopFont  @ 268, 352
@@ -382,11 +383,11 @@
   @use call    imgui.PushStyleColor  @ 323, 932, 2276, 2304, 2356, 2383
   @use call    imgui.PushStyleVar  @ 324, 933
   @use call    imgui.SameLine  @ 2417
-  @use call    imgui.Selectable  @ 2308, 2313, 2322, 2436, 2616
-  @use call    imgui.Separator  @ 2467, 2587
+  @use call    imgui.Selectable  @ 2308, 2313, 2322, 2436, 2617
+  @use call    imgui.Separator  @ 2467, 2588
   @use call    imgui.SetCursorScreenPos  @ 313, 927, 2378
-  @use call    imgui.SetKeyboardFocusHere  @ 2580
-  @use call    imgui.SetNextItemWidth  @ 2581
+  @use call    imgui.SetKeyboardFocusHere  @ 2581
+  @use call    imgui.SetNextItemWidth  @ 2582
   @use call    imgui.SetNextWindowPos  @ 320, 930, 2274, 2302, 2349, 2353
   @use call    imgui.Text  @ 326, 935, 2510
   @use call    imgui.TextDisabled  @ 2431

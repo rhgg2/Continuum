@@ -25,7 +25,7 @@ local wm = util.instantiate('wiringManager', { cm = cm, rm = rm })
 local wv = util.instantiate('wiringView',    { cm = cm, cmgr = cmgr, wm = wm })
 
 local wr = util.instantiate('wiringRender',
-  { wv = wv, cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, modalHost = modalHost })
+  { wv = wv, cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, modalHost = modalHost, facade = facade })
 
 -- Published for other pages without reaching into wm/rm: arrange hides wiring-owned tracks
 -- (scratch FX-park, spawned newTrack hosts); the tracker's param palette pulls its targets.

@@ -190,7 +190,7 @@ spl0 *= 1;
     end,
   },
   {
-    name = 'addFxNode: audio-only generator gets no auto source wiring',
+    name = 'addFxNode: audio-only generator wires to master, no auto source',
     run = function(harness)
       local h, wm = mkWm(harness)
       seedJsfx(wm, { ['JS:Noise'] = 'desc:n\n@sample\nspl0 = rand(1);\n' })
@@ -198,10 +198,31 @@ spl0 *= 1;
       local id = wm:addFxNode(0, 0, { name = 'Noise', ident = 'JS:Noise' })
       t.truthy(id)
       local g = wm:graph()
-      t.deepEq(g.edges, {}, 'no auto midi edge for a deaf generator')
+      t.deepEq(g.edges, { { type = 'audio', from = id, fromPort = 1, to = 'master', toPort = 1 } },
+               'deaf generator wires straight to master, no source/midi edge')
       for _, n in pairs(g.nodes) do
         t.truthy(n.kind ~= 'source', 'no auto source node for a deaf generator')
       end
+    end,
+  },
+  {
+    name = 'addFxNode: synth generator spawns source, wires midi-in + master-out',
+    run = function(harness)
+      local h, wm = mkWm(harness)
+      seedJsfx(wm, { ['JS:Synth'] = 'desc:s\n@block\nmidirecv(o,a,b);\n' })
+      reaper:setFxIO('JS:Synth', { ins = 0, outs = 2 })
+      local id, sourceGuid = wm:addFxNode(0, 0, { name = 'Synth', ident = 'JS:Synth' })
+      t.truthy(id,         'returns the fx-node id')
+      t.truthy(sourceGuid, 'returns the spawned source guid')
+      local g = wm:graph()
+      t.eq(g.nodes[sourceGuid].kind, 'source', 'source node spawned')
+      local hasMidi, hasMaster = false, false
+      for _, e in ipairs(g.edges) do
+        if e.type == 'midi'  and e.from == sourceGuid and e.to == id      then hasMidi   = true end
+        if e.type == 'audio' and e.from == id        and e.to == 'master' then hasMaster = true end
+      end
+      t.truthy(hasMidi,   'source feeds the synth midi')
+      t.truthy(hasMaster, 'synth wires straight to master')
     end,
   },
 }

@@ -509,20 +509,21 @@ end
 
 --contract: one Undo block around instantiate + mutate; stamps fxId on the new fx-node
 --contract: generators (io.ins==0) also spawn sourceTrack + source-node + midi edge
---contract: returns new fx-node id; nil+err on validate failure or ext_midi_bus refusal
+--contract: a generator with audio outs also wires straight to master
+--contract: returns fx-node id + sourceGuid (nil if none); nil+err on validate/refusal
 function wm:addFxNode(x, y, fx, opts)
   ensureLoaded()
   local addErr = self:checkUserAddable(fx.ident)
   if addErr then return nil, addErr end
   local display = fx.name and shortFxName(fx.name) or fx.ident
-  local newId, ok, err
+  local newId, ok, err, sourceGuid
   rm:transaction('wiring: add ' .. display, function()
     local io         = self:instantiateFxOnScratch(fx.ident)
     if not io.fxId then ok, err = false, { code = 'fx_instantiate_failed', ident = fx.ident }; return end
     local midiPorts  = fxMidiPorts(fx.ident)
     local autoSource = io.ins == 0 and midiPorts.ins > 0
                        and not (opts and opts.autoSource == false)
-    local sourceGuid = autoSource and self:createSourceTrack{ name = display } or nil
+    sourceGuid = autoSource and self:createSourceTrack{ name = display } or nil
     ok, err = self:mutate(function(g)
       newId = io.fxId
       g.nodes[io.fxId] = {
@@ -550,6 +551,9 @@ function wm:addFxNode(x, y, fx, opts)
         }
         util.add(g.edges, { type = 'midi', from = sourceGuid, to = io.fxId })
       end
+      if io.ins == 0 and io.outs > 0 then
+        util.add(g.edges, { type = 'audio', from = io.fxId, fromPort = 1, to = 'master', toPort = 1 })
+      end
     end)
     if ok then
       local fxNode = userGraph.nodes[io.fxId]
@@ -561,7 +565,7 @@ function wm:addFxNode(x, y, fx, opts)
     end
   end)
   if not ok then return nil, err end
-  return newId
+  return newId, sourceGuid
 end
 
 --contract: deletes a source node + incident edges and its REAPER track in one Undo block.

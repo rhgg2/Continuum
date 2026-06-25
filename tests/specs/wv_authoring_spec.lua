@@ -95,7 +95,7 @@ return {
     end,
   },
   {
-    name = 'addFx on generator pins fx pos, fallback source pos, and a single midi edge',
+    name = 'addFx on generator pins fx pos, fallback source pos, midi-in + master-out edges',
     run = function(harness)
       local h, wv = mkWv(harness)
       h.reaper:setFxIO('VST3:Massive', { ins = 0, outs = 2 })
@@ -107,10 +107,13 @@ return {
       t.eq(g.nodes[fxId].pos.x, 50);  t.eq(g.nodes[fxId].pos.y, -10)
       t.eq(g.nodes[srcId].pos.x, -90, 'fallback source pos = (fx.x - 140, fx.y)')
       t.eq(g.nodes[srcId].pos.y, -10)
-      t.eq(#g.edges, 1)
+      t.eq(#g.edges, 2)
       t.eq(g.edges[1].type, 'midi')
       t.eq(g.edges[1].from, srcId)
       t.eq(g.edges[1].to,   fxId)
+      t.eq(g.edges[2].type, 'audio')
+      t.eq(g.edges[2].from, fxId)
+      t.eq(g.edges[2].to,   'master')
       t.eq(reaper.CountTracks(0), tracksBefore + 2, 'scratch + new source track')
     end,
   },

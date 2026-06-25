@@ -1,4 +1,4 @@
-@module wiringPage  src=wiringPage.lua  loc=63  sha=9623b2b  mode=chunk
+@module wiringPage  src=wiringPage.lua  loc=63  sha=c7fee67  mode=chunk
 @deps cm, cmgr, chrome, gui, modalHost, facade
 
 # Imports
