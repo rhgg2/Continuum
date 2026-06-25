@@ -1,4 +1,4 @@
-@module DAG  src=DAG.lua  loc=1923  sha=8233379  mode=namespace
+@module DAG  src=DAG.lua  loc=1919  sha=8233379  mode=namespace
 
 # Invariants & contracts
   @invariant  M.validate is pure; derivations live on M.compile's ctx
@@ -47,7 +47,7 @@
   @const PARK_BUS = 127  @ 49
   @const MASTER = '__master__'  @ 53
   @const M = {}  @ 55
-  @const SPLIT_SEP = '#cap#'  @ 1696
+  @const SPLIT_SEP = '#cap#'  @ 1692
 
 # Private functions
   -- validate
@@ -89,28 +89,28 @@
       · per-track midi post-pass: merge-CU params, native-fx bus surface, JSFX bracket splice.
       · bracket post-pass — see docs/DAG.md § allocate
   -- capacity bisection — design/wiring-implicit-graph.md § Capacity
-  @fn bisect(trackKey, spec, g)  @ 1700
+  @fn bisect(trackKey, spec, g)  @ 1696
       -- Cut spec at gap g: fxOrder[1..g] keeps identity; [g+1..] becomes an emergent newTrack.
       -- Conns crossing the cut become a forward send; master feed / mainSend follow their producer.
-  @fn toExplicitFeed(spec)  @ 1750
+  @fn toExplicitFeed(spec)  @ 1746
       -- Re-express a folder parent-send as an explicit audio send (leaves the family bus domain).
       -- Only folder feeds (sink ~= MASTER) pass here; master sends never convert.
-  @fn isFolderFeed(spec)  @ 1758
-  @fn hasMergeCrossing(spec, nodes)  @ 1762
-  @fn convertCrossing(spec, cross, nodes, trackOfFx)  @ 1772
+  @fn isFolderFeed(spec)  @ 1754
+  @fn hasMergeCrossing(spec, nodes)  @ 1758
+  @fn convertCrossing(spec, cross, nodes, trackOfFx)  @ 1768
       -- Convert a pipe crossing to an explicit midi send when its producer leaves the family.
       -- Bus-0 merges (consumer = parent source node) cannot be reproduced as explicit sends; reaching one here asserts.
-  @fn bisectOutOfFamily(trackKey, spec, g, nodes, trackOfFx)  @ 1781
+  @fn bisectOutOfFamily(trackKey, spec, g, nodes, trackOfFx)  @ 1777
       -- Like bisect, but the down segment leaves the family: its folder feed and pipe crossings
       -- go explicit; the pipe-keeping child retains piped crossings. See design/archive/wiring-folders.md § Bus domains.
-  @fn evictMember(spec, nodes, trackOfFx)  @ 1797
+  @fn evictMember(spec, nodes, trackOfFx)  @ 1793
       -- Pull a leaf member out of its family without splitting: folder feed and crossings go
       -- explicit. Used when members are too short to bisect internally.
-  @fn minCrossingGap(profile, lo, hi)  @ 1807
-  @fn pickEvictableLeaf(members, tracks, nodes)  @ 1817
+  @fn minCrossingGap(profile, lo, hi)  @ 1803
+  @fn pickEvictableLeaf(members, tracks, nodes)  @ 1813
       -- A leaf member (nothing parent-sends to it) that is graph-safe to evict whole (no bus-0
       -- merge crossing). Deterministic by key.
-  @fn splitOverCap(tracks, meta, nodes)  @ 1833
+  @fn splitOverCap(tracks, meta, nodes)  @ 1829
       -- One bisection round. Audio over-cap cuts per track; MIDI over-cap is per FAMILY (folder pipe = ONE
       -- bus domain) — at most one eviction per family per round, skipped when an audio cut is pending. nil at fixpoint.
 
@@ -124,15 +124,15 @@
   @api M.compile(userGraph)  @ 1112
       -- ctx.splice (spliceProv) is present iff sub-threshold busses were spliced out.
       @contract  assumes M.validate(userGraph)==nil; returns a lazy-caching compile ctx
-  @api M.allocate(tracks, nodes)  @ 1911
+  @api M.allocate(tracks, nodes)  @ 1907
       -- Capacity-resolving allocation: assign, bisect any over-ceiling class/family, re-assign
       -- until everything fits. The only entry point; allocateOnce is the inner pass.
 
 # Uses (outbound edges)
-  @use call    util.add  @ 193, 212, 301, 450, 544, 558, 563, 565, 569, 602, 622, 661, 662, 711, 721, 742, 752, 765, 772, 775, 831, 838, 848, 867, 869, 974, 1064, 1078, 1079, 1080, 1088, 1089, 1090, 1197, 1203, 1274, 1281, 1286, 1291, 1295, 1319, 1322, 1347, 1351, 1369, 1405, 1477, 1485, 1488, 1491, 1516, 1529, 1538, 1621, 1625, 1631, 1647, 1703, 1704, 1711, 1712, 1715, 1719, 1752, 1775, 1788, 1800
-  @use call    util.assign  @ 93, 520, 608, 1669, 1670, 1798
-  @use call    util.bucket  @ 141, 234, 235, 304, 471, 648, 862, 1154, 1158, 1224, 1232, 1847
-  @use call    util.key  @ 130, 303, 499, 502, 587, 617, 842, 1343, 1366, 1646
+  @use call    util.add  @ 193, 212, 301, 450, 544, 558, 563, 565, 569, 602, 622, 661, 662, 711, 721, 742, 752, 765, 772, 775, 831, 838, 848, 867, 869, 974, 1064, 1078, 1079, 1080, 1088, 1089, 1090, 1197, 1203, 1274, 1284, 1289, 1294, 1298, 1321, 1343, 1347, 1365, 1401, 1473, 1481, 1484, 1487, 1512, 1525, 1534, 1617, 1621, 1627, 1643, 1699, 1700, 1707, 1708, 1711, 1715, 1748, 1771, 1784, 1796
+  @use call    util.assign  @ 93, 520, 608, 1665, 1666, 1794
+  @use call    util.bucket  @ 141, 234, 235, 304, 471, 648, 862, 1154, 1158, 1224, 1232, 1843
+  @use call    util.key  @ 130, 303, 499, 502, 587, 617, 842, 1339, 1362, 1642
   @use call    util.keys  @ 378, 379, 383, 384, 1260
   @use call    util.pick  @ 520
   @use require util  @ 39

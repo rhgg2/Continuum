@@ -86,6 +86,35 @@ return {
     end,
   },
   {
+    -- A,B -> C forces C onto master (two sources can't fold to one source track).
+    -- C feeds the master read (pair 1) and must hold it to chain end; D takes a fresh pair.
+    name = 'targetState: in-class master producer with downstream chain holds pair 1',
+    run = function(harness)
+      local h, wm = mkWm(harness)
+      seedSource(h, 'guid-A')
+      seedSource(h, 'guid-B')
+      wm:mutate(function(g)
+        g.nodes.a = source('guid-A')
+        g.nodes.b = source('guid-B')
+        g.nodes.c = fx('VST:C', { ins=1, outs=1, fxId='C' })
+        g.nodes.d = fx('VST:D', { ins=1, outs=1, fxId='D' })
+        g.nodes.e = fx('VST:E', { ins=1, outs=1, fxId='E' })
+        util.add(g.edges, audioEdge('a', 'c'))
+        util.add(g.edges, audioEdge('b', 'c'))
+        util.add(g.edges, audioEdge('c', 'master'))
+        util.add(g.edges, audioEdge('c', 'd'))
+        util.add(g.edges, audioEdge('d', 'e'))
+      end)
+      local master = wm:targetState()['__master__']
+      t.truthy(master, 'in-class master track present')
+      t.deepEq(pinmapByNode(master, 'C').outs[1], {1}, 'C feeds the master read on pair 1')
+      t.deepEq(pinmapByNode(master, 'D').ins[1],  {1}, 'D reads C on pair 1')
+      t.deepEq(pinmapByNode(master, 'D').outs[1], {2}, 'D writes a fresh pair, not pair 1')
+      t.deepEq(pinmapByNode(master, 'E').ins[1],  {2}, 'E reads D on pair 2')
+      t.eq(master.nchan, 4)
+    end,
+  },
+  {
     -- Trivial chain: every port routes through pair 1. The projection carries
     -- explicit entries; unwired ports of the fx default to disconnected at apply.
     name = 'targetState: linear source -> fx -> master keeps explicit pair-1 routes',

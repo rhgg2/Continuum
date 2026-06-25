@@ -1278,9 +1278,12 @@ local function allocateOnce(tracks, nodes)
     --shape: flow = { type, from?, fromPort?, fromSlot?, to?, toPort?, toSlot?, escape?='send'|'feed', sendIdx?, inc?=incoming entry }
     local flows = {}
     for _, ic in ipairs(entry.intraConns or {}) do
-      util.add(flows, { type = ic.type,
+      local toSlot = slotMap[ic.to]
+      -- Off-chain audio consumer = in-class master feed: rides 'feed' escape like a parent send,
+      -- folding into the producer's output value (pinned pair 1, live to N+1).
+      util.add(flows, { type = ic.type, escape = (ic.type == 'audio' and not toSlot) and 'feed' or nil,
         from = ic.from, fromPort = ic.fromPort, fromSlot = slotMap[ic.from],
-        to   = ic.to,   toPort   = ic.toPort,   toSlot   = slotMap[ic.to] })
+        to   = ic.to,   toPort   = ic.toPort,   toSlot   = toSlot })
     end
     for sendIdx, ow in ipairs(entry.outWires or {}) do
       util.add(flows, { type = ow.type, escape = 'send', sendIdx = sendIdx,
@@ -1307,10 +1310,9 @@ local function allocateOnce(tracks, nodes)
     local values = {}
     local addValue = ordAppend(values)
 
-    -- Pair-1 boundary register: source-from (input) and master-to (output)
-    -- share pair 1 with non-overlapping lifetimes. See allocatedTracks shape.
+    -- Pair-1 boundary register: raw source (input) shares pair 1 with the chain's master write,
+    -- non-overlapping. Master write rides 'feed' into its producer's value; no boundary slot needed.
     local sfPins, sfLastUse = {}, 0
-    local mtPins, mtDef     = {}, math.huge
     local feedFlow
     for _, f in ipairs(flows) do
       if f.type == 'audio' then
@@ -1318,21 +1320,15 @@ local function allocateOnce(tracks, nodes)
         if not f.fromSlot and f.toSlot and not f.inc then
           util.add(sfPins, { fxId = f.to, dir = 'ins', port = f.toPort })
           sfLastUse = math.max(sfLastUse, f.toSlot)
-        elseif f.fromSlot and f.to and not f.toSlot then
-          util.add(mtPins, { fxId = f.from, dir = 'outs', port = f.fromPort })
-          mtDef = math.min(mtDef, f.fromSlot)
         end
       end
     end
     -- Raw source persists on pair 1 to end-of-chain only to feed the parent send
     -- itself (no fx writer); source-out sends tap pre-FX, so they don't reserve it.
-    local srcToMaster = entry.mainSend and #mtPins == 0 and not (feedFlow and feedFlow.fromSlot)
+    local srcToMaster = entry.mainSend and not (feedFlow and feedFlow.fromSlot)
     if srcToMaster then sfLastUse = N + 1 end
     if #sfPins > 0 or srcToMaster then
       addValue({ def = 0, lastUse = sfLastUse, pins = sfPins, assignReg = 1 })
-    end
-    if #mtPins > 0 then
-      addValue({ def = mtDef, lastUse = N + 1, pins = mtPins, assignReg = 1 })
     end
 
     -- One value per fx audio output (fxId, fromPort): one pair shared by every reader.
@@ -1350,8 +1346,8 @@ local function allocateOnce(tracks, nodes)
           g.lastUse = N + 1
           util.add(g.writes, { kind = 'sendSrc', sendIdx = f.sendIdx })
         else
-          -- Parent send reads source pair 1 (NCH=2, no offset), so pin the master-feed
-          -- producer there; OFFS is written back when the master track allocates its pin.
+          -- Pair-1 boundary write -- the in-class master read or a parent send: pin the producer
+          -- on pair 1 (NCH=2) live to chain end. A cross-track send's OFFS is set when its sink allocates the pin.
           g.lastUse, g.assignReg = N + 1, 1
         end
       end

@@ -384,6 +384,31 @@ return {
     end,
   },
   {
+    -- Regression: master-feed and C->D values were distinct, so pair 1 freed early and D
+    -- reclaimed it, clobbering the master read. Producer must hold pair 1 to chain end.
+    name = 'allocate: master-to producer with downstream chain holds pair 1 to end',
+    run = function()
+      local tracks = {
+        ['__master__'] = {
+          trackKind='master', fxOrder={'C','D','E'},
+          mainSend=false,
+          intraConns={
+            {from='C', to='D',      type='audio'},
+            {from='D', to='E',      type='audio'},
+            {from='C', to='master', type='audio'},
+          },
+          outWires={},
+        },
+      }
+      local pm = DAG.allocate(tracks)['__master__'].pinMaps
+      t.deepEq(pm.C.outs[1], {1}, 'C feeds the master read on pair 1')
+      t.deepEq(pm.D.ins[1],  {1}, 'D reads C on pair 1')
+      t.deepEq(pm.D.outs[1], {2}, 'D writes a fresh pair, not pair 1')
+      t.deepEq(pm.E.ins[1],  {2}, 'E reads D on pair 2')
+      t.eq(DAG.allocate(tracks)['__master__'].nchan, 4)
+    end,
+  },
+  {
     name = 'mainSendOffs: mainSend=true with no parentFeed defaults to 0',
     run = function()
       local tracks = {
