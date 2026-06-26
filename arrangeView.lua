@@ -582,12 +582,14 @@ function av:renameSlot(trackIdx, slotIdx, name)
   am:renameSlot(trackIdx, slotIdx, name)
 end
 
---contract: mints a MIDI slot via am, palette-focuses it, dives into it; nil if am refused.
+--contract: mints a MIDI slot via am, palette-focuses it, dives the tracker onto it; nil if am refused.
 function av:createSlot(trackIdx, qnPos, lengthQN, name)
   local slotIdx = am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)
   if slotIdx then
     self:setPaletteSlot(slotIdx)
     self:setCursor(self:qnToRow(qnPos), trackIdx)
+    local tr = am:projectTracks()[trackIdx + 1]
+    if tr then tracker().diveTo(tr.guid, slotIdx) end
     cmgr:invoke('switchPage', 'tracker')
   end
   return slotIdx

@@ -461,6 +461,25 @@ return {
   },
 
   {
+    name = 'createSlot dives the tracker onto the freshly-minted take',
+    run = function(harness)
+      local h = harness.mk()
+      h.cm:set('project', 'arrangeBeatPerRow', 1)
+      h.reaper:setTrackName('tr1', 'Track 1')
+      h.reaper:setProjectTracks{ 'tr1' }
+      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
+      ap:seedCursorFromReaper()
+      h.cmgr:push('arrange')
+      h.cmgr:invoke('createSlot')                 -- opens the create modal
+      t.truthy(fakeModalHost.last, 'create modal opened')
+      fakeModalHost.last.callback('lead', '2')    -- OK: name + beats
+      t.eq(captured.nav, 'tracker', 'create switched to the tracker page')
+      t.truthy(captured.dive and captured.dive.guid, 'dive handed the tracker the new take\'s track')
+      t.eq(captured.dive.slot, 0, 'and pinned the freshly-minted slot, not a restore')
+    end,
+  },
+
+  {
     name = 'arrangeDive over an audio take still switches and restores (no take pinned)',
     run = function(harness)
       local h = harness.mk()
