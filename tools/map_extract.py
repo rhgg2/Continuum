@@ -37,8 +37,8 @@ ANN_RE        = re.compile(rf"^\s*--(\??)({'|'.join(KINDS)}):\s*(.*?)\s*$")
 COMMENT_RE    = re.compile(r"^\s*--\s?(.*)$")
 SECTION_RE    = re.compile(r"^(\s*)-{5,}\s+(\S.*?)\s*$")
 LOCAL_FN_RE   = re.compile(r"^(\s*)local\s+function\s+(\w+)\s*\(([^)]*)\)")
-METHOD_RE     = re.compile(r"^function\s+(\w+):(\w+)\s*\(([^)]*)\)")
-DOT_FN_RE     = re.compile(r"^function\s+(\w+)\.(\w+)\s*\(([^)]*)\)")
+METHOD_RE     = re.compile(r"^(\s*)function\s+(\w+):(\w+)\s*\(([^)]*)\)")
+DOT_FN_RE     = re.compile(r"^(\s*)function\s+(\w+)\.(\w+)\s*\(([^)]*)\)")
 # Bare `function name(args)` indented inside a `do` block — assignment to a
 # forward-declared upvalue (idiom: `local moveCol  do function moveCol(n) ... end end`).
 NESTED_FN_RE  = re.compile(r"^(\s+)function\s+([a-z]\w*)\s*\(([^)]*)\)")
@@ -235,25 +235,29 @@ def parse(path: Path) -> MapFile:
             cm.sections.append((i + 1, len(ms.group(1)), ms.group(2)))
             continue
 
-        # methods on a table — colon receiver
+        # methods on a table — colon receiver. Indented defs count only when the
+        # owner is the module's own table; sub-instance methods stay private.
         mm = METHOD_RE.match(raw)
         if mm:
-            blk = Block(name=mm.group(2), args=mm.group(3).strip(),
-                        line=i + 1, owner=mm.group(1), kind='method',
-                        doc=collect_doc(lines, i))
-            cm.methods.append(blk)
+            indent, owner, name, args = mm.groups()
+            if indent == '' or owner == cm.return_target:
+                cm.methods.append(Block(name=name, args=args.strip(),
+                                        line=i + 1, owner=owner, kind='method',
+                                        doc=collect_doc(lines, i)))
             continue
 
-        # dot functions on a table (no self)
+        # dot functions on a table (no self). Same indent guard as methods.
         md = DOT_FN_RE.match(raw)
         if md:
-            blk = Block(name=md.group(2), args=md.group(3).strip(),
-                        line=i + 1, owner=md.group(1), kind='dotfn',
-                        doc=collect_doc(lines, i))
-            if cm.mode == 'namespace' and md.group(1) == cm.return_target:
-                cm.api.append(blk)
-            else:
-                cm.dotfns.append(blk)
+            indent, owner, name, args = md.groups()
+            if indent == '' or owner == cm.return_target:
+                blk = Block(name=name, args=args.strip(),
+                            line=i + 1, owner=owner, kind='dotfn',
+                            doc=collect_doc(lines, i))
+                if cm.mode == 'namespace' and owner == cm.return_target:
+                    cm.api.append(blk)
+                else:
+                    cm.dotfns.append(blk)
             continue
 
         # local function — private helper
@@ -512,7 +516,10 @@ def emit(cm: MapFile) -> str:
     add = out.append
     sections = list(cm.sections)        # consumed by emit_items as we walk
 
-    add(f"@module {cm.module}  src={cm.src.name}  loc={cm.loc}  sha={cm.sha}  mode={cm.mode}")
+    head = f"@module {cm.module}  src={cm.src.name}  loc={cm.loc}  sha={cm.sha}  mode={cm.mode}"
+    if cm.return_target:
+        head += f"  self={cm.return_target}"
+    add(head)
     if cm.deps:
         add(f"@deps {', '.join(cm.deps)}")
     add('')
