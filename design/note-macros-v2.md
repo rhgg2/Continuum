@@ -398,7 +398,7 @@ wants ~none of gm (see resolved open question below).
   Parking frees the lanes, so the arp packs to lane 1 and the same-pitch nudge
   dissolves *structurally* -- the chord is no longer a note-on in the take. augment
   is A2 verbatim (members sound + occupy lanes; nudge persists). Display of the
-  parked bucket (`channels[chan].parked`) is the renderer's union -- Track B. Pinned
+  parked bucket (`channels[chan].parked`) is the renderer's union (Track B B2). Pinned
   by the replace / augment / realise / removal / G4 tests in `tm_fx_region_spec`.
 - **A4 — continuous replace + PA. Next.** A3 parks notes only. The other two
   dimensions of the one augment/replace axis are deferred until each has a consumer:
@@ -429,6 +429,16 @@ column-based, not gm-backed -- the Open-questions Track-B lean, now resolved.
   tail-resize / onset-move, the replace/augment toggle in the modal,
   overlapping-region sub-lanes, the per-lane note-fx pop-out, a real
   kind-glyph vocabulary.
+
+- **B2 -- parked-chord display: the renderer's union. Display landed; edit open.**
+  A3 parks replace members off the take into `channels[chan].parked`; the grid
+  build now unions each back into its lane as a render-ready logical cell
+  (`ppq == ppqL`, `endppqC == endppqL`), so the chord stays on screen -- the piece
+  A3 punted here. Display only: parked cells are tokenless, so a cursor edit no-ops.
+  Making the chord *editable* off-take (an edit rebound to `fxParked`, as the
+  "visible, editable surface" model intends) is still open, as is whether a
+  continuous-fx replace region should park its notes at all (A4). Pinned by the
+  parked-render test in `tv_fx_region_spec`.
 
 ## Open questions
 

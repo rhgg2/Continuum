@@ -35,6 +35,17 @@ local function authoredUuid(h)
   for _, n in ipairs(h.fm:dump().notes) do if not n.derived then return n.uuid end end
 end
 
+-- Pitches still sounding on the take (non-derived). Empty once a replace region has
+-- parked the covered chord off-take.
+local function authoredPitches(h)
+  local out = {}
+  for _, n in ipairs(h.fm:dump().notes) do
+    if not n.derived then out[#out + 1] = n.pitch end
+  end
+  table.sort(out)
+  return out
+end
+
 return {
 
   ----- The column: a region renders as a tailed kind-badge
@@ -72,6 +83,24 @@ return {
       h.vm:setGridSize(80, 40)
       injectRegion(h, { fx = {} })
       t.falsy(fxColFor(h, 1), 'a region with no kinds is not shown')
+    end,
+  },
+
+  ----- Replace parking: members leave the take but stay the displayed chord
+
+  {
+    name = 'replace region: a parked note still renders in its note column',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      addNote(h)                    -- C4 over [0,240) in lane 1
+      injectRegion(h)               -- replace region covering the note's span
+      t.deepEq(authoredPitches(h), {}, 'the covered note is parked off the take')
+      local idx = noteColIdx(h, 1)
+      t.truthy(idx, 'the lane-1 note column survives the parking')
+      local cell = h.vm.grid.cols[idx].cells[0]
+      t.truthy(cell, 'the parked note still occupies row 0')
+      t.eq(cell.pitch, 60, 'rendered with its authored pitch')
     end,
   },
 

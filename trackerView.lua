@@ -2759,7 +2759,20 @@ function tv:rebuild(takeChanged)
       local c = channel.columns
       if c.pc and not trackerMode then addGridCol(chan, 'pc', nil, c.pc.events) end
       if c.pb then addGridCol(chan, 'pb', nil,  c.pb.events) end
-      for lane, col in ipairs(c.notes) do addGridCol(chan, 'note', lane, col.events) end
+      -- Replace-region parked notes left the take so the arp packs to lane 1, but they remain
+      -- the displayed chord: union each back into its lane. see design/note-macros-v2.md § Generator output
+      local parkedByLane = {}
+      for _, m in ipairs(channel.parked or {}) do util.bucket(parkedByLane, m.lane, m) end
+      for lane, col in ipairs(c.notes) do
+        local events = col.events
+        if parkedByLane[lane] then
+          events = {}
+          for _, e in ipairs(col.events)        do util.add(events, e) end
+          for _, e in ipairs(parkedByLane[lane]) do util.add(events, e) end
+          table.sort(events, function(a, b) return (a.ppq or 0) < (b.ppq or 0) end)
+        end
+        addGridCol(chan, 'note', lane, events)
+      end
       if c.at then addGridCol(chan, 'at', nil,  c.at.events) end
       local ccNums = {}
       for n in pairs(c.ccs) do util.add(ccNums, n) end

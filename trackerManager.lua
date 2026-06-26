@@ -27,7 +27,7 @@
 --shape: extraColumns[chan] = { notes=count, [pc], [pb], [at], [ccs={[ccNum]=true}] }
 --shape: lastMuteSet = { [chan] = true }, pushed by tv via tm:setMutedChannels
 --shape: fxParked = { { evType='note', chan, lane, ppq, endppq, ppqL, endppqL, pitch, vel, detune, delay, sample }, ... }
---shape: channels[chan].parked = { { ppqL, endppqL, pitch, vel, detune, lane }, ... } -- realised off-take replace members
+--shape: channels[chan].parked = { { ppq, ppqL, endppqL, endppqC, pitch, vel, detune, sample, delay, lane }, ... } -- off-take replace members as render-ready logical cells (ppq==ppqL, endppqC==endppqL)
 --contract: replace fxRegion parks covered authored notes off the take; augment leaves them sounding
 --invariant: parked members feed generator + grid only; never sounding (mute fails for CC/PA)
 
@@ -1312,16 +1312,23 @@ do
         ds:assign('fxParked', #newParked > 0 and newParked or util.REMOVE)
       end
 
-      -- Realised, displayed membership: parked off the take, retained for the generator + the grid.
+      -- Off-take membership for the generator + grid: each is a render-ready logical cell
+      -- (ppq/endppqC like a projected note); an emptied lane re-extends to keep a column home.
       local takeLen = tm:length()
       for chan = 1, 16 do channels[chan].parked = {} end
       for _, spec in ipairs(newParked) do
-        util.add(channels[spec.chan].parked, {
-          ppqL = spec.ppqL, endppqL = spec.endppqL, pitch = spec.pitch,
-          vel = spec.vel, detune = spec.detune or 0, lane = spec.lane,
+        local channel = channels[spec.chan]
+        while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
+        util.add(channel.parked, {
+          ppq = spec.ppqL, ppqL = spec.ppqL, endppqL = spec.endppqL,
+          pitch = spec.pitch, vel = spec.vel, detune = spec.detune or 0,
+          sample = spec.sample, delay = spec.delay, lane = spec.lane,
         })
       end
-      for chan = 1, 16 do realiseParked(channels[chan].parked, tm:toLogical(chan, takeLen)) end
+      for chan = 1, 16 do
+        realiseParked(channels[chan].parked, tm:toLogical(chan, takeLen))
+        for _, m in ipairs(channels[chan].parked) do m.endppqC = m.endppqL end
+      end
     end
 
     -- Windows (read-only): fx host voice extents + per-note same-lane successor ppqL, floored by authored end; no realised round-trip (G4-stable).
