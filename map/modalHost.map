@@ -17,20 +17,20 @@
   @state kinds = {}  @ 14
   @state state = nil  @ 15
   @state wasOpen = false  @ 16   -- snapshot at tick(); stays true across the closing frame
-  @state mh = {}  @ 20
+  @state modalHost = {}  @ 20
 
 # Private functions
   @fn label()  @ 18
 
-# Public API (mh:*)
-  @api mh:registerKind(kind, render)  @ 22
-  @api mh:open(s)  @ 24
-  @api mh:openPrompt(args)  @ 29
-  @api mh:openConfirm(args)  @ 41
-  @api mh:isOpen()  @ 50
-  @api mh:wasOpenAtFrameStart()  @ 51
-  @api mh:tick()  @ 53
-  @api mh:draw()  @ 55
+# Public API (modalHost:*)
+  @api modalHost:registerKind(kind, render)  @ 22
+  @api modalHost:open(s)  @ 24
+  @api modalHost:openPrompt(args)  @ 29
+  @api modalHost:openConfirm(args)  @ 41
+  @api modalHost:isOpen()  @ 50
+  @api modalHost:wasOpenAtFrameStart()  @ 51
+  @api modalHost:tick()  @ 53
+  @api modalHost:draw()  @ 55
 
 # Uses (outbound edges)
   @use call    chrome.colour  @ 67

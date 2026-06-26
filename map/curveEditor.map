@@ -1,4 +1,4 @@
-@module curveEditor  src=curveEditor.lua  loc=329  sha=4fdd89b  mode=chunk
+@module curveEditor  src=curveEditor.lua  loc=329  sha=a3a8e0b  mode=chunk
 @deps ctx, chrome, page
 
 # Invariants & contracts
@@ -30,10 +30,10 @@
   @state R_PREVIEW = 3.5  @ 28
   @state FREE_EPS_T = 1e-3  @ 29   -- strict-between-neighbours margin in free (shift) mode
   @state hover, segHover, segPin, preview, previewSuppress, drag  @ 31
-  @state self = {}  @ 33
+  @state curveEditor = {}  @ 33
 
-# Public API (self:*)
-  @api self:frame(a)  @ 39
+# Public API (curveEditor:*)
+  @api curveEditor:frame(a)  @ 39
       @contract  returns true iff the editor consumed the mouse this frame (host should suppress its own click handling)
       @contract  callbacks fire synchronously during frame(); host must tolerate re-entrant reads of events on the same frame
       @contract  host must call frame() inside the window whose drawlist the painter binds; gate a.hovered on its own IsWindowHovered

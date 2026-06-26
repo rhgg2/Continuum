@@ -23,7 +23,7 @@
 
 local ImGui = require 'imgui' '0.10'
 
-local M = {}
+local painter = {}
 
 ----- Rotated text
 
@@ -86,14 +86,14 @@ local function rotatedTex(ctx, s, size)
 end
 
 --contract: strip (w,h) in screen px for textUp at this size; nil when the LICE path is unavailable
-function M.measureRotated(ctx, s, size)
+function painter.measureRotated(ctx, s, size)
   local tex = rotatedTex(ctx, s, size)
   if not tex then return nil end
   return tex.h / OVERSAMPLE, tex.w / OVERSAMPLE
 end
 
 --contract: sx/sy default 1 and must be non-zero (fromScreen divides); ox/oy default 0.
-function M.new(ctx, chrome, transform, page)
+function painter.new(ctx, chrome, transform, page)
   -- ox/oy round to whole pixels so an integer logical coord lands on a pixel
   -- boundary; sx/sy pass through (a page may scale by a fractional zoom).
   local ox, oy = math.floor((transform.ox or 0) + 0.5), math.floor((transform.oy or 0) + 0.5)
@@ -294,13 +294,13 @@ end
 
 --contract: returns an opaque colour token (not a bare int); pass to a draw method's colour arg.
 -- The idx-th perceptually-even hue. chroma/light/alpha tone it.
-function M.hue(idx, chroma, light, alpha)
+function painter.hue(idx, chroma, light, alpha)
   local r, g, b = hueRGB(idx, chroma, light)
   return { u32 = ImGui.ColorConvertDouble4ToU32(r, g, b, alpha) }
 end
 
 --contract: REAPER native int (|0x1000000 set) for I_CUSTOMCOLOR; chroma/light match grid fill hue.
-function M.hueNative(idx)
+function painter.hueNative(idx)
   local r, g, b = hueRGB(idx, 0.125, 0.72)
   return reaper.ColorToNative(
     math.floor(r * 255 + 0.5),
@@ -308,4 +308,4 @@ function M.hueNative(idx)
     math.floor(b * 255 + 0.5)) | 0x1000000
 end
 
-return M
+return painter

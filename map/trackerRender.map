@@ -1,4 +1,4 @@
-@module trackerRender  src=trackerRender.lua  loc=2214  sha=ae63bda  mode=chunk
+@module trackerRender  src=trackerRender.lua  loc=2214  sha=2d2415d  mode=chunk
 @deps cm, ds, cmgr, chrome, gui, modalHost, facade, tv, help
 
 # Invariants & contracts
@@ -28,7 +28,7 @@
   @require painter = 'painter'  @ 29
 
 # Constructed sub-instances
-  @construct curveEd = util.instantiate('curveEditor')  @ 72
+  @construct curveEditor = util.instantiate('curveEditor')  @ 72
 
 # Private state
   @state GUTTER = 5  @ 37   -- in grid chars: 3-char row num + spacer + region slot
@@ -67,7 +67,7 @@
   @state paramClipper = nil  @ 950
   @state editKeys = {}  @ 1609
   @state lastEditKey  @ 1627
-  @state renderer = {}  @ 1788
+  @state tr = {}  @ 1788
   @state FX_KINDS = { 'retrig', 'trill', 'vibrato', 'slide' }  @ 1795
   @state KIND_LABELS = { retrig = 'Retrig', trill = 'Trill', vibrato = 'Vibrato'...  @ 1796
   @state FX_DEFAULTS = {  @ 1797
@@ -188,10 +188,10 @@
       -- Mint the clone, open take-properties focused on name. No rebind: slot selection re-binds
       -- to the clone before any commit lands, so the seed and commit both target the clone.
 
-# Public API (renderer:*)
+# Public API (tr:*)
   -- Region overlay keymap
   -- Take properties modal helper
-  @api renderer:openTakeProperties(args)  @ 2115
+  @api tr:openTakeProperties(args)  @ 2115
       -- onClose fires exactly once, after the whole modal chain — including
       -- any truncate-confirm follow-up. Two sources of "chain done":
       -- the apply path (callback ran, valid input, either direct apply or
@@ -201,13 +201,13 @@
       -- exclusive: once a valid callback starts the apply chain it claims
       -- ownership, so modalHost's onClose becomes a no-op.
   -- Page interface (rendering only; trackerPage drives lifecycle and the dispatch)
-  @api renderer:toolbarSegments()  @ 2157
-  @api renderer:renderBody(_, w, h, dispatch)  @ 2162
+  @api tr:toolbarSegments()  @ 2157
+  @api tr:renderBody(_, w, h, dispatch)  @ 2162
       @contract  calls computeLayout twice
       @invariant  lane-strip drag callbacks may flush tv.grid.cols and clear col.x
       @contract  second pass repopulates layout for drawTracker
-  @api renderer:renderStatusBar(_)  @ 2196
-  @api renderer:focusState()  @ 2203
+  @api tr:renderStatusBar(_)  @ 2196
+  @api tr:focusState()  @ 2203
       -- suppressKbd: modal/picker owns input. pageSuppressed: unused (swing/temper on own page).
       -- acceptCmds: page visible and no item active (toolbar focus is transient; see IsAnyItemActive).
 

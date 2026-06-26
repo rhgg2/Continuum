@@ -1,4 +1,4 @@
-@module generators  src=generators.lua  loc=153  sha=1fc72be  mode=namespace
+@module generators  src=generators.lua  loc=153  sha=2d2415d  mode=namespace
 
 # Invariants & contracts
   @invariant  pure module -- no module-level state; a generator is fn(host, params, ctx) -> { notes, delta }
@@ -10,7 +10,7 @@
   @shape  result = { notes = { {ppqL,endppqL,pitch,vel,detune}, ... }, delta = { {ppqL,val,shape,[tension]}, ... } }
 
 # Module-level constants
-  @const M = {}  @ 14
+  @const generators = {}  @ 14
   @const CARRIER_PRIORITY = {  @ 72
 
 # Private functions
@@ -19,19 +19,19 @@
       -- Cents between two notes' realised pitches. The microtonal offset already rides
       -- in detune, so this is pure note arithmetic -- no temper needed.
 
-# Public API (M.*)
-  @api M.retrig(host, params, ctx)  @ 23
+# Public API (generators.*)
+  @api generators.retrig(host, params, ctx)  @ 23
       @contract  retrig fills the host window with evenly-spaced same-pitch fxNotes 2..N (host is fxNote 1)
       @contract  velocity ramps params.ramp per fxNote, clamped 1..127; detune inherited from the host verbatim
-  @api M.trill(host, params, ctx)  @ 44
+  @api generators.trill(host, params, ctx)  @ 44
       @contract  trill alternates host pitch with a note `step` scale-steps away (via ctx.step); host is fxNote 1
-  @api M.allocateCarrier(occupied)  @ 82
+  @api generators.allocateCarrier(occupied)  @ 82
       @contract  first priority MSB n where neither n nor n+32 is in `occupied`; nil if saturated
-  @api M.vibrato(host, params, ctx)  @ 91
+  @api generators.vibrato(host, params, ctx)  @ 91
       @contract  vibrato -> lane-1 pb-delta breakpoints in cents; sine of depth cents at 1/period QN
       @contract  breakpoints at sine extrema, 'slow'-shaped; linear ramp-in over onset QN
       @contract  carrier returns to 0 (centre) at window end -- no residual bend on the channel
-  @api M.slide(host, params, ctx)  @ 122
+  @api generators.slide(host, params, ctx)  @ 122
       @contract  slide glide-in -> lane-1 pb-delta; slur to target over `over` QN; re-centres at end
       @contract  target 'next' = interval to next same-lane note; 'fixed' = params.cents; pb-range clamps
       @contract  no next note or unison target -> empty delta (carrier untouched)

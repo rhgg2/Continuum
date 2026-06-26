@@ -20,13 +20,13 @@
   @const util = 'util'  @ 16
 
 # Module-level constants
-  @const M = {}  @ 18
+  @const timing = {}  @ 18
   @const PI = math.pi  @ 35
   @const TAU = 2 * PI  @ 36
   @const SHUFFLE_K = 2 / (3 * math.sqrt(3))  @ 37   -- pins |g| = 1 at the extrema
   @const TOL = 1e-12  @ 38
   @const MAX_ITER = 20  @ 39
-  @const K = M.K  @ 129
+  @const K = timing.K  @ 129
 
 # Private functions
   -- Atoms
@@ -50,35 +50,35 @@
   @fn findRampOff(factors, length, step)  @ 258
   @fn identityShape(length)  @ 270
 
-# Public API (M.*)
-  @api M.atomTilePeriod(factor)  @ 142
+# Public API (timing.*)
+  @api timing.atomTilePeriod(factor)  @ 142
       @contract  returns QN, not PPQ; multiply by resolution at the swing-resolution boundary
-  @api M.isIdentity(composite)  @ 147
+  @api timing.isIdentity(composite)  @ 147
       @contract  bare {} treated as identity; either missing factors or empty factors with zero phase counts
-  @api M.periodQN(period)  @ 156
+  @api timing.periodQN(period)  @ 156
       -- Bad shape is a caller bug; fail loudly rather than guessing.
-  @api M.compositePeriodQN(composite)  @ 165
+  @api timing.compositePeriodQN(composite)  @ 165
       -- Uses internal tile periods (period × pulsesPerCycle), so the result is
       -- the realised repeat rate, not the user-period.
-  @api M.resolveFactors(composite, ppqPerQN)  @ 183
+  @api timing.resolveFactors(composite, ppqPerQN)  @ 183
       @contract  Composite + ppqPerQN -> ResolvedFactor[]; folds composite.phase into each factor's effective phase. Sole pre-flight for applyFactors / unapplyFactors and resolveComposite.
-  @api M.applyFactors(factors, ppq)  @ 223
+  @api timing.applyFactors(factors, ppq)  @ 223
       @contract  ppqL -> ppqI; identity-safe on empty factors
-  @api M.unapplyFactors(factors, ppq)  @ 229
+  @api timing.unapplyFactors(factors, ppq)  @ 229
       @contract  ppqI -> ppqL; reverses factor order to invert composition
-  @api M.resolveComposite(composite, length, ppqPerQN)  @ 275
+  @api timing.resolveComposite(composite, length, ppqPerQN)  @ 275
       @contract  identity composite or length≤0 returns an identity-Shape sentinel; otherwise returns Shape{factors, a, b, ya, yb, length}. Consumers eval/invert across both forms.
-  @api M.eval(S, x)  @ 289
+  @api timing.eval(S, x)  @ 289
       @contract  eval routes by x: ramp-on for x≤a, applyFactors for a<x<b, ramp-off for x≥b
-  @api M.invert(S, y)  @ 301
+  @api timing.invert(S, y)  @ 301
       @contract  invert routes by y: ramp-on inverse for y≤ya, unapplyFactors for ya<y<yb, ramp-off inverse for y≥yb
   -- Logical grid
-  @api M.logPerRow(rpb, denom, resolution)  @ 315
+  @api timing.logPerRow(rpb, denom, resolution)  @ 315
       @contract  callers must store result as float; tv relies on unrounded ppqs for swing-inversion exactness
   -- Delay <-> PPQ
-  @api M.delayToPPQ(d, res)  @ 322
+  @api timing.delayToPPQ(d, res)  @ 322
       @contract  d in signed milli-QN, res in PPQ/QN; nil d treated as 0
-  @api M.ppqToDelay(p, res)  @ 326
+  @api timing.ppqToDelay(p, res)  @ 326
 
 # Uses (outbound edges)
   @use call    util.gcd  @ 175

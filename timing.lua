@@ -15,12 +15,12 @@
 --shape: AtomMeta = { posRange = number, negRange = number, pulsesPerCycle = 1|2 }
 local util = require 'util'
 
-local M = {}
+local timing = {}
 
 -- Project-level max stretch factor: every bounded atom and the composite-
 -- boundary ramp pin slope ∈ [1/K, K]. K=60 is well above any realistic
 -- note-density-driven injectivity demand on integer PPQ.
-M.K = 60
+timing.K = 60
 
 ----- Atoms
 
@@ -68,7 +68,7 @@ local function smooth(g, gp)
   }
 end
 
-M.atoms = {
+timing.atoms = {
   -- identity-with-shift: f(u, s) = u + s. Slope is 1; endpoints NOT
   -- pinned to [0, 1]. On a tile of period T this gives p → p + T·s, the
   -- substrate for delay. The boundary ramp absorbs the resulting overhang
@@ -126,8 +126,8 @@ M.atoms = {
 --            min=−9c/8 at cos(2πu)=1/4, where c=8π/(3√3) ⟹ asymmetric (16:9)
 --   tilt     g'=(27/4)(1−u)(1−3u);    max=27/4 at u=0,
 --            min=−9/4 at u=2/3                            ⟹ asymmetric (3:1)
-local K = M.K
-M.atomMeta = {
+local K = timing.K
+timing.atomMeta = {
   -- id range = ∞: slope is 1 regardless of shift. The boundary ramp is
   -- what keeps the take's overall slope in bound.
   id      = { posRange = math.huge,                                  negRange = math.huge,                                  pulsesPerCycle = 1 },
@@ -139,12 +139,12 @@ M.atomMeta = {
 }
 
 --contract: returns QN, not PPQ; multiply by resolution at the swing-resolution boundary
-function M.atomTilePeriod(factor)
-  return M.periodQN(factor.period) * M.atomMeta[factor.atom].pulsesPerCycle
+function timing.atomTilePeriod(factor)
+  return timing.periodQN(factor.period) * timing.atomMeta[factor.atom].pulsesPerCycle
 end
 
 --contract: bare {} treated as identity; either missing factors or empty factors with zero phase counts
-function M.isIdentity(composite)
+function timing.isIdentity(composite)
   if not composite then return true end
   local fs = composite.factors
   return (composite.phase or 0) == 0 and (not fs or #fs == 0)
@@ -153,7 +153,7 @@ end
 ----- Period helpers
 
 -- Bad shape is a caller bug; fail loudly rather than guessing.
-function M.periodQN(period)
+function timing.periodQN(period)
   local t = type(period)
   if t == 'number' then return period end
   if t == 'table'  then return period[1] / period[2] end
@@ -162,13 +162,13 @@ end
 
 -- Uses internal tile periods (period × pulsesPerCycle), so the result is
 -- the realised repeat rate, not the user-period.
-function M.compositePeriodQN(composite)
+function timing.compositePeriodQN(composite)
   local fs = composite and composite.factors
   if not fs or #fs == 0 then return 1 end
   local nL, dG
   for _, f in ipairs(fs) do
     local p     = f.period
-    local mult  = M.atomMeta[f.atom].pulsesPerCycle
+    local mult  = timing.atomMeta[f.atom].pulsesPerCycle
     local n     = ((type(p) == 'table') and p[1] or p) * mult
     local d     = (type(p) == 'table') and p[2] or 1
     nL = nL and util.lcm(nL, n) or n
@@ -180,14 +180,14 @@ end
 ----- Factor resolution
 
 --contract: Composite + ppqPerQN -> ResolvedFactor[]; folds composite.phase into each factor's effective phase. Sole pre-flight for applyFactors / unapplyFactors and resolveComposite.
-function M.resolveFactors(composite, ppqPerQN)
+function timing.resolveFactors(composite, ppqPerQN)
   if not composite or not composite.factors then return {} end
-  local cPhaseQN = composite.phase and M.periodQN(composite.phase) or 0
+  local cPhaseQN = composite.phase and timing.periodQN(composite.phase) or 0
   local out = {}
   for i, f in ipairs(composite.factors) do
-    if not M.atoms[f.atom] then error('timing: unknown atom ' .. tostring(f.atom)) end
-    local tileQN  = M.atomTilePeriod(f)
-    local phaseQN = (f.phase and M.periodQN(f.phase) or 0) + cPhaseQN
+    if not timing.atoms[f.atom] then error('timing: unknown atom ' .. tostring(f.atom)) end
+    local tileQN  = timing.atomTilePeriod(f)
+    local phaseQN = (f.phase and timing.periodQN(f.phase) or 0) + cPhaseQN
     out[i] = {
       atom  = f.atom,
       shift = f.shift / tileQN,
@@ -206,7 +206,7 @@ local function tileApply(rf, p)
   local q = rf.phase and (p - rf.phase) or p
   local t = q / rf.T
   local n = math.floor(t)
-  local y = rf.T * (n + M.atoms[rf.atom].forward(t - n, rf.shift))
+  local y = rf.T * (n + timing.atoms[rf.atom].forward(t - n, rf.shift))
   return rf.phase and (y + rf.phase) or y
 end
 
@@ -215,18 +215,18 @@ local function tileUnapply(rf, p)
   local q = rf.phase and (p - rf.phase) or p
   local t = q / rf.T
   local n = math.floor(t)
-  local y = rf.T * (n + M.atoms[rf.atom].inverse(t - n, rf.shift))
+  local y = rf.T * (n + timing.atoms[rf.atom].inverse(t - n, rf.shift))
   return rf.phase and (y + rf.phase) or y
 end
 
 --contract: ppqL -> ppqI; identity-safe on empty factors
-function M.applyFactors(factors, ppq)
+function timing.applyFactors(factors, ppq)
   for _, rf in ipairs(factors) do ppq = tileApply(rf, ppq) end
   return ppq
 end
 
 --contract: ppqI -> ppqL; reverses factor order to invert composition
-function M.unapplyFactors(factors, ppq)
+function timing.unapplyFactors(factors, ppq)
   for i = #factors, 1, -1 do ppq = tileUnapply(factors[i], ppq) end
   return ppq
 end
@@ -244,27 +244,27 @@ end
 -- lands in bound.
 
 local function findRampOn(factors, length, step)
-  local lo, hi = 1 / M.K, M.K
+  local lo, hi = 1 / timing.K, timing.K
   local kMax = math.max(1, math.floor(length / step))
   for k = 1, kMax do
     local x = k * step
-    local y = M.applyFactors(factors, x)
+    local y = timing.applyFactors(factors, x)
     local g = y / x
     if g >= lo and g <= hi then return x, y end
   end
-  return length, M.applyFactors(factors, length)
+  return length, timing.applyFactors(factors, length)
 end
 
 local function findRampOff(factors, length, step)
-  local lo, hi = 1 / M.K, M.K
+  local lo, hi = 1 / timing.K, timing.K
   local kMax = math.max(1, math.floor(length / step))
   for k = 1, kMax do
     local x = length - k * step
-    local y = M.applyFactors(factors, x)
+    local y = timing.applyFactors(factors, x)
     local g = (length - y) / (length - x)
     if g >= lo and g <= hi then return x, y end
   end
-  return 0, M.applyFactors(factors, 0)
+  return 0, timing.applyFactors(factors, 0)
 end
 
 local function identityShape(length)
@@ -272,9 +272,9 @@ local function identityShape(length)
 end
 
 --contract: identity composite or length≤0 returns an identity-Shape sentinel; otherwise returns Shape{factors, a, b, ya, yb, length}. Consumers eval/invert across both forms.
-function M.resolveComposite(composite, length, ppqPerQN)
-  if M.isIdentity(composite) or length <= 0 then return identityShape(length) end
-  local factors = M.resolveFactors(composite, ppqPerQN)
+function timing.resolveComposite(composite, length, ppqPerQN)
+  if timing.isIdentity(composite) or length <= 0 then return identityShape(length) end
+  local factors = timing.resolveFactors(composite, ppqPerQN)
   local step    = ppqPerQN / 60
   local a, ya   = findRampOn(factors, length, step)
   local b, yb   = findRampOff(factors, length, step)
@@ -286,7 +286,7 @@ function M.resolveComposite(composite, length, ppqPerQN)
 end
 
 --contract: eval routes by x: ramp-on for x≤a, applyFactors for a<x<b, ramp-off for x≥b
-function M.eval(S, x)
+function timing.eval(S, x)
   if S.identity then return x end
   if x <= S.a then
     return S.a > 0 and (x * S.ya / S.a) or 0
@@ -294,11 +294,11 @@ function M.eval(S, x)
     local L = S.length
     return L > S.b and (S.yb + (x - S.b) * (L - S.yb) / (L - S.b)) or L
   end
-  return M.applyFactors(S.factors, x)
+  return timing.applyFactors(S.factors, x)
 end
 
 --contract: invert routes by y: ramp-on inverse for y≤ya, unapplyFactors for ya<y<yb, ramp-off inverse for y≥yb
-function M.invert(S, y)
+function timing.invert(S, y)
   if S.identity then return y end
   if y <= S.ya then
     return S.ya > 0 and (y * S.a / S.ya) or 0
@@ -306,25 +306,25 @@ function M.invert(S, y)
     local L = S.length
     return L > S.yb and (S.b + (y - S.yb) * (L - S.b) / (L - S.yb)) or L
   end
-  return M.unapplyFactors(S.factors, y)
+  return timing.unapplyFactors(S.factors, y)
 end
 
 ----- Logical grid
 
 --contract: callers must store result as float; tv relies on unrounded ppqs for swing-inversion exactness
-function M.logPerRow(rpb, denom, resolution)
+function timing.logPerRow(rpb, denom, resolution)
   return resolution * 4 / (denom * rpb)
 end
 
 ----- Delay <-> PPQ
 
 --contract: d in signed milli-QN, res in PPQ/QN; nil d treated as 0
-function M.delayToPPQ(d, res)
+function timing.delayToPPQ(d, res)
   return util.round(res * (d or 0) / 1000)
 end
 
-function M.ppqToDelay(p, res)
+function timing.ppqToDelay(p, res)
   return 1000 * p / res
 end
 
-return M
+return timing

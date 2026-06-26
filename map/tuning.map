@@ -1,17 +1,17 @@
-@module tuning  src=tuning.lua  loc=457  sha=0191115  mode=namespace
+@module tuning  src=tuning.lua  loc=457  sha=d1f01c9  mode=namespace
 
 # Invariants & contracts
   @invariant  pure coordinate-system module: no module state, no take state, no pb / detune realisation logic
   @invariant  intent / realisation split — owns intent (cents-typed detune); pb realisation is tm's domain
   @invariant  detune is cents throughout; raw 14-bit pb conversion is tm's flush boundary, never here
-  @invariant  cents[1] is the unison (0); nameless step displays as degree-octave via M.stepToText
+  @invariant  cents[1] is the unison (0); nameless step displays as degree-octave via stepToText
   @invariant  octave parameters are MIDI-relative (C4 → 4), not period-index
 
 # Shapes
   @shape  Temper = {name, periodPitch=token, pitches=token[ascending], stepNames=string[], periodAsStep=bool, cents=number[derived], period=cents[derived], octaveStep=int, octaveWidth=int, cellWidth=int}
 
 # Module-level constants
-  @const M = {}  @ 10
+  @const tuning = {}  @ 10
   @const RATIO_CAP = 1 << 40  @ 314
 
 # Private functions
@@ -41,63 +41,63 @@
       -- Adjacent step sizes (incl. the wrap step) of an n-note chain of `g`
       -- reduced into `p`: {cents, count} per distinct size, large first.
 
-# Public API (M.*)
-  @api M.scalaPitch(token)  @ 49
+# Public API (tuning.*)
+  @api tuning.scalaPitch(token)  @ 49
       @contract  token → cents or nil: n/d, int, '.'=cents, n\m, n\m<equave> step (equave dflt 2/1).
-  @api M.derive(temper)  @ 70
+  @api tuning.derive(temper)  @ 70
       @contract  pitches→cents, periodPitch→period; stamps octaveStep + cellWidth. Pure; returns temper.
-  @api M.findTemper(name, userLib)  @ 120
-      @contract  looks up name in userLib first, then falls back to built-in M.presets; returns nil only if name is missing or unknown to both. Lets the '12EDO' sentinel resolve even when userLib is empty.
-  @api M.parseScalaPitches(text)  @ 129
+  @api tuning.findTemper(name, userLib)  @ 120
+      @contract  userLib first, then presets; nil when unknown to both; '12EDO' resolves via presets
+  @api tuning.parseScalaPitches(text)  @ 129
       -- Lenient: every non-blank, non-'!' line is a pitch token. Drives paste + the
       -- import Create button (which re-parses the box after any manual edits).
-  @api M.parseScalaFile(text)  @ 140
+  @api tuning.parseScalaFile(text)  @ 140
       -- Strict .scl: drop '!' comment lines, then [description, count, pitch x count].
       -- Returns pitch tokens + description (suggested name) for the Scala load path.
-  @api M.scalaToTemper(pitchLines, name)  @ 158
+  @api tuning.scalaToTemper(pitchLines, name)  @ 158
       -- Bridge Scala's convention (unison implicit, period last) to Continuum's
       -- (step 1 = 1/1, period separate): prepend unison, split off final as period.
-  @api M.edoDegrees(spec, mode)  @ 182
+  @api tuning.edoDegrees(spec, mode)  @ 182
       -- Equal-division subset spec -> ascending degrees; largest is the period.
       -- 'relative': cumulative step counts. 'absolute': sorted+deduped. nil on bad token.
-  @api M.degreesToSpec(degrees, mode)  @ 203
+  @api tuning.degreesToSpec(degrees, mode)  @ 203
       -- Inverse of edoDegrees: render a degree list back as a spec string in `mode`.
       -- Lets a mode switch convert the in-flight pattern rather than reset it.
-  @api M.genEqual(degrees, interval)  @ 212
+  @api tuning.genEqual(degrees, interval)  @ 212
       -- N-equal-divisions of `interval` subset to `degrees`; tokens are intensional
       -- (d\D<equave>, suffix omitted for octave). Base 0 implicit; last degree = period.
-  @api M.genHarmonics(lo, hi)  @ 222
+  @api tuning.genHarmonics(lo, hi)  @ 222
       -- Harmonic-series segment lo..hi: ratios m/lo rooted on the low harmonic, the
       -- top (hi/lo) the period.
-  @api M.genSubharmonics(lo, hi)  @ 229
+  @api tuning.genSubharmonics(lo, hi)  @ 229
       -- Subharmonic (utonal) segment lo..hi: ratios hi/m ascending, top the period.
-  @api M.parseChord(spec)  @ 237
+  @api tuning.parseChord(spec)  @ 237
       -- Colon/space-separated extended ratio (e.g. '4:5:6:7') -> positive integers,
       -- at least two. nil + message otherwise.
-  @api M.genChord(members, invert)  @ 250
+  @api tuning.genChord(members, invert)  @ 250
       -- Enumerate a chord as a scale rooted on its first note. otonal: ci/c1.
       -- inverted (utonal): ck/c(k+1-i). The last member is the period either way.
-  @api M.genCPS(factors, k, equave)  @ 274
+  @api tuning.genCPS(factors, k, equave)  @ 274
       -- Combination product set: every k-subset's product, rooted on the smallest
       -- product (so 1/1 is always present) and reduced into the equave; ascending.
-  @api M.genRank2(generator, period, size, up)  @ 348
+  @api tuning.genRank2(generator, period, size, up)  @ 348
       -- Rank-2 scale: stack the generator `up` above and `size-1-up` below 1/1,
       -- reduce into period, sort. up = mode. Exact ratios if inputs rational, else cents.
-  @api M.mosInfo(generator, period, n)  @ 370
+  @api tuning.mosInfo(generator, period, n)  @ 370
       @contract  {isMos, large, small} for an n-note chain; large/small are L/s step counts when isMos
-  @api M.nextMosSize(generator, period, fromN, dir)  @ 377
+  @api tuning.nextMosSize(generator, period, fromN, dir)  @ 377
       @contract  next MOS size (two step sizes) from fromN, stepping dir (+/-1); nil past the cap
   -- Coordinate conversions
-  @api M.midiToStep(temper, midi, detune)  @ 391
+  @api tuning.midiToStep(temper, midi, detune)  @ 391
       @contract  detune optional (defaults 0); snaps to nearest scale point including the period boundary (rounds up to step 1 of next octave)
       @contract  returned octave is MIDI-relative (C-1 → -1)
-  @api M.stepToMidi(temper, step, octave)  @ 413
+  @api tuning.stepToMidi(temper, step, octave)  @ 413
       @contract  wraps out-of-range step by adjusting octave; clamps midi to 0..127 by folding overflow into detune (never silently drops)
-  @api M.snap(temper, midi, detune)  @ 431
-  @api M.transposeStep(temper, midi, detune, n)  @ 436
+  @api tuning.snap(temper, midi, detune)  @ 431
+  @api tuning.transposeStep(temper, midi, detune, n)  @ 436
       @contract  moves by n scale steps under temper, carrying the octave; n may be negative
   -- Display
-  @api M.stepToParts(temper, step, octave)  @ 444
+  @api tuning.stepToParts(temper, step, octave)  @ 444
       @contract  returns (note, octaveLabel); named ⇒ name, nameless ⇒ degree+'-'; octave+1 at octaveStep
-  @api M.stepToText(temper, step, octave)  @ 452
+  @api tuning.stepToText(temper, step, octave)  @ 452
       @contract  name ⇒ name+octave (C-4); blank/absent ⇒ degree-octave (7-4). Octave +1 at octaveStep.

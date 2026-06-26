@@ -1,9 +1,9 @@
-@module commandManager  src=commandManager.lua  loc=589  sha=884c6a9  mode=chunk
+@module commandManager  src=commandManager.lua  loc=582  sha=0ecbe36  mode=chunk
 @deps cm
 
 # Invariants & contracts
-  @invariant  commands form a single flat namespace owned by mgr; scopes own keymaps + modal/passthrough only
-  @invariant  scope:register installs a gated wrapper into mgr.commands — invoke returns nil when the scope is not reachable on the stack
+  @invariant  cmgr owns a flat command namespace; scopes own keymaps + modal/passthrough only
+  @invariant  scope:register installs a gated wrapper; invoke returns nil when scope is unreachable
   @invariant  scopes form a stack walked top-down; the bottom is the 'global' scope pushed at module load
   @invariant  a modal scope without passthrough[name] blocks both key dispatch and invoke for names below it
   @invariant  command return: nil = handled (stop dispatch); false = declined (let char queue see the keypress)
@@ -25,14 +25,14 @@
 # Private state
   @state layouts = {  @ 16
   @state chars = {}  @ 35
-  @state mgr = {  @ 49
-  @state global = newScope('global')  @ 117
-  @state prefixBuf, pendingPrefix = nil, nil  @ 181
-  @state pendingPrefixNum, pendingPrefixDen = nil, nil  @ 182
-  @state keyNames  @ 357
-  @state shiftGlyph  @ 397
-  @state modOrder, modSep  @ 416
-  @state keyTokens, modTokenList, tokenKeys, modByName  @ 467
+  @state cmgr = {  @ 49
+  @state global = newScope('global')  @ 113
+  @state prefixBuf, pendingPrefix = nil, nil  @ 174
+  @state pendingPrefixNum, pendingPrefixDen = nil, nil  @ 175
+  @state keyNames  @ 350
+  @state shiftGlyph  @ 390
+  @state modOrder, modSep  @ 409
+  @state keyTokens, modTokenList, tokenKeys, modByName  @ 460
 
 # Private functions
   -- Stack reachability
@@ -42,88 +42,88 @@
   -- Bottom of the stack
   -- Manager-level surface
   -- Universal-argument prefix
-  @fn clearPrefixState()  @ 184
+  @fn clearPrefixState()  @ 177
   -- Scopes & stack
-  @fn asScope(s)  @ 239
+  @fn asScope(s)  @ 232
   -- Dispatch
   -- Keymap lookup
-  @fn resolveKeys(name)  @ 275
+  @fn resolveKeys(name)  @ 268
   -- Binding-edit queries (scope-aware)
   -- Note layout
   -- Key labels (human-readable bindings, for the help overlay)
-  @fn buildKeyNames(ImGui)  @ 358
-  @fn buildShiftGlyphs(ImGui)  @ 398
-  @fn buildModOrder(ImGui)  @ 417
+  @fn buildKeyNames(ImGui)  @ 351
+  @fn buildShiftGlyphs(ImGui)  @ 391
+  @fn buildModOrder(ImGui)  @ 410
   -- Binding tokens (stable ASCII; the on-disk / hand-edit form)
-  @fn buildKeyTokens(ImGui)  @ 469
-  @fn buildModTokens(ImGui)  @ 506
-  @fn ensureTokenTables(ImGui)  @ 515
+  @fn buildKeyTokens(ImGui)  @ 462
+  @fn buildModTokens(ImGui)  @ 499
+  @fn ensureTokenTables(ImGui)  @ 508
 
-# Public API (mgr:*)
-  @api mgr:register(name, fn, undoDesc)  @ 129
+# Public API (cmgr:*)
+  @api cmgr:register(name, fn, undoDesc)  @ 122
       @contract  delegates to the global scope — root-level commands are gated-to-global, which is always reachable; the duplicated registration body now lives only in scope:register
-  @api mgr:registerAll(tbl)  @ 130
-  @api mgr:rootKeymap()  @ 133
+  @api cmgr:registerAll(tbl)  @ 123
+  @api cmgr:rootKeymap()  @ 126
       @contract  returns the bottom-of-stack ('global') keymap directly — used by dispatchers that want to fire ONLY root bindings (e.g. trackerPage's swing editor wants playPause/quit live but page-scoped commands off)
-  @api mgr:bind(name, keys)  @ 135
-  @api mgr:bindAll(tbl)  @ 136
-  @api mgr:wrap(name, wrapper)  @ 139
+  @api cmgr:bind(name, keys)  @ 128
+  @api cmgr:bindAll(tbl)  @ 129
+  @api cmgr:wrap(name, wrapper)  @ 132
       @contract  wrap is a no-op if name has no registered command; wrappers stack (compose outward)
-  @api mgr:doBefore(name, before)  @ 148
+  @api cmgr:doBefore(name, before)  @ 141
       @contract  doBefore/doAfter accept either a single name or an array of names
       @contract  doAfter preserves the original command's return values (the dispatch signal)
       @invariant  wraps compose inside the gate — when invoke skips a gated command, no doBefore / doAfter side-effect fires
-  @api mgr:doAfter(name, after)  @ 158
-  @api mgr:beginPrefix()  @ 190
+  @api cmgr:doAfter(name, after)  @ 151
+  @api cmgr:beginPrefix()  @ 183
       @contract  buffer accepts only '0'..'9' and '/'; cancel/finish/invoke each leave the state inactive
-  @api mgr:isPrefixActive()  @ 191
-  @api mgr:appendPrefix(ch)  @ 193
-  @api mgr:cancelPrefix()  @ 199
-  @api mgr:finishPrefix()  @ 202
+  @api cmgr:isPrefixActive()  @ 184
+  @api cmgr:appendPrefix(ch)  @ 186
+  @api cmgr:cancelPrefix()  @ 192
+  @api cmgr:finishPrefix()  @ 195
       @contract  empty buffer or unparseable input → nil pending value; '/' with empty numerator or denominator parses as nil; integer N stored as (N/1)
-  @api mgr:prefixRational()  @ 223
+  @api cmgr:prefixRational()  @ 216
       @contract  non-consuming reader of the parsed rational; safe to call inside a command body. Returns (nil, nil) when no prefix is pending. State is cleared at the end of invoke, not by this call.
-  @api mgr:scope(name)  @ 230
+  @api cmgr:scope(name)  @ 223
       @contract  creates the scope on first request; idempotent thereafter
-  @api mgr:push(s)  @ 242
+  @api cmgr:push(s)  @ 235
       @contract  push(name|scope); creates a named scope if absent. Top-of-stack is the most recently pushed.
-  @api mgr:pop(s)  @ 249
+  @api cmgr:pop(s)  @ 242
       @contract  pop(name|scope) asserts the named scope is currently on top; pops it
-  @api mgr:invoke(name, ...)  @ 259
+  @api cmgr:invoke(name, ...)  @ 252
       @contract  returns nil when the command is unknown OR registered on a scope that is not currently reachable (off-stack or blocked by a modal above)
       @contract  always prepends the pending prefix (defaulted to 1 when nothing is pending) as the first argument to the command body. Bodies that need to distinguish "user typed 1" from "no prefix" read prefixRational() — it returns (nil, nil) when nothing is pending. State stays live for the call so the body may read it; cleared on return ONLY if there was a pending prefix at entry, so a command body that opens prefix mode (beginPrefix) is not wiped out by its own invoke.
-  @api mgr:keysFor(name)  @ 284
-  @api mgr:keychain()  @ 287
+  @api cmgr:keysFor(name)  @ 277
+  @api cmgr:keychain()  @ 280
       @contract  returns one keymap per stack scope in top-down order; modal scopes filter lower keymaps to their passthrough name set, then halt the walk
-  @api mgr:keySpec(spec, ImGui)  @ 307
+  @api cmgr:keySpec(spec, ImGui)  @ 300
       -- ImGui injected so cmgr stays free of REAPER-side imports at module load.
-  @api mgr:commandAtKey(spec, exceptName, ImGui)  @ 318
+  @api cmgr:commandAtKey(spec, exceptName, ImGui)  @ 311
       @contract  reachable command for spec's key (keychain top-down); skips exceptName; nil if free
-  @api mgr:bindingSite(name)  @ 333
+  @api cmgr:bindingSite(name)  @ 326
       @contract  scope to edit name's binding in: scope currently binding it, else its gate scope
-  @api mgr:noteChars(char)  @ 346
+  @api cmgr:noteChars(char)  @ 339
       -- Re-read noteLayout on each call so a config change takes effect
       -- without rebuilding vm.
-  @api mgr:keyLabel(spec, ImGui)  @ 435
-  @api mgr:keyLabelList(name, ImGui)  @ 450
+  @api cmgr:keyLabel(spec, ImGui)  @ 428
+  @api cmgr:keyLabelList(name, ImGui)  @ 443
       @contract  list of human labels, one per bound keyspec of the reachable command, or nil if unbound
-  @api mgr:keyLabels(name, ImGui)  @ 459
+  @api cmgr:keyLabels(name, ImGui)  @ 452
       @contract  keyLabelList joined by ' / ', or nil if unbound on the current stack
-  @api mgr:tokenForSpec(spec, ImGui)  @ 524
+  @api cmgr:tokenForSpec(spec, ImGui)  @ 517
       @contract  spec -> stable ASCII token ("Ctrl+Z"); nil if the key has no token name
-  @api mgr:specForToken(token, ImGui)  @ 538
+  @api cmgr:specForToken(token, ImGui)  @ 531
       @contract  token -> keyspec (bare key | {key, mod...}); (nil, err) on an unknown key/modifier
   -- Binding overrides (persisted, hand-editable)
-  @api mgr:loadOverrides(ImGui)  @ 559
+  @api cmgr:loadOverrides(ImGui)  @ 552
       @contract  a malformed token is warned and skipped; the command keeps its other (good) bindings
-  @api mgr:rebind(scopeName, name, specs, ImGui)  @ 577
+  @api cmgr:rebind(scopeName, name, specs, ImGui)  @ 570
       @contract  overwrites the scope's binding for name and persists it as tokens (global tier)
 
 # Uses (outbound edges)
-  @use call    cm.get  @ 347, 560, 581
-  @use call    cm.set  @ 586
+  @use call    cm.get  @ 340, 553, 574
+  @use call    cm.set  @ 579
   @use call    util.atomic  @ 90
-  @use call    util.print  @ 568
+  @use call    util.print  @ 561
   @use require util  @ 14
 
 # REAPER API surface

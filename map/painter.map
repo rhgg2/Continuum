@@ -1,4 +1,4 @@
-@module painter  src=painter.lua  loc=311  sha=1d2bf54  mode=namespace
+@module painter  src=painter.lua  loc=311  sha=a3a8e0b  mode=namespace
 
 # Invariants & contracts
   @contract  centre is logical; radius is screen px so the dot stays round under non-uniform scale.
@@ -10,7 +10,7 @@
   @const ImGui = 'imgui'  @ 24
 
 # Module-level constants
-  @const M = {}  @ 26
+  @const painter = {}  @ 26
   @const OVERSAMPLE = 2  @ 32   -- rasterise at 2x, draw half-size: retina stays crisp
   @const rotatedCache = {}  @ 34   -- size .. ':' .. text -> {img, w, h} | false: LICE path unavailable
   @const GOLDEN = 0.6180339887498949  @ 266
@@ -27,15 +27,15 @@
       -- Golden-ratio rotation throws adjacent indices to opposite sides of the
       -- wheel; light/chroma are held constant so the set stays perceptually even.
 
-# Public API (M.*)
-  @api M.measureRotated(ctx, s, size)  @ 89
+# Public API (painter.*)
+  @api painter.measureRotated(ctx, s, size)  @ 89
       @contract  strip (w,h) in screen px for textUp at this size; nil when the LICE path is unavailable
-  @api M.new(ctx, chrome, transform, page)  @ 96
+  @api painter.new(ctx, chrome, transform, page)  @ 96
       @contract  sx/sy default 1 and must be non-zero (fromScreen divides); ox/oy default 0.
-  @api M.hue(idx, chroma, light, alpha)  @ 297
+  @api painter.hue(idx, chroma, light, alpha)  @ 297
       -- The idx-th perceptually-even hue. chroma/light/alpha tone it.
       @contract  returns an opaque colour token (not a bare int); pass to a draw method's colour arg.
-  @api M.hueNative(idx)  @ 303
+  @api painter.hueNative(idx)  @ 303
       @contract  REAPER native int (|0x1000000 set) for I_CUSTOMCOLOR; chroma/light match grid fill hue.
 
 # Uses (outbound edges)

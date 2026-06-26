@@ -746,13 +746,13 @@ local function draw(w, h)
 end
 
 ----- Public
-local self = {}
+local temperEditor = {}
 --contract: open(name?) selects entry; default is active tuning, 12EDO treated as nil.
-function self:open(name)
+function temperEditor:open(name)
   local target = name or activeTemper()
   if target then selectTemper(target) end
 end
-function self:hasSelection()      return selected ~= nil end
-function self:render(w, h)        draw(w, h) end
-function self:libraryDescriptor() return buildDescriptor() end
-return self
+function temperEditor:hasSelection()      return selected ~= nil end
+function temperEditor:render(w, h)        draw(w, h) end
+function temperEditor:libraryDescriptor() return buildDescriptor() end
+return temperEditor

@@ -1,16 +1,16 @@
--- Pure structural calculus for the wiring page. M.compile returns a
+-- Pure structural calculus for the wiring page. DAG.compile returns a
 -- lazy-caching ctx; user-graph predicates stay free-standing. See docs/DAG.md.
 
 -- @noindex
 
---invariant: M.validate is pure; derivations live on M.compile's ctx
+--invariant: DAG.validate is pure; derivations live on DAG.compile's ctx
 --invariant: REAPER tracks are always stereo; audio I/O is a count of stereo pairs, never channels
 --invariant: every user-graph node carries node.ports={audio={…},midi={ins,outs}} at construction
 --invariant: fx midi: JSFX ports come from midirecv/midisend scan; native fx get {1,1}.
 --invariant: master is a singleton node (id='master'); ports.audio.ins is an explicit integer port count (default 1); no audio outs, no MIDI; terminal-only (never `from`)
 --shape: userGraph = { nodes = {[id]=userNode}, edges = edge[] }  -- node ids are rm guids (read era)
 --shape: userNode = { kind='source'|'fx'|'master'|'bus', pos={x,y}, ports={audio={ins,outs,inNames?,outNames?}, midi={ins,outs}}, trackId?=string, fxIdent?=string, fxDisplay?=string, fxId?=string, busAware?=bool, split?=true, orient?='V'|'H' }  -- bus: synthetic id, no source/fx; its summing track's guid lives on the bus record, not the node
---invariant: fx nodes carry busAware; wm:addFxNode and M.validate refuse true
+--invariant: fx nodes carry busAware; wm:addFxNode and DAG.validate refuse true
 --invariant: fxId is nil until materialised; stamped into the node after TrackFX_AddByName succeeds
 -- see docs/DAG.md § fxId as incarnation handle
 --shape: edge = { type='audio'|'midi', from=id, fromPort=nil|portIdx, to=id, toPort=nil|portIdx, ops?={gain?=number}, primary?=true }
@@ -52,14 +52,14 @@ local PARK_BUS = 127
 -- wiringTracks entry, so target and snapshot agree on this synthetic key.
 local MASTER = '__master__'
 
-local M = {}
+local DAG = {}
 
 ----------- PUBLIC
 
 ----- validate
 
 --contract: returns nil on success, or { code, ... } describing the first failure; wm:mutate gates persistence on nil
-function M.validate(userGraph)
+function DAG.validate(userGraph)
   local nodes, edges = userGraph.nodes or {}, userGraph.edges or {}
 
   local masters = 0
@@ -168,7 +168,7 @@ end
 -- § Quarantine): validate's successor on the graphs REAPER allows, not just authorable ones.
 --contract: groups non-master nodes into components; feedbackSeeds + busAware tag quarantined ones
 --shape: component = { nodes=id[] (sorted), reason=nil|'feedback'|'busAware' }
-function M.classify(userGraph, feedbackSeeds)
+function DAG.classify(userGraph, feedbackSeeds)
   local nodes, edges = userGraph.nodes or {}, userGraph.edges or {}
   feedbackSeeds = feedbackSeeds or {}
 
@@ -412,7 +412,7 @@ local function buildCtx(userGraph, derivedSplits)
   end
 
   -- The class hosted ON the REAPER master; nil only on a marker-free base ctx.
-  -- M.compile marks master split in those cases, so compiled ctx is total. See docs/DAG.md § Master-minimization.
+  -- DAG.compile marks master split in those cases, so compiled ctx is total. See docs/DAG.md § Master-minimization.
   function ctx:masterTrackClass()
     if cache.masterTrackClass ~= nil then return cache.masterTrackClass or nil end
     local mc = self:classOf()['master']
@@ -919,7 +919,7 @@ do
   -- Realisation pass: turns the structural ctx into per-track specs (fxOrder,
   -- wires, synth merge CUs). Reads only the ctx public surface + ctx.userGraph.
   --contract: realisation pass over a compile ctx; returns the targetTracks shape (not cached)
-  function M.targetTracks(ctx)
+  function DAG.targetTracks(ctx)
     local sendGain, mainGain = nativeGains(ctx)
     local conns, synthNodes, cuTrackKey, nodeTrackKey, pipeMidi = buildConns(ctx)
     local routing = routeByTrack(conns, nodeTrackKey, sendGain)
@@ -1107,9 +1107,9 @@ local function spliceBusses(userGraph)
   return { nodes = keptNodes, edges = splicedEdges }, { parts = parts }
 end
 
---contract: assumes M.validate(userGraph)==nil; returns a lazy-caching compile ctx
+--contract: assumes DAG.validate(userGraph)==nil; returns a lazy-caching compile ctx
 -- ctx.splice (spliceProv) is present iff sub-threshold busses were spliced out.
-function M.compile(userGraph)
+function DAG.compile(userGraph)
   local graph, splice = spliceBusses(userGraph)
   local ctx = buildCtx(graph, deriveMasterSplit(graph))
   ctx.splice = splice
@@ -1904,7 +1904,7 @@ end
 
 -- Capacity-resolving allocation: assign, bisect any over-ceiling class/family, re-assign
 -- until everything fits. The only entry point; allocateOnce is the inner pass.
-function M.allocate(tracks, nodes)
+function DAG.allocate(tracks, nodes)
   nodes = nodes or {}
   local out, meta = allocateOnce(tracks, nodes)
   local split = splitOverCap(tracks, meta, nodes)
@@ -1916,4 +1916,4 @@ function M.allocate(tracks, nodes)
   return out
 end
 
-return M
+return DAG

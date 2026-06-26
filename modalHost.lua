@@ -17,16 +17,16 @@ local wasOpen = false   -- snapshot at tick(); stays true across the closing fra
 
 local function label() return (state and state.title or '') .. POPUP_ID end
 
-local mh = {}
+local modalHost = {}
 
-function mh:registerKind(kind, render) kinds[kind] = render end
+function modalHost:registerKind(kind, render) kinds[kind] = render end
 
-function mh:open(s)
+function modalHost:open(s)
   state = s
   ImGui.OpenPopup(ctx, label())
 end
 
-function mh:openPrompt(args)
+function modalHost:openPrompt(args)
   self:open{
     kind     = 'prompt',
     title    = args.title,
@@ -38,7 +38,7 @@ function mh:openPrompt(args)
   }
 end
 
-function mh:openConfirm(args)
+function modalHost:openConfirm(args)
   self:open{
     kind     = 'confirm',
     title    = args.title,
@@ -47,12 +47,12 @@ function mh:openConfirm(args)
   }
 end
 
-function mh:isOpen() return state ~= nil end
-function mh:wasOpenAtFrameStart() return wasOpen end
+function modalHost:isOpen() return state ~= nil end
+function modalHost:wasOpenAtFrameStart() return wasOpen end
 
-function mh:tick() wasOpen = (state ~= nil) end
+function modalHost:tick() wasOpen = (state ~= nil) end
 
-function mh:draw()
+function modalHost:draw()
   if not state then return end
   -- Self-heal: a callback opened a follow-up modal whose OpenPopup was
   -- cancelled by the enclosing CloseCurrentPopup. Re-open at top level.
@@ -78,7 +78,7 @@ function mh:draw()
     local onClose = state.onClose
     local function close(invoke, ...)
       -- Capture-then-clear before invoking: the callback may open a follow-up
-      -- modal by calling mh:open, and we mustn't nil that out from under it.
+      -- modal by calling modalHost:open, and we mustn't nil that out from under it.
       state = nil
       ImGui.CloseCurrentPopup(ctx)
       if invoke and cb then
@@ -103,7 +103,7 @@ end
 
 ----- Built-in renderers
 
-mh:registerKind('confirm', function(s, close)
+modalHost:registerKind('confirm', function(s, close)
   ImGui.Text(ctx, s.prompt)
   if ImGui.IsKeyPressed(ctx, ImGui.Key_Y) or ImGui.IsKeyPressed(ctx, ImGui.Key_Enter) then
     close(true, true)
@@ -112,7 +112,7 @@ mh:registerKind('confirm', function(s, close)
   end
 end)
 
-mh:registerKind('prompt', function(s, close)
+modalHost:registerKind('prompt', function(s, close)
   local appearing = ImGui.IsWindowAppearing(ctx)
   if appearing then ImGui.SetKeyboardFocusHere(ctx) end
   ImGui.Text(ctx, s.prompt)
@@ -148,4 +148,4 @@ mh:registerKind('prompt', function(s, close)
   end
 end)
 
-return mh
+return modalHost

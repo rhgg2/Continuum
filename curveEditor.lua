@@ -30,13 +30,13 @@ local FREE_EPS_T = 1e-3   -- strict-between-neighbours margin in free (shift) mo
 
 local hover, segHover, segPin, preview, previewSuppress, drag
 
-local self = {}
+local curveEditor = {}
 
 --shape: FrameArgs = { rect={x0,yTop,w,h}, vMin, vMax, tMin, tMax, events, tOf=(evt)->t, evalCurve=(A,B,fracT)->val, snap=(t)->snappedT|nil, hovered=bool, dragId, colours=config-names{axis,envelope,anchor,anchorActive}, callbacks={onMove(idx,t,val), onMoveFree(idx,t,val), onInsert(t,val)->newIdx, onDelete(idx), onTension(idx,tau), onCycleShape(idx)} }
 --contract: returns true iff the editor consumed the mouse this frame (host should suppress its own click handling)
 --contract: callbacks fire synchronously during frame(); host must tolerate re-entrant reads of events on the same frame
 --contract: host must call frame() inside the window whose drawlist the painter binds; gate a.hovered on its own IsWindowHovered
-function self:frame(a)
+function curveEditor:frame(a)
   local rect      = a.rect
   local x0, yTop  = rect.x0, rect.yTop
   local w, hInner = rect.w,  rect.h
@@ -325,5 +325,5 @@ function self:frame(a)
   return true
 end
 
-return self
+return curveEditor
 

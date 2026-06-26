@@ -1,4 +1,4 @@
-@module temperEditor  src=temperEditor.lua  loc=758  sha=a3a8e0b  mode=chunk
+@module temperEditor  src=temperEditor.lua  loc=758  sha=9a303bd  mode=chunk
 @deps cm, chrome, ctx, gui, modalHost
 
 # Imports
@@ -22,7 +22,7 @@
   @state COL_LABELS = { 'step', 'pitch', 'name', '' }  @ 246
   @state GEN_KINDS = {  @ 473
   @state GEN_LABEL_W = 90  @ 505
-  @state self = {}  @ 749
+  @state temperEditor = {}  @ 749
 
 # Private functions
   @fn viewedName()  @ 41
@@ -116,13 +116,13 @@
       -- the 'generators' header, mirrors swingEditor's preview/factor splitter.
   @fn draw(w, h)  @ 737
 
-# Public API (self:*)
+# Public API (temperEditor:*)
   -- Public
-  @api self:open(name)  @ 751
+  @api temperEditor:open(name)  @ 751
       @contract  open(name?) selects entry; default is active tuning, 12EDO treated as nil.
-  @api self:hasSelection()  @ 755
-  @api self:render(w, h)  @ 756
-  @api self:libraryDescriptor()  @ 757
+  @api temperEditor:hasSelection()  @ 755
+  @api temperEditor:render(w, h)  @ 756
+  @api temperEditor:libraryDescriptor()  @ 757
 
 # Uses (outbound edges)
   @use call    chrome.checkbox  @ 271, 557, 598

@@ -1,7 +1,7 @@
 -- See docs/commandManager.md for the model.
 
---invariant: commands form a single flat namespace owned by mgr; scopes own keymaps + modal/passthrough only
---invariant: scope:register installs a gated wrapper into mgr.commands — invoke returns nil when the scope is not reachable on the stack
+--invariant: cmgr owns a flat command namespace; scopes own keymaps + modal/passthrough only
+--invariant: scope:register installs a gated wrapper; invoke returns nil when scope is unreachable
 --invariant: scopes form a stack walked top-down; the bottom is the 'global' scope pushed at module load
 --invariant: a modal scope without passthrough[name] blocks both key dispatch and invoke for names below it
 --invariant: command return: nil = handled (stop dispatch); false = declined (let char queue see the keypress)
@@ -46,7 +46,7 @@ end
 
 local cm = (...).cm
 
-local mgr = {
+local cmgr = {
   commands = {},          -- flat: name → fn (may be a wrap chain)
   gates    = {},          -- name → owning scope; absent = ungated (global)
   scopes   = {},
@@ -62,12 +62,12 @@ local mgr = {
 
 local function isReachable(scope, name)
   local idx
-  for i, s in ipairs(mgr.stack) do
+  for i, s in ipairs(cmgr.stack) do
     if s == scope then idx = i; break end
   end
   if not idx then return false end
-  for i = idx + 1, #mgr.stack do
-    local s = mgr.stack[i]
+  for i = idx + 1, #cmgr.stack do
+    local s = cmgr.stack[i]
     if s.modal and not (s.passthrough and s.passthrough[name]) then return false end
   end
   return true
@@ -87,8 +87,8 @@ local function newScope(name)
   --contract: optional undoDesc wraps fn in util.atomic(undoDesc, fn) so REAPER's undo stack records this command as a labelled block
   function s:register(name, fn, undoDesc)
     self.registered[name] = true
-    mgr.commands[name] = undoDesc and util.atomic(undoDesc, fn) or fn
-    mgr.gates[name]    = self
+    cmgr.commands[name] = undoDesc and util.atomic(undoDesc, fn) or fn
+    cmgr.gates[name]    = self
   end
 
   --contract: registerAll value is either fn or {fn, undoDesc}; the tuple form opts the command into REAPER undo wrapping with the given label
@@ -108,35 +108,28 @@ local function newScope(name)
 end
 
 ----- Bottom of the stack
---
--- 'global' is an ordinary scope; it lives at the bottom and is never
--- popped. Commands registered via mgr:register are flat in mgr.commands
--- with no gate (always reachable). mgr.keymap aliases global.keymap so
--- root-level binds land on the bottom-of-stack keymap.
+-- 'global' is fixed here; cmgr.keymap aliases global.keymap; cmgr:register writes to it ungated.
 
 local global = newScope('global')
-mgr.scopes.global = global
-mgr.stack[1]      = global
-mgr.keymap        = global.keymap
+cmgr.scopes.global = global
+cmgr.stack[1]      = global
+cmgr.keymap        = global.keymap
 
 ----- Manager-level surface
---
--- mgr:register installs an ungated command (always reachable). Pages and
--- modules use scope:register for mode-gated verbs; mgr:register is for
--- the unconditional ones (play, quit, switchPage).
+-- cmgr:register is for unconditional verbs (play, quit, switchPage); scope:register for mode-gated ones.
 
 --contract: delegates to the global scope — root-level commands are gated-to-global, which is always reachable; the duplicated registration body now lives only in scope:register
-function mgr:register(name, fn, undoDesc) global:register(name, fn, undoDesc) end
-function mgr:registerAll(tbl)             global:registerAll(tbl)             end
+function cmgr:register(name, fn, undoDesc) global:register(name, fn, undoDesc) end
+function cmgr:registerAll(tbl)             global:registerAll(tbl)             end
 
 --contract: returns the bottom-of-stack ('global') keymap directly — used by dispatchers that want to fire ONLY root bindings (e.g. trackerPage's swing editor wants playPause/quit live but page-scoped commands off)
-function mgr:rootKeymap() return global.keymap end
+function cmgr:rootKeymap() return global.keymap end
 
-function mgr:bind(name, keys)    global:bind(name, keys) end
-function mgr:bindAll(tbl)        global:bindAll(tbl)     end
+function cmgr:bind(name, keys)    global:bind(name, keys) end
+function cmgr:bindAll(tbl)        global:bindAll(tbl)     end
 
 --contract: wrap is a no-op if name has no registered command; wrappers stack (compose outward)
-function mgr:wrap(name, wrapper)
+function cmgr:wrap(name, wrapper)
   local orig = self.commands[name]
   if not orig then return end
   self.commands[name] = wrapper(orig)
@@ -145,7 +138,7 @@ end
 --contract: doBefore/doAfter accept either a single name or an array of names
 --contract: doAfter preserves the original command's return values (the dispatch signal)
 --invariant: wraps compose inside the gate — when invoke skips a gated command, no doBefore / doAfter side-effect fires
-function mgr:doBefore(name, before)
+function cmgr:doBefore(name, before)
   if type(name) == 'table' then
     for _, n in ipairs(name) do self:doBefore(n, before) end
     return
@@ -155,7 +148,7 @@ function mgr:doBefore(name, before)
   end)
 end
 
-function mgr:doAfter(name, after)
+function cmgr:doAfter(name, after)
   if type(name) == 'table' then
     for _, n in ipairs(name) do self:doAfter(n, after) end
     return
@@ -187,19 +180,19 @@ local function clearPrefixState()
 end
 
 --contract: buffer accepts only '0'..'9' and '/'; cancel/finish/invoke each leave the state inactive
-function mgr:beginPrefix()    prefixBuf = ''           end
-function mgr:isPrefixActive() return prefixBuf ~= nil end
+function cmgr:beginPrefix()    prefixBuf = ''           end
+function cmgr:isPrefixActive() return prefixBuf ~= nil end
 
-function mgr:appendPrefix(ch)
+function cmgr:appendPrefix(ch)
   if not prefixBuf then return end
   if ch == '/' and prefixBuf:find('/', 1, true) then return end
   prefixBuf = prefixBuf .. ch
 end
 
-function mgr:cancelPrefix() clearPrefixState() end
+function cmgr:cancelPrefix() clearPrefixState() end
 
 --contract: empty buffer or unparseable input → nil pending value; '/' with empty numerator or denominator parses as nil; integer N stored as (N/1)
-function mgr:finishPrefix()
+function cmgr:finishPrefix()
   local buf = prefixBuf
   prefixBuf = nil
   pendingPrefix, pendingPrefixNum, pendingPrefixDen = nil, nil, nil
@@ -220,14 +213,14 @@ function mgr:finishPrefix()
 end
 
 --contract: non-consuming reader of the parsed rational; safe to call inside a command body. Returns (nil, nil) when no prefix is pending. State is cleared at the end of invoke, not by this call.
-function mgr:prefixRational()
+function cmgr:prefixRational()
   return pendingPrefixNum, pendingPrefixDen
 end
 
 ----- Scopes & stack
 
 --contract: creates the scope on first request; idempotent thereafter
-function mgr:scope(name)
+function cmgr:scope(name)
   local s = self.scopes[name]
   if not s then
     s = newScope(name)
@@ -236,17 +229,17 @@ function mgr:scope(name)
   return s
 end
 
-local function asScope(s) return type(s) == 'string' and mgr.scopes[s] or s end
+local function asScope(s) return type(s) == 'string' and cmgr.scopes[s] or s end
 
 --contract: push(name|scope); creates a named scope if absent. Top-of-stack is the most recently pushed.
-function mgr:push(s)
+function cmgr:push(s)
   s = type(s) == 'string' and self:scope(s) or s
   self.stack[#self.stack + 1] = s
   return s
 end
 
 --contract: pop(name|scope) asserts the named scope is currently on top; pops it
-function mgr:pop(s)
+function cmgr:pop(s)
   s = asScope(s)
   assert(self.stack[#self.stack] == s, 'cmgr:pop — scope is not on top of the stack')
   self.stack[#self.stack] = nil
@@ -256,7 +249,7 @@ end
 
 --contract: returns nil when the command is unknown OR registered on a scope that is not currently reachable (off-stack or blocked by a modal above)
 --contract: always prepends the pending prefix (defaulted to 1 when nothing is pending) as the first argument to the command body. Bodies that need to distinguish "user typed 1" from "no prefix" read prefixRational() — it returns (nil, nil) when nothing is pending. State stays live for the call so the body may read it; cleared on return ONLY if there was a pending prefix at entry, so a command body that opens prefix mode (beginPrefix) is not wiped out by its own invoke.
-function mgr:invoke(name, ...)
+function cmgr:invoke(name, ...)
   local fn = self.commands[name]
   if not fn then return end
   local scope = self.gates[name]
@@ -273,18 +266,18 @@ end
 -- rule, but on `scope.keymap` rather than the flat command table.
 
 local function resolveKeys(name)
-  for i = #mgr.stack, 1, -1 do
-    local s = mgr.stack[i]
+  for i = #cmgr.stack, 1, -1 do
+    local s = cmgr.stack[i]
     local hit = s.keymap[name]
     if hit then return hit end
     if s.modal and not (s.passthrough and s.passthrough[name]) then return end
   end
 end
 
-function mgr:keysFor(name) return resolveKeys(name) end
+function cmgr:keysFor(name) return resolveKeys(name) end
 
 --contract: returns one keymap per stack scope in top-down order; modal scopes filter lower keymaps to their passthrough name set, then halt the walk
-function mgr:keychain()
+function cmgr:keychain()
   local out = {}
   for i = #self.stack, 1, -1 do
     out[#out + 1] = self.stack[i].keymap
@@ -304,7 +297,7 @@ function mgr:keychain()
 end
 
 -- ImGui injected so cmgr stays free of REAPER-side imports at module load.
-function mgr:keySpec(spec, ImGui)
+function cmgr:keySpec(spec, ImGui)
   if type(spec) ~= 'table' then return spec, ImGui.Mod_None end
   local mods = ImGui.Mod_None
   for i = 2, #spec do mods = mods | spec[i] end
@@ -315,7 +308,7 @@ end
 -- see docs/commandManager.md § Binding-edit queries
 
 --contract: reachable command for spec's key (keychain top-down); skips exceptName; nil if free
-function mgr:commandAtKey(spec, exceptName, ImGui)
+function cmgr:commandAtKey(spec, exceptName, ImGui)
   local key, mods = self:keySpec(spec, ImGui)
   for _, keymap in ipairs(self:keychain()) do
     for name, entry in pairs(keymap) do
@@ -330,7 +323,7 @@ function mgr:commandAtKey(spec, exceptName, ImGui)
 end
 
 --contract: scope to edit name's binding in: scope currently binding it, else its gate scope
-function mgr:bindingSite(name)
+function cmgr:bindingSite(name)
   for i = #self.stack, 1, -1 do
     local scope = self.stack[i]
     if scope.keymap[name] then return scope.name end
@@ -343,7 +336,7 @@ end
 
 -- Re-read noteLayout on each call so a config change takes effect
 -- without rebuilding vm.
-function mgr:noteChars(char)
+function cmgr:noteChars(char)
   return chars[cm:get('noteLayout')][char]
 end
 
@@ -432,7 +425,7 @@ local function buildModOrder(ImGui)
   }, '+'
 end
 
-function mgr:keyLabel(spec, ImGui)
+function cmgr:keyLabel(spec, ImGui)
   keyNames   = keyNames   or buildKeyNames(ImGui)
   shiftGlyph = shiftGlyph or buildShiftGlyphs(ImGui)
   if not modOrder then modOrder, modSep = buildModOrder(ImGui) end
@@ -447,7 +440,7 @@ function mgr:keyLabel(spec, ImGui)
 end
 
 --contract: list of human labels, one per bound keyspec of the reachable command, or nil if unbound
-function mgr:keyLabelList(name, ImGui)
+function cmgr:keyLabelList(name, ImGui)
   local specs = self:keysFor(name)
   if not specs then return nil end
   local out = {}
@@ -456,7 +449,7 @@ function mgr:keyLabelList(name, ImGui)
 end
 
 --contract: keyLabelList joined by ' / ', or nil if unbound on the current stack
-function mgr:keyLabels(name, ImGui)
+function cmgr:keyLabels(name, ImGui)
   local list = self:keyLabelList(name, ImGui)
   return list and table.concat(list, ' / ')
 end
@@ -521,7 +514,7 @@ local function ensureTokenTables(ImGui)
 end
 
 --contract: spec -> stable ASCII token ("Ctrl+Z"); nil if the key has no token name
-function mgr:tokenForSpec(spec, ImGui)
+function cmgr:tokenForSpec(spec, ImGui)
   ensureTokenTables(ImGui)
   local key, mods = self:keySpec(spec, ImGui)
   local name = keyTokens[key]
@@ -535,7 +528,7 @@ function mgr:tokenForSpec(spec, ImGui)
 end
 
 --contract: token -> keyspec (bare key | {key, mod...}); (nil, err) on an unknown key/modifier
-function mgr:specForToken(token, ImGui)
+function cmgr:specForToken(token, ImGui)
   ensureTokenTables(ImGui)
   local parts = {}
   for part in token:gmatch('[^+]+') do parts[#parts + 1] = part end
@@ -556,7 +549,7 @@ end
 -- keyBindings[scopeName][cmd]={token,...} overlays code defaults; rebind writes live+persisted.
 
 --contract: a malformed token is warned and skipped; the command keeps its other (good) bindings
-function mgr:loadOverrides(ImGui)
+function cmgr:loadOverrides(ImGui)
   for scopeName, cmds in pairs(cm:get('keyBindings')) do
     local scope = self.scopes[scopeName]
     if scope then
@@ -574,7 +567,7 @@ function mgr:loadOverrides(ImGui)
 end
 
 --contract: overwrites the scope's binding for name and persists it as tokens (global tier)
-function mgr:rebind(scopeName, name, specs, ImGui)
+function cmgr:rebind(scopeName, name, specs, ImGui)
   local scope = self.scopes[scopeName]
   if not scope then return end
   scope.keymap[name] = specs
@@ -586,4 +579,4 @@ function mgr:rebind(scopeName, name, specs, ImGui)
   cm:set('global', 'keyBindings', overrides)
 end
 
-return mgr
+return cmgr

@@ -11,7 +11,7 @@
 --invariant: periods are QN per the periodQN convention -- scalar or {num,den}
 --shape: result = { notes = { {ppqL,endppqL,pitch,vel,detune}, ... }, delta = { {ppqL,val,shape,[tension]}, ... } }
 
-local M = {}
+local generators = {}
 
 local function periodTicks(period, resolution)
   local qn = type(period) == 'table' and period[1] / period[2] or period
@@ -20,7 +20,7 @@ end
 
 --contract: retrig fills the host window with evenly-spaced same-pitch fxNotes 2..N (host is fxNote 1)
 --contract: velocity ramps params.ramp per fxNote, clamped 1..127; detune inherited from the host verbatim
-function M.retrig(host, params, ctx)
+function generators.retrig(host, params, ctx)
   local startL, endL = host.window[1], host.window[2]
   local step  = periodTicks(params.period, ctx.resolution)
   local h     = host.events[1]
@@ -41,7 +41,7 @@ function M.retrig(host, params, ctx)
 end
 
 --contract: trill alternates host pitch with a note `step` scale-steps away (via ctx.step); host is fxNote 1
-function M.trill(host, params, ctx)
+function generators.trill(host, params, ctx)
   local startL, endL = host.window[1], host.window[2]
   local step  = periodTicks(params.period, ctx.resolution)
   local h     = host.events[1]
@@ -65,7 +65,7 @@ end
 
 -- Kinds whose realisation is a continuous delta stream (carrier ccs), not structural notes.
 -- Value = wire target ('pb' or cc number); truthy = "is continuous". Drives carrier allocation.
-M.continuous = { vibrato = 'pb', slide = 'pb' }
+generators.continuous = { vibrato = 'pb', slide = 'pb' }
 
 -- 14-bit carrier priority: MSB n, LSB n+32 (REAPER interpolates only that pair).
 -- Unlikely-authored first; conventional last. see design/archive/note-macros.md § Delta-code allocation
@@ -79,7 +79,7 @@ local CARRIER_PRIORITY = {
 }
 
 --contract: first priority MSB n where neither n nor n+32 is in `occupied`; nil if saturated
-function M.allocateCarrier(occupied)
+function generators.allocateCarrier(occupied)
   for _, n in ipairs(CARRIER_PRIORITY) do
     if not occupied[n] and not occupied[n + 32] then return n end
   end
@@ -88,7 +88,7 @@ end
 --contract: vibrato -> lane-1 pb-delta breakpoints in cents; sine of depth cents at 1/period QN
 --contract: breakpoints at sine extrema, 'slow'-shaped; linear ramp-in over onset QN
 --contract: carrier returns to 0 (centre) at window end -- no residual bend on the channel
-function M.vibrato(host, params, ctx)
+function generators.vibrato(host, params, ctx)
   local startL, endL = host.window[1], host.window[2]
   local period = periodTicks(params.period, ctx.resolution)   -- ticks per cycle
   local depth  = params.depth or 0
@@ -119,7 +119,7 @@ end
 --contract: slide glide-in -> lane-1 pb-delta; slur to target over `over` QN; re-centres at end
 --contract: target 'next' = interval to next same-lane note; 'fixed' = params.cents; pb-range clamps
 --contract: no next note or unison target -> empty delta (carrier untouched)
-function M.slide(host, params, ctx)
+function generators.slide(host, params, ctx)
   local startL, endL = host.window[1], host.window[2]
   local h = host.events[1]
   local target
@@ -150,4 +150,4 @@ function M.slide(host, params, ctx)
   return { notes = {}, delta = delta }
 end
 
-return M
+return generators

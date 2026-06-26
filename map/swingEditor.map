@@ -1,4 +1,4 @@
-@module swingEditor  src=swingEditor.lua  loc=750  sha=835f191  mode=chunk
+@module swingEditor  src=swingEditor.lua  loc=750  sha=a3a8e0b  mode=chunk
 @deps cm, ds, chrome, ctx, gui, facade, modalHost
 
 # Invariants & contracts
@@ -33,7 +33,7 @@
   @state MIN_FACTOR_AREA = 80  @ 108   -- px kept below the splitter for the factor list
   @state SYNTHETIC = { identity = true }  @ 413
   @state openNewModal  @ 523   -- forward decl; defined with its modalHost kind below
-  @state self = {}  @ 714
+  @state swingEditor = {}  @ 714
 
 # Private functions
   @fn arrange()  @ 45
@@ -135,18 +135,18 @@
       -- Body-region draw inside a child window; chrome palette (editor.bg + toolbar colours)
       -- takes the tracker grid's place (Col_ChildBg instead of Col_WindowBg).
 
-# Public API (self:*)
+# Public API (swingEditor:*)
   -- Public
-  @api self:open(name)  @ 718
+  @api swingEditor:open(name)  @ 718
       @contract  open(name?) selects entry; default prefers chan override → take swing → nil.
       @contract  when already open, re-selects resolved target; snapshot captured at selection time.
-  @api self:render(w, h)  @ 730
-  @api self:renderToolbar()  @ 734
+  @api swingEditor:render(w, h)  @ 730
+  @api swingEditor:renderToolbar()  @ 734
       -- Tools row (Reset / Rows-per-qn / Wild / Composite-phase) drawn into the page
       -- toolbar band by editorRender. Greys out with no slot selected, like the body.
-  @api self:libraryDescriptor()  @ 743
-  @api self:close()  @ 745
-  @api self:isOpen()  @ 747
+  @api swingEditor:libraryDescriptor()  @ 743
+  @api swingEditor:close()  @ 745
+  @api swingEditor:isOpen()  @ 747
 
 # Uses (outbound edges)
   @use call    chrome.checkbox  @ 620

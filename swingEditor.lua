@@ -711,11 +711,11 @@ end
 
 ----- Public
 
-local self = {}
+local swingEditor = {}
 
 --contract: open(name?) selects entry; default prefers chan override → take swing → nil.
 --contract: when already open, re-selects resolved target; snapshot captured at selection time.
-function self:open(name)
+function swingEditor:open(name)
   local takeName, chanName = resolvedSlots()
   local target = name or chanName or takeName
   if state then
@@ -727,11 +727,11 @@ function self:open(name)
   switchTo(target)
 end
 
-function self:render(w, h) draw(w, h) end
+function swingEditor:render(w, h) draw(w, h) end
 
 -- Tools row (Reset / Rows-per-qn / Wild / Composite-phase) drawn into the page
 -- toolbar band by editorRender. Greys out with no slot selected, like the body.
-function self:renderToolbar()
+function swingEditor:renderToolbar()
   if not state then return end
   local composite = (state.name and swingRead()) or {}
   local n = #readFactors(composite)
@@ -740,11 +740,11 @@ function self:renderToolbar()
   if not state.name then ImGui.EndDisabled(ctx) end
 end
 
-function self:libraryDescriptor() return buildDescriptor() end
+function swingEditor:libraryDescriptor() return buildDescriptor() end
 
-function self:close() state = nil end
+function swingEditor:close() state = nil end
 
-function self:isOpen() return state ~= nil end
+function swingEditor:isOpen() return state ~= nil end
 
-return self
+return swingEditor
 

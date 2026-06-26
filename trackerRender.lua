@@ -69,7 +69,7 @@ end
 
 local ctx, font, uiFont = gui.ctx, gui.font, gui.uiFont
 local dragging    = false   -- tracker-grid selection drag: click → held → release
-local curveEd      = util.instantiate('curveEditor', { ctx = ctx, chrome = chrome, page = 'tracker' })
+local curveEditor = util.instantiate('curveEditor', { ctx = ctx, chrome = chrome, page = 'tracker' })
 local laneConsumed = false
 
 -- Group quick-verb state and lifetime moved to trackerView (this page is
@@ -564,7 +564,7 @@ local function drawLaneStrip()
       vMin, vMax = 0, 127
     end
 
-    laneConsumed = curveEd:frame {
+    laneConsumed = curveEditor:frame {
       rect     = { x0 = x0, yTop = yTop, w = w, h = yBot - yTop },
       vMin = vMin, vMax = vMax,
       tMin = scrollRow, tMax = scrollRow + rowSpan,
@@ -1785,7 +1785,7 @@ end
 
 -- Forward-declared so the takeProperties command body, registered
 -- below, captures the same table the helper installs methods on.
-local renderer = {}
+local tr = {}
 
 
 ----- Note FX editor (retrig + trill + vibrato + slide)
@@ -2027,7 +2027,7 @@ end)
 -- Mint the clone, open take-properties focused on name. No rebind: slot selection re-binds
 -- to the clone before any commit lands, so the seed and commit both target the clone.
 local function duplicateUnpooledTake()
-  if tv:duplicateBoundUnpooled() then renderer:openTakeProperties{ focusName = true } end
+  if tv:duplicateBoundUnpooled() then tr:openTakeProperties{ focusName = true } end
 end
 
 local tracker = cmgr:scope('tracker')
@@ -2039,7 +2039,7 @@ tracker:registerAll{
     end)
   end,
 
-  takeProperties         = { function() renderer:openTakeProperties{} end, 'Take properties' },
+  takeProperties         = { function() tr:openTakeProperties{} end, 'Take properties' },
   newTakeBelow           = { openNewTakeModal, 'New take' },
   duplicateUnpooledBelow = { duplicateUnpooledTake, 'Duplicate take (unpooled)' },
 
@@ -2112,7 +2112,7 @@ tv:wireGroupLifetime()
 -- onClose. The `transfer` flag handshake makes these mutually
 -- exclusive: once a valid callback starts the apply chain it claims
 -- ownership, so modalHost's onClose becomes a no-op.
-function renderer:openTakeProperties(args)
+function tr:openTakeProperties(args)
   args = args or {}
   local rpb        = cm:get('rowPerBeat')
   local origBeats  = (tv.grid.numRows or 0) / rpb
@@ -2154,12 +2154,12 @@ end
 
 ----- Page interface (rendering only; trackerPage drives lifecycle and the dispatch)
 
-function renderer:toolbarSegments() return toolbarSegments end
+function tr:toolbarSegments() return toolbarSegments end
 
 --contract: calls computeLayout twice
 --invariant: lane-strip drag callbacks may flush tv.grid.cols and clear col.x
 --contract: second pass repopulates layout for drawTracker
-function renderer:renderBody(_, w, h, dispatch)
+function tr:renderBody(_, w, h, dispatch)
   -- No bound take ⇒ empty grid. Body pushes no Col_Text, so push uiFont +
   -- grid text colour explicitly; still dispatch so global keys fire.
   if #tv.grid.cols == 0 then
@@ -2193,14 +2193,14 @@ function renderer:renderBody(_, w, h, dispatch)
   tv:tick()
 end
 
-function renderer:renderStatusBar(_)
+function tr:renderStatusBar(_)
   drawStatusBar()
 end
 
 -- suppressKbd: modal/picker owns input. pageSuppressed: unused (swing/temper on own page).
 -- acceptCmds: page visible and no item active (toolbar focus is transient; see IsAnyItemActive).
 --shape: focusState = { suppressKbd:bool, pageSuppressed:bool, acceptCmds:bool }
-function renderer:focusState()
+function tr:focusState()
   if not ctx then return { suppressKbd = false, pageSuppressed = false, acceptCmds = false } end
   local suppressKbd = modalHost:isOpen() or chrome.pickerIsActive()
   return {
@@ -2210,5 +2210,5 @@ function renderer:focusState()
   }
 end
 
-return renderer
+return tr
 

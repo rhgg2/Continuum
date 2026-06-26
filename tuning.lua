@@ -4,10 +4,10 @@
 --invariant: pure coordinate-system module: no module state, no take state, no pb / detune realisation logic
 --invariant: intent / realisation split — owns intent (cents-typed detune); pb realisation is tm's domain
 --invariant: detune is cents throughout; raw 14-bit pb conversion is tm's flush boundary, never here
---invariant: cents[1] is the unison (0); nameless step displays as degree-octave via M.stepToText
+--invariant: cents[1] is the unison (0); nameless step displays as degree-octave via stepToText
 --invariant: octave parameters are MIDI-relative (C4 → 4), not period-index
 --shape: Temper = {name, periodPitch=token, pitches=token[ascending], stepNames=string[], periodAsStep=bool, cents=number[derived], period=cents[derived], octaveStep=int, octaveWidth=int, cellWidth=int}
-local M = {}
+local tuning = {}
 
 ----- Temperament presets
 
@@ -46,7 +46,7 @@ local function computeCellWidth(temper)
 end
 
 --contract: token → cents or nil: n/d, int, '.'=cents, n\m, n\m<equave> step (equave dflt 2/1).
-function M.scalaPitch(token)
+function tuning.scalaPitch(token)
   token = token:match('^%s*(.-)%s*$')
   -- n\m<equave>: n of m equal divisions of equave (default the octave 2/1).
   local steps, div, equave = token:match('^(%d+)\\(%d+)<(.-)>$')
@@ -54,7 +54,7 @@ function M.scalaPitch(token)
   if steps then
     local span = 1200
     if equave then
-      span = M.scalaPitch(equave)
+      span = tuning.scalaPitch(equave)
       if not span then return nil end
     end
     return tonumber(steps) * span / tonumber(div)
@@ -67,14 +67,14 @@ function M.scalaPitch(token)
 end
 
 --contract: pitches→cents, periodPitch→period; stamps octaveStep + cellWidth. Pure; returns temper.
-function M.derive(temper)
+function tuning.derive(temper)
   if temper.pitches then
     local cents = {}
-    for i, tok in ipairs(temper.pitches) do cents[i] = M.scalaPitch(tok) or 0 end
+    for i, tok in ipairs(temper.pitches) do cents[i] = tuning.scalaPitch(tok) or 0 end
     temper.cents = cents
   end
   if temper.periodPitch then
-    temper.period = M.scalaPitch(temper.periodPitch) or temper.period
+    temper.period = tuning.scalaPitch(temper.periodPitch) or temper.period
   end
   local n = #temper.cents
   temper.octaveStep  = computeOctaveStep(temper.stepNames or {}, n)
@@ -86,7 +86,7 @@ end
 local function edo(n, names)
   local pitches = {}
   for i = 1, n do pitches[i] = (i - 1) .. '\\' .. n end
-  return M.derive{
+  return tuning.derive{
     name        = n .. 'EDO',
     periodPitch = '2/1',
     pitches     = pitches,
@@ -94,7 +94,7 @@ local function edo(n, names)
   }
 end
 
-M.presets = {
+tuning.presets = {
   ['12EDO'] = edo(12, {
     'C-','C#','D-','D#','E-','F-','F#','G-','G#','A-','A#','B-'
   }),
@@ -116,17 +116,17 @@ M.presets = {
   }),
 }
 
---contract: looks up name in userLib first, then falls back to built-in M.presets; returns nil only if name is missing or unknown to both. Lets the '12EDO' sentinel resolve even when userLib is empty.
-function M.findTemper(name, userLib)
+--contract: userLib first, then presets; nil when unknown to both; '12EDO' resolves via presets
+function tuning.findTemper(name, userLib)
   if not name then return nil end
-  return (userLib and userLib[name]) or M.presets[name]
+  return (userLib and userLib[name]) or tuning.presets[name]
 end
 
 ----- Scala import
 
 -- Lenient: every non-blank, non-'!' line is a pitch token. Drives paste + the
 -- import Create button (which re-parses the box after any manual edits).
-function M.parseScalaPitches(text)
+function tuning.parseScalaPitches(text)
   local lines = {}
   for line in (text .. '\n'):gmatch('(.-)\n') do
     local s = line:match('^%s*(.-)%s*$')
@@ -137,7 +137,7 @@ end
 
 -- Strict .scl: drop '!' comment lines, then [description, count, pitch x count].
 -- Returns pitch tokens + description (suggested name) for the Scala load path.
-function M.parseScalaFile(text)
+function tuning.parseScalaFile(text)
   local lines = {}
   for line in (text .. '\n'):gmatch('(.-)\n') do
     if not line:match('^%s*!') then lines[#lines + 1] = line end
@@ -155,18 +155,18 @@ end
 
 -- Bridge Scala's convention (unison implicit, period last) to Continuum's
 -- (step 1 = 1/1, period separate): prepend unison, split off final as period.
-function M.scalaToTemper(pitchLines, name)
+function tuning.scalaToTemper(pitchLines, name)
   if #pitchLines == 0 then return nil, 'no pitches' end
   for _, tok in ipairs(pitchLines) do
-    if not M.scalaPitch(tok) then return nil, ('unparseable pitch: %q'):format(tok) end
+    if not tuning.scalaPitch(tok) then return nil, ('unparseable pitch: %q'):format(tok) end
   end
   -- Sort ascending so the widest interval is the period and cents stay
   -- monotonic regardless of paste order (a well-formed .scl is already sorted).
   local sorted = { table.unpack(pitchLines) }
-  table.sort(sorted, function(a, b) return M.scalaPitch(a) < M.scalaPitch(b) end)
+  table.sort(sorted, function(a, b) return tuning.scalaPitch(a) < tuning.scalaPitch(b) end)
   local pitches = { '1/1' }
   for i = 1, #sorted - 1 do pitches[#pitches + 1] = sorted[i] end
-  return M.derive{
+  return tuning.derive{
     name         = name,
     periodPitch  = sorted[#sorted],
     pitches      = pitches,
@@ -179,7 +179,7 @@ end
 
 -- Equal-division subset spec -> ascending degrees; largest is the period.
 -- 'relative': cumulative step counts. 'absolute': sorted+deduped. nil on bad token.
-function M.edoDegrees(spec, mode)
+function tuning.edoDegrees(spec, mode)
   local nums = {}
   for tok in spec:gmatch('%S+') do
     local n = tonumber(tok)
@@ -200,7 +200,7 @@ end
 
 -- Inverse of edoDegrees: render a degree list back as a spec string in `mode`.
 -- Lets a mode switch convert the in-flight pattern rather than reset it.
-function M.degreesToSpec(degrees, mode)
+function tuning.degreesToSpec(degrees, mode)
   if mode == 'absolute' then return table.concat(degrees, ' ') end
   local steps, prev = {}, 0
   for _, d in ipairs(degrees) do steps[#steps + 1] = d - prev; prev = d end
@@ -209,7 +209,7 @@ end
 
 -- N-equal-divisions of `interval` subset to `degrees`; tokens are intensional
 -- (d\D<equave>, suffix omitted for octave). Base 0 implicit; last degree = period.
-function M.genEqual(degrees, interval)
+function tuning.genEqual(degrees, interval)
   local D      = degrees[#degrees]
   local suffix = (interval and interval ~= '' and interval ~= '2/1') and ('<' .. interval .. '>') or ''
   local pitches = { '0\\' .. D .. suffix }
@@ -219,14 +219,14 @@ end
 
 -- Harmonic-series segment lo..hi: ratios m/lo rooted on the low harmonic, the
 -- top (hi/lo) the period.
-function M.genHarmonics(lo, hi)
+function tuning.genHarmonics(lo, hi)
   local pitches = {}
   for m = lo, hi - 1 do pitches[#pitches + 1] = m .. '/' .. lo end
   return { pitches = pitches, periodPitch = hi .. '/' .. lo, periodAsStep = true }
 end
 
 -- Subharmonic (utonal) segment lo..hi: ratios hi/m ascending, top the period.
-function M.genSubharmonics(lo, hi)
+function tuning.genSubharmonics(lo, hi)
   local pitches = {}
   for m = hi, lo + 1, -1 do pitches[#pitches + 1] = hi .. '/' .. m end
   return { pitches = pitches, periodPitch = hi .. '/' .. lo, periodAsStep = true }
@@ -234,7 +234,7 @@ end
 
 -- Colon/space-separated extended ratio (e.g. '4:5:6:7') -> positive integers,
 -- at least two. nil + message otherwise.
-function M.parseChord(spec)
+function tuning.parseChord(spec)
   local members = {}
   for tok in spec:gmatch('[^%s:]+') do
     local n = tonumber(tok)
@@ -247,7 +247,7 @@ end
 
 -- Enumerate a chord as a scale rooted on its first note. otonal: ci/c1.
 -- inverted (utonal): ck/c(k+1-i). The last member is the period either way.
-function M.genChord(members, invert)
+function tuning.genChord(members, invert)
   local k, c1, ck = #members, members[1], members[#members]
   local pitches = {}
   for i = 1, k - 1 do
@@ -271,7 +271,7 @@ end
 
 -- Combination product set: every k-subset's product, rooted on the smallest
 -- product (so 1/1 is always present) and reduced into the equave; ascending.
-function M.genCPS(factors, k, equave)
+function tuning.genCPS(factors, k, equave)
   equave = equave or '2/1'
   local ea, eb = equave:match('^(%d+)/(%d+)$')
   if not ea then ea, eb = equave:match('^(%d+)$'), '1' end
@@ -293,7 +293,7 @@ function M.genCPS(factors, k, equave)
     num, den = num // g, den // g
     tokens[j] = num .. '/' .. den
   end
-  table.sort(tokens, function(x, y) return M.scalaPitch(x) < M.scalaPitch(y) end)
+  table.sort(tokens, function(x, y) return tuning.scalaPitch(x) < tuning.scalaPitch(y) end)
   return { pitches = tokens, periodPitch = equave, periodAsStep = true }
 end
 
@@ -345,12 +345,12 @@ end
 
 -- Rank-2 scale: stack the generator `up` above and `size-1-up` below 1/1,
 -- reduce into period, sort. up = mode. Exact ratios if inputs rational, else cents.
-function M.genRank2(generator, period, size, up)
+function tuning.genRank2(generator, period, size, up)
   period = period or '2/1'
   local down = size - 1 - up
   local gn, gd = asRatio(generator)
   local pn, pd = asRatio(period)
-  local g, p = M.scalaPitch(generator), M.scalaPitch(period)
+  local g, p = tuning.scalaPitch(generator), tuning.scalaPitch(period)
   local entries = {}
   for k = -down, up do
     local num, den
@@ -367,15 +367,15 @@ function M.genRank2(generator, period, size, up)
 end
 
 --contract: {isMos, large, small} for an n-note chain; large/small are L/s step counts when isMos
-function M.mosInfo(generator, period, n)
-  local spec = stepSpectrum(M.scalaPitch(generator), M.scalaPitch(period or '2/1'), n)
+function tuning.mosInfo(generator, period, n)
+  local spec = stepSpectrum(tuning.scalaPitch(generator), tuning.scalaPitch(period or '2/1'), n)
   if #spec ~= 2 then return { isMos = false } end
   return { isMos = true, large = spec[1].count, small = spec[2].count }
 end
 
 --contract: next MOS size (two step sizes) from fromN, stepping dir (+/-1); nil past the cap
-function M.nextMosSize(generator, period, fromN, dir)
-  local g, p = M.scalaPitch(generator), M.scalaPitch(period or '2/1')
+function tuning.nextMosSize(generator, period, fromN, dir)
+  local g, p = tuning.scalaPitch(generator), tuning.scalaPitch(period or '2/1')
   local n = fromN + dir
   while n >= 2 and n <= 400 do
     if #stepSpectrum(g, p, n) == 2 then return n end
@@ -388,7 +388,7 @@ end
 
 --contract: detune optional (defaults 0); snaps to nearest scale point including the period boundary (rounds up to step 1 of next octave)
 --contract: returned octave is MIDI-relative (C-1 → -1)
-function M.midiToStep(temper, midi, detune)
+function tuning.midiToStep(temper, midi, detune)
   detune = detune or 0
   local cents  = midi * 100 + detune
   local period = temper.period
@@ -410,7 +410,7 @@ function M.midiToStep(temper, midi, detune)
 end
 
 --contract: wraps out-of-range step by adjusting octave; clamps midi to 0..127 by folding overflow into detune (never silently drops)
-function M.stepToMidi(temper, step, octave)
+function tuning.stepToMidi(temper, step, octave)
   local steps, n = temper.cents, #temper.cents
   while step < 1 do step = step + n; octave = octave - 1 end
   while step > n do step = step - n; octave = octave + 1 end
@@ -428,20 +428,20 @@ function M.stepToMidi(temper, step, octave)
   return midi, detune
 end
 
-function M.snap(temper, midi, detune)
-  return M.stepToMidi(temper, M.midiToStep(temper, midi, detune))
+function tuning.snap(temper, midi, detune)
+  return tuning.stepToMidi(temper, tuning.midiToStep(temper, midi, detune))
 end
 
 --contract: moves by n scale steps under temper, carrying the octave; n may be negative
-function M.transposeStep(temper, midi, detune, n)
-  local step, oct = M.midiToStep(temper, midi, detune)
-  return M.stepToMidi(temper, step + n, oct)
+function tuning.transposeStep(temper, midi, detune, n)
+  local step, oct = tuning.midiToStep(temper, midi, detune)
+  return tuning.stepToMidi(temper, step + n, oct)
 end
 
 ----- Display
 
 --contract: returns (note, octaveLabel); named ⇒ name, nameless ⇒ degree+'-'; octave+1 at octaveStep
-function M.stepToParts(temper, step, octave)
+function tuning.stepToParts(temper, step, octave)
   if step >= temper.octaveStep then octave = octave + 1 end
   local name = temper.stepNames and temper.stepNames[step]
   local note = (name and name ~= '') and name or (step .. '-')
@@ -449,9 +449,9 @@ function M.stepToParts(temper, step, octave)
 end
 
 --contract: name ⇒ name+octave (C-4); blank/absent ⇒ degree-octave (7-4). Octave +1 at octaveStep.
-function M.stepToText(temper, step, octave)
-  local note, octaveStr = M.stepToParts(temper, step, octave)
+function tuning.stepToText(temper, step, octave)
+  local note, octaveStr = tuning.stepToParts(temper, step, octave)
   return note .. octaveStr
 end
 
-return M
+return tuning
