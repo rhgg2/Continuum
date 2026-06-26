@@ -175,11 +175,11 @@ local function reconcileFx(existing, predicted)
 end
 
 ----- delta-stream (carrier) reconciliation
--- Pure fn of lane-1 hosts; match by (cc, ppq); relocated carrier reaps old code, writes new. see design/note-macros.md § Delta-code allocation
+-- Pure fn of lane-1 hosts; key by (cc, canon ppq) — REAPER float vs int prediction churns whole stream. see design/note-macros.md § Delta-code allocation
 local function reconcileCarrier(existing, predicted)
   return reconcileDerived{
     existing = existing, predicted = predicted,
-    key   = function(x) return util.key(x.cc, x.ppq) end,
+    key   = function(x) return util.key(canon(x.cc), canon(x.ppq)) end,
     match = function(have, spec) return have.val == spec.val and have.shape == spec.shape end,
   }
 end

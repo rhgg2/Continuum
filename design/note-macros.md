@@ -589,13 +589,23 @@ instances. In leverage order:
 - **R3 — `forEachEffectiveNote`.** "Committed notes ∪ staged adds" is
   hand-rolled in flush's voice-legality scan and in `reconcilePcs`;
   macro flush-reconcile is the third occurrence — extract then.
-- **R4 — flush-time mechanism registry.** `flush()` hard-codes the PC
-  pass behind `dirtyPcChans`; macros add `dirtyFxHosts`. Ordering is
-  load-bearing — fxNote reconcile must precede PC reconcile (fxNotes
-  carry the host's `sample` and enter PC records) — so this is an
-  ordered `{dirtySet, reconcile}` list in tm, **not** a preflush
-  subscription (hook order is registration order; gm already rides
-  that hook).
+- **R4 — flush-time mechanism registry. Measured 2026-06-26: not
+  warranted.** The shape, were it built: `flush()` hard-codes the PC
+  pass behind `dirtyPcChans`; macros would add `dirtyFxHosts` as an
+  ordered `{dirtySet, reconcile}` list in tm (fxNote reconcile must
+  precede PC reconcile — fxNotes carry the host's `sample` and enter PC
+  records), **not** a preflush subscription. But live profiling of a
+  dense fx take first showed the fx-expansion slice dominating rebuild
+  (~17 of ~20ms) — and the cause was a **carrier-reconcile churn bug**,
+  not regeneration: `reconcileCarrier`'s key lacked the `canon()` that
+  `fxKey` carries, so REAPER's float ppq never matched the integer
+  prediction and every rebuild rewrote the entire delta stream (~14ms of
+  needless `mm:modify`). Fixed (the `G4-float` carrier guard in
+  `tm_vibrato_spec`); rebuild halved, churn gone. With it fixed, fx
+  regeneration is a minority of a worst-case rebuild and a sliver of a
+  typical one — dirty-tracking buys back ~4ms at the cost of a prediction
+  cache and window-aware invalidation. Build only if a measured hotspot
+  reappears.
 - **R5 — plink via MIDI; retire the listen bank.** `pa.apply` writes
   the bound param's `plink.midi_*` at the relocated automation-bus
   address instead of linking through the node's value sliders;
@@ -798,14 +808,16 @@ generator.
   deterministically, and cascade across carriers is only possible at
   densities v1's one-carrier-per-channel never reaches. Open: only whether
   the add bank's 16 slots need to grow.
-- **Trill cents: structural detune vs delta stream.** Structural is
-  correct-by-existing-machinery but seats absorbers at trill rate;
-  both ride the same wire now, so decide after watching it run.
-- **Gen stack UI.** v1 surfaces **one toggleable section per kind** — Retrig,
-  Vibrato, Slide, independent checkboxes (§ UI). The model carries an unbounded
-  list; the **free multi-entry stack** UI — repeated kinds, reorder, and the
-  R16 fx-column that would show it densely — still waits, now on demand rather
-  than on the model (three kinds, continuous coexisting, have proven it out).
+- **Trill cents: structural — settled (2026-06-26).** The delta-stream
+  migration is rejected: structural detune is correct by existing
+  machinery, and the absorber churn at trill rate is acceptable in
+  practice. Keep it.
+- **Gen stack UI — settled (2026-06-26): current UI stands.** v1 surfaces
+  **one toggleable section per kind** — Retrig, Vibrato, Slide, independent
+  checkboxes (§ UI) — proven adequate in use. The model still carries an
+  unbounded list, but the **free multi-entry stack** UI — repeated kinds,
+  reorder, and the R16 fx-column that would show it densely — stays unbuilt:
+  not needed, not merely deferred.
 - **Bake-on-export.** Address rewrite + merge of delta streams into
   their target lanes for plain-MIDI export; densification cost paid
   only there.

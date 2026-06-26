@@ -1,4 +1,4 @@
-@module trackerManager  src=trackerManager.lua  loc=1895  sha=ff1f0af  mode=chunk
+@module trackerManager  src=trackerManager.lua  loc=1895  sha=1fc72be  mode=chunk
 @deps mm, cm, ds
 
 # Invariants & contracts
@@ -130,7 +130,7 @@
       -- kept fxNote is re-clipped through its token by the tail walk rather than re-added.
   -- delta-stream (carrier) reconciliation
   @fn reconcileCarrier(existing, predicted)  @ 179
-      -- Pure fn of lane-1 hosts; match by (cc, ppq); relocated carrier reaps old code, writes new. see design/note-macros.md § Delta-code allocation
+      -- Pure fn of lane-1 hosts; key by (cc, canon ppq) — REAPER float vs int prediction churns whole stream. see design/note-macros.md § Delta-code allocation
       · State
       · Accessors
       · Low-level mutation

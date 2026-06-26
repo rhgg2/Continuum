@@ -121,6 +121,29 @@ return {
     end,
   },
 
+  ----- G4-float — carrier churn guard (the canon the structural fxKey has)
+  -- REAPER cc ppq is float; predicted is int. Without canon() they stringify apart, rewrites whole stream. floatPpq makes fake mm mirror REAPER so the skew bites.
+
+  {
+    name = 'G4-float: a no-change rebuild re-adds no carrier events (carrier key canon)',
+    run = function(harness)
+      local h = harness.mk{ floatPpq = true }
+      addVibHost(h)
+      t.truthy(#carriersOf(h.fm:dump(), 1) > 0, 'carriers present (non-vacuous)')
+
+      -- Count carrier-code adds across one steady-state rebuild: churn re-adds the
+      -- whole stream, the fix re-adds nothing.
+      local carrierAdds, realAdd = 0, h.fm.add
+      h.fm.add = function(self, t)
+        if t and t.evType == 'cc' and t.cc == DELTA_MSB then carrierAdds = carrierAdds + 1 end
+        return realAdd(self, t)
+      end
+
+      h.tm:rebuild()
+      t.eq(carrierAdds, 0, 'steady-state rebuild rewrites no carriers (no float-ppq churn)')
+    end,
+  },
+
   ----- G2 — both directions
 
   {
