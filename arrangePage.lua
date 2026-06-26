@@ -50,6 +50,8 @@ facade.publish('arrange', {
   mintParkedTake  = function(trackIdx, name, lengthQN, srcTake)
     return av:mintParkedTake(trackIdx, name, lengthQN, srcTake)
   end,
+  dropSlot        = function(trackIdx, slotIdx, qnPos) return av:dropSlot(trackIdx, slotIdx, qnPos) end,
+  hasPlacedTakes  = function() return av:hasPlacedTakes() end,
   isParkedTake    = function(take) return av:isParkedTake(take) end,
   ownerTrack      = function(take) return av:ownerTrack(take) end,
   reswingAll             = function(name) av:reswingAll(name) end,

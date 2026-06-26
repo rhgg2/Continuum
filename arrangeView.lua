@@ -428,6 +428,8 @@ function av:mintParkedTake(trackIdx, name, lengthQN, srcTake)
 end
 function av:isParkedTake(take) return am:isParkedTake(take) end
 function av:ownerTrack(take)   return am:ownerTrack(take) end
+function av:dropSlot(trackIdx, slotIdx, qnPos) return am:dropInstance(trackIdx, slotIdx, qnPos) end
+function av:hasPlacedTakes()   return am:hasPlacedTakes() end
 function av:editCursorQN()        return am:editCursorQN() end
 function av:playPositionQN()      return am:playPositionQN() end
 function av:loopRangeQN()         return am:loopRangeQN() end

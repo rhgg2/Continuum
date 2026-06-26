@@ -120,6 +120,19 @@ return {
     end,
   },
 
+  {
+    name = 'hasPlacedTakes ignores parked takes, sees placed instances',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, { { items = {} } })
+      t.eq(am:hasPlacedTakes(), false, 'empty timeline has no placed takes')
+      am:mintParkedTake(0, '00', 4)
+      t.eq(am:hasPlacedTakes(), false, 'a parked-only slot is not placed')
+      am:createAndDropMidi(0, 0, 2, '00')
+      t.truthy(am:hasPlacedTakes(), 'a dropped instance counts as placed')
+    end,
+  },
+
   --------------------------------------------------------------------
   -- Identity resolution
   --------------------------------------------------------------------

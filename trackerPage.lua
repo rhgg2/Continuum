@@ -101,10 +101,10 @@ facade.publish('tracker', {
   diveTo = function(guid, slotIdx) tv:selectTrack(guid, slotIdx) end,
 
   -- Wiring spawns a generator's source track; ready its first take to author:
-  -- select the track, mint a default-length parked take, select it.
+  -- select the track, mint a default-length '00' parked take, select it; returns its slot.
   selectNewParkedTake = function(guid)
     tv:selectTrack(guid)
-    tv:newParkedTake('', cm:get('newTakeBeats'))
+    return tv:newParkedTake('00', cm:get('newTakeBeats'))
   end,
 
   -- Arrange opens take properties without diving: bind to it (so tv reads its

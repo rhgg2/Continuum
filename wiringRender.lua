@@ -2572,7 +2572,14 @@ local function commitFx(pck, fx)
     else
       local _, sourceGuid = wv:addFx(pck.x, pck.y, { name = fx.name, ident = fx.ident },
                                      { sourcePos = { x = pck.sx, y = pck.sy } })
-      if sourceGuid then facade.get('tracker').selectNewParkedTake(sourceGuid) end
+      if sourceGuid then
+        local slot = facade.get('tracker').selectNewParkedTake(sourceGuid)
+        local arrange = facade.get('arrange')
+        if slot and not arrange.hasPlacedTakes() then
+          local trackIdx = arrange.trackIdxForGuid(sourceGuid)
+          if trackIdx then arrange.dropSlot(trackIdx, slot, 0) end
+        end
+      end
     end
   end)
 end

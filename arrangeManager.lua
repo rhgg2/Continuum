@@ -457,6 +457,14 @@ function am:visibleTakes(fromCol, toCol, qnLo, qnHi)
   return out
 end
 
+--contract: true iff any visible column holds a placed take instance; parked-on-scratch excluded
+function am:hasPlacedTakes()
+  for _, takes in pairs(ensureState().takesByCol) do
+    if #takes > 0 then return true end
+  end
+  return false
+end
+
 --contract: cached take-shape wrapping reaperTake on any project column; nil if not found
 function am:findTake(reaperTake)
   if not reaperTake then return end

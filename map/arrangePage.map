@@ -1,4 +1,4 @@
-@module arrangePage  src=arrangePage.lua  loc=65  sha=732c659  mode=chunk  self=ap
+@module arrangePage  src=arrangePage.lua  loc=67  sha=732c659  mode=chunk  self=ap
 @deps cm, ds, cmgr, chrome, gui, modalHost, facade
 
 # Imports
@@ -24,28 +24,30 @@
       @contract  seeds the cursor from am:initialCursor (selected take, else edit cursor); no selection.
   -- Arrange service surface — av passthroughs
   -- Page interface — render delegates to the renderer
-  @api ap:toolbarSegments()  @ 60
-  @api ap:renderBody(_, w, h, dispatch)  @ 61
-  @api ap:renderStatusBar(ctx)  @ 62
-  @api ap:focusState()  @ 63
+  @api ap:toolbarSegments()  @ 62
+  @api ap:renderBody(_, w, h, dispatch)  @ 63
+  @api ap:renderStatusBar(ctx)  @ 64
+  @api ap:focusState()  @ 65
 
 # Uses (outbound edges)
-  @use call    arrangeRender.focusState  @ focusState:63
-  @use call    arrangeRender.renderBody  @ renderBody:61
-  @use call    arrangeRender.renderStatusBar  @ renderStatusBar:62
-  @use call    arrangeRender.toolbarSegments  @ toolbarSegments:60
+  @use call    arrangeRender.focusState  @ focusState:65
+  @use call    arrangeRender.renderBody  @ renderBody:63
+  @use call    arrangeRender.renderStatusBar  @ renderStatusBar:64
+  @use call    arrangeRender.toolbarSegments  @ toolbarSegments:62
   @use call    arrangeView.cursorCol  @ 42
-  @use call    arrangeView.isParkedTake  @ 53
+  @use call    arrangeView.dropSlot  @ 53
+  @use call    arrangeView.hasPlacedTakes  @ 54
+  @use call    arrangeView.isParkedTake  @ 55
   @use call    arrangeView.keyForSlot  @ 48
   @use call    arrangeView.midiSlots  @ 44
   @use call    arrangeView.mintParkedTake  @ 51
   @use call    arrangeView.nextFreeSlot  @ 49
-  @use call    arrangeView.ownerTrack  @ 54
+  @use call    arrangeView.ownerTrack  @ 56
   @use call    arrangeView.projectTracks  @ 43
-  @use call    arrangeView.reswingAll  @ 55
+  @use call    arrangeView.reswingAll  @ 57
   @use call    arrangeView.seedCursor  @ seedCursorFromReaper:38
   @use call    arrangeView.takeForSlot  @ 45
-  @use call    arrangeView.takesUsing  @ 56
+  @use call    arrangeView.takesUsing  @ 58
   @use call    arrangeView.trackHandle  @ 47
   @use call    arrangeView.trackIdxForGuid  @ 46
   @use call    facade.publish  @ 41
