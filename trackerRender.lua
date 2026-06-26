@@ -138,7 +138,7 @@ local function renderNote(evt, col, row)
     if d == 0 then
       return text .. ' ···', nil, overrides, divergent
     end
-    text = text .. ' ' .. string.format('%03d', math.abs(d))
+    text = text .. ' ' .. string.format('%03d', math.floor(math.abs(d)))
     if d < 0 then
       local n = utf8.len(text)   -- display columns, not bytes (note label may be multibyte)
       overrides = overrides or {}
@@ -150,7 +150,7 @@ end
 
 local function renderPB(evt)
   if evt and not evt.hidden and evt.val then
-    if evt.val < 0 then return string.format('%04d', math.abs(evt.val)), 'negative'
+    if evt.val < 0 then return string.format('%04d', math.floor(math.abs(evt.val))), 'negative'
     else return string.format('%04d', math.floor(evt.val)) end
   else return '····' end
 end
