@@ -238,7 +238,7 @@ Execution order, with a pointer to each step's detail:
 2. **Allocate internal lanes.** Each stamped internal clones into its
    authored lane via `pickStampedLane`, which pushes columns until that
    lane exists and returns it verbatim (the tail walk clips its note-off,
-   so it can never overlap). Externals are placed later, at step 6.
+   so it can never overlap). Externals are placed up front, after 4.7.
 3. **Single CC walk.** Reconcile each non-derived CC's `(raw, ppqL)` under
    the current swing, then project `cc`/`at`/`pc` into columns. pb column
    projection is deferred to 4.9, pa dispatch to 6.5. → § Rebuild: step 3.
@@ -250,21 +250,28 @@ Execution order, with a pointer to each step's detail:
    each note's `raw` from its `ppqL` under the new swing (see
    `docs/timing.md` §"Rebuild rule"). CCs are reseated by step 3; the raw
    note-off is owned by step 4.8, never here.
-4.6. **Macro expansion.** Every note (any lane) carrying `fx` runs its
-   generator; the derived fxNotes reconcile against the step-0 set
-   (`reconcileFx`), and continuous deltas colour into carrier CC codes.
-   The post-expansion derived set `fxLive` feeds the tail walk and PC
-   synthesis. fxLive is re-scanned from `mm:notes()` for fresh tokens only
-   when the reconcile actually churned the take; on a no-churn rebuild the
-   step-0 `fxExisting` already lists the set with current tokens, so the
-   re-scan is skipped. See `design/note-macros.md`.
-6. **Reintroduce externals.** In raw-ppq order, pack each external a lane
-   against the now-settled internals, stamp `ppqL`/`endppqL` from raw, and
-   backfill missing metadata. → § Rebuild: step 6.
-4.8. **Unified tail/onset walk.** Clamp same-pitch onset collisions, then
-   clip each internal's realised note-off against its same-lane and
-   same-pitch successors. Externals are blockers only — never written.
-   → § Rebuild: step 4.8.
+6. **Reintroduce externals (up front).** In raw-ppq order, pack each
+   external a lane against the placed internals, stamp `ppqL`/`endppqL`
+   from raw, and backfill missing metadata. Tagged `evt.fixed` so the
+   walk freezes its onset but clips its tail like any note. Placed here —
+   after 4.7, before the window pass — so externals bound fx windows and
+   walk alongside everything else. → § Rebuild: step 6.
+   **Windows (read-only).** Walk each channel's same-lane successor map in
+   the logical frame; each fx host's window is its voice extent (the next
+   same-lane onset's `ppqL`, floored by the authored end). Feeds 4.6 and
+   the slide `next` lookup.
+4.6. **Macro expansion (in memory).** Every note (any lane) carrying `fx`
+   runs its generator over its window; the derived fxNotes reconcile
+   against the step-0 set (`reconcileFx`), and continuous deltas colour
+   into carrier CC codes. The note add/del is **deferred** to the 4.8
+   atomic commit; `fxLive` (the predicted set) feeds the tail walk and PC
+   synthesis. See `design/note-macros.md`.
+4.8. **Unified tail/onset walk + atomic note commit.** Real notes, fixed
+   externals, and the predicted fxNotes walk together: clamp same-pitch
+   onset collisions (fixed onsets frozen), then clip each realised
+   note-off against its same-lane and same-pitch successors. The clips
+   commit WITH the fxNote del/add in one `mm:modify`, so each host's clip
+   to its first fxNote lands with the inserts. → § Rebuild: step 4.8.
 4.9. **Absorber reconciliation + pb resynthesis.** Reseat absorber pbs
    against the post-walk lane-1 layout, recompute their raw
    vals, and project the pb column. See `docs/tuning.md` § Absorber
@@ -497,14 +504,16 @@ final reconciled absorbers and recomputed raw vals.
 
 ## Rebuild: step 6 — externals
 
-Per external in raw-ppq order: pack a lane against the now-settled
-internals plus any earlier externals already placed (`noteColumnAccepts`
-sees realised tails); stamp `ppqL`/`endppqL` from raw; backfill missing
-metadata (foreign-MIDI lacks all; stale-stamped notes arrive with authored
+Reintroduced up front (after 4.7's swing reseat, before the window pass),
+so externals bound fx windows and walk alongside everything else. Per
+external in raw-ppq order: pack a lane against the placed internals plus
+any earlier externals (`noteColumnAccepts` sees raw tails; the walk clips
+later); stamp `ppqL`/`endppqL` from raw; backfill missing metadata
+(foreign-MIDI lacks all; stale-stamped notes arrive with authored
 detune/delay intact). Column event inserted in lockstep so each subsequent
-external's pack sees prior ones. Tagged `evt.external = true` so step 4.8
-treats it as a BLOCKER — its onset shows up as 'next' for internals — but
-the walk never writes to its tail or clamps its onset.
+external's pack sees prior ones. Tagged `evt.fixed = true`: step 4.8
+freezes its onset (the same-pitch clamp skips it) but clips its tail like
+any other note, and it blocks neighbours' tails as a 'next' lookup.
 
 ## Rebuild: step 4.8 — tail walk
 
@@ -528,9 +537,13 @@ tie-break): the successor is clamped to `prev.ppq + 1`. Authored swap
 survives: when raw order differs from logical order, whoever lands first
 in raw becomes the realised predecessor.
 
-Externals (tagged `evt.external` by step 6) participate as BLOCKERS only
-— their onsets appear as 'next' lookups so internal tails clip against
-them — but the walk never writes to them.
+Fixed records (externals, tagged `evt.fixed` by step 6) keep their frozen
+onset — the same-pitch clamp skips them — but their tails clip like any
+other note, and their onsets appear as 'next' lookups so neighbours clip
+against them. The predicted fxNotes (`fxLive`) walk here too; a record
+with no token (a new fxNote) carries its clipped geometry into its
+`mm:add` rather than a tail assign, and the clips commit with the fxNote
+del/add in one modify.
 
 ## Rebuild: step 5 — project to logical
 

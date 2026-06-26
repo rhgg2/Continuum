@@ -110,6 +110,7 @@ local function reconcileDerived(a)
     local have = index[a.key(spec)]
     if have and (not a.match or a.match(have, spec)) then
       kept[have] = true
+      if a.onKeep then a.onKeep(spec, have) end
     else
       util.add(toAdd, a.make and a.make(spec) or spec)
     end
@@ -166,8 +167,11 @@ local function fxKey(spec)
                   canon(spec.sample or 0))
 end
 
+-- onKeep carries the matched note's token + realised end onto the predicted spec, so a
+-- kept fxNote is re-clipped through its token by the tail walk rather than re-added.
 local function reconcileFx(existing, predicted)
-  return reconcileDerived{ existing = existing, predicted = predicted, key = fxKey }
+  return reconcileDerived{ existing = existing, predicted = predicted, key = fxKey,
+    onKeep = function(spec, have) spec.token, spec.endppq = have.token, have.endppq end }
 end
 
 ----- delta-stream (carrier) reconciliation
@@ -944,7 +948,7 @@ do
   end
 
   --contract: pick a lane for an external (unstamped) note via accept → sibling → push bump
-  --invariant: called by step 6 AFTER internals' raw tails settle, so accept sees realised state
+  --invariant: called up front after internals are placed + swing-reseated; 4.8 clips tails after
   local function packExternalLane(channel, note)
     local notes = channel.columns.notes
     if note.lane then
@@ -1002,14 +1006,29 @@ do
     rebuilding = true
     takeChanged = takeChanged or false
 
+    -- assignList reindexes each event's token in place; applyAssigns wraps it in its own
+    -- modify, the 4.8 atomic note commit calls it inside a shared one.
+    local function assignList(list)
+      for _, a in ipairs(list) do
+        local newTok = mm:assign(a.evt.token, a.update)
+        if newTok and newTok ~= a.evt.token then a.evt.token = newTok end
+      end
+    end
     local function applyAssigns(list)
-      if #list == 0 then return end
-      mm:modify(function()
-        for _, a in ipairs(list) do
-          local newTok = mm:assign(a.evt.token, a.update)
-          if newTok and newTok ~= a.evt.token then a.evt.token = newTok end
+      if #list > 0 then mm:modify(function() assignList(list) end) end
+    end
+
+    -- Strict-next per note: first group member with a greater ppq,
+    -- chord-mates skipped. Precomputed O(n); see docs/trackerManager.md § Rebuild.
+    local function strictNextMap(groups)
+      local nextOf = {}
+      for _, g in pairs(groups) do
+        for i = #g - 1, 1, -1 do
+          nextOf[g[i]] = g[i + 1].evt.ppq > g[i].evt.ppq
+                         and g[i + 1] or nextOf[g[i + 1]]
         end
-      end)
+      end
+      return nextOf
     end
 
     clearSwing()   -- rebuild is the (cm, mm) coherence point
@@ -1022,6 +1041,9 @@ do
     -- fxLive: post-expansion set unioned into the tail walk and PC synthesis.
     local fxExisting, fxLive, carrierExisting = {}, {}, {}
     for i = 1, 16 do fxExisting[i] = {}; fxLive[i] = {}; carrierExisting[i] = {} end
+    -- fxNote add/del deferred from 4.6 into the 4.8 atomic note commit, so the host clip
+    -- and the fxNote inserts land in one mm:modify (one MIDI_Sort, no transient overlap).
+    local fxToRemove, fxToAdd = {}, {}
     -- host event -> pre-fx realised tail, stashed at 4.6, restored onto the
     -- column event after the 4.8 tail walk so the view sees the authored note.
     local fxHostEnd = {}
@@ -1158,8 +1180,73 @@ do
       staleSwing = {}
     end
 
-    -- 4.6) Macro expansion: expand fx-carrying notes on every lane, reconcile
-    -- against fxExisting, commit. fxLive feeds the tail walk + PC synthesis. see design/note-macros.md § Pipeline placement
+    -- Reintroduce externals: pack lane, stamp ppqL/endppqL, backfill metadata, tag `fixed`; block window + tail passes (onsets frozen, tails clipped).
+    -- see docs/trackerManager.md § Rebuild: externals
+    if #external > 0 then
+      table.sort(external, function(a, b) return a.ppq < b.ppq end)
+      local trackerMode = cm:get('trackerMode')
+      local inserts = {}
+      for _, note in ipairs(external) do
+        local delay     = note.delay or 0
+        local d         = delayToPPQ(delay)
+        local probe     = { ppq = note.ppq, endppq = note.endppq,
+                            pitch = note.pitch, delay = delay, lane = note.lane }
+        local col, lane = packExternalLane(channels[note.chan], probe)
+        local update    = {
+          ppqL    = tm:toLogical(note.chan, note.ppq - d),
+          endppqL = tm:toLogical(note.chan, note.endppq),
+        }
+        if note.lane   ~= lane then update.lane   = lane   end
+        if note.detune == nil  then update.detune = 0      end
+        if note.delay  == nil  then update.delay  = 0      end
+        if trackerMode and note.sample == nil then update.sample = 0 end
+        local ce = util.clone(note, { chan = true, lane = true })
+        util.assign(ce, update)
+        ce.fixed = true
+        util.add(col.events, ce)
+        util.add(inserts, { note = note, ce = ce, update = update })
+      end
+      mm:modify(function()
+        for _, ins in ipairs(inserts) do
+          local newTok = mm:assign(mm:tokenOf(ins.note), ins.update)
+          ins.ce.token = newTok or mm:tokenOf(ins.note)
+        end
+      end)
+    end
+
+    -- Windows (read-only): fx host voice extents + per-note same-lane successor ppqL, floored by authored end; no realised round-trip (G4-stable).
+    -- see design/note-macros.md § host contract
+    local fxWindow, nextInLane = {}, {}
+    do
+      local takeLen = tm:length()
+      for chan = 1, 16 do
+        local byLane = {}
+        for laneIdx, col in ipairs(channels[chan].columns.notes) do
+          for _, evt in ipairs(col.events) do
+            if evt.type ~= 'pa' and evt.ppqL ~= nil then
+              util.bucket(byLane, laneIdx, { evt = evt })
+            end
+          end
+        end
+        for _, g in pairs(byLane) do table.sort(g, function(a, b) return a.evt.ppq < b.evt.ppq end) end
+        local laneNextOf = strictNextMap(byLane)
+        for _, g in pairs(byLane) do
+          for _, rec in ipairs(g) do
+            local nextRec = laneNextOf[rec]
+            nextInLane[rec.evt] = nextRec and nextRec.evt
+            if rec.evt.fx then
+              local endL = (rec.evt.endppqL == nil or rec.evt.endppqL == util.OPEN)
+                           and tm:toLogical(chan, takeLen) or rec.evt.endppqL
+              if nextRec then endL = math.min(endL, nextRec.evt.ppqL) end
+              fxWindow[rec.evt] = endL
+            end
+          end
+        end
+      end
+    end
+
+    -- 4.6) Macro expansion (in-memory): expand fx-carrying notes, reconcile vs fxExisting; add/del deferred to 4.8; fxLive feeds tail walk + PC synthesis.
+    -- see design/note-macros.md § Pipeline placement
     do
       local res = mm:resolution()
       local pbRangeCents = cm:get('pbRange') * 100   -- slide clamps its target to what pb can reach
@@ -1167,55 +1254,24 @@ do
       local function stepOp(pitch, detune, n)        -- trill: scale steps -> (pitch, detune) via the temper
         return tuning.transposeStep(temper, pitch, detune, n)
       end
-      local takeLen = tm:length()
       local extras  = ds:get('extraColumns') or {}   -- authored columns block carrier codes
-      local churned = false
+      local chanCtx = { resolution = res, pbRangeCents = pbRangeCents, step = stepOp,
+                        nextSameLaneNote = function(host) return nextInLane[host.events[1]] end }
       for chan = 1, 16 do
-        -- Window ends at the first same-pitch or same-lane onset after the host
-        -- (monophonic column; see design/note-macros.md § host contract).
-        local foreignOnsets, laneOnsets, lane1ByPpq = {}, {}, {}
-        local function addOnset(n, lane)
-          if n.derived or n.type == 'pa' then return end
-          util.bucket(foreignOnsets, n.pitch, n.ppq)
-          if lane then util.bucket(laneOnsets, lane, n.ppq) end
-          if lane == 1 then lane1ByPpq[n.ppq] = n end
-        end
-        for laneIdx, col in ipairs(channels[chan].columns.notes) do
-          for _, n in ipairs(col.events) do addOnset(n, laneIdx) end
-        end
-        for _, n in ipairs(external) do if n.chan == chan then addOnset(n) end end
-        for _, list in pairs(foreignOnsets) do table.sort(list) end
-        for _, list in pairs(laneOnsets)    do table.sort(list) end
-
-        local function firstAfter(list, ppq)
-          for _, p in ipairs(list or {}) do if p > ppq then return p end end
-        end
-        -- slide.target='next': the next lane-1 note after the host (logical frame).
-        local function nextLane1Note(host)
-          local p = firstAfter(laneOnsets[1], host.ppq)
-          return p and lane1ByPpq[p]
-        end
-        local chanCtx = { resolution = res, pbRangeCents = pbRangeCents,
-                          nextLane1Note = nextLane1Note, step = stepOp }
-
         -- Pass A: run every generator. Structural notes commit per lane; continuous deltas
         -- stash with their window for colouring (channel-wide, not note-tied). see design/note-macros.md § Continuous realisation
         local predicted, pending = {}, {}
         for laneIdx, col in ipairs(channels[chan].columns.notes) do
           for _, host in ipairs(col.events) do
             if host.fx and host.type ~= 'pa' then
-              local endL = (host.endppqL == nil or host.endppqL == util.OPEN)
-                           and tm:toLogical(chan, takeLen) or host.endppqL
-              local bound = math.min(firstAfter(foreignOnsets[host.pitch], host.ppq) or math.huge,
-                                     firstAfter(laneOnsets[laneIdx],       host.ppq) or math.huge)
-              if bound ~= math.huge then endL = math.min(endL, tm:toLogical(chan, bound)) end
+              local endL = fxWindow[host]
               fxHostEnd[host] = tm:fromLogical(chan, endL)
               local d = delayToPPQ(host.delay or 0)
               for _, params in ipairs(host.fx) do
                 local gen = generators[params.kind]
                 if gen then
                   local out = gen({ window = { host.ppqL, endL }, events = { host },
-                                    id = host.uuid, chan = chan }, params, chanCtx)
+                                    id = host.uuid, chan = chan, lane = laneIdx }, params, chanCtx)
                   for _, fn in ipairs(out.notes) do
                     util.add(predicted, {
                       evType = 'note', chan = chan, lane = laneIdx, derived = host.uuid,
@@ -1237,26 +1293,13 @@ do
           end
         end
 
+        -- Reconcile existence (stamps kept specs with token + realised end); defer writes to the 4.8 atomic commit.
+        -- fxLive holds the predicted specs; the tail walk clips them in place.
         local toRemove, toAdd = reconcileFx(fxExisting[chan], predicted)
-        if #toRemove > 0 or #toAdd > 0 then
-          churned = true
-          mm:modify(function()
-            for _, e    in ipairs(toRemove) do mm:delete(e.token) end
-            for _, spec in ipairs(toAdd)    do mm:add(spec)       end
-          end)
-        end
-
-        -- TEMP FXDBG (remove): what the fxNote reconcile sees vs what it predicts.
-        if #predicted > 0 or #fxExisting[chan] > 0 then
-          local function fmt(n)
-            return string.format('[%s..%s L%s]p%s d%s', tostring(n.ppq),
-              tostring(n.endppq), tostring(n.endppqL), tostring(n.pitch), tostring(n.detune))
-          end
-          local ex, pr = {}, {}
-          for _, n in ipairs(fxExisting[chan]) do ex[#ex+1] = fmt(n) end
-          for _, n in ipairs(predicted)        do pr[#pr+1] = fmt(n) end
-          print(string.format('[FXDBG ch%d reconcile] EXIST %s || PRED %s || remove %d add %d',
-            chan, table.concat(ex, ' '), table.concat(pr, ' '), #toRemove, #toAdd))
+        for _, e in ipairs(toRemove) do util.add(fxToRemove, e) end
+        for _, s in ipairs(toAdd)    do util.add(fxToAdd, s)    end
+        for _, spec in ipairs(predicted) do
+          util.add(fxLive[chan], { evt = spec, lane = spec.lane })
         end
 
         -- Pass B: per target, interval-colour stashed instances -- overlapping carriers get
@@ -1342,60 +1385,10 @@ do
       if not util.deepEq(prevCarrier, newFxCarrier) and mm:take() then
         ds:assign('fxCarrier', next(newFxCarrier) and newFxCarrier or util.REMOVE)
       end
-
-      -- fxLive clones evts (walk mutates them). No-churn: fxExisting lists derived set with current
-      -- tokens so mm:notes() re-scan is skipped. see docs/trackerManager.md § Rebuild
-      local fxSource = {}
-      if churned then
-        for _, n in mm:notes() do if n.derived then util.add(fxSource, n) end end
-      else
-        for chan = 1, 16 do
-          for _, n in ipairs(fxExisting[chan]) do util.add(fxSource, n) end
-        end
-      end
-      for _, n in ipairs(fxSource) do
-        local ce = util.clone(n)
-        ce.token = n.token
-        util.add(fxLive[n.chan], { evt = ce, lane = n.lane or 1 })
-      end
     end
 
-    -- 6) Reintroduce externals: pack lane, stamp ppqL/endppqL from raw, backfill metadata.
-    -- see docs/trackerManager.md § Rebuild: step 6 — externals
-    if #external > 0 then
-      table.sort(external, function(a, b) return a.ppq < b.ppq end)
-      local trackerMode = cm:get('trackerMode')
-      local inserts = {}
-      for _, note in ipairs(external) do
-        local delay     = note.delay or 0
-        local d         = delayToPPQ(delay)
-        local probe     = { ppq = note.ppq, endppq = note.endppq,
-                            pitch = note.pitch, delay = delay, lane = note.lane }
-        local col, lane = packExternalLane(channels[note.chan], probe)
-        local update    = {
-          ppqL    = tm:toLogical(note.chan, note.ppq - d),
-          endppqL = tm:toLogical(note.chan, note.endppq),
-        }
-        if note.lane   ~= lane then update.lane   = lane   end
-        if note.detune == nil  then update.detune = 0      end
-        if note.delay  == nil  then update.delay  = 0      end
-        if trackerMode and note.sample == nil then update.sample = 0 end
-        local ce = util.clone(note, { chan = true, lane = true })
-        util.assign(ce, update)
-        ce.external = true
-        util.add(col.events, ce)
-        util.add(inserts, { note = note, ce = ce, update = update })
-      end
-      mm:modify(function()
-        for _, ins in ipairs(inserts) do
-          local newTok = mm:assign(mm:tokenOf(ins.note), ins.update)
-          ins.ce.token = newTok or mm:tokenOf(ins.note)
-        end
-      end)
-    end
-
-    -- 4.8) Unified tail/onset walk on internals. Externals are BLOCKERS only (never written).
-    -- see docs/trackerManager.md § Rebuild: step 4.8 — tail walk
+    -- 4.8) Unified tail/onset walk + atomic commit: real notes, fixed externals, fxLive walk together (onset clamp then tail clip).
+    -- Host clip + fxNote inserts land in one mm:modify — no transient same-pitch overlap for MIDI_Sort. see docs/trackerManager.md § Rebuild: step 4.8 — tail walk
     do
       local takeLen = tm:length()
       local clamps, clips = {}, {}
@@ -1430,32 +1423,20 @@ do
         end
         sortAll()
 
-        -- Same-pitch onset clamp. Retro-clip of predecessor's tail is subsumed by the tail
-        -- pass below (the clamped successor's onset shows up as same-pitch next).
+        -- Same-pitch onset clamp; retro-clip is subsumed by the tail pass (clamped successor appears as same-pitch next).
+        -- Token'd events assign; a new fxNote (no token yet) mutates in place, riding into mm:add at the atomic commit.
         local lastByPitch = {}
         for _, n in ipairs(notes) do
           local e, prev = n.evt, lastByPitch[n.evt.pitch]
-          if prev and not n.evt.external and e.ppq <= prev.evt.ppq then
+          if prev and not n.evt.fixed and e.ppq <= prev.evt.ppq then
             local floor = prev.evt.ppq + 1
-            util.add(clamps, { evt = e, update = { ppq = floor } })
+            if e.token then util.add(clamps, { evt = e, update = { ppq = floor } }) end
             e.ppq = floor
           end
           lastByPitch[e.pitch] = n
         end
         sortAll()
 
-        -- Strict-next per note: first group member with a greater ppq,
-        -- chord-mates skipped. Precomputed O(n); see docs/trackerManager.md § Rebuild.
-        local function strictNextMap(groups)
-          local nextOf = {}
-          for _, g in pairs(groups) do
-            for i = #g - 1, 1, -1 do
-              nextOf[g[i]] = g[i + 1].evt.ppq > g[i].evt.ppq
-                             and g[i + 1] or nextOf[g[i + 1]]
-            end
-          end
-          return nextOf
-        end
         local laneNextOf  = strictNextMap(byLane)
         local pitchNextOf = strictNextMap(byPitch)
 
@@ -1474,42 +1455,28 @@ do
                               math.min(ceiling, laneClip, pitchClip, takeLen))
           local rounded   = util.round(bound)
           if rounded ~= e.endppq then
-            util.add(clips, { evt = e, update = { endppq = rounded } })
+            if e.token then util.add(clips, { evt = e, update = { endppq = rounded } }) end
             e.endppq = rounded
           end
         end
         ::nextChan::
       end
-      -- Clamps first: reindex separates colliding tokens before clip assigns dereference them
-      -- (same-pitch notes share a content-keyed token until ppq differs).
+      -- Clamps reindex colliding same-pitch onsets separately: reload separates the shared content-keyed token before the clip pass dereferences it.
+      -- Clips only touch endppq, never re-key — safe to batch with adds.
       applyAssigns(clamps)
-      applyAssigns(clips)
-
-      -- TEMP FXDBG (remove): capture each host's realised clip (to fxNote 2)
-      -- before the view-restore below overwrites it with the authored tail.
-      local hostRealised = {}
-      for host in pairs(fxHostEnd) do hostRealised[host] = host.endppq end
+      -- Host clips (each clipped to first fxNote) commit WITH the fxNote del/add in one mm:modify/MIDI_Sort call.
+      -- No transient same-pitch overlap for MIDI_Sort to mispair.
+      if #clips > 0 or #fxToRemove > 0 or #fxToAdd > 0 then
+        mm:modify(function()
+          assignList(clips)
+          for _, e in ipairs(fxToRemove) do mm:delete(e.token) end
+          for _, spec in ipairs(fxToAdd) do mm:add(spec) end
+        end)
+      end
 
       -- Restore pre-fx tail onto column events so the view sees the authored
       -- note; mm is untouched, so the take and G4 round-trip are unaffected.
       for host, rawEnd in pairs(fxHostEnd) do host.endppq = rawEnd end
-
-      -- TEMP FXDBG (remove): final realised fxNote geometry + each host's clip.
-      for ch = 1, 16 do
-        if #fxLive[ch] > 0 then
-          local parts = {}
-          for _, w in ipairs(fxLive[ch]) do
-            local n = w.evt
-            parts[#parts+1] = string.format('[%s..%s L%s]p%s', tostring(n.ppq),
-              tostring(n.endppq), tostring(n.endppqL), tostring(n.pitch))
-          end
-          print(string.format('[FXDBG ch%d realised] %s', ch, table.concat(parts, ' ')))
-        end
-      end
-      for host, realisedEnd in pairs(hostRealised) do
-        print(string.format('[FXDBG host] p%s ppq=%s realisedClip=%s authoredEndL=%s',
-          tostring(host.pitch), tostring(host.ppq), tostring(realisedEnd), tostring(host.endppqL)))
-      end
     end
 
     -- 4.9) Absorber reconciliation + pb wire/column resynthesis.

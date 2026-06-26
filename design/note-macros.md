@@ -134,7 +134,7 @@ consistent with swing factors. Per-kind params, v1 vocabulary:
 | `trill` | `period`, `step` (signed **scale steps**) | alternation resolved through the temper → (pitch, detune) pairs |
 | `arp` | `period`, `steps = {0, ...}` (scale steps) | broken chord off the single host note — a generalised trill, **not** a chord arpeggiator (that needs a region host, § *The host contract*) |
 | `vibrato` | `period`, `depth` (cents), `onset` (QN ramp-in) | channel-wide pb gesture, hostable on any lane (overlaps sum at the node) |
-| `slide` | `over` (QN), `target` = `Next` \| `Fixed` (`cents` demand) | `Next` resolves the next lane-1 (melody) note; `Fixed` bends by `cents`, authored as host-relative temper steps |
+| `slide` | `over` (QN), `target` = `Next` \| `Fixed` (`cents` demand) | `Next` resolves the next same-lane (melody) note; `Fixed` bends by `cents`, authored as host-relative temper steps |
 
 ## The host contract
 
@@ -184,7 +184,7 @@ pb, or REAPER. The existing realise stack converts: fxNotes swing like
 any authored note and inherit the host's delay; delta breakpoints map
 cents → raw pb units via the resolved pbRange at flush — the same
 boundary where detune realises. `ctx` carries the temper and a
-next-lane-1-note lookup (for `slide.target = 'next'`).
+next-same-lane-note lookup (for `slide.target = 'next'`).
 
 ## Generators as config — ctx is the binding environment
 
@@ -509,7 +509,7 @@ retrig **UI** — badge + `Super-X` editor (§ UI) — **has landed**, and the
 `cursorNote`/`setNoteFx`/`setFxKindActive`/`setFxField` path; the
 modal's row-cursor key dispatch is verified in REAPER). **Slide rides it too**
 as a third independent section — `over` on the shared QN-fraction ladder, and
-`target` chooses `Next` (glide to the next lane-1 note) or `Fixed`: a `cents`
+`target` chooses `Next` (glide to the next same-lane note) or `Fixed`: a `cents`
 demand stored temper-agnostically, authored as host-relative temper steps via
 the `stepInterval` widget. **Trill rides the same chassis** as a fourth
 section (Retrig · Trill · Vibrato · Slide): `period` on the shared ladder and
@@ -811,23 +811,20 @@ generator.
   only there.
 - **`plink.midi_*` parms.** Exact config-parm names and automation-bus
   addressing for R5; gates the listen-bank retirement, not v1.
-- **Window bounding duplicates the tail walk — known bodge.** Step 4.6
-  computes each host's effective window by hand (`firstAfter` over
-  same-pitch *and* same-lane onsets) — the same "first onset after"
-  decision the 4.8 tail walk makes for tails. It can't simply reuse the
-  walk: the bound decides note *existence* (how many fxNotes the
-  generator emits) while the walk decides note *length*, and the walk
-  never deletes — so fxNotes past a foreign onset would survive as
-  audible re-triggers if generated and only tail-clipped. The interim
-  hand-roll is correct (a tracker column is monophonic, so any later
-  same-lane note cuts the retrig, matching how the walk clips a plain
-  host) but it forks the logic. **Target architecture:** walk the real
-  notes only → read each host's clipped extent as its generator window →
-  generate fxNotes inside it → an isolated fx-walk (no foreign note ever
-  interleaves, since the window stops at the first one) → splice, with
-  host→fxNote-2 the only host clip. Removes the fork and makes the walk
-  a reusable unit. Deferred: the payoff is cashed when the second host
-  kind exists; at N=1 it costs a pipeline reorder against ~6 lines.
+- **Window bounding duplicates the tail walk — RESOLVED (2026-06).** The
+  fork is gone. A read-only window pass walks the real notes' same-lane
+  successor in the *logical* frame (no realised round-trip, so G4 holds)
+  to give each host its voice extent; 4.6 then expands **in memory** (no
+  commit), and ONE unified tail walk clips real notes, fixed externals,
+  and the predicted fxNotes together. The walk is *unified*, not the
+  predicted *isolated* fx-walk: a trill's alt-pitch fxNote colliding with
+  a real note at that pitch is caught (an isolated `[host + fxNotes]` walk
+  would miss it). The host's same-lane successor among the records is its
+  first fxNote, so its clip and the fxNote inserts commit in **one**
+  `mm:modify` — fixing the same-pitch overlap REAPER mispaired when
+  fxNotes were committed against a still full-length host (the
+  trill/retrig break). `reconcileFx` owns fxNote existence (deletes the
+  unkept); the walk owns realised tails.
 - **Replace vs augment, and the no-host endpoint.** The host note wears
   three hats — intent carrier (`note.fx`), identity anchor (uuid →
   `derived` provenance, PA binding), and **output note 1** (the audible

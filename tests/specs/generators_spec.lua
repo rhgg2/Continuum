@@ -16,10 +16,10 @@ local function bandTaken(lo, hi)
   return s
 end
 
--- A slide host (pitch 60) and a ctx supplying the next lane-1 note + pb ceiling.
+-- A slide host (pitch 60) and a ctx supplying the next same-lane note + pb ceiling.
 local function slideCtx(nextNote, pbRangeCents)
   return { resolution = 240, pbRangeCents = pbRangeCents or 200,
-           nextLane1Note = function() return nextNote end }
+           nextSameLaneNote = function() return nextNote end }
 end
 local function slideHost(detune)
   return { window = { 0, 240 }, events = { { pitch = 60, vel = 100, detune = detune or 0 } } }

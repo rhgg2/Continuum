@@ -1,6 +1,4 @@
--- Note macros, v1: slide (continuous, portamento). Toy carrier fixed at cc=20.
--- Pins the glide-in carrier emission, target='next' resolution against the next
--- lane-1 note, the pb clamp + regeneration, and the G4 round-trip.
+-- Slide spec (note macros v1, portamento): pins carrier emission, target='next' resolution, pb clamp + regeneration, G4 round-trip.
 -- see design/note-macros.md § Continuous realisation
 
 local t    = require('support')
@@ -76,6 +74,26 @@ return {
       local h = harness.mk()
       addSlidePair(h, 60, 50)       -- same pitch, 50c sharp -> a 50c glide
       t.eq(carrierAt(h.fm:dump(), 1, 225).val, carrierVal(50), 'a 50c-sharp next note yields a 50c glide')
+    end,
+  },
+
+  ----- target='next' resolves the host's own lane, not lane 1
+
+  {
+    name = 'slide target=next resolves the next note in the host lane, not lane 1',
+    run = function(harness)
+      local h = harness.mk()
+      -- Host on lane 2; a nearer lane-1 note must NOT be chosen as "next".
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
+                      detune = 0, delay = 0, lane = 2,
+                      fx = { { kind = 'slide', over = { 1, 2 }, target = 'next' } } })
+      h.tm:addEvent({ evType = 'note', ppq = 240, endppq = 480, chan = 1, pitch = 72, vel = 100,
+                      detune = 0, delay = 0, lane = 1 })   -- decoy: +1200c if lane-1 were probed
+      h.tm:addEvent({ evType = 'note', ppq = 240, endppq = 480, chan = 1, pitch = 61, vel = 100,
+                      detune = 0, delay = 0, lane = 2 })   -- the real same-lane next: +100c
+      h.tm:flush()
+      t.eq(carrierAt(h.fm:dump(), 1, 225).val, carrierVal(100),
+        'glides to the +100c lane-2 successor, not the +1200c lane-1 decoy')
     end,
   },
 

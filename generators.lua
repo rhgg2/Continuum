@@ -6,8 +6,8 @@
 -- @noindex
 
 --invariant: pure module -- no module-level state; a generator is fn(host, params, ctx) -> { notes, delta }
---invariant: host = { window={startppqL,endppqL}, events={note,...}, id=uuid, chan }
---invariant: ctx binds resolution, pbRangeCents, nextLane1Note(host), step(pitch,detune,n) -- flush-time
+--invariant: host = { window={startppqL,endppqL}, events={note,...}, id=uuid, chan, lane }
+--invariant: ctx binds resolution, pbRangeCents, nextSameLaneNote(host), step(pitch,detune,n)
 --invariant: periods are QN per the periodQN convention -- scalar or {num,den}
 --shape: result = { notes = { {ppqL,endppqL,pitch,vel,detune}, ... }, delta = { {ppqL,val,shape,[tension]}, ... } }
 
@@ -117,14 +117,14 @@ local function interval(a, b)
 end
 
 --contract: slide glide-in -> lane-1 pb-delta; slur to target over `over` QN; re-centres at end
---contract: target 'next' = interval to next lane-1 note; 'fixed' = params.cents; pb-range clamps
+--contract: target 'next' = interval to next same-lane note; 'fixed' = params.cents; pb-range clamps
 --contract: no next note or unison target -> empty delta (carrier untouched)
 function M.slide(host, params, ctx)
   local startL, endL = host.window[1], host.window[2]
   local h = host.events[1]
   local target
   if params.target == 'next' then
-    local nxt = ctx.nextLane1Note and ctx.nextLane1Note(h)
+    local nxt = ctx.nextSameLaneNote and ctx.nextSameLaneNote(host)
     if not nxt then return { notes = {}, delta = {} } end
     target = interval(h, nxt)
   else
