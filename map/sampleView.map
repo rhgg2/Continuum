@@ -26,63 +26,63 @@
   @state expanded = {}  @ 23
 
 # Public API (sv:*)
-  @api sv:setTrack(t)  @ 26
+  @api sv:setTrack(t)  @ 26-32
       @contract  idempotent rebind: always re-primes cm.track tier so cache survives a prior cm:setContext(nil) (e.g. tm:bindTake(nil) on page switch)
   @api sv:getTrack()  @ 33
   @api sv:listTracks()  @ 34
-  @api sv:browseRoot()  @ 36
+  @api sv:browseRoot()  @ 36-38
       @contract  resolution order: cm:sampleBrowserRoot → $HOME → '/'; never returns nil
   @api sv:getCurrentFolder()  @ 39
   @api sv:setCurrentFolder(p)  @ 40
-  @api sv:setBrowseRoot(path)  @ 42
+  @api sv:setBrowseRoot(path)  @ 42-45
       @contract  persists at the global tier; resets currentFolder so the new root takes effect immediately
   @api sv:isFolderExpanded(p)  @ 46
   @api sv:setFolderExpanded(p, open)  @ 47
   @api sv:getBrowserPath()  @ 48
   @api sv:isBrowserFolder()  @ 49
-  @api sv:setBrowserItem(path, isFolder)  @ 51
+  @api sv:setBrowserItem(path, isFolder)  @ 51-56
       @contract  folder selection clears selectedFile and leaves previewSource untouched; file selection sets both selectedFile and previewSource='file'
   @api sv:setSlotFocus()  @ 58
-  @api sv:canAuditionCurrent()  @ 61
+  @api sv:canAuditionCurrent()  @ 61-64
       @contract  slot branch needs a track; file branch needs a selected file (track is checked downstream by auditionPath)
-  @api sv:auditionCurrent()  @ 67
+  @api sv:auditionCurrent()  @ 67-72
       @contract  dispatches to slot/path branch by previewSource; defaults to slot 0 if cm is absent
   @api sv:setSelectedFile(p)  @ 73
   @api sv:getSelectedFile()  @ 74
-  @api sv:loadSelectedIntoCurrent()  @ 78
+  @api sv:loadSelectedIntoCurrent()  @ 78-92
       @contract  returns false on no selection or sm:assign failure; on success may advance currentSample
       @contract  advance is a no-op when no empty slot exists in range (currentSample left unchanged)
-  @api sv:auditionPath(path)  @ 95
+  @api sv:auditionPath(path)  @ 95-99
       @contract  requires both path and track; returns false otherwise without invoking sm:previewPath
-  @api sv:auditionSlot(idx)  @ 102
+  @api sv:auditionSlot(idx)  @ 102-105
       @contract  requires track; bounds=1 (honours SH_START/SH_END trim)
-  @api sv:clearCurrentSlot()  @ 108
+  @api sv:clearCurrentSlot()  @ 108-111
       @contract  no-op when cm is unbound
-  @api sv:stopAudition()  @ 113
+  @api sv:stopAudition()  @ 113-115
   -- Slot mutations — the renderer routes JSFX-side edits through here, never sm
-  @api sv:isLive()  @ 120
+  @api sv:isLive()  @ 120-122
       @contract  live only when a track is bound and it carries the sampler FX
-  @api sv:setTrim(slot, startFrames, endFrames)  @ 124
-  @api sv:setName(slot, name)  @ 128
-  @api sv:stageInto(slot, srcPath)  @ 133
+  @api sv:setTrim(slot, startFrames, endFrames)  @ 124-126
+  @api sv:setName(slot, name)  @ 128-130
+  @api sv:stageInto(slot, srcPath)  @ 133-135
       @contract  stages srcPath into the slot's JSFX mailbox without touching cm; false on failure
-  @api sv:syncSlot(stagedTrack, slot)  @ 138
+  @api sv:syncSlot(stagedTrack, slot)  @ 138-140
       @contract  takes a track arg; PIP revert restores track captured at trigger, not sv's current one
 
 # Uses (outbound edges)
-  @use call cm.get  @ 37, 69, 80, 82, 110
-  @use call cm.remove  @ 30
-  @use call cm.set  @ 43, 86
-  @use call cm.setTrack  @ 29
-  @use call ds.get  @ 83
-  @use call sm.assign  @ 81
-  @use call sm.clearSlot  @ 110
-  @use call sm.isLive  @ 121
-  @use call sm.listTracks  @ 34
-  @use call sm.previewPath  @ 97
-  @use call sm.previewSlot  @ 104
-  @use call sm.setName  @ 129
-  @use call sm.setTrim  @ 125
-  @use call sm.stageInto  @ 134
-  @use call sm.stopPreview  @ 114
-  @use call sm.syncSlot  @ 139
+  @use call cm.get  @ browseRoot:37 auditionCurrent:69 loadSelectedIntoCurrent:80,82 clearCurrentSlot:110
+  @use call cm.remove  @ setTrack:30
+  @use call cm.set  @ setBrowseRoot:43 loadSelectedIntoCurrent:86
+  @use call cm.setTrack  @ setTrack:29
+  @use call ds.get  @ loadSelectedIntoCurrent:83
+  @use call sm.assign  @ loadSelectedIntoCurrent:81
+  @use call sm.clearSlot  @ clearCurrentSlot:110
+  @use call sm.isLive  @ isLive:121
+  @use call sm.listTracks  @ listTracks:34
+  @use call sm.previewPath  @ auditionPath:97
+  @use call sm.previewSlot  @ auditionSlot:104
+  @use call sm.setName  @ setName:129
+  @use call sm.setTrim  @ setTrim:125
+  @use call sm.stageInto  @ stageInto:134
+  @use call sm.stopPreview  @ stopAudition:114
+  @use call sm.syncSlot  @ syncSlot:139

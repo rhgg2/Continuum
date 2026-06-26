@@ -21,62 +21,62 @@
   @state fire = util.installHooks(ps)  @ 156
 
 # Private functions
-  @fn print(...)  @ 10
+  @fn print(...)  @ 10-12
   -- PRIVATE STATE
-  @fn globalPath(slot)  @ 20
+  @fn globalPath(slot)  @ 20-22
       -- Global blobs are disk files in the resource dir, one per slot: 'config' ->
       -- continuum-config.lua, 'data' -> continuum-data.lua. Lazy so load needs no reaper.
   -- RAW BACKEND I/O
-  @fn takeRaw(handle, slot)  @ 38
-  @fn trackRaw(handle, slot)  @ 44
-  @fn readRaw(scope, slot, handle)  @ 51
+  @fn takeRaw(handle, slot)  @ 38-42
+  @fn trackRaw(handle, slot)  @ 44-48
+  @fn readRaw(scope, slot, handle)  @ 51-66
       -- handle overrides the bound context (foreign-handle reads); scope picks the backend.
-  @fn writeRaw(scope, slot, raw, handle)  @ 68
-  @fn decode(scope, slot, raw)  @ 91
+  @fn writeRaw(scope, slot, raw, handle)  @ 68-87
+  @fn decode(scope, slot, raw)  @ 91-109
       -- Format by backend: global -> hand-editable Lua literal, P_EXT/projext ->
       -- compact wire. A bad global parse locks writes. See docs/pextStore.md § Formats.
-  @fn encode(scope, value)  @ 111
+  @fn encode(scope, value)  @ 111-114
   -- WATCHER
   @fn blobKey(blob)  @ 118
-  @fn snapshotBaseline()  @ 120
-  @fn zeroBaselines(scope)  @ 132
+  @fn snapshotBaseline()  @ 120-128
+  @fn zeroBaselines(scope)  @ 132-138
       -- A dropped handle's watched blobs read as '' on the next poll; zeroing their
       -- baselines to match keeps that drop from registering as an external diff.
-  @fn dropStale()  @ 140
+  @fn dropStale()  @ 140-151
 
 # Public API (ps:*)
   -- PUBLIC INTERFACE
   -- Context
-  @api ps:setTake(newTake)  @ 162
+  @api ps:setTake(newTake)  @ 162-171
       @contract  setTake(nil) clears take+track; setTake(take) derives track via GetMediaItemTrack; resnapshots baselines
-  @api ps:clearTake()  @ 173
-  @api ps:setTrack(newTrack)  @ 179
+  @api ps:clearTake()  @ 173-177
+  @api ps:setTrack(newTrack)  @ 179-183
   @api ps:boundTake()  @ 185
   @api ps:boundTrack()  @ 186
   -- Storage
   @api ps:get(scope, slot)  @ 191
       @contract  returns the decoded value at (scope, slot) under bound context; nil if absent or undecodable
   @api ps:getAt(handle, scope, slot)  @ 192
-  @api ps:assign(scope, slot, value)  @ 195
+  @api ps:assign(scope, slot, value)  @ 195-200
       @contract  writes value at (scope, slot); util.REMOVE clears; refreshes watcher baseline if watched
-  @api ps:assignAt(handle, scope, slot, value)  @ 203
+  @api ps:assignAt(handle, scope, slot, value)  @ 203-205
       -- Foreign-handle write: bypasses bound context and never touches the baseline.
   -- Watcher
-  @api ps:watch(blobs, onDiverge)  @ 210
+  @api ps:watch(blobs, onDiverge)  @ 210-215
       @contract  blobs = { { scope, slot }, ... }; onDiverge(divergedBlobs) fires once per poll tick that diverges
-  @api ps:pollUndo()  @ 219
+  @api ps:pollUndo()  @ 219-237
       @invariant  polls project state count per frame; on tick re-reads watched blobs, fires diverged groups once each
       @contract  no-op without GetProjectStateChangeCount (test harness); one int compare per frame otherwise
 
 # Signals emitted (via util.installHooks)
-  @emits contextChanged   -- {} on every context change so faces drop+reload their scope caches
+  @emits contextChanged   -- {} on every context change so faces drop+reload their scope caches   @ setTake:170 clearTake:176 setTrack:182
 
 # Uses (outbound edges)
   @use call    util.installHooks  @ 156
-  @use call    util.prettySerialise  @ 112
-  @use call    util.prettyUnserialise  @ 97
-  @use call    util.print  @ 11
-  @use call    util.serialise  @ 113
+  @use call    util.prettySerialise  @ encode:112
+  @use call    util.prettyUnserialise  @ decode:97
+  @use call    util.print  @ print:11
+  @use call    util.serialise  @ encode:113
   @use require util  @ 8
 
 # REAPER API surface

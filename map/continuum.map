@@ -9,22 +9,22 @@
   @require ImGui = 'imgui'  @ 17
 
 # Private functions
-  @fn print(...)  @ 21
-  @fn err_handler(err)  @ 25
-  @fn run(fn)  @ 31
-  @fn createImGui()  @ 36
-  @fn Main()  @ 78
+  @fn print(...)  @ 21-23
+  @fn err_handler(err)  @ 25-29
+  @fn run(fn)  @ 31-34
+  @fn createImGui()  @ 36-74
+  @fn Main()  @ 78-200
       @contract  Main builds the manager stack bottom-up, then enters the defer loop via coord:run()
       @contract  each page owns its cross-page state, exposed through the facade registry coord wires
 
 # Uses (outbound edges)
-  @use call    imgui.Attach  @ 57, 58, 59, 60
-  @use call    imgui.CreateContext  @ 37
-  @use call    imgui.CreateFont  @ 42, 47, 51, 56
-  @use call    imgui.CreateFontFromFile  @ 46, 50, 55
-  @use call    imgui.SetConfigVar  @ 38, 39
-  @use call    util.instantiate  @ 80, 81, 82, 83, 84
-  @use call    util.print  @ 22
+  @use call    imgui.Attach  @ createImGui:57,58,59,60
+  @use call    imgui.CreateContext  @ createImGui:37
+  @use call    imgui.CreateFont  @ createImGui:42,47,51,56
+  @use call    imgui.CreateFontFromFile  @ createImGui:46,50,55
+  @use call    imgui.SetConfigVar  @ createImGui:38,39
+  @use call    util.instantiate  @ Main:80,81,82,83,84
+  @use call    util.print  @ print:22
   @use require imgui  @ 17
   @use require util  @ 16
 

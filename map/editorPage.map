@@ -27,13 +27,13 @@
 
 # Uses (outbound edges)
   @use call    editorRender.edit  @ 32
-  @use call    editorRender.focusState  @ 43
-  @use call    editorRender.renderBody  @ 41
-  @use call    editorRender.renderStatusBar  @ 42
-  @use call    editorRender.toolbarSegments  @ 40
-  @use call    editorRender.unbind  @ 37
+  @use call    editorRender.focusState  @ focusState:43
+  @use call    editorRender.renderBody  @ renderBody:41
+  @use call    editorRender.renderStatusBar  @ renderStatusBar:42
+  @use call    editorRender.toolbarSegments  @ toolbarSegments:40
+  @use call    editorRender.unbind  @ unbind:37
   @use call    facade.publish  @ 31
-  @use call    util.instantiate  @ 16, 18, 21
+  @use call    util.instantiate  @ 16,18,21
   @use require editorRender  @ 21
   @use require swingEditor  @ 16
   @use require temperEditor  @ 18

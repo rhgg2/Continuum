@@ -17,51 +17,51 @@
 
 # Private functions
   -- Rotated text
-  @fn rasteriseRotated(ctx, s, size)  @ 36
-  @fn rotatedTex(ctx, s, size)  @ 79
+  @fn rasteriseRotated(ctx, s, size)  @ 36-75
+  @fn rotatedTex(ctx, s, size)  @ 79-86
       -- pcall doubles as the js_ReaScriptAPI presence check; a failure caches
       -- false so callers fall back for good.
-  @fn gamma(x)  @ 268
-  @fn oklchToRgb(light, chroma, hueTurns)  @ 275
-  @fn hueRGB(idx, chroma, light)  @ 291
+  @fn gamma(x)  @ 268-273
+  @fn oklchToRgb(light, chroma, hueTurns)  @ 275-287
+  @fn hueRGB(idx, chroma, light)  @ 291-293
       -- Golden-ratio rotation throws adjacent indices to opposite sides of the
       -- wheel; light/chroma are held constant so the set stays perceptually even.
 
 # Public API (painter.*)
-  @api painter.measureRotated(ctx, s, size)  @ 89
+  @api painter.measureRotated(ctx, s, size)  @ 89-93
       @contract  strip (w,h) in screen px for textUp at this size; nil when the LICE path is unavailable
-  @api painter.new(ctx, chrome, transform, page)  @ 96
+  @api painter.new(ctx, chrome, transform, page)  @ 96-262
       @contract  sx/sy default 1 and must be non-zero (fromScreen divides); ox/oy default 0.
-  @api painter.hue(idx, chroma, light, alpha)  @ 297
+  @api painter.hue(idx, chroma, light, alpha)  @ 297-300
       -- The idx-th perceptually-even hue. chroma/light/alpha tone it.
       @contract  returns an opaque colour token (not a bare int); pass to a draw method's colour arg.
-  @api painter.hueNative(idx)  @ 303
+  @api painter.hueNative(idx)  @ 303-309
       @contract  REAPER native int (|0x1000000 set) for I_CUSTOMCOLOR; chroma/light match grid fill hue.
 
 # Uses (outbound edges)
-  @use call    imgui.Attach  @ 73
-  @use call    imgui.CalcTextSize  @ 238, 240
-  @use call    imgui.ColorConvertDouble4ToU32  @ 299
-  @use call    imgui.CreateImageFromSize  @ 71
-  @use call    imgui.DrawList_AddCircleFilled  @ 190
-  @use call    imgui.DrawList_AddImageQuad  @ 255
-  @use call    imgui.DrawList_AddLine  @ 177
-  @use call    imgui.DrawList_AddPolyline  @ 201
-  @use call    imgui.DrawList_AddRect  @ 138
-  @use call    imgui.DrawList_AddRectFilled  @ 132, 147, 148, 149, 150, 160
-  @use call    imgui.DrawList_AddText  @ 170
-  @use call    imgui.DrawList_AddTextEx  @ 168
-  @use call    imgui.DrawList_AddTriangleFilled  @ 184
-  @use call    imgui.DrawList_PathArcTo  @ 227
-  @use call    imgui.DrawList_PathClear  @ 217
-  @use call    imgui.DrawList_PathLineTo  @ 221
-  @use call    imgui.DrawList_PathStroke  @ 231
-  @use call    imgui.DrawList_PopClipRect  @ 212
-  @use call    imgui.DrawList_PushClipRect  @ 209
-  @use call    imgui.GetWindowDrawList  @ 102
-  @use call    imgui.Image_SetPixels_Array  @ 72
-  @use call    imgui.PopFont  @ 241
-  @use call    imgui.PushFont  @ 239
+  @use call    imgui.Attach  @ rasteriseRotated:73
+  @use call    imgui.CalcTextSize  @ new:238,240
+  @use call    imgui.ColorConvertDouble4ToU32  @ hue:299
+  @use call    imgui.CreateImageFromSize  @ rasteriseRotated:71
+  @use call    imgui.DrawList_AddCircleFilled  @ new:190
+  @use call    imgui.DrawList_AddImageQuad  @ new:255
+  @use call    imgui.DrawList_AddLine  @ new:177
+  @use call    imgui.DrawList_AddPolyline  @ new:201
+  @use call    imgui.DrawList_AddRect  @ new:138
+  @use call    imgui.DrawList_AddRectFilled  @ new:132,147,148,149,150,160
+  @use call    imgui.DrawList_AddText  @ new:170
+  @use call    imgui.DrawList_AddTextEx  @ new:168
+  @use call    imgui.DrawList_AddTriangleFilled  @ new:184
+  @use call    imgui.DrawList_PathArcTo  @ new:227
+  @use call    imgui.DrawList_PathClear  @ new:217
+  @use call    imgui.DrawList_PathLineTo  @ new:221
+  @use call    imgui.DrawList_PathStroke  @ new:231
+  @use call    imgui.DrawList_PopClipRect  @ new:212
+  @use call    imgui.DrawList_PushClipRect  @ new:209
+  @use call    imgui.GetWindowDrawList  @ new:102
+  @use call    imgui.Image_SetPixels_Array  @ rasteriseRotated:72
+  @use call    imgui.PopFont  @ new:241
+  @use call    imgui.PushFont  @ new:239
   @use require imgui  @ 24
 
 # REAPER API surface

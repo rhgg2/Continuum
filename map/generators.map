@@ -14,24 +14,24 @@
   @const CARRIER_PRIORITY = {  @ 72
 
 # Private functions
-  @fn periodTicks(period, resolution)  @ 16
-  @fn interval(a, b)  @ 115
+  @fn periodTicks(period, resolution)  @ 16-19
+  @fn interval(a, b)  @ 115-117
       -- Cents between two notes' realised pitches. The microtonal offset already rides
       -- in detune, so this is pure note arithmetic -- no temper needed.
 
 # Public API (generators.*)
-  @api generators.retrig(host, params, ctx)  @ 23
+  @api generators.retrig(host, params, ctx)  @ 23-41
       @contract  retrig fills the host window with evenly-spaced same-pitch fxNotes 2..N (host is fxNote 1)
       @contract  velocity ramps params.ramp per fxNote, clamped 1..127; detune inherited from the host verbatim
-  @api generators.trill(host, params, ctx)  @ 44
+  @api generators.trill(host, params, ctx)  @ 44-64
       @contract  trill alternates host pitch with a note `step` scale-steps away (via ctx.step); host is fxNote 1
-  @api generators.allocateCarrier(occupied)  @ 82
+  @api generators.allocateCarrier(occupied)  @ 82-86
       @contract  first priority MSB n where neither n nor n+32 is in `occupied`; nil if saturated
-  @api generators.vibrato(host, params, ctx)  @ 91
+  @api generators.vibrato(host, params, ctx)  @ 91-111
       @contract  vibrato -> lane-1 pb-delta breakpoints in cents; sine of depth cents at 1/period QN
       @contract  breakpoints at sine extrema, 'slow'-shaped; linear ramp-in over onset QN
       @contract  carrier returns to 0 (centre) at window end -- no residual bend on the channel
-  @api generators.slide(host, params, ctx)  @ 122
+  @api generators.slide(host, params, ctx)  @ 122-151
       @contract  slide glide-in -> lane-1 pb-delta; slur to target over `over` QN; re-centres at end
       @contract  target 'next' = interval to next same-lane note; 'fixed' = params.cents; pb-range clamps
       @contract  no next note or unison target -> empty delta (carrier untouched)

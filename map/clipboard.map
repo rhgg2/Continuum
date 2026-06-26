@@ -26,18 +26,18 @@
   @state clipboard = {}  @ 437
 
 # Private functions
-  @fn save(clip)  @ 44
-  @fn load()  @ 48
-  @fn collect()  @ 55
+  @fn save(clip)  @ 44-46
+  @fn load()  @ 48-52
+  @fn collect()  @ 55-153
       @contract  nil if the resolved selection is empty; single-col → { mode='single', type, ... }; multi-col → { mode='multi', cols=[...] }.
-  @fn pasteVelocities(events, dstCol, startppq, endppq)  @ 156
+  @fn pasteVelocities(events, dstCol, startppq, endppq)  @ 156-197
       @contract  carry-forward over note-ons in region (clip val updates currentVel, then writes onto next note-ons); pass 2 may emit PA events on sustain rows when cm.polyAftertouch is set
-  @fn pasteSingle(clip)  @ 200
+  @fn pasteSingle(clip)  @ 200-289
       @contract  dispatches by (clip.type, dstCol.type, cursorPart): note->note(pitch), 7bit->note(vel) via pasteVelocities, pb->pb, 7bit->cc/at/pc; mismatched combos silently no-op.
-  @fn pasteMulti(clip)  @ 292
+  @fn pasteMulti(clip)  @ 292-404
       @contract  resolves each clip col against cursor's chan via chanDelta; out-of-range channels and missing destinations skip silently; bails entirely if startType=='note' but cursor isn't on a note col.
-  @fn pasteClip(clip)  @ 406
-  @fn trimTop(clip, trim)  @ 414
+  @fn pasteClip(clip)  @ 406-410
+  @fn trimTop(clip, trim)  @ 414-433
       -- A note whose start row falls within the trimmed band is dropped entirely.
       @contract  mutates clip in place; survives both modes; used by duplicate-up at row 0 to keep selection-following behaviour cumulative
 
@@ -46,29 +46,29 @@
   @api clipboard:copy()  @ 439
   @api clipboard:pasteClip(clip)  @ 440
   @api clipboard:trimTop(clip, trim)  @ 441
-  @api clipboard:registerCommands(scope)  @ 443
+  @api clipboard:registerCommands(scope)  @ 443-452
 
 # Uses (outbound edges)
-  @use call    cm.get  @ 158, 180, 237
-  @use call    ec.col  @ 202, 294
-  @use call    ec.cursorPart  @ 208
-  @use call    ec.eachSelectedCol  @ 122
-  @use call    ec.isSticky  @ 447
-  @use call    ec.region  @ 57
-  @use call    ec.row  @ 205, 341
-  @use call    ec.selClear  @ 445, 447
-  @use call    tm.addEvent  @ 185, 262, 284, 399
-  @use call    tm.assignEvent  @ 175
-  @use call    tm.deleteEvent  @ 162, 247, 276, 378, 382
-  @use call    tm.flush  @ 196, 264, 286, 403, 409
-  @use call    util.add  @ 110, 141, 143, 146, 224, 233, 364
-  @use call    util.between  @ 109, 139, 161, 167, 231, 246, 275, 377, 381
-  @use call    util.clamp  @ 171, 189, 254
-  @use call    util.clone  @ 72, 81, 216, 356
-  @use call    util.isNote  @ 74
-  @use call    util.seek  @ 157, 182, 236
-  @use call    util.serialise  @ 45
-  @use call    util.unserialise  @ 51
+  @use call    cm.get  @ pasteVelocities:158,180 pasteSingle:237
+  @use call    ec.col  @ pasteSingle:202 pasteMulti:294
+  @use call    ec.cursorPart  @ pasteSingle:208
+  @use call    ec.eachSelectedCol  @ collect:122
+  @use call    ec.isSticky  @ registerCommands:447
+  @use call    ec.region  @ collect:57
+  @use call    ec.row  @ pasteSingle:205 pasteMulti:341
+  @use call    ec.selClear  @ registerCommands:445,447
+  @use call    tm.addEvent  @ pasteVelocities:185 pasteSingle:262,284 pasteMulti:399
+  @use call    tm.assignEvent  @ pasteVelocities:175
+  @use call    tm.deleteEvent  @ pasteVelocities:162 pasteSingle:247,276 pasteMulti:378,382
+  @use call    tm.flush  @ pasteVelocities:196 pasteSingle:264,286 pasteMulti:403 pasteClip:409
+  @use call    util.add  @ collect:110,141,143,146 pasteSingle:224,233 pasteMulti:364
+  @use call    util.between  @ collect:109,139 pasteVelocities:161,167 pasteSingle:231,246,275 pasteMulti:377,381
+  @use call    util.clamp  @ pasteVelocities:171,189 pasteSingle:254
+  @use call    util.clone  @ collect:72,81 pasteSingle:216 pasteMulti:356
+  @use call    util.isNote  @ collect:74
+  @use call    util.seek  @ pasteVelocities:157,182 pasteSingle:236
+  @use call    util.serialise  @ save:45
+  @use call    util.unserialise  @ load:51
   @use require util  @ 11
 
 # REAPER API surface

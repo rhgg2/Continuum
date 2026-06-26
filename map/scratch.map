@@ -13,19 +13,19 @@
 
 # Private functions
   -- mint + locate
-  @fn locate(guid)  @ 17
+  @fn locate(guid)  @ 17-22
       -- By guid over project tracks (the scratch is never master).
-  @fn mint()  @ 27
+  @fn mint()  @ 27-47
       -- Append top-level: if the project ends inside an open folder, an appended
       -- track joins it and retargets its mainSend to the parent. Copied from
       -- rm:addTrack (not called) to keep this module dependency-free; see docs.
 
 # Public API (scratch.*)
-  @api scratch.peek()  @ 52
+  @api scratch.peek()  @ 52-57
       @contract  persisted guid + live handle, or nil if none minted yet. Never mints.
-  @api scratch.id()  @ 60
+  @api scratch.id()  @ 60-63
       @contract  the scratch track's guid, minted (hidden + muted) on first use; persisted in projext.
-  @api scratch.track()  @ 66
+  @api scratch.track()  @ 66-70
       @contract  the scratch track handle; mints on first use.
 
 # REAPER API surface

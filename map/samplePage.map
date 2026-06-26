@@ -18,17 +18,17 @@
 
 # Public API (sp:*)
   -- Page lifecycle (track ops on sv, JSFX poll on sm)
-  @api sp:bind()  @ 37
+  @api sp:bind()  @ 37-44
       -- The shared cm is re-keyed by whichever page is active, so re-assert ours each
       -- time even when sv already remembers a track -- a prior tracker unbind nulled it.
       @contract  bind re-keys cm to the page's track on every activation (seeds a default on the first)
-  @api sp:setTrack(track)  @ 47
+  @api sp:setTrack(track)  @ 47-49
       @contract  setTrack re-keys cm to the given track via sv; the sample facade and the picker drive it
   @api sp:listTracks()  @ 52
       @contract  listTracks proxies sm:listTracks via sv — coord queries this to seed its active sampler track on first activation
   @api sp:unbind()  @ 55
       @contract  unbind reverts any preview-in-place but leaves cm and sv state alone — the next bind can resume on the same track
-  @api sp:tick()  @ 58
+  @api sp:tick()  @ 58-61
       @contract  tick runs every frame regardless of active page; watchPath then sm:tick
   -- Page interface — render delegates to the renderer
   @api sp:toolbarSegments()  @ 66
@@ -38,17 +38,17 @@
 
 # Uses (outbound edges)
   @use call    facade.publish  @ 63
-  @use call    sampleManager.tick  @ 60
-  @use call    sampleManager.watchPath  @ 59
-  @use call    sampleRender.closeTransients  @ 55
-  @use call    sampleRender.focusState  @ 69
-  @use call    sampleRender.renderBody  @ 67
-  @use call    sampleRender.renderStatusBar  @ 68
-  @use call    sampleRender.toolbarSegments  @ 66
-  @use call    sampleView.getTrack  @ 38
-  @use call    sampleView.listTracks  @ 40, 52
-  @use call    sampleView.setTrack  @ 43, 48
-  @use call    util.instantiate  @ 23, 24, 25
+  @use call    sampleManager.tick  @ tick:60
+  @use call    sampleManager.watchPath  @ tick:59
+  @use call    sampleRender.closeTransients  @ unbind:55
+  @use call    sampleRender.focusState  @ focusState:69
+  @use call    sampleRender.renderBody  @ renderBody:67
+  @use call    sampleRender.renderStatusBar  @ renderStatusBar:68
+  @use call    sampleRender.toolbarSegments  @ toolbarSegments:66
+  @use call    sampleView.getTrack  @ bind:38
+  @use call    sampleView.listTracks  @ bind:40 listTracks:52
+  @use call    sampleView.setTrack  @ bind:43 setTrack:48
+  @use call    util.instantiate  @ 23,24,25
   @use require fs  @ 11
   @use require sampleManager  @ 23
   @use require sampleRender  @ 25

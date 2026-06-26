@@ -33,102 +33,102 @@
 # Private functions
   @fn resetEdit()  @ 28
   -- DRAW
-  @fn rectFor(key)  @ 59
+  @fn rectFor(key)  @ 59-63
   @fn withAlpha(rgba, a)  @ 71
   @fn tagSide()  @ 74
       -- Side of a square edit-tag box: the symbol plus a 2px moat and the 1px border.
-  @fn layoutCluster(keys, withAdd)  @ 78
+  @fn layoutCluster(keys, withAdd)  @ 78-102
       -- Lay out a shortcut's chips ('/'-separated, one per binding) into geometry for
       -- drawCluster: total width + each chip's {w, cells}; word runs share one cell, symbols one each.
-  @fn crispBorder(x0, y0, x1, y1, colour)  @ 106
+  @fn crispBorder(x0, y0, x1, y1, colour)  @ 106-111
       -- Pixel-crisp 1px border (painter.border's 4-strip technique) on the foreground
       -- drawlist the overlay uses: painter binds to the window drawlist, behind the dim.
-  @fn drawTag(cx, cy, symbol, ink, captureHere, hit)  @ 115
+  @fn drawTag(cx, cy, symbol, ink, captureHere, hit)  @ 115-136
       -- Square edit tag at (cx, cy): fill + 1px border, symbol in a 2px moat (+ as
       -- 1px strips, x as diagonal). `captureHere` highlights; `hit` rect filled here.
-  @fn drawCluster(cluster, x, y, cmd, specs)  @ 140
+  @fn drawCluster(cluster, x, y, cmd, specs)  @ 140-175
       -- Records a click hit per chip; in edit mode also draws the ✕ corner tags and the
       -- trailing + tag, each with its own hit. See docs/help.md § Editing.
-  @fn layoutBox(group)  @ 179
+  @fn layoutBox(group)  @ 179-194
       -- A group's box geometry in one pass: rows (each with a laid-out cluster) plus the
       -- box w/h, sized to the wider of the title vs the shortcut column + widest label.
-  @fn drawBox(box, x, y)  @ 196
-  @fn cmdLabel(cmd)  @ 211
+  @fn drawBox(box, x, y)  @ 196-207
+  @fn cmdLabel(cmd)  @ 211-218
       -- A command's human label from the current page's manifest, else its raw name (a
       -- victim may live on another scope/page, where no manifest label is to hand).
-  @fn drawConflict(winX, winY, winW, winH)  @ 224
+  @fn drawConflict(winX, winY, winW, winH)  @ 224-269
       -- Centred modal for a chord collision. Warn phase offers Cancel/Reassign; recover
       -- phase narrates the victim's loss while pollCapture claims a new chord for it.
-  @fn placePins(pins, winX, winW)  @ 273
+  @fn placePins(pins, winX, winW)  @ 273-306
       -- Pin callouts sit just under their toolbar segment. Overlapping neighbours are
       -- slid to minimise total displacement — isotonic regression. See docs/help.md.
-  @fn placeFlow(flows)  @ 310
+  @fn placeFlow(flows)  @ 310-327
       -- Flow groups fill their grid rect row-major: left to right, wrapping down a row
       -- at the rect's right edge. Each anchor rect carries its own cursor.
-  @fn buildDismissKeys()  @ 330
-  @fn anyKeyPressed()  @ 349
+  @fn buildDismissKeys()  @ 330-345
+  @fn anyKeyPressed()  @ 349-356
       -- Char queue catches punctuation/layout-specific keys; the explicit list covers
       -- the non-printables (and alphanumerics, since the macOS char queue drops some).
-  @fn insideAnyBox(mouseX, mouseY)  @ 358
+  @fn insideAnyBox(mouseX, mouseY)  @ 358-364
   -- EDIT MODE
-  @fn buildSpec(key, mods)  @ 369
+  @fn buildSpec(key, mods)  @ 369-376
       -- A pressed non-modifier key plus the live modifier mask, as a cmgr keyspec.
-  @fn rebindWithout(cmd, drop, add)  @ 379
+  @fn rebindWithout(cmd, drop, add)  @ 379-386
       -- Rewrites cmd's bindings: drop `drop` (a spec ref, or nil), append `add` (or nil).
-  @fn dropChord(cmd, spec)  @ 390
+  @fn dropChord(cmd, spec)  @ 390-398
       -- Drops every binding of cmd whose chord matches spec, then rebinds. The victim's
       -- stored ref isn't the captured one, so match by resolved key+mods, not identity.
-  @fn commitCapture(spec)  @ 402
+  @fn commitCapture(spec)  @ 402-412
       -- A captured chord that collides with a reachable command opens the warn prompt;
       -- a free chord binds straight away. See docs/help.md § Editing.
-  @fn reassign()  @ 416
+  @fn reassign()  @ 416-422
       -- Reassign: strip the chord from the victim, give it to cmd, then drop the victim
       -- into a recovery capture so it can claim a new chord (Esc leaves it unbound).
-  @fn pollCapture()  @ 424
-  @fn hitAt(mouseX, mouseY)  @ 437
+  @fn pollCapture()  @ 424-434
+  @fn hitAt(mouseX, mouseY)  @ 437-445
       -- ✕ sits atop its chip, so a remove hit wins over the chip hit it overlaps.
-  @fn handleConflict()  @ 449
+  @fn handleConflict()  @ 449-464
       -- Warn-phase input: Esc/Cancel abandons untouched, Enter or the Reassign button
       -- commits. Off-button clicks are swallowed (modal), never dismissing the sheet.
-  @fn handleClicks()  @ 466
+  @fn handleClicks()  @ 466-479
 
 # Public API (help:*)
   @api help:registerPage(name, groups)  @ 34
   @api help:setPage(name)  @ 35
   @api help:isOpen()  @ 36
   @api help:close()  @ 37
-  @api help:toggle()  @ 41
+  @api help:toggle()  @ 41-44
       -- Won't open on a page that declared no manifest, so F1 there is inert
       -- rather than dimming the screen with nothing to show.
   @api help:beginFrame()  @ 46
   @api help:wasOpenAtFrameStart()  @ 47
-  @api help:anchor(key, x, y, w, h)  @ 49
-  @api help:draw()  @ 481
+  @api help:anchor(key, x, y, w, h)  @ 49-52
+  @api help:draw()  @ 481-539
 
 # Uses (outbound edges)
-  @use call    chrome.colour  @ 490, 493, 494, 495, 496, 497, 498, 499, 500, 501, 502
-  @use call    chrome.toolbarRects  @ 61
-  @use call    cmgr.bindingSite  @ 385, 397
-  @use call    cmgr.commandAtKey  @ 405
-  @use call    cmgr.keyLabel  @ 226
-  @use call    cmgr.keyLabelList  @ 183
-  @use call    cmgr.keySpec  @ 391, 394
-  @use call    cmgr.keysFor  @ 186, 381, 393
-  @use call    cmgr.rebind  @ 385, 397
-  @use call    imgui.CalcTextSize  @ 79, 83, 141, 155, 160, 188, 190, 239, 242, 264
-  @use call    imgui.DrawList_AddLine  @ 127, 128
-  @use call    imgui.DrawList_AddRect  @ 153, 198, 253, 263
-  @use call    imgui.DrawList_AddRectFilled  @ 107, 108, 109, 110, 119, 131, 132, 152, 197, 252, 262, 490
-  @use call    imgui.DrawList_AddText  @ 146, 156, 161, 200, 204, 255, 257, 265
-  @use call    imgui.GetForegroundDrawList  @ 486
-  @use call    imgui.GetInputQueueCharacter  @ 350
-  @use call    imgui.GetKeyMods  @ 427
-  @use call    imgui.GetMousePos  @ 454, 469
-  @use call    imgui.GetTextLineHeight  @ 487
-  @use call    imgui.GetWindowPos  @ 488
-  @use call    imgui.GetWindowSize  @ 489
-  @use call    imgui.IsKeyPressed  @ 353, 425, 429, 450, 451, 452, 533
-  @use call    imgui.IsMouseClicked  @ 453, 467, 468
-  @use call    util.add  @ 84, 97, 135, 165, 185, 266, 282, 304, 323, 332, 343, 517, 519
+  @use call    chrome.colour  @ draw:490,493,494,495,496,497,498,499,500,501,502
+  @use call    chrome.toolbarRects  @ rectFor:61
+  @use call    cmgr.bindingSite  @ rebindWithout:385 dropChord:397
+  @use call    cmgr.commandAtKey  @ commitCapture:405
+  @use call    cmgr.keyLabel  @ drawConflict:226
+  @use call    cmgr.keyLabelList  @ layoutBox:183
+  @use call    cmgr.keySpec  @ dropChord:391,394
+  @use call    cmgr.keysFor  @ layoutBox:186 rebindWithout:381 dropChord:393
+  @use call    cmgr.rebind  @ rebindWithout:385 dropChord:397
+  @use call    imgui.CalcTextSize  @ layoutCluster:79,83 drawCluster:141,155,160 layoutBox:188,190 drawConflict:239,242,264
+  @use call    imgui.DrawList_AddLine  @ drawTag:127,128
+  @use call    imgui.DrawList_AddRect  @ drawCluster:153 drawBox:198 drawConflict:253,263
+  @use call    imgui.DrawList_AddRectFilled  @ crispBorder:107,108,109,110 drawTag:119,131,132 drawCluster:152 drawBox:197 drawConflict:252,262 draw:490
+  @use call    imgui.DrawList_AddText  @ drawCluster:146,156,161 drawBox:200,204 drawConflict:255,257,265
+  @use call    imgui.GetForegroundDrawList  @ draw:486
+  @use call    imgui.GetInputQueueCharacter  @ anyKeyPressed:350
+  @use call    imgui.GetKeyMods  @ pollCapture:427
+  @use call    imgui.GetMousePos  @ handleConflict:454 handleClicks:469
+  @use call    imgui.GetTextLineHeight  @ draw:487
+  @use call    imgui.GetWindowPos  @ draw:488
+  @use call    imgui.GetWindowSize  @ draw:489
+  @use call    imgui.IsKeyPressed  @ anyKeyPressed:353 pollCapture:425,429 handleConflict:450,451,452 draw:533
+  @use call    imgui.IsMouseClicked  @ handleConflict:453 handleClicks:467,468
+  @use call    util.add  @ layoutCluster:84,97 drawTag:135 drawCluster:165 layoutBox:185 drawConflict:266 placePins:282,304 placeFlow:323 buildDismissKeys:332,343 draw:517,519
   @use require imgui  @ 8
   @use require util  @ 9

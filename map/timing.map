@@ -30,58 +30,58 @@
 
 # Private functions
   -- Atoms
-  @fn newton(fwd, dfwd, v, s)  @ 47
+  @fn newton(fwd, dfwd, v, s)  @ 47-59
       -- Bracket-augmented Newton on smooth f mapping [0,1] → [0,1]: maintain
       -- [lo, hi] bracketing the root by sign of the residual; fall back to
       -- bisection whenever a Newton step leaves the bracket. Pure Newton
       -- overshoots near slope-min regions (slope → 1/K at the K-bound limit);
       -- bracketing forces global convergence while preserving the quadratic
       -- end-game once Newton stops escaping.
-  @fn smooth(g, gp)  @ 62
+  @fn smooth(g, gp)  @ 62-69
       -- Build a smooth atom from g(u) and g'(u). f(u, s) = u + s·g(u).
   -- Period helpers
   -- Factor resolution
   -- Tile bookkeeping
-  @fn tileApply(rf, p)  @ 204
+  @fn tileApply(rf, p)  @ 204-211
       -- f(u, s) lifted to a tile of period T with optional phase.
-  @fn tileUnapply(rf, p)  @ 213
+  @fn tileUnapply(rf, p)  @ 213-220
   -- Composite resolution
-  @fn findRampOn(factors, length, step)  @ 246
-  @fn findRampOff(factors, length, step)  @ 258
-  @fn identityShape(length)  @ 270
+  @fn findRampOn(factors, length, step)  @ 246-256
+  @fn findRampOff(factors, length, step)  @ 258-268
+  @fn identityShape(length)  @ 270-272
 
 # Public API (timing.*)
-  @api timing.atomTilePeriod(factor)  @ 142
+  @api timing.atomTilePeriod(factor)  @ 142-144
       @contract  returns QN, not PPQ; multiply by resolution at the swing-resolution boundary
-  @api timing.isIdentity(composite)  @ 147
+  @api timing.isIdentity(composite)  @ 147-151
       @contract  bare {} treated as identity; either missing factors or empty factors with zero phase counts
-  @api timing.periodQN(period)  @ 156
+  @api timing.periodQN(period)  @ 156-161
       -- Bad shape is a caller bug; fail loudly rather than guessing.
-  @api timing.compositePeriodQN(composite)  @ 165
+  @api timing.compositePeriodQN(composite)  @ 165-178
       -- Uses internal tile periods (period × pulsesPerCycle), so the result is
       -- the realised repeat rate, not the user-period.
-  @api timing.resolveFactors(composite, ppqPerQN)  @ 183
+  @api timing.resolveFactors(composite, ppqPerQN)  @ 183-199
       @contract  Composite + ppqPerQN -> ResolvedFactor[]; folds composite.phase into each factor's effective phase. Sole pre-flight for applyFactors / unapplyFactors and resolveComposite.
-  @api timing.applyFactors(factors, ppq)  @ 223
+  @api timing.applyFactors(factors, ppq)  @ 223-226
       @contract  ppqL -> ppqI; identity-safe on empty factors
-  @api timing.unapplyFactors(factors, ppq)  @ 229
+  @api timing.unapplyFactors(factors, ppq)  @ 229-232
       @contract  ppqI -> ppqL; reverses factor order to invert composition
-  @api timing.resolveComposite(composite, length, ppqPerQN)  @ 275
+  @api timing.resolveComposite(composite, length, ppqPerQN)  @ 275-286
       @contract  identity composite or length≤0 returns an identity-Shape sentinel; otherwise returns Shape{factors, a, b, ya, yb, length}. Consumers eval/invert across both forms.
-  @api timing.eval(S, x)  @ 289
+  @api timing.eval(S, x)  @ 289-298
       @contract  eval routes by x: ramp-on for x≤a, applyFactors for a<x<b, ramp-off for x≥b
-  @api timing.invert(S, y)  @ 301
+  @api timing.invert(S, y)  @ 301-310
       @contract  invert routes by y: ramp-on inverse for y≤ya, unapplyFactors for ya<y<yb, ramp-off inverse for y≥yb
   -- Logical grid
-  @api timing.logPerRow(rpb, denom, resolution)  @ 315
+  @api timing.logPerRow(rpb, denom, resolution)  @ 315-317
       @contract  callers must store result as float; tv relies on unrounded ppqs for swing-inversion exactness
   -- Delay <-> PPQ
-  @api timing.delayToPPQ(d, res)  @ 322
+  @api timing.delayToPPQ(d, res)  @ 322-324
       @contract  d in signed milli-QN, res in PPQ/QN; nil d treated as 0
-  @api timing.ppqToDelay(p, res)  @ 326
+  @api timing.ppqToDelay(p, res)  @ 326-328
 
 # Uses (outbound edges)
-  @use call    util.gcd  @ 175
-  @use call    util.lcm  @ 174
-  @use call    util.round  @ 323
+  @use call    util.gcd  @ compositePeriodQN:175
+  @use call    util.lcm  @ compositePeriodQN:174
+  @use call    util.round  @ delayToPPQ:323
   @use require util  @ 16

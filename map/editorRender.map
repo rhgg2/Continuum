@@ -25,57 +25,57 @@
   @fn activePane()  @ 25
   @fn onClose()  @ 27
   -- Library tree palette (Active / Project / Global tiers; one per pane)
-  @fn libraryActions(spec)  @ 35
+  @fn libraryActions(spec)  @ 35-68
       -- sel.tier scopes the action bar: a folder selection (name=nil) scopes add/import,
       -- a leaf arms dup/del. Active's 'select' button resolves an entry to its home tier.
-  @fn libraryRow(spec, tier, name, label)  @ 72
+  @fn libraryRow(spec, tier, name, label)  @ 72-79
       -- PushID(tier) scopes the row's ImGui id: a promoted entry appears in both
       -- Project and Global with the same label, which would otherwise collide.
-  @fn libraryFolder(spec, tier, title, drawChildren)  @ 85
+  @fn libraryFolder(spec, tier, title, drawChildren)  @ 85-92
       -- Disclosure chip toggles the folder; the title row selects the tier (name=nil)
       -- so add/import scope to it, and now also toggles. Mirrors the sampler tree.
-  @fn libraryTree(spec)  @ 94
+  @fn libraryTree(spec)  @ 94-120
 
 # Public API (er:*)
-  @api er:edit(lib, name)  @ 128
+  @api er:edit(lib, name)  @ 128-135
       -- Fast path: set the pane + selection; the editTuning/editSwing commands
       -- (which hold coord) switch the page. Mirrors samplePage's diveToSampler.
   @api er:unbind()  @ 139
       -- Page unbind (leaving the editor) ends the drop-in: the next entry must
       -- re-earn the Close affordance by coming through edit() again.
   @api er:toolbarSegments()  @ 172
-  @api er:renderBody(_, w, h, dispatch)  @ 174
-  @api er:renderStatusBar(_)  @ 201
-  @api er:focusState()  @ 207
+  @api er:renderBody(_, w, h, dispatch)  @ 174-199
+  @api er:renderStatusBar(_)  @ 201-204
+  @api er:focusState()  @ 207-215
 
 # Uses (outbound edges)
-  @use call    chrome.colour  @ 149, 150
-  @use call    chrome.disabledIf  @ 60, 65
-  @use call    chrome.gridWidth  @ 191
-  @use call    chrome.pickerIsActive  @ 209
-  @use call    chrome.row  @ 98
-  @use call    cmgr.invoke  @ 27
-  @use call    imgui.AlignTextToFramePadding  @ 102
-  @use call    imgui.Button  @ 39, 42, 47, 53, 61, 66, 152, 168
-  @use call    imgui.GetCursorScreenPos  @ 190
-  @use call    imgui.IsAnyItemActive  @ 181, 213
-  @use call    imgui.IsKeyPressed  @ 182
-  @use call    imgui.PopFont  @ 194
-  @use call    imgui.PopID  @ 78, 106
+  @use call    chrome.colour  @ 149,150
+  @use call    chrome.disabledIf  @ libraryActions:60,65
+  @use call    chrome.gridWidth  @ renderBody:191
+  @use call    chrome.pickerIsActive  @ focusState:209
+  @use call    chrome.row  @ libraryTree:98
+  @use call    cmgr.invoke  @ onClose:27
+  @use call    imgui.AlignTextToFramePadding  @ libraryTree:102
+  @use call    imgui.Button  @ libraryActions:39,42,47,53,61,66 152,168
+  @use call    imgui.GetCursorScreenPos  @ renderBody:190
+  @use call    imgui.IsAnyItemActive  @ renderBody:181 focusState:213
+  @use call    imgui.IsKeyPressed  @ renderBody:182
+  @use call    imgui.PopFont  @ renderBody:194
+  @use call    imgui.PopID  @ libraryRow:78 libraryTree:106
   @use call    imgui.PopStyleColor  @ 153
-  @use call    imgui.PushFont  @ 192
-  @use call    imgui.PushID  @ 73, 101
-  @use call    imgui.PushStyleColor  @ 149, 150
-  @use call    imgui.SameLine  @ 41, 44, 50, 56, 63, 104, 156
-  @use call    imgui.Separator  @ 99
-  @use call    imgui.SmallButton  @ 105
-  @use call    imgui.Text  @ 203
-  @use call    imgui.TextDisabled  @ 103
-  @use call    modalHost.isOpen  @ 181, 209
-  @use call    swingEditor.isOpen  @ 185
-  @use call    swingEditor.open  @ 133, 185
-  @use call    temperEditor.hasSelection  @ 186
-  @use call    temperEditor.open  @ 131, 186
+  @use call    imgui.PushFont  @ renderBody:192
+  @use call    imgui.PushID  @ libraryRow:73 libraryTree:101
+  @use call    imgui.PushStyleColor  @ 149,150
+  @use call    imgui.SameLine  @ libraryActions:41,44,50,56,63 libraryTree:104 156
+  @use call    imgui.Separator  @ libraryTree:99
+  @use call    imgui.SmallButton  @ libraryTree:105
+  @use call    imgui.Text  @ renderStatusBar:203
+  @use call    imgui.TextDisabled  @ libraryTree:103
+  @use call    modalHost.isOpen  @ renderBody:181 focusState:209
+  @use call    swingEditor.isOpen  @ renderBody:185
+  @use call    swingEditor.open  @ edit:133 renderBody:185
+  @use call    temperEditor.hasSelection  @ renderBody:186
+  @use call    temperEditor.open  @ edit:131 renderBody:186
   @use require imgui  @ 15
 
 # REAPER API surface

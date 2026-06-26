@@ -219,7 +219,7 @@ def reaper_doc_lookup(
 _MAP_HEADER = re.compile(r'^@module\s+(\S+)\s+src=(\S+)\s+loc=(\d+)\s+sha=(\S+)')
 _DECL = re.compile(
     r'^(?P<indent>\s*)@(?P<kind>fn|api|state|const|require|construct)\s+'
-    r'(?P<head>.+?)\s*@\s*(?P<line>\d+)\s*'
+    r'(?P<head>.+?)\s*@\s*(?P<line>\d+)(?:-(?P<end>\d+))?\s*'
     r'(?P<doc>(?:--|·).*)?$'
 )
 # Annotations: `@invariant`, `@contract`, `@shape`, `@emits`, `@reaper`,
@@ -229,10 +229,24 @@ _ANN = re.compile(
     r'^(?P<indent>\s*)@(?P<kind>\??(?:invariant|contract|shape|emits|reaper|deps))\s+'
     r'(?P<body>.*)$'
 )
-# `@use <kind> <target>  @ <line>[, <line>...]`
+# `@use <kind> <target>  @ <caller>:<line>[,<line>] [<caller>:<line>...]`
+# Top-level edges (e.g. requires) appear as bare line numbers, no caller.
 _USE = re.compile(
-    r'^\s*@use\s+(?P<ukind>\w+)\s+(?P<target>\S+)\s+@\s+(?P<lines>[\d,\s]+)\s*$'
+    r'^\s*@use\s+(?P<ukind>\w+)\s+(?P<target>\S+)\s+@\s+(?P<sites>.+?)\s*$'
 )
+
+
+def _iter_use_sites(sites: str):
+    """Yield (caller|None, line) from a @use sites field."""
+    for seg in sites.split():
+        if ':' in seg:
+            caller, _, nums = seg.partition(':')
+        else:
+            caller, nums = None, seg
+        for n in nums.split(','):
+            n = n.strip()
+            if n.isdigit():
+                yield caller, n
 
 
 def _bare_name(kind: str, head: str) -> str:
@@ -348,11 +362,12 @@ def map_query(
                 target = mu.group("target")
                 if query_rx and not query_rx.search(target):
                     continue
-                for n in re.findall(r'\d+', mu.group("lines")):
+                for caller, n in _iter_use_sites(mu.group("sites")):
                     if len(results) >= max_results:
                         truncated = True
                         break
-                    results.append(f"{src}:{n}  @use {ukind} {target}")
+                    where = f"  (in {caller})" if caller else ""
+                    results.append(f"{src}:{n}  @use {ukind} {target}{where}")
                 if truncated:
                     break
             if truncated:
@@ -387,6 +402,7 @@ def map_query(
                 k = md.group("kind")
                 head = md.group("head").strip()
                 src_line = int(md.group("line"))
+                end_line = md.group("end")
                 doc = (md.group("doc") or "").strip()
 
                 if kind_filter and kind_filter != k:
@@ -396,8 +412,9 @@ def map_query(
                     if not query_rx.search(bare):
                         continue
 
+                loc = f"{src}:{src_line}-{end_line}" if end_line else f"{src}:{src_line}"
                 tail = f"  {doc}" if doc else ""
-                results.append(f"{src}:{src_line}  @{k} {head}{tail}")
+                results.append(f"{loc}  @{k} {head}{tail}")
                 continue
 
             ma = _ANN.match(raw)

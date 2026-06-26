@@ -16,12 +16,12 @@
   @state claims = {}  @ 14   -- producer -> { guid -> track }
 
 # Private functions
-  @fn nodeIndex(track)  @ 17
+  @fn nodeIndex(track)  @ 17-25
       -- fx_ident for a JSFX is the bare Effects-relative path (cf. routingManager fxIdentAt)
 
 # Public API (ccm:*)
-  @api ccm:claim(producer, track)  @ 27
-  @api ccm:release(producer, track)  @ 42
+  @api ccm:claim(producer, track)  @ 27-40
+  @api ccm:release(producer, track)  @ 42-50
 
 # REAPER API surface
   @reaper TrackFX_GetCount, TrackFX_GetNamedConfigParm, TrackFX_AddByName, TrackFX_CopyToTrack, TrackFX_Delete

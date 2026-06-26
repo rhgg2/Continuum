@@ -30,10 +30,10 @@
   @api ap:focusState()  @ 63
 
 # Uses (outbound edges)
-  @use call    arrangeRender.focusState  @ 63
-  @use call    arrangeRender.renderBody  @ 61
-  @use call    arrangeRender.renderStatusBar  @ 62
-  @use call    arrangeRender.toolbarSegments  @ 60
+  @use call    arrangeRender.focusState  @ focusState:63
+  @use call    arrangeRender.renderBody  @ renderBody:61
+  @use call    arrangeRender.renderStatusBar  @ renderStatusBar:62
+  @use call    arrangeRender.toolbarSegments  @ toolbarSegments:60
   @use call    arrangeView.cursorCol  @ 42
   @use call    arrangeView.isParkedTake  @ 53
   @use call    arrangeView.keyForSlot  @ 48
@@ -43,13 +43,13 @@
   @use call    arrangeView.ownerTrack  @ 54
   @use call    arrangeView.projectTracks  @ 43
   @use call    arrangeView.reswingAll  @ 55
-  @use call    arrangeView.seedCursor  @ 38
+  @use call    arrangeView.seedCursor  @ seedCursorFromReaper:38
   @use call    arrangeView.takeForSlot  @ 45
   @use call    arrangeView.takesUsing  @ 56
   @use call    arrangeView.trackHandle  @ 47
   @use call    arrangeView.trackIdxForGuid  @ 46
   @use call    facade.publish  @ 41
-  @use call    util.instantiate  @ 23, 24, 25
+  @use call    util.instantiate  @ 23,24,25
   @use require arrangeManager  @ 23
   @use require arrangeRender  @ 25
   @use require arrangeView  @ 24

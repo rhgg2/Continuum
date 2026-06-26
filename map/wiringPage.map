@@ -35,18 +35,18 @@
 
 # Uses (outbound edges)
   @use call    facade.publish  @ 32
-  @use call    routingManager.pollUndo  @ 52
-  @use call    util.instantiate  @ 23, 24, 25, 27
+  @use call    routingManager.pollUndo  @ tick:52
+  @use call    util.instantiate  @ 23,24,25,27
   @use call    wiringManager.isWiringOwnedTrack  @ 33
   @use call    wiringManager.paramTargets  @ 34
   @use call    wiringManager.samplerReachable  @ 35
-  @use call    wiringRender.closeTransients  @ 46
-  @use call    wiringRender.focusState  @ 61
-  @use call    wiringRender.renderBody  @ 59
-  @use call    wiringRender.renderStatusBar  @ 60
-  @use call    wiringRender.toolbarSegments  @ 58
-  @use call    wiringView.enableLive  @ 49
-  @use call    wiringView.syncExternal  @ 55
+  @use call    wiringRender.closeTransients  @ unbind:46
+  @use call    wiringRender.focusState  @ focusState:61
+  @use call    wiringRender.renderBody  @ renderBody:59
+  @use call    wiringRender.renderStatusBar  @ renderStatusBar:60
+  @use call    wiringRender.toolbarSegments  @ toolbarSegments:58
+  @use call    wiringView.enableLive  @ enableLive:49
+  @use call    wiringView.syncExternal  @ syncExternal:55
   @use require routingManager  @ 23
   @use require util  @ 12
   @use require wiringManager  @ 24

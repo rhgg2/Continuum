@@ -23,26 +23,26 @@
   @const OVERLAY = { overridden = 'mirror.overridden.tint',  @ 114
 
 # Public API (groups.*)
-  @api groups.resolve(groupEvt, assign)  @ 19
+  @api groups.resolve(groupEvt, assign)  @ 19-24
       @contract  (groupEvt, assign?) -> resolved event, 'synced'|'overridden'. Local value wins; per the sticky-assign invariant a drifted base raises no conflict here.
-  @api groups.project(group, instance)  @ 28
+  @api groups.project(group, instance)  @ 28-69
       @contract  (group, instance?) -> desired, conflicts, states. desired[vuid] is provenance-free intent (dur is the authored ceiling; nil dur = open); states[vuid] is synced|overridden|conflicted. Recomputed from scratch each call (terminal set, never a diff). Carries intent only -- tm's universal tail pass derives every realised note-off, so project never clips or grows a dur.
-  @api groups.reconcile(desired, current)  @ 72
+  @api groups.reconcile(desired, current)  @ 72-88
       @contract  (desired, current) where current[vuid]={uuid,groupEvt} -> op list; a move/resize is one `set`, never del+add.
-  @api groups.deriveAssign(groupEvt, field, value)  @ 91
+  @api groups.deriveAssign(groupEvt, field, value)  @ 91-93
       @contract  (groupEvt?, field, value) -> assign rec capturing the live group value as the merge base at fork time (nil groupEvt -> nil base).
-  @api groups.streamId(evt)  @ 96
+  @api groups.streamId(evt)  @ 96-98
       @contract  stream identity = evType..':'..(key or 0) (note->lane, cc->cc-number); index-free per the region invariant.
-  @api groups.laneId(evt)  @ 101
+  @api groups.laneId(evt)  @ 101-103
       @contract  group-frame lane identity = (chanDelta or 0)..'/'..streamId; per-channel, so two channels at one lane+onset are distinct slots.
-  @api groups.inRect(rect, ppq, chanOffset, evt)  @ 106
+  @api groups.inRect(rect, ppq, chanOffset, evt)  @ 106-110
       @contract  membership predicate; ppq/chanOffset are anchor-relative (caller does the anchor maths). True iff 0<=ppq<rect.dur AND rect.streams[chanOffset][streamId(evt)]. rect.ppq is the placement origin, not the membership origin.
-  @api groups.tintKey(state)  @ 116
-  @api groups.regionKey(colour, kind)  @ 119
-  @api groups.outlineKey(state, colour)  @ 122
+  @api groups.tintKey(state)  @ 116-118
+  @api groups.regionKey(colour, kind)  @ 119-121
+  @api groups.outlineKey(state, colour)  @ 122-125
 
 # Uses (outbound edges)
-  @use call    util.add  @ 77, 79, 84
-  @use call    util.clone  @ 20, 43
-  @use call    util.deepEq  @ 78
+  @use call    util.add  @ reconcile:77,79,84
+  @use call    util.clone  @ resolve:20 project:43
+  @use call    util.deepEq  @ reconcile:78
   @use require util  @ 14

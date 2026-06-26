@@ -21,26 +21,30 @@
   @state ON_TEMPER_EPS = 1e-6  @ 26
   @state PPQ_GRID_EPS = 0.5  @ 71
 
-# Public API (ctx:*)
+# Private functions
   -- Temperament
-  @api ctx:activeTemper()  @ 22
-  @api ctx:noteProjection(evt)  @ 28
   -- Timing
-  @api ctx:ppqToRow(ppqI, chan)  @ 50
+  @fn timeSigAt(ppq)  @ 80-87
+  @fn tsRow(ts)  @ 89
+
+# Public API (ctx:*)
+  @api ctx:activeTemper()  @ 22
+  @api ctx:noteProjection(evt)  @ 28-45
+  @api ctx:ppqToRow(ppqI, chan)  @ 50-54
       @contract  identity row math: column-event ppq is the logical position; rows are uniform ppqPerRow units. Exact inverse of rowToPPQ. Returns float; integer rows are float fixpoints. The chan argument is unused at this layer (kept for the call-site signature).
-  @api ctx:rowToPPQ(row, chan)  @ 57
+  @api ctx:rowToPPQ(row, chan)  @ 57-61
       @contract  identity row math: row × ppqPerRow, clamped at length. Returns float; no rounding. On-grid is a tolerance question — see ctx:isOnGrid.
   @api ctx:snapRow(ppqI, chan)  @ 63
   @api ctx:ppqPerRow()  @ 65
-  @api ctx:isOnGrid(ppqI, chan)  @ 74
+  @api ctx:isOnGrid(ppqI, chan)  @ 74-77
       @contract  true iff ppqI lies within PPQ_GRID_EPS ppq of the nearest row's ppq under this ctx. The sole owner of the on-grid threshold; callers must not re-implement it from rowToPPQ.
-  @api ctx:rowBeatInfo(row)  @ 91
-  @api ctx:barBeatSub(row)  @ 98
+  @api ctx:rowBeatInfo(row)  @ 91-96
+  @api ctx:barBeatSub(row)  @ 98-114
 
 # Uses (outbound edges)
-  @use call    tuning.midiToStep  @ 31
-  @use call    tuning.stepToMidi  @ 33
-  @use call    tuning.stepToParts  @ 32
-  @use call    util.round  @ 63
+  @use call    tuning.midiToStep  @ noteProjection:31
+  @use call    tuning.stepToMidi  @ noteProjection:33
+  @use call    tuning.stepToParts  @ noteProjection:32
+  @use call    util.round  @ snapRow:63
   @use require tuning  @ 8
   @use require util  @ 7

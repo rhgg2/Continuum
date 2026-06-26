@@ -77,6 +77,7 @@ class Block:
     name: str
     args: str = ''
     line: int = 0
+    end_line: int = 0       # span end (block-depth matched); functions only
     owner: str = ''         # for methods: the receiver
     kind: str = 'fn'        # 'fn' | 'method' | 'dotfn'
     indent: int = 0
@@ -113,14 +114,16 @@ class MapFile:
     sections: list[tuple[int, int, str]] = field(default_factory=list)
     signals: list[str] = field(default_factory=list)
     signal_lines: dict[str, list[int]] = field(default_factory=dict)
+    signal_sites: dict[str, list[tuple[str, int]]] = field(default_factory=dict)
     signal_payloads: dict[str, str] = field(default_factory=dict)
     reaper_calls: list[str] = field(default_factory=list)
     reaper_lines: dict[str, list[int]] = field(default_factory=dict)
     module_annotations: list[Annotation] = field(default_factory=list)
     shape_annotations: list[tuple[str, str, bool, int]] = field(default_factory=list)
     pending_annotations: list[tuple[int, str, str, bool]] = field(default_factory=list)
-    # Outbound edges: (kind, target, line). kind ∈ {require, call, sub, forward}.
-    uses: list[tuple[str, str, int]] = field(default_factory=list)
+    # Outbound edges: (kind, target, line, caller). caller is the enclosing fn
+    # name or None (top-level). kind ∈ {require, call, sub, forward}.
+    uses: list[tuple[str, str, int, str]] = field(default_factory=list)
 
 
 # ----- Helpers
@@ -134,6 +137,111 @@ def short_sha(path: Path) -> str:
         return r.stdout.strip() or 'untracked'
     except Exception:
         return 'unknown'
+
+
+# ----- Block spans (string/comment-aware Lua block-depth)
+
+# Keywords opening / closing an `end`-terminated block. `for`/`while` aren't
+# counted -- their `do` is; `elseif` reuses its `if`'s block so its `then` is
+# discounted; `repeat` opens and `until` closes.
+_OPEN_KW   = re.compile(r'\b(?:function|do|then|repeat)\b')
+_CLOSE_KW  = re.compile(r'\b(?:end|until)\b')
+_ELSEIF_KW = re.compile(r'\belseif\b')
+
+
+def strip_code(text: str) -> list[str]:
+    """Mask string and comment spans (incl. long brackets [[..]] / --[[..]])
+    with spaces so block keywords inside them don't perturb depth counting."""
+    n = len(text)
+    masked = list(text)
+    def blank(a: int, b: int) -> None:
+        for k in range(a, b):
+            if masked[k] != '\n':
+                masked[k] = ' '
+    i = 0
+    long_level = None        # `=` count of an open long bracket, else None
+    while i < n:
+        c = text[i]
+        if long_level is not None:
+            if c == ']':
+                j = i + 1; eq = 0
+                while j < n and text[j] == '=': eq += 1; j += 1
+                if eq == long_level and j < n and text[j] == ']':
+                    blank(i, j + 1); long_level = None; i = j + 1; continue
+            if c != '\n': masked[i] = ' '
+            i += 1; continue
+        if c == '-' and i + 1 < n and text[i + 1] == '-':
+            j = i + 2
+            if j < n and text[j] == '[':
+                k = j + 1; eq = 0
+                while k < n and text[k] == '=': eq += 1; k += 1
+                if k < n and text[k] == '[':
+                    long_level = eq; blank(i, k + 1); i = k + 1; continue
+            j = i
+            while j < n and text[j] != '\n': j += 1
+            blank(i, j); i = j; continue
+        if c == '[':
+            j = i + 1; eq = 0
+            while j < n and text[j] == '=': eq += 1; j += 1
+            if j < n and text[j] == '[':
+                long_level = eq; blank(i, j + 1); i = j + 1; continue
+            i += 1; continue
+        if c in '"\'':
+            j = i + 1
+            while j < n and text[j] != c and text[j] != '\n':
+                j += 2 if text[j] == '\\' else 1
+            end = j + 1 if (j < n and text[j] == c) else j
+            blank(i, end); i = end; continue
+        i += 1
+    return ''.join(masked).splitlines()
+
+
+def block_levels(code_lines: list[str]) -> tuple[list[int], list[int]]:
+    """Per-line block delta and running level-after on masked code lines."""
+    deltas, after, lvl = [], [], 0
+    for code in code_lines:
+        d = (len(_OPEN_KW.findall(code)) - len(_ELSEIF_KW.findall(code))
+             - len(_CLOSE_KW.findall(code)))
+        deltas.append(d); lvl += d; after.append(lvl)
+    return deltas, after
+
+
+def span_end(deltas: list[int], after: list[int], start: int) -> int:
+    """0-based end-line index of the block opening at 0-based `start`."""
+    open_level = after[start] - deltas[start]
+    for j in range(start, len(after)):
+        if after[j] <= open_level:
+            return j
+    return len(after) - 1
+
+
+# Block keywords in source order, for a typed open/close stack. `for`/`while`
+# don't appear -- their `do` opens; `elseif` cancels one upcoming `then`.
+_BLOCK_TOK = re.compile(r'\b(function|do|then|repeat|elseif|end|until)\b')
+
+
+def function_depth_before(code_lines: list[str]) -> list[int]:
+    """Per-line count of enclosing *function* bodies, measured before the
+    line's own tokens. Distinguishes module-scope helpers (depth 0, captured
+    wherever a do/if wraps them) from true nested closures (depth >=1)."""
+    depths, stack, skip_then = [], [], 0
+    for code in code_lines:
+        depths.append(sum(1 for frame in stack if frame == 'fn'))
+        for tok in _BLOCK_TOK.findall(code):
+            if tok == 'function':
+                stack.append('fn')
+            elif tok in ('do', 'repeat'):
+                stack.append('block')
+            elif tok == 'then':
+                if skip_then:
+                    skip_then -= 1
+                else:
+                    stack.append('block')
+            elif tok == 'elseif':
+                skip_then += 1
+            elif stack:                      # end | until
+                stack.pop()
+    return depths
 
 
 def collect_doc(lines: list[str], i: int) -> list[str]:
@@ -212,6 +320,9 @@ def discover_deps(lines: list[str]) -> list[str]:
 def parse(path: Path) -> MapFile:
     text = path.read_text()
     lines = text.splitlines()
+    code_lines = strip_code(text)
+    deltas, level_after = block_levels(code_lines)
+    fn_depth = function_depth_before(code_lines)
 
     cm = MapFile(module=path.stem, src=path, loc=len(lines), sha=short_sha(path))
     cm.mode, cm.return_target = classify(lines)
@@ -263,9 +374,11 @@ def parse(path: Path) -> MapFile:
                     cm.dotfns.append(blk)
             continue
 
-        # local function — private helper
+        # local function — private helper. Captured at module scope (function
+        # depth 0) wherever a do/if wraps it; true nested closures (depth >=1)
+        # are out of scope.
         ml = LOCAL_FN_RE.match(raw)
-        if ml and len(ml.group(1)) == 0:
+        if ml and fn_depth[i] == 0:
             blk = Block(name=ml.group(2), args=ml.group(3).strip(),
                         line=i + 1, kind='fn',
                         doc=collect_doc(lines, i))
@@ -273,9 +386,9 @@ def parse(path: Path) -> MapFile:
             continue
 
         # bare `function name(args)` inside a `do` block — assignment to a
-        # forward-declared upvalue.
+        # forward-declared upvalue. Module scope only, same as local helpers.
         mn = NESTED_FN_RE.match(raw)
-        if mn:
+        if mn and fn_depth[i] == 0:
             blk = Block(name=mn.group(2), args=mn.group(3).strip(),
                         line=i + 1, kind='fn',
                         doc=collect_doc(lines, i))
@@ -344,12 +457,27 @@ def parse(path: Path) -> MapFile:
     cm.state = [d for d in cm.state if not (not d.init and d.name in fn_names)]
     cm.consts = [d for d in cm.consts if not (not d.init and d.name in fn_names)]
 
+    fn_blocks = cm.private_fns + cm.methods + cm.dotfns + cm.api
+    for blk in fn_blocks:
+        blk.end_line = span_end(deltas, level_after, blk.line - 1) + 1
+
+    # innermost captured function enclosing a 1-based line -- call attribution
+    spans = sorted((b.line, b.end_line, b.name) for b in fn_blocks)
+    def caller_at(line: int):
+        best = None
+        for start, end, name in spans:
+            if start <= line <= end and (best is None or start > best[0]):
+                best = (start, end, name)
+        return best[2] if best else None
+
     attach_annotations(cm)
-    extract_uses(cm, lines)
+    for name, lns in cm.signal_lines.items():
+        cm.signal_sites[name] = [(caller_at(ln), ln) for ln in lns]
+    extract_uses(cm, lines, caller_at)
     return cm
 
 
-def extract_uses(cm: MapFile, lines: list[str]) -> None:
+def extract_uses(cm: MapFile, lines: list[str], caller_at) -> None:
     """Walk lines collecting outbound edges. Resolves receivers through the
     alias table (imports/constructs/self → module); calls on unresolved
     receivers are dropped — see docs/map_uses.md for the recall caveat."""
@@ -371,7 +499,7 @@ def extract_uses(cm: MapFile, lines: list[str]) -> None:
         key = (kind, target, line)
         if key not in seen:
             seen.add(key)
-            cm.uses.append(key)
+            cm.uses.append((kind, target, line, caller_at(line)))
 
     for d in cm.imports:
         add('require', d.init, d.line)
@@ -462,6 +590,23 @@ def attach_annotations(cm: MapFile) -> None:
 
 # ----- Emission
 
+def render_caller_groups(pairs: list[tuple[str, int]]) -> str:
+    """`(caller, line)` pairs -> `caller:l1,l2 other:l3`; lines with no
+    enclosing function appear bare. Callers ordered by their first line."""
+    groups: dict[str, list[int]] = {}
+    order: list[str] = []
+    for caller, line in sorted(pairs, key=lambda p: p[1]):
+        if caller not in groups:
+            groups[caller] = []
+            order.append(caller)
+        groups[caller].append(line)
+    segs = []
+    for caller in order:
+        nums = ','.join(str(n) for n in sorted(set(groups[caller])))
+        segs.append(f"{caller}:{nums}" if caller else nums)
+    return ' '.join(segs)
+
+
 def fmt_args(args: str) -> str:
     return f"({args})" if args else "()"
 
@@ -506,7 +651,8 @@ def emit_items(out: list[str], sections: list, items: list,
             head = f"  {label_prefix}{m.owner}{join}{m.name}"
         else:
             head = f"  {label_prefix}{m.name}"
-        out.append(f"{head}{fmt_args(m.args)}  @ {m.line}")
+        loc = f"{m.line}-{m.end_line}" if m.end_line > m.line else f"{m.line}"
+        out.append(f"{head}{fmt_args(m.args)}  @ {loc}")
         for d in m.doc:
             out.append(f"      -- {d}")
         emit_anns(out, m.annotations, '      ')
@@ -614,25 +760,32 @@ def emit(cm: MapFile) -> str:
     if cm.signals:
         add("# Signals emitted (via util.installHooks)")
         for s in cm.signals:
+            line = f"  @emits {s}"
             payload = cm.signal_payloads.get(s)
-            add(f"  @emits {s}   -- {payload}" if payload else f"  @emits {s}")
+            if payload:
+                line += f"   -- {payload}"
+            sites = cm.signal_sites.get(s)
+            if sites:
+                line += f"   @ {render_caller_groups(sites)}"
+            add(line)
         add('')
 
     if cm.uses:
         add("# Uses (outbound edges)")
-        # Collapse same (kind, target) into one row with all line numbers.
-        grouped: dict[tuple[str, str], list[int]] = {}
+        # One row per (kind, target); lines grouped under their caller function
+        # so each row reads as a call graph: target <- caller:lines.
+        grouped: dict[tuple[str, str], list[tuple[str, int]]] = {}
         order: list[tuple[str, str]] = []
-        for kind, target, line in cm.uses:
+        for kind, target, line, caller in cm.uses:
             key = (kind, target)
             if key not in grouped:
                 grouped[key] = []
                 order.append(key)
-            grouped[key].append(line)
+            grouped[key].append((caller, line))
         width = max(len(k) for k, _ in order)
         for kind, target in order:
-            lines_str = ', '.join(str(n) for n in grouped[(kind, target)])
-            add(f"  @use {kind:<{width}} {target}  @ {lines_str}")
+            sites = render_caller_groups(grouped[(kind, target)])
+            add(f"  @use {kind:<{width}} {target}  @ {sites}")
         add('')
 
     if cm.reaper_calls:

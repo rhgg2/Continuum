@@ -13,71 +13,70 @@
   @const prettyEmit  @ 510   -- forward decl (mutual recursion with emitTable)
 
 # Private functions
-  @fn print(...)  @ 15
-  @fn escape_string(s)  @ 164
-  @fn parseValue()  @ 465
+  @fn print(...)  @ 15-17
+  @fn escape_string(s)  @ 164-179
   -- Lua-literal disk format (human-editable; read by load(), never P_EXT)
-  @fn bareKey(k)  @ 491
-  @fn luaNumber(n)  @ 496
+  @fn bareKey(k)  @ 491-493
+  @fn luaNumber(n)  @ 496-501
       -- inf/nan are not bare Lua, but their arithmetic forms are and need no env.
-  @fn nonFiniteNote(v)  @ 504
+  @fn nonFiniteNote(v)  @ 504-508
       -- Inline note so a hand-editor recognises the arithmetic non-finite forms.
-  @fn emitTable(tbl, indent, seen)  @ 512
+  @fn emitTable(tbl, indent, seen)  @ 512-548
 
 # Public API (util.*)
-  @api util.print(...)  @ 7
-  @api util.print_r(root)  @ 19
-  @api util.assign(t1,t2)  @ 46
+  @api util.print(...)  @ 7-13
+  @api util.print_r(root)  @ 19-38
+  @api util.assign(t1,t2)  @ 46-57
       @contract  values equal to util.REMOVE clear the key from t1 instead of being assigned
-  @api util.add(tbl, val)  @ 59
-  @api util.atomic(label, fn)  @ 68
+  @api util.add(tbl, val)  @ 59-62
+  @api util.atomic(label, fn)  @ 68-77
       -- Wrap fn so each call is one REAPER undo entry. label is the undo
       -- description; the wrapper forwards args, propagates errors after
       -- closing the block, and is a no-op when reaper.Undo_BeginBlock is
       -- absent (test harness).
-  @api util.pick(src, keys, adds)  @ 79
-  @api util.bucket(buckets, key, val)  @ 90
-  @api util.key(...)  @ 99
+  @api util.pick(src, keys, adds)  @ 79-88
+  @api util.bucket(buckets, key, val)  @ 90-95
+  @api util.key(...)  @ 99-103
       -- Opaque compound key: join identity fields with NUL, which can't appear
       -- in a guid, track-key, or stringified scalar. Never split back apart.
-  @api util.keys(t)  @ 105
-  @api util.compact(t, n)  @ 112
+  @api util.keys(t)  @ 105-109
+  @api util.compact(t, n)  @ 112-116
       -- Sparse → dense; n is the pre-sparse length.
-  @api util.seek(items, mode, key, filter, keyFn)  @ 119
+  @api util.seek(items, mode, key, filter, keyFn)  @ 119-140
       @contract  assumes items sorted by keyFn (defaults to .ppq); 'before' modes scan to first miss then stop
-  @api util.clone(src, exclude, deep)  @ 143
+  @api util.clone(src, exclude, deep)  @ 143-152
       @contract  exclude applies only to the outermost table; deep recursion drops the exclude set
   @api util.deepClone(src)  @ 154
-  @api util.deepEq(a, b)  @ 156
-  @api util.installHooks(owner)  @ 182
+  @api util.deepEq(a, b)  @ 156-162
+  @api util.installHooks(owner)  @ 182-199
       @contract  listeners filter by signal name at registration; forward requires source itself ran installHooks
   @api util.isNote(e)  @ 201
-  @api util.between(events, lo, hi, filter)  @ 204
+  @api util.between(events, lo, hi, filter)  @ 204-215
       @contract  iterates events with ppq in half-open [lo, hi); adjacent windows tile without overlap
-  @api util.clamp(val,min,max)  @ 217
-  @api util.setDigit(val, d, pos, base, half)  @ 227
-  @api util.snapTo(v, dir, interval)  @ 234
+  @api util.clamp(val,min,max)  @ 217-225
+  @api util.setDigit(val, d, pos, base, half)  @ 227-231
+  @api util.snapTo(v, dir, interval)  @ 234-237
       @contract  advances at least one full interval; values already on a boundary do not no-op
-  @api util.nudgedScalar(v, lo, hi, dir, interval)  @ 239
-  @api util.oneOf(choices, txt)  @ 244
-  @api util.round(n, to)  @ 251
-  @api util.gcd(a, b)  @ 259
+  @api util.nudgedScalar(v, lo, hi, dir, interval)  @ 239-242
+  @api util.oneOf(choices, txt)  @ 244-249
+  @api util.round(n, to)  @ 251-257
+  @api util.gcd(a, b)  @ 259-263
   @api util.lcm(a, b)  @ 265
-  @api util.toBase36(n)  @ 269
-  @api util.fromBase36(txt)  @ 280
-  @api util.toBase62(n)  @ 288
-  @api util.fromBase62(txt)  @ 299
-  @api util.dotimes(n, v)  @ 311
+  @api util.toBase36(n)  @ 269-278
+  @api util.fromBase36(txt)  @ 280-282
+  @api util.toBase62(n)  @ 288-297
+  @api util.fromBase62(txt)  @ 299-308
+  @api util.dotimes(n, v)  @ 311-319
       @contract  overloaded on type of v: function => call n times for side effect; else build n-array filled with v
-  @api util.serialise(value, exclude, seen)  @ 322
+  @api util.serialise(value, exclude, seen)  @ 322-362
       @contract  strict: cycles raise; exclude applies only to the outermost table (recursion drops it)
-  @api util.unserialise(input)  @ 365
+  @api util.unserialise(input)  @ 365-480
       @contract  strict: trailing chars after the root value raise; scalars decode back to number/boolean/string
-  @api util.prettySerialise(value)  @ 560
+  @api util.prettySerialise(value)  @ 560-562
       @contract  emits a `return <literal>` chunk for load(); non-finite → 1/0 -1/0 0/0; cycles raise
-  @api util.prettyUnserialise(text)  @ 565
+  @api util.prettyUnserialise(text)  @ 565-571
       @contract  sandboxed load() of the disk literal (text-only, empty env); ok→value, fail→nil,err
-  @api util.instantiate(name, deps)  @ 575
+  @api util.instantiate(name, deps)  @ 575-581
       @contract  executes the named module file as a fresh chunk, passing `deps` as its `...` argument. Used for factory modules whose file body IS the constructor (vs. stateless `require`d tables). Test seam: a function in util._stubs[name] takes precedence and is called with deps — so harnesses can swap a fake without altering the production graph.
 
 # REAPER API surface

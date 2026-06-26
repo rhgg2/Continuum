@@ -11,23 +11,23 @@
 
 # Private functions
   @fn ciLess(a, b)  @ 34
-  @fn copyFile(src, dst)  @ 95
+  @fn copyFile(src, dst)  @ 95-105
       -- 64KB chunks so big samples don't allocate a Lua string the size of the file.
 
 # Public API (fs.*)
-  @api fs.isAudio(name)  @ 12
-  @api fs.basename(path)  @ 18
-  @api fs.parent(path)  @ 23
+  @api fs.isAudio(name)  @ 12-16
+  @api fs.basename(path)  @ 18-20
+  @api fs.parent(path)  @ 23-25
       @contract  returns '' if path has no separator; trailing separators on input are not stripped (caller passes canonical paths)
-  @api fs.join(a, b)  @ 28
+  @api fs.join(a, b)  @ 28-32
       @contract  inserts '/' between a and b unless a already ends in '/' or '\\'; no path normalisation
-  @api fs.listDirs(path)  @ 37
+  @api fs.listDirs(path)  @ 37-47
       @contract  hides dotfile-prefixed entries (.git, .DS_Store, etc.)
-  @api fs.exists(path)  @ 49
-  @api fs.readText(path)  @ 55
-  @api fs.hashFile(path)  @ 61
+  @api fs.exists(path)  @ 49-53
+  @api fs.readText(path)  @ 55-58
+  @api fs.hashFile(path)  @ 61-80
       @contract  FNV-1a over (size, first 4KB, last 4KB); 8-char hex; non-cryptographic; see docs/fs.md
-  @api fs.listAudioFiles(path)  @ 82
+  @api fs.listAudioFiles(path)  @ 82-92
 
 # REAPER API surface
   @reaper EnumerateSubdirectories

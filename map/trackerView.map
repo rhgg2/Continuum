@@ -81,28 +81,28 @@
 
 # Private functions
   @fn arrange()  @ 32
-  @fn print(...)  @ 34
+  @fn print(...)  @ 34-36
   -- STATE
   -- Selection — the tracker's own (track, slot), held in cm, decoupled from the arrange cursor.
-  @fn recoverSlot(slots, desired)  @ 66
+  @fn recoverSlot(slots, desired)  @ 66-76
       -- Nearest extant slot to `desired` in the ascending midiSlots list: the exact
       -- slot, else the lowest above it, else the highest below it. nil ⇒ no slots.
-  @fn selectedTrackIdx()  @ 78
-  @fn effectiveSlot(trackIdx)  @ 83
+  @fn selectedTrackIdx()  @ 78-81
+  @fn effectiveSlot(trackIdx)  @ 83-85
   -- SHARED HELPERS
   -- Note geometry (used by editing, adjust*, nudge, quantizeKeepRealised)
-  @fn neighbourEvents(cols, ppq, pred)  @ 185
+  @fn neighbourEvents(cols, ppq, pred)  @ 185-194
       -- Onset-only: prev maximises onset (nearest predecessor before ppq),
       -- nxt minimises onset (nearest successor). Neighbour tails never enter
       -- here -- tm's universal tail pass clips an overrun on rebuild, so a
       -- tail must not bound a move (the rowBounds/shiftEvents rule).
-  @fn notePreds(excludeEvt)  @ 196
-  @fn overlapBounds(col, ppq, excludeEvt, allowOverlap)  @ 206
+  @fn notePreds(excludeEvt)  @ 196-200
+  @fn overlapBounds(col, ppq, excludeEvt, allowOverlap)  @ 206-216
       -- Diff-pitch col-local with `overlapOffset` leniency (matches column allocator).
       -- Same-pitch chan-wide with no leniency: MIDI permits one voice per (chan, pitch).
       -- Onset-only, like rowBounds: bounds are neighbour ONSETS, never tails --
       -- tm clips a tail overrun on the next rebuild.
-  @fn rowBounds(col, ppq, excludeEvt)  @ 227
+  @fn rowBounds(col, ppq, excludeEvt)  @ 227-239
       -- Row-space onset band for a moved note: the inclusive [minRow, maxRow]
       -- its onset may occupy without reordering against a neighbour. Bounds
       -- are the *onsets* of the nearest diff-pitch col-local and same-pitch
@@ -112,69 +112,102 @@
       -- rule). No prev -> the -1 sentinel makes minRow 0, the item-start
       -- guard. e.ppq is exact logical-ppq post-projection.
       @contract  onset-only; tails never bound the move (tm clips overrun on rebuild)
-  @fn conformOverlaps(plans, deleted)  @ 247
-  @fn writePlans(plans)  @ 299
+  @fn conformOverlaps(plans, deleted)  @ 247-294
+  @fn writePlans(plans)  @ 299-318
       -- Sort by shift direction so a still-old same-pitch peer vacates
       -- before its slot gets written. Without this, assignEvent's
       -- clearSameKeyRange kills the not-yet-moved peer.
   -- Show events by column, used by lots of selection ops
-  @fn eventsByCol()  @ 322
-  @fn streamIdOf(col)  @ 350
+  @fn eventsByCol()  @ 322-345
+  @fn streamIdOf(col)  @ 350-355
       -- The mirror region's per-stream identity, derived from the column (the
       -- column IS the stream): evType:key, key = lane for notes, cc-number for
       -- cc, 0 otherwise. Index-free, so it survives column insert/reorder.
   -- Frames & timing
-  @fn logPerRowFor(rpb)  @ 359
-  @fn isFrameChange(change)  @ 369
+  @fn logPerRowFor(rpb)  @ 359-362
+  @fn isFrameChange(change)  @ 369-371
       @contract  a non-transient write to a FRAME_KEYS member is a real frame change
       @contract  real frame change fires releaseTransientFrame from configCallback
   @fn currentRpb()  @ 373
-  @fn releaseTransientFrame()  @ 376
+  @fn releaseTransientFrame()  @ 376-386
       -- Returns true iff a transient override was released.
-  @fn assignStamp(evt, chan, rowS, rowE)  @ 390
+  @fn assignStamp(evt, chan, rowS, rowE)  @ 390-396
       -- Pass rowE for span events (notes).
-  @fn assignTail(evt, chan, endppq)  @ 403
+  @fn assignTail(evt, chan, endppq)  @ 403-405
       -- Authoring a tail authors a finite ceiling: passing endppq with no
       -- endppqL makes tm stamp the ceiling from this note-off (closing a
       -- previously util.OPEN note), so the universal tail pass honours it
       -- instead of treating the note as unbounded every rebuild.
       @contract  on tail move: stamps endppqL ceiling via tm; rebases evt.rpb alongside endppq
-  @fn assignNoteMove(evt, rowS)  @ 412
+  @fn assignNoteMove(evt, rowS)  @ 412-419
       -- Shift onset to rowS and shift endppq by the same ppq delta. endppq
       -- is the authored logical ceiling (endppqL), which may run past the
       -- take length when an earlier move overshot. Routing it through a row
       -- here would clamp to numRows (ctx:ppqToRow) and erase the overshoot,
       -- so any further inward move can't regrow the tail. util.OPEN stays open.
-  @fn matchGridToCursor()  @ 421
-  @fn setTakeSwing(slot, value)  @ 463
+  @fn matchGridToCursor()  @ 421-432
+  @fn setTakeSwing(slot, value)  @ 463-467
       -- swing is take document data: one map { global=name, [chan]=name }. defaultSwing
       -- mirrors that shape across config tiers as a pure seed (copied in on bind, never realised).
-  @fn setDefaultSwing(tier, slot, value)  @ 469
-  @fn localizeSwing(name)  @ 477
+  @fn setDefaultSwing(tier, slot, value)  @ 469-473
+  @fn localizeSwing(name)  @ 477-486
       -- Picking a library swing copies its composite into the project tier if absent,
       -- so the project is self-contained. See docs/swingEditor.md § Library tiers.
   -- Mute / solo
-  @fn pushMute()  @ 550
+  @fn toggleChannelFlag(key, chan)  @ 541-545
+  @fn pushMute()  @ 550-561
       @contract  effective mute = persistent-mute ∪ solo-implied mute
       @invariant  any solo: non-soloed forced muted, soloed forced audible (DAW solo-wins)
       @invariant  both sets persist in ds so reload's tm:lastMuteSet matches the wire
   -- Audition
-  @fn killAudition()  @ 586
-  @fn audition(pitch, vel, chan, detune)  @ 593
+  @fn sendBend(chan, cents)  @ 579-584
+      -- Detune→live pitch-bend on the audition channel; mirrors tm's centsToRaw
+      -- slope so the preview bends like the seated note (synth range = pbRange).
+  @fn killAudition()  @ 586-591
+  @fn audition(pitch, vel, chan, detune)  @ 593-600
   -- Viewport
-  @fn followViewport()  @ 624
+  @fn lastVisibleFrom(startCol)  @ 612-622
+  @fn followViewport()  @ 624-645
   -- Editing
+  @fn placeNewNote(col, update)  @ 667-675
+      -- Caller has already pinned (ppq, ppqL, rpb) onto `update`. A freshly
+      -- placed note is unbounded: author endppq = util.OPEN. tm stamps the
+      -- open ceiling and a provisional raw note-off; the universal tail
+      -- pass derives the real tail (next onset / take length) every
+      -- rebuild.
+  @fn notePAEvents(col, pitch, startppq, endppq)  @ 677-686
   -- Lane-strip edits (drag, add, delete, shape, tension)
-  @fn visibleAt(col, i)  @ 898
+  @fn visibleAt(col, i)  @ 898-907
       -- Skips hidden absorbers; returns nil if i out of range.
   -- Interpolation
-  @fn interpolate()  @ 1010
-  @fn interpolateValues(col)  @ 1044
+  @fn nextShape(s)  @ 987-992
+  @fn cycleShape(col, A)  @ 994-997
+  @fn interpolate()  @ 1010-1041
+  @fn interpolateValues(col)  @ 1044-1062
       -- Returns nil for non-interpolable cols so callers can assign unconditionally.
   -- Duration & position
-  @fn noteOff()  @ 1090
-  @fn adjustDuration(prefix, rowDelta)  @ 1149
-  @fn adjustPosition(prefix, rowDelta)  @ 1224
+  @fn cursorNoteBefore()  @ 1068-1073
+  @fn applyNoteOff(col, last, targetppq, undo)  @ 1080-1088
+      -- Undo reopens authored intent: the tail was OPEN before any noteOff
+      -- closed it (or we have no record), so write util.OPEN and let tm's
+      -- universal tail pass re-derive the realised note-off. The finite
+      -- branch writes the user's targeted ceiling unclamped -- tm clips
+      -- realised against same-pitch onsets and take length on rebuild.
+  @fn noteOff()  @ 1090-1131
+  @fn adjustDurationCore(col, note, rowDelta)  @ 1137-1147
+      -- The user grows/shrinks from the ceiling they SEE — the clipped
+      -- logical endppqC — even when the authored endppq is util.OPEN or
+      -- runs longer. assignTail writes a finite logical ceiling, so tm
+      -- stamps endppqL and an open note closes.
+  @fn adjustDuration(prefix, rowDelta)  @ 1149-1164
+  @fn adjustPositionMulti(rowDelta)  @ 1172-1214
+      -- Selection nudge: the rows the block will occupy after the shift
+      -- ([selLo..selHi] + rowDelta) must be clear of any foreign onset in
+      -- every touched column -- the SELECTION's full row extent, not just
+      -- the sparse moving-onset rows. A foreign onset on a selected-but-
+      -- empty row would otherwise slip through and let repeated nudges
+      -- accumulate overlaps. Onset-only: tm clips note tails on rebuild.
+  @fn adjustPosition(prefix, rowDelta)  @ 1224-1263
       -- Notes: onset-only band (rowBounds) -- a neighbour tail never blocks
       -- the move; tm clips an overrun on the next rebuild. The cursor
       -- follows by rowDelta unless that row already holds another note
@@ -184,47 +217,100 @@
       @contract  single move: notes blocked only by onset reorder; cc/at/pa/pc by occupied dest row
       @contract  selection: refuse if any col's [selLo..selHi]+rowDelta destination holds a foreign onset
   -- Quantize / scale
+  @fn allGroups()  @ 1271-1279
+      -- Every column, every event, as a groups list (for *-all variants).
+  @fn quantizeScope(groups)  @ 1286-1313
+      -- Plan-then-write so conformOverlaps can clip plan geometry against
+      -- col-mates before the writes commit. Two off-grid col-mates can
+      -- otherwise quantize-collapse onto the same ppq (or onto adjacent
+      -- rows whose post-snap distance crosses the lenient threshold),
+      -- and the allocator would reject the persisted lane on rebuild.
+  @fn quantizeKeepRealisedScope(groups)  @ 1316-1343
+      -- Plan-then-write so conformOverlaps can adjust newppq before delay re-derives.
+  @fn scaleScope(groups, kNum, kDen)  @ 1355-1427
+  @fn notDerived(e)  @ 1436
+      -- Absorber pbs are tm-managed, tied to note seats — row ops shift
+      -- only real events and leave derived pbs to tm's reconcile.
+  @fn shiftPlan(col, e, dLogical)  @ 1442-1450
+      -- An open authored tail stays open across the shift; a finite ceiling
+      -- shifts with the note, UNCLAMPED — endppq is authored intent, not a
+      -- realised value. tm's universal tail pass owns clipping (against take
+      -- length and same-pitch onsets); clamping here would shrink intent.
+  @fn insertRowCore(col, topRow, numRows)  @ 1452-1483
+  @fn deleteRowCore(col, topRow, numRows)  @ 1485-1513
+  @fn forEachRowOp(core, preSel, noSelCols)  @ 1516-1525
+      -- `noSelCols` picks the column set when no selection is active.
+  @fn allCols()  @ 1527
+  @fn curCol()  @ 1528-1531
   @fn insertRow()  @ 1533
   @fn deleteRow()  @ 1534
   @fn insertRowCol()  @ 1535
   @fn deleteRowCol()  @ 1536
   -- Nudge
-  @fn nudge(prefix, dir, coarse)  @ 1630
+  @fn pitchStep(coarse)  @ 1542-1546
+  @fn valueInterval(col)  @ 1549-1553
+      -- Coarse snap interval per column type. nil = no coarse (pc).
+  @fn valueBounds(col)  @ 1555-1558
+  @fn scaledScalar(v, lo, hi, dir, baseInterval, p)  @ 1563-1568
+      -- p scales the step magnitude (universal-argument prefix; defaults
+      -- to 1 from the call site). Coarse scales the interval; fine scales
+      -- the direction unit.
+  @fn nudgePitch(col, note, dir, coarse, audible, p)  @ 1570-1585
+  @fn nudgeVel(note, dir, coarse, p)  @ 1587-1591
+  @fn nudgeDelay(col, note, dir, coarse, p)  @ 1593-1600
+  @fn nudgeValue(col, evt, dir, coarse, p)  @ 1602-1607
+  @fn applyNudge(col, evt, part, dir, coarse, audible, p)  @ 1609-1614
+  @fn cursorRowEvent(col)  @ 1617-1624
+      -- PAs skipped on note cols.
+  @fn nudge(prefix, dir, coarse)  @ 1630-1663
       -- Column-typed nudge. Selection rule: if any note event is selected,
       -- transpose / velocity- / delay-nudge the notes and leave value events
       -- alone; otherwise nudge val on every value event. Solo cursor: first
       -- event in the cursor row, column- and part-typed.
   -- Note FX (macros)
   -- Deletion
-  @fn deleteEvent()  @ 1776
-  @fn deleteSelection()  @ 1795
-  @fn deleteOrBackspace()  @ 1804
+  @fn queueDeleteNotes(col, locs)  @ 1732-1736
+      -- Delete notes; extend each predecessor that ended at-or-past a deleted run
+      -- into the next survivor's start (or `length`). PAs are out of scope here.
+      -- Fixups are computed before any mutation: tm:assignEvent's same-key clamp
+      -- reads live state, so we must delete first and stretch second.
+      -- Plain delete. A survivor that legato-owned the run grows back over
+      -- the hole for free: tm re-derives every raw tail next rebuild, up to
+      -- the survivor's ceiling (take length when it is open).
+  @fn queueResetDelays(col, locs)  @ 1739-1745
+  @fn queueResetVelocities(col, locs)  @ 1749-1762
+      -- Reset selected note vels to the prior event's vel (notes or PAs carry
+      -- forward); delete selected PAs outright.
+  @fn queueDeleteCCs(col, locs)  @ 1764-1766
+  @fn deleteEvent()  @ 1776-1793
+  @fn deleteSelection()  @ 1795-1801
+  @fn deleteOrBackspace()  @ 1804-1807
   -- Horizontal move
-  @fn shiftEvents(dir)  @ 1829
-  @fn stepSample(dir)  @ 1945
+  @fn shiftEvents(dir)  @ 1829-1940
+  @fn stepSample(dir)  @ 1945-1948
       -- Step currentSample by ±1 across the full 0..127 range. Empty slots
       -- are reachable — the user may want to author a sample value before
       -- the sampler has loaded that slot.
   -- Duplicate
-  @fn cursorRect()  @ 1962
+  @fn cursorRect()  @ 1962-1969
       -- Cursor cell as a 1-row mirror rect: the seed-rect fallback for plain
       -- duplicate when there is no real selection (selectionAsRect is nil).
       -- This is the 1x1 carveout -- mirror passes no fallback, so a degenerate
       -- selection is a no-op there; plain duplicate clones the cursor cell.
-  @fn colsForAnchor(anchor, rect)  @ 1975
+  @fn colsForAnchor(anchor, rect)  @ 1975-1985
       -- The grid columns the rect's stream set lands on when its chanLo is
       -- pinned to `anchor.chan` -- the shared logical->grid mapping. Resolving
       -- this at paste/select time (not freezing the seed column) is what lets
       -- a channel-changing cursor move carry the cascade to the new channel.
-  @fn stopForPart(col, part)  @ 1990
+  @fn stopForPart(col, part)  @ 1990-1995
       -- First stop in `col` carrying part `part` (the seed's part name), or
       -- 1 if unknown -- keeps pasteSingle's pitch/vel dispatch on the part
       -- the user duplicated, at whatever column the anchor resolved to.
-  @fn selectRegionAt(anchor, rect)  @ 2000
+  @fn selectRegionAt(anchor, rect)  @ 2000-2010
       -- Inverse of selectionAsRect: drop a grid selection (cursor at its
       -- top-left) at a logical anchor. Whole-column parts -- the cascade
       -- carries part precision in its payload, not in the live selection.
-  @fn duplicate()  @ 2016
+  @fn duplicate()  @ 2016-2033
       -- Plain duplicate: clip payload, cursor-cell seed fallback. The cascade
       -- lifetime, anchor and select-the-copy live in tv:duplicateCascade.
       -- place re-homes the paste to the anchor's channel (colsForAnchor), so a
@@ -234,19 +320,19 @@
   -- Non-command callbacks from trackerPage
   -- Columns
   -- Param automation (palette selection, touch-learn + pa pass-throughs)
-  @fn takeHoist()  @ 2374
-  @fn hoistTouch(fxGuid, paramIndex)  @ 2379
+  @fn takeHoist()  @ 2374-2377
+  @fn hoistTouch(fxGuid, paramIndex)  @ 2379-2387
   -- Touch-learn
   -- Group quick-verbs
-  @fn groupMark()  @ 2510
+  @fn groupMark()  @ 2510-2513
       -- mark and copy share the one groupSrc lifetime; without this, mark ->
       -- groupPaste degrades to plain paste (groupPaste gates on groupSrc, not
       -- the active group).
-  @fn groupDuplicate()  @ 2520
+  @fn groupDuplicate()  @ 2520-2529
       -- destination so the projection replaces rather than interleaves;
       -- tm:flush commits gm's staged adds (it only stages otherwise,
       -- colliding with the next edit).
-  @fn groupPaste()  @ 2535
+  @fn groupPaste()  @ 2535-2547
       -- The pasted region [a.ppq, a.ppq+groupSrc.dur) must fit wholly inside
       -- the take. Out of bounds is a silent no-op, NOT a fallthrough to plain
       -- paste (that would paste non-group content the user didn't ask for);
@@ -254,60 +340,60 @@
 
 # Public API (tv:*)
   @api tv:currentTrackIdx()  @ 87
-  @api tv:currentSlotIdx()  @ 88
-  @api tv:resolveSelectionTake()  @ 95
+  @api tv:currentSlotIdx()  @ 88-91
+  @api tv:resolveSelectionTake()  @ 95-107
       -- Resolve the stored (track, slot) to a live take. A vanished slot walks to the
       -- nearest extant one and writes through, so storage tracks what's displayed.
-  @api tv:retargetTrackTier()  @ 111
+  @api tv:retargetTrackTier()  @ 111-117
       -- per-track reads (swing seed, trackerSlot) stay coherent. See docs § Selection.
       @contract  parked take hosts on scratch; re-point track tier at the selection's track so
-  @api tv:selectTrack(guid, optSlot)  @ 120
+  @api tv:selectTrack(guid, optSlot)  @ 120-128
       @contract  point at a track by GUID; optSlot pins a slot, else restore its last-viewed slot
   @api tv:selectSlot(slotIdx)  @ 131
       @contract  pin a slot on the current track
-  @api tv:gotoTrack(dir)  @ 134
+  @api tv:gotoTrack(dir)  @ 134-138
       @contract  step ±1 over all tracks (may land on an empty one); restores its last slot
-  @api tv:gotoTake(dir)  @ 141
+  @api tv:gotoTake(dir)  @ 141-150
       @contract  step ±1 slot on the current track, from the effective slot
-  @api tv:pickTrack(trackIdx)  @ 152
+  @api tv:pickTrack(trackIdx)  @ 152-155
   @api tv:pickTake(slotIdx)  @ 156
-  @api tv:newParkedTake(name, beats)  @ 159
+  @api tv:newParkedTake(name, beats)  @ 159-163
       @contract  mint an empty take parked on scratch on the current track, then select it
-  @api tv:duplicateBoundUnpooled()  @ 166
+  @api tv:duplicateBoundUnpooled()  @ 166-173
       @contract  clone the bound take (unpooled) into a fresh parked slot, select it, return slotIdx
-  @api tv:setRowPerBeat(n)  @ 434
-  @api tv:setSwingSlot(name)  @ 489
+  @api tv:setRowPerBeat(n)  @ 434-444
+  @api tv:setSwingSlot(name)  @ 489-495
       -- Take-wide swing: the take map's 'global' slot + project & track seed.
-  @api tv:setColSwingSlot(chan, name)  @ 499
+  @api tv:setColSwingSlot(chan, name)  @ 499-504
       -- Per-channel swing: the take map's channel slot + track seed only
       -- (the project tier carries 'global' alone, never per-channel).
-  @api tv:setTemperSlot(name)  @ 506
-  @api tv:seedSharedSlots()  @ 514
+  @api tv:setTemperSlot(name)  @ 506-511
+  @api tv:seedSharedSlots()  @ 514-518
       @contract  bind materialises a take's swing from defaultSwing (identity floor); no-op once set
-  @api tv:setSwingComposite(name, composite, tier)  @ 520
-  @api tv:setTemper(name, temper, tier)  @ 528
+  @api tv:setSwingComposite(name, composite, tier)  @ 520-526
+  @api tv:setTemper(name, temper, tier)  @ 528-534
   @api tv:isChannelMuted(chan)  @ 563
   @api tv:isChannelSoloed(chan)  @ 564
   @api tv:isChannelEffectivelyMuted(chan)  @ 565
   @api tv:toggleChannelMute(chan)  @ 566
   @api tv:toggleChannelSolo(chan)  @ 567
-  @api tv:tick()  @ 602
-  @api tv:scroll()  @ 647
-  @api tv:editEvent(col, evt, stop, char, half)  @ 691
+  @api tv:tick()  @ 602-606
+  @api tv:scroll()  @ 647-649
+  @api tv:editEvent(col, evt, stop, char, half)  @ 691-888
       @contract  single typed-input entry point; dispatches on (col.type, stop, evt-kind)
       @contract  off-grid edits run through snap to repin evt.ppq to cursor row and restamp frame
       @contract  commit flushes, advances by advanceBy, and may audition
-  @api tv:moveLaneEvent(col, i, toRow, toVal)  @ 911
+  @api tv:moveLaneEvent(col, i, toRow, toVal)  @ 911-931
       @contract  clamps newppq strictly inside (prev.ppq, next.ppq) by ±1
       @invariant  ±1 clamp is necessary-and-sufficient for identity-by-visible-index across rebuild
-  @api tv:addLaneEvent(col, colIdx, ppq, val)  @ 935
+  @api tv:addLaneEvent(col, colIdx, ppq, val)  @ 935-961
       -- Inherits prev visible's envelope shape so prev→next curve survives the new midpoint.
       -- Returns the new event's visible index post-flush for drag-seed.
-  @api tv:deleteLaneEvent(col, i)  @ 963
-  @api tv:setLaneTension(col, i, tension)  @ 973
+  @api tv:deleteLaneEvent(col, i)  @ 963-969
+  @api tv:setLaneTension(col, i, tension)  @ 973-979
       -- Set bezier tension on the i-th visible event. Forces shape to bezier
       -- so the tension is honoured (REAPER ignores tension on other shapes).
-  @api tv:cycleLaneShape(col, i)  @ 1002
+  @api tv:cycleLaneShape(col, i)  @ 1002-1008
       -- Cycle the segment-owner's shape on the i-th visible event in a
       -- cc/pb/at column. Segment-owner = left endpoint (REAPER convention:
       -- A.shape governs the curve from A to next).
@@ -317,20 +403,20 @@
   @api tv:quantizeKeepRealisedAll()  @ 1348
   @api tv:scaleSelection(kNum, kDen)  @ 1429
   @api tv:scaleAll(kNum, kDen)  @ 1430
-  @api tv:cursorNote()  @ 1673
+  @api tv:cursorNote()  @ 1673-1678
       -- The note under the caret, or nil on a non-note / empty cell. The fx
       -- editor command gates on this (it is a no-op off a note).
-  @api tv:noteFx(uuid)  @ 1680
+  @api tv:noteFx(uuid)  @ 1680-1683
   @api tv:noteByUuid(uuid)  @ 1687
       -- The host note behind a uuid; the stepInterval editor reads its pitch/detune to
       -- convert a slide's cents demand to/from temper steps.
-  @api tv:setNoteFx(uuid, fxOrRemove)  @ 1691
+  @api tv:setNoteFx(uuid, fxOrRemove)  @ 1691-1697
       -- Write or clear (util.REMOVE) a note's fx list, then flush so the rebuild
       -- re-derives its fxNotes. uuid, not the event, is the durable handle.
-  @api tv:setFxField(uuid, index, field, value)  @ 1701
+  @api tv:setFxField(uuid, index, field, value)  @ 1701-1708
       -- Set one field of fx entry `index`, preserving sibling entries, then flush.
       -- The generic write the per-kind editor descriptors drive -- no per-kind code.
-  @api tv:setFxKindActive(uuid, entry, active)  @ 1712
+  @api tv:setFxKindActive(uuid, entry, active)  @ 1712-1720
       -- Toggle a macro kind on/off, preserving the other category's entry; render owns defaults.
       -- Emptying the list clears fx entirely (util.REMOVE), never an empty list.
   @api tv:ec()  @ 2037
@@ -347,8 +433,8 @@
   @api tv:rowToPPQ(row, chan)  @ 2051
   @api tv:logPerRow()  @ 2052
   @api tv:sampleCurve(A, B, ppq)  @ 2053
-  @api tv:timeSig()  @ 2054
-  @api tv:duplicateCascade(state, collectSource, place, fallbackRect)  @ 2072
+  @api tv:timeSig()  @ 2054-2057
+  @api tv:duplicateCascade(state, collectSource, place, fallbackRect)  @ 2072-2109
       -- Shared duplicate cascade. `state` is the run token (nil seeds);
       -- `collectSource` captures a payload while the source is still intact
       -- (plain dup: clip + part; mirror: nil -- events come from the rect in
@@ -360,11 +446,11 @@
       -- selection re-selects each copy; one seeded from the fallback rect
       -- (no selection -- the 1x1 cell carveout) leaves no selection, like a
       -- classic cell duplicate. Returns the new run token.
-  @api tv:selectionAsRect()  @ 2114
+  @api tv:selectionAsRect()  @ 2114-2137
       -- The active selection as a mirror rect: a logical-frame time span x a
       -- per-channel streamId set, chanOffset relative to the lowest selected
       -- channel. nil unless a real (non-degenerate) selection exists.
-  @api tv:eventsInRect(rect)  @ 2147
+  @api tv:eventsInRect(rect)  @ 2147-2162
       -- Concrete events the rect contains. Membership is the mirror predicate
       -- in the logical frame: onset ppq in the span AND the column's stream is
       -- selected for its channel offset. col.events ppq is logical (tm
@@ -373,7 +459,7 @@
       -- channel/lane); gm needs them per-event for its anchor maths and must
       -- keep object identity (it links the live evt for propagation), so we
       -- backfill the authoritative column values rather than clone.
-  @api tv:clearRegionAt(rect, anchor)  @ 2177
+  @api tv:clearRegionAt(rect, anchor)  @ 2177-2185
       -- Clears the take cells the rect's projection lands on at `anchor` -- the
       -- footprint inverse of eventsInRect. gm:stamp / gm:newInstance only
       -- re-place their own concretes (contract: the caller clears foreign
@@ -387,28 +473,28 @@
       -- stages, so it never eats the projection; a gm op that then rejects
       -- (out-of-range / live-group overlap) is a rare pre-beta edge the
       -- bounds/no-straddle gates already exclude for the common path.
-  @api tv:cursorAnchor()  @ 2188
+  @api tv:cursorAnchor()  @ 2188-2193
       -- Cursor as a mirror anchor: { ppq, chan } in the logical frame.
-  @api tv:streamRefAt(colIx, chanLo)  @ 2197
+  @api tv:streamRefAt(colIx, chanLo)  @ 2197-2201
       -- (channel offset, stream id) for a grid column, relative to chanLo —
       -- the coordinates a mirror rect's `streams` table is keyed by.
-  @api tv:instanceAtCursor()  @ 2205
+  @api tv:instanceAtCursor()  @ 2205-2217
       -- The instance whose region covers the caret cell, or nil. Region mode
       -- seeds from this so entry lands on what the caret is over.
   @api tv:eachInstance()  @ 2220
       -- Page region-wash reads group instances and per-event state through tv, never gm.
   @api tv:stateOf(uuid)  @ 2221
-  @api tv:instanceSelection(groupId, instId)  @ 2226
+  @api tv:instanceSelection(groupId, instId)  @ 2226-2232
       -- Install the grid selection for one group instance: its anchor + the
       -- group rect -> selectRegionAt (the duplicate-cascade selector). The ec
       -- region-mode bridge speaks this; ec never reads gm geometry directly.
-  @api tv:paintRegionStream(groupId, instId, colIx, on)  @ 2237
+  @api tv:paintRegionStream(groupId, instId, colIx, on)  @ 2237-2263
       @contract  extend hands newly-covered concretes in as `gained` (gm:resizeGroup never rescans)
       @contract  idempotent: re-painting an already on/off stream is a no-op true
       @invariant  group's live rect found by id off gm:eachInstance — ec carries no geometry
-  @api tv:setGridSize(w, h)  @ 2267
-  @api tv:addExtraCol(type, cc)  @ 2273
-  @api tv:hideExtraCol()  @ 2301
+  @api tv:setGridSize(w, h)  @ 2267-2269
+  @api tv:addExtraCol(type, cc)  @ 2273-2299
+  @api tv:hideExtraCol()  @ 2301-2355
   @api tv:paletteParam()  @ 2389
   @api tv:setPaletteParam(sel)  @ 2390
   @api tv:paletteFilter()  @ 2391
@@ -419,33 +505,33 @@
   @api tv:setPaletteCursor(c)  @ 2396
   @api tv:paramTargets()  @ 2398
   @api tv:paramBinding(chan, lane)  @ 2399
-  @api tv:listParams(trackGuid, fxGuid)  @ 2402
+  @api tv:listParams(trackGuid, fxGuid)  @ 2402-2417
       @contract  pa's frecency order with this take's learn-touched params on top, recent first
-  @api tv:armLearn(row)  @ 2422
+  @api tv:armLearn(row)  @ 2422-2429
       @contract  arming floats the fx ui; the pre-arm touch is snapshotted so it can't select
   @api tv:learnFxGuid()  @ 2431
-  @api tv:cancelLearn()  @ 2434
+  @api tv:cancelLearn()  @ 2434-2437
       @contract  pops the fx window down only when arming floated it
-  @api tv:pollLearn(focused)  @ 2441
+  @api tv:pollLearn(focused)  @ 2441-2458
       @contract  focused = any ImGui window focused; cancel fires on regain after a loss
       @contract  a touch on the armed fx selects + hoists; frecency is bumped by automate only
-  @api tv:automateParam()  @ 2461
+  @api tv:automateParam()  @ 2461-2475
       @contract  binds the selected palette param at the cursor column's channel; adds its cc column
-  @api tv:unautomateParam()  @ 2478
+  @api tv:unautomateParam()  @ 2478-2486
       @contract  deletes the cursor cc column's events; column + binding then go via hideExtraCol
-  @api tv:showDelay()  @ 2488
+  @api tv:showDelay()  @ 2488-2502
   -- Command table
   -- Rebuild
-  @api tv:rebuild(takeChanged)  @ 2619
+  @api tv:rebuild(takeChanged)  @ 2619-2740
       @contract  reentrancy-guarded; bails on no-take (page shows placeholder)
       @contract  takeChanged=true resets ec and re-reads resolution/length/timeSigs
       @contract  grid/ctx/cell-maps/ghosts rebuild unconditionally; pushMute at end
-  @api tv:dropGrid()  @ 2743
+  @api tv:dropGrid()  @ 2743-2748
       @contract  blank the grid so renderBody falls through to the "Select a MIDI item" placeholder. Counterpart to bindTake(nil)'s dormant seam, for when the take is destroyed rather than handed off.
   -- Lifecycle
   -- Factory load
   -- Group quick-verb lifetimes
-  @api tv:wireGroupLifetime()  @ 2890
+  @api tv:wireGroupLifetime()  @ 2890-2899
       -- Snapshot the source on copy + install the clear-on-mutation sweep.
       -- Must run AFTER every tracker command (tv's, clipboard's, ec's AND
       -- trackerPage's page verbs) registers, so the sweep covers page commands
@@ -455,91 +541,91 @@
   @api tv:endReselectCascades()  @ 2903
       -- Mouse re-selection ends both cursor-anchored cascades by hand (cmgr's keep-set
       -- sweep doesn't see the mouse, so the run tokens would outlive a fresh selection).
-  @api tv:endAllCascades()  @ 2908
+  @api tv:endAllCascades()  @ 2908-2911
       -- A committed typed edit cancels every cascade and drops the groupPaste
       -- source, exactly as a non-keep cmgr command would -- editEvent is the
       -- mutation the keep-set sweeps cannot see (it never reaches cmgr).
 
 # Uses (outbound edges)
-  @use call    cm.assign  @ 379, 431
-  @use call    cm.boundTake  @ 2375
-  @use call    cm.boundTrack  @ 101
-  @use call    cm.get  @ 207, 373, 378, 380, 429, 436, 442, 481, 516, 580, 669, 672, 730, 737, 839, 1556, 1750, 1947, 2560, 2561, 2598, 2599, 2640, 2654, 2655
-  @use call    cm.getAt  @ 79, 84, 102, 125, 377, 470, 479, 523, 531
-  @use call    cm.set  @ 105, 123, 127, 131, 443, 472, 484, 508, 509, 510, 525, 533, 796, 1422, 1946, 2560, 2561, 2609
-  @use call    cm.setTrack  @ 101, 116, 124
-  @use call    cmgr.doAfter  @ 2819, 2826
-  @use call    cmgr.doBefore  @ 2828, 2850, 2891, 2897, 2898
-  @use call    cmgr.invoke  @ 2545
-  @use call    cmgr.noteChars  @ 729
-  @use call    cmgr.prefixRational  @ 2572, 2579
+  @use call    cm.assign  @ releaseTransientFrame:379 matchGridToCursor:431
+  @use call    cm.boundTake  @ takeHoist:2375
+  @use call    cm.boundTrack  @ resolveSelectionTake:101
+  @use call    cm.get  @ overlapBounds:207 currentRpb:373 releaseTransientFrame:378,380 matchGridToCursor:429 setRowPerBeat:436,442 localizeSwing:481 seedSharedSlots:516 sendBend:580 placeNewNote:669,672 editEvent:730,737,839 valueBounds:1556 queueResetVelocities:1750 stepSample:1947 2560,2561,2598,2599 rebuild:2640,2654,2655
+  @use call    cm.getAt  @ selectedTrackIdx:79 effectiveSlot:84 resolveSelectionTake:102 selectTrack:125 releaseTransientFrame:377 setDefaultSwing:470 localizeSwing:479 setSwingComposite:523 setTemper:531
+  @use call    cm.set  @ resolveSelectionTake:105 selectTrack:123,127 selectSlot:131 setRowPerBeat:443 setDefaultSwing:472 localizeSwing:484 setTemperSlot:508,509,510 setSwingComposite:525 setTemper:533 editEvent:796 scaleScope:1422 stepSample:1946 2560,2561,2609
+  @use call    cm.setTrack  @ resolveSelectionTake:101 retargetTrackTier:116 selectTrack:124
+  @use call    cmgr.doAfter  @ 2819,2826
+  @use call    cmgr.doBefore  @ 2828,2850 wireGroupLifetime:2891,2897,2898
+  @use call    cmgr.invoke  @ groupPaste:2545
+  @use call    cmgr.noteChars  @ editEvent:729
+  @use call    cmgr.prefixRational  @ 2572,2579
   @use call    cmgr.scope  @ 2552
-  @use call    ds.assign  @ 466, 516, 544, 2295, 2315, 2353, 2474, 2501
-  @use call    ds.get  @ 464, 515, 542, 551, 552, 563, 564, 2274, 2310, 2323, 2468, 2489, 2653
-  @use call    facade.get  @ 32
-  @use call    gm.clearActive  @ 2897, 2910
-  @use call    gm.duplicateInto  @ 2525
-  @use call    gm.eachInstance  @ 2209, 2220, 2227, 2239
+  @use call    ds.assign  @ setTakeSwing:466 seedSharedSlots:516 toggleChannelFlag:544 addExtraCol:2295 hideExtraCol:2315,2353 automateParam:2474 showDelay:2501
+  @use call    ds.get  @ setTakeSwing:464 seedSharedSlots:515 toggleChannelFlag:542 pushMute:551,552 isChannelMuted:563 isChannelSoloed:564 addExtraCol:2274 hideExtraCol:2310,2323 automateParam:2468 showDelay:2489 rebuild:2653
+  @use call    facade.get  @ arrange:32
+  @use call    gm.clearActive  @ wireGroupLifetime:2897 endAllCascades:2910
+  @use call    gm.duplicateInto  @ groupDuplicate:2525
+  @use call    gm.eachInstance  @ instanceAtCursor:2209 eachInstance:2220 instanceSelection:2227 paintRegionStream:2239
   @use call    gm.groupRect  @ 2791
   @use call    gm.localMode  @ 2604
-  @use call    gm.mark  @ 2512
-  @use call    gm.resizeGroup  @ 2262
+  @use call    gm.mark  @ groupMark:2512
+  @use call    gm.resizeGroup  @ paintRegionStream:2262
   @use call    gm.setLocalMode  @ 2604
-  @use call    gm.stamp  @ 2541
-  @use call    gm.stateOf  @ 2221
-  @use call    pa.apply  @ 1696, 2298
-  @use call    pa.automate  @ 2464
-  @use call    pa.binding  @ 2341, 2399
-  @use call    pa.bumpFrecency  @ 2466
-  @use call    pa.floatFx  @ 2427
-  @use call    pa.lastTouched  @ 2428, 2448
-  @use call    pa.params  @ 2403
-  @use call    pa.targets  @ 2398
-  @use call    pa.unautomate  @ 2341
-  @use call    pa.unfloatFx  @ 2435
-  @use call    timing.delayToPPQ  @ 1336
-  @use call    timing.logPerRow  @ 361
-  @use call    timing.ppqToDelay  @ 1337
-  @use call    tm.addEvent  @ 674, 842, 885, 949, 1928
-  @use call    tm.assignEvent  @ 316, 395, 404, 418, 738, 783, 792, 819, 830, 835, 877, 929, 977, 996, 1082, 1583, 1590, 1599, 1606, 1694, 1742, 1756, 1785
-  @use call    tm.byUuid  @ 1681, 1687, 1692
-  @use call    tm.channels  @ 2679
-  @use call    tm.currentTake  @ 112, 168, 2621
-  @use call    tm.deleteEvent  @ 747, 750, 967, 1084, 1468, 1511, 1734, 1754, 1765, 1927, 2182, 2481
-  @use call    tm.flush  @ 703, 930, 950, 968, 978, 1007, 1028, 1040, 1111, 1129, 1163, 1212, 1249, 1261, 1312, 1342, 1384, 1524, 1654, 1662, 1695, 1786, 1792, 1799, 1930, 2482, 2526, 2542, 2796
-  @use call    tm.getChannel  @ 211, 232
-  @use call    tm.interpolate  @ 1055, 2053
-  @use call    tm.length  @ 452, 2101, 2106, 2538, 2633
-  @use call    tm.name  @ 449, 2043
-  @use call    tm.playFrom  @ 2593, 2596
+  @use call    gm.stamp  @ groupPaste:2541
+  @use call    gm.stateOf  @ stateOf:2221
+  @use call    pa.apply  @ setNoteFx:1696 addExtraCol:2298
+  @use call    pa.automate  @ automateParam:2464
+  @use call    pa.binding  @ hideExtraCol:2341 paramBinding:2399
+  @use call    pa.bumpFrecency  @ automateParam:2466
+  @use call    pa.floatFx  @ armLearn:2427
+  @use call    pa.lastTouched  @ armLearn:2428 pollLearn:2448
+  @use call    pa.params  @ listParams:2403
+  @use call    pa.targets  @ paramTargets:2398
+  @use call    pa.unautomate  @ hideExtraCol:2341
+  @use call    pa.unfloatFx  @ cancelLearn:2435
+  @use call    timing.delayToPPQ  @ quantizeKeepRealisedScope:1336
+  @use call    timing.logPerRow  @ logPerRowFor:361
+  @use call    timing.ppqToDelay  @ quantizeKeepRealisedScope:1337
+  @use call    tm.addEvent  @ placeNewNote:674 editEvent:842,885 addLaneEvent:949 shiftEvents:1928
+  @use call    tm.assignEvent  @ writePlans:316 assignStamp:395 assignTail:404 assignNoteMove:418 editEvent:738,783,792,819,830,835,877 moveLaneEvent:929 setLaneTension:977 cycleShape:996 applyNoteOff:1082 nudgePitch:1583 nudgeVel:1590 nudgeDelay:1599 nudgeValue:1606 setNoteFx:1694 queueResetDelays:1742 queueResetVelocities:1756 deleteEvent:1785
+  @use call    tm.byUuid  @ noteFx:1681 noteByUuid:1687 setNoteFx:1692
+  @use call    tm.channels  @ rebuild:2679
+  @use call    tm.currentTake  @ retargetTrackTier:112 duplicateBoundUnpooled:168 rebuild:2621
+  @use call    tm.deleteEvent  @ editEvent:747,750 deleteLaneEvent:967 applyNoteOff:1084 insertRowCore:1468 deleteRowCore:1511 queueDeleteNotes:1734 queueResetVelocities:1754 queueDeleteCCs:1765 shiftEvents:1927 clearRegionAt:2182 unautomateParam:2481
+  @use call    tm.flush  @ editEvent:703 moveLaneEvent:930 addLaneEvent:950 deleteLaneEvent:968 setLaneTension:978 cycleLaneShape:1007 interpolate:1028,1040 noteOff:1111,1129 adjustDuration:1163 adjustPositionMulti:1212 adjustPosition:1249,1261 quantizeScope:1312 quantizeKeepRealisedScope:1342 scaleScope:1384 forEachRowOp:1524 nudge:1654,1662 setNoteFx:1695 deleteEvent:1786,1792 deleteSelection:1799 shiftEvents:1930 unautomateParam:2482 groupDuplicate:2526 groupPaste:2542 2796
+  @use call    tm.getChannel  @ overlapBounds:211 rowBounds:232
+  @use call    tm.interpolate  @ interpolateValues:1055 sampleCurve:2053
+  @use call    tm.length  @ 452 duplicateCascade:2101,2106 groupPaste:2538 rebuild:2633
+  @use call    tm.name  @ 449 takeName:2043
+  @use call    tm.playFrom  @ 2593,2596
   @use call    tm.rescaleLength  @ 454
-  @use call    tm.resolution  @ 2632
+  @use call    tm.resolution  @ rebuild:2632
   @use call    tm.setLength  @ 456
-  @use call    tm.setMutedChannels  @ 560
+  @use call    tm.setMutedChannels  @ pushMute:560
   @use call    tm.setName  @ 449
   @use call    tm.tileLength  @ 455
-  @use call    tm.timeSigs  @ 2634
-  @use call    tuning.findTemper  @ 2655
-  @use call    tuning.midiToStep  @ 776
-  @use call    tuning.snap  @ 733
-  @use call    tuning.stepToMidi  @ 778
-  @use call    tuning.transposeStep  @ 1575
-  @use call    util.add  @ 254, 265, 341, 682, 917, 1100, 1182, 1191, 1276, 1305, 1324, 1374, 1461, 1462, 1506, 1507, 1860, 2157, 2331, 2673, 2686, 2723
-  @use call    util.assign  @ 879, 880
-  @use call    util.atomic  @ 448, 892
-  @use call    util.between  @ 336, 1019, 1459, 1505, 1860, 2153, 2182
-  @use call    util.clamp  @ 435, 581, 631, 636, 730, 781, 790, 812, 826, 860, 1142, 1580, 1947, 2560, 2561
-  @use call    util.clone  @ 1705, 1922
-  @use call    util.deepClone  @ 1718
-  @use call    util.gcd  @ 1400
-  @use call    util.instantiate  @ 2694, 2799, 2809
-  @use call    util.isNote  @ 198, 199, 252, 263, 315, 735, 763, 788, 801, 1186, 1242, 1296, 1301, 1304, 1335, 1371, 1444, 1638, 1648, 1677, 1864, 1914
-  @use call    util.nudgedScalar  @ 1565, 1567
-  @use call    util.oneOf  @ 858, 913, 936, 964, 974
-  @use call    util.print  @ 35
-  @use call    util.round  @ 581, 1053, 1056, 1142, 1293, 1297, 1369, 1372
-  @use call    util.seek  @ 188, 189, 668, 744, 840, 938, 1038, 1072, 1099, 1126, 1478, 1497, 1622
-  @use call    util.setDigit  @ 791, 812, 826, 860, 870
+  @use call    tm.timeSigs  @ rebuild:2634
+  @use call    tuning.findTemper  @ rebuild:2655
+  @use call    tuning.midiToStep  @ editEvent:776
+  @use call    tuning.snap  @ editEvent:733
+  @use call    tuning.stepToMidi  @ editEvent:778
+  @use call    tuning.transposeStep  @ nudgePitch:1575
+  @use call    util.add  @ conformOverlaps:254,265 eventsByCol:341 notePAEvents:682 moveLaneEvent:917 noteOff:1100 adjustPositionMulti:1182,1191 allGroups:1276 quantizeScope:1305 quantizeKeepRealisedScope:1324 scaleScope:1374 insertRowCore:1461,1462 deleteRowCore:1506,1507 shiftEvents:1860 eventsInRect:2157 hideExtraCol:2331 rebuild:2673,2686,2723
+  @use call    util.assign  @ editEvent:879,880
+  @use call    util.atomic  @ 448,892
+  @use call    util.between  @ eventsByCol:336 interpolate:1019 insertRowCore:1459 deleteRowCore:1505 shiftEvents:1860 eventsInRect:2153 clearRegionAt:2182
+  @use call    util.clamp  @ setRowPerBeat:435 sendBend:581 followViewport:631,636 editEvent:730,781,790,812,826,860 adjustDurationCore:1142 nudgePitch:1580 stepSample:1947 2560,2561
+  @use call    util.clone  @ setFxField:1705 shiftEvents:1922
+  @use call    util.deepClone  @ setFxKindActive:1718
+  @use call    util.gcd  @ scaleScope:1400
+  @use call    util.instantiate  @ rebuild:2694 2799,2809
+  @use call    util.isNote  @ notePreds:198,199 conformOverlaps:252,263 writePlans:315 editEvent:735,763,788,801 adjustPositionMulti:1186 adjustPosition:1242 quantizeScope:1296,1301,1304 quantizeKeepRealisedScope:1335 scaleScope:1371 shiftPlan:1444 nudge:1638,1648 cursorNote:1677 shiftEvents:1864,1914
+  @use call    util.nudgedScalar  @ scaledScalar:1565,1567
+  @use call    util.oneOf  @ editEvent:858 moveLaneEvent:913 addLaneEvent:936 deleteLaneEvent:964 setLaneTension:974
+  @use call    util.print  @ print:35
+  @use call    util.round  @ sendBend:581 interpolateValues:1053,1056 adjustDurationCore:1142 quantizeScope:1293,1297 scaleScope:1369,1372
+  @use call    util.seek  @ neighbourEvents:188,189 placeNewNote:668 editEvent:744,840 addLaneEvent:938 interpolate:1038 cursorNoteBefore:1072 noteOff:1099,1126 insertRowCore:1478 deleteRowCore:1497 cursorRowEvent:1622
+  @use call    util.setDigit  @ editEvent:791,812,826,860,870
   @use require timing  @ 26
   @use require tuning  @ 27
   @use require util  @ 25

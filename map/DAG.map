@@ -52,34 +52,54 @@
   -- validate
   -- classify
   -- compile context
-  @fn buildCtx(userGraph, derivedSplits)  @ 222
+  @fn buildCtx(userGraph, derivedSplits)  @ 222-529
       -- Lazy ctx factory; derivations memoise into closure-local `cache`.
       -- derivedSplits arrives already settled (from deriveMasterSplit); ctx just folds it into srcSet.
   -- realisation
-  @fn topoIntraTrack(members, conns)  @ 535
+  @fn topoIntraTrack(members, conns)  @ 535-574
       -- Kahn's over a track's chain members (fx + synth CU; source/master excluded).
       -- Tiebreak: Goodman-Hsu local pressure (outMember - inMember), then id.
+  @fn isChainMember(node)  @ 578-580
+      -- source/master bound track IO; a bus is a bare summing track — none host an fxOrder.
+  @fn nativeGains(ctx)  @ 584-591
+      -- Native gain hosts keyed for the routing pass: send volume by track pair,
+      -- main-send volume by class. CU-hosted gains ride their conns instead.
+  @fn buildConns(ctx)  @ 595-780
+      -- Realise edges into conns + synth merge CUs; audio gain as metadata,
+      -- MIDI passes through. See docs/DAG.md § per-consumer merge.
+  @fn cmpOpt(a, b)  @ 784
+      -- Deterministic wire ordering shared by every assembled track; optional ports
+      -- collate as 0 so present/absent compare stably.
+  @fn neqOpt(a, b)  @ 785
+  @fn sortOutWires(outWires)  @ 786-795
+  @fn sortIntraConns(intraConns)  @ 796-804
+  @fn routeByTrack(conns, nodeTrackKey, sendGain)  @ 808-855
+      -- Fold every conn onto its source track: same-track → intraConn; master → mainSend;
+      -- else → outWire. Keyed by producer so no pre-built entries needed; inert ('') endpoints skipped.
+  @fn assembleTracks(trackMembers, nodes, routing, cuTrackKey, synthNodes, mainGain)  @ 859-917
+      -- Assemble each per-track spec: trackKind, topo-ordered chain, routed wires, synth nodes.
+      -- Track '' is the scratch park; FX-less master is dropped (see docs/DAG.md § Master-minimization).
   -- master minimization
-  @fn deriveMasterSplit(userGraph)  @ 939
+  @fn deriveMasterSplit(userGraph)  @ 939-1042
       -- master class = cone of master's largest dominator whose entry pulls <=1 audio
       -- pair per upstream track; one derived split evicts the rest. See docs/DAG.md § Master-minimization.
   -- bus splice
-  @fn spliceBusses(userGraph)  @ 1049
+  @fn spliceBusses(userGraph)  @ 1049-1108
       -- Sub-threshold busses (authored degree < 2×2) splice out before derivation;
       -- in×out pairs become direct edges at the product gain. See docs/DAG.md § bus splice.
   -- allocate
-  @fn allocStream(values, startCursor, N, compare, pinAdd, writeBack, profile)  @ 1123
+  @fn allocStream(values, startCursor, N, compare, pinAdd, writeBack, profile)  @ 1123-1176
       -- Linear-scan allocator over one stream's value list (audio pair or MIDI bus).
       -- see docs/DAG.md § allocStream internals; profile[g] = live count at gap g (capacity crossing weight).
-  @fn audioValueCompare(a, c)  @ 1180
+  @fn audioValueCompare(a, c)  @ 1180-1187
       -- Audio packs by pin shape (dir, port, fx) so co-defined values land
       -- deterministically; midi has no pins, so lastUse then insertion serial.
-  @fn midiValueCompare(a, c)  @ 1189
-  @fn orderedGroup(groups, order, key, init)  @ 1195
+  @fn midiValueCompare(a, c)  @ 1189-1192
+  @fn orderedGroup(groups, order, key, init)  @ 1195-1199
       -- Keyed group with deterministic first-touch order; `init` is the fresh group.
-  @fn ordAppend(list)  @ 1202
+  @fn ordAppend(list)  @ 1202-1204
       -- Append fn stamping ord = insertion serial, the value-compare tiebreak.
-  @fn allocateOnce(tracks, nodes)  @ 1210
+  @fn allocateOnce(tracks, nodes)  @ 1210-1685
       -- One assignment pass over a fixed partition; returns allocatedTracks + per-track capacity meta.
       -- Per-track live-range allocation, one register file per stream (audio pairs b1, midi buses b0).
       @contract  outWires/intraConns/parentFeed -> sends+pinMaps+nchan+mainSendOffs.
@@ -88,54 +108,54 @@
       · per-track midi post-pass: merge-CU params, native-fx bus surface, JSFX bracket splice.
       · bracket post-pass — see docs/DAG.md § allocate
   -- capacity bisection — design/wiring-implicit-graph.md § Capacity
-  @fn bisect(trackKey, spec, g)  @ 1696
+  @fn bisect(trackKey, spec, g)  @ 1696-1742
       -- Cut spec at gap g: fxOrder[1..g] keeps identity; [g+1..] becomes an emergent newTrack.
       -- Conns crossing the cut become a forward send; master feed / mainSend follow their producer.
-  @fn toExplicitFeed(spec)  @ 1746
+  @fn toExplicitFeed(spec)  @ 1746-1752
       -- Re-express a folder parent-send as an explicit audio send (leaves the family bus domain).
       -- Only folder feeds (sink ~= MASTER) pass here; master sends never convert.
-  @fn isFolderFeed(spec)  @ 1754
-  @fn hasMergeCrossing(spec, nodes)  @ 1758
-  @fn convertCrossing(spec, cross, nodes, trackOfFx)  @ 1768
+  @fn isFolderFeed(spec)  @ 1754-1756
+  @fn hasMergeCrossing(spec, nodes)  @ 1758-1764
+  @fn convertCrossing(spec, cross, nodes, trackOfFx)  @ 1768-1773
       -- Convert a pipe crossing to an explicit midi send when its producer leaves the family.
       -- Bus-0 merges (consumer = parent source node) cannot be reproduced as explicit sends; reaching one here asserts.
-  @fn bisectOutOfFamily(trackKey, spec, g, nodes, trackOfFx)  @ 1777
+  @fn bisectOutOfFamily(trackKey, spec, g, nodes, trackOfFx)  @ 1777-1789
       -- Like bisect, but the down segment leaves the family: its folder feed and pipe crossings
       -- go explicit; the pipe-keeping child retains piped crossings. See design/archive/wiring-folders.md § Bus domains.
-  @fn evictMember(spec, nodes, trackOfFx)  @ 1793
+  @fn evictMember(spec, nodes, trackOfFx)  @ 1793-1801
       -- Pull a leaf member out of its family without splitting: folder feed and crossings go
       -- explicit. Used when members are too short to bisect internally.
-  @fn minCrossingGap(profile, lo, hi)  @ 1803
-  @fn pickEvictableLeaf(members, tracks, nodes)  @ 1813
+  @fn minCrossingGap(profile, lo, hi)  @ 1803-1809
+  @fn pickEvictableLeaf(members, tracks, nodes)  @ 1813-1825
       -- A leaf member (nothing parent-sends to it) that is graph-safe to evict whole (no bus-0
       -- merge crossing). Deterministic by key.
-  @fn splitOverCap(tracks, meta, nodes)  @ 1829
+  @fn splitOverCap(tracks, meta, nodes)  @ 1829-1903
       -- One bisection round. Audio over-cap cuts per track; MIDI over-cap is per FAMILY (folder pipe = ONE
       -- bus domain) — at most one eviction per family per round, skipped when an audio cut is pending. nil at fixpoint.
 
 # Public API (DAG.*)
-  @api DAG.validate(userGraph)  @ 62
+  @api DAG.validate(userGraph)  @ 62-163
       @contract  returns nil on success, or { code, ... } describing the first failure; wm:mutate gates persistence on nil
-  @api DAG.classify(userGraph, feedbackSeeds)  @ 171
+  @api DAG.classify(userGraph, feedbackSeeds)  @ 171-216
       -- Post-hoc component classifier over read's domain (design/wiring-implicit-graph.md
       -- § Quarantine): validate's successor on the graphs REAPER allows, not just authorable ones.
       @contract  groups non-master nodes into components; feedbackSeeds + busAware tag quarantined ones
-  @api DAG.targetTracks(ctx)  @ 922
+  @api DAG.targetTracks(ctx)  @ 922-932
       -- Realisation pass: turns the structural ctx into per-track specs (fxOrder,
       -- wires, synth merge CUs). Reads only the ctx public surface + ctx.userGraph.
       @contract  realisation pass over a compile ctx; returns the targetTracks shape (not cached)
-  @api DAG.compile(userGraph)  @ 1112
+  @api DAG.compile(userGraph)  @ 1112-1117
       -- ctx.splice (spliceProv) is present iff sub-threshold busses were spliced out.
       @contract  assumes DAG.validate(userGraph)==nil; returns a lazy-caching compile ctx
-  @api DAG.allocate(tracks, nodes)  @ 1907
+  @api DAG.allocate(tracks, nodes)  @ 1907-1917
       -- Capacity-resolving allocation: assign, bisect any over-ceiling class/family, re-assign
       -- until everything fits. The only entry point; allocateOnce is the inner pass.
 
 # Uses (outbound edges)
-  @use call    util.add  @ 193, 212, 301, 450, 544, 558, 563, 565, 569, 602, 622, 661, 662, 711, 721, 742, 752, 765, 772, 775, 831, 838, 848, 867, 869, 974, 1064, 1078, 1079, 1080, 1088, 1089, 1090, 1197, 1203, 1274, 1284, 1289, 1294, 1298, 1321, 1343, 1347, 1365, 1401, 1473, 1481, 1484, 1487, 1512, 1525, 1534, 1617, 1621, 1627, 1643, 1699, 1700, 1707, 1708, 1711, 1715, 1748, 1771, 1784, 1796
-  @use call    util.assign  @ 93, 520, 608, 1665, 1666, 1794
-  @use call    util.bucket  @ 141, 234, 235, 304, 471, 648, 862, 1154, 1158, 1224, 1232, 1843
-  @use call    util.key  @ 130, 303, 499, 502, 587, 617, 842, 1339, 1362, 1642
-  @use call    util.keys  @ 378, 379, 383, 384, 1260
-  @use call    util.pick  @ 520
+  @use call    util.add  @ classify:193,212 buildCtx:301,450 topoIntraTrack:544,558,563,565,569 buildConns:602,622,661,662,711,721,742,752,765,772,775 routeByTrack:831,838,848 assembleTracks:867,869 deriveMasterSplit:974 spliceBusses:1064,1078,1079,1080,1088,1089,1090 orderedGroup:1197 ordAppend:1203 allocateOnce:1274,1284,1289,1294,1298,1321,1343,1347,1365,1401,1473,1481,1484,1487,1512,1525,1534,1617,1621,1627,1643 bisect:1699,1700,1707,1708,1711,1715 toExplicitFeed:1748 convertCrossing:1771 bisectOutOfFamily:1784 evictMember:1796
+  @use call    util.assign  @ validate:93 buildCtx:520 buildConns:608 allocateOnce:1665,1666 evictMember:1794
+  @use call    util.bucket  @ validate:141 buildCtx:234,235,304,471 buildConns:648 assembleTracks:862 allocStream:1154,1158 allocateOnce:1224,1232 splitOverCap:1843
+  @use call    util.key  @ validate:130 buildCtx:303,499,502 nativeGains:587 buildConns:617 routeByTrack:842 allocateOnce:1339,1362,1642
+  @use call    util.keys  @ buildCtx:378,379,383,384 allocateOnce:1260
+  @use call    util.pick  @ buildCtx:520
   @use require util  @ 39
