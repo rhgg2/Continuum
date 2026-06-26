@@ -720,6 +720,7 @@ do
     delay  = { width = 3, stops = {0, 1, 2} },   -- 040
     pb     = { width = 4, stops = {0, 1, 2, 3} },
     val    = { width = 2, stops = {0, 1}    },
+    fx     = { width = 1, stops = {0}       },   -- one kind glyph (param stops later)
   }
 
   -- One char of separator between adjacent parts in the rendered cell.
@@ -732,6 +733,8 @@ do
       return p
     elseif type == 'pb' then
       return {'pb'}
+    elseif type == 'fx' then
+      return {'fx'}
     else
       return {'val'}
     end

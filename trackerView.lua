@@ -1677,9 +1677,64 @@ function tv:cursorNote()
   return (evt and util.isNote(evt)) and evt or nil
 end
 
+-- An fx host is a note (mm, integer uuid) or a region (ds, 'fxr-N' string uuid); the
+-- editor addresses both by uuid. Disjoint namespaces: a missed note lookup falls to the region.
+local function regionByUuid(uuid)
+  for _, region in ipairs(ds:get('fxRegions') or {}) do
+    if region.uuid == uuid then return region end
+  end
+end
+
+local function mintRegionUuid()
+  local maxN = 0
+  for _, region in ipairs(ds:get('fxRegions') or {}) do
+    local n = tonumber(tostring(region.uuid):match('^fxr%-(%d+)$'))
+    if n and n > maxN then maxN = n end
+  end
+  return 'fxr-' .. (maxN + 1)
+end
+
+-- A selection authors a region over (channel, ppq span); find-or-create by exact
+-- footprint so re-opening the same span reuses the region, never duplicates it.
+local function ensureRegionForSelection()
+  local row1, row2, col1 = ec:region()
+  local col = grid.cols[col1]
+  if not col then return end
+  local chan     = col.midiChan
+  local startppq = tv:rowToPPQ(row1, chan)
+  local endppq   = tv:rowToPPQ(row2 + 1, chan)
+  for _, region in ipairs(ds:get('fxRegions') or {}) do
+    if region.chan == chan and region.startppq == startppq and region.endppq == endppq then
+      return region.uuid, false
+    end
+  end
+  local region = { uuid = mintRegionUuid(), chan = chan,
+                   startppq = startppq, endppq = endppq, fx = {}, mode = 'replace' }
+  local out = {}
+  for _, existing in ipairs(ds:get('fxRegions') or {}) do out[#out + 1] = existing end
+  out[#out + 1] = region
+  ds:assign('fxRegions', out)
+  return region.uuid, true
+end
+
 function tv:noteFx(uuid)
   local note = tm:byUuid(uuid)
-  return note and note.fx or nil
+  if note then return note.fx end
+  local region = regionByUuid(uuid)
+  return region and region.fx or nil
+end
+
+-- The fx host the editor opens on: a selection authors/reopens a region; else the caret's
+-- fx cell; else the caret's note (v1). 2nd return = freshly minted (modal takes no snapshot).
+function tv:fxHostForEdit()
+  if ec:hasSelection() then return ensureRegionForSelection() end
+  local col = grid.cols[ec:col()]
+  if col and col.type == 'fx' then
+    local cell = col.cells and col.cells[ec:row()]
+    return cell and cell.uuid or nil
+  end
+  local note = self:cursorNote()
+  return note and note.uuid or nil
 end
 
 -- The host note behind a uuid; the stepInterval editor reads its pitch/detune to
@@ -1690,10 +1745,26 @@ function tv:noteByUuid(uuid) return tm:byUuid(uuid) end
 -- re-derives its fxNotes. uuid, not the event, is the durable handle.
 function tv:setNoteFx(uuid, fxOrRemove)
   local note = tm:byUuid(uuid)
-  if not note then return end
-  tm:assignEvent(note, { fx = fxOrRemove })
-  tm:flush()
-  pa:apply()   -- spawn/reap the CC node when a carrier first appears or last leaves the track
+  if note then
+    tm:assignEvent(note, { fx = fxOrRemove })
+    tm:flush()
+    pa:apply()   -- spawn/reap the CC node when a carrier first appears or last leaves the track
+    return
+  end
+  -- Region host: fx lives in ds, so this is a document-data write (ds:assign -> dataChanged
+  -- -> rebuild, the addExtraCol idiom). A region IS its fx: emptying it drops the region.
+  local empty = fxOrRemove == util.REMOVE
+             or (type(fxOrRemove) == 'table' and #fxOrRemove == 0)
+  local out = {}
+  for _, region in ipairs(ds:get('fxRegions') or {}) do
+    if region.uuid ~= uuid then
+      out[#out + 1] = region
+    elseif not empty then
+      local updated = util.clone(region); updated.fx = fxOrRemove; out[#out + 1] = updated
+    end
+  end
+  ds:assign('fxRegions', next(out) and out or util.REMOVE)
+  pa:apply()
 end
 
 -- Set one field of fx entry `index`, preserving sibling entries, then flush.
@@ -2623,7 +2694,7 @@ function tv:rebuild(takeChanged)
   takeChanged = takeChanged or false
 
   local LABELS = {
-    note = 'Note', cc = 'CC', pb = 'PB', at = 'AT', pa = 'PA', pc = 'PC',
+    note = 'Note', cc = 'CC', pb = 'PB', at = 'AT', pa = 'PA', pc = 'PC', fx = 'FX',
   }
 
   -- Length, resolution and timeSigs all change without a take swap:
@@ -2676,6 +2747,13 @@ function tv:rebuild(takeChanged)
       if type == 'note' and key == 1 then grid.lane1Col[chan] = gridCol end
     end
 
+    -- fx-region columns are data-derived (one per channel carrying a region); each is a
+    -- tailed kind-badge the cell/tail build below handles via ppq/endppqC. see design/note-macros-v2.md § Authoring
+    local fxByChan = {}
+    for _, region in ipairs(ds:get('fxRegions') or {}) do
+      util.bucket(fxByChan, region.chan, region)
+    end
+
     for chan, channel in tm:channels() do
       local c = channel.columns
       if c.pc and not trackerMode then addGridCol(chan, 'pc', nil, c.pc.events) end
@@ -2686,6 +2764,15 @@ function tv:rebuild(takeChanged)
       for n in pairs(c.ccs) do util.add(ccNums, n) end
       table.sort(ccNums)
       for _, n in ipairs(ccNums) do addGridCol(chan, 'cc', n, c.ccs[n].events) end
+      local fxCells = {}
+      for _, region in ipairs(fxByChan[chan] or {}) do
+        local kind = region.fx and region.fx[1] and region.fx[1].kind
+        if kind then
+          util.add(fxCells, { ppq = region.startppq, endppqC = region.endppq,
+                              kind = kind, uuid = region.uuid })
+        end
+      end
+      if #fxCells > 0 then addGridCol(chan, 'fx', nil, fxCells) end
     end
 
     local numRows = math.max(1, math.ceil(length / ppqPerRow))
@@ -2703,7 +2790,7 @@ function tv:rebuild(takeChanged)
     for ci, gridCol in ipairs(grid.cols) do
       gridCol.overflow = {}
       gridCol.offGrid  = {}
-      if gridCol.type == 'note' then gridCol.tails = {} end
+      if gridCol.type == 'note' or gridCol.type == 'fx' then gridCol.tails = {} end
       local chan = gridCol.midiChan
       for _, evt in ipairs(gridCol.events) do
         local startRow = ctx:ppqToRow(evt.ppq or 0, chan)

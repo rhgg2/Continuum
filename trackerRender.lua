@@ -160,6 +160,13 @@ local function renderCC(evt)
   else return '··' end
 end
 
+-- One glyph per fx kind; the fx-region cell shows the region's primary kind.
+local FX_GLYPH = { retrig = 'R', trill = 'T', vibrato = 'V', slide = 'S', arp = 'A', fill = 'F' }
+local function renderFx(evt)
+  if not evt then return end
+  return FX_GLYPH[evt.kind] or '~', 'accent'
+end
+
 local renderFns = {
   note = renderNote,
   pb   = renderPB,
@@ -167,6 +174,7 @@ local renderFns = {
   pa   = renderCC,
   at   = renderCC,
   pc   = renderCC,
+  fx   = renderFx,
 }
 
 local function renderCell(evt, col, row)
@@ -1943,6 +1951,13 @@ local fxEdit do
     end
   end
 
+  -- A freshly-minted region opened with no kinds added is an inert husk; drop it
+  -- on a plain Done/Enter (Cancel/Esc already restore the nil snapshot via REMOVE).
+  local function pruneEmptyRegion(uuid)
+    local fx = tv:noteFx(uuid)
+    if fx and #fx == 0 then tv:setNoteFx(uuid, util.REMOVE) end
+  end
+
   modalHost:registerKind('fxEdit', function(s, close)
     local fx   = tv:noteFx(s.uuid) or {}
     local rows = buildRows(fx)
@@ -1957,14 +1972,14 @@ local fxEdit do
     ImGui.SameLine(ctx)
     if ImGui.Button(ctx, 'Cancel') then tv:setNoteFx(s.uuid, s.snapshot or util.REMOVE); close(false); return end
     ImGui.SameLine(ctx)
-    if ImGui.Button(ctx, 'Done')   then close(false); return end
+    if ImGui.Button(ctx, 'Done')   then pruneEmptyRegion(s.uuid); close(false); return end
 
     if ImGui.IsAnyItemActive(ctx) then return end   -- a focused widget owns the keys
     local press = function(k) return ImGui.IsKeyPressed(ctx, k) end
     if press(ImGui.Key_Escape) then
       tv:setNoteFx(s.uuid, s.snapshot or util.REMOVE); close(false)
     elseif press(ImGui.Key_Enter) or press(ImGui.Key_KeypadEnter) then
-      close(false)
+      pruneEmptyRegion(s.uuid); close(false)
     elseif press(ImGui.Key_DownArrow) then s.field = util.clamp(s.field + 1, 1, #rows)
     elseif press(ImGui.Key_UpArrow)   then s.field = util.clamp(s.field - 1, 1, #rows)
     elseif press(ImGui.Key_Delete) or press(ImGui.Key_Backspace) then
@@ -1976,12 +1991,13 @@ local fxEdit do
   end)
 
   function fxEdit()
-    local note = tv:cursorNote()
-    if not note then return end
+    local uuid, isNew = tv:fxHostForEdit()
+    if not uuid then return end
+    local fx = tv:noteFx(uuid)
     modalHost:open{
-      kind = 'fxEdit', title = 'Note FX',
-      uuid = note.uuid, field = 1,
-      snapshot = note.fx and util.deepClone(note.fx) or nil,
+      kind = 'fxEdit', title = 'FX',
+      uuid = uuid, field = 1,
+      snapshot = (not isNew) and fx and util.deepClone(fx) or nil,
       flags = ImGui.WindowFlags_NoNavInputs,
     }
   end

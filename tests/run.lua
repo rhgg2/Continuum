@@ -56,6 +56,7 @@ local specs = {
   'tm_macro_spec',
   'tm_vibrato_spec',
   'tm_fx_region_spec',
+  'tv_fx_region_spec',
   'tm_slide_spec',
   'tm_trill_spec',
   'generators_spec',

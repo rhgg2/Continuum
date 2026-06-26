@@ -224,19 +224,27 @@ a whole-take default: that quietly reintroduces unbounded hosts, and
 new mechanism. And don't add a third `column.fx` storage site — a
 whole-lane LFO is just a region of column × take-bounds.
 
-**Edit existing regions in a region mode**, mirroring the mode that
-already exists for mirror (group) regions: in normal mode cells are the
-cursor targets and a selection authors a region; in fx-region mode the
-*regions* are the navigable objects — footprints you tab between, select
-to open the editor, create / delete. Note scope needs no mode (no object,
-just the cursor note). Reusing the mirror-region interaction is the cheap
-path, and another reason the substrate wants to *be* gm's regions
-substrate (§ R7).
+**Address existing regions through an fx column — not a region mode (B1,
+landed).** Role (5) is handed back the way a note gets it: give the region
+a *cell*. A per-channel **fx column** carries each region as a tailed
+kind-badge — onset `startppq`, a note-style tail to `endppq`, a one-char
+glyph for the primary kind; the cursor lands on it and Super-X opens the
+editor. No second navigable object, no footprint mode. This supersedes the
+earlier region-mode plan, and is Track A's standalone-not-gm call extended
+to the UI (§ Open questions): borrow the *column/cell/tail* machinery — the
+most native thing the tracker has — not gm's region-mode. The column is
+**cc-like in lifecycle** (data-derived: it materialises iff the channel
+carries a region with ≥1 kind, appears when one is created/pasted, drops
+when the last goes; not proximity-gated) and **note-lane-like in render**
+(discrete tailed badges — so overlap is the lane-packing question, deferred).
+The existing cell+tail build draws badge and span bracket unchanged; the
+only new view code is the column build and a one-char render branch.
 
-**Indication** generalizes onto existing machinery: the v1 badge
-(`smallGlyph` in the note cell) for note scope, a footprint wash / edge
-(the region-paint machinery — `tv_region_paint`, `ec_regions`) for a
-region.
+**Indication.** Note scope keeps the v1 in-cell badge (`smallGlyph`,
+untouched); a region is its column entry. A later per-lane note-fx
+**pop-out** column — proximity-gated, the only pop-down thing — earns its
+keep once parameter stops land and there is inline editing the badge can't
+carry; until then badge + Super-X is the whole story.
 
 **Visibility — invisible now, ghost later.** Generated notes stay
 take-only for v2, routed out of columns as v1's derived notes are: visible
@@ -401,16 +409,38 @@ wants ~none of gm (see resolved open question below).
   split); a PA on a parked note orphans (silent, not re-emitted); a parked note
   carrying its own `fx` loses that host behaviour to the region.
 
+**Track B -- authoring UI: the fx column** (started 2026-06-26). Standalone /
+column-based, not gm-backed -- the Open-questions Track-B lean, now resolved.
+
+- **B1 -- the fx-region column + Super-X addressing. Landed.** A per-channel
+  `fx` column, data-derived from `ds.fxRegions`: each region is a `{ ppq =
+  startppq, endppqC = endppq, kind, uuid }` cell-event, so the existing
+  cell+tail build draws a one-char kind-badge and a note-style span bracket
+  with no new geometry (the `tails` init just widened to `fx`). `tv:noteFx` /
+  `tv:setNoteFx` now resolve a string `'fxr-N'` region uuid (disjoint from
+  notes' integer uuids), so the whole `fxEdit` modal edits a region unchanged;
+  region writes are document-data edits (ds -> dataChanged -> rebuild, the
+  `addExtraCol` idiom). `tv:fxHostForEdit` routes Super-X: a selection
+  authors/reopens a region (find-or-create by footprint, replace default),
+  else the caret's fx cell, else the caret's note (v1). A region *is* its fx --
+  emptying it (REMOVE / empty list) drops it, and a minted-then-abandoned
+  region is pruned on close. Pinned by `tv_fx_region_spec` (column render, uuid
+  generalisation, REMOVE-deletes, the three host branches). Deferred:
+  tail-resize / onset-move, the replace/augment toggle in the modal,
+  overlapping-region sub-lanes, the per-lane note-fx pop-out, a real
+  kind-glyph vocabulary.
+
 ## Open questions
 
-- **gm-backed vs standalone region host. Resolved (generator side):
+- **gm-backed vs standalone region host. Resolved (both tracks):
   standalone.** The generator contract is already region-shaped, and an
   fx-region's membership is *simpler* than `groups.inRect` — gm's region
   carries a stream-map, a replay template, and per-instance override tables
   a bare fx-region has none of. So Track A is built fresh, gm untouched.
-  Track B (authoring) may still lean gm-backed to reuse the region mode /
-  wash / persistence; the shared `regions` substrate (R7 piece 1) gets
-  extracted only when that second consumer justifies its shape.
+  Track B resolved the same way: authoring is an fx **column**
+  (cell/tail/cursor, B1), not gm's region-mode/wash — a column is more native
+  to the tracker than a second region object. The shared `regions` substrate
+  (R7 piece 1) stays unextracted; no consumer has justified its shape.
 - **Note host: keep augment, or migrate to replace too? Resolved: keep
   augment.** Region hosts default to replace, but `region.mode` is a
   per-region choice (A3); the note host stays v1 augment (host plays as

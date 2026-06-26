@@ -1,4 +1,4 @@
-@module editCursor  src=editCursor.lua  loc=767  sha=46b2797  mode=chunk  self=ec
+@module editCursor  src=editCursor.lua  loc=770  sha=46b2797  mode=chunk  self=ec
 @deps grid, cm, cmgr, rowPerBar, logPerRow, moveHook, groupBridge
 
 # Invariants & contracts
@@ -125,7 +125,7 @@
       -- for this verb. The border feedback is the rendering layer's.
   -- Commands
   -- Decoration
-  @fn partsFor(type, showDelay, trackerMode)  @ 726-738
+  @fn partsFor(type, showDelay, trackerMode)  @ 727-741
       -- One char of separator between adjacent parts in the rendered cell.
 
 # Public API (ec:*)
@@ -165,7 +165,7 @@
   @api ec:enterRegionMode()  @ 507-525
       @contract  idempotent; seeds nav cursor from caret instance, else active group's first
   @api ec:registerCommands(scope)  @ 683-710
-  @api ec:decorateCol(col, pitchWidth)  @ 742-764
+  @api ec:decorateCol(col, pitchWidth)  @ 745-767
       @contract  derives col part fields from type/showDelay/trackerMode; pitch width = pitchWidth
       @invariant  ec is the sole writer of col.{parts, stopPos, partAt, partStart, width}
 
@@ -182,6 +182,6 @@
   @use call    groupBridge.instanceSelection  @ commit:620
   @use call    groupBridge.paintStream  @ paintCell:614
   @use call    groupBridge.selectionAsRect  @ newFromSelection:528
-  @use call    util.add  @ partsFor:729,730,731 decorateCol:754,755,756
+  @use call    util.add  @ partsFor:730,731,732 decorateCol:757,758,759
   @use call    util.clamp  @ clampPos:56,57,58 shiftSelection:453,454,455 stepGroup:577 stepInstance:593
   @use require util  @ 25
