@@ -1257,40 +1257,64 @@ do
       local extras  = ds:get('extraColumns') or {}   -- authored columns block carrier codes
       local chanCtx = { resolution = res, pbRangeCents = pbRangeCents, step = stepOp,
                         nextSameLaneNote = function(host) return nextInLane[host.events[1]] end }
+      -- Explicit fx-regions (channel x ppq span + fx, no host note), re-queried each
+      -- rebuild and bucketed by channel. see design/note-macros-v2.md § The anchor generalized
+      local fxRegionsByChan = {}
+      for _, region in ipairs(ds:get('fxRegions') or {}) do
+        util.bucket(fxRegionsByChan, region.chan, region)
+      end
       for chan = 1, 16 do
         -- Pass A: run every generator. Structural notes commit per lane; continuous deltas
         -- stash with their window for colouring (channel-wide, not note-tied). see design/archive/note-macros.md § Continuous realisation
         local predicted, pending = {}, {}
+        -- One producer interface, two sources: a note carrying fx (the degenerate
+        -- region -- v1 augment path) or an explicit fxRegion (pure replace). The
+        -- generator never knows which. see design/note-macros-v2.md § The anchor generalized
+        local function runProducer(p)
+          local startL, endL = p.window[1], p.window[2]
+          for _, params in ipairs(p.fx) do
+            local gen = generators[params.kind]
+            if gen then
+              local out = gen({ window = { startL, endL }, events = p.events,
+                                id = p.id, chan = chan, lane = p.lane }, params, chanCtx)
+              for _, fn in ipairs(out.notes) do
+                util.add(predicted, {
+                  evType = 'note', chan = chan, lane = p.lane, derived = p.id,
+                  pitch = fn.pitch, vel = fn.vel, detune = fn.detune or 0,
+                  delay = p.delay or 0, sample = p.sample,
+                  ppqL = fn.ppqL, endppqL = fn.endppqL,
+                  ppq    = tm:fromLogical(chan, fn.ppqL,    p.d),
+                  endppq = tm:fromLogical(chan, fn.endppqL, p.d),
+                })
+              end
+              local target = generators.continuous[params.kind]
+              if target and #out.delta > 0 then
+                util.add(pending, { startL = startL, endL = endL,
+                                    target = target, delta = out.delta, d = p.d })
+              end
+            end
+          end
+        end
+
+        -- Note producers: fxHostEnd stash sustains the v1 augment view-restore; the
+        -- derived notes ride the host's own lane.
         for laneIdx, col in ipairs(channels[chan].columns.notes) do
           for _, host in ipairs(col.events) do
             if host.fx and host.type ~= 'pa' then
               local endL = fxWindow[host]
               fxHostEnd[host] = tm:fromLogical(chan, endL)
-              local d = delayToPPQ(host.delay or 0)
-              for _, params in ipairs(host.fx) do
-                local gen = generators[params.kind]
-                if gen then
-                  local out = gen({ window = { host.ppqL, endL }, events = { host },
-                                    id = host.uuid, chan = chan, lane = laneIdx }, params, chanCtx)
-                  for _, fn in ipairs(out.notes) do
-                    util.add(predicted, {
-                      evType = 'note', chan = chan, lane = laneIdx, derived = host.uuid,
-                      pitch = fn.pitch, vel = fn.vel, detune = fn.detune or 0,
-                      delay = host.delay or 0, sample = host.sample,
-                      ppqL = fn.ppqL, endppqL = fn.endppqL,
-                      ppq    = tm:fromLogical(chan, fn.ppqL,    d),
-                      endppq = tm:fromLogical(chan, fn.endppqL, d),
-                    })
-                  end
-                  local target = generators.continuous[params.kind]
-                  if target and #out.delta > 0 then
-                    util.add(pending, { startL = host.ppqL, endL = endL,
-                                        target = target, delta = out.delta, d = d })
-                  end
-                end
-              end
+              runProducer{ window = { host.ppqL, endL }, events = { host }, fx = host.fx,
+                           id = host.uuid, lane = laneIdx, delay = host.delay or 0,
+                           sample = host.sample, d = delayToPPQ(host.delay or 0) }
             end
           end
+        end
+
+        -- Region producers: pure replace, no host note. A1 feeds continuous kinds
+        -- only (events unused); membership + discrete lane allocation are A2.
+        for _, region in ipairs(fxRegionsByChan[chan] or {}) do
+          runProducer{ window = { region.startppq, region.endppq }, events = {},
+                       fx = region.fx, id = region.uuid, lane = nil, d = 0 }
         end
 
         -- Reconcile existence (stamps kept specs with token + realised end); defer writes to the 4.8 atomic commit.
@@ -1841,8 +1865,8 @@ do
     if not tvOnlyKeys[key] then tm:rebuild(false) end
   end)
 
-  -- swing/extraColumns/noteDelay are document data: edits + undo rewinds arrive as
-  -- dataChanged. swing diffs its map; the column-layout keys force a full rebuild.
+  -- swing/extraColumns/noteDelay/fxRegions are document data: edits + undo rewinds
+  -- arrive as dataChanged. swing diffs its map; the rest force a full rebuild.
   ds:subscribe('dataChanged', function(change)
     if bindingTake or not cm:boundTake() then return end
     if change.name == 'swing' then
@@ -1854,7 +1878,8 @@ do
       end
       prevSwing = util.deepClone(cur)
       tm:rebuild(false)
-    elseif change.name == 'extraColumns' or change.name == 'noteDelay' then
+    elseif change.name == 'extraColumns' or change.name == 'noteDelay'
+           or change.name == 'fxRegions' then
       tm:rebuild(false)
     end
   end)

@@ -24,6 +24,7 @@ local registry = {
   swing               = 'take',
   extraColumns        = 'take',
   fxCarrier           = 'take',
+  fxRegions           = 'take',
   arrangeNaturalLenQN = 'take',
   mutedChannels       = 'take',
   soloedChannels      = 'take',

@@ -333,20 +333,47 @@ accretes as named ops.
 - **R3 — `forEachEffectiveNote`.** Extract on its third real occurrence;
   not before.
 
+## Build progress
+
+**Track A — generator-side substrate, no UI** (started 2026-06-26). Chose
+standalone over gm-backed: the generator contract is already region-shaped
+and an fx-region's membership is simpler than gm's, so the generator side
+wants ~none of gm (see resolved open question below).
+
+- **A1 — region producer + free LFO (N=0). Landed.** An `fxRegion =
+  { uuid, chan, startppq, endppq, fx }` lives in dataStore (take scope),
+  re-queried each rebuild. The 4.6 expansion seam now runs one
+  `runProducer` over two sources — every note-carrying-fx (the degenerate
+  region, augment path, `fxHostEnd` intact) and every explicit fxRegion
+  (pure replace). `vibrato` reads only its window, so a region over an
+  empty span *is* the N=0 free LFO: it drives the channel pb carrier with
+  no host note, through the existing carrier path unchanged. Pinned by
+  `tm_fx_region_spec` (N=0, window re-centre, G4 round-trip + float-churn,
+  removal).
+- **A2 — membership + discrete lane allocation (N≥2). Next.** The
+  containment query (`{covered notes on the channel}`) and the
+  deterministic lane allocator for polyphonic discrete output.
+
 ## Open questions
 
-- **gm-backed vs standalone region host.** Leaning gm-backed (above); the
-  open part is only whether a full group is too heavy for a bare
-  fx-region, decided when building.
-- **Note host: keep augment, or migrate to replace too?** Region hosts
-  are pure replace; the note host stays v1 augment (host plays as fxNote
-  1). Unifying it onto replace would delete the `fxHostEnd` dance
-  entirely, at the cost of re-binding the single-note PA case to a region.
-- **Selection over empty space and across lanes.** The authoring gesture
-  needs the selection rect to work over *empty* spans (for N=0) and to
-  scope a channel × ppq region. If today's selection is event-anchored,
-  that is new selection behaviour, not just new fx behaviour — verify
-  against `tv_selection_rect` before relying on it.
+- **gm-backed vs standalone region host. Resolved (generator side):
+  standalone.** The generator contract is already region-shaped, and an
+  fx-region's membership is *simpler* than `groups.inRect` — gm's region
+  carries a stream-map, a replay template, and per-instance override tables
+  a bare fx-region has none of. So Track A is built fresh, gm untouched.
+  Track B (authoring) may still lean gm-backed to reuse the region mode /
+  wash / persistence; the shared `regions` substrate (R7 piece 1) gets
+  extracted only when that second consumer justifies its shape.
+- **Note host: keep augment, or migrate to replace too? Resolved: keep
+  augment.** Region hosts are pure replace; the note host stays v1 augment
+  (host plays as fxNote 1, `fxHostEnd` dance intact). Migrating would
+  delete the dance but re-bind the single-note PA case to a region —
+  deferred, not closed.
+- **Selection over empty space and across lanes. Resolved: no new
+  behaviour needed.** Selection is already a geometric channel × ppq
+  rectangle (`editCursor.lua` `selection = {row1,row2,col1,col2,part1,part2}`)
+  that iterates empty cells — it spans empty / cross-lane regions as-is, so
+  N=0 and channel × ppq scoping fall out of the existing model.
 - **Bake-on-export.** Address rewrite + merge of delta streams into their
   target lanes for plain-MIDI export; densification cost paid only there.
 - **`plink.midi_*` parms.** Exact config-parm names and automation-bus
