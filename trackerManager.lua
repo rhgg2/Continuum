@@ -1253,7 +1253,9 @@ do
     do
       local replaceWindows = {}
       for _, region in ipairs(ds:get('fxRegions') or {}) do
-        if (region.mode or 'replace') == 'replace' then
+        -- A husk (no kinds) generates no replacement, so it parks nothing -- else a mid-edit
+        -- emptied region would silence its chord with nothing standing in.
+        if (region.mode or 'replace') == 'replace' and region.fx and region.fx[1] then
           util.bucket(replaceWindows, region.chan, { region.startppq, region.endppq })
         end
       end

@@ -1745,22 +1745,24 @@ function tv:noteByUuid(uuid) return tm:byUuid(uuid) end
 -- Write or clear (util.REMOVE) a note's fx list, then flush so the rebuild
 -- re-derives its fxNotes. uuid, not the event, is the durable handle.
 function tv:setNoteFx(uuid, fxOrRemove)
+  local emptyList = type(fxOrRemove) == 'table' and #fxOrRemove == 0
   local note = tm:byUuid(uuid)
   if note then
-    tm:assignEvent(note, { fx = fxOrRemove })
+    -- A note outlives its fx, so clearing means absence -- nil, never an empty list (noteFx
+    -- must read falsy). Normalise an empty list to REMOVE; the region path keeps the husk.
+    tm:assignEvent(note, { fx = emptyList and util.REMOVE or fxOrRemove })
     tm:flush()
     pa:apply()   -- spawn/reap the CC node when a carrier first appears or last leaves the track
     return
   end
-  -- Region host: fx lives in ds, so this is a document-data write (ds:assign -> dataChanged
-  -- -> rebuild, the addExtraCol idiom). A region IS its fx: emptying it drops the region.
-  local empty = fxOrRemove == util.REMOVE
-             or (type(fxOrRemove) == 'table' and #fxOrRemove == 0)
+  -- Region host: a document-data write (ds:assign -> dataChanged -> rebuild). A region IS its
+  -- fx, but only REMOVE drops it -- an empty list leaves an inert husk the editor can refill.
+  local delete = fxOrRemove == util.REMOVE
   local out = {}
   for _, region in ipairs(ds:get('fxRegions') or {}) do
     if region.uuid ~= uuid then
       out[#out + 1] = region
-    elseif not empty then
+    elseif not delete then
       local updated = util.clone(region); updated.fx = fxOrRemove; out[#out + 1] = updated
     end
   end
@@ -1780,7 +1782,7 @@ function tv:setFxField(uuid, index, field, value)
 end
 
 -- Toggle a macro kind on/off, preserving the other category's entry; render owns defaults.
--- Emptying the list clears fx entirely (util.REMOVE), never an empty list.
+-- The new list (maybe empty) is the write; setNoteFx decides how empty persists per host.
 function tv:setFxKindActive(uuid, entry, active)
   local fx = self:noteFx(uuid)
   local list = {}
@@ -1788,7 +1790,7 @@ function tv:setFxKindActive(uuid, entry, active)
     for _, e in ipairs(fx) do if e.kind ~= entry.kind then list[#list + 1] = e end end
   end
   if active then list[#list + 1] = util.deepClone(entry) end
-  self:setNoteFx(uuid, (#list > 0) and list or util.REMOVE)
+  self:setNoteFx(uuid, list)
 end
 
 ----- Deletion

@@ -218,6 +218,16 @@ return {
   },
 
   {
+    name = 'replace husk (no kinds) parks nothing -- its members keep sounding',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { pitch = 60, lane = 1 })
+      injectArp(h, { fx = {} })   -- a replace region with no generator: an inert husk
+      t.deepEq(authoredPitches(h), { 60 }, 'the covered note is not parked -- nothing replaces it')
+    end,
+  },
+
+  {
     name = 'replace: removing the region restores the parked chord to the take',
     run = function(harness)
       local h = harness.mk()

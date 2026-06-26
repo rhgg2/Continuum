@@ -136,6 +136,20 @@ return {
   },
 
   {
+    name = 'region fx: deselecting the last kind keeps a husk the editor can repopulate',
+    run = function(harness)
+      local h = harness.mk()
+      injectRegion(h)                                        -- fxr-1 carrying vibrato
+      h.vm:setFxKindActive('fxr-1', { kind = 'vibrato' }, false)
+      t.eq(#(h.ds:get('fxRegions') or {}), 1, 'the emptied region survives mid-edit as a husk')
+      t.deepEq(h.ds:get('fxRegions')[1].fx, {}, 'with an empty fx list')
+      h.vm:setFxKindActive('fxr-1', { kind = 'arp', period = { 1, 4 }, dir = 'up' }, true)
+      t.eq(#(h.ds:get('fxRegions') or {}), 1, 'the reselect writes back to the same region')
+      t.eq(h.vm:noteFx('fxr-1')[1].kind, 'arp', 'the reselected kind landed on the region')
+    end,
+  },
+
+  {
     name = 'setFxField edits one region fx field, leaving the region',
     run = function(harness)
       local h = harness.mk()
