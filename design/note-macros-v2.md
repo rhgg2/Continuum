@@ -436,9 +436,100 @@ column-based, not gm-backed -- the Open-questions Track-B lean, now resolved.
   (`ppq == ppqL`, `endppqC == endppqL`), so the chord stays on screen -- the piece
   A3 punted here. Display only: parked cells are tokenless, so a cursor edit no-ops.
   Making the chord *editable* off-take (an edit rebound to `fxParked`, as the
-  "visible, editable surface" model intends) is still open, as is whether a
-  continuous-fx replace region should park its notes at all (A4). Pinned by the
+  "visible, editable surface" model intends) is still open (planned as B3
+  below), as is whether a continuous-fx replace region should park its notes
+  at all (A4). Pinned by the
   parked-render test in `tv_fx_region_spec`.
+
+## B3 — parked notes as first-class editable cells (planned)
+
+Closes the B2 *edit open* gap: a replace region's parked chord renders but is not
+yet editable (parked cells are tokenless, so a cursor edit no-ops). The goal is
+that you edit the parked chord exactly like any note -- transpose, resize, retune,
+delete -- with no second editing surface.
+
+**The reframe -- the separate array is not the cost.** The expense in "make parked
+editable" is *reimplementing edit verbs*, not the `channels[chan].parked` array.
+Two routes diverge sharply:
+
+- *Put parked notes back into `columns.notes` (tagged).* Then every sounding-walk
+  -- the 4.8 tail walk, PC synthesis, lane occupancy, `fxWindow`, the flush
+  collision scan -- must learn to skip them. Miss one and the same-pitch collision
+  parking exists to dissolve comes back. The work lands in the most dangerous place.
+- *Keep the array; route edits through one chokepoint.* Parked notes stay out of
+  `columns.notes`, so no sounding-walk ever sees them -- zero risk to the collision
+  machinery. Editability is added in one place: the `tm` verbs the view already
+  calls.
+
+The second is strictly less work and less risk, so: **keep `channels[chan].parked`,
+add an edit dispatch.**
+
+**Three layers.**
+
+1. *Render* -- done (B2's union). No change.
+2. *Identity* -- step 4.5's park-capture grows `uuid = evt.uuid` on the spec (so an
+   edit can find it) and `parked = true` on the rendered cell (the dispatch's
+   discriminator). `fxParked` specs become **purely logical** (`ppqL`/`endppqL`;
+   drop realised `ppq`/`endppq`) -- realised position is used only by restore, and
+   is better derived fresh from `ppqL` via `fromLogical` at restore (current swing)
+   than stored stale. This removes any dual-frame coherence burden: an edit touches
+   only logical fields.
+3. *Edit -- the dispatch.* The view calls `tm:assignEvent(cell, update)` /
+   `tm:deleteEvent(cell)` uniformly with logical updates. `assignEvent`'s `lookup`
+   returns nil for a parked cell (no token); one new branch routes `cell.parked` to
+   a staged parked-edit that maps the update onto the spec (`pitch/vel/detune/`
+   `sample/delay` direct; `ppq -> ppqL`; `endppq -> endppqL`). **Add needs no parked
+   path**: a note added into a covered window goes to mm normally and 4.5 parks it
+   on the same rebuild, capturing its uuid.
+
+**The coordination -- the one piece of new machinery.** A single-cell parked edit
+is trivial (mutate `fxParked`, `ds:assign`, rebuild -- exactly the `fxRegions`
+idiom). The wrinkle is a **multi-select spanning parked + normal notes**
+(transpose-selection): normal edits *stage* in the um and do not rebuild until
+`tm:flush()`. A parked edit that did an immediate `ds:assign -> rebuild` mid-loop
+would re-key every staged normal note's token, corrupting the batch. So parked
+edits **stage like mm edits**:
+
+- a `parkedEdits` buffer (peer to `adds`/`assigns`/`deletes`): `{ uuid, update }`
+  or `{ uuid, delete = true }`;
+- `flush()` applies them to a cloned `fxParked`, writes once, and coordinates a
+  *single* rebuild -- if the batch also touched mm, the existing `mm 'reload'`
+  rebuild picks up the already-written `fxParked`; if parked-only, `flush` rebuilds
+  explicitly;
+- **undo** still needs `fxParked`-rewind -> rebuild: a small guard (set while
+  `flush` writes `fxParked`, like the existing `bindingTake` guard) keeps the
+  `dataChanged` subscriber quiet during flush but live for undo-rewinds, so no
+  double-fire.
+
+This buffer + flush integration + guard is the only new machinery, all inside
+`trackerManager`.
+
+**Decisions taken (revisit if a need appears).**
+
+- *uuid stability across unpark: simple.* The spec carries the uuid for editing,
+  but restore lets `mm:add` mint a fresh one (no `midiManager` change). A note's
+  uuid churns when it crosses back to the take -- harmless today, since note-fx *on*
+  a parked note is already a deferred gap. Upgrading to a stable uuid later = teach
+  `mm:add` to honor a supplied uuid, an isolated change.
+- *Specs logical-only* (drop realised, derive on restore) -- as above.
+
+**Surface.** `trackerManager.lua` only: park-capture (`uuid`, logical-only),
+`parkedEdits` buffer, dispatch in `assignEvent`/`deleteEvent`, `flush` integration
++ rebuild coordination, `dataChanged` guard, restore-derives-realised, two
+`--shape` updates. **No `trackerView` change** (the union stays; cells gain
+`parked`/`uuid`, set in tm). **No `midiManager` change.** Tests
+(`tm_fx_region_spec` / `tv_fx_region_spec`): edit a parked pitch -> `fxParked`
+updated, still parked, renders new pitch; delete a parked note -> gone, not
+restored when the region moves off; move a parked note out of its window ->
+auto-restored to the take; multi-select spanning parked + normal -> both land
+under one undo with one final rebuild.
+
+**Ship order.** Single-cell parked edits first (trivial, the 80% case, the
+`fxRegions` idiom); defer the multi-select staging + guard until it is felt to
+matter.
+
+**Out of scope.** Note-fx hosted on a parked note, and continuous/PA replace (A4)
+-- both already deferred.
 
 ## Open questions
 
