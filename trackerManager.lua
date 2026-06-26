@@ -175,7 +175,7 @@ local function reconcileFx(existing, predicted)
 end
 
 ----- delta-stream (carrier) reconciliation
--- Pure fn of lane-1 hosts; key by (cc, canon ppq) — REAPER float vs int prediction churns whole stream. see design/note-macros.md § Delta-code allocation
+-- Pure fn of lane-1 hosts; key by (cc, canon ppq) — REAPER float vs int prediction churns whole stream. see design/archive/note-macros.md § Delta-code allocation
 local function reconcileCarrier(existing, predicted)
   return reconcileDerived{
     existing = existing, predicted = predicted,
@@ -1069,7 +1069,7 @@ do
       end
     end
     -- Carrier codes from the prior rebuild: route existing events out of cc columns
-    -- (step 3 reads carrierRoute); new codes allocated in 4.6 once windows are known. see design/note-macros.md § Delta-code allocation
+    -- (step 3 reads carrierRoute); new codes allocated in 4.6 once windows are known. see design/archive/note-macros.md § Delta-code allocation
     local prevCarrier = ds:get('fxCarrier') or {}   -- chan -> { {code, target}, ... }
     local carrierRoute, newFxCarrier = {}, {}
     for chan, carriers in pairs(prevCarrier) do
@@ -1096,7 +1096,7 @@ do
       for _, cc in mm:ccs() do
         if cc.evType == 'cc' and carrierRoute[cc.chan] and carrierRoute[cc.chan][cc.cc] then
           -- Carrier: generator-owned, no metadata; routed out by allocated code,
-          -- reconciled stream-level at 4.6. see design/note-macros.md § Delta-code allocation
+          -- reconciled stream-level at 4.6. see design/archive/note-macros.md § Delta-code allocation
           util.add(carrierExisting[cc.chan],
             { ppq = cc.ppq, val = cc.val, shape = cc.shape, cc = cc.cc, token = mm:tokenOf(cc) })
           goto continue
@@ -1215,7 +1215,7 @@ do
     end
 
     -- Windows (read-only): fx host voice extents + per-note same-lane successor ppqL, floored by authored end; no realised round-trip (G4-stable).
-    -- see design/note-macros.md § host contract
+    -- see design/archive/note-macros.md § host contract
     local fxWindow, nextInLane = {}, {}
     do
       local takeLen = tm:length()
@@ -1246,7 +1246,7 @@ do
     end
 
     -- 4.6) Macro expansion (in-memory): expand fx-carrying notes, reconcile vs fxExisting; add/del deferred to 4.8; fxLive feeds tail walk + PC synthesis.
-    -- see design/note-macros.md § Pipeline placement
+    -- see design/archive/note-macros.md § Pipeline placement
     do
       local res = mm:resolution()
       local pbRangeCents = cm:get('pbRange') * 100   -- slide clamps its target to what pb can reach
@@ -1259,7 +1259,7 @@ do
                         nextSameLaneNote = function(host) return nextInLane[host.events[1]] end }
       for chan = 1, 16 do
         -- Pass A: run every generator. Structural notes commit per lane; continuous deltas
-        -- stash with their window for colouring (channel-wide, not note-tied). see design/note-macros.md § Continuous realisation
+        -- stash with their window for colouring (channel-wide, not note-tied). see design/archive/note-macros.md § Continuous realisation
         local predicted, pending = {}, {}
         for laneIdx, col in ipairs(channels[chan].columns.notes) do
           for _, host in ipairs(col.events) do
@@ -1303,7 +1303,7 @@ do
         end
 
         -- Pass B: per target, interval-colour stashed instances -- overlapping carriers get
-        -- distinct codes (node sums by target), disjoint share the coldest. see design/note-macros.md § Delta-code allocation
+        -- distinct codes (node sums by target), disjoint share the coldest. see design/archive/note-macros.md § Delta-code allocation
         local occupied = {}
         for code in pairs(channels[chan].columns.ccs or {}) do occupied[code] = true end
         for code in pairs((extras[chan] or {}).ccs or {})   do occupied[code] = true end
@@ -1352,7 +1352,7 @@ do
         end
 
         -- Anchor each carrier to 0 at take start; CC chase re-establishes centre
-        -- on any loop/seek before the first host. see design/note-macros.md § Continuous realisation
+        -- on any loop/seek before the first host. see design/archive/note-macros.md § Continuous realisation
         local earliest = {}
         for _, e in ipairs(predictedDelta) do
           if not earliest[e.cc] or e.ppq < earliest[e.cc] then earliest[e.cc] = e.ppq end
@@ -1374,7 +1374,7 @@ do
         if #newCarriers > 0 then newFxCarrier[chan] = newCarriers end
       end
 
-      -- Reap stale carrier codes (relocated / removed); persist live map for pa's add bank. see design/note-macros.md § Delta-code allocation
+      -- Reap stale carrier codes (relocated / removed); persist live map for pa's add bank. see design/archive/note-macros.md § Delta-code allocation
       for chan in pairs(carrierRoute) do
         local live = {}
         for _, c in ipairs(newFxCarrier[chan] or {}) do live[c.code] = true end

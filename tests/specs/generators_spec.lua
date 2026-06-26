@@ -1,5 +1,5 @@
 -- generators.lua: carrier MSB allocation (unlikely-authored-first, 14-bit pair free;
--- see design/note-macros.md § Delta-code allocation) and slide glide-in envelope.
+-- see design/archive/note-macros.md § Delta-code allocation) and slide glide-in envelope.
 
 local t = require('support')
 local generators = require('generators')

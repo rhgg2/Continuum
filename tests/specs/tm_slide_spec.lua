@@ -1,5 +1,5 @@
 -- Slide spec (note macros v1, portamento): pins carrier emission, target='next' resolution, pb clamp + regeneration, G4 round-trip.
--- see design/note-macros.md § Continuous realisation
+-- see design/archive/note-macros.md § Continuous realisation
 
 local t    = require('support')
 local util = require('util')

@@ -101,7 +101,7 @@ a MIDI wire, so there is nothing to convert.
 > retrig/vibrato run in **Lua at flush**, baking sparse CC into the take,
 > precisely so they survive loop/seek and offline render — the live-DSP
 > generator-as-FX was considered and *rejected* there
-> (`design/note-macros.md` §*Why the delta is its own stream*). cv-2
+> (`design/archive/note-macros.md` §*Why the delta is its own stream*). cv-2
 > generators are graph-level and live; note generators are note-scoped and
 > baked. Same word, two scopes — don't realise a note vibrato as a cv-2 LFO.
 

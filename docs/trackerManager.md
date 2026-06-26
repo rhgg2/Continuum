@@ -265,7 +265,7 @@ Execution order, with a pointer to each step's detail:
    against the step-0 set (`reconcileFx`), and continuous deltas colour
    into carrier CC codes. The note add/del is **deferred** to the 4.8
    atomic commit; `fxLive` (the predicted set) feeds the tail walk and PC
-   synthesis. See `design/note-macros.md`.
+   synthesis. See `design/archive/note-macros.md`.
 4.8. **Unified tail/onset walk + atomic note commit.** Real notes, fixed
    externals, and the predicted fxNotes walk together: clamp same-pitch
    onset collisions (fixed onsets frozen), then clip each realised

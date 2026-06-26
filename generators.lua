@@ -1,7 +1,7 @@
 -- Note-macro generators: pure expansions of per-note `fx` intent into
 -- derived realisation. A generator never touches swing, raw pb, or
 -- REAPER -- it speaks logical frame and intent units only; the rebuild
--- seam rounds ppqL -> raw and maps cents -> pb. See design/note-macros.md
+-- seam rounds ppqL -> raw and maps cents -> pb. See design/archive/note-macros.md
 -- § Generators.
 -- @noindex
 
@@ -68,7 +68,7 @@ end
 M.continuous = { vibrato = 'pb', slide = 'pb' }
 
 -- 14-bit carrier priority: MSB n, LSB n+32 (REAPER interpolates only that pair).
--- Unlikely-authored first; conventional last. see design/note-macros.md § Delta-code allocation
+-- Unlikely-authored first; conventional last. see design/archive/note-macros.md § Delta-code allocation
 local CARRIER_PRIORITY = {
   20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,  -- undefined / general (coldest)
   3, 9, 14, 15,                                     -- other undefined
@@ -135,7 +135,7 @@ function M.slide(host, params, ctx)
   if target == 0 then return { notes = {}, delta = {} } end
 
   -- snap keeps the arrival (target) and the handoff (0) on distinct wire ppqs --
-  -- the carrier reconcile keys on (cc, ppq). see design/note-macros.md § Continuous realisation
+  -- the carrier reconcile keys on (cc, ppq). see design/archive/note-macros.md § Continuous realisation
   local snap   = math.max(1, ctx.resolution / 16)
   local over   = periodTicks(params.over, ctx.resolution)
   local arrive = math.max(startL, endL - snap)

@@ -73,7 +73,7 @@
       -- evType space. Rebuilt fresh in mm:load alongside eventsByUuid.
   @fn wideKey(chan, cc)  @ 60
       -- 14-bit CC carriers: MSB code n, fixed-point value 0..127.99.., low 7 bits ride n+32.
-      -- See design/note-macros.md § Continuous realisation.
+      -- See design/archive/note-macros.md § Continuous realisation.
   @fn isWideMsb(c)  @ 61
   @fn isWideLsb(c)  @ 62
   @fn splitWide(val)  @ 65
@@ -156,7 +156,7 @@
   @api mm:wideCC(chan, cc, on)  @ 862
       @contract  marks (chan, cc) a 14-bit MSB whose low 7 bits ride cc+32; transient, not persisted
       @contract  writes split to MSB(shaped)/LSB(step) pair; reads coalesce to fixed-point val 0..127.99
-      @invariant  code is the only signal -- wire pair is not self-describing (design/note-macros.md)
+      @invariant  code is the only signal -- wire pair is not self-describing (design/archive/note-macros.md)
   @api mm:ccs()  @ 866
   @api mm:tokenOf(evt)  @ 1045
       @contract  token stable across reload while identity fields don't change

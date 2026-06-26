@@ -1,4 +1,4 @@
--- 14-bit CC primitive (design/note-macros.md § Continuous realisation).
+-- 14-bit CC primitive (design/archive/note-macros.md § Continuous realisation).
 -- A wideCC-registered MSB code carries a fixed-point value 0..127.99..; mm
 -- splits it to an MSB(shaped)/LSB(step) wire pair on write and coalesces it
 -- back on read. The code is the only signal -- the wire pair is not

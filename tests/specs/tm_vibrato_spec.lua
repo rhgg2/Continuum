@@ -1,7 +1,7 @@
 -- Note macros, v1: vibrato (continuous). Toy carrier fixed at cc=20.
 -- Pins carrier emission (cents -> 14-bit pb units), G4 round-trip, G2 both
 -- directions, regeneration under pbRange, lane-1-only, and routing-out.
--- see design/note-macros.md § Continuous realisation
+-- see design/archive/note-macros.md § Continuous realisation
 
 local t    = require('support')
 local util = require('util')

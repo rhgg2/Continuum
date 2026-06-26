@@ -88,7 +88,7 @@ local function gatherBindings()
 end
 
 -- Continuous-macro carriers by track, from ds.fxCarrier; flattened to {chan, code, target}.
--- tm owns allocation; pa follows into the add bank src. see design/note-macros.md § Delta-code allocation
+-- tm owns allocation; pa follows into the add bank src. see design/archive/note-macros.md § Delta-code allocation
 local function gatherCarriers()
   local byTrack = {}
   eachTake(function(take)

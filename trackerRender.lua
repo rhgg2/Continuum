@@ -1791,7 +1791,7 @@ local renderer = {}
 ----- Note FX editor (retrig + trill + vibrato + slide)
 
 -- Three toggleable sections (one per kind); FX_FIELDS is pure data so a new kind ships a
--- generator + one entry. Cursor: Up/Down pick a row, Left/Right adjust. see design/note-macros.md § UI.
+-- generator + one entry. Cursor: Up/Down pick a row, Left/Right adjust. see design/archive/note-macros.md § UI.
 local FX_KINDS    = { 'retrig', 'trill', 'vibrato', 'slide' }
 local KIND_LABELS = { retrig = 'Retrig', trill = 'Trill', vibrato = 'Vibrato', slide = 'Slide' }
 local FX_DEFAULTS = {
@@ -1850,7 +1850,7 @@ local fxEdit do
   end
 
   -- stepInterval: stored value is signed cents (a host-relative pitch demand);
-  -- shown/stepped as temper steps, anchored at the host. see design/note-macros.md § UI
+  -- shown/stepped as temper steps, anchored at the host. see design/archive/note-macros.md § UI
   local function slideTemper() return tv:activeTemper() or tuning.findTemper('12EDO') end
   local function hostPitch(uuid)
     local n = tv:noteByUuid(uuid)

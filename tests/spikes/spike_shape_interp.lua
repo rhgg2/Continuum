@@ -1,6 +1,6 @@
 -- spike_shape_interp.lua
 --
--- design/note-macros.md shape-interpolation spike. Settled (2026-06-21):
+-- design/archive/note-macros.md shape-interpolation spike. Settled (2026-06-21):
 -- REAPER reads an n/n+32 CC pair as one 14-bit value and interpolates
 -- that, so sparse MSB-shaped breakpoints deliver smooth full-resolution
 -- 14-bit downstream. Result recorded in note-macros.md § Open questions;

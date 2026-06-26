@@ -1,4 +1,4 @@
-@module paramAutomation  src=paramAutomation.lua  loc=467  sha=d73fd96  mode=chunk
+@module paramAutomation  src=paramAutomation.lua  loc=467  sha=b2966fd  mode=chunk
 @deps cm, ds, facade, ccm
 
 # Invariants & contracts
@@ -41,7 +41,7 @@
   @fn gatherBindings()  @ 71
   @fn gatherCarriers()  @ 92
       -- Continuous-macro carriers by track, from ds.fxCarrier; flattened to {chan, code, target}.
-      -- tm owns allocation; pa follows into the add bank src. see design/note-macros.md § Delta-code allocation
+      -- tm owns allocation; pa follows into the add bank src. see design/archive/note-macros.md § Delta-code allocation
   -- Apply
   @fn readMirror(track)  @ 159
   @fn writeMirror(track, spec)  @ 166

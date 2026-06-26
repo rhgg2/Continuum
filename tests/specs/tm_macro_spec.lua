@@ -1,4 +1,4 @@
--- Note macros, v1: retrig (structural). Pins G1-G4 (see design/note-macros.md § Invariants).
+-- Note macros, v1: retrig (structural). Pins G1-G4 (see design/archive/note-macros.md § Invariants).
 -- G4 runs under swing+delay first — the frame/rounding tripwire for steady-state churn.
 
 local t = require('support')

@@ -203,7 +203,7 @@ return {
       t.truthy(orig, 'original host still sits at ppq 0 with fx')
       t.eq(orig.uuid, origUuid, 'original host keeps its identity (not relocated)')
       -- Same-pitch paste at row 1 (ppq 60) bounds the retrig window to [0,60];
-      -- derived repeats drop (see design/note-macros.md § host contract).
+      -- derived repeats drop (see design/archive/note-macros.md § host contract).
       t.eq(fxNoteCount(origUuid), 0, 'same-pitch paste truncates the original retrig window')
     end,
   },

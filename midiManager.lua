@@ -56,7 +56,7 @@ end
 local INTERNALS = { idx = true, uuidIdx = true }
 
 -- 14-bit CC carriers: MSB code n, fixed-point value 0..127.99.., low 7 bits ride n+32.
--- See design/note-macros.md § Continuous realisation.
+-- See design/archive/note-macros.md § Continuous realisation.
 local function wideKey(chan, cc) return chan * 128 + cc end
 local function isWideMsb(c) return c.evType == 'cc' and c.cc and wideMsb[wideKey(c.chan, c.cc)] end
 local function isWideLsb(c)
@@ -858,7 +858,7 @@ end
 
 --contract: marks (chan, cc) a 14-bit MSB whose low 7 bits ride cc+32; transient, not persisted
 --contract: writes split to MSB(shaped)/LSB(step) pair; reads coalesce to fixed-point val 0..127.99
---invariant: code is the only signal -- wire pair is not self-describing (design/note-macros.md)
+--invariant: code is the only signal -- wire pair is not self-describing (design/archive/note-macros.md)
 function mm:wideCC(chan, cc, on)
   wideMsb[wideKey(chan, cc)] = on or nil
 end
