@@ -47,6 +47,42 @@ local function anyNoteOnChan(h, chan)
   return false
 end
 
+----- Arp (A2): membership overlap query + chord-arp generator + lane allocation
+
+local arpUp = { { kind = 'arp', period = { 1, 4 }, dir = 'up' } }   -- step 60 at res 240
+
+local function addNote(h, over)
+  local n = { evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
+              vel = 100, detune = 0, delay = 0, lane = 1 }
+  for k, v in pairs(over or {}) do n[k] = v end
+  h.tm:addEvent(n); h.tm:flush()
+end
+
+local function injectArp(h, over)
+  local region = { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = arpUp }
+  for k, v in pairs(over or {}) do region[k] = v end
+  h.ds:assign('fxRegions', { region })
+  h.tm:rebuild()
+end
+
+-- Derived notes the region produced -- routed out of columns, tagged with the region
+-- uuid. Sorted by onset then lane; identity swing, so ppq == the logical step time.
+local function derivedNotes(h)
+  local out = {}
+  for _, n in ipairs(h.fm:dump().notes) do
+    if n.evType == 'note' and n.derived == 'fxr-1' then
+      out[#out + 1] = { ppq = n.ppq, pitch = n.pitch, lane = n.lane }
+    end
+  end
+  table.sort(out, function(a, b)
+    if a.ppq ~= b.ppq then return a.ppq < b.ppq end
+    return a.lane < b.lane
+  end)
+  return out
+end
+
+local function field(ns, k) local v = {} for i, n in ipairs(ns) do v[i] = n[k] end return v end
+
 return {
 
   ----- N=0 -- a region with no host note still drives the channel pb carrier
@@ -125,6 +161,86 @@ return {
       h.ds:assign('fxRegions', {})
       h.tm:rebuild()
       t.eq(#carriersOf(h.fm:dump(), 1), 0, 'no carrier survives region removal')
+    end,
+  },
+
+  ----- Membership is an overlap query; the arp samples the sounding set at each step
+
+  {
+    -- Window starts at 30 to dodge same-pitch authored/derived collision tick-nudge (A3
+    -- artifact); keeps derived ppqs clean until suppression lands.
+    name = 'arp samples the playing notes at each step and cycles them (continuous read)',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { pitch = 60, ppq = 0,   endppq = 240, lane = 1 })   -- sounds throughout
+      addNote(h, { pitch = 67, ppq = 120, endppq = 240, lane = 2 })   -- enters mid-window
+      injectArp(h, { startppq = 30 })
+      local ns = derivedNotes(h)
+      t.deepEq(field(ns, 'ppq'),   { 30, 90, 150, 210 }, 'one hit per step across the window')
+      t.deepEq(field(ns, 'pitch'), { 60, 60, 60, 67 },
+        '67 is silent until 120, so the first two steps can only be 60; the cycle reaches it once it sounds')
+    end,
+  },
+
+  ----- Held chord: the derived voice packs above the immovable authored lanes
+
+  {
+    name = 'arp over a held triad packs its sequential voice into the first free lane',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { pitch = 60, lane = 1 })
+      addNote(h, { pitch = 64, lane = 2 })
+      addNote(h, { pitch = 67, lane = 3 })
+      injectArp(h)
+      local ns = derivedNotes(h)
+      t.deepEq(field(ns, 'pitch'), { 60, 64, 67, 60 }, 'ascending cycle through the triad')
+      t.deepEq(field(ns, 'lane'),  { 4, 4, 4, 4 },
+        'lanes 1-3 are authored-occupied all span; the sequential voice shares lane 4')
+    end,
+  },
+
+  ----- Dropout + freed-lane reuse: occupancy is temporal, not whole-span
+
+  {
+    name = 'arp follows a note dropping out and reuses the freed lane below',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { pitch = 60, ppq = 0, endppq = 240, lane = 1 })   -- immovable, full span
+      addNote(h, { pitch = 72, ppq = 0, endppq = 120, lane = 2 })   -- frees lane 2 at 120
+      injectArp(h)
+      local ns = derivedNotes(h)
+      t.deepEq(field(ns, 'pitch'), { 60, 72, 60, 60 },
+        '72 sounds only for the first half; the cycle drops back to 60 once it ends')
+      t.deepEq(field(ns, 'lane'),  { 3, 3, 2, 2 },
+        'derived sits above both obstacles, then falls to lane 2 once it frees at 120')
+    end,
+  },
+
+  ----- Discrete N=0: an arp over a silent span is rest, not a stuck voice
+
+  {
+    name = 'arp over a span with no sounding notes emits nothing',
+    run = function(harness)
+      local h = harness.mk()
+      injectArp(h)
+      t.eq(#derivedNotes(h), 0, 'no members -> no derived notes (every step rests)')
+    end,
+  },
+
+  ----- G4: the allocator is a pure function of occupancy (lowest-free, emission order)
+
+  {
+    name = 'G4: derived arp notes are byte-identical across rebuild -> flush',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { pitch = 60, lane = 1 })
+      addNote(h, { pitch = 64, lane = 2 })
+      addNote(h, { pitch = 67, lane = 3 })
+      injectArp(h)
+      local before = derivedNotes(h)
+      t.eq(#before, 4, 'derived present (non-vacuous)')
+      h.tm:rebuild(); h.tm:flush()
+      t.deepEq(derivedNotes(h), before, 'no lane/pitch churn across the round trip')
     end,
   },
 

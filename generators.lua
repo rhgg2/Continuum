@@ -63,6 +63,55 @@ function generators.trill(host, params, ctx)
   return { notes = notes, delta = {} }
 end
 
+-- Notes sounding at logical tick `t`, ascending by realised pitch (semitone*100 + detune cents).
+local function playingAt(events, t)
+  local active = {}
+  for _, n in ipairs(events) do
+    if n.ppqL <= t and t < n.endppqL then active[#active + 1] = n end
+  end
+  table.sort(active, function(a, b)
+    return a.pitch * 100 + (a.detune or 0) < b.pitch * 100 + (b.detune or 0)
+  end)
+  return active
+end
+
+-- Which voice of the active set step `i` plays, by direction. updown bounces without
+-- repeating the extremes (span 2*(n-1)); up/down wrap.
+local function arpIndex(count, dir, i)
+  if dir == 'down' then return (count - 1) - i % count end
+  if dir == 'updown' and count > 2 then
+    local span = 2 * (count - 1)
+    local j = i % span
+    return j < count and j or span - j
+  end
+  return i % count
+end
+
+--contract: arp samples the sounding notes at each step (period QN), playing one by `dir`
+--contract: dir up|down|updown cycles the current active set; an empty active set -> a rest
+--contract: hits abut (endppqL = next step), clamped to the window; vel/detune from the voice
+function generators.arp(host, params, ctx)
+  local startL, endL = host.window[1], host.window[2]
+  local step = periodTicks(params.period, ctx.resolution)
+  local dir  = params.dir or 'up'
+  local notes = {}
+  local i = 0
+  local at = startL
+  while at < endL do
+    local active = playingAt(host.events, at)
+    if #active > 0 then
+      local src = active[arpIndex(#active, dir, i) + 1]
+      notes[#notes + 1] = {
+        ppqL = at, endppqL = math.min(at + step, endL),
+        pitch = src.pitch, vel = src.vel, detune = src.detune or 0,
+      }
+    end
+    i = i + 1
+    at = startL + i * step
+  end
+  return { notes = notes, delta = {} }
+end
+
 -- Kinds whose realisation is a continuous delta stream (carrier ccs), not structural notes.
 -- Value = wire target ('pb' or cc number); truthy = "is continuous". Drives carrier allocation.
 generators.continuous = { vibrato = 'pb', slide = 'pb' }

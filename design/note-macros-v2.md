@@ -350,9 +350,26 @@ wants ~none of gm (see resolved open question below).
   no host note, through the existing carrier path unchanged. Pinned by
   `tm_fx_region_spec` (N=0, window re-centre, G4 round-trip + float-churn,
   removal).
-- **A2 — membership + discrete lane allocation (N≥2). Next.** The
-  containment query (`{covered notes on the channel}`) and the
-  deterministic lane allocator for polyphonic discrete output.
+- **A2 — membership + chord-arp + lane allocation (N≥2). Landed.**
+  Membership is an **overlap** query, not containment: authored notes whose
+  interval intersects the window, re-queried each rebuild (`eachWindowNote`
+  at the 4.6 seam feeds both the chord and the fixed lane occupancy from one
+  walk). `generators.arp` samples the *sounding* set at each step
+  (`playingAt`) and cycles it by `dir` (up/down/updown) — changing harmony is
+  followed, gaps produce rests. The deterministic allocator
+  (`allocateRegionLanes`) packs each derived note into the lowest lane free
+  of overlap, authored notes seeding fixed occupancy; lowest-free + emission
+  order = G4-stable. Pinned by the arp tests in `tm_fx_region_spec`
+  (continuous read, held-chord packing, dropout + freed-lane reuse, N=0 rest,
+  G4).
+- **A3 — member-note suppression (true replace). Next.** A2 deferred it, so
+  authored members still sound *and* seed lane occupancy: a held-chord arp
+  packs *above* the chord, and a derived hit coincident same-pitch with an
+  authored note is nudged a tick (the same-pitch-overlap constraint,
+  surfacing between authored and derived rather than derived-and-derived).
+  Suppression mutes members within the window (skip the mm queue, re-bind PA
+  to the region per § *Generator output*); the collision and the
+  lane-stacking both dissolve once it lands.
 
 ## Open questions
 

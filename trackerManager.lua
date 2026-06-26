@@ -1263,6 +1263,46 @@ do
       for _, region in ipairs(ds:get('fxRegions') or {}) do
         util.bucket(fxRegionsByChan, region.chan, region)
       end
+      -- Membership is overlap, not storage: authored notes re-queried each rebuild; one walk
+      -- feeds generator events + fixed lane occupancy. see design/note-macros-v2.md § The anchor generalized
+      local function eachWindowNote(chan, startL, endL, fn)
+        for laneIdx, col in ipairs(channels[chan].columns.notes) do
+          for _, evt in ipairs(col.events) do
+            if evt.type ~= 'pa' and evt.ppqL ~= nil then
+              local hi = (evt.endppqL == nil or evt.endppqL == util.OPEN) and endL or evt.endppqL
+              if evt.ppqL < endL and hi > startL then fn(laneIdx, evt.ppqL, hi, evt) end
+            end
+          end
+        end
+      end
+      local function membersOf(chan, startL, endL)
+        local out = {}
+        eachWindowNote(chan, startL, endL, function(_, lo, hi, evt)
+          out[#out + 1] = { pitch = evt.pitch, vel = evt.vel,
+                            detune = evt.detune or 0, ppqL = lo, endppqL = hi }
+        end)
+        return out
+      end
+      -- Deterministic allocator: lowest lane free of overlap, authored notes seed occupancy;
+      -- emission order -> deterministic -> G4-stable. see design/note-macros-v2.md § Generator output
+      local function allocateRegionLanes(chan, startL, endL, derived)
+        local occupied = {}
+        eachWindowNote(chan, startL, endL, function(laneIdx, lo, hi)
+          util.bucket(occupied, laneIdx, { lo, hi })
+        end)
+        local function laneFree(lane, lo, hi)
+          for _, iv in ipairs(occupied[lane] or {}) do
+            if lo < iv[2] and hi > iv[1] then return false end
+          end
+          return true
+        end
+        for _, spec in ipairs(derived) do
+          local lane = 1
+          while not laneFree(lane, spec.ppqL, spec.endppqL) do lane = lane + 1 end
+          util.bucket(occupied, lane, { spec.ppqL, spec.endppqL })
+          spec.lane = lane
+        end
+      end
       for chan = 1, 16 do
         -- Pass A: run every generator. Structural notes commit per lane; continuous deltas
         -- stash with their window for colouring (channel-wide, not note-tied). see design/archive/note-macros.md § Continuous realisation
@@ -1272,20 +1312,25 @@ do
         -- generator never knows which. see design/note-macros-v2.md § The anchor generalized
         local function runProducer(p)
           local startL, endL = p.window[1], p.window[2]
+          -- Region producers (lane unset) defer their notes: lanes are allocated over the
+          -- whole batch after the fx loop. Note producers ride the host's own lane inline.
+          local regionNotes = p.lane == nil and {} or nil
           for _, params in ipairs(p.fx) do
             local gen = generators[params.kind]
             if gen then
               local out = gen({ window = { startL, endL }, events = p.events,
                                 id = p.id, chan = chan, lane = p.lane }, params, chanCtx)
               for _, fn in ipairs(out.notes) do
-                util.add(predicted, {
+                local spec = {
                   evType = 'note', chan = chan, lane = p.lane, derived = p.id,
                   pitch = fn.pitch, vel = fn.vel, detune = fn.detune or 0,
                   delay = p.delay or 0, sample = p.sample,
                   ppqL = fn.ppqL, endppqL = fn.endppqL,
                   ppq    = tm:fromLogical(chan, fn.ppqL,    p.d),
                   endppq = tm:fromLogical(chan, fn.endppqL, p.d),
-                })
+                }
+                if regionNotes then regionNotes[#regionNotes + 1] = spec
+                else util.add(predicted, spec) end
               end
               local target = generators.continuous[params.kind]
               if target and #out.delta > 0 then
@@ -1293,6 +1338,10 @@ do
                                     target = target, delta = out.delta, d = p.d })
               end
             end
+          end
+          if regionNotes then
+            allocateRegionLanes(chan, startL, endL, regionNotes)
+            for _, spec in ipairs(regionNotes) do util.add(predicted, spec) end
           end
         end
 
@@ -1310,10 +1359,11 @@ do
           end
         end
 
-        -- Region producers: pure replace, no host note. A1 feeds continuous kinds
-        -- only (events unused); membership + discrete lane allocation are A2.
+        -- Region producers: pure replace, no host note. events = membership (overlap query);
+        -- discrete notes get deterministic lane allocation, continuous kinds drive the carrier.
         for _, region in ipairs(fxRegionsByChan[chan] or {}) do
-          runProducer{ window = { region.startppq, region.endppq }, events = {},
+          runProducer{ window = { region.startppq, region.endppq },
+                       events = membersOf(chan, region.startppq, region.endppq),
                        fx = region.fx, id = region.uuid, lane = nil, d = 0 }
         end
 
