@@ -1,12 +1,12 @@
-@module dataStore  src=dataStore.lua  loc=184  sha=fe0f215  mode=chunk  self=ds
+@module dataStore  src=dataStore.lua  loc=185  sha=fe0f215  mode=chunk  self=ds
 @deps ps
 
 # Invariants & contracts
   @invariant  per-key document storage over pextStore; each name lives at one scope (no tier merge)
-  @invariant  the registry is sole truth for valid names + their scope; unknown names raise on every entry point
-  @invariant  owns its cache: reads deep-clone out, writes deep-clone in; callers never alias ds state
-  @invariant  take/track caches drop on pextStore contextChanged and reload lazily; project/global are context-free
-  @contract  take/track scopes are per-key P_EXT blobs (ctm_data.<name>); global is one disk file (continuum-data.lua)
+  @invariant  registry is sole truth for valid names; unknown names raise on every entry point
+  @invariant  owns its cache: deep-clone out and in; callers never alias ds state
+  @invariant  take/track caches drop on contextChanged; project/global are context-free
+  @contract  take/track scopes are per-key P_EXT blobs (ctm_data.<name>); global is a disk file
 
 # Imports
   @require util = 'util'  @ 10
@@ -15,26 +15,26 @@
 # Private state
   @state ps = assert(deps and deps.ps, 'dataStore requires a pextStore ...  @ 13
   @state registry = {  @ 20
-  @state GLOBAL_SLOT = 'data'  @ 37
-  @state cache = { take = nil, track = nil, project = nil, global = nil }  @ 60
-  @state ds = {}  @ 101
-  @state fire = util.installHooks(ds)  @ 102
-  @state watched = {}  @ 115
+  @state GLOBAL_SLOT = 'data'  @ 38
+  @state cache = { take = nil, track = nil, project = nil, global = nil }  @ 61
+  @state ds = {}  @ 102
+  @state fire = util.installHooks(ds)  @ 103
+  @state watched = {}  @ 116
 
 # Private functions
   @fn print(...)  @ 15
   -- REGISTRY
-  @fn slotFor(scope, name)  @ 41-45
+  @fn slotFor(scope, name)  @ 42-46
       -- take/track keep one P_EXT slot per name for write isolation + per-key undo
       -- baselines; project reuses the engine's projext section with slot = name.
-  @fn checkName(name)  @ 47-49
-  @fn copy(v)  @ 51-54
+  @fn checkName(name)  @ 48-50
+  @fn copy(v)  @ 52-55
   -- CACHE
-  @fn loadScope(scope)  @ 64-77
+  @fn loadScope(scope)  @ 65-78
       -- Tolerant: a stale name in the global file (post-rename) is dropped, not raised
       -- (mirrors cm's pruneUnknown). Per-key blobs can't accrue unknowns -- skip them.
-  @fn ensureScope(scope)  @ 79-81
-  @fn persist(scope, name, value)  @ 85-97
+  @fn ensureScope(scope)  @ 80-82
+  @fn persist(scope, name, value)  @ 86-98
       -- util.REMOVE clears the slot. take/track writes are loud if unbound (document
       -- data isn't recomputable, unlike configManager's silent take-tier skip).
 
@@ -42,31 +42,31 @@
   -- PUBLIC INTERFACE
   -- Watcher
   -- Reading
-  @api ds:get(name)  @ 134-139
-      @contract  returns a deep copy of the value at name's registry scope; nil if absent; raises on unknown name
-  @api ds:getAt(handle, name)  @ 142-146
+  @api ds:get(name)  @ 135-140
+      @contract  returns deep copy at name's scope; nil if absent; raises on unknown name
+  @api ds:getAt(handle, name)  @ 143-147
       -- Foreign-handle read: bypasses bound context; scope (take/track) from the registry.
   -- Writing
-  @api ds:assign(name, value)  @ 151-164
-      @contract  writes one key at its registry scope; util.REMOVE deletes; fires dataChanged { scope, name }
-  @api ds:delete(name)  @ 166
-  @api ds:assignAt(handle, name, value)  @ 170-182
+  @api ds:assign(name, value)  @ 152-165
+      @contract  writes one key at its registry scope; REMOVE deletes; fires dataChanged { scope, name }
+  @api ds:delete(name)  @ 167
+  @api ds:assignAt(handle, name, value)  @ 171-183
       -- Foreign-handle write; util.REMOVE deletes. Refreshes the cache + signals only for
       -- the bound handle, so a write aimed at another take/track doesn't disturb the view.
 
 # Signals emitted (via util.installHooks)
-  @emits dataChanged   -- { scope, name }   @ 127 assign:163 assignAt:180
+  @emits dataChanged   -- { scope, name }   @ 128 assign:164 assignAt:181
 
 # Uses (outbound edges)
-  @use call    ps.assign  @ persist:87,89,92,95
-  @use call    ps.assignAt  @ assignAt:173
-  @use call    ps.boundTake  @ persist:94 assignAt:174
-  @use call    ps.boundTrack  @ persist:91 assignAt:175
-  @use call    ps.get  @ loadScope:67,73 125
-  @use call    ps.getAt  @ getAt:145
-  @use call    ps.watch  @ 122
-  @use call    util.deepClone  @ copy:52
-  @use call    util.installHooks  @ 102
+  @use call    ps.assign  @ persist:88,90,93,96
+  @use call    ps.assignAt  @ assignAt:174
+  @use call    ps.boundTake  @ persist:95 assignAt:175
+  @use call    ps.boundTrack  @ persist:92 assignAt:176
+  @use call    ps.get  @ loadScope:68,74 126
+  @use call    ps.getAt  @ getAt:146
+  @use call    ps.watch  @ 123
+  @use call    util.deepClone  @ copy:53
+  @use call    util.installHooks  @ 103
   @use call    util.print  @ print:15
   @use require util  @ 10
-  @use sub     ps:contextChanged  @ 106
+  @use sub     ps:contextChanged  @ 107

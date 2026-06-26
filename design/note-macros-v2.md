@@ -115,6 +115,18 @@ So the contract's primitive is *region + a membership rule*, with `events
 channel}` for a region, `∅` for a free LFO. One rule, three host kinds,
 no special-casing below the contract.
 
+**Replace absorbs; augment queries (A3).** The query above is the whole story
+only for *augment* — members stay in the take, sound, and feed the generator.
+*Replace* cannot leave them there: a member the output stands in for must not also
+sound, and it cannot be muted — a muted note still carries a note-on/off pair that
+MIDI_Sort mispairs against a same-pitch derived note, and a CC/PA has no mute bit.
+So replace **parks** its members off the take into a store (`fxParked`), re-homed
+each rebuild (covered → off-take, no-longer-covered → restored). The parked members
+are still the membership, and — inverted from intuition — they are the *visible,
+editable* surface: you see and edit the chord, the generated arp is hidden (take-only,
+as v1 derived). So for replace, membership *is* storage, off-take; for augment it
+stays a live query. `region.mode` is the per-region choice, replace default.
+
 **There is no dirty tracking to design.** The rebuild regenerates and
 diffs unconditionally every time (R4: `dirtyFxHosts` is unbuilt and
 measured not-warranted), so "membership changed → regenerate" is a
@@ -177,9 +189,10 @@ fill or an arp folding back onto a pitch.
 **PA binds to the region.** With no privileged host note, the replace
 gate the v1 doc flagged ("bind to the window, or to a regenerated first
 hit") resolves cleanly: PA binds to the region — channel × ppq, stable,
-persisted. The degenerate note host still binds PA to its note. So
-augment survives only as the v1 note-host special case; region hosts are
-pure replace.
+persisted. The degenerate note host still binds PA to its note. (PA
+parking and re-emit are **A4** — A3 parks notes only.) Augment is no longer
+just the note-host case: it is a per-region mode (replace default), so a
+region can keep its members sounding instead of parking them.
 
 ## Authoring and editing the fx
 
@@ -362,14 +375,31 @@ wants ~none of gm (see resolved open question below).
   order = G4-stable. Pinned by the arp tests in `tm_fx_region_spec`
   (continuous read, held-chord packing, dropout + freed-lane reuse, N=0 rest,
   G4).
-- **A3 — member-note suppression (true replace). Next.** A2 deferred it, so
-  authored members still sound *and* seed lane occupancy: a held-chord arp
-  packs *above* the chord, and a derived hit coincident same-pitch with an
-  authored note is nudged a tick (the same-pitch-overlap constraint,
-  surfacing between authored and derived rather than derived-and-derived).
-  Suppression mutes members within the window (skip the mm queue, re-bind PA
-  to the region per § *Generator output*); the collision and the
-  lane-stacking both dissolve once it lands.
+- **A3 — replace mode: member parking (true replace). Landed.** `region.mode`
+  (`replace` default | `augment`) makes augment/replace a *choice*, read per
+  dimension. Discrete replace **parks** the authored notes a window covers off the
+  take into `fxParked` (ds): they can't be muted -- a muted note still carries a
+  note-on/off pair that MIDI_Sort mispairs against a same-pitch derived note, and a
+  CC/PA has no mute bit -- so they leave mm and live as the realised, *displayed*
+  membership; the generated arp is the sole sounding voice (hidden, as v1 derived).
+  Step **4.5** reconciles park/restore each rebuild (covered authored -> off-take;
+  no-longer-covered -> restored, its `mm:add` riding the 4.8 commit *after* the
+  derived deletions so the shared `(pitch,ppq)` content-key never clashes).
+  `realiseParked` tail-walks the parked members in logical frame (`strictNextMap`
+  now onset-parameterized) so membership is the held chord, not raw overlaps.
+  Parking frees the lanes, so the arp packs to lane 1 and the same-pitch nudge
+  dissolves *structurally* -- the chord is no longer a note-on in the take. augment
+  is A2 verbatim (members sound + occupy lanes; nudge persists). Display of the
+  parked bucket (`channels[chan].parked`) is the renderer's union -- Track B. Pinned
+  by the replace / augment / realise / removal / G4 tests in `tm_fx_region_spec`.
+- **A4 — continuous replace + PA. Next.** A3 parks notes only. The other two
+  dimensions of the one augment/replace axis are deferred until each has a consumer:
+  **continuous replace** (the region pb stream overwrites the logical pb, vs today's
+  additive carrier -- entangled with the 4.9 absorber path) and **PA** (PAs into
+  `host.events`, parked alongside their note and re-emittable rebound to the region).
+  Known gaps to close there: a member straddling a window edge is parked whole (no
+  split); a PA on a parked note orphans (silent, not re-emitted); a parked note
+  carrying its own `fx` loses that host behaviour to the region.
 
 ## Open questions
 
@@ -382,10 +412,10 @@ wants ~none of gm (see resolved open question below).
   wash / persistence; the shared `regions` substrate (R7 piece 1) gets
   extracted only when that second consumer justifies its shape.
 - **Note host: keep augment, or migrate to replace too? Resolved: keep
-  augment.** Region hosts are pure replace; the note host stays v1 augment
-  (host plays as fxNote 1, `fxHostEnd` dance intact). Migrating would
-  delete the dance but re-bind the single-note PA case to a region —
-  deferred, not closed.
+  augment.** Region hosts default to replace, but `region.mode` is a
+  per-region choice (A3); the note host stays v1 augment (host plays as
+  fxNote 1, `fxHostEnd` dance intact), unparked. Migrating would delete the
+  dance but re-bind the single-note PA case to a region — deferred, not closed.
 - **Selection over empty space and across lanes. Resolved: no new
   behaviour needed.** Selection is already a geometric channel × ppq
   rectangle (`editCursor.lua` `selection = {row1,row2,col1,col2,part1,part2}`)

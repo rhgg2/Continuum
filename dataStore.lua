@@ -1,10 +1,10 @@
 -- See docs/dataStore.md for the model.
 
 --invariant: per-key document storage over pextStore; each name lives at one scope (no tier merge)
---invariant: the registry is sole truth for valid names + their scope; unknown names raise on every entry point
---invariant: owns its cache: reads deep-clone out, writes deep-clone in; callers never alias ds state
---invariant: take/track caches drop on pextStore contextChanged and reload lazily; project/global are context-free
---contract: take/track scopes are per-key P_EXT blobs (ctm_data.<name>); global is one disk file (continuum-data.lua)
+--invariant: registry is sole truth for valid names; unknown names raise on every entry point
+--invariant: owns its cache: deep-clone out and in; callers never alias ds state
+--invariant: take/track caches drop on contextChanged; project/global are context-free
+--contract: take/track scopes are per-key P_EXT blobs (ctm_data.<name>); global is a disk file
 --emits: dataChanged -- { scope, name } on assign/delete; adds invalidate=true on each rewound key
 --reaper: none directly; storage + undo watcher are delegated to pextStore
 local util = require 'util'
@@ -25,6 +25,7 @@ local registry = {
   extraColumns        = 'take',
   fxCarrier           = 'take',
   fxRegions           = 'take',
+  fxParked            = 'take',
   arrangeNaturalLenQN = 'take',
   mutedChannels       = 'take',
   soloedChannels      = 'take',
@@ -130,7 +131,7 @@ end)
 
 ----- Reading
 
---contract: returns a deep copy of the value at name's registry scope; nil if absent; raises on unknown name
+--contract: returns deep copy at name's scope; nil if absent; raises on unknown name
 function ds:get(name)
   checkName(name)
   local scope = registry[name]
@@ -147,7 +148,7 @@ end
 
 ----- Writing
 
---contract: writes one key at its registry scope; util.REMOVE deletes; fires dataChanged { scope, name }
+--contract: writes one key at its registry scope; REMOVE deletes; fires dataChanged { scope, name }
 function ds:assign(name, value)
   checkName(name)
   local scope = registry[name]
