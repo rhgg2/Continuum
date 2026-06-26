@@ -258,6 +258,7 @@ end
 --invariant: drop0..dropZ place a fresh instance at the cursor and advance cm.arrangeAdvanceBy rows.
 --invariant: arrangeAdvanceBy0..9 (Ctrl+digit) set the advance step.
 --invariant: drop on an empty slot is a no-op; new takes inherit the slot's instance length.
+--invariant: drop over a take starting at the cursor overwrites it; drops never stack.
 local function dropAt(slotIdx)
   if am:dropInstance(cursorCol, slotIdx, av:rowToQN(cursorRow)) then
     moveCursorBy(cm:get('arrangeAdvanceBy'), 0)

@@ -1,4 +1,4 @@
-@module arrangeManager  src=arrangeManager.lua  loc=932  sha=732c659  mode=chunk  self=am
+@module arrangeManager  src=arrangeManager.lua  loc=943  sha=732c659  mode=chunk  self=am
 @deps cm, ds, facade
 
 # Invariants & contracts
@@ -98,12 +98,12 @@
   @fn siblingInstance(track, id)  @ 700-708
       -- First instance matching id: item, length, name — what a fresh drop inherits.
       -- Falls back to the parked keeper so drops from emptied slots re-materialise.
-  @fn destBelow(take)  @ 780
+  @fn destBelow(take)  @ 791
       -- Destination for the *-Below trio: natural end (not rendered), so a truncated upstream still
       -- drops past its downstream neighbour; relayout handles the symmetric truncation.
   -- Per-take edits
   -- Reswing (folded from sequenceManager)
-  @fn projectMidiTakes()  @ 900-911
+  @fn projectMidiTakes()  @ 911-922
 
 # Public API (am:*)
   @api am:projectTracks()  @ 315
@@ -147,44 +147,45 @@
       @contract  true iff take's host is the scratch track (its slot's only instance is parked)
   @api am:trackIdxForGuid(guid)  @ 730-735
       @contract  visible-column index of the track carrying this GUID; nil if it is gone
-  @api am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)  @ 738-757
+  @api am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)  @ 739-768
       @contract  instance of slot at qnPos; nil if track/slot missing (MIDI also requires a live sibling)
-  @api am:duplicateTake(take, qnPos)  @ 760-776
+      @invariant  overwrites any take already starting at qnPos; drop never stacks (matches startIsClear).
+  @api am:duplicateTake(take, qnPos)  @ 771-787
       @contract  clones take at qnPos on its own track, original untouched; nil if track/id missing
-  @api am:duplicateBelow(take)  @ 783-788
+  @api am:duplicateBelow(take)  @ 794-799
       @contract  pooled clone at startQN+naturalLenQN; nil iff non-MIDI or start-collision.
-  @api am:duplicateUnpooledBelow(take)  @ 791-802
+  @api am:duplicateUnpooledBelow(take)  @ 802-813
       @contract  unpooled clone at startQN+naturalLenQN; nil iff non-MIDI or start-collision.
-  @api am:newTakeBelow(take)  @ 805-811
+  @api am:newTakeBelow(take)  @ 816-822
       @contract  empty MIDI take at natural end, naturalLenQN-sized; nil iff non-MIDI or start collision.
-  @api am:mintParkedTake(trackIdx, name, lengthQN, srcTake)  @ 815-840
+  @api am:mintParkedTake(trackIdx, name, lengthQN, srcTake)  @ 826-851
       -- srcTake → clone its events + natural length into a fresh unpooled pool; else an empty take of lengthQN.
       @contract  mints a slot on trackIdx parked on scratch; returns slotIdx (nil if no track/free slot)
-  @api am:startIsClear(trackIdx, startQN, exceptItem)  @ 845-852
+  @api am:startIsClear(trackIdx, startQN, exceptItem)  @ 856-863
       @contract  true iff no take on trackIdx (≠ exceptItem) starts exactly at startQN (shared spans OK)
-  @api am:moveTake(take, deltaQN)  @ 855-865
+  @api am:moveTake(take, deltaQN)  @ 866-876
       @contract  shifts start by deltaQN, relayouts (natural kept); true iff start clear, else no-op
-  @api am:resizeTake(take, newNaturalQN)  @ 868-872
+  @api am:resizeTake(take, newNaturalQN)  @ 879-883
       @contract  writes the take's natural length; relayout caps it. See docs § Natural length.
-  @api am:takeSourceLengthQN(take)  @ 875-882
+  @api am:takeSourceLengthQN(take)  @ 886-893
       @contract  source length in QN at the take's position; 0 if source missing.
-  @api am:deleteTake(take)  @ 886-896
+  @api am:deleteTake(take)  @ 897-907
       -- Deleting a slot's last live instance parks it on the scratch track (keeping
       -- the pool + slot alive) rather than GC-ing it. See docs § Parking.
-  @api am:takesUsing(name)  @ 914-925
+  @api am:takesUsing(name)  @ 925-936
       @contract  scans each take's swing map (ds) for the named swing; no mm/cm context disturbance
-  @api am:reswingAll(name)  @ 928-930
+  @api am:reswingAll(name)  @ 939-941
       @contract  hands takesUsing(name) to the 'tracker' facade; transient-rebinds each and restores
 
 # Uses (outbound edges)
   @use call    ds.assign  @ writeColours:234
   @use call    ds.assignAt  @ writeSlots:77 setNaturalLenOf:135,136
   @use call    ds.get  @ readColours:233
-  @use call    ds.getAt  @ readSlots:73 naturalLenOf:130 takesUsing:917
-  @use call    facade.get  @ isVisibleTrack:287 reswingAll:929
+  @use call    ds.getAt  @ readSlots:73 naturalLenOf:130 takesUsing:928
+  @use call    facade.get  @ isVisibleTrack:287 reswingAll:940
   @use call    painter.hueNative  @ stampColour:269
   @use call    scratch.peek  @ parkedItemFor:103 isVisibleTrack:285 deleteSlot:602 isParkedTake:725
-  @use call    scratch.track  @ mintParkedTake:825 deleteTake:891
+  @use call    scratch.track  @ mintParkedTake:836 deleteTake:902
   @use call    util.toBase62  @ keyForSlot:561
   @use require painter  @ 22
   @use require scratch  @ 23

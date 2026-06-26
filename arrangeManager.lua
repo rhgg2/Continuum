@@ -735,6 +735,7 @@ function am:trackIdxForGuid(guid)
 end
 
 --contract: instance of slot at qnPos; nil if track/slot missing (MIDI also requires a live sibling)
+--invariant: overwrites any take already starting at qnPos; drop never stacks (matches startIsClear).
 function am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)
   local track = visibleTrackOfCol(trackIdx)
   if not track then return end
@@ -742,6 +743,14 @@ function am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)
   if not entry or not entry.id then return end
   local sibItem, sibLen, sibName = siblingInstance(track, entry.id)
   local len = lengthQN or sibLen or 1
+
+  -- Captured before placing: the new take starts at qnPos too, so it must not
+  -- be in this list; for MIDI it also keeps the clone source alive until cloned.
+  local occupants = {}
+  for _, other in ipairs(am:tracksTakes(trackIdx)) do
+    if other.startQN == qnPos then occupants[#occupants+1] = other end
+  end
+
   local take
   if entry.kind == 'midi' then
     if not sibItem then return end
@@ -751,6 +760,8 @@ function am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)
   end
   if not take then return end
   setTakeName(take, sibName)
+
+  for _, old in ipairs(occupants) do am:deleteTake(old) end
   stampForTake(take)
   relayoutTrack(track)
   return take
