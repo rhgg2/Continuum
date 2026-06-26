@@ -1,4 +1,4 @@
-@module ccManager  src=ccManager.lua  loc=52  sha=untracked  mode=chunk
+@module ccManager  src=ccManager.lua  loc=52  sha=c1012ac  mode=chunk  self=ccm
 
 # Invariants & contracts
   @invariant  the node exists iff a producer claims it; release reaps it when the last claim drops

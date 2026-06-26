@@ -1,4 +1,4 @@
-@module painter  src=painter.lua  loc=311  sha=a3a8e0b  mode=namespace
+@module painter  src=painter.lua  loc=311  sha=d013d39  mode=namespace  self=painter
 
 # Invariants & contracts
   @contract  centre is logical; radius is screen px so the dot stays round under non-uniform scale.

@@ -1,4 +1,4 @@
-@module groupManager  src=groupManager.lua  loc=919  sha=840964c  mode=chunk
+@module groupManager  src=groupManager.lua  loc=919  sha=4ae9c74  mode=chunk  self=gm
 @deps tm, ds
 
 # Invariants & contracts

@@ -1,4 +1,4 @@
-@module help  src=help.lua  loc=541  sha=40367fe  mode=chunk
+@module help  src=help.lua  loc=541  sha=a3a8e0b  mode=chunk  self=help
 @deps ctx, chrome, cmgr
 
 # Shapes

@@ -1,4 +1,4 @@
-@module wiringManager  src=wiringManager.lua  loc=2065  sha=64b775e  mode=chunk
+@module wiringManager  src=wiringManager.lua  loc=2065  sha=f7ce353  mode=chunk  self=wm
 @deps rm
 
 # Invariants & contracts

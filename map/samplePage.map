@@ -1,4 +1,4 @@
-@module samplePage  src=samplePage.lua  loc=71  sha=9623b2b  mode=chunk
+@module samplePage  src=samplePage.lua  loc=71  sha=c7fee67  mode=chunk  self=sp
 @deps cm, ds, cmgr, chrome, gui, facade
 
 # Imports

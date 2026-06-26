@@ -1,4 +1,4 @@
-@module timing  src=timing.lua  loc=330  sha=4a6bfb0  mode=namespace
+@module timing  src=timing.lua  loc=330  sha=d013d39  mode=namespace  self=timing
 
 # Invariants & contracts
   @invariant  pure module — no module-level state; all functions take operands explicitly

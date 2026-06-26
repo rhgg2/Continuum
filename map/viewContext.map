@@ -1,4 +1,4 @@
-@module viewContext  src=viewContext.lua  loc=117  sha=27ad399  mode=chunk
+@module viewContext  src=viewContext.lua  loc=117  sha=fdb66b0  mode=chunk  self=ctx
 @deps length, numRows, rowPerBeat, ppqPerRow, timeSigs, temper
 
 # Shapes
@@ -34,6 +34,8 @@
   @api ctx:ppqPerRow()  @ 65
   @api ctx:isOnGrid(ppqI, chan)  @ 74
       @contract  true iff ppqI lies within PPQ_GRID_EPS ppq of the nearest row's ppq under this ctx. The sole owner of the on-grid threshold; callers must not re-implement it from rowToPPQ.
+  @api ctx:rowBeatInfo(row)  @ 91
+  @api ctx:barBeatSub(row)  @ 98
 
 # Uses (outbound edges)
   @use call    tuning.midiToStep  @ 31

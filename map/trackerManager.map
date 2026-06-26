@@ -1,4 +1,4 @@
-@module trackerManager  src=trackerManager.lua  loc=1895  sha=4a20e55  mode=chunk
+@module trackerManager  src=trackerManager.lua  loc=1895  sha=2d2415d  mode=chunk  self=tm
 @deps mm, cm, ds
 
 # Invariants & contracts
@@ -75,9 +75,6 @@
   @contract  opts.markSwingStale=true rebuilds raw from ppqL under new (cm, mm) (seqMgr:reswingAll)
   @contract  bindTake(nil) is the dormant seam (e.g. samplePage)
   @invariant  bindTake(nil): cm clears under suppression; mm:load(nil) no-op; tm/tv keep last frame
-  @contract  take died under us — nils mm.take so tm:currentTake reads nil; not bindTake(nil) seam
-  @contract  re-reads the bound take from REAPER; mm:reload fires standard reload→rebuild
-  @invariant  reloadFromReaper does not swap take; for coord's external-mutation watcher
 
 # Shapes
   @shape  channel = { chan, columns = { notes, ccs={[ccNum]=col}, [pc], [pb], [at] } }
@@ -156,6 +153,9 @@
       · Rebuild
 
 # Public API (tm:*)
+  @api tm:byUuid(uuid)  @ 401
+      -- The live column event for a uuid, valid until the next rebuild.
+      -- uuid is durable; token is re-keyed each rebuild, so cross-rebuild handles use uuid.
   @api tm:getChannel(chan)  @ 666
   @api tm:channels()  @ 668
   @api tm:editCursor()  @ 679
@@ -165,6 +165,8 @@
   @api tm:setName(name)  @ 688
   @api tm:timeSigs()  @ 689
   @api tm:interpolate(A, B, ppq)  @ 690
+  @api tm:fromLogical(chan, ppqL, offset)  @ 735
+  @api tm:toLogical(chan, ppqI)  @ 739
   @api tm:markSwingStale(chan)  @ 750
       @contract  chan==nil marks all 16 channels stale; otherwise just the named channel
       @contract  consumed by the next tm:rebuild, then cleared
@@ -192,6 +194,17 @@
       @contract  idempotent: emits an assign only when n.muted differs from desired
       @invariant  lastMuteSet also tags later-added notes
       @invariant  PA events ride along in note columns but carry no mute state — skipped
+  -- Rebuild
+  @api tm:rebuild(takeChanged)  @ 1003
+      -- see docs/trackerManager.md § Rebuild
+  -- Lifecycle
+  @api tm:bindTake(take, opts)  @ 1867
+  @api tm:detach()  @ 1880
+      @contract  take died under us — nils mm.take so tm:currentTake reads nil; not bindTake(nil) seam
+  @api tm:currentTake()  @ 1887
+  @api tm:reloadFromReaper()  @ 1891
+      @contract  re-reads the bound take from REAPER; mm:reload fires standard reload→rebuild
+      @invariant  reloadFromReaper does not swap take; for coord's external-mutation watcher
 
 # Signals emitted (via util.installHooks)
   @emits preflush   -- (adds, assigns, deletes)

@@ -1,4 +1,4 @@
-@module groups  src=groups.lua  loc=127  sha=7dae3ed  mode=namespace
+@module groups  src=groups.lua  loc=127  sha=7dae3ed  mode=namespace  self=groups
 
 # Invariants & contracts
   @invariant  evType is identity, never merged or overridden; changing type is delete+create upstream

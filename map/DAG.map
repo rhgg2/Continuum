@@ -1,4 +1,4 @@
-@module DAG  src=DAG.lua  loc=1919  sha=654679f  mode=namespace
+@module DAG  src=DAG.lua  loc=1919  sha=d013d39  mode=namespace  self=DAG
 
 # Invariants & contracts
   @invariant  DAG.validate is pure; derivations live on DAG.compile's ctx
@@ -16,7 +16,6 @@
   @invariant  a class with no audio parents and a lone source-direct midi parent absorbs onto it
   @invariant  busses below 2x2 splice out at compile; crossings become direct edges at product gain
   @invariant  srcSet unions node.split with derived master-min split markers
-  @contract  realisation pass over a compile ctx; returns the targetTracks shape (not cached)
 
 # Shapes
   @shape  userGraph = { nodes = {[id]=userNode}, edges = edge[] }  -- node ids are rm guids (read era)
@@ -121,6 +120,10 @@
       -- Post-hoc component classifier over read's domain (design/wiring-implicit-graph.md
       -- § Quarantine): validate's successor on the graphs REAPER allows, not just authorable ones.
       @contract  groups non-master nodes into components; feedbackSeeds + busAware tag quarantined ones
+  @api DAG.targetTracks(ctx)  @ 922
+      -- Realisation pass: turns the structural ctx into per-track specs (fxOrder,
+      -- wires, synth merge CUs). Reads only the ctx public surface + ctx.userGraph.
+      @contract  realisation pass over a compile ctx; returns the targetTracks shape (not cached)
   @api DAG.compile(userGraph)  @ 1112
       -- ctx.splice (spliceProv) is present iff sub-threshold busses were spliced out.
       @contract  assumes DAG.validate(userGraph)==nil; returns a lazy-caching compile ctx

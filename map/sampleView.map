@@ -1,4 +1,4 @@
-@module sampleView  src=sampleView.lua  loc=143  sha=7bbf555  mode=chunk
+@module sampleView  src=sampleView.lua  loc=143  sha=1278d64  mode=chunk  self=sv
 @deps cm, ds, sm
 
 # Invariants & contracts

@@ -1,4 +1,4 @@
-@module trackerView  src=trackerView.lua  loc=2915  sha=721795b  mode=chunk
+@module trackerView  src=trackerView.lua  loc=2915  sha=2d2415d  mode=chunk  self=tv
 @deps tm, cm, ds, cmgr, gm, pa, facade
 
 # Invariants & contracts
@@ -22,9 +22,6 @@
   @invariant  tail overlaps NOT resolved here; tm's universal tail pass owns every raw note-off
   @contract  skips non-note plans/cols; optional `deleted` event-set excluded from the walk
   @invariant  deleted corpses still live in col.events snapshot until next rebuild
-  @contract  single typed-input entry point; dispatches on (col.type, stop, evt-kind)
-  @contract  off-grid edits run through snap to repin evt.ppq to cursor row and restamp frame
-  @contract  commit flushes, advances by advanceBy, and may audition
   @contract  selection must be exactly one grid column; multi-col selection is a no-op
   @invariant  a 1-col block stays contiguous when it lands on the destination col
   @contract  cursor follows to the destination column (single event and selection alike)
@@ -289,6 +286,17 @@
       @contract  bind materialises a take's swing from defaultSwing (identity floor); no-op once set
   @api tv:setSwingComposite(name, composite, tier)  @ 520
   @api tv:setTemper(name, temper, tier)  @ 528
+  @api tv:isChannelMuted(chan)  @ 563
+  @api tv:isChannelSoloed(chan)  @ 564
+  @api tv:isChannelEffectivelyMuted(chan)  @ 565
+  @api tv:toggleChannelMute(chan)  @ 566
+  @api tv:toggleChannelSolo(chan)  @ 567
+  @api tv:tick()  @ 602
+  @api tv:scroll()  @ 647
+  @api tv:editEvent(col, evt, stop, char, half)  @ 691
+      @contract  single typed-input entry point; dispatches on (col.type, stop, evt-kind)
+      @contract  off-grid edits run through snap to repin evt.ppq to cursor row and restamp frame
+      @contract  commit flushes, advances by advanceBy, and may audition
   @api tv:moveLaneEvent(col, i, toRow, toVal)  @ 911
       @contract  clamps newppq strictly inside (prev.ppq, next.ppq) by ±1
       @invariant  ±1 clamp is necessary-and-sufficient for identity-by-visible-index across rebuild
@@ -299,6 +307,16 @@
   @api tv:setLaneTension(col, i, tension)  @ 973
       -- Set bezier tension on the i-th visible event. Forces shape to bezier
       -- so the tension is honoured (REAPER ignores tension on other shapes).
+  @api tv:cycleLaneShape(col, i)  @ 1002
+      -- Cycle the segment-owner's shape on the i-th visible event in a
+      -- cc/pb/at column. Segment-owner = left endpoint (REAPER convention:
+      -- A.shape governs the curve from A to next).
+  @api tv:quantizeSelection()  @ 1345
+  @api tv:quantizeAll()  @ 1346
+  @api tv:quantizeKeepRealisedSelection()  @ 1347
+  @api tv:quantizeKeepRealisedAll()  @ 1348
+  @api tv:scaleSelection(kNum, kDen)  @ 1429
+  @api tv:scaleAll(kNum, kDen)  @ 1430
   @api tv:cursorNote()  @ 1673
       -- The note under the caret, or nil on a non-note / empty cell. The fx
       -- editor command gates on this (it is a no-op off a note).

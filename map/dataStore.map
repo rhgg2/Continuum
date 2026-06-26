@@ -1,4 +1,4 @@
-@module dataStore  src=dataStore.lua  loc=183  sha=d415ad4  mode=chunk
+@module dataStore  src=dataStore.lua  loc=183  sha=d73fd96  mode=chunk  self=ds
 @deps ps
 
 # Invariants & contracts

@@ -1,4 +1,4 @@
-@module routingManager  src=routingManager.lua  loc=982  sha=e6f7a42  mode=chunk
+@module routingManager  src=routingManager.lua  loc=982  sha=ca82072  mode=chunk  self=rm
 
 # Invariants & contracts
   @invariant  id is a track/fx GUID string — opaque to callers, stable across reload

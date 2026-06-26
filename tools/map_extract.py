@@ -162,9 +162,12 @@ def classify(lines: list[str]) -> tuple[str, str]:
     has_method = False
     has_dotfn = False
     for raw in lines:
-        if METHOD_RE.match(raw):
+        # Classify on the module's own surface only — col-0 defs. Indented defs
+        # may be sub-instance methods (ctx:/owner:) that don't set the shape.
+        mth, dot = METHOD_RE.match(raw), DOT_FN_RE.match(raw)
+        if mth and mth.group(1) == '':
             has_method = True
-        elif DOT_FN_RE.match(raw):
+        elif dot and dot.group(1) == '':
             has_dotfn = True
         m = RETURN_RE.match(raw.lstrip())
         if m:

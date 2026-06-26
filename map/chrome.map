@@ -1,4 +1,4 @@
-@module chrome  src=chrome.lua  loc=640  sha=761e277  mode=chunk
+@module chrome  src=chrome.lua  loc=640  sha=a3a8e0b  mode=chunk
 @deps cm, ctx, uiFontBold, uiSize
 
 # Shapes

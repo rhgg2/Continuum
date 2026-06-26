@@ -1,4 +1,4 @@
-@module scratch  src=scratch.lua  loc=72  sha=untracked  mode=namespace
+@module scratch  src=scratch.lua  loc=72  sha=ca82072  mode=namespace  self=scratch
 
 # Invariants & contracts
   @invariant  identity is the projext guid (continuum_wiring/scratch), not module state — instances interchangeable

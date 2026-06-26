@@ -1,4 +1,4 @@
-@module swingEditor  src=swingEditor.lua  loc=750  sha=a3a8e0b  mode=chunk
+@module swingEditor  src=swingEditor.lua  loc=750  sha=d013d39  mode=chunk  self=swingEditor
 @deps cm, ds, chrome, ctx, gui, facade, modalHost
 
 # Invariants & contracts

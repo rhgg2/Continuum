@@ -1,4 +1,4 @@
-@module commandManager  src=commandManager.lua  loc=582  sha=0ecbe36  mode=chunk
+@module commandManager  src=commandManager.lua  loc=582  sha=d013d39  mode=chunk  self=cmgr
 @deps cm
 
 # Invariants & contracts

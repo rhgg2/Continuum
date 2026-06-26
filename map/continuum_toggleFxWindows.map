@@ -1,4 +1,4 @@
-@module continuum_toggleFxWindows  src=continuum_toggleFxWindows.lua  loc=11  sha=untracked  mode=script
+@module continuum_toggleFxWindows  src=continuum_toggleFxWindows.lua  loc=11  sha=9e28da0  mode=script
 
 # REAPER API surface
   @reaper SetExtState

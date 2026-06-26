@@ -1,4 +1,4 @@
-@module editCursor  src=editCursor.lua  loc=767  sha=803aee0  mode=chunk
+@module editCursor  src=editCursor.lua  loc=767  sha=46b2797  mode=chunk  self=ec
 @deps grid, cm, cmgr, rowPerBar, logPerRow, moveHook, groupBridge
 
 # Invariants & contracts
@@ -16,9 +16,6 @@
   @invariant  moveHook fires after every position change (paired with clampPos)
   @invariant  sel.part1/part2 are part names, or '*' sentinel under hBlock=2/3
   @invariant  clip.single.type ∈ {'note', '7bit', 'pb'}
-  @contract  idempotent; seeds nav cursor from caret instance, else active group's first
-  @contract  derives col part fields from type/showDelay/trackerMode; pitch width = pitchWidth
-  @invariant  ec is the sole writer of col.{parts, stopPos, partAt, partStart, width}
 
 # Shapes
   @shape  selection = { row1, row2, col1, col2, part1, part2 }  -- inclusive both axes
@@ -141,10 +138,18 @@
       @invariant  shiftSelection: sel may compress against an edge while cursor doesn't
   @api ec:advance()  @ 463
       @contract  advances by cm.advanceBy rows; the per-keystroke auto-step after a write
+  @api ec:selectChannel(chan)  @ 473
+  @api ec:selectColumn(col)  @ 478
   @api ec:isInRegionMode()  @ 486
   @api ec:regionCursor()  @ 487
+  @api ec:enterRegionMode()  @ 507
+      @contract  idempotent; seeds nav cursor from caret instance, else active group's first
   -- Commands
   @api ec:registerCommands(scope)  @ 683
+  -- Decoration
+  @api ec:decorateCol(col, pitchWidth)  @ 742
+      @contract  derives col part fields from type/showDelay/trackerMode; pitch width = pitchWidth
+      @invariant  ec is the sole writer of col.{parts, stopPos, partAt, partStart, width}
 
 # Uses (outbound edges)
   @use call    cm.get  @ 100, 463
