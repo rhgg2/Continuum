@@ -1,4 +1,4 @@
-@module midiManager  src=midiManager.lua  loc=1287  sha=2d2415d  mode=chunk  self=mm
+@module midiManager  src=midiManager.lua  loc=1304  sha=2d2415d  mode=chunk  self=mm
 @deps take
 
 # Invariants & contracts
@@ -58,9 +58,9 @@
   @state shapeLUT = { step = 0, linear = 1, slow = 2, ['fast-start'] = 3, ['f...  @ 73
       @invariant  shapeNames is derived from shapeLUT so the two directions can't drift
   @state shapeNames  @ 74   -- inverse of shapeLUT
-  @state noteEventFields = {  @ 214
-  @state ccEventFields = {  @ 219
-  @state fire = util.installHooks(mm)  @ 329
+  @state noteEventFields = {  @ 230
+  @state ccEventFields = {  @ 235
+  @state fire = util.installHooks(mm)  @ 345
 
 # Private functions
   @fn liveTake()  @ 14-20
@@ -84,16 +84,21 @@
   @fn noteSidecarDecode(msg)  @ 145-150
   @fn ccSidecarEncode(cc)  @ 152-174
   @fn ccSidecarDecode(body)  @ 176-193
-  @fn loadMetadata()  @ 196-212
-  @fn saveMetadatum(uuid)  @ 225-245
-  @fn deleteMetadatum(uuid)  @ 249-262
+  @fn sidecarIdxOf(uuid, eventType)  @ 200-210
+      -- Resolve a sidecar's current wire index by content for REAPER text type
+      -- (15 = note notation, -1 = cc/pb). uuidIdx desyncs once a delete shifts the
+      -- shared text-sysex stream within a modify, so in-modify writes/deletes must
+      -- re-resolve rather than trust it.
+  @fn loadMetadata()  @ 212-228
+  @fn saveMetadatum(uuid)  @ 241-261
+  @fn deleteMetadatum(uuid)  @ 265-278
       -- Wipe one uuid's ext-data + keys entry inline, so internal reloads can skip the
       -- wholesale saveMetadata() keys-reconcile. See docs/midiManager.md § Metadata I/O.
-  @fn saveMetadata()  @ 264-286
-  @fn snapshotMetadata()  @ 290-301
+  @fn saveMetadata()  @ 280-302
+  @fn snapshotMetadata()  @ 306-317
       -- In-memory equivalent of loadMetadata() (per uuid, the non-structural fields):
       -- lets an internal reload reuse live metadata. See docs/midiManager.md § Metadata I/O.
-  @fn assignNewUUID(evt)  @ 305-310
+  @fn assignNewUUID(evt)  @ 321-326
       · Helper functions
       · Read notes
       · Note dedup
@@ -109,121 +114,118 @@
       · Persist + signals
   -- Load
   -- Locking
-  @fn checkLock()  @ 747-750
+  @fn checkLock()  @ 763-766
       @contract  writes (add*, delete*, structural assign*) must run inside mm:modify(fn)
       @contract  modify disables sort, runs fn under lock, re-sorts, then reload→callbacks
   -- Notes
-  @fn cloneOut(evt)  @ 765-774
-  @fn assignNote(loc, t)  @ 787-825
+  @fn cloneOut(evt)  @ 781-790
+  @fn assignNote(loc, t)  @ 803-846
       @contract  assignNote: lockless write when t touches no structural field
       @invariant  assignNote structural fields = {ppq, endppq, pitch, vel, chan, muted}
-  @fn addNote(t)  @ 828-855
+  @fn addNote(t)  @ 849-876
       @contract  addNote always allocates a uuid + inserts a notation event (unlike addCC)
   -- CCs
-  @fn reconstruct(tbl)  @ 878-898
-  @fn assignCC(loc, t)  @ 902-972
+  @fn reconstruct(tbl)  @ 899-919
+  @fn assignCC(loc, t)  @ 923-998
       @contract  assignCC: lockless iff t touches no structural field and the cc has a uuid
       @contract  first metadata stamp on a plain cc needs lock — inserts a sidecar sysex
-  @fn pushCC(t)  @ 976-995
+  @fn pushCC(t)  @ 1002-1021
       -- Insert one ordinary CC: wire event + record + idx + token. No metadata
       -- (the lazy-sidecar path lives in addCC); the wideCC split reuses this.
-  @fn addCC(t)  @ 999-1040
+  @fn addCC(t)  @ 1025-1066
       @contract  addCC lazy-sidecar: uuid + sidecar only when t has a non-structural key
       @contract  a wideCC-registered code splits to an MSB(shaped)/LSB(step) wire pair
   -- Unified token-keyed surface
-  @fn shiftDown(tbl, field, threshold)  @ 1083-1088
+  @fn shiftDown(tbl, field, threshold)  @ 1109-1114
       -- Mirror REAPER's idx-shift-down after a delete: decrement evt[field] on every
       -- event in tbl whose field > threshold. Guarded by `v and` so uuidIdx (absent
       -- on plain ccs) is safely skipped.
-  @fn deleteSidecarByUuid(uuid)  @ 1093-1105
-      -- Sidecars (notation type 15, cc/pb type -1) share one TextSysexEvt index
-      -- space; a cached uuidIdx desyncs across a mixed multi-delete in one modify
-      -- (MIDI_DeleteNote cascades its notation event). Match by content instead.
+  @fn deleteSidecarByUuid(uuid)  @ 1119-1122
   -- Take data
-  @fn setEot(buf, targetPpq)  @ 1209-1225
+  @fn setEot(buf, targetPpq)  @ 1226-1242
       -- Rewrite the trailing EOT meta event so it sits exactly at targetPpq.
       -- Handles both shrink (offset reduces) and grow (offset increases).
       -- Assumes events past targetPpq are already deleted upstream on shrink
       -- (tm:setLength does this).
 
 # Public API (mm:*)
-  @api mm:load(newTake)  @ 335-729
+  @api mm:load(newTake)  @ 351-745
       @contract  internal reload (lock held) reuses live metadata; skips ext-data read + write
       @contract  external load (take swap, undo, watcher, init) does full loadMetadata + saveMetadata
-  @api mm:reload()  @ 731-734
-  @api mm:unload()  @ 737-740
+  @api mm:reload()  @ 747-750
+  @api mm:unload()  @ 753-756
       @contract  clears mm.take and event tables when take dies; distinct from load(nil) dormant seam
-  @api mm:modify(fn)  @ 752-761
-  @api mm:notes()  @ 776-783
-  @api mm:wideCC(chan, cc, on)  @ 862-864
+  @api mm:modify(fn)  @ 768-777
+  @api mm:notes()  @ 792-799
+  @api mm:wideCC(chan, cc, on)  @ 883-885
       @contract  marks (chan, cc) a 14-bit MSB whose low 7 bits ride cc+32; transient, not persisted
       @contract  writes split to MSB(shaped)/LSB(step) pair; reads coalesce to fixed-point val 0..127.99
       @invariant  code is the only signal -- wire pair is not self-describing (design/archive/note-macros.md)
-  @api mm:ccs()  @ 866-876
-  @api mm:tokenOf(evt)  @ 1045-1048
+  @api mm:ccs()  @ 887-897
+  @api mm:tokenOf(evt)  @ 1071-1074
       @contract  token stable across reload while identity fields don't change
       @invariant  token identity fields = evType, chan, ppq, and pitch|cc as relevant
       @contract  mutating an identity field retires the old token and issues a new one
-  @api mm:byToken(token)  @ 1053-1057
+  @api mm:byToken(token)  @ 1079-1083
       @contract  returns (loc, evt-clone, kind) for the token, or nil if absent
       @contract  works on every event (including plain ccs with no uuid)
       @invariant  byToken's evt-clone carries .token equal to the input
-  @api mm:add(t)  @ 1063-1067
+  @api mm:add(t)  @ 1089-1093
       @contract  t.evType='note' routes to addNote; anything else to addCC
       @contract  returns the new token, or nil if t is malformed; inherits inner lock req
-  @api mm:assign(token, t)  @ 1072-1078
+  @api mm:assign(token, t)  @ 1098-1104
       @contract  dispatches on the resolved event's evType
       @contract  returns the event's token, == input iff no identity field changed (caller re-keys)
       @contract  inherits the inner method's metadata-only lockless carve-out
-  @api mm:delete(token)  @ 1113-1144
-  @api mm:events()  @ 1148-1164
+  @api mm:delete(token)  @ 1130-1161
+  @api mm:events()  @ 1165-1181
       @contract  yields (token, evt-clone) over all live events, notes then ccs
       @invariant  events()'s clone carries .token; loc is intentionally absent
-  @api mm:take()  @ 1168-1170
-  @api mm:interpolate(A, B, ppq)  @ 1173-1179
+  @api mm:take()  @ 1185-1187
+  @api mm:interpolate(A, B, ppq)  @ 1190-1196
       -- REAPER convention: shape on A governs the curve from A to next.
-  @api mm:resolution()  @ 1181-1184
-  @api mm:length()  @ 1187-1192
+  @api mm:resolution()  @ 1198-1201
+  @api mm:length()  @ 1204-1209
       -- Source length. setLength positions the source's EOT explicitly to keep this in sync.
-  @api mm:name()  @ 1194-1198
-  @api mm:setName(name)  @ 1200-1203
-  @api mm:setLength(qn)  @ 1231-1243
+  @api mm:name()  @ 1211-1215
+  @api mm:setName(name)  @ 1217-1220
+  @api mm:setLength(qn)  @ 1248-1260
       -- MIDI_SetItemExtents only resizes the item; on grow it leaves source EOT short,
       -- on shrink it leaves source EOT stale. Reposition the source EOT first so the
       -- source is the right size, then bring the item to match.
       -- Project metadata only — bypasses modify(); fires reload so tm picks up the new length.
-  @api mm:timeSigs()  @ 1245-1283
+  @api mm:timeSigs()  @ 1262-1300
 
 # Signals emitted (via util.installHooks)
-  @emits takeSwapped   -- nil; only when load received a different take   @ load:718
-  @emits notesDeduped   -- { events = [{ppq, chan, pitch, droppedCount}, ...] }   @ load:720
-  @emits uuidsReassigned   -- { events = [{ppq, chan, pitch, oldUuid, newUuid}, ...] }   @ load:722
-  @emits ccsDeduped   -- { events = [{ppq, chan, evType, cc, pitch, droppedCount}, ...] }   @ load:724
-  @emits ccsReconciled   -- { events = [reconcileEvent, ...] }  -- 5 kinds in reconcileEvent.*   @ load:726
-  @emits reload   -- nil; every load, including after modify()   @ load:728
+  @emits takeSwapped   -- nil; only when load received a different take   @ load:734
+  @emits notesDeduped   -- { events = [{ppq, chan, pitch, droppedCount}, ...] }   @ load:736
+  @emits uuidsReassigned   -- { events = [{ppq, chan, pitch, oldUuid, newUuid}, ...] }   @ load:738
+  @emits ccsDeduped   -- { events = [{ppq, chan, evType, cc, pitch, droppedCount}, ...] }   @ load:740
+  @emits ccsReconciled   -- { events = [reconcileEvent, ...] }  -- 5 kinds in reconcileEvent.*   @ load:742
+  @emits reload   -- nil; every load, including after modify()   @ load:744
 
 # Uses (outbound edges)
-  @use call    util.add  @ saveMetadata:271 load:371,386,388,395,397,428,436,439,459,464,466,482,494,498,505,530,531,608,614,615,625 addNote:848 pushCC:991 delete:1133 timeSigs:1278
-  @use call    util.assign  @ load:436,439,532,667,674 assignNote:794,810 assignCC:916,935,941
-  @use call    util.bucket  @ load:453,519,520
+  @use call    util.add  @ saveMetadata:287 load:387,402,404,411,413,444,452,455,475,480,482,498,510,514,521,546,547,624,630,631,641 addNote:869 pushCC:1017 delete:1150 timeSigs:1295
+  @use call    util.assign  @ load:452,455,548,683,690 assignNote:810,826 assignCC:937,956,962
+  @use call    util.bucket  @ load:469,535,536
   @use call    util.clamp  @ splitWide:69 bezierSample:95
-  @use call    util.clone  @ load:493,514 cloneOut:767 addNote:838 assignCC:935 pushCC:980
-  @use call    util.compact  @ load:655,656,657
-  @use call    util.fromBase36  @ noteSidecarDecode:148 loadMetadata:203
-  @use call    util.installHooks  @ 329
-  @use call    util.key  @ tokenOf:49,50,51,52 load:358,360,361,362
-  @use call    util.pick  @ load:395,464,498,505,532,608
+  @use call    util.clone  @ load:509,530 cloneOut:783 addNote:859 assignCC:956 pushCC:1006
+  @use call    util.compact  @ load:671,672,673
+  @use call    util.fromBase36  @ noteSidecarDecode:148 loadMetadata:219
+  @use call    util.installHooks  @ 345
+  @use call    util.key  @ tokenOf:49,50,51,52 load:374,376,377,378
+  @use call    util.pick  @ load:411,480,514,521,548,624
   @use call    util.print  @ print:23
   @use call    util.round  @ splitWide:67
-  @use call    util.serialise  @ saveMetadatum:237
-  @use call    util.toBase36  @ noteSidecarEncode:142 ccSidecarEncode:173 saveMetadatum:228 deleteMetadatum:251 saveMetadata:269
-  @use call    util.unserialise  @ loadMetadata:208
+  @use call    util.serialise  @ saveMetadatum:253
+  @use call    util.toBase36  @ noteSidecarEncode:142 ccSidecarEncode:173 saveMetadatum:244 deleteMetadatum:267 saveMetadata:285
+  @use call    util.unserialise  @ loadMetadata:224
   @use require util  @ 8
 
 # REAPER API surface
   @reaper ValidatePtr2
+  @reaper MIDI_CountEvts, MIDI_GetTextSysexEvt, MIDI_GetNote, MIDI_DisableSort, MIDI_DeleteNote, MIDI_Sort, MIDI_GetCC, MIDI_GetCCShape, MIDI_SetTextSysexEvt, MIDI_DeleteCC, MIDI_DeleteTextSysexEvt, MIDI_InsertTextSysexEvt, MIDI_SetNote, MIDI_InsertNote, MIDI_SetCC, MIDI_SetCCShape, MIDI_InsertCC, MIDI_GetPPQPosFromProjQN, MIDI_GetAllEvts, MIDI_SetAllEvts, MIDI_SetItemExtents, MIDI_GetPPQPosFromProjTime
   @reaper GetSetMediaItemTakeInfo_String
-  @reaper MIDI_CountEvts, MIDI_GetNote, MIDI_DisableSort, MIDI_DeleteNote, MIDI_Sort, MIDI_GetCC, MIDI_GetCCShape, MIDI_GetTextSysexEvt, MIDI_SetTextSysexEvt, MIDI_DeleteCC, MIDI_DeleteTextSysexEvt, MIDI_InsertTextSysexEvt, MIDI_SetNote, MIDI_InsertNote, MIDI_SetCC, MIDI_SetCCShape, MIDI_InsertCC, MIDI_GetPPQPosFromProjQN, MIDI_GetAllEvts, MIDI_SetAllEvts, MIDI_SetItemExtents, MIDI_GetPPQPosFromProjTime
   @reaper GetMediaItemTake_Source, GetMediaItemTake_Item
   @reaper GetMediaSourceLength
   @reaper GetMediaItemInfo_Value

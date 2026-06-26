@@ -193,6 +193,22 @@ local noteSidecarEncode, noteSidecarDecode, ccSidecarEncode, ccSidecarDecode do
   end
 end
 
+-- Resolve a sidecar's current wire index by content for REAPER text type
+-- (15 = note notation, -1 = cc/pb). uuidIdx desyncs once a delete shifts the
+-- shared text-sysex stream within a modify, so in-modify writes/deletes must
+-- re-resolve rather than trust it.
+local function sidecarIdxOf(uuid, eventType)
+  if not uuid then return nil end
+  local _, _, _, textCount = reaper.MIDI_CountEvts(take)
+  for i = 0, textCount - 1 do
+    local ok, _, _, _, et, msg = reaper.MIDI_GetTextSysexEvt(take, i)
+    if ok and et == eventType then
+      local sc = (eventType == 15) and noteSidecarDecode(msg) or ccSidecarDecode(msg)
+      if sc and sc.uuid == uuid then return i end
+    end
+  end
+end
+
 local function loadMetadata()
   if not take then return {} end
 
@@ -816,9 +832,14 @@ local function assignNote(loc, t)
     tokenIdx[newTok] = note
   end
 
-  -- notation event encodes (chan, pitch) at ppq, so keep it in sync
-  if (t.ppq or t.chan or t.pitch) and note.uuidIdx then
-    reaper.MIDI_SetTextSysexEvt(take, note.uuidIdx, nil, nil, note.ppq, 15, noteSidecarEncode(note), true)
+  -- notation event encodes (chan, pitch) at ppq, so keep it in sync. Resolve the
+  -- sidecar index fresh -- uuidIdx goes stale if a delete shifted the text-sysex
+  -- stream earlier in this modify (notation + cc sidecars share that index space).
+  if t.ppq or t.chan or t.pitch then
+    local idx = sidecarIdxOf(note.uuid, 15)
+    if idx then
+      reaper.MIDI_SetTextSysexEvt(take, idx, nil, nil, note.ppq, 15, noteSidecarEncode(note), true)
+    end
   end
 
   saveMetadatum(note.uuid)
@@ -965,7 +986,12 @@ local function assignCC(loc, t)
   end
 
   if msg.uuid and hasStructural then
-    reaper.MIDI_SetTextSysexEvt(take, msg.uuidIdx, nil, nil, msg.ppq, -1, ccSidecarEncode(msg), true)
+    -- Resolve fresh -- uuidIdx is stale if a delete shifted the shared text-sysex
+    -- stream earlier in this modify, and would clobber a note's notation event.
+    local idx = sidecarIdxOf(msg.uuid, -1)
+    if idx then
+      reaper.MIDI_SetTextSysexEvt(take, idx, nil, nil, msg.ppq, -1, ccSidecarEncode(msg), true)
+    end
   end
 
   if msg.uuid then saveMetadatum(msg.uuid) end
@@ -1087,21 +1113,12 @@ local function shiftDown(tbl, field, threshold)
   end
 end
 
--- Sidecars (notation type 15, cc/pb type -1) share one TextSysexEvt index
--- space; a cached uuidIdx desyncs across a mixed multi-delete in one modify
--- (MIDI_DeleteNote cascades its notation event). Match by content instead.
+-- Remove a cc/pb sidecar (type -1) by content. The sole caller is a cc/pb delete;
+-- a note's notation (type 15) is cascade-removed by MIDI_DeleteNote. Resolve fresh
+-- -- the shared text-sysex index space shifts across deletes within a modify.
 local function deleteSidecarByUuid(uuid)
-  if not uuid then return end
-  local _, _, _, textCount = reaper.MIDI_CountEvts(take)
-  for i = 0, textCount-1 do
-    local ok, _, _, _, eventtype, msg = reaper.MIDI_GetTextSysexEvt(take, i)
-    local sc = ok and (eventtype == 15 and noteSidecarDecode(msg)
-                    or eventtype == -1 and ccSidecarDecode(msg))
-    if sc and sc.uuid == uuid then
-      reaper.MIDI_DeleteTextSysexEvt(take, i)
-      return
-    end
-  end
+  local idx = sidecarIdxOf(uuid, -1)
+  if idx then reaper.MIDI_DeleteTextSysexEvt(take, idx) end
 end
 
 --contract: immediate-mode delete (no batch); fires inside the modify caller's lock

@@ -58,7 +58,6 @@ local specs = {
   'tm_fx_region_spec',
   'tm_slide_spec',
   'tm_trill_spec',
-  'tm_trill_rate_change_spec',
   'generators_spec',
   'tm_dormant_config_spec',
   'groups_core_spec',
