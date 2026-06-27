@@ -106,35 +106,33 @@ end
 
 ----- derived-event reconcile skeleton (R2)
 -- Index existing by `key`, keep-on-match, add the rest, remove unkept. The absorber pass (4.9) is a richer fungible-move variant, inline.
---contract: returns (toRemove, toAdd); existing events unmatched by any spec are removed
+--contract: appends unmatched-existing to sink.del(event), new/made specs to sink.add(spec)
 local function reconcileDerived(a)
   local index, kept = {}, {}
   for _, e in ipairs(a.existing) do index[a.key(e)] = e end
-  local toRemove, toAdd = {}, {}
   for _, spec in ipairs(a.predicted) do
     local have = index[a.key(spec)]
     if have and (not a.match or a.match(have, spec)) then
       kept[have] = true
       if a.onKeep then a.onKeep(spec, have) end
     else
-      util.add(toAdd, a.make and a.make(spec) or spec)
+      a.sink.add(a.make and a.make(spec) or spec)
     end
   end
   for _, e in ipairs(a.existing) do
-    if not kept[e] then util.add(toRemove, e) end
+    if not kept[e] then a.sink.del(e) end
   end
-  return toRemove, toAdd
 end
 
 ----- PC synthesis reconciliation (grouping + lane-winner pre-pass, then the skeleton)
 
 --contract: synthesised PCs carry derived='pc'; ppqL inherited from winning host-note record
 --contract: an existing derived PC matching (ppq, val) is kept, preserving mm-side loc
---contract: returns (toRemove, toAdd) for the caller to persist
+--contract: appends removals/adds to the sink {del(event), add(spec)}
 --contract: if record.key set, marks key.sampleShadowed=true on records lost to lane priority
 --invariant: shadow marking is rebuild-only; flush callers omit key (rebuild reclones lane events)
 --invariant: c.pc.events not written here; rebuild's CC walk refreshes it from mm after commit
-local function reconcilePCsForChan(chan, records)
+local function reconcilePCsForChan(chan, records, sink)
   local existing = (channels[chan].columns.pc and channels[chan].columns.pc.events) or {}
 
   local groups = {}
@@ -149,8 +147,8 @@ local function reconcilePCsForChan(chan, records)
     end
   end
 
-  return reconcileDerived{
-    existing = existing, predicted = winners,
+  reconcileDerived{
+    existing = existing, predicted = winners, sink = sink,
     key   = function(x) return x.ppq end,
     match = function(have, w) return have.derived and have.val == w.sample end,
     make  = function(w) return { ppq = w.ppq, ppqL = w.ppqL, val = w.sample,
@@ -174,8 +172,8 @@ end
 
 -- onKeep carries the matched note's token + realised end onto the predicted spec, so a
 -- kept fxNote is re-clipped through its token by the tail walk rather than re-added.
-local function reconcileFx(existing, predicted)
-  return reconcileDerived{ existing = existing, predicted = predicted, key = fxKey,
+local function reconcileFx(existing, predicted, sink)
+  reconcileDerived{ existing = existing, predicted = predicted, key = fxKey, sink = sink,
     onKeep = function(spec, have) spec.token, spec.endppq = have.token, have.endppq end }
 end
 
@@ -191,9 +189,9 @@ end
 
 ----- delta-stream (carrier) reconciliation
 -- Pure fn of lane-1 hosts; key by (cc, canon ppq) — REAPER float vs int prediction churns whole stream. see design/archive/note-macros.md § Delta-code allocation
-local function reconcileCarrier(existing, predicted)
-  return reconcileDerived{
-    existing = existing, predicted = predicted,
+local function reconcileCarrier(existing, predicted, sink)
+  reconcileDerived{
+    existing = existing, predicted = predicted, sink = sink,
     key   = function(x) return util.key(canon(x.cc), canon(x.ppq)) end,
     match = function(have, spec) return have.val == spec.val and have.shape == spec.shape end,
   }
@@ -398,9 +396,7 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
       end
     end
 
-    local toRemove, toAdd = reconcilePCsForChan(chan, records)
-    for _, have in ipairs(toRemove) do deleteLowlevel(have) end
-    for _, want in ipairs(toAdd)    do addLowlevel(want)    end
+    reconcilePCsForChan(chan, records, { del = deleteLowlevel, add = addLowlevel })
   end
 
   local function lookup(evtOrToken)
@@ -1032,6 +1028,28 @@ local function assignList(list)
 end
 local function applyAssigns(list)
   if #list > 0 then mm:modify(function() assignList(list) end) end
+end
+
+-- Accumulate mm ops, commit once in canonical delete -> assign -> add order; no-op if empty.
+-- assign re-keys a passed evt's token in place when an identity field moved (mirrors assignList).
+local function mmBatch()
+  local dels, assigns, adds = {}, {}, {}
+  return {
+    del    = function(evt)                util.add(dels, evt) end,
+    assign = function(token, update, evt) util.add(assigns, { token = token, update = update, evt = evt }) end,
+    add    = function(spec)               util.add(adds, spec) end,
+    commit = function()
+      if #dels + #assigns + #adds == 0 then return end
+      mm:modify(function()
+        for _, e in ipairs(dels) do mm:delete(e.token) end
+        for _, a in ipairs(assigns) do
+          local newTok = mm:assign(a.token, a.update)
+          if a.evt and newTok and newTok ~= a.token then a.evt.token = newTok end
+        end
+        for _, s in ipairs(adds) do mm:add(s) end
+      end)
+    end,
+  }
 end
 
 -- Clip each parked member's tail to lane / pitch successor onset and take end:
@@ -1857,9 +1875,10 @@ function tm:rebuild(takeChanged)
 
       -- Reconcile existence (stamps kept specs with token + realised end); defer writes to the 4.8 atomic commit.
       -- fxLive holds the predicted specs; the tail walk clips them in place.
-      local toRemove, toAdd = reconcileFx(fxExisting[chan], predicted)
-      for _, e in ipairs(toRemove) do util.add(fxToRemove, e) end
-      for _, s in ipairs(toAdd)    do util.add(fxToAdd, s)    end
+      reconcileFx(fxExisting[chan], predicted, {
+        del = function(e) util.add(fxToRemove, e) end,
+        add = function(s) util.add(fxToAdd, s)    end,
+      })
       for _, spec in ipairs(predicted) do
         util.add(fxLive[chan], { evt = spec, lane = spec.lane })
       end
@@ -1937,30 +1956,22 @@ function tm:rebuild(takeChanged)
                                     val = byTarget[target][1].rest or 0, shape = 'step', derived = 'ccbase' })
         end
       end
-      local bRemove, bAdd = reconcileDerived{
-        existing = ccBaseExisting[chan], predicted = predictedBase,
+      local wires = mmBatch()
+      reconcileDerived{
+        existing = ccBaseExisting[chan], predicted = predictedBase, sink = wires,
         key   = function(x) return util.key(canon(x.cc), canon(x.ppq)) end,
         match = function(have, spec) return have.val == spec.val end,
       }
       -- cc-replace fill: reconcile the generated curve on its target lane; shape is part of the
       -- match -- it drives REAPER's interpolation. see design/note-macros-v2.md § Continuous cc
-      local fRemove, fAdd = reconcileDerived{
-        existing = ccFillExisting[chan], predicted = ccFill,
+      reconcileDerived{
+        existing = ccFillExisting[chan], predicted = ccFill, sink = wires,
         key   = function(x) return util.key(canon(x.cc), canon(x.ppq)) end,
         match = function(have, spec) return have.val == spec.val and have.shape == spec.shape end,
       }
 
-      local cRemove, cAdd = reconcileCarrier(carrierExisting[chan], predictedDelta)
-      if #cRemove > 0 or #cAdd > 0 or #bRemove > 0 or #bAdd > 0 or #fRemove > 0 or #fAdd > 0 then
-        mm:modify(function()
-          for _, e in ipairs(cRemove) do mm:delete(e.token) end
-          for _, e in ipairs(bRemove) do mm:delete(e.token) end
-          for _, e in ipairs(fRemove) do mm:delete(e.token) end
-          for _, s in ipairs(cAdd)    do mm:add(s)          end
-          for _, s in ipairs(bAdd)    do mm:add(s)          end
-          for _, s in ipairs(fAdd)    do mm:add(s)          end
-        end)
-      end
+      reconcileCarrier(carrierExisting[chan], predictedDelta, wires)
+      wires.commit()
       if #newCarriers > 0 then newFxCarrier[chan] = newCarriers end
     end
 
@@ -2092,9 +2103,10 @@ function tm:rebuild(takeChanged)
         local n = w.evt
         util.add(records, { ppq = n.ppq, ppqL = n.ppqL, lane = w.lane, sample = n.sample or 0, key = n })
       end
-      local rems, adds_ = reconcilePCsForChan(chan, records)
-      for _, r in ipairs(rems)  do util.add(toDelete, r.token) end
-      for _, a in ipairs(adds_) do util.add(toAdd, a) end
+      reconcilePCsForChan(chan, records, {
+        del = function(r) util.add(toDelete, r.token) end,
+        add = function(a) util.add(toAdd, a) end,
+      })
     end
 
     if #toDelete > 0 or #toAdd > 0 then
