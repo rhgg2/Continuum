@@ -6,8 +6,8 @@
 -- @noindex
 
 --invariant: pure module -- no module-level state; a generator is fn(host, params, ctx) -> { notes, delta }
---invariant: host = windowed channel input streams: notes, pas, ccs, ats (logical, intent units)
---shape: host = { window={startppqL,endppqL}, chan, lane, id, notes={ {pitch,vel,detune,ppqL,endppqL},.. }, pas={ {ppqL,pitch,vel},.. }, ccs={ [cc]={ {ppqL,val},.. } }, ats={ {ppqL,val},.. } }
+--invariant: host = windowed channel input streams: notes, pas, ccs, ats, pb (logical, intent units)
+--shape: host = { window={startppqL,endppqL}, chan, lane, id, notes={ {pitch,vel,detune,ppqL,endppqL},.. }, pas={ {ppqL,pitch,vel},.. }, ccs={ [cc]={ {ppqL,val},.. } }, ats={ {ppqL,val},.. }, pb={ {ppqL,cents},.. } }
 --invariant: ctx binds resolution, pbRangeCents, nextSameLaneNote(host), step(pitch,detune,n)
 --invariant: periods are QN per the periodQN convention -- scalar or {num,den}
 --shape: result = { notes = { {ppqL,endppqL,pitch,vel,detune}, ... }, delta = { {ppqL,val,shape,[tension]}, ... } }

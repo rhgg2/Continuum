@@ -344,6 +344,105 @@ note arithmetic, lives as a module helper. **Build no interpreter now** —
 the move costs ~nothing if new kinds are shaped as composition and ctx
 accretes as named ops.
 
+## The fx chain — series-composition and multi-column authoring (design)
+
+Nothing here is built. It reframes the landed fan-out producer
+(`runProducer`) and § *Generator output*'s compose semantics — both stay
+accurate for what ships, this charts the series direction. The motivation
+is the rigidity of bare kinds: you can arp but not shape the arp's
+velocity, vibrate but not bend the rate in flight.
+
+**Today the `fx` list fans out; the chain makes it a series.**
+`runProducer` runs every kind in `note.fx` / `region.fx` against the
+*same* host, then unions the notes and sums the deltas — no kind ever
+sees another's output, so "shape the arp's velocity" has nowhere to live:
+a second kind can only read the chord, never the arp's notes. Reinterpret
+the (already ordered) list as a **series** — thread a `{ notes, delta }`
+**stream** through the stages, each transforming what the last produced.
+`[arp, velPattern]`: arp turns the chord into arp notes, velPattern
+rewrites their velocities.
+
+**One contract, two roles.** Every stage is
+`(stream, host, params, ctx) → stream`. Only `stream` flows — a stage's
+output is the next stage's input. `host`, `params`, `ctx` are ambient,
+re-supplied each call: `host` and `ctx` identical for every stage (window,
+membership streams, resolution, bounds), `params` the stage's own registry
+entry. The role falls out of whether a stage reads `stream`: **sources**
+ignore it and read `host` (today's generators — arp, retrig, trill,
+vibrato, slide); **transformers** read it and rewrite (new —
+velocity-pattern, humanize, density gate, transpose). A source is a
+transformer that ignores its input, so the head needs no special case; the
+kinds registry (A5) gains a `role`.
+
+**The initial stream is the membership.** Seed the chain with
+`{ notes = host.notes, delta = {} }` — membership as notes, no deltas — so
+a source reading `host.notes` and the first stage reading `stream.notes`
+coincide. This is the current rule; the seeding may grow other inputs
+later (authored deltas once pb-as-input lands).
+
+**Order is semantic; replace/augment re-reads as channel ownership.** The
+stream carries two channels, and a stage composes onto them by its op: a
+note-replacing source overwrites `notes`, an augment source *adds* to
+`delta`, a velocity transformer reads+writes `notes` and passes `delta`
+through. So velPattern before vs after arp give different results — the
+list order, cosmetic in v1, is now load-bearing. The A5 mode×dest axes
+survive verbatim: `mode` is the op (overwrite | add | pack), `dest` the
+channel it owns.
+
+**The channel's fx region is a second note-grid; chains are its notes.** A
+*chain* is a span carrying a series of stages — exactly `region.fx`'s
+shape, no new storage. Multiple chains coexist on a channel as **fx
+columns**, packed by overlap with A2's lane allocator re-pointed from
+derived notes to chains (B1 already renders the lone column note-lane-like;
+this resolves its deferred "overlapping-region sub-lanes"). The fxEdit
+modal becomes a **chain editor** — it tabs across the sibling chains, edits
+a chain's ordered stages (add / remove / reorder), and deletes or mints
+whole chains. On a note the chain is `note.fx`, reached as in v1 (in-cell
+badge + Super-X); per-lane note-fx columns stay deferred.
+
+**Multiplicity resolves by the target's fold — pack, sum, or layer.** Every
+output target folds overlapping contributions, and overlap is well-behaved
+exactly when that fold is order-free:
+
+- **notes** → lane-pack: any N chains flow into free lanes (two
+  note-replace chains merge — they share the parked chord, pack into
+  separate lanes);
+- **augment continuous** (additive pb/cc) → sum at the carrier node, as
+  v1 — commutative;
+- **replace continuous** (overwrite pb/cc) → **layer**: no commutative
+  fold exists, so the **fx-column lane index is the precedence** and the
+  topmost chain wins pointwise in the overlap (painter's algorithm).
+
+The fold operates at both scopes — between stages within a chain (a stage's
+op onto a stream channel) and between chains on a channel (at the node).
+The replace conflict is scoped per `(channel, exact target)`: two chains on
+the *same* cc number or both on pb; distinct cc numbers are independent
+wires. Replace-cc/pb is stubbed behind the unbuilt 4.9 overwrite path
+(A4/A5), so the only invariant the immediate work owes is **a chain
+declares its target and the fold is a property of that target** — which
+keeps top-wins open without building it.
+
+**Transformers rewrite values; rate stays a source param.** A transformer
+freely rewrites event *values* and nudges *discrete* timing (velocity,
+density, humanize, swing, transpose); it cannot coherently rewrite a
+continuous source's **rate**, because vibrato's breakpoints are placed by
+accumulated phase and resampling them loses coherence. So the line: value
+and discrete-timing are chain stages; rate / period / phase stay internal
+to the source as params. "Shape the arp's velocity" is a transformer;
+"bend the vibrato rate in flight" is a source param — modulate `period` in
+vibrato's loop, swapping its closed-form breakpoint placement for a phase
+accumulator.
+
+**Open — tab scope.** Whether the modal tabs across *all* chains on the
+channel or only those stacked at the cursor's ppq (overlap
+disambiguation). It decides whether the modal carries a channel index or
+just the cursor's column set; it doesn't gate the rest.
+
+**First cut.** Thread the `runProducer` loop, add `role` to the registry,
+write one note-channel transformer (velocity-pattern), and prove it on
+`[arp, velPattern]`; defer delta-channel transformers and the multi-column
+UI until the single-chain series is solid.
+
 ## Owned elsewhere — not this doc's work
 
 - **R5 — plink via MIDI; retire the listen bank**, and the **single-node
@@ -401,7 +500,7 @@ wants ~none of gm (see resolved open question below).
   is A2 verbatim (members sound + occupy lanes; nudge persists). Display of the
   parked bucket (`channels[chan].parked`) is the renderer's union (Track B B2). Pinned
   by the replace / augment / realise / removal / G4 tests in `tm_fx_region_spec`.
-- **A4 — reframed: generator input streams (notes/pas/ccs/ats). Landed; pb + continuous replace deferred.**
+- **A4 — reframed: generator input streams (notes/pas/ccs/ats/pb). Landed; continuous replace deferred.**
   A3 parks notes only. The PA half was misframed as park-the-PA-and-re-emit-it-rebound-to-the-region;
   that operation can't exist generically -- a PA is generator *input*, like a member's pitch/detune, and
   the generator's input->output mapping preserves no event correspondence to rebind across (an arp samples
@@ -410,9 +509,11 @@ wants ~none of gm (see resolved open question below).
   ats). **Landed**: `channelStreams` slices them from the real column projections at the 4.6 seam, keyed by
   `evt.ppqL or evt.ppq` (no toLogical round-trip); the PA projection moved ahead of the producer. See
   § A4 -- generator input streams.
-  **Deferred** (each until a consumer): **pb as input** (its intent cents `cents-minus-detune` is the
-  absorber's product, entangled with generator output -- needs the phased absorber-split, not an mm
-  re-derivation) and **continuous replace** (region pb overwrites logical pb, the 4.9 overwrite path).
+  **pb as input -- landed (authored breakpoints only).** The feared absorber-split was avoided: a generator
+  reads only the *authored* (non-derived) pb breakpoints, whose logical value is the persisted `cents`
+  sidecar -- no `cents-minus-detune` reconstruction. Sliced from the pre-producer `mm:ccs()` walk, fakes
+  excluded. **Deferred** (until a consumer): **continuous replace** (region pb overwrites logical pb, the
+  4.9 overwrite path).
   Known gaps unchanged: a member straddling a window edge is parked whole (no split); a parked note
   carrying its own `fx` loses that host behaviour to the region; a replace region's parked PAs stay
   take-side (latent orphan) until the first PA-consuming generator, then park them out.
@@ -571,7 +672,8 @@ host = { window={startppqL,endppqL}, chan, lane, id,
   notes = { {pitch,vel,detune,ppqL,endppqL}, ... },   -- the membership (was `events`)
   pas   = { {ppqL,pitch,vel}, ... },
   ccs   = { [ccNum] = { {ppqL,val}, ... } },
-  ats   = { {ppqL,val}, ... } }
+  ats   = { {ppqL,val}, ... },
+  pb    = { {ppqL,cents}, ... } }                     -- authored breakpoints, logical cents
 ```
 
 **Read the real projections, not mm.** Slice the streams from the **column projections**
@@ -612,13 +714,14 @@ more of the view before generating" is moving the `pas` projection earlier.
    `runProducer` from `(chan, window)` -- uniform across both host kinds and
    augment/replace.
 
-**pb -- deferred, by the phased absorber-split.** pb's intent value (`cents-minus-detune`)
-is produced by the absorber/pb walk, which itself consumes generator output (derived
-lane-1 detune seating, ~1724). Exposing it as input means splitting the absorber: an
-authored-only pb projection *before* the producer, then the existing 4.9 reseat (derived +
-carrier) *after*. A real refactor of the tuning layer -- do it when the first pb-consuming
-generator needs it, properly, not by mm re-derivation. **Continuous replace** (region pb
-overwrites logical pb) stays deferred on the same 4.9 overwrite path.
+**pb -- landed (authored breakpoints only).** Reading only the *authored* (non-derived) pb
+breakpoints dodged the phased absorber-split: their logical value is the persisted `cents`
+sidecar, so the pre-producer `mm:ccs()` walk reads it directly (fakes excluded by `derived`).
+A foreign-MIDI pb lacks the sidecar for one rebuild until 4.9 back-derives + persists it --
+harmless and self-healing, no consumer yet. The heavier path (the absorber's densified/derived
+logical stream as input) stays unbuilt until a generator needs more than breakpoints.
+**Continuous replace** (region pb overwrites logical pb) stays deferred on the 4.9 overwrite
+path -- the cheap tail once a replace transformer wants it.
 
 **Tests.** `tm_fx_region_spec`: a region over a window holding a cc + pa + at, with a
 capture-kind injected into `generators.kinds` recording its `host`, rebuild, assert

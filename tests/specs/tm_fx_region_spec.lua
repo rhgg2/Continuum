@@ -320,4 +320,28 @@ return {
     end,
   },
 
+  {
+    name = 'fx region: host.pb carries authored pb breakpoints, excluding absorber fakes',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h)   -- lane-1 note 60 over [0,240); its presence makes I2a seat an absorber fake at ppq 0
+      h.tm:addEvent({ evType = 'pb', ppq = 60, chan = 1, val = 50 })   -- val is cents (the um is cents-native)
+      h.tm:flush()
+
+      local captured
+      generators.kinds.capture = {
+        expand = function(host) captured = host; return { notes = {}, delta = {} } end,
+        mode = 'augment', dest = 'pb', label = 'Capture', defaults = {}, fields = {},
+      }
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+                                   fx = { { kind = 'capture' } } } })
+      h.tm:rebuild()
+      generators.kinds.capture = nil
+
+      t.truthy(captured, 'the capture kind ran and recorded its host')
+      t.deepEq(captured.pb, { { ppqL = 60, cents = 50 } },
+        'the authored pb breakpoint rides into host.pb; the absorber fake at ppq 0 is excluded')
+    end,
+  },
+
 }

@@ -1373,15 +1373,21 @@ do
       end
     end
 
-    -- PA projection: moved before the producer so windowed channel streams see PAs as generator input;
-    -- before step 5 so findNoteColumnForPitch matches raw. Parked-host PAs stay orphan until a PA-consuming generator. see design/note-macros-v2.md § A4
+    -- Pre-producer input projection: PA columns + authored pb breakpoints, exposed to the generator as
+    -- channel input (PA before step 5; pb authored breakpoints only, fakes excluded). see design/note-macros-v2.md § A4
+    local authoredPbByChan = {}
     for _, cc in mm:ccs() do
       if cc.evType == 'pa' then
         local noteCol = findNoteColumnForPitch(channels[cc.chan], cc.pitch, cc.ppq)
         if noteCol then
           util.add(noteCol.events, projectCC(cc, mm:tokenOf(cc), { type = 'pa' }))
         end
+      elseif cc.evType == 'pb' and not cc.derived and cc.cents ~= nil then
+        util.bucket(authoredPbByChan, cc.chan, { ppqL = cc.ppqL or cc.ppq, cents = cc.cents })
       end
+    end
+    for _, list in pairs(authoredPbByChan) do
+      table.sort(list, function(a, b) return a.ppqL < b.ppqL end)
     end
 
     -- 4.6) Macro expansion (in-memory): expand fx-carrying notes, reconcile vs fxExisting; add/del deferred to 4.8; fxLive feeds tail walk + PC synthesis.
@@ -1423,11 +1429,11 @@ do
         return out
       end
       -- cc-family streams a generator reads over its window (notes via membersOf). Key `evt.ppqL or evt.ppq`:
-      -- ppqL is nil when raw==logical (step-5 convention); no toLogical round-trip. pb deferred. see design/note-macros-v2.md § A4
+      -- ppqL nil when raw==logical (step-5); pb sliced from the pre-producer authoredPbByChan. see design/note-macros-v2.md § A4
       local function channelStreams(chan, startL, endL)
         local cols = channels[chan].columns
         local function within(ppqL) return ppqL >= startL and ppqL < endL end
-        local pas, ccs, ats = {}, {}, {}
+        local pas, ccs, ats, pb = {}, {}, {}, {}
         for _, col in ipairs(cols.notes) do
           for _, evt in ipairs(col.events) do
             local ppqL = evt.ppqL or evt.ppq
@@ -1446,7 +1452,10 @@ do
           local ppqL = evt.ppqL or evt.ppq
           if within(ppqL) then util.add(ats, { ppqL = ppqL, val = evt.val }) end
         end
-        return pas, ccs, ats
+        for _, bp in ipairs(authoredPbByChan[chan] or {}) do
+          if within(bp.ppqL) then util.add(pb, { ppqL = bp.ppqL, cents = bp.cents }) end
+        end
+        return pas, ccs, ats, pb
       end
       -- Deterministic allocator: lowest lane free of overlap, authored notes seed occupancy;
       -- emission order -> deterministic -> G4-stable. see design/note-macros-v2.md § Generator output
@@ -1478,9 +1487,9 @@ do
           local startL, endL = p.window[1], p.window[2]
           -- The host the generators read: the note membership plus the windowed channel input
           -- streams, built once per host (not per kind). see design/note-macros-v2.md § A4
-          local pas, ccs, ats = channelStreams(chan, startL, endL)
+          local pas, ccs, ats, pb = channelStreams(chan, startL, endL)
           local host = { window = { startL, endL }, chan = chan, lane = p.lane, id = p.id,
-                         notes = p.notes, pas = pas, ccs = ccs, ats = ats }
+                         notes = p.notes, pas = pas, ccs = ccs, ats = ats, pb = pb }
           -- Region producers (lane unset) defer their notes: lanes are allocated over the
           -- whole batch after the fx loop. Note producers ride the host's own lane inline.
           local regionNotes = p.lane == nil and {} or nil
