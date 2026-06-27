@@ -1,0 +1,66 @@
+@module masterMix  src=masterMix.lua  loc=121  sha=untracked  mode=chunk
+@deps chrome, ctx
+
+# Shapes
+  @shape  masterMix = { segment = { id = 'master', render } }   -- one shared toolbar segment
+
+# Imports
+  @require ImGui = 'imgui'  @ 6
+      @reaper  reads GetMasterTrack + D_VOL + Track_GetPeakInfo(0/1 peak, 1024 loudness) + Track_GetPeakHoldDB; writes via CSurf_OnVolumeChange
+
+# Private state
+  @state colour = chrome.colour  @ 9
+  @state WIDTH = 170  @ 11
+  @state BAR_H = 5  @ 12
+  @state HANDLE_W = 8  @ 13   -- grab handle width, px
+  @state METER_MIN = -60  @ 14
+  @state METER_MAX = 6  @ 15
+  @state ZERO_FRAC = (0 - METER_MIN) / (METER_MAX - METER_MIN)  @ 16   -- where 0 dB sits across the bar
+  @state DETENT_DB = 0.7  @ 17   -- a drag snaps to unity within this band of 0 dB
+  @state PEAK_SMOOTH = 0.5  @ 18   -- ~2-frame averaging on the bar fill (the raw peak is nervy)
+  @state suppressDrag = false  @ 65   -- a double-click reset holds off drag until the mouse releases
+  @state peakL, peakR = 0, 0  @ 66   -- frame-averaged bar fills
+
+# Private functions
+  @fn clamp01(v)  @ 20
+  @fn px(v)  @ 21
+  @fn ampToDb(a)  @ 22
+  @fn dbFrac(db)  @ 23
+  @fn loudnessDb(raw)  @ 27
+      -- Channel 1024 returns loudness, but its scale is undocumented; treated as
+      -- linear amplitude here. See docs/masterMix.md § Loudness scale.
+  @fn volToFrac(vol)  @ 30-33
+      -- REAPER's own fader taper (matches a track fader): frac 0..1 <-> dB <-> vol.
+  @fn fracToDb(frac)  @ 34
+  @fn dbToVol(db)  @ 35
+  -- Crisp (non-AA) primitives: ReaImGui's AddLine/AddRect are anti-aliased with
+  -- no per-call toggle, so axis-aligned filled rects stand in for 1px rules.
+  @fn hrule(dl, x0, x1, y, col)  @ 40
+  @fn vrule(dl, x, y0, y1, col)  @ 41
+  @fn box(dl, x0, y0, x1, y1, col)  @ 42-45
+  -- Meter bars
+  @fn drawBar(dl, x, top, peak, holdDb, loudX)  @ 49-61
+  -- Segment
+  @fn render()  @ 68-119
+
+# Uses (outbound edges)
+  @use call    imgui.CalcTextSize  @ render:112
+  @use call    imgui.DrawList_AddRectFilled  @ hrule:40 vrule:41 drawBar:50,54,56 render:106,115
+  @use call    imgui.DrawList_AddText  @ render:117
+  @use call    imgui.GetCursorScreenPos  @ render:72
+  @use call    imgui.GetForegroundDrawList  @ render:113
+  @use call    imgui.GetFrameHeight  @ render:74
+  @use call    imgui.GetMousePos  @ render:84
+  @use call    imgui.GetWindowDrawList  @ render:75
+  @use call    imgui.InvisibleButton  @ render:78
+  @use call    imgui.IsItemActive  @ render:79
+  @use call    imgui.IsItemHovered  @ render:80
+  @use call    imgui.IsMouseDoubleClicked  @ render:80
+  @use require imgui  @ 6
+
+# REAPER API surface
+  @reaper DB2SLIDER
+  @reaper GetMasterTrack
+  @reaper CSurf_OnVolumeChange
+  @reaper Track_GetPeakInfo, Track_GetPeakHoldDB
+  @reaper GetMediaTrackInfo_Value

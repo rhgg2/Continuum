@@ -1,4 +1,4 @@
-@module coordinator  src=coordinator.lua  loc=420  sha=e69cb6f  mode=chunk  self=coord
+@module coordinator  src=coordinator.lua  loc=421  sha=59da522  mode=chunk  self=coord
 @deps cm, ds, cmgr, gui
 
 # Invariants & contracts
@@ -22,35 +22,36 @@
   @construct chrome    = util.instantiate('chrome')  @ 20
   @construct modalHost = util.instantiate('modalHost')  @ 23
   @construct help      = util.instantiate('help')  @ 24
+  @construct masterMix = util.instantiate('masterMix')  @ 25
 
 # Private state
   @state ctx, uiFont = gui.ctx, gui.uiFont  @ 17
   @state uiSize = gui.fontSize.ui  @ 18
   @state toolbar = chrome.makeToolbar()  @ 22   -- one shared toolbar; renders the active page's row
-  @state facades = {}  @ 32
-  @state facade = {  @ 33
-  @state STD = { cm = cm, ds = ds, cmgr = cmgr, chrome = chrome, gui = g...  @ 37
-  @state CHROME_PAD_X, CHROME_PAD_Y = 8, 4  @ 39
-  @state pages, active, previous = {}, nil, nil  @ 41
-  @state lastToolbarActive = nil  @ 42   -- last page measured; a switch re-pins the band height
-  @state bootSettled = false  @ 43   -- latched once boot transients (fonts, window width) settle
-  @state bootFrames = 0  @ 44
-  @state lastAvailW = nil  @ 45
-  @state quitting = false  @ 46
-  @state errHandler = nil  @ 47
-  @state focusFrames = 0  @ 48   -- >0: re-focus our window this many frames, counting down
-  @state fxFloatOpen = false  @ 49   -- an FX float window was open at the last poll
-  @state weHadFocus = false  @ 50   -- our window held focus at the end of the last frame
-  @state myHwnd  @ 51   -- our OS window HWND, captured via js while we hold focus
-  @state jsFocus = reaper.JS_Window_GetForeground ~= nil  @ 52   -- js_ReaScriptAPI present
-  @state switcherSeg = { id = 'switcher', render = drawSwitcher }  @ 164
-  @state externalCommands = {}  @ 179   -- list of { extKey, command }
-  @state coord = {}  @ 354
+  @state facades = {}  @ 33
+  @state facade = {  @ 34
+  @state STD = { cm = cm, ds = ds, cmgr = cmgr, chrome = chrome, gui = g...  @ 38
+  @state CHROME_PAD_X, CHROME_PAD_Y = 8, 4  @ 40
+  @state pages, active, previous = {}, nil, nil  @ 42
+  @state lastToolbarActive = nil  @ 43   -- last page measured; a switch re-pins the band height
+  @state bootSettled = false  @ 44   -- latched once boot transients (fonts, window width) settle
+  @state bootFrames = 0  @ 45
+  @state lastAvailW = nil  @ 46
+  @state quitting = false  @ 47
+  @state errHandler = nil  @ 48
+  @state focusFrames = 0  @ 49   -- >0: re-focus our window this many frames, counting down
+  @state fxFloatOpen = false  @ 50   -- an FX float window was open at the last poll
+  @state weHadFocus = false  @ 51   -- our window held focus at the end of the last frame
+  @state myHwnd  @ 52   -- our OS window HWND, captured via js while we hold focus
+  @state jsFocus = reaper.JS_Window_GetForeground ~= nil  @ 53   -- js_ReaScriptAPI present
+  @state switcherSeg = { id = 'switcher', render = drawSwitcher }  @ 165
+  @state externalCommands = {}  @ 180   -- list of { extKey, command }
+  @state coord = {}  @ 355
       @contract  register instantiates page; first registered becomes active; returns page handle
 
 # Private functions
   -- Keyboard router
-  @fn isDigitMods(mods)  @ 65-67
+  @fn isDigitMods(mods)  @ 66-68
       -- Capture digits and '/' into the prefix buffer; Esc cancels. Returns
       -- 'consumed' if a prefix-accumulating key fired this frame; nil otherwise
       -- (so the normal keychain walk proceeds). The prefix is NOT finished here
@@ -60,106 +61,107 @@
       -- chord open while typing a count is a natural reach, and any Ctrl-N or
       -- Super-N command binding is overridden for the duration of prefix mode.
       -- Shift/Alt still disqualify (Shift-digit emits a different char).
-  @fn handlePrefixCapture(cmgr, ctx)  @ 69-84
-  @fn dispatchKeys(state, cmgr, ctx)  @ 91-124
+  @fn handlePrefixCapture(cmgr, ctx)  @ 70-85
+  @fn dispatchKeys(state, cmgr, ctx)  @ 92-125
   -- Coordinator
-  @fn tick()  @ 129-136
+  @fn tick()  @ 130-137
       @contract  tick() runs once per frame before the page draws; no selection bus here
-  @fn drawSwitcher()  @ 138-160
-  @fn dispatch(state)  @ 166-173
+  @fn drawSwitcher()  @ 139-161
+  @fn dispatch(state)  @ 167-174
   -- External commands (REAPER-keymap bridge)
-  @fn pollExternalCommands()  @ 181-188
-  @fn anyFxFloating()  @ 192-204
+  @fn pollExternalCommands()  @ 182-189
+  @fn anyFxFloating()  @ 193-205
       -- Any floating FX window open across master + tracks. The poll in frame() reads
       -- its open→closed edge (X button or F11) to reclaim OS focus from REAPER.
-  @fn frame()  @ 206-348
+  @fn frame()  @ 207-349
 
 # Public API (coord:*)
-  @api coord:register(name, moduleName, extra)  @ 356-361
-  @api coord:setActive(name)  @ 365-378
+  @api coord:register(name, moduleName, extra)  @ 357-362
+  @api coord:setActive(name)  @ 366-379
       @contract  setActive(name) no-ops if name==active; else unbind outgoing, swap scope, bind incoming
       @contract  tracker's no-arg bind resolves its stored selection; renderBody keeps it current
-  @api coord:returnToArrange()  @ 381-384
+  @api coord:returnToArrange()  @ 382-385
       @contract  tracker back to arrange; no reveal (cursor never left). No-op if arrange unregistered.
-  @api coord:getFacade(name)  @ 387
+  @api coord:getFacade(name)  @ 388
       @contract  resolve a published page facade by name; the contents are owned by the publishing page
-  @api coord:previousPage()  @ 390
+  @api coord:previousPage()  @ 391
       @contract  the page active immediately before the current one; closeEditor returns here
-  @api coord:togglePage()  @ 394-402
+  @api coord:togglePage()  @ 395-403
       -- Cycle tracker → arrange → sample → wiring → tracker. Unregistered pages
       -- are skipped; with ≥1 track every page activates.
-  @api coord:reloadAfterExternalMutation()  @ 405-409
+  @api coord:reloadAfterExternalMutation()  @ 406-410
       @contract  invoke after firing a REAPER action that mutates the bound take from inside a frame (Ctrl-Z, Ctrl-Shift-Z). The watcher's end-of-frame baseline would otherwise absorb the mutation; this reloads now so tm/vm stay coherent with the take.
-  @api coord:onExternalCommand(extKey, command)  @ 412-414
+  @api coord:onExternalCommand(extKey, command)  @ 413-415
       @contract  registers an ExtState key→command bridge polled each frame to fire Continuum commands
-  @api coord:quit()  @ 416
-  @api coord:run(handler)  @ 418
+  @api coord:quit()  @ 417
+  @api coord:run(handler)  @ 419
       @contract  handler wraps every deferred frame; without it, post-frame-1 errors raise raw dialogs
 
 # Uses (outbound edges)
-  @use call    chrome.colour  @ drawSwitcher:143,144 frame:221,222,223,224,225,295,326,327
+  @use call    chrome.colour  @ drawSwitcher:144,145 frame:222,223,224,225,226,296,327,328
   @use call    chrome.makeToolbar  @ 22
-  @use call    chrome.popChromeStyles  @ frame:267
-  @use call    chrome.pushChromeStyles  @ frame:261
-  @use call    chrome.resetPickerActive  @ frame:294
-  @use call    chrome.resetToolbar  @ setActive:370
-  @use call    chrome.toolbarLineCount  @ frame:291
-  @use call    cm.pollUndo  @ frame:207
-  @use call    cmgr.appendPrefix  @ handlePrefixCapture:74,78
-  @use call    cmgr.bind  @ 29
-  @use call    cmgr.cancelPrefix  @ handlePrefixCapture:81
-  @use call    cmgr.finishPrefix  @ dispatchKeys:112
-  @use call    cmgr.invoke  @ dispatchKeys:114 drawSwitcher:147 pollExternalCommands:185
-  @use call    cmgr.isPrefixActive  @ handlePrefixCapture:70 dispatchKeys:111
-  @use call    cmgr.keySpec  @ dispatchKeys:104
-  @use call    cmgr.keychain  @ dispatchKeys:100
-  @use call    cmgr.pop  @ setActive:371
-  @use call    cmgr.push  @ setActive:375
-  @use call    cmgr.register  @ 28
-  @use call    cmgr.rootKeymap  @ dispatchKeys:100
-  @use call    help.beginFrame  @ frame:217
-  @use call    help.draw  @ frame:339
-  @use call    help.isOpen  @ dispatch:169
-  @use call    help.setPage  @ setActive:374
-  @use call    help.toggle  @ 28
-  @use call    imgui.Begin  @ frame:233
-  @use call    imgui.BeginChild  @ frame:277,298,329
-  @use call    imgui.Button  @ drawSwitcher:146
-  @use call    imgui.End  @ frame:342
-  @use call    imgui.EndChild  @ frame:282,303,334
-  @use call    imgui.GetContentRegionAvail  @ frame:252,311
-  @use call    imgui.GetCursorPosY  @ frame:310,316
-  @use call    imgui.GetCursorScreenPos  @ frame:274
-  @use call    imgui.GetFrameHeight  @ frame:288
-  @use call    imgui.GetFrameHeightWithSpacing  @ frame:312
-  @use call    imgui.GetKeyMods  @ handlePrefixCapture:71 dispatchKeys:108
-  @use call    imgui.GetStyleVar  @ frame:290
-  @use call    imgui.Indent  @ frame:315
-  @use call    imgui.IsKeyDown  @ dispatchKeys:105
-  @use call    imgui.IsKeyPressed  @ handlePrefixCapture:73,77,80 dispatchKeys:108
-  @use call    imgui.IsWindowFocused  @ frame:245
-  @use call    imgui.PopFont  @ frame:345
-  @use call    imgui.PopStyleColor  @ drawSwitcher:149 frame:305,336,344
-  @use call    imgui.PopStyleVar  @ frame:239,266,283,289,304,335
-  @use call    imgui.PushFont  @ frame:220
-  @use call    imgui.PushStyleColor  @ drawSwitcher:143,144 frame:221,222,223,224,225,295,326,327
-  @use call    imgui.PushStyleVar  @ frame:227,262,275,276,287,296,328
-  @use call    imgui.SameLine  @ drawSwitcher:152,154,156,158
-  @use call    imgui.SetCursorPosY  @ frame:316,325
-  @use call    imgui.SetCursorScreenPos  @ frame:284
-  @use call    imgui.SetNextWindowContentSize  @ frame:297
-  @use call    imgui.SetNextWindowFocus  @ frame:229
-  @use call    imgui.SetScrollX  @ frame:243
-  @use call    imgui.SetScrollY  @ frame:243
-  @use call    imgui.Unindent  @ frame:321
-  @use call    modalHost.draw  @ frame:340
-  @use call    modalHost.isOpen  @ 28
-  @use call    modalHost.tick  @ tick:130
-  @use call    util.assign  @ register:357
-  @use call    util.instantiate  @ 20,23,24 register:357
+  @use call    chrome.popChromeStyles  @ frame:268
+  @use call    chrome.pushChromeStyles  @ frame:262
+  @use call    chrome.resetPickerActive  @ frame:295
+  @use call    chrome.resetToolbar  @ setActive:371
+  @use call    chrome.toolbarLineCount  @ frame:292
+  @use call    cm.pollUndo  @ frame:208
+  @use call    cmgr.appendPrefix  @ handlePrefixCapture:75,79
+  @use call    cmgr.bind  @ 30
+  @use call    cmgr.cancelPrefix  @ handlePrefixCapture:82
+  @use call    cmgr.finishPrefix  @ dispatchKeys:113
+  @use call    cmgr.invoke  @ dispatchKeys:115 drawSwitcher:148 pollExternalCommands:186
+  @use call    cmgr.isPrefixActive  @ handlePrefixCapture:71 dispatchKeys:112
+  @use call    cmgr.keySpec  @ dispatchKeys:105
+  @use call    cmgr.keychain  @ dispatchKeys:101
+  @use call    cmgr.pop  @ setActive:372
+  @use call    cmgr.push  @ setActive:376
+  @use call    cmgr.register  @ 29
+  @use call    cmgr.rootKeymap  @ dispatchKeys:101
+  @use call    help.beginFrame  @ frame:218
+  @use call    help.draw  @ frame:340
+  @use call    help.isOpen  @ dispatch:170
+  @use call    help.setPage  @ setActive:375
+  @use call    help.toggle  @ 29
+  @use call    imgui.Begin  @ frame:234
+  @use call    imgui.BeginChild  @ frame:278,299,330
+  @use call    imgui.Button  @ drawSwitcher:147
+  @use call    imgui.End  @ frame:343
+  @use call    imgui.EndChild  @ frame:283,304,335
+  @use call    imgui.GetContentRegionAvail  @ frame:253,312
+  @use call    imgui.GetCursorPosY  @ frame:311,317
+  @use call    imgui.GetCursorScreenPos  @ frame:275
+  @use call    imgui.GetFrameHeight  @ frame:289
+  @use call    imgui.GetFrameHeightWithSpacing  @ frame:313
+  @use call    imgui.GetKeyMods  @ handlePrefixCapture:72 dispatchKeys:109
+  @use call    imgui.GetStyleVar  @ frame:291
+  @use call    imgui.Indent  @ frame:316
+  @use call    imgui.IsKeyDown  @ dispatchKeys:106
+  @use call    imgui.IsKeyPressed  @ handlePrefixCapture:74,78,81 dispatchKeys:109
+  @use call    imgui.IsWindowFocused  @ frame:246
+  @use call    imgui.PopFont  @ frame:346
+  @use call    imgui.PopStyleColor  @ drawSwitcher:150 frame:306,337,345
+  @use call    imgui.PopStyleVar  @ frame:240,267,284,290,305,336
+  @use call    imgui.PushFont  @ frame:221
+  @use call    imgui.PushStyleColor  @ drawSwitcher:144,145 frame:222,223,224,225,226,296,327,328
+  @use call    imgui.PushStyleVar  @ frame:228,263,276,277,288,297,329
+  @use call    imgui.SameLine  @ drawSwitcher:153,155,157,159
+  @use call    imgui.SetCursorPosY  @ frame:317,326
+  @use call    imgui.SetCursorScreenPos  @ frame:285
+  @use call    imgui.SetNextWindowContentSize  @ frame:298
+  @use call    imgui.SetNextWindowFocus  @ frame:230
+  @use call    imgui.SetScrollX  @ frame:244
+  @use call    imgui.SetScrollY  @ frame:244
+  @use call    imgui.Unindent  @ frame:322
+  @use call    modalHost.draw  @ frame:341
+  @use call    modalHost.isOpen  @ 29
+  @use call    modalHost.tick  @ tick:131
+  @use call    util.assign  @ register:358
+  @use call    util.instantiate  @ 20,23,24,25 register:358
   @use require chrome  @ 20
   @use require help  @ 24
   @use require imgui  @ 14
+  @use require masterMix  @ 25
   @use require modalHost  @ 23
   @use require util  @ 7
 

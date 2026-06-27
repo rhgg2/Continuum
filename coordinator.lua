@@ -22,6 +22,7 @@ local chrome = util.instantiate('chrome',
 local toolbar = chrome.makeToolbar()   -- one shared toolbar; renders the active page's row
 local modalHost = util.instantiate('modalHost', { ctx = ctx, chrome = chrome })
 local help      = util.instantiate('help', { ctx = ctx, chrome = chrome, cmgr = cmgr })
+local masterMix = util.instantiate('masterMix', { ctx = ctx, chrome = chrome })
 
 -- F1 toggles the keybinding cheat-sheet (root scope, so every page picks it
 -- up). Held off while a modal owns input — the overlay would cover the dialog.
@@ -260,7 +261,7 @@ local function frame()
     local function drawToolbarRow()
       chrome.pushChromeStyles()
       ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, 6, 2)
-      local segs = { switcherSeg }
+      local segs = { switcherSeg, masterMix.segment }
       for _, s in ipairs(page:toolbarSegments()) do segs[#segs + 1] = s end
       toolbar(segs)
       ImGui.PopStyleVar(ctx, 1)
