@@ -1,4 +1,4 @@
-@module routingManager  src=routingManager.lua  loc=982  sha=ca82072  mode=chunk  self=rm
+@module routingManager  src=routingManager.lua  loc=1049  sha=ca82072  mode=chunk  self=rm
 
 # Invariants & contracts
   @invariant  id is a track/fx GUID string — opaque to callers, stable across reload
@@ -29,7 +29,7 @@
   @state EXT_SECTION = 'continuum_wiring'  @ 513
   @state META_PEXT = 'P_EXT:ctm_meta'  @ 514
   @state META_STORES = {  @ 518
-  @state paramIdxByIdent = {}  @ 634
+  @state paramIdxByIdent = {}  @ 658
 
 # Private functions
   -- track resolution
@@ -114,85 +114,103 @@
   @fn readMeta(store)  @ 540-543
   @fn writeMeta(store, id, meta)  @ 546-560
       -- nil meta deletes the entry; otherwise patch-merge (util.REMOVE clears a field).
+  -- Mute: clear live pins on one side, stash the real pinout in fx-meta so reads stay wired.
+  @fn applyMuteReport(fx)  @ 567-573
+      -- A muted fx reads its live (cleared) side, so swap the stashed real pinout back
+      -- into it. Mutates and returns the meta-folded record.
+  @fn divertIfMuted(fxId, pm)  @ 577-584
+      -- A pin write to a muted fx must not relight it: stash the intended pinout for the
+      -- cleared side and return a pinMap with that side cleared, keeping the fx silent.
   -- read
-  @fn trackName(track)  @ 564-567
-  @fn readMainSend(track)  @ 569-577
-  @fn trackHasMidiTake(track)  @ 581-587
+  @fn trackName(track)  @ 588-591
+  @fn readMainSend(track)  @ 593-601
+  @fn trackHasMidiTake(track)  @ 605-611
       -- A track's own active MIDI take decides whether its source node emits on bus 0: a folder
       -- parent or bare source with no midi take produces nothing there (the out stays wirable).
-  @fn readTrack(track, isMaster)  @ 589-604
-  @fn stampParents(records)  @ 608-618
+  @fn readTrack(track, isMaster)  @ 613-628
+  @fn stampParents(records)  @ 632-642
       -- Folder membership is positional (I_FOLDERDEPTH: 1 opens, <0 closes |n|): walk
       -- tracks in order, each foldered track's parent is the open-folder stack top.
   -- write
-  @fn writeMainSend(track, ms)  @ 622-630
-  @fn paramsByName(track, fxIdx)  @ 636-649
-  @fn writeParams(track, fxIdx, params)  @ 652-659
+  @fn writeMainSend(track, ms)  @ 646-654
+  @fn paramsByName(track, fxIdx)  @ 660-673
+  @fn writeParams(track, fxIdx, params)  @ 676-683
       @contract  params keyed by display name; an unknown name raises
-  @fn readParams(track, fxIdx)  @ 662-668
+  @fn readParams(track, fxIdx)  @ 686-692
       -- Live { [name] = value } for every named param — the read counterpart to writeParams.
-  @fn routingIdxOf(track, fxIdx)  @ 672-679
+  @fn routingIdxOf(track, fxIdx)  @ 696-703
       -- Absolute fx index → chunk routing index (routing-bearing blocks only); nil for a
       -- JS/container fx, which has no routing trailer — writing midi to one is a no-op.
-  @fn writeMidiRouting(track, fxIdx, midi)  @ 681-693
-  @fn writeTrackFields(track, t)  @ 695-704
+  @fn writeMidiRouting(track, fxIdx, midi)  @ 705-717
+  @fn writeTrackFields(track, t)  @ 719-728
 
 # Public API (rm:*)
-  @api rm:trackLabels()  @ 709-721
+  @api rm:trackLabels()  @ 733-745
       @contract  lightweight {id, name, number, isMaster} per project track + master; no fx/sends/chunk reads.
-  @api rm:tracks()  @ 723-736
-  @api rm:track(id)  @ 739-746
+  @api rm:tracks()  @ 747-760
+  @api rm:track(id)  @ 763-770
       @contract  full record for one track by id (single-track rm:tracks()); nil if the id is gone
-  @api rm:fxIds(id)  @ 750-760
+  @api rm:fxIds(id)  @ 774-784
       @contract  ordered live fx ids for a track via TrackFX — no chunk read; nil if the id is gone
       @contract  second return: { [id] = ident } over the same chain
-  @api rm:reaperTrack(id)  @ 763-765
+  @api rm:reaperTrack(id)  @ 787-789
       @contract  raw MediaTrack handle for id — escape hatch for reaper ops rm doesn't model; nil if gone
-  @api rm:fxTrack(id)  @ 768-770
+  @api rm:fxTrack(id)  @ 792-794
       @contract  live MediaTrack hosting fx id, resolved without reading its record/chunk; nil if gone
-  @api rm:masterId()  @ 773-776
+  @api rm:masterId()  @ 797-800
       @contract  the master track's guid; resolves master without an rm:tracks() scan
-  @api rm:resyncMeta()  @ 780-787
+  @api rm:resyncMeta()  @ 804-811
       @contract  pull every meta store's scratch P_EXT mirror back into projext after a
       @contract  REAPER undo/redo — projext doesn't reverse natively, the scratch chunk does
-  @api rm:pollUndo()  @ 791-799
+  @api rm:pollUndo()  @ 815-823
       @contract  per-frame heartbeat — ensures the scratch exists, and on a scratch-chunk
       @contract  rewind (REAPER undo/redo) pulls the meta mirrors back into projext
-  @api rm:addTrack(t)  @ 801-821
-  @api rm:assignTrack(id, t)  @ 823-829
-  @api rm:deleteTrack(id)  @ 831-834
-  @api rm:setSendGain(srcId, dstId, gain)  @ 838-849
+  @api rm:addTrack(t)  @ 825-845
+  @api rm:assignTrack(id, t)  @ 847-853
+  @api rm:deleteTrack(id)  @ 855-858
+  @api rm:setSendGain(srcId, dstId, gain)  @ 862-873
       @contract  targeted live D_VOL on the audio send srcId→dstId; false if no such send is live.
       @contract  the partial write assignTrack{sends} (full-replace) can't serve — for live gain pokes.
-  @api rm:addFx(trackId, t)  @ 851-865
-  @api rm:assignFx(id, t)  @ 867-885
-  @api rm:rewritePins(id, pinMaps)  @ 889-892
-      -- Undo-free pin re-assert (no transaction, no meta): repairs the identity-OR a same-cycle
-      -- I_NCHAN grow stamps onto a just-written pin. See docs/wiringManager.md § Pin re-assert after grow.
-  @api rm:meta(store, id)  @ 895-899
+  @api rm:addFx(trackId, t)  @ 875-889
+  @api rm:assignFx(id, t)  @ 891-909
+  @api rm:rewritePins(id, pinMaps)  @ 913-916
+      -- Undo-free pin re-assert (no transaction; muted fx stash-divert may touch meta):
+      -- repairs the identity-OR a same-cycle I_NCHAN grow stamps onto a just-written pin. See docs/wiringManager.md § Pin re-assert after grow.
+  @api rm:meta(store, id)  @ 919-923
       @contract  read a named meta store ('fx'|'bus'): whole blob, or one entry when id given
-  @api rm:assignMeta(store, id, meta)  @ 902-904
+  @api rm:assignMeta(store, id, meta)  @ 926-928
       @contract  write a named meta store: nil deletes store[id], else patch-merge (util.REMOVE to clear)
-  @api rm:writeChainMidi(trackId, writes)  @ 907-924
+  @api rm:writeChainMidi(trackId, writes)  @ 931-948
       @contract  batch per-FX MIDI routing for one track in a single chunk Get+Set; writes={{id,midi},...}
-  @api rm:deleteFx(id)  @ 926-929
-  @api rm:fx(id)  @ 932-943
+  @api rm:deleteFx(id)  @ 950-953
+  @api rm:fx(id)  @ 956-967
       @contract  fx record by id (ports, names, pinMaps, midi, trackId); nil if gone. Params separate.
-  @api rm:params(id)  @ 947-950
+  @api rm:params(id)  @ 971-974
       @contract  live { [name] = value } param values for the fx by id; nil if gone.
       @contract  the mutable control-state counterpart to the structural rm:fx record.
-  @api rm:showFx(id)  @ 953-958
+  @api rm:setMuted(fxId, on)  @ 979-999
+      @contract  silence/relight an fx. Muted: the silencing side's live pins are cleared
+      @contract  (input for a processor, output for a generator), the real pinout stashed in
+      @contract  fx-meta + reported up (wire kept); writes to that side divert to the stash.
+  @api rm:muted(fxId)  @ 1002-1005
+      @contract  true iff fxId is currently muted; false for a live or absent fx.
+  @api rm:setBypassed(fxId, on)  @ 1008-1011
+      @contract  bypass = REAPER-native FX enable (pass-through, topology-safe, not in the snapshot).
+  @api rm:bypassed(fxId)  @ 1014-1017
+      @contract  true iff fxId is bypassed (REAPER-disabled); false for an enabled or absent fx.
+  @api rm:showFx(id)  @ 1020-1025
       @contract  floats the fx window for id; false if the fx is no longer live
-  @api rm:installedFx()  @ 961-972
+  @api rm:installedFx()  @ 1028-1039
       @contract  enumerates reaper.EnumInstalledFX once, memoised; the set is runtime-fixed
-  @api rm:transaction(label, fn)  @ 974-980
+  @api rm:transaction(label, fn)  @ 1041-1047
 
 # Uses (outbound edges)
-  @use call    scratch.peek  @ resyncMeta:781
-  @use call    scratch.track  @ writeMeta:558 pollUndo:792
-  @use call    util.add  @ decodePairList:68 readFxChain:376 readSends:433 reconcileSends:485 trackLabels:717,719 tracks:726,729 fxIds:756 installedFx:967
-  @use call    util.assign  @ writeTrackMeta:536 writeMeta:553 readTrack:602 tracks:732 track:744 fx:941
-  @use call    util.clone  @ addTrack:818 assignTrack:827 addFx:862 assignFx:883
+  @use call    scratch.peek  @ resyncMeta:805
+  @use call    scratch.track  @ writeMeta:558 pollUndo:816
+  @use call    util.add  @ decodePairList:68 readFxChain:376 readSends:433 reconcileSends:485 trackLabels:741,743 tracks:750,753 fxIds:780 installedFx:1034
+  @use call    util.assign  @ writeTrackMeta:536 writeMeta:553 readTrack:626 tracks:756 track:768 fx:965
+  @use call    util.clone  @ addTrack:842 assignTrack:851 addFx:886 assignFx:907
+  @use call    util.deepClone  @ applyMuteReport:570 divertIfMuted:581 setMuted:988,993
   @use call    util.key  @ sendKey:440
   @use call    util.serialise  @ writeTrackMeta:537 writeMeta:556
   @use call    util.unserialise  @ decodeBlob:524
@@ -204,7 +222,7 @@
   @reaper GetTrackGUID
   @reaper CountTracks
   @reaper GetTrack
-  @reaper TrackFX_GetCount, TrackFX_GetFXGUID, TrackFX_GetPinMappings, TrackFX_GetIOSize, TrackFX_GetNamedConfigParm, TrackFX_SetPinMappings, TrackFX_GetParamName, TrackFX_SetParam, TrackFX_GetParam, TrackFX_AddByName, TrackFX_CopyToTrack, TrackFX_Delete, TrackFX_Show
+  @reaper TrackFX_GetCount, TrackFX_GetFXGUID, TrackFX_GetPinMappings, TrackFX_GetIOSize, TrackFX_GetNamedConfigParm, TrackFX_SetPinMappings, TrackFX_GetParamName, TrackFX_SetParam, TrackFX_GetParam, TrackFX_AddByName, TrackFX_CopyToTrack, TrackFX_Delete, TrackFX_SetEnabled, TrackFX_GetEnabled, TrackFX_Show
   @reaper GetTrackStateChunk
   @reaper GetTrackSendInfo_Value
   @reaper GetTrackNumSends

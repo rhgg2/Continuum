@@ -158,6 +158,18 @@ Wire geometry (`segs`) is built once and shared by the draw pass and every
 hit-test, so highlight and label placement can never drift from the drawn
 line.
 
+## M / B badges
+
+Fx-backed nodes (`effect`/`generator`) carry two always-visible chips in the
+body's top-left corner — **M** (mute) and **B** (bypass) — drawn in the
+node pass and tinted when active (`wv:muted` / `wv:bypassed`). They're
+hit-tested manually like the body gestures (`badgeHit`), not via an
+`InvisibleButton`: a plain click toggles through `wv` and takes precedence over
+the body-drag it sits on, while `shiftHeld` (wire mode) suppresses them and a
+double-click on a badge is swallowed before the dive. Mute is graph-invisible
+(rm preserves the wire underneath, see `docs/routingManager.md § Mute`), so the
+toggle fires no `wiringChanged` and the next frame just re-reads the state.
+
 ## Buss bars
 
 A buss is a `kind='bus'` node at every degree — a free-floating **bar** that sums

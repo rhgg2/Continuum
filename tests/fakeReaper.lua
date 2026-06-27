@@ -137,6 +137,15 @@ function M.new()
     local entry = fxEntry(track, idx)
     return entry ~= nil, fxIdentOf(entry) or ''
   end
+  -- Bypass = REAPER's per-FX enable; default enabled (entry.enabled ~= false).
+  function r.TrackFX_GetEnabled(track, idx)
+    local entry = fxEntry(track, idx)
+    return type(entry) ~= 'table' or entry.enabled ~= false
+  end
+  function r.TrackFX_SetEnabled(track, idx, enabled)
+    local entry = fxEntry(track, idx)
+    if type(entry) == 'table' then entry.enabled = enabled end
+  end
   state.missingFx = {}
   function r.TrackFX_AddByName(track, ident, _recFx, _instantiate)
     if state.missingFx[ident] then return -1 end

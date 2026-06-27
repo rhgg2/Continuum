@@ -186,6 +186,26 @@ function wm:edgeGain(idx)
   return (e.ops and e.ops.gain) or 1.0
 end
 
+-- Mute/bypass act on nodeId's fx via rm (pin-stash / native enable): neither perturbs
+-- the graph nor fires wiringChanged. One Undo block each.
+--contract: output-mute nodeId's fx via rm's pin-stash; wire preserved, no graph change.
+function wm:setMuted(nodeId, on)
+  rm:transaction('wiring: ' .. (on and 'mute fx' or 'unmute fx'), function()
+    rm:setMuted(nodeId, on)
+  end)
+end
+--contract: true iff nodeId's fx is output-muted.
+function wm:muted(nodeId) return rm:muted(nodeId) end
+
+--contract: bypass nodeId's fx (REAPER-native enable); orthogonal to the graph.
+function wm:setBypassed(nodeId, on)
+  rm:transaction('wiring: ' .. (on and 'bypass fx' or 'unbypass fx'), function()
+    rm:setBypassed(nodeId, on)
+  end)
+end
+--contract: true iff nodeId's fx is bypassed.
+function wm:bypassed(nodeId) return rm:bypassed(nodeId) end
+
 local pruneSourceTags, mirrorBusTaps  -- defined below; decoration GC + tap write-through on mutates
 
 --contract: clone-validate-swap; DAG.validate failure returns false,err with no state change;

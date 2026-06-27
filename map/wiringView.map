@@ -1,4 +1,4 @@
-@module wiringView  src=wiringView.lua  loc=414  sha=c7fee67  mode=chunk  self=wv
+@module wiringView  src=wiringView.lua  loc=422  sha=c7fee67  mode=chunk  self=wv
 @deps cm, wm
 
 # Invariants & contracts
@@ -52,7 +52,7 @@
   -- Navigation (page double-click targets)
   -- Topology queries
   -- Render-ready, viewport-independent
-  @fn busTag(e, fromNode, toNode)  @ 341-345
+  @fn busTag(e, fromNode, toNode)  @ 349-353
       -- Edge → bus stamp: membership is structural — an endpoint on a bus node; `to` end wins.
 
 # Public API (wv:*)
@@ -100,42 +100,49 @@
       @contract  writes ops.gain on audio edges[idx]; fast path when poke hosts, else wm:mutate
   @api wv:pokeEdgeGain(idx, gain)  @ 266
       @contract  live pass-through to wm:pokeEdgeGain. Returns true if the CU exists and was poked; false if caller must materialise via setEdgeGain first.
-  @api wv:setEdgePrimary(idx, primary)  @ 269-275
+  @api wv:setMuted(nodeId, on)  @ 269
+      @contract  output-mute / read mute for an fx node — pass-through to wm (rm pin-stash)
+  @api wv:muted(nodeId)  @ 270
+  @api wv:setBypassed(nodeId, on)  @ 273
+      @contract  bypass / read bypass for an fx node — pass-through to wm (REAPER-native enable)
+  @api wv:bypassed(nodeId)  @ 274
+  @api wv:setEdgePrimary(idx, primary)  @ 277-283
       @contract  sets edges[idx].primary via wm:mutate; coerced to true/nil (nil-not-false per DAG).
-  @api wv:ancestorsOf(sourceId)  @ 280-283
+  @api wv:ancestorsOf(sourceId)  @ 288-291
       @contract  backward reachability over user.edges; returns { [id]=true } including sourceId
-  @api wv:descendantsOf(sourceId)  @ 286-289
+  @api wv:descendantsOf(sourceId)  @ 294-297
       @contract  forward reachability over user.edges; returns { [id]=true } including sourceId
-  @api wv:wiredPorts(nodeId, dir)  @ 292-302
+  @api wv:wiredPorts(nodeId, dir)  @ 300-310
       @contract  returns { [portIdx]=true } over audio edges on nodeId for dir ('out'|'in'); midi edges ignored
-  @api wv:masterPos()  @ 305-309
+  @api wv:masterPos()  @ 313-317
       @contract  logical canvas position of the master node as x, y; 0,0 if master is somehow absent
-  @api wv:nodeViews()  @ 315-320
+  @api wv:nodeViews()  @ 323-328
       @contract  returns the list of nodeViews for every node in the current user graph; order unspecified (pairs over graph.nodes)
-  @api wv:busViews()  @ 324-338
+  @api wv:busViews()  @ 332-346
       @contract  one busView per buss record; pos/orient from the node when present, else the record
-  @api wv:wireViews()  @ 350-387
+  @api wv:wireViews()  @ 358-395
       -- see docs/wiringView.md § wireView fromKind/fromLabel
       @contract  returns the list of wireViews for every edge in the current user graph; order matches graph.edges
   -- Logical view-state (nodeId only)
-  @api wv:hover()  @ 391
-  @api wv:setHover(id)  @ 392
-  @api wv:selection()  @ 395
+  @api wv:hover()  @ 399
+  @api wv:setHover(id)  @ 400
+  @api wv:selection()  @ 403
       @contract  returns the live selection set { [id]=true, … }; callers read, never mutate
-  @api wv:setSelection(idSet)  @ 397-401
+  @api wv:setSelection(idSet)  @ 405-409
       @contract  replaces selection wholesale; pass {} to clear. Defensive shallow-copies the input.
   -- Lifecycle: cache pulled on every structural change
-  @api wv:rebuild()  @ 408-410
+  @api wv:rebuild()  @ 416-418
       -- Lazy sibling of tv:rebuild: invalidate, don't re-pull. The next render
       -- read repopulates via ensureView, so a signal without a render compiles nothing.
       @contract  drops the view cache; next read re-pulls from wm. Driven by wiringChanged.
 
 # Uses (outbound edges)
-  @use call    util.add  @ midiPorts:92 addWire:211 deleteNode:228 nodeViews:318 busViews:329 wireViews:370
+  @use call    util.add  @ midiPorts:92 addWire:211 deleteNode:228 nodeViews:326 busViews:337 wireViews:378
   @use call    wm.addBusNode  @ addBusNode:192
   @use call    wm.addFxNode  @ addFx:147
   @use call    wm.addSourceNode  @ addSource:152
   @use call    wm.busRecords  @ ensureView:26
+  @use call    wm.bypassed  @ bypassed:274
   @use call    wm.deleteBus  @ deleteBus:198
   @use call    wm.deleteSource  @ deleteSource:157
   @use call    wm.edgeGain  @ edgeGain:251
@@ -149,15 +156,18 @@
   @use call    wm.load  @ load:139
   @use call    wm.moveBus  @ moveBus:185
   @use call    wm.moveNodes  @ moveNodes:180
-  @use call    wm.mutate  @ addWire:205 removeWireAt:217 deleteNode:224 rewireEdgeEnd:236 setEdgeGain:257 setEdgePrimary:270
+  @use call    wm.mutate  @ addWire:205 removeWireAt:217 deleteNode:224 rewireEdgeEnd:236 setEdgeGain:257 setEdgePrimary:278
+  @use call    wm.muted  @ muted:270
   @use call    wm.pokeEdgeGain  @ setEdgeGain:256 pokeEdgeGain:266
   @use call    wm.reach  @ ensureView:25
   @use call    wm.rotateBus  @ rotateBus:195
+  @use call    wm.setBypassed  @ setBypassed:273
+  @use call    wm.setMuted  @ setMuted:269
   @use call    wm.setSourceTagPos  @ setSourceTagPos:201
   @use call    wm.showFxWindow  @ openFxWindow:167
-  @use call    wm.srcTagKey  @ setSourceTagPos:201 wireViews:368
+  @use call    wm.srcTagKey  @ setSourceTagPos:201 wireViews:376
   @use call    wm.syncExternal  @ syncExternal:141
   @use call    wm.trackNames  @ ensureView:30
   @use call    wm.viewGraph  @ ensureView:24
   @use require util  @ 8
-  @use sub     wm:wiringChanged  @ 412
+  @use sub     wm:wiringChanged  @ 420

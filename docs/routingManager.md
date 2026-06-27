@@ -118,6 +118,38 @@ each frame by `wp:tick`) is the heartbeat that ensures the scratch exists
 and, on a scratch-chunk rewind, resyncs the fx-meta mirror back into projext
 — gated by a watermark so steady-state frames touch no extstate.
 
+## Mute
+
+`rm:setMuted` silences an fx without touching topology — same plugin, same IO,
+same chain position. The mechanism splits by fx kind, because REAPER FX *replace*
+the channels they output to (an in-place effect plays wet, not wet+dry):
+
+- A **processor** (has audio inputs) is silenced by clearing its live **input**
+  pins. Fed silence, it overwrites its output channels with processed silence.
+  Clearing the *output* instead is useless: the dry input still sits on those
+  channels and `readGraph` — modelling REAPER at `wiringManager.lua` — passes it
+  straight through, so an in-place `1,2→fx→1,2` would leak its input unmuted
+  (output-clear there is bypass, not mute).
+- A **generator** (no audio inputs) ignores input, so it is silenced by clearing
+  its live **output** pins: nothing upstream writes its output pair, so it goes
+  dark.
+
+The cleared side is recorded as `muteSide`. Either way the trap is the same:
+`readGraph` reconstructs every audio edge by threading pins, so a cleared side
+reads back **identical to an unwired one** — the pins are the wire's only durable
+record ("read is the store"). So mute can't just clear pins. The real pinout for
+the cleared side is **stashed in fx-meta** (`muteStash`, beside `muted`/`muteSide`)
+and `applyMuteReport` swaps it back into every read (`rm:fx`/`tracks`/`track`), so
+the snapshot — hence the differ and `readGraph` — sees the real wiring. Two
+consequences fall out for free: reconcile is a no-op on a muted fx (target ==
+reported snapshot, no `setPinMaps` op), and the mute round-trips a save/reload
+like any other fx-meta. A pin write that *does* arrive while muted (a rewire, the
+pin-grow re-assert) is diverted by `divertIfMuted` to the stash with the cleared
+side kept dark, so it never relights the fx.
+
+Bypass (`rm:setBypassed`) is the unrelated REAPER-native enable: pass-through,
+not in the snapshot, never read or written by reconcile.
+
 ## Relationship to wiringManager
 
 The wm rewire has landed. `wm:snapshot()` is `rm:tracks()` plus wm's

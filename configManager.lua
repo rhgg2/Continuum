@@ -191,6 +191,10 @@ local declarations = {
   { 'colour.wiring.port.midi',      'alt.zone5'  },
   { 'colour.wiring.source.label',   'base.zone6' },  -- de-emphasised track-name on a source stub (neutral, not bold)
   { 'colour.wiring.tooltip.bg',     'base.zone9' },  -- matches toolbar; body's dark text reads against it
+  { 'colour.wiring.badge.bg',       {'alt.zone9', 0.25} },  -- idle M/B chip: recessed dark, reads on any node tint
+  { 'colour.wiring.badge.text',     'base.zone2'          },
+  { 'colour.wiring.badge.muted',    'red'                 },  -- active output-mute
+  { 'colour.wiring.badge.bypassed', 'alt.zone6'           },  -- active bypass (REAPER-native enable)
 
   -- Chrome roles — toolbar (top band) and statusBar (bottom band).
   -- Toolbar rides the parchment (base) ramp; statusBar the blue (alt) ramp.

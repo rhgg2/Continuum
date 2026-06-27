@@ -46,6 +46,11 @@ local HANDLE_W         = 13  -- spillover-list chevron, mirrors midi slot envelo
 local HANDLE_H         = 11
 local HANDLE_INSET     = 4   -- slightly more inset than midi so the caret reads as off-edge
 local PORT_ROW_H       = 11  -- tallest slot in the row; defines the shared centreline
+local BADGE_W          = 9  -- M/B toggle chip, mirrors the midi-slot envelope
+local BADGE_H          = 11
+local BADGE_INSET      = 4   -- from the body's top-left corner; clears the centred label
+local BADGE_GAP        = 3
+local BADGE_SIZE       = 9   -- glyph size for the M / B letters
 local LIST_GAP         = 4   -- pixel gap between handle and dropdown list; the list.hitRect extends back across this gap so chevron-to-list traversal has no dead zone
 local CLICK_THRESH     = 4   -- mouseup within this many pixels of mousedown counts as a click, not a drag
 local LIST_ROW_PAD_X   = 8
@@ -333,6 +338,41 @@ end
 
 local function drawBodyOutline(p, nv)
   strokeNodeRect(p, nodeBox(nv), 'wiring.node.selected')
+end
+
+----- M / B badges: output-mute + bypass toggles on fx nodes (effect/generator), top-left corner.
+-- Hit-tested manually (badgeHit) — click toggles via wv, wins over drag/dive. See docs/wiringPage.md § M / B badges.
+
+local function nodeHasFx(nv) return nv.category == 'effect' or nv.category == 'generator' end
+
+local function badgeRects(nv)
+  local r   = nodeBox(nv)
+  local top = r.y0 + BADGE_INSET
+  local mx0 = r.x0 + BADGE_INSET
+  local bx0 = mx0 + BADGE_W + BADGE_GAP
+  return rect(mx0, top, mx0 + BADGE_W, top + BADGE_H),
+         rect(bx0, top, bx0 + BADGE_W, top + BADGE_H)
+end
+
+local function drawBadge(p, r, glyph, fillName)
+  p.fill(r, 'wiring.badge.bg', 1)
+  local tw, th = p.measure(glyph, uiFont, BADGE_SIZE)
+  p.text(math.ceil((r.x0 + r.x1 - tw) / 2), math.ceil((r.y0 + r.y1 - th) / 2),
+         fillName, glyph, uiFont, BADGE_SIZE)
+end
+
+local function drawNodeBadges(p, nv, muted, bypassed)
+  local mRect, bRect = badgeRects(nv)
+  drawBadge(p, mRect, 'M', muted    and 'wiring.badge.muted'    or 'wiring.badge.text')
+  drawBadge(p, bRect, 'B', bypassed and 'wiring.badge.bypassed' or 'wiring.badge.text')
+end
+
+-- 'mute' | 'bypass' | nil for a click at (mx,my) on an fx-backed node.
+local function badgeHit(nv, mx, my)
+  if not nodeHasFx(nv) then return nil end
+  local mRect, bRect = badgeRects(nv)
+  if inRect(mx, my, mRect) then return 'mute' end
+  if inRect(mx, my, bRect) then return 'bypass' end
 end
 
 ----- Wire-creation gesture helpers
@@ -1887,6 +1927,7 @@ local function renderCanvas(w, h)
   for _, nv in ipairs(nodeViews) do
     if not (nv.category == 'bus' and matrixRails[nv.id]) then
       drawNode(p, nv, selection[nv.id])
+      if nodeHasFx(nv) then drawNodeBadges(p, nv, wv:muted(nv.id), wv:bypassed(nv.id)) end
     end
   end
 
@@ -2029,7 +2070,8 @@ local function renderCanvas(w, h)
     local hit = nodeUnderMouse(nodeViews, lmx, lmy)
     if hit then
       dblConsumed = true  -- a node was hit: never fall through to a body-drag
-      if hit.activate == 'sampler' then
+      if badgeHit(hit, lmx, lmy) then       -- a badge double-click already toggled once; never dive
+      elseif hit.activate == 'sampler' then
         local track = wv:samplerTrack(hit.id)
         if track then cmgr:invoke('diveToSampler', track) end
       elseif hit.activate == 'fx' then
@@ -2057,7 +2099,14 @@ local function renderCanvas(w, h)
     -- Any click closes the spillover. The pre-click sourceHit (list still open)
     -- drives dispatch here.
     listOpenId = nil
-    if sourceHit then
+    -- An M/B badge click toggles output-mute / bypass on the fx node and wins
+    -- over the body-drag it sits on; shift (wire mode) suppresses it.
+    local badgeNode = not shiftHeld and nodeUnderMouse(nodeViews, lmx, lmy)
+    local badge     = badgeNode and badgeHit(badgeNode, lmx, lmy)
+    if badge then
+      if badge == 'mute' then wv:setMuted(badgeNode.id, not wv:muted(badgeNode.id))
+      else                    wv:setBypassed(badgeNode.id, not wv:bypassed(badgeNode.id)) end
+    elseif sourceHit then
       local slot = sourceHit.slot
       if slot then
         -- Pin the port → a chip materialises in the band; rebind slot to it so

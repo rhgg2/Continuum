@@ -265,6 +265,14 @@ end
 --contract: live pass-through to wm:pokeEdgeGain. Returns true if the CU exists and was poked; false if caller must materialise via setEdgeGain first.
 function wv:pokeEdgeGain(idx, gain) return wm:pokeEdgeGain(idx, gain) end
 
+--contract: output-mute / read mute for an fx node — pass-through to wm (rm pin-stash)
+function wv:setMuted(nodeId, on) return wm:setMuted(nodeId, on) end
+function wv:muted(nodeId)        return wm:muted(nodeId) end
+
+--contract: bypass / read bypass for an fx node — pass-through to wm (REAPER-native enable)
+function wv:setBypassed(nodeId, on) return wm:setBypassed(nodeId, on) end
+function wv:bypassed(nodeId)        return wm:bypassed(nodeId) end
+
 --contract: sets edges[idx].primary via wm:mutate; coerced to true/nil (nil-not-false per DAG).
 function wv:setEdgePrimary(idx, primary)
   return wm:mutate(function(g)

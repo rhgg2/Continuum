@@ -559,6 +559,30 @@ local function writeMeta(store, id, meta)
   metaSeen[store] = raw
 end
 
+----- Mute: clear live pins on one side, stash the real pinout in fx-meta so reads stay wired.
+-- Processor mutes its input; generator (ignores input) mutes its output. See docs/routingManager.md § Mute.
+
+-- A muted fx reads its live (cleared) side, so swap the stashed real pinout back
+-- into it. Mutates and returns the meta-folded record.
+local function applyMuteReport(fx)
+  if fx and fx.muted then
+    fx.pinMaps = fx.pinMaps or { ins = {}, outs = {} }
+    fx.pinMaps[fx.muteSide] = util.deepClone(fx.muteStash or {})
+  end
+  return fx
+end
+
+-- A pin write to a muted fx must not relight it: stash the intended pinout for the
+-- cleared side and return a pinMap with that side cleared, keeping the fx silent.
+local function divertIfMuted(fxId, pm)
+  local meta = readMeta('fx')[fxId]
+  if not (meta and meta.muted) then return pm end
+  local side = meta.muteSide
+  writeMeta('fx', fxId, { muteStash = util.deepClone(pm[side] or {}) })
+  if side == 'ins' then return { ins = {}, outs = pm.outs } end
+  return { ins = pm.ins, outs = {} }
+end
+
 ----------- read
 
 local function trackName(track)
@@ -729,7 +753,7 @@ function rm:tracks()
   if master then util.add(out, readTrack(master, true)) end
   local meta = readMeta('fx')
   for _, tr in ipairs(out) do
-    for _, fx in ipairs(tr.fx) do util.assign(fx, meta[fx.id]) end
+    for _, fx in ipairs(tr.fx) do applyMuteReport(util.assign(fx, meta[fx.id])) end
   end
   stampParents(out)
   return out
@@ -741,7 +765,7 @@ function rm:track(id)
   if not track then return nil end
   local rec  = readTrack(track, track == reaper.GetMasterTrack(PROJ))
   local meta = readMeta('fx')
-  for _, fx in ipairs(rec.fx) do util.assign(fx, meta[fx.id]) end
+  for _, fx in ipairs(rec.fx) do applyMuteReport(util.assign(fx, meta[fx.id])) end
   return rec
 end
 
@@ -878,17 +902,17 @@ function rm:assignFx(id, t)
     idx = t.index
   end
   if t.params  then writeParams(track, idx, t.params)  end
-  if t.pinMaps then writePinMaps(track, idx, t.pinMaps) end
+  if t.pinMaps then writePinMaps(track, idx, divertIfMuted(id, t.pinMaps)) end
   if t.midi    then writeMidiRouting(track, idx, t.midi) end
   local meta = util.clone(t, FX_NATIVE)
   if next(meta) then writeMeta('fx', id, meta) end
 end
 
--- Undo-free pin re-assert (no transaction, no meta): repairs the identity-OR a same-cycle
--- I_NCHAN grow stamps onto a just-written pin. See docs/wiringManager.md § Pin re-assert after grow.
+-- Undo-free pin re-assert (no transaction; muted fx stash-divert may touch meta):
+-- repairs the identity-OR a same-cycle I_NCHAN grow stamps onto a just-written pin. See docs/wiringManager.md § Pin re-assert after grow.
 function rm:rewritePins(id, pinMaps)
   local track, idx = locateFx(id)
-  if track then writePinMaps(track, idx, pinMaps) end
+  if track then writePinMaps(track, idx, divertIfMuted(id, pinMaps)) end
 end
 
 --contract: read a named meta store ('fx'|'bus'): whole blob, or one entry when id given
@@ -938,7 +962,7 @@ function rm:fx(id)
     local _, chunk = reaper.GetTrackStateChunk(track, '', false)
     fx.midi = readMidiRouting(chunk, routingIdxOf(track, idx))
   end
-  util.assign(fx, readMeta('fx')[id])
+  applyMuteReport(util.assign(fx, readMeta('fx')[id]))
   return fx
 end
 
@@ -947,6 +971,49 @@ end
 function rm:params(id)
   local track, idx = locateFx(id)
   return track and readParams(track, idx) or nil
+end
+
+--contract: silence/relight an fx. Muted: the silencing side's live pins are cleared
+--contract: (input for a processor, output for a generator), the real pinout stashed in
+--contract: fx-meta + reported up (wire kept); writes to that side divert to the stash.
+function rm:setMuted(fxId, on)
+  local track, idx = locateFx(fxId)
+  if not track then return end
+  local meta = readMeta('fx')[fxId]
+  if on then
+    if meta and meta.muted then return end
+    local _, inPins = reaper.TrackFX_GetIOSize(track, idx)
+    local side = (inPins or 0) > 0 and 'ins' or 'outs'  -- processor mutes input, generator output
+    local pm = readPinMaps(track, idx)
+    writeMeta('fx', fxId, { muted = true, muteSide = side, muteStash = util.deepClone(pm[side]) })
+    writePinMaps(track, idx, side == 'ins' and { ins = {}, outs = pm.outs }
+                                            or  { ins = pm.ins, outs = {} })
+  else
+    if not (meta and meta.muted) then return end
+    local side, stash = meta.muteSide, util.deepClone(meta.muteStash or {})
+    local pm = readPinMaps(track, idx)
+    writeMeta('fx', fxId, { muted = util.REMOVE, muteSide = util.REMOVE, muteStash = util.REMOVE })
+    writePinMaps(track, idx, side == 'ins' and { ins = stash, outs = pm.outs }
+                                            or  { ins = pm.ins, outs = stash })
+  end
+end
+
+--contract: true iff fxId is currently muted; false for a live or absent fx.
+function rm:muted(fxId)
+  local meta = readMeta('fx')[fxId]
+  return meta ~= nil and meta.muted == true
+end
+
+--contract: bypass = REAPER-native FX enable (pass-through, topology-safe, not in the snapshot).
+function rm:setBypassed(fxId, on)
+  local track, idx = locateFx(fxId)
+  if track then reaper.TrackFX_SetEnabled(track, idx, not on) end
+end
+
+--contract: true iff fxId is bypassed (REAPER-disabled); false for an enabled or absent fx.
+function rm:bypassed(fxId)
+  local track, idx = locateFx(fxId)
+  return track ~= nil and not reaper.TrackFX_GetEnabled(track, idx)
 end
 
 --contract: floats the fx window for id; false if the fx is no longer live
