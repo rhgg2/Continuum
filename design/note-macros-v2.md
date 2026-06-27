@@ -16,6 +16,34 @@
 > and converging macros, aliases, and group-mirror onto one generator
 > spectrum over one regions substrate (R7).
 
+## Status at a glance
+
+Quick board; the prose lives in **Build progress** and the per-topic sections.
+Track A is the generator substrate, Track B the authoring UI. Checked = landed.
+
+**Landed**
+- [x] A1 — region producer + free LFO (N=0)
+- [x] A2 — membership + chord-arp + lane allocation (N≥2)
+- [x] A3 — replace mode: discrete member parking
+- [x] A4 — generator input streams (notes/pas/ccs/ats/pb)
+- [x] A5 — mode is a generator-kind property; one registry per kind
+- [x] Continuous **pb** replace — augment-cancellation (§ A4)
+- [x] B1 — fx-region column + Super-X addressing
+- [x] B2 — parked-chord display (render only)
+
+**Open / next**
+- [ ] B3 — parked chord *editable* off-take (planned, § B3)
+- [ ] fx chain — series composition + multi-column authoring (design only, § The fx chain)
+
+**Deferred (no consumer / intentional)**
+- [ ] Continuous **cc** replace, and **PA** replace — only pb-replace is built
+- [ ] Slew on a replace curve — ramp the window-edge hand-off (§ A4 TODO)
+- [ ] Multi-chain painter-layering for replace — overlapping pb fx is UI-blocked instead
+- [ ] Note-fx hosted on a parked note
+- [ ] Freeze (to raw / to mirror group), ghost-note display, bake-on-export
+
+**Owned elsewhere** — R5 plink → `design/cv-2.md`; R4 dirty-registry & R3 `forEachEffectiveNote` build on demand.
+
 ## What v1 left standing
 
 v1 is complete and shipped. The single open frontier is the **host**: v1
@@ -417,10 +445,10 @@ The fold operates at both scopes — between stages within a chain (a stage's
 op onto a stream channel) and between chains on a channel (at the node).
 The replace conflict is scoped per `(channel, exact target)`: two chains on
 the *same* cc number or both on pb; distinct cc numbers are independent
-wires. Replace-cc/pb is stubbed behind the unbuilt 4.9 overwrite path
-(A4/A5), so the only invariant the immediate work owes is **a chain
-declares its target and the fold is a property of that target** — which
-keeps top-wins open without building it.
+wires. Single-region pb-replace is **landed** as augment-cancellation (§ A4) -- not the
+4.9 overwrite path. Multi-chain painter-layering stays deferred: overlapping pb fx is blocked
+at the authoring UI, so one replace per target is the only fold the immediate work owes --
+which keeps top-wins open without building it.
 
 **Transformers rewrite values; rate stays a source param.** A transformer
 freely rewrites event *values* and nudges *discrete* timing (velocity,
@@ -500,7 +528,7 @@ wants ~none of gm (see resolved open question below).
   is A2 verbatim (members sound + occupy lanes; nudge persists). Display of the
   parked bucket (`channels[chan].parked`) is the renderer's union (Track B B2). Pinned
   by the replace / augment / realise / removal / G4 tests in `tm_fx_region_spec`.
-- **A4 — reframed: generator input streams (notes/pas/ccs/ats/pb). Landed; continuous replace deferred.**
+- **A4 — reframed: generator input streams (notes/pas/ccs/ats/pb) + continuous pb replace. Landed.**
   A3 parks notes only. The PA half was misframed as park-the-PA-and-re-emit-it-rebound-to-the-region;
   that operation can't exist generically -- a PA is generator *input*, like a member's pitch/detune, and
   the generator's input->output mapping preserves no event correspondence to rebind across (an arp samples
@@ -512,8 +540,10 @@ wants ~none of gm (see resolved open question below).
   **pb as input -- landed (authored breakpoints only).** The feared absorber-split was avoided: a generator
   reads only the *authored* (non-derived) pb breakpoints, whose logical value is the persisted `cents`
   sidecar -- no `cents-minus-detune` reconstruction. Sliced from the pre-producer `mm:ccs()` walk, fakes
-  excluded. **Deferred** (until a consumer): **continuous replace** (region pb overwrites logical pb, the
-  4.9 overwrite path).
+  excluded. **Continuous replace -- landed** (augment-cancellation; the 4.9 overwrite path abandoned).
+  A replace-continuous kind emits its absolute pb curve; the producer cancels the authored base in
+  `host.pb` so the additive carrier sum overwrites it. Overlapping pb fx is blocked at the UI; slew
+  is a TODO. See § A4 -- generator input streams.
   Known gaps unchanged: a member straddling a window edge is parked whole (no split); a parked note
   carrying its own `fx` loses that host behaviour to the region; a replace region's parked PAs stay
   take-side (latent orphan) until the first PA-consuming generator, then park them out.
@@ -528,7 +558,8 @@ wants ~none of gm (see resolved open question below).
   lane-mates that clip the authored note to its first derived hit (= replace, host stays fxNote 1, PA
   unmoved), a continuous kind emits none (= augment) -- emergent, never parked. `mode` and `dest` are
   independent axes, so continuous-replace (A4) and discrete-augment are expressible; continuous-replace
-  is **stubbed** (the producer falls back to additive) until the 4.9 overwrite path lands. The fxEdit
+  is **landed** as augment-cancellation (the producer subtracts `host.pb` so the additive carrier sum
+  overwrites the base -- § A4; not the 4.9 overwrite path), discrete-augment still expressible-not-built. The fxEdit
   modal reads its rows from the registry (`modalOrder` picks the shown kinds; arp is surfaced on both
   hosts -- single-note arp = retrig, so no host-aware list is needed). Pinned by the continuous-augment + parked-render
   reworks in `tm_fx_region_spec`/`tv_fx_region_spec`, and `generators_spec` driving `kinds.<k>.expand`.
@@ -561,8 +592,8 @@ column-based, not gm-backed -- the Open-questions Track-B lean, now resolved.
   A3 punted here. Display only: parked cells are tokenless, so a cursor edit no-ops.
   Making the chord *editable* off-take (an edit rebound to `fxParked`, as the
   "visible, editable surface" model intends) is still open (planned as B3
-  below), as is whether a continuous-fx replace region should park its notes
-  at all (A4). Pinned by the
+  below). A continuous-fx replace region parks nothing -- it overwrites the pb wire and
+  leaves its members sounding (A5/A4). Pinned by the
   parked-render test in `tv_fx_region_spec`.
 
 ## B3 — parked notes as first-class editable cells (planned)
@@ -652,8 +683,8 @@ under one undo with one final rebuild.
 `fxRegions` idiom); defer the multi-select staging + guard until it is felt to
 matter.
 
-**Out of scope.** Note-fx hosted on a parked note, and continuous/PA replace (A4)
--- both already deferred.
+**Out of scope.** Note-fx hosted on a parked note, and PA replace (A4) -- both deferred
+(continuous pb replace landed; cc-target replace unbuilt).
 
 ## A4 -- generator input streams (landed)
 
@@ -661,8 +692,8 @@ Reframes the PA half of A4. PA was misframed as a park/re-emit/rebind problem; t
 operation can't exist generically (no input->output event correspondence to carry a PA
 across). So PA stops being special and becomes one of several **typed input streams the
 generator reads over its window**. ADSR gated by note-ons, a CC-controlled vibrato, a
-pressure-aware arp all fall out of one shape. Landed: notes, pas, ccs, ats; pb deferred
-(below).
+pressure-aware arp all fall out of one shape. Landed: notes, pas, ccs, ats, pb; continuous
+pb replace rides the same input (below).
 
 **Contract** (`generators.lua`). `host.events` -> `host.notes` (it *is* the note stream),
 plus three more -- all window+channel scoped, logical frame, intent units:
@@ -720,8 +751,19 @@ sidecar, so the pre-producer `mm:ccs()` walk reads it directly (fakes excluded b
 A foreign-MIDI pb lacks the sidecar for one rebuild until 4.9 back-derives + persists it --
 harmless and self-healing, no consumer yet. The heavier path (the absorber's densified/derived
 logical stream as input) stays unbuilt until a generator needs more than breakpoints.
-**Continuous replace** (region pb overwrites logical pb) stays deferred on the 4.9 overwrite
-path -- the cheap tail once a replace transformer wants it.
+**Continuous replace -- landed (augment-cancellation, not the 4.9 overwrite path).** With pb-as-input
+landed, replace is *augment that cancels its own base*: a replace-continuous kind (`mode='replace'`,
+`dest='pb'`) emits its absolute target curve; the producer subtracts the authored base it already
+holds in `host.pb` (`cancelBase`, piecewise-linear) and stashes `curve - base` into the same additive
+carrier list. The node sum `base + (curve - base)` lands on the curve, and detune still seats
+(`raw = curve + detune`, I1 intact) -- no absorber, node, or reconcile change. Scoped to **one replace
+region per pb target**: two overlapping pb-replace windows would double-cancel the base (sum, not
+painter-layer), so **overlapping pb fx is blocked at the authoring UI** rather than layered. Caveats: a
+shaped authored base is approximated linearly between `host.pb` breakpoints; cc-target replace is
+unbuilt (it would sample the wrong base, so it falls back to additive). **TODO -- slew:** a replace
+curve can step the wire at the window edge; add an optional slew (rate limit) so the hand-off to/from
+the authored base ramps rather than jumps. Pinned by the cancellation + degenerate tests in
+`tm_fx_region_spec`.
 
 **Tests.** `tm_fx_region_spec`: a region over a window holding a cc + pa + at, with a
 capture-kind injected into `generators.kinds` recording its `host`, rebuild, assert

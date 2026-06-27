@@ -1457,6 +1457,30 @@ do
         end
         return pas, ccs, ats, pb
       end
+      -- Piecewise-linear sample of authored pb breakpoints (sorted by ppqL) at ppqL, in cents;
+      -- endpoints held flat. Empty base (N=0 region) -> 0, so replace degenerates to augment.
+      local function samplePb(bps, ppqL)
+        if #bps == 0 then return 0 end
+        if ppqL <= bps[1].ppqL then return bps[1].cents end
+        for i = 2, #bps do
+          local a, b = bps[i - 1], bps[i]
+          if ppqL <= b.ppqL then
+            if b.ppqL == a.ppqL then return b.cents end
+            return a.cents + (ppqL - a.ppqL) / (b.ppqL - a.ppqL) * (b.cents - a.cents)
+          end
+        end
+        return bps[#bps].cents
+      end
+      -- Replace-continuous overwrites the logical target: carrier = curve - authored base, so the
+      -- additive node sum base + (curve - base) lands on the curve. see design/note-macros-v2.md § A4
+      local function cancelBase(curve, base)
+        local out = {}
+        for _, bp in ipairs(curve) do
+          util.add(out, { ppqL = bp.ppqL, val = bp.val - samplePb(base, bp.ppqL),
+                          shape = bp.shape, tension = bp.tension })
+        end
+        return out
+      end
       -- Deterministic allocator: lowest lane free of overlap, authored notes seed occupancy;
       -- emission order -> deterministic -> G4-stable. see design/note-macros-v2.md § Generator output
       local function allocateRegionLanes(chan, startL, endL, derived)
@@ -1509,13 +1533,14 @@ do
                 if regionNotes then regionNotes[#regionNotes + 1] = spec
                 else util.add(predicted, spec) end
               end
-              -- Continuous kinds (dest ~= 'note') stash an additive delta on their wire target.
-              -- A4 stub: a replace continuous kind would overwrite the logical pb instead; that
-              -- path is unbuilt, so every continuous kind realises additively (augment) for now.
+              -- Continuous kinds (dest ~= 'note') stash a delta on their wire target: augment adds
+              -- it; replace cancels the authored base so the node sum lands on the curve (pb only).
               local target = meta.dest ~= 'note' and meta.dest or nil
               if target and #out.delta > 0 then
+                local delta = out.delta
+                if meta.mode == 'replace' and target == 'pb' then delta = cancelBase(out.delta, host.pb) end
                 util.add(pending, { startL = startL, endL = endL,
-                                    target = target, delta = out.delta, d = p.d })
+                                    target = target, delta = delta, d = p.d })
               end
             end
           end

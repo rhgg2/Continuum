@@ -344,4 +344,63 @@ return {
     end,
   },
 
+  ----- Continuous replace (C): overwrite via augment-cancellation against host.pb
+
+  {
+    name = 'fx region: continuous replace cancels the authored pb base (carrier = curve - base)',
+    run = function(harness)
+      local h = harness.mk()
+      -- Authored base ramps 0c -> 40c over [0,120); held flat at 40c after. (val is cents.)
+      h.tm:addEvent({ evType = 'pb', ppq = 0,   chan = 1, val = 0 })
+      h.tm:addEvent({ evType = 'pb', ppq = 120, chan = 1, val = 40 })
+      h.tm:flush()
+
+      -- A spec-only replace kind: emits an absolute +50c target curve, rejoining the base (40c)
+      -- at the window end so the carrier re-centres. The producer subtracts host.pb per breakpoint.
+      generators.kinds.capRep = {
+        expand = function(host)
+          return { notes = {}, delta = {
+            { ppqL = host.window[1], val = 50, shape = 'square' },
+            { ppqL = 60,             val = 50, shape = 'square' },
+            { ppqL = host.window[2], val = 40, shape = 'square' },
+          } }
+        end,
+        mode = 'replace', dest = 'pb', label = 'CapRep', defaults = {}, fields = {},
+      }
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+                                   fx = { { kind = 'capRep' } } } })
+      h.tm:rebuild()
+      generators.kinds.capRep = nil
+
+      local dump = h.fm:dump()
+      t.eq(carrierAt(dump, 1, 0).val,   carrierVal(50), 'window start: base 0c -> carrier = 50 - 0 = 50c')
+      t.eq(carrierAt(dump, 1, 60).val,  carrierVal(30), 'mid-ramp: base interpolates to 20c -> carrier = 50 - 20 = 30c')
+      t.eq(carrierAt(dump, 1, 240).val, carrierVal(0),  'window end: curve rejoins base 40c -> carrier re-centres to 0')
+    end,
+  },
+
+  {
+    name = 'fx region: continuous replace with no authored base is identical to augment',
+    run = function(harness)
+      local h = harness.mk()
+      generators.kinds.capRep = {
+        expand = function(host)
+          return { notes = {}, delta = {
+            { ppqL = host.window[1], val = 50, shape = 'square' },
+            { ppqL = host.window[2], val = 0,  shape = 'square' },
+          } }
+        end,
+        mode = 'replace', dest = 'pb', label = 'CapRep', defaults = {}, fields = {},
+      }
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+                                   fx = { { kind = 'capRep' } } } })
+      h.tm:rebuild()
+      generators.kinds.capRep = nil
+
+      local dump = h.fm:dump()
+      t.eq(carrierAt(dump, 1, 0).val,   carrierVal(50), 'no base to cancel -> the curve passes through verbatim (50c)')
+      t.eq(carrierAt(dump, 1, 240).val, carrierVal(0),  'curve re-centres at the window end')
+    end,
+  },
+
 }
