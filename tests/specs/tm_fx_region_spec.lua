@@ -57,6 +57,29 @@ local function colPbCents(h, chan, ppq)
   end
 end
 
+-- The generated replace curve written straight onto a cc target (derived='ccfill'), routed out of
+-- columns. Its authored cc is parked off-take; these stand in on the target lane.
+local function fillsOf(dump, chan, cc)
+  local out = {}
+  for _, c in ipairs(dump.ccs) do
+    if c.evType == 'cc' and c.cc == cc and c.chan == chan and c.derived == 'ccfill' then
+      out[#out + 1] = { ppq = c.ppq, val = c.val, shape = c.shape }
+    end
+  end
+  table.sort(out, function(a, b) return a.ppq < b.ppq end)
+  return out
+end
+local function ccFillAt(dump, chan, cc, ppq)
+  for _, c in ipairs(fillsOf(dump, chan, cc)) do if c.ppq == ppq then return c end end
+end
+
+-- A non-derived authored cc on the take; nil once a replace window parks it off.
+local function authoredCC(dump, chan, cc, ppq)
+  for _, c in ipairs(dump.ccs) do
+    if c.evType == 'cc' and c.cc == cc and c.chan == chan and c.ppq == ppq and not c.derived then return c end
+  end
+end
+
 -- A region is channel x ppq span + fx; no host note. Inject via ds, then rebuild.
 local function injectRegion(h, over)
   local region = { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = vib30 }
@@ -487,6 +510,97 @@ return {
       generators.kinds.capRep = nil
       t.eq(authoredPb(h.fm:dump(), 1, 120).val, centsToRaw(40),
         'the authored base raw is restored once the region is gone')
+    end,
+  },
+
+  ----- Continuous cc replace: park the authored cc off-take, write the generated curve direct (no node)
+
+  {
+    name = 'fx region (cc replace): the generated curve lands on the target cc lane; no carrier',
+    run = function(harness)
+      local h = harness.mk()
+      -- Authored cc 74 inside the window: parked off-take by the replace region.
+      h.tm:addEvent({ evType = 'cc', ppq = 60,  chan = 1, cc = 74, val = 30 })
+      h.tm:addEvent({ evType = 'cc', ppq = 120, chan = 1, cc = 74, val = 90 })
+      h.tm:flush()
+
+      generators.kinds.ccRep = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppqL = host.window[1], val = 100, shape = 'square' },
+          { ppqL = 120,            val = 20,  shape = 'square' },
+        } } end,
+        mode = 'replace', dest = 74, label = 'CcRep', defaults = {}, fields = {},
+      }
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+                                   fx = { { kind = 'ccRep' } } } })
+      h.tm:rebuild()
+      generators.kinds.ccRep = nil
+
+      local dump = h.fm:dump()
+      -- The curve is written verbatim onto cc 74 -- no carrier, no node, no transport encoding.
+      t.eq(ccFillAt(dump, 1, 74, 0).val,   100, 'curve start lands on the target cc lane')
+      t.eq(ccFillAt(dump, 1, 74, 120).val, 20,  'curve mid lands on the target cc lane')
+      t.eq(#carriersOf(dump, 1), 0, 'no carrier allocated -- cc replace bypasses the additive node')
+      -- The authored cc the window covers is parked off-take.
+      t.falsy(authoredCC(dump, 1, 74, 60),  'authored cc at 60 is parked off-take')
+      t.falsy(authoredCC(dump, 1, 74, 120), 'authored cc at 120 is parked off-take')
+    end,
+  },
+
+  {
+    name = 'fx region (cc replace): removing the region restores the parked cc and drops the fill',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent({ evType = 'cc', ppq = 60, chan = 1, cc = 74, val = 30 }); h.tm:flush()
+      generators.kinds.ccRep = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppqL = host.window[1], val = 100, shape = 'square' },
+        } } end,
+        mode = 'replace', dest = 74, label = 'CcRep', defaults = {}, fields = {},
+      }
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+                                   fx = { { kind = 'ccRep' } } } })
+      h.tm:rebuild()
+      generators.kinds.ccRep = nil
+      local dump = h.fm:dump()
+      t.truthy(ccFillAt(dump, 1, 74, 0), 'the fill is present while the region is')
+      t.falsy(authoredCC(dump, 1, 74, 60), 'the authored cc is parked while the region is present')
+
+      h.ds:assign('fxRegions', {})
+      h.tm:rebuild()
+      dump = h.fm:dump()
+      t.falsy(ccFillAt(dump, 1, 74, 0), 'no fill survives the region removal')
+      t.eq(authoredCC(dump, 1, 74, 60).val, 30, 'the authored cc is restored to the take')
+    end,
+  },
+
+  {
+    name = 'G4 (cc replace): the fill is byte-identical and re-adds nothing across a no-change rebuild',
+    run = function(harness)
+      local h = harness.mk()
+      generators.kinds.ccRep = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppqL = host.window[1], val = 100, shape = 'square' },
+          { ppqL = 120,            val = 20,  shape = 'square' },
+        } } end,
+        mode = 'replace', dest = 74, label = 'CcRep', defaults = {}, fields = {},
+      }
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+                                   fx = { { kind = 'ccRep' } } } })
+      h.tm:rebuild()
+      local before = fillsOf(h.fm:dump(), 1, 74)
+      t.truthy(#before > 0, 'fill present (non-vacuous)')
+
+      local adds, realAdd = 0, h.fm.add
+      h.fm.add = function(self, e)
+        if e and e.evType == 'cc' and e.derived == 'ccfill' then adds = adds + 1 end
+        return realAdd(self, e)
+      end
+      h.tm:rebuild()
+      h.fm.add = realAdd
+      generators.kinds.ccRep = nil
+      t.eq(adds, 0, 'steady-state rebuild rewrites no fill events')
+      t.deepEq(fillsOf(h.fm:dump(), 1, 74), before, 'the fill is byte-identical across the round trip')
     end,
   },
 

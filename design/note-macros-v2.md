@@ -29,13 +29,13 @@ Track A is the generator substrate, Track B the authoring UI. Checked = landed.
 - [x] A5 — mode is a generator-kind property; one registry per kind
 - [x] Continuous **pb** replace — detune-only wire base via the sum node (§ A4)
 - [x] Continuous **cc** augment — node-fork collapse + rest seat + auto-pan kind (§ Continuous cc)
+- [x] Continuous **cc** replace — park authored cc off-take + write the curve direct (§ Continuous cc)
 - [x] B1 — fx-region column + Super-X addressing
 - [x] B2 — parked-chord display (render only)
 
 **Open / next**
 - [ ] B3 — parked chord *editable* off-take (planned, § B3)
 - [ ] fx chain — series composition + multi-column authoring (design only, § The fx chain)
-- [ ] Continuous **cc** replace — suppress the authored cc base (no absorber) (§ Continuous cc)
 
 **Deferred (no consumer / intentional)**
 - [ ] **PA** replace — no generic park/rebind path (§ A4)
@@ -785,11 +785,11 @@ but after externals + 4.5 parking*, not "after step 3": note columns are only se
 covered notes parked out) by then, and it must stay before step 5 so `findNoteColumnForPitch` still matches
 in the raw frame.
 
-## Continuous cc -- augment (landed); replace (plan)
+## Continuous cc -- augment (landed); replace (landed)
 
 Extends A4's carrier machinery to cc targets. pb proved the path; cc *augment* is simpler (no detune,
-no I1, no absorber) and rides the same carrier wire. cc *replace* is the harder direction -- the lack
-of an absorber that pb leans on is exactly what makes it harder (see § cc replace below).
+no I1, no absorber) and rides the same carrier wire. cc *replace* lands by a different route entirely --
+it bypasses the carrier and node, parking the authored cc and writing the curve direct (see § cc replace).
 
 **Augment -- landed.** The node carrier fork collapsed to the pb formula for every target
 (`Continuum CC.jsfx`: `acc += acm*128+acl-8192`, centre 8192); the producer branches the *unit*
@@ -798,7 +798,7 @@ emits a generator-owned base CC (`derived='ccbase'`) at take start for an un-aut
 routed out of columns like a carrier (step 3) and recognised on reload via the mm sidecar.
 `ccDefaultRest` + a first **auto-pan** kind (sine LFO on cc 10) ship in `generators.lua`. Pinned by
 the cc-augment tests in `tm_fx_region_spec` (value-correctness, +/-127 transport, rest
-fallback/withdraw, override) and the `autopan` test in `generators_spec`. **Replace** is the plan below.
+fallback/withdraw, override) and the `autopan` test in `generators_spec`. **Replace** lands below, by a different route (no carrier, no node).
 
 The mechanism subsections that follow are the design rationale, now landed-accurate as description.
 
@@ -845,28 +845,34 @@ Seat only when the target has no authored automation (pure fallback) -- authored
 when present, already is the base, and seeding nothing sidesteps an ordering fight at ppq 0.
 No node change; same shape as the absorber seating pb base, narrower job.
 
-**cc replace -- the open piece (cancellation removed; not a `cancelBase` mirror).** pb replace works
-because the absorber leaves a *detune-only* wire base under the absolute carrier. cc has no absorber and
-no detune residual, and the node step-holds the latest *authored* cc as its base -- so a cc replace must
-establish a known base **and** keep the authored cc from reaching the node inside the window. Two routes:
+**cc replace -- landed (park + direct insert; no carrier, no node).** pb replace leans on the absorber
+to leave a *detune-only* base under an absolute carrier. cc has neither an absorber nor a detune
+residual, and the node step-holds the latest *authored* cc as its base. Rather than fight that, cc
+replace **bypasses the node entirely**: inside the window on the target cc, the authored cc is *parked
+off-take* and the generated curve is written *straight onto the target lane* as literal cc events.
+No carrier is allocated, so no `adst` is registered, so `Continuum CC.jsfx` is transparent to that
+target -- the instrument hears the curve directly.
 
-- **(a) no authored cc in the window** (the rest-seat case): the base seat already sits at `rest`, so
-  emit the carrier as `curve - rest` -- a single *constant* offset, not a sampled base. The node sum
-  `rest + (curve - rest)` lands on the curve, and the wire rests at `rest` outside the window. Small.
-- **(b) authored cc in the window**: there is no absorber to rewrite it, so the authored automation
-  must be *parked* off the take over the window (the discrete-replace note-parking idiom applied to cc
-  -- a new store, restored on region removal). This is the real work; defer until a consumer needs it.
+- **Parking** mirrors discrete note-replace (step 4.5): a `4.5b` block reads the per-`(chan, cc)`
+  replace windows off the regions, parks the covered authored cc into the `fxParkedCC` sidecar (delete
+  from take, drop from column), carries still-covered forward, and restores the rest on region removal.
+- **The fill** is a derived cc (`derived='ccfill'`) on the target code: the producer emits it in place
+  of the carrier `pending` entry, step 3 routes it out of columns like the rest seat, and Pass B
+  reconciles it (keyed `(cc, ppq)`, matched on val + shape) so a steady rebuild does not churn it.
+- `cancelBase` / base-sampling is **not** the path -- it was removed; this mechanism needs neither.
 
-`cancelBase` / base-sampling is **not** the path -- it was removed.
+**Known edges** (not solved). (1) A cc target carrying *both* an augment region and a replace region:
+the augment registers `adst`, so the node would swallow the replace fill inside the window. (2) Augment
+`rest` is conceptually the *target's* value but stored per *region* -- two augment regions on one target
+with different overrides resolve first/lowest-wins. Both are same-target overlaps, already UI-constrained.
 
-**Open edge** (not solved now). `rest` is conceptually the *target's* value but stored per
-*region*. Two cc regions on one target, both leaning on rest with different overrides ->
-first/lowest wins, or block the overlap (same-target overlap is already constrained). Doesn't
-change the shape.
-
-**Files.** `Continuum CC.jsfx` (one line + a comment), `trackerManager.lua` (producer
+**Files (augment).** `Continuum CC.jsfx` (one line + a comment), `trackerManager.lua` (producer
 raw-branch + rest seating), `generators.lua` (a cc-dest augment kind + `ccDefaultRest`), a
 fixture test in `tm_fx_region_spec` (value-correctness + ±127 range + rest fallback).
+
+**Files (replace).** `trackerManager.lua` only -- the `4.5b` cc-park block + `fxParkedCC` sidecar, the
+producer `ccFill` fork, step-3 `ccfill` routing, and the Pass B fill reconcile. No `Continuum CC.jsfx`
+or `generators.lua` change; cc-replace fixture tests in `tm_fx_region_spec`.
 
 ## Open questions
 

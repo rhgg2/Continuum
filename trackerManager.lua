@@ -27,6 +27,7 @@
 --shape: extraColumns[chan] = { notes=count, [pc], [pb], [at], [ccs={[ccNum]=true}] }
 --shape: lastMuteSet = { [chan] = true }, pushed by tv via tm:setMutedChannels
 --shape: fxParked = { { evType='note', chan, lane, ppq, endppq, ppqL, endppqL, pitch, vel, detune, delay, sample }, ... }
+--shape: fxParkedCC = { { chan, cc, ppq, ppqL, val, shape }, ... } -- authored cc parked off-take by a cc-replace window
 --shape: channels[chan].parked = { { ppq, ppqL, endppqL, endppqC, pitch, vel, detune, sample, delay, lane }, ... } -- off-take replace members as render-ready logical cells (ppq==ppqL, endppqC==endppqL)
 --contract: a discrete-replace kind in a region parks its covered chord off-take; else it keeps sounding
 --invariant: parked members feed generator + grid only; never sounding (mute fails for CC/PA)
@@ -1054,8 +1055,8 @@ do
 
     -- fxExisting: derived notes parsed at step 0, reconciled at 4.6.
     -- fxLive: post-expansion set unioned into the tail walk and PC synthesis.
-    local fxExisting, fxLive, carrierExisting, ccBaseExisting, replacePbWindows = {}, {}, {}, {}, {}
-    for i = 1, 16 do fxExisting[i] = {}; fxLive[i] = {}; carrierExisting[i] = {}; ccBaseExisting[i] = {}; replacePbWindows[i] = {} end
+    local fxExisting, fxLive, carrierExisting, ccBaseExisting, ccFillExisting, replacePbWindows = {}, {}, {}, {}, {}, {}
+    for i = 1, 16 do fxExisting[i] = {}; fxLive[i] = {}; carrierExisting[i] = {}; ccBaseExisting[i] = {}; ccFillExisting[i] = {}; replacePbWindows[i] = {} end
     -- fxNote add/del deferred from 4.6 into the 4.8 atomic note commit, so the host clip
     -- and the fxNote inserts land in one mm:modify (one MIDI_Sort, no transient overlap).
     local fxToRemove, fxToAdd = {}, {}
@@ -1124,6 +1125,13 @@ do
         if cc.evType == 'cc' and cc.derived == 'ccbase' then
           util.add(ccBaseExisting[cc.chan],
             { ppq = cc.ppq, val = cc.val, cc = cc.cc, token = mm:tokenOf(cc) })
+          goto continue
+        end
+        -- Replace fill: the generated curve written straight onto a cc target (replace mode), routed
+        -- out like the rest seat and reconciled at Pass B. see design/note-macros-v2.md § Continuous cc
+        if cc.evType == 'cc' and cc.derived == 'ccfill' then
+          util.add(ccFillExisting[cc.chan],
+            { ppq = cc.ppq, val = cc.val, shape = cc.shape, cc = cc.cc, token = mm:tokenOf(cc) })
           goto continue
         end
         if not cc.derived then
@@ -1349,6 +1357,79 @@ do
       end
     end
 
+    -- 4.5b) Region cc-replace: park the authored cc a window covers off-take; the curve from Pass A
+    -- stands in on the target lane -- no carrier, no node. see design/note-macros-v2.md § Continuous cc
+    do
+      local ccWindows = {}   -- [chan][cc] = { {startL, endL}, ... }
+      for _, region in ipairs(ds:get('fxRegions') or {}) do
+        for _, params in ipairs(region.fx or {}) do
+          local meta = generators.kinds[params.kind]
+          if meta and meta.mode == 'replace' and type(meta.dest) == 'number' then
+            ccWindows[region.chan] = ccWindows[region.chan] or {}
+            util.bucket(ccWindows[region.chan], meta.dest, { region.startppq, region.endppq })
+          end
+        end
+      end
+      local function covered(chan, cc, ppqL)
+        for _, w in ipairs((ccWindows[chan] or {})[cc] or {}) do
+          if ppqL >= w[1] and ppqL < w[2] then return true end
+        end
+        return false
+      end
+
+      -- On-take authored cc the window covers leaves; the prior parked set re-homes (still-covered
+      -- forward, rest restores). Logical pos = ppqL or ppq -- nil under identity swing.
+      local newParked, removals, restores = {}, {}, {}
+      for chan = 1, 16 do
+        for cc, col in pairs(channels[chan].columns.ccs) do
+          for _, evt in ipairs(col.events) do
+            local ppqL = evt.ppqL or evt.ppq
+            if covered(chan, cc, ppqL) then
+              util.add(newParked, { chan = chan, cc = cc, ppq = evt.ppq, ppqL = ppqL,
+                                    val = evt.val, shape = evt.shape })
+              util.add(removals, { chan = chan, cc = cc, evt = evt })
+            end
+          end
+        end
+      end
+      for _, spec in ipairs(ds:get('fxParkedCC') or {}) do
+        if covered(spec.chan, spec.cc, spec.ppqL) then util.add(newParked, spec)
+        else util.add(restores, { spec = spec }) end
+      end
+
+      if #removals > 0 then
+        mm:modify(function()
+          for _, r in ipairs(removals) do mm:delete(r.evt.token) end
+        end)
+        for _, r in ipairs(removals) do
+          local events = channels[r.chan].columns.ccs[r.cc].events
+          for i, e in ipairs(events) do if e == r.evt then table.remove(events, i); break end end
+        end
+      end
+      if #restores > 0 then
+        mm:modify(function()
+          for _, r in ipairs(restores) do
+            mm:add({ evType = 'cc', chan = r.spec.chan, cc = r.spec.cc,
+                     ppq = r.spec.ppq, ppqL = r.spec.ppqL, val = r.spec.val, shape = r.spec.shape })
+          end
+        end)
+        -- Seat a token-less projection so the view shows the restored cc this frame; next rebuild
+        -- re-reads the real token'd event from the take.
+        for _, r in ipairs(restores) do
+          local channel = channels[r.spec.chan]
+          local col = channel.columns.ccs[r.spec.cc]
+          if not col then col = { cc = r.spec.cc, events = {} }; channel.columns.ccs[r.spec.cc] = col end
+          util.add(col.events, { evType = 'cc', ppq = r.spec.ppq, ppqL = r.spec.ppqL,
+                                 val = r.spec.val, shape = r.spec.shape })
+          table.sort(col.events, function(a, b) return (a.ppqL or a.ppq) < (b.ppqL or b.ppq) end)
+        end
+      end
+
+      if not util.deepEq(ds:get('fxParkedCC') or {}, newParked) and mm:take() then
+        ds:assign('fxParkedCC', #newParked > 0 and newParked or util.REMOVE)
+      end
+    end
+
     -- Windows (read-only): fx host voice extents + per-note same-lane successor ppqL, floored by authored end; no realised round-trip (G4-stable).
     -- see design/archive/note-macros.md § host contract
     local fxWindow, nextInLane = {}, {}
@@ -1487,7 +1568,7 @@ do
       for chan = 1, 16 do
         -- Pass A: run every generator. Structural notes commit per lane; continuous deltas
         -- stash with their window for colouring (channel-wide, not note-tied). see design/archive/note-macros.md § Continuous realisation
-        local predicted, pending = {}, {}
+        local predicted, pending, ccFill = {}, {}, {}
         -- One producer interface, two sources: a note with fx (v1 augment) or an explicit
         -- fxRegion; the generator sees neither. see design/note-macros-v2.md § The anchor generalized
         local function runProducer(p)
@@ -1516,20 +1597,29 @@ do
                 if regionNotes then regionNotes[#regionNotes + 1] = spec
                 else util.add(predicted, spec) end
               end
-              -- Augment and replace ride the additive carrier identically; their only difference is
-              -- the node's base, which 4.9 forces to detune-only inside a replace window.
+              -- pb (augment+replace) and cc augment ride the additive carrier; cc replace alone
+              -- forks off it -- the curve goes straight on the target lane, authored cc parked at 4.5b.
               local target = meta.dest ~= 'note' and meta.dest or nil
               if target and #out.delta > 0 then
-                -- Replace overwrites the wire over [startL,endL): record it for 4.9's base suppression.
-                if meta.mode == 'replace' and target == 'pb' then
-                  util.add(replacePbWindows[chan], { startL, endL })
+                if meta.mode == 'replace' and type(target) == 'number' then
+                  -- cc replace: write the curve onto the target cc lane verbatim. No carrier is
+                  -- allocated, so the node never registers (adst) the target -- it hears it direct.
+                  for _, bp in ipairs(out.delta) do
+                    util.add(ccFill, { evType = 'cc', chan = chan, cc = target, derived = 'ccfill',
+                                       ppq = tm:fromLogical(chan, bp.ppqL, p.d), val = bp.val, shape = bp.shape })
+                  end
+                else
+                  -- Replace overwrites the wire over [startL,endL): record it for 4.9's base suppression.
+                  if meta.mode == 'replace' and target == 'pb' then
+                    util.add(replacePbWindows[chan], { startL, endL })
+                  end
+                  -- cc augment with no authored base needs a resting seat; carry its value so Pass B
+                  -- emits it once per target. see design/note-macros-v2.md § Continuous cc
+                  local rest = type(target) == 'number'
+                    and (p.fx.rest or generators.ccDefaultRest[target] or 0) or nil
+                  util.add(pending, { startL = startL, endL = endL,
+                                      target = target, delta = out.delta, d = p.d, rest = rest })
                 end
-                -- cc augment with no authored base needs a resting seat; carry its value so Pass B
-                -- emits it once per target. see design/note-macros-v2.md § Continuous cc
-                local rest = type(target) == 'number'
-                  and (p.fx.rest or generators.ccDefaultRest[target] or 0) or nil
-                util.add(pending, { startL = startL, endL = endL,
-                                    target = target, delta = out.delta, d = p.d, rest = rest })
               end
             end
           end
@@ -1658,14 +1748,23 @@ do
           key   = function(x) return util.key(canon(x.cc), canon(x.ppq)) end,
           match = function(have, spec) return have.val == spec.val end,
         }
+        -- cc-replace fill: reconcile the generated curve on its target lane; shape is part of the
+        -- match -- it drives REAPER's interpolation. see design/note-macros-v2.md § Continuous cc
+        local fRemove, fAdd = reconcileDerived{
+          existing = ccFillExisting[chan], predicted = ccFill,
+          key   = function(x) return util.key(canon(x.cc), canon(x.ppq)) end,
+          match = function(have, spec) return have.val == spec.val and have.shape == spec.shape end,
+        }
 
         local cRemove, cAdd = reconcileCarrier(carrierExisting[chan], predictedDelta)
-        if #cRemove > 0 or #cAdd > 0 or #bRemove > 0 or #bAdd > 0 then
+        if #cRemove > 0 or #cAdd > 0 or #bRemove > 0 or #bAdd > 0 or #fRemove > 0 or #fAdd > 0 then
           mm:modify(function()
             for _, e in ipairs(cRemove) do mm:delete(e.token) end
             for _, e in ipairs(bRemove) do mm:delete(e.token) end
+            for _, e in ipairs(fRemove) do mm:delete(e.token) end
             for _, s in ipairs(cAdd)    do mm:add(s)          end
             for _, s in ipairs(bAdd)    do mm:add(s)          end
+            for _, s in ipairs(fAdd)    do mm:add(s)          end
           end)
         end
         if #newCarriers > 0 then newFxCarrier[chan] = newCarriers end
