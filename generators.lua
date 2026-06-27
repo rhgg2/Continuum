@@ -6,7 +6,8 @@
 -- @noindex
 
 --invariant: pure module -- no module-level state; a generator is fn(host, params, ctx) -> { notes, delta }
---invariant: host = { window={startppqL,endppqL}, events={note,...}, id=uuid, chan, lane }
+--invariant: host = windowed channel input streams: notes, pas, ccs, ats (logical, intent units)
+--shape: host = { window={startppqL,endppqL}, chan, lane, id, notes={ {pitch,vel,detune,ppqL,endppqL},.. }, pas={ {ppqL,pitch,vel},.. }, ccs={ [cc]={ {ppqL,val},.. } }, ats={ {ppqL,val},.. } }
 --invariant: ctx binds resolution, pbRangeCents, nextSameLaneNote(host), step(pitch,detune,n)
 --invariant: periods are QN per the periodQN convention -- scalar or {num,den}
 --shape: result = { notes = { {ppqL,endppqL,pitch,vel,detune}, ... }, delta = { {ppqL,val,shape,[tension]}, ... } }
@@ -24,7 +25,7 @@ end
 local function retrig(host, params, ctx)
   local startL, endL = host.window[1], host.window[2]
   local step  = periodTicks(params.period, ctx.resolution)
-  local h     = host.events[1]
+  local h     = host.notes[1]
   local ramp  = params.ramp or 0
   local notes = {}
   local i = 1
@@ -45,7 +46,7 @@ end
 local function trill(host, params, ctx)
   local startL, endL = host.window[1], host.window[2]
   local step  = periodTicks(params.period, ctx.resolution)
-  local h     = host.events[1]
+  local h     = host.notes[1]
   -- The alternation note: `step` scale steps from the host, resolved through the temper.
   local altPitch, altDetune = ctx.step(h.pitch, h.detune or 0, params.step or 0)
   local notes = {}
@@ -99,7 +100,7 @@ local function arp(host, params, ctx)
   local i = 0
   local at = startL
   while at < endL do
-    local active = playingAt(host.events, at)
+    local active = playingAt(host.notes, at)
     if #active > 0 then
       local src = active[arpIndex(#active, dir, i) + 1]
       notes[#notes + 1] = {
@@ -167,7 +168,7 @@ end
 --contract: no next note or unison target -> empty delta (carrier untouched)
 local function slide(host, params, ctx)
   local startL, endL = host.window[1], host.window[2]
-  local h = host.events[1]
+  local h = host.notes[1]
   local target
   if params.target == 'next' then
     local nxt = ctx.nextSameLaneNote and ctx.nextSameLaneNote(host)

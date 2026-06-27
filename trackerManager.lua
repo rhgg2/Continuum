@@ -1373,6 +1373,17 @@ do
       end
     end
 
+    -- PA projection: moved before the producer so windowed channel streams see PAs as generator input;
+    -- before step 5 so findNoteColumnForPitch matches raw. Parked-host PAs stay orphan until a PA-consuming generator. see design/note-macros-v2.md § A4
+    for _, cc in mm:ccs() do
+      if cc.evType == 'pa' then
+        local noteCol = findNoteColumnForPitch(channels[cc.chan], cc.pitch, cc.ppq)
+        if noteCol then
+          util.add(noteCol.events, projectCC(cc, mm:tokenOf(cc), { type = 'pa' }))
+        end
+      end
+    end
+
     -- 4.6) Macro expansion (in-memory): expand fx-carrying notes, reconcile vs fxExisting; add/del deferred to 4.8; fxLive feeds tail walk + PC synthesis.
     -- see design/archive/note-macros.md § Pipeline placement
     do
@@ -1384,7 +1395,7 @@ do
       end
       local extras  = ds:get('extraColumns') or {}   -- authored columns block carrier codes
       local chanCtx = { resolution = res, pbRangeCents = pbRangeCents, step = stepOp,
-                        nextSameLaneNote = function(host) return nextInLane[host.events[1]] end }
+                        nextSameLaneNote = function(host) return nextInLane[host.notes[1]] end }
       -- Explicit fx-regions (channel x ppq span + fx, no host note), re-queried each
       -- rebuild and bucketed by channel. see design/note-macros-v2.md § The anchor generalized
       local fxRegionsByChan = {}
@@ -1410,6 +1421,32 @@ do
                             detune = evt.detune or 0, ppqL = lo, endppqL = hi }
         end)
         return out
+      end
+      -- cc-family streams a generator reads over its window (notes via membersOf). Key `evt.ppqL or evt.ppq`:
+      -- ppqL is nil when raw==logical (step-5 convention); no toLogical round-trip. pb deferred. see design/note-macros-v2.md § A4
+      local function channelStreams(chan, startL, endL)
+        local cols = channels[chan].columns
+        local function within(ppqL) return ppqL >= startL and ppqL < endL end
+        local pas, ccs, ats = {}, {}, {}
+        for _, col in ipairs(cols.notes) do
+          for _, evt in ipairs(col.events) do
+            local ppqL = evt.ppqL or evt.ppq
+            if evt.type == 'pa' and within(ppqL) then
+              util.add(pas, { ppqL = ppqL, pitch = evt.pitch, vel = evt.vel })
+            end
+          end
+        end
+        for ccNum, col in pairs(cols.ccs) do
+          for _, evt in ipairs(col.events) do
+            local ppqL = evt.ppqL or evt.ppq
+            if within(ppqL) then util.bucket(ccs, ccNum, { ppqL = ppqL, val = evt.val }) end
+          end
+        end
+        for _, evt in ipairs(cols.at and cols.at.events or {}) do
+          local ppqL = evt.ppqL or evt.ppq
+          if within(ppqL) then util.add(ats, { ppqL = ppqL, val = evt.val }) end
+        end
+        return pas, ccs, ats
       end
       -- Deterministic allocator: lowest lane free of overlap, authored notes seed occupancy;
       -- emission order -> deterministic -> G4-stable. see design/note-macros-v2.md § Generator output
@@ -1439,14 +1476,18 @@ do
         -- fxRegion; the generator sees neither. see design/note-macros-v2.md § The anchor generalized
         local function runProducer(p)
           local startL, endL = p.window[1], p.window[2]
+          -- The host the generators read: the note membership plus the windowed channel input
+          -- streams, built once per host (not per kind). see design/note-macros-v2.md § A4
+          local pas, ccs, ats = channelStreams(chan, startL, endL)
+          local host = { window = { startL, endL }, chan = chan, lane = p.lane, id = p.id,
+                         notes = p.notes, pas = pas, ccs = ccs, ats = ats }
           -- Region producers (lane unset) defer their notes: lanes are allocated over the
           -- whole batch after the fx loop. Note producers ride the host's own lane inline.
           local regionNotes = p.lane == nil and {} or nil
           for _, params in ipairs(p.fx) do
             local meta = generators.kinds[params.kind]
             if meta then
-              local out = meta.expand({ window = { startL, endL }, events = p.events,
-                                id = p.id, chan = chan, lane = p.lane }, params, chanCtx)
+              local out = meta.expand(host, params, chanCtx)
               for _, fn in ipairs(out.notes) do
                 local spec = {
                   evType = 'note', chan = chan, lane = p.lane, derived = p.id,
@@ -1482,7 +1523,7 @@ do
             if host.fx and host.type ~= 'pa' then
               local endL = fxWindow[host]
               fxHostEnd[host] = tm:fromLogical(chan, endL)
-              runProducer{ window = { host.ppqL, endL }, events = { host }, fx = host.fx,
+              runProducer{ window = { host.ppqL, endL }, notes = { host }, fx = host.fx,
                            id = host.uuid, lane = laneIdx, delay = host.delay or 0,
                            sample = host.sample, d = delayToPPQ(host.delay or 0) }
             end
@@ -1493,16 +1534,16 @@ do
         -- (parking frees the lanes); else members still sound and feed the live overlap. see design/note-macros-v2.md § Generator output
         for _, region in ipairs(fxRegionsByChan[chan] or {}) do
           local startL, endL = region.startppq, region.endppq
-          local events
+          local members
           if parksNotes(region) then
-            events = {}                              -- replace: derived notes stand in for the parked chord
+            members = {}                             -- replace: derived notes stand in for the parked chord
             for _, m in ipairs(channels[chan].parked or {}) do
-              if m.ppqL >= startL and m.ppqL < endL then util.add(events, m) end
+              if m.ppqL >= startL and m.ppqL < endL then util.add(members, m) end
             end
           else
-            events = membersOf(chan, startL, endL)   -- augment: members still sound
+            members = membersOf(chan, startL, endL)  -- augment: members still sound
           end
-          runProducer{ window = { startL, endL }, events = events,
+          runProducer{ window = { startL, endL }, notes = members,
                        fx = region.fx, id = region.uuid, lane = nil, d = 0 }
         end
 
@@ -1880,17 +1921,6 @@ do
             mm:add(writeEvt)
           end
         end)
-      end
-    end
-
-    -- 6.5) PA dispatch. Runs after step 6 so foreign-MIDI PAs can locate their host note.
-    -- PAs do not own a lane — they ride a same-pitch note's column.
-    for _, cc in mm:ccs() do
-      if cc.evType == 'pa' then
-        local noteCol = findNoteColumnForPitch(channels[cc.chan], cc.pitch, cc.ppq)
-        if noteCol then
-          util.add(noteCol.events, projectCC(cc, mm:tokenOf(cc), { type = 'pa' }))
-        end
       end
     end
 

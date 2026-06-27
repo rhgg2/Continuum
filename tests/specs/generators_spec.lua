@@ -22,7 +22,7 @@ local function slideCtx(nextNote, pbRangeCents)
            nextSameLaneNote = function() return nextNote end }
 end
 local function slideHost(detune)
-  return { window = { 0, 240 }, events = { { pitch = 60, vel = 100, detune = detune or 0 } } }
+  return { window = { 0, 240 }, notes = { { pitch = 60, vel = 100, detune = detune or 0 } } }
 end
 local slideP = { kind = 'slide', over = { 1, 2 }, target = 'next' }
 
@@ -139,7 +139,7 @@ return {
       local seen
       local ctx = { resolution = 240,
                     step = function(p, d, n) seen = { p, d, n }; return p + n, (d or 0) + 7 end }
-      local host = { window = { 0, 240 }, events = { { pitch = 60, vel = 100, detune = 0 } } }
+      local host = { window = { 0, 240 }, notes = { { pitch = 60, vel = 100, detune = 0 } } }
       local out = generators.kinds.trill.expand(host, { kind = 'trill', period = { 1, 4 }, step = 2 }, ctx)
       t.eq(#out.delta, 0, 'structural: no continuous delta')
       t.deepEq(seen, { 60, 0, 2 }, 'ctx.step receives the host pitch, detune, and step count')
@@ -157,7 +157,7 @@ return {
     name = 'trill carries host detune verbatim on the return (even) tiles',
     run = function()
       local ctx = { resolution = 240, step = function(p, d, n) return p + n, 99 end }
-      local host = { window = { 0, 240 }, events = { { pitch = 60, vel = 80, detune = 12 } } }
+      local host = { window = { 0, 240 }, notes = { { pitch = 60, vel = 80, detune = 12 } } }
       local out = generators.kinds.trill.expand(host, { kind = 'trill', period = { 1, 4 }, step = 1 }, ctx)
       t.eq(out.notes[2].detune, 12, 'even tile inherits the host detune')
       t.eq(out.notes[1].detune, 99, 'odd tile takes the stepped detune')

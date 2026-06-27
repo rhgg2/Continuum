@@ -1,7 +1,8 @@
 -- Note macros v2: region hosts. The N=0 vibrato carrier proves the generator-side substrate
 -- (ds, 4.6 producer split, reconcile, G4 round-trip). see design/note-macros-v2.md
-local t    = require('support')
-local util = require('util')
+local t          = require('support')
+local util       = require('util')
+local generators = require('generators')
 
 local DELTA_MSB = 20   -- coldest carrier code; no authored cc columns here
 
@@ -283,6 +284,39 @@ return {
       local h = harness.mk()
       injectArp(h)
       t.eq(#derivedNotes(h), 0, 'no members -> no derived notes (every step rests)')
+    end,
+  },
+
+  ----- A4: the producer exposes the windowed channel as typed input streams
+
+  {
+    name = 'fx region: the producer hands the generator notes/pas/ccs/ats input streams',
+    run = function(harness)
+      local h = harness.mk()
+      -- A covered note (so a PA can ride its column) plus authored cc / channel-AT / poly-AT in
+      -- the window. Identity swing in the harness, so ppq == ppqL.
+      addNote(h, { pitch = 60, ppq = 0, endppq = 240, lane = 1 })
+      h.tm:addEvent({ evType = 'cc', ppq = 60,  chan = 1, cc = 74, val = 50 })
+      h.tm:addEvent({ evType = 'at', ppq = 180, chan = 1, val = 33 })
+      h.tm:addEvent({ evType = 'pa', ppq = 120, chan = 1, pitch = 60, vel = 77 })
+      h.tm:flush()
+
+      -- A spec-only capture kind: augment (parks nothing), records the host it is handed.
+      local captured
+      generators.kinds.capture = {
+        expand = function(host) captured = host; return { notes = {}, delta = {} } end,
+        mode = 'augment', dest = 'pb', label = 'Capture', defaults = {}, fields = {},
+      }
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+                                   fx = { { kind = 'capture' } } } })
+      h.tm:rebuild()
+      generators.kinds.capture = nil   -- restore before asserting (generators is a shared module)
+
+      t.truthy(captured, 'the capture kind ran and recorded its host')
+      t.deepEq(captured.pas, { { ppqL = 120, pitch = 60, vel = 77 } }, 'the PA rides into host.pas')
+      t.deepEq(captured.ccs[74], { { ppqL = 60, val = 50 } }, 'authored cc 74 buckets into host.ccs')
+      t.deepEq(captured.ats, { { ppqL = 180, val = 33 } }, 'channel aftertouch into host.ats')
+      t.deepEq(field(captured.notes, 'pitch'), { 60 }, 'the covered note is the membership (host.notes)')
     end,
   },
 

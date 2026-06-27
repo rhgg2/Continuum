@@ -401,13 +401,15 @@ wants ~none of gm (see resolved open question below).
   is A2 verbatim (members sound + occupy lanes; nudge persists). Display of the
   parked bucket (`channels[chan].parked`) is the renderer's union (Track B B2). Pinned
   by the replace / augment / realise / removal / G4 tests in `tm_fx_region_spec`.
-- **A4 — reframed: generator input streams (the PA half); continuous replace deferred. In progress.**
+- **A4 — reframed: generator input streams (notes/pas/ccs/ats). Landed; pb + continuous replace deferred.**
   A3 parks notes only. The PA half was misframed as park-the-PA-and-re-emit-it-rebound-to-the-region;
   that operation can't exist generically -- a PA is generator *input*, like a member's pitch/detune, and
   the generator's input->output mapping preserves no event correspondence to rebind across (an arp samples
   a chord and emits one stream; which input PA maps to which output note is undefined). PA isn't special:
   it generalises to *the generator reads the windowed channel as typed input streams* (notes, pas, ccs,
-  ats). **Landing now**, read from the real column projections -- see § A4 -- generator input streams (plan).
+  ats). **Landed**: `channelStreams` slices them from the real column projections at the 4.6 seam, keyed by
+  `evt.ppqL or evt.ppq` (no toLogical round-trip); the PA projection moved ahead of the producer. See
+  § A4 -- generator input streams.
   **Deferred** (each until a consumer): **pb as input** (its intent cents `cents-minus-detune` is the
   absorber's product, entangled with generator output -- needs the phased absorber-split, not an mm
   re-derivation) and **continuous replace** (region pb overwrites logical pb, the 4.9 overwrite path).
@@ -552,13 +554,13 @@ matter.
 **Out of scope.** Note-fx hosted on a parked note, and continuous/PA replace (A4)
 -- both already deferred.
 
-## A4 -- generator input streams (plan)
+## A4 -- generator input streams (landed)
 
 Reframes the PA half of A4. PA was misframed as a park/re-emit/rebind problem; that
 operation can't exist generically (no input->output event correspondence to carry a PA
 across). So PA stops being special and becomes one of several **typed input streams the
 generator reads over its window**. ADSR gated by note-ons, a CC-controlled vibrato, a
-pressure-aware arp all fall out of one shape. Landing: notes, pas, ccs, ats. pb deferred
+pressure-aware arp all fall out of one shape. Landed: notes, pas, ccs, ats; pb deferred
 (below).
 
 **Contract** (`generators.lua`). `host.events` -> `host.notes` (it *is* the note stream),
@@ -625,6 +627,14 @@ spec fixture, not a production surface). `generators_spec`: the `events`->`notes
 
 **Files.** `generators.lua` (contract invariant/shape + rename), `trackerManager.lua`
 (pa-projection move, `channelStreams`, host hoist, rename feeds), this doc, the two specs.
+
+**Landed -- two refinements from the steps above.** (1) The stream key is `evt.ppqL or evt.ppq`, not a
+bare `ppqL` slice: an authored cc/at/pa carries `ppqL == nil` whenever raw already equals logical (identity
+swing, or a swing-neutral position), so the `or evt.ppq` fallback gives the logical position with no
+`toLogical` round-trip -- the same convention step 5 uses. (2) The PA projection lands *before the producer
+but after externals + 4.5 parking*, not "after step 3": note columns are only settled (foreign-MIDI in,
+covered notes parked out) by then, and it must stay before step 5 so `findNoteColumnForPitch` still matches
+in the raw frame.
 
 ## Open questions
 
