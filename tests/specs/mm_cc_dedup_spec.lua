@@ -7,7 +7,6 @@
 
 local t = require('support')
 
-local util = require('util')
 local realMM = require('realMidiManager')()
 
 local CHANMSG = { pa = 0xA0, cc = 0xB0, pc = 0xC0, at = 0xD0, pb = 0xE0 }
@@ -35,13 +34,6 @@ local function packCc(c)
   return CHANMSG[c.evType], msg2, msg3
 end
 
-local function uuidTxt(u)
-  if u == 0 then return '0' end
-  local s, n, b36 = '', u, '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-  while n > 0 do s = b36:sub((n % 36) + 1, (n % 36) + 1) .. s; n = n // 36 end
-  return s
-end
-
 local function seed(take, reaper, spec)
   local ccs, texts = {}, {}
   for _, c in ipairs(spec.ccs or {}) do
@@ -56,17 +48,9 @@ local function seed(take, reaper, spec)
   end
   reaper:seedMidi(take, { ccs = ccs, texts = texts })
 
-  local keys = {}
+  -- Per-event metadata persists via eventMeta (project scope, pool-guid keyed).
   for _, sc in ipairs(spec.sidecars or {}) do
-    if sc.metadata then
-      local txt = uuidTxt(sc.uuid)
-      keys[#keys+1] = txt
-      reaper.GetSetMediaItemTakeInfo_String(take, 'P_EXT:ctm_' .. txt,
-        util.serialise(sc.metadata, {}), true)
-    end
-  end
-  if #keys > 0 then
-    reaper.GetSetMediaItemTakeInfo_String(take, 'P_EXT:ctm_keys', table.concat(keys, ','), true)
+    if sc.metadata then t.seedMeta(take, sc.uuid, sc.metadata) end
   end
 end
 
@@ -228,11 +212,11 @@ return {
       t.eq(#bodies, 1, 'loser sidecar deleted by reconcile orphan path')
       t.eq(bodies[1].uuid, survivor.uuid)
 
-      local _, keys = reaper.GetSetMediaItemTakeInfo_String(take, 'P_EXT:ctm_keys', '', false)
-      t.eq(keys, uuidTxt(survivor.uuid), 'only winner uuid remains in ctm_keys')
-      local _, loserSlot = reaper.GetSetMediaItemTakeInfo_String(
-        take, 'P_EXT:ctm_' .. uuidTxt(loserUuid), '', false)
-      t.eq(loserSlot, '', 'loser ctm_<uuid> slot purged')
+      local meta = t.loadMeta(take)
+      t.eq(meta[loserUuid], nil, 'loser metadata purged')
+      local remaining = {}
+      for u in pairs(meta) do remaining[#remaining+1] = u end
+      t.deepEq(remaining, { survivor.uuid }, 'only the winner uuid remains')
     end,
   },
 

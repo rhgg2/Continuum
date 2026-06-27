@@ -1,4 +1,4 @@
-@module continuum  src=continuum.lua  loc=202  sha=772d5ba  mode=chunk
+@module continuum  src=continuum.lua  loc=203  sha=772d5ba  mode=chunk
 
 # Invariants & contracts
   @invariant  entry point — owns lifecycle (Main runs once per ReaScript invocation), wires the layered manager stack, drives the render loop via reaper.defer
@@ -13,7 +13,7 @@
   @fn err_handler(err)  @ 25-29
   @fn run(fn)  @ 31-34
   @fn createImGui()  @ 36-74
-  @fn Main()  @ 78-200
+  @fn Main()  @ 78-201
       @contract  Main builds the manager stack bottom-up, then enters the defer loop via coord:run()
       @contract  each page owns its cross-page state, exposed through the facade registry coord wires
 
@@ -23,7 +23,7 @@
   @use call    imgui.CreateFont  @ createImGui:42,47,51,56
   @use call    imgui.CreateFontFromFile  @ createImGui:46,50,55
   @use call    imgui.SetConfigVar  @ createImGui:38,39
-  @use call    util.instantiate  @ Main:80,81,82,83,84
+  @use call    util.instantiate  @ Main:80,81,82,83,84,85
   @use call    util.print  @ print:22
   @use require imgui  @ 17
   @use require util  @ 16

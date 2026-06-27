@@ -6,38 +6,42 @@ mutation lock.
 
 ## Identity & persistence
 
-Every uuid'd event has a metadata blob in **take extension data** under
-two key families:
-- `P_EXT:ctm_keys` — comma-separated list of all UUID texts. Loader's entry point.
-- `P_EXT:ctm_<uuidTxt>` — `util.serialise`d field table per event.
+Every uuid'd event has a metadata blob persisted by **`eventMeta`**, keyed by
+the take's **pool guid** (its `POOLEDEVTS` source identity), not the take. mm
+derives that guid from the item chunk on take-swap and caches it (`poolGuid`).
 
-Stale keys (present in `ctm_keys` but no longer in `uuids`) are cleared by
-writing an empty string to their extension slot — REAPER treats this as
-deletion. UUIDs are monotonic integers, base-36 encoded; the namespace is
-unified across notes and ccs.
+Keying by pool rather than take is load-bearing. Pooled instances share one MIDI
+source — and therefore the in-stream uuid sidecars — but each is a *separate*
+take with its own ext-data. Storing the blob per take let a pooled sibling (or a
+parked survivor of a delete) keep the uuid yet lose the metadata; keyed by pool,
+every instance resolves the one blob. See docs/eventMeta.md for the model and
+storage shape.
+
+UUIDs are monotonic integers, base-36 encoded; the namespace is unified across
+notes and ccs, and is per-pool — the sidecars that carry them ride the pool.
 
 ### Metadata I/O — internal vs external reload
 
-`load` reaches REAPER's ext-data twice: `loadMetadata` reads every
-`ctm_<uuid>` up front, `saveMetadata` re-writes every one at the end
-(plus a stale-key sweep). Both are O(all uuids) in REAPER calls — and
+`load` reaches the metadata store twice: `eventMeta:load(poolGuid)` reads
+the pool's blob up front, `saveMetadata` (→ `eventMeta:saveAll`) re-writes
+it at the end (plus a stale-uuid sweep). Both are O(all uuids) — and
 `mm:modify` triggers a full reload on **every** edit, so with a few
 hundred notes this dominated keystroke latency.
 
 The round-trip is redundant on a *self-inflicted* reload — one driven by
 `mm:modify`, identified by `lock` still being held when `load` runs:
 - The writes are redundant because `add`/`assign` already self-persist
-  each touched uuid via `saveMetadatum`, and `delete` now wipes its own
-  `ctm_<uuid>` + keys entry inline (`deleteMetadatum`). Ext-data stays
-  current incrementally, so the wholesale `saveMetadata` adds nothing.
+  each touched uuid via `saveMetadatum` (→ `eventMeta:saveOne`), and
+  `delete` wipes its own entry via `deleteMetadatum` (→ `eventMeta:deleteOne`).
+  The store stays current incrementally, so the wholesale `saveMetadata`
+  adds nothing.
 - The read is redundant because the in-memory events still carry that
   same metadata; `snapshotMetadata` reconstructs the `uuid → fields`
   table from them (before the table clear) instead of re-reading.
 
 So internal reloads skip both. External loads — take swap, undo, the
-watcher, initial bind — keep the full `loadMetadata` + `saveMetadata`,
-which is where dedup/reconcile and orphan compaction must run; that path
-is byte-for-byte unchanged.
+watcher, initial bind — keep the full `eventMeta:load` + `saveMetadata`,
+which is where dedup/reconcile and orphan compaction must run.
 
 ### Index re-read elision
 

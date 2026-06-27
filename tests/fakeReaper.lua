@@ -1097,6 +1097,9 @@ function M.new()
   function r:bindTake(take, item, track)
     state.itemForTake[take]  = item
     state.trackForItem[item] = track
+    -- A bound take's item fakes a POOLEDEVTS guid so mm can derive its pool
+    -- identity (the key eventMeta stores per-event metadata under).
+    state.poolByItem[item]   = state.poolByItem[item] or r.genGuid('')
   end
   function r:setTrackFX(track, names)
     state.fxByTrack[track] = names

@@ -22,7 +22,7 @@ local util    = require 'util'
 local painter = require 'painter'
 local scratch = require 'scratch'
 
-local cm, ds, facade = (...).cm, (...).ds, (...).facade
+local cm, ds, facade, eventMeta = (...).cm, (...).ds, (...).facade, (...).eventMeta
 
 local am = {}
 
@@ -615,6 +615,7 @@ function am:deleteSlot(trackIdx, slotIdx)
   end
   local parked = parkedItemFor(entry.id)
   if parked then reaper.DeleteTrackMediaItem(select(2, scratch.peek()), parked) end
+  if entry.kind == 'midi' then eventMeta:dropPool(entry.id) end
   ensureSlots(track)    -- prune the orphaned dict entry now; non-render readers see it gone at once
   invalidate()
   return removed
@@ -670,7 +671,10 @@ local function cloneMidiItem(track, srcItem, qnPos, lengthQN, rePool)
   local chunk = srcChunk
   if rePool then
     local freshGuid = harvestPoolGuid(newItem)
-    if freshGuid then chunk = chunkSetPool(srcChunk, freshGuid) end
+    if freshGuid then
+      chunk = chunkSetPool(srcChunk, freshGuid)
+      eventMeta:copyPool(harvestPoolGuid(srcItem), freshGuid)   -- fresh pool: fork metadata
+    end
   end
   reaper.SetItemStateChunk(newItem, chunk, false)
   -- Chunk replays src POSITION/LENGTH and may swap the active take; restore + refetch.
@@ -854,6 +858,7 @@ function am:mintParkedTake(trackIdx, name, lengthQN, srcTake)
   if not guid then return end
   if srcTake then
     copyMidiEvents(srcTake, take)
+    eventMeta:copyPool(takeIdOf(srcTake), guid)   -- fresh pool: fork the source's metadata
     if name == '' then name = reaper.GetTakeName(srcTake) or '' end
   end
 

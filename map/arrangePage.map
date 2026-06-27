@@ -1,5 +1,5 @@
-@module arrangePage  src=arrangePage.lua  loc=67  sha=732c659  mode=chunk  self=ap
-@deps cm, ds, cmgr, chrome, gui, modalHost, facade
+@module arrangePage  src=arrangePage.lua  loc=67  sha=3a7206b  mode=chunk  self=ap
+@deps cm, ds, cmgr, chrome, gui, modalHost, facade, eventMeta
 
 # Imports
   @require util = 'util'  @ 12

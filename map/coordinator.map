@@ -1,5 +1,5 @@
-@module coordinator  src=coordinator.lua  loc=421  sha=59da522  mode=chunk  self=coord
-@deps cm, ds, cmgr, gui
+@module coordinator  src=coordinator.lua  loc=421  sha=4a6c156  mode=chunk  self=coord
+@deps cm, ds, eventMeta, cmgr, gui
 
 # Invariants & contracts
   @invariant  owns the active tracker take; polls REAPER's selection each frame while tracker page is active (sticky on no-item or non-MIDI)
@@ -30,7 +30,7 @@
   @state toolbar = chrome.makeToolbar()  @ 22   -- one shared toolbar; renders the active page's row
   @state facades = {}  @ 33
   @state facade = {  @ 34
-  @state STD = { cm = cm, ds = ds, cmgr = cmgr, chrome = chrome, gui = g...  @ 38
+  @state STD = { cm = cm, ds = ds, eventMeta = eventMeta, cmgr = cmgr, c...  @ 38
   @state CHROME_PAD_X, CHROME_PAD_Y = 8, 4  @ 40
   @state pages, active, previous = {}, nil, nil  @ 42
   @state lastToolbarActive = nil  @ 43   -- last page measured; a switch re-pins the band height

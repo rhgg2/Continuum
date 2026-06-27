@@ -4,10 +4,11 @@
 --invariant: mm holds realisation frame; delay baked into note-on ppq (docs/timing.md)
 --invariant: mm holds raw pb; cents/detune + absorber pb live in tm (docs/tuning.md)
 --invariant: muted is true-or-absent; false coerces to nil at write; pass false to clear
---invariant: per-event metadata: util:serialise to take ext-data, unserialised on read
+--invariant: per-event metadata persists via eventMeta, keyed by the take's POOL guid (docs/eventMeta.md)
 local util = require 'util'
 
-local take = (...).take
+local take      = (...).take
+local eventMeta = (...).eventMeta
 
 -- A deleted take leaves `take` dangling (the dormant bindTake(nil) seam keeps
 -- it for tm's last frame); like cm:pollUndo, a dead ptr self-heals to nil here.
@@ -17,6 +18,18 @@ local function liveTake()
     take = nil
   end
   return take
+end
+
+-- Metadata is keyed by the take's POOLEDEVTS guid (its source identity), so every
+-- pooled instance shares one blob. Derived from the item chunk, cached across reloads.
+local poolGuid
+local function setTakeGuid()
+  poolGuid = nil
+  if not take then return end
+  local item = reaper.GetMediaItemTake_Item(take)
+  if not item then return end
+  local ok, chunk = reaper.GetItemStateChunk(item, '', false)
+  if ok and chunk then poolGuid = chunk:match('POOLEDEVTS%s+({[^}]+})') end
 end
 
 local function print(...)
@@ -209,24 +222,6 @@ local function sidecarIdxOf(uuid, eventType)
   end
 end
 
-local function loadMetadata()
-  if not take then return {} end
-
-  local ok, keysText = reaper.GetSetMediaItemTakeInfo_String(take, 'P_EXT:ctm_keys', '', false)
-  if not (ok and keysText and keysText ~= '') then return {} end
-  local tbl = {}
-  for uuidTxt in keysText:gmatch('[^,]+') do
-    local uuid = util.fromBase36(uuidTxt)
-    tbl[uuid] = { }
-
-    local entryOk, fields = reaper.GetSetMediaItemTakeInfo_String(take, 'P_EXT:ctm_' .. uuidTxt, '', false)
-    if entryOk and fields then
-      tbl[uuid] = util.unserialise(fields)
-    end
-  end
-  return tbl
-end
-
 local noteEventFields = {
   idx = true, loc = true, ppq = true, endppq = true, chan = true,
   evType = true, pitch = true, vel = true, muted = true, uuid = true, uuidIdx = true,
@@ -238,81 +233,36 @@ local ccEventFields = {
   muted = true, shape = true, tension = true, uuid = true,
 }
 
-local function saveMetadatum(uuid)
-  if not take then return end
-
-  local uuidTxt = util.toBase36(uuid)
-  local evt   = eventsByUuid[uuid]
-
-  if not evt then
-    print('Error! uuid not found')
-    return
-  end
-
+-- The metadata an event carries: every field that isn't structural or regenerated.
+-- eventMeta stores these opaque; the strip (which fields count) is mm's alone.
+local function metaFieldsOf(evt)
   local strip = (evt.evType == 'note') and noteEventFields or ccEventFields
-  reaper.GetSetMediaItemTakeInfo_String(take, 'P_EXT:ctm_' .. uuidTxt, util.serialise(evt, strip), true)
-
-  -- Ensure uuid is in the keys list so loadMetadata() finds it on reload
-  local ok, keysText = reaper.GetSetMediaItemTakeInfo_String(take, 'P_EXT:ctm_keys', '', false)
-  if not ok or not keysText or not keysText:find(uuidTxt, 1, true) then
-    local keys = (ok and keysText and keysText ~= '') and (keysText .. ',' .. uuidTxt) or uuidTxt
-    reaper.GetSetMediaItemTakeInfo_String(take, 'P_EXT:ctm_keys', keys, true)
-  end
+  local meta = {}
+  for k, v in pairs(evt) do if not strip[k] then meta[k] = v end end
+  return meta
 end
 
--- Wipe one uuid's ext-data + keys entry inline, so internal reloads can skip the
--- wholesale saveMetadata() keys-reconcile. See docs/midiManager.md § Metadata I/O.
-local function deleteMetadatum(uuid)
-  if not (take and uuid) then return end
-  local uuidTxt = util.toBase36(uuid)
-  reaper.GetSetMediaItemTakeInfo_String(take, 'P_EXT:ctm_' .. uuidTxt, '', true)
+local function saveMetadatum(uuid)
+  local evt = eventsByUuid[uuid]
+  if not evt then print('Error! uuid not found'); return end
+  eventMeta:saveOne(poolGuid, uuid, metaFieldsOf(evt))
+end
 
-  local ok, keysText = reaper.GetSetMediaItemTakeInfo_String(take, 'P_EXT:ctm_keys', '', false)
-  if ok and keysText and keysText ~= '' then
-    local kept = {}
-    for k in keysText:gmatch('[^,]+') do
-      if k ~= uuidTxt then kept[#kept + 1] = k end
-    end
-    reaper.GetSetMediaItemTakeInfo_String(take, 'P_EXT:ctm_keys', table.concat(kept, ','), true)
-  end
+local function deleteMetadatum(uuid)
+  if uuid then eventMeta:deleteOne(poolGuid, uuid) end
 end
 
 local function saveMetadata()
-  if not take then return end
-
-  local newKeys, keyList = {}, {}
-  for uuid in pairs(eventsByUuid) do
-    local uuidTxt = util.toBase36(uuid)
-    newKeys[uuidTxt] = true
-    util.add(keyList, uuidTxt)
-    saveMetadatum(uuid)
-  end
-
-  local ok, oldKeysText = reaper.GetSetMediaItemTakeInfo_String(take, 'P_EXT:ctm_keys', '', false)
-  if ok and oldKeysText and oldKeysText ~= '' then
-    for oldUuidTxt in oldKeysText:gmatch('[^,]+') do
-      if not newKeys[oldUuidTxt] then
-        -- Writing an empty string effectively removes the extension data
-        reaper.GetSetMediaItemTakeInfo_String(take, 'P_EXT:ctm_' .. oldUuidTxt, '', true)
-      end
-    end
-  end
-
-  reaper.GetSetMediaItemTakeInfo_String(take, 'P_EXT:ctm_keys', table.concat(keyList, ','), true)
+  local byUuid = {}
+  for uuid, evt in pairs(eventsByUuid) do byUuid[uuid] = metaFieldsOf(evt) end
+  eventMeta:saveAll(poolGuid, byUuid)
 end
 
--- In-memory equivalent of loadMetadata() (per uuid, the non-structural fields):
+-- In-memory equivalent of eventMeta:load (per uuid, the non-structural fields):
 -- lets an internal reload reuse live metadata. See docs/midiManager.md § Metadata I/O.
 local function snapshotMetadata()
   local tbl = {}
-  for uuid, evt in pairs(eventsByUuid) do
-    local strip = (evt.evType == 'note') and noteEventFields or ccEventFields
-    local meta = {}
-    for k, v in pairs(evt) do
-      if not strip[k] then meta[k] = v end
-    end
-    tbl[uuid] = meta
-  end
+  for uuid, evt in pairs(eventsByUuid) do tbl[uuid] = metaFieldsOf(evt) end
   return tbl
 end
 
@@ -354,7 +304,7 @@ function mm:load(newTake)
   local takeSwapped = take ~= newTake
   -- wideCC registration is per-take config (tm re-asserts it each rebuild from
   -- the take's hosts); a swapped-in take must not inherit the old one's codes.
-  if takeSwapped then take = newTake; wideMsb = {} end
+  if takeSwapped then take = newTake; wideMsb = {}; setTakeGuid() end
 
   -- lock is held only by modify() at reload time → this is a self-inflicted reload.
   -- Snapshot the live metadata before the clear so we can skip the ext-data round-trip.
@@ -367,7 +317,7 @@ function mm:load(newTake)
   local noteDedupEvents, ccDedupEvents, reassignEvents, reconcileEvents = {}, {}, {}, {}
   local takeDirty = false  -- set when an in-load step re-sorts the take (see final read pass)
 
-  local metadata = carried or loadMetadata()
+  local metadata = carried or eventMeta:load(poolGuid)
   for uuid in pairs(metadata) do if uuid > maxUUID then maxUUID = uuid end end
 
   ----- Helper functions
@@ -751,7 +701,7 @@ end
 
 --contract: clears mm.take and event tables when take dies; distinct from load(nil) dormant seam
 function mm:unload()
-  take = nil
+  take, poolGuid = nil, nil
   notes, ccs, eventsByUuid, tokenIdx, maxUUID, lock = {}, {}, {}, {}, 0, false
 end
 
@@ -1300,6 +1250,6 @@ function mm:timeSigs()
   return result
 end
 
-if take then mm:load(take) end
+if take then setTakeGuid(); mm:load(take) end
 return mm
 

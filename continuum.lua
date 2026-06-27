@@ -80,8 +80,9 @@ local function Main()
   local ps    = util.instantiate('pextStore')
   local cm    = util.instantiate('configManager', { ps = ps })
   local ds    = util.instantiate('dataStore', { ps = ps })
+  local eventMeta = util.instantiate('eventMeta', { ps = ps })
   local cmgr  = util.instantiate('commandManager', { cm = cm })
-  local coord = util.instantiate('coordinator', { cm = cm, ds = ds, cmgr = cmgr, gui = gui })
+  local coord = util.instantiate('coordinator', { cm = cm, ds = ds, eventMeta = eventMeta, cmgr = cmgr, gui = gui })
 
   -- Wiring registered first so Continuum boots into it (coord:register makes
   -- the first registered page active). seedCursorFromReaper still seeds arrange.

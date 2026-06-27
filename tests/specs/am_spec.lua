@@ -6,7 +6,8 @@ local scratch = require('scratch')
 
 local function mkAm(harness, opts)
   local h = harness.mk(opts)
-  local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
+  local em = util.instantiate('eventMeta', { ps = util.instantiate('pextStore') })
+  local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm, eventMeta = em })
   return h, am
 end
 
@@ -659,6 +660,21 @@ return {
   },
 
   {
+    name = 'deleteSlot forever-deletes the pool per-event metadata',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', poolGuid = '{p1}' } } },
+      })
+      local tk = am:tracksTakes(0)[1]
+      t.seedMeta(tk.take, 1, { detune = -50 })
+      local slot = am:trackSlots(0)[1].idx
+      am:deleteSlot(0, slot)
+      t.eq(next(t.loadMeta(tk.take)), nil, 'pool metadata gone with the slot')
+    end,
+  },
+
+  {
     name = 'mintParkedTake shows the new slot at once; isParkedTake flags scratch-hosted takes',
     run = function(harness)
       local h, am = mkAm(harness)
@@ -929,6 +945,23 @@ return {
       t.eq(below.name, 'lead', 'inherits the source name')
       local _, blob = h.reaper.MIDI_GetAllEvts(copy, '')
       t.eq(blob, 'EVTS-BLOB', 'MIDI events copied to the new take')
+    end,
+  },
+
+  {
+    -- The fix for "parking desyncs notes from their metadata": an unpooled clone
+    -- mints a fresh pool, so eventMeta:copyPool must fork the source's metadata.
+    name = 'duplicateUnpooledBelow forks the source per-event metadata onto the fresh pool',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, len = 4, srcLen = 4, poolGuid = '{p1}' } } },
+      })
+      local src = am:tracksTakes(0)[1]
+      t.seedMeta(src.take, 1, { detune = -50 })       -- author metadata on the source pool
+      local copy = am:duplicateUnpooledBelow(src)
+      t.truthy(copy, 'copy returned')
+      t.eq(t.loadMeta(copy)[1].detune, -50, 'the fresh pool inherited the source metadata')
     end,
   },
 

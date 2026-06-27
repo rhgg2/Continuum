@@ -71,6 +71,12 @@ slot the user edits in place and drops onto the grid later. A new MIDI
 item already carries its own pool, so the clone is unpooled by
 construction.
 
+Per-event metadata follows the pool, not the take (docs/eventMeta.md). The
+keeper move (`MoveMediaItemToTrack`) and pooled re-drops keep the same pool
+guid, so metadata travels for free. The *unpooled* mints — `mintParkedTake`
+and `cloneMidiItem(rePool=true)` — get a fresh guid, so they `eventMeta:copyPool`
+the source's blob onto it; `deleteSlot` (the lone forever-delete) `dropPool`s it.
+
 ### Renaming and name drift
 
 No slot-name field is stored. The displayed name is whatever the

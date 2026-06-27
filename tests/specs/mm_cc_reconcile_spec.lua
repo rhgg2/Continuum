@@ -7,7 +7,6 @@
 
 local t = require('support')
 
-local util = require('util')
 local realMM = require('realMidiManager')()
 
 local CHANMSG = { pa = 0xA0, cc = 0xB0, pc = 0xC0, at = 0xD0, pb = 0xE0 }
@@ -48,7 +47,7 @@ local function packCc(c)
 end
 
 -- Spec for an event-row plus optional metadata. Sidecar specs that include
--- a `metadata` field also get an ctm_<uuid> ext-data entry. uuids must be
+-- a `metadata` field also seed per-event metadata via eventMeta. uuids must be
 -- explicit and globally unique within the take.
 local function seed(take, reaper, spec)
   local notes, ccs, texts = {}, {}, {}
@@ -71,25 +70,10 @@ local function seed(take, reaper, spec)
   end
   reaper:seedMidi(take, { notes = notes, ccs = ccs, texts = texts })
 
-  -- Lay down ctm_<uuid> ext-data and ctm_keys for any sidecar carrying metadata.
-  local keys = {}
-  local function uuidTxt(u)
-    local s, n = '', u
-    if n == 0 then return '0' end
-    local b36 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-    while n > 0 do s = b36:sub((n % 36) + 1, (n % 36) + 1) .. s; n = n // 36 end
-    return s
-  end
+  -- Per-event metadata persists via eventMeta (project scope, keyed by the take's
+  -- pool guid); seed it the same way for any sidecar carrying metadata.
   for _, sc in ipairs(spec.sidecars or {}) do
-    if sc.metadata then
-      local txt = uuidTxt(sc.uuid)
-      keys[#keys+1] = txt
-      reaper.GetSetMediaItemTakeInfo_String(take, 'P_EXT:ctm_' .. txt,
-        util.serialise(sc.metadata, {}), true)
-    end
-  end
-  if #keys > 0 then
-    reaper.GetSetMediaItemTakeInfo_String(take, 'P_EXT:ctm_keys', table.concat(keys, ','), true)
+    if sc.metadata then t.seedMeta(take, sc.uuid, sc.metadata) end
   end
 end
 
@@ -200,9 +184,8 @@ return {
       local _, _, _, txtCount = reaper.MIDI_CountEvts(take)
       t.eq(txtCount, 0, 'orphan sidecar removed')
 
-      -- Ext-data slot purged by saveMetadata's stale-key sweep.
-      local _, keys = reaper.GetSetMediaItemTakeInfo_String(take, 'P_EXT:ctm_keys', '', false)
-      t.eq(keys, '', 'ctm_keys cleared')
+      -- The orphaned uuid's metadata is purged by the stale-key sweep.
+      t.eq(next(t.loadMeta(take)), nil, 'orphan metadata cleared')
     end,
   },
 

@@ -2,9 +2,11 @@
 
 local M = {}
 
+local util = require('util')
+
 -- Same opaque compound-key join prod uses, so specs assert against the
 -- real class-key shape without hardcoding the separator.
-M.key = require('util').key
+M.key = util.key
 
 local function repr(v, depth)
   depth = depth or 0
@@ -152,6 +154,27 @@ do
     end
     return out
   end
+end
+
+-- Per-event metadata persists via eventMeta at project scope, keyed by the take's
+-- POOLEDEVTS pool guid. These helpers seed and read it the way production does, so
+-- fixtures need not re-derive the guid or the storage shape.
+local function newEventMeta()
+  return util.instantiate('eventMeta', { ps = util.instantiate('pextStore') })
+end
+
+function M.poolGuidOf(take)
+  local item = reaper.GetMediaItemTake_Item(take)
+  local _, chunk = reaper.GetItemStateChunk(item, '', false)
+  return chunk and chunk:match('POOLEDEVTS%s+({[^}]+})')
+end
+
+function M.seedMeta(take, uuid, fields)
+  newEventMeta():saveOne(M.poolGuidOf(take), uuid, fields)
+end
+
+function M.loadMeta(take)
+  return newEventMeta():load(M.poolGuidOf(take))
 end
 
 -- Minimal dataStore fake for gm specs: get/assign/subscribe over a flat store.

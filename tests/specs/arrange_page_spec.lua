@@ -50,6 +50,7 @@ local function newArrangePage(cm, ds, cmgr, chrome, gui)
   cmgr:registerAll{ switchPage = function(_, name) captured.nav = name end }
   return util.instantiate('arrangePage',
     { cm = cm, ds = ds, cmgr = cmgr, chrome = chrome, gui = gui,
+      eventMeta = util.instantiate('eventMeta', { ps = util.instantiate('pextStore') }),
       modalHost = fakeModalHost, facade = fakeFacade })
 end
 
