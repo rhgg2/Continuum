@@ -1,4 +1,4 @@
-@module generators  src=generators.lua  loc=202  sha=d013d39  mode=namespace  self=generators
+@module generators  src=generators.lua  loc=265  sha=4f76514  mode=namespace  self=generators
 
 # Invariants & contracts
   @invariant  pure module -- no module-level state; a generator is fn(host, params, ctx) -> { notes, delta }
@@ -8,39 +8,43 @@
 
 # Shapes
   @shape  result = { notes = { {ppqL,endppqL,pitch,vel,detune}, ... }, delta = { {ppqL,val,shape,[tension]}, ... } }
+  @shape  kinds[kind] = { expand, mode='replace'|'augment', dest='note'|'pb'|<cc>, label, defaults, fields }
 
 # Module-level constants
-  @const generators = {}  @ 14
-  @const CARRIER_PRIORITY = {  @ 121
+  @const generators = {}  @ 15
+  @const CARRIER_PRIORITY = {  @ 118
+  @const PERIODS = { { l = '1/2', v = { 1, 2 } }, { l = '1/3', v = { 1, 3 } },  @ 208
+  @const SLIDE_TARGETS = { { l = 'Next', v = 'next' }, { l = 'Fixed', v = 'fixed' } }  @ 211
+  @const DIR_OPTIONS = { { l = 'Up', v = 'up' }, { l = 'Down', v = 'down' }, { l...  @ 212
 
 # Private functions
-  @fn periodTicks(period, resolution)  @ 16-19
-  @fn playingAt(events, t)  @ 67-76
-      -- Notes sounding at logical tick `t`, ascending by realised pitch (semitone*100 + detune cents).
-  @fn arpIndex(count, dir, i)  @ 80-88
-      -- Which voice of the active set step `i` plays, by direction. updown bounces without
-      -- repeating the extremes (span 2*(n-1)); up/down wrap.
-  @fn interval(a, b)  @ 164-166
-      -- Cents between two notes' realised pitches. The microtonal offset already rides
-      -- in detune, so this is pure note arithmetic -- no temper needed.
-
-# Public API (generators.*)
-  @api generators.retrig(host, params, ctx)  @ 23-41
+  @fn periodTicks(period, resolution)  @ 17-20
+  @fn retrig(host, params, ctx)  @ 24-42
       @contract  retrig fills the host window with evenly-spaced same-pitch fxNotes 2..N (host is fxNote 1)
       @contract  velocity ramps params.ramp per fxNote, clamped 1..127; detune inherited from the host verbatim
-  @api generators.trill(host, params, ctx)  @ 44-64
+  @fn trill(host, params, ctx)  @ 45-65
       @contract  trill alternates host pitch with a note `step` scale-steps away (via ctx.step); host is fxNote 1
-  @api generators.arp(host, params, ctx)  @ 93-113
+  @fn playingAt(events, t)  @ 68-77
+      -- Notes sounding at logical tick `t`, ascending by realised pitch (semitone*100 + detune cents).
+  @fn arpIndex(count, dir, i)  @ 81-89
+      -- Which voice of the active set step `i` plays, by direction. updown bounces without
+      -- repeating the extremes (span 2*(n-1)); up/down wrap.
+  @fn arp(host, params, ctx)  @ 94-114
       @contract  arp samples the sounding notes at each step (period QN), playing one by `dir`
       @contract  dir up|down|updown cycles the current active set; an empty active set -> a rest
       @contract  hits abut (endppqL = next step), clamped to the window; vel/detune from the voice
-  @api generators.allocateCarrier(occupied)  @ 131-135
-      @contract  first priority MSB n where neither n nor n+32 is in `occupied`; nil if saturated
-  @api generators.vibrato(host, params, ctx)  @ 140-160
+  @fn vibrato(host, params, ctx)  @ 137-157
       @contract  vibrato -> lane-1 pb-delta breakpoints in cents; sine of depth cents at 1/period QN
       @contract  breakpoints at sine extrema, 'slow'-shaped; linear ramp-in over onset QN
       @contract  carrier returns to 0 (centre) at window end -- no residual bend on the channel
-  @api generators.slide(host, params, ctx)  @ 171-200
+  @fn interval(a, b)  @ 161-163
+      -- Cents between two notes' realised pitches. The microtonal offset already rides
+      -- in detune, so this is pure note arithmetic -- no temper needed.
+  @fn slide(host, params, ctx)  @ 168-197
       @contract  slide glide-in -> lane-1 pb-delta; slur to target over `over` QN; re-centres at end
       @contract  target 'next' = interval to next same-lane note; 'fixed' = params.cents; pb-range clamps
       @contract  no next note or unison target -> empty delta (carrier untouched)
+
+# Public API (generators.*)
+  @api generators.allocateCarrier(occupied)  @ 128-132
+      @contract  first priority MSB n where neither n nor n+32 is in `occupied`; nil if saturated

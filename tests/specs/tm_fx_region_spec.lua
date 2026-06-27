@@ -236,7 +236,8 @@ return {
       addNote(h, { pitch = 67, lane = 3 })
       injectArp(h)
       t.deepEq(authoredPitches(h), {}, 'chord parked while the region is present')
-      t.truthy(#derivedNotes(h) > 0, 'arp sounding')
+      t.deepEq(field(derivedNotes(h), 'lane'), { 1, 1, 1, 1 },
+        'parking frees lanes 1-3, so the arp packs to lane 1 -- the same-pitch nudge dissolves')
 
       h.ds:assign('fxRegions', {})
       h.tm:rebuild()
@@ -261,36 +262,16 @@ return {
     end,
   },
 
-  ----- Augment (opt-in): members keep sounding and occupy lanes; the arp packs above
+  ----- Augment by kind: a continuous region leaves its members sounding (no parking)
 
   {
-    name = 'augment: arp over a held triad packs above the still-sounding chord',
+    name = 'augment by kind: a continuous (vibrato) region leaves its covered notes sounding',
     run = function(harness)
       local h = harness.mk()
-      addNote(h, { pitch = 60, lane = 1 })
-      addNote(h, { pitch = 64, lane = 2 })
-      addNote(h, { pitch = 67, lane = 3 })
-      injectArp(h, { mode = 'augment' })
-      local ns = derivedNotes(h)
-      t.deepEq(field(ns, 'pitch'), { 60, 64, 67, 60 }, 'ascending cycle through the triad')
-      t.deepEq(field(ns, 'lane'),  { 4, 4, 4, 4 },
-        'lanes 1-3 are authored-occupied all span; the sequential voice shares lane 4')
-      t.deepEq(authoredPitches(h), { 60, 64, 67 }, 'the chord keeps sounding under augment')
-    end,
-  },
-
-  {
-    name = 'augment: arp follows a note dropping out and reuses the freed lane below',
-    run = function(harness)
-      local h = harness.mk()
-      addNote(h, { pitch = 60, ppq = 0, endppq = 240, lane = 1 })   -- immovable, full span
-      addNote(h, { pitch = 72, ppq = 0, endppq = 120, lane = 2 })   -- frees lane 2 at 120
-      injectArp(h, { mode = 'augment' })
-      local ns = derivedNotes(h)
-      t.deepEq(field(ns, 'pitch'), { 60, 72, 60, 60 },
-        '72 sounds only for the first half; the cycle drops back to 60 once it ends')
-      t.deepEq(field(ns, 'lane'),  { 3, 3, 2, 2 },
-        'derived sits above both obstacles, then falls to lane 2 once it frees at 120')
+      addNote(h, { pitch = 60, ppq = 0, endppq = 240, lane = 1 })
+      injectRegion(h)   -- vibrato over [0,240) covers the note -- augment, so it is not parked
+      t.deepEq(authoredPitches(h), { 60 }, 'the covered note keeps sounding -- a continuous kind augments')
+      t.truthy(#carriersOf(h.fm:dump(), 1) > 0, 'and the vibrato carrier is present over the span')
     end,
   },
 

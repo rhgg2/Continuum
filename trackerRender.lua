@@ -10,6 +10,7 @@ local util    = require 'util'
 local timing  = require 'timing'
 local tuning  = require 'tuning'
 local groups = require 'groups'
+local generators = require 'generators'
 
 if not reaper.ImGui_GetBuiltinPath then
   return reaper.MB('ReaImGui is not installed or too old.', 'My script', 0)
@@ -1798,48 +1799,15 @@ local tr = {}
 
 ----- Note FX editor (retrig + trill + vibrato + slide)
 
--- Three toggleable sections (one per kind); FX_FIELDS is pure data so a new kind ships a
--- generator + one entry. Cursor: Up/Down pick a row, Left/Right adjust. see design/archive/note-macros.md § UI.
-local FX_KINDS    = { 'retrig', 'trill', 'vibrato', 'slide' }
-local KIND_LABELS = { retrig = 'Retrig', trill = 'Trill', vibrato = 'Vibrato', slide = 'Slide' }
-local FX_DEFAULTS = {
-  retrig  = { kind = 'retrig',  period = { 1, 4 }, ramp  = 0 },
-  trill   = { kind = 'trill',   period = { 1, 4 }, step  = 2 },
-  vibrato = { kind = 'vibrato', period = { 1, 2 }, depth = 30, onset = 1 },
-  slide   = { kind = 'slide',   over   = { 1, 2 }, target = 'next' },
-}
+-- The fx editor is a thin renderer over the generator registry: modalOrder picks which kinds it
+-- offers (and their order); each kind's label / defaults / fields come from generators.kinds.
+-- A new kind ships a registry entry; surfacing it here is one modalOrder slot. The widget tags
+-- ('choice' dropdown, 'int' stepper, 'stepInterval' cents-as-steps) are interpreted below.
+-- see design/archive/note-macros.md § UI.
+local FX_KINDS = generators.modalOrder
 
--- Shared QN-fraction period ladder; both kinds tempo-sync the same way.
-local PERIODS = { { l = '1/2', v = { 1, 2 } }, { l = '1/3', v = { 1, 3 } },
-                  { l = '1/4', v = { 1, 4 } }, { l = '1/6', v = { 1, 6 } },
-                  { l = '1/8', v = { 1, 8 } } }
-
-local SLIDE_TARGETS = { { l = 'Next', v = 'next' }, { l = 'Fixed', v = 'fixed' } }
-
--- widgets: 'choice' (dropdown, Left/Right steps the list); 'int' (numberStepper,
--- Left/Right ±base, Ctrl ±coarse); 'stepInterval' (cents stored, edited as temper steps).
-local FX_FIELDS = {
-  retrig = {
-    { field = 'period', label = 'Period', widget = 'choice', options = PERIODS },
-    { field = 'ramp',   label = 'Ramp',   widget = 'int', base = 1, coarse = 10, min = -127, max = 127 },
-  },
-  trill = {
-    { field = 'period', label = 'Period', widget = 'choice', options = PERIODS },
-    { field = 'step',   label = 'Step',   widget = 'int', base = 1, coarse = 12, min = -24, max = 24 },  -- signed scale steps
-  },
-  vibrato = {
-    { field = 'period', label = 'Period', widget = 'choice', options = PERIODS },
-    { field = 'depth',  label = 'Depth',  widget = 'int', base = 1, coarse = 10, min = 0, max = 200 },  -- cents
-    { field = 'onset',  label = 'Onset',  widget = 'int', base = 1, coarse = 4,  min = 0, max = 16 },   -- QN ramp-in
-  },
-  slide = {
-    { field = 'over',   label = 'Glide',    widget = 'choice', options = PERIODS },
-    { field = 'target', label = 'To',       widget = 'choice', options = SLIDE_TARGETS },
-    -- cents demand, edited as host-relative temper steps; shown only for a fixed slide.
-    { field = 'cents',  label = 'Interval', widget = 'stepInterval',
-      when = function(e) return e.target == 'fixed' end },
-  },
-}
+-- A kind's default fx entry: its registry params stamped with the kind tag downstream reads.
+local function fxSeed(kind) return util.assign({ kind = kind }, generators.kinds[kind].defaults) end
 
 local fxEdit do
   local MARK_W, LABEL_W = 16, 64
@@ -1883,7 +1851,7 @@ local fxEdit do
       for i, e in ipairs(fx) do if e.kind == kind then idx = i; break end end
       rows[#rows + 1] = { kind = kind, header = true, index = idx }
       if idx then
-        for _, fd in ipairs(FX_FIELDS[kind]) do
+        for _, fd in ipairs(generators.kinds[kind].fields) do
           if not fd.when or fd.when(fx[idx]) then
             rows[#rows + 1] = { kind = kind, fd = fd, index = idx, entry = fx[idx] }
           end
@@ -1902,8 +1870,8 @@ local fxEdit do
   local function drawRow(uuid, rw, focused)
     mark(focused)
     if rw.header then
-      local changed, on = chrome.checkbox(KIND_LABELS[rw.kind] .. '##fxk_' .. rw.kind, rw.index ~= nil)
-      if changed then tv:setFxKindActive(uuid, FX_DEFAULTS[rw.kind], on) end
+      local changed, on = chrome.checkbox(generators.kinds[rw.kind].label .. '##fxk_' .. rw.kind, rw.index ~= nil)
+      if changed then tv:setFxKindActive(uuid, fxSeed(rw.kind), on) end
       return
     end
     local fd, value = rw.fd, rw.entry[rw.fd.field]
@@ -1930,7 +1898,7 @@ local fxEdit do
 
   local function adjustRow(uuid, rw, right, mods)
     if rw.header then
-      tv:setFxKindActive(uuid, FX_DEFAULTS[rw.kind], right)
+      tv:setFxKindActive(uuid, fxSeed(rw.kind), right)
       return
     end
     local fd, value = rw.fd, rw.entry[rw.fd.field]
@@ -1983,7 +1951,7 @@ local fxEdit do
     elseif press(ImGui.Key_DownArrow) then s.field = util.clamp(s.field + 1, 1, #rows)
     elseif press(ImGui.Key_UpArrow)   then s.field = util.clamp(s.field - 1, 1, #rows)
     elseif press(ImGui.Key_Delete) or press(ImGui.Key_Backspace) then
-      tv:setFxKindActive(s.uuid, FX_DEFAULTS[rows[s.field].kind], false)
+      tv:setFxKindActive(s.uuid, fxSeed(rows[s.field].kind), false)
     else
       local left, right = press(ImGui.Key_LeftArrow), press(ImGui.Key_RightArrow)
       if left or right then adjustRow(s.uuid, rows[s.field], right, ImGui.GetKeyMods(ctx)) end

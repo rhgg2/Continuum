@@ -28,7 +28,7 @@
 --shape: lastMuteSet = { [chan] = true }, pushed by tv via tm:setMutedChannels
 --shape: fxParked = { { evType='note', chan, lane, ppq, endppq, ppqL, endppqL, pitch, vel, detune, delay, sample }, ... }
 --shape: channels[chan].parked = { { ppq, ppqL, endppqL, endppqC, pitch, vel, detune, sample, delay, lane }, ... } -- off-take replace members as render-ready logical cells (ppq==ppqL, endppqC==endppqL)
---contract: replace fxRegion parks covered authored notes off the take; augment leaves them sounding
+--contract: a discrete-replace kind in a region parks its covered chord off-take; else it keeps sounding
 --invariant: parked members feed generator + grid only; never sounding (mute fails for CC/PA)
 
 local util    = require 'util'
@@ -176,6 +176,16 @@ end
 local function reconcileFx(existing, predicted)
   return reconcileDerived{ existing = existing, predicted = predicted, key = fxKey,
     onKeep = function(spec, have) spec.token, spec.endppq = have.token, have.endppq end }
+end
+
+-- A region parks its covered chord iff it carries a discrete-replace kind (its derived notes
+-- stand in). A continuous/augment kind never parks notes; a husk (no kinds) parks nothing.
+local function parksNotes(region)
+  for _, params in ipairs(region.fx or {}) do
+    local meta = generators.kinds[params.kind]
+    if meta and meta.mode == 'replace' and meta.dest == 'note' then return true end
+  end
+  return false
 end
 
 ----- delta-stream (carrier) reconciliation
@@ -1253,9 +1263,8 @@ do
     do
       local replaceWindows = {}
       for _, region in ipairs(ds:get('fxRegions') or {}) do
-        -- A husk (no kinds) generates no replacement, so it parks nothing -- else a mid-edit
-        -- emptied region would silence its chord with nothing standing in.
-        if (region.mode or 'replace') == 'replace' and region.fx and region.fx[1] then
+        -- parksNotes is false for a husk or a continuous/augment-only region, so it parks nothing.
+        if parksNotes(region) then
           util.bucket(replaceWindows, region.chan, { region.startppq, region.endppq })
         end
       end
@@ -1434,9 +1443,9 @@ do
           -- whole batch after the fx loop. Note producers ride the host's own lane inline.
           local regionNotes = p.lane == nil and {} or nil
           for _, params in ipairs(p.fx) do
-            local gen = generators[params.kind]
-            if gen then
-              local out = gen({ window = { startL, endL }, events = p.events,
+            local meta = generators.kinds[params.kind]
+            if meta then
+              local out = meta.expand({ window = { startL, endL }, events = p.events,
                                 id = p.id, chan = chan, lane = p.lane }, params, chanCtx)
               for _, fn in ipairs(out.notes) do
                 local spec = {
@@ -1450,7 +1459,10 @@ do
                 if regionNotes then regionNotes[#regionNotes + 1] = spec
                 else util.add(predicted, spec) end
               end
-              local target = generators.continuous[params.kind]
+              -- Continuous kinds (dest ~= 'note') stash an additive delta on their wire target.
+              -- A4 stub: a replace continuous kind would overwrite the logical pb instead; that
+              -- path is unbuilt, so every continuous kind realises additively (augment) for now.
+              local target = meta.dest ~= 'note' and meta.dest or nil
               if target and #out.delta > 0 then
                 util.add(pending, { startL = startL, endL = endL,
                                     target = target, delta = out.delta, d = p.d })
@@ -1477,18 +1489,18 @@ do
           end
         end
 
-        -- Region producers: no host note. replace (default) feeds the realised parked chord and
-        -- parking frees the lanes; augment feeds the still-sounding overlap. see design/note-macros-v2.md § Generator output
+        -- Region producers: no host note. A discrete-replace kind feeds the realised parked chord
+        -- (parking frees the lanes); else members still sound and feed the live overlap. see design/note-macros-v2.md § Generator output
         for _, region in ipairs(fxRegionsByChan[chan] or {}) do
           local startL, endL = region.startppq, region.endppq
           local events
-          if (region.mode or 'replace') == 'augment' then
-            events = membersOf(chan, startL, endL)
-          else
-            events = {}
+          if parksNotes(region) then
+            events = {}                              -- replace: derived notes stand in for the parked chord
             for _, m in ipairs(channels[chan].parked or {}) do
               if m.ppqL >= startL and m.ppqL < endL then util.add(events, m) end
             end
+          else
+            events = membersOf(chan, startL, endL)   -- augment: members still sound
           end
           runProducer{ window = { startL, endL }, events = events,
                        fx = region.fx, id = region.uuid, lane = nil, d = 0 }

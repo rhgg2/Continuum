@@ -79,7 +79,7 @@ return {
     name = 'slide glides in: flat hold, slur to the interval, re-centre at the window end',
     run = function()
       -- res 240, over 1/2 QN: snap 15 -> arrive 225, glideStart 225-120 = 105.
-      local out = generators.slide(slideHost(), slideP, slideCtx{ pitch = 62, detune = 0 })
+      local out = generators.kinds.slide.expand(slideHost(), slideP, slideCtx{ pitch = 62, detune = 0 })
       local d = out.delta
       t.eq(#out.notes, 0, 'continuous: no structural notes')
       t.eq(d[1].ppqL, 0);   t.eq(d[1].val, 0, 'starts flat at centre')
@@ -93,7 +93,7 @@ return {
   {
     name = 'slide interval includes detune (the microtonal offset rides in detune, not pitch)',
     run = function()
-      local out = generators.slide(slideHost(0), slideP, slideCtx{ pitch = 60, detune = 50 })
+      local out = generators.kinds.slide.expand(slideHost(0), slideP, slideCtx{ pitch = 60, detune = 50 })
       t.eq(out.delta[3].val, 50, 'a same-pitch note 50c sharp yields a 50c slide')
     end,
   },
@@ -101,7 +101,7 @@ return {
   {
     name = 'slide clamps the target to ctx.pbRangeCents (a pb can only bend so far)',
     run = function()
-      local out = generators.slide(slideHost(), slideP, slideCtx({ pitch = 72 }, 200))
+      local out = generators.kinds.slide.expand(slideHost(), slideP, slideCtx({ pitch = 72 }, 200))
       t.eq(out.delta[3].val, 200, 'a 1200c interval clamps to the 200c pb ceiling')
     end,
   },
@@ -109,7 +109,7 @@ return {
   {
     name = "slide.target='fixed' is a fixed-cents bend (cents demand, no next-note lookup)",
     run = function()
-      local out = generators.slide(slideHost(), { kind = 'slide', over = { 1, 2 }, target = 'fixed', cents = 150 },
+      local out = generators.kinds.slide.expand(slideHost(), { kind = 'slide', over = { 1, 2 }, target = 'fixed', cents = 150 },
                                    slideCtx(nil))
       t.eq(out.delta[3].val, 150, 'fixed cents ignores the next-note resolution')
     end,
@@ -118,7 +118,7 @@ return {
   {
     name = "slide.target='next' with no following note yields no delta (carrier untouched)",
     run = function()
-      local out = generators.slide(slideHost(), slideP, slideCtx(nil))
+      local out = generators.kinds.slide.expand(slideHost(), slideP, slideCtx(nil))
       t.eq(#out.delta, 0, 'no next note: nothing to slide to')
     end,
   },
@@ -126,7 +126,7 @@ return {
   {
     name = 'slide to a unison next note yields no delta (zero interval)',
     run = function()
-      local out = generators.slide(slideHost(), slideP, slideCtx{ pitch = 60, detune = 0 })
+      local out = generators.kinds.slide.expand(slideHost(), slideP, slideCtx{ pitch = 60, detune = 0 })
       t.eq(#out.delta, 0, 'gliding to the same pitch is a no-op')
     end,
   },
@@ -140,7 +140,7 @@ return {
       local ctx = { resolution = 240,
                     step = function(p, d, n) seen = { p, d, n }; return p + n, (d or 0) + 7 end }
       local host = { window = { 0, 240 }, events = { { pitch = 60, vel = 100, detune = 0 } } }
-      local out = generators.trill(host, { kind = 'trill', period = { 1, 4 }, step = 2 }, ctx)
+      local out = generators.kinds.trill.expand(host, { kind = 'trill', period = { 1, 4 }, step = 2 }, ctx)
       t.eq(#out.delta, 0, 'structural: no continuous delta')
       t.deepEq(seen, { 60, 0, 2 }, 'ctx.step receives the host pitch, detune, and step count')
       t.eq(#out.notes, 3, '1/4-QN period over a 1-QN window: 3 fxNotes (host is fxNote 1)')
@@ -158,7 +158,7 @@ return {
     run = function()
       local ctx = { resolution = 240, step = function(p, d, n) return p + n, 99 end }
       local host = { window = { 0, 240 }, events = { { pitch = 60, vel = 80, detune = 12 } } }
-      local out = generators.trill(host, { kind = 'trill', period = { 1, 4 }, step = 1 }, ctx)
+      local out = generators.kinds.trill.expand(host, { kind = 'trill', period = { 1, 4 }, step = 1 }, ctx)
       t.eq(out.notes[2].detune, 12, 'even tile inherits the host detune')
       t.eq(out.notes[1].detune, 99, 'odd tile takes the stepped detune')
     end,

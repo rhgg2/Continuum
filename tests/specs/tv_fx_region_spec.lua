@@ -5,6 +5,7 @@ local t    = require('support')
 local util = require('util')
 
 local vib30 = { { kind = 'vibrato', period = { 1, 4 }, depth = 30, onset = 0 } }
+local arpUp = { { kind = 'arp', period = { 1, 4 }, dir = 'up' } }   -- discrete -> replace (parks)
 
 local function injectRegion(h, over)
   local region = { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = vib30 }
@@ -94,7 +95,7 @@ return {
       local h = harness.mk()
       h.vm:setGridSize(80, 40)
       addNote(h)                    -- C4 over [0,240) in lane 1
-      injectRegion(h)               -- replace region covering the note's span
+      injectRegion(h, { fx = arpUp })   -- a discrete-replace region covering the note's span
       t.deepEq(authoredPitches(h), {}, 'the covered note is parked off the take')
       local idx = noteColIdx(h, 1)
       t.truthy(idx, 'the lane-1 note column survives the parking')
@@ -187,7 +188,6 @@ return {
       t.eq(r.chan, 1, 'on the selected channel')
       t.eq(r.startppq, h.vm:rowToPPQ(0, 1), 'window start = selection top')
       t.eq(r.endppq, h.vm:rowToPPQ(4, 1), 'window end = one row past the selection bottom (exclusive)')
-      t.eq(r.mode or 'replace', 'replace', 'replace by default')
       t.eq(#r.fx, 0, 'minted empty -- the editor fills the kinds')
     end,
   },

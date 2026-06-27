@@ -10,6 +10,7 @@
 --invariant: ctx binds resolution, pbRangeCents, nextSameLaneNote(host), step(pitch,detune,n)
 --invariant: periods are QN per the periodQN convention -- scalar or {num,den}
 --shape: result = { notes = { {ppqL,endppqL,pitch,vel,detune}, ... }, delta = { {ppqL,val,shape,[tension]}, ... } }
+--shape: kinds[kind] = { expand, mode='replace'|'augment', dest='note'|'pb'|<cc>, label, defaults, fields }
 
 local generators = {}
 
@@ -20,7 +21,7 @@ end
 
 --contract: retrig fills the host window with evenly-spaced same-pitch fxNotes 2..N (host is fxNote 1)
 --contract: velocity ramps params.ramp per fxNote, clamped 1..127; detune inherited from the host verbatim
-function generators.retrig(host, params, ctx)
+local function retrig(host, params, ctx)
   local startL, endL = host.window[1], host.window[2]
   local step  = periodTicks(params.period, ctx.resolution)
   local h     = host.events[1]
@@ -41,7 +42,7 @@ function generators.retrig(host, params, ctx)
 end
 
 --contract: trill alternates host pitch with a note `step` scale-steps away (via ctx.step); host is fxNote 1
-function generators.trill(host, params, ctx)
+local function trill(host, params, ctx)
   local startL, endL = host.window[1], host.window[2]
   local step  = periodTicks(params.period, ctx.resolution)
   local h     = host.events[1]
@@ -90,7 +91,7 @@ end
 --contract: arp samples the sounding notes at each step (period QN), playing one by `dir`
 --contract: dir up|down|updown cycles the current active set; an empty active set -> a rest
 --contract: hits abut (endppqL = next step), clamped to the window; vel/detune from the voice
-function generators.arp(host, params, ctx)
+local function arp(host, params, ctx)
   local startL, endL = host.window[1], host.window[2]
   local step = periodTicks(params.period, ctx.resolution)
   local dir  = params.dir or 'up'
@@ -111,10 +112,6 @@ function generators.arp(host, params, ctx)
   end
   return { notes = notes, delta = {} }
 end
-
--- Kinds whose realisation is a continuous delta stream (carrier ccs), not structural notes.
--- Value = wire target ('pb' or cc number); truthy = "is continuous". Drives carrier allocation.
-generators.continuous = { vibrato = 'pb', slide = 'pb' }
 
 -- 14-bit carrier priority: MSB n, LSB n+32 (REAPER interpolates only that pair).
 -- Unlikely-authored first; conventional last. see design/archive/note-macros.md § Delta-code allocation
@@ -137,7 +134,7 @@ end
 --contract: vibrato -> lane-1 pb-delta breakpoints in cents; sine of depth cents at 1/period QN
 --contract: breakpoints at sine extrema, 'slow'-shaped; linear ramp-in over onset QN
 --contract: carrier returns to 0 (centre) at window end -- no residual bend on the channel
-function generators.vibrato(host, params, ctx)
+local function vibrato(host, params, ctx)
   local startL, endL = host.window[1], host.window[2]
   local period = periodTicks(params.period, ctx.resolution)   -- ticks per cycle
   local depth  = params.depth or 0
@@ -168,7 +165,7 @@ end
 --contract: slide glide-in -> lane-1 pb-delta; slur to target over `over` QN; re-centres at end
 --contract: target 'next' = interval to next same-lane note; 'fixed' = params.cents; pb-range clamps
 --contract: no next note or unison target -> empty delta (carrier untouched)
-function generators.slide(host, params, ctx)
+local function slide(host, params, ctx)
   local startL, endL = host.window[1], host.window[2]
   local h = host.events[1]
   local target
@@ -198,5 +195,71 @@ function generators.slide(host, params, ctx)
   bp(endL, 0, 'square')                                       -- re-centre: next note sounds true
   return { notes = {}, delta = delta }
 end
+
+----- Generator registry
+
+-- One entry per kind: the realisation fn (`expand`) plus all metadata a kind ships with. `mode`
+-- (replace|augment) and `dest` ('note' for structural kinds, else the continuous wire target) are
+-- independent axes -- today every continuous kind is augment, but continuous-replace (A4) and
+-- discrete-augment are expressible. `dest` is a default hint the user may override per fx-entry
+-- later. The fxEdit modal builds itself from label / defaults / fields.
+
+-- Shared QN-fraction period ladder; every periodic kind tempo-syncs the same way.
+local PERIODS = { { l = '1/2', v = { 1, 2 } }, { l = '1/3', v = { 1, 3 } },
+                  { l = '1/4', v = { 1, 4 } }, { l = '1/6', v = { 1, 6 } },
+                  { l = '1/8', v = { 1, 8 } } }
+local SLIDE_TARGETS = { { l = 'Next', v = 'next' }, { l = 'Fixed', v = 'fixed' } }
+local DIR_OPTIONS   = { { l = 'Up', v = 'up' }, { l = 'Down', v = 'down' }, { l = 'Up/Down', v = 'updown' } }
+
+generators.kinds = {
+  retrig = {
+    expand = retrig, mode = 'replace', dest = 'note', label = 'Retrig',
+    defaults = { period = { 1, 4 }, ramp = 0 },
+    fields = {
+      { field = 'period', label = 'Period', widget = 'choice', options = PERIODS },
+      { field = 'ramp',   label = 'Ramp',   widget = 'int', base = 1, coarse = 10, min = -127, max = 127 },
+    },
+  },
+  trill = {
+    expand = trill, mode = 'replace', dest = 'note', label = 'Trill',
+    defaults = { period = { 1, 4 }, step = 2 },
+    fields = {
+      { field = 'period', label = 'Period', widget = 'choice', options = PERIODS },
+      { field = 'step',   label = 'Step',   widget = 'int', base = 1, coarse = 12, min = -24, max = 24 },  -- signed scale steps
+    },
+  },
+  arp = {
+    expand = arp, mode = 'replace', dest = 'note', label = 'Arp',
+    defaults = { period = { 1, 4 }, dir = 'up' },
+    fields = {
+      { field = 'period', label = 'Period', widget = 'choice', options = PERIODS },
+      { field = 'dir',    label = 'Dir',    widget = 'choice', options = DIR_OPTIONS },
+    },
+  },
+  vibrato = {
+    expand = vibrato, mode = 'augment', dest = 'pb', label = 'Vibrato',
+    defaults = { period = { 1, 2 }, depth = 30, onset = 1 },
+    fields = {
+      { field = 'period', label = 'Period', widget = 'choice', options = PERIODS },
+      { field = 'depth',  label = 'Depth',  widget = 'int', base = 1, coarse = 10, min = 0, max = 200 },  -- cents
+      { field = 'onset',  label = 'Onset',  widget = 'int', base = 1, coarse = 4,  min = 0, max = 16 },   -- QN ramp-in
+    },
+  },
+  slide = {
+    expand = slide, mode = 'augment', dest = 'pb', label = 'Slide',
+    defaults = { over = { 1, 2 }, target = 'next' },
+    fields = {
+      { field = 'over',   label = 'Glide',    widget = 'choice', options = PERIODS },
+      { field = 'target', label = 'To',       widget = 'choice', options = SLIDE_TARGETS },
+      -- cents demand, edited as host-relative temper steps; shown only for a fixed slide.
+      { field = 'cents',  label = 'Interval', widget = 'stepInterval',
+        when = function(e) return e.target == 'fixed' end },
+    },
+  },
+}
+
+-- Which kinds the fxEdit modal offers, in order. arp is registered (region-usable) but not yet
+-- surfaced -- a chord arp wants a region host and a host-aware kind list (deferred).
+generators.modalOrder = { 'retrig', 'trill', 'vibrato', 'slide' }
 
 return generators

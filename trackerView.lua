@@ -1710,7 +1710,7 @@ local function ensureRegionForSelection()
     end
   end
   local region = { uuid = mintRegionUuid(), chan = chan,
-                   startppq = startppq, endppq = endppq, fx = {}, mode = 'replace' }
+                   startppq = startppq, endppq = endppq, fx = {} }
   local out = {}
   for _, existing in ipairs(ds:get('fxRegions') or {}) do out[#out + 1] = existing end
   out[#out + 1] = region

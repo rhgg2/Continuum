@@ -125,7 +125,8 @@ each rebuild (covered → off-take, no-longer-covered → restored). The parked 
 are still the membership, and — inverted from intuition — they are the *visible,
 editable* surface: you see and edit the chord, the generated arp is hidden (take-only,
 as v1 derived). So for replace, membership *is* storage, off-take; for augment it
-stays a live query. `region.mode` is the per-region choice, replace default.
+stays a live query. **Whether a region does this is read from its kinds, not a
+`region.mode` toggle** (A5): a discrete kind replaces, a continuous kind augments.
 
 **There is no dirty tracking to design.** The rebuild regenerates and
 diffs unconditionally every time (R4: `dirtyFxHosts` is unbuilt and
@@ -191,8 +192,8 @@ gate the v1 doc flagged ("bind to the window, or to a regenerated first
 hit") resolves cleanly: PA binds to the region — channel × ppq, stable,
 persisted. The degenerate note host still binds PA to its note. (PA
 parking and re-emit are **A4** — A3 parks notes only.) Augment is no longer
-just the note-host case: it is a per-region mode (replace default), so a
-region can keep its members sounding instead of parking them.
+just the note-host case: a continuous-kind region keeps its members sounding, a
+discrete-kind region parks them — the choice is per generator kind (A5), not per region.
 
 ## Authoring and editing the fx
 
@@ -409,6 +410,21 @@ wants ~none of gm (see resolved open question below).
   split); a PA on a parked note orphans (silent, not re-emitted); a parked note
   carrying its own `fx` loses that host behaviour to the region.
 
+- **A5 -- mode is a generator property; one registry per kind. Landed.** `region.mode` is gone.
+  Each kind declares `mode` (`replace`|`augment`) and `dest` (`'note'` for discrete kinds, else the
+  continuous wire target) in a single `generators.kinds` registry that also carries the kind's `expand`
+  fn and modal `label`/`defaults`/`fields` -- one place per generator, user-extensible. Both hosts now
+  branch *by kind*: a region parks iff it carries a discrete-replace kind (`parksNotes`), so a
+  continuous-only region augments instead (closing the prior all-regions-replace bug -- a vibrato region
+  silenced its covered notes). The note host is unchanged and needs no new branch: a discrete kind emits
+  lane-mates that clip the authored note to its first derived hit (= replace, host stays fxNote 1, PA
+  unmoved), a continuous kind emits none (= augment) -- emergent, never parked. `mode` and `dest` are
+  independent axes, so continuous-replace (A4) and discrete-augment are expressible; continuous-replace
+  is **stubbed** (the producer falls back to additive) until the 4.9 overwrite path lands. The fxEdit
+  modal reads its rows from the registry (`modalOrder` picks the shown kinds; arp is registered but not
+  yet surfaced -- it wants a host-aware kind list). Pinned by the continuous-augment + parked-render
+  reworks in `tm_fx_region_spec`/`tv_fx_region_spec`, and `generators_spec` driving `kinds.<k>.expand`.
+
 **Track B -- authoring UI: the fx column** (started 2026-06-26). Standalone /
 column-based, not gm-backed -- the Open-questions Track-B lean, now resolved.
 
@@ -542,11 +558,13 @@ matter.
   (cell/tail/cursor, B1), not gm's region-mode/wash — a column is more native
   to the tracker than a second region object. The shared `regions` substrate
   (R7 piece 1) stays unextracted; no consumer has justified its shape.
-- **Note host: keep augment, or migrate to replace too? Resolved: keep
-  augment.** Region hosts default to replace, but `region.mode` is a
-  per-region choice (A3); the note host stays v1 augment (host plays as
-  fxNote 1, `fxHostEnd` dance intact), unparked. Migrating would delete the
-  dance but re-bind the single-note PA case to a region — deferred, not closed.
+- **Note host: keep augment, or migrate to replace too? Resolved: both branch
+  by kind (A5).** Mode is a generator-kind property, not a host or region default:
+  a discrete kind replaces, a continuous kind augments, on *both* hosts. They
+  realise replace differently — a region parks its covered chord; a note host clips
+  its authored note to the first derived hit (host stays fxNote 1, `fxHostEnd` dance
+  intact, PA unmoved). Parking a note host is still deferred (it would re-bind the
+  single-note PA case to a region) — not needed, since lane-clipping already gives replace.
 - **Selection over empty space and across lanes. Resolved: no new
   behaviour needed.** Selection is already a geometric channel × ppq
   rectangle (`editCursor.lua` `selection = {row1,row2,col1,col2,part1,part2}`)
