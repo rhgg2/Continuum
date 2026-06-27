@@ -164,4 +164,22 @@ return {
     end,
   },
 
+  ----- autopan: a cc-dest sine LFO (vibrato's shape, cc steps not cents)
+
+  {
+    name = 'autopan tiles the window with sine extrema in cc steps, anchored 0 at both ends',
+    run = function()
+      -- res 240, period 1/2 QN -> cycle 120 ticks; extrema at period/4 = 30, then every 60.
+      local out = generators.kinds.autopan.expand({ window = { 0, 240 } },
+                    { kind = 'autopan', period = { 1, 2 }, depth = 32 }, { resolution = 240 })
+      t.eq(#out.notes, 0, 'continuous: no structural notes')
+      local d = out.delta
+      t.eq(d[1].ppqL, 0);    t.eq(d[1].val, 0,   'anchored at centre (0) at the window start')
+      t.eq(d[2].ppqL, 30);   t.eq(d[2].val, 32,  'first extreme is +depth cc steps')
+      t.eq(d[3].ppqL, 90);   t.eq(d[3].val, -32, 'next extreme is -depth')
+      t.eq(d[2].shape, 'slow', 'extrema bridged by slow (half-cosine)')
+      t.eq(d[#d].ppqL, 240); t.eq(d[#d].val, 0,  're-centres to 0 at the window end')
+    end,
+  },
+
 }

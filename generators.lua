@@ -197,6 +197,24 @@ local function slide(host, params, ctx)
   return { notes = {}, delta = delta }
 end
 
+--contract: auto-pan -> cc-delta breakpoints in cc steps; sine of depth steps at 1/period QN
+--contract: extrema-only, 'slow'-shaped; anchored 0 at both ends so the channel re-centres
+local function autopan(host, params, ctx)
+  local startL, endL = host.window[1], host.window[2]
+  local period = periodTicks(params.period, ctx.resolution)
+  local depth  = params.depth or 0
+  local delta  = { { ppqL = startL, val = 0, shape = 'slow' } }
+  local k, at = 0, startL + period / 4
+  while at < endL do
+    local sign = k % 2 == 0 and 1 or -1
+    delta[#delta + 1] = { ppqL = at, val = sign * depth, shape = 'slow' }
+    k  = k + 1
+    at = startL + period / 4 + k * period / 2
+  end
+  delta[#delta + 1] = { ppqL = endL, val = 0, shape = 'slow' }
+  return { notes = {}, delta = delta }
+end
+
 ----- Generator registry
 
 -- One entry per kind: the realisation fn (`expand`) plus all metadata a kind ships with. `mode`
@@ -257,10 +275,23 @@ generators.kinds = {
         when = function(e) return e.target == 'fixed' end },
     },
   },
+  autopan = {
+    expand = autopan, mode = 'augment', dest = 10, label = 'Auto-pan',
+    defaults = { period = { 1, 2 }, depth = 32 },
+    fields = {
+      { field = 'period', label = 'Period', widget = 'choice', options = PERIODS },
+      { field = 'depth',  label = 'Depth',  widget = 'int', base = 1, coarse = 10, min = 0, max = 63 },  -- cc steps from centre
+    },
+  },
 }
+
+-- Resting base for a cc-augment target with no authored automation: bipolar controllers
+-- centre at 64, expression rests wide open, all else at 0. see design/note-macros-v2.md § Continuous cc
+generators.ccDefaultRest = { [8] = 64, [10] = 64, [11] = 127 }
+for cc = 71, 79 do generators.ccDefaultRest[cc] = 64 end
 
 -- Which kinds the fxEdit modal offers, in order. Every kind works on either host: a region
 -- arpeggiates its covered chord, a single note degenerates cleanly (arp -> retrig, one voice).
-generators.modalOrder = { 'retrig', 'trill', 'arp', 'vibrato', 'slide' }
+generators.modalOrder = { 'retrig', 'trill', 'arp', 'vibrato', 'slide', 'autopan' }
 
 return generators

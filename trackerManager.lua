@@ -1054,8 +1054,8 @@ do
 
     -- fxExisting: derived notes parsed at step 0, reconciled at 4.6.
     -- fxLive: post-expansion set unioned into the tail walk and PC synthesis.
-    local fxExisting, fxLive, carrierExisting = {}, {}, {}
-    for i = 1, 16 do fxExisting[i] = {}; fxLive[i] = {}; carrierExisting[i] = {} end
+    local fxExisting, fxLive, carrierExisting, ccBaseExisting = {}, {}, {}, {}
+    for i = 1, 16 do fxExisting[i] = {}; fxLive[i] = {}; carrierExisting[i] = {}; ccBaseExisting[i] = {} end
     -- fxNote add/del deferred from 4.6 into the 4.8 atomic note commit, so the host clip
     -- and the fxNote inserts land in one mm:modify (one MIDI_Sort, no transient overlap).
     local fxToRemove, fxToAdd = {}, {}
@@ -1117,6 +1117,13 @@ do
           -- reconciled stream-level at 4.6. see design/archive/note-macros.md § Delta-code allocation
           util.add(carrierExisting[cc.chan],
             { ppq = cc.ppq, val = cc.val, shape = cc.shape, cc = cc.cc, token = mm:tokenOf(cc) })
+          goto continue
+        end
+        -- Rest seat: a generator-owned base CC at a real cc target (derived sidecar), routed out
+        -- of columns like a carrier so it stays off-screen. see design/note-macros-v2.md § Continuous cc
+        if cc.evType == 'cc' and cc.derived == 'ccbase' then
+          util.add(ccBaseExisting[cc.chan],
+            { ppq = cc.ppq, val = cc.val, cc = cc.cc, token = mm:tokenOf(cc) })
           goto continue
         end
         if not cc.derived then
@@ -1539,8 +1546,12 @@ do
               if target and #out.delta > 0 then
                 local delta = out.delta
                 if meta.mode == 'replace' and target == 'pb' then delta = cancelBase(out.delta, host.pb) end
+                -- cc augment with no authored base needs a resting seat; carry its value so Pass B
+                -- emits it once per target. see design/note-macros-v2.md § Continuous cc
+                local rest = type(target) == 'number'
+                  and (p.fx.rest or generators.ccDefaultRest[target] or 0) or nil
                 util.add(pending, { startL = startL, endL = endL,
-                                    target = target, delta = delta, d = p.d })
+                                    target = target, delta = delta, d = p.d, rest = rest })
               end
             end
           end
@@ -1599,7 +1610,7 @@ do
         for _, inst in ipairs(pending) do util.bucket(byTarget, inst.target, inst) end
         local targets = {}
         for target in pairs(byTarget) do targets[#targets + 1] = target end
-        table.sort(targets)
+        table.sort(targets, function(a, b) return tostring(a) < tostring(b) end)
 
         local predictedDelta, lastDeltaPpq, newCarriers = {}, {}, {}
         for _, target in ipairs(targets) do
@@ -1630,9 +1641,12 @@ do
               local ppq = tm:fromLogical(chan, bp.ppqL, inst.d)
               if ppq ~= lastDeltaPpq[code] then
                 lastDeltaPpq[code] = ppq
+                -- pb deltas are cents (-> raw); cc deltas are already cc steps. Shared 14-bit
+                -- transport: (8192 + raw) / 128. see design/note-macros-v2.md § Continuous cc
+                local raw = target == 'pb' and centsToRaw(bp.val) or bp.val
                 util.add(predictedDelta, {
                   evType = 'cc', chan = chan, cc = code, ppq = ppq,
-                  val = (8192 + centsToRaw(bp.val)) / 128, shape = bp.shape,
+                  val = (8192 + raw) / 128, shape = bp.shape,
                 })
               end
             end
@@ -1652,11 +1666,28 @@ do
           end
         end
 
+        -- Rest seats: one base CC per augment cc target lacking authored automation (derived ones
+        -- already routed out, so an empty cc column == no authored base). see design/note-macros-v2.md § Continuous cc
+        local predictedBase = {}
+        for _, target in ipairs(targets) do
+          if type(target) == 'number' and not channels[chan].columns.ccs[target] then
+            util.add(predictedBase, { evType = 'cc', chan = chan, cc = target, ppq = 0,
+                                      val = byTarget[target][1].rest or 0, shape = 'step', derived = 'ccbase' })
+          end
+        end
+        local bRemove, bAdd = reconcileDerived{
+          existing = ccBaseExisting[chan], predicted = predictedBase,
+          key   = function(x) return util.key(canon(x.cc), canon(x.ppq)) end,
+          match = function(have, spec) return have.val == spec.val end,
+        }
+
         local cRemove, cAdd = reconcileCarrier(carrierExisting[chan], predictedDelta)
-        if #cRemove > 0 or #cAdd > 0 then
+        if #cRemove > 0 or #cAdd > 0 or #bRemove > 0 or #bAdd > 0 then
           mm:modify(function()
             for _, e in ipairs(cRemove) do mm:delete(e.token) end
+            for _, e in ipairs(bRemove) do mm:delete(e.token) end
             for _, s in ipairs(cAdd)    do mm:add(s)          end
+            for _, s in ipairs(bAdd)    do mm:add(s)          end
           end)
         end
         if #newCarriers > 0 then newFxCarrier[chan] = newCarriers end

@@ -54,8 +54,8 @@ acm = 80;    // mem[80..95]  : add bank, latest carrier MSB byte
 acl = 96;    // mem[96..111] : add bank, latest carrier LSB byte
 abd = 112;   // mem[112..127]: add bank, latest base delta from centre
 
-// Carrier MSB centre-defaults (64 -> 8192 for pb, 64 for cc) so a carrier-less
-// slot sums to base. One-time: @init refires on play/loop with mem preserved.
+// Carrier MSB centre-default 64 (acl 0) -> 8192, so a carrier-less slot adds delta 0
+// for every target. One-time: @init refires on play/loop with mem preserved.
 init_done ? 0 : (
   s = 0;
   loop(16, acm[s] = 64; s += 1; );
@@ -130,7 +130,7 @@ adirty ? (
         adst[t] == d ? (
           (t < s) ? (canon = 0);
           (adirty & (1 << t)) ? (grpdirty = 1);
-          d >= 2048 ? (acc += acm[t] * 128 + acl[t] - 8192) : (acc += acm[t] - 64);
+          acc += acm[t] * 128 + acl[t] - 8192;   // every target: 14-bit carrier delta, centre 8192
           base = abd[t];
         );
         t += 1;

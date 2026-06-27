@@ -1,4 +1,4 @@
-@module generators  src=generators.lua  loc=266  sha=c32f4e9  mode=namespace  self=generators
+@module generators  src=generators.lua  loc=297  sha=ffd5949  mode=namespace  self=generators
 
 # Invariants & contracts
   @invariant  pure module -- no module-level state; a generator is fn(host, params, ctx) -> { notes, delta }
@@ -14,9 +14,9 @@
 # Module-level constants
   @const generators = {}  @ 16
   @const CARRIER_PRIORITY = {  @ 119
-  @const PERIODS = { { l = '1/2', v = { 1, 2 } }, { l = '1/3', v = { 1, 3 } },  @ 209
-  @const SLIDE_TARGETS = { { l = 'Next', v = 'next' }, { l = 'Fixed', v = 'fixed' } }  @ 212
-  @const DIR_OPTIONS = { { l = 'Up', v = 'up' }, { l = 'Down', v = 'down' }, { l...  @ 213
+  @const PERIODS = { { l = '1/2', v = { 1, 2 } }, { l = '1/3', v = { 1, 3 } },  @ 227
+  @const SLIDE_TARGETS = { { l = 'Next', v = 'next' }, { l = 'Fixed', v = 'fixed' } }  @ 230
+  @const DIR_OPTIONS = { { l = 'Up', v = 'up' }, { l = 'Down', v = 'down' }, { l...  @ 231
 
 # Private functions
   @fn periodTicks(period, resolution)  @ 18-21
@@ -45,6 +45,9 @@
       @contract  slide glide-in -> lane-1 pb-delta; slur to target over `over` QN; re-centres at end
       @contract  target 'next' = interval to next same-lane note; 'fixed' = params.cents; pb-range clamps
       @contract  no next note or unison target -> empty delta (carrier untouched)
+  @fn autopan(host, params, ctx)  @ 202-216
+      @contract  auto-pan -> cc-delta breakpoints in cc steps; sine of depth steps at 1/period QN
+      @contract  extrema-only, 'slow'-shaped; anchored 0 at both ends so the channel re-centres
 
 # Public API (generators.*)
   @api generators.allocateCarrier(occupied)  @ 129-133

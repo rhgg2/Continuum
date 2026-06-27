@@ -28,15 +28,17 @@ Track A is the generator substrate, Track B the authoring UI. Checked = landed.
 - [x] A4 — generator input streams (notes/pas/ccs/ats/pb)
 - [x] A5 — mode is a generator-kind property; one registry per kind
 - [x] Continuous **pb** replace — augment-cancellation (§ A4)
+- [x] Continuous **cc** augment — node-fork collapse + rest seat + auto-pan kind (§ Continuous cc)
 - [x] B1 — fx-region column + Super-X addressing
 - [x] B2 — parked-chord display (render only)
 
 **Open / next**
 - [ ] B3 — parked chord *editable* off-take (planned, § B3)
 - [ ] fx chain — series composition + multi-column authoring (design only, § The fx chain)
+- [ ] Continuous **cc** replace — augment-cancellation on `host.ccs` (§ Continuous cc)
 
 **Deferred (no consumer / intentional)**
-- [ ] Continuous **cc** replace, and **PA** replace — only pb-replace is built
+- [ ] **PA** replace — no generic park/rebind path (§ A4)
 - [ ] Slew on a replace curve — ramp the window-edge hand-off (§ A4 TODO)
 - [ ] Multi-chain painter-layering for replace — overlapping pb fx is UI-blocked instead
 - [ ] Note-fx hosted on a parked note
@@ -780,6 +782,79 @@ swing, or a swing-neutral position), so the `or evt.ppq` fallback gives the logi
 but after externals + 4.5 parking*, not "after step 3": note columns are only settled (foreign-MIDI in,
 covered notes parked out) by then, and it must stay before step 5 so `findNoteColumnForPitch` still matches
 in the raw frame.
+
+## Continuous cc -- augment (landed); replace (plan)
+
+Extends A4's carrier machinery to cc targets. pb proved the path; cc is *simpler* (no detune,
+no I1, no absorber) and rides the same carrier wire.
+
+**Augment -- landed.** The node carrier fork collapsed to the pb formula for every target
+(`Continuum CC.jsfx`: `acc += acm*128+acl-8192`, centre 8192); the producer branches the *unit*
+(pb -> `centsToRaw`, cc -> raw steps) over the shared `(8192+raw)/128` transport; the rest seat
+emits a generator-owned base CC (`derived='ccbase'`) at take start for an un-automated target,
+routed out of columns like a carrier (step 3) and recognised on reload via the mm sidecar.
+`ccDefaultRest` + a first **auto-pan** kind (sine LFO on cc 10) ship in `generators.lua`. Pinned by
+the cc-augment tests in `tm_fx_region_spec` (value-correctness, +/-127 transport, rest
+fallback/withdraw, override) and the `autopan` test in `generators_spec`. **Replace** is the plan below.
+
+The mechanism subsections that follow are the design rationale, now landed-accurate as description.
+
+**The transport is already 14-bit.** `mm:wideCC` (`midiManager.lua`) splits a *fractional*
+carrier value 0..127.99 into an MSB(shaped)/LSB(step) wire pair; the node coalesces them via
+`acm*128 + acl`. So the carrier the pb path already emits (`(8192 + centsToRaw)/128`) carries
+14 bits, not 7 -- cc rides the identical wire. That is why ±127 "is fine, we have 14 bits": a
+cc delta of ±127 lives almost entirely in the *low* bits, the MSB sitting at ~64.
+
+**Node -- collapse the carrier branch** (`Continuum CC.jsfx`, the per-block sum). Today it
+forks on target: `d >= 2048 ? acc += acm*128+acl-8192 : acc += acm-64`. The cc arm is 7-bit
+MSB-only, centred 64 -- exactly what caps cc at ±63 and would quantise any delta below 128 to
+zero. Drop the fork; use the pb formula for every target. The existing carrier centre-default
+`acm = 64` still yields delta 0 for an absent carrier (`64*128 - 8192 = 0`), so nothing else
+moves. (The centre-default comment "64 for cc" becomes "always 8192".)
+
+**Producer -- branch the unit, not the transport** (`trackerManager.lua`, the carrier-value
+emit ~1635). Stop hardcoding `centsToRaw`: per target, pb -> `centsToRaw(bp.val)` (cents ->
+raw), cc -> `bp.val` (already cc steps, identity); shared `(8192 + raw)/128`. The take-start
+anchor (~1651) is already centre-64 and target-agnostic -- unchanged.
+
+**Base is held, not integrated.** The node emits `out = 64 + base + delta`, *recomputed each
+block* -- base is the latest *authored* cc on the target, captured live (`abd = m3 - 64`) and
+swallowed; delta is the current carrier sum. It never feeds its own emission back as base, so
+there is no drift: when the macro delta returns to 0 the output returns exactly to the
+authored value. For augment the authored automation *is* the base -- no synthesis (unlike pb,
+whose base the absorber builds from breakpoints + detune).
+
+**Rest -- the base when nothing is authored.** When a cc-augment target has *no* authored
+automation, seat one CC at its resting value at take start; the node captures it as base and
+the macro rides on top. Resolution:
+
+```
+rest(target) = region.fx.rest ?? ccDefaultRest[target] ?? 0
+```
+
+- `ccDefaultRest` -- a code constant. 64 for the bipolar family (pan 10, balance 8, sound
+  controllers 71-79), 127 for expression (11), else 0. The only opinionated part.
+- `region.fx.rest` -- optional per-region override, set in the fx UI. Realisation metadata: it
+  rides `region.fx` but does *not* flow through `fn(host, params, ctx)` -- the base-seater
+  reads it directly, leaving the generator contract untouched.
+
+Seat only when the target has no authored automation (pure fallback) -- authored automation,
+when present, already is the base, and seeding nothing sidesteps an ordering fight at ppq 0.
+No node change; same shape as the absorber seating pb base, narrower job.
+
+**cc replace falls out.** Once cc-augment is value-correct, replace is the same
+augment-cancellation pb uses: `cancelBase` samples the authored cc base (`host.ccs[target]`,
+cc units) instead of `host.pb`. This resolves the A4 caveat that cc-target replace "would
+sample the wrong base".
+
+**Open edge** (not solved now). `rest` is conceptually the *target's* value but stored per
+*region*. Two cc regions on one target, both leaning on rest with different overrides ->
+first/lowest wins, or block the overlap (same-target overlap is already constrained). Doesn't
+change the shape.
+
+**Files.** `Continuum CC.jsfx` (one line + a comment), `trackerManager.lua` (producer
+raw-branch + rest seating), `generators.lua` (a cc-dest augment kind + `ccDefaultRest`), a
+fixture test in `tm_fx_region_spec` (value-correctness + ±127 range + rest fallback).
 
 ## Open questions
 

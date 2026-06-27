@@ -30,6 +30,17 @@ local function carrierAt(dump, chan, ppq)
   for _, c in ipairs(carriersOf(dump, chan)) do if c.ppq == ppq then return c end end
 end
 
+-- A cc-augment carrier encodes raw cc steps (no centsToRaw): (8192 + steps) / 128.
+local function ccCarrierVal(steps) return (8192 + steps) / 128 end
+
+-- The generator-owned resting base CC at a cc target (ppq 0, derived='ccbase'), routed out
+-- of columns. nil when the target carries authored automation (that becomes the base instead).
+local function baseSeat(dump, chan, cc)
+  for _, c in ipairs(dump.ccs) do
+    if c.evType == 'cc' and c.cc == cc and c.chan == chan and c.derived == 'ccbase' then return c end
+  end
+end
+
 -- A region is channel x ppq span + fx; no host note. Inject via ds, then rebuild.
 local function injectRegion(h, over)
   local region = { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = vib30 }
@@ -400,6 +411,120 @@ return {
       local dump = h.fm:dump()
       t.eq(carrierAt(dump, 1, 0).val,   carrierVal(50), 'no base to cancel -> the curve passes through verbatim (50c)')
       t.eq(carrierAt(dump, 1, 240).val, carrierVal(0),  'curve re-centres at the window end')
+    end,
+  },
+
+  ----- Continuous cc augment: the carrier encodes cc steps; an un-automated target gets a rest seat
+
+  {
+    name = 'fx region (cc augment): the carrier encodes cc steps directly, not pb cents',
+    run = function(harness)
+      local h = harness.mk()
+      generators.kinds.ccCap = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppqL = host.window[1], val = 0,   shape = 'slow' },
+          { ppqL = 60,             val = 100, shape = 'slow' },
+          { ppqL = host.window[2], val = 0,   shape = 'slow' },
+        } } end,
+        mode = 'augment', dest = 10, label = 'CcCap', defaults = {}, fields = {},
+      }
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+                                   fx = { { kind = 'ccCap' } } } })
+      h.tm:rebuild()
+      generators.kinds.ccCap = nil
+
+      local dump = h.fm:dump()
+      t.eq(carrierAt(dump, 1, 60).val, ccCarrierVal(100),
+        'a 100-step cc delta rides the carrier as raw cc, not centsToRaw(100)')
+      t.eq(carrierAt(dump, 1, 0).val, ccCarrierVal(0), 'zero delta -> carrier centre')
+    end,
+  },
+
+  {
+    name = 'fx region (cc augment): +/-127 cc deltas survive the 14-bit transport',
+    run = function(harness)
+      local h = harness.mk()
+      generators.kinds.ccCap = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppqL = host.window[1], val = 127,  shape = 'slow' },
+          { ppqL = 120,            val = -127, shape = 'slow' },
+          { ppqL = host.window[2], val = 0,    shape = 'slow' },
+        } } end,
+        mode = 'augment', dest = 10, label = 'CcCap', defaults = {}, fields = {},
+      }
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+                                   fx = { { kind = 'ccCap' } } } })
+      h.tm:rebuild()
+      generators.kinds.ccCap = nil
+
+      -- Replicate midiManager.splitWide + the collapsed node coalesce (acm*128 + acl - 8192)
+      -- to prove +/-127 round-trips through the MSB/LSB pair the node now reads for every target.
+      local function recompose(v)
+        local msb = math.floor(v)
+        local lsb = util.round((v - msb) * 128)
+        if lsb >= 128 then msb, lsb = msb + 1, 0 end
+        return msb * 128 + lsb - 8192
+      end
+      local dump = h.fm:dump()
+      t.eq(recompose(carrierAt(dump, 1, 0).val),   127,  '+127 recovers exactly through the wire pair')
+      t.eq(recompose(carrierAt(dump, 1, 120).val), -127, '-127 recovers exactly through the wire pair')
+    end,
+  },
+
+  {
+    name = 'fx region (cc augment): rest seat appears only with no authored automation, off-screen',
+    run = function(harness)
+      local h = harness.mk()
+      generators.kinds.ccCap = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppqL = host.window[1], val = 0,  shape = 'slow' },
+          { ppqL = 60,             val = 20, shape = 'slow' },
+          { ppqL = host.window[2], val = 0,  shape = 'slow' },
+        } } end,
+        mode = 'augment', dest = 11, label = 'CcCap', defaults = {}, fields = {},   -- 11 = expression (rest 127)
+      }
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+                                   fx = { { kind = 'ccCap' } } } })
+      h.tm:rebuild()
+
+      local seat = baseSeat(h.fm:dump(), 1, 11)
+      t.truthy(seat, 'an un-automated expression target gets a base seat')
+      t.eq(seat.ppq, 0, 'seated at take start')
+      t.eq(seat.val, 127, 'expression rests wide open (ccDefaultRest[11] = 127)')
+      t.falsy(h.tm:getChannel(1).columns.ccs[11], 'the seat is routed out of columns -- off-screen')
+
+      h.tm:rebuild()
+      t.eq(baseSeat(h.fm:dump(), 1, 11).val, 127, 'the seat persists across a no-change rebuild')
+
+      -- Authoring real automation on the target makes it the base; the seat withdraws.
+      h.tm:addEvent({ evType = 'cc', ppq = 30, chan = 1, cc = 11, val = 90 }); h.tm:flush()
+      generators.kinds.ccCap = nil
+
+      t.falsy(baseSeat(h.fm:dump(), 1, 11), 'authored automation became the base; the seat is gone')
+      t.truthy(h.tm:getChannel(1).columns.ccs[11], 'the authored cc 11 is now a normal, visible column')
+    end,
+  },
+
+  {
+    name = 'fx region (cc augment): region.fx.rest overrides the default resting base',
+    run = function(harness)
+      local h = harness.mk()
+      generators.kinds.ccCap = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppqL = host.window[1], val = 0,  shape = 'slow' },
+          { ppqL = 60,             val = 10, shape = 'slow' },
+          { ppqL = host.window[2], val = 0,  shape = 'slow' },
+        } } end,
+        mode = 'augment', dest = 10, label = 'CcCap', defaults = {}, fields = {},   -- pan, default rest 64
+      }
+      local fx = { { kind = 'ccCap' } }; fx.rest = 100
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = fx } })
+      h.tm:rebuild()
+      generators.kinds.ccCap = nil
+
+      local seat = baseSeat(h.fm:dump(), 1, 10)
+      t.truthy(seat, 'a base seat is emitted for the un-automated pan target')
+      t.eq(seat.val, 100, 'region.fx.rest (100) overrides ccDefaultRest[10] (64)')
     end,
   },
 
