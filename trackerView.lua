@@ -2504,6 +2504,9 @@ end
 
 function tv:learnFxGuid() return learn and learn.fxGuid end
 
+-- The palette's 'show' button: float the fx ui without arming learn.
+function tv:showFx(row) pa:floatFx(row.trackGuid, row.fxGuid) end
+
 --contract: pops the fx window down only when arming floated it
 function tv:cancelLearn()
   if learn and learn.floated then pa:unfloatFx(learn.trackGuid, learn.fxGuid) end

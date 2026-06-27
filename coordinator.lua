@@ -45,6 +45,11 @@ local bootFrames    = 0
 local lastAvailW    = nil
 local quitting      = false
 local errHandler    = nil
+local focusFrames   = 0      -- >0: re-focus our window this many frames, counting down
+local fxFloatOpen   = false  -- an FX float window was open at the last poll
+local weHadFocus    = false  -- our window held focus at the end of the last frame
+local myHwnd                 -- our OS window HWND, captured via js while we hold focus
+local jsFocus       = reaper.JS_Window_GetForeground ~= nil   -- js_ReaScriptAPI present
 
 ----- Keyboard router
 
@@ -182,9 +187,32 @@ local function pollExternalCommands()
   end
 end
 
+-- Any floating FX window open across master + tracks. The poll in frame() reads
+-- its open→closed edge (X button or F11) to reclaim OS focus from REAPER.
+local function anyFxFloating()
+  local function trackFloats(track)
+    for fxIdx = 0, reaper.TrackFX_GetCount(track) - 1 do
+      if reaper.TrackFX_GetFloatingWindow(track, fxIdx) then return true end
+    end
+    return false
+  end
+  if trackFloats(reaper.GetMasterTrack(0)) then return true end
+  for i = 0, reaper.CountTracks(0) - 1 do
+    if trackFloats(reaper.GetTrack(0, i)) then return true end
+  end
+  return false
+end
+
 local function frame()
   cm:pollUndo()
   pollExternalCommands()
+  -- While we lack focus, watch the floating-FX set: its open→closed edge means
+  -- the user dismissed the last one (X or F11) and REAPER stole focus — reclaim.
+  if jsFocus and not weHadFocus then
+    local nowOpen = anyFxFloating()
+    if fxFloatOpen and not nowOpen then focusFrames = 2 end
+    fxFloatOpen = nowOpen
+  end
   tick()
   help:beginFrame()
   local page = pages[active]
@@ -197,6 +225,11 @@ local function frame()
   ImGui.PushStyleColor(ctx, ImGui.Col_ScrollbarGrab,chrome.colour('scrollHandle'))
 
   ImGui.PushStyleVar(ctx, ImGui.StyleVar_WindowPadding, 0, 0)
+  if focusFrames > 0 then
+    ImGui.SetNextWindowFocus(ctx)              -- ImGui-internal focus; must precede Begin
+    if myHwnd then reaper.JS_Window_SetForeground(myHwnd) end   -- the OS-level focus grab
+    focusFrames = focusFrames - 1
+  end
   local visible, open = ImGui.Begin(ctx, 'Continuum', true,
     ImGui.WindowFlags_NoScrollbar
     | ImGui.WindowFlags_NoScrollWithMouse
@@ -208,6 +241,9 @@ local function frame()
   -- accumulate auto-scroll on the parent window, pushing the grid below
   -- the visible region for the duration of the drag.
   if visible then ImGui.SetScrollY(ctx, 0); ImGui.SetScrollX(ctx, 0) end
+  -- Cache our OS window while we hold focus, so focusFrames can restore it later.
+  weHadFocus = visible and ImGui.IsWindowFocused(ctx, ImGui.FocusedFlags_RootAndChildWindows)
+  if weHadFocus and jsFocus then myHwnd = reaper.JS_Window_GetForeground() end
 
   -- Boot warm-up: hold content a few frames until ReaImGui builds the font
   -- atlas and the window width settles, then latch (never re-gates on resize).

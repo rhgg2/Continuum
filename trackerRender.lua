@@ -1093,15 +1093,15 @@ local function scrollFollow(onCur)
   elseif rowBot > winBot then ImGui.SetScrollY(ctx, sY + (rowBot - winBot)) end
 end
 
-local function drawTreeItem(it, cur, showLearn, btnW)
+local function drawTreeItem(it, cur, showLearn, btns)
   if it.kind == 'heading' then
     ImGui.TextDisabled(ctx, it.text)
   elseif it.kind == 'fx' then
     local row     = it.row
     local onCur   = cur and cur.fxGuid == row.fxGuid and cur.param == nil
     local availW  = select(1, ImGui.GetContentRegionAvail(ctx))
-    local reserve = showLearn and btnW + 28 or 8
-    -- AllowOverlap so the learn button drawn on top still takes its clicks.
+    local reserve = showLearn and btns.show + btns.learn + 36 or 8
+    -- AllowOverlap so the show/learn buttons drawn on top still take their clicks.
     local r = chrome.treeRow{ id = 'fx' .. row.fxGuid, label = row.name,
                               hasChildren = true, open = it.open, selected = onCur,
                               reserve = reserve, flags = ImGui.SelectableFlags_AllowOverlap }
@@ -1112,11 +1112,14 @@ local function drawTreeItem(it, cur, showLearn, btnW)
     end
     if r.toggled then tv:setFxExpanded(row.fxGuid, not it.open) end
     if showLearn then
-      local armed = tv:learnFxGuid() == row.fxGuid
-      ImGui.SameLine(ctx, availW - btnW)
+      local armed  = tv:learnFxGuid() == row.fxGuid
+      -- Right-aligned, a few px in from the row edge so they sit inside the highlight.
+      local learnX = availW - 4 - btns.learn
+      ImGui.SameLine(ctx, learnX - 4 - btns.show)
+      if ImGui.SmallButton(ctx, 'show###S' .. row.fxGuid) then tv:showFx(row) end
+      ImGui.SameLine(ctx, learnX)
       if ImGui.SmallButton(ctx, (armed and 'stop' or 'learn') .. '###L' .. row.fxGuid) then
         tv:armLearn(row)
-        if tv:learnFxGuid() then tv:setFxExpanded(row.fxGuid, true) end
       end
     end
   else
@@ -1155,8 +1158,9 @@ local function drawTree(plan)
   end
   local cur  = tv:paletteCursor()
   local fpx  = ImGui.GetStyleVar(ctx, ImGui.StyleVar_FramePadding)
-  local btnW = ImGui.CalcTextSize(ctx, 'learn') + fpx * 2
-  local showLearn = tv:paletteFilter() == ''   -- learn is hidden while filtering
+  local btns = { show  = ImGui.CalcTextSize(ctx, 'show')  + fpx * 2,
+                 learn = ImGui.CalcTextSize(ctx, 'learn') + fpx * 2 }
+  local showLearn = tv:paletteFilter() == ''   -- show/learn buttons hidden while filtering
 
   -- Clip to the visible rows: a fx with hundreds of params must not draw (and
   -- CalcTextSize) every row each frame.
@@ -1172,7 +1176,7 @@ local function drawTree(plan)
   while ImGui.ListClipper_Step(paramClipper) do
     local first, last = ImGui.ListClipper_GetDisplayRange(paramClipper)
     for i = first, last - 1 do
-      drawTreeItem(plan[i + 1], cur, showLearn, btnW)
+      drawTreeItem(plan[i + 1], cur, showLearn, btns)
     end
   end
   ImGui.ListClipper_End(paramClipper)
