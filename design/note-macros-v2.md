@@ -401,14 +401,19 @@ wants ~none of gm (see resolved open question below).
   is A2 verbatim (members sound + occupy lanes; nudge persists). Display of the
   parked bucket (`channels[chan].parked`) is the renderer's union (Track B B2). Pinned
   by the replace / augment / realise / removal / G4 tests in `tm_fx_region_spec`.
-- **A4 — continuous replace + PA. Next.** A3 parks notes only. The other two
-  dimensions of the one augment/replace axis are deferred until each has a consumer:
-  **continuous replace** (the region pb stream overwrites the logical pb, vs today's
-  additive carrier -- entangled with the 4.9 absorber path) and **PA** (PAs into
-  `host.events`, parked alongside their note and re-emittable rebound to the region).
-  Known gaps to close there: a member straddling a window edge is parked whole (no
-  split); a PA on a parked note orphans (silent, not re-emitted); a parked note
-  carrying its own `fx` loses that host behaviour to the region.
+- **A4 — reframed: generator input streams (the PA half); continuous replace deferred. In progress.**
+  A3 parks notes only. The PA half was misframed as park-the-PA-and-re-emit-it-rebound-to-the-region;
+  that operation can't exist generically -- a PA is generator *input*, like a member's pitch/detune, and
+  the generator's input->output mapping preserves no event correspondence to rebind across (an arp samples
+  a chord and emits one stream; which input PA maps to which output note is undefined). PA isn't special:
+  it generalises to *the generator reads the windowed channel as typed input streams* (notes, pas, ccs,
+  ats). **Landing now**, read from the real column projections -- see § A4 -- generator input streams (plan).
+  **Deferred** (each until a consumer): **pb as input** (its intent cents `cents-minus-detune` is the
+  absorber's product, entangled with generator output -- needs the phased absorber-split, not an mm
+  re-derivation) and **continuous replace** (region pb overwrites logical pb, the 4.9 overwrite path).
+  Known gaps unchanged: a member straddling a window edge is parked whole (no split); a parked note
+  carrying its own `fx` loses that host behaviour to the region; a replace region's parked PAs stay
+  take-side (latent orphan) until the first PA-consuming generator, then park them out.
 
 - **A5 -- mode is a generator property; one registry per kind. Landed.** `region.mode` is gone.
   Each kind declares `mode` (`replace`|`augment`) and `dest` (`'note'` for discrete kinds, else the
@@ -546,6 +551,80 @@ matter.
 
 **Out of scope.** Note-fx hosted on a parked note, and continuous/PA replace (A4)
 -- both already deferred.
+
+## A4 -- generator input streams (plan)
+
+Reframes the PA half of A4. PA was misframed as a park/re-emit/rebind problem; that
+operation can't exist generically (no input->output event correspondence to carry a PA
+across). So PA stops being special and becomes one of several **typed input streams the
+generator reads over its window**. ADSR gated by note-ons, a CC-controlled vibrato, a
+pressure-aware arp all fall out of one shape. Landing: notes, pas, ccs, ats. pb deferred
+(below).
+
+**Contract** (`generators.lua`). `host.events` -> `host.notes` (it *is* the note stream),
+plus three more -- all window+channel scoped, logical frame, intent units:
+
+```lua
+host = { window={startppqL,endppqL}, chan, lane, id,
+  notes = { {pitch,vel,detune,ppqL,endppqL}, ... },   -- the membership (was `events`)
+  pas   = { {ppqL,pitch,vel}, ... },
+  ccs   = { [ccNum] = { {ppqL,val}, ... } },
+  ats   = { {ppqL,val}, ... } }
+```
+
+**Read the real projections, not mm.** Slice the streams from the **column projections**
+(`channels[chan].columns`), never reconstruct them from `mm` -- re-deriving a view
+projection at the seam is a smell, and for pb outright wrong (mm pb is raw, not the
+`cents-minus-detune` the absorber computes). These four are cheap *because* their intent
+value needs no computation (note fields / 7-bit `val` verbatim) and they are projected to
+columns **before** the producer: notes/ccs/ats already are (steps 2-3; carriers already
+routed out of `ccs` by step 3), and `pas` only needs its projection moved ahead of the
+producer.
+
+**Phased: project inputs -> generate -> reconcile outputs.** The structural move. The
+generator consumes finished input projections; its output (derived notes, carrier) feeds
+the existing later passes (4.8 tail walk, 4.9 absorber). The one new instance of "project
+more of the view before generating" is moving the `pas` projection earlier.
+
+**Implementation** (`trackerManager.lua`, at the 4.6 seam):
+
+1. Rename host field `events` -> `notes`: the host literal (~1448), the 3 `runProducer`
+   feeds (note host ~1485, region augment/replace ~1494-1507), the generator read-sites
+   (`retrig`/`trill`/`arp`/`slide`; `vibrato` reads none), `generators_spec`.
+2. Move the PA column projection (~1887: `mm:ccs()` -> `evType=='pa'` ->
+   `findNoteColumnForPitch` -> `projectCC(.., {type='pa'})`) to **before** the producer
+   (after step 3, note columns settled). Safe: every intervening note-column walk already
+   guards `type ~= 'pa'` (producer 1482, `eachWindowNote` 1399, tail walk 1612, park 1284),
+   and derived fxNotes are routed out of columns, so `findNoteColumnForPitch` only ever
+   finds authored columns -- present pre-producer. VERIFY on build: the step-5
+   `ppq->logical` note-col overwrite still leaves PA `ppqL` intact for render; nothing
+   between old/new position needs PA absent.
+3. `channelStreams(chan, startL, endL)` -- slice the columns by **`ppqL`** (col `.ppq` is
+   raw until step 5, so `ppqL` is the logical key; the reason `membersOf` reads it):
+   - `pas`: walk `columns.notes[*].events`, `type=='pa'`, `ppqL in [startL,endL)` ->
+     `{ppqL, pitch, vel}`.
+   - `ccs`: each `columns.ccs[cc]`, windowed -> bucket by cc -> `{ppqL, val}`.
+   - `ats`: `columns.at`, windowed -> `{ppqL, val}`.
+4. Hoist the host literal out of `runProducer`'s fx-loop (built once per host, not per
+   kind), attach `notes` + the three streams; `channelStreams` computed inside
+   `runProducer` from `(chan, window)` -- uniform across both host kinds and
+   augment/replace.
+
+**pb -- deferred, by the phased absorber-split.** pb's intent value (`cents-minus-detune`)
+is produced by the absorber/pb walk, which itself consumes generator output (derived
+lane-1 detune seating, ~1724). Exposing it as input means splitting the absorber: an
+authored-only pb projection *before* the producer, then the existing 4.9 reseat (derived +
+carrier) *after*. A real refactor of the tuning layer -- do it when the first pb-consuming
+generator needs it, properly, not by mm re-derivation. **Continuous replace** (region pb
+overwrites logical pb) stays deferred on the same 4.9 overwrite path.
+
+**Tests.** `tm_fx_region_spec`: a region over a window holding a cc + pa + at, with a
+capture-kind injected into `generators.kinds` recording its `host`, rebuild, assert
+`host.pas/ccs/ats` carry the windowed streams (real producer wiring; the capture kind is a
+spec fixture, not a production surface). `generators_spec`: the `events`->`notes` rename.
+
+**Files.** `generators.lua` (contract invariant/shape + rename), `trackerManager.lua`
+(pa-projection move, `channelStreams`, host hoist, rename feeds), this doc, the two specs.
 
 ## Open questions
 

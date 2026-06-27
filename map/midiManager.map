@@ -1,4 +1,4 @@
-@module midiManager  src=midiManager.lua  loc=1304  sha=2d2415d  mode=chunk  self=mm
+@module midiManager  src=midiManager.lua  loc=1305  sha=7bc5d6d  mode=chunk  self=mm
 @deps take
 
 # Invariants & contracts
@@ -142,11 +142,9 @@
       -- on plain ccs) is safely skipped.
   @fn deleteSidecarByUuid(uuid)  @ 1119-1122
   -- Take data
-  @fn setEot(buf, targetPpq)  @ 1226-1242
-      -- Rewrite the trailing EOT meta event so it sits exactly at targetPpq.
-      -- Handles both shrink (offset reduces) and grow (offset increases).
-      -- Assumes events past targetPpq are already deleted upstream on shrink
-      -- (tm:setLength does this).
+  @fn setEot(buf, targetPpq)  @ 1224-1243
+      -- Reposition the take's trailing end marker (CC 0x7B all-notes-off, or FF 2F meta) to targetPpq.
+      -- Shrink assumes events past targetPpq are already deleted upstream (tm:setLength does this).
 
 # Public API (mm:*)
   @api mm:load(newTake)  @ 351-745
@@ -189,12 +187,12 @@
       -- Source length. setLength positions the source's EOT explicitly to keep this in sync.
   @api mm:name()  @ 1211-1215
   @api mm:setName(name)  @ 1217-1220
-  @api mm:setLength(qn)  @ 1248-1260
+  @api mm:setLength(qn)  @ 1249-1261
       -- MIDI_SetItemExtents only resizes the item; on grow it leaves source EOT short,
       -- on shrink it leaves source EOT stale. Reposition the source EOT first so the
       -- source is the right size, then bring the item to match.
       -- Project metadata only — bypasses modify(); fires reload so tm picks up the new length.
-  @api mm:timeSigs()  @ 1262-1300
+  @api mm:timeSigs()  @ 1263-1301
 
 # Signals emitted (via util.installHooks)
   @emits takeSwapped   -- nil; only when load received a different take   @ load:734
@@ -205,7 +203,7 @@
   @emits reload   -- nil; every load, including after modify()   @ load:744
 
 # Uses (outbound edges)
-  @use call    util.add  @ saveMetadata:287 load:387,402,404,411,413,444,452,455,475,480,482,498,510,514,521,546,547,624,630,631,641 addNote:869 pushCC:1017 delete:1150 timeSigs:1295
+  @use call    util.add  @ saveMetadata:287 load:387,402,404,411,413,444,452,455,475,480,482,498,510,514,521,546,547,624,630,631,641 addNote:869 pushCC:1017 delete:1150 timeSigs:1296
   @use call    util.assign  @ load:452,455,548,683,690 assignNote:810,826 assignCC:937,956,962
   @use call    util.bucket  @ load:469,535,536
   @use call    util.clamp  @ splitWide:69 bezierSample:95

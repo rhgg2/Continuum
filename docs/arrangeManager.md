@@ -215,6 +215,15 @@ re-derives `D_LENGTH` for every take after any mutation, so the cap is
 always current; the mutators (`moveTake`, `resizeTake`, …) preserve
 natural length and lean on relayout to re-derive the playing length.
 
+`relayoutTrack` also runs **per track inside `buildState`** (every
+rebuild), not only from the mutators. A source-length change made
+elsewhere — Take Properties extending or shrinking a pooled take's MIDI
+source — is an external edit `am` never sees as a mutator call; the
+build-time pass re-derives `D_LENGTH` for every instance so OPEN siblings
+grow/shrink with the source, and a freshly-grown take is re-capped to its
+gap rather than overlapping its neighbour (an overlap that would otherwise
+make `takeAtCursor` tie and hit the wrong take).
+
 A stored natural that is **≥ the source length** is demoted to
 `util.OPEN` on relayout. Pinning a finite cap at-or-above the source
 would freeze the take at today's source length; demoting to OPEN lets
@@ -238,7 +247,11 @@ state is stale:
   move/resize/delete/drop/duplicate; `renameSlot` and `deleteSlot`
   (which skip relayout) call it directly.
 - **External edits** (a direct change in REAPER) are caught by polling
-  `GetProjectStateChangeCount`; a moved count forces a rebuild.
+  `GetProjectStateChangeCount`; a moved count forces a rebuild. The
+  rebuild relayouts every track (above), so a source-length change made
+  outside `am` re-derives all dependent `D_LENGTH`s. `setItemQNRange`
+  skips no-op writes, so an idempotent rebuild touches nothing and does
+  not re-dirty the project.
 
 The count is re-read *after* a build so the build's own ext-state
 writes (slot/colour allocation) don't trigger a needless rebuild next

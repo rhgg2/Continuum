@@ -434,7 +434,7 @@ return {
   -- Natural length + relayout
   --------------------------------------------------------------------
   {
-    name = 'tracksTakes reports naturalLenQN; default is util.OPEN → source length',
+    name = 'tracksTakes relayouts on read: an OPEN take grows to its source length',
     run = function(harness)
       local h, am = mkAm(harness)
       seedTracks(h, {
@@ -442,7 +442,32 @@ return {
       })
       local tk = am:tracksTakes(0)[1]
       t.eq(tk.naturalLenQN, 6, 'default natural = source length')
-      t.eq(tk.lengthQN,     2, 'rendered stays at the seeded item length until relayout reads source')
+      t.eq(tk.lengthQN,     6, 'build-time relayout grows the OPEN take from the seeded 2 to its 6-QN source')
+    end,
+  },
+  {
+    name = 'build relayout: OPEN takes fill to source; an earlier one capped at its gap (no overlap)',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      -- Two adjacent pooled instances whose shared source (8) outruns each seeded item.
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, len = 4, srcLen = 8, poolGuid = '{p1}' },
+                    { kind = 'midi', pos = 4, len = 4, srcLen = 8, poolGuid = '{p1}' } } },
+      })
+      local takes = am:tracksTakes(0)
+      t.eq(takes[1].lengthQN, 4, 'earlier OPEN take capped at the gap to its neighbour — never overlaps')
+      t.eq(takes[2].lengthQN, 8, 'last OPEN take grows to the full source')
+    end,
+  },
+  {
+    name = 'build relayout: an OPEN take whose item outruns its shrunk source is pulled back',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      -- Models a sibling left long after Take Properties shrank the shared source.
+      seedTracks(h, {
+        { items = { { kind = 'midi', pos = 0, len = 8, srcLen = 4, poolGuid = '{p1}' } } },
+      })
+      t.eq(am:tracksTakes(0)[1].lengthQN, 4, 'rendered shrinks to source on read, not left at the stale 8')
     end,
   },
 

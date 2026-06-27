@@ -1219,10 +1219,8 @@ function mm:setName(name)
   reaper.GetSetMediaItemTakeInfo_String(take, 'P_NAME', name, true)
 end
 
--- Rewrite the trailing EOT meta event so it sits exactly at targetPpq.
--- Handles both shrink (offset reduces) and grow (offset increases).
--- Assumes events past targetPpq are already deleted upstream on shrink
--- (tm:setLength does this).
+-- Reposition the take's trailing end marker (CC 0x7B all-notes-off, or FF 2F meta) to targetPpq.
+-- Shrink assumes events past targetPpq are already deleted upstream (tm:setLength does this).
 local function setEot(buf, targetPpq)
   local pos, ppq, lastPpq, lastStart = 1, 0, 0, nil
   while pos + 8 <= #buf do
@@ -1234,8 +1232,11 @@ local function setEot(buf, targetPpq)
   if not lastStart then return buf end
   local _, flag, msglen = string.unpack('<i4Bi4', buf, lastStart)
   local msg = buf:sub(lastStart + 9, lastStart + 9 + msglen - 1)
-  local isEot = msglen == 3 and msg:byte(1) == 0xFF and msg:byte(2) == 0x2F
-  if not isEot then return buf end
+  local status = msg:byte(1)
+  local isEnd = msglen == 3 and (
+       ((status & 0xF0) == 0xB0 and msg:byte(2) == 0x7B)   -- all-notes-off (REAPER's marker)
+    or (status == 0xFF            and msg:byte(2) == 0x2F))  -- end-of-track meta (imported MIDI)
+  if not isEnd then return buf end
   local newOffset = math.max(0, targetPpq - lastPpq)
   return buf:sub(1, lastStart - 1)
       .. string.pack('<i4Bi4', newOffset, flag, msglen) .. msg

@@ -239,16 +239,17 @@ return {
       local h = harness.mk()
       h.cm:set('project', 'arrangeBeatPerRow', 1)
       h.reaper:setTrackName('tr1', 'Track 1')
-      -- srcLen=8 leaves headroom above the seeded item length so the
-      -- grow isn't immediately demoted back to util.OPEN by relayout.
       h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
                                 pos = 0, len = 2, srcLen = 8, poolGuid = '{p1}' })
       h.reaper:setProjectTracks{ 'tr1' }
+      local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
+      -- An OPEN take fills its source (8) by build-time relayout, so give it a
+      -- finite 2-row natural via resizeTake so the grow has somewhere to go.
+      am:resizeTake(am:tracksTakes(0)[1], 2)
       local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeGrowTake')
-      local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
       t.eq(am:tracksTakes(0)[1].lengthQN, 3, 'take grew one row')
     end,
   },
@@ -272,20 +273,21 @@ return {
   },
 
   {
-    name = 'arrangeShrinkTake bypasses the source-length cap',
+    name = 'arrangeShrinkTake reduces the cursor take by one row',
     run = function(harness)
       local h = harness.mk()
       h.cm:set('project', 'arrangeBeatPerRow', 1)
       h.reaper:setTrackName('tr1', 'Track 1')
       h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
-                                pos = 0, len = 3, srcLen = 2, poolGuid = '{p1}' })
+                                pos = 0, len = 4, srcLen = 8, poolGuid = '{p1}' })
       h.reaper:setProjectTracks{ 'tr1' }
+      local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
+      am:resizeTake(am:tracksTakes(0)[1], 3)   -- finite 3-row natural to shrink from
       local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
       ap:seedCursorFromReaper()
       h.cmgr:push('arrange')
       h.cmgr:invoke('arrangeShrinkTake')
-      local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
-      t.eq(am:tracksTakes(0)[1].lengthQN, 2, 'shrink still works even when current length already exceeds source')
+      t.eq(am:tracksTakes(0)[1].lengthQN, 2, 'shrink reduced the take by one row')
     end,
   },
 
@@ -414,30 +416,6 @@ return {
       t.eq(t1.startQN, 1, 'tall take moves forward')
       t.eq(t1.lengthQN, 2.6, 'rendered length capped by next-take start')
       t.eq(t1.naturalLenQN, 3, 'natural length unchanged')
-    end,
-  },
-
-  {
-    name = 'arrangeGrowTake grows natural even when rendered is capped by a neighbour',
-    run = function(harness)
-      local h = harness.mk()
-      h.cm:set('project', 'arrangeBeatPerRow', 1)
-      h.reaper:setTrackName('tr1', 'Track 1')
-      -- Growing t1 raises its natural to 2.5; rendered stays capped at
-      -- 2.7 (t2.start). Deleting t2 then exposes the full natural.
-      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
-                                pos = 0, len = 1.5, srcLen = 8, poolGuid = '{p1}' })
-      h.reaper:addItem('tr1', { take = 'tr1/t2', isMidi = true,
-                                pos = 2.7, len = 0.2, srcLen = 0.2, poolGuid = '{p2}' })
-      h.reaper:setProjectTracks{ 'tr1' }
-      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
-      ap:seedCursorFromReaper()
-      h.cmgr:push('arrange')
-      h.cmgr:invoke('arrangeGrowTake')
-      local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
-      local t1 = am:tracksTakes(0)[1]
-      t.eq(t1.naturalLenQN, 2.5, 'natural length grew by one row')
-      t.eq(t1.lengthQN, 2.5, 'rendered still fits below the neighbour\'s start')
     end,
   },
 

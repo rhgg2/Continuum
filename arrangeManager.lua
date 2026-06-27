@@ -57,11 +57,17 @@ local function itemQNRange(item)
   return startQN, endQN - startQN
 end
 
+-- Skip no-op writes: relayout runs on every build, so a redundant write would
+-- bump the project-state count and re-dirty the project for nothing.
 local function setItemQNRange(item, startQN, endQN)
   local startSec = reaper.TimeMap2_QNToTime(0, startQN)
-  local endSec   = reaper.TimeMap2_QNToTime(0, endQN)
-  reaper.SetMediaItemInfo_Value(item, 'D_POSITION', startSec)
-  reaper.SetMediaItemInfo_Value(item, 'D_LENGTH',   endSec - startSec)
+  local lenSec   = reaper.TimeMap2_QNToTime(0, endQN) - startSec
+  if reaper.GetMediaItemInfo_Value(item, 'D_POSITION') ~= startSec then
+    reaper.SetMediaItemInfo_Value(item, 'D_POSITION', startSec)
+  end
+  if reaper.GetMediaItemInfo_Value(item, 'D_LENGTH') ~= lenSec then
+    reaper.SetMediaItemInfo_Value(item, 'D_LENGTH', lenSec)
+  end
 end
 
 local function takeKind(take)
@@ -391,14 +397,15 @@ local function chanRangeOf(takes)
   return { lo = lo, hi = hi }
 end
 
--- One walk of the project, building every render read: track rows, per-column
--- take-shapes, per-column slot rows. ensureColours once; ensureSlots once/track.
+-- One walk: track rows, per-column take-shapes + slot rows; ensureColours/ensureSlots once.
+-- relayoutTrack per track re-derives D_LENGTH so a source-length edit outside am reflects.
 local function buildState()
   local colourForId = ensureColours()
   local tracks, takesByCol, slotsByCol, chanByCol = {}, {}, {}, {}
   for ti = 0, reaper.CountTracks(0) - 1 do
     local track = reaper.GetTrack(0, ti)
     if isVisibleTrack(track) then
+      relayoutTrack(track)
       local col = #tracks
       local dict, slotForId, firstName, liveIds = ensureSlots(track)
       local _, name = reaper.GetTrackName(track)
