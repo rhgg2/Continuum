@@ -41,6 +41,22 @@ local function baseSeat(dump, chan, cc)
   end
 end
 
+-- An authored (non-derived) pb on the wire: `val` is raw (centsToRaw of wire-cents + detune),
+-- `cents` the persisted intent. A replace window forces the wire raw to detune-only.
+local function authoredPb(dump, chan, ppq)
+  for _, c in ipairs(dump.ccs) do
+    if c.evType == 'pb' and c.chan == chan and c.ppq == ppq and not c.derived then return c end
+  end
+end
+
+-- The pb column projects intent: the event's `val` is the authored cents (stays visible even when
+-- a replace region overwrites the wire).
+local function colPbCents(h, chan, ppq)
+  for _, e in ipairs((h.tm:getChannel(chan).columns.pb or {}).events or {}) do
+    if e.ppq == ppq then return e.val end
+  end
+end
+
 -- A region is channel x ppq span + fx; no host note. Inject via ds, then rebuild.
 local function injectRegion(h, over)
   local region = { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = vib30 }
@@ -355,27 +371,26 @@ return {
     end,
   },
 
-  ----- Continuous replace (C): overwrite via augment-cancellation against host.pb
+  ----- Continuous pb replace: the wire base goes detune-only; the carrier rides the absolute curve
 
   {
-    name = 'fx region: continuous replace cancels the authored pb base (carrier = curve - base)',
+    name = 'fx region: pb replace overwrites the authored base via a detune-only wire',
     run = function(harness)
       local h = harness.mk()
-      -- Authored base ramps 0c -> 40c over [0,120); held flat at 40c after. (val is cents.)
+      -- Authored base: 0c at ppq 0, 40c at ppq 120. No notes -> detune is 0, so the detune-only
+      -- base is 0 and the absolute curve lands on the wire untouched. (val is cents.)
       h.tm:addEvent({ evType = 'pb', ppq = 0,   chan = 1, val = 0 })
       h.tm:addEvent({ evType = 'pb', ppq = 120, chan = 1, val = 40 })
       h.tm:flush()
 
-      -- A spec-only replace kind: emits an absolute +50c target curve, rejoining the base (40c)
-      -- at the window end so the carrier re-centres. The producer subtracts host.pb per breakpoint.
+      -- A spec-only replace kind: an absolute +50c curve returning to 0c at the window end (so the
+      -- carrier re-centres). The producer rides the carrier verbatim; 4.9 suppresses the base.
       generators.kinds.capRep = {
-        expand = function(host)
-          return { notes = {}, delta = {
-            { ppqL = host.window[1], val = 50, shape = 'square' },
-            { ppqL = 60,             val = 50, shape = 'square' },
-            { ppqL = host.window[2], val = 40, shape = 'square' },
-          } }
-        end,
+        expand = function(host) return { notes = {}, delta = {
+          { ppqL = host.window[1], val = 50, shape = 'square' },
+          { ppqL = 60,             val = 50, shape = 'square' },
+          { ppqL = host.window[2], val = 0,  shape = 'square' },
+        } } end,
         mode = 'replace', dest = 'pb', label = 'CapRep', defaults = {}, fields = {},
       }
       h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
@@ -384,14 +399,21 @@ return {
       generators.kinds.capRep = nil
 
       local dump = h.fm:dump()
-      t.eq(carrierAt(dump, 1, 0).val,   carrierVal(50), 'window start: base 0c -> carrier = 50 - 0 = 50c')
-      t.eq(carrierAt(dump, 1, 60).val,  carrierVal(30), 'mid-ramp: base interpolates to 20c -> carrier = 50 - 20 = 30c')
-      t.eq(carrierAt(dump, 1, 240).val, carrierVal(0),  'window end: curve rejoins base 40c -> carrier re-centres to 0')
+      -- The carrier rides the ABSOLUTE curve -- not curve-minus-base (which would read 30c at 60).
+      t.eq(carrierAt(dump, 1, 0).val,   carrierVal(50), 'carrier is the absolute curve at the window start')
+      t.eq(carrierAt(dump, 1, 60).val,  carrierVal(50), 'still absolute 50c mid-window (cancellation would have read 30c)')
+      t.eq(carrierAt(dump, 1, 240).val, carrierVal(0),  'curve returns to 0 -> carrier re-centres at the window end')
+
+      -- The authored 40c base is overwritten on the wire (detune-only = 0); its intent survives.
+      local wire = authoredPb(dump, 1, 120)
+      t.eq(wire.val,   0,  'authored pb raw forced to detune-only (0) on the wire inside the window')
+      t.eq(wire.cents, 40, 'its persisted cents (intent) are untouched')
+      t.eq(colPbCents(h, 1, 120), 40, 'and the authored cents stay visible in the pb column')
     end,
   },
 
   {
-    name = 'fx region: continuous replace with no authored base is identical to augment',
+    name = 'fx region: pb replace with no authored base rides the carrier verbatim',
     run = function(harness)
       local h = harness.mk()
       generators.kinds.capRep = {
@@ -409,8 +431,62 @@ return {
       generators.kinds.capRep = nil
 
       local dump = h.fm:dump()
-      t.eq(carrierAt(dump, 1, 0).val,   carrierVal(50), 'no base to cancel -> the curve passes through verbatim (50c)')
+      t.eq(carrierAt(dump, 1, 0).val,   carrierVal(50), 'no base to suppress -> the curve rides the carrier verbatim (50c)')
       t.eq(carrierAt(dump, 1, 240).val, carrierVal(0),  'curve re-centres at the window end')
+    end,
+  },
+
+  {
+    name = 'fx region: pb replace is driven by the detune pb only -- I1 holds, authored cents suppressed',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { detune = 25 })                                    -- lane-1 detune drives the base
+      h.tm:addEvent({ evType = 'pb', ppq = 60, chan = 1, val = 40 }) -- authored automation in the window
+      h.tm:flush()
+
+      generators.kinds.capRep = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppqL = host.window[1], val = 30, shape = 'square' },
+          { ppqL = host.window[2], val = 0,  shape = 'square' },
+        } } end,
+        mode = 'replace', dest = 'pb', label = 'CapRep', defaults = {}, fields = {},
+      }
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+                                   fx = { { kind = 'capRep' } } } })
+      h.tm:rebuild()
+      generators.kinds.capRep = nil
+
+      -- The node's base in the window is detune-only: the authored 40c is dropped, the 25c detune
+      -- survives (I1). centsToRaw(25) is distinct from cents+detune and from bare cents.
+      local dump = h.fm:dump()
+      t.eq(authoredPb(dump, 1, 60).val, centsToRaw(25),
+        'authored pb wire raw is detune-only, NOT cents+detune nor bare cents')
+      t.eq(carrierAt(dump, 1, 0).val, carrierVal(30), 'the carrier carries the absolute curve on top')
+    end,
+  },
+
+  {
+    name = 'fx region: removing a pb replace region restores the suppressed authored base',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent({ evType = 'pb', ppq = 120, chan = 1, val = 40 }); h.tm:flush()
+      generators.kinds.capRep = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppqL = host.window[1], val = 50, shape = 'square' },
+          { ppqL = host.window[2], val = 0,  shape = 'square' },
+        } } end,
+        mode = 'replace', dest = 'pb', label = 'CapRep', defaults = {}, fields = {},
+      }
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+                                   fx = { { kind = 'capRep' } } } })
+      h.tm:rebuild()
+      t.eq(authoredPb(h.fm:dump(), 1, 120).val, 0, 'suppressed to detune-only while the region is present')
+
+      h.ds:assign('fxRegions', {})
+      h.tm:rebuild()
+      generators.kinds.capRep = nil
+      t.eq(authoredPb(h.fm:dump(), 1, 120).val, centsToRaw(40),
+        'the authored base raw is restored once the region is gone')
     end,
   },
 

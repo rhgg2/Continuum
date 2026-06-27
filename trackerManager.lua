@@ -1054,8 +1054,8 @@ do
 
     -- fxExisting: derived notes parsed at step 0, reconciled at 4.6.
     -- fxLive: post-expansion set unioned into the tail walk and PC synthesis.
-    local fxExisting, fxLive, carrierExisting, ccBaseExisting = {}, {}, {}, {}
-    for i = 1, 16 do fxExisting[i] = {}; fxLive[i] = {}; carrierExisting[i] = {}; ccBaseExisting[i] = {} end
+    local fxExisting, fxLive, carrierExisting, ccBaseExisting, replacePbWindows = {}, {}, {}, {}, {}
+    for i = 1, 16 do fxExisting[i] = {}; fxLive[i] = {}; carrierExisting[i] = {}; ccBaseExisting[i] = {}; replacePbWindows[i] = {} end
     -- fxNote add/del deferred from 4.6 into the 4.8 atomic note commit, so the host clip
     -- and the fxNote inserts land in one mm:modify (one MIDI_Sort, no transient overlap).
     local fxToRemove, fxToAdd = {}, {}
@@ -1464,30 +1464,6 @@ do
         end
         return pas, ccs, ats, pb
       end
-      -- Piecewise-linear sample of authored pb breakpoints (sorted by ppqL) at ppqL, in cents;
-      -- endpoints held flat. Empty base (N=0 region) -> 0, so replace degenerates to augment.
-      local function samplePb(bps, ppqL)
-        if #bps == 0 then return 0 end
-        if ppqL <= bps[1].ppqL then return bps[1].cents end
-        for i = 2, #bps do
-          local a, b = bps[i - 1], bps[i]
-          if ppqL <= b.ppqL then
-            if b.ppqL == a.ppqL then return b.cents end
-            return a.cents + (ppqL - a.ppqL) / (b.ppqL - a.ppqL) * (b.cents - a.cents)
-          end
-        end
-        return bps[#bps].cents
-      end
-      -- Replace-continuous overwrites the logical target: carrier = curve - authored base, so the
-      -- additive node sum base + (curve - base) lands on the curve. see design/note-macros-v2.md § A4
-      local function cancelBase(curve, base)
-        local out = {}
-        for _, bp in ipairs(curve) do
-          util.add(out, { ppqL = bp.ppqL, val = bp.val - samplePb(base, bp.ppqL),
-                          shape = bp.shape, tension = bp.tension })
-        end
-        return out
-      end
       -- Deterministic allocator: lowest lane free of overlap, authored notes seed occupancy;
       -- emission order -> deterministic -> G4-stable. see design/note-macros-v2.md § Generator output
       local function allocateRegionLanes(chan, startL, endL, derived)
@@ -1540,18 +1516,20 @@ do
                 if regionNotes then regionNotes[#regionNotes + 1] = spec
                 else util.add(predicted, spec) end
               end
-              -- Continuous kinds (dest ~= 'note') stash a delta on their wire target: augment adds
-              -- it; replace cancels the authored base so the node sum lands on the curve (pb only).
+              -- Augment and replace ride the additive carrier identically; their only difference is
+              -- the node's base, which 4.9 forces to detune-only inside a replace window.
               local target = meta.dest ~= 'note' and meta.dest or nil
               if target and #out.delta > 0 then
-                local delta = out.delta
-                if meta.mode == 'replace' and target == 'pb' then delta = cancelBase(out.delta, host.pb) end
+                -- Replace overwrites the wire over [startL,endL): record it for 4.9's base suppression.
+                if meta.mode == 'replace' and target == 'pb' then
+                  util.add(replacePbWindows[chan], { startL, endL })
+                end
                 -- cc augment with no authored base needs a resting seat; carry its value so Pass B
                 -- emits it once per target. see design/note-macros-v2.md § Continuous cc
                 local rest = type(target) == 'number'
                   and (p.fx.rest or generators.ccDefaultRest[target] or 0) or nil
                 util.add(pending, { startL = startL, endL = endL,
-                                    target = target, delta = delta, d = p.d, rest = rest })
+                                    target = target, delta = out.delta, d = p.d, rest = rest })
               end
             end
           end
@@ -1815,6 +1793,16 @@ do
         return (n and n.detune) or 0
       end
 
+      -- Replace-pb overwrites the wire over its window, so an authored pb there contributes 0 cents
+      -- to its wire raw (column cents untouched) -- the node's base is detune-only. see design/note-macros-v2.md § Continuous pb replace
+      local function inReplacePb(chan, P)
+        local pL = tm:toLogical(chan, P)
+        for _, w in ipairs(replacePbWindows[chan]) do
+          if pL >= w[1] and pL < w[2] then return true end
+        end
+        return false
+      end
+
       -- Per-chan lane-1 sort, used both at reconcile and inside mm:modify.
       local lane1ByChan = {}
       for chan = 1, 16 do
@@ -1942,8 +1930,9 @@ do
         -- (ppq moved, ppqL restamped, raw changed, cents back-derived) needs to land.
         for _, pb in ipairs(pbs) do
           if pb.origTok then
-            local d      = detuneAt(lane1Events, pb.ppq)
-            local newRaw = centsToRaw(pb.cents + d)
+            local d         = detuneAt(lane1Events, pb.ppq)
+            local wireCents = (not pb.derived and inReplacePb(chan, pb.ppq)) and 0 or pb.cents
+            local newRaw    = centsToRaw(wireCents + d)
             local update = nil
             if moved[pb] then
               update = { ppq = pb.ppq, ppqL = pb.ppqL,
