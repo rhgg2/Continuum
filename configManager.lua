@@ -206,7 +206,7 @@ local declarations = {
   { 'colour.chrome.toolbar.checkMark',    'base.zone2'         },
   { 'colour.chrome.toolbar.sliderGrab',       'base.zone8'     },  -- slider handle on the chromed track
   { 'colour.chrome.toolbar.sliderGrabActive', 'base.zone7'     },  -- handle while dragging
-  { 'colour.chrome.toolbar.meter.bg',    {'base.zone6', 0.35} },  -- master meter trough
+  { 'colour.chrome.toolbar.meter.bg',    {'base.zone8', 0.6} },  -- master meter trough
   { 'colour.chrome.toolbar.meter.fill',  'green'              },  -- peak fill ≤ 0 dB
   { 'colour.chrome.toolbar.meter.hot',   'red'                },  -- peak fill > 0 dB
   { 'colour.chrome.toolbar.meter.peak',  'green'         },  -- per-channel peak-hold tick
