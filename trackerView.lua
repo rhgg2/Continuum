@@ -2813,13 +2813,16 @@ function tv:rebuild(takeChanged)
       local chan = gridCol.midiChan
       for _, evt in ipairs(gridCol.events) do
         local startRow = ctx:ppqToRow(evt.ppq or 0, chan)
-        local y        = math.floor(startRow)
+        local onGrid   = ctx:isOnGrid(evt.ppq or 0, chan)
+        -- On-grid onset a float-hair below its row boundary must snap to
+        -- the nearest row, not floor to the one below; off-grid keeps floor.
+        local y = onGrid and ctx:snapRow(evt.ppq or 0, chan) or math.floor(startRow)
         if y >= 0 and y < numRows then
           if gridCol.cells[y] then
             gridCol.overflow[y] = true
           else
             gridCol.cells[y] = evt
-            if not ctx:isOnGrid(evt.ppq, chan) then gridCol.offGrid[y] = true end
+            if not onGrid then gridCol.offGrid[y] = true end
           end
         end
         -- endppqC is the clipped logical ceiling (always numeric, even
