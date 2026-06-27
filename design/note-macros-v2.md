@@ -428,8 +428,8 @@ wants ~none of gm (see resolved open question below).
   unmoved), a continuous kind emits none (= augment) -- emergent, never parked. `mode` and `dest` are
   independent axes, so continuous-replace (A4) and discrete-augment are expressible; continuous-replace
   is **stubbed** (the producer falls back to additive) until the 4.9 overwrite path lands. The fxEdit
-  modal reads its rows from the registry (`modalOrder` picks the shown kinds; arp is registered but not
-  yet surfaced -- it wants a host-aware kind list). Pinned by the continuous-augment + parked-render
+  modal reads its rows from the registry (`modalOrder` picks the shown kinds; arp is surfaced on both
+  hosts -- single-note arp = retrig, so no host-aware list is needed). Pinned by the continuous-augment + parked-render
   reworks in `tm_fx_region_spec`/`tv_fx_region_spec`, and `generators_spec` driving `kinds.<k>.expand`.
 
 **Track B -- authoring UI: the fx column** (started 2026-06-26). Standalone /

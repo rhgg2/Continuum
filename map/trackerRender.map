@@ -1,4 +1,4 @@
-@module trackerRender  src=trackerRender.lua  loc=2198  sha=a10c799  mode=chunk  self=tr
+@module trackerRender  src=trackerRender.lua  loc=2198  sha=7462b5d  mode=chunk  self=tr
 @deps cm, ds, cmgr, chrome, gui, modalHost, facade, tv, help
 
 # Invariants & contracts
@@ -178,7 +178,7 @@
   @fn removeOrHideCol()  @ 1788-1793
       -- Ctrl-Left drops the cursor column: a bound automation (cc) column goes
       -- through the remove-automation flow; anything else just hides.
-  -- Note FX editor (retrig + trill + vibrato + slide)
+  -- Note FX editor (retrig + trill + arp + vibrato + slide)
   @fn fxSeed(kind)  @ 1810
       -- A kind's default fx entry: its registry params stamped with the kind tag downstream reads.
   @fn valueEq(a, b)  @ 1816-1819

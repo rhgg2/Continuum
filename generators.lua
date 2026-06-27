@@ -259,8 +259,8 @@ generators.kinds = {
   },
 }
 
--- Which kinds the fxEdit modal offers, in order. arp is registered (region-usable) but not yet
--- surfaced -- a chord arp wants a region host and a host-aware kind list (deferred).
-generators.modalOrder = { 'retrig', 'trill', 'vibrato', 'slide' }
+-- Which kinds the fxEdit modal offers, in order. Every kind works on either host: a region
+-- arpeggiates its covered chord, a single note degenerates cleanly (arp -> retrig, one voice).
+generators.modalOrder = { 'retrig', 'trill', 'arp', 'vibrato', 'slide' }
 
 return generators

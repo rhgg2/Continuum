@@ -1797,7 +1797,7 @@ end
 local tr = {}
 
 
------ Note FX editor (retrig + trill + vibrato + slide)
+----- Note FX editor (retrig + trill + arp + vibrato + slide)
 
 -- The fx editor is a thin renderer over the generator registry: modalOrder picks which kinds it
 -- offers (and their order); each kind's label / defaults / fields come from generators.kinds.
