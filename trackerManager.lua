@@ -526,7 +526,7 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
   ----- Flush: commit accumulated ops to mm.
 
   --contract: no-op if nothing staged
-  --contract: commits assigns, then deletes, then adds under one mm:modify
+  --contract: commits deletes, then assigns, then adds under one mm:modify
   --contract: pb cents→raw conversion happens here
   --contract: byToken re-keyed live from mm:assign's returned token when an identity field moved
   --contract: snapshots ops before mm:modify; mm-callback re-entry can't re-emit in-flight ops
@@ -616,6 +616,10 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     end
 
     mm:modify(function()
+      for _, o in ipairs(flushDeletes) do
+        mm:delete(o.token)
+        byToken[o.token] = nil
+      end
       for _, o in ipairs(flushAssigns) do
         local newTok = mm:assign(o.token, o.update)
         if newTok and newTok ~= o.token then
@@ -623,10 +627,6 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
           byToken[newTok]  = o.evt
           o.evt.token      = newTok
         end
-      end
-      for _, o in ipairs(flushDeletes) do
-        mm:delete(o.token)
-        byToken[o.token] = nil
       end
       for _, o in ipairs(flushAdds) do
         local tok = mm:add(o.evt)
@@ -2058,8 +2058,8 @@ function tm:rebuild(takeChanged)
     -- No transient same-pitch overlap for MIDI_Sort to mispair.
     if #clips > 0 or #fxToRemove > 0 or #fxToAdd > 0 or #fxToRestore > 0 then
       mm:modify(function()
-        assignList(clips)
         for _, e in ipairs(fxToRemove) do mm:delete(e.token) end
+        assignList(clips)
         -- ppq/endppq come post tail-walk clip; the colliding derived stand-in is gone above.
         for _, r in ipairs(fxToRestore) do
           mm:add(util.pick(r.ce, "ppq endppq ppqL endppqL pitch vel detune delay sample",

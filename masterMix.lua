@@ -123,6 +123,7 @@ local function render()
   local grab    = active and colour('toolbar.sliderGrabActive') or colour('toolbar.sliderGrab')
   ImGui.DrawList_AddRectFilled(dl, hx0, hy0, hx1, hy1, grab)
   box(dl, hx0, hy0, hx1, hy1, colour('toolbar.meter.border'))   -- 1px non-AA frame on the grab
+  box(dl, x, y, x + WIDTH, y+H, colour('toolbar.meter.border'))   -- 1px non-AA frame on the meter
 
   if active then   -- dB readout below the fader, tracking the handle
     local db  = vol > 1e-6 and 20 * math.log(vol, 10) or nil

@@ -1,4 +1,4 @@
-@module trackerManager  src=trackerManager.lua  loc=2298  sha=1ea5171  mode=chunk  self=tm
+@module trackerManager  src=trackerManager.lua  loc=2298  sha=f93a582  mode=chunk  self=tm
 @deps mm, cm, ds
 
 # Invariants & contracts
@@ -41,7 +41,7 @@
   @contract  pb authoring frame is logical cents; val stored as cents on the event
   @contract  um only stages; rebuild step 4.9 reconciles seats and recomputes raw vals at flush
   @contract  no-op if nothing staged
-  @contract  commits assigns, then deletes, then adds under one mm:modify
+  @contract  commits deletes, then assigns, then adds under one mm:modify
   @contract  pb cents→raw conversion happens here
   @contract  byToken re-keyed live from mm:assign's returned token when an identity field moved
   @contract  snapshots ops before mm:modify; mm-callback re-entry can't re-emit in-flight ops
@@ -282,9 +282,9 @@
   @use call    ds.get  @ currentSwing:724 rebuildPbs:1068 rebuild:1316,1404,1482,1510,1536,1560,1591,1624,1686,1692 2175,2251 snapshotSwingState:2179 channelsResolvingTo:2207
   @use call    generators.allocateCarrier  @ rebuild:1892
   @use call    mm.add  @ flush:632 tileLength:890 rebuildPbs:1254 rebuild:1608,1959,1960,1961,2065,2068,2103
-  @use call    mm.assign  @ flush:620 assignList:1029 rebuildPbs:1249 rebuild:1397,1472
+  @use call    mm.assign  @ flush:624 assignList:1029 rebuildPbs:1249 rebuild:1397,1472
   @use call    mm.ccs  @ rebuildPbs:1107 rebuild:1343,1663,2106
-  @use call    mm.delete  @ flush:628 rebuildPbs:1248 rebuild:1517,1598,1956,1957,1958,2062,2102
+  @use call    mm.delete  @ flush:620 rebuildPbs:1248 rebuild:1517,1598,1956,1957,1958,2061,2102
   @use call    mm.events  @ reload:653 tileLength:869
   @use call    mm.interpolate  @ interpolate:705
   @use call    mm.length  @ length:700 currentSwing:717 setLength:782 rescaleLength:803 tileLength:856

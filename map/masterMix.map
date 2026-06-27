@@ -1,4 +1,4 @@
-@module masterMix  src=masterMix.lua  loc=139  sha=3e38faf  mode=chunk
+@module masterMix  src=masterMix.lua  loc=140  sha=7c4c840  mode=chunk
 @deps chrome, ctx
 
 # Shapes
@@ -49,14 +49,14 @@
   @fn holdPeak(heldDb, latchedAt, db, now)  @ 75-78
       -- Latch a higher peak and stamp the time; once HOLD_TIME elapses with nothing
       -- louder, release the hold to the current level.
-  @fn render()  @ 80-137
+  @fn render()  @ 80-138
 
 # Uses (outbound edges)
-  @use call    imgui.CalcTextSize  @ render:130
-  @use call    imgui.DrawList_AddRectFilled  @ hrule:42 vrule:43 chip:44 drawBar:53,57,59 render:124,133
-  @use call    imgui.DrawList_AddText  @ render:135
+  @use call    imgui.CalcTextSize  @ render:131
+  @use call    imgui.DrawList_AddRectFilled  @ hrule:42 vrule:43 chip:44 drawBar:53,57,59 render:124,134
+  @use call    imgui.DrawList_AddText  @ render:136
   @use call    imgui.GetCursorScreenPos  @ render:84
-  @use call    imgui.GetForegroundDrawList  @ render:131
+  @use call    imgui.GetForegroundDrawList  @ render:132
   @use call    imgui.GetFrameHeight  @ render:86
   @use call    imgui.GetMousePos  @ render:96
   @use call    imgui.GetWindowDrawList  @ render:87

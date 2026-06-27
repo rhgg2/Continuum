@@ -206,13 +206,13 @@ local declarations = {
   { 'colour.chrome.toolbar.checkMark',    'base.zone2'         },
   { 'colour.chrome.toolbar.sliderGrab',       'base.zone8'     },  -- slider handle on the chromed track
   { 'colour.chrome.toolbar.sliderGrabActive', 'base.zone7'     },  -- handle while dragging
-  { 'colour.chrome.toolbar.meter.bg',    {'base.zone8', 0.6} },  -- master meter trough
+  { 'colour.chrome.toolbar.meter.bg',    {'base.zone7', 0.3} },  -- master meter trough
   { 'colour.chrome.toolbar.meter.fill',  'green'              },  -- peak fill ≤ 0 dB
   { 'colour.chrome.toolbar.meter.hot',   'red'                },  -- peak fill > 0 dB
   { 'colour.chrome.toolbar.meter.peak',  'green'         },  -- per-channel peak-hold tick
   { 'colour.chrome.toolbar.meter.loud',  'base.zone5'               },  -- mono loudness reference line
   { 'colour.chrome.toolbar.fader.track', 'base.zone6'         },  -- master fader groove
-  { 'colour.chrome.toolbar.meter.border','base.zone6'         },  -- meter frame / detent tick / readout box
+  { 'colour.chrome.toolbar.meter.border','base.zone7'         },  -- meter frame / detent tick / readout box
   { 'colour.chrome.toolbar.popupBg',      'base.zone10'        },
   { 'colour.chrome.toolbar.textSelection', 'alt.zone8'         },  -- text-selection highlight (Col_TextSelectedBg)
   { 'colour.chrome.toolbar.selectedRow',   'alt.zone8'         },  -- Selectable/list-row highlight (Col_Header family)
