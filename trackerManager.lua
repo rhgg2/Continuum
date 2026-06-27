@@ -1104,6 +1104,10 @@ do
       local channel = channels[note.chan]
       local col, lane = pickStampedLane(channel, note)
       local ce = util.clone(note, { chan = true, lane = true })
+      -- detune/delay are optional eventMeta; default at ingestion so every column note
+      -- event carries them (mirrors the external seam) -- downstream reads trust non-nil.
+      ce.detune = ce.detune or 0
+      ce.delay  = ce.delay  or 0
       ce.token = mm:tokenOf(note)
       util.add(col.events, ce)
     end
@@ -1202,7 +1206,7 @@ do
       forEachEvent(function(_, evt, chan, isNote, _, lane)
         if not isNote or evt.derived then return end
         if staleSwing[chan] then
-          local newPpq = tm:fromLogical(chan, evt.ppqL, delayToPPQ(evt.delay or 0))
+          local newPpq = tm:fromLogical(chan, evt.ppqL, delayToPPQ(evt.delay))
           if newPpq ~= evt.ppq then
             evt.ppq = newPpq
             util.add(toAssign, { evt = evt, update = { ppq = newPpq } })
@@ -1297,12 +1301,9 @@ do
         for laneIdx, col in ipairs(channels[chan].columns.notes) do
           for _, evt in ipairs(col.events) do
             if evt.type ~= 'pa' and evt.ppqL ~= nil and covered(chan, evt.ppqL) then
-              util.add(newParked, {
-                evType = 'note', chan = chan, lane = laneIdx,
-                ppq = evt.ppq, endppq = evt.endppq, ppqL = evt.ppqL, endppqL = evt.endppqL,
-                pitch = evt.pitch, vel = evt.vel, detune = evt.detune or 0,
-                delay = evt.delay or 0, sample = evt.sample,
-              })
+              util.add(newParked, util.pick(evt,
+                "ppq endppq ppqL endppqL pitch vel detune delay sample",
+                { evType = 'note', chan = chan, lane = laneIdx }))
               util.add(removals, { chan = chan, lane = laneIdx, evt = evt })
             end
           end
@@ -1345,11 +1346,8 @@ do
       for _, spec in ipairs(newParked) do
         local channel = channels[spec.chan]
         while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
-        util.add(channel.parked, {
-          ppq = spec.ppqL, ppqL = spec.ppqL, endppqL = spec.endppqL,
-          pitch = spec.pitch, vel = spec.vel, detune = spec.detune or 0,
-          sample = spec.sample, delay = spec.delay, lane = spec.lane,
-        })
+        util.add(channel.parked, util.pick(spec,
+          "ppqL endppqL pitch vel detune sample delay lane", { ppq = spec.ppqL }))
       end
       for chan = 1, 16 do
         realiseParked(channels[chan].parked, tm:toLogical(chan, takeLen))
@@ -1511,8 +1509,7 @@ do
       local function membersOf(chan, startL, endL)
         local out = {}
         eachWindowNote(chan, startL, endL, function(_, lo, hi, evt)
-          out[#out + 1] = { pitch = evt.pitch, vel = evt.vel,
-                            detune = evt.detune or 0, ppqL = lo, endppqL = hi }
+          util.add(out, util.pick(evt, "pitch vel detune", { ppqL = lo, endppqL = hi }))
         end)
         return out
       end
@@ -1594,7 +1591,7 @@ do
                   ppq    = tm:fromLogical(chan, fn.ppqL,    p.d),
                   endppq = tm:fromLogical(chan, fn.endppqL, p.d),
                 }
-                if regionNotes then regionNotes[#regionNotes + 1] = spec
+                if regionNotes then util.add(regionNotes, spec)
                 else util.add(predicted, spec) end
               end
               -- pb (augment+replace) and cc augment ride the additive carrier; cc replace alone
@@ -1637,8 +1634,8 @@ do
               local endL = fxWindow[host]
               fxHostEnd[host] = tm:fromLogical(chan, endL)
               runProducer{ window = { host.ppqL, endL }, notes = { host }, fx = host.fx,
-                           id = host.uuid, lane = laneIdx, delay = host.delay or 0,
-                           sample = host.sample, d = delayToPPQ(host.delay or 0) }
+                           id = host.uuid, lane = laneIdx, delay = host.delay,
+                           sample = host.sample, d = delayToPPQ(host.delay) }
             end
           end
         end
@@ -1676,8 +1673,7 @@ do
         for code in pairs((extras[chan] or {}).ccs or {})   do occupied[code] = true end
         local byTarget = {}
         for _, inst in ipairs(pending) do util.bucket(byTarget, inst.target, inst) end
-        local targets = {}
-        for target in pairs(byTarget) do targets[#targets + 1] = target end
+        local targets = util.keys(byTarget)
         table.sort(targets, function(a, b) return tostring(a) < tostring(b) end)
 
         local predictedDelta, lastDeltaPpq, newCarriers = {}, {}, {}
@@ -1868,10 +1864,8 @@ do
           for _, e in ipairs(fxToRemove) do mm:delete(e.token) end
           -- ppq/endppq come post tail-walk clip; the colliding derived stand-in is gone above.
           for _, r in ipairs(fxToRestore) do
-            mm:add({ evType = 'note', chan = r.spec.chan, lane = r.spec.lane,
-                     ppq = r.ce.ppq, endppq = r.ce.endppq, ppqL = r.ce.ppqL, endppqL = r.ce.endppqL,
-                     pitch = r.ce.pitch, vel = r.ce.vel, detune = r.ce.detune or 0,
-                     delay = r.ce.delay or 0, sample = r.ce.sample })
+            mm:add(util.pick(r.ce, "ppq endppq ppqL endppqL pitch vel detune delay sample",
+                             { evType = 'note', chan = r.spec.chan, lane = r.spec.lane }))
           end
           for _, spec in ipairs(fxToAdd) do mm:add(spec) end
         end)
@@ -1943,7 +1937,7 @@ do
         local needed, hostPpqL = {}, {}
         local prev = 0
         for _, n in ipairs(lane1Events) do
-          local d = n.detune or 0
+          local d = n.detune
           if d ~= prev then
             needed[n.ppq] = true
             hostPpqL[n.ppq] = n.ppqL

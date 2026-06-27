@@ -1,4 +1,4 @@
-@module trackerManager  src=trackerManager.lua  loc=2299  sha=f4a456f  mode=chunk  self=tm
+@module trackerManager  src=trackerManager.lua  loc=2293  sha=5ba7782  mode=chunk  self=tm
 @deps mm, cm, ds
 
 # Invariants & contracts
@@ -194,13 +194,13 @@
   @fn projectCC(cc, token, overlay)  @ 1003-1008
       · Rebuild
   -- Lifecycle
-  @fn readSwings()  @ 2174
+  @fn readSwings()  @ 2168
       -- Merged-tier read: a save at any tier lands in the same merged view, so diff
       -- captures real change to the composite a channel will resolve to.
-  @fn snapshotSwingState()  @ 2178-2181
-  @fn swingChannelDiff(prev, cur)  @ 2183-2190
-  @fn changedSwingNames(prev, cur)  @ 2192-2202
-  @fn channelsResolvingTo(names)  @ 2205-2217
+  @fn snapshotSwingState()  @ 2172-2175
+  @fn swingChannelDiff(prev, cur)  @ 2177-2184
+  @fn changedSwingNames(prev, cur)  @ 2186-2196
+  @fn channelsResolvingTo(names)  @ 2199-2211
       -- Global swing shadows the per-channel slots: a hit on the global name affects all 16.
 
 # Public API (tm:*)
@@ -241,81 +241,82 @@
       @contract  idempotent: emits an assign only when n.muted differs from desired
       @invariant  lastMuteSet also tags later-added notes
       @invariant  PA events ride along in note columns but carry no mute state — skipped
-  @api tm:rebuild(takeChanged)  @ 1018-2160
+  @api tm:rebuild(takeChanged)  @ 1018-2154
       -- see docs/trackerManager.md § Rebuild
-  @api tm:bindTake(take, opts)  @ 2271-2281
-  @api tm:detach()  @ 2284-2289
+  @api tm:bindTake(take, opts)  @ 2265-2275
+  @api tm:detach()  @ 2278-2283
       @contract  take died under us — nils mm.take so tm:currentTake reads nil; not bindTake(nil) seam
-  @api tm:currentTake()  @ 2291
-  @api tm:reloadFromReaper()  @ 2295
+  @api tm:currentTake()  @ 2285
+  @api tm:reloadFromReaper()  @ 2289
       @contract  re-reads the bound take from REAPER; mm:reload fires standard reload→rebuild
       @invariant  reloadFromReaper does not swap take; for coord's external-mutation watcher
 
 # Signals emitted (via util.installHooks)
   @emits preflush   -- (adds, assigns, deletes)   @ flush:538
   @emits postflush   -- nil   @ flush:639
-  @emits rebuild   -- takeChanged:boolean   @ rebuild:2159
+  @emits rebuild   -- takeChanged:boolean   @ rebuild:2153
 
 # Uses (outbound edges)
-  @use call    cm.boundTake  @ 2235,2250
-  @use call    cm.get  @ centsToRaw:70 rawToCents:75 flush:539 currentSwing:718 noteColumnAccepts:939 rebuild:1220,1485,1486,2082 readSwings:2174
-  @use call    cm.set  @ bindTake:2274
-  @use call    cm.setContext  @ bindTake:2273 detach:2286
-  @use call    ds.assign  @ rebuild:1195,1338,1429,1782
-  @use call    ds.get  @ currentSwing:724 rebuild:1092,1176,1280,1311,1337,1364,1395,1428,1490,1496,1888 2176,2252 snapshotSwingState:2180 channelsResolvingTo:2208
-  @use call    generators.allocateCarrier  @ rebuild:1698
-  @use call    mm.add  @ flush:632 tileLength:890 rebuild:1412,1765,1766,1767,1871,1876,2074,2103
-  @use call    mm.assign  @ flush:620 rebuild:1028,1169,1244,2069
-  @use call    mm.ccs  @ rebuild:1115,1467,1927,2106
-  @use call    mm.delete  @ flush:628 rebuild:1318,1402,1762,1763,1764,1868,2068,2102
+  @use call    cm.boundTake  @ 2229,2244
+  @use call    cm.get  @ centsToRaw:70 rawToCents:75 flush:539 currentSwing:718 noteColumnAccepts:939 rebuild:1224,1483,1484,2076 readSwings:2168
+  @use call    cm.set  @ bindTake:2268
+  @use call    cm.setContext  @ bindTake:2267 detach:2280
+  @use call    ds.assign  @ rebuild:1199,1339,1427,1778
+  @use call    ds.get  @ currentSwing:724 rebuild:1092,1180,1284,1312,1338,1362,1393,1426,1488,1494,1882 2170,2246 snapshotSwingState:2174 channelsResolvingTo:2202
+  @use call    generators.allocateCarrier  @ rebuild:1694
+  @use call    mm.add  @ flush:632 tileLength:890 rebuild:1410,1761,1762,1763,1867,1870,2068,2097
+  @use call    mm.assign  @ flush:620 rebuild:1028,1173,1248,2063
+  @use call    mm.ccs  @ rebuild:1119,1465,1921,2100
+  @use call    mm.delete  @ flush:628 rebuild:1319,1400,1758,1759,1760,1864,2062,2096
   @use call    mm.events  @ reload:653 tileLength:869
   @use call    mm.interpolate  @ interpolate:705
   @use call    mm.length  @ length:700 currentSwing:717 setLength:782 rescaleLength:803 tileLength:856
-  @use call    mm.load  @ bindTake:2279
-  @use call    mm.modify  @ flush:618 tileLength:885 rebuild:1033,1168,1242,1317,1401,1410,1761,1866,2067,2101
+  @use call    mm.load  @ bindTake:2273
+  @use call    mm.modify  @ flush:618 tileLength:885 rebuild:1033,1172,1246,1318,1399,1408,1757,1862,2061,2095
   @use call    mm.name  @ name:702
   @use call    mm.notes  @ rebuild:1082
-  @use call    mm.reload  @ reloadFromReaper:2295
-  @use call    mm.resolution  @ delayToPPQ:79 resolution:701 currentSwing:717 setLength:796 rescaleLength:805,849 tileLength:871 noteColumnAccepts:939 rebuild:1484,2117
+  @use call    mm.reload  @ reloadFromReaper:2289
+  @use call    mm.resolution  @ delayToPPQ:79 resolution:701 currentSwing:717 setLength:796 rescaleLength:805,849 tileLength:871 noteColumnAccepts:939 rebuild:1482,2111
   @use call    mm.setLength  @ setLength:796 rescaleLength:805,849 tileLength:871
   @use call    mm.setName  @ setName:703
-  @use call    mm.take  @ editCursor:695,697 playFrom:899,900 rebuild:1020,1195,1337,1428,1781 currentTake:2291
+  @use call    mm.take  @ editCursor:695,697 playFrom:899,900 rebuild:1020,1199,1338,1426,1777 currentTake:2285
   @use call    mm.timeSigs  @ timeSigs:704
-  @use call    mm.tokenOf  @ rebuild:1084,1107,1120,1127,1134,1141,1146,1153,1244,1245,1471,1929,2108
-  @use call    mm.unload  @ detach:2288
-  @use call    mm.wideCC  @ rebuild:1098,1701,1778
+  @use call    mm.tokenOf  @ rebuild:1084,1111,1124,1131,1138,1145,1150,1157,1248,1249,1469,1923,2102
+  @use call    mm.unload  @ detach:2282
+  @use call    mm.wideCC  @ rebuild:1098,1697,1774
   @use call    timing.delayToPPQ  @ delayToPPQ:79
   @use call    timing.eval  @ currentSwing:734,735
   @use call    timing.invert  @ currentSwing:740,742
   @use call    timing.isIdentity  @ currentSwing:721
-  @use call    timing.ppqToDelay  @ rebuild:2125
+  @use call    timing.ppqToDelay  @ rebuild:2119
   @use call    timing.resolveComposite  @ currentSwing:722
-  @use call    tuning.findTemper  @ rebuild:1486
-  @use call    tuning.transposeStep  @ rebuild:1488
-  @use call    util.add  @ reconcileDerived:120,124 reconcilePCsForChan:146 addLowlevel:244,248,250 assignLowlevel:270,283 deleteLowlevel:308 reconcilePcs:389,396 flush:572,574,579,587 reload:660,665 setLength:787,789 rescaleLength:833 tileLength:864 pushNoteCol:932 rebuild:1085,1086,1087,1108,1119,1126,1133,1141,1146,1162,1208,1239,1240,1256,1300,1306,1312,1313,1332,1334,1348,1388,1390,1396,1397,1422,1471,1529,1541,1544,1598,1608,1614,1620,1628,1654,1666,1667,1669,1702,1715,1732,1742,1797,1805,1829,1854,1912,1918,1985,2009,2013,2014,2020,2046,2056,2088,2093,2096,2097,2108
-  @use call    util.assign  @ assignLowlevel:257 flush:597 projectCC:1006 rebuild:1237
-  @use call    util.bucket  @ reconcilePCsForChan:141 flush:551,554 rebuild:1257,1258,1283,1369,1443,1474,1497,1536,1553,1564,1678,1798,1799,1806,1807,1930
+  @use call    tuning.findTemper  @ rebuild:1484
+  @use call    tuning.transposeStep  @ rebuild:1486
+  @use call    util.add  @ reconcileDerived:120,124 reconcilePCsForChan:146 addLowlevel:244,248,250 assignLowlevel:270,283 deleteLowlevel:308 reconcilePcs:389,396 flush:572,574,579,587 reload:660,665 setLength:787,789 rescaleLength:833 tileLength:864 pushNoteCol:932 rebuild:1085,1086,1087,1112,1123,1130,1137,1145,1150,1166,1212,1243,1244,1260,1304,1307,1313,1314,1333,1335,1349,1386,1388,1394,1395,1420,1469,1512,1526,1538,1541,1594,1595,1605,1611,1617,1625,1651,1663,1664,1666,1698,1711,1728,1738,1793,1801,1825,1850,1906,1912,1979,2003,2007,2008,2014,2040,2050,2082,2087,2090,2091,2102
+  @use call    util.assign  @ assignLowlevel:257 flush:597 projectCC:1006 rebuild:1241
+  @use call    util.bucket  @ reconcilePCsForChan:141 flush:551,554 rebuild:1261,1262,1287,1367,1441,1472,1495,1533,1550,1561,1675,1794,1795,1802,1803,1924
   @use call    util.clamp  @ centsToRaw:71
-  @use call    util.clone  @ tileLength:863,889 setMutedChannels:914 projectCC:1004 rebuild:1106,1236,1331,2072
-  @use call    util.deepClone  @ 2175,2176,2242,2258 snapshotSwingState:2179,2180
-  @use call    util.deepEq  @ rebuild:1337,1428,1781 changedSwingNames:2196
+  @use call    util.clone  @ tileLength:863,889 setMutedChannels:914 projectCC:1004 rebuild:1106,1240,1332,2066
+  @use call    util.deepClone  @ 2169,2170,2236,2252 snapshotSwingState:2173,2174
+  @use call    util.deepEq  @ rebuild:1338,1426,1777 changedSwingNames:2190
   @use call    util.installHooks  @ 47
-  @use call    util.key  @ fxKey:170 reconcileCarrier:197 flush:551,554 rebuild:1748,1755
-  @use call    util.pick  @ reload:658
+  @use call    util.key  @ fxKey:170 reconcileCarrier:197 flush:551,554 rebuild:1744,1751
+  @use call    util.keys  @ rebuild:1676
+  @use call    util.pick  @ reload:658 rebuild:1304,1349,1512,1867
   @use call    util.print  @ print:41
-  @use call    util.round  @ centsToRaw:71 rawToCents:76 fromLogical:751 rescaleLength:820,827 rebuild:1852,2125
-  @use call    util.seek  @ detuneAt:221 rebuild:1891
-  @use forward mm:notesDeduped  @ 2224
-  @use forward mm:takeSwapped  @ 2226
-  @use forward mm:uuidsReassigned  @ 2225
+  @use call    util.round  @ centsToRaw:71 rawToCents:76 fromLogical:751 rescaleLength:820,827 rebuild:1848,2119
+  @use call    util.seek  @ detuneAt:221 rebuild:1885
+  @use forward mm:notesDeduped  @ 2218
+  @use forward mm:takeSwapped  @ 2220
+  @use forward mm:uuidsReassigned  @ 2219
   @use require generators  @ 38
   @use require timing  @ 36
   @use require tuning  @ 37
   @use require util  @ 35
-  @use sub     cm:configChanged  @ 2234
-  @use sub     ds:dataChanged  @ 2249
-  @use sub     mm:reload  @ 2228
-  @use sub     mm:takeSwapped  @ 2227
+  @use sub     cm:configChanged  @ 2228
+  @use sub     ds:dataChanged  @ 2243
+  @use sub     mm:reload  @ 2222
+  @use sub     mm:takeSwapped  @ 2221
 
 # REAPER API surface
   @reaper GetCursorPosition
