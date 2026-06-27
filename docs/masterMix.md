@@ -10,7 +10,7 @@ No JSFX, no gmem. REAPER exposes everything the meter needs directly off
 the master track:
 
 - **Stereo peak** — `Track_GetPeakInfo(master, 0/1)`, per channel, drives each bar's fill (lightly frame-averaged — the raw value is nervy).
-- **Per-channel peak-hold** — `Track_GetPeakHoldDB(master, ch, false)`; REAPER ages the hold, we only draw the tick.
+- **Per-channel peak-hold** — computed locally: each channel's peak (dB) is latched and held for `HOLD_TIME` (2 s) via `time_precise`, then released to the current level. REAPER's native `Track_GetPeakHoldDB` ages on its own schedule, hence the local hold.
 - **Mono loudness** — `Track_GetPeakInfo(master, 1024)` (momentary): one program-wide value, drawn as a reference line across both bars.
 - **Volume** — read `D_VOL`, write `CSurf_OnVolumeChange` (absolute, undo- and surface-aware). The taper is REAPER's own (`DB2SLIDER`/`SLIDER2DB`), so the fader matches a track fader: −inf … the project fader max (default +12 dB).
 

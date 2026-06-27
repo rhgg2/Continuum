@@ -1,6 +1,6 @@
 -- See docs/masterMix.md for the model.
 
---reaper: reads GetMasterTrack + D_VOL + Track_GetPeakInfo(0/1 peak, 1024 loudness) + Track_GetPeakHoldDB; writes via CSurf_OnVolumeChange
+--reaper: reads GetMasterTrack + D_VOL + Track_GetPeakInfo(0/1 peak, 1024 loudness) + time_precise; writes via CSurf_OnVolumeChange
 --shape: masterMix = { segment = { id = 'master', render } }   -- one shared toolbar segment
 
 local ImGui = require 'imgui' '0.10'
@@ -9,7 +9,7 @@ local chrome, ctx = (...).chrome, (...).ctx
 local colour = chrome.colour
 
 local WIDTH      = 170
-local BAR_H      = 6
+local BAR_H      = 8
 local HANDLE_W   = 9      -- grab handle width, px
 local HANDLE_H   = 13      -- grab handle height, px
 local METER_MIN  = -60
@@ -17,6 +17,7 @@ local METER_MAX  = 6
 local ZERO_FRAC  = (0 - METER_MIN) / (METER_MAX - METER_MIN)   -- where 0 dB sits across the bar
 local DETENT_DB  = 0.7    -- a drag snaps to unity within this band of 0 dB
 local PEAK_SMOOTH = 0.5   -- ~2-frame averaging on the bar fill (the raw peak is nervy)
+local HOLD_TIME  = 1.5    -- seconds a peak is held before it releases to the current level
 
 local function clamp01(v) return v < 0 and 0 or v > 1 and 1 or v end
 local function px(v) return math.floor(v + 0.5) end           -- nearest pixel, for crisp non-AA rules
@@ -40,6 +41,7 @@ local function dbToVol(db)     return db <= -150 and 0 or 10 ^ (db / 20) end
 
 local function hrule(dl, x0, x1, y, col) ImGui.DrawList_AddRectFilled(dl, px(x0), px(y), px(x1), px(y) + 1, col) end
 local function vrule(dl, x, y0, y1, col) ImGui.DrawList_AddRectFilled(dl, px(x), px(y0), px(x) + 1, px(y1), col) end
+local function chip(dl, x, y0, y1, col) ImGui.DrawList_AddRectFilled(dl, px(x), px(y0), px(x) + 2, px(y1), col) end
 local function box(dl, x0, y0, x1, y1, col)
   hrule(dl, x0, x1, y0, col); hrule(dl, x0, x1, y1 - 1, col)
   vrule(dl, x0, y0, y1, col); vrule(dl, x1 - 1, y0, y1, col)
@@ -58,13 +60,22 @@ local function drawBar(dl, x, top, peak, holdDb, loudX)
     end
   end
   if loudX then vrule(dl, loudX, top, top + BAR_H, colour('toolbar.meter.loud')) end
-  if holdDb > METER_MIN then vrule(dl, x + WIDTH * dbFrac(holdDb), top, top + BAR_H, colour('toolbar.meter.peak')) end
+  if holdDb > METER_MIN then chip(dl, x + WIDTH * dbFrac(holdDb), top, top + BAR_H, colour('toolbar.meter.peak')) end
 end
 
 ----- Segment
 
 local suppressDrag = false   -- a double-click reset holds off drag until the mouse releases
 local peakL, peakR = 0, 0    -- frame-averaged bar fills
+local holdL, holdR = METER_MIN, METER_MIN   -- held peak per channel, dB
+local holdAtL, holdAtR = 0, 0               -- time_precise() when each hold last latched
+
+-- Latch a higher peak and stamp the time; once HOLD_TIME elapses with nothing
+-- louder, release the hold to the current level.
+local function holdPeak(heldDb, latchedAt, db, now)
+  if db >= heldDb or now - latchedAt >= HOLD_TIME then return db, now end
+  return heldDb, latchedAt
+end
 
 local function render()
   local master = reaper.GetMasterTrack(0)
@@ -91,10 +102,14 @@ local function render()
 
   local loudDb = loudnessDb(reaper.Track_GetPeakInfo(master, 1024))
   local loudX  = loudDb > METER_MIN and (x + WIDTH * dbFrac(loudDb)) or nil
-  peakL = peakL + (reaper.Track_GetPeakInfo(master, 0) - peakL) * PEAK_SMOOTH
-  peakR = peakR + (reaper.Track_GetPeakInfo(master, 1) - peakR) * PEAK_SMOOTH
-  drawBar(dl, x, y,             peakL, reaper.Track_GetPeakHoldDB(master, 0, false) * 100, loudX)
-  drawBar(dl, x, y + H - BAR_H, peakR, reaper.Track_GetPeakHoldDB(master, 1, false) * 100, loudX)
+  local rawL, rawR = reaper.Track_GetPeakInfo(master, 0), reaper.Track_GetPeakInfo(master, 1)
+  peakL = peakL + (rawL - peakL) * PEAK_SMOOTH
+  peakR = peakR + (rawR - peakR) * PEAK_SMOOTH
+  local now = reaper.time_precise()
+  holdL, holdAtL = holdPeak(holdL, holdAtL, ampToDb(rawL), now)
+  holdR, holdAtR = holdPeak(holdR, holdAtR, ampToDb(rawR), now)
+  drawBar(dl, x, y,             peakL, holdL, loudX)
+  drawBar(dl, x, y + H - BAR_H, peakR, holdR, loudX)
 
   -- groove (a touch above centre), 0 dB detent tick, handle
   local vol = reaper.GetMediaTrackInfo_Value(master, 'D_VOL')

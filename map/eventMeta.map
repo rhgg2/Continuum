@@ -1,4 +1,4 @@
-@module eventMeta  src=eventMeta.lua  loc=89  sha=untracked  mode=chunk  self=em
+@module eventMeta  src=eventMeta.lua  loc=90  sha=61aa319  mode=chunk  self=eventMeta
 @deps ps
 
 # Invariants & contracts
@@ -11,34 +11,33 @@
   @require util = 'util'  @ 7
 
 # Private state
-  @state ps = assert(deps and deps.ps, 'eventMeta requires a pextStore ...  @ 10
-  @state em = {}  @ 22
+  @state eventMeta = {}  @ 23
 
 # Private functions
-  @fn keysSlot(guid)  @ 12
-  @fn entrySlot(guid, uuidTxt)  @ 13
-  @fn readKeys(guid)  @ 17
+  @fn keysSlot(guid)  @ 11
+  @fn entrySlot(guid, uuidTxt)  @ 12
+  @fn readKeys(guid)  @ 16-18
       -- The keys set { [uuidTxt] = true } is the loader's index — projext has no
       -- enumerate-by-prefix, so the live uuid set is tracked explicitly.
-  @fn writeKeys(guid, set)  @ 18-20
+  @fn writeKeys(guid, set)  @ 19-21
 
-# Public API (em:*)
-  @api em:load(guid)  @ 25-33
+# Public API (eventMeta:*)
+  @api eventMeta:load(guid)  @ 26-34
       @contract  { [uuid:int] = fields }; empty table if the guid has no metadata
-  @api em:saveOne(guid, uuid, fields)  @ 36-45
+  @api eventMeta:saveOne(guid, uuid, fields)  @ 37-46
       @contract  persists one uuid's fields; extends the keys set only when the uuid is new (hot path stays O(1) writes)
-  @api em:deleteOne(guid, uuid)  @ 48-57
+  @api eventMeta:deleteOne(guid, uuid)  @ 49-58
       @contract  clears one uuid's fields slot and drops it from the keys set
-  @api em:saveAll(guid, byUuid)  @ 60-72
+  @api eventMeta:saveAll(guid, byUuid)  @ 61-73
       @contract  replaces the pool's whole metadata with byUuid={[uuid]=fields}; sweeps uuids no longer present
-  @api em:copyPool(srcGuid, dstGuid)  @ 75-78
+  @api eventMeta:copyPool(srcGuid, dstGuid)  @ 76-79
       @contract  forks srcGuid's metadata onto dstGuid (an unpooled clone mints a fresh pool; this seeds it)
-  @api em:dropPool(guid)  @ 81-87
+  @api eventMeta:dropPool(guid)  @ 82-88
       @contract  forever-deletes a pool's metadata (deleteSlot's keeper removal)
 
 # Uses (outbound edges)
-  @use call    ps.assign  @ writeKeys:19 saveOne:39 deleteOne:51 saveAll:65,69 dropPool:84,86
-  @use call    ps.get  @ readKeys:17 load:29
-  @use call    util.fromBase36  @ load:30
-  @use call    util.toBase36  @ saveOne:38 deleteOne:50 saveAll:64
+  @use call    ps.assign  @ writeKeys:20 saveOne:40 deleteOne:52 saveAll:66,70 dropPool:85,87
+  @use call    ps.get  @ readKeys:17 load:30
+  @use call    util.fromBase36  @ load:31
+  @use call    util.toBase36  @ saveOne:39 deleteOne:51 saveAll:65
   @use require util  @ 7
