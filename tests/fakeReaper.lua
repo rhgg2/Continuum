@@ -11,6 +11,9 @@ function M.new()
     precise      = 0,
     tempoBPM     = 120,
     ppqPerQN     = 240,
+    timeSigNum   = 4,
+    timeSigDenom = 4,
+    timeSigMarkers = {},
     projExt      = {},
     projStateCount = 0,
     trackExt     = {},
@@ -782,6 +785,18 @@ function M.new()
     bump()
     return true
   end
+
+  -- Resize item and MIDI source together so mm:length reflects the new extent.
+  -- Mirrors mm:setLength, which sets source EOT then calls this to sync the item.
+  function r.MIDI_SetItemExtents(item, startQN, endQN)
+    state.itemPos[item] = startQN
+    state.itemLen[item] = endQN - startQN
+    local take = state.activeTake[item]
+    local src  = take and state.takeSrc[take]
+    if src then state.srcLen[src] = endQN - startQN end
+    bump()
+    return true
+  end
   function r.SetMediaItemTakeInfo_Value(take, parm, value)
     if parm == 'I_CUSTOMCOLOR' then state.takeCustomColor[take] = value end
     bump()
@@ -884,6 +899,23 @@ function M.new()
 
   function r.MIDI_GetProjTimeFromPPQPos(_take, ppq)
     return ppq / state.ppqPerQN / (state.tempoBPM / 60)
+  end
+
+  -- Item at project start, no tempo-map skew: a QN maps to ppqPerQN ticks.
+  function r.MIDI_GetPPQPosFromProjQN(_take, qn)
+    return qn * state.ppqPerQN
+  end
+
+  -- Project time-signature map. Default: one prevailing sig (4/4) and no
+  -- markers; setTimeSig / addTimeSigMarker drive multi-sig cases.
+  function r.CountTempoTimeSigMarkers(_proj) return #state.timeSigMarkers end
+  function r.GetTempoTimeSigMarker(_proj, i)
+    local m = state.timeSigMarkers[i + 1]
+    if not m then return false end
+    return true, m.time, -1, -1, state.tempoBPM, m.num, m.denom, false
+  end
+  function r.TimeMap_GetTimeSigAtTime(_proj, _time)
+    return state.timeSigNum, state.timeSigDenom, state.tempoBPM
   end
 
   function r.Main_OnCommand(cmd, flag)
@@ -1094,12 +1126,28 @@ function M.new()
   end
   function r:tick(dt)         state.precise = state.precise + dt end
   function r:setTempo(bpm)    state.tempoBPM = bpm end
-  function r:bindTake(take, item, track)
+  function r:setResolution(ppqPerQN) state.ppqPerQN = ppqPerQN end
+  function r:setTimeSig(num, denom)  state.timeSigNum, state.timeSigDenom = num, denom end
+  function r:addTimeSigMarker(time, num, denom)
+    state.timeSigMarkers[#state.timeSigMarkers + 1] = { time = time, num = num, denom = denom }
+  end
+  -- Give the take a MIDI source so the real mm's length/resolution/timeSigs
+  -- resolve. lengthQN defaults to 16 QN (the harness's historical default).
+  function r:bindTake(take, item, track, lengthQN)
     state.itemForTake[take]  = item
     state.trackForItem[item] = track
+    state.activeTake[item]   = take
+    state.takeIsMidi[take]   = true
     -- A bound take's item fakes a POOLEDEVTS guid so mm can derive its pool
     -- identity (the key eventMeta stores per-event metadata under).
     state.poolByItem[item]   = state.poolByItem[item] or r.genGuid('')
+    local len = lengthQN or 16
+    local src = { __midiSrc = take }
+    state.takeSrc[take] = src
+    state.srcLen[src]   = len
+    state.srcIsQN[src]  = true
+    state.itemPos[item] = 0
+    state.itemLen[item] = len
   end
   function r:setTrackFX(track, names)
     state.fxByTrack[track] = names
