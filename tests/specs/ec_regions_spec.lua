@@ -36,9 +36,12 @@ local function mk(opts)
   local gm = util.instantiate('groupManager', { tm = tm, ds = t.fakeDs() })
 
   local cols = { { type = 'note', midiChan = 1, lane = 1 },
-                 { type = 'note', midiChan = 1, lane = 2 } }
+                 { type = 'note', midiChan = 1, lane = 2 },
+                 { type = 'note', midiChan = 2, lane = 1 },
+                 { type = 'note', midiChan = 2, lane = 2 } }
   local grid = { cols = cols, numRows = opts.numRows or 20,
-                 chanFirstCol = { [1] = 1 }, chanLastCol = { [1] = 2 } }
+                 chanFirstCol = { [1] = 1, [2] = 3 },
+                 chanLastCol  = { [1] = 2, [2] = 4 } }
 
   local cmgr = util.instantiate('commandManager',
                                 { cm = { get = function() return 'qwerty' end } })
@@ -289,6 +292,57 @@ return {
       t.eq(ec:row(), 19, 'clamps there -- one row must remain')
       c.cmgr:invoke('regionExit')
       t.eq(instances(c.gm, bot)[1].anchor.ppq, 19 * LPR, 'committed at the last take row')
+    end,
+  },
+
+  {
+    name = 'eventShift previews a channel move; the caret tracks, exit commits',
+    run = function()
+      local ec, c = mk()
+      local g = c.gm:mark({}, rect(0, LPR))
+      armOn(ec, c, g, 1)
+      ec:setPos(0, 1, 1)
+      c.cmgr:invoke('eventShiftRight')
+      t.eq(instances(c.gm, g)[1].anchor.chan, 1, 'gm channel unmoved during preview')
+      t.eq(ec:regionCursor().chanDelta, 1, 'channel delta accumulated')
+      t.eq(ec:col(), 3, 'caret tracked to the next channel')
+      c.cmgr:invoke('regionExit')
+      t.eq(instances(c.gm, g)[1].anchor.chan, 2, 'committed one channel over on exit')
+    end,
+  },
+
+  {
+    name = 'a channel move clamps at channels 1 and 16',
+    run = function()
+      local ec, c = mk()
+      local lo = c.gm:mark({}, rect(0, LPR))      -- anchored on channel 1
+      armOn(ec, c, lo, 1)
+      ec:setPos(0, 1, 1)
+      c.cmgr:invoke('eventShiftLeft')
+      t.eq(ec:regionCursor().chanDelta or 0, 0, 'channel 1 is the floor')
+      c.cmgr:invoke('regionExit')
+
+      local iid = c.gm:newInstance(lo, { ppq = 0, chan = 16 })
+      armOn(ec, c, lo, iid)
+      c.cmgr:invoke('eventShiftRight')
+      t.eq(ec:regionCursor().chanDelta or 0, 0, 'channel 16 is the ceiling')
+    end,
+  },
+
+  {
+    name = 'row and channel deltas compose into a diagonal commit',
+    run = function()
+      local ec, c = mk()
+      local g = c.gm:mark({}, rect(0, LPR))
+      armOn(ec, c, g, 1)
+      ec:setPos(0, 1, 1)
+      c.cmgr:invoke('nudgeForward')
+      c.cmgr:invoke('eventShiftRight')
+      t.eq(instances(c.gm, g)[1].anchor.ppq, 0, 'unmoved during preview')
+      c.cmgr:invoke('regionExit')
+      local inst = instances(c.gm, g)[1]
+      t.eq(inst.anchor.ppq, LPR, 'committed +1 row')
+      t.eq(inst.anchor.chan, 2, 'and +1 channel')
     end,
   },
 

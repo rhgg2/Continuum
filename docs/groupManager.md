@@ -173,14 +173,21 @@ drain a pending `newInstance` add-echo (whose add then misclassifies as
 a user create) and vice versa. One marker per loop, each drained only
 by its own.
 
-The move is *previewed* before it is sealed. In region mode a nudge only
-accumulates `regionCursor.moveDelta` and slides the caret; gm and tm are
-untouched. `trackerRender` reads `tv:movePreview` to draw the armed
-instance shifted by that delta — its own cells ghosted at the new rows,
-the foreign cells under the footprint suppressed render-only, so sweeping
-back restores them for free. `sealMove` runs the real
+The move is *previewed* before it is sealed, on two axes. A row nudge
+accumulates `regionCursor.moveDelta`; a channel shift
+(`eventShiftLeft/Right`) accumulates `regionCursor.chanDelta`. Both only
+slide the caret — gm and tm stay untouched. Channel-move preserves lane
+(`moveInstance` re-anchors and keeps each event's `key`) and clamps so
+every member channel stays in 1..16; there is no "hang off" sideways,
+unlike the bottom row. `trackerRender` reads `tv:movePreview` to draw the
+armed instance shifted by both deltas — its cells ghosted at the
+destination columns (sourced through `destSrc`), the source footprint and
+the foreign cells under it suppressed render-only, so sweeping back
+restores them for free. `sealMove` runs the real
 `clearMoveGap → moveInstance → flush` once, on mode exit or before any
 structural verb, so a pending preview never leaks onto another instance.
+(Lane-move — shifting `key` within one channel — is a separate gated
+axis, not this row/channel translation.)
 
 A region resize moves the boundary, never the music. Trimming the
 start edge re-origins — every anchor shifts by `startDelta`, every

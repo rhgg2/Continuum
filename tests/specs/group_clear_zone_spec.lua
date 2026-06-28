@@ -243,9 +243,45 @@ return {
       local mp = h.vm:movePreview()
       t.truthy(mp, 'preview active after a nudge')
       t.eq(mp.delta, 1, 'delta is the nudged row count')
+      t.eq(mp.chanDelta, 0, 'no channel delta from a pure row nudge')
       t.eq(mp.srcLo, 0, 'source span starts at the anchor row')
       t.eq(mp.srcHi, 2, 'source span ends at anchor + durRows')
-      t.truthy(mp.member[ci], 'the member column is flagged for remap')
+      t.truthy(mp.srcMember[ci], 'the source member column is flagged')
+      t.eq(mp.destSrc[ci], ci, 'a row-only move maps each column to itself')
+    end,
+  },
+
+  {
+    name = 'a channel move clears the destination channel, relocates the member, preserves lane',
+    run = function(harness)
+      -- group member on chan 1; a foreign note on chan 2 where the group lands.
+      local h = harness.mk{ groups = true, seed = { notes = {
+        { ppq = 0, endppq = 60, chan = 1, pitch = 60, vel = 100 }, -- group member
+        { ppq = 0, endppq = 60, chan = 2, pitch = 72, vel = 100 }, -- foreign on chan 2
+      } } }
+      local ci   = noteCol(h, 1)
+      local seed = { ppq = 0, dur = 60, chanLo = 1, streams = { [0] = { ['note:1'] = true } } }
+      h.gm:mark(h.vm:eventsInRect(seed), seed)
+
+      h.ec:setPos(0, ci, 1)
+      h.ec:regionArm()
+      h.cmgr:invoke('eventShiftRight')   -- preview onto chan 2
+
+      local mp = h.vm:movePreview()
+      t.eq(mp.chanDelta, 1, 'preview reports one channel over')
+      t.eq(mp.destSrc[noteCol(h, 2)], ci, 'chan-2 destination ghosts from the chan-1 source')
+
+      local notes = h.fm:dump().notes
+      t.truthy(byPitch(notes, 72), 'foreign chan-2 note present during preview (non-destructive)')
+      t.eq(byPitch(notes, 60).chan, 1, 'member not yet relocated during preview')
+
+      h.cmgr:invoke('regionExit')        -- commit on leaving the mode
+      notes = h.fm:dump().notes
+      t.falsy(byPitch(notes, 72), 'foreign chan-2 note cleared on commit')
+      local m = byPitch(notes, 60)
+      t.truthy(m, 'member survived')
+      t.eq(m.chan, 2, 'member relocated to channel 2')
+      t.eq(m.lane, 1, 'lane preserved across the channel move')
     end,
   },
 }

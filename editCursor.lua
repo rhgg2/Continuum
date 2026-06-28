@@ -491,16 +491,18 @@ local REGION_KEEPALIVE = {
 }
 
 do
-  -- Commit the pending drag: clear swept-onto cells, re-anchor (gm withholds
-  -- off-take), flush. Every structural verb and mode exit seals first.
+  -- Commit the pending drag (row + channel): clear swept-onto cells, re-anchor
+  -- (gm preserves lane, withholds off-take), flush. Every verb and exit seals first.
   local function sealMove()
-    local delta = regionCursor and regionCursor.moveDelta
-    if not delta or delta == 0 then return end
-    regionCursor.moveDelta = 0
+    local rowDelta  = regionCursor and regionCursor.moveDelta or 0
+    local chanDelta = regionCursor and regionCursor.chanDelta or 0
+    if rowDelta == 0 and chanDelta == 0 then return end
+    regionCursor.moveDelta, regionCursor.chanDelta = 0, 0
     local cur = currentEntry()
     if not cur then return end
     local lpr  = logPerRow()
-    local dest = { ppq = cur.anchor.ppq + delta * lpr, chan = cur.anchor.chan }
+    local dest = { ppq  = cur.anchor.ppq  + rowDelta  * lpr,
+                   chan = cur.anchor.chan + chanDelta }
     if groupBridge.clearMoveGap then
       groupBridge.clearMoveGap(regionCursor.groupId, cur.anchor, dest)
     end
@@ -578,6 +580,24 @@ do
     clampPos(); moveHook()
   end
 
+  -- Channel sibling of moveBy: chanDelta clamped so every member channel stays in 1..16
+  -- (no hang-off). moveChannel rides caret + fires hook; lane is preserved by moveInstance.
+  local function moveByChan(chanStep)
+    local cur = currentEntry()
+    if not cur then return end
+    local minOff, maxOff = 0, 0
+    for off in pairs(cur.rect.streams) do
+      minOff = math.min(minOff, off); maxOff = math.max(maxOff, off)
+    end
+    local delta    = regionCursor.chanDelta or 0
+    local newDelta = util.clamp(delta + chanStep,
+                                1  - (cur.anchor.chan + minOff),
+                                16 - (cur.anchor.chan + maxOff))
+    if newDelta == delta then return end
+    regionCursor.chanDelta = newDelta
+    moveChannel(newDelta - delta)
+  end
+
   local function resizeBy(edits)
     if not regionCursor then return end
     gmgr():resizeGroup(regionCursor.groupId, regionCursor.instId, edits)
@@ -623,6 +643,8 @@ do
       nudgeForward  = function(p) moveBy( p) end,
       growNote      = function(p) resizeBy{ endDelta =  p * logPerRow() } end,
       shrinkNote    = function(p) resizeBy{ endDelta = -p * logPerRow() } end,
+      eventShiftLeft  = function(p) moveByChan(-p) end,
+      eventShiftRight = function(p) moveByChan( p) end,
     }
     regionScope:registerAll{
       regionExit        = function() ec:regionExit() end,

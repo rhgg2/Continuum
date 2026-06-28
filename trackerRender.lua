@@ -747,8 +747,10 @@ local function drawTracker()
   local movePrev  = tv:movePreview()
   for _, inst in ipairs(tv:eachInstance()) do
     local rect  = inst.rect
-    local shift = movePrev and movePrev.groupId == inst.groupId
-                            and movePrev.instId == inst.instId and movePrev.delta or 0
+    local previewing = movePrev and movePrev.groupId == inst.groupId
+                                and movePrev.instId == inst.instId
+    local shift      = previewing and movePrev.delta or 0
+    local chanOrigin = inst.anchor.chan + (previewing and movePrev.chanDelta or 0)
     local ppqLo = inst.anchor.ppq + shift * logPerRow
     local ppqHi = ppqLo + rect.dur
     local yLo = math.max(math.floor(ppqLo / logPerRow + 0.5) - scrollRow, 0)
@@ -758,14 +760,16 @@ local function drawTracker()
       local xMin, xMax, conflicted, cursorIn
       for x, col in ipairs(grid.cols) do
         if col.x then
-          local off, sid = tv:streamRefAt(x, inst.anchor.chan)
+          local off, sid = tv:streamRefAt(x, chanOrigin)
           if off and rect.streams[off] and rect.streams[off][sid] then
             local x1, x2 = col.x, col.x + col.width - 1
             xMin = math.min(xMin or x1, x1)
             xMax = math.max(xMax or x2, x2)
             draw:box(x1, x2, yLo, yHi - 1, baseTint)
+            local srcCol = (previewing and movePrev.destSrc[x]) or x
+            local cells  = grid.cols[srcCol] and grid.cols[srcCol].cells
             for y = yLo, yHi - 1 do
-              local evt = col.cells and col.cells[scrollRow + y - shift]
+              local evt = cells and cells[scrollRow + y - shift]
               local st  = evt and evt.uuid and tv:stateOf(evt.uuid)
               if st == 'conflicted' then conflicted = true end
               local key = st and groups.tintKey(st)
@@ -820,11 +824,14 @@ local function drawTracker()
       if col.x then
         local evt = col.cells and col.cells[row]
         local previewGhost
-        if movePrev and movePrev.member[x] then
-          local dstLo = movePrev.srcLo + movePrev.delta
-          if row >= dstLo and row < dstLo + (movePrev.srcHi - movePrev.srcLo) then
-            evt, previewGhost = col.cells and col.cells[row - movePrev.delta], true
-          elseif row >= movePrev.srcLo and row < movePrev.srcHi then
+        if movePrev then
+          local srcCol = movePrev.destSrc[x]
+          local dstLo  = movePrev.srcLo + movePrev.delta
+          local dstHi  = dstLo + (movePrev.srcHi - movePrev.srcLo)
+          if srcCol and row >= dstLo and row < dstHi then
+            local sc = grid.cols[srcCol]
+            evt, previewGhost = sc and sc.cells and sc.cells[row - movePrev.delta], true
+          elseif movePrev.srcMember[x] and row >= movePrev.srcLo and row < movePrev.srcHi then
             evt, previewGhost = nil, true
           end
         end

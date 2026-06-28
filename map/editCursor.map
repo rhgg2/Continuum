@@ -1,4 +1,4 @@
-@module editCursor  src=editCursor.lua  loc=752  sha=0b701e6  mode=chunk  self=ec
+@module editCursor  src=editCursor.lua  loc=774  sha=32d3357  mode=chunk  self=ec
 @deps grid, cm, cmgr, rowPerBar, logPerRow, moveHook, groupBridge
 
 # Invariants & contracts
@@ -99,27 +99,30 @@
   -- Motion
   @fn selectSpan(scope, col, stop1, stop2)  @ 459-464
   -- Region mode (group authoring)
-  @fn sealMove()  @ 496-509
-      -- Commit the pending drag: clear swept-onto cells, re-anchor (gm withholds
-      -- off-take), flush. Every structural verb and mode exit seals first.
-  @fn exitMode()  @ 511-516
-  @fn enterArmed()  @ 518-522
-  @fn newFromSelection()  @ 524-532
-  @fn stampAt(anchor)  @ 536-542
+  @fn sealMove()  @ 496-511
+      -- Commit the pending drag (row + channel): clear swept-onto cells, re-anchor
+      -- (gm preserves lane, withholds off-take), flush. Every verb and exit seals first.
+  @fn exitMode()  @ 513-518
+  @fn enterArmed()  @ 520-524
+  @fn newFromSelection()  @ 526-534
+  @fn stampAt(anchor)  @ 538-544
       -- Clear before staging (gm re-places its own concretes only); stamp a fresh
       -- instance, advance the border. Shared by paste-at-caret and cascade-duplicate.
-  @fn newInstance()  @ 544
-  @fn duplicate()  @ 548-554
+  @fn newInstance()  @ 546
+  @fn duplicate()  @ 550-556
       -- Cascade: the copy lands one group-length past the armed instance and
       -- the border advances onto it, so repeats lay a run hands-free.
-  @fn dropInstance()  @ 556-564
-  @fn moveBy(rowDelta)  @ 568-579
+  @fn dropInstance()  @ 558-566
+  @fn moveBy(rowDelta)  @ 570-581
       -- A nudge accumulates moveDelta and tracks the caret; gm/tm are untouched
       -- until sealMove. Top pinned at row 0; bottom hangs (gm withholds off-take).
-  @fn resizeBy(edits)  @ 581-584
-  @fn paintCell(on)  @ 586-590
+  @fn moveByChan(chanStep)  @ 585-599
+      -- Channel sibling of moveBy: chanDelta clamped so every member channel stays in 1..16
+      -- (no hang-off). moveChannel rides caret + fires hook; lane is preserved by moveInstance.
+  @fn resizeBy(edits)  @ 601-604
+  @fn paintCell(on)  @ 606-610
   -- Group-instance hop (editing mode)
-  @fn hopInstance(step)  @ 643-661
+  @fn hopInstance(step)  @ 665-683
       -- [ / ] in normal editing jump the caret to the same row offset in the
       -- prev/next instance of the group it sits inside. Column is left as-is:
       -- "same place" is the relative row; chasing the stream across instances
@@ -127,7 +130,7 @@
       -- for this verb. The border feedback is the rendering layer's.
   -- Commands
   -- Decoration
-  @fn partsFor(type, showDelay, trackerMode)  @ 709-723
+  @fn partsFor(type, showDelay, trackerMode)  @ 731-745
       -- One char of separator between adjacent parts in the rendered cell.
 
 # Public API (ec:*)
@@ -164,30 +167,30 @@
   @api ec:selectColumn(col)  @ 471-474
   @api ec:isInRegionMode()  @ 479
   @api ec:regionCursor()  @ 480
-  @api ec:regionArm()  @ 594-605
+  @api ec:regionArm()  @ 614-625
       -- DWIM: a selection seeds a new group; else arm the caret's instance; else nothing.
       -- enterArmed is idempotent: a re-press just re-points the border at the caret.
-  @api ec:regionExit()  @ 609
+  @api ec:regionExit()  @ 629
       -- Leave armed mode without touching the selection (Esc/Enter/note-key execute-through).
       -- regionBail (Super-G) also clears the selection.
-  @api ec:registerCommands(scope)  @ 665-692
-  @api ec:decorateCol(col, pitchWidth)  @ 727-749
+  @api ec:registerCommands(scope)  @ 687-714
+  @api ec:decorateCol(col, pitchWidth)  @ 749-771
       @contract  derives col part fields from type/showDelay/trackerMode; pitch width = pitchWidth
       @invariant  ec is the sole writer of col.{parts, stopPos, partAt, partStart, width}
 
 # Uses (outbound edges)
   @use call    cm.get  @ selUpdate:99 advance:456
-  @use call    cmgr.pop  @ exitMode:513
-  @use call    cmgr.push  @ enterArmed:520
-  @use call    cmgr.scope  @ 614
-  @use call    groupBridge.clearAt  @ stampAt:538
-  @use call    groupBridge.clearMoveGap  @ sealMove:505
-  @use call    groupBridge.commit  @ sealMove:508 newFromSelection:531 stampAt:541
-  @use call    groupBridge.cursorAnchor  @ newInstance:544
-  @use call    groupBridge.eventsInRect  @ newFromSelection:527
-  @use call    groupBridge.instanceAt  @ regionArm:601 hopInstance:645
-  @use call    groupBridge.paintStream  @ paintCell:588
-  @use call    groupBridge.selectionAsRect  @ newFromSelection:525
-  @use call    util.add  @ partsFor:712,713,714 decorateCol:739,740,741
-  @use call    util.clamp  @ clampPos:55,56,57 shiftSelection:446,447,448 moveBy:574
+  @use call    cmgr.pop  @ exitMode:515
+  @use call    cmgr.push  @ enterArmed:522
+  @use call    cmgr.scope  @ 634
+  @use call    groupBridge.clearAt  @ stampAt:540
+  @use call    groupBridge.clearMoveGap  @ sealMove:507
+  @use call    groupBridge.commit  @ sealMove:510 newFromSelection:533 stampAt:543
+  @use call    groupBridge.cursorAnchor  @ newInstance:546
+  @use call    groupBridge.eventsInRect  @ newFromSelection:529
+  @use call    groupBridge.instanceAt  @ regionArm:621 hopInstance:667
+  @use call    groupBridge.paintStream  @ paintCell:608
+  @use call    groupBridge.selectionAsRect  @ newFromSelection:527
+  @use call    util.add  @ partsFor:734,735,736 decorateCol:761,762,763
+  @use call    util.clamp  @ clampPos:55,56,57 shiftSelection:446,447,448 moveBy:576 moveByChan:593
   @use require util  @ 25

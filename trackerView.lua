@@ -2254,18 +2254,18 @@ function tv:clearRegionAt(rect, anchor)
     function(_, evt) tm:deleteEvent(evt) end)
 end
 
--- Clear only the foreign notes newly swept onto -- spares the source-overlap where own
--- notes still live. Member cells; stages deletes, caller flushes (as clearRegionAt).
+-- Clear foreign notes the destination covers; source-overlap is spared (moveInstance re-places those).
+-- Shared column (row nudge): spare source rows. Channel move: different columns, so whole dest clears.
 function tv:clearMoveGap(rect, srcAnchor, destAnchor)
   local dur = rect.dur
   local srcLo, srcHi = srcAnchor.ppq, srcAnchor.ppq + dur
   local dstLo, dstHi = destAnchor.ppq, destAnchor.ppq + dur
-  local lo, hi
-  if     dstLo >= srcHi or dstHi <= srcLo then lo, hi = dstLo, dstHi
-  elseif dstLo > srcLo                    then lo, hi = srcHi, dstHi
-  else                                         lo, hi = dstLo, srcLo end
-  eachMemberEvent(rect, destAnchor.chan, lo, hi,
-    function(_, evt) tm:deleteEvent(evt) end)
+  eachMemberEvent(rect, destAnchor.chan, dstLo, dstHi, function(col, evt)
+    local srcSel = rect.streams[col.midiChan - srcAnchor.chan]
+    local shared = srcSel and srcSel[streamIdOf(col)]
+    if shared and evt.ppq >= srcLo and evt.ppq < srcHi then return end
+    tm:deleteEvent(evt)
+  end)
 end
 
 -- Cursor as a mirror anchor: { ppq, chan } in the logical frame.
@@ -2304,12 +2304,13 @@ end
 function tv:eachInstance() return gm:eachInstance() end
 function tv:stateOf(uuid) return gm:stateOf(uuid) end
 
--- Drag preview for trackerRender: the armed instance shown at anchor+moveDelta
--- with gm/tm untouched. nil unless a nonzero drag is pending; member = remapped cols.
+-- Drag preview for trackerRender: armed instance shifted by pending row+channel deltas, gm/tm untouched.
+-- nil if no drag pending. srcMember = suppressed source cols; destSrc[x] = source col for x (chanOffset+sid).
 function tv:movePreview()
-  local rc    = ec:regionCursor()
-  local delta = rc and rc.moveDelta
-  if not delta or delta == 0 then return nil end
+  local rc        = ec:regionCursor()
+  local rowDelta  = rc and rc.moveDelta  or 0
+  local chanDelta = rc and rc.chanDelta or 0
+  if rowDelta == 0 and chanDelta == 0 then return nil end
   local inst
   for _, e in ipairs(gm:eachInstance()) do
     if e.groupId == rc.groupId and e.instId == rc.instId then inst = e; break end
@@ -2318,15 +2319,26 @@ function tv:movePreview()
   local lpr     = logPerRowFor(currentRpb())
   local srcLo   = math.floor(inst.anchor.ppq / lpr + 0.5)
   local durRows = math.max(1, math.floor(inst.rect.dur / lpr + 0.5))
-  local member  = {}
+  local streams = inst.rect.streams
+  local srcMember, srcColByRef = {}, {}
   for x in ipairs(grid.cols) do
     local off, sid = tv:streamRefAt(x, inst.anchor.chan)
-    if off and inst.rect.streams[off] and inst.rect.streams[off][sid] then
-      member[x] = true
+    if off and streams[off] and streams[off][sid] then
+      srcMember[x]                   = true
+      srcColByRef[off .. ' ' .. sid] = x
     end
   end
-  return { groupId = rc.groupId, instId = rc.instId, delta = delta,
-           srcLo = srcLo, srcHi = srcLo + durRows, member = member }
+  local destSrc = {}
+  for x in ipairs(grid.cols) do
+    local off, sid = tv:streamRefAt(x, inst.anchor.chan + chanDelta)
+    if off and streams[off] and streams[off][sid] then
+      destSrc[x] = srcColByRef[off .. ' ' .. sid]
+    end
+  end
+  return { groupId = rc.groupId, instId = rc.instId,
+           delta = rowDelta, chanDelta = chanDelta,
+           srcLo = srcLo, srcHi = srcLo + durRows,
+           srcMember = srcMember, destSrc = destSrc }
 end
 
 --contract: extend hands newly-covered concretes in as `gained` (gm:resizeGroup never rescans)
