@@ -693,11 +693,18 @@ local function cloneMidiItem(track, srcItem, qnPos, lengthQN, rePool)
 end
 
 --contract: (slotIdx, take) for new MIDI on trackIdx in lowest-free slot; nil if no track/free slot
+--invariant: overwrites any take already starting at qnPos; create never stacks (matches dropInstance).
 function am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)
   local track   = visibleTrackOfCol(trackIdx)
   local dict    = track and readSlots(track)
   local slotIdx = dict and nextFreeSlot(dict)
   if not slotIdx then return end
+
+  -- Captured before placing: the new take starts at qnPos too, so it must not be in this list.
+  local occupants = {}
+  for _, other in ipairs(am:tracksTakes(trackIdx)) do
+    if other.startQN == qnPos then occupants[#occupants+1] = other end
+  end
 
   local item = reaper.CreateNewMIDIItemInProj(track, qnPos, qnPos + lengthQN, true)
   local take = item and reaper.GetActiveTake(item)
@@ -709,6 +716,7 @@ function am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)
   if name and name ~= '' then
     reaper.GetSetMediaItemTakeInfo_String(take, 'P_NAME', name, true)
   end
+  for _, old in ipairs(occupants) do am:deleteTake(old) end
   stampForTake(take)
   relayoutTrack(track)
   return slotIdx, take

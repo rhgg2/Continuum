@@ -1,4 +1,4 @@
-@module arrangeManager  src=arrangeManager.lua  loc=963  sha=d4006ed  mode=chunk  self=am
+@module arrangeManager  src=arrangeManager.lua  loc=971  sha=61aa319  mode=chunk  self=am
 @deps cm, ds, facade, eventMeta
 
 # Invariants & contracts
@@ -97,15 +97,15 @@
   @fn cloneMidiItem(track, srcItem, qnPos, lengthQN, rePool)  @ 665-693
       -- See docs/arrangeManager.md § Subsequent drops for why chunk-clone over POOLEDEVTS swap.
       @contract  MIDI clone of srcItem at qnPos; rePool=true mints a fresh pool; nil if REAPER refuses.
-  @fn siblingInstance(track, id)  @ 719-727
+  @fn siblingInstance(track, id)  @ 727-735
       -- First instance matching id: item, length, name — what a fresh drop inherits.
       -- Falls back to the parked keeper so drops from emptied slots re-materialise.
-  @fn destBelow(take)  @ 810
+  @fn destBelow(take)  @ 818
       -- Destination for the *-Below trio: natural end (not rendered), so a truncated upstream still
       -- drops past its downstream neighbour; relayout handles the symmetric truncation.
   -- Per-take edits
   -- Reswing (folded from sequenceManager)
-  @fn projectMidiTakes()  @ 931-942
+  @fn projectMidiTakes()  @ 939-950
 
 # Public API (am:*)
   @api am:projectTracks()  @ 321
@@ -142,56 +142,57 @@
   @api am:renameSlot(trackIdx, slotIdx, name)  @ 588-599
   @api am:deleteSlot(trackIdx, slotIdx)  @ 602-622
       @contract  forever-deletes the slot: every live instance + the parked keeper; returns live count
-  @api am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)  @ 696-715
+  @api am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)  @ 697-723
       @contract  (slotIdx, take) for new MIDI on trackIdx in lowest-free slot; nil if no track/free slot
-  @api am:takeForSlot(trackIdx, slotIdx)  @ 730-737
+      @invariant  overwrites any take already starting at qnPos; create never stacks (matches dropInstance).
+  @api am:takeForSlot(trackIdx, slotIdx)  @ 738-745
       @contract  live-or-parked MIDI take for slot slotIdx on trackIdx; nil if no track/slot/instance
-  @api am:trackHandle(trackIdx)  @ 739
-  @api am:isParkedTake(take)  @ 742-746
+  @api am:trackHandle(trackIdx)  @ 747
+  @api am:isParkedTake(take)  @ 750-754
       @contract  true iff take's host is the scratch track (its slot's only instance is parked)
-  @api am:trackIdxForGuid(guid)  @ 749-754
+  @api am:trackIdxForGuid(guid)  @ 757-762
       @contract  visible-column index of the track carrying this GUID; nil if it is gone
-  @api am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)  @ 758-787
+  @api am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)  @ 766-795
       @contract  instance of slot at qnPos; nil if track/slot missing (MIDI also requires a live sibling)
       @invariant  overwrites any take already starting at qnPos; drop never stacks (matches startIsClear).
-  @api am:duplicateTake(take, qnPos)  @ 790-806
+  @api am:duplicateTake(take, qnPos)  @ 798-814
       @contract  clones take at qnPos on its own track, original untouched; nil if track/id missing
-  @api am:duplicateBelow(take)  @ 813-818
+  @api am:duplicateBelow(take)  @ 821-826
       @contract  pooled clone at startQN+naturalLenQN; nil iff non-MIDI or start-collision.
-  @api am:duplicateUnpooledBelow(take)  @ 821-832
+  @api am:duplicateUnpooledBelow(take)  @ 829-840
       @contract  unpooled clone at startQN+naturalLenQN; nil iff non-MIDI or start-collision.
-  @api am:newTakeBelow(take)  @ 835-841
+  @api am:newTakeBelow(take)  @ 843-849
       @contract  empty MIDI take at natural end, naturalLenQN-sized; nil iff non-MIDI or start collision.
-  @api am:mintParkedTake(trackIdx, name, lengthQN, srcTake)  @ 845-871
+  @api am:mintParkedTake(trackIdx, name, lengthQN, srcTake)  @ 853-879
       -- srcTake → clone its events + natural length into a fresh unpooled pool; else an empty take of lengthQN.
       @contract  mints a slot on trackIdx parked on scratch; returns slotIdx (nil if no track/free slot)
-  @api am:startIsClear(trackIdx, startQN, exceptItem)  @ 876-883
+  @api am:startIsClear(trackIdx, startQN, exceptItem)  @ 884-891
       @contract  true iff no take on trackIdx (≠ exceptItem) starts exactly at startQN (shared spans OK)
-  @api am:moveTake(take, deltaQN)  @ 886-896
+  @api am:moveTake(take, deltaQN)  @ 894-904
       @contract  shifts start by deltaQN, relayouts (natural kept); true iff start clear, else no-op
-  @api am:resizeTake(take, newNaturalQN)  @ 899-903
+  @api am:resizeTake(take, newNaturalQN)  @ 907-911
       @contract  writes the take's natural length; relayout caps it. See docs § Natural length.
-  @api am:takeSourceLengthQN(take)  @ 906-913
+  @api am:takeSourceLengthQN(take)  @ 914-921
       @contract  source length in QN at the take's position; 0 if source missing.
-  @api am:deleteTake(take)  @ 917-927
+  @api am:deleteTake(take)  @ 925-935
       -- Deleting a slot's last live instance parks it on the scratch track (keeping
       -- the pool + slot alive) rather than GC-ing it. See docs § Parking.
-  @api am:takesUsing(name)  @ 945-956
+  @api am:takesUsing(name)  @ 953-964
       @contract  scans each take's swing map (ds) for the named swing; no mm/cm context disturbance
-  @api am:reswingAll(name)  @ 959-961
+  @api am:reswingAll(name)  @ 967-969
       @contract  hands takesUsing(name) to the 'tracker' facade; transient-rebinds each and restores
 
 # Uses (outbound edges)
   @use call    ds.assign  @ writeColours:240
   @use call    ds.assignAt  @ writeSlots:83 setNaturalLenOf:141,142
   @use call    ds.get  @ readColours:239
-  @use call    ds.getAt  @ readSlots:79 naturalLenOf:136 takesUsing:948
-  @use call    eventMeta.copyPool  @ cloneMidiItem:676 mintParkedTake:861
+  @use call    ds.getAt  @ readSlots:79 naturalLenOf:136 takesUsing:956
+  @use call    eventMeta.copyPool  @ cloneMidiItem:676 mintParkedTake:869
   @use call    eventMeta.dropPool  @ deleteSlot:618
-  @use call    facade.get  @ isVisibleTrack:293 reswingAll:960
+  @use call    facade.get  @ isVisibleTrack:293 reswingAll:968
   @use call    painter.hueNative  @ stampColour:275
-  @use call    scratch.peek  @ parkedItemFor:109 isVisibleTrack:291 deleteSlot:617 isParkedTake:744
-  @use call    scratch.track  @ mintParkedTake:855 deleteTake:922
+  @use call    scratch.peek  @ parkedItemFor:109 isVisibleTrack:291 deleteSlot:617 isParkedTake:752
+  @use call    scratch.track  @ mintParkedTake:863 deleteTake:930
   @use call    util.toBase62  @ keyForSlot:576
   @use require painter  @ 22
   @use require scratch  @ 23

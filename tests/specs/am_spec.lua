@@ -275,6 +275,25 @@ return {
   },
 
   {
+    name = 'createAndDropMidi overwrites a take already starting at the create position',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      seedTracks(h, { { items = {} } })
+      local slotA = am:createAndDropMidi(0, 0, 1, 'lead')   -- A at qn0
+      am:dropInstance(0, slotA, 12, 1)                      -- keep slot A live at qn12
+      local slotB = am:createAndDropMidi(0, 0, 1, 'bass')   -- B minted over A's qn0
+      t.truthy(slotB and slotB ~= slotA, 'B minted its own slot')
+
+      local atZero = {}
+      for _, tk in ipairs(am:tracksTakes(0)) do
+        if tk.startQN == 0 then atZero[#atZero+1] = tk end
+      end
+      t.eq(#atZero, 1, 'a single take occupies qn0 — create did not stack')
+      t.eq(atZero[1].slotIdx, slotB, 'the survivor is the freshly created instance')
+    end,
+  },
+
+  {
     name = 'dropInstance returns nil for missing slot or missing track',
     run = function(harness)
       local h, am = mkAm(harness)
