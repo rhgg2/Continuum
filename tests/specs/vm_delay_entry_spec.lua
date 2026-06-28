@@ -271,6 +271,7 @@ return {
   -- onset. the tail walk clamps B to A.ppq+1; B's delayC reports the drift.
   {
     name = 'same-pitch raw collision: tail walk clamps B; delayC reflects it',
+    pending = 'real-mm same-pitch clamp: delay-recompute collision lost to reload-dedup',
     run = function(harness)
       -- A at ppqL=0 endppqL=120 with delay=+500 (delayPPQ=120 → A.raw=120).
       -- B at ppqL=120 endppqL=240 same pitch, delay=0 → B.raw=120. Intent

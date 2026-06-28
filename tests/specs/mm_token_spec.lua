@@ -27,8 +27,6 @@ return {
       local h = harness.mk{
         seed = { notes = { { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100 } } },
       }
-      local _, n = h.fm:byUuid(select(2, next(h.fm:dump().notes)).uuid or 1)
-      -- Either route works: tokenOf on a fetched event, or via :notes().
       local _, fetched = h.fm:notes()()
       local tok = h.fm:tokenOf(fetched)
       t.truthy(tok, 'tokenOf returned a token')

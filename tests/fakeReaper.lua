@@ -995,13 +995,16 @@ function M.new()
   function r.MIDI_GetNote(take, i)
     local n = midi(take).notes[i + 1]
     if not n then return false end
-    return true, n.selected or false, n.muted or false, n.ppq, n.endppq, n.chan, n.pitch, n.vel
+    local ppq, endppq = n.ppq, n.endppq
+    if state.floatPpq then ppq, endppq = ppq + 0.0, endppq + 0.0 end
+    return true, n.selected or false, n.muted or false, ppq, endppq, n.chan, n.pitch, n.vel
   end
 
   function r.MIDI_GetCC(take, i)
     local c = midi(take).ccs[i + 1]
     if not c then return false end
-    return true, c.selected or false, c.muted or false, c.ppq, c.chanmsg, c.chan, c.msg2, c.msg3
+    local ppq = state.floatPpq and (c.ppq + 0.0) or c.ppq
+    return true, c.selected or false, c.muted or false, ppq, c.chanmsg, c.chan, c.msg2, c.msg3
   end
 
   function r.MIDI_GetCCShape(take, i)
@@ -1013,7 +1016,10 @@ function M.new()
   function r.MIDI_GetTextSysexEvt(take, i)
     local e = midi(take).texts[i + 1]
     if not e then return false end
-    return true, e.selected or false, e.muted or false, e.ppq, e.eventtype, e.msg
+    -- Sidecar ppq must float in lockstep with note/cc ppq, or load's ppq-keyed
+    -- note↔sidecar pairing (noteKey) misses and uuids orphan their metadata.
+    local ppq = state.floatPpq and (e.ppq + 0.0) or e.ppq
+    return true, e.selected or false, e.muted or false, ppq, e.eventtype, e.msg
   end
 
   function r.MIDI_DisableSort(take) midi(take).sortDisabled = true end
@@ -1127,6 +1133,9 @@ function M.new()
   function r:tick(dt)         state.precise = state.precise + dt end
   function r:setTempo(bpm)    state.tempoBPM = bpm end
   function r:setResolution(ppqPerQN) state.ppqPerQN = ppqPerQN end
+  -- REAPER returns ppq from MIDI_GetNote/GetCC as a float; opt in so int/float
+  -- canon guards (fxKey churn) exercise the real skew instead of passing vacuously.
+  function r:setFloatPpq(on)         state.floatPpq = on and true or false end
   function r:setTimeSig(num, denom)  state.timeSigNum, state.timeSigDenom = num, denom end
   function r:addTimeSigMarker(time, num, denom)
     state.timeSigMarkers[#state.timeSigMarkers + 1] = { time = time, num = num, denom = denom }

@@ -1,12 +1,11 @@
--- Pure-Lua test harness for trackerManager and trackerView. Stubs out
--- REAPER and midiManager; loads the real tm/vm/cm modules unchanged.
+-- Pure-Lua test harness for trackerManager and trackerView. Runs the REAL
+-- midiManager against the fakeReaper: only REAPER, the external boundary, is
+-- faked. Seeds are authored through the production write path (mm:modify +
+-- mm:add), not poked into a fake mm.
 --
 -- Caller sets package.path (see run.lua) before requiring this module.
 
 local harness = {}
-
-local fakeReaper = require('fakeReaper').new()
-_G.reaper = fakeReaper
 
 -- configManager + dataStore global tiers do real io.open on continuum-config.lua /
 -- continuum-data.lua; redirect to temp files so specs never clobber the real ones.
@@ -21,25 +20,47 @@ io.open = function(path, ...)
   return realOpen(path, ...)
 end
 
+-- newMidiManager (the fake) stays globally defined: mm_* specs build it directly
+-- to pin the token/unified/cc contract. The tm/vm stack below runs the real mm.
 require('fakeMidiManager')
 local util = require('util')
-
--- Route every util.instantiate('midiManager', …) — including the one
--- inside trackerPage — through the fake. Production code still asks for
--- 'midiManager' by name; the stub registry swaps it out without the
--- production graph having to know.
-util._stubs['midiManager'] = function(deps) return newMidiManager(deps) end
+local newRealMM = require('realMidiManager')()
 require('timing')
 require('tuning')
 
+local fakeReaper = require('fakeReaper').new()
+_G.reaper = fakeReaper
 
--- Build a fresh scenario. Keys: seed (fake mm payload), config ({level={k=v}} via cm:assign),
--- data ({k=v} via ds:assign, bound context), take (opaque token, default 'take1').
+-- Internal util.instantiate('midiManager', …) (e.g. trackerPage) gets the real
+-- mm too, so the whole graph runs one implementation.
+util._stubs['midiManager'] = function(deps) return newRealMM(deps and deps.take) end
+
+-- Author a seed payload through the production write path. A stamped note
+-- (ppqL set) must carry lane/detune/delay or tm crashes at pickStampedLane.
+local function seedThrough(mm, payload)
+  mm:modify(function()
+    for _, n in ipairs(payload.notes or {}) do
+      local note = util.clone(n); note.evType = 'note'
+      if note.ppqL == nil and note.endppqL ~= nil then note.ppqL = note.ppq end
+      if note.ppqL ~= nil then
+        note.lane   = note.lane   or 1
+        note.detune = note.detune or 0
+        note.delay  = note.delay  or 0
+      end
+      mm:add(note)
+    end
+    for _, c in ipairs(payload.ccs or {}) do mm:add(util.clone(c)) end
+  end)
+end
+
+-- Build a fresh scenario. opts keys: seed (notes/ccs + resolution/length/
+-- timeSigs), config, data, take, floatPpq, groups. See header for the mm model.
 function harness.mk(opts)
   opts = opts or {}
+  local seed = opts.seed or {}
 
-  -- Fresh reaper state per scenario; global-tier stub file likewise, or
-  -- one scenario's cm:set('global', …) leaks into the next.
+  -- Fresh reaper state per scenario; global-tier stub file likewise, or one
+  -- scenario's cm:set('global', …) leaks into the next.
   fakeReaper = require('fakeReaper').new()
   _G.reaper  = fakeReaper
   realOpen(globalCfgStub, 'w'):close()
@@ -47,15 +68,26 @@ function harness.mk(opts)
 
   local take = opts.take or 'take1'
   local item, track = take .. '/item', take .. '/track'
-  fakeReaper:bindTake(take, item, track)
+  local resolution  = seed.resolution or 240
+  local lengthPpq   = seed.length     or 3840
 
-  local mm = newMidiManager({
-    take       = take,
-    resolution = opts.seed and opts.seed.resolution or 240,
-    length     = opts.seed and opts.seed.length     or 3840,
-    timeSigs   = opts.seed and opts.seed.timeSigs,
-    floatPpq   = opts.floatPpq,
-  })
+  -- Establish the take's resolution/length/time-sig surface before building the
+  -- mm: its constructor loads immediately and reads them.
+  fakeReaper:bindTake(take, item, track, lengthPpq / resolution)
+  fakeReaper:setResolution(resolution)
+  for _, ts in ipairs(seed.timeSigs or {}) do
+    fakeReaper:addTimeSigMarker(fakeReaper.MIDI_GetProjTimeFromPPQPos(take, ts.ppq or 0), ts.num, ts.denom)
+  end
+  if opts.floatPpq then fakeReaper:setFloatPpq(true) end
+
+  local mm = newRealMM(take)
+  mm.seed = function(_, payload) seedThrough(mm, payload) end
+  mm.dump = function()
+    local notes, ccs = {}, {}
+    for _, n in mm:notes() do notes[#notes + 1] = n end
+    for _, c in mm:ccs()   do ccs[#ccs + 1]   = c end
+    return { notes = notes, ccs = ccs }
+  end
 
   local ps = util.instantiate('pextStore')
   local cm = util.instantiate('configManager', { ps = ps })
@@ -68,7 +100,7 @@ function harness.mk(opts)
     for name, value in pairs(opts.data) do ds:assign(name, value) end
   end
 
-  if opts.seed then mm:seed(opts.seed) end
+  if seed.notes or seed.ccs then seedThrough(mm, seed) end
 
   local tm = util.instantiate('trackerManager', { mm = mm, cm = cm, ds = ds })
   local cmgr = util.instantiate('commandManager', { cm = cm })

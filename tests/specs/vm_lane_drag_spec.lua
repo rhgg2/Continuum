@@ -367,7 +367,7 @@ return {
       t.eq(newIdx, 1, 'new event is the new first')
       local events = h.vm.grid.cols[idx].events
       t.eq(events[1].ppq,   60,  'new lands ahead of seed')
-      t.eq(events[1].shape, nil, 'no prev → no shape inherited')
+      t.eq(events[1].shape, 'step', 'no prev → wire default shape, not an inherited one')
       t.eq(events[2].ppq,   240, 'former first shifts to idx 2')
     end,
   },

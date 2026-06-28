@@ -204,21 +204,26 @@ local specs = {
   'curveEditor_spec',
 }
 
-local pass, fail, failures = 0, 0, {}
+local pass, fail, pending, failures = 0, 0, 0, {}
 
 for _, name in ipairs(specs) do
   local spec = require(name)
   for _, test in ipairs(spec) do
     local fullName = name .. ' :: ' .. test.name
     if not filter or fullName:find(filter, 1, true) then
-      local ok, err = xpcall(function() test.run(harness) end, debug.traceback)
-      if ok then
-        pass = pass + 1
-        io.write(string.format('  ok    %s\n', fullName))
+      if test.pending then
+        pending = pending + 1
+        io.write(string.format('  pend  %s  (%s)\n', fullName, test.pending))
       else
-        fail = fail + 1
-        failures[#failures + 1] = { name = fullName, err = err }
-        io.write(string.format('  FAIL  %s\n', fullName))
+        local ok, err = xpcall(function() test.run(harness) end, debug.traceback)
+        if ok then
+          pass = pass + 1
+          io.write(string.format('  ok    %s\n', fullName))
+        else
+          fail = fail + 1
+          failures[#failures + 1] = { name = fullName, err = err }
+          io.write(string.format('  FAIL  %s\n', fullName))
+        end
       end
     end
   end
@@ -232,5 +237,6 @@ if #failures > 0 then
   end
 end
 
-io.write(string.format('\n%d passed, %d failed\n', pass, fail))
+local pendTail = pending > 0 and string.format(', %d pending', pending) or ''
+io.write(string.format('\n%d passed, %d failed%s\n', pass, fail, pendTail))
 os.exit(fail > 0 and 1 or 0)

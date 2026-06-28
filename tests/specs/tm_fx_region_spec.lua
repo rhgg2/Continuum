@@ -580,8 +580,8 @@ return {
       local h = harness.mk()
       generators.kinds.ccRep = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 100, shape = 'square' },
-          { ppqL = 120,            val = 20,  shape = 'square' },
+          { ppqL = host.window[1], val = 100, shape = 'step' },
+          { ppqL = 120,            val = 20,  shape = 'step' },
         } } end,
         mode = 'replace', dest = 74, label = 'CcRep', defaults = {}, fields = {},
       }

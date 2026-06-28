@@ -103,17 +103,20 @@ return {
   },
 
   {
-    name = 'pre-seeded uuid is preserved and not re-issued',
+    name = 'a stamped cc keeps its uuid across a lockless metadata assign',
     run = function(harness)
       local h = harness.mk{
         seed = {
-          ccs = { { ppq = 0, evType = 'cc', chan = 1, cc = 7, val = 64, uuid = 100, foo = 'old' } },
+          ccs = { { ppq = 0, evType = 'cc', chan = 1, cc = 7, val = 64, foo = 'old' } },
         },
       }
-      -- Lockless carve-out path (uuid present, metadata-only)
+      -- Seeding with metadata stamps a uuid; capture it, then take the lockless
+      -- carve-out (uuid present, metadata-only) and confirm it isn't re-issued.
+      local uuid = ccAt(h.fm, 1).uuid
+      t.truthy(uuid, 'stamped cc carries a uuid')
       h.fm:assign(ccAt(h.fm, 1).token, { foo = 'new' })
       local cc = ccAt(h.fm, 1)
-      t.eq(cc.uuid, 100, 'pre-seeded uuid retained')
+      t.eq(cc.uuid, uuid, 'uuid retained across the metadata-only assign')
       t.eq(cc.foo, 'new')
     end,
   },
