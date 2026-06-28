@@ -142,6 +142,30 @@ end
 -- No ReaScript API for per-FX in/out bus + output-passthrough; patch the track
 -- state chunk directly. See docs/wiringManager.md § Per-FX MIDI routing.
 
+--invariant: midiCache[fxGuid]=midi; serves reads, gates no-op writes, pruned when fx leaves
+-- An external midi-bus hand-edit (pin-mapping submenu) goes stale until the fx changes structurally or
+-- the project reopens; the giant-VST chunk read is too costly to repeat. See docs § Per-FX MIDI routing.
+local midiCache = {}
+
+local function pruneMidiCache(tracks)
+  local live = {}
+  for _, tr in ipairs(tracks) do
+    for _, fx in ipairs(tr.fx) do live[fx.id] = true end
+  end
+  for guid in pairs(midiCache) do
+    if not live[guid] then midiCache[guid] = nil end
+  end
+end
+
+-- True iff the cache already holds want's fields, so a chunk read-modify-write would be a no-op.
+local function midiUnchanged(cached, want)
+  if not cached then return false end
+  for k, v in pairs(want) do
+    if cached[k] ~= v then return false end
+  end
+  return true
+end
+
 local b64alpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
 local b64dec   = {}
 for i = 1, #b64alpha do b64dec[b64alpha:sub(i, i):byte()] = i - 1 end
@@ -292,8 +316,7 @@ end
 
 -- Read the fxIdx-th non-JS FX block's routing from the stream's last 4 bytes.
 -- Returns { inBus, outBus, inDisabled, outDisabled } or nil if absent.
-local function readFXMidiRouting(chunk, fxIdx)
-  local lines          = splitChunkLines(chunk)
+local function readFXMidiRouting(lines, fxIdx)
   local first, trailer = findFxBlock(lines, fxIdx)
   if not first then return nil end
   local stream = fxBlockStream(lines, first, trailer)
@@ -357,23 +380,40 @@ end
 
 -- Absent trailer ⇒ passthrough defaults; the field is present for every non-JS
 -- fx so callers can read routing without a JS-vs-not branch.
-local function readMidiRouting(chunk, routingIdx)
-  local r = readFXMidiRouting(chunk, routingIdx)
+local function midiFromLines(lines, routingIdx)
+  local r = readFXMidiRouting(lines, routingIdx)
             or { inBus = 0, outBus = 0, inDisabled = false, outDisabled = false }
   return { inBus = r.inBus, outBus = r.outBus,
            inDisabled = r.inDisabled, outDisabled = r.outDisabled }
 end
 
+local function readMidiRouting(chunk, routingIdx)
+  local lines = splitChunkLines(chunk)
+  return midiFromLines(lines, routingIdx)
+end
+
+-- The chunk read serialises the track's whole state (giant-VST presets dominate); its only
+-- unique payload is 4 routing bytes per fx. Read it only when a routing fx GUID is uncached;
+-- otherwise reuse midiCache. see docs/wiringManager.md § Per-FX MIDI routing.
 local function readFxChain(track)
-  local _, chunk     = reaper.GetTrackStateChunk(track, '', false)
-  local out, routing = {}, 0
+  local out, routingFx, needChunk = {}, {}, false
   for idx = 0, reaper.TrackFX_GetCount(track) - 1 do
     local fx = readFx(track, idx)
     if isRoutingFx(fx.fxType) then
-      fx.midi = readMidiRouting(chunk, routing)
-      routing = routing + 1
+      util.add(routingFx, fx)
+      if not midiCache[fx.id] then needChunk = true end
     end
     util.add(out, fx)
+  end
+  if needChunk then
+    local _, chunk = reaper.GetTrackStateChunk(track, '', false)
+    local lines    = splitChunkLines(chunk)
+    for routingIdx, fx in ipairs(routingFx) do
+      fx.midi = midiFromLines(lines, routingIdx - 1)
+      midiCache[fx.id] = fx.midi
+    end
+  else
+    for _, fx in ipairs(routingFx) do fx.midi = midiCache[fx.id] end
   end
   return out
 end
@@ -708,12 +748,16 @@ local function writeMidiRouting(track, fxIdx, midi)
   local opts = { inBus = midi.inBus, outBus = midi.outBus,
                  inDisabled = midi.inDisabled, outDisabled = midi.outDisabled }
   if next(opts) == nil then return end
+  local guid = reaper.TrackFX_GetFXGUID(track, fxIdx)
+  if midiUnchanged(midiCache[guid], opts) then return end  -- already current; skip the chunk read-modify-write
   local _, ins, outs = reaper.TrackFX_GetIOSize(track, fxIdx)
   -- isundo=false throughout: applyOps brackets an Undo block, so chunk RMW needs no
   -- per-call undo caching. All rm chunk reads/writes share the flag so caches agree.
   local _, chunk     = reaper.GetTrackStateChunk(track, '', false)
   local newChunk = setFXMidiRouting(chunk, routingIdx, opts, ins + outs)
   reaper.SetTrackStateChunk(track, newChunk, false)
+  -- a partial write touches only the bytes it sets; overlay them onto the warm entry to keep it exact.
+  if midiCache[guid] then midiCache[guid] = util.assign(util.clone(midiCache[guid]), opts) end
 end
 
 local function writeTrackFields(track, t)
@@ -756,6 +800,7 @@ function rm:tracks()
     for _, fx in ipairs(tr.fx) do applyMuteReport(util.assign(fx, meta[fx.id])) end
   end
   stampParents(out)
+  pruneMidiCache(out)
   return out
 end
 
@@ -927,13 +972,19 @@ function rm:assignMeta(store, id, meta)
   writeMeta(store, id, meta)
 end
 
---contract: batch per-FX MIDI routing for one track in a single chunk Get+Set; writes={{id,midi},...}
+--contract: batch per-FX MIDI routing for one track in one chunk Get+Set; writes={{id,midi},...};
+--contract: drops writes the cache says are current; all-unchanged skips the chunk read entirely
 function rm:writeChainMidi(trackId, writes)
+  local pending = {}
+  for _, w in ipairs(writes) do
+    if not midiUnchanged(midiCache[w.id], w.midi) then util.add(pending, w) end
+  end
+  if #pending == 0 then return end
   local track = locateTrack(trackId)
   if not track then return end
   local _, chunk = reaper.GetTrackStateChunk(track, '', false)
   local changed  = false
-  for _, w in ipairs(writes) do
+  for _, w in ipairs(pending) do
     local _, idx     = locateFx(w.id)
     local routingIdx = idx and routingIdxOf(track, idx)
     if routingIdx then
@@ -941,7 +992,10 @@ function rm:writeChainMidi(trackId, writes)
       local newChunk, ok = setFXMidiRouting(chunk, routingIdx,
         { inBus = w.midi.inBus, outBus = w.midi.outBus,
           inDisabled = w.midi.inDisabled, outDisabled = w.midi.outDisabled }, ins + outs)
-      if ok then chunk, changed = newChunk, true end
+      if ok then
+        chunk, changed = newChunk, true
+        if midiCache[w.id] then midiCache[w.id] = util.assign(util.clone(midiCache[w.id]), w.midi) end
+      end
     end
   end
   if changed then reaper.SetTrackStateChunk(track, chunk, false) end
@@ -961,6 +1015,7 @@ function rm:fx(id)
   if isRoutingFx(fx.fxType) then
     local _, chunk = reaper.GetTrackStateChunk(track, '', false)
     fx.midi = readMidiRouting(chunk, routingIdxOf(track, idx))
+    midiCache[id] = fx.midi
   end
   applyMuteReport(util.assign(fx, readMeta('fx')[id]))
   return fx

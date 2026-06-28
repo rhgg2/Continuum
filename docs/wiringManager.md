@@ -159,6 +159,28 @@ longer patches FXCHAIN state chunks; it reads/writes the `fx.midi` record.
 See `docs/routingManager.md § Wire-format surgery worth knowing` and the
 byte-level reference in `docs/reaper_midi_routing.md`.
 
+**The read cache.** `GetTrackStateChunk` serialises a track's *entire*
+state — for a track hosting a giant-VST preset that measured ~80ms/track,
+~560ms across a 7-track project — yet the only per-FX MIDI payload it
+yields is four routing bytes. So rm caches `fx.midi` by FX GUID and reads a
+track's chunk only when one of its routing FX has a GUID it hasn't cached
+— at boot, or an FX added in REAPER outside Continuum (our own mints are
+pre-cached when instantiated on scratch, and a cross-track move keeps its
+GUID); otherwise it reuses the cached record. Our own MIDI writes overlay the changed fields onto the cached
+entry — a partial write only patches the bytes it sets, and we know the
+rest — so the entry stays warm; a GUID that leaves the project is pruned on
+the next full `rm:tracks`. The same cache gates *writes*: a structural
+reconcile re-asserts per-FX MIDI for the whole chain, but `writeChainMidi`
+and `writeMidiRouting` skip any fx whose MIDI already matches the cache —
+so connecting an audio wire to a track hosting a heavy FX no longer reads
+that FX's chunk to rewrite MIDI that didn't change. The deliberate gap: an
+*external* hand-edit of an existing FX's MIDI bus via REAPER's pin-mapping
+submenu stays stale until that FX changes structurally or the project
+reopens. This matters because `syncExternal` rereads on *any* project-state
+move (§ external sync), so before the cache every switch back to the wiring
+page after an edit elsewhere paid the full chunk decode — the page-switch
+pause.
+
 ## wiringSnapshot
 
 The shape both `wm:snapshot` and `wm:targetState` emit (field list in
