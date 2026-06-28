@@ -1270,8 +1270,52 @@ end
 
 -- Fx expansion (rebuild step 4.6): fx-carrying notes / fx-regions -> derived notes, CCs, carriers;
 -- reconcile vs existing, note writes deferred to 4.8. Returns per-chan carrier map. see design/archive/note-macros.md § Pipeline placement
-local function rebuildFx(fx, deferred, authoredPbByChan, fxWindow, nextInLane)
+local function rebuildFx(fx, deferred)
   local newFxCarrier = {}
+
+  -- Windows (read-only): fx host voice extents + per-note same-lane successor ppqL, floored by authored
+  -- end; no realised round-trip (G4-stable). see design/archive/note-macros.md § host contract
+  local fxWindow, nextInLane = {}, {}
+  do
+    local takeLen = tm:length()
+    for chan = 1, 16 do
+      local byLane = {}
+      for laneIdx, col in ipairs(channels[chan].columns.notes) do
+        for _, evt in ipairs(col.events) do
+          if evt.type ~= 'pa' and evt.ppqL ~= nil then
+            util.bucket(byLane, laneIdx, { evt = evt })
+          end
+        end
+      end
+      for _, g in pairs(byLane) do table.sort(g, function(a, b) return a.evt.ppq < b.evt.ppq end) end
+      local laneNextOf = strictNextMap(byLane)
+      for _, g in pairs(byLane) do
+        for _, rec in ipairs(g) do
+          local nextRec = laneNextOf[rec]
+          nextInLane[rec.evt] = nextRec and nextRec.evt
+          if rec.evt.fx then
+            local endL = (rec.evt.endppqL == nil or rec.evt.endppqL == util.OPEN)
+                         and tm:toLogical(chan, takeLen) or rec.evt.endppqL
+            if nextRec then endL = math.min(endL, nextRec.evt.ppqL) end
+            fxWindow[rec.evt] = endL
+          end
+        end
+      end
+    end
+  end
+
+  -- Authored pb breakpoints per channel, exposed to the generator as channel input
+  -- (authored only, fakes excluded). see design/note-macros-v2.md § A4
+  local authoredPbByChan = {}
+  for _, cc in mm:ccs() do
+    if cc.evType == 'pb' and not cc.derived and cc.cents ~= nil then
+      util.bucket(authoredPbByChan, cc.chan, { ppqL = cc.ppqL or cc.ppq, cents = cc.cents })
+    end
+  end
+  for _, list in pairs(authoredPbByChan) do
+    table.sort(list, function(a, b) return a.ppqL < b.ppqL end)
+  end
+
   local res = mm:resolution()
   local pbRangeCents = cm:get('pbRange') * 100   -- slide clamps its target to what pb can reach
   local temper = tuning.findTemper(cm:get('temper'), cm:get('tempers'))
@@ -2013,56 +2057,19 @@ function tm:rebuild(takeChanged)
   -- 4.5/4.5b) Region-replace parking: notes + ccs (see rebuildRegionPark).
   rebuildRegionPark(deferred)
 
-  -- Windows (read-only): fx host voice extents + per-note same-lane successor ppqL, floored by authored end; no realised round-trip (G4-stable).
-  -- see design/archive/note-macros.md § host contract
-  local fxWindow, nextInLane = {}, {}
-  do
-    local takeLen = tm:length()
-    for chan = 1, 16 do
-      local byLane = {}
-      for laneIdx, col in ipairs(channels[chan].columns.notes) do
-        for _, evt in ipairs(col.events) do
-          if evt.type ~= 'pa' and evt.ppqL ~= nil then
-            util.bucket(byLane, laneIdx, { evt = evt })
-          end
-        end
-      end
-      for _, g in pairs(byLane) do table.sort(g, function(a, b) return a.evt.ppq < b.evt.ppq end) end
-      local laneNextOf = strictNextMap(byLane)
-      for _, g in pairs(byLane) do
-        for _, rec in ipairs(g) do
-          local nextRec = laneNextOf[rec]
-          nextInLane[rec.evt] = nextRec and nextRec.evt
-          if rec.evt.fx then
-            local endL = (rec.evt.endppqL == nil or rec.evt.endppqL == util.OPEN)
-                         and tm:toLogical(chan, takeLen) or rec.evt.endppqL
-            if nextRec then endL = math.min(endL, nextRec.evt.ppqL) end
-            fxWindow[rec.evt] = endL
-          end
-        end
-      end
-    end
-  end
-
-  -- Pre-producer input projection: PA columns + authored pb breakpoints, exposed to the generator as
-  -- channel input (PA before step 5; pb authored breakpoints only, fakes excluded). see design/note-macros-v2.md § A4
-  local authoredPbByChan = {}
+  -- Late projection: PA mixes into note columns once lanes are settled, so the view (and rebuildFx's
+  -- channelStreams) read it inline. Must follow column layout, so it can't ride step 3's CC walk.
   for _, cc in mm:ccs() do
     if cc.evType == 'pa' then
       local noteCol = findNoteColumnForPitch(channels[cc.chan], cc.pitch, cc.ppq)
       if noteCol then
         util.add(noteCol.events, projectCC(cc, mm:tokenOf(cc), { type = 'pa' }))
       end
-    elseif cc.evType == 'pb' and not cc.derived and cc.cents ~= nil then
-      util.bucket(authoredPbByChan, cc.chan, { ppqL = cc.ppqL or cc.ppq, cents = cc.cents })
     end
-  end
-  for _, list in pairs(authoredPbByChan) do
-    table.sort(list, function(a, b) return a.ppqL < b.ppqL end)
   end
 
   -- 4.6) Fx expansion: derived notes/CCs/carriers, note writes deferred to 4.8 (see rebuildFx).
-  local newFxCarrier = rebuildFx(fx, deferred, authoredPbByChan, fxWindow, nextInLane)
+  local newFxCarrier = rebuildFx(fx, deferred)
   reapCarriers(newFxCarrier)
 
   -- 4.8) Unified tail/onset walk + atomic commit (see rebuildTails).
