@@ -954,7 +954,7 @@ end
 local function pickStampedLane(channel, note)
   local notes = channel.columns.notes
   while #notes < note.lane do pushNoteCol(channel) end
-  return notes[note.lane], note.lane
+  return notes[note.lane]
 end
 
 --contract: pick a lane for an external (unstamped) note via accept → sibling → push bump
@@ -1921,6 +1921,186 @@ local function rebuildCCs(fx)
   end
 end
 
+-- 0+2) Partition mm notes into internal (stamped) / external, lay internal note columns, and
+-- reseat stale-swing internals inline (was 4.7). Returns external, deferred to rebuildExternals.
+-- see docs/trackerManager.md § Rebuild: step 0 — internal/external partition
+local function rebuildInternals(fx)
+  local internal, external = {}, {}
+  for _, note in mm:notes() do
+    if note.derived then
+      note.token = mm:tokenOf(note)
+      util.add(fx.noteExisting[note.chan], note)
+    elseif rawDivergesFromLogical(note) then util.add(external, note)
+    else util.add(internal, note)
+    end
+  end
+
+  local reseats = mmBatch()
+  for _, note in ipairs(internal) do
+    local channel = channels[note.chan]
+    local col = pickStampedLane(channel, note)
+    -- clone not alias: projectLogical rewrites column ppq to logical; mm retains raw
+    local ce = util.clone(note, { chan = true, lane = true })
+    -- detune/delay are optional eventMeta; default at ingestion so every column note
+    -- event carries them (mirrors the external seam) -- downstream reads trust non-nil.
+    ce.detune = ce.detune or 0
+    ce.delay  = ce.delay  or 0
+    ce.token = mm:tokenOf(note)
+    -- Stale swing: raw stamped under the prior swing; rederive realised onset from logical
+    -- (endppq owned by 4.8) and rewrite mm. Mirrors the CC reseat. see docs/timing.md §"Rebuild rule"
+    if staleSwing[note.chan] then
+      local newPpq = tm:fromLogical(note.chan, ce.ppqL, delayToPPQ(ce.delay))
+      if newPpq ~= ce.ppq then ce.ppq = newPpq; reseats.assign(ce, { ppq = newPpq }) end
+    end
+    util.add(col.events, ce)
+  end
+  reseats.commit()
+
+  return external
+end
+
+-- 4) Reconcile extra columns against the persisted extraColumns spec; grow the spec when a
+-- channel already holds more note lanes than recorded.
+local function rebuildExtraColumns()
+  local extras = ds:get('extraColumns') or {}
+  local grew   = false
+  for i = 1, 16 do
+    local c    = channels[i].columns
+    local want = extras[i] or { notes = 1 }
+    local n    = #c.notes
+    if n > want.notes then
+      want.notes = n
+      extras[i] = want
+      grew = true
+    end
+    while #c.notes < want.notes do pushNoteCol(channels[i]) end
+    if want.pc then c.pc = c.pc or { events = {} } end
+    if want.pb then c.pb = c.pb or { events = {} } end
+    if want.at then c.at = c.at or { events = {} } end
+    for ccNum in pairs(want.ccs or {}) do
+      c.ccs[ccNum] = c.ccs[ccNum] or { cc = ccNum, events = {} }
+    end
+  end
+  if grew and mm:take() then ds:assign('extraColumns', extras) end
+end
+
+-- 6) Reintroduce externals: pack lane, stamp ppqL/endppqL, backfill metadata, tag `fixed`;
+-- block window + tail passes -- onsets frozen, tails clipped. see docs/trackerManager.md § Rebuild: externals
+local function rebuildExternals(external)
+  if #external == 0 then return end
+  table.sort(external, function(a, b) return a.ppq < b.ppq end)
+  local trackerMode = cm:get('trackerMode')
+  local extWrites = mmBatch()
+  for _, note in ipairs(external) do
+    local delay     = note.delay or 0
+    local d         = delayToPPQ(delay)
+    local probe     = { ppq = note.ppq, endppq = note.endppq,
+                        pitch = note.pitch, delay = delay, lane = note.lane }
+    local col, lane = packExternalLane(channels[note.chan], probe)
+    local update    = {
+      ppqL    = tm:toLogical(note.chan, note.ppq - d),
+      endppqL = tm:toLogical(note.chan, note.endppq),
+    }
+    if note.lane   ~= lane then update.lane   = lane   end
+    if note.detune == nil  then update.detune = 0      end
+    if note.delay  == nil  then update.delay  = 0      end
+    if trackerMode and note.sample == nil then update.sample = 0 end
+    local ce = util.clone(note, { chan = true, lane = true })
+    util.assign(ce, update)
+    ce.fixed = true
+    util.add(col.events, ce)
+    ce.token = mm:tokenOf(note)
+    extWrites.assign(ce, update)
+  end
+  extWrites.commit()
+end
+
+-- Late PA projection: mixes into note columns once lanes are settled, so the view (and rebuildFx's
+-- channelStreams) read it inline. Must follow column layout, so it can't ride step 3's CC walk.
+local function rebuildPA()
+  for _, cc in mm:ccs() do
+    if cc.evType == 'pa' then
+      local noteCol = findNoteColumnForPitch(channels[cc.chan], cc.pitch, cc.ppq)
+      if noteCol then
+        util.add(noteCol.events, projectCC(cc, mm:tokenOf(cc), { type = 'pa' }))
+      end
+    end
+  end
+end
+
+-- 4.5) PC synthesis (trackerMode only). Runs after externals so a foreign-MIDI note inherits
+-- sample from the prevailing PC.
+local function rebuildPCs(fx)
+  if not cm:get('trackerMode') then return end
+  local pcWrites, dirty = mmBatch(), false
+  local sink = {
+    del = function(r) pcWrites.del(r); dirty = true end,
+    add = function(a) pcWrites.add(a); dirty = true end,
+  }
+  for chan = 1, 16 do
+    local records = {}
+    for L, lane in ipairs(channels[chan].columns.notes) do
+      for _, n in ipairs(lane.events) do
+        util.add(records, { ppq = n.ppq, ppqL = n.ppqL, lane = L, sample = n.sample or 0, key = n })
+      end
+    end
+    for _, w in ipairs(fx.noteLive[chan]) do
+      local n = w.evt
+      util.add(records, { ppq = n.ppq, ppqL = n.ppqL, lane = w.lane, sample = n.sample or 0, key = n })
+    end
+    reconcilePCsForChan(chan, records, sink)
+  end
+  pcWrites.commit()
+
+  if dirty then
+    for chan = 1, 16 do channels[chan].columns.pc = { events = {} } end
+    for _, cc in mm:ccs() do
+      if cc.evType == 'pc' then
+        util.add(channels[cc.chan].columns.pc.events, projectCC(cc, mm:tokenOf(cc)))
+      end
+    end
+  end
+end
+
+-- 5) Project columns to logical. tv surface is logical-only; ppq/endppq leave here as floats.
+-- see docs/trackerManager.md § Rebuild: step 5 — project to logical
+local function projectLogical()
+  local res = mm:resolution()
+  local function projectToLogical(col, chan)
+    for _, evt in ipairs(col.events) do
+      if evt.ppqL ~= nil then
+        -- delayC: realised-frame delay equivalent. Differs from authored delay when
+        -- the unified walk clamped raw against a same-pitch predecessor; renderer cues the give-way.
+        if evt.delay ~= nil then
+          local baseline = tm:fromLogical(chan, evt.ppqL)
+          evt.delayC = util.round(timing.ppqToDelay(evt.ppq - baseline, res))
+        end
+        evt.ppq = evt.ppqL
+      end
+      if evt.endppq ~= nil then
+        evt.endppqC = tm:toLogical(chan, evt.endppq)
+        if evt.endppqL == util.OPEN then
+          evt.endppq = util.OPEN
+        elseif evt.endppqL ~= nil then
+          evt.endppq = evt.endppqL
+        else
+          evt.endppq = evt.endppqC
+        end
+      end
+    end
+    sortByPPQ(col.events)
+  end
+
+  for _, chan in ipairs(channels) do
+    local c, n = chan.columns, chan.chan
+    if c.pc then projectToLogical(c.pc, n) end
+    if c.pb then projectToLogical(c.pb, n) end
+    for _, col in ipairs(c.notes) do projectToLogical(col, n) end
+    if c.at then projectToLogical(c.at, n) end
+    for _, col in pairs(c.ccs) do projectToLogical(col, n) end
+  end
+end
+
 ----- Rebuild
 
 local rebuilding = false
@@ -1954,119 +2134,18 @@ function tm:rebuild(takeChanged)
   -- commit: host clip + these inserts in one mm:modify (one MIDI_Sort, canonical delete-first).
   local deferred = mmBatch()
 
-  -- 0) Partition mm events into internal (stamped + raw = fromLogical(ppqL)) and external.
-  -- see docs/trackerManager.md § Rebuild: step 0 — internal/external partition
-  local internal, external = {}, {}
-  for _, note in mm:notes() do
-    if note.derived then
-      note.token = mm:tokenOf(note)
-      util.add(fx.noteExisting[note.chan], note)
-    elseif rawDivergesFromLogical(note) then util.add(external, note)
-    else util.add(internal, note)
-    end
-  end
-  -- 2) Allocate note columns for internals (stamped path). Clone rather than alias:
-  -- step 5 overwrites column evt.ppq with logical while mm retains raw.
-  for _, note in ipairs(internal) do
-    local channel = channels[note.chan]
-    local col, lane = pickStampedLane(channel, note)
-    local ce = util.clone(note, { chan = true, lane = true })
-    -- detune/delay are optional eventMeta; default at ingestion so every column note
-    -- event carries them (mirrors the external seam) -- downstream reads trust non-nil.
-    ce.detune = ce.detune or 0
-    ce.delay  = ce.delay  or 0
-    ce.token = mm:tokenOf(note)
-    util.add(col.events, ce)
-  end
+  local external     = rebuildInternals(fx)   -- 0+2: partition, lay internal columns, reseat stale notes
+  local reapCarriers = rebuildCCs(fx)         -- 3: carrier setup + CC walk; reseats stale CCs
+  staleSwing = {}                             -- swing consumers (steps 0 & 3) done; see :53 invariant
 
-  -- 3) Carrier setup + single CC walk; returns the carrier reaper for 4.6 (see rebuildCCs).
-  local reapCarriers = rebuildCCs(fx)
+  rebuildExtraColumns()                       -- 4: reconcile persisted extra columns
 
-  -- 4) Reconcile extras.
-  do
-    local extras = ds:get('extraColumns') or {}
-    local grew   = false
-    for i = 1, 16 do
-      local c    = channels[i].columns
-      local want = extras[i] or { notes = 1 }
-      local n    = #c.notes
-      if n > want.notes then
-        want.notes = n
-        extras[i] = want
-        grew = true
-      end
-      while #c.notes < want.notes do pushNoteCol(channels[i]) end
-      if want.pc then c.pc = c.pc or { events = {} } end
-      if want.pb then c.pb = c.pb or { events = {} } end
-      if want.at then c.at = c.at or { events = {} } end
-      for ccNum in pairs(want.ccs or {}) do
-        c.ccs[ccNum] = c.ccs[ccNum] or { cc = ccNum, events = {} }
-      end
-    end
-    if grew and mm:take() then ds:assign('extraColumns', extras) end
-  end
-
-  -- 4.7) Two-frame rebuild rule. See docs/timing.md §"Rebuild rule". staleSwing reseats
-  -- notes only; CCs by step 3/4.5/4.9; raw endppq owned by step 4.8, never reseated here.
-  do
-    local reseats = mmBatch()
-    forEachEvent(function(_, evt, chan, isNote, _, lane)
-      if not isNote or evt.derived then return end
-      if staleSwing[chan] then
-        local newPpq = tm:fromLogical(chan, evt.ppqL, delayToPPQ(evt.delay))
-        if newPpq ~= evt.ppq then
-          evt.ppq = newPpq
-          reseats.assign(evt, { ppq = newPpq })
-        end
-      end
-    end)
-    reseats.commit()
-    staleSwing = {}
-  end
-
-  -- Reintroduce externals: pack lane, stamp ppqL/endppqL, backfill metadata, tag `fixed`; block window + tail passes (onsets frozen, tails clipped).
-  -- see docs/trackerManager.md § Rebuild: externals
-  if #external > 0 then
-    table.sort(external, function(a, b) return a.ppq < b.ppq end)
-    local trackerMode = cm:get('trackerMode')
-    local extWrites = mmBatch()
-    for _, note in ipairs(external) do
-      local delay     = note.delay or 0
-      local d         = delayToPPQ(delay)
-      local probe     = { ppq = note.ppq, endppq = note.endppq,
-                          pitch = note.pitch, delay = delay, lane = note.lane }
-      local col, lane = packExternalLane(channels[note.chan], probe)
-      local update    = {
-        ppqL    = tm:toLogical(note.chan, note.ppq - d),
-        endppqL = tm:toLogical(note.chan, note.endppq),
-      }
-      if note.lane   ~= lane then update.lane   = lane   end
-      if note.detune == nil  then update.detune = 0      end
-      if note.delay  == nil  then update.delay  = 0      end
-      if trackerMode and note.sample == nil then update.sample = 0 end
-      local ce = util.clone(note, { chan = true, lane = true })
-      util.assign(ce, update)
-      ce.fixed = true
-      util.add(col.events, ce)
-      ce.token = mm:tokenOf(note)
-      extWrites.assign(ce, update)
-    end
-    extWrites.commit()
-  end
+  rebuildExternals(external)                  -- 6: reintroduce externals
 
   -- 4.5/4.5b) Region-replace parking: notes + ccs (see rebuildRegionPark).
   rebuildRegionPark(deferred)
 
-  -- Late projection: PA mixes into note columns once lanes are settled, so the view (and rebuildFx's
-  -- channelStreams) read it inline. Must follow column layout, so it can't ride step 3's CC walk.
-  for _, cc in mm:ccs() do
-    if cc.evType == 'pa' then
-      local noteCol = findNoteColumnForPitch(channels[cc.chan], cc.pitch, cc.ppq)
-      if noteCol then
-        util.add(noteCol.events, projectCC(cc, mm:tokenOf(cc), { type = 'pa' }))
-      end
-    end
-  end
+  rebuildPA()                                 -- late PA projection into settled note columns
 
   -- 4.6) Fx expansion: derived notes/CCs/carriers, note writes deferred to 4.8 (see rebuildFx).
   local newFxCarrier = rebuildFx(fx, deferred)
@@ -2078,77 +2157,9 @@ function tm:rebuild(takeChanged)
   -- 4.9) Absorber reconciliation + pb wire/column resynthesis.
   rebuildPbs(fx.noteLive, fx.replacePb)
 
-  -- 4.5) PC synthesis (trackerMode only). Runs after step 6 so it sees externals:
-  -- a foreign-MIDI note inherits sample from the prevailing PC.
-  if cm:get('trackerMode') then
-    local pcWrites, dirty = mmBatch(), false
-    local sink = {
-      del = function(r) pcWrites.del(r); dirty = true end,
-      add = function(a) pcWrites.add(a); dirty = true end,
-    }
-    for chan = 1, 16 do
-      local records = {}
-      for L, lane in ipairs(channels[chan].columns.notes) do
-        for _, n in ipairs(lane.events) do
-          util.add(records, { ppq = n.ppq, ppqL = n.ppqL, lane = L, sample = n.sample or 0, key = n })
-        end
-      end
-      for _, w in ipairs(fx.noteLive[chan]) do
-        local n = w.evt
-        util.add(records, { ppq = n.ppq, ppqL = n.ppqL, lane = w.lane, sample = n.sample or 0, key = n })
-      end
-      reconcilePCsForChan(chan, records, sink)
-    end
-    pcWrites.commit()
+  rebuildPCs(fx)                              -- 4.5: PC synthesis (trackerMode)
 
-    if dirty then
-      for chan = 1, 16 do channels[chan].columns.pc = { events = {} } end
-      for _, cc in mm:ccs() do
-        if cc.evType == 'pc' then
-          util.add(channels[cc.chan].columns.pc.events, projectCC(cc, mm:tokenOf(cc)))
-        end
-      end
-    end
-  end
-
-  -- 5) Project to logical. tv surface is logical-only; ppq/endppq leave here as floats.
-  -- see docs/trackerManager.md § Rebuild: step 5 — project to logical
-  do
-    local res = mm:resolution()
-    local function projectToLogical(col, chan)
-      for _, evt in ipairs(col.events) do
-        if evt.ppqL ~= nil then
-          -- delayC: realised-frame delay equivalent. Differs from authored delay when
-          -- the unified walk clamped raw against a same-pitch predecessor; renderer cues the give-way.
-          if evt.delay ~= nil then
-            local baseline = tm:fromLogical(chan, evt.ppqL)
-            evt.delayC = util.round(timing.ppqToDelay(evt.ppq - baseline, res))
-          end
-          evt.ppq = evt.ppqL
-        end
-        if evt.endppq ~= nil then
-          evt.endppqC = tm:toLogical(chan, evt.endppq)
-          if evt.endppqL == util.OPEN then
-            evt.endppq = util.OPEN
-          elseif evt.endppqL ~= nil then
-            evt.endppq = evt.endppqL
-          else
-            evt.endppq = evt.endppqC
-          end
-        end
-      end
-      sortByPPQ(col.events)
-    end
-
-    for _, chan in ipairs(channels) do
-      local c, n = chan.columns, chan.chan
-      if c.pc then projectToLogical(c.pc, n) end
-      if c.pb then projectToLogical(c.pb, n) end
-      for _, col in ipairs(c.notes) do projectToLogical(col, n) end
-      if c.at then projectToLogical(c.at, n) end
-      for _, col in pairs(c.ccs) do projectToLogical(col, n) end
-    end
-  end
+  projectLogical()                            -- 5: project columns to logical
 
   reload()
   rebuilding = false
