@@ -320,6 +320,34 @@ return {
     end,
   },
 
+  -- 4d. A duplicate seeded near the take tail straddles the edge: the
+  -- cascade pastes whatever fits, but the re-selection (selectRegionAt)
+  -- must not project a row past the take's last row. duplicateDown and
+  -- groupDuplicate share this projection. Take is 8 rows (0..7); a 2-row
+  -- selection at rows 5..6 clones to rows 7..8, so the naive row2 (8)
+  -- would land off the bottom.
+  {
+    name = 'duplicateDown near the tail clamps the re-selection to the take edge',
+    run = function(harness)
+      local h = harness.mk{
+        seed = {
+          length = 480,   -- 8 rows at 60 ppq/row (rows 0..7)
+          notes = {
+            { ppq = 300, endppq = 360, chan = 1, pitch = 60, vel = 100,
+              detune = 0, delay = 0 },   -- row 5
+          },
+        },
+      }
+      h.vm:setGridSize(80, 40)
+      h.ec:setPos(5, 1, 1)
+      h.ec:extendTo(6, 1, 1)            -- real 2-row selection, rows 5..6
+      h.cmgr:invoke('duplicateDown')
+
+      local _, row2 = h.ec:region()
+      t.eq(row2, 7, 'selection bottom clamped to the take last row, not row 8')
+    end,
+  },
+
   -- 5a. adjustPosition (nudgeForward) with no sel moves the cursor-row
   -- note's ppq forward by rowPerBeat-unit, and the cursor follows so a
   -- repeated keypress keeps targeting the same note (cursorNoteBefore

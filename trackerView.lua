@@ -2076,7 +2076,10 @@ local function selectRegionAt(anchor, rect)
   if not col1 then return end
   local lpr  = logPerRowFor(currentRpb())
   local row1 = anchor.ppq // lpr
-  local row2 = row1 + rect.dur // lpr - 1
+  -- A copy seeded near the tail straddles the take edge (the cascade
+  -- pastes whatever fits); clamp the highlight to the last row so the
+  -- selection can't run off the bottom.
+  local row2 = math.min(row1 + rect.dur // lpr - 1, grid.numRows - 1)
   local pa1, pa2 = grid.cols[col1].partAt, grid.cols[col2].partAt
   ec:setPos(row1, col1, 1)
   ec:setSelection{ row1 = row1, row2 = row2, col1 = col1, col2 = col2,
