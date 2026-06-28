@@ -20,9 +20,6 @@ io.open = function(path, ...)
   return realOpen(path, ...)
 end
 
--- newMidiManager (the fake) stays globally defined: mm_* specs build it directly
--- to pin the token/unified/cc contract. The tm/vm stack below runs the real mm.
-require('fakeMidiManager')
 local util = require('util')
 local newRealMM = require('realMidiManager')()
 require('timing')
@@ -53,27 +50,23 @@ local function seedThrough(mm, payload)
   end)
 end
 
--- Build a fresh scenario. opts keys: seed (notes/ccs + resolution/length/
--- timeSigs), config, data, take, floatPpq, groups. See header for the mm model.
-function harness.mk(opts)
-  opts = opts or {}
+-- Fresh fakeReaper + a real mm bound to its take, carrying :seed/:dump shims.
+-- The shared spine of every scenario: harness.mk layers cm/tm/vm on top;
+-- harness.bareMM hands back just this. The fiddly take-binding sequence lives
+-- in one place on purpose — a second copy would drift.
+local function buildMM(opts)
   local seed = opts.seed or {}
 
-  -- Fresh reaper state per scenario; global-tier stub file likewise, or one
-  -- scenario's cm:set('global', …) leaks into the next.
   fakeReaper = require('fakeReaper').new()
   _G.reaper  = fakeReaper
-  realOpen(globalCfgStub, 'w'):close()
-  realOpen(globalDataStub, 'w'):close()
 
-  local take = opts.take or 'take1'
-  local item, track = take .. '/item', take .. '/track'
-  local resolution  = seed.resolution or 240
-  local lengthPpq   = seed.length     or 3840
+  local take       = opts.take or 'take1'
+  local resolution = seed.resolution or 240
+  local lengthPpq  = seed.length     or 3840
 
   -- Establish the take's resolution/length/time-sig surface before building the
   -- mm: its constructor loads immediately and reads them.
-  fakeReaper:bindTake(take, item, track, lengthPpq / resolution)
+  fakeReaper:bindTake(take, take .. '/item', take .. '/track', lengthPpq / resolution)
   fakeReaper:setResolution(resolution)
   for _, ts in ipairs(seed.timeSigs or {}) do
     fakeReaper:addTimeSigMarker(fakeReaper.MIDI_GetProjTimeFromPPQPos(take, ts.ppq or 0), ts.num, ts.denom)
@@ -88,6 +81,30 @@ function harness.mk(opts)
     for _, c in mm:ccs()   do ccs[#ccs + 1]   = c end
     return { notes = notes, ccs = ccs }
   end
+  return mm, take, fakeReaper
+end
+
+-- A real mm with NO tm/vm wired. mm_* contract specs pin behaviour on a plain
+-- cc, which a tm rebuild would otherwise stamp (ppqL → uuid) out from under
+-- them. The seed payload doubles as the take surface (resolution/length).
+function harness.bareMM(seed)
+  local mm = buildMM{ seed = seed }
+  if seed then mm:seed(seed) end
+  return mm
+end
+
+-- Build a fresh scenario. opts keys: seed (notes/ccs + resolution/length/
+-- timeSigs), config, data, take, floatPpq, groups. See header for the mm model.
+function harness.mk(opts)
+  opts = opts or {}
+  local seed = opts.seed or {}
+
+  local mm, take = buildMM(opts)
+
+  -- Fresh global-tier stub file per scenario, or one scenario's
+  -- cm:set('global', …) leaks into the next.
+  realOpen(globalCfgStub, 'w'):close()
+  realOpen(globalDataStub, 'w'):close()
 
   local ps = util.instantiate('pextStore')
   local cm = util.instantiate('configManager', { ps = ps })

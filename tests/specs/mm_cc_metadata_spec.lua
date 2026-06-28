@@ -8,7 +8,8 @@ local util = require('util')
 -- Plain-cc tests: tm's rebuild rule (Phase 2 two-frame) writes ppqL onto
 -- any non-frame cc passing through, which allocates a uuid via the
 -- metadata path. To pin mm's lock-on-plain-cc contract we need a cc that
--- never went through tm — so a couple of tests below build a bare fakeMM.
+-- never went through tm — so a couple of tests below build a bare mm via
+-- harness.bareMM (real mm, no tm wired).
 
 local function ccAt(mm, i)
   local n = 0
@@ -21,9 +22,8 @@ end
 return {
   {
     name = 'metadata-only assign on a plain (un-uuid\'d) cc requires the lock',
-    run = function()
-      local fm = newMidiManager{ length = 3840, resolution = 240, take = 't' }
-      fm:seed{ ccs = { { ppq = 0, evType = 'cc', chan = 1, cc = 7, val = 64 } } }
+    run = function(harness)
+      local fm = harness.bareMM{ ccs = { { ppq = 0, evType = 'cc', chan = 1, cc = 7, val = 64 } } }
       local ok, err = pcall(function() fm:assign(ccAt(fm, 1).token, { foo = 1 }) end)
       t.falsy(ok, 'expected an assertion')
       t.truthy(tostring(err):find('modify'), 'error mentions modify lock')
@@ -72,10 +72,9 @@ return {
 
   {
     name = 'pure-structural writes leave plain ccs un-uuid\'d',
-    run = function()
+    run = function(harness)
       -- Bare mm (no tm), to keep the cc plain — see header note.
-      local fm = newMidiManager{ length = 3840, resolution = 240, take = 't' }
-      fm:seed{ ccs = { { ppq = 0, evType = 'cc', chan = 1, cc = 7, val = 64 } } }
+      local fm = harness.bareMM{ ccs = { { ppq = 0, evType = 'cc', chan = 1, cc = 7, val = 64 } } }
       fm:modify(function() fm:assign(ccAt(fm, 1).token, { val = 100 }) end)
       t.eq(ccAt(fm, 1).uuid, nil, 'no metadata, no uuid (sidecar-on-touch)')
     end,

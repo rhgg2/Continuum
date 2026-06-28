@@ -29,8 +29,8 @@ return {
 
   {
     name = 'add(cc/pb/pa/at/pc): every evType lands and is byToken-addressable',
-    run = function()
-      local fm = newMidiManager{ length = 3840, resolution = 240, take = 't' }
+    run = function(harness)
+      local fm = harness.bareMM()
       local toks = {}
       fm:modify(function()
         toks.cc = fm:add{ evType = 'cc', ppq = 60,  chan = 2, cc = 7,            val = 64   }
@@ -82,9 +82,8 @@ return {
 
   {
     name = 'assign: cc identity change (chan or cc#) re-keys',
-    run = function()
-      local fm = newMidiManager{ length = 3840, resolution = 240, take = 't' }
-      fm:seed{ ccs = { { ppq = 120, evType = 'cc', chan = 2, cc = 7, val = 64 } } }
+    run = function(harness)
+      local fm = harness.bareMM{ ccs = { { ppq = 120, evType = 'cc', chan = 2, cc = 7, val = 64 } } }
       local _, cc = fm:ccs()()
       local oldTok = fm:tokenOf(cc)
       local newTok
@@ -137,9 +136,8 @@ return {
 
   {
     name = 'events(): yields all live events as (token, evt), notes then ccs',
-    run = function()
-      local fm = newMidiManager{ length = 3840, resolution = 240, take = 't' }
-      fm:seed{
+    run = function(harness)
+      local fm = harness.bareMM{
         notes = {
           { ppq = 0,   endppq = 120, chan = 1, pitch = 60, vel = 100 },
           { ppq = 240, endppq = 360, chan = 1, pitch = 64, vel = 100 },

@@ -40,9 +40,8 @@ return {
 
   {
     name = 'cc: tokenOf round-trips for a plain (un-uuid\'d) cc',
-    run = function()
-      local fm = newMidiManager{ length = 3840, resolution = 240, take = 't' }
-      fm:seed{ ccs = { { ppq = 120, evType = 'cc', chan = 2, cc = 7, val = 64 } } }
+    run = function(harness)
+      local fm = harness.bareMM{ ccs = { { ppq = 120, evType = 'cc', chan = 2, cc = 7, val = 64 } } }
       local tok = token(fm, 'cc', { chan = 2, cc = 7, ppq = 120 })
       local loc, c, kind = fm:byToken(tok)
       t.eq(loc, 1)
@@ -54,9 +53,8 @@ return {
 
   {
     name = 'pb / pa / at / pc: every evType yields a working token',
-    run = function()
-      local fm = newMidiManager{ length = 3840, resolution = 240, take = 't' }
-      fm:seed{ ccs = {
+    run = function(harness)
+      local fm = harness.bareMM{ ccs = {
         { ppq = 0,   evType = 'pb', chan = 1,             val = -2048 },
         { ppq = 60,  evType = 'pa', chan = 3, pitch = 64, vel =  90   },
         { ppq = 120, evType = 'at', chan = 5,             val =  77   },
@@ -124,11 +122,10 @@ return {
 
   {
     name = 'distinct events with overlapping fields get distinct tokens',
-    run = function()
-      local fm = newMidiManager{ length = 3840, resolution = 240, take = 't' }
+    run = function(harness)
       -- A note and a pa at the same (chan, pitch, ppq); a cc#7 vs cc#10
       -- at the same (chan, ppq); a pb at the same (chan, ppq) as an at.
-      fm:seed{
+      local fm = harness.bareMM{
         notes = { { ppq = 0, endppq = 120, chan = 1, pitch = 60, vel = 100 } },
         ccs   = {
           { ppq = 0,  evType = 'pa', chan = 1, pitch = 60, vel = 50 },
