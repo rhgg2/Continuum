@@ -1071,6 +1071,17 @@ end
 
 ----- Rebuild steps
 
+-- True when raw ppq can't be explained by the logical projection: foreign MIDI (no ppqL) or
+-- an external raw edit. staleSwing chans return false -- their divergence is an expected reseat.
+local function rawDivergesFromLogical(evt)
+  if evt.ppqL == nil      then return true  end
+  if staleSwing[evt.chan] then return false end
+  local d = evt.evType == 'note' and delayToPPQ(evt.delay or 0) or 0
+  local rawFromLogical = tm:fromLogical(evt.chan, evt.ppqL, d)
+  if evt.ppq == 0 and rawFromLogical < 0 then return false end
+  return math.abs(evt.ppq - rawFromLogical) > EPS
+end
+
 -- Reseat absorber pbs against the post-walk lane-1 layout, recompute their raw vals,
 -- and project the pb column. see docs/tuning.md § Absorber reconciliation
 local function rebuildPbs(noteLive, replacePb)
@@ -1780,6 +1791,92 @@ local function rebuildRegionPark(deferred)
   batch.commit()
 end
 
+-- 3) Carrier setup + single CC walk: arm prior carriers/sidecars and route them out of columns,
+-- reconcile (raw, ppqL) under swing, project non-pb CCs. Returns reapCarriers(newFxCarrier), run
+-- after 4.6 to disarm stale codes + persist the live map. see docs/trackerManager.md § Rebuild: step 3 — CC walk
+local function rebuildCCs(fx)
+  -- Carrier codes from the prior rebuild: route existing events out of cc columns; new codes
+  -- allocated in 4.6 once windows are known. see design/archive/note-macros.md § Delta-code allocation
+  local prevCarrier  = ds:get('fxCarrier') or {}   -- chan -> { {code, target}, ... }
+  local carrierRoute = {}
+  for chan, carriers in pairs(prevCarrier) do
+    carrierRoute[chan] = {}
+    for _, c in ipairs(carriers) do
+      carrierRoute[chan][c.code] = true
+      mm:wideCC(chan, c.code, true)
+    end
+  end
+
+  local ccWrites = mmBatch()
+  for _, cc in mm:ccs() do
+    if cc.evType == 'cc' and carrierRoute[cc.chan] and carrierRoute[cc.chan][cc.cc] then
+      -- Carrier: generator-owned, no metadata; routed out by allocated code,
+      -- reconciled stream-level at 4.6. see design/archive/note-macros.md § Delta-code allocation
+      util.add(fx.ccExisting[cc.chan].carrier,
+        { ppq = cc.ppq, val = cc.val, shape = cc.shape, cc = cc.cc, token = mm:tokenOf(cc) })
+      goto continue
+    end
+    -- Rest seat: a generator-owned base CC at a real cc target (derived sidecar), routed out
+    -- of columns like a carrier so it stays off-screen. see design/note-macros-v2.md § Continuous cc
+    if cc.evType == 'cc' and cc.derived == 'ccbase' then
+      util.add(fx.ccExisting[cc.chan].base,
+        { ppq = cc.ppq, val = cc.val, cc = cc.cc, token = mm:tokenOf(cc) })
+      goto continue
+    end
+    -- Replace fill: the generated curve written straight onto a cc target (replace mode), routed
+    -- out like the rest seat and reconciled at Pass B. see design/note-macros-v2.md § Continuous cc
+    if cc.evType == 'cc' and cc.derived == 'ccfill' then
+      util.add(fx.ccExisting[cc.chan].fill,
+        { ppq = cc.ppq, val = cc.val, shape = cc.shape, cc = cc.cc, token = mm:tokenOf(cc) })
+      goto continue
+    end
+    if not cc.derived then
+      if staleSwing[cc.chan] and cc.ppqL ~= nil then
+        local newPpq = tm:fromLogical(cc.chan, cc.ppqL)
+        if newPpq ~= cc.ppq then
+          ccWrites.assign({ token = mm:tokenOf(cc) }, { ppq = newPpq })
+          cc.ppq = newPpq
+        end
+      elseif rawDivergesFromLogical(cc) then
+        local newPpqL = tm:toLogical(cc.chan, cc.ppq)
+        ccWrites.assign({ token = mm:tokenOf(cc) }, { ppqL = newPpqL })
+        cc.ppqL = newPpqL
+      end
+    end
+
+    if cc.evType == 'cc' or cc.evType == 'at' or cc.evType == 'pc' then
+      local channel = channels[cc.chan]
+      local tok     = mm:tokenOf(cc)
+      local col
+      if cc.evType == 'cc' then
+        col = channel.columns.ccs[cc.cc] or { cc = cc.cc, events = {} }
+        channel.columns.ccs[cc.cc] = col
+      else
+        col = channel.columns[cc.evType] or { events = {} }
+        channel.columns[cc.evType] = col
+      end
+      util.add(col.events, projectCC(cc, tok))
+    end
+    ::continue::
+  end
+  ccWrites.commit()
+
+  -- Reap stale carrier codes (relocated / removed); persist live map for pa's add bank.
+  -- see design/archive/note-macros.md § Delta-code allocation
+  return function(newFxCarrier)
+    for chan in pairs(carrierRoute) do
+      local live = {}
+      for _, c in ipairs(newFxCarrier[chan] or {}) do live[c.code] = true end
+      for code in pairs(carrierRoute[chan]) do
+        if not live[code] then mm:wideCC(chan, code, false) end
+      end
+    end
+    if not util.deepEq(prevCarrier, newFxCarrier) and mm:take() then
+      ds:assign('fxCarrier', next(newFxCarrier) and newFxCarrier or util.REMOVE)
+    end
+  end
+end
+
 ----- Rebuild
 
 local rebuilding = false
@@ -1815,15 +1912,6 @@ function tm:rebuild(takeChanged)
 
   -- 0) Partition mm events into internal (stamped + raw = fromLogical(ppqL)) and external.
   -- see docs/trackerManager.md § Rebuild: step 0 — internal/external partition
-  local function rawDivergesFromLogical(evt)
-    if evt.ppqL == nil      then return true  end
-    if staleSwing[evt.chan] then return false end
-    local d = evt.evType == 'note' and delayToPPQ(evt.delay or 0) or 0
-    local rawFromLogical = tm:fromLogical(evt.chan, evt.ppqL, d)
-    if evt.ppq == 0 and rawFromLogical < 0 then return false end
-    return math.abs(evt.ppq - rawFromLogical) > EPS
-  end
-
   local internal, external = {}, {}
   for _, note in mm:notes() do
     if note.derived then
@@ -1831,17 +1919,6 @@ function tm:rebuild(takeChanged)
       util.add(fx.noteExisting[note.chan], note)
     elseif rawDivergesFromLogical(note) then util.add(external, note)
     else util.add(internal, note)
-    end
-  end
-  -- Carrier codes from the prior rebuild: route existing events out of cc columns
-  -- (step 3 reads carrierRoute); new codes allocated in 4.6 once windows are known. see design/archive/note-macros.md § Delta-code allocation
-  local prevCarrier = ds:get('fxCarrier') or {}   -- chan -> { {code, target}, ... }
-  local carrierRoute = {}
-  for chan, carriers in pairs(prevCarrier) do
-    carrierRoute[chan] = {}
-    for _, c in ipairs(carriers) do
-      carrierRoute[chan][c.code] = true
-      mm:wideCC(chan, c.code, true)
     end
   end
   -- 2) Allocate note columns for internals (stamped path). Clone rather than alias:
@@ -1858,64 +1935,8 @@ function tm:rebuild(takeChanged)
     util.add(col.events, ce)
   end
 
-  -- 3) Single CC walk. Reconciles (raw, ppqL) under current swing; projects non-pb CCs.
-  -- see docs/trackerManager.md § Rebuild: step 3 — CC walk
-  do
-    local ccWrites = mmBatch()
-    for _, cc in mm:ccs() do
-      if cc.evType == 'cc' and carrierRoute[cc.chan] and carrierRoute[cc.chan][cc.cc] then
-        -- Carrier: generator-owned, no metadata; routed out by allocated code,
-        -- reconciled stream-level at 4.6. see design/archive/note-macros.md § Delta-code allocation
-        util.add(fx.ccExisting[cc.chan].carrier,
-          { ppq = cc.ppq, val = cc.val, shape = cc.shape, cc = cc.cc, token = mm:tokenOf(cc) })
-        goto continue
-      end
-      -- Rest seat: a generator-owned base CC at a real cc target (derived sidecar), routed out
-      -- of columns like a carrier so it stays off-screen. see design/note-macros-v2.md § Continuous cc
-      if cc.evType == 'cc' and cc.derived == 'ccbase' then
-        util.add(fx.ccExisting[cc.chan].base,
-          { ppq = cc.ppq, val = cc.val, cc = cc.cc, token = mm:tokenOf(cc) })
-        goto continue
-      end
-      -- Replace fill: the generated curve written straight onto a cc target (replace mode), routed
-      -- out like the rest seat and reconciled at Pass B. see design/note-macros-v2.md § Continuous cc
-      if cc.evType == 'cc' and cc.derived == 'ccfill' then
-        util.add(fx.ccExisting[cc.chan].fill,
-          { ppq = cc.ppq, val = cc.val, shape = cc.shape, cc = cc.cc, token = mm:tokenOf(cc) })
-        goto continue
-      end
-      if not cc.derived then
-        if staleSwing[cc.chan] and cc.ppqL ~= nil then
-          local newPpq = tm:fromLogical(cc.chan, cc.ppqL)
-          if newPpq ~= cc.ppq then
-            ccWrites.assign({ token = mm:tokenOf(cc) }, { ppq = newPpq })
-            cc.ppq = newPpq
-          end
-        elseif rawDivergesFromLogical(cc) then
-          local newPpqL = tm:toLogical(cc.chan, cc.ppq)
-          ccWrites.assign({ token = mm:tokenOf(cc) }, { ppqL = newPpqL })
-          cc.ppqL = newPpqL
-        end
-      end
-
-      if cc.evType == 'cc' or cc.evType == 'at' or cc.evType == 'pc' then
-        local channel = channels[cc.chan]
-        local tok     = mm:tokenOf(cc)
-        local col
-        if cc.evType == 'cc' then
-          col = channel.columns.ccs[cc.cc] or { cc = cc.cc, events = {} }
-          channel.columns.ccs[cc.cc] = col
-        else
-          col = channel.columns[cc.evType] or { events = {} }
-          channel.columns[cc.evType] = col
-        end
-        util.add(col.events, projectCC(cc, tok))
-      end
-      ::continue::
-    end
-
-    ccWrites.commit()
-  end
+  -- 3) Carrier setup + single CC walk; returns the carrier reaper for 4.6 (see rebuildCCs).
+  local reapCarriers = rebuildCCs(fx)
 
   -- 4) Reconcile extras.
   do
@@ -2042,17 +2063,7 @@ function tm:rebuild(takeChanged)
 
   -- 4.6) Fx expansion: derived notes/CCs/carriers, note writes deferred to 4.8 (see rebuildFx).
   local newFxCarrier = rebuildFx(fx, deferred, authoredPbByChan, fxWindow, nextInLane)
-  -- Reap stale carrier codes (relocated / removed); persist live map for pa's add bank. see design/archive/note-macros.md § Delta-code allocation
-  for chan in pairs(carrierRoute) do
-    local live = {}
-    for _, c in ipairs(newFxCarrier[chan] or {}) do live[c.code] = true end
-    for code in pairs(carrierRoute[chan]) do
-      if not live[code] then mm:wideCC(chan, code, false) end
-    end
-  end
-  if not util.deepEq(prevCarrier, newFxCarrier) and mm:take() then
-    ds:assign('fxCarrier', next(newFxCarrier) and newFxCarrier or util.REMOVE)
-  end
+  reapCarriers(newFxCarrier)
 
   -- 4.8) Unified tail/onset walk + atomic commit (see rebuildTails).
   rebuildTails(fx, deferred)
