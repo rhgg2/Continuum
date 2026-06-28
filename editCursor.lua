@@ -544,15 +544,24 @@ do
                         or nil
   end
 
+  -- Top clamped at row 0; bottom may hang (gm withholds off-take, one row must remain).
+  -- Commit is unconditional: a rare moveInstance reject still flushes the gap-clear.
   local function moveBy(rowDelta)
     local cur = currentEntry()
     if not cur then return end
-    local anchor = { ppq  = cur.anchor.ppq + rowDelta * logPerRow(),
-                     chan = cur.anchor.chan }
-    if gmgr():moveInstance(regionCursor.groupId, regionCursor.instId, anchor) then
-      cursorRow = cursorRow + rowDelta
+    local lpr     = logPerRow()
+    local fromRow = math.floor(cur.anchor.ppq / lpr + 0.5)
+    local toRow   = util.clamp(fromRow + rowDelta, 0, grid.numRows - 1)
+    if toRow == fromRow then return end
+    local dest = { ppq = toRow * lpr, chan = cur.anchor.chan }
+    if groupBridge.clearMoveGap then
+      groupBridge.clearMoveGap(regionCursor.groupId, cur.anchor, dest)
+    end
+    if gmgr():moveInstance(regionCursor.groupId, regionCursor.instId, dest) then
+      cursorRow = cursorRow + (toRow - fromRow)
       clampPos(); moveHook()
     end
+    if groupBridge.commit then groupBridge.commit() end
   end
 
   local function resizeBy(edits)

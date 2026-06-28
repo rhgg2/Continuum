@@ -138,4 +138,81 @@ return {
       t.truthy(at600, 'a projected copy landed at the paste anchor')
     end,
   },
+
+  {
+    name = 'a wired move clears the swept-onto foreign notes and relocates the instance',
+    run = function(harness)
+      -- 60 ppq/row. 1-row group at row 0; a foreign note sits two rows
+      -- down, where the group lands after two nudges.
+      local h = harness.mk{ groups = true, seed = { notes = {
+        { ppq =   0, endppq =  60, chan = 1, pitch = 60, vel = 100 }, -- group member
+        { ppq = 120, endppq = 180, chan = 1, pitch = 72, vel = 100 }, -- foreign, 2 rows down
+      } } }
+      local ci   = noteCol(h, 1)
+      local seed = { ppq = 0, dur = 60, chanLo = 1, streams = { [0] = { ['note:1'] = true } } }
+      h.gm:mark(h.vm:eventsInRect(seed), seed)
+
+      h.ec:setPos(0, ci, 1)
+      h.ec:regionArm()                 -- arms on the instance under the caret
+      t.truthy(h.ec:isInRegionMode(), 'armed')
+
+      h.cmgr:invoke('nudgeForward')    -- +1 row
+      h.cmgr:invoke('nudgeForward')    -- +1 row: group now over the foreign note
+
+      local notes = h.fm:dump().notes
+      t.falsy(byPitch(notes, 72), 'foreign note the group swept onto was cleared')
+      local m = byPitch(notes, 60)
+      t.truthy(m, 'member survived')
+      t.eq(m.ppq, 120, 'member relocated to the new anchor (flushed, not deferred)')
+    end,
+  },
+
+  {
+    name = 'clearMoveGap on an overlapping nudge spares the cells the source still covers',
+    run = function(harness)
+      -- 2-row rect +1 row: source covers [60,120), so only the leading gap [120,180) is
+      -- clearable -- own notes in the overlap must survive (whole-dest clear would eat them).
+      local h = harness.mk{ groups = true, seed = { notes = {
+        { ppq =  60, endppq = 100, chan = 1, pitch = 60, vel = 100 }, -- overlap, spared
+        { ppq = 120, endppq = 160, chan = 1, pitch = 62, vel = 100 }, -- leading gap, wiped
+      } } }
+      h.vm:clearMoveGap(
+        { ppq = 0, dur = 120, chanLo = 1, streams = { [0] = { ['note:1'] = true } } },
+        { ppq = 0, chan = 1 }, { ppq = 60, chan = 1 })
+      h.tm:flush()
+      local notes = h.fm:dump().notes
+      t.truthy(byPitch(notes, 60), 'overlap cell (own notes live here) spared')
+      t.falsy (byPitch(notes, 62), 'leading-gap foreign note wiped')
+    end,
+  },
+
+  {
+    name = 'a move hanging the group off the take end withholds the off-take member, revives it on return',
+    run = function(harness)
+      -- 60 ppq/row, take 240 (rows 0..3). 2-row group; nudged to the last row its lower
+      -- member falls off-take -- writing it would push REAPER's EOT and grow the take.
+      local h = harness.mk{ groups = true, seed = { length = 240, notes = {
+        { ppq =  0, endppq =  40, chan = 1, pitch = 60, vel = 100 }, -- group row 0
+        { ppq = 60, endppq = 100, chan = 1, pitch = 62, vel = 100 }, -- group row 1
+      } } }
+      local ci   = noteCol(h, 1)
+      local seed = { ppq = 0, dur = 120, chanLo = 1, streams = { [0] = { ['note:1'] = true } } }
+      h.gm:mark(h.vm:eventsInRect(seed), seed)
+      h.ec:setPos(0, ci, 1)
+      h.ec:regionArm()
+
+      h.cmgr:invoke('nudgeForward')   -- row 1
+      h.cmgr:invoke('nudgeForward')   -- row 2
+      h.cmgr:invoke('nudgeForward')   -- row 3: lower member would land at ppq 240, off-take
+      local notes = h.fm:dump().notes
+      t.truthy(byPitch(notes, 60), 'on-take member present')
+      t.eq(byPitch(notes, 60).ppq, 180, 'top member at the last take row')
+      t.falsy(byPitch(notes, 62), 'off-take member withheld (take did not grow)')
+
+      h.cmgr:invoke('nudgeBack')      -- back to row 2: lower member on-take again
+      notes = h.fm:dump().notes
+      t.truthy(byPitch(notes, 62), 'withheld member revived on return')
+      t.eq(byPitch(notes, 62).ppq, 180, 'revived at its in-take ppq')
+    end,
+  },
 }

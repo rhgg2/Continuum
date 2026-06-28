@@ -2213,28 +2213,26 @@ function tv:selectionAsRect()
            chanLo = chanLo, streams = streams }
 end
 
--- Concrete events the rect contains. Membership is the mirror predicate
--- in the logical frame: onset ppq in the span AND the column's stream is
--- selected for its channel offset. col.events ppq is logical (tm
--- invariant), so the comparison needs no swing maths.
--- chan/lane/cc are column-implicit in the tm stack (the container is the
--- channel/lane); gm needs them per-event for its anchor maths and must
--- keep object identity (it links the live evt for propagation), so we
--- backfill the authoritative column values rather than clone.
-function tv:eventsInRect(rect)
-  local lo, hi = rect.ppq, rect.ppq + rect.dur
-  local out = {}
+-- Shared spine of eventsInRect/clearRegionAt/clearMoveGap. Backfills chan/lane/cc
+-- (gm needs per-event identity for propagation); no swing (col.events ppq is logical).
+local function eachMemberEvent(rect, chanOrigin, lo, hi, body)
   for _, col in ipairs(grid.cols) do
-    local sel = rect.streams[col.midiChan - rect.chanLo]
+    local sel = rect.streams[col.midiChan - chanOrigin]
     if sel and sel[streamIdOf(col)] then
-      for evt in util.between(col.events, lo, hi) do
-        evt.chan = evt.chan or col.midiChan
-        if col.type == 'note' then evt.lane = evt.lane or col.lane
-        elseif col.type == 'cc' then evt.cc  = evt.cc  or col.cc end
-        util.add(out, evt)
-      end
+      for evt in util.between(col.events, lo, hi) do body(col, evt) end
     end
   end
+end
+
+function tv:eventsInRect(rect)
+  local out = {}
+  eachMemberEvent(rect, rect.chanLo, rect.ppq, rect.ppq + rect.dur,
+    function(col, evt)
+      evt.chan = evt.chan or col.midiChan
+      if col.type == 'note' then evt.lane = evt.lane or col.lane
+      elseif col.type == 'cc' then evt.cc  = evt.cc  or col.cc end
+      util.add(out, evt)
+    end)
   return out
 end
 
@@ -2252,13 +2250,22 @@ end
 -- (out-of-range / live-group overlap) is a rare pre-beta edge the
 -- bounds/no-straddle gates already exclude for the common path.
 function tv:clearRegionAt(rect, anchor)
-  local lo, hi = anchor.ppq, anchor.ppq + rect.dur
-  for _, col in ipairs(grid.cols) do
-    local sel = rect.streams[col.midiChan - anchor.chan]
-    if sel and sel[streamIdOf(col)] then
-      for evt in util.between(col.events, lo, hi) do tm:deleteEvent(evt) end
-    end
-  end
+  eachMemberEvent(rect, anchor.chan, anchor.ppq, anchor.ppq + rect.dur,
+    function(_, evt) tm:deleteEvent(evt) end)
+end
+
+-- Clear only the foreign notes newly swept onto -- spares the source-overlap where own
+-- notes still live. Member cells; stages deletes, caller flushes (as clearRegionAt).
+function tv:clearMoveGap(rect, srcAnchor, destAnchor)
+  local dur = rect.dur
+  local srcLo, srcHi = srcAnchor.ppq, srcAnchor.ppq + dur
+  local dstLo, dstHi = destAnchor.ppq, destAnchor.ppq + dur
+  local lo, hi
+  if     dstLo >= srcHi or dstHi <= srcLo then lo, hi = dstLo, dstHi
+  elseif dstLo > srcLo                    then lo, hi = srcHi, dstHi
+  else                                         lo, hi = dstLo, srcLo end
+  eachMemberEvent(rect, destAnchor.chan, lo, hi,
+    function(_, evt) tm:deleteEvent(evt) end)
 end
 
 -- Cursor as a mirror anchor: { ppq, chan } in the logical frame.
@@ -2894,6 +2901,12 @@ local groupBridge = {
   clearAt           = function(g, anchor)
     local rect = gm:groupRect(g)
     if rect then tv:clearRegionAt(rect, anchor) end
+  end,
+  -- Like clearAt but for a move: wipes only the foreign notes the
+  -- destination newly covers, sparing the instance's own on a small nudge.
+  clearMoveGap      = function(g, srcAnchor, destAnchor)
+    local rect = gm:groupRect(g)
+    if rect then tv:clearMoveGap(rect, srcAnchor, destAnchor) end
   end,
   -- gm only stages; the creation verbs flush so a new instance
   -- materialises now, not on the next unrelated mutation.

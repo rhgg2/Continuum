@@ -1,4 +1,4 @@
-@module groupManager  src=groupManager.lua  loc=927  sha=4ae9c74  mode=chunk  self=gm
+@module groupManager  src=groupManager.lua  loc=934  sha=ebd10c8  mode=chunk  self=gm
 @deps tm, ds
 
 # Invariants & contracts
@@ -177,16 +177,11 @@
       -- the instance, and -- if it was the group's last -- drop the group,
       -- clearing the active pointer if it named it. Unknown id -> nil, reason.
       @contract  (groupId, instId) -> true | nil,reason; stages tm deletes for the instance's concretes, last instance drops the group + clears active. Unknown id -> nil,reason.
-  @api gm:moveInstance(groupId, instId, anchor)  @ 831-857
-      -- Re-anchor an instance. The group frame is anchor-invariant, so a pure
-      -- move is zero group-frame drift and reproject (drift-driven) cannot see
-      -- it: re-place every projected concrete through the group->instance dual
-      -- at the new anchor directly, gated selfStaged so the echo never
-      -- re-enters applyEdit. Rejected (instance untouched) on channel range or
-      -- a collision with another group or a sibling -- the moving instance
-      -- itself excluded so it cannot self-collide.
-      @contract  (groupId, instId, anchor) -> true | nil,reason. Precondition: caller has cleared the destination cells -- gm only re-places its own concretes, never clears foreign ones (as gm:newInstance, take/region bounds are the caller's). gm validates channel range + cross-group/sibling disjointness only.
-  @api gm:resizeGroup(groupId, instId, edits)  @ 871-925
+  @api gm:moveInstance(groupId, instId, anchor)  @ 826-864
+      -- Re-anchor directly (reproject can't see anchor-invariant moves; see docs/groupManager.md
+      -- § Instance lifecycle). onTake withholds off-take members and revives on return (bottom only).
+      @contract  (groupId, instId, anchor) -> true | nil,reason. Caller cleared dest + clamped top.
+  @api gm:resizeGroup(groupId, instId, edits)  @ 878-932
       -- Resize the SHARED rect from edge instance `instId`'s drag. startDelta
       -- re-origins (Model A: every anchor += startDelta, every group event
       -- ppq -= startDelta) so realised positions hold while the boundary
@@ -204,18 +199,18 @@
   @use call    ds.assign  @ persist:244
   @use call    ds.get  @ 28 rehydrate:252
   @use call    groups.deriveAssign  @ absorbSiblingOverrides:352 localAmend:636
-  @use call    groups.inRect  @ classifyCreate:373 resizeGroup:902
-  @use call    groups.project  @ rehydrate:262 newInstance:475 stateOf:548 reproject:575
+  @use call    groups.inRect  @ classifyCreate:373 resizeGroup:909
+  @use call    groups.project  @ rehydrate:262 newInstance:475 stateOf:548 reproject:575 moveInstance:840
   @use call    groups.reconcile  @ reproject:588
   @use call    groups.resolve  @ absorbSiblingOverrides:361
   @use call    groups.streamId  @ sameSlot:316
-  @use call    tm.addEvent  @ newInstance:479 reproject:604
-  @use call    tm.assignEvent  @ reproject:611 moveInstance:849
+  @use call    tm.addEvent  @ newInstance:479 reproject:604 moveInstance:851
+  @use call    tm.assignEvent  @ reproject:611 moveInstance:848
   @use call    tm.byUuid  @ rehydrate:265 782
-  @use call    tm.deleteEvent  @ reproject:617 deleteInstance:808
+  @use call    tm.deleteEvent  @ reproject:617 deleteInstance:808 moveInstance:856
   @use call    tm.length  @ onTake:166
   @use call    util.assign  @ localAmend:640 applyEdit:726
-  @use call    util.clone  @ rehydrate:268 markGroup:450 newInstance:481 reproject:608,614 applyEdit:689,722 resizeGroup:919
+  @use call    util.clone  @ rehydrate:268 markGroup:450 newInstance:481 reproject:608,614 applyEdit:689,722 moveInstance:853 resizeGroup:926
   @use require groups  @ 11
   @use require util  @ 10
   @use sub     ds:dataChanged  @ 790

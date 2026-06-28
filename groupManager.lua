@@ -820,14 +820,9 @@ function gm:deleteInstance(groupId, instId)
   return true
 end
 
--- Re-anchor an instance. The group frame is anchor-invariant, so a pure
--- move is zero group-frame drift and reproject (drift-driven) cannot see
--- it: re-place every projected concrete through the group->instance dual
--- at the new anchor directly, gated selfStaged so the echo never
--- re-enters applyEdit. Rejected (instance untouched) on channel range or
--- a collision with another group or a sibling -- the moving instance
--- itself excluded so it cannot self-collide.
---contract: (groupId, instId, anchor) -> true | nil,reason. Precondition: caller has cleared the destination cells -- gm only re-places its own concretes, never clears foreign ones (as gm:newInstance, take/region bounds are the caller's). gm validates channel range + cross-group/sibling disjointness only.
+-- Re-anchor directly (reproject can't see anchor-invariant moves; see docs/groupManager.md
+-- § Instance lifecycle). onTake withholds off-take members and revives on return (bottom only).
+--contract: (groupId, instId, anchor) -> true | nil,reason. Caller cleared dest + clamped top.
 function gm:moveInstance(groupId, instId, anchor)
   local group = groups[groupId]
   if not group then return nil, 'no such group' end
@@ -841,13 +836,25 @@ function gm:moveInstance(groupId, instId, anchor)
     return nil, 'overlaps an existing mirror group'
   end
 
+  local p       = projOf(groupId, instId)
+  local desired = groupsCore.project(group, instance)
   propagating = true
-  for _, rec in pairs(projOf(groupId, instId)) do
-    if rec.evt and rec.groupEvt then
-      local placed = toInstance(rec.groupEvt, anchor)
-      selfAssigned[rec.evt] = true
-      tm:assignEvent(rec.evt,
-        { ppq = placed.ppq, chan = placed.chan, endppq = placed.endppq })
+  for vuid, g in pairs(desired) do
+    local rec    = p[vuid]
+    local placed = toInstance(g, anchor)
+    if onTake(placed) then
+      if rec and rec.evt then               -- on-take, linked: re-place it
+        selfAssigned[rec.evt] = true
+        tm:assignEvent(rec.evt,
+          { ppq = placed.ppq, chan = placed.chan, endppq = placed.endppq })
+      else                                  -- on-take, withheld: revive it
+        tm:addEvent(placed)
+        selfStaged[placed] = true
+        link(groupId, instId, vuid, p, nil, util.clone(g), placed)
+      end
+    elseif rec and rec.evt then             -- gone off-take: withhold it
+      tm:deleteEvent(rec.evt)
+      unlink(p, vuid)
     end
   end
   propagating = false

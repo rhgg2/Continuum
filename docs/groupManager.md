@@ -155,8 +155,14 @@ take-changed rebuild.
 a pure re-anchor produces *zero* drift: `reproject` would compare an
 unchanged shadow against an unchanged `desired` and emit nothing.
 `moveInstance` therefore cannot delegate the move to the seam — it
-stages the re-placement itself, mapping each projected concrete through
-the group→instance dual at the new anchor. That staged assign echoes
+reconciles the instance's concretes against the *desired* projection at
+the new anchor itself, mapping each through the group→instance dual.
+Placing concretes directly also makes it own the take-edge call the seam
+would otherwise make: through `onTake` it withholds a member the move
+pushes off the take end (deleted + unlinked) and revives it (re-added)
+when a later move brings it back on. Only the bottom edge can hang — the
+caller clamps the anchor so the top stays on-take, mirroring the absent
+start-edge trim. That staged assign echoes
 back through `preflush` like any gm-driven write; for a synced instance
 it is neutral, but on an override instance the echo would re-enter
 `applyEdit` and accrete a base-valued sticky `assign` that later pins

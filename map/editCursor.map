@@ -1,4 +1,4 @@
-@module editCursor  src=editCursor.lua  loc=728  sha=b473ca9  mode=chunk  self=ec
+@module editCursor  src=editCursor.lua  loc=737  sha=7e24684  mode=chunk  self=ec
 @deps grid, cm, cmgr, rowPerBar, logPerRow, moveHook, groupBridge
 
 # Invariants & contracts
@@ -110,11 +110,13 @@
       -- Cascade: the copy lands one group-length past the armed instance and
       -- the border advances onto it, so repeats lay a run hands-free.
   @fn dropInstance()  @ 537-545
-  @fn moveBy(rowDelta)  @ 547-556
-  @fn resizeBy(edits)  @ 558-561
-  @fn paintCell(on)  @ 563-567
+  @fn moveBy(rowDelta)  @ 549-565
+      -- Top clamped at row 0; bottom may hang (gm withholds off-take, one row must remain).
+      -- Commit is unconditional: a rare moveInstance reject still flushes the gap-clear.
+  @fn resizeBy(edits)  @ 567-570
+  @fn paintCell(on)  @ 572-576
   -- Group-instance hop (editing mode)
-  @fn hopInstance(step)  @ 619-637
+  @fn hopInstance(step)  @ 628-646
       -- [ / ] in normal editing jump the caret to the same row offset in the
       -- prev/next instance of the group it sits inside. Column is left as-is:
       -- "same place" is the relative row; chasing the stream across instances
@@ -122,7 +124,7 @@
       -- for this verb. The border feedback is the rendering layer's.
   -- Commands
   -- Decoration
-  @fn partsFor(type, showDelay, trackerMode)  @ 685-699
+  @fn partsFor(type, showDelay, trackerMode)  @ 694-708
       -- One char of separator between adjacent parts in the rendered cell.
 
 # Public API (ec:*)
@@ -159,14 +161,14 @@
   @api ec:selectColumn(col)  @ 471-474
   @api ec:isInRegionMode()  @ 479
   @api ec:regionCursor()  @ 480
-  @api ec:regionArm()  @ 571-581
+  @api ec:regionArm()  @ 580-590
       -- DWIM: a selection seeds a new group; else arm the caret's instance; else nothing.
       -- enterArmed is idempotent: a re-press just re-points the border at the caret.
-  @api ec:regionExit()  @ 585
+  @api ec:regionExit()  @ 594
       -- Leave armed mode without touching the selection (Esc/Enter/note-key execute-through).
       -- regionBail (Super-G) also clears the selection.
-  @api ec:registerCommands(scope)  @ 641-668
-  @api ec:decorateCol(col, pitchWidth)  @ 703-725
+  @api ec:registerCommands(scope)  @ 650-677
+  @api ec:decorateCol(col, pitchWidth)  @ 712-734
       @contract  derives col part fields from type/showDelay/trackerMode; pitch width = pitchWidth
       @invariant  ec is the sole writer of col.{parts, stopPos, partAt, partStart, width}
 
@@ -174,14 +176,15 @@
   @use call    cm.get  @ selUpdate:99 advance:456
   @use call    cmgr.pop  @ exitMode:495
   @use call    cmgr.push  @ enterArmed:502
-  @use call    cmgr.scope  @ 590
+  @use call    cmgr.scope  @ 599
   @use call    groupBridge.clearAt  @ stampAt:520
-  @use call    groupBridge.commit  @ newFromSelection:513 stampAt:523
+  @use call    groupBridge.clearMoveGap  @ moveBy:558
+  @use call    groupBridge.commit  @ newFromSelection:513 stampAt:523 moveBy:564
   @use call    groupBridge.cursorAnchor  @ newInstance:526
   @use call    groupBridge.eventsInRect  @ newFromSelection:509
-  @use call    groupBridge.instanceAt  @ regionArm:577 hopInstance:621
-  @use call    groupBridge.paintStream  @ paintCell:565
+  @use call    groupBridge.instanceAt  @ regionArm:586 hopInstance:630
+  @use call    groupBridge.paintStream  @ paintCell:574
   @use call    groupBridge.selectionAsRect  @ newFromSelection:507
-  @use call    util.add  @ partsFor:688,689,690 decorateCol:715,716,717
-  @use call    util.clamp  @ clampPos:55,56,57 shiftSelection:446,447,448
+  @use call    util.add  @ partsFor:697,698,699 decorateCol:724,725,726
+  @use call    util.clamp  @ clampPos:55,56,57 shiftSelection:446,447,448 moveBy:554
   @use require util  @ 25
