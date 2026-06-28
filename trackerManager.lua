@@ -1033,20 +1033,23 @@ end
 -- Accumulate mm ops, commit once in canonical delete -> assign -> add order; no-op if empty.
 -- assign re-keys a passed evt's token in place when an identity field moved (mirrors assignList).
 local function mmBatch()
-  local dels, assigns, adds = {}, {}, {}
+  local dels, assigns, adds, lazyAdds = {}, {}, {}, {}
   return {
-    del    = function(evt)                util.add(dels, evt) end,
-    assign = function(token, update, evt) util.add(assigns, { token = token, update = update, evt = evt }) end,
-    add    = function(spec)               util.add(adds, spec) end,
-    commit = function()
-      if #dels + #assigns + #adds == 0 then return end
+    del     = function(evt)                util.add(dels, evt) end,
+    assign  = function(token, update, evt) util.add(assigns, { token = token, update = update, evt = evt }) end,
+    add     = function(spec)               util.add(adds, spec) end,
+    -- addLazy: fn produces its spec at commit, after any post-accumulation mutation it must read.
+    addLazy = function(fn)                 util.add(lazyAdds, fn) end,
+    commit  = function()
+      if #dels + #assigns + #adds + #lazyAdds == 0 then return end
       mm:modify(function()
         for _, e in ipairs(dels) do mm:delete(e.token) end
         for _, a in ipairs(assigns) do
           local newTok = mm:assign(a.token, a.update)
           if a.evt and newTok and newTok ~= a.token then a.evt.token = newTok end
         end
-        for _, s in ipairs(adds) do mm:add(s) end
+        for _, s  in ipairs(adds)     do mm:add(s)    end
+        for _, fn in ipairs(lazyAdds) do mm:add(fn()) end
       end)
     end,
   }
@@ -1082,7 +1085,7 @@ end
 
 -- Reseat absorber pbs against the post-walk lane-1 layout, recompute their raw vals,
 -- and project the pb column. see docs/tuning.md § Absorber reconciliation
-local function rebuildPbs(fxLive, replacePbWindows)
+local function rebuildPbs(noteLive, replacePb)
   local extras = ds:get('extraColumns') or {}
 
   local function detuneAt(events, P)
@@ -1094,7 +1097,7 @@ local function rebuildPbs(fxLive, replacePbWindows)
   -- to its wire raw (column cents untouched) -- the node's base is detune-only. see design/note-macros-v2.md § Continuous pb replace
   local function inReplacePb(chan, P)
     local pL = tm:toLogical(chan, P)
-    for _, w in ipairs(replacePbWindows[chan]) do
+    for _, w in ipairs(replacePb[chan]) do
       if pL >= w[1] and pL < w[2] then return true end
     end
     return false
@@ -1112,7 +1115,7 @@ local function rebuildPbs(fxLive, replacePbWindows)
     end
     -- Derived lane-1 fxNotes (a trill's per-fxNote detune) are routed out of
     -- columns; union them so the absorber pass seats their detune jumps.
-    for _, w in ipairs(fxLive[chan]) do
+    for _, w in ipairs(noteLive[chan]) do
       if w.lane == 1 then util.add(list, w.evt) end
     end
     table.sort(list, function(a, b) return a.ppq < b.ppq end)
@@ -1295,19 +1298,18 @@ function tm:rebuild(takeChanged)
     channels[i] = { chan = i, columns = { notes = {}, ccs = {} } }
   end
 
-  -- fxExisting: derived notes parsed at step 0, reconciled at 4.6.
-  -- fxLive: post-expansion set unioned into the tail walk and PC synthesis.
-  local fxExisting, fxLive, carrierExisting, ccBaseExisting, ccFillExisting, replacePbWindows = {}, {}, {}, {}, {}, {}
-  for i = 1, 16 do fxExisting[i] = {}; fxLive[i] = {}; carrierExisting[i] = {}; ccBaseExisting[i] = {}; ccFillExisting[i] = {}; replacePbWindows[i] = {} end
-  -- fxNote add/del deferred from 4.6 into the 4.8 atomic note commit, so the host clip
-  -- and the fxNote inserts land in one mm:modify (one MIDI_Sort, no transient overlap).
-  local fxToRemove, fxToAdd = {}, {}
-  -- Parked members restored to the take (region removed / window moved off them): the mm:add
-  -- rides the 4.8 commit so the outgoing derived note at a shared (pitch, ppq) is deleted first.
-  local fxToRestore = {}
-  -- host event -> pre-fx realised tail, stashed at 4.6, restored onto the
-  -- column event after the 4.8 tail walk so the view sees the authored note.
-  local fxHostEnd = {}
+  -- Per-channel fx realisation state (hostEnd is host-event-keyed, not per-channel).
+  -- noteExisting/noteLive: derived vs post-expansion fx notes. ccExisting: carrier/base/fill CC. replacePb: pb windows.
+  local fx = { noteExisting = {}, noteLive = {}, ccExisting = {}, replacePb = {}, hostEnd = {} }
+  for i = 1, 16 do
+    fx.noteExisting[i] = {}
+    fx.noteLive[i]     = {}
+    fx.ccExisting[i]   = { carrier = {}, base = {}, fill = {} }
+    fx.replacePb[i]    = {}
+  end
+  -- fxNote add/del + parked-member restores, deferred from 4.6/4.5 into the 4.8 atomic note
+  -- commit: host clip + these inserts in one mm:modify (one MIDI_Sort, canonical delete-first).
+  local deferred = mmBatch()
 
   -- 0) Partition mm events into internal (stamped + raw = fromLogical(ppqL)) and external.
   -- see docs/trackerManager.md § Rebuild: step 0 — internal/external partition
@@ -1324,7 +1326,7 @@ function tm:rebuild(takeChanged)
   for _, note in mm:notes() do
     if note.derived then
       note.token = mm:tokenOf(note)
-      util.add(fxExisting[note.chan], note)
+      util.add(fx.noteExisting[note.chan], note)
     elseif rawDivergesFromLogical(note) then util.add(external, note)
     else util.add(internal, note)
     end
@@ -1362,21 +1364,21 @@ function tm:rebuild(takeChanged)
       if cc.evType == 'cc' and carrierRoute[cc.chan] and carrierRoute[cc.chan][cc.cc] then
         -- Carrier: generator-owned, no metadata; routed out by allocated code,
         -- reconciled stream-level at 4.6. see design/archive/note-macros.md § Delta-code allocation
-        util.add(carrierExisting[cc.chan],
+        util.add(fx.ccExisting[cc.chan].carrier,
           { ppq = cc.ppq, val = cc.val, shape = cc.shape, cc = cc.cc, token = mm:tokenOf(cc) })
         goto continue
       end
       -- Rest seat: a generator-owned base CC at a real cc target (derived sidecar), routed out
       -- of columns like a carrier so it stays off-screen. see design/note-macros-v2.md § Continuous cc
       if cc.evType == 'cc' and cc.derived == 'ccbase' then
-        util.add(ccBaseExisting[cc.chan],
+        util.add(fx.ccExisting[cc.chan].base,
           { ppq = cc.ppq, val = cc.val, cc = cc.cc, token = mm:tokenOf(cc) })
         goto continue
       end
       -- Replace fill: the generated curve written straight onto a cc target (replace mode), routed
       -- out like the rest seat and reconciled at Pass B. see design/note-macros-v2.md § Continuous cc
       if cc.evType == 'cc' and cc.derived == 'ccfill' then
-        util.add(ccFillExisting[cc.chan],
+        util.add(fx.ccExisting[cc.chan].fill,
           { ppq = cc.ppq, val = cc.val, shape = cc.shape, cc = cc.cc, token = mm:tokenOf(cc) })
         goto continue
       end
@@ -1548,7 +1550,11 @@ function tm:rebuild(takeChanged)
       local ce = util.clone(spec, { chan = true, lane = true })
       util.add(channel.columns.notes[spec.lane].events, ce)
       table.sort(channel.columns.notes[spec.lane].events, function(a, b) return a.ppqL < b.ppqL end)
-      util.add(fxToRestore, { spec = spec, ce = ce })
+      -- Lazy: reshaped at commit so it reads ce.ppq/endppq after the tail-walk clip.
+      deferred.addLazy(function()
+        return util.pick(ce, "ppq endppq ppqL endppqL pitch vel detune delay sample",
+                         { evType = 'note', chan = spec.chan, lane = spec.lane })
+      end)
     end
 
     if not util.deepEq(ds:get('fxParked') or {}, newParked) and mm:take() then
@@ -1692,7 +1698,7 @@ function tm:rebuild(takeChanged)
     table.sort(list, function(a, b) return a.ppqL < b.ppqL end)
   end
 
-  -- 4.6) Macro expansion (in-memory): expand fx-carrying notes, reconcile vs fxExisting; add/del deferred to 4.8; fxLive feeds tail walk + PC synthesis.
+  -- 4.6) Macro expansion (in-memory): expand fx-carrying notes, reconcile vs fx.noteExisting; add/del deferred to 4.8; fx.noteLive feeds tail walk + PC synthesis.
   -- see design/archive/note-macros.md § Pipeline placement
   do
     local res = mm:resolution()
@@ -1824,7 +1830,7 @@ function tm:rebuild(takeChanged)
               else
                 -- Replace overwrites the wire over [startL,endL): record it for 4.9's base suppression.
                 if meta.mode == 'replace' and target == 'pb' then
-                  util.add(replacePbWindows[chan], { startL, endL })
+                  util.add(fx.replacePb[chan], { startL, endL })
                 end
                 -- cc augment with no authored base needs a resting seat; carry its value so Pass B
                 -- emits it once per target. see design/note-macros-v2.md § Continuous cc
@@ -1842,13 +1848,13 @@ function tm:rebuild(takeChanged)
         end
       end
 
-      -- Note producers: fxHostEnd stash sustains the v1 augment view-restore; the
+      -- Note producers: fx.hostEnd stash sustains the v1 augment view-restore; the
       -- derived notes ride the host's own lane.
       for laneIdx, col in ipairs(channels[chan].columns.notes) do
         for _, host in ipairs(col.events) do
           if host.fx and host.type ~= 'pa' then
             local endL = fxWindow[host]
-            fxHostEnd[host] = tm:fromLogical(chan, endL)
+            fx.hostEnd[host] = tm:fromLogical(chan, endL)
             runProducer{ window = { host.ppqL, endL }, notes = { host }, fx = host.fx,
                          id = host.uuid, lane = laneIdx, delay = host.delay,
                          sample = host.sample, d = delayToPPQ(host.delay) }
@@ -1874,13 +1880,10 @@ function tm:rebuild(takeChanged)
       end
 
       -- Reconcile existence (stamps kept specs with token + realised end); defer writes to the 4.8 atomic commit.
-      -- fxLive holds the predicted specs; the tail walk clips them in place.
-      reconcileFx(fxExisting[chan], predicted, {
-        del = function(e) util.add(fxToRemove, e) end,
-        add = function(s) util.add(fxToAdd, s)    end,
-      })
+      -- fx.noteLive holds the predicted specs; the tail walk clips them in place.
+      reconcileFx(fx.noteExisting[chan], predicted, deferred)
       for _, spec in ipairs(predicted) do
-        util.add(fxLive[chan], { evt = spec, lane = spec.lane })
+        util.add(fx.noteLive[chan], { evt = spec, lane = spec.lane })
       end
 
       -- Pass B: per target, interval-colour stashed instances -- overlapping carriers get
@@ -1958,19 +1961,19 @@ function tm:rebuild(takeChanged)
       end
       local wires = mmBatch()
       reconcileDerived{
-        existing = ccBaseExisting[chan], predicted = predictedBase, sink = wires,
+        existing = fx.ccExisting[chan].base, predicted = predictedBase, sink = wires,
         key   = function(x) return util.key(canon(x.cc), canon(x.ppq)) end,
         match = function(have, spec) return have.val == spec.val end,
       }
       -- cc-replace fill: reconcile the generated curve on its target lane; shape is part of the
       -- match -- it drives REAPER's interpolation. see design/note-macros-v2.md § Continuous cc
       reconcileDerived{
-        existing = ccFillExisting[chan], predicted = ccFill, sink = wires,
+        existing = fx.ccExisting[chan].fill, predicted = ccFill, sink = wires,
         key   = function(x) return util.key(canon(x.cc), canon(x.ppq)) end,
         match = function(have, spec) return have.val == spec.val and have.shape == spec.shape end,
       }
 
-      reconcileCarrier(carrierExisting[chan], predictedDelta, wires)
+      reconcileCarrier(fx.ccExisting[chan].carrier, predictedDelta, wires)
       wires.commit()
       if #newCarriers > 0 then newFxCarrier[chan] = newCarriers end
     end
@@ -1988,11 +1991,11 @@ function tm:rebuild(takeChanged)
     end
   end
 
-  -- 4.8) Unified tail/onset walk + atomic commit: real notes, fixed externals, fxLive walk together (onset clamp then tail clip).
+  -- 4.8) Unified tail/onset walk + atomic commit: real notes, fixed externals, fx.noteLive walk together (onset clamp then tail clip).
   -- Host clip + fxNote inserts land in one mm:modify — no transient same-pitch overlap for MIDI_Sort. see docs/trackerManager.md § Rebuild: step 4.8 — tail walk
   do
     local takeLen = tm:length()
-    local clamps, clips = {}, {}
+    local clamps = {}
     for chan = 1, 16 do
       local notes, byLane, byPitch = {}, {}, {}
       for laneIdx, col in ipairs(channels[chan].columns.notes) do
@@ -2005,7 +2008,7 @@ function tm:rebuild(takeChanged)
           end
         end
       end
-      for _, w in ipairs(fxLive[chan]) do
+      for _, w in ipairs(fx.noteLive[chan]) do
         local fn = { evt = w.evt, lane = w.lane }
         util.add(notes, fn)
         util.bucket(byLane,  w.lane,      fn)
@@ -2056,7 +2059,7 @@ function tm:rebuild(takeChanged)
                             math.min(ceiling, laneClip, pitchClip, takeLen))
         local rounded   = util.round(bound)
         if rounded ~= e.endppq then
-          if e.token then util.add(clips, { evt = e, update = { endppq = rounded } }) end
+          if e.token then deferred.assign(e.token, { endppq = rounded }, e) end
           e.endppq = rounded
         end
       end
@@ -2065,28 +2068,17 @@ function tm:rebuild(takeChanged)
     -- Clamps reindex colliding same-pitch onsets separately: reload separates the shared content-keyed token before the clip pass dereferences it.
     -- Clips only touch endppq, never re-key — safe to batch with adds.
     applyAssigns(clamps)
-    -- Host clips (each clipped to first fxNote) commit WITH the fxNote del/add in one mm:modify/MIDI_Sort call.
-    -- No transient same-pitch overlap for MIDI_Sort to mispair.
-    if #clips > 0 or #fxToRemove > 0 or #fxToAdd > 0 or #fxToRestore > 0 then
-      mm:modify(function()
-        for _, e in ipairs(fxToRemove) do mm:delete(e.token) end
-        assignList(clips)
-        -- ppq/endppq come post tail-walk clip; the colliding derived stand-in is gone above.
-        for _, r in ipairs(fxToRestore) do
-          mm:add(util.pick(r.ce, "ppq endppq ppqL endppqL pitch vel detune delay sample",
-                           { evType = 'note', chan = r.spec.chan, lane = r.spec.lane }))
-        end
-        for _, spec in ipairs(fxToAdd) do mm:add(spec) end
-      end)
-    end
+    -- Host clips (each clipped to first fxNote) commit WITH the fxNote del/add + restores in one
+    -- mm:modify/MIDI_Sort; canonical delete-first means no transient same-pitch overlap.
+    deferred.commit()
 
     -- Restore pre-fx tail onto column events so the view sees the authored
     -- note; mm is untouched, so the take and G4 round-trip are unaffected.
-    for host, rawEnd in pairs(fxHostEnd) do host.endppq = rawEnd end
+    for host, rawEnd in pairs(fx.hostEnd) do host.endppq = rawEnd end
   end
 
   -- 4.9) Absorber reconciliation + pb wire/column resynthesis.
-  rebuildPbs(fxLive, replacePbWindows)
+  rebuildPbs(fx.noteLive, fx.replacePb)
 
   -- 4.5) PC synthesis (trackerMode only). Runs after step 6 so it sees externals:
   -- a foreign-MIDI note inherits sample from the prevailing PC.
@@ -2099,7 +2091,7 @@ function tm:rebuild(takeChanged)
           util.add(records, { ppq = n.ppq, ppqL = n.ppqL, lane = L, sample = n.sample or 0, key = n })
         end
       end
-      for _, w in ipairs(fxLive[chan]) do
+      for _, w in ipairs(fx.noteLive[chan]) do
         local n = w.evt
         util.add(records, { ppq = n.ppq, ppqL = n.ppqL, lane = w.lane, sample = n.sample or 0, key = n })
       end
