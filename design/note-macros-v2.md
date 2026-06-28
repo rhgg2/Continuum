@@ -39,7 +39,6 @@ Track A is the generator substrate, Track B the authoring UI. Checked = landed.
 
 **Deferred (no consumer / intentional)**
 - [ ] **PA** replace — no generic park/rebind path (§ A4)
-- [ ] Slew on a replace curve — ramp the window-edge hand-off (§ A4 TODO)
 - [ ] Multi-chain painter-layering for replace — overlapping pb fx is UI-blocked instead
 - [ ] Note-fx hosted on a parked note
 - [ ] Freeze (to raw / to mirror group), ghost-note display, bake-on-export
@@ -547,7 +546,7 @@ wants ~none of gm (see resolved open question below).
   A replace-continuous kind emits its absolute pb curve, which rides the additive carrier verbatim;
   the absorber (4.9) emits a *detune-only* wire base inside the recorded replace window, so the node
   sum `detune + curve` lands on the curve (I1 intact). No `cancelBase`, no sampling. Overlapping pb
-  fx is blocked at the UI; slew is a TODO. See § A4 -- generator input streams.
+  fx is blocked at the UI. See § A4 -- generator input streams.
   Known gaps unchanged: a member straddling a window edge is parked whole (no split); a parked note
   carrying its own `fx` loses that host behaviour to the region; a replace region's parked PAs stay
   take-side (latent orphan) until the first PA-consuming generator, then park them out.
@@ -764,7 +763,7 @@ column cents untouched and visible. The node sum `detune + curve` lands on the c
 seats (`raw = curve + detune`, I1 intact) -- no `cancelBase`, no sampling, no node change. Scoped to
 **one replace region per pb target**: base-suppression is *idempotent*, but two overlapping carriers
 would *sum* (not painter-layer), so **overlapping pb fx is blocked at the authoring UI**. Caveats: the
-boundary from authored base to curve can step (**TODO -- slew:** rate-limit the hand-off); cc-target
+boundary from authored base to curve can step; cc-target
 replace is unbuilt -- cc has no absorber/detune residual, so suppressing its authored base needs a
 different mechanism (below). Pinned by the detune-only / I1 / suppression-reversibility tests in
 `tm_fx_region_spec`.

@@ -1,11 +1,5 @@
-- tuning editor
-- FX, ideas:
-  - flam
-  - trill
-  - cc macros
-  - arpeggio
 - CC smoothing
-- 14bit CCs
+- 14bit CCs in tracker view
 - wm - midi channel filter
 - wm - master multi-outs / deal with restriction on single audio feed
   to master

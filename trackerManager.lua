@@ -1278,6 +1278,289 @@ local function rebuildPbs(noteLive, replacePb)
   end
 end
 
+-- Fx expansion (rebuild step 4.6): fx-carrying notes / fx-regions -> derived notes, CCs, carriers;
+-- reconcile vs existing, note writes deferred to 4.8. Returns per-chan carrier map. see design/archive/note-macros.md § Pipeline placement
+local function rebuildFx(fx, deferred, authoredPbByChan, fxWindow, nextInLane)
+  local newFxCarrier = {}
+  local res = mm:resolution()
+  local pbRangeCents = cm:get('pbRange') * 100   -- slide clamps its target to what pb can reach
+  local temper = tuning.findTemper(cm:get('temper'), cm:get('tempers'))
+  local function stepOp(pitch, detune, n)        -- trill: scale steps -> (pitch, detune) via the temper
+    return tuning.transposeStep(temper, pitch, detune, n)
+  end
+  local extras  = ds:get('extraColumns') or {}   -- authored columns block carrier codes
+  local chanCtx = { resolution = res, pbRangeCents = pbRangeCents, step = stepOp,
+                    nextSameLaneNote = function(host) return nextInLane[host.notes[1]] end }
+  -- Explicit fx-regions (channel x ppq span + fx, no host note), re-queried each
+  -- rebuild and bucketed by channel. see design/note-macros-v2.md § The anchor generalized
+  local fxRegionsByChan = {}
+  for _, region in ipairs(ds:get('fxRegions') or {}) do
+    util.bucket(fxRegionsByChan, region.chan, region)
+  end
+  -- Membership is overlap, not storage: authored notes re-queried each rebuild; one walk
+  -- feeds generator events + fixed lane occupancy. see design/note-macros-v2.md § The anchor generalized
+  local function eachWindowNote(chan, startL, endL, fn)
+    for laneIdx, col in ipairs(channels[chan].columns.notes) do
+      for _, evt in ipairs(col.events) do
+        if evt.type ~= 'pa' and evt.ppqL ~= nil then
+          local hi = (evt.endppqL == nil or evt.endppqL == util.OPEN) and endL or evt.endppqL
+          if evt.ppqL < endL and hi > startL then fn(laneIdx, evt.ppqL, hi, evt) end
+        end
+      end
+    end
+  end
+  local function membersOf(chan, startL, endL)
+    local out = {}
+    eachWindowNote(chan, startL, endL, function(_, lo, hi, evt)
+      util.add(out, util.pick(evt, "pitch vel detune", { ppqL = lo, endppqL = hi }))
+    end)
+    return out
+  end
+  -- cc-family streams a generator reads over its window (notes via membersOf). Key `evt.ppqL or evt.ppq`:
+  -- ppqL nil when raw==logical (step-5); pb sliced from the pre-producer authoredPbByChan. see design/note-macros-v2.md § A4
+  local function channelStreams(chan, startL, endL)
+    local cols = channels[chan].columns
+    local function within(ppqL) return ppqL >= startL and ppqL < endL end
+    local pas, ccs, ats, pb = {}, {}, {}, {}
+    for _, col in ipairs(cols.notes) do
+      for _, evt in ipairs(col.events) do
+        local ppqL = evt.ppqL or evt.ppq
+        if evt.type == 'pa' and within(ppqL) then
+          util.add(pas, { ppqL = ppqL, pitch = evt.pitch, vel = evt.vel })
+        end
+      end
+    end
+    for ccNum, col in pairs(cols.ccs) do
+      for _, evt in ipairs(col.events) do
+        local ppqL = evt.ppqL or evt.ppq
+        if within(ppqL) then util.bucket(ccs, ccNum, { ppqL = ppqL, val = evt.val }) end
+      end
+    end
+    for _, evt in ipairs(cols.at and cols.at.events or {}) do
+      local ppqL = evt.ppqL or evt.ppq
+      if within(ppqL) then util.add(ats, { ppqL = ppqL, val = evt.val }) end
+    end
+    for _, bp in ipairs(authoredPbByChan[chan] or {}) do
+      if within(bp.ppqL) then util.add(pb, { ppqL = bp.ppqL, cents = bp.cents }) end
+    end
+    return pas, ccs, ats, pb
+  end
+  -- Deterministic allocator: lowest lane free of overlap, authored notes seed occupancy;
+  -- emission order -> deterministic -> G4-stable. see design/note-macros-v2.md § Generator output
+  local function allocateRegionLanes(chan, startL, endL, derived)
+    local occupied = {}
+    eachWindowNote(chan, startL, endL, function(laneIdx, lo, hi)
+      util.bucket(occupied, laneIdx, { lo, hi })
+    end)
+    local function laneFree(lane, lo, hi)
+      for _, iv in ipairs(occupied[lane] or {}) do
+        if lo < iv[2] and hi > iv[1] then return false end
+      end
+      return true
+    end
+    for _, spec in ipairs(derived) do
+      local lane = 1
+      while not laneFree(lane, spec.ppqL, spec.endppqL) do lane = lane + 1 end
+      util.bucket(occupied, lane, { spec.ppqL, spec.endppqL })
+      spec.lane = lane
+    end
+  end
+  for chan = 1, 16 do
+    -- Pass A: run every generator. Structural notes commit per lane; continuous deltas
+    -- stash with their window for colouring (channel-wide, not note-tied). see design/archive/note-macros.md § Continuous realisation
+    local predicted, pending, ccFill = {}, {}, {}
+    -- One producer interface, two sources: a note with fx (v1 augment) or an explicit
+    -- fxRegion; the generator sees neither. see design/note-macros-v2.md § The anchor generalized
+    local function runProducer(p)
+      local startL, endL = p.window[1], p.window[2]
+      -- The host the generators read: the note membership plus the windowed channel input
+      -- streams, built once per host (not per kind). see design/note-macros-v2.md § A4
+      local pas, ccs, ats, pb = channelStreams(chan, startL, endL)
+      local host = { window = { startL, endL }, chan = chan, lane = p.lane, id = p.id,
+                     notes = p.notes, pas = pas, ccs = ccs, ats = ats, pb = pb }
+      -- Region producers (lane unset) defer their notes: lanes are allocated over the
+      -- whole batch after the fx loop. Note producers ride the host's own lane inline.
+      local regionNotes = p.lane == nil and {} or nil
+      for _, params in ipairs(p.fx) do
+        local meta = generators.kinds[params.kind]
+        if meta then
+          local out = meta.expand(host, params, chanCtx)
+          for _, fn in ipairs(out.notes) do
+            local spec = {
+              evType = 'note', chan = chan, lane = p.lane, derived = p.id,
+              pitch = fn.pitch, vel = fn.vel, detune = fn.detune or 0,
+              delay = p.delay or 0, sample = p.sample,
+              ppqL = fn.ppqL, endppqL = fn.endppqL,
+              ppq    = tm:fromLogical(chan, fn.ppqL,    p.d),
+              endppq = tm:fromLogical(chan, fn.endppqL, p.d),
+            }
+            if regionNotes then util.add(regionNotes, spec)
+            else util.add(predicted, spec) end
+          end
+          -- pb (augment+replace) and cc augment ride the additive carrier; cc replace alone
+          -- forks off it -- the curve goes straight on the target lane, authored cc parked at 4.5b.
+          local target = meta.dest ~= 'note' and meta.dest or nil
+          if target and #out.delta > 0 then
+            if meta.mode == 'replace' and type(target) == 'number' then
+              -- cc replace: write the curve onto the target cc lane verbatim. No carrier is
+              -- allocated, so the node never registers (adst) the target -- it hears it direct.
+              for _, bp in ipairs(out.delta) do
+                util.add(ccFill, { evType = 'cc', chan = chan, cc = target, derived = 'ccfill',
+                                   ppq = tm:fromLogical(chan, bp.ppqL, p.d), val = bp.val, shape = bp.shape })
+              end
+            else
+              -- Replace overwrites the wire over [startL,endL): record it for 4.9's base suppression.
+              if meta.mode == 'replace' and target == 'pb' then
+                util.add(fx.replacePb[chan], { startL, endL })
+              end
+              -- cc augment with no authored base needs a resting seat; carry its value so Pass B
+              -- emits it once per target. see design/note-macros-v2.md § Continuous cc
+              local rest = type(target) == 'number'
+                and (p.fx.rest or generators.ccDefaultRest[target] or 0) or nil
+              util.add(pending, { startL = startL, endL = endL,
+                                  target = target, delta = out.delta, d = p.d, rest = rest })
+            end
+          end
+        end
+      end
+      if regionNotes then
+        allocateRegionLanes(chan, startL, endL, regionNotes)
+        for _, spec in ipairs(regionNotes) do util.add(predicted, spec) end
+      end
+    end
+
+    -- Note producers: fx.hostEnd stash sustains the v1 augment view-restore; the
+    -- derived notes ride the host's own lane.
+    for laneIdx, col in ipairs(channels[chan].columns.notes) do
+      for _, host in ipairs(col.events) do
+        if host.fx and host.type ~= 'pa' then
+          local endL = fxWindow[host]
+          fx.hostEnd[host] = tm:fromLogical(chan, endL)
+          runProducer{ window = { host.ppqL, endL }, notes = { host }, fx = host.fx,
+                       id = host.uuid, lane = laneIdx, delay = host.delay,
+                       sample = host.sample, d = delayToPPQ(host.delay) }
+        end
+      end
+    end
+
+    -- Region producers: no host note. A discrete-replace kind feeds the realised parked chord
+    -- (parking frees the lanes); else members still sound and feed the live overlap. see design/note-macros-v2.md § Generator output
+    for _, region in ipairs(fxRegionsByChan[chan] or {}) do
+      local startL, endL = region.startppq, region.endppq
+      local members
+      if parksNotes(region) then
+        members = {}                             -- replace: derived notes stand in for the parked chord
+        for _, m in ipairs(channels[chan].parked or {}) do
+          if m.ppqL >= startL and m.ppqL < endL then util.add(members, m) end
+        end
+      else
+        members = membersOf(chan, startL, endL)  -- augment: members still sound
+      end
+      runProducer{ window = { startL, endL }, notes = members,
+                   fx = region.fx, id = region.uuid, lane = nil, d = 0 }
+    end
+
+    -- Reconcile existence (stamps kept specs with token + realised end); defer writes to the 4.8 atomic commit.
+    -- fx.noteLive holds the predicted specs; the tail walk clips them in place.
+    reconcileFx(fx.noteExisting[chan], predicted, deferred)
+    for _, spec in ipairs(predicted) do
+      util.add(fx.noteLive[chan], { evt = spec, lane = spec.lane })
+    end
+
+    -- Pass B: per target, interval-colour stashed instances -- overlapping carriers get
+    -- distinct codes (node sums by target), disjoint share the coldest. see design/archive/note-macros.md § Delta-code allocation
+    local occupied = {}
+    for code in pairs(channels[chan].columns.ccs or {}) do occupied[code] = true end
+    for code in pairs((extras[chan] or {}).ccs or {})   do occupied[code] = true end
+    local byTarget = {}
+    for _, inst in ipairs(pending) do util.bucket(byTarget, inst.target, inst) end
+    local targets = util.keys(byTarget)
+    table.sort(targets, function(a, b) return tostring(a) < tostring(b) end)
+
+    local predictedDelta, lastDeltaPpq, newCarriers = {}, {}, {}
+    for _, target in ipairs(targets) do
+      local insts = byTarget[target]
+      table.sort(insts, function(a, b)
+        if a.startL ~= b.startL then return a.startL < b.startL end
+        return a.endL < b.endL
+      end)
+      local colourEnd, colourCode = {}, {}
+      for _, inst in ipairs(insts) do
+        local colour
+        for ci = 1, #colourEnd do
+          if colourEnd[ci] <= inst.startL then colour = ci; break end
+        end
+        if not colour then
+          colour = #colourEnd + 1
+          local code = generators.allocateCarrier(occupied)
+          colourCode[colour] = code
+          occupied[code], occupied[code + 32] = true, true
+          mm:wideCC(chan, code, true)
+          util.add(newCarriers, { code = code, target = target })
+        end
+        colourEnd[colour] = inst.endL
+        -- dedup per code: a disjoint sharer's start can land on the prior window's
+        -- re-centre ppq (both centre, so identical) -- keep the first.
+        local code = colourCode[colour]
+        for _, bp in ipairs(inst.delta) do
+          local ppq = tm:fromLogical(chan, bp.ppqL, inst.d)
+          if ppq ~= lastDeltaPpq[code] then
+            lastDeltaPpq[code] = ppq
+            -- pb deltas are cents (-> raw); cc deltas are already cc steps. Shared 14-bit
+            -- transport: (8192 + raw) / 128. see design/note-macros-v2.md § Continuous cc
+            local raw = target == 'pb' and centsToRaw(bp.val) or bp.val
+            util.add(predictedDelta, {
+              evType = 'cc', chan = chan, cc = code, ppq = ppq,
+              val = (8192 + raw) / 128, shape = bp.shape,
+            })
+          end
+        end
+      end
+    end
+
+    -- Anchor each carrier to 0 at take start; CC chase re-establishes centre
+    -- on any loop/seek before the first host. see design/archive/note-macros.md § Continuous realisation
+    local earliest = {}
+    for _, e in ipairs(predictedDelta) do
+      if not earliest[e.cc] or e.ppq < earliest[e.cc] then earliest[e.cc] = e.ppq end
+    end
+    for code, first in pairs(earliest) do
+      if first ~= 0 then
+        util.add(predictedDelta, { evType = 'cc', chan = chan, cc = code,
+                                   ppq = 0, val = (8192 + centsToRaw(0)) / 128, shape = 'slow' })
+      end
+    end
+
+    -- Rest seats: one base CC per augment cc target lacking authored automation (derived ones
+    -- already routed out, so an empty cc column == no authored base). see design/note-macros-v2.md § Continuous cc
+    local predictedBase = {}
+    for _, target in ipairs(targets) do
+      if type(target) == 'number' and not channels[chan].columns.ccs[target] then
+        util.add(predictedBase, { evType = 'cc', chan = chan, cc = target, ppq = 0,
+                                  val = byTarget[target][1].rest or 0, shape = 'step', derived = 'ccbase' })
+      end
+    end
+    local wires = mmBatch()
+    reconcileDerived{
+      existing = fx.ccExisting[chan].base, predicted = predictedBase, sink = wires,
+      key   = function(x) return util.key(canon(x.cc), canon(x.ppq)) end,
+      match = function(have, spec) return have.val == spec.val end,
+    }
+    -- cc-replace fill: reconcile the generated curve on its target lane; shape is part of the
+    -- match -- it drives REAPER's interpolation. see design/note-macros-v2.md § Continuous cc
+    reconcileDerived{
+      existing = fx.ccExisting[chan].fill, predicted = ccFill, sink = wires,
+      key   = function(x) return util.key(canon(x.cc), canon(x.ppq)) end,
+      match = function(have, spec) return have.val == spec.val and have.shape == spec.shape end,
+    }
+
+    reconcileCarrier(fx.ccExisting[chan].carrier, predictedDelta, wires)
+    wires.commit()
+    if #newCarriers > 0 then newFxCarrier[chan] = newCarriers end
+  end
+  return newFxCarrier
+end
+
 ----- Rebuild
 
 local rebuilding = false
@@ -1334,7 +1617,7 @@ function tm:rebuild(takeChanged)
   -- Carrier codes from the prior rebuild: route existing events out of cc columns
   -- (step 3 reads carrierRoute); new codes allocated in 4.6 once windows are known. see design/archive/note-macros.md § Delta-code allocation
   local prevCarrier = ds:get('fxCarrier') or {}   -- chan -> { {code, target}, ... }
-  local carrierRoute, newFxCarrier = {}, {}
+  local carrierRoute = {}
   for chan, carriers in pairs(prevCarrier) do
     carrierRoute[chan] = {}
     for _, c in ipairs(carriers) do
@@ -1698,297 +1981,18 @@ function tm:rebuild(takeChanged)
     table.sort(list, function(a, b) return a.ppqL < b.ppqL end)
   end
 
-  -- 4.6) Macro expansion (in-memory): expand fx-carrying notes, reconcile vs fx.noteExisting; add/del deferred to 4.8; fx.noteLive feeds tail walk + PC synthesis.
-  -- see design/archive/note-macros.md § Pipeline placement
-  do
-    local res = mm:resolution()
-    local pbRangeCents = cm:get('pbRange') * 100   -- slide clamps its target to what pb can reach
-    local temper = tuning.findTemper(cm:get('temper'), cm:get('tempers'))
-    local function stepOp(pitch, detune, n)        -- trill: scale steps -> (pitch, detune) via the temper
-      return tuning.transposeStep(temper, pitch, detune, n)
+  -- 4.6) Fx expansion: derived notes/CCs/carriers, note writes deferred to 4.8 (see rebuildFx).
+  local newFxCarrier = rebuildFx(fx, deferred, authoredPbByChan, fxWindow, nextInLane)
+  -- Reap stale carrier codes (relocated / removed); persist live map for pa's add bank. see design/archive/note-macros.md § Delta-code allocation
+  for chan in pairs(carrierRoute) do
+    local live = {}
+    for _, c in ipairs(newFxCarrier[chan] or {}) do live[c.code] = true end
+    for code in pairs(carrierRoute[chan]) do
+      if not live[code] then mm:wideCC(chan, code, false) end
     end
-    local extras  = ds:get('extraColumns') or {}   -- authored columns block carrier codes
-    local chanCtx = { resolution = res, pbRangeCents = pbRangeCents, step = stepOp,
-                      nextSameLaneNote = function(host) return nextInLane[host.notes[1]] end }
-    -- Explicit fx-regions (channel x ppq span + fx, no host note), re-queried each
-    -- rebuild and bucketed by channel. see design/note-macros-v2.md § The anchor generalized
-    local fxRegionsByChan = {}
-    for _, region in ipairs(ds:get('fxRegions') or {}) do
-      util.bucket(fxRegionsByChan, region.chan, region)
-    end
-    -- Membership is overlap, not storage: authored notes re-queried each rebuild; one walk
-    -- feeds generator events + fixed lane occupancy. see design/note-macros-v2.md § The anchor generalized
-    local function eachWindowNote(chan, startL, endL, fn)
-      for laneIdx, col in ipairs(channels[chan].columns.notes) do
-        for _, evt in ipairs(col.events) do
-          if evt.type ~= 'pa' and evt.ppqL ~= nil then
-            local hi = (evt.endppqL == nil or evt.endppqL == util.OPEN) and endL or evt.endppqL
-            if evt.ppqL < endL and hi > startL then fn(laneIdx, evt.ppqL, hi, evt) end
-          end
-        end
-      end
-    end
-    local function membersOf(chan, startL, endL)
-      local out = {}
-      eachWindowNote(chan, startL, endL, function(_, lo, hi, evt)
-        util.add(out, util.pick(evt, "pitch vel detune", { ppqL = lo, endppqL = hi }))
-      end)
-      return out
-    end
-    -- cc-family streams a generator reads over its window (notes via membersOf). Key `evt.ppqL or evt.ppq`:
-    -- ppqL nil when raw==logical (step-5); pb sliced from the pre-producer authoredPbByChan. see design/note-macros-v2.md § A4
-    local function channelStreams(chan, startL, endL)
-      local cols = channels[chan].columns
-      local function within(ppqL) return ppqL >= startL and ppqL < endL end
-      local pas, ccs, ats, pb = {}, {}, {}, {}
-      for _, col in ipairs(cols.notes) do
-        for _, evt in ipairs(col.events) do
-          local ppqL = evt.ppqL or evt.ppq
-          if evt.type == 'pa' and within(ppqL) then
-            util.add(pas, { ppqL = ppqL, pitch = evt.pitch, vel = evt.vel })
-          end
-        end
-      end
-      for ccNum, col in pairs(cols.ccs) do
-        for _, evt in ipairs(col.events) do
-          local ppqL = evt.ppqL or evt.ppq
-          if within(ppqL) then util.bucket(ccs, ccNum, { ppqL = ppqL, val = evt.val }) end
-        end
-      end
-      for _, evt in ipairs(cols.at and cols.at.events or {}) do
-        local ppqL = evt.ppqL or evt.ppq
-        if within(ppqL) then util.add(ats, { ppqL = ppqL, val = evt.val }) end
-      end
-      for _, bp in ipairs(authoredPbByChan[chan] or {}) do
-        if within(bp.ppqL) then util.add(pb, { ppqL = bp.ppqL, cents = bp.cents }) end
-      end
-      return pas, ccs, ats, pb
-    end
-    -- Deterministic allocator: lowest lane free of overlap, authored notes seed occupancy;
-    -- emission order -> deterministic -> G4-stable. see design/note-macros-v2.md § Generator output
-    local function allocateRegionLanes(chan, startL, endL, derived)
-      local occupied = {}
-      eachWindowNote(chan, startL, endL, function(laneIdx, lo, hi)
-        util.bucket(occupied, laneIdx, { lo, hi })
-      end)
-      local function laneFree(lane, lo, hi)
-        for _, iv in ipairs(occupied[lane] or {}) do
-          if lo < iv[2] and hi > iv[1] then return false end
-        end
-        return true
-      end
-      for _, spec in ipairs(derived) do
-        local lane = 1
-        while not laneFree(lane, spec.ppqL, spec.endppqL) do lane = lane + 1 end
-        util.bucket(occupied, lane, { spec.ppqL, spec.endppqL })
-        spec.lane = lane
-      end
-    end
-    for chan = 1, 16 do
-      -- Pass A: run every generator. Structural notes commit per lane; continuous deltas
-      -- stash with their window for colouring (channel-wide, not note-tied). see design/archive/note-macros.md § Continuous realisation
-      local predicted, pending, ccFill = {}, {}, {}
-      -- One producer interface, two sources: a note with fx (v1 augment) or an explicit
-      -- fxRegion; the generator sees neither. see design/note-macros-v2.md § The anchor generalized
-      local function runProducer(p)
-        local startL, endL = p.window[1], p.window[2]
-        -- The host the generators read: the note membership plus the windowed channel input
-        -- streams, built once per host (not per kind). see design/note-macros-v2.md § A4
-        local pas, ccs, ats, pb = channelStreams(chan, startL, endL)
-        local host = { window = { startL, endL }, chan = chan, lane = p.lane, id = p.id,
-                       notes = p.notes, pas = pas, ccs = ccs, ats = ats, pb = pb }
-        -- Region producers (lane unset) defer their notes: lanes are allocated over the
-        -- whole batch after the fx loop. Note producers ride the host's own lane inline.
-        local regionNotes = p.lane == nil and {} or nil
-        for _, params in ipairs(p.fx) do
-          local meta = generators.kinds[params.kind]
-          if meta then
-            local out = meta.expand(host, params, chanCtx)
-            for _, fn in ipairs(out.notes) do
-              local spec = {
-                evType = 'note', chan = chan, lane = p.lane, derived = p.id,
-                pitch = fn.pitch, vel = fn.vel, detune = fn.detune or 0,
-                delay = p.delay or 0, sample = p.sample,
-                ppqL = fn.ppqL, endppqL = fn.endppqL,
-                ppq    = tm:fromLogical(chan, fn.ppqL,    p.d),
-                endppq = tm:fromLogical(chan, fn.endppqL, p.d),
-              }
-              if regionNotes then util.add(regionNotes, spec)
-              else util.add(predicted, spec) end
-            end
-            -- pb (augment+replace) and cc augment ride the additive carrier; cc replace alone
-            -- forks off it -- the curve goes straight on the target lane, authored cc parked at 4.5b.
-            local target = meta.dest ~= 'note' and meta.dest or nil
-            if target and #out.delta > 0 then
-              if meta.mode == 'replace' and type(target) == 'number' then
-                -- cc replace: write the curve onto the target cc lane verbatim. No carrier is
-                -- allocated, so the node never registers (adst) the target -- it hears it direct.
-                for _, bp in ipairs(out.delta) do
-                  util.add(ccFill, { evType = 'cc', chan = chan, cc = target, derived = 'ccfill',
-                                     ppq = tm:fromLogical(chan, bp.ppqL, p.d), val = bp.val, shape = bp.shape })
-                end
-              else
-                -- Replace overwrites the wire over [startL,endL): record it for 4.9's base suppression.
-                if meta.mode == 'replace' and target == 'pb' then
-                  util.add(fx.replacePb[chan], { startL, endL })
-                end
-                -- cc augment with no authored base needs a resting seat; carry its value so Pass B
-                -- emits it once per target. see design/note-macros-v2.md § Continuous cc
-                local rest = type(target) == 'number'
-                  and (p.fx.rest or generators.ccDefaultRest[target] or 0) or nil
-                util.add(pending, { startL = startL, endL = endL,
-                                    target = target, delta = out.delta, d = p.d, rest = rest })
-              end
-            end
-          end
-        end
-        if regionNotes then
-          allocateRegionLanes(chan, startL, endL, regionNotes)
-          for _, spec in ipairs(regionNotes) do util.add(predicted, spec) end
-        end
-      end
-
-      -- Note producers: fx.hostEnd stash sustains the v1 augment view-restore; the
-      -- derived notes ride the host's own lane.
-      for laneIdx, col in ipairs(channels[chan].columns.notes) do
-        for _, host in ipairs(col.events) do
-          if host.fx and host.type ~= 'pa' then
-            local endL = fxWindow[host]
-            fx.hostEnd[host] = tm:fromLogical(chan, endL)
-            runProducer{ window = { host.ppqL, endL }, notes = { host }, fx = host.fx,
-                         id = host.uuid, lane = laneIdx, delay = host.delay,
-                         sample = host.sample, d = delayToPPQ(host.delay) }
-          end
-        end
-      end
-
-      -- Region producers: no host note. A discrete-replace kind feeds the realised parked chord
-      -- (parking frees the lanes); else members still sound and feed the live overlap. see design/note-macros-v2.md § Generator output
-      for _, region in ipairs(fxRegionsByChan[chan] or {}) do
-        local startL, endL = region.startppq, region.endppq
-        local members
-        if parksNotes(region) then
-          members = {}                             -- replace: derived notes stand in for the parked chord
-          for _, m in ipairs(channels[chan].parked or {}) do
-            if m.ppqL >= startL and m.ppqL < endL then util.add(members, m) end
-          end
-        else
-          members = membersOf(chan, startL, endL)  -- augment: members still sound
-        end
-        runProducer{ window = { startL, endL }, notes = members,
-                     fx = region.fx, id = region.uuid, lane = nil, d = 0 }
-      end
-
-      -- Reconcile existence (stamps kept specs with token + realised end); defer writes to the 4.8 atomic commit.
-      -- fx.noteLive holds the predicted specs; the tail walk clips them in place.
-      reconcileFx(fx.noteExisting[chan], predicted, deferred)
-      for _, spec in ipairs(predicted) do
-        util.add(fx.noteLive[chan], { evt = spec, lane = spec.lane })
-      end
-
-      -- Pass B: per target, interval-colour stashed instances -- overlapping carriers get
-      -- distinct codes (node sums by target), disjoint share the coldest. see design/archive/note-macros.md § Delta-code allocation
-      local occupied = {}
-      for code in pairs(channels[chan].columns.ccs or {}) do occupied[code] = true end
-      for code in pairs((extras[chan] or {}).ccs or {})   do occupied[code] = true end
-      local byTarget = {}
-      for _, inst in ipairs(pending) do util.bucket(byTarget, inst.target, inst) end
-      local targets = util.keys(byTarget)
-      table.sort(targets, function(a, b) return tostring(a) < tostring(b) end)
-
-      local predictedDelta, lastDeltaPpq, newCarriers = {}, {}, {}
-      for _, target in ipairs(targets) do
-        local insts = byTarget[target]
-        table.sort(insts, function(a, b)
-          if a.startL ~= b.startL then return a.startL < b.startL end
-          return a.endL < b.endL
-        end)
-        local colourEnd, colourCode = {}, {}
-        for _, inst in ipairs(insts) do
-          local colour
-          for ci = 1, #colourEnd do
-            if colourEnd[ci] <= inst.startL then colour = ci; break end
-          end
-          if not colour then
-            colour = #colourEnd + 1
-            local code = generators.allocateCarrier(occupied)
-            colourCode[colour] = code
-            occupied[code], occupied[code + 32] = true, true
-            mm:wideCC(chan, code, true)
-            util.add(newCarriers, { code = code, target = target })
-          end
-          colourEnd[colour] = inst.endL
-          -- dedup per code: a disjoint sharer's start can land on the prior window's
-          -- re-centre ppq (both centre, so identical) -- keep the first.
-          local code = colourCode[colour]
-          for _, bp in ipairs(inst.delta) do
-            local ppq = tm:fromLogical(chan, bp.ppqL, inst.d)
-            if ppq ~= lastDeltaPpq[code] then
-              lastDeltaPpq[code] = ppq
-              -- pb deltas are cents (-> raw); cc deltas are already cc steps. Shared 14-bit
-              -- transport: (8192 + raw) / 128. see design/note-macros-v2.md § Continuous cc
-              local raw = target == 'pb' and centsToRaw(bp.val) or bp.val
-              util.add(predictedDelta, {
-                evType = 'cc', chan = chan, cc = code, ppq = ppq,
-                val = (8192 + raw) / 128, shape = bp.shape,
-              })
-            end
-          end
-        end
-      end
-
-      -- Anchor each carrier to 0 at take start; CC chase re-establishes centre
-      -- on any loop/seek before the first host. see design/archive/note-macros.md § Continuous realisation
-      local earliest = {}
-      for _, e in ipairs(predictedDelta) do
-        if not earliest[e.cc] or e.ppq < earliest[e.cc] then earliest[e.cc] = e.ppq end
-      end
-      for code, first in pairs(earliest) do
-        if first ~= 0 then
-          util.add(predictedDelta, { evType = 'cc', chan = chan, cc = code,
-                                     ppq = 0, val = (8192 + centsToRaw(0)) / 128, shape = 'slow' })
-        end
-      end
-
-      -- Rest seats: one base CC per augment cc target lacking authored automation (derived ones
-      -- already routed out, so an empty cc column == no authored base). see design/note-macros-v2.md § Continuous cc
-      local predictedBase = {}
-      for _, target in ipairs(targets) do
-        if type(target) == 'number' and not channels[chan].columns.ccs[target] then
-          util.add(predictedBase, { evType = 'cc', chan = chan, cc = target, ppq = 0,
-                                    val = byTarget[target][1].rest or 0, shape = 'step', derived = 'ccbase' })
-        end
-      end
-      local wires = mmBatch()
-      reconcileDerived{
-        existing = fx.ccExisting[chan].base, predicted = predictedBase, sink = wires,
-        key   = function(x) return util.key(canon(x.cc), canon(x.ppq)) end,
-        match = function(have, spec) return have.val == spec.val end,
-      }
-      -- cc-replace fill: reconcile the generated curve on its target lane; shape is part of the
-      -- match -- it drives REAPER's interpolation. see design/note-macros-v2.md § Continuous cc
-      reconcileDerived{
-        existing = fx.ccExisting[chan].fill, predicted = ccFill, sink = wires,
-        key   = function(x) return util.key(canon(x.cc), canon(x.ppq)) end,
-        match = function(have, spec) return have.val == spec.val and have.shape == spec.shape end,
-      }
-
-      reconcileCarrier(fx.ccExisting[chan].carrier, predictedDelta, wires)
-      wires.commit()
-      if #newCarriers > 0 then newFxCarrier[chan] = newCarriers end
-    end
-
-    -- Reap stale carrier codes (relocated / removed); persist live map for pa's add bank. see design/archive/note-macros.md § Delta-code allocation
-    for chan in pairs(carrierRoute) do
-      local live = {}
-      for _, c in ipairs(newFxCarrier[chan] or {}) do live[c.code] = true end
-      for code in pairs(carrierRoute[chan]) do
-        if not live[code] then mm:wideCC(chan, code, false) end
-      end
-    end
-    if not util.deepEq(prevCarrier, newFxCarrier) and mm:take() then
-      ds:assign('fxCarrier', next(newFxCarrier) and newFxCarrier or util.REMOVE)
-    end
+  end
+  if not util.deepEq(prevCarrier, newFxCarrier) and mm:take() then
+    ds:assign('fxCarrier', next(newFxCarrier) and newFxCarrier or util.REMOVE)
   end
 
   -- 4.8) Unified tail/onset walk + atomic commit: real notes, fixed externals, fx.noteLive walk together (onset clamp then tail clip).
