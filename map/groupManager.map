@@ -1,9 +1,8 @@
-@module groupManager  src=groupManager.lua  loc=919  sha=4ae9c74  mode=chunk  self=gm
+@module groupManager  src=groupManager.lua  loc=927  sha=4ae9c74  mode=chunk  self=gm
 @deps tm, ds
 
 # Invariants & contracts
   @contract  seeds a new group from clipboard-sourced concrete `events` and a
-  @contract  the caller (clipboard) has already bounds-checked the target
   @contract  explicit-group duplicate, used by the groupDuplicate
   @contract  rehydrate on a groups invalidate (undo rewind); own assign echoes lack it, ignored
 
@@ -61,42 +60,45 @@
       -- dur is the intent ceiling: author endppq = onset + dur. tm stamps
       -- endppqL and derives the raw tail, so a blocker delete regrows the
       -- tail back up to the ceiling rather than merely clipping.
-  @fn updToGroup(update, anchor, groupEvt)  @ 167-184
+  @fn onTake(e)  @ 165-167
+      -- Off-take concretes withheld: writing one pushes REAPER's EOT and grows the take.
+      -- Group retains the member; concrete revives once an instance brings it on-take.
+  @fn updToGroup(update, anchor, groupEvt)  @ 173-190
       -- Instance-frame partial update -> group-frame partial update. `groupEvt`
       -- is the event's current group entry, the reference for ceiling<->dur.
       -- A note's ceiling is INTENT: endppqL (authored), or open -> dur removed
       -- (nil dur IS open). The realised endppq never enters the group frame.
-  @fn updToInstance(update, anchor, groupEvt)  @ 191-211
+  @fn updToInstance(update, anchor, groupEvt)  @ 197-217
       -- Exact inverse: group-frame partial update -> instance-frame update.
       -- dur removed (util.REMOVE), OR a move of an already-open note, => the
       -- note is open: author endppq = util.OPEN. A finite dur (or a move of
       -- a finite note) authors the intent ceiling on endppq; tm stamps
       -- endppqL and derives the raw tail.
-  @fn diffGroup(oldG, newG)  @ 214-223
+  @fn diffGroup(oldG, newG)  @ 220-229
       -- Neutral field diff between two group events (feeds updToInstance).
   -- Persistence
-  @fn persist()  @ 227-239
-  @fn rehydrate()  @ 245-267
+  @fn persist()  @ 233-245
+  @fn rehydrate()  @ 251-273
       -- Construction-time cm read runs before any take binds, so it is empty;
       -- live data arrives only on the take-changed rebuild. Without it
       -- restored groups are inert and nextGroupId stays 1, clobbering the
       -- persisted group on the next markGroup.
   -- Helpers
-  @fn freshInstance(anchor)  @ 271-273
-  @fn nextKey(map)  @ 275-279
-  @fn classify(evt)  @ 283-303
+  @fn freshInstance(anchor)  @ 277-279
+  @fn nextKey(map)  @ 281-285
+  @fn classify(evt)  @ 289-309
       -- Locate (groupId, instId, vuid) by uuid -- the durable identity; a
       -- table gm holds is valid only within one rebuild window.
-  @fn sameSlot(a, b)  @ 308-311
+  @fn sameSlot(a, b)  @ 314-317
       -- Two group-frame events occupy the same region slot: same onset, same
       -- channel offset, same stream. The identity the override-transition
       -- helpers (revive, sibling absorb) match on.
-  @fn revivableVuid(group, instance, evt)  @ 317-323
+  @fn revivableVuid(group, instance, evt)  @ 323-329
       -- A global-mode create on a slot this instance locally deleted: the group
       -- event whose delete is shadowing it, still alive in the shared pattern.
       -- Returns its vuid so the create revives it in place instead of
       -- allocating a coincident second vuid.
-  @fn absorbSiblingOverrides(group, vuid, actingInstId, created)  @ 334-360
+  @fn absorbSiblingOverrides(group, vuid, actingInstId, created)  @ 340-366
       -- A global-mode group-event create/delete flips whether a shared event
       -- exists at a slot. A SIBLING instance carrying its own override there
       -- must keep its visible event: re-express the override across the flip
@@ -106,10 +108,10 @@
       -- needs the live base, so this runs before the group event is cleared.
       -- The acting instance is the on-ov-local path's job; skip it. A sibling
       -- that locally hides the slot has no visible event -- nothing to keep.
-  @fn classifyCreate(evt)  @ 364-375
+  @fn classifyCreate(evt)  @ 370-381
       -- A create with no projected ref: does it fall inside some instance's
       -- region, on a stream the region already selects? inRect enforces the gate.
-  @fn rectCells(rect, anchor)  @ 385-394
+  @fn rectCells(rect, anchor)  @ 391-400
       -- Overlapping mirror groups have no defined semantics: classifyCreate
       -- adopts a fresh event into whichever group pairs() yields first, and
       -- two groups projecting the same slot collide with no cross-group
@@ -117,68 +119,65 @@
       -- (channel, streamId, time): same bars on a different lane or channel
       -- do not conflict, and an adjacent stack (next = ppq+dur, half-open)
       -- does not either.
-  @fn spansOverlap(aPpq, aDur, bPpq, bDur)  @ 396-398
-  @fn regionConflict(rect, anchor, exclude)  @ 403-422
+  @fn spansOverlap(aPpq, aDur, bPpq, bDur)  @ 402-404
+  @fn regionConflict(rect, anchor, exclude)  @ 409-428
       -- groupId of an existing group an instance of `rect` at `anchor` would
       -- collide with -- shared time span AND a shared (channel, streamId)
       -- cell -- or nil.
   -- Active group (dupeClip-idiom selector; the command layer owns the
   -- clear-on-other-command lifetime, gm only the pointer)
   -- SEAM
-  @fn reproject(groupId)  @ 567-616
-  @fn localAmend(instance, vuid, group, update)  @ 623-634
+  @fn reproject(groupId)  @ 571-624
+  @fn localAmend(instance, vuid, group, update)  @ 631-642
       -- Local edit of an existing override -- shared by localMode and the
       -- on-ov-in-global path. An assign'd / synced group event accrues a
       -- sticky per-instance assign; a local-only add is edited in place.
       -- Never touches group.events, so no sibling sees it.
-  @fn applyEdit(evt, update)  @ 639-724
+  @fn applyEdit(evt, update)  @ 647-732
 
 # Public API (gm:*)
-  @api gm:markGroup(events, rect)  @ 431-450
+  @api gm:markGroup(events, rect)  @ 437-456
       --          resolved region `rect`. Instance 1's anchor is the region origin
       --          { rect.ppq, rect.chanLo }; proj points at the passed events.
       --          Returns the new groupId, or (nil, reason) if the region
       --          collides with a live group (disjoint-region invariant).
-  @api gm:newInstance(groupId, anchor)  @ 458-483
-      --          region and cleared it. Validates the projection (every group
-      --          event's instance channel in 1..16), then stages a concrete
-      --          clone of the group at `anchor`. Returns instId, or
-      --          (nil, reason) if the projection is invalid or the placement
-      --          collides with a live group (disjoint-region invariant).
-  @api gm:activeGroup()  @ 488
-  @api gm:clearActive()  @ 489
-  @api gm:groupRect(groupId)  @ 493-496
+  @api gm:newInstance(groupId, anchor)  @ 460-487
+      -- Caller (clipboard) has bounds-checked and cleared the target region; off-take withheld, see onTake.
+      @contract  validates projection (chan 1..16); returns instId or nil,reason on invalid/collision.
+  @api gm:activeGroup()  @ 492
+  @api gm:clearActive()  @ 493
+  @api gm:groupRect(groupId)  @ 497-500
       -- The group's projection rect, for the caller's pre-stage clear of the
       -- destination zone (gm:newInstance contract). nil if the group is gone.
-  @api gm:mark(events, rect)  @ 500-505
+  @api gm:mark(events, rect)  @ 504-509
       --          group becomes active.
       @contract  case 1 -- seed a group from the selection, no copy. The new
-  @api gm:stamp(events, rect, anchor)  @ 510-518
+  @api gm:stamp(events, rect, anchor)  @ 514-522
       --          instId). No active -> case 2, seed the group AND its first copy
       --          (returns groupId, instId); the group becomes active.
       @contract  active live -> case 3, drop one more copy at `anchor` (returns
-  @api gm:duplicateInto(groupId, events, rect, anchor)  @ 527-535
+  @api gm:duplicateInto(groupId, events, rect, anchor)  @ 531-539
       --          cascade. `groupId` live -> drop one more copy at `anchor`
       --          into it; nil or stale -> seed group + first copy. Returns
       --          the groupId either way. Sets it active for render parity,
       --          but NEVER reads the shared active pointer -- the caller's
       --          token is the sole continuation state (stamp's activeGroup
       --          fallback belongs to mark/paste, not the cascade).
-  @api gm:setLocalMode(on)  @ 537
-  @api gm:localMode()  @ 538
-  @api gm:stateOf(uuid)  @ 540-546
-  @api gm:eachInstance()  @ 552-563
+  @api gm:setLocalMode(on)  @ 541
+  @api gm:localMode()  @ 542
+  @api gm:stateOf(uuid)  @ 544-550
+  @api gm:eachInstance()  @ 556-567
       -- Read accessor for the render pass: every live instance with the group
       -- rect it projects, its anchor, and whether its group is active. No new
       -- mutable state; rect/anchor are by reference (render reads, never
       -- mutates).
   -- INSTANCE / GROUP LIFECYCLE
-  @api gm:deleteInstance(groupId, instId)  @ 792-813
+  @api gm:deleteInstance(groupId, instId)  @ 800-821
       -- Stage a tm delete for every projected concrete of one instance, drop
       -- the instance, and -- if it was the group's last -- drop the group,
       -- clearing the active pointer if it named it. Unknown id -> nil, reason.
       @contract  (groupId, instId) -> true | nil,reason; stages tm deletes for the instance's concretes, last instance drops the group + clears active. Unknown id -> nil,reason.
-  @api gm:moveInstance(groupId, instId, anchor)  @ 823-849
+  @api gm:moveInstance(groupId, instId, anchor)  @ 831-857
       -- Re-anchor an instance. The group frame is anchor-invariant, so a pure
       -- move is zero group-frame drift and reproject (drift-driven) cannot see
       -- it: re-place every projected concrete through the group->instance dual
@@ -187,7 +186,7 @@
       -- a collision with another group or a sibling -- the moving instance
       -- itself excluded so it cannot self-collide.
       @contract  (groupId, instId, anchor) -> true | nil,reason. Precondition: caller has cleared the destination cells -- gm only re-places its own concretes, never clears foreign ones (as gm:newInstance, take/region bounds are the caller's). gm validates channel range + cross-group/sibling disjointness only.
-  @api gm:resizeGroup(groupId, instId, edits)  @ 863-917
+  @api gm:resizeGroup(groupId, instId, edits)  @ 871-925
       -- Resize the SHARED rect from edge instance `instId`'s drag. startDelta
       -- re-origins (Model A: every anchor += startDelta, every group event
       -- ppq -= startDelta) so realised positions hold while the boundary
@@ -199,26 +198,27 @@
       -- surface) fold in at that instance's anchor. Whole op rejected, nothing
       -- mutated, if any instance's new placement collides with another group
       -- or a sibling instance of the same group, or the region would vanish.
-      @contract  (groupId, instId, {startDelta?,endDelta?,streams?,gained?}) -> true | nil,reason. gm validates cross-group AND same-group sibling disjointness + non-vanishing region only; take bounds are the caller's, deferred as in gm:newInstance (gm holds no take authority -- takeLen is advisory). Leaving members orphan (concrete kept, unmanaged); gained fold in at the actor anchor.
+      @contract  (groupId, instId, {startDelta?,endDelta?,streams?,gained?}) -> true|nil,reason.
 
 # Uses (outbound edges)
-  @use call    ds.assign  @ persist:238
-  @use call    ds.get  @ 28 rehydrate:246
-  @use call    groups.deriveAssign  @ absorbSiblingOverrides:346 localAmend:628
-  @use call    groups.inRect  @ classifyCreate:367 resizeGroup:894
-  @use call    groups.project  @ rehydrate:256 newInstance:473 stateOf:544 reproject:571
-  @use call    groups.reconcile  @ reproject:584
-  @use call    groups.resolve  @ absorbSiblingOverrides:355
-  @use call    groups.streamId  @ sameSlot:310
-  @use call    tm.addEvent  @ newInstance:476 reproject:598
-  @use call    tm.assignEvent  @ reproject:603 moveInstance:841
-  @use call    tm.byUuid  @ rehydrate:259 774
-  @use call    tm.deleteEvent  @ reproject:609 deleteInstance:800
-  @use call    util.assign  @ localAmend:632 applyEdit:718
-  @use call    util.clone  @ rehydrate:262 markGroup:444 newInstance:478 reproject:601,606 applyEdit:681,714 resizeGroup:911
+  @use call    ds.assign  @ persist:244
+  @use call    ds.get  @ 28 rehydrate:252
+  @use call    groups.deriveAssign  @ absorbSiblingOverrides:352 localAmend:636
+  @use call    groups.inRect  @ classifyCreate:373 resizeGroup:902
+  @use call    groups.project  @ rehydrate:262 newInstance:475 stateOf:548 reproject:575
+  @use call    groups.reconcile  @ reproject:588
+  @use call    groups.resolve  @ absorbSiblingOverrides:361
+  @use call    groups.streamId  @ sameSlot:316
+  @use call    tm.addEvent  @ newInstance:479 reproject:604
+  @use call    tm.assignEvent  @ reproject:611 moveInstance:849
+  @use call    tm.byUuid  @ rehydrate:265 782
+  @use call    tm.deleteEvent  @ reproject:617 deleteInstance:808
+  @use call    tm.length  @ onTake:166
+  @use call    util.assign  @ localAmend:640 applyEdit:726
+  @use call    util.clone  @ rehydrate:268 markGroup:450 newInstance:481 reproject:608,614 applyEdit:689,722 resizeGroup:919
   @use require groups  @ 11
   @use require util  @ 10
-  @use sub     ds:dataChanged  @ 782
-  @use sub     tm:postflush  @ 751
-  @use sub     tm:preflush  @ 726
-  @use sub     tm:rebuild  @ 768
+  @use sub     ds:dataChanged  @ 790
+  @use sub     tm:postflush  @ 759
+  @use sub     tm:preflush  @ 734
+  @use sub     tm:rebuild  @ 776

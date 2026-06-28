@@ -65,6 +65,7 @@ local specs = {
   'groups_core_spec',
   'gm_propagate_spec',
   'gm_realisation_spec',
+  'gm_take_clip_spec',
   'tv_selection_rect_spec',
   'tv_event_shift_spec',
   'tv_adjust_position_tail_spec',

@@ -160,6 +160,12 @@ local function toInstance(g, anchor)
   return e
 end
 
+-- Off-take concretes withheld: writing one pushes REAPER's EOT and grows the take.
+-- Group retains the member; concrete revives once an instance brings it on-take.
+local function onTake(e)
+  return e.ppq < tm:length()
+end
+
 -- Instance-frame partial update -> group-frame partial update. `groupEvt`
 -- is the event's current group entry, the reference for ceiling<->dur.
 -- A note's ceiling is INTENT: endppqL (authored), or open -> dur removed
@@ -449,12 +455,8 @@ function gm:markGroup(events, rect)
   return groupId
 end
 
---contract: the caller (clipboard) has already bounds-checked the target
---          region and cleared it. Validates the projection (every group
---          event's instance channel in 1..16), then stages a concrete
---          clone of the group at `anchor`. Returns instId, or
---          (nil, reason) if the projection is invalid or the placement
---          collides with a live group (disjoint-region invariant).
+-- Caller (clipboard) has bounds-checked and cleared the target region; off-take withheld, see onTake.
+--contract: validates projection (chan 1..16); returns instId or nil,reason on invalid/collision.
 function gm:newInstance(groupId, anchor)
   local group = groups[groupId]
   for _, g in pairs(group.events) do
@@ -473,9 +475,11 @@ function gm:newInstance(groupId, anchor)
   local desired = groupsCore.project(group, instance)
   for vuid, g in pairs(desired) do
     local e = toInstance(g, anchor)
-    tm:addEvent(e)
-    selfStaged[e] = true
-    link(groupId, instId, vuid, p, nil, util.clone(g), e)
+    if onTake(e) then
+      tm:addEvent(e)
+      selfStaged[e] = true
+      link(groupId, instId, vuid, p, nil, util.clone(g), e)
+    end
   end
   propagating = false
   pendingReproject[groupId] = true
@@ -595,10 +599,14 @@ local function reproject(groupId)
           instEvt = vuidProj.evt
         else
           instEvt = toInstance(op.groupEvt, instance.anchor)
-          tm:addEvent(instEvt)
+          -- off-take: withhold so the take never grows; left unlinked,
+          -- reconcile re-offers it if it later comes on-take.
+          if onTake(instEvt) then tm:addEvent(instEvt) else instEvt = nil end
         end
-        link(groupId, instId, op.vuid, instProj,
-             vuidProj and vuidProj.uuid, util.clone(op.groupEvt), instEvt)
+        if instEvt then
+          link(groupId, instId, op.vuid, instProj,
+               vuidProj and vuidProj.uuid, util.clone(op.groupEvt), instEvt)
+        end
       elseif op.op == 'set' then
         tm:assignEvent(vuidProj.evt,
           updToInstance(diffGroup(vuidProj.groupEvt, op.groupEvt),
@@ -859,7 +867,7 @@ end
 -- surface) fold in at that instance's anchor. Whole op rejected, nothing
 -- mutated, if any instance's new placement collides with another group
 -- or a sibling instance of the same group, or the region would vanish.
---contract: (groupId, instId, {startDelta?,endDelta?,streams?,gained?}) -> true | nil,reason. gm validates cross-group AND same-group sibling disjointness + non-vanishing region only; take bounds are the caller's, deferred as in gm:newInstance (gm holds no take authority -- takeLen is advisory). Leaving members orphan (concrete kept, unmanaged); gained fold in at the actor anchor.
+--contract: (groupId, instId, {startDelta?,endDelta?,streams?,gained?}) -> true|nil,reason.
 function gm:resizeGroup(groupId, instId, edits)
   local group = groups[groupId]
   if not group then return nil, 'no such group' end

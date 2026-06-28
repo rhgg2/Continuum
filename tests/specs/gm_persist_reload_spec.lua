@@ -11,6 +11,7 @@ local util = require('util')
 local function fakeTm(uuidMap)
   local hooks, staged, seq = {}, { add = {}, assign = {}, del = {} }, 0
   local tm = {}
+  function tm:length()            return math.huge end   -- off-take clip irrelevant here
   function tm:subscribe(sig, fn)  hooks[sig] = fn end
   function tm:addEvent(e)         staged.add[#staged.add + 1] = e end
   function tm:assignEvent(e, u)   staged.assign[#staged.assign + 1] = { evt = e, update = u } end

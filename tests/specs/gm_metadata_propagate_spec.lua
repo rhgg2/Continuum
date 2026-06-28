@@ -10,6 +10,7 @@ local util = require('util')
 local function fakeTm()
   local hooks, staged, seq = {}, { add = {} }, 0
   local tm = {}
+  function tm:length()         return math.huge end   -- off-take clip irrelevant here
   function tm:subscribe(s, fn) hooks[s] = fn end
   function tm:addEvent(e)      staged.add[#staged.add + 1] = e end
   function tm:assignEvent()    end
