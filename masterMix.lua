@@ -10,8 +10,8 @@ local colour = chrome.colour
 
 local WIDTH      = 170
 local BAR_H      = 8
-local HANDLE_W   = 9      -- grab handle width, px
-local HANDLE_H   = 13      -- grab handle height, px
+local HANDLE_W   = 7      -- grab handle width, px
+local HANDLE_H   = 11      -- grab handle height, px
 local METER_MIN  = -60
 local METER_MAX  = 6
 local ZERO_FRAC  = (0 - METER_MIN) / (METER_MAX - METER_MIN)   -- where 0 dB sits across the bar

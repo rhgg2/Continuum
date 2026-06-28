@@ -1,4 +1,4 @@
-@module masterMix  src=masterMix.lua  loc=140  sha=7c4c840  mode=chunk
+@module masterMix  src=masterMix.lua  loc=140  sha=85177d4  mode=chunk
 @deps chrome, ctx
 
 # Shapes
@@ -12,8 +12,8 @@
   @state colour = chrome.colour  @ 9
   @state WIDTH = 170  @ 11
   @state BAR_H = 8  @ 12
-  @state HANDLE_W = 9  @ 13   -- grab handle width, px
-  @state HANDLE_H = 13  @ 14   -- grab handle height, px
+  @state HANDLE_W = 7  @ 13   -- grab handle width, px
+  @state HANDLE_H = 11  @ 14   -- grab handle height, px
   @state METER_MIN = -60  @ 15
   @state METER_MAX = 6  @ 16
   @state ZERO_FRAC = (0 - METER_MIN) / (METER_MAX - METER_MIN)  @ 17   -- where 0 dB sits across the bar

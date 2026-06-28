@@ -1018,20 +1018,8 @@ local function strictNextMap(groups, onset)
   return nextOf
 end
 
--- assignList reindexes each event's token in place; applyAssigns wraps it in its own
--- modify, the 4.8 atomic note commit calls it inside a shared one.
-local function assignList(list)
-  for _, a in ipairs(list) do
-    local newTok = mm:assign(a.evt.token, a.update)
-    if newTok and newTok ~= a.evt.token then a.evt.token = newTok end
-  end
-end
-local function applyAssigns(list)
-  if #list > 0 then mm:modify(function() assignList(list) end) end
-end
-
 -- Accumulate mm ops, commit once in canonical delete -> assign -> add order; no-op if empty.
--- assign re-keys a passed evt's token in place when an identity field moved (mirrors assignList).
+-- assign re-keys a passed evt's token in place when an identity field moved.
 local function mmBatch()
   local dels, assigns, adds, lazyAdds = {}, {}, {}, {}
   return {
@@ -1132,7 +1120,7 @@ local function rebuildPbs(noteLive, replacePb)
     end
   end
 
-  local pbAdds, pbAssigns, pbDeletes = {}, {}, {}
+  local pbWrites = mmBatch()
 
   for chan = 1, 16 do
     local lane1Events = lane1ByChan[chan]
@@ -1212,13 +1200,15 @@ local function rebuildPbs(noteLive, replacePb)
           local fresh = { chan = chan, ppq = ppq, cents = 0,
                           ppqL = hostPpqL[ppq], derived = 'absorber', evType = 'pb' }
           util.add(pbs, fresh)
-          util.add(pbAdds, { evt = fresh })
+          local writeEvt = util.clone(fresh)
+          writeEvt.val = centsToRaw(fresh.cents + detuneAt(lane1ByChan[chan], ppq))
+          pbWrites.add(writeEvt)
         end
       end
     end
 
     for _, f in ipairs(availAbsorbers) do
-      util.add(pbDeletes, { token = f.origTok })
+      pbWrites.del({ token = f.origTok })
       for i, p in ipairs(pbs) do
         if p == f then table.remove(pbs, i); break end
       end
@@ -1244,7 +1234,7 @@ local function rebuildPbs(noteLive, replacePb)
         end
         if update then
           pb.val = newRaw
-          util.add(pbAssigns, { token = pb.origTok, update = update })
+          pbWrites.assign(pb.origTok, update)
         end
       end
     end
@@ -1264,18 +1254,7 @@ local function rebuildPbs(noteLive, replacePb)
     channels[chan].columns.pb = keep and { events = pbColEvents } or nil
   end
 
-  if #pbAdds > 0 or #pbAssigns > 0 or #pbDeletes > 0 then
-    mm:modify(function()
-      for _, op in ipairs(pbDeletes) do mm:delete(op.token) end
-      for _, op in ipairs(pbAssigns) do mm:assign(op.token, op.update) end
-      for _, op in ipairs(pbAdds) do
-        local d = detuneAt(lane1ByChan[op.evt.chan], op.evt.ppq)
-        local writeEvt = util.clone(op.evt)
-        writeEvt.val = centsToRaw(op.evt.cents + d)
-        mm:add(writeEvt)
-      end
-    end)
-  end
+  pbWrites.commit()
 end
 
 -- Fx expansion (rebuild step 4.6): fx-carrying notes / fx-regions -> derived notes, CCs, carriers;
@@ -1642,7 +1621,7 @@ function tm:rebuild(takeChanged)
   -- 3) Single CC walk. Reconciles (raw, ppqL) under current swing; projects non-pb CCs.
   -- see docs/trackerManager.md § Rebuild: step 3 — CC walk
   do
-    local ccUpdates = {}
+    local ccWrites = mmBatch()
     for _, cc in mm:ccs() do
       if cc.evType == 'cc' and carrierRoute[cc.chan] and carrierRoute[cc.chan][cc.cc] then
         -- Carrier: generator-owned, no metadata; routed out by allocated code,
@@ -1669,12 +1648,12 @@ function tm:rebuild(takeChanged)
         if staleSwing[cc.chan] and cc.ppqL ~= nil then
           local newPpq = tm:fromLogical(cc.chan, cc.ppqL)
           if newPpq ~= cc.ppq then
-            util.add(ccUpdates, { tok = mm:tokenOf(cc), update = { ppq = newPpq } })
+            ccWrites.assign(mm:tokenOf(cc), { ppq = newPpq })
             cc.ppq = newPpq
           end
         elseif rawDivergesFromLogical(cc) then
           local newPpqL = tm:toLogical(cc.chan, cc.ppq)
-          util.add(ccUpdates, { tok = mm:tokenOf(cc), update = { ppqL = newPpqL } })
+          ccWrites.assign(mm:tokenOf(cc), { ppqL = newPpqL })
           cc.ppqL = newPpqL
         end
       end
@@ -1695,11 +1674,7 @@ function tm:rebuild(takeChanged)
       ::continue::
     end
 
-    if #ccUpdates > 0 then
-      mm:modify(function()
-        for _, u in ipairs(ccUpdates) do mm:assign(u.tok, u.update) end
-      end)
-    end
+    ccWrites.commit()
   end
 
   -- 4) Reconcile extras.
@@ -1729,18 +1704,18 @@ function tm:rebuild(takeChanged)
   -- 4.7) Two-frame rebuild rule. See docs/timing.md §"Rebuild rule". staleSwing reseats
   -- notes only; CCs by step 3/4.5/4.9; raw endppq owned by step 4.8, never reseated here.
   do
-    local toAssign = {}
+    local reseats = mmBatch()
     forEachEvent(function(_, evt, chan, isNote, _, lane)
       if not isNote or evt.derived then return end
       if staleSwing[chan] then
         local newPpq = tm:fromLogical(chan, evt.ppqL, delayToPPQ(evt.delay))
         if newPpq ~= evt.ppq then
           evt.ppq = newPpq
-          util.add(toAssign, { evt = evt, update = { ppq = newPpq } })
+          reseats.assign(evt.token, { ppq = newPpq }, evt)
         end
       end
     end)
-    applyAssigns(toAssign)
+    reseats.commit()
     staleSwing = {}
   end
 
@@ -1749,7 +1724,7 @@ function tm:rebuild(takeChanged)
   if #external > 0 then
     table.sort(external, function(a, b) return a.ppq < b.ppq end)
     local trackerMode = cm:get('trackerMode')
-    local inserts = {}
+    local extWrites = mmBatch()
     for _, note in ipairs(external) do
       local delay     = note.delay or 0
       local d         = delayToPPQ(delay)
@@ -1768,14 +1743,10 @@ function tm:rebuild(takeChanged)
       util.assign(ce, update)
       ce.fixed = true
       util.add(col.events, ce)
-      util.add(inserts, { note = note, ce = ce, update = update })
+      ce.token = mm:tokenOf(note)
+      extWrites.assign(ce.token, update, ce)
     end
-    mm:modify(function()
-      for _, ins in ipairs(inserts) do
-        local newTok = mm:assign(mm:tokenOf(ins.note), ins.update)
-        ins.ce.token = newTok or mm:tokenOf(ins.note)
-      end
-    end)
+    extWrites.commit()
   end
 
   -- 4.5) Region replace: park authored notes a replace-window covers (can't mute: note-on/off
@@ -1797,6 +1768,7 @@ function tm:rebuild(takeChanged)
 
     -- Authored notes a window now covers leave the take; the prior parked set re-homes --
     -- still-covered carries forward, the rest restores to the take.
+    local parkDels = mmBatch()
     local newParked, removals, restores = {}, {}, {}
     for chan = 1, 16 do
       for laneIdx, col in ipairs(channels[chan].columns.notes) do
@@ -1806,6 +1778,7 @@ function tm:rebuild(takeChanged)
               "ppq endppq ppqL endppqL pitch vel detune delay sample",
               { evType = 'note', chan = chan, lane = laneIdx }))
             util.add(removals, { chan = chan, lane = laneIdx, evt = evt })
+            parkDels.del(evt)
           end
         end
       end
@@ -1815,14 +1788,10 @@ function tm:rebuild(takeChanged)
       else util.add(restores, { spec = spec }) end
     end
 
-    if #removals > 0 then
-      mm:modify(function()
-        for _, r in ipairs(removals) do mm:delete(r.evt.token) end
-      end)
-      for _, r in ipairs(removals) do
-        local events = channels[r.chan].columns.notes[r.lane].events
-        for i, e in ipairs(events) do if e == r.evt then table.remove(events, i); break end end
-      end
+    parkDels.commit()
+    for _, r in ipairs(removals) do
+      local events = channels[r.chan].columns.notes[r.lane].events
+      for i, e in ipairs(events) do if e == r.evt then table.remove(events, i); break end end
     end
     -- Restores re-enter their columns now (token-less); the tail walk clips them in place and
     -- the 4.8 commit adds them after the derived deletions.
@@ -1882,6 +1851,7 @@ function tm:rebuild(takeChanged)
 
     -- On-take authored cc the window covers leaves; the prior parked set re-homes (still-covered
     -- forward, rest restores). Logical pos = ppqL or ppq -- nil under identity swing.
+    local ccPark = mmBatch()
     local newParked, removals, restores = {}, {}, {}
     for chan = 1, 16 do
       for cc, col in pairs(channels[chan].columns.ccs) do
@@ -1891,41 +1861,34 @@ function tm:rebuild(takeChanged)
             util.add(newParked, { chan = chan, cc = cc, ppq = evt.ppq, ppqL = ppqL,
                                   val = evt.val, shape = evt.shape })
             util.add(removals, { chan = chan, cc = cc, evt = evt })
+            ccPark.del(evt)
           end
         end
       end
     end
     for _, spec in ipairs(ds:get('fxParkedCC') or {}) do
       if covered(spec.chan, spec.cc, spec.ppqL) then util.add(newParked, spec)
-      else util.add(restores, { spec = spec }) end
+      else
+        util.add(restores, { spec = spec })
+        ccPark.add({ evType = 'cc', chan = spec.chan, cc = spec.cc,
+                     ppq = spec.ppq, ppqL = spec.ppqL, val = spec.val, shape = spec.shape })
+      end
     end
 
-    if #removals > 0 then
-      mm:modify(function()
-        for _, r in ipairs(removals) do mm:delete(r.evt.token) end
-      end)
-      for _, r in ipairs(removals) do
-        local events = channels[r.chan].columns.ccs[r.cc].events
-        for i, e in ipairs(events) do if e == r.evt then table.remove(events, i); break end end
-      end
+    ccPark.commit()
+    for _, r in ipairs(removals) do
+      local events = channels[r.chan].columns.ccs[r.cc].events
+      for i, e in ipairs(events) do if e == r.evt then table.remove(events, i); break end end
     end
-    if #restores > 0 then
-      mm:modify(function()
-        for _, r in ipairs(restores) do
-          mm:add({ evType = 'cc', chan = r.spec.chan, cc = r.spec.cc,
-                   ppq = r.spec.ppq, ppqL = r.spec.ppqL, val = r.spec.val, shape = r.spec.shape })
-        end
-      end)
-      -- Seat a token-less projection so the view shows the restored cc this frame; next rebuild
-      -- re-reads the real token'd event from the take.
-      for _, r in ipairs(restores) do
-        local channel = channels[r.spec.chan]
-        local col = channel.columns.ccs[r.spec.cc]
-        if not col then col = { cc = r.spec.cc, events = {} }; channel.columns.ccs[r.spec.cc] = col end
-        util.add(col.events, { evType = 'cc', ppq = r.spec.ppq, ppqL = r.spec.ppqL,
-                               val = r.spec.val, shape = r.spec.shape })
-        table.sort(col.events, function(a, b) return (a.ppqL or a.ppq) < (b.ppqL or b.ppq) end)
-      end
+    -- Seat a token-less projection so the view shows the restored cc this frame; next rebuild
+    -- re-reads the real token'd event from the take.
+    for _, r in ipairs(restores) do
+      local channel = channels[r.spec.chan]
+      local col = channel.columns.ccs[r.spec.cc]
+      if not col then col = { cc = r.spec.cc, events = {} }; channel.columns.ccs[r.spec.cc] = col end
+      util.add(col.events, { evType = 'cc', ppq = r.spec.ppq, ppqL = r.spec.ppqL,
+                             val = r.spec.val, shape = r.spec.shape })
+      table.sort(col.events, function(a, b) return (a.ppqL or a.ppq) < (b.ppqL or b.ppq) end)
     end
 
     if not util.deepEq(ds:get('fxParkedCC') or {}, newParked) and mm:take() then
@@ -1999,7 +1962,7 @@ function tm:rebuild(takeChanged)
   -- Host clip + fxNote inserts land in one mm:modify — no transient same-pitch overlap for MIDI_Sort. see docs/trackerManager.md § Rebuild: step 4.8 — tail walk
   do
     local takeLen = tm:length()
-    local clamps = {}
+    local clampWrites = mmBatch()
     for chan = 1, 16 do
       local notes, byLane, byPitch = {}, {}, {}
       for laneIdx, col in ipairs(channels[chan].columns.notes) do
@@ -2038,7 +2001,7 @@ function tm:rebuild(takeChanged)
         local e, prev = n.evt, lastByPitch[n.evt.pitch]
         if prev and not n.evt.fixed and e.ppq <= prev.evt.ppq then
           local floor = prev.evt.ppq + 1
-          if e.token then util.add(clamps, { evt = e, update = { ppq = floor } }) end
+          if e.token then clampWrites.assign(e.token, { ppq = floor }, e) end
           e.ppq = floor
         end
         lastByPitch[e.pitch] = n
@@ -2071,7 +2034,7 @@ function tm:rebuild(takeChanged)
     end
     -- Clamps reindex colliding same-pitch onsets separately: reload separates the shared content-keyed token before the clip pass dereferences it.
     -- Clips only touch endppq, never re-key — safe to batch with adds.
-    applyAssigns(clamps)
+    clampWrites.commit()
     -- Host clips (each clipped to first fxNote) commit WITH the fxNote del/add + restores in one
     -- mm:modify/MIDI_Sort; canonical delete-first means no transient same-pitch overlap.
     deferred.commit()
@@ -2087,7 +2050,11 @@ function tm:rebuild(takeChanged)
   -- 4.5) PC synthesis (trackerMode only). Runs after step 6 so it sees externals:
   -- a foreign-MIDI note inherits sample from the prevailing PC.
   if cm:get('trackerMode') then
-    local toDelete, toAdd = {}, {}
+    local pcWrites, dirty = mmBatch(), false
+    local sink = {
+      del = function(r) pcWrites.del(r); dirty = true end,
+      add = function(a) pcWrites.add(a); dirty = true end,
+    }
     for chan = 1, 16 do
       local records = {}
       for L, lane in ipairs(channels[chan].columns.notes) do
@@ -2099,17 +2066,11 @@ function tm:rebuild(takeChanged)
         local n = w.evt
         util.add(records, { ppq = n.ppq, ppqL = n.ppqL, lane = w.lane, sample = n.sample or 0, key = n })
       end
-      reconcilePCsForChan(chan, records, {
-        del = function(r) util.add(toDelete, r.token) end,
-        add = function(a) util.add(toAdd, a) end,
-      })
+      reconcilePCsForChan(chan, records, sink)
     end
+    pcWrites.commit()
 
-    if #toDelete > 0 or #toAdd > 0 then
-      mm:modify(function()
-        for _, tok in ipairs(toDelete) do mm:delete(tok) end
-        for _, pc  in ipairs(toAdd)    do mm:add(pc) end
-      end)
+    if dirty then
       for chan = 1, 16 do channels[chan].columns.pc = { events = {} } end
       for _, cc in mm:ccs() do
         if cc.evType == 'pc' then
