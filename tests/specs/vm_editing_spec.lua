@@ -92,6 +92,35 @@ return {
     end,
   },
 
+  {
+    -- Regression (fractional ppqPerRow): the rendered tail's endppqC is
+    -- back-mapped through the integer raw frame, so it drifts sub-tick
+    -- from rowToPPQ(cursorRow). The undo branch must compare *rows*
+    -- (ctx:snapRow), not raw ppq equality, or noteOff can never reopen a
+    -- tail to util.OPEN off the integer grid. rpb=7 -> ppqPerRow=240/7;
+    -- row 3 = 102.857 ppq, tail seeded at the nearest raw tick 103.
+    name = 'noteOff reopens a tail to util.OPEN under fractional ppqPerRow',
+    run = function(harness)
+      local h = harness.mk{
+        config = { take = { rowPerBeat = 7 } },
+        seed = { notes = {
+          { ppq = 0, endppq = 103, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0 },
+        } },
+      }
+      h.vm:setGridSize(80, 40)
+
+      h.ec:setPos(3, 1, 1)   -- row 3 = the tail's rendered end row
+      h.cmgr:invoke('noteOff')
+
+      local A
+      for _, e in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
+        if e.pitch == 60 and e.ppq == 0 then A = e end
+      end
+      t.truthy(A, 'A survives')
+      t.eq(A.endppq, util.OPEN, 'tail reopened to OPEN despite sub-tick drift')
+    end,
+  },
+
   -- End-state invariant: after placing a new note at (chan, pitch, ppq),
   -- no other note on the same (chan, pitch) may still cover ppq. The
   -- invariant is enforced jointly by addNoteEvent's cross-col truncate

@@ -1105,7 +1105,7 @@ local noteOff, adjustDuration, adjustPosition do
 
       local undo = true
       for _, h in ipairs(hits) do
-        if h.note.endppqC ~= h.targetppq then undo = false; break end
+        if ctx:snapRow(h.note.endppqC, h.col.midiChan) ~= r1 then undo = false; break end
       end
 
       for _, h in ipairs(hits) do applyNoteOff(h.col, h.note, h.targetppq, undo) end
@@ -1126,7 +1126,7 @@ local noteOff, adjustDuration, adjustPosition do
 
     local last = util.seek(col.events, 'before', nextCursorPPQ, util.isNote)
     if not last then return end
-    applyNoteOff(col, last, cursorppq, last.endppqC == cursorppq)
+    applyNoteOff(col, last, cursorppq, ctx:snapRow(last.endppqC, col.midiChan) == r)
     tm:flush()
     ec:advance()
   end
