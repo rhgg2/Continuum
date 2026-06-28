@@ -140,10 +140,10 @@ return {
   },
 
   {
-    name = 'a wired move clears the swept-onto foreign notes and relocates the instance',
+    name = 'a wired move previews non-destructively, then clears + relocates on exit',
     run = function(harness)
-      -- 60 ppq/row. 1-row group at row 0; a foreign note sits two rows
-      -- down, where the group lands after two nudges.
+      -- 60 ppq/row. 1-row group at row 0; a foreign note two rows down, where
+      -- the group lands after two nudges. The sweep is render-only until exit.
       local h = harness.mk{ groups = true, seed = { notes = {
         { ppq =   0, endppq =  60, chan = 1, pitch = 60, vel = 100 }, -- group member
         { ppq = 120, endppq = 180, chan = 1, pitch = 72, vel = 100 }, -- foreign, 2 rows down
@@ -156,14 +156,19 @@ return {
       h.ec:regionArm()                 -- arms on the instance under the caret
       t.truthy(h.ec:isInRegionMode(), 'armed')
 
-      h.cmgr:invoke('nudgeForward')    -- +1 row
-      h.cmgr:invoke('nudgeForward')    -- +1 row: group now over the foreign note
+      h.cmgr:invoke('nudgeForward')    -- preview +1 row
+      h.cmgr:invoke('nudgeForward')    -- preview +2 rows: over the foreign note
 
       local notes = h.fm:dump().notes
-      t.falsy(byPitch(notes, 72), 'foreign note the group swept onto was cleared')
+      t.truthy(byPitch(notes, 72), 'foreign note still present during preview (non-destructive)')
+      t.eq(byPitch(notes, 60).ppq, 0, 'member not yet relocated during preview')
+
+      h.cmgr:invoke('regionExit')      -- commit on leaving the mode
+      notes = h.fm:dump().notes
+      t.falsy(byPitch(notes, 72), 'foreign note the group swept onto cleared on commit')
       local m = byPitch(notes, 60)
       t.truthy(m, 'member survived')
-      t.eq(m.ppq, 120, 'member relocated to the new anchor (flushed, not deferred)')
+      t.eq(m.ppq, 120, 'member relocated to the new anchor on commit')
     end,
   },
 
@@ -187,10 +192,10 @@ return {
   },
 
   {
-    name = 'a move hanging the group off the take end withholds the off-take member, revives it on return',
+    name = 'committing a move that hangs off the take withholds the off-take member; a later move revives it',
     run = function(harness)
-      -- 60 ppq/row, take 240 (rows 0..3). 2-row group; nudged to the last row its lower
-      -- member falls off-take -- writing it would push REAPER's EOT and grow the take.
+      -- 60 ppq/row, take 240 (rows 0..3). 2-row group; committed at the last row
+      -- its lower member falls off-take -- writing it would push REAPER's EOT.
       local h = harness.mk{ groups = true, seed = { length = 240, notes = {
         { ppq =  0, endppq =  40, chan = 1, pitch = 60, vel = 100 }, -- group row 0
         { ppq = 60, endppq = 100, chan = 1, pitch = 62, vel = 100 }, -- group row 1
@@ -198,21 +203,49 @@ return {
       local ci   = noteCol(h, 1)
       local seed = { ppq = 0, dur = 120, chanLo = 1, streams = { [0] = { ['note:1'] = true } } }
       h.gm:mark(h.vm:eventsInRect(seed), seed)
+
       h.ec:setPos(0, ci, 1)
       h.ec:regionArm()
+      h.cmgr:invoke('nudgeForward')
+      h.cmgr:invoke('nudgeForward')
+      h.cmgr:invoke('nudgeForward')   -- preview row 3: lower member would land off-take
+      h.cmgr:invoke('regionExit')     -- commit
 
-      h.cmgr:invoke('nudgeForward')   -- row 1
-      h.cmgr:invoke('nudgeForward')   -- row 2
-      h.cmgr:invoke('nudgeForward')   -- row 3: lower member would land at ppq 240, off-take
       local notes = h.fm:dump().notes
       t.truthy(byPitch(notes, 60), 'on-take member present')
       t.eq(byPitch(notes, 60).ppq, 180, 'top member at the last take row')
       t.falsy(byPitch(notes, 62), 'off-take member withheld (take did not grow)')
 
-      h.cmgr:invoke('nudgeBack')      -- back to row 2: lower member on-take again
+      h.ec:setPos(3, ci, 1)
+      h.ec:regionArm()
+      h.cmgr:invoke('nudgeBack')      -- preview row 2: lower member back on-take
+      h.cmgr:invoke('regionExit')     -- commit
       notes = h.fm:dump().notes
       t.truthy(byPitch(notes, 62), 'withheld member revived on return')
       t.eq(byPitch(notes, 62).ppq, 180, 'revived at its in-take ppq')
+    end,
+  },
+
+  {
+    name = 'tv:movePreview reports the armed drag geometry; nil when idle',
+    run = function(harness)
+      local h = harness.mk{ groups = true, seed = { notes = {
+        { ppq = 0, endppq = 60, chan = 1, pitch = 60, vel = 100 },
+      } } }
+      local ci   = noteCol(h, 1)
+      local seed = { ppq = 0, dur = 120, chanLo = 1, streams = { [0] = { ['note:1'] = true } } }
+      h.gm:mark(h.vm:eventsInRect(seed), seed)
+      h.ec:setPos(0, ci, 1)
+      h.ec:regionArm()
+      t.eq(h.vm:movePreview(), nil, 'no preview before any nudge')
+
+      h.cmgr:invoke('nudgeForward')
+      local mp = h.vm:movePreview()
+      t.truthy(mp, 'preview active after a nudge')
+      t.eq(mp.delta, 1, 'delta is the nudged row count')
+      t.eq(mp.srcLo, 0, 'source span starts at the anchor row')
+      t.eq(mp.srcHi, 2, 'source span ends at anchor + durRows')
+      t.truthy(mp.member[ci], 'the member column is flagged for remap')
     end,
   },
 }

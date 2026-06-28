@@ -173,6 +173,15 @@ drain a pending `newInstance` add-echo (whose add then misclassifies as
 a user create) and vice versa. One marker per loop, each drained only
 by its own.
 
+The move is *previewed* before it is sealed. In region mode a nudge only
+accumulates `regionCursor.moveDelta` and slides the caret; gm and tm are
+untouched. `trackerRender` reads `tv:movePreview` to draw the armed
+instance shifted by that delta — its own cells ghosted at the new rows,
+the foreign cells under the footprint suppressed render-only, so sweeping
+back restores them for free. `sealMove` runs the real
+`clearMoveGap → moveInstance → flush` once, on mode exit or before any
+structural verb, so a pending preview never leaks onto another instance.
+
 A region resize moves the boundary, never the music. Trimming the
 start edge re-origins — every anchor shifts by `startDelta`, every
 group event counter-shifts — so realised positions are invariant

@@ -744,9 +744,12 @@ local function drawTracker()
   local cursorPpq = cursorRow * logPerRow
   local inRegion  = tv:ec():isInRegionMode()
   local rc        = inRegion and tv:ec():regionCursor()
+  local movePrev  = tv:movePreview()
   for _, inst in ipairs(tv:eachInstance()) do
     local rect  = inst.rect
-    local ppqLo = inst.anchor.ppq
+    local shift = movePrev and movePrev.groupId == inst.groupId
+                            and movePrev.instId == inst.instId and movePrev.delta or 0
+    local ppqLo = inst.anchor.ppq + shift * logPerRow
     local ppqHi = ppqLo + rect.dur
     local yLo = math.max(math.floor(ppqLo / logPerRow + 0.5) - scrollRow, 0)
     local yHi = math.min(math.floor(ppqHi / logPerRow + 0.5) - scrollRow, gridHeight, numRows - scrollRow)
@@ -762,7 +765,7 @@ local function drawTracker()
             xMax = math.max(xMax or x2, x2)
             draw:box(x1, x2, yLo, yHi - 1, baseTint)
             for y = yLo, yHi - 1 do
-              local evt = col.cells and col.cells[scrollRow + y]
+              local evt = col.cells and col.cells[scrollRow + y - shift]
               local st  = evt and evt.uuid and tv:stateOf(evt.uuid)
               if st == 'conflicted' then conflicted = true end
               local key = st and groups.tintKey(st)
@@ -816,7 +819,16 @@ local function drawTracker()
     for x, col in ipairs(grid.cols) do
       if col.x then
         local evt = col.cells and col.cells[row]
-        local ghost = not evt and col.ghosts and col.ghosts[row]
+        local previewGhost
+        if movePrev and movePrev.member[x] then
+          local dstLo = movePrev.srcLo + movePrev.delta
+          if row >= dstLo and row < dstLo + (movePrev.srcHi - movePrev.srcLo) then
+            evt, previewGhost = col.cells and col.cells[row - movePrev.delta], true
+          elseif row >= movePrev.srcLo and row < movePrev.srcHi then
+            evt, previewGhost = nil, true
+          end
+        end
+        local ghost = not evt and not previewGhost and col.ghosts and col.ghosts[row]
         local text, textCol, overrides, divergent
         if ghost then
           local cellCol
@@ -829,6 +841,7 @@ local function drawTracker()
           if textCol == 'text' and col.offGrid and col.offGrid[row] then
             textCol = 'offGrid'
           end
+          if previewGhost and evt then textCol, overrides, divergent = 'ghost', nil, false end
         end
         local muted = tv:isChannelEffectivelyMuted(col.midiChan)
         if muted then textCol, overrides, divergent = 'inactive', nil, false end
@@ -843,7 +856,7 @@ local function drawTracker()
         if divergent and col.showDelay then
           draw:smallGlyph(col.x + delayMarkerOffset(col, cellWidth), y, '*', 9, textCol)
         end
-        if evt and evt.fx and evt.fx[1] and col.type == 'note' and not muted then
+        if evt and evt.fx and evt.fx[1] and col.type == 'note' and not muted and not previewGhost then
           draw:smallGlyph(col.x + fxMarkerOffset(col, cellWidth), y, '~', 9, 'accent')
         end
       end

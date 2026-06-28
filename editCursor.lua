@@ -491,7 +491,25 @@ local REGION_KEEPALIVE = {
 }
 
 do
+  -- Commit the pending drag: clear swept-onto cells, re-anchor (gm withholds
+  -- off-take), flush. Every structural verb and mode exit seals first.
+  local function sealMove()
+    local delta = regionCursor and regionCursor.moveDelta
+    if not delta or delta == 0 then return end
+    regionCursor.moveDelta = 0
+    local cur = currentEntry()
+    if not cur then return end
+    local lpr  = logPerRow()
+    local dest = { ppq = cur.anchor.ppq + delta * lpr, chan = cur.anchor.chan }
+    if groupBridge.clearMoveGap then
+      groupBridge.clearMoveGap(regionCursor.groupId, cur.anchor, dest)
+    end
+    gmgr():moveInstance(regionCursor.groupId, regionCursor.instId, dest)
+    if groupBridge.commit then groupBridge.commit() end
+  end
+
   local function exitMode()
+    sealMove()
     cmgr:pop(regionScope)
     regionPushed = false
     regionCursor = nil
@@ -523,11 +541,12 @@ do
     if groupBridge.commit then groupBridge.commit() end
   end
 
-  local function newInstance() stampAt(groupBridge.cursorAnchor()) end
+  local function newInstance() sealMove(); stampAt(groupBridge.cursorAnchor()) end
 
   -- Cascade: the copy lands one group-length past the armed instance and
   -- the border advances onto it, so repeats lay a run hands-free.
   local function duplicate()
+    sealMove()
     local cur  = currentEntry()
     local rect = cur and gmgr():groupRect(regionCursor.groupId)
     if not rect then return end
@@ -544,24 +563,19 @@ do
                         or nil
   end
 
-  -- Top clamped at row 0; bottom may hang (gm withholds off-take, one row must remain).
-  -- Commit is unconditional: a rare moveInstance reject still flushes the gap-clear.
+  -- A nudge accumulates moveDelta and tracks the caret; gm/tm are untouched
+  -- until sealMove. Top pinned at row 0; bottom hangs (gm withholds off-take).
   local function moveBy(rowDelta)
     local cur = currentEntry()
     if not cur then return end
-    local lpr     = logPerRow()
-    local fromRow = math.floor(cur.anchor.ppq / lpr + 0.5)
-    local toRow   = util.clamp(fromRow + rowDelta, 0, grid.numRows - 1)
-    if toRow == fromRow then return end
-    local dest = { ppq = toRow * lpr, chan = cur.anchor.chan }
-    if groupBridge.clearMoveGap then
-      groupBridge.clearMoveGap(regionCursor.groupId, cur.anchor, dest)
-    end
-    if gmgr():moveInstance(regionCursor.groupId, regionCursor.instId, dest) then
-      cursorRow = cursorRow + (toRow - fromRow)
-      clampPos(); moveHook()
-    end
-    if groupBridge.commit then groupBridge.commit() end
+    local lpr       = logPerRow()
+    local anchorRow = math.floor(cur.anchor.ppq / lpr + 0.5)
+    local delta     = regionCursor.moveDelta or 0
+    local newDelta  = util.clamp(anchorRow + delta + rowDelta, 0, grid.numRows - 1) - anchorRow
+    if newDelta == delta then return end
+    regionCursor.moveDelta = newDelta
+    cursorRow = cursorRow + (newDelta - delta)
+    clampPos(); moveHook()
   end
 
   local function resizeBy(edits)
@@ -578,6 +592,7 @@ do
   -- DWIM: a selection seeds a new group; else arm the caret's instance; else nothing.
   -- enterArmed is idempotent: a re-press just re-points the border at the caret.
   function ec:regionArm()
+    sealMove()
     if sel then
       newFromSelection()
       if regionCursor then enterArmed() end

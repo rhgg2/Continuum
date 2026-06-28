@@ -2304,6 +2304,31 @@ end
 function tv:eachInstance() return gm:eachInstance() end
 function tv:stateOf(uuid) return gm:stateOf(uuid) end
 
+-- Drag preview for trackerRender: the armed instance shown at anchor+moveDelta
+-- with gm/tm untouched. nil unless a nonzero drag is pending; member = remapped cols.
+function tv:movePreview()
+  local rc    = ec:regionCursor()
+  local delta = rc and rc.moveDelta
+  if not delta or delta == 0 then return nil end
+  local inst
+  for _, e in ipairs(gm:eachInstance()) do
+    if e.groupId == rc.groupId and e.instId == rc.instId then inst = e; break end
+  end
+  if not inst then return nil end
+  local lpr     = logPerRowFor(currentRpb())
+  local srcLo   = math.floor(inst.anchor.ppq / lpr + 0.5)
+  local durRows = math.max(1, math.floor(inst.rect.dur / lpr + 0.5))
+  local member  = {}
+  for x in ipairs(grid.cols) do
+    local off, sid = tv:streamRefAt(x, inst.anchor.chan)
+    if off and inst.rect.streams[off] and inst.rect.streams[off][sid] then
+      member[x] = true
+    end
+  end
+  return { groupId = rc.groupId, instId = rc.instId, delta = delta,
+           srcLo = srcLo, srcHi = srcLo + durRows, member = member }
+end
+
 --contract: extend hands newly-covered concretes in as `gained` (gm:resizeGroup never rescans)
 --contract: idempotent: re-painting an already on/off stream is a no-op true
 --invariant: group's live rect found by id off gm:eachInstance — ec carries no geometry

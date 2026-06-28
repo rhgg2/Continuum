@@ -218,19 +218,49 @@ return {
   },
 
   {
-    name = 'nudgeForward / nudgeBack move the instance, caret follows',
+    name = 'a nudge previews the move without mutating gm; the caret tracks it',
     run = function()
       local ec, c = mk()
       local g = c.gm:mark({}, rect(0, LPR))
       armOn(ec, c, g, 1)
       ec:setPos(5, 1, 1)
       c.cmgr:invoke('nudgeForward')
-      t.eq(instances(c.gm, g)[1].anchor.ppq, LPR, 'instance +1 row')
-      t.eq(ec:row(), 6, 'caret followed')
+      t.eq(instances(c.gm, g)[1].anchor.ppq, 0, 'gm instance unmoved during preview')
+      t.eq(ec:row(), 6, 'caret tracked the preview')
       c.cmgr:invoke('nudgeBack')
-      t.eq(instances(c.gm, g)[1].anchor.ppq, 0)
-      t.eq(ec:row(), 5)
+      t.eq(ec:row(), 5, 'caret tracked back')
       t.truthy(ec:isInRegionMode())
+    end,
+  },
+
+  {
+    name = 'leaving region mode commits the net drag',
+    run = function()
+      local ec, c = mk()
+      local g = c.gm:mark({}, rect(0, LPR))
+      armOn(ec, c, g, 1)
+      ec:setPos(0, 1, 1)
+      c.cmgr:invoke('nudgeForward')
+      c.cmgr:invoke('nudgeForward')
+      t.eq(instances(c.gm, g)[1].anchor.ppq, 0, 'still unmoved before exit')
+      c.cmgr:invoke('regionExit')
+      t.eq(instances(c.gm, g)[1].anchor.ppq, 2 * LPR, 'committed at +2 rows on exit')
+    end,
+  },
+
+  {
+    name = 'a nudged-then-returned drag commits nothing on exit',
+    run = function()
+      local ec, c = mk()
+      local g = c.gm:mark({}, rect(0, LPR))
+      armOn(ec, c, g, 1)
+      ec:setPos(5, 1, 1)
+      c.cmgr:invoke('nudgeForward')
+      c.cmgr:invoke('nudgeBack')
+      local commits = c.bridge.commits
+      c.cmgr:invoke('regionExit')
+      t.eq(c.bridge.commits, commits, 'net-zero delta: no flush on exit')
+      t.eq(instances(c.gm, g)[1].anchor.ppq, 0, 'instance unmoved')
     end,
   },
 
@@ -238,14 +268,14 @@ return {
     name = 'move pins the top at row 0 but lets the bottom hang off, one row left',
     run = function()
       local ec, c = mk()                       -- numRows 20, lpr LPR
-      -- top: a group at row 0 cannot nudge above it.
+      -- top: a group at row 0 cannot preview above it.
       local top = c.gm:mark({}, rect(0, LPR))
       armOn(ec, c, top, 1)
       ec:setPos(0, 1, 1)
-      local commits = c.bridge.commits
       c.cmgr:invoke('nudgeBack')
-      t.eq(instances(c.gm, top)[1].anchor.ppq, 0, 'top pinned at row 0')
-      t.eq(c.bridge.commits, commits, 'a clamped no-op does not flush')
+      t.eq(ec:row(), 0, 'caret pinned: the top cannot preview above row 0')
+      c.cmgr:invoke('regionExit')
+      t.eq(instances(c.gm, top)[1].anchor.ppq, 0, 'top still at row 0 after commit')
 
       -- bottom: a 3-row group hangs off the end until one row remains
       -- (top row at numRows - 1 = 19), past the old whole-inside limit (17).
@@ -254,9 +284,11 @@ return {
       ec:setPos(17, 1, 1)
       c.cmgr:invoke('nudgeForward')
       c.cmgr:invoke('nudgeForward')
-      t.eq(instances(c.gm, bot)[1].anchor.ppq, 19 * LPR, 'top row reaches the last take row')
+      t.eq(ec:row(), 19, 'caret reaches the last take row')
       c.cmgr:invoke('nudgeForward')
-      t.eq(instances(c.gm, bot)[1].anchor.ppq, 19 * LPR, 'clamps there -- one row must remain')
+      t.eq(ec:row(), 19, 'clamps there -- one row must remain')
+      c.cmgr:invoke('regionExit')
+      t.eq(instances(c.gm, bot)[1].anchor.ppq, 19 * LPR, 'committed at the last take row')
     end,
   },
 
