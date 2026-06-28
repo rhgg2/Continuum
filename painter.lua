@@ -138,16 +138,18 @@ function painter.new(ctx, chrome, transform, page)
     ImGui.DrawList_AddRect(dl, x0, y0, x1, y1, col(name), rounding or 0, 0, thick or 1)
   end
 
-  -- Pixel-crisp 1px border: four filled strips, not AddRect — AA fringe softens
-  -- a 1px stroke into a ~2px blur. Rect is the outer bound; caller snaps corners.
-  function p.border(r, name)
+  -- Pixel-crisp border: four filled strips, not AddRect — AA fringe softens a
+  -- thin stroke into a blur. Rect is the outer bound, strips grow inward; thick
+  -- defaults to 1px. Caller snaps corners.
+  function p.border(r, name, thick)
     local x0, y0 = toScreen(r.x0, r.y0)
     local x1, y1 = toScreen(r.x1, r.y1)
     local c = col(name)
-    ImGui.DrawList_AddRectFilled(dl, x0,     y0,     x1,     y0 + 1, c)  -- top
-    ImGui.DrawList_AddRectFilled(dl, x0,     y1 - 1, x1,     y1,     c)  -- bottom
-    ImGui.DrawList_AddRectFilled(dl, x0,     y0,     x0 + 1, y1,     c)  -- left
-    ImGui.DrawList_AddRectFilled(dl, x1 - 1, y0,     x1,     y1,     c)  -- right
+    local t = thick or 1
+    ImGui.DrawList_AddRectFilled(dl, x0,     y0,     x1,     y0 + t, c)  -- top
+    ImGui.DrawList_AddRectFilled(dl, x0,     y1 - t, x1,     y1,     c)  -- bottom
+    ImGui.DrawList_AddRectFilled(dl, x0,     y0,     x0 + t, y1,     c)  -- left
+    ImGui.DrawList_AddRectFilled(dl, x1 - t, y0,     x1,     y1,     c)  -- right
   end
 
   -- Crisp axis-aligned line: a filled strip, not AddLine (AA fringe blurs it).
