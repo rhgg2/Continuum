@@ -31,7 +31,7 @@ Track A is the generator substrate, Track B the authoring UI. Checked = landed.
 - [x] Continuous **cc** augment — node-fork collapse + rest seat + auto-pan kind (§ Continuous cc)
 - [x] Continuous **cc** replace — park authored cc off-take + write the curve direct (§ Continuous cc)
 - [x] B1 — fx-region column + Super-X addressing
-- [x] B2 — parked-chord display (render only)
+- [x] B2 — parked note + cc display (render only)
 
 **Open / next**
 - [ ] B3 — parked chord *editable* off-take (planned, § B3)
@@ -153,8 +153,13 @@ So replace **parks** its members off the take into a store (`fxParked`), re-home
 each rebuild (covered → off-take, no-longer-covered → restored). The parked members
 are still the membership, and — inverted from intuition — they are the *visible,
 editable* surface: you see and edit the chord, the generated arp is hidden (take-only,
-as v1 derived). So for replace, membership *is* storage, off-take; for augment it
-stays a live query. **Whether a region does this is read from its kinds, not a
+as v1 derived). The invariant underneath: **creating an fx region never changes what
+the user sees.** Replace stops the authored events *sounding* but keeps them *shown and
+editable*; the generator's output is hidden realisation. It holds for every replace path
+— the note chord (`fxParked` → `channels[chan].parked`), the cc source (`fxParkedCC` →
+`channels[chan].parkedCC`), and pb (authored breakpoints stay visible in-column, only
+their wire contribution zeroed). So for replace, membership *is* storage, off-take; for
+augment it stays a live query. **Whether a region does this is read from its kinds, not a
 `region.mode` toggle** (A5): a discrete kind replaces, a continuous kind augments.
 
 **There is no dirty tracking to design.** The rebuild regenerates and
@@ -588,16 +593,19 @@ column-based, not gm-backed -- the Open-questions Track-B lean, now resolved.
   overlapping-region sub-lanes, the per-lane note-fx pop-out, a real
   kind-glyph vocabulary.
 
-- **B2 -- parked-chord display: the renderer's union. Display landed; edit open.**
-  A3 parks replace members off the take into `channels[chan].parked`; the grid
-  build now unions each back into its lane as a render-ready logical cell
-  (`ppq == ppqL`, `endppqC == endppqL`), so the chord stays on screen -- the piece
-  A3 punted here. Display only: parked cells are tokenless, so a cursor edit no-ops.
-  Making the chord *editable* off-take (an edit rebound to `fxParked`, as the
-  "visible, editable surface" model intends) is still open (planned as B3
-  below). A continuous-fx replace region parks nothing -- it overwrites the pb wire and
-  leaves its members sounding (A5/A4). Pinned by the
-  parked-render test in `tv_fx_region_spec`.
+- **B2 -- parked display: the renderer's union. Display landed (note + cc); edit open.**
+  A3 parks replace members off the take into `channels[chan].parked`; the grid build
+  unions each back into its lane as a render-ready logical cell (`ppq == ppqL`,
+  `endppqC == endppqL`), so the chord stays on screen -- the piece A3 punted here.
+  **cc-replace gets the symmetric union:** it parks the covered authored cc into
+  `fxParkedCC` and re-seats it via `channels[chan].parkedCC`, so the authored cc stays
+  the visible surface and the generated fill is hidden realisation -- creating the region
+  never blanks the lane (the invariant). pb-replace needs no union: it parks nothing,
+  leaving its authored breakpoints visible in-column and only zeroing their wire
+  contribution (A4). Display only: parked cells are tokenless, so a cursor edit no-ops.
+  Making the parked events *editable* off-take (rebound to `fxParked` / `fxParkedCC`, as
+  the "visible, editable surface" model intends) is still open (planned as B3 below).
+  Pinned by the parked note- and cc-render tests in `tv_fx_region_spec`.
 
 ## B3 — parked notes as first-class editable cells (planned)
 
@@ -848,13 +856,17 @@ No node change; same shape as the absorber seating pb base, narrower job.
 to leave a *detune-only* base under an absolute carrier. cc has neither an absorber nor a detune
 residual, and the node step-holds the latest *authored* cc as its base. Rather than fight that, cc
 replace **bypasses the node entirely**: inside the window on the target cc, the authored cc is *parked
-off-take* and the generated curve is written *straight onto the target lane* as literal cc events.
+off-take* and the generated curve is written as literal cc events onto the target *take* lane (the
+realisation -- routed out of the visible column, below).
 No carrier is allocated, so no `adst` is registered, so `Continuum CC.jsfx` is transparent to that
 target -- the instrument hears the curve directly.
 
 - **Parking** mirrors discrete note-replace (step 4.5): a `4.5b` block reads the per-`(chan, cc)`
   replace windows off the regions, parks the covered authored cc into the `fxParkedCC` sidecar (delete
   from take, drop from column), carries still-covered forward, and restores the rest on region removal.
+  Like the note chord, the parked cc is **re-seated for display** via `channels[chan].parkedCC` (the cc
+  twin of B2's `channels[chan].parked`), so it stays the visible, editable surface and the fill never
+  shows -- creating a cc-replace region leaves the lane looking unchanged (the invariant).
 - **The fill** is a derived cc (`derived='ccfill'`) on the target code: the producer emits it in place
   of the carrier `pending` entry, step 3 routes it out of columns like the rest seat, and Pass B
   reconciles it (keyed `(cc, ppq)`, matched on val + shape) so a steady rebuild does not churn it.
@@ -869,9 +881,11 @@ with different overrides resolve first/lowest-wins. Both are same-target overlap
 raw-branch + rest seating), `generators.lua` (a cc-dest augment kind + `ccDefaultRest`), a
 fixture test in `tm_fx_region_spec` (value-correctness + ±127 range + rest fallback).
 
-**Files (replace).** `trackerManager.lua` only -- the `4.5b` cc-park block + `fxParkedCC` sidecar, the
-producer `ccFill` fork, step-3 `ccfill` routing, and the Pass B fill reconcile. No `Continuum CC.jsfx`
-or `generators.lua` change; cc-replace fixture tests in `tm_fx_region_spec`.
+**Files (replace).** `trackerManager.lua` -- the `4.5b` cc-park block + `fxParkedCC` sidecar, the
+producer `ccFill` fork, step-3 `ccfill` routing, the Pass B fill reconcile, and the
+`channels[chan].parkedCC` render union; `trackerView.lua` -- the cc render-union (B2). No
+`Continuum CC.jsfx` or `generators.lua` change; fixture tests in `tm_fx_region_spec` (replace
+mechanics) + `tv_fx_region_spec` (parked-cc render).
 
 ## Open questions
 

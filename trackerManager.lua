@@ -29,6 +29,7 @@
 --shape: fxParked = { { evType='note', chan, lane, ppq, endppq, ppqL, endppqL, pitch, vel, detune, delay, sample }, ... }
 --shape: fxParkedCC = { { chan, cc, ppq, ppqL, val, shape }, ... } -- authored cc parked off-take by a cc-replace window
 --shape: channels[chan].parked = { { ppq, ppqL, endppqL, endppqC, pitch, vel, detune, sample, delay, lane }, ... } -- off-take replace members as render-ready logical cells (ppq==ppqL, endppqC==endppqL)
+--shape: channels[chan].parkedCC = { { evType='cc', cc, ppq, val, shape }, ... } -- off-take cc-replace members as render-ready logical cells (ppq==ppqL)
 --contract: a discrete-replace kind in a region parks its covered chord off-take; else it keeps sounding
 --invariant: parked members feed generator + grid only; never sounding (mute fails for CC/PA)
 
@@ -1830,6 +1831,16 @@ local function rebuildRegionPark(deferred)
     end
 
     persistParked('fxParkedCC', newParked)
+
+    -- Render union: the parked authored cc stays the visible surface (the fill is hidden
+    -- realisation), so creating a cc-replace region never blanks the lane. Mirrors channels[*].parked.
+    for chan = 1, 16 do channels[chan].parkedCC = {} end
+    for _, spec in ipairs(newParked) do
+      local channel = channels[spec.chan]
+      channel.columns.ccs[spec.cc] = channel.columns.ccs[spec.cc] or { cc = spec.cc, events = {} }
+      util.add(channel.parkedCC,
+        { evType = 'cc', cc = spec.cc, ppq = spec.ppqL, val = spec.val, shape = spec.shape })
+    end
   end
 
   batch.commit()

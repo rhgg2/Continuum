@@ -2779,10 +2779,23 @@ function tv:rebuild(takeChanged)
         addGridCol(chan, 'note', lane, events)
       end
       if c.at then addGridCol(chan, 'at', nil,  c.at.events) end
+      -- Replace-region parked ccs left the take but stay the displayed automation: union each
+      -- back into its cc column, as the parked chord is unioned above. see design/note-macros-v2.md § Continuous cc
+      local parkedCCByNum = {}
+      for _, m in ipairs(channel.parkedCC or {}) do util.bucket(parkedCCByNum, m.cc, m) end
       local ccNums = {}
       for n in pairs(c.ccs) do util.add(ccNums, n) end
       table.sort(ccNums)
-      for _, n in ipairs(ccNums) do addGridCol(chan, 'cc', n, c.ccs[n].events) end
+      for _, n in ipairs(ccNums) do
+        local events = c.ccs[n].events
+        if parkedCCByNum[n] then
+          events = {}
+          for _, e in ipairs(c.ccs[n].events)  do util.add(events, e) end
+          for _, e in ipairs(parkedCCByNum[n]) do util.add(events, e) end
+          table.sort(events, function(a, b) return (a.ppq or 0) < (b.ppq or 0) end)
+        end
+        addGridCol(chan, 'cc', n, events)
+      end
       local fxCells = {}
       for _, region in ipairs(fxByChan[chan] or {}) do
         local kind = region.fx and region.fx[1] and region.fx[1].kind

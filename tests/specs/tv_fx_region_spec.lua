@@ -3,6 +3,7 @@
 -- editor addresses it by uuid. see design/note-macros-v2.md § Authoring and editing the fx
 local t    = require('support')
 local util = require('util')
+local generators = require('generators')
 
 local vib30 = { { kind = 'vibrato', period = { 1, 4 }, depth = 30, onset = 0 } }
 local arpUp = { { kind = 'arp', period = { 1, 4 }, dir = 'up' } }   -- discrete -> replace (parks)
@@ -102,6 +103,33 @@ return {
       local cell = h.vm.grid.cols[idx].cells[0]
       t.truthy(cell, 'the parked note still occupies row 0')
       t.eq(cell.pitch, 60, 'rendered with its authored pitch')
+    end,
+  },
+
+  {
+    name = 'replace region: a parked cc still renders in its cc column',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      h.tm:addEvent({ evType = 'cc', ppq = 0, chan = 1, cc = 74, val = 30 }); h.tm:flush()
+      generators.kinds.ccRep = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppqL = host.window[1], val = 100, shape = 'square' },
+        } } end,
+        mode = 'replace', dest = 74, label = 'CcRep', defaults = {}, fields = {},
+      }
+      injectRegion(h, { fx = { { kind = 'ccRep' } } })   -- rebuild 1: parks the authored cc
+      h.tm:rebuild()                                     -- rebuild 2: steady state (parked via prior, column absent)
+      generators.kinds.ccRep = nil
+
+      local col
+      for _, c in ipairs(h.vm.grid.cols) do
+        if c.type == 'cc' and c.midiChan == 1 and c.cc == 74 then col = c end
+      end
+      t.truthy(col, 'the cc 74 column survives the parking')
+      local cell = col and col.cells[0]
+      t.truthy(cell, 'the parked cc still occupies row 0 -- creating the region did not blank the lane')
+      t.eq(cell.val, 30, 'rendered with its authored value')
     end,
   },
 
