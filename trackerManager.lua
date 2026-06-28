@@ -1024,7 +1024,7 @@ local function mmBatch()
   local dels, assigns, adds, lazyAdds = {}, {}, {}, {}
   return {
     del     = function(evt)                util.add(dels, evt) end,
-    assign  = function(token, update, evt) util.add(assigns, { token = token, update = update, evt = evt }) end,
+    assign  = function(evt, update)        util.add(assigns, { evt = evt, update = update }) end,
     add     = function(spec)               util.add(adds, spec) end,
     -- addLazy: fn produces its spec at commit, after any post-accumulation mutation it must read.
     addLazy = function(fn)                 util.add(lazyAdds, fn) end,
@@ -1033,8 +1033,8 @@ local function mmBatch()
       mm:modify(function()
         for _, e in ipairs(dels) do mm:delete(e.token) end
         for _, a in ipairs(assigns) do
-          local newTok = mm:assign(a.token, a.update)
-          if a.evt and newTok and newTok ~= a.token then a.evt.token = newTok end
+          local newTok = mm:assign(a.evt.token, a.update)
+          if newTok and newTok ~= a.evt.token then a.evt.token = newTok end
         end
         for _, s  in ipairs(adds)     do mm:add(s)    end
         for _, fn in ipairs(lazyAdds) do mm:add(fn()) end
@@ -1234,7 +1234,7 @@ local function rebuildPbs(noteLive, replacePb)
         end
         if update then
           pb.val = newRaw
-          pbWrites.assign(pb.origTok, update)
+          pbWrites.assign({ token = pb.origTok }, update)
         end
       end
     end
@@ -1648,12 +1648,12 @@ function tm:rebuild(takeChanged)
         if staleSwing[cc.chan] and cc.ppqL ~= nil then
           local newPpq = tm:fromLogical(cc.chan, cc.ppqL)
           if newPpq ~= cc.ppq then
-            ccWrites.assign(mm:tokenOf(cc), { ppq = newPpq })
+            ccWrites.assign({ token = mm:tokenOf(cc) }, { ppq = newPpq })
             cc.ppq = newPpq
           end
         elseif rawDivergesFromLogical(cc) then
           local newPpqL = tm:toLogical(cc.chan, cc.ppq)
-          ccWrites.assign(mm:tokenOf(cc), { ppqL = newPpqL })
+          ccWrites.assign({ token = mm:tokenOf(cc) }, { ppqL = newPpqL })
           cc.ppqL = newPpqL
         end
       end
@@ -1711,7 +1711,7 @@ function tm:rebuild(takeChanged)
         local newPpq = tm:fromLogical(chan, evt.ppqL, delayToPPQ(evt.delay))
         if newPpq ~= evt.ppq then
           evt.ppq = newPpq
-          reseats.assign(evt.token, { ppq = newPpq }, evt)
+          reseats.assign(evt, { ppq = newPpq })
         end
       end
     end)
@@ -1744,7 +1744,7 @@ function tm:rebuild(takeChanged)
       ce.fixed = true
       util.add(col.events, ce)
       ce.token = mm:tokenOf(note)
-      extWrites.assign(ce.token, update, ce)
+      extWrites.assign(ce, update)
     end
     extWrites.commit()
   end
@@ -2001,7 +2001,7 @@ function tm:rebuild(takeChanged)
         local e, prev = n.evt, lastByPitch[n.evt.pitch]
         if prev and not n.evt.fixed and e.ppq <= prev.evt.ppq then
           local floor = prev.evt.ppq + 1
-          if e.token then clampWrites.assign(e.token, { ppq = floor }, e) end
+          if e.token then clampWrites.assign(e, { ppq = floor }) end
           e.ppq = floor
         end
         lastByPitch[e.pitch] = n
@@ -2026,7 +2026,7 @@ function tm:rebuild(takeChanged)
                             math.min(ceiling, laneClip, pitchClip, takeLen))
         local rounded   = util.round(bound)
         if rounded ~= e.endppq then
-          if e.token then deferred.assign(e.token, { endppq = rounded }, e) end
+          if e.token then deferred.assign(e, { endppq = rounded }) end
           e.endppq = rounded
         end
       end
