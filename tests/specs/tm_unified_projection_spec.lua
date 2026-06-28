@@ -53,7 +53,6 @@ return {
     -- clamps to A.raw + 1 = 140. A's tail retro-clips to 140. delayC
     -- carries the give-way: (140 - 194) = -54 ppq = -225 ms-QN.
     name = 'raw collision: ppqL-later note clamps to predecessor + 1; delayC carries give-way',
-    pending = 'real-mm same-pitch clamp: delay-recompute collision lost to reload-dedup',
     run = function(harness)
       local h = harness.mk{
         seed = {

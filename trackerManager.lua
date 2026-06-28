@@ -551,53 +551,73 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
         if o.evt.evType == 'note' then util.bucket(byKey, util.key(o.evt.chan, o.evt.pitch), o.evt) end
       end
 
-      local clips, kills = {}, {}
-      -- Coincident-onset dedup: authored intent beats a regenerable fxNote;
-      -- else keep the longest ceiling (fresh OPEN raw = 1-tick, would lose).
+      -- Dedup same-(chan,pitch) raw collision only when one is a regenerable fxNote or they share
+      -- logical seat and detune; otherwise distinct voices: separate (+1) so each keeps its raw.
       local function supersedes(a, b)
         local aDerived, bDerived = a.derived ~= nil, b.derived ~= nil
         if aDerived ~= bDerived then return bDerived end
         return (a.endppqL or a.endppq) > (b.endppqL or b.endppq)
       end
+      local function redundant(a, b)
+        if (a.derived ~= nil) ~= (b.derived ~= nil) then return true end
+        return a.ppqL == b.ppqL and (a.detune or 0) == (b.detune or 0)
+      end
+
+      local updates, kills = {}, {}
       for _, group in pairs(byKey) do
-        local longestAt = {}
+        table.sort(group, function(a, b)
+          if a.ppq ~= b.ppq then return a.ppq < b.ppq end
+          return (a.ppqL or 0) < (b.ppqL or 0)
+        end)
+        -- Walk the sorted voice: dedup true duplicates, nudge distinct collisions apart.
+        -- onsetOf carries each survivor's post-separation raw onset.
+        local voiced, onsetOf = {}, {}
         for _, n in ipairs(group) do
-          local kept = longestAt[n.ppq]
-          if not kept then
-            longestAt[n.ppq] = n
-          elseif supersedes(n, kept) then
-            longestAt[n.ppq] = n; util.add(kills, kept)
+          local prev = voiced[#voiced]
+          if prev and n.ppq <= onsetOf[prev] then
+            if redundant(n, prev) then
+              if supersedes(n, prev) then
+                util.add(kills, prev); voiced[#voiced] = n; onsetOf[n] = onsetOf[prev]
+              else
+                util.add(kills, n)
+              end
+            else
+              onsetOf[n] = onsetOf[prev] + 1
+              util.add(voiced, n)
+            end
           else
-            util.add(kills, n)
+            onsetOf[n] = n.ppq
+            util.add(voiced, n)
           end
         end
 
-        local voiced = {}
-        for _, n in pairs(longestAt) do util.add(voiced, n) end
-        table.sort(voiced, function(a, b) return a.ppq < b.ppq end)
-
         for i = 1, #voiced do
           local n      = voiced[i]
-          local nextOn = voiced[i + 1] and voiced[i + 1].ppq or math.huge
-          local bound  = math.max(n.ppq + 1, math.min(n.endppq, nextOn, takeLen))
-          if bound < n.endppq then
-            util.add(clips, { n = n, endppq = bound })
-          end
+          local nextOn = voiced[i + 1] and onsetOf[voiced[i + 1]] or math.huge
+          local bound  = math.max(onsetOf[n] + 1, math.min(n.endppq, nextOn, takeLen))
+          local up
+          if onsetOf[n] ~= n.ppq then up = { ppq = onsetOf[n] } end
+          if bound < n.endppq    then up = up or {}; up.endppq = bound end
+          if up then util.add(updates, { n = n, up = up }) end
         end
       end
 
       for _, n in ipairs(kills) do deleteNote(n) end
-      for _, c in ipairs(clips) do
-        local up = { endppq = c.endppq }
-        if c.endppqL ~= nil then up.endppqL = c.endppqL end
-        if c.n.token then assignNote(c.n, up)   -- committed: route PA/detune resize
-        else              util.assign(c.n, up)  -- staged add: geometry only
+      for _, u in ipairs(updates) do
+        if u.n.token then assignNote(u.n, u.up)   -- committed: route PA/detune resize
+        else            util.assign(u.n, u.up)    -- staged add: geometry only
         end
       end
     end
 
     local flushAdds, flushAssigns, flushDeletes = adds, assigns, deletes
     adds, assigns, deletes = {}, {}, {}
+
+    -- Same-pitch moves can alias ppq-keyed tokens: occupying move re-keys onto a peer's slot before
+    -- that peer vacates. Sort descending so every vacate lands ahead of its occupy. see docs/trackerManager.md § Pre-clip collision scan
+    table.sort(flushAssigns, function(a, b)
+      return (a.update.ppq or a.evt.ppq or 0) > (b.update.ppq or b.evt.ppq or 0)
+    end)
 
     -- pb wire conversion at flush: raw = centsToRaw(cents + detuneAt(seat)).
     -- Rebuild's absorber pass refines with the post-walk layout; this is best-effort for the interim.
@@ -1600,6 +1620,23 @@ local function rebuildFx(fx, deferred)
   return newFxCarrier
 end
 
+-- Nudge colliding same-(chan,pitch) onsets to prev.ppq+1 (cascades; fixed externals frozen).
+-- Pure geometry on evt.ppq; callers stage mm writes. Input sorted (raw, ppqL). see docs/trackerManager.md § Same-pitch onset separation
+local function nudgeSamePitchOnsets(records)
+  local moved, lastByVoice = {}, {}
+  for _, n in ipairs(records) do
+    local e   = n.evt
+    local key = util.key(e.chan, e.pitch)
+    local prev = lastByVoice[key]
+    if prev and not e.fixed and e.ppq <= prev.evt.ppq then
+      e.ppq = prev.evt.ppq + 1
+      util.add(moved, n)
+    end
+    lastByVoice[key] = n
+  end
+  return moved
+end
+
 -- Unified tail/onset walk + atomic commit: real notes, fixed externals, fx.noteLive
 -- walk together (onset clamp then tail clip); host clip + fxNote del/add in one mm:modify. see docs/trackerManager.md § Rebuild: tail walk
 local function rebuildTails(fx, deferred)
@@ -1636,17 +1673,10 @@ local function rebuildTails(fx, deferred)
     end
     sortAll()
 
-    -- Same-pitch onset clamp; retro-clip is subsumed by the tail pass (clamped successor appears as same-pitch next).
-    -- Token'd events assign; a new fxNote (no token yet) mutates in place, riding into mm:add at the atomic commit.
-    local lastByPitch = {}
-    for _, n in ipairs(notes) do
-      local e, prev = n.evt, lastByPitch[n.evt.pitch]
-      if prev and not n.evt.fixed and e.ppq <= prev.evt.ppq then
-        local floor = prev.evt.ppq + 1
-        if e.token then clampWrites.assign(e, { ppq = floor }) end
-        e.ppq = floor
-      end
-      lastByPitch[e.pitch] = n
+    -- Same-pitch onset separation; retro-clip subsumed by tail pass. Token'd events assign;
+    -- a new fxNote (no token yet) mutates in place, riding into mm:add at the atomic commit.
+    for _, n in ipairs(nudgeSamePitchOnsets(notes)) do
+      if n.evt.token then clampWrites.assign(n.evt, { ppq = n.evt.ppq }) end
     end
     sortAll()
 
@@ -1950,7 +1980,8 @@ local function rebuildInternals(fx)
     end
   end
 
-  local reseats = mmBatch()
+  local reseats  = mmBatch()
+  local reseated = {}
   for _, note in ipairs(internal) do
     local channel = channels[note.chan]
     local col = pickStampedLane(channel, note)
@@ -1962,12 +1993,24 @@ local function rebuildInternals(fx)
     ce.delay  = ce.delay  or 0
     ce.token = mm:tokenOf(note)
     -- Stale swing: raw stamped under the prior swing; rederive realised onset from logical
-    -- (endppq owned by the tail walk) and rewrite mm. Mirrors the CC reseat. see docs/timing.md §"Rebuild rule"
+    -- (endppq owned by the tail walk). Mirrors the CC reseat. see docs/timing.md §"Rebuild rule"
     if staleSwing[note.chan] then
-      local newPpq = tm:fromLogical(note.chan, ce.ppqL, delayToPPQ(ce.delay))
-      if newPpq ~= ce.ppq then ce.ppq = newPpq; reseats.assign(ce, { ppq = newPpq }) end
+      ce.ppq = tm:fromLogical(note.chan, ce.ppqL, delayToPPQ(ce.delay))
+      util.add(reseated, { evt = ce, was = note.ppq })
     end
     util.add(col.events, ce)
+  end
+
+  -- Reswing can collapse two distinct-ppqL same-pitch notes onto one raw. Separate them before
+  -- the commit so mm's reload-dedup never eats a voice -- the tail walk's gate runs far too late.
+  table.sort(reseated, function(a, b)
+    if a.evt.chan ~= b.evt.chan then return a.evt.chan < b.evt.chan end
+    if a.evt.ppq  ~= b.evt.ppq  then return a.evt.ppq  < b.evt.ppq  end
+    return a.evt.ppqL < b.evt.ppqL
+  end)
+  nudgeSamePitchOnsets(reseated)
+  for _, r in ipairs(reseated) do
+    if r.evt.ppq ~= r.was then reseats.assign(r.evt, { ppq = r.evt.ppq }) end
   end
   reseats.commit()
 

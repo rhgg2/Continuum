@@ -804,25 +804,26 @@ return {
   -- raw ppqs after the swap.
   {
     name = 'negative delay reorders lane-1 hosts; absorbers seat at realised ppqs',
-    pending = 'real-mm same-pitch clamp: delay-recompute collision lost to reload-dedup',
     run = function(harness)
-      -- A at intent 240, B at intent 480 with delay -999 (~ -240 ppq @
-      -- res 240). B's realised ppq = 480 - 240 = 240 (coincident with
-      -- A's, same-pitch onset clamp will push B to 241). Detunes
-      -- differ (A=30, B=-30); after the swap the realised sequence in
-      -- lane 1 is A@240(d=30) then B@241(d=-30), needing absorbers at
-      -- 240 and 241.
+      -- A@240(det30), B@480(det-30). Edit B.delay=-999 → B.raw=240=A; separation pushes B to 241.
+      -- Absorbers needed at 240 (A) and 241 (B).
       local h = harness.mk{
         seed = {
           notes = {
             { ppq = 240, endppq = 360, ppqL = 240, endppqL = 360,
               chan = 1, pitch = 60, vel = 100, detune = 30, delay = 0, lane = 1 },
-            -- Same-pitch as A so the tail walk clamps the realised collision.
-            { ppq = 240, endppq = 600, ppqL = 480, endppqL = 600,
-              chan = 1, pitch = 60, vel = 100, detune = -30, delay = -999, lane = 1 },
+            { ppq = 480, endppq = 600, ppqL = 480, endppqL = 600,
+              chan = 1, pitch = 60, vel = 100, detune = -30, delay = 0, lane = 1 },
           },
         },
       }
+
+      local B
+      for _, e in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
+        if e.ppqL == 480 then B = e end
+      end
+      h.tm:assignEvent(B, { delay = -999 })
+      h.tm:flush()
 
       local pbs = {}
       for _, c in ipairs(h.fm:dump().ccs) do
@@ -838,41 +839,6 @@ return {
       t.eq(pbs[2].val, cents2raw(-30), 'B absorber -30 cents (no carry-over)')
       t.eq(pbs[1].derived, 'absorber')
       t.eq(pbs[2].derived, 'absorber')
-    end,
-  },
-
-  -- Order-change regression: same-pitch clamp shifts a lane-1 host's
-  -- raw ppq by +1. Step 4.9 recomputes needed seats from the
-  -- post-clamp positions, so the absorber follows.
-  {
-    name = 'same-pitch clamp moves lane-1 host by 1 tick; absorber follows',
-    pending = 'real-mm same-pitch clamp: coincident detune cluster, seed dedup collapses it',
-    run = function(harness)
-      -- A and B same pitch, coincident raw onset, different detunes.
-      -- Step 4.8 clamps B's raw to A.ppq+1. Absorbers needed at A's
-      -- onset and at B's clamp-displaced onset.
-      local h = harness.mk{
-        seed = {
-          notes = {
-            { ppq = 0, endppq = 240, ppqL = 0, endppqL = 240,
-              chan = 1, pitch = 60, vel = 100, detune = 20, delay = 0, lane = 1 },
-            { ppq = 0, endppq = 480, ppqL = 0, endppqL = 480,
-              chan = 1, pitch = 60, vel = 100, detune = -20, delay = 0, lane = 1 },
-          },
-        },
-      }
-
-      local pbs = {}
-      for _, c in ipairs(h.fm:dump().ccs) do
-        if c.evType == 'pb' then pbs[#pbs + 1] = c end
-      end
-      table.sort(pbs, function(a, b) return a.ppq < b.ppq end)
-
-      t.eq(#pbs, 2, 'one absorber per realised lane-1 seat after clamp')
-      t.eq(pbs[1].ppq, 0,  'first absorber at A')
-      t.eq(pbs[2].ppq, 1,  'second absorber at B (clamp-displaced by +1)')
-      t.eq(pbs[1].val, cents2raw(20),  'A absorber +20')
-      t.eq(pbs[2].val, cents2raw(-20), 'B absorber -20')
     end,
   },
 

@@ -178,14 +178,14 @@ Semantics:
   rebuild-owned. A `chan` change is accepted; rebuild's absorber pass
   reconciles fakes across both channels.
 - **Single voice per (chan, pitch) — realised space.** MIDI permits
-  one voice per `(chan, pitch)`, so a realised collision must shorten
-  or drop a note regardless of intent geometry. tv writes authored
-  logical verbatim; `tm:rebuild`'s universal tail walk (grouped by
-  pitch within channel) is the sole gate — it clamps each
-  note's realised onset against the next same-pitch onset and
-  surfaces the divergence as `endppq ≠ endppqC` in the projection.
-  The clamp lives entirely on the realisation side: `endppqL` retains
-  the authored ceiling. A caller staging a coherent monotone plan can
+  one voice per `(chan, pitch)`. tv writes authored logical verbatim;
+  distinct voices that collide in realised raw (swing/delay-collapsed,
+  or a same-row detune cluster) are separated by a +1 nudge — not
+  dropped — so each keeps its own pb absorber (§ Same-pitch onset
+  separation). The divergence surfaces as `endppq ≠ endppqC` in the
+  projection and as `delayC` on the onset. Separation lives entirely on
+  the realisation side: `endppqL` retains the authored ceiling. A caller
+  staging a coherent monotone plan can
   bypass the per-write logical→raw translation by setting
   `rawTime = true` on the payload — `tm:rescaleLength`'s
   plan-then-mutate path is the sole such caller; the flag is consumed
@@ -431,20 +431,61 @@ out-of-range values. Divergence surfaces as `delay ~= delayC` (tp paints
 `*` next to the delay digits) and `endppq ~= endppqC`; the renderer draws
 `endppqC`, so no separate endppq cue is needed.
 
+## Same-pitch onset separation
+
+MIDI voices one note per `(chan, pitch)`. Two *distinct* voices that
+collide in realised raw — distinct `ppqL` collapsed by swing or delay, or
+a same-row detune cluster — must be kept apart, not dropped: each needs
+its own pb absorber, and the give-way surfaces as `delayC`. mm forbids
+the collision outright — its content-keyed token and reload-dedup both
+key on `(ppq, chan, pitch)`, so two such notes is illegal — so the
+separation must happen on every path *before* a colliding raw reaches mm.
+
+`nudgeSamePitchOnsets(records)` is the one separator: walk a
+`(raw, ppqL)`-sorted list and bump each colliding successor to
+`prev.ppq + 1` (cascading; `fixed` externals frozen). Pure geometry on
+`evt.ppq`; it returns the moved records so each caller stages its own mm
+write. Three sites call it:
+
+- **reseat** (`rebuildInternals`) — a reswing recomputes raw from
+  logical, so two distinct-`ppqL` notes can land on one raw. Separate
+  before the reseat commit, else reload-dedup eats a voice.
+- **pre-clip scan** (`flush`) — an edit moves a note onto a same-pitch
+  peer. Separate before the flush commit.
+- **tail walk** (`rebuildTails`) — real notes and predicted fxNotes walk
+  together; separate before the atomic note commit, then clip tails.
+
+**Kill, not nudge, for genuine duplicates.** The pre-clip scan still
+dedups when the two are the *same* voice: a regenerable fxNote loses to
+an authored note, or two notes sharing `ppqL` *and* `detune` collapse to
+the longer. Distinct `ppqL` or distinct `detune` ⇒ distinct voices ⇒
+nudge.
+
+**Commit ordering.** mm tokens are keyed by realised ppq, so an occupying
+move (an edit landing on a peer's slot) re-keys onto that peer's token
+before the peer's own nudge applies — the peer's staged write then
+resolves to the wrong note. The flush applies note moves by **descending
+target ppq** so every vacate lands ahead of its occupy. The reseat path
+is immune: reswing moves both notes to fresh raws, away from each other's
+tokens.
+
 ## Pre-clip collision scan
 
 Run inside `mm:modify`'s preflush, after `preflush` (propagated peers
-already staged) and before the snapshot (clamps/deletes ride this flush).
-Scans ALL post-flush notes — `byToken` all lanes plus staged adds — for
-same-`(chan, pitch)` MIDI legality in one pass.
+already staged) and before the snapshot (separations/deletes ride this
+flush). Scans ALL post-flush notes — `byToken` all lanes plus staged
+adds — grouped by `(chan, pitch)` in one pass.
 
 Not a per-self peer walk: two notes can collide without either being the
 edited one, and repeated per-self truncation damages peers a later
 same-flush op would resolve.
 
-This is the staging pre-clip only; the authoritative raw tail is
-re-derived by rebuild step 4.8. `endppqL` (intent) is never written here
-— deleting a blocker lets the raw tail regrow to it.
+Each group is sorted `(raw, ppqL)` and walked: genuine duplicates killed,
+distinct voices nudged apart, survivors' tails clipped to the next onset
+(§ Same-pitch onset separation). This is the staging pre-clip only; the
+authoritative raw tail is re-derived by rebuild step 4.8. `endppqL`
+(intent) is never written here — deleting a blocker lets the raw tail
+regrow to it.
 
 ## Length operations
 
@@ -535,7 +576,8 @@ realisation delays. Same-pitch uses RAW because MIDI physics is realised.
 not following.
 
 Collision (current raw `<=` prev same-pitch raw, raw-order with ppqL
-tie-break): the successor is clamped to `prev.ppq + 1`. Authored swap
+tie-break): the successor is nudged to `prev.ppq + 1`
+(`nudgeSamePitchOnsets`; § Same-pitch onset separation). Authored swap
 survives: when raw order differs from logical order, whoever lands first
 in raw becomes the realised predecessor.
 

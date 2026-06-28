@@ -267,31 +267,29 @@ return {
     end,
   },
 
-  -- Same-pitch raw collision: A's positive delay puts A.raw past B.intent
-  -- onset. the tail walk clamps B to A.ppq+1; B's delayC reports the drift.
+  -- Same-pitch raw collision via delay EDIT: A.raw lands on B.raw; flush scan separates
+  -- (A predecessor by ppqL, B nudged to A.raw+1) so neither is lost to reload-dedup.
   {
     name = 'same-pitch raw collision: tail walk clamps B; delayC reflects it',
-    pending = 'real-mm same-pitch clamp: delay-recompute collision lost to reload-dedup',
     run = function(harness)
-      -- A at ppqL=0 endppqL=120 with delay=+500 (delayPPQ=120 → A.raw=120).
-      -- B at ppqL=120 endppqL=240 same pitch, delay=0 → B.raw=120. Intent
-      -- non-overlapping so both share lane 1. Raw collision: byPitch
-      -- sorts by raw then ppqL → A first (ppqL=0), B clamped to A.raw+1
-      -- = 121. delayC for B = ppqToDelay(121-120, 240) ≈ 4.
+      -- A.raw=0/B.raw=120 distinct; edit A.delay=500 (delayPPQ=120) → A.raw=120 collides with B.
+      -- A (ppqL 0) is predecessor; B separates to 121; B.delayC = ppqToDelay(1, 240) ≈ 4.
       local h = harness.mk{
         seed = {
           notes = {
-            { ppq = 120, ppqL = 0,   endppq = 120, endppqL = 120,
-              chan = 1, pitch = 60, vel = 100,
-              detune = 0, delay = 500 },
+            { ppq = 0,   ppqL = 0,   endppq = 120, endppqL = 120,
+              chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0 },
             { ppq = 120, ppqL = 120, endppq = 240, endppqL = 240,
-              chan = 1, pitch = 60, vel = 100,
-              detune = 0, delay = 0   },
+              chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0 },
           },
         },
         data = { noteDelay = { [1] = { [1] = true } } },
       }
       h.vm:setGridSize(80, 40)
+
+      local col = h.vm.grid.cols[1]
+      h.ec:setPos(0, 1, 5)
+      h.vm:editEvent(col, col.cells[0], 5, string.byte('5'), false)  -- A.delay = 500 → A.raw = 120
 
       local col1 = h.tm:getChannel(1).columns.notes[1]
       local A, B
@@ -299,9 +297,9 @@ return {
         if e.ppqL == 0   then A = e end
         if e.ppqL == 120 then B = e end
       end
-      t.truthy(A and B, 'both notes share lane 1 (intent non-overlapping)')
+      t.truthy(A and B, 'both notes survive the colliding delay edit')
       t.eq(B.delay, 0, 'authored delay 0 preserved')
-      t.eq(B.delayC, 4, 'delayC reflects step-4.8 onset clamp to 121')
+      t.eq(B.delayC, 4, 'delayC reflects onset separation to 121')
       t.truthy(B.delay ~= B.delayC, 'divergence — B sounds 1 tick after A')
     end,
   },
