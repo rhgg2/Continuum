@@ -297,6 +297,31 @@ return {
     end,
   },
 
+  ----- Effective window — the take end bounds the host, even when the authored tail overruns it
+
+  {
+    name = 'a retrig whose authored tail overruns the take generates nothing past the take end',
+    run = function(harness)
+      -- 1-QN take; authored tail runs to 2 QN. Paste (and overshooting moves)
+      -- can leave endppqL past the take end -- the fx window must still clamp to it,
+      -- or the generator writes derived events off-take and grows the take.
+      local h = harness.mk{ seed = { length = 240 } }
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 480, chan = 1, pitch = 60,
+                      vel = 100, detune = 0, delay = 0, lane = 1, fx = retrig16 })
+      h.tm:flush()
+
+      local dump = h.fm:dump()
+      local host = hostNote(dump)
+      t.truthy(host, 'host note carries fx')
+      local fns = fxNotesOf(dump, host.uuid)
+      for _, fn in ipairs(fns) do
+        t.truthy(fn.ppq < 240, 'fxNote onset stays within the take (got ppq=' .. fn.ppq .. ')')
+        t.truthy(fn.endppq <= 240, 'fxNote tail stays within the take (got endppq=' .. fn.endppq .. ')')
+      end
+      t.eq(#fns, 3, 'window clamped to the 1-QN take: hits at 60/120/180 only')
+    end,
+  },
+
   ----- View sees the pre-fx host (no spurious give-way cue)
 
   {

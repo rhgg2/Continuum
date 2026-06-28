@@ -1280,6 +1280,7 @@ local function rebuildFx(fx, deferred)
   do
     local takeLen = tm:length()
     for chan = 1, 16 do
+      local takeLenL = tm:toLogical(chan, takeLen)
       local byLane = {}
       for laneIdx, col in ipairs(channels[chan].columns.notes) do
         for _, evt in ipairs(col.events) do
@@ -1295,8 +1296,11 @@ local function rebuildFx(fx, deferred)
           local nextRec = laneNextOf[rec]
           nextInLane[rec.evt] = nextRec and nextRec.evt
           if rec.evt.fx then
+            -- The take is the world: an authored tail past the take end (paste / an
+            -- overshooting move) can't make the voice sound past it, so the window
+            -- caps at the take regardless of the authored ceiling.
             local endL = (rec.evt.endppqL == nil or rec.evt.endppqL == util.OPEN)
-                         and tm:toLogical(chan, takeLen) or rec.evt.endppqL
+                         and takeLenL or math.min(rec.evt.endppqL, takeLenL)
             if nextRec then endL = math.min(endL, nextRec.evt.ppqL) end
             fxWindow[rec.evt] = endL
           end
