@@ -1540,6 +1540,246 @@ local function rebuildFx(fx, deferred, authoredPbByChan, fxWindow, nextInLane)
   return newFxCarrier
 end
 
+-- Unified tail/onset walk + atomic commit (rebuild step 4.8): real notes, fixed externals, fx.noteLive
+-- walk together (onset clamp then tail clip); host clip + fxNote del/add in one mm:modify. see docs/trackerManager.md § Rebuild: step 4.8 — tail walk
+local function rebuildTails(fx, deferred)
+  local takeLen = tm:length()
+  local clampWrites = mmBatch()
+  for chan = 1, 16 do
+    local notes, byLane, byPitch = {}, {}, {}
+    for laneIdx, col in ipairs(channels[chan].columns.notes) do
+      for _, evt in ipairs(col.events) do
+        if evt.type ~= 'pa' and evt.ppqL ~= nil then
+          local n = { evt = evt, lane = laneIdx }
+          util.add(notes, n)
+          util.bucket(byLane,  laneIdx,   n)
+          util.bucket(byPitch, evt.pitch, n)
+        end
+      end
+    end
+    for _, w in ipairs(fx.noteLive[chan]) do
+      local fn = { evt = w.evt, lane = w.lane }
+      util.add(notes, fn)
+      util.bucket(byLane,  w.lane,      fn)
+      util.bucket(byPitch, w.evt.pitch, fn)
+    end
+    if #notes == 0 then goto nextChan end
+
+    local function rawThenLogical(a, b)
+      if a.evt.ppq ~= b.evt.ppq then return a.evt.ppq < b.evt.ppq end
+      return a.evt.ppqL < b.evt.ppqL
+    end
+    local function sortAll()
+      table.sort(notes, rawThenLogical)
+      for _, g in pairs(byLane)  do table.sort(g, rawThenLogical) end
+      for _, g in pairs(byPitch) do table.sort(g, rawThenLogical) end
+    end
+    sortAll()
+
+    -- Same-pitch onset clamp; retro-clip is subsumed by the tail pass (clamped successor appears as same-pitch next).
+    -- Token'd events assign; a new fxNote (no token yet) mutates in place, riding into mm:add at the atomic commit.
+    local lastByPitch = {}
+    for _, n in ipairs(notes) do
+      local e, prev = n.evt, lastByPitch[n.evt.pitch]
+      if prev and not n.evt.fixed and e.ppq <= prev.evt.ppq then
+        local floor = prev.evt.ppq + 1
+        if e.token then clampWrites.assign(e, { ppq = floor }) end
+        e.ppq = floor
+      end
+      lastByPitch[e.pitch] = n
+    end
+    sortAll()
+
+    local laneNextOf  = strictNextMap(byLane)
+    local pitchNextOf = strictNextMap(byPitch)
+
+    for _, n in ipairs(notes) do
+      local e         = n.evt
+      local ceiling   = e.endppqL == util.OPEN and math.huge
+                        or e.endppqL and tm:fromLogical(chan, e.endppqL)
+                        or math.huge
+      local laneNext  = laneNextOf[n]
+      local pitchNext = pitchNextOf[n]
+      local laneClip  = laneNext
+        and tm:fromLogical(chan, laneNext.evt.ppqL) + (e.overlap or 0)
+        or math.huge
+      local pitchClip = pitchNext and pitchNext.evt.ppq or math.huge
+      local bound     = math.max(e.ppq + 1,
+                          math.min(ceiling, laneClip, pitchClip, takeLen))
+      local rounded   = util.round(bound)
+      if rounded ~= e.endppq then
+        if e.token then deferred.assign(e, { endppq = rounded }) end
+        e.endppq = rounded
+      end
+    end
+    ::nextChan::
+  end
+  -- Clamps reindex colliding same-pitch onsets separately: reload separates the shared content-keyed token before the clip pass dereferences it.
+  -- Clips only touch endppq, never re-key — safe to batch with adds.
+  clampWrites.commit()
+  -- Host clips (each clipped to first fxNote) commit WITH the fxNote del/add + restores in one
+  -- mm:modify/MIDI_Sort; canonical delete-first means no transient same-pitch overlap.
+  deferred.commit()
+
+  -- Restore pre-fx tail onto column events so the view sees the authored
+  -- note; mm is untouched, so the take and G4 round-trip are unaffected.
+  for host, rawEnd in pairs(fx.hostEnd) do host.endppq = rawEnd end
+end
+
+-- Region-replace parking (rebuild step 4.5/4.5b): authored events a replace window covers leave the take;
+-- the prior parked set carries still-covered forward, restores the rest. see design/note-macros-v2.md § Generator output
+local function rebuildRegionPark(deferred)
+  local function unlink(events, evt)
+    for i, e in ipairs(events) do if e == evt then table.remove(events, i); break end end
+  end
+
+  -- Park covered candidates, split the prior set into carry-forward / restore. scan records carry
+  -- {evt,chan,sub,ppqL,events}; covered(chan,sub,ppqL); shape(evt,chan,sub)->spec.
+  local function reconcilePark(scan, prior, covered, shape, batch)
+    local newParked, restores = {}, {}
+    for _, c in ipairs(scan) do
+      if covered(c.chan, c.sub, c.ppqL) then
+        util.add(newParked, shape(c.evt, c.chan, c.sub))
+        batch.del(c.evt)
+        unlink(c.events, c.evt)
+      end
+    end
+    for _, spec in ipairs(prior) do
+      if covered(spec.chan, spec.cc, spec.ppqL) then util.add(newParked, spec)
+      else util.add(restores, spec) end
+    end
+    return newParked, restores
+  end
+
+  local function persistParked(key, newParked)
+    if not util.deepEq(ds:get(key) or {}, newParked) and mm:take() then
+      ds:assign(key, #newParked > 0 and newParked or util.REMOVE)
+    end
+  end
+
+  -- Notes and ccs park in one batch -> a single delete-first commit for the whole phase.
+  local batch = mmBatch()
+
+  -- 4.5) Notes: can't mute (note-on/off + CC matching), so a covered authored note leaves the take.
+  do
+    local windows = {}
+    for _, region in ipairs(ds:get('fxRegions') or {}) do
+      -- parksNotes is false for a husk or a continuous/augment-only region, so it parks nothing.
+      if parksNotes(region) then
+        util.bucket(windows, region.chan, { region.startppq, region.endppq })
+      end
+    end
+    local function covered(chan, _, ppqL)
+      for _, w in ipairs(windows[chan] or {}) do
+        if ppqL >= w[1] and ppqL < w[2] then return true end
+      end
+      return false
+    end
+
+    local scan = {}
+    for chan = 1, 16 do
+      for laneIdx, col in ipairs(channels[chan].columns.notes) do
+        for _, evt in ipairs(col.events) do
+          if evt.type ~= 'pa' and evt.ppqL ~= nil then
+            util.add(scan, { evt = evt, chan = chan, sub = laneIdx, ppqL = evt.ppqL, events = col.events })
+          end
+        end
+      end
+    end
+    local function shape(evt, chan, laneIdx)
+      return util.pick(evt, "ppq endppq ppqL endppqL pitch vel detune delay sample",
+                       { evType = 'note', chan = chan, lane = laneIdx })
+    end
+
+    local newParked, restores = reconcilePark(scan, ds:get('fxParked') or {}, covered, shape, batch)
+
+    -- Restores re-enter their columns now (token-less); the tail walk clips them in place and
+    -- the 4.8 commit adds them after the derived deletions.
+    for _, spec in ipairs(restores) do
+      local channel = channels[spec.chan]
+      while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
+      local ce = util.clone(spec, { chan = true, lane = true })
+      util.add(channel.columns.notes[spec.lane].events, ce)
+      table.sort(channel.columns.notes[spec.lane].events, function(a, b) return a.ppqL < b.ppqL end)
+      -- Lazy: reshaped at commit so it reads ce.ppq/endppq after the tail-walk clip.
+      deferred.addLazy(function()
+        return util.pick(ce, "ppq endppq ppqL endppqL pitch vel detune delay sample",
+                         { evType = 'note', chan = spec.chan, lane = spec.lane })
+      end)
+    end
+
+    persistParked('fxParked', newParked)
+
+    -- Off-take membership for the generator + grid: each is a render-ready logical cell
+    -- (ppq/endppqC like a projected note); an emptied lane re-extends to keep a column home.
+    local takeLen = tm:length()
+    for chan = 1, 16 do channels[chan].parked = {} end
+    for _, spec in ipairs(newParked) do
+      local channel = channels[spec.chan]
+      while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
+      util.add(channel.parked, util.pick(spec,
+        "ppqL endppqL pitch vel detune sample delay lane", { ppq = spec.ppqL }))
+    end
+    for chan = 1, 16 do
+      realiseParked(channels[chan].parked, tm:toLogical(chan, takeLen))
+      for _, m in ipairs(channels[chan].parked) do m.endppqC = m.endppqL end
+    end
+  end
+
+  -- 4.5b) CCs: a point event has no tail, so the Pass-A curve stands in on the target lane and
+  -- restores add back immediately, seating a token-less projection for the view.
+  do
+    local windows = {}   -- [chan][cc] = { {startL, endL}, ... }
+    for _, region in ipairs(ds:get('fxRegions') or {}) do
+      for _, params in ipairs(region.fx or {}) do
+        local meta = generators.kinds[params.kind]
+        if meta and meta.mode == 'replace' and type(meta.dest) == 'number' then
+          windows[region.chan] = windows[region.chan] or {}
+          util.bucket(windows[region.chan], meta.dest, { region.startppq, region.endppq })
+        end
+      end
+    end
+    local function covered(chan, cc, ppqL)
+      for _, w in ipairs((windows[chan] or {})[cc] or {}) do
+        if ppqL >= w[1] and ppqL < w[2] then return true end
+      end
+      return false
+    end
+
+    local scan = {}
+    for chan = 1, 16 do
+      for cc, col in pairs(channels[chan].columns.ccs) do
+        for _, evt in ipairs(col.events) do
+          util.add(scan, { evt = evt, chan = chan, sub = cc, ppqL = evt.ppqL or evt.ppq, events = col.events })
+        end
+      end
+    end
+    local function shape(evt, chan, cc)
+      return { chan = chan, cc = cc, ppq = evt.ppq, ppqL = evt.ppqL or evt.ppq,
+               val = evt.val, shape = evt.shape }
+    end
+
+    local newParked, restores = reconcilePark(scan, ds:get('fxParkedCC') or {}, covered, shape, batch)
+
+    -- Seat a token-less projection so the view shows the restored cc this frame; next rebuild
+    -- re-reads the real token'd event from the take. The add rides the shared park commit.
+    for _, spec in ipairs(restores) do
+      batch.add({ evType = 'cc', chan = spec.chan, cc = spec.cc,
+                  ppq = spec.ppq, ppqL = spec.ppqL, val = spec.val, shape = spec.shape })
+      local channel = channels[spec.chan]
+      local col = channel.columns.ccs[spec.cc]
+      if not col then col = { cc = spec.cc, events = {} }; channel.columns.ccs[spec.cc] = col end
+      util.add(col.events, { evType = 'cc', ppq = spec.ppq, ppqL = spec.ppqL,
+                             val = spec.val, shape = spec.shape })
+      table.sort(col.events, function(a, b) return (a.ppqL or a.ppq) < (b.ppqL or b.ppq) end)
+    end
+
+    persistParked('fxParkedCC', newParked)
+  end
+
+  batch.commit()
+end
+
 ----- Rebuild
 
 local rebuilding = false
@@ -1749,152 +1989,8 @@ function tm:rebuild(takeChanged)
     extWrites.commit()
   end
 
-  -- 4.5) Region replace: park authored notes a replace-window covers (can't mute: note-on/off
-  -- + CC matching); restore any uncovered. see design/note-macros-v2.md § Generator output
-  do
-    local replaceWindows = {}
-    for _, region in ipairs(ds:get('fxRegions') or {}) do
-      -- parksNotes is false for a husk or a continuous/augment-only region, so it parks nothing.
-      if parksNotes(region) then
-        util.bucket(replaceWindows, region.chan, { region.startppq, region.endppq })
-      end
-    end
-    local function covered(chan, ppqL)
-      for _, w in ipairs(replaceWindows[chan] or {}) do
-        if ppqL >= w[1] and ppqL < w[2] then return true end
-      end
-      return false
-    end
-
-    -- Authored notes a window now covers leave the take; the prior parked set re-homes --
-    -- still-covered carries forward, the rest restores to the take.
-    local parkDels = mmBatch()
-    local newParked, removals, restores = {}, {}, {}
-    for chan = 1, 16 do
-      for laneIdx, col in ipairs(channels[chan].columns.notes) do
-        for _, evt in ipairs(col.events) do
-          if evt.type ~= 'pa' and evt.ppqL ~= nil and covered(chan, evt.ppqL) then
-            util.add(newParked, util.pick(evt,
-              "ppq endppq ppqL endppqL pitch vel detune delay sample",
-              { evType = 'note', chan = chan, lane = laneIdx }))
-            util.add(removals, { chan = chan, lane = laneIdx, evt = evt })
-            parkDels.del(evt)
-          end
-        end
-      end
-    end
-    for _, spec in ipairs(ds:get('fxParked') or {}) do
-      if covered(spec.chan, spec.ppqL) then util.add(newParked, spec)
-      else util.add(restores, { spec = spec }) end
-    end
-
-    parkDels.commit()
-    for _, r in ipairs(removals) do
-      local events = channels[r.chan].columns.notes[r.lane].events
-      for i, e in ipairs(events) do if e == r.evt then table.remove(events, i); break end end
-    end
-    -- Restores re-enter their columns now (token-less); the tail walk clips them in place and
-    -- the 4.8 commit adds them after the derived deletions.
-    for _, r in ipairs(restores) do
-      local spec    = r.spec
-      local channel = channels[spec.chan]
-      while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
-      local ce = util.clone(spec, { chan = true, lane = true })
-      util.add(channel.columns.notes[spec.lane].events, ce)
-      table.sort(channel.columns.notes[spec.lane].events, function(a, b) return a.ppqL < b.ppqL end)
-      -- Lazy: reshaped at commit so it reads ce.ppq/endppq after the tail-walk clip.
-      deferred.addLazy(function()
-        return util.pick(ce, "ppq endppq ppqL endppqL pitch vel detune delay sample",
-                         { evType = 'note', chan = spec.chan, lane = spec.lane })
-      end)
-    end
-
-    if not util.deepEq(ds:get('fxParked') or {}, newParked) and mm:take() then
-      ds:assign('fxParked', #newParked > 0 and newParked or util.REMOVE)
-    end
-
-    -- Off-take membership for the generator + grid: each is a render-ready logical cell
-    -- (ppq/endppqC like a projected note); an emptied lane re-extends to keep a column home.
-    local takeLen = tm:length()
-    for chan = 1, 16 do channels[chan].parked = {} end
-    for _, spec in ipairs(newParked) do
-      local channel = channels[spec.chan]
-      while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
-      util.add(channel.parked, util.pick(spec,
-        "ppqL endppqL pitch vel detune sample delay lane", { ppq = spec.ppqL }))
-    end
-    for chan = 1, 16 do
-      realiseParked(channels[chan].parked, tm:toLogical(chan, takeLen))
-      for _, m in ipairs(channels[chan].parked) do m.endppqC = m.endppqL end
-    end
-  end
-
-  -- 4.5b) Region cc-replace: park the authored cc a window covers off-take; the curve from Pass A
-  -- stands in on the target lane -- no carrier, no node. see design/note-macros-v2.md § Continuous cc
-  do
-    local ccWindows = {}   -- [chan][cc] = { {startL, endL}, ... }
-    for _, region in ipairs(ds:get('fxRegions') or {}) do
-      for _, params in ipairs(region.fx or {}) do
-        local meta = generators.kinds[params.kind]
-        if meta and meta.mode == 'replace' and type(meta.dest) == 'number' then
-          ccWindows[region.chan] = ccWindows[region.chan] or {}
-          util.bucket(ccWindows[region.chan], meta.dest, { region.startppq, region.endppq })
-        end
-      end
-    end
-    local function covered(chan, cc, ppqL)
-      for _, w in ipairs((ccWindows[chan] or {})[cc] or {}) do
-        if ppqL >= w[1] and ppqL < w[2] then return true end
-      end
-      return false
-    end
-
-    -- On-take authored cc the window covers leaves; the prior parked set re-homes (still-covered
-    -- forward, rest restores). Logical pos = ppqL or ppq -- nil under identity swing.
-    local ccPark = mmBatch()
-    local newParked, removals, restores = {}, {}, {}
-    for chan = 1, 16 do
-      for cc, col in pairs(channels[chan].columns.ccs) do
-        for _, evt in ipairs(col.events) do
-          local ppqL = evt.ppqL or evt.ppq
-          if covered(chan, cc, ppqL) then
-            util.add(newParked, { chan = chan, cc = cc, ppq = evt.ppq, ppqL = ppqL,
-                                  val = evt.val, shape = evt.shape })
-            util.add(removals, { chan = chan, cc = cc, evt = evt })
-            ccPark.del(evt)
-          end
-        end
-      end
-    end
-    for _, spec in ipairs(ds:get('fxParkedCC') or {}) do
-      if covered(spec.chan, spec.cc, spec.ppqL) then util.add(newParked, spec)
-      else
-        util.add(restores, { spec = spec })
-        ccPark.add({ evType = 'cc', chan = spec.chan, cc = spec.cc,
-                     ppq = spec.ppq, ppqL = spec.ppqL, val = spec.val, shape = spec.shape })
-      end
-    end
-
-    ccPark.commit()
-    for _, r in ipairs(removals) do
-      local events = channels[r.chan].columns.ccs[r.cc].events
-      for i, e in ipairs(events) do if e == r.evt then table.remove(events, i); break end end
-    end
-    -- Seat a token-less projection so the view shows the restored cc this frame; next rebuild
-    -- re-reads the real token'd event from the take.
-    for _, r in ipairs(restores) do
-      local channel = channels[r.spec.chan]
-      local col = channel.columns.ccs[r.spec.cc]
-      if not col then col = { cc = r.spec.cc, events = {} }; channel.columns.ccs[r.spec.cc] = col end
-      util.add(col.events, { evType = 'cc', ppq = r.spec.ppq, ppqL = r.spec.ppqL,
-                             val = r.spec.val, shape = r.spec.shape })
-      table.sort(col.events, function(a, b) return (a.ppqL or a.ppq) < (b.ppqL or b.ppq) end)
-    end
-
-    if not util.deepEq(ds:get('fxParkedCC') or {}, newParked) and mm:take() then
-      ds:assign('fxParkedCC', #newParked > 0 and newParked or util.REMOVE)
-    end
-  end
+  -- 4.5/4.5b) Region-replace parking: notes + ccs (see rebuildRegionPark).
+  rebuildRegionPark(deferred)
 
   -- Windows (read-only): fx host voice extents + per-note same-lane successor ppqL, floored by authored end; no realised round-trip (G4-stable).
   -- see design/archive/note-macros.md § host contract
@@ -1958,91 +2054,8 @@ function tm:rebuild(takeChanged)
     ds:assign('fxCarrier', next(newFxCarrier) and newFxCarrier or util.REMOVE)
   end
 
-  -- 4.8) Unified tail/onset walk + atomic commit: real notes, fixed externals, fx.noteLive walk together (onset clamp then tail clip).
-  -- Host clip + fxNote inserts land in one mm:modify — no transient same-pitch overlap for MIDI_Sort. see docs/trackerManager.md § Rebuild: step 4.8 — tail walk
-  do
-    local takeLen = tm:length()
-    local clampWrites = mmBatch()
-    for chan = 1, 16 do
-      local notes, byLane, byPitch = {}, {}, {}
-      for laneIdx, col in ipairs(channels[chan].columns.notes) do
-        for _, evt in ipairs(col.events) do
-          if evt.type ~= 'pa' and evt.ppqL ~= nil then
-            local n = { evt = evt, lane = laneIdx }
-            util.add(notes, n)
-            util.bucket(byLane,  laneIdx,   n)
-            util.bucket(byPitch, evt.pitch, n)
-          end
-        end
-      end
-      for _, w in ipairs(fx.noteLive[chan]) do
-        local fn = { evt = w.evt, lane = w.lane }
-        util.add(notes, fn)
-        util.bucket(byLane,  w.lane,      fn)
-        util.bucket(byPitch, w.evt.pitch, fn)
-      end
-      if #notes == 0 then goto nextChan end
-
-      local function rawThenLogical(a, b)
-        if a.evt.ppq ~= b.evt.ppq then return a.evt.ppq < b.evt.ppq end
-        return a.evt.ppqL < b.evt.ppqL
-      end
-      local function sortAll()
-        table.sort(notes, rawThenLogical)
-        for _, g in pairs(byLane)  do table.sort(g, rawThenLogical) end
-        for _, g in pairs(byPitch) do table.sort(g, rawThenLogical) end
-      end
-      sortAll()
-
-      -- Same-pitch onset clamp; retro-clip is subsumed by the tail pass (clamped successor appears as same-pitch next).
-      -- Token'd events assign; a new fxNote (no token yet) mutates in place, riding into mm:add at the atomic commit.
-      local lastByPitch = {}
-      for _, n in ipairs(notes) do
-        local e, prev = n.evt, lastByPitch[n.evt.pitch]
-        if prev and not n.evt.fixed and e.ppq <= prev.evt.ppq then
-          local floor = prev.evt.ppq + 1
-          if e.token then clampWrites.assign(e, { ppq = floor }) end
-          e.ppq = floor
-        end
-        lastByPitch[e.pitch] = n
-      end
-      sortAll()
-
-      local laneNextOf  = strictNextMap(byLane)
-      local pitchNextOf = strictNextMap(byPitch)
-
-      for _, n in ipairs(notes) do
-        local e         = n.evt
-        local ceiling   = e.endppqL == util.OPEN and math.huge
-                          or e.endppqL and tm:fromLogical(chan, e.endppqL)
-                          or math.huge
-        local laneNext  = laneNextOf[n]
-        local pitchNext = pitchNextOf[n]
-        local laneClip  = laneNext
-          and tm:fromLogical(chan, laneNext.evt.ppqL) + (e.overlap or 0)
-          or math.huge
-        local pitchClip = pitchNext and pitchNext.evt.ppq or math.huge
-        local bound     = math.max(e.ppq + 1,
-                            math.min(ceiling, laneClip, pitchClip, takeLen))
-        local rounded   = util.round(bound)
-        if rounded ~= e.endppq then
-          if e.token then deferred.assign(e, { endppq = rounded }) end
-          e.endppq = rounded
-        end
-      end
-      ::nextChan::
-    end
-    -- Clamps reindex colliding same-pitch onsets separately: reload separates the shared content-keyed token before the clip pass dereferences it.
-    -- Clips only touch endppq, never re-key — safe to batch with adds.
-    clampWrites.commit()
-    -- Host clips (each clipped to first fxNote) commit WITH the fxNote del/add + restores in one
-    -- mm:modify/MIDI_Sort; canonical delete-first means no transient same-pitch overlap.
-    deferred.commit()
-
-    -- Restore pre-fx tail onto column events so the view sees the authored
-    -- note; mm is untouched, so the take and G4 round-trip are unaffected.
-    for host, rawEnd in pairs(fx.hostEnd) do host.endppq = rawEnd end
-  end
+  -- 4.8) Unified tail/onset walk + atomic commit (see rebuildTails).
+  rebuildTails(fx, deferred)
 
   -- 4.9) Absorber reconciliation + pb wire/column resynthesis.
   rebuildPbs(fx.noteLive, fx.replacePb)
