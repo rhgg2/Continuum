@@ -14,6 +14,15 @@ local function newModalScope(mgr, passthrough)
   return s
 end
 
+local function newSpringScope(mgr, opts)
+  local s = mgr:scope('region')
+  s.springLoaded = true
+  s.redirect     = opts.redirect
+  s.keepAlive    = opts.keepAlive
+  s.onBail       = opts.onBail
+  return s
+end
+
 return {
   {
     name = 'push/pop is LIFO; pop asserts top identity',
@@ -186,6 +195,93 @@ return {
       t.truthy(mgr.commands.save,                    'mgr.commands carries ungated registrations')
       t.eq    (mgr.keymap.save[1],   7,              'mgr.keymap aliases global.keymap')
       t.eq    (mgr.scopes.global.keymap, mgr.keymap, 'global.keymap is mgr.keymap')
+    end,
+  },
+
+  ----- spring-loaded scope (region authoring overlay)
+
+  {
+    name = 'spring redirect reinterprets a foreign command, stays armed',
+    run = function()
+      local mgr = newCmgr()
+      local log = {}
+      mgr:scope('tracker'):register('paste', function() log[#log+1] = 'paste' end)
+      mgr:push('tracker')
+      local bailed = false
+      newSpringScope(mgr, {
+        redirect = { paste = function() log[#log+1] = 'instance' end },
+        onBail   = function() bailed = true end,
+      })
+      mgr:push('region')
+      mgr:invoke('paste')
+      t.deepEq(log, { 'instance' }, 'redirect ran instead of tracker paste')
+      t.falsy(bailed, 'redirect does not bail')
+      t.eq(mgr.stack[#mgr.stack], mgr:scope('region'), 'still armed')
+    end,
+  },
+
+  {
+    name = 'spring redirect receives the pending prefix (defaults 1)',
+    run = function()
+      local mgr = newCmgr()
+      local got
+      mgr:push('tracker')
+      newSpringScope(mgr, { redirect = { nudge = function(p) got = p end } })
+      mgr:push('region')
+      mgr:invoke('nudge')
+      t.eq(got, 1, 'prefix defaults to 1')
+    end,
+  },
+
+  {
+    name = 'spring keepAlive command runs and stays armed',
+    run = function()
+      local mgr = newCmgr()
+      local log = {}
+      mgr:scope('tracker'):register('cursorUp', function() log[#log+1] = 'up' end)
+      mgr:push('tracker')
+      local bailed = false
+      newSpringScope(mgr, { keepAlive = { cursorUp = true },
+                            onBail = function() bailed = true end })
+      mgr:push('region')
+      mgr:invoke('cursorUp')
+      t.deepEq(log, { 'up' }, 'keepAlive command ran')
+      t.falsy(bailed, 'keepAlive does not bail')
+      t.eq(mgr.stack[#mgr.stack], mgr:scope('region'), 'still armed')
+    end,
+  },
+
+  {
+    name = 'spring foreign command bails then dispatches (execute-through)',
+    run = function()
+      local mgr = newCmgr()
+      local log = {}
+      mgr:scope('tracker'):register('someOther', function() log[#log+1] = 'other' end)
+      mgr:push('tracker')
+      local region
+      region = newSpringScope(mgr, {
+        onBail = function() mgr:pop(region); log[#log+1] = 'bail' end })
+      mgr:push('region')
+      mgr:invoke('someOther')
+      t.deepEq(log, { 'bail', 'other' }, 'bailed first, then the command ran')
+      t.eq(mgr.stack[#mgr.stack], mgr:scope('tracker'), 'scope popped')
+    end,
+  },
+
+  {
+    name = 'spring own command does not auto-bail',
+    run = function()
+      local mgr = newCmgr()
+      local log = {}
+      mgr:push('tracker')
+      local region
+      region = newSpringScope(mgr, {
+        onBail = function() log[#log+1] = 'autobail' end })
+      region:register('regionBail', function() log[#log+1] = 'ran'; mgr:pop(region) end)
+      mgr:push('region')
+      mgr:invoke('regionBail')
+      t.deepEq(log, { 'ran' }, 'own command ran without auto-bail')
+      t.eq(mgr.stack[#mgr.stack], mgr:scope('tracker'), 'its body popped explicitly')
     end,
   },
 }

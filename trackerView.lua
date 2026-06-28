@@ -2294,17 +2294,6 @@ end
 function tv:eachInstance() return gm:eachInstance() end
 function tv:stateOf(uuid) return gm:stateOf(uuid) end
 
--- Install the grid selection for one group instance: its anchor + the
--- group rect -> selectRegionAt (the duplicate-cascade selector). The ec
--- region-mode bridge speaks this; ec never reads gm geometry directly.
-function tv:instanceSelection(groupId, instId)
-  for _, e in ipairs(gm:eachInstance()) do
-    if e.groupId == groupId and e.instId == instId then
-      return selectRegionAt(e.anchor, e.rect)
-    end
-  end
-end
-
 --contract: extend hands newly-covered concretes in as `gained` (gm:resizeGroup never rescans)
 --contract: idempotent: re-painting an already on/off stream is a no-op true
 --invariant: group's live rect found by id off gm:eachInstance — ec carries no geometry
@@ -2581,14 +2570,6 @@ end
 
 ----- Group quick-verbs
 
--- mark and copy share the one groupSrc lifetime; without this, mark ->
--- groupPaste degrades to plain paste (groupPaste gates on groupSrc, not
--- the active group).
-local function groupMark()
-  local r = tv:selectionAsRect()
-  if r then groupSrc = r; gm:mark(tv:eventsInRect(r), r) end
-end
-
 -- Cascade copies into one group. Capture the seed events BEFORE clearing
 -- -- source and destination may overlap. clearRegionAt wipes the
 -- destination so the projection replaces rather than interleaves;
@@ -2675,11 +2656,10 @@ tracker:registerAll{
   doubleRPB               = function() tv:setRowPerBeat(cm:get('rowPerBeat') * 2) end,
   halveRPB                = function() tv:setRowPerBeat(math.floor(cm:get('rowPerBeat') / 2)) end,
   matchGridToCursor       = matchGridToCursor,
-  groupMark               = { groupMark,      'Mark group'      },
   groupDuplicate          = { groupDuplicate, 'Duplicate group' },
   groupPaste              = { groupPaste,     'Paste group'     },
   groupLocalToggle        = function() gm:setLocalMode(not gm:localMode()) end,
-  regionEnter             = function() ec:enterRegionMode() end,
+  regionArm               = function() ec:regionArm() end,
 }
 
 for i = 0, 9 do
@@ -2904,7 +2884,6 @@ local groupBridge = {
   eventsInRect      = function(rect) return tv:eventsInRect(rect) end,
   selectionAsRect   = function()     return tv:selectionAsRect() end,
   cursorAnchor      = function()     return tv:cursorAnchor() end,
-  instanceSelection = function(g, i) return tv:instanceSelection(g, i) end,
   instanceAt        = function()     return tv:instanceAtCursor() end,
   paintStream       = function(g, i, c, on) return tv:paintRegionStream(g, i, c, on) end,
   -- The caller clears the destination before gm stages its projection
@@ -2990,8 +2969,8 @@ for i = 0, 9 do GROUP_PASSTHROUGH['advBy' .. i] = true end
 
 local GROUP_KEEP = {}
 for k in pairs(GROUP_PASSTHROUGH) do GROUP_KEEP[k] = true end
-for _, n in ipairs{ 'copy', 'groupMark', 'groupDuplicate',
-                    'groupPaste', 'groupLocalToggle', 'regionEnter' } do
+for _, n in ipairs{ 'copy', 'groupDuplicate', 'groupPaste',
+                    'groupLocalToggle', 'regionArm' } do
   GROUP_KEEP[n] = true
 end
 

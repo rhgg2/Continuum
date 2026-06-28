@@ -1,9 +1,5 @@
--- ec region mode, driven through the real cmgr modal stack against a
--- real groupManager (fake tm/cm, as the gm_* specs do). ec builds the
--- 'region' overlay scope at instantiate; we push a tracker scope under
--- it, enter via ec:enterRegionMode(), and dispatch through cmgr:invoke.
--- The bridge stands in for trackerView's grid<->logical surface --
--- faking the bridge fakes tv, never ec's verb bodies, which run real.
+-- ec group-authoring mode: real cmgr spring-loaded stack, real groupManager (fake tm/cm).
+-- ec builds 'region' scope at instantiate; bridge fakes tv surface, not ec's verb bodies.
 
 local t    = require('support')
 local util = require('util')
@@ -46,14 +42,14 @@ local function mk(opts)
   local cmgr = util.instantiate('commandManager',
                                 { cm = { get = function() return 'qwerty' end } })
 
-  local bridge = { gm = gm, selCalls = {}, paintCalls = {},
-                   rect = nil, anchor = nil, commits = 0 }
-  function bridge.eventsInRect()       return {} end
-  function bridge.selectionAsRect()    return bridge.rect end
-  function bridge.cursorAnchor()       return bridge.anchor end
-  function bridge.instanceAt()         return bridge.instAt end
-  function bridge.commit()             bridge.commits = bridge.commits + 1
-                                       return tm:flush() end
+  local bridge = { gm = gm, paintCalls = {},
+                   rect = nil, anchor = nil, instAt = nil, commits = 0 }
+  function bridge.eventsInRect()    return {} end
+  function bridge.selectionAsRect() return bridge.rect end
+  function bridge.cursorAnchor()    return bridge.anchor end
+  function bridge.instanceAt()      return bridge.instAt end
+  function bridge.commit()          bridge.commits = bridge.commits + 1
+                                    return tm:flush() end
   function bridge.paintStream(g, i, col, on)
     bridge.paintCalls[#bridge.paintCalls + 1] = { g, i, col, on }
   end
@@ -68,14 +64,8 @@ local function mk(opts)
   })
   for _, col in ipairs(cols) do ec:decorateCol(col) end
 
-  -- tv install emulation: flip a real selection so ec:hasSelection() and
-  -- the caret land where a real instanceSelection would put them.
-  function bridge.instanceSelection(g, i)
-    bridge.selCalls[#bridge.selCalls + 1] = { g, i }
-    ec:setSelection{ row1 = 0, row2 = 0, col1 = 1, col2 = 1,
-                     part1 = 'pitch', part2 = 'pitch' }
-  end
-
+  -- Stub tracker: cursorDown is REGION_KEEPALIVE (stays armed); someOther is foreign (bails).
+  -- Redirect targets need no tracker registration — redirect fires regardless.
   local origLog = {}
   local tracker = cmgr:scope('tracker')
   for _, name in ipairs{ 'someOther', 'cursorDown' } do
@@ -96,298 +86,187 @@ local function instances(gm, groupId)
   return out
 end
 
+local function anchorPpqs(gm, groupId)
+  local out = {}
+  for _, e in ipairs(instances(gm, groupId)) do out[#out + 1] = e.anchor.ppq end
+  table.sort(out)
+  return out
+end
+
+local function armOn(ec, c, groupId, instId)
+  c.bridge.instAt = { groupId = groupId, instId = instId or instances(c.gm, groupId)[1].instId }
+  ec:regionArm()
+end
+
 return {
 
-  ----- lifecycle / modal gate
+  ----- arm / bail lifecycle
 
   {
-    name = 'enterRegionMode sets mode; regionBail clears it',
+    name = 'regionArm with a selection seeds a group, arms, clears selection',
     run = function()
       local ec, c = mk()
-      t.falsy(ec:isInRegionMode())
-      ec:enterRegionMode()
-      t.truthy(ec:isInRegionMode())
-      c.cmgr:invoke('regionBail')
-      t.falsy(ec:isInRegionMode())
-      t.eq(ec:regionCursor(), nil, 'bail clears the region cursor')
+      ec:setSelection{ row1 = 0, row2 = 0, col1 = 1, col2 = 1,
+                       part1 = 'pitch', part2 = 'pitch' }
+      c.bridge.rect = rect(0, LPR)
+      ec:regionArm()
+      t.truthy(ec:isInRegionMode(), 'armed')
+      t.eq(#instances(c.gm), 1, 'a group was created')
+      local rc = ec:regionCursor()
+      t.eq(rc.instId, 1)
+      t.eq(rc.groupId, instances(c.gm)[1].groupId)
+      t.falsy(ec:hasSelection(), 'selection cleared')
     end,
   },
 
   {
-    name = 'region verbs unreachable outside mode',
+    name = 'regionArm with no selection arms on the caret instance',
     run = function()
       local ec, c = mk()
-      for _, v in ipairs{ 'regionBail', 'regionCommit', 'regionNew',
-                          'regionInstance', 'regionDrop', 'regionNext',
-                          'regionPrev', 'regionGrow', 'regionShrink' } do
+      local g = c.gm:mark({}, rect(0, LPR))
+      armOn(ec, c, g)
+      t.truthy(ec:isInRegionMode())
+      t.eq(ec:regionCursor().groupId, g)
+      t.eq(ec:regionCursor().instId, instances(c.gm, g)[1].instId)
+    end,
+  },
+
+  {
+    name = 'regionArm with no selection and no caret instance is a no-op',
+    run = function()
+      local ec, c = mk()
+      c.bridge.instAt = nil
+      ec:regionArm()
+      t.falsy(ec:isInRegionMode(), 'not armed')
+      t.eq(ec:regionCursor(), nil)
+    end,
+  },
+
+  {
+    name = 'regionBail exits and clears any selection',
+    run = function()
+      local ec, c = mk()
+      local g = c.gm:mark({}, rect(0, LPR))
+      armOn(ec, c, g, 1)
+      ec:setSelection{ row1 = 0, row2 = 1, col1 = 1, col2 = 1,
+                       part1 = 'pitch', part2 = 'pitch' }
+      c.cmgr:invoke('regionBail')
+      t.falsy(ec:isInRegionMode(), 'bailed')
+      t.eq(ec:regionCursor(), nil, 'cursor cleared')
+      t.falsy(ec:hasSelection(), 'selection cleared')
+    end,
+  },
+
+  {
+    name = 'regionExit exits but leaves the selection intact',
+    run = function()
+      local ec, c = mk()
+      local g = c.gm:mark({}, rect(0, LPR))
+      armOn(ec, c, g, 1)
+      ec:setSelection{ row1 = 0, row2 = 1, col1 = 1, col2 = 1,
+                       part1 = 'pitch', part2 = 'pitch' }
+      c.cmgr:invoke('regionExit')
+      t.falsy(ec:isInRegionMode(), 'exited')
+      t.eq(ec:regionCursor(), nil, 'cursor cleared')
+      t.truthy(ec:hasSelection(), 'selection preserved (unlike regionBail)')
+    end,
+  },
+
+  {
+    name = 'region-owned verbs unreachable outside mode',
+    run = function()
+      local ec, c = mk()
+      for _, v in ipairs{ 'regionExit', 'regionBail', 'regionPaintExtend', 'regionPaintShrink' } do
         t.eq(c.cmgr:invoke(v), nil, v .. ' does not resolve outside mode')
       end
       t.falsy(ec:isInRegionMode())
     end,
   },
 
-  {
-    name = 'non-passthrough tracker command blocked in mode, runs outside',
-    run = function()
-      local ec, c = mk()
-      t.eq(c.cmgr:invoke('someOther'), 'orig:someOther', 'runs outside mode')
-      ec:enterRegionMode()
-      t.eq(c.cmgr:invoke('someOther'), nil, 'modal blocks (not passthrough)')
-      c.cmgr:invoke('regionBail')
-      t.eq(c.cmgr:invoke('someOther'), 'orig:someOther', 'restored after bail')
-    end,
-  },
+  ----- redirect verbs (reinterpret tracker commands onto the armed instance)
 
   {
-    name = 'enterRegionMode seeds the region cursor from the caret instance',
+    name = 'paste / groupPaste drop a new instance at the caret, stay armed',
     run = function()
       local ec, c = mk()
       local g = c.gm:mark({}, rect(0, LPR))
-      c.bridge.instAt = { groupId = g, instId = instances(c.gm, g)[1].instId }
-      ec:enterRegionMode()
-      t.eq(ec:regionCursor().groupId, g, 'seeded from the caret instance')
-      t.eq(ec:regionCursor().instId, instances(c.gm, g)[1].instId)
-    end,
-  },
-
-  {
-    name = 'enterRegionMode falls back to the active group when caret over none',
-    run = function()
-      local ec, c = mk()
-      local g = c.gm:mark({}, rect(0, LPR))   -- mark sets it active
-      c.bridge.instAt = nil
-      ec:enterRegionMode()
-      t.eq(ec:regionCursor().groupId, g, 'fell back to the active group')
-      t.eq(ec:regionCursor().instId, instances(c.gm, g)[1].instId)
-    end,
-  },
-
-  ----- regionNew / regionInstance
-
-  {
-    name = 'regionNew seeds a group from the selection rect; cursor + clear',
-    run = function()
-      local ec, c = mk()
-      ec:enterRegionMode()
-      ec:setSelection{ row1 = 0, row2 = 0, col1 = 1, col2 = 1,
-                       part1 = 'pitch', part2 = 'pitch' }
-      c.bridge.rect = rect(0, LPR)
-      c.cmgr:invoke('regionNew')
-      t.eq(#instances(c.gm), 1, 'a group was created')
-      local rc = ec:regionCursor()
-      t.eq(rc.instId, 1)
-      t.eq(rc.groupId, instances(c.gm)[1].groupId)
-      t.falsy(ec:hasSelection(), 'selection cleared after new')
-    end,
-  },
-
-  {
-    name = 'regionNew with no selection rect is a silent no-op',
-    run = function()
-      local ec, c = mk()
-      ec:enterRegionMode()
-      c.bridge.rect = nil
-      c.cmgr:invoke('regionNew')
-      t.eq(#instances(c.gm), 0, 'no group created')
-      t.eq(ec:regionCursor(), nil)
-    end,
-  },
-
-  {
-    name = 'regionInstance drops another copy of the cursor group',
-    run = function()
-      local ec, c = mk()
-      ec:enterRegionMode()
-      c.bridge.rect = rect(0, LPR)
-      c.cmgr:invoke('regionNew')
-      local g = ec:regionCursor().groupId
+      armOn(ec, c, g, 1)
       c.bridge.anchor = { ppq = 100, chan = 1 }
-      c.cmgr:invoke('regionInstance')
-      t.eq(#instances(c.gm, g), 2, 'second instance added')
-      t.eq(ec:regionCursor().instId, instances(c.gm, g)[2].instId)
+      c.cmgr:invoke('paste')
+      t.eq(#instances(c.gm, g), 2, 'paste added an instance')
+      c.bridge.anchor = { ppq = 200, chan = 1 }
+      c.cmgr:invoke('groupPaste')
+      t.eq(#instances(c.gm, g), 3, 'groupPaste added another')
+      t.truthy(ec:isInRegionMode(), 'still armed')
     end,
   },
 
   {
-    name = 'creation verbs flush so a new region materialises immediately',
-    run = function()
-      local ec, c = mk()
-      ec:enterRegionMode()
-      c.bridge.rect = rect(0, LPR)
-      c.cmgr:invoke('regionNew')
-      t.eq(c.bridge.commits, 1, 'regionNew flushed staged group ops')
-      c.bridge.anchor = { ppq = LPR, chan = 1 }
-      c.cmgr:invoke('regionInstance')
-      t.eq(c.bridge.commits, 2, 'regionInstance flushed the new copy')
-    end,
-  },
-
-  ----- group / instance navigation
-
-  {
-    name = 'regionPrev/regionNext step between groups (first instance), clamp',
-    run = function()
-      local ec, c = mk()
-      local g1 = c.gm:mark({}, rect(0,  LPR))         -- [0,10)
-      local g2 = c.gm:mark({}, rect(20, LPR))         -- [20,30), active
-      c.gm:newInstance(g2, { ppq = 200, chan = 1 })   -- g2 gets 2 instances
-
-      ec:enterRegionMode()                            -- seeds at active g2
-      t.eq(ec:regionCursor().groupId, g2)
-      t.eq(ec:regionCursor().instId, 1, 'lands on g2 first instance')
-      c.cmgr:invoke('regionNext')
-      t.eq(ec:regionCursor().groupId, g2, 'next at last group clamps')
-      c.cmgr:invoke('regionPrev')
-      t.eq(ec:regionCursor().groupId, g1)
-      t.eq(ec:regionCursor().instId, 1, 'first instance of the prev group')
-      c.cmgr:invoke('regionPrev')
-      t.eq(ec:regionCursor().groupId, g1, 'prev at first group clamps')
-      t.falsy(ec:hasSelection(), 'group step is border-only')
-      t.eq(#c.bridge.selCalls, 0)
-    end,
-  },
-
-  {
-    name = 'regionInstPrev/regionInstNext cycle within the group, clamp',
+    name = 'delete / deleteSel drop the armed instance, stay armed',
     run = function()
       local ec, c = mk()
       local g = c.gm:mark({}, rect(0, LPR))
       c.gm:newInstance(g, { ppq = 100, chan = 1 })
-      c.gm:newInstance(g, { ppq = 200, chan = 1 })
-      local ids = {}
-      for _, e in ipairs(instances(c.gm, g)) do ids[#ids + 1] = e.instId end
-      table.sort(ids)
-
-      ec:enterRegionMode()
-      t.eq(ec:regionCursor().instId, ids[1])
-      c.cmgr:invoke('regionInstPrev')
-      t.eq(ec:regionCursor().instId, ids[1], 'prev at first clamps')
-      c.cmgr:invoke('regionInstNext')
-      t.eq(ec:regionCursor().instId, ids[2])
-      c.cmgr:invoke('regionInstNext')
-      c.cmgr:invoke('regionInstNext')
-      t.eq(ec:regionCursor().instId, ids[3], 'next at last clamps')
-      t.eq(ec:regionCursor().groupId, g, 'never leaves the group')
-      t.falsy(ec:hasSelection(), 'instance step is border-only')
+      armOn(ec, c, g, 1)
+      c.cmgr:invoke('deleteSel')
+      t.eq(#instances(c.gm, g), 1, 'deleteSel dropped one')
+      c.cmgr:invoke('delete')
+      t.eq(#instances(c.gm, g), 0, 'delete dropped the last')
+      t.truthy(ec:isInRegionMode(), 'still armed')
     end,
   },
 
   {
-    name = 'groupInstNext/Prev hop caret to same row offset in sibling',
-    run = function()
-      local ec, c = mk()
-      ec:registerCommands(c.cmgr:scope('tracker'))
-      local g = c.gm:mark({}, rect(0, LPR))           -- inst 1 @ ppq 0
-      c.gm:newInstance(g, { ppq = 100, chan = 1 })    -- inst 2 @ ppq 100
-      ec:setPos(2, 1, 1)                              -- +2 rows into inst 1
-
-      c.bridge.instAt = { groupId = g, instId = 1 }
-      c.cmgr:invoke('groupInstNext')
-      t.eq(ec:row(), 12, 'same +2 offset in next instance (ppq 100 = row 10)')
-      c.bridge.instAt = { groupId = g, instId = 2 }
-      c.cmgr:invoke('groupInstPrev')
-      t.eq(ec:row(), 2, 'back to the original offset in instance 1')
-      c.bridge.instAt = { groupId = g, instId = 1 }   -- caret now in inst 1
-      c.cmgr:invoke('groupInstPrev')
-      t.eq(ec:row(), 2, 'no prev sibling: caret unchanged')
-    end,
-  },
-
-  ----- nudge (move instance)
-
-  {
-    name = 'regionNudgeForward moves the instance and the caret follows',
+    name = 'nudgeForward / nudgeBack move the instance, caret follows',
     run = function()
       local ec, c = mk()
       local g = c.gm:mark({}, rect(0, LPR))
-      ec:enterRegionMode()
+      armOn(ec, c, g, 1)
       ec:setPos(5, 1, 1)
-      c.cmgr:invoke('regionNudgeForward')
-      t.eq(instances(c.gm, g)[1].anchor.ppq, LPR, 'instance moved +1 row')
-      t.eq(ec:row(), 6, 'caret followed +1')
-      c.cmgr:invoke('regionNudgeBack')
+      c.cmgr:invoke('nudgeForward')
+      t.eq(instances(c.gm, g)[1].anchor.ppq, LPR, 'instance +1 row')
+      t.eq(ec:row(), 6, 'caret followed')
+      c.cmgr:invoke('nudgeBack')
       t.eq(instances(c.gm, g)[1].anchor.ppq, 0)
       t.eq(ec:row(), 5)
+      t.truthy(ec:isInRegionMode())
     end,
   },
 
   {
-    name = 'regionNudge rejected by collision: instance and caret unchanged',
-    run = function()
-      local ec, c = mk()
-      c.gm:mark({}, rect(20, LPR))                    -- b: [20,30)
-      local a = c.gm:mark({}, rect(0, LPR))           -- a: [0,10), active
-      ec:enterRegionMode()                            -- seeds cursor to a
-      ec:setPos(5, 1, 1)
-      c.cmgr:invoke('regionNudgeForward')             -- a -> [10,20) ok
-      t.eq(instances(c.gm, a)[1].anchor.ppq, LPR)
-      t.eq(ec:row(), 6)
-      c.cmgr:invoke('regionNudgeForward')             -- a -> [20,30) hits b
-      t.eq(instances(c.gm, a)[1].anchor.ppq, LPR, 'rejected: instance held')
-      t.eq(ec:row(), 6, 'rejected: caret held')
-    end,
-  },
-
-  ----- drop
-
-  {
-    name = 'regionDrop deletes the cursor instance; advances; last drops group',
-    run = function()
-      local ec, c = mk()
-      local g = c.gm:mark({}, rect(0, LPR))
-      c.gm:newInstance(g, { ppq = 100, chan = 1 })
-      ec:enterRegionMode()
-      t.eq(#instances(c.gm, g), 2)
-      c.cmgr:invoke('regionDrop')
-      t.eq(#instances(c.gm, g), 1, 'one instance dropped')
-      t.truthy(ec:regionCursor(), 'cursor advanced to the survivor')
-      c.cmgr:invoke('regionDrop')
-      t.eq(#instances(c.gm, g), 0, 'group emptied')
-      t.eq(ec:regionCursor(), nil, 'cursor cleared with the group')
-    end,
-  },
-
-  ----- resize (end + start edges)
-
-  {
-    name = 'regionGrow / regionShrink move the end edge by logPerRow',
+    name = 'growNote / shrinkNote resize the instance end edge',
     run = function()
       local ec, c = mk()
       local g = c.gm:mark({}, rect(0, 2 * LPR))
-      ec:enterRegionMode()
-      c.cmgr:invoke('regionGrow')
-      t.eq(instances(c.gm, g)[1].rect.dur, 3 * LPR, 'end edge out +lpr')
-      c.cmgr:invoke('regionShrink')
-      c.cmgr:invoke('regionShrink')
-      t.eq(instances(c.gm, g)[1].rect.dur, LPR, 'end edge in -2 lpr')
+      armOn(ec, c, g, 1)
+      c.cmgr:invoke('growNote')
+      t.eq(instances(c.gm, g)[1].rect.dur, 3 * LPR, 'end out +lpr')
+      c.cmgr:invoke('shrinkNote')
+      c.cmgr:invoke('shrinkNote')
+      t.eq(instances(c.gm, g)[1].rect.dur, LPR, 'end in -2 lpr')
     end,
   },
 
   {
-    name = 'regionGrowStart / regionShrinkStart move the start edge (Model A)',
+    name = 'duplicate (duplicateDown / groupDuplicate) cascades one group-length on',
     run = function()
       local ec, c = mk()
-      local g  = c.gm:mark({}, rect(LPR, 2 * LPR))    -- [10,30)
-      ec:enterRegionMode()
-      c.cmgr:invoke('regionShrinkStart')              -- start in: +lpr
-      local r = instances(c.gm, g)[1].rect
-      t.eq(r.ppq, 2 * LPR, 'start edge moved in')
-      t.eq(r.dur, LPR,     'span shorter by lpr')
-      c.cmgr:invoke('regionGrowStart')                -- start out: -lpr
-      r = instances(c.gm, g)[1].rect
-      t.eq(r.ppq, LPR)
-      t.eq(r.dur, 2 * LPR)
+      local g = c.gm:mark({}, rect(0, LPR))   -- inst 1 @ ppq 0, dur LPR
+      armOn(ec, c, g, 1)
+      c.cmgr:invoke('groupDuplicate')
+      t.deepEq(anchorPpqs(c.gm, g), { 0, LPR }, 'first copy one group-length on')
+      c.cmgr:invoke('duplicateDown')
+      t.deepEq(anchorPpqs(c.gm, g), { 0, LPR, 2 * LPR }, 'and one more on')
+      t.truthy(ec:isInRegionMode(), 'still armed')
     end,
   },
 
-  ----- paint (stream-set sculpt via the bridge)
-
   {
-    name = 'regionPaintExtend/Shrink forward (groupId, instId, cursorCol, on) to the bridge',
+    name = 'paint forwards (groupId, instId, cursorCol, on) to the bridge',
     run = function()
       local ec, c = mk()
       local g = c.gm:mark({}, rect(0, LPR))
-      ec:enterRegionMode()
+      armOn(ec, c, g, 1)
       local iid = ec:regionCursor().instId
       ec:setPos(0, 2, 1)                       -- caret on col 2
       c.cmgr:invoke('regionPaintExtend')
@@ -398,22 +277,28 @@ return {
     end,
   },
 
-  ----- commit
+  ----- spring auto-exit
 
   {
-    name = 'regionCommit installs the instance selection and exits mode',
+    name = 'keepAlive nav command runs and keeps the mode armed',
     run = function()
       local ec, c = mk()
       local g = c.gm:mark({}, rect(0, LPR))
-      ec:enterRegionMode()
-      ec:selClear()
-      t.falsy(ec:hasSelection())
-      c.cmgr:invoke('regionCommit')
-      t.falsy(ec:isInRegionMode(), 'commit exited mode')
-      t.truthy(ec:hasSelection(), 'commit installed the instance selection')
-      local last = c.bridge.selCalls[#c.bridge.selCalls]
-      t.eq(last[1], g)
+      armOn(ec, c, g, 1)
+      t.eq(c.cmgr:invoke('cursorDown'), 'orig:cursorDown', 'nav ran')
+      t.truthy(ec:isInRegionMode(), 'still armed')
     end,
   },
 
+  {
+    name = 'any other command bails then runs (execute-through)',
+    run = function()
+      local ec, c = mk()
+      local g = c.gm:mark({}, rect(0, LPR))
+      armOn(ec, c, g, 1)
+      t.eq(c.cmgr:invoke('someOther'), 'orig:someOther', 'foreign command ran')
+      t.falsy(ec:isInRegionMode(), 'and disarmed')
+      t.eq(ec:regionCursor(), nil)
+    end,
+  },
 }

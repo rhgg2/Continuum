@@ -5,6 +5,7 @@
 --invariant: scopes form a stack walked top-down; the bottom is the 'global' scope pushed at module load
 --invariant: a modal scope without passthrough[name] blocks both key dispatch and invoke for names below it
 --invariant: command return: nil = handled (stop dispatch); false = declined (let char queue see the keypress)
+--invariant: spring-loaded scope: redirect[] reinterprets; keepAlive[] passes; else onBail()
 --invariant: a keymap entry is an array of keyspecs — multiple bindings dispatch to the same command
 --invariant: layouts row 1 = base octave (15 semitones, C..D+1oct); row 2 = +1 octave (17 semitones, C..F+1oct)
 --invariant: chars is folded from layouts at load time so the LUT can't drift from the declaration
@@ -75,7 +76,7 @@ end
 
 ----- Scope
 
---shape: scope = { keymap={}, modal=false?, passthrough={[name]=true}?, registered={[name]=true} }
+--shape: scope = { keymap={}, registered={}, modal?, passthrough?, springLoaded?, redirect={[name]=fn}?, keepAlive={[name]=true}?, onBail? }
 local function newScope(name)
   local s = { keymap = {}, registered = {}, name = name }
 
@@ -249,9 +250,20 @@ end
 
 --contract: returns nil when the command is unknown OR registered on a scope that is not currently reachable (off-stack or blocked by a modal above)
 --contract: always prepends the pending prefix (defaulted to 1 when nothing is pending) as the first argument to the command body. Bodies that need to distinguish "user typed 1" from "no prefix" read prefixRational() — it returns (nil, nil) when nothing is pending. State stays live for the call so the body may read it; cleared on return ONLY if there was a pending prefix at entry, so a command body that opens prefix mode (beginPrefix) is not wiped out by its own invoke.
+--contract: spring-loaded scope: redirect[] runs fn in-place; keepAlive[] passes; else onBail()
 function cmgr:invoke(name, ...)
-  local fn = self.commands[name]
-  if not fn then return end
+  local fn  = self.commands[name]
+  local top = self.stack[#self.stack]
+  local spring     = (top and top.springLoaded) and top or nil
+  local redirected = spring and spring.redirect and spring.redirect[name]
+  if not fn and not redirected then return end
+  if spring then
+    if redirected then
+      fn = redirected                                  -- reinterpret onto the overlay; stay armed
+    elseif self.gates[name] ~= spring and not (spring.keepAlive and spring.keepAlive[name]) then
+      spring.onBail()                                  -- any other command: disarm, then dispatch through
+    end
+  end
   local scope = self.gates[name]
   if scope and not isReachable(scope, name) then return end
   local hadPending = pendingPrefix ~= nil

@@ -41,9 +41,8 @@ local hBlockScope, vBlockScope         = 0, 0
 local vBlockBars                       = 1   -- bars spanned when vBlockScope == 2
 local sel, selAnchor
 
--- Region authoring mode: a modal cmgr overlay. ec owns only the
--- push/pop lifecycle + this ephemeral nav cursor (NOT persisted); the
--- group store/projection/persistence is gm's.
+-- Group authoring overlay (spring-loaded cmgr scope). ec owns push/pop + ephemeral nav cursor
+-- (NOT persisted); group store, projection, and persistence are gm's.
 local regionCursor                       -- { groupId, instId } | nil
 local regionScope, regionPushed
 
@@ -331,12 +330,6 @@ local function currentEntry()
   end
 end
 
--- Points the region cursor; the border follows. No grid selection
--- until commit -- a live selection mid-mode would let edits escape.
-local function pointAt(entry)
-  regionCursor = { groupId = entry.groupId, instId = entry.instId }
-end
-
 ---------- PUBLIC
 
 local ec = {}
@@ -481,19 +474,20 @@ do
   end
 end
 
------ Region mode
+----- Region mode (group authoring)
 
 function ec:isInRegionMode() return regionPushed == true end
 function ec:regionCursor()   return regionCursor end
 
--- Nav verbs fall through the modal overlay to tracker/global below;
--- everything else is gated so a stray edit can't escape region mode.
-local REGION_PASSTHROUGH = {
+-- Nav keeps the overlay armed (caret may roam before stamping);
+-- every other command bails via onBail (execute-through).
+local REGION_KEEPALIVE = {
   cursorUp=true, cursorDown=true, cursorLeft=true, cursorRight=true,
   pageUp=true, pageDown=true, goTop=true, goBottom=true, goLeft=true, goRight=true,
   colLeft=true, colRight=true, channelLeft=true, channelRight=true,
   selectUp=true, selectDown=true, selectLeft=true, selectRight=true, selectClear=true,
   cycleBlock=true, cycleVBlock=true, swapBlockEnds=true,
+  regionArm=true,   -- re-pressing \ re-arms at the caret without a bail
 }
 
 do
@@ -503,25 +497,10 @@ do
     regionCursor = nil
   end
 
-  --contract: idempotent; seeds nav cursor from caret instance, else active group's first
-  function ec:enterRegionMode()
+  local function enterArmed()
     if regionPushed then return end
     cmgr:push(regionScope)
     regionPushed = true
-    local at = groupBridge.instanceAt and groupBridge.instanceAt()
-    if at then
-      regionCursor = { groupId = at.groupId, instId = at.instId }
-      return
-    end
-    local gm = gmgr()
-    local active = gm and gm:activeGroup()
-    if not active then return end
-    for _, e in ipairs(orderedInstances()) do
-      if e.groupId == active then
-        regionCursor = { groupId = e.groupId, instId = e.instId }
-        return
-      end
-    end
   end
 
   local function newFromSelection()
@@ -534,17 +513,25 @@ do
     if groupBridge.commit then groupBridge.commit() end
   end
 
-  local function newInstance()
-    if not regionCursor then return end
-    local anchor = groupBridge.cursorAnchor()
-    if not anchor then return end
-    -- Clear the destination first (gm only re-places its own concretes);
-    -- clearAt completes before gm stages, so it never eats the
-    -- projection. Both stage; commit flushes them together.
+  -- Clear before staging (gm re-places its own concretes only); stamp a fresh
+  -- instance, advance the border. Shared by paste-at-caret and cascade-duplicate.
+  local function stampAt(anchor)
+    if not (regionCursor and anchor) then return end
     if groupBridge.clearAt then groupBridge.clearAt(regionCursor.groupId, anchor) end
     local instId = gmgr():newInstance(regionCursor.groupId, anchor)
     if instId then regionCursor.instId = instId end
     if groupBridge.commit then groupBridge.commit() end
+  end
+
+  local function newInstance() stampAt(groupBridge.cursorAnchor()) end
+
+  -- Cascade: the copy lands one group-length past the armed instance and
+  -- the border advances onto it, so repeats lay a run hands-free.
+  local function duplicate()
+    local cur  = currentEntry()
+    local rect = cur and gmgr():groupRect(regionCursor.groupId)
+    if not rect then return end
+    stampAt({ ppq = cur.anchor.ppq + rect.dur, chan = cur.anchor.chan })
   end
 
   local function dropInstance()
@@ -555,42 +542,6 @@ do
     local pick  = after[math.min(idx, #after)]
     regionCursor = pick and { groupId = pick.groupId, instId = pick.instId }
                         or nil
-  end
-
-  -- < / > step between groups, landing on the prev/next group's first
-  -- instance (orderedInstances is (groupId, instId) sorted, so the first
-  -- match is instId-lowest). [ / ] step instances within the current
-  -- group. Both are border-only -- no grid selection until commit.
-  local function stepGroup(step)
-    local ids, seen = {}, {}
-    for _, e in ipairs(orderedInstances()) do
-      if not seen[e.groupId] then
-        seen[e.groupId] = true
-        ids[#ids + 1] = e.groupId
-      end
-    end
-    if #ids == 0 then return end
-    local cur = regionCursor and regionCursor.groupId
-    local at
-    for k, id in ipairs(ids) do if id == cur then at = k end end
-    at = at or (step > 0 and 0 or #ids + 1)
-    local g = ids[util.clamp(at + step, 1, #ids)]
-    for _, e in ipairs(orderedInstances()) do
-      if e.groupId == g then pointAt(e); return end
-    end
-  end
-
-  local function stepInstance(step)
-    if not regionCursor then return end
-    local sibs = {}
-    for _, e in ipairs(orderedInstances()) do
-      if e.groupId == regionCursor.groupId then sibs[#sibs + 1] = e end
-    end
-    if #sibs == 0 then return end
-    local at
-    for k, e in ipairs(sibs) do if e.instId == regionCursor.instId then at = k end end
-    at = at or (step > 0 and 0 or #sibs + 1)
-    pointAt(sibs[util.clamp(at + step, 1, #sibs)])
   end
 
   local function moveBy(rowDelta)
@@ -615,38 +566,45 @@ do
                             cursorCol, on)
   end
 
-  local function commit()
-    if regionCursor then
-      groupBridge.instanceSelection(regionCursor.groupId, regionCursor.instId)
+  -- DWIM: a selection seeds a new group; else arm the caret's instance; else nothing.
+  -- enterArmed is idempotent: a re-press just re-points the border at the caret.
+  function ec:regionArm()
+    if sel then
+      newFromSelection()
+      if regionCursor then enterArmed() end
+      return
     end
-    exitMode()
+    local at = groupBridge.instanceAt and groupBridge.instanceAt()
+    if not at then return end
+    regionCursor = { groupId = at.groupId, instId = at.instId }
+    enterArmed()
   end
 
-  -- Built once at instantiate; trackerPage binds keys on this same
-  -- scope later (shared registry). Without cmgr region mode errors
-  -- loudly if entered -- intentional, like the tracker scope.
+  -- Leave armed mode without touching the selection (Esc/Enter/note-key execute-through).
+  -- regionBail (Super-G) also clears the selection.
+  function ec:regionExit() exitMode() end
+
+  -- Built once at instantiate; trackerPage binds keys later. Redirect, keepAlive, and onBail
+  -- implement spring-loaded dispatch — see docs/commandManager.md § Spring-loaded scope.
   if cmgr then
     regionScope = cmgr:scope('region')
-    regionScope.modal       = true
-    regionScope.passthrough = REGION_PASSTHROUGH
+    regionScope.springLoaded = true
+    regionScope.keepAlive    = REGION_KEEPALIVE
+    regionScope.onBail       = exitMode
+    regionScope.redirect = {
+      paste         = newInstance,  groupPaste     = newInstance,
+      duplicateDown = duplicate,    groupDuplicate = duplicate,
+      delete        = dropInstance, deleteSel      = dropInstance,
+      nudgeBack     = function(p) moveBy(-p) end,
+      nudgeForward  = function(p) moveBy( p) end,
+      growNote      = function(p) resizeBy{ endDelta =  p * logPerRow() } end,
+      shrinkNote    = function(p) resizeBy{ endDelta = -p * logPerRow() } end,
+    }
     regionScope:registerAll{
-      regionBail         = exitMode,
-      regionCommit       = commit,
-      regionNew          = newFromSelection,
-      regionInstance     = newInstance,
-      regionDrop         = dropInstance,
-      regionNext         = function() stepGroup( 1) end,
-      regionPrev         = function() stepGroup(-1) end,
-      regionInstNext     = function() stepInstance( 1) end,
-      regionInstPrev     = function() stepInstance(-1) end,
-      regionNudgeForward = function() moveBy( 1) end,
-      regionNudgeBack    = function() moveBy(-1) end,
-      regionGrow         = function() resizeBy{ endDelta   =  logPerRow() } end,
-      regionShrink       = function() resizeBy{ endDelta   = -logPerRow() } end,
-      regionGrowStart    = function() resizeBy{ startDelta = -logPerRow() } end,
-      regionShrinkStart  = function() resizeBy{ startDelta =  logPerRow() } end,
-      regionPaintExtend  = function() paintCell(true)  end,
-      regionPaintShrink  = function() paintCell(false) end,
+      regionExit        = function() ec:regionExit() end,
+      regionBail        = function() exitMode(); selClear() end,
+      regionPaintExtend = function() paintCell(true)  end,
+      regionPaintShrink = function() paintCell(false) end,
     }
   end
 end

@@ -122,7 +122,7 @@ return {
 
       h.ec:setSelection{ row1 = 0, row2 = 0, col1 = ci, col2 = ci,
                          part1 = 'pitch', part2 = 'pitch' }
-      h.cmgr:invoke('groupMark')        -- seeds a group at [0,60), sets active
+      h.cmgr:invoke('copy')             -- copy seeds the group source rect [0,60)
       h.ec:setPos(10, ci, 1)            -- cursor anchor = ppq 600
       h.cmgr:invoke('groupPaste')
 

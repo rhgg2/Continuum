@@ -1306,11 +1306,10 @@ cmgr:scope('tracker'):bindAll{
   newTakeBelow           = { {ImGui.Key_Enter, ImGui.Mod_Super} },
   duplicateUnpooledBelow = { {ImGui.Key_Enter, ImGui.Mod_Super, ImGui.Mod_Shift} },
   matchGridToCursor      = { {ImGui.Key_M, ImGui.Mod_Super} },
-  groupMark              = { {ImGui.Key_M, ImGui.Mod_Ctrl} },
   groupDuplicate         = { {ImGui.Key_D, ImGui.Mod_Ctrl, ImGui.Mod_Shift} },
   groupPaste             = { {ImGui.Key_V, ImGui.Mod_Ctrl, ImGui.Mod_Shift} },
-  groupLocalToggle       = { {ImGui.Key_L, ImGui.Mod_Super} },
-  regionEnter            = { {ImGui.Key_R, ImGui.Mod_Super} },
+  groupLocalToggle       = { {ImGui.Key_Backslash, ImGui.Mod_Shift} },
+  regionArm              = { ImGui.Key_Backslash },
   groupInstPrev          = { ImGui.Key_LeftBracket },
   groupInstNext          = { ImGui.Key_RightBracket },
   inputOctaveUp          = { {ImGui.Key_8, ImGui.Mod_Shift} },
@@ -1415,8 +1414,7 @@ help:registerPage('tracker', {
     { cmd = 'deleteRowCol', label = 'Delete row' },
   }},
   { anchor = 'body.grid', place = 'flow', title = 'Groups & region', items = {
-    { cmd = 'regionEnter', label = 'Region mode' },
-    { cmd = 'groupMark', label = 'Mark group' },
+    { cmd = 'regionArm', label = 'Region mode' },
     { cmd = 'groupDuplicate', label = 'Duplicate group' },
     { cmd = 'groupPaste', label = 'Paste group' },
     { cmd = 'groupLocalToggle', label = 'Toggle local' },
@@ -1644,19 +1642,20 @@ local lastEditKey
 --contract: no-op when modal open, picker active, palette focused, or any ImGui item active
 --contract: every fresh press enters; only lastEditKey autorepeats
 --contract: scans editKeys per frame; reads ec/grid fresh (editEvent may rebuild)
+--contract: a note key typed while armed exits region mode then enters (execute-through)
 local function handleKeys(kr)
   if modalHost:isOpen() or chrome.pickerIsActive() then return end
   if ImGui.IsAnyItemActive(ctx) or paletteFocus then return end
   local ec = tv:ec()
   local commandHeld = kr.commandHeld
 
-  if ImGui.GetKeyMods(ctx) == ImGui.Mod_None
-     and not cmgr:isPrefixActive() and not ec:isInRegionMode() then
+  if ImGui.GetKeyMods(ctx) == ImGui.Mod_None and not cmgr:isPrefixActive() then
     for _, entry in ipairs(editKeys) do
       if not commandHeld[entry.key] then
         local fresh  = ImGui.IsKeyPressed(ctx, entry.key, false)
         local repeated = ImGui.IsKeyPressed(ctx, entry.key, true)
         if fresh or (repeated and entry.key == lastEditKey) then
+          if ec:isInRegionMode() then ec:regionExit() end   -- a typed note executes through
           if ec:isSticky() then ec:selClear(); break end
           if fresh then lastEditKey = entry.key end
           local row, colIdx, stop = ec:pos()
@@ -2053,27 +2052,13 @@ cmgr:doAfter({ 'quantize', 'quantizeKeepRealised' },
 
 ----- Region overlay keymap
 
--- The 'region' modal overlay + every region verb body live on ec
--- (built at tv construct). The page wires only entry on the tracker
--- scope and the overlay key map; ec owns lifecycle and dispatch.
+-- Overlay + verb bodies live on ec. Page wires only the \ entry and overlay-only keys
+-- (exit/bail/paint); move/size/stamp/delete redirect off tracker commands, no keys needed.
 cmgr:scope('region'):bindAll{
-  regionBail         = { ImGui.Key_Escape, {ImGui.Key_R, ImGui.Mod_Super} },
-  regionCommit       = { ImGui.Key_Enter, ImGui.Key_KeypadEnter },
-  regionNew          = { ImGui.Key_N },
-  regionInstance     = { ImGui.Key_I },
-  regionPaintExtend  = { ImGui.Key_Equal },
-  regionPaintShrink  = { ImGui.Key_Minus },
-  regionDrop         = { ImGui.Key_Delete },
-  regionNudgeBack    = { {ImGui.Key_UpArrow,   ImGui.Mod_Super} },
-  regionNudgeForward = { {ImGui.Key_DownArrow, ImGui.Mod_Super} },
-  regionShrink       = { {ImGui.Key_UpArrow,   ImGui.Mod_Super, ImGui.Mod_Shift} },
-  regionGrow         = { {ImGui.Key_DownArrow, ImGui.Mod_Super, ImGui.Mod_Shift} },
-  regionShrinkStart  = { {ImGui.Key_UpArrow,   ImGui.Mod_Super, ImGui.Mod_Alt} },
-  regionGrowStart    = { {ImGui.Key_DownArrow, ImGui.Mod_Super, ImGui.Mod_Alt} },
-  regionInstPrev     = { ImGui.Key_LeftBracket },
-  regionInstNext     = { ImGui.Key_RightBracket },
-  regionPrev         = { {ImGui.Key_Comma,  ImGui.Mod_Shift} },
-  regionNext         = { {ImGui.Key_Period, ImGui.Mod_Shift} },
+  regionExit        = { ImGui.Key_Escape, ImGui.Key_Enter, ImGui.Key_KeypadEnter },
+  regionBail        = { {ImGui.Key_G, ImGui.Mod_Super} },
+  regionPaintExtend = { ImGui.Key_Equal },
+  regionPaintShrink = { ImGui.Key_Minus },
 }
 
 -- Group quick-verb bodies + lifetime live on trackerView; install the

@@ -1,4 +1,4 @@
-@module editCursor  src=editCursor.lua  loc=770  sha=46b2797  mode=chunk  self=ec
+@module editCursor  src=editCursor.lua  loc=728  sha=b473ca9  mode=chunk  self=ec
 @deps grid, cm, cmgr, rowPerBar, logPerRow, moveHook, groupBridge
 
 # Invariants & contracts
@@ -42,82 +42,79 @@
   @state hBlockScope, vBlockScope = 0, 0  @ 40
   @state vBlockBars = 1  @ 41   -- bars spanned when vBlockScope == 2
   @state sel, selAnchor  @ 42
-  @state regionCursor  @ 47   -- { groupId, instId } | nil
-  @state regionScope, regionPushed  @ 48
-  @state ec = {}  @ 342
-  @state REGION_PASSTHROUGH = {  @ 491
+  @state regionCursor  @ 46   -- { groupId, instId } | nil
+  @state regionScope, regionPushed  @ 47
+  @state ec = {}  @ 335
+  @state REGION_KEEPALIVE = {  @ 484
 
 # Private functions
   -- Position
-  @fn clampPos()  @ 54-59
+  @fn clampPos()  @ 53-58
       @contract  clamps to grid extents; idempotent; stop is bound to the current col's stopPos
       @invariant  col-changes must precede stop reads (stop is clamped against the current col)
   -- Parts
-  @fn partAt(col, stop)  @ 63-66
-  @fn cursorPart()  @ 68
-  @fn firstStopForPart(col, part)  @ 71-78
+  @fn partAt(col, stop)  @ 62-65
+  @fn cursorPart()  @ 67
+  @fn firstStopForPart(col, part)  @ 70-77
       @contract  returns first stop whose partAt name matches; caret lands on part-leading char
   -- Selection
-  @fn isSticky()  @ 82
-  @fn selStart()  @ 85-89
+  @fn isSticky()  @ 81
+  @fn selStart()  @ 84-88
       @contract  pins anchor at cursor and produces a 1x1 sel; precondition for selUpdate
-  @fn selUpdate()  @ 93-132
+  @fn selUpdate()  @ 92-131
       @contract  recomputes sel from anchor + cursor + scopes; no-op if selAnchor is nil
       @invariant  vBlock=1/2 snap rows to beat/bar; hBlock=2/3 expand cols to channel/all
-  @fn selClear()  @ 135-138
+  @fn selClear()  @ 134-137
       @contract  drops sel + anchor + sticky scopes; the only sticky-clear besides unstick()
-  @fn cycleHBlock()  @ 141-153
+  @fn cycleHBlock()  @ 140-152
       @contract  seeds anchor on first engage; cycles channel→all-cols→col
-  @fn cycleVBlock()  @ 156-169
+  @fn cycleVBlock()  @ 155-168
       @contract  seeds anchor on first engage; beat→bar, each press grows by a bar; no-op on empty grid
-  @fn swapEnds()  @ 173-184
+  @fn swapEnds()  @ 172-183
       @contract  swaps anchor↔cursor on scope-unlocked axes; no-op without a selection
       @invariant  swapEnds: vBlock<1 swaps row; hBlock<2 swaps col+stop
   -- Movement
-  @fn moveRow(n, selecting)  @ 189-196
+  @fn moveRow(n, selecting)  @ 188-195
       @contract  selecting or sticky extends sel; else clears; clamps top/bottom, no wrap
-  @fn moveStop(n, selecting)  @ 200-226
+  @fn moveStop(n, selecting)  @ 199-225
       @contract  walks stops within col, crossing into the adjacent col at the boundary
       @contract  no wrap at first/last col; hBlock≥2 collapses scope to 1 and re-anchors
-  @fn moveUnit(n, toFirstStop, toLastStop)  @ 229-249
-  @fn moveCol(n)  @ 252-268
+  @fn moveUnit(n, toFirstStop, toLastStop)  @ 228-248
+  @fn moveCol(n)  @ 251-267
       @contract  jumps one col, landing on first/last stop; sticky extends/contracts 1 col
-  @fn moveChannel(n)  @ 272-298
+  @fn moveChannel(n)  @ 271-297
       @contract  jumps one channel; non-sticky lands on first note col (skipping pc/pb)
       @contract  sticky preserves the raw chan-edge land
   -- Regions (group authoring mode)
-  @fn gmgr()  @ 305
+  @fn gmgr()  @ 304
       -- All group geometry/persistence is gm's, reached through the bridge
       -- (trackerView's grid<->logical surface). ec never touches gm directly.
-  @fn orderedInstances()  @ 309-317
+  @fn orderedInstances()  @ 308-316
       -- gm:eachInstance iterates pairs(); sort to a stable (groupId, instId)
       -- order so next/prev cycle deterministically.
-  @fn cursorIndex(list)  @ 319-325
-  @fn currentEntry()  @ 327-332
-  @fn pointAt(entry)  @ 336-338
-      -- Points the region cursor; the border follows. No grid selection
-      -- until commit -- a live selection mid-mode would let edits escape.
+  @fn cursorIndex(list)  @ 318-324
+  @fn currentEntry()  @ 326-331
   -- Position
   -- Part & Region
   -- Motion
-  @fn selectSpan(scope, col, stop1, stop2)  @ 466-471
-  -- Region mode
-  @fn exitMode()  @ 500-504
-  @fn newFromSelection()  @ 527-535
-  @fn newInstance()  @ 537-548
-  @fn dropInstance()  @ 550-558
-  @fn stepGroup(step)  @ 564-581
-      -- < / > step between groups, landing on the prev/next group's first
-      -- instance (orderedInstances is (groupId, instId) sorted, so the first
-      -- match is instId-lowest). [ / ] step instances within the current
-      -- group. Both are border-only -- no grid selection until commit.
-  @fn stepInstance(step)  @ 583-594
-  @fn moveBy(rowDelta)  @ 596-605
-  @fn resizeBy(edits)  @ 607-610
-  @fn paintCell(on)  @ 612-616
-  @fn commit()  @ 618-623
+  @fn selectSpan(scope, col, stop1, stop2)  @ 459-464
+  -- Region mode (group authoring)
+  @fn exitMode()  @ 494-498
+  @fn enterArmed()  @ 500-504
+  @fn newFromSelection()  @ 506-514
+  @fn stampAt(anchor)  @ 518-524
+      -- Clear before staging (gm re-places its own concretes only); stamp a fresh
+      -- instance, advance the border. Shared by paste-at-caret and cascade-duplicate.
+  @fn newInstance()  @ 526
+  @fn duplicate()  @ 530-535
+      -- Cascade: the copy lands one group-length past the armed instance and
+      -- the border advances onto it, so repeats lay a run hands-free.
+  @fn dropInstance()  @ 537-545
+  @fn moveBy(rowDelta)  @ 547-556
+  @fn resizeBy(edits)  @ 558-561
+  @fn paintCell(on)  @ 563-567
   -- Group-instance hop (editing mode)
-  @fn hopInstance(step)  @ 661-679
+  @fn hopInstance(step)  @ 619-637
       -- [ / ] in normal editing jump the caret to the same row offset in the
       -- prev/next instance of the group it sits inside. Column is left as-is:
       -- "same place" is the relative row; chasing the stream across instances
@@ -125,63 +122,66 @@
       -- for this verb. The border feedback is the rendering layer's.
   -- Commands
   -- Decoration
-  @fn partsFor(type, showDelay, trackerMode)  @ 727-741
+  @fn partsFor(type, showDelay, trackerMode)  @ 685-699
       -- One char of separator between adjacent parts in the rendered cell.
 
 # Public API (ec:*)
-  @api ec:row()  @ 346
-  @api ec:col()  @ 347
-  @api ec:pos()  @ 348
-  @api ec:setPos(row, col, stop)  @ 351-356
+  @api ec:row()  @ 339
+  @api ec:col()  @ 340
+  @api ec:pos()  @ 341
+  @api ec:setPos(row, col, stop)  @ 344-349
       @contract  nil arg leaves that axis untouched; clamps and fires moveHook unconditionally
-  @api ec:clampPos()  @ 358
-  @api ec:rescaleRow(oldRPB, newRPB)  @ 361-363
+  @api ec:clampPos()  @ 351
+  @api ec:rescaleRow(oldRPB, newRPB)  @ 354-356
       @contract  scales cursorRow by newRPB/oldRPB so caret stays at the same musical time
-  @api ec:reset()  @ 365-369
-  @api ec:cursorPart()  @ 373
-  @api ec:hasSelection()  @ 374
-  @api ec:isSticky()  @ 375
-  @api ec:anchorRow()  @ 376
-  @api ec:region()  @ 378-384
-  @api ec:regionStart()  @ 387-390
+  @api ec:reset()  @ 358-362
+  @api ec:cursorPart()  @ 366
+  @api ec:hasSelection()  @ 367
+  @api ec:isSticky()  @ 368
+  @api ec:anchorRow()  @ 369
+  @api ec:region()  @ 371-377
+  @api ec:regionStart()  @ 380-383
       -- Pair so callers can splat: `ec:setPos(row, ec:regionStart())`.
-  @api ec:eachSelectedCol()  @ 392-411
-  @api ec:setSelection(r)  @ 414-419
+  @api ec:eachSelectedCol()  @ 385-404
+  @api ec:setSelection(r)  @ 407-412
       @contract  installs sel from part record; clears sticky; anchor at top-left part-start
-  @api ec:selectionStopSpan(col)  @ 421-437
-  @api ec:selClear()  @ 439
-  @api ec:unstick()  @ 440
-  @api ec:extendTo(row, col, stop)  @ 443-447
+  @api ec:selectionStopSpan(col)  @ 414-430
+  @api ec:selClear()  @ 432
+  @api ec:unstick()  @ 433
+  @api ec:extendTo(row, col, stop)  @ 436-440
       -- Mouse shift-click and drag both speak this verb.
-  @api ec:shiftSelection(rowDelta)  @ 451-458
+  @api ec:shiftSelection(rowDelta)  @ 444-451
       @contract  shifts sel rows + anchor + cursor by rowDelta; each axis clamped independently
       @invariant  shiftSelection: sel may compress against an edge while cursor doesn't
-  @api ec:advance()  @ 463
+  @api ec:advance()  @ 456
       @contract  advances by cm.advanceBy rows; the per-keystroke auto-step after a write
-  @api ec:selectChannel(chan)  @ 473-476
-  @api ec:selectColumn(col)  @ 478-481
-  @api ec:isInRegionMode()  @ 486
-  @api ec:regionCursor()  @ 487
-  @api ec:enterRegionMode()  @ 507-525
-      @contract  idempotent; seeds nav cursor from caret instance, else active group's first
-  @api ec:registerCommands(scope)  @ 683-710
-  @api ec:decorateCol(col, pitchWidth)  @ 745-767
+  @api ec:selectChannel(chan)  @ 466-469
+  @api ec:selectColumn(col)  @ 471-474
+  @api ec:isInRegionMode()  @ 479
+  @api ec:regionCursor()  @ 480
+  @api ec:regionArm()  @ 571-581
+      -- DWIM: a selection seeds a new group; else arm the caret's instance; else nothing.
+      -- enterArmed is idempotent: a re-press just re-points the border at the caret.
+  @api ec:regionExit()  @ 585
+      -- Leave armed mode without touching the selection (Esc/Enter/note-key execute-through).
+      -- regionBail (Super-G) also clears the selection.
+  @api ec:registerCommands(scope)  @ 641-668
+  @api ec:decorateCol(col, pitchWidth)  @ 703-725
       @contract  derives col part fields from type/showDelay/trackerMode; pitch width = pitchWidth
       @invariant  ec is the sole writer of col.{parts, stopPos, partAt, partStart, width}
 
 # Uses (outbound edges)
-  @use call    cm.get  @ selUpdate:100 advance:463
-  @use call    cmgr.pop  @ exitMode:501
-  @use call    cmgr.push  @ enterRegionMode:509
-  @use call    cmgr.scope  @ 629
-  @use call    groupBridge.clearAt  @ newInstance:544
-  @use call    groupBridge.commit  @ newFromSelection:534 newInstance:547
-  @use call    groupBridge.cursorAnchor  @ newInstance:539
-  @use call    groupBridge.eventsInRect  @ newFromSelection:530
-  @use call    groupBridge.instanceAt  @ enterRegionMode:511 hopInstance:663
-  @use call    groupBridge.instanceSelection  @ commit:620
-  @use call    groupBridge.paintStream  @ paintCell:614
-  @use call    groupBridge.selectionAsRect  @ newFromSelection:528
-  @use call    util.add  @ partsFor:730,731,732 decorateCol:757,758,759
-  @use call    util.clamp  @ clampPos:56,57,58 shiftSelection:453,454,455 stepGroup:577 stepInstance:593
+  @use call    cm.get  @ selUpdate:99 advance:456
+  @use call    cmgr.pop  @ exitMode:495
+  @use call    cmgr.push  @ enterArmed:502
+  @use call    cmgr.scope  @ 590
+  @use call    groupBridge.clearAt  @ stampAt:520
+  @use call    groupBridge.commit  @ newFromSelection:513 stampAt:523
+  @use call    groupBridge.cursorAnchor  @ newInstance:526
+  @use call    groupBridge.eventsInRect  @ newFromSelection:509
+  @use call    groupBridge.instanceAt  @ regionArm:577 hopInstance:621
+  @use call    groupBridge.paintStream  @ paintCell:565
+  @use call    groupBridge.selectionAsRect  @ newFromSelection:507
+  @use call    util.add  @ partsFor:688,689,690 decorateCol:715,716,717
+  @use call    util.clamp  @ clampPos:55,56,57 shiftSelection:446,447,448
   @use require util  @ 25

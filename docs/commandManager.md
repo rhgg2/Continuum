@@ -93,6 +93,29 @@ distinct verbs, one shared key. No name collision; no wrapper hack.
 mutators. `pop` asserts the popped scope is on top, so an
 out-of-order pop is loud rather than silent.
 
+## Spring-loaded scope
+
+A scope may set `springLoaded = true` to act as a transient overlay
+that auto-dismisses. It is non-modal, so the keychain still reaches
+the scopes below; what it adds is `invoke`-time interception while it
+is on top of the stack:
+
+- `redirect = { [name] = fn }` — invoking `name` runs `fn` instead of
+  the command and the overlay *stays*. This reinterprets a familiar
+  verb onto the overlay's subject (region mode redirects `paste`,
+  `nudgeForward`, `growNote`, … onto the armed group instance).
+- `keepAlive = { [name] = true }` — invoking `name` runs normally and
+  the overlay *stays*. Navigation lives here.
+- anything else — `onBail()` fires first (it pops the scope and clears
+  the owner's state), then the command dispatches normally
+  (execute-through).
+
+Commands the scope *owns* (registered on it) never trigger `onBail`;
+its own bail verb pops explicitly. The interception lives in `invoke`,
+so it governs mouse and programmatic invokes too, not just keys.
+
+region mode (the `\` verb) is the only spring-loaded scope today.
+
 ## Dispatch & result protocol
 
 The dispatcher iterates `cmgr:keychain()` — one filtered keymap per
