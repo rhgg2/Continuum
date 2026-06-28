@@ -89,7 +89,7 @@ tm-specific facts:
   note for delay inheritance is the lane-1 note at the absorber's seat
   (`pb.ppq`), recovered geometrically — the host carries no marker.
 - **No per-mutation upkeep.** There is no `markFake`/`reconcileBoundary`
-  machinery: absorbers are not maintained on each edit. Rebuild step 4.9
+  machinery: absorbers are not maintained on each edit. The absorber pass
   reseats the whole absorber set against the final post-walk lane-1
   layout, so a detune edit just writes `n.detune` and lets the next
   rebuild reconcile.
@@ -110,14 +110,14 @@ mechanism did:
   logical stream are preserved; only the realised ppq of host and
   absorber move together. Delay edits route through
   `realiseNoteUpdate` → `resizeNote` (which moves the host's raw
-  onset); rebuild step 4.9 then reseats the absorber to the new seat.
+  onset); the absorber pass then reseats the absorber to the new seat.
 - **I8 — Round-trip stability.** flush → rebuild → flush produces
   an identical pb dump. `derived='absorber'` survives via pb-sidecar
-  metadata; an absorber's seat is the host's lane-1 onset, so step 5
-  projects host and absorber onto the same logical row together.
+  metadata; an absorber's seat is the host's lane-1 onset, so the logical
+  projection lands host and absorber onto the same logical row together.
 
 Only lane-1 notes drive detune realisation (I3), enforced in rebuild's
-absorber pass (step 4.9): it reads only lane-1 onsets, so higher-lane
+absorber pass: it reads only lane-1 onsets, so higher-lane
 detune never reaches the pb stream. Mutation entry points (`addNote`,
 `assignNote`, `resizeNote`, `deleteNote`) write detune as plain
 metadata; the next rebuild does the realisation.
@@ -132,14 +132,14 @@ offset on the raw note-on, not a frame of its own. tm's role:
   sorted by logical ppq; `endppq` leaves as the authored logical
   ceiling (`endppqL`, or `util.OPEN`).
 - **um and rebuild work in realisation** — REAPER's storage frame.
-  Rebuild step 5 (`projectToLogical`) is the sole shift to logical at
+  Rebuild's logical-projection step (`projectToLogical`) is the sole shift to logical at
   rebuild's tail; `tm:addEvent` / `tm:assignEvent` translate logical to
   raw (adding delay back) on writes to mm.
 
 A delay change with no ppq update pins the logical onset and shifts the
 realised onset by the delta (`realiseNoteUpdate`).
 
-An absorber's seat is its host's lane-1 onset, so step 5 projects host
+An absorber's seat is its host's lane-1 onset, so logical projection lands host
 and absorber onto the same logical row. Without this a delayed note and
 its absorber would desynchronise at the tv boundary.
 
@@ -180,8 +180,8 @@ Semantics:
 - **Single voice per (chan, pitch) — realised space.** MIDI permits
   one voice per `(chan, pitch)`, so a realised collision must shorten
   or drop a note regardless of intent geometry. tv writes authored
-  logical verbatim; `tm:rebuild` step 4.8 (universal tail walk,
-  grouped by pitch within channel) is the sole gate — it clamps each
+  logical verbatim; `tm:rebuild`'s universal tail walk (grouped by
+  pitch within channel) is the sole gate — it clamps each
   note's realised onset against the next same-pitch onset and
   surfaces the divergence as `endppq ≠ endppqC` in the projection.
   The clamp lives entirely on the realisation side: `endppqL` retains
@@ -191,7 +191,7 @@ Semantics:
   plan-then-mutate path is the sole such caller; the flag is consumed
   in realise so it never reaches mm.
 - **Detune changes (lane-1 notes).** `assignEvent` writes the new
-  detune as plain metadata; rebuild step 4.9 reseats absorbers and
+  detune as plain metadata; rebuild's absorber pass reseats absorbers and
   recomputes the raw pb stream from the final post-walk layout.
 - **PA follows host.** Resizing or moving a note shifts attached PAs
   with it when the shift preserves the window; otherwise PAs outside
@@ -202,7 +202,7 @@ Semantics:
   against `P2` would drop every PA past the onset.
 - **Pb edits don't maintain absorbers.** Adding or deleting a real pb
   stages only that pb; the absorber set is reconciled wholesale by
-  rebuild step 4.9, never adjusted per-edit.
+  rebuild's absorber pass, never adjusted per-edit.
 - **Flush re-entrancy.** `flush` snapshots and clears `adds/assigns/
   deletes` **before** calling `mm:modify`, because mm's callbacks can
   reach back into the same um (e.g. via `setMutedChannels`). Without
@@ -227,64 +227,66 @@ retaining tv's last rendered frame. This is the same liveTake guard every
 other mm consumer applies; without it a foreign-track `configChanged` fired
 during arrange's take-delete sequence would crash on a nil resolution.
 
-The step numbers are historical labels — steps were inserted between
-existing ones over time, so numeric order is not execution order.
-Execution order, with a pointer to each step's detail:
+The pipeline runs in this order; each step is named for the helper that
+runs it, with a pointer to its detail where one exists.
 
-0. **Partition into internal / external.** Split mm notes into stamped-
-   and-consistent *internals* and foreign-or-diverged *externals*, parse
-   derived fxNotes out, and set up carrier routing from the prior
-   rebuild. → § Rebuild: step 0.
-2. **Allocate internal lanes.** Each stamped internal clones into its
-   authored lane via `pickStampedLane`, which pushes columns until that
-   lane exists and returns it verbatim (the tail walk clips its note-off,
-   so it can never overlap). Externals are placed up front, after 4.7.
-3. **Single CC walk.** Reconcile each non-derived CC's `(raw, ppqL)` under
-   the current swing, then project `cc`/`at`/`pc` into columns. pb column
-   projection is deferred to 4.9, pa dispatch to 6.5. → § Rebuild: step 3.
-4. **Reconcile extras.** Grow `extraColumns[chan].notes` if live
-   allocation exceeded it; pad empty note lanes; materialise user-opened
-   singleton/cc columns that carry no events. Writes back via `ds:assign`
-   if the high-water mark grew.
-4.7. **Reseat stale-swing notes.** For channels in `staleSwing`, rederive
-   each note's `raw` from its `ppqL` under the new swing (see
-   `docs/timing.md` §"Rebuild rule"). CCs are reseated by step 3; the raw
-   note-off is owned by step 4.8, never here.
-6. **Reintroduce externals (up front).** In raw-ppq order, pack each
-   external a lane against the placed internals, stamp `ppqL`/`endppqL`
-   from raw, and backfill missing metadata. Tagged `evt.fixed` so the
-   walk freezes its onset but clips its tail like any note. Placed here —
-   after 4.7, before the window pass — so externals bound fx windows and
-   walk alongside everything else. → § Rebuild: step 6.
-   **Windows (read-only).** Walk each channel's same-lane successor map in
-   the logical frame; each fx host's window is its voice extent (the next
-   same-lane onset's `ppqL`, floored by the authored end). Feeds 4.6 and
-   the slide `next` lookup.
-4.6. **Macro expansion (in memory).** Every note (any lane) carrying `fx`
-   runs its generator over its window; the derived fxNotes reconcile
-   against the step-0 set (`reconcileFx`), and continuous deltas colour
-   into carrier CC codes. The note add/del is **deferred** to the 4.8
-   atomic commit; `fxLive` (the predicted set) feeds the tail walk and PC
-   synthesis. See `design/archive/note-macros.md`.
-4.8. **Unified tail/onset walk + atomic note commit.** Real notes, fixed
-   externals, and the predicted fxNotes walk together: clamp same-pitch
-   onset collisions (fixed onsets frozen), then clip each realised
-   note-off against its same-lane and same-pitch successors. The clips
-   commit WITH the fxNote del/add in one `mm:modify`, so each host's clip
-   to its first fxNote lands with the inserts. → § Rebuild: step 4.8.
-4.9. **Absorber reconciliation + pb resynthesis.** Reseat absorber pbs
-   against the post-walk lane-1 layout, recompute their raw
-   vals, and project the pb column. See `docs/tuning.md` § Absorber
-   reconciliation.
-6.5. **PA dispatch.** Attach each `pa` to the note column whose voice it
-   modulates. Runs after step 6 so foreign-MIDI PAs can find their host.
-4.5. **PC synthesis (trackerMode only).** Re-derive each channel's PC
-   stream from current note state. Runs here, after externals, so a
-   foreign-MIDI note inherits its sample from the prevailing PC.
-   → § PC synthesis under trackerMode.
-5. **Project to logical.** Shift every column event onto the logical frame
-   (`evt.ppq = evt.ppqL`), derive the `delayC`/`endppqC` render cues, and
-   sort each column by logical ppq. → § Rebuild: step 5.
+- **Partition & internal lanes** (`rebuildInternals`). Split mm notes
+  into stamped-and-consistent *internals*, foreign-or-diverged
+  *externals*, and derived fxNotes. Each internal clones into its
+  authored lane via `pickStampedLane` (the tail walk clips its note-off,
+  so it can never overlap); stale-swing internals rederive `raw` from
+  `ppqL` under the new swing here (see `docs/timing.md` §"Rebuild rule").
+  Externals are deferred to their own step. → § Rebuild: partition.
+- **CC walk** (`rebuildCCs`). Arm prior carriers and route them out of
+  columns, reconcile each non-derived CC's `(raw, ppqL)` under the
+  current swing (stale-swing CCs reseated here), then project
+  `cc`/`at`/`pc` into columns. pb projection defers to the absorber pass,
+  pa dispatch to its own step. → § Rebuild: CC walk.
+- **Reconcile extras** (`rebuildExtraColumns`). Grow
+  `extraColumns[chan].notes` if live allocation exceeded it; pad empty
+  note lanes; materialise user-opened singleton/cc columns that carry no
+  events. Writes back via `ds:assign` if the high-water mark grew.
+- **Reintroduce externals** (`rebuildExternals`). In raw-ppq order, pack
+  each external a lane against the placed internals, stamp
+  `ppqL`/`endppqL` from raw, and backfill missing metadata. Tagged
+  `evt.fixed` so the tail walk freezes its onset but clips its tail like
+  any note. Placed up front — before fx expansion — so externals bound fx
+  windows and walk alongside everything else. → § Rebuild: externals.
+- **Region-replace parking** (`rebuildRegionPark`). Authored notes and
+  ccs a replace-region covers leave the take; the prior parked set splits
+  into still-covered carry-forward and restores that re-enter their
+  columns token-less. The note del/adds ride the tail walk's atomic
+  commit. See `design/note-macros-v2.md` § Generator output.
+- **PA dispatch** (`rebuildPA`). Attach each `pa` to the note column
+  whose voice it modulates. Runs after column layout so the view and fx
+  expansion read PAs inline, and after externals so foreign-MIDI PAs find
+  their host.
+- **Fx expansion** (`rebuildFx`). First the read-only **window** pass:
+  walk each channel's same-lane successor map in the logical frame, so
+  each fx host's window is its voice extent (the next same-lane onset's
+  `ppqL`, floored by the authored end). Then every note carrying `fx`
+  runs its generator over its window; the derived fxNotes reconcile
+  against the partition's set (`reconcileFx`), and continuous deltas
+  colour into carrier CC codes. The note add/del is **deferred** to the
+  tail walk's atomic commit; `fxLive` (the predicted set) feeds the tail
+  walk and PC synthesis. See `design/archive/note-macros.md`.
+- **Tail walk** (`rebuildTails`). Real notes, fixed externals, and the
+  predicted fxNotes walk together: clamp same-pitch onset collisions
+  (fixed onsets frozen), then clip each realised note-off against its
+  same-lane and same-pitch successors. The clips commit WITH the fxNote
+  del/add in one `mm:modify`, so each host's clip to its first fxNote
+  lands with the inserts. → § Rebuild: tail walk.
+- **Absorber reconciliation** (`rebuildPbs`). Reseat absorber pbs against
+  the post-walk lane-1 layout, recompute their raw vals, and project the
+  pb column. See `docs/tuning.md` § Absorber reconciliation.
+- **PC synthesis** (`rebuildPCs`, trackerMode only). Re-derive each
+  channel's PC stream from current note state. Runs after externals so a
+  foreign-MIDI note inherits its sample from the prevailing PC.
+  → § PC synthesis under trackerMode.
+- **Project to logical** (`projectLogical`). Shift every column event
+  onto the logical frame (`evt.ppq = evt.ppqL`), derive the
+  `delayC`/`endppqC` render cues, and sort each column by logical ppq.
+  → § Rebuild: logical projection.
 
 All projection runs through `projectCC(cc, token, overlay)`: it clones the
 source event, strips only `chan` and `cc`, and applies the caller's
@@ -297,7 +299,7 @@ buffers, and tm fires the `'rebuild'` signal carrying the `takeChanged`
 boolean — true only when this rebuild followed a `bindTake` (a take-tier
 reload).
 
-The universal tail pass (step 4.8) resolves each note's realised
+The universal tail pass resolves each note's realised
 note-off against its same-lane and same-pitch successors. The "strict
 next" — first group member with a strictly greater ppq, chord-mates at
 equal ppq skipped — is precomputed once per ppq-sorted group in a
@@ -469,14 +471,14 @@ marker, user metadata). Since `oldPpq` sits on a swing-period boundary
 logical and realised frames — one delta serves both `ppq` and `ppqL`
 paths.
 
-## Rebuild: step 0 — internal/external partition
+## Rebuild: partition
 
 Internal events are stamped (`ppqL ~= nil`) AND have raw ppq consistent
 with `fromLogical(ppqL, delay)`. The main rebuild flows them branchlessly.
 External events are foreign-MIDI (no `ppqL`) or externally-edited stamped
 records (Ctrl-Z, foreign script made raw diverge from `fromLogical`).
-They re-enter at step 6: notes get a fresh lane pack and
-`ppqL`/`endppqL` stamp; CCs get `ppqL` stamped in-line in step 3.
+They re-enter at the externals step: notes get a fresh lane pack and
+`ppqL`/`endppqL` stamp; CCs get `ppqL` stamped in-line in the CC walk.
 
 **Exception for `realiseNoteUpdate`'s floor:** when authored delay pushes
 the realised onset negative, raw is clamped to 0 while `ppqL`/`delay`
@@ -484,7 +486,7 @@ retain the intent. This divergence is intentional and surfaces as
 `delayC` (tp paints `*`). Recognise the clamp shape
 (`raw == 0 AND fromLogical(ppqL, delay) < 0`) and stay internal.
 
-## Rebuild: step 3 — CC walk
+## Rebuild: CC walk
 
 Reconciles each non-derived CC's `(raw, ppqL)` under the current swing, then
 projects non-pb CCs into columns:
@@ -497,25 +499,25 @@ Reconcile updates are mutated into the live cc record so the subsequent
 column-event clone sees up-to-date values; `mm:assign` propagates them at
 the end of the walk.
 
-Derived events are handled separately: absorber pbs by step 4.9 (whole
-absorber pass against post-walk lane-1 layout); synthesised PCs by
-step 4.5. Pb column projection is deferred to step 4.9 so it sees the
+Derived events are handled separately: absorber pbs by the absorber pass
+(against the post-walk lane-1 layout); synthesised PCs by PC synthesis.
+Pb column projection is deferred to the absorber pass so it sees the
 final reconciled absorbers and recomputed raw vals.
 
-## Rebuild: step 6 — externals
+## Rebuild: externals
 
-Reintroduced up front (after 4.7's swing reseat, before the window pass),
+Reintroduced up front (after the stale-swing reseat, before the window pass),
 so externals bound fx windows and walk alongside everything else. Per
 external in raw-ppq order: pack a lane against the placed internals plus
 any earlier externals (`noteColumnAccepts` sees raw tails; the walk clips
 later); stamp `ppqL`/`endppqL` from raw; backfill missing metadata
 (foreign-MIDI lacks all; stale-stamped notes arrive with authored
 detune/delay intact). Column event inserted in lockstep so each subsequent
-external's pack sees prior ones. Tagged `evt.fixed = true`: step 4.8
+external's pack sees prior ones. Tagged `evt.fixed = true`: the tail walk
 freezes its onset (the same-pitch clamp skips it) but clips its tail like
 any other note, and it blocks neighbours' tails as a 'next' lookup.
 
-## Rebuild: step 4.8 — tail walk
+## Rebuild: tail walk
 
 Tail target for each internal note:
 
@@ -537,7 +539,7 @@ tie-break): the successor is clamped to `prev.ppq + 1`. Authored swap
 survives: when raw order differs from logical order, whoever lands first
 in raw becomes the realised predecessor.
 
-Fixed records (externals, tagged `evt.fixed` by step 6) keep their frozen
+Fixed records (externals, tagged `evt.fixed` by the externals step) keep their frozen
 onset — the same-pitch clamp skips them — but their tails clip like any
 other note, and their onsets appear as 'next' lookups so neighbours clip
 against them. The predicted fxNotes (`fxLive`) walk here too; a record
@@ -545,7 +547,7 @@ with no token (a new fxNote) carries its clipped geometry into its
 `mm:add` rather than a tail assign, and the clips commit with the fxNote
 del/add in one modify.
 
-## Rebuild: step 5 — project to logical
+## Rebuild: logical projection
 
 tv surface is logical-only: both onset and tail leave here in the
 authoring frame; raw stays private to tm/mm. `evt.ppq` and `evt.endppq`

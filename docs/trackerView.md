@@ -44,7 +44,7 @@ sits at the old grid's swung position and no longer matches
 
 `evt.ppqL` is not consulted by rebuild's row placement — it exists
 as the canonical authoring stamp that survives swing changes (tm's
-rebuild step 4.7 rederives raw from ppqL when a channel is marked
+rebuild's stale-swing reseat rederives raw from ppqL when a channel is marked
 stale) and for editing operations that need the unswung row position.
 
 ## Ghost sampling
@@ -169,7 +169,7 @@ sends `evt.ppq` / `evt.endppq` as logical positions; `tm:addEvent` /
 `tm:assignEvent` stamp `ppqL` / `endppqL` and derive raw via
 `fromLogical` under the channel's current swing. There is no
 per-event frame — the channel's swing is read from cm at realisation,
-and `tm:rebuild` step 4.7 reseats raw from ppqL when cm broadcasts a
+and `tm:rebuild`'s stale-swing reseat updates raw from ppqL when cm broadcasts a
 swing change (see `docs/timing.md`).
 
 **View-layer rpb override.** `matchGridToCursor` (Ctrl-G) writes
@@ -233,7 +233,7 @@ evt-kind)`:
   creation on a sustain row when `polyAftertouch` is on.
 - **note**, stops 5–7: decimal signed delay (±999), unbounded at the
   vm layer. tm clamps raw at realisation — onset floors at 0 and
-  same-pitch collisions resolve via rebuild step 4.8's universal tail
+  same-pitch collisions resolve via rebuild's universal tail
   walk; divergence between authored delay and realised onset surfaces
   as `delay ≠ delayC`, which trackerPage paints as a `*` next to the
   delay digits.
@@ -314,7 +314,7 @@ confirm UX choice lives in rm, which dispatches to one or the other.
 
 Reswing is not a vm verb. Swing changes broadcast as `configChanged`;
 tm's subscriber marks affected channels via `tm:markSwingStale` and
-`tm:rebuild` step 4.7 reseats raw from each event's ppqL under the
+`tm:rebuild`'s stale-swing reseat rederives raw from each event's ppqL under the
 new swing. Cross-take propagation is `seqMgr:reswingAll`, which binds
 each affected take through `tm:bindTake(opts.markSwingStale=true)`.
 

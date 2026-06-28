@@ -129,7 +129,7 @@ return {
       -- so mm stores both the note and its absorber at ppq=120. The
       -- column event projects to the logical frame: host surfaces at
       -- ppqL=0 and the absorber follows, stamped with host's ppqL by
-      -- step 4.8.
+      -- the tail walk.
       local rawFor50 = 2048
       local h = harness.mk{
         seed = {

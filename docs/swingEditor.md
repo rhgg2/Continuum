@@ -21,8 +21,8 @@ Every primitive (patch, add, remove, move, slider drag, atom swap,
 period change, Reset) routes through `swingWrite`. `swingWrite`
 short-circuits on equality and then fires `tv:setSwingComposite`;
 cm's resulting `configChanged` broadcast drives `tm:markSwingStale`
-on the affected channels, and the next `tm:rebuild`'s step 4.7
-reseats raw from each event's ppqL under the new composite. Because
+on the affected channels, and the next `tm:rebuild`'s stale-swing reseat
+rederives raw from each event's ppqL under the new composite. Because
 `swingWrite` reads the stored composite as the "old" side of the
 delta, per-frame slider-drag calls chain into a correct sequence of
 old→new transformations as the slider moves.

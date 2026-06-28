@@ -816,7 +816,7 @@ return {
           notes = {
             { ppq = 240, endppq = 360, ppqL = 240, endppqL = 360,
               chan = 1, pitch = 60, vel = 100, detune = 30, delay = 0, lane = 1 },
-            -- Same-pitch as A so step 4.8 clamps the realised collision.
+            -- Same-pitch as A so the tail walk clamps the realised collision.
             { ppq = 240, endppq = 600, ppqL = 480, endppqL = 600,
               chan = 1, pitch = 60, vel = 100, detune = -30, delay = -999, lane = 1 },
           },
@@ -875,7 +875,7 @@ return {
   },
 
   -- Foreign-MIDI pb regression: a pb loaded with no cents sidecar
-  -- (just raw wire bytes) gets cents back-derived at step 4.9, then
+  -- (just raw wire bytes) gets cents back-derived in the absorber pass, then
   -- behaves like any other pb under subsequent detune edits — its
   -- authored logical value is preserved as raw retunes around it.
   {

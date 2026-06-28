@@ -298,9 +298,9 @@ Mirrors the swing model in `docs/timing.md`:
 
 ## Absorber reconciliation
 
-Step 4.9 of `trackerManager` runs after step 4.8 finalises lane-1 raw
-ppqs (same-pitch onset clamps, delay/clamp combinations that reorder
-hosts) and after step 6 places externals. From the final realised
+The absorber pass of `trackerManager` runs after the tail walk finalises
+lane-1 raw ppqs (same-pitch onset clamps, delay/clamp combinations that
+reorder hosts) and after externals are placed. From the final realised
 lane-1 sequence it:
 
 - Back-derives cents for any pb missing it (foreign-MIDI / first load):

@@ -1,6 +1,6 @@
 -- Authored delay is intent: vm writes it through unbounded (modulo the
 -- ±999 digit-entry cap). tm clamps raw at realisation -- raw ≥ 0 in
--- realiseNoteUpdate, same-pitch onset floor in step 4.8 -- and exposes
+-- realiseNoteUpdate, same-pitch onset floor in the tail walk -- and exposes
 -- the realised-frame equivalent as evt.delayC. tp surfaces the
 -- divergence (delay ~= delayC) via a small * next to the delay digits.
 
@@ -36,7 +36,7 @@ return {
   },
 
   -- delay past the note's authored end is allowed: intent is preserved,
-  -- step 4.8's tail walk gives the realised note its 1-tick minimum.
+  -- the tail walk gives the realised note its 1-tick minimum.
   -- (Previously delayRange clamped here; now the divergence shows up
   -- via the tp marker rather than a vm-side refusal.)
   {
@@ -60,7 +60,7 @@ return {
       local n = h.fm:dump().notes[1]
       t.eq(n.delay, 900, 'authored delay preserved')
       t.eq(n.ppq, 216, 'realised onset moves past authored end')
-      t.eq(n.endppq, 217, 'step 4.8 tail walk pinches endppq up to onset+1')
+      t.eq(n.endppq, 217, 'tail walk pinches endppq up to onset+1')
     end,
   },
 
@@ -268,9 +268,9 @@ return {
   },
 
   -- Same-pitch raw collision: A's positive delay puts A.raw past B.intent
-  -- onset. step 4.8 clamps B to A.ppq+1; B's delayC reports the drift.
+  -- onset. the tail walk clamps B to A.ppq+1; B's delayC reports the drift.
   {
-    name = 'same-pitch raw collision: step 4.8 clamps B; delayC reflects it',
+    name = 'same-pitch raw collision: tail walk clamps B; delayC reflects it',
     run = function(harness)
       -- A at ppqL=0 endppqL=120 with delay=+500 (delayPPQ=120 → A.raw=120).
       -- B at ppqL=120 endppqL=240 same pitch, delay=0 → B.raw=120. Intent

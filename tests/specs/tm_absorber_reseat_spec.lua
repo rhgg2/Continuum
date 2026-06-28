@@ -42,7 +42,7 @@ return {
       }
       local fk = fakeIn(h.fm:dump())
       t.eq(fk.ppq, 120, 'mm absorber stays at host raw')
-      t.eq(fk.ppqL, 0,  'mm absorber stamped with host ppqL by step 4.8')
+      t.eq(fk.ppqL, 0,  'mm absorber stamped with host ppqL by the tail walk')
 
       local ch = h.tm:getChannel(1)
       local fakeDisp

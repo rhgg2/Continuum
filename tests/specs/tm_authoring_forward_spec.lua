@@ -157,7 +157,7 @@ return {
   -- Dual to realiseNoteUpdate's raw-onset floor (ppq < 0 → 0): authored
   -- endppq that maps past take-end clips raw at takeLen the moment the
   -- update lands in mm. endppqL retains the authored intent; the
-  -- divergence surfaces in step 5's projection as endppq ~= endppqC.
+  -- divergence surfaces in the logical projection as endppq ~= endppqC.
   -- (Step 4.8 and flush also clamp, this just keeps the staged raw
   -- bounded immediately rather than waiting for the next rebuild.)
   {

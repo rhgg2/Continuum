@@ -345,7 +345,7 @@ strip round-trips are algebraic rather than approximate.
 
 Absorbers (`fake=true` pbs at lane-1 detune-jump seats) carry no
 `delay` field of their own. They sit at the host note's raw —
-`reconcileBoundary` sets them on edit paths; rebuild step 4.8
+`reconcileBoundary` sets them on edit paths; rebuild's absorber pass
 reseats them when the host moved. See `docs/tuning.md` §"The
 fake-pb absorber".
 

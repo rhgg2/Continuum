@@ -109,7 +109,7 @@ return {
     end,
   },
 
-  -- Regression for a stale-loc bug: rebuild step 4.5 captures the
+  -- Regression for a stale-loc bug: rebuild's PC synthesis captures the
   -- mm:addCC return value, which is the pre-sort index inside mm:modify;
   -- post-modify, mm reindexes by (ppq, chan, ...). With PCs spanning
   -- chans whose insertion order differs from sort order, captured locs
@@ -154,7 +154,7 @@ return {
 
   ----- External notes do NOT inherit sample from the prevailing PC
 
-  -- Foreign MIDI (no ppqL/lane stamp) gets sample=0 at step 6, not the
+  -- Foreign MIDI (no ppqL/lane stamp) gets sample=0 at the externals step, not the
   -- prevailing-PC value. External MIDI doesn't carry tracker semantics,
   -- so an arbitrary PC predating the note isn't a meaningful sample
   -- assignment for it. Regression guard against re-adding PC-lookup

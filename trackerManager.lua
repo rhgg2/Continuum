@@ -105,7 +105,7 @@ end
 
 
 ----- derived-event reconcile skeleton (R2)
--- Index existing by `key`, keep-on-match, add the rest, remove unkept. The absorber pass (4.9) is a richer fungible-move variant, inline.
+-- Index existing by `key`, keep-on-match, add the rest, remove unkept. The absorber pass is a richer fungible-move variant, inline.
 --contract: appends unmatched-existing to sink.del(event), new/made specs to sink.add(spec)
 local function reconcileDerived(a)
   local index, kept = {}, {}
@@ -214,7 +214,7 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
   ----- Accessors
 
   -- Prevailing lane-1 detune at-or-before ppq; flush derives wire-raw = cents + detuneAt(seat).
-  -- Full absorber reconciliation is rebuild step 4.9; um just stages the best-effort value.
+  -- Full absorber reconciliation is rebuild's absorber pass; um just stages the best-effort value.
   local function detuneAt(chan, P)
     local n = util.seek(chans[chan].notes, 'at-or-before', P)
     return (n and n.detune) or 0
@@ -317,7 +317,7 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
   ----- High-level ops
 
   -- um is a stager: pb authoring writes cents; wire raw is derived at flush (cents + detuneAt seat).
-  -- Absorber seating/reseating happens in rebuild step 4.9 from the final note layout.
+  -- Absorber seating/reseating happens in rebuild's absorber pass from the final note layout.
 
   local function dirtyPc(chan) dirtyPcChans[chan] = true end
 
@@ -502,7 +502,7 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
   --contract: evt.rawTime=true bypasses translation (mirrors assignEvent; rescale-only caller)
   --invariant: rawTime consumed here so it never persists on the record or reaches mm
   --contract: pb authoring frame is logical cents; val stored as cents on the event
-  --contract: um only stages; rebuild step 4.9 reconciles seats and recomputes raw vals at flush
+  --contract: um only stages; rebuild's absorber pass reconciles seats and recomputes raw vals at flush
   function addEvent(evt)
     local rawCaller = evt.rawTime
     evt.rawTime = nil
@@ -599,7 +599,7 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     adds, assigns, deletes = {}, {}, {}
 
     -- pb wire conversion at flush: raw = centsToRaw(cents + detuneAt(seat)).
-    -- Rebuild step 4.9 refines with the post-walk layout; this is best-effort for the interim.
+    -- Rebuild's absorber pass refines with the post-walk layout; this is best-effort for the interim.
     for _, e in ipairs(flushAssigns) do
       if e.evt.evType == 'pb' and e.update.cents ~= nil then
         e.update.val = centsToRaw(e.update.cents + detuneAt(e.evt.chan, e.evt.ppq))
@@ -650,7 +650,7 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
       local evt
       if e.evType == 'pb' then
         -- val is raw 14-bit converted to cents (um's frame). cents sidecar is authored logical value;
-        -- nil for foreign-MIDI/pre-cents pbs — back-derived in rebuild step 4.9 from lane-1 layout.
+        -- nil for foreign-MIDI/pre-cents pbs — back-derived in rebuild's absorber pass from lane-1 layout.
         evt = util.pick(e, 'ppq ppqL chan shape tension derived frame cents',
                         { val = rawToCents(e.val), token = tok, evType = 'pb' })
         util.add(chans[evt.chan].pbs, evt)
@@ -950,7 +950,7 @@ local function noteColumnAccepts(col, note)
 end
 
 --contract: stamped notes (ppqL ~= nil) take their authored lane verbatim
---invariant: step 4.8 raw walk clips tails so they can't overlap; lane extends if missing
+--invariant: the tail walk clips tails so they can't overlap; lane extends if missing
 local function pickStampedLane(channel, note)
   local notes = channel.columns.notes
   while #notes < note.lane do pushNoteCol(channel) end
@@ -958,7 +958,7 @@ local function pickStampedLane(channel, note)
 end
 
 --contract: pick a lane for an external (unstamped) note via accept → sibling → push bump
---invariant: called up front after internals are placed + swing-reseated; 4.8 clips tails after
+--invariant: called up front after internals are placed + swing-reseated; the tail walk clips tails after
 local function packExternalLane(channel, note)
   local notes = channel.columns.notes
   if note.lane then
@@ -1139,7 +1139,7 @@ local function rebuildPbs(noteLive, replacePb)
     table.sort(pbs, function(a, b) return a.ppq < b.ppq end)
 
     -- Needed seats: every lane-1 onset where detune ≠ predecessor. hostPpqL captures
-    -- lane-1 ppqL so a fake placed there carries the host's logical position (step 5, tv).
+    -- lane-1 ppqL so a fake placed there carries the host's logical position (logical projection, tv).
     local needed, hostPpqL = {}, {}
     local prev = 0
     for _, n in ipairs(lane1Events) do
@@ -1192,7 +1192,7 @@ local function rebuildPbs(noteLive, replacePb)
       if needed[f.ppq] and not realAt[f.ppq] then
         if f.ppqL ~= hostPpqL[f.ppq] then
           restampPpqL[f] = hostPpqL[f.ppq]
-          f.ppqL = hostPpqL[f.ppq]   -- mirror into the clone so step 5 / column projection sees it
+          f.ppqL = hostPpqL[f.ppq]   -- mirror into the clone so the logical projection sees it
         end
         needed[f.ppq] = nil
         table.remove(availAbsorbers, i)
@@ -1268,8 +1268,8 @@ local function rebuildPbs(noteLive, replacePb)
   pbWrites.commit()
 end
 
--- Fx expansion (rebuild step 4.6): fx-carrying notes / fx-regions -> derived notes, CCs, carriers;
--- reconcile vs existing, note writes deferred to 4.8. Returns per-chan carrier map. see design/archive/note-macros.md § Pipeline placement
+-- Fx expansion: fx-carrying notes / fx-regions -> derived notes, CCs, carriers;
+-- reconcile vs existing, note writes deferred to the tail walk. Returns per-chan carrier map. see design/archive/note-macros.md § Pipeline placement
 local function rebuildFx(fx, deferred)
   local newFxCarrier = {}
 
@@ -1351,7 +1351,7 @@ local function rebuildFx(fx, deferred)
     return out
   end
   -- cc-family streams a generator reads over its window (notes via membersOf). Key `evt.ppqL or evt.ppq`:
-  -- ppqL nil when raw==logical (step-5); pb sliced from the pre-producer authoredPbByChan. see design/note-macros-v2.md § A4
+  -- ppqL nil when raw==logical (logical projection); pb sliced from the pre-producer authoredPbByChan. see design/note-macros-v2.md § A4
   local function channelStreams(chan, startL, endL)
     local cols = channels[chan].columns
     local function within(ppqL) return ppqL >= startL and ppqL < endL end
@@ -1443,7 +1443,7 @@ local function rebuildFx(fx, deferred)
                                    ppq = tm:fromLogical(chan, bp.ppqL, p.d), val = bp.val, shape = bp.shape })
               end
             else
-              -- Replace overwrites the wire over [startL,endL): record it for 4.9's base suppression.
+              -- Replace overwrites the wire over [startL,endL): record it for the absorber pass's base suppression.
               if meta.mode == 'replace' and target == 'pb' then
                 util.add(fx.replacePb[chan], { startL, endL })
               end
@@ -1494,7 +1494,7 @@ local function rebuildFx(fx, deferred)
                    fx = region.fx, id = region.uuid, lane = nil, d = 0 }
     end
 
-    -- Reconcile existence (stamps kept specs with token + realised end); defer writes to the 4.8 atomic commit.
+    -- Reconcile existence (stamps kept specs with token + realised end); defer writes to the tail walk's atomic commit.
     -- fx.noteLive holds the predicted specs; the tail walk clips them in place.
     reconcileFx(fx.noteExisting[chan], predicted, deferred)
     for _, spec in ipairs(predicted) do
@@ -1595,8 +1595,8 @@ local function rebuildFx(fx, deferred)
   return newFxCarrier
 end
 
--- Unified tail/onset walk + atomic commit (rebuild step 4.8): real notes, fixed externals, fx.noteLive
--- walk together (onset clamp then tail clip); host clip + fxNote del/add in one mm:modify. see docs/trackerManager.md § Rebuild: step 4.8 — tail walk
+-- Unified tail/onset walk + atomic commit: real notes, fixed externals, fx.noteLive
+-- walk together (onset clamp then tail clip); host clip + fxNote del/add in one mm:modify. see docs/trackerManager.md § Rebuild: tail walk
 local function rebuildTails(fx, deferred)
   local takeLen = tm:length()
   local clampWrites = mmBatch()
@@ -1681,7 +1681,7 @@ local function rebuildTails(fx, deferred)
   for host, rawEnd in pairs(fx.hostEnd) do host.endppq = rawEnd end
 end
 
--- Region-replace parking (rebuild step 4.5/4.5b): authored events a replace window covers leave the take;
+-- Region-replace parking: authored events a replace window covers leave the take;
 -- the prior parked set carries still-covered forward, restores the rest. see design/note-macros-v2.md § Generator output
 local function rebuildRegionPark(deferred)
   local function unlink(events, evt)
@@ -1715,7 +1715,7 @@ local function rebuildRegionPark(deferred)
   -- Notes and ccs park in one batch -> a single delete-first commit for the whole phase.
   local batch = mmBatch()
 
-  -- 4.5) Notes: can't mute (note-on/off + CC matching), so a covered authored note leaves the take.
+  -- Notes: can't mute (note-on/off + CC matching), so a covered authored note leaves the take.
   do
     local windows = {}
     for _, region in ipairs(ds:get('fxRegions') or {}) do
@@ -1749,7 +1749,7 @@ local function rebuildRegionPark(deferred)
     local newParked, restores = reconcilePark(scan, ds:get('fxParked') or {}, covered, shape, batch)
 
     -- Restores re-enter their columns now (token-less); the tail walk clips them in place and
-    -- the 4.8 commit adds them after the derived deletions.
+    -- the tail walk's commit adds them after the derived deletions.
     for _, spec in ipairs(restores) do
       local channel = channels[spec.chan]
       while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
@@ -1781,7 +1781,7 @@ local function rebuildRegionPark(deferred)
     end
   end
 
-  -- 4.5b) CCs: a point event has no tail, so the Pass-A curve stands in on the target lane and
+  -- CCs: a point event has no tail, so the Pass-A curve stands in on the target lane and
   -- restores add back immediately, seating a token-less projection for the view.
   do
     local windows = {}   -- [chan][cc] = { {startL, endL}, ... }
@@ -1835,12 +1835,12 @@ local function rebuildRegionPark(deferred)
   batch.commit()
 end
 
--- 3) Carrier setup + single CC walk: arm prior carriers/sidecars and route them out of columns,
+-- Carrier setup + single CC walk: arm prior carriers/sidecars and route them out of columns,
 -- reconcile (raw, ppqL) under swing, project non-pb CCs. Returns reapCarriers(newFxCarrier), run
--- after 4.6 to disarm stale codes + persist the live map. see docs/trackerManager.md § Rebuild: step 3 — CC walk
+-- after fx expansion to disarm stale codes + persist the live map. see docs/trackerManager.md § Rebuild: CC walk
 local function rebuildCCs(fx)
   -- Carrier codes from the prior rebuild: route existing events out of cc columns; new codes
-  -- allocated in 4.6 once windows are known. see design/archive/note-macros.md § Delta-code allocation
+  -- allocated in fx expansion once windows are known. see design/archive/note-macros.md § Delta-code allocation
   local prevCarrier  = ds:get('fxCarrier') or {}   -- chan -> { {code, target}, ... }
   local carrierRoute = {}
   for chan, carriers in pairs(prevCarrier) do
@@ -1855,7 +1855,7 @@ local function rebuildCCs(fx)
   for _, cc in mm:ccs() do
     if cc.evType == 'cc' and carrierRoute[cc.chan] and carrierRoute[cc.chan][cc.cc] then
       -- Carrier: generator-owned, no metadata; routed out by allocated code,
-      -- reconciled stream-level at 4.6. see design/archive/note-macros.md § Delta-code allocation
+      -- reconciled stream-level in fx expansion. see design/archive/note-macros.md § Delta-code allocation
       util.add(fx.ccExisting[cc.chan].carrier,
         { ppq = cc.ppq, val = cc.val, shape = cc.shape, cc = cc.cc, token = mm:tokenOf(cc) })
       goto continue
@@ -1921,9 +1921,9 @@ local function rebuildCCs(fx)
   end
 end
 
--- 0+2) Partition mm notes into internal (stamped) / external, lay internal note columns, and
--- reseat stale-swing internals inline (was 4.7). Returns external, deferred to rebuildExternals.
--- see docs/trackerManager.md § Rebuild: step 0 — internal/external partition
+-- Partition mm notes into internal (stamped) / external, lay internal note columns, and
+-- reseat stale-swing internals inline. Returns external, deferred to rebuildExternals.
+-- see docs/trackerManager.md § Rebuild: partition
 local function rebuildInternals(fx)
   local internal, external = {}, {}
   for _, note in mm:notes() do
@@ -1947,7 +1947,7 @@ local function rebuildInternals(fx)
     ce.delay  = ce.delay  or 0
     ce.token = mm:tokenOf(note)
     -- Stale swing: raw stamped under the prior swing; rederive realised onset from logical
-    -- (endppq owned by 4.8) and rewrite mm. Mirrors the CC reseat. see docs/timing.md §"Rebuild rule"
+    -- (endppq owned by the tail walk) and rewrite mm. Mirrors the CC reseat. see docs/timing.md §"Rebuild rule"
     if staleSwing[note.chan] then
       local newPpq = tm:fromLogical(note.chan, ce.ppqL, delayToPPQ(ce.delay))
       if newPpq ~= ce.ppq then ce.ppq = newPpq; reseats.assign(ce, { ppq = newPpq }) end
@@ -1959,7 +1959,7 @@ local function rebuildInternals(fx)
   return external
 end
 
--- 4) Reconcile extra columns against the persisted extraColumns spec; grow the spec when a
+-- Reconcile extra columns against the persisted extraColumns spec; grow the spec when a
 -- channel already holds more note lanes than recorded.
 local function rebuildExtraColumns()
   local extras = ds:get('extraColumns') or {}
@@ -1984,7 +1984,7 @@ local function rebuildExtraColumns()
   if grew and mm:take() then ds:assign('extraColumns', extras) end
 end
 
--- 6) Reintroduce externals: pack lane, stamp ppqL/endppqL, backfill metadata, tag `fixed`;
+-- Reintroduce externals: pack lane, stamp ppqL/endppqL, backfill metadata, tag `fixed`;
 -- block window + tail passes -- onsets frozen, tails clipped. see docs/trackerManager.md § Rebuild: externals
 local function rebuildExternals(external)
   if #external == 0 then return end
@@ -2016,7 +2016,7 @@ local function rebuildExternals(external)
 end
 
 -- Late PA projection: mixes into note columns once lanes are settled, so the view (and rebuildFx's
--- channelStreams) read it inline. Must follow column layout, so it can't ride step 3's CC walk.
+-- channelStreams) read it inline. Must follow column layout, so it can't ride the CC walk.
 local function rebuildPA()
   for _, cc in mm:ccs() do
     if cc.evType == 'pa' then
@@ -2028,7 +2028,7 @@ local function rebuildPA()
   end
 end
 
--- 4.5) PC synthesis (trackerMode only). Runs after externals so a foreign-MIDI note inherits
+-- PC synthesis (trackerMode only). Runs after externals so a foreign-MIDI note inherits
 -- sample from the prevailing PC.
 local function rebuildPCs(fx)
   if not cm:get('trackerMode') then return end
@@ -2062,8 +2062,8 @@ local function rebuildPCs(fx)
   end
 end
 
--- 5) Project columns to logical. tv surface is logical-only; ppq/endppq leave here as floats.
--- see docs/trackerManager.md § Rebuild: step 5 — project to logical
+-- Project columns to logical. tv surface is logical-only; ppq/endppq leave here as floats.
+-- see docs/trackerManager.md § Rebuild: logical projection
 local function projectLogical()
   local res = mm:resolution()
   local function projectToLogical(col, chan)
@@ -2130,36 +2130,27 @@ function tm:rebuild(takeChanged)
     fx.ccExisting[i]   = { carrier = {}, base = {}, fill = {} }
     fx.replacePb[i]    = {}
   end
-  -- fxNote add/del + parked-member restores, deferred from 4.6/4.5 into the 4.8 atomic note
-  -- commit: host clip + these inserts in one mm:modify (one MIDI_Sort, canonical delete-first).
+  -- fxNote add/del + parked-member restores, deferred from fx expansion / region parking into the tail
+  -- walk's atomic note commit: host clip + these inserts in one mm:modify (one MIDI_Sort, canonical delete-first).
   local deferred = mmBatch()
 
-  local external     = rebuildInternals(fx)   -- 0+2: partition, lay internal columns, reseat stale notes
-  local reapCarriers = rebuildCCs(fx)         -- 3: carrier setup + CC walk; reseats stale CCs
-  staleSwing = {}                             -- swing consumers (steps 0 & 3) done; see :53 invariant
+  local external     = rebuildInternals(fx)     -- partition; lay internal columns; reseat stale-swing notes
+  local reapCarriers = rebuildCCs(fx)           -- carrier setup + CC walk; reseat stale-swing CCs
+  staleSwing = {}                               -- swing consumers (partition + CC walk) done; see :53 invariant
+  rebuildExtraColumns()                         -- reconcile persisted extra columns
+  rebuildExternals(external)                    -- reintroduce foreign / diverged notes up front
 
-  rebuildExtraColumns()                       -- 4: reconcile persisted extra columns
+  rebuildRegionPark(deferred)                   -- region-replace parking: park covered, carry/restore prior set
+  rebuildPA()                                   -- project PAs into the settled note columns
 
-  rebuildExternals(external)                  -- 6: reintroduce externals
+  local newFxCarrier = rebuildFx(fx, deferred)  -- fx expansion: derived notes/CCs/carriers; note writes deferred
+  reapCarriers(newFxCarrier)                    -- disarm stale carrier codes; persist the live map
 
-  -- 4.5/4.5b) Region-replace parking: notes + ccs (see rebuildRegionPark).
-  rebuildRegionPark(deferred)
+  rebuildTails(fx, deferred)                    -- unified tail/onset walk + atomic note commit
+  rebuildPbs(fx.noteLive, fx.replacePb)         -- absorber reconciliation + pb resynthesis
+  rebuildPCs(fx)                                -- PC synthesis (trackerMode)
 
-  rebuildPA()                                 -- late PA projection into settled note columns
-
-  -- 4.6) Fx expansion: derived notes/CCs/carriers, note writes deferred to 4.8 (see rebuildFx).
-  local newFxCarrier = rebuildFx(fx, deferred)
-  reapCarriers(newFxCarrier)
-
-  -- 4.8) Unified tail/onset walk + atomic commit (see rebuildTails).
-  rebuildTails(fx, deferred)
-
-  -- 4.9) Absorber reconciliation + pb wire/column resynthesis.
-  rebuildPbs(fx.noteLive, fx.replacePb)
-
-  rebuildPCs(fx)                              -- 4.5: PC synthesis (trackerMode)
-
-  projectLogical()                            -- 5: project columns to logical
+  projectLogical()                              -- project columns to logical
 
   reload()
   rebuilding = false

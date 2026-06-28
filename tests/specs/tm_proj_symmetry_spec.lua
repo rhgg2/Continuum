@@ -1,7 +1,7 @@
 -- Projection symmetry: the column-projection step must expose BOTH the
 -- onset and the tail in the logical frame, never raw.
 --
--- Before: step 5 projected only evt.ppq = round(ppqL); evt.endppq was
+-- Before: the logical projection set only evt.ppq = round(ppqL); evt.endppq was
 -- left as the tail pass's CLIPPED RAW value. So a tv consumer reading
 -- evt.endppq got a swung, clipped realisation while evt.ppq was logical
 -- -- the asymmetry this suite pins shut.

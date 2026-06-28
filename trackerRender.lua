@@ -131,7 +131,7 @@ local function renderNote(evt, col, row)
 
   -- delayC is the realised-frame delay; divergence (delay ~= delayC) means
   -- the authored intent couldn't be realised (raw clamped at 0 or by
-  -- step 4.8's same-pitch onset floor). tp signals it with a small star.
+  -- the tail walk's same-pitch onset floor). tp signals it with a small star.
   local divergent = evt.delayC ~= nil and evt.delayC ~= (evt.delay or 0)
 
   if showDelay then
