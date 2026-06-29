@@ -167,13 +167,14 @@ lane/cc, same row/ppq the caller computed):
     of the vanished member kill the standalone).
   - overridden / localMode → `gm:deleteEvent` drops this instance's
     override only; the fresh standalone lands here, siblings untouched.
-- **dest inside a region** (`destKind = member`): within-pattern move.
-  Deferred — `add` has no `member` arm yet (auto-join, decision 2), so the
-  move is a no-op for now. When built: synced → move `group.events[vuid]`'s
-  slot, `reproject` carries siblings; overridden → reposition the local
-  override (`adds[vuid]` or `assigns[vuid]`) only.
-  - edge case: a `dest` in *another* group's region is the same
-    `add[member]` auto-join; note and test once the member-add arm lands.
+- **dest inside a region** (`destKind = member`): auto-join via
+  `gm:addEvent` (decision 2). classifyCreate finds the covering region;
+  global adopts the moved event into that group's shared pattern (every
+  instance gains it), localMode keeps it a per-instance add. The same arm
+  serves a dest in the *source's own* group (within-pattern / cross-
+  instance move) and in *another* group — the destination position alone
+  decides, so no per-case branching. Covered by `gm_shift_in_spec`
+  (into a group, group→group, instance→instance), all global.
 
 The caller (`shiftEvents`) stops its own grouped `del+add`: it dispatches
 `delete[srcKind]` + `add[destKind]` per cell. Single-event shift (the
@@ -210,12 +211,13 @@ precise is fiddly; note the over-refusal.
 
 1. **Facade skeleton (`delete`/`add` kind dispatch) + `gm:deleteEvent` +
    route `shiftEvents`.** Single-cell move = `delete[srcKind]` +
-   `add[destKind]`; out-of-region done, in-region deferred (no `add`
-   `member` arm yet). Convert `gm_shift_out_spec` from a characterisation
+   `add[destKind]`; out-of-region and in-region both done (the `add`
+   `member` arm is `gm:addEvent`). Convert `gm_shift_out_spec` from a characterisation
    harness into red→green assertions (synced + overridden, member leaves).
    **This fixes the reported bug.** `applyEdit` still serves value/
    create/delete in this stage — transitional two-path state is fine.
-   *Done; in-region move + multi-instance coverage remain.*
+   *Done, including the auto-join arm: moves into a group, between groups,
+   and between instances are covered (global).*
 2. **Injectivity predicate + block-move guard.** `gm:footprintAliases`;
    refuse a non-injective block shift in global mode. New spec: block
    shift spanning two instances of one group.

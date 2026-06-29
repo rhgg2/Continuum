@@ -1922,14 +1922,15 @@ local function relocatedClone(src, dest, drop)
 end
 
 -- Leaf edits dispatched by cellKind (tagged at build): 'member' routes to gm, 'plain' to tm.
--- Move = delete[src] + add[dest]; no member-add arm yet, so a move into a region is a no-op.
+-- A move is delete[src] + add[dest]; an in-region dest auto-joins via gm (decision 2).
 local cellEdit = {
   delete = {
     plain  = function(evt) tm:deleteEvent(evt) end,
     member = function(evt) gm:deleteEvent(evt.uuid) end,
   },
   add = {
-    plain = function(evt) tm:addEvent(evt) end,
+    plain  = function(evt) tm:addEvent(evt) end,
+    member = function(evt) gm:addEvent(evt) end,
   },
   -- identity a relocated copy of each kind sheds: 'member' needs a fresh uuid
   -- (else reproject's del of the vanished member kills the standalone); 'plain' keeps it.
@@ -2034,11 +2035,8 @@ local function shiftEvents(dir)
   for _, src in ipairs(moving) do
     local srcKind  = srcCol.cellKind[cellRowOf(src, srcCol.midiChan)] or 'plain'
     local destKind = (destCol and destCol.cellKind[cellRowOf(src, destCol.midiChan)]) or 'plain'
-    local add = cellEdit.add[destKind]
-    if add then                          -- no member-add arm yet: in-region move is deferred
-      cellEdit.delete[srcKind](src)
-      add(relocatedClone(src, dest, cellEdit.relocateDrop[srcKind]))
-    end
+    cellEdit.delete[srcKind](src)
+    cellEdit.add[destKind](relocatedClone(src, dest, cellEdit.relocateDrop[srcKind]))
   end
   tm:flush()
 

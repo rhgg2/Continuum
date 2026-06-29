@@ -868,6 +868,34 @@ function gm:moveInstance(groupId, instId, anchor)
   return true
 end
 
+-- Positional create (the add half of a facade move): classifyCreate finds the covering
+-- region; global adopts into the shared pattern (all instances gain it), localMode keeps a per-instance add.
+--contract: (evt) -> true | nil,'not in a region'. Defers to reproject; never links clone.
+function gm:addEvent(evt)
+  local groupId, instId = classifyCreate(evt)
+  if not groupId then return nil, 'not in a region' end
+  local group    = groups[groupId]
+  local instance = group.instances[instId]
+
+  local vuid = not localMode and revivableVuid(group, instance, evt)
+  if vuid then
+    instance.deletes[vuid] = nil          -- type-over clears the local delete
+  else
+    vuid = group.nextVuid
+    group.nextVuid = vuid + 1
+  end
+
+  local g = toGroup(evt, instance.anchor)   -- keeps the moved note's dur (unlike a typed create)
+  if localMode then
+    instance.adds[vuid] = g
+  else
+    group.events[vuid] = g
+    absorbSiblingOverrides(group, vuid, instId, true)
+  end
+  pendingReproject[groupId] = true
+  return true
+end
+
 -- synced/global: absorb sibling overrides then drop from shared pattern (existence
 -- flip); all instances lose it. overridden/local: hide in this instance only.
 --contract: (uuid) -> true | nil,reason
