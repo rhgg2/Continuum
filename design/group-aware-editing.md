@@ -41,6 +41,37 @@ rest of the damage.
 The cure is to stop guessing: let the call site speak *intent*, and
 route that intent to whoever owns the event.
 
+## Second goal — gm stops eavesdropping on tm
+
+Routing intent through the facade isn't only a corruption fix; it lets
+gm stop *listening* at the flush seam. `applyEdit` is the sole reason gm
+subscribes to `preflush` (fired at `trackerManager.lua:535` on the
+*staged* op buffers — before the commit and the pre-clip collision scan,
+not after them). So the seam never reacted to committed geometry; it
+inferred intent from the *shape* of staged ops. The facade delivers that
+intent named, which removes the inference — and the subscription with it.
+
+The whole self-echo defense exists only to keep that sniffer safe from
+gm's own staged writes re-entering it:
+
+- `propagating` (set around `newInstance`/`moveInstance`/`reproject`,
+  gated at the preflush guard) — reentrancy guard;
+- `selfStaged` — newInstance's projection adds, skipped in the adds loop;
+- `selfAssigned` — moveInstance's re-place echo, skipped in the assigns
+  loop.
+
+All three guard one consumer. Once every edit arrives through an explicit
+verb that flushes itself under `propagating`, gm no longer needs the
+subscription — drop it and the apparatus goes with it. This is the
+terminal goal of stages 3–4, not incidental tidy-up.
+
+Loose end: the `reproject` drain (`touchedGroups`/`pendingReproject`,
+`groupManager.lua:753`) lives inside the preflush handler. When the
+handler dies it needs a new home — folded into the verbs or a thin
+commit hook. (The collision scan already issues its fixups *after*
+preflush fires, so gm never saw collision nudges; that's pre-existing,
+not introduced here.)
+
 ## The model
 
 ### Kind-keyed facade (leaf dispatch)
@@ -190,11 +221,11 @@ reported bug) is always injective and needs no guard.
 gm:footprintAliases(cells) -> bool
 ```
 
-Open: **precise vs conservative.** Precise checks slot-level (top half of
-I1 + bottom half of I2 of one group is still injective). Conservative
-treats "≥2 instances of one group in the footprint" as aliasing
-(over-refuses the disjoint-halves case). Ship conservative first if
-precise is fiddly; note the over-refusal.
+Settled: shipped **precise** (slot-level). It was not fiddly -- the
+group-frame slot identity (`toGroup` + `laneId`, the `sameSlot` triple)
+gives an exact per-cell key, so the disjoint-halves case (top half of I1
++ bottom half of I2) maps to distinct slots and stays legal. No
+over-refusal; no conservative fallback shipped.
 
 ## Layering
 
@@ -221,10 +252,21 @@ precise is fiddly; note the over-refusal.
 2. **Injectivity predicate + block-move guard.** `gm:footprintAliases`;
    refuse a non-injective block shift in global mode. New spec: block
    shift spanning two instances of one group.
+   *Done: shipped **precise** (per-cell, slot-keyed) -- not conservative.
+   Predicate maps each footprint cell to its group slot via
+   `classifyCreate` + `toGroup` + `laneId` (the `sameSlot` triple); two
+   cells on one slot => alias. Guard in `shiftEvents`, gated on `gm` and
+   `not localMode`. Spec `gm_block_shift_alias_spec`: aliasing-refused +
+   disjoint-allowed (the latter pins precision against a conservative
+   regression).*
 3. **Migrate value edits.** Route `setValue` through the facade →
    `gm:setMemberValue`; retire `applyEdit`'s assign classification.
-4. **Migrate create/delete.** `createMember`/`deleteMember`; retire the
-   `applyEdit` seam sniffer entirely. `reproject`/`reconcile` and the
+4. **Migrate create/delete, then drop gm's preflush subscription.**
+   `createMember`/`deleteMember`; retire the `applyEdit` seam sniffer
+   entirely, then unsubscribe gm from `preflush` and delete the
+   self-echo apparatus (`selfStaged`/`selfAssigned`/the `propagating`
+   reentrancy guard) — see "Second goal" above. Relocate the `reproject`
+   drain out of the dead handler. `reproject`/`reconcile` and the
    override-transition logic remain, now behind the explicit verbs.
 5. **Time-topology atomicity.** `insertRow`/`deleteRow` planner:
    whole-instance re-anchor at/after the cut; refuse mid-instance.
@@ -238,7 +280,7 @@ arm on the facade + a stash write path — not a fourth mechanism.
 
 ## Open decisions (settle as the stage arrives)
 
-- Injectivity precise vs conservative (above).
+- ~~Injectivity precise vs conservative~~ -- settled: shipped precise (above).
 - Move-out landing in another region: adopt (decision 2) vs leave
   standalone. Lean adopt for consistency; confirm with a stage-1 test.
 - Row-op refusal granularity: refuse the whole op, or just the

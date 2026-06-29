@@ -1982,6 +1982,18 @@ local function shiftEvents(dir)
 
   -- Destination descriptor, or nil if the move runs off the grid edge.
   local chan = srcCol.midiChan
+
+  -- Injectivity (decision 3): refuse if two footprint cells alias one group slot; re-adds
+  -- would double-write the shared pattern. localMode (per-instance adds) dissolves aliasing.
+  if gm and rows and not gm:localMode() then
+    local cells = {}
+    for r = rows[1], rows[2] do
+      util.add(cells, { ppq = ctx:rowToPPQ(r, chan), chan = chan,
+                        evType = srcCol.type, lane = srcCol.lane, cc = srcCol.cc })
+    end
+    if gm:footprintAliases(cells) then return end
+  end
+
   local function destDescriptor()
     if srcCol.type ~= 'note' then
       local nc = chan + dir

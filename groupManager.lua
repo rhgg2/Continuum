@@ -568,6 +568,24 @@ function gm:eachInstance()
   return out
 end
 
+-- Precise per-cell injectivity test for propagating block ops (decision 3): two cells
+-- on one group slot => non-injective; disjoint slots stay legal. see docs/groupManager.md § Block-shift injectivity.
+--contract: (cells) -> bool. cells carry { ppq, chan, evType, lane?/cc? }.
+function gm:footprintAliases(cells)
+  local seen = {}                       -- groupId -> { slotKey -> true }
+  for _, cell in ipairs(cells) do
+    local groupId, instId = classifyCreate(cell)
+    if groupId then
+      local g    = toGroup(cell, groups[groupId].instances[instId].anchor)
+      local slot = g.ppq .. ':' .. groupsCore.laneId(g)
+      seen[groupId] = seen[groupId] or {}
+      if seen[groupId][slot] then return true end
+      seen[groupId][slot] = true
+    end
+  end
+  return false
+end
+
 ----------- SEAM
 
 local function reproject(groupId)

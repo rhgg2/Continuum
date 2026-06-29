@@ -363,3 +363,17 @@ that gives way to the region-cursor instance's 2px outline plus the
 inside the instance (a member stream at the cursor column ∧ ppq within
 the span), not merely sharing a row. A conflicted instance always
 outlines in any mode — an alarm that must always show.
+
+## Block-shift injectivity
+
+`gm:footprintAliases` is a precise per-cell predicate for propagating block ops
+(decision 3 in group-aware-editing). Each footprint cell maps to a region slot
+via `classifyCreate` + `toGroup` + `laneId` (the `sameSlot` triple). Two cells
+on one slot — two instances of a group overlapping the block at the same relative
+position — make the op non-injective: the re-adds at the destination would
+double-write the shared pattern.
+
+Precision matters: disjoint slots of two instances stay legal. A block covering
+the top half of one instance and the bottom half of another maps those cells to
+distinct slots — no alias, op allowed. A conservative "≥2 instances in footprint"
+test would over-refuse this case; the per-cell slot key avoids it.
