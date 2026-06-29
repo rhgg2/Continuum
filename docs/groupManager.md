@@ -173,21 +173,39 @@ drain a pending `newInstance` add-echo (whose add then misclassifies as
 a user create) and vice versa. One marker per loop, each drained only
 by its own.
 
-The move is *previewed* before it is sealed, on two axes. A row nudge
-accumulates `regionCursor.moveDelta`; a channel shift
-(`eventShiftLeft/Right`) accumulates `regionCursor.chanDelta`. Both only
-slide the caret — gm and tm stay untouched. Channel-move preserves lane
-(`moveInstance` re-anchors and keeps each event's `key`) and clamps so
-every member channel stays in 1..16; there is no "hang off" sideways,
-unlike the bottom row. `trackerRender` reads `tv:movePreview` to draw the
-armed instance shifted by both deltas — its cells ghosted at the
-destination columns (sourced through `destSrc`), the source footprint and
-the foreign cells under it suppressed render-only, so sweeping back
-restores them for free. `sealMove` runs the real
-`clearMoveGap → moveInstance → flush` once, on mode exit or before any
-structural verb, so a pending preview never leaks onto another instance.
-(Lane-move — shifting `key` within one channel — is a separate gated
-axis, not this row/channel translation.)
+The move is *previewed* before it is sealed, on three axes. A row nudge
+accumulates `regionCursor.moveDelta`; a sideways shift
+(`eventShiftLeft/Right`) accumulates `regionCursor.chanDelta` and/or
+`regionCursor.laneDelta`. All only slide the caret — gm and tm stay
+untouched. The sideways dispatch mirrors `shiftEvents`' note-vs-other
+split: a multi-channel or has-CC instance **channel-moves** (lane
+preserved, clamped so every member channel stays in 1..16, no "hang off"
+sideways); a single-channel all-notes instance **walks lane-by-lane**
+within the channel and, at the lane boundary, spills the whole block into
+the adjacent channel's edge lane — `shiftEvents`' note wrap, lifted to the
+instance.
+
+Channel and lane decompose differently, and must. Channel is a
+per-instance *base* (`anchor.chan + chanDelta`); lane is a per-instance
+*offset* (`anchor.laneDelta`, default 0) layered over the absolute `key`,
+because `key` doubles as the stream identity `rect.streams` is keyed by —
+it cannot move without breaking membership. Lane is also rebuild-owned
+(`assignNote` rejects a relane), so `moveInstance` realises a lane change
+by **del+add**, not assign; `pickStampedLane` then honours the authored
+lane verbatim and materialises the column if missing, so the move holds
+through rebuild and a member never renders invisible. Conflict stays
+lane-accurate by shifting each instance's `streams` keys through
+`groups.shiftStream(sid, laneDelta)` — the lane analogue of applying
+`anchor.chan` to `chanOffset`.
+
+`trackerRender` reads `tv:movePreview` to draw the armed instance shifted
+by all three deltas — its cells ghosted at the destination columns
+(sourced through `destSrc`, matched on the group-frame
+`(chanOffset, streamId)`), the source footprint and the foreign cells
+under it suppressed render-only, so sweeping back restores them for free.
+`sealMove` runs the real `clearMoveGap → moveInstance → flush` once, on
+mode exit or before any structural verb, so a pending preview never leaks
+onto another instance.
 
 A region resize moves the boundary, never the music. Trimming the
 start edge re-origins — every anchor shifts by `startDelta`, every

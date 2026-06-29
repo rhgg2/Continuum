@@ -97,6 +97,14 @@ function groups.streamId(evt)
   return evt.evType .. ':' .. tostring(evt.key or 0)
 end
 
+--contract: shift a note stream's lane by δ (note:L -> note:L+δ); non-notes pass through.
+function groups.shiftStream(sid, delta)
+  if delta == 0 then return sid end
+  local lane = sid:match('^note:(-?%d+)$')
+  if not lane then return sid end
+  return 'note:' .. (tonumber(lane) + delta)
+end
+
 --contract: group-frame lane identity = (chanDelta or 0)..'/'..streamId; per-channel, so two channels at one lane+onset are distinct slots.
 function groups.laneId(evt)
   return tostring(evt.chanDelta or 0) .. '/' .. groups.streamId(evt)

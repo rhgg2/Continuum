@@ -1,7 +1,7 @@
 -- See docs/groupManager.md for the model.
 
 --shape: group = { rect, events = { [vuid]=groupEvt }, nextVuid, instances = { [instId]=instance } }
---shape: instance = { anchor = { ppq, chan }, assigns, adds, deletes }  -- pure data, persisted verbatim
+--shape: instance = { anchor = { ppq, chan, [laneDelta] }, assigns, adds, deletes }  -- pure data, persisted verbatim
 --shape: proj[groupId][instId][vuid] = { uuid, groupEvt=clone, evt=liveEvt }  -- module-level, runtime; only `uuid` serialised, persisted as `uuids[groupId][instId][vuid]`
 --shape: persisted groups = { groups = groups, uuids = { [groupId]={ [instId]={ [vuid]=uuid } } } }
 --invariant: localMode is a single global UI flag, not per-instance; default propagate edits the shared group
@@ -148,7 +148,7 @@ local function toInstance(g, anchor)
                              chan   = anchor.chan + (g.chanDelta or 0),
                              ppq    = anchor.ppq + (g.ppq or 0) })
   if g.evType == 'note' then
-    e.lane = g.key
+    e.lane = g.key + (anchor.laneDelta or 0)
     if g.dur == nil then
       e.endppq = util.OPEN
     else
@@ -394,7 +394,9 @@ local function rectCells(rect, anchor)
     local chan = anchor.chan + chanOff
     local row  = cells[chan] or {}
     cells[chan] = row
-    for sid in pairs(streams) do row[sid] = true end
+    for sid in pairs(streams) do
+      row[groupsCore.shiftStream(sid, anchor.laneDelta or 0)] = true
+    end
   end
   return cells
 end
@@ -418,7 +420,7 @@ local function regionConflict(rect, anchor, exclude)
           local row = cells[inst.anchor.chan + chanOff]
           if row then
             for sid in pairs(streams) do
-              if row[sid] then return groupId end
+              if row[groupsCore.shiftStream(sid, inst.anchor.laneDelta or 0)] then return groupId end
             end
           end
         end
@@ -843,12 +845,15 @@ function gm:moveInstance(groupId, instId, anchor)
     local rec    = p[vuid]
     local placed = toInstance(g, anchor)
     if onTake(placed) then
-      if rec and rec.evt then               -- on-take, linked: re-place it
-        selfAssigned[rec.evt] = true
+      if rec and rec.evt and placed.lane == rec.evt.lane then
+        selfAssigned[rec.evt] = true        -- on-take, linked, lane unchanged: re-place
         tm:assignEvent(rec.evt,
           { ppq = placed.ppq, chan = placed.chan, endppq = placed.endppq })
-      else                                  -- on-take, withheld: revive it
-        tm:addEvent(placed)
+      else
+        if rec and rec.evt then             -- relane: lane is rebuild-owned (assignNote), so del+add
+          tm:deleteEvent(rec.evt); unlink(p, vuid)
+        end
+        tm:addEvent(placed)                 -- withheld revive, or relane re-create
         selfStaged[placed] = true
         link(groupId, instId, vuid, p, nil, util.clone(g), placed)
       end

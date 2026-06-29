@@ -1,4 +1,4 @@
-@module groups  src=groups.lua  loc=127  sha=7dae3ed  mode=namespace  self=groups
+@module groups  src=groups.lua  loc=135  sha=7dae3ed  mode=namespace  self=groups
 
 # Invariants & contracts
   @invariant  evType is identity, never merged or overridden; changing type is delete+create upstream
@@ -20,7 +20,7 @@
 # Module-level constants
   @const groups = {}  @ 16
   @const resolve = groups.resolve  @ 25
-  @const OVERLAY = { overridden = 'mirror.overridden.tint',  @ 114
+  @const OVERLAY = { overridden = 'mirror.overridden.tint',  @ 122
 
 # Public API (groups.*)
   @api groups.resolve(groupEvt, assign)  @ 19-24
@@ -33,13 +33,15 @@
       @contract  (groupEvt?, field, value) -> assign rec capturing the live group value as the merge base at fork time (nil groupEvt -> nil base).
   @api groups.streamId(evt)  @ 96-98
       @contract  stream identity = evType..':'..(key or 0) (note->lane, cc->cc-number); index-free per the region invariant.
-  @api groups.laneId(evt)  @ 101-103
+  @api groups.shiftStream(sid, delta)  @ 101-106
+      @contract  shift a note stream's lane by δ (note:L -> note:L+δ); non-notes pass through.
+  @api groups.laneId(evt)  @ 109-111
       @contract  group-frame lane identity = (chanDelta or 0)..'/'..streamId; per-channel, so two channels at one lane+onset are distinct slots.
-  @api groups.inRect(rect, ppq, chanOffset, evt)  @ 106-110
+  @api groups.inRect(rect, ppq, chanOffset, evt)  @ 114-118
       @contract  membership predicate; ppq/chanOffset are anchor-relative (caller does the anchor maths). True iff 0<=ppq<rect.dur AND rect.streams[chanOffset][streamId(evt)]. rect.ppq is the placement origin, not the membership origin.
-  @api groups.tintKey(state)  @ 116-118
-  @api groups.regionKey(colour, kind)  @ 119-121
-  @api groups.outlineKey(state, colour)  @ 122-125
+  @api groups.tintKey(state)  @ 124-126
+  @api groups.regionKey(colour, kind)  @ 127-129
+  @api groups.outlineKey(state, colour)  @ 130-133
 
 # Uses (outbound edges)
   @use call    util.add  @ reconcile:77,79,84

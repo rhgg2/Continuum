@@ -491,18 +491,20 @@ local REGION_KEEPALIVE = {
 }
 
 do
-  -- Commit the pending drag (row + channel): clear swept-onto cells, re-anchor
-  -- (gm preserves lane, withholds off-take), flush. Every verb and exit seals first.
+  -- Commit the pending drag (row + channel + lane): clear swept-onto cells,
+  -- re-anchor (gm relanes via del+add, withholds off-take), flush. Verbs seal first.
   local function sealMove()
     local rowDelta  = regionCursor and regionCursor.moveDelta or 0
     local chanDelta = regionCursor and regionCursor.chanDelta or 0
-    if rowDelta == 0 and chanDelta == 0 then return end
-    regionCursor.moveDelta, regionCursor.chanDelta = 0, 0
+    local laneDelta = regionCursor and regionCursor.laneDelta or 0
+    if rowDelta == 0 and chanDelta == 0 and laneDelta == 0 then return end
+    regionCursor.moveDelta, regionCursor.chanDelta, regionCursor.laneDelta = 0, 0, 0
     local cur = currentEntry()
     if not cur then return end
     local lpr  = logPerRow()
-    local dest = { ppq  = cur.anchor.ppq  + rowDelta  * lpr,
-                   chan = cur.anchor.chan + chanDelta }
+    local dest = { ppq       = cur.anchor.ppq  + rowDelta * lpr,
+                   chan      = cur.anchor.chan + chanDelta,
+                   laneDelta = (cur.anchor.laneDelta or 0) + laneDelta }
     if groupBridge.clearMoveGap then
       groupBridge.clearMoveGap(regionCursor.groupId, cur.anchor, dest)
     end
@@ -598,6 +600,108 @@ do
     moveChannel(newDelta - delta)
   end
 
+  -- Walk a single-channel all-notes instance sideways one lane per step,
+  -- spilling the whole block into the next channel's edge -- shiftEvents' wrap.
+  local function noteLanesIn(chan)
+    local lanes = {}
+    local lo, hi = grid.chanFirstCol[chan], grid.chanLastCol[chan]
+    for ci = lo or 1, hi or 0 do
+      local col = grid.cols[ci]
+      if col and col.type == 'note' then lanes[col.lane or 1] = true end
+    end
+    return lanes
+  end
+
+  local function topLaneIn(chan)
+    local top
+    for lane in pairs(noteLanesIn(chan)) do
+      if not top or lane > top then top = lane end
+    end
+    return top
+  end
+
+  local function blockKeys(rect)
+    local keys = {}
+    for sid in pairs(rect.streams[0] or {}) do
+      local k = sid:match('^note:(-?%d+)$')
+      if k then util.add(keys, tonumber(k)) end
+    end
+    table.sort(keys)
+    return keys
+  end
+
+  local function blockFits(keys, chan, total)
+    local lanes = noteLanesIn(chan)
+    for _, k in ipairs(keys) do
+      if not lanes[k + total] then return false end
+    end
+    return true
+  end
+
+  local function laneWalkable(rect)
+    for off, sel in pairs(rect.streams) do
+      if off ~= 0 then return false end
+      for sid in pairs(sel) do
+        if not sid:match('^note:') then return false end
+      end
+    end
+    return true
+  end
+
+  -- Caret rides the block's lowest realised lane column at the pending position.
+  local function caretToBlock(cur, keys)
+    local total = (cur.anchor.laneDelta or 0) + (regionCursor.laneDelta or 0)
+    local chan  = cur.anchor.chan + (regionCursor.chanDelta or 0)
+    local lane  = keys[1] + total
+    for ci, col in ipairs(grid.cols) do
+      if col.midiChan == chan and col.type == 'note' and (col.lane or 1) == lane then
+        cursorCol = ci; break
+      end
+    end
+    clampPos(); moveHook()
+  end
+
+  -- Lane sibling of moveByChan: accumulate laneDelta (channel-spill at the
+  -- boundary) + caret tracking; gm/tm untouched until sealMove.
+  local function moveByLane(step)
+    local cur = currentEntry()
+    if not cur then return end
+    local keys = blockKeys(cur.rect)
+    if #keys == 0 then return end
+    local minKey, maxKey = keys[1], keys[#keys]
+    local base = cur.anchor.laneDelta or 0
+    local dir  = step > 0 and 1 or -1
+    for _ = 1, math.abs(step) do
+      local total = base + (regionCursor.laneDelta or 0)
+      local chan  = cur.anchor.chan + (regionCursor.chanDelta or 0)
+      if blockFits(keys, chan, total + dir) then
+        regionCursor.laneDelta = (regionCursor.laneDelta or 0) + dir
+      else
+        local nc = chan + dir
+        if nc < 1 or nc > 16 then break end
+        local landTotal
+        if dir > 0 then
+          landTotal = 1 - minKey
+        else
+          local top = topLaneIn(nc)
+          if not top then break end
+          landTotal = top - maxKey
+        end
+        if not blockFits(keys, nc, landTotal) then break end
+        regionCursor.chanDelta = nc - cur.anchor.chan
+        regionCursor.laneDelta = landTotal - base
+      end
+      caretToBlock(cur, keys)
+    end
+  end
+
+  -- eventShiftLeft/Right dispatch (mirrors shiftEvents' note-vs-other split):
+  -- single-channel all-notes walks lanes; else channel-move (3a).
+  local function shiftSideways(step)
+    local cur = currentEntry()
+    if cur and laneWalkable(cur.rect) then moveByLane(step) else moveByChan(step) end
+  end
+
   local function resizeBy(edits)
     if not regionCursor then return end
     gmgr():resizeGroup(regionCursor.groupId, regionCursor.instId, edits)
@@ -643,8 +747,8 @@ do
       nudgeForward  = function(p) moveBy( p) end,
       growNote      = function(p) resizeBy{ endDelta =  p * logPerRow() } end,
       shrinkNote    = function(p) resizeBy{ endDelta = -p * logPerRow() } end,
-      eventShiftLeft  = function(p) moveByChan(-p) end,
-      eventShiftRight = function(p) moveByChan( p) end,
+      eventShiftLeft  = function(p) shiftSideways(-p) end,
+      eventShiftRight = function(p) shiftSideways( p) end,
     }
     regionScope:registerAll{
       regionExit        = function() ec:regionExit() end,

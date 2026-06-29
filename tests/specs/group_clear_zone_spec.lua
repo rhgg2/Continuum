@@ -16,6 +16,12 @@ local function noteCol(h, chan)
   end
 end
 
+local function laneCol(h, chan, lane)
+  for i, col in ipairs(h.vm.grid.cols) do
+    if col.type == 'note' and col.midiChan == chan and (col.lane or 1) == lane then return i, col end
+  end
+end
+
 local function byPitch(notes, p)
   for _, n in ipairs(notes) do if n.pitch == p then return n end end
 end
@@ -282,6 +288,62 @@ return {
       t.truthy(m, 'member survived')
       t.eq(m.chan, 2, 'member relocated to channel 2')
       t.eq(m.lane, 1, 'lane preserved across the channel move')
+    end,
+  },
+
+  {
+    name = 'a lane move clears the destination lane, relanes the member via del+add, holds through rebuild',
+    run = function(harness)
+      -- chan 1 with two stamped lanes (pickStampedLane honors authored lane).
+      -- Member on lane 1; a foreign note sits on lane 2 where it lands.
+      local h = harness.mk{ groups = true, seed = { notes = {
+        { ppq = 0, endppq = 60, endppqL = 60, chan = 1, lane = 1, pitch = 60, vel = 100 }, -- member
+        { ppq = 0, endppq = 60, endppqL = 60, chan = 1, lane = 2, pitch = 72, vel = 100 }, -- foreign, lane 2
+      } } }
+      local ci   = laneCol(h, 1, 1)
+      local seed = { ppq = 0, dur = 60, chanLo = 1, streams = { [0] = { ['note:1'] = true } } }
+      h.gm:mark(h.vm:eventsInRect(seed), seed)
+
+      h.ec:setPos(0, ci, 1)
+      h.ec:regionArm()
+      h.cmgr:invoke('eventShiftRight')   -- lane 2 column exists, so it walks (not spills)
+
+      local mp = h.vm:movePreview()
+      t.eq(mp.laneDelta, 1, 'preview reports one lane over')
+      t.eq(mp.chanDelta, 0, 'same channel')
+      t.eq(mp.destSrc[laneCol(h, 1, 2)], ci, 'lane-2 destination ghosts from the lane-1 source')
+
+      local notes = h.fm:dump().notes
+      t.truthy(byPitch(notes, 72), 'foreign lane-2 note present during preview (non-destructive)')
+      t.eq(byPitch(notes, 60).lane, 1, 'member not yet relaned during preview')
+
+      h.cmgr:invoke('regionExit')        -- commit
+      notes = h.fm:dump().notes
+      t.falsy(byPitch(notes, 72), 'foreign lane-2 note cleared on commit')
+      local m = byPitch(notes, 60)
+      t.truthy(m, 'member survived the del+add relane')
+      t.eq(m.lane, 2, 'member relaned to lane 2 and held through rebuild')
+      t.eq(m.chan, 1, 'same channel')
+    end,
+  },
+
+  {
+    name = 'a lane move onto another group\'s lane is rejected (lane-aware conflict)',
+    run = function(harness)
+      local h = harness.mk{ groups = true, seed = { notes = {
+        { ppq = 0, endppq = 60, endppqL = 60, chan = 1, lane = 1, pitch = 60, vel = 100 },
+        { ppq = 0, endppq = 60, endppqL = 60, chan = 1, lane = 2, pitch = 72, vel = 100 },
+      } } }
+      local seedA = { ppq = 0, dur = 60, chanLo = 1, streams = { [0] = { ['note:1'] = true } } }
+      local seedB = { ppq = 0, dur = 60, chanLo = 1, streams = { [0] = { ['note:2'] = true } } }
+      local gA = h.gm:mark(h.vm:eventsInRect(seedA), seedA)
+      local gB = h.gm:mark(h.vm:eventsInRect(seedB), seedB)
+      t.truthy(gA and gB, 'two groups on separate lanes coexist')
+
+      local ok, why = h.gm:moveInstance(gA, 1, { ppq = 0, chan = 1, laneDelta = 1 })
+      t.falsy(ok, 'a lane move onto lane 2 (gB) is rejected')
+      t.truthy(why, 'reason returned')
+      t.eq(byPitch(h.fm:dump().notes, 60).lane, 1, 'member stayed on lane 1')
     end,
   },
 }

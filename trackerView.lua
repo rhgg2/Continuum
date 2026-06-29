@@ -25,6 +25,7 @@
 local util       = require 'util'
 local timing     = require 'timing'
 local tuning     = require 'tuning'
+local groupsCore = require 'groups'
 
 local tm, cm, ds, cmgr, gm, pa, facade =
   (...).tm, (...).cm, (...).ds, (...).cmgr, (...).gm, (...).pa, (...).facade
@@ -2215,10 +2216,10 @@ end
 
 -- Shared spine of eventsInRect/clearRegionAt/clearMoveGap. Backfills chan/lane/cc
 -- (gm needs per-event identity for propagation); no swing (col.events ppq is logical).
-local function eachMemberEvent(rect, chanOrigin, lo, hi, body)
+local function eachMemberEvent(rect, chanOrigin, lo, hi, body, laneDelta)
   for _, col in ipairs(grid.cols) do
     local sel = rect.streams[col.midiChan - chanOrigin]
-    if sel and sel[streamIdOf(col)] then
+    if sel and sel[groupsCore.shiftStream(streamIdOf(col), -(laneDelta or 0))] then
       for evt in util.between(col.events, lo, hi) do body(col, evt) end
     end
   end
@@ -2255,17 +2256,18 @@ function tv:clearRegionAt(rect, anchor)
 end
 
 -- Clear foreign notes the destination covers; source-overlap is spared (moveInstance re-places those).
--- Shared column (row nudge): spare source rows. Channel move: different columns, so whole dest clears.
+-- Shared column (row nudge): spare source rows. Channel/lane move: different columns, so whole dest clears.
 function tv:clearMoveGap(rect, srcAnchor, destAnchor)
   local dur = rect.dur
   local srcLo, srcHi = srcAnchor.ppq, srcAnchor.ppq + dur
   local dstLo, dstHi = destAnchor.ppq, destAnchor.ppq + dur
+  local srcLane = srcAnchor.laneDelta or 0
   eachMemberEvent(rect, destAnchor.chan, dstLo, dstHi, function(col, evt)
     local srcSel = rect.streams[col.midiChan - srcAnchor.chan]
-    local shared = srcSel and srcSel[streamIdOf(col)]
+    local shared = srcSel and srcSel[groupsCore.shiftStream(streamIdOf(col), -srcLane)]
     if shared and evt.ppq >= srcLo and evt.ppq < srcHi then return end
     tm:deleteEvent(evt)
-  end)
+  end, destAnchor.laneDelta or 0)
 end
 
 -- Cursor as a mirror anchor: { ppq, chan } in the logical frame.
@@ -2276,12 +2278,12 @@ function tv:cursorAnchor()
   return { ppq = ec:row() * logPerRowFor(currentRpb()), chan = col.midiChan }
 end
 
--- (channel offset, stream id) for a grid column, relative to chanLo —
--- the coordinates a mirror rect's `streams` table is keyed by.
-function tv:streamRefAt(colIx, chanLo)
+-- (channel offset, group-frame stream id) for a grid column at chanLo —
+-- laneDelta un-shifts a realised column back to the group-frame id.
+function tv:streamRefAt(colIx, chanLo, laneDelta)
   local col = grid.cols[colIx]
   if not col then return nil end
-  return col.midiChan - chanLo, streamIdOf(col)
+  return col.midiChan - chanLo, groupsCore.shiftStream(streamIdOf(col), -(laneDelta or 0))
 end
 
 -- The instance whose region covers the caret cell, or nil. Region mode
@@ -2292,7 +2294,7 @@ function tv:instanceAtCursor()
   local ppq = ec:row() * logPerRowFor(currentRpb())
   for _, e in ipairs(gm:eachInstance()) do
     if ppq >= e.anchor.ppq and ppq < e.anchor.ppq + e.rect.dur then
-      local off, sid = tv:streamRefAt(c, e.anchor.chan)
+      local off, sid = tv:streamRefAt(c, e.anchor.chan, e.anchor.laneDelta)
       if off and e.rect.streams[off] and e.rect.streams[off][sid] then
         return { groupId = e.groupId, instId = e.instId }
       end
@@ -2304,25 +2306,27 @@ end
 function tv:eachInstance() return gm:eachInstance() end
 function tv:stateOf(uuid) return gm:stateOf(uuid) end
 
--- Drag preview for trackerRender: armed instance shifted by pending row+channel deltas, gm/tm untouched.
--- nil if no drag pending. srcMember = suppressed source cols; destSrc[x] = source col for x (chanOffset+sid).
+-- Drag preview for trackerRender: armed instance shifted by pending row /
+-- channel / lane deltas; srcMember = suppressed source cols, destSrc[x] = its source col.
 function tv:movePreview()
   local rc        = ec:regionCursor()
-  local rowDelta  = rc and rc.moveDelta  or 0
+  local rowDelta  = rc and rc.moveDelta or 0
   local chanDelta = rc and rc.chanDelta or 0
-  if rowDelta == 0 and chanDelta == 0 then return nil end
+  local laneDelta = rc and rc.laneDelta or 0
+  if rowDelta == 0 and chanDelta == 0 and laneDelta == 0 then return nil end
   local inst
   for _, e in ipairs(gm:eachInstance()) do
     if e.groupId == rc.groupId and e.instId == rc.instId then inst = e; break end
   end
   if not inst then return nil end
-  local lpr     = logPerRowFor(currentRpb())
-  local srcLo   = math.floor(inst.anchor.ppq / lpr + 0.5)
-  local durRows = math.max(1, math.floor(inst.rect.dur / lpr + 0.5))
-  local streams = inst.rect.streams
+  local lpr      = logPerRowFor(currentRpb())
+  local srcLo    = math.floor(inst.anchor.ppq / lpr + 0.5)
+  local durRows  = math.max(1, math.floor(inst.rect.dur / lpr + 0.5))
+  local streams  = inst.rect.streams
+  local baseLane = inst.anchor.laneDelta or 0
   local srcMember, srcColByRef = {}, {}
   for x in ipairs(grid.cols) do
-    local off, sid = tv:streamRefAt(x, inst.anchor.chan)
+    local off, sid = tv:streamRefAt(x, inst.anchor.chan, baseLane)
     if off and streams[off] and streams[off][sid] then
       srcMember[x]                   = true
       srcColByRef[off .. ' ' .. sid] = x
@@ -2330,13 +2334,13 @@ function tv:movePreview()
   end
   local destSrc = {}
   for x in ipairs(grid.cols) do
-    local off, sid = tv:streamRefAt(x, inst.anchor.chan + chanDelta)
+    local off, sid = tv:streamRefAt(x, inst.anchor.chan + chanDelta, baseLane + laneDelta)
     if off and streams[off] and streams[off][sid] then
       destSrc[x] = srcColByRef[off .. ' ' .. sid]
     end
   end
   return { groupId = rc.groupId, instId = rc.instId,
-           delta = rowDelta, chanDelta = chanDelta,
+           delta = rowDelta, chanDelta = chanDelta, laneDelta = laneDelta,
            srcLo = srcLo, srcHi = srcLo + durRows,
            srcMember = srcMember, destSrc = destSrc }
 end

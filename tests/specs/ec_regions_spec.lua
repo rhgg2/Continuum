@@ -28,6 +28,13 @@ local function rect(ppq, dur)
            streams = { [0] = { ['note:1'] = true } } }
 end
 
+-- rect spanning two channels (one note lane each) -- the multi-channel
+-- dispatch: eventShift channel-moves rather than lane-walks.
+local function rectMulti(ppq, dur)
+  return { ppq = ppq, dur = dur, chanLo = 1,
+           streams = { [0] = { ['note:1'] = true }, [1] = { ['note:1'] = true } } }
+end
+
 local LPR = 10
 
 local function mk(opts)
@@ -296,41 +303,63 @@ return {
   },
 
   {
-    name = 'eventShift previews a channel move; the caret tracks, exit commits',
+    name = 'eventShift walks a single-lane region across lanes, then spills to the next channel',
+    run = function()
+      local ec, c = mk()
+      local g = c.gm:mark({}, rect(0, LPR))   -- channel 1, lane 1
+      armOn(ec, c, g, 1)
+      ec:setPos(0, 1, 1)
+      c.cmgr:invoke('eventShiftRight')        -- lane 1 -> lane 2, still channel 1
+      t.eq(ec:regionCursor().laneDelta, 1, 'lane delta accumulated')
+      t.eq(ec:regionCursor().chanDelta or 0, 0, 'no channel change yet')
+      t.eq(ec:col(), 2, 'caret on the lane-2 column')
+      t.eq(instances(c.gm, g)[1].anchor.laneDelta or 0, 0, 'gm untouched during preview')
+      c.cmgr:invoke('eventShiftRight')        -- lane boundary -> spill whole block to channel 2
+      t.eq(ec:regionCursor().chanDelta, 1, 'spilled one channel over')
+      t.eq(ec:regionCursor().laneDelta, 0, 'landed on the new channel edge lane')
+      t.eq(ec:col(), 3, 'caret on channel 2, lane 1')
+      c.cmgr:invoke('regionExit')
+      local inst = instances(c.gm, g)[1]
+      t.eq(inst.anchor.chan, 2, 'committed on channel 2')
+      t.eq(inst.anchor.laneDelta or 0, 0, 'at the edge lane')
+    end,
+  },
+
+  {
+    name = 'a single-lane region cannot walk past lane 1 of channel 1',
     run = function()
       local ec, c = mk()
       local g = c.gm:mark({}, rect(0, LPR))
       armOn(ec, c, g, 1)
       ec:setPos(0, 1, 1)
-      c.cmgr:invoke('eventShiftRight')
-      t.eq(instances(c.gm, g)[1].anchor.chan, 1, 'gm channel unmoved during preview')
-      t.eq(ec:regionCursor().chanDelta, 1, 'channel delta accumulated')
-      t.eq(ec:col(), 3, 'caret tracked to the next channel')
-      c.cmgr:invoke('regionExit')
-      t.eq(instances(c.gm, g)[1].anchor.chan, 2, 'committed one channel over on exit')
+      c.cmgr:invoke('eventShiftLeft')
+      t.eq(ec:regionCursor().laneDelta or 0, 0, 'lane 1 / channel 1 is the corner')
+      t.eq(ec:regionCursor().chanDelta or 0, 0)
     end,
   },
 
   {
-    name = 'a channel move clamps at channels 1 and 16',
+    name = 'a multi-channel region channel-moves and clamps at channel 16',
     run = function()
       local ec, c = mk()
-      local lo = c.gm:mark({}, rect(0, LPR))      -- anchored on channel 1
-      armOn(ec, c, lo, 1)
+      local g = c.gm:mark({}, rectMulti(0, LPR))   -- channels 1-2
+      armOn(ec, c, g, 1)
       ec:setPos(0, 1, 1)
-      c.cmgr:invoke('eventShiftLeft')
-      t.eq(ec:regionCursor().chanDelta or 0, 0, 'channel 1 is the floor')
+      c.cmgr:invoke('eventShiftRight')
+      t.eq(ec:regionCursor().chanDelta, 1, 'multi-channel region channel-moves')
+      t.eq(ec:regionCursor().laneDelta or 0, 0, 'lane untouched')
       c.cmgr:invoke('regionExit')
+      t.eq(instances(c.gm, g)[1].anchor.chan, 2, 'committed one channel over')
 
-      local iid = c.gm:newInstance(lo, { ppq = 0, chan = 16 })
-      armOn(ec, c, lo, iid)
+      local iid = c.gm:newInstance(g, { ppq = 0, chan = 15 })  -- occupies 15-16
+      armOn(ec, c, g, iid)
       c.cmgr:invoke('eventShiftRight')
       t.eq(ec:regionCursor().chanDelta or 0, 0, 'channel 16 is the ceiling')
     end,
   },
 
   {
-    name = 'row and channel deltas compose into a diagonal commit',
+    name = 'row and lane deltas compose into a diagonal commit',
     run = function()
       local ec, c = mk()
       local g = c.gm:mark({}, rect(0, LPR))
@@ -342,7 +371,7 @@ return {
       c.cmgr:invoke('regionExit')
       local inst = instances(c.gm, g)[1]
       t.eq(inst.anchor.ppq, LPR, 'committed +1 row')
-      t.eq(inst.anchor.chan, 2, 'and +1 channel')
+      t.eq(inst.anchor.laneDelta, 1, 'and +1 lane')
     end,
   },
 

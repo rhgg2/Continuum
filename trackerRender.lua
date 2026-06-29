@@ -751,6 +751,7 @@ local function drawTracker()
                                 and movePrev.instId == inst.instId
     local shift      = previewing and movePrev.delta or 0
     local chanOrigin = inst.anchor.chan + (previewing and movePrev.chanDelta or 0)
+    local laneOrigin = (inst.anchor.laneDelta or 0) + (previewing and movePrev.laneDelta or 0)
     local ppqLo = inst.anchor.ppq + shift * logPerRow
     local ppqHi = ppqLo + rect.dur
     local yLo = math.max(math.floor(ppqLo / logPerRow + 0.5) - scrollRow, 0)
@@ -760,7 +761,7 @@ local function drawTracker()
       local xMin, xMax, conflicted, cursorIn
       for x, col in ipairs(grid.cols) do
         if col.x then
-          local off, sid = tv:streamRefAt(x, chanOrigin)
+          local off, sid = tv:streamRefAt(x, chanOrigin, laneOrigin)
           if off and rect.streams[off] and rect.streams[off][sid] then
             local x1, x2 = col.x, col.x + col.width - 1
             xMin = math.min(xMin or x1, x1)
