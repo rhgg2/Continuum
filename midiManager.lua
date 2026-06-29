@@ -242,14 +242,27 @@ local function metaFieldsOf(evt)
   return meta
 end
 
+-- Per-modify metadata write buffer: incremental saves/deletes coalesce here so the
+-- project-ext keys set is (de)serialised once at flushMetadata(), not per event.
+local metaDirty, metaDeleted = {}, {}
+
 local function saveMetadatum(uuid)
   local evt = eventsByUuid[uuid]
   if not evt then print('Error! uuid not found'); return end
-  eventMeta:saveOne(poolGuid, uuid, metaFieldsOf(evt))
+  metaDirty[uuid], metaDeleted[uuid] = metaFieldsOf(evt), nil
 end
 
 local function deleteMetadatum(uuid)
-  if uuid then eventMeta:deleteOne(poolGuid, uuid) end
+  if uuid then metaDeleted[uuid], metaDirty[uuid] = true, nil end
+end
+
+-- Commit the buffered metadata in one keys-set round-trip. Called at modify-end,
+-- before reload -- nothing reads project ext-state mid-modify (internal reload uses
+-- the in-memory snapshot), so deferring the writes here is transparent.
+local function flushMetadata()
+  if next(metaDirty) or next(metaDeleted) then
+    eventMeta:flush(poolGuid, metaDirty, metaDeleted)
+  end
 end
 
 local function saveMetadata()
@@ -719,8 +732,10 @@ function mm:modify(fn)
   if not liveTake() then return end
   lock = true
   reaper.MIDI_DisableSort(take)
+  metaDirty, metaDeleted = {}, {}
   local ok, err = pcall(fn)
   reaper.MIDI_Sort(take)
+  flushMetadata()
   self:reload()
   lock = false
   if not ok then print('Error in modify: ' .. tostring(err)) end

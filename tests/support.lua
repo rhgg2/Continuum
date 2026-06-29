@@ -170,7 +170,7 @@ function M.poolGuidOf(take)
 end
 
 function M.seedMeta(take, uuid, fields)
-  newEventMeta():saveOne(M.poolGuidOf(take), uuid, fields)
+  newEventMeta():flush(M.poolGuidOf(take), { [uuid] = fields }, {})
 end
 
 function M.loadMeta(take)

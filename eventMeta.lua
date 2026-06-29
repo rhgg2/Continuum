@@ -33,28 +33,22 @@ function eventMeta:load(guid)
   return out
 end
 
---contract: persists one uuid's fields; extends the keys set only when the uuid is new (hot path stays O(1) writes)
-function eventMeta:saveOne(guid, uuid, fields)
+--contract: batched incremental persist: applies dirty={[uuid]=fields} + deleted={[uuid]=true}
+--contract: reads/writes the keys set once -- the per-modify hot path, O(#ops) not O(#ops*#keys)
+function eventMeta:flush(guid, dirty, deleted)
   if not guid then return end
-  local uuidTxt = util.toBase36(uuid)
-  ps:assign('project', entrySlot(guid, uuidTxt), fields)
-  local keys = readKeys(guid)
-  if not keys[uuidTxt] then
-    keys[uuidTxt] = true
-    writeKeys(guid, keys)
+  local keys, keysChanged = readKeys(guid), false
+  for uuid, fields in pairs(dirty) do
+    local uuidTxt = util.toBase36(uuid)
+    ps:assign('project', entrySlot(guid, uuidTxt), fields)
+    if not keys[uuidTxt] then keys[uuidTxt] = true; keysChanged = true end
   end
-end
-
---contract: clears one uuid's fields slot and drops it from the keys set
-function eventMeta:deleteOne(guid, uuid)
-  if not guid then return end
-  local uuidTxt = util.toBase36(uuid)
-  ps:assign('project', entrySlot(guid, uuidTxt), util.REMOVE)
-  local keys = readKeys(guid)
-  if keys[uuidTxt] then
-    keys[uuidTxt] = nil
-    writeKeys(guid, keys)
+  for uuid in pairs(deleted) do
+    local uuidTxt = util.toBase36(uuid)
+    ps:assign('project', entrySlot(guid, uuidTxt), util.REMOVE)
+    if keys[uuidTxt] then keys[uuidTxt] = nil; keysChanged = true end
   end
+  if keysChanged then writeKeys(guid, keys) end
 end
 
 --contract: replaces the pool's whole metadata with byUuid={[uuid]=fields}; sweeps uuids no longer present
