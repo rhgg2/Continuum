@@ -868,6 +868,30 @@ function gm:moveInstance(groupId, instId, anchor)
   return true
 end
 
+-- synced/global: absorb sibling overrides then drop from shared pattern (existence
+-- flip); all instances lose it. overridden/local: hide in this instance only.
+--contract: (uuid) -> true | nil,reason
+function gm:deleteEvent(uuid)
+  local loc = locByUuid[uuid]
+  if not loc then return nil, 'not a member' end
+  local groupId, instId, vuid = loc.groupId, loc.instId, loc.vuid
+  local group    = groups[groupId]
+  local instance = group.instances[instId]
+  local localEdit = localMode
+                    or instance.adds[vuid] ~= nil
+                    or instance.assigns[vuid] ~= nil
+  if not localEdit then
+    absorbSiblingOverrides(group, vuid, instId, false)
+    group.events[vuid] = nil
+  else
+    if instance.adds[vuid] ~= nil then instance.adds[vuid] = nil   -- local-only add: just gone
+    else instance.deletes[vuid] = true end                          -- shadow the shared member here
+    instance.assigns[vuid] = nil
+  end
+  pendingReproject[groupId] = true
+  return true
+end
+
 -- Resize the SHARED rect from edge instance `instId`'s drag. startDelta
 -- re-origins (Model A: every anchor += startDelta, every group event
 -- ppq -= startDelta) so realised positions hold while the boundary

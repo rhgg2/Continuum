@@ -1,4 +1,4 @@
-@module groupManager  src=groupManager.lua  loc=939  sha=0b701e6  mode=chunk  self=gm
+@module groupManager  src=groupManager.lua  loc=963  sha=fcf8d06  mode=chunk  self=gm
 @deps tm, ds
 
 # Invariants & contracts
@@ -181,7 +181,11 @@
       -- Re-anchor directly (reproject can't see anchor-invariant moves; see docs/groupManager.md
       -- § Instance lifecycle). onTake withholds off-take members and revives on return (bottom only).
       @contract  (groupId, instId, anchor) -> true | nil,reason. Caller cleared dest + clamped top.
-  @api gm:resizeGroup(groupId, instId, edits)  @ 883-937
+  @api gm:deleteEvent(uuid)  @ 874-893
+      -- synced/global: absorb sibling overrides then drop from shared pattern (existence
+      -- flip); all instances lose it. overridden/local: hide in this instance only.
+      @contract  (uuid) -> true | nil,reason
+  @api gm:resizeGroup(groupId, instId, edits)  @ 907-961
       -- Resize the SHARED rect from edge instance `instId`'s drag. startDelta
       -- re-origins (Model A: every anchor += startDelta, every group event
       -- ppq -= startDelta) so realised positions hold while the boundary
@@ -199,7 +203,7 @@
   @use call    ds.assign  @ persist:244
   @use call    ds.get  @ 28 rehydrate:252
   @use call    groups.deriveAssign  @ absorbSiblingOverrides:352 localAmend:638
-  @use call    groups.inRect  @ classifyCreate:373 resizeGroup:914
+  @use call    groups.inRect  @ classifyCreate:373 resizeGroup:938
   @use call    groups.project  @ rehydrate:262 newInstance:477 stateOf:550 reproject:577 moveInstance:842
   @use call    groups.reconcile  @ reproject:590
   @use call    groups.resolve  @ absorbSiblingOverrides:361
@@ -211,7 +215,7 @@
   @use call    tm.deleteEvent  @ reproject:619 deleteInstance:810 moveInstance:854,861
   @use call    tm.length  @ onTake:166
   @use call    util.assign  @ localAmend:642 applyEdit:728
-  @use call    util.clone  @ rehydrate:268 markGroup:452 newInstance:483 reproject:610,616 applyEdit:691,724 moveInstance:858 resizeGroup:931
+  @use call    util.clone  @ rehydrate:268 markGroup:452 newInstance:483 reproject:610,616 applyEdit:691,724 moveInstance:858 resizeGroup:955
   @use require groups  @ 11
   @use require util  @ 10
   @use sub     ds:dataChanged  @ 792

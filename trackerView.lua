@@ -1901,6 +1901,44 @@ end
 --invariant: tails (either direction) clipped by tm's tail pass; never block
 local PART_FOR = { note = 'pitch', pb = 'pb', cc = 'val', pc = 'val', at = 'val' }
 
+-- Grid row for ppq: on-grid onset near a row boundary snaps (not floors); off-grid
+-- floors. Shared by build, region-tag pass, and move dispatch for consistent resolution.
+local function ppqRowOf(ppq, chan)
+  ppq = ppq or 0
+  if ctx:isOnGrid(ppq, chan) then return ctx:snapRow(ppq, chan) end
+  return math.floor(ctx:ppqToRow(ppq, chan))
+end
+local function cellRowOf(evt, chan) return ppqRowOf(evt.ppq, chan) end
+
+-- A relocated copy of `src` at `dest`. `drop` is the per-kind set of identity
+-- fields to shed (cellEdit.relocateDrop). dest = { chan, type, lane?, cc? }.
+local function relocatedClone(src, dest, drop)
+  local clone = util.clone(src, drop)
+  clone.evType = dest.type
+  clone.chan   = dest.chan
+  if     dest.type == 'note' then clone.lane = dest.lane
+  elseif dest.type == 'cc'   then clone.cc   = dest.cc end
+  return clone
+end
+
+-- Leaf edits dispatched by cellKind (tagged at build): 'member' routes to gm, 'plain' to tm.
+-- Move = delete[src] + add[dest]; no member-add arm yet, so a move into a region is a no-op.
+local cellEdit = {
+  delete = {
+    plain  = function(evt) tm:deleteEvent(evt) end,
+    member = function(evt) gm:deleteEvent(evt.uuid) end,
+  },
+  add = {
+    plain = function(evt) tm:addEvent(evt) end,
+  },
+  -- identity a relocated copy of each kind sheds: 'member' needs a fresh uuid
+  -- (else reproject's del of the vanished member kills the standalone); 'plain' keeps it.
+  relocateDrop = {
+    plain  = { token = true, loc = true },
+    member = { token = true, loc = true, uuid = true },
+  },
+}
+
 local function shiftEvents(dir)
   local function noteColsByLane(chan)
     local byLane = {}
@@ -1994,13 +2032,13 @@ local function shiftEvents(dir)
   end
 
   for _, src in ipairs(moving) do
-    local clone = util.clone(src, { token = true, loc = true })
-    clone.evType = srcCol.type
-    clone.chan   = dest.chan
-    if     dest.type == 'note' then clone.lane = dest.lane
-    elseif dest.type == 'cc'   then clone.cc   = dest.cc end
-    tm:deleteEvent(src)
-    tm:addEvent(clone)
+    local srcKind  = srcCol.cellKind[cellRowOf(src, srcCol.midiChan)] or 'plain'
+    local destKind = (destCol and destCol.cellKind[cellRowOf(src, destCol.midiChan)]) or 'plain'
+    local add = cellEdit.add[destKind]
+    if add then                          -- no member-add arm yet: in-region move is deferred
+      cellEdit.delete[srcKind](src)
+      add(relocatedClone(src, dest, cellEdit.relocateDrop[srcKind]))
+    end
   end
   tm:flush()
 
@@ -2776,6 +2814,7 @@ function tv:rebuild(takeChanged)
         trackerMode = type == 'note' and trackerMode or nil,
         midiChan    = chan,
         cells       = {},
+        cellKind    = {},   -- [row] = 'member' | 'plain'; the leaf-edit dispatch tag
       }
       ec:decorateCol(gridCol, pitchWidth)   -- stamps parts/stopPos/partAt/partStart/width
       util.add(grid.cols, gridCol)
@@ -2858,9 +2897,7 @@ function tv:rebuild(takeChanged)
       for _, evt in ipairs(gridCol.events) do
         local startRow = ctx:ppqToRow(evt.ppq or 0, chan)
         local onGrid   = ctx:isOnGrid(evt.ppq or 0, chan)
-        -- On-grid onset a float-hair below its row boundary must snap to
-        -- the nearest row, not floor to the one below; off-grid keeps floor.
-        local y = onGrid and ctx:snapRow(evt.ppq or 0, chan) or math.floor(startRow)
+        local y        = cellRowOf(evt, chan)
         if y >= 0 and y < numRows then
           if gridCol.cells[y] then
             gridCol.overflow[y] = true
@@ -2877,6 +2914,21 @@ function tv:rebuild(takeChanged)
             startRow = startRow,
             endRow   = ctx:ppqToRow(evt.endppqC, chan),
           })
+        end
+      end
+    end
+
+    -- Tag cells inside region footprints 'member' (positional: an empty in-region cell
+    -- is a member too). Mirrors the render wash; untagged cells default 'plain' at dispatch.
+    if gm then
+      for _, inst in ipairs(gm:eachInstance()) do
+        for ci, col in ipairs(grid.cols) do
+          local off, sid = tv:streamRefAt(ci, inst.anchor.chan, inst.anchor.laneDelta)
+          if off and inst.rect.streams[off] and inst.rect.streams[off][sid] then
+            local lo = ppqRowOf(inst.anchor.ppq, col.midiChan)
+            local hi = ppqRowOf(inst.anchor.ppq + inst.rect.dur, col.midiChan)
+            for row = lo, hi - 1 do col.cellKind[row] = 'member' end
+          end
         end
       end
     end

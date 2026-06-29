@@ -79,6 +79,7 @@ local specs = {
   'gm_render_spec',
   'gm_bridge_spec',
   'gm_pitch_dupe_spec',
+  'gm_shift_out_spec',
   'gm_stamp_commit_spec',
   'gm_persist_reload_spec',
   'gm_revive_delete_spec',
