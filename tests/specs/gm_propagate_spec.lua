@@ -91,7 +91,8 @@ return {
       tm:flush()                                -- commit the mirrored add; stamp its uuid
       staged.add = {}
 
-      tm:flush({}, { { token = 't1', evt = src, update = { pitch = 72 } } }, {})
+      gm:assignEvent(src.uuid, { pitch = 72 })
+      tm:flush()
 
       -- Replay model: reproject round-trips EVERY instance from the
       -- pristine group -- the sibling's copy AND the user-touched
@@ -120,14 +121,11 @@ return {
       gm:newInstance(gid, { ppq = 960, chan = 1 })
       tm:flush(); staged.add = {}
 
-      -- A move authors a new ceiling. The injected update is the
-      -- post-realise shape the real tm hands gm: ppqL stamped, the
-      -- intent ceiling on endppqL, ppq RAW. gm reads that logical frame
-      -- and STAGES the sibling's intent as endppq. No swing here so raw
-      -- == logical == 480. Start 0->480, ceiling 240->720 (span fixed).
-      tm:flush({}, { { token = 't1', evt = src,
-                       update = { ppq = 480, ppqL = 480,
-                                  endppqL = 720, open = false } } }, {})
+      -- A move authors a new ceiling. The facade hands gm tv's AUTHORED
+      -- update (logical onset in ppq, intent ceiling in endppq); gm stages
+      -- each instance's intent as endppq. Start 0->480, ceiling ->720.
+      gm:assignEvent(src.uuid, { ppq = 480, endppq = 720 })
+      tm:flush()
 
       local bySibling, byOrigin
       for _, a in ipairs(staged.assign) do
@@ -187,7 +185,8 @@ return {
       tm:flush(); staged.add = {}
 
       gm:setLocalMode(true)
-      tm:flush({}, { { token = 't1', evt = src, update = { pitch = 99 } } }, {})
+      gm:assignEvent(src.uuid, { pitch = 99 })
+      tm:flush()
 
       -- localMode contains the edit to its own instance. The replay
       -- model still round-trips the origin's OWN event from its
@@ -226,7 +225,8 @@ return {
       gm:setLocalMode(false)
       -- Editing the local-only add: group.events[vuid] is nil (it lives in
       -- instance.adds), so the non-local assign branch must not util.assign nil.
-      tm:flush({}, { { token = 'tb', evt = born, update = { pitch = 70 } } }, {})
+      gm:assignEvent(born.uuid, { pitch = 70 })
+      tm:flush()
 
       local iid = gm:newInstance(gid, { ppq = 1920, chan = 1 })
       t.truthy(iid, 'shared group still projectable; the local add stayed local')

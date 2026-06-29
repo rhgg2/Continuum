@@ -121,7 +121,8 @@ return {
       t.eq(gid2, gid + 1, 'nextGroupId restored, not reset to 1')
 
       -- Propagation lives end to end: edit the origin, sibling reprojects.
-      tmB:flush({}, { { evt = src, update = { pitch = 72 } } }, {})
+      B:assignEvent(src.uuid, { pitch = 72 })
+      tmB:flush()
       local bySibling, byOrigin
       for _, a in ipairs(stagedB.assign) do
         if a.update.pitch ~= nil then

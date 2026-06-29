@@ -67,7 +67,7 @@ return {
       end
 
       -- First origin edit: 60 -> 72. Sibling must follow in place.
-      h.tm:assignEvent(originEvt(h, 1), { pitch = 72 })
+      gm:assignEvent(originEvt(h, 1).uuid, { pitch = 72 })
       h.tm:flush()
       local after1 = chanNotes(h, 1)
       t.eq(#after1, 2, 'still exactly two notes after the first edit')
@@ -77,7 +77,7 @@ return {
 
       -- Second origin edit: 72 -> 80. Guards the "further edits have no
       -- effect" tail of the bug (stale sibling proj record).
-      h.tm:assignEvent(originEvt(h, 1), { pitch = 80 })
+      gm:assignEvent(originEvt(h, 1).uuid, { pitch = 80 })
       h.tm:flush()
       local after2 = chanNotes(h, 1)
       t.eq(#after2, 2, 'still exactly two notes after the second edit')

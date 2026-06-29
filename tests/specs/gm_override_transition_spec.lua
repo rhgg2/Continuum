@@ -86,11 +86,13 @@ return {
       tm:flush(); staged.add = {}
 
       gm:setLocalMode(true)                 -- assign-ov on src (instance 1)
-      tm:flush({}, { { evt = src, update = { pitch = 80 } } }, {})
+      gm:assignEvent(src.uuid, { pitch = 80 })
+      tm:flush()
       gm:setLocalMode(false)
 
       staged.add, staged.assign = {}, {}
-      tm:flush({}, { { evt = src, update = { pitch = 90 } } }, {})
+      gm:assignEvent(src.uuid, { pitch = 90 })
+      tm:flush()
 
       -- No assign carried pitch 90 onto a foreign event, and the shared
       -- group still projects 60 to a clean probe.
@@ -114,7 +116,8 @@ return {
       tm:flush(); staged.add = {}
 
       gm:setLocalMode(true)
-      tm:flush({}, { { evt = src, update = { pitch = 80 } } }, {})
+      gm:assignEvent(src.uuid, { pitch = 80 })
+      tm:flush()
       gm:setLocalMode(false)
 
       staged.add, staged.del = {}, {}
@@ -137,7 +140,8 @@ return {
       tm:flush(); staged.add = {}
 
       gm:setLocalMode(true)
-      tm:flush({}, { { evt = src, update = { pitch = 80 } } }, {})
+      gm:assignEvent(src.uuid, { pitch = 80 })
+      tm:flush()
       gm:setLocalMode(false)
 
       staged.add, staged.del = {}, {}
@@ -191,7 +195,8 @@ return {
       tm:flush(); staged.add = {}
       gm:setLocalMode(false)
 
-      tm:flush({}, { { evt = born, update = { pitch = 70 } } }, {})
+      gm:assignEvent(born.uuid, { pitch = 70 })
+      tm:flush()
 
       t.eq(groupPitch(gm, tm, staged, 1920), 60,
         'editing the local add did not leak into the shared group')
@@ -245,7 +250,8 @@ return {
 
       -- Instance 2 diverges its copy (assign-ov on the shared vuid).
       gm:setLocalMode(true)
-      tm:flush({}, { { evt = sib, update = { pitch = 88 } } }, {})
+      gm:assignEvent(sib.uuid, { pitch = 88 })
+      tm:flush()
       gm:setLocalMode(false)
       staged.add, staged.del = {}, {}
 

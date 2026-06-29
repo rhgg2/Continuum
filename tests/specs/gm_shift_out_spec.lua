@@ -79,7 +79,7 @@ return {
       h.tm:flush()
       -- Give the origin instance a local override: a localMode pitch edit.
       h.gm:setLocalMode(true)
-      h.tm:assignEvent(h.tm:byUuid(1), { pitch = 67 })
+      h.gm:assignEvent(1, { pitch = 67 })
       h.tm:flush()
       h.gm:setLocalMode(false)
 

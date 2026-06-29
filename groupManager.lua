@@ -43,8 +43,6 @@ local proj      = {}
 local locByUuid = {}  -- concrete uuid -> { groupId, instId, vuid }
 -- newInstance's own projection adds; the preflush adds loop skips them.
 local selfStaged = {}
--- moveInstance's own re-place assigns; the preflush assigns loop skips them.
-local selfAssigned = {}
 -- uuids the user directly touched this flush. Gates userOwned (per
 -- event, not per instance) so a create/delete's redundant tm op is
 -- skipped while a same-flush edit in two instances still propagates.
@@ -172,19 +170,19 @@ end
 -- (nil dur IS open). The realised endppq never enters the group frame.
 local function updToGroup(update, anchor, groupEvt)
   local u = copyScalars(update, {})
-  -- ppqL is the logical onset; tm's realiseNoteUpdate leaves update.ppq
-  -- RAW (swing + delay baked in). The group frame is logical, so a pure
-  -- delay edit (raw ppq set, no ppqL) must move no group onset — delay
-  -- rides as its own scalar via copyScalars.
-  if update.ppqL ~= nil then u.ppq = update.ppqL - anchor.ppq end
+  -- The facade hands gm tv's AUTHORED (logical) update: onset in ppq, ceiling in
+  -- endppq, no tm-private ppqL/endppqL (no realisation runs upstream). The group
+  -- frame is logical, so read those directly. A pure delay edit carries no ppq, so
+  -- it moves no group onset -- delay rides as its own scalar via copyScalars.
+  if update.ppq ~= nil then u.ppq = update.ppq - anchor.ppq end
   if update.chan ~= nil then u.chanDelta = update.chan - anchor.chan end
   if update.lane ~= nil then u.key = update.lane end
   if update.cc   ~= nil then u.key = update.cc end
-  if update.endppqL == util.OPEN then
+  if update.endppq == util.OPEN then
     u.dur = util.REMOVE
-  elseif update.endppqL ~= nil then
-    local startAbs = update.ppqL or (anchor.ppq + (groupEvt.ppq or 0))
-    u.dur = update.endppqL - startAbs
+  elseif update.endppq ~= nil then
+    local startAbs = update.ppq or (anchor.ppq + (groupEvt.ppq or 0))
+    u.dur = update.endppq - startAbs
   end
   return u
 end
@@ -551,6 +549,10 @@ function gm:stateOf(uuid)
   return states[loc.vuid]
 end
 
+-- Cheap membership test for the facade's assign dispatch: locByUuid is the
+-- O(1) backing check; avoids stateOf's full project() on the keystroke path.
+function gm:isMember(uuid) return locByUuid[uuid] ~= nil end
+
 -- Read accessor for the render pass: every live instance with the group
 -- rect it projects, its anchor, and whether its group is active. No new
 -- mutable state; rect/anchor are by reference (render reads, never
@@ -687,11 +689,10 @@ do
     local group    = groups[groupId]
     local instance = group.instances[instId]
 
-    -- Same-instance "on-ov => local": once this instance carries its own
-    -- override at vuid, a further edit there stays local and never
-    -- propagates -- in localMode by definition, in global mode because a
-    -- declared divergence is an intent to differ (clear it to rejoin the
-    -- group). See docs/groupManager.md "Override transitions".
+    -- on-ov delete stays local: a delete on an instance that already carries its
+    -- own override at vuid hides the slot here rather than firing the propagating
+    -- group delete. Value edits route through gm:assignEvent now; only create and
+    -- delete reach applyEdit. See docs/groupManager.md "Override transitions".
     local onOv = not isCreate and (instance.adds[vuid] ~= nil
                   or instance.assigns[vuid] ~= nil
                   or instance.deletes[vuid] == true)
@@ -707,8 +708,6 @@ do
         local g = toGroup(evt, instance.anchor)
         instance.adds[vuid] = g
         link(groupId, instId, vuid, projOf(groupId, instId), evt.uuid, util.clone(g), evt)
-      else
-        localAmend(instance, vuid, group, update)
       end
     elseif onOv then
       if update == nil then
@@ -724,8 +723,6 @@ do
         end
         -- delete-ov + delete: the slot is already hidden here. No-op --
         -- and crucially never the propagating group delete below.
-      else
-        localAmend(instance, vuid, group, update)
       end
     else
       if update == nil then
@@ -741,9 +738,6 @@ do
         link(groupId, instId, vuid, projOf(groupId, instId), evt.uuid,
              util.clone(g), evt)
         absorbSiblingOverrides(group, vuid, instId, true)
-      else
-        local groupEvt = group.events[vuid]
-        util.assign(groupEvt, updToGroup(update, instance.anchor, groupEvt))
       end
     end
 
@@ -754,13 +748,8 @@ do
   tm:subscribe('preflush', function(adds, assigns, deletes)
     if propagating then return end
     touchedGroups, touchedUuids = {}, {}
-    -- An assign tm delivers may be gm's own re-place echo (moveInstance):
-    -- skip & clear so it never re-enters applyEdit and pollutes an
-    -- override instance's assigns.
-    for _, o in ipairs(assigns) do
-      if selfAssigned[o.evt] then selfAssigned[o.evt] = nil
-      else applyEdit(o.evt, o.update) end
-    end
+    -- Value edits no longer sniff here: the facade routes member assigns through
+    -- gm:assignEvent (stage 3). Only create (adds) and delete arrive raw.
     for _, o in ipairs(deletes) do applyEdit(o.evt, nil)      end
     -- newInstance stages its projection adds; the commit flush fires
     -- later, so they reappear as gm's echo -- skip them.
@@ -864,7 +853,7 @@ function gm:moveInstance(groupId, instId, anchor)
     local placed = toInstance(g, anchor)
     if onTake(placed) then
       if rec and rec.evt and placed.lane == rec.evt.lane then
-        selfAssigned[rec.evt] = true        -- on-take, linked, lane unchanged: re-place
+        -- on-take, linked, lane unchanged: re-place in situ
         tm:assignEvent(rec.evt,
           { ppq = placed.ppq, chan = placed.chan, endppq = placed.endppq })
       else
@@ -935,6 +924,30 @@ function gm:deleteEvent(uuid)
     instance.assigns[vuid] = nil
   end
   pendingReproject[groupId] = true
+  return true
+end
+
+-- Value edit of an existing member (the assign half of the facade). localMode or an
+-- existing override => sticky per-instance amend (localAmend); else edit the shared
+-- pattern. Consumes tv's AUTHORED update (see updToGroup). Never touches the concrete
+-- and marks no touchedUuids: reproject restages every instance, the acting one included.
+--contract: (uuid, update) -> true | nil,'not a member'. Defers to reproject (pendingReproject).
+function gm:assignEvent(uuid, update)
+  local loc = locByUuid[uuid]
+  if not loc then return nil, 'not a member' end
+  local group    = groups[loc.groupId]
+  local instance = group.instances[loc.instId]
+  local vuid     = loc.vuid
+  local onOv = instance.adds[vuid] ~= nil
+               or instance.assigns[vuid] ~= nil
+               or instance.deletes[vuid] == true
+  if localMode or onOv then
+    localAmend(instance, vuid, group, update)
+  else
+    local groupEvt = group.events[vuid]
+    util.assign(groupEvt, updToGroup(update, instance.anchor, groupEvt))
+  end
+  pendingReproject[loc.groupId] = true
   return true
 end
 

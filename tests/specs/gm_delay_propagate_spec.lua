@@ -1,20 +1,14 @@
--- Groups × delay: the gm→tm intent/realisation seam for a pure delay
--- edit. Real tm, real cm (identity swing), real gm wired into the
--- production flush pipeline.
+-- Groups × delay: a pure delay edit must not leak into the group's
+-- logical onset. Real tm, real cm (identity swing), real gm wired into
+-- the production flush pipeline; the edit drives gm:assignEvent (the
+-- facade's member path), as tv's delay edit now does.
 --
--- The incident: a delay edit on one instance pushed every OTHER copy of
--- the note off-grid. tm.realiseNoteUpdate rewrites a {delay=X} update
--- in place to {delay=X, ppq=<raw onset incl. delay>} (no ppqL — delay
--- moves no logical onset). gm reads that same update at preflush;
--- updToGroup/toGroup keyed the group onset off the realised `ppq`, so
--- the delay offset leaked into the group's LOGICAL onset and every
--- sibling reproject re-realised it a second time. Delay is the first
--- edit that breaks raw==logical even under identity swing, so it is
--- where the latent frame confusion surfaces.
---
--- Fix: the group frame is logical. toGroup/updToGroup derive the onset
--- from the logical frame (ppqL) only; a pure delay edit (raw ppq set,
--- no ppqL) moves no group onset — delay travels as the scalar alone.
+-- The group frame is logical. A delay edit authors {delay=X} alone --
+-- no ppq -- so updToGroup moves no group onset; delay travels as the
+-- scalar and each instance re-realises it once at reproject. (Original
+-- incident: when gm sniffed tm's REALISED update, the delay-baked raw
+-- ppq leaked into the group onset and every sibling re-realised it
+-- twice. Routing the authored update straight to gm removes that path.)
 
 local t       = require('support')
 local harness = require('harness')
@@ -58,8 +52,8 @@ return {
       gm:newInstance(gid, { ppq = 960, chan = 1 })
       h.tm:flush()
 
-      -- The production seam: tv's delay edit is exactly this call.
-      h.tm:assignEvent(src, { delay = DELAY })
+      -- The facade routes tv's delay edit to gm:assignEvent.
+      h.gm:assignEvent(src.uuid, { delay = DELAY })
       h.tm:flush()
 
       local notes = notesByPpq(h)
@@ -83,7 +77,7 @@ return {
       gm:newInstance(gid, { ppq = 960, chan = 1 })
       h.tm:flush()
 
-      h.tm:assignEvent(src, { delay = DELAY })
+      h.gm:assignEvent(src.uuid, { delay = DELAY })
       h.tm:flush()
 
       -- A copy dropped AFTER the delay edit must still land at its

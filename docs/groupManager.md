@@ -58,16 +58,23 @@ frame.
 
 The onset is logical the same way the ceiling is. The group frame is
 the authoring grid; a concrete's `ppq` is realised — swing and the
-note's `delay` baked in by tm's `realiseNoteUpdate`. So onsets cross on
-`ppqL`, never `ppq`: `toGroup` rebases off `evt.ppqL`, and `updToGroup`
-moves the group onset only when the update carries `ppqL` (the explicit
-"logical onset moved" stamp tm sets). A pure `delay` edit leaves `ppq`
-raw with no `ppqL` — it must move no group onset; `delay` rides across
-as its own scalar via `copyScalars`. The two coincide only under
-identity swing with zero delay, which is why a `delay` edit was the
-first to expose the leak: the offset entered the shared template and
+note's `delay` baked in by tm's `realiseNoteUpdate`. `toGroup` is fed
+realised concretes (creates, projection) and rebases off `evt.ppqL`,
+the logical onset. A value edit, though, no longer passes through tm
+before reaching gm: the leaf-edit facade (`trackerView.cellEdit.assign`)
+routes a member straight to `gm:assignEvent` with tv's *authored*
+update — logical onset in `ppq`, ceiling in `endppq`, none of tm's
+private `ppqL`/`endppqL`. So `updToGroup` reads those authored fields
+directly. A pure `delay` edit authors `{delay}` alone with no `ppq`, so
+it moves no group onset; `delay` rides across as its own scalar via
+`copyScalars`.
+
+Before the facade (stage 3) gm sniffed tm's *realised* update at the
+flush seam and read `ppqL`; a `delay` edit was the first to expose a
+leak there — the delay-baked raw `ppq` entered the shared template and
 every sibling reproject re-realised it a second time, pushing the
-copies off-grid.
+copies off-grid. Routing the authored update straight to gm removes
+that path: there is no realised onset to mistake for a logical one.
 
 Realisation is tm's, universally. tm's tail pass re-derives *every*
 note's raw note-off each rebuild, clipping it to whatever physically

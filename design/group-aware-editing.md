@@ -261,6 +261,19 @@ over-refusal; no conservative fallback shipped.
    regression).*
 3. **Migrate value edits.** Route `setValue` through the facade →
    `gm:setMemberValue`; retire `applyEdit`'s assign classification.
+   *Done. Shipped as `cellEdit.assign` → `gm:assignEvent` (named for parity
+   with `gm:addEvent`/`deleteEvent`, not `setMemberValue`). Surfaced a gap
+   the plan missed: gm depended on tm pre-realising the update (it read the
+   realised `ppqL`/`endppqL`), but the facade bypasses tm. Resolved by
+   Option D -- `gm:assignEvent` consumes tv's AUTHORED (logical) update and
+   `updToGroup` reads `ppq`/`endppq` directly; reproject is the sole writer
+   of every instance (no concrete pre-mutation, no `touchedUuids` on the
+   assign path). All ~23 tv value-edit sites route through `cellEdit.assign`
+   (dispatch by `gm:isMember`); `applyEdit`'s three assign arms, the preflush
+   assigns loop, and `selfAssigned` are gone (create/delete still via
+   applyEdit until stage 4). New full-stack spec `gm_value_facade_spec`
+   (synced propagates, localMode local); the gm propagate/override specs now
+   drive `gm:assignEvent` in the authored frame.*
 4. **Migrate create/delete, then drop gm's preflush subscription.**
    `createMember`/`deleteMember`; retire the `applyEdit` seam sniffer
    entirely, then unsubscribe gm from `preflush` and delete the

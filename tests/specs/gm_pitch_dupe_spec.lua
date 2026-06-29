@@ -47,8 +47,8 @@ return {
       local before = chanNotes(h, 1)
       t.eq(#before, 2, 'origin + one sibling copy after newInstance')
 
-      -- Real pitch edit on the origin note (vm path: assignEvent{pitch}).
-      h.tm:assignEvent(events[1], { pitch = 72 })
+      -- Real pitch edit on the origin note (facade path: gm:assignEvent).
+      gm:assignEvent(events[1].uuid, { pitch = 72 })
       h.tm:flush()
 
       local after = chanNotes(h, 1)

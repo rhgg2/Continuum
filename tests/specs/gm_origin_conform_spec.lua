@@ -90,8 +90,9 @@ return {
       staged.add, staged.assign = {}, {}
 
       -- One flush: A edited via the origin, B edited via the sibling.
-      tm:flush({}, { { evt = a,    update = { pitch = 70 } },
-                      { evt = sibB, update = { pitch = 80 } } }, {})
+      gm:assignEvent(a.uuid,    { pitch = 70 })
+      gm:assignEvent(sibB.uuid, { pitch = 80 })
+      tm:flush()
 
       local function assignFor(target)
         for _, op in ipairs(staged.assign) do

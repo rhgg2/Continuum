@@ -343,7 +343,9 @@ local toolbarSegments = {
       end
       chrome.drawPicker {
         kind        = 'track',
-        buttonLabel = (curName and curName ~= '' and curName) or ('Track ' .. (curIdx + 1)),
+        buttonLabel = (curName and curName ~= '' and curName)
+          or (curIdx and ('Track ' .. (curIdx + 1)))
+          or '\xe2\x80\x94',
         width       = 160, items = items, onPick = function(idx) tv:pickTrack(idx) end,
       }
     end,
