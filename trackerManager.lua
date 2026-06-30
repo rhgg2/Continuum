@@ -27,8 +27,8 @@
 --shape: extraColumns[chan] = { notes=count, [pc], [pb], [at], [ccs={[ccNum]=true}] }
 --shape: lastMuteSet = { [chan] = true }, pushed by tv via tm:setMutedChannels
 --shape: fxParked = { { evType='note', chan, lane, uuid, ppqL, endppqL, pitch, vel, detune, delay, sample }, ... } -- logical-only; realised ppq derived on restore
---shape: fxParkedCC = { { chan, cc, ppqL, val, shape }, ... } -- authored cc parked off-take by a cc-replace window (logical-only)
---shape: channels[chan].parked = { { chan, uuid, ppq, ppqL, endppqL, endppqC, pitch, vel, detune, sample, delay, lane }, ... } -- off-take replace members as render-ready logical cells (ppq==ppqL, endppqC==endppqL)
+--shape: fxParkedCC = { { evType='cc', chan, cc, ppqL, val, shape }, ... } -- authored cc parked off-take by a cc-replace window (logical-only)
+--shape: channels[chan].parked = { { evType='note', chan, uuid, ppq, ppqL, endppqL, endppqC, pitch, vel, detune, sample, delay, lane }, ... } -- off-take replace members as render-ready logical cells (ppq==ppqL, endppqC==endppqL)
 --shape: channels[chan].parkedCC = { { evType='cc', chan, cc, ppq, ppqL, val, shape }, ... } -- off-take cc-replace members as render-ready logical cells (ppq==ppqL)
 --contract: a discrete-replace in a region parks its covered chord off-take; else it keeps sounding
 --invariant: parked members feed generator + grid only; never sounding (mute fails for CC/PA)
@@ -54,6 +54,9 @@ local channels    = {}
 local lastMuteSet = {}
 --invariant: staleSwing[chan]=true: resolved swing changed; rebuild rederives raw, clears
 local staleSwing  = {}
+-- True only while flush writes the parked stash; suppresses the inline dataChanged
+-- rebuild so flush drives the single rebuild (B3 staging, see design/note-macros-v2.md).
+local flushingParked = false
 -- ppq tolerance for "raw agrees with its logical projection"; absorbs
 -- fromLogical rounding slop, shared by the tail pass and rebuild rule.
 local EPS         = 1
@@ -189,13 +192,15 @@ end
 
 ---------- UPDATE MANAGER
 
-local addEvent, assignEvent, deleteEvent, flush, reload do
+local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked, flush, reload do
 
   ----- State
 
   local adds = {}
   local assigns = {}
   local deletes = {}
+  local parkedEdits = {}
+  local parkedUuidSeq = 0
   local chans = {}
   local byToken = {}
   local byUuid  = {}
@@ -509,6 +514,66 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     end
   end
 
+  ----- Parked staging (B3): logical-only edits to the fx replace off-take.
+
+  -- Specs are logical (no realised ppq); rebuildRegionPark derives realisation each rebuild.
+  -- Dispatch on evType like addEvent: notes key by uuid (fxp-N minted for window-authored
+  -- adds), ccs by (chan, cc, ppqL). Edits stage here and ride flush -- a parked edit that wrote
+  -- ds inline would rebuild mid-batch and discard still-staged mm ops.
+
+  local function mintParkedUuid()
+    parkedUuidSeq = parkedUuidSeq + 1
+    return 'fxp-' .. parkedUuidSeq
+  end
+
+  function addParked(spec)
+    if spec.evType == 'note' and not spec.uuid then spec.uuid = mintParkedUuid() end
+    util.add(parkedEdits, { op = 'add', spec = spec })
+  end
+
+  function assignParked(evt, update)
+    util.add(parkedEdits, { op = 'assign', evt = evt, update = update })
+  end
+
+  function deleteParked(evt)
+    util.add(parkedEdits, { op = 'delete', evt = evt })
+  end
+
+  local function findParked(list, ref)
+    if ref.evType == 'note' then
+      for i, s in ipairs(list) do if s.uuid == ref.uuid then return i end end
+    else
+      for i, s in ipairs(list) do
+        if s.chan == ref.chan and s.cc == ref.cc and s.ppqL == ref.ppqL then return i end
+      end
+    end
+  end
+
+  -- Apply staged edits to cloned stashes, then write back under flushingParked so the inline
+  -- dataChanged rebuild is suppressed (flush drives the one rebuild).
+  local function flushParked()
+    local notes = util.deepClone(ds:get('fxParked')   or {})
+    local ccs   = util.deepClone(ds:get('fxParkedCC') or {})
+    for _, e in ipairs(parkedEdits) do
+      local ref  = e.spec or e.evt
+      local list = ref.evType == 'note' and notes or ccs
+      if e.op == 'add' then
+        util.add(list, e.spec)
+      else
+        local i = findParked(list, ref)
+        if i then
+          if e.op == 'assign' then util.assign(list[i], e.update)
+          else table.remove(list, i) end
+        end
+      end
+    end
+    parkedEdits = {}
+    flushingParked = true
+    if not util.deepEq(ds:get('fxParked')   or {}, notes) then ds:assign('fxParked',   #notes > 0 and notes or util.REMOVE) end
+    if not util.deepEq(ds:get('fxParkedCC') or {}, ccs)   then ds:assign('fxParkedCC', #ccs   > 0 and ccs   or util.REMOVE) end
+    flushingParked = false
+  end
+
   ----- Flush: commit accumulated ops to mm.
 
   --contract: no-op if nothing staged
@@ -526,7 +591,17 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
       for chan in pairs(dirtyPcChans) do reconcilePcs(chan) end
       dirtyPcChans = {}
     end
-    if #adds == 0 and #assigns == 0 and #deletes == 0 then return end
+    if #adds == 0 and #assigns == 0 and #deletes == 0 and #parkedEdits == 0 then return end
+
+    -- Parked edits stage alongside mm ops. Write the stash first (guarded), then let the mm
+    -- commit's reload->rebuild pick it up; with no mm ops, drive the one rebuild explicitly.
+    local hadMmOps = #adds > 0 or #assigns > 0 or #deletes > 0
+    if #parkedEdits > 0 then flushParked() end
+    if not hadMmOps then
+      tm:rebuild(false)
+      fire('postflush')
+      return
+    end
 
     perf.openFrame(); perf.start('flush')
 
@@ -657,6 +732,7 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
   -- (tokens may be stale for newly-added events; matches prior "fresh um per rebuild").
   function reload()
     adds, assigns, deletes = {}, {}, {}
+    parkedEdits            = {}
     dirtyPcChans           = {}
     byToken                = {}
     byUuid                 = {}
@@ -784,6 +860,9 @@ end
 function tm:deleteEvent(evt)         deleteEvent(evt)         end
 function tm:addEvent(evt)            addEvent(evt)            end
 function tm:assignEvent(evt, update) assignEvent(evt, update) end
+function tm:addParked(spec)           addParked(spec)           end
+function tm:assignParked(evt, update) assignParked(evt, update) end
+function tm:deleteParked(evt)         deleteParked(evt)         end
 function tm:flush() flush() end
 
 ----- Length
@@ -1394,7 +1473,7 @@ local function rebuildRegionPark(deferred)
       local channel = channels[spec.chan]
       while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
       util.add(channel.parked, util.pick(spec,
-        "chan uuid ppqL endppqL pitch vel detune sample delay lane", { ppq = spec.ppqL }))
+        "evType chan uuid ppqL endppqL pitch vel detune sample delay lane", { ppq = spec.ppqL }))
     end
     for chan = 1, 16 do
       realiseParked(channels[chan].parked, tm:toLogical(chan, takeLen))
@@ -1422,7 +1501,7 @@ local function rebuildRegionPark(deferred)
       end
     end
     local function shape(evt, chan, cc)
-      return { chan = chan, cc = cc, ppqL = evt.ppqL or evt.ppq,
+      return { evType = 'cc', chan = chan, cc = cc, ppqL = evt.ppqL or evt.ppq,
                val = evt.val, shape = evt.shape }
     end
     -- A logical cc event from a parked spec, seated at ppq (realised onset on restore; ppqL for a render cell).
@@ -2298,8 +2377,9 @@ do
       prevSwing = util.deepClone(cur)
       tm:rebuild(false)
     elseif change.name == 'extraColumns' or change.name == 'noteDelay'
-           or change.name == 'fxRegions' then
-      tm:rebuild(false)
+           or change.name == 'fxRegions'
+           or change.name == 'fxParked' or change.name == 'fxParkedCC' then
+      if not flushingParked then tm:rebuild(false) end
     end
   end)
 

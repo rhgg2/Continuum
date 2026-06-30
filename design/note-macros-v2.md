@@ -34,7 +34,7 @@ Track A is the generator substrate, Track B the authoring UI. Checked = landed.
 - [x] B2 — parked note + cc display (render only)
 
 **Open / next**
-- [ ] B3 — parked notes/ccs *editable* off-take via a third edit backing (in progress, § B3) — steps 1-2 landed (the `generators` extract; logical-only specs + identity capture)
+- [ ] B3 — parked notes/ccs *editable* off-take via a third edit backing (in progress, § B3) — steps 1-3 landed (the `generators` extract; logical-only specs + identity capture; staging verbs + flush integration). Step 4 (view backing) remains
 - [ ] fx chain — series composition + multi-column authoring (design only, § The fx chain)
 
 **Deferred (no consumer / intentional)**
@@ -614,8 +614,12 @@ column-based, not gm-backed -- the Open-questions Track-B lean, now resolved.
 (2) logical-only park specs + identity capture in `rebuildRegionPark` — **landed**
 (stashes are logical-only; parked notes carry `chan`+`uuid`, parked ccs `chan`+`ppqL`;
 restore derives realised ppq via `fromLogical`; pinned in `tm_fx_region_spec`); (3) staging
-verbs (`parkedEdits`) + flush integration + the `dataChanged` subscription; (4) view backing +
-tagging (note, then cc). Steps 3-4 below as planned.
+verbs (`parkedEdits`) + flush integration + the `dataChanged` subscription — **landed**
+(`tm:addParked`/`assignParked`/`deleteParked` dispatch on `evType` like `addEvent`; flush
+writes the cloned stash under `flushingParked` then rides the mm reload→rebuild, or drives one
+explicit rebuild when parked-only; `fxParked`/`fxParkedCC` joined the `dataChanged` rebuild
+list; every parked spec/cell now carries `evType`; pinned in `tm_fx_region_spec`); (4) view
+backing + tagging (note, then cc). Step 4 below as planned.
 
 Closes the B2 *edit open* gap: a replace region's parked chord (and parked cc)
 renders but is not yet editable (parked cells are tokenless, so a cursor edit
@@ -673,13 +677,13 @@ parking disagree. Both now come from `generators` (pure, reads only `kinds`):
   `colFor`/the backing address by). Specs go **logical-only** (drop realised
   `ppq`/`endppq`; restore derives them fresh from `ppqL` via `fromLogical` under
   current swing). All four `--shape` annotations updated.
-  (b) **staging**: a `parkedEdits` buffer peer to `adds`/`assigns`/`deletes`, with
-  `tm:addParked`/`tm:assignParked`/`tm:deleteParked`. Note key = `uuid` (minted
-  `fxp-N` on add); cc key = natural `(chan, cc, ppqL)` (cc events carry no uuid).
-  (c) **flush integration**: `parkedEdits` joins the no-op guard; apply to a cloned
+  (b) **staging** — **landed**: a `parkedEdits` buffer peer to `adds`/`assigns`/`deletes`, with
+  `tm:addParked`/`tm:assignParked`/`tm:deleteParked` (evType-dispatched like `addEvent`). Note
+  key = `uuid` (minted `fxp-N` on add); cc key = natural `(chan, cc, ppqL)` (cc events carry no uuid).
+  (c) **flush integration** — **landed**: `parkedEdits` joins the no-op guard; apply to a cloned
   `fxParked`/`fxParkedCC` under a `flushingParked` guard, then -- mm-ops present ->
   the existing `mm 'reload'` rebuild picks up the written stash; parked-only -> one
-  explicit `tm:rebuild`. (d) **dataChanged**: add `fxParked`/`fxParkedCC` to the
+  explicit `tm:rebuild`. (d) **dataChanged** — **landed**: `fxParked`/`fxParkedCC` joined the
   rebuild list (so undo rewinds still rebuild), skipped while `flushingParked`.
 - *`trackerView.lua`* -- `require 'generators'`; a `parked` cellKind tagging block
   mirroring the `member` one (~3100) over `parkWindows`; `backing.parked =

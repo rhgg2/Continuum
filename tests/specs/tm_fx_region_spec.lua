@@ -358,6 +358,131 @@ return {
     end,
   },
 
+  ----- B3 step 3: parked edits stage on tm and ride flush (no inline ds write)
+
+  {
+    name = 'assignParked (note): edit a parked pitch -> stash updated, still parked, renders the new pitch',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { pitch = 60, lane = 1 })
+      injectArp(h)
+      h.tm:assignParked(h.tm:getChannel(1).parked[1], { pitch = 67 }); h.tm:flush()
+      local parked = h.tm:getChannel(1).parked
+      t.eq(#parked, 1, 'still parked under the region')
+      t.eq(parked[1].pitch, 67, 'the render cell shows the edited pitch')
+      t.eq(h.ds:get('fxParked')[1].pitch, 67, 'the stash carries the edit')
+      t.deepEq(authoredPitches(h), {}, 'still off the take -- editing did not unpark it')
+    end,
+  },
+
+  {
+    name = 'deleteParked (note): a parked note leaves the stash and is not restored while still covered',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { pitch = 60, lane = 1 })
+      injectArp(h)
+      h.tm:deleteParked(h.tm:getChannel(1).parked[1]); h.tm:flush()
+      t.eq(#h.tm:getChannel(1).parked, 0, 'the parked note is gone from the render union')
+      t.falsy(h.ds:get('fxParked'), 'the stash empties -- no parked notes remain')
+      t.deepEq(authoredPitches(h), {}, 'deleting a parked note does not resurrect it on the take')
+    end,
+  },
+
+  {
+    name = 'addParked (note): typing into a replace window stashes a logical spec (minted uuid), off the take',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { pitch = 60, lane = 1 })
+      injectArp(h)
+      h.tm:addParked({ evType = 'note', chan = 1, lane = 1, ppqL = 120, endppqL = 240,
+                       pitch = 72, vel = 100, detune = 0, delay = 0 })
+      h.tm:flush()
+      local stash = h.ds:get('fxParked')
+      t.eq(#stash, 2, 'the authored 60 and the typed 72 both sit in the stash')
+      local typed
+      for _, s in ipairs(stash) do if s.pitch == 72 then typed = s end end
+      t.truthy(typed, 'the typed note is stashed')
+      t.eq(typed.uuid, 'fxp-1', 'a window-authored parked note mints an fxp uuid')
+      t.eq(typed.ppq, nil, 'the stashed spec stays logical-only')
+      t.deepEq(authoredPitches(h), {}, 'the typed note never enters the take -- it is parked')
+      local pitches = {}
+      for _, m in ipairs(h.tm:getChannel(1).parked) do pitches[#pitches + 1] = m.pitch end
+      table.sort(pitches)
+      t.deepEq(pitches, { 60, 72 }, 'both parked notes render')
+    end,
+  },
+
+  {
+    name = 'parked cc: assignParked then deleteParked edits the off-take cc stash symmetrically',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent({ evType = 'cc', ppq = 60, chan = 1, cc = 74, val = 30 }); h.tm:flush()
+      generators.kinds.ccRep = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppqL = host.window[1], val = 100, shape = 'square' },
+        } } end,
+        mode = 'replace', dest = 74, label = 'CcRep', defaults = {}, fields = {},
+      }
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+                                   fx = { { kind = 'ccRep' } } } })
+      h.tm:rebuild()
+
+      h.tm:assignParked(h.tm:getChannel(1).parkedCC[1], { val = 81 }); h.tm:flush()
+      t.eq(h.ds:get('fxParkedCC')[1].val, 81, 'the cc stash carries the edited value')
+      t.eq(h.tm:getChannel(1).parkedCC[1].val, 81, 'the render cell shows the edit')
+
+      h.tm:deleteParked(h.tm:getChannel(1).parkedCC[1]); h.tm:flush()
+      generators.kinds.ccRep = nil
+      t.eq(#h.tm:getChannel(1).parkedCC, 0, 'the parked cc is gone from the render union')
+      t.falsy(h.ds:get('fxParkedCC'), 'the cc stash empties')
+    end,
+  },
+
+  {
+    name = 'one flush, one rebuild: a parked edit + a normal note land together (the multi-select guard)',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { pitch = 60, lane = 1 })
+      injectArp(h)
+      local rebuilds = 0
+      h.tm:subscribe('rebuild', function() rebuilds = rebuilds + 1 end)
+      h.tm:assignParked(h.tm:getChannel(1).parked[1], { pitch = 67 })
+      h.tm:addEvent({ evType = 'note', ppq = 300, endppq = 480, chan = 1, pitch = 50,
+                      vel = 100, detune = 0, delay = 0, lane = 1 })
+      h.tm:flush()
+      t.eq(rebuilds, 1, 'a single flush drives exactly one rebuild -- the staged parked edit is not discarded')
+      t.eq(h.tm:getChannel(1).parked[1].pitch, 67, 'the parked edit landed')
+      t.deepEq(authoredPitches(h), { 50 }, 'the normal note landed on the take in the same flush')
+    end,
+  },
+
+  {
+    name = 'parked-only flush drives exactly one rebuild (no mm round-trip)',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { pitch = 60, lane = 1 })
+      injectArp(h)
+      local rebuilds = 0
+      h.tm:subscribe('rebuild', function() rebuilds = rebuilds + 1 end)
+      h.tm:assignParked(h.tm:getChannel(1).parked[1], { pitch = 67 }); h.tm:flush()
+      t.eq(rebuilds, 1, 'a parked-only flush still rebuilds exactly once')
+      t.eq(h.tm:getChannel(1).parked[1].pitch, 67, 'the edit is visible after the rebuild')
+    end,
+  },
+
+  {
+    name = 'fxParked dataChanged (undo rewind) rebuilds the grid',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { pitch = 60, lane = 1 })
+      injectArp(h)
+      local rebuilds = 0
+      h.tm:subscribe('rebuild', function() rebuilds = rebuilds + 1 end)
+      h.ds:assign('fxParked', {})   -- an undo rewind arrives as a bare fxParked change
+      t.eq(rebuilds, 1, 'a bare fxParked change triggers one rebuild so the grid re-derives')
+    end,
+  },
+
   ----- Augment by kind: a continuous region leaves its members sounding (no parking)
 
   {
