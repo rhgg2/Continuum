@@ -233,4 +233,133 @@ return {
       t.falsy(h.vm:fxHostForEdit(), 'no host off a note with no selection')
     end,
   },
+
+  ----- B3 step 4: parked events are editable off-take through the leaf-edit facade
+
+  {
+    name = 'parked note: a pitch nudge edits the off-take stash and re-renders, still parked',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      addNote(h)                        -- C4 (60) over [0,240)
+      injectRegion(h, { fx = arpUp })   -- a discrete-replace region parks it
+      t.deepEq(authoredPitches(h), {}, 'parked off the take')
+      h.ec:setPos(0, noteColIdx(h, 1), 1)
+      h.cmgr:invoke('nudgeFineUp')      -- transpose +1
+      local stash = h.ds:get('fxParked') or {}
+      t.eq(#stash, 1, 'one parked note in the stash')
+      t.eq(stash[1].pitch, 61, 'the stash pitch was edited (not the take)')
+      t.deepEq(authoredPitches(h), {}, 'still parked -- the edit did not push it to the take')
+      t.eq(h.tm:getChannel(1).parked[1].pitch, 61, 'the render cell shows the new pitch')
+    end,
+  },
+
+  {
+    name = 'parked note: delete removes it from the stash and does not restore it when the window moves off',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      addNote(h)
+      injectRegion(h, { fx = arpUp })
+      h.ec:setPos(0, noteColIdx(h, 1), 1)
+      h.cmgr:invoke('delete')
+      t.eq(#(h.ds:get('fxParked') or {}), 0, 'the parked note left the stash')
+      injectRegion(h, { fx = arpUp, endppq = 60 })   -- shrink the window off the (now-deleted) note
+      t.deepEq(authoredPitches(h), {}, 'a deleted parked note is not resurrected on the take')
+    end,
+  },
+
+  {
+    name = 'parked add: typing a note into a replace window stashes a logical spec, off the take',
+    run = function(harness)
+      local h = harness.mk{ config = { take = { currentOctave = 4 } } }
+      h.vm:setGridSize(80, 40)
+      injectRegion(h, { fx = arpUp })   -- replace window [0,240) over an empty channel
+      local idx = noteColIdx(h, 1)
+      h.ec:setPos(0, idx, 1)
+      h.vm:editEvent(h.vm.grid.cols[idx], nil, 1, string.byte('z'), false)  -- 'z' = C4 = 60
+      local stash = h.ds:get('fxParked') or {}
+      t.eq(#stash, 1, 'the typed note went to the parked stash')
+      t.eq(stash[1].pitch, 60, 'with the typed pitch')
+      t.eq(stash[1].ppqL, 0, 'logical onset captured from the cursor row')
+      t.eq(stash[1].ppq, nil, 'no realised ppq -- the stash is logical-only')
+      t.truthy(tostring(stash[1].uuid):match('^fxp%-'), 'a parked uuid was minted')
+      t.deepEq(authoredPitches(h), {}, 'nothing entered the take')
+    end,
+  },
+
+  {
+    name = 'parked move-out: nudging a parked note past the window end restores it to the take',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      h.tm:addEvent{ evType = 'note', ppq = 60, endppq = 120, chan = 1, pitch = 60,
+                     vel = 100, detune = 0, delay = 0, lane = 1 }
+      h.tm:flush()
+      injectRegion(h, { fx = arpUp, endppq = 120 })   -- covers [0,120): the ppq-60 note parks
+      t.deepEq(authoredPitches(h), {}, 'the covered note is parked')
+      h.ec:setPos(1, noteColIdx(h, 1), 1)             -- row 1 = ppq 60
+      h.cmgr:invoke('nudgeForward')                   -- -> row 2 (ppq 120), past the window
+      t.deepEq(authoredPitches(h), { 60 }, 'the note crossed back onto the take')
+      t.eq(#(h.ds:get('fxParked') or {}), 0, 'and left the parked stash')
+    end,
+  },
+
+  {
+    name = 'parked cc: a value nudge edits the off-take cc stash; delete removes it',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      h.tm:addEvent({ evType = 'cc', ppq = 0, chan = 1, cc = 74, val = 30 }); h.tm:flush()
+      generators.kinds.ccRep = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppqL = host.window[1], val = 100, shape = 'square' },
+        } } end,
+        mode = 'replace', dest = 74, label = 'CcRep', defaults = {}, fields = {},
+      }
+      injectRegion(h, { fx = { { kind = 'ccRep' } } })
+      h.tm:rebuild()                                   -- steady state: cc parked, column present
+
+      local ci
+      for i, c in ipairs(h.vm.grid.cols) do
+        if c.type == 'cc' and c.midiChan == 1 and c.cc == 74 then ci = i end
+      end
+      t.truthy(ci, 'the parked cc column exists')
+      h.ec:setPos(0, ci, 1)
+      h.cmgr:invoke('nudgeCoarseUp')                   -- bump the cc value
+      local stash = h.ds:get('fxParkedCC') or {}
+      t.eq(#stash, 1, 'one parked cc in the stash')
+      t.truthy(stash[1].val > 30, 'its value was nudged up off the take')
+
+      h.ec:setPos(0, ci, 1)
+      h.cmgr:invoke('delete')
+      generators.kinds.ccRep = nil
+      t.eq(#(h.ds:get('fxParkedCC') or {}), 0, 'delete removed the parked cc from the stash')
+    end,
+  },
+
+  {
+    name = 'multi-select spanning a parked note and a take note: both edit under one rebuild',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      h.tm:addEvent{ evType = 'note', ppq = 0,   endppq = 60,  chan = 1, pitch = 60,
+                     vel = 100, detune = 0, delay = 0, lane = 1 }
+      h.tm:addEvent{ evType = 'note', ppq = 240, endppq = 300, chan = 1, pitch = 64,
+                     vel = 100, detune = 0, delay = 0, lane = 1 }
+      h.tm:flush()
+      injectRegion(h, { fx = arpUp, endppq = 120 })   -- parks only the ppq-0 note
+      t.deepEq(authoredPitches(h), { 64 }, 'only the in-window note parked')
+
+      local rebuilds = 0
+      h.tm:subscribe('rebuild', function() rebuilds = rebuilds + 1 end)
+      local idx = noteColIdx(h, 1)
+      h.ec:setSelection{ row1 = 0, row2 = 4, col1 = idx, col2 = idx,
+                         part1 = 'pitch', part2 = 'pitch' }
+      h.cmgr:invoke('nudgeFineUp')                     -- transpose both +1
+      t.eq(rebuilds, 1, 'one rebuild for the whole multi-select flush (the staging guard)')
+      t.deepEq(authoredPitches(h), { 65 }, 'the take note transposed to 65')
+      t.eq((h.ds:get('fxParked') or {})[1].pitch, 61, 'the parked note transposed to 61 in the stash')
+    end,
+  },
 }

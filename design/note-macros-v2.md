@@ -32,9 +32,9 @@ Track A is the generator substrate, Track B the authoring UI. Checked = landed.
 - [x] Continuous **cc** replace — park authored cc off-take + write the curve direct (§ Continuous cc)
 - [x] B1 — fx-region column + Super-X addressing
 - [x] B2 — parked note + cc display (render only)
+- [x] B3 — parked notes/ccs *editable* off-take via a third edit backing (§ B3) — all four steps landed (the `generators` extract; logical-only specs + identity capture; staging verbs + flush integration; the `parked` view backing + cell tagging)
 
 **Open / next**
-- [ ] B3 — parked notes/ccs *editable* off-take via a third edit backing (in progress, § B3) — steps 1-3 landed (the `generators` extract; logical-only specs + identity capture; staging verbs + flush integration). Step 4 (view backing) remains
 - [ ] fx chain — series composition + multi-column authoring (design only, § The fx chain)
 
 **Deferred (no consumer / intentional)**
@@ -607,7 +607,7 @@ column-based, not gm-backed -- the Open-questions Track-B lean, now resolved.
   the "visible, editable surface" model intends) is still open (planned as B3 below).
   Pinned by the parked note- and cc-render tests in `tv_fx_region_spec`.
 
-## B3 — parked notes/ccs as a third edit backing (in progress)
+## B3 — parked notes/ccs as a third edit backing (landed)
 
 **Progress — four green steps.** (1) extract `parksNotes`/`parkWindows` to `generators` —
 **landed** (pure surface + `generators_spec` pins; tm now calls `parkWindows` once);
@@ -619,7 +619,12 @@ verbs (`parkedEdits`) + flush integration + the `dataChanged` subscription — *
 writes the cloned stash under `flushingParked` then rides the mm reload→rebuild, or drives one
 explicit rebuild when parked-only; `fxParked`/`fxParkedCC` joined the `dataChanged` rebuild
 list; every parked spec/cell now carries `evType`; pinned in `tm_fx_region_spec`); (4) view
-backing + tagging (note, then cc). Step 4 below as planned.
+backing + tagging — **landed** (`backing.parked` routes the leaf-edit facade to the three tm
+verbs; `toParkedSpec` normalises a view event — authoring ppq is already logical — to the
+logical-only stash; a `parked` `cellKind` pass over `generators.parkWindows` mirrors the
+`member` one and wins on overlap; the parked render cell gained `endppq` (authored ceiling) so
+the note move/resize machinery edits it; move-out/in fall out of the facade's cross-kind
+relocate; pinned in `tv_fx_region_spec`).
 
 Closes the B2 *edit open* gap: a replace region's parked chord (and parked cc)
 renders but is not yet editable (parked cells are tokenless, so a cursor edit
@@ -685,12 +690,15 @@ parking disagree. Both now come from `generators` (pure, reads only `kinds`):
   the existing `mm 'reload'` rebuild picks up the written stash; parked-only -> one
   explicit `tm:rebuild`. (d) **dataChanged** — **landed**: `fxParked`/`fxParkedCC` joined the
   rebuild list (so undo rewinds still rebuild), skipped while `flushingParked`.
-- *`trackerView.lua`* -- `require 'generators'`; a `parked` cellKind tagging block
-  mirroring the `member` one (~3100) over `parkWindows`; `backing.parked =
-  { add, assign, delete, relocateDrop = { token, uuid, parked } }` routing to the
-  three tm verbs. `add` builds the logical spec from the OPEN-ended note `edit.add`
-  already hands it (placeNewNote ~732); `realiseParked` already tails OPEN specs.
-- **No `midiManager` change.**
+- *`trackerView.lua`* -- **landed**: `require 'generators'`; a `parked` cellKind tagging block
+  mirroring the `member` one over `parkWindows` (parked wins on overlap); `backing.parked =
+  { add, assign, delete, relocateDrop = { token, loc, uuid } }` routing to the three tm verbs.
+  `add` runs `toParkedSpec` (the view's authoring ppq is already logical, so `ppqL = evt.ppq`)
+  on the OPEN-ended note `edit.add` hands it (placeNewNote); `realiseParked` tails OPEN specs.
+- *`trackerManager.lua`* (B2 render cell) -- **landed**: the parked note cell gained `endppq`
+  (the authored ceiling) so the view's note move/resize machinery (`assignNoteMove` reads
+  `evt.endppq`) edits a parked note instead of faulting on a missing field; `endppqC` stays the
+  clipped render ceiling. The only tm touch -- **no `midiManager` change**.
 
 **Decisions taken (revisit if a need appears).**
 

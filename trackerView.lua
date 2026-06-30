@@ -26,6 +26,7 @@ local util       = require 'util'
 local timing     = require 'timing'
 local tuning     = require 'tuning'
 local groupsCore = require 'groups'
+local generators = require 'generators'
 
 local tm, cm, ds, cmgr, gm, pa, facade =
   (...).tm, (...).cm, (...).ds, (...).cmgr, (...).gm, (...).pa, (...).facade
@@ -36,13 +37,25 @@ local function print(...)
   return util.print(...)
 end
 
--- Leaf-edit facade: routes an event to 'member' (gm) or 'plain' (tm) by position;
--- colFor reads its self-describing column, kindAt the region tag. Fallback, move, see design/group-aware-editing.md § Kind-keyed facade.
+-- Leaf-edit facade: routes an event to 'member' (gm), 'parked' (tm fx off-take), or
+-- 'plain' (tm) by position; colFor reads its self-describing column, kindAt the region
+-- tag. Fallback, move, see design/group-aware-editing.md § Kind-keyed facade.
 local colFor, kindAt   -- data-derived column + cell-kind helpers, defined below
 local function kindOf(evt) return kindAt(colFor(evt), evt.ppq) end
 
 -- localMode confines edits to the instance under the caret; defined after instanceAtCursor.
 local localBlocked
+
+-- A parked event edits the fx replace off-take. Normalise a view event to a logical-only
+-- stash spec: at this layer authoring ppq is already logical (cursorppq = row·logPerRow),
+-- so ppqL = evt.ppq and the stash carries no realised ppq. see design/note-macros-v2.md § B3
+local function toParkedSpec(evt)
+  if evt.evType == 'cc' then
+    return util.pick(evt, "evType chan cc val shape", { ppqL = evt.ppq })
+  end
+  return util.pick(evt, "evType chan lane pitch vel detune sample delay",
+                   { ppqL = evt.ppq, endppqL = evt.endppq })
+end
 
 local backing = {
   plain = {
@@ -57,6 +70,13 @@ local backing = {
     delete = function(evt)         if not gm:deleteEvent(evt.uuid)         then tm:deleteEvent(evt)      end end,
     -- a relocated copy sheds the source kind's identity: a member needs a fresh
     -- uuid, else reproject's del of the vanished member kills the standalone.
+    relocateDrop = { token = true, loc = true, uuid = true },
+  },
+  parked = {
+    add    = function(evt)         tm:addParked(toParkedSpec(evt))   end,
+    assign = function(evt, update) tm:assignParked(evt, update)      end,
+    delete = function(evt)         tm:deleteParked(evt)              end,
+    -- move-out sheds the stash key so mm:add mints a fresh take uuid (§ B3 decisions).
     relocateDrop = { token = true, loc = true, uuid = true },
   },
 }
@@ -3108,6 +3128,20 @@ function tv:rebuild(takeChanged)
             local hi = ppqRowOf(inst.anchor.ppq + inst.rect.dur, col.midiChan)
             for row = lo, hi - 1 do col.cellKind[row] = 'member' end
           end
+        end
+      end
+    end
+
+    -- Tag cells inside fx replace-park windows 'parked' (positional, like 'member'): the
+    -- leaf-edit facade routes them to tm's logical-only off-take stash. Same windows 4.5
+    -- parks over (generators.parkWindows is the shared predicate); parked wins on overlap.
+    local park = generators.parkWindows(ds:get('fxRegions') or {})
+    for _, col in ipairs(grid.cols) do
+      local windows = col.type == 'note' and park.notes[col.midiChan]
+                   or col.type == 'cc'  and (park.ccs[col.midiChan] or {})[col.cc]
+      for _, w in ipairs(windows or {}) do
+        for row = ppqRowOf(w[1], col.midiChan), ppqRowOf(w[2], col.midiChan) - 1 do
+          col.cellKind[row] = 'parked'
         end
       end
     end

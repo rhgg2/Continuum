@@ -28,7 +28,7 @@
 --shape: lastMuteSet = { [chan] = true }, pushed by tv via tm:setMutedChannels
 --shape: fxParked = { { evType='note', chan, lane, uuid, ppqL, endppqL, pitch, vel, detune, delay, sample }, ... } -- logical-only; realised ppq derived on restore
 --shape: fxParkedCC = { { evType='cc', chan, cc, ppqL, val, shape }, ... } -- authored cc parked off-take by a cc-replace window (logical-only)
---shape: channels[chan].parked = { { evType='note', chan, uuid, ppq, ppqL, endppqL, endppqC, pitch, vel, detune, sample, delay, lane }, ... } -- off-take replace members as render-ready logical cells (ppq==ppqL, endppqC==endppqL)
+--shape: channels[chan].parked = { { evType='note', chan, uuid, ppq, ppqL, endppq, endppqL, endppqC, pitch, vel, detune, sample, delay, lane }, ... } -- render-ready off-take replace cells (ppq==ppqL; endppq is the authored ceiling the view edits, endppqC==endppqL clipped for render)
 --shape: channels[chan].parkedCC = { { evType='cc', chan, cc, ppq, ppqL, val, shape }, ... } -- off-take cc-replace members as render-ready logical cells (ppq==ppqL)
 --contract: a discrete-replace in a region parks its covered chord off-take; else it keeps sounding
 --invariant: parked members feed generator + grid only; never sounding (mute fails for CC/PA)
@@ -1473,7 +1473,8 @@ local function rebuildRegionPark(deferred)
       local channel = channels[spec.chan]
       while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
       util.add(channel.parked, util.pick(spec,
-        "evType chan uuid ppqL endppqL pitch vel detune sample delay lane", { ppq = spec.ppqL }))
+        "evType chan uuid ppqL endppqL pitch vel detune sample delay lane",
+        { ppq = spec.ppqL, endppq = spec.endppqL or util.OPEN }))
     end
     for chan = 1, 16 do
       realiseParked(channels[chan].parked, tm:toLogical(chan, takeLen))
