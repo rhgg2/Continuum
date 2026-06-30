@@ -1066,6 +1066,229 @@ local function mmBatch()
   }
 end
 
+-- True when raw ppq can't be explained by the logical projection: foreign MIDI (no ppqL) or
+-- an external raw edit. staleSwing chans return false -- their divergence is an expected reseat.
+local function rawDivergesFromLogical(evt)
+  if evt.ppqL == nil      then return true  end
+  if staleSwing[evt.chan] then return false end
+  local d = evt.evType == 'note' and delayToPPQ(evt.delay or 0) or 0
+  local rawFromLogical = tm:fromLogical(evt.chan, evt.ppqL, d)
+  if evt.ppq == 0 and rawFromLogical < 0 then return false end
+  return math.abs(evt.ppq - rawFromLogical) > EPS
+end
+
+-- Nudge colliding same-(chan,pitch) onsets to prev.ppq+1 (cascades; fixed externals frozen).
+-- Pure geometry on evt.ppq; callers stage mm writes. Input sorted (raw, ppqL). see docs/trackerManager.md § Same-pitch onset separation
+local function nudgeSamePitchOnsets(records)
+  local moved, lastByVoice = {}, {}
+  for _, n in ipairs(records) do
+    local e   = n.evt
+    local key = util.key(e.chan, e.pitch)
+    local prev = lastByVoice[key]
+    if prev and not e.fixed and e.ppq <= prev.evt.ppq then
+      e.ppq = prev.evt.ppq + 1
+      util.add(moved, n)
+    end
+    lastByVoice[key] = n
+  end
+  return moved
+end
+
+----- Rebuild steps
+
+-- Partition mm notes into internal (stamped) / external, lay internal note columns, and
+-- reseat stale-swing internals inline. Returns external, deferred to rebuildExternals.
+-- see docs/trackerManager.md § Rebuild: partition
+local function rebuildInternals(fx)
+  local internal, external = {}, {}
+  for _, note in mm:notes() do
+    if note.derived then
+      note.token = mm:tokenOf(note)
+      util.add(fx.noteExisting[note.chan], note)
+    elseif rawDivergesFromLogical(note) then util.add(external, note)
+    else util.add(internal, note)
+    end
+  end
+
+  local reseats  = mmBatch()
+  local reseated = {}
+  for _, note in ipairs(internal) do
+    local channel = channels[note.chan]
+    local col = pickStampedLane(channel, note)
+    -- clone not alias: projectLogical rewrites column ppq to logical; mm retains raw
+    local ce = util.clone(note)
+    -- detune/delay are optional eventMeta; default at ingestion so every column note
+    -- event carries them (mirrors the external seam) -- downstream reads trust non-nil.
+    ce.detune = ce.detune or 0
+    ce.delay  = ce.delay  or 0
+    ce.token = mm:tokenOf(note)
+    -- Stale swing: raw stamped under the prior swing; rederive realised onset from logical
+    -- (endppq owned by the tail walk). Mirrors the CC reseat. see docs/timing.md §"Rebuild rule"
+    if staleSwing[note.chan] then
+      ce.ppq = tm:fromLogical(note.chan, ce.ppqL, delayToPPQ(ce.delay))
+      util.add(reseated, { evt = ce, was = note.ppq })
+    end
+    util.add(col.events, ce)
+  end
+
+  -- Reswing can collapse two distinct-ppqL same-pitch notes onto one raw. Separate them before
+  -- the commit so mm's reload-dedup never eats a voice -- the tail walk's gate runs far too late.
+  table.sort(reseated, function(a, b)
+    if a.evt.chan ~= b.evt.chan then return a.evt.chan < b.evt.chan end
+    if a.evt.ppq  ~= b.evt.ppq  then return a.evt.ppq  < b.evt.ppq  end
+    return a.evt.ppqL < b.evt.ppqL
+  end)
+  nudgeSamePitchOnsets(reseated)
+  for _, r in ipairs(reseated) do
+    if r.evt.ppq ~= r.was then reseats.assign(r.evt, { ppq = r.evt.ppq }) end
+  end
+  reseats.commit()
+
+  return external
+end
+
+-- Carrier setup + single CC walk: arm prior carriers/sidecars and route them out of columns,
+-- reconcile (raw, ppqL) under swing, project non-pb CCs. Returns reapCarriers(newFxCarrier), run
+-- after fx expansion to disarm stale codes + persist the live map. see docs/trackerManager.md § Rebuild: CC walk
+local function rebuildCCs(fx)
+  -- Carrier codes from the prior rebuild: route existing events out of cc columns; new codes
+  -- allocated in fx expansion once windows are known. see design/archive/note-macros.md § Delta-code allocation
+  local prevCarrier  = ds:get('fxCarrier') or {}   -- chan -> { {code, target}, ... }
+  local carrierRoute = {}
+  for chan, carriers in pairs(prevCarrier) do
+    carrierRoute[chan] = {}
+    for _, c in ipairs(carriers) do
+      carrierRoute[chan][c.code] = true
+      mm:wideCC(chan, c.code, true)
+    end
+  end
+
+  local ccWrites = mmBatch()
+  for _, cc in mm:ccs() do
+    if cc.evType == 'cc' and carrierRoute[cc.chan] and carrierRoute[cc.chan][cc.cc] then
+      -- Carrier: generator-owned, no metadata; routed out by allocated code,
+      -- reconciled stream-level in fx expansion. see design/archive/note-macros.md § Delta-code allocation
+      util.add(fx.ccExisting[cc.chan].carrier,
+        { ppq = cc.ppq, val = cc.val, shape = cc.shape, cc = cc.cc, token = mm:tokenOf(cc) })
+      goto continue
+    end
+    -- Rest seat: a generator-owned base CC at a real cc target (derived sidecar), routed out
+    -- of columns like a carrier so it stays off-screen. see design/note-macros-v2.md § Continuous cc
+    if cc.evType == 'cc' and cc.derived == 'ccbase' then
+      util.add(fx.ccExisting[cc.chan].base,
+        { ppq = cc.ppq, val = cc.val, cc = cc.cc, token = mm:tokenOf(cc) })
+      goto continue
+    end
+    -- Replace fill: the generated curve written straight onto a cc target (replace mode), routed
+    -- out like the rest seat and reconciled at Pass B. see design/note-macros-v2.md § Continuous cc
+    if cc.evType == 'cc' and cc.derived == 'ccfill' then
+      util.add(fx.ccExisting[cc.chan].fill,
+        { ppq = cc.ppq, val = cc.val, shape = cc.shape, cc = cc.cc, token = mm:tokenOf(cc) })
+      goto continue
+    end
+    if not cc.derived then
+      if staleSwing[cc.chan] and cc.ppqL ~= nil then
+        local newPpq = tm:fromLogical(cc.chan, cc.ppqL)
+        if newPpq ~= cc.ppq then
+          ccWrites.assign({ token = mm:tokenOf(cc) }, { ppq = newPpq })
+          cc.ppq = newPpq
+        end
+      elseif rawDivergesFromLogical(cc) then
+        local newPpqL = tm:toLogical(cc.chan, cc.ppq)
+        ccWrites.assign({ token = mm:tokenOf(cc) }, { ppqL = newPpqL })
+        cc.ppqL = newPpqL
+      end
+    end
+
+    if cc.evType == 'cc' or cc.evType == 'at' or cc.evType == 'pc' then
+      local channel = channels[cc.chan]
+      local tok     = mm:tokenOf(cc)
+      local col
+      if cc.evType == 'cc' then
+        col = channel.columns.ccs[cc.cc] or { cc = cc.cc, events = {} }
+        channel.columns.ccs[cc.cc] = col
+      else
+        col = channel.columns[cc.evType] or { events = {} }
+        channel.columns[cc.evType] = col
+      end
+      util.add(col.events, projectCC(cc, tok))
+    end
+    ::continue::
+  end
+  ccWrites.commit()
+
+  -- Reap stale carrier codes (relocated / removed); persist live map for pa's add bank.
+  -- see design/archive/note-macros.md § Delta-code allocation
+  return function(newFxCarrier)
+    for chan in pairs(carrierRoute) do
+      local live = {}
+      for _, c in ipairs(newFxCarrier[chan] or {}) do live[c.code] = true end
+      for code in pairs(carrierRoute[chan]) do
+        if not live[code] then mm:wideCC(chan, code, false) end
+      end
+    end
+    if not util.deepEq(prevCarrier, newFxCarrier) and mm:take() then
+      ds:assign('fxCarrier', next(newFxCarrier) and newFxCarrier or util.REMOVE)
+    end
+  end
+end
+
+-- Reconcile extra columns against the persisted extraColumns spec; grow the spec when a
+-- channel already holds more note lanes than recorded.
+local function rebuildExtraColumns()
+  local extras = ds:get('extraColumns') or {}
+  local grew   = false
+  for i = 1, 16 do
+    local c    = channels[i].columns
+    local want = extras[i] or { notes = 1 }
+    local n    = #c.notes
+    if n > want.notes then
+      want.notes = n
+      extras[i] = want
+      grew = true
+    end
+    while #c.notes < want.notes do pushNoteCol(channels[i]) end
+    if want.pc then c.pc = c.pc or { events = {} } end
+    if want.pb then c.pb = c.pb or { events = {} } end
+    if want.at then c.at = c.at or { events = {} } end
+    for ccNum in pairs(want.ccs or {}) do
+      c.ccs[ccNum] = c.ccs[ccNum] or { cc = ccNum, events = {} }
+    end
+  end
+  if grew and mm:take() then ds:assign('extraColumns', extras) end
+end
+
+-- Reintroduce externals: pack lane, stamp ppqL/endppqL, backfill metadata, tag `fixed`;
+-- block window + tail passes -- onsets frozen, tails clipped. see docs/trackerManager.md § Rebuild: externals
+local function rebuildExternals(external)
+  if #external == 0 then return end
+  table.sort(external, function(a, b) return a.ppq < b.ppq end)
+  local trackerMode = cm:get('trackerMode')
+  local extWrites = mmBatch()
+  for _, note in ipairs(external) do
+    local delay     = note.delay or 0
+    local d         = delayToPPQ(delay)
+    local probe     = { ppq = note.ppq, endppq = note.endppq,
+                        pitch = note.pitch, delay = delay, lane = note.lane }
+    local col, lane = packExternalLane(channels[note.chan], probe)
+    local update    = {
+      ppqL    = tm:toLogical(note.chan, note.ppq - d),
+      endppqL = tm:toLogical(note.chan, note.endppq),
+    }
+    if note.lane   ~= lane then update.lane   = lane   end
+    if note.detune == nil  then update.detune = 0      end
+    if note.delay  == nil  then update.delay  = 0      end
+    if trackerMode and note.sample == nil then update.sample = 0 end
+    local ce = util.clone(note)
+    util.assign(ce, update)
+    ce.fixed = true
+    util.add(col.events, ce)
+    ce.token = mm:tokenOf(note)
+    extWrites.assign(ce, update)
+  end
+  extWrites.commit()
+end
+
 -- Clip each parked member's tail to lane / pitch successor onset and take end:
 -- displayed membership is the realised held chord, not raw overlaps (logical frame).
 local function realiseParked(members, takeLenL)
@@ -1092,203 +1315,181 @@ local function realiseParked(members, takeLenL)
   end
 end
 
------ Rebuild steps
+-- Region-replace parking: authored events a replace window covers leave the take;
+-- the prior parked set carries still-covered forward, restores the rest. see design/note-macros-v2.md § Generator output
+local function rebuildRegionPark(deferred)
+  local function unlink(events, evt)
+    for i, e in ipairs(events) do if e == evt then table.remove(events, i); break end end
+  end
 
--- True when raw ppq can't be explained by the logical projection: foreign MIDI (no ppqL) or
--- an external raw edit. staleSwing chans return false -- their divergence is an expected reseat.
-local function rawDivergesFromLogical(evt)
-  if evt.ppqL == nil      then return true  end
-  if staleSwing[evt.chan] then return false end
-  local d = evt.evType == 'note' and delayToPPQ(evt.delay or 0) or 0
-  local rawFromLogical = tm:fromLogical(evt.chan, evt.ppqL, d)
-  if evt.ppq == 0 and rawFromLogical < 0 then return false end
-  return math.abs(evt.ppq - rawFromLogical) > EPS
+  -- Park covered candidates, split the prior set into carry-forward / restore. scan records carry
+  -- {evt,chan,sub,ppqL,events}; covered(chan,sub,ppqL); shape(evt,chan,sub)->spec.
+  local function reconcilePark(scan, prior, covered, shape, batch)
+    local newParked, restores = {}, {}
+    for _, c in ipairs(scan) do
+      if covered(c.chan, c.sub, c.ppqL) then
+        util.add(newParked, shape(c.evt, c.chan, c.sub))
+        batch.del(c.evt)
+        unlink(c.events, c.evt)
+      end
+    end
+    for _, spec in ipairs(prior) do
+      if covered(spec.chan, spec.cc, spec.ppqL) then util.add(newParked, spec)
+      else util.add(restores, spec) end
+    end
+    return newParked, restores
+  end
+
+  local function persistParked(key, newParked)
+    if not util.deepEq(ds:get(key) or {}, newParked) and mm:take() then
+      ds:assign(key, #newParked > 0 and newParked or util.REMOVE)
+    end
+  end
+
+  -- Notes and ccs park in one batch -> a single delete-first commit for the whole phase.
+  local batch = mmBatch()
+
+  -- Notes: can't mute (note-on/off + CC matching), so a covered authored note leaves the take.
+  do
+    local windows = {}
+    for _, region in ipairs(ds:get('fxRegions') or {}) do
+      -- parksNotes is false for a husk or a continuous/augment-only region, so it parks nothing.
+      if parksNotes(region) then
+        util.bucket(windows, region.chan, { region.startppq, region.endppq })
+      end
+    end
+    local function covered(chan, _, ppqL)
+      for _, w in ipairs(windows[chan] or {}) do
+        if ppqL >= w[1] and ppqL < w[2] then return true end
+      end
+      return false
+    end
+
+    local scan = {}
+    for chan = 1, 16 do
+      for laneIdx, col in ipairs(channels[chan].columns.notes) do
+        for _, evt in ipairs(col.events) do
+          if evt.evType ~= 'pa' and evt.ppqL ~= nil then
+            util.add(scan, { evt = evt, chan = chan, sub = laneIdx, ppqL = evt.ppqL, events = col.events })
+          end
+        end
+      end
+    end
+    local function shape(evt, chan, laneIdx)
+      return util.pick(evt, "ppq endppq ppqL endppqL pitch vel detune delay sample",
+                       { evType = 'note', chan = chan, lane = laneIdx })
+    end
+
+    local newParked, restores = reconcilePark(scan, ds:get('fxParked') or {}, covered, shape, batch)
+
+    -- Restores re-enter their columns now (token-less); the tail walk clips them in place and
+    -- the tail walk's commit adds them after the derived deletions.
+    for _, spec in ipairs(restores) do
+      local channel = channels[spec.chan]
+      while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
+      local ce = util.clone(spec)
+      util.add(channel.columns.notes[spec.lane].events, ce)
+      table.sort(channel.columns.notes[spec.lane].events, function(a, b) return a.ppqL < b.ppqL end)
+      -- Lazy: reshaped at commit so it reads ce.ppq/endppq after the tail-walk clip.
+      deferred.addLazy(function()
+        return util.pick(ce, "ppq endppq ppqL endppqL pitch vel detune delay sample",
+                         { evType = 'note', chan = spec.chan, lane = spec.lane })
+      end)
+    end
+
+    persistParked('fxParked', newParked)
+
+    -- Off-take membership for the generator + grid: each is a render-ready logical cell
+    -- (ppq/endppqC like a projected note); an emptied lane re-extends to keep a column home.
+    local takeLen = tm:length()
+    for chan = 1, 16 do channels[chan].parked = {} end
+    for _, spec in ipairs(newParked) do
+      local channel = channels[spec.chan]
+      while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
+      util.add(channel.parked, util.pick(spec,
+        "ppqL endppqL pitch vel detune sample delay lane", { ppq = spec.ppqL }))
+    end
+    for chan = 1, 16 do
+      realiseParked(channels[chan].parked, tm:toLogical(chan, takeLen))
+      for _, m in ipairs(channels[chan].parked) do m.endppqC = m.endppqL end
+    end
+  end
+
+  -- CCs: a point event has no tail, so the Pass-A curve stands in on the target lane and
+  -- restores add back immediately, seating a token-less projection for the view.
+  do
+    local windows = {}   -- [chan][cc] = { {startL, endL}, ... }
+    for _, region in ipairs(ds:get('fxRegions') or {}) do
+      for _, params in ipairs(region.fx or {}) do
+        local meta = generators.kinds[params.kind]
+        if meta and meta.mode == 'replace' and type(meta.dest) == 'number' then
+          windows[region.chan] = windows[region.chan] or {}
+          util.bucket(windows[region.chan], meta.dest, { region.startppq, region.endppq })
+        end
+      end
+    end
+    local function covered(chan, cc, ppqL)
+      for _, w in ipairs((windows[chan] or {})[cc] or {}) do
+        if ppqL >= w[1] and ppqL < w[2] then return true end
+      end
+      return false
+    end
+
+    local scan = {}
+    for chan = 1, 16 do
+      for cc, col in pairs(channels[chan].columns.ccs) do
+        for _, evt in ipairs(col.events) do
+          util.add(scan, { evt = evt, chan = chan, sub = cc, ppqL = evt.ppqL or evt.ppq, events = col.events })
+        end
+      end
+    end
+    local function shape(evt, chan, cc)
+      return { chan = chan, cc = cc, ppq = evt.ppq, ppqL = evt.ppqL or evt.ppq,
+               val = evt.val, shape = evt.shape }
+    end
+
+    local newParked, restores = reconcilePark(scan, ds:get('fxParkedCC') or {}, covered, shape, batch)
+
+    -- Seat a token-less projection so the view shows the restored cc this frame; next rebuild
+    -- re-reads the real token'd event from the take. The add rides the shared park commit.
+    for _, spec in ipairs(restores) do
+      batch.add({ evType = 'cc', chan = spec.chan, cc = spec.cc,
+                  ppq = spec.ppq, ppqL = spec.ppqL, val = spec.val, shape = spec.shape })
+      local channel = channels[spec.chan]
+      local col = channel.columns.ccs[spec.cc]
+      if not col then col = { cc = spec.cc, events = {} }; channel.columns.ccs[spec.cc] = col end
+      util.add(col.events, { evType = 'cc', ppq = spec.ppq, ppqL = spec.ppqL,
+                             val = spec.val, shape = spec.shape })
+      table.sort(col.events, function(a, b) return (a.ppqL or a.ppq) < (b.ppqL or b.ppq) end)
+    end
+
+    persistParked('fxParkedCC', newParked)
+
+    -- Render union: the parked authored cc stays the visible surface (the fill is hidden
+    -- realisation), so creating a cc-replace region never blanks the lane. Mirrors channels[*].parked.
+    for chan = 1, 16 do channels[chan].parkedCC = {} end
+    for _, spec in ipairs(newParked) do
+      local channel = channels[spec.chan]
+      channel.columns.ccs[spec.cc] = channel.columns.ccs[spec.cc] or { cc = spec.cc, events = {} }
+      util.add(channel.parkedCC,
+        { evType = 'cc', cc = spec.cc, ppq = spec.ppqL, val = spec.val, shape = spec.shape })
+    end
+  end
+
+  batch.commit()
 end
 
--- Reseat absorber pbs against the post-walk lane-1 layout, recompute their raw vals,
--- and project the pb column. see docs/tuning.md § Absorber reconciliation
-local function rebuildPbs(noteLive, replacePb)
-  local extras = ds:get('extraColumns') or {}
-
-  local function detuneAt(events, P)
-    local n = util.seek(events, 'at-or-before', P)
-    return (n and n.detune) or 0
-  end
-
-  -- Replace-pb overwrites the wire over its window, so an authored pb there contributes 0 cents
-  -- to its wire raw (column cents untouched) -- the node's base is detune-only. see design/note-macros-v2.md § Continuous pb replace
-  local function inReplacePb(chan, P)
-    local pL = tm:toLogical(chan, P)
-    for _, w in ipairs(replacePb[chan]) do
-      if pL >= w[1] and pL < w[2] then return true end
-    end
-    return false
-  end
-
-  -- Per-chan lane-1 sort, used both at reconcile and inside mm:modify.
-  local lane1ByChan = {}
-  for chan = 1, 16 do
-    local lane1 = channels[chan].columns.notes[1]
-    local list  = {}
-    if lane1 then
-      for _, n in ipairs(lane1.events) do
-        if n.evType ~= 'pa' then util.add(list, n) end
-      end
-    end
-    -- Derived lane-1 fxNotes (a trill's per-fxNote detune) are routed out of
-    -- columns; union them so the absorber pass seats their detune jumps.
-    for _, w in ipairs(noteLive[chan]) do
-      if w.lane == 1 then util.add(list, w.evt) end
-    end
-    table.sort(list, function(a, b) return a.ppq < b.ppq end)
-    lane1ByChan[chan] = list
-  end
-
-  -- mm uses content-keyed tokens: any pb whose ppq we touch needs its pre-mutation token
-  -- captured up front. Each pb here is a mm:ccs() clone with origTok set once.
-  local pbsByChan = {}
+-- Late PA projection: mixes into note columns once lanes are settled, so the view (and rebuildFx's
+-- channelStreams) read it inline. Must follow column layout, so it can't ride the CC walk.
+local function rebuildPA()
   for _, cc in mm:ccs() do
-    if cc.evType == 'pb' then
-      cc.origTok = mm:tokenOf(cc)
-      util.bucket(pbsByChan, cc.chan, cc)
+    if cc.evType == 'pa' then
+      local noteCol, lane = findNoteColumnForPitch(channels[cc.chan], cc.pitch, cc.ppq)
+      if noteCol then
+        util.add(noteCol.events, projectCC(cc, mm:tokenOf(cc), { lane = lane }))
+      end
     end
   end
-
-  local pbWrites = mmBatch()
-
-  for chan = 1, 16 do
-    local lane1Events = lane1ByChan[chan]
-    local pbs         = pbsByChan[chan] or {}
-    table.sort(pbs, function(a, b) return a.ppq < b.ppq end)
-
-    -- Needed seats: every lane-1 onset where detune ≠ predecessor. hostPpqL captures
-    -- lane-1 ppqL so a fake placed there carries the host's logical position (logical projection, tv).
-    local needed, hostPpqL = {}, {}
-    local prev = 0
-    for _, n in ipairs(lane1Events) do
-      local d = n.detune
-      if d ~= prev then
-        needed[n.ppq] = true
-        hostPpqL[n.ppq] = n.ppqL
-      end
-      prev = d
-    end
-
-    -- Anchor a pb-active channel at its first lane-1 onset (I2a):
-    -- without it, playback inherits the synth's unknown prior bend.
-    local first = lane1Events[1]
-    if first and not needed[first.ppq] then
-      local hasReal, anchored = false, false
-      for _, pb in ipairs(pbs) do
-        if not pb.derived then
-          hasReal = true
-          if pb.ppq <= first.ppq then anchored = true break end
-        end
-      end
-      if (next(needed) ~= nil or hasReal) and not anchored then
-        needed[first.ppq]  = true
-        hostPpqL[first.ppq] = first.ppqL
-      end
-    end
-
-    -- Back-derive cents for any pb missing it (foreign-MIDI/pre-cents pbs carry raw only).
-    -- Marked so the consolidated assign below always carries cents to the sidecar.
-    local persistCents = {}
-    for _, pb in ipairs(pbs) do
-      if pb.cents == nil then
-        pb.cents = rawToCents(pb.val) - detuneAt(lane1Events, pb.ppq)
-        persistCents[pb] = true
-      end
-    end
-
-    -- Match existing pbs to needed seats. Real pbs cover their seat; fakes: consume any
-    -- already at a needed seat, move remaining fakes to fill the rest, delete leftovers.
-    local realAt, availAbsorbers = {}, {}
-    for _, pb in ipairs(pbs) do
-      if pb.derived then util.add(availAbsorbers, pb)
-      else realAt[pb.ppq] = pb end
-    end
-
-    local restampPpqL = {}  -- pb -> newPpqL (existing fake at needed seat with stale ppqL)
-    for i = #availAbsorbers, 1, -1 do
-      local f = availAbsorbers[i]
-      if needed[f.ppq] and not realAt[f.ppq] then
-        if f.ppqL ~= hostPpqL[f.ppq] then
-          restampPpqL[f] = hostPpqL[f.ppq]
-          f.ppqL = hostPpqL[f.ppq]   -- mirror into the clone so the logical projection sees it
-        end
-        needed[f.ppq] = nil
-        table.remove(availAbsorbers, i)
-      end
-    end
-
-    local moved = {}  -- pb -> newPpq
-    for ppq in pairs(needed) do
-      if not realAt[ppq] then
-        local f = table.remove(availAbsorbers)
-        if f then
-          moved[f] = ppq
-          f.ppq, f.cents, f.ppqL = ppq, 0, hostPpqL[ppq]
-          util.add(pbs, f)
-        else
-          local fresh = { chan = chan, ppq = ppq, cents = 0,
-                          ppqL = hostPpqL[ppq], derived = 'absorber', evType = 'pb' }
-          util.add(pbs, fresh)
-          local writeEvt = util.clone(fresh)
-          writeEvt.val = centsToRaw(fresh.cents + detuneAt(lane1ByChan[chan], ppq))
-          pbWrites.add(writeEvt)
-        end
-      end
-    end
-
-    for _, f in ipairs(availAbsorbers) do
-      pbWrites.del({ token = f.origTok })
-      for i, p in ipairs(pbs) do
-        if p == f then table.remove(pbs, i); break end
-      end
-    end
-
-    table.sort(pbs, function(a, b) return a.ppq < b.ppq end)
-
-    -- Consolidated assign: one entry per existing pb where any of
-    -- (ppq moved, ppqL restamped, raw changed, cents back-derived) needs to land.
-    for _, pb in ipairs(pbs) do
-      if pb.origTok then
-        local d         = detuneAt(lane1Events, pb.ppq)
-        local wireCents = (not pb.derived and inReplacePb(chan, pb.ppq)) and 0 or pb.cents
-        local newRaw    = centsToRaw(wireCents + d)
-        local update = nil
-        if moved[pb] then
-          update = { ppq = pb.ppq, ppqL = pb.ppqL,
-                     cents = pb.cents, val = newRaw }
-        elseif restampPpqL[pb] then
-          update = { ppqL = restampPpqL[pb], cents = pb.cents, val = newRaw }
-        elseif pb.val ~= newRaw or persistCents[pb] then
-          update = { cents = pb.cents, val = newRaw }
-        end
-        if update then
-          pb.val = newRaw
-          pbWrites.assign({ token = pb.origTok }, update)
-        end
-      end
-    end
-
-    -- Column projection.
-    local anyVisible, pbColEvents = false, {}
-    for _, pb in ipairs(pbs) do
-      local hidden = pb.derived and (pb.shape == nil or pb.shape == 'step')
-      anyVisible = anyVisible or not hidden
-      util.add(pbColEvents, projectCC(pb, pb.origTok, {
-        val    = pb.cents,
-        detune = detuneAt(lane1Events, pb.ppq),
-        hidden = hidden,
-      }))
-    end
-    local keep = anyVisible or (extras[chan] and extras[chan].pb)
-    channels[chan].columns.pb = keep and { events = pbColEvents } or nil
-  end
-
-  pbWrites.commit()
 end
 
 -- Fx expansion: fx-carrying notes / fx-regions -> derived notes, CCs, carriers;
@@ -1622,23 +1823,6 @@ local function rebuildFx(fx, deferred)
   return newFxCarrier
 end
 
--- Nudge colliding same-(chan,pitch) onsets to prev.ppq+1 (cascades; fixed externals frozen).
--- Pure geometry on evt.ppq; callers stage mm writes. Input sorted (raw, ppqL). see docs/trackerManager.md § Same-pitch onset separation
-local function nudgeSamePitchOnsets(records)
-  local moved, lastByVoice = {}, {}
-  for _, n in ipairs(records) do
-    local e   = n.evt
-    local key = util.key(e.chan, e.pitch)
-    local prev = lastByVoice[key]
-    if prev and not e.fixed and e.ppq <= prev.evt.ppq then
-      e.ppq = prev.evt.ppq + 1
-      util.add(moved, n)
-    end
-    lastByVoice[key] = n
-  end
-  return moved
-end
-
 -- Unified tail/onset walk + atomic commit: real notes, fixed externals, fx.noteLive
 -- walk together (onset clamp then tail clip); host clip + fxNote del/add in one mm:modify. see docs/trackerManager.md § Rebuild: tail walk
 local function rebuildTails(fx, deferred)
@@ -1718,374 +1902,190 @@ local function rebuildTails(fx, deferred)
   for host, rawEnd in pairs(fx.hostEnd) do host.endppq = rawEnd end
 end
 
--- Region-replace parking: authored events a replace window covers leave the take;
--- the prior parked set carries still-covered forward, restores the rest. see design/note-macros-v2.md § Generator output
-local function rebuildRegionPark(deferred)
-  local function unlink(events, evt)
-    for i, e in ipairs(events) do if e == evt then table.remove(events, i); break end end
-  end
-
-  -- Park covered candidates, split the prior set into carry-forward / restore. scan records carry
-  -- {evt,chan,sub,ppqL,events}; covered(chan,sub,ppqL); shape(evt,chan,sub)->spec.
-  local function reconcilePark(scan, prior, covered, shape, batch)
-    local newParked, restores = {}, {}
-    for _, c in ipairs(scan) do
-      if covered(c.chan, c.sub, c.ppqL) then
-        util.add(newParked, shape(c.evt, c.chan, c.sub))
-        batch.del(c.evt)
-        unlink(c.events, c.evt)
-      end
-    end
-    for _, spec in ipairs(prior) do
-      if covered(spec.chan, spec.cc, spec.ppqL) then util.add(newParked, spec)
-      else util.add(restores, spec) end
-    end
-    return newParked, restores
-  end
-
-  local function persistParked(key, newParked)
-    if not util.deepEq(ds:get(key) or {}, newParked) and mm:take() then
-      ds:assign(key, #newParked > 0 and newParked or util.REMOVE)
-    end
-  end
-
-  -- Notes and ccs park in one batch -> a single delete-first commit for the whole phase.
-  local batch = mmBatch()
-
-  -- Notes: can't mute (note-on/off + CC matching), so a covered authored note leaves the take.
-  do
-    local windows = {}
-    for _, region in ipairs(ds:get('fxRegions') or {}) do
-      -- parksNotes is false for a husk or a continuous/augment-only region, so it parks nothing.
-      if parksNotes(region) then
-        util.bucket(windows, region.chan, { region.startppq, region.endppq })
-      end
-    end
-    local function covered(chan, _, ppqL)
-      for _, w in ipairs(windows[chan] or {}) do
-        if ppqL >= w[1] and ppqL < w[2] then return true end
-      end
-      return false
-    end
-
-    local scan = {}
-    for chan = 1, 16 do
-      for laneIdx, col in ipairs(channels[chan].columns.notes) do
-        for _, evt in ipairs(col.events) do
-          if evt.evType ~= 'pa' and evt.ppqL ~= nil then
-            util.add(scan, { evt = evt, chan = chan, sub = laneIdx, ppqL = evt.ppqL, events = col.events })
-          end
-        end
-      end
-    end
-    local function shape(evt, chan, laneIdx)
-      return util.pick(evt, "ppq endppq ppqL endppqL pitch vel detune delay sample",
-                       { evType = 'note', chan = chan, lane = laneIdx })
-    end
-
-    local newParked, restores = reconcilePark(scan, ds:get('fxParked') or {}, covered, shape, batch)
-
-    -- Restores re-enter their columns now (token-less); the tail walk clips them in place and
-    -- the tail walk's commit adds them after the derived deletions.
-    for _, spec in ipairs(restores) do
-      local channel = channels[spec.chan]
-      while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
-      local ce = util.clone(spec)
-      util.add(channel.columns.notes[spec.lane].events, ce)
-      table.sort(channel.columns.notes[spec.lane].events, function(a, b) return a.ppqL < b.ppqL end)
-      -- Lazy: reshaped at commit so it reads ce.ppq/endppq after the tail-walk clip.
-      deferred.addLazy(function()
-        return util.pick(ce, "ppq endppq ppqL endppqL pitch vel detune delay sample",
-                         { evType = 'note', chan = spec.chan, lane = spec.lane })
-      end)
-    end
-
-    persistParked('fxParked', newParked)
-
-    -- Off-take membership for the generator + grid: each is a render-ready logical cell
-    -- (ppq/endppqC like a projected note); an emptied lane re-extends to keep a column home.
-    local takeLen = tm:length()
-    for chan = 1, 16 do channels[chan].parked = {} end
-    for _, spec in ipairs(newParked) do
-      local channel = channels[spec.chan]
-      while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
-      util.add(channel.parked, util.pick(spec,
-        "ppqL endppqL pitch vel detune sample delay lane", { ppq = spec.ppqL }))
-    end
-    for chan = 1, 16 do
-      realiseParked(channels[chan].parked, tm:toLogical(chan, takeLen))
-      for _, m in ipairs(channels[chan].parked) do m.endppqC = m.endppqL end
-    end
-  end
-
-  -- CCs: a point event has no tail, so the Pass-A curve stands in on the target lane and
-  -- restores add back immediately, seating a token-less projection for the view.
-  do
-    local windows = {}   -- [chan][cc] = { {startL, endL}, ... }
-    for _, region in ipairs(ds:get('fxRegions') or {}) do
-      for _, params in ipairs(region.fx or {}) do
-        local meta = generators.kinds[params.kind]
-        if meta and meta.mode == 'replace' and type(meta.dest) == 'number' then
-          windows[region.chan] = windows[region.chan] or {}
-          util.bucket(windows[region.chan], meta.dest, { region.startppq, region.endppq })
-        end
-      end
-    end
-    local function covered(chan, cc, ppqL)
-      for _, w in ipairs((windows[chan] or {})[cc] or {}) do
-        if ppqL >= w[1] and ppqL < w[2] then return true end
-      end
-      return false
-    end
-
-    local scan = {}
-    for chan = 1, 16 do
-      for cc, col in pairs(channels[chan].columns.ccs) do
-        for _, evt in ipairs(col.events) do
-          util.add(scan, { evt = evt, chan = chan, sub = cc, ppqL = evt.ppqL or evt.ppq, events = col.events })
-        end
-      end
-    end
-    local function shape(evt, chan, cc)
-      return { chan = chan, cc = cc, ppq = evt.ppq, ppqL = evt.ppqL or evt.ppq,
-               val = evt.val, shape = evt.shape }
-    end
-
-    local newParked, restores = reconcilePark(scan, ds:get('fxParkedCC') or {}, covered, shape, batch)
-
-    -- Seat a token-less projection so the view shows the restored cc this frame; next rebuild
-    -- re-reads the real token'd event from the take. The add rides the shared park commit.
-    for _, spec in ipairs(restores) do
-      batch.add({ evType = 'cc', chan = spec.chan, cc = spec.cc,
-                  ppq = spec.ppq, ppqL = spec.ppqL, val = spec.val, shape = spec.shape })
-      local channel = channels[spec.chan]
-      local col = channel.columns.ccs[spec.cc]
-      if not col then col = { cc = spec.cc, events = {} }; channel.columns.ccs[spec.cc] = col end
-      util.add(col.events, { evType = 'cc', ppq = spec.ppq, ppqL = spec.ppqL,
-                             val = spec.val, shape = spec.shape })
-      table.sort(col.events, function(a, b) return (a.ppqL or a.ppq) < (b.ppqL or b.ppq) end)
-    end
-
-    persistParked('fxParkedCC', newParked)
-
-    -- Render union: the parked authored cc stays the visible surface (the fill is hidden
-    -- realisation), so creating a cc-replace region never blanks the lane. Mirrors channels[*].parked.
-    for chan = 1, 16 do channels[chan].parkedCC = {} end
-    for _, spec in ipairs(newParked) do
-      local channel = channels[spec.chan]
-      channel.columns.ccs[spec.cc] = channel.columns.ccs[spec.cc] or { cc = spec.cc, events = {} }
-      util.add(channel.parkedCC,
-        { evType = 'cc', cc = spec.cc, ppq = spec.ppqL, val = spec.val, shape = spec.shape })
-    end
-  end
-
-  batch.commit()
-end
-
--- Carrier setup + single CC walk: arm prior carriers/sidecars and route them out of columns,
--- reconcile (raw, ppqL) under swing, project non-pb CCs. Returns reapCarriers(newFxCarrier), run
--- after fx expansion to disarm stale codes + persist the live map. see docs/trackerManager.md § Rebuild: CC walk
-local function rebuildCCs(fx)
-  -- Carrier codes from the prior rebuild: route existing events out of cc columns; new codes
-  -- allocated in fx expansion once windows are known. see design/archive/note-macros.md § Delta-code allocation
-  local prevCarrier  = ds:get('fxCarrier') or {}   -- chan -> { {code, target}, ... }
-  local carrierRoute = {}
-  for chan, carriers in pairs(prevCarrier) do
-    carrierRoute[chan] = {}
-    for _, c in ipairs(carriers) do
-      carrierRoute[chan][c.code] = true
-      mm:wideCC(chan, c.code, true)
-    end
-  end
-
-  local ccWrites = mmBatch()
-  for _, cc in mm:ccs() do
-    if cc.evType == 'cc' and carrierRoute[cc.chan] and carrierRoute[cc.chan][cc.cc] then
-      -- Carrier: generator-owned, no metadata; routed out by allocated code,
-      -- reconciled stream-level in fx expansion. see design/archive/note-macros.md § Delta-code allocation
-      util.add(fx.ccExisting[cc.chan].carrier,
-        { ppq = cc.ppq, val = cc.val, shape = cc.shape, cc = cc.cc, token = mm:tokenOf(cc) })
-      goto continue
-    end
-    -- Rest seat: a generator-owned base CC at a real cc target (derived sidecar), routed out
-    -- of columns like a carrier so it stays off-screen. see design/note-macros-v2.md § Continuous cc
-    if cc.evType == 'cc' and cc.derived == 'ccbase' then
-      util.add(fx.ccExisting[cc.chan].base,
-        { ppq = cc.ppq, val = cc.val, cc = cc.cc, token = mm:tokenOf(cc) })
-      goto continue
-    end
-    -- Replace fill: the generated curve written straight onto a cc target (replace mode), routed
-    -- out like the rest seat and reconciled at Pass B. see design/note-macros-v2.md § Continuous cc
-    if cc.evType == 'cc' and cc.derived == 'ccfill' then
-      util.add(fx.ccExisting[cc.chan].fill,
-        { ppq = cc.ppq, val = cc.val, shape = cc.shape, cc = cc.cc, token = mm:tokenOf(cc) })
-      goto continue
-    end
-    if not cc.derived then
-      if staleSwing[cc.chan] and cc.ppqL ~= nil then
-        local newPpq = tm:fromLogical(cc.chan, cc.ppqL)
-        if newPpq ~= cc.ppq then
-          ccWrites.assign({ token = mm:tokenOf(cc) }, { ppq = newPpq })
-          cc.ppq = newPpq
-        end
-      elseif rawDivergesFromLogical(cc) then
-        local newPpqL = tm:toLogical(cc.chan, cc.ppq)
-        ccWrites.assign({ token = mm:tokenOf(cc) }, { ppqL = newPpqL })
-        cc.ppqL = newPpqL
-      end
-    end
-
-    if cc.evType == 'cc' or cc.evType == 'at' or cc.evType == 'pc' then
-      local channel = channels[cc.chan]
-      local tok     = mm:tokenOf(cc)
-      local col
-      if cc.evType == 'cc' then
-        col = channel.columns.ccs[cc.cc] or { cc = cc.cc, events = {} }
-        channel.columns.ccs[cc.cc] = col
-      else
-        col = channel.columns[cc.evType] or { events = {} }
-        channel.columns[cc.evType] = col
-      end
-      util.add(col.events, projectCC(cc, tok))
-    end
-    ::continue::
-  end
-  ccWrites.commit()
-
-  -- Reap stale carrier codes (relocated / removed); persist live map for pa's add bank.
-  -- see design/archive/note-macros.md § Delta-code allocation
-  return function(newFxCarrier)
-    for chan in pairs(carrierRoute) do
-      local live = {}
-      for _, c in ipairs(newFxCarrier[chan] or {}) do live[c.code] = true end
-      for code in pairs(carrierRoute[chan]) do
-        if not live[code] then mm:wideCC(chan, code, false) end
-      end
-    end
-    if not util.deepEq(prevCarrier, newFxCarrier) and mm:take() then
-      ds:assign('fxCarrier', next(newFxCarrier) and newFxCarrier or util.REMOVE)
-    end
-  end
-end
-
--- Partition mm notes into internal (stamped) / external, lay internal note columns, and
--- reseat stale-swing internals inline. Returns external, deferred to rebuildExternals.
--- see docs/trackerManager.md § Rebuild: partition
-local function rebuildInternals(fx)
-  local internal, external = {}, {}
-  for _, note in mm:notes() do
-    if note.derived then
-      note.token = mm:tokenOf(note)
-      util.add(fx.noteExisting[note.chan], note)
-    elseif rawDivergesFromLogical(note) then util.add(external, note)
-    else util.add(internal, note)
-    end
-  end
-
-  local reseats  = mmBatch()
-  local reseated = {}
-  for _, note in ipairs(internal) do
-    local channel = channels[note.chan]
-    local col = pickStampedLane(channel, note)
-    -- clone not alias: projectLogical rewrites column ppq to logical; mm retains raw
-    local ce = util.clone(note)
-    -- detune/delay are optional eventMeta; default at ingestion so every column note
-    -- event carries them (mirrors the external seam) -- downstream reads trust non-nil.
-    ce.detune = ce.detune or 0
-    ce.delay  = ce.delay  or 0
-    ce.token = mm:tokenOf(note)
-    -- Stale swing: raw stamped under the prior swing; rederive realised onset from logical
-    -- (endppq owned by the tail walk). Mirrors the CC reseat. see docs/timing.md §"Rebuild rule"
-    if staleSwing[note.chan] then
-      ce.ppq = tm:fromLogical(note.chan, ce.ppqL, delayToPPQ(ce.delay))
-      util.add(reseated, { evt = ce, was = note.ppq })
-    end
-    util.add(col.events, ce)
-  end
-
-  -- Reswing can collapse two distinct-ppqL same-pitch notes onto one raw. Separate them before
-  -- the commit so mm's reload-dedup never eats a voice -- the tail walk's gate runs far too late.
-  table.sort(reseated, function(a, b)
-    if a.evt.chan ~= b.evt.chan then return a.evt.chan < b.evt.chan end
-    if a.evt.ppq  ~= b.evt.ppq  then return a.evt.ppq  < b.evt.ppq  end
-    return a.evt.ppqL < b.evt.ppqL
-  end)
-  nudgeSamePitchOnsets(reseated)
-  for _, r in ipairs(reseated) do
-    if r.evt.ppq ~= r.was then reseats.assign(r.evt, { ppq = r.evt.ppq }) end
-  end
-  reseats.commit()
-
-  return external
-end
-
--- Reconcile extra columns against the persisted extraColumns spec; grow the spec when a
--- channel already holds more note lanes than recorded.
-local function rebuildExtraColumns()
+-- Reseat absorber pbs against the post-walk lane-1 layout, recompute their raw vals,
+-- and project the pb column. see docs/tuning.md § Absorber reconciliation
+local function rebuildPbs(noteLive, replacePb)
   local extras = ds:get('extraColumns') or {}
-  local grew   = false
-  for i = 1, 16 do
-    local c    = channels[i].columns
-    local want = extras[i] or { notes = 1 }
-    local n    = #c.notes
-    if n > want.notes then
-      want.notes = n
-      extras[i] = want
-      grew = true
-    end
-    while #c.notes < want.notes do pushNoteCol(channels[i]) end
-    if want.pc then c.pc = c.pc or { events = {} } end
-    if want.pb then c.pb = c.pb or { events = {} } end
-    if want.at then c.at = c.at or { events = {} } end
-    for ccNum in pairs(want.ccs or {}) do
-      c.ccs[ccNum] = c.ccs[ccNum] or { cc = ccNum, events = {} }
-    end
-  end
-  if grew and mm:take() then ds:assign('extraColumns', extras) end
-end
 
--- Reintroduce externals: pack lane, stamp ppqL/endppqL, backfill metadata, tag `fixed`;
--- block window + tail passes -- onsets frozen, tails clipped. see docs/trackerManager.md § Rebuild: externals
-local function rebuildExternals(external)
-  if #external == 0 then return end
-  table.sort(external, function(a, b) return a.ppq < b.ppq end)
-  local trackerMode = cm:get('trackerMode')
-  local extWrites = mmBatch()
-  for _, note in ipairs(external) do
-    local delay     = note.delay or 0
-    local d         = delayToPPQ(delay)
-    local probe     = { ppq = note.ppq, endppq = note.endppq,
-                        pitch = note.pitch, delay = delay, lane = note.lane }
-    local col, lane = packExternalLane(channels[note.chan], probe)
-    local update    = {
-      ppqL    = tm:toLogical(note.chan, note.ppq - d),
-      endppqL = tm:toLogical(note.chan, note.endppq),
-    }
-    if note.lane   ~= lane then update.lane   = lane   end
-    if note.detune == nil  then update.detune = 0      end
-    if note.delay  == nil  then update.delay  = 0      end
-    if trackerMode and note.sample == nil then update.sample = 0 end
-    local ce = util.clone(note)
-    util.assign(ce, update)
-    ce.fixed = true
-    util.add(col.events, ce)
-    ce.token = mm:tokenOf(note)
-    extWrites.assign(ce, update)
+  local function detuneAt(events, P)
+    local n = util.seek(events, 'at-or-before', P)
+    return (n and n.detune) or 0
   end
-  extWrites.commit()
-end
 
--- Late PA projection: mixes into note columns once lanes are settled, so the view (and rebuildFx's
--- channelStreams) read it inline. Must follow column layout, so it can't ride the CC walk.
-local function rebuildPA()
-  for _, cc in mm:ccs() do
-    if cc.evType == 'pa' then
-      local noteCol, lane = findNoteColumnForPitch(channels[cc.chan], cc.pitch, cc.ppq)
-      if noteCol then
-        util.add(noteCol.events, projectCC(cc, mm:tokenOf(cc), { lane = lane }))
+  -- Replace-pb overwrites the wire over its window, so an authored pb there contributes 0 cents
+  -- to its wire raw (column cents untouched) -- the node's base is detune-only. see design/note-macros-v2.md § Continuous pb replace
+  local function inReplacePb(chan, P)
+    local pL = tm:toLogical(chan, P)
+    for _, w in ipairs(replacePb[chan]) do
+      if pL >= w[1] and pL < w[2] then return true end
+    end
+    return false
+  end
+
+  -- Per-chan lane-1 sort, used both at reconcile and inside mm:modify.
+  local lane1ByChan = {}
+  for chan = 1, 16 do
+    local lane1 = channels[chan].columns.notes[1]
+    local list  = {}
+    if lane1 then
+      for _, n in ipairs(lane1.events) do
+        if n.evType ~= 'pa' then util.add(list, n) end
       end
     end
+    -- Derived lane-1 fxNotes (a trill's per-fxNote detune) are routed out of
+    -- columns; union them so the absorber pass seats their detune jumps.
+    for _, w in ipairs(noteLive[chan]) do
+      if w.lane == 1 then util.add(list, w.evt) end
+    end
+    table.sort(list, function(a, b) return a.ppq < b.ppq end)
+    lane1ByChan[chan] = list
   end
+
+  -- mm uses content-keyed tokens: any pb whose ppq we touch needs its pre-mutation token
+  -- captured up front. Each pb here is a mm:ccs() clone with origTok set once.
+  local pbsByChan = {}
+  for _, cc in mm:ccs() do
+    if cc.evType == 'pb' then
+      cc.origTok = mm:tokenOf(cc)
+      util.bucket(pbsByChan, cc.chan, cc)
+    end
+  end
+
+  local pbWrites = mmBatch()
+
+  for chan = 1, 16 do
+    local lane1Events = lane1ByChan[chan]
+    local pbs         = pbsByChan[chan] or {}
+    table.sort(pbs, function(a, b) return a.ppq < b.ppq end)
+
+    -- Needed seats: every lane-1 onset where detune ≠ predecessor. hostPpqL captures
+    -- lane-1 ppqL so a fake placed there carries the host's logical position (logical projection, tv).
+    local needed, hostPpqL = {}, {}
+    local prev = 0
+    for _, n in ipairs(lane1Events) do
+      local d = n.detune
+      if d ~= prev then
+        needed[n.ppq] = true
+        hostPpqL[n.ppq] = n.ppqL
+      end
+      prev = d
+    end
+
+    -- Anchor a pb-active channel at its first lane-1 onset (I2a):
+    -- without it, playback inherits the synth's unknown prior bend.
+    local first = lane1Events[1]
+    if first and not needed[first.ppq] then
+      local hasReal, anchored = false, false
+      for _, pb in ipairs(pbs) do
+        if not pb.derived then
+          hasReal = true
+          if pb.ppq <= first.ppq then anchored = true break end
+        end
+      end
+      if (next(needed) ~= nil or hasReal) and not anchored then
+        needed[first.ppq]  = true
+        hostPpqL[first.ppq] = first.ppqL
+      end
+    end
+
+    -- Back-derive cents for any pb missing it (foreign-MIDI/pre-cents pbs carry raw only).
+    -- Marked so the consolidated assign below always carries cents to the sidecar.
+    local persistCents = {}
+    for _, pb in ipairs(pbs) do
+      if pb.cents == nil then
+        pb.cents = rawToCents(pb.val) - detuneAt(lane1Events, pb.ppq)
+        persistCents[pb] = true
+      end
+    end
+
+    -- Match existing pbs to needed seats. Real pbs cover their seat; fakes: consume any
+    -- already at a needed seat, move remaining fakes to fill the rest, delete leftovers.
+    local realAt, availAbsorbers = {}, {}
+    for _, pb in ipairs(pbs) do
+      if pb.derived then util.add(availAbsorbers, pb)
+      else realAt[pb.ppq] = pb end
+    end
+
+    local restampPpqL = {}  -- pb -> newPpqL (existing fake at needed seat with stale ppqL)
+    for i = #availAbsorbers, 1, -1 do
+      local f = availAbsorbers[i]
+      if needed[f.ppq] and not realAt[f.ppq] then
+        if f.ppqL ~= hostPpqL[f.ppq] then
+          restampPpqL[f] = hostPpqL[f.ppq]
+          f.ppqL = hostPpqL[f.ppq]   -- mirror into the clone so the logical projection sees it
+        end
+        needed[f.ppq] = nil
+        table.remove(availAbsorbers, i)
+      end
+    end
+
+    local moved = {}  -- pb -> newPpq
+    for ppq in pairs(needed) do
+      if not realAt[ppq] then
+        local f = table.remove(availAbsorbers)
+        if f then
+          moved[f] = ppq
+          f.ppq, f.cents, f.ppqL = ppq, 0, hostPpqL[ppq]
+          util.add(pbs, f)
+        else
+          local fresh = { chan = chan, ppq = ppq, cents = 0,
+                          ppqL = hostPpqL[ppq], derived = 'absorber', evType = 'pb' }
+          util.add(pbs, fresh)
+          local writeEvt = util.clone(fresh)
+          writeEvt.val = centsToRaw(fresh.cents + detuneAt(lane1ByChan[chan], ppq))
+          pbWrites.add(writeEvt)
+        end
+      end
+    end
+
+    for _, f in ipairs(availAbsorbers) do
+      pbWrites.del({ token = f.origTok })
+      for i, p in ipairs(pbs) do
+        if p == f then table.remove(pbs, i); break end
+      end
+    end
+
+    table.sort(pbs, function(a, b) return a.ppq < b.ppq end)
+
+    -- Consolidated assign: one entry per existing pb where any of
+    -- (ppq moved, ppqL restamped, raw changed, cents back-derived) needs to land.
+    for _, pb in ipairs(pbs) do
+      if pb.origTok then
+        local d         = detuneAt(lane1Events, pb.ppq)
+        local wireCents = (not pb.derived and inReplacePb(chan, pb.ppq)) and 0 or pb.cents
+        local newRaw    = centsToRaw(wireCents + d)
+        local update = nil
+        if moved[pb] then
+          update = { ppq = pb.ppq, ppqL = pb.ppqL,
+                     cents = pb.cents, val = newRaw }
+        elseif restampPpqL[pb] then
+          update = { ppqL = restampPpqL[pb], cents = pb.cents, val = newRaw }
+        elseif pb.val ~= newRaw or persistCents[pb] then
+          update = { cents = pb.cents, val = newRaw }
+        end
+        if update then
+          pb.val = newRaw
+          pbWrites.assign({ token = pb.origTok }, update)
+        end
+      end
+    end
+
+    -- Column projection.
+    local anyVisible, pbColEvents = false, {}
+    for _, pb in ipairs(pbs) do
+      local hidden = pb.derived and (pb.shape == nil or pb.shape == 'step')
+      anyVisible = anyVisible or not hidden
+      util.add(pbColEvents, projectCC(pb, pb.origTok, {
+        val    = pb.cents,
+        detune = detuneAt(lane1Events, pb.ppq),
+        hidden = hidden,
+      }))
+    end
+    local keep = anyVisible or (extras[chan] and extras[chan].pb)
+    channels[chan].columns.pb = keep and { events = pbColEvents } or nil
+  end
+
+  pbWrites.commit()
 end
 
 -- PC synthesis (trackerMode only). Runs after externals so a foreign-MIDI note inherits
