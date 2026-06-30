@@ -166,18 +166,45 @@ All write paths (`add*`, `delete*`, `assign*`) must run inside `mm:modify(fn)`.
   and so requires the lock.
 
 A structural assignCC on a uuid'd cc also rewrites the sidecar's position and
-fingerprint bytes so the next load is stage-1 clean. `deleteCC` removes the
-sidecar alongside the event — but defers the sysex delete to end-of-`modify`,
-where the queued uuids are resolved against the live sysex array (idxs
-sorted desc) rather than against `uuidIdx` values stamped before any
-intervening shifts. Without that, a mid-fn sidecar insert + a subsequent
-delete that shifts the array can leave a `deleteCC`'s cached `uuidIdx`
-pointing at the wrong sidecar — quietly killing a bystander.
+fingerprint bytes so the next load is stage-1 clean. `mm:delete` removes the
+sidecar in the same shot as the event — a note's notation cascades with
+`MIDI_DeleteNote`, a cc's sidecar is deleted by its tracked `uuidIdx` — then
+replays the resulting wire-index shift on every surviving record so later
+writes in the same `modify` stay addressable (see § Sidecar index
+maintenance).
 
 `addCC(t)` mirrors the lazy-sidecar pattern: if `t` carries any non-structural
 key it allocates a uuid + inserts a sidecar in the same shot. Plain ccs
 (no metadata) skip the allocation entirely. Symmetric with `addNote`'s
 unconditional uuid, but lazy — most ccs never need one.
+
+## Sidecar index maintenance
+
+Notation sidecars (type 15) and cc/pb sidecars (type -1) share one
+`MIDI_*TextSysexEvt` index space. Every note and metadata'd cc caches the wire
+index of its own sidecar as `uuidIdx`, so a structural write addresses that
+slot directly — no content scan.
+
+That directness is only safe if `uuidIdx` tracks the wire shifts a `modify`
+causes. Deleting a note runs `MIDI_DeleteNote`, which cascade-removes the
+note's notation and shifts every higher text-sysex index down by one — across
+*both* arrays, since they share the space. `shiftSysexDown(threshold)` replays
+that decrement on every surviving `uuidIdx`; the explicit `MIDI_DeleteTextSysexEvt`
+on a cc delete shifts identically.
+
+**Why it's done this carefully.** This index existed before, was ripped out,
+and had to be restored. `becdcd8` dropped the `shiftSysexDown` maintenance;
+without it a delete left every later `uuidIdx` pointing one slot high, so the
+next structural write in the same modify landed on a neighbour's notation,
+stamping it with the wrong note's uuid. On the closing reload the clobbered
+note matched no notation, minted a fresh empty-metadata uuid, and silently lost
+its detune (the 19EDO repro pinned by `mm_note_cascade_sidecar_spec`). `7bc5d6d`
+worked around the breakage by abandoning uuidIdx-direct writes for a content
+rescan of the whole text stream once per note — correct, but O(n²), and the
+dominant cost of editing a group with many instances. Restoring the shift makes
+the direct write safe again, collapsing that scan back to O(1) per write. Two
+specs guard the pair: `mm_note_cascade_sidecar_spec` (delete path) and
+`mm_delete_then_sidecar_write_spec` (write path).
 
 ## Signals
 

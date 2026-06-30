@@ -34,6 +34,7 @@ local specs = {
   'mm_ppql_roundtrip_spec',
   'mm_cc_reconcile_spec',
   'mm_cc_dedup_spec',
+  'mm_delete_then_sidecar_write_spec',
   'mm_deletecc_sidecar_spec',
   'mm_multi_note_delete_spec',
   'mm_note_cascade_sidecar_spec',
