@@ -44,6 +44,7 @@ local specs = {
   'mm_take_validity_spec',
   'mm_blob_parse_spec',
   'mm_blob_serialise_spec',
+  'mm_flush_spec',
   'sidecar_reconcile_spec',
   'tm_rebuild_spec',
   'tm_proj_symmetry_spec',

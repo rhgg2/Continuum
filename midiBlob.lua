@@ -6,7 +6,7 @@
 -- rest of load (dedup, reconcile, uuid, metadata) is unchanged. Format facts
 -- verified against real captures by tests/spikes/spike_capture_blobs.lua.
 
---shape: parse(blob) -> notes, ccs, texts
+--shape: parse(blob) -> notes, ccs, texts, passthrough
 --shape: note = { idx, evType='note', ppq, endppq, chan(1..16), pitch, vel, [muted] }
 --shape: cc = { idx, ppq, evType, chan(1..16), [cc|pitch], [val|vel], shape, [tension], [muted] }
 --shape: text = { idx, ppq, eventtype, msg }  -- 15=notation, -1=sysex; CCBZ tension folds onto its cc
@@ -104,10 +104,10 @@ local function ccWire(c)
   return string.char(status, b2, b3)
 end
 
---shape: serialise(notes, ccs, texts, passthrough) -> blob   -- exact inverse of parse, mm-shape in
+--shape: serialise(notes, ccs, texts, passthrough, endPpq?) -> blob   -- inverse of parse; endPpq places the tail
 --invariant: parse(serialise(x))==x; coincident events may reorder, per-type record lists preserved
---reaper: output matches the MIDI_SetAllEvts blob format; 12-byte all-notes-off tail appended
-function midiBlob.serialise(notes, ccs, texts, passthrough)
+--reaper: matches MIDI_SetAllEvts format; tail at max(endPpq, last-event ppq) (default: last event)
+function midiBlob.serialise(notes, ccs, texts, passthrough, endPpq)
   local wire = {}
   local function push(ppq, rank, seq, flags, msg)
     util.add(wire, { ppq = ppq, rank = rank, seq = seq, flags = flags, msg = msg })
@@ -149,7 +149,8 @@ function midiBlob.serialise(notes, ccs, texts, passthrough)
     util.add(out, string.pack('i4Bs4', ev.ppq - prev, ev.flags, ev.msg))
     prev = ev.ppq
   end
-  util.add(out, string.pack('i4Bs4', 0, 0, '\xB0\x7B\x00'))   -- all-notes-off tail
+  local tailPpq = math.max(endPpq or prev, prev)   -- never shrink past the last event
+  util.add(out, string.pack('i4Bs4', tailPpq - prev, 0, '\xB0\x7B\x00'))   -- all-notes-off tail
   return table.concat(out)
 end
 

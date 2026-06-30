@@ -960,7 +960,7 @@ function M.new()
   local function midi(take)
     local m = state.takeMidi[take]
     if not m then
-      m = { notes = {}, ccs = {}, texts = {}, sortDisabled = false }
+      m = { notes = {}, ccs = {}, texts = {}, passthrough = {}, sortDisabled = false }
       state.takeMidi[take] = m
     end
     return m
@@ -1013,6 +1013,9 @@ function M.new()
         or  ('\xFF' .. string.char(e.eventtype) .. e.msg)
       push(e.ppq, 3, i, e.muted and 0x02 or 0, msg)
     end
+    for i, p in ipairs(m.passthrough or {}) do
+      push(p.ppq, 4, i, p.flags or 0, p.msg)   -- events the structured store doesn't model
+    end
     table.sort(wire, function(a, b)
       if a.ppq  ~= b.ppq  then return a.ppq  < b.ppq  end
       if a.rank ~= b.rank then return a.rank < b.rank end
@@ -1027,18 +1030,65 @@ function M.new()
     return table.concat(out)
   end
 
-  -- Two views on one take: mm authors per-event (Get serialises the structured
-  -- store), arrange moves blobs opaquely (empty store -> the last Set, or '').
+  -- Inverse of serialiseMidi: walk the wire back into the native structured
+  -- store so SetAllEvts repopulates the same view Get/Count/dump read. Mirrors
+  -- midiBlob.parse independently (REAPER-native fields, no idx), the round-trip
+  -- partner that keeps the fake honest.
+  local function deserialiseMidi(blob)
+    local notes, ccs, texts, passthrough = {}, {}, {}, {}
+    local pending, lastCC = {}, nil
+    local pos, ppq, len = 1, 0, #blob
+    while pos < len - 12 do   -- trailing 12 bytes are the all-notes-off tail
+      local offset, flags, msg, nextPos = string.unpack('i4Bs4', blob, pos)
+      ppq, pos = ppq + offset, nextPos
+      local status = msg:byte(1) or 0
+      local hi     = status & 0xF0
+      local chan   = status & 0x0F   -- native: 0-based nibble
+      local b2, b3 = msg:byte(2) or 0, msg:byte(3) or 0
+      local muted  = (flags & 2) ~= 0 or nil
+      if hi == 0x90 and b3 ~= 0 then
+        local note = { ppq = ppq, endppq = ppq, chan = chan, pitch = b2, vel = b3, muted = muted }
+        notes[#notes + 1] = note
+        local key = chan * 128 + b2
+        local q = pending[key]; if not q then q = {}; pending[key] = q end
+        q[#q + 1] = note
+      elseif hi == 0x80 or hi == 0x90 then   -- note-off (incl. note-on vel 0)
+        local q = pending[chan * 128 + b2]
+        if q and q[1] then table.remove(q, 1).endppq = ppq end
+      elseif hi >= 0xA0 and hi < 0xF0 then
+        local cc = { ppq = ppq, chanmsg = hi, chan = chan, msg2 = b2, msg3 = b3,
+                     shape = (flags >> 4) & 7, muted = muted }
+        ccs[#ccs + 1] = cc
+        lastCC = cc
+      elseif status == 0xFF then
+        if b2 == 0x0F and msg:sub(3, 7) == 'CCBZ ' then
+          if lastCC and lastCC.shape == 5 then lastCC.tension = string.unpack('f', msg:sub(9)) end
+        else
+          texts[#texts + 1] = { ppq = ppq, eventtype = b2, msg = msg:sub(3), muted = muted }
+        end
+      elseif status == 0xF0 then
+        texts[#texts + 1] = { ppq = ppq, eventtype = -1, msg = msg:sub(2, #msg - 1), muted = muted }
+      elseif status ~= 0 then
+        passthrough[#passthrough + 1] = { ppq = ppq, flags = flags, msg = msg }
+      end
+    end
+    return { notes = notes, ccs = ccs, texts = texts, passthrough = passthrough, sortDisabled = false }
+  end
+
+  -- Two views on one take: a structured store (seeded, per-event authored, or
+  -- rebuilt from a whole-take Set) and a raw blob. SetAllEvts replays the wire
+  -- into the structured store so Get/Count/dump stay consistent after it.
   state.midiBlob = state.midiBlob or {}
   function r.MIDI_GetAllEvts(take, _)
     local m = midi(take)
-    if #m.notes > 0 or #m.ccs > 0 or #m.texts > 0 then
+    if #m.notes > 0 or #m.ccs > 0 or #m.texts > 0 or (m.passthrough and #m.passthrough > 0) then
       return true, serialiseMidi(m)
     end
     return true, state.midiBlob[take] or ''
   end
   function r.MIDI_SetAllEvts(take, evts)
-    state.midiBlob[take] = evts
+    state.takeMidi[take] = deserialiseMidi(evts)
+    state.midiBlob[take] = evts   -- fallback for a take left empty by the write
     bump()
     return true
   end
@@ -1298,19 +1348,21 @@ function M.new()
   -- texts : { { ppq, eventtype, msg, [muted] }, ... }
   function r:seedMidi(take, seed)
     local m = midi(take)
-    m.notes = {}; m.ccs = {}; m.texts = {}
+    m.notes = {}; m.ccs = {}; m.texts = {}; m.passthrough = {}
     for _, n in ipairs(seed.notes or {}) do m.notes[#m.notes+1] = { ppq = n.ppq, endppq = n.endppq,
         chan = n.chan, pitch = n.pitch, vel = n.vel, muted = n.muted } end
     for _, c in ipairs(seed.ccs or {})   do m.ccs[#m.ccs+1]     = { ppq = c.ppq, chanmsg = c.chanmsg,
         chan = c.chan, msg2 = c.msg2, msg3 = c.msg3, muted = c.muted, shape = c.shape, tension = c.tension } end
     for _, e in ipairs(seed.texts or {}) do m.texts[#m.texts+1] = { ppq = e.ppq, eventtype = e.eventtype,
         msg = e.msg, muted = e.muted } end
-    stableSort(m.notes); stableSort(m.ccs); stableSort(m.texts)
+    for _, p in ipairs(seed.passthrough or {}) do m.passthrough[#m.passthrough+1] = {
+        ppq = p.ppq, flags = p.flags or 0, msg = p.msg } end
+    stableSort(m.notes); stableSort(m.ccs); stableSort(m.texts); stableSort(m.passthrough)
   end
 
   function r:dumpMidi(take)
     local m = midi(take)
-    return { notes = m.notes, ccs = m.ccs, texts = m.texts }
+    return { notes = m.notes, ccs = m.ccs, texts = m.texts, passthrough = m.passthrough }
   end
 
   return r

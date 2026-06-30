@@ -1,4 +1,4 @@
-@module midiBlob  src=midiBlob.lua  loc=156  sha=510a60e  mode=namespace  self=midiBlob
+@module midiBlob  src=midiBlob.lua  loc=157  sha=fd187aa  mode=namespace  self=midiBlob
 
 # Invariants & contracts
   @invariant  idx is the 0-based REAPER per-type index; note idx counts note-ons, text idx skips CCBZ
@@ -6,11 +6,11 @@
   @reaper  flags bit1=muted; bits4-6=cc shape; status byte classifies; CCBZ rides FF-0F after its cc
 
 # Shapes
-  @shape  parse(blob) -> notes, ccs, texts
+  @shape  parse(blob) -> notes, ccs, texts, passthrough
   @shape  note = { idx, evType='note', ppq, endppq, chan(1..16), pitch, vel, [muted] }
   @shape  cc = { idx, ppq, evType, chan(1..16), [cc|pitch], [val|vel], shape, [tension], [muted] }
   @shape  text = { idx, ppq, eventtype, msg }  -- 15=notation, -1=sysex; CCBZ tension folds onto its cc
-  @shape  serialise(notes, ccs, texts, passthrough) -> blob   -- exact inverse of parse, mm-shape in
+  @shape  serialise(notes, ccs, texts, passthrough, endPpq?) -> blob   -- inverse of parse; endPpq places the tail
 
 # Imports
   @const util = 'util'  @ 17
@@ -31,10 +31,10 @@
 
 # Public API (midiBlob.*)
   @api midiBlob.parse(blob)  @ 38-90
-  @api midiBlob.serialise(notes, ccs, texts, passthrough)  @ 110-154
+  @api midiBlob.serialise(notes, ccs, texts, passthrough, endPpq)  @ 110-155
       @invariant  parse(serialise(x))==x; coincident events may reorder, per-type record lists preserved
-      @reaper  output matches the MIDI_SetAllEvts blob format; 12-byte all-notes-off tail appended
+      @reaper  matches MIDI_SetAllEvts format; tail at max(endPpq, last-event ppq) (default: last event)
 
 # Uses (outbound edges)
-  @use call    util.add  @ parse:59,72,78,82,85 serialise:113,149,152
+  @use call    util.add  @ parse:59,72,78,82,85 serialise:113,149,153
   @use require util  @ 17

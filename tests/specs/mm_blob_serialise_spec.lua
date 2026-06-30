@@ -38,4 +38,25 @@ tests[#tests + 1] = {
   end,
 }
 
+-- The trailing all-notes-off marker carries the take length (EOT); endPpq
+-- places it past the last event so a whole-take rewrite never shrinks the take.
+local function tailPpq(blob)
+  local pos, ppq = 1, 0
+  while pos <= #blob do
+    local offset, _, _, nextPos = string.unpack('i4Bs4', blob, pos)
+    ppq, pos = ppq + offset, nextPos
+  end
+  return ppq
+end
+
+tests[#tests + 1] = {
+  name = 'endPpq positions the EOT tail; never shrinks past the last event',
+  run = function()
+    local notes = { { evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100 } }
+    t.eq(tailPpq(midiBlob.serialise(notes, {}, {}, {}, 960)), 960, 'tail honours endPpq beyond the last event')
+    t.eq(tailPpq(midiBlob.serialise(notes, {}, {}, {}, 100)), 240, 'endPpq below the last event is clamped up')
+    t.eq(tailPpq(midiBlob.serialise(notes, {}, {}, {})),      240, 'no endPpq: tail sits at the last event')
+  end,
+}
+
 return tests
