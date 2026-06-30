@@ -34,7 +34,7 @@ Track A is the generator substrate, Track B the authoring UI. Checked = landed.
 - [x] B2 — parked note + cc display (render only)
 
 **Open / next**
-- [ ] B3 — parked notes/ccs *editable* off-take via a third edit backing (in progress, § B3) — step 1 (the `generators` extract) landed
+- [ ] B3 — parked notes/ccs *editable* off-take via a third edit backing (in progress, § B3) — steps 1-2 landed (the `generators` extract; logical-only specs + identity capture)
 - [ ] fx chain — series composition + multi-column authoring (design only, § The fx chain)
 
 **Deferred (no consumer / intentional)**
@@ -611,9 +611,11 @@ column-based, not gm-backed -- the Open-questions Track-B lean, now resolved.
 
 **Progress — four green steps.** (1) extract `parksNotes`/`parkWindows` to `generators` —
 **landed** (pure surface + `generators_spec` pins; tm now calls `parkWindows` once);
-(2) logical-only park specs + identity capture in `rebuildRegionPark`; (3) staging verbs
-(`parkedEdits`) + flush integration + the `dataChanged` subscription; (4) view backing +
-tagging (note, then cc). Steps 2-4 below as planned.
+(2) logical-only park specs + identity capture in `rebuildRegionPark` — **landed**
+(stashes are logical-only; parked notes carry `chan`+`uuid`, parked ccs `chan`+`ppqL`;
+restore derives realised ppq via `fromLogical`; pinned in `tm_fx_region_spec`); (3) staging
+verbs (`parkedEdits`) + flush integration + the `dataChanged` subscription; (4) view backing +
+tagging (note, then cc). Steps 3-4 below as planned.
 
 Closes the B2 *edit open* gap: a replace region's parked chord (and parked cc)
 renders but is not yet editable (parked cells are tokenless, so a cursor edit
@@ -665,12 +667,12 @@ parking disagree. Both now come from `generators` (pure, reads only `kinds`):
 **Surface.**
 
 - *`generators.lua`* -- `parksNotes` (moved) + `parkWindows` (new). Pure. **Landed.**
-- *`trackerManager.lua`* -- (a) **identity capture** in `rebuildRegionPark`: note
-  `shape` captures `uuid = evt.uuid`; `channels[chan].parked` cells gain
+- *`trackerManager.lua`* -- (a) **identity capture** in `rebuildRegionPark` — **landed**:
+  note `shape` captures `uuid = evt.uuid`; `channels[chan].parked` cells gain
   `chan`+`uuid`; `channels[chan].parkedCC` cells gain `chan`+`ppqL` (the fields
   `colFor`/the backing address by). Specs go **logical-only** (drop realised
   `ppq`/`endppq`; restore derives them fresh from `ppqL` via `fromLogical` under
-  current swing). 4.5's window blocks call `parkWindows`. Two `--shape` updates.
+  current swing). All four `--shape` annotations updated.
   (b) **staging**: a `parkedEdits` buffer peer to `adds`/`assigns`/`deletes`, with
   `tm:addParked`/`tm:assignParked`/`tm:deleteParked`. Note key = `uuid` (minted
   `fxp-N` on add); cc key = natural `(chan, cc, ppqL)` (cc events carry no uuid).

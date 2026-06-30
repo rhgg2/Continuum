@@ -313,6 +313,51 @@ return {
     end,
   },
 
+  ----- B3 step 2: parked specs are logical-only and carry the identity the backing addresses by
+
+  {
+    name = 'park identity (note): render cell carries chan+uuid; the fxParked stash is logical-only',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { pitch = 60, lane = 1 })
+      injectArp(h)
+      local parked = h.tm:getChannel(1).parked
+      t.eq(#parked, 1, 'the covered note parks')
+      t.eq(parked[1].chan, 1, 'the render cell knows its channel (the backing addresses by it)')
+      t.truthy(parked[1].uuid, 'the render cell carries the durable note uuid')
+      local stash = h.ds:get('fxParked')
+      t.eq(stash[1].ppqL, 0, 'the stash keeps the logical onset')
+      t.eq(stash[1].ppq, nil, 'the stash drops realised ppq -- logical-only')
+      t.eq(stash[1].endppq, nil, 'the stash drops realised endppq -- logical-only')
+      t.eq(stash[1].uuid, parked[1].uuid, 'stash and render cell share the durable uuid')
+    end,
+  },
+
+  {
+    name = 'park identity (cc): render cell carries chan+ppqL; the fxParkedCC stash is logical-only',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent({ evType = 'cc', ppq = 60, chan = 1, cc = 74, val = 30 }); h.tm:flush()
+      generators.kinds.ccRep = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppqL = host.window[1], val = 100, shape = 'square' },
+        } } end,
+        mode = 'replace', dest = 74, label = 'CcRep', defaults = {}, fields = {},
+      }
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+                                   fx = { { kind = 'ccRep' } } } })
+      h.tm:rebuild()
+      generators.kinds.ccRep = nil
+      local parked = h.tm:getChannel(1).parkedCC
+      t.eq(#parked, 1, 'the covered cc parks')
+      t.eq(parked[1].chan, 1, 'the render cell knows its channel')
+      t.eq(parked[1].ppqL, 60, 'the render cell carries the logical onset (the backing key)')
+      local stash = h.ds:get('fxParkedCC')
+      t.eq(stash[1].ppqL, 60, 'the stash keeps the logical onset')
+      t.eq(stash[1].ppq, nil, 'the stash drops realised ppq -- logical-only')
+    end,
+  },
+
   ----- Augment by kind: a continuous region leaves its members sounding (no parking)
 
   {

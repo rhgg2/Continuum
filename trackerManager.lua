@@ -26,10 +26,10 @@
 --invariant: paEventCol mixes into note column events
 --shape: extraColumns[chan] = { notes=count, [pc], [pb], [at], [ccs={[ccNum]=true}] }
 --shape: lastMuteSet = { [chan] = true }, pushed by tv via tm:setMutedChannels
---shape: fxParked = { { evType='note', chan, lane, ppq, endppq, ppqL, endppqL, pitch, vel, detune, delay, sample }, ... }
---shape: fxParkedCC = { { chan, cc, ppq, ppqL, val, shape }, ... } -- authored cc parked off-take by a cc-replace window
---shape: channels[chan].parked = { { ppq, ppqL, endppqL, endppqC, pitch, vel, detune, sample, delay, lane }, ... } -- off-take replace members as render-ready logical cells (ppq==ppqL, endppqC==endppqL)
---shape: channels[chan].parkedCC = { { evType='cc', cc, ppq, val, shape }, ... } -- off-take cc-replace members as render-ready logical cells (ppq==ppqL)
+--shape: fxParked = { { evType='note', chan, lane, uuid, ppqL, endppqL, pitch, vel, detune, delay, sample }, ... } -- logical-only; realised ppq derived on restore
+--shape: fxParkedCC = { { chan, cc, ppqL, val, shape }, ... } -- authored cc parked off-take by a cc-replace window (logical-only)
+--shape: channels[chan].parked = { { chan, uuid, ppq, ppqL, endppqL, endppqC, pitch, vel, detune, sample, delay, lane }, ... } -- off-take replace members as render-ready logical cells (ppq==ppqL, endppqC==endppqL)
+--shape: channels[chan].parkedCC = { { evType='cc', chan, cc, ppq, ppqL, val, shape }, ... } -- off-take cc-replace members as render-ready logical cells (ppq==ppqL)
 --contract: a discrete-replace in a region parks its covered chord off-take; else it keeps sounding
 --invariant: parked members feed generator + grid only; never sounding (mute fails for CC/PA)
 
@@ -1362,7 +1362,7 @@ local function rebuildRegionPark(deferred)
       end
     end
     local function shape(evt, chan, laneIdx)
-      return util.pick(evt, "ppq endppq ppqL endppqL pitch vel detune delay sample",
+      return util.pick(evt, "uuid ppqL endppqL pitch vel detune delay sample",
                        { evType = 'note', chan = chan, lane = laneIdx })
     end
 
@@ -1373,7 +1373,8 @@ local function rebuildRegionPark(deferred)
     for _, spec in ipairs(restores) do
       local channel = channels[spec.chan]
       while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
-      local ce = util.clone(spec)
+      local ce = util.clone(spec, { uuid = true })    -- sheds the parked uuid; mm:add mints a fresh one
+      ce.ppq = tm:fromLogical(spec.chan, spec.ppqL)    -- realised onset derived fresh (spec is logical-only)
       util.add(channel.columns.notes[spec.lane].events, ce)
       table.sort(channel.columns.notes[spec.lane].events, function(a, b) return a.ppqL < b.ppqL end)
       -- Lazy: reshaped at commit so it reads ce.ppq/endppq after the tail-walk clip.
@@ -1393,7 +1394,7 @@ local function rebuildRegionPark(deferred)
       local channel = channels[spec.chan]
       while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
       util.add(channel.parked, util.pick(spec,
-        "ppqL endppqL pitch vel detune sample delay lane", { ppq = spec.ppqL }))
+        "chan uuid ppqL endppqL pitch vel detune sample delay lane", { ppq = spec.ppqL }))
     end
     for chan = 1, 16 do
       realiseParked(channels[chan].parked, tm:toLogical(chan, takeLen))
@@ -1421,8 +1422,12 @@ local function rebuildRegionPark(deferred)
       end
     end
     local function shape(evt, chan, cc)
-      return { chan = chan, cc = cc, ppq = evt.ppq, ppqL = evt.ppqL or evt.ppq,
+      return { chan = chan, cc = cc, ppqL = evt.ppqL or evt.ppq,
                val = evt.val, shape = evt.shape }
+    end
+    -- A logical cc event from a parked spec, seated at ppq (realised onset on restore; ppqL for a render cell).
+    local function ccCell(spec, ppq)
+      return util.pick(spec, "chan cc ppqL val shape", { evType = 'cc', ppq = ppq })
     end
 
     local newParked, restores = reconcilePark(scan, ds:get('fxParkedCC') or {}, covered, shape, batch)
@@ -1430,13 +1435,12 @@ local function rebuildRegionPark(deferred)
     -- Seat a token-less projection so the view shows the restored cc this frame; next rebuild
     -- re-reads the real token'd event from the take. The add rides the shared park commit.
     for _, spec in ipairs(restores) do
-      batch.add({ evType = 'cc', chan = spec.chan, cc = spec.cc,
-                  ppq = spec.ppq, ppqL = spec.ppqL, val = spec.val, shape = spec.shape })
+      local ppq = tm:fromLogical(spec.chan, spec.ppqL)   -- realised onset derived fresh (spec is logical-only)
+      batch.add(ccCell(spec, ppq))
       local channel = channels[spec.chan]
       local col = channel.columns.ccs[spec.cc]
       if not col then col = { cc = spec.cc, events = {} }; channel.columns.ccs[spec.cc] = col end
-      util.add(col.events, { evType = 'cc', ppq = spec.ppq, ppqL = spec.ppqL,
-                             val = spec.val, shape = spec.shape })
+      util.add(col.events, ccCell(spec, ppq))
       table.sort(col.events, function(a, b) return (a.ppqL or a.ppq) < (b.ppqL or b.ppq) end)
     end
 
@@ -1448,8 +1452,7 @@ local function rebuildRegionPark(deferred)
     for _, spec in ipairs(newParked) do
       local channel = channels[spec.chan]
       channel.columns.ccs[spec.cc] = channel.columns.ccs[spec.cc] or { cc = spec.cc, events = {} }
-      util.add(channel.parkedCC,
-        { evType = 'cc', cc = spec.cc, ppq = spec.ppqL, val = spec.val, shape = spec.shape })
+      util.add(channel.parkedCC, ccCell(spec, spec.ppqL))
     end
   end
 
