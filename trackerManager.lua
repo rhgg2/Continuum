@@ -1013,80 +1013,12 @@ function tm:setMutedChannels(set)
   flush()
 end
 
------ Rebuild
-
------ Column allocation
+----- Rebuild step helpers
 
 local function pushNoteCol(channel)
   local notes = channel.columns.notes
   return util.add(notes, { events = {} }), #notes
 end
-
---contract: true iff note fits col: no over-threshold overlap, coincident onset always refuses
---invariant: overlap threshold: same-pitch 0, cross-pitch lenient; dominated-by≥2 refuses
---contract: consulted only for unstamped raw notes; stamped notes never reach it
-local function noteColumnAccepts(col, note)
-  local lenient = cm:get('overlapOffset') * mm:resolution()
-  local noteppqI    = note.ppq - delayToPPQ(note.delay or 0)
-  local noteEndppqI = note.endppq
-  local dominated = 0
-  for _, evt in ipairs(col.events) do
-    local evtppqI = evt.ppq - delayToPPQ(evt.delay or 0)
-    if noteppqI == evtppqI then return false end
-    if noteppqI < evt.endppq and evtppqI < noteEndppqI then
-      local threshold = (evt.pitch == note.pitch) and 0 or lenient
-      local overlapAmount = math.min(evt.endppq, noteEndppqI) - math.max(evtppqI, noteppqI)
-      if overlapAmount > threshold then return false end
-      dominated = dominated + 1
-    end
-  end
-  if dominated >= 2 then return false end
-  return true
-end
-
---contract: stamped notes (ppqL ~= nil) take their authored lane verbatim
---invariant: the tail walk clips tails so they can't overlap; lane extends if missing
-local function pickStampedLane(channel, note)
-  local notes = channel.columns.notes
-  while #notes < note.lane do pushNoteCol(channel) end
-  return notes[note.lane]
-end
-
---contract: pick a lane for an external (unstamped) note via accept → sibling → push bump
---invariant: called up front after internals placed + swing-reseated; tail walk clips tails after
-local function packExternalLane(channel, note)
-  local notes = channel.columns.notes
-  if note.lane then
-    local col = notes[note.lane]
-    if col and noteColumnAccepts(col, note) then return col, note.lane end
-    if not col then
-      while #notes < note.lane do pushNoteCol(channel) end
-      return notes[note.lane], note.lane
-    end
-  end
-  for i, col in ipairs(notes) do
-    if noteColumnAccepts(col, note) then return col, i end
-  end
-  return pushNoteCol(channel)
-end
-
-local function findNoteColumnForPitch(channel, pitch, ppq_pos)
-  local notes = channel.columns.notes
-  for laneIdx, col in ipairs(notes) do
-    for _, evt in ipairs(col.events) do
-      if evt.endppq and evt.pitch == pitch and evt.ppq <= ppq_pos and evt.endppq > ppq_pos then
-        return col, laneIdx
-      end
-    end
-  end
-  for laneIdx, col in ipairs(notes) do
-    for _, evt in ipairs(col.events) do
-      if evt.pitch == pitch then return col, laneIdx end
-    end
-  end
-end
-
------ CC projection
 
 -- Column events keep chan/cc so each event is self-describing (the leaf-edit
 -- facade resolves an event's column from its own chan + lane/cc; see trackerView).
@@ -1096,8 +1028,6 @@ local function projectCC(cc, token, overlay)
   if overlay then util.assign(evt, overlay) end
   return evt
 end
-
------ Rebuild step helpers
 
 -- Strict-next per note: first group member with a greater ppq,
 -- chord-mates skipped. Precomputed O(n); see docs/trackerManager.md § Rebuild.
@@ -1185,21 +1115,23 @@ local function rebuildInternals(fx)
   local reseated = {}
   for _, note in ipairs(internal) do
     local channel = channels[note.chan]
-    local col = pickStampedLane(channel, note)
+    local notes = channel.columns.notes
+    -- Stamped notes keep their authored lane verbatim (extended if missing);
+    -- the tail walk clips tails afterward, so overlap here is never a concern.
+    while #notes < note.lane do pushNoteCol(channel) end
+    local col = notes[note.lane]
     -- clone not alias: projectLogical rewrites column ppq to logical; mm retains raw
-    local ce = util.clone(note)
-    -- detune/delay are optional eventMeta; default at ingestion so every column note
-    -- event carries them (mirrors the external seam) -- downstream reads trust non-nil.
-    ce.detune = ce.detune or 0
-    ce.delay  = ce.delay  or 0
-    ce.token = mm:tokenOf(note)
-    -- Stale swing: raw stamped under the prior swing; rederive realised onset from logical
-    -- (endppq owned by the tail walk). Mirrors the CC reseat. see docs/timing.md §"Rebuild rule"
+    local colNote = util.clone(note)
+    -- set detune/delay at ingestion to skip defensive guards downstream
+    colNote.detune = colNote.detune or 0
+    colNote.delay  = colNote.delay  or 0
+    colNote.token  = mm:tokenOf(note)
+    -- when swing is stale, rederive realised onset from logical; endppq handled by the tail walk.
     if staleSwing[note.chan] then
-      ce.ppq = tm:fromLogical(note.chan, ce.ppqL, delayToPPQ(ce.delay))
-      util.add(reseated, { evt = ce, was = note.ppq })
+      colNote.ppq = tm:fromLogical(note.chan, colNote.ppqL, delayToPPQ(colNote.delay))
+      util.add(reseated, { evt = colNote, was = note.ppq })
     end
-    util.add(col.events, ce)
+    util.add(col.events, colNote)
   end
 
   -- Reswing can collapse two distinct-ppqL same-pitch notes onto one raw. Separate them before
@@ -1332,6 +1264,47 @@ end
 -- block window + tail passes -- onsets frozen, tails clipped. see docs/trackerManager.md § Rebuild: externals
 local function rebuildExternals(external)
   if #external == 0 then return end
+
+  --contract: true iff note fits col: no over-threshold overlap, coincident onset always refuses
+  --invariant: overlap threshold: same-pitch 0, cross-pitch lenient; dominated-by≥2 refuses
+  --contract: consulted only for unstamped raw notes; stamped notes never reach it
+  local function noteColumnAccepts(col, note)
+    local lenient = cm:get('overlapOffset') * mm:resolution()
+    local noteppqI    = note.ppq - delayToPPQ(note.delay or 0)
+    local noteEndppqI = note.endppq
+    local dominated = 0
+    for _, evt in ipairs(col.events) do
+      local evtppqI = evt.ppq - delayToPPQ(evt.delay or 0)
+      if noteppqI == evtppqI then return false end
+      if noteppqI < evt.endppq and evtppqI < noteEndppqI then
+        local threshold = (evt.pitch == note.pitch) and 0 or lenient
+        local overlapAmount = math.min(evt.endppq, noteEndppqI) - math.max(evtppqI, noteppqI)
+        if overlapAmount > threshold then return false end
+        dominated = dominated + 1
+      end
+    end
+    if dominated >= 2 then return false end
+    return true
+  end
+
+  --contract: pick a lane for an external (unstamped) note via accept → sibling → push bump
+  --invariant: called up front after internals placed + swing-reseated; tail walk clips tails after
+  local function packExternalLane(channel, note)
+    local notes = channel.columns.notes
+    if note.lane then
+      local col = notes[note.lane]
+      if col and noteColumnAccepts(col, note) then return col, note.lane end
+      if not col then
+        while #notes < note.lane do pushNoteCol(channel) end
+        return notes[note.lane], note.lane
+      end
+    end
+    for i, col in ipairs(notes) do
+      if noteColumnAccepts(col, note) then return col, i end
+    end
+    return pushNoteCol(channel)
+  end
+
   table.sort(external, function(a, b) return a.ppq < b.ppq end)
   local trackerMode = cm:get('trackerMode')
   local extWrites = mmBatch()
@@ -1349,12 +1322,12 @@ local function rebuildExternals(external)
     if note.detune == nil  then update.detune = 0      end
     if note.delay  == nil  then update.delay  = 0      end
     if trackerMode and note.sample == nil then update.sample = 0 end
-    local ce = util.clone(note)
-    util.assign(ce, update)
-    ce.fixed = true
-    util.add(col.events, ce)
-    ce.token = mm:tokenOf(note)
-    extWrites.assign(ce, update)
+    local colNote = util.clone(note)
+    util.assign(colNote, update)
+    colNote.fixed = true
+    util.add(col.events, colNote)
+    colNote.token = mm:tokenOf(note)
+    extWrites.assign(colNote, update)
   end
   extWrites.commit()
 end
@@ -1452,13 +1425,13 @@ local function rebuildRegionPark(deferred)
     for _, spec in ipairs(restores) do
       local channel = channels[spec.chan]
       while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
-      local ce = util.clone(spec, { uuid = true })    -- sheds the parked uuid; mm:add mints a fresh one
-      ce.ppq = tm:fromLogical(spec.chan, spec.ppqL)    -- realised onset derived fresh (spec is logical-only)
-      util.add(channel.columns.notes[spec.lane].events, ce)
+      local colNote = util.clone(spec, { uuid = true })    -- sheds the parked uuid; mm:add mints a fresh one
+      colNote.ppq = tm:fromLogical(spec.chan, spec.ppqL)    -- realised onset derived fresh (spec is logical-only)
+      util.add(channel.columns.notes[spec.lane].events, colNote)
       table.sort(channel.columns.notes[spec.lane].events, function(a, b) return a.ppqL < b.ppqL end)
-      -- Lazy: reshaped at commit so it reads ce.ppq/endppq after the tail-walk clip.
+      -- Lazy: reshaped at commit so it reads colNote.ppq/endppq after the tail-walk clip.
       deferred.addLazy(function()
-        return util.pick(ce, "ppq endppq ppqL endppqL pitch vel detune delay sample",
+        return util.pick(colNote, "ppq endppq ppqL endppqL pitch vel detune delay sample",
                          { evType = 'note', chan = spec.chan, lane = spec.lane })
       end)
     end
@@ -1542,6 +1515,22 @@ end
 -- Late PA projection: mixes into note columns once lanes are settled, so the view (and rebuildFx's
 -- channelStreams) read it inline. Must follow column layout, so it can't ride the CC walk.
 local function rebuildPA()
+  local function findNoteColumnForPitch(channel, pitch, ppq_pos)
+    local notes = channel.columns.notes
+    for laneIdx, col in ipairs(notes) do
+      for _, evt in ipairs(col.events) do
+        if evt.endppq and evt.pitch == pitch and evt.ppq <= ppq_pos and evt.endppq > ppq_pos then
+          return col, laneIdx
+        end
+      end
+    end
+    for laneIdx, col in ipairs(notes) do
+      for _, evt in ipairs(col.events) do
+        if evt.pitch == pitch then return col, laneIdx end
+      end
+    end
+  end
+
   for _, cc in mm:ccs() do
     if cc.evType == 'pa' then
       local noteCol, lane = findNoteColumnForPitch(channels[cc.chan], cc.pitch, cc.ppq)
