@@ -20,6 +20,11 @@ local chanMsgEvTypes = { [0xA0] = 'pa', [0xB0] = 'cc', [0xC0] = 'pc', [0xD0] = '
 local shapeNames     = { [0] = 'step', [1] = 'linear', [2] = 'slow',
                          [3] = 'fast-start', [4] = 'fast-end', [5] = 'bezier' }
 
+local shapeCodes, hiByEvType = {}, {}
+for code, name in pairs(shapeNames)     do shapeCodes[name] = code end
+for hi,   name in pairs(chanMsgEvTypes) do hiByEvType[name] = hi  end
+local oneDataByte = { pc = true, at = true }   -- status + a single 7-bit data byte
+
 local midiBlob = {}
 
 -- The value-bearing fields for a cc-family event, keyed as mm:load stores them.
@@ -31,7 +36,7 @@ local function ccValueFields(evType, b2, b3)
 end
 
 function midiBlob.parse(blob)
-  local notes, ccs, texts = {}, {}, {}
+  local notes, ccs, texts, passthrough = {}, {}, {}, {}
   local pending = {}   -- (chan*128+pitch) -> FIFO queue of open note-ons awaiting their note-off
   local lastCC         -- most-recent cc, for CCBZ tension attachment
   local noteIdx, ccIdx, textIdx = 0, 0, 0
@@ -76,10 +81,76 @@ function midiBlob.parse(blob)
     elseif status == 0xF0 then
       util.add(texts, { idx = textIdx, ppq = ppq, eventtype = -1, msg = msg:sub(2, #msg - 1) })
       textIdx = textIdx + 1
+    elseif status ~= 0 then
+      util.add(passthrough, { ppq = ppq, flags = flags, msg = msg })
     end
   end
 
-  return notes, ccs, texts
+  return notes, ccs, texts, passthrough
+end
+
+-- Value bytes for a cc-family record (inverse of ccValueFields).
+local function ccDataBytes(c)
+  if c.evType == 'pa' then return c.pitch, c.vel end
+  if c.evType == 'cc' then return c.cc, c.val end
+  if c.evType == 'pb' then local raw = c.val + 8192; return raw & 0x7F, (raw >> 7) & 0x7F end
+  return c.val or 0, 0   -- pc, at: single 7-bit payload
+end
+
+local function ccWire(c)
+  local status = (hiByEvType[c.evType] or 0) | (c.chan - 1)
+  local b2, b3 = ccDataBytes(c)
+  if oneDataByte[c.evType] then return string.char(status, b2) end
+  return string.char(status, b2, b3)
+end
+
+--shape: serialise(notes, ccs, texts, passthrough) -> blob   -- exact inverse of parse, mm-shape in
+--invariant: parse(serialise(x))==x; coincident events may reorder, per-type record lists preserved
+--reaper: output matches the MIDI_SetAllEvts blob format; 12-byte all-notes-off tail appended
+function midiBlob.serialise(notes, ccs, texts, passthrough)
+  local wire = {}
+  local function push(ppq, rank, seq, flags, msg)
+    util.add(wire, { ppq = ppq, rank = rank, seq = seq, flags = flags, msg = msg })
+  end
+
+  for i, n in ipairs(notes) do
+    local ch = n.chan - 1
+    push(n.ppq,    1, i, n.muted and 0x02 or 0, string.char(0x90 | ch, n.pitch, n.vel))
+    push(n.endppq, 0, i, 0,                      string.char(0x80 | ch, n.pitch, 0))
+  end
+
+  for i, c in ipairs(ccs) do
+    local flags = (c.muted and 0x02 or 0) | ((shapeCodes[c.shape] or 0) << 4)
+    push(c.ppq, 2, i, flags, ccWire(c))
+    if c.shape == 'bezier' then
+      push(c.ppq, 2, i + 0.5, 0, '\xFF\x0F' .. 'CCBZ ' .. '\0' .. string.pack('f', c.tension or 0))
+    end
+  end
+
+  for i, x in ipairs(texts) do
+    local msg = x.eventtype == -1
+      and ('\xF0' .. x.msg .. '\xF7')
+      or  ('\xFF' .. string.char(x.eventtype) .. x.msg)
+    push(x.ppq, 3, i, 0, msg)
+  end
+
+  for i, p in ipairs(passthrough or {}) do
+    push(p.ppq, 4, i, p.flags, p.msg)
+  end
+
+  table.sort(wire, function(a, b)
+    if a.ppq  ~= b.ppq  then return a.ppq  < b.ppq  end
+    if a.rank ~= b.rank then return a.rank < b.rank end
+    return a.seq < b.seq
+  end)
+
+  local out, prev = {}, 0
+  for _, ev in ipairs(wire) do
+    util.add(out, string.pack('i4Bs4', ev.ppq - prev, ev.flags, ev.msg))
+    prev = ev.ppq
+  end
+  util.add(out, string.pack('i4Bs4', 0, 0, '\xB0\x7B\x00'))   -- all-notes-off tail
+  return table.concat(out)
 end
 
 return midiBlob

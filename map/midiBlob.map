@@ -1,4 +1,4 @@
-@module midiBlob  src=midiBlob.lua  loc=85  sha=52943e4  mode=namespace  self=midiBlob
+@module midiBlob  src=midiBlob.lua  loc=156  sha=510a60e  mode=namespace  self=midiBlob
 
 # Invariants & contracts
   @invariant  idx is the 0-based REAPER per-type index; note idx counts note-ons, text idx skips CCBZ
@@ -10,6 +10,7 @@
   @shape  note = { idx, evType='note', ppq, endppq, chan(1..16), pitch, vel, [muted] }
   @shape  cc = { idx, ppq, evType, chan(1..16), [cc|pitch], [val|vel], shape, [tension], [muted] }
   @shape  text = { idx, ppq, eventtype, msg }  -- 15=notation, -1=sysex; CCBZ tension folds onto its cc
+  @shape  serialise(notes, ccs, texts, passthrough) -> blob   -- exact inverse of parse, mm-shape in
 
 # Imports
   @const util = 'util'  @ 17
@@ -17,15 +18,23 @@
 # Module-level constants
   @const chanMsgEvTypes = { [0xA0] = 'pa', [0xB0] = 'cc', [0xC0] = 'pc', [0xD0] = '...  @ 19
   @const shapeNames = { [0] = 'step', [1] = 'linear', [2] = 'slow',  @ 20
-  @const midiBlob = {}  @ 23
+  @const shapeCodes, hiByEvType = {}, {}  @ 23
+  @const oneDataByte = { pc = true, at = true }  @ 26   -- status + a single 7-bit data byte
+  @const midiBlob = {}  @ 28
 
 # Private functions
-  @fn ccValueFields(evType, b2, b3)  @ 26-31
+  @fn ccValueFields(evType, b2, b3)  @ 31-36
       -- The value-bearing fields for a cc-family event, keyed as mm:load stores them.
+  @fn ccDataBytes(c)  @ 93-98
+      -- Value bytes for a cc-family record (inverse of ccValueFields).
+  @fn ccWire(c)  @ 100-105
 
 # Public API (midiBlob.*)
-  @api midiBlob.parse(blob)  @ 33-83
+  @api midiBlob.parse(blob)  @ 38-90
+  @api midiBlob.serialise(notes, ccs, texts, passthrough)  @ 110-154
+      @invariant  parse(serialise(x))==x; coincident events may reorder, per-type record lists preserved
+      @reaper  output matches the MIDI_SetAllEvts blob format; 12-byte all-notes-off tail appended
 
 # Uses (outbound edges)
-  @use call    util.add  @ parse:54,67,73,77
+  @use call    util.add  @ parse:59,72,78,82,85 serialise:113,149,152
   @use require util  @ 17
