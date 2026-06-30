@@ -164,6 +164,33 @@ return {
     end,
   },
 
+  ----- park predicate + windows: the single source for "what 4.5 parks over"
+
+  {
+    name = 'parksNotes is true for a discrete-replace kind, false for augment / husk',
+    run = function()
+      t.eq(generators.parksNotes{ fx = { { kind = 'retrig' } } }, true,  'retrig replaces notes')
+      t.eq(generators.parksNotes{ fx = { { kind = 'vibrato' } } }, false, 'vibrato augments pb')
+      t.eq(generators.parksNotes{ fx = {} }, false, 'a husk parks nothing')
+    end,
+  },
+
+  {
+    name = 'parkWindows buckets note windows (discrete-replace) and cc windows (continuous-replace) by chan',
+    run = function()
+      generators.kinds.ccrep = { mode = 'replace', dest = 10 }   -- fixture: no built-in cc-replace kind
+      local windows = generators.parkWindows{
+        { chan = 1, startppq = 0,  endppq = 240, fx = { { kind = 'arp' } } },     -- discrete replace -> note window
+        { chan = 3, startppq = 60, endppq = 120, fx = { { kind = 'ccrep' } } },   -- continuous replace -> cc window
+        { chan = 5, startppq = 0,  endppq = 240, fx = { { kind = 'vibrato' } } }, -- augment -> neither
+        { chan = 7, fx = {} },                                                    -- husk -> neither
+      }
+      generators.kinds.ccrep = nil
+      t.deepEq(windows.notes, { [1] = { { 0, 240 } } }, 'only the discrete-replace region seeds a note window')
+      t.deepEq(windows.ccs,   { [3] = { [10] = { { 60, 120 } } } }, 'the cc-replace region seeds a (chan,cc) window')
+    end,
+  },
+
   ----- autopan: a cc-dest sine LFO (vibrato's shape, cc steps not cents)
 
   {

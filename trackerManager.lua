@@ -177,16 +177,6 @@ local function reconcileFx(existing, predicted, sink)
     onKeep = function(spec, have) spec.token, spec.endppq = have.token, have.endppq end }
 end
 
--- A region parks its covered chord iff it carries a discrete-replace kind (its derived notes
--- stand in). A continuous/augment kind never parks notes; a husk (no kinds) parks nothing.
-local function parksNotes(region)
-  for _, params in ipairs(region.fx or {}) do
-    local meta = generators.kinds[params.kind]
-    if meta and meta.mode == 'replace' and meta.dest == 'note' then return true end
-  end
-  return false
-end
-
 ----- delta-stream (carrier) reconciliation
 -- Pure fn of lane-1 hosts; key by (cc, canon ppq) — REAPER float vs int prediction churns whole stream. see design/archive/note-macros.md § Delta-code allocation
 local function reconcileCarrier(existing, predicted, sink)
@@ -1349,16 +1339,11 @@ local function rebuildRegionPark(deferred)
 
   -- Notes and ccs park in one batch -> a single delete-first commit for the whole phase.
   local batch = mmBatch()
+  local parkWindows = generators.parkWindows(ds:get('fxRegions') or {})
 
   -- Notes: can't mute (note-on/off + CC matching), so a covered authored note leaves the take.
   do
-    local windows = {}
-    for _, region in ipairs(ds:get('fxRegions') or {}) do
-      -- parksNotes is false for a husk or a continuous/augment-only region, so it parks nothing.
-      if parksNotes(region) then
-        util.bucket(windows, region.chan, { region.startppq, region.endppq })
-      end
-    end
+    local windows = parkWindows.notes
     local function covered(chan, _, ppqL)
       for _, w in ipairs(windows[chan] or {}) do
         if ppqL >= w[1] and ppqL < w[2] then return true end
@@ -1419,16 +1404,7 @@ local function rebuildRegionPark(deferred)
   -- CCs: a point event has no tail, so the Pass-A curve stands in on the target lane and
   -- restores add back immediately, seating a token-less projection for the view.
   do
-    local windows = {}   -- [chan][cc] = { {startL, endL}, ... }
-    for _, region in ipairs(ds:get('fxRegions') or {}) do
-      for _, params in ipairs(region.fx or {}) do
-        local meta = generators.kinds[params.kind]
-        if meta and meta.mode == 'replace' and type(meta.dest) == 'number' then
-          windows[region.chan] = windows[region.chan] or {}
-          util.bucket(windows[region.chan], meta.dest, { region.startppq, region.endppq })
-        end
-      end
-    end
+    local windows = parkWindows.ccs   -- [chan][cc] = { {startL, endL}, ... }
     local function covered(chan, cc, ppqL)
       for _, w in ipairs((windows[chan] or {})[cc] or {}) do
         if ppqL >= w[1] and ppqL < w[2] then return true end
@@ -1710,7 +1686,7 @@ local function rebuildFx(fx, deferred)
     for _, region in ipairs(fxRegionsByChan[chan] or {}) do
       local startL, endL = region.startppq, region.endppq
       local members
-      if parksNotes(region) then
+      if generators.parksNotes(region) then
         members = {}                             -- replace: derived notes stand in for the parked chord
         for _, m in ipairs(channels[chan].parked or {}) do
           if m.ppqL >= startL and m.ppqL < endL then util.add(members, m) end

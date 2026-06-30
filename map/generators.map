@@ -1,4 +1,4 @@
-@module generators  src=generators.lua  loc=297  sha=ffd5949  mode=namespace  self=generators
+@module generators  src=generators.lua  loc=331  sha=3c5eb54  mode=namespace  self=generators
 
 # Invariants & contracts
   @invariant  pure module -- no module-level state; a generator is fn(host, params, ctx) -> { notes, delta }
@@ -10,45 +10,61 @@
   @shape  host = { window={startppqL,endppqL}, chan, lane, id, notes={ {pitch,vel,detune,ppqL,endppqL},.. }, pas={ {ppqL,pitch,vel},.. }, ccs={ [cc]={ {ppqL,val},.. } }, ats={ {ppqL,val},.. }, pb={ {ppqL,cents},.. } }
   @shape  result = { notes = { {ppqL,endppqL,pitch,vel,detune}, ... }, delta = { {ppqL,val,shape,[tension]}, ... } }
   @shape  kinds[kind] = { expand, mode='replace'|'augment', dest='note'|'pb'|<cc>, label, defaults, fields }
+  @shape  parkWindows -> { notes = { [chan]={{s,e},..} }, ccs = { [chan]={ [cc]={{s,e},..} } } }
+
+# Imports
+  @const util = 'util'  @ 16
 
 # Module-level constants
-  @const generators = {}  @ 16
-  @const CARRIER_PRIORITY = {  @ 119
-  @const PERIODS = { { l = '1/2', v = { 1, 2 } }, { l = '1/3', v = { 1, 3 } },  @ 227
-  @const SLIDE_TARGETS = { { l = 'Next', v = 'next' }, { l = 'Fixed', v = 'fixed' } }  @ 230
-  @const DIR_OPTIONS = { { l = 'Up', v = 'up' }, { l = 'Down', v = 'down' }, { l...  @ 231
+  @const generators = {}  @ 18
+  @const CARRIER_PRIORITY = {  @ 121
+  @const PERIODS = { { l = '1/2', v = { 1, 2 } }, { l = '1/3', v = { 1, 3 } },  @ 229
+  @const SLIDE_TARGETS = { { l = 'Next', v = 'next' }, { l = 'Fixed', v = 'fixed' } }  @ 232
+  @const DIR_OPTIONS = { { l = 'Up', v = 'up' }, { l = 'Down', v = 'down' }, { l...  @ 233
 
 # Private functions
-  @fn periodTicks(period, resolution)  @ 18-21
-  @fn retrig(host, params, ctx)  @ 25-43
+  @fn periodTicks(period, resolution)  @ 20-23
+  @fn retrig(host, params, ctx)  @ 27-45
       @contract  retrig fills the host window with evenly-spaced same-pitch fxNotes 2..N (host is fxNote 1)
       @contract  velocity ramps params.ramp per fxNote, clamped 1..127; detune inherited from the host verbatim
-  @fn trill(host, params, ctx)  @ 46-66
+  @fn trill(host, params, ctx)  @ 48-68
       @contract  trill alternates host pitch with a note `step` scale-steps away (via ctx.step); host is fxNote 1
-  @fn playingAt(events, t)  @ 69-78
+  @fn playingAt(events, t)  @ 71-80
       -- Notes sounding at logical tick `t`, ascending by realised pitch (semitone*100 + detune cents).
-  @fn arpIndex(count, dir, i)  @ 82-90
+  @fn arpIndex(count, dir, i)  @ 84-92
       -- Which voice of the active set step `i` plays, by direction. updown bounces without
       -- repeating the extremes (span 2*(n-1)); up/down wrap.
-  @fn arp(host, params, ctx)  @ 95-115
+  @fn arp(host, params, ctx)  @ 97-117
       @contract  arp samples the sounding notes at each step (period QN), playing one by `dir`
       @contract  dir up|down|updown cycles the current active set; an empty active set -> a rest
       @contract  hits abut (endppqL = next step), clamped to the window; vel/detune from the voice
-  @fn vibrato(host, params, ctx)  @ 138-158
+  @fn vibrato(host, params, ctx)  @ 140-160
       @contract  vibrato -> lane-1 pb-delta breakpoints in cents; sine of depth cents at 1/period QN
       @contract  breakpoints at sine extrema, 'slow'-shaped; linear ramp-in over onset QN
       @contract  carrier returns to 0 (centre) at window end -- no residual bend on the channel
-  @fn interval(a, b)  @ 162-164
+  @fn interval(a, b)  @ 164-166
       -- Cents between two notes' realised pitches. The microtonal offset already rides
       -- in detune, so this is pure note arithmetic -- no temper needed.
-  @fn slide(host, params, ctx)  @ 169-198
+  @fn slide(host, params, ctx)  @ 171-200
       @contract  slide glide-in -> lane-1 pb-delta; slur to target over `over` QN; re-centres at end
       @contract  target 'next' = interval to next same-lane note; 'fixed' = params.cents; pb-range clamps
       @contract  no next note or unison target -> empty delta (carrier untouched)
-  @fn autopan(host, params, ctx)  @ 202-216
+  @fn autopan(host, params, ctx)  @ 204-218
       @contract  auto-pan -> cc-delta breakpoints in cc steps; sine of depth steps at 1/period QN
       @contract  extrema-only, 'slow'-shaped; anchored 0 at both ends so the channel re-centres
 
 # Public API (generators.*)
-  @api generators.allocateCarrier(occupied)  @ 129-133
+  @api generators.allocateCarrier(occupied)  @ 131-135
       @contract  first priority MSB n where neither n nor n+32 is in `occupied`; nil if saturated
+  -- Generator registry
+  -- Region park predicate + windows
+  @api generators.parksNotes(region)  @ 303-309
+      -- A region parks its covered chord iff it carries a discrete-replace kind (its derived notes
+      -- stand in). A continuous/augment kind never parks notes; a husk (no kinds) parks nothing.
+  @api generators.parkWindows(regions)  @ 314-329
+      -- The single source for "what 4.5 parks over": note windows for a discrete-replace chord, cc
+      -- windows per (chan, cc) for a continuous-replace target. The view tags the same spans.
+
+# Uses (outbound edges)
+  @use call    util.bucket  @ parkWindows:318,324
+  @use require util  @ 16

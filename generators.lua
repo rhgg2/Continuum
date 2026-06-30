@@ -13,6 +13,8 @@
 --shape: result = { notes = { {ppqL,endppqL,pitch,vel,detune}, ... }, delta = { {ppqL,val,shape,[tension]}, ... } }
 --shape: kinds[kind] = { expand, mode='replace'|'augment', dest='note'|'pb'|<cc>, label, defaults, fields }
 
+local util = require 'util'
+
 local generators = {}
 
 local function periodTicks(period, resolution)
@@ -293,5 +295,37 @@ for cc = 71, 79 do generators.ccDefaultRest[cc] = 64 end
 -- Which kinds the fxEdit modal offers, in order. Every kind works on either host: a region
 -- arpeggiates its covered chord, a single note degenerates cleanly (arp -> retrig, one voice).
 generators.modalOrder = { 'retrig', 'trill', 'arp', 'vibrato', 'slide', 'autopan' }
+
+----- Region park predicate + windows
+
+-- A region parks its covered chord iff it carries a discrete-replace kind (its derived notes
+-- stand in). A continuous/augment kind never parks notes; a husk (no kinds) parks nothing.
+function generators.parksNotes(region)
+  for _, params in ipairs(region.fx or {}) do
+    local meta = generators.kinds[params.kind]
+    if meta and meta.mode == 'replace' and meta.dest == 'note' then return true end
+  end
+  return false
+end
+
+--shape: parkWindows -> { notes = { [chan]={{s,e},..} }, ccs = { [chan]={ [cc]={{s,e},..} } } }
+-- The single source for "what 4.5 parks over": note windows for a discrete-replace chord, cc
+-- windows per (chan, cc) for a continuous-replace target. The view tags the same spans.
+function generators.parkWindows(regions)
+  local notes, ccs = {}, {}
+  for _, region in ipairs(regions) do
+    if generators.parksNotes(region) then
+      util.bucket(notes, region.chan, { region.startppq, region.endppq })
+    end
+    for _, params in ipairs(region.fx or {}) do
+      local meta = generators.kinds[params.kind]
+      if meta and meta.mode == 'replace' and type(meta.dest) == 'number' then
+        ccs[region.chan] = ccs[region.chan] or {}
+        util.bucket(ccs[region.chan], meta.dest, { region.startppq, region.endppq })
+      end
+    end
+  end
+  return { notes = notes, ccs = ccs }
+end
 
 return generators
