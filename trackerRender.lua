@@ -106,7 +106,7 @@ local function renderNote(evt, col, row)
   end
 
   local label
-  if evt.type ~= 'pa' then
+  if evt.evType ~= 'pa' then
     local note, octave = tv:noteProjection(evt)
     if note then
       -- Both parts right-aligned in their own fields (note field = cellWidth -
@@ -116,7 +116,7 @@ local function renderNote(evt, col, row)
       label = rightAlign(noteName(evt.pitch), cellWidth)
     end
   end
-  local isPA      = evt.type == 'pa'
+  local isPA      = evt.evType == 'pa'
   local noteTxt   = isPA and blank or label
   local velTxt    = evt.vel and string.format('%02X', evt.vel) or '··'
   local sampleTxt = showSample and (' ' .. (isPA and '··' or string.format('%02X', evt.sample or 0))) or ''

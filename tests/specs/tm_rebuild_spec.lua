@@ -298,7 +298,7 @@ return {
       -- pa is attached to the host note's column, alongside the note.
       local paEvt
       for _, e in ipairs(ch.columns.notes[1].events) do
-        if e.type == 'pa' then paEvt = e end
+        if e.evType == 'pa' then paEvt = e end
       end
       t.truthy(paEvt, 'pa event projected onto host-pitch note col')
       t.eq(paEvt.mood, 'red', 'pa custom field rides through projection')

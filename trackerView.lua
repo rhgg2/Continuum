@@ -36,29 +36,47 @@ local function print(...)
   return util.print(...)
 end
 
--- Leaf-edit facade. Routes one cell/event by backing: 'member' (cellKind-tagged
--- at build) -> gm, 'plain' -> tm. A move is delete[src] + add[dest]; an in-region
--- dest auto-joins via gm (decision 2). assign dispatches at runtime by gm:isMember
--- -- value-edit sites hold an evt, not a kind tag. see design/group-aware-editing.md.
-local cellEdit = {
-  delete = {
-    plain  = function(evt) tm:deleteEvent(evt) end,
-    member = function(evt) gm:deleteEvent(evt.uuid) end,
+-- Leaf-edit facade: routes an event to 'member' (gm) or 'plain' (tm) by position;
+-- colFor reads its self-describing column, kindAt the region tag. Fallback, move, see design/group-aware-editing.md § Kind-keyed facade.
+local colFor, kindAt   -- data-derived column + cell-kind helpers, defined below
+local function kindOf(evt) return kindAt(colFor(evt), evt.ppq) end
+
+local backing = {
+  plain = {
+    add    = function(evt)         tm:addEvent(evt) end,
+    assign = function(evt, update) tm:assignEvent(evt, update) end,
+    delete = function(evt)         tm:deleteEvent(evt) end,
+    relocateDrop = { token = true, loc = true },
   },
-  add = {
-    plain  = function(evt) tm:addEvent(evt) end,
-    member = function(evt) gm:addEvent(evt) end,
+  member = {
+    add    = function(evt)         if not gm:addEvent(evt)                 then tm:addEvent(evt)         end end,
+    assign = function(evt, update) if not gm:assignEvent(evt.uuid, update) then tm:assignEvent(evt, update) end end,
+    delete = function(evt)         if not gm:deleteEvent(evt.uuid)         then tm:deleteEvent(evt)      end end,
+    -- a relocated copy sheds the source kind's identity: a member needs a fresh
+    -- uuid, else reproject's del of the vanished member kills the standalone.
+    relocateDrop = { token = true, loc = true, uuid = true },
   },
+}
+
+local edit = {
+  add    = function(evt)      backing[kindOf(evt)].add(evt)    end,
+  delete = function(evt)      backing[kindOf(evt)].delete(evt) end,
   assign = function(evt, update)
-    if gm and evt.uuid and gm:isMember(evt.uuid) then gm:assignEvent(evt.uuid, update)
-    else tm:assignEvent(evt, update) end
+    local src = kindOf(evt)
+    if update.ppq and update.ppq ~= evt.ppq then
+      -- a ppq edit that crosses into/out of a region is a move: shed the source
+      -- kind's identity and re-add at the destination kind (same column, new ppq).
+      local dst = kindAt(colFor(evt), update.ppq)
+      if dst ~= src then
+        backing[src].delete(evt)
+        local moved = util.clone(evt, backing[src].relocateDrop)
+        util.assign(moved, update)
+        backing[dst].add(moved)
+        return
+      end
+    end
+    backing[src].assign(evt, update)
   end,
-  -- identity a relocated copy of each kind sheds: 'member' needs a fresh uuid
-  -- (else reproject's del of the vanished member kills the standalone); 'plain' keeps it.
-  relocateDrop = {
-    plain  = { token = true, loc = true },
-    member = { token = true, loc = true, uuid = true },
-  },
 }
 
 ---------- STATE
@@ -340,7 +358,7 @@ local function writePlans(plans)
     if p.newppq    ~= nil then u.ppq    = p.newppq    end
     if p.newDelay  ~= nil then u.delay  = p.newDelay  end
     if util.isNote(p.e) and p.newEndppq ~= nil then u.endppq = p.newEndppq end
-    cellEdit.assign(p.e, u)
+    edit.assign(p.e, u)
   end
 end
 
@@ -419,7 +437,7 @@ local function assignStamp(evt, chan, rowS, rowE)
   local logPerRow = logPerRowFor(rpb)
   local s = { ppq = rowS * logPerRow, rpb = rpb }
   if rowE then s.endppq = rowE * logPerRow end
-  cellEdit.assign(evt, s)
+  edit.assign(evt, s)
 end
 
 -- Authoring a tail authors a finite ceiling: passing endppq with no
@@ -428,7 +446,7 @@ end
 -- instead of treating the note as unbounded every rebuild.
 --contract: on tail move: stamps endppqL ceiling via tm; rebases evt.rpb alongside endppq
 local function assignTail(evt, chan, endppq)
-  cellEdit.assign(evt, { endppq = endppq, rpb = currentRpb() })
+  edit.assign(evt, { endppq = endppq, rpb = currentRpb() })
 end
 
 -- Shift onset to rowS and shift endppq by the same ppq delta. endppq
@@ -442,7 +460,7 @@ local function assignNoteMove(evt, rowS)
   local newPpq    = rowS * logPerRow
   local newEnd    = evt.endppq == util.OPEN and util.OPEN
                     or evt.endppq + (newPpq - evt.ppq)
-  cellEdit.assign(evt, { ppq = newPpq, endppq = newEnd, rpb = rpb })
+  edit.assign(evt, { ppq = newPpq, endppq = newEnd, rpb = rpb })
 end
 
 local function matchGridToCursor()
@@ -698,13 +716,13 @@ do
     update.lane   = col.lane
     if cm:get('trackerMode') then update.sample = cm:get('currentSample') end
     update.evType = 'note'
-    tm:addEvent(update)
+    edit.add(update)
   end
 
   local function notePAEvents(col, pitch, startppq, endppq)
     local pas = {}
     for _, evt in ipairs(col.events) do
-      if evt.type == 'pa' and evt.pitch == pitch
+      if evt.evType == 'pa' and evt.pitch == pitch
         and evt.ppq >= startppq and evt.ppq <= endppq then
         util.add(pas, evt)
       end
@@ -762,19 +780,19 @@ do
         if util.isNote(evt) then
           local upd = { pitch = pitch, detune = detune }
           if cm:get('trackerMode') then upd.sample = cm:get('currentSample') end
-          cellEdit.assign(evt, snap(upd))
+          edit.assign(evt, snap(upd))
           return commit(pitch, evt.vel, detune)
         end
 
         -- PA cell → wipe host's PA tail, then fall through
-        if evt and evt.type == 'pa' then
+        if evt and evt.evType == 'pa' then
           local host = util.seek(col.events, 'before', evt.ppq, util.isNote)
           if host and host.endppq > evt.ppq then
             for _, pa in ipairs(notePAEvents(col, host.pitch, evt.ppq, host.endppq)) do
-              tm:deleteEvent(pa)
+              edit.delete(pa)
             end
           else
-            tm:deleteEvent(evt)
+            edit.delete(evt)
           end
         end
 
@@ -807,7 +825,7 @@ do
         else
           pitch, detune = util.clamp((oct + 1) * 12 + evt.pitch % 12, 0, 127), evt.detune
         end
-        cellEdit.assign(evt, { pitch = pitch, detune = detune })
+        edit.assign(evt, { pitch = pitch, detune = detune })
         return commit(pitch, evt.vel, detune)
 
       -- sample: 2 hex nibbles, 0..127.
@@ -816,7 +834,7 @@ do
         local d = hexDigit[char]; if not d then return end
         local newSample = util.clamp(
           util.setDigit(evt.sample or 0, d, 1 - digit, 16, half), 0, 127)
-        cellEdit.assign(evt, { sample = newSample })
+        edit.assign(evt, { sample = newSample })
         commit()
         -- After flush so the configChanged-driven rebuild reads the
         -- already-written sample rather than racing the queued assign.
@@ -843,7 +861,7 @@ do
         -- Authored delay is intent: write through unbounded (modulo the
         -- ±999 cap that sign*mag already enforces). tm clamps raw at
         -- realisation; divergence (delay ~= delayC) surfaces in tp.
-        cellEdit.assign(evt, { delay = newDelay })
+        edit.assign(evt, { delay = newDelay })
         return commit()
 
       -- velocity nibble (on note) or PA value
@@ -853,23 +871,24 @@ do
           return util.clamp(util.setDigit(old, d, 1 - digit, 16, half), 1, 127)
         end
 
-        if evt and evt.type == 'pa' then
-          cellEdit.assign(evt, snap({ vel = newVel(evt.vel) }))
+        if evt and evt.evType == 'pa' then
+          edit.assign(evt, snap({ vel = newVel(evt.vel) }))
           return commit()
         end
 
         if evt then
-          cellEdit.assign(evt, { vel = newVel(evt.vel) })
+          edit.assign(evt, { vel = newVel(evt.vel) })
           return commit()
         end
 
         if cm:get('polyAftertouch') then
           local note = util.seek(col.events, 'before', cursorppq, util.isNote)
           if note and note.endppq > cursorppq then
-            tm:addEvent({
+            edit.add({
               evType = 'pa',
               ppq = cursorppq,
               chan = col.midiChan,
+              lane = col.lane,
               pitch = note.pitch, vel = newVel(0),
               rpb = currentRpb(),
             })
@@ -901,7 +920,7 @@ do
     end
 
     if evt then
-      cellEdit.assign(evt, snap(update))
+      edit.assign(evt, snap(update))
     else
       if type == 'cc' then util.assign(update, { cc = col.cc }) end
       util.assign(update, {
@@ -909,7 +928,7 @@ do
         chan = col.midiChan, rpb = rpbNow,
       })
       update.evType = type
-      tm:addEvent(update)
+      edit.add(update)
     end
     commit()
   end
@@ -953,7 +972,7 @@ function tv:moveLaneEvent(col, i, toRow, toVal)
   if next and newppq >= next.ppq then newppq = next.ppq - 1 end
   if prev and newppq <= prev.ppq then return end  -- gap < 2 ppq, nowhere to go
 
-  cellEdit.assign(evt, { val = toVal, ppq = newppq, rpb = currentRpb() })
+  edit.assign(evt, { val = toVal, ppq = newppq, rpb = currentRpb() })
   tm:flush()
 end
 
@@ -973,7 +992,7 @@ function tv:addLaneEvent(col, colIdx, ppq, val)
   }
   if col.type == 'cc' then update.cc = col.cc end
   update.evType = col.type
-  tm:addEvent(update)
+  edit.add(update)
   tm:flush()
 
   local newCol = grid.cols[colIdx]
@@ -991,7 +1010,7 @@ function tv:deleteLaneEvent(col, i)
   if not col or not util.oneOf('cc pb at', col.type) then return end
   local evt = visibleAt(col, i)
   if not evt then return end
-  tm:deleteEvent(evt)
+  edit.delete(evt)
   tm:flush()
 end
 
@@ -1001,7 +1020,7 @@ function tv:setLaneTension(col, i, tension)
   if not col or not util.oneOf('cc pb at', col.type) then return end
   local A = visibleAt(col, i)
   if not A then return end
-  cellEdit.assign(A, { tension = tension, shape = 'bezier' })
+  edit.assign(A, { tension = tension, shape = 'bezier' })
   tm:flush()
 end
 
@@ -1020,7 +1039,7 @@ local interpolate, interpolateValues do
 
   local function cycleShape(col, A)
     if not A then return end
-    cellEdit.assign(A, { shape = nextShape(A.shape or 'step') })
+    edit.assign(A, { shape = nextShape(A.shape or 'step') })
   end
 
   -- Cycle the segment-owner's shape on the i-th visible event in a
@@ -1106,9 +1125,9 @@ local noteOff, adjustDuration, adjustPosition do
   -- realised against same-pitch onsets and take length on rebuild.
   local function applyNoteOff(col, last, targetppq, undo)
     if undo then
-      cellEdit.assign(last, { endppq = util.OPEN, rpb = currentRpb() })
+      edit.assign(last, { endppq = util.OPEN, rpb = currentRpb() })
     elseif last.ppq >= targetppq then
-      tm:deleteEvent(last)
+      edit.delete(last)
     else
       assignTail(last, col.midiChan, math.max(targetppq, last.ppq + 1))
     end
@@ -1492,7 +1511,7 @@ local insertRow, deleteRow, insertRowCol, deleteRowCol do
     -- col.events is a rebuild-snapshot; deletes don't refresh it,
     -- so corpses must be passed to conform explicitly.
     conformOverlaps(plans, deletes)
-    for _, e in ipairs(deletes) do tm:deleteEvent(e) end
+    for _, e in ipairs(deletes) do edit.delete(e) end
     writePlans(plans)
 
     -- A spanning note (onset before C, tail crosses C) shifts forward
@@ -1535,7 +1554,7 @@ local insertRow, deleteRow, insertRowCol, deleteRowCol do
     end
 
     conformOverlaps(plans, deletes)
-    for _, e in ipairs(deletes) do tm:deleteEvent(e) end
+    for _, e in ipairs(deletes) do edit.delete(e) end
     writePlans(plans)
   end
 
@@ -1607,14 +1626,14 @@ local nudge do
       pitch, detune = util.clamp(note.pitch + delta, 0, 127), note.detune
     end
     if pitch == note.pitch and detune == note.detune then return end
-    cellEdit.assign(note, { pitch = pitch, detune = detune })
+    edit.assign(note, { pitch = pitch, detune = detune })
     if audible then audition(pitch, note.vel, col.midiChan, detune) end
   end
 
   local function nudgeVel(note, dir, coarse, p)
     local newVel = scaledScalar(note.vel, 1, 127, dir, coarse and 8 or nil, p)
     if newVel == note.vel then return end
-    cellEdit.assign(note, { vel = newVel })
+    edit.assign(note, { vel = newVel })
   end
 
   local function nudgeDelay(col, note, dir, coarse, p)
@@ -1623,14 +1642,14 @@ local nudge do
     local old = note.delay
     local new = scaledScalar(old, -999, 999, dir, coarse and 10 or nil, p)
     if new == old then return end
-    cellEdit.assign(note, { delay = new })
+    edit.assign(note, { delay = new })
   end
 
   local function nudgeValue(col, evt, dir, coarse, p)
     local lo, hi   = valueBounds(col)
     local newVal   = scaledScalar(evt.val, lo, hi, dir, coarse and valueInterval(col) or nil, p)
     if newVal == evt.val then return end
-    cellEdit.assign(evt, { val = newVal })
+    edit.assign(evt, { val = newVal })
   end
 
   local function applyNudge(col, evt, part, dir, coarse, audible, p)
@@ -1776,7 +1795,7 @@ function tv:setNoteFx(uuid, fxOrRemove)
   if note then
     -- A note outlives its fx, so clearing means absence -- nil, never an empty list (noteFx
     -- must read falsy). Normalise an empty list to REMOVE; the region path keeps the husk.
-    cellEdit.assign(note, { fx = emptyList and util.REMOVE or fxOrRemove })
+    edit.assign(note, { fx = emptyList and util.REMOVE or fxOrRemove })
     tm:flush()
     pa:apply()   -- spawn/reap the CC node when a carrier first appears or last leaves the track
     return
@@ -1831,15 +1850,15 @@ local deleteEvent, deleteSelection do
   -- the survivor's ceiling (take length when it is open).
   local function queueDeleteNotes(col, locs)
     for _, evt in pairs(locs) do
-      if evt.type ~= 'pa' then tm:deleteEvent(evt) end
+      if evt.evType ~= 'pa' then edit.delete(evt) end
     end
   end
 
   ---@diagnostic disable-next-line: unused-local
   local function queueResetDelays(col, locs)
     for _, evt in pairs(locs) do
-      if evt.type ~= 'pa' and evt.delay ~= 0 then
-        cellEdit.assign(evt, { delay = 0 })
+      if evt.evType ~= 'pa' and evt.delay ~= 0 then
+        edit.assign(evt, { delay = 0 })
       end
     end
   end
@@ -1850,10 +1869,10 @@ local deleteEvent, deleteSelection do
     local prevVel = cm:get('defaultVelocity')
     for _, evt in ipairs(col.events) do
       if locs[evt] then
-        if evt.type == 'pa' then
-          tm:deleteEvent(evt)
+        if evt.evType == 'pa' then
+          edit.delete(evt)
         else
-          cellEdit.assign(evt, { vel = prevVel })
+          edit.assign(evt, { vel = prevVel })
         end
       else
         prevVel = evt.vel
@@ -1862,7 +1881,7 @@ local deleteEvent, deleteSelection do
   end
 
   local function queueDeleteCCs(col, locs)
-    for _, evt in pairs(locs) do tm:deleteEvent(evt) end
+    for _, evt in pairs(locs) do edit.delete(evt) end
   end
 
   local DELETE_BY_PART = {
@@ -1882,7 +1901,7 @@ local deleteEvent, deleteSelection do
       -- Delete on a ghost cell: unset interpolation on the governing event.
       local ghost = col.ghosts and col.ghosts[r]
       if ghost then
-        cellEdit.assign(ghost.fromEvt, { shape = 'step' })
+        edit.assign(ghost.fromEvt, { shape = 'step' })
         tm:flush()
       end
       return
@@ -1935,8 +1954,31 @@ local function ppqRowOf(ppq, chan)
 end
 local function cellRowOf(evt, chan) return ppqRowOf(evt.ppq, chan) end
 
+-- The grid column an event lives in, from its own chan + lane (notes/PA) or
+-- cc-number (cc). nil if off-grid (e.g. a fresh clone) -- kindAt reads that plain.
+local function colTypeOf(evt)
+  if util.isNote(evt) or evt.evType == 'pa' then return 'note' end
+  return evt.evType
+end
+function colFor(evt)
+  local want = colTypeOf(evt)
+  for _, c in ipairs(grid.cols) do
+    if c.midiChan == evt.chan and c.type == want
+       and (want ~= 'note' or (c.lane or 1) == (evt.lane or 1))
+       and (want ~= 'cc'   or c.cc == evt.cc) then
+      return c
+    end
+  end
+end
+
+-- Kind of a (col, ppq) cell: 'member' inside a region (cellKind-tagged at build),
+-- else 'plain'. A nil col (event off the grid) is plain.
+function kindAt(col, ppq)
+  return col and col.cellKind[ppqRowOf(ppq, col.midiChan)] or 'plain'
+end
+
 -- A relocated copy of `src` at `dest`. `drop` is the per-kind set of identity
--- fields to shed (cellEdit.relocateDrop). dest = { chan, type, lane?, cc? }.
+-- fields to shed (backing[kind].relocateDrop). dest = { chan, type, lane?, cc? }.
 local function relocatedClone(src, dest, drop)
   local clone = util.clone(src, drop)
   clone.evType = dest.type
@@ -2051,10 +2093,9 @@ local function shiftEvents(dir)
   end
 
   for _, src in ipairs(moving) do
-    local srcKind  = srcCol.cellKind[cellRowOf(src, srcCol.midiChan)] or 'plain'
-    local destKind = (destCol and destCol.cellKind[cellRowOf(src, destCol.midiChan)]) or 'plain'
-    cellEdit.delete[srcKind](src)
-    cellEdit.add[destKind](relocatedClone(src, dest, cellEdit.relocateDrop[srcKind]))
+    local srcKind = kindOf(src)
+    backing[srcKind].delete(src)
+    edit.add(relocatedClone(src, dest, backing[srcKind].relocateDrop))
   end
   tm:flush()
 
@@ -2649,7 +2690,7 @@ end
 function tv:unautomateParam()
   local col = grid.cols[ec:col()]
   if not (col and col.type == 'cc') then return end
-  for _, evt in ipairs(col.events) do tm:deleteEvent(evt) end
+  for _, evt in ipairs(col.events) do edit.delete(evt) end
   tm:flush()
   -- hideExtraCol re-reads the grid; rebuild so it sees the emptied lane.
   tv:rebuild()

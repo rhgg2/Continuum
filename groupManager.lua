@@ -549,10 +549,6 @@ function gm:stateOf(uuid)
   return states[loc.vuid]
 end
 
--- Cheap membership test for the facade's assign dispatch: locByUuid is the
--- O(1) backing check; avoids stateOf's full project() on the keystroke path.
-function gm:isMember(uuid) return locByUuid[uuid] ~= nil end
-
 -- Read accessor for the render pass: every live instance with the group
 -- rect it projects, its anchor, and whether its group is active. No new
 -- mutable state; rect/anchor are by reference (render reads, never
@@ -903,8 +899,8 @@ function gm:addEvent(evt)
   return true
 end
 
--- synced/global: absorb sibling overrides then drop from shared pattern (existence
--- flip); all instances lose it. overridden/local: hide in this instance only.
+-- Delete a member: drop the shared event (synced), peel an override back to
+-- synced, or hide locally. Mirrors applyEdit's delete branch; docs § Override transitions.
 --contract: (uuid) -> true | nil,reason
 function gm:deleteEvent(uuid)
   local loc = locByUuid[uuid]
@@ -912,16 +908,18 @@ function gm:deleteEvent(uuid)
   local groupId, instId, vuid = loc.groupId, loc.instId, loc.vuid
   local group    = groups[groupId]
   local instance = group.instances[instId]
-  local localEdit = localMode
-                    or instance.adds[vuid] ~= nil
-                    or instance.assigns[vuid] ~= nil
-  if not localEdit then
-    absorbSiblingOverrides(group, vuid, instId, false)
-    group.events[vuid] = nil
-  else
-    if instance.adds[vuid] ~= nil then instance.adds[vuid] = nil   -- local-only add: just gone
-    else instance.deletes[vuid] = true end                          -- shadow the shared member here
+  if localMode then
+    if instance.adds[vuid] ~= nil then instance.adds[vuid] = nil   -- local add deleted: just gone
+    else instance.deletes[vuid] = true end                          -- hide the slot here
+  elseif instance.adds[vuid] ~= nil then
+    instance.adds[vuid] = nil                                        -- local-only add: just gone
+  elseif instance.assigns[vuid] ~= nil then
+    -- assign-override: peel back to synced. Keep the link (unlike the seam's delete):
+    -- the facade spares the concrete, so reconcile `set`s it in place. See docs § Override transitions.
     instance.assigns[vuid] = nil
+  elseif instance.deletes[vuid] ~= true then                        -- already hidden => no-op
+    absorbSiblingOverrides(group, vuid, instId, false)              -- synced: propagating delete
+    group.events[vuid] = nil
   end
   pendingReproject[groupId] = true
   return true

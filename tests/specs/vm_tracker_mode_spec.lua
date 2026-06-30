@@ -308,7 +308,7 @@ return {
       local col = lane1()
       local paRow
       for r, evt in pairs(col.cells) do
-        if evt.type == 'pa' then paRow = r end
+        if evt.evType == 'pa' then paRow = r end
       end
       t.truthy(paRow, 'PA cell is on the grid')
       h.ec:setPos(paRow, 1, 3)
@@ -340,7 +340,7 @@ return {
       end
       local paRow
       for r, evt in pairs(col.cells) do
-        if evt.type == 'pa' then paRow = r end
+        if evt.evType == 'pa' then paRow = r end
       end
       h.ec:setPos(paRow, 1, 3)
       h.cmgr:invoke('delete')    -- must not crash and must not delete the PA

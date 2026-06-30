@@ -83,6 +83,7 @@ local specs = {
   'gm_shift_in_spec',
   'gm_block_shift_alias_spec',
   'gm_value_facade_spec',
+  'gm_create_delete_facade_spec',
   'gm_stamp_commit_spec',
   'gm_persist_reload_spec',
   'gm_revive_delete_spec',

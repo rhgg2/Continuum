@@ -72,7 +72,7 @@ return {
     end,
   },
   {
-    name = 'shift an overridden member out: standalone at dest, sibling untouched, no duplicate',
+    name = 'shift an overridden member out: override peels to reveal the synced note, standalone at dest',
     run = function(harness)
       local h, ci, gid = setup(harness)
       h.gm:newInstance(gid, { ppq = 960, chan = 1 })
@@ -86,9 +86,14 @@ return {
       h.ec:setPos(rowOfPpq(h, ci, 0), ci)   -- caret on the origin
       h.cmgr:invoke('eventShiftRight')
 
+      -- Moving the overridden member out PEELS the override (revert-to-synced): the
+      -- shared note (60) reveals at origin; the dragged value (67) lands standalone at dest.
       local notes = allNotes(h)
-      t.eq(#notes, 2, 'standalone + untouched sibling -- no duplicate at the origin')
-      t.falsy(noteAt(notes, 1, 0), 'origin slot empty -- the group member did not re-materialise here')
+      t.eq(#notes, 3, 'synced revealed at origin + untouched sibling + standalone at dest')
+
+      local revealed = noteAt(notes, 1, 0)
+      t.truthy(revealed, 'shared note revealed at the origin -- the override was peeled, not hidden')
+      t.eq(revealed.pitch, 60, 'it shows the shared group value, not the peeled-off override')
 
       local moved = noteAt(notes, 2, 0)
       t.truthy(moved, 'standalone at the destination channel')

@@ -1,4 +1,4 @@
-@module groupManager  src=groupManager.lua  loc=1022  sha=b8c32e6  mode=chunk  self=gm
+@module groupManager  src=groupManager.lua  loc=1020  sha=bb5e29b  mode=chunk  self=gm
 @deps tm, ds
 
 # Invariants & contracts
@@ -126,13 +126,13 @@
   -- Active group (dupeClip-idiom selector; the command layer owns the
   -- clear-on-other-command lifetime, gm only the pointer)
   -- SEAM
-  @fn reproject(groupId)  @ 593-646
-  @fn localAmend(instance, vuid, group, update)  @ 653-664
+  @fn reproject(groupId)  @ 589-642
+  @fn localAmend(instance, vuid, group, update)  @ 649-660
       -- Local edit of an existing override -- shared by localMode and the
       -- on-ov-in-global path. An assign'd / synced group event accrues a
       -- sticky per-instance assign; a local-only add is edited in place.
       -- Never touches group.events, so no sibling sees it.
-  @fn applyEdit(evt, update)  @ 669-746
+  @fn applyEdit(evt, update)  @ 665-742
 
 # Public API (gm:*)
   @api gm:markGroup(events, rect)  @ 437-456
@@ -165,43 +165,40 @@
   @api gm:setLocalMode(on)  @ 541
   @api gm:localMode()  @ 542
   @api gm:stateOf(uuid)  @ 544-550
-  @api gm:isMember(uuid)  @ 554
-      -- Cheap membership test for the facade's assign dispatch: locByUuid is the
-      -- O(1) backing check; avoids stateOf's full project() on the keystroke path.
-  @api gm:eachInstance()  @ 560-571
+  @api gm:eachInstance()  @ 556-567
       -- Read accessor for the render pass: every live instance with the group
       -- rect it projects, its anchor, and whether its group is active. No new
       -- mutable state; rect/anchor are by reference (render reads, never
       -- mutates).
-  @api gm:footprintAliases(cells)  @ 576-589
+  @api gm:footprintAliases(cells)  @ 572-585
       -- Precise per-cell injectivity test for propagating block ops (decision 3): two cells
       -- on one group slot => non-injective; disjoint slots stay legal. see docs/groupManager.md § Block-shift injectivity.
       @contract  (cells) -> bool. cells carry { ppq, chan, evType, lane?/cc? }.
   -- INSTANCE / GROUP LIFECYCLE
-  @api gm:deleteInstance(groupId, instId)  @ 809-830
+  @api gm:deleteInstance(groupId, instId)  @ 805-826
       -- Stage a tm delete for every projected concrete of one instance, drop
       -- the instance, and -- if it was the group's last -- drop the group,
       -- clearing the active pointer if it named it. Unknown id -> nil, reason.
       @contract  (groupId, instId) -> true | nil,reason; stages tm deletes for the instance's concretes, last instance drops the group + clears active. Unknown id -> nil,reason.
-  @api gm:moveInstance(groupId, instId, anchor)  @ 835-876
+  @api gm:moveInstance(groupId, instId, anchor)  @ 831-872
       -- Re-anchor directly (reproject can't see anchor-invariant moves; see docs/groupManager.md
       -- § Instance lifecycle). onTake withholds off-take members and revives on return (bottom only).
       @contract  (groupId, instId, anchor) -> true | nil,reason. Caller cleared dest + clamped top.
-  @api gm:addEvent(evt)  @ 881-904
+  @api gm:addEvent(evt)  @ 877-900
       -- Positional create (the add half of a facade move): classifyCreate finds the covering
       -- region; global adopts into the shared pattern (all instances gain it), localMode keeps a per-instance add.
       @contract  (evt) -> true | nil,'not in a region'. Defers to reproject; never links clone.
-  @api gm:deleteEvent(uuid)  @ 909-928
-      -- synced/global: absorb sibling overrides then drop from shared pattern (existence
-      -- flip); all instances lose it. overridden/local: hide in this instance only.
+  @api gm:deleteEvent(uuid)  @ 905-926
+      -- Delete a member: drop the shared event (synced), peel an override back to
+      -- synced, or hide locally. Mirrors applyEdit's delete branch; docs § Override transitions.
       @contract  (uuid) -> true | nil,reason
-  @api gm:assignEvent(uuid, update)  @ 935-952
+  @api gm:assignEvent(uuid, update)  @ 933-950
       -- Value edit of an existing member (the assign half of the facade). localMode or an
       -- existing override => sticky per-instance amend (localAmend); else edit the shared
       -- pattern. Consumes tv's AUTHORED update (see updToGroup). Never touches the concrete
       -- and marks no touchedUuids: reproject restages every instance, the acting one included.
       @contract  (uuid, update) -> true | nil,'not a member'. Defers to reproject (pendingReproject).
-  @api gm:resizeGroup(groupId, instId, edits)  @ 966-1020
+  @api gm:resizeGroup(groupId, instId, edits)  @ 964-1018
       -- Resize the SHARED rect from edge instance `instId`'s drag. startDelta
       -- re-origins (Model A: every anchor += startDelta, every group event
       -- ppq -= startDelta) so realised positions hold while the boundary
@@ -218,24 +215,24 @@
 # Uses (outbound edges)
   @use call    ds.assign  @ persist:242
   @use call    ds.get  @ 28 rehydrate:250
-  @use call    groups.deriveAssign  @ absorbSiblingOverrides:350 localAmend:658
-  @use call    groups.inRect  @ classifyCreate:371 resizeGroup:997
-  @use call    groups.laneId  @ footprintAliases:582
-  @use call    groups.project  @ rehydrate:260 newInstance:475 stateOf:548 reproject:597 moveInstance:849
-  @use call    groups.reconcile  @ reproject:610
+  @use call    groups.deriveAssign  @ absorbSiblingOverrides:350 localAmend:654
+  @use call    groups.inRect  @ classifyCreate:371 resizeGroup:995
+  @use call    groups.laneId  @ footprintAliases:578
+  @use call    groups.project  @ rehydrate:260 newInstance:475 stateOf:548 reproject:593 moveInstance:845
+  @use call    groups.reconcile  @ reproject:606
   @use call    groups.resolve  @ absorbSiblingOverrides:359
   @use call    groups.shiftStream  @ rectCells:396 regionConflict:421
   @use call    groups.streamId  @ sameSlot:314
-  @use call    tm.addEvent  @ newInstance:479 reproject:626 moveInstance:863
-  @use call    tm.assignEvent  @ reproject:633 moveInstance:857
-  @use call    tm.byUuid  @ rehydrate:263 791
-  @use call    tm.deleteEvent  @ reproject:639 deleteInstance:817 moveInstance:861,868
+  @use call    tm.addEvent  @ newInstance:479 reproject:622 moveInstance:859
+  @use call    tm.assignEvent  @ reproject:629 moveInstance:853
+  @use call    tm.byUuid  @ rehydrate:263 787
+  @use call    tm.deleteEvent  @ reproject:635 deleteInstance:813 moveInstance:857,864
   @use call    tm.length  @ onTake:164
-  @use call    util.assign  @ localAmend:662 assignEvent:948
-  @use call    util.clone  @ rehydrate:266 markGroup:450 newInstance:481 reproject:630,636 applyEdit:710,739 moveInstance:865 resizeGroup:1014
+  @use call    util.assign  @ localAmend:658 assignEvent:946
+  @use call    util.clone  @ rehydrate:266 markGroup:450 newInstance:481 reproject:626,632 applyEdit:706,735 moveInstance:861 resizeGroup:1012
   @use require groups  @ 11
   @use require util  @ 10
-  @use sub     ds:dataChanged  @ 799
-  @use sub     tm:postflush  @ 768
-  @use sub     tm:preflush  @ 748
-  @use sub     tm:rebuild  @ 785
+  @use sub     ds:dataChanged  @ 795
+  @use sub     tm:postflush  @ 764
+  @use sub     tm:preflush  @ 744
+  @use sub     tm:rebuild  @ 781

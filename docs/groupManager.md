@@ -299,6 +299,15 @@ slot carries its override):
 `localAmend` is the shared amend body; `onOv` gates the acting
 instance onto this path before the global branches.
 
+The same transitions reach `gm:deleteEvent` from the leaf-edit facade,
+with one inversion. The facade *suppresses* tm's delete, so on an
+assign-ov peel this instance's concrete still exists. The branch must
+therefore **not** unlink: the live link lets `reconcile` emit `set`,
+rewriting the override concrete to the synced value in place. Unlinking
+(as the seam does, above) would instead `add` a second concrete on top
+of the survivor — the duplicate-note bug that motivated splitting the
+facade path from the seam.
+
 **Cross-instance — `absorbSiblingOverrides`.** When the acting
 instance's global create/delete flips whether a shared event exists at
 a slot, a *sibling* carrying its own override there must keep its

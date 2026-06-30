@@ -22,7 +22,7 @@
 --shape: pbEventCol = { ppq, val=cents-minus-detune, detune, hidden, loc, ... }
 --invariant: pbEventCol optional: delay, shape, tension
 --invariant: pbEventCol is the col projection; um cache holds raw cents in val
---shape: paEventCol = { type='pa', ppq, pitch, vel, loc, ... }
+--shape: paEventCol = { evType='pa', ppq, pitch, vel, loc, ... }
 --invariant: paEventCol mixes into note column events
 --shape: extraColumns[chan] = { notes=count, [pc], [pb], [at], [ccs={[ccNum]=true}] }
 --shape: lastMuteSet = { [chan] = true }, pushed by tv via tm:setMutedChannels
@@ -84,10 +84,9 @@ local function forEachEvent(fn)
     local channel = channels[i]
     if channel then
       local chan, cols = channel.chan, channel.columns
-      -- Note branch carries lane (column events strip it; see util.clone at row clone).
       for lane, col in ipairs(cols.notes) do
         for _, evt in ipairs(col.events) do
-          local isNote = evt.type ~= 'pa'
+          local isNote = evt.evType ~= 'pa'
           fn(isNote and 'note' or 'pa', evt, chan, isNote, nil, lane)
         end
       end
@@ -96,7 +95,6 @@ local function forEachEvent(fn)
           for _, evt in ipairs(cols[t].events) do fn(t, evt, chan, false) end
         end
       end
-      -- cc branch carries ccNum: column events have cc stripped (see CC_PROJECT_STRIP), so callers needing the cc number get it from the column key.
       for ccNum, col in pairs(cols.ccs) do
         for _, evt in ipairs(col.events) do fn('cc', evt, chan, false, ccNum) end
       end
@@ -998,26 +996,26 @@ end
 
 local function findNoteColumnForPitch(channel, pitch, ppq_pos)
   local notes = channel.columns.notes
-  for _, col in ipairs(notes) do
+  for laneIdx, col in ipairs(notes) do
     for _, evt in ipairs(col.events) do
       if evt.endppq and evt.pitch == pitch and evt.ppq <= ppq_pos and evt.endppq > ppq_pos then
-        return col
+        return col, laneIdx
       end
     end
   end
-  for _, col in ipairs(notes) do
+  for laneIdx, col in ipairs(notes) do
     for _, evt in ipairs(col.events) do
-      if evt.pitch == pitch then return col end
+      if evt.pitch == pitch then return col, laneIdx end
     end
   end
 end
 
 ----- CC projection
 
-local CC_PROJECT_STRIP = { chan = true, cc = true }
-
+-- Column events keep chan/cc so each event is self-describing (the leaf-edit
+-- facade resolves an event's column from its own chan + lane/cc; see trackerView).
 local function projectCC(cc, token, overlay)
-  local evt = util.clone(cc, CC_PROJECT_STRIP)
+  local evt = util.clone(cc)
   evt.token = token
   if overlay then util.assign(evt, overlay) end
   return evt
@@ -1130,7 +1128,7 @@ local function rebuildPbs(noteLive, replacePb)
     local list  = {}
     if lane1 then
       for _, n in ipairs(lane1.events) do
-        if n.type ~= 'pa' then util.add(list, n) end
+        if n.evType ~= 'pa' then util.add(list, n) end
       end
     end
     -- Derived lane-1 fxNotes (a trill's per-fxNote detune) are routed out of
@@ -1304,7 +1302,7 @@ local function rebuildFx(fx, deferred)
       local byLane = {}
       for laneIdx, col in ipairs(channels[chan].columns.notes) do
         for _, evt in ipairs(col.events) do
-          if evt.type ~= 'pa' and evt.ppqL ~= nil then
+          if evt.evType ~= 'pa' and evt.ppqL ~= nil then
             util.bucket(byLane, laneIdx, { evt = evt })
           end
         end
@@ -1361,7 +1359,7 @@ local function rebuildFx(fx, deferred)
   local function eachWindowNote(chan, startL, endL, fn)
     for laneIdx, col in ipairs(channels[chan].columns.notes) do
       for _, evt in ipairs(col.events) do
-        if evt.type ~= 'pa' and evt.ppqL ~= nil then
+        if evt.evType ~= 'pa' and evt.ppqL ~= nil then
           local hi = (evt.endppqL == nil or evt.endppqL == util.OPEN) and endL or evt.endppqL
           if evt.ppqL < endL and hi > startL then fn(laneIdx, evt.ppqL, hi, evt) end
         end
@@ -1384,7 +1382,7 @@ local function rebuildFx(fx, deferred)
     for _, col in ipairs(cols.notes) do
       for _, evt in ipairs(col.events) do
         local ppqL = evt.ppqL or evt.ppq
-        if evt.type == 'pa' and within(ppqL) then
+        if evt.evType == 'pa' and within(ppqL) then
           util.add(pas, { ppqL = ppqL, pitch = evt.pitch, vel = evt.vel })
         end
       end
@@ -1492,7 +1490,7 @@ local function rebuildFx(fx, deferred)
     -- derived notes ride the host's own lane.
     for laneIdx, col in ipairs(channels[chan].columns.notes) do
       for _, host in ipairs(col.events) do
-        if host.fx and host.type ~= 'pa' then
+        if host.fx and host.evType ~= 'pa' then
           local endL = fxWindow[host]
           fx.hostEnd[host] = tm:fromLogical(chan, endL)
           runProducer{ window = { host.ppqL, endL }, notes = { host }, fx = host.fx,
@@ -1646,7 +1644,7 @@ local function rebuildTails(fx, deferred)
     local notes, byLane, byPitch = {}, {}, {}
     for laneIdx, col in ipairs(channels[chan].columns.notes) do
       for _, evt in ipairs(col.events) do
-        if evt.type ~= 'pa' and evt.ppqL ~= nil then
+        if evt.evType ~= 'pa' and evt.ppqL ~= nil then
           local n = { evt = evt, lane = laneIdx }
           util.add(notes, n)
           util.bucket(byLane,  laneIdx,   n)
@@ -1770,7 +1768,7 @@ local function rebuildRegionPark(deferred)
     for chan = 1, 16 do
       for laneIdx, col in ipairs(channels[chan].columns.notes) do
         for _, evt in ipairs(col.events) do
-          if evt.type ~= 'pa' and evt.ppqL ~= nil then
+          if evt.evType ~= 'pa' and evt.ppqL ~= nil then
             util.add(scan, { evt = evt, chan = chan, sub = laneIdx, ppqL = evt.ppqL, events = col.events })
           end
         end
@@ -1788,7 +1786,7 @@ local function rebuildRegionPark(deferred)
     for _, spec in ipairs(restores) do
       local channel = channels[spec.chan]
       while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
-      local ce = util.clone(spec, { chan = true, lane = true })
+      local ce = util.clone(spec)
       util.add(channel.columns.notes[spec.lane].events, ce)
       table.sort(channel.columns.notes[spec.lane].events, function(a, b) return a.ppqL < b.ppqL end)
       -- Lazy: reshaped at commit so it reads ce.ppq/endppq after the tail-walk clip.
@@ -1986,7 +1984,7 @@ local function rebuildInternals(fx)
     local channel = channels[note.chan]
     local col = pickStampedLane(channel, note)
     -- clone not alias: projectLogical rewrites column ppq to logical; mm retains raw
-    local ce = util.clone(note, { chan = true, lane = true })
+    local ce = util.clone(note)
     -- detune/delay are optional eventMeta; default at ingestion so every column note
     -- event carries them (mirrors the external seam) -- downstream reads trust non-nil.
     ce.detune = ce.detune or 0
@@ -2063,7 +2061,7 @@ local function rebuildExternals(external)
     if note.detune == nil  then update.detune = 0      end
     if note.delay  == nil  then update.delay  = 0      end
     if trackerMode and note.sample == nil then update.sample = 0 end
-    local ce = util.clone(note, { chan = true, lane = true })
+    local ce = util.clone(note)
     util.assign(ce, update)
     ce.fixed = true
     util.add(col.events, ce)
@@ -2078,9 +2076,9 @@ end
 local function rebuildPA()
   for _, cc in mm:ccs() do
     if cc.evType == 'pa' then
-      local noteCol = findNoteColumnForPitch(channels[cc.chan], cc.pitch, cc.ppq)
+      local noteCol, lane = findNoteColumnForPitch(channels[cc.chan], cc.pitch, cc.ppq)
       if noteCol then
-        util.add(noteCol.events, projectCC(cc, mm:tokenOf(cc), { type = 'pa' }))
+        util.add(noteCol.events, projectCC(cc, mm:tokenOf(cc), { lane = lane }))
       end
     end
   end

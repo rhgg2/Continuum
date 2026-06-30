@@ -159,7 +159,7 @@ local function pasteVelocities(events, dstCol, startppq, endppq)
 
   -- Delete existing PA events in the paste region
   for evt in util.between(dstCol.events, startppq, endppq) do
-    if evt.type == 'pa' then tm:deleteEvent(evt) end
+    if evt.evType == 'pa' then tm:deleteEvent(evt) end
   end
 
   -- Pass 1: carry-forward velocities onto note-ons

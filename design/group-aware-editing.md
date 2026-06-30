@@ -14,11 +14,15 @@ corrupts mirror groups. Full-stack repro in
 - **Synced member shifted out of its region → siblings vanish.** The
   raw `tm:deleteEvent(src)` classifies as a *propagating* group delete;
   `reproject` strips the vuid from every instance.
-- **Overridden member shifted out → duplicate.** The delete drops this
-  instance's override but leaves the shared group event alive;
-  `reproject` re-materialises a fresh concrete at the origin slot, while
-  the moved clone lands at the destination. Two notes where there was
-  one.
+- **Overridden member shifted out → corruption.** The moved clone keeps
+  `src`'s uuid, so `reproject`'s del of the vanished member kills the
+  standalone (or desyncs the links). NOTE the *two-note* outcome itself —
+  synced note revealed at the origin + standalone at the destination — is
+  CORRECT: an assign-override masks the still-live shared note, so peeling
+  it off reveals the synced note underneath and deposits the moved copy
+  elsewhere. The corruption is the shared identity, not the two notes; the
+  fix is `relocateDrop.member` shedding the uuid (see Move semantics +
+  stage 4a). Stage 1 over-corrected to hide-locally — wrong; see stage 4a.
 - **Repeated in/out → stacked notes.** The clone keeps `src`'s uuid
   (`util.clone` strips only `token`/`loc`), so `classify` keeps
   unlinking and re-adopting it, desyncing the projection links a little
@@ -76,36 +80,77 @@ not introduced here.)
 
 ### Kind-keyed facade (leaf dispatch)
 
-A view-owned facade exposes the leaf editing verbs and routes each by
-the event's **backing**, not by op-stream inference:
+A view-owned facade exposes the leaf editing verbs and routes each by the
+cell's **kind** (the `cellKind` render tag), not by op-stream inference.
+Three kinds, one backing each:
 
-- gm owns this uuid (`gm:stateOf`/`locByUuid`) → gm's member API
-- stash-backed generated fx event → the stash (future; not built — fx
-  cells are display-only today)
-- else → tm directly
+- in a gm region → `member` (gm's member verbs)
+- in a stash region → `stash` (future; not built — fx cells are
+  display-only today)
+- else → `plain` (tm directly)
 
-```
--- kind-keyed; one cell/event at a time. Dispatch by backing.
-facade.setValue(evt, update)   -- value edit on an existing event
-facade.move(evt, dest)         -- relocate an existing event to a column/row
-facade.delete(evt)             -- remove an existing event
-facade.create(spec)            -- new event at a cell (dispatch by POSITION)
-```
+The facade is a **kind-major table**: `cellKind` is the key, `editAt`
+resolves the backing (defaulting to `plain`). Verbs keep the exact
+signatures they had pre-facade.
 
-`setValue`/`move`/`delete` dispatch on the event's owner. `create`
-dispatches on **position** — does the cell fall in a region? →
-`gm:createMember`; in a stash region → stash; else `tm:addEvent`.
+    local cellEdit = {
+      plain = {
+        add    = function(evt)         tm:addEvent(evt) end,
+        assign = function(evt, update) tm:assignEvent(evt, update) end,
+        delete = function(evt)         tm:deleteEvent(evt) end,
+        relocateDrop = { token = true, loc = true },
+      },
+      member = {
+        add    = function(evt)         gm:addEvent(evt) end,
+        assign = function(evt, update) gm:assignEvent(evt.uuid, update) end,
+        delete = function(evt)         gm:deleteEvent(evt.uuid) end,
+        relocateDrop = { token = true, loc = true, uuid = true },
+      },
+      -- future: stash = { ... } for editable fx events -- one row, no
+      -- call-site change (fx cells are display-only today)
+    }
+    local function editAt(col, row) return cellEdit[col.cellKind[row] or 'plain'] end
+
+Call sites pick the backing by the cell's kind, then call the verb:
+
+    editAt(col, r).assign(evt, update)
+    editAt(col, r).delete(evt)        -- caller loops over EVERY event at the cell
+    editAt(col, r).add(spec)
+
+Four principles pin this shape, each settled against a wrong turn taken
+while designing it:
+
+- **Verbs take events; nothing is closed over.** `add`/`assign`/`delete`
+  keep their pre-facade signatures. A cell-edit acts on *every* event at
+  the cell (delete/paste loop; note + PA + overflow all share one
+  positional kind), so a verb must not bind a single `col.cells[row]`
+  event — the caller passes them.
+- **Dispatch is one table index off the stashed kind** — not a
+  `kind == 'member'` string-comp, not a per-call `gm:isMember` probe.
+  `cellKind` is chosen once per rebuild; `editAt` indexes `cellEdit[kind]`.
+  A new backing (`stash`) is a new row; call sites unchanged.
+- **`assign` lives in the table, not in a self-dispatching function.**
+  Stage 3 shipped it as `if gm:isMember(...)`; stage 4 folds it into
+  `cellEdit[kind]` beside add/delete for one idiom.
+- **`add` (create) dispatches on POSITION** — the cursor cell's
+  `cellKind`, which tags empty in-region cells too; `delete`/`assign` on
+  the edited event's cell. Positional kind is a sound proxy for membership
+  because every in-region event is a member (decision 2).
+
+`shiftEvents` already indexes by kind:
+`cellEdit[srcKind].delete(src)` +
+`cellEdit[destKind].add(relocatedClone(src, dest, cellEdit[srcKind].relocateDrop))`.
 
 This is **leaf dispatch only**. It knows nothing about bulk semantics,
 selections, or time topology — those live above it (see Bulk planners).
 Every leaf op targets exactly one pattern slot, so it is always
 injective (see Injectivity) and never trips the group hazards.
 
-Realisation note: kind-keyed **facade**, not callbacks bound onto cells.
-Cells are rebuilt every window (gm re-anchors by uuid each rebuild);
-binding closures per cell would re-close on every rebuild and add a
-staleness surface. The facade is a lookup keyed by the event's backing,
-which gm already knows by uuid.
+Realisation note: a **table**, not callbacks bound onto cells. Binding a
+verb onto each cell would re-close every rebuild (cells are rebuilt every
+window) and add a staleness surface. The only per-cell datum is the
+`cellKind` string the rebuild already writes for the member render wash;
+the verbs are two shared records indexed by it.
 
 ### gm grows an explicit member API
 
@@ -196,8 +241,17 @@ lane/cc, same row/ppq the caller computed):
     `add` materialises a standalone at `dest` with a FRESH identity
     (`relocateDrop.member` sheds uuid — reusing it lets `reproject`'s del
     of the vanished member kill the standalone).
-  - overridden / localMode → `gm:deleteEvent` drops this instance's
-    override only; the fresh standalone lands here, siblings untouched.
+  - assign-overridden → `gm:deleteEvent` PEELS the override
+    (revert-to-synced: drop the assign, unlink; the shared event survives),
+    so `reproject` re-materialises the synced note at the origin — the
+    unmodified note revealed underneath — while the standalone lands at
+    `dest`. Siblings untouched. IDENTICAL to a plain delete on an
+    assign-ov; there is NO `relocating` flag. (Stage 1's hide-locally was
+    wrong: `gm:deleteEvent` must mirror `applyEdit`'s delete branch and
+    decision 1's on-ov-local rule. `gm_shift_out_spec`'s overridden case
+    flips from "one note" to "synced revealed + standalone".)
+  - local add / localMode → the local add is just gone; standalone at
+    `dest`, siblings untouched.
 - **dest inside a region** (`destKind = member`): auto-join via
   `gm:addEvent` (decision 2). classifyCreate finds the covering region;
   global adopts the moved event into that group's shared pattern (every
@@ -274,13 +328,49 @@ over-refusal; no conservative fallback shipped.
    applyEdit until stage 4). New full-stack spec `gm_value_facade_spec`
    (synced propagates, localMode local); the gm propagate/override specs now
    drive `gm:assignEvent` in the authored frame.*
-4. **Migrate create/delete, then drop gm's preflush subscription.**
-   `createMember`/`deleteMember`; retire the `applyEdit` seam sniffer
-   entirely, then unsubscribe gm from `preflush` and delete the
-   self-echo apparatus (`selfStaged`/`selfAssigned`/the `propagating`
-   reentrancy guard) — see "Second goal" above. Relocate the `reproject`
-   drain out of the dead handler. `reproject`/`reconcile` and the
-   override-transition logic remain, now behind the explicit verbs.
+4. **Migrate create/delete onto the facade, then retire `applyEdit`.**
+   Verbs already exist as `gm:addEvent`/`gm:deleteEvent` (stage 1) — no
+   new `createMember`/`deleteMember`. Land in two green commits:
+
+   **4a — facade + reroute (the bug-relevant half).** Flip `cellEdit` to
+   the kind-major table above; route every tv create/delete/assign +
+   `shiftEvents` through `editAt`. Fix `gm:deleteEvent` to mirror
+   `applyEdit`'s delete branch — revert-to-synced on an assign-ov (peel
+   the override, reveal the synced note), NOT stage 1's hide-locally; flip
+   `gm_shift_out_spec`'s overridden case. Add a full-stack
+   `gm_create_delete_facade_spec` (typed create in-region auto-joins +
+   propagates; delete propagates; localMode local). `applyEdit` stays
+   alive but inert for tv paths — every edit now arrives named; only
+   clipboard still reaches the sniffer. Route these tv sites: creates
+   `placeNewNote` / PA-add / non-note-add / `addLaneEvent`; deletes the
+   typed-over PA wipe / `deleteLaneEvent` / noteOff-delete / the row-op
+   deletes / the `DELETE_BY_PART` family / `unautomateParam`. Leave
+   `clearRegionAt`/`clearMoveGap` RAW — they must not propagate.
+
+   **4b — retire the sniffer.** Delete `applyEdit`; strip the `preflush`
+   handler to the thin `pendingReproject` drain (gm stays subscribed —
+   reproject must stage before commit, and preflush is the only
+   pre-commit seam; the "unsubscribe" goal resolves to this thin hook).
+   Drop `propagating` (guard + all sets — with no sniffer, gm's staged
+   ops are invisible to the thin drain), `selfStaged` (only consumer was
+   the dead adds-loop), and `touchedUuids` + the `userOwned` carrier-reuse
+   in `reproject` (no verb stages a user carrier now; reproject is sole
+   writer, exactly the stage-3 assign model). Migrate the ~7 unit specs
+   that drive create/delete via a synthetic `preflush` trio
+   (`gm_override_transition`, `gm_propagate`, `gm_revive_delete`,
+   `gm_delete_sibling`, `gm_two_channel`, `gm_realisation`,
+   `gm_origin_conform`) and `gm_shift_in_spec:122` to direct
+   `gm:addEvent`/`gm:deleteEvent` calls with uuid read-back from
+   `staged.add` — the same swap stage 3 did for assigns.
+   `reproject`/`reconcile` and the override-transition logic remain, now
+   behind the explicit verbs.
+
+   **Interim regression (acceptable, fixed in stage 6):** clipboard still
+   stages raw tm ops, so once `applyEdit` dies a paste-into-region stops
+   auto-joining and its clear-step stops propagating to siblings — paste
+   becomes a plain local overwrite. No green spec covers this (its assign
+   half already stopped propagating in stage 3); paste gets *safer* in the
+   interim. Stage 6 routes paste through the facade properly.
 5. **Time-topology atomicity.** `insertRow`/`deleteRow` planner:
    whole-instance re-anchor at/after the cut; refuse mid-instance.
 6. **Paste through the facade.** Clear+write leaf loop + injectivity

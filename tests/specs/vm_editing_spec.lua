@@ -434,7 +434,7 @@ return {
       h.vm:setGridSize(80, 40)
       local col = h.vm.grid.cols[1]
       local pa = col.cells[2]
-      t.truthy(pa and pa.type == 'pa', 'PA cell at row 2')
+      t.truthy(pa and pa.evType == 'pa', 'PA cell at row 2')
       h.ec:setPos(2, 1, 3) -- row 2 = ppq 120 (PA), high vel nibble
       h.vm:editEvent(col, pa, 3, string.byte('5'), false)
 
@@ -478,7 +478,7 @@ return {
 
       col = h.vm.grid.cols[1]
       local pa = col.cells[1]
-      t.truthy(pa and pa.type == 'pa', 'PA appears at row 1 cell')
+      t.truthy(pa and pa.evType == 'pa', 'PA appears at row 1 cell')
       t.eq(col.overflow[1], nil, 'no overflow at row 1')
 
       -- Stamp another PA at row 2.
@@ -486,8 +486,8 @@ return {
       h.vm:editEvent(h.vm.grid.cols[1], nil, 3, string.byte('7'), false)
 
       col = h.vm.grid.cols[1]
-      t.truthy(col.cells[1] and col.cells[1].type == 'pa', 'row 1 still PA')
-      t.truthy(col.cells[2] and col.cells[2].type == 'pa', 'row 2 PA')
+      t.truthy(col.cells[1] and col.cells[1].evType == 'pa', 'row 1 still PA')
+      t.truthy(col.cells[2] and col.cells[2].evType == 'pa', 'row 2 PA')
       t.eq(col.overflow[1], nil, 'no overflow at row 1')
       t.eq(col.overflow[2], nil, 'no overflow at row 2')
 
