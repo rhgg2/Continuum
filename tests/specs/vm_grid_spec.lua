@@ -394,31 +394,26 @@ return {
   },
 
   {
-    -- Regression: with a fractional ppqPerRow (take resolution not a
-    -- multiple of rpb — 96 PPQ at rpb 5 → 19.2 ppq/row), a mirror copy's
-    -- projected onset accrues a sub-ULP deficit, so row 14's onset stores
-    -- as 13.999…×lpr. Placing the cell with bare math.floor dropped it to
-    -- row 13; on-grid onsets must snap to the nearest row (ctx:isOnGrid).
-    name = 'fractional ppqPerRow: an on-grid onset a float-hair low snaps to its row, not the one below',
+    -- Regression: REAPER onsets sit on integer ticks, so with a fractional ppqPerRow
+    -- (19.2) tick 230 lands a hair below row-12 boundary 230.4 — bare floor drops it to row 11, must snap.
+    name = 'fractional ppqPerRow: an on-grid onset a tick below its row boundary snaps up, not down',
     run = function(harness)
-      local lpr   = timing.logPerRow(5, 4, 96)   -- 19.2 ppq/row
-      -- The float a 4-row pattern mirrored thrice then offset by 2 rows
-      -- yields (copy-four onset for a note authored on row 2): 13.999…×lpr.
-      local onset = (4*lpr + 4*lpr + 4*lpr) + 2*lpr
-      t.eq(math.floor(onset / lpr), 13, 'sanity: bare floor mislocates to row 13')
+      local lpr = timing.logPerRow(5, 4, 96)   -- 19.2 ppq/row
+      local ppq = 230                           -- row 12 boundary is 230.4; stored a tick low
+      t.eq(math.floor(ppq / lpr), 11, 'sanity: bare floor mislocates to row 11')
 
       local h = harness.mk{
         seed = {
           resolution = 96, length = 3840,
-          notes = { { ppq = onset, endppq = onset + lpr,
+          notes = { { ppq = ppq, endppq = ppq + 19,
                       chan = 1, pitch = 60, vel = 100 } },
         },
         config = { take = { rowPerBeat = 5 } },
       }
       local col = h.vm.grid.cols[1]
-      t.truthy(col.cells[14],    'note snaps to row 14')
-      t.eq(col.cells[13], nil,   'not floored onto row 13')
-      t.eq(col.offGrid[14], nil, 'and not flagged off-grid')
+      t.truthy(col.cells[12],    'note snaps to row 12')
+      t.eq(col.cells[11], nil,   'not floored onto row 11')
+      t.eq(col.offGrid[12], nil, 'and not flagged off-grid')
     end,
   },
 }

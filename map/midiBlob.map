@@ -1,4 +1,4 @@
-@module midiBlob  src=midiBlob.lua  loc=83  sha=untracked  mode=namespace  self=midiBlob
+@module midiBlob  src=midiBlob.lua  loc=85  sha=52943e4  mode=namespace  self=midiBlob
 
 # Invariants & contracts
   @invariant  idx is the 0-based REAPER per-type index; note idx counts note-ons, text idx skips CCBZ
@@ -11,14 +11,21 @@
   @shape  cc = { idx, ppq, evType, chan(1..16), [cc|pitch], [val|vel], shape, [tension], [muted] }
   @shape  text = { idx, ppq, eventtype, msg }  -- 15=notation, -1=sysex; CCBZ tension folds onto its cc
 
+# Imports
+  @const util = 'util'  @ 17
+
 # Module-level constants
-  @const chanMsgEvTypes = { [0xA0] = 'pa', [0xB0] = 'cc', [0xC0] = 'pc', [0xD0] = '...  @ 17
-  @const shapeNames = { [0] = 'step', [1] = 'linear', [2] = 'slow',  @ 18
-  @const midiBlob = {}  @ 21
+  @const chanMsgEvTypes = { [0xA0] = 'pa', [0xB0] = 'cc', [0xC0] = 'pc', [0xD0] = '...  @ 19
+  @const shapeNames = { [0] = 'step', [1] = 'linear', [2] = 'slow',  @ 20
+  @const midiBlob = {}  @ 23
 
 # Private functions
-  @fn ccValueFields(evType, b2, b3)  @ 24-29
+  @fn ccValueFields(evType, b2, b3)  @ 26-31
       -- The value-bearing fields for a cc-family event, keyed as mm:load stores them.
 
 # Public API (midiBlob.*)
-  @api midiBlob.parse(blob)  @ 31-81
+  @api midiBlob.parse(blob)  @ 33-83
+
+# Uses (outbound edges)
+  @use call    util.add  @ parse:54,67,73,77
+  @use require util  @ 17

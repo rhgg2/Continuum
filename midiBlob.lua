@@ -14,6 +14,8 @@
 --reaper: blob = repeat(i4 offset, B flags, s4 msg) + trailing 12-byte all-notes-off tail (excluded)
 --reaper: flags bit1=muted; bits4-6=cc shape; status byte classifies; CCBZ rides FF-0F after its cc
 
+local util = require 'util'
+
 local chanMsgEvTypes = { [0xA0] = 'pa', [0xB0] = 'cc', [0xC0] = 'pc', [0xD0] = 'at', [0xE0] = 'pb' }
 local shapeNames     = { [0] = 'step', [1] = 'linear', [2] = 'slow',
                          [3] = 'fast-start', [4] = 'fast-end', [5] = 'bezier' }
@@ -49,7 +51,7 @@ function midiBlob.parse(blob)
       local note = { idx = noteIdx, evType = 'note', ppq = ppq, endppq = ppq,
                      chan = chan, pitch = b2, vel = b3, muted = muted }
       noteIdx = noteIdx + 1
-      notes[#notes + 1] = note
+      util.add(notes, note)
       local key = (status & 0x0F) * 128 + b2
       local q = pending[key]; if not q then q = {}; pending[key] = q end
       q[#q + 1] = note
@@ -62,17 +64,17 @@ function midiBlob.parse(blob)
                    shape = shapeNames[(flags >> 4) & 7] or 'step', muted = muted }
       for k, v in pairs(ccValueFields(evType, b2, b3)) do cc[k] = v end
       ccIdx = ccIdx + 1
-      ccs[#ccs + 1] = cc
+      util.add(ccs, cc)
       lastCC = cc
     elseif status == 0xFF then
       if b2 == 0x0F and msg:sub(3, 7) == 'CCBZ ' then
         if lastCC and lastCC.shape == 'bezier' then lastCC.tension = string.unpack('f', msg:sub(9)) end
       else
-        texts[#texts + 1] = { idx = textIdx, ppq = ppq, eventtype = b2, msg = msg:sub(3) }
+        util.add(texts, { idx = textIdx, ppq = ppq, eventtype = b2, msg = msg:sub(3) })
         textIdx = textIdx + 1
       end
     elseif status == 0xF0 then
-      texts[#texts + 1] = { idx = textIdx, ppq = ppq, eventtype = -1, msg = msg:sub(2, #msg - 1) }
+      util.add(texts, { idx = textIdx, ppq = ppq, eventtype = -1, msg = msg:sub(2, #msg - 1) })
       textIdx = textIdx + 1
     end
   end

@@ -6,6 +6,8 @@
 --invariant: muted is true-or-absent; false coerces to nil at write; pass false to clear
 --invariant: per-event metadata persists via eventMeta, keyed by the take's POOL guid (docs/eventMeta.md)
 local util = require 'util'
+local midiBlob = require 'midiBlob'
+local perf = require 'perf'
 
 local take      = (...).take
 local eventMeta = (...).eventMeta
@@ -82,10 +84,7 @@ local function splitWide(val)
   return util.clamp(msb, 0, 127), lsb
 end
 
---invariant: shapeNames is derived from shapeLUT so the two directions can't drift
 local shapeLUT = { step = 0, linear = 1, slow = 2, ['fast-start'] = 3, ['fast-end'] = 4, bezier = 5 }
-local shapeNames = {}
-for k, v in pairs(shapeLUT) do shapeNames[v] = k end
 
 local curveSample do
   local BEZIER = {
@@ -297,6 +296,7 @@ local fire = util.installHooks(mm)
 --contract: external load (take swap, undo, watcher, init) does full loadMetadata + saveMetadata
 function mm:load(newTake)
   if not newTake then return end
+  perf.start('load')
 
   local takeSwapped = take ~= newTake
   -- wideCC registration is per-take config (tm re-asserts it each rebuild from
@@ -324,14 +324,20 @@ function mm:load(newTake)
   local function ccPPQKey(e)  return util.key(ccIdKey(e), e.ppq) end
   local function ccFullKey(e) return util.key(ccPPQKey(e), e.val or 0) end
 
-  ----- Read notes
-  local _, noteCount = reaper.MIDI_CountEvts(take)
-  for i = 0, noteCount-1 do
-    local ok, _, muted, ppq, endppq, chan, pitch, vel = reaper.MIDI_GetNote(take, i)
-    if ok then
-      local evt = { idx = i, evType = 'note', ppq = ppq, endppq = endppq, chan = chan + 1, pitch = pitch, vel = vel }
-      if muted then evt.muted = true end
-      util.add(notes, evt)
+  ----- Read take: one MIDI_GetAllEvts blob parsed to note/cc/text records
+  perf.start('read')
+  local _, blob = reaper.MIDI_GetAllEvts(take)
+  local texts
+  notes, ccs, texts = midiBlob.parse(blob)
+  perf.stop('read')
+  local noteCount, ccCount = #notes, #ccs
+  for _, t in ipairs(texts) do
+    if t.eventtype == 15 then
+      local sc = noteSidecarDecode(t.msg)
+      if sc then util.add(noteSidecars, util.assign(sc, { idx = t.idx, ppq = t.ppq })) end
+    elseif t.eventtype == -1 then
+      local sc = ccSidecarDecode(t.msg)
+      if sc then util.add(ccSidecars, util.assign(sc, { idx = t.idx, ppq = t.ppq })) end
     end
   end
 
@@ -371,37 +377,6 @@ function mm:load(newTake)
     end
   end
 
-  ----- Read ccs + sysex
-  local _, _, ccCount, textCount = reaper.MIDI_CountEvts(take)
-
-  for i = 0, ccCount-1 do
-    local ok, _, muted, ppq, chanmsg, chan, msg2, msg3 = reaper.MIDI_GetCC(take, i)
-    if ok then
-      local evType = chanMsgEvTypes[chanmsg] or ('chanmsg_' .. chanmsg)
-      local evt = { idx = i, ppq = ppq, evType = evType, chan = chan + 1}
-      if muted then evt.muted = true end
-      if     evType == 'pa' then evt.pitch, evt.vel = msg2, msg3
-      elseif evType == 'cc' then evt.cc,    evt.val = msg2, msg3
-      elseif evType == 'pc' or evType == 'at' then evt.val = msg2
-      elseif evType == 'pb' then evt.val = ((msg3 << 7) | msg2) - 8192
-      end
-      local _, shape, tension = reaper.MIDI_GetCCShape(take, i)
-      evt.shape = shapeNames[shape] or 'step'
-      if evt.shape == 'bezier' then evt.tension = tension end
-      util.add(ccs, evt)
-    end
-  end
-
-  for i = 0, textCount-1 do
-    local ok, _, _, ppq, eventtype, msg = reaper.MIDI_GetTextSysexEvt(take, i)
-    if ok and eventtype == 15 then
-      local sc = noteSidecarDecode(msg)
-      if sc then util.add(noteSidecars, util.assign(sc, { idx = i, ppq = ppq})) end
-    elseif ok and eventtype == -1 then
-      local sc = ccSidecarDecode(msg)
-      if sc then util.add(ccSidecars, util.assign(sc, { idx = i, ppq = ppq})) end
-    end
-  end
   local sidecarCount = #ccSidecars
 
   ----- CC dedup
@@ -641,32 +616,19 @@ function mm:load(newTake)
   -- idx/uuidIdx re-read: only needed when load re-sorted the take (dedup / sidecar
   -- reconcile). On a clean reload the first-pass indices still hold. See docs § Index re-read elision.
   if takeDirty then
-    _, noteCount, ccCount, textCount = reaper.MIDI_CountEvts(take)
-    for i = 0, noteCount-1 do
-      local ok, _, _, ppq, _, chan, pitch = reaper.MIDI_GetNote(take, i)
-      if ok then
-        local evt = { ppq = ppq, chan = chan + 1, pitch = pitch }
-        local n = notesKeyed[noteKey(evt)]
-        if n then n.idx = i end
-      end
+    local _, blob = reaper.MIDI_GetAllEvts(take)
+    local rNotes, rCcs, rTexts = midiBlob.parse(blob)
+    for _, e in ipairs(rNotes) do
+      local n = notesKeyed[noteKey(e)]; if n then n.idx = e.idx end
     end
-    for i = 0, ccCount-1 do
-      local ok, _, _, ppq, chanmsg, chan, msg2 = reaper.MIDI_GetCC(take, i)
-      if ok then
-        local evType = chanMsgEvTypes[chanmsg] or ('chanmsg_'..chanmsg)
-        local evt = { ppq = ppq, chan = chan + 1, evType = evType }
-        if evType == 'cc' then evt.cc = msg2 end
-        if evType == 'pa' then evt.pitch = msg2 end
-        local c = ccsKeyed[ccPPQKey(evt)]
-        if c then c.idx = i end
-      end
+    for _, e in ipairs(rCcs) do
+      local c = ccsKeyed[ccPPQKey(e)]; if c then c.idx = e.idx end
     end
-    for i = 0, textCount-1 do
-      local ok, _, _, _, eventtype, msg = reaper.MIDI_GetTextSysexEvt(take, i)
-      local sc = ok and (eventtype == 15  and noteSidecarDecode(msg)
-                      or eventtype == -1 and ccSidecarDecode(msg))
+    for _, e in ipairs(rTexts) do
+      local sc = e.eventtype == 15 and noteSidecarDecode(e.msg)
+              or e.eventtype == -1 and ccSidecarDecode(e.msg)
       local evt = sc and eventsByUuid[sc.uuid]
-      if evt then evt.uuidIdx = i end
+      if evt then evt.uuidIdx = e.idx end
     end
   end
 
@@ -689,6 +651,9 @@ function mm:load(newTake)
   if #reconcileEvents > 0  then fire('ccsReconciled',   { events = reconcileEvents }) end
   --emits: reload         -- nil; every load, including after modify()
   fire('reload', nil)
+
+  perf.count('events', noteCount + ccCount)
+  perf.stop('load')
 end
 
 function mm:reload()
