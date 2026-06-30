@@ -761,6 +761,11 @@ local function drawTracker()
   local localHole
   for _, inst in ipairs(tv:eachInstance()) do
     local rect  = inst.rect
+    local deleted = {}                 -- srcCol -> { [row] = true }: delete-override blanks
+    for _, d in ipairs(tv:deletedCells(inst.groupId, inst.instId)) do
+      deleted[d.col] = deleted[d.col] or {}
+      deleted[d.col][d.row] = true
+    end
     local previewing = movePrev and movePrev.groupId == inst.groupId
                                 and movePrev.instId == inst.instId
     local shift      = previewing and movePrev.delta or 0
@@ -784,11 +789,15 @@ local function drawTracker()
             local srcCol = (previewing and movePrev.destSrc[x]) or x
             local cells  = grid.cols[srcCol] and grid.cols[srcCol].cells
             for y = yLo, yHi - 1 do
-              local evt = cells and cells[scrollRow + y - shift]
+              local row = scrollRow + y - shift
+              local evt = cells and cells[row]
               local st  = evt and evt.uuid and tv:stateOf(evt.uuid)
               if st == 'conflicted' then conflicted = true end
               local key = st and groups.tintKey(st)
-              if key then draw:box(x1, x2, y, y, key) end
+              if key then draw:box(x1, x2, y, y, key)
+              elseif not evt and deleted[srcCol] and deleted[srcCol][row] then
+                draw:box(x1, x2, y, y, groups.tintKey('overridden'))
+              end
             end
             if x == cursorCol and cursorPpq >= ppqLo and cursorPpq < ppqHi then
               cursorIn = true

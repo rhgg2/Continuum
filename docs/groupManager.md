@@ -290,10 +290,17 @@ slot carries its override):
   the propagating group delete — you cannot one-keystroke-destroy a
   shared event from a diverged instance.)
 - delete-ov + amend (type) → `revivableVuid` (above).
-- delete-ov + delete → no-op. Unreachable by construction — a hidden
-  slot has no concrete event to delete — but the guard is load-bearing:
-  without it the bare global-delete branch would fire a *propagating
-  group delete from a cell invisible in this instance*.
+- delete-ov + delete (global mode) → lift the override back to synced
+  (`gm:revertDelete`): the group event was never removed, only shadowed, so
+  reproject revives the concrete. The blank carries no concrete, so
+  `gm:deleteEvent`'s uuid path cannot reach it — `deleteEvent` (tv) locates the
+  cell by the group event's projection (`tv:deletedCells`) and routes to
+  `revertDelete`. Render tints the blank (overridden) so the gesture is legible.
+  The revert is gated out of local mode: there delete stays hide-only, so a
+  delete sweep never resurrects a cell it already blanked. `gm:deleteEvent`'s own
+  `deletes[vuid] ~= true` no-op guard still stands and is still load-bearing:
+  without it the bare global-delete branch would fire a *propagating group delete
+  from a cell invisible in this instance*.
 
 `localAmend` is the shared amend body; `onOv` gates the acting
 instance onto this path before the global branches.

@@ -1987,6 +1987,20 @@ local deleteEvent, deleteSelection do
     local r = ec:row()
     local evt = col.cells and col.cells[r]
     if not evt then
+      -- Global-mode delete on a delete-override blank reverts to synced. Gated out of local
+      -- mode: delete stays hide-only there, so a sweep never resurrects a blanked cell.
+      if not tv:localMode() then
+        local active = tv:instanceAtCursor()
+        if active then
+          for _, d in ipairs(tv:deletedCells(active.groupId, active.instId)) do
+            if d.col == ec:col() and d.row == r then
+              gm:revertDelete(active.groupId, active.instId, d.vuid)
+              tm:flush()
+              return
+            end
+          end
+        end
+      end
       -- Delete on a ghost cell: unset interpolation on the governing event.
       local ghost = col.ghosts and col.ghosts[r]
       if ghost then
@@ -2049,13 +2063,14 @@ local function colTypeOf(evt)
   if util.isNote(evt) or evt.evType == 'pa' then return 'note' end
   return evt.evType
 end
+-- Second return is its column index; single-value callers truncate it away.
 function colFor(evt)
   local want = colTypeOf(evt)
-  for _, c in ipairs(grid.cols) do
+  for i, c in ipairs(grid.cols) do
     if c.midiChan == evt.chan and c.type == want
        and (want ~= 'note' or (c.lane or 1) == (evt.lane or 1))
        and (want ~= 'cc'   or c.cc == evt.cc) then
-      return c
+      return c, i
     end
   end
 end
@@ -2493,6 +2508,20 @@ end
 -- Page region-wash reads group instances and per-event state through tv, never gm.
 function tv:eachInstance() return gm:eachInstance() end
 function tv:stateOf(uuid) return gm:stateOf(uuid) end
+
+-- gm's delete overrides resolved to grid cells for render highlight and deleteEvent's revert.
+-- Located by group event projection (no concrete = no uuid) rather than uuid.
+--contract: (groupId, instId) -> { { col, row, vuid } }
+function tv:deletedCells(groupId, instId)
+  local out = {}
+  for _, d in ipairs(gm:deletedCells(groupId, instId)) do
+    local col, ix = colFor(d.evt)
+    if col then
+      out[#out + 1] = { col = ix, row = ppqRowOf(d.evt.ppq, col.midiChan), vuid = d.vuid }
+    end
+  end
+  return out
+end
 
 -- Drag preview for trackerRender: armed instance shifted by pending row /
 -- channel / lane deltas; srcMember = suppressed source cols, destSrc[x] = its source col.

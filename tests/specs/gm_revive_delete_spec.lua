@@ -89,4 +89,35 @@ return {
       t.eq(zC.pitch, 99, 'C overwritten with the typed note, not a coincident dup')
     end,
   },
+  {
+    name = 'gm:revertDelete lifts a local delete override back to the synced value',
+    run = function()
+      local gm, tm, staged = mk()
+      local abcd = { note(0, 1, 1, 60), note(240, 1, 1, 61),
+                     note(480, 1, 1, 62), note(720, 1, 1, 63) }
+      local gid  = gm:markGroup(abcd, rect(0, 1))
+      local iidY = gm:newInstance(gid, { ppq = 960, chan = 1 })
+      tm:flush()
+      local yC = atPpq(staged.add, 1440)
+      staged.add = {}
+
+      gm:setLocalMode(true)
+      gm:deleteEvent(yC.uuid); tm:flush()
+      gm:setLocalMode(false)
+
+      local cells = gm:deletedCells(gid, iidY)
+      t.eq(#cells, 1, 'one delete override on Y')
+      t.eq(cells[1].evt.ppq, 1440, 'projected to the concrete C slot')
+      t.eq(cells[1].evt.pitch, 62, 'carries the synced group value')
+
+      staged.add = {}
+      t.truthy(gm:revertDelete(gid, iidY, cells[1].vuid))
+      tm:flush()
+      local revived = atPpq(staged.add, 1440)
+      t.truthy(revived, 'C revived at its slot')
+      t.eq(revived.pitch, 62, 'restored to the synced group value')
+      t.falsy(next(gm:deletedCells(gid, iidY)), 'no delete override remains')
+      t.falsy((gm:revertDelete(gid, iidY, cells[1].vuid)), 'second revert is a guarded no-op')
+    end,
+  },
 }

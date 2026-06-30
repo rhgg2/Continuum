@@ -557,6 +557,21 @@ function gm:eachInstance()
   return out
 end
 
+-- Tagged with vuid so revertDelete can lift each override. A dropped group event
+-- (group is authority) leaves a moot delete -- skipped.
+--contract: (groupId, instId) -> { { vuid, evt } }; evt = toInstance projection of an empty cell
+function gm:deletedCells(groupId, instId)
+  local group = groups[groupId]
+  local inst  = group and group.instances[instId]
+  if not inst then return {} end
+  local out = {}
+  for vuid in pairs(inst.deletes) do
+    local g = group.events[vuid]
+    if g then out[#out + 1] = { vuid = vuid, evt = toInstance(g, inst.anchor) } end
+  end
+  return out
+end
+
 -- Precise per-cell injectivity test for propagating block ops (decision 3): two cells
 -- on one group slot => non-injective; disjoint slots stay legal. see docs/groupManager.md § Block-shift injectivity.
 --contract: (cells) -> bool. cells carry { ppq, chan, evType, lane?/cc? }.
@@ -788,6 +803,18 @@ function gm:deleteEvent(uuid)
     absorbSiblingOverrides(group, vuid, instId, false)              -- synced: propagating delete
     group.events[vuid] = nil
   end
+  pendingReproject[groupId] = true
+  return true
+end
+
+-- The group event was never removed (only shadowed), so reproject revives the synced concrete.
+-- delete-ov + delete -> revert to synced; see docs/groupManager.md.
+--contract: (groupId, instId, vuid) -> true | nil,reason
+function gm:revertDelete(groupId, instId, vuid)
+  local group = groups[groupId]
+  local inst  = group and group.instances[instId]
+  if not (inst and inst.deletes[vuid]) then return nil, 'not a delete override' end
+  inst.deletes[vuid] = nil
   pendingReproject[groupId] = true
   return true
 end
