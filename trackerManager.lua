@@ -37,6 +37,7 @@ local util    = require 'util'
 local timing  = require 'timing'
 local tuning  = require 'tuning'
 local generators = require 'generators'
+local perf       = require 'perf'
 
 local function print(...)
   return util.print(...)
@@ -537,6 +538,8 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     end
     if #adds == 0 and #assigns == 0 and #deletes == 0 then return end
 
+    perf.openFrame(); perf.start('flush')
+
     -- Single scan over all post-flush notes for same-(chan,pitch) MIDI legality (staging pre-clip).
     -- see docs/trackerManager.md § Pre-clip collision scan
     do
@@ -610,6 +613,7 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
 
     local flushAdds, flushAssigns, flushDeletes = adds, assigns, deletes
     adds, assigns, deletes = {}, {}, {}
+    perf.count('committed', #flushAdds + #flushAssigns + #flushDeletes)
 
     -- Same-pitch moves can alias ppq-keyed tokens: occupying move re-keys onto a peer's slot before
     -- that peer vacates. Sort descending so every vacate lands ahead of its occupy. see docs/trackerManager.md § Pre-clip collision scan
@@ -630,6 +634,7 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
       end
     end
 
+    perf.start('mm')
     mm:modify(function()
       for _, o in ipairs(flushDeletes) do
         mm:delete(o.token)
@@ -651,6 +656,8 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
         end
       end
     end)
+    perf.stop('mm')
+    perf.stop('flush'); perf.report('flush'); perf.closeFrame()
     fire('postflush')
   end
 

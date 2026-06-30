@@ -1,0 +1,40 @@
+@module perf  src=perf.lua  loc=117  sha=untracked  mode=namespace  self=perf
+
+# Imports
+  @const util = 'util'  @ 18
+
+# Module-level constants
+  @const perf = { on = false }  @ 19
+  @const stack = {}  @ 21
+  @const span, mark, started = {}, {}, {}  @ 22   -- current frame (swapped on nest)
+  @const totSpan, totMark = {}, {}  @ 23   -- run totals (persist across frames)
+
+# Private functions
+  -- Frame stack
+  -- Sampling
+  -- Reporting
+  @fn bySize(t)  @ 64-69
+  @fn printLine(headline, headMs, spans, marks, skip)  @ 71-83
+
+# Public API (perf.*)
+  @api perf.openFrame()  @ 27-31
+  @api perf.closeFrame()  @ 33-37
+  @api perf.start(name)  @ 41
+  @api perf.stop(name)  @ 43-50
+  @api perf.count(name, by)  @ 52-58
+  @api perf.ms(name)  @ 60
+  @api perf.report(label)  @ 87-92
+      -- One line per closed frame; silent for trivial frames (no counts, nothing timed
+      -- beyond the label itself -- e.g. a no-op flush).
+  @api perf.dump()  @ 96-101
+      -- Run totals since arm. Each span key is total time spent in spans of that name;
+      -- nested spans overlap their parents by construction.
+  @api perf.toggle()  @ 103-113
+  @api perf.line(...)  @ 115
+
+# Uses (outbound edges)
+  @use call    util.print  @ printLine:78 dump:98 toggle:109 line:115
+  @use require util  @ 18
+
+# REAPER API surface
+  @reaper time_precise

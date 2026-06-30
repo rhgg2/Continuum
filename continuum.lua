@@ -15,6 +15,7 @@ end
 
 local util = require 'util'
 local ImGui = require 'imgui' '0.10'
+local perf  = require 'perf'
 
 math.randomseed(os.time())
 
@@ -166,6 +167,7 @@ local function Main()
     quit            = function() coord:quit()               end,
     beginPrefix     = function() cmgr:beginPrefix()         end,
     toggleFxWindows = toggleAllFxWindows,
+    toggleProfiler  = function() perf.toggle() end,
   }
   cmgr:bindAll{
     playPause       = { ImGui.Key_Space },
@@ -181,6 +183,7 @@ local function Main()
     quit            = { {ImGui.Key_Q, ImGui.Mod_Ctrl} },
     beginPrefix     = { {ImGui.Key_U, ImGui.Mod_Super} },
     toggleFxWindows = { ImGui.Key_F11 },
+    toggleProfiler  = { {ImGui.Key_P, ImGui.Mod_Ctrl, ImGui.Mod_Shift} },
   }
 
   -- ImGui only delivers keys while Continuum holds focus; the REAPER-keymap
