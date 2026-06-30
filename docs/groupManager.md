@@ -196,9 +196,9 @@ Channel and lane decompose differently, and must. Channel is a
 per-instance *base* (`anchor.chan + chanDelta`); lane is a per-instance
 *offset* (`anchor.laneDelta`, default 0) layered over the absolute `key`,
 because `key` doubles as the stream identity `rect.streams` is keyed by —
-it cannot move without breaking membership. Lane is also rebuild-owned
-(`assignNote` rejects a relane), so `moveInstance` realises a lane change
-by **del+add**, not assign; `pickStampedLane` then honours the authored
+it cannot move without breaking membership. Lane membership is reseated by
+rebuild, so `moveInstance` realises a lane change by **del+add** to re-stamp
+it cleanly; `pickStampedLane` then honours the authored
 lane verbatim and materialises the column if missing, so the move holds
 through rebuild and a member never renders invisible. Conflict stays
 lane-accurate by shifting each instance's `streams` keys through

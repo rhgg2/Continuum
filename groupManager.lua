@@ -719,7 +719,7 @@ function gm:moveInstance(groupId, instId, anchor)
         tm:assignEvent(rec.evt,
           { ppq = placed.ppq, chan = placed.chan, endppq = placed.endppq })
       else
-        if rec and rec.evt then             -- relane: lane is rebuild-owned (assignNote), so del+add
+        if rec and rec.evt then             -- relane: del+add re-stamps the authored lane through rebuild
           tm:deleteEvent(rec.evt); unlink(p, vuid)
         end
         tm:addEvent(placed)                 -- withheld revive, or relane re-create
@@ -798,6 +798,23 @@ function gm:assignEvent(uuid, update)
   local group    = groups[loc.groupId]
   local instance = group.instances[loc.instId]
   local vuid     = loc.vuid
+
+  -- A relocating assign may cross into a different group/instance: delete source
+  -- (peel/propagate/drop) and addEvent to adopt it into the target.
+  if update.chan or update.lane or update.ppq then
+    local rec = projOf(loc.groupId, loc.instId)[vuid]
+    if rec and rec.evt then
+      local moved = util.clone(rec.evt, { uuid = true, token = true, loc = true })
+      util.assign(moved, update)
+      local newG, newI = classifyCreate(moved)
+      if newG and (newG ~= loc.groupId or newI ~= loc.instId) then
+        gm:deleteEvent(uuid)
+        gm:addEvent(moved)
+        return true
+      end
+    end
+  end
+
   local onOv = instance.adds[vuid] ~= nil
                or instance.assigns[vuid] ~= nil
                or instance.deletes[vuid] == true

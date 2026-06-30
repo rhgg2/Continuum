@@ -58,15 +58,31 @@ local backing = {
   },
 }
 
+-- Destination-cell probe for a relocating assign: nil for a pure value edit, else
+-- evt with new position fields overlaid; kindOf() on the result finds the dst kind.
+local function relocate(evt, update)
+  local moved = update.ppq  ~= nil and update.ppq  ~= evt.ppq
+             or update.chan ~= nil and update.chan ~= evt.chan
+             or update.lane ~= nil and update.lane ~= evt.lane
+             or update.cc   ~= nil and update.cc   ~= evt.cc
+  if not moved then return nil end
+  return { evType = evt.evType,
+           chan = update.chan or evt.chan,
+           lane = update.lane or evt.lane,
+           cc   = update.cc   or evt.cc,
+           ppq  = update.ppq  or evt.ppq }
+end
+
 local edit = {
   add    = function(evt)      backing[kindOf(evt)].add(evt)    end,
   delete = function(evt)      backing[kindOf(evt)].delete(evt) end,
   assign = function(evt, update)
     local src = kindOf(evt)
-    if update.ppq and update.ppq ~= evt.ppq then
-      -- a ppq edit that crosses into/out of a region is a move: shed the source
-      -- kind's identity and re-add at the destination kind (same column, new ppq).
-      local dst = kindAt(colFor(evt), update.ppq)
+    -- Cross-region move: shed source kind, re-add at destination. ppq stays in-column;
+    -- chan/lane/cc changes column. relocate() resolves the destination cell either way.
+    local probe = relocate(evt, update)
+    if probe then
+      local dst = kindOf(probe)
       if dst ~= src then
         backing[src].delete(evt)
         local moved = util.clone(evt, backing[src].relocateDrop)
@@ -1977,17 +1993,6 @@ function kindAt(col, ppq)
   return col and col.cellKind[ppqRowOf(ppq, col.midiChan)] or 'plain'
 end
 
--- A relocated copy of `src` at `dest`. `drop` is the per-kind set of identity
--- fields to shed (backing[kind].relocateDrop). dest = { chan, type, lane?, cc? }.
-local function relocatedClone(src, dest, drop)
-  local clone = util.clone(src, drop)
-  clone.evType = dest.type
-  clone.chan   = dest.chan
-  if     dest.type == 'note' then clone.lane = dest.lane
-  elseif dest.type == 'cc'   then clone.cc   = dest.cc end
-  return clone
-end
-
 local function shiftEvents(dir)
   local function noteColsByLane(chan)
     local byLane = {}
@@ -2092,10 +2097,13 @@ local function shiftEvents(dir)
     end
   end
 
+  -- Assign through the facade: gm reseats members (chan/lane → group key), tm plain notes.
+  -- No identity shed; next rebuild reseats columns from new chan/lane/cc.
   for _, src in ipairs(moving) do
-    local srcKind = kindOf(src)
-    backing[srcKind].delete(src)
-    edit.add(relocatedClone(src, dest, backing[srcKind].relocateDrop))
+    local update = { chan = dest.chan }
+    if     dest.type == 'note' then update.lane = dest.lane
+    elseif dest.type == 'cc'   then update.cc   = dest.cc end
+    edit.assign(src, update)
   end
   tm:flush()
 

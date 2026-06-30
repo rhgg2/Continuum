@@ -251,24 +251,23 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
   --contract: dedupes by token; in-flight assigns to the same event collapse into one mm write
   --invariant: util.REMOVE markers must survive merging
   local function assignLowlevel(evt, update)
-    local oldChan = evt.chan
+    local oldChan, oldLane = evt.chan, evt.lane
     util.assign(evt, update)
-    -- Keep per-chan index coherent: chan change migrates the entry; ppq change resorts.
-    -- util.seek needs ascending order; stale-swing pass walks original order, not new-raw.
-    local function listOf(c)
-      if evt.evType == 'note' and evt.lane == 1 then return chans[c].notes end
-      if evt.evType == 'pb' then return chans[c].pbs end
+    -- Keep the lane-1 detune index coherent: a chan OR lane move migrates the
+    -- entry between lists; a ppq move resorts in place (util.seek needs ascending).
+    local function listFor(chan, lane)
+      if evt.evType == 'note' and lane == 1 then return chans[chan].notes end
+      if evt.evType == 'pb' then return chans[chan].pbs end
     end
-    if update.chan and update.chan ~= oldChan then
-      local old = listOf(oldChan)
-      if old then
-        for i, item in ipairs(old) do if item == evt then table.remove(old, i); break end end
+    local oldList = listFor(oldChan, oldLane)
+    local newList = listFor(evt.chan, evt.lane)
+    if oldList ~= newList then
+      if oldList then
+        for i, item in ipairs(oldList) do if item == evt then table.remove(oldList, i); break end end
       end
-      local new = listOf(evt.chan)
-      if new then util.add(new, evt); sortByPPQ(new) end
-    elseif update.ppq ~= nil then
-      local list = listOf(evt.chan)
-      if list then sortByPPQ(list) end
+      if newList then util.add(newList, evt); sortByPPQ(newList) end
+    elseif update.ppq ~= nil and newList then
+      sortByPPQ(newList)
     end
     if not evt.token then return end
     for _, e in ipairs(assigns) do
@@ -355,15 +354,13 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
     assignLowlevel(n, { ppq = P1, endppq = P2 })
   end
 
-  --contract: lane updates rejected with a warning (column membership is rebuild-owned)
-  --contract: chan changes accepted; rebuild's absorber pass reconciles fakes across both channels
+  --contract: lane/chan changes accepted; rebuild reseats columns via pickStampedLane
+  --contract: chan change: rebuild's absorber pass reconciles fakes across both channels
   --contract: ppq/endppq route through resizeNote
   local function assignNote(n, update)
-    if update.lane then print('um: not allowed to change lane of notes'); return end
-
-    -- update.ppq covers direct ppq edits and delay edits (realiseNoteUpdate maps delay→ppq).
-    -- endppq alone doesn't move the realised onset, so it doesn't dirty.
-    if update.sample ~= nil or update.ppq ~= nil then dirtyPc(n.chan) end
+    -- lane/sample/ppq dirty PC priority; update.ppq covers direct + delay edits
+    -- (realiseNoteUpdate maps delay→ppq); endppq alone doesn't move the onset, so no dirty.
+    if update.sample ~= nil or update.ppq ~= nil or update.lane ~= nil then dirtyPc(n.chan) end
     if update.chan and update.chan ~= n.chan then dirtyPc(n.chan); dirtyPc(update.chan) end
 
     if update.ppq ~= nil or update.endppq ~= nil then

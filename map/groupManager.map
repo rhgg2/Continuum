@@ -1,4 +1,4 @@
-@module groupManager  src=groupManager.lua  loc=882  sha=1747f65  mode=chunk  self=gm
+@module groupManager  src=groupManager.lua  loc=899  sha=9e7e85d  mode=chunk  self=gm
 @deps tm, ds
 
 # Invariants & contracts
@@ -188,11 +188,11 @@
       -- Delete a member: drop the shared event (synced), peel an override back to
       -- synced, or hide locally. See docs/groupManager.md § Override transitions.
       @contract  (uuid) -> true | nil,reason
-  @api gm:assignEvent(uuid, update)  @ 795-812
+  @api gm:assignEvent(uuid, update)  @ 795-829
       -- Value edit of a member (assign half of the facade): localMode or an existing override
       -- => sticky localAmend, else edit the shared pattern. Consumes tv's AUTHORED update (updToGroup).
       @contract  (uuid, update) -> true | nil,'not a member'. Defers to reproject (pendingReproject).
-  @api gm:resizeGroup(groupId, instId, edits)  @ 826-880
+  @api gm:resizeGroup(groupId, instId, edits)  @ 843-897
       -- Resize the SHARED rect from edge instance `instId`'s drag. startDelta
       -- re-origins (Model A: every anchor += startDelta, every group event
       -- ppq -= startDelta) so realised positions hold while the boundary
@@ -210,7 +210,7 @@
   @use call    ds.assign  @ persist:233
   @use call    ds.get  @ 28 rehydrate:241
   @use call    groups.deriveAssign  @ absorbSiblingOverrides:341 localAmend:616
-  @use call    groups.inRect  @ classifyCreate:362 resizeGroup:857
+  @use call    groups.inRect  @ classifyCreate:362 resizeGroup:874
   @use call    groups.laneId  @ footprintAliases:566
   @use call    groups.project  @ rehydrate:251 newInstance:465 stateOf:536 reproject:580 moveInstance:712
   @use call    groups.reconcile  @ reproject:582
@@ -222,8 +222,8 @@
   @use call    tm.byUuid  @ rehydrate:254 656
   @use call    tm.deleteEvent  @ reproject:599 deleteInstance:681 moveInstance:723,729
   @use call    tm.length  @ onTake:155
-  @use call    util.assign  @ localAmend:620 assignEvent:808
-  @use call    util.clone  @ rehydrate:257 markGroup:441 newInstance:470 reproject:591,597 moveInstance:726 resizeGroup:874
+  @use call    util.assign  @ localAmend:620 assignEvent:808,825
+  @use call    util.clone  @ rehydrate:257 markGroup:441 newInstance:470 reproject:591,597 moveInstance:726 assignEvent:807 resizeGroup:891
   @use require groups  @ 11
   @use require util  @ 10
   @use sub     ds:dataChanged  @ 664

@@ -119,7 +119,7 @@ return {
       -- Give instance 1 a local-only add at its empty ppq-0 cell; instance 2's
       -- ppq-0 cell stays empty (the move's destination).
       h.gm:setLocalMode(true)
-      h.tm:addEvent{ evType = 'note', chan = 1, ppq = 0, endppq = 60, pitch = 67, vel = 100, lane = 1 }
+      h.gm:addEvent{ evType = 'note', chan = 1, ppq = 0, endppq = 60, pitch = 67, vel = 100, lane = 1 }
       h.tm:flush()
       h.gm:setLocalMode(false)
 

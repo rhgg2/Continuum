@@ -173,10 +173,13 @@ tm:flush()                           -- commit staged ops in one mm:modify
 
 Semantics:
 
-- **Rejected updates.** Changing a note's `lane` via `assignEvent` is
-  rejected (prints a warning, drops the call) — column membership is
-  rebuild-owned. A `chan` change is accepted; rebuild's absorber pass
-  reconciles fakes across both channels.
+- **Lane / chan changes.** Both are accepted by `assignEvent`. A note's
+  `lane` is persisted per note and taken verbatim by the next rebuild
+  (`pickStampedLane`), so an in-place lane assign reseats the note's
+  column without shedding its identity; `assignLowlevel` migrates the
+  lane-1 detune index when the move crosses the lane-1 boundary. A `chan`
+  change is likewise accepted; rebuild's absorber pass reconciles fakes
+  across both channels.
 - **Single voice per (chan, pitch) — realised space.** MIDI permits
   one voice per `(chan, pitch)`. tv writes authored logical verbatim;
   distinct voices that collide in realised raw (swing/delay-collapsed,
