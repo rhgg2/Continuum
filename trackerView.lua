@@ -3152,6 +3152,12 @@ ec = util.instantiate('editCursor', {
 
 clipboard = util.instantiate('clipboard', {
   ec = ec, grid = grid, tm = tm, cm = cm,
+  edit         = edit,
+  -- Injectivity gate (decision 5): refuse a paste whose footprint aliases one
+  -- group in global mode; localMode (per-instance adds) dissolves it.
+  aliases      = function(cells)
+    return gm ~= nil and not gm:localMode() and gm:footprintAliases(cells)
+  end,
   currentRpb   = currentRpb,
   getCtx       = function() return ctx end,
   getLength    = function() return length end,

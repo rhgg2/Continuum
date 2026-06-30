@@ -86,6 +86,7 @@ local specs = {
   'gm_row_atomic_spec',
   'gm_value_facade_spec',
   'gm_create_delete_facade_spec',
+  'gm_paste_facade_spec',
   'gm_stamp_commit_spec',
   'gm_persist_reload_spec',
   'gm_revive_delete_spec',

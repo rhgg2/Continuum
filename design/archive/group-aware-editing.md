@@ -376,6 +376,19 @@ over-refusal; no conservative fallback shipped.
 6. **Paste through the facade.** Clear+write leaf loop + injectivity
    gate + auto-join. Ripple/insert-paste (if it exists) under stage-5
    atomicity.
+   *Done. clipboard takes two new deps from tv: the `edit` facade and a
+   narrow `aliases(cells)` predicate (`gm and not localMode and
+   footprintAliases`, mirroring the groupBridge injection idiom). Every
+   `tm:addEvent`/`deleteEvent`/`assignEvent` in `pasteSingle`/`pasteMulti`/
+   `pasteVelocities` now routes through `edit.*`, so clears propagate, writes
+   auto-join, and vel-paste edits propagate — the `member`/`plain` fallback
+   keeps non-group pastes byte-identical. `refusePaste` builds the
+   destination footprint per column and gates on `aliases`; pasteMulti
+   gates atomically in a pre-pass (cross-column cells never share a slot, so
+   per-column == aggregate). Closes the stage-4b interim regression (paste
+   into a region stopped auto-joining once `applyEdit` died). New full-stack
+   `gm_paste_facade_spec` (auto-join+propagate, overwrite-propagates,
+   localMode-local, alias-refused + disjoint-allowed).*
 
 **Stash arm** is deferred until fx events become mutable (note-macros
 v2 made them displayable, not editable). When that lands it is a single

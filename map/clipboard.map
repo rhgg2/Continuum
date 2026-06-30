@@ -1,5 +1,5 @@
-@module clipboard  src=clipboard.lua  loc=454  sha=281e4bf  mode=chunk  self=clipboard
-@deps ec, grid, tm, cm, currentRpb, getCtx, getLength
+@module clipboard  src=clipboard.lua  loc=475  sha=1747f65  mode=chunk  self=clipboard
+@deps ec, grid, tm, cm, currentRpb, getCtx, getLength, edit, aliases
 
 # Invariants & contracts
   @invariant  clipboard persists via REAPER ExtState under ('rdm','clipboard'), serialised by util.serialise
@@ -23,52 +23,58 @@
   @state currentRpb = deps.currentRpb  @ 40
   @state getCtx = deps.getCtx  @ 41
   @state getLength = deps.getLength  @ 42
-  @state clipboard = {}  @ 437
+  @state edit = deps.edit  @ 43   -- leaf-edit facade: routes add/delete/assign to gm or tm by cell kind
+  @state aliases = deps.aliases  @ 44   -- (cells) -> bool: refuse a paste whose footprint aliases one group
+  @state clipboard = {}  @ 458
 
 # Private functions
-  @fn save(clip)  @ 44-46
-  @fn load()  @ 48-52
-  @fn collect()  @ 55-153
+  @fn save(clip)  @ 46-48
+  @fn load()  @ 50-54
+  @fn collect()  @ 57-155
       @contract  nil if the resolved selection is empty; single-col → { mode='single', type, ... }; multi-col → { mode='multi', cols=[...] }.
-  @fn pasteVelocities(events, dstCol, startppq, endppq)  @ 156-197
+  @fn refusePaste(chan, evType, lane, cc, startRow, numRows)  @ 160-167
+      -- One footprint cell per destination row, fed to aliases() so a paste covering
+      -- >=2 instances of one group is refused in global mode (decision 5). Mirrors the
+      -- shiftEvents gate; see design/group-aware-editing.md § Injectivity predicate.
+  @fn pasteVelocities(events, dstCol, startppq, endppq)  @ 170-211
       @contract  carry-forward over note-ons in region (clip val updates currentVel, then writes onto next note-ons); pass 2 may emit PA events on sustain rows when cm.polyAftertouch is set
-  @fn pasteSingle(clip)  @ 200-289
+  @fn pasteSingle(clip)  @ 214-304
       @contract  dispatches by (clip.type, dstCol.type, cursorPart): note->note(pitch), 7bit->note(vel) via pasteVelocities, pb->pb, 7bit->cc/at/pc; mismatched combos silently no-op.
-  @fn pasteMulti(clip)  @ 292-404
+  @fn pasteMulti(clip)  @ 307-425
       @contract  resolves each clip col against cursor's chan via chanDelta; out-of-range channels and missing destinations skip silently; bails entirely if startType=='note' but cursor isn't on a note col.
-  @fn pasteClip(clip)  @ 406-410
-  @fn trimTop(clip, trim)  @ 414-433
+  @fn pasteClip(clip)  @ 427-431
+  @fn trimTop(clip, trim)  @ 435-454
       -- A note whose start row falls within the trimmed band is dropped entirely.
       @contract  mutates clip in place; survives both modes; used by duplicate-up at row 0 to keep selection-following behaviour cumulative
 
 # Public API (clipboard:*)
-  @api clipboard:collect()  @ 438
-  @api clipboard:copy()  @ 439
-  @api clipboard:pasteClip(clip)  @ 440
-  @api clipboard:trimTop(clip, trim)  @ 441
-  @api clipboard:registerCommands(scope)  @ 443-452
+  @api clipboard:collect()  @ 459
+  @api clipboard:copy()  @ 460
+  @api clipboard:pasteClip(clip)  @ 461
+  @api clipboard:trimTop(clip, trim)  @ 462
+  @api clipboard:registerCommands(scope)  @ 464-473
 
 # Uses (outbound edges)
-  @use call    cm.get  @ pasteVelocities:158,180 pasteSingle:237
-  @use call    ec.col  @ pasteSingle:202 pasteMulti:294
-  @use call    ec.cursorPart  @ pasteSingle:208
-  @use call    ec.eachSelectedCol  @ collect:122
-  @use call    ec.isSticky  @ registerCommands:447
-  @use call    ec.region  @ collect:57
-  @use call    ec.row  @ pasteSingle:205 pasteMulti:341
-  @use call    ec.selClear  @ registerCommands:445,447
-  @use call    tm.addEvent  @ pasteVelocities:185 pasteSingle:262,284 pasteMulti:399
-  @use call    tm.assignEvent  @ pasteVelocities:175
-  @use call    tm.deleteEvent  @ pasteVelocities:162 pasteSingle:247,276 pasteMulti:378,382
-  @use call    tm.flush  @ pasteVelocities:196 pasteSingle:264,286 pasteMulti:403 pasteClip:409
-  @use call    util.add  @ collect:110,141,143,146 pasteSingle:224,233 pasteMulti:364
-  @use call    util.between  @ collect:109,139 pasteVelocities:161,167 pasteSingle:231,246,275 pasteMulti:377,381
-  @use call    util.clamp  @ pasteVelocities:171,189 pasteSingle:254
-  @use call    util.clone  @ collect:72,81 pasteSingle:216 pasteMulti:356
-  @use call    util.isNote  @ collect:74
-  @use call    util.seek  @ pasteVelocities:157,182 pasteSingle:236
-  @use call    util.serialise  @ save:45
-  @use call    util.unserialise  @ load:51
+  @use call    cm.get  @ pasteVelocities:172,194 pasteSingle:252
+  @use call    ec.col  @ pasteSingle:216 pasteMulti:309
+  @use call    ec.cursorPart  @ pasteSingle:222
+  @use call    ec.eachSelectedCol  @ collect:124
+  @use call    ec.isSticky  @ registerCommands:468
+  @use call    ec.region  @ collect:59
+  @use call    ec.row  @ pasteSingle:219 pasteMulti:356
+  @use call    ec.selClear  @ registerCommands:466,468
+  @use call    edit.add  @ pasteVelocities:199 pasteSingle:277,299 pasteMulti:420
+  @use call    edit.assign  @ pasteVelocities:189
+  @use call    edit.delete  @ pasteVelocities:176 pasteSingle:262,291 pasteMulti:399,403
+  @use call    tm.flush  @ pasteVelocities:210 pasteSingle:279,301 pasteMulti:424 pasteClip:430
+  @use call    util.add  @ collect:112,143,145,148 refusePaste:163 pasteSingle:239,248 pasteMulti:385
+  @use call    util.between  @ collect:111,141 pasteVelocities:175,181 pasteSingle:246,261,290 pasteMulti:398,402
+  @use call    util.clamp  @ pasteVelocities:185,203 pasteSingle:269
+  @use call    util.clone  @ collect:74,83 pasteSingle:231 pasteMulti:377
+  @use call    util.isNote  @ collect:76
+  @use call    util.seek  @ pasteVelocities:171,196 pasteSingle:251
+  @use call    util.serialise  @ save:47
+  @use call    util.unserialise  @ load:53
   @use require util  @ 11
 
 # REAPER API surface

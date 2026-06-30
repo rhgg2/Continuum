@@ -40,6 +40,8 @@ local cm           = deps.cm
 local currentRpb   = deps.currentRpb
 local getCtx       = deps.getCtx
 local getLength    = deps.getLength
+local edit         = deps.edit       -- leaf-edit facade: routes add/delete/assign to gm or tm by cell kind
+local aliases      = deps.aliases    -- (cells) -> bool: refuse a paste whose footprint aliases one group
 
 local function save(clip)
   reaper.SetExtState('rdm', 'clipboard', util.serialise(clip), false)
@@ -152,6 +154,18 @@ local function collect()
   return clip
 end
 
+-- One footprint cell per destination row, fed to aliases() so a paste covering
+-- >=2 instances of one group is refused in global mode (decision 5). Mirrors the
+-- shiftEvents gate; see design/group-aware-editing.md § Injectivity predicate.
+local function refusePaste(chan, evType, lane, cc, startRow, numRows)
+  local ctx, cells = getCtx(), {}
+  for r = startRow, startRow + numRows - 1 do
+    util.add(cells, { ppq = ctx:rowToPPQ(r, chan), chan = chan,
+                      evType = evType, lane = lane, cc = cc })
+  end
+  return aliases(cells)
+end
+
 --contract: carry-forward over note-ons in region (clip val updates currentVel, then writes onto next note-ons); pass 2 may emit PA events on sustain rows when cm.polyAftertouch is set
 local function pasteVelocities(events, dstCol, startppq, endppq)
   local last = util.seek(dstCol.events, 'before', startppq)
@@ -159,7 +173,7 @@ local function pasteVelocities(events, dstCol, startppq, endppq)
 
   -- Delete existing PA events in the paste region
   for evt in util.between(dstCol.events, startppq, endppq) do
-    if evt.evType == 'pa' then tm:deleteEvent(evt) end
+    if evt.evType == 'pa' then edit.delete(evt) end
   end
 
   -- Pass 1: carry-forward velocities onto note-ons
@@ -172,7 +186,7 @@ local function pasteVelocities(events, dstCol, startppq, endppq)
         end
         ci = ci + 1
       end
-      tm:assignEvent(evt, { vel = currentVel })
+      edit.assign(evt, { vel = currentVel })
     end
   end
 
@@ -182,7 +196,7 @@ local function pasteVelocities(events, dstCol, startppq, endppq)
       local note = util.seek(dstCol.events, 'before', ce.ppq, util.isNote)
       if note and note.endppq > ce.ppq
         and note.ppq ~= ce.ppq then
-        tm:addEvent({
+        edit.add({
           evType = 'pa',
           ppq = ce.ppq,
           chan = dstCol.midiChan,
@@ -208,6 +222,7 @@ local function pasteSingle(clip)
   local part = ec:cursorPart()
   local logPerRow = ctx:ppqPerRow()
   local capRow = r + clip.numRows  -- logical row of endppq
+  if refusePaste(chan, dstCol.type, dstCol.lane, dstCol.cc, r, clip.numRows) then return end
 
   local events = {}
   for _, ce in ipairs(clip.events) do
@@ -244,7 +259,7 @@ local function pasteSingle(clip)
     -- note's realised tail to the pasted onset and regrows it if the
     -- paste is later removed -- pre-trimming would shrink its intent.
     for evt in util.between(dstCol.events, startppq, endppq) do
-      tm:deleteEvent(evt)
+      edit.delete(evt)
     end
 
     local rpb = currentRpb()
@@ -259,7 +274,7 @@ local function pasteSingle(clip)
       -- blocker; the intent survives so removing the blocker regrows.
       e.chan, e.vel, e.lane, e.rpb = dstCol.midiChan, currentVel, lane, rpb
       e.evType = 'note'
-      tm:addEvent(e)
+      edit.add(e)
     end
     tm:flush()
     return
@@ -273,7 +288,7 @@ local function pasteSingle(clip)
   if (clip.type == 'pb' and dstCol.type == 'pb')
   or (clip.type == '7bit' and dstCol.type ~= 'note' and dstCol.type ~= 'pb') then
     for evt in util.between(dstCol.events, startppq, endppq) do
-      tm:deleteEvent(evt)
+      edit.delete(evt)
     end
 
     local rpb = currentRpb()
@@ -281,7 +296,7 @@ local function pasteSingle(clip)
       e.chan, e.rpb = dstCol.midiChan, rpb
       if dstCol.type == 'cc' then e.cc = dstCol.cc end
       e.evType = dstCol.type
-      tm:addEvent(e)
+      edit.add(e)
     end
     tm:flush()
     return
@@ -341,6 +356,12 @@ local function pasteMulti(clip)
   local cRow = ec:row()
   local logPerRow = ctx:ppqPerRow()
   local capRow = cRow + clip.numRows
+  -- Gate the whole paste atomically: cross-column cells never share a group
+  -- slot, so per-column refusal == aggregate refusal (decision 5).
+  for _, clipCol in ipairs(clip.cols) do
+    local rr = resolve(clipCol)
+    if rr and refusePaste(rr.chan, rr.type, rr.lane, rr.ccNum, cRow, clip.numRows) then return end
+  end
   for _, clipCol in ipairs(clip.cols) do
     local r = resolve(clipCol)
     if not r then goto nextCol end
@@ -375,11 +396,11 @@ local function pasteMulti(clip)
     if dst then
       if r.type == 'note' then
         for evt in util.between(dst.events, startppq, endppq, util.isNote) do
-          tm:deleteEvent(evt)
+          edit.delete(evt)
         end
       else
         for evt in util.between(dst.events, startppq, endppq) do
-          tm:deleteEvent(evt)
+          edit.delete(evt)
         end
       end
     end
@@ -396,7 +417,7 @@ local function pasteMulti(clip)
         e.cc = r.ccNum
       end
       e.evType = r.type
-      tm:addEvent(e)
+      edit.add(e)
     end
     ::nextCol::
   end
