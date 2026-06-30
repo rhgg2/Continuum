@@ -42,6 +42,7 @@ local specs = {
   'mm_unified_spec',
   'mm_wide_cc_spec',
   'mm_take_validity_spec',
+  'mm_blob_parse_spec',
   'sidecar_reconcile_spec',
   'tm_rebuild_spec',
   'tm_proj_symmetry_spec',
