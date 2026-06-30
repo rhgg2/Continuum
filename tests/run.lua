@@ -91,6 +91,7 @@ local specs = {
   'gm_stamp_commit_spec',
   'gm_persist_reload_spec',
   'gm_revive_delete_spec',
+  'gm_revive_delay_remove_spec',
   'gm_overlap_spec',
   'gm_lifecycle_spec',
   'gm_override_transition_spec',

@@ -30,7 +30,7 @@
 --shape: fxParkedCC = { { chan, cc, ppq, ppqL, val, shape }, ... } -- authored cc parked off-take by a cc-replace window
 --shape: channels[chan].parked = { { ppq, ppqL, endppqL, endppqC, pitch, vel, detune, sample, delay, lane }, ... } -- off-take replace members as render-ready logical cells (ppq==ppqL, endppqC==endppqL)
 --shape: channels[chan].parkedCC = { { evType='cc', cc, ppq, val, shape }, ... } -- off-take cc-replace members as render-ready logical cells (ppq==ppqL)
---contract: a discrete-replace kind in a region parks its covered chord off-take; else it keeps sounding
+--contract: a discrete-replace in a region parks its covered chord off-take; else it keeps sounding
 --invariant: parked members feed generator + grid only; never sounding (mute fails for CC/PA)
 
 local util    = require 'util'
@@ -433,8 +433,11 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
   --contract: rawCaller=true bypass: translation skipped, only delay-delta applies
   --invariant: assignEvent consumes rawTime before calling; never reaches mm (docs/timing.md)
   local function realiseNoteUpdate(evt, update, rawCaller)
+    -- A delay clear arrives as util.REMOVE (assign honours it downstream); decode
+    -- to 0 here so the onset arithmetic below never sees the sentinel table.
+    local newDelay = update.delay == util.REMOVE and 0 or update.delay
     local dOld = delayToPPQ(evt.delay)
-    local dNew = delayToPPQ(update.delay ~= nil and update.delay or evt.delay)
+    local dNew = delayToPPQ(newDelay ~= nil and newDelay or evt.delay)
     if rawCaller then
       if update.ppq ~= nil then
         update.ppq = update.ppq + dNew
@@ -499,7 +502,7 @@ local addEvent, assignEvent, deleteEvent, flush, reload do
   --contract: evt.rawTime=true bypasses translation (mirrors assignEvent; rescale-only caller)
   --invariant: rawTime consumed here so it never persists on the record or reaches mm
   --contract: pb authoring frame is logical cents; val stored as cents on the event
-  --contract: um only stages; rebuild's absorber pass reconciles seats and recomputes raw vals at flush
+  --contract: um only stages; rebuild absorber pass reconciles seats, recomputes raw vals at flush
   function addEvent(evt)
     local rawCaller = evt.rawTime
     evt.rawTime = nil
@@ -981,7 +984,7 @@ local function pickStampedLane(channel, note)
 end
 
 --contract: pick a lane for an external (unstamped) note via accept → sibling → push bump
---invariant: called up front after internals are placed + swing-reseated; the tail walk clips tails after
+--invariant: called up front after internals placed + swing-reseated; tail walk clips tails after
 local function packExternalLane(channel, note)
   local notes = channel.columns.notes
   if note.lane then
@@ -1096,8 +1099,7 @@ end
 
 ----- Rebuild steps
 
--- Partition mm notes into internal (stamped) / external, lay internal note columns, and
--- reseat stale-swing internals inline. Returns external, deferred to rebuildExternals.
+-- Partition mm notes stamped/external, lay internal columns, reseat stale-swing. Returns external.
 -- see docs/trackerManager.md § Rebuild: partition
 local function rebuildInternals(fx)
   local internal, external = {}, {}
@@ -1147,9 +1149,8 @@ local function rebuildInternals(fx)
   return external
 end
 
--- Carrier setup + single CC walk: arm prior carriers/sidecars and route them out of columns,
--- reconcile (raw, ppqL) under swing, project non-pb CCs. Returns reapCarriers(newFxCarrier), run
--- after fx expansion to disarm stale codes + persist the live map. see docs/trackerManager.md § Rebuild: CC walk
+-- Carrier setup + CC walk: arm prior carriers/sidecars, reconcile (raw,ppqL), project CCs.
+-- Returns reapCarriers; run after fx expansion. see docs/trackerManager.md § Rebuild: CC walk
 local function rebuildCCs(fx)
   -- Carrier codes from the prior rebuild: route existing events out of cc columns; new codes
   -- allocated in fx expansion once windows are known. see design/archive/note-macros.md § Delta-code allocation
@@ -1519,9 +1520,8 @@ local function rebuildFx(fx, deferred)
           local nextRec = laneNextOf[rec]
           nextInLane[rec.evt] = nextRec and nextRec.evt
           if rec.evt.fx then
-            -- The take is the world: an authored tail past the take end (paste / an
-            -- overshooting move) can't make the voice sound past it, so the window
-            -- caps at the take regardless of the authored ceiling.
+            -- Take is the world: a tail past take end (paste / overshooting move)
+            -- can't sound past it; window caps at take regardless of authored ceiling.
             local endL = (rec.evt.endppqL == nil or rec.evt.endppqL == util.OPEN)
                          and takeLenL or math.min(rec.evt.endppqL, takeLenL)
             if nextRec then endL = math.min(endL, nextRec.evt.ppqL) end
