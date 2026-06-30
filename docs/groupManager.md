@@ -37,13 +37,14 @@ Three mechanisms enforce that:
   own") was exactly how the distorted value survived; that skip is
   gone.
 
-`userOwned` survives only where re-driving would duplicate work the
-user's edit already staged in tm — a create reuses its own event as the
-projection carrier, a delete needs no second `tm:deleteEvent`. It no
-longer suppresses the `set` writeback. It is keyed per concrete event,
-not per instance: per-instance gating once flagged both sides "origin"
-when two notes were edited in one flush through different instances and
-suppressed both writebacks, so neither edit reached the other.
+`reproject` is the *sole* writer of every instance's concretes, the
+acting one included. Every edit now arrives through an explicit verb
+(`gm:addEvent`/`deleteEvent`/`assignEvent`) that mutates only group
+state and never stages a user carrier in tm — so there is nothing for
+reproject to dedup against. The earlier `userOwned` carve-out (reuse the
+user's created event as the projection carrier; skip a redundant
+`tm:deleteEvent`) existed only because gm sniffed those raw ops at the
+flush seam; with the sniffer retired (see The flush seam) it is gone too.
 
 ## Intent in, realisation out
 
@@ -128,28 +129,33 @@ the span test is strict.
 
 ## The flush seam
 
-`reproject` runs *inside* tm's `preflush`, re-entrantly, so it must not
-call tv (tv's edit verbs assume cursor/grid/audition and themselves
-call `tm:flush`). It stages through tm and lets the in-flight flush
-carry the ops. `propagating` guards gm's own staged adds from
-re-entering `applyEdit` as user edits; `selfStaged` does the same for
-newInstance's projection adds, which commit on a later flush.
+gm no longer sniffs tm's op stream. Every member edit arrives through an
+explicit verb — `gm:addEvent`/`deleteEvent`/`assignEvent` and the
+structural ops — that mutates group state and marks the touched group in
+`pendingReproject`. The sole `preflush` subscription drains that set and
+calls `reproject` for each. It runs in `preflush`, not after commit,
+because reproject's `set`/`add`/`del` must land in the *same* flush the
+user's edit opened, so the projection commits atomically with it.
+
+`reproject` stages through tm and lets the in-flight flush carry the
+ops; it must not call tv (tv's edit verbs assume cursor/grid/audition
+and themselves call `tm:flush`). Its own staged ops never re-enter the
+drain — nothing reads the op stream now, and only the verbs, never
+reproject, write `pendingReproject`. That retires the whole self-echo
+apparatus the sniffer needed: `propagating` (the re-entrancy guard),
+`selfStaged` (newInstance's projection adds), `selfAssigned`
+(moveInstance's re-place echo), and `applyEdit` itself.
 
 `reconcile` compares `desired` against the projection *shadow*
 (`rec.groupEvt`, what reproject last wrote), not the live concrete —
-cheap, and the two agree as long as only gm drives concretes. But tv
-is group-unaware: a user edit mutates a projected concrete's intent
-(`ppq` / `endppqL`, including `util.OPEN`) in place, with no
-group-geometry change,
-so the shadow still equals `desired`, reconcile emits nothing, and the
-edit never reaches the siblings. So before reconcile, `reproject`
-refreshes the shadow from the live concrete (`toGroup(rec.evt)`) for
-every record whose concrete the user touched this flush
-(`touchedUuids`). Scoped there because only a user edit can mutate a
-concrete behind reproject's back; gm's own staged adds never enter
-`touchedUuids`, so the steady-state shadow path is untouched. This is
-the same cross-identity leak the replay model exists to kill, at the
-one seam where reconcile's optimisation let it back in.
+cheap, and sound because `reproject` is the sole writer of every
+concrete: nothing mutates a projected event behind the shadow's back, so
+it never goes stale. The one breach is clipboard, which still stages raw
+tm ops until paste routes through the facade; until then a paste into a
+region neither auto-joins nor propagates its clear (group-aware-editing
+stage 6). The earlier `touchedUuids` shadow-refresh — re-deriving the
+shadow from any concrete the user mutated in place — is gone with the
+sniffer that made such mutations reachable.
 
 `uuid` is gm's only durable identity. tm swaps every event table on
 rebuild, so the runtime projection is re-anchored by uuid each window;
@@ -169,16 +175,10 @@ would otherwise make: through `onTake` it withholds a member the move
 pushes off the take end (deleted + unlinked) and revives it (re-added)
 when a later move brings it back on. Only the bottom edge can hang — the
 caller clamps the anchor so the top stays on-take, mirroring the absent
-start-edge trim. That staged assign echoes
-back through `preflush` like any gm-driven write; for a synced instance
-it is neutral, but on an override instance the echo would re-enter
-`applyEdit` and accrete a base-valued sticky `assign` that later pins
-the instance. So move-echoes carry their own `selfAssigned` marker. It
-is deliberately *not* `selfStaged`: the `preflush` assigns loop runs
-before the adds loop, so one shared set would let the assigns pass
-drain a pending `newInstance` add-echo (whose add then misclassifies as
-a user create) and vice versa. One marker per loop, each drained only
-by its own.
+start-edge trim. `moveInstance`'s staged assigns need no guard now: with
+the sniffer retired nothing re-reads them, so the old `selfAssigned`
+marker — which kept an override instance's re-place echo from re-entering
+`applyEdit` as a sticky base-valued assign — is gone with it.
 
 The move is *previewed* before it is sealed, on three axes. A row nudge
 accumulates `regionCursor.moveDelta`; a sideways shift
@@ -283,13 +283,12 @@ slot carries its override):
 - assign-ov + amend → accrue the assign locally; `group.events`
   untouched, no sibling sees it.
 - assign-ov + delete → drop the assign, the cell rejoins the shared
-  group value. The user's keystroke already removed this instance's
-  concrete, but the group event survives, so the projection link still
-  reads vuid-alive and `reconcile` would emit `set` against the dead
-  event; the branch must `unlink` so it emits `add` and the group note
-  re-materialises here. (A second delete then does the propagating
-  group delete — you cannot one-keystroke-destroy a shared event from
-  a diverged instance.)
+  group value. The delete arrives through `gm:deleteEvent`, which
+  suppresses tm's own delete, so this instance's concrete survives;
+  keeping the projection link lets `reconcile` emit `set` and rewrite
+  that concrete to the synced value in place. (A second delete then does
+  the propagating group delete — you cannot one-keystroke-destroy a
+  shared event from a diverged instance.)
 - delete-ov + amend (type) → `revivableVuid` (above).
 - delete-ov + delete → no-op. Unreachable by construction — a hidden
   slot has no concrete event to delete — but the guard is load-bearing:
@@ -299,14 +298,14 @@ slot carries its override):
 `localAmend` is the shared amend body; `onOv` gates the acting
 instance onto this path before the global branches.
 
-The same transitions reach `gm:deleteEvent` from the leaf-edit facade,
-with one inversion. The facade *suppresses* tm's delete, so on an
-assign-ov peel this instance's concrete still exists. The branch must
-therefore **not** unlink: the live link lets `reconcile` emit `set`,
-rewriting the override concrete to the synced value in place. Unlinking
-(as the seam does, above) would instead `add` a second concrete on top
-of the survivor — the duplicate-note bug that motivated splitting the
-facade path from the seam.
+These transitions are the verbs' own logic now — `gm:assignEvent` for
+amends, `gm:deleteEvent` for deletes, `gm:addEvent`'s `revivableVuid`
+for the type-over — not an `applyEdit` re-reading of the op stream,
+which is retired. The load-bearing constraint on the assign-ov peel: it
+must **not** unlink the vuid. The facade suppressed tm's delete, so the
+concrete survives; unlinking would drop it from the projection and
+`reconcile` would `add` a *second* concrete on top of the survivor — the
+duplicate-note bug that motivated routing delete through the facade.
 
 **Cross-instance — `absorbSiblingOverrides`.** When the acting
 instance's global create/delete flips whether a shared event exists at

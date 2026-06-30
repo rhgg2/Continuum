@@ -65,11 +65,11 @@ return {
       t.truthy(copyA and copyB, 'instance 2 materialised A and B')
       staged.add, staged.assign, staged.del = {}, {}, {}
 
-      tm:flush({}, {}, { { evt = copyA } })                -- delete copy A
+      gm:deleteEvent(copyA.uuid); tm:flush()               -- delete copy A
       t.truthy(delPitches(staged)[60], 'sibling A deleted after first delete')
       staged.del = {}
 
-      tm:flush({}, {}, { { evt = copyB } })                -- delete copy B
+      gm:deleteEvent(copyB.uuid); tm:flush()               -- delete copy B
       t.truthy(delPitches(staged)[62], 'sibling B deleted after second delete')
     end,
   },
@@ -86,7 +86,7 @@ return {
       local copyB = copyAt(staged, 1200)
       staged.add, staged.assign, staged.del = {}, {}, {}
 
-      tm:flush({}, {}, { { evt = copyA }, { evt = copyB } })
+      gm:deleteEvent(copyA.uuid); gm:deleteEvent(copyB.uuid); tm:flush()
       local d = delPitches(staged)
       t.truthy(d[60], 'sibling A deleted')
       t.truthy(d[62], 'sibling B deleted')
@@ -101,15 +101,15 @@ return {
       -- create has no birth ceiling -- tm derives its take-length tail).
       local A = note(0, 60)
       local gid = gm:markGroup({ A }, rect())
-      local B = note(240, 62)
-      tm:flush({ { evt = B } }, {}, {})                    -- create B: infinite tail
+      local B = note(240, 62); B.endppqL = util.OPEN
+      gm:addEvent(B); tm:flush()                           -- create B: infinite tail
       gm:newInstance(gid, { ppq = 960, chan = 1 })       -- instance 2
       tm:flush()
       local copyA = copyAt(staged, 960)
       t.truthy(copyA, 'instance 2 copy of A materialised')
       staged.add, staged.assign, staged.del = {}, {}, {}
 
-      tm:flush({}, {}, { { evt = copyA } })                -- delete instance 2's A
+      gm:deleteEvent(copyA.uuid); tm:flush()               -- delete instance 2's A
 
       -- A fresh instance reveals the shared group's B: created notes are
       -- open (no birth ceiling), and deleting the predecessor must not

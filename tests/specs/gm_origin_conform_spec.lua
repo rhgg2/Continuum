@@ -134,17 +134,11 @@ return {
       gm:stamp({}, rect, { ppq = 960, chan = 1 })   -- group + sibling
       h.tm:flush()
 
-      -- Type a note into instance 1 whose tail runs past 960 into the
-      -- sibling region.
-      h.tm:addEvent{ evType = 'note', chan = 1, pitch = 60,
-                     ppq = 0, endppq = 1500, vel = 100 }
+      -- Type an OPEN note into instance 1 via gm:addEvent (placeNewNote semantics).
+      -- tm clips the realised tail to the sibling onset (960); authored intent stays OPEN.
+      gm:addEvent{ evType = 'note', chan = 1, lane = 1, pitch = 60,
+                   ppq = 0, endppq = util.OPEN, endppqL = util.OPEN, vel = 100 }
       h.tm:flush()
-      -- With `conform` removed the mirror-origin note is not
-      -- force-clipped against its own sibling copy: its AUTHORED tail
-      -- stays where the user typed it (1500). The universal tail pass
-      -- still clips the *realised* tail to the sibling onset (960).
-      -- Projection surfaces both: endppq = authored intent, endppqC =
-      -- the clipped logical the renderer draws.
 
       local function lane(n)
         local out = {}
@@ -165,7 +159,7 @@ return {
       t.eq(l1[2].ppq, 960, 'sibling copy rebased to anchor 960')
       -- The tv surface is logical-only: endppq is the AUTHORED ceiling,
       -- endppqC the clipped logical the renderer draws.
-      t.eq(l1[1].endppq,  1500, 'instance 1 keeps its authored tail (typed to 1500)')
+      t.eq(l1[1].endppq, util.OPEN, 'instance 1 typed open (placeNewNote); authored tail is OPEN')
       t.eq(l1[1].endppqC, 960,  'instance 1 renders clipped to the sibling onset')
       t.eq(l1[2].endppq, util.OPEN,
            'the sibling copy keeps its open authored intent on the surface')

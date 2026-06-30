@@ -121,7 +121,7 @@ return {
       gm:setLocalMode(false)
 
       staged.add, staged.del = {}, {}
-      tm:flush({}, {}, { { evt = src } })     -- delete on the assign-ov
+      gm:deleteEvent(src.uuid); tm:flush()    -- delete on the assign-ov
 
       t.eq(#staged.del, 0,
         'no propagating group delete: the shared event survives')
@@ -145,16 +145,15 @@ return {
       gm:setLocalMode(false)
 
       staged.add, staged.del = {}, {}
-      tm:flush({}, {}, { { evt = src } })      -- delete on the assign-ov
+      gm:deleteEvent(src.uuid); tm:flush()     -- delete on the assign-ov
 
-      -- The user's delete removed the concrete; dropping the divergence
-      -- must rejoin the group, so the acting instance re-adds the
-      -- group-projected note (pitch 60) at its own slot.
+      -- Facade delete peels the override but spares the concrete: the surviving
+      -- concrete is re-SET to the group value (60) in place, not del+add.
       local back
-      for _, a in ipairs(staged.add) do
-        if a.ppq == 0 and a.evType == 'note' then back = a.pitch end
+      for _, a in ipairs(staged.assign) do
+        if a.evt == src and a.update.pitch ~= nil then back = a.update.pitch end
       end
-      t.eq(back, 60, 'the cell rejoins the group: group note resurfaces here')
+      t.eq(back, 60, 'the cell rejoins the group: surviving concrete re-set to the group value')
     end,
   },
 
@@ -168,11 +167,13 @@ return {
 
       gm:setLocalMode(true)
       local born = note(480, 1, 1, { pitch = 65 })
-      tm:flush({ { evt = born } }, {}, {})     -- local-only add in instance 1
-      tm:flush(); staged.add = {}
+      gm:addEvent(born); tm:flush()            -- local-only add in instance 1
+      local made
+      for _, e in ipairs(staged.add) do if e.ppq == 480 then made = e end end
+      staged.add = {}
       gm:setLocalMode(false)
 
-      tm:flush({}, {}, { { evt = born } })     -- delete on the add-ov
+      gm:deleteEvent(made.uuid); tm:flush()    -- delete on the add-ov
 
       -- The group never carried `born`; a probe still shows only the
       -- single seeded event, and nothing blew up.
@@ -191,11 +192,13 @@ return {
 
       gm:setLocalMode(true)
       local born = note(480, 1, 1, { pitch = 65 })
-      tm:flush({ { evt = born } }, {}, {})
-      tm:flush(); staged.add = {}
+      gm:addEvent(born); tm:flush()
+      local made
+      for _, e in ipairs(staged.add) do if e.ppq == 480 then made = e end end
+      staged.add = {}
       gm:setLocalMode(false)
 
-      gm:assignEvent(born.uuid, { pitch = 70 })
+      gm:assignEvent(made.uuid, { pitch = 70 })
       tm:flush()
 
       t.eq(groupPitch(gm, tm, staged, 1920), 60,
@@ -215,13 +218,13 @@ return {
       -- Instance 2 grows a local add at the (group-frame) empty slot 480.
       gm:setLocalMode(true)
       local sibAdd = note(1440, 1, 1, { pitch = 70 })  -- 960 + 480
-      tm:flush({ { evt = sibAdd } }, {}, {})
-      tm:flush(); staged.add, staged.del = {}, {}
+      gm:addEvent(sibAdd); tm:flush()
+      staged.add, staged.del = {}, {}
       gm:setLocalMode(false)
 
       -- Instance 1 globally creates a real event at group slot 480.
       local peer = note(480, 1, 1, { pitch = 50 })
-      tm:flush({ { evt = peer } }, {}, {})
+      gm:addEvent(peer); tm:flush()
 
       -- Instance 2 keeps pitch 70 there (add-ov absorbed into an
       -- assign-ov over the new group event), while a clean probe sees 50.
@@ -256,7 +259,7 @@ return {
       staged.add, staged.del = {}, {}
 
       -- Instance 1 globally deletes the shared event.
-      tm:flush({}, {}, { { evt = src } })
+      gm:deleteEvent(src.uuid); tm:flush()
 
       -- The shared event is gone for clean instances, but instance 2
       -- keeps its diverged note (now a materialised local add @ 960/88).

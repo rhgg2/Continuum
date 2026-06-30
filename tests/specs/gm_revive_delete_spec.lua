@@ -70,12 +70,12 @@ return {
 
       -- Locally delete C in Y, then leave local mode.
       gm:setLocalMode(true)
-      tm:flush({}, {}, { { evt = yC } })
+      gm:deleteEvent(yC.uuid); tm:flush()
       gm:setLocalMode(false)
 
       -- Type a new note over the now-empty C cell in Y (global mode).
       local born = note(1440, 1, 1, 99)
-      tm:flush({ { evt = born } }, {}, {})
+      gm:addEvent(born); tm:flush()
 
       -- Read the group back via a pristine fresh instance Z.
       staged.add = {}

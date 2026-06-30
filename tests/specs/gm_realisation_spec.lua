@@ -108,8 +108,8 @@ return {
       gm:newInstance(gid, { ppq = 960, chan = 1 })
       tm:flush(); staged.add, staged.assign, staged.del = {}, {}, {}
 
-      local born = note(240, 62, 240)                  -- a create
-      tm:flush({ { evt = born } }, {}, {})
+      local born = note(240, 62, 240, { open = true }) -- a create (open, like placeNewNote)
+      gm:addEvent(born); tm:flush()
 
       -- The created note is open like tv's placeNewNote, regardless of
       -- the birth endppq it arrived with. Its sibling copy is open.
@@ -139,7 +139,7 @@ return {
       gm:newInstance(gid, { ppq = 2000, chan = 1 })
       tm:flush(); staged.add, staged.assign, staged.del = {}, {}, {}
 
-      tm:flush({}, {}, { { evt = C } })                -- non-local delete of C
+      gm:deleteEvent(C.uuid); tm:flush()               -- non-local delete of C
 
       local delPitch = {}
       for _, e in ipairs(staged.del) do delPitch[e.pitch] = true end

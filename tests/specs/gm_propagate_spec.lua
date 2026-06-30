@@ -153,11 +153,15 @@ return {
       tm:flush(); staged.add = {}
 
       local born = note(480, 1, 1, { pitch = 65 })   -- inside region, note:1 selected
-      tm:flush({ { evt = born } }, {}, {})
+      gm:addEvent(born); tm:flush()
 
-      t.eq(#staged.add, 1, 'sibling gets the created event')
-      t.eq(staged.add[1].ppq, 1440)             -- 480 rebased to sibling anchor 960
-      t.eq(staged.add[1].pitch, 65)
+      -- reproject is sole writer: BOTH the acting instance (anchor 0) and the
+      -- sibling (anchor 960) materialise the adopted create.
+      t.eq(#staged.add, 2, 'acting instance and sibling both materialise the create')
+      local sib
+      for _, a in ipairs(staged.add) do if a.ppq == 1440 then sib = a end end
+      t.truthy(sib, 'sibling copy at 1440 (480 rebased to anchor 960)')
+      t.eq(sib.pitch, 65)
     end,
   },
 
@@ -169,7 +173,7 @@ return {
       gm:newInstance(gid, { ppq = 960, chan = 1 })
       tm:flush(); staged.add = {}
 
-      tm:flush({ { evt = note(480, 1, 2) } }, {}, {})  -- lane 2 -> note:2, unselected
+      gm:addEvent(note(480, 1, 2)); tm:flush()  -- lane 2 -> note:2, unselected
 
       t.eq(#staged.add, 0)
     end,
@@ -219,13 +223,15 @@ return {
 
       gm:setLocalMode(true)
       local born = note(480, 1, 1, { pitch = 65 })   -- inside region
-      tm:flush({ { evt = born } }, {}, {})            -- local-only add
-      tm:flush(); staged.add = {}
+      gm:addEvent(born); tm:flush()                  -- local-only add
+      local made
+      for _, e in ipairs(staged.add) do if e.ppq == 480 then made = e end end
+      staged.add = {}
 
       gm:setLocalMode(false)
       -- Editing the local-only add: group.events[vuid] is nil (it lives in
       -- instance.adds), so the non-local assign branch must not util.assign nil.
-      gm:assignEvent(born.uuid, { pitch = 70 })
+      gm:assignEvent(made.uuid, { pitch = 70 })
       tm:flush()
 
       local iid = gm:newInstance(gid, { ppq = 1920, chan = 1 })

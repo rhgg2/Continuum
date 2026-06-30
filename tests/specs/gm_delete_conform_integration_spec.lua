@@ -11,7 +11,6 @@
 -- shared group as a duration edit collapsing B's infinite tail.
 
 local t    = require('support')
-local util = require('util')
 
 local LPR      = 60                        -- resolution 240, rpb 4, denom 4
 local TAKE_LEN = 3840
@@ -45,7 +44,7 @@ return {
   {
     name = 'single-cell delete of the duplicate A must not shrink the duplicate B',
     run = function(harness)
-      local h = harness.mk{
+      local h = harness.mk{ groups = true,
         seed = { length = TAKE_LEN, resolution = 240, notes = {
           { ppq = 0,   endppq = LPR,      ppqL = 0,   endppqL = LPR,
             chan = 1, pitch = 60, vel = 100, lane = 1, uuid = 1 },
@@ -53,12 +52,10 @@ return {
             chan = 1, pitch = 62, vel = 100, lane = 1, uuid = 2 },
         } },
       }
-      local gm = util.instantiate('groupManager', { tm = h.tm, ds = h.ds })
-
       local evA, evB = h.tm:byUuid(1), h.tm:byUuid(2)
       for _, e in ipairs{ evA, evB } do e.chan = 1; e.lane = e.lane or 1 end
-      local gid = gm:markGroup({ evA, evB }, rect())
-      gm:newInstance(gid, { ppq = 2 * LPR, chan = 1 })   -- rows 2-3
+      local gid = h.gm:markGroup({ evA, evB }, rect())
+      h.gm:newInstance(gid, { ppq = 2 * LPR, chan = 1 })   -- rows 2-3
       h.tm:flush()
 
       local before = h.fm:dump().notes

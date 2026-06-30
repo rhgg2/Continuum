@@ -28,7 +28,6 @@ local gm = {}
 local blob        = ds:get('groups') or {}
 local groups      = blob.groups or {}
 local localMode   = false
-local propagating = false
 local nextGroupId = 1
 
 -- The active group: a transient pointer (never persisted), dupeClip-idiom.
@@ -41,16 +40,8 @@ local activeGroup = nil
 -- is the durable key (tm's token is internal and re-keyed).
 local proj      = {}
 local locByUuid = {}  -- concrete uuid -> { groupId, instId, vuid }
--- newInstance's own projection adds; the preflush adds loop skips them.
-local selfStaged = {}
--- uuids the user directly touched this flush. Gates userOwned (per
--- event, not per instance) so a create/delete's redundant tm op is
--- skipped while a same-flush edit in two instances still propagates.
-local touchedUuids = {}
--- newInstance's adds are selfStaged, so the preflush adds loop skips
--- them and the new group never lands in touchedGroups -- it would stay
--- unreprojected (no conform) until some later edit touched it. Carry it
--- here so the next preflush reprojects it once.
+-- Verbs (addEvent/deleteEvent/assignEvent, newInstance, moveInstance,
+-- resizeGroup) defer projection here; the next preflush drains + reprojects.
 local pendingReproject = {}
 
 local function projOf(groupId, instId)
@@ -467,7 +458,6 @@ function gm:newInstance(groupId, anchor)
     return nil, 'overlaps an existing mirror group'
   end
 
-  propagating = true
   local instId   = nextKey(group.instances)
   local instance = freshInstance(anchor)
   group.instances[instId] = instance
@@ -477,11 +467,9 @@ function gm:newInstance(groupId, anchor)
     local e = toInstance(g, anchor)
     if onTake(e) then
       tm:addEvent(e)
-      selfStaged[e] = true
       link(groupId, instId, vuid, p, nil, util.clone(g), e)
     end
   end
-  propagating = false
   pendingReproject[groupId] = true
   return instId
 end
@@ -588,40 +576,17 @@ end
 
 local function reproject(groupId)
   local group = groups[groupId]
-  propagating = true
   for instId, instance in pairs(group.instances) do
     local desired = groupsCore.project(group, instance)
     local instProj = projOf(groupId, instId)
-    -- tv is mirror-unaware: a user edit mutates a projected concrete's
-    -- intent (ppq / endppqL / open) directly, with no group-geometry
-    -- change, so the projection shadow goes stale and reconcile would
-    -- see no drift. Refresh the shadow from the live concrete for every
-    -- user-touched record, so reconcile both detects the drift and
-    -- writes the corrective edit back to the siblings.
-    for _, rec in pairs(instProj) do
-      if rec.evt and rec.evt.uuid and touchedUuids[rec.evt.uuid] then
-        rec.groupEvt = toGroup(rec.evt, instance.anchor)
-      end
-    end
     for _, op in ipairs(groupsCore.reconcile(desired, currentOf(instProj))) do
       local vuidProj = instProj[op.vuid]
-      -- userOwned suppresses only the redundant tm op a user
-      -- create/delete already staged (carrier reuse / no second
-      -- delete); `set` still re-drives the origin. Keyed per uuid so a
-      -- sibling's copy of the same vuid still propagates.
-      local userOwned = vuidProj and vuidProj.evt
-                        and touchedUuids[vuidProj.evt.uuid]
       if op.op == 'add' then
-        local instEvt
-        if userOwned then
-          instEvt = vuidProj.evt
-        else
-          instEvt = toInstance(op.groupEvt, instance.anchor)
-          -- off-take: withhold so the take never grows; left unlinked,
-          -- reconcile re-offers it if it later comes on-take.
-          if onTake(instEvt) then tm:addEvent(instEvt) else instEvt = nil end
-        end
-        if instEvt then
+        -- off-take: withhold so the take never grows; left unlinked,
+        -- reconcile re-offers it if it later comes on-take.
+        local instEvt = toInstance(op.groupEvt, instance.anchor)
+        if onTake(instEvt) then
+          tm:addEvent(instEvt)
           link(groupId, instId, op.vuid, instProj,
                vuidProj and vuidProj.uuid, util.clone(op.groupEvt), instEvt)
         end
@@ -631,14 +596,11 @@ local function reproject(groupId)
                         instance.anchor, op.groupEvt))
         vuidProj.groupEvt = util.clone(op.groupEvt)
       elseif op.op == 'del' then
-        if not userOwned and vuidProj and vuidProj.evt then
-          tm:deleteEvent(vuidProj.evt)
-        end
+        if vuidProj and vuidProj.evt then tm:deleteEvent(vuidProj.evt) end
         unlink(instProj, op.vuid)
       end
     end
   end
-  propagating = false
 end
 
 
@@ -659,107 +621,14 @@ local function localAmend(instance, vuid, group, update)
   end
 end
 
-do
-  local touchedGroups = {}
-
-  local function applyEdit(evt, update)
-    local groupId, instId, vuid = classify(evt)
-    local isCreate = false
-    if not groupId and update ~= nil then          -- a brand-new event (create)
-      groupId, instId = classifyCreate(evt)
-      if not groupId then return end
-      local group, instance = groups[groupId], groups[groupId].instances[instId]
-      local revive = not localMode and revivableVuid(group, instance, evt)
-      if revive then
-        vuid = revive
-        instance.deletes[vuid] = nil          -- type-over clears the local delete
-      else
-        vuid = group.nextVuid
-        group.nextVuid = vuid + 1
-      end
-      isCreate = true
-    elseif not groupId then
-      return
-    end
-
-    local group    = groups[groupId]
-    local instance = group.instances[instId]
-
-    -- on-ov delete stays local: a delete on an instance that already carries its
-    -- own override at vuid hides the slot here rather than firing the propagating
-    -- group delete. Value edits route through gm:assignEvent now; only create and
-    -- delete reach applyEdit. See docs/groupManager.md "Override transitions".
-    local onOv = not isCreate and (instance.adds[vuid] ~= nil
-                  or instance.assigns[vuid] ~= nil
-                  or instance.deletes[vuid] == true)
-
-    if localMode then
-      if update == nil then
-        if instance.adds[vuid] ~= nil then
-          instance.adds[vuid] = nil       -- a local add deleted is just gone
-        else
-          instance.deletes[vuid] = true
-        end
-      elseif isCreate then
-        local g = toGroup(evt, instance.anchor)
-        instance.adds[vuid] = g
-        link(groupId, instId, vuid, projOf(groupId, instId), evt.uuid, util.clone(g), evt)
-      end
-    elseif onOv then
-      if update == nil then
-        if instance.adds[vuid] ~= nil then
-          instance.adds[vuid] = nil       -- local add: just gone
-        elseif instance.assigns[vuid] ~= nil then
-          instance.assigns[vuid] = nil    -- drop the divergence, rejoin the group
-          -- The user's delete removed this instance's concrete, but the
-          -- group event survives, so the link still reads vuid-alive and
-          -- reconcile would emit `set` against the dead event. Unlink so
-          -- it emits `add` and re-materialises the group projection here.
-          unlink(projOf(groupId, instId), vuid)
-        end
-        -- delete-ov + delete: the slot is already hidden here. No-op --
-        -- and crucially never the propagating group delete below.
-      end
-    else
-      if update == nil then
-        absorbSiblingOverrides(group, vuid, instId, false)
-        group.events[vuid] = nil
-      elseif isCreate then
-        -- A fresh create is open like tv's placeNewNote: no birth
-        -- ceiling (nil dur). tm derives its raw tail; an explicit
-        -- duration arrives later as a non-create assign -> finite dur.
-        local g = toGroup(evt, instance.anchor)
-        g.dur = nil
-        group.events[vuid] = g
-        link(groupId, instId, vuid, projOf(groupId, instId), evt.uuid,
-             util.clone(g), evt)
-        absorbSiblingOverrides(group, vuid, instId, true)
-      end
-    end
-
-    if evt.uuid then touchedUuids[evt.uuid] = true end
-    touchedGroups[groupId] = true
+-- Sole projection seam: drain pendingReproject, reproject each touched group.
+-- In preflush so reproject commits in the user's flush. See docs/groupManager.md § The flush seam.
+tm:subscribe('preflush', function()
+  for groupId in pairs(pendingReproject) do
+    if groups[groupId] then reproject(groupId) end
+    pendingReproject[groupId] = nil
   end
-
-  tm:subscribe('preflush', function(adds, assigns, deletes)
-    if propagating then return end
-    touchedGroups, touchedUuids = {}, {}
-    -- Value edits no longer sniff here: the facade routes member assigns through
-    -- gm:assignEvent (stage 3). Only create (adds) and delete arrive raw.
-    for _, o in ipairs(deletes) do applyEdit(o.evt, nil)      end
-    -- newInstance stages its projection adds; the commit flush fires
-    -- later, so they reappear as gm's echo -- skip them.
-    for _, o in ipairs(adds) do
-      if selfStaged[o.evt] then selfStaged[o.evt] = nil
-      else applyEdit(o.evt, o.evt) end
-    end
-    for groupId in pairs(touchedGroups) do reproject(groupId) end
-    for groupId in pairs(pendingReproject) do
-      if not touchedGroups[groupId] and groups[groupId] then reproject(groupId) end
-      pendingReproject[groupId] = nil
-    end
-  end)
-end
+end)
 
 tm:subscribe('postflush', function()
   for groupId, gp in pairs(proj) do
@@ -808,12 +677,10 @@ function gm:deleteInstance(groupId, instId)
   if not group.instances[instId] then return nil, 'no such instance' end
 
   local p = projOf(groupId, instId)
-  propagating = true
   for _, rec in pairs(p) do
     if rec.evt  then tm:deleteEvent(rec.evt) end
     if rec.uuid then locByUuid[rec.uuid] = nil end
   end
-  propagating = false
 
   proj[groupId][instId]   = nil
   group.instances[instId] = nil
@@ -843,7 +710,6 @@ function gm:moveInstance(groupId, instId, anchor)
 
   local p       = projOf(groupId, instId)
   local desired = groupsCore.project(group, instance)
-  propagating = true
   for vuid, g in pairs(desired) do
     local rec    = p[vuid]
     local placed = toInstance(g, anchor)
@@ -857,7 +723,6 @@ function gm:moveInstance(groupId, instId, anchor)
           tm:deleteEvent(rec.evt); unlink(p, vuid)
         end
         tm:addEvent(placed)                 -- withheld revive, or relane re-create
-        selfStaged[placed] = true
         link(groupId, instId, vuid, p, nil, util.clone(g), placed)
       end
     elseif rec and rec.evt then             -- gone off-take: withhold it
@@ -865,7 +730,6 @@ function gm:moveInstance(groupId, instId, anchor)
       unlink(p, vuid)
     end
   end
-  propagating = false
   instance.anchor = anchor
   persist()
   return true
@@ -900,7 +764,7 @@ function gm:addEvent(evt)
 end
 
 -- Delete a member: drop the shared event (synced), peel an override back to
--- synced, or hide locally. Mirrors applyEdit's delete branch; docs § Override transitions.
+-- synced, or hide locally. See docs/groupManager.md § Override transitions.
 --contract: (uuid) -> true | nil,reason
 function gm:deleteEvent(uuid)
   local loc = locByUuid[uuid]
@@ -914,8 +778,8 @@ function gm:deleteEvent(uuid)
   elseif instance.adds[vuid] ~= nil then
     instance.adds[vuid] = nil                                        -- local-only add: just gone
   elseif instance.assigns[vuid] ~= nil then
-    -- assign-override: peel back to synced. Keep the link (unlike the seam's delete):
-    -- the facade spares the concrete, so reconcile `set`s it in place. See docs § Override transitions.
+    -- assign-override: peel back to synced. Keep the link -- the facade spares the
+    -- concrete, so reconcile `set`s it in place (unlinking would add a duplicate).
     instance.assigns[vuid] = nil
   elseif instance.deletes[vuid] ~= true then                        -- already hidden => no-op
     absorbSiblingOverrides(group, vuid, instId, false)              -- synced: propagating delete
@@ -925,10 +789,8 @@ function gm:deleteEvent(uuid)
   return true
 end
 
--- Value edit of an existing member (the assign half of the facade). localMode or an
--- existing override => sticky per-instance amend (localAmend); else edit the shared
--- pattern. Consumes tv's AUTHORED update (see updToGroup). Never touches the concrete
--- and marks no touchedUuids: reproject restages every instance, the acting one included.
+-- Value edit of a member (assign half of the facade): localMode or an existing override
+-- => sticky localAmend, else edit the shared pattern. Consumes tv's AUTHORED update (updToGroup).
 --contract: (uuid, update) -> true | nil,'not a member'. Defers to reproject (pendingReproject).
 function gm:assignEvent(uuid, update)
   local loc = locByUuid[uuid]
