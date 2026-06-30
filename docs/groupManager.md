@@ -392,3 +392,37 @@ Precision matters: disjoint slots of two instances stay legal. A block covering
 the top half of one instance and the bottom half of another maps those cells to
 distinct slots — no alias, op allowed. A conservative "≥2 instances in footprint"
 test would over-refuse this case; the per-cell slot key avoids it.
+
+## Row-op atomicity
+
+`insertRow`/`deleteRow` are time-topology, not value, edits: they shift a whole
+column band along the timeline. Routing a member through the leaf facade the way
+the rest of `shiftEvents` does would be wrong here — a per-event onset shift reads
+as a *pattern* edit (`gm:assignEvent` rewrites the shared slot), so inserting a
+row below one instance would drag the macro in **every** instance. The cut is a
+timeline operation on this instance, not an authoring change to the shared
+pattern.
+
+So a row op treats each instance as a rigid block (decision 4). The planner in
+`forEachRowOp` classifies every instance the op's columns touch against the cut,
+in logical-ppq space: wholly past it re-anchors as a unit (`gm:moveInstance`, the
+same anchor-invariant path region drag uses); wholly before it is untouched; a
+cut through its interior **refuses the whole op** — "add/remove a row inside the
+macro" is a region resize, done in region mode, never by reaching into a pattern.
+The per-column cores skip member cells (`kindAt … == 'member'`) so the re-anchored
+members are not also shifted as plain events.
+
+An `insertRow` may slide an instance off the take's bottom edge — it does not grow
+the take. While at least the top row stays on (`newLo < length`), the instance
+re-anchors and `moveInstance`'s `onTake` withholds the overflowed rows, exactly as
+a downward drag would (revived if a later op brings them back). Once even the top
+row is pushed past the end (`newLo >= length`), the whole instance is *deleted*
+rather than left as a zombie anchored off the take — mirroring how a plain event
+shoved off the bottom is dropped. `deleteRow` re-anchors toward the origin, so it
+never overflows.
+
+Two refusal choices settle the granularity the design left open, both toward
+"never slice a pattern": refusal is whole-op, not per-column; and a column-scoped
+op (`insertRowCol`, a narrow selection) that would re-anchor an instance but cover
+only some of its columns refuses too — re-anchoring moves all of an instance's
+columns, so partial coverage cannot be honoured atomically.

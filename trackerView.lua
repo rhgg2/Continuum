@@ -1519,9 +1519,11 @@ local insertRow, deleteRow, insertRowCol, deleteRowCol do
 
     local plans, deletes = {}, {}
     for e in util.between(col.events, C, length, notDerived) do
-      local p = shiftPlan(col, e, dLogical)
-      if p.newppq >= length then util.add(deletes, e)
-      else                       util.add(plans, p) end
+      if kindAt(col, e.ppq) ~= 'member' then   -- members re-anchor as a block, not per event
+        local p = shiftPlan(col, e, dLogical)
+        if p.newppq >= length then util.add(deletes, e)
+        else                       util.add(plans, p) end
+      end
     end
 
     -- col.events is a rebuild-snapshot; deletes don't refresh it,
@@ -1538,7 +1540,8 @@ local insertRow, deleteRow, insertRowCol, deleteRowCol do
     -- realised tail is re-derived from scratch every rebuild anyway.
     if col.type == 'note' then
       local spanning = util.seek(col.events, 'before', C, util.isNote)
-      if spanning and spanning.endppq ~= util.OPEN and spanning.endppq > C then
+      if spanning and kindAt(col, spanning.ppq) ~= 'member'
+         and spanning.endppq ~= util.OPEN and spanning.endppq > C then
         assignTail(spanning, chan, spanning.endppq + dLogical)
       end
     end
@@ -1557,7 +1560,8 @@ local insertRow, deleteRow, insertRowCol, deleteRowCol do
     -- close the note; tm re-derives the realised note-off on rebuild.
     if col.type == 'note' then
       local spanning = util.seek(col.events, 'before', C, util.isNote)
-      if spanning and spanning.endppq ~= util.OPEN and spanning.endppq > C then
+      if spanning and kindAt(col, spanning.ppq) ~= 'member'
+         and spanning.endppq ~= util.OPEN and spanning.endppq > C then
         assignTail(spanning, chan,
                    spanning.endppq > D and spanning.endppq - dLogical or C)
       end
@@ -1565,8 +1569,10 @@ local insertRow, deleteRow, insertRowCol, deleteRowCol do
 
     local plans, deletes = {}, {}
     for e in util.between(col.events, C, length, notDerived) do
-      if e.ppq < D then util.add(deletes, e)
-      else              util.add(plans, shiftPlan(col, e, -dLogical)) end
+      if kindAt(col, e.ppq) ~= 'member' then   -- members re-anchor as a block, not per event
+        if e.ppq < D then util.add(deletes, e)
+        else              util.add(plans, shiftPlan(col, e, -dLogical)) end
+      end
     end
 
     conformOverlaps(plans, deletes)
@@ -1574,15 +1580,78 @@ local insertRow, deleteRow, insertRowCol, deleteRowCol do
     writePlans(plans)
   end
 
-  -- `noSelCols` picks the column set when no selection is active.
-  local function forEachRowOp(core, preSel, noSelCols)
-    if ec:hasSelection() then
-      if preSel then preSel() end
-      local r1, r2 = ec:region()
-      for col in ec:eachSelectedCol() do core(col, r1, r2 - r1 + 1) end
-    else
-      for _, col in ipairs(noSelCols()) do core(col, ec:row(), 1) end
+  -- True iff grid column `col` carries one of instance `inst`'s streams. Mirrors
+  -- the render-pass occupancy test (eachMemberEvent): the column IS the stream.
+  local function colInInstance(col, inst)
+    local sel = inst.rect.streams[col.midiChan - inst.anchor.chan]
+    return sel and sel[groupsCore.shiftStream(streamIdOf(col), -(inst.anchor.laneDelta or 0))]
+             and true or false
+  end
+
+  -- Group instances are atomic blocks: re-anchor wholly-past-cut ones, refuse bisects.
+  -- Returns { move | delete } plan, or nil to refuse. see docs/groupManager.md § Row-op atomicity.
+  local function planInstanceMoves(cols, topRow, numRows, isInsert)
+    if not gm then return {} end
+    local logPerRow = logPerRowFor(currentRpb())
+    local cutPpq    = topRow * logPerRow
+    local bandEnd   = (topRow + numRows) * logPerRow
+    local dLogical  = numRows * logPerRow
+
+    local opCol = {}
+    for _, col in ipairs(cols) do opCol[col] = true end
+
+    local plan = {}
+    for _, inst in ipairs(gm:eachInstance()) do
+      local occupied, covered = 0, 0
+      for _, col in ipairs(grid.cols) do
+        if colInInstance(col, inst) then
+          occupied = occupied + 1
+          if opCol[col] then covered = covered + 1 end
+        end
+      end
+      if covered > 0 then                       -- the op touches this instance
+        local lo, hi   = inst.anchor.ppq, inst.anchor.ppq + inst.rect.dur
+        local above    = hi <= cutPpq           -- wholly before the cut: untouched
+        local reanchor = isInsert and lo >= cutPpq or (not isInsert and lo >= bandEnd)
+        if not above then
+          if not reanchor or covered ~= occupied then return nil end   -- bisect / partial col
+          local newLo = lo + (isInsert and dLogical or -dLogical)
+          if isInsert and newLo >= length then  -- top row off the take end too: drop it
+            util.add(plan, { delete = true, groupId = inst.groupId, instId = inst.instId })
+          else                                  -- re-anchor; onTake clips any overflow tail
+            util.add(plan, { groupId = inst.groupId, instId = inst.instId,
+                             anchor = { ppq = newLo, chan = inst.anchor.chan,
+                                        laneDelta = inst.anchor.laneDelta } })
+          end
+        end
+      end
     end
+    return plan
+  end
+
+  -- `noSelCols` picks the column set when no selection is active.
+  local function forEachRowOp(core, preSel, noSelCols, isInsert)
+    local cols, topRow, numRows, selected
+    if ec:hasSelection() then
+      selected = true
+      local r1, r2 = ec:region()
+      topRow, numRows = r1, r2 - r1 + 1
+      cols = {}
+      for col in ec:eachSelectedCol() do util.add(cols, col) end
+    else
+      topRow, numRows = ec:row(), 1
+      cols = noSelCols()
+    end
+
+    local plan = planInstanceMoves(cols, topRow, numRows, isInsert)
+    if not plan then return end                 -- refused: bisect or partial column
+
+    if selected and preSel then preSel() end
+    for _, p in ipairs(plan) do
+      if p.delete then gm:deleteInstance(p.groupId, p.instId)
+      else             gm:moveInstance(p.groupId, p.instId, p.anchor) end
+    end
+    for _, col in ipairs(cols) do core(col, topRow, numRows) end
     tm:flush()
   end
 
@@ -1592,10 +1661,10 @@ local insertRow, deleteRow, insertRowCol, deleteRowCol do
     return c and { c } or {}
   end
 
-  function insertRow()    forEachRowOp(insertRowCore, nil, allCols) end
-  function deleteRow()    forEachRowOp(deleteRowCore, function() clipboard:copy() end, allCols) end
-  function insertRowCol() forEachRowOp(insertRowCore, nil, curCol) end
-  function deleteRowCol() forEachRowOp(deleteRowCore, function() clipboard:copy() end, curCol) end
+  function insertRow()    forEachRowOp(insertRowCore, nil, allCols, true) end
+  function deleteRow()    forEachRowOp(deleteRowCore, function() clipboard:copy() end, allCols, false) end
+  function insertRowCol() forEachRowOp(insertRowCore, nil, curCol, true) end
+  function deleteRowCol() forEachRowOp(deleteRowCore, function() clipboard:copy() end, curCol, false) end
 end
 
 ----- Nudge
