@@ -41,6 +41,9 @@ end
 local colFor, kindAt   -- data-derived column + cell-kind helpers, defined below
 local function kindOf(evt) return kindAt(colFor(evt), evt.ppq) end
 
+-- localMode confines edits to the instance under the caret; defined after instanceAtCursor.
+local localBlocked
+
 local backing = {
   plain = {
     add    = function(evt)         tm:addEvent(evt) end,
@@ -74,9 +77,10 @@ local function relocate(evt, update)
 end
 
 local edit = {
-  add    = function(evt)      backing[kindOf(evt)].add(evt)    end,
-  delete = function(evt)      backing[kindOf(evt)].delete(evt) end,
+  add    = function(evt)      if localBlocked(evt) then return end backing[kindOf(evt)].add(evt)    end,
+  delete = function(evt)      if localBlocked(evt) then return end backing[kindOf(evt)].delete(evt) end,
   assign = function(evt, update)
+    if localBlocked(evt) then return end
     local src = kindOf(evt)
     -- Cross-region move: shed source kind, re-add at destination. ppq stays in-column;
     -- chan/lane/cc changes column. relocate() resolves the destination cell either way.
@@ -2472,6 +2476,18 @@ function tv:instanceAtCursor()
       end
     end
   end
+end
+
+-- localMode confines edits to the instance the caret sits inside; other instances wash
+-- out (trackerRender) and go read-only. Copy bypasses `edit`, so reads stay free.
+function tv:localMode() return gm ~= nil and gm:localMode() end
+
+localBlocked = function(evt)
+  if not tv:localMode() then return false end
+  local active = tv:instanceAtCursor()
+  if not active then return true end
+  local groupId, instId = gm:instanceOf(evt)
+  return groupId ~= active.groupId or instId ~= active.instId
 end
 
 -- Page region-wash reads group instances and per-event state through tv, never gm.

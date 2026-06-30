@@ -139,6 +139,7 @@ local declarations = {
   { 'colour.tracker.cursorText',  'alt.zone8'  },
   { 'colour.tracker.rowBarStart', {'base.zone6', 0.4} },
   { 'colour.tracker.selection',   {'base.zone10', 0.5} },
+  { 'colour.tracker.localScrim',  {'base.zone1',  0.3} },  -- local-mode wash over instances the caret isn't inside
   { 'colour.tracker.accent',      'base.zone6' },
   { 'colour.tracker.mute',        'colour.tracker.negative' },
   { 'colour.tracker.solo',        'yellow'     },

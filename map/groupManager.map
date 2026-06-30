@@ -1,4 +1,4 @@
-@module groupManager  src=groupManager.lua  loc=899  sha=9e7e85d  mode=chunk  self=gm
+@module groupManager  src=groupManager.lua  loc=902  sha=cd206c9  mode=chunk  self=gm
 @deps tm, ds
 
 # Invariants & contracts
@@ -123,8 +123,8 @@
   -- Active group (dupeClip-idiom selector; the command layer owns the
   -- clear-on-other-command lifetime, gm only the pointer)
   -- SEAM
-  @fn reproject(groupId)  @ 577-604
-  @fn localAmend(instance, vuid, group, update)  @ 611-622
+  @fn reproject(groupId)  @ 580-607
+  @fn localAmend(instance, vuid, group, update)  @ 614-625
       -- Local edit of an existing override -- shared by localMode and the
       -- on-ov-in-global path. An assign'd / synced group event accrues a
       -- sticky per-instance assign; a local-only add is edited in place.
@@ -161,38 +161,40 @@
   @api gm:setLocalMode(on)  @ 529
   @api gm:localMode()  @ 530
   @api gm:stateOf(uuid)  @ 532-538
-  @api gm:eachInstance()  @ 544-555
+  @api gm:instanceOf(evt)  @ 541
+      @contract  (evt) -> groupId, instId of the instance covering evt's cell, or nil (localMode guard)
+  @api gm:eachInstance()  @ 547-558
       -- Read accessor for the render pass: every live instance with the group
       -- rect it projects, its anchor, and whether its group is active. No new
       -- mutable state; rect/anchor are by reference (render reads, never
       -- mutates).
-  @api gm:footprintAliases(cells)  @ 560-573
+  @api gm:footprintAliases(cells)  @ 563-576
       -- Precise per-cell injectivity test for propagating block ops (decision 3): two cells
       -- on one group slot => non-injective; disjoint slots stay legal. see docs/groupManager.md § Block-shift injectivity.
       @contract  (cells) -> bool. cells carry { ppq, chan, evType, lane?/cc? }.
   -- INSTANCE / GROUP LIFECYCLE
-  @api gm:deleteInstance(groupId, instId)  @ 674-693
+  @api gm:deleteInstance(groupId, instId)  @ 677-696
       -- Stage a tm delete for every projected concrete of one instance, drop
       -- the instance, and -- if it was the group's last -- drop the group,
       -- clearing the active pointer if it named it. Unknown id -> nil, reason.
       @contract  (groupId, instId) -> true | nil,reason; stages tm deletes for the instance's concretes, last instance drops the group + clears active. Unknown id -> nil,reason.
-  @api gm:moveInstance(groupId, instId, anchor)  @ 698-736
+  @api gm:moveInstance(groupId, instId, anchor)  @ 701-739
       -- Re-anchor directly (reproject can't see anchor-invariant moves; see docs/groupManager.md
       -- § Instance lifecycle). onTake withholds off-take members and revives on return (bottom only).
       @contract  (groupId, instId, anchor) -> true | nil,reason. Caller cleared dest + clamped top.
-  @api gm:addEvent(evt)  @ 741-764
+  @api gm:addEvent(evt)  @ 744-767
       -- Positional create (the add half of a facade move): classifyCreate finds the covering
       -- region; global adopts into the shared pattern (all instances gain it), localMode keeps a per-instance add.
       @contract  (evt) -> true | nil,'not in a region'. Defers to reproject; never links clone.
-  @api gm:deleteEvent(uuid)  @ 769-790
+  @api gm:deleteEvent(uuid)  @ 772-793
       -- Delete a member: drop the shared event (synced), peel an override back to
       -- synced, or hide locally. See docs/groupManager.md § Override transitions.
       @contract  (uuid) -> true | nil,reason
-  @api gm:assignEvent(uuid, update)  @ 795-829
+  @api gm:assignEvent(uuid, update)  @ 798-832
       -- Value edit of a member (assign half of the facade): localMode or an existing override
       -- => sticky localAmend, else edit the shared pattern. Consumes tv's AUTHORED update (updToGroup).
       @contract  (uuid, update) -> true | nil,'not a member'. Defers to reproject (pendingReproject).
-  @api gm:resizeGroup(groupId, instId, edits)  @ 843-897
+  @api gm:resizeGroup(groupId, instId, edits)  @ 846-900
       -- Resize the SHARED rect from edge instance `instId`'s drag. startDelta
       -- re-origins (Model A: every anchor += startDelta, every group event
       -- ppq -= startDelta) so realised positions hold while the boundary
@@ -209,24 +211,24 @@
 # Uses (outbound edges)
   @use call    ds.assign  @ persist:233
   @use call    ds.get  @ 28 rehydrate:241
-  @use call    groups.deriveAssign  @ absorbSiblingOverrides:341 localAmend:616
-  @use call    groups.inRect  @ classifyCreate:362 resizeGroup:874
-  @use call    groups.laneId  @ footprintAliases:566
-  @use call    groups.project  @ rehydrate:251 newInstance:465 stateOf:536 reproject:580 moveInstance:712
-  @use call    groups.reconcile  @ reproject:582
+  @use call    groups.deriveAssign  @ absorbSiblingOverrides:341 localAmend:619
+  @use call    groups.inRect  @ classifyCreate:362 resizeGroup:877
+  @use call    groups.laneId  @ footprintAliases:569
+  @use call    groups.project  @ rehydrate:251 newInstance:465 stateOf:536 reproject:583 moveInstance:715
+  @use call    groups.reconcile  @ reproject:585
   @use call    groups.resolve  @ absorbSiblingOverrides:350
   @use call    groups.shiftStream  @ rectCells:387 regionConflict:412
   @use call    groups.streamId  @ sameSlot:305
-  @use call    tm.addEvent  @ newInstance:469 reproject:589 moveInstance:725
-  @use call    tm.assignEvent  @ reproject:594 moveInstance:719
-  @use call    tm.byUuid  @ rehydrate:254 656
-  @use call    tm.deleteEvent  @ reproject:599 deleteInstance:681 moveInstance:723,729
+  @use call    tm.addEvent  @ newInstance:469 reproject:592 moveInstance:728
+  @use call    tm.assignEvent  @ reproject:597 moveInstance:722
+  @use call    tm.byUuid  @ rehydrate:254 659
+  @use call    tm.deleteEvent  @ reproject:602 deleteInstance:684 moveInstance:726,732
   @use call    tm.length  @ onTake:155
-  @use call    util.assign  @ localAmend:620 assignEvent:808,825
-  @use call    util.clone  @ rehydrate:257 markGroup:441 newInstance:470 reproject:591,597 moveInstance:726 assignEvent:807 resizeGroup:891
+  @use call    util.assign  @ localAmend:623 assignEvent:811,828
+  @use call    util.clone  @ rehydrate:257 markGroup:441 newInstance:470 reproject:594,600 moveInstance:729 assignEvent:810 resizeGroup:894
   @use require groups  @ 11
   @use require util  @ 10
-  @use sub     ds:dataChanged  @ 664
-  @use sub     tm:postflush  @ 633
-  @use sub     tm:preflush  @ 626
-  @use sub     tm:rebuild  @ 650
+  @use sub     ds:dataChanged  @ 667
+  @use sub     tm:postflush  @ 636
+  @use sub     tm:preflush  @ 629
+  @use sub     tm:rebuild  @ 653

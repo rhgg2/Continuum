@@ -537,6 +537,9 @@ function gm:stateOf(uuid)
   return states[loc.vuid]
 end
 
+--contract: (evt) -> groupId, instId of the instance covering evt's cell, or nil (localMode guard)
+function gm:instanceOf(evt) return classifyCreate(evt) end
+
 -- Read accessor for the render pass: every live instance with the group
 -- rect it projects, its anchor, and whether its group is active. No new
 -- mutable state; rect/anchor are by reference (render reads, never

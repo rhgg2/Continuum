@@ -275,6 +275,16 @@ local function laneStripRows()
   return cm:get('laneStrip.rows') or 0
 end
 
+-- Local-mode wash: dim the whole grid except a hole at the instance the caret sits
+-- inside (`hole`, grid units); nil hole washes everything. Overlays the cell pass.
+local function drawLocalScrim(draw, hole, w, h)
+  if not hole then draw:box(0, w - 1, 0, h - 1, 'localScrim'); return end
+  if hole.y1 > 0     then draw:box(0, w - 1, 0, hole.y1 - 1, 'localScrim') end
+  if hole.y2 < h - 1 then draw:box(0, w - 1, hole.y2 + 1, h - 1, 'localScrim') end
+  if hole.x1 > 0     then draw:box(0, hole.x1 - 1, hole.y1, hole.y2, 'localScrim') end
+  if hole.x2 < w - 1 then draw:box(hole.x2 + 1, w - 1, hole.y1, hole.y2, 'localScrim') end
+end
+
 -- Localize the picked temper into the project library if absent, so the project
 -- carries every temper it references (mirrors swing's setSwingSlot).
 local pickTemper = util.atomic('Set temper', function(name)
@@ -747,6 +757,8 @@ local function drawTracker()
   local inRegion  = tv:ec():isInRegionMode()
   local rc        = inRegion and tv:ec():regionCursor()
   local movePrev  = tv:movePreview()
+  local isLocal   = tv:localMode()
+  local localHole
   for _, inst in ipairs(tv:eachInstance()) do
     local rect  = inst.rect
     local previewing = movePrev and movePrev.groupId == inst.groupId
@@ -792,6 +804,9 @@ local function drawTracker()
           local outlineName = groups.outlineKey(
             conflicted and 'conflicted' or 'synced', inst.colour)
           p.border({ x0 = xMin, y0 = yLo, x1 = xMax + 1, y1 = yHi }, outlineName, isCursorInst and 2 or 1)
+        end
+        if isLocal and cursorIn then
+          localHole = { x1 = xMin, x2 = xMax, y1 = yLo, y2 = yHi - 1 }
         end
       end
     end
@@ -897,6 +912,11 @@ local function drawTracker()
         end
       end
     end
+  end
+
+  -- Scrim spans only populated rows; blank space past the take's end stays clear.
+  if isLocal then
+    drawLocalScrim(draw, localHole, totalWidth, math.min(gridHeight, math.max(numRows - scrollRow, 0)))
   end
 
   if ec:hasSelection() then

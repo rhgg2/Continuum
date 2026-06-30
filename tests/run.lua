@@ -85,6 +85,7 @@ local specs = {
   'gm_block_shift_alias_spec',
   'gm_row_atomic_spec',
   'gm_value_facade_spec',
+  'gm_local_guard_spec',
   'gm_create_delete_facade_spec',
   'gm_paste_facade_spec',
   'gm_stamp_commit_spec',
