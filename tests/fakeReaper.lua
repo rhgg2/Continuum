@@ -980,10 +980,61 @@ function M.new()
     return true, #m.notes, #m.ccs, #m.texts
   end
 
-  -- Opaque event blobs by take. Production only needs a faithful
-  -- round-trip (Get then Set on another take), not real parsing.
+  -- Serialise the structured store to a real blob (inverse of midiBlob.parse,
+  -- reading REAPER-native fields): chan nibble 0-based, cc shape in flags 4-6.
+  local oneDataByte = { [0xC0] = true, [0xD0] = true }   -- pc, at: status + one data byte
+
+  local function chanMsgBytes(chanmsg, chan, msg2, msg3)
+    local status = chanmsg | chan
+    if oneDataByte[chanmsg] then return string.char(status, msg2) end
+    return string.char(status, msg2 or 0, msg3 or 0)
+  end
+
+  local function serialiseMidi(m)
+    local wire = {}
+    local function push(ppq, rank, seq, flags, msg)
+      wire[#wire + 1] = { ppq = ppq, rank = rank, seq = seq, flags = flags, msg = msg }
+    end
+    for i, n in ipairs(m.notes) do
+      push(n.ppq,    1, i, n.muted and 0x02 or 0, string.char(0x90 | n.chan, n.pitch, n.vel))
+      push(n.endppq, 0, i, 0,                      string.char(0x80 | n.chan, n.pitch, 0))
+    end
+    for i, c in ipairs(m.ccs) do
+      local shape = c.shape or 0
+      local flags = (c.muted and 0x02 or 0) | ((shape & 7) << 4)
+      push(c.ppq, 2, i, flags, chanMsgBytes(c.chanmsg, c.chan, c.msg2, c.msg3))
+      if shape == 5 then   -- bezier: tension rides a CCBZ meta just after its cc
+        push(c.ppq, 2, i + 0.5, 0, '\xFF\x0F' .. 'CCBZ ' .. '\0' .. string.pack('f', c.tension or 0))
+      end
+    end
+    for i, e in ipairs(m.texts) do
+      local msg = e.eventtype == -1
+        and ('\xF0' .. e.msg .. '\xF7')
+        or  ('\xFF' .. string.char(e.eventtype) .. e.msg)
+      push(e.ppq, 3, i, e.muted and 0x02 or 0, msg)
+    end
+    table.sort(wire, function(a, b)
+      if a.ppq  ~= b.ppq  then return a.ppq  < b.ppq  end
+      if a.rank ~= b.rank then return a.rank < b.rank end
+      return a.seq < b.seq
+    end)
+    local out, prev = {}, 0
+    for _, ev in ipairs(wire) do
+      out[#out + 1] = string.pack('i4Bs4', ev.ppq - prev, ev.flags, ev.msg)
+      prev = ev.ppq
+    end
+    out[#out + 1] = string.pack('i4Bs4', 0, 0, '\xB0\x7B\x00')   -- all-notes-off tail (parse excludes it)
+    return table.concat(out)
+  end
+
+  -- Two views on one take: mm authors per-event (Get serialises the structured
+  -- store), arrange moves blobs opaquely (empty store -> the last Set, or '').
   state.midiBlob = state.midiBlob or {}
   function r.MIDI_GetAllEvts(take, _)
+    local m = midi(take)
+    if #m.notes > 0 or #m.ccs > 0 or #m.texts > 0 then
+      return true, serialiseMidi(m)
+    end
     return true, state.midiBlob[take] or ''
   end
   function r.MIDI_SetAllEvts(take, evts)
