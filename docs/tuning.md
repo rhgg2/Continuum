@@ -361,7 +361,7 @@ detune)` — no carrier, no add-bank slot. See `design/note-macros-v2.md`
 § Continuous pb replace.
 
 Origin and the replace path (generator curves reusing the same seats):
-`design/pb-interpolation.md`.
+`design/archive/pb-interpolation.md`.
 
 ## Conventions
 

@@ -1,4 +1,4 @@
--- pb interpolation across a detune onset (design/pb-interpolation.md, Step 1).
+-- pb interpolation across a detune onset (design/archive/pb-interpolation.md, Step 1).
 -- A derived absorber seat samples the prevailing authored pb value at its ppq
 -- and adds detune, instead of punching the wire down to detune-only. Linear
 -- glides land exactly; curved glides densify to a linear polyline; the detune
