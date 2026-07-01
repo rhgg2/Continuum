@@ -61,6 +61,8 @@ local wideMsb    = {}   -- (chan*128+cc) -> true: code is a 14-bit MSB; LSB ride
 local maxUUID    = 0
 local lock       = false
 local dirty      = false  -- a structural write happened; the take needs reprojecting via flushTake
+local modifyDepth  = 0      -- reload can re-enter modify; only the outermost flushes
+local flushPending = false  -- a dirty modify happened somewhere in the nest; flush once on unwind
 local carriedTexts       = {}  -- parsed text/meta events mm doesn't model; re-emitted verbatim on flush
 local carriedPassthrough = {}  -- parsed system messages mm doesn't model; re-emitted verbatim on flush
 
@@ -334,7 +336,7 @@ local function flushTake()
   reaper.MIDI_SetAllEvts(take, blob)
   perf.stop('setEvts')
 
-  perf.count('serialised', #notes + #ccs + #texts)
+  perf.count('notes', #notes); perf.count('ccs', #ccs); perf.count('texts', #texts)
   dirty = false
 end
 
@@ -657,8 +659,11 @@ local function checkLock()
   return true
 end
 
+-- Re-entrant: reload reseats absorbers via a nested modify. Flush once on the
+-- outermost unwind. See docs/midiManager.md § Mutation contract.
 function mm:modify(fn)
   if not liveTake() then return end
+  modifyDepth = modifyDepth + 1
   lock = true
   dirty = false
   metaDirty, metaDeleted = {}, {}
@@ -666,10 +671,15 @@ function mm:modify(fn)
   perf.start('meta');  flushMetadata();          perf.stop('meta')
   if dirty then                                 -- clean (metadata-only) gestures touch no structure
     perf.start('rebuild'); rebuild(nil); perf.stop('rebuild')
-    flushTake()
+    flushPending = true
   end
   lock = false
   perf.start('reload'); fire('reload', nil); perf.stop('reload')
+  modifyDepth = modifyDepth - 1
+  if modifyDepth == 0 and flushPending then
+    flushPending = false
+    flushTake()
+  end
   if not ok then print('Error in modify: ' .. tostring(err)) end
 end
 

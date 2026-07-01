@@ -153,8 +153,16 @@ to report, so the event no longer carries `keptHadUuid`.
 ## Mutation contract
 
 All write paths (`add*`, `delete*`, `assign*`) must run inside `mm:modify(fn)`.
-`modify` disables MIDI sort, runs `fn` under a lock, re-sorts, then reloads
-(which fires callbacks). Calling a mutator outside `modify` raises.
+`modify` runs `fn` under a lock, rebuilds the in-memory model, projects it onto
+the take as one whole-take blob (`flushTake`), then reloads (which fires
+callbacks). Calling a mutator outside `modify` raises.
+
+**One write per gesture.** `modify` is re-entrant: `reload` fires `tm:rebuild`,
+which reseats absorber pitch-bends by calling `mm:modify` again. A naive flush
+per `modify` would then rewrite the whole take twice for any detuned gesture.
+Instead the flush is deferred — a dirty `modify` at any nesting level sets a
+shared `flushPending`, and only the outermost unwind (`modifyDepth == 0`) calls
+`flushTake`, *after* `reload` has settled so the reseat is already in the model.
 
 **Metadata-only carve-out** (parallel for notes and stamped ccs):
 - `assignNote(loc, t)` where `t` touches none of `ppq, endppq, pitch, vel,
