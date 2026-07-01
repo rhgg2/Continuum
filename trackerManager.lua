@@ -1537,7 +1537,7 @@ local function rebuildPA()
     end
   end
 
-  for _, cc in mm:ccs() do
+  for _, cc in mm:ccsRaw() do
     if cc.evType == 'pa' then
       local noteCol, lane = findNoteColumnForPitch(channels[cc.chan], cc.pitch, cc.ppq)
       if noteCol then
@@ -1589,7 +1589,7 @@ local function rebuildFx(fx, deferred)
   -- Authored pb breakpoints per channel, exposed to the generator as channel input
   -- (authored only, fakes excluded). see design/note-macros-v2.md § A4
   local authoredPbByChan = {}
-  for _, cc in mm:ccs() do
+  for _, cc in mm:ccsRaw() do
     if cc.evType == 'pb' and not cc.derived and cc.cents ~= nil then
       util.bucket(authoredPbByChan, cc.chan, { ppqL = cc.ppqL or cc.ppq, cents = cc.cents })
     end
@@ -2000,12 +2000,13 @@ local function rebuildPbs(noteLive, replacePb)
   end
 
   -- mm uses content-keyed tokens: any pb whose ppq we touch needs its pre-mutation token
-  -- captured up front. Each pb here is a mm:ccs() clone with origTok set once.
+  -- captured up front. Each pb here is our own clone of the raw internal pb, with origTok set once.
   local pbsByChan = {}
-  for _, cc in mm:ccs() do
+  for _, cc in mm:ccsRaw() do
     if cc.evType == 'pb' then
-      cc.origTok, cc.origShape = mm:tokenOf(cc), cc.shape
-      util.bucket(pbsByChan, cc.chan, cc)
+      local pb = util.clone(cc)
+      pb.origTok, pb.origShape = mm:tokenOf(cc), cc.shape
+      util.bucket(pbsByChan, pb.chan, pb)
     end
   end
 
@@ -2246,7 +2247,7 @@ local function rebuildPCs(fx)
 
   if dirty then
     for chan = 1, 16 do channels[chan].columns.pc = { events = {} } end
-    for _, cc in mm:ccs() do
+    for _, cc in mm:ccsRaw() do
       if cc.evType == 'pc' then
         util.add(channels[cc.chan].columns.pc.events, projectCC(cc, mm:tokenOf(cc)))
       end

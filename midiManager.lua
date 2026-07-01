@@ -690,6 +690,7 @@ end
 ----- Notes
 
 local function cloneOut(evt)
+  perf.count('clones', 1) 
   if not evt then return nil end
   local c = util.clone(evt)
   c.token = tokenOf(evt)
@@ -782,6 +783,19 @@ function mm:ccs()
       local msg = ccs[i]
       if not msg then return end
       if not isWideLsb(msg) then return i, cloneOut(msg) end
+    end
+  end
+end
+
+--contract: yields mm-internal cc records uncloned; consumers must NOT mutate them (read-only fast path)
+function mm:ccsRaw()
+  local i = 0
+  return function()
+    while true do
+      i = i + 1
+      local msg = ccs[i]
+      if not msg then return end
+      if not isWideLsb(msg) then return i, msg end
     end
   end
 end
