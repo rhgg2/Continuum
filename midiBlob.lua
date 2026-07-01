@@ -25,6 +25,16 @@ for code, name in pairs(shapeNames)     do shapeCodes[name] = code end
 for hi,   name in pairs(chanMsgEvTypes) do hiByEvType[name] = hi  end
 local oneDataByte = { pc = true, at = true }   -- status + a single 7-bit data byte
 
+-- 14-bit CC: a code in 0..31 with a fractional value rides an LSB on code+32.
+-- The value's type is the whole signal -- an integer value stays a plain 7-bit CC.
+local function isWideCC(c) return c.evType == 'cc' and c.cc <= 31 and c.val % 1 ~= 0 end
+local function splitWide(val)
+  local msb = math.floor(val)
+  local lsb = util.round((val - msb) * 128)
+  if lsb >= 128 then msb, lsb = msb + 1, 0 end
+  return util.clamp(msb, 0, 127), lsb
+end
+
 local midiBlob = {}
 
 -- The value-bearing fields for a cc-family event, keyed as mm:load stores them.
@@ -86,6 +96,28 @@ function midiBlob.parse(blob)
     end
   end
 
+  -- Coalesce 14-bit pairs (REAPER's convention): MSB keeps shape/tension, LSB folds in and drops.
+  -- see docs/midiManager.md § 14-bit CCs
+  local byPos, drop = {}, nil
+  for _, c in ipairs(ccs) do
+    if c.evType == 'cc' then byPos[c.chan .. '\0' .. c.cc .. '\0' .. c.ppq] = c end
+  end
+  for _, msb in ipairs(ccs) do
+    if msb.evType == 'cc' and msb.cc <= 31 then
+      local lsb = byPos[msb.chan .. '\0' .. (msb.cc + 32) .. '\0' .. msb.ppq]
+      if lsb then
+        msb.val = msb.val + lsb.val / 128
+        drop = drop or {}; drop[lsb] = true
+      end
+    end
+  end
+  if drop then
+    local kept = {}
+    for _, c in ipairs(ccs) do if not drop[c] then util.add(kept, c) end end
+    for i, c in ipairs(kept) do c.idx = i - 1 end
+    ccs = kept
+  end
+
   return notes, ccs, texts, passthrough
 end
 
@@ -119,7 +151,15 @@ local function decodeWire(kv, notes, ccs, texts, passthrough)
   elseif rank == 2 then
     local c = ccs[i]
     if kv % 2 == 1 then return 0, '\xFF\x0F' .. 'CCBZ ' .. '\0' .. string.pack('f', c.tension or 0) end
-    return (c.muted and 0x02 or 0) | ((shapeCodes[c.shape] or 0) << 4), ccWire(c)
+    local shaped = (c.muted and 0x02 or 0) | ((shapeCodes[c.shape] or 0) << 4)
+    if isWideCC(c) then
+      local msb, lsb = splitWide(c.val)
+      local status = 0xB0 | (c.chan - 1)
+      -- LSB(step) first so a bezier CCBZ rider (next key, same ppq) still lands on the MSB in parse.
+      return (c.muted and 0x02 or 0), string.char(status, c.cc + 32, lsb),
+             shaped,                  string.char(status, c.cc, msb)
+    end
+    return shaped, ccWire(c)
   elseif rank == 3 then
     local x = texts[i]
     return 0, x.eventtype == -1
@@ -157,9 +197,10 @@ function midiBlob.serialise(notes, ccs, texts, passthrough, endPpq)
   for k = 1, count do
     local kv = keys[k]
     local ppq = kv // 1000000
-    local flags, msg = decodeWire(kv, notes, ccs, texts, passthrough)
+    local flags, msg, flags2, msg2 = decodeWire(kv, notes, ccs, texts, passthrough)
     util.add(out, string.pack('i4Bs4', ppq - prev, flags, msg))
     prev = ppq
+    if msg2 then util.add(out, string.pack('i4Bs4', 0, flags2, msg2)) end   -- wide LSB rides at offset 0
   end
   local tailPpq = math.max(endPpq or prev, prev)   -- never shrink past the last event
   util.add(out, string.pack('i4Bs4', tailPpq - prev, 0, '\xB0\x7B\x00'))   -- all-notes-off tail

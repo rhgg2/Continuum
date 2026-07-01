@@ -1,4 +1,4 @@
-@module midiBlob  src=midiBlob.lua  loc=169  sha=7477fbb  mode=namespace  self=midiBlob
+@module midiBlob  src=midiBlob.lua  loc=210  sha=7d2d60d  mode=namespace  self=midiBlob
 
 # Invariants & contracts
   @invariant  idx is the 0-based REAPER per-type index; note idx counts note-ons, text idx skips CCBZ
@@ -22,22 +22,28 @@
   @const shapeNames = { [0] = 'step', [1] = 'linear', [2] = 'slow',  @ 20
   @const shapeCodes, hiByEvType = {}, {}  @ 23
   @const oneDataByte = { pc = true, at = true }  @ 26   -- status + a single 7-bit data byte
-  @const midiBlob = {}  @ 28
+  @const midiBlob = {}  @ 38
 
 # Private functions
-  @fn ccValueFields(evType, b2, b3)  @ 31-36
+  @fn isWideCC(c)  @ 30
+      -- 14-bit CC: a code in 0..31 with a fractional value rides an LSB on code+32.
+      -- The value's type is the whole signal -- an integer value stays a plain 7-bit CC.
+  @fn splitWide(val)  @ 31-36
+  @fn ccValueFields(evType, b2, b3)  @ 41-46
       -- The value-bearing fields for a cc-family event, keyed as mm:load stores them.
-  @fn ccDataBytes(c)  @ 93-98
+  @fn ccDataBytes(c)  @ 125-130
       -- Value bytes for a cc-family record (inverse of ccValueFields).
-  @fn ccWire(c)  @ 100-105
-  @fn decodeWire(kv, notes, ccs, texts, passthrough)  @ 112-131
+  @fn ccWire(c)  @ 132-137
+  @fn decodeWire(kv, notes, ccs, texts, passthrough)  @ 144-171
       -- Decodes a packed sort key to (flags, msg): rank digit picks the stream, seq//2
       -- the record index, an odd seq a cc's bezier CCBZ rider. Mirrors midiBlob.parse.
 
 # Public API (midiBlob.*)
-  @api midiBlob.parse(blob)  @ 38-90
-  @api midiBlob.serialise(notes, ccs, texts, passthrough, endPpq)  @ 133-167
+  @api midiBlob.parse(blob)  @ 48-122
+  @api midiBlob.serialise(notes, ccs, texts, passthrough, endPpq)  @ 173-208
 
 # Uses (outbound edges)
-  @use call    util.add  @ parse:59,72,78,82,85 serialise:161,165
+  @use call    util.add  @ parse:69,82,88,92,95,116 serialise:201,203,206
+  @use call    util.clamp  @ splitWide:35
+  @use call    util.round  @ splitWide:33
   @use require util  @ 17

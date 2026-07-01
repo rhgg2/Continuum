@@ -1,4 +1,4 @@
-@module midiManager  src=midiManager.lua  loc=1150  sha=3783342  mode=chunk  self=mm
+@module midiManager  src=midiManager.lua  loc=1099  sha=b8ec85e  mode=chunk  self=mm
 @deps take, eventMeta
 
 # Invariants & contracts
@@ -49,20 +49,19 @@
   @state ccCount = 0  @ 57
   @state eventsByUuid = {}  @ 58
   @state tokenIdx = {}  @ 59
-  @state wideMsb = {}  @ 60   -- (chan*128+cc) -> true: code is a 14-bit MSB; LSB rides cc+32
-  @state maxUUID = 0  @ 61
-  @state lock = false  @ 62
-  @state dirty = false  @ 63   -- a structural write happened; the take needs reprojecting via flushTake
-  @state modifyDepth = 0  @ 64   -- reload can re-enter modify; only the outermost flushes
-  @state flushPending = false  @ 65   -- a dirty modify happened somewhere in the nest; flush once on unwind
-  @state carriedTexts = {}  @ 66   -- parsed text/meta events mm doesn't model; re-emitted verbatim on flush
-  @state carriedPassthrough = {}  @ 67   -- parsed system messages mm doesn't model; re-emitted verbatim on flush
-  @state shapeLUT = { step = 0, linear = 1, slow = 2, ['fast-start'] = 3, ['f...  @ 97
-  @state noteEventFields = {  @ 218
-  @state ccEventFields = {  @ 223
-  @state metaDirty, metaDeleted = {}, {}  @ 240
-  @state sidecarCache = setmetatable({}, { __mode = 'k' })  @ 313
-  @state fire = util.installHooks(mm)  @ 388
+  @state maxUUID = 0  @ 60
+  @state lock = false  @ 61
+  @state dirty = false  @ 62   -- a structural write happened; the take needs reprojecting via flushTake
+  @state modifyDepth = 0  @ 63   -- reload can re-enter modify; only the outermost flushes
+  @state flushPending = false  @ 64   -- a dirty modify happened somewhere in the nest; flush once on unwind
+  @state carriedTexts = {}  @ 65   -- parsed text/meta events mm doesn't model; re-emitted verbatim on flush
+  @state carriedPassthrough = {}  @ 66   -- parsed system messages mm doesn't model; re-emitted verbatim on flush
+  @state shapeLUT = { step = 0, linear = 1, slow = 2, ['fast-start'] = 3, ['f...  @ 82
+  @state noteEventFields = {  @ 203
+  @state ccEventFields = {  @ 208
+  @state metaDirty, metaDeleted = {}, {}  @ 225
+  @state sidecarCache = setmetatable({}, { __mode = 'k' })  @ 298
+  @state fire = util.installHooks(mm)  @ 373
 
 # Private functions
   @fn liveTake()  @ 17-23
@@ -70,47 +69,41 @@
       -- it for tm's last frame); like cm:pollUndo, a dead ptr self-heals to nil here.
   @fn setTakeGuid()  @ 28-38
   @fn print(...)  @ 40-42
-  @fn tokenOf(evt)  @ 75-81
+  @fn tokenOf(evt)  @ 74-80
       -- Opaque, content-keyed addressing. Token is private string built from
       -- the event's identity fields; collision-free by construction across the
       -- evType space. Rebuilt fresh in mm:load alongside eventsByUuid.
       -- Chained concat, not util.key: one OP_CONCAT allocates once and coerces the
       -- integer fields inline, vs util.key's per-arg tostring + table + table.concat.
       -- Byte-identical (n..'' == tostring(n)), so tokens stay stable across the rewrite.
-  @fn wideKey(chan, cc)  @ 85
-      -- 14-bit CC carriers: MSB code n, fixed-point value 0..127.99.., low 7 bits ride n+32.
-      -- See design/archive/note-macros.md § Continuous realisation.
-  @fn isWideMsb(c)  @ 86
-  @fn isWideLsb(c)  @ 87-89
-  @fn splitWide(val)  @ 90-95
-  @fn bezierSample(tau, t)  @ 114-138
-  @fn curveSample(shape, tension, t)  @ 140-154
-  @fn idOf(cc)  @ 161
-  @fn noteSidecarEncode(note)  @ 163-165
-  @fn noteSidecarDecode(msg)  @ 167-172
-  @fn ccSidecarEncode(cc)  @ 174-196
-  @fn ccSidecarDecode(body)  @ 198-215
-  @fn metaFieldsOf(evt)  @ 231-236
+  @fn bezierSample(tau, t)  @ 99-123
+  @fn curveSample(shape, tension, t)  @ 125-139
+  @fn idOf(cc)  @ 146
+  @fn noteSidecarEncode(note)  @ 148-150
+  @fn noteSidecarDecode(msg)  @ 152-157
+  @fn ccSidecarEncode(cc)  @ 159-181
+  @fn ccSidecarDecode(body)  @ 183-200
+  @fn metaFieldsOf(evt)  @ 216-221
       -- The metadata an event carries: every field that isn't structural or regenerated.
       -- eventMeta stores these opaque; the strip (which fields count) is mm's alone.
-  @fn saveMetadatum(uuid)  @ 242-246
-  @fn deleteMetadatum(uuid)  @ 248-250
-  @fn flushMetadata()  @ 254-258
+  @fn saveMetadatum(uuid)  @ 227-231
+  @fn deleteMetadatum(uuid)  @ 233-235
+  @fn flushMetadata()  @ 239-243
       -- Commit buffered metadata in one keys-set round-trip, once at the outermost
       -- modify unwind. See docs/midiManager.md § Mutation contract.
-  @fn saveMetadata()  @ 260-264
-  @fn assignNewUUID(evt)  @ 268-273
-  @fn stableByPpq(list)  @ 278-285
+  @fn saveMetadata()  @ 245-249
+  @fn assignNewUUID(evt)  @ 253-258
+  @fn stableByPpq(list)  @ 263-270
       -- Stable sort by ppq: REAPER's MIDI_Sort used to order the take and the
       -- modify re-read mirrored it back; with the read-back gone mm owns the order,
       -- and tm/view consume notes/ccs strictly in ppq order.
-  @fn rebuild(metadata)  @ 290-309
+  @fn rebuild(metadata)  @ 275-294
       -- Compact the sparse note/cc arrays to dense (verbs and dedup leave holes),
       -- order by ppq, recompute loc, and rebuild the token + uuid indices. metadata
       -- (load only) joins the per-uuid non-structural fields back onto the records.
-  @fn noteSidecarEntry(note)  @ 315-324
-  @fn ccSidecarEntry(cc)  @ 326-338
-  @fn flushTake()  @ 342-369
+  @fn noteSidecarEntry(note)  @ 300-309
+  @fn ccSidecarEntry(cc)  @ 311-323
+  @fn flushTake()  @ 327-354
       -- Project the model onto the take as one whole-take blob: reproject each uuid'd
       -- event's sidecar (cached), carry unmodelled events, preserve the EOT. Sole writer.
       · Helper functions
@@ -122,121 +115,115 @@
       · Rebuild dense indices, reproject the normalised model, persist metadata
   -- Load
   -- Locking
-  @fn checkLock()  @ 684-688
+  @fn checkLock()  @ 667-671
       @contract  writes (add*, delete*, structural assign*) must run inside mm:modify(fn)
       @contract  a structural write marks the take dirty; modify reprojects it once via flushTake
   -- Notes
-  @fn cloneOut(evt)  @ 719-728
-  @fn assignNote(loc, t)  @ 741-770
+  @fn cloneOut(evt)  @ 702-707
+  @fn assignNote(loc, t)  @ 720-749
       @contract  assignNote: lockless write when t touches no structural field
       @invariant  assignNote structural fields = {ppq, endppq, pitch, vel, chan, muted}
-  @fn addNote(t)  @ 773-793
+  @fn addNote(t)  @ 752-772
       @contract  addNote always allocates a uuid; flushTake regenerates its notation sidecar
   -- CCs
-  @fn assignCC(loc, t)  @ 831-879
+  @fn assignCC(loc, t)  @ 800-848
       @contract  assignCC: lockless iff t touches no structural field and the cc has a uuid
       @contract  first metadata stamp on a plain cc needs lock — inserts a sidecar sysex
-  @fn pushCC(t)  @ 883-894
+  @fn pushCC(t)  @ 852-863
       -- Build one ordinary CC record (its wire event is regenerated on flush). No
-      -- metadata (the lazy-sidecar path lives in addCC); the wideCC split reuses this.
-  @fn addCC(t)  @ 898-934
+      -- metadata (the lazy-sidecar path lives in addCC).
+  @fn addCC(t)  @ 866-893
       @contract  addCC lazy-sidecar: uuid + sidecar only when t has a non-structural key
-      @contract  a wideCC-registered code splits to an MSB(shaped)/LSB(step) wire pair
   -- Unified token-keyed surface
   -- Take data
-  @fn setEot(buf, targetPpq)  @ 1069-1088
+  @fn setEot(buf, targetPpq)  @ 1018-1037
       -- Reposition the take's trailing end marker (CC 0x7B all-notes-off, or FF 2F meta) to targetPpq.
       -- Shrink assumes events past targetPpq are already deleted upstream (tm:setLength does this).
 
 # Public API (mm:*)
-  @api mm:load(newTake)  @ 394-664
+  @api mm:load(newTake)  @ 379-647
       @contract  load is always external (lock-free): reads the take, normalises in-memory, reprojects
       @contract  dedup/unify/reconcile mutate the model + set dirty; flushTake writes once if dirty
-  @api mm:reload()  @ 666-669
-  @api mm:unload()  @ 672-677
+  @api mm:reload()  @ 649-652
+  @api mm:unload()  @ 655-660
       @contract  clears mm.take and event tables when take dies; distinct from load(nil) dormant seam
-  @api mm:modify(fn)  @ 692-715
+  @api mm:modify(fn)  @ 675-698
       -- Re-entrant: reload reseats absorbers via a nested modify. Flush the take and
       -- metadata once on the outermost unwind. See docs/midiManager.md § Mutation contract.
-  @api mm:notes()  @ 730-737
-  @api mm:wideCC(chan, cc, on)  @ 800-802
-      @contract  marks (chan, cc) a 14-bit MSB whose low 7 bits ride cc+32; transient, not persisted
-      @contract  writes split to MSB(shaped)/LSB(step) pair; reads coalesce to fixed-point val 0..127.99
-      @invariant  code is the only signal -- wire pair is not self-describing (design/archive/note-macros.md)
-  @api mm:ccs()  @ 804-814
-  @api mm:ccsRaw()  @ 817-827
+  @api mm:notes()  @ 709-716
+  @api mm:ccs()  @ 777-785
+      @invariant  a cc in 0..31 with fractional val is 14-bit; MSB/LSB split lives in midiBlob
+  @api mm:ccsRaw()  @ 788-796
       @contract  yields mm-internal cc records uncloned; consumers must NOT mutate them (read-only fast path)
-  @api mm:tokenOf(evt)  @ 939-942
+  @api mm:tokenOf(evt)  @ 898-901
       @contract  token stable across reload while identity fields don't change
       @invariant  token identity fields = evType, chan, ppq, and pitch|cc as relevant
       @contract  mutating an identity field retires the old token and issues a new one
-  @api mm:byToken(token)  @ 947-951
+  @api mm:byToken(token)  @ 906-910
       @contract  returns (loc, evt-clone, kind) for the token, or nil if absent
       @contract  works on every event (including plain ccs with no uuid)
       @invariant  byToken's evt-clone carries .token equal to the input
-  @api mm:add(t)  @ 957-961
+  @api mm:add(t)  @ 916-920
       @contract  t.evType='note' routes to addNote; anything else to addCC
       @contract  returns the new token, or nil if t is malformed; inherits inner lock req
-  @api mm:assign(token, t)  @ 966-972
+  @api mm:assign(token, t)  @ 925-931
       @contract  dispatches on the resolved event's evType
       @contract  returns the event's token, == input iff no identity field changed (caller re-keys)
       @contract  inherits the inner method's metadata-only lockless carve-out
-  @api mm:delete(token)  @ 977-1000
+  @api mm:delete(token)  @ 935-951
       @contract  removes the event in-memory (a hole until rebuild compacts); flushTake reprojects
-      @contract  a wideCC MSB drags its LSB shadow (code+32); both records drop
       @contract  wipes the event's ctm_<uuid> metadata via deleteMetadatum
-  @api mm:events()  @ 1004-1020
+  @api mm:events()  @ 955-969
       @contract  yields (token, evt-clone) over all live events, notes then ccs
       @invariant  events()'s clone carries .token; loc is intentionally absent
-  @api mm:take()  @ 1024-1026
-  @api mm:interpolate(A, B, ppq, field)  @ 1030-1037
+  @api mm:take()  @ 973-975
+  @api mm:interpolate(A, B, ppq, field)  @ 979-986
       -- REAPER convention: shape on A governs the curve from A to next. field defaults to
       -- 'val'; pass 'cents' to interpolate the authored cents stream (rebuildPbs seats).
-  @api mm:ccInterp()  @ 1041
+  @api mm:ccInterp()  @ 990
       -- CCINTERP from the item chunk: interpolated points per QN REAPER linearizes CC at
       -- (not ticks). rebuildPbs converts to a tick step via resolution. Default 32.
-  @api mm:resolution()  @ 1043-1046
-  @api mm:length()  @ 1049-1054
+  @api mm:resolution()  @ 992-995
+  @api mm:length()  @ 998-1003
       -- Source length. setLength positions the source's EOT explicitly to keep this in sync.
-  @api mm:name()  @ 1056-1060
-  @api mm:setName(name)  @ 1062-1065
-  @api mm:setLength(qn)  @ 1094-1106
+  @api mm:name()  @ 1005-1009
+  @api mm:setName(name)  @ 1011-1014
+  @api mm:setLength(qn)  @ 1043-1055
       -- MIDI_SetItemExtents only resizes the item; on grow it leaves source EOT short,
       -- on shrink it leaves source EOT stale. Reposition the source EOT first so the
       -- source is the right size, then bring the item to match.
       -- Project metadata only — bypasses modify(); fires reload so tm picks up the new length.
-  @api mm:timeSigs()  @ 1108-1146
+  @api mm:timeSigs()  @ 1057-1095
 
 # Signals emitted (via util.installHooks)
-  @emits takeSwapped   -- nil; only when load received a different take   @ load:650
-  @emits notesDeduped   -- { events = [{ppq, chan, pitch, droppedCount}, ...] }   @ load:652
-  @emits uuidsReassigned   -- { events = [{ppq, chan, pitch, oldUuid, newUuid}, ...] }   @ load:654
-  @emits ccsDeduped   -- { events = [{ppq, chan, evType, cc, pitch, droppedCount}, ...] }   @ load:656
-  @emits ccsReconciled   -- { events = [reconcileEvent, ...] }  -- 5 kinds in reconcileEvent.*   @ load:658
-  @emits reload   -- { wholesale=false }; in-place modify, incremental caches stay valid   @ load:660 modify:705
+  @emits takeSwapped   -- nil; only when load received a different take   @ load:633
+  @emits notesDeduped   -- { events = [{ppq, chan, pitch, droppedCount}, ...] }   @ load:635
+  @emits uuidsReassigned   -- { events = [{ppq, chan, pitch, oldUuid, newUuid}, ...] }   @ load:637
+  @emits ccsDeduped   -- { events = [{ppq, chan, evType, cc, pitch, droppedCount}, ...] }   @ load:639
+  @emits ccsReconciled   -- { events = [reconcileEvent, ...] }  -- 5 kinds in reconcileEvent.*   @ load:641
+  @emits reload   -- { wholesale=false }; in-place modify, incremental caches stay valid   @ load:643 modify:688
 
 # Uses (outbound edges)
-  @use call    eventMeta.flush  @ flushMetadata:256
-  @use call    eventMeta.load  @ load:408
-  @use call    eventMeta.saveAll  @ saveMetadata:263
-  @use call    midiBlob.parse  @ load:422
-  @use call    midiBlob.serialise  @ flushTake:360
-  @use call    perf.count  @ flushTake:367 load:662
-  @use call    perf.start  @ flushTake:344,359,363 load:396,419 modify:698,700,705,708
-  @use call    perf.stop  @ flushTake:353,361,365 load:423,663 modify:698,700,705,708
-  @use call    util.add  @ flushTake:347,350,352 load:431,432,435,436,438,453,455,463,484,490,520,549,626,632,633 delete:993 timeSigs:1141
-  @use call    util.assign  @ rebuild:299,306 load:431,435,550 assignNote:748,760 assignCC:845,859
-  @use call    util.bucket  @ load:478,537,538
-  @use call    util.clamp  @ splitWide:94 bezierSample:117
-  @use call    util.clone  @ load:518,532 cloneOut:721 addNote:781 pushCC:884
-  @use call    util.compact  @ rebuild:291,292
-  @use call    util.fromBase36  @ noteSidecarDecode:170
-  @use call    util.installHooks  @ 388
-  @use call    util.key  @ load:412,414,415,416
-  @use call    util.pick  @ load:463,490,520,550,626
+  @use call    eventMeta.flush  @ flushMetadata:241
+  @use call    eventMeta.load  @ load:391
+  @use call    eventMeta.saveAll  @ saveMetadata:248
+  @use call    midiBlob.parse  @ load:405
+  @use call    midiBlob.serialise  @ flushTake:345
+  @use call    perf.count  @ flushTake:352 load:645
+  @use call    perf.start  @ flushTake:329,344,348 load:381,402 modify:681,683,688,691
+  @use call    perf.stop  @ flushTake:338,346,350 load:406,646 modify:681,683,688,691
+  @use call    util.add  @ flushTake:332,335,337 load:414,415,418,419,421,436,438,446,467,473,503,532,609,615,616 timeSigs:1090
+  @use call    util.assign  @ rebuild:284,291 load:414,418,533 assignNote:727,739 assignCC:814,828
+  @use call    util.bucket  @ load:461,520,521
+  @use call    util.clamp  @ bezierSample:102
+  @use call    util.clone  @ load:501,515 cloneOut:704 addNote:760 pushCC:853
+  @use call    util.compact  @ rebuild:276,277
+  @use call    util.fromBase36  @ noteSidecarDecode:155
+  @use call    util.installHooks  @ 373
+  @use call    util.key  @ load:395,397,398,399
+  @use call    util.pick  @ load:446,473,503,533,609
   @use call    util.print  @ print:41
-  @use call    util.round  @ splitWide:92
-  @use call    util.toBase36  @ noteSidecarEncode:164 ccSidecarEncode:195
+  @use call    util.toBase36  @ noteSidecarEncode:149 ccSidecarEncode:180
   @use require midiBlob  @ 9
   @use require perf  @ 10
   @use require util  @ 8

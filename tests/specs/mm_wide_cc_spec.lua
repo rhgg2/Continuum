@@ -1,9 +1,5 @@
--- 14-bit CC primitive (design/archive/note-macros.md § Continuous realisation).
--- A wideCC-registered MSB code carries a fixed-point value 0..127.99..; mm
--- splits it to an MSB(shaped)/LSB(step) wire pair on write and coalesces it
--- back on read. The code is the only signal -- the wire pair is not
--- self-describing -- so an unregistered code stays a plain 7-bit CC, one
--- message, integer value.
+-- 14-bit CC primitive: a fractional val on cc 0..31 splits to an MSB/LSB wire pair; the codec
+-- owns it, not a registry. see docs/midiManager.md § 14-bit CCs
 
 local t = require('support')
 local realMM = require('realMidiManager')()
@@ -18,7 +14,7 @@ local function freshTake(name)
   return take, fakeReaper
 end
 
--- Raw wire CCs straight from REAPER, bypassing mm's coalescing. cc-sorted.
+-- Raw wire CCs straight from REAPER, bypassing the codec's coalescing. cc-sorted.
 local function wireCCs(rp, take)
   local _, _, n = rp.MIDI_CountEvts(take)
   local out = {}
@@ -45,18 +41,17 @@ end
 
 return {
   {
-    name = 'wide CC write splits into an MSB-shaped / LSB-step wire pair',
+    name = 'fractional val (code 0..31) splits into an MSB-shaped / LSB-step wire pair',
     run = function()
       local take, rp = freshTake()
       local mm = realMM(take)
-      mm:wideCC(1, 20, true)
       mm:modify(function()
         mm:add{ evType = 'cc', chan = 1, cc = 20, ppq = 480, val = 100 + 5 / 128, shape = 'linear' }
       end)
 
       local wire = wireCCs(rp, take)
       t.eq(#wire, 2, 'one logical wide CC becomes two wire events')
-      t.eq(wire[1].cc, 20, 'MSB on the registered code')
+      t.eq(wire[1].cc, 20, 'MSB on the authored code')
       t.eq(wire[1].val, 100, 'MSB = floor(val)')
       t.eq(wire[1].shape, LINEAR, 'MSB carries the authored shape')
       t.eq(wire[1].ppq, 480)
@@ -72,17 +67,14 @@ return {
     run = function()
       local take = freshTake()
       local mm = realMM(take)
-      mm:wideCC(1, 20, true)
       mm:modify(function()
         mm:add{ evType = 'cc', chan = 1, cc = 20, ppq = 480, val = 100 + 5 / 128, shape = 'linear' }
       end)
 
-      -- A second instance against the same take is a reload; wideCC is
-      -- transient mm state, re-declared before the coalescing read.
+      -- A second instance reloads from the wire; parse coalesces the pair.
       local mm2 = realMM(take)
-      mm2:wideCC(1, 20, true)
       local cs = readCCs(mm2)
-      t.eq(#cs, 1, 'the LSB lane is hidden; one event surfaces')
+      t.eq(#cs, 1, 'the LSB lane folds in; one event surfaces')
       t.eq(cs[1].cc, 20)
       t.eq(cs[1].val, 100 + 5 / 128, 'value reconstructed exactly')
       t.eq(cs[1].shape, 'linear', 'MSB shape surfaces')
@@ -94,12 +86,11 @@ return {
     run = function()
       local take = freshTake()
       local mm = realMM(take)
-      mm:wideCC(1, 20, true)
       local v = (8192 + 100) / 128   -- a pb-delta of +100 raw units, fixed-point
       mm:modify(function()
         mm:add{ evType = 'cc', chan = 1, cc = 20, ppq = 240, val = v }
       end)
-      local mm2 = realMM(take); mm2:wideCC(1, 20, true)
+      local mm2 = realMM(take)
       local cs = readCCs(mm2)
       t.eq(#cs, 1)
       t.eq(cs[1].val * 128 - 8192, 100, '14-bit reconstructs the pb-delta exactly')
@@ -107,31 +98,29 @@ return {
   },
 
   {
-    name = 'a registered MSB with no LSB partner upgrades to 14-bit (LSB 0)',
+    name = 'a lone code 0..31 on the wire (no +32 partner) stays a plain 7-bit CC',
     run = function()
       local take, rp = freshTake()
       -- Plant a lone 7-bit CC20 on the wire, as foreign MIDI would.
       rp.MIDI_InsertCC(take, false, false, 240, 0xB0, 0, 20, 77)
 
       local mm = realMM(take)
-      mm:wideCC(1, 20, true)
       local cs = readCCs(mm)
-      t.eq(#cs, 1, 'the lone MSB surfaces as one event')
+      t.eq(#cs, 1, 'the lone CC surfaces as one event')
       t.eq(cs[1].cc, 20)
-      t.eq(cs[1].val, 77, 'upgraded with LSB 0 -> integer value')
+      t.eq(cs[1].val, 77, 'integer value, unsplit')
     end,
   },
 
   {
-    name = 'plain (unregistered) CC is untouched: one message, integer value',
+    name = 'integer val is untouched: one message, no LSB companion',
     run = function()
       local take, rp = freshTake()
       local mm = realMM(take)
-      -- code 20 is NOT registered on this instance.
       mm:modify(function()
         mm:add{ evType = 'cc', chan = 1, cc = 20, ppq = 240, val = 64 }
       end)
-      t.eq(#wireCCs(rp, take), 1, 'no LSB companion for an unregistered code')
+      t.eq(#wireCCs(rp, take), 1, 'no LSB companion for an integer val')
       local cs = readCCs(mm)
       t.eq(#cs, 1); t.eq(cs[1].val, 64)
     end,
@@ -142,7 +131,6 @@ return {
     run = function()
       local take, rp = freshTake()
       local mm = realMM(take)
-      mm:wideCC(1, 20, true)
       local tok
       mm:modify(function()
         tok = mm:add{ evType = 'cc', chan = 1, cc = 20, ppq = 480, val = 100 + 5 / 128, shape = 'linear' }
@@ -150,23 +138,6 @@ return {
       t.eq(#wireCCs(rp, take), 2, 'pair present before delete')
       mm:modify(function() mm:delete(tok) end)
       t.eq(#wireCCs(rp, take), 0, 'both MSB and LSB gone')
-    end,
-  },
-
-  {
-    name = 'wideCC registration clears on take swap (per-take, not inherited)',
-    run = function()
-      local takeA, rp = freshTake('take-A')
-      rp:bindTake('take-B', 'take-B/item', 'take-B/track')
-      local mm = realMM(takeA)
-      mm:wideCC(1, 20, true)
-
-      -- Swap to a different take; cc20 there is a plain 7-bit code, not a carrier.
-      mm:load('take-B')
-      mm:modify(function()
-        mm:add{ evType = 'cc', chan = 1, cc = 20, ppq = 240, val = 64 }
-      end)
-      t.eq(#wireCCs(rp, 'take-B'), 1, 'no LSB companion: registration did not survive the swap')
     end,
   },
 }

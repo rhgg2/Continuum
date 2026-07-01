@@ -1170,8 +1170,8 @@ local function rebuildInternals(fx)
   return external
 end
 
--- Carrier setup + CC walk: arm prior carriers/sidecars, reconcile (raw,ppqL), project CCs.
--- Returns reapCarriers; run after fx expansion. see docs/trackerManager.md § Rebuild: CC walk
+-- CC walk: build the carrier routing map, reconcile (raw,ppqL), project CCs.
+-- Returns a carrier-map persister; run after fx expansion. see docs/trackerManager.md § Rebuild: CC walk
 local function rebuildCCs(fx)
   -- Carrier codes from the prior rebuild: route existing events out of cc columns; new codes
   -- allocated in fx expansion once windows are known. see design/archive/note-macros.md § Delta-code allocation
@@ -1179,51 +1179,55 @@ local function rebuildCCs(fx)
   local carrierRoute = {}
   for chan, carriers in pairs(prevCarrier) do
     carrierRoute[chan] = {}
-    for _, c in ipairs(carriers) do
-      carrierRoute[chan][c.code] = true
-      mm:wideCC(chan, c.code, true)
-    end
+    for _, c in ipairs(carriers) do carrierRoute[chan][c.code] = true end
   end
-
   local ccWrites = mmBatch()
-  for _, cc in mm:ccs() do
+  for _, cc in mm:ccsRaw() do
+    local token = mm:tokenOf(cc)
     if cc.evType == 'cc' and carrierRoute[cc.chan] and carrierRoute[cc.chan][cc.cc] then
       -- Carrier: generator-owned, no metadata; routed out by allocated code,
       -- reconciled stream-level in fx expansion. see design/archive/note-macros.md § Delta-code allocation
       util.add(fx.ccExisting[cc.chan].carrier,
-        { ppq = cc.ppq, val = cc.val, shape = cc.shape, cc = cc.cc, token = cc.token })
+        { ppq = cc.ppq, val = cc.val, shape = cc.shape, cc = cc.cc, token = token })
       goto continue
     end
     -- Rest seat: a generator-owned base CC at a real cc target (derived sidecar), routed out
     -- of columns like a carrier so it stays off-screen. see design/note-macros-v2.md § Continuous cc
     if cc.evType == 'cc' and cc.derived == 'ccbase' then
       util.add(fx.ccExisting[cc.chan].base,
-        { ppq = cc.ppq, val = cc.val, cc = cc.cc, token = cc.token })
+        { ppq = cc.ppq, val = cc.val, cc = cc.cc, token = token })
       goto continue
     end
     -- Replace fill: the generated curve written straight onto a cc target (replace mode), routed
     -- out like the rest seat and reconciled at Pass B. see design/note-macros-v2.md § Continuous cc
     if cc.evType == 'cc' and cc.derived == 'ccfill' then
       util.add(fx.ccExisting[cc.chan].fill,
-        { ppq = cc.ppq, val = cc.val, shape = cc.shape, cc = cc.cc, token = cc.token })
+        { ppq = cc.ppq, val = cc.val, shape = cc.shape, cc = cc.cc, token = token })
       goto continue
     end
+
+    -- Timing reconcile on the raw (read-only) record; capture what moved for the column clone.
+    local movedPpq, movedPpqL
     if not cc.derived then
       if staleSwing[cc.chan] and cc.ppqL ~= nil then
         local newPpq = tm:fromLogical(cc.chan, cc.ppqL)
         if newPpq ~= cc.ppq then
-          ccWrites.assign({ token = cc.token }, { ppq = newPpq })
-          cc.ppq   = newPpq
-          cc.token = mm:tokenOf(cc)   -- ppq is an identity field; resync the stashed token
+          ccWrites.assign({ token = token }, { ppq = newPpq })
+          movedPpq = newPpq
         end
       elseif rawDivergesFromLogical(cc) then
         local newPpqL = tm:toLogical(cc.chan, cc.ppq)
-        ccWrites.assign({ token = cc.token }, { ppqL = newPpqL })
-        cc.ppqL = newPpqL
+        ccWrites.assign({ token = token }, { ppqL = newPpqL })
+        movedPpqL = newPpqL
       end
     end
 
+    -- pb/pa reconcile-only (no column); cc/at/pc clone into their column carrying the reseat.
     if cc.evType == 'cc' or cc.evType == 'at' or cc.evType == 'pc' then
+      local event = util.clone(cc)
+      event.token = token
+      if movedPpq  then event.ppq  = movedPpq; event.token = mm:tokenOf(event) end
+      if movedPpqL then event.ppqL = movedPpqL end
       local channel = channels[cc.chan]
       local col
       if cc.evType == 'cc' then
@@ -1233,24 +1237,14 @@ local function rebuildCCs(fx)
         col = channel.columns[cc.evType] or { events = {} }
         channel.columns[cc.evType] = col
       end
-      -- cc is our own mm:ccs() clone, already wide-expanded and reseated -- reuse it as the
-      -- column event rather than cloning again (projectLogical rewrites its ppq to logical later).
-      util.add(col.events, cc)
+      util.add(col.events, event)
     end
     ::continue::
   end
   ccWrites.commit()
 
-  -- Reap stale carrier codes (relocated / removed); persist live map for pa's add bank.
-  -- see design/archive/note-macros.md § Delta-code allocation
+  -- Persist the live carrier map for pa's add bank. see design/archive/note-macros.md § Delta-code allocation
   return function(newFxCarrier)
-    for chan in pairs(carrierRoute) do
-      local live = {}
-      for _, c in ipairs(newFxCarrier[chan] or {}) do live[c.code] = true end
-      for code in pairs(carrierRoute[chan]) do
-        if not live[code] then mm:wideCC(chan, code, false) end
-      end
-    end
     if not util.deepEq(prevCarrier, newFxCarrier) and mm:take() then
       ds:assign('fxCarrier', next(newFxCarrier) and newFxCarrier or util.REMOVE)
     end
@@ -1446,13 +1440,13 @@ local function rebuildRegionPark(deferred)
     for _, spec in ipairs(restores) do
       local channel = channels[spec.chan]
       while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
-      local colNote = util.clone(spec, { uuid = true })    -- sheds the parked uuid; mm:add mints a fresh one
-      colNote.ppq = tm:fromLogical(spec.chan, spec.ppqL)    -- realised onset derived fresh (spec is logical-only)
-      util.add(channel.columns.notes[spec.lane].events, colNote)
+      local note = util.clone(spec, { uuid = true })    -- sheds the parked uuid; mm:add mints a fresh one
+      note.ppq = tm:fromLogical(spec.chan, spec.ppqL)    -- realised onset derived fresh (spec is logical-only)
+      util.add(channel.columns.notes[spec.lane].events, note)
       table.sort(channel.columns.notes[spec.lane].events, function(a, b) return a.ppqL < b.ppqL end)
-      -- Lazy: reshaped at commit so it reads colNote.ppq/endppq after the tail-walk clip.
+      -- Lazy: reshaped at commit so it reads note.ppq/endppq after the tail-walk clip.
       deferred.addLazy(function()
-        return util.pick(colNote, "ppq endppq ppqL endppqL pitch vel detune delay sample",
+        return util.pick(note, "ppq endppq ppqL endppqL pitch vel detune delay sample",
                          { evType = 'note', chan = spec.chan, lane = spec.lane })
       end)
     end
@@ -1826,7 +1820,6 @@ local function rebuildFx(fx, deferred)
           local code = generators.allocateCarrier(occupied)
           colourCode[colour] = code
           occupied[code], occupied[code + 32] = true, true
-          mm:wideCC(chan, code, true)
           util.add(newCarriers, { code = code, target = target })
         end
         colourEnd[colour] = inst.endL

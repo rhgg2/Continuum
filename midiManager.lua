@@ -57,7 +57,6 @@ local noteCount  = 0    -- high-water extent of notes/ccs; verbs leave holes, re
 local ccCount    = 0
 local eventsByUuid      = {}
 local tokenIdx   = {}
-local wideMsb    = {}   -- (chan*128+cc) -> true: code is a 14-bit MSB; LSB rides cc+32
 local maxUUID    = 0
 local lock       = false
 local dirty      = false  -- a structural write happened; the take needs reprojecting via flushTake
@@ -78,20 +77,6 @@ local function tokenOf(evt)
   if et == 'pa'   then return 'pa\0'   .. evt.chan .. '\0' .. evt.pitch .. '\0' .. evt.ppq end
   if et == 'cc'   then return 'cc\0'   .. evt.chan .. '\0' .. evt.cc    .. '\0' .. evt.ppq end
   return et .. '\0' .. evt.chan .. '\0' .. evt.ppq
-end
-
--- 14-bit CC carriers: MSB code n, fixed-point value 0..127.99.., low 7 bits ride n+32.
--- See design/archive/note-macros.md § Continuous realisation.
-local function wideKey(chan, cc) return chan * 128 + cc end
-local function isWideMsb(c) return c.evType == 'cc' and c.cc and wideMsb[wideKey(c.chan, c.cc)] end
-local function isWideLsb(c)
-  return c.evType == 'cc' and c.cc and c.cc >= 32 and wideMsb[wideKey(c.chan, c.cc - 32)]
-end
-local function splitWide(val)
-  local msb = math.floor(val)
-  local lsb = util.round((val - msb) * 128)
-  if lsb >= 128 then msb, lsb = msb + 1, 0 end
-  return util.clamp(msb, 0, 127), lsb
 end
 
 local shapeLUT = { step = 0, linear = 1, slow = 2, ['fast-start'] = 3, ['fast-end'] = 4, bezier = 5 }
@@ -396,9 +381,7 @@ function mm:load(newTake)
   perf.start('load')
 
   local takeSwapped = take ~= newTake
-  -- wideCC registration is per-take config (tm re-asserts it each rebuild from
-  -- the take's hosts); a swapped-in take must not inherit the old one's codes.
-  if takeSwapped then take = newTake; wideMsb = {}; setTakeGuid() end
+  if takeSwapped then take = newTake; setTakeGuid() end
 
   notes, ccs, eventsByUuid, tokenIdx, maxUUID, lock = {}, {}, {}, {}, 0, false
   carriedTexts, carriedPassthrough, dirty = {}, {}, false
@@ -720,10 +703,6 @@ local function cloneOut(evt)
   if not evt then return nil end
   local c = util.clone(evt)
   c.token = tokenOf(evt)
-  if isWideMsb(evt) then
-    local lsb = tokenIdx[tokenOf{ evType = 'cc', chan = evt.chan, cc = evt.cc + 32, ppq = evt.ppq }]
-    c.val = evt.val + (lsb and lsb.val or 0) / 128
-  end
   return c
 end
 
@@ -794,22 +773,14 @@ end
 
 ----- CCs
 
---contract: marks (chan, cc) a 14-bit MSB whose low 7 bits ride cc+32; transient, not persisted
---contract: writes split to MSB(shaped)/LSB(step) pair; reads coalesce to fixed-point val 0..127.99
---invariant: code is the only signal -- wire pair is not self-describing (design/archive/note-macros.md)
-function mm:wideCC(chan, cc, on)
-  wideMsb[wideKey(chan, cc)] = on or nil
-end
-
+--invariant: a cc in 0..31 with fractional val is 14-bit; MSB/LSB split lives in midiBlob
 function mm:ccs()
   local i = 0
   return function()
-    while true do
-      i = i + 1
-      local msg = ccs[i]
-      if not msg then return end
-      if not isWideLsb(msg) then return i, cloneOut(msg) end
-    end
+    i = i + 1
+    local msg = ccs[i]
+    if not msg then return end
+    return i, cloneOut(msg)
   end
 end
 
@@ -817,12 +788,10 @@ end
 function mm:ccsRaw()
   local i = 0
   return function()
-    while true do
-      i = i + 1
-      local msg = ccs[i]
-      if not msg then return end
-      if not isWideLsb(msg) then return i, msg end
-    end
+    i = i + 1
+    local msg = ccs[i]
+    if not msg then return end
+    return i, msg
   end
 end
 
@@ -879,7 +848,7 @@ local function assignCC(loc, t)
 end
 
 -- Build one ordinary CC record (its wire event is regenerated on flush). No
--- metadata (the lazy-sidecar path lives in addCC); the wideCC split reuses this.
+-- metadata (the lazy-sidecar path lives in addCC).
 local function pushCC(t)
   local msg = util.clone(t)
   if not msg.muted then msg.muted = nil end
@@ -894,7 +863,6 @@ local function pushCC(t)
 end
 
 --contract: addCC lazy-sidecar: uuid + sidecar only when t has a non-structural key
---contract: a wideCC-registered code splits to an MSB(shaped)/LSB(step) wire pair
 local function addCC(t)
   if not (take and checkLock()) then return end
 
@@ -908,15 +876,6 @@ local function addCC(t)
 
   if not chanMsgLUT[t.evType] then
     print('Error! Unspecified message type')
-    return
-  end
-
-  if isWideMsb(t) then
-    local msb, lsb = splitWide(t.val)
-    pushCC{ evType = 'cc', chan = t.chan, cc = t.cc,      ppq = t.ppq, val = msb,
-            shape = t.shape, tension = t.tension, muted = t.muted }
-    pushCC{ evType = 'cc', chan = t.chan, cc = t.cc + 32, ppq = t.ppq, val = lsb,
-            shape = 'step', muted = t.muted }
     return
   end
 
@@ -972,7 +931,6 @@ function mm:assign(token, t)
 end
 
 --contract: removes the event in-memory (a hole until rebuild compacts); flushTake reprojects
---contract: a wideCC MSB drags its LSB shadow (code+32); both records drop
 --contract: wipes the event's ctm_<uuid> metadata via deleteMetadatum
 function mm:delete(token)
   if not (take and checkLock()) then return end
@@ -987,16 +945,9 @@ function mm:delete(token)
     return
   end
 
-  local recs = { evt }
-  if isWideMsb(evt) then
-    local lsb = tokenIdx[tokenOf{ evType = 'cc', chan = evt.chan, cc = evt.cc + 32, ppq = evt.ppq }]
-    if lsb then util.add(recs, lsb) end
-  end
-  for _, rec in ipairs(recs) do
-    tokenIdx[tokenOf(rec)] = nil
-    ccs[rec.loc] = nil
-    if rec.uuid then eventsByUuid[rec.uuid] = nil; deleteMetadatum(rec.uuid) end
-  end
+  tokenIdx[token] = nil
+  ccs[evt.loc] = nil
+  if evt.uuid then eventsByUuid[evt.uuid] = nil; deleteMetadatum(evt.uuid) end
 end
 
 --contract: yields (token, evt-clone) over all live events, notes then ccs
@@ -1010,8 +961,6 @@ function mm:events()
       if not e then
         if src == ccs then return end
         src, i = ccs, 0
-      elseif src == ccs and isWideLsb(e) then
-        -- LSB shadow: hidden behind its MSB
       else
         return tokenOf(e), cloneOut(e)
       end

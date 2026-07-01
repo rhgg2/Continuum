@@ -315,6 +315,32 @@ Shape codes follow REAPER's `MIDI_SetCCShape`: `step, linear, slow,
 fast-start, fast-end, bezier` → 0..5. `tension` is only meaningful for
 `bezier` and is cleared when the shape moves away from it.
 
+## 14-bit CCs
+
+A CC in controller codes 0..31 carries 14-bit resolution: the high 7 bits
+ride the code, the low 7 bits ride `code+32` (REAPER's convention, matching
+the MIDI spec's coarse/fine controller pairs). Continuum makes this
+invisible above the wire — **the value's type is the whole signal**. mm
+stores one record with a possibly-fractional `val`; the split/coalesce lives
+entirely in the wire codec (`midiBlob`):
+
+- **serialise** — a `cc` in 0..31 with a fractional `val` emits two wire
+  events: MSB `floor(val)` on the code (carrying the authored shape/tension),
+  LSB `round(frac*128)` on `code+32` (always `step`). An integer `val` stays
+  one plain 7-bit event.
+- **parse** — a `cc` in 0..31 with a coincident `cc+32` at the same
+  `(chan, ppq)` coalesces to one record, `val = msb + lsb/128`; the MSB keeps
+  shape/tension, the LSB folds in and drops.
+
+There is no registry and nothing to arm: a value is wide because it is
+fractional, not because a code was marked. Carriers (the only 14-bit
+producers, all in 0..31) get this for free by writing `(8192+raw)/128`.
+
+Pairing is positional, so a hand-authored or foreign coincident
+`code`/`code+32` pair on codes 0..31 is read as one 14-bit value rather than
+two independent lanes — accepted, as those codes are the MIDI-spec fine
+partners and Continuum owns them.
+
 ## Text / sysex events
 
 Continuum reads two text-event types and ignores the rest:
