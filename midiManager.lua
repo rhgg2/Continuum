@@ -273,6 +273,7 @@ end
 -- order by ppq, recompute loc, and rebuild the token + uuid indices. metadata
 -- (load only) joins the per-uuid non-structural fields back onto the records.
 local function rebuild(metadata)
+  perf.start('rebuild')
   notes = util.compact(notes, noteCount); noteCount = #notes
   ccs   = util.compact(ccs,   ccCount);   ccCount   = #ccs
   stableByPpq(notes); stableByPpq(ccs)
@@ -291,6 +292,7 @@ local function rebuild(metadata)
       if metadata then util.assign(c, metadata[c.uuid]) end
     end
   end
+  perf.stop('rebuild')
 end
 
 -- Reuse each uuid'd event's sidecar record across flushes; recompute only when a
@@ -680,7 +682,7 @@ function mm:modify(fn)
   if modifyDepth == 1 then metaDirty, metaDeleted = {}, {} end   -- reset once; nested modifies accumulate
   perf.start('verbs'); local ok, err = pcall(fn); perf.stop('verbs')
   if dirty then                                 -- clean (metadata-only) gestures touch no structure
-    perf.start('rebuild'); rebuild(nil); perf.stop('rebuild')
+    rebuild(nil)
     flushPending = true
   end
   lock = false
