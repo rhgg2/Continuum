@@ -1,4 +1,4 @@
-@module util  src=util.lua  loc=583  sha=a7abbd3  mode=namespace  self=util
+@module util  src=util.lua  loc=595  sha=a7abbd3  mode=namespace  self=util
 
 # Invariants & contracts
   @invariant  util.OPEN is the canonical "deliberately unbounded tail" marker for a note's endppqL. It is math.huge, so arithmetic on an open tail just works (inf + finite = inf, inf > finite = true) — callers no longer special-case the sentinel except to communicate intent. util.serialise/unserialise round-trip the non-finite floats via explicit inf/-inf/nan literals so the on-disk form is stable. Distinct from util.REMOVE: REMOVE clears a key on assign; OPEN is a persisted *value* of endppqL.
@@ -7,21 +7,21 @@
   @const util = {}  @ 5
       @invariant  stateless module: pure helpers, no module-level mutable state beyond the REMOVE/OPEN sentinels
       @invariant  util.REMOVE is the canonical delete marker honoured by assign and by mm/cm assignment APIs
-  @const BASE36 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'  @ 267
-  @const BASE62 = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRST...  @ 286
-  @const LUA_KEYWORDS = {}  @ 485
-  @const prettyEmit  @ 510   -- forward decl (mutual recursion with emitTable)
+  @const BASE36 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'  @ 279
+  @const BASE62 = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRST...  @ 298
+  @const LUA_KEYWORDS = {}  @ 497
+  @const prettyEmit  @ 522   -- forward decl (mutual recursion with emitTable)
 
 # Private functions
   @fn print(...)  @ 15-17
-  @fn escape_string(s)  @ 164-179
+  @fn escape_string(s)  @ 176-191
   -- Lua-literal disk format (human-editable; read by load(), never P_EXT)
-  @fn bareKey(k)  @ 491-493
-  @fn luaNumber(n)  @ 496-501
+  @fn bareKey(k)  @ 503-505
+  @fn luaNumber(n)  @ 508-513
       -- inf/nan are not bare Lua, but their arithmetic forms are and need no env.
-  @fn nonFiniteNote(v)  @ 504-508
+  @fn nonFiniteNote(v)  @ 516-520
       -- Inline note so a hand-editor recognises the arithmetic non-finite forms.
-  @fn emitTable(tbl, indent, seen)  @ 512-548
+  @fn emitTable(tbl, indent, seen)  @ 524-560
 
 # Public API (util.*)
   @api util.print(...)  @ 7-13
@@ -36,47 +36,49 @@
       -- absent (test harness).
   @api util.pick(src, keys, adds)  @ 79-88
   @api util.bucket(buckets, key, val)  @ 90-95
-  @api util.key(...)  @ 99-103
+  @api util.key(...)  @ 101-115
       -- Opaque compound key: join identity fields with NUL, which can't appear
       -- in a guid, track-key, or stringified scalar. Never split back apart.
-  @api util.keys(t)  @ 105-109
-  @api util.compact(t, n)  @ 112-116
+      -- Small arities unroll to a single concat (per-event on the load/rebuild key
+      -- paths); tostring kept per arg so output is identical for any arg type.
+  @api util.keys(t)  @ 117-121
+  @api util.compact(t, n)  @ 124-128
       -- Sparse → dense; n is the pre-sparse length.
-  @api util.seek(items, mode, key, filter, keyFn)  @ 119-140
+  @api util.seek(items, mode, key, filter, keyFn)  @ 131-152
       @contract  assumes items sorted by keyFn (defaults to .ppq); 'before' modes scan to first miss then stop
-  @api util.clone(src, exclude, deep)  @ 143-152
+  @api util.clone(src, exclude, deep)  @ 155-164
       @contract  exclude applies only to the outermost table; deep recursion drops the exclude set
-  @api util.deepClone(src)  @ 154
-  @api util.deepEq(a, b)  @ 156-162
-  @api util.installHooks(owner)  @ 182-199
+  @api util.deepClone(src)  @ 166
+  @api util.deepEq(a, b)  @ 168-174
+  @api util.installHooks(owner)  @ 194-211
       @contract  listeners filter by signal name at registration; forward requires source itself ran installHooks
-  @api util.isNote(e)  @ 201
-  @api util.between(events, lo, hi, filter)  @ 204-215
+  @api util.isNote(e)  @ 213
+  @api util.between(events, lo, hi, filter)  @ 216-227
       @contract  iterates events with ppq in half-open [lo, hi); adjacent windows tile without overlap
-  @api util.clamp(val,min,max)  @ 217-225
-  @api util.setDigit(val, d, pos, base, half)  @ 227-231
-  @api util.snapTo(v, dir, interval)  @ 234-237
+  @api util.clamp(val,min,max)  @ 229-237
+  @api util.setDigit(val, d, pos, base, half)  @ 239-243
+  @api util.snapTo(v, dir, interval)  @ 246-249
       @contract  advances at least one full interval; values already on a boundary do not no-op
-  @api util.nudgedScalar(v, lo, hi, dir, interval)  @ 239-242
-  @api util.oneOf(choices, txt)  @ 244-249
-  @api util.round(n, to)  @ 251-257
-  @api util.gcd(a, b)  @ 259-263
-  @api util.lcm(a, b)  @ 265
-  @api util.toBase36(n)  @ 269-278
-  @api util.fromBase36(txt)  @ 280-282
-  @api util.toBase62(n)  @ 288-297
-  @api util.fromBase62(txt)  @ 299-308
-  @api util.dotimes(n, v)  @ 311-319
+  @api util.nudgedScalar(v, lo, hi, dir, interval)  @ 251-254
+  @api util.oneOf(choices, txt)  @ 256-261
+  @api util.round(n, to)  @ 263-269
+  @api util.gcd(a, b)  @ 271-275
+  @api util.lcm(a, b)  @ 277
+  @api util.toBase36(n)  @ 281-290
+  @api util.fromBase36(txt)  @ 292-294
+  @api util.toBase62(n)  @ 300-309
+  @api util.fromBase62(txt)  @ 311-320
+  @api util.dotimes(n, v)  @ 323-331
       @contract  overloaded on type of v: function => call n times for side effect; else build n-array filled with v
-  @api util.serialise(value, exclude, seen)  @ 322-362
+  @api util.serialise(value, exclude, seen)  @ 334-374
       @contract  strict: cycles raise; exclude applies only to the outermost table (recursion drops it)
-  @api util.unserialise(input)  @ 365-480
+  @api util.unserialise(input)  @ 377-492
       @contract  strict: trailing chars after the root value raise; scalars decode back to number/boolean/string
-  @api util.prettySerialise(value)  @ 560-562
+  @api util.prettySerialise(value)  @ 572-574
       @contract  emits a `return <literal>` chunk for load(); non-finite → 1/0 -1/0 0/0; cycles raise
-  @api util.prettyUnserialise(text)  @ 565-571
+  @api util.prettyUnserialise(text)  @ 577-583
       @contract  sandboxed load() of the disk literal (text-only, empty env); ok→value, fail→nil,err
-  @api util.instantiate(name, deps)  @ 575-581
+  @api util.instantiate(name, deps)  @ 587-593
       @contract  executes the named module file as a fresh chunk, passing `deps` as its `...` argument. Used for factory modules whose file body IS the constructor (vs. stateless `require`d tables). Test seam: a function in util._stubs[name] takes precedence and is called with deps — so harnesses can swap a fake without altering the production graph.
 
 # REAPER API surface

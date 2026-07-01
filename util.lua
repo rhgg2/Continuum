@@ -96,9 +96,21 @@ end
 
 -- Opaque compound key: join identity fields with NUL, which can't appear
 -- in a guid, track-key, or stringified scalar. Never split back apart.
+-- Small arities unroll to a single concat (per-event on the load/rebuild key
+-- paths); tostring kept per arg so output is identical for any arg type.
 function util.key(...)
+  local n = select('#', ...)
+  if n == 2 then local a, b = ...
+    return tostring(a) .. '\0' .. tostring(b)
+  elseif n == 3 then local a, b, c = ...
+    return tostring(a) .. '\0' .. tostring(b) .. '\0' .. tostring(c)
+  elseif n == 4 then local a, b, c, d = ...
+    return tostring(a) .. '\0' .. tostring(b) .. '\0' .. tostring(c) .. '\0' .. tostring(d)
+  elseif n == 5 then local a, b, c, d, e = ...
+    return tostring(a) .. '\0' .. tostring(b) .. '\0' .. tostring(c) .. '\0' .. tostring(d) .. '\0' .. tostring(e)
+  end
   local parts = {}
-  for i = 1, select('#', ...) do parts[i] = tostring((select(i, ...))) end
+  for i = 1, n do parts[i] = tostring((select(i, ...))) end
   return table.concat(parts, '\0')
 end
 
