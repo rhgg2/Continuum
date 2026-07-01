@@ -71,14 +71,20 @@ local function sortByPPQ(tbl)
   table.sort(tbl, function(a, b) return a.ppq < b.ppq end)
 end
 
+-- pbRange resolves through cm's 5 tiers -- too costly to re-fetch per pb in the
+-- absorber pass. Cache it; rebuild (the cm coherence point) drops the cache.
+local pbLimCents
+local function pbLim()
+  if not pbLimCents then pbLimCents = cm:get('pbRange') * 100 end
+  return pbLimCents
+end
+
 local function centsToRaw(cents)
-  local lim = cm:get('pbRange') * 100
-  return util.clamp(util.round(cents * 8192 / lim), -8192, 8191)
+  return util.clamp(util.round(cents * 8192 / pbLim()), -8192, 8191)
 end
 
 local function rawToCents(raw)
-  local lim = cm:get('pbRange') * 100
-  return util.round(raw / 8192 * lim)
+  return util.round(raw / 8192 * pbLim())
 end
 
 local function delayToPPQ(d) return timing.delayToPPQ(d, mm:resolution()) end
@@ -1593,7 +1599,7 @@ local function rebuildFx(fx, deferred)
   end
 
   local res = mm:resolution()
-  local pbRangeCents = cm:get('pbRange') * 100   -- slide clamps its target to what pb can reach
+  local pbRangeCents = pbLim()   -- slide clamps its target to what pb can reach
   local temper = tuning.findTemper(cm:get('temper'), cm:get('tempers'))
   local function stepOp(pitch, detune, n)        -- trill: scale steps -> (pitch, detune) via the temper
     return tuning.transposeStep(temper, pitch, detune, n)
@@ -2161,11 +2167,21 @@ local function rebuildPbs(noteLive, replacePb)
 
     table.sort(pbs, function(a, b) return a.ppq < b.ppq end)
 
+    -- detune-at-ppq for every pb in one linear merge (pbs and lane1Events both
+    -- ppq-sorted), replacing a per-pb util.seek scan that ran O(pbs*notes).
+    local detuneOf, di, dcur = {}, 1, 0
+    for _, pb in ipairs(pbs) do
+      while di <= #lane1Events and lane1Events[di].ppq <= pb.ppq do
+        dcur = lane1Events[di].detune or 0
+        di = di + 1
+      end
+      detuneOf[pb] = dcur
+    end
     -- Consolidated assign: one entry per existing pb where any of (ppq moved, ppqL
     -- restamped, raw changed, cents back-derived, derived shape changed) needs to land.
     for _, pb in ipairs(pbs) do
       if pb.origTok then
-        local d         = detuneAt(lane1Events, pb.ppq)
+        local d         = detuneOf[pb]
         local wireCents = (not pb.derived and inReplacePb(chan, pb.ppq)) and 0 or pb.cents
         local newRaw    = centsToRaw(wireCents + d)
         local shapeChanged = pb.derived and pb.shape ~= pb.origShape
@@ -2193,7 +2209,7 @@ local function rebuildPbs(noteLive, replacePb)
       anyVisible = anyVisible or not hidden
       util.add(pbColEvents, projectCC(pb, pb.origTok, {
         val    = pb.cents,
-        detune = detuneAt(lane1Events, pb.ppq),
+        detune = detuneOf[pb],
         hidden = hidden,
       }))
     end
@@ -2290,6 +2306,7 @@ function tm:rebuild(takeChanged)
   if not mm:take() then return end
   rebuilding = true
   takeChanged = takeChanged or false
+  pbLimCents = nil   -- coherence point: refresh cached pbRange for cents<->raw conversions
 
   clearSwing()   -- rebuild is the (cm, mm) coherence point
   channels = {}
@@ -2310,25 +2327,25 @@ function tm:rebuild(takeChanged)
   -- walk's atomic note commit: host clip + these inserts in one mm:modify (one MIDI_Sort, canonical delete-first).
   local deferred = mmBatch()
 
-  local external     = rebuildInternals(fx)     -- partition; lay internal columns; reseat stale-swing notes
-  local reapCarriers = rebuildCCs(fx)           -- carrier setup + CC walk; reseat stale-swing CCs
+  perf.start('internals'); local external = rebuildInternals(fx); perf.stop('internals')  -- partition; internal cols; reseat swing notes
+  perf.start('ccs'); local reapCarriers = rebuildCCs(fx); perf.stop('ccs')  -- carrier setup + CC walk; reseat swing CCs
   staleSwing = {}                               -- swing consumers (partition + CC walk) done; see :53 invariant
-  rebuildExtraColumns()                         -- reconcile persisted extra columns
-  rebuildExternals(external)                    -- reintroduce foreign / diverged notes up front
+  perf.start('extraCols'); rebuildExtraColumns(); perf.stop('extraCols')  -- reconcile persisted extra columns
+  perf.start('externals'); rebuildExternals(external); perf.stop('externals')  -- reintroduce foreign / diverged notes
 
-  rebuildRegionPark(deferred)                   -- region-replace parking: park covered, carry/restore prior set
-  rebuildPA()                                   -- project PAs into the settled note columns
+  perf.start('regionPark'); rebuildRegionPark(deferred); perf.stop('regionPark')  -- park covered, carry/restore prior
+  perf.start('pa'); rebuildPA(); perf.stop('pa')  -- project PAs into settled note columns
 
-  local newFxCarrier = rebuildFx(fx, deferred)  -- fx expansion: derived notes/CCs/carriers; note writes deferred
-  reapCarriers(newFxCarrier)                    -- disarm stale carrier codes; persist the live map
+  perf.start('fx'); local newFxCarrier = rebuildFx(fx, deferred); perf.stop('fx')  -- fx expansion: derived notes/CCs/carriers
+  perf.start('reapCarr'); reapCarriers(newFxCarrier); perf.stop('reapCarr')  -- disarm stale carrier codes; persist live map
 
-  rebuildTails(fx, deferred)                    -- unified tail/onset walk + atomic note commit
-  rebuildPbs(fx.noteLive, fx.replacePb)         -- absorber reconciliation + pb resynthesis
-  rebuildPCs(fx)                                -- PC synthesis (trackerMode)
+  perf.start('tails'); rebuildTails(fx, deferred); perf.stop('tails')  -- unified tail/onset walk + atomic note commit
+  perf.start('pbs'); rebuildPbs(fx.noteLive, fx.replacePb); perf.stop('pbs')  -- absorber reconciliation + pb resynthesis
+  perf.start('pcs'); rebuildPCs(fx); perf.stop('pcs')  -- PC synthesis (trackerMode)
 
-  projectLogical()                              -- project columns to logical
+  perf.start('projLogical'); projectLogical(); perf.stop('projLogical')  -- project columns to logical
 
-  reload()
+  perf.start('view'); reload(); perf.stop('view')  -- reload local cache -> tv:rebuild
   rebuilding = false
 
   --emits: rebuild -- takeChanged:boolean
