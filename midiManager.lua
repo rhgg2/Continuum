@@ -690,7 +690,6 @@ end
 ----- Notes
 
 local function cloneOut(evt)
-  perf.count('clones', 1) 
   if not evt then return nil end
   local c = util.clone(evt)
   c.token = tokenOf(evt)

@@ -1126,16 +1126,18 @@ local function rebuildInternals(fx)
     -- the tail walk clips tails afterward, so overlap here is never a concern.
     while #notes < note.lane do pushNoteCol(channel) end
     local col = notes[note.lane]
-    -- clone not alias: projectLogical rewrites column ppq to logical; mm retains raw
-    local colNote = util.clone(note)
+    -- note is already our own mm:notes() clone -- repurpose it as the column note rather than
+    -- cloning again. mm's stored note is untouched; projectLogical later rewrites this ppq to logical.
+    local colNote = note
     -- set detune/delay at ingestion to skip defensive guards downstream
     colNote.detune = colNote.detune or 0
     colNote.delay  = colNote.delay  or 0
     colNote.token  = mm:tokenOf(note)
     -- when swing is stale, rederive realised onset from logical; endppq handled by the tail walk.
     if staleSwing[note.chan] then
+      local was = colNote.ppq   -- capture raw before the reseat mutates it (alias, not a copy)
       colNote.ppq = tm:fromLogical(note.chan, colNote.ppqL, delayToPPQ(colNote.delay))
-      util.add(reseated, { evt = colNote, was = note.ppq })
+      util.add(reseated, { evt = colNote, was = was })
     end
     util.add(col.events, colNote)
   end
@@ -1219,7 +1221,10 @@ local function rebuildCCs(fx)
         col = channel.columns[cc.evType] or { events = {} }
         channel.columns[cc.evType] = col
       end
-      util.add(col.events, projectCC(cc, tok))
+      -- cc is our own mm:ccs() clone, already wide-expanded and reseated -- reuse it as the
+      -- column event rather than cloning again (projectLogical rewrites its ppq to logical later).
+      cc.token = tok
+      util.add(col.events, cc)
     end
     ::continue::
   end
