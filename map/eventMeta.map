@@ -1,4 +1,4 @@
-@module eventMeta  src=eventMeta.lua  loc=84  sha=61aa319  mode=chunk  self=eventMeta
+@module eventMeta  src=eventMeta.lua  loc=92  sha=b1615e0  mode=chunk  self=eventMeta
 @deps ps
 
 # Invariants & contracts
@@ -11,32 +11,31 @@
   @require util = 'util'  @ 7
 
 # Private state
-  @state eventMeta = {}  @ 23
+  @state keysCache = {}  @ 16
+  @state eventMeta = {}  @ 29
 
 # Private functions
   @fn keysSlot(guid)  @ 11
   @fn entrySlot(guid, uuidTxt)  @ 12
-  @fn readKeys(guid)  @ 16-18
-      -- The keys set { [uuidTxt] = true } is the loader's index — projext has no
-      -- enumerate-by-prefix, so the live uuid set is tracked explicitly.
-  @fn writeKeys(guid, set)  @ 19-21
+  @fn readKeys(guid)  @ 17-23
+  @fn writeKeys(guid, set)  @ 24-27
 
 # Public API (eventMeta:*)
-  @api eventMeta:load(guid)  @ 26-34
+  @api eventMeta:load(guid)  @ 32-41
       @contract  { [uuid:int] = fields }; empty table if the guid has no metadata
-  @api eventMeta:flush(guid, dirty, deleted)  @ 38-52
+  @api eventMeta:flush(guid, dirty, deleted)  @ 45-59
       @contract  batched incremental persist: applies dirty={[uuid]=fields} + deleted={[uuid]=true}
       @contract  reads/writes the keys set once -- the per-modify hot path, O(#ops) not O(#ops*#keys)
-  @api eventMeta:saveAll(guid, byUuid)  @ 55-67
+  @api eventMeta:saveAll(guid, byUuid)  @ 62-74
       @contract  replaces the pool's whole metadata with byUuid={[uuid]=fields}; sweeps uuids no longer present
-  @api eventMeta:copyPool(srcGuid, dstGuid)  @ 70-73
+  @api eventMeta:copyPool(srcGuid, dstGuid)  @ 77-80
       @contract  forks srcGuid's metadata onto dstGuid (an unpooled clone mints a fresh pool; this seeds it)
-  @api eventMeta:dropPool(guid)  @ 76-82
+  @api eventMeta:dropPool(guid)  @ 83-90
       @contract  forever-deletes a pool's metadata (deleteSlot's keeper removal)
 
 # Uses (outbound edges)
-  @use call    ps.assign  @ writeKeys:20 flush:43,48 saveAll:60,64 dropPool:79,81
-  @use call    ps.get  @ readKeys:17 load:30
-  @use call    util.fromBase36  @ load:31
-  @use call    util.toBase36  @ flush:42,47 saveAll:59
+  @use call    ps.assign  @ writeKeys:26 flush:50,55 saveAll:67,71 dropPool:86,88
+  @use call    ps.get  @ readKeys:20 load:37
+  @use call    util.fromBase36  @ load:38
+  @use call    util.toBase36  @ flush:49,54 saveAll:66
   @use require util  @ 7

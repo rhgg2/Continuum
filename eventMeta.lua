@@ -11,12 +11,18 @@ local ps   = (...).ps
 local function keysSlot(guid)           return 'ctm.' .. guid .. '.keys'      end
 local function entrySlot(guid, uuidTxt) return 'ctm.' .. guid .. '.u.' .. uuidTxt end
 
--- The keys set { [uuidTxt] = true } is the loader's index — projext has no
--- enumerate-by-prefix, so the live uuid set is tracked explicitly.
+-- The keys set { [uuidTxt] = true } is the loader's index (projext has no enumerate-by-
+-- prefix). Cached in memory; load() re-syncs it. See docs/eventMeta.md § Keyset cache.
+local keysCache = {}
 local function readKeys(guid)
-  return ps:get('project', keysSlot(guid)) or {}
+  local cached = keysCache[guid]
+  if cached then return cached end
+  local set = ps:get('project', keysSlot(guid)) or {}
+  keysCache[guid] = set
+  return set
 end
 local function writeKeys(guid, set)
+  keysCache[guid] = set
   ps:assign('project', keysSlot(guid), next(set) and set or util.REMOVE)
 end
 
@@ -25,6 +31,7 @@ local eventMeta = {}
 --contract: { [uuid:int] = fields }; empty table if the guid has no metadata
 function eventMeta:load(guid)
   if not guid then return {} end
+  keysCache[guid] = nil                       -- re-sync from projext (absorbs external undo/redo)
   local out = {}
   for uuidTxt in pairs(readKeys(guid)) do
     local fields = ps:get('project', entrySlot(guid, uuidTxt))
@@ -79,6 +86,7 @@ function eventMeta:dropPool(guid)
     ps:assign('project', entrySlot(guid, uuidTxt), util.REMOVE)
   end
   ps:assign('project', keysSlot(guid), util.REMOVE)
+  keysCache[guid] = nil
 end
 
 return eventMeta

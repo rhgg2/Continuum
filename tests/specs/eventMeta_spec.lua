@@ -12,7 +12,7 @@ local function fresh()
   _G.reaper = reaper
   local ps = util.instantiate('pextStore')
   local em = util.instantiate('eventMeta', { ps = ps })
-  return em, reaper
+  return em, reaper, ps
 end
 
 return {
@@ -82,6 +82,19 @@ return {
       t.eq(em:load('{dst}')[1].detune, -50, 'dst inherits src')
       em:flush('{dst}', { [1] = { detune = 0 } }, {})
       t.eq(em:load('{src}')[1].detune, -50, 'src unaffected by the dst edit')
+    end,
+  },
+
+  {
+    -- The keyset is cached in memory to keep flush off an O(N) re-parse; load() must
+    -- still re-sync from projext, since REAPER undo/redo rewrites the blob behind us.
+    name = 'load re-reads the keyset after an external (undo-style) projext wipe',
+    run = function()
+      local em, _, ps = fresh()
+      em:flush('{p1}', { [1] = { detune = -50 } }, {})
+      t.eq(em:load('{p1}')[1].detune, -50)                    -- primes the cache
+      ps:assign('project', 'ctm.{p1}.keys', util.REMOVE)      -- undo wipes the pool keyset
+      t.eq(next(em:load('{p1}')), nil, 'load reflects the wipe, not the stale cache')
     end,
   },
 
