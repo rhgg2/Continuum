@@ -42,4 +42,29 @@ return {
       t.eq(dump.passthrough[1].msg,  '\xF2\x01\x02', 'passthrough bytes intact')
     end,
   },
+
+  {
+    -- The sidecar cache reuses a note's notation record across flushes; a
+    -- structural edit must invalidate it, not serve the stale pre-edit body.
+    name = 'editing a cached note re-encodes its notation sidecar at the new pitch',
+    run = function()
+      local take, rp = freshTake()
+      rp:seedMidi(take, {
+        notes = { { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100 } },
+      })
+
+      local mm = realMM(nil)
+      mm:load(take)   -- mints a uuid + caches the note's notation sidecar
+
+      local _, note = mm:notes()()
+      mm:modify(function() mm:assign(note.token, { pitch = 67 }) end)
+
+      local pitch
+      for _, e in ipairs(rp:dumpMidi(take).texts) do
+        local p = e.eventtype == 15 and e.msg:match('^NOTE%s+%d+%s+(%d+)%s+custom')
+        if p then pitch = tonumber(p) end
+      end
+      t.eq(pitch, 67, 'transposed note re-encodes its notation sidecar')
+    end,
+  },
 }

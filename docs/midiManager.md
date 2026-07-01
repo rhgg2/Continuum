@@ -190,6 +190,20 @@ key it allocates a uuid + inserts a sidecar in the same shot. Plain ccs
 (no metadata) skip the allocation entirely. Symmetric with `addNote`'s
 unconditional uuid, but lazy — most ccs never need one.
 
+### Sidecar regeneration cache
+
+`flushTake` rewrites the whole take (`MIDI_SetAllEvts`) on every mutation, so it
+regenerates the sidecar text stream from scratch each flush. Encoding every
+notation/cc sidecar and allocating a record per event is O(all events) — the bulk
+of a large take's flush cost. But an event's encoded sidecar only changes when a
+field feeding its body changes (note: chan/pitch/uuid; cc: evType/chan/id/value/
+uuid), which a gesture rarely touches across the whole take. So each uuid'd event
+caches its sidecar record, keyed weakly on the event object: a hit reuses the
+record (only `ppq`, which places but doesn't encode the sidecar, is refreshed); a
+miss re-encodes. `rebuild` reuses event objects in place, so the cache survives a
+modify; `load` mints fresh objects, so it self-resets, and the weak keys let rows
+for deleted events fall away with them.
+
 ## Sidecar index maintenance
 
 Notation sidecars (type 15) and cc/pb sidecars (type -1) share one

@@ -308,20 +308,48 @@ local function rebuild(metadata)
   end
 end
 
--- Project the in-memory model onto the take as one whole-take blob: regenerate
--- every sidecar from its event's uuid, carry through unmodelled events, and
--- preserve the source-length EOT. The sole writer to the take.
+-- Reuse each uuid'd event's sidecar record across flushes; recompute only when a
+-- field feeding its body changes. Weak keys drop a deleted event's row. See docs.
+local sidecarCache = setmetatable({}, { __mode = 'k' })
+
+local function noteSidecarEntry(note)
+  local hit = sidecarCache[note]
+  if not (hit and hit.chan == note.chan and hit.pitch == note.pitch and hit.uuid == note.uuid) then
+    hit = { chan = note.chan, pitch = note.pitch, uuid = note.uuid,
+            entry = { eventtype = 15, msg = noteSidecarEncode(note) } }
+    sidecarCache[note] = hit
+  end
+  hit.entry.ppq = note.ppq   -- ppq places the sidecar but isn't in its body; refresh every flush
+  return hit.entry
+end
+
+local function ccSidecarEntry(cc)
+  local hit = sidecarCache[cc]
+  if not (hit and hit.evType == cc.evType and hit.chan == cc.chan and hit.cc == cc.cc
+          and hit.pitch == cc.pitch and hit.val == cc.val and hit.vel == cc.vel
+          and hit.uuid == cc.uuid) then
+    hit = { evType = cc.evType, chan = cc.chan, cc = cc.cc, pitch = cc.pitch,
+            val = cc.val, vel = cc.vel, uuid = cc.uuid,
+            entry = { eventtype = -1, msg = ccSidecarEncode(cc) } }
+    sidecarCache[cc] = hit
+  end
+  hit.entry.ppq = cc.ppq
+  return hit.entry
+end
+
+-- Project the model onto the take as one whole-take blob: reproject each uuid'd
+-- event's sidecar (cached), carry unmodelled events, preserve the EOT. Sole writer.
 local function flushTake()
   if not take then return end
   perf.start('sidecars')
   local texts = {}
-  for _, n in ipairs(notes) do
-    if n.uuid then util.add(texts, { ppq = n.ppq, eventtype = 15, msg = noteSidecarEncode(n) }) end
+  for _, note in ipairs(notes) do
+    if note.uuid then util.add(texts, noteSidecarEntry(note)) end
   end
-  for _, c in ipairs(ccs) do
-    if c.uuid then util.add(texts, { ppq = c.ppq, eventtype = -1, msg = ccSidecarEncode(c) }) end
+  for _, cc in ipairs(ccs) do
+    if cc.uuid then util.add(texts, ccSidecarEntry(cc)) end
   end
-  for _, t in ipairs(carriedTexts) do util.add(texts, t) end
+  for _, carried in ipairs(carriedTexts) do util.add(texts, carried) end
   perf.stop('sidecars')
 
   local source   = reaper.GetMediaItemTake_Source(take)
