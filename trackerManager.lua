@@ -1380,16 +1380,18 @@ local function rebuildExternals(external)
   extWrites.commit()
 end
 
--- Clip each parked member's tail to lane / pitch successor onset and take end:
--- displayed membership is the realised held chord, not raw overlaps (logical frame).
-local function realiseParked(members, takeLenL)
+-- Clip each parked member's tail to lane/pitch successor onset and take end (logical frame),
+-- against bounds (unclipped on-take notes). See docs/trackerManager.md § Region-replace parking.
+local function realiseParked(members, takeLenL, bounds)
   local byLane, byPitch, records = {}, {}, {}
-  for _, m in ipairs(members) do
-    local rec = { evt = m }
-    util.add(records, rec)
-    util.bucket(byLane,  m.lane,  rec)
-    util.bucket(byPitch, m.pitch, rec)
+  local function seat(evt, lane, member)
+    local rec = { evt = evt }
+    util.bucket(byLane,  lane,      rec)
+    util.bucket(byPitch, evt.pitch, rec)
+    if member then util.add(records, rec) end
   end
+  for _, m in ipairs(members)      do seat(m,     m.lane, true)  end
+  for _, b in ipairs(bounds or {}) do seat(b.evt, b.lane, false) end
   local onset = function(rec) return rec.evt.ppqL end
   local function byOnset(a, b) return onset(a) < onset(b) end
   for _, g in pairs(byLane)  do table.sort(g, byOnset) end
@@ -1498,8 +1500,21 @@ local function rebuildRegionPark(deferred)
         { ppq = spec.ppqL, endppq = spec.endppqL or util.OPEN }))
     end
     for chan = 1, 16 do
-      realiseParked(channels[chan].parked, tm:toLogical(chan, takeLen))
-      for _, m in ipairs(channels[chan].parked) do m.endppqC = m.endppqL end
+      local members = channels[chan].parked
+      if #members > 0 then
+        -- On-take survivors bound a parked tail on its own lane/pitch (rebuildTails' model), so a
+        -- member clips to the first note after the region, not just the next parked member.
+        local bounds = {}
+        for laneIdx, col in ipairs(channels[chan].columns.notes) do
+          for _, evt in ipairs(col.events) do
+            if evt.evType ~= 'pa' and evt.ppqL ~= nil then
+              util.add(bounds, { evt = evt, lane = laneIdx })
+            end
+          end
+        end
+        realiseParked(members, tm:toLogical(chan, takeLen), bounds)
+        for _, m in ipairs(members) do m.endppqC = m.endppqL end
+      end
     end
   end
 

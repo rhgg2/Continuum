@@ -263,6 +263,44 @@ return {
   },
 
   {
+    name = 'replace: a parked member tail is clipped by an on-take note after the region',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { pitch = 60, ppq = 0,   endppq = 480, lane = 1 })   -- covered -> parks; authored tail 480
+      addNote(h, { pitch = 60, ppq = 240, endppq = 480, lane = 1 })   -- past the window -> stays on the take
+      injectArp(h, { endppq = 120 })                                  -- region covers only [0,120)
+      local parked
+      for _, m in ipairs(h.tm:getChannel(1).parked) do
+        if m.pitch == 60 and m.ppq == 0 then parked = m end
+      end
+      t.truthy(parked, 'the note at onset 0 is parked off the take')
+      t.eq(parked.endppqC, 240,
+        'the parked tail is clipped by the following on-take note at 240, not left running to its authored ceiling')
+    end,
+  },
+
+  {
+    name = 'replace: a parked member tail is clipped by a parked note in a later region',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { pitch = 60, ppq = 0,   endppq = 480, lane = 1 })   -- parked by region A; authored tail 480
+      addNote(h, { pitch = 60, ppq = 240, endppq = 480, lane = 1 })   -- parked by region B
+      h.ds:assign('fxRegions', {
+        { uuid = 'fxr-a', chan = 1, startppq = 0,   endppq = 120, fx = arpUp },
+        { uuid = 'fxr-b', chan = 1, startppq = 240, endppq = 360, fx = arpUp },
+      })
+      h.tm:rebuild()
+      local parked
+      for _, m in ipairs(h.tm:getChannel(1).parked) do
+        if m.pitch == 60 and m.ppq == 0 then parked = m end
+      end
+      t.truthy(parked, 'the note at onset 0 is parked by region A')
+      t.eq(parked.endppqC, 240,
+        'region A parked tail is clipped by the region-B parked note at 240')
+    end,
+  },
+
+  {
     name = 'replace husk (no kinds) parks nothing -- its members keep sounding',
     run = function(harness)
       local h = harness.mk()

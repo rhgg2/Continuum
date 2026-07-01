@@ -283,7 +283,10 @@ runs it, with a pointer to its detail where one exists.
 - **Region-replace parking** (`rebuildRegionPark`). Authored notes and
   ccs a replace-region covers leave the take; the prior parked set splits
   into still-covered carry-forward and restores that re-enter their
-  columns token-less. The note del/adds ride the tail walk's atomic
+  columns token-less. Carried-forward tails clip against on-take note
+  bounds the same way the tail walk clips real notes, so a parked tail
+  stops at the first successor past its region, not just the next
+  parked member. The note del/adds ride the tail walk's atomic
   commit. See `design/note-macros-v2.md` § Generator output.
 - **PA dispatch** (`rebuildPA`). Attach each `pa` to the note column
   whose voice it modulates. Runs after column layout so the view and fx

@@ -1,4 +1,4 @@
-@module trackerManager  src=trackerManager.lua  loc=2589  sha=9446591  mode=chunk  self=tm
+@module trackerManager  src=trackerManager.lua  loc=2604  sha=0f213b1  mode=chunk  self=tm
 @deps mm, cm, ds
 
 # Invariants & contracts
@@ -100,8 +100,8 @@
   @state swingSnap  @ 66
       @invariant  swingSnap caches the (cm, mm)-derived swing transforms; nil
   @state pbLimCents  @ 76
-  @state rebuilding = false  @ 2385
-  @state mmReloaded = false  @ 2388
+  @state rebuilding = false  @ 2400
+  @state mmReloaded = false  @ 2403
 
 # Private functions
   @fn print(...)  @ 42-44
@@ -241,39 +241,39 @@
   @fn rebuildExternals(external)  @ 1314-1381
       -- Reintroduce externals: pack lane, stamp ppqL/endppqL, backfill metadata, tag `fixed`;
       -- block window + tail passes -- onsets frozen, tails clipped. see docs/trackerManager.md § Rebuild: externals
-  @fn realiseParked(members, takeLenL)  @ 1385-1407
-      -- Clip each parked member's tail to lane / pitch successor onset and take end:
-      -- displayed membership is the realised held chord, not raw overlaps (logical frame).
-  @fn rebuildRegionPark(deferred)  @ 1411-1561
+  @fn realiseParked(members, takeLenL, bounds)  @ 1385-1409
+      -- Clip each parked member's tail to lane/pitch successor onset and take end (logical frame),
+      -- against bounds (unclipped on-take notes). See docs/trackerManager.md § Region-replace parking.
+  @fn rebuildRegionPark(deferred)  @ 1413-1576
       -- Region-replace parking: authored events a replace window covers leave the take;
       -- the prior parked set carries still-covered forward, restores the rest. see design/note-macros-v2.md § Generator output
-  @fn rebuildPA()  @ 1565-1590
+  @fn rebuildPA()  @ 1580-1605
       -- Late PA projection: mixes into note columns once lanes are settled, so the view (and rebuildFx's
       -- channelStreams) read it inline. Must follow column layout, so it can't ride the CC walk.
-  @fn rebuildFx(fx, deferred)  @ 1594-1919
+  @fn rebuildFx(fx, deferred)  @ 1609-1934
       -- Fx expansion: fx-carrying notes / fx-regions -> derived notes, CCs, carriers;
       -- reconcile vs existing, note writes deferred to the tail walk. Returns per-chan carrier map. see design/archive/note-macros.md § Pipeline placement
-  @fn rebuildTails(fx, deferred)  @ 1923-1999
+  @fn rebuildTails(fx, deferred)  @ 1938-2014
       -- Unified tail/onset walk + atomic commit: real notes, fixed externals, fx.noteLive
       -- walk together (onset clamp then tail clip); host clip + fxNote del/add in one mm:modify. see docs/trackerManager.md § Rebuild: tail walk
-  @fn rebuildPbs(noteLive, replacePb)  @ 2003-2308
+  @fn rebuildPbs(noteLive, replacePb)  @ 2018-2323
       -- Reseat absorber pbs against the post-walk lane-1 layout, recompute their raw vals,
       -- and project the pb column. see docs/tuning.md § Absorber reconciliation
-  @fn rebuildPCs(fx)  @ 2312-2342
+  @fn rebuildPCs(fx)  @ 2327-2357
       -- PC synthesis (trackerMode only). Runs after externals so a foreign-MIDI note inherits
       -- sample from the prevailing PC.
-  @fn projectLogical()  @ 2346-2381
+  @fn projectLogical()  @ 2361-2396
       -- Project columns to logical. tv surface is logical-only; ppq/endppq leave here as floats.
       -- see docs/trackerManager.md § Rebuild: logical projection
   -- Rebuild
   -- Lifecycle
-  @fn readSwings()  @ 2462
+  @fn readSwings()  @ 2477
       -- Merged-tier read: a save at any tier lands in the same merged view, so diff
       -- captures real change to the composite a channel will resolve to.
-  @fn snapshotSwingState()  @ 2466-2469
-  @fn swingChannelDiff(prev, cur)  @ 2471-2478
-  @fn changedSwingNames(prev, cur)  @ 2480-2490
-  @fn channelsResolvingTo(names)  @ 2493-2505
+  @fn snapshotSwingState()  @ 2481-2484
+  @fn swingChannelDiff(prev, cur)  @ 2486-2493
+  @fn changedSwingNames(prev, cur)  @ 2495-2505
+  @fn channelsResolvingTo(names)  @ 2508-2520
       -- Global swing shadows the per-channel slots: a hit on the global name affects all 16.
 
 # Public API (tm:*)
@@ -317,90 +317,90 @@
       @contract  idempotent: emits an assign only when n.muted differs from desired
       @invariant  lastMuteSet also tags later-added notes
       @invariant  PA events ride along in note columns but carry no mute state — skipped
-  @api tm:rebuild(takeChanged)  @ 2394-2449
+  @api tm:rebuild(takeChanged)  @ 2409-2464
       -- see docs/trackerManager.md § Rebuild
-  @api tm:bindTake(take, opts)  @ 2561-2571
-  @api tm:detach()  @ 2574-2579
+  @api tm:bindTake(take, opts)  @ 2576-2586
+  @api tm:detach()  @ 2589-2594
       @contract  take died under us — nils mm.take so tm:currentTake reads nil; not bindTake(nil) seam
-  @api tm:currentTake()  @ 2581
-  @api tm:reloadFromReaper()  @ 2585
+  @api tm:currentTake()  @ 2596
+  @api tm:reloadFromReaper()  @ 2600
       @contract  re-reads the bound take from REAPER; mm:reload fires standard reload→rebuild
       @invariant  reloadFromReaper does not swap take; for coord's external-mutation watcher
 
 # Signals emitted (via util.installHooks)
   @emits preflush   -- (adds, assigns, deletes)   @ flush:638
   @emits postflush   -- nil   @ flush:651,774
-  @emits rebuild   -- takeChanged:boolean   @ rebuild:2448
+  @emits rebuild   -- takeChanged:boolean   @ rebuild:2463
 
 # Uses (outbound edges)
-  @use call    cm.boundTake  @ 2524,2539
-  @use call    cm.get  @ pbLim:78 flush:639 currentSwing:848 rebuildExternals:1321,1358 rebuildFx:1645 rebuildPCs:2313 readSwings:2462
-  @use call    cm.set  @ bindTake:2564
-  @use call    cm.setContext  @ bindTake:2563 detach:2576
-  @use call    ds.assign  @ flushParked:621,622 rebuildCCs:1282 rebuildExtraColumns:1309 rebuildRegionPark:1436
-  @use call    ds.get  @ flushParked:604,605,621,622 currentSwing:854 rebuildCCs:1211 rebuildExtraColumns:1290 rebuildRegionPark:1435,1442,1469,1534 rebuildFx:1649,1655 rebuildPbs:2004 2464,2541 snapshotSwingState:2468 channelsResolvingTo:2496
-  @use call    generators.allocateCarrier  @ rebuildFx:1853
-  @use call    generators.parkWindows  @ rebuildRegionPark:1442
-  @use call    generators.parksNotes  @ rebuildFx:1809
+  @use call    cm.boundTake  @ 2539,2554
+  @use call    cm.get  @ pbLim:78 flush:639 currentSwing:848 rebuildExternals:1321,1358 rebuildFx:1660 rebuildPCs:2328 readSwings:2477
+  @use call    cm.set  @ bindTake:2579
+  @use call    cm.setContext  @ bindTake:2578 detach:2591
+  @use call    ds.assign  @ flushParked:621,622 rebuildCCs:1282 rebuildExtraColumns:1309 rebuildRegionPark:1438
+  @use call    ds.get  @ flushParked:604,605,621,622 currentSwing:854 rebuildCCs:1211 rebuildExtraColumns:1290 rebuildRegionPark:1437,1444,1471,1549 rebuildFx:1664,1670 rebuildPbs:2019 2479,2556 snapshotSwingState:2483 channelsResolvingTo:2511
+  @use call    generators.allocateCarrier  @ rebuildFx:1868
+  @use call    generators.parkWindows  @ rebuildRegionPark:1444
+  @use call    generators.parksNotes  @ rebuildFx:1824
   @use call    mm.add  @ flush:766 tileLength:1023 mmBatch:1112,1113
   @use call    mm.assign  @ flush:758 mmBatch:1105
   @use call    mm.byToken  @ idxReconcile:293
-  @use call    mm.ccInterp  @ rebuildPbs:2047
-  @use call    mm.ccsRaw  @ rebuildCCs:1218 rebuildPA:1582 rebuildFx:1634 rebuildPbs:2037 rebuildPCs:2336
+  @use call    mm.ccInterp  @ rebuildPbs:2062
+  @use call    mm.ccsRaw  @ rebuildCCs:1218 rebuildPA:1597 rebuildFx:1649 rebuildPbs:2052 rebuildPCs:2351
   @use call    mm.delete  @ flush:754 mmBatch:1102
   @use call    mm.events  @ loadIndex:785 tileLength:1002
-  @use call    mm.interpolate  @ interpolate:835 rebuildPbs:2100
+  @use call    mm.interpolate  @ interpolate:835 rebuildPbs:2115
   @use call    mm.length  @ length:830 currentSwing:847 setLength:915 rescaleLength:936 tileLength:989
-  @use call    mm.load  @ bindTake:2569
+  @use call    mm.load  @ bindTake:2584
   @use call    mm.modify  @ flush:752 tileLength:1018 mmBatch:1101
   @use call    mm.name  @ name:832
   @use call    mm.notes  @ rebuildInternals:1158
-  @use call    mm.reload  @ reloadFromReaper:2585
-  @use call    mm.resolution  @ delayToPPQ:90 resolution:831 currentSwing:847 setLength:929 rescaleLength:938,982 tileLength:1004 rebuildExternals:1321 rebuildFx:1643 rebuildPbs:2047 projectLogical:2347
+  @use call    mm.reload  @ reloadFromReaper:2600
+  @use call    mm.resolution  @ delayToPPQ:90 resolution:831 currentSwing:847 setLength:929 rescaleLength:938,982 tileLength:1004 rebuildExternals:1321 rebuildFx:1658 rebuildPbs:2062 projectLogical:2362
   @use call    mm.setLength  @ setLength:929 rescaleLength:938,982 tileLength:1004
   @use call    mm.setName  @ setName:833
-  @use call    mm.take  @ editCursor:825,827 playFrom:1032,1033 rebuildCCs:1281 rebuildExtraColumns:1309 rebuildRegionPark:1435 rebuild:2396 currentTake:2581
+  @use call    mm.take  @ editCursor:825,827 playFrom:1032,1033 rebuildCCs:1281 rebuildExtraColumns:1309 rebuildRegionPark:1437 rebuild:2411 currentTake:2596
   @use call    mm.timeSigs  @ timeSigs:834
-  @use call    mm.tokenOf  @ rebuildCCs:1219,1262 rebuildPA:1586 rebuildPbs:2040 rebuildPCs:2338
-  @use call    mm.unload  @ detach:2578
+  @use call    mm.tokenOf  @ rebuildCCs:1219,1262 rebuildPA:1601 rebuildPbs:2055 rebuildPCs:2353
+  @use call    mm.unload  @ detach:2593
   @use call    perf.count  @ flush:730
   @use call    perf.report  @ flush:773
-  @use call    perf.start  @ flush:655,751 rebuild:2422,2423,2425,2426,2428,2429,2431,2432,2434,2435,2436,2438,2442
-  @use call    perf.stop  @ flush:772,773 rebuild:2422,2423,2425,2426,2428,2429,2431,2432,2434,2435,2436,2438,2442
+  @use call    perf.start  @ flush:655,751 rebuild:2437,2438,2440,2441,2443,2444,2446,2447,2449,2450,2451,2453,2457
+  @use call    perf.stop  @ flush:772,773 rebuild:2437,2438,2440,2441,2443,2444,2446,2447,2449,2450,2451,2453,2457
   @use call    timing.delayToPPQ  @ delayToPPQ:90
   @use call    timing.eval  @ currentSwing:864,865
   @use call    timing.invert  @ currentSwing:870,872
   @use call    timing.isIdentity  @ currentSwing:851
-  @use call    timing.ppqToDelay  @ projectLogical:2355
+  @use call    timing.ppqToDelay  @ projectLogical:2370
   @use call    timing.resolveComposite  @ currentSwing:852
-  @use call    tuning.findTemper  @ rebuildFx:1645
-  @use call    tuning.transposeStep  @ rebuildFx:1647
-  @use call    util.add  @ reconcilePCsForChan:153 chansInsert:242 addLowlevel:312 assignLowlevel:338 deleteLowlevel:349 reconcilePcs:428,435 addParked:580 assignParked:584 deleteParked:588 flushParked:610 flush:695,697,701,705,716 loadIndex:788 setLength:920,922 rescaleLength:966 tileLength:997 pushNoteCol:1062 mmBatch:1093,1094,1095,1097 nudgeSamePitchOnsets:1145 rebuildInternals:1160,1161,1162,1185,1187 rebuildCCs:1223,1230,1237,1273 rebuildExternals:1377 realiseParked:1389 rebuildRegionPark:1422,1428,1429,1459,1478,1496,1521,1544,1556 rebuildPA:1586 rebuildFx:1673,1687,1699,1702,1755,1756,1766,1772,1778,1786,1812,1825,1856,1869,1886,1896 rebuildTails:1931,1936 rebuildPbs:2022,2028,2067,2076,2080,2115,2209,2236,2240,2301 rebuildPCs:2323,2328,2338
+  @use call    tuning.findTemper  @ rebuildFx:1660
+  @use call    tuning.transposeStep  @ rebuildFx:1662
+  @use call    util.add  @ reconcilePCsForChan:153 chansInsert:242 addLowlevel:312 assignLowlevel:338 deleteLowlevel:349 reconcilePcs:428,435 addParked:580 assignParked:584 deleteParked:588 flushParked:610 flush:695,697,701,705,716 loadIndex:788 setLength:920,922 rescaleLength:966 tileLength:997 pushNoteCol:1062 mmBatch:1093,1094,1095,1097 nudgeSamePitchOnsets:1145 rebuildInternals:1160,1161,1162,1185,1187 rebuildCCs:1223,1230,1237,1273 rebuildExternals:1377 realiseParked:1391 rebuildRegionPark:1424,1430,1431,1461,1480,1498,1511,1536,1559,1571 rebuildPA:1601 rebuildFx:1688,1702,1714,1717,1770,1771,1781,1787,1793,1801,1827,1840,1871,1884,1901,1911 rebuildTails:1946,1951 rebuildPbs:2037,2043,2082,2091,2095,2130,2224,2251,2255,2316 rebuildPCs:2338,2343,2353
   @use call    util.assign  @ refreshEntry:279 assignLowlevel:319 flushParked:614 flush:723 projectCC:1070 rebuildExternals:1375
-  @use call    util.bucket  @ reconcilePCsForChan:148 flush:663,666 realiseParked:1390,1391 rebuildFx:1608,1636,1656,1694,1711,1722,1834 rebuildTails:1950,1951 rebuildPbs:2041
+  @use call    util.bucket  @ reconcilePCsForChan:148 flush:663,666 realiseParked:1389,1390 rebuildFx:1623,1651,1671,1709,1726,1737,1849 rebuildTails:1965,1966 rebuildPbs:2056
   @use call    util.clamp  @ centsToRaw:83
-  @use call    util.clone  @ tileLength:996,1022 setMutedChannels:1047 projectCC:1068 rebuildCCs:1260 rebuildExternals:1374 rebuildRegionPark:1476 rebuildPbs:2039,2241
-  @use call    util.deepClone  @ flushParked:604,605 2463,2464,2531,2547 snapshotSwingState:2467,2468
-  @use call    util.deepEq  @ flushParked:621,622 rebuildCCs:1281 rebuildRegionPark:1435 changedSwingNames:2484
+  @use call    util.clone  @ tileLength:996,1022 setMutedChannels:1047 projectCC:1068 rebuildCCs:1260 rebuildExternals:1374 rebuildRegionPark:1478 rebuildPbs:2054,2256
+  @use call    util.deepClone  @ flushParked:604,605 2478,2479,2546,2562 snapshotSwingState:2482,2483
+  @use call    util.deepEq  @ flushParked:621,622 rebuildCCs:1281 rebuildRegionPark:1437 changedSwingNames:2499
   @use call    util.installHooks  @ 49
-  @use call    util.key  @ fxKey:173 reconcileCarrier:189 flush:663,666 nudgeSamePitchOnsets:1141 rebuildFx:1903,1910
-  @use call    util.keys  @ rebuildFx:1835
-  @use call    util.pick  @ makeEntry:258 rebuildRegionPark:1465,1482,1496,1531 rebuildFx:1673
+  @use call    util.key  @ fxKey:173 reconcileCarrier:189 flush:663,666 nudgeSamePitchOnsets:1141 rebuildFx:1918,1925
+  @use call    util.keys  @ rebuildFx:1850
+  @use call    util.pick  @ makeEntry:258 rebuildRegionPark:1467,1484,1498,1546 rebuildFx:1688
   @use call    util.print  @ print:43
-  @use call    util.round  @ centsToRaw:83 rawToCents:87 fromLogical:881 rescaleLength:953,960 rebuildTails:1981 rebuildPbs:2047 projectLogical:2355
-  @use call    util.seek  @ detuneAt:215 rebuildPbs:2007
-  @use forward mm:notesDeduped  @ 2512
-  @use forward mm:takeSwapped  @ 2514
-  @use forward mm:uuidsReassigned  @ 2513
+  @use call    util.round  @ centsToRaw:83 rawToCents:87 fromLogical:881 rescaleLength:953,960 rebuildTails:1996 rebuildPbs:2062 projectLogical:2370
+  @use call    util.seek  @ detuneAt:215 rebuildPbs:2022
+  @use forward mm:notesDeduped  @ 2527
+  @use forward mm:takeSwapped  @ 2529
+  @use forward mm:uuidsReassigned  @ 2528
   @use require generators  @ 39
   @use require perf  @ 40
   @use require timing  @ 37
   @use require tuning  @ 38
   @use require util  @ 36
-  @use sub     cm:configChanged  @ 2523
-  @use sub     ds:dataChanged  @ 2538
-  @use sub     mm:reload  @ 2516
-  @use sub     mm:takeSwapped  @ 2515
+  @use sub     cm:configChanged  @ 2538
+  @use sub     ds:dataChanged  @ 2553
+  @use sub     mm:reload  @ 2531
+  @use sub     mm:takeSwapped  @ 2530
 
 # REAPER API surface
   @reaper GetCursorPosition
