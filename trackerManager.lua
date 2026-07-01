@@ -232,20 +232,27 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
 
   ----- Low-level mutation
 
+  -- chans indexes only what detune/seek read: lane-1 notes and pbs. One place to
+  -- resolve the target list, so insert/remove/migrate stay in sync across ops.
+  local function chansListFor(evt, chan, lane)
+    if evt.evType == 'note' and lane == 1 then return chans[chan].notes end
+    if evt.evType == 'pb' then return chans[chan].pbs end
+  end
+  local function chansInsert(evt)
+    local tbl = chansListFor(evt, evt.chan, evt.lane)
+    if tbl then util.add(tbl, evt); sortByPPQ(tbl) end
+  end
+  local function chansRemove(evt, chan, lane)
+    local tbl = chansListFor(evt, chan or evt.chan, lane or evt.lane)
+    if not tbl then return end
+    for i, item in ipairs(tbl) do if item == evt then table.remove(tbl, i); return end end
+  end
+
   --contract: only lane==1 notes index into chans[chan].notes
   --contract: higher-lane notes get queued for mm but don't feed detune/realisation reads
   --contract: caller supplies evt.evType
   local function addLowlevel(evt)
-    local et = evt.evType
-    if et == 'note' then
-      if evt.lane == 1 then
-        local tbl = chans[evt.chan].notes
-        util.add(tbl, evt); sortByPPQ(tbl)
-      end
-    elseif et == 'pb' then
-      local tbl = chans[evt.chan].pbs
-      util.add(tbl, evt); sortByPPQ(tbl)
-    end
+    chansInsert(evt)
     util.add(adds, { evt = evt })
   end
 
@@ -256,17 +263,11 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     util.assign(evt, update)
     -- Keep the lane-1 detune index coherent: a chan OR lane move migrates the
     -- entry between lists; a ppq move resorts in place (util.seek needs ascending).
-    local function listFor(chan, lane)
-      if evt.evType == 'note' and lane == 1 then return chans[chan].notes end
-      if evt.evType == 'pb' then return chans[chan].pbs end
-    end
-    local oldList = listFor(oldChan, oldLane)
-    local newList = listFor(evt.chan, evt.lane)
+    local oldList = chansListFor(evt, oldChan, oldLane)
+    local newList = chansListFor(evt, evt.chan, evt.lane)
     if oldList ~= newList then
-      if oldList then
-        for i, item in ipairs(oldList) do if item == evt then table.remove(oldList, i); break end end
-      end
-      if newList then util.add(newList, evt); sortByPPQ(newList) end
+      chansRemove(evt, oldChan, oldLane)
+      chansInsert(evt)
     elseif update.ppq ~= nil and newList then
       sortByPPQ(newList)
     end
@@ -282,22 +283,8 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   end
 
   local function deleteLowlevel(evt)
-    local et = evt.evType
-    local tbl
-    if et == 'note' then
-      tbl = chans[evt.chan].notes
-    elseif et == 'pb' then
-      tbl = chans[evt.chan].pbs
-    end
-
-    if tbl then
-      for i, item in ipairs(tbl) do
-        if item == evt then
-          table.remove(tbl, i)
-          break
-        end
-      end
-    end
+    chansRemove(evt)
+    if evt.uuid then byUuid[evt.uuid] = nil end
 
     local token = evt.token
 
@@ -724,6 +711,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
         if tok then
           byToken[tok] = o.evt
           o.evt.token  = tok
+          if o.evt.uuid then byUuid[o.evt.uuid] = o.evt end
         end
       end
     end)
