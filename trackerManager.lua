@@ -762,7 +762,8 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
       byToken[tok] = evt
       if evt.uuid then byUuid[evt.uuid] = evt end
     end
-    for i = 1, 16 do sortByPPQ(chans[i].notes); sortByPPQ(chans[i].pbs) end
+    -- mm:events() yields notes then ccs each already ppq-sorted (mm's stableByPpq);
+    -- the per-channel filter above preserves that order, so no re-sort is needed.
   end
 
   reload()
@@ -2213,11 +2214,10 @@ local function rebuildPbs(noteLive, replacePb)
     for _, pb in ipairs(pbs) do
       local hidden = pb.derived ~= nil
       anyVisible = anyVisible or not hidden
-      util.add(pbColEvents, projectCC(pb, pb.origTok, {
-        val    = pb.cents,
-        detune = detuneOf[pb],
-        hidden = hidden,
-      }))
+      -- pb is our own working clone, done being read by the assign above -- reuse it as the
+      -- column event rather than cloning again (projLogical rewrites its ppq to logical later).
+      pb.token, pb.val, pb.detune, pb.hidden = pb.origTok, pb.cents, detuneOf[pb], hidden
+      util.add(pbColEvents, pb)
     end
     local keep = anyVisible or (extras[chan] and extras[chan].pb)
     channels[chan].columns.pb = keep and { events = pbColEvents } or nil
