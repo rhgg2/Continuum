@@ -233,9 +233,14 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     if evt.evType == 'note' and lane == 1 then return chans[chan].notes end
     if evt.evType == 'pb' then return chans[chan].pbs end
   end
+  -- During a batched reconcile this holds the lists chansInsert touched; the batch
+  -- sorts each once at the end instead of re-sorting per insert. nil = sort inline.
+  local deferredSort
   local function chansInsert(evt)
     local tbl = chansListFor(evt, evt.chan, evt.lane)
-    if tbl then util.add(tbl, evt); sortByPPQ(tbl) end
+    if not tbl then return end
+    util.add(tbl, evt)
+    if deferredSort then deferredSort[tbl] = true else sortByPPQ(tbl) end
   end
   local function chansRemove(evt, chan, lane)
     local tbl = chansListFor(evt, chan or evt.chan, lane or evt.lane)
@@ -261,17 +266,41 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     return evt
   end
 
-  -- Incremental index upkeep for one token, via makeEntry -- byte-identical to reload's.
-  -- see docs/trackerManager.md § Incremental index reconciliation
+  -- Refresh an existing entry from mm's fresh clone in place: prev keeps its ppq-sorted
+  -- slot in chans, so a same-slot reconcile skips the chansRemove scan, reinsert and sort.
+  local function refreshEntry(prev, e, tok)
+    if e.evType == 'pb' then
+      prev.ppqL, prev.shape, prev.tension = e.ppqL, e.shape, e.tension
+      prev.derived, prev.frame, prev.cents = e.derived, e.frame, e.cents
+      prev.val = rawToCents(e.val)
+    else
+      local oldUuid = prev.uuid
+      for k in pairs(prev) do if e[k] == nil and k ~= 'token' then prev[k] = nil end end
+      util.assign(prev, e)
+      prev.token = tok
+      if oldUuid ~= prev.uuid then
+        if oldUuid then byUuid[oldUuid] = nil end
+        if prev.uuid then byUuid[prev.uuid] = prev end
+      end
+    end
+  end
+
+  -- Incremental index upkeep for one token. Same token + same target list => same slot
+  -- (ppq is an identity field): refresh in place, else remove + reinsert. see docs/trackerManager.md § Incremental index reconciliation
   function idxReconcile(tok)
     if not tok then return end
     local prev = byToken[tok]
+    local _, e = mm:byToken(tok)
+    if e and prev
+       and chansListFor(prev, prev.chan, prev.lane) == chansListFor(e, e.chan, e.lane) then
+      refreshEntry(prev, e, tok)
+      return
+    end
     byToken[tok] = nil
     if prev then
       if prev.uuid then byUuid[prev.uuid] = nil end
       chansRemove(prev)
     end
-    local _, e = mm:byToken(tok)
     if e then chansInsert(makeEntry(e, tok)) end
   end
 
@@ -1083,7 +1112,11 @@ local function mmBatch()
         for _, s  in ipairs(adds)     do local t = mm:add(s);    if t then touched[t] = true end end
         for _, fn in ipairs(lazyAdds) do local t = mm:add(fn()); if t then touched[t] = true end end
       end)
+      local prevDeferred = deferredSort
+      deferredSort = {}
       for tok in pairs(touched) do idxReconcile(tok) end
+      for tbl in pairs(deferredSort) do sortByPPQ(tbl) end
+      deferredSort = prevDeferred
     end,
   }
 end
