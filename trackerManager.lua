@@ -1124,7 +1124,6 @@ local function rebuildInternals(fx)
   local internal, external = {}, {}
   for _, note in mm:notes() do
     if note.derived then
-      note.token = mm:tokenOf(note)
       util.add(fx.noteExisting[note.chan], note)
     elseif rawDivergesFromLogical(note) then util.add(external, note)
     else util.add(internal, note)
@@ -1146,7 +1145,6 @@ local function rebuildInternals(fx)
     -- set detune/delay at ingestion to skip defensive guards downstream
     colNote.detune = colNote.detune or 0
     colNote.delay  = colNote.delay  or 0
-    colNote.token  = mm:tokenOf(note)
     -- when swing is stale, rederive realised onset from logical; endppq handled by the tail walk.
     if staleSwing[note.chan] then
       local was = colNote.ppq   -- capture raw before the reseat mutates it (alias, not a copy)
@@ -1193,40 +1191,40 @@ local function rebuildCCs(fx)
       -- Carrier: generator-owned, no metadata; routed out by allocated code,
       -- reconciled stream-level in fx expansion. see design/archive/note-macros.md § Delta-code allocation
       util.add(fx.ccExisting[cc.chan].carrier,
-        { ppq = cc.ppq, val = cc.val, shape = cc.shape, cc = cc.cc, token = mm:tokenOf(cc) })
+        { ppq = cc.ppq, val = cc.val, shape = cc.shape, cc = cc.cc, token = cc.token })
       goto continue
     end
     -- Rest seat: a generator-owned base CC at a real cc target (derived sidecar), routed out
     -- of columns like a carrier so it stays off-screen. see design/note-macros-v2.md § Continuous cc
     if cc.evType == 'cc' and cc.derived == 'ccbase' then
       util.add(fx.ccExisting[cc.chan].base,
-        { ppq = cc.ppq, val = cc.val, cc = cc.cc, token = mm:tokenOf(cc) })
+        { ppq = cc.ppq, val = cc.val, cc = cc.cc, token = cc.token })
       goto continue
     end
     -- Replace fill: the generated curve written straight onto a cc target (replace mode), routed
     -- out like the rest seat and reconciled at Pass B. see design/note-macros-v2.md § Continuous cc
     if cc.evType == 'cc' and cc.derived == 'ccfill' then
       util.add(fx.ccExisting[cc.chan].fill,
-        { ppq = cc.ppq, val = cc.val, shape = cc.shape, cc = cc.cc, token = mm:tokenOf(cc) })
+        { ppq = cc.ppq, val = cc.val, shape = cc.shape, cc = cc.cc, token = cc.token })
       goto continue
     end
     if not cc.derived then
       if staleSwing[cc.chan] and cc.ppqL ~= nil then
         local newPpq = tm:fromLogical(cc.chan, cc.ppqL)
         if newPpq ~= cc.ppq then
-          ccWrites.assign({ token = mm:tokenOf(cc) }, { ppq = newPpq })
-          cc.ppq = newPpq
+          ccWrites.assign({ token = cc.token }, { ppq = newPpq })
+          cc.ppq   = newPpq
+          cc.token = mm:tokenOf(cc)   -- ppq is an identity field; resync the stashed token
         end
       elseif rawDivergesFromLogical(cc) then
         local newPpqL = tm:toLogical(cc.chan, cc.ppq)
-        ccWrites.assign({ token = mm:tokenOf(cc) }, { ppqL = newPpqL })
+        ccWrites.assign({ token = cc.token }, { ppqL = newPpqL })
         cc.ppqL = newPpqL
       end
     end
 
     if cc.evType == 'cc' or cc.evType == 'at' or cc.evType == 'pc' then
       local channel = channels[cc.chan]
-      local tok     = mm:tokenOf(cc)
       local col
       if cc.evType == 'cc' then
         col = channel.columns.ccs[cc.cc] or { cc = cc.cc, events = {} }
@@ -1237,7 +1235,6 @@ local function rebuildCCs(fx)
       end
       -- cc is our own mm:ccs() clone, already wide-expanded and reseated -- reuse it as the
       -- column event rather than cloning again (projectLogical rewrites its ppq to logical later).
-      cc.token = tok
       util.add(col.events, cc)
     end
     ::continue::
@@ -1351,7 +1348,6 @@ local function rebuildExternals(external)
     util.assign(colNote, update)
     colNote.fixed = true
     util.add(col.events, colNote)
-    colNote.token = mm:tokenOf(note)
     extWrites.assign(colNote, update)
   end
   extWrites.commit()
