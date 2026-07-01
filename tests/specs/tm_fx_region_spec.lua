@@ -202,25 +202,6 @@ return {
     end,
   },
 
-  ----- G4-float -- carrier churn guard for a region source (canon path)
-
-  {
-    name = 'G4-float: a no-change rebuild re-adds no carriers for a region source',
-    run = function(harness)
-      local h = harness.mk{ floatPpq = true }
-      injectRegion(h)
-      t.truthy(#carriersOf(h.fm:dump(), 1) > 0, 'carriers present (non-vacuous)')
-
-      local adds, realAdd = 0, h.fm.add
-      h.fm.add = function(self, e)
-        if e and e.evType == 'cc' and e.cc == DELTA_MSB then adds = adds + 1 end
-        return realAdd(self, e)
-      end
-      h.tm:rebuild()
-      t.eq(adds, 0, 'steady-state rebuild rewrites no carriers (no float-ppq churn)')
-    end,
-  },
-
   ----- G2 -- region removal leaves no carrier
 
   {

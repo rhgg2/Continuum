@@ -168,15 +168,10 @@ end
 ----- fxNote reconciliation (the PC-synthesis skeleton, note-shaped)
 
 -- Identity is geometry: (host, ppq, endppqL, pitch, vel, detune, sample); stale endppqL still
--- matches (tail-walk-owned realised end stays out). Predicted ppq is integer; REAPER returns float.
-local function canon(x)
-  if type(x) == 'number' then return math.tointeger(x) or x end
-  return x
-end
+-- matches (tail-walk-owned realised end stays out). Fields are integer at source (blob codec read).
 local function fxKey(spec)
-  return util.key(canon(spec.derived), canon(spec.ppq), canon(spec.endppqL or 0),
-                  canon(spec.pitch), canon(spec.vel), canon(spec.detune or 0),
-                  canon(spec.sample or 0))
+  return util.key(spec.derived, spec.ppq, spec.endppqL or 0,
+                  spec.pitch, spec.vel, spec.detune or 0, spec.sample or 0)
 end
 
 -- onKeep carries the matched note's token + realised end onto the predicted spec, so a
@@ -187,11 +182,11 @@ local function reconcileFx(existing, predicted, sink)
 end
 
 ----- delta-stream (carrier) reconciliation
--- Pure fn of lane-1 hosts; key by (cc, canon ppq) — REAPER float vs int prediction churns whole stream. see design/archive/note-macros.md § Delta-code allocation
+-- Pure fn of lane-1 hosts; key by (cc, ppq). see design/archive/note-macros.md § Delta-code allocation
 local function reconcileCarrier(existing, predicted, sink)
   reconcileDerived{
     existing = existing, predicted = predicted, sink = sink,
-    key   = function(x) return util.key(canon(x.cc), canon(x.ppq)) end,
+    key   = function(x) return util.key(x.cc, x.ppq) end,
     match = function(have, spec) return have.val == spec.val and have.shape == spec.shape end,
   }
 end
@@ -1883,14 +1878,14 @@ local function rebuildFx(fx, deferred)
     local wires = mmBatch()
     reconcileDerived{
       existing = fx.ccExisting[chan].base, predicted = predictedBase, sink = wires,
-      key   = function(x) return util.key(canon(x.cc), canon(x.ppq)) end,
+      key   = function(x) return util.key(x.cc, x.ppq) end,
       match = function(have, spec) return have.val == spec.val end,
     }
     -- cc-replace fill: reconcile the generated curve on its target lane; shape is part of the
     -- match -- it drives REAPER's interpolation. see design/note-macros-v2.md § Continuous cc
     reconcileDerived{
       existing = fx.ccExisting[chan].fill, predicted = ccFill, sink = wires,
-      key   = function(x) return util.key(canon(x.cc), canon(x.ppq)) end,
+      key   = function(x) return util.key(x.cc, x.ppq) end,
       match = function(have, spec) return have.val == spec.val and have.shape == spec.shape end,
     }
 

@@ -71,7 +71,6 @@ local function buildMM(opts)
   for _, ts in ipairs(seed.timeSigs or {}) do
     fakeReaper:addTimeSigMarker(fakeReaper.MIDI_GetProjTimeFromPPQPos(take, ts.ppq or 0), ts.num, ts.denom)
   end
-  if opts.floatPpq then fakeReaper:setFloatPpq(true) end
 
   local mm = newRealMM(take)
   mm.seed = function(_, payload) seedThrough(mm, payload) end
@@ -94,7 +93,7 @@ function harness.bareMM(seed)
 end
 
 -- Build a fresh scenario. opts keys: seed (notes/ccs + resolution/length/
--- timeSigs), config, data, take, floatPpq, groups. See header for the mm model.
+-- timeSigs), config, data, take, groups. See header for the mm model.
 function harness.mk(opts)
   opts = opts or {}
   local seed = opts.seed or {}
