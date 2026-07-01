@@ -42,19 +42,15 @@ local function createImGui()
   local osName = reaper.GetOS()
   local font   = ImGui.CreateFont('Source Code Pro')
   local isMac  = osName:find('OSX') or osName:find('mac')
-  local sfns   = '/System/Library/Fonts/SFNS.ttf'
-  local family = osName:find('Win') and 'Segoe UI' or 'sans-serif'
-  local uiFont     = isMac and ImGui.CreateFontFromFile(sfns)
-                           or  ImGui.CreateFont(family)
-  -- FontFlags_Bold is rasterizer-simulated, so the same family/file
-  -- gives a usable bold without shipping a separate face.
-  local uiFontBold = isMac and ImGui.CreateFontFromFile(sfns, 0, ImGui.FontFlags_Bold)
-                           or  ImGui.CreateFont(family, ImGui.FontFlags_Bold)
-  -- Wiring node labels want a heavier face at a size between ui and
-  -- grid; same family/flags as uiFontBold today, kept as its own slot
-  -- so the wiring page can diverge without dragging chrome with it.
-  local wireFont = isMac and ImGui.CreateFontFromFile(sfns, 0, ImGui.FontFlags_Bold)
-                          or  ImGui.CreateFont(family, ImGui.FontFlags_Bold)
+  local uiFamily = isMac and 'Helvetica Neue'
+                          or (osName:find('Win') and 'Segoe UI' or 'sans-serif')
+  local uiFont     = ImGui.CreateFont(uiFamily)
+  -- FontFlags_Bold is rasterizer-simulated: same family, usable bold, no
+  -- separate face to ship.
+  local uiFontBold = ImGui.CreateFont(uiFamily, ImGui.FontFlags_Bold)
+  -- Wiring node labels want a heavier face at a size between ui and grid;
+  -- same family/flags as uiFontBold, its own slot so wiring can diverge.
+  local wireFont   = ImGui.CreateFont(uiFamily, ImGui.FontFlags_Bold)
   ImGui.Attach(ctx, font)
   ImGui.Attach(ctx, uiFont)
   ImGui.Attach(ctx, uiFontBold)
@@ -62,8 +58,8 @@ local function createImGui()
   -- Chrome (toolbar, status, popups, swing editor) all scale off the
   -- grid size so the two registers stay in proportion if either moves.
   local GRID_SIZE = 15
-  local UI_SIZE   = math.floor(GRID_SIZE * 4 / 5)
-  local WIRE_SIZE = 14
+  local UI_SIZE   = 11
+  local WIRE_SIZE = 12
   return {
     ctx        = ctx,
     font       = font,
