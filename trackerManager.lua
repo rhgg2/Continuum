@@ -603,7 +603,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
       return
     end
 
-    perf.openFrame(); perf.start('flush')
+    perf.start('flush')
 
     -- Single scan over all post-flush notes for same-(chan,pitch) MIDI legality (staging pre-clip).
     -- see docs/trackerManager.md § Pre-clip collision scan
@@ -722,7 +722,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
       end
     end)
     perf.stop('mm')
-    perf.stop('flush'); perf.report('flush'); perf.closeFrame()
+    perf.stop('flush'); perf.report()
     fire('postflush')
   end
 

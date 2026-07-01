@@ -1,4 +1,4 @@
-@module trackerManager  src=trackerManager.lua  loc=2477  sha=8a7fcfd  mode=chunk  self=tm
+@module trackerManager  src=trackerManager.lua  loc=2477  sha=33e1810  mode=chunk  self=tm
 @deps mm, cm, ds
 
 # Invariants & contracts
@@ -343,9 +343,7 @@
   @use call    mm.tokenOf  @ rebuildInternals:1107,1128 rebuildCCs:1174,1181,1188,1195,1200,1207 rebuildExternals:1329 rebuildPA:1538 rebuildPbs:2001 rebuildPCs:2235
   @use call    mm.unload  @ detach:2466
   @use call    mm.wideCC  @ rebuildCCs:1164,1229 rebuildFx:1808
-  @use call    perf.closeFrame  @ flush:725
   @use call    perf.count  @ flush:681
-  @use call    perf.openFrame  @ flush:606
   @use call    perf.report  @ flush:725
   @use call    perf.start  @ flush:606,702
   @use call    perf.stop  @ flush:724,725

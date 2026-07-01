@@ -1,40 +1,40 @@
-@module perf  src=perf.lua  loc=117  sha=untracked  mode=namespace  self=perf
+@module perf  src=perf.lua  loc=136  sha=e87e69d  mode=namespace  self=perf
 
 # Imports
-  @const util = 'util'  @ 18
+  @const util = 'util'  @ 21
 
 # Module-level constants
-  @const perf = { on = false }  @ 19
-  @const stack = {}  @ 21
-  @const span, mark, started = {}, {}, {}  @ 22   -- current frame (swapped on nest)
-  @const totSpan, totMark = {}, {}  @ 23   -- run totals (persist across frames)
+  @const perf = { on = false }  @ 22
+  @const root, cur  @ 24   -- last top-level node; currently-open node (nil = none open)
+  @const totSpan, totMark = {}, {}  @ 25   -- run totals, persist across gestures
 
 # Private functions
-  -- Frame stack
+  @fn newNode(name, parent)  @ 27-29
   -- Sampling
   -- Reporting
-  @fn bySize(t)  @ 64-69
-  @fn printLine(headline, headMs, spans, marks, skip)  @ 71-83
+  @fn marksOf(node)  @ 74-79
+  @fn renderNode(node, depth, out)  @ 81-90
 
 # Public API (perf.*)
-  @api perf.openFrame()  @ 27-31
-  @api perf.closeFrame()  @ 33-37
-  @api perf.start(name)  @ 41
-  @api perf.stop(name)  @ 43-50
-  @api perf.count(name, by)  @ 52-58
-  @api perf.ms(name)  @ 60
-  @api perf.report(label)  @ 87-92
-      -- One line per closed frame; silent for trivial frames (no counts, nothing timed
-      -- beyond the label itself -- e.g. a no-op flush).
-  @api perf.dump()  @ 96-101
-      -- Run totals since arm. Each span key is total time spent in spans of that name;
-      -- nested spans overlap their parents by construction.
-  @api perf.toggle()  @ 103-113
-  @api perf.line(...)  @ 115
+  @api perf.start(name)  @ 33-50
+  @api perf.stop(name)  @ 52-58
+  @api perf.count(name, by)  @ 60-65
+  @api perf.openFrame()  @ 69
+      -- Deprecated: the tree comes from start/stop nesting. Kept as no-ops so any
+      -- straggler call site is harmless.
+  @api perf.closeFrame()  @ 70
+  @api perf.report()  @ 94-100
+      -- One indented tree per closed gesture; silent for trivial roots (nothing nested,
+      -- nothing counted -- e.g. a no-op flush).
+  @api perf.dump()  @ 104-121
+      -- Run totals since arm, sorted by time. Nested same-name spans overlap, so a
+      -- re-entrant name's total is inclusive of its own recursion.
+  @api perf.toggle()  @ 123-132
+  @api perf.line(...)  @ 134
 
 # Uses (outbound edges)
-  @use call    util.print  @ printLine:78 dump:98 toggle:109 line:115
-  @use require util  @ 18
+  @use call    util.print  @ report:99 dump:106,118 toggle:128 line:134
+  @use require util  @ 21
 
 # REAPER API surface
   @reaper time_precise
