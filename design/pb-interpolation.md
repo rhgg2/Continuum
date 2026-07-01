@@ -131,14 +131,15 @@ seat. Entirely within `rebuildPbs`; nothing above the manager moves.
 Authored breakpoints, columns, the view surface, and the round-trip are
 untouched — only the derived (hidden) wire stream changes.
 
-## Step 2 — generator / replace curve (forward; owned by note-macros-v2)
+## Step 2 — generator / replace curve (landed)
 
-Swap `streamValue` for the generator's pb output inside a replace window
-and drop the carrier: the curve rides the base lane through these same
-seats, so `centsToRaw(curve(ppq) + detune)` seats the replace stream with
-no add-bank slot. Retires one carrier per replace region and unifies pb
-replace with the value-aware-seat model. See `design/note-macros-v2.md`
-§ Continuous pb replace — not built here.
+`streamValue` returns the generator's pb output inside a replace window and
+the carrier is dropped: the curve rides the base lane through these same
+seats, so `centsToRaw(curve(ppq) + detune)` seats the replace stream with no
+add-bank slot. Retired one carrier per replace region and unified pb replace
+with the value-aware-seat model. Landed in `trackerManager`'s `rebuildFx`
+(producer split) + `rebuildPbs` (curve ingest + seats). See `design/note-macros-v2.md`
+§ Continuous pb replace.
 
 ## Files
 

@@ -27,7 +27,7 @@ Track A is the generator substrate, Track B the authoring UI. Checked = landed.
 - [x] A3 — replace mode: discrete member parking
 - [x] A4 — generator input streams (notes/pas/ccs/ats/pb)
 - [x] A5 — mode is a generator-kind property; one registry per kind
-- [x] Continuous **pb** replace — detune-only wire base via the sum node (§ A4)
+- [x] Continuous **pb** replace — absolute curve seated on the base lane, no carrier (§ A4)
 - [x] Continuous **cc** augment — node-fork collapse + rest seat + auto-pan kind (§ Continuous cc)
 - [x] Continuous **cc** replace — park authored cc off-take + write the curve direct (§ Continuous cc)
 - [x] B1 — fx-region column + Super-X addressing
@@ -451,8 +451,8 @@ The fold operates at both scopes — between stages within a chain (a stage's
 op onto a stream channel) and between chains on a channel (at the node).
 The replace conflict is scoped per `(channel, exact target)`: two chains on
 the *same* cc number or both on pb; distinct cc numbers are independent
-wires. Single-region pb-replace is **landed** as a detune-only wire base (§ A4): the carrier rides
-the absolute curve and the absorber suppresses the authored base in the window. Multi-chain
+wires. Single-region pb-replace is **landed** as an absolute curve seated on the base lane (§ A4): the
+absorber realises it as derived pb seats, no carrier. Multi-chain
 painter-layering stays deferred: overlapping pb fx is blocked
 at the authoring UI, so one replace per target is the only fold the immediate work owes --
 which keeps top-wins open without building it.
@@ -547,7 +547,7 @@ wants ~none of gm (see resolved open question below).
   **pb as input -- landed (authored breakpoints only).** The feared absorber-split was avoided: a generator
   reads only the *authored* (non-derived) pb breakpoints, whose logical value is the persisted `cents`
   sidecar -- no `cents-minus-detune` reconstruction. Sliced from the pre-producer `mm:ccs()` walk, fakes
-  excluded. **Continuous replace -- landed** (detune-only wire base; cancellation abandoned).
+  excluded. **Continuous replace -- landed** (absolute curve seated on the base lane, no carrier).
   A replace-continuous kind emits its absolute pb curve, which rides the additive carrier verbatim;
   the absorber (4.9) emits a *detune-only* wire base inside the recorded replace window, so the node
   sum `detune + curve` lands on the curve (I1 intact). No `cancelBase`, no sampling. Overlapping pb
@@ -566,8 +566,7 @@ wants ~none of gm (see resolved open question below).
   lane-mates that clip the authored note to its first derived hit (= replace, host stays fxNote 1, PA
   unmoved), a continuous kind emits none (= augment) -- emergent, never parked. `mode` and `dest` are
   independent axes, so continuous-replace (A4) and discrete-augment are expressible; continuous-replace
-  is **landed** as a detune-only wire base (the absorber suppresses the authored base in the window so
-  the additive carrier sum lands on the curve -- § A4), discrete-augment still expressible-not-built. The fxEdit
+is **landed** as an absolute curve seated on the base lane by the absorber, no carrier -- § A4), discrete-augment still expressible-not-built. The fxEdit
   modal reads its rows from the registry (`modalOrder` picks the shown kinds; arp is surfaced on both
   hosts -- single-note arp = retrig, so no host-aware list is needed). Pinned by the continuous-augment + parked-render
   reworks in `tm_fx_region_spec`/`tv_fx_region_spec`, and `generators_spec` driving `kinds.<k>.expand`.
@@ -802,19 +801,21 @@ sidecar, so the pre-producer `mm:ccs()` walk reads it directly (fakes excluded b
 A foreign-MIDI pb lacks the sidecar for one rebuild until 4.9 back-derives + persists it --
 harmless and self-healing, no consumer yet. The heavier path (the absorber's densified/derived
 logical stream as input) stays unbuilt until a generator needs more than breakpoints.
-**Continuous replace -- landed (detune-only wire base, not cancellation).** A replace-continuous kind
-(`mode='replace'`, `dest='pb'`) emits its **absolute** target curve, which rides the additive carrier
-*verbatim* -- the very path augment uses. The override lives at the **base**, not the carrier: the
-producer records the replace window (`replacePbWindows`), and the absorber (4.9) emits a **detune-only**
-wire base inside it -- an authored pb there contributes 0 cents to its wire raw (`wireCents = 0`), its
-column cents untouched and visible. The node sum `detune + curve` lands on the curve, detune still
-seats (`raw = curve + detune`, I1 intact) -- no `cancelBase`, no sampling, no node change. Scoped to
-**one replace region per pb target**: base-suppression is *idempotent*, but two overlapping carriers
-would *sum* (not painter-layer), so **overlapping pb fx is blocked at the authoring UI**. Caveats: the
-boundary from authored base to curve can step; cc-target
-replace is unbuilt -- cc has no absorber/detune residual, so suppressing its authored base needs a
-different mechanism (below). Pinned by the detune-only / I1 / suppression-reversibility tests in
-`tm_fx_region_spec`.
+**Continuous replace -- landed (curve seated on the base lane, no carrier).** A replace-continuous kind
+(`mode='replace'`, `dest='pb'`) emits its **absolute** target curve. The absorber (4.9) seats it **on the
+base pb lane**, reusing the value-aware seats: the producer records the replace window with its curve
+(`fx.replacePb[chan] = {startL, endL, curve, d}`), and inside the window `streamValue` returns the *curve*
+rather than the authored breakpoints. The curve's breakpoints become derived seats carrying their shape;
+an authored pb inside the window rides the curve on its wire (`streamValue(ppq)`, its column cents untouched
+and visible); a curved curve-segment split by a detune onset densifies exactly as an authored one does. Each
+seat's wire raw is `centsToRaw(curve + detune)`, so detune still seats (I1 intact). **No carrier, no add-bank
+slot** -- the retired path summed a detune-only base with a separate additive carrier at the node; the seated
+model needs neither. Scoped to **one replace region per pb target**: two curves cannot both own the wire, so
+**overlapping pb fx is blocked at the authoring UI**. Caveats: the boundary from authored base to curve can
+step; a non-step authored pb *inside* the window rides the curve in value but keeps its own outgoing shape
+over the next cell (the same bounded artifact a densified authored curve carries). cc-target replace is unbuilt
+-- cc has no absorber/detune residual, so suppressing its authored base needs a different mechanism (below).
+Pinned by the seated-curve / I1 / densify / suppression-reversibility tests in `tm_fx_region_spec`.
 
 **Tests.** `tm_fx_region_spec`: a region over a window holding a cc + pa + at, with a
 capture-kind injected into `generators.kinds` recording its `host`, rebuild, assert
@@ -893,7 +894,7 @@ when present, already is the base, and seeding nothing sidesteps an ordering fig
 No node change; same shape as the absorber seating pb base, narrower job.
 
 **cc replace -- landed (park + direct insert; no carrier, no node).** pb replace leans on the absorber
-to leave a *detune-only* base under an absolute carrier. cc has neither an absorber nor a detune
+to seat its curve on the base lane. cc has neither an absorber nor a detune
 residual, and the node step-holds the latest *authored* cc as its base. Rather than fight that, cc
 replace **bypasses the node entirely**: inside the window on the target cc, the authored cc is *parked
 off-take* and the generated curve is written as literal cc events onto the target *take* lane (the

@@ -350,8 +350,18 @@ the onset:
   and churn (the canon-ppq lesson). A curved segment with no interior onset
   rides REAPER's native shape untouched.
 
-Origin and the forward path (generator replace curves reusing the same
-seats): `design/pb-interpolation.md`.
+**Replace curves ride the same seats.** A pb-replace generator's absolute
+curve is seated here, not on an additive carrier. Inside a replace window
+`streamValue` returns the *curve* (interpolated over the generator's
+breakpoints); the breakpoints become derived seats carrying their shape, an
+authored pb inside the window rides the curve on its wire (column cents
+untouched), and a curved curve-segment split by a detune onset densifies
+exactly as an authored one does. Each wire raw is `centsToRaw(curve +
+detune)` — no carrier, no add-bank slot. See `design/note-macros-v2.md`
+§ Continuous pb replace.
+
+Origin and the replace path (generator curves reusing the same seats):
+`design/pb-interpolation.md`.
 
 ## Conventions
 

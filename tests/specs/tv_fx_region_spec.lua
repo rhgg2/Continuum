@@ -114,7 +114,7 @@ return {
       h.tm:addEvent({ evType = 'cc', ppq = 0, chan = 1, cc = 74, val = 30 }); h.tm:flush()
       generators.kinds.ccRep = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 100, shape = 'square' },
+          { ppqL = host.window[1], val = 100, shape = 'step' },
         } } end,
         mode = 'replace', dest = 74, label = 'CcRep', defaults = {}, fields = {},
       }
@@ -313,7 +313,7 @@ return {
       h.tm:addEvent({ evType = 'cc', ppq = 0, chan = 1, cc = 74, val = 30 }); h.tm:flush()
       generators.kinds.ccRep = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 100, shape = 'square' },
+          { ppqL = host.window[1], val = 100, shape = 'step' },
         } } end,
         mode = 'replace', dest = 74, label = 'CcRep', defaults = {}, fields = {},
       }

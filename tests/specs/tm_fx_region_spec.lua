@@ -57,6 +57,19 @@ local function colPbCents(h, chan, ppq)
   end
 end
 
+-- Derived (absorber) pbs on the wire: the seated curve of a pb-replace region, hidden from columns.
+local function derivedPbs(dump, chan)
+  local out = {}
+  for _, c in ipairs(dump.ccs) do
+    if c.evType == 'pb' and c.chan == chan and c.derived then out[#out + 1] = c end
+  end
+  return out
+end
+
+local function derivedPb(dump, chan, ppq)
+  for _, c in ipairs(derivedPbs(dump, chan)) do if c.ppq == ppq then return c end end
+end
+
 -- The generated replace curve written straight onto a cc target (derived='ccfill'), routed out of
 -- columns. Its authored cc is parked off-take; these stand in on the target lane.
 local function fillsOf(dump, chan, cc)
@@ -340,7 +353,7 @@ return {
       h.tm:addEvent({ evType = 'cc', ppq = 60, chan = 1, cc = 74, val = 30 }); h.tm:flush()
       generators.kinds.ccRep = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 100, shape = 'square' },
+          { ppqL = host.window[1], val = 100, shape = 'step' },
         } } end,
         mode = 'replace', dest = 74, label = 'CcRep', defaults = {}, fields = {},
       }
@@ -419,7 +432,7 @@ return {
       h.tm:addEvent({ evType = 'cc', ppq = 60, chan = 1, cc = 74, val = 30 }); h.tm:flush()
       generators.kinds.ccRep = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 100, shape = 'square' },
+          { ppqL = host.window[1], val = 100, shape = 'step' },
         } } end,
         mode = 'replace', dest = 74, label = 'CcRep', defaults = {}, fields = {},
       }
@@ -564,25 +577,24 @@ return {
     end,
   },
 
-  ----- Continuous pb replace: the wire base goes detune-only; the carrier rides the absolute curve
+  ----- Continuous pb replace: the absolute curve is seated on the base lane as derived pbs -- no carrier
 
   {
-    name = 'fx region: pb replace overwrites the authored base via a detune-only wire',
+    name = 'fx region: pb replace seats the absolute curve on the base lane, no carrier',
     run = function(harness)
       local h = harness.mk()
-      -- Authored base: 0c at ppq 0, 40c at ppq 120. No notes -> detune is 0, so the detune-only
-      -- base is 0 and the absolute curve lands on the wire untouched. (val is cents.)
+      -- Authored base: 0c at ppq 0, 40c at ppq 120. No notes -> detune 0, so the seated wire is the
+      -- absolute curve untouched. (val is cents.)
       h.tm:addEvent({ evType = 'pb', ppq = 0,   chan = 1, val = 0 })
       h.tm:addEvent({ evType = 'pb', ppq = 120, chan = 1, val = 40 })
       h.tm:flush()
 
-      -- A spec-only replace kind: an absolute +50c curve returning to 0c at the window end (so the
-      -- carrier re-centres). The producer rides the carrier verbatim; 4.9 suppresses the base.
+      -- A spec-only replace kind: an absolute +50c step curve returning to 0c at the window end.
       generators.kinds.capRep = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 50, shape = 'square' },
-          { ppqL = 60,             val = 50, shape = 'square' },
-          { ppqL = host.window[2], val = 0,  shape = 'square' },
+          { ppqL = host.window[1], val = 50, shape = 'step' },
+          { ppqL = 60,             val = 50, shape = 'step' },
+          { ppqL = host.window[2], val = 0,  shape = 'step' },
         } } end,
         mode = 'replace', dest = 'pb', label = 'CapRep', defaults = {}, fields = {},
       }
@@ -592,28 +604,28 @@ return {
       generators.kinds.capRep = nil
 
       local dump = h.fm:dump()
-      -- The carrier rides the ABSOLUTE curve -- not curve-minus-base (which would read 30c at 60).
-      t.eq(carrierAt(dump, 1, 0).val,   carrierVal(50), 'carrier is the absolute curve at the window start')
-      t.eq(carrierAt(dump, 1, 60).val,  carrierVal(50), 'still absolute 50c mid-window (cancellation would have read 30c)')
-      t.eq(carrierAt(dump, 1, 240).val, carrierVal(0),  'curve returns to 0 -> carrier re-centres at the window end')
+      t.eq(#carriersOf(dump, 1), 0, 'pb replace allocates no carrier -- the curve rides the base lane')
 
-      -- The authored 40c base is overwritten on the wire (detune-only = 0); its intent survives.
-      local wire = authoredPb(dump, 1, 120)
-      t.eq(wire.val,   0,  'authored pb raw forced to detune-only (0) on the wire inside the window')
-      t.eq(wire.cents, 40, 'its persisted cents (intent) are untouched')
+      -- Authored pbs inside the window ride the curve on the wire (intent preserved); derived seats
+      -- fill the gaps. The 50c curve holds across the window (step), re-centring to 0 at the end.
+      t.eq(authoredPb(dump, 1, 0).val,    centsToRaw(50), 'authored base at the window start rides the curve (50c)')
+      t.eq(authoredPb(dump, 1, 120).val,  centsToRaw(50), 'authored pb mid-window rides the curve, not its own 40c')
+      t.eq(authoredPb(dump, 1, 120).cents, 40,            'its persisted cents (intent) are untouched')
       t.eq(colPbCents(h, 1, 120), 40, 'and the authored cents stay visible in the pb column')
+      t.eq(derivedPb(dump, 1, 60).val,  centsToRaw(50), 'a derived seat carries the curve mid-window')
+      t.eq(derivedPb(dump, 1, 240).val, 0,              'the terminal seat re-centres at the window end')
     end,
   },
 
   {
-    name = 'fx region: pb replace with no authored base rides the carrier verbatim',
+    name = 'fx region: pb replace with no authored base seats the curve verbatim',
     run = function(harness)
       local h = harness.mk()
       generators.kinds.capRep = {
         expand = function(host)
           return { notes = {}, delta = {
-            { ppqL = host.window[1], val = 50, shape = 'square' },
-            { ppqL = host.window[2], val = 0,  shape = 'square' },
+            { ppqL = host.window[1], val = 50, shape = 'step' },
+            { ppqL = host.window[2], val = 0,  shape = 'step' },
           } }
         end,
         mode = 'replace', dest = 'pb', label = 'CapRep', defaults = {}, fields = {},
@@ -624,23 +636,24 @@ return {
       generators.kinds.capRep = nil
 
       local dump = h.fm:dump()
-      t.eq(carrierAt(dump, 1, 0).val,   carrierVal(50), 'no base to suppress -> the curve rides the carrier verbatim (50c)')
-      t.eq(carrierAt(dump, 1, 240).val, carrierVal(0),  'curve re-centres at the window end')
+      t.eq(#carriersOf(dump, 1), 0, 'no carrier -- the curve is derived seats on the base lane')
+      t.eq(derivedPb(dump, 1, 0).val,   centsToRaw(50), 'seated at the curve start (50c)')
+      t.eq(derivedPb(dump, 1, 240).val, 0,              'seat re-centres at the window end')
     end,
   },
 
   {
-    name = 'fx region: pb replace is driven by the detune pb only -- I1 holds, authored cents suppressed',
+    name = 'fx region: pb replace rides the curve over the detune -- I1 holds',
     run = function(harness)
       local h = harness.mk()
-      addNote(h, { detune = 25 })                                    -- lane-1 detune drives the base
+      addNote(h, { detune = 25 })                                    -- lane-1 detune seats under the curve
       h.tm:addEvent({ evType = 'pb', ppq = 60, chan = 1, val = 40 }) -- authored automation in the window
       h.tm:flush()
 
       generators.kinds.capRep = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 30, shape = 'square' },
-          { ppqL = host.window[2], val = 0,  shape = 'square' },
+          { ppqL = host.window[1], val = 30, shape = 'step' },
+          { ppqL = host.window[2], val = 0,  shape = 'step' },
         } } end,
         mode = 'replace', dest = 'pb', label = 'CapRep', defaults = {}, fields = {},
       }
@@ -649,37 +662,78 @@ return {
       h.tm:rebuild()
       generators.kinds.capRep = nil
 
-      -- The node's base in the window is detune-only: the authored 40c is dropped, the 25c detune
-      -- survives (I1). centsToRaw(25) is distinct from cents+detune and from bare cents.
+      -- The wire is curve + detune, not detune-only nor curve-only: the 30c curve rides on the 25c
+      -- detune (I1). The authored 40c is dropped from the wire; the curve re-centres to detune at the end.
       local dump = h.fm:dump()
-      t.eq(authoredPb(dump, 1, 60).val, centsToRaw(25),
-        'authored pb wire raw is detune-only, NOT cents+detune nor bare cents')
-      t.eq(carrierAt(dump, 1, 0).val, carrierVal(30), 'the carrier carries the absolute curve on top')
+      t.eq(#carriersOf(dump, 1), 0, 'no carrier')
+      t.eq(authoredPb(dump, 1, 60).val, centsToRaw(55), 'authored pb wire = curve 30c + detune 25c, not its own 40c')
+      t.eq(derivedPb(dump, 1, 0).val,   centsToRaw(55), 'the seat at the window start carries curve + detune')
+      t.eq(derivedPb(dump, 1, 240).val, centsToRaw(25), 'curve re-centres to detune-only at the window end (I1)')
     end,
   },
 
   {
-    name = 'fx region: removing a pb replace region restores the suppressed authored base',
+    name = 'fx region: removing a pb replace region restores the authored wire',
     run = function(harness)
       local h = harness.mk()
       h.tm:addEvent({ evType = 'pb', ppq = 120, chan = 1, val = 40 }); h.tm:flush()
       generators.kinds.capRep = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 50, shape = 'square' },
-          { ppqL = host.window[2], val = 0,  shape = 'square' },
+          { ppqL = host.window[1], val = 50, shape = 'step' },
+          { ppqL = host.window[2], val = 0,  shape = 'step' },
         } } end,
         mode = 'replace', dest = 'pb', label = 'CapRep', defaults = {}, fields = {},
       }
       h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
                                    fx = { { kind = 'capRep' } } } })
       h.tm:rebuild()
-      t.eq(authoredPb(h.fm:dump(), 1, 120).val, 0, 'suppressed to detune-only while the region is present')
+      t.eq(authoredPb(h.fm:dump(), 1, 120).val, centsToRaw(50), 'rides the curve (50c) while the region is present')
 
       h.ds:assign('fxRegions', {})
       h.tm:rebuild()
       generators.kinds.capRep = nil
       t.eq(authoredPb(h.fm:dump(), 1, 120).val, centsToRaw(40),
-        'the authored base raw is restored once the region is gone')
+        'the authored wire (40c) is restored once the region is gone')
+    end,
+  },
+
+  {
+    name = 'fx region: pb replace densifies a curved segment split by a detune onset',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { pitch = 62, ppq = 120, detune = 20, lane = 1 })   -- a lone detune onset at ppq 120
+      h.tm:flush()
+
+      -- A single 'slow' segment 0c -> 60c across the window; the onset at 120 splits it, so the
+      -- segment densifies to a linear polyline on the CCINTERP grid (step 8 at res 240 / interp 32).
+      generators.kinds.capRep = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppqL = host.window[1], val = 0,  shape = 'slow' },
+          { ppqL = host.window[2], val = 60, shape = 'slow' },
+        } } end,
+        mode = 'replace', dest = 'pb', label = 'CapRep', defaults = {}, fields = {},
+      }
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+                                   fx = { { kind = 'capRep' } } } })
+      h.tm:rebuild()
+      generators.kinds.capRep = nil
+
+      local dump = h.fm:dump()
+      t.eq(#carriersOf(dump, 1), 0, 'no carrier')
+
+      local interior = false
+      for _, c in ipairs(derivedPbs(dump, 1)) do
+        if c.ppq > 0 and c.ppq < 119 then interior = true break end
+      end
+      t.truthy(interior, 'the curved segment is subdivided by grid seats -- densified, not two bps')
+
+      -- Endpoints exact; the interior tracks the slow shape (30c at the midpoint).
+      t.eq(derivedPb(dump, 1, 0).val,   centsToRaw(0),  'start seat exact (0c, detune 0)')
+      t.eq(derivedPb(dump, 1, 240).val, centsToRaw(80), 'end seat exact (60c curve + 20c detune)')
+
+      -- The detune step rides a dual point at the onset: same 30c curve value, detune jumps 0 -> 20.
+      t.eq(derivedPb(dump, 1, 119).val, centsToRaw(30), 'just-before the onset: 30c curve, detune 0')
+      t.eq(derivedPb(dump, 1, 120).val, centsToRaw(50), 'at the onset: 30c curve, detune 20 -- the step')
     end,
   },
 
@@ -696,8 +750,8 @@ return {
 
       generators.kinds.ccRep = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 100, shape = 'square' },
-          { ppqL = 120,            val = 20,  shape = 'square' },
+          { ppqL = host.window[1], val = 100, shape = 'step' },
+          { ppqL = 120,            val = 20,  shape = 'step' },
         } } end,
         mode = 'replace', dest = 74, label = 'CcRep', defaults = {}, fields = {},
       }
@@ -724,7 +778,7 @@ return {
       h.tm:addEvent({ evType = 'cc', ppq = 60, chan = 1, cc = 74, val = 30 }); h.tm:flush()
       generators.kinds.ccRep = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 100, shape = 'square' },
+          { ppqL = host.window[1], val = 100, shape = 'step' },
         } } end,
         mode = 'replace', dest = 74, label = 'CcRep', defaults = {}, fields = {},
       }

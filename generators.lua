@@ -192,10 +192,10 @@ local function slide(host, params, ctx)
 
   local delta = {}
   local function bp(ppqL, val, shape) delta[#delta + 1] = { ppqL = ppqL, val = val, shape = shape } end
-  bp(startL, 0, glideStart > startL and 'square' or 'slow')   -- hold true pitch until the slur
+  bp(startL, 0, glideStart > startL and 'step' or 'slow')   -- hold true pitch until the slur
   if glideStart > startL then bp(glideStart, 0, 'slow') end   -- slur begins (half-cosine ease)
-  bp(arrive, target, 'square')                                -- arrived; hold to the handoff
-  bp(endL, 0, 'square')                                       -- re-centre: next note sounds true
+  bp(arrive, target, 'step')                                -- arrived; hold to the handoff
+  bp(endL, 0, 'step')                                       -- re-centre: next note sounds true
   return { notes = {}, delta = delta }
 end
 

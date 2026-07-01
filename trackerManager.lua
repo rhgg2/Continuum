@@ -1737,8 +1737,8 @@ local function rebuildFx(fx, deferred)
             if regionNotes then util.add(regionNotes, spec)
             else util.add(predicted, spec) end
           end
-          -- pb (augment+replace) and cc augment ride the additive carrier; cc replace alone
-          -- forks off it -- the curve goes straight on the target lane, authored cc parked at 4.5b.
+          -- Augment (pb or cc) rides the additive carrier; both replace kinds fork off it instead --
+          -- see docs/tuning.md § Absorber reconciliation for how each target seats its curve.
           local target = meta.dest ~= 'note' and meta.dest or nil
           if target and #out.delta > 0 then
             if meta.mode == 'replace' and type(target) == 'number' then
@@ -1748,11 +1748,11 @@ local function rebuildFx(fx, deferred)
                 util.add(ccFill, { evType = 'cc', chan = chan, cc = target, derived = 'ccfill',
                                    ppq = tm:fromLogical(chan, bp.ppqL, p.d), val = bp.val, shape = bp.shape })
               end
+            elseif meta.mode == 'replace' and target == 'pb' then
+              -- pb replace: the absolute curve rides the base lane as derived absorber seats
+              -- (no carrier). see design/note-macros-v2.md § Continuous pb replace
+              util.add(fx.replacePb[chan], { startL, endL, curve = out.delta, d = p.d })
             else
-              -- Replace overwrites the wire over [startL,endL): record it for the absorber pass's base suppression.
-              if meta.mode == 'replace' and target == 'pb' then
-                util.add(fx.replacePb[chan], { startL, endL })
-              end
               -- cc augment with no authored base needs a resting seat; carry its value so Pass B
               -- emits it once per target. see design/note-macros-v2.md § Continuous cc
               local rest = type(target) == 'number'
@@ -1907,6 +1907,7 @@ local function rebuildTails(fx, deferred)
   local takeLen = tm:length()
   local clampWrites = mmBatch()
   for chan = 1, 16 do
+    perf.start('gather')
     local notes, byLane, byPitch = {}, {}, {}
     for laneIdx, col in ipairs(channels[chan].columns.notes) do
       for _, evt in ipairs(col.events) do
@@ -1924,6 +1925,7 @@ local function rebuildTails(fx, deferred)
       util.bucket(byLane,  w.lane,      fn)
       util.bucket(byPitch, w.evt.pitch, fn)
     end
+    perf.stop('gather')
     if #notes == 0 then goto nextChan end
 
     local function rawThenLogical(a, b)
@@ -1935,18 +1937,23 @@ local function rebuildTails(fx, deferred)
       for _, g in pairs(byLane)  do table.sort(g, rawThenLogical) end
       for _, g in pairs(byPitch) do table.sort(g, rawThenLogical) end
     end
-    sortAll()
+    perf.start('sort'); sortAll(); perf.stop('sort')
 
     -- Same-pitch onset separation; retro-clip subsumed by tail pass. Token'd events assign;
     -- a new fxNote (no token yet) mutates in place, riding into mm:add at the atomic commit.
+    perf.start('nudge')
     for _, n in ipairs(nudgeSamePitchOnsets(notes)) do
       if n.evt.token then clampWrites.assign(n.evt, { ppq = n.evt.ppq }) end
     end
-    sortAll()
+    perf.stop('nudge')
+    perf.start('sort2'); sortAll(); perf.stop('sort2')
 
+    perf.start('nextmaps')
     local laneNextOf  = strictNextMap(byLane)
     local pitchNextOf = strictNextMap(byPitch)
+    perf.stop('nextmaps')
 
+    perf.start('walk')
     for _, n in ipairs(notes) do
       local e         = n.evt
       local ceiling   = e.endppqL == util.OPEN and math.huge
@@ -1966,14 +1973,17 @@ local function rebuildTails(fx, deferred)
         e.endppq = rounded
       end
     end
+    perf.stop('walk')
     ::nextChan::
   end
   -- Clamps reindex colliding same-pitch onsets separately: reload separates the shared content-keyed token before the clip pass dereferences it.
   -- Clips only touch endppq, never re-key — safe to batch with adds.
+  perf.start('commit')
   clampWrites.commit()
   -- Host clips (each clipped to first fxNote) commit WITH the fxNote del/add + restores in one
   -- mm:modify/MIDI_Sort; canonical delete-first means no transient same-pitch overlap.
   deferred.commit()
+  perf.stop('commit')
 
   -- Restore pre-fx tail onto column events so the view sees the authored
   -- note; mm is untouched, so the take and G4 round-trip are unaffected.
@@ -1992,16 +2002,6 @@ local function rebuildPbs(noteLive, replacePb)
 
   local function isCurved(shape)
     return shape and shape ~= 'step' and shape ~= 'linear'
-  end
-
-  -- Replace-pb overwrites the wire over its window, so an authored pb there contributes 0 cents
-  -- to its wire raw (column cents untouched) -- the node's base is detune-only. see design/note-macros-v2.md § Continuous pb replace
-  local function inReplacePb(chan, P)
-    local pL = tm:toLogical(chan, P)
-    for _, w in ipairs(replacePb[chan]) do
-      if pL >= w[1] and pL < w[2] then return true end
-    end
-    return false
   end
 
   -- Per-chan lane-1 sort, used both at reconcile and inside mm:modify.
@@ -2059,11 +2059,32 @@ local function rebuildPbs(noteLive, replacePb)
       if not pb.derived then util.add(realPbs, pb) end
     end
 
-    -- Prevailing authored cents at any ppq: interpolate between the bounding
-    -- breakpoints, hold the last past the end, 0 before the first.
+    -- Replace windows on this chan: the generator's absolute curve, breakpoints mapped to raw ppq and
+    -- seated as derived pbs below -- the curve rides the base lane, no carrier. see docs/tuning.md § Absorber reconciliation
+    local replaceWins = {}
+    for _, w in ipairs(replacePb[chan]) do
+      local bps = {}
+      for _, bp in ipairs(w.curve or {}) do
+        util.add(bps, { ppq = tm:fromLogical(chan, bp.ppqL, w.d), ppqL = bp.ppqL,
+                        cents = bp.val, shape = bp.shape, tension = bp.tension })
+      end
+      table.sort(bps, function(a, b) return a.ppq < b.ppq end)
+      util.add(replaceWins, { startL = w[1], endL = w[2], bps = bps })
+    end
+    local function replaceWinAt(ppq)
+      local pL = tm:toLogical(chan, ppq)
+      for _, win in ipairs(replaceWins) do
+        if pL >= win.startL and pL < win.endL then return win end
+      end
+    end
+
+    -- Prevailing cents at any ppq: the replace curve inside a window, else the authored
+    -- breakpoints. Interpolate the bounding pair, hold the last past the end, 0 before the first.
     local function streamValue(ppq)
+      local win = replaceWinAt(ppq)
+      local src = win and win.bps or realPbs
       local A, B
-      for _, pb in ipairs(realPbs) do
+      for _, pb in ipairs(src) do
         if pb.ppq <= ppq then A = pb else B = pb break end
       end
       if not A then return 0 end
@@ -2095,12 +2116,17 @@ local function rebuildPbs(noteLive, replacePb)
     for _, o in ipairs(onsets) do
       local v    = streamValue(o.ppq)
       local A, B = spanAround(o.ppq)
-      local ramps = A and B and A.shape and A.shape ~= 'step'
-                    and (isCurved(A.shape) or A.cents ~= B.cents)
+      -- Inside a replace window the curve always ramps; otherwise ramp only across a curved or
+      -- value-changing authored span.
+      local ramps = replaceWinAt(o.ppq)
+                    or (A and B and A.shape and A.shape ~= 'step'
+                        and (isCurved(A.shape) or A.cents ~= B.cents))
       if ramps then
-        -- Dual point: the curve value held across a one-tick detune step (before carries
-        -- the old detune cell, at carries the new), both linear so the curve rides through.
-        seats[o.ppq - 1] = { cents = v, ppqL = tm:toLogical(chan, o.ppq - 1), shape = 'linear' }
+        -- Dual point (see docs/tuning.md § Value-aware seats): a window-start onset (ppq 0) has no
+        -- prior cell, so the lone at-onset seat stands.
+        if o.ppq > 0 then
+          seats[o.ppq - 1] = { cents = v, ppqL = tm:toLogical(chan, o.ppq - 1), shape = 'linear' }
+        end
         seats[o.ppq]     = { cents = v, ppqL = o.ppqL, shape = 'linear' }
       else
         seats[o.ppq]     = { cents = v, ppqL = o.ppqL, shape = 'step' }
@@ -2122,6 +2148,33 @@ local function rebuildPbs(noteLive, replacePb)
             seats[p] = { cents = streamValue(p), ppqL = tm:toLogical(chan, p), shape = 'linear' }
           end
           p = p + gridStep
+        end
+      end
+    end
+
+    -- Seat each replace curve as derived (hidden) seats; see docs/tuning.md § Absorber
+    -- reconciliation for the densification rule. Onset seats above take priority.
+    for _, win in ipairs(replaceWins) do
+      local bps = win.bps
+      for _, bp in ipairs(bps) do
+        if not seats[bp.ppq] then
+          seats[bp.ppq] = { cents = bp.cents, ppqL = bp.ppqL, shape = bp.shape }
+        end
+      end
+      for i = 1, #bps - 1 do
+        local A, B = bps[i], bps[i + 1]
+        local hasOnset = false
+        for _, o in ipairs(onsets) do
+          if o.ppq > A.ppq and o.ppq < B.ppq then hasOnset = true break end
+        end
+        if isCurved(A.shape) and hasOnset then
+          local p = A.ppq + gridStep
+          while p < B.ppq do
+            if not seats[p] then
+              seats[p] = { cents = streamValue(p), ppqL = tm:toLogical(chan, p), shape = 'linear' }
+            end
+            p = p + gridStep
+          end
         end
       end
     end
@@ -2207,7 +2260,9 @@ local function rebuildPbs(noteLive, replacePb)
     for _, pb in ipairs(pbs) do
       if pb.origTok then
         local d         = detuneOf[pb]
-        local wireCents = (not pb.derived and inReplacePb(chan, pb.ppq)) and 0 or pb.cents
+        -- An authored pb inside a replace window rides the curve on the wire (streamValue), its
+        -- column cents untouched -- the curve owns realisation there. see docs/tuning.md § Absorber reconciliation
+        local wireCents = (not pb.derived and replaceWinAt(pb.ppq)) and streamValue(pb.ppq) or pb.cents
         local newRaw    = centsToRaw(wireCents + d)
         local shapeChanged = pb.derived and pb.shape ~= pb.origShape
         local update = nil
@@ -2344,7 +2399,7 @@ function tm:rebuild(takeChanged)
   end
 
   -- Per-channel fx realisation state (hostEnd is host-event-keyed, not per-channel).
-  -- noteExisting/noteLive: derived vs post-expansion fx notes. ccExisting: carrier/base/fill CC. replacePb: pb windows.
+  -- noteExisting/noteLive: derived vs post-expansion fx notes. ccExisting: carrier/base/fill CC. replacePb: pb replace windows + curves.
   local fx = { noteExisting = {}, noteLive = {}, ccExisting = {}, replacePb = {}, hostEnd = {} }
   for i = 1, 16 do
     fx.noteExisting[i] = {}
