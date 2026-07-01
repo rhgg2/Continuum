@@ -69,12 +69,15 @@ local carriedPassthrough = {}  -- parsed system messages mm doesn't model; re-em
 -- Opaque, content-keyed addressing. Token is private string built from
 -- the event's identity fields; collision-free by construction across the
 -- evType space. Rebuilt fresh in mm:load alongside eventsByUuid.
+-- Chained concat, not util.key: one OP_CONCAT allocates once and coerces the
+-- integer fields inline, vs util.key's per-arg tostring + table + table.concat.
+-- Byte-identical (n..'' == tostring(n)), so tokens stay stable across the rewrite.
 local function tokenOf(evt)
   local et = evt.evType
-  if et == 'note' then return util.key('note', evt.chan, evt.pitch, evt.ppq) end
-  if et == 'pa'   then return util.key('pa',   evt.chan, evt.pitch, evt.ppq) end
-  if et == 'cc'   then return util.key('cc',   evt.chan, evt.cc,    evt.ppq) end
-  return util.key(et, evt.chan, evt.ppq)
+  if et == 'note' then return 'note\0' .. evt.chan .. '\0' .. evt.pitch .. '\0' .. evt.ppq end
+  if et == 'pa'   then return 'pa\0'   .. evt.chan .. '\0' .. evt.pitch .. '\0' .. evt.ppq end
+  if et == 'cc'   then return 'cc\0'   .. evt.chan .. '\0' .. evt.cc    .. '\0' .. evt.ppq end
+  return et .. '\0' .. evt.chan .. '\0' .. evt.ppq
 end
 
 -- 14-bit CC carriers: MSB code n, fixed-point value 0..127.99.., low 7 bits ride n+32.
