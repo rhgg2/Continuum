@@ -76,14 +76,21 @@ return {
   },
 
   {
-    name = 'mm.reload payload is nil (no smuggled flags)',
+    -- Slice 2: consumers keep an incremental cache across a modify but must full-reload
+    -- after a wholesale re-read. The payload's `wholesale` bit is that discriminator.
+    name = 'mm.reload carries wholesale: true from load, false from modify',
     run = function()
       local h = harness.mk()
-      local count, lastPayload = 0, 'unset'
-      h.fm:subscribe('reload', function(data) count = count + 1; lastPayload = data end)
-      h.fm:load(h.fm:take())
-      t.eq(count, 1, 'reload fired exactly once')
-      t.eq(lastPayload, nil, 'reload payload is nil')
+      local payloads = {}
+      h.fm:subscribe('reload', function(data) payloads[#payloads+1] = data end)
+
+      h.fm:load(h.fm:take())        -- full re-read of the take's events
+      t.eq(#payloads, 1, 'load fired reload once')
+      t.eq(payloads[1] and payloads[1].wholesale, true, 'load reload is wholesale')
+
+      h.fm:modify(function() end)   -- in-place; a consumer's incremental cache stays valid
+      t.eq(#payloads, 2, 'modify fired reload once')
+      t.eq(payloads[2].wholesale, false, 'modify reload is not wholesale')
     end,
   },
 

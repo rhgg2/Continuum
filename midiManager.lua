@@ -324,11 +324,9 @@ local function flushTake()
   for _, t in ipairs(carriedTexts) do util.add(texts, t) end
   perf.stop('sidecars')
 
-  perf.start('eot')
   local source   = reaper.GetMediaItemTake_Source(take)
   local ppqPerQN = reaper.MIDI_GetPPQPosFromProjQN(take, 1) - reaper.MIDI_GetPPQPosFromProjQN(take, 0)
   local endPpq   = math.floor(reaper.GetMediaSourceLength(source) * ppqPerQN + 0.5)
-  perf.stop('eot')
 
   perf.start('serialise')
   local blob = midiBlob.serialise(notes, ccs, texts, carriedPassthrough, endPpq)
@@ -630,8 +628,8 @@ function mm:load(newTake)
   if #ccDedupEvents > 0    then fire('ccsDeduped',      { events = ccDedupEvents })   end
   --emits: ccsReconciled -- { events = [reconcileEvent, ...] }  -- 5 kinds in reconcileEvent.*
   if #reconcileEvents > 0  then fire('ccsReconciled',   { events = reconcileEvents }) end
-  --emits: reload         -- nil; every load, including after modify()
-  fire('reload', nil)
+  --emits: reload -- { wholesale=true }; full re-read, every event object is new
+  fire('reload', { wholesale = true })
 
   perf.count('events', noteCount + ccCount)
   perf.stop('load')
@@ -675,7 +673,8 @@ function mm:modify(fn)
     flushPending = true
   end
   lock = false
-  perf.start('reload'); fire('reload', nil); perf.stop('reload')
+  --emits: reload -- { wholesale=false }; in-place modify, incremental caches stay valid
+  perf.start('reload'); fire('reload', { wholesale = false }); perf.stop('reload')
   modifyDepth = modifyDepth - 1
   if modifyDepth == 0 then
     perf.start('meta'); flushMetadata(); perf.stop('meta')

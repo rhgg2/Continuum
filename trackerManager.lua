@@ -198,7 +198,7 @@ end
 
 ---------- UPDATE MANAGER
 
-local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked, flush, reload, idxReconcile do
+local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked, flush, reload, idxReconcile, clearStaging do
 
   ----- State
 
@@ -267,7 +267,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   end
 
   -- Incremental index upkeep for one token, via makeEntry -- byte-identical to reload's.
-  -- see docs/trackerManager.md § Incremental index reconciliation (idxReconcile)
+  -- see docs/trackerManager.md § Incremental index reconciliation
   function idxReconcile(tok)
     if not tok then return end
     local prev = byToken[tok]
@@ -750,98 +750,14 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     fire('postflush')
   end
 
-  ----- Shadow-compare: prove the incremental index equals a full reload (perf-gated).
-
-  local shadowFields = 'chan ppq evType pitch vel cc val shape lane endppq muted tension uuid'
-
-  local function snapshotChans()
-    local snap = {}
-    for i = 1, 16 do
-      local tokens = { notes = {}, pbs = {} }
-      for _, n in ipairs(chans[i].notes) do util.add(tokens.notes, n.token) end
-      for _, p in ipairs(chans[i].pbs)   do util.add(tokens.pbs,   p.token) end
-      snap[i] = tokens
-    end
-    return snap
-  end
-
-  local function fieldDiffs(incremental, groundTruth)
-    local diffs
-    for field in shadowFields:gmatch('%S+') do
-      if incremental[field] ~= groundTruth[field] then
-        diffs = diffs or {}
-        util.add(diffs, string.format('%s %s!=%s', field,
-                 tostring(incremental[field]), tostring(groundTruth[field])))
-      end
-    end
-    return diffs
-  end
-
-  -- Tokens embed \0 separators (pb\0chan\0ppq); expose them so console print doesn't truncate.
-  local function tokLabel(tok) return (tostring(tok):gsub('%z', '|')) end
-  local function evtLabel(e)
-    return string.format('chan=%s ppq=%s val=%s shape=%s derived=%s',
-      tostring(e.chan), tostring(e.ppq), tostring(e.val), tostring(e.shape), tostring(e.derived))
-  end
-
-  local function shadowCompare(prevByToken, prevByUuid, prevChans)
-    local report = {}
-    for tok, truth in pairs(byToken) do
-      local had = prevByToken[tok]
-      if not had then
-        local _, viaByToken = mm:byToken(tok)
-        util.add(report, 'byToken missing ' .. tokLabel(tok) .. ' [' .. evtLabel(truth) ..
-                 '] mmByToken=' .. tostring(viaByToken ~= nil))
-      else
-        local d = fieldDiffs(had, truth)
-        if d then util.add(report, 'byToken ' .. tokLabel(tok) .. ': ' .. table.concat(d, ', ')) end
-      end
-    end
-    for tok, had in pairs(prevByToken) do
-      if not byToken[tok] then util.add(report, 'byToken stale ' .. tokLabel(tok) .. ' [' .. evtLabel(had) .. ']') end
-    end
-    for uuid, truth in pairs(byUuid) do
-      local had = prevByUuid[uuid]
-      if not had then util.add(report, 'byUuid missing ' .. tostring(uuid))
-      elseif had.token ~= truth.token then
-        util.add(report, 'byUuid ' .. tostring(uuid) .. ' token ' .. tostring(had.token) .. '!=' .. tostring(truth.token))
-      end
-    end
-    for uuid in pairs(prevByUuid) do
-      if not byUuid[uuid] then util.add(report, 'byUuid stale ' .. tostring(uuid)) end
-    end
-    for i = 1, 16 do
-      for _, lane in ipairs({ 'notes', 'pbs' }) do
-        local had, truth = prevChans[i][lane], chans[i][lane]
-        for k = 1, math.max(#had, #truth) do
-          local a = had[k]
-          local b = truth[k] and truth[k].token
-          if a ~= b then
-            util.add(report, string.format('chans[%d].%s[%d] %s!=%s', i, lane, k, tokLabel(a or '-'), tokLabel(b or '-')))
-          end
-        end
-      end
-    end
-    if #report == 0 then util.print('[shadow] index parity OK'); return end
-    util.print(string.format('[shadow] %d divergence(s):', #report))
-    for _, line in ipairs(report) do util.print('  ' .. line) end
-  end
-
   ----- Init / reload: (re)load local cache from mm.
 
-  -- Also clears staging buffers: rebuild must not carry un-flushed ops across
-  -- (tokens may be stale for newly-added events; matches prior "fresh um per rebuild").
-  function reload()
-    local prevByToken, prevByUuid, prevChans
-    if perf.on then prevByToken, prevByUuid, prevChans = byToken, byUuid, snapshotChans() end
-
-    adds, assigns, deletes = {}, {}, {}
-    parkedEdits            = {}
-    dirtyPcChans           = {}
-    byToken                = {}
-    byUuid                 = {}
+  -- Rebuild the whole index from mm. Only for genuine loads (init, take swap, external
+  -- re-read) where the incremental index is stale; edit rebuilds keep the live index.
+  local function loadIndex()
+    byToken = {}
+    byUuid  = {}
     for i = 1, 16 do chans[i] = { notes = {}, pbs = {} } end
-
     for tok, e in mm:events() do
       local evt = makeEntry(e, tok)
       local tbl = chansListFor(evt, evt.chan, evt.lane)
@@ -849,9 +765,17 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     end
     -- mm:events() yields notes then ccs each already ppq-sorted (mm's stableByPpq);
     -- the per-channel filter above preserves that order, so no re-sort is needed.
-
-    if perf.on then shadowCompare(prevByToken, prevByUuid, prevChans) end
   end
+
+  -- Drop un-flushed staging: a rebuild must not carry command-path ops across
+  -- (tokens may be stale for newly-added events; matches prior "fresh um per rebuild").
+  function clearStaging()
+    adds, assigns, deletes = {}, {}, {}
+    parkedEdits            = {}
+    dirtyPcChans           = {}
+  end
+
+  function reload() clearStaging(); loadIndex() end
 
   reload()
 end
@@ -2396,6 +2320,9 @@ end
 ----- Rebuild
 
 local rebuilding = false
+-- mm:reload wholesale-replaces the event set (take swap / external re-read), stranding the
+-- incremental index; full-reloads when set, else keeps it. see docs § Incremental index reconciliation
+local mmReloaded = false
 
 --contract: reentrancy-guarded; rebuilds channels[] from mm, reloads um cache, fires 'rebuild'
 --contract: takeChanged forwarded to subscribers via the captured pendingTakeSwap
@@ -2406,6 +2333,8 @@ function tm:rebuild(takeChanged)
   if not mm:take() then return end
   rebuilding = true
   takeChanged = takeChanged or false
+  -- Capture before the pipeline's nested mm:modify calls re-fire 'reload' and clear it.
+  local didReload = mmReloaded; mmReloaded = false
   pbLimCents = nil   -- coherence point: refresh cached pbRange for cents<->raw conversions
 
   clearSwing()   -- rebuild is the (cm, mm) coherence point
@@ -2445,7 +2374,9 @@ function tm:rebuild(takeChanged)
 
   perf.start('projLogical'); projectLogical(); perf.stop('projLogical')  -- project columns to logical
 
-  perf.start('view'); reload(); perf.stop('view')  -- reload local cache -> tv:rebuild
+  -- Index: full reload only when mm re-read its event set (load/reload); edit rebuilds
+  -- trust the incremental index and just clear staging. see docs § Incremental index reconciliation
+  perf.start('view'); if didReload then reload() else clearStaging() end; perf.stop('view')
   rebuilding = false
 
   --emits: rebuild -- takeChanged:boolean
@@ -2519,7 +2450,8 @@ do
   tm:forward('uuidsReassigned', mm)
   tm:forward('takeSwapped',     mm)
   mm:subscribe('takeSwapped', function() pendingTakeSwap = true end)
-  mm:subscribe('reload', function()
+  mm:subscribe('reload', function(info)
+    mmReloaded = (info and info.wholesale) or false
     tm:rebuild(pendingTakeSwap)
     pendingTakeSwap = false
   end)

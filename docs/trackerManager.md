@@ -57,15 +57,16 @@ from tv and from tm's own rebuild-time housekeeping — funnel through
 `tm:addEvent` / `tm:assignEvent` / `tm:deleteEvent`, which apply to a
 local cache (`byToken`, `byUuid`, per-channel `chans`) and accumulate
 mm-facing ops in `adds`/`assigns`/`deletes`. `tm:flush()` commits the
-batch in one `mm:modify` call. `reload()` rebuilds that cache from
-`mm:events()` — at module init and at the tail of every rebuild — so um's
-view of mm always matches tm's own.
+batch in one `mm:modify` call. The cache is maintained incrementally at
+every mm-write site (the verbs, flush, and rebuild's `mmBatch`), so a full
+`reload()` from `mm:events()` runs only when mm re-reads its whole event
+set — module init and wholesale reloads (§ Incremental index reconciliation).
 
 The sections below reference um by name because its frame and encoding
 choices (cents not raw; realisation toward mm, logical at the public
 surface) are the reason several conventions exist.
 
-### Incremental index reconciliation (idxReconcile)
+### Incremental index reconciliation
 
 `idxReconcile(tok)` rebuilds one token's `byToken`/`byUuid`/`chans` entry
 from mm's canonical clone (`mm:byToken`), producing an entry byte-identical
@@ -74,9 +75,17 @@ the shared `makeEntry` helper. Callers reconcile every touched token after
 the whole `mm:modify` batch commits, not op-by-op: reconciling mid-batch
 would be vulnerable to reseat sequences whose intermediate token re-keys
 collide, where an op-by-op replay could net a live token out of the index.
-A perf-gated shadow-compare in `reload()` diffs the incrementally-maintained
-index against a fresh full rebuild to catch any divergence between the two
-paths.
+
+Because every mm write maintains the index, it is authoritative and survives
+across rebuilds. A rebuild only full-`reload()`s when mm re-read its entire
+event set from REAPER; ordinary edit rebuilds keep the live index and just
+`clearStaging()`. mm signals which case it is: its `'reload'` payload carries
+`wholesale=true` from `load`/`reload` (every event object is new, index stale)
+and `wholesale=false` from `modify` (in-place, index still valid). tm captures
+that bit at the top of `rebuild`, before the pipeline's own nested `mm:modify`
+calls re-fire `'reload'` and would otherwise clear it. The incremental path
+was validated against a full `reload()` by a perf-gated shadow-compare during
+the migration; that scaffolding is removed now that parity is established.
 
 ## Pitchbend: tm's role in the tuning model
 
@@ -227,9 +236,12 @@ Semantics:
 ## Rebuild
 
 Triggered by:
-- mm `'reload'` signal — always rebuilds. The take-swap flag travels via
-  the separate mm `'takeSwapped'` signal, captured into a transient flag
-  and consumed by the next reload (mm guarantees the firing order);
+- mm `'reload'` signal — always rebuilds. Its `wholesale` payload bit says
+  whether mm re-read its whole event set (`load`/`reload`) or mutated in
+  place (`modify`); the former drives a full index reload (§ Incremental
+  index reconciliation). The take-swap flag travels via the separate mm
+  `'takeSwapped'` signal, captured into a transient flag and consumed by
+  the next reload (mm guarantees the firing order);
 - cm `'configChanged'` signal, except for `vmOnlyKeys` (`mutedChannels`,
   `soloedChannels`) which do not touch tm's structural view.
 
@@ -310,8 +322,9 @@ source event, strips only `chan` and `cc`, and applies the caller's
 known here — rides through verbatim, so new event fields reach
 `col.events` without a change to this layer.
 
-Then `reload()` reloads tm's local cache from mm and clears the staging
-buffers, and tm fires the `'rebuild'` signal carrying the `takeChanged`
+Then the index step runs: a full `reload()` from mm on a wholesale reload,
+otherwise just `clearStaging()` to drop un-flushed ops (§ Incremental index
+reconciliation). tm fires the `'rebuild'` signal carrying the `takeChanged`
 boolean — true only when this rebuild followed a `bindTake` (a take-tier
 reload).
 
