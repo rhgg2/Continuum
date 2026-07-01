@@ -1738,7 +1738,7 @@ local function rebuildFx(fx, deferred)
             else util.add(predicted, spec) end
           end
           -- Augment (pb or cc) rides the additive carrier; both replace kinds fork off it instead --
-          -- see docs/tuning.md § Absorber reconciliation for how each target seats its curve.
+          -- see design/note-macros-v2.md § cc replace / § Continuous replace for how each seats its curve.
           local target = meta.dest ~= 'note' and meta.dest or nil
           if target and #out.delta > 0 then
             if meta.mode == 'replace' and type(target) == 'number' then
@@ -1907,53 +1907,47 @@ local function rebuildTails(fx, deferred)
   local takeLen = tm:length()
   local clampWrites = mmBatch()
   for chan = 1, 16 do
-    perf.start('gather')
     local notes, byLane, byPitch = {}, {}, {}
     for laneIdx, col in ipairs(channels[chan].columns.notes) do
       for _, evt in ipairs(col.events) do
         if evt.evType ~= 'pa' and evt.ppqL ~= nil then
-          local n = { evt = evt, lane = laneIdx }
-          util.add(notes, n)
-          util.bucket(byLane,  laneIdx,   n)
-          util.bucket(byPitch, evt.pitch, n)
+          util.add(notes, { evt = evt, lane = laneIdx })
         end
       end
     end
     for _, w in ipairs(fx.noteLive[chan]) do
-      local fn = { evt = w.evt, lane = w.lane }
-      util.add(notes, fn)
-      util.bucket(byLane,  w.lane,      fn)
-      util.bucket(byPitch, w.evt.pitch, fn)
+      util.add(notes, { evt = w.evt, lane = w.lane })
     end
-    perf.stop('gather')
     if #notes == 0 then goto nextChan end
 
     local function rawThenLogical(a, b)
       if a.evt.ppq ~= b.evt.ppq then return a.evt.ppq < b.evt.ppq end
       return a.evt.ppqL < b.evt.ppqL
     end
+    -- Sort notes once; the buckets partition notes, so rebuilding them by walking the
+    -- sorted array yields sorted buckets in O(N) -- cheaper than re-sorting each bucket.
     local function sortAll()
       table.sort(notes, rawThenLogical)
-      for _, g in pairs(byLane)  do table.sort(g, rawThenLogical) end
-      for _, g in pairs(byPitch) do table.sort(g, rawThenLogical) end
+      byLane, byPitch = {}, {}
+      for _, n in ipairs(notes) do
+        util.bucket(byLane,  n.lane,      n)
+        util.bucket(byPitch, n.evt.pitch, n)
+      end
     end
-    perf.start('sort'); sortAll(); perf.stop('sort')
+    sortAll()
 
     -- Same-pitch onset separation; retro-clip subsumed by tail pass. Token'd events assign;
     -- a new fxNote (no token yet) mutates in place, riding into mm:add at the atomic commit.
-    perf.start('nudge')
-    for _, n in ipairs(nudgeSamePitchOnsets(notes)) do
+    local moved = nudgeSamePitchOnsets(notes)
+    for _, n in ipairs(moved) do
       if n.evt.token then clampWrites.assign(n.evt, { ppq = n.evt.ppq }) end
     end
-    perf.stop('nudge')
-    perf.start('sort2'); sortAll(); perf.stop('sort2')
+    -- Re-sort only when a nudge actually moved an onset (rare); otherwise ordering stands.
+    if #moved > 0 then sortAll() end
 
-    perf.start('nextmaps')
     local laneNextOf  = strictNextMap(byLane)
     local pitchNextOf = strictNextMap(byPitch)
-    perf.stop('nextmaps')
 
-    perf.start('walk')
     for _, n in ipairs(notes) do
       local e         = n.evt
       local ceiling   = e.endppqL == util.OPEN and math.huge
@@ -1973,17 +1967,14 @@ local function rebuildTails(fx, deferred)
         e.endppq = rounded
       end
     end
-    perf.stop('walk')
     ::nextChan::
   end
   -- Clamps reindex colliding same-pitch onsets separately: reload separates the shared content-keyed token before the clip pass dereferences it.
   -- Clips only touch endppq, never re-key — safe to batch with adds.
-  perf.start('commit')
   clampWrites.commit()
   -- Host clips (each clipped to first fxNote) commit WITH the fxNote del/add + restores in one
   -- mm:modify/MIDI_Sort; canonical delete-first means no transient same-pitch overlap.
   deferred.commit()
-  perf.stop('commit')
 
   -- Restore pre-fx tail onto column events so the view sees the authored
   -- note; mm is untouched, so the take and G4 round-trip are unaffected.
@@ -2122,8 +2113,8 @@ local function rebuildPbs(noteLive, replacePb)
                     or (A and B and A.shape and A.shape ~= 'step'
                         and (isCurved(A.shape) or A.cents ~= B.cents))
       if ramps then
-        -- Dual point (see docs/tuning.md § Value-aware seats): a window-start onset (ppq 0) has no
-        -- prior cell, so the lone at-onset seat stands.
+        -- Dual point (see docs/tuning.md § Value-aware seats): before/at carry old/new detune, both
+        -- linear so the curve rides through; a window-start onset (ppq 0) has no prior cell.
         if o.ppq > 0 then
           seats[o.ppq - 1] = { cents = v, ppqL = tm:toLogical(chan, o.ppq - 1), shape = 'linear' }
         end
@@ -2152,8 +2143,8 @@ local function rebuildPbs(noteLive, replacePb)
       end
     end
 
-    -- Seat each replace curve as derived (hidden) seats; see docs/tuning.md § Absorber
-    -- reconciliation for the densification rule. Onset seats above take priority.
+    -- Seat each replace curve as derived (hidden) seats carrying its shape; see docs/tuning.md §
+    -- Value-aware seats and densification for the rule. Onset seats above take priority.
     for _, win in ipairs(replaceWins) do
       local bps = win.bps
       for _, bp in ipairs(bps) do
