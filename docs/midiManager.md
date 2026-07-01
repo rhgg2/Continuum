@@ -163,6 +163,10 @@ per `modify` would then rewrite the whole take twice for any detuned gesture.
 Instead the flush is deferred — a dirty `modify` at any nesting level sets a
 shared `flushPending`, and only the outermost unwind (`modifyDepth == 0`) calls
 `flushTake`, *after* `reload` has settled so the reseat is already in the model.
+`flushMetadata` (a whole-blob `eventMeta` ext-state round-trip) coalesces the
+same way: `metaDirty`/`metaDeleted` reset only at the outermost entry, so nested
+modifies accumulate into them and the flush runs once at the unwind — safe
+because nothing reads project ext-state mid-modify.
 
 **Metadata-only carve-out** (parallel for notes and stamped ccs):
 - `assignNote(loc, t)` where `t` touches none of `ppq, endppq, pitch, vel,

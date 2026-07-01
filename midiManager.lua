@@ -246,9 +246,8 @@ local function deleteMetadatum(uuid)
   if uuid then metaDeleted[uuid], metaDirty[uuid] = true, nil end
 end
 
--- Commit the buffered metadata in one keys-set round-trip. Called at modify-end,
--- before reload -- nothing reads project ext-state mid-modify (internal reload uses
--- the in-memory snapshot), so deferring the writes here is transparent.
+-- Commit buffered metadata in one keys-set round-trip, once at the outermost
+-- modify unwind. See docs/midiManager.md § Mutation contract.
 local function flushMetadata()
   if next(metaDirty) or next(metaDeleted) then
     eventMeta:flush(poolGuid, metaDirty, metaDeleted)
@@ -659,16 +658,15 @@ local function checkLock()
   return true
 end
 
--- Re-entrant: reload reseats absorbers via a nested modify. Flush once on the
--- outermost unwind. See docs/midiManager.md § Mutation contract.
+-- Re-entrant: reload reseats absorbers via a nested modify. Flush the take and
+-- metadata once on the outermost unwind. See docs/midiManager.md § Mutation contract.
 function mm:modify(fn)
   if not liveTake() then return end
   modifyDepth = modifyDepth + 1
   lock = true
   dirty = false
-  metaDirty, metaDeleted = {}, {}
+  if modifyDepth == 1 then metaDirty, metaDeleted = {}, {} end   -- reset once; nested modifies accumulate
   perf.start('verbs'); local ok, err = pcall(fn); perf.stop('verbs')
-  perf.start('meta');  flushMetadata();          perf.stop('meta')
   if dirty then                                 -- clean (metadata-only) gestures touch no structure
     perf.start('rebuild'); rebuild(nil); perf.stop('rebuild')
     flushPending = true
@@ -676,9 +674,12 @@ function mm:modify(fn)
   lock = false
   perf.start('reload'); fire('reload', nil); perf.stop('reload')
   modifyDepth = modifyDepth - 1
-  if modifyDepth == 0 and flushPending then
-    flushPending = false
-    flushTake()
+  if modifyDepth == 0 then
+    perf.start('meta'); flushMetadata(); perf.stop('meta')
+    if flushPending then
+      flushPending = false
+      flushTake()
+    end
   end
   if not ok then print('Error in modify: ' .. tostring(err)) end
 end
