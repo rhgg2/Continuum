@@ -107,47 +107,59 @@ end
 --shape: serialise(notes, ccs, texts, passthrough, endPpq?) -> blob   -- inverse of parse; endPpq places the tail
 --invariant: parse(serialise(x))==x; coincident events may reorder, per-type record lists preserved
 --reaper: matches MIDI_SetAllEvts format; tail at max(endPpq, last-event ppq) (default: last event)
+-- Decodes a packed sort key to (flags, msg): rank digit picks the stream, seq//2
+-- the record index, an odd seq a cc's bezier CCBZ rider. Mirrors midiBlob.parse.
+local function decodeWire(kv, notes, ccs, texts, passthrough)
+  local rank = (kv // 100000) % 10
+  local i    = (kv % 100000) // 2
+  if rank == 1 then
+    local n = notes[i]; return n.muted and 0x02 or 0, string.char(0x90 | (n.chan - 1), n.pitch, n.vel)
+  elseif rank == 0 then
+    local n = notes[i]; return 0, string.char(0x80 | (n.chan - 1), n.pitch, 0)
+  elseif rank == 2 then
+    local c = ccs[i]
+    if kv % 2 == 1 then return 0, '\xFF\x0F' .. 'CCBZ ' .. '\0' .. string.pack('f', c.tension or 0) end
+    return (c.muted and 0x02 or 0) | ((shapeCodes[c.shape] or 0) << 4), ccWire(c)
+  elseif rank == 3 then
+    local x = texts[i]
+    return 0, x.eventtype == -1
+      and ('\xF0' .. x.msg .. '\xF7')
+      or  ('\xFF' .. string.char(x.eventtype) .. x.msg)
+  else
+    local p = passthrough[i]; return p.flags, p.msg
+  end
+end
+
 function midiBlob.serialise(notes, ccs, texts, passthrough, endPpq)
-  local wire = {}
-  local function push(ppq, rank, seq, flags, msg)
-    util.add(wire, { ppq = ppq, rank = rank, seq = seq, flags = flags, msg = msg })
+  passthrough = passthrough or {}
+  -- key = ppq*1e6 + rank*1e5 + seq2; ppq < 2^31 (i4 offset bounds it) keeps it
+  -- exact under 2^53. seq2 = index*2, +1 for a bezier tail. See docs/midiBlob.md.
+  local keys, count = {}, 0
+  local function key(ppq, rank, seq2)
+    count = count + 1
+    keys[count] = ppq * 1000000 + rank * 100000 + seq2
   end
 
   for i, n in ipairs(notes) do
-    local ch = n.chan - 1
-    push(n.ppq,    1, i, n.muted and 0x02 or 0, string.char(0x90 | ch, n.pitch, n.vel))
-    push(n.endppq, 0, i, 0,                      string.char(0x80 | ch, n.pitch, 0))
+    key(n.ppq, 1, i * 2)      -- note-on
+    key(n.endppq, 0, i * 2)   -- note-off
   end
-
   for i, c in ipairs(ccs) do
-    local flags = (c.muted and 0x02 or 0) | ((shapeCodes[c.shape] or 0) << 4)
-    push(c.ppq, 2, i, flags, ccWire(c))
-    if c.shape == 'bezier' then
-      push(c.ppq, 2, i + 0.5, 0, '\xFF\x0F' .. 'CCBZ ' .. '\0' .. string.pack('f', c.tension or 0))
-    end
+    key(c.ppq, 2, i * 2)
+    if c.shape == 'bezier' then key(c.ppq, 2, i * 2 + 1) end
   end
+  for i, x in ipairs(texts) do key(x.ppq, 3, i * 2) end
+  for i, p in ipairs(passthrough) do key(p.ppq, 4, i * 2) end
 
-  for i, x in ipairs(texts) do
-    local msg = x.eventtype == -1
-      and ('\xF0' .. x.msg .. '\xF7')
-      or  ('\xFF' .. string.char(x.eventtype) .. x.msg)
-    push(x.ppq, 3, i, 0, msg)
-  end
-
-  for i, p in ipairs(passthrough or {}) do
-    push(p.ppq, 4, i, p.flags, p.msg)
-  end
-
-  table.sort(wire, function(a, b)
-    if a.ppq  ~= b.ppq  then return a.ppq  < b.ppq  end
-    if a.rank ~= b.rank then return a.rank < b.rank end
-    return a.seq < b.seq
-  end)
+  table.sort(keys)
 
   local out, prev = {}, 0
-  for _, ev in ipairs(wire) do
-    util.add(out, string.pack('i4Bs4', ev.ppq - prev, ev.flags, ev.msg))
-    prev = ev.ppq
+  for k = 1, count do
+    local kv = keys[k]
+    local ppq = kv // 1000000
+    local flags, msg = decodeWire(kv, notes, ccs, texts, passthrough)
+    util.add(out, string.pack('i4Bs4', ppq - prev, flags, msg))
+    prev = ppq
   end
   local tailPpq = math.max(endPpq or prev, prev)   -- never shrink past the last event
   util.add(out, string.pack('i4Bs4', tailPpq - prev, 0, '\xB0\x7B\x00'))   -- all-notes-off tail
