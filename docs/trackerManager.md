@@ -65,6 +65,19 @@ The sections below reference um by name because its frame and encoding
 choices (cents not raw; realisation toward mm, logical at the public
 surface) are the reason several conventions exist.
 
+### Incremental index reconciliation (idxReconcile)
+
+`idxReconcile(tok)` rebuilds one token's `byToken`/`byUuid`/`chans` entry
+from mm's canonical clone (`mm:byToken`), producing an entry byte-identical
+to what a full `reload()` would build for that token — both funnel through
+the shared `makeEntry` helper. Callers reconcile every touched token after
+the whole `mm:modify` batch commits, not op-by-op: reconciling mid-batch
+would be vulnerable to reseat sequences whose intermediate token re-keys
+collide, where an op-by-op replay could net a live token out of the index.
+A perf-gated shadow-compare in `reload()` diffs the incrementally-maintained
+index against a fresh full rebuild to catch any divergence between the two
+paths.
+
 ## Pitchbend: tm's role in the tuning model
 
 See `docs/tuning.md` for the cross-cutting model — detune as intent,

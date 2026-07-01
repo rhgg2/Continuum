@@ -198,7 +198,7 @@ end
 
 ---------- UPDATE MANAGER
 
-local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked, flush, reload do
+local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked, flush, reload, idxReconcile do
 
   ----- State
 
@@ -246,6 +246,38 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     local tbl = chansListFor(evt, chan or evt.chan, lane or evt.lane)
     if not tbl then return end
     for i, item in ipairs(tbl) do if item == evt then table.remove(tbl, i); return end end
+  end
+
+  -- Construct the um-frame index entry for one mm clone and file it into byToken/byUuid.
+  -- Shared verbatim by full reload and the incremental verbs so both build identical entries.
+  local function makeEntry(e, tok)
+    local evt
+    if e.evType == 'pb' then
+      -- val is raw 14-bit converted to cents (um's frame). cents sidecar is authored logical value;
+      -- nil for foreign-MIDI/pre-cents pbs — back-derived in rebuild's absorber pass from lane-1 layout.
+      evt = util.pick(e, 'ppq ppqL chan shape tension derived frame cents',
+                      { val = rawToCents(e.val), token = tok, evType = 'pb' })
+    else
+      evt = e
+      evt.token = tok
+    end
+    byToken[tok] = evt
+    if evt.uuid then byUuid[evt.uuid] = evt end
+    return evt
+  end
+
+  -- Incremental index upkeep for one token, via makeEntry -- byte-identical to reload's.
+  -- see docs/trackerManager.md § Incremental index reconciliation (idxReconcile)
+  function idxReconcile(tok)
+    if not tok then return end
+    local prev = byToken[tok]
+    byToken[tok] = nil
+    if prev then
+      if prev.uuid then byUuid[prev.uuid] = nil end
+      chansRemove(prev)
+    end
+    local _, e = mm:byToken(tok)
+    if e then chansInsert(makeEntry(e, tok)) end
   end
 
   --contract: only lane==1 notes index into chans[chan].notes
@@ -708,11 +740,9 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
       end
       for _, o in ipairs(flushAdds) do
         local tok = mm:add(o.evt)
-        if tok then
-          byToken[tok] = o.evt
-          o.evt.token  = tok
-          if o.evt.uuid then byUuid[o.evt.uuid] = o.evt end
-        end
+        -- addLowlevel already filed the raw staged object into chans; drop it by identity
+        -- and re-file mm's canonical clone so the entry matches reload (cc shape, pb cents/no-uuid).
+        if tok then chansRemove(o.evt); idxReconcile(tok) end
       end
     end)
     perf.stop('mm')
@@ -720,11 +750,91 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     fire('postflush')
   end
 
+  ----- Shadow-compare: prove the incremental index equals a full reload (perf-gated).
+
+  local shadowFields = 'chan ppq evType pitch vel cc val shape lane endppq muted tension uuid'
+
+  local function snapshotChans()
+    local snap = {}
+    for i = 1, 16 do
+      local tokens = { notes = {}, pbs = {} }
+      for _, n in ipairs(chans[i].notes) do util.add(tokens.notes, n.token) end
+      for _, p in ipairs(chans[i].pbs)   do util.add(tokens.pbs,   p.token) end
+      snap[i] = tokens
+    end
+    return snap
+  end
+
+  local function fieldDiffs(incremental, groundTruth)
+    local diffs
+    for field in shadowFields:gmatch('%S+') do
+      if incremental[field] ~= groundTruth[field] then
+        diffs = diffs or {}
+        util.add(diffs, string.format('%s %s!=%s', field,
+                 tostring(incremental[field]), tostring(groundTruth[field])))
+      end
+    end
+    return diffs
+  end
+
+  -- Tokens embed \0 separators (pb\0chan\0ppq); expose them so console print doesn't truncate.
+  local function tokLabel(tok) return (tostring(tok):gsub('%z', '|')) end
+  local function evtLabel(e)
+    return string.format('chan=%s ppq=%s val=%s shape=%s derived=%s',
+      tostring(e.chan), tostring(e.ppq), tostring(e.val), tostring(e.shape), tostring(e.derived))
+  end
+
+  local function shadowCompare(prevByToken, prevByUuid, prevChans)
+    local report = {}
+    for tok, truth in pairs(byToken) do
+      local had = prevByToken[tok]
+      if not had then
+        local _, viaByToken = mm:byToken(tok)
+        util.add(report, 'byToken missing ' .. tokLabel(tok) .. ' [' .. evtLabel(truth) ..
+                 '] mmByToken=' .. tostring(viaByToken ~= nil))
+      else
+        local d = fieldDiffs(had, truth)
+        if d then util.add(report, 'byToken ' .. tokLabel(tok) .. ': ' .. table.concat(d, ', ')) end
+      end
+    end
+    for tok, had in pairs(prevByToken) do
+      if not byToken[tok] then util.add(report, 'byToken stale ' .. tokLabel(tok) .. ' [' .. evtLabel(had) .. ']') end
+    end
+    for uuid, truth in pairs(byUuid) do
+      local had = prevByUuid[uuid]
+      if not had then util.add(report, 'byUuid missing ' .. tostring(uuid))
+      elseif had.token ~= truth.token then
+        util.add(report, 'byUuid ' .. tostring(uuid) .. ' token ' .. tostring(had.token) .. '!=' .. tostring(truth.token))
+      end
+    end
+    for uuid in pairs(prevByUuid) do
+      if not byUuid[uuid] then util.add(report, 'byUuid stale ' .. tostring(uuid)) end
+    end
+    for i = 1, 16 do
+      for _, lane in ipairs({ 'notes', 'pbs' }) do
+        local had, truth = prevChans[i][lane], chans[i][lane]
+        for k = 1, math.max(#had, #truth) do
+          local a = had[k]
+          local b = truth[k] and truth[k].token
+          if a ~= b then
+            util.add(report, string.format('chans[%d].%s[%d] %s!=%s', i, lane, k, tokLabel(a or '-'), tokLabel(b or '-')))
+          end
+        end
+      end
+    end
+    if #report == 0 then util.print('[shadow] index parity OK'); return end
+    util.print(string.format('[shadow] %d divergence(s):', #report))
+    for _, line in ipairs(report) do util.print('  ' .. line) end
+  end
+
   ----- Init / reload: (re)load local cache from mm.
 
   -- Also clears staging buffers: rebuild must not carry un-flushed ops across
   -- (tokens may be stale for newly-added events; matches prior "fresh um per rebuild").
   function reload()
+    local prevByToken, prevByUuid, prevChans
+    if perf.on then prevByToken, prevByUuid, prevChans = byToken, byUuid, snapshotChans() end
+
     adds, assigns, deletes = {}, {}, {}
     parkedEdits            = {}
     dirtyPcChans           = {}
@@ -733,25 +843,14 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     for i = 1, 16 do chans[i] = { notes = {}, pbs = {} } end
 
     for tok, e in mm:events() do
-      local evt
-      if e.evType == 'pb' then
-        -- val is raw 14-bit converted to cents (um's frame). cents sidecar is authored logical value;
-        -- nil for foreign-MIDI/pre-cents pbs — back-derived in rebuild's absorber pass from lane-1 layout.
-        evt = util.pick(e, 'ppq ppqL chan shape tension derived frame cents',
-                        { val = rawToCents(e.val), token = tok, evType = 'pb' })
-        util.add(chans[evt.chan].pbs, evt)
-      else
-        evt = e
-        evt.token = tok
-        if evt.evType == 'note' and evt.lane == 1 then
-          util.add(chans[evt.chan].notes, evt)
-        end
-      end
-      byToken[tok] = evt
-      if evt.uuid then byUuid[evt.uuid] = evt end
+      local evt = makeEntry(e, tok)
+      local tbl = chansListFor(evt, evt.chan, evt.lane)
+      if tbl then util.add(tbl, evt) end
     end
     -- mm:events() yields notes then ccs each already ppq-sorted (mm's stableByPpq);
     -- the per-channel filter above preserves that order, so no re-sort is needed.
+
+    if perf.on then shadowCompare(prevByToken, prevByUuid, prevChans) end
   end
 
   reload()
@@ -973,7 +1072,7 @@ function tm:tileLength(newPpq)
       local delta = k * oldPpq
       for _, src in ipairs(sourceEvents) do
         local c = util.clone(src)
-        if shift(c, delta) then mm:add(c) end
+        if shift(c, delta) then idxReconcile(mm:add(c)) end
       end
     end
   end)
@@ -1050,15 +1149,22 @@ local function mmBatch()
     addLazy = function(fn)                 util.add(lazyAdds, fn) end,
     commit  = function()
       if #dels + #assigns + #adds + #lazyAdds == 0 then return end
+      local touched = {}
       mm:modify(function()
-        for _, e in ipairs(dels) do mm:delete(e.token) end
+        for _, e in ipairs(dels) do mm:delete(e.token); touched[e.token] = true end
         for _, a in ipairs(assigns) do
-          local newTok = mm:assign(a.evt.token, a.update)
-          if newTok and newTok ~= a.evt.token then a.evt.token = newTok end
+          local oldTok = a.evt.token
+          local newTok = mm:assign(oldTok, a.update)
+          touched[oldTok] = true
+          if newTok then
+            if newTok ~= oldTok then a.evt.token = newTok end
+            touched[newTok] = true
+          end
         end
-        for _, s  in ipairs(adds)     do mm:add(s)    end
-        for _, fn in ipairs(lazyAdds) do mm:add(fn()) end
+        for _, s  in ipairs(adds)     do local t = mm:add(s);    if t then touched[t] = true end end
+        for _, fn in ipairs(lazyAdds) do local t = mm:add(fn()); if t then touched[t] = true end end
       end)
+      for tok in pairs(touched) do idxReconcile(tok) end
     end,
   }
 end
