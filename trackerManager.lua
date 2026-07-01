@@ -790,7 +790,7 @@ function tm:resolution()           return mm and mm:resolution() end
 function tm:name()                 return mm and mm:name() end
 function tm:setName(name)          if mm then mm:setName(name) end end
 function tm:timeSigs()             return mm and mm:timeSigs() or {} end
-function tm:interpolate(A, B, ppq) return mm and mm:interpolate(A, B, ppq) end
+function tm:interpolate(A, B, ppq, field) return mm and mm:interpolate(A, B, ppq, field) end
 
 -- E_c: column is inner, global is outer (see docs/timing.md).
 --contract: cached per-(cm, mm) pair; invalidated at rebuild head.
@@ -1960,6 +1960,10 @@ local function rebuildPbs(noteLive, replacePb)
     return (n and n.detune) or 0
   end
 
+  local function isCurved(shape)
+    return shape and shape ~= 'step' and shape ~= 'linear'
+  end
+
   -- Replace-pb overwrites the wire over its window, so an authored pb there contributes 0 cents
   -- to its wire raw (column cents untouched) -- the node's base is detune-only. see design/note-macros-v2.md § Continuous pb replace
   local function inReplacePb(chan, P)
@@ -1994,47 +1998,19 @@ local function rebuildPbs(noteLive, replacePb)
   local pbsByChan = {}
   for _, cc in mm:ccs() do
     if cc.evType == 'pb' then
-      cc.origTok = mm:tokenOf(cc)
+      cc.origTok, cc.origShape = mm:tokenOf(cc), cc.shape
       util.bucket(pbsByChan, cc.chan, cc)
     end
   end
 
   local pbWrites = mmBatch()
+  -- CCINTERP is interpolated points per QN; the densify grid wants a tick step.
+  local gridStep = math.max(1, util.round((mm:resolution() or 960) / mm:ccInterp()))
 
   for chan = 1, 16 do
     local lane1Events = lane1ByChan[chan]
     local pbs         = pbsByChan[chan] or {}
     table.sort(pbs, function(a, b) return a.ppq < b.ppq end)
-
-    -- Needed seats: every lane-1 onset where detune ≠ predecessor. hostPpqL captures
-    -- lane-1 ppqL so a fake placed there carries the host's logical position (logical projection, tv).
-    local needed, hostPpqL = {}, {}
-    local prev = 0
-    for _, n in ipairs(lane1Events) do
-      local d = n.detune
-      if d ~= prev then
-        needed[n.ppq] = true
-        hostPpqL[n.ppq] = n.ppqL
-      end
-      prev = d
-    end
-
-    -- Anchor a pb-active channel at its first lane-1 onset (I2a):
-    -- without it, playback inherits the synth's unknown prior bend.
-    local first = lane1Events[1]
-    if first and not needed[first.ppq] then
-      local hasReal, anchored = false, false
-      for _, pb in ipairs(pbs) do
-        if not pb.derived then
-          hasReal = true
-          if pb.ppq <= first.ppq then anchored = true break end
-        end
-      end
-      if (next(needed) ~= nil or hasReal) and not anchored then
-        needed[first.ppq]  = true
-        hostPpqL[first.ppq] = first.ppqL
-      end
-    end
 
     -- Back-derive cents for any pb missing it (foreign-MIDI/pre-cents pbs carry raw only).
     -- Marked so the consolidated assign below always carries cents to the sidecar.
@@ -2046,43 +2022,133 @@ local function rebuildPbs(noteLive, replacePb)
       end
     end
 
-    -- Match existing pbs to needed seats. Real pbs cover their seat; fakes: consume any
-    -- already at a needed seat, move remaining fakes to fill the rest, delete leftovers.
+    -- Authored (non-derived) pbs in ppq order: the value stream the seats sample.
+    local realPbs = {}
+    for _, pb in ipairs(pbs) do
+      if not pb.derived then util.add(realPbs, pb) end
+    end
+
+    -- Prevailing authored cents at any ppq: interpolate between the bounding
+    -- breakpoints, hold the last past the end, 0 before the first.
+    local function streamValue(ppq)
+      local A, B
+      for _, pb in ipairs(realPbs) do
+        if pb.ppq <= ppq then A = pb else B = pb break end
+      end
+      if not A then return 0 end
+      if not B then return A.cents end
+      return mm:interpolate(A, B, ppq, 'cents')
+    end
+
+    -- Authored breakpoints bounding M, excluding any pb exactly at M.
+    local function spanAround(M)
+      local A, B
+      for _, pb in ipairs(realPbs) do
+        if pb.ppq < M then A = pb elseif pb.ppq > M then B = pb break end
+      end
+      return A, B
+    end
+
+    -- Detune onsets: every lane-1 ppq whose detune differs from its predecessor.
+    local onsets, prev = {}, 0
+    for _, n in ipairs(lane1Events) do
+      if n.detune ~= prev then util.add(onsets, { ppq = n.ppq, ppqL = n.ppqL }) end
+      prev = n.detune
+    end
+
+    -- Seats to realise: ppq -> { cents, ppqL, shape }. The consolidated assign turns each
+    -- into wire raw = centsToRaw(cents + detune). A flat/held/absent stream needs only a
+    -- lone step seat; a value that ramps across the onset rides linearly, so the detune
+    -- step splits onto a dual point and a curved segment densifies. see docs/tuning.md
+    local seats = {}
+    for _, o in ipairs(onsets) do
+      local v    = streamValue(o.ppq)
+      local A, B = spanAround(o.ppq)
+      local ramps = A and B and A.shape and A.shape ~= 'step'
+                    and (isCurved(A.shape) or A.cents ~= B.cents)
+      if ramps then
+        -- Dual point: the curve value held across a one-tick detune step (before carries
+        -- the old detune cell, at carries the new), both linear so the curve rides through.
+        seats[o.ppq - 1] = { cents = v, ppqL = tm:toLogical(chan, o.ppq - 1), shape = 'linear' }
+        seats[o.ppq]     = { cents = v, ppqL = o.ppqL, shape = 'linear' }
+      else
+        seats[o.ppq]     = { cents = v, ppqL = o.ppqL, shape = 'step' }
+      end
+    end
+
+    -- Densify each curved authored segment that contains an onset into a linear polyline
+    -- on the fixed CCINTERP grid -- stable keys (from authored ppqs) keep it churn-free.
+    for i = 1, #realPbs - 1 do
+      local A, B = realPbs[i], realPbs[i + 1]
+      local hasOnset = false
+      for _, o in ipairs(onsets) do
+        if o.ppq > A.ppq and o.ppq < B.ppq then hasOnset = true break end
+      end
+      if isCurved(A.shape) and hasOnset then
+        local p = A.ppq + gridStep
+        while p < B.ppq do
+          if not seats[p] then
+            seats[p] = { cents = streamValue(p), ppqL = tm:toLogical(chan, p), shape = 'linear' }
+          end
+          p = p + gridStep
+        end
+      end
+    end
+
+    -- Anchor a pb-active channel at its first lane-1 onset (I2a):
+    -- without it, playback inherits the synth's unknown prior bend.
+    local first = lane1Events[1]
+    if first and not seats[first.ppq] then
+      local hasReal, anchored = false, false
+      for _, pb in ipairs(realPbs) do
+        hasReal = true
+        if pb.ppq <= first.ppq then anchored = true break end
+      end
+      if (next(seats) ~= nil or hasReal) and not anchored then
+        seats[first.ppq] = { cents = streamValue(first.ppq), ppqL = first.ppqL, shape = 'step' }
+      end
+    end
+
+    -- Match existing pbs to seats. A real pb at a seat covers it (it steps detune itself);
+    -- fakes consume any already at a seat, move remaining fakes to fill the rest, delete the
+    -- leftovers.
     local realAt, availAbsorbers = {}, {}
     for _, pb in ipairs(pbs) do
       if pb.derived then util.add(availAbsorbers, pb)
       else realAt[pb.ppq] = pb end
     end
+    for ppq in pairs(seats) do
+      if realAt[ppq] then seats[ppq] = nil end
+    end
 
-    local restampPpqL = {}  -- pb -> newPpqL (existing fake at needed seat with stale ppqL)
+    local restampPpqL = {}  -- pb -> newPpqL (existing fake at a seat with stale ppqL)
     for i = #availAbsorbers, 1, -1 do
-      local f = availAbsorbers[i]
-      if needed[f.ppq] and not realAt[f.ppq] then
-        if f.ppqL ~= hostPpqL[f.ppq] then
-          restampPpqL[f] = hostPpqL[f.ppq]
-          f.ppqL = hostPpqL[f.ppq]   -- mirror into the clone so the logical projection sees it
+      local f, seat = availAbsorbers[i], seats[availAbsorbers[i].ppq]
+      if seat then
+        f.cents, f.shape = seat.cents, seat.shape
+        if f.ppqL ~= seat.ppqL then
+          restampPpqL[f] = seat.ppqL
+          f.ppqL = seat.ppqL   -- mirror into the clone so the logical projection sees it
         end
-        needed[f.ppq] = nil
+        seats[f.ppq] = nil
         table.remove(availAbsorbers, i)
       end
     end
 
     local moved = {}  -- pb -> newPpq
-    for ppq in pairs(needed) do
-      if not realAt[ppq] then
-        local f = table.remove(availAbsorbers)
-        if f then
-          moved[f] = ppq
-          f.ppq, f.cents, f.ppqL = ppq, 0, hostPpqL[ppq]
-          util.add(pbs, f)
-        else
-          local fresh = { chan = chan, ppq = ppq, cents = 0,
-                          ppqL = hostPpqL[ppq], derived = 'absorber', evType = 'pb' }
-          util.add(pbs, fresh)
-          local writeEvt = util.clone(fresh)
-          writeEvt.val = centsToRaw(fresh.cents + detuneAt(lane1ByChan[chan], ppq))
-          pbWrites.add(writeEvt)
-        end
+    for ppq, seat in pairs(seats) do
+      local f = table.remove(availAbsorbers)
+      if f then
+        moved[f] = ppq
+        f.ppq, f.cents, f.ppqL, f.shape = ppq, seat.cents, seat.ppqL, seat.shape
+        util.add(pbs, f)
+      else
+        local fresh = { chan = chan, ppq = ppq, cents = seat.cents, ppqL = seat.ppqL,
+                        shape = seat.shape, derived = 'absorber', evType = 'pb' }
+        util.add(pbs, fresh)
+        local writeEvt = util.clone(fresh)
+        writeEvt.val = centsToRaw(fresh.cents + detuneAt(lane1ByChan[chan], ppq))
+        pbWrites.add(writeEvt)
       end
     end
 
@@ -2095,33 +2161,35 @@ local function rebuildPbs(noteLive, replacePb)
 
     table.sort(pbs, function(a, b) return a.ppq < b.ppq end)
 
-    -- Consolidated assign: one entry per existing pb where any of
-    -- (ppq moved, ppqL restamped, raw changed, cents back-derived) needs to land.
+    -- Consolidated assign: one entry per existing pb where any of (ppq moved, ppqL
+    -- restamped, raw changed, cents back-derived, derived shape changed) needs to land.
     for _, pb in ipairs(pbs) do
       if pb.origTok then
         local d         = detuneAt(lane1Events, pb.ppq)
         local wireCents = (not pb.derived and inReplacePb(chan, pb.ppq)) and 0 or pb.cents
         local newRaw    = centsToRaw(wireCents + d)
+        local shapeChanged = pb.derived and pb.shape ~= pb.origShape
         local update = nil
         if moved[pb] then
           update = { ppq = pb.ppq, ppqL = pb.ppqL,
                      cents = pb.cents, val = newRaw }
         elseif restampPpqL[pb] then
           update = { ppqL = restampPpqL[pb], cents = pb.cents, val = newRaw }
-        elseif pb.val ~= newRaw or persistCents[pb] then
+        elseif pb.val ~= newRaw or persistCents[pb] or shapeChanged then
           update = { cents = pb.cents, val = newRaw }
         end
         if update then
+          if pb.derived then update.shape = pb.shape end
           pb.val = newRaw
           pbWrites.assign({ token = pb.origTok }, update)
         end
       end
     end
 
-    -- Column projection.
+    -- Column projection. A derived seat is wire-only -- always hidden.
     local anyVisible, pbColEvents = false, {}
     for _, pb in ipairs(pbs) do
-      local hidden = pb.derived and (pb.shape == nil or pb.shape == 'step')
+      local hidden = pb.derived ~= nil
       anyVisible = anyVisible or not hidden
       util.add(pbColEvents, projectCC(pb, pb.origTok, {
         val    = pb.cents,

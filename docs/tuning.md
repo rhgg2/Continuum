@@ -307,16 +307,51 @@ lane-1 sequence it:
   `cents = rawToCents(wire) − detune` at the pb's seat.
 - Covers every detune-jump seat: a real pb at that ppq counts;
   otherwise reuse an existing fake if any (in-place first, else move),
-  else create a new fake (`cents=0`).
+  else create a new fake.
 - Anchors a pb-active channel at its first lane-1 onset (even detune 0)
   unless a real pb already pins it at-or-before (I2a).
 - Drops fakes whose seat is no longer needed.
 - Writes wire raw = `centsToRaw(cents + carrying lane-1 detune)`.
 - Projects the pb column from the final set, with `val=cents` (the
-  authored value tv displays) and `hidden=fake`.
+  authored value tv displays) and `hidden` for every derived seat.
 
 Reads pbs directly from mm; the um cache (`chans`, `byToken`) is
 rebuilt at the end-of-rebuild `reload()`.
+
+### Value-aware seats and densification
+
+A seat is no longer value-blind. It samples the **prevailing authored pb
+value** at its ppq (`streamValue` — interpolate between the bounding
+breakpoints, hold the last past the end, 0 before the first) and adds
+detune. The old `cents=0` discarded any authored value passing through the
+seat, so you could not interpolate or hold a pb across a detune onset; now
+the seat carries it. The two-number pb breakpoint (display `cents` vs wire
+raw) is what lets the column still show the user's sparse authored shape
+while the wire carries the realisation.
+
+How a seat realises depends on whether the authored value *ramps* across
+the onset:
+
+- **Flat / held / no stream** — a lone **step** seat holds the prevailing
+  value and steps detune at the onset. This is the common pure-detune case;
+  the value-aware machinery is inert (`streamValue` is 0 or a constant).
+- **Ramps (sloped or curved segment)** — the seat must ride **linearly** so
+  the curve tracks through it, so the detune step can no longer be the
+  seat's own shape. It splits onto a **dual point**: a just-before seat
+  carrying `streamValue(onset) + old detune` and an at-onset seat carrying
+  `streamValue(onset) + new detune`. The curve rides through both; detune
+  jumps between them, never smeared across the preceding cell.
+- **Curved segment under an onset** — REAPER's fixed-tension shapes cannot
+  be split at an arbitrary point, so the segment is re-expressed as a
+  **densified linear polyline**: derived seats on a fixed grid (step =
+  `resolution / CCINTERP` ticks -- `CCINTERP` is interpolated points per QN,
+  the density REAPER itself linearizes CC at) sampling the curve. The grid is fixed, not curvature-adaptive, and keyed
+  on the stable authored ppqs — adaptive points would move between rebuilds
+  and churn (the canon-ppq lesson). A curved segment with no interior onset
+  rides REAPER's native shape untouched.
+
+Origin and the forward path (generator replace curves reusing the same
+seats): `design/pb-interpolation.md`.
 
 ## Conventions
 

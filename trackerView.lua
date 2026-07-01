@@ -1069,6 +1069,7 @@ end
 local interpolate, interpolateValues do
   local interpolable = { cc = true, pb = true, at = true }
   local shapeCycle = { 'step', 'linear', 'slow', 'fast-start', 'fast-end', 'bezier' }
+  local function notHidden(e) return not e.hidden end  -- interpolate targets visible breakpoints only
 
   local function nextShape(s)
     for i, n in ipairs(shapeCycle) do
@@ -1103,7 +1104,7 @@ local interpolate, interpolateValues do
           local endppq   = ctx:rowToPPQ(r2 + 1, col.midiChan)
           local evts = {}
           for evt in util.between(col.events, startppq, endppq) do
-            evts[#evts + 1] = evt
+            if notHidden(evt) then evts[#evts + 1] = evt end
           end
           plans[#plans + 1] = { col = col, evts = evts }
         end
@@ -1121,7 +1122,7 @@ local interpolate, interpolateValues do
     local ghost = col.ghosts and col.ghosts[r]
     local A = ghost and ghost.fromEvt
       or (col.cells and col.cells[r])
-      or util.seek(col.events, 'before', ctx:rowToPPQ(r + 1, col.midiChan))
+      or util.seek(col.events, 'before', ctx:rowToPPQ(r + 1, col.midiChan), notHidden)
     if not A then return end
     cycleShape(col, A); tm:flush()
   end
@@ -1129,7 +1130,11 @@ local interpolate, interpolateValues do
   -- Returns nil for non-interpolable cols so callers can assign unconditionally.
   function interpolateValues(col)
     if not interpolable[col.type] then return end
-    local events, chan, occupied = col.events, col.midiChan, col.cells
+    local chan, occupied = col.midiChan, col.cells
+    -- Ghosts span the visible authored breakpoints; hidden derived seats
+    -- (the absorber wire stream) are skipped so the curve rides the onset.
+    local events = {}
+    for _, e in ipairs(col.events) do if not e.hidden then util.add(events, e) end end
     local ghosts = {}
     for i = 1, #events - 1 do
       local A, B = events[i], events[i + 1]
@@ -3094,6 +3099,7 @@ function tv:rebuild(takeChanged)
       if gridCol.type == 'note' or gridCol.type == 'fx' then gridCol.tails = {} end
       local chan = gridCol.midiChan
       for _, evt in ipairs(gridCol.events) do
+        if evt.hidden then goto continue end  -- derived absorber seats are wire-only
         local startRow = ctx:ppqToRow(evt.ppq or 0, chan)
         local onGrid   = ctx:isOnGrid(evt.ppq or 0, chan)
         local y        = cellRowOf(evt, chan)
@@ -3114,6 +3120,7 @@ function tv:rebuild(takeChanged)
             endRow   = ctx:ppqToRow(evt.endppqC, chan),
           })
         end
+        ::continue::
       end
     end
 

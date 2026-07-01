@@ -24,14 +24,17 @@ end
 
 -- Metadata is keyed by the take's POOLEDEVTS guid (its source identity), so every
 -- pooled instance shares one blob. Derived from the item chunk, cached across reloads.
-local poolGuid
+local poolGuid, ccInterp
 local function setTakeGuid()
-  poolGuid = nil
+  poolGuid, ccInterp = nil, nil
   if not take then return end
   local item = reaper.GetMediaItemTake_Item(take)
   if not item then return end
   local ok, chunk = reaper.GetItemStateChunk(item, '', false)
-  if ok and chunk then poolGuid = chunk:match('POOLEDEVTS%s+({[^}]+})') end
+  if ok and chunk then
+    poolGuid = chunk:match('POOLEDEVTS%s+({[^}]+})')
+    ccInterp = tonumber(chunk:match('CCINTERP%s+(%d+)'))
+  end
 end
 
 local function print(...)
@@ -968,14 +971,20 @@ function mm:take()
   return liveTake()
 end
 
--- REAPER convention: shape on A governs the curve from A to next.
-function mm:interpolate(A, B, ppq)
-  if not A.shape or A.shape == 'step' then return A.val end
+-- REAPER convention: shape on A governs the curve from A to next. field defaults to
+-- 'val'; pass 'cents' to interpolate the authored cents stream (rebuildPbs seats).
+function mm:interpolate(A, B, ppq, field)
+  field = field or 'val'
+  if not A.shape or A.shape == 'step' then return A[field] end
   local span = B.ppq - A.ppq
-  if span == 0 then return A.val end
+  if span == 0 then return A[field] end
   local t = (ppq - A.ppq) / span
-  return (A.val or 0) + curveSample(A.shape, A.tension, t) * ((B.val or 0) - (A.val or 0))
+  return (A[field] or 0) + curveSample(A.shape, A.tension, t) * ((B[field] or 0) - (A[field] or 0))
 end
+
+-- CCINTERP from the item chunk: interpolated points per QN REAPER linearizes CC at
+-- (not ticks). rebuildPbs converts to a tick step via resolution. Default 32.
+function mm:ccInterp() return ccInterp or 32 end
 
 function mm:resolution()
   if not liveTake() then return end
