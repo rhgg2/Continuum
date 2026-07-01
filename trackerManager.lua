@@ -1609,6 +1609,12 @@ end
 local function rebuildFx(fx, deferred)
   local newFxCarrier = {}
 
+  -- Note columns read in ppq order regardless of mm array order (eachWindowNote /
+  -- allocateRegionLanes / membersOf iterate col.events directly). see design/deferred-reindex.md § Phase A
+  for chan = 1, 16 do
+    for _, col in ipairs(channels[chan].columns.notes) do sortByPPQ(col.events) end
+  end
+
   -- Windows (read-only): fx host voice extents + per-note same-lane successor ppqL, floored by authored
   -- end; no realised round-trip (G4-stable). see design/archive/note-macros.md § host contract
   local fxWindow, nextInLane = {}, {}
@@ -1624,8 +1630,7 @@ local function rebuildFx(fx, deferred)
           end
         end
       end
-      for _, g in pairs(byLane) do table.sort(g, function(a, b) return a.evt.ppq < b.evt.ppq end) end
-      local laneNextOf = strictNextMap(byLane)
+      local laneNextOf = strictNextMap(byLane)   -- groups are ppq-ordered: col.events sorted at entry
       for _, g in pairs(byLane) do
         for _, rec in ipairs(g) do
           local nextRec = laneNextOf[rec]
@@ -1716,6 +1721,11 @@ local function rebuildFx(fx, deferred)
     for _, bp in ipairs(authoredPbByChan[chan] or {}) do
       if within(bp.ppqL) then util.add(pb, { ppqL = bp.ppqL, cents = bp.cents }) end
     end
+    -- Generators read these streams in ppq order (pb pre-sorted upstream). see design/deferred-reindex.md § Phase A
+    local function byPpqL(a, b) return a.ppqL < b.ppqL end
+    table.sort(pas, byPpqL)
+    for _, list in pairs(ccs) do table.sort(list, byPpqL) end
+    table.sort(ats, byPpqL)
     return pas, ccs, ats, pb
   end
   -- Deterministic allocator: lowest lane free of overlap, authored notes seed occupancy;

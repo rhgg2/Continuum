@@ -74,7 +74,7 @@ order-independent:**
 | `rebuildExternals` | sorts `external` (:1357); `noteColumnAccepts` full scan |
 | `rebuildRegionPark` | coverage full-scans; `realiseParked` sorts groups (:1397); restores re-sort touched columns (:1481, :1560) |
 | `rebuildPA` | active-voice match unique by single-voice invariant; fallback per-column boolean |
-| `rebuildFx` window pass | sorts `byLane` (:1627) |
+| `rebuildFx` window pass | `col.events` sorted at entry (Phase A); `byLane` groups inherit the order |
 | `rebuildTails` | unconditional `sortAll()` (:1969) |
 | `rebuildPbs` | sorts `lane1ByChan` (:2045) and `pbsByChan` (:2067) |
 | `rebuildPCs` | buckets by ppq, winner by explicit lane sort (:152) |
@@ -116,19 +116,69 @@ absorber pass stages nothing on clean channels, its nested commit
 disappears entirely and the unwind reindex is only paid when some
 pipeline stage actually wrote.
 
-## Open questions
+## Implementation
 
-- **Load/config-triggered rebuilds.** Only the flush path nests the
-  pipeline's commits inside an outer modify; a rebuild fired by
-  `configChanged` or `load` runs each pipeline commit as its own
-  top-level modify — own reindex, own `flushTake`. Wrapping the
-  pipeline body in a `mm:modify` would extend the win (and collapse the
-  multiple serialises) to those paths; the extra `reload` fire at
-  unwind is harmless (sole subscriber is guarded). Do this now or as a
-  follow-up?
-- **Dirt granularity.** `dirty` is boolean; assign-only commits that
-  move no ppq (val edits) need neither compact nor sort. Worth
-  splitting hole-dirt from order-dirt so the unwind reindex can skip
-  the sort when nothing moved?
-- Whether the slim reindex should also skip compaction when no deletes
-  occurred (same split, cheaper still).
+Phased so the risky switch lands last. Today `rebuild(nil)` runs inside
+every dirty `mm:modify` (midiManager.lua:685), so the arrays are compact
++ sorted whenever the pipeline or a consumer reads them. Deferral removes
+that guarantee — the whole `tm:rebuild` pipeline (fired by `reload` at
+:690) then runs against sparse-but-stable, unsorted arrays until the
+single unwind reindex. So each prep phase makes the pipeline tolerate
+that state while remaining a behavioural no-op today (arrays are still
+compact + sorted when it runs); the flip becomes load-bearing only at
+Phase D. Every phase lands green with a pinning spec.
+
+- **Phase A — tm order self-sufficiency (item 4). ✅ landed.** Two sorts so the
+  pipeline head stops depending on mm array order:
+  - `rebuildFx` entry: sort each `channels[chan].columns.notes` col's
+    `col.events` by ppq — covers `eachWindowNote` (:1675),
+    `allocateRegionLanes` (:1725), `channelStreams` (:1698).
+  - `channelStreams` (:1694): sort the gathered `pas`/`ccs`/`ats` before
+    returning; `pb` is already sorted upstream.
+
+  Also fixes a latent bug today: externals append unsorted at the column
+  tail (trackerManager.lua:1377). **Pin:** generator lane stability.
+  Lands independent of everything.
+- **Phase B — hole-tolerant iterators (item 2).** `mm:notes` (:711),
+  `mm:ccs` (:779), `mm:ccsRaw` (:790), `mm:events` (:957) skip nils up to
+  the `noteCount`/`ccCount` high-water marks instead of stopping at the
+  first hole. No-op today. **Pin:** hole-injection spec.
+- **Phase C — reindex-if-stale scaffolding (item 5).** Add `indexStale`
+  (cleared at the end of `rebuild`), `mm:reindexIfStale()`, and call it
+  at the head of tm's `loadIndex` (trackerManager.lua:781) before it
+  walks `mm:events()`. Inert while nothing sets the flag — `loadIndex`
+  verifiably reindexes nothing today. Makes Phase D a one-line switch.
+- **Phase D — defer to one reindex at the unwind (item 1).** The flip.
+  In `mm:modify` (:684-687) replace `rebuild(nil)` with
+  `indexStale = true`; at the outermost unwind (`modifyDepth == 0`, :692)
+  run `if indexStale then rebuild(nil) end` before
+  `flushMetadata`/`flushTake`. Going straight for full deferral (outer +
+  nested), which A/B/C make safe. **Pin:** hole-regression specs now
+  exercise the deferred path — PA survives region-park cc deletes;
+  absorber snapshot (:2052) and PC re-projection (:2351) see the full
+  stream after mid-pipeline dels.
+- **Phase E — slim the unwind reindex (item 3).** `rebuild(metadata,
+  slim)`: `slim` keeps compact + sort + `loc` recompute but drops the
+  `tokenIdx`/`eventsByUuid` reconstruction (:280, :283-284, :289-291) —
+  the verbs maintain both incrementally. Modify-path/unwind and
+  `reindexIfStale` pass `slim=true`; `mm:load` keeps `slim=false` (dedup
+  /unify needs from-scratch). **Validate:** shadow-compare per Validation
+  above; strip the scaffold at parity, keep one permanent gated-vs-full
+  spec.
+
+## Follow-ups (after Phase E)
+
+- **Wrap the load/config rebuild paths in an outer `mm:modify`.** Only
+  the flush path nests the pipeline's commits inside an outer modify; a
+  rebuild fired by `configChanged` or `load` runs each pipeline commit as
+  its own top-level modify — own reindex, own `flushTake`. Wrapping the
+  pipeline body in a `mm:modify` extends the win (and collapses the
+  multiple serialises) to those paths; the extra `reload` fire at unwind
+  is harmless (sole subscriber is guarded). Separate behavioural change
+  from deferral, so deferred to keep this slice tight.
+- **Split hole-dirt from order-dirt.** `dirty` is boolean; assign-only
+  commits that move no ppq (val edits) need neither compact nor sort.
+  Splitting lets the unwind reindex skip the sort when nothing moved (and
+  the slim reindex skip compaction when no deletes occurred — same
+  split, cheaper still). A micro-opt on top of D/E, not needed for
+  correctness.

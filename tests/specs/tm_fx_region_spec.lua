@@ -235,6 +235,24 @@ return {
     end,
   },
 
+  ----- Phase A: generator output is self-sufficient of mm array order (design/deferred-reindex.md)
+
+  {
+    name = 'two rebuilds over an arp region allocate byte-identical derived notes + lanes',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { pitch = 60, lane = 1 })
+      addNote(h, { pitch = 64, lane = 2 })
+      addNote(h, { pitch = 67, lane = 3 })
+      injectArp(h)
+      local first = derivedNotes(h)
+      t.eq(#first, 4, 'arp cycles the triad -- four derived hits')
+      h.tm:rebuild()
+      local second = derivedNotes(h)
+      t.deepEq(second, first, 'a second rebuild is byte-identical -- generator order self-sufficient')
+    end,
+  },
+
   {
     name = 'replace: arp samples the playing notes continuously, with no collision nudge',
     run = function(harness)
