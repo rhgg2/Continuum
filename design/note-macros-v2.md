@@ -36,6 +36,7 @@ Track A is the generator substrate, Track B the authoring UI. Checked = landed.
 
 **Open / next**
 - [ ] fx chain — series composition + multi-column authoring (design only, § The fx chain)
+- [ ] chain surface — docked chain strip, scripted kinds pane, patch library (design only, § The chain surface)
 
 **Deferred (no consumer / intentional)**
 - [ ] **PA** replace — no generic park/rebind path (§ A4)
@@ -429,10 +430,11 @@ shape, no new storage. Multiple chains coexist on a channel as **fx
 columns**, packed by overlap with A2's lane allocator re-pointed from
 derived notes to chains (B1 already renders the lone column note-lane-like;
 this resolves its deferred "overlapping-region sub-lanes"). The fxEdit
-modal becomes a **chain editor** — it tabs across the sibling chains, edits
-a chain's ordered stages (add / remove / reorder), and deletes or mints
-whole chains. On a note the chain is `note.fx`, reached as in v1 (in-cell
-badge + Super-X); per-lane note-fx columns stay deferred.
+modal serves as the **interim chain editor** — it tabs across the sibling
+chains, edits a chain's ordered stages (add / remove / reorder), and
+deletes or mints whole chains — until the chain strip supersedes it
+(§ The chain surface). On a note the chain is `note.fx`, reached as in v1
+(in-cell badge + Super-X); per-lane note-fx columns stay deferred.
 
 **Multiplicity resolves by the target's fold — pack, sum, or layer.** Every
 output target folds overlapping contributions, and overlap is well-behaved
@@ -468,15 +470,143 @@ to the source as params. "Shape the arp's velocity" is a transformer;
 vibrato's loop, swapping its closed-form breakpoint placement for a phase
 accumulator.
 
-**Open — tab scope.** Whether the modal tabs across *all* chains on the
-channel or only those stacked at the cursor's ppq (overlap
-disambiguation). It decides whether the modal carries a channel index or
-just the cursor's column set; it doesn't gate the rest.
+**Tab scope — resolved: the cursor's ppq.** The editor (modal now, strip
+later) cycles the chains stacked at the cursor's ppq, not every chain on
+the channel — that is what the cursor means everywhere else in the
+tracker. Overlap disambiguation falls out; a chain elsewhere is reached
+by moving the cursor to it.
 
 **First cut.** Thread the `runProducer` loop, add `role` to the registry,
 write one note-channel transformer (velocity-pattern), and prove it on
 `[arp, velPattern]`; defer delta-channel transformers and the multi-column
 UI until the single-chain series is solid.
+
+## The chain surface — strip, scripts, patches (design)
+
+Nothing here is built either; it is the UI + extensibility half of the
+chain, converged 2026-07-02. The through-line: **chains shrink the kind
+vocabulary instead of growing it.** With series composition most new-kind
+wishes are *spellings* of a few hard primitives — strum = `[arp,
+humanize]`, gated arp = `[arp, densityGate]` — so the primitive set stays
+small (sources: arp, retrig, trill, vibrato, slide, LFO; transformers:
+velocity-pattern, humanize, transpose, density, swing) and expressivity
+comes from composition. This is generators-as-config one level up: a kind
+is data when its body is arithmetic over ctx ops; a chain is
+composition-as-data.
+
+**The chain strip — the comb made visible.** The modal fails
+structurally: a chain has two axes (stages ×, params ↓) plus siblings,
+and a flat field list shows none of that. The destination is a docked
+horizontal strip at the bottom of the tracker page (a `chrome.row` strip,
+so it aligns by construction), shown when the cursor sits on an fx cell
+or an fx-carrying note:
+
+    ┌─ ch3 fx ── chain 2/3 ──────────────────────────────────┐
+    │ ▶ ARP        →  VEL PATT     →  HUMANIZE   │ + stage    │
+    │   per 1/3       patt ▌▖▌▘        time 12t  │            │
+    │   dir updown    depth 40%       [bypass]   │            │
+    └────────────────────────────────────────────────────────┘
+
+Left-to-right *is* signal flow — the load-bearing stage order is visible
+at all times, the thing the modal can't show. The keyboard grammar is the
+tracker's own: a focus key enters the strip; left/right walks stages;
+up/down walks the focused stage's params; ± / typing adjusts; Backspace
+deletes a stage; shift+left/right reorders; Tab cycles the sibling chains
+stacked at the cursor's ppq (the tab-scope resolution above). Per-stage
+**bypass** borrows the wiring page's verb and stores like `rest` —
+realisation metadata riding the fx entry, never passed through
+`fn(host, params, ctx)`. The `FX_FIELDS` row-walk ports near-verbatim,
+rendered horizontally with params under each stage.
+
+**Grid-side affordances.** The fx-column badge grows into a **chain
+signature** — stacked one-char glyphs in series order (`a·v·h`) — so a
+region's behaviour reads without opening anything. The ghost display mode
+(§ Authoring and editing, *Visibility*) earns its keep here: default
+ghost-on while the strip is focused, because "what does this chain
+actually emit" becomes a live question the moment stages compose.
+
+**Scripted kinds — an editor-page pane.** `generators.kinds` is already
+the seam: one registry entry per kind (`expand`, `mode`, `dest`, `label`,
+`defaults`, `fields`), user-extensible by construction. A scripted kind
+is a user Lua chunk evaluating to that entry-shape, edited in a third
+editor-page pane beside swing and temper. The pane rides the existing
+`libraryTreeSpec` machinery whole — global/project tiers, promote/demote,
+new/import/delete, dirty tracking — which already models exactly this:
+named, tiered, user-authored artifacts. The ctx discipline is the
+contract surface: a scripted `expand` composes host + params + named ctx
+ops, pure, no reach into tm. Loading is eval-into-registry at startup /
+library-save; a broken script degrades to its kind vanishing from the
+registry with a status-bar complaint, never a rebuild fault.
+
+**Patches ride the same library.** A patch is a *named chain* — an
+ordered `{kind, params}` list, pure data, no code — saved to the same
+tiered library and instantiated **by copy** onto a region or note. Live
+patch references (edit the patch, instances follow) are the gm
+invertibility axis reappearing; deferred until wanted.
+
+**Param modulation — the gleam, not the build.** "Bend the vibrato rate
+in flight" generalizes `dest` once more: `param:<stage>.<field>` — a
+continuous stage whose delta targets a sibling stage's parameter instead
+of a MIDI wire. Depth 1 only, the modulator living inside the chain it
+modulates. Build nothing now; the obligation on today's work is only to
+keep `dest` a clean single axis so the value can slot in.
+
+**Stepped feed — modulation's contract (design, same gleam tier).** A
+modulated param stops being a scalar and becomes a control signal, and
+the contract must decide who integrates it over time. Handing bodies
+`params:at(t)` leaves integration as per-author folklore — a closed-form
+body under a varying param fails silently (vibrato's sine needs a phase
+accumulator once `period` moves; the classic FM error). The structural
+answer: the **runner drives the body through time** —
+`expand(block, params, ctx, state)` — resolving modulators to *constant*
+params per block and threading explicit state (vibrato: phase; arp: step
+index; retrig: next fire). A block is just a **narrowed host** (window
+shrunk, streams sliced), and a one-shot kind is a stepped kind run with
+one block spanning the window — the same no-special-case-head move as
+`role`. Whole-window properties (vibrato's end-of-window re-centre) become
+runner epilogues, not block business.
+
+Blocks are **segment-driven, not fixed-size**: edges at the union of
+modulator breakpoints and membership note-on/offs (sample-and-hold at
+the modulator's own breakpoints — exact, no block-size/aliasing
+trade). With membership edges in the cut, params *and* polyphony are
+block-constant — a block is precisely an interval of constancy, and
+bodies go straight-line: no scanning, no mid-block cases.
+
+**Notes arrive as held + triggered.** Per block: `held` = sounding at
+block start (onset before it), `triggered` = note-ons inside it. No
+`released` set — every note carries `endppqL`, so gate-shaped bodies read
+release edges off the events. The partition **tiles the membership**:
+each note is triggered in exactly one block, held in every later block it
+spans; union over blocks = today's overlap query. The degenerate
+one-block case is *more* correct than the flat list (`playingAt` stops
+being something arp implements and becomes `held ∪ triggered`, handed
+in). Simultaneous onsets in `triggered` order by ascending realised pitch
+(as `playingAt` sorts) so "first triggered" stays G4-stable; segmentation
+is a pure function of the input streams, so determinism holds by
+construction. Cost stays proportional to event count, all offline; the
+shape also mirrors the node's per-block run one level up, and is
+streaming-ready if live feeds (preview, plink) ever want it.
+
+**The obligation now is a writing discipline only**, same register as
+ctx: shape new continuous kinds *incrementally* — phase accumulators and
+step loops, never closed forms over the window — so the window can shrink
+without rewriting the body. Discrete kinds are already step-shaped. When
+param modulation lands, the build order writes itself: segment cutter +
+state threading in the runner, vibrato ported as the proving kind.
+
+**Resist the DAG.** Parallel → series with target folds is a comb, and
+the comb is the model. Sibling chains give parallel; the fold gives
+summing; order gives series. A node canvas (the wiring page's idiom)
+invites exactly the fan-out and geometry-as-order the semantics forbid —
+audio routing earns a DAG, note-fx doesn't. Borrow the wiring page's
+*chrome* (bypass badges), never its canvas. Likewise no parallel blocks
+*inside* a chain: sibling chains already express it.
+
+**Sequencing.** (1) The fx-chain first cut above, modal intact. (2) The
+strip, replacing the modal once ≥2-stage chains are real. (3) The
+editor-page pane — patch library first (pure data, cheap once chains are
+real), scripted kinds after. Param modulation stays a gleam.
 
 ## Owned elsewhere — not this doc's work
 
