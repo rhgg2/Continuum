@@ -49,6 +49,28 @@ local function tailPpq(blob)
   return ppq
 end
 
+-- Defence in depth for the same-pitch invariant: warn-and-write, never dedup at
+-- blob level -- see design/same-pitch-enforcement.md § Direction decided against.
+tests[#tests + 1] = {
+  name = 'colliding note onsets warn loudly and still serialise',
+  run = function()
+    local notes = {
+      { evType = 'note', ppq = 0, endppq = 120, chan = 1, pitch = 60, vel = 100 },
+      { evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 90 },
+    }
+    local warned = false
+    local origShow = _G.reaper.ShowConsoleMsg
+    _G.reaper.ShowConsoleMsg = function(m)
+      if m:find('same-pitch onset collision', 1, true) then warned = true end
+    end
+    local blob = midiBlob.serialise(notes, {}, {}, {})
+    _G.reaper.ShowConsoleMsg = origShow
+    t.eq(warned, true, 'serialise reports the collision')
+    local parsed = midiBlob.parse(blob)
+    t.eq(#parsed, 2, 'warn-and-write: both notes still in the blob')
+  end,
+}
+
 tests[#tests + 1] = {
   name = 'endPpq positions the EOT tail; never shrinks past the last event',
   run = function()

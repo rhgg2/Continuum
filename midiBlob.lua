@@ -138,6 +138,7 @@ end
 
 --shape: serialise(notes, ccs, texts, passthrough, endPpq?) -> blob   -- inverse of parse; endPpq places the tail
 --invariant: parse(serialise(x))==x; coincident events may reorder, per-type record lists preserved
+--invariant: note onsets unique per (ppq,chan,pitch); collision is upstream bug, warn+write
 --reaper: matches MIDI_SetAllEvts format; tail at max(endPpq, last-event ppq) (default: last event)
 -- Decodes a packed sort key to (flags, msg): rank digit picks the stream, seq//2
 -- the record index, an odd seq a cc's bezier CCBZ rider. Mirrors midiBlob.parse.
@@ -180,7 +181,14 @@ function midiBlob.serialise(notes, ccs, texts, passthrough, endPpq)
     keys[count] = ppq * 1000000 + rank * 100000 + seq2
   end
 
+  local seenOnset = {}   -- (ppq,chan,pitch) occupancy; 2048 = 16 chans x 128 pitches per ppq
   for i, n in ipairs(notes) do
+    local onset = n.ppq * 2048 + (n.chan - 1) * 128 + n.pitch
+    if seenOnset[onset] then
+      util.print(('midiBlob.serialise: same-pitch onset collision ppq=%d chan=%d pitch=%d -- upstream bug, writing anyway')
+        :format(n.ppq, n.chan, n.pitch))
+    end
+    seenOnset[onset] = true
     key(n.ppq, 1, i * 2)      -- note-on
     key(n.endppq, 0, i * 2)   -- note-off
   end

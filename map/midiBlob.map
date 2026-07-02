@@ -1,10 +1,11 @@
-@module midiBlob  src=midiBlob.lua  loc=210  sha=7d2d60d  mode=namespace  self=midiBlob
+@module midiBlob  src=midiBlob.lua  loc=218  sha=8cc9255  mode=namespace  self=midiBlob
 
 # Invariants & contracts
   @invariant  idx is the 0-based REAPER per-type index; note idx counts note-ons, text idx skips CCBZ
   @reaper  blob = repeat(i4 offset, B flags, s4 msg) + trailing 12-byte all-notes-off tail (excluded)
   @reaper  flags bit1=muted; bits4-6=cc shape; status byte classifies; CCBZ rides FF-0F after its cc
   @invariant  parse(serialise(x))==x; coincident events may reorder, per-type record lists preserved
+  @invariant  note onsets unique per (ppq,chan,pitch); collision is upstream bug, warn+write
   @reaper  matches MIDI_SetAllEvts format; tail at max(endPpq, last-event ppq) (default: last event)
 
 # Shapes
@@ -34,16 +35,17 @@
   @fn ccDataBytes(c)  @ 125-130
       -- Value bytes for a cc-family record (inverse of ccValueFields).
   @fn ccWire(c)  @ 132-137
-  @fn decodeWire(kv, notes, ccs, texts, passthrough)  @ 144-171
+  @fn decodeWire(kv, notes, ccs, texts, passthrough)  @ 145-172
       -- Decodes a packed sort key to (flags, msg): rank digit picks the stream, seq//2
       -- the record index, an odd seq a cc's bezier CCBZ rider. Mirrors midiBlob.parse.
 
 # Public API (midiBlob.*)
   @api midiBlob.parse(blob)  @ 48-122
-  @api midiBlob.serialise(notes, ccs, texts, passthrough, endPpq)  @ 173-208
+  @api midiBlob.serialise(notes, ccs, texts, passthrough, endPpq)  @ 174-216
 
 # Uses (outbound edges)
-  @use call    util.add  @ parse:69,82,88,92,95,116 serialise:201,203,206
+  @use call    util.add  @ parse:69,82,88,92,95,116 serialise:209,211,214
   @use call    util.clamp  @ splitWide:35
+  @use call    util.print  @ serialise:188
   @use call    util.round  @ splitWide:33
   @use require util  @ 17
