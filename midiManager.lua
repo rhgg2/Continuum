@@ -428,29 +428,62 @@ function mm:load(newTake)
     end
   end
 
-  ----- Note dedup (in-memory; losers drop to holes, flushTake omits them)
+  ----- UUID binding (notes ↔ noteSidecars) + metadata join. Ahead of dedup so
+  ----- the voicing verdicts see intent (ppqL, detune, derived).
 
-  local notesKeyed = {}
+  local uuidCount = {}
   do
-    local groups = {}
-    for loc, n in ipairs(notes) do
-      local key = noteKey(n)
-      local g = groups[key]
-      if not g then
-        groups[key] = { kept = loc, dropped = {} }
-      elseif n.endppq > notes[g.kept].endppq then
-        util.add(g.dropped, g.kept); g.kept = loc
+    local buckets = {}
+    for _, n in ipairs(notes) do util.bucket(buckets, noteKey(n), n) end
+    -- Colliding notes and sidecars pair off in parse order: arbitrary but
+    -- deterministic (design/same-pitch-enforcement.md Phase 3).
+    for _, ns in ipairs(noteSidecars) do
+      local unbound
+      for _, note in ipairs(buckets[noteKey(ns)] or {}) do
+        if not note.uuid then unbound = note; break end
+      end
+      if unbound then
+        unbound.uuid = ns.uuid
+        uuidCount[ns.uuid] = (uuidCount[ns.uuid] or 0) + 1
+        util.assign(unbound, metadata[ns.uuid])
       else
-        util.add(g.dropped, loc)
+        dirty = true   -- orphaned notation sidecar: regeneration drops it
       end
     end
-    for key, g in pairs(groups) do
-      local kept = notes[g.kept]
-      notesKeyed[key] = kept
-      if #g.dropped > 0 then
+  end
+
+  ----- Note dedup + separation (kills drop to holes; distinct voices nudge apart)
+
+  local collisionEvents = {}
+  do
+    local lanes, locOf, seenOnset, collidingLanes = {}, {}, {}, {}
+    for loc, n in ipairs(notes) do
+      local laneKey, onsetKey = util.key(n.chan, n.pitch), noteKey(n)
+      util.bucket(lanes, laneKey, n)
+      locOf[n] = loc
+      if seenOnset[onsetKey] then collidingLanes[laneKey] = true end
+      seenOnset[onsetKey] = true
+    end
+    for laneKey in pairs(collidingLanes) do
+      local kills, voiced, onsetOf = voicing.resolveGroup(lanes[laneKey])
+      local dropped = {}
+      for _, n in ipairs(kills) do
         dirty = true
-        util.add(noteDedupEvents, util.pick(kept, 'ppq chan pitch', { droppedCount = #g.dropped }))
-        for _, loc in ipairs(g.dropped) do notes[loc] = nil end
+        notes[locOf[n]] = nil
+        if n.uuid then uuidCount[n.uuid] = uuidCount[n.uuid] - 1 end
+        util.bucket(dropped, noteKey(n), n)
+      end
+      for _, group in pairs(dropped) do
+        util.add(noteDedupEvents, util.pick(group[1], 'ppq chan pitch', { droppedCount = #group }))
+      end
+      for _, n in ipairs(voiced) do
+        if onsetOf[n] ~= n.ppq then
+          dirty = true
+          local oldToken = tokenOf(n)
+          n.ppq = onsetOf[n]
+          util.add(collisionEvents, { kind = 'nudged', oldToken = oldToken, token = tokenOf(n),
+                                      uuid = n.uuid, chan = n.chan, pitch = n.pitch, ppq = n.ppq })
+        end
       end
     end
   end
@@ -484,33 +517,20 @@ function mm:load(newTake)
     end
   end
 
-  ----- UUID unification (notes ↔ noteSidecars; flushTake regenerates the sidecars)
+  ----- UUID unification (reassign duplicated uuids, mint for unbound survivors;
+  ----- flushTake regenerates the sidecars)
 
-  do
-    local uuidCount = {}
-    for _, ns in ipairs(noteSidecars) do
-      local note = notesKeyed[noteKey(ns)]
-      if note and not note.uuid then
-        note.uuid = ns.uuid
-        uuidCount[ns.uuid] = (uuidCount[ns.uuid] or 0) + 1
-      else
-        dirty = true   -- orphaned notation sidecar: regeneration drops it
-      end
-    end
-
-    for _, note in pairs(notesKeyed) do
-      local uuid = note.uuid
-      if uuid and uuidCount[uuid] > 1 then
-        local oldUUID = uuid
-        local newUUID = assignNewUUID(note)
-        uuidCount[oldUUID] = uuidCount[oldUUID] - 1
-        metadata[newUUID] = util.clone(metadata[oldUUID]) or {}
-        dirty = true
-        util.add(reassignEvents, util.pick(note, 'ppq chan pitch', { oldUuid = oldUUID, newUuid = newUUID }))
-      elseif not uuid then
-        metadata[assignNewUUID(note)] = {}
-        dirty = true   -- note had no notation sidecar: regeneration inserts one
-      end
+  for _, note in util.sparsePairs(notes, noteCount) do
+    local uuid = note.uuid
+    if uuid and uuidCount[uuid] > 1 then
+      local newUUID = assignNewUUID(note)
+      uuidCount[uuid] = uuidCount[uuid] - 1
+      metadata[newUUID] = util.clone(metadata[uuid]) or {}
+      dirty = true
+      util.add(reassignEvents, util.pick(note, 'ppq chan pitch', { oldUuid = uuid, newUuid = newUUID }))
+    elseif not uuid then
+      metadata[assignNewUUID(note)] = {}
+      dirty = true   -- note had no notation sidecar: regeneration inserts one
     end
   end
 
@@ -633,7 +653,7 @@ function mm:load(newTake)
   saveMetadata()
 
   --contract: load fires signals in order: takeSwapped, notesDeduped, uuidsReassigned
-  --contract: then: ccsDeduped, ccsReconciled, reload
+  --contract: then: ccsDeduped, ccsReconciled, collisionsResolved, reload
   --contract: dedup/reconcile signals fire only when their event kind has ≥1 record
   --emits: takeSwapped    -- nil; only when load received a different take
   if takeSwapped           then fire('takeSwapped',     nil) end
@@ -645,6 +665,8 @@ function mm:load(newTake)
   if #ccDedupEvents > 0    then fire('ccsDeduped',      { events = ccDedupEvents })   end
   --emits: ccsReconciled -- { events = [reconcileEvent, ...] }  -- 5 kinds in reconcileEvent.*
   if #reconcileEvents > 0  then fire('ccsReconciled',   { events = reconcileEvents }) end
+  --emits: collisionsResolved -- { events = [collisionEvent, ...] }; nudged colliding voices apart
+  if #collisionEvents > 0  then fire('collisionsResolved', { events = collisionEvents }) end
   --emits: reload -- { wholesale=true }; full re-read, every event object is new
   fire('reload', { wholesale = true })
 

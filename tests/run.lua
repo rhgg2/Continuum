@@ -40,6 +40,7 @@ local specs = {
   'mm_hole_iter_spec',
   'mm_reindex_if_stale_spec',
   'mm_collision_backstop_spec',
+  'mm_load_dedup_spec',
   'tm_deferred_hole_spec',
   'mm_note_cascade_sidecar_spec',
   'mm_token_spec',
