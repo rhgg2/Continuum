@@ -733,6 +733,14 @@ local function resolveCollisions()
 end
 
 
+----- Dirty channels (rebuild dirt spine)
+
+-- Seeds the reload payload so tm gates derivation per channel.
+-- See design/dirty-channels.md § Scheme.
+local dirtyChans = {}
+local function markChan(chan) if chan then dirtyChans[chan] = true end end
+
+
 ----- Locking
 
 --contract: writes (add*, delete*, structural assign*) must run inside mm:modify(fn)
@@ -750,15 +758,15 @@ function mm:modify(fn)
   modifyDepth = modifyDepth + 1
   lock = true
   dirty = false
-  if modifyDepth == 1 then metaDirty, metaDeleted, pendingCollisions = {}, {}, {} end   -- reset once; nested modifies accumulate
+  if modifyDepth == 1 then metaDirty, metaDeleted, pendingCollisions, dirtyChans = {}, {}, {}, {} end   -- reset once; nested modifies accumulate
   perf.start('verbs'); local ok, err = pcall(fn); perf.stop('verbs')
   if dirty then                                 -- clean (metadata-only) gestures touch no structure
     indexStale = true                           -- defer the reindex; nested pipeline reads run against sparse/unsorted arrays
     flushPending = true
   end
   lock = false
-  --emits: reload -- { wholesale=false }; in-place modify, incremental caches stay valid
-  perf.start('reload'); fire('reload', { wholesale = false }); perf.stop('reload')
+  --emits: reload -- { wholesale=false, chans=set }; chans nil only when wholesale
+  perf.start('reload'); fire('reload', { wholesale = false, chans = dirtyChans }); perf.stop('reload')
   modifyDepth = modifyDepth - 1
   if modifyDepth == 0 then
     local resolved = resolveCollisions()
@@ -992,6 +1000,7 @@ end
 function mm:add(t)
   if not t or not t.evType then return nil end
   if t.evType == 'note' then addNote(t) else addCC(t) end
+  markChan(t.chan)
   return tokenOf(t)
 end
 
@@ -1001,8 +1010,10 @@ end
 function mm:assign(token, t)
   local evt = tokenIdx[token]
   if not evt then return nil end
+  markChan(evt.chan)                       -- old chan; a chan move dirties both
   if evt.evType == 'note' then assignNote(evt.loc, t)
   else                         assignCC(evt.loc, t) end
+  markChan(t.chan)                          -- new chan; nil-guarded when the assign leaves chan untouched
   return tokenOf(evt)
 end
 
@@ -1012,6 +1023,7 @@ function mm:delete(token)
   if not (take and checkLock()) then return end
   local evt = tokenIdx[token]
   if not evt then return end
+  markChan(evt.chan)
 
   if evt.evType == 'note' then
     tokenIdx[token] = nil

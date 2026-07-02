@@ -118,4 +118,45 @@ return {
       t.eq(b, 1)
     end,
   },
+
+  {
+    -- Dirt spine (design/dirty-channels.md § Scheme): reload names channels touched.
+    -- bareMM: no tm rebuild pipeline to fire follow-on reloads over the payload.
+    name = 'mm.reload chans: an add marks only the touched channel',
+    run = function()
+      local fm = harness.bareMM()
+      local last
+      fm:subscribe('reload', function(data) last = data end)
+      fm:modify(function()
+        fm:add{ evType = 'note', ppq = 0, endppq = 240, chan = 3, pitch = 60, vel = 100 }
+      end)
+      t.eq(last.wholesale, false, 'modify reload is incremental')
+      t.deepEq(last.chans, { [3] = true }, 'only chan 3 marked')
+    end,
+  },
+
+  {
+    name = 'mm.reload chans: an assign changing chan marks both old and new',
+    run = function()
+      local fm = harness.bareMM{ notes = { { ppq = 0, endppq = 240, chan = 3, pitch = 60, vel = 100 } } }
+      local _, note = fm:notes()()
+      local tok = fm:tokenOf(note)
+      local last
+      fm:subscribe('reload', function(data) last = data end)
+      fm:modify(function() fm:assign(tok, { chan = 5 }) end)
+      t.deepEq(last.chans, { [3] = true, [5] = true }, 'a chan move dirties both source and dest')
+    end,
+  },
+
+  {
+    name = 'mm.reload chans: a wholesale load carries no chans (nil = all 16)',
+    run = function()
+      local fm = harness.bareMM()
+      local last
+      fm:subscribe('reload', function(data) last = data end)
+      fm:load(fm:take())
+      t.eq(last.wholesale, true, 'load is wholesale')
+      t.eq(last.chans, nil, 'wholesale carries no per-chan set — tm reads nil as all 16')
+    end,
+  },
 }
