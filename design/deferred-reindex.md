@@ -143,11 +143,13 @@ Phase D. Every phase lands green with a pinning spec.
   `mm:ccs` (:779), `mm:ccsRaw` (:790), `mm:events` (:957) skip nils up to
   the `noteCount`/`ccCount` high-water marks instead of stopping at the
   first hole. No-op today. **Pin:** hole-injection spec.
-- **Phase C — reindex-if-stale scaffolding (item 5).** Add `indexStale`
-  (cleared at the end of `rebuild`), `mm:reindexIfStale()`, and call it
-  at the head of tm's `loadIndex` (trackerManager.lua:781) before it
-  walks `mm:events()`. Inert while nothing sets the flag — `loadIndex`
-  verifiably reindexes nothing today. Makes Phase D a one-line switch.
+- **Phase C — reindex-if-stale scaffolding (item 5). ✅ landed.** Add
+  `indexStale` (cleared at the end of `rebuild`), `mm:reindexIfStale()`,
+  and call it at the head of tm's `loadIndex` (trackerManager.lua:781)
+  before it walks `mm:events()`. Inert while nothing sets the flag —
+  `loadIndex` verifiably reindexes nothing today. Makes Phase D a
+  one-line switch. **Pin:** `mm_reindex_if_stale_spec` — the call is a
+  no-op on compact state and after a compacting modify.
 - **Phase D — defer to one reindex at the unwind (item 1).** The flip.
   In `mm:modify` (:684-687) replace `rebuild(nil)` with
   `indexStale = true`; at the outermost unwind (`modifyDepth == 0`, :692)

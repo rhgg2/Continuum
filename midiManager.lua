@@ -62,6 +62,7 @@ local lock       = false
 local dirty      = false  -- a structural write happened; the take needs reprojecting via flushTake
 local modifyDepth  = 0      -- reload can re-enter modify; only the outermost flushes
 local flushPending = false  -- a dirty modify happened somewhere in the nest; flush once on unwind
+local indexStale   = false  -- a deferred modify left arrays sparse/unsorted; the next reindex compacts+sorts; cleared by rebuild
 local carriedTexts       = {}  -- parsed text/meta events mm doesn't model; re-emitted verbatim on flush
 local carriedPassthrough = {}  -- parsed system messages mm doesn't model; re-emitted verbatim on flush
 
@@ -292,6 +293,7 @@ local function rebuild(metadata)
       if metadata then util.assign(c, metadata[c.uuid]) end
     end
   end
+  indexStale = false
   perf.stop('rebuild')
 end
 
@@ -697,6 +699,11 @@ function mm:modify(fn)
     end
   end
   if not ok then print('Error in modify: ' .. tostring(err)) end
+end
+
+--contract: run the deferred reindex when a modify left arrays stale (sparse/unsorted); else no-op
+function mm:reindexIfStale()
+  if indexStale then rebuild(nil) end
 end
 
 ----- Notes

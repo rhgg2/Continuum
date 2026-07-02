@@ -779,6 +779,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   -- Rebuild the whole index from mm. Only for genuine loads (init, take swap, external
   -- re-read) where the incremental index is stale; edit rebuilds keep the live index.
   local function loadIndex()
+    mm:reindexIfStale()   -- deferred edits may leave mm sparse/unsorted; events() below needs compact+sorted (item 5)
     byToken = {}
     byUuid  = {}
     for i = 1, 16 do chans[i] = { notes = {}, pbs = {} } end
