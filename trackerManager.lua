@@ -59,6 +59,8 @@ local staleSwing  = {}
 local dirtyPbChans = {}
 --invariant: hadFxPb[chan]: chan had fx pb-output last rebuildPbs; trailing dirt covers fx removal
 local hadFxPb      = {}
+--invariant: dirtyChans[chan]: chan dirtied; gated stages re-derive, cleared at rebuild tail
+local dirtyChans   = {}
 -- True only while flush writes the parked stash; suppresses the inline dataChanged
 -- rebuild so flush drives the single rebuild (B3 staging, see design/note-macros-v2.md).
 local flushingParked = false
@@ -81,6 +83,13 @@ end
 local function dirtyPb(chan)
   if chan then dirtyPbChans[chan] = true; return end
   for i = 1, 16 do dirtyPbChans[i] = true end
+end
+
+-- General derivation-dirt spine: any edit re-derives a channel's gated stages; dirtyPb is
+-- the pb-only subset, kept parallel until the spine subsumes it. see design/dirty-channels.md § Scheme
+local function dirtyChan(chan)
+  if chan then dirtyChans[chan] = true; return end
+  for i = 1, 16 do dirtyChans[i] = true end
 end
 
 -- pbRange resolves through cm's 5 tiers -- too costly to re-fetch per pb in the
@@ -889,6 +898,7 @@ end
 --contract: consumed by the next tm:rebuild, then cleared
 function tm:markSwingStale(chan)
   dirtyPb(chan)   -- reseats move lane-1 onsets; staleSwing itself clears before the pbs pass
+  dirtyChan(chan) -- swing move re-times this chan's derivations; not carried by the mm payload
   if chan then staleSwing[chan] = true; return end
   for i = 1, 16 do staleSwing[i] = true end
 end
@@ -1220,7 +1230,7 @@ local function rebuildCCs(fx)
 
     -- Timing reconcile on the raw (read-only) record; capture what moved for the column clone.
     local movedPpq, movedPpqL
-    if not cc.derived then
+    if not cc.derived and dirtyChans[cc.chan] then
       if staleSwing[cc.chan] and cc.ppqL ~= nil then
         local newPpq = tm:fromLogical(cc.chan, cc.ppqL)
         if newPpq ~= cc.ppq then
@@ -2464,7 +2474,7 @@ function tm:rebuild(takeChanged)
   takeChanged = takeChanged or false
   -- Capture before the pipeline's nested mm:modify calls re-fire 'reload' and clear it.
   local didReload = mmReloaded; mmReloaded = false
-  if didReload or takeChanged then dirtyPb() end   -- wholesale re-read / take swap: no per-site marks
+  if didReload or takeChanged then dirtyPb(); dirtyChan() end   -- wholesale re-read / take swap: no per-site marks
   pbLimCents = nil   -- coherence point: refresh cached pbRange for cents<->raw conversions
 
   clearSwing()   -- rebuild is the (cm, mm) coherence point
@@ -2511,6 +2521,7 @@ function tm:rebuild(takeChanged)
   -- Index: full reload only when mm re-read its event set (load/reload); edit rebuilds
   -- trust the incremental index and just clear staging. see docs § Incremental index reconciliation
   perf.start('view'); if didReload then reload() else clearStaging() end; perf.stop('view')
+  dirtyChans = {}   -- gated stages consumed the spine; next edit window accumulates fresh
   rebuilding = false
 
   --emits: rebuild -- takeChanged:boolean
@@ -2594,6 +2605,11 @@ do
   mm:subscribe('takeSwapped', function() pendingTakeSwap = true end)
   mm:subscribe('reload', function(info)
     mmReloaded = (info and info.wholesale) or false
+    -- Own pipeline commits are converged output, not dirt (I8).
+    -- see design/dirty-channels.md § Scheme item 1
+    if not rebuilding and info and info.chans then
+      for chan in pairs(info.chans) do dirtyChans[chan] = true end
+    end
     tm:rebuild(pendingTakeSwap)
     pendingTakeSwap = false
   end)
