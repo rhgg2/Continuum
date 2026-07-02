@@ -1,10 +1,14 @@
 # incremental pbs — dirty-scoped absorber reconciliation
 
-> Working design doc. First slice of the incremental-rebuild programme
-> (`incremental-rebuild.md`):
-> the absorber pass (`rebuildPbs`) only, in two stages — channel gating
-> (1), then seat-level windows within dirty channels (2). Stage 2 is
-> gated on profile evidence that stage 1 isn't enough.
+> First slice of the incremental-rebuild programme
+> (`incremental-rebuild.md`): the absorber pass (`rebuildPbs`) only.
+>
+> **Status.** Stage 1 (channel gating, `8d29327`) and stage 1b (carry the
+> pb view column, `8591036`) landed. The pbs stage went **27.8ms → 0.4ms**
+> on the 3070-note fixture, taking it off the critical path. Stage 2
+> (seat-level windows) is therefore deferred indefinitely — stage 1+1b
+> already cleared the problem. The residual 0.4ms is addressed in
+> § Deferred, itself blocked on fx dirt tracking.
 
 ## Problem
 
@@ -25,9 +29,10 @@ onsets after um's edit ran. That rationale still holds.
 - **No per-edit upkeep in um.** Reconciliation stays in `rebuildPbs`,
   post-walk, single-site. We resurrect 03f0a23's *interval math*, not
   its location.
-- **No `channels[]` persistence.** Columns still rebuild from scratch;
-  keeping them alive across rebuilds is a separate, larger project
-  (`dirty-channels.md` phase B).
+- **No general `channels[]` persistence.** Columns still rebuild from
+  scratch each rebuild — *except* the pb view column, which stage 1b
+  carries forward (profiling forced it). Persisting the rest is a
+  separate, larger project (`dirty-channels.md` phase B).
 - **Other stages** (internals, ccs, tails, projLogical) — later slices,
   same pattern (`dirty-channels.md`).
 
@@ -73,10 +78,10 @@ region's derived seats get deleted. Everything else is exact.
   step too: running it with an empty `seats` table would read as
   "delete every absorber". The clean path stages nothing.
 - **Materialisation** (clone from `mm:ccsRaw`, sort, the `detuneOf`
-  linear merge, column projection with `hidden`/`detune`/cents) —
-  still runs; `channels[]` is fresh each rebuild and the projection is
-  linear and cheap. Back-derived cents (`persistCents`) is a no-op on
-  a clean channel — cents were persisted the first time through.
+  linear merge, column projection with `hidden`/`detune`/cents) — was
+  left running here on the assumption it was "linear and cheap".
+  Profiling falsified that (§ Stage 1b): the clone dominates, so stage
+  1b gates materialisation too and carries the view column forward.
 
 **Why skipping is sound:** rebuild converges in one pass (I8 — flush →
 rebuild → flush is a fixpoint). After rebuild N writes a channel's
@@ -99,7 +104,30 @@ exercising gated-vs-full permanently; strip the live shadow scaffolding
 once parity holds. The failure mode of a missed dirty source is silent
 wrong wire raws — the shadow compare is the only honest detector.
 
-## Stage 2 — seat windows within a dirty channel
+### Stage 1b — carry the pb view column
+
+Stage 1 gated *derivation* but let *materialisation* run, assuming the
+projection was cheap. Profiling (8.6ms stage) put the residual at 4.2ms
+of `util.clone` over **every pb in the take**, every rebuild — the view
+column rebuilt from scratch.
+
+Each pb needs two live copies in different timing frames: the realisation
+copy (raw ppq, mm-owned, already persistent across rebuilds) and the view
+copy (logical ppq, rewritten by `projectLogical`). Only the view copy was
+being re-cloned.
+
+Fix: carry `channels[chan].columns.pb` across the rebuild-entry wipe
+(`columns = { notes={}, ccs={}, pb=<prior> }`). A clean channel reuses
+it; the clone and the whole per-chan derive/project body are gated on the
+same dirt, so only dirty channels clone. `projectLogical` re-runs on a
+carried column but is idempotent for pb (rewrites `ppq := ppqL`; pbs
+carry no delay/endppq).
+
+Sound by I8: a clean channel's raw pbs, detunes, and swing are unchanged,
+so the projected column equals a full rebuild's. Every input that could
+change it already marks the channel dirty — including the document-data
+edits (`extraColumns`, `noteDelay`) that arrive as `dataChanged` rather
+than um verbs, which now `dirtyPb()` at their rebuild site.
 
 Only if profiling after stage 1 shows single-channel derivation still
 hurts (dense pb streams: the seat math, not the projection, dominates).
@@ -140,6 +168,29 @@ merge two screens down already shows the fix: both lists are ppq-sorted,
 so a single merge-walk computes every onset's bounding pair. Worth
 doing regardless of incrementality; it may shrink the stage enough to
 defer stage 2 indefinitely.
+
+## Deferred — fold pb extraction into the cc walk
+
+After stage 1b the whole pbs stage is ~0.4ms, all of it the residual
+`pbsRaw` walk: `rebuildPbs` re-walks every cc via `mm:ccsRaw()` to find
+and clone the pbs. That walk is redundant — `rebuildCCs` already visits
+every cc, computes `tokenOf`, and reseats each pb's swing in place. The
+clean move is to clone the pbs there (like it clones cc/at/pc, applying
+`movedPpq`/`movedPpqL` so `origTok` is the reseated token) and return
+them, sparing `rebuildPbs` the second full-cc traversal.
+
+Blocked on fx dirt tracking. The clone needs the same dirt gate the
+per-chan loop uses, but `rebuildCCs` is the `ccs` stage — fx-activeness
+(`fxLane1`, `replacePb`) isn't resolved until the later `fx` stage, and
+fx channels aren't in `dirtyPbChans` by design (the fx row stays
+wholesale). Gating the cc-loop clone on `dirtyPbChans` alone silently
+misses fx-active channels: e.g. toggling a lane-1 note's `.fx` flag
+makes the channel fx-active but doesn't `dirtyPb` (`fx` ∉ `PB_GEOMETRY`),
+so no clone is taken, and `deriveChan` then reads empty pbs and deletes
+every absorber on the channel. Revisit once fx grows its own dirt signal
+(retiring the wholesale fx row) — then the cc-loop extraction gated on
+pb-dirt falls out for free. It buys ~0.4ms, so it waits on that larger
+change rather than driving it.
 
 ## Open questions
 

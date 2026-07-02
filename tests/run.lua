@@ -57,6 +57,7 @@ local specs = {
   'tm_rebuild_rule_spec',
   'tm_authoring_forward_spec',
   'tm_absorber_reseat_spec',
+  'tm_pb_gating_spec',
   'tm_pb_interp_spec',
   'tm_tuning_spec',
   'tm_swing_spec',

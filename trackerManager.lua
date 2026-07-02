@@ -2020,35 +2020,60 @@ local function rebuildPbs(noteLive, replacePb)
   end
 
   perf.start('gather')
-  -- Per-chan lane-1 sort, used both at reconcile and inside mm:modify.
-  local lane1ByChan, fxLane1 = {}, {}
+  perf.start('lane1')
+  -- Derived lane-1 fxNotes make a channel fx-active; detect them ahead of the dirty gate by
+  -- walking only noteLive (usually empty), so the gate is cheap for every channel.
+  local fxLane1 = {}
   for chan = 1, 16 do
-    local lane1 = channels[chan].columns.notes[1]
-    local list  = {}
-    if lane1 then
-      for _, n in ipairs(lane1.events) do
-        if n.evType ~= 'pa' then util.add(list, n) end
-      end
-    end
-    -- Derived lane-1 fxNotes (a trill's per-fxNote detune) are routed out of
-    -- columns; union them so the absorber pass seats their detune jumps.
     for _, w in ipairs(noteLive[chan]) do
-      if w.lane == 1 then fxLane1[chan] = true; util.add(list, w.evt) end
+      if w.lane == 1 then fxLane1[chan] = true; break end
     end
-    table.sort(list, function(a, b) return a.ppq < b.ppq end)
-    lane1ByChan[chan] = list
   end
 
+  -- Dirty gate, hoisted ahead of lane-1 sort and clone (both skip clean chans). fx output
+  -- regenerates untracked each rebuild; hadFxPb trails removal by one rebuild so stale seats delete.
+  local dirty = {}
+  for chan = 1, 16 do
+    local fxActive = fxLane1[chan] or replacePb[chan][1] ~= nil
+    dirty[chan]    = dirtyPbChans[chan] or fxActive or hadFxPb[chan] or nil
+    hadFxPb[chan]  = fxActive or nil
+  end
+
+  -- Per-chan lane-1 sort, consumed only by deriveChan: built for dirty channels alone. Clean
+  -- channels reuse their carried pb column and never read it.
+  local lane1ByChan = {}
+  for chan = 1, 16 do
+    if dirty[chan] then
+      local lane1 = channels[chan].columns.notes[1]
+      local list  = {}
+      if lane1 then
+        for _, n in ipairs(lane1.events) do
+          if n.evType ~= 'pa' then util.add(list, n) end
+        end
+      end
+      -- Derived lane-1 fxNotes are routed out of columns; union them so the absorber pass seats
+      -- their detune jumps.
+      for _, w in ipairs(noteLive[chan]) do
+        if w.lane == 1 then util.add(list, w.evt) end
+      end
+      table.sort(list, function(a, b) return a.ppq < b.ppq end)
+      lane1ByChan[chan] = list
+    end
+  end
+  perf.stop('lane1')
+
+  perf.start('pbsRaw')
   -- mm uses content-keyed tokens: any pb whose ppq we touch needs its pre-mutation token
-  -- captured up front. Each pb here is our own clone of the raw internal pb, with origTok set once.
+  -- captured up front, on our own clone (origTok set once) -- only dirty channels clone here.
   local pbsByChan = {}
   for _, cc in mm:ccsRaw() do
-    if cc.evType == 'pb' then
+    if cc.evType == 'pb' and dirty[cc.chan] then
       local pb = util.clone(cc)
       pb.origTok, pb.origShape = mm:tokenOf(cc), cc.shape
       util.bucket(pbsByChan, pb.chan, pb)
     end
   end
+  perf.stop('pbsRaw')
   perf.stop('gather')
 
   local pbWrites = mmBatch()
@@ -2317,32 +2342,29 @@ local function rebuildPbs(noteLive, replacePb)
   end
 
   for chan = 1, 16 do
-    local lane1Events = lane1ByChan[chan]
-    local pbs         = pbsByChan[chan] or {}
-    table.sort(pbs, function(a, b) return a.ppq < b.ppq end)
+    -- Clean channels are skipped wholesale -- their carried pb column stands (set at rebuild entry).
+    if dirty[chan] then
+      local lane1Events = lane1ByChan[chan]
+      local pbs         = pbsByChan[chan] or {}
+      table.sort(pbs, function(a, b) return a.ppq < b.ppq end)
 
-    -- fx output regenerates every rebuild with no change tracking: fx-hosting channels derive
-    -- wholesale; hadFxPb keeps the chan dirty one rebuild after fx vanishes so stale seats delete.
-    local fxActive = fxLane1[chan] or replacePb[chan][1] ~= nil
-    local dirty    = dirtyPbChans[chan] or fxActive or hadFxPb[chan]
-    hadFxPb[chan]  = fxActive or nil
+      local detuneOf = deriveChan(chan, lane1Events, pbs)
 
-    local detuneOf = dirty and deriveChan(chan, lane1Events, pbs) or mergeDetunes(pbs, lane1Events)
-
-    perf.start('project')
-    -- Column projection. A derived seat is wire-only -- always hidden.
-    local anyVisible, pbColEvents = false, {}
-    for _, pb in ipairs(pbs) do
-      local hidden = pb.derived ~= nil
-      anyVisible = anyVisible or not hidden
-      -- pb is our own working clone, done being read by the assign above -- reuse it as the
-      -- column event rather than cloning again (projLogical rewrites its ppq to logical later).
-      pb.token, pb.val, pb.detune, pb.hidden = pb.origTok, pb.cents, detuneOf[pb], hidden
-      util.add(pbColEvents, pb)
+      perf.start('project')
+      -- Column projection. A derived seat is wire-only -- always hidden.
+      local anyVisible, pbColEvents = false, {}
+      for _, pb in ipairs(pbs) do
+        local hidden = pb.derived ~= nil
+        anyVisible = anyVisible or not hidden
+        -- pb is our own working clone, done being read by the assign above -- reuse it as the
+        -- column event rather than cloning again (projLogical rewrites its ppq to logical later).
+        pb.token, pb.val, pb.detune, pb.hidden = pb.origTok, pb.cents, detuneOf[pb], hidden
+        util.add(pbColEvents, pb)
+      end
+      local keep = anyVisible or (extras[chan] and extras[chan].pb)
+      channels[chan].columns.pb = keep and { events = pbColEvents } or nil
+      perf.stop('project')
     end
-    local keep = anyVisible or (extras[chan] and extras[chan].pb)
-    channels[chan].columns.pb = keep and { events = pbColEvents } or nil
-    perf.stop('project')
   end
 
   perf.start('commit')
@@ -2446,9 +2468,13 @@ function tm:rebuild(takeChanged)
   pbLimCents = nil   -- coherence point: refresh cached pbRange for cents<->raw conversions
 
   clearSwing()   -- rebuild is the (cm, mm) coherence point
+  -- Carry the pb view column forward: a fixpoint on clean channels, so re-cloning every pb
+  -- each rebuild is waste; rebuildPbs overwrites it for dirty chans. see design/incremental-pbs.md § Stage 1b
+  local prevChannels = channels
   channels = {}
   for i = 1, 16 do
-    channels[i] = { chan = i, columns = { notes = {}, ccs = {} } }
+    local prevPb = prevChannels[i] and prevChannels[i].columns.pb
+    channels[i] = { chan = i, columns = { notes = {}, ccs = {}, pb = prevPb } }
   end
 
   -- Per-channel fx realisation state (hostEnd is host-event-keyed, not per-channel).
@@ -2603,7 +2629,9 @@ do
     elseif change.name == 'extraColumns' or change.name == 'noteDelay'
            or change.name == 'fxRegions'
            or change.name == 'fxParked' or change.name == 'fxParkedCC' then
-      if not flushingParked then tm:rebuild(false) end
+      -- Document-data edits bypass the um-verb dirtyPb marking; noteDelay moves lane-1
+      -- realisation and extraColumns drives the pb keep-decision, so re-derive conservatively.
+      if not flushingParked then dirtyPb(); tm:rebuild(false) end
     end
   end)
 
