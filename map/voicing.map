@@ -1,0 +1,28 @@
+@module voicing  src=voicing.lua  loc=73  sha=untracked  mode=namespace  self=voicing
+
+# Imports
+  @const util = 'util'  @ 5
+      @invariant  pure policy module: no module state; callers stage every mm write
+
+# Module-level constants
+  @const voicing = {}  @ 7
+
+# Private functions
+  -- Verdicts
+  @fn supersedes(a, b)  @ 13-17
+      -- Dedup same-(chan,pitch) raw collision only when one is a regenerable fxNote or they share
+      -- logical seat and detune; otherwise distinct voices: separate (+1) so each keeps its raw.
+  @fn redundant(a, b)  @ 19-22
+
+# Public API (voicing.*)
+  -- Separation
+  @api voicing.resolveGroup(group)  @ 27-54
+      @contract  sorts group (ppq, ppqL) in place; returns kills, voiced, onsetOf (separated onsets)
+  @api voicing.nudgeOnsets(records)  @ 58-71
+      -- Nudge colliding same-(chan,pitch) onsets to prev.ppq+1 (cascades; fixed externals frozen).
+      -- Pure geometry on evt.ppq; callers stage mm writes. Input sorted (raw, ppqL).
+
+# Uses (outbound edges)
+  @use call    util.add  @ resolveGroup:40,42,46,50 nudgeOnsets:66
+  @use call    util.key  @ nudgeOnsets:62
+  @use require util  @ 5
