@@ -150,15 +150,16 @@ Phase D. Every phase lands green with a pinning spec.
   `loadIndex` verifiably reindexes nothing today. Makes Phase D a
   one-line switch. **Pin:** `mm_reindex_if_stale_spec` — the call is a
   no-op on compact state and after a compacting modify.
-- **Phase D — defer to one reindex at the unwind (item 1).** The flip.
-  In `mm:modify` (:684-687) replace `rebuild(nil)` with
+- **Phase D — defer to one reindex at the unwind (item 1). ✅ landed.**
+  The flip. In `mm:modify` (:684-687) replace `rebuild(nil)` with
   `indexStale = true`; at the outermost unwind (`modifyDepth == 0`, :692)
   run `if indexStale then rebuild(nil) end` before
-  `flushMetadata`/`flushTake`. Going straight for full deferral (outer +
-  nested), which A/B/C make safe. **Pin:** hole-regression specs now
-  exercise the deferred path — PA survives region-park cc deletes;
-  absorber snapshot (:2052) and PC re-projection (:2351) see the full
-  stream after mid-pipeline dels.
+  `flushMetadata`/`flushTake`. Went straight for full deferral (outer +
+  nested), which A/B/C make safe. **Pin:** `tm_deferred_hole_spec` — the
+  three ccsRaw consumers each read past a hole a mid-pipeline delete
+  leaves before their survivors: PA dispatch (:1598), absorber snapshot
+  (:2063), PC re-projection (:2362). Each is red-checked to truncate
+  (to `[]`) if the hole-tolerance is reverted.
 - **Phase E — slim the unwind reindex (item 3).** `rebuild(metadata,
   slim)`: `slim` keeps compact + sort + `loc` recompute but drops the
   `tokenIdx`/`eventsByUuid` reconstruction (:280, :283-284, :289-291) —

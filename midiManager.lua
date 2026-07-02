@@ -674,8 +674,8 @@ local function checkLock()
   return true
 end
 
--- Re-entrant: reload reseats absorbers via a nested modify. Flush the take and
--- metadata once on the outermost unwind. See docs/midiManager.md § Mutation contract.
+-- Re-entrant: reload reseats absorbers via a nested modify. Reindex and flush
+-- are both deferred to the outermost unwind. See docs/midiManager.md § Mutation contract.
 function mm:modify(fn)
   if not liveTake() then return end
   modifyDepth = modifyDepth + 1
@@ -684,7 +684,7 @@ function mm:modify(fn)
   if modifyDepth == 1 then metaDirty, metaDeleted = {}, {} end   -- reset once; nested modifies accumulate
   perf.start('verbs'); local ok, err = pcall(fn); perf.stop('verbs')
   if dirty then                                 -- clean (metadata-only) gestures touch no structure
-    rebuild(nil)
+    indexStale = true                           -- defer the reindex; nested pipeline reads run against sparse/unsorted arrays
     flushPending = true
   end
   lock = false
@@ -692,6 +692,7 @@ function mm:modify(fn)
   perf.start('reload'); fire('reload', { wholesale = false }); perf.stop('reload')
   modifyDepth = modifyDepth - 1
   if modifyDepth == 0 then
+    if indexStale then rebuild(nil) end         -- pay one reindex, after every nested pipeline write
     perf.start('meta'); flushMetadata(); perf.stop('meta')
     if flushPending then
       flushPending = false

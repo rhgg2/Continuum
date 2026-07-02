@@ -168,6 +168,15 @@ same way: `metaDirty`/`metaDeleted` reset only at the outermost entry, so nested
 modifies accumulate into them and the flush runs once at the unwind — safe
 because nothing reads project ext-state mid-modify.
 
+**Reindex deferral.** `rebuild` used to run inline on every dirty `modify`,
+including the nested reseat pass. That reindex is deferred the same way as the
+flush: a dirty `modify` sets `indexStale` instead of calling `rebuild`
+directly, and only `modifyDepth == 0` pays for the one reindex, after the
+nested reseat's writes have landed. Callers inside a nested `modify` — the
+reseat pass included — see sparse/unsorted arrays until that unwind; nothing
+in the pipeline reads position-dependent state mid-modify, so this is safe for
+the same reason the flush deferral is.
+
 **Metadata-only carve-out** (parallel for notes and stamped ccs):
 - `assignNote(loc, t)` where `t` touches none of `ppq, endppq, pitch, vel,
   chan, muted` writes straight to extension data and skips the lock.
