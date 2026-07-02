@@ -38,6 +38,12 @@ onsets after um's edit ran. That rationale still holds.
 
 ## Stage 1 — channel gating (`dirtyPbChans`)
 
+> **Superseded (2026-07-03) by `dirty-channels.md`.** `dirtyPbChans` folded
+> into the shared `dirtyChans` spine; `hadFxPb` and `fxLane1` are gone. pbs
+> now gates on `dirtyChans` alone, and fx grew its own dirt so fx-hosting
+> channels gate too. The gate shape and soundness argument below still hold —
+> only the identifiers changed. See `docs/trackerManager.md` § Derivation dirt.
+
 Like `dirtyPcChans`, but tm-scope rather than um-scope: um's set
 clears at flush, while pb dirt must survive into the rebuild that
 follows and absorb marks from rebuild-internal movers. Marked at every

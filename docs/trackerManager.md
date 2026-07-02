@@ -340,6 +340,40 @@ linearly per note: a retrig host expands to a long run of same-pitch
 fxNotes, so that scan made the walk O(k²) inside the group and dominated
 rebuild on macro-heavy takes.
 
+### Derivation dirt: the gated spine
+
+Two axes of dirt drive rebuild. *Materialisation dirt* (the `wholesale`
+bit) is object identity: on a wholesale reload every record is new, so
+columns reproject and the um index fully reloads. *Derivation dirt* is a
+per-channel set, `dirtyChans`, marked by edit verbs (via mm's `reload`
+`chans` payload), swing (`markSwingStale`), any non-tv config change (all
+16), fx-region and parking edits, and pipeline-internal movers (a tail-walk
+nudge marks the captured set so the later pbs pass sees it). It is captured
+and cleared at the rebuild head, consumed by the gated stages, and wiped at
+the tail.
+
+A channel absent from `dirtyChans` **freezes**: `ccs`, `fx`, `tails`,
+`pbs`, and `pcs` each skip the derive/synthesise half of their pass for it,
+and its derived notes/CCs/carriers/absorbers/PCs stand untouched in mm. The
+classify/route/project half still runs — columns fill, carriers route out,
+PCs reproject — so tv sees a complete frame. Sound by I8 (rebuild is a
+one-pass fixpoint, so a channel with no dirty source re-derives nothing) and
+by blast radius: every rule (tail clip/regrow, same-pitch cascades, absorber
+reseats, PC streams, fx windows) is intra-channel, so a whole dirty channel
+over-approximates the closure.
+
+`fx` is the pivot: for a clean channel it skips its generators and leaves
+`noteLive` empty — which is exactly why the downstream stages that read
+`noteLive` (`tails`, `pbs`, `pcs`) skip it too. One gate, no cross-stage
+dirt plumbing. The one coupling that does *not* live in mm is the persisted
+`fxCarrier` map: `reapCarriers` replaces it wholesale, so a gated rebuild
+seeds each frozen channel's entry from the prior map, or its carrier routing
+is erased and generator-owned CCs leak into the view.
+
+`projectLogical` and column materialisation never gate — fresh clones
+always need projecting. `regionPark` is not yet gated: it marks the spine on
+park/restore but still reconciles wholesale.
+
 ### Dormant guard
 
 When the tracker page is not active, `bindTake(nil)` clears cm's take context

@@ -60,6 +60,7 @@ local specs = {
   'tm_pb_gating_spec',
   'tm_cc_gating_spec',
   'tm_tail_gating_spec',
+  'tm_fx_gating_spec',
   'tm_pb_interp_spec',
   'tm_tuning_spec',
   'tm_swing_spec',

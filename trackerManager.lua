@@ -55,11 +55,7 @@ local channels    = {}
 local lastMuteSet = {}
 --invariant: staleSwing[chan]=true: resolved swing changed; rebuild rederives raw, clears
 local staleSwing  = {}
---invariant: dirtyPbChans[chan]: absorber inputs changed; rebuildPbs re-derives dirty chans, clears
-local dirtyPbChans = {}
---invariant: hadFxPb[chan]: chan had fx pb-output last rebuildPbs; trailing dirt covers fx removal
-local hadFxPb      = {}
---invariant: dirtyChans[chan]: chan dirtied; gated stages re-derive, cleared at rebuild tail
+--invariant: dirtyChans[chan]: chan dirtied; gated stages (ccs/fx/tails/pbs/pcs) re-derive, clears
 local dirtyChans   = {}
 -- True only while flush writes the parked stash; suppresses the inline dataChanged
 -- rebuild so flush drives the single rebuild (B3 staging, see design/note-macros-v2.md).
@@ -67,10 +63,6 @@ local flushingParked = false
 -- ppq tolerance for "raw agrees with its logical projection"; absorbs
 -- fromLogical rounding slop, shared by the tail pass and rebuild rule.
 local EPS         = 1
---invariant: swingSnap caches the (cm, mm)-derived swing transforms; nil
---  means "needs rebuild". Invalidated at the head of every tm:rebuild —
---  the sole synchronisation point at which mm/cm read coherently.
-local swingSnap
 
 ---------- SHARED HELPERS
 
@@ -78,15 +70,8 @@ local function sortByPPQ(tbl)
   table.sort(tbl, function(a, b) return a.ppq < b.ppq end)
 end
 
--- Marks err dirty: spurious dirt costs one re-derive; a missed source writes silent
--- wrong wire raws. see design/incremental-pbs.md § Stage 1
-local function dirtyPb(chan)
-  if chan then dirtyPbChans[chan] = true; return end
-  for i = 1, 16 do dirtyPbChans[i] = true end
-end
-
--- General derivation-dirt spine: any edit re-derives a channel's gated stages; dirtyPb is
--- the pb-only subset, kept parallel until the spine subsumes it. see design/dirty-channels.md § Scheme
+-- General derivation-dirt spine: any edit/config change re-derives a channel's gated stages.
+-- Spurious dirt costs a re-derive; missed dirt writes silent wrong output. see design/dirty-channels.md § Scheme
 local function dirtyChan(chan)
   if chan then dirtyChans[chan] = true; return end
   for i = 1, 16 do dirtyChans[i] = true end
@@ -343,7 +328,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   --contract: higher-lane notes get queued for mm but don't feed detune/realisation reads
   --contract: caller supplies evt.evType
   local function addLowlevel(evt)
-    if pbSource(evt, evt.lane) then dirtyPb(evt.chan) end
+    if pbSource(evt, evt.lane) then dirtyChan(evt.chan) end
     chansInsert(evt)
     util.add(adds, { evt = evt })
   end
@@ -353,7 +338,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   local function assignLowlevel(evt, update)
     local oldChan, oldLane = evt.chan, evt.lane
     util.assign(evt, update)
-    if assignDirtiesPb(evt, oldLane, update) then dirtyPb(oldChan); dirtyPb(evt.chan) end
+    if assignDirtiesPb(evt, oldLane, update) then dirtyChan(oldChan); dirtyChan(evt.chan) end
     -- Keep the lane-1 detune index coherent: a chan OR lane move migrates the
     -- entry between lists; a ppq move resorts in place (util.seek needs ascending).
     local oldList = chansListFor(evt, oldChan, oldLane)
@@ -376,7 +361,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   end
 
   local function deleteLowlevel(evt)
-    if pbSource(evt, evt.lane) then dirtyPb(evt.chan) end
+    if pbSource(evt, evt.lane) then dirtyChan(evt.chan) end
     chansRemove(evt)
     if evt.uuid then byUuid[evt.uuid] = nil end
 
@@ -897,8 +882,7 @@ end
 --contract: chan==nil marks all 16 channels stale; otherwise just the named channel
 --contract: consumed by the next tm:rebuild, then cleared
 function tm:markSwingStale(chan)
-  dirtyPb(chan)   -- reseats move lane-1 onsets; staleSwing itself clears before the pbs pass
-  dirtyChan(chan) -- swing move re-times this chan's derivations; not carried by the mm payload
+  dirtyChan(chan) -- swing move re-times this chan's derivations (raw reseat + absorber seats); not carried by the mm payload
   if chan then staleSwing[chan] = true; return end
   for i = 1, 16 do staleSwing[i] = true end
 end
@@ -1412,7 +1396,6 @@ local function rebuildRegionPark(deferred)
       if covered(c.chan, c.sub, c.ppqL) then
         if c.evt.evType == 'note' then
           dirtyChan(c.chan)   -- park removes a blocker; same-lane/pitch neighbours' tails regrow
-          if c.sub == 1 then dirtyPb(c.chan) end
         end
         util.add(newParked, shape(c.evt, c.chan, c.sub))
         batch.del(c.evt)
@@ -1466,8 +1449,7 @@ local function rebuildRegionPark(deferred)
     -- Restores re-enter their columns now (token-less); the tail walk clips them in place and
     -- the tail walk's commit adds them after the derived deletions.
     for _, spec in ipairs(restores) do
-      dirtyChan(spec.chan)   -- restored note re-enters columns; the tail walk sets its raw endppq
-      if spec.lane == 1 then dirtyPb(spec.chan) end   -- restored note re-enters the detune stream
+      dirtyChan(spec.chan)   -- restored note re-enters columns; tail walk + absorber pass re-derive it
       local channel = channels[spec.chan]
       while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
       local note = util.clone(spec, { uuid = true })    -- sheds the parked uuid; mm:add mints a fresh one
@@ -1603,6 +1585,7 @@ end
 -- reconcile vs existing, note writes deferred to the tail walk. Returns per-chan carrier map. see design/archive/note-macros.md § Pipeline placement
 local function rebuildFx(fx, deferred)
   local newFxCarrier = {}
+  local prevCarrier  = ds:get('fxCarrier') or {}   -- clean chans carry their carrier map forward
 
   -- Note columns read in ppq order regardless of mm array order (eachWindowNote /
   -- allocateRegionLanes / membersOf iterate col.events directly). see design/deferred-reindex.md § Phase A
@@ -1637,6 +1620,9 @@ local function rebuildFx(fx, deferred)
                          and takeLenL or math.min(rec.evt.endppqL, takeLenL)
             if nextRec then endL = math.min(endL, nextRec.evt.ppqL) end
             fxWindow[rec.evt] = endL
+            -- host view-tail: stashed here (read-only pass, all chans) so a frozen fx host still
+            -- renders to its window after the walk. see design/dirty-channels.md § Phase A
+            fx.hostEnd[rec.evt] = tm:fromLogical(chan, endL)
           end
         end
       end
@@ -1744,6 +1730,12 @@ local function rebuildFx(fx, deferred)
     end
   end
   for chan = 1, 16 do
+    -- Frozen: derived notes/CCs/carriers stand untouched in mm; carry the carrier map so routing
+    -- survives, leave noteLive empty so tails/pbs/pcs skip too. see design/dirty-channels.md § Phase A
+    if not dirtyChans[chan] then
+      newFxCarrier[chan] = prevCarrier[chan]
+      goto nextChan
+    end
     -- Pass A: run every generator. Structural notes commit per lane; continuous deltas
     -- stash with their window for colouring (channel-wide, not note-tied). see design/archive/note-macros.md § Continuous realisation
     local predicted, pending, ccFill = {}, {}, {}
@@ -1813,7 +1805,6 @@ local function rebuildFx(fx, deferred)
       for _, host in ipairs(col.events) do
         if host.fx and host.evType ~= 'pa' then
           local endL = fxWindow[host]
-          fx.hostEnd[host] = tm:fromLogical(chan, endL)
           runProducer{ window = { host.ppqL, endL }, notes = { host }, fx = host.fx,
                        id = host.uuid, lane = laneIdx, delay = host.delay,
                        sample = host.sample, d = delayToPPQ(host.delay) }
@@ -1934,6 +1925,7 @@ local function rebuildFx(fx, deferred)
     reconcileCarrier(fx.ccExisting[chan].carrier, predictedDelta, wires)
     wires.commit()
     if #newCarriers > 0 then newFxCarrier[chan] = newCarriers end
+    ::nextChan::
   end
   return newFxCarrier
 end
@@ -1944,9 +1936,8 @@ local function rebuildTails(fx, deferred)
   local takeLen = tm:length()
   local clampWrites = mmBatch()
   for chan = 1, 16 do
-    -- fx-hosting channels always clip: generator output can shift without a per-chan dirt
-    -- mark (design/dirty-channels.md § Open questions, fx dirt). Authored-only channels gate.
-    if not dirtyChans[chan] and #fx.noteLive[chan] == 0 then goto nextChan end
+    -- Clean channels freeze: fx left noteLive empty, real notes converged last rebuild.
+    if not dirtyChans[chan] then goto nextChan end
     local notes, byLane, byPitch = {}, {}, {}
     for laneIdx, col in ipairs(channels[chan].columns.notes) do
       for _, evt in ipairs(col.events) do
@@ -1980,7 +1971,7 @@ local function rebuildTails(fx, deferred)
     -- a new fxNote (no token yet) mutates in place, riding into mm:add at the atomic commit.
     local moved = voicing.nudgeOnsets(notes)
     for _, n in ipairs(moved) do
-      if n.lane == 1 then dirtyPb(chan) end   -- nudged lane-1 onset moves absorber seats
+      if n.lane == 1 then dirtyChan(chan) end   -- nudged lane-1 onset moves absorber seats (pbs runs after tails)
       if n.evt.token then clampWrites.assign(n.evt, { ppq = n.evt.ppq }) end
     end
     -- Re-sort only when a nudge actually moved an onset (rare); otherwise ordering stands.
@@ -2038,22 +2029,11 @@ local function rebuildPbs(noteLive, replacePb)
 
   perf.start('gather')
   perf.start('lane1')
-  -- Derived lane-1 fxNotes make a channel fx-active; detect them ahead of the dirty gate by
-  -- walking only noteLive (usually empty), so the gate is cheap for every channel.
-  local fxLane1 = {}
-  for chan = 1, 16 do
-    for _, w in ipairs(noteLive[chan]) do
-      if w.lane == 1 then fxLane1[chan] = true; break end
-    end
-  end
-
-  -- Dirty gate, hoisted ahead of lane-1 sort and clone (both skip clean chans). fx output
-  -- regenerates untracked each rebuild; hadFxPb trails removal by one rebuild so stale seats delete.
+  -- Dirty gate on the shared spine, hoisted ahead of lane-1 sort and clone (both skip clean chans).
+  -- Frozen fx channels are not dirty: their derived output stands in mm, absorber seats carried.
   local dirty = {}
   for chan = 1, 16 do
-    local fxActive = fxLane1[chan] or replacePb[chan][1] ~= nil
-    dirty[chan]    = dirtyPbChans[chan] or fxActive or hadFxPb[chan] or nil
-    hadFxPb[chan]  = fxActive or nil
+    dirty[chan] = dirtyChans[chan] or nil
   end
 
   -- Per-chan lane-1 sort, consumed only by deriveChan: built for dirty channels alone. Clean
@@ -2387,19 +2367,16 @@ local function rebuildPbs(noteLive, replacePb)
   perf.start('commit')
   pbWrites.commit()
   perf.stop('commit')
-  dirtyPbChans = {}
 end
 
 -- PC synthesis (trackerMode only). Runs after externals so a foreign-MIDI note inherits
 -- sample from the prevailing PC.
 local function rebuildPCs(fx)
   if not cm:get('trackerMode') then return end
-  local pcWrites, dirty = mmBatch(), false
-  local sink = {
-    del = function(r) pcWrites.del(r); dirty = true end,
-    add = function(a) pcWrites.add(a); dirty = true end,
-  }
+  local pcWrites = mmBatch()
   for chan = 1, 16 do
+    -- Clean channels freeze: their PCs stand in mm and their pc column is carried forward.
+    if not dirtyChans[chan] then goto nextChan end
     local records = {}
     for L, lane in ipairs(channels[chan].columns.notes) do
       for _, n in ipairs(lane.events) do
@@ -2410,16 +2387,17 @@ local function rebuildPCs(fx)
       local n = w.evt
       util.add(records, { ppq = n.ppq, ppqL = n.ppqL, lane = w.lane, sample = n.sample or 0, key = n })
     end
-    reconcilePCsForChan(chan, records, sink)
+    reconcilePCsForChan(chan, records, pcWrites)
+    ::nextChan::
   end
   pcWrites.commit()
 
-  if dirty then
-    for chan = 1, 16 do channels[chan].columns.pc = { events = {} } end
-    for _, cc in mm:ccsRaw() do
-      if cc.evType == 'pc' then
-        util.add(channels[cc.chan].columns.pc.events, projectCC(cc, mm:tokenOf(cc)))
-      end
+  -- Refresh every pc column from mm (frozen channels' PCs stand). reconcilePCsForChan leaves
+  -- c.pc.events unwritten (its invariant), so rebuild it here from the committed stream.
+  for chan = 1, 16 do channels[chan].columns.pc = { events = {} } end
+  for _, cc in mm:ccsRaw() do
+    if cc.evType == 'pc' then
+      util.add(channels[cc.chan].columns.pc.events, projectCC(cc, mm:tokenOf(cc)))
     end
   end
 end
@@ -2481,7 +2459,7 @@ function tm:rebuild(takeChanged)
   takeChanged = takeChanged or false
   -- Capture before the pipeline's nested mm:modify calls re-fire 'reload' and clear it.
   local didReload = mmReloaded; mmReloaded = false
-  if didReload or takeChanged then dirtyPb(); dirtyChan() end   -- wholesale re-read / take swap: no per-site marks
+  if didReload or takeChanged then dirtyChan() end   -- wholesale re-read / take swap: no per-site marks
   pbLimCents = nil   -- coherence point: refresh cached pbRange for cents<->raw conversions
 
   clearSwing()   -- rebuild is the (cm, mm) coherence point
@@ -2631,8 +2609,9 @@ do
         tm:markSwingStale(chan)
       end
       prevSwings = util.deepClone(curSwings)
+    elseif not tvOnlyKeys[key] then
+      dirtyChan()   -- any other derivation config (temper/pbRange/ccInterp/overlapOffset) re-derives all chans
     end
-    if key == 'pbRange' then dirtyPb() end   -- cents<->raw scale: every absorber raw re-derives
     if not tvOnlyKeys[key] then tm:rebuild(false) end
   end)
 
@@ -2649,12 +2628,15 @@ do
       end
       prevSwing = util.deepClone(cur)
       tm:rebuild(false)
-    elseif change.name == 'extraColumns' or change.name == 'noteDelay'
+    elseif change.name == 'extraColumns'
            or change.name == 'fxRegions'
            or change.name == 'fxParked' or change.name == 'fxParkedCC' then
-      -- Document-data edits bypass the um-verb dirtyPb marking; noteDelay moves lane-1
-      -- realisation and extraColumns drives the pb keep-decision, so re-derive conservatively.
-      if not flushingParked then dirtyPb(); tm:rebuild(false) end
+      -- fxRegions/parking drive fx expansion; extraColumns blocks fx carrier codes and drives
+      -- the pb keep-decision (both inside the gated passes) -- re-derive.
+      if not flushingParked then dirtyChan(); tm:rebuild(false) end
+    elseif change.name == 'noteDelay' then
+      -- noteDelay is a display offset -- nothing in the tm pipeline reads it; reproject only.
+      if not flushingParked then tm:rebuild(false) end
     end
   end)
 

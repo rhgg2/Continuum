@@ -8,6 +8,20 @@
 > derives nothing. Retaining `channels[]` across rebuilds (phase B) is
 > the stretch.
 
+## Status
+
+Landed (2026-07-03): the spine (`dirtyChans`, fed by mm's `reload` `chans`
+payload, swing, config, and pipeline-internal movers) and the phase-A gate
+across `ccs` (pre-existing), `fx`, `tails`, `pbs`, and `pcs`. `dirtyPbChans`
+folded into the spine — `dirtyPb`, `hadFxPb`, and `fxLane1` are gone; pbs
+gates on `dirtyChans` alone. A clean channel freezes whole: fx skips its
+generators and leaves `noteLive` empty, so tails/pbs/pcs skip it too, and its
+derived notes/CCs/carriers/absorbers stand untouched in mm. The `fxCarrier`
+ds-key carry (item 3, carriers only) is in. Still open: the remaining ds-key
+carries and the `regionPark` gate (both phase A), plus items 4 (take-hash)
+and 5 (phase B). The enduring model lives in `docs/trackerManager.md`
+§ Derivation dirt.
+
 ## Problem
 
 Same profile as the siblings (3070 notes, 6219 ccs, ~100ms/edit).
