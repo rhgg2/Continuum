@@ -1,0 +1,18 @@
+desc:Continuum CV spike - cv2 lane strip (chain-stream shield probe)
+
+slider1:20<0,31,1>lane (MSB cc)
+slider2:126<0,127,1>bus
+slider3:0<0,1000000,1>stripped count
+
+in_pin:none
+out_pin:none
+
+@init
+ext_midi_bus = 1; // header-zone code never runs; bus support must be enabled here
+
+@block
+while (midirecv(ofs, m1, m2, m3)) (
+  iscc = (m1 & 0xF0) == 0xB0;
+  ours = iscc && midi_bus == slider2 && (m2 == slider1 || m2 == slider1 + 32);
+  ours ? slider3 += 1 : midisend(ofs, m1, m2, m3);
+);

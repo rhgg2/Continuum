@@ -387,13 +387,38 @@ All green; architecture stands (2026-06-10, `tests/spike_cv.lua` +
 - reorder: REAPER's plink remap is unreliable — treat `plink.effect` as
   index-keyed, store bindings by FX GUID, re-point on every reconcile.
 
-**Not covered — the plink-via-MIDI leg.** `effect = −100` was confirmed
-at API-shape level only, and `cv.md` avoided the underdocumented
-`plink.midi_*` path by design. The spine hangs decode on it, so a spike
-leg must go green before phase 3 commits: bus addressing (does the MIDI
-source spec see bus 126, or only the track's merged stream?), 14-bit
-pair reads, value hold across seek/loop, and chain position (does a
-chain-head send reach a plink on a mid-chain FX?).
+**The plink-via-MIDI leg — green** (2026-07-02,
+`tests/spikes/spike_cv2_plink.lua` + `cv/cv2_*.jsfx`). Every question
+the spine hung on decode resolved in the design's favour:
+
+- **native decode, end to end.** A midi-only send on bus 126 into a
+  track whose target FX carries `plink.effect = −100` drives the param —
+  no minted FX on the destination. REAPER's config for a 14-bit CC link:
+  `midi_msg = 0xB0`, `midi_chan = 0`, `midi_bus = 126` (0-based — the
+  JSFX `midi_bus` value directly, no `+1`), `midi_msg2 = cc | 0x80`.
+  **Bit 7 of `midi_msg2` is the 14-bit flag**; low 7 bits are the MSB
+  CC, the LSB rides `cc + 32`. Plain 7-bit is identical with bit 7
+  clear. `setParamLink` writes exactly these keys.
+- **14-bit resolution reads.** The cross-track poll saw a min step of
+  1/16384, not 1/128 — the LSB is consumed, so the ladder's top rung
+  delivers full pair precision natively.
+- **plink reads the chain MIDI stream at the FX's position**, not the
+  track's raw input. Load-bearing, and better than hoped: the whole
+  ladder composes in chain order on one track — encoder upstream →
+  optional filter node → plink on the target — so an upstream node truly
+  shields or rewrites what the plink sees. A chain-head strip made the
+  param go dead; the filter node (§ *Filtering*) works by construction.
+- **both fan-in realizations viable.** A cross-track send into the chain
+  head reached a mid-chain plink (cross-track sum), and an encoder
+  upstream in the *same* chain reached a downstream plink (in-chain
+  sum) — both at 14-bit resolution.
+- **hold across transport.** Through seeks while stopped the param held
+  its last value on a silent (delta-suppressed) wire. At play-start it
+  took a fresh value equal to the *encoder's* base, not the plink
+  baseline of 0 — the encoder re-asserted (its phase reset), plink never
+  dropped its hold. Encoders that reset state re-emit at play-start for
+  free; one that doesn't leaves plink holding, which the seek test
+  proved safe. No stale-to-baseline failure appeared.
 
 ## Phases (revised order)
 
@@ -401,12 +426,14 @@ chain-head send reach a plink on a mid-chain FX?).
 "Everything builds in the graph" inverts that: the graph and realizer must
 exist before the front-end can mint into them.
 
-1. **Spike** — done (`cv.md`).
+1. **Spike** — done (`cv.md`; plink-via-MIDI leg `spike_cv2_plink.lua`,
+   § *Spike results*).
 2. **Simple layer** — done, standalone; to be re-founded on the graph (above).
-3. **Wiring refactor → shared realizer.** Gated on the plink-via-MIDI
-   spike leg (above). Extract the realizer beneath the `targetTracks`
-   seam; add `setParamLink` (native MIDI-plink config); add the
-   param-pin terminal — spine code allocation, encoder/sum/filter
+3. **Wiring refactor → shared realizer.** Unblocked — the plink-via-MIDI
+   spike leg is green (above). Extract the realizer beneath the
+   `targetTracks` seam; add `setParamLink` (native MIDI-plink config:
+   `effect = −100`, `midi_bus`, `midi_msg2 = cc | 0x80` for 14-bit); add
+   the param-pin terminal — spine code allocation, encoder/sum/filter
    synthesis. Wiring behaviour unchanged, its specs stay green.
    The bulk of the risk; lands and is verified first.
 4. **Unified graph front-end.** Param pins on FX nodes; the palette

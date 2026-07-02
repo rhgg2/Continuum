@@ -1,0 +1,45 @@
+desc:Continuum CV spike - cv2 coded emitter (bus-126 plink source)
+
+slider1:20<0,31,1>lane (MSB cc)
+slider2:1<0,1,1{7-bit,14-bit}>mode
+slider3:8<0.5,60,0.5>ramp period (s)
+slider4:0<0,1,1{run,freeze}>freeze
+slider5:1<0,1,1{MSB first,LSB first}>pair order
+slider6:126<0,127,1>bus
+slider7:1024<1,16383,1>ramp depth (counts)
+slider8:8192<0,16382,1>ramp base (counts)
+
+in_pin:none
+out_pin:none
+
+@init
+ext_midi_bus = 1; // header-zone code never runs; bus support must be enabled here
+
+@block
+// lastval survives @init refires at play/loop: a frozen emitter stays
+// delta-suppressed silent across seeks - that silence IS the hold test
+slider4 < 0.5 ? (
+  phase += samplesblock / (srate * slider3);
+  phase >= 1 ? phase -= 1;
+);
+tri = phase < 0.5 ? phase * 2 : 2 - phase * 2;
+val = floor(slider8 + tri * slider7 + 0.5);
+val > 16383 ? val = 16383;
+slider2 < 0.5 ? val = (val >> 7) << 7;  // 7-bit grain so suppression matches
+val != lastval ? (
+  midi_bus = slider6;
+  msb = val >> 7;
+  lsb = val & 127;
+  slider2 < 0.5 ? (
+    midisend(0, 0xB0, slider1, msb);
+  ) : (
+    slider5 < 0.5 ? (
+      midisend(0, 0xB0, slider1, msb);
+      midisend(0, 0xB0, slider1 + 32, lsb);
+    ) : (
+      midisend(0, 0xB0, slider1 + 32, lsb);
+      midisend(0, 0xB0, slider1, msb);
+    );
+  );
+  lastval = val;
+);
