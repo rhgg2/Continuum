@@ -55,6 +55,10 @@ local channels    = {}
 local lastMuteSet = {}
 --invariant: staleSwing[chan]=true: resolved swing changed; rebuild rederives raw, clears
 local staleSwing  = {}
+--invariant: dirtyPbChans[chan]: absorber inputs changed; rebuildPbs re-derives dirty chans, clears
+local dirtyPbChans = {}
+--invariant: hadFxPb[chan]: chan had fx pb-output last rebuildPbs; trailing dirt covers fx removal
+local hadFxPb      = {}
 -- True only while flush writes the parked stash; suppresses the inline dataChanged
 -- rebuild so flush drives the single rebuild (B3 staging, see design/note-macros-v2.md).
 local flushingParked = false
@@ -70,6 +74,13 @@ local swingSnap
 
 local function sortByPPQ(tbl)
   table.sort(tbl, function(a, b) return a.ppq < b.ppq end)
+end
+
+-- Marks err dirty: spurious dirt costs one re-derive; a missed source writes silent
+-- wrong wire raws. see design/incremental-pbs.md § Stage 1
+local function dirtyPb(chan)
+  if chan then dirtyPbChans[chan] = true; return end
+  for i = 1, 16 do dirtyPbChans[i] = true end
 end
 
 -- pbRange resolves through cm's 5 tiers -- too costly to re-fetch per pb in the
@@ -305,10 +316,25 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     if e then chansInsert(makeEntry(e, tok)) end
   end
 
+  -- Absorber derivation inputs: any pb, and lane-1 notes' onset/detune geometry.
+  local PB_GEOMETRY = { detune = true, ppq = true, ppqL = true, delay = true, chan = true, lane = true }
+  local function pbSource(evt, lane)
+    return evt.evType == 'pb' or (evt.evType == 'note' and lane == 1)
+  end
+  local function assignDirtiesPb(evt, oldLane, update)
+    if evt.evType == 'pb' then return true end
+    if not pbSource(evt, oldLane) and not pbSource(evt, evt.lane) then return false end
+    for key in pairs(update) do
+      if PB_GEOMETRY[key] then return true end
+    end
+    return false
+  end
+
   --contract: only lane==1 notes index into chans[chan].notes
   --contract: higher-lane notes get queued for mm but don't feed detune/realisation reads
   --contract: caller supplies evt.evType
   local function addLowlevel(evt)
+    if pbSource(evt, evt.lane) then dirtyPb(evt.chan) end
     chansInsert(evt)
     util.add(adds, { evt = evt })
   end
@@ -318,6 +344,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   local function assignLowlevel(evt, update)
     local oldChan, oldLane = evt.chan, evt.lane
     util.assign(evt, update)
+    if assignDirtiesPb(evt, oldLane, update) then dirtyPb(oldChan); dirtyPb(evt.chan) end
     -- Keep the lane-1 detune index coherent: a chan OR lane move migrates the
     -- entry between lists; a ppq move resorts in place (util.seek needs ascending).
     local oldList = chansListFor(evt, oldChan, oldLane)
@@ -340,6 +367,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   end
 
   local function deleteLowlevel(evt)
+    if pbSource(evt, evt.lane) then dirtyPb(evt.chan) end
     chansRemove(evt)
     if evt.uuid then byUuid[evt.uuid] = nil end
 
@@ -860,6 +888,7 @@ end
 --contract: chan==nil marks all 16 channels stale; otherwise just the named channel
 --contract: consumed by the next tm:rebuild, then cleared
 function tm:markSwingStale(chan)
+  dirtyPb(chan)   -- reseats move lane-1 onsets; staleSwing itself clears before the pbs pass
   if chan then staleSwing[chan] = true; return end
   for i = 1, 16 do staleSwing[i] = true end
 end
@@ -1371,6 +1400,7 @@ local function rebuildRegionPark(deferred)
     local newParked, restores = {}, {}
     for _, c in ipairs(scan) do
       if covered(c.chan, c.sub, c.ppqL) then
+        if c.evt.evType == 'note' and c.sub == 1 then dirtyPb(c.chan) end
         util.add(newParked, shape(c.evt, c.chan, c.sub))
         batch.del(c.evt)
         unlink(c.events, c.evt)
@@ -1423,6 +1453,7 @@ local function rebuildRegionPark(deferred)
     -- Restores re-enter their columns now (token-less); the tail walk clips them in place and
     -- the tail walk's commit adds them after the derived deletions.
     for _, spec in ipairs(restores) do
+      if spec.lane == 1 then dirtyPb(spec.chan) end   -- restored note re-enters the detune stream
       local channel = channels[spec.chan]
       while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
       local note = util.clone(spec, { uuid = true })    -- sheds the parked uuid; mm:add mints a fresh one
@@ -1932,6 +1963,7 @@ local function rebuildTails(fx, deferred)
     -- a new fxNote (no token yet) mutates in place, riding into mm:add at the atomic commit.
     local moved = voicing.nudgeOnsets(notes)
     for _, n in ipairs(moved) do
+      if n.lane == 1 then dirtyPb(chan) end   -- nudged lane-1 onset moves absorber seats
       if n.evt.token then clampWrites.assign(n.evt, { ppq = n.evt.ppq }) end
     end
     -- Re-sort only when a nudge actually moved an onset (rare); otherwise ordering stands.
@@ -1987,8 +2019,9 @@ local function rebuildPbs(noteLive, replacePb)
     return shape and shape ~= 'step' and shape ~= 'linear'
   end
 
+  perf.start('gather')
   -- Per-chan lane-1 sort, used both at reconcile and inside mm:modify.
-  local lane1ByChan = {}
+  local lane1ByChan, fxLane1 = {}, {}
   for chan = 1, 16 do
     local lane1 = channels[chan].columns.notes[1]
     local list  = {}
@@ -2000,7 +2033,7 @@ local function rebuildPbs(noteLive, replacePb)
     -- Derived lane-1 fxNotes (a trill's per-fxNote detune) are routed out of
     -- columns; union them so the absorber pass seats their detune jumps.
     for _, w in ipairs(noteLive[chan]) do
-      if w.lane == 1 then util.add(list, w.evt) end
+      if w.lane == 1 then fxLane1[chan] = true; util.add(list, w.evt) end
     end
     table.sort(list, function(a, b) return a.ppq < b.ppq end)
     lane1ByChan[chan] = list
@@ -2016,16 +2049,29 @@ local function rebuildPbs(noteLive, replacePb)
       util.bucket(pbsByChan, pb.chan, pb)
     end
   end
+  perf.stop('gather')
 
   local pbWrites = mmBatch()
   -- CCINTERP is interpolated points per QN; the densify grid wants a tick step.
   local gridStep = math.max(1, util.round((mm:resolution() or 960) / mm:ccInterp()))
 
-  for chan = 1, 16 do
-    local lane1Events = lane1ByChan[chan]
-    local pbs         = pbsByChan[chan] or {}
-    table.sort(pbs, function(a, b) return a.ppq < b.ppq end)
+  -- detune-at-ppq for every pb in one linear merge (pbs and lane1Events both ppq-sorted).
+  local function mergeDetunes(pbs, lane1Events)
+    local detuneOf, di, dcur = {}, 1, 0
+    for _, pb in ipairs(pbs) do
+      while di <= #lane1Events and lane1Events[di].ppq <= pb.ppq do
+        dcur = lane1Events[di].detune or 0
+        di = di + 1
+      end
+      detuneOf[pb] = dcur
+    end
+    return detuneOf
+  end
 
+  -- Seat the lane-1 detune stream, match absorbers, stage the consolidated assign; returns
+  -- detuneOf. Clean chans skip it wholesale -- I8: rebuild is a fixpoint. see design/incremental-pbs.md
+  local function deriveChan(chan, lane1Events, pbs)
+    perf.start('seats')
     -- Back-derive cents for any pb missing it (foreign-MIDI/pre-cents pbs carry raw only).
     -- Marked so the consolidated assign below always carries cents to the sidecar.
     local persistCents = {}
@@ -2061,15 +2107,23 @@ local function rebuildPbs(noteLive, replacePb)
       end
     end
 
+    -- First index with .ppq > target -- binary; callers loop per onset over dense pb streams.
+    local function firstAfter(list, target)
+      local lo, hi = 1, #list + 1
+      while lo < hi do
+        local mid = (lo + hi) // 2
+        if list[mid].ppq <= target then lo = mid + 1 else hi = mid end
+      end
+      return lo
+    end
+
     -- Prevailing cents at any ppq: the replace curve inside a window, else the authored
     -- breakpoints. Interpolate the bounding pair, hold the last past the end, 0 before the first.
     local function streamValue(ppq)
-      local win = replaceWinAt(ppq)
-      local src = win and win.bps or realPbs
-      local A, B
-      for _, pb in ipairs(src) do
-        if pb.ppq <= ppq then A = pb else B = pb break end
-      end
+      local win  = replaceWinAt(ppq)
+      local src  = win and win.bps or realPbs
+      local i    = firstAfter(src, ppq)
+      local A, B = src[i - 1], src[i]
       if not A then return 0 end
       if not B then return A.cents end
       return mm:interpolate(A, B, ppq, 'cents')
@@ -2077,11 +2131,10 @@ local function rebuildPbs(noteLive, replacePb)
 
     -- Authored breakpoints bounding M, excluding any pb exactly at M.
     local function spanAround(M)
-      local A, B
-      for _, pb in ipairs(realPbs) do
-        if pb.ppq < M then A = pb elseif pb.ppq > M then B = pb break end
-      end
-      return A, B
+      local after  = firstAfter(realPbs, M)
+      local before = after - 1
+      while before >= 1 and realPbs[before].ppq == M do before = before - 1 end
+      return realPbs[before], realPbs[after]
     end
 
     -- Detune onsets: every lane-1 ppq whose detune differs from its predecessor.
@@ -2175,7 +2228,9 @@ local function rebuildPbs(noteLive, replacePb)
         seats[first.ppq] = { cents = streamValue(first.ppq), ppqL = first.ppqL, shape = 'step' }
       end
     end
+    perf.stop('seats')
 
+    perf.start('match')
     -- Match existing pbs to seats. A real pb at a seat covers it (it steps detune itself);
     -- fakes consume any already at a seat, move remaining fakes to fill the rest, delete the
     -- leftovers.
@@ -2214,7 +2269,7 @@ local function rebuildPbs(noteLive, replacePb)
                         shape = seat.shape, derived = 'absorber', evType = 'pb' }
         util.add(pbs, fresh)
         local writeEvt = util.clone(fresh)
-        writeEvt.val = centsToRaw(fresh.cents + detuneAt(lane1ByChan[chan], ppq))
+        writeEvt.val = centsToRaw(fresh.cents + detuneAt(lane1Events, ppq))
         pbWrites.add(writeEvt)
       end
     end
@@ -2227,17 +2282,10 @@ local function rebuildPbs(noteLive, replacePb)
     end
 
     table.sort(pbs, function(a, b) return a.ppq < b.ppq end)
+    perf.stop('match')
 
-    -- detune-at-ppq for every pb in one linear merge (pbs and lane1Events both
-    -- ppq-sorted), replacing a per-pb util.seek scan that ran O(pbs*notes).
-    local detuneOf, di, dcur = {}, 1, 0
-    for _, pb in ipairs(pbs) do
-      while di <= #lane1Events and lane1Events[di].ppq <= pb.ppq do
-        dcur = lane1Events[di].detune or 0
-        di = di + 1
-      end
-      detuneOf[pb] = dcur
-    end
+    local detuneOf = mergeDetunes(pbs, lane1Events)
+    perf.start('assign')
     -- Consolidated assign: one entry per existing pb where any of (ppq moved, ppqL
     -- restamped, raw changed, cents back-derived, derived shape changed) needs to land.
     for _, pb in ipairs(pbs) do
@@ -2264,7 +2312,24 @@ local function rebuildPbs(noteLive, replacePb)
         end
       end
     end
+    perf.stop('assign')
+    return detuneOf
+  end
 
+  for chan = 1, 16 do
+    local lane1Events = lane1ByChan[chan]
+    local pbs         = pbsByChan[chan] or {}
+    table.sort(pbs, function(a, b) return a.ppq < b.ppq end)
+
+    -- fx output regenerates every rebuild with no change tracking: fx-hosting channels derive
+    -- wholesale; hadFxPb keeps the chan dirty one rebuild after fx vanishes so stale seats delete.
+    local fxActive = fxLane1[chan] or replacePb[chan][1] ~= nil
+    local dirty    = dirtyPbChans[chan] or fxActive or hadFxPb[chan]
+    hadFxPb[chan]  = fxActive or nil
+
+    local detuneOf = dirty and deriveChan(chan, lane1Events, pbs) or mergeDetunes(pbs, lane1Events)
+
+    perf.start('project')
     -- Column projection. A derived seat is wire-only -- always hidden.
     local anyVisible, pbColEvents = false, {}
     for _, pb in ipairs(pbs) do
@@ -2277,9 +2342,13 @@ local function rebuildPbs(noteLive, replacePb)
     end
     local keep = anyVisible or (extras[chan] and extras[chan].pb)
     channels[chan].columns.pb = keep and { events = pbColEvents } or nil
+    perf.stop('project')
   end
 
+  perf.start('commit')
   pbWrites.commit()
+  perf.stop('commit')
+  dirtyPbChans = {}
 end
 
 -- PC synthesis (trackerMode only). Runs after externals so a foreign-MIDI note inherits
@@ -2373,6 +2442,7 @@ function tm:rebuild(takeChanged)
   takeChanged = takeChanged or false
   -- Capture before the pipeline's nested mm:modify calls re-fire 'reload' and clear it.
   local didReload = mmReloaded; mmReloaded = false
+  if didReload or takeChanged then dirtyPb() end   -- wholesale re-read / take swap: no per-site marks
   pbLimCents = nil   -- coherence point: refresh cached pbRange for cents<->raw conversions
 
   clearSwing()   -- rebuild is the (cm, mm) coherence point
@@ -2513,6 +2583,7 @@ do
       end
       prevSwings = util.deepClone(curSwings)
     end
+    if key == 'pbRange' then dirtyPb() end   -- cents<->raw scale: every absorber raw re-derives
     if not tvOnlyKeys[key] then tm:rebuild(false) end
   end)
 

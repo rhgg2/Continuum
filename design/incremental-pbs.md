@@ -33,7 +33,9 @@ onsets after um's edit ran. That rationale still holds.
 
 ## Stage 1 — channel gating (`dirtyPbChans`)
 
-Mirror the `dirtyPcChans` precedent: a tm-scope set, marked at every
+Like `dirtyPcChans`, but tm-scope rather than um-scope: um's set
+clears at flush, while pb dirt must survive into the rebuild that
+follows and absorb marks from rebuild-internal movers. Marked at every
 site that can change a channel's pb-relevant state, consumed and
 cleared at the end of `rebuildPbs`.
 
@@ -44,20 +46,22 @@ raw↔cents conversion params. So the dirty sources are:
 | source | marks |
 |---|---|
 | wholesale reload / take swap | all 16 |
-| `pbRange` or `ccInterp` config change | all 16 |
-| `staleSwing[chan]` | chan |
+| `pbRange` config change (`ccInterp` is item-chunk data, re-read only at load) | all 16 |
+| `tm:markSwingStale` (mirrored at mark time; staleSwing itself clears before the pbs pass) | chan |
 | um verb: pb add / assign / delete | chan |
 | um verb: lane-1 note add / delete | chan |
 | um verb: note assign touching `detune` or `ppq` (delay maps to ppq upstream) on lane 1 | chan |
 | um verb: note `chan` change (lane 1) | both chans |
 | um verb: `lane` assign crossing the lane-1 boundary | chan |
-| `nudgeSamePitchOnsets` moving a lane-1 note (internals reseat, flush pre-clip, tail walk) | chan |
+| `voicing.nudgeOnsets` moving a lane-1 note in the tail walk (internals reseat rides markSwingStale; flush pre-clip rides the um verbs) | chan |
 | `rebuildRegionPark` parking / restoring a lane-1 note | chan |
 | fx: `noteLive[chan]` has lane-1 entries, or `replacePb[chan]` non-empty | chan (conservative) |
 
 The fx row is deliberately coarse: fx output regenerates every rebuild
 with no change tracking, so fx-hosting channels stay wholesale until fx
-grows its own dirt signal. Everything else is exact.
+grows its own dirt signal. A channel that was fx-active stays dirty for
+one rebuild after fx vanishes (`hadFxPb` trailing dirt), so a removed
+region's derived seats get deleted. Everything else is exact.
 
 ### The clean-channel path
 
@@ -142,9 +146,5 @@ defer stage 2 indefinitely.
 - Split of the ~16ms derivation between seat math, matching, and the
   consolidated assign — add sub-timers inside `rebuildPbs` before
   committing to stage 2.
-- How the dirty accumulation crosses the flush → rebuild boundary:
-  `dirtyPcChans` clears at flush, but pb dirt must survive until
-  `rebuildPbs` consumes it (rebuild-internal movers mark it *during*
-  the same rebuild).
 - Whether fx-hosting channels are common enough in practice that the
   conservative fx row erases the win on macro-heavy takes.
