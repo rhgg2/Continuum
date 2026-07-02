@@ -1410,7 +1410,10 @@ local function rebuildRegionPark(deferred)
     local newParked, restores = {}, {}
     for _, c in ipairs(scan) do
       if covered(c.chan, c.sub, c.ppqL) then
-        if c.evt.evType == 'note' and c.sub == 1 then dirtyPb(c.chan) end
+        if c.evt.evType == 'note' then
+          dirtyChan(c.chan)   -- park removes a blocker; same-lane/pitch neighbours' tails regrow
+          if c.sub == 1 then dirtyPb(c.chan) end
+        end
         util.add(newParked, shape(c.evt, c.chan, c.sub))
         batch.del(c.evt)
         unlink(c.events, c.evt)
@@ -1463,6 +1466,7 @@ local function rebuildRegionPark(deferred)
     -- Restores re-enter their columns now (token-less); the tail walk clips them in place and
     -- the tail walk's commit adds them after the derived deletions.
     for _, spec in ipairs(restores) do
+      dirtyChan(spec.chan)   -- restored note re-enters columns; the tail walk sets its raw endppq
       if spec.lane == 1 then dirtyPb(spec.chan) end   -- restored note re-enters the detune stream
       local channel = channels[spec.chan]
       while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
@@ -1940,6 +1944,9 @@ local function rebuildTails(fx, deferred)
   local takeLen = tm:length()
   local clampWrites = mmBatch()
   for chan = 1, 16 do
+    -- fx-hosting channels always clip: generator output can shift without a per-chan dirt
+    -- mark (design/dirty-channels.md § Open questions, fx dirt). Authored-only channels gate.
+    if not dirtyChans[chan] and #fx.noteLive[chan] == 0 then goto nextChan end
     local notes, byLane, byPitch = {}, {}, {}
     for laneIdx, col in ipairs(channels[chan].columns.notes) do
       for _, evt in ipairs(col.events) do
