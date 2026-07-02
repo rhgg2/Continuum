@@ -468,30 +468,35 @@ out-of-range values. Divergence surfaces as `delay ~= delayC` (tp paints
 MIDI voices one note per `(chan, pitch)`. Two *distinct* voices that
 collide in realised raw — distinct `ppqL` collapsed by swing or delay, or
 a same-row detune cluster — must be kept apart, not dropped: each needs
-its own pb absorber, and the give-way surfaces as `delayC`. mm forbids
-the collision outright — its content-keyed token and reload-dedup both
-key on `(ppq, chan, pitch)`, so two such notes is illegal — so the
-separation must happen on every path *before* a colliding raw reaches mm.
+its own pb absorber, and the give-way surfaces as `delayC`. The verdict
+policy — which collisions are duplicates to kill, which are distinct
+voices to nudge — is `voicing`'s; see `docs/voicing.md`.
 
-`nudgeSamePitchOnsets(records)` is the one separator: walk a
+mm owns the `(ppq, chan, pitch)` invariant and enforces it itself: a
+colliding write is repaired by the backstop at `modify`'s unwind, an
+external collapse by intent-aware load-dedup (`docs/midiManager.md`
+§ Mutation contract). tm's separation sites are therefore not
+load-bearing for take integrity — a missed collision is resolved by mm
+and surfaced via `collisionsResolved` instead of silently eating a
+voice. The sites stay because they keep tm's live clones (column
+events, um entries) coherent with what mm will hold, and because the
+pre-clip scan routes kills and updates through um verbs, carrying
+semantics mm shouldn't own (PA culling, detune-aware resize).
+
+`voicing.nudgeOnsets(records)` is the separation geometry: walk a
 `(raw, ppqL)`-sorted list and bump each colliding successor to
 `prev.ppq + 1` (cascading; `fixed` externals frozen). Pure geometry on
 `evt.ppq`; it returns the moved records so each caller stages its own mm
-write. Three sites call it:
+write. Three sites separate:
 
 - **reseat** (`rebuildInternals`) — a reswing recomputes raw from
-  logical, so two distinct-`ppqL` notes can land on one raw. Separate
-  before the reseat commit, else reload-dedup eats a voice.
+  logical, so two distinct-`ppqL` notes can land on one raw. Separating
+  before the reseat commit keeps the staged clones and mm in step.
 - **pre-clip scan** (`flush`) — an edit moves a note onto a same-pitch
-  peer. Separate before the flush commit.
+  peer; consumes `voicing.resolveGroup` for the full kill/nudge
+  verdicts. Separate before the flush commit.
 - **tail walk** (`rebuildTails`) — real notes and predicted fxNotes walk
   together; separate before the atomic note commit, then clip tails.
-
-**Kill, not nudge, for genuine duplicates.** The pre-clip scan still
-dedups when the two are the *same* voice: a regenerable fxNote loses to
-an authored note, or two notes sharing `ppqL` *and* `detune` collapse to
-the longer. Distinct `ppqL` or distinct `detune` ⇒ distinct voices ⇒
-nudge.
 
 **Commit ordering.** mm tokens are keyed by realised ppq, so an occupying
 move (an edit landing on a peer's slot) re-keys onto that peer's token
@@ -512,9 +517,9 @@ Not a per-self peer walk: two notes can collide without either being the
 edited one, and repeated per-self truncation damages peers a later
 same-flush op would resolve.
 
-Each group is sorted `(raw, ppqL)` and walked: genuine duplicates killed,
-distinct voices nudged apart, survivors' tails clipped to the next onset
-(§ Same-pitch onset separation). This is the staging pre-clip only; the
+Each group runs `voicing.resolveGroup`: genuine duplicates killed,
+distinct voices nudged apart (see `docs/voicing.md`), survivors' tails
+clipped to the next onset. This is the staging pre-clip only; the
 authoritative raw tail is re-derived by rebuild step 4.8. `endppqL`
 (intent) is never written here — deleting a blocker lets the raw tail
 regrow to it.

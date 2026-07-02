@@ -1,4 +1,4 @@
--- See docs/trackerManager.md § Same-pitch onset separation for the model.
+-- See docs/voicing.md for the model.
 -- @noindex
 
 --invariant: pure policy module: no module state; callers stage every mm write

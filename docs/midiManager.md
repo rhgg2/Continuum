@@ -63,11 +63,15 @@ the same ppq. UUIDs are universal: every note gets one on load whether or not
 it carries metadata.
 
 On load, duplicates, missing UUIDs, and collisions are reconciled:
-1. Dedup identical `(ppq, chan, pitch)` notes, keeping the longest. Losers are
-   flushed before sysex is read so their cascade-deleted notation events don't
-   leave us holding stale text/sysex idxs.
-2. Scan notation events into `noteSidecars` and bind to notes by tag; the first
-   notation event at a tag claims its note (`note.uuid`, `note.uuidIdx`).
+1. Scan notation events into `noteSidecars`, bind to notes by tag, and join
+   each bound uuid's metadata onto its note. Binding is collision-aware —
+   notes and sidecars bucket by `(ppq, chan, pitch)` and pair off in order —
+   and runs ahead of dedup so the voicing verdicts see intent (`ppqL`,
+   `detune`, `derived`).
+2. Dedup same-`(ppq, chan, pitch)` notes via `voicing.resolveGroup` (see
+   `docs/voicing.md`): true duplicates are killed (foreign MIDI, carrying no
+   intent, degrades to keep-the-longest); distinct voices are nudged apart
+   rather than eaten. Kills fire `notesDeduped`, nudges `collisionsResolved`.
 3. Any note with a shared UUID is reassigned a fresh one (metadata cloned);
    any note without a UUID gets a new one and a queued notation-event insert.
    Notation events that didn't claim a note (no surviving note at that tag, or
@@ -253,7 +257,7 @@ specs guard the pair: `mm_note_cascade_sidecar_spec` (delete path) and
 
 ## Signals
 
-mm fires up to six kinds of signal per `load`. Subscribers register per
+mm fires up to seven kinds of signal per `load`. Subscribers register per
 kind and receive only the payloads of that kind.
 
 ```
@@ -262,8 +266,14 @@ kind and receive only the payloads of that kind.
 'uuidsReassigned'  data = { events = [{ oldUuid, newUuid, ppq, chan, pitch }, ...] }
 'ccsReconciled'    data = { events = [...] }                 -- omnibus: see below
 'ccsDeduped'       data = { events = [{ ppq, chan, msgType, cc, pitch, droppedCount }, ...] }
-'reload'           data = nil                                -- every load
+'collisionsResolved' data = { events = [{ kind, oldToken, token, uuid, chan, pitch, ppq }, ...] }
+'reload'           data = { wholesale }                      -- every load; true iff full re-read
 ```
+
+`collisionsResolved` events carry `kind = 'killed' | 'nudged'`; `token`
+(the post-resolution token) is present on nudges only. The signal also
+fires outside load, from `modify`'s outermost unwind, when the same-pitch
+backstop repaired a missed collision (§ Mutation contract).
 
 `ccsReconciled` events come in five kinds. The shared fields are `kind`,
 `uuid`, `chan`, `msgType`, and (per msgType) `cc` or `pitch`. Per-kind extras:
@@ -284,7 +294,8 @@ subscriber that wants only the data-loss subset filters on
 
 Firing rules:
 - Order on a single load is `takeSwapped` → `notesDeduped` →
-  `uuidsReassigned` → `ccsDeduped` → `ccsReconciled` → `reload`.
+  `uuidsReassigned` → `ccsDeduped` → `ccsReconciled` →
+  `collisionsResolved` → `reload`.
   Subscribers handling reconciliation/dedup see the events before the
   baseline rebuild. `ccsDeduped` precedes `ccsReconciled` because the
   reconciler runs over an already-deduped cc list — orphans (sidecars
