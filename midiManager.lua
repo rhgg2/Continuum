@@ -709,10 +709,9 @@ local function cloneOut(evt)
 end
 
 function mm:notes()
-  local i = 0
+  local it = util.sparsePairs(notes, noteCount)
   return function()
-    i = i + 1
-    local note = notes[i]
+    local i, note = it()
     if note then return i, cloneOut(note) end
   end
 end
@@ -777,24 +776,16 @@ end
 
 --invariant: a cc in 0..31 with fractional val is 14-bit; MSB/LSB split lives in midiBlob
 function mm:ccs()
-  local i = 0
+  local it = util.sparsePairs(ccs, ccCount)
   return function()
-    i = i + 1
-    local msg = ccs[i]
-    if not msg then return end
-    return i, cloneOut(msg)
+    local i, msg = it()
+    if msg then return i, cloneOut(msg) end
   end
 end
 
 --contract: yields mm-internal cc records uncloned; consumers must NOT mutate them (read-only fast path)
 function mm:ccsRaw()
-  local i = 0
-  return function()
-    i = i + 1
-    local msg = ccs[i]
-    if not msg then return end
-    return i, msg
-  end
+  return util.sparsePairs(ccs, ccCount)
 end
 
 --contract: assignCC: lockless iff t touches no structural field and the cc has a uuid
@@ -955,18 +946,12 @@ end
 --contract: yields (token, evt-clone) over all live events, notes then ccs
 --invariant: events()'s clone carries .token; loc is intentionally absent
 function mm:events()
-  local i, src = 0, notes
+  local noteIt = util.sparsePairs(notes, noteCount)
+  local ccIt   = util.sparsePairs(ccs, ccCount)
   return function()
-    while true do
-      i = i + 1
-      local e = src[i]
-      if not e then
-        if src == ccs then return end
-        src, i = ccs, 0
-      else
-        return tokenOf(e), cloneOut(e)
-      end
-    end
+    local _, e = noteIt()
+    if not e then _, e = ccIt() end
+    if e then return tokenOf(e), cloneOut(e) end
   end
 end
 

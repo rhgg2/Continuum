@@ -127,6 +127,17 @@ function util.compact(t, n)
   return out
 end
 
+-- Sparse walk; yields (index, value) for each non-nil slot up to n.
+function util.sparsePairs(t, n)
+  local i = 0
+  return function()
+    while i < n do
+      i = i + 1
+      if t[i] ~= nil then return i, t[i] end
+    end
+  end
+end
+
 --contract: assumes items sorted by keyFn (defaults to .ppq); 'before' modes scan to first miss then stop
 function util.seek(items, mode, key, filter, keyFn)
   keyFn = keyFn or function(x) return x.ppq end
