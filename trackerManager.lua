@@ -2487,6 +2487,14 @@ do
   tm:forward('notesDeduped',    mm)
   tm:forward('uuidsReassigned', mm)
   tm:forward('takeSwapped',     mm)
+  -- mm's backstop repaired a missed same-pitch collision: re-key um surgically. No
+  -- tm:rebuild here (re-enters mm:modify mid-unwind); geometry trues up next rebuild.
+  mm:subscribe('collisionsResolved', function(info)
+    for _, e in ipairs(info.events) do
+      idxReconcile(e.oldToken)
+      if e.token then idxReconcile(e.token) end
+    end
+  end)
   mm:subscribe('takeSwapped', function() pendingTakeSwap = true end)
   mm:subscribe('reload', function(info)
     mmReloaded = (info and info.wholesale) or false

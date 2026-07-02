@@ -7,6 +7,7 @@
 --invariant: per-event metadata persists via eventMeta, keyed by the take's POOL guid (docs/eventMeta.md)
 local util = require 'util'
 local midiBlob = require 'midiBlob'
+local voicing = require 'voicing'
 local perf = require 'perf'
 
 local take      = (...).take
@@ -367,6 +368,7 @@ end
 --invariant: cc.shape ∈ {step, linear, slow, fast-start, fast-end, bezier}; tension only on bezier
 --shape: noteSidecarPayload = { ppq, chan, pitch, droppedCount }  -- notesDeduped event
 --shape: uuidsReassignedEvent = { ppq, chan, pitch, oldUuid, newUuid }
+--shape: collisionEvent = { kind='killed'|'nudged', oldToken, [token], uuid, chan, pitch, ppq }
 --shape: ccDedupEvent = { ppq, chan, evType, cc, pitch, droppedCount }  -- ccsDeduped event
 --shape: reconcileEvent base = { kind, uuid, chan, evType, [cc], [pitch], ppq }
 --shape: reconcileEvent.valueRebound = base + { oldVal, newVal }
@@ -664,6 +666,51 @@ function mm:unload()
 end
 
 
+----- Same-pitch backstop
+
+-- Verbs record, the outermost unwind resolves — mid-batch collisions can be
+-- transient. See docs/midiManager.md § Same-pitch backstop.
+local pendingCollisions = {}
+local function noteCollision(note, verb)
+  pendingCollisions[util.key(note.chan, note.pitch)] = { chan = note.chan, pitch = note.pitch, verb = verb }
+end
+
+--contract: resolves missed same-pitch collisions at the outermost unwind; steady state finds none
+local function resolveCollisions()
+  if not next(pendingCollisions) then return nil end
+  local events = {}
+  for _, pending in pairs(pendingCollisions) do
+    local group = {}
+    for _, n in util.sparsePairs(notes, noteCount) do
+      if n.chan == pending.chan and n.pitch == pending.pitch then util.add(group, n) end
+    end
+    local kills, voiced, onsetOf = voicing.resolveGroup(group)
+    for _, n in ipairs(kills) do
+      util.add(events, { kind = 'killed', oldToken = tokenOf(n), uuid = n.uuid,
+                         chan = n.chan, pitch = n.pitch, ppq = n.ppq })
+      perf.line('backstop killed %s (chan %d pitch %d ppq %d) via %s',
+                tokenOf(n), n.chan, n.pitch, n.ppq, pending.verb)
+      notes[n.loc] = nil
+      eventsByUuid[n.uuid] = nil
+      deleteMetadatum(n.uuid)
+    end
+    for _, n in ipairs(voiced) do
+      if onsetOf[n] ~= n.ppq then
+        local oldToken = tokenOf(n)
+        n.ppq = onsetOf[n]
+        util.add(events, { kind = 'nudged', oldToken = oldToken, token = tokenOf(n), uuid = n.uuid,
+                           chan = n.chan, pitch = n.pitch, ppq = n.ppq })
+        perf.line('backstop nudged %s -> ppq %d via %s', oldToken, n.ppq, pending.verb)
+      end
+    end
+  end
+  pendingCollisions = {}
+  if #events == 0 then return nil end
+  indexStale, flushPending = true, true
+  return events
+end
+
+
 ----- Locking
 
 --contract: writes (add*, delete*, structural assign*) must run inside mm:modify(fn)
@@ -681,7 +728,7 @@ function mm:modify(fn)
   modifyDepth = modifyDepth + 1
   lock = true
   dirty = false
-  if modifyDepth == 1 then metaDirty, metaDeleted = {}, {} end   -- reset once; nested modifies accumulate
+  if modifyDepth == 1 then metaDirty, metaDeleted, pendingCollisions = {}, {}, {} end   -- reset once; nested modifies accumulate
   perf.start('verbs'); local ok, err = pcall(fn); perf.stop('verbs')
   if dirty then                                 -- clean (metadata-only) gestures touch no structure
     indexStale = true                           -- defer the reindex; nested pipeline reads run against sparse/unsorted arrays
@@ -692,7 +739,10 @@ function mm:modify(fn)
   perf.start('reload'); fire('reload', { wholesale = false }); perf.stop('reload')
   modifyDepth = modifyDepth - 1
   if modifyDepth == 0 then
+    local resolved = resolveCollisions()
     if indexStale then rebuild(nil) end         -- pay one reindex, after every nested pipeline write
+    --emits: collisionsResolved -- { events = [collisionEvent, ...] }; repaired a missed collision
+    if resolved then fire('collisionsResolved', { events = resolved }) end
     perf.start('meta'); flushMetadata(); perf.stop('meta')
     if flushPending then
       flushPending = false
@@ -750,6 +800,7 @@ local function assignNote(loc, t)
 
   local newTok = tokenOf(note)
   if newTok ~= oldTok then
+    if tokenIdx[newTok] then noteCollision(note, 'assign') end
     tokenIdx[oldTok] = nil
     tokenIdx[newTok] = note
   end
@@ -775,7 +826,9 @@ local function addNote(t)
   noteCount = noteCount + 1
   notes[noteCount] = note
   note.loc = noteCount
-  tokenIdx[tokenOf(note)] = note
+  local tok = tokenOf(note)
+  if tokenIdx[tok] then noteCollision(note, 'add') end
+  tokenIdx[tok] = note
 
   saveMetadatum(note.uuid)
 end

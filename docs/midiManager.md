@@ -177,6 +177,16 @@ reseat pass included — see sparse/unsorted arrays until that unwind; nothing
 in the pipeline reads position-dependent state mid-modify, so this is safe for
 the same reason the flush deferral is.
 
+**Same-pitch backstop.** `tm`'s separation sites uphold the `(ppq, chan,
+pitch)` invariant in steady state; `resolveCollisions` catches any write path
+that missed. Verbs (`addNote`, `assignNote`) record a pending collision by
+`(chan, pitch)` instead of resolving inline — mid-batch collisions can be
+transient, and resolving early would nudge a note a later verb was about to
+move. The outermost unwind (`modifyDepth == 0`) resolves once, after all
+nested writes have landed, via `voicing.resolveGroup`, then fires
+`collisionsResolved` so `tm` can re-key its `um` surgically without
+re-entering `mm:modify` mid-unwind.
+
 **Metadata-only carve-out** (parallel for notes and stamped ccs):
 - `assignNote(loc, t)` where `t` touches none of `ppq, endppq, pitch, vel,
   chan, muted` writes straight to extension data and skips the lock.
