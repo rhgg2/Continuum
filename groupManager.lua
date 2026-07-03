@@ -9,6 +9,7 @@
 
 local util   = require 'util'
 local groupsCore = require 'groups'
+local perf   = require 'perf'
 
 local deps   = ...
 local tm, ds = deps.tm, deps.ds
@@ -667,6 +668,7 @@ end)
 -- no-oping all later assigns/deletes.
 tm:subscribe('rebuild', function(takeChanged)
   if takeChanged then return rehydrate() end
+  perf.start('gmAnchor')
   for _, gp in pairs(proj) do
     for _, p in pairs(gp) do
       for _, rec in pairs(p) do
@@ -676,6 +678,7 @@ tm:subscribe('rebuild', function(takeChanged)
       end
     end
   end
+  perf.stop('gmAnchor')
 end)
 
 --contract: rehydrate on a groups invalidate (undo rewind); own assign echoes lack it, ignored

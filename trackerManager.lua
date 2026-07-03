@@ -57,6 +57,8 @@ local lastMuteSet = {}
 local staleSwing  = {}
 --invariant: dirtyChans[chan]: gated stages (ccs/fx/park/tails/pbs/pcs) re-derive it, else freeze
 local dirtyChans   = {}
+-- Rebuilt chans re-read the wire, so muted flags need re-conforming; setMutedChannels consumes.
+local muteConform  = {}
 -- True only while flush writes the parked stash; suppresses the inline dataChanged
 -- rebuild so flush drives the single rebuild (B3 staging, see design/note-macros-v2.md).
 local flushingParked = false
@@ -1030,18 +1032,27 @@ function tm:playPause() reaper.Main_OnCommand(40073, 0) end
 
 ----- Mute
 
---contract: idempotent: emits an assign only when n.muted differs from desired
---invariant: lastMuteSet also tags later-added notes
+--contract: sweeps only chans with a mute delta or rebuild dirt; assign only when n.muted differs
+--invariant: lastMuteSet also tags later-added notes (add path stamps muted at insert)
 --invariant: PA events ride along in note columns but carry no mute state — skipped
 function tm:setMutedChannels(set)
+  local prev = lastMuteSet
   lastMuteSet = util.clone(set or {})
-  forEachEvent(function(_, n, chan, isNote)
-    if not isNote then return end
+  local sweep = muteConform; muteConform = {}
+  for chan = 1, 16 do
+    if (prev[chan] == true) ~= (lastMuteSet[chan] == true) then sweep[chan] = true end
+  end
+  for chan in pairs(sweep) do
+    local channel = channels[chan]
     local want = lastMuteSet[chan] == true
-    if (n.muted == true) ~= want then
-      assignEvent(n, { muted = want })
+    for _, col in ipairs(channel and channel.columns.notes or {}) do
+      for _, evt in ipairs(col.events) do
+        if evt.evType ~= 'pa' and (evt.muted == true) ~= want then
+          assignEvent(evt, { muted = want })
+        end
+      end
     end
-  end)
+  end
   flush()
 end
 
@@ -2525,6 +2536,7 @@ function tm:rebuild(takeChanged)
   -- Index: full reload only when mm re-read its event set (load/reload); edit rebuilds
   -- trust the incremental index and just clear staging. see docs § Incremental index reconciliation
   perf.start('view'); if didReload then reload() else clearStaging() end; perf.stop('view')
+  for chan in pairs(dirtyChans) do muteConform[chan] = true end
   dirtyChans = {}   -- gated stages consumed the spine; next edit window accumulates fresh
   rebuilding = false
 

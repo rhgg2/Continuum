@@ -27,6 +27,7 @@ local timing     = require 'timing'
 local tuning     = require 'tuning'
 local groupsCore = require 'groups'
 local generators = require 'generators'
+local perf       = require 'perf'
 
 local tm, cm, ds, cmgr, gm, pa, facade =
   (...).tm, (...).cm, (...).ds, (...).cmgr, (...).gm, (...).pa, (...).facade
@@ -3054,6 +3055,7 @@ function tv:rebuild(takeChanged)
       util.bucket(fxByChan, region.chan, region)
     end
 
+    perf.start('cols')
     for chan, channel in tm:channels() do
       local c = channel.columns
       if c.pc and not trackerMode then addGridCol(chan, 'pc', nil, c.pc.events) end
@@ -3100,6 +3102,7 @@ function tv:rebuild(takeChanged)
       end
       if #fxCells > 0 then addGridCol(chan, 'fx', nil, fxCells) end
     end
+    perf.stop('cols')
 
     local numRows = math.max(1, math.ceil(length / ppqPerRow))
     grid.numRows  = numRows
@@ -3118,6 +3121,7 @@ function tv:rebuild(takeChanged)
     if epochSig ~= lastEpochSig then prevBuilt = {} end
     lastEpochSig = epochSig
 
+    perf.start('place')
     for ci, gridCol in ipairs(grid.cols) do
       local carried = prevBuilt[gridCol.events]
       if carried then
@@ -3155,17 +3159,27 @@ function tv:rebuild(takeChanged)
       end
       ::nextPlaceCol::
     end
+    perf.stop('place')
 
+    perf.start('tags')
     -- Tag cells inside region footprints 'member' (positional: an empty in-region cell
     -- is a member too). Mirrors the render wash; untagged cells default 'plain' at dispatch.
     if gm then
       for _, inst in ipairs(gm:eachInstance()) do
-        for ci, col in ipairs(grid.cols) do
-          local off, sid = tv:streamRefAt(ci, inst.anchor.chan, inst.anchor.laneDelta)
-          if off and inst.rect.streams[off] and inst.rect.streams[off][sid] then
-            local lo = ppqRowOf(inst.anchor.ppq, col.midiChan)
-            local hi = ppqRowOf(inst.anchor.ppq + inst.rect.dur, col.midiChan)
-            for row = lo, hi - 1 do col.cellKind[row] = 'member' end
+        -- Only columns on the instance's covered channels can match; skip the rest of the grid.
+        for off in pairs(inst.rect.streams) do
+          local chan = inst.anchor.chan + off
+          local first, last = grid.chanFirstCol[chan], grid.chanLastCol[chan]
+          if first then
+            for ci = first, last do
+              local col = grid.cols[ci]
+              local colOff, sid = tv:streamRefAt(ci, inst.anchor.chan, inst.anchor.laneDelta)
+              if colOff and inst.rect.streams[colOff] and inst.rect.streams[colOff][sid] then
+                local lo = ppqRowOf(inst.anchor.ppq, col.midiChan)
+                local hi = ppqRowOf(inst.anchor.ppq + inst.rect.dur, col.midiChan)
+                for row = lo, hi - 1 do col.cellKind[row] = 'member' end
+              end
+            end
           end
         end
       end
@@ -3184,17 +3198,20 @@ function tv:rebuild(takeChanged)
         end
       end
     end
+    perf.stop('tags')
 
+    perf.start('ghosts')
     for _, gridCol in ipairs(grid.cols) do
       local carried = prevBuilt[gridCol.events]
       if carried then gridCol.ghosts = carried.ghosts
       else gridCol.ghosts = interpolateValues(gridCol) end
     end
+    perf.stop('ghosts')
 
     -- Layout changed but no cursor move; re-clamp + re-follow viewport.
     ec:clampPos(); followViewport()
   end
-  pushMute()
+  perf.start('mute'); pushMute(); perf.stop('mute')
   rebuilding = false
 end
 
