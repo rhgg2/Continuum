@@ -17,10 +17,12 @@ folded into the spine — `dirtyPb`, `hadFxPb`, and `fxLane1` are gone; pbs
 gates on `dirtyChans` alone. A clean channel freezes whole: fx skips its
 generators and leaves `noteLive` empty, so tails/pbs/pcs skip it too, and its
 derived notes/CCs/carriers/absorbers stand untouched in mm. The `fxCarrier`
-ds-key carry (item 3, carriers only) is in. Still open: the remaining ds-key
-carries and the `regionPark` gate (both phase A), plus items 4 (take-hash)
-and 5 (phase B). The enduring model lives in `docs/trackerManager.md`
-§ Derivation dirt.
+ds-key carry (item 3, carriers only) is in. `regionPark` is now scan-gated
+too; its reconcile *partitions* the prior `fxParked`/`fxParkedCC` set rather
+than rebuilding it, so clean channels carry through by construction and need no
+seed. With `extraColumns` grow-only, item 3 is closed — `fxCarrier` was the
+only real leak. Still open: items 4 (take-hash) and 5 (phase B). The enduring
+model lives in `docs/trackerManager.md` § Derivation dirt.
 
 ## Problem
 
@@ -103,8 +105,9 @@ No derivation step reads across channels. The couplings live in
    carriers route out of columns, absorbers get `hidden`, parked
    members get render cells), the reconcile/synthesise/write half is
    skipped for clean channels. Per stage: CC walk skips the timing
-   reconcile; regionPark skips `reconcilePark` and carries prior
-   parked entries; fx skips generator runs (the window pass is
+   reconcile; regionPark skips the new-park scan (its reconcile
+   partitions the prior set, so clean channels carry through); fx
+   skips generator runs (the window pass is
    read-only and stays); tails skips the clip/nudge computation; PCs
    mirrors `dirtyPcChans`; pbs is `incremental-pbs` stage 1.
    projLogical is pure materialisation and cannot gate here — fresh

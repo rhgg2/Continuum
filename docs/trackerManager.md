@@ -352,8 +352,9 @@ nudge marks the captured set so the later pbs pass sees it). It is captured
 and cleared at the rebuild head, consumed by the gated stages, and wiped at
 the tail.
 
-A channel absent from `dirtyChans` **freezes**: `ccs`, `fx`, `tails`,
-`pbs`, and `pcs` each skip the derive/synthesise half of their pass for it,
+A channel absent from `dirtyChans` **freezes**: `ccs`, `fx`, `regionPark`,
+`tails`, `pbs`, and `pcs` each skip the derive/synthesise half of their pass
+for it,
 and its derived notes/CCs/carriers/absorbers/PCs stand untouched in mm. The
 classify/route/project half still runs — columns fill, carriers route out,
 PCs reproject — so tv sees a complete frame. Sound by I8 (rebuild is a
@@ -366,13 +367,17 @@ over-approximates the closure.
 `noteLive` empty — which is exactly why the downstream stages that read
 `noteLive` (`tails`, `pbs`, `pcs`) skip it too. One gate, no cross-stage
 dirt plumbing. The one coupling that does *not* live in mm is the persisted
-`fxCarrier` map: `reapCarriers` replaces it wholesale, so a gated rebuild
-seeds each frozen channel's entry from the prior map, or its carrier routing
-is erased and generator-owned CCs leak into the view.
+`fxCarrier` map: `reapCarriers` rebuilds it from scratch each rebuild from the
+channels that ran generators, so a gated rebuild seeds each frozen channel's
+entry from the prior map, or its carrier routing is erased and generator-owned
+CCs leak into the view. `regionPark`'s `fxParked`/`fxParkedCC` need no such
+seed: `reconcilePark` *partitions the prior set* rather than rebuilding it, so
+a clean channel's parked spec carries through untouched by construction — the
+gate skips only the scan that hunts new parks. (`extraColumns` is grow-only,
+so it is merge-safe too.)
 
 `projectLogical` and column materialisation never gate — fresh clones
-always need projecting. `regionPark` is not yet gated: it marks the spine on
-park/restore but still reconciles wholesale.
+always need projecting.
 
 ### Dormant guard
 

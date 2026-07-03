@@ -55,7 +55,7 @@ local channels    = {}
 local lastMuteSet = {}
 --invariant: staleSwing[chan]=true: resolved swing changed; rebuild rederives raw, clears
 local staleSwing  = {}
---invariant: dirtyChans[chan]: chan dirtied; gated stages (ccs/fx/tails/pbs/pcs) re-derive, clears
+--invariant: dirtyChans[chan]: gated stages (ccs/fx/park/tails/pbs/pcs) re-derive it, else freeze
 local dirtyChans   = {}
 -- True only while flush writes the parked stash; suppresses the inline dataChanged
 -- rebuild so flush drives the single rebuild (B3 staging, see design/note-macros-v2.md).
@@ -1431,10 +1431,12 @@ local function rebuildRegionPark(deferred)
 
     local scan = {}
     for chan = 1, 16 do
-      for laneIdx, col in ipairs(channels[chan].columns.notes) do
-        for _, evt in ipairs(col.events) do
-          if evt.evType ~= 'pa' and evt.ppqL ~= nil then
-            util.add(scan, { evt = evt, chan = chan, sub = laneIdx, ppqL = evt.ppqL, events = col.events })
+      if dirtyChans[chan] then   -- clean chan holds no on-take candidate a window could newly cover
+        for laneIdx, col in ipairs(channels[chan].columns.notes) do
+          for _, evt in ipairs(col.events) do
+            if evt.evType ~= 'pa' and evt.ppqL ~= nil then
+              util.add(scan, { evt = evt, chan = chan, sub = laneIdx, ppqL = evt.ppqL, events = col.events })
+            end
           end
         end
       end
@@ -1508,9 +1510,11 @@ local function rebuildRegionPark(deferred)
 
     local scan = {}
     for chan = 1, 16 do
-      for cc, col in pairs(channels[chan].columns.ccs) do
-        for _, evt in ipairs(col.events) do
-          util.add(scan, { evt = evt, chan = chan, sub = cc, ppqL = evt.ppqL or evt.ppq, events = col.events })
+      if dirtyChans[chan] then
+        for cc, col in pairs(channels[chan].columns.ccs) do
+          for _, evt in ipairs(col.events) do
+            util.add(scan, { evt = evt, chan = chan, sub = cc, ppqL = evt.ppqL or evt.ppq, events = col.events })
+          end
         end
       end
     end
