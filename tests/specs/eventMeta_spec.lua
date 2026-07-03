@@ -93,7 +93,7 @@ return {
       local em, _, ps = fresh()
       em:flush('{p1}', { [1] = { detune = -50 } }, {})
       t.eq(em:load('{p1}')[1].detune, -50)                    -- primes the cache
-      ps:assign('project', 'ctm.{p1}.keys', util.REMOVE)      -- undo wipes the pool keyset
+      ps:assign('project', 'ctm.{p1}.kb', util.REMOVE)        -- undo wipes the pool bucket index
       t.eq(next(em:load('{p1}')), nil, 'load reflects the wipe, not the stale cache')
     end,
   },

@@ -27,10 +27,12 @@ instance. Every pooled take resolves the one blob.
 ## Storage
 
 A thin face over `pextStore`'s `project` scope (so the engine's projext and
-undo machinery carry it), under two slot families per pool:
+undo machinery carry it), under three slot families per pool:
 
-- `ctm.<guid>.keys` — the live uuid set. projext has no enumerate-by-prefix, so
-  the uuids under a pool are tracked explicitly; this is the loader's index.
+- `ctm.<guid>.kb` — the bucket index: which key buckets exist.
+- `ctm.<guid>.keys.<b>` — one uuidTxt set per bucket (`b = uuid // 256`).
+  projext has no enumerate-by-prefix, so the uuids under a pool are tracked
+  explicitly; the buckets are the loader's index.
 - `ctm.<guid>.u.<uuidTxt>` — one `util.serialise`d field table per event.
 
 `flush` extends the keys set only when a uuid is new, so re-stamping an
@@ -56,6 +58,14 @@ MIDI take, so the tracker's take-hash watcher fires `reloadFromReaper` → `load
 value-only edit (detune change on an already-keyed note) leaves membership — and
 the cache — correct with no reload. Field *values* are never cached; `load`
 reads each `ctm.<guid>.u.<uuidTxt>` blob fresh.
+
+Caching killed the re-parse, but the *write* stayed monolithic: any uuid birth
+or death reserialised the entire keys set — for a saturated ~12k-uuid pool,
+~5ms of serialise + `SetProjExtState` per note-entry keystroke (`keys` under
+`meta` in the perf tree). Hence the buckets: a birth/death rewrites one
+~256-uuid bucket, and the tiny bucket index only when a bucket is born or
+dies. Same re-sync rule as before: `load` drops the whole cached index and
+re-reads.
 
 ## Pooled vs unpooled
 

@@ -240,6 +240,12 @@ end
 -- modify unwind. See docs/midiManager.md § Mutation contract.
 local function flushMetadata()
   if next(metaDirty) or next(metaDeleted) then
+    if perf.on then
+      local dirtyN, deletedN = 0, 0
+      for _ in pairs(metaDirty)   do dirtyN   = dirtyN   + 1 end
+      for _ in pairs(metaDeleted) do deletedN = deletedN + 1 end
+      perf.count('metaDirty', dirtyN); perf.count('metaDeleted', deletedN)
+    end
     eventMeta:flush(poolGuid, metaDirty, metaDeleted)
   end
 end
