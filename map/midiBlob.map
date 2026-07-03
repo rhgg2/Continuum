@@ -1,4 +1,4 @@
-@module midiBlob  src=midiBlob.lua  loc=218  sha=8cc9255  mode=namespace  self=midiBlob
+@module midiBlob  src=midiBlob.lua  loc=228  sha=c1de112  mode=namespace  self=midiBlob
 
 # Invariants & contracts
   @invariant  idx is the 0-based REAPER per-type index; note idx counts note-ons, text idx skips CCBZ
@@ -17,35 +17,39 @@
 
 # Imports
   @const util = 'util'  @ 17
+  @const perf = 'perf'  @ 18
 
 # Module-level constants
-  @const chanMsgEvTypes = { [0xA0] = 'pa', [0xB0] = 'cc', [0xC0] = 'pc', [0xD0] = '...  @ 19
-  @const shapeNames = { [0] = 'step', [1] = 'linear', [2] = 'slow',  @ 20
-  @const shapeCodes, hiByEvType = {}, {}  @ 23
-  @const oneDataByte = { pc = true, at = true }  @ 26   -- status + a single 7-bit data byte
-  @const midiBlob = {}  @ 38
+  @const chanMsgEvTypes = { [0xA0] = 'pa', [0xB0] = 'cc', [0xC0] = 'pc', [0xD0] = '...  @ 20
+  @const shapeNames = { [0] = 'step', [1] = 'linear', [2] = 'slow',  @ 21
+  @const shapeCodes, hiByEvType = {}, {}  @ 24
+  @const oneDataByte = { pc = true, at = true }  @ 27   -- status + a single 7-bit data byte
+  @const midiBlob = {}  @ 39
 
 # Private functions
-  @fn isWideCC(c)  @ 30
+  @fn isWideCC(c)  @ 31
       -- 14-bit CC: a code in 0..31 with a fractional value rides an LSB on code+32.
       -- The value's type is the whole signal -- an integer value stays a plain 7-bit CC.
-  @fn splitWide(val)  @ 31-36
-  @fn ccValueFields(evType, b2, b3)  @ 41-46
+  @fn splitWide(val)  @ 32-37
+  @fn ccValueFields(evType, b2, b3)  @ 42-47
       -- The value-bearing fields for a cc-family event, keyed as mm:load stores them.
-  @fn ccDataBytes(c)  @ 125-130
+  @fn ccDataBytes(c)  @ 126-131
       -- Value bytes for a cc-family record (inverse of ccValueFields).
-  @fn ccWire(c)  @ 132-137
-  @fn decodeWire(kv, notes, ccs, texts, passthrough)  @ 145-172
+  @fn ccWire(c)  @ 133-138
+  @fn decodeWire(kv, notes, ccs, texts, passthrough)  @ 146-173
       -- Decodes a packed sort key to (flags, msg): rank digit picks the stream, seq//2
       -- the record index, an odd seq a cc's bezier CCBZ rider. Mirrors midiBlob.parse.
 
 # Public API (midiBlob.*)
-  @api midiBlob.parse(blob)  @ 48-122
-  @api midiBlob.serialise(notes, ccs, texts, passthrough, endPpq)  @ 174-216
+  @api midiBlob.parse(blob)  @ 49-123
+  @api midiBlob.serialise(notes, ccs, texts, passthrough, endPpq)  @ 175-226
 
 # Uses (outbound edges)
-  @use call    util.add  @ parse:69,82,88,92,95,116 serialise:209,211,214
-  @use call    util.clamp  @ splitWide:35
-  @use call    util.print  @ serialise:188
-  @use call    util.round  @ splitWide:33
+  @use call    perf.start  @ serialise:185,205,209,222
+  @use call    perf.stop  @ serialise:203,207,221,224
+  @use call    util.add  @ parse:70,83,89,93,96,117 serialise:215,217,220
+  @use call    util.clamp  @ splitWide:36
+  @use call    util.print  @ serialise:190
+  @use call    util.round  @ splitWide:34
+  @use require perf  @ 18
   @use require util  @ 17

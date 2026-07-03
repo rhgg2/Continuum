@@ -262,7 +262,7 @@ end
 -- Stable sort by ppq: REAPER's MIDI_Sort used to order the take and the
 -- modify re-read mirrored it back; with the read-back gone mm owns the order,
 -- and tm/view consume notes/ccs strictly in ppq order.
-local function stableByPpq(list)
+local function fullSortByPpq(list)
   for i, e in ipairs(list) do e.__ord = i end
   table.sort(list, function(a, b)
     if a.ppq ~= b.ppq then return a.ppq < b.ppq end
@@ -271,14 +271,36 @@ local function stableByPpq(list)
   for _, e in ipairs(list) do e.__ord = nil end
 end
 
+-- Verbs only append or nudge (loads arrive blob-ordered): insertion sort is ~O(n).
+-- Bulk disorder blows the shift budget -> fullSortByPpq; strict compare keeps equal-ppq order.
+local function stableByPpq(list)
+  local budget = 8 * #list
+  for i = 2, #list do
+    local event = list[i]
+    local slot  = i - 1
+    while slot >= 1 and list[slot].ppq > event.ppq do
+      list[slot + 1] = list[slot]
+      slot   = slot - 1
+      budget = budget - 1
+      if budget < 0 then list[slot + 1] = event; return fullSortByPpq(list) end
+    end
+    list[slot + 1] = event
+  end
+end
+
 -- Compact the sparse note/cc arrays to dense (verbs and dedup leave holes),
 -- order by ppq, recompute loc, and rebuild the token + uuid indices. metadata
 -- (load only) joins the per-uuid non-structural fields back onto the records.
 local function rebuild(metadata)
   perf.start('rebuild')
+  perf.start('compact')
   notes = util.compact(notes, noteCount); noteCount = #notes
   ccs   = util.compact(ccs,   ccCount);   ccCount   = #ccs
+  perf.stop('compact')
+  perf.start('sort')
   stableByPpq(notes); stableByPpq(ccs)
+  perf.stop('sort')
+  perf.start('tokenIdx')
   tokenIdx, eventsByUuid = {}, {}
   for i, n in ipairs(notes) do
     n.loc = i
@@ -294,6 +316,7 @@ local function rebuild(metadata)
       if metadata then util.assign(c, metadata[c.uuid]) end
     end
   end
+  perf.stop('tokenIdx')
   indexStale = false
   perf.stop('rebuild')
 end

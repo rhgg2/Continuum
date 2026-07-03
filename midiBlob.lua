@@ -15,6 +15,7 @@
 --reaper: flags bit1=muted; bits4-6=cc shape; status byte classifies; CCBZ rides FF-0F after its cc
 
 local util = require 'util'
+local perf = require 'perf'
 
 local chanMsgEvTypes = { [0xA0] = 'pa', [0xB0] = 'cc', [0xC0] = 'pc', [0xD0] = 'at', [0xE0] = 'pb' }
 local shapeNames     = { [0] = 'step', [1] = 'linear', [2] = 'slow',
@@ -181,6 +182,7 @@ function midiBlob.serialise(notes, ccs, texts, passthrough, endPpq)
     keys[count] = ppq * 1000000 + rank * 100000 + seq2
   end
 
+  perf.start('keys')
   local seenOnset = {}   -- (ppq,chan,pitch) occupancy; 2048 = 16 chans x 128 pitches per ppq
   for i, n in ipairs(notes) do
     local onset = n.ppq * 2048 + (n.chan - 1) * 128 + n.pitch
@@ -198,9 +200,13 @@ function midiBlob.serialise(notes, ccs, texts, passthrough, endPpq)
   end
   for i, x in ipairs(texts) do key(x.ppq, 3, i * 2) end
   for i, p in ipairs(passthrough) do key(p.ppq, 4, i * 2) end
+  perf.stop('keys')
 
+  perf.start('sort')
   table.sort(keys)
+  perf.stop('sort')
 
+  perf.start('pack')
   local out, prev = {}, 0
   for k = 1, count do
     local kv = keys[k]
@@ -212,7 +218,11 @@ function midiBlob.serialise(notes, ccs, texts, passthrough, endPpq)
   end
   local tailPpq = math.max(endPpq or prev, prev)   -- never shrink past the last event
   util.add(out, string.pack('i4Bs4', tailPpq - prev, 0, '\xB0\x7B\x00'))   -- all-notes-off tail
-  return table.concat(out)
+  perf.stop('pack')
+  perf.start('concat')
+  local blob = table.concat(out)
+  perf.stop('concat')
+  return blob
 end
 
 return midiBlob

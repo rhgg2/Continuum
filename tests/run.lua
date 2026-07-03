@@ -38,6 +38,7 @@ local specs = {
   'mm_deletecc_sidecar_spec',
   'mm_multi_note_delete_spec',
   'mm_hole_iter_spec',
+  'mm_sort_order_spec',
   'mm_reindex_if_stale_spec',
   'mm_collision_backstop_spec',
   'mm_load_dedup_spec',
