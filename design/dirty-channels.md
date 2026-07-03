@@ -21,8 +21,22 @@ ds-key carry (item 3, carriers only) is in. `regionPark` is now scan-gated
 too; its reconcile *partitions* the prior `fxParked`/`fxParkedCC` set rather
 than rebuilding it, so clean channels carry through by construction and need no
 seed. With `extraColumns` grow-only, item 3 is closed — `fxCarrier` was the
-only real leak. Still open: items 4 (take-hash) and 5 (phase B). The enduring
-model lives in `docs/trackerManager.md` § Derivation dirt.
+only real leak.
+
+Phase B/B1 landed (2026-07-03): a clean channel carries its whole prior
+`channels[i]` frame forward, so materialisation itself gates — `rebuildInternals`
+placement, the CC-walk column clone, `rebuildPA`, the pc-refresh, and
+`projectLogical` all skip clean channels, and `prevPb` is subsumed by the carried
+frame. This surfaced a latent re-entry bug: the pipeline's own park/`extraColumns`
+persists fire `dataChanged` mid-rebuild, whose handler called `dirtyChan()` (all
+16) — harmless under phase A (everything re-materialised anyway), fatal under
+retention (a channel clean in the CC walk but dirty in fx re-derived its carriers
+against an empty existing set, doubling them in mm). The `dataChanged` subscriber
+now drops fires while `rebuilding`, mirroring the `reload` handler.
+
+Still open: item 4 (take-hash) and B2 (tv scopes its grid rebuild to the dirty
+set via the `rebuild` signal payload). The enduring model lives in
+`docs/trackerManager.md` § Derivation dirt.
 
 ## Problem
 

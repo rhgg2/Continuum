@@ -350,18 +350,24 @@ per-channel set, `dirtyChans`, marked by edit verbs (via mm's `reload`
 16), fx-region and parking edits, and pipeline-internal movers (a tail-walk
 nudge marks the captured set so the later pbs pass sees it). It is captured
 and cleared at the rebuild head, consumed by the gated stages, and wiped at
-the tail.
+the tail. The pipeline's own `ds:assign`s during a rebuild (persisting
+`fxParked`/`fxParkedCC`/`extraColumns`) fire `dataChanged` re-entrantly; the
+subscriber drops them while `rebuilding` — they are converged output, not
+edits, and marking all 16 dirty mid-rebuild would defeat retention (a channel
+clean in the CC walk but dirty in fx double-derives its carriers).
 
-A channel absent from `dirtyChans` **freezes**: `ccs`, `fx`, `regionPark`,
-`tails`, `pbs`, and `pcs` each skip the derive/synthesise half of their pass
-for it,
-and its derived notes/CCs/carriers/absorbers/PCs stand untouched in mm. The
-classify/route/project half still runs — columns fill, carriers route out,
-PCs reproject — so tv sees a complete frame. Sound by I8 (rebuild is a
-one-pass fixpoint, so a channel with no dirty source re-derives nothing) and
-by blast radius: every rule (tail clip/regrow, same-pitch cascades, absorber
-reseats, PC streams, fx windows) is intra-channel, so a whole dirty channel
-over-approximates the closure.
+A channel absent from `dirtyChans` **freezes**. Under frame retention (B1) the
+freeze is total: rebuild carries the channel's whole prior `channels[i]` —
+columns and all — forward, so materialisation itself skips (internals places
+nothing, the CC walk clones nothing, `rebuildPA` and the pc-refresh reproject
+nothing) alongside the derive/synthesise half of `ccs`, `fx`, `regionPark`,
+`tails`, `pbs`, and `pcs`. Its derived notes/CCs/carriers/absorbers/PCs stand
+untouched in mm and its carried columns are already logical, so tv sees a
+complete frame at no cost. Sound by I8 (rebuild is a one-pass fixpoint, so a
+channel with no dirty source re-derives nothing) and by blast radius: every
+rule (tail clip/regrow, same-pitch cascades, absorber reseats, PC streams, fx
+windows) is intra-channel, so a whole dirty channel over-approximates the
+closure.
 
 `fx` is the pivot: for a clean channel it skips its generators and leaves
 `noteLive` empty — which is exactly why the downstream stages that read
@@ -376,8 +382,10 @@ a clean channel's parked spec carries through untouched by construction — the
 gate skips only the scan that hunts new parks. (`extraColumns` is grow-only,
 so it is merge-safe too.)
 
-`projectLogical` and column materialisation never gate — fresh clones
-always need projecting.
+`projectLogical` gates with the rest: a carried column is already projected,
+and re-projecting it would corrupt `delayC` (recomputing `evt.ppq - baseline`
+from an already-logical `ppq`). Only dirty channels, freshly materialised,
+reach it.
 
 ### Dormant guard
 

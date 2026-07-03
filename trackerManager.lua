@@ -1129,7 +1129,8 @@ end
 local function rebuildInternals(fx)
   local internal, external = {}, {}
   for _, note in mm:notes() do
-    if note.derived then
+    if not dirtyChans[note.chan] then   -- clean: columns carried whole; no partition or placement
+    elseif note.derived then
       util.add(fx.noteExisting[note.chan], note)
     elseif rawDivergesFromLogical(note) then util.add(external, note)
     else util.add(internal, note)
@@ -1190,6 +1191,7 @@ local function rebuildCCs(fx)
   local ccWrites = mmBatch()
   for _, cc in mm:ccsRaw() do
     local token = mm:tokenOf(cc)
+    if not dirtyChans[cc.chan] then goto continue end   -- clean: cc/at/pc columns carried whole
     if cc.evType == 'cc' and carrierRoute[cc.chan] and carrierRoute[cc.chan][cc.cc] then
       -- Carrier: generator-owned, no metadata; routed out by allocated code,
       -- reconciled stream-level in fx expansion. see design/archive/note-macros.md § Delta-code allocation
@@ -1576,7 +1578,7 @@ local function rebuildPA()
   end
 
   for _, cc in mm:ccsRaw() do
-    if cc.evType == 'pa' then
+    if cc.evType == 'pa' and dirtyChans[cc.chan] then   -- clean: PA already sits in the carried note column
       local noteCol, lane = findNoteColumnForPitch(channels[cc.chan], cc.pitch, cc.ppq)
       if noteCol then
         util.add(noteCol.events, projectCC(cc, mm:tokenOf(cc), { lane = lane }))
@@ -1594,7 +1596,9 @@ local function rebuildFx(fx, deferred)
   -- Note columns read in ppq order regardless of mm array order (eachWindowNote /
   -- allocateRegionLanes / membersOf iterate col.events directly). see design/deferred-reindex.md § Phase A
   for chan = 1, 16 do
-    for _, col in ipairs(channels[chan].columns.notes) do sortByPPQ(col.events) end
+    if dirtyChans[chan] then
+      for _, col in ipairs(channels[chan].columns.notes) do sortByPPQ(col.events) end
+    end
   end
 
   -- Windows (read-only): fx host voice extents + per-note same-lane successor ppqL, floored by authored
@@ -1603,6 +1607,7 @@ local function rebuildFx(fx, deferred)
   do
     local takeLen = tm:length()
     for chan = 1, 16 do
+      if not dirtyChans[chan] then goto nextWinChan end   -- clean: fx hosts stay in carried columns
       local takeLenL = tm:toLogical(chan, takeLen)
       local byLane = {}
       for laneIdx, col in ipairs(channels[chan].columns.notes) do
@@ -1630,6 +1635,7 @@ local function rebuildFx(fx, deferred)
           end
         end
       end
+      ::nextWinChan::
     end
   end
 
@@ -2398,9 +2404,11 @@ local function rebuildPCs(fx)
 
   -- Refresh every pc column from mm (frozen channels' PCs stand). reconcilePCsForChan leaves
   -- c.pc.events unwritten (its invariant), so rebuild it here from the committed stream.
-  for chan = 1, 16 do channels[chan].columns.pc = { events = {} } end
+  for chan = 1, 16 do
+    if dirtyChans[chan] then channels[chan].columns.pc = { events = {} } end
+  end
   for _, cc in mm:ccsRaw() do
-    if cc.evType == 'pc' then
+    if cc.evType == 'pc' and dirtyChans[cc.chan] then
       util.add(channels[cc.chan].columns.pc.events, projectCC(cc, mm:tokenOf(cc)))
     end
   end
@@ -2436,12 +2444,14 @@ local function projectLogical()
   end
 
   for _, chan in ipairs(channels) do
-    local c, n = chan.columns, chan.chan
-    if c.pc then projectToLogical(c.pc, n) end
-    if c.pb then projectToLogical(c.pb, n) end
-    for _, col in ipairs(c.notes) do projectToLogical(col, n) end
-    if c.at then projectToLogical(c.at, n) end
-    for _, col in pairs(c.ccs) do projectToLogical(col, n) end
+    if dirtyChans[chan.chan] then   -- clean: columns carried already-logical from a prior rebuild
+      local c, n = chan.columns, chan.chan
+      if c.pc then projectToLogical(c.pc, n) end
+      if c.pb then projectToLogical(c.pb, n) end
+      for _, col in ipairs(c.notes) do projectToLogical(col, n) end
+      if c.at then projectToLogical(c.at, n) end
+      for _, col in pairs(c.ccs) do projectToLogical(col, n) end
+    end
   end
 end
 
@@ -2467,13 +2477,16 @@ function tm:rebuild(takeChanged)
   pbLimCents = nil   -- coherence point: refresh cached pbRange for cents<->raw conversions
 
   clearSwing()   -- rebuild is the (cm, mm) coherence point
-  -- Carry the pb view column forward: a fixpoint on clean channels, so re-cloning every pb
-  -- each rebuild is waste; rebuildPbs overwrites it for dirty chans. see design/incremental-pbs.md § Stage 1b
+  -- Carry each clean channel's whole frame forward (B1): re-deriving it is waste, and every
+  -- gated stage below skips clean chans so the carried columns stand. see design/dirty-channels.md § Phase B
   local prevChannels = channels
   channels = {}
   for i = 1, 16 do
-    local prevPb = prevChannels[i] and prevChannels[i].columns.pb
-    channels[i] = { chan = i, columns = { notes = {}, ccs = {}, pb = prevPb } }
+    if dirtyChans[i] then
+      channels[i] = { chan = i, columns = { notes = {}, ccs = {} } }
+    else
+      channels[i] = prevChannels[i]
+    end
   end
 
   -- Per-channel fx realisation state (hostEnd is host-event-keyed, not per-channel).
@@ -2622,6 +2635,9 @@ do
   -- swing/extraColumns/noteDelay/fxRegions are document data: edits + undo rewinds
   -- arrive as dataChanged. swing diffs its map; the rest force a full rebuild.
   ds:subscribe('dataChanged', function(change)
+    -- Pipeline's own ds:assigns during rebuild (fxParked/fxParkedCC/extraColumns) are converged
+    -- output, not edits; re-entering marks all 16 dirty and breaks B1. see design/dirty-channels.md § Phase B
+    if rebuilding then return end
     if bindingTake or not cm:boundTake() then return end
     if change.name == 'swing' then
       local cur = ds:get('swing') or {}
