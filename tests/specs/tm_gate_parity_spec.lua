@@ -55,6 +55,27 @@ local function projectFrame(tm)
   return frame
 end
 
+-- The rendered grid: each column's built cells/tails/ghosts. B2 carries a clean channel's built cells
+-- across an edit rebuild; this pins that carry against a forced full re-derive, as the frame is above.
+local function projGrid(vm)
+  local out = {}
+  for i, col in ipairs(vm.grid.cols) do
+    local cells = {}
+    for row, evt in pairs(col.cells) do cells[row] = projEvt(evt) end
+    local ghosts
+    if col.ghosts then
+      ghosts = {}
+      for row, g in pairs(col.ghosts) do
+        ghosts[row] = { val = g.val, fromEvt = projEvt(g.fromEvt), toEvt = projEvt(g.toEvt) }
+      end
+    end
+    out[i] = { type = col.type, lane = col.lane, cc = col.cc, midiChan = col.midiChan,
+               cells = cells, overflow = col.overflow, offGrid = col.offGrid,
+               tails = col.tails, ghosts = ghosts }
+  end
+  return out
+end
+
 -- The wire-side derived state (carriers, absorber pbs, derived fx notes) is routed out of columns or
 -- hidden, so the projected frame never sees it. mm content is its shadow: a converged take that a full
 -- re-derive leaves byte-identical proves those hidden derivations were a fixpoint too. token/loc churn
@@ -77,10 +98,12 @@ end
 -- than re-reading. Both the projected frame and the mm content must be the fixpoint the gate assumed.
 local function assertParity(h, msg)
   local gatedFrame = projectFrame(h.tm)
+  local gatedGrid  = projGrid(h.vm)
   local mmBefore   = mmBag(h)
   h.tm:rebuild(true)
   t.deepEq(projectFrame(h.tm), gatedFrame, msg .. ' [projected frame]')
   t.bagEq(mmBag(h), mmBefore, msg .. ' [mm content: full re-derive staged no change]')
+  t.deepEq(projGrid(h.vm), gatedGrid, msg .. ' [view grid: carried cells == full re-derive]')
 end
 
 return {

@@ -34,8 +34,24 @@ retention (a channel clean in the CC walk but dirty in fx re-derived its carrier
 against an empty existing set, doubling them in mm). The `dataChanged` subscriber
 now drops fires while `rebuilding`, mirroring the `reload` handler.
 
-Still open: item 4 (take-hash) and B2 (tv scopes its grid rebuild to the dirty
-set via the `rebuild` signal payload). The enduring model lives in
+B2 landed (2026-07-03): `trackerView` memoises each column's built cells
+(cells/overflow/offGrid/tails/ghosts) keyed on its `events` **table identity**.
+B1 keeps a clean channel's events table identical rebuild-to-rebuild, so identity
+*is* the dirty signal — no `rebuild`-payload plumbing needed. A hit moves the
+cached tables onto the fresh gridCol (O(1)) instead of re-placing every event; a
+dirty or parked channel builds fresh (new table ⇒ miss). Validity is guarded by a
+projection **epoch** — a signature over `viewContext`'s constructor inputs
+(length, numRows, rowPerBeat, ppqPerRow, timeSigs, temper); any change drops the
+whole cache. Swing never enters: view-level timing is logical, so `ppqToRow` is
+swing-invariant. `tm_gate_parity_spec` now also asserts the carried grid equals a
+forced full re-derive.
+
+Separately (2026-07-03), the clean-channel *walk* cost went too: `mm:notesRaw()`
+(uncloned, mirroring `ccsRaw`) lets `rebuildInternals` clone only dirty notes, and
+`rebuildCCs` moved its `tokenOf` below the dirty gate — internals 7.3→0.5, ccs
+2.8→0.7.
+
+Still open: item 4 (take-hash gate). The enduring model lives in
 `docs/trackerManager.md` § Derivation dirt.
 
 ## Problem

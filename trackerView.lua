@@ -2962,10 +2962,22 @@ end
 ----- Rebuild
 
 local rebuilding = false
+local lastEpochSig   -- projection-epoch signature carried from the last rebuild; guards the cell cache
+
+-- The (ppq,chan)->row projection is a pure function of viewContext's constructor inputs, so a
+-- column's built cells stay valid iff these hold. see design/dirty-channels.md § Phase B
+local function projectionEpoch(length, numRows, rpb, ppqPerRow, timeSigs, temperKey)
+  local parts = { length, numRows, rpb, ppqPerRow, temperKey }
+  for _, ts in ipairs(timeSigs) do
+    parts[#parts + 1] = (ts.ppq or 0) .. ':' .. (ts.num or 0) .. '/' .. (ts.denom or 0)
+  end
+  return table.concat(parts, '|')
+end
 
 --contract: reentrancy-guarded; bails on no-take (page shows placeholder)
 --contract: takeChanged=true resets ec and re-reads resolution/length/timeSigs
---contract: grid/ctx/cell-maps/ghosts rebuild unconditionally; pushMute at end
+--contract: grid + ctx rebuild each call; pushMute at end
+--contract: a column's cells/ghosts carry while its events table + projection epoch are unchanged
 function tv:rebuild(takeChanged)
   if not tm or rebuilding then return end
   if not tm:currentTake() then return end
@@ -2994,6 +3006,14 @@ function tv:rebuild(takeChanged)
     local num   = timeSigs[1] and timeSigs[1].num or 4
     rowPerBar = rpb * num
     local ppqPerRow = (resolution * 4 / denom) / rpb
+
+    -- Snapshot each outgoing column's built cells keyed by its events table; B1 keeps a clean channel's
+    -- events table identical across rebuilds, so the hit below reuses cells. see design/dirty-channels.md § Phase B
+    local prevBuilt = {}
+    for _, col in ipairs(grid.cols) do
+      prevBuilt[col.events] = { cells = col.cells, overflow = col.overflow,
+        offGrid = col.offGrid, tails = col.tails, ghosts = col.ghosts }
+    end
 
     grid.cols         = {}
     grid.chanFirstCol = {}
@@ -3093,7 +3113,18 @@ function tv:rebuild(takeChanged)
       temper     = temper,
     })
 
+    -- Carried cells hold only while the projection epoch does; any change drops every entry.
+    local epochSig = projectionEpoch(length, numRows, rpb, ppqPerRow, timeSigs, cm:get('temper'))
+    if epochSig ~= lastEpochSig then prevBuilt = {} end
+    lastEpochSig = epochSig
+
     for ci, gridCol in ipairs(grid.cols) do
+      local carried = prevBuilt[gridCol.events]
+      if carried then
+        gridCol.cells, gridCol.overflow = carried.cells, carried.overflow
+        gridCol.offGrid, gridCol.tails  = carried.offGrid, carried.tails
+        goto nextPlaceCol
+      end
       gridCol.overflow = {}
       gridCol.offGrid  = {}
       if gridCol.type == 'note' or gridCol.type == 'fx' then gridCol.tails = {} end
@@ -3122,6 +3153,7 @@ function tv:rebuild(takeChanged)
         end
         ::continue::
       end
+      ::nextPlaceCol::
     end
 
     -- Tag cells inside region footprints 'member' (positional: an empty in-region cell
@@ -3154,7 +3186,9 @@ function tv:rebuild(takeChanged)
     end
 
     for _, gridCol in ipairs(grid.cols) do
-      gridCol.ghosts = interpolateValues(gridCol)
+      local carried = prevBuilt[gridCol.events]
+      if carried then gridCol.ghosts = carried.ghosts
+      else gridCol.ghosts = interpolateValues(gridCol) end
     end
 
     -- Layout changed but no cursor move; re-clamp + re-follow viewport.
