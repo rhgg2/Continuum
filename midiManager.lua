@@ -804,6 +804,11 @@ function mm:notes()
   end
 end
 
+--contract: yields mm-internal note records uncloned; do not mutate (read-only fast path)
+function mm:notesRaw()
+  return util.sparsePairs(notes, noteCount)
+end
+
 --contract: assignNote: lockless write when t touches no structural field
 --invariant: assignNote structural fields = {ppq, endppq, pitch, vel, chan, muted}
 local function assignNote(loc, t)

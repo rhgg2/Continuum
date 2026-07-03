@@ -1128,12 +1128,14 @@ end
 -- see docs/trackerManager.md § Rebuild: partition
 local function rebuildInternals(fx)
   local internal, external = {}, {}
-  for _, note in mm:notes() do
-    if not dirtyChans[note.chan] then   -- clean: columns carried whole; no partition or placement
-    elseif note.derived then
-      util.add(fx.noteExisting[note.chan], note)
-    elseif rawDivergesFromLogical(note) then util.add(external, note)
-    else util.add(internal, note)
+  for _, raw in mm:notesRaw() do
+    -- clean channels carry their columns whole; clone (with token) only the dirty notes we place.
+    if dirtyChans[raw.chan] then
+      local note = util.clone(raw); note.token = mm:tokenOf(raw)
+      if note.derived then util.add(fx.noteExisting[note.chan], note)
+      elseif rawDivergesFromLogical(note) then util.add(external, note)
+      else util.add(internal, note)
+      end
     end
   end
 
@@ -1190,8 +1192,8 @@ local function rebuildCCs(fx)
   end
   local ccWrites = mmBatch()
   for _, cc in mm:ccsRaw() do
-    local token = mm:tokenOf(cc)
     if not dirtyChans[cc.chan] then goto continue end   -- clean: cc/at/pc columns carried whole
+    local token = mm:tokenOf(cc)
     if cc.evType == 'cc' and carrierRoute[cc.chan] and carrierRoute[cc.chan][cc.cc] then
       -- Carrier: generator-owned, no metadata; routed out by allocated code,
       -- reconciled stream-level in fx expansion. see design/archive/note-macros.md § Delta-code allocation
@@ -2529,7 +2531,7 @@ function tm:rebuild(takeChanged)
   --emits: rebuild -- takeChanged:boolean
   --contract: rebuild fires at end of every rebuild after the um cache is reloaded
   --invariant: takeChanged is true only when rebuild followed bindTake; signals take-tier reload
-  fire('rebuild', takeChanged)
+  perf.start('fire'); fire('rebuild', takeChanged); perf.stop('fire')
 end
 
 ----- Lifecycle
