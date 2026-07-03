@@ -141,34 +141,98 @@ end
 --invariant: parse(serialise(x))==x; coincident events may reorder, per-type record lists preserved
 --invariant: note onsets unique per (ppq,chan,pitch); collision is upstream bug, warn+write
 --reaper: matches MIDI_SetAllEvts format; tail at max(endPpq, last-event ppq) (default: last event)
--- Decodes a packed sort key to (flags, msg): rank digit picks the stream, seq//2
+-- Packed-chunk cache: identity fields validate the row, the neighbour-coupled
+-- delta revalidates per chunk. An edit repacks only its own neighbourhood.
+local chunkCache = setmetatable({}, { __mode = 'k' })
+
+local function noteRow(n)
+  local row = chunkCache[n]
+  if not (row and row.chan == n.chan and row.pitch == n.pitch
+          and row.vel == n.vel and row.muted == n.muted) then
+    row = { chan = n.chan, pitch = n.pitch, vel = n.vel, muted = n.muted }
+    chunkCache[n] = row
+  end
+  return row
+end
+
+local function ccRow(c)
+  local row = chunkCache[c]
+  if not (row and row.evType == c.evType and row.chan == c.chan and row.cc == c.cc
+          and row.pitch == c.pitch and row.val == c.val and row.vel == c.vel
+          and row.muted == c.muted and row.shape == c.shape and row.tension == c.tension) then
+    row = { evType = c.evType, chan = c.chan, cc = c.cc, pitch = c.pitch, val = c.val,
+            vel = c.vel, muted = c.muted, shape = c.shape, tension = c.tension }
+    chunkCache[c] = row
+  end
+  return row
+end
+
+local function textRow(x)
+  local row = chunkCache[x]
+  if not (row and row.eventtype == x.eventtype and row.msg == x.msg) then
+    row = { eventtype = x.eventtype, msg = x.msg }
+    chunkCache[x] = row
+  end
+  return row
+end
+
+-- Decodes a packed sort key to its wire chunk(s): rank digit picks the stream, seq//2
 -- the record index, an odd seq a cc's bezier CCBZ rider. Mirrors midiBlob.parse.
-local function decodeWire(kv, notes, ccs, texts, passthrough)
+local function chunkOf(kv, dppq, notes, ccs, texts, passthrough)
   local rank = (kv // 100000) % 10
   local i    = (kv % 100000) // 2
   if rank == 1 then
-    local n = notes[i]; return n.muted and 0x02 or 0, string.char(0x90 | (n.chan - 1), n.pitch, n.vel)
-  elseif rank == 0 then
-    local n = notes[i]; return 0, string.char(0x80 | (n.chan - 1), n.pitch, 0)
-  elseif rank == 2 then
-    local c = ccs[i]
-    if kv % 2 == 1 then return 0, '\xFF\x0F' .. 'CCBZ ' .. '\0' .. string.pack('f', c.tension or 0) end
-    local shaped = (c.muted and 0x02 or 0) | ((shapeCodes[c.shape] or 0) << 4)
-    if isWideCC(c) then
-      local msb, lsb = splitWide(c.val)
-      local status = 0xB0 | (c.chan - 1)
-      -- LSB(step) first so a bezier CCBZ rider (next key, same ppq) still lands on the MSB in parse.
-      return (c.muted and 0x02 or 0), string.char(status, c.cc + 32, lsb),
-             shaped,                  string.char(status, c.cc, msb)
+    local n   = notes[i]
+    local row = noteRow(n)
+    if row.onD ~= dppq then
+      row.onD, row.on = dppq, string.pack('i4Bs4', dppq, n.muted and 0x02 or 0,
+                                          string.char(0x90 | (n.chan - 1), n.pitch, n.vel))
     end
-    return shaped, ccWire(c)
+    return row.on
+  elseif rank == 0 then
+    local n   = notes[i]
+    local row = noteRow(n)
+    if row.offD ~= dppq then
+      row.offD, row.off = dppq, string.pack('i4Bs4', dppq, 0,
+                                            string.char(0x80 | (n.chan - 1), n.pitch, 0))
+    end
+    return row.off
+  elseif rank == 2 then
+    local c   = ccs[i]
+    local row = ccRow(c)
+    if kv % 2 == 1 then   -- CCBZ rider directly follows its cc at the same ppq: delta always 0
+      if not row.bz then
+        row.bz = string.pack('i4Bs4', 0, 0,
+                             '\xFF\x0F' .. 'CCBZ ' .. '\0' .. string.pack('f', c.tension or 0))
+      end
+      return row.bz
+    end
+    if row.mainD ~= dppq then
+      row.mainD = dppq
+      local shaped = (c.muted and 0x02 or 0) | ((shapeCodes[c.shape] or 0) << 4)
+      if isWideCC(c) then
+        local msb, lsb = splitWide(c.val)
+        local status = 0xB0 | (c.chan - 1)
+        -- LSB(step) first so a bezier CCBZ rider (next key, same ppq) still lands on the MSB in parse.
+        row.main  = string.pack('i4Bs4', dppq, c.muted and 0x02 or 0, string.char(status, c.cc + 32, lsb))
+        row.main2 = string.pack('i4Bs4', 0, shaped, string.char(status, c.cc, msb))
+      else
+        row.main, row.main2 = string.pack('i4Bs4', dppq, shaped, ccWire(c)), nil
+      end
+    end
+    return row.main, row.main2
   elseif rank == 3 then
-    local x = texts[i]
-    return 0, x.eventtype == -1
-      and ('\xF0' .. x.msg .. '\xF7')
-      or  ('\xFF' .. string.char(x.eventtype) .. x.msg)
+    local x   = texts[i]
+    local row = textRow(x)
+    if row.d ~= dppq then
+      row.d, row.chunk = dppq, string.pack('i4Bs4', dppq, 0, x.eventtype == -1
+        and ('\xF0' .. x.msg .. '\xF7')
+        or  ('\xFF' .. string.char(x.eventtype) .. x.msg))
+    end
+    return row.chunk
   else
-    local p = passthrough[i]; return p.flags, p.msg
+    local p = passthrough[i]
+    return string.pack('i4Bs4', dppq, p.flags, p.msg)
   end
 end
 
@@ -211,10 +275,10 @@ function midiBlob.serialise(notes, ccs, texts, passthrough, endPpq)
   for k = 1, count do
     local kv = keys[k]
     local ppq = kv // 1000000
-    local flags, msg, flags2, msg2 = decodeWire(kv, notes, ccs, texts, passthrough)
-    util.add(out, string.pack('i4Bs4', ppq - prev, flags, msg))
+    local chunk, chunk2 = chunkOf(kv, ppq - prev, notes, ccs, texts, passthrough)
+    util.add(out, chunk)
+    if chunk2 then util.add(out, chunk2) end   -- wide LSB rides first, MSB at offset 0
     prev = ppq
-    if msg2 then util.add(out, string.pack('i4Bs4', 0, flags2, msg2)) end   -- wide LSB rides at offset 0
   end
   local tailPpq = math.max(endPpq or prev, prev)   -- never shrink past the last event
   util.add(out, string.pack('i4Bs4', tailPpq - prev, 0, '\xB0\x7B\x00'))   -- all-notes-off tail

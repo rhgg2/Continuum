@@ -288,6 +288,22 @@ local function stableByPpq(list)
   end
 end
 
+-- Reuse each event's token string across rebuilds; recompute only when an
+-- identity field changes. Weak keys drop deleted events. Cf. sidecarCache.
+local tokenCache = setmetatable({}, { __mode = 'k' })
+
+local function cachedToken(evt)
+  local hit = tokenCache[evt]
+  if hit and hit.evType == evt.evType and hit.chan == evt.chan
+     and hit.pitch == evt.pitch and hit.cc == evt.cc and hit.ppq == evt.ppq then
+    return hit.token
+  end
+  local token = tokenOf(evt)
+  tokenCache[evt] = { evType = evt.evType, chan = evt.chan, pitch = evt.pitch,
+                      cc = evt.cc, ppq = evt.ppq, token = token }
+  return token
+end
+
 -- Compact the sparse note/cc arrays to dense (verbs and dedup leave holes),
 -- order by ppq, recompute loc, and rebuild the token + uuid indices. metadata
 -- (load only) joins the per-uuid non-structural fields back onto the records.
@@ -304,13 +320,13 @@ local function rebuild(metadata)
   tokenIdx, eventsByUuid = {}, {}
   for i, n in ipairs(notes) do
     n.loc = i
-    tokenIdx[tokenOf(n)] = n
+    tokenIdx[cachedToken(n)] = n
     if n.uuid then eventsByUuid[n.uuid] = n end
     if metadata then util.assign(n, metadata[n.uuid]) end
   end
   for i, c in ipairs(ccs) do
     c.loc = i
-    tokenIdx[tokenOf(c)] = c
+    tokenIdx[cachedToken(c)] = c
     if c.uuid then
       eventsByUuid[c.uuid] = c
       if metadata then util.assign(c, metadata[c.uuid]) end
