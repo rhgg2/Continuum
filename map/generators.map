@@ -1,4 +1,4 @@
-@module generators  src=generators.lua  loc=337  sha=a1b74fe  mode=namespace  self=generators
+@module generators  src=generators.lua  loc=335  sha=9194473  mode=namespace  self=generators
 
 # Invariants & contracts
   @invariant  pure module -- no module-level state; a generator is fn(host, params, ctx) -> { notes, delta }
@@ -10,7 +10,7 @@
   @shape  host = { window={startppqL,endppqL}, chan, lane, id, notes={ {pitch,vel,detune,ppqL,endppqL},.. }, pas={ {ppqL,pitch,vel},.. }, ccs={ [cc]={ {ppqL,val},.. } }, ats={ {ppqL,val},.. }, pb={ {ppqL,cents},.. } }
   @shape  result = { notes = { {ppqL,endppqL,pitch,vel,detune}, ... }, delta = { {ppqL,val,shape,[tension]}, ... } }
   @shape  kinds[kind] = { expand, mode='replace'|'augment', dest='note'|'pb'|<cc>, label, defaults, fields }
-  @shape  parkWindows -> { notes={[chan]={{s,e},..}}, ccs={[chan]={[cc]={{s,e},..}}}, pbs={[chan]={{s,e},..}} }
+  @shape  parkWindows -> { {evType='note'|'cc'|'pb', chan, cc?, startppq, endppq}, ... } (cc on cc windows only)
 
 # Imports
   @const util = 'util'  @ 16
@@ -61,10 +61,10 @@
   @api generators.parksNotes(region)  @ 305-311
       -- A region parks its covered chord iff it carries a discrete-replace kind (its derived notes
       -- stand in). A continuous/augment kind never parks notes; a husk (no kinds) parks nothing.
-  @api generators.parkWindows(regions)  @ 316-335
-      -- The single source for "what 4.5 parks over": note windows for a discrete-replace chord, cc/pb
-      -- windows per continuous-replace target. The view tags the same spans.
+  @api generators.parkWindows(regions)  @ 316-333
+      -- The single source for "what 4.5 parks over": a note window for a discrete-replace chord, a cc/pb
+      -- window per continuous-replace target. The view tags the same spans.
 
 # Uses (outbound edges)
-  @use call    util.bucket  @ parkWindows:320,327,329
+  @use call    util.add  @ parkWindows:319
   @use require util  @ 16

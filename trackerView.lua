@@ -3225,12 +3225,11 @@ function tv:rebuild(takeChanged)
     -- parks over (generators.parkWindows is the shared predicate); parked wins on overlap.
     local park = generators.parkWindows(ds:get('fxRegions') or {})
     for _, col in ipairs(grid.cols) do
-      local windows = col.type == 'note' and park.notes[col.midiChan]
-                   or col.type == 'cc'  and (park.ccs[col.midiChan] or {})[col.cc]
-                   or col.type == 'pb'  and park.pbs[col.midiChan]
-      for _, w in ipairs(windows or {}) do
-        for row = ppqRowOf(w[1], col.midiChan), ppqRowOf(w[2], col.midiChan) - 1 do
-          col.cellKind[row] = 'parked'
+      for _, w in ipairs(park) do
+        if w.evType == col.type and w.chan == col.midiChan and (w.cc == nil or w.cc == col.cc) then
+          for row = ppqRowOf(w.startppq, col.midiChan), ppqRowOf(w.endppq, col.midiChan) - 1 do
+            col.cellKind[row] = 'parked'
+          end
         end
       end
     end

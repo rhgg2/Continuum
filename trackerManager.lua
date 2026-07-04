@@ -1399,26 +1399,40 @@ end
 -- Region-replace parking: authored events a replace window covers leave the take;
 -- the prior parked set carries still-covered forward, restores the rest. see design/note-macros-v2.md § Generator output
 local function rebuildRegionPark(deferred)
+  local batch = mmBatch()
+
   local function unlink(events, evt)
     for i, e in ipairs(events) do if e == evt then table.remove(events, i); break end end
   end
 
-  -- Park covered candidates, split the prior set into carry-forward / restore. scan records carry
-  -- {evt,chan,sub,ppqL,events}; covered(chan,sub,ppqL,ref) -- ref is the live evt or prior spec.
-  local function reconcilePark(scan, prior, covered, shape, batch)
+  -- One predicate for all passes; takes anything spec-shaped (evType/chan/cc/ppqL). spec.fx (note
+  -- specs only): a discrete-replace note host parks itself, like a region window (membership {self}).
+  local windows = generators.parkWindows(ds:get('fxRegions') or {})
+  local function covered(spec)
+    if spec.fx and generators.parksNotes(spec) then return true end
+    for _, w in ipairs(windows) do
+      if w.evType == spec.evType and w.chan == spec.chan and w.cc == spec.cc
+         and spec.ppqL >= w.startppq and spec.ppqL < w.endppq then return true end
+    end
+    return false
+  end
+
+  -- Park covered candidates, split the prior set into carry-forward / restore. scan records
+  -- carry {evt, spec, events?}; spec is built at the scan site, where chan/lane/cc are in scope.
+  local function reconcilePark(scan, prior)
     local newParked, restores = {}, {}
     for _, c in ipairs(scan) do
-      if covered(c.chan, c.sub, c.ppqL, c.evt) then
-        if c.evt.evType == 'note' then
-          dirtyChan(c.chan)   -- park removes a blocker; same-lane/pitch neighbours' tails regrow
+      if covered(c.spec) then
+        if c.spec.evType == 'note' then
+          dirtyChan(c.spec.chan)   -- park removes a blocker; same-lane/pitch neighbours' tails regrow
         end
-        util.add(newParked, shape(c.evt, c.chan, c.sub))
+        util.add(newParked, c.spec)
         batch.del(c.evt)
         if c.events then unlink(c.events, c.evt) end
       end
     end
     for _, spec in ipairs(prior) do
-      if covered(spec.chan, spec.cc, spec.ppqL, spec) then util.add(newParked, spec)
+      if covered(spec) then util.add(newParked, spec)
       else util.add(restores, spec) end
     end
     return newParked, restores
@@ -1432,8 +1446,6 @@ local function rebuildRegionPark(deferred)
 
   -- Notes, ccs and pbs park in one batch -> a single delete-first commit for the whole phase, and
   -- one evType-tagged fxParked stash. Each pass reconciles its own slice of the prior stash.
-  local batch = mmBatch()
-  local parkWindows = generators.parkWindows(ds:get('fxRegions') or {})
   local prior = ds:get('fxParked') or {}
   local function priorOf(evType)
     local slice = {}
@@ -1444,35 +1456,22 @@ local function rebuildRegionPark(deferred)
 
   -- Notes: can't mute (note-on/off + CC matching), so a covered authored note leaves the take.
   do
-    local windows = parkWindows.notes
-    -- A note parks when a region window covers it, or when it hosts a discrete-replace kind
-    -- itself: note-host replace realises as parking, exactly like a region (membership {self}).
-    local function covered(chan, _, ppqL, ref)
-      if ref.fx and generators.parksNotes(ref) then return true end
-      for _, w in ipairs(windows[chan] or {}) do
-        if ppqL >= w[1] and ppqL < w[2] then return true end
-      end
-      return false
-    end
-
     local scan = {}
     for chan = 1, 16 do
       if dirtyChans[chan] then   -- clean chan holds no on-take candidate a window could newly cover
         for laneIdx, col in ipairs(channels[chan].columns.notes) do
           for _, evt in ipairs(col.events) do
             if evt.evType ~= 'pa' and evt.ppqL ~= nil then
-              util.add(scan, { evt = evt, chan = chan, sub = laneIdx, ppqL = evt.ppqL, events = col.events })
+              util.add(scan, { evt = evt, events = col.events,
+                spec = util.pick(evt, "uuid ppqL endppqL pitch vel detune delay sample fx",
+                                 { evType = 'note', chan = chan, lane = laneIdx }) })
             end
           end
         end
       end
     end
-    local function shape(evt, chan, laneIdx)
-      return util.pick(evt, "uuid ppqL endppqL pitch vel detune delay sample fx",
-                       { evType = 'note', chan = chan, lane = laneIdx })
-    end
 
-    local newParked, restores = reconcilePark(scan, priorOf('note'), covered, shape, batch)
+    local newParked, restores = reconcilePark(scan, priorOf('note'))
 
     -- Restores re-enter their columns now (token-less); the tail walk clips them in place and
     -- the tail walk's commit adds them after the derived deletions.
@@ -1526,34 +1525,24 @@ local function rebuildRegionPark(deferred)
   -- CCs: a point event has no tail, so the Pass-A curve stands in on the target lane and
   -- restores add back immediately, seating a token-less projection for the view.
   do
-    local windows = parkWindows.ccs   -- [chan][cc] = { {startL, endL}, ... }
-    local function covered(chan, cc, ppqL)
-      for _, w in ipairs((windows[chan] or {})[cc] or {}) do
-        if ppqL >= w[1] and ppqL < w[2] then return true end
-      end
-      return false
-    end
-
     local scan = {}
     for chan = 1, 16 do
       if dirtyChans[chan] then
         for cc, col in pairs(channels[chan].columns.ccs) do
           for _, evt in ipairs(col.events) do
-            util.add(scan, { evt = evt, chan = chan, sub = cc, ppqL = evt.ppqL or evt.ppq, events = col.events })
+            util.add(scan, { evt = evt, events = col.events,
+              spec = { evType = 'cc', chan = chan, cc = cc, ppqL = evt.ppqL or evt.ppq,
+                       val = evt.val, shape = evt.shape } })
           end
         end
       end
-    end
-    local function shape(evt, chan, cc)
-      return { evType = 'cc', chan = chan, cc = cc, ppqL = evt.ppqL or evt.ppq,
-               val = evt.val, shape = evt.shape }
     end
     -- A logical cc event from a parked spec, seated at ppq (realised onset on restore; ppqL for a render cell).
     local function ccCell(spec, ppq)
       return util.pick(spec, "chan cc ppqL val shape", { evType = 'cc', ppq = ppq })
     end
 
-    local newParked, restores = reconcilePark(scan, priorOf('cc'), covered, shape, batch)
+    local newParked, restores = reconcilePark(scan, priorOf('cc'))
 
     -- Seat a token-less projection so the view shows the restored cc this frame; next rebuild
     -- re-reads the real token'd event from the take. The add rides the shared park commit.
@@ -1582,34 +1571,30 @@ local function rebuildRegionPark(deferred)
   -- pb: the pb column isn't built yet (rebuildPbs runs later), so scan authored pbs straight from mm.
   -- see design/note-macros-v2.md § Route-by-window
   do
-    local windows = parkWindows.pbs
-    local function covered(chan, _, ppqL)
-      for _, w in ipairs(windows[chan] or {}) do
-        if ppqL >= w[1] and ppqL < w[2] then return true end
-      end
-      return false
+    local hasPbWindow = false
+    for _, w in ipairs(windows) do
+      if w.evType == 'pb' then hasPbWindow = true; break end
     end
 
     -- Only walk mm when a pb window exists, and clone only the pbs one actually covers -- an
     -- authored pb stream on a dirty channel with no pb-replace region is left untouched.
     local scan = {}
-    if next(windows) then
+    if hasPbWindow then
       for _, cc in mm:ccsRaw() do
-        if cc.evType == 'pb' and not cc.derived and dirtyChans[cc.chan]
-           and covered(cc.chan, nil, cc.ppqL or cc.ppq) then
-          local pb = util.clone(cc); pb.token = mm:tokenOf(cc)
-          util.add(scan, { evt = pb, chan = cc.chan, ppqL = cc.ppqL or cc.ppq })
+        if cc.evType == 'pb' and not cc.derived and dirtyChans[cc.chan] then
+          -- val: logical cents from mm's cents sidecar (restore maps back); a foreign pre-cents
+          -- pb falls back to raw-derived cents (best-effort).
+          local spec = { evType = 'pb', chan = cc.chan, ppqL = cc.ppqL or cc.ppq,
+                         val = cc.cents or rawToCents(cc.val), shape = cc.shape }
+          if covered(spec) then
+            local pb = util.clone(cc); pb.token = mm:tokenOf(cc)
+            util.add(scan, { evt = pb, spec = spec })
+          end
         end
       end
     end
-    -- val carries the logical cents (the pb column's display value), from mm's cents sidecar;
-    -- restore maps it back. A foreign pre-cents pb falls back to raw-derived cents (best-effort).
-    local function shape(evt, chan)
-      return { evType = 'pb', chan = chan, ppqL = evt.ppqL or evt.ppq,
-               val = evt.cents or rawToCents(evt.val), shape = evt.shape }
-    end
 
-    local newParked, restores = reconcilePark(scan, priorOf('pb'), covered, shape, batch)
+    local newParked, restores = reconcilePark(scan, priorOf('pb'))
 
     -- Restore re-adds to the take; the absorber (later this rebuild) refines the wire raw with
     -- detune and re-shows it. The seed val is detune-free -- the absorber's assign corrects it.
@@ -1687,10 +1672,12 @@ local function rebuildFx(fx, deferred)
   end
 
   -- Region note-park windows: a parked cell inside one is region membership, not a note host.
-  local regionNoteWindows = generators.parkWindows(ds:get('fxRegions') or {}).notes
+  local parkWindows = generators.parkWindows(ds:get('fxRegions') or {})
   local function noteParkCovered(chan, ppqL)
-    for _, w in ipairs(regionNoteWindows[chan] or {}) do
-      if ppqL >= w[1] and ppqL < w[2] then return true end
+    for _, w in ipairs(parkWindows) do
+      if w.evType == 'note' and w.chan == chan and ppqL >= w.startppq and ppqL < w.endppq then
+        return true
+      end
     end
     return false
   end

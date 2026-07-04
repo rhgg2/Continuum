@@ -100,7 +100,7 @@ Verified per stage (2026-07-02):
 | internals | placement into `channels[note.chan]`; nudge groups per (chan,pitch) |
 | CC walk | carrier routing `carrierRoute[cc.chan]` (:1220); reconcile per cc |
 | externals | lane pack within channel |
-| regionPark | `parkWindows.notes[chan]` / `.ccs[chan][cc]` (:1449, :1525) |
+| regionPark | `covered(spec)` filters flat `parkWindows` on (evType, chan, cc) |
 | fx | window pass per channel (:1617); `authoredPbByChan`, `fxRegionsByChan`, streams all chan-keyed |
 | tails | same-lane / same-pitch groups within channel |
 | pbs | `lane1ByChan` / `pbsByChan` (:2031, :2051) |

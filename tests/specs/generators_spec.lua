@@ -176,7 +176,7 @@ return {
   },
 
   {
-    name = 'parkWindows buckets note windows (discrete-replace) and cc windows (continuous-replace) by chan',
+    name = 'parkWindows emits an evType-tagged window per replace target (note for discrete, cc for continuous)',
     run = function()
       generators.kinds.ccrep = { mode = 'replace', dest = 10 }   -- fixture: no built-in cc-replace kind
       local windows = generators.parkWindows{
@@ -186,8 +186,10 @@ return {
         { chan = 7, fx = {} },                                                    -- husk -> neither
       }
       generators.kinds.ccrep = nil
-      t.deepEq(windows.notes, { [1] = { { 0, 240 } } }, 'only the discrete-replace region seeds a note window')
-      t.deepEq(windows.ccs,   { [3] = { [10] = { { 60, 120 } } } }, 'the cc-replace region seeds a (chan,cc) window')
+      t.deepEq(windows, {
+        { evType = 'note', chan = 1, startppq = 0, endppq = 240 },
+        { evType = 'cc', chan = 3, cc = 10, startppq = 60, endppq = 120 },
+      }, 'only the replace kinds seed windows, tagged with their target evType')
     end,
   },
 
