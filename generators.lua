@@ -310,24 +310,28 @@ function generators.parksNotes(region)
   return false
 end
 
---shape: parkWindows -> { notes = { [chan]={{s,e},..} }, ccs = { [chan]={ [cc]={{s,e},..} } } }
--- The single source for "what 4.5 parks over": note windows for a discrete-replace chord, cc
--- windows per (chan, cc) for a continuous-replace target. The view tags the same spans.
+--shape: parkWindows -> { notes={[chan]={{s,e},..}}, ccs={[chan]={[cc]={{s,e},..}}}, pbs={[chan]={{s,e},..}} }
+-- The single source for "what 4.5 parks over": note windows for a discrete-replace chord, cc/pb
+-- windows per continuous-replace target. The view tags the same spans.
 function generators.parkWindows(regions)
-  local notes, ccs = {}, {}
+  local notes, ccs, pbs = {}, {}, {}
   for _, region in ipairs(regions) do
     if generators.parksNotes(region) then
       util.bucket(notes, region.chan, { region.startppq, region.endppq })
     end
     for _, params in ipairs(region.fx or {}) do
       local meta = generators.kinds[params.kind]
-      if meta and meta.mode == 'replace' and type(meta.dest) == 'number' then
-        ccs[region.chan] = ccs[region.chan] or {}
-        util.bucket(ccs[region.chan], meta.dest, { region.startppq, region.endppq })
+      if meta and meta.mode == 'replace' then
+        if type(meta.dest) == 'number' then
+          ccs[region.chan] = ccs[region.chan] or {}
+          util.bucket(ccs[region.chan], meta.dest, { region.startppq, region.endppq })
+        elseif meta.dest == 'pb' then
+          util.bucket(pbs, region.chan, { region.startppq, region.endppq })
+        end
       end
     end
   end
-  return { notes = notes, ccs = ccs }
+  return { notes = notes, ccs = ccs, pbs = pbs }
 end
 
 return generators

@@ -26,10 +26,12 @@
 --invariant: paEventCol mixes into note column events
 --shape: extraColumns[chan] = { notes=count, [pc], [pb], [at], [ccs={[ccNum]=true}] }
 --shape: lastMuteSet = { [chan] = true }, pushed by tv via tm:setMutedChannels
---shape: fxParked = { { evType='note', chan, lane, uuid, ppqL, endppqL, pitch, vel, detune, delay, sample, [fx] }, ... } -- logical-only; realised ppq derived on restore
---shape: fxParkedCC = { { evType='cc', chan, cc, ppqL, val, shape }, ... } -- authored cc parked off-take by a cc-replace window (logical-only)
+--shape: fxParked = one evType-tagged off-take stash for every replace park (logical-only; realised ppq derived on restore):
+--shape:   note { evType='note', chan, lane, uuid, ppqL, endppqL, pitch, vel, detune, delay, sample, [fx] }
+--shape:   cc { evType='cc', chan, cc, ppqL, val, shape }  |  pb { evType='pb', chan, ppqL, val (=cents), shape }
 --shape: channels[chan].parked = { { evType='note', chan, uuid, ppq, ppqL, endppq, endppqL, endppqC, pitch, vel, detune, sample, delay, lane, [fx] }, ... } -- render-ready off-take replace cells (ppq==ppqL; endppq is the authored ceiling the view edits, endppqC==endppqL clipped for render)
---shape: channels[chan].parkedCC = { { evType='cc', chan, cc, ppq, ppqL, val, shape }, ... } -- off-take cc-replace members as render-ready logical cells (ppq==ppqL)
+--shape: channels[chan].parkedCC = { { evType='cc', chan, cc, ppq, ppqL, val, shape }, ... } -- off-take cc-replace render cells (ppq==ppqL)
+--shape: channels[chan].parkedPb = { { evType='pb', chan, ppq, ppqL, val (=cents), cents, shape }, ... } -- off-take pb-replace render cells (ppq==ppqL)
 --contract: a discrete-replace kind parks its host: a region parks its covered chord, a note parks itself
 --invariant: parked members feed generator + grid only; never sounding (mute fails for CC/PA)
 
@@ -626,26 +628,23 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   -- Apply staged edits to cloned stashes, then write back under flushingParked so the inline
   -- dataChanged rebuild is suppressed (flush drives the one rebuild).
   local function flushParked()
-    local notes = util.deepClone(ds:get('fxParked')   or {})
-    local ccs   = util.deepClone(ds:get('fxParkedCC') or {})
+    local parked = util.deepClone(ds:get('fxParked') or {})
     for _, e in ipairs(parkedEdits) do
       local ref  = e.spec or e.evt
       dirtyChan(ref.chan)   -- parked specs feed the producer: an edit re-derives the channel
-      local list = ref.evType == 'note' and notes or ccs
       if e.op == 'add' then
-        util.add(list, e.spec)
+        util.add(parked, e.spec)
       else
-        local i = findParked(list, ref)
+        local i = findParked(parked, ref)
         if i then
-          if e.op == 'assign' then util.assign(list[i], e.update)
-          else table.remove(list, i) end
+          if e.op == 'assign' then util.assign(parked[i], e.update)
+          else table.remove(parked, i) end
         end
       end
     end
     parkedEdits = {}
     flushingParked = true
-    if not util.deepEq(ds:get('fxParked')   or {}, notes) then ds:assign('fxParked',   #notes > 0 and notes or util.REMOVE) end
-    if not util.deepEq(ds:get('fxParkedCC') or {}, ccs)   then ds:assign('fxParkedCC', #ccs   > 0 and ccs   or util.REMOVE) end
+    if not util.deepEq(ds:get('fxParked') or {}, parked) then ds:assign('fxParked', #parked > 0 and parked or util.REMOVE) end
     flushingParked = false
   end
 
@@ -1415,7 +1414,7 @@ local function rebuildRegionPark(deferred)
         end
         util.add(newParked, shape(c.evt, c.chan, c.sub))
         batch.del(c.evt)
-        unlink(c.events, c.evt)
+        if c.events then unlink(c.events, c.evt) end
       end
     end
     for _, spec in ipairs(prior) do
@@ -1431,9 +1430,17 @@ local function rebuildRegionPark(deferred)
     end
   end
 
-  -- Notes and ccs park in one batch -> a single delete-first commit for the whole phase.
+  -- Notes, ccs and pbs park in one batch -> a single delete-first commit for the whole phase, and
+  -- one evType-tagged fxParked stash. Each pass reconciles its own slice of the prior stash.
   local batch = mmBatch()
   local parkWindows = generators.parkWindows(ds:get('fxRegions') or {})
+  local prior = ds:get('fxParked') or {}
+  local function priorOf(evType)
+    local slice = {}
+    for _, spec in ipairs(prior) do if spec.evType == evType then util.add(slice, spec) end end
+    return slice
+  end
+  local allParked = {}
 
   -- Notes: can't mute (note-on/off + CC matching), so a covered authored note leaves the take.
   do
@@ -1465,7 +1472,7 @@ local function rebuildRegionPark(deferred)
                        { evType = 'note', chan = chan, lane = laneIdx })
     end
 
-    local newParked, restores = reconcilePark(scan, ds:get('fxParked') or {}, covered, shape, batch)
+    local newParked, restores = reconcilePark(scan, priorOf('note'), covered, shape, batch)
 
     -- Restores re-enter their columns now (token-less); the tail walk clips them in place and
     -- the tail walk's commit adds them after the derived deletions.
@@ -1484,7 +1491,7 @@ local function rebuildRegionPark(deferred)
       end)
     end
 
-    persistParked('fxParked', newParked)
+    for _, spec in ipairs(newParked) do util.add(allParked, spec) end
 
     -- Off-take membership for the generator + grid: each is a render-ready logical cell
     -- (ppq/endppqC like a projected note); an emptied lane re-extends to keep a column home.
@@ -1546,7 +1553,7 @@ local function rebuildRegionPark(deferred)
       return util.pick(spec, "chan cc ppqL val shape", { evType = 'cc', ppq = ppq })
     end
 
-    local newParked, restores = reconcilePark(scan, ds:get('fxParkedCC') or {}, covered, shape, batch)
+    local newParked, restores = reconcilePark(scan, priorOf('cc'), covered, shape, batch)
 
     -- Seat a token-less projection so the view shows the restored cc this frame; next rebuild
     -- re-reads the real token'd event from the take. The add rides the shared park commit.
@@ -1560,7 +1567,7 @@ local function rebuildRegionPark(deferred)
       table.sort(col.events, function(a, b) return (a.ppqL or a.ppq) < (b.ppqL or b.ppq) end)
     end
 
-    persistParked('fxParkedCC', newParked)
+    for _, spec in ipairs(newParked) do util.add(allParked, spec) end
 
     -- Render union: the parked authored cc stays the visible surface (the fill is hidden
     -- realisation), so creating a cc-replace region never blanks the lane. Mirrors channels[*].parked.
@@ -1572,6 +1579,59 @@ local function rebuildRegionPark(deferred)
     end
   end
 
+  -- pb: the pb column isn't built yet (rebuildPbs runs later), so scan authored pbs straight from mm.
+  -- see design/note-macros-v2.md § Route-by-window
+  do
+    local windows = parkWindows.pbs
+    local function covered(chan, _, ppqL)
+      for _, w in ipairs(windows[chan] or {}) do
+        if ppqL >= w[1] and ppqL < w[2] then return true end
+      end
+      return false
+    end
+
+    -- Only walk mm when a pb window exists, and clone only the pbs one actually covers -- an
+    -- authored pb stream on a dirty channel with no pb-replace region is left untouched.
+    local scan = {}
+    if next(windows) then
+      for _, cc in mm:ccsRaw() do
+        if cc.evType == 'pb' and not cc.derived and dirtyChans[cc.chan]
+           and covered(cc.chan, nil, cc.ppqL or cc.ppq) then
+          local pb = util.clone(cc); pb.token = mm:tokenOf(cc)
+          util.add(scan, { evt = pb, chan = cc.chan, ppqL = cc.ppqL or cc.ppq })
+        end
+      end
+    end
+    -- val carries the logical cents (the pb column's display value), from mm's cents sidecar;
+    -- restore maps it back. A foreign pre-cents pb falls back to raw-derived cents (best-effort).
+    local function shape(evt, chan)
+      return { evType = 'pb', chan = chan, ppqL = evt.ppqL or evt.ppq,
+               val = evt.cents or rawToCents(evt.val), shape = evt.shape }
+    end
+
+    local newParked, restores = reconcilePark(scan, priorOf('pb'), covered, shape, batch)
+
+    -- Restore re-adds to the take; the absorber (later this rebuild) refines the wire raw with
+    -- detune and re-shows it. The seed val is detune-free -- the absorber's assign corrects it.
+    for _, spec in ipairs(restores) do
+      dirtyChan(spec.chan)
+      batch.add({ evType = 'pb', chan = spec.chan, ppqL = spec.ppqL,
+                  ppq = tm:fromLogical(spec.chan, spec.ppqL),
+                  cents = spec.val, val = centsToRaw(spec.val), shape = spec.shape })
+    end
+
+    for _, spec in ipairs(newParked) do util.add(allParked, spec) end
+
+    -- Render union for the view: the authored breakpoints stay visible in-column though off-take.
+    for chan = 1, 16 do channels[chan].parkedPb = {} end
+    for _, spec in ipairs(newParked) do
+      util.add(channels[spec.chan].parkedPb,
+        { evType = 'pb', chan = spec.chan, ppq = spec.ppqL, ppqL = spec.ppqL,
+          val = spec.val, cents = spec.val, shape = spec.shape })
+    end
+  end
+
+  persistParked('fxParked', allParked)
   batch.commit()
 end
 
@@ -2368,10 +2428,7 @@ local function rebuildPbs(noteLive, replacePb)
     for _, pb in ipairs(pbs) do
       if pb.origTok then
         local d         = detuneOf[pb]
-        -- An authored pb inside a replace window rides the curve on the wire (streamValue), its
-        -- column cents untouched -- the curve owns realisation there. see docs/tuning.md § Absorber reconciliation
-        local wireCents = (not pb.derived and replaceWinAt(pb.ppq)) and streamValue(pb.ppq) or pb.cents
-        local newRaw    = centsToRaw(wireCents + d)
+        local newRaw    = centsToRaw(pb.cents + d)
         local shapeChanged = pb.derived and pb.shape ~= pb.origShape
         local update = nil
         if moved[pb] then
@@ -2681,7 +2738,7 @@ do
   -- swing/extraColumns/noteDelay/fxRegions are document data: edits + undo rewinds
   -- arrive as dataChanged. swing diffs its map; the rest force a full rebuild.
   ds:subscribe('dataChanged', function(change)
-    -- Pipeline's own ds:assigns during rebuild (fxParked/fxParkedCC/extraColumns) are converged
+    -- Pipeline's own ds:assigns during rebuild (fxParked/extraColumns) are converged
     -- output, not edits; re-entering marks all 16 dirty and breaks B1. see design/dirty-channels.md § Phase B
     if rebuilding then return end
     if bindingTake or not cm:boundTake() then return end
@@ -2696,7 +2753,7 @@ do
       tm:rebuild(false)
     elseif change.name == 'extraColumns'
            or change.name == 'fxRegions'
-           or change.name == 'fxParked' or change.name == 'fxParkedCC' then
+           or change.name == 'fxParked' then
       -- fxRegions/parking drive fx expansion; extraColumns blocks fx carrier codes and drives
       -- the pb keep-decision (both inside the gated passes) -- re-derive.
       if not flushingParked then dirtyChan(); tm:rebuild(false) end

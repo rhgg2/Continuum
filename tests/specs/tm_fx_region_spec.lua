@@ -70,6 +70,15 @@ local function derivedPb(dump, chan, ppq)
   for _, c in ipairs(derivedPbs(dump, chan)) do if c.ppq == ppq then return c end end
 end
 
+-- The cc / pb slice of the unified fxParked off-take stash.
+local function stashOfType(h, evType)
+  local out = {}
+  for _, s in ipairs(h.ds:get('fxParked') or {}) do
+    if s.evType == evType then out[#out + 1] = s end
+  end
+  return out
+end
+
 -- The generated replace curve written straight onto a cc target (derived='ccfill'), routed out of
 -- columns. Its authored cc is parked off-take; these stand in on the target lane.
 local function fillsOf(dump, chan, cc)
@@ -402,7 +411,7 @@ return {
       t.eq(#parked, 1, 'the covered cc parks')
       t.eq(parked[1].chan, 1, 'the render cell knows its channel')
       t.eq(parked[1].ppqL, 60, 'the render cell carries the logical onset (the backing key)')
-      local stash = h.ds:get('fxParkedCC')
+      local stash = stashOfType(h, 'cc')
       t.eq(stash[1].ppqL, 60, 'the stash keeps the logical onset')
       t.eq(stash[1].ppq, nil, 'the stash drops realised ppq -- logical-only')
     end,
@@ -478,13 +487,13 @@ return {
       h.tm:rebuild()
 
       h.tm:assignParked(h.tm:getChannel(1).parkedCC[1], { val = 81 }); h.tm:flush()
-      t.eq(h.ds:get('fxParkedCC')[1].val, 81, 'the cc stash carries the edited value')
+      t.eq(stashOfType(h, 'cc')[1].val, 81, 'the cc stash carries the edited value')
       t.eq(h.tm:getChannel(1).parkedCC[1].val, 81, 'the render cell shows the edit')
 
       h.tm:deleteParked(h.tm:getChannel(1).parkedCC[1]); h.tm:flush()
       generators.kinds.ccRep = nil
       t.eq(#h.tm:getChannel(1).parkedCC, 0, 'the parked cc is gone from the render union')
-      t.falsy(h.ds:get('fxParkedCC'), 'the cc stash empties')
+      t.eq(#stashOfType(h, 'cc'), 0, 'the cc stash empties')
     end,
   },
 
@@ -643,14 +652,16 @@ return {
       local dump = h.fm:dump()
       t.eq(#carriersOf(dump, 1), 0, 'pb replace allocates no carrier -- the curve rides the base lane')
 
-      -- Authored pbs inside the window ride the curve on the wire (intent preserved); derived seats
-      -- fill the gaps. The 50c curve holds across the window (step), re-centring to 0 at the end.
-      t.eq(authoredPb(dump, 1, 0).val,    centsToRaw(50), 'authored base at the window start rides the curve (50c)')
-      t.eq(authoredPb(dump, 1, 120).val,  centsToRaw(50), 'authored pb mid-window rides the curve, not its own 40c')
-      t.eq(authoredPb(dump, 1, 120).cents, 40,            'its persisted cents (intent) are untouched')
-      t.eq(colPbCents(h, 1, 120), 40, 'and the authored cents stay visible in the pb column')
+      -- Authored pbs inside the window park off-take (exclusive ownership), so the curve is realised
+      -- purely by derived seats; the authored breakpoints stay visible via the parkedPb render union.
+      t.falsy(authoredPb(dump, 1, 0),   'the authored base at the window start parked off the take')
+      t.falsy(authoredPb(dump, 1, 120), 'the authored pb mid-window parked off the take')
+      t.eq(derivedPb(dump, 1, 0).val,   centsToRaw(50), 'a derived seat carries the curve at the window start (50c)')
       t.eq(derivedPb(dump, 1, 60).val,  centsToRaw(50), 'a derived seat carries the curve mid-window')
       t.eq(derivedPb(dump, 1, 240).val, 0,              'the terminal seat re-centres at the window end')
+      local at120
+      for _, p in ipairs(h.tm:getChannel(1).parkedPb) do if p.ppqL == 120 then at120 = p end end
+      t.eq(at120 and at120.val, 40, 'the authored 40c stays visible via the parkedPb render union')
     end,
   },
 
@@ -699,13 +710,14 @@ return {
       h.tm:rebuild()
       generators.kinds.capRep = nil
 
-      -- The wire is curve + detune, not detune-only nor curve-only: the 30c curve rides on the 25c
-      -- detune (I1). The authored 40c is dropped from the wire; the curve re-centres to detune at the end.
+      -- The wire is curve + detune (I1): the 30c curve rides on the 25c detune. The authored pb
+      -- parks off-take (the curve owns the wire) and stays visible via parkedPb.
       local dump = h.fm:dump()
       t.eq(#carriersOf(dump, 1), 0, 'no carrier')
-      t.eq(authoredPb(dump, 1, 60).val, centsToRaw(55), 'authored pb wire = curve 30c + detune 25c, not its own 40c')
-      t.eq(derivedPb(dump, 1, 0).val,   centsToRaw(55), 'the seat at the window start carries curve + detune')
+      t.falsy(authoredPb(dump, 1, 60), 'the authored pb parked off the take')
+      t.eq(derivedPb(dump, 1, 0).val,   centsToRaw(55), 'the seat at the window start carries curve 30c + detune 25c')
       t.eq(derivedPb(dump, 1, 240).val, centsToRaw(25), 'curve re-centres to detune-only at the window end (I1)')
+      t.eq(h.tm:getChannel(1).parkedPb[1].val, 40, 'the authored 40c stays visible via the parkedPb render union')
     end,
   },
 
@@ -724,13 +736,17 @@ return {
       h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
                                    fx = { { kind = 'capRep' } } } })
       h.tm:rebuild()
-      t.eq(authoredPb(h.fm:dump(), 1, 120).val, centsToRaw(50), 'rides the curve (50c) while the region is present')
+      -- While the region is present the authored pb parks off-take (the curve owns the wire) and
+      -- stays visible via parkedPb; removing the region restores it to the take.
+      t.falsy(authoredPb(h.fm:dump(), 1, 120), 'the authored pb parks while the region is present')
+      t.eq(h.tm:getChannel(1).parkedPb[1].val, 40, 'its 40c stays visible via the parkedPb render union')
 
       h.ds:assign('fxRegions', {})
       h.tm:rebuild()
       generators.kinds.capRep = nil
       t.eq(authoredPb(h.fm:dump(), 1, 120).val, centsToRaw(40),
         'the authored wire (40c) is restored once the region is gone')
+      t.eq(#h.tm:getChannel(1).parkedPb, 0, 'and the parkedPb render set empties')
     end,
   },
 

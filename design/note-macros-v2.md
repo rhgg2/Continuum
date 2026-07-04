@@ -36,7 +36,8 @@ Track A is the generator substrate, Track B the authoring UI. Checked = landed.
 - [x] Note-host replace parks the host — all hits derived, the `fxHostEnd` dance deleted (§ Note-host replace parks)
 
 **Open / next**
-- [ ] offline continuous realisation — park-and-seat, route-by-window, retire the carrier/node (design only, § Offline continuous realisation)
+- [ ] offline continuous realisation — park-and-seat, retire the carrier/node (design only, § Offline continuous realisation)
+  - [ ] **route-by-window** — zero-eventMeta seats via exclusive-ownership parking + tag-for-deletion (§ Route-by-window; **pb parking landed** — exclusive ownership now holds for pb, markerless seats next)
 - [ ] fx chain — series composition + multi-column authoring (design only, § The fx chain)
 - [ ] chain surface — docked chain strip, scripted kinds pane, patch library (design only, § The chain surface)
 
@@ -413,10 +414,15 @@ matches the carrier's.
 **Route-by-window is the metadata discipline, and it is load-bearing.** The
 seats carry **no per-event metadata**. A dense curve is thousands of
 breakpoints; tag each with a `derived=` sidecar and the persisted data
-explodes. They are recognized as generator-owned *structurally* — the region
-window is persisted, so on the target lane inside it every event is
-re-derived each rebuild, content-reconciled, routed out of the column and
-kept out of the authored value stream by the **window**, never a marker.
+explodes. They are recognized as generator-owned *structurally* — by the region's
+**window**, not a marker: inside it every event is re-derived each rebuild,
+content-reconciled, routed out of the column and kept out of the authored
+value stream by the window alone. A **live** region carries its own window
+(`fxRegions`, in hand every rebuild), so recognition needs no standing
+record; a **deleted** region's orphaned seats are swept by a one-shot
+cleanup request the delete site enqueues with the bounds it still knows —
+no persisted window mirror, which would be redundant every rebuild the
+region lives.
 This generalizes the carrier's metadata-free route-by-code (an allocated CC
 code in `fxCarrier`) and **retires the absorber's `derived='absorber'`
 per-seat tag** — a latent explosion the moment a replace curve is dense.
@@ -459,6 +465,89 @@ preview (R5 / plink) may still want a runtime path later, but *committed*
 realisation is offline. Once this lands the chain's `stream.pb` /
 `stream.ccs` are real summed curves a stage can read and fold, so
 `stream ≡ host` holds for the continuous channels too, not just notes.
+
+## Route-by-window — markerless seats via exclusive ownership (pb parking landed; markerless seats next)
+
+First build slice of offline continuous realisation, landing before cc-augment.
+It retires the *in-window* per-seat `derived=` metadata on both landed replace
+paths — pb-replace `absorber` seats and cc-replace `ccfill` — so a dense curve
+costs **zero** `eventMeta`. `addCC` mints a uuid + sidecar iff a spec carries a
+non-structural key (`mm:1027`); a seat written with only `{ppq, val, shape}` (all
+native MIDI) carries none, so the metadata explosion a dense curve would otherwise
+persist never happens.
+
+**Continuous only.** `target ∈ {pb} ∪ cc-numbers`, never a note. A note always
+carries a uuid + notation sidecar for identity and round-trip regardless, so
+markerless elides nothing there; only the continuous streams — whose seats are
+pure realisation — win.
+
+**The enabling invariant is exclusive ownership.** A markerless seat is
+indistinguishable on the wire from an authored pb/cc, so recognition works only if
+*everything on-take inside a replace window is generated*. That already holds for
+cc: `parkWindows` emits a `ccs[chan][cc]` span for every continuous-replace target
+(`generators.lua:322`) and the park reconcile stashes the authored ccs off-take in
+`fxParkedCC`. It does **not** hold for pb — `parkWindows` has no `dest == 'pb'`
+arm, so authored pbs stay on-take and `tm:2373` bends them to follow the curve.
+That branch is the workaround standing in for the parking pb never got.
+
+**So pb catches up to cc — landed.** `parkWindows` gained a `pbs` arm and the pb
+pass in `rebuildRegionPark` parks authored pbs off-take, with `tm:2373` deleted.
+Two departures from the literal sketch above, both forced or cleaner: (1) the stash
+is the **unified `fxParked`** table (one `evType`-tagged list, `fxParkedCC` folded
+in) rather than a separate `fxParkedPb`; (2) the pb column isn't built until the
+absorber runs *later* in the rebuild, so the pass scans authored pbs straight from
+mm (not a column) and the authored breakpoints stay visible via a
+`channels[chan].parkedPb` render union the **view** folds in — symmetric with how it
+unions `parked`/`parkedCC`, not an absorber-side union. Audibly a no-op: an authored
+bend already sounded as the curve. Now every on-take pb/cc in a window is a seat, and
+parked pbs are editable off-take through the same `parked` backing as cc (pb values
+are edited by typing, not solo-cursor nudge — `applyNudge` has no `pb` part). What
+remains for the full slice: the markerless recognition below (retire the `derived=`
+tags), which this parking is the precondition for.
+
+**Live recognition needs no standing record.** A live region recognizes its own
+seats by its own current window — `fx.replacePb[chan]` in the pb pass, the region
+bounds in the cc walk, both already in hand. Reconcile churn-free against the
+freshly computed curve by `(ppq, val, shape)` via the R2 `reconcileDerived`
+skeleton (`tm:127`); the seat grid is time-absolute, so unchanged seats keep. The
+absorber back-derivation (`tm:2156`) must **skip** in-window pbs — a seat has no
+cents and must not acquire any, or it stops looking like a seat.
+
+**Bounds are logical; convert once, compare raw-to-raw.** A region's
+`startppq/endppq` are logical; seats are raw-only (no `ppqL` — that is the win).
+Convert the *bounds* to raw once per `(chan, window)` via `fromLogical(chan,
+startL)` / `fromLogical(chan, endL)` and test raw seat ppqs against `[startRaw,
+endRaw)` directly. Exact by construction: seats are placed at `fromLogical(chan,
+bp.ppqL, d)`, so bounds converted by the same function have zero round-trip drift.
+`replaceWinAt` (`tm:2180`) is the counter-example — it round-trips each event
+raw→logical (`toLogical`), the inverse of seat placement; this slice corrects it
+to the bounds-converted, raw-compared form.
+
+**Deletion: tag, don't mirror.** A removed region's seats orphan — no live window
+covers them, no marker names them. The fix is **not** a standing window record: it
+would be redundant every rebuild the region is alive (its bounds live in
+`fxRegions`) and needed only at the instant of deletion. Instead `setRegionFx`'s
+REMOVE path enqueues a one-shot cleanup request `{chan, startppq, endppq, targets}`
+(via a tm public method — view→tm is allowed, view→mm is not) before dropping the
+region; the next rebuild drains it, converts the bounds to raw, and deletes the
+markerless seats in that span on those targets. The queue is transient RAM —
+consumed once, not persisted, not in undo. The region's parked authored restores
+on its own: gone from `fxRegions` → `parkWindows` no longer covers it →
+`reconcilePark` restores it to take (`tm:1421-1424`). Two natural mechanisms fire,
+no shadow of last rebuild's reality.
+
+**Known edge — swing at a boundary.** A seat is raw-only, so a swing change moves
+it while its logical window is unchanged; a seat within a few ticks of a window
+edge can land just outside the current-swing bounds and escape recognition.
+`staleSwing[chan]` already flags the case — on a swing change, fully regenerate the
+channel's replace-target seats (churn on swing is acceptable) rather than
+reconciling.
+
+**Pin.** The existing `tm_fx_region_spec` seated-curve / I1 / densify /
+suppression-reversibility tests hold unchanged; add one asserting a dense in-window
+curve writes zero `eventMeta` entries — the regression the slice exists to prevent
+— and one that a removed region leaves neither an orphaned seat nor a lost authored
+pb.
 
 ## The fx chain — series-composition and multi-column authoring (design)
 
@@ -831,9 +920,10 @@ column-based, not gm-backed -- the Open-questions Track-B lean, now resolved.
   **cc-replace gets the symmetric union:** it parks the covered authored cc into
   `fxParkedCC` and re-seats it via `channels[chan].parkedCC`, so the authored cc stays
   the visible surface and the generated fill is hidden realisation -- creating the region
-  never blanks the lane (the invariant). pb-replace needs no union: it parks nothing,
-  leaving its authored breakpoints visible in-column and only zeroing their wire
-  contribution (A4). Display only: parked cells are tokenless, so a cursor edit no-ops.
+  never blanks the lane (the invariant). pb-replace now parks symmetrically too (route-by-window):
+  its authored breakpoints park off-take into the unified `fxParked` stash and re-seat via
+  `channels[chan].parkedPb`, staying visible in-column and editable off-take -- the earlier
+  "pb parks nothing" note is superseded. Display only: parked cells are tokenless, so a cursor edit no-ops.
   Making the parked events *editable* off-take (rebound to `fxParked` / `fxParkedCC`, as
   the "visible, editable surface" model intends) is still open (planned as B3 below).
   Pinned by the parked note- and cc-render tests in `tv_fx_region_spec`.

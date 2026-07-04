@@ -327,14 +327,57 @@ return {
       t.truthy(ci, 'the parked cc column exists')
       h.ec:setPos(0, ci, 1)
       h.cmgr:invoke('nudgeCoarseUp')                   -- bump the cc value
-      local stash = h.ds:get('fxParkedCC') or {}
+      local stash = {}
+      for _, s in ipairs(h.ds:get('fxParked') or {}) do if s.evType == 'cc' then stash[#stash + 1] = s end end
       t.eq(#stash, 1, 'one parked cc in the stash')
       t.truthy(stash[1].val > 30, 'its value was nudged up off the take')
 
       h.ec:setPos(0, ci, 1)
       h.cmgr:invoke('delete')
       generators.kinds.ccRep = nil
-      t.eq(#(h.ds:get('fxParkedCC') or {}), 0, 'delete removed the parked cc from the stash')
+      local ccStash = {}
+      for _, s in ipairs(h.ds:get('fxParked') or {}) do if s.evType == 'cc' then ccStash[#ccStash + 1] = s end end
+      t.eq(#ccStash, 0, 'delete removed the parked cc from the stash')
+    end,
+  },
+
+  {
+    name = 'parked pb: a value nudge edits the off-take pb stash; delete removes it',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      h.tm:addEvent({ evType = 'pb', ppq = 0, chan = 1, val = 40 }); h.tm:flush()
+      generators.kinds.pbRep = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppqL = host.window[1], val = 50, shape = 'step' },
+          { ppqL = host.window[2], val = 0,  shape = 'step' },
+        } } end,
+        mode = 'replace', dest = 'pb', label = 'PbRep', defaults = {}, fields = {},
+      }
+      injectRegion(h, { fx = { { kind = 'pbRep' } } })
+      h.tm:rebuild()                                   -- steady state: authored pb parked, column present
+
+      local ci
+      for i, c in ipairs(h.vm.grid.cols) do
+        if c.type == 'pb' and c.midiChan == 1 then ci = i end
+      end
+      t.truthy(ci, 'the parked pb column exists (built from the parkedPb union)')
+      local pbcol = h.vm.grid.cols[ci]
+      local ev0
+      for _, e in ipairs(pbcol.events) do if (e.ppq or 0) == 0 then ev0 = e end end
+      h.ec:setPos(0, ci, 1)
+      h.vm:editEvent(pbcol, ev0, 1, string.byte('-'), false)  -- negate the breakpoint: a real pb value edit
+      local stash = {}
+      for _, s in ipairs(h.ds:get('fxParked') or {}) do if s.evType == 'pb' then stash[#stash + 1] = s end end
+      t.eq(#stash, 1, 'the pb stays parked off the take')
+      t.eq(stash[1].val, -40, 'the edit routed to the off-take pb stash (40c -> -40c)')
+
+      h.ec:setPos(0, ci, 1)
+      h.cmgr:invoke('delete')
+      generators.kinds.pbRep = nil
+      local pbStash = {}
+      for _, s in ipairs(h.ds:get('fxParked') or {}) do if s.evType == 'pb' then pbStash[#pbStash + 1] = s end end
+      t.eq(#pbStash, 0, 'delete removed the parked pb from the stash')
     end,
   },
 

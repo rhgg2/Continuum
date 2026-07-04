@@ -353,10 +353,12 @@ the onset:
 **Replace curves ride the same seats.** A pb-replace generator's absolute
 curve is seated here, not on an additive carrier. Inside a replace window
 `streamValue` returns the *curve* (interpolated over the generator's
-breakpoints); the breakpoints become derived seats carrying their shape, an
-authored pb inside the window rides the curve on its wire (column cents
-untouched), and a curved curve-segment split by a detune onset densifies
-exactly as an authored one does. Each wire raw is `centsToRaw(curve +
+breakpoints); the breakpoints become derived seats carrying their shape, and a
+curved curve-segment split by a detune onset densifies exactly as an authored
+one does. Authored pbs the window covers **park off-take** (the unified
+`fxParked` stash, `evType='pb'`) so every on-take pb in the window is a derived
+seat -- exclusive ownership; they stay visible in-column via the `parkedPb`
+render union and restore to the take when the region leaves. Each wire raw is `centsToRaw(curve +
 detune)` — no carrier, no add-bank slot. See `design/note-macros-v2.md`
 § Continuous pb replace.
 

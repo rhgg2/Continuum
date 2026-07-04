@@ -53,6 +53,8 @@ local localBlocked
 local function toParkedSpec(evt)
   if evt.evType == 'cc' then
     return util.pick(evt, "evType chan cc val shape", { ppqL = evt.ppq })
+  elseif evt.evType == 'pb' then
+    return util.pick(evt, "evType chan val shape", { ppqL = evt.ppq })
   end
   return util.pick(evt, "evType chan lane pitch vel detune sample delay fx",
                    { ppqL = evt.ppq, endppqL = evt.endppq })
@@ -3080,7 +3082,19 @@ function tv:rebuild(takeChanged)
     for chan, channel in tm:channels() do
       local c = channel.columns
       if c.pc and not trackerMode then addGridCol(chan, 'pc', nil, c.pc.events) end
-      if c.pb then addGridCol(chan, 'pb', nil,  c.pb.events) end
+      -- Replace-region parked pbs left the take but stay the displayed automation, as the parked
+      -- chord/cc are unioned below. see design/note-macros-v2.md § Route-by-window
+      local parkedPb = channel.parkedPb or {}
+      if c.pb or #parkedPb > 0 then
+        local events = c.pb and c.pb.events or {}
+        if #parkedPb > 0 then
+          events = {}
+          for _, e in ipairs(c.pb and c.pb.events or {}) do util.add(events, e) end
+          for _, e in ipairs(parkedPb) do util.add(events, e) end
+          table.sort(events, function(a, b) return (a.ppq or 0) < (b.ppq or 0) end)
+        end
+        addGridCol(chan, 'pb', nil, events)
+      end
       -- Replace-region parked notes left the take so the arp packs to lane 1, but they remain
       -- the displayed chord: union each back into its lane. see design/note-macros-v2.md § Generator output
       local parkedByLane = {}
@@ -3213,6 +3227,7 @@ function tv:rebuild(takeChanged)
     for _, col in ipairs(grid.cols) do
       local windows = col.type == 'note' and park.notes[col.midiChan]
                    or col.type == 'cc'  and (park.ccs[col.midiChan] or {})[col.cc]
+                   or col.type == 'pb'  and park.pbs[col.midiChan]
       for _, w in ipairs(windows or {}) do
         for row = ppqRowOf(w[1], col.midiChan), ppqRowOf(w[2], col.midiChan) - 1 do
           col.cellKind[row] = 'parked'
