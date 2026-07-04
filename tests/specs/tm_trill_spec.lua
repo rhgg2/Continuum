@@ -25,10 +25,6 @@ local function fxNotesOf(dump, hostUuid)
   return out
 end
 
-local function hostNote(dump)
-  for _, n in ipairs(dump.notes) do if n.fx then return n end end
-end
-
 local function pbsByPpq(dump)
   local out = {}
   for _, c in ipairs(dump.ccs) do
@@ -69,10 +65,10 @@ return {
 
       -- Expansion + microtonal detune + absorbers must actually have happened --
       -- else "byte-identical" is satisfied vacuously.
-      local host = hostNote(h.fm:dump())
-      t.truthy(host, 'host carries fx')
+      local host = h.tm:getChannel(1).parked[1]
+      t.truthy(host, 'the host is parked off-take')
       local fns = fxNotesOf(h.fm:dump(), host.uuid)
-      t.eq(#fns, 3, 'trill over a 1-QN window at 1/4-QN period yields 3 fxNotes')
+      t.eq(#fns, 4, 'trill over a 1-QN window at 1/4-QN period yields 4 fxNotes (all hits derived)')
       local anyDetuned = false
       for _, fn in ipairs(fns) do if (fn.detune or 0) ~= 0 then anyDetuned = true end end
       t.truthy(anyDetuned, 'the alternation note carries a non-zero (microtonal) detune')
@@ -89,7 +85,7 @@ return {
   ----- Structural realisation -- pitch alternation (12EDO: no detune, no absorbers)
 
   {
-    name = 'trill alternates host pitch with the stepped note; host is fxNote 1',
+    name = 'trill alternates host pitch with the stepped note; the host parks, all hits derived',
     run = function(harness)
       local h = harness.mk()   -- 12EDO floor
       h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
@@ -97,12 +93,13 @@ return {
       h.tm:flush()
 
       local dump = h.fm:dump()
-      local host = hostNote(dump)
-      t.eq(host.pitch, 60, 'host (fxNote 1) keeps its pitch')
+      local host = h.tm:getChannel(1).parked[1]
+      t.eq(host.pitch, 60, 'the parked host keeps its pitch')
       local fns = fxNotesOf(dump, host.uuid)
-      t.deepEq({ fns[1].ppq, fns[2].ppq, fns[3].ppq }, { 60, 120, 180 }, 'fxNote onsets tile the window')
-      t.deepEq({ fns[1].pitch, fns[2].pitch, fns[3].pitch }, { 62, 60, 62 },
-        'odd tiles step +2 semitones; even tiles return to the host')
+      t.deepEq({ fns[1].ppq, fns[2].ppq, fns[3].ppq, fns[4].ppq }, { 0, 60, 120, 180 },
+        'fxNote onsets tile the window from its start')
+      t.deepEq({ fns[1].pitch, fns[2].pitch, fns[3].pitch, fns[4].pitch }, { 60, 62, 60, 62 },
+        'even tiles carry the host pitch; odd tiles step +2 semitones')
       for _, fn in ipairs(fns) do
         t.eq(fn.vel, 100, 'trill carries host velocity (no ramp)')
         t.eq(fn.detune or 0, 0, '12EDO: a +2-step trill has no detune')

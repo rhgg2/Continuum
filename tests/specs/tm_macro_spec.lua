@@ -50,8 +50,10 @@ local function fxNotesOf(dump, hostUuid)
   return out
 end
 
-local function hostNote(dump)
-  for _, n in ipairs(dump.notes) do if n.fx then return n end end
+-- Note-host replace parks: the authored note leaves the take and remains the
+-- visible, editable surface in channels[chan].parked.
+local function parkedHost(h)
+  return h.tm:getChannel(1).parked[1]
 end
 
 -- Host + retrig under swing and delay. Shared across the G-tests.
@@ -81,10 +83,10 @@ return {
 
       -- Expansion must actually have happened — otherwise "byte-identical"
       -- is satisfied vacuously by producing nothing.
-      local host = hostNote(h.fm:dump())
-      t.truthy(host, 'host note carries fx')
-      t.eq(#fxNotesOf(h.fm:dump(), host.uuid), 3,
-        'retrig over a 1-QN window at 1/4-QN period yields 3 fxNotes (host is fxNote 1)')
+      local host = parkedHost(h)
+      t.truthy(host, 'the host note is parked off-take')
+      t.eq(#fxNotesOf(h.fm:dump(), host.uuid), 4,
+        'retrig over a 1-QN window at 1/4-QN period yields 4 fxNotes (all hits derived)')
 
       local before = notesView(h.fm:dump())
       h.tm:rebuild()
@@ -98,15 +100,18 @@ return {
   ----- G1 — provenance
 
   {
-    name = 'G1: every fxNote resolves via derived to a live host carrying a structural fx',
+    name = 'G1: every fxNote resolves via derived to the parked host carrying the structural fx',
     run = function(harness)
       local h = mkRetrigHost(harness)
       local dump = h.fm:dump()
-      local host = hostNote(dump)
-      for _, fn in ipairs(fxNotesOf(dump, host.uuid)) do
-        t.eq(fn.derived, host.uuid, 'fxNote tagged with host uuid')
-        t.truthy(h.tm:byUuid(fn.derived), 'host is live in byUuid')
+      local host = parkedHost(h)
+      local fns = fxNotesOf(dump, host.uuid)
+      t.eq(#fns, 4, 'expansion happened')
+      for _, fn in ipairs(fns) do
+        t.eq(fn.derived, host.uuid, 'fxNote tagged with the parked host uuid')
       end
+      t.falsy(h.tm:byUuid(host.uuid), 'the host is off-take (parked), not in mm')
+      t.truthy(host.fx, 'the parked cell carries the fx (the editable surface)')
     end,
   },
 
@@ -116,14 +121,21 @@ return {
     name = 'G2: fx present yields fxNotes; fx removed leaves none after reconcile',
     run = function(harness)
       local h = mkRetrigHost(harness)
-      local host = hostNote(h.fm:dump())
-      t.eq(#fxNotesOf(h.fm:dump(), host.uuid), 3, 'fxNotes present with fx')
+      local host = parkedHost(h)
+      t.eq(#fxNotesOf(h.fm:dump(), host.uuid), 4, 'fxNotes present with fx')
 
-      local hostEvt = h.tm:getChannel(1).columns.notes[1].events[1]
-      h.tm:assignEvent(hostEvt, { fx = require('util').REMOVE })
+      h.tm:assignParked(host, { fx = util.REMOVE })
       h.tm:flush()
 
       t.eq(#fxNotesOf(h.fm:dump(), host.uuid), 0, 'no fxNote survives fx removal')
+      t.falsy(h.tm:getChannel(1).parked[1], 'nothing left parked')
+      local restored
+      for _, n in ipairs(h.fm:dump().notes) do
+        if not n.derived then restored = n end
+      end
+      t.truthy(restored, 'the authored note is restored to the take')
+      t.eq(restored.uuid, host.uuid, 'restore preserves the uuid (fx-editor handles survive)')
+      t.falsy(restored.fx, 'the restored note carries no fx')
     end,
   },
 
@@ -140,10 +152,10 @@ return {
                       vel = 100, detune = 0, delay = 0, lane = 2, fx = retrig16 })
       h.tm:flush()
       local dump = h.fm:dump()
-      local host = hostNote(dump)
-      t.eq(host.lane, 2, 'host sits on lane 2')
+      local host = parkedHost(h)
+      t.eq(host.lane, 2, 'host parked from lane 2')
       local fns = fxNotesOf(dump, host.uuid)
-      t.eq(#fns, 3, 'lane-2 host expands like a lane-1 host')
+      t.eq(#fns, 4, 'lane-2 host expands like a lane-1 host')
       for _, fn in ipairs(fns) do
         t.eq(fn.lane, 2, 'fxNotes inherit the host lane, not lane 1')
       end
@@ -169,25 +181,28 @@ return {
       h.tm:rebuild()
       local dump = h.fm:dump()
       local vels = {}
-      for _, fn in ipairs(fxNotesOf(dump, hostNote(dump).uuid)) do vels[#vels + 1] = fn.vel end
-      t.deepEq(vels, { 88, 76, 64 }, 'generator geometry restored; foreign vel gone')
+      for _, fn in ipairs(fxNotesOf(dump, parkedHost(h).uuid)) do vels[#vels + 1] = fn.vel end
+      t.deepEq(vels, { 100, 88, 76, 64 }, 'generator geometry restored; foreign vel gone')
     end,
   },
 
   ----- Tail clamp + ramp (structural realisation details)
 
   {
-    name = 'host tail truncates to fxNote 2; authored ceiling preserved; fxNotes clip in turn',
+    name = 'the host parks; all hits are derived; authored ceiling preserved; fxNotes clip in turn',
     run = function(harness)
       local h = harness.mk()
       addPlainHost(h)
       local dump = h.fm:dump()
-      local host = hostNote(dump)
-      t.eq(host.endppq,  60,  'host raw tail clamped to fxNote 2 onset')
-      t.eq(host.endppqL, 240, 'host authored ceiling untouched')
+      local host = parkedHost(h)
+      t.eq(host.endppq, 240, 'the parked cell carries the authored ceiling')
+      for _, n in ipairs(dump.notes) do
+        t.truthy(n.derived, 'no authored note remains in the take')
+      end
       local fns = fxNotesOf(dump, host.uuid)
-      t.deepEq({ fns[1].ppq, fns[2].ppq, fns[3].ppq }, { 60, 120, 180 }, 'fxNote onsets')
-      t.deepEq({ fns[1].endppq, fns[2].endppq, fns[3].endppq }, { 120, 180, 240 },
+      t.deepEq({ fns[1].ppq, fns[2].ppq, fns[3].ppq, fns[4].ppq }, { 0, 60, 120, 180 },
+        'fxNote onsets tile from the window start')
+      t.deepEq({ fns[1].endppq, fns[2].endppq, fns[3].endppq, fns[4].endppq }, { 60, 120, 180, 240 },
         'fxNote tails clip to the next onset / authored ceiling')
     end,
   },
@@ -199,16 +214,16 @@ return {
       addPlainHost(h, { vel = 20 })
       local dump = h.fm:dump()
       local vels = {}
-      for _, fn in ipairs(fxNotesOf(dump, hostNote(dump).uuid)) do vels[#vels + 1] = fn.vel end
+      for _, fn in ipairs(fxNotesOf(dump, parkedHost(h).uuid)) do vels[#vels + 1] = fn.vel end
       -- 20 -> 8 -> -4 (floor 1) -> -16 (floor 1)
-      t.deepEq(vels, { 8, 1, 1 }, 'ramp applied, clamped to 1')
+      t.deepEq(vels, { 20, 8, 1, 1 }, 'tile 0 carries the host vel; ramp applied from tile 1, floored at 1')
     end,
   },
 
   ----- PC interplay (trackerMode)
 
   {
-    name = 'under trackerMode fxNotes enter PC synthesis carrying the host sample',
+    name = 'under trackerMode the derived tiles enter PC synthesis carrying the host sample',
     run = function(harness)
       local h = harness.mk{ config = { transient = { trackerMode = true } } }
       addPlainHost(h, { sample = 5 })
@@ -225,24 +240,24 @@ return {
     run = function(harness)
       local h = harness.mk()
       addPlainHost(h)
-      t.eq(#fxNotesOf(h.fm:dump(), hostNote(h.fm:dump()).uuid), 3, 'baseline 3 fxNotes')
+      t.eq(#fxNotesOf(h.fm:dump(), parkedHost(h).uuid), 4, 'baseline 4 fxNotes')
 
-      -- Same-pitch note at 120 bounds the host window to [0,120]; the
+      -- Same-pitch note at 120 bounds the host window to [0,120); the
       -- regenerable fxNote must not clobber authored intent.
       h.tm:addEvent({ evType = 'note', ppq = 120, endppq = util.OPEN, chan = 1,
                       pitch = 60, vel = 90, detune = 0, delay = 0, lane = 1 })
       h.tm:flush()
 
       local dump = h.fm:dump()
-      local host = hostNote(dump)
+      local host = parkedHost(h)
       local authored
       for _, n in ipairs(dump.notes) do
         if n.pitch == 60 and n.ppq == 120 and not n.derived then authored = n end
       end
       t.truthy(authored, 'authored same-pitch note survives the retrig')
       local fns = fxNotesOf(dump, host.uuid)
-      t.eq(#fns, 1, 'window bounded to [0,120]: only the fxNote at 60 remains')
-      t.eq(fns[1].ppq, 60, 'surviving fxNote sits at 60')
+      t.eq(#fns, 2, 'window bounded to [0,120): fxNotes at 0 and 60 remain')
+      t.deepEq({ fns[1].ppq, fns[2].ppq }, { 0, 60 }, 'surviving fxNotes sit at 0 and 60')
     end,
   },
 
@@ -253,7 +268,7 @@ return {
     run = function(harness)
       local h = harness.mk()
       addPlainHost(h)
-      t.eq(#fxNotesOf(h.fm:dump(), hostNote(h.fm:dump()).uuid), 3, 'baseline 3 fxNotes')
+      t.eq(#fxNotesOf(h.fm:dump(), parkedHost(h).uuid), 4, 'baseline 4 fxNotes')
 
       -- Same-lane note at 100 (different pitch): monophonic column cuts the
       -- retrig window, so no fxNote should appear at or after 100.
@@ -262,12 +277,11 @@ return {
       h.tm:flush()
 
       local dump = h.fm:dump()
-      local fns = fxNotesOf(dump, hostNote(dump).uuid)
-      t.eq(#fns, 1, 'window bounded to [0,100]: only the fxNote at 60 remains')
-      t.eq(fns[1].ppq, 60, 'surviving fxNote sits at 60')
+      local fns = fxNotesOf(dump, parkedHost(h).uuid)
+      t.eq(#fns, 2, 'window bounded to [0,100): fxNotes at 0 and 60 remain')
+      t.deepEq({ fns[1].ppq, fns[2].ppq }, { 0, 60 }, 'surviving fxNotes sit at 0 and 60')
 
-      local hostCol = h.tm:getChannel(1).columns.notes[1].events[1]
-      t.eq(hostCol.endppqC, 100, 'host view tail clipped to the new note at 100')
+      t.eq(parkedHost(h).endppqC, 100, 'parked cell view tail clipped to the new note at 100')
     end,
   },
 
@@ -285,27 +299,45 @@ return {
       h.tm:flush()
 
       local dump = h.fm:dump()
-      local host = hostNote(dump)
-      t.truthy(host, 'host note carries fx')
+      local host = parkedHost(h)
+      t.truthy(host, 'the host is parked')
       local fns = fxNotesOf(dump, host.uuid)
       for _, fn in ipairs(fns) do
         t.truthy(fn.ppq < 240, 'fxNote onset stays within the take (got ppq=' .. fn.ppq .. ')')
         t.truthy(fn.endppq <= 240, 'fxNote tail stays within the take (got endppq=' .. fn.endppq .. ')')
       end
-      t.eq(#fns, 3, 'window clamped to the 1-QN take: hits at 60/120/180 only')
+      t.eq(#fns, 4, 'window clamped to the 1-QN take: hits at 0/60/120/180 only')
     end,
   },
 
   ----- View sees the pre-fx host (no spurious give-way cue)
 
   {
-    name = 'retrig host column event shows the authored length, not the fxNote-2 clamp',
+    name = 'the parked host cell shows the authored length (the visible, editable surface)',
     run = function(harness)
       local h = harness.mk()
       addPlainHost(h)
-      local hostCol = h.tm:getChannel(1).columns.notes[1].events[1]
-      t.eq(hostCol.endppqC, 240, 'view sees the full authored tail')
-      t.eq(hostCol.endppqL, 240, 'authored ceiling intact')
+      local host = parkedHost(h)
+      t.eq(host.endppqC, 240, 'view sees the full authored tail')
+      t.eq(host.endppq, 240, 'authored ceiling intact on the cell')
+    end,
+  },
+
+  ----- PA display -- a parked host anchors its PA to its lane
+
+  {
+    name = 'a PA on a parked host projects into the host lane column (display anchor survives parking)',
+    run = function(harness)
+      local h = harness.mk()
+      addPlainHost(h)
+      h.tm:addEvent({ evType = 'pa', ppq = 30, chan = 1, pitch = 60, vel = 90 })
+      h.tm:flush()
+      local pa
+      for _, evt in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
+        if evt.evType == 'pa' and evt.ppq == 30 then pa = evt end
+      end
+      t.truthy(pa, "the PA seats in the parked host's lane column")
+      t.eq(pa.pitch, 60, 'keyed to the host pitch')
     end,
   },
 

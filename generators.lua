@@ -22,15 +22,16 @@ local function periodTicks(period, resolution)
   return qn * resolution
 end
 
---contract: retrig fills the host window with evenly-spaced same-pitch fxNotes 2..N (host is fxNote 1)
---contract: velocity ramps params.ramp per fxNote, clamped 1..127; detune inherited from the host verbatim
+--contract: retrig tiles the host window with evenly-spaced same-pitch fxNotes; every hit is derived
+--contract: velocity ramps params.ramp per tile from the host vel, clamped 1..127; detune inherited verbatim
 local function retrig(host, params, ctx)
   local startL, endL = host.window[1], host.window[2]
   local step  = periodTicks(params.period, ctx.resolution)
   local h     = host.notes[1]
+  if not h then return { notes = {}, delta = {} } end   -- empty membership (bare region)
   local ramp  = params.ramp or 0
   local notes = {}
-  local i = 1
+  local i = 0
   while startL + i * step < endL do
     notes[#notes + 1] = {
       ppqL    = startL + i * step,
@@ -44,17 +45,18 @@ local function retrig(host, params, ctx)
   return { notes = notes, delta = {} }
 end
 
---contract: trill alternates host pitch with a note `step` scale-steps away (via ctx.step); host is fxNote 1
+--contract: trill alternates host pitch with a note `step` scale-steps away (via ctx.step); every hit derived
 local function trill(host, params, ctx)
   local startL, endL = host.window[1], host.window[2]
   local step  = periodTicks(params.period, ctx.resolution)
   local h     = host.notes[1]
+  if not h then return { notes = {}, delta = {} } end   -- empty membership (bare region)
   -- The alternation note: `step` scale steps from the host, resolved through the temper.
   local altPitch, altDetune = ctx.step(h.pitch, h.detune or 0, params.step or 0)
   local notes = {}
-  local i = 1
+  local i = 0
   while startL + i * step < endL do
-    local odd = i % 2 == 1   -- fxNote 1 (the host) is even tile 0; odd tiles carry the alternation
+    local odd = i % 2 == 1   -- even tiles carry the host pitch; odd tiles the alternation
     notes[#notes + 1] = {
       ppqL    = startL + i * step,
       endppqL = math.min(startL + (i + 1) * step, endL),

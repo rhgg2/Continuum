@@ -281,9 +281,11 @@ runs it, with a pointer to its detail where one exists.
   any note. Placed up front — before fx expansion — so externals bound fx
   windows and walk alongside everything else. → § Rebuild: externals.
 - **Region-replace parking** (`rebuildRegionPark`). Authored notes and
-  ccs a replace-region covers leave the take; the prior parked set splits
-  into still-covered carry-forward and restores that re-enter their
-  columns token-less. Carried-forward tails clip against on-take note
+  ccs a replace-region covers leave the take — and so does any note
+  hosting its own discrete-replace kind (note-host replace parks the
+  host; see `design/note-macros-v2.md` § Note-host replace parks). The
+  prior parked set splits into still-covered carry-forward and restores
+  that re-enter their columns token-less, keeping their uuid and fx. Carried-forward tails clip against on-take note
   bounds the same way the tail walk clips real notes, so a parked tail
   stops at the first successor past its region, not just the next
   parked member. The note del/adds ride the tail walk's atomic
@@ -295,8 +297,9 @@ runs it, with a pointer to its detail where one exists.
 - **Fx expansion** (`rebuildFx`). First the read-only **window** pass:
   walk each channel's same-lane successor map in the logical frame, so
   each fx host's window is its voice extent (the next same-lane onset's
-  `ppqL`, floored by the authored end). Then every note carrying `fx`
-  runs its generator over its window; the derived fxNotes reconcile
+  `ppqL`, floored by the authored end). Then every producer runs —
+  on-take fx notes (augment hosts), parked note hosts (window = the
+  realised parked extent), and fx regions; the derived fxNotes reconcile
   against the partition's set (`reconcileFx`), and continuous deltas
   colour into carrier CC codes. The note add/del is **deferred** to the
   tail walk's atomic commit; `fxLive` (the predicted set) feeds the tail
@@ -305,8 +308,7 @@ runs it, with a pointer to its detail where one exists.
   predicted fxNotes walk together: clamp same-pitch onset collisions
   (fixed onsets frozen), then clip each realised note-off against its
   same-lane and same-pitch successors. The clips commit WITH the fxNote
-  del/add in one `mm:modify`, so each host's clip to its first fxNote
-  lands with the inserts. → § Rebuild: tail walk.
+  del/add and parked restores in one `mm:modify`. → § Rebuild: tail walk.
 - **Absorber reconciliation** (`rebuildPbs`). Reseat absorber pbs against
   the post-walk lane-1 layout, recompute their raw vals, and project the
   pb column. See `docs/tuning.md` § Absorber reconciliation.

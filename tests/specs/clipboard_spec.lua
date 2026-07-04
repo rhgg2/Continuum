@@ -175,9 +175,10 @@ return {
       h.tm:flush()
       h.vm:setGridSize(80, 80)
 
-      local function host0()
-        for _, n in ipairs(h.fm:dump().notes) do
-          if n.ppq == 0 and n.fx then return n end
+      -- The host parks (note-host replace): it lives in channels[1].parked, not the take.
+      local function parkedAt(ppq)
+        for _, cell in ipairs(h.tm:getChannel(1).parked) do
+          if cell.ppq == ppq then return cell end
         end
       end
       local function fxNoteCount(uuid)
@@ -186,8 +187,8 @@ return {
         return c
       end
 
-      local origUuid = host0().uuid
-      t.eq(fxNoteCount(origUuid), 3, 'host spawns 3 fxNotes before the copy')
+      local origUuid = parkedAt(0).uuid
+      t.eq(fxNoteCount(origUuid), 4, 'host spawns 4 fxNotes before the copy')
 
       -- Copy the host, paste one row down -- onto its own fxNote grid, the
       -- same-pitch collision that exposed the leaked token.
@@ -199,12 +200,12 @@ return {
       h.ec:setPos(1, 1, 1)
       h.clipboard:pasteClip(clip)
 
-      local orig = host0()
-      t.truthy(orig, 'original host still sits at ppq 0 with fx')
+      local orig = parkedAt(0)
+      t.truthy(orig, 'original host still parked at ppq 0')
       t.eq(orig.uuid, origUuid, 'original host keeps its identity (not relocated)')
-      -- Same-pitch paste at row 1 (ppq 60) bounds the retrig window to [0,60];
-      -- derived repeats drop (see design/archive/note-macros.md § host contract).
-      t.eq(fxNoteCount(origUuid), 0, 'same-pitch paste truncates the original retrig window')
+      -- Same-pitch paste at row 1 (ppq 60) bounds the retrig window to [0,60);
+      -- only tile 0 survives (see design/archive/note-macros.md § host contract).
+      t.eq(fxNoteCount(origUuid), 1, 'same-pitch paste truncates the original retrig window to one tile')
     end,
   },
 

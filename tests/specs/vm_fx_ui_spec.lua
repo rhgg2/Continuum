@@ -18,8 +18,11 @@ local function lane1Idx(h)
   end
 end
 
--- The host is the sole authored (non-derived) note; fxNotes carry derived.
+-- The host: parked off-take once it carries a discrete kind, else the sole
+-- authored (non-derived) take note.
 local function hostUuid(h)
+  local parked = h.tm:getChannel(1).parked[1]
+  if parked then return parked.uuid end
   for _, n in ipairs(h.fm:dump().notes) do if not n.derived then return n.uuid end end
 end
 
@@ -58,9 +61,9 @@ return {
       h.vm:setGridSize(80, 40)
       local uuid = hostUuid(h)
       h.vm:setNoteFx(uuid, { { kind = 'retrig', period = { 1, 4 }, ramp = 0 } })
-      t.eq(fxNoteCount(h, uuid), 3, '1/4 over a 1-QN host derives fxNotes 2..4')
+      t.eq(fxNoteCount(h, uuid), 4, '1/4 over a 1-QN host parks it and derives all 4 hits')
       h.vm:setNoteFx(uuid, util.REMOVE)
-      t.eq(fxNoteCount(h, uuid), 0, 'REMOVE clears the derived notes')
+      t.eq(fxNoteCount(h, uuid), 0, 'REMOVE clears the derived notes (the host is restored)')
     end,
   },
 
@@ -71,10 +74,10 @@ return {
       addHost(h, { { kind = 'retrig', period = { 1, 4 }, ramp = 0 } })
       h.vm:setGridSize(80, 40)
       local uuid = hostUuid(h)
-      t.eq(fxNoteCount(h, uuid), 3, 'baseline 1/4')
+      t.eq(fxNoteCount(h, uuid), 4, 'baseline 1/4')
       h.vm:setFxField(uuid, 1, 'period', { 1, 6 })   -- finer
       t.eq(h.vm:noteFx(uuid)[1].period[2], 6, 'period written to 1/6')
-      t.eq(fxNoteCount(h, uuid), 5, 'finer period derives more fxNotes')
+      t.eq(fxNoteCount(h, uuid), 6, 'finer period derives more fxNotes')
     end,
   },
 
@@ -87,12 +90,12 @@ return {
       local uuid = hostUuid(h)
       h.vm:setFxField(uuid, 1, 'ramp', -10)
       t.eq(h.vm:noteFx(uuid)[1].ramp, -10, 'ramp updated on the entry')
-      -- fxNote 2 (i=1) gets vel + 1*ramp = 100 - 10 = 90; later ones lower.
-      local top = 0
+      local vels = {}
       for _, n in ipairs(h.fm:dump().notes) do
-        if n.derived == uuid and n.vel > top then top = n.vel end
+        if n.derived == uuid then vels[#vels + 1] = n.vel end
       end
-      t.eq(top, 90, 'first fxNote velocity ramped by -10')
+      table.sort(vels, function(a, b) return a > b end)
+      t.deepEq(vels, { 100, 90, 80, 70 }, 'tile 0 carries the host vel; later tiles ramp by -10')
     end,
   },
 
@@ -217,6 +220,23 @@ return {
       t.eq(calls, 2, 'a field edit routes through setNoteFx -> reconcile')
       h.vm:setNoteFx(uuid, util.REMOVE)
       t.eq(calls, 3, 'clearing reconciles again')
+    end,
+  },
+
+  {
+    name = 'a parked host cell routes to the parked backing at its onset row only',
+    run = function(harness)
+      local h = harness.mk()
+      addHost(h, { { kind = 'retrig', period = { 1, 4 }, ramp = 0 } })
+      h.vm:setGridSize(80, 40)
+      local ci = lane1Idx(h)
+      local col = h.vm.grid.cols[ci]
+      t.eq(col.cellKind[0], 'parked', 'onset row tagged parked')
+      t.falsy(col.cellKind[1], 'tail rows untagged: adds inside the span stay plain')
+      h.ec:setPos(0, ci, 1)
+      local note = h.vm:cursorNote()
+      t.truthy(note and note.fx, 'the caret sees the parked cell carrying its fx')
+      t.eq(h.vm:fxHostForEdit(), hostUuid(h), 'Super-X addresses the parked host by uuid')
     end,
   },
 }

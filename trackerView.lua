@@ -54,7 +54,7 @@ local function toParkedSpec(evt)
   if evt.evType == 'cc' then
     return util.pick(evt, "evType chan cc val shape", { ppqL = evt.ppq })
   end
-  return util.pick(evt, "evType chan lane pitch vel detune sample delay",
+  return util.pick(evt, "evType chan lane pitch vel detune sample delay fx",
                    { ppqL = evt.ppq, endppqL = evt.endppq })
 end
 
@@ -1838,8 +1838,17 @@ function tv:cursorNote()
   return (evt and util.isNote(evt)) and evt or nil
 end
 
--- An fx host is a note (mm, integer uuid) or a region (ds, 'fxr-N' string uuid); the
--- editor addresses both by uuid. Disjoint namespaces: a missed note lookup falls to the region.
+-- An fx host is a note (mm, integer uuid), a parked note host (off-take, original or minted
+-- 'fxp-N' uuid), or a region (ds, 'fxr-N'); the editor addresses all three by uuid.
+-- Disjoint namespaces: a missed lookup falls through in that order.
+local function parkedByUuid(uuid)
+  for chan = 1, 16 do
+    for _, cell in ipairs(tm:getChannel(chan).parked or {}) do
+      if cell.uuid == uuid then return cell end
+    end
+  end
+end
+
 local function regionByUuid(uuid)
   for _, region in ipairs(ds:get('fxRegions') or {}) do
     if region.uuid == uuid then return region end
@@ -1881,6 +1890,8 @@ end
 function tv:noteFx(uuid)
   local note = tm:byUuid(uuid)
   if note then return note.fx end
+  local cell = parkedByUuid(uuid)
+  if cell then return cell.fx end
   local region = regionByUuid(uuid)
   return region and region.fx or nil
 end
@@ -1900,7 +1911,7 @@ end
 
 -- The host note behind a uuid; the stepInterval editor reads its pitch/detune to
 -- convert a slide's cents demand to/from temper steps.
-function tv:noteByUuid(uuid) return tm:byUuid(uuid) end
+function tv:noteByUuid(uuid) return tm:byUuid(uuid) or parkedByUuid(uuid) end
 
 -- Write or clear (util.REMOVE) a note's fx list, then flush so the rebuild
 -- re-derives its fxNotes. uuid, not the event, is the durable handle.
@@ -1913,6 +1924,16 @@ function tv:setNoteFx(uuid, fxOrRemove)
     edit.assign(note, { fx = emptyList and util.REMOVE or fxOrRemove })
     tm:flush()
     pa:apply()   -- spawn/reap the CC node when a carrier first appears or last leaves the track
+    return
+  end
+  -- Parked note host: the fx rides the off-take stash. Clearing it (or the last discrete
+  -- kind) un-covers the spec, so the flush rebuild restores the note to the take.
+  local cell = parkedByUuid(uuid)
+  if cell then
+    local clear = emptyList or fxOrRemove == util.REMOVE
+    tm:assignParked(cell, { fx = clear and util.REMOVE or fxOrRemove })
+    tm:flush()
+    pa:apply()
     return
   end
   -- Region host: a document-data write (ds:assign -> dataChanged -> rebuild). A region IS its
@@ -3196,6 +3217,15 @@ function tv:rebuild(takeChanged)
         for row = ppqRowOf(w[1], col.midiChan), ppqRowOf(w[2], col.midiChan) - 1 do
           col.cellKind[row] = 'parked'
         end
+      end
+    end
+    -- A parked note host owns only its own cell: tag its onset row on its lane column, so
+    -- edits route to the stash while adds elsewhere in its span stay plain (membership
+    -- {self} is closed -- nothing can join a note host, unlike a region window).
+    for chan, channel in tm:channels() do
+      for _, cell in ipairs(channel.parked or {}) do
+        local col = colFor(cell)
+        if col then col.cellKind[ppqRowOf(cell.ppq, chan)] = 'parked' end
       end
     end
     perf.stop('tags')

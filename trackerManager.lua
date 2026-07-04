@@ -26,11 +26,11 @@
 --invariant: paEventCol mixes into note column events
 --shape: extraColumns[chan] = { notes=count, [pc], [pb], [at], [ccs={[ccNum]=true}] }
 --shape: lastMuteSet = { [chan] = true }, pushed by tv via tm:setMutedChannels
---shape: fxParked = { { evType='note', chan, lane, uuid, ppqL, endppqL, pitch, vel, detune, delay, sample }, ... } -- logical-only; realised ppq derived on restore
+--shape: fxParked = { { evType='note', chan, lane, uuid, ppqL, endppqL, pitch, vel, detune, delay, sample, [fx] }, ... } -- logical-only; realised ppq derived on restore
 --shape: fxParkedCC = { { evType='cc', chan, cc, ppqL, val, shape }, ... } -- authored cc parked off-take by a cc-replace window (logical-only)
---shape: channels[chan].parked = { { evType='note', chan, uuid, ppq, ppqL, endppq, endppqL, endppqC, pitch, vel, detune, sample, delay, lane }, ... } -- render-ready off-take replace cells (ppq==ppqL; endppq is the authored ceiling the view edits, endppqC==endppqL clipped for render)
+--shape: channels[chan].parked = { { evType='note', chan, uuid, ppq, ppqL, endppq, endppqL, endppqC, pitch, vel, detune, sample, delay, lane, [fx] }, ... } -- render-ready off-take replace cells (ppq==ppqL; endppq is the authored ceiling the view edits, endppqC==endppqL clipped for render)
 --shape: channels[chan].parkedCC = { { evType='cc', chan, cc, ppq, ppqL, val, shape }, ... } -- off-take cc-replace members as render-ready logical cells (ppq==ppqL)
---contract: a discrete-replace in a region parks its covered chord off-take; else it keeps sounding
+--contract: a discrete-replace kind parks its host: a region parks its covered chord, a note parks itself
 --invariant: parked members feed generator + grid only; never sounding (mute fails for CC/PA)
 
 local util    = require 'util'
@@ -630,6 +630,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     local ccs   = util.deepClone(ds:get('fxParkedCC') or {})
     for _, e in ipairs(parkedEdits) do
       local ref  = e.spec or e.evt
+      dirtyChan(ref.chan)   -- parked specs feed the producer: an edit re-derives the channel
       local list = ref.evType == 'note' and notes or ccs
       if e.op == 'add' then
         util.add(list, e.spec)
@@ -1404,11 +1405,11 @@ local function rebuildRegionPark(deferred)
   end
 
   -- Park covered candidates, split the prior set into carry-forward / restore. scan records carry
-  -- {evt,chan,sub,ppqL,events}; covered(chan,sub,ppqL); shape(evt,chan,sub)->spec.
+  -- {evt,chan,sub,ppqL,events}; covered(chan,sub,ppqL,ref) -- ref is the live evt or prior spec.
   local function reconcilePark(scan, prior, covered, shape, batch)
     local newParked, restores = {}, {}
     for _, c in ipairs(scan) do
-      if covered(c.chan, c.sub, c.ppqL) then
+      if covered(c.chan, c.sub, c.ppqL, c.evt) then
         if c.evt.evType == 'note' then
           dirtyChan(c.chan)   -- park removes a blocker; same-lane/pitch neighbours' tails regrow
         end
@@ -1418,7 +1419,7 @@ local function rebuildRegionPark(deferred)
       end
     end
     for _, spec in ipairs(prior) do
-      if covered(spec.chan, spec.cc, spec.ppqL) then util.add(newParked, spec)
+      if covered(spec.chan, spec.cc, spec.ppqL, spec) then util.add(newParked, spec)
       else util.add(restores, spec) end
     end
     return newParked, restores
@@ -1437,7 +1438,10 @@ local function rebuildRegionPark(deferred)
   -- Notes: can't mute (note-on/off + CC matching), so a covered authored note leaves the take.
   do
     local windows = parkWindows.notes
-    local function covered(chan, _, ppqL)
+    -- A note parks when a region window covers it, or when it hosts a discrete-replace kind
+    -- itself: note-host replace realises as parking, exactly like a region (membership {self}).
+    local function covered(chan, _, ppqL, ref)
+      if ref.fx and generators.parksNotes(ref) then return true end
       for _, w in ipairs(windows[chan] or {}) do
         if ppqL >= w[1] and ppqL < w[2] then return true end
       end
@@ -1457,7 +1461,7 @@ local function rebuildRegionPark(deferred)
       end
     end
     local function shape(evt, chan, laneIdx)
-      return util.pick(evt, "uuid ppqL endppqL pitch vel detune delay sample",
+      return util.pick(evt, "uuid ppqL endppqL pitch vel detune delay sample fx",
                        { evType = 'note', chan = chan, lane = laneIdx })
     end
 
@@ -1469,14 +1473,14 @@ local function rebuildRegionPark(deferred)
       dirtyChan(spec.chan)   -- restored note re-enters columns; tail walk + absorber pass re-derive it
       local channel = channels[spec.chan]
       while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
-      local note = util.clone(spec, { uuid = true })    -- sheds the parked uuid; mm:add mints a fresh one
+      local note = util.clone(spec)   -- keeps the parked uuid; mm:add honours it (fx handles survive unpark)
       note.ppq = tm:fromLogical(spec.chan, spec.ppqL)    -- realised onset derived fresh (spec is logical-only)
       util.add(channel.columns.notes[spec.lane].events, note)
       table.sort(channel.columns.notes[spec.lane].events, function(a, b) return a.ppqL < b.ppqL end)
       -- Lazy: reshaped at commit so it reads note.ppq/endppq after the tail-walk clip.
       deferred.addLazy(function()
-        return util.pick(note, "ppq endppq ppqL endppqL pitch vel detune delay sample",
-                         { evType = 'note', chan = spec.chan, lane = spec.lane })
+        return util.pick(note, "ppq endppq ppqL endppqL pitch vel detune delay sample fx uuid",
+                         { evType = 'note', chan = spec.chan, lane = spec.lane, keepUuid = true })
       end)
     end
 
@@ -1490,7 +1494,7 @@ local function rebuildRegionPark(deferred)
       local channel = channels[spec.chan]
       while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
       util.add(channel.parked, util.pick(spec,
-        "evType chan uuid ppqL endppqL pitch vel detune sample delay lane",
+        "evType chan uuid ppqL endppqL pitch vel detune sample delay lane fx",
         { ppq = spec.ppqL, endppq = spec.endppqL or util.OPEN }))
     end
     for chan = 1, 16 do
@@ -1583,6 +1587,14 @@ local function rebuildPA()
         end
       end
     end
+    -- Parked note hosts left the take but keep their PA display anchored to their lane
+    -- (the PA stays take-side and sounds against the derived same-pitch hits).
+    for _, cell in ipairs(channel.parked or {}) do
+      if cell.pitch == pitch and tm:fromLogical(channel.chan, cell.ppqL) <= ppq_pos
+         and tm:fromLogical(channel.chan, cell.endppqL) > ppq_pos then
+        return notes[cell.lane], cell.lane
+      end
+    end
     for laneIdx, col in ipairs(notes) do
       for _, evt in ipairs(col.events) do
         if evt.pitch == pitch then return col, laneIdx end
@@ -1614,6 +1626,15 @@ local function rebuildFx(fx, deferred)
     end
   end
 
+  -- Region note-park windows: a parked cell inside one is region membership, not a note host.
+  local regionNoteWindows = generators.parkWindows(ds:get('fxRegions') or {}).notes
+  local function noteParkCovered(chan, ppqL)
+    for _, w in ipairs(regionNoteWindows[chan] or {}) do
+      if ppqL >= w[1] and ppqL < w[2] then return true end
+    end
+    return false
+  end
+
   -- Windows (read-only): fx host voice extents + per-note same-lane successor ppqL, floored by authored
   -- end; no realised round-trip (G4-stable). see design/archive/note-macros.md § host contract
   local fxWindow, nextInLane = {}, {}
@@ -1642,9 +1663,6 @@ local function rebuildFx(fx, deferred)
                          and takeLenL or math.min(rec.evt.endppqL, takeLenL)
             if nextRec then endL = math.min(endL, nextRec.evt.ppqL) end
             fxWindow[rec.evt] = endL
-            -- host view-tail: stashed here (read-only pass, all chans) so a frozen fx host still
-            -- renders to its window after the walk. see design/dirty-channels.md § Phase A
-            fx.hostEnd[rec.evt] = tm:fromLogical(chan, endL)
           end
         end
       end
@@ -1734,11 +1752,18 @@ local function rebuildFx(fx, deferred)
   end
   -- Deterministic allocator: lowest lane free of overlap, authored notes seed occupancy;
   -- emission order -> deterministic -> G4-stable. see design/note-macros-v2.md § Generator output
-  local function allocateRegionLanes(chan, startL, endL, derived)
+  local function allocateRegionLanes(chan, startL, endL, derived, emitted)
     local occupied = {}
     eachWindowNote(chan, startL, endL, function(laneIdx, lo, hi)
       util.bucket(occupied, laneIdx, { lo, hi })
     end)
+    -- Already-emitted derived specs occupy too: a parked note host's tiles hold its lane
+    -- (the host itself is off-take, so eachWindowNote no longer sees it).
+    for _, spec in ipairs(emitted) do
+      if spec.ppqL < endL and spec.endppqL > startL then
+        util.bucket(occupied, spec.lane, { spec.ppqL, spec.endppqL })
+      end
+    end
     local function laneFree(lane, lo, hi)
       for _, iv in ipairs(occupied[lane] or {}) do
         if lo < iv[2] and hi > iv[1] then return false end
@@ -1817,21 +1842,32 @@ local function rebuildFx(fx, deferred)
         end
       end
       if regionNotes then
-        allocateRegionLanes(chan, startL, endL, regionNotes)
+        allocateRegionLanes(chan, startL, endL, regionNotes, predicted)
         for _, spec in ipairs(regionNotes) do util.add(predicted, spec) end
       end
     end
 
-    -- Note producers: fx.hostEnd stash sustains the v1 augment view-restore; the
-    -- derived notes ride the host's own lane.
+    -- Note producers. Only augment hosts (continuous kinds) remain on-take -- a discrete-replace
+    -- host was parked at 4.5 and runs from its parked cell below. Derived notes ride the host lane.
     for laneIdx, col in ipairs(channels[chan].columns.notes) do
       for _, host in ipairs(col.events) do
         if host.fx and host.evType ~= 'pa' then
-          local endL = fxWindow[host]
-          runProducer{ window = { host.ppqL, endL }, notes = { host }, fx = host.fx,
+          runProducer{ window = { host.ppqL, fxWindow[host] }, notes = { host }, fx = host.fx,
                        id = host.uuid, lane = laneIdx, delay = host.delay,
                        sample = host.sample, d = delayToPPQ(host.delay) }
         end
+      end
+    end
+
+    -- Parked note hosts: the host left the take (note-host replace parks, like a region), so
+    -- every hit is derived output. Window = the parked cell's realised extent (realiseParked
+    -- applies the same bounds fxWindow would). A cell inside a region note-park window is region
+    -- membership, not a host (own-fx suppressed -- the retained gap).
+    for _, cell in ipairs(channels[chan].parked or {}) do
+      if cell.fx and not noteParkCovered(chan, cell.ppqL) then
+        runProducer{ window = { cell.ppqL, cell.endppqL }, notes = { cell }, fx = cell.fx,
+                     id = cell.uuid, lane = cell.lane, delay = cell.delay,
+                     sample = cell.sample, d = delayToPPQ(cell.delay) }
       end
     end
 
@@ -2027,13 +2063,9 @@ local function rebuildTails(fx, deferred)
   -- Clamps reindex colliding same-pitch onsets separately: reload separates the shared content-keyed token before the clip pass dereferences it.
   -- Clips only touch endppq, never re-key — safe to batch with adds.
   clampWrites.commit()
-  -- Host clips (each clipped to first fxNote) commit WITH the fxNote del/add + restores in one
-  -- mm:modify/MIDI_Sort; canonical delete-first means no transient same-pitch overlap.
+  -- fxNote del/add + parked restores commit in one mm:modify/MIDI_Sort; canonical
+  -- delete-first means no transient same-pitch overlap.
   deferred.commit()
-
-  -- Restore pre-fx tail onto column events so the view sees the authored
-  -- note; mm is untouched, so the take and G4 round-trip are unaffected.
-  for host, rawEnd in pairs(fx.hostEnd) do host.endppq = rawEnd end
 end
 
 -- Reseat absorber pbs against the post-walk lane-1 layout, recompute their raw vals,
@@ -2502,9 +2534,9 @@ function tm:rebuild(takeChanged)
     end
   end
 
-  -- Per-channel fx realisation state (hostEnd is host-event-keyed, not per-channel).
+  -- Per-channel fx realisation state.
   -- noteExisting/noteLive: derived vs post-expansion fx notes. ccExisting: carrier/base/fill CC. replacePb: pb replace windows + curves.
-  local fx = { noteExisting = {}, noteLive = {}, ccExisting = {}, replacePb = {}, hostEnd = {} }
+  local fx = { noteExisting = {}, noteLive = {}, ccExisting = {}, replacePb = {} }
   for i = 1, 16 do
     fx.noteExisting[i] = {}
     fx.noteLive[i]     = {}

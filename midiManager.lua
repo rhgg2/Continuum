@@ -900,7 +900,16 @@ local function addNote(t)
   local note = util.clone(t)
   note.evType = 'note'
   if not note.muted then note.muted = nil end
-  assignNewUUID(note)
+  -- An unpark restore supplies the note's original uuid under keepUuid so fx-editor
+  -- handles survive the round trip; anything else (paste clones, stale ids) mints.
+  if note.keepUuid and type(note.uuid) == 'number' and not eventsByUuid[note.uuid] then
+    note.keepUuid = nil
+    if note.uuid > maxUUID then maxUUID = note.uuid end
+    eventsByUuid[note.uuid] = note
+  else
+    note.keepUuid = nil
+    assignNewUUID(note)
+  end
   t.uuid = note.uuid
 
   noteCount = noteCount + 1

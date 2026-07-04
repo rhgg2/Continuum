@@ -134,7 +134,7 @@ return {
   ----- trill: window tiling + temper-resolved alternation
 
   {
-    name = 'trill tiles the window, alternating host pitch with the stepped note (host is fxNote 1)',
+    name = 'trill tiles the window from its start, alternating host pitch with the stepped note',
     run = function()
       local seen
       local ctx = { resolution = 240,
@@ -143,13 +143,13 @@ return {
       local out = generators.kinds.trill.expand(host, { kind = 'trill', period = { 1, 4 }, step = 2 }, ctx)
       t.eq(#out.delta, 0, 'structural: no continuous delta')
       t.deepEq(seen, { 60, 0, 2 }, 'ctx.step receives the host pitch, detune, and step count')
-      t.eq(#out.notes, 3, '1/4-QN period over a 1-QN window: 3 fxNotes (host is fxNote 1)')
+      t.eq(#out.notes, 4, '1/4-QN period over a 1-QN window: 4 fxNotes (all hits derived)')
       local n = out.notes
-      t.deepEq({ n[1].ppqL, n[2].ppqL, n[3].ppqL }, { 60, 120, 180 }, 'tiled onsets')
-      t.deepEq({ n[1].endppqL, n[2].endppqL, n[3].endppqL }, { 120, 180, 240 }, 'tails clip to next / window end')
-      t.deepEq({ n[1].pitch, n[2].pitch, n[3].pitch }, { 62, 60, 62 }, 'odd tiles step; even tiles return to host')
-      t.deepEq({ n[1].detune, n[2].detune, n[3].detune }, { 7, 0, 7 }, 'stepped detune on odd; host detune on even')
-      t.eq(n[1].vel, 100, 'host velocity carried (no ramp)')
+      t.deepEq({ n[1].ppqL, n[2].ppqL, n[3].ppqL, n[4].ppqL }, { 0, 60, 120, 180 }, 'tiled onsets from the window start')
+      t.deepEq({ n[1].endppqL, n[2].endppqL, n[3].endppqL, n[4].endppqL }, { 60, 120, 180, 240 }, 'tails clip to next / window end')
+      t.deepEq({ n[1].pitch, n[2].pitch, n[3].pitch, n[4].pitch }, { 60, 62, 60, 62 }, 'even tiles carry the host pitch; odd tiles step')
+      t.deepEq({ n[1].detune, n[2].detune, n[3].detune, n[4].detune }, { 0, 7, 0, 7 }, 'host detune on even; stepped detune on odd')
+      t.eq(n[2].vel, 100, 'host velocity carried (no ramp)')
     end,
   },
 
@@ -159,8 +159,8 @@ return {
       local ctx = { resolution = 240, step = function(p, d, n) return p + n, 99 end }
       local host = { window = { 0, 240 }, notes = { { pitch = 60, vel = 80, detune = 12 } } }
       local out = generators.kinds.trill.expand(host, { kind = 'trill', period = { 1, 4 }, step = 1 }, ctx)
-      t.eq(out.notes[2].detune, 12, 'even tile inherits the host detune')
-      t.eq(out.notes[1].detune, 99, 'odd tile takes the stepped detune')
+      t.eq(out.notes[1].detune, 12, 'even tile inherits the host detune')
+      t.eq(out.notes[2].detune, 99, 'odd tile takes the stepped detune')
     end,
   },
 
