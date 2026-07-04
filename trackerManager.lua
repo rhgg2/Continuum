@@ -1194,6 +1194,27 @@ local function rebuildInternals(fx)
   return external
 end
 
+-- cc-replace markerless-seat transitions mirror pb (see rebuildRegionPark, § Route-by-window): a forward
+-- fxRegions edit diffs cc windows against the last baseline; the CC walk drains the staged park/sweep.
+local ccParkQueue, ccSweepQueue, prevCcWindows = {}, {}, {}
+local function ccWindowsNow()
+  local out = {}
+  for _, w in ipairs(generators.parkWindows(ds:get('fxRegions') or {})) do
+    if w.evType == 'cc' then out[util.key(w.chan, w.cc, w.startppq, w.endppq)] = w end
+  end
+  return out
+end
+local function enqueueCcTransitions()
+  local now = ccWindowsNow()
+  for k, w in pairs(now) do if not prevCcWindows[k] then util.add(ccParkQueue, w) end end
+  for k, w in pairs(prevCcWindows) do if not now[k] then util.add(ccSweepQueue, w) end end
+  prevCcWindows = now
+end
+local function resyncCcWindows()
+  prevCcWindows = ccWindowsNow()
+  ccParkQueue, ccSweepQueue = {}, {}
+end
+
 -- CC walk: build the carrier routing map, reconcile (raw,ppqL), project CCs.
 -- Returns a carrier-map persister; run after fx expansion. see docs/trackerManager.md § Rebuild: CC walk
 local function rebuildCCs(fx)
@@ -1206,6 +1227,41 @@ local function rebuildCCs(fx)
     for _, c in ipairs(carriers) do carrierRoute[chan][c.code] = true end
   end
   local ccWrites = mmBatch()
+
+  -- Markerless cc-replace fill seats are recognized by window (mirrors pb inSeatWindow). Bounds raw once,
+  -- half-open like the park's covered(); cc curves carry no terminal-at-end seat, so the open end is safe.
+  local function rawSpanMap(wins)
+    local map = {}
+    for _, w in ipairs(wins) do
+      map[w.chan]       = map[w.chan] or {}
+      map[w.chan][w.cc] = map[w.chan][w.cc] or {}
+      util.add(map[w.chan][w.cc], { sRaw = tm:fromLogical(w.chan, w.startppq),
+                                    eRaw = tm:fromLogical(w.chan, w.endppq) })
+    end
+    return map
+  end
+  local function inSpan(map, chan, cc, ppq)
+    local spans = map[chan] and map[chan][cc]
+    if spans then
+      for _, s in ipairs(spans) do if ppq >= s.sRaw and ppq < s.eRaw then return true end end
+    end
+    return false
+  end
+
+  -- A window created this rebuild is excluded from fillWin: its authored ccs still sit on-take and must
+  -- park (via columns, later) before they become seats -- recognizing them as fill now would eat them.
+  local created = {}
+  for _, w in ipairs(ccParkQueue) do created[util.key(w.chan, w.cc, w.startppq, w.endppq)] = true end
+  ccParkQueue = {}
+  local steadyWins = {}
+  for _, w in ipairs(generators.parkWindows(ds:get('fxRegions') or {})) do
+    if w.evType == 'cc' and not created[util.key(w.chan, w.cc, w.startppq, w.endppq)] then
+      util.add(steadyWins, w)
+    end
+  end
+  local fillWin  = rawSpanMap(steadyWins)
+  local sweepWin = rawSpanMap(ccSweepQueue); ccSweepQueue = {}
+
   for _, cc in mm:ccsRaw() do
     if not dirtyChans[cc.chan] then goto continue end   -- clean: cc/at/pc columns carried whole
     local token = mm:tokenOf(cc)
@@ -1223,11 +1279,17 @@ local function rebuildCCs(fx)
         { ppq = cc.ppq, val = cc.val, cc = cc.cc, token = token })
       goto continue
     end
-    -- Replace fill: the generated curve written straight onto a cc target (replace mode), routed
-    -- out like the rest seat and reconciled at Pass B. see design/note-macros-v2.md § Continuous cc
-    if cc.evType == 'cc' and cc.derived == 'ccfill' then
+    -- Replace fill: a markerless seat inside a live cc-replace window (its authored cc parked), routed
+    -- out like the rest seat and reconciled fresh at Pass B. see design/note-macros-v2.md § Route-by-window
+    if cc.evType == 'cc' and inSpan(fillWin, cc.chan, cc.cc, cc.ppq) then
       util.add(fx.ccExisting[cc.chan].fill,
         { ppq = cc.ppq, val = cc.val, shape = cc.shape, cc = cc.cc, token = token })
+      goto continue
+    end
+    -- Swept fill: the region was removed this rebuild -- its seats match no window now and no marker
+    -- names them, so delete them here (the authored cc is restored by the park pass). see § Route-by-window
+    if cc.evType == 'cc' and inSpan(sweepWin, cc.chan, cc.cc, cc.ppq) then
+      ccWrites.del({ token = token })
       goto continue
     end
 
@@ -1900,10 +1962,10 @@ local function rebuildFx(fx, deferred)
           local target = meta.dest ~= 'note' and meta.dest or nil
           if target and #out.delta > 0 then
             if meta.mode == 'replace' and type(target) == 'number' then
-              -- cc replace: write the curve onto the target cc lane verbatim. No carrier is
-              -- allocated, so the node never registers (adst) the target -- it hears it direct.
+              -- cc replace: write the curve verbatim onto the target cc lane as markerless seats (no
+              -- derived tag -> no uuid/sidecar); recognized next rebuild by window. No carrier, no node.
               for _, bp in ipairs(out.delta) do
-                util.add(ccFill, { evType = 'cc', chan = chan, cc = target, derived = 'ccfill',
+                util.add(ccFill, { evType = 'cc', chan = chan, cc = target,
                                    ppq = tm:fromLogical(chan, bp.ppqL, p.d), val = bp.val, shape = bp.shape })
               end
             elseif meta.mode == 'replace' and target == 'pb' then
@@ -2619,7 +2681,7 @@ function tm:rebuild(takeChanged)
   takeChanged = takeChanged or false
   -- Capture before the pipeline's nested mm:modify calls re-fire 'reload' and clear it.
   local didReload = mmReloaded; mmReloaded = false
-  if didReload or takeChanged then dirtyChan(); resyncPbWindows() end   -- wholesale re-read / take swap: no per-site marks, no transition
+  if didReload or takeChanged then dirtyChan(); resyncPbWindows(); resyncCcWindows() end   -- wholesale re-read / take swap: no per-site marks, no transition
   pbLimCents = nil   -- coherence point: refresh cached pbRange for cents<->raw conversions
 
   clearSwing()   -- rebuild is the (cm, mm) coherence point
@@ -2796,10 +2858,11 @@ do
       prevSwing = util.deepClone(cur)
       tm:rebuild(false)
     elseif change.name == 'fxRegions' then
-      -- A forward pb-replace region edit stages the park/sweep transition; undo/redo (invalidate) and
-      -- reload land consistent state and only resync the baseline. see § Route-by-window
+      -- A forward pb/cc-replace region edit stages the park/sweep transition; undo/redo (invalidate)
+      -- and reload land consistent state and only resync the baseline. see § Route-by-window
       if not flushingParked then
-        if change.invalidate then resyncPbWindows() else enqueuePbTransitions() end
+        if change.invalidate then resyncPbWindows(); resyncCcWindows()
+        else enqueuePbTransitions(); enqueueCcTransitions() end
         dirtyChan(); tm:rebuild(false)
       end
     elseif change.name == 'extraColumns' or change.name == 'fxParked' then

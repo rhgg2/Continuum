@@ -37,7 +37,7 @@ Track A is the generator substrate, Track B the authoring UI. Checked = landed.
 
 **Open / next**
 - [ ] offline continuous realisation — park-and-seat, retire the carrier/node (design only, § Offline continuous realisation)
-  - [ ] **route-by-window** — zero-eventMeta seats via exclusive-ownership parking + tag-for-deletion (§ Route-by-window; **pb parking landed** — exclusive ownership now holds for pb, markerless seats next)
+  - [x] **route-by-window** — zero-eventMeta seats via exclusive-ownership parking + diff-driven transitions (§ Route-by-window; **landed for pb and cc** — in-window seats are markerless, recognized by region)
 - [ ] fx chain — series composition + multi-column authoring (design only, § The fx chain)
 - [ ] chain surface — docked chain strip, scripted kinds pane, patch library (design only, § The chain surface)
 
@@ -466,7 +466,7 @@ realisation is offline. Once this lands the chain's `stream.pb` /
 `stream.ccs` are real summed curves a stage can read and fold, so
 `stream ≡ host` holds for the continuous channels too, not just notes.
 
-## Route-by-window — markerless seats via exclusive ownership (pb half landed; cc-replace next)
+## Route-by-window — markerless seats via exclusive ownership (landed — pb and cc)
 
 First build slice of offline continuous realisation, landing before cc-augment.
 It retires the *in-window* per-seat `derived=` metadata on both landed replace
@@ -502,9 +502,9 @@ unions `parked`/`parkedCC`, not an absorber-side union. Audibly a no-op: an auth
 bend already sounded as the curve. Now every on-take pb/cc in a window is a seat, and
 parked pbs are editable off-take through the same `parked` backing as cc (pb values
 are edited by typing, not solo-cursor nudge — `applyNudge` has no `pb` part). The
-markerless recognition below is now **landed for pb**: in-window seats retire their
+markerless recognition below is now **landed for pb and cc**: in-window seats retire their
 `derived=` tag (write native `{ppq, val, shape}` only) and are recognized by the
-region window. **cc-replace `ccfill` is the remaining half.**
+region window.
 
 **Live recognition needs no standing record.** A live region recognizes its own
 seats by its own current window — `fx.replacePb[chan]` in the pb pass, the region
@@ -526,7 +526,9 @@ to the bounds-converted, raw-compared form. Two predicates result: `replaceWinAt
 stays **half-open** `[startRaw, endRaw)` for the curve interior
 (`streamValue`/`ramps`), while seat *recognition* (`inSeatWindow`) is **inclusive**
 of `endRaw` — the terminal re-centre seat sits exactly at the window end and must
-read as a seat, not as an authored pb.
+read as a seat, not as an authored pb. cc-replace recognition is **half-open** throughout:
+its curves carry no terminal re-centre at `endppq`, so it matches the park's own half-open
+`covered()` and an authored cc exactly at the boundary stays visible.
 
 **Transitions: diff windows, don't mirror.** A markerless seat is invisible to the
 park scan, so the scan cannot run every rebuild — it would re-park the seats. It must
@@ -538,6 +540,13 @@ new window **parks** its authored pbs off-take (walk mm in the raw span, skippin
 already-marked detune absorbers), a removed one **sweeps** its orphaned seats (delete
 every mm pb in the raw span). The queue is transient RAM, consumed once, not
 persisted.
+
+**cc drains earlier than pb.** The CC walk (`rebuildCCs`) runs *before* the park, so cc can't
+park-then-recognize the way pb does. `enqueueCcTransitions` stages the same park/sweep, but the walk
+drains them itself: a freshly-created window is **excluded** from the fill-recognition set (its authored
+ccs stay in columns for the following park pass to stash off-take — recognizing them as fill first would
+let the reconcile delete them), and a removed window's orphaned seats are **deleted inline**. The
+existing column-scan cc park is untouched.
 
 Undo/redo needs no enqueue at all: the take + `fxRegions` + `fxParked` revert
 atomically, and REAPER's undo watcher delivers those rewinds as `dataChanged` with
@@ -556,11 +565,11 @@ edge can land just outside the current-swing bounds and escape recognition.
 channel's replace-target seats (churn on swing is acceptable) rather than
 reconciling.
 
-**Pin.** The existing `tm_fx_region_spec` seated-curve / I1 / densify /
-suppression-reversibility tests hold unchanged; add one asserting a dense in-window
-curve writes zero `eventMeta` entries — the regression the slice exists to prevent
-— and one that a removed region leaves neither an orphaned seat nor a lost authored
-pb.
+**Pin (landed).** The existing `tm_fx_region_spec` seated-curve / I1 / densify /
+suppression-reversibility tests hold unchanged; dense-curve tests (pb and cc) assert the
+seats are markerless (`uuid == nil`, no `eventMeta`) — the regression the slice exists to
+prevent — and removal tests assert a removed region leaves neither an orphaned seat nor a
+lost authored pb/cc on the take.
 
 ## The fx chain — series-composition and multi-column authoring (design)
 
@@ -1279,9 +1288,11 @@ target -- the instrument hears the curve directly.
   Like the note chord, the parked cc is **re-seated for display** via `channels[chan].parkedCC` (the cc
   twin of B2's `channels[chan].parked`), so it stays the visible, editable surface and the fill never
   shows -- creating a cc-replace region leaves the lane looking unchanged (the invariant).
-- **The fill** is a derived cc (`derived='ccfill'`) on the target code: the producer emits it in place
-  of the carrier `pending` entry, step 3 routes it out of columns like the rest seat, and Pass B
-  reconciles it (keyed `(cc, ppq)`, matched on val + shape) so a steady rebuild does not churn it.
+- **The fill** is a **markerless** cc on the target code (native `{ppq, val, shape}`, no `derived=` tag,
+  so no uuid/`eventMeta`): the producer emits it in place of the carrier `pending` entry, the CC walk
+  routes any in-window target-lane cc out of columns like the rest seat (recognized by the region, not a
+  marker — see § Route-by-window), and Pass B reconciles it (keyed `(cc, ppq)`, matched on val + shape)
+  so a steady rebuild does not churn it.
 - `cancelBase` / base-sampling is **not** the path -- it was removed; this mechanism needs neither.
 
 **Known edges** (not solved). (1) A cc target carrying *both* an augment region and a replace region:
@@ -1294,7 +1305,7 @@ raw-branch + rest seating), `generators.lua` (a cc-dest augment kind + `ccDefaul
 fixture test in `tm_fx_region_spec` (value-correctness + ±127 range + rest fallback).
 
 **Files (replace).** `trackerManager.lua` -- the `4.5b` cc-park block + `fxParkedCC` sidecar, the
-producer `ccFill` fork, step-3 `ccfill` routing, the Pass B fill reconcile, and the
+producer `ccFill` fork, the CC-walk window recognition + create-suppress / removal-sweep, the Pass B fill reconcile, and the
 `channels[chan].parkedCC` render union; `trackerView.lua` -- the cc render-union (B2). No
 `Continuum CC.jsfx` or `generators.lua` change; fixture tests in `tm_fx_region_spec` (replace
 mechanics) + `tv_fx_region_spec` (parked-cc render).

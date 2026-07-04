@@ -89,26 +89,44 @@ local function stashOfType(h, evType)
   return out
 end
 
--- The generated replace curve written straight onto a cc target (derived='ccfill'), routed out of
--- columns. Its authored cc is parked off-take; these stand in on the target lane.
-local function fillsOf(dump, chan, cc)
+-- Half-open region membership on a channel (matches production's covered()): a cc-replace seat lives
+-- in [startppq, endppq). see design/note-macros-v2.md § Route-by-window
+local function inCcSpan(h, chan, ppq)
+  for _, r in ipairs(h.ds:get('fxRegions') or {}) do
+    if r.chan == chan and ppq >= r.startppq and ppq < r.endppq then return true end
+  end
+  return false
+end
+
+-- The seated replace curve on a cc target, hidden from columns. Seats are markerless -- the live region
+-- span IS their identity; the authored cc it covers is parked off-take.
+local function fillRecords(h, chan, cc)
   local out = {}
-  for _, c in ipairs(dump.ccs) do
-    if c.evType == 'cc' and c.cc == cc and c.chan == chan and c.derived == 'ccfill' then
-      out[#out + 1] = { ppq = c.ppq, val = c.val, shape = c.shape }
+  for _, c in ipairs(h.fm:dump().ccs) do
+    if c.evType == 'cc' and c.cc == cc and c.chan == chan and inCcSpan(h, chan, c.ppq) then
+      out[#out + 1] = c
     end
+  end
+  return out
+end
+local function fillsOf(h, chan, cc)
+  local out = {}
+  for _, c in ipairs(fillRecords(h, chan, cc)) do
+    out[#out + 1] = { ppq = c.ppq, val = c.val, shape = c.shape }
   end
   table.sort(out, function(a, b) return a.ppq < b.ppq end)
   return out
 end
-local function ccFillAt(dump, chan, cc, ppq)
-  for _, c in ipairs(fillsOf(dump, chan, cc)) do if c.ppq == ppq then return c end end
+local function ccFillAt(h, chan, cc, ppq)
+  for _, c in ipairs(fillsOf(h, chan, cc)) do if c.ppq == ppq then return c end end
 end
 
--- A non-derived authored cc on the take; nil once a replace window parks it off.
-local function authoredCC(dump, chan, cc, ppq)
-  for _, c in ipairs(dump.ccs) do
-    if c.evType == 'cc' and c.cc == cc and c.chan == chan and c.ppq == ppq and not c.derived then return c end
+-- A non-derived authored cc on the take, outside any live cc-replace window (an in-window cc is a
+-- markerless seat, not authored); nil once a window parks the authored cc off.
+local function authoredCC(h, chan, cc, ppq)
+  for _, c in ipairs(h.fm:dump().ccs) do
+    if c.evType == 'cc' and c.cc == cc and c.chan == chan and c.ppq == ppq
+       and not c.derived and not inCcSpan(h, chan, ppq) then return c end
   end
 end
 
@@ -910,12 +928,12 @@ return {
 
       local dump = h.fm:dump()
       -- The curve is written verbatim onto cc 74 -- no carrier, no node, no transport encoding.
-      t.eq(ccFillAt(dump, 1, 74, 0).val,   100, 'curve start lands on the target cc lane')
-      t.eq(ccFillAt(dump, 1, 74, 120).val, 20,  'curve mid lands on the target cc lane')
+      t.eq(ccFillAt(h, 1, 74, 0).val,   100, 'curve start lands on the target cc lane')
+      t.eq(ccFillAt(h, 1, 74, 120).val, 20,  'curve mid lands on the target cc lane')
       t.eq(#carriersOf(dump, 1), 0, 'no carrier allocated -- cc replace bypasses the additive node')
       -- The authored cc the window covers is parked off-take.
-      t.falsy(authoredCC(dump, 1, 74, 60),  'authored cc at 60 is parked off-take')
-      t.falsy(authoredCC(dump, 1, 74, 120), 'authored cc at 120 is parked off-take')
+      t.falsy(authoredCC(h, 1, 74, 60),  'authored cc at 60 is parked off-take')
+      t.falsy(authoredCC(h, 1, 74, 120), 'authored cc at 120 is parked off-take')
     end,
   },
 
@@ -934,15 +952,18 @@ return {
                                    fx = { { kind = 'ccRep' } } } })
       h.tm:rebuild()
       generators.kinds.ccRep = nil
-      local dump = h.fm:dump()
-      t.truthy(ccFillAt(dump, 1, 74, 0), 'the fill is present while the region is')
-      t.falsy(authoredCC(dump, 1, 74, 60), 'the authored cc is parked while the region is present')
+      t.truthy(ccFillAt(h, 1, 74, 0), 'the fill is present while the region is')
+      t.falsy(authoredCC(h, 1, 74, 60), 'the authored cc is parked while the region is present')
 
       h.ds:assign('fxRegions', {})
       h.tm:rebuild()
-      dump = h.fm:dump()
-      t.falsy(ccFillAt(dump, 1, 74, 0), 'no fill survives the region removal')
-      t.eq(authoredCC(dump, 1, 74, 60).val, 30, 'the authored cc is restored to the take')
+      t.falsy(ccFillAt(h, 1, 74, 0), 'no fill survives the region removal')
+      t.eq(authoredCC(h, 1, 74, 60).val, 30, 'the authored cc is restored to the take')
+      local cc74 = {}
+      for _, c in ipairs(h.fm:dump().ccs) do
+        if c.evType == 'cc' and c.cc == 74 and c.chan == 1 then cc74[#cc74 + 1] = c end
+      end
+      t.eq(#cc74, 1, 'the swept seats leave the take -- only the restored authored cc remains')
     end,
   },
 
@@ -960,19 +981,43 @@ return {
       h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
                                    fx = { { kind = 'ccRep' } } } })
       h.tm:rebuild()
-      local before = fillsOf(h.fm:dump(), 1, 74)
+      local before = fillsOf(h, 1, 74)
       t.truthy(#before > 0, 'fill present (non-vacuous)')
 
       local adds, realAdd = 0, h.fm.add
       h.fm.add = function(self, e)
-        if e and e.evType == 'cc' and e.derived == 'ccfill' then adds = adds + 1 end
+        if e and e.evType == 'cc' and e.cc == 74 then adds = adds + 1 end
         return realAdd(self, e)
       end
       h.tm:rebuild()
       h.fm.add = realAdd
       generators.kinds.ccRep = nil
       t.eq(adds, 0, 'steady-state rebuild rewrites no fill events')
-      t.deepEq(fillsOf(h.fm:dump(), 1, 74), before, 'the fill is byte-identical across the round trip')
+      t.deepEq(fillsOf(h, 1, 74), before, 'the fill is byte-identical across the round trip')
+    end,
+  },
+
+  {
+    name = 'cc replace: a dense fill curve seats markerlessly (no uuid, no eventMeta)',
+    run = function(harness)
+      local h = harness.mk()
+      generators.kinds.ccDense = {
+        expand = function()
+          local d = {}
+          for i = 0, 11 do d[#d + 1] = { ppqL = i * 20, val = i * 8, shape = 'linear' } end
+          return { notes = {}, delta = d }
+        end,
+        mode = 'replace', dest = 74, label = 'CcDense', defaults = {}, fields = {},
+      }
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+                                   fx = { { kind = 'ccDense' } } } })
+      h.tm:rebuild()
+      generators.kinds.ccDense = nil
+      local seats = fillRecords(h, 1, 74)
+      t.truthy(#seats >= 12, 'every breakpoint seats on the target lane')
+      for _, s in ipairs(seats) do
+        t.eq(s.uuid, nil, 'a fill seat is markerless -- no uuid, no eventMeta sidecar')
+      end
     end,
   },
 
