@@ -1021,94 +1021,87 @@ return {
     end,
   },
 
-  ----- Continuous cc augment: the carrier encodes cc steps; an un-automated target gets a rest seat
+  ----- Continuous cc augment: base + macros sum offline into markerless seats on the target lane
 
   {
-    name = 'fx region (cc augment): the carrier encodes cc steps directly, not pb cents',
+    name = 'fx region (cc augment): un-automated target seats base(rest) + macro, markerless, off columns',
     run = function(harness)
       local h = harness.mk()
       generators.kinds.ccCap = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 0,   shape = 'slow' },
-          { ppqL = 60,             val = 100, shape = 'slow' },
-          { ppqL = host.window[2], val = 0,   shape = 'slow' },
+          { ppqL = host.window[1], val = 0,  shape = 'step' },
+          { ppqL = 60,             val = 30, shape = 'step' },
+          { ppqL = host.window[2], val = 0,  shape = 'step' },
         } } end,
-        mode = 'augment', dest = 10, label = 'CcCap', defaults = {}, fields = {},
+        mode = 'augment', dest = 10, label = 'CcCap', defaults = {}, fields = {},   -- pan, default rest 64
       }
       h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
                                    fx = { { kind = 'ccCap' } } } })
       h.tm:rebuild()
       generators.kinds.ccCap = nil
 
-      local dump = h.fm:dump()
-      t.eq(carrierAt(dump, 1, 60).val, ccCarrierVal(100),
-        'a 100-step cc delta rides the carrier as raw cc, not centsToRaw(100)')
-      t.eq(carrierAt(dump, 1, 0).val, ccCarrierVal(0), 'zero delta -> carrier centre')
-    end,
-  },
-
-  {
-    name = 'fx region (cc augment): +/-127 cc deltas survive the 14-bit transport',
-    run = function(harness)
-      local h = harness.mk()
-      generators.kinds.ccCap = {
-        expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 127,  shape = 'slow' },
-          { ppqL = 120,            val = -127, shape = 'slow' },
-          { ppqL = host.window[2], val = 0,    shape = 'slow' },
-        } } end,
-        mode = 'augment', dest = 10, label = 'CcCap', defaults = {}, fields = {},
-      }
-      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
-                                   fx = { { kind = 'ccCap' } } } })
-      h.tm:rebuild()
-      generators.kinds.ccCap = nil
-
-      -- Replicate midiManager.splitWide + the collapsed node coalesce (acm*128 + acl - 8192)
-      -- to prove +/-127 round-trips through the MSB/LSB pair the node now reads for every target.
-      local function recompose(v)
-        local msb = math.floor(v)
-        local lsb = util.round((v - msb) * 128)
-        if lsb >= 128 then msb, lsb = msb + 1, 0 end
-        return msb * 128 + lsb - 8192
+      t.eq(ccFillAt(h, 1, 10, 0).val,  64, 'no authored automation -> base is the default rest (64) + macro 0')
+      t.eq(ccFillAt(h, 1, 10, 60).val, 94, 'at the macro peak the seat is rest 64 + delta 30')
+      for _, s in ipairs(fillRecords(h, 1, 10)) do
+        t.eq(s.uuid, nil, 'an augment seat is markerless -- no uuid, no eventMeta sidecar')
       end
-      local dump = h.fm:dump()
-      t.eq(recompose(carrierAt(dump, 1, 0).val),   127,  '+127 recovers exactly through the wire pair')
-      t.eq(recompose(carrierAt(dump, 1, 120).val), -127, '-127 recovers exactly through the wire pair')
+      t.falsy(h.tm:getChannel(1).columns.ccs[10], 'the summed seats are routed out of columns -- off-screen')
     end,
   },
 
   {
-    name = 'fx region (cc augment): rest seat appears only with no authored automation, off-screen',
+    name = 'fx region (cc augment): over authored automation the seat is authored-base + macro',
     run = function(harness)
       local h = harness.mk()
+      h.tm:addEvent({ evType = 'cc', ppq = 0, chan = 1, cc = 10, val = 20 }); h.tm:flush()
       generators.kinds.ccCap = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 0,  shape = 'slow' },
-          { ppqL = 60,             val = 20, shape = 'slow' },
-          { ppqL = host.window[2], val = 0,  shape = 'slow' },
+          { ppqL = host.window[1], val = 0,  shape = 'step' },
+          { ppqL = 60,             val = 30, shape = 'step' },
+          { ppqL = host.window[2], val = 0,  shape = 'step' },
         } } end,
-        mode = 'augment', dest = 11, label = 'CcCap', defaults = {}, fields = {},   -- 11 = expression (rest 127)
+        mode = 'augment', dest = 10, label = 'CcCap', defaults = {}, fields = {},
       }
       h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
                                    fx = { { kind = 'ccCap' } } } })
       h.tm:rebuild()
-
-      local seat = baseSeat(h.fm:dump(), 1, 11)
-      t.truthy(seat, 'an un-automated expression target gets a base seat')
-      t.eq(seat.ppq, 0, 'seated at take start')
-      t.eq(seat.val, 127, 'expression rests wide open (ccDefaultRest[11] = 127)')
-      t.falsy(h.tm:getChannel(1).columns.ccs[11], 'the seat is routed out of columns -- off-screen')
-
-      h.tm:rebuild()
-      t.eq(baseSeat(h.fm:dump(), 1, 11).val, 127, 'the seat persists across a no-change rebuild')
-
-      -- Authoring real automation on the target makes it the base; the seat withdraws.
-      h.tm:addEvent({ evType = 'cc', ppq = 30, chan = 1, cc = 11, val = 90 }); h.tm:flush()
       generators.kinds.ccCap = nil
 
-      t.falsy(baseSeat(h.fm:dump(), 1, 11), 'authored automation became the base; the seat is gone')
-      t.truthy(h.tm:getChannel(1).columns.ccs[11], 'the authored cc 11 is now a normal, visible column')
+      t.eq(ccFillAt(h, 1, 10, 0).val,  20, 'authored cc 20 becomes the held base; macro adds 0 at the start')
+      t.eq(ccFillAt(h, 1, 10, 60).val, 50, 'held base 20 + macro delta 30 at the peak')
+      t.falsy(authoredCC(h, 1, 10, 0), 'the authored cc is parked off-take -- the sum owns the lane')
+    end,
+  },
+
+  {
+    name = 'fx region (cc augment): two overlapping regions sum every stream (N-stream regression guard)',
+    run = function(harness)
+      local h = harness.mk()
+      generators.kinds.ccA = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppqL = host.window[1], val = 0,  shape = 'step' },
+          { ppqL = 60,             val = 40, shape = 'step' },
+          { ppqL = host.window[2], val = 0,  shape = 'step' },
+        } } end,
+        mode = 'augment', dest = 10, label = 'CcA', defaults = {}, fields = {},
+      }
+      generators.kinds.ccB = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppqL = host.window[1], val = 0,  shape = 'step' },
+          { ppqL = 60,             val = 10, shape = 'step' },
+          { ppqL = host.window[2], val = 0,  shape = 'step' },
+        } } end,
+        mode = 'augment', dest = 10, label = 'CcB', defaults = {}, fields = {},
+      }
+      h.ds:assign('fxRegions', {
+        { uuid = 'r1', chan = 1, startppq = 0, endppq = 240, fx = { { kind = 'ccA' } } },
+        { uuid = 'r2', chan = 1, startppq = 0, endppq = 240, fx = { { kind = 'ccB' } } },
+      })
+      h.tm:rebuild()
+      generators.kinds.ccA, generators.kinds.ccB = nil, nil
+
+      t.eq(ccFillAt(h, 1, 10, 60).val, 114, 'overlap sums rest 64 + macroA 40 + macroB 10 -- no stream dropped')
+      t.eq(ccFillAt(h, 1, 10, 0).val,  64,  'both macros anchor 0 at the window edge -> base rest alone')
     end,
   },
 
@@ -1118,9 +1111,9 @@ return {
       local h = harness.mk()
       generators.kinds.ccCap = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 0,  shape = 'slow' },
-          { ppqL = 60,             val = 10, shape = 'slow' },
-          { ppqL = host.window[2], val = 0,  shape = 'slow' },
+          { ppqL = host.window[1], val = 0,  shape = 'step' },
+          { ppqL = 60,             val = 10, shape = 'step' },
+          { ppqL = host.window[2], val = 0,  shape = 'step' },
         } } end,
         mode = 'augment', dest = 10, label = 'CcCap', defaults = {}, fields = {},   -- pan, default rest 64
       }
@@ -1129,9 +1122,41 @@ return {
       h.tm:rebuild()
       generators.kinds.ccCap = nil
 
-      local seat = baseSeat(h.fm:dump(), 1, 10)
-      t.truthy(seat, 'a base seat is emitted for the un-automated pan target')
-      t.eq(seat.val, 100, 'region.fx.rest (100) overrides ccDefaultRest[10] (64)')
+      t.eq(ccFillAt(h, 1, 10, 0).val,  100, 'region.fx.rest (100) overrides ccDefaultRest[10] (64) as the base')
+      t.eq(ccFillAt(h, 1, 10, 60).val, 110, 'the override base 100 + macro delta 10 at the peak')
+    end,
+  },
+
+  {
+    name = 'note-host augment (cc): a sounding note drives summed seats like a degenerate region',
+    run = function(harness)
+      local h = harness.mk()
+      generators.kinds.ccCap = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppqL = host.window[1], val = 0,  shape = 'step' },
+          { ppqL = 60,             val = 25, shape = 'step' },
+          { ppqL = host.window[2], val = 0,  shape = 'step' },
+        } } end,
+        mode = 'augment', dest = 10, label = 'CcCap', defaults = {}, fields = {},
+      }
+      -- The note carries its own fx: an augment host stays on the take (unparked) and drives cc over its span.
+      local function seatMap()
+        local m = {}
+        for _, c in ipairs(h.fm:dump().ccs) do
+          if c.evType == 'cc' and c.cc == 10 and c.chan == 1 then m[c.ppq] = c.val end
+        end
+        return m
+      end
+      addNote(h, { pitch = 60, ppq = 0, endppq = 240, lane = 1, fx = { { kind = 'ccCap' } } })
+
+      local seat = seatMap()
+      t.deepEq(authoredPitches(h), { 60 }, 'the augment host keeps sounding -- it is not parked')
+      t.eq(seat[0],  64, 'the note-host window seats base rest 64 + macro 0 at the start')
+      t.eq(seat[60], 89, 'and rest 64 + macro delta 25 at the peak')
+
+      h.tm:rebuild()   -- kind still registered: seats must be recognized, re-summed, not swept or duplicated
+      generators.kinds.ccCap = nil
+      t.eq(seatMap()[60], 89, 'the summed seat is stable across a no-change rebuild')
     end,
   },
 

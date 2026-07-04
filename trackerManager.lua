@@ -96,6 +96,87 @@ local function centsToRaw(cents)
   return util.clamp(util.round(cents * 8192 / pbLim()), -8192, 8191)
 end
 
+local function isCurved(shape)
+  return shape and shape ~= 'step' and shape ~= 'linear'
+end
+
+-- CCINTERP is interpolated points per QN; the densify grid wants a tick step.
+local function ccGridStep()
+  return math.max(1, util.round((mm:resolution() or 960) / mm:ccInterp()))
+end
+
+-- Sum a held base curve and N macro curves onto the ccGridStep lattice over span [sL, eL) -- half-open,
+-- so eL is never emitted. Macros anchor 0 at their own edges, so disjoint macros still sum correctly.
+local function sumStreams(base, macros, span, opts)
+  local sL, eL = span[1], span[2]
+  local grid   = ccGridStep()
+  local curves = { base }
+  for _, m in ipairs(macros) do util.add(curves, m) end
+
+  local function firstAfter(curve, target)   -- first index with .ppq > target (binary; curves ppq-sorted)
+    local lo, hi = 1, #curve + 1
+    while lo < hi do
+      local mid = (lo + hi) // 2
+      if curve[mid].ppq <= target then lo = mid + 1 else hi = mid end
+    end
+    return lo
+  end
+  local function eval(curve, ppq)   -- held both ways: first value before, last after, shape interp within
+    if #curve == 0 then return 0 end
+    local i = firstAfter(curve, ppq)
+    local A, B = curve[i - 1], curve[i]
+    if not A then return curve[1].val end
+    if not B then return A.val end
+    return mm:interpolate(A, B, ppq, 'val')
+  end
+  local function governingShape(curve, ppq)   -- shape at ppq: bp at-or-before; 'step' at/beyond the ends
+    local i = firstAfter(curve, ppq)
+    local A, B = curve[i - 1], curve[i]
+    if not A or not B then return 'step' end
+    return A.shape or 'linear'
+  end
+  local function sumAt(ppq)
+    local v = 0
+    for _, c in ipairs(curves) do v = v + eval(c, ppq) end
+    if opts.round then v = util.round(v) end
+    if opts.lo then v = util.clamp(v, opts.lo, opts.hi) end
+    return v
+  end
+
+  -- feature points: span ends plus every constituent bp strictly within, deduped and sorted
+  local seen, fps = { [sL] = true, [eL] = true }, { sL, eL }
+  for _, c in ipairs(curves) do
+    for _, bp in ipairs(c) do
+      if bp.ppq > sL and bp.ppq < eL and not seen[bp.ppq] then
+        seen[bp.ppq] = true; util.add(fps, bp.ppq)
+      end
+    end
+  end
+  table.sort(fps)
+
+  -- emit each pair's left point; densify a pair only when some constituent curves through it (linear+linear
+  -- and step+step sum exactly at the union, no growth). eL bounds the final pair but is never emitted.
+  local pts = {}
+  for idx = 1, #fps - 1 do
+    local p, q = fps[idx], fps[idx + 1]
+    local anyCurved, allStep = false, true
+    for _, c in ipairs(curves) do
+      local s = governingShape(c, p)
+      if isCurved(s) then anyCurved = true end
+      if s ~= 'step' then allStep = false end
+    end
+    util.add(pts, { ppq = p, val = sumAt(p), shape = allStep and 'step' or 'linear' })
+    if anyCurved then
+      local g = p + grid
+      while g < q do
+        util.add(pts, { ppq = g, val = sumAt(g), shape = 'linear' })
+        g = g + grid
+      end
+    end
+  end
+  return pts
+end
+
 local function rawToCents(raw)
   return util.round(raw / 8192 * pbLim())
 end
@@ -1194,27 +1275,6 @@ local function rebuildInternals(fx)
   return external
 end
 
--- cc-replace markerless-seat transitions mirror pb (see rebuildRegionPark, § Route-by-window): a forward
--- fxRegions edit diffs cc windows against the last baseline; the CC walk drains the staged park/sweep.
-local ccParkQueue, ccSweepQueue, prevCcWindows = {}, {}, {}
-local function ccWindowsNow()
-  local out = {}
-  for _, w in ipairs(generators.parkWindows(ds:get('fxRegions') or {})) do
-    if w.evType == 'cc' then out[util.key(w.chan, w.cc, w.startppq, w.endppq)] = w end
-  end
-  return out
-end
-local function enqueueCcTransitions()
-  local now = ccWindowsNow()
-  for k, w in pairs(now) do if not prevCcWindows[k] then util.add(ccParkQueue, w) end end
-  for k, w in pairs(prevCcWindows) do if not now[k] then util.add(ccSweepQueue, w) end end
-  prevCcWindows = now
-end
-local function resyncCcWindows()
-  prevCcWindows = ccWindowsNow()
-  ccParkQueue, ccSweepQueue = {}, {}
-end
-
 -- CC walk: build the carrier routing map, reconcile (raw,ppqL), project CCs.
 -- Returns a carrier-map persister; run after fx expansion. see docs/trackerManager.md § Rebuild: CC walk
 local function rebuildCCs(fx)
@@ -1248,19 +1308,13 @@ local function rebuildCCs(fx)
     return false
   end
 
-  -- A window created this rebuild is excluded from fillWin: its authored ccs still sit on-take and must
-  -- park (via columns, later) before they become seats -- recognizing them as fill now would eat them.
-  local created = {}
-  for _, w in ipairs(ccParkQueue) do created[util.key(w.chan, w.cc, w.startppq, w.endppq)] = true end
-  ccParkQueue = {}
-  local steadyWins = {}
-  for _, w in ipairs(generators.parkWindows(ds:get('fxRegions') or {})) do
-    if w.evType == 'cc' and not created[util.key(w.chan, w.cc, w.startppq, w.endppq)] then
-      util.add(steadyWins, w)
-    end
+  -- Seats are recognized against last rebuild's persisted windows: an on-take cc inside a prev cc window is a
+  -- seat; a just-created window's cc still parks, a removed one's orphans reconcile away. see design/note-macros-v2.md § Route-by-window
+  local ccWins = {}
+  for _, w in ipairs(ds:get('prevWindows') or {}) do
+    if w.evType == 'cc' then util.add(ccWins, w) end
   end
-  local fillWin  = rawSpanMap(steadyWins)
-  local sweepWin = rawSpanMap(ccSweepQueue); ccSweepQueue = {}
+  local fillWin = rawSpanMap(ccWins)
 
   for _, cc in mm:ccsRaw() do
     if not dirtyChans[cc.chan] then goto continue end   -- clean: cc/at/pc columns carried whole
@@ -1272,24 +1326,11 @@ local function rebuildCCs(fx)
         { ppq = cc.ppq, val = cc.val, shape = cc.shape, cc = cc.cc, token = token })
       goto continue
     end
-    -- Rest seat: a generator-owned base CC at a real cc target (derived sidecar), routed out
-    -- of columns like a carrier so it stays off-screen. see design/note-macros-v2.md § Continuous cc
-    if cc.evType == 'cc' and cc.derived == 'ccbase' then
-      util.add(fx.ccExisting[cc.chan].base,
-        { ppq = cc.ppq, val = cc.val, cc = cc.cc, token = token })
-      goto continue
-    end
-    -- Replace fill: a markerless seat inside a live cc-replace window (its authored cc parked), routed
-    -- out like the rest seat and reconciled fresh at Pass B. see design/note-macros-v2.md § Route-by-window
+    -- fx cc event: a markerless seat inside a prev cc window (its authored cc parked), routed out and
+    -- reconciled fresh at fx expansion. A removed window's orphans reconcile away there. see § Route-by-window
     if cc.evType == 'cc' and inSpan(fillWin, cc.chan, cc.cc, cc.ppq) then
-      util.add(fx.ccExisting[cc.chan].fill,
+      util.add(fx.ccExisting[cc.chan].events,
         { ppq = cc.ppq, val = cc.val, shape = cc.shape, cc = cc.cc, token = token })
-      goto continue
-    end
-    -- Swept fill: the region was removed this rebuild -- its seats match no window now and no marker
-    -- names them, so delete them here (the authored cc is restored by the park pass). see § Route-by-window
-    if cc.evType == 'cc' and inSpan(sweepWin, cc.chan, cc.cc, cc.ppq) then
-      ccWrites.del({ token = token })
       goto continue
     end
 
@@ -1462,28 +1503,7 @@ end
 -- Region-replace parking: authored events a replace window covers leave the take;
 -- the prior parked set carries still-covered forward, restores the rest. see design/note-macros-v2.md § Generator output
 
--- Markerless-seat transitions (pb-replace): a forward fxRegions edit diffs pb windows against the last
--- baseline and stages a one-shot park/sweep the next rebuild drains. see design/note-macros-v2.md § Route-by-window
-local pbParkQueue, pbSweepQueue, prevPbWindows = {}, {}, {}
-local function pbWindowsNow()
-  local out = {}
-  for _, w in ipairs(generators.parkWindows(ds:get('fxRegions') or {})) do
-    if w.evType == 'pb' then out[util.key(w.chan, w.startppq, w.endppq)] = w end
-  end
-  return out
-end
-local function enqueuePbTransitions()
-  local now = pbWindowsNow()
-  for k, w in pairs(now) do if not prevPbWindows[k] then util.add(pbParkQueue, w) end end
-  for k, w in pairs(prevPbWindows) do if not now[k] then util.add(pbSweepQueue, w) end end
-  prevPbWindows = now
-end
-local function resyncPbWindows()
-  prevPbWindows = pbWindowsNow()
-  pbParkQueue, pbSweepQueue = {}, {}
-end
-
-local function rebuildRegionPark(deferred)
+local function rebuildRegionPark(deferred, currentWindows)
   local batch = mmBatch()
 
   -- Park = clone minus the realisation frame, so new authored metadata rides a park/unpark
@@ -1497,7 +1517,7 @@ local function rebuildRegionPark(deferred)
 
   -- One predicate for all passes; takes anything spec-shaped (evType/chan/cc/ppqL). spec.fx (note
   -- specs only): a discrete-replace note host parks itself, like a region window (membership {self}).
-  local windows = generators.parkWindows(ds:get('fxRegions') or {})
+  local windows = currentWindows
   local function covered(spec)
     if spec.fx and generators.parksNotes(spec) then return true end
     for _, w in ipairs(windows) do
@@ -1654,12 +1674,22 @@ local function rebuildRegionPark(deferred)
     end
   end
 
-  -- pb: seats are markerless, so the scan cannot run every rebuild -- it drains the staged transition
-  -- here instead (enqueuePbTransitions); the pb column isn't built yet, so we walk mm directly. see § Route-by-window
+  -- pb: seats are markerless, so the scan can't run every rebuild -- it diffs current pb windows against
+  -- last rebuild's persisted set: a created window parks its authored pbs, a removed one sweeps. see § Route-by-window
+  local prevPb, curPb = {}, {}
+  for _, w in ipairs(ds:get('prevWindows') or {}) do
+    if w.evType == 'pb' then prevPb[util.key(w.chan, w.startppq, w.endppq)] = w end
+  end
+  for _, w in ipairs(windows) do
+    if w.evType == 'pb' then curPb[util.key(w.chan, w.startppq, w.endppq)] = w end
+  end
+  local pbCreated, pbRemoved = {}, {}
+  for k, w in pairs(curPb) do if not prevPb[k] then util.add(pbCreated, w) end end
+  for k, w in pairs(prevPb) do if not curPb[k] then util.add(pbRemoved, w) end end
   do
-    -- Park queue (create): only an enqueued window walks mm. Marked detune absorbers may already sit in
+    -- Park (create): only a newly-created window walks mm. Marked detune absorbers may already sit in
     -- the window (not authored; rebuildPbs reseats them into the curve) -- only unmarked (authored) pbs park.
-    local parkQ = pbParkQueue; pbParkQueue = {}
+    local parkQ = pbCreated
     local scan = {}
     for _, q in ipairs(parkQ) do
       local sRaw, eRaw = tm:fromLogical(q.chan, q.startppq), tm:fromLogical(q.chan, q.endppq)
@@ -1692,7 +1722,7 @@ local function rebuildRegionPark(deferred)
 
     -- Sweep queue (remove): a removed window's seats orphan (no marker names them) -- delete every mm pb
     -- in the swept raw span. The authored restored above is a token-less add, so delete-first order is safe.
-    local sweepQ = pbSweepQueue; pbSweepQueue = {}
+    local sweepQ = pbRemoved
     for _, q in ipairs(sweepQ) do
       local sRaw, eRaw = tm:fromLogical(q.chan, q.startppq), tm:fromLogical(q.chan, q.endppq)
       for _, cc in mm:ccsRaw() do
@@ -1752,9 +1782,43 @@ local function rebuildPA()
   end
 end
 
+-- fx host voice extents + per-note same-lane successor ppqL, floored by authored end; a pure, G4-stable scan
+-- of the settled note columns. Runs for all 16 chans so parking + recognition see the complete window set. see design/archive/note-macros.md § host contract
+local function computeFxWindows()
+  local fxWindow, nextInLane = {}, {}
+  local takeLen = tm:length()
+  for chan = 1, 16 do
+    if dirtyChans[chan] then
+      for _, col in ipairs(channels[chan].columns.notes) do sortByPPQ(col.events) end
+    end
+    local takeLenL = tm:toLogical(chan, takeLen)
+    local byLane = {}
+    for laneIdx, col in ipairs(channels[chan].columns.notes) do
+      for _, evt in ipairs(col.events) do
+        if evt.evType ~= 'pa' and evt.ppqL ~= nil then util.bucket(byLane, laneIdx, evt) end
+      end
+    end
+    local laneNextOf = strictNextMap(byLane)   -- groups are ppq-ordered: col.events sorted above
+    for _, g in pairs(byLane) do
+      for _, evt in ipairs(g) do
+        local nextEvt = laneNextOf[evt]
+        nextInLane[evt] = nextEvt
+        if evt.fx then
+          -- Take is the world: a tail past take end (paste / overshooting move) can't sound past it.
+          local endL = (evt.endppqL == nil or evt.endppqL == util.OPEN)
+                       and takeLenL or math.min(evt.endppqL, takeLenL)
+          if nextEvt then endL = math.min(endL, nextEvt.ppqL) end
+          fxWindow[evt] = endL
+        end
+      end
+    end
+  end
+  return fxWindow, nextInLane
+end
+
 -- Fx expansion: fx-carrying notes / fx-regions -> derived notes, CCs, carriers;
 -- reconcile vs existing, note writes deferred to the tail walk. Returns per-chan carrier map. see design/archive/note-macros.md § Pipeline placement
-local function rebuildFx(fx, deferred)
+local function rebuildFx(fx, deferred, fxWindow, nextInLane, currentWindows)
   local newFxCarrier = {}
   local prevCarrier  = ds:get('fxCarrier') or {}   -- clean chans carry their carrier map forward
 
@@ -1767,49 +1831,13 @@ local function rebuildFx(fx, deferred)
   end
 
   -- Region note-park windows: a parked cell inside one is region membership, not a note host.
-  local parkWindows = generators.parkWindows(ds:get('fxRegions') or {})
   local function noteParkCovered(chan, ppqL)
-    for _, w in ipairs(parkWindows) do
+    for _, w in ipairs(currentWindows) do
       if w.evType == 'note' and w.chan == chan and ppqL >= w.startppq and ppqL < w.endppq then
         return true
       end
     end
     return false
-  end
-
-  -- Windows (read-only): fx host voice extents + per-note same-lane successor ppqL, floored by authored
-  -- end; no realised round-trip (G4-stable). see design/archive/note-macros.md § host contract
-  local fxWindow, nextInLane = {}, {}
-  do
-    local takeLen = tm:length()
-    for chan = 1, 16 do
-      if not dirtyChans[chan] then goto nextWinChan end   -- clean: fx hosts stay in carried columns
-      local takeLenL = tm:toLogical(chan, takeLen)
-      local byLane = {}
-      for laneIdx, col in ipairs(channels[chan].columns.notes) do
-        for _, evt in ipairs(col.events) do
-          if evt.evType ~= 'pa' and evt.ppqL ~= nil then
-            util.bucket(byLane, laneIdx, evt)
-          end
-        end
-      end
-      local laneNextOf = strictNextMap(byLane)   -- groups are ppq-ordered: col.events sorted at entry
-      for _, g in pairs(byLane) do
-        for _, evt in ipairs(g) do
-          local nextEvt = laneNextOf[evt]
-          nextInLane[evt] = nextEvt
-          if evt.fx then
-            -- Take is the world: a tail past take end (paste / overshooting move)
-            -- can't sound past it; window caps at take regardless of authored ceiling.
-            local endL = (evt.endppqL == nil or evt.endppqL == util.OPEN)
-                         and takeLenL or math.min(evt.endppqL, takeLenL)
-            if nextEvt then endL = math.min(endL, nextEvt.ppqL) end
-            fxWindow[evt] = endL
-          end
-        end
-      end
-      ::nextWinChan::
-    end
   end
 
   -- Authored pb breakpoints per channel, exposed to the generator as channel input
@@ -1919,6 +1947,61 @@ local function rebuildFx(fx, deferred)
       spec.lane = lane
     end
   end
+  -- cc-augment summation helpers (per chan): merge macro windows into maximal spans, pick the macros
+  -- covering a span, resolve the resting base, build the authored base curve the sum holds.
+  local function mergeWindows(bucket)
+    local wins = {}
+    for _, m in ipairs(bucket) do util.add(wins, { m.window[1], m.window[2] }) end
+    table.sort(wins, function(a, b) return a[1] < b[1] end)
+    local merged = {}
+    for _, w in ipairs(wins) do
+      local last = merged[#merged]
+      if last and w[1] <= last[2] then last[2] = math.max(last[2], w[2])
+      else util.add(merged, { w[1], w[2] }) end
+    end
+    return merged
+  end
+  local function overlapping(bucket, span)
+    local out = {}
+    for _, m in ipairs(bucket) do
+      if m.window[1] < span[2] and m.window[2] > span[1] then util.add(out, m) end
+    end
+    return out
+  end
+  local function firstRestOverride(bucket)   -- earliest window's explicit rest override wins
+    local rest, best = nil, math.huge
+    for _, m in ipairs(bucket) do
+      if m.rest ~= nil and m.window[1] < best then rest, best = m.rest, m.window[1] end
+    end
+    return rest
+  end
+  -- Authored base the sum holds: parked in-window ccs (authoritative) plus out-of-window ccs still on the
+  -- take (for hold-in), deduped by ppqL. Empty -> a single flat rest point. see design/note-macros-v2.md § Continuous cc
+  local function buildCcBase(chan, cc, bucket, rest)
+    local base, seen = {}, {}
+    for _, cell in ipairs(channels[chan].parkedCC or {}) do
+      if cell.cc == cc then
+        util.add(base, { ppq = cell.ppqL, val = cell.val, shape = cell.shape or 'step' })
+        seen[cell.ppqL] = true
+      end
+    end
+    local col = channels[chan].columns.ccs[cc]
+    for _, evt in ipairs(col and col.events or {}) do
+      local ppqL = evt.ppqL or evt.ppq
+      if not seen[ppqL] then
+        util.add(base, { ppq = ppqL, val = evt.val, shape = evt.shape or 'step' })
+        seen[ppqL] = true
+      end
+    end
+    table.sort(base, function(a, b) return a.ppq < b.ppq end)
+    if #base == 0 then
+      local minStart = math.huge
+      for _, m in ipairs(bucket) do minStart = math.min(minStart, m.window[1]) end
+      base = { { ppq = minStart, val = rest, shape = 'step' } }
+    end
+    return base
+  end
+
   for chan = 1, 16 do
     -- Frozen: derived notes/CCs/carriers stand untouched in mm; carry the carrier map so routing
     -- survives, leave noteLive empty so tails/pbs/pcs skip too. see design/dirty-channels.md § Phase A
@@ -1928,7 +2011,7 @@ local function rebuildFx(fx, deferred)
     end
     -- Pass A: run every generator. Structural notes commit per lane; continuous deltas
     -- stash with their window for colouring (channel-wide, not note-tied). see design/archive/note-macros.md § Continuous realisation
-    local predicted, pending, ccFill = {}, {}, {}
+    local predicted, pending, ccLive, ccAugment = {}, {}, {}, {}
     -- One producer interface, two sources: a note with fx (v1 augment) or an explicit
     -- fxRegion; the generator sees neither. see design/note-macros-v2.md § The anchor generalized
     local function runProducer(p)
@@ -1957,28 +2040,31 @@ local function rebuildFx(fx, deferred)
             if regionNotes then util.add(regionNotes, spec)
             else util.add(predicted, spec) end
           end
-          -- Augment (pb or cc) rides the additive carrier; both replace kinds fork off it instead --
-          -- see design/note-macros-v2.md § cc replace / § Continuous replace for how each seats its curve.
+          -- cc-replace seats verbatim; cc-augment buckets per target for offline summation; pb (both modes)
+          -- still rides the carrier this slice. see design/note-macros-v2.md § Continuous cc / § Continuous replace
           local target = meta.dest ~= 'note' and meta.dest or nil
           if target and #out.delta > 0 then
             if meta.mode == 'replace' and type(target) == 'number' then
-              -- cc replace: write the curve verbatim onto the target cc lane as markerless seats (no
-              -- derived tag -> no uuid/sidecar); recognized next rebuild by window. No carrier, no node.
+              -- cc replace: write the curve verbatim onto the target cc lane as markerless seats,
+              -- recognized next rebuild by window. No carrier, no node.
               for _, bp in ipairs(out.delta) do
-                util.add(ccFill, { evType = 'cc', chan = chan, cc = target,
+                util.add(ccLive, { evType = 'cc', chan = chan, cc = target,
                                    ppq = tm:fromLogical(chan, bp.ppqL, p.d), val = bp.val, shape = bp.shape })
               end
             elseif meta.mode == 'replace' and target == 'pb' then
-              -- pb replace: the absolute curve rides the base lane as derived absorber seats
-              -- (no carrier). see design/note-macros-v2.md § Continuous pb replace
+              -- pb replace: the absolute curve rides the base lane as derived absorber seats (no carrier).
               util.add(fx.replacePb[chan], { startL, endL, curve = out.delta, d = p.d })
+            elseif type(target) == 'number' then
+              -- cc augment: bucket this macro's window + curve per target; the parked base and every
+              -- covering macro sum offline below (N-stream overlap). see design/note-macros-v2.md § Continuous cc
+              local curve = {}
+              for _, bp in ipairs(out.delta) do
+                util.add(curve, { ppq = bp.ppqL, val = bp.val, shape = bp.shape, tension = bp.tension })
+              end
+              util.bucket(ccAugment, target, { window = { startL, endL }, curve = curve, rest = p.fx.rest })
             else
-              -- cc augment with no authored base needs a resting seat; carry its value so Pass B
-              -- emits it once per target. see design/note-macros-v2.md § Continuous cc
-              local rest = type(target) == 'number'
-                and (p.fx.rest or generators.ccDefaultRest[target] or 0) or nil
-              util.add(pending, { startL = startL, endL = endL,
-                                  target = target, delta = out.delta, d = p.d, rest = rest })
+              -- pb augment: carrier delta (slice 2 migrates to park-and-seat).
+              util.add(pending, { startL = startL, endL = endL, target = target, delta = out.delta, d = p.d })
             end
           end
         end
@@ -2035,6 +2121,21 @@ local function rebuildFx(fx, deferred)
     reconcileFx(fx.noteExisting[chan], predicted, deferred)
     for _, spec in ipairs(predicted) do
       util.add(fx.noteLive[chan], { evt = spec, lane = spec.lane })
+    end
+
+    -- cc-augment: sum the parked base and every covering macro per target into markerless seats on the
+    -- target lane (N-stream overlap folds here). see design/note-macros-v2.md § Continuous cc
+    for cc, bucket in pairs(ccAugment) do
+      local rest = firstRestOverride(bucket) or generators.ccDefaultRest[cc] or 0
+      local base = buildCcBase(chan, cc, bucket, rest)
+      for _, span in ipairs(mergeWindows(bucket)) do
+        local curves = {}
+        for _, m in ipairs(overlapping(bucket, span)) do util.add(curves, m.curve) end
+        for _, pt in ipairs(sumStreams(base, curves, span, { round = true, lo = 0, hi = 127 })) do
+          util.add(ccLive, { evType = 'cc', chan = chan, cc = cc,
+                             ppq = tm:fromLogical(chan, pt.ppq, 0), val = pt.val, shape = pt.shape })
+        end
+      end
     end
 
     -- Pass B: per target, interval-colour stashed instances -- overlapping carriers get
@@ -2100,25 +2201,11 @@ local function rebuildFx(fx, deferred)
       end
     end
 
-    -- Rest seats: one base CC per augment cc target lacking authored automation (derived ones
-    -- already routed out, so an empty cc column == no authored base). see design/note-macros-v2.md § Continuous cc
-    local predictedBase = {}
-    for _, target in ipairs(targets) do
-      if type(target) == 'number' and not channels[chan].columns.ccs[target] then
-        util.add(predictedBase, { evType = 'cc', chan = chan, cc = target, ppq = 0,
-                                  val = byTarget[target][1].rest or 0, shape = 'step', derived = 'ccbase' })
-      end
-    end
     local wires = mmBatch()
+    -- fx cc events: reconcile the summed/replace seats on the target lane; shape is part of the match --
+    -- it drives REAPER's interpolation. see design/note-macros-v2.md § Continuous cc
     reconcileDerived{
-      existing = fx.ccExisting[chan].base, predicted = predictedBase, sink = wires,
-      key   = function(x) return util.key(x.cc, x.ppq) end,
-      match = function(have, spec) return have.val == spec.val end,
-    }
-    -- cc-replace fill: reconcile the generated curve on its target lane; shape is part of the
-    -- match -- it drives REAPER's interpolation. see design/note-macros-v2.md § Continuous cc
-    reconcileDerived{
-      existing = fx.ccExisting[chan].fill, predicted = ccFill, sink = wires,
+      existing = fx.ccExisting[chan].events, predicted = ccLive, sink = wires,
       key   = function(x) return util.key(x.cc, x.ppq) end,
       match = function(have, spec) return have.val == spec.val and have.shape == spec.shape end,
     }
@@ -2219,10 +2306,6 @@ local function rebuildPbs(noteLive, replacePb)
     return (n and n.detune) or 0
   end
 
-  local function isCurved(shape)
-    return shape and shape ~= 'step' and shape ~= 'linear'
-  end
-
   perf.start('gather')
   perf.start('lane1')
   -- Dirty gate on the shared spine, hoisted ahead of lane-1 sort and clone (both skip clean chans).
@@ -2270,8 +2353,7 @@ local function rebuildPbs(noteLive, replacePb)
   perf.stop('gather')
 
   local pbWrites = mmBatch()
-  -- CCINTERP is interpolated points per QN; the densify grid wants a tick step.
-  local gridStep = math.max(1, util.round((mm:resolution() or 960) / mm:ccInterp()))
+  local gridStep = ccGridStep()
 
   -- detune-at-ppq for every pb in one linear merge (pbs and lane1Events both ppq-sorted).
   local function mergeDetunes(pbs, lane1Events)
@@ -2681,7 +2763,7 @@ function tm:rebuild(takeChanged)
   takeChanged = takeChanged or false
   -- Capture before the pipeline's nested mm:modify calls re-fire 'reload' and clear it.
   local didReload = mmReloaded; mmReloaded = false
-  if didReload or takeChanged then dirtyChan(); resyncPbWindows(); resyncCcWindows() end   -- wholesale re-read / take swap: no per-site marks, no transition
+  if didReload or takeChanged then dirtyChan() end   -- wholesale re-read / take swap: prevWindows (dataStore) carries the recognition baseline
   pbLimCents = nil   -- coherence point: refresh cached pbRange for cents<->raw conversions
 
   clearSwing()   -- rebuild is the (cm, mm) coherence point
@@ -2697,13 +2779,13 @@ function tm:rebuild(takeChanged)
     end
   end
 
-  -- Per-channel fx realisation state.
-  -- noteExisting/noteLive: derived vs post-expansion fx notes. ccExisting: carrier/base/fill CC. replacePb: pb replace windows + curves.
+  -- Per-channel fx realisation state: noteExisting/noteLive (derived vs post-expansion fx notes), ccExisting
+  -- (carrier for pb-augment + summed/replace cc events), replacePb (pb replace windows + curves).
   local fx = { noteExisting = {}, noteLive = {}, ccExisting = {}, replacePb = {} }
   for i = 1, 16 do
     fx.noteExisting[i] = {}
     fx.noteLive[i]     = {}
-    fx.ccExisting[i]   = { carrier = {}, base = {}, fill = {} }
+    fx.ccExisting[i]   = { carrier = {}, events = {} }
     fx.replacePb[i]    = {}
   end
   -- fxNote add/del + parked-member restores, deferred from fx expansion / region parking into the tail
@@ -2716,10 +2798,30 @@ function tm:rebuild(takeChanged)
   perf.start('extraCols'); rebuildExtraColumns(); perf.stop('extraCols')  -- reconcile persisted extra columns
   perf.start('externals'); rebuildExternals(external); perf.stop('externals')  -- reintroduce foreign / diverged notes
 
-  perf.start('regionPark'); rebuildRegionPark(deferred); perf.stop('regionPark')  -- park covered, carry/restore prior
+  -- Park window set: fx-regions plus every on-take note host as a degenerate region (note-is-a-region),
+  -- from the settled columns. The producer re-scans post-unpark below. see design/note-macros-v2.md § Offline continuous realisation
+  local hostWindows = computeFxWindows()
+  local parkRegions = {}
+  for _, r in ipairs(ds:get('fxRegions') or {}) do util.add(parkRegions, r) end
+  for chan = 1, 16 do
+    for _, col in ipairs(channels[chan].columns.notes) do
+      for _, host in ipairs(col.events) do
+        if host.fx and host.evType ~= 'pa' and hostWindows[host] then
+          util.add(parkRegions, { chan = chan, startppq = host.ppqL, endppq = hostWindows[host],
+                                  fx = host.fx, noteHost = true })
+        end
+      end
+    end
+  end
+  local currentWindows = generators.parkWindows(parkRegions)
+
+  perf.start('regionPark'); rebuildRegionPark(deferred, currentWindows); perf.stop('regionPark')  -- park covered, carry/restore prior
   perf.start('pa'); rebuildPA(); perf.stop('pa')  -- project PAs into settled note columns
 
-  perf.start('fx'); local newFxCarrier = rebuildFx(fx, deferred); perf.stop('fx')  -- fx expansion: derived notes/CCs/carriers
+  -- Re-scan windows post park/unpark/PA: the producer reads the final columns, including a host an unpark
+  -- just restored (a replace host that lost its note-producing kind falls back to on-take augment).
+  local fxWindow, nextInLane = computeFxWindows()
+  perf.start('fx'); local newFxCarrier = rebuildFx(fx, deferred, fxWindow, nextInLane, currentWindows); perf.stop('fx')  -- fx expansion: derived notes/CCs/carriers
   perf.start('reapCarr'); reapCarriers(newFxCarrier); perf.stop('reapCarr')  -- disarm stale carrier codes; persist live map
 
   perf.start('tails'); rebuildTails(fx, deferred); perf.stop('tails')  -- unified tail/onset walk + atomic note commit
@@ -2727,6 +2829,11 @@ function tm:rebuild(takeChanged)
   perf.start('pcs'); rebuildPCs(fx); perf.stop('pcs')  -- PC synthesis (trackerMode)
 
   perf.start('projLogical'); projectLogical(); perf.stop('projLogical')  -- project columns to logical
+
+  -- Persist this rebuild's window set: next rebuild recognizes seats against it (prev-keyed). see § Route-by-window
+  if mm:take() and not util.deepEq(ds:get('prevWindows') or {}, currentWindows) then
+    ds:assign('prevWindows', #currentWindows > 0 and currentWindows or util.REMOVE)
+  end
 
   -- Index: full reload only when mm re-read its event set (load/reload); edit rebuilds
   -- trust the incremental index and just clear staging. see docs § Incremental index reconciliation
@@ -2858,13 +2965,8 @@ do
       prevSwing = util.deepClone(cur)
       tm:rebuild(false)
     elseif change.name == 'fxRegions' then
-      -- A forward pb/cc-replace region edit stages the park/sweep transition; undo/redo (invalidate)
-      -- and reload land consistent state and only resync the baseline. see § Route-by-window
-      if not flushingParked then
-        if change.invalidate then resyncPbWindows(); resyncCcWindows()
-        else enqueuePbTransitions(); enqueueCcTransitions() end
-        dirtyChan(); tm:rebuild(false)
-      end
+      -- Region edits re-derive; the rebuild diffs current vs persisted windows for park/sweep. see § Route-by-window
+      if not flushingParked then dirtyChan(); tm:rebuild(false) end
     elseif change.name == 'extraColumns' or change.name == 'fxParked' then
       -- parking/extraColumns drive fx expansion + the pb keep-decision (inside the gated passes) -- re-derive.
       if not flushingParked then dirtyChan(); tm:rebuild(false) end

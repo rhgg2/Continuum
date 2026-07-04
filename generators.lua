@@ -311,8 +311,8 @@ function generators.parksNotes(region)
 end
 
 --shape: parkWindows -> { {evType='note'|'cc'|'pb', chan, cc?, startppq, endppq}, ... } (cc on cc windows only)
--- The single source for "what 4.5 parks over": a note window for a discrete-replace chord, a cc/pb
--- window per continuous-replace target. The view tags the same spans.
+-- The single source for "what 4.5 parks over": a note window for a discrete-replace chord, a cc window
+-- per continuous cc target (replace or augment), a pb window per continuous-replace target.
 function generators.parkWindows(regions)
   local windows = {}
   local function window(evType, region, cc)
@@ -320,12 +320,16 @@ function generators.parkWindows(regions)
                         startppq = region.startppq, endppq = region.endppq })
   end
   for _, region in ipairs(regions) do
-    if generators.parksNotes(region) then window('note', region) end
+    -- A note host self-parks via its own note spec, not a region note window -- suppress the note arm
+    -- so a note host's region form only contributes continuous (cc/pb) windows.
+    if generators.parksNotes(region) and not region.noteHost then window('note', region) end
     for _, params in ipairs(region.fx or {}) do
       local meta = generators.kinds[params.kind]
-      if meta and meta.mode == 'replace' then
+      if meta then
+        -- cc parks for replace and augment (the summed base + macros seat on the target lane); pb only
+        -- for replace this slice -- pb-augment still rides the carrier. see design/note-macros-v2.md § Continuous cc
         if type(meta.dest) == 'number' then window('cc', region, meta.dest)
-        elseif meta.dest == 'pb' then window('pb', region) end
+        elseif meta.dest == 'pb' and meta.mode == 'replace' then window('pb', region) end
       end
     end
   end

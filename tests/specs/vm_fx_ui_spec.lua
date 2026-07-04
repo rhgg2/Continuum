@@ -1,8 +1,9 @@
 -- UI wiring for the note-FX editor (retrig + vibrato + slide). Pins cursorNote ->
 -- setNoteFx / setFxKindActive / setFxField. Continuous kinds coexist -- both sum at the node.
 
-local t    = require('support')
-local util = require('util')
+local t          = require('support')
+local util       = require('util')
+local generators = require('generators')
 
 local DELTA_MSB = 20   -- toy fixed vibrato carrier (cf. tm_vibrato_spec)
 
@@ -237,6 +238,36 @@ return {
       local note = h.vm:cursorNote()
       t.truthy(note and note.fx, 'the caret sees the parked cell carrying its fx')
       t.eq(h.vm:fxHostForEdit(), hostUuid(h), 'Super-X addresses the parked host by uuid')
+    end,
+  },
+
+  {
+    name = 'note-host augment: cc cells under the window tag parked (route to the off-take base)',
+    run = function(harness)
+      local h = harness.mk()
+      generators.kinds.ccCap = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppqL = host.window[1], val = 0,  shape = 'step' },
+          { ppqL = 60,             val = 20, shape = 'step' },
+          { ppqL = host.window[2], val = 0,  shape = 'step' },
+        } } end,
+        mode = 'augment', dest = 10, label = 'CcCap', defaults = {}, fields = {},
+      }
+      h.tm:addEvent({ evType = 'cc', ppq = 0, chan = 1, cc = 10, val = 30 }); h.tm:flush()
+      addHost(h, { { kind = 'ccCap' } })   -- an augment host: stays on-take, parks its base cc off-take
+      h.vm:setGridSize(80, 40)
+
+      local ci
+      for i, c in ipairs(h.vm.grid.cols) do
+        if c.midiChan == 1 and c.type == 'cc' and c.cc == 10 then ci = i end
+      end
+      t.truthy(ci, 'the parked base cc still shows a cc 10 column')
+      t.eq(h.vm.grid.cols[ci].cellKind[0], 'parked',
+        'the authored base cc under the note-host window routes to the off-take stash, not plain tm')
+
+      local ni = lane1Idx(h)
+      t.falsy(h.vm.grid.cols[ni].cellKind[0], 'the augment host note itself stays plain -- it is not parked')
+      generators.kinds.ccCap = nil
     end,
   },
 }

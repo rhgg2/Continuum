@@ -26,6 +26,7 @@ local registry = {
   fxCarrier           = 'take',
   fxRegions           = 'take',
   fxParked            = 'take',
+  prevWindows         = 'take',
   arrangeNaturalLenQN = 'take',
   mutedChannels       = 'take',
   soloedChannels      = 'take',

@@ -1,4 +1,4 @@
-@module generators  src=generators.lua  loc=335  sha=9194473  mode=namespace  self=generators
+@module generators  src=generators.lua  loc=339  sha=9930d99  mode=namespace  self=generators
 
 # Invariants & contracts
   @invariant  pure module -- no module-level state; a generator is fn(host, params, ctx) -> { notes, delta }
@@ -61,9 +61,9 @@
   @api generators.parksNotes(region)  @ 305-311
       -- A region parks its covered chord iff it carries a discrete-replace kind (its derived notes
       -- stand in). A continuous/augment kind never parks notes; a husk (no kinds) parks nothing.
-  @api generators.parkWindows(regions)  @ 316-333
-      -- The single source for "what 4.5 parks over": a note window for a discrete-replace chord, a cc/pb
-      -- window per continuous-replace target. The view tags the same spans.
+  @api generators.parkWindows(regions)  @ 316-337
+      -- The single source for "what 4.5 parks over": a note window for a discrete-replace chord, a cc window
+      -- per continuous cc target (replace or augment), a pb window per continuous-replace target.
 
 # Uses (outbound edges)
   @use call    util.add  @ parkWindows:319

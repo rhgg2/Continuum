@@ -26,7 +26,6 @@ local util       = require 'util'
 local timing     = require 'timing'
 local tuning     = require 'tuning'
 local groupsCore = require 'groups'
-local generators = require 'generators'
 local perf       = require 'perf'
 
 local tm, cm, ds, cmgr, gm, pa, facade =
@@ -3220,10 +3219,9 @@ function tv:rebuild(takeChanged)
       end
     end
 
-    -- Tag cells inside fx replace-park windows 'parked' (positional, like 'member'): the
-    -- leaf-edit facade routes them to tm's logical-only off-take stash. Same windows 4.5
-    -- parks over (generators.parkWindows is the shared predicate); parked wins on overlap.
-    local park = generators.parkWindows(ds:get('fxRegions') or {})
+    -- Tag cells inside fx park windows 'parked' (positional, like 'member'): the leaf-edit facade routes
+    -- them to tm's off-take stash. prevWindows is the set 4.5 parked over this rebuild (regions + note hosts); parked wins on overlap.
+    local park = ds:get('prevWindows') or {}
     for _, col in ipairs(grid.cols) do
       for _, w in ipairs(park) do
         if w.evType == col.type and w.chan == col.midiChan and (w.cc == nil or w.cc == col.cc) then
