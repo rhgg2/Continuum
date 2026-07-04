@@ -1,4 +1,4 @@
-@module voicing  src=voicing.lua  loc=73  sha=7baa1b6  mode=namespace  self=voicing
+@module voicing  src=voicing.lua  loc=72  sha=55ac771  mode=namespace  self=voicing
 
 # Imports
   @const util = 'util'  @ 5
@@ -18,11 +18,11 @@
   -- Separation
   @api voicing.resolveGroup(group)  @ 27-54
       @contract  sorts group (ppq, ppqL) in place; returns kills, voiced, onsetOf (separated onsets)
-  @api voicing.nudgeOnsets(records)  @ 58-71
+  @api voicing.nudgeOnsets(events)  @ 58-70
       -- Nudge colliding same-(chan,pitch) onsets to prev.ppq+1 (cascades; fixed externals frozen).
       -- Pure geometry on evt.ppq; callers stage mm writes. Input sorted (raw, ppqL).
 
 # Uses (outbound edges)
-  @use call    util.add  @ resolveGroup:40,42,46,50 nudgeOnsets:66
-  @use call    util.key  @ nudgeOnsets:62
+  @use call    util.add  @ resolveGroup:40,42,46,50 nudgeOnsets:65
+  @use call    util.key  @ nudgeOnsets:61
   @use require util  @ 5

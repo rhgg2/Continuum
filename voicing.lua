@@ -55,17 +55,16 @@ end
 
 -- Nudge colliding same-(chan,pitch) onsets to prev.ppq+1 (cascades; fixed externals frozen).
 -- Pure geometry on evt.ppq; callers stage mm writes. Input sorted (raw, ppqL).
-function voicing.nudgeOnsets(records)
+function voicing.nudgeOnsets(events)
   local moved, lastByVoice = {}, {}
-  for _, n in ipairs(records) do
-    local e   = n.evt
+  for _, e in ipairs(events) do
     local key = util.key(e.chan, e.pitch)
     local prev = lastByVoice[key]
-    if prev and not e.fixed and e.ppq <= prev.evt.ppq then
-      e.ppq = prev.evt.ppq + 1
-      util.add(moved, n)
+    if prev and not e.fixed and e.ppq <= prev.ppq then
+      e.ppq = prev.ppq + 1
+      util.add(moved, e)
     end
-    lastByVoice[key] = n
+    lastByVoice[key] = e
   end
   return moved
 end

@@ -1078,7 +1078,7 @@ end
 -- Strict-next per note: first group member with a greater ppq,
 -- chord-mates skipped. Precomputed O(n); see docs/trackerManager.md § Rebuild.
 local function strictNextMap(groups, onset)
-  onset = onset or function(rec) return rec.evt.ppq end
+  onset = onset or function(evt) return evt.ppq end
   local nextOf = {}
   for _, g in pairs(groups) do
     for i = #g - 1, 1, -1 do
@@ -1153,8 +1153,9 @@ local function rebuildInternals(fx)
     end
   end
 
-  local reseats  = mmBatch()
-  local reseated = {}
+  local reseats     = mmBatch()
+  local reseated    = {}
+  local reseatedWas = {}
   for _, note in ipairs(internal) do
     local channel = channels[note.chan]
     local notes = channel.columns.notes
@@ -1170,9 +1171,9 @@ local function rebuildInternals(fx)
     colNote.delay  = colNote.delay  or 0
     -- when swing is stale, rederive realised onset from logical; endppq handled by the tail walk.
     if staleSwing[note.chan] then
-      local was = colNote.ppq   -- capture raw before the reseat mutates it (alias, not a copy)
+      reseatedWas[colNote] = colNote.ppq   -- capture raw before the reseat mutates it (alias, not a copy)
       colNote.ppq = tm:fromLogical(note.chan, colNote.ppqL, delayToPPQ(colNote.delay))
-      util.add(reseated, { evt = colNote, was = was })
+      util.add(reseated, colNote)
     end
     util.add(col.events, colNote)
   end
@@ -1180,13 +1181,13 @@ local function rebuildInternals(fx)
   -- Reswing can collapse two distinct-ppqL same-pitch notes onto one raw. Separate them before
   -- the commit so mm's reload-dedup never eats a voice -- the tail walk's gate runs far too late.
   table.sort(reseated, function(a, b)
-    if a.evt.chan ~= b.evt.chan then return a.evt.chan < b.evt.chan end
-    if a.evt.ppq  ~= b.evt.ppq  then return a.evt.ppq  < b.evt.ppq  end
-    return a.evt.ppqL < b.evt.ppqL
+    if a.chan ~= b.chan then return a.chan < b.chan end
+    if a.ppq  ~= b.ppq  then return a.ppq  < b.ppq  end
+    return a.ppqL < b.ppqL
   end)
   voicing.nudgeOnsets(reseated)
-  for _, r in ipairs(reseated) do
-    if r.evt.ppq ~= r.was then reseats.assign(r.evt, { ppq = r.evt.ppq }) end
+  for _, e in ipairs(reseated) do
+    if e.ppq ~= reseatedWas[e] then reseats.assign(e, { ppq = e.ppq }) end
   end
   reseats.commit()
 
@@ -1374,28 +1375,25 @@ end
 -- Clip each parked member's tail to lane/pitch successor onset and take end (logical frame),
 -- against bounds (unclipped on-take notes). See docs/trackerManager.md § Region-replace parking.
 local function realiseParked(members, takeLenL, bounds)
-  local byLane, byPitch, records = {}, {}, {}
-  local function seat(evt, lane, member)
-    local rec = { evt = evt }
-    util.bucket(byLane,  lane,      rec)
-    util.bucket(byPitch, evt.pitch, rec)
-    if member then util.add(records, rec) end
+  local byLane, byPitch = {}, {}
+  local function seat(evt)
+    util.bucket(byLane,  evt.lane,  evt)
+    util.bucket(byPitch, evt.pitch, evt)
   end
-  for _, m in ipairs(members)      do seat(m,     m.lane, true)  end
-  for _, b in ipairs(bounds or {}) do seat(b.evt, b.lane, false) end
-  local onset = function(rec) return rec.evt.ppqL end
+  for _, m in ipairs(members)      do seat(m) end
+  for _, b in ipairs(bounds or {}) do seat(b) end
+  local onset = function(evt) return evt.ppqL end
   local function byOnset(a, b) return onset(a) < onset(b) end
   for _, g in pairs(byLane)  do table.sort(g, byOnset) end
   for _, g in pairs(byPitch) do table.sort(g, byOnset) end
   local laneNextOf  = strictNextMap(byLane,  onset)
   local pitchNextOf = strictNextMap(byPitch, onset)
-  for _, rec in ipairs(records) do
-    local m = rec.evt
+  for _, m in ipairs(members) do
     local ceil = (m.endppqL == nil or m.endppqL == util.OPEN) and takeLenL or m.endppqL
-    local laneNext, pitchNext = laneNextOf[rec], pitchNextOf[rec]
+    local laneNext, pitchNext = laneNextOf[m], pitchNextOf[m]
     m.endppqL = math.max(m.ppqL + 1, math.min(ceil,
-      laneNext  and laneNext.evt.ppqL  or math.huge,
-      pitchNext and pitchNext.evt.ppqL or math.huge, takeLenL))
+      laneNext  and laneNext.ppqL  or math.huge,
+      pitchNext and pitchNext.ppqL or math.huge, takeLenL))
   end
 end
 
@@ -1536,10 +1534,10 @@ local function rebuildRegionPark(deferred)
         -- On-take survivors bound a parked tail on its own lane/pitch (rebuildTails' model), so a
         -- member clips to the first note after the region, not just the next parked member.
         local bounds = {}
-        for laneIdx, col in ipairs(channels[chan].columns.notes) do
+        for _, col in ipairs(channels[chan].columns.notes) do
           for _, evt in ipairs(col.events) do
             if evt.evType ~= 'pa' and evt.ppqL ~= nil then
-              util.add(bounds, { evt = evt, lane = laneIdx })
+              util.add(bounds, evt)
             end
           end
         end
@@ -1729,22 +1727,22 @@ local function rebuildFx(fx, deferred)
       for laneIdx, col in ipairs(channels[chan].columns.notes) do
         for _, evt in ipairs(col.events) do
           if evt.evType ~= 'pa' and evt.ppqL ~= nil then
-            util.bucket(byLane, laneIdx, { evt = evt })
+            util.bucket(byLane, laneIdx, evt)
           end
         end
       end
       local laneNextOf = strictNextMap(byLane)   -- groups are ppq-ordered: col.events sorted at entry
       for _, g in pairs(byLane) do
-        for _, rec in ipairs(g) do
-          local nextRec = laneNextOf[rec]
-          nextInLane[rec.evt] = nextRec and nextRec.evt
-          if rec.evt.fx then
+        for _, evt in ipairs(g) do
+          local nextEvt = laneNextOf[evt]
+          nextInLane[evt] = nextEvt
+          if evt.fx then
             -- Take is the world: a tail past take end (paste / overshooting move)
             -- can't sound past it; window caps at take regardless of authored ceiling.
-            local endL = (rec.evt.endppqL == nil or rec.evt.endppqL == util.OPEN)
-                         and takeLenL or math.min(rec.evt.endppqL, takeLenL)
-            if nextRec then endL = math.min(endL, nextRec.evt.ppqL) end
-            fxWindow[rec.evt] = endL
+            local endL = (evt.endppqL == nil or evt.endppqL == util.OPEN)
+                         and takeLenL or math.min(evt.endppqL, takeLenL)
+            if nextEvt then endL = math.min(endL, nextEvt.ppqL) end
+            fxWindow[evt] = endL
           end
         end
       end
@@ -2080,21 +2078,21 @@ local function rebuildTails(fx, deferred)
     -- Clean channels freeze: fx left noteLive empty, real notes converged last rebuild.
     if not dirtyChans[chan] then goto nextChan end
     local notes, byLane, byPitch = {}, {}, {}
-    for laneIdx, col in ipairs(channels[chan].columns.notes) do
+    for _, col in ipairs(channels[chan].columns.notes) do
       for _, evt in ipairs(col.events) do
         if evt.evType ~= 'pa' and evt.ppqL ~= nil then
-          util.add(notes, { evt = evt, lane = laneIdx })
+          util.add(notes, evt)
         end
       end
     end
     for _, w in ipairs(fx.noteLive[chan]) do
-      util.add(notes, { evt = w.evt, lane = w.lane })
+      util.add(notes, w.evt)
     end
     if #notes == 0 then goto nextChan end
 
     local function rawThenLogical(a, b)
-      if a.evt.ppq ~= b.evt.ppq then return a.evt.ppq < b.evt.ppq end
-      return a.evt.ppqL < b.evt.ppqL
+      if a.ppq ~= b.ppq then return a.ppq < b.ppq end
+      return a.ppqL < b.ppqL
     end
     -- Sort notes once; the buckets partition notes, so rebuilding them by walking the
     -- sorted array yields sorted buckets in O(N) -- cheaper than re-sorting each bucket.
@@ -2102,8 +2100,8 @@ local function rebuildTails(fx, deferred)
       table.sort(notes, rawThenLogical)
       byLane, byPitch = {}, {}
       for _, n in ipairs(notes) do
-        util.bucket(byLane,  n.lane,      n)
-        util.bucket(byPitch, n.evt.pitch, n)
+        util.bucket(byLane,  n.lane,  n)
+        util.bucket(byPitch, n.pitch, n)
       end
     end
     sortAll()
@@ -2113,7 +2111,7 @@ local function rebuildTails(fx, deferred)
     local moved = voicing.nudgeOnsets(notes)
     for _, n in ipairs(moved) do
       if n.lane == 1 then dirtyChan(chan) end   -- nudged lane-1 onset moves absorber seats (pbs runs after tails)
-      if n.evt.token then clampWrites.assign(n.evt, { ppq = n.evt.ppq }) end
+      if n.token then clampWrites.assign(n, { ppq = n.ppq }) end
     end
     -- Re-sort only when a nudge actually moved an onset (rare); otherwise ordering stands.
     if #moved > 0 then sortAll() end
@@ -2121,17 +2119,16 @@ local function rebuildTails(fx, deferred)
     local laneNextOf  = strictNextMap(byLane)
     local pitchNextOf = strictNextMap(byPitch)
 
-    for _, n in ipairs(notes) do
-      local e         = n.evt
+    for _, e in ipairs(notes) do
       local ceiling   = e.endppqL == util.OPEN and math.huge
                         or e.endppqL and tm:fromLogical(chan, e.endppqL)
                         or math.huge
-      local laneNext  = laneNextOf[n]
-      local pitchNext = pitchNextOf[n]
+      local laneNext  = laneNextOf[e]
+      local pitchNext = pitchNextOf[e]
       local laneClip  = laneNext
-        and tm:fromLogical(chan, laneNext.evt.ppqL) + (e.overlap or 0)
+        and tm:fromLogical(chan, laneNext.ppqL) + (e.overlap or 0)
         or math.huge
-      local pitchClip = pitchNext and pitchNext.evt.ppq or math.huge
+      local pitchClip = pitchNext and pitchNext.ppq or math.huge
       local bound     = math.max(e.ppq + 1,
                           math.min(ceiling, laneClip, pitchClip, takeLen))
       local rounded   = util.round(bound)
