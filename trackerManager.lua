@@ -27,12 +27,14 @@
 --invariant: paEventCol mixes into note column events
 --shape: extraColumns[chan] = { notes=count, [pc], [pb], [at], [ccs={[ccNum]=true}] }
 --shape: lastMuteSet = { [chan] = true }, pushed by tv via tm:setMutedChannels
---shape: fxParked = one evType-tagged off-take stash for every replace park (logical-only; realised ppq derived on restore):
+--shape: fxParked = one evType-tagged off-take stash for every replace park; each spec is the authored
+--shape:   event minus the realisation frame (ppq/endppq/loc/token/derived/frame/cents), so new metadata
+--shape:   rides park automatically. Baseline fields per type (realised ppq re-derived on restore):
 --shape:   note { evType='note', chan, lane, uuid, ppqL, endppqL, pitch, vel, detune, delay, sample, [fx] }
---shape:   cc { evType='cc', chan, cc, ppqL, val, shape }  |  pb { evType='pb', chan, ppqL, val (=cents), shape }
+--shape:   cc { evType='cc', chan, cc, ppqL, val, shape }  |  pb { evType='pb', chan, ppqL, val (=cents), shape, [tension] }
 --shape: channels[chan].parked = { { evType='note', chan, uuid, ppq, ppqL, endppq, endppqL, endppqC, pitch, vel, detune, sample, delay, lane, [fx] }, ... } -- render-ready off-take replace cells (ppq==ppqL; endppq is the authored ceiling the view edits, endppqC==endppqL clipped for render)
 --shape: channels[chan].parkedCC = { { evType='cc', chan, cc, ppq, ppqL, val, shape }, ... } -- off-take cc-replace render cells (ppq==ppqL)
---shape: channels[chan].parkedPb = { { evType='pb', chan, ppq, ppqL, val (=cents), cents, shape }, ... } -- off-take pb-replace render cells (ppq==ppqL)
+--shape: channels[chan].parkedPb = { { evType='pb', chan, ppq, ppqL, val (=cents), cents, shape, [tension] }, ... } -- off-take pb-replace render cells (ppq==ppqL)
 --contract: a discrete-replace kind parks its host: a region parks its covered chord, a note parks itself
 --invariant: parked members feed generator + grid only; never sounding (mute fails for CC/PA)
 
@@ -1424,6 +1426,11 @@ end
 local function rebuildRegionPark(deferred)
   local batch = mmBatch()
 
+  -- Park = clone minus the realisation frame, so new authored metadata rides a park/unpark
+  -- round-trip untouched; restore mirrors it (clone back, re-derive realisation; pb also cents->raw).
+  local REALISATION = { ppq = true, endppq = true, loc = true, token = true, derived = true, frame = true, cents = true }
+  local function parkSpec(evt, adds) return util.assign(util.clone(evt, REALISATION), adds) end
+
   local function unlink(events, evt)
     for i, e in ipairs(events) do if e == evt then table.remove(events, i); break end end
   end
@@ -1486,8 +1493,7 @@ local function rebuildRegionPark(deferred)
           for _, evt in ipairs(col.events) do
             if evt.evType ~= 'pa' and evt.ppqL ~= nil then
               util.add(scan, { evt = evt, events = col.events,
-                spec = util.pick(evt, "uuid ppqL endppqL pitch vel detune delay sample fx",
-                                 { evType = 'note', chan = chan, lane = laneIdx }) })
+                spec = parkSpec(evt, { lane = laneIdx }) })   -- evType/chan ride the event; lane pins the column index
             end
           end
         end
@@ -1508,8 +1514,7 @@ local function rebuildRegionPark(deferred)
       table.sort(channel.columns.notes[spec.lane].events, function(a, b) return a.ppqL < b.ppqL end)
       -- Lazy: reshaped at commit so it reads note.ppq/endppq after the tail-walk clip.
       deferred.addLazy(function()
-        return util.pick(note, "ppq endppq ppqL endppqL pitch vel detune delay sample fx uuid",
-                         { evType = 'note', chan = spec.chan, lane = spec.lane, keepUuid = true })
+        return util.assign(util.clone(note), { keepUuid = true })   -- note carries evType/chan/lane + the fresh ppq/endppq
       end)
     end
 
@@ -1522,8 +1527,7 @@ local function rebuildRegionPark(deferred)
     for _, spec in ipairs(newParked) do
       local channel = channels[spec.chan]
       while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
-      util.add(channel.parked, util.pick(spec,
-        "evType chan uuid ppqL endppqL pitch vel detune sample delay lane fx",
+      util.add(channel.parked, util.assign(util.clone(spec),
         { ppq = spec.ppqL, endppq = spec.endppqL or util.OPEN }))
     end
     for chan = 1, 16 do
@@ -1554,15 +1558,14 @@ local function rebuildRegionPark(deferred)
         for cc, col in pairs(channels[chan].columns.ccs) do
           for _, evt in ipairs(col.events) do
             util.add(scan, { evt = evt, events = col.events,
-              spec = { evType = 'cc', chan = chan, cc = cc, ppqL = evt.ppqL or evt.ppq,
-                       val = evt.val, shape = evt.shape } })
+              spec = parkSpec(evt, { cc = cc, ppqL = evt.ppqL or evt.ppq }) })   -- cc pins the column key; ppqL coalesces a raw-sourced event
           end
         end
       end
     end
     -- A logical cc event from a parked spec, seated at ppq (realised onset on restore; ppqL for a render cell).
     local function ccCell(spec, ppq)
-      return util.pick(spec, "chan cc ppqL val shape", { evType = 'cc', ppq = ppq })
+      return util.assign(util.clone(spec), { ppq = ppq })   -- spec carries evType/chan/cc/ppqL/val/shape
     end
 
     local newParked, restores = reconcilePark(scan, priorOf('cc'))
@@ -1606,8 +1609,8 @@ local function rebuildRegionPark(deferred)
           dirtyChan(cc.chan)
           -- val: logical cents from mm's cents sidecar (restore maps back); a foreign pre-cents pb
           -- falls back to raw-derived cents (best-effort).
-          local spec = { evType = 'pb', chan = cc.chan, ppqL = cc.ppqL or cc.ppq,
-                         val = cc.cents or rawToCents(cc.val), shape = cc.shape }
+          local spec = parkSpec(cc, { ppqL = cc.ppqL or cc.ppq,
+                                      val = cc.cents or rawToCents(cc.val) })   -- from mm-raw: evType/chan/shape/tension ride; rename cents->val
           local pb = util.clone(cc); pb.token = mm:tokenOf(cc)
           util.add(scan, { evt = pb, spec = spec })
         end
@@ -1620,9 +1623,9 @@ local function rebuildRegionPark(deferred)
     -- detune and re-shows it. The seed val is detune-free -- the absorber's assign corrects it.
     for _, spec in ipairs(restores) do
       dirtyChan(spec.chan)
-      batch.add({ evType = 'pb', chan = spec.chan, ppqL = spec.ppqL,
-                  ppq = tm:fromLogical(spec.chan, spec.ppqL),
-                  cents = spec.val, val = centsToRaw(spec.val), shape = spec.shape })
+      batch.add(util.assign(util.clone(spec),
+        { ppq = tm:fromLogical(spec.chan, spec.ppqL),
+          cents = spec.val, val = centsToRaw(spec.val) }))   -- spec.val is cents; the wire wants raw + a cents sidecar
     end
 
     for _, spec in ipairs(newParked) do util.add(allParked, spec) end
@@ -1643,9 +1646,8 @@ local function rebuildRegionPark(deferred)
     -- Render union for the view: the authored breakpoints stay visible in-column though off-take.
     for chan = 1, 16 do channels[chan].parkedPb = {} end
     for _, spec in ipairs(newParked) do
-      util.add(channels[spec.chan].parkedPb,
-        { evType = 'pb', chan = spec.chan, ppq = spec.ppqL, ppqL = spec.ppqL,
-          val = spec.val, cents = spec.val, shape = spec.shape })
+      util.add(channels[spec.chan].parkedPb, util.assign(util.clone(spec),
+        { ppq = spec.ppqL, cents = spec.val }))
     end
   end
 

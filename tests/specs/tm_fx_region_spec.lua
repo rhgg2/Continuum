@@ -403,6 +403,22 @@ return {
   },
 
   {
+    name = 'park round-trip carries arbitrary authored metadata, not just whitelisted fields',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { pitch = 60, lane = 1, glide = 42 })   -- glide: an authored field no park whitelist names
+      injectArp(h)
+      t.eq(h.ds:get('fxParked')[1].glide, 42, 'park keeps the authored field in the stash')
+
+      h.ds:assign('fxRegions', {})
+      h.tm:rebuild()
+      local restored
+      for _, n in ipairs(h.fm:dump().notes) do if not n.derived then restored = n end end
+      t.eq(restored and restored.glide, 42, 'unpark restores the authored field to the take')
+    end,
+  },
+
+  {
     name = 'park identity (cc): render cell carries chan+ppqL; the fxParkedCC stash is logical-only',
     run = function(harness)
       local h = harness.mk()
