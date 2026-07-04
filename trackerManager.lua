@@ -7,7 +7,8 @@
 --invariant: pb.val is cents inside um; raw↔cents only at load/flush (rawToCents/centsToRaw)
 --invariant: cents window = cm:get('pbRange') * 100 per side
 --invariant: absorber pbs absorb lane-1 detune jumps; first onset anchors a pb-active channel
---invariant: pb.derived=='absorber' is the absorber marker, persisted as cc metadata via mm sidecar
+--invariant: pb.derived=='absorber' marks an absorber (cc sidecar) or in-window seat (RAM-only)
+--invariant: replace-window seats are markerless; recognized by window, not a derived-tag on wire
 --invariant: pa stores aftertouch value in mm cc.vel; cc-routing fields stripped on projection
 --invariant: loc values valid only within one rebuild-to-flush window
 --invariant: um's notesByLoc/ccsByLoc rebuild fresh each rebuild
@@ -1398,6 +1399,28 @@ end
 
 -- Region-replace parking: authored events a replace window covers leave the take;
 -- the prior parked set carries still-covered forward, restores the rest. see design/note-macros-v2.md § Generator output
+
+-- Markerless-seat transitions (pb-replace): a forward fxRegions edit diffs pb windows against the last
+-- baseline and stages a one-shot park/sweep the next rebuild drains. see design/note-macros-v2.md § Route-by-window
+local pbParkQueue, pbSweepQueue, prevPbWindows = {}, {}, {}
+local function pbWindowsNow()
+  local out = {}
+  for _, w in ipairs(generators.parkWindows(ds:get('fxRegions') or {})) do
+    if w.evType == 'pb' then out[util.key(w.chan, w.startppq, w.endppq)] = w end
+  end
+  return out
+end
+local function enqueuePbTransitions()
+  local now = pbWindowsNow()
+  for k, w in pairs(now) do if not prevPbWindows[k] then util.add(pbParkQueue, w) end end
+  for k, w in pairs(prevPbWindows) do if not now[k] then util.add(pbSweepQueue, w) end end
+  prevPbWindows = now
+end
+local function resyncPbWindows()
+  prevPbWindows = pbWindowsNow()
+  pbParkQueue, pbSweepQueue = {}, {}
+end
+
 local function rebuildRegionPark(deferred)
   local batch = mmBatch()
 
@@ -1568,28 +1591,25 @@ local function rebuildRegionPark(deferred)
     end
   end
 
-  -- pb: the pb column isn't built yet (rebuildPbs runs later), so scan authored pbs straight from mm.
-  -- see design/note-macros-v2.md § Route-by-window
+  -- pb: seats are markerless, so the scan cannot run every rebuild -- it drains the staged transition
+  -- here instead (enqueuePbTransitions); the pb column isn't built yet, so we walk mm directly. see § Route-by-window
   do
-    local hasPbWindow = false
-    for _, w in ipairs(windows) do
-      if w.evType == 'pb' then hasPbWindow = true; break end
-    end
-
-    -- Only walk mm when a pb window exists, and clone only the pbs one actually covers -- an
-    -- authored pb stream on a dirty channel with no pb-replace region is left untouched.
+    -- Park queue (create): only an enqueued window walks mm. Marked detune absorbers may already sit in
+    -- the window (not authored; rebuildPbs reseats them into the curve) -- only unmarked (authored) pbs park.
+    local parkQ = pbParkQueue; pbParkQueue = {}
     local scan = {}
-    if hasPbWindow then
+    for _, q in ipairs(parkQ) do
+      local sRaw, eRaw = tm:fromLogical(q.chan, q.startppq), tm:fromLogical(q.chan, q.endppq)
       for _, cc in mm:ccsRaw() do
-        if cc.evType == 'pb' and not cc.derived and dirtyChans[cc.chan] then
-          -- val: logical cents from mm's cents sidecar (restore maps back); a foreign pre-cents
-          -- pb falls back to raw-derived cents (best-effort).
+        if cc.evType == 'pb' and not cc.derived and cc.chan == q.chan
+           and cc.ppq >= sRaw and cc.ppq <= eRaw then
+          dirtyChan(cc.chan)
+          -- val: logical cents from mm's cents sidecar (restore maps back); a foreign pre-cents pb
+          -- falls back to raw-derived cents (best-effort).
           local spec = { evType = 'pb', chan = cc.chan, ppqL = cc.ppqL or cc.ppq,
                          val = cc.cents or rawToCents(cc.val), shape = cc.shape }
-          if covered(spec) then
-            local pb = util.clone(cc); pb.token = mm:tokenOf(cc)
-            util.add(scan, { evt = pb, spec = spec })
-          end
+          local pb = util.clone(cc); pb.token = mm:tokenOf(cc)
+          util.add(scan, { evt = pb, spec = spec })
         end
       end
     end
@@ -1606,6 +1626,19 @@ local function rebuildRegionPark(deferred)
     end
 
     for _, spec in ipairs(newParked) do util.add(allParked, spec) end
+
+    -- Sweep queue (remove): a removed window's seats orphan (no marker names them) -- delete every mm pb
+    -- in the swept raw span. The authored restored above is a token-less add, so delete-first order is safe.
+    local sweepQ = pbSweepQueue; pbSweepQueue = {}
+    for _, q in ipairs(sweepQ) do
+      local sRaw, eRaw = tm:fromLogical(q.chan, q.startppq), tm:fromLogical(q.chan, q.endppq)
+      for _, cc in mm:ccsRaw() do
+        if cc.evType == 'pb' and cc.chan == q.chan and cc.ppq >= sRaw and cc.ppq <= eRaw then
+          dirtyChan(cc.chan)
+          batch.del({ token = mm:tokenOf(cc) })
+        end
+      end
+    end
 
     -- Render union for the view: the authored breakpoints stay visible in-column though off-take.
     for chan = 1, 16 do channels[chan].parkedPb = {} end
@@ -2196,24 +2229,8 @@ local function rebuildPbs(noteLive, replacePb)
   -- detuneOf. Clean chans skip it wholesale -- I8: rebuild is a fixpoint. see design/incremental-pbs.md
   local function deriveChan(chan, lane1Events, pbs)
     perf.start('seats')
-    -- Back-derive cents for any pb missing it (foreign-MIDI/pre-cents pbs carry raw only).
-    -- Marked so the consolidated assign below always carries cents to the sidecar.
-    local persistCents = {}
-    for _, pb in ipairs(pbs) do
-      if pb.cents == nil then
-        pb.cents = rawToCents(pb.val) - detuneAt(lane1Events, pb.ppq)
-        persistCents[pb] = true
-      end
-    end
-
-    -- Authored (non-derived) pbs in ppq order: the value stream the seats sample.
-    local realPbs = {}
-    for _, pb in ipairs(pbs) do
-      if not pb.derived then util.add(realPbs, pb) end
-    end
-
-    -- Replace windows on this chan: the generator's absolute curve, breakpoints mapped to raw ppq and
-    -- seated as derived pbs below -- the curve rides the base lane, no carrier. see docs/tuning.md § Absorber reconciliation
+    -- Replace windows on this chan: the generator's curve, seated as derived pbs on the base lane (no
+    -- carrier). Bounds converted to raw once -- seats are raw-only -- for zero round-trip drift. see docs/tuning.md § Absorber reconciliation
     local replaceWins = {}
     for _, w in ipairs(replacePb[chan]) do
       local bps = {}
@@ -2222,13 +2239,39 @@ local function rebuildPbs(noteLive, replacePb)
                         cents = bp.val, shape = bp.shape, tension = bp.tension })
       end
       table.sort(bps, function(a, b) return a.ppq < b.ppq end)
-      util.add(replaceWins, { startL = w[1], endL = w[2], bps = bps })
+      util.add(replaceWins, { bps = bps,
+                              startRaw = tm:fromLogical(chan, w[1], w.d),
+                              endRaw   = tm:fromLogical(chan, w[2], w.d) })
     end
+    -- Which window's curve prevails at a raw ppq (half-open -- the interior stream).
     local function replaceWinAt(ppq)
-      local pL = tm:toLogical(chan, ppq)
       for _, win in ipairs(replaceWins) do
-        if pL >= win.startL and pL < win.endL then return win end
+        if ppq >= win.startRaw and ppq < win.endRaw then return win end
       end
+    end
+    -- Seat recognition: exclusive ownership means everything on-take in a window is a generated seat
+    -- (authored pbs park off-take). Inclusive of endRaw to catch the terminal re-centre seat.
+    local function inSeatWindow(ppq)
+      for _, win in ipairs(replaceWins) do
+        if ppq >= win.startRaw and ppq <= win.endRaw then return true end
+      end
+      return false
+    end
+
+    -- Back-derive cents for any authored pb missing it (foreign-MIDI/pre-cents pbs carry raw only) so the
+    -- assign carries cents to the sidecar; an in-window seat must not acquire cents or it stops looking like a seat.
+    local persistCents = {}
+    for _, pb in ipairs(pbs) do
+      if pb.cents == nil and not inSeatWindow(pb.ppq) then
+        pb.cents = rawToCents(pb.val) - detuneAt(lane1Events, pb.ppq)
+        persistCents[pb] = true
+      end
+    end
+
+    -- Authored (non-derived, out-of-window) pbs in ppq order: the value stream the seats sample.
+    local realPbs = {}
+    for _, pb in ipairs(pbs) do
+      if not pb.derived and not inSeatWindow(pb.ppq) then util.add(realPbs, pb) end
     end
 
     -- First index with .ppq > target -- binary; callers loop per onset over dense pb streams.
@@ -2360,6 +2403,9 @@ local function rebuildPbs(noteLive, replacePb)
     -- leftovers.
     local realAt, availAbsorbers = {}, {}
     for _, pb in ipairs(pbs) do
+      -- A markerless in-window pb is a generated seat (recognized by window, no marker); tag it in RAM
+      -- so projection hides it and the fungible-absorber machinery below reseats it.
+      if not pb.derived and inSeatWindow(pb.ppq) then pb.derived = 'absorber' end
       if pb.derived then util.add(availAbsorbers, pb)
       else realAt[pb.ppq] = pb end
     end
@@ -2373,8 +2419,9 @@ local function rebuildPbs(noteLive, replacePb)
       if seat then
         f.cents, f.shape = seat.cents, seat.shape
         if f.ppqL ~= seat.ppqL then
-          restampPpqL[f] = seat.ppqL
           f.ppqL = seat.ppqL   -- mirror into the clone so the logical projection sees it
+          -- A seat's ppqL is raw-only (never persisted), so this nil->seat mirror is not a sidecar write.
+          if not inSeatWindow(f.ppq) then restampPpqL[f] = seat.ppqL end
         end
         seats[f.ppq] = nil
         table.remove(availAbsorbers, i)
@@ -2392,9 +2439,16 @@ local function rebuildPbs(noteLive, replacePb)
         local fresh = { chan = chan, ppq = ppq, cents = seat.cents, ppqL = seat.ppqL,
                         shape = seat.shape, derived = 'absorber', evType = 'pb' }
         util.add(pbs, fresh)
-        local writeEvt = util.clone(fresh)
-        writeEvt.val = centsToRaw(fresh.cents + detuneAt(lane1Events, ppq))
-        pbWrites.add(writeEvt)
+        local raw = centsToRaw(fresh.cents + detuneAt(lane1Events, ppq))
+        if inSeatWindow(ppq) then
+          -- Markerless seat: native MIDI only ({ppq,val,shape}) -> addCC mints no uuid, no eventMeta
+          -- sidecar; recognized next rebuild by its window. see § Route-by-window
+          pbWrites.add({ evType = 'pb', chan = chan, ppq = ppq, val = raw, shape = fresh.shape })
+        else
+          local writeEvt = util.clone(fresh)
+          writeEvt.val = raw
+          pbWrites.add(writeEvt)
+        end
       end
     end
 
@@ -2417,6 +2471,7 @@ local function rebuildPbs(noteLive, replacePb)
         local d         = detuneOf[pb]
         local newRaw    = centsToRaw(pb.cents + d)
         local shapeChanged = pb.derived and pb.shape ~= pb.origShape
+        local markerless   = pb.derived and inSeatWindow(pb.ppq)
         local update = nil
         if moved[pb] then
           update = { ppq = pb.ppq, ppqL = pb.ppqL,
@@ -2428,6 +2483,9 @@ local function rebuildPbs(noteLive, replacePb)
         end
         if update then
           if pb.derived then update.shape = pb.shape end
+          -- A markerless seat persists native MIDI only; strip the sidecar fields so addCC/assign mint
+          -- no uuid. Its ppq/val/shape still land (a moved seat re-keys by ppq).
+          if markerless then update.cents, update.ppqL = nil, nil end
           pb.val = newRaw
           pbWrites.assign({ token = pb.origTok }, update)
         end
@@ -2562,7 +2620,7 @@ function tm:rebuild(takeChanged)
   takeChanged = takeChanged or false
   -- Capture before the pipeline's nested mm:modify calls re-fire 'reload' and clear it.
   local didReload = mmReloaded; mmReloaded = false
-  if didReload or takeChanged then dirtyChan() end   -- wholesale re-read / take swap: no per-site marks
+  if didReload or takeChanged then dirtyChan(); resyncPbWindows() end   -- wholesale re-read / take swap: no per-site marks, no transition
   pbLimCents = nil   -- coherence point: refresh cached pbRange for cents<->raw conversions
 
   clearSwing()   -- rebuild is the (cm, mm) coherence point
@@ -2738,11 +2796,15 @@ do
       end
       prevSwing = util.deepClone(cur)
       tm:rebuild(false)
-    elseif change.name == 'extraColumns'
-           or change.name == 'fxRegions'
-           or change.name == 'fxParked' then
-      -- fxRegions/parking drive fx expansion; extraColumns blocks fx carrier codes and drives
-      -- the pb keep-decision (both inside the gated passes) -- re-derive.
+    elseif change.name == 'fxRegions' then
+      -- A forward pb-replace region edit stages the park/sweep transition; undo/redo (invalidate) and
+      -- reload land consistent state and only resync the baseline. see § Route-by-window
+      if not flushingParked then
+        if change.invalidate then resyncPbWindows() else enqueuePbTransitions() end
+        dirtyChan(); tm:rebuild(false)
+      end
+    elseif change.name == 'extraColumns' or change.name == 'fxParked' then
+      -- parking/extraColumns drive fx expansion + the pb keep-decision (inside the gated passes) -- re-derive.
       if not flushingParked then dirtyChan(); tm:rebuild(false) end
     elseif change.name == 'noteDelay' then
       -- noteDelay is a display offset -- nothing in the tm pipeline reads it; reproject only.

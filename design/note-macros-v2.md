@@ -466,7 +466,7 @@ realisation is offline. Once this lands the chain's `stream.pb` /
 `stream.ccs` are real summed curves a stage can read and fold, so
 `stream ≡ host` holds for the continuous channels too, not just notes.
 
-## Route-by-window — markerless seats via exclusive ownership (pb parking landed; markerless seats next)
+## Route-by-window — markerless seats via exclusive ownership (pb half landed; cc-replace next)
 
 First build slice of offline continuous realisation, landing before cc-augment.
 It retires the *in-window* per-seat `derived=` metadata on both landed replace
@@ -501,9 +501,10 @@ mm (not a column) and the authored breakpoints stay visible via a
 unions `parked`/`parkedCC`, not an absorber-side union. Audibly a no-op: an authored
 bend already sounded as the curve. Now every on-take pb/cc in a window is a seat, and
 parked pbs are editable off-take through the same `parked` backing as cc (pb values
-are edited by typing, not solo-cursor nudge — `applyNudge` has no `pb` part). What
-remains for the full slice: the markerless recognition below (retire the `derived=`
-tags), which this parking is the precondition for.
+are edited by typing, not solo-cursor nudge — `applyNudge` has no `pb` part). The
+markerless recognition below is now **landed for pb**: in-window seats retire their
+`derived=` tag (write native `{ppq, val, shape}` only) and are recognized by the
+region window. **cc-replace `ccfill` is the remaining half.**
 
 **Live recognition needs no standing record.** A live region recognizes its own
 seats by its own current window — `fx.replacePb[chan]` in the pb pass, the region
@@ -521,20 +522,32 @@ endRaw)` directly. Exact by construction: seats are placed at `fromLogical(chan,
 bp.ppqL, d)`, so bounds converted by the same function have zero round-trip drift.
 `replaceWinAt` (`tm:2180`) is the counter-example — it round-trips each event
 raw→logical (`toLogical`), the inverse of seat placement; this slice corrects it
-to the bounds-converted, raw-compared form.
+to the bounds-converted, raw-compared form. Two predicates result: `replaceWinAt`
+stays **half-open** `[startRaw, endRaw)` for the curve interior
+(`streamValue`/`ramps`), while seat *recognition* (`inSeatWindow`) is **inclusive**
+of `endRaw` — the terminal re-centre seat sits exactly at the window end and must
+read as a seat, not as an authored pb.
 
-**Deletion: tag, don't mirror.** A removed region's seats orphan — no live window
-covers them, no marker names them. The fix is **not** a standing window record: it
-would be redundant every rebuild the region is alive (its bounds live in
-`fxRegions`) and needed only at the instant of deletion. Instead `setRegionFx`'s
-REMOVE path enqueues a one-shot cleanup request `{chan, startppq, endppq, targets}`
-(via a tm public method — view→tm is allowed, view→mm is not) before dropping the
-region; the next rebuild drains it, converts the bounds to raw, and deletes the
-markerless seats in that span on those targets. The queue is transient RAM —
-consumed once, not persisted, not in undo. The region's parked authored restores
-on its own: gone from `fxRegions` → `parkWindows` no longer covers it →
-`reconcilePark` restores it to take (`tm:1421-1424`). Two natural mechanisms fire,
-no shadow of last rebuild's reality.
+**Transitions: diff windows, don't mirror.** A markerless seat is invisible to the
+park scan, so the scan cannot run every rebuild — it would re-park the seats. It must
+fire only at the create/remove instant. The mechanism landed is **not** the
+view-edit-site enqueue first sketched here, but tm's own `fxRegions` observer:
+`enqueuePbTransitions` diffs the current pb windows against the last baseline
+(`prevPbWindows`, RAM) and stages a one-shot transition the next rebuild drains — a
+new window **parks** its authored pbs off-take (walk mm in the raw span, skipping
+already-marked detune absorbers), a removed one **sweeps** its orphaned seats (delete
+every mm pb in the raw span). The queue is transient RAM, consumed once, not
+persisted.
+
+Undo/redo needs no enqueue at all: the take + `fxRegions` + `fxParked` revert
+atomically, and REAPER's undo watcher delivers those rewinds as `dataChanged` with
+`invalidate=true` (`dataStore.lua:127`) — the observer reads the flag and only resyncs
+the baseline, never enqueues (a stray sweep would delete the just-restored authored pb).
+Reload resyncs the same way. This is why the diff lives in tm, not the edit site: the
+edit site can't see undo, but the observer can. On a plain remove the parked authored
+restores on its own — gone from `fxRegions` → `parkWindows` no longer covers it →
+`reconcilePark` restores it. Diff-driven transition + automatic restore, no shadow of
+last rebuild's reality.
 
 **Known edge — swing at a boundary.** A seat is raw-only, so a swing change moves
 it while its logical window is unchanged; a seat within a few ticks of a window

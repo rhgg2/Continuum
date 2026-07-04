@@ -41,11 +41,20 @@ local function baseSeat(dump, chan, cc)
   end
 end
 
--- An authored (non-derived) pb on the wire: `val` is raw (centsToRaw of wire-cents + detune),
--- `cents` the persisted intent. A replace window forces the wire raw to detune-only.
-local function authoredPb(dump, chan, ppq)
-  for _, c in ipairs(dump.ccs) do
-    if c.evType == 'pb' and c.chan == chan and c.ppq == ppq and not c.derived then return c end
+-- A seat is recognized purely by region membership: any pb inside a live region's span (bounds
+-- inclusive of endppq, so the terminal re-centre seat counts). see design/note-macros-v2.md § Route-by-window
+local function inPbWindow(h, chan, ppq)
+  for _, r in ipairs(h.ds:get('fxRegions') or {}) do
+    if r.chan == chan and ppq >= r.startppq and ppq <= r.endppq then return true end
+  end
+  return false
+end
+
+-- An authored pb on the wire: one no live pb window covers (a covered pb is a seat). `val` is raw
+-- (centsToRaw of wire-cents + detune); `cents` the persisted intent. nil while a window parks it off.
+local function authoredPb(h, chan, ppq)
+  for _, c in ipairs(h.fm:dump().ccs) do
+    if c.evType == 'pb' and c.chan == chan and c.ppq == ppq and not inPbWindow(h, chan, ppq) then return c end
   end
 end
 
@@ -57,17 +66,18 @@ local function colPbCents(h, chan, ppq)
   end
 end
 
--- Derived (absorber) pbs on the wire: the seated curve of a pb-replace region, hidden from columns.
-local function derivedPbs(dump, chan)
+-- The seated curve of a pb-replace region, hidden from columns. Seats are markerless -- there is no
+-- marker to filter on; the live window IS their identity. Recognized purely by region membership.
+local function derivedPbs(h, chan)
   local out = {}
-  for _, c in ipairs(dump.ccs) do
-    if c.evType == 'pb' and c.chan == chan and c.derived then out[#out + 1] = c end
+  for _, c in ipairs(h.fm:dump().ccs) do
+    if c.evType == 'pb' and c.chan == chan and inPbWindow(h, chan, c.ppq) then out[#out + 1] = c end
   end
   return out
 end
 
-local function derivedPb(dump, chan, ppq)
-  for _, c in ipairs(derivedPbs(dump, chan)) do if c.ppq == ppq then return c end end
+local function derivedPb(h, chan, ppq)
+  for _, c in ipairs(derivedPbs(h, chan)) do if c.ppq == ppq then return c end end
 end
 
 -- The cc / pb slice of the unified fxParked off-take stash.
@@ -654,11 +664,11 @@ return {
 
       -- Authored pbs inside the window park off-take (exclusive ownership), so the curve is realised
       -- purely by derived seats; the authored breakpoints stay visible via the parkedPb render union.
-      t.falsy(authoredPb(dump, 1, 0),   'the authored base at the window start parked off the take')
-      t.falsy(authoredPb(dump, 1, 120), 'the authored pb mid-window parked off the take')
-      t.eq(derivedPb(dump, 1, 0).val,   centsToRaw(50), 'a derived seat carries the curve at the window start (50c)')
-      t.eq(derivedPb(dump, 1, 60).val,  centsToRaw(50), 'a derived seat carries the curve mid-window')
-      t.eq(derivedPb(dump, 1, 240).val, 0,              'the terminal seat re-centres at the window end')
+      t.falsy(authoredPb(h, 1, 0),   'the authored base at the window start parked off the take')
+      t.falsy(authoredPb(h, 1, 120), 'the authored pb mid-window parked off the take')
+      t.eq(derivedPb(h, 1, 0).val,   centsToRaw(50), 'a derived seat carries the curve at the window start (50c)')
+      t.eq(derivedPb(h, 1, 60).val,  centsToRaw(50), 'a derived seat carries the curve mid-window')
+      t.eq(derivedPb(h, 1, 240).val, 0,              'the terminal seat re-centres at the window end')
       local at120
       for _, p in ipairs(h.tm:getChannel(1).parkedPb) do if p.ppqL == 120 then at120 = p end end
       t.eq(at120 and at120.val, 40, 'the authored 40c stays visible via the parkedPb render union')
@@ -685,8 +695,8 @@ return {
 
       local dump = h.fm:dump()
       t.eq(#carriersOf(dump, 1), 0, 'no carrier -- the curve is derived seats on the base lane')
-      t.eq(derivedPb(dump, 1, 0).val,   centsToRaw(50), 'seated at the curve start (50c)')
-      t.eq(derivedPb(dump, 1, 240).val, 0,              'seat re-centres at the window end')
+      t.eq(derivedPb(h, 1, 0).val,   centsToRaw(50), 'seated at the curve start (50c)')
+      t.eq(derivedPb(h, 1, 240).val, 0,              'seat re-centres at the window end')
     end,
   },
 
@@ -714,9 +724,9 @@ return {
       -- parks off-take (the curve owns the wire) and stays visible via parkedPb.
       local dump = h.fm:dump()
       t.eq(#carriersOf(dump, 1), 0, 'no carrier')
-      t.falsy(authoredPb(dump, 1, 60), 'the authored pb parked off the take')
-      t.eq(derivedPb(dump, 1, 0).val,   centsToRaw(55), 'the seat at the window start carries curve 30c + detune 25c')
-      t.eq(derivedPb(dump, 1, 240).val, centsToRaw(25), 'curve re-centres to detune-only at the window end (I1)')
+      t.falsy(authoredPb(h, 1, 60), 'the authored pb parked off the take')
+      t.eq(derivedPb(h, 1, 0).val,   centsToRaw(55), 'the seat at the window start carries curve 30c + detune 25c')
+      t.eq(derivedPb(h, 1, 240).val, centsToRaw(25), 'curve re-centres to detune-only at the window end (I1)')
       t.eq(h.tm:getChannel(1).parkedPb[1].val, 40, 'the authored 40c stays visible via the parkedPb render union')
     end,
   },
@@ -738,13 +748,13 @@ return {
       h.tm:rebuild()
       -- While the region is present the authored pb parks off-take (the curve owns the wire) and
       -- stays visible via parkedPb; removing the region restores it to the take.
-      t.falsy(authoredPb(h.fm:dump(), 1, 120), 'the authored pb parks while the region is present')
+      t.falsy(authoredPb(h, 1, 120), 'the authored pb parks while the region is present')
       t.eq(h.tm:getChannel(1).parkedPb[1].val, 40, 'its 40c stays visible via the parkedPb render union')
 
       h.ds:assign('fxRegions', {})
       h.tm:rebuild()
       generators.kinds.capRep = nil
-      t.eq(authoredPb(h.fm:dump(), 1, 120).val, centsToRaw(40),
+      t.eq(authoredPb(h, 1, 120).val, centsToRaw(40),
         'the authored wire (40c) is restored once the region is gone')
       t.eq(#h.tm:getChannel(1).parkedPb, 0, 'and the parkedPb render set empties')
     end,
@@ -775,18 +785,87 @@ return {
       t.eq(#carriersOf(dump, 1), 0, 'no carrier')
 
       local interior = false
-      for _, c in ipairs(derivedPbs(dump, 1)) do
+      for _, c in ipairs(derivedPbs(h, 1)) do
         if c.ppq > 0 and c.ppq < 119 then interior = true break end
       end
       t.truthy(interior, 'the curved segment is subdivided by grid seats -- densified, not two bps')
 
       -- Endpoints exact; the interior tracks the slow shape (30c at the midpoint).
-      t.eq(derivedPb(dump, 1, 0).val,   centsToRaw(0),  'start seat exact (0c, detune 0)')
-      t.eq(derivedPb(dump, 1, 240).val, centsToRaw(80), 'end seat exact (60c curve + 20c detune)')
+      t.eq(derivedPb(h, 1, 0).val,   centsToRaw(0),  'start seat exact (0c, detune 0)')
+      t.eq(derivedPb(h, 1, 240).val, centsToRaw(80), 'end seat exact (60c curve + 20c detune)')
 
       -- The detune step rides a dual point at the onset: same 30c curve value, detune jumps 0 -> 20.
-      t.eq(derivedPb(dump, 1, 119).val, centsToRaw(30), 'just-before the onset: 30c curve, detune 0')
-      t.eq(derivedPb(dump, 1, 120).val, centsToRaw(50), 'at the onset: 30c curve, detune 20 -- the step')
+      t.eq(derivedPb(h, 1, 119).val, centsToRaw(30), 'just-before the onset: 30c curve, detune 0')
+      t.eq(derivedPb(h, 1, 120).val, centsToRaw(50), 'at the onset: 30c curve, detune 20 -- the step')
+    end,
+  },
+
+  ----- Markerless seats: a dense in-window curve costs zero eventMeta (§ Route-by-window)
+
+  {
+    name = 'fx region: a dense pb replace curve seats markerless -- no uuid, no metadata sidecar',
+    run = function(harness)
+      local h = harness.mk()
+      -- A 12-segment step curve across the window: every breakpoint seats, so a dense curve. Were the
+      -- seats marked (derived/cents), each would mint a uuid + eventMeta row -- the explosion we retire.
+      generators.kinds.capDense = {
+        expand = function(host)
+          local delta, span = {}, host.window[2] - host.window[1]
+          for i = 0, 12 do
+            delta[#delta + 1] = { ppqL = host.window[1] + span * i // 12,
+                                  val = (i % 2 == 0) and 40 or -40, shape = 'step' }
+          end
+          return { notes = {}, delta = delta }
+        end,
+        mode = 'replace', dest = 'pb', label = 'CapDense', defaults = {}, fields = {},
+      }
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+                                   fx = { { kind = 'capDense' } } } })
+      h.tm:rebuild()
+      generators.kinds.capDense = nil
+
+      -- Detection is region-based (derivedPbs); the assertion is that those seats carry no metadata.
+      local seats = derivedPbs(h, 1)
+      t.truthy(#seats >= 12, 'the dense curve realises many seats')
+      for _, s in ipairs(seats) do
+        t.eq(s.uuid, nil, 'every seat is markerless -- no uuid means no eventMeta sidecar')
+      end
+    end,
+  },
+
+  {
+    name = 'fx region: removing a pb replace region sweeps its seats, leaving only the restored authored pb',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent({ evType = 'pb', ppq = 130, chan = 1, val = 40 }); h.tm:flush()  -- authored, off a seat grid point
+      generators.kinds.capDense = {
+        expand = function(host)
+          local delta, span = {}, host.window[2] - host.window[1]
+          for i = 0, 12 do
+            delta[#delta + 1] = { ppqL = host.window[1] + span * i // 12,
+                                  val = (i % 2 == 0) and 40 or -40, shape = 'step' }
+          end
+          return { notes = {}, delta = delta }
+        end,
+        mode = 'replace', dest = 'pb', label = 'CapDense', defaults = {}, fields = {},
+      }
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+                                   fx = { { kind = 'capDense' } } } })
+      h.tm:rebuild()
+      t.truthy(#derivedPbs(h, 1) >= 12, 'the dense curve seated many markerless seats while present')
+      t.falsy(authoredPb(h, 1, 130), 'the authored pb parked off the take while the region was present')
+
+      h.ds:assign('fxRegions', {})   -- forward removal: enqueues the sweep, restores the parked authored
+      h.tm:rebuild()
+      generators.kinds.capDense = nil
+
+      local pbs = {}
+      for _, c in ipairs(h.fm:dump().ccs) do
+        if c.evType == 'pb' and c.chan == 1 then pbs[#pbs + 1] = c end
+      end
+      t.eq(#pbs, 1,                  'every seat is swept -- only the restored authored pb remains on the wire')
+      t.eq(pbs[1].ppq, 130,         'and it is the authored breakpoint, back at its ppq')
+      t.eq(pbs[1].val, centsToRaw(40), 'restored at its authored value')
     end,
   },
 

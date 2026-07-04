@@ -362,6 +362,17 @@ render union and restore to the take when the region leaves. Each wire raw is `c
 detune)` — no carrier, no add-bank slot. See `design/note-macros-v2.md`
 § Continuous pb replace.
 
+**In-window seats are markerless.** A replace seat writes native MIDI only
+(`{ppq, val, shape}`), so `addCC` mints no uuid and no `eventMeta` sidecar — a
+dense curve costs zero metadata. Recognition is then purely by region: exclusive
+ownership means every on-take pb inside a live window is a seat, so `inSeatWindow`
+(raw bounds, inclusive of `endRaw` for the terminal re-centre) classifies a loaded
+markerless pb as a seat and tags `derived='absorber'` in RAM only. Detune absorbers
+*outside* any window keep their marker + cents sidecar (no exclusive owner there).
+The create/remove transition — park authored in, sweep seats out — is diffed by
+tm's `fxRegions` observer, not carried as a standing record. See
+`design/note-macros-v2.md` § Route-by-window.
+
 Origin and the replace path (generator curves reusing the same seats):
 `design/archive/pb-interpolation.md`.
 
