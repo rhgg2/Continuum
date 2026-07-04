@@ -33,8 +33,10 @@ Track A is the generator substrate, Track B the authoring UI. Checked = landed.
 - [x] B1 — fx-region column + Super-X addressing
 - [x] B2 — parked note + cc display (render only)
 - [x] B3 — parked notes/ccs *editable* off-take via a third edit backing (§ B3) — all four steps landed (the `generators` extract; logical-only specs + identity capture; staging verbs + flush integration; the `parked` view backing + cell tagging)
+- [x] Note-host replace parks the host — all hits derived, the `fxHostEnd` dance deleted (§ Note-host replace parks)
 
 **Open / next**
+- [ ] offline continuous realisation — park-and-seat, route-by-window, retire the carrier/node (design only, § Offline continuous realisation)
 - [ ] fx chain — series composition + multi-column authoring (design only, § The fx chain)
 - [ ] chain surface — docked chain strip, scripted kinds pane, patch library (design only, § The chain surface)
 
@@ -87,7 +89,9 @@ only job is to sustain the fiction that the note you *see* (authored
 length) and the note you *hear* (truncated to fxNote 2) are one object.
 A region host has no privileged host note: all hits are derived output
 (§ *Generator output*), so (1) is not a host role at all — it's output
-the generator may or may not emit, and the dance disappears.
+the generator may or may not emit, and the dance disappears. **Landed
+2026-07-03:** the note host parks too (§ *Note-host replace parks*) —
+the dance is deleted on both hosts.
 
 **(5) is the role the note gives away free.** (4) is where the fx is
 *stored and identified*; (5) is how the user *reaches* it. A note is both
@@ -379,6 +383,83 @@ note arithmetic, lives as a module helper. **Build no interpreter now** —
 the move costs ~nothing if new kinds are shaped as composition and ctx
 accretes as named ops.
 
+## Offline continuous realisation — park, seat, route-by-window (design)
+
+Nothing here is built; it is the realisation change the fx chain waits on,
+and it lands **before** the chain. The motive is a discomfort with
+realisation needing a **runtime component**: augment continuous (pb / cc)
+sums at the node today — `Continuum CC.jsfx` recomputes `base + Σ carrier`
+per audio block — so the take is not what you hear until the node runs. That
+summation is the node's *only* irreplaceable job; the 14-bit transport is
+native to a seated pb (`centsToRaw` is already 14-bit) and the base-hold is
+incidental. Move the sum offline and realisation is wholly in the take:
+WYSIWYG, exportable as plain MIDI, no JSFX dependency. The landed pb-replace
+path already proves it end to end — an absolute curve seated on the base
+lane, no carrier, detune / densification / shape / I1 all handled — so this
+generalizes that path to every continuous kind rather than inventing one.
+
+**One model: park the base, seat the sum.** A continuous fx region parks the
+authored automation its window covers off the take (a park sidecar), exactly
+as note-replace parks the chord and cc-replace parks the cc — bounded
+(authored breakpoints only), visible and editable via re-seat. The producer
+emits the region's **absolute** target curve — augment sums
+`parked-base + macro`, replace is `macro` alone — and seats it on the target
+lane. Augment and replace collapse to one realisation path, differing only
+in whether the sum folds in the parked base. The carrier, the add-bank
+slots, and the node's per-block summation retire; a 14-bit cc target seats
+its MSB/LSB pair through the existing `mm:wideCC`, so seated precision
+matches the carrier's.
+
+**Route-by-window is the metadata discipline, and it is load-bearing.** The
+seats carry **no per-event metadata**. A dense curve is thousands of
+breakpoints; tag each with a `derived=` sidecar and the persisted data
+explodes. They are recognized as generator-owned *structurally* — the region
+window is persisted, so on the target lane inside it every event is
+re-derived each rebuild, content-reconciled, routed out of the column and
+kept out of the authored value stream by the **window**, never a marker.
+This generalizes the carrier's metadata-free route-by-code (an allocated CC
+code in `fxCarrier`) and **retires the absorber's `derived='absorber'`
+per-seat tag** — a latent explosion the moment a replace curve is dense.
+Parking the authored base is what makes the *shared* base pb lane routable
+this way: inside a continuous window the base lane is entirely derived seats
+(routed out wholesale), and the small parked set carries the only metadata.
+
+**Summation adds points only where a curve is genuinely curved.** Two
+piecewise-**linear** curves sum exactly at the *union* of their breakpoints —
+no growth over the carrier, which already materialized that density as CC. A
+**curved** segment (shape ≠ step / linear) has no closed-form sum, so it is
+sampled onto the grid — the same CCINTERP densification the absorber runs
+when a detune onset splits a curved segment. So extra points land only on
+genuinely curved authored automation under a macro, or a curved-shape macro
+segment; a pre-sampled vibrato or LFO emits linear breakpoints and sums
+exactly. Densification adds MIDI, never sidecar.
+
+**The grid is time-absolute — this is what makes densification idempotent.**
+Sample points snap to a global `k·gridStep` lattice in ppq, *not* to a
+segment's own endpoints. A curve re-densified next rebuild then lands points
+at the identical ppqs, so the content-keyed reconcile sees no churn —
+densification a pure function of absolute time, the G4 discipline of the
+canon fix and lane allocation. This **refines** the existing absorber grid
+(`A.ppq + gridStep`), stable today only because `A` is an authored
+breakpoint; a summed curve's bounding points are themselves derived and
+would drift a segment-relative grid into permanent churn.
+
+**Detune folds in unchanged (I1).** Each pb seat's wire raw is
+`centsToRaw(curveValue + detune)`, splitting at detune onsets exactly as the
+replace-pb path seats now — detune stays realisation on the pb wire, the
+curve rides on top. cc has no detune residual, so a cc seat is the curve
+value verbatim.
+
+**What migrates, what retires.** Vibrato, slide, autopan and cc-augment move
+from the carrier to park-and-seat. `Continuum CC.jsfx`'s summation, the
+`fxCarrier` code map, the add-bank slots, and the `derived='absorber'` /
+`'ccbase'` markers retire (pre-beta — drop the persisted carrier state, no
+shim). Detune pb is untouched: the absorber already seats it offline. Live
+preview (R5 / plink) may still want a runtime path later, but *committed*
+realisation is offline. Once this lands the chain's `stream.pb` /
+`stream.ccs` are real summed curves a stage can read and fold, so
+`stream ≡ host` holds for the continuous channels too, not just notes.
+
 ## The fx chain — series-composition and multi-column authoring (design)
 
 Nothing here is built. It reframes the landed fan-out producer
@@ -397,23 +478,36 @@ the (already ordered) list as a **series** — thread a `{ notes, delta }`
 `[arp, velPattern]`: arp turns the chord into arp notes, velPattern
 rewrites their velocities.
 
-**One contract, two roles.** Every stage is
-`(stream, host, params, ctx) → stream`. Only `stream` flows — a stage's
-output is the next stage's input. `host`, `params`, `ctx` are ambient,
-re-supplied each call: `host` and `ctx` identical for every stage (window,
-membership streams, resolution, bounds), `params` the stage's own registry
-entry. The role falls out of whether a stage reads `stream`: **sources**
-ignore it and read `host` (today's generators — arp, retrig, trill,
-vibrato, slide); **transformers** read it and rewrite (new —
-velocity-pattern, humanize, density gate, transpose). A source is a
-transformer that ignores its input, so the head needs no special case; the
-kinds registry (A5) gains a `role`.
+**One contract, no role.** Every stage is
+`(stream, host, params, ctx) → stream`, and `stream` and `host` are the
+**same record shape** (below) — so a stage reads whichever it wants: the
+untouched membership + authored channels (`host`), or its predecessor's
+output (`stream`), which equals `host` at the head and diverges after.
+`host`, `params`, `ctx` are ambient, re-supplied each call. A stage that
+ignores `stream` and reads `host` is a **source** (arp, retrig, trill,
+vibrato, slide); one that reads and rewrites `stream` is a **transformer**
+(velocity-pattern, humanize, transpose) — but that is a choice inside the
+body, **not a registry flag**. The axes stay `mode` (replace | augment) and
+`dest`, nothing added: velPattern is `mode='replace', dest='note'` — it
+replaces the note stream with re-velocitied notes, no different in kind from
+arp, which also replaces `notes`; it merely reads its input instead of
+ignoring it. Parking and commit-ownership key off `mode`/`dest` exactly as
+today (`parksNotes` fires on any note-replace kind, velPattern included), so
+a transformer needs no new machinery and no ownership guard.
 
-**The initial stream is the membership.** Seed the chain with
-`{ notes = host.notes, delta = {} }` — membership as notes, no deltas — so
-a source reading `host.notes` and the first stage reading `stream.notes`
-coincide. This is the current rule; the seeding may grow other inputs
-later (authored deltas once pb-as-input lands).
+**`stream` and `host` are one shape — the A4 host.**
+`{ window, chan, lane, id, notes, pas, ccs, ats, pb }`. `host` carries the
+membership + authored channels unchanged for every stage; `stream` starts as
+a copy of it and evolves as stages fold in, so a source reading `host.notes`
+and the head stage reading `stream.notes` coincide. A note-replace stage
+overwrites `stream.notes`; a continuous stage folds into the typed channel
+named by `dest` (`stream.pb`, `stream.ccs[n]`) — the *same* channels a later
+stage reads, which is why the shapes must match. The free-floating `delta`
+output retires into the typed channel. Continuous folding rides the offline
+park-and-seat realisation (§ Offline continuous realisation) and needs the
+offline summation to be readable mid-chain; until a delta transformer exists
+the continuous channels are read-only pass-through and the note channel is
+the only one the first cut exercises.
 
 **Order is semantic; replace/augment re-reads as channel ownership.** The
 stream carries two channels, and a stage composes onto them by its op: a
@@ -443,8 +537,9 @@ exactly when that fold is order-free:
 - **notes** → lane-pack: any N chains flow into free lanes (two
   note-replace chains merge — they share the parked chord, pack into
   separate lanes);
-- **augment continuous** (additive pb/cc) → sum at the carrier node, as
-  v1 — commutative;
+- **augment continuous** (additive pb/cc) → sum — commutative; offline at
+  seat time once realisation is park-and-seat (§ Offline continuous
+  realisation), at the node until then;
 - **replace continuous** (overwrite pb/cc) → **layer**: no commutative
   fold exists, so the **fx-column lane index is the precedence** and the
   topmost chain wins pointwise in the overlap (painter's algorithm).
@@ -476,10 +571,17 @@ the channel — that is what the cursor means everywhere else in the
 tracker. Overlap disambiguation falls out; a chain elsewhere is reached
 by moving the cursor to it.
 
-**First cut.** Thread the `runProducer` loop, add `role` to the registry,
-write one note-channel transformer (velocity-pattern), and prove it on
-`[arp, velPattern]`; defer delta-channel transformers and the multi-column
-UI until the single-chain series is solid.
+**First cut.** With continuous realisation already offline (§ above), thread
+the `runProducer` fx-loop from fan-out to series: seed `stream` as a copy of
+`host`, run each kind `expand(stream, host, params, ctx)`, fold a
+`dest='note'` result by `mode` (replace overwrites `stream.notes`), and
+build the derived specs **once** after the loop from the final
+`stream.notes` — parking is automatic, since a note-replace kind (velPattern
+included) already fires `parksNotes`. Write velPattern
+(`mode='replace', dest='note'`, reads `stream.notes`) and prove
+`[arp, velPattern]` and `[velPattern, arp]` give different, correct results.
+Defer continuous (delta) transformers and the multi-column UI until the
+single-chain note series is solid.
 
 ## The chain surface — strip, scripts, patches (design)
 
@@ -692,9 +794,9 @@ wants ~none of gm (see resolved open question below).
   fn and modal `label`/`defaults`/`fields` -- one place per generator, user-extensible. Both hosts now
   branch *by kind*: a region parks iff it carries a discrete-replace kind (`parksNotes`), so a
   continuous-only region augments instead (closing the prior all-regions-replace bug -- a vibrato region
-  silenced its covered notes). The note host is unchanged and needs no new branch: a discrete kind emits
-  lane-mates that clip the authored note to its first derived hit (= replace, host stays fxNote 1, PA
-  unmoved), a continuous kind emits none (= augment) -- emergent, never parked. `mode` and `dest` are
+  silenced its covered notes). The note host originally kept a clip-to-first-derived-hit realisation of
+  replace (host stayed fxNote 1); superseded 2026-07-03 -- it now parks itself
+  (§ Note-host replace parks). `mode` and `dest` are
   independent axes, so continuous-replace (A4) and discrete-augment are expressible; continuous-replace
 is **landed** as an absolute curve seated on the base lane by the absorber, no carrier -- § A4), discrete-augment still expressible-not-built. The fxEdit
   modal reads its rows from the registry (`modalOrder` picks the shown kinds; arp is surfaced on both
@@ -831,11 +933,11 @@ parking disagree. Both now come from `generators` (pure, reads only `kinds`):
 
 **Decisions taken (revisit if a need appears).**
 
-- *uuid stability across unpark: simple.* On move-out, `relocateDrop` sheds the
-  uuid and `mm:add` mints a fresh one (no `midiManager` change). A note's uuid
-  churns crossing back to the take -- harmless today (note-fx on a parked note is
-  already a deferred gap). Stable uuid later = teach `mm:add` to honor a supplied
-  one, isolated.
+- *uuid stability across unpark: split by path (revised 2026-07-03).* A **restore**
+  (fx removed / window moved off) supplies the spec's original uuid to `mm:addNote`
+  under `keepUuid` -- fx-editor handles survive the round trip. A **move-out** still
+  sheds the uuid via `relocateDrop` (a relocation is a new note, not the old one
+  returning).
 - *cc keyed by `(chan, cc, ppqL)`*, not a minted id -- cc events have no uuid here;
   the natural key is unique within `fxParkedCC` and simpler.
 - *`member` vs `parked` precedence* if a gm group and an fx region ever cover the
@@ -863,8 +965,44 @@ parked cc edit + delete (the symmetric cc path); multi-select spanning parked +
 normal -> both land under one undo with one final rebuild (the case the staging
 exists to protect).
 
-**Out of scope.** Note-fx hosted on a parked note, and PA replace (A4) -- both
+**Out of scope.** Note-fx hosted on a *region*-parked note, and PA replace (A4) -- both
 deferred (continuous pb replace landed; cc-target replace unbuilt).
+
+## Note-host replace parks (landed 2026-07-03)
+
+Note-host replace now does what the name says: a note carrying a
+discrete-replace kind **parks itself** (membership `{self}`), exactly as a
+region parks its covered chord. All hits are derived output -- retrig/trill
+emit tile 0 -- and the parked cell (now carrying `fx`) is the visible,
+editable surface via the B2/B3 machinery. Dead: the `fxHostEnd` view-restore
+dance, the tail-walk's clip-host-to-first-fxNote special case, and the
+no-derived-output-at-the-host-onset constraint on generators. The two hosts
+now differ only in membership and where the fx is stored -- the precondition
+for the fx chain's transformer role behaving uniformly on both.
+
+Mechanics. The 4.5 note scan gains an identity criterion (`evt.fx` +
+`generators.parksNotes`) alongside the window one, applied to live notes and
+prior specs alike -- so a region-parked note whose own fx carries a discrete
+kind stays parked when the region moves off, becoming its own host with no
+take round-trip. Parked specs/cells carry `fx`; restore returns it, and
+`mm:addNote` honours the spec's original uuid under `keepUuid`. The producer
+walks parked cells (window = the realised parked extent, which
+`realiseParked` already bounds exactly as `fxWindow` would; cells inside a
+region note-park window stay region membership). Region lane allocation
+seeds occupancy from already-emitted derived specs, so a parked host's tiles
+hold its lane against an overlapping region. A parked edit dirties its
+channel at flush -- parked specs are producer input. The view tags only the
+parked cell's **onset row** `parked` (membership `{self}` is closed: adds
+elsewhere in the span stay plain, unlike a region window), and
+`noteFx`/`setNoteFx`/`noteByUuid` resolve parked uuids between mm and
+regions. PA display anchors to the parked cell's lane; the PA itself stays
+take-side and sounds against the derived same-pitch hits.
+
+Gaps. `ctx.nextSameLaneNote` misses on a parked host, so a slide sharing a
+chain with a discrete kind degrades to no delta (target `'fixed'`
+unaffected). A region-parked note's own fx stays suppressed while
+region-covered -- but it now survives in the spec instead of being destroyed
+on restore.
 
 ## A4 -- generator input streams (landed)
 
@@ -1070,12 +1208,10 @@ mechanics) + `tv_fx_region_spec` (parked-cc render).
   to the tracker than a second region object. The shared `regions` substrate
   (R7 piece 1) stays unextracted; no consumer has justified its shape.
 - **Note host: keep augment, or migrate to replace too? Resolved: both branch
-  by kind (A5).** Mode is a generator-kind property, not a host or region default:
-  a discrete kind replaces, a continuous kind augments, on *both* hosts. They
-  realise replace differently — a region parks its covered chord; a note host clips
-  its authored note to the first derived hit (host stays fxNote 1, `fxHostEnd` dance
-  intact, PA unmoved). Parking a note host is still deferred (it would re-bind the
-  single-note PA case to a region) — not needed, since lane-clipping already gives replace.
+  by kind (A5), and both realise replace by parking (2026-07-03).** Mode is a
+  generator-kind property: a discrete kind replaces, a continuous kind augments,
+  on *both* hosts. The interim clip-to-first-hit realisation and the `fxHostEnd`
+  dance are gone — § Note-host replace parks.
 - **Selection over empty space and across lanes. Resolved: no new
   behaviour needed.** Selection is already a geometric channel × ppq
   rectangle (`editCursor.lua` `selection = {row1,row2,col1,col2,part1,part2}`)
