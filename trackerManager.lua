@@ -208,6 +208,137 @@ end
 
 local function delayToPPQ(delay) return timing.delayToPPQ(delay, mm:resolution()) end
 
+----- Fx expansion helpers
+
+-- Membership is overlap, not storage: authored notes re-queried each rebuild; one walk
+-- feeds generator events + fixed lane occupancy. see design/note-macros-v2.md § The anchor generalized
+local function eachWindowNote(chan, startL, endL, fn)
+  for laneIdx, col in ipairs(channels[chan].columns.notes) do
+    for _, evt in ipairs(col.events) do
+      if evt.evType ~= 'pa' and evt.ppqL ~= nil then
+        local hi = (evt.endppqL == nil or evt.endppqL == util.OPEN) and endL or evt.endppqL
+        if evt.ppqL < endL and hi > startL then fn(laneIdx, evt.ppqL, hi, evt) end
+      end
+    end
+  end
+end
+local function membersOf(chan, startL, endL)
+  local out = {}
+  eachWindowNote(chan, startL, endL, function(_, lo, hi, evt)
+    util.add(out, util.pick(evt, "pitch vel detune", { ppqL = lo, endppqL = hi }))
+  end)
+  return out
+end
+-- cc-family streams a generator reads over its window (notes via membersOf). Key `evt.ppqL or evt.ppq`:
+-- ppqL nil when raw==logical (logical projection); pb sliced from the pre-producer authoredPbByChan. see design/note-macros-v2.md § A4
+local function channelStreams(chan, startL, endL, authoredPbByChan)
+  local cols = channels[chan].columns
+  local function within(ppqL) return ppqL >= startL and ppqL < endL end
+  local pas, ccs, ats, pb = {}, {}, {}, {}
+  for _, col in ipairs(cols.notes) do
+    for _, evt in ipairs(col.events) do
+      local ppqL = evt.ppqL or evt.ppq
+      if evt.evType == 'pa' and within(ppqL) then
+        util.add(pas, { ppqL = ppqL, pitch = evt.pitch, vel = evt.vel })
+      end
+    end
+  end
+  for ccNum, col in pairs(cols.ccs) do
+    for _, evt in ipairs(col.events) do
+      local ppqL = evt.ppqL or evt.ppq
+      if within(ppqL) then util.bucket(ccs, ccNum, { ppqL = ppqL, val = evt.val }) end
+    end
+  end
+  for _, evt in ipairs(cols.at and cols.at.events or {}) do
+    local ppqL = evt.ppqL or evt.ppq
+    if within(ppqL) then util.add(ats, { ppqL = ppqL, val = evt.val }) end
+  end
+  for _, point in ipairs(authoredPbByChan[chan] or {}) do
+    if within(point.ppqL) then util.add(pb, { ppqL = point.ppqL, cents = point.cents }) end
+  end
+  -- Generators read these streams in ppq order (pb pre-sorted upstream). see design/deferred-reindex.md § Phase A
+  local function byPpqL(a, b) return a.ppqL < b.ppqL end
+  table.sort(pas, byPpqL)
+  for _, list in pairs(ccs) do table.sort(list, byPpqL) end
+  table.sort(ats, byPpqL)
+  return pas, ccs, ats, pb
+end
+-- Deterministic allocator: lowest lane free of overlap, authored notes seed occupancy;
+-- emission order -> deterministic -> G4-stable. see design/note-macros-v2.md § Generator output
+local function allocateRegionLanes(chan, startL, endL, derived, emitted)
+  local occupied = {}
+  eachWindowNote(chan, startL, endL, function(laneIdx, lo, hi)
+    util.bucket(occupied, laneIdx, { lo, hi })
+  end)
+  -- Already-emitted derived specs occupy too: a parked note host's tiles hold its lane
+  -- (the host itself is off-take, so eachWindowNote no longer sees it).
+  for _, spec in ipairs(emitted) do
+    if spec.ppqL < endL and spec.endppqL > startL then
+      util.bucket(occupied, spec.lane, { spec.ppqL, spec.endppqL })
+    end
+  end
+  local function laneFree(lane, lo, hi)
+    for _, span in ipairs(occupied[lane] or {}) do
+      if lo < span[2] and hi > span[1] then return false end
+    end
+    return true
+  end
+  for _, spec in ipairs(derived) do
+    local lane = 1
+    while not laneFree(lane, spec.ppqL, spec.endppqL) do lane = lane + 1 end
+    util.bucket(occupied, lane, { spec.ppqL, spec.endppqL })
+    spec.lane = lane
+  end
+end
+-- cc-augment summation helpers (per chan): resolve the resting base and build the authored base
+-- curve the sum holds (spans/overlap via mergeWindows/overlapping above).
+local function firstRestOverride(bucket)   -- earliest window's explicit rest override wins
+  local rest, best = nil, math.huge
+  for _, macro in ipairs(bucket) do
+    if macro.rest ~= nil and macro.window[1] < best then rest, best = macro.rest, macro.window[1] end
+  end
+  return rest
+end
+-- Authored base the sum holds: parked in-window ccs (authoritative) plus out-of-window ccs still on the
+-- take (for hold-in), deduped by ppqL. Empty -> a single flat rest point. see design/note-macros-v2.md § Continuous cc
+local function buildCcBase(chan, cc, bucket, rest)
+  local base, seen = {}, {}
+  for _, cell in ipairs(channels[chan].parkedCC or {}) do
+    if cell.cc == cc then
+      util.add(base, { ppq = cell.ppqL, val = cell.val, shape = cell.shape or 'step' })
+      seen[cell.ppqL] = true
+    end
+  end
+  local col = channels[chan].columns.ccs[cc]
+  for _, evt in ipairs(col and col.events or {}) do
+    local ppqL = evt.ppqL or evt.ppq
+    if not seen[ppqL] then
+      util.add(base, { ppq = ppqL, val = evt.val, shape = evt.shape or 'step' })
+      seen[ppqL] = true
+    end
+  end
+  table.sort(base, function(a, b) return a.ppq < b.ppq end)
+  if #base == 0 then
+    local minStart = math.huge
+    for _, macro in ipairs(bucket) do minStart = math.min(minStart, macro.window[1]) end
+    base = { { ppq = minStart, val = rest, shape = 'step' } }
+  end
+  return base
+end
+local function windowCurve(delta)   -- logical curve -> window-tagged points for offline summing
+  local curve = {}
+  for _, point in ipairs(delta) do
+    util.add(curve, { ppq = point.ppqL, val = point.val, shape = point.shape, tension = point.tension })
+  end
+  return curve
+end
+-- A note host (on-take or parked) as a producer: derived notes ride the host's lane/delay/sample.
+local function hostProducer(host, windowEnd, lane)
+  return { window = { host.ppqL, windowEnd }, notes = { host }, fx = host.fx,
+           id = host.uuid, lane = lane, delay = host.delay,
+           sample = host.sample, delayPpq = delayToPPQ(host.delay) }
+end
+
 local function forEachEvent(fn)
   for i=1,16 do
     local channel = channels[i]
@@ -1847,135 +1978,6 @@ local function rebuildFx(fx, deferred, fxWindow, nextInLane, currentWindows)
   for _, region in ipairs(ds:get('fxRegions') or {}) do
     util.bucket(fxRegionsByChan, region.chan, region)
   end
-  -- Membership is overlap, not storage: authored notes re-queried each rebuild; one walk
-  -- feeds generator events + fixed lane occupancy. see design/note-macros-v2.md § The anchor generalized
-  local function eachWindowNote(chan, startL, endL, fn)
-    for laneIdx, col in ipairs(channels[chan].columns.notes) do
-      for _, evt in ipairs(col.events) do
-        if evt.evType ~= 'pa' and evt.ppqL ~= nil then
-          local hi = (evt.endppqL == nil or evt.endppqL == util.OPEN) and endL or evt.endppqL
-          if evt.ppqL < endL and hi > startL then fn(laneIdx, evt.ppqL, hi, evt) end
-        end
-      end
-    end
-  end
-  local function membersOf(chan, startL, endL)
-    local out = {}
-    eachWindowNote(chan, startL, endL, function(_, lo, hi, evt)
-      util.add(out, util.pick(evt, "pitch vel detune", { ppqL = lo, endppqL = hi }))
-    end)
-    return out
-  end
-  -- cc-family streams a generator reads over its window (notes via membersOf). Key `evt.ppqL or evt.ppq`:
-  -- ppqL nil when raw==logical (logical projection); pb sliced from the pre-producer authoredPbByChan. see design/note-macros-v2.md § A4
-  local function channelStreams(chan, startL, endL)
-    local cols = channels[chan].columns
-    local function within(ppqL) return ppqL >= startL and ppqL < endL end
-    local pas, ccs, ats, pb = {}, {}, {}, {}
-    for _, col in ipairs(cols.notes) do
-      for _, evt in ipairs(col.events) do
-        local ppqL = evt.ppqL or evt.ppq
-        if evt.evType == 'pa' and within(ppqL) then
-          util.add(pas, { ppqL = ppqL, pitch = evt.pitch, vel = evt.vel })
-        end
-      end
-    end
-    for ccNum, col in pairs(cols.ccs) do
-      for _, evt in ipairs(col.events) do
-        local ppqL = evt.ppqL or evt.ppq
-        if within(ppqL) then util.bucket(ccs, ccNum, { ppqL = ppqL, val = evt.val }) end
-      end
-    end
-    for _, evt in ipairs(cols.at and cols.at.events or {}) do
-      local ppqL = evt.ppqL or evt.ppq
-      if within(ppqL) then util.add(ats, { ppqL = ppqL, val = evt.val }) end
-    end
-    for _, point in ipairs(authoredPbByChan[chan] or {}) do
-      if within(point.ppqL) then util.add(pb, { ppqL = point.ppqL, cents = point.cents }) end
-    end
-    -- Generators read these streams in ppq order (pb pre-sorted upstream). see design/deferred-reindex.md § Phase A
-    local function byPpqL(a, b) return a.ppqL < b.ppqL end
-    table.sort(pas, byPpqL)
-    for _, list in pairs(ccs) do table.sort(list, byPpqL) end
-    table.sort(ats, byPpqL)
-    return pas, ccs, ats, pb
-  end
-  -- Deterministic allocator: lowest lane free of overlap, authored notes seed occupancy;
-  -- emission order -> deterministic -> G4-stable. see design/note-macros-v2.md § Generator output
-  local function allocateRegionLanes(chan, startL, endL, derived, emitted)
-    local occupied = {}
-    eachWindowNote(chan, startL, endL, function(laneIdx, lo, hi)
-      util.bucket(occupied, laneIdx, { lo, hi })
-    end)
-    -- Already-emitted derived specs occupy too: a parked note host's tiles hold its lane
-    -- (the host itself is off-take, so eachWindowNote no longer sees it).
-    for _, spec in ipairs(emitted) do
-      if spec.ppqL < endL and spec.endppqL > startL then
-        util.bucket(occupied, spec.lane, { spec.ppqL, spec.endppqL })
-      end
-    end
-    local function laneFree(lane, lo, hi)
-      for _, span in ipairs(occupied[lane] or {}) do
-        if lo < span[2] and hi > span[1] then return false end
-      end
-      return true
-    end
-    for _, spec in ipairs(derived) do
-      local lane = 1
-      while not laneFree(lane, spec.ppqL, spec.endppqL) do lane = lane + 1 end
-      util.bucket(occupied, lane, { spec.ppqL, spec.endppqL })
-      spec.lane = lane
-    end
-  end
-  -- cc-augment summation helpers (per chan): resolve the resting base and build the authored base
-  -- curve the sum holds. mergeWindows/overlapping are module-level (shared with pb-augment).
-  local function firstRestOverride(bucket)   -- earliest window's explicit rest override wins
-    local rest, best = nil, math.huge
-    for _, macro in ipairs(bucket) do
-      if macro.rest ~= nil and macro.window[1] < best then rest, best = macro.rest, macro.window[1] end
-    end
-    return rest
-  end
-  -- Authored base the sum holds: parked in-window ccs (authoritative) plus out-of-window ccs still on the
-  -- take (for hold-in), deduped by ppqL. Empty -> a single flat rest point. see design/note-macros-v2.md § Continuous cc
-  local function buildCcBase(chan, cc, bucket, rest)
-    local base, seen = {}, {}
-    for _, cell in ipairs(channels[chan].parkedCC or {}) do
-      if cell.cc == cc then
-        util.add(base, { ppq = cell.ppqL, val = cell.val, shape = cell.shape or 'step' })
-        seen[cell.ppqL] = true
-      end
-    end
-    local col = channels[chan].columns.ccs[cc]
-    for _, evt in ipairs(col and col.events or {}) do
-      local ppqL = evt.ppqL or evt.ppq
-      if not seen[ppqL] then
-        util.add(base, { ppq = ppqL, val = evt.val, shape = evt.shape or 'step' })
-        seen[ppqL] = true
-      end
-    end
-    table.sort(base, function(a, b) return a.ppq < b.ppq end)
-    if #base == 0 then
-      local minStart = math.huge
-      for _, macro in ipairs(bucket) do minStart = math.min(minStart, macro.window[1]) end
-      base = { { ppq = minStart, val = rest, shape = 'step' } }
-    end
-    return base
-  end
-
-  local function windowCurve(delta)   -- logical curve -> window-tagged points for offline summing
-    local curve = {}
-    for _, point in ipairs(delta) do
-      util.add(curve, { ppq = point.ppqL, val = point.val, shape = point.shape, tension = point.tension })
-    end
-    return curve
-  end
-  -- A note host (on-take or parked) as a producer: derived notes ride the host's lane/delay/sample.
-  local function hostProducer(host, windowEnd, lane)
-    return { window = { host.ppqL, windowEnd }, notes = { host }, fx = host.fx,
-             id = host.uuid, lane = lane, delay = host.delay,
-             sample = host.sample, delayPpq = delayToPPQ(host.delay) }
-  end
 
   -- Pass A: run every generator. Structural notes commit per lane; continuous deltas
   -- stash with their window for colouring (channel-wide, not note-tied). see design/archive/note-macros.md § Continuous realisation
@@ -2017,7 +2019,7 @@ local function rebuildFx(fx, deferred, fxWindow, nextInLane, currentWindows)
       local startL, endL = producer.window[1], producer.window[2]
       -- The host the generators read: the note membership plus the windowed channel input
       -- streams, built once per host (not per kind). see design/note-macros-v2.md § A4
-      local pas, ccs, ats, pb = channelStreams(chan, startL, endL)
+      local pas, ccs, ats, pb = channelStreams(chan, startL, endL, authoredPbByChan)
       local host = { window = { startL, endL }, chan = chan, lane = producer.lane, id = producer.id,
                      notes = producer.notes, pas = pas, ccs = ccs, ats = ats, pb = pb }
       -- Region producers (lane unset) defer their notes: lanes are allocated over the
