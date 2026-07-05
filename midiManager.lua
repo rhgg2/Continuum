@@ -372,6 +372,28 @@ local function ccSidecarEntry(cc)
   return hit.entry
 end
 
+-- While playing, MIDI_SetAllEvts can't release a held pitch whose edited realisation
+-- drops its note-off; pre-release via the per-event API (docs/midiManager.md § Live-edit note release).
+local function releaseStrandedNotes(playPpq)
+  local ok, blob = reaper.MIDI_GetAllEvts(take)
+  if not ok then return end
+  local spanning = {}
+  for _, note in ipairs(notes) do
+    if note.ppq <= playPpq and playPpq < note.endppq then
+      spanning[note.chan * 128 + note.pitch] = true
+    end
+  end
+  local stranded = {}
+  for _, old in ipairs(midiBlob.parse(blob)) do
+    if old.ppq <= playPpq and playPpq < old.endppq
+       and not spanning[old.chan * 128 + old.pitch] then
+      stranded[#stranded + 1] = old.idx
+    end
+  end
+  table.sort(stranded, function(a, b) return a > b end)
+  for _, idx in ipairs(stranded) do reaper.MIDI_DeleteNote(take, idx) end
+end
+
 -- Project the model onto the take as one whole-take blob: reproject each uuid'd
 -- event's sidecar (cached), carry unmodelled events, preserve the EOT. Sole writer.
 local function flushTake()
@@ -394,6 +416,12 @@ local function flushTake()
   perf.start('serialise')
   local blob = midiBlob.serialise(notes, ccs, texts, carriedPassthrough, endPpq)
   perf.stop('serialise')
+
+  if reaper.GetPlayState() & 1 == 1 then
+    -- scheduling frontier (next block), not the audible position: note-ons for
+    -- the in-flight block are already committed and can strand too
+    releaseStrandedNotes(reaper.MIDI_GetPPQPosFromProjTime(take, reaper.GetPlayPosition2()))
+  end
 
   perf.start('setEvts')
   reaper.MIDI_SetAllEvts(take, blob)

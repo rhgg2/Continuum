@@ -233,6 +233,27 @@ Semantics:
   reach back into the same um (e.g. via `setMutedChannels`). Without
   the up-front clear, in-flight ops would be re-emitted.
 
+## Anticipative-FX guard
+
+While playing, `mm`'s `flushTake` releases notes REAPER is actively sounding
+through the per-event API *before* its wholesale `MIDI_SetAllEvts`, so an edit
+to a live note doesn't strand the old note-off (see docs/midiManager.md §
+Live-edit note release). That release tests against the `GetPlayPosition2`
+scheduling frontier — but anticipative FX processing buffers a track's synth
+*past* that frontier, reopening the stranding window. So tm turns anticipative
+FX off on the bound track (`I_PERFFLAGS &2`) for the duration of editing.
+
+The prior flags are captured and persisted (`ds` project key `guardedTrack =
+{guid, flags}`) the moment a track is guarded, and restored on the next unbind:
+`bindTake` restores the outgoing track before guarding the incoming one,
+`detach` restores when the take dies, and Continuum's quit restores through the
+`tracker` facade's `restorePerfFlags`. Because the prior is persisted, a crash
+that skips the restore is healed on the next boot — tm's construction calls
+`restoreGuarded` once before the first bind, putting any leaked track back and
+clearing the record. Capturing the prior only when guarding a fresh track (the
+restore always runs first) means the stored value is never a Continuum-modified
+one, so it can't latch.
+
 ## Rebuild
 
 Triggered by:

@@ -1,4 +1,4 @@
-@module trackerManager  src=trackerManager.lua  loc=3004  sha=751676c  mode=chunk  self=tm
+@module trackerManager  src=trackerManager.lua  loc=3032  sha=38d20ea  mode=chunk  self=tm
 @deps mm, cm, ds
 
 # Invariants & contracts
@@ -349,6 +349,9 @@
   @fn changedSwingNames(prev, cur)  @ 2872-2882
   @fn channelsResolvingTo(names)  @ 2885-2897
       -- Global swing shadows the per-channel slots: a hit on the global name affects all 16.
+      · Anticipative-FX guard (see docs/trackerManager.md § Anticipative-FX guard)
+  @fn trackByGuid(guid)  @ 2972-2977
+  @fn guardTrack(track)  @ 2979-2984
 
 # Public API (tm:*)
   @api tm:byUuid(uuid)  @ 743
@@ -393,11 +396,13 @@
       @invariant  PA events ride along in note columns but carry no mute state — skipped
   @api tm:rebuild(takeChanged)  @ 2751-2841
       -- see docs/trackerManager.md § Rebuild
-  @api tm:bindTake(take, opts)  @ 2976-2986
-  @api tm:detach()  @ 2989-2994
+  @api tm:restoreGuarded()  @ 2987-2993
+      @contract  restores the guarded track's prior I_PERFFLAGS, clears the record; no-op if none
+  @api tm:bindTake(take, opts)  @ 3000-3012
+  @api tm:detach()  @ 3015-3021
       @contract  take died under us — nils mm.take so tm:currentTake reads nil; not bindTake(nil) seam
-  @api tm:currentTake()  @ 2996
-  @api tm:reloadFromReaper()  @ 3000
+  @api tm:currentTake()  @ 3023
+  @api tm:reloadFromReaper()  @ 3027
       @contract  re-reads the bound take from REAPER; mm:reload fires standard reload→rebuild
       @invariant  reloadFromReaper does not swap take; for coord's external-mutation watcher
 
@@ -409,10 +414,11 @@
 # Uses (outbound edges)
   @use call    cm.boundTake  @ 2929,2949
   @use call    cm.get  @ pbLim:91 flush:927 currentSwing:1102 noteColumnAccepts:1577 rebuildExternals:1619 rebuildFx:2051 rebuildPCs:2664 readSwings:2854
-  @use call    cm.set  @ bindTake:2979
-  @use call    cm.setContext  @ bindTake:2978 detach:2991
-  @use call    ds.assign  @ flushParked:910 rebuildExtraColumns:1568 persistParked:1690 rebuild:2827
-  @use call    ds.get  @ flushParked:894,910 currentSwing:1108 rebuildCCs:1490 rebuildExtraColumns:1549 persistParked:1689 rebuildRegionPark:1735,1845 rebuildFx:2060 rebuildPbs:2327 rebuild:2798,2826 2856,2951 snapshotSwingState:2860 channelsResolvingTo:2888
+  @use call    cm.set  @ bindTake:3004
+  @use call    cm.setContext  @ bindTake:3003 detach:3018
+  @use call    ds.assign  @ flushParked:910 rebuildExtraColumns:1568 persistParked:1690 rebuild:2827 guardTrack:2982
+  @use call    ds.delete  @ restoreGuarded:2992
+  @use call    ds.get  @ flushParked:894,910 currentSwing:1108 rebuildCCs:1490 rebuildExtraColumns:1549 persistParked:1689 rebuildRegionPark:1735,1845 rebuildFx:2060 rebuildPbs:2327 rebuild:2798,2826 2856,2951 snapshotSwingState:2860 channelsResolvingTo:2888 restoreGuarded:2988
   @use call    generators.parkWindows  @ rebuild:2809
   @use call    generators.parksNotes  @ rebuildRegionPark:1703 rebuildFx:2184
   @use call    mm.add  @ flush:1019 tileLength:1278 mmBatch:1378,1379
@@ -424,19 +430,19 @@
   @use call    mm.events  @ loadIndex:1039 tileLength:1257
   @use call    mm.interpolate  @ evalCurve:148 interpolate:1089 rebuildPbs:2439
   @use call    mm.length  @ length:1084 currentSwing:1101 setLength:1170 rescaleLength:1191 tileLength:1244
-  @use call    mm.load  @ bindTake:2984
+  @use call    mm.load  @ bindTake:3009
   @use call    mm.modify  @ flush:1005 tileLength:1273 mmBatch:1367
   @use call    mm.name  @ name:1086
   @use call    mm.notesRaw  @ rebuildInternals:1407
   @use call    mm.reindexIfStale  @ loadIndex:1035
-  @use call    mm.reload  @ reloadFromReaper:3000
+  @use call    mm.reload  @ reloadFromReaper:3027
   @use call    mm.resolution  @ ccGridStep:105 delayToPPQ:285 resolution:1085 currentSwing:1101 setLength:1184 rescaleLength:1193,1237 tileLength:1259 noteColumnAccepts:1577 rebuildFx:2049 projectLogical:2727
   @use call    mm.setLength  @ setLength:1184 rescaleLength:1193,1237 tileLength:1259
   @use call    mm.setName  @ setName:1087
-  @use call    mm.take  @ editCursor:1079,1081 playFrom:1287,1288 rebuildExtraColumns:1568 persistParked:1689 rebuild:2753,2826 currentTake:2996
+  @use call    mm.take  @ editCursor:1079,1081 playFrom:1287,1288 rebuildExtraColumns:1568 persistParked:1689 rebuild:2753,2826 currentTake:3023
   @use call    mm.timeSigs  @ timeSigs:1088
   @use call    mm.tokenOf  @ rebuildInternals:1410 rebuildCCs:1497,1526 rebuildRegionPark:1868,1892 rebuildPA:1940 rebuildPbs:2370 rebuildPCs:2691
-  @use call    mm.unload  @ detach:2993
+  @use call    mm.unload  @ detach:3020
   @use call    perf.count  @ flush:983
   @use call    perf.report  @ flush:1026
   @use call    perf.start  @ flush:943,1004 rebuildPbs:2334,2382,2530,2596,2637,2654 rebuild:2788,2789,2791,2792,2811,2812,2817,2819,2820,2821,2823,2832,2840
@@ -484,3 +490,9 @@
   @reaper MIDI_GetPPQPosFromProjTime, MIDI_GetProjTimeFromPPQPos
   @reaper SetEditCurPos
   @reaper Main_OnCommand
+  @reaper CountTracks
+  @reaper GetTrack
+  @reaper GetTrackGUID
+  @reaper GetMediaTrackInfo_Value
+  @reaper SetMediaTrackInfo_Value
+  @reaper GetMediaItemTake_Track

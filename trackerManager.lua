@@ -2968,12 +2968,37 @@ do
     end
   end)
 
+  ----- Anticipative-FX guard (see docs/trackerManager.md § Anticipative-FX guard)
+  local function trackByGuid(guid)
+    for i = 0, reaper.CountTracks(0) - 1 do
+      local tr = reaper.GetTrack(0, i)
+      if reaper.GetTrackGUID(tr) == guid then return tr end
+    end
+  end
+
+  local function guardTrack(track)
+    if not track then return end
+    local flags = math.floor(reaper.GetMediaTrackInfo_Value(track, 'I_PERFFLAGS'))
+    ds:assign('guardedTrack', { guid = reaper.GetTrackGUID(track), flags = flags })
+    reaper.SetMediaTrackInfo_Value(track, 'I_PERFFLAGS', flags | 2)
+  end
+
+  --contract: restores the guarded track's prior I_PERFFLAGS, clears the record; no-op if none
+  function tm:restoreGuarded()
+    local g = ds:get('guardedTrack')
+    if not g then return end
+    local track = trackByGuid(g.guid)
+    if track then reaper.SetMediaTrackInfo_Value(track, 'I_PERFFLAGS', g.flags) end
+    ds:delete('guardedTrack')
+  end
+
   --contract: atomic take swap: cm:setContext runs silently; mm:load fires the coherent rebuild
   --contract: opts.trackerMode (wiring-derived) seeds trackerMode under the same suppression window
   --contract: opts.markSwingStale=true rebuilds raw from ppqL under new (cm, mm) (seqMgr:reswingAll)
   --contract: bindTake(nil) is the dormant seam (e.g. samplePage)
   --invariant: bindTake(nil): cm clears under suppression; mm:load(nil) no-op; tm/tv keep last frame
   function tm:bindTake(take, opts)
+    tm:restoreGuarded()
     bindingTake = true
     cm:setContext(take)
     if take then cm:set('transient', 'trackerMode', (opts and opts.trackerMode) or false) end
@@ -2982,11 +3007,13 @@ do
       for i = 1, 16 do staleSwing[i] = true end
     end
     mm:load(take)
+    if take then guardTrack(reaper.GetMediaItemTake_Track(take)) end
     snapshotSwingState()
   end
 
   --contract: take died under us — nils mm.take so tm:currentTake reads nil; not bindTake(nil) seam
   function tm:detach()
+    tm:restoreGuarded()
     bindingTake = true
     cm:setContext(nil)
     bindingTake = false
@@ -3000,5 +3027,6 @@ do
   function tm:reloadFromReaper() if mm then mm:reload() end end
 end
 
+tm:restoreGuarded()
 tm:rebuild(true)
 return tm

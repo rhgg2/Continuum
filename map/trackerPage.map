@@ -1,4 +1,4 @@
-@module trackerPage  src=trackerPage.lua  loc=150  sha=3a7206b  mode=chunk  self=tp
+@module trackerPage  src=trackerPage.lua  loc=153  sha=61aa319  mode=chunk  self=tp
 @deps cm, ds, cmgr, chrome, gui, modalHost, facade, help, eventMeta
 
 # Imports
@@ -43,35 +43,36 @@
   @api tp:bindFromSelection()  @ 81-96
       @contract  rebind to the selection take on change. See docs/trackerPage.md § Selection
   -- Page interface — render delegates to the renderer; the watcher brackets the frame
-  @api tp:toolbarSegments()  @ 139
-  @api tp:renderStatusBar(ctx)  @ 140
-  @api tp:focusState()  @ 141
-  @api tp:renderBody(ctx, w, h, dispatch)  @ 144-148
+  @api tp:toolbarSegments()  @ 142
+  @api tp:renderStatusBar(ctx)  @ 143
+  @api tp:focusState()  @ 144
+  @api tp:renderBody(ctx, w, h, dispatch)  @ 147-151
       @contract  resolve selection, draw, then snapshot the take hash as next frame's watcher baseline
 
 # Uses (outbound edges)
-  @use call    cm.get  @ 107
+  @use call    cm.get  @ 110
   @use call    cm.getAt  @ bindFromSelection:82
   @use call    facade.get  @ arrange:20 samplerMode:26
   @use call    facade.publish  @ 100
   @use call    paramAutomation.apply  @ bind:67
-  @use call    trackerManager.bindTake  @ bind:64 unbind:69 124,128
-  @use call    trackerManager.currentTake  @ takeHash:50 currentTake:59 bindFromSelection:88 121,127
+  @use call    trackerManager.bindTake  @ bind:64 unbind:69 127,131
+  @use call    trackerManager.currentTake  @ takeHash:50 currentTake:59 bindFromSelection:88 124,130
   @use call    trackerManager.detach  @ dropTake:72
   @use call    trackerManager.reloadFromReaper  @ reloadFromReaper:75 bindFromSelection:94
-  @use call    trackerRender.focusState  @ focusState:141
-  @use call    trackerRender.renderBody  @ renderBody:146
-  @use call    trackerRender.renderStatusBar  @ renderStatusBar:140
-  @use call    trackerRender.toolbarSegments  @ toolbarSegments:139
-  @use call    trackerView.cursorAnchor  @ 133
+  @use call    trackerManager.restoreGuarded  @ 104
+  @use call    trackerRender.focusState  @ focusState:144
+  @use call    trackerRender.renderBody  @ renderBody:149
+  @use call    trackerRender.renderStatusBar  @ renderStatusBar:143
+  @use call    trackerRender.toolbarSegments  @ toolbarSegments:142
+  @use call    trackerView.cursorAnchor  @ 136
   @use call    trackerView.dropGrid  @ dropTake:72
-  @use call    trackerView.newParkedTake  @ 107
+  @use call    trackerView.newParkedTake  @ 110
   @use call    trackerView.resolveSelectionTake  @ bindFromSelection:87
   @use call    trackerView.retargetTrackTier  @ bind:65
   @use call    trackerView.seedSharedSlots  @ bind:66
-  @use call    trackerView.selectTrack  @ bindFromSelection:85 101,106
-  @use call    trackerView.setSwingComposite  @ 134
-  @use call    trackerView.timeSig  @ 132
+  @use call    trackerView.selectTrack  @ bindFromSelection:85 101,109
+  @use call    trackerView.setSwingComposite  @ 137
+  @use call    trackerView.timeSig  @ 135
   @use call    util.instantiate  @ 31,32,33,34,35,36,38
   @use require ccManager  @ 34
   @use require groupManager  @ 33

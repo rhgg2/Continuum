@@ -160,7 +160,7 @@ local function Main()
     closeEditor     = function() coord:setActive(coord:previousPage() or 'tracker') end,
     diveToSampler   = function(_, track) coord:getFacade('sample').setTrack(track); coord:setActive('sample') end,
     togglePage      = function() coord:togglePage()         end,
-    quit            = function() coord:quit()               end,
+    quit            = function() coord:getFacade('tracker').restorePerfFlags(); coord:quit()               end,
     beginPrefix     = function() cmgr:beginPrefix()         end,
     toggleFxWindows = toggleAllFxWindows,
     toggleProfiler  = function() perf.toggle() end,

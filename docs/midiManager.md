@@ -213,6 +213,39 @@ key it allocates a uuid + inserts a sidecar in the same shot. Plain ccs
 (no metadata) skip the allocation entirely. Symmetric with `addNote`'s
 unconditional uuid, but lazy — most ccs never need one.
 
+### Live-edit note release
+
+While the transport is playing, `flushTake`'s whole-take `MIDI_SetAllEvts`
+can strand a sounding note. REAPER's per-event API carries edit identity —
+`MIDI_SetNote(idx, 60→62)` tells the engine "*this* held event changed" and
+it emits the note-off on 60. `SetAllEvts` is a blind swap: it installs 62 with
+a note-off REAPER never struck, while the held 60's old note-off exists
+nowhere in the new blob, so 60 hangs until the next loop. Unchanged held notes
+survive fine — their `(chan, pitch)` note-off is still present.
+
+So before the wipe, and only when playing, `releaseStrandedNotes` reads the
+take (`MIDI_GetAllEvts`) and releases each old note in flight at the
+**scheduling frontier** whose new model no longer covers it. The frontier is
+`GetPlayPosition2` — the next audio block, *ahead* of the latency-compensated
+audible `GetPlayPosition` — because REAPER has already committed the note-ons
+for the block it is about to process. Using the audible position misses a note
+edited in the window just before it sounds: its old note-on is already
+scheduled, so the edit strands it exactly as a mid-note edit would, and the
+new pitch never sounds because the cursor is already past its onset. For every
+old note with `onset ≤ frontier < noteoff` whose new model has no
+same-`(chan, pitch)` note still spanning the frontier, it issues a
+`MIDI_DeleteNote`. That delete emits the real note-off, and — verified against
+REAPER — the release survives the same-frame `SetAllEvts` that immediately
+follows; the edited note re-articulates at its next onset, matching the
+per-event behaviour from before Step 5.
+
+For `GetPlayPosition2` to be the true frontier, the edited track must not render
+its synth further ahead than the next block — which anticipative FX processing
+does. So tm disables anticipative FX (`I_PERFFLAGS &2`) on the bound track while
+editing and restores the prior on unbind/quit, healing any crash-leaked flag on
+boot (see docs/trackerManager.md § Anticipative-FX guard). This is the sole
+per-event MIDI write left in mm; every other write rides the wholesale blob.
+
 ### Sidecar regeneration cache
 
 `flushTake` rewrites the whole take (`MIDI_SetAllEvts`) on every mutation, so it
