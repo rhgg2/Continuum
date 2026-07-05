@@ -155,6 +155,38 @@ return {
     end,
   },
 
+  ----- Regression — duration edits across a take round-trip (mm:load drops the RAM seat tag)
+
+  {
+    name = 'noteOff shrink after reload neither parks seats nor restores them as authored pbs',
+    run = function(harness)
+      local h = harness.mk()
+      addVibHost(h, { endppq = 480 })
+
+      -- mm:load rebuilds events from the wire, so seats come back derived=nil; the regionPark
+      -- create-scan must recognise them by region (inside a previous window), not by tag.
+      local function roundTrip() h.fm:load(); h.tm:rebuild() end
+      local function shrinkTo(endppq)
+        local host = h.tm:getChannel(1).columns.notes[1].events[1]
+        h.tm:assignEvent(host, { endppq = endppq })
+        h.tm:flush()
+      end
+
+      roundTrip()
+      shrinkTo(240)
+      for _, spec in ipairs(h.ds:get('fxParked') or {}) do
+        t.falsy(spec.evType == 'pb', 'no seat mistaken for an authored pb and parked')
+      end
+
+      roundTrip()
+      shrinkTo(120)
+      local seats = pbSeatsOf(h.fm:dump(), 1)
+      t.truthy(#seats > 0, 'seats present (non-vacuous)')
+      t.eq(seats[#seats].ppq, 120, 'no stranded pb beyond the shrunk window')
+      t.falsy(h.tm:getChannel(1).columns.pb, 'no phantom authored pbs surface in the pb column')
+    end,
+  },
+
   ----- Projection — the derived seats never surface as an editable column
 
   {

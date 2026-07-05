@@ -1852,14 +1852,25 @@ local function rebuildRegionPark(deferred, currentWindows)
   for k, w in pairs(curPb) do if not prevPb[k] then util.add(pbCreated, w) end end
   for k, w in pairs(prevPb) do if not curPb[k] then util.add(pbRemoved, w) end end
   do
-    -- Park (create): only a newly-created window walks mm. Marked detune absorbers may already sit in
-    -- the window (not authored; rebuildPbs reseats them into the curve) -- only unmarked (authored) pbs park.
+    -- Park (create): only a newly-created window walks mm. `derived` can't spot seats (RAM-only,
+    -- lost on take round-trip); region can: a pb inside a *previous* window is a seat, never authored.
+    local prevSpans = {}
+    for _, win in pairs(prevPb) do
+      util.bucket(prevSpans, win.chan,
+        { tm:fromLogical(win.chan, win.startppq), tm:fromLogical(win.chan, win.endppq) })
+    end
+    local function seatByRegion(chan, ppq)
+      for _, span in ipairs(prevSpans[chan] or {}) do
+        if ppq >= span[1] and ppq <= span[2] then return true end
+      end
+      return false
+    end
     local scan = {}
     for _, win in ipairs(pbCreated) do
       local sRaw, eRaw = tm:fromLogical(win.chan, win.startppq), tm:fromLogical(win.chan, win.endppq)
       for _, cc in mm:ccsRaw() do
         if cc.evType == 'pb' and not cc.derived and cc.chan == win.chan
-           and cc.ppq >= sRaw and cc.ppq <= eRaw then
+           and cc.ppq >= sRaw and cc.ppq <= eRaw and not seatByRegion(cc.chan, cc.ppq) then
           dirtyChan(cc.chan)
           -- val: logical cents from mm's cents sidecar (restore maps back); a foreign pre-cents pb
           -- falls back to raw-derived cents (best-effort).
