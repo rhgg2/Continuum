@@ -666,7 +666,10 @@ return {
 
       t.truthy(captured, 'the capture kind ran and recorded its host')
       t.deepEq(captured.pas, { { ppqL = 120, pitch = 60, vel = 77 } }, 'the PA rides into host.pas')
-      t.deepEq(captured.ccs[74], { { ppqL = 60, val = 50 } }, 'authored cc 74 buckets into host.ccs')
+      t.deepEq(captured.ccs[74], { { ppqL = 0,   val = 50, shape = 'step' },
+                                   { ppqL = 60,  val = 50, shape = 'step' },
+                                   { ppqL = 240, val = 50, shape = 'step' } },
+        'authored cc 74 buckets into host.ccs as an absolute curve with entering/closing edge values')
       t.deepEq(captured.ats, { { ppqL = 180, val = 33 } }, 'channel aftertouch into host.ats')
       t.deepEq(field(captured.notes, 'pitch'), { 60 }, 'the covered note is the membership (host.notes)')
     end,
@@ -693,8 +696,10 @@ return {
       generators.kinds.capture = nil
 
       t.truthy(captured, 'the capture kind ran and recorded its host')
-      t.deepEq(captured.pb, { { ppqL = 60, cents = 50 } },
-        'the authored pb breakpoint rides into host.pb; the absorber fake at ppq 0 is excluded')
+      t.deepEq(captured.pb, { { ppqL = 0,   val = 50, shape = 'step' },
+                              { ppqL = 60,  val = 50, shape = 'step' },
+                              { ppqL = 240, val = 50, shape = 'step' } },
+        'the authored pb rides into host.pb as an absolute cents curve; the absorber fake is excluded')
     end,
   },
 
@@ -757,6 +762,70 @@ return {
 
       t.eq(derivedPb(h, 1, 0).val,   centsToRaw(50), 'seated at the curve start (50c)')
       t.eq(derivedPb(h, 1, 240).val, 0,              'seat re-centres at the window end')
+    end,
+  },
+
+  ----- C2: continuous stages fold in-chain -- order is load-bearing on the pb channel too
+
+  {
+    name = 'fx chain (continuous): [replace, augment] -- the augment stage wobbles the replaced curve',
+    run = function(harness)
+      local h = harness.mk()
+      -- capRep replaces the pb channel with a flat 50c curve; bump augments +20c over [60,120).
+      generators.kinds.capRep = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppqL = host.window[1], val = 50, shape = 'step' },
+          { ppqL = host.window[2], val = 0,  shape = 'step' },
+        } } end,
+        mode = 'replace', dest = 'pb', label = 'CapRep', defaults = {}, fields = {},
+      }
+      generators.kinds.bump = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppqL = host.window[1], val = 0,  shape = 'step' },
+          { ppqL = 60,             val = 20, shape = 'step' },
+          { ppqL = 120,            val = 0,  shape = 'step' },
+        } } end,
+        mode = 'augment', dest = 'pb', label = 'Bump', defaults = {}, fields = {},
+      }
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+                                   fx = { { kind = 'capRep' }, { kind = 'bump' } } } })
+      h.tm:rebuild()
+      generators.kinds.capRep, generators.kinds.bump = nil, nil
+
+      t.eq(derivedPb(h, 1, 0).val,   centsToRaw(50), 'the replaced curve seats at the window start')
+      t.eq(derivedPb(h, 1, 60).val,  centsToRaw(70), 'the augment delta folds onto the replaced curve (50c + 20c)')
+      t.eq(derivedPb(h, 1, 120).val, centsToRaw(50), 'the delta releases back to the replaced curve')
+      t.eq(derivedPb(h, 1, 240).val, 0,              'the terminal seat re-centres at the window end')
+    end,
+  },
+
+  {
+    name = 'fx chain (continuous): [augment, replace] -- the replace stage overwrites the folded stream',
+    run = function(harness)
+      local h = harness.mk()
+      generators.kinds.bump = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppqL = host.window[1], val = 0,  shape = 'step' },
+          { ppqL = 60,             val = 20, shape = 'step' },
+          { ppqL = 120,            val = 0,  shape = 'step' },
+        } } end,
+        mode = 'augment', dest = 'pb', label = 'Bump', defaults = {}, fields = {},
+      }
+      generators.kinds.capRep = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppqL = host.window[1], val = 50, shape = 'step' },
+          { ppqL = host.window[2], val = 0,  shape = 'step' },
+        } } end,
+        mode = 'replace', dest = 'pb', label = 'CapRep', defaults = {}, fields = {},
+      }
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+                                   fx = { { kind = 'bump' }, { kind = 'capRep' } } } })
+      h.tm:rebuild()
+      generators.kinds.capRep, generators.kinds.bump = nil, nil
+
+      t.eq(derivedPb(h, 1, 0).val, centsToRaw(50), 'the replace curve owns the window start')
+      t.falsy(derivedPb(h, 1, 60), 'the earlier augment bump is overwritten -- no seat survives at 60')
+      t.eq(derivedPb(h, 1, 240).val, 0, 'the terminal seat re-centres at the window end')
     end,
   },
 

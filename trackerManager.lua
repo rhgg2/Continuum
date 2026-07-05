@@ -138,20 +138,21 @@ local function firstAfter(list, target)   -- first index with .ppq > target (bin
   return lo
 end
 
+-- Curve value at ppq: held both ways (first value before, last after), shape interp within.
+local function evalCurve(curve, ppq)
+  if #curve == 0 then return 0 end
+  local i = firstAfter(curve, ppq)
+  local A, B = curve[i - 1], curve[i]
+  if not A then return curve[1].val end
+  if not B then return A.val end
+  return mm:interpolate(A, B, ppq, 'val')
+end
+
 local function sumStreams(base, macros, span, opts)
   local sL, eL = span[1], span[2]
   local grid   = ccGridStep()
   local curves = { base }
   for _, m in ipairs(macros) do util.add(curves, m) end
-
-  local function eval(curve, ppq)   -- held both ways: first value before, last after, shape interp within
-    if #curve == 0 then return 0 end
-    local i = firstAfter(curve, ppq)
-    local A, B = curve[i - 1], curve[i]
-    if not A then return curve[1].val end
-    if not B then return A.val end
-    return mm:interpolate(A, B, ppq, 'val')
-  end
   local function governingShape(curve, ppq)   -- shape at ppq: bp at-or-before; 'step' at/beyond the ends
     local i = firstAfter(curve, ppq)
     local A, B = curve[i - 1], curve[i]
@@ -160,7 +161,7 @@ local function sumStreams(base, macros, span, opts)
   end
   local function sumAt(ppq)
     local v = 0
-    for _, c in ipairs(curves) do v = v + eval(c, ppq) end
+    for _, c in ipairs(curves) do v = v + evalCurve(c, ppq) end
     if opts.round then v = util.round(v) end
     if opts.lo then v = util.clamp(v, opts.lo, opts.hi) end
     return v
@@ -207,6 +208,67 @@ local function rawToCents(raw)
   return util.round(raw / 8192 * pbLim())
 end
 
+----- Continuous curves (fx chain)
+
+-- Logical stream curve ({ppqL,val,shape,[tension]}) <-> sumStreams' ppq-keyed points; same values, one key.
+local function asPoints(curve)
+  local pts = {}
+  for _, point in ipairs(curve) do
+    util.add(pts, { ppq = point.ppqL, val = point.val, shape = point.shape, tension = point.tension })
+  end
+  return pts
+end
+local function asCurve(pts)
+  local curve = {}
+  for _, point in ipairs(pts) do
+    util.add(curve, { ppqL = point.ppq, val = point.val, shape = point.shape, tension = point.tension })
+  end
+  return curve
+end
+local function negated(pts)
+  local out = {}
+  for _, point in ipairs(pts) do
+    util.add(out, { ppq = point.ppq, val = -point.val, shape = point.shape, tension = point.tension })
+  end
+  return out
+end
+local function anyNonZero(curve)
+  for _, point in ipairs(curve) do if point.val ~= 0 then return true end end
+  return false
+end
+
+-- Slice a ppq-keyed base curve to [startL, endL]: entering/closing values at the edges (shape/tension
+-- from the governing point so interpolation carries through), authored points strictly within.
+local function sliceCurve(base, startL, endL)
+  if #base == 0 then return {} end
+  local function edge(ppq)
+    local govern = base[firstAfter(base, ppq) - 1]
+    return { ppq = ppq, val = evalCurve(base, ppq),
+             shape = govern and govern.shape or 'step', tension = govern and govern.tension }
+  end
+  local pts = { edge(startL) }
+  for _, point in ipairs(base) do
+    if point.ppq > startL and point.ppq < endL then util.add(pts, point) end
+  end
+  util.add(pts, edge(endL))
+  return pts
+end
+
+-- Fold chains covering `span`: a lone chain's curve stands verbatim; N chains fold as base +
+-- sum(chain - base), suppressed to empty when every chain and the base are flat. see design/note-macros-v2.md § The fx chain
+local function foldChains(recs, span, base, opts)
+  local covering = overlapping(recs, span)
+  if #covering == 1 then return asPoints(covering[1].curve) end
+  local deltas = {}
+  for _, rec in ipairs(covering) do
+    if #rec.curve > 0 then
+      util.add(deltas, sumStreams(asPoints(rec.curve), { negated(base) }, rec.window, { closed = true }))
+    end
+  end
+  if #deltas == 0 and not anyNonZero(base) then return {} end
+  return sumStreams(base, deltas, span, opts)
+end
+
 -- detune-at-ppq for every pb in one linear merge (pbs and lane1Events both ppq-sorted).
 local function mergeDetunes(pbs, lane1Events)
   local detuneOf, di, dcur = {}, 1, 0
@@ -243,12 +305,12 @@ local function membersOf(chan, startL, endL)
   end)
   return out
 end
--- cc-family streams a generator reads over its window (notes via membersOf). Key `evt.ppqL or evt.ppq`:
--- ppqL nil when raw==logical (logical projection); pb sliced from the pre-producer authoredPbByChan. see design/note-macros-v2.md § A4
-local function channelStreams(chan, startL, endL, authoredPbByChan)
+-- cc-family streams a generator reads (notes via membersOf); pas/ats key `evt.ppqL or evt.ppq`,
+-- pb/ccs are absolute curves sliced from the per-chan bases with entering/closing edges. see design/note-macros-v2.md § The fx chain
+local function channelStreams(chan, startL, endL, pbBase, ccBases)
   local cols = channels[chan].columns
   local function within(ppqL) return ppqL >= startL and ppqL < endL end
-  local pas, ccs, ats, pb = {}, {}, {}, {}
+  local pas, ats = {}, {}
   for _, col in ipairs(cols.notes) do
     for _, evt in ipairs(col.events) do
       local ppqL = evt.ppqL or evt.ppq
@@ -257,25 +319,17 @@ local function channelStreams(chan, startL, endL, authoredPbByChan)
       end
     end
   end
-  for ccNum, col in pairs(cols.ccs) do
-    for _, evt in ipairs(col.events) do
-      local ppqL = evt.ppqL or evt.ppq
-      if within(ppqL) then util.bucket(ccs, ccNum, { ppqL = ppqL, val = evt.val }) end
-    end
-  end
   for _, evt in ipairs(cols.at and cols.at.events or {}) do
     local ppqL = evt.ppqL or evt.ppq
     if within(ppqL) then util.add(ats, { ppqL = ppqL, val = evt.val }) end
   end
-  for _, point in ipairs(authoredPbByChan[chan] or {}) do
-    if within(point.ppqL) then util.add(pb, { ppqL = point.ppqL, cents = point.cents }) end
-  end
-  -- Generators read these streams in ppq order (pb pre-sorted upstream). see design/deferred-reindex.md § Phase A
+  -- Generators read these streams in ppq order (bases pre-sorted, slices preserve order). see design/deferred-reindex.md § Phase A
   local function byPpqL(a, b) return a.ppqL < b.ppqL end
   table.sort(pas, byPpqL)
-  for _, list in pairs(ccs) do table.sort(list, byPpqL) end
   table.sort(ats, byPpqL)
-  return pas, ccs, ats, pb
+  local ccs = {}
+  for cc, base in pairs(ccBases) do ccs[cc] = asCurve(sliceCurve(base, startL, endL)) end
+  return pas, ccs, ats, asCurve(sliceCurve(pbBase, startL, endL))
 end
 -- Deterministic allocator: lowest lane free of overlap, authored notes seed occupancy;
 -- emission order -> deterministic -> G4-stable. see design/note-macros-v2.md § Generator output
@@ -304,47 +358,12 @@ local function allocateRegionLanes(chan, startL, endL, derived, emitted)
     spec.lane = lane
   end
 end
--- cc-augment summation helpers (per chan): resolve the resting base and build the authored base
--- curve the sum holds (spans/overlap via mergeWindows/overlapping above).
-local function firstRestOverride(bucket)   -- earliest window's explicit rest override wins
+local function firstRestOverride(recs)   -- earliest chain's explicit rest override wins
   local rest, best = nil, math.huge
-  for _, macro in ipairs(bucket) do
-    if macro.rest ~= nil and macro.window[1] < best then rest, best = macro.rest, macro.window[1] end
+  for _, rec in ipairs(recs) do
+    if rec.rest ~= nil and rec.window[1] < best then rest, best = rec.rest, rec.window[1] end
   end
   return rest
-end
--- Authored base the sum holds: parked in-window ccs (authoritative) plus out-of-window ccs still on the
--- take (for hold-in), deduped by ppqL. Empty -> a single flat rest point. see design/note-macros-v2.md § Continuous cc
-local function buildCcBase(chan, cc, bucket, rest)
-  local base, seen = {}, {}
-  for _, cell in ipairs(channels[chan].parkedCC or {}) do
-    if cell.cc == cc then
-      util.add(base, { ppq = cell.ppqL, val = cell.val, shape = cell.shape or 'step' })
-      seen[cell.ppqL] = true
-    end
-  end
-  local col = channels[chan].columns.ccs[cc]
-  for _, evt in ipairs(col and col.events or {}) do
-    local ppqL = evt.ppqL or evt.ppq
-    if not seen[ppqL] then
-      util.add(base, { ppq = ppqL, val = evt.val, shape = evt.shape or 'step' })
-      seen[ppqL] = true
-    end
-  end
-  table.sort(base, function(a, b) return a.ppq < b.ppq end)
-  if #base == 0 then
-    local minStart = math.huge
-    for _, macro in ipairs(bucket) do minStart = math.min(minStart, macro.window[1]) end
-    base = { { ppq = minStart, val = rest, shape = 'step' } }
-  end
-  return base
-end
-local function windowCurve(delta)   -- logical curve -> window-tagged points for offline summing
-  local curve = {}
-  for _, point in ipairs(delta) do
-    util.add(curve, { ppq = point.ppqL, val = point.val, shape = point.shape, tension = point.tension })
-  end
-  return curve
 end
 -- A note host (on-take or parked) as a producer: derived notes ride the host's lane/delay/sample.
 local function hostProducer(host, windowEnd, lane)
@@ -1986,11 +2005,45 @@ local function rebuildFx(fx, deferred, fxWindow, nextInLane, currentWindows)
   local authoredPbByChan = {}
   for _, cc in mm:ccsRaw() do
     if cc.evType == 'pb' and not cc.derived and cc.cents ~= nil then
-      util.bucket(authoredPbByChan, cc.chan, { ppqL = cc.ppqL or cc.ppq, cents = cc.cents })
+      util.bucket(authoredPbByChan, cc.chan, { ppqL = cc.ppqL or cc.ppq, cents = cc.cents, shape = cc.shape })
     end
   end
   for _, list in pairs(authoredPbByChan) do
     table.sort(list, function(a, b) return a.ppqL < b.ppqL end)
+  end
+
+  -- Absolute authored bases per channel (ppq-keyed, logical): parked events are authoritative in their
+  -- windows (dedup by ppqL), the on-take stream elsewhere. Seeds + the cross-chain fold read them.
+  local function pbBaseFor(chan)
+    local base, seen = {}, {}
+    for _, cell in ipairs(channels[chan].parkedPb or {}) do
+      util.add(base, { ppq = cell.ppqL, val = cell.cents, shape = cell.shape or 'step', tension = cell.tension })
+      seen[cell.ppqL] = true
+    end
+    for _, point in ipairs(authoredPbByChan[chan] or {}) do
+      if not seen[point.ppqL] then
+        util.add(base, { ppq = point.ppqL, val = point.cents, shape = point.shape or 'step' })
+      end
+    end
+    sortByPPQ(base)
+    return base
+  end
+  local function ccBasesFor(chan)
+    local bases, seen = {}, {}
+    for _, cell in ipairs(channels[chan].parkedCC or {}) do
+      util.bucket(bases, cell.cc, { ppq = cell.ppqL, val = cell.val, shape = cell.shape or 'step' })
+      seen[util.key(cell.cc, cell.ppqL)] = true
+    end
+    for cc, col in pairs(channels[chan].columns.ccs) do
+      for _, evt in ipairs(col.events) do
+        local ppqL = evt.ppqL or evt.ppq
+        if not seen[util.key(cc, ppqL)] then
+          util.bucket(bases, cc, { ppq = ppqL, val = evt.val, shape = evt.shape or 'step' })
+        end
+      end
+    end
+    for _, base in pairs(bases) do sortByPPQ(base) end
+    return bases
   end
 
   local res = mm:resolution()
@@ -2011,47 +2064,47 @@ local function rebuildFx(fx, deferred, fxWindow, nextInLane, currentWindows)
   -- Pass A: run every chain as a series -- each stage folds into the stream by mode x dest, and
   -- the final owned channels emit. see design/note-macros-v2.md § The fx chain
   local function expandChannel(chan)
-    local predicted, ccLive, ccAugment, pbAugment = {}, {}, {}, {}
-    -- cc-replace seats verbatim; cc-augment sums offline per target; pb replace seats too, pb
-    -- augment sums in rebuildPbs. see design/note-macros-v2.md § Continuous cc / § Continuous replace
-    local function routeContinuous(meta, out, producer)
-      local startL, endL = producer.window[1], producer.window[2]
-      if meta.dest == 'pb' and meta.mode ~= 'replace' then
-        -- pb augment: bucket the window even when empty (a slide with no next note) so rebuildPbs
-        -- still re-centres the span and sweeps stale seats. see design/note-macros-v2.md § Continuous pb
-        util.add(pbAugment, { window = { startL, endL }, curve = windowCurve(out.delta) })
-        return
-      end
-      if #out.delta == 0 then return end
-      if meta.dest == 'pb' then
-        -- pb replace: the absolute curve rides the base lane as derived absorber seats (no carrier).
-        util.add(fx.replacePb[chan], { startL, endL, curve = out.delta, delayPpq = producer.delayPpq })
-      elseif meta.mode == 'replace' then
-        -- cc replace: write the curve verbatim onto the target cc lane as markerless seats,
-        -- recognized next rebuild by window. No carrier, no node.
-        for _, point in ipairs(out.delta) do
-          util.add(ccLive, { evType = 'cc', chan = chan, cc = meta.dest,
-                             ppq = tm:fromLogical(chan, point.ppqL, producer.delayPpq),
-                             val = point.val, shape = point.shape })
-        end
-      else
-        -- cc augment: bucket this macro's window + curve per target; the parked base and every
-        -- covering macro sum offline below (N-stream overlap). see design/note-macros-v2.md § Continuous cc
-        util.bucket(ccAugment, meta.dest,
-                    { window = { startL, endL }, curve = windowCurve(out.delta), rest = producer.fx.rest })
-      end
-    end
+    local predicted, ccLive = {}, {}
+    local pbBase, ccBases = pbBaseFor(chan), ccBasesFor(chan)
+    fx.pbBase[chan] = pbBase
+    -- Per-chain continuous records: one absolute curve per chain per owned cc target; cross-chain
+    -- overlap folds at emission below (pb records fold in rebuildPbs). see design/note-macros-v2.md § The fx chain
+    local ccChains = {}
     -- One producer interface, three sources: an on-take fx note, a parked fx cell, or an explicit
     -- fxRegion; the generator sees none of them. see design/note-macros-v2.md § The anchor generalized
     local function runProducer(producer)
       local startL, endL = producer.window[1], producer.window[2]
       -- host: the untouched membership + windowed channel input streams, built once per chain;
       -- stream seeds as its copy and folds forward stage by stage. see design/note-macros-v2.md § The fx chain
-      local pas, ccs, ats, pb = channelStreams(chan, startL, endL, authoredPbByChan)
+      local pas, ccs, ats, pb = channelStreams(chan, startL, endL, pbBase, ccBases)
       local host = { window = { startL, endL }, chan = chan, lane = producer.lane, id = producer.id,
                      notes = producer.notes, pas = pas, ccs = ccs, ats = ats, pb = pb }
       local stream = util.pick(host, "window chan lane id notes pas ccs ats pb")
+      stream.ccs = util.assign({}, host.ccs)   -- folds replace per-target lists; host's map stays untouched
       local ownsNotes = false
+      local owned = {}   -- continuous target ('pb' | cc number) -> true once a stage folded a curve in
+
+      -- Fold a continuous stage into its stream channel: replace overwrites, augment sums its delta on
+      -- (exact breakpoint-union; closed, so the curve stays absolute over the whole window).
+      local function foldContinuous(meta, out)
+        local target = meta.dest
+        if owned[target] == nil then owned[target] = false end
+        if #out.delta == 0 then return end
+        local cur = target == 'pb' and stream.pb or stream.ccs[target] or {}
+        if meta.mode == 'replace' then
+          cur = out.delta
+        else
+          if #cur == 0 and target ~= 'pb' then
+            local rest = producer.fx.rest or generators.ccDefaultRest[target] or 0
+            cur = { { ppqL = startL, val = rest, shape = 'step' } }
+          end
+          cur = asCurve(sumStreams(asPoints(cur), { asPoints(out.delta) },
+                                   { startL, endL }, { closed = true }))
+        end
+        owned[target] = true
+        if target == 'pb' then stream.pb = cur else stream.ccs[target] = cur end
+      end
+
       for _, params in ipairs(producer.fx) do
         local meta = generators.kinds[params.kind]
         if meta then
@@ -2066,8 +2119,21 @@ local function rebuildFx(fx, deferred, fxWindow, nextInLane, currentWindows)
               stream.notes = merged
             end
           else
-            routeContinuous(meta, out, producer)
+            foldContinuous(meta, out)
           end
+        end
+      end
+
+      -- Emission is ownership: one record per owned continuous target, the chain's final curve. An
+      -- untouched chain re-seats its parked base; an all-zero pb curve empties to a pure re-centre record.
+      for target, contributed in pairs(owned) do
+        if target == 'pb' then
+          local curve = stream.pb
+          if not contributed and not anyNonZero(curve) then curve = {} end
+          util.add(fx.pbChains[chan], { window = { startL, endL }, curve = curve })
+        else
+          util.bucket(ccChains, target,
+                      { window = { startL, endL }, curve = stream.ccs[target] or {}, rest = producer.fx.rest })
         end
       end
       -- Only a note-dest stage's chain emits (parksNotes mirrors this). Region producers (lane
@@ -2134,24 +2200,25 @@ local function rebuildFx(fx, deferred, fxWindow, nextInLane, currentWindows)
       util.add(fx.noteLive[chan], { evt = spec, lane = spec.lane })
     end
 
-    -- cc-augment: sum the parked base and every covering macro per target into markerless seats on the
-    -- target lane (N-stream overlap folds here). see design/note-macros-v2.md § Continuous cc
-    for cc, bucket in pairs(ccAugment) do
-      local rest = firstRestOverride(bucket) or generators.ccDefaultRest[cc] or 0
-      local base = buildCcBase(chan, cc, bucket, rest)
-      for _, span in ipairs(mergeWindows(bucket)) do
-        local curves = {}
-        for _, macro in ipairs(overlapping(bucket, span)) do util.add(curves, macro.curve) end
-        for _, point in ipairs(sumStreams(base, curves, span, { round = true, lo = 0, hi = 127 })) do
-          util.add(ccLive, { evType = 'cc', chan = chan, cc = cc,
-                             ppq = tm:fromLogical(chan, point.ppq, 0), val = point.val, shape = point.shape })
+    -- cc emission: per target, merge chain windows and fold (foldChains) into markerless seats on the
+    -- target lane; half-open -- the closing value belongs to the next window. see design/note-macros-v2.md § The fx chain
+    for cc, recs in pairs(ccChains) do
+      local base = ccBases[cc] or {}
+      if #base == 0 then
+        local rest, minStart = firstRestOverride(recs) or generators.ccDefaultRest[cc] or 0, math.huge
+        for _, rec in ipairs(recs) do minStart = math.min(minStart, rec.window[1]) end
+        base = { { ppq = minStart, val = rest, shape = 'step' } }
+      end
+      for _, span in ipairs(mergeWindows(recs)) do
+        for _, point in ipairs(foldChains(recs, span, base, { closed = true })) do
+          if point.ppq < span[2] then
+            util.add(ccLive, { evType = 'cc', chan = chan, cc = cc,
+                               ppq = tm:fromLogical(chan, point.ppq, 0),
+                               val = util.clamp(util.round(point.val), 0, 127), shape = point.shape })
+          end
         end
       end
     end
-
-    -- pb-augment macros go to rebuildPbs, which sums them onto the authored pb base and seats the
-    -- result like a replace curve (pb value + detune resolve there). see design/note-macros-v2.md § Continuous pb
-    fx.pbAugment[chan] = pbAugment
 
     local wires = mmBatch()
     -- fx cc events: reconcile the summed/replace seats on the target lane; shape is part of the match --
@@ -2256,7 +2323,7 @@ end
 
 -- Reseat absorber pbs against the post-walk lane-1 layout, recompute their raw vals,
 -- and project the pb column. see docs/tuning.md § Absorber reconciliation
-local function rebuildPbs(noteLive, replacePb, pbAugment)
+local function rebuildPbs(noteLive, pbChains, pbBase)
   local extras = ds:get('extraColumns') or {}
 
   local function detuneAt(events, P)
@@ -2313,71 +2380,20 @@ local function rebuildPbs(noteLive, replacePb, pbAugment)
   -- detuneOf. Clean chans skip it wholesale -- I8: rebuild is a fixpoint. see design/incremental-pbs.md
   local function deriveChan(chan, lane1Events, pbs)
     perf.start('seats')
-    -- Replace windows on this chan: the generator's curve, seated as derived pbs on the base lane (no
-    -- carrier). Bounds converted to raw once -- seats are raw-only -- for zero round-trip drift. see docs/tuning.md § Absorber reconciliation
+    -- pb chain windows: each chain's curve seats as derived pbs on the base lane (no carrier); overlap
+    -- folds onto the authored base (foldChains). Bounds convert to raw once for zero round-trip drift. see docs/tuning.md § Absorber reconciliation
+    local lim = pbLim()
     local replaceWins = {}
-    for _, win in ipairs(replacePb[chan]) do
+    for _, span in ipairs(mergeWindows(pbChains[chan])) do
       local bps = {}
-      for _, point in ipairs(win.curve or {}) do
-        util.add(bps, { ppq = tm:fromLogical(chan, point.ppqL, win.delayPpq), ppqL = point.ppqL,
-                        cents = point.val, shape = point.shape, tension = point.tension })
+      for _, point in ipairs(foldChains(pbChains[chan], span, pbBase[chan], { closed = true })) do
+        util.add(bps, { ppq = tm:fromLogical(chan, point.ppq, 0), ppqL = point.ppq,
+                        cents = util.clamp(point.val, -lim, lim), shape = point.shape, tension = point.tension })
       end
       table.sort(bps, function(a, b) return a.ppq < b.ppq end)
       util.add(replaceWins, { bps = bps,
-                              startRaw = tm:fromLogical(chan, win[1], win.delayPpq),
-                              endRaw   = tm:fromLogical(chan, win[2], win.delayPpq) })
-    end
-
-    -- Augment windows: vibrato/slide macros sum onto the authored pb base (parked in-window, held
-    -- out-of-window) into an absolute cents curve, seated exactly like a replace window. see § Continuous pb
-    if #(pbAugment[chan] or {}) > 0 then
-      local spans, augRaw = mergeWindows(pbAugment[chan]), {}
-      for _, s in ipairs(spans) do
-        util.add(augRaw, { tm:fromLogical(chan, s[1], 0), tm:fromLogical(chan, s[2], 0) })
-      end
-      -- Base the sum holds: parked authored pbs (in-window) plus on-take authored pbs outside every pb
-      -- window (hold-in). A generated seat sits on-take inside a window -- exclude it.
-      local function inPbWindow(ppq)
-        for _, w in ipairs(replaceWins) do if ppq >= w.startRaw and ppq <= w.endRaw then return true end end
-        for _, s in ipairs(augRaw)      do if ppq >= s[1]      and ppq <= s[2]      then return true end end
-        return false
-      end
-      local base, seen = {}, {}
-      for _, cell in ipairs(channels[chan].parkedPb or {}) do
-        util.add(base, { ppq = cell.ppqL, val = cell.cents, shape = cell.shape or 'step' })
-        seen[cell.ppqL] = true
-      end
-      for _, pb in ipairs(pbs) do
-        local ppqL = tm:toLogical(chan, pb.ppq)
-        if not pb.derived and not inPbWindow(pb.ppq) and not seen[ppqL] then
-          util.add(base, { ppq = ppqL, val = pb.cents or rawToCents(pb.val), shape = pb.shape or 'step' })
-          seen[ppqL] = true
-        end
-      end
-      table.sort(base, function(a, b) return a.ppq < b.ppq end)
-      if #base == 0 then
-        local minStart = math.huge
-        for _, s in ipairs(spans) do minStart = math.min(minStart, s[1]) end
-        base = { { ppq = minStart, val = 0, shape = 'step' } }
-      end
-      local lim = pbLim()
-      local trivialBase = #base == 1 and base[1].val == 0
-      for i, span in ipairs(spans) do
-        local curves = {}
-        for _, m in ipairs(overlapping(pbAugment[chan], span)) do
-          if #m.curve > 0 then util.add(curves, m.curve) end
-        end
-        -- A span with no macro curve over a flat-0 base is a pure re-centre: register the window with no
-        -- bps so its stale seats sweep (rest needs no pb). Else seat the summed base+macros curve.
-        local bps = {}
-        if #curves > 0 or not trivialBase then
-          for _, pt in ipairs(sumStreams(base, curves, span, { lo = -lim, hi = lim, closed = true })) do
-            util.add(bps, { ppq = tm:fromLogical(chan, pt.ppq, 0), ppqL = pt.ppq,
-                            cents = pt.val, shape = pt.shape })
-          end
-        end
-        util.add(replaceWins, { bps = bps, startRaw = augRaw[i][1], endRaw = augRaw[i][2] })
-      end
+                              startRaw = tm:fromLogical(chan, span[1], 0),
+                              endRaw   = tm:fromLogical(chan, span[2], 0) })
     end
 
     -- Which window's curve prevails at a raw ppq (half-open -- the interior stream).
@@ -2756,14 +2772,14 @@ function tm:rebuild(takeChanged)
   end
 
   -- Per-channel fx state: noteExisting/noteLive (fx notes, derived vs post-expansion), ccExisting
-  -- (summed/replace cc seats, recognized by window), replacePb + pbAugment (pb replace/augment windows + curves).
-  local fx = { noteExisting = {}, noteLive = {}, ccExisting = {}, replacePb = {}, pbAugment = {} }
+  -- (cc seats, recognized by window), pbChains + pbBase (per-chain pb curves + the authored base they fold onto).
+  local fx = { noteExisting = {}, noteLive = {}, ccExisting = {}, pbChains = {}, pbBase = {} }
   for i = 1, 16 do
     fx.noteExisting[i] = {}
     fx.noteLive[i]     = {}
     fx.ccExisting[i]   = {}
-    fx.replacePb[i]    = {}
-    fx.pbAugment[i]    = {}
+    fx.pbChains[i]     = {}
+    fx.pbBase[i]       = {}
   end
   -- fxNote add/del + parked-member restores, deferred from fx expansion / region parking into the tail
   -- walk's atomic note commit: host clip + these inserts in one mm:modify (one MIDI_Sort, canonical delete-first).
@@ -2801,7 +2817,7 @@ function tm:rebuild(takeChanged)
   perf.start('fx'); rebuildFx(fx, deferred, fxWindow, nextInLane, currentWindows); perf.stop('fx')  -- fx expansion: derived notes/CCs
 
   perf.start('tails'); rebuildTails(fx, deferred); perf.stop('tails')  -- unified tail/onset walk + atomic note commit
-  perf.start('pbs'); rebuildPbs(fx.noteLive, fx.replacePb, fx.pbAugment); perf.stop('pbs')  -- absorber reconciliation + pb resynthesis
+  perf.start('pbs'); rebuildPbs(fx.noteLive, fx.pbChains, fx.pbBase); perf.stop('pbs')  -- absorber reconciliation + pb resynthesis
   perf.start('pcs'); rebuildPCs(fx); perf.stop('pcs')  -- PC synthesis (trackerMode)
 
   perf.start('projLogical'); projectLogical(); perf.stop('projLogical')  -- project columns to logical

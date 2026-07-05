@@ -38,9 +38,9 @@ Track A is the generator substrate, Track B the authoring UI. Checked = landed.
 - [x] Route-by-window — zero-eventMeta markerless seats via exclusive-ownership parking + diff-driven transitions, recognized by region (§ Route-by-window; pb and cc)
 
 - [x] fx chain C1 — the series fold on the note channel + velPattern; every kind reads the stream (§ The fx chain)
+- [x] fx chain C2 — continuous channels fold in-chain, per-chain absolute emission at d=0 (§ The fx chain)
 
 **Open / next**
-- [ ] fx chain C2 — continuous channels fold in-chain, per-chain absolute emission (agreed, § The fx chain)
 - [ ] fx chain — multi-column authoring / overlapping-chain UI (design only, § The fx chain)
 - [ ] chain surface — docked chain strip, scripted kinds pane, patch library (design only, § The chain surface)
 
@@ -695,23 +695,34 @@ stepped per distinct onset, so a chord shares a step). Order pins:
 `[arp, velPattern]` accents the steps, `[velPattern, arp]` re-velocities
 the chord the arp then samples — `tm_fx_region_spec`.
 
-**C2 — continuous channels fold in-chain (agreed, unbuilt).** The stream's
-continuous channels become **absolute** curves: `stream.pb` /
-`stream.ccs[n]` seed from the authored base *as parked* (the park stash
-plus the entering value at the window start — the column slice is empty
-inside an owned window), an augment stage sums its delta on via the
-`sumStreams` engine (breakpoint-union sum, grid densification only where
-curved), a replace stage overwrites. Emission is one absolute curve per
-chain per owned target — which collapses `rebuildPbs`'s augment arm into
-the existing replace-window seating and `routeContinuous`'s per-kind
-buckets into per-chain records. Cross-chain overlap on one target folds
-as `base + Σ(chainᵢ − base)` — exact for piecewise-linear, and the common
-n=1 case needs no subtraction; the trivial-base/no-delta suppression (a
-pure re-centre registers its window with no seats) carries over per
-chain. Build-time details still open: stream pb/cc entries need `shape`
-(and pb aligns `cents`→`val`); emission delay for delayed note hosts
-(augment historically converts at d=0, replace used the producer delay).
-Defer the multi-column UI until C2 is solid.
+**C2 — continuous channels fold in-chain (landed 2026-07-05).** The stream's
+continuous channels are **absolute** curves: `stream.pb` / `stream.ccs[n]`
+seed from the authored base *as parked* — per-channel bases
+(`pbBaseFor`/`ccBasesFor`: park stash authoritative in its windows, the
+on-take stream elsewhere) sliced to the window with **entering/closing edge
+values** (`sliceCurve`), so the curve is total over the closed window.
+Entries are `{ppqL, val, shape}` (pb val in cents — the `cents`→`val`
+alignment). An augment stage sums its delta on via `sumStreams`
+(breakpoint-union, closed, exact — no rounding in-chain; cc rounds/clamps at
+emission), a replace stage overwrites. Emission is ownership: one record per
+chain per owned target (`fx.pbChains` / per-channel `ccChains`); a chain
+that folded nothing re-seats its parked base, or — over an all-zero pb
+base — registers an empty window so stale seats sweep (per-chain
+suppression). `rebuildPbs`'s augment arm is deleted: every pb record seats
+through the one replace-window path. Cross-chain overlap on one target folds
+per merged span as `base + Σ(chainᵢ − base)` (`foldChains`, shared by pb and
+cc) — exact for piecewise-linear, verbatim for the common n=1 chain;
+overlapping curved ('slow') macros may seat extra colinear grid points vs
+the old single-pass sum (audibly identical, churn-free across rebuilds). The
+open **delay** question resolved to **d=0 for all continuous emission**: the
+park scan, removal sweep, and seat recognition all convert windows at d=0,
+so delay-shifted seats would orphan on removal — and doctrinally, delay is a
+per-note-on offset (docs/timing.md), while a channel-wide curve has no note.
+This moves cc/pb *replace* on a delayed note host from producer-delay to
+d=0; both paths are exercised only by spec kinds. Order pins:
+`[replace, augment]` wobbles the replaced curve, `[augment, replace]`
+overwrites the folded stream — `tm_fx_region_spec`. The multi-column UI
+stays deferred.
 
 ## The chain surface — strip, scripts, patches (design)
 
@@ -985,6 +996,18 @@ column-based, not gm-backed -- the Open-questions Track-B lean, now resolved.
   onset) ships in the registry + modal. Pinned by the chain tests in
   `tm_fx_region_spec` and the velPattern tests in `generators_spec`.
 
+- **C2 — continuous channels fold in-chain; per-chain absolute emission.
+  Landed 2026-07-05.** `channelStreams` seeds `stream.pb`/`stream.ccs[n]` as
+  absolute closed curves (entering/closing edge values off the parked-aware
+  per-channel bases); `foldContinuous` folds each continuous stage by mode;
+  one record per chain per owned target; `foldChains` (shared pb/cc)
+  collapses cross-chain overlap as `base + Σ(chain − base)`; `rebuildPbs`'s
+  augment arm deleted (one seating path); all continuous emission converts at
+  d=0 (delay resolved: a per-note offset, not a frame — see § The fx chain).
+  Pinned by the continuous order tests in `tm_fx_region_spec`; the prior
+  augment / replace / N-stream-overlap / suppression pins hold
+  value-for-value.
+
 ## B3 — parked notes/ccs as a third edit backing (landed)
 
 **Progress — four green steps.** (1) extract `parksNotes`/`parkWindows` to `generators` —
@@ -1159,8 +1182,10 @@ across). So PA stops being special and becomes one of several **typed input stre
 generator reads over its window**. ADSR gated by note-ons, a CC-controlled vibrato, a
 pressure-aware arp all fall out of one shape. Landed: notes, pas, ccs, ats, pb; continuous
 pb replace rides the same input (below). **Superseded by C1 (2026-07-05):** the contract is
-now `expand(stream, host, params, ctx)` and stages read the folded `stream`; the `host` shape
-below is unchanged and names the untouched original (§ The fx chain).
+now `expand(stream, host, params, ctx)` and stages read the folded `stream`; `host` names the
+untouched original (§ The fx chain). C2 then reshaped the continuous channels: `pb`/`ccs` are
+absolute `{ppqL, val, shape}` curves over the closed window (pb val in cents), seeded with
+entering/closing edge values — the shape below is the historical A4 form.
 
 **Contract** (`generators.lua`). `host.events` -> `host.notes` (it *is* the note stream),
 plus three more -- all window+channel scoped, logical frame, intent units:
