@@ -206,7 +206,7 @@ local function rawToCents(raw)
   return util.round(raw / 8192 * pbLim())
 end
 
-local function delayToPPQ(d) return timing.delayToPPQ(d, mm:resolution()) end
+local function delayToPPQ(delay) return timing.delayToPPQ(delay, mm:resolution()) end
 
 local function forEachEvent(fn)
   for i=1,16 do
@@ -1226,8 +1226,8 @@ end
 local function rawDivergesFromLogical(evt)
   if evt.ppqL == nil      then return true  end
   if staleSwing[evt.chan] then return false end
-  local d = evt.evType == 'note' and delayToPPQ(evt.delay or 0) or 0
-  local rawFromLogical = tm:fromLogical(evt.chan, evt.ppqL, d)
+  local delayPpq = evt.evType == 'note' and delayToPPQ(evt.delay or 0) or 0
+  local rawFromLogical = tm:fromLogical(evt.chan, evt.ppqL, delayPpq)
   if evt.ppq == 0 and rawFromLogical < 0 then return false end
   return math.abs(evt.ppq - rawFromLogical) > EPS
 end
@@ -1813,8 +1813,8 @@ local function rebuildFx(fx, deferred, fxWindow, nextInLane, currentWindows)
 
   -- Region note-park windows: a parked cell inside one is region membership, not a note host.
   local function noteParkCovered(chan, ppqL)
-    for _, w in ipairs(currentWindows) do
-      if w.evType == 'note' and w.chan == chan and ppqL >= w.startppq and ppqL < w.endppq then
+    for _, win in ipairs(currentWindows) do
+      if win.evType == 'note' and win.chan == chan and ppqL >= win.startppq and ppqL < win.endppq then
         return true
       end
     end
@@ -1890,8 +1890,8 @@ local function rebuildFx(fx, deferred, fxWindow, nextInLane, currentWindows)
       local ppqL = evt.ppqL or evt.ppq
       if within(ppqL) then util.add(ats, { ppqL = ppqL, val = evt.val }) end
     end
-    for _, bp in ipairs(authoredPbByChan[chan] or {}) do
-      if within(bp.ppqL) then util.add(pb, { ppqL = bp.ppqL, cents = bp.cents }) end
+    for _, point in ipairs(authoredPbByChan[chan] or {}) do
+      if within(point.ppqL) then util.add(pb, { ppqL = point.ppqL, cents = point.cents }) end
     end
     -- Generators read these streams in ppq order (pb pre-sorted upstream). see design/deferred-reindex.md § Phase A
     local function byPpqL(a, b) return a.ppqL < b.ppqL end
@@ -1915,8 +1915,8 @@ local function rebuildFx(fx, deferred, fxWindow, nextInLane, currentWindows)
       end
     end
     local function laneFree(lane, lo, hi)
-      for _, iv in ipairs(occupied[lane] or {}) do
-        if lo < iv[2] and hi > iv[1] then return false end
+      for _, span in ipairs(occupied[lane] or {}) do
+        if lo < span[2] and hi > span[1] then return false end
       end
       return true
     end
@@ -1931,8 +1931,8 @@ local function rebuildFx(fx, deferred, fxWindow, nextInLane, currentWindows)
   -- curve the sum holds. mergeWindows/overlapping are module-level (shared with pb-augment).
   local function firstRestOverride(bucket)   -- earliest window's explicit rest override wins
     local rest, best = nil, math.huge
-    for _, m in ipairs(bucket) do
-      if m.rest ~= nil and m.window[1] < best then rest, best = m.rest, m.window[1] end
+    for _, macro in ipairs(bucket) do
+      if macro.rest ~= nil and macro.window[1] < best then rest, best = macro.rest, macro.window[1] end
     end
     return rest
   end
@@ -1957,81 +1957,87 @@ local function rebuildFx(fx, deferred, fxWindow, nextInLane, currentWindows)
     table.sort(base, function(a, b) return a.ppq < b.ppq end)
     if #base == 0 then
       local minStart = math.huge
-      for _, m in ipairs(bucket) do minStart = math.min(minStart, m.window[1]) end
+      for _, macro in ipairs(bucket) do minStart = math.min(minStart, macro.window[1]) end
       base = { { ppq = minStart, val = rest, shape = 'step' } }
     end
     return base
   end
 
-  for chan = 1, 16 do
-    -- Frozen: derived notes/CCs stand untouched in mm; leave noteLive empty so tails/pbs/pcs skip too.
-    -- see design/dirty-channels.md § Phase A
-    if not dirtyChans[chan] then
-      goto nextChan
+  local function windowCurve(delta)   -- logical curve -> window-tagged points for offline summing
+    local curve = {}
+    for _, point in ipairs(delta) do
+      util.add(curve, { ppq = point.ppqL, val = point.val, shape = point.shape, tension = point.tension })
     end
-    -- Pass A: run every generator. Structural notes commit per lane; continuous deltas
-    -- stash with their window for colouring (channel-wide, not note-tied). see design/archive/note-macros.md § Continuous realisation
+    return curve
+  end
+  -- A note host (on-take or parked) as a producer: derived notes ride the host's lane/delay/sample.
+  local function hostProducer(host, windowEnd, lane)
+    return { window = { host.ppqL, windowEnd }, notes = { host }, fx = host.fx,
+             id = host.uuid, lane = lane, delay = host.delay,
+             sample = host.sample, delayPpq = delayToPPQ(host.delay) }
+  end
+
+  -- Pass A: run every generator. Structural notes commit per lane; continuous deltas
+  -- stash with their window for colouring (channel-wide, not note-tied). see design/archive/note-macros.md § Continuous realisation
+  local function expandChannel(chan)
     local predicted, ccLive, ccAugment, pbAugment = {}, {}, {}, {}
-    -- One producer interface, two sources: a note with fx (v1 augment) or an explicit
-    -- fxRegion; the generator sees neither. see design/note-macros-v2.md § The anchor generalized
-    local function runProducer(p)
-      local startL, endL = p.window[1], p.window[2]
+    -- cc-replace seats verbatim; cc-augment sums offline per target; pb replace seats too, pb
+    -- augment sums in rebuildPbs. see design/note-macros-v2.md § Continuous cc / § Continuous replace
+    local function routeContinuous(meta, out, producer)
+      if meta.dest == 'note' then return end
+      local startL, endL = producer.window[1], producer.window[2]
+      if meta.dest == 'pb' and meta.mode ~= 'replace' then
+        -- pb augment: bucket the window even when empty (a slide with no next note) so rebuildPbs
+        -- still re-centres the span and sweeps stale seats. see design/note-macros-v2.md § Continuous pb
+        util.add(pbAugment, { window = { startL, endL }, curve = windowCurve(out.delta) })
+        return
+      end
+      if #out.delta == 0 then return end
+      if meta.dest == 'pb' then
+        -- pb replace: the absolute curve rides the base lane as derived absorber seats (no carrier).
+        util.add(fx.replacePb[chan], { startL, endL, curve = out.delta, delayPpq = producer.delayPpq })
+      elseif meta.mode == 'replace' then
+        -- cc replace: write the curve verbatim onto the target cc lane as markerless seats,
+        -- recognized next rebuild by window. No carrier, no node.
+        for _, point in ipairs(out.delta) do
+          util.add(ccLive, { evType = 'cc', chan = chan, cc = meta.dest,
+                             ppq = tm:fromLogical(chan, point.ppqL, producer.delayPpq),
+                             val = point.val, shape = point.shape })
+        end
+      else
+        -- cc augment: bucket this macro's window + curve per target; the parked base and every
+        -- covering macro sum offline below (N-stream overlap). see design/note-macros-v2.md § Continuous cc
+        util.bucket(ccAugment, meta.dest,
+                    { window = { startL, endL }, curve = windowCurve(out.delta), rest = producer.fx.rest })
+      end
+    end
+    -- One producer interface, three sources: an on-take fx note, a parked fx cell, or an explicit
+    -- fxRegion; the generator sees none of them. see design/note-macros-v2.md § The anchor generalized
+    local function runProducer(producer)
+      local startL, endL = producer.window[1], producer.window[2]
       -- The host the generators read: the note membership plus the windowed channel input
       -- streams, built once per host (not per kind). see design/note-macros-v2.md § A4
       local pas, ccs, ats, pb = channelStreams(chan, startL, endL)
-      local host = { window = { startL, endL }, chan = chan, lane = p.lane, id = p.id,
-                     notes = p.notes, pas = pas, ccs = ccs, ats = ats, pb = pb }
+      local host = { window = { startL, endL }, chan = chan, lane = producer.lane, id = producer.id,
+                     notes = producer.notes, pas = pas, ccs = ccs, ats = ats, pb = pb }
       -- Region producers (lane unset) defer their notes: lanes are allocated over the
       -- whole batch after the fx loop. Note producers ride the host's own lane inline.
-      local regionNotes = p.lane == nil and {} or nil
-      for _, params in ipairs(p.fx) do
+      local regionNotes = producer.lane == nil and {} or nil
+      for _, params in ipairs(producer.fx) do
         local meta = generators.kinds[params.kind]
         if meta then
           local out = meta.expand(host, params, chanCtx)
-          for _, fn in ipairs(out.notes) do
-            local spec = {
-              evType = 'note', chan = chan, lane = p.lane, derived = p.id,
-              pitch = fn.pitch, vel = fn.vel, detune = fn.detune or 0,
-              delay = p.delay or 0, sample = p.sample,
-              ppqL = fn.ppqL, endppqL = fn.endppqL,
-              ppq    = tm:fromLogical(chan, fn.ppqL,    p.d),
-              endppq = tm:fromLogical(chan, fn.endppqL, p.d),
-            }
-            if regionNotes then util.add(regionNotes, spec)
-            else util.add(predicted, spec) end
+          for _, hit in ipairs(out.notes) do
+            util.add(regionNotes or predicted, {
+              evType = 'note', chan = chan, lane = producer.lane, derived = producer.id,
+              pitch = hit.pitch, vel = hit.vel, detune = hit.detune or 0,
+              delay = producer.delay or 0, sample = producer.sample,
+              ppqL = hit.ppqL, endppqL = hit.endppqL,
+              ppq    = tm:fromLogical(chan, hit.ppqL,    producer.delayPpq),
+              endppq = tm:fromLogical(chan, hit.endppqL, producer.delayPpq),
+            })
           end
-          -- cc-replace seats verbatim; cc-augment sums offline per target. pb now seats too: replace
-          -- verbatim, augment summed in rebuildPbs. see design/note-macros-v2.md § Continuous cc / § Continuous replace
-          local target = meta.dest ~= 'note' and meta.dest or nil
-          if target == 'pb' and meta.mode ~= 'replace' then
-            -- pb augment: bucket the window even when empty (a slide with no next note) so rebuildPbs
-            -- still re-centres the span and sweeps stale seats. see design/note-macros-v2.md § Continuous pb
-            local curve = {}
-            for _, bp in ipairs(out.delta) do
-              util.add(curve, { ppq = bp.ppqL, val = bp.val, shape = bp.shape, tension = bp.tension })
-            end
-            util.add(pbAugment, { window = { startL, endL }, curve = curve })
-          elseif target and #out.delta > 0 then
-            if type(target) == 'number' and meta.mode == 'replace' then
-              -- cc replace: write the curve verbatim onto the target cc lane as markerless seats,
-              -- recognized next rebuild by window. No carrier, no node.
-              for _, bp in ipairs(out.delta) do
-                util.add(ccLive, { evType = 'cc', chan = chan, cc = target,
-                                   ppq = tm:fromLogical(chan, bp.ppqL, p.d), val = bp.val, shape = bp.shape })
-              end
-            elseif type(target) == 'number' then
-              -- cc augment: bucket this macro's window + curve per target; the parked base and every
-              -- covering macro sum offline below (N-stream overlap). see design/note-macros-v2.md § Continuous cc
-              local curve = {}
-              for _, bp in ipairs(out.delta) do
-                util.add(curve, { ppq = bp.ppqL, val = bp.val, shape = bp.shape, tension = bp.tension })
-              end
-              util.bucket(ccAugment, target, { window = { startL, endL }, curve = curve, rest = p.fx.rest })
-            else
-              -- pb replace: the absolute curve rides the base lane as derived absorber seats (no carrier).
-              util.add(fx.replacePb[chan], { startL, endL, curve = out.delta, d = p.d })
-            end
-          end
+          routeContinuous(meta, out, producer)
         end
       end
       if regionNotes then
@@ -2045,9 +2051,7 @@ local function rebuildFx(fx, deferred, fxWindow, nextInLane, currentWindows)
     for laneIdx, col in ipairs(channels[chan].columns.notes) do
       for _, host in ipairs(col.events) do
         if host.fx and host.evType ~= 'pa' then
-          runProducer{ window = { host.ppqL, fxWindow[host] }, notes = { host }, fx = host.fx,
-                       id = host.uuid, lane = laneIdx, delay = host.delay,
-                       sample = host.sample, d = delayToPPQ(host.delay) }
+          runProducer(hostProducer(host, fxWindow[host], laneIdx))
         end
       end
     end
@@ -2058,9 +2062,7 @@ local function rebuildFx(fx, deferred, fxWindow, nextInLane, currentWindows)
     -- membership, not a host (own-fx suppressed -- the retained gap).
     for _, cell in ipairs(channels[chan].parked or {}) do
       if cell.fx and not noteParkCovered(chan, cell.ppqL) then
-        runProducer{ window = { cell.ppqL, cell.endppqL }, notes = { cell }, fx = cell.fx,
-                     id = cell.uuid, lane = cell.lane, delay = cell.delay,
-                     sample = cell.sample, d = delayToPPQ(cell.delay) }
+        runProducer(hostProducer(cell, cell.endppqL, cell.lane))
       end
     end
 
@@ -2071,14 +2073,14 @@ local function rebuildFx(fx, deferred, fxWindow, nextInLane, currentWindows)
       local members
       if generators.parksNotes(region) then
         members = {}                             -- replace: derived notes stand in for the parked chord
-        for _, m in ipairs(channels[chan].parked or {}) do
-          if m.ppqL >= startL and m.ppqL < endL then util.add(members, m) end
+        for _, cell in ipairs(channels[chan].parked or {}) do
+          if cell.ppqL >= startL and cell.ppqL < endL then util.add(members, cell) end
         end
       else
         members = membersOf(chan, startL, endL)  -- augment: members still sound
       end
       runProducer{ window = { startL, endL }, notes = members,
-                   fx = region.fx, id = region.uuid, lane = nil, d = 0 }
+                   fx = region.fx, id = region.uuid, lane = nil, delayPpq = 0 }
     end
 
     -- Reconcile existence (stamps kept specs with token + realised end); defer writes to the tail walk's atomic commit.
@@ -2095,10 +2097,10 @@ local function rebuildFx(fx, deferred, fxWindow, nextInLane, currentWindows)
       local base = buildCcBase(chan, cc, bucket, rest)
       for _, span in ipairs(mergeWindows(bucket)) do
         local curves = {}
-        for _, m in ipairs(overlapping(bucket, span)) do util.add(curves, m.curve) end
-        for _, pt in ipairs(sumStreams(base, curves, span, { round = true, lo = 0, hi = 127 })) do
+        for _, macro in ipairs(overlapping(bucket, span)) do util.add(curves, macro.curve) end
+        for _, point in ipairs(sumStreams(base, curves, span, { round = true, lo = 0, hi = 127 })) do
           util.add(ccLive, { evType = 'cc', chan = chan, cc = cc,
-                             ppq = tm:fromLogical(chan, pt.ppq, 0), val = pt.val, shape = pt.shape })
+                             ppq = tm:fromLogical(chan, point.ppq, 0), val = point.val, shape = point.shape })
         end
       end
     end
@@ -2117,7 +2119,12 @@ local function rebuildFx(fx, deferred, fxWindow, nextInLane, currentWindows)
     }
 
     wires.commit()
-    ::nextChan::
+  end
+
+  for chan = 1, 16 do
+    -- Frozen: derived notes/CCs stand untouched in mm; leave noteLive empty so tails/pbs/pcs skip too.
+    -- see design/dirty-channels.md § Phase A
+    if dirtyChans[chan] then expandChannel(chan) end
   end
 end
 
@@ -2278,16 +2285,16 @@ local function rebuildPbs(noteLive, replacePb, pbAugment)
     -- Replace windows on this chan: the generator's curve, seated as derived pbs on the base lane (no
     -- carrier). Bounds converted to raw once -- seats are raw-only -- for zero round-trip drift. see docs/tuning.md § Absorber reconciliation
     local replaceWins = {}
-    for _, w in ipairs(replacePb[chan]) do
+    for _, win in ipairs(replacePb[chan]) do
       local bps = {}
-      for _, bp in ipairs(w.curve or {}) do
-        util.add(bps, { ppq = tm:fromLogical(chan, bp.ppqL, w.d), ppqL = bp.ppqL,
-                        cents = bp.val, shape = bp.shape, tension = bp.tension })
+      for _, point in ipairs(win.curve or {}) do
+        util.add(bps, { ppq = tm:fromLogical(chan, point.ppqL, win.delayPpq), ppqL = point.ppqL,
+                        cents = point.val, shape = point.shape, tension = point.tension })
       end
       table.sort(bps, function(a, b) return a.ppq < b.ppq end)
       util.add(replaceWins, { bps = bps,
-                              startRaw = tm:fromLogical(chan, w[1], w.d),
-                              endRaw   = tm:fromLogical(chan, w[2], w.d) })
+                              startRaw = tm:fromLogical(chan, win[1], win.delayPpq),
+                              endRaw   = tm:fromLogical(chan, win[2], win.delayPpq) })
     end
 
     -- Augment windows: vibrato/slide macros sum onto the authored pb base (parked in-window, held
