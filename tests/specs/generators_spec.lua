@@ -176,20 +176,21 @@ return {
   },
 
   {
-    name = 'parkWindows emits an evType-tagged window per replace target (note for discrete, cc for continuous)',
+    name = 'parkWindows emits an evType-tagged window per continuous/replace target (note discrete, cc, pb augment)',
     run = function()
       generators.kinds.ccrep = { mode = 'replace', dest = 10 }   -- fixture: no built-in cc-replace kind
       local windows = generators.parkWindows{
         { chan = 1, startppq = 0,  endppq = 240, fx = { { kind = 'arp' } } },     -- discrete replace -> note window
-        { chan = 3, startppq = 60, endppq = 120, fx = { { kind = 'ccrep' } } },   -- continuous replace -> cc window
-        { chan = 5, startppq = 0,  endppq = 240, fx = { { kind = 'vibrato' } } }, -- augment -> neither
+        { chan = 3, startppq = 60, endppq = 120, fx = { { kind = 'ccrep' } } },   -- cc target (replace) -> cc window
+        { chan = 5, startppq = 0,  endppq = 240, fx = { { kind = 'vibrato' } } }, -- pb augment -> pb window
         { chan = 7, fx = {} },                                                    -- husk -> neither
       }
       generators.kinds.ccrep = nil
       t.deepEq(windows, {
         { evType = 'note', chan = 1, startppq = 0, endppq = 240 },
         { evType = 'cc', chan = 3, cc = 10, startppq = 60, endppq = 120 },
-      }, 'only the replace kinds seed windows, tagged with their target evType')
+        { evType = 'pb', chan = 5, startppq = 0, endppq = 240 },
+      }, 'note for the discrete chord, cc for the cc target, pb for the augment gesture')
     end,
   },
 

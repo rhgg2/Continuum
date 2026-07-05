@@ -1,4 +1,4 @@
--- Note macros v2: region hosts. The N=0 vibrato carrier proves the generator-side substrate
+-- Note macros v2: region hosts. The N=0 vibrato pb seat stream proves the generator-side substrate
 -- (ds, 4.6 producer split, reconcile, G4 round-trip). see design/note-macros-v2.md
 local t          = require('support')
 local util       = require('util')
@@ -194,63 +194,74 @@ end
 
 return {
 
-  ----- N=0 -- a region with no host note still drives the channel pb carrier
+  ----- N=0 -- a region with no host note still seats the channel pb stream
 
   {
-    name = 'fx region (N=0): vibrato over a span emits a free-LFO carrier with no host note',
+    name = 'fx region (N=0): vibrato over a span seats a free-LFO pb stream with no host note',
     run = function(harness)
       local h = harness.mk()
       injectRegion(h)
-      local dump = h.fm:dump()
-      local cs   = carriersOf(dump, 1)
-      t.truthy(#cs >= 8, 'a multi-breakpoint carrier stream is emitted from the region alone')
-      t.eq(carrierAt(dump, 1, 0).val,  carrierVal(0),   'zero crossing -> centre')
-      t.eq(carrierAt(dump, 1, 15).val, carrierVal(30),  'peak  -> +depth cents')
-      t.eq(carrierAt(dump, 1, 45).val, carrierVal(-30), 'trough -> -depth cents')
+      local seats = derivedPbs(h, 1)
+      t.truthy(#seats >= 8, 'a densified pb seat stream is emitted from the region alone')
+      t.eq(derivedPb(h, 1, 0).val,  centsToRaw(0),   'zero crossing -> centre')
+      t.eq(derivedPb(h, 1, 15).val, centsToRaw(30),  'peak  -> +depth cents')
+      t.eq(derivedPb(h, 1, 45).val, centsToRaw(-30), 'trough -> -depth cents')
       t.falsy(anyNoteOnChan(h, 1), 'no host note exists -- the LFO is sourced purely by the region')
     end,
   },
 
-  ----- Window end re-centres (channel-wide carrier, region-sourced)
+  ----- Window end re-centres (channel-wide, region-sourced)
 
   {
-    name = 'fx region: carrier returns to centre at the region window end',
+    name = 'fx region: pb seats re-centre the channel at the region window end',
     run = function(harness)
       local h = harness.mk()
       injectRegion(h)
-      local cs   = carriersOf(h.fm:dump(), 1)
-      local last = cs[#cs]
-      t.eq(last.ppq, 240, 'terminal breakpoint sits at the region window end')
-      t.eq(last.val, carrierVal(0), 'terminal value is centre -- no residual channel bend')
+      local seats = derivedPbs(h, 1)
+      table.sort(seats, function(a, b) return a.ppq < b.ppq end)
+      local last = seats[#seats]
+      t.eq(last.ppq, 240, 'terminal seat sits at the region window end (closed span)')
+      t.eq(last.val, centsToRaw(0), 'terminal value is centre -- no residual channel bend')
     end,
   },
 
   ----- G4 -- round-trip stability
 
   {
-    name = 'G4: region carrier stream is byte-identical across rebuild -> flush',
+    name = 'G4: region pb seat stream is byte-identical across rebuild -> flush',
     run = function(harness)
       local h = harness.mk()
       injectRegion(h)
-      local before = carriersOf(h.fm:dump(), 1)
-      t.truthy(#before > 0, 'carriers present (non-vacuous)')
+      local function sig()
+        local out = {}
+        for _, c in ipairs(derivedPbs(h, 1)) do out[#out + 1] = { ppq = c.ppq, val = c.val, shape = c.shape } end
+        table.sort(out, function(a, b) return a.ppq < b.ppq end)
+        return out
+      end
+      local before = sig()
+      t.truthy(#before > 0, 'seats present (non-vacuous)')
       h.tm:rebuild(); h.tm:flush()
-      t.deepEq(carriersOf(h.fm:dump(), 1), before, 'no carrier churn across the round trip')
+      t.deepEq(sig(), before, 'no seat churn across the round trip')
     end,
   },
 
-  ----- G2 -- region removal leaves no carrier
+  ----- G2 -- region removal leaves no pb seat
 
   {
-    name = 'G2: removing the region leaves no carrier after reconcile',
+    name = 'G2: removing the region leaves no pb seat after reconcile',
     run = function(harness)
       local h = harness.mk()
       injectRegion(h)
-      t.truthy(#carriersOf(h.fm:dump(), 1) > 0, 'carriers present with the region')
+      local function allPb()
+        local n = 0
+        for _, c in ipairs(h.fm:dump().ccs) do if c.evType == 'pb' and c.chan == 1 then n = n + 1 end end
+        return n
+      end
+      t.truthy(allPb() > 0, 'seats present with the region')
 
       h.ds:assign('fxRegions', {})
       h.tm:rebuild()
-      t.eq(#carriersOf(h.fm:dump(), 1), 0, 'no carrier survives region removal')
+      t.eq(allPb(), 0, 'no seat survives region removal')
     end,
   },
 
@@ -595,7 +606,7 @@ return {
       addNote(h, { pitch = 60, ppq = 0, endppq = 240, lane = 1 })
       injectRegion(h)   -- vibrato over [0,240) covers the note -- augment, so it is not parked
       t.deepEq(authoredPitches(h), { 60 }, 'the covered note keeps sounding -- a continuous kind augments')
-      t.truthy(#carriersOf(h.fm:dump(), 1) > 0, 'and the vibrato carrier is present over the span')
+      t.truthy(#derivedPbs(h, 1) > 0, 'and the vibrato pb seats are present over the span')
     end,
   },
 
@@ -651,10 +662,12 @@ return {
       h.tm:addEvent({ evType = 'pb', ppq = 60, chan = 1, val = 50 })   -- val is cents (the um is cents-native)
       h.tm:flush()
 
+      -- A cc-dest probe: host.pb is built independent of the kind's dest, so a cc-augment capture reads
+      -- the authored pb without a pb window parking it off (a pb-dest kind would park it, emptying host.pb).
       local captured
       generators.kinds.capture = {
         expand = function(host) captured = host; return { notes = {}, delta = {} } end,
-        mode = 'augment', dest = 'pb', label = 'Capture', defaults = {}, fields = {},
+        mode = 'augment', dest = 10, label = 'Capture', defaults = {}, fields = {},
       }
       h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
                                    fx = { { kind = 'capture' } } } })

@@ -1,11 +1,9 @@
 -- UI wiring for the note-FX editor (retrig + vibrato + slide). Pins cursorNote ->
--- setNoteFx / setFxKindActive / setFxField. Continuous kinds coexist -- both sum at the node.
+-- setNoteFx / setFxKindActive / setFxField. Continuous kinds coexist -- both sum offline into pb seats.
 
 local t          = require('support')
 local util       = require('util')
 local generators = require('generators')
-
-local DELTA_MSB = 20   -- toy fixed vibrato carrier (cf. tm_vibrato_spec)
 
 local function addHost(h, fx, lane)
   h.tm:addEvent{ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
@@ -152,7 +150,7 @@ return {
       local uuid = hostUuid(h)
       h.vm:setFxKindActive(uuid, { kind = 'slide', over = { 1, 2 }, target = 'next' }, true)
       local k = byKind(h.vm:noteFx(uuid))
-      t.truthy(k.vibrato and k.slide, 'vibrato and slide co-resident -- both sum at the node')
+      t.truthy(k.vibrato and k.slide, 'vibrato and slide co-resident -- both sum offline into pb seats')
       t.eq(k.slide.target, 'next', 'slide seeded with target=next')
       h.vm:setFxField(uuid, 2, 'over', { 1, 4 })
       t.eq(h.vm:noteFx(uuid)[2].over[2], 4, 'over cycled via the generic field writer')
@@ -165,16 +163,16 @@ return {
       local h = harness.mk()
       addHost(h, { { kind = 'slide', over = { 1, 2 }, target = 'fixed', cents = 200 } }, 1)
       local uuid = hostUuid(h)
-      local function carrierCount()
+      local function pbSeatCount()
         local n = 0
         for _, c in ipairs(h.fm:dump().ccs) do
-          if c.evType == 'cc' and c.cc == DELTA_MSB then n = n + 1 end
+          if c.evType == 'pb' then n = n + 1 end
         end
         return n
       end
-      t.truthy(carrierCount() >= 3, 'a fixed slide bakes a carrier with no next-note lookup')
+      t.truthy(pbSeatCount() >= 3, 'a fixed slide seats a pb stream with no next-note lookup')
       h.vm:setFxField(uuid, 1, 'target', 'next')
-      t.eq(carrierCount(), 0, "target='next' with no following note yields no carrier")
+      t.eq(pbSeatCount(), 0, "target='next' with no following note yields no seats")
     end,
   },
 
@@ -193,7 +191,7 @@ return {
   },
 
   {
-    name = 'a vibrato entry on a lane-1 host bakes a carrier stream',
+    name = 'a vibrato entry on a lane-1 host seats a pb stream',
     run = function(harness)
       local h = harness.mk()
       addHost(h, nil, 1)
@@ -201,9 +199,9 @@ return {
       h.vm:setNoteFx(uuid, { { kind = 'vibrato', period = { 1, 2 }, depth = 30, onset = 0 } })
       local n = 0
       for _, c in ipairs(h.fm:dump().ccs) do
-        if c.evType == 'cc' and c.cc == DELTA_MSB then n = n + 1 end
+        if c.evType == 'pb' then n = n + 1 end
       end
-      t.truthy(n >= 4, 'the view path realises vibrato as a sparse carrier stream (extrema + anchors)')
+      t.truthy(n >= 4, 'the view path realises vibrato as a densified pb seat stream')
     end,
   },
 

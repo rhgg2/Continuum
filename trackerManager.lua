@@ -105,6 +105,28 @@ local function ccGridStep()
   return math.max(1, util.round((mm:resolution() or 960) / mm:ccInterp()))
 end
 
+-- Merge macro windows into maximal covered spans (overlap/adjacency joins, gaps split); and pick the
+-- macros covering a span. Shared by cc- and pb-augment summation.
+local function mergeWindows(bucket)
+  local wins = {}
+  for _, m in ipairs(bucket) do util.add(wins, { m.window[1], m.window[2] }) end
+  table.sort(wins, function(a, b) return a[1] < b[1] end)
+  local merged = {}
+  for _, w in ipairs(wins) do
+    local last = merged[#merged]
+    if last and w[1] <= last[2] then last[2] = math.max(last[2], w[2])
+    else util.add(merged, { w[1], w[2] }) end
+  end
+  return merged
+end
+local function overlapping(bucket, span)
+  local out = {}
+  for _, m in ipairs(bucket) do
+    if m.window[1] < span[2] and m.window[2] > span[1] then util.add(out, m) end
+  end
+  return out
+end
+
 -- Sum a held base curve and N macro curves onto the ccGridStep lattice over span [sL, eL) -- half-open,
 -- so eL is never emitted. Macros anchor 0 at their own edges, so disjoint macros still sum correctly.
 local function sumStreams(base, macros, span, opts)
@@ -174,6 +196,9 @@ local function sumStreams(base, macros, span, opts)
       end
     end
   end
+  -- pb-augment closes the span: the terminal eL point re-centres the channel (macros anchor 0 there),
+  -- so it must land as a seat -- cc leaves eL to the next window/authored value. see § Continuous pb
+  if opts.closed then util.add(pts, { ppq = eL, val = sumAt(eL), shape = 'step' }) end
   return pts
 end
 
@@ -1947,27 +1972,8 @@ local function rebuildFx(fx, deferred, fxWindow, nextInLane, currentWindows)
       spec.lane = lane
     end
   end
-  -- cc-augment summation helpers (per chan): merge macro windows into maximal spans, pick the macros
-  -- covering a span, resolve the resting base, build the authored base curve the sum holds.
-  local function mergeWindows(bucket)
-    local wins = {}
-    for _, m in ipairs(bucket) do util.add(wins, { m.window[1], m.window[2] }) end
-    table.sort(wins, function(a, b) return a[1] < b[1] end)
-    local merged = {}
-    for _, w in ipairs(wins) do
-      local last = merged[#merged]
-      if last and w[1] <= last[2] then last[2] = math.max(last[2], w[2])
-      else util.add(merged, { w[1], w[2] }) end
-    end
-    return merged
-  end
-  local function overlapping(bucket, span)
-    local out = {}
-    for _, m in ipairs(bucket) do
-      if m.window[1] < span[2] and m.window[2] > span[1] then util.add(out, m) end
-    end
-    return out
-  end
+  -- cc-augment summation helpers (per chan): resolve the resting base and build the authored base
+  -- curve the sum holds. mergeWindows/overlapping are module-level (shared with pb-augment).
   local function firstRestOverride(bucket)   -- earliest window's explicit rest override wins
     local rest, best = nil, math.huge
     for _, m in ipairs(bucket) do
@@ -2011,7 +2017,7 @@ local function rebuildFx(fx, deferred, fxWindow, nextInLane, currentWindows)
     end
     -- Pass A: run every generator. Structural notes commit per lane; continuous deltas
     -- stash with their window for colouring (channel-wide, not note-tied). see design/archive/note-macros.md § Continuous realisation
-    local predicted, pending, ccLive, ccAugment = {}, {}, {}, {}
+    local predicted, pending, ccLive, ccAugment, pbAugment = {}, {}, {}, {}, {}
     -- One producer interface, two sources: a note with fx (v1 augment) or an explicit
     -- fxRegion; the generator sees neither. see design/note-macros-v2.md § The anchor generalized
     local function runProducer(p)
@@ -2040,20 +2046,25 @@ local function rebuildFx(fx, deferred, fxWindow, nextInLane, currentWindows)
             if regionNotes then util.add(regionNotes, spec)
             else util.add(predicted, spec) end
           end
-          -- cc-replace seats verbatim; cc-augment buckets per target for offline summation; pb (both modes)
-          -- still rides the carrier this slice. see design/note-macros-v2.md § Continuous cc / § Continuous replace
+          -- cc-replace seats verbatim; cc-augment sums offline per target. pb now seats too: replace
+          -- verbatim, augment summed in rebuildPbs. see design/note-macros-v2.md § Continuous cc / § Continuous replace
           local target = meta.dest ~= 'note' and meta.dest or nil
-          if target and #out.delta > 0 then
-            if meta.mode == 'replace' and type(target) == 'number' then
+          if target == 'pb' and meta.mode ~= 'replace' then
+            -- pb augment: bucket the window even when empty (a slide with no next note) so rebuildPbs
+            -- still re-centres the span and sweeps stale seats. see design/note-macros-v2.md § Continuous pb
+            local curve = {}
+            for _, bp in ipairs(out.delta) do
+              util.add(curve, { ppq = bp.ppqL, val = bp.val, shape = bp.shape, tension = bp.tension })
+            end
+            util.add(pbAugment, { window = { startL, endL }, curve = curve })
+          elseif target and #out.delta > 0 then
+            if type(target) == 'number' and meta.mode == 'replace' then
               -- cc replace: write the curve verbatim onto the target cc lane as markerless seats,
               -- recognized next rebuild by window. No carrier, no node.
               for _, bp in ipairs(out.delta) do
                 util.add(ccLive, { evType = 'cc', chan = chan, cc = target,
                                    ppq = tm:fromLogical(chan, bp.ppqL, p.d), val = bp.val, shape = bp.shape })
               end
-            elseif meta.mode == 'replace' and target == 'pb' then
-              -- pb replace: the absolute curve rides the base lane as derived absorber seats (no carrier).
-              util.add(fx.replacePb[chan], { startL, endL, curve = out.delta, d = p.d })
             elseif type(target) == 'number' then
               -- cc augment: bucket this macro's window + curve per target; the parked base and every
               -- covering macro sum offline below (N-stream overlap). see design/note-macros-v2.md § Continuous cc
@@ -2063,8 +2074,8 @@ local function rebuildFx(fx, deferred, fxWindow, nextInLane, currentWindows)
               end
               util.bucket(ccAugment, target, { window = { startL, endL }, curve = curve, rest = p.fx.rest })
             else
-              -- pb augment: carrier delta (slice 2 migrates to park-and-seat).
-              util.add(pending, { startL = startL, endL = endL, target = target, delta = out.delta, d = p.d })
+              -- pb replace: the absolute curve rides the base lane as derived absorber seats (no carrier).
+              util.add(fx.replacePb[chan], { startL, endL, curve = out.delta, d = p.d })
             end
           end
         end
@@ -2137,6 +2148,10 @@ local function rebuildFx(fx, deferred, fxWindow, nextInLane, currentWindows)
         end
       end
     end
+
+    -- pb-augment macros go to rebuildPbs, which sums them onto the authored pb base and seats the
+    -- result like a replace curve (pb value + detune resolve there). see design/note-macros-v2.md § Continuous pb
+    fx.pbAugment[chan] = pbAugment
 
     -- Pass B: per target, interval-colour stashed instances -- overlapping carriers get
     -- distinct codes (node sums by target), disjoint share the coldest. see design/archive/note-macros.md § Delta-code allocation
@@ -2298,7 +2313,7 @@ end
 
 -- Reseat absorber pbs against the post-walk lane-1 layout, recompute their raw vals,
 -- and project the pb column. see docs/tuning.md § Absorber reconciliation
-local function rebuildPbs(noteLive, replacePb)
+local function rebuildPbs(noteLive, replacePb, pbAugment)
   local extras = ds:get('extraColumns') or {}
 
   local function detuneAt(events, P)
@@ -2386,6 +2401,59 @@ local function rebuildPbs(noteLive, replacePb)
                               startRaw = tm:fromLogical(chan, w[1], w.d),
                               endRaw   = tm:fromLogical(chan, w[2], w.d) })
     end
+
+    -- Augment windows: vibrato/slide macros sum onto the authored pb base (parked in-window, held
+    -- out-of-window) into an absolute cents curve, seated exactly like a replace window. see § Continuous pb
+    if #(pbAugment[chan] or {}) > 0 then
+      local spans, augRaw = mergeWindows(pbAugment[chan]), {}
+      for _, s in ipairs(spans) do
+        util.add(augRaw, { tm:fromLogical(chan, s[1], 0), tm:fromLogical(chan, s[2], 0) })
+      end
+      -- Base the sum holds: parked authored pbs (in-window) plus on-take authored pbs outside every pb
+      -- window (hold-in). A generated seat sits on-take inside a window -- exclude it.
+      local function inPbWindow(ppq)
+        for _, w in ipairs(replaceWins) do if ppq >= w.startRaw and ppq <= w.endRaw then return true end end
+        for _, s in ipairs(augRaw)      do if ppq >= s[1]      and ppq <= s[2]      then return true end end
+        return false
+      end
+      local base, seen = {}, {}
+      for _, cell in ipairs(channels[chan].parkedPb or {}) do
+        util.add(base, { ppq = cell.ppqL, val = cell.cents, shape = cell.shape or 'step' })
+        seen[cell.ppqL] = true
+      end
+      for _, pb in ipairs(pbs) do
+        local ppqL = tm:toLogical(chan, pb.ppq)
+        if not pb.derived and not inPbWindow(pb.ppq) and not seen[ppqL] then
+          util.add(base, { ppq = ppqL, val = pb.cents or rawToCents(pb.val), shape = pb.shape or 'step' })
+          seen[ppqL] = true
+        end
+      end
+      table.sort(base, function(a, b) return a.ppq < b.ppq end)
+      if #base == 0 then
+        local minStart = math.huge
+        for _, s in ipairs(spans) do minStart = math.min(minStart, s[1]) end
+        base = { { ppq = minStart, val = 0, shape = 'step' } }
+      end
+      local lim = pbLim()
+      local trivialBase = #base == 1 and base[1].val == 0
+      for i, span in ipairs(spans) do
+        local curves = {}
+        for _, m in ipairs(overlapping(pbAugment[chan], span)) do
+          if #m.curve > 0 then util.add(curves, m.curve) end
+        end
+        -- A span with no macro curve over a flat-0 base is a pure re-centre: register the window with no
+        -- bps so its stale seats sweep (rest needs no pb). Else seat the summed base+macros curve.
+        local bps = {}
+        if #curves > 0 or not trivialBase then
+          for _, pt in ipairs(sumStreams(base, curves, span, { lo = -lim, hi = lim, closed = true })) do
+            util.add(bps, { ppq = tm:fromLogical(chan, pt.ppq, 0), ppqL = pt.ppq,
+                            cents = pt.val, shape = pt.shape })
+          end
+        end
+        util.add(replaceWins, { bps = bps, startRaw = augRaw[i][1], endRaw = augRaw[i][2] })
+      end
+    end
+
     -- Which window's curve prevails at a raw ppq (half-open -- the interior stream).
     local function replaceWinAt(ppq)
       for _, win in ipairs(replaceWins) do
@@ -2779,14 +2847,15 @@ function tm:rebuild(takeChanged)
     end
   end
 
-  -- Per-channel fx realisation state: noteExisting/noteLive (derived vs post-expansion fx notes), ccExisting
-  -- (carrier for pb-augment + summed/replace cc events), replacePb (pb replace windows + curves).
-  local fx = { noteExisting = {}, noteLive = {}, ccExisting = {}, replacePb = {} }
+  -- Per-channel fx state: noteExisting/noteLive (fx notes, derived vs post-expansion), ccExisting
+  -- (summed/replace ccs; carrier dormant), replacePb + pbAugment (pb replace/augment windows + curves).
+  local fx = { noteExisting = {}, noteLive = {}, ccExisting = {}, replacePb = {}, pbAugment = {} }
   for i = 1, 16 do
     fx.noteExisting[i] = {}
     fx.noteLive[i]     = {}
     fx.ccExisting[i]   = { carrier = {}, events = {} }
     fx.replacePb[i]    = {}
+    fx.pbAugment[i]    = {}
   end
   -- fxNote add/del + parked-member restores, deferred from fx expansion / region parking into the tail
   -- walk's atomic note commit: host clip + these inserts in one mm:modify (one MIDI_Sort, canonical delete-first).
@@ -2825,7 +2894,7 @@ function tm:rebuild(takeChanged)
   perf.start('reapCarr'); reapCarriers(newFxCarrier); perf.stop('reapCarr')  -- disarm stale carrier codes; persist live map
 
   perf.start('tails'); rebuildTails(fx, deferred); perf.stop('tails')  -- unified tail/onset walk + atomic note commit
-  perf.start('pbs'); rebuildPbs(fx.noteLive, fx.replacePb); perf.stop('pbs')  -- absorber reconciliation + pb resynthesis
+  perf.start('pbs'); rebuildPbs(fx.noteLive, fx.replacePb, fx.pbAugment); perf.stop('pbs')  -- absorber reconciliation + pb resynthesis
   perf.start('pcs'); rebuildPCs(fx); perf.stop('pcs')  -- PC synthesis (trackerMode)
 
   perf.start('projLogical'); projectLogical(); perf.stop('projLogical')  -- project columns to logical

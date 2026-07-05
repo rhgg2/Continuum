@@ -312,7 +312,7 @@ end
 
 --shape: parkWindows -> { {evType='note'|'cc'|'pb', chan, cc?, startppq, endppq}, ... } (cc on cc windows only)
 -- The single source for "what 4.5 parks over": a note window for a discrete-replace chord, a cc window
--- per continuous cc target (replace or augment), a pb window per continuous-replace target.
+-- per continuous cc target and a pb window per continuous pb target (both replace or augment).
 function generators.parkWindows(regions)
   local windows = {}
   local function window(evType, region, cc)
@@ -326,10 +326,10 @@ function generators.parkWindows(regions)
     for _, params in ipairs(region.fx or {}) do
       local meta = generators.kinds[params.kind]
       if meta then
-        -- cc parks for replace and augment (the summed base + macros seat on the target lane); pb only
-        -- for replace this slice -- pb-augment still rides the carrier. see design/note-macros-v2.md § Continuous cc
+        -- cc and pb both park for replace and augment: the summed base + macros seat on the target
+        -- lane (cc) or base lane (pb). see design/note-macros-v2.md § Continuous cc / § Continuous pb
         if type(meta.dest) == 'number' then window('cc', region, meta.dest)
-        elseif meta.dest == 'pb' and meta.mode == 'replace' then window('pb', region) end
+        elseif meta.dest == 'pb' then window('pb', region) end
       end
     end
   end

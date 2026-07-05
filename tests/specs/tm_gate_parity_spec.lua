@@ -119,7 +119,7 @@ return {
       }
 
       -- chan 1: plain edit target.  chan 2: detuned lane-1 -> absorber pb stream.
-      -- chan 3: vibrato host -> carriers + pb.  chan 4: arp region -> parked host + derived notes.
+      -- chan 3: vibrato host -> pb seats.  chan 4: arp region -> parked host + derived notes.
       h.tm:addEvent(note(1, 0,   60));                 h.tm:flush()
       h.tm:addEvent(note(2, 0,   64, { detune = 25 })); h.tm:flush()
       h.tm:addEvent(note(3, 0,   67, { fx = vib30 }));  h.tm:flush()
@@ -130,14 +130,14 @@ return {
       h.tm:rebuild()
 
       -- The fixture is live across all three axes, so parity is a real fixpoint claim, not two empty
-      -- frames agreeing. Carriers + absorber pbs are wire-only (mm), the parked chord is frame-visible.
-      local nCarrier, nPb = 0, 0
+      -- frames agreeing. Vibrato pb seats + absorber pbs are wire-only (mm), the parked chord is frame-visible.
+      local nSeat3, nPb2 = 0, 0
       for _, c in ipairs(h.fm:dump().ccs) do
-        if c.evType == 'cc' and c.cc == 20 then nCarrier = nCarrier + 1 end
-        if c.evType == 'pb' then nPb = nPb + 1 end
+        if c.evType == 'pb' and c.chan == 3 then nSeat3 = nSeat3 + 1 end
+        if c.evType == 'pb' and c.chan == 2 then nPb2   = nPb2   + 1 end
       end
-      t.truthy(nCarrier > 0, 'vibrato carriers present in mm (fx ran)')
-      t.truthy(nPb > 0,      'absorber pbs present in mm (tuning ran)')
+      t.truthy(nSeat3 > 0, 'vibrato pb seats present on chan 3 (fx ran)')
+      t.truthy(nPb2 > 0,   'absorber pbs present on chan 2 (tuning ran)')
       t.truthy(projectFrame(h.tm)[4].parked and #projectFrame(h.tm)[4].parked > 0,
         'chan 4 has an off-take parked chord (region ran)')
       t.truthy(h.tm:fromLogical(1, 120) ~= 120, 'swing is active (projection non-identity)')
