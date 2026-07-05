@@ -129,20 +129,21 @@ end
 
 -- Sum a held base curve and N macro curves onto the ccGridStep lattice over span [sL, eL) -- half-open,
 -- so eL is never emitted. Macros anchor 0 at their own edges, so disjoint macros still sum correctly.
+local function firstAfter(list, target)   -- first index with .ppq > target (binary; list ppq-sorted)
+  local lo, hi = 1, #list + 1
+  while lo < hi do
+    local mid = (lo + hi) // 2
+    if list[mid].ppq <= target then lo = mid + 1 else hi = mid end
+  end
+  return lo
+end
+
 local function sumStreams(base, macros, span, opts)
   local sL, eL = span[1], span[2]
   local grid   = ccGridStep()
   local curves = { base }
   for _, m in ipairs(macros) do util.add(curves, m) end
 
-  local function firstAfter(curve, target)   -- first index with .ppq > target (binary; curves ppq-sorted)
-    local lo, hi = 1, #curve + 1
-    while lo < hi do
-      local mid = (lo + hi) // 2
-      if curve[mid].ppq <= target then lo = mid + 1 else hi = mid end
-    end
-    return lo
-  end
   local function eval(curve, ppq)   -- held both ways: first value before, last after, shape interp within
     if #curve == 0 then return 0 end
     local i = firstAfter(curve, ppq)
@@ -204,6 +205,19 @@ end
 
 local function rawToCents(raw)
   return util.round(raw / 8192 * pbLim())
+end
+
+-- detune-at-ppq for every pb in one linear merge (pbs and lane1Events both ppq-sorted).
+local function mergeDetunes(pbs, lane1Events)
+  local detuneOf, di, dcur = {}, 1, 0
+  for _, pb in ipairs(pbs) do
+    while di <= #lane1Events and lane1Events[di].ppq <= pb.ppq do
+      dcur = lane1Events[di].detune or 0
+      di = di + 1
+    end
+    detuneOf[pb] = dcur
+  end
+  return detuneOf
 end
 
 local function delayToPPQ(delay) return timing.delayToPPQ(delay, mm:resolution()) end
@@ -1286,7 +1300,9 @@ function tm:setMutedChannels(set)
   flush()
 end
 
------ Rebuild step helpers
+---------- REBUILD
+
+----- Rebuild shared helpers
 
 local function pushNoteCol(channel)
   local notes = channel.columns.notes
@@ -1363,7 +1379,7 @@ local function rawDivergesFromLogical(evt)
   return math.abs(evt.ppq - rawFromLogical) > EPS
 end
 
------ Rebuild steps
+----- Rebuild internals
 
 -- Partition mm notes stamped/external, lay internal columns, reseat stale-swing. Returns external.
 -- see docs/trackerManager.md § Rebuild: partition
@@ -1420,6 +1436,8 @@ local function rebuildInternals(fx)
 
   return external
 end
+
+----- Rebuild CCs
 
 -- CC walk: build the carrier routing map, reconcile (raw,ppqL), project CCs.
 -- Returns a carrier-map persister; run after fx expansion. see docs/trackerManager.md § Rebuild: CC walk
@@ -2267,19 +2285,6 @@ local function rebuildPbs(noteLive, replacePb, pbAugment)
   local pbWrites = mmBatch()
   local gridStep = ccGridStep()
 
-  -- detune-at-ppq for every pb in one linear merge (pbs and lane1Events both ppq-sorted).
-  local function mergeDetunes(pbs, lane1Events)
-    local detuneOf, di, dcur = {}, 1, 0
-    for _, pb in ipairs(pbs) do
-      while di <= #lane1Events and lane1Events[di].ppq <= pb.ppq do
-        dcur = lane1Events[di].detune or 0
-        di = di + 1
-      end
-      detuneOf[pb] = dcur
-    end
-    return detuneOf
-  end
-
   -- Seat the lane-1 detune stream, match absorbers, stage the consolidated assign; returns
   -- detuneOf. Clean chans skip it wholesale -- I8: rebuild is a fixpoint. see design/incremental-pbs.md
   local function deriveChan(chan, lane1Events, pbs)
@@ -2382,16 +2387,6 @@ local function rebuildPbs(noteLive, replacePb, pbAugment)
       if not pb.derived and not inSeatWindow(pb.ppq) then util.add(realPbs, pb) end
     end
 
-    -- First index with .ppq > target -- binary; callers loop per onset over dense pb streams.
-    local function firstAfter(list, target)
-      local lo, hi = 1, #list + 1
-      while lo < hi do
-        local mid = (lo + hi) // 2
-        if list[mid].ppq <= target then lo = mid + 1 else hi = mid end
-      end
-      return lo
-    end
-
     -- Prevailing cents at any ppq: the replace curve inside a window, else the authored
     -- breakpoints. Interpolate the bounding pair, hold the last past the end, 0 before the first.
     local function streamValue(ppq)
@@ -2444,36 +2439,11 @@ local function rebuildPbs(noteLive, replacePb, pbAugment)
       end
     end
 
-    -- Densify each curved authored segment that contains an onset into a linear polyline
-    -- on the fixed CCINTERP grid -- stable keys (from authored ppqs) keep it churn-free.
-    for i = 1, #realPbs - 1 do
-      local A, B = realPbs[i], realPbs[i + 1]
-      local hasOnset = false
-      for _, o in ipairs(onsets) do
-        if o.ppq > A.ppq and o.ppq < B.ppq then hasOnset = true break end
-      end
-      if isCurved(A.shape) and hasOnset then
-        local p = A.ppq + gridStep
-        while p < B.ppq do
-          if not seats[p] then
-            seats[p] = { cents = streamValue(p), ppqL = tm:toLogical(chan, p), shape = 'linear' }
-          end
-          p = p + gridStep
-        end
-      end
-    end
-
-    -- Seat each replace curve as derived (hidden) seats carrying its shape; see docs/tuning.md §
-    -- Value-aware seats and densification for the rule. Onset seats above take priority.
-    for _, win in ipairs(replaceWins) do
-      local bps = win.bps
-      for _, bp in ipairs(bps) do
-        if not seats[bp.ppq] then
-          seats[bp.ppq] = { cents = bp.cents, ppqL = bp.ppqL, shape = bp.shape }
-        end
-      end
-      for i = 1, #bps - 1 do
-        local A, B = bps[i], bps[i + 1]
+    -- Densify each curved segment of `list` that contains an onset into a linear polyline on the
+    -- fixed CCINTERP grid -- stable keys (from authored ppqs) keep it churn-free.
+    local function densify(list)
+      for i = 1, #list - 1 do
+        local A, B = list[i], list[i + 1]
         local hasOnset = false
         for _, o in ipairs(onsets) do
           if o.ppq > A.ppq and o.ppq < B.ppq then hasOnset = true break end
@@ -2488,6 +2458,18 @@ local function rebuildPbs(noteLive, replacePb, pbAugment)
           end
         end
       end
+    end
+    densify(realPbs)
+
+    -- Seat each replace curve as derived (hidden) seats carrying its shape; see docs/tuning.md §
+    -- Value-aware seats and densification for the rule. Onset seats above take priority.
+    for _, win in ipairs(replaceWins) do
+      for _, bp in ipairs(win.bps) do
+        if not seats[bp.ppq] then
+          seats[bp.ppq] = { cents = bp.cents, ppqL = bp.ppqL, shape = bp.shape }
+        end
+      end
+      densify(win.bps)
     end
 
     -- Anchor a pb-active channel at its first lane-1 onset (I2a):
