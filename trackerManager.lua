@@ -1439,30 +1439,31 @@ end
 
 ----- Rebuild CCs
 
+-- Markerless cc-replace fill seats are recognized by window (mirrors pb inSeatWindow). Bounds raw once,
+-- half-open like the park's covered(); cc curves carry no terminal-at-end seat, so the open end is safe.
+local function rawSpanMap(wins)
+  local map = {}
+  for _, w in ipairs(wins) do
+    map[w.chan]       = map[w.chan] or {}
+    map[w.chan][w.cc] = map[w.chan][w.cc] or {}
+    util.add(map[w.chan][w.cc], { sRaw = tm:fromLogical(w.chan, w.startppq),
+                                  eRaw = tm:fromLogical(w.chan, w.endppq) })
+  end
+  return map
+end
+
+local function inSpan(map, chan, cc, ppq)
+  local spans = map[chan] and map[chan][cc]
+  if spans then
+    for _, s in ipairs(spans) do if ppq >= s.sRaw and ppq < s.eRaw then return true end end
+  end
+  return false
+end
+
 -- CC walk: build the carrier routing map, reconcile (raw,ppqL), project CCs.
 -- Returns a carrier-map persister; run after fx expansion. see docs/trackerManager.md § Rebuild: CC walk
 local function rebuildCCs(fx)
   local ccWrites = mmBatch()
-
-  -- Markerless cc-replace fill seats are recognized by window (mirrors pb inSeatWindow). Bounds raw once,
-  -- half-open like the park's covered(); cc curves carry no terminal-at-end seat, so the open end is safe.
-  local function rawSpanMap(wins)
-    local map = {}
-    for _, w in ipairs(wins) do
-      map[w.chan]       = map[w.chan] or {}
-      map[w.chan][w.cc] = map[w.chan][w.cc] or {}
-      util.add(map[w.chan][w.cc], { sRaw = tm:fromLogical(w.chan, w.startppq),
-                                    eRaw = tm:fromLogical(w.chan, w.endppq) })
-    end
-    return map
-  end
-  local function inSpan(map, chan, cc, ppq)
-    local spans = map[chan] and map[chan][cc]
-    if spans then
-      for _, s in ipairs(spans) do if ppq >= s.sRaw and ppq < s.eRaw then return true end end
-    end
-    return false
-  end
 
   -- Seats are recognized against last rebuild's persisted windows: an on-take cc inside a prev cc window is a
   -- seat; a just-created window's cc still parks, a removed one's orphans reconcile away. see design/note-macros-v2.md § Route-by-window
@@ -1521,6 +1522,8 @@ local function rebuildCCs(fx)
   ccWrites.commit()
 end
 
+----- Rebuild extra columns
+
 -- Reconcile extra columns against the persisted extraColumns spec; grow the spec when a
 -- channel already holds more note lanes than recorded.
 local function rebuildExtraColumns()
@@ -1546,50 +1549,52 @@ local function rebuildExtraColumns()
   if grew and mm:take() then ds:assign('extraColumns', extras) end
 end
 
+----- Rebuild externals
+
+--contract: true iff note fits col: no over-threshold overlap, coincident onset always refuses
+--invariant: overlap threshold: same-pitch 0, cross-pitch lenient; dominated-by≥2 refuses
+--contract: consulted only for unstamped raw notes; stamped notes never reach it
+local function noteColumnAccepts(col, note)
+  local lenient = cm:get('overlapOffset') * mm:resolution()
+  local noteppqI    = note.ppq - delayToPPQ(note.delay or 0)
+  local noteEndppqI = note.endppq
+  local dominated = 0
+  for _, evt in ipairs(col.events) do
+    local evtppqI = evt.ppq - delayToPPQ(evt.delay or 0)
+    if noteppqI == evtppqI then return false end
+    if noteppqI < evt.endppq and evtppqI < noteEndppqI then
+      local threshold = (evt.pitch == note.pitch) and 0 or lenient
+      local overlapAmount = math.min(evt.endppq, noteEndppqI) - math.max(evtppqI, noteppqI)
+      if overlapAmount > threshold then return false end
+      dominated = dominated + 1
+    end
+  end
+  if dominated >= 2 then return false end
+  return true
+end
+
+--contract: pick a lane for an external (unstamped) note via accept → sibling → push bump
+--invariant: called up front after internals placed + swing-reseated; tail walk clips tails after
+local function packExternalLane(channel, note)
+  local notes = channel.columns.notes
+  if note.lane then
+    local col = notes[note.lane]
+    if col and noteColumnAccepts(col, note) then return col, note.lane end
+    if not col then
+      while #notes < note.lane do pushNoteCol(channel) end
+      return notes[note.lane], note.lane
+    end
+  end
+  for i, col in ipairs(notes) do
+    if noteColumnAccepts(col, note) then return col, i end
+  end
+  return pushNoteCol(channel)
+end
+
 -- Reintroduce externals: pack lane, stamp ppqL/endppqL, backfill metadata, tag `fixed`;
 -- block window + tail passes -- onsets frozen, tails clipped. see docs/trackerManager.md § Rebuild: externals
 local function rebuildExternals(external)
   if #external == 0 then return end
-
-  --contract: true iff note fits col: no over-threshold overlap, coincident onset always refuses
-  --invariant: overlap threshold: same-pitch 0, cross-pitch lenient; dominated-by≥2 refuses
-  --contract: consulted only for unstamped raw notes; stamped notes never reach it
-  local function noteColumnAccepts(col, note)
-    local lenient = cm:get('overlapOffset') * mm:resolution()
-    local noteppqI    = note.ppq - delayToPPQ(note.delay or 0)
-    local noteEndppqI = note.endppq
-    local dominated = 0
-    for _, evt in ipairs(col.events) do
-      local evtppqI = evt.ppq - delayToPPQ(evt.delay or 0)
-      if noteppqI == evtppqI then return false end
-      if noteppqI < evt.endppq and evtppqI < noteEndppqI then
-        local threshold = (evt.pitch == note.pitch) and 0 or lenient
-        local overlapAmount = math.min(evt.endppq, noteEndppqI) - math.max(evtppqI, noteppqI)
-        if overlapAmount > threshold then return false end
-        dominated = dominated + 1
-      end
-    end
-    if dominated >= 2 then return false end
-    return true
-  end
-
-  --contract: pick a lane for an external (unstamped) note via accept → sibling → push bump
-  --invariant: called up front after internals placed + swing-reseated; tail walk clips tails after
-  local function packExternalLane(channel, note)
-    local notes = channel.columns.notes
-    if note.lane then
-      local col = notes[note.lane]
-      if col and noteColumnAccepts(col, note) then return col, note.lane end
-      if not col then
-        while #notes < note.lane do pushNoteCol(channel) end
-        return notes[note.lane], note.lane
-      end
-    end
-    for i, col in ipairs(notes) do
-      if noteColumnAccepts(col, note) then return col, i end
-    end
-    return pushNoteCol(channel)
-  end
 
   table.sort(external, function(a, b) return a.ppq < b.ppq end)
   local trackerMode = cm:get('trackerMode')
@@ -1617,6 +1622,8 @@ local function rebuildExternals(external)
   extWrites.commit()
 end
 
+----- Rebuild region park
+
 -- Clip each parked member's tail to lane/pitch successor onset and take end (logical frame),
 -- against bounds (unclipped on-take notes). See docs/trackerManager.md § Region-replace parking.
 local function realiseParked(members, takeLenL, bounds)
@@ -1642,20 +1649,34 @@ local function realiseParked(members, takeLenL, bounds)
   end
 end
 
+-- Park = clone minus the realisation frame, so new authored metadata rides a park/unpark
+-- round-trip untouched; restore mirrors it (clone back, re-derive realisation; pb also cents->raw).
+local REALISATION = { ppq = true, endppq = true, loc = true, token = true, derived = true, frame = true, cents = true }
+local function parkSpec(evt, adds) return util.assign(util.clone(evt, REALISATION), adds) end
+
+local function unlink(events, evt)
+  for i, e in ipairs(events) do if e == evt then table.remove(events, i); break end end
+end
+
+-- Off-take render union: parked specs stay visible in-column as render-ready cells.
+local function renderUnion(field, newParked, toCell)
+  for chan = 1, 16 do channels[chan][field] = {} end
+  for _, spec in ipairs(newParked) do
+    util.add(channels[spec.chan][field], toCell(spec))
+  end
+end
+
+local function persistParked(key, newParked)
+  if not util.deepEq(ds:get(key) or {}, newParked) and mm:take() then
+    ds:assign(key, #newParked > 0 and newParked or util.REMOVE)
+  end
+end
+
 -- Region-replace parking: authored events a replace window covers leave the take;
 -- the prior parked set carries still-covered forward, restores the rest. see design/note-macros-v2.md § Generator output
 
 local function rebuildRegionPark(deferred, currentWindows)
   local batch = mmBatch()
-
-  -- Park = clone minus the realisation frame, so new authored metadata rides a park/unpark
-  -- round-trip untouched; restore mirrors it (clone back, re-derive realisation; pb also cents->raw).
-  local REALISATION = { ppq = true, endppq = true, loc = true, token = true, derived = true, frame = true, cents = true }
-  local function parkSpec(evt, adds) return util.assign(util.clone(evt, REALISATION), adds) end
-
-  local function unlink(events, evt)
-    for i, e in ipairs(events) do if e == evt then table.remove(events, i); break end end
-  end
 
   -- One predicate for all passes; takes anything spec-shaped (evType/chan/cc/ppqL). spec.fx (note
   -- specs only): a discrete-replace note host parks itself, like a region window (membership {self}).
@@ -1687,20 +1708,6 @@ local function rebuildRegionPark(deferred, currentWindows)
     end
     for _, spec in ipairs(newParked) do util.add(allParked, spec) end
     return newParked, restores
-  end
-
-  -- Off-take render union: parked specs stay visible in-column as render-ready cells.
-  local function renderUnion(field, newParked, toCell)
-    for chan = 1, 16 do channels[chan][field] = {} end
-    for _, spec in ipairs(newParked) do
-      util.add(channels[spec.chan][field], toCell(spec))
-    end
-  end
-
-  local function persistParked(key, newParked)
-    if not util.deepEq(ds:get(key) or {}, newParked) and mm:take() then
-      ds:assign(key, #newParked > 0 and newParked or util.REMOVE)
-    end
   end
 
   -- Notes, ccs and pbs park in one batch -> a single delete-first commit for the whole phase, and
@@ -1878,33 +1885,35 @@ local function rebuildRegionPark(deferred, currentWindows)
   batch.commit()
 end
 
--- Late PA projection: mixes into note columns once lanes are settled, so the view (and rebuildFx's
--- channelStreams) read it inline. Must follow column layout, so it can't ride the CC walk.
-local function rebuildPA()
-  local function findNoteColumnForPitch(channel, pitch, ppq_pos)
-    local notes = channel.columns.notes
-    for laneIdx, col in ipairs(notes) do
-      for _, evt in ipairs(col.events) do
-        if evt.endppq and evt.pitch == pitch and evt.ppq <= ppq_pos and evt.endppq > ppq_pos then
-          return col, laneIdx
-        end
-      end
-    end
-    -- Parked note hosts left the take but keep their PA display anchored to their lane
-    -- (the PA stays take-side and sounds against the derived same-pitch hits).
-    for _, cell in ipairs(channel.parked or {}) do
-      if cell.pitch == pitch and tm:fromLogical(channel.chan, cell.ppqL) <= ppq_pos
-         and tm:fromLogical(channel.chan, cell.endppqL) > ppq_pos then
-        return notes[cell.lane], cell.lane
-      end
-    end
-    for laneIdx, col in ipairs(notes) do
-      for _, evt in ipairs(col.events) do
-        if evt.pitch == pitch then return col, laneIdx end
+----- Rebuild PA
+
+local function findNoteColumnForPitch(channel, pitch, ppq_pos)
+  local notes = channel.columns.notes
+  for laneIdx, col in ipairs(notes) do
+    for _, evt in ipairs(col.events) do
+      if evt.endppq and evt.pitch == pitch and evt.ppq <= ppq_pos and evt.endppq > ppq_pos then
+        return col, laneIdx
       end
     end
   end
+  -- Parked note hosts left the take but keep their PA display anchored to their lane
+  -- (the PA stays take-side and sounds against the derived same-pitch hits).
+  for _, cell in ipairs(channel.parked or {}) do
+    if cell.pitch == pitch and tm:fromLogical(channel.chan, cell.ppqL) <= ppq_pos
+       and tm:fromLogical(channel.chan, cell.endppqL) > ppq_pos then
+      return notes[cell.lane], cell.lane
+    end
+  end
+  for laneIdx, col in ipairs(notes) do
+    for _, evt in ipairs(col.events) do
+      if evt.pitch == pitch then return col, laneIdx end
+    end
+  end
+end
 
+-- Late PA projection: mixes into note columns once lanes are settled, so the view (and rebuildFx's
+-- channelStreams) read it inline. Must follow column layout, so it can't ride the CC walk.
+local function rebuildPA()
   for _, cc in mm:ccsRaw() do
     if cc.evType == 'pa' and dirtyChans[cc.chan] then   -- clean: PA already sits in the carried note column
       local noteCol, lane = findNoteColumnForPitch(channels[cc.chan], cc.pitch, cc.ppq)
@@ -1914,6 +1923,8 @@ local function rebuildPA()
     end
   end
 end
+
+----- Rebuild Fx
 
 -- fx host voice extents + per-note same-lane successor ppqL, floored by authored end; a pure, G4-stable scan
 -- of the settled note columns. Runs for all 16 chans so parking + recognition see the complete window set. see design/archive/note-macros.md § host contract
@@ -2148,6 +2159,8 @@ local function rebuildFx(fx, deferred, fxWindow, nextInLane, currentWindows)
   end
 end
 
+----- Rebuild tails
+
 -- Unified tail/onset walk + atomic commit: real notes, fixed externals, fx.noteLive
 -- walk together (onset clamp then tail clip); host clip + fxNote del/add in one mm:modify. see docs/trackerManager.md § Rebuild: tail walk
 local function rebuildTails(fx, deferred)
@@ -2226,6 +2239,8 @@ local function rebuildTails(fx, deferred)
   deferred.commit()
 end
 
+----- Rebuild Pbs
+
 -- Reseat absorber pbs against the post-walk lane-1 layout, recompute their raw vals,
 -- and project the pb column. see docs/tuning.md § Absorber reconciliation
 local function rebuildPbs(noteLive, replacePb, pbAugment)
@@ -2237,7 +2252,6 @@ local function rebuildPbs(noteLive, replacePb, pbAugment)
   end
 
   perf.start('gather')
-  perf.start('lane1')
   -- Dirty gate on the shared spine, hoisted ahead of lane-1 sort and clone (both skip clean chans).
   -- Frozen fx channels are not dirty: their derived output stands in mm, absorber seats carried.
   local dirty = {}
@@ -2266,9 +2280,7 @@ local function rebuildPbs(noteLive, replacePb, pbAugment)
       lane1ByChan[chan] = list
     end
   end
-  perf.stop('lane1')
 
-  perf.start('pbsRaw')
   -- mm uses content-keyed tokens: any pb whose ppq we touch needs its pre-mutation token
   -- captured up front, on our own clone (origTok set once) -- only dirty channels clone here.
   local pbsByChan = {}
@@ -2279,7 +2291,6 @@ local function rebuildPbs(noteLive, replacePb, pbAugment)
       util.bucket(pbsByChan, pb.chan, pb)
     end
   end
-  perf.stop('pbsRaw')
   perf.stop('gather')
 
   local pbWrites = mmBatch()
@@ -2616,6 +2627,8 @@ local function rebuildPbs(noteLive, replacePb, pbAugment)
   perf.stop('commit')
 end
 
+----- Rebuild PCs
+
 -- PC synthesis (trackerMode only). Runs after externals so a foreign-MIDI note inherits
 -- sample from the prevailing PC.
 local function rebuildPCs(fx)
@@ -2651,43 +2664,46 @@ local function rebuildPCs(fx)
   end
 end
 
+----- Rebuild logical projection
+
+-- Project one column's events to the logical frame in place; delayC captures the walk's raw give-way.
+local function projectToLogical(col, chan, res)
+  for _, evt in ipairs(col.events) do
+    if evt.ppqL ~= nil then
+      -- delayC: realised-frame delay equivalent. Differs from authored delay when
+      -- the unified walk clamped raw against a same-pitch predecessor; renderer cues the give-way.
+      if evt.delay ~= nil then
+        local baseline = tm:fromLogical(chan, evt.ppqL)
+        evt.delayC = util.round(timing.ppqToDelay(evt.ppq - baseline, res))
+      end
+      evt.ppq = evt.ppqL
+    end
+    if evt.endppq ~= nil then
+      evt.endppqC = tm:toLogical(chan, evt.endppq)
+      if evt.endppqL == util.OPEN then
+        evt.endppq = util.OPEN
+      elseif evt.endppqL ~= nil then
+        evt.endppq = evt.endppqL
+      else
+        evt.endppq = evt.endppqC
+      end
+    end
+  end
+  sortByPPQ(col.events)
+end
+
 -- Project columns to logical. tv surface is logical-only; ppq/endppq leave here as floats.
 -- see docs/trackerManager.md § Rebuild: logical projection
 local function projectLogical()
   local res = mm:resolution()
-  local function projectToLogical(col, chan)
-    for _, evt in ipairs(col.events) do
-      if evt.ppqL ~= nil then
-        -- delayC: realised-frame delay equivalent. Differs from authored delay when
-        -- the unified walk clamped raw against a same-pitch predecessor; renderer cues the give-way.
-        if evt.delay ~= nil then
-          local baseline = tm:fromLogical(chan, evt.ppqL)
-          evt.delayC = util.round(timing.ppqToDelay(evt.ppq - baseline, res))
-        end
-        evt.ppq = evt.ppqL
-      end
-      if evt.endppq ~= nil then
-        evt.endppqC = tm:toLogical(chan, evt.endppq)
-        if evt.endppqL == util.OPEN then
-          evt.endppq = util.OPEN
-        elseif evt.endppqL ~= nil then
-          evt.endppq = evt.endppqL
-        else
-          evt.endppq = evt.endppqC
-        end
-      end
-    end
-    sortByPPQ(col.events)
-  end
-
   for _, chan in ipairs(channels) do
     if dirtyChans[chan.chan] then   -- clean: columns carried already-logical from a prior rebuild
       local c, n = chan.columns, chan.chan
-      if c.pc then projectToLogical(c.pc, n) end
-      if c.pb then projectToLogical(c.pb, n) end
-      for _, col in ipairs(c.notes) do projectToLogical(col, n) end
-      if c.at then projectToLogical(c.at, n) end
-      for _, col in pairs(c.ccs) do projectToLogical(col, n) end
+      if c.pc then projectToLogical(c.pc, n, res) end
+      if c.pb then projectToLogical(c.pb, n, res) end
+      for _, col in ipairs(c.notes) do projectToLogical(col, n, res) end
+      if c.at then projectToLogical(c.at, n, res) end
+      for _, col in pairs(c.ccs) do projectToLogical(col, n, res) end
     end
   end
 end
