@@ -216,35 +216,29 @@ unconditional uuid, but lazy — most ccs never need one.
 ### Live-edit note release
 
 While the transport is playing, `flushTake`'s whole-take `MIDI_SetAllEvts`
-can strand a sounding note. REAPER's per-event API carries edit identity —
-`MIDI_SetNote(idx, 60→62)` tells the engine "*this* held event changed" and
-it emits the note-off on 60. `SetAllEvts` is a blind swap: it installs 62 with
-a note-off REAPER never struck, while the held 60's old note-off exists
-nowhere in the new blob, so 60 hangs until the next loop. Unchanged held notes
-survive fine — their `(chan, pitch)` note-off is still present.
+swaps the event data but leaves REAPER's playback engine indexing the *old*
+event layout. When play reaches the tick where the edit reordered events, the
+stale cursor treats what sits there as already-processed and swallows it: a
+held note's note-off never fires (it hangs until the loop) and a simultaneous
+note-on is dropped (it never sounds). With more voices in flight, *every*
+boundary note-off is swallowed and exactly one note-on with them. The blob
+itself is correct — `MIDI_GetAllEvts` reads it back byte-identical; only
+REAPER's internal cursor is stale.
 
-So before the wipe, and only when playing, `releaseStrandedNotes` reads the
-take (`MIDI_GetAllEvts`) and releases each old note in flight at the
-**scheduling frontier** whose new model no longer covers it. The frontier is
-`GetPlayPosition2` — the next audio block, *ahead* of the latency-compensated
-audible `GetPlayPosition` — because REAPER has already committed the note-ons
-for the block it is about to process. Using the audible position misses a note
-edited in the window just before it sounds: its old note-on is already
-scheduled, so the edit strands it exactly as a mid-note edit would, and the
-new pitch never sounds because the cursor is already past its onset. For every
-old note with `onset ≤ frontier < noteoff` whose new model has no
-same-`(chan, pitch)` note still spanning the frontier, it issues a
-`MIDI_DeleteNote`. That delete emits the real note-off, and — verified against
-REAPER — the release survives the same-frame `SetAllEvts` that immediately
-follows; the edited note re-articulates at its next onset, matching the
-per-event behaviour from before Step 5.
+`MIDI_Sort(take)` immediately after the write repairs it: it forces REAPER to
+rebuild its playback index against the new layout, so no boundary event is
+swallowed. The interaction is undocumented — the API lists `MIDI_Sort` only for
+`MIDI_SetNote`/`MIDI_SetCC` batches — but verified against REAPER, and the blob
+is provably unchanged by the sort. This replaced an earlier per-event
+`releaseStrandedNotes` pre-release, which only covered *dropped* note-offs (and
+cut held notes short); the sort fixes stranded offs and dropped ons alike, at
+any play position, with no per-event write.
 
-For `GetPlayPosition2` to be the true frontier, the edited track must not render
-its synth further ahead than the next block — which anticipative FX processing
-does. So tm disables anticipative FX (`I_PERFFLAGS &2`) on the bound track while
-editing and restores the prior on unbind/quit, healing any crash-leaked flag on
-boot (see docs/trackerManager.md § Anticipative-FX guard). This is the sole
-per-event MIDI write left in mm; every other write rides the wholesale blob.
+tm still clears anticipative FX (`I_PERFFLAGS &2`) on the bound track while
+editing, restoring the prior on unbind/quit (see docs/trackerManager.md §
+Anticipative-FX guard). The old frontier rationale is gone, but the guard stays
+deliberately: REAPER's own MIDI editor disables anticipative FX while open, so
+this keeps tracker editing consistent with the native editor.
 
 ### Sidecar regeneration cache
 
