@@ -2008,14 +2008,13 @@ local function rebuildFx(fx, deferred, fxWindow, nextInLane, currentWindows)
     util.bucket(fxRegionsByChan, region.chan, region)
   end
 
-  -- Pass A: run every generator. Structural notes commit per lane; continuous deltas
-  -- stash with their window for colouring (channel-wide, not note-tied). see design/archive/note-macros.md § Continuous realisation
+  -- Pass A: run every chain as a series -- each stage folds into the stream by mode x dest, and
+  -- the final owned channels emit. see design/note-macros-v2.md § The fx chain
   local function expandChannel(chan)
     local predicted, ccLive, ccAugment, pbAugment = {}, {}, {}, {}
     -- cc-replace seats verbatim; cc-augment sums offline per target; pb replace seats too, pb
     -- augment sums in rebuildPbs. see design/note-macros-v2.md § Continuous cc / § Continuous replace
     local function routeContinuous(meta, out, producer)
-      if meta.dest == 'note' then return end
       local startL, endL = producer.window[1], producer.window[2]
       if meta.dest == 'pb' and meta.mode ~= 'replace' then
         -- pb augment: bucket the window even when empty (a slide with no next note) so rebuildPbs
@@ -2046,30 +2045,44 @@ local function rebuildFx(fx, deferred, fxWindow, nextInLane, currentWindows)
     -- fxRegion; the generator sees none of them. see design/note-macros-v2.md § The anchor generalized
     local function runProducer(producer)
       local startL, endL = producer.window[1], producer.window[2]
-      -- The host the generators read: the note membership plus the windowed channel input
-      -- streams, built once per host (not per kind). see design/note-macros-v2.md § A4
+      -- host: the untouched membership + windowed channel input streams, built once per chain;
+      -- stream seeds as its copy and folds forward stage by stage. see design/note-macros-v2.md § The fx chain
       local pas, ccs, ats, pb = channelStreams(chan, startL, endL, authoredPbByChan)
       local host = { window = { startL, endL }, chan = chan, lane = producer.lane, id = producer.id,
                      notes = producer.notes, pas = pas, ccs = ccs, ats = ats, pb = pb }
-      -- Region producers (lane unset) defer their notes: lanes are allocated over the
-      -- whole batch after the fx loop. Note producers ride the host's own lane inline.
-      local regionNotes = producer.lane == nil and {} or nil
+      local stream = util.pick(host, "window chan lane id notes pas ccs ats pb")
+      local ownsNotes = false
       for _, params in ipairs(producer.fx) do
         local meta = generators.kinds[params.kind]
         if meta then
-          local out = meta.expand(host, params, chanCtx)
-          for _, hit in ipairs(out.notes) do
-            util.add(regionNotes or predicted, {
-              evType = 'note', chan = chan, lane = producer.lane, derived = producer.id,
-              pitch = hit.pitch, vel = hit.vel, detune = hit.detune or 0,
-              delay = producer.delay or 0, sample = producer.sample,
-              ppqL = hit.ppqL, endppqL = hit.endppqL,
-              ppq    = tm:fromLogical(chan, hit.ppqL,    producer.delayPpq),
-              endppq = tm:fromLogical(chan, hit.endppqL, producer.delayPpq),
-            })
+          local out = meta.expand(stream, host, params, chanCtx)
+          if meta.dest == 'note' then
+            ownsNotes = true
+            if meta.mode == 'replace' then stream.notes = out.notes
+            else
+              local merged = {}
+              for _, hit in ipairs(stream.notes) do util.add(merged, hit) end
+              for _, hit in ipairs(out.notes)    do util.add(merged, hit) end
+              stream.notes = merged
+            end
+          else
+            routeContinuous(meta, out, producer)
           end
-          routeContinuous(meta, out, producer)
         end
+      end
+      -- Only a note-dest stage's chain emits (parksNotes mirrors this). Region producers (lane
+      -- unset) defer to batch lane allocation below; note producers ride the host lane inline.
+      if not ownsNotes then return end
+      local regionNotes = producer.lane == nil and {} or nil
+      for _, hit in ipairs(stream.notes) do
+        util.add(regionNotes or predicted, {
+          evType = 'note', chan = chan, lane = producer.lane, derived = producer.id,
+          pitch = hit.pitch, vel = hit.vel, detune = hit.detune or 0,
+          delay = producer.delay or 0, sample = producer.sample,
+          ppqL = hit.ppqL, endppqL = hit.endppqL,
+          ppq    = tm:fromLogical(chan, hit.ppqL,    producer.delayPpq),
+          endppq = tm:fromLogical(chan, hit.endppqL, producer.delayPpq),
+        })
       end
       if regionNotes then
         allocateRegionLanes(chan, startL, endL, regionNotes, predicted)

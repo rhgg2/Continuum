@@ -3,6 +3,11 @@
 local t = require('support')
 local generators = require('generators')
 
+-- Kinds run alone here, so the chain state equals the original: stream == host (the chain head).
+local function expand(kind, hostRec, params, ctx)
+  return generators.kinds[kind].expand(hostRec, hostRec, params, ctx)
+end
+
 -- A slide host (pitch 60) and a ctx supplying the next same-lane note + pb ceiling.
 local function slideCtx(nextNote, pbRangeCents)
   return { resolution = 240, pbRangeCents = pbRangeCents or 200,
@@ -21,7 +26,7 @@ return {
     name = 'slide glides in: flat hold, slur to the interval, re-centre at the window end',
     run = function()
       -- res 240, over 1/2 QN: snap 15 -> arrive 225, glideStart 225-120 = 105.
-      local out = generators.kinds.slide.expand(slideHost(), slideP, slideCtx{ pitch = 62, detune = 0 })
+      local out = expand('slide', slideHost(), slideP, slideCtx{ pitch = 62, detune = 0 })
       local d = out.delta
       t.eq(#out.notes, 0, 'continuous: no structural notes')
       t.eq(d[1].ppqL, 0);   t.eq(d[1].val, 0, 'starts flat at centre')
@@ -35,7 +40,7 @@ return {
   {
     name = 'slide interval includes detune (the microtonal offset rides in detune, not pitch)',
     run = function()
-      local out = generators.kinds.slide.expand(slideHost(0), slideP, slideCtx{ pitch = 60, detune = 50 })
+      local out = expand('slide', slideHost(0), slideP, slideCtx{ pitch = 60, detune = 50 })
       t.eq(out.delta[3].val, 50, 'a same-pitch note 50c sharp yields a 50c slide')
     end,
   },
@@ -43,7 +48,7 @@ return {
   {
     name = 'slide clamps the target to ctx.pbRangeCents (a pb can only bend so far)',
     run = function()
-      local out = generators.kinds.slide.expand(slideHost(), slideP, slideCtx({ pitch = 72 }, 200))
+      local out = expand('slide', slideHost(), slideP, slideCtx({ pitch = 72 }, 200))
       t.eq(out.delta[3].val, 200, 'a 1200c interval clamps to the 200c pb ceiling')
     end,
   },
@@ -51,8 +56,8 @@ return {
   {
     name = "slide.target='fixed' is a fixed-cents bend (cents demand, no next-note lookup)",
     run = function()
-      local out = generators.kinds.slide.expand(slideHost(), { kind = 'slide', over = { 1, 2 }, target = 'fixed', cents = 150 },
-                                   slideCtx(nil))
+      local out = expand('slide', slideHost(), { kind = 'slide', over = { 1, 2 }, target = 'fixed', cents = 150 },
+                         slideCtx(nil))
       t.eq(out.delta[3].val, 150, 'fixed cents ignores the next-note resolution')
     end,
   },
@@ -60,7 +65,7 @@ return {
   {
     name = "slide.target='next' with no following note yields no delta (carrier untouched)",
     run = function()
-      local out = generators.kinds.slide.expand(slideHost(), slideP, slideCtx(nil))
+      local out = expand('slide', slideHost(), slideP, slideCtx(nil))
       t.eq(#out.delta, 0, 'no next note: nothing to slide to')
     end,
   },
@@ -68,7 +73,7 @@ return {
   {
     name = 'slide to a unison next note yields no delta (zero interval)',
     run = function()
-      local out = generators.kinds.slide.expand(slideHost(), slideP, slideCtx{ pitch = 60, detune = 0 })
+      local out = expand('slide', slideHost(), slideP, slideCtx{ pitch = 60, detune = 0 })
       t.eq(#out.delta, 0, 'gliding to the same pitch is a no-op')
     end,
   },
@@ -82,7 +87,7 @@ return {
       local ctx = { resolution = 240,
                     step = function(p, d, n) seen = { p, d, n }; return p + n, (d or 0) + 7 end }
       local host = { window = { 0, 240 }, notes = { { pitch = 60, vel = 100, detune = 0 } } }
-      local out = generators.kinds.trill.expand(host, { kind = 'trill', period = { 1, 4 }, step = 2 }, ctx)
+      local out = expand('trill', host, { kind = 'trill', period = { 1, 4 }, step = 2 }, ctx)
       t.eq(#out.delta, 0, 'structural: no continuous delta')
       t.deepEq(seen, { 60, 0, 2 }, 'ctx.step receives the host pitch, detune, and step count')
       t.eq(#out.notes, 4, '1/4-QN period over a 1-QN window: 4 fxNotes (all hits derived)')
@@ -100,7 +105,7 @@ return {
     run = function()
       local ctx = { resolution = 240, step = function(p, d, n) return p + n, 99 end }
       local host = { window = { 0, 240 }, notes = { { pitch = 60, vel = 80, detune = 12 } } }
-      local out = generators.kinds.trill.expand(host, { kind = 'trill', period = { 1, 4 }, step = 1 }, ctx)
+      local out = expand('trill', host, { kind = 'trill', period = { 1, 4 }, step = 1 }, ctx)
       t.eq(out.notes[1].detune, 12, 'even tile inherits the host detune')
       t.eq(out.notes[2].detune, 99, 'odd tile takes the stepped detune')
     end,
@@ -109,7 +114,7 @@ return {
   ----- park predicate + windows: the single source for "what 4.5 parks over"
 
   {
-    name = 'parksNotes is true for a discrete-replace kind, false for augment / husk',
+    name = 'parksNotes is true for any note-dest kind, false for a continuous kind / husk',
     run = function()
       t.eq(generators.parksNotes{ fx = { { kind = 'retrig' } } }, true,  'retrig replaces notes')
       t.eq(generators.parksNotes{ fx = { { kind = 'vibrato' } } }, false, 'vibrato augments pb')
@@ -142,8 +147,8 @@ return {
     name = 'autopan tiles the window with sine extrema in cc steps, anchored 0 at both ends',
     run = function()
       -- res 240, period 1/2 QN -> cycle 120 ticks; extrema at period/4 = 30, then every 60.
-      local out = generators.kinds.autopan.expand({ window = { 0, 240 } },
-                    { kind = 'autopan', period = { 1, 2 }, depth = 32 }, { resolution = 240 })
+      local out = expand('autopan', { window = { 0, 240 } },
+                         { kind = 'autopan', period = { 1, 2 }, depth = 32 }, { resolution = 240 })
       t.eq(#out.notes, 0, 'continuous: no structural notes')
       local d = out.delta
       t.eq(d[1].ppqL, 0);    t.eq(d[1].val, 0,   'anchored at centre (0) at the window start')
@@ -151,6 +156,41 @@ return {
       t.eq(d[3].ppqL, 90);   t.eq(d[3].val, -32, 'next extreme is -depth')
       t.eq(d[2].shape, 'slow', 'extrema bridged by slow (half-cosine)')
       t.eq(d[#d].ppqL, 240); t.eq(d[#d].val, 0,  're-centres to 0 at the window end')
+    end,
+  },
+
+  ----- velPattern: a transformer -- reads the note stream, rewrites velocities
+
+  {
+    name = 'velPattern cycles its percent pattern per distinct onset; a chord shares one step',
+    run = function()
+      local stream = { window = { 0, 240 }, notes = {
+        { pitch = 60, vel = 100, detune = 0, ppqL = 0,   endppqL = 60 },
+        { pitch = 64, vel = 100, detune = 0, ppqL = 0,   endppqL = 60 },    -- chord mate: same step
+        { pitch = 60, vel = 100, detune = 0, ppqL = 60,  endppqL = 120 },
+        { pitch = 60, vel = 100, detune = 0, ppqL = 120, endppqL = 180 },
+      } }
+      local out = expand('velPattern', stream, { kind = 'velPattern', pattern = { 100, 50 } }, {})
+      t.eq(#out.delta, 0, 'structural: no continuous delta')
+      local vels = {}
+      for i, n in ipairs(out.notes) do vels[i] = n.vel end
+      t.deepEq(vels, { 100, 100, 50, 100 }, 'the chord shares step 1; later onsets cycle 50/100')
+      t.eq(out.notes[2].pitch, 64, 'every other field carries verbatim')
+      t.eq(stream.notes[3].vel, 100, 'the input stream is not mutated -- stages emit new events')
+    end,
+  },
+
+  {
+    name = 'velPattern walks onset order regardless of input order, clamping vel to 1..127',
+    run = function()
+      local stream = { window = { 0, 240 }, notes = {
+        { pitch = 60, vel = 100, detune = 0, ppqL = 120, endppqL = 180 },   -- listed out of order
+        { pitch = 60, vel = 100, detune = 0, ppqL = 0,   endppqL = 60 },
+      } }
+      local out = expand('velPattern', stream, { kind = 'velPattern', pattern = { 140, 0 } }, {})
+      t.deepEq({ out.notes[1].ppqL, out.notes[2].ppqL }, { 0, 120 }, 'ordered by onset, not input order')
+      t.eq(out.notes[1].vel, 127, '140% of 100 clamps to 127')
+      t.eq(out.notes[2].vel, 1,   '0% clamps up to the audible floor')
     end,
   },
 

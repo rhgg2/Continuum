@@ -37,8 +37,11 @@ Track A is the generator substrate, Track B the authoring UI. Checked = landed.
 - [x] Offline continuous realisation — augment sums offline via park-and-seat; the carrier / node / add-bank retired (§ Offline continuous realisation)
 - [x] Route-by-window — zero-eventMeta markerless seats via exclusive-ownership parking + diff-driven transitions, recognized by region (§ Route-by-window; pb and cc)
 
+- [x] fx chain C1 — the series fold on the note channel + velPattern; every kind reads the stream (§ The fx chain)
+
 **Open / next**
-- [ ] fx chain — series composition + multi-column authoring (design only, § The fx chain)
+- [ ] fx chain C2 — continuous channels fold in-chain, per-chain absolute emission (agreed, § The fx chain)
+- [ ] fx chain — multi-column authoring / overlapping-chain UI (design only, § The fx chain)
 - [ ] chain surface — docked chain strip, scripted kinds pane, patch library (design only, § The chain surface)
 
 **Deferred (no consumer / intentional)**
@@ -573,38 +576,42 @@ lost authored pb/cc on the take.
 
 ## The fx chain — series-composition and multi-column authoring (design)
 
-Nothing here is built. It reframes the landed fan-out producer
-(`runProducer`) and § *Generator output*'s compose semantics — both stay
-accurate for what ships, this charts the series direction. The motivation
-is the rigidity of bare kinds: you can arp but not shape the arp's
-velocity, vibrate but not bend the rate in flight.
+**C1 (the note-channel series) landed 2026-07-05** — see *Build progress*
+Track C. The continuous half (C2) is agreed below but unbuilt. The
+motivation is the rigidity of bare kinds: you can arp but not shape the
+arp's velocity, vibrate but not bend the rate in flight.
 
-**Today the `fx` list fans out; the chain makes it a series.**
-`runProducer` runs every kind in `note.fx` / `region.fx` against the
-*same* host, then unions the notes and sums the deltas — no kind ever
-sees another's output, so "shape the arp's velocity" has nowhere to live:
-a second kind can only read the chord, never the arp's notes. Reinterpret
+**v1's `fx` list fanned out; the chain makes it a series.**
+`runProducer` ran every kind in `note.fx` / `region.fx` against the
+*same* host, then unioned the notes and summed the deltas — no kind ever
+saw another's output, so "shape the arp's velocity" had nowhere to live:
+a second kind could only read the chord, never the arp's notes. Reinterpret
 the (already ordered) list as a **series** — thread a `{ notes, delta }`
 **stream** through the stages, each transforming what the last produced.
 `[arp, velPattern]`: arp turns the chord into arp notes, velPattern
 rewrites their velocities.
 
-**One contract, no role.** Every stage is
-`(stream, host, params, ctx) → stream`, and `stream` and `host` are the
-**same record shape** (below) — so a stage reads whichever it wants: the
-untouched membership + authored channels (`host`), or its predecessor's
-output (`stream`), which equals `host` at the head and diverges after.
-`host`, `params`, `ctx` are ambient, re-supplied each call. A stage that
-ignores `stream` and reads `host` is a **source** (arp, retrig, trill,
-vibrato, slide); one that reads and rewrites `stream` is a **transformer**
-(velocity-pattern, humanize, transpose) — but that is a choice inside the
-body, **not a registry flag**. The axes stay `mode` (replace | augment) and
-`dest`, nothing added: velPattern is `mode='replace', dest='note'` — it
-replaces the note stream with re-velocitied notes, no different in kind from
-arp, which also replaces `notes`; it merely reads its input instead of
-ignoring it. Parking and commit-ownership key off `mode`/`dest` exactly as
-today (`parksNotes` fires on any note-replace kind, velPattern included), so
-a transformer needs no new machinery and no ownership guard.
+**One contract, no role (revised 2026-07-05, landed).** Every stage is
+`expand(stream, host, params, ctx) → { notes, delta }`, folded by the
+runner — a stage returns its *output*, not the next stream. `stream` and
+`host` are the **same record shape** (below). The earlier
+source/transformer split is retired: **every kind reads `stream`**, so
+any kind composes at any position ([velPattern, arp] arps the
+re-velocitied chord; [retrig, arp] arps the tiles). `host` stays as the
+second argument purely so a stage *can* read the untouched original —
+cost-free provenance; slide's next-note lookup is the one real use
+(`nextInLane` is keyed on the original note record's identity). `mode` is
+the **fold**: replace overwrites the stream's dest channel, augment adds
+to it; the final output is the final folded stream. The axes stay
+`mode` × `dest`, nothing added.
+
+**Emission is ownership — emit exactly what's been parked.** A stream
+channel is emitted (and its authored base parked) iff some stage's `dest`
+targets it; untouched channels stay authored and sounding. This is the
+same predicate `parkWindows` already applies per continuous target,
+extended to notes: `parksNotes` fires on any note-dest kind, mode
+irrelevant. Without it, "final output = final stream" would re-emit a
+vibrato-only host's untouched membership as derived duplicates.
 
 **`stream` and `host` are one shape — the A4 host.**
 `{ window, chan, lane, id, notes, pas, ccs, ats, pb }`. `host` carries the
@@ -614,11 +621,9 @@ and the head stage reading `stream.notes` coincide. A note-replace stage
 overwrites `stream.notes`; a continuous stage folds into the typed channel
 named by `dest` (`stream.pb`, `stream.ccs[n]`) — the *same* channels a later
 stage reads, which is why the shapes must match. The free-floating `delta`
-output retires into the typed channel. Continuous folding rides the offline
-park-and-seat realisation (§ Offline continuous realisation) and needs the
-offline summation to be readable mid-chain; until a delta transformer exists
-the continuous channels are read-only pass-through and the note channel is
-the only one the first cut exercises.
+output retires into the typed channel (C2). Under C1 the continuous
+channels are read-only pass-through and the note channel is the only one
+the series exercises; the continuous fold is specified under **C2** below.
 
 **Order is semantic; replace/augment re-reads as channel ownership.** The
 stream carries two channels, and a stage composes onto them by its op: a
@@ -682,17 +687,31 @@ the channel — that is what the cursor means everywhere else in the
 tracker. Overlap disambiguation falls out; a chain elsewhere is reached
 by moving the cursor to it.
 
-**First cut.** With continuous realisation already offline (§ above), thread
-the `runProducer` fx-loop from fan-out to series: seed `stream` as a copy of
-`host`, run each kind `expand(stream, host, params, ctx)`, fold a
-`dest='note'` result by `mode` (replace overwrites `stream.notes`), and
-build the derived specs **once** after the loop from the final
-`stream.notes` — parking is automatic, since a note-replace kind (velPattern
-included) already fires `parksNotes`. Write velPattern
-(`mode='replace', dest='note'`, reads `stream.notes`) and prove
-`[arp, velPattern]` and `[velPattern, arp]` give different, correct results.
-Defer continuous (delta) transformers and the multi-column UI until the
-single-chain note series is solid.
+**C1 — the note series (landed 2026-07-05).** `runProducer` seeds `stream`
+as a copy of `host`, folds each `dest='note'` result by mode, and builds
+the derived specs once from the final `stream.notes`; emission is gated on
+note-ownership. velPattern shipped (`replace`/`note`; a percent pattern
+stepped per distinct onset, so a chord shares a step). Order pins:
+`[arp, velPattern]` accents the steps, `[velPattern, arp]` re-velocities
+the chord the arp then samples — `tm_fx_region_spec`.
+
+**C2 — continuous channels fold in-chain (agreed, unbuilt).** The stream's
+continuous channels become **absolute** curves: `stream.pb` /
+`stream.ccs[n]` seed from the authored base *as parked* (the park stash
+plus the entering value at the window start — the column slice is empty
+inside an owned window), an augment stage sums its delta on via the
+`sumStreams` engine (breakpoint-union sum, grid densification only where
+curved), a replace stage overwrites. Emission is one absolute curve per
+chain per owned target — which collapses `rebuildPbs`'s augment arm into
+the existing replace-window seating and `routeContinuous`'s per-kind
+buckets into per-chain records. Cross-chain overlap on one target folds
+as `base + Σ(chainᵢ − base)` — exact for piecewise-linear, and the common
+n=1 case needs no subtraction; the trivial-base/no-delta suppression (a
+pure re-centre registers its window with no seats) carries over per
+chain. Build-time details still open: stream pb/cc entries need `shape`
+(and pb aligns `cents`→`val`); emission delay for delayed note hosts
+(augment historically converts at d=0, replace used the producer delay).
+Defer the multi-column UI until C2 is solid.
 
 ## The chain surface — strip, scripts, patches (design)
 
@@ -950,6 +969,22 @@ column-based, not gm-backed -- the Open-questions Track-B lean, now resolved.
   the "visible, editable surface" model intends) is still open (planned as B3 below).
   Pinned by the parked note- and cc-render tests in `tv_fx_region_spec`.
 
+**Track C — the fx chain** (started 2026-07-05).
+
+- **C1 — the series fold on the note channel + velPattern. Landed.** The
+  `runProducer` fx-loop threads a `stream` seeded from `host`; every kind's
+  signature is `expand(stream, host, params, ctx)` and every kind reads
+  `stream` (the drafted source/transformer role split retired — any kind
+  composes at any position; `host` is the untouched original, kept for
+  provenance reads like slide's identity-keyed next-note lookup). A
+  `dest='note'` result folds by mode (replace overwrites, augment appends);
+  derived specs build once from the final stream, and emission is gated on
+  note-ownership — `parksNotes` generalised to any note-dest kind, the same
+  ownership predicate parking uses. Continuous kinds still route per-kind
+  (C2's job). velPattern (`replace`/`note`, percent pattern per distinct
+  onset) ships in the registry + modal. Pinned by the chain tests in
+  `tm_fx_region_spec` and the velPattern tests in `generators_spec`.
+
 ## B3 — parked notes/ccs as a third edit backing (landed)
 
 **Progress — four green steps.** (1) extract `parksNotes`/`parkWindows` to `generators` —
@@ -1123,7 +1158,9 @@ operation can't exist generically (no input->output event correspondence to carr
 across). So PA stops being special and becomes one of several **typed input streams the
 generator reads over its window**. ADSR gated by note-ons, a CC-controlled vibrato, a
 pressure-aware arp all fall out of one shape. Landed: notes, pas, ccs, ats, pb; continuous
-pb replace rides the same input (below).
+pb replace rides the same input (below). **Superseded by C1 (2026-07-05):** the contract is
+now `expand(stream, host, params, ctx)` and stages read the folded `stream`; the `host` shape
+below is unchanged and names the untouched original (§ The fx chain).
 
 **Contract** (`generators.lua`). `host.events` -> `host.notes` (it *is* the note stream),
 plus three more -- all window+channel scoped, logical frame, intent units:

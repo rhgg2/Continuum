@@ -140,7 +140,7 @@ local function derivedNotes(h)
   local out = {}
   for _, n in ipairs(h.fm:dump().notes) do
     if n.evType == 'note' and n.derived == 'fxr-1' then
-      out[#out + 1] = { ppq = n.ppq, pitch = n.pitch, lane = n.lane }
+      out[#out + 1] = { ppq = n.ppq, pitch = n.pitch, lane = n.lane, vel = n.vel }
     end
   end
   table.sort(out, function(a, b)
@@ -296,6 +296,53 @@ return {
       injectArp(h)
       t.deepEq(field(derivedNotes(h), 'pitch'), { 60, 60, 64, 64 },
         '60 realises to [0,120) against its lane successor, so 64 sounds alone from 120 -- not a 60/64 cycle')
+    end,
+  },
+
+  ----- The fx chain: stages fold into the stream in series; order is semantic
+
+  {
+    name = 'chain [arp, velPattern]: the pattern accents the arp steps',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { pitch = 60, lane = 1 })
+      addNote(h, { pitch = 64, lane = 2 })
+      addNote(h, { pitch = 67, lane = 3 })
+      injectArp(h, { fx = { { kind = 'arp', period = { 1, 4 }, dir = 'up' },
+                            { kind = 'velPattern', pattern = { 100, 50 } } } })
+      local ns = derivedNotes(h)
+      t.deepEq(field(ns, 'pitch'), { 60, 64, 67, 60 },   'the arp itself is unchanged')
+      t.deepEq(field(ns, 'vel'),   { 100, 50, 100, 50 }, 'velPattern re-velocities the arp notes per step')
+    end,
+  },
+
+  {
+    name = 'chain [velPattern, arp]: the chord takes the pattern first, the arp reads the folded stream',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { pitch = 60, lane = 1 })
+      addNote(h, { pitch = 64, lane = 2 })
+      addNote(h, { pitch = 67, lane = 3 })
+      injectArp(h, { fx = { { kind = 'velPattern', pattern = { 80 } },
+                            { kind = 'arp', period = { 1, 4 }, dir = 'up' } } })
+      local ns = derivedNotes(h)
+      t.deepEq(field(ns, 'pitch'), { 60, 64, 67, 60 }, 'arp cycles the re-velocitied chord')
+      t.deepEq(field(ns, 'vel'),   { 80, 80, 80, 80 },
+        'the whole chord took step 1 of the pattern before the arp sampled it -- order is semantic')
+    end,
+  },
+
+  {
+    name = 'velPattern alone owns the note stream: the chord parks and re-emits re-velocitied',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { pitch = 60, lane = 1 })
+      addNote(h, { pitch = 64, lane = 2 })
+      injectArp(h, { fx = { { kind = 'velPattern', pattern = { 80 } } } })
+      t.deepEq(authoredPitches(h), {}, 'a note-dest chain parks its membership -- ownership, not kind')
+      local ns = derivedNotes(h)
+      t.deepEq(field(ns, 'pitch'), { 60, 64 }, 'the chain output is the chord itself, re-emitted derived')
+      t.deepEq(field(ns, 'vel'),   { 80, 80 }, 'one onset -> the whole chord shares pattern step 1')
     end,
   },
 

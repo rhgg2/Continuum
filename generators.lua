@@ -5,13 +5,14 @@
 -- § Generators.
 -- @noindex
 
---invariant: pure module -- no module-level state; a generator is fn(host, params, ctx) -> { notes, delta }
---invariant: host = windowed channel input streams: notes, pas, ccs, ats, pb (logical, intent units)
---shape: host = { window={startppqL,endppqL}, chan, lane, id, notes={ {pitch,vel,detune,ppqL,endppqL},.. }, pas={ {ppqL,pitch,vel},.. }, ccs={ [cc]={ {ppqL,val},.. } }, ats={ {ppqL,val},.. }, pb={ {ppqL,cents},.. } }
+--invariant: pure module, no state; a stage is fn(stream, host, params, ctx) -> { notes, delta }
+--invariant: stream and host share one shape; stages read stream, host is the untouched original
+--shape: stream/host = { window={startppqL,endppqL}, chan, lane, id, notes={ {pitch,vel,detune,ppqL,endppqL},.. }, pas={ {ppqL,pitch,vel},.. }, ccs={ [cc]={ {ppqL,val},.. } }, ats={ {ppqL,val},.. }, pb={ {ppqL,cents},.. } }
 --invariant: ctx binds resolution, pbRangeCents, nextSameLaneNote(host), step(pitch,detune,n)
 --invariant: periods are QN per the periodQN convention -- scalar or {num,den}
 --shape: result = { notes = { {ppqL,endppqL,pitch,vel,detune}, ... }, delta = { {ppqL,val,shape,[tension]}, ... } }
 --shape: kinds[kind] = { expand, mode='replace'|'augment', dest='note'|'pb'|<cc>, label, defaults, fields }
+--invariant: mode is the stream fold -- replace overwrites the dest channel, augment adds to it
 
 local util = require 'util'
 
@@ -24,10 +25,10 @@ end
 
 --contract: retrig tiles the host window with evenly-spaced same-pitch fxNotes; every hit is derived
 --contract: velocity ramps params.ramp per tile from the host vel, clamped 1..127; detune inherited verbatim
-local function retrig(host, params, ctx)
-  local startL, endL = host.window[1], host.window[2]
+local function retrig(stream, host, params, ctx)
+  local startL, endL = stream.window[1], stream.window[2]
   local step  = periodTicks(params.period, ctx.resolution)
-  local h     = host.notes[1]
+  local h     = stream.notes[1]
   if not h then return { notes = {}, delta = {} } end   -- empty membership (bare region)
   local ramp  = params.ramp or 0
   local notes = {}
@@ -46,10 +47,10 @@ local function retrig(host, params, ctx)
 end
 
 --contract: trill alternates host pitch with a note `step` scale-steps away (via ctx.step); every hit derived
-local function trill(host, params, ctx)
-  local startL, endL = host.window[1], host.window[2]
+local function trill(stream, host, params, ctx)
+  local startL, endL = stream.window[1], stream.window[2]
   local step  = periodTicks(params.period, ctx.resolution)
-  local h     = host.notes[1]
+  local h     = stream.notes[1]
   if not h then return { notes = {}, delta = {} } end   -- empty membership (bare region)
   -- The alternation note: `step` scale steps from the host, resolved through the temper.
   local altPitch, altDetune = ctx.step(h.pitch, h.detune or 0, params.step or 0)
@@ -96,15 +97,15 @@ end
 --contract: arp samples the sounding notes at each step (period QN), playing one by `dir`
 --contract: dir up|down|updown cycles the current active set; an empty active set -> a rest
 --contract: hits abut (endppqL = next step), clamped to the window; vel/detune from the voice
-local function arp(host, params, ctx)
-  local startL, endL = host.window[1], host.window[2]
+local function arp(stream, host, params, ctx)
+  local startL, endL = stream.window[1], stream.window[2]
   local step = periodTicks(params.period, ctx.resolution)
   local dir  = params.dir or 'up'
   local notes = {}
   local i = 0
   local at = startL
   while at < endL do
-    local active = playingAt(host.notes, at)
+    local active = playingAt(stream.notes, at)
     if #active > 0 then
       local src = active[arpIndex(#active, dir, i) + 1]
       notes[#notes + 1] = {
@@ -121,8 +122,8 @@ end
 --contract: vibrato -> lane-1 pb-delta breakpoints in cents; sine of depth cents at 1/period QN
 --contract: breakpoints at sine extrema, 'slow'-shaped; linear ramp-in over onset QN
 --contract: returns to 0 (centre) at window end -- no residual bend on the channel
-local function vibrato(host, params, ctx)
-  local startL, endL = host.window[1], host.window[2]
+local function vibrato(stream, host, params, ctx)
+  local startL, endL = stream.window[1], stream.window[2]
   local period = periodTicks(params.period, ctx.resolution)   -- ticks per cycle
   local depth  = params.depth or 0
   local onset  = (params.onset or 0) * ctx.resolution          -- ramp-in, ticks
@@ -152,11 +153,12 @@ end
 --contract: slide glide-in -> lane-1 pb-delta; slur to target over `over` QN; re-centres at end
 --contract: target 'next' = interval to next same-lane note; 'fixed' = params.cents; pb-range clamps
 --contract: no next note or unison target -> empty delta (channel untouched)
-local function slide(host, params, ctx)
-  local startL, endL = host.window[1], host.window[2]
-  local h = host.notes[1]
+local function slide(stream, host, params, ctx)
+  local startL, endL = stream.window[1], stream.window[2]
+  local h = stream.notes[1]
   local target
   if params.target == 'next' then
+    -- keyed on the original host note's identity, so it reads host, not the folded stream
     local nxt = ctx.nextSameLaneNote and ctx.nextSameLaneNote(host)
     if not nxt then return { notes = {}, delta = {} } end
     target = interval(h, nxt)
@@ -185,8 +187,8 @@ end
 
 --contract: auto-pan -> cc-delta breakpoints in cc steps; sine of depth steps at 1/period QN
 --contract: extrema-only, 'slow'-shaped; anchored 0 at both ends so the channel re-centres
-local function autopan(host, params, ctx)
-  local startL, endL = host.window[1], host.window[2]
+local function autopan(stream, host, params, ctx)
+  local startL, endL = stream.window[1], stream.window[2]
   local period = periodTicks(params.period, ctx.resolution)
   local depth  = params.depth or 0
   local delta  = { { ppqL = startL, val = 0, shape = 'slow' } }
@@ -201,13 +203,31 @@ local function autopan(host, params, ctx)
   return { notes = {}, delta = delta }
 end
 
+--contract: velPattern rewrites stream-note velocities by a pattern; other fields carry verbatim
+--contract: pattern steps per distinct onset (a chord shares one step) and cycles; vel clamps 1..127
+local function velPattern(stream, host, params, ctx)
+  local ordered = {}
+  for _, note in ipairs(stream.notes) do util.add(ordered, note) end
+  table.sort(ordered, function(a, b)   -- onset, then realised pitch (playingAt's order)
+    if a.ppqL ~= b.ppqL then return a.ppqL < b.ppqL end
+    return a.pitch * 100 + (a.detune or 0) < b.pitch * 100 + (b.detune or 0)
+  end)
+  local pattern = params.pattern or { 100 }
+  local notes, step, lastOnset = {}, 0, nil
+  for _, note in ipairs(ordered) do
+    if note.ppqL ~= lastOnset then step, lastOnset = step + 1, note.ppqL end
+    local pct = pattern[(step - 1) % #pattern + 1]
+    util.add(notes, { ppqL = note.ppqL, endppqL = note.endppqL, pitch = note.pitch,
+                      vel = util.clamp(util.round(note.vel * pct / 100), 1, 127),
+                      detune = note.detune or 0 })
+  end
+  return { notes = notes, delta = {} }
+end
+
 ----- Generator registry
 
--- One entry per kind: the realisation fn (`expand`) plus all metadata a kind ships with. `mode`
--- (replace|augment) and `dest` ('note' for structural kinds, else the continuous wire target) are
--- independent axes -- today every continuous kind is augment, but continuous-replace (A4) and
--- discrete-augment are expressible. `dest` is a default hint the user may override per fx-entry
--- later. The fxEdit modal builds itself from label / defaults / fields.
+-- One entry per kind: the realisation fn (`expand`) plus all metadata a kind ships with. see
+-- design/note-macros-v2.md § The fx chain
 
 -- Shared QN-fraction period ladder; every periodic kind tempo-syncs the same way.
 local PERIODS = { { l = '1/2', v = { 1, 2 } }, { l = '1/3', v = { 1, 3 } },
@@ -215,6 +235,9 @@ local PERIODS = { { l = '1/2', v = { 1, 2 } }, { l = '1/3', v = { 1, 3 } },
                   { l = '1/8', v = { 1, 8 } } }
 local SLIDE_TARGETS = { { l = 'Next', v = 'next' }, { l = 'Fixed', v = 'fixed' } }
 local DIR_OPTIONS   = { { l = 'Up', v = 'up' }, { l = 'Down', v = 'down' }, { l = 'Up/Down', v = 'updown' } }
+local VEL_PATTERNS  = { { l = '> .',     v = { 100, 55 } },
+                        { l = '> . .',   v = { 100, 55, 70 } },
+                        { l = '> . . .', v = { 100, 55, 70, 55 } } }
 
 generators.kinds = {
   retrig = {
@@ -269,6 +292,13 @@ generators.kinds = {
       { field = 'depth',  label = 'Depth',  widget = 'int', base = 1, coarse = 10, min = 0, max = 63 },  -- cc steps from centre
     },
   },
+  velPattern = {
+    expand = velPattern, mode = 'replace', dest = 'note', label = 'Vel Pattern',
+    defaults = { pattern = { 100, 55 } },
+    fields = {
+      { field = 'pattern', label = 'Pattern', widget = 'choice', options = VEL_PATTERNS },
+    },
+  },
 }
 
 -- Resting base for a cc-augment target with no authored automation: bipolar controllers
@@ -278,16 +308,16 @@ for cc = 71, 79 do generators.ccDefaultRest[cc] = 64 end
 
 -- Which kinds the fxEdit modal offers, in order. Every kind works on either host: a region
 -- arpeggiates its covered chord, a single note degenerates cleanly (arp -> retrig, one voice).
-generators.modalOrder = { 'retrig', 'trill', 'arp', 'vibrato', 'slide', 'autopan' }
+generators.modalOrder = { 'retrig', 'trill', 'arp', 'velPattern', 'vibrato', 'slide', 'autopan' }
 
 ----- Region park predicate + windows
 
--- A region parks its covered chord iff it carries a discrete-replace kind (its derived notes
--- stand in). A continuous/augment kind never parks notes; a husk (no kinds) parks nothing.
+-- A region parks its covered chord iff it carries a note-dest kind: the chain's final note stream
+-- stands in for the members (ownership by dest, not mode). A husk (no kinds) parks nothing.
 function generators.parksNotes(region)
   for _, params in ipairs(region.fx or {}) do
     local meta = generators.kinds[params.kind]
-    if meta and meta.mode == 'replace' and meta.dest == 'note' then return true end
+    if meta and meta.dest == 'note' then return true end
   end
   return false
 end
