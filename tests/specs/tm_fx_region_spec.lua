@@ -4,41 +4,12 @@ local t          = require('support')
 local util       = require('util')
 local generators = require('generators')
 
-local DELTA_MSB = 20   -- coldest carrier code; no authored cc columns here
-
 -- depth 30c, period 1/4 QN: at res 240 one cycle = 60 ticks; sine extrema at
 -- ppqL 15 (peak) / 45 (trough); stream anchored 0 at both window ends.
 local vib30 = { { kind = 'vibrato', period = { 1, 4 }, depth = 30, onset = 0 } }
 
 local function centsToRaw(cents, pbRange)
   return util.round(cents * 8192 / ((pbRange or 2) * 100))
-end
-local function carrierVal(cents, pbRange) return (8192 + centsToRaw(cents, pbRange)) / 128 end
-
-local function carriersOf(dump, chan)
-  local out = {}
-  for _, c in ipairs(dump.ccs) do
-    if c.evType == 'cc' and c.cc == DELTA_MSB and c.chan == chan then
-      out[#out + 1] = { ppq = c.ppq, val = c.val, shape = c.shape }
-    end
-  end
-  table.sort(out, function(a, b) return a.ppq < b.ppq end)
-  return out
-end
-
-local function carrierAt(dump, chan, ppq)
-  for _, c in ipairs(carriersOf(dump, chan)) do if c.ppq == ppq then return c end end
-end
-
--- A cc-augment carrier encodes raw cc steps (no centsToRaw): (8192 + steps) / 128.
-local function ccCarrierVal(steps) return (8192 + steps) / 128 end
-
--- The generator-owned resting base CC at a cc target (ppq 0, derived='ccbase'), routed out
--- of columns. nil when the target carries authored automation (that becomes the base instead).
-local function baseSeat(dump, chan, cc)
-  for _, c in ipairs(dump.ccs) do
-    if c.evType == 'cc' and c.cc == cc and c.chan == chan and c.derived == 'ccbase' then return c end
-  end
 end
 
 -- A seat is recognized purely by region membership: any pb inside a live region's span (bounds
@@ -706,9 +677,6 @@ return {
       h.tm:rebuild()
       generators.kinds.capRep = nil
 
-      local dump = h.fm:dump()
-      t.eq(#carriersOf(dump, 1), 0, 'pb replace allocates no carrier -- the curve rides the base lane')
-
       -- Authored pbs inside the window park off-take (exclusive ownership), so the curve is realised
       -- purely by derived seats; the authored breakpoints stay visible via the parkedPb render union.
       t.falsy(authoredPb(h, 1, 0),   'the authored base at the window start parked off the take')
@@ -740,8 +708,6 @@ return {
       h.tm:rebuild()
       generators.kinds.capRep = nil
 
-      local dump = h.fm:dump()
-      t.eq(#carriersOf(dump, 1), 0, 'no carrier -- the curve is derived seats on the base lane')
       t.eq(derivedPb(h, 1, 0).val,   centsToRaw(50), 'seated at the curve start (50c)')
       t.eq(derivedPb(h, 1, 240).val, 0,              'seat re-centres at the window end')
     end,
@@ -769,8 +735,6 @@ return {
 
       -- The wire is curve + detune (I1): the 30c curve rides on the 25c detune. The authored pb
       -- parks off-take (the curve owns the wire) and stays visible via parkedPb.
-      local dump = h.fm:dump()
-      t.eq(#carriersOf(dump, 1), 0, 'no carrier')
       t.falsy(authoredPb(h, 1, 60), 'the authored pb parked off the take')
       t.eq(derivedPb(h, 1, 0).val,   centsToRaw(55), 'the seat at the window start carries curve 30c + detune 25c')
       t.eq(derivedPb(h, 1, 240).val, centsToRaw(25), 'curve re-centres to detune-only at the window end (I1)')
@@ -827,9 +791,6 @@ return {
                                    fx = { { kind = 'capRep' } } } })
       h.tm:rebuild()
       generators.kinds.capRep = nil
-
-      local dump = h.fm:dump()
-      t.eq(#carriersOf(dump, 1), 0, 'no carrier')
 
       local interior = false
       for _, c in ipairs(derivedPbs(h, 1)) do
@@ -939,11 +900,9 @@ return {
       h.tm:rebuild()
       generators.kinds.ccRep = nil
 
-      local dump = h.fm:dump()
-      -- The curve is written verbatim onto cc 74 -- no carrier, no node, no transport encoding.
+      -- The curve is written verbatim onto cc 74 -- no transport encoding.
       t.eq(ccFillAt(h, 1, 74, 0).val,   100, 'curve start lands on the target cc lane')
       t.eq(ccFillAt(h, 1, 74, 120).val, 20,  'curve mid lands on the target cc lane')
-      t.eq(#carriersOf(dump, 1), 0, 'no carrier allocated -- cc replace bypasses the additive node')
       -- The authored cc the window covers is parked off-take.
       t.falsy(authoredCC(h, 1, 74, 60),  'authored cc at 60 is parked off-take')
       t.falsy(authoredCC(h, 1, 74, 120), 'authored cc at 120 is parked off-take')

@@ -34,10 +34,10 @@ Track A is the generator substrate, Track B the authoring UI. Checked = landed.
 - [x] B2 — parked note + cc display (render only)
 - [x] B3 — parked notes/ccs *editable* off-take via a third edit backing (§ B3) — all four steps landed (the `generators` extract; logical-only specs + identity capture; staging verbs + flush integration; the `parked` view backing + cell tagging)
 - [x] Note-host replace parks the host — all hits derived, the `fxHostEnd` dance deleted (§ Note-host replace parks)
+- [x] Offline continuous realisation — augment sums offline via park-and-seat; the carrier / node / add-bank retired (§ Offline continuous realisation)
+- [x] Route-by-window — zero-eventMeta markerless seats via exclusive-ownership parking + diff-driven transitions, recognized by region (§ Route-by-window; pb and cc)
 
 **Open / next**
-- [ ] offline continuous realisation — park-and-seat, retire the carrier/node (design only, § Offline continuous realisation)
-  - [x] **route-by-window** — zero-eventMeta seats via exclusive-ownership parking + diff-driven transitions (§ Route-by-window; **landed for pb and cc** — in-window seats are markerless, recognized by region)
 - [ ] fx chain — series composition + multi-column authoring (design only, § The fx chain)
 - [ ] chain surface — docked chain strip, scripted kinds pane, patch library (design only, § The chain surface)
 
@@ -384,20 +384,20 @@ note arithmetic, lives as a module helper. **Build no interpreter now** —
 the move costs ~nothing if new kinds are shaped as composition and ctx
 accretes as named ops.
 
-## Offline continuous realisation — park, seat, route-by-window (design)
+## Offline continuous realisation — park, seat, route-by-window (landed)
 
-Nothing here is built; it is the realisation change the fx chain waits on,
-and it lands **before** the chain. The motive is a discomfort with
-realisation needing a **runtime component**: augment continuous (pb / cc)
-sums at the node today — `Continuum CC.jsfx` recomputes `base + Σ carrier`
-per audio block — so the take is not what you hear until the node runs. That
-summation is the node's *only* irreplaceable job; the 14-bit transport is
+This landed in three slices (cc-augment, pb-augment, carrier retirement) and is
+the realisation substrate the fx chain builds on. The motive was a discomfort
+with realisation needing a **runtime component**: augment continuous (pb / cc)
+used to sum at the node — `Continuum CC.jsfx` recomputed `base + Σ carrier`
+per audio block — so the take was not what you heard until the node ran. That
+summation was the node's *only* irreplaceable job; the 14-bit transport is
 native to a seated pb (`centsToRaw` is already 14-bit) and the base-hold is
-incidental. Move the sum offline and realisation is wholly in the take:
-WYSIWYG, exportable as plain MIDI, no JSFX dependency. The landed pb-replace
-path already proves it end to end — an absolute curve seated on the base
-lane, no carrier, detune / densification / shape / I1 all handled — so this
-generalizes that path to every continuous kind rather than inventing one.
+incidental. Moving the sum offline put realisation wholly in the take:
+WYSIWYG, exportable as plain MIDI, no JSFX dependency. The pb-replace path
+proved it end to end — an absolute curve seated on the base lane, no carrier,
+detune / densification / shape / I1 all handled — and this generalized that
+path to every continuous kind rather than inventing one.
 
 **One model: park the base, seat the sum.** A continuous fx region parks the
 authored automation its window covers off the take (a park sidecar), exactly
@@ -407,9 +407,9 @@ emits the region's **absolute** target curve — augment sums
 `parked-base + macro`, replace is `macro` alone — and seats it on the target
 lane. Augment and replace collapse to one realisation path, differing only
 in whether the sum folds in the parked base. The carrier, the add-bank
-slots, and the node's per-block summation retire; a 14-bit cc target seats
+slots, and the node's per-block summation are gone; a 14-bit cc target seats
 its MSB/LSB pair through the existing `mm:wideCC`, so seated precision
-matches the carrier's.
+matches what the carrier gave.
 
 **Route-by-window is the metadata discipline, and it is load-bearing.** The
 seats carry **no per-event metadata**. A dense curve is thousands of
@@ -1215,6 +1215,11 @@ in the raw frame.
 
 ## Continuous cc -- augment (landed); replace (landed)
 
+> **Superseded (2026-07-05).** The carrier / node / add-bank this section
+> describes retired in slice 3 — cc-augment now sums offline and seats
+> markerless, exactly like pb (§ Offline continuous realisation). Kept below
+> as the record of the interim node-based mechanism and *why* it existed.
+
 Extends A4's carrier machinery to cc targets. pb proved the path; cc *augment* is simpler (no detune,
 no I1, no absorber) and rides the same carrier wire. cc *replace* lands by a different route entirely --
 it bypasses the carrier and node, parking the authored cc and writing the curve direct (see § cc replace).
@@ -1335,5 +1340,4 @@ mechanics) + `tv_fx_region_spec` (parked-cc render).
   target lanes for plain-MIDI export; densification cost paid only there.
 - **`plink.midi_*` parms.** Exact config-parm names and automation-bus
   addressing for R5 (→ cv-2); gates the listen-bank retirement.
-- **Add-bank slot growth.** Whether the node's 16 add-bank slots need to
-  grow once region hosts multiply overlapping carriers.
+

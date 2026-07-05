@@ -265,11 +265,11 @@ runs it, with a pointer to its detail where one exists.
   so it can never overlap); stale-swing internals rederive `raw` from
   `ppqL` under the new swing here (see `docs/timing.md` §"Rebuild rule").
   Externals are deferred to their own step. → § Rebuild: partition.
-- **CC walk** (`rebuildCCs`). Arm prior carriers and route them out of
-  columns, reconcile each non-derived CC's `(raw, ppqL)` under the
-  current swing (stale-swing CCs reseated here), then project
-  `cc`/`at`/`pc` into columns. pb projection defers to the absorber pass,
-  pa dispatch to its own step. → § Rebuild: CC walk.
+- **CC walk** (`rebuildCCs`). Route markerless cc seats (a cc inside a
+  prior cc window) out of columns for fresh reconciliation, reconcile each
+  non-derived CC's `(raw, ppqL)` under the current swing (stale-swing CCs
+  reseated here), then project `cc`/`at`/`pc` into columns. pb projection
+  defers to the absorber pass, pa dispatch to its own step. → § Rebuild: CC walk.
 - **Reconcile extras** (`rebuildExtraColumns`). Grow
   `extraColumns[chan].notes` if live allocation exceeded it; pad empty
   note lanes; materialise user-opened singleton/cc columns that carry no
@@ -289,7 +289,11 @@ runs it, with a pointer to its detail where one exists.
   bounds the same way the tail walk clips real notes, so a parked tail
   stops at the first successor past its region, not just the next
   parked member. The note del/adds ride the tail walk's atomic
-  commit. See `design/note-macros-v2.md` § Generator output.
+  commit. See `design/note-macros-v2.md` § Generator output. Each pass's
+  `scan` builds its `spec` inline at the scan site, where that pass's
+  `chan`/`lane`/`cc` are in scope; `reconcilePark`'s optional `onPark`
+  callback fires only for specs newly parked this rebuild (e.g. marking
+  the note pass's channel dirty), never for carried-forward priors.
 - **PA dispatch** (`rebuildPA`). Attach each `pa` to the note column
   whose voice it modulates. Runs after column layout so the view and fx
   expansion read PAs inline, and after externals so foreign-MIDI PAs find
@@ -300,10 +304,11 @@ runs it, with a pointer to its detail where one exists.
   `ppqL`, floored by the authored end). Then every producer runs —
   on-take fx notes (augment hosts), parked note hosts (window = the
   realised parked extent), and fx regions; the derived fxNotes reconcile
-  against the partition's set (`reconcileFx`), and continuous deltas
-  colour into carrier CC codes. The note add/del is **deferred** to the
-  tail walk's atomic commit; `fxLive` (the predicted set) feeds the tail
-  walk and PC synthesis. See `design/archive/note-macros.md`.
+  against the partition's set (`reconcileFx`), and continuous streams seat
+  offline — cc-augment sums per target into markerless cc seats, pb defers
+  to the absorber pass. The note add/del is **deferred** to the tail walk's
+  atomic commit; `fxLive` (the predicted set) feeds the tail walk and PC
+  synthesis. See `design/note-macros-v2.md` § Offline continuous realisation.
 - **Tail walk** (`rebuildTails`). Real notes, fixed externals, and the
   predicted fxNotes walk together: clamp same-pitch onset collisions
   (fixed onsets frozen), then clip each realised note-off against its
@@ -356,14 +361,14 @@ the tail. The pipeline's own `ds:assign`s during a rebuild (persisting
 `fxParked`/`fxParkedCC`/`extraColumns`) fire `dataChanged` re-entrantly; the
 subscriber drops them while `rebuilding` — they are converged output, not
 edits, and marking all 16 dirty mid-rebuild would defeat retention (a channel
-clean in the CC walk but dirty in fx double-derives its carriers).
+clean in the CC walk but dirty in fx double-derives its seats).
 
 A channel absent from `dirtyChans` **freezes**. Under frame retention (B1) the
 freeze is total: rebuild carries the channel's whole prior `channels[i]` —
 columns and all — forward, so materialisation itself skips (internals places
 nothing, the CC walk clones nothing, `rebuildPA` and the pc-refresh reproject
 nothing) alongside the derive/synthesise half of `ccs`, `fx`, `regionPark`,
-`tails`, `pbs`, and `pcs`. Its derived notes/CCs/carriers/absorbers/PCs stand
+`tails`, `pbs`, and `pcs`. Its derived notes/CCs/absorbers/PCs stand
 untouched in mm and its carried columns are already logical, so tv sees a
 complete frame at no cost. Sound by I8 (rebuild is a one-pass fixpoint, so a
 channel with no dirty source re-derives nothing) and by blast radius: every
@@ -374,13 +379,9 @@ closure.
 `fx` is the pivot: for a clean channel it skips its generators and leaves
 `noteLive` empty — which is exactly why the downstream stages that read
 `noteLive` (`tails`, `pbs`, `pcs`) skip it too. One gate, no cross-stage
-dirt plumbing. The one coupling that does *not* live in mm is the persisted
-`fxCarrier` map: `reapCarriers` rebuilds it from scratch each rebuild from the
-channels that ran generators, so a gated rebuild seeds each frozen channel's
-entry from the prior map, or its carrier routing is erased and generator-owned
-CCs leak into the view. `regionPark`'s `fxParked`/`fxParkedCC` need no such
-seed: `reconcilePark` *partitions the prior set* rather than rebuilding it, so
-a clean channel's parked spec carries through untouched by construction — the
+dirt plumbing. `regionPark`'s `fxParked`/`fxParkedCC` need no seed:
+`reconcilePark` *partitions the prior set* rather than rebuilding it, so a
+clean channel's parked spec carries through untouched by construction — the
 gate skips only the scan that hunts new parks. (`extraColumns` is grow-only,
 so it is merge-safe too.)
 

@@ -23,7 +23,6 @@ local registry = {
   noteDelay           = 'take',
   swing               = 'take',
   extraColumns        = 'take',
-  fxCarrier           = 'take',
   fxRegions           = 'take',
   fxParked            = 'take',
   prevWindows         = 'take',

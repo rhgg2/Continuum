@@ -118,27 +118,9 @@ local function arp(host, params, ctx)
   return { notes = notes, delta = {} }
 end
 
--- 14-bit carrier priority: MSB n, LSB n+32 (REAPER interpolates only that pair).
--- Unlikely-authored first; conventional last. see design/archive/note-macros.md § Delta-code allocation
-local CARRIER_PRIORITY = {
-  20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,  -- undefined / general (coldest)
-  3, 9, 14, 15,                                     -- other undefined
-  16, 17, 18, 19,                                   -- general purpose
-  12, 13, 6,                                        -- effect control, data entry
-  2, 4, 5, 8,                                        -- breath, foot, portamento, balance
-  1, 11, 10, 7, 0,                                  -- conventional (last)
-}
-
---contract: first priority MSB n where neither n nor n+32 is in `occupied`; nil if saturated
-function generators.allocateCarrier(occupied)
-  for _, n in ipairs(CARRIER_PRIORITY) do
-    if not occupied[n] and not occupied[n + 32] then return n end
-  end
-end
-
 --contract: vibrato -> lane-1 pb-delta breakpoints in cents; sine of depth cents at 1/period QN
 --contract: breakpoints at sine extrema, 'slow'-shaped; linear ramp-in over onset QN
---contract: carrier returns to 0 (centre) at window end -- no residual bend on the channel
+--contract: returns to 0 (centre) at window end -- no residual bend on the channel
 local function vibrato(host, params, ctx)
   local startL, endL = host.window[1], host.window[2]
   local period = periodTicks(params.period, ctx.resolution)   -- ticks per cycle
@@ -146,7 +128,7 @@ local function vibrato(host, params, ctx)
   local onset  = (params.onset or 0) * ctx.resolution          -- ramp-in, ticks
 
   -- Extrema-only breakpoints; 'slow' bridges each pair as a half-cosine.
-  -- Anchored at 0 both ends; the terminal 0 re-centres the channel carrier.
+  -- Anchored at 0 both ends; the terminal 0 re-centres the channel.
   local delta = { { ppqL = startL, val = 0, shape = 'slow' } }
   local k  = 0
   local at = startL + period / 4
@@ -169,7 +151,7 @@ end
 
 --contract: slide glide-in -> lane-1 pb-delta; slur to target over `over` QN; re-centres at end
 --contract: target 'next' = interval to next same-lane note; 'fixed' = params.cents; pb-range clamps
---contract: no next note or unison target -> empty delta (carrier untouched)
+--contract: no next note or unison target -> empty delta (channel untouched)
 local function slide(host, params, ctx)
   local startL, endL = host.window[1], host.window[2]
   local h = host.notes[1]
@@ -186,7 +168,7 @@ local function slide(host, params, ctx)
   if target == 0 then return { notes = {}, delta = {} } end
 
   -- snap keeps the arrival (target) and the handoff (0) on distinct wire ppqs --
-  -- the carrier reconcile keys on (cc, ppq). see design/archive/note-macros.md § Continuous realisation
+  -- the seat reconcile keys on ppq. see design/note-macros-v2.md § Continuous pb
   local snap   = math.max(1, ctx.resolution / 16)
   local over   = periodTicks(params.over, ctx.resolution)
   local arrive = math.max(startL, endL - snap)

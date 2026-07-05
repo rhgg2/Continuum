@@ -1,10 +1,10 @@
 desc:Continuum CC
 tags: utility continuum
-version: 0.03
+version: 0.04
 author: Continuum
 license: MIT
 about:
-  Compiler-managed node, pinned at chain head — never user-placed. Three
+  Compiler-managed node, pinned at chain head — never user-placed. Two
   independent 16-slot banks, codes chan*128+cc, -1 off:
   - Filter bank (src -> dst): authored automation CCs must not reach the
     performance stream. A bus-0 CC matching a src code is rewritten to
@@ -13,13 +13,6 @@ about:
   - Listen bank: value sliders 1..16 (params 0..15) are the plink
     sources for this track's bound FX params. A CC on the automation bus
     matching a listen code drives its slot's value slider.
-  - Add bank (asrc -> adst): note-macro carrier deltas summed onto a
-    target. asrc is the carrier's 14-bit MSB code (LSB at asrc+32); adst
-    is 0..2047 for a cc code, 2048+chan for a channel's pitchbend.
-    out = base + sum(carrier - centre) over every slot sharing the
-    target, clamped once at emission, so vibrato and slide both bend one
-    channel's pitch additively; carriers are swallowed, the instrument
-    hears only the sum, and centred (absent) carriers leave base intact.
   Filtering precedes listening per event, so a same-track binding works
   in one instance. Everything else is passed through: the automation bus
   is invisible to instruments, so nothing else needs stripping.
@@ -36,10 +29,6 @@ out_pin:none
   loop(16, printf("slider%d:dst%d=-1<-1,2047,1>-dst %d\n", i + 32, i, i); i += 1; );
   i = 1;
   loop(16, printf("slider%d:listen%d=-1<-1,2047,1>-listen %d\n", i + 48, i, i); i += 1; );
-  i = 1;
-  loop(16, printf("slider%d:asrc%d=-1<-1,2047,1>-asrc %d\n", i + 64, i, i); i += 1; );
-  i = 1;
-  loop(16, printf("slider%d:adst%d=-1<-1,2063,1>-adst %d\n", i + 80, i, i); i += 1; );
 ?>
 
 @init
@@ -48,31 +37,14 @@ autobus = 126;    // 127 is wiring's parking bus; the wiring allocator hands out
 src = 0;     // mem[0..15]   : filter bank, authored codes
 dst = 16;    // mem[16..31]  : filter bank, bus-address codes
 listen = 32; // mem[32..47]  : listen bank, bus-address codes
-asrc = 48;   // mem[48..63]  : add bank, carrier MSB codes
-adst = 64;   // mem[64..79]  : add bank, target codes (cc, or 2048+chan pb)
-acm = 80;    // mem[80..95]  : add bank, latest carrier MSB byte
-acl = 96;    // mem[96..111] : add bank, latest carrier LSB byte
-abd = 112;   // mem[112..127]: add bank, latest base delta from centre
-
-// Carrier MSB centre-default 64 (acl 0) -> 8192, so a carrier-less slot adds delta 0
-// for every target. One-time: @init refires on play/loop with mem preserved.
-init_done ? 0 : (
-  s = 0;
-  loop(16, acm[s] = 64; s += 1; );
-  init_done = 1;
-);
 
 @slider
 <? i = 0; loop(16, printf("src[%d] = src%d; dst[%d] = dst%d; listen[%d] = listen%d;\n", i, i + 1, i, i + 1, i, i + 1); i += 1; ); ?>
-<? i = 0; loop(16, printf("asrc[%d] = asrc%d; adst[%d] = adst%d;\n", i, i + 1, i, i + 1); i += 1; ); ?>
 
 @block
 changed = 0;
-adirty = 0;
 while (midirecv(ofs, m1, m2, m3)) (
   iscc = (m1 & 0xF0) == 0xB0;
-  ispb = (m1 & 0xF0) == 0xE0;
-  swallow = 0;
 
   iscc && midi_bus == 0 ? (
     code = (m1 & 0x0F) * 128 + m2;
@@ -97,56 +69,7 @@ while (midirecv(ofs, m1, m2, m3)) (
     );
   );
 
-  // Add bank: on bus 0, capture a carrier byte (msb/lsb) or a target's base,
-  // mark the slot dirty, swallow it; the per-block pass below emits the sum.
-  midi_bus == 0 ? (
-    ch = m1 & 0x0F;
-    code = ch * 128 + m2;
-    s = 0;
-    loop(16,
-      iscc && asrc[s] >= 0 && code == asrc[s]      ? ( acm[s] = m3; adirty |= 1 << s; swallow = 1; );
-      iscc && asrc[s] >= 0 && code == asrc[s] + 32 ? ( acl[s] = m3; adirty |= 1 << s; swallow = 1; );
-      iscc && adst[s] >= 0 && adst[s] < 2048 && code == adst[s] ? ( abd[s] = m3 - 64; adirty |= 1 << s; swallow = 1; );
-      ispb && adst[s] == 2048 + ch ? ( abd[s] = m3 * 128 + m2 - 8192; adirty |= 1 << s; swallow = 1; );
-      s += 1;
-    );
-  );
-
-  swallow ? 0 : midisend(ofs, m1, m2, m3);
-);
-
-// One summed message per touched target, block rate (~the carrier grain), after the
-// recv loop so both bytes of a 14-bit pair are current before the sum. A target may have
-// several carriers (vibrato + slide both bend pitch): group slots by dst, sum each
-// carrier's delta from centre onto the shared base, emit once at the group's lowest slot.
-adirty ? (
-  s = 0;
-  loop(16,
-    adst[s] >= 0 ? (
-      d = adst[s];
-      canon = 1; grpdirty = 0; acc = 0; base = 0;
-      t = 0;
-      loop(16,
-        adst[t] == d ? (
-          (t < s) ? (canon = 0);
-          (adirty & (1 << t)) ? (grpdirty = 1);
-          acc += acm[t] * 128 + acl[t] - 8192;   // every target: 14-bit carrier delta, centre 8192
-          base = abd[t];
-        );
-        t += 1;
-      );
-      (canon && grpdirty) ? (
-        d >= 2048 ? (
-          out = max(0, min(16383, 8192 + base + acc));
-          midisend(0, 0xE0 | (d - 2048), out & 127, (out >> 7) & 127);
-        ) : (
-          out = max(0, min(127, 64 + base + acc));
-          midisend(0, 0xB0 | (d >> 7), d & 127, out);
-        );
-      );
-    );
-    s += 1;
-  );
+  midisend(ofs, m1, m2, m3);
 );
 
 changed ? sliderchange(changed);

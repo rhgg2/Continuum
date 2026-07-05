@@ -20,10 +20,8 @@ local SLOTS     = 16
 local META_PEXT = 'P_EXT:ctm_paramAuto'
 local TOP_LANE  = 119   -- 120..127 are channel-mode messages
 
--- Continuum CC.jsfx param banks: value sliders, then src/dst/listen codes,
--- then the add bank (asrc/adst) for continuous note-macro carriers.
+-- Continuum CC.jsfx param banks: value sliders, then src/dst/listen codes.
 local P_VALUE, P_SRC, P_DST, P_LISTEN = 0, 16, 32, 48
-local P_ASRC, P_ADST = 64, 80
 
 local pa = {}
 
@@ -87,31 +85,12 @@ local function gatherBindings()
   return bindings
 end
 
--- Continuous-macro carriers by track, from ds.fxCarrier; flattened to {chan, code, target}.
--- tm owns allocation; pa follows into the add bank src. see design/archive/note-macros.md § Delta-code allocation
-local function gatherCarriers()
-  local byTrack = {}
-  eachTake(function(take)
-    local carriers = ds:getAt(take, 'fxCarrier')
-    if not carriers or not next(carriers) then return end
-    local guid = reaper.GetTrackGUID(ownerTrack(take))
-    local list = byTrack[guid] or {}
-    for chan, chanCarriers in pairs(carriers) do
-      for _, c in ipairs(chanCarriers) do
-        list[#list + 1] = { chan = chan, code = c.code, target = c.target }
-      end
-    end
-    byTrack[guid] = list
-  end)
-  return byTrack
-end
-
 -- Pure: bindings -> { [trackGuid] = trackSpec }. Pooled duplicates collapse
 -- via the seen-keys; slot order is sorted for a stable REAPER image.
-function pa.computeDesired(bindings, carriers)
+function pa.computeDesired(bindings)
   local specs, seen = {}, {}
   local function spec(guid)
-    specs[guid] = specs[guid] or { filter = {}, listen = {}, sends = {}, add = {} }
+    specs[guid] = specs[guid] or { filter = {}, listen = {}, sends = {} }
     return specs[guid]
   end
   local function once(...)
@@ -133,18 +112,6 @@ function pa.computeDesired(bindings, carriers)
     if b.srcTrackGuid ~= b.trackGuid and once('s', b.srcTrackGuid, b.trackGuid) then
       table.insert(spec(b.srcTrackGuid).sends, b.trackGuid)
     end
-  end
-  -- Carriers join the add bank: asrc=(chan-1)*128+code; adst=2048+(chan-1) for pb else
-  -- (chan-1)*128+cc (chan 1-indexed, wire 0-indexed). Shared target sums at node.
-  for guid, trackCarriers in pairs(carriers or {}) do
-    local list = {}
-    for _, c in ipairs(trackCarriers) do
-      local wireChan = c.chan - 1
-      local adst = c.target == 'pb' and (2048 + wireChan) or (wireChan * 128 + c.target)
-      list[#list + 1] = { asrc = wireChan * 128 + c.code, adst = adst }
-    end
-    table.sort(list, function(a, b) return a.asrc < b.asrc end)
-    spec(guid).add = list
   end
   for _, s in pairs(specs) do
     table.sort(s.filter, function(a, b) return a.src < b.src end)
@@ -186,16 +153,14 @@ local function clearPlink(track, fxIdx, param)
 end
 
 local function writeBanks(track, ccIdx, spec)
-  if #spec.filter > SLOTS or #spec.listen > SLOTS or #spec.add > SLOTS then
+  if #spec.filter > SLOTS or #spec.listen > SLOTS then
     util.print('paramAutomation: more than ' .. SLOTS .. ' slots on one track; extras dropped')
   end
   for s = 0, SLOTS - 1 do
-    local f, l, a = spec.filter[s + 1], spec.listen[s + 1], spec.add[s + 1]
+    local f, l = spec.filter[s + 1], spec.listen[s + 1]
     reaper.TrackFX_SetParam(track, ccIdx, P_SRC + s,    f and f.src  or -1)
     reaper.TrackFX_SetParam(track, ccIdx, P_DST + s,    f and f.dst  or -1)
     reaper.TrackFX_SetParam(track, ccIdx, P_LISTEN + s, l and l.code or -1)
-    reaper.TrackFX_SetParam(track, ccIdx, P_ASRC + s,   a and a.asrc or -1)
-    reaper.TrackFX_SetParam(track, ccIdx, P_ADST + s,   a and a.adst or -1)
   end
 end
 
@@ -342,7 +307,7 @@ end
 
 --contract: no-op (and no undo point) when every track's mirror already matches
 function pa:apply()
-  local specs = pa.computeDesired(gatherBindings(), gatherCarriers())
+  local specs = pa.computeDesired(gatherBindings())
   local dirty = {}
   for i = 0, reaper.CountTracks(0) - 1 do
     local track = reaper.GetTrack(0, i)

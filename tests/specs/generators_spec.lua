@@ -1,20 +1,7 @@
--- generators.lua: carrier MSB allocation (unlikely-authored-first, 14-bit pair free;
--- see design/archive/note-macros.md § Delta-code allocation) and slide glide-in envelope.
+-- generators.lua: slide glide-in envelope.
 
 local t = require('support')
 local generators = require('generators')
-
-local function occ(list)
-  local s = {}
-  for _, v in ipairs(list) do s[v] = true end
-  return s
-end
-
-local function bandTaken(lo, hi)
-  local s = {}
-  for n = lo, hi do s[n] = true end
-  return s
-end
 
 -- A slide host (pitch 60) and a ctx supplying the next same-lane note + pb ceiling.
 local function slideCtx(nextNote, pbRangeCents)
@@ -27,51 +14,6 @@ end
 local slideP = { kind = 'slide', over = { 1, 2 }, target = 'next' }
 
 return {
-
-  {
-    name = 'an empty channel draws the coldest code first (20)',
-    run = function()
-      t.eq(generators.allocateCarrier({}), 20)
-    end,
-  },
-
-  {
-    name = 'a taken MSB code is skipped to the next priority code',
-    run = function()
-      t.eq(generators.allocateCarrier(occ{ 20 }), 21)
-    end,
-  },
-
-  {
-    name = 'a taken LSB partner (n+32) disqualifies the whole pair',
-    run = function()
-      -- 52 = 20+32, so the (20,52) pair is unusable; 21 is the next free pair.
-      t.eq(generators.allocateCarrier(occ{ 52 }), 21)
-    end,
-  },
-
-  {
-    name = 'the cold band exhausted falls through to the next undefined code (3)',
-    run = function()
-      t.eq(generators.allocateCarrier(bandTaken(20, 31)), 3)
-    end,
-  },
-
-  {
-    name = 'conventional codes are the last resort -- bank-select (0) is the final pick',
-    run = function()
-      local taken = bandTaken(0, 63)
-      taken[0], taken[32] = nil, nil   -- free only the (0,32) pair
-      t.eq(generators.allocateCarrier(taken), 0)
-    end,
-  },
-
-  {
-    name = 'a saturated band returns nil',
-    run = function()
-      t.eq(generators.allocateCarrier(bandTaken(0, 63)), nil)
-    end,
-  },
 
   ----- slide: glide-in envelope
 

@@ -1,4 +1,4 @@
-@module generators  src=generators.lua  loc=339  sha=6516cae  mode=namespace  self=generators
+@module generators  src=generators.lua  loc=321  sha=0efbe16  mode=namespace  self=generators
 
 # Invariants & contracts
   @invariant  pure module -- no module-level state; a generator is fn(host, params, ctx) -> { notes, delta }
@@ -17,10 +17,9 @@
 
 # Module-level constants
   @const generators = {}  @ 18
-  @const CARRIER_PRIORITY = {  @ 123
-  @const PERIODS = { { l = '1/2', v = { 1, 2 } }, { l = '1/3', v = { 1, 3 } },  @ 231
-  @const SLIDE_TARGETS = { { l = 'Next', v = 'next' }, { l = 'Fixed', v = 'fixed' } }  @ 234
-  @const DIR_OPTIONS = { { l = 'Up', v = 'up' }, { l = 'Down', v = 'down' }, { l...  @ 235
+  @const PERIODS = { { l = '1/2', v = { 1, 2 } }, { l = '1/3', v = { 1, 3 } },  @ 213
+  @const SLIDE_TARGETS = { { l = 'Next', v = 'next' }, { l = 'Fixed', v = 'fixed' } }  @ 216
+  @const DIR_OPTIONS = { { l = 'Up', v = 'up' }, { l = 'Down', v = 'down' }, { l...  @ 217
 
 # Private functions
   @fn periodTicks(period, resolution)  @ 20-23
@@ -38,33 +37,31 @@
       @contract  arp samples the sounding notes at each step (period QN), playing one by `dir`
       @contract  dir up|down|updown cycles the current active set; an empty active set -> a rest
       @contract  hits abut (endppqL = next step), clamped to the window; vel/detune from the voice
-  @fn vibrato(host, params, ctx)  @ 142-162
+  @fn vibrato(host, params, ctx)  @ 124-144
       @contract  vibrato -> lane-1 pb-delta breakpoints in cents; sine of depth cents at 1/period QN
       @contract  breakpoints at sine extrema, 'slow'-shaped; linear ramp-in over onset QN
-      @contract  carrier returns to 0 (centre) at window end -- no residual bend on the channel
-  @fn interval(a, b)  @ 166-168
+      @contract  returns to 0 (centre) at window end -- no residual bend on the channel
+  @fn interval(a, b)  @ 148-150
       -- Cents between two notes' realised pitches. The microtonal offset already rides
       -- in detune, so this is pure note arithmetic -- no temper needed.
-  @fn slide(host, params, ctx)  @ 173-202
+  @fn slide(host, params, ctx)  @ 155-184
       @contract  slide glide-in -> lane-1 pb-delta; slur to target over `over` QN; re-centres at end
       @contract  target 'next' = interval to next same-lane note; 'fixed' = params.cents; pb-range clamps
-      @contract  no next note or unison target -> empty delta (carrier untouched)
-  @fn autopan(host, params, ctx)  @ 206-220
+      @contract  no next note or unison target -> empty delta (channel untouched)
+  @fn autopan(host, params, ctx)  @ 188-202
       @contract  auto-pan -> cc-delta breakpoints in cc steps; sine of depth steps at 1/period QN
       @contract  extrema-only, 'slow'-shaped; anchored 0 at both ends so the channel re-centres
 
 # Public API (generators.*)
-  @api generators.allocateCarrier(occupied)  @ 133-137
-      @contract  first priority MSB n where neither n nor n+32 is in `occupied`; nil if saturated
   -- Generator registry
   -- Region park predicate + windows
-  @api generators.parksNotes(region)  @ 305-311
+  @api generators.parksNotes(region)  @ 287-293
       -- A region parks its covered chord iff it carries a discrete-replace kind (its derived notes
       -- stand in). A continuous/augment kind never parks notes; a husk (no kinds) parks nothing.
-  @api generators.parkWindows(regions)  @ 316-337
+  @api generators.parkWindows(regions)  @ 298-319
       -- The single source for "what 4.5 parks over": a note window for a discrete-replace chord, a cc window
       -- per continuous cc target and a pb window per continuous pb target (both replace or augment).
 
 # Uses (outbound edges)
-  @use call    util.add  @ parkWindows:319
+  @use call    util.add  @ parkWindows:301
   @use require util  @ 16
