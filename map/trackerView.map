@@ -1,4 +1,4 @@
-@module trackerView  src=trackerView.lua  loc=3444  sha=9930d99  mode=chunk  self=tv
+@module trackerView  src=trackerView.lua  loc=3464  sha=6516cae  mode=chunk  self=tv
 @deps tm, cm, ds, cmgr, gm, pa, facade
 
 # Invariants & contracts
@@ -85,10 +85,10 @@
   @state tracker = cmgr:scope('tracker')  @ 2926
   @state rebuilding = false  @ 2987
   @state lastEpochSig  @ 2988   -- projection-epoch signature carried from the last rebuild; guards the cell cache
-  @state groupBridge = {  @ 3298
-  @state GROUP_PASSTHROUGH = {  @ 3389
-  @state GROUP_KEEP = {}  @ 3398
-  @state DUP_KEEP = { groupDuplicate = true, selectClear = true,  @ 3405
+  @state groupBridge = {  @ 3318
+  @state GROUP_PASSTHROUGH = {  @ 3409
+  @state GROUP_KEEP = {}  @ 3418
+  @state DUP_KEEP = { groupDuplicate = true, selectClear = true,  @ 3425
 
 # Private functions
   @fn arrange()  @ 34
@@ -572,23 +572,23 @@
   @api tv:unautomateParam()  @ 2860-2868
       @contract  deletes the cursor cc column's events; column + binding then go via hideExtraCol
   @api tv:showDelay()  @ 2870-2884
-  @api tv:rebuild(takeChanged)  @ 3004-3258
-  @api tv:dropGrid()  @ 3261-3266
+  @api tv:rebuild(takeChanged)  @ 3004-3278
+  @api tv:dropGrid()  @ 3281-3286
       @contract  blank the grid so renderBody falls through to the "Select a MIDI item" placeholder. Counterpart to bindTake(nil)'s dormant seam, for when the take is destroyed rather than handed off.
   -- Lifecycle
   -- Factory load
   -- Group quick-verb lifetimes
-  @api tv:wireGroupLifetime()  @ 3419-3428
+  @api tv:wireGroupLifetime()  @ 3439-3448
       -- Snapshot the source on copy + install the clear-on-mutation sweep.
       -- Must run AFTER every tracker command (tv's, clipboard's, ec's AND
       -- trackerPage's page verbs) registers, so the sweep covers page commands
       -- too -- trackerPage calls this once post-registration. copy is plain:
       -- clipboard:copy ends with ec:selClear(), so a doAfter snapshot would
       -- see an empty selection; doBefore captures the live rect.
-  @api tv:endReselectCascades()  @ 3432
+  @api tv:endReselectCascades()  @ 3452
       -- Mouse re-selection ends both cursor-anchored cascades by hand (cmgr's keep-set
       -- sweep doesn't see the mouse, so the run tokens would outlive a fresh selection).
-  @api tv:endAllCascades()  @ 3437-3440
+  @api tv:endAllCascades()  @ 3457-3460
       -- A committed typed edit cancels every cascade and drops the groupPaste
       -- source, exactly as a non-keep cmgr command would -- editEvent is the
       -- mutation the keep-set sweeps cannot see (it never reaches cmgr).
@@ -597,31 +597,31 @@
   @use call    cm.assign  @ releaseTransientFrame:466 matchGridToCursor:518
   @use call    cm.boundTake  @ takeHoist:2754
   @use call    cm.boundTrack  @ resolveSelectionTake:187
-  @use call    cm.get  @ overlapBounds:294 currentRpb:460 releaseTransientFrame:465,467 matchGridToCursor:516 setRowPerBeat:523,529 localizeSwing:568 seedSharedSlots:603 sendBend:667 placeNewNote:756,759 editEvent:817,824,926 valueBounds:1718 queueResetVelocities:2006 stepSample:2261 2934,2935,2972,2973 rebuild:3025,3047,3048,3154
+  @use call    cm.get  @ overlapBounds:294 currentRpb:460 releaseTransientFrame:465,467 matchGridToCursor:516 setRowPerBeat:523,529 localizeSwing:568 seedSharedSlots:603 sendBend:667 placeNewNote:756,759 editEvent:817,824,926 valueBounds:1718 queueResetVelocities:2006 stepSample:2261 2934,2935,2972,2973 rebuild:3025,3047,3048,3174
   @use call    cm.getAt  @ selectedTrackIdx:165 effectiveSlot:170 resolveSelectionTake:188 selectTrack:211 releaseTransientFrame:464 setDefaultSwing:557 localizeSwing:566 setSwingComposite:610 setTemper:618
   @use call    cm.set  @ resolveSelectionTake:191 selectTrack:209,213 selectSlot:217 setRowPerBeat:530 setDefaultSwing:559 localizeSwing:571 setTemperSlot:595,596,597 setSwingComposite:612 setTemper:620 editEvent:883 scaleScope:1515 stepSample:2260 2934,2935,2982
   @use call    cm.setTrack  @ resolveSelectionTake:187 retargetTrackTier:202 selectTrack:210
-  @use call    cmgr.doAfter  @ 3348,3355
-  @use call    cmgr.doBefore  @ 3357,3379 wireGroupLifetime:3420,3426,3427
+  @use call    cmgr.doAfter  @ 3368,3375
+  @use call    cmgr.doBefore  @ 3377,3399 wireGroupLifetime:3440,3446,3447
   @use call    cmgr.invoke  @ groupPaste:2919
   @use call    cmgr.noteChars  @ editEvent:816
   @use call    cmgr.prefixRational  @ 2946,2953
   @use call    cmgr.scope  @ 2926
   @use call    ds.assign  @ setTakeSwing:553 seedSharedSlots:603 toggleChannelFlag:631 ensureRegionForSelection:1887 setNoteFx:1951 addExtraCol:2674 hideExtraCol:2694,2732 automateParam:2856 showDelay:2883
-  @use call    ds.get  @ setTakeSwing:551 seedSharedSlots:602 toggleChannelFlag:629 pushMute:638,639 isChannelMuted:650 isChannelSoloed:651 regionByUuid:1854 mintRegionUuid:1861 ensureRegionForSelection:1877,1885 setNoteFx:1944 addExtraCol:2653 hideExtraCol:2689,2702 automateParam:2850 showDelay:2871 rebuild:3046,3076,3224
+  @use call    ds.get  @ setTakeSwing:551 seedSharedSlots:602 toggleChannelFlag:629 pushMute:638,639 isChannelMuted:650 isChannelSoloed:651 regionByUuid:1854 mintRegionUuid:1861 ensureRegionForSelection:1877,1885 setNoteFx:1944 addExtraCol:2653 hideExtraCol:2689,2702 automateParam:2850 showDelay:2871 rebuild:3046,3076,3244
   @use call    facade.get  @ arrange:34
   @use call    gm.addEvent  @ 70
   @use call    gm.assignEvent  @ 71
-  @use call    gm.clearActive  @ wireGroupLifetime:3426 endAllCascades:3439
+  @use call    gm.clearActive  @ wireGroupLifetime:3446 endAllCascades:3459
   @use call    gm.deleteEvent  @ 72
   @use call    gm.deleteInstance  @ forEachRowOp:1682
   @use call    gm.deletedCells  @ deletedCells:2565
   @use call    gm.duplicateInto  @ groupDuplicate:2899
-  @use call    gm.eachInstance  @ planInstanceMoves:1635 instanceAtCursor:2534 eachInstance:2557 movePreview:2583 paintRegionStream:2618 rebuild:3202
-  @use call    gm.footprintAliases  @ shiftEvents:2183 3338
-  @use call    gm.groupRect  @ 3308,3314
+  @use call    gm.eachInstance  @ planInstanceMoves:1635 instanceAtCursor:2534 eachInstance:2557 movePreview:2583 paintRegionStream:2618 rebuild:3222
+  @use call    gm.footprintAliases  @ shiftEvents:2183 3358
+  @use call    gm.groupRect  @ 3328,3334
   @use call    gm.instanceOf  @ 2552
-  @use call    gm.localMode  @ shiftEvents:2177 localMode:2546 2977,3338
+  @use call    gm.localMode  @ shiftEvents:2177 localMode:2546 2977,3358
   @use call    gm.moveInstance  @ forEachRowOp:1683
   @use call    gm.resizeGroup  @ paintRegionStream:2641
   @use call    gm.revertDelete  @ deleteEvent:2045
@@ -639,8 +639,8 @@
   @use call    pa.targets  @ paramTargets:2777
   @use call    pa.unautomate  @ hideExtraCol:2720
   @use call    pa.unfloatFx  @ cancelLearn:2817
-  @use call    perf.start  @ rebuild:3080,3158,3198,3245,3256
-  @use call    perf.stop  @ rebuild:3139,3196,3243,3251,3256
+  @use call    perf.start  @ rebuild:3098,3178,3218,3265,3276
+  @use call    perf.stop  @ rebuild:3159,3216,3263,3271,3276
   @use call    timing.delayToPPQ  @ quantizeKeepRealisedScope:1429
   @use call    timing.logPerRow  @ logPerRowFor:448
   @use call    timing.ppqToDelay  @ quantizeKeepRealisedScope:1430
@@ -649,11 +649,11 @@
   @use call    tm.assignEvent  @ 65,71
   @use call    tm.assignParked  @ 79 setNoteFx:1935
   @use call    tm.byUuid  @ noteFx:1892 noteByUuid:1915 setNoteFx:1921
-  @use call    tm.channels  @ rebuild:3081,3237
+  @use call    tm.channels  @ rebuild:3099,3257
   @use call    tm.currentTake  @ retargetTrackTier:198 duplicateBoundUnpooled:255 rebuild:3006
   @use call    tm.deleteEvent  @ 66,72 clearRegionAt:2494 clearMoveGap:2508
   @use call    tm.deleteParked  @ 80
-  @use call    tm.flush  @ editEvent:790 moveLaneEvent:1018 addLaneEvent:1038 deleteLaneEvent:1056 setLaneTension:1066 cycleLaneShape:1096 interpolate:1117,1129 noteOff:1204,1222 adjustDuration:1256 adjustPositionMulti:1305 adjustPosition:1342,1354 quantizeScope:1405 quantizeKeepRealisedScope:1435 scaleScope:1477 forEachRowOp:1686 nudge:1816,1824 setNoteFx:1926,1936 deleteEvent:2046,2056,2062 deleteSelection:2069 shiftEvents:2244 unautomateParam:2864 groupDuplicate:2900 groupPaste:2916 3319
+  @use call    tm.flush  @ editEvent:790 moveLaneEvent:1018 addLaneEvent:1038 deleteLaneEvent:1056 setLaneTension:1066 cycleLaneShape:1096 interpolate:1117,1129 noteOff:1204,1222 adjustDuration:1256 adjustPositionMulti:1305 adjustPosition:1342,1354 quantizeScope:1405 quantizeKeepRealisedScope:1435 scaleScope:1477 forEachRowOp:1686 nudge:1816,1824 setNoteFx:1926,1936 deleteEvent:2046,2056,2062 deleteSelection:2069 shiftEvents:2244 unautomateParam:2864 groupDuplicate:2900 groupPaste:2916 3339
   @use call    tm.getChannel  @ overlapBounds:298 rowBounds:319 parkedByUuid:1847
   @use call    tm.interpolate  @ interpolateValues:1148 sampleCurve:2370
   @use call    tm.length  @ 539 duplicateCascade:2418,2423 groupPaste:2912 rebuild:3018
@@ -671,16 +671,16 @@
   @use call    tuning.snap  @ editEvent:820
   @use call    tuning.stepToMidi  @ editEvent:865
   @use call    tuning.transposeStep  @ nudgePitch:1737
-  @use call    util.add  @ conformOverlaps:341,352 eventsByCol:428 notePAEvents:769 moveLaneEvent:1005 interpolateValues:1139 noteOff:1193 adjustPositionMulti:1275,1284 allGroups:1369 quantizeScope:1398 quantizeKeepRealisedScope:1417 scaleScope:1467 insertRowCore:1555,1556 deleteRowCore:1604,1605 planInstanceMoves:1651,1653 forEachRowOp:1671 shiftEvents:2163,2180 eventsInRect:2474 hideExtraCol:2710 rebuild:3067,3091,3092,3105,3106,3117,3123,3124,3133,3187
+  @use call    util.add  @ conformOverlaps:341,352 eventsByCol:428 notePAEvents:769 moveLaneEvent:1005 interpolateValues:1139 noteOff:1193 adjustPositionMulti:1275,1284 allGroups:1369 quantizeScope:1398 quantizeKeepRealisedScope:1417 scaleScope:1467 insertRowCore:1555,1556 deleteRowCore:1604,1605 planInstanceMoves:1651,1653 forEachRowOp:1671 shiftEvents:2163,2180 eventsInRect:2474 hideExtraCol:2710 rebuild:3067,3109,3110,3123,3124,3135,3141,3142,3152,3207
   @use call    util.assign  @ 115 editEvent:967,968
   @use call    util.atomic  @ 535,980
   @use call    util.between  @ eventsByCol:423 interpolate:1108 insertRowCore:1552 deleteRowCore:1602 shiftEvents:2163 eachMemberEvent:2462
-  @use call    util.bucket  @ rebuild:3077,3100,3115
+  @use call    util.bucket  @ rebuild:3077,3092,3093,3118,3133
   @use call    util.clamp  @ setRowPerBeat:522 sendBend:668 followViewport:718,723 editEvent:817,868,877,899,913,948 adjustDurationCore:1235 nudgePitch:1742 stepSample:2261 2934,2935
   @use call    util.clone  @ 114 setNoteFx:1948 setFxField:1961
   @use call    util.deepClone  @ setFxKindActive:1974
   @use call    util.gcd  @ scaleScope:1493
-  @use call    util.instantiate  @ rebuild:3144 3322,3332
+  @use call    util.instantiate  @ rebuild:3164 3342,3352
   @use call    util.isNote  @ notePreds:285,286 conformOverlaps:339,350 writePlans:402 editEvent:822,850,875,888 adjustPositionMulti:1279 adjustPosition:1335 quantizeScope:1389,1394,1397 quantizeKeepRealisedScope:1428 scaleScope:1464 shiftPlan:1537 nudge:1800,1810 cursorNote:1839 colTypeOf:2111 shiftEvents:2167,2229
   @use call    util.nudgedScalar  @ scaledScalar:1727,1729
   @use call    util.oneOf  @ editEvent:946 moveLaneEvent:1001 addLaneEvent:1024 deleteLaneEvent:1052 setLaneTension:1062
@@ -694,10 +694,10 @@
   @use require timing  @ 26
   @use require tuning  @ 27
   @use require util  @ 25
-  @use sub     cm:configChanged  @ 3284
-  @use sub     ds:dataChanged  @ 3289
-  @use sub     tm:rebuild  @ 3276
-  @use sub     tm:takeSwapped  @ 3275
+  @use sub     cm:configChanged  @ 3304
+  @use sub     ds:dataChanged  @ 3309
+  @use sub     tm:rebuild  @ 3296
+  @use sub     tm:takeSwapped  @ 3295
 
 # REAPER API surface
   @reaper time_precise

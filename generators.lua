@@ -323,6 +323,16 @@ function generators.parksNotes(region)
   return false
 end
 
+-- The fold mode a chain presents for one continuous target: replace if any stage targeting it
+-- replaces, else augment -- drives cross-chain layering (a later replace wins). see design/note-macros-v2.md § The fx chain
+function generators.chainDestType(fx, target)
+  for _, params in ipairs(fx or {}) do
+    local meta = generators.kinds[params.kind]
+    if meta and meta.dest == target and meta.mode == 'replace' then return 'replace' end
+  end
+  return 'augment'
+end
+
 --shape: parkWindows -> { {evType='note'|'cc'|'pb', chan, cc?, startppq, endppq}, ... } (cc on cc windows only)
 -- The single source for "what 4.5 parks over": a note window for a discrete-replace chord, a cc window
 -- per continuous cc target and a pb window per continuous pb target (both replace or augment).

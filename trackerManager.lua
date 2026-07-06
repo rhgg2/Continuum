@@ -254,19 +254,82 @@ local function sliceCurve(base, startL, endL)
   return pts
 end
 
--- Fold chains covering `span`: a lone chain's curve stands verbatim; N chains fold as base +
--- sum(chain - base), suppressed to empty when every chain and the base are flat. see design/note-macros-v2.md § The fx chain
+-- Fold records in storage order (later replace wins, painter fold); all-flat -> empty so stale seats sweep.
+-- Kept distinct from foldSub: a whole-span replace emits verbatim, no synthetic edge point. see design/note-macros-v2.md § The fx chain
+local function foldWhole(covering, span, base, opts)
+  local stream, any = base, false
+  for _, rec in ipairs(covering) do
+    if #rec.curve > 0 then
+      any = true
+      if rec.mode == 'replace' then
+        stream = asPoints(rec.curve)
+      else
+        stream = sumStreams(stream, { asPoints(rec.curve), negated(base) }, span, opts)
+      end
+    end
+  end
+  if not any and not anyNonZero(base) then return {} end
+  return stream
+end
+
+-- Boundaries within `span` where the covering set changes: span ends plus every record edge strictly
+-- inside. Between consecutive cuts the active set is constant, so foldWhole's fold is exact there.
+local function chainCuts(covering, span)
+  local seen, cuts = { [span[1]] = true, [span[2]] = true }, { span[1], span[2] }
+  for _, rec in ipairs(covering) do
+    for _, edge in ipairs({ rec.window[1], rec.window[2] }) do
+      if edge > span[1] and edge < span[2] and not seen[edge] then
+        seen[edge] = true; util.add(cuts, edge)
+      end
+    end
+  end
+  table.sort(cuts)
+  return cuts
+end
+
+-- Fold the active records over one sub-span [a,b) with a constant active set; half-open unless closing.
+-- A curved replace clipped mid-segment re-interpolates from the slice edge (accepted fidelity loss). see design/note-macros-v2.md § The fx chain
+local function foldSub(active, a, b, base, closeHere, opts)
+  local subOpts = opts
+  if not closeHere then subOpts = util.assign({}, opts); subOpts.closed = false end
+  local subBase = sliceCurve(base, a, b)
+  local stream, streamed, touched = subBase, false, false
+  for _, rec in ipairs(active) do
+    if #rec.curve > 0 then
+      touched = true
+      if rec.mode == 'replace' then
+        stream, streamed = asPoints(rec.curve), false
+      else
+        stream = sumStreams(stream, { asPoints(rec.curve), negated(subBase) }, { a, b }, subOpts)
+        streamed = true
+      end
+    end
+  end
+  if streamed then return stream end                       -- sumStreams already emitted [a,b) or [a,b]
+  if not touched and not anyNonZero(subBase) then return {} end
+  local pts = sliceCurve(stream, a, b)                     -- raw replace curve or held base: clip to [a,b]
+  if not closeHere and #pts > 0 then table.remove(pts) end -- half-open: the edge belongs to the next sub-span
+  return pts
+end
+
+-- Fold parallel chains covering `span` in storage order: whole-span records take the verbatim fast path,
+-- otherwise sub-split at record edges so each layer folds only where it applies. see design/note-macros-v2.md § The fx chain
 local function foldChains(recs, span, base, opts)
   local covering = overlapping(recs, span)
   if #covering == 1 then return asPoints(covering[1].curve) end
-  local deltas = {}
-  for _, rec in ipairs(covering) do
-    if #rec.curve > 0 then
-      util.add(deltas, sumStreams(asPoints(rec.curve), { negated(base) }, rec.window, { closed = true }))
+  local cuts = chainCuts(covering, span)
+  if #cuts == 2 then return foldWhole(covering, span, base, opts) end
+  local out = {}
+  for i = 1, #cuts - 1 do
+    local a, b = cuts[i], cuts[i + 1]
+    local active = {}
+    for _, rec in ipairs(covering) do
+      if rec.window[1] <= a and rec.window[2] >= b then util.add(active, rec) end
     end
+    local closeHere = opts.closed and i == #cuts - 1
+    for _, point in ipairs(foldSub(active, a, b, base, closeHere, opts)) do util.add(out, point) end
   end
-  if #deltas == 0 and not anyNonZero(base) then return {} end
-  return sumStreams(base, deltas, span, opts)
+  return out
 end
 
 -- detune-at-ppq for every pb in one linear merge (pbs and lane1Events both ppq-sorted).
@@ -2078,8 +2141,8 @@ local function rebuildFx(fx, deferred, fxWindow, nextInLane, currentWindows)
     local predicted, ccLive = {}, {}
     local pbBase, ccBases = pbBaseFor(chan), ccBasesFor(chan)
     fx.pbBase[chan] = pbBase
-    -- Per-chain continuous records: one absolute curve per chain per owned cc target; cross-chain
-    -- overlap folds at emission below (pb records fold in rebuildPbs). see design/note-macros-v2.md § The fx chain
+    -- Per-chain continuous records: one absolute curve + fold mode per chain per owned cc target;
+    -- cross-chain overlap layers at emission by storage order (pb folds in rebuildPbs). see design/note-macros-v2.md § The fx chain
     local ccChains = {}
     -- One producer interface, three sources: an on-take fx note, a parked fx cell, or an explicit
     -- fxRegion; the generator sees none of them. see design/note-macros-v2.md § The anchor generalized
@@ -2141,10 +2204,12 @@ local function rebuildFx(fx, deferred, fxWindow, nextInLane, currentWindows)
         if target == 'pb' then
           local curve = stream.pb
           if not contributed and not anyNonZero(curve) then curve = {} end
-          util.add(fx.pbChains[chan], { window = { startL, endL }, curve = curve })
+          util.add(fx.pbChains[chan], { window = { startL, endL }, curve = curve,
+                                        mode = generators.chainDestType(producer.fx, target) })
         else
           util.bucket(ccChains, target,
-                      { window = { startL, endL }, curve = stream.ccs[target] or {}, rest = producer.fx.rest })
+                      { window = { startL, endL }, curve = stream.ccs[target] or {},
+                        rest = producer.fx.rest, mode = generators.chainDestType(producer.fx, target) })
         end
       end
       -- Only a note-dest stage's chain emits (parksNotes mirrors this). Region producers (lane

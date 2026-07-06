@@ -88,6 +88,56 @@ return {
     end,
   },
 
+  ----- Multi-column: overlapping regions pack into sibling fx columns (storage = precedence)
+
+  {
+    name = 'two overlapping regions pack into separate fx columns, each addressable',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      h.ds:assign('fxRegions', {
+        { uuid = 'fxr-1', chan = 1, startppq = 0,   endppq = 240, fx = vib30 },
+        { uuid = 'fxr-2', chan = 1, startppq = 120, endppq = 360, fx = arpUp },
+      })
+      h.tm:rebuild()
+
+      local n = 0
+      for _, c in ipairs(h.vm.grid.cols) do if c.type == 'fx' and c.midiChan == 1 then n = n + 1 end end
+      t.eq(n, 2, 'two overlapping regions -> two fx columns')
+
+      local function cellPos(uuid)
+        for i, c in ipairs(h.vm.grid.cols) do
+          if c.type == 'fx' then
+            for row, cell in pairs(c.cells) do if cell.uuid == uuid then return i, row end end
+          end
+        end
+      end
+      local i1, r1 = cellPos('fxr-1')
+      local i2, r2 = cellPos('fxr-2')
+      t.truthy(i1 < i2, 'the first-storage region owns the leftmost (lane 1) fx column')
+      h.ec:setPos(r1, i1, 1)
+      t.eq(h.vm:fxHostForEdit(), 'fxr-1', 'the caret on lane 1 edits fxr-1')
+      h.ec:setPos(r2, i2, 1)
+      t.eq(h.vm:fxHostForEdit(), 'fxr-2', 'the caret on lane 2 edits fxr-2 -- addressable in its own column')
+    end,
+  },
+
+  {
+    name = 'two disjoint regions share one fx column (packed into lane 1)',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      h.ds:assign('fxRegions', {
+        { uuid = 'fxr-1', chan = 1, startppq = 0,   endppq = 120, fx = vib30 },
+        { uuid = 'fxr-2', chan = 1, startppq = 120, endppq = 240, fx = vib30 },
+      })
+      h.tm:rebuild()
+      local n = 0
+      for _, c in ipairs(h.vm.grid.cols) do if c.type == 'fx' and c.midiChan == 1 then n = n + 1 end end
+      t.eq(n, 1, 'disjoint regions do not overlap -> one fx column holds both badges')
+    end,
+  },
+
   ----- Replace parking: members leave the take but stay the displayed chord
 
   {

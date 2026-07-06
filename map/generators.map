@@ -1,4 +1,4 @@
-@module generators  src=generators.lua  loc=352  sha=751676c  mode=namespace  self=generators
+@module generators  src=generators.lua  loc=362  sha=38d20ea  mode=namespace  self=generators
 
 # Invariants & contracts
   @invariant  pure module, no state; a stage is fn(stream, host, params, ctx) -> { notes, delta }
@@ -64,12 +64,15 @@
   @api generators.parksNotes(region)  @ 318-324
       -- A region parks its covered chord iff it carries a note-dest kind: the chain's final note stream
       -- stands in for the members (ownership by dest, not mode). A husk (no kinds) parks nothing.
-  @api generators.parkWindows(regions)  @ 329-350
+  @api generators.chainDestType(fx, target)  @ 328-334
+      -- The fold mode a chain presents for one continuous target: replace if any stage targeting it
+      -- replaces, else augment -- drives cross-chain layering (a later replace wins). see design/note-macros-v2.md § The fx chain
+  @api generators.parkWindows(regions)  @ 339-360
       -- The single source for "what 4.5 parks over": a note window for a discrete-replace chord, a cc window
       -- per continuous cc target and a pb window per continuous pb target (both replace or augment).
 
 # Uses (outbound edges)
-  @use call    util.add  @ velPattern:211,221 parkWindows:332
+  @use call    util.add  @ velPattern:211,221 parkWindows:342
   @use call    util.clamp  @ velPattern:222
   @use call    util.round  @ velPattern:222
   @use require util  @ 18

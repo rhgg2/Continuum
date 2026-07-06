@@ -39,14 +39,14 @@ Track A is the generator substrate, Track B the authoring UI. Checked = landed.
 
 - [x] fx chain C1 — the series fold on the note channel + velPattern; every kind reads the stream (§ The fx chain)
 - [x] fx chain C2 — continuous channels fold in-chain, per-chain absolute emission at d=0 (§ The fx chain)
+- [x] fx chain C3 — cross-chain painter fold (later storage wins) + overlapping regions render as sibling fx columns (§ The fx chain)
 
 **Open / next**
-- [ ] fx chain — multi-column authoring / overlapping-chain UI (design only, § The fx chain)
+- [ ] fx chain — precedence-reorder verb (move a region in storage order via the fx column); multi-stage modal editing (§ The fx chain)
 - [ ] chain surface — docked chain strip, scripted kinds pane, patch library (design only, § The chain surface)
 
 **Deferred (no consumer / intentional)**
 - [ ] **PA** replace — no generic park/rebind path (§ A4)
-- [ ] Multi-chain painter-layering for replace — overlapping pb fx is UI-blocked instead
 - [ ] Note-fx hosted on a parked note
 - [ ] Freeze (to raw / to mirror group), ghost-note display, bake-on-export
 
@@ -656,9 +656,11 @@ exactly when that fold is order-free:
 - **augment continuous** (additive pb/cc) → sum — commutative; offline at
   seat time once realisation is park-and-seat (§ Offline continuous
   realisation), at the node until then;
-- **replace continuous** (overwrite pb/cc) → **layer**: no commutative
-  fold exists, so the **fx-column lane index is the precedence** and the
-  topmost chain wins pointwise in the overlap (painter's algorithm).
+- **replace continuous** (overwrite pb/cc) → **layer** (landed C3): no commutative
+  fold exists, so **storage order is the precedence** (= the fx-column lane
+  index for overlapping regions) and the later chain wins pointwise in the
+  overlap (painter's algorithm) — the same left-to-right add/overwrite fold
+  used within a chain, one level up.
 
 The fold operates at both scopes — between stages within a chain (a stage's
 op onto a stream channel) and between chains on a channel (at the node).
@@ -666,9 +668,11 @@ The replace conflict is scoped per `(channel, exact target)`: two chains on
 the *same* cc number or both on pb; distinct cc numbers are independent
 wires. Single-region pb-replace is **landed** as an absolute curve seated on the base lane (§ A4): the
 absorber realises it as derived pb seats, no carrier. Multi-chain
-painter-layering stays deferred: overlapping pb fx is blocked
-at the authoring UI, so one replace per target is the only fold the immediate work owes --
-which keeps top-wins open without building it.
+painter-layering is **landed (C3)**: `foldChains` folds each target's records in storage order from the
+authored base — an augment record adds its base-relative delta, a replace record overwrites — so a
+later replace wins pointwise, no UI block and no per-target guard. Two replace curves on one target no
+longer sum; they layer. Overlapping regions with differing windows sub-split at record edges, so an
+exclusive tail keeps its own curve and the painter fold applies only across the true overlap.
 
 **Transformers rewrite values; rate stays a source param.** A transformer
 freely rewrites event *values* and nudges *discrete* timing (velocity,
@@ -710,10 +714,11 @@ that folded nothing re-seats its parked base, or — over an all-zero pb
 base — registers an empty window so stale seats sweep (per-chain
 suppression). `rebuildPbs`'s augment arm is deleted: every pb record seats
 through the one replace-window path. Cross-chain overlap on one target folds
-per merged span as `base + Σ(chainᵢ − base)` (`foldChains`, shared by pb and
-cc) — exact for piecewise-linear, verbatim for the common n=1 chain;
-overlapping curved ('slow') macros may seat extra colinear grid points vs
-the old single-pass sum (audibly identical, churn-free across rebuilds). The
+per merged span (`foldChains`, shared by pb and cc); C2 shipped an additive
+sum, **superseded by C3's storage-ordered painter fold** (augment adds its
+base-relative delta, replace overwrites — a later replace wins). Verbatim for
+the common n=1 chain; overlapping curved ('slow') macros may seat extra
+colinear grid points (audibly identical, churn-free across rebuilds). The
 open **delay** question resolved to **d=0 for all continuous emission**: the
 park scan, removal sweep, and seat recognition all convert windows at d=0,
 so delay-shifted seats would orphan on removal — and doctrinally, delay is a
@@ -960,10 +965,10 @@ column-based, not gm-backed -- the Open-questions Track-B lean, now resolved.
   else the caret's fx cell, else the caret's note (v1). A region *is* its fx --
   emptying it (REMOVE / empty list) drops it, and a minted-then-abandoned
   region is pruned on close. Pinned by `tv_fx_region_spec` (column render, uuid
-  generalisation, REMOVE-deletes, the three host branches). Deferred:
-  tail-resize / onset-move, the replace/augment toggle in the modal,
-  overlapping-region sub-lanes, the per-lane note-fx pop-out, a real
-  kind-glyph vocabulary.
+  generalisation, REMOVE-deletes, the three host branches). Overlapping-region
+  sub-lanes landed in C3 (regions pack into sibling fx columns by storage order).
+  Deferred: tail-resize / onset-move, the replace/augment toggle in the modal,
+  the per-lane note-fx pop-out, a real kind-glyph vocabulary.
 
 - **B2 -- parked display: the renderer's union. Display landed (note + cc); edit open.**
   A3 parks replace members off the take into `channels[chan].parked`; the grid build
@@ -1001,12 +1006,39 @@ column-based, not gm-backed -- the Open-questions Track-B lean, now resolved.
   absolute closed curves (entering/closing edge values off the parked-aware
   per-channel bases); `foldContinuous` folds each continuous stage by mode;
   one record per chain per owned target; `foldChains` (shared pb/cc)
-  collapses cross-chain overlap as `base + Σ(chain − base)`; `rebuildPbs`'s
-  augment arm deleted (one seating path); all continuous emission converts at
-  d=0 (delay resolved: a per-note offset, not a frame — see § The fx chain).
+  collapses cross-chain overlap (an additive sum here, **superseded by C3's
+  storage-ordered painter fold**); `rebuildPbs`'s augment arm deleted (one
+  seating path); all continuous emission converts at d=0 (delay resolved: a
+  per-note offset, not a frame — see § The fx chain).
   Pinned by the continuous order tests in `tm_fx_region_spec`; the prior
   augment / replace / N-stream-overlap / suppression pins hold
   value-for-value.
+
+- **C3 — multi-column: cross-chain painter fold + lane render. Landed 2026-07-06.**
+  Two view-independent halves of one model. (1) *Fold* — each per-chain continuous
+  record carries a `mode` (`generators.chainDestType(fx, target)`: replace if any
+  dest-targeting stage replaces, else augment); `foldChains` folds a target's
+  records in storage order from the authored base — an augment record adds its
+  base-relative delta `(curve − base)`, a replace record overwrites — so a later
+  replace wins pointwise (painter). The additive n≥2 sum is gone; the n=1 fast path
+  is unchanged and correct for both modes. Overlapping regions with *differing*
+  windows sub-split at every record edge (`chainCuts`): between consecutive cuts the
+  active set is constant, so each layer folds only where it applies — an exclusive
+  tail survives, a later replace wins only in the true overlap. The all-coincident
+  case (`#cuts == 2`) routes to `foldWhole` verbatim, keeping same-window output
+  byte-identical (a whole-span replace emits its raw curve, no synthetic edge point).
+  This is the within-chain `foldContinuous`
+  fold one level up, and it dissolves the deferred painter-layering + the UI overlap
+  guard: two replace curves on one target layer, they no longer sum. (2) *Render* —
+  `packRegionLanes` (trackerView) packs a channel's regions into lanes lowest-free
+  in storage order, emitting one `fx` grid column per lane; overlapping chains split
+  into sibling columns (addressed by moving the caret between them), disjoint ones
+  share lane 1. Precedence = storage order = lane order for overlapping regions, by
+  construction. Pinned by the cross-region painter tests (pb + cc) in
+  `tm_fx_region_spec` and the multi-column render/address tests in `tv_fx_region_spec`;
+  the C2 augment / suppression pins hold value-for-value. Deferred: the
+  precedence-reorder verb (a region-index move via the fx column) and multi-stage
+  modal editing.
 
 ## B3 — parked notes/ccs as a third edit backing (landed)
 

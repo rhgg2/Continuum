@@ -829,6 +829,218 @@ return {
     end,
   },
 
+  ----- Cross-chain: overlapping regions on one target layer by storage order (painter)
+
+  {
+    name = 'fx region (pb): two overlapping replace regions -- later storage wins pointwise, not summed',
+    run = function(harness)
+      local h = harness.mk()
+      generators.kinds.capA = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppqL = host.window[1], val = 30, shape = 'step' },
+          { ppqL = host.window[2], val = 0,  shape = 'step' },
+        } } end,
+        mode = 'replace', dest = 'pb', label = 'CapA', defaults = {}, fields = {},
+      }
+      generators.kinds.capB = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppqL = host.window[1], val = 60, shape = 'step' },
+          { ppqL = host.window[2], val = 0,  shape = 'step' },
+        } } end,
+        mode = 'replace', dest = 'pb', label = 'CapB', defaults = {}, fields = {},
+      }
+      h.ds:assign('fxRegions', {
+        { uuid = 'r1', chan = 1, startppq = 0, endppq = 240, fx = { { kind = 'capA' } } },
+        { uuid = 'r2', chan = 1, startppq = 0, endppq = 240, fx = { { kind = 'capB' } } },
+      })
+      h.tm:rebuild()
+      generators.kinds.capA, generators.kinds.capB = nil, nil
+
+      t.eq(derivedPb(h, 1, 0).val, centsToRaw(60),
+        'r2 is later in storage -> its 60c curve wins; the additive fold would give 90c')
+    end,
+  },
+
+  {
+    name = 'fx region (pb): a later replace region wipes an earlier augment (storage = precedence)',
+    run = function(harness)
+      local h = harness.mk()
+      generators.kinds.bump = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppqL = host.window[1], val = 0,  shape = 'step' },
+          { ppqL = 60,             val = 20, shape = 'step' },
+          { ppqL = 120,            val = 0,  shape = 'step' },
+        } } end,
+        mode = 'augment', dest = 'pb', label = 'Bump', defaults = {}, fields = {},
+      }
+      generators.kinds.capRep = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppqL = host.window[1], val = 50, shape = 'step' },
+          { ppqL = host.window[2], val = 0,  shape = 'step' },
+        } } end,
+        mode = 'replace', dest = 'pb', label = 'CapRep', defaults = {}, fields = {},
+      }
+      h.ds:assign('fxRegions', {
+        { uuid = 'r1', chan = 1, startppq = 0, endppq = 240, fx = { { kind = 'bump' } } },
+        { uuid = 'r2', chan = 1, startppq = 0, endppq = 240, fx = { { kind = 'capRep' } } },
+      })
+      h.tm:rebuild()
+      generators.kinds.bump, generators.kinds.capRep = nil, nil
+
+      t.eq(derivedPb(h, 1, 0).val, centsToRaw(50), 'the later replace owns the wire from the start')
+      t.falsy(derivedPb(h, 1, 60),
+        'the earlier +20c augment is wiped -- no seat at 60; the additive fold would seat 70c there')
+    end,
+  },
+
+  {
+    name = 'fx region (pb): overlapping replace regions with differing windows -- each owns its exclusive tail',
+    run = function(harness)
+      local h = harness.mk()
+      -- r1 [120,360) at 30c, r2 [0,240) at 60c (later storage) wins the overlap [120,240); r1's exclusive
+      -- tail [240,360) must survive at 30c, not be wiped by r2's whole curve. see design/note-macros-v2.md § The fx chain
+      generators.kinds.capA = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppqL = host.window[1], val = 30, shape = 'step' },
+          { ppqL = host.window[2], val = 0,  shape = 'step' },
+        } } end,
+        mode = 'replace', dest = 'pb', label = 'CapA', defaults = {}, fields = {},
+      }
+      generators.kinds.capB = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppqL = host.window[1], val = 60, shape = 'step' },
+          { ppqL = host.window[2], val = 0,  shape = 'step' },
+        } } end,
+        mode = 'replace', dest = 'pb', label = 'CapB', defaults = {}, fields = {},
+      }
+      h.ds:assign('fxRegions', {
+        { uuid = 'r1', chan = 1, startppq = 120, endppq = 360, fx = { { kind = 'capA' } } },
+        { uuid = 'r2', chan = 1, startppq = 0,   endppq = 240, fx = { { kind = 'capB' } } },
+      })
+      h.tm:rebuild()
+      generators.kinds.capA, generators.kinds.capB = nil, nil
+
+      t.eq(derivedPb(h, 1, 0).val,   centsToRaw(60), 'r2 owns its exclusive head [0,120) at 60c')
+      t.eq(derivedPb(h, 1, 120).val, centsToRaw(60), 'in the overlap r2 (later storage) wins -- 60c, not 30c')
+      t.eq(derivedPb(h, 1, 240).val, centsToRaw(30), "r1's exclusive tail [240,360) survives at 30c, not wiped")
+      t.eq(derivedPb(h, 1, 360).val, 0,              'the terminal seat re-centres at the merged-span end')
+    end,
+  },
+
+  {
+    name = 'fx region (cc): two overlapping replace regions -- later storage wins, not the additive fold',
+    run = function(harness)
+      local h = harness.mk()
+      generators.kinds.ccA = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppqL = host.window[1], val = 30, shape = 'step' },
+          { ppqL = host.window[2], val = 0,  shape = 'step' },
+        } } end,
+        mode = 'replace', dest = 10, label = 'CcA', defaults = {}, fields = {},
+      }
+      generators.kinds.ccB = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppqL = host.window[1], val = 90, shape = 'step' },
+          { ppqL = host.window[2], val = 0,  shape = 'step' },
+        } } end,
+        mode = 'replace', dest = 10, label = 'CcB', defaults = {}, fields = {},
+      }
+      h.ds:assign('fxRegions', {
+        { uuid = 'r1', chan = 1, startppq = 0, endppq = 240, fx = { { kind = 'ccA' } } },
+        { uuid = 'r2', chan = 1, startppq = 0, endppq = 240, fx = { { kind = 'ccB' } } },
+      })
+      h.tm:rebuild()
+      generators.kinds.ccA, generators.kinds.ccB = nil, nil
+
+      t.eq(ccFillAt(h, 1, 10, 0).val, 90,
+        'r2 (90) wins as later storage; the additive fold over rest 64 would give 56')
+    end,
+  },
+
+  {
+    name = 'fx region (cc augment): overlapping differing windows -- each augment folds only in its own window',
+    run = function(harness)
+      local h = harness.mk()
+      -- r1 [0,240) peaks +40 at 60; r2 [120,360) peaks +10 at 180. Overlap [120,240) sums both; each
+      -- exclusive tail carries only its own delta (base rest 64). see design/note-macros-v2.md § The fx chain
+      generators.kinds.ccA = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppqL = host.window[1], val = 0,  shape = 'step' },
+          { ppqL = 60,             val = 40, shape = 'step' },
+          { ppqL = host.window[2], val = 0,  shape = 'step' },
+        } } end,
+        mode = 'augment', dest = 10, label = 'CcA', defaults = {}, fields = {},
+      }
+      generators.kinds.ccB = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppqL = host.window[1], val = 0,  shape = 'step' },
+          { ppqL = 180,            val = 10, shape = 'step' },
+          { ppqL = host.window[2], val = 0,  shape = 'step' },
+        } } end,
+        mode = 'augment', dest = 10, label = 'CcB', defaults = {}, fields = {},
+      }
+      h.ds:assign('fxRegions', {
+        { uuid = 'r1', chan = 1, startppq = 0,   endppq = 240, fx = { { kind = 'ccA' } } },
+        { uuid = 'r2', chan = 1, startppq = 120, endppq = 360, fx = { { kind = 'ccB' } } },
+      })
+      h.tm:rebuild()
+      generators.kinds.ccA, generators.kinds.ccB = nil, nil
+
+      t.eq(ccFillAt(h, 1, 10, 60).val,  104, 'r1 exclusive head: rest 64 + macroA 40')
+      t.eq(ccFillAt(h, 1, 10, 180).val, 114, 'overlap: rest 64 + macroA 40 (held) + macroB 10')
+      t.eq(ccFillAt(h, 1, 10, 240).val, 74,  'r2 exclusive tail seats at 240: rest 64 + macroB 10 -- macroA no longer folds')
+    end,
+  },
+
+  {
+    name = 'fx region (pb): differing-window overlap seats are byte-stable across a no-change rebuild',
+    run = function(harness)
+      local h = harness.mk()
+      -- the sub-split emits seats at interior cut boundaries (240) the same-window path never produced;
+      -- pin that the reconcile/token layer matches them across a steady-state rebuild (G4 for sub-splits).
+      generators.kinds.capA = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppqL = host.window[1], val = 30, shape = 'step' },
+          { ppqL = host.window[2], val = 0,  shape = 'step' },
+        } } end,
+        mode = 'replace', dest = 'pb', label = 'CapA', defaults = {}, fields = {},
+      }
+      generators.kinds.capB = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppqL = host.window[1], val = 60, shape = 'step' },
+          { ppqL = host.window[2], val = 0,  shape = 'step' },
+        } } end,
+        mode = 'replace', dest = 'pb', label = 'CapB', defaults = {}, fields = {},
+      }
+      h.ds:assign('fxRegions', {
+        { uuid = 'r1', chan = 1, startppq = 120, endppq = 360, fx = { { kind = 'capA' } } },
+        { uuid = 'r2', chan = 1, startppq = 0,   endppq = 240, fx = { { kind = 'capB' } } },
+      })
+      h.tm:rebuild()
+      local before = derivedPbs(h, 1)
+      table.sort(before, function(a, b) return a.ppq < b.ppq end)
+      t.truthy(#before >= 3, 'sub-split seats present (head, overlap, tail, terminal)')
+
+      local adds, realAdd = 0, h.fm.add
+      h.fm.add = function(self, e)
+        if e and e.evType == 'pb' then adds = adds + 1 end
+        return realAdd(self, e)
+      end
+      h.tm:rebuild()
+      h.fm.add = realAdd
+      generators.kinds.capA, generators.kinds.capB = nil, nil
+
+      t.eq(adds, 0, 'steady-state rebuild re-seats no pb across the differing-window overlap')
+      local after = derivedPbs(h, 1)
+      table.sort(after, function(a, b) return a.ppq < b.ppq end)
+      t.eq(#after, #before, 'seat count is stable across the round trip')
+      for i, pb in ipairs(after) do
+        t.eq(pb.ppq, before[i].ppq, 'seat ppq stable')
+        t.eq(pb.val, before[i].val, 'seat val stable')
+      end
+    end,
+  },
+
   {
     name = 'fx region: pb replace rides the curve over the detune -- I1 holds',
     run = function(harness)

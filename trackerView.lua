@@ -3070,11 +3070,29 @@ function tv:rebuild(takeChanged)
       if type == 'note' and key == 1 then grid.lane1Col[chan] = gridCol end
     end
 
-    -- fx-region columns are data-derived (one per channel carrying a region); each is a
-    -- tailed kind-badge the cell/tail build below handles via ppq/endppqC. see design/note-macros-v2.md § Authoring
+    -- fx-region columns are data-derived; overlapping regions on a channel pack into sibling fx
+    -- columns by storage order (= precedence), each a tailed kind-badge. see design/note-macros-v2.md § The fx chain
     local fxByChan = {}
     for _, region in ipairs(ds:get('fxRegions') or {}) do
       util.bucket(fxByChan, region.chan, region)
+    end
+    -- Pack into lanes (storage order): lowest lane free of overlap, so overlapping chains split into
+    -- their own columns while disjoint ones share a lane. Mirrors tm's allocateRegionLanes discipline.
+    local function packRegionLanes(regions)
+      local spans, byLane = {}, {}
+      local function free(lane, s, e)
+        for _, span in ipairs(spans[lane] or {}) do
+          if s < span[2] and e > span[1] then return false end
+        end
+        return true
+      end
+      for _, region in ipairs(regions) do
+        local lane = 1
+        while not free(lane, region.startppq, region.endppq) do lane = lane + 1 end
+        util.bucket(spans,  lane, { region.startppq, region.endppq })
+        util.bucket(byLane, lane, region)
+      end
+      return byLane
     end
 
     perf.start('cols')
@@ -3126,15 +3144,17 @@ function tv:rebuild(takeChanged)
         end
         addGridCol(chan, 'cc', n, events)
       end
-      local fxCells = {}
-      for _, region in ipairs(fxByChan[chan] or {}) do
-        local kind = region.fx and region.fx[1] and region.fx[1].kind
-        if kind then
-          util.add(fxCells, { ppq = region.startppq, endppqC = region.endppq,
-                              kind = kind, uuid = region.uuid })
+      for _, regions in ipairs(packRegionLanes(fxByChan[chan] or {})) do
+        local fxCells = {}
+        for _, region in ipairs(regions) do
+          local kind = region.fx and region.fx[1] and region.fx[1].kind
+          if kind then
+            util.add(fxCells, { ppq = region.startppq, endppqC = region.endppq,
+                                kind = kind, uuid = region.uuid })
+          end
         end
+        if #fxCells > 0 then addGridCol(chan, 'fx', nil, fxCells) end
       end
-      if #fxCells > 0 then addGridCol(chan, 'fx', nil, fxCells) end
     end
     perf.stop('cols')
 
