@@ -40,6 +40,7 @@ Track A is the generator substrate, Track B the authoring UI. Checked = landed.
 - [x] fx chain C1 — the series fold on the note channel + velPattern; every kind reads the stream (§ The fx chain)
 - [x] fx chain C2 — continuous channels fold in-chain, per-chain absolute emission at d=0 (§ The fx chain)
 - [x] fx chain C3 — cross-chain painter fold (later storage wins) + overlapping regions render as sibling fx columns (§ The fx chain)
+- [x] fx chain — window editing on the fx column: noteOff truncates, grow/shrink resize, nudge shifts the window (§ The fx chain)
 
 **Open / next**
 - [ ] fx chain — precedence-reorder verb (move a region in storage order via the fx column); multi-stage modal editing (§ The fx chain)
@@ -673,6 +674,20 @@ authored base — an augment record adds its base-relative delta, a replace reco
 later replace wins pointwise, no UI block and no per-target guard. Two replace curves on one target no
 longer sum; they layer. Overlapping regions with differing windows sub-split at record edges, so an
 exclusive tail keeps its own curve and the painter fold applies only across the true overlap.
+
+**Window editing on the fx column (landed).** The note duration/position verbs act on the fx
+column too, editing a region's `(startppq, endppq)` in `fxRegions` (→ `ds:assign` →
+route-by-window park/sweep): `noteOff` truncates the tail to the cursor row, or grows it past the
+tail (the onset row is a no-op — deletion stays the delete verb's job); grow/shrink resize from
+the end; nudge shifts the whole window (fixed duration, no onset guard since regions may
+overlap). The region the cursor is on is found by a scan of its own column, since fx cells sit in
+storage, not ppq, order. **A window edit keeps the moved region in its lane** (`applyRegionWindow`): when the edit adds
+overlapping siblings *before* it (a lane bump), it slides the region after the (lane−1)-th
+overlap so it retains its lane and the newcomers fall to higher lanes; otherwise storage is
+untouched (no churn on a disjoint edit). Either way the caret re-centres on the region by uuid,
+so it tracks across a column merge/split. Because lane = precedence, a lane-holding reorder
+slides the moved region's precedence with it — acceptable because the eventual precedence-reorder
+verb will own that intent explicitly. Multi-stage modal editing stays open. `tv_fx_region_spec`.
 
 **Transformers rewrite values; rate stays a source param.** A transformer
 freely rewrites event *values* and nudges *discrete* timing (velocity,

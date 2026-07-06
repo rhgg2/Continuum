@@ -1155,9 +1155,133 @@ local interpolate, interpolateValues do
   end
 end
 
+-- fxRegions doc-data mutation: mutate(region) -> fresh region | nil (drop); others verbatim,
+-- then persist + re-derive. Shared by the window verbs, region delete, setNoteFx's region arm.
+local function rewriteRegion(uuid, mutate)
+  local out = {}
+  for _, region in ipairs(ds:get('fxRegions') or {}) do
+    if region.uuid ~= uuid then
+      out[#out + 1] = region
+    else
+      local updated = mutate(region)
+      if updated then out[#out + 1] = updated end
+    end
+  end
+  ds:assign('fxRegions', next(out) and out or util.REMOVE)
+  pa:apply()
+end
+
 ----- Duration & position
 
 local noteOff, adjustDuration, adjustPosition do
+  -- The fx region the editor acts on: within the cursor's own column (its lane), the badge with
+  -- the greatest onset at-or-before the cursor row. Manual scan -- fx cells sit in storage, not ppq, order.
+  local function cursorRegionBefore(col)
+    local limit = ctx:rowToPPQ(ec:row() + 1, col.midiChan)
+    local best
+    for _, cell in ipairs(col.events) do
+      if cell.ppq < limit and (not best or cell.ppq > best.ppq) then best = cell end
+    end
+    return best
+  end
+
+  -- The lane (1-based) of the cursor's fx column -- columns are added in lane order, so the k-th
+  -- fx column on the channel is lane k. A window edit reorders storage to hold this lane.
+  local function fxLaneOf(col)
+    local lane = 0
+    for _, gcol in ipairs(grid.cols) do
+      if gcol.type == 'fx' and gcol.midiChan == col.midiChan then
+        lane = lane + 1
+        if gcol == col then return lane end
+      end
+    end
+    return 1
+  end
+
+  -- After the rebuild, put the caret back on the region by uuid (its column may have shifted),
+  -- tracking the row by the same delta the window moved.
+  local function recentreOnRegion(uuid, rowDelta)
+    for ci, gcol in ipairs(grid.cols) do
+      if gcol.type == 'fx' then
+        for _, cell in ipairs(gcol.events) do
+          if cell.uuid == uuid then return ec:setPos(ec:row() + rowDelta, ci, 1) end
+        end
+      end
+    end
+  end
+
+  -- Rewrite the region's window, holding its lane. Only when the edit adds overlapping siblings
+  -- before it (a lane bump) does it slide after the (lane-1)-th overlap; else storage is untouched.
+  local function applyRegionWindow(col, cell, ns, ne, rowDelta)
+    local chan, uuid, lane = col.midiChan, cell.uuid, fxLaneOf(col)
+    local regions = ds:get('fxRegions') or {}
+    local function overlaps(region)
+      return region.chan == chan and ns < region.endppq and ne > region.startppq
+    end
+    local moved, before = nil, 0
+    for _, region in ipairs(regions) do
+      if region.uuid == uuid then
+        moved = util.clone(region); moved.startppq, moved.endppq = ns, ne
+        break
+      elseif overlaps(region) then
+        before = before + 1
+      end
+    end
+    if not moved then return end
+    local out = {}
+    if before <= lane - 1 then
+      for _, region in ipairs(regions) do
+        out[#out + 1] = (region.uuid == uuid) and moved or region
+      end
+    else
+      local seen, inserted = 0, false
+      for _, region in ipairs(regions) do
+        if region.uuid ~= uuid then
+          if not inserted and overlaps(region) and seen >= lane - 1 then
+            out[#out + 1] = moved; inserted = true
+          end
+          if not inserted and overlaps(region) then seen = seen + 1 end
+          out[#out + 1] = region
+        end
+      end
+      if not inserted then out[#out + 1] = moved end
+    end
+    ds:assign('fxRegions', out)
+    pa:apply()
+    recentreOnRegion(uuid, rowDelta)
+  end
+
+  -- noteOff shortens the region's tail to the cursor row; the onset row is a no-op -- deletion
+  -- belongs to the delete verb, not a duration edit. see design/note-macros-v2.md § The fx chain
+  local function regionNoteOff(col)
+    local cell = cursorRegionBefore(col)
+    if not cell then return end
+    local targetppq = ctx:rowToPPQ(ec:row(), col.midiChan)
+    if targetppq <= cell.ppq then return end
+    applyRegionWindow(col, cell, cell.ppq, targetppq, 0)
+  end
+
+  local function regionAdjustDuration(col, rowDelta)
+    local cell = cursorRegionBefore(col)
+    if not cell then return end
+    local chan     = col.midiChan
+    local startRow = ctx:ppqToRow(cell.ppq, chan)
+    local endRow   = util.clamp(ctx:ppqToRow(cell.endppqC, chan) + rowDelta, startRow + 1, grid.numRows)
+    local newEnd   = ctx:rowToPPQ(endRow, chan)
+    if newEnd ~= cell.endppqC then applyRegionWindow(col, cell, cell.ppq, newEnd, 0) end
+  end
+
+  -- Shift start and end together (duration fixed); fx regions may overlap, so no onset guard.
+  local function regionAdjustPosition(col, rowDelta)
+    local cell = cursorRegionBefore(col)
+    if not cell then return end
+    local chan     = col.midiChan
+    local startRow = ctx:ppqToRow(cell.ppq, chan) + rowDelta
+    local endRow   = ctx:ppqToRow(cell.endppqC, chan) + rowDelta
+    if startRow < 0 or endRow > grid.numRows then return end
+    applyRegionWindow(col, cell, ctx:rowToPPQ(startRow, chan), ctx:rowToPPQ(endRow, chan), rowDelta)
+  end
+
   local function cursorNoteBefore()
     local col = grid.cols[ec:col()]
     if not (col and col.type == 'note') then return end
@@ -1207,6 +1331,7 @@ local noteOff, adjustDuration, adjustPosition do
 
     local _, ccol, cstop = ec:pos()
     local col = grid.cols[ccol]
+    if col and col.type == 'fx' then return regionNoteOff(col) end
     if not (col and col.type == 'note'
             and ec:cursorPart() == 'pitch'
             and cstop == col.partStart[cstop]) then
@@ -1250,6 +1375,8 @@ local noteOff, adjustDuration, adjustPosition do
         end
       end
     else
+      local fxCol = grid.cols[ec:col()]
+      if fxCol and fxCol.type == 'fx' then return regionAdjustDuration(fxCol, rowDelta) end
       local col, note = cursorNoteBefore()
       if note then adjustDurationCore(col, note, rowDelta) end
     end
@@ -1320,6 +1447,7 @@ local noteOff, adjustDuration, adjustPosition do
 
     local col = grid.cols[ec:col()]
     if not col then return end
+    if col.type == 'fx' then return regionAdjustPosition(col, rowDelta) end
     local chan         = col.midiChan
     local newCursorRow = ec:row() + rowDelta
 
@@ -1940,16 +2068,10 @@ function tv:setNoteFx(uuid, fxOrRemove)
   -- Region host: a document-data write (ds:assign -> dataChanged -> rebuild). A region IS its
   -- fx, but only REMOVE drops it -- an empty list leaves an inert husk the editor can refill.
   local delete = fxOrRemove == util.REMOVE
-  local out = {}
-  for _, region in ipairs(ds:get('fxRegions') or {}) do
-    if region.uuid ~= uuid then
-      out[#out + 1] = region
-    elseif not delete then
-      local updated = util.clone(region); updated.fx = fxOrRemove; out[#out + 1] = updated
-    end
-  end
-  ds:assign('fxRegions', next(out) and out or util.REMOVE)
-  pa:apply()
+  rewriteRegion(uuid, function(region)
+    if delete then return nil end
+    local updated = util.clone(region); updated.fx = fxOrRemove; return updated
+  end)
 end
 
 -- Set one field of fx entry `index`, preserving sibling entries, then flush.

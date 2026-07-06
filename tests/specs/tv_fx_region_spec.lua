@@ -21,6 +21,12 @@ local function fxColFor(h, chan)
   end
 end
 
+local function region(h, uuid)
+  for _, r in ipairs(h.ds:get('fxRegions') or {}) do
+    if r.uuid == uuid then return r end
+  end
+end
+
 local function noteColIdx(h, chan)
   for i, c in ipairs(h.vm.grid.cols) do
     if c.type == 'note' and c.midiChan == chan and c.lane == 1 then return i end
@@ -453,6 +459,209 @@ return {
       t.eq(rebuilds, 1, 'one rebuild for the whole multi-select flush (the staging guard)')
       t.deepEq(authoredPitches(h), { 65 }, 'the take note transposed to 65')
       t.eq((h.ds:get('fxParked') or {})[1].pitch, 61, 'the parked note transposed to 61 in the stash')
+    end,
+  },
+
+  ----- Window editing: the note duration/position verbs act on the fx column
+
+  {
+    name = 'fx noteOff truncates the region tail to the cursor row',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      injectRegion(h)                          -- fxr-1 [0,240)
+      local _, ci = fxColFor(h, 1)
+      h.ec:setPos(2, ci, 1)                     -- row 2 = ppq 120
+      h.cmgr:invoke('noteOff')
+      local r = region(h, 'fxr-1')
+      t.truthy(r, 'the region survives -- noteOff shortens, never deletes')
+      t.eq(r.startppq, 0,   'onset unchanged')
+      t.eq(r.endppq,  120,  'end truncated to the cursor row')
+    end,
+  },
+
+  {
+    name = 'fx noteOff finds the right region in its lane when cells are in storage, not ppq, order',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      h.ds:assign('fxRegions', {                             -- storage order != ppq order, same lane
+        { uuid = 'fxr-2', chan = 1, startppq = 240, endppq = 360, fx = vib30 },
+        { uuid = 'fxr-1', chan = 1, startppq = 0,   endppq = 120, fx = vib30 },
+      })
+      h.tm:rebuild()
+      local _, ci = fxColFor(h, 1)
+      h.ec:setPos(1, ci, 1)                                  -- row 1 = ppq 60, over fxr-1
+      h.cmgr:invoke('noteOff')
+      t.eq(region(h, 'fxr-1').endppq, 60,  'the covered region (fxr-1) shrank to the cursor row')
+      t.eq(region(h, 'fxr-2').endppq, 360, 'the storage-first sibling in the lane is untouched')
+    end,
+  },
+
+  {
+    name = 'fx noteOff past the region tail grows it to the cursor row',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      injectRegion(h, { endppq = 120 })        -- fxr-1 [0,120)
+      local _, ci = fxColFor(h, 1)
+      h.ec:setPos(4, ci, 1)                     -- row 4 = ppq 240, past the [0,120) tail
+      h.cmgr:invoke('noteOff')
+      t.eq(region(h, 'fxr-1').endppq, 240, 'the tail grew to the cursor row')
+    end,
+  },
+
+  {
+    name = 'fx noteOff on the onset row is a no-op (deletion is the delete verb, not noteOff)',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      injectRegion(h)
+      local _, ci = fxColFor(h, 1)
+      h.ec:setPos(0, ci, 1)
+      h.cmgr:invoke('noteOff')
+      local r = region(h, 'fxr-1')
+      t.truthy(r, 'the region is untouched')
+      t.eq(r.endppq, 240, 'the window is unchanged')
+    end,
+  },
+
+  {
+    name = 'fx growNote / shrinkNote resize the region from its end',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      injectRegion(h)
+      local _, ci = fxColFor(h, 1)
+      h.ec:setPos(0, ci, 1)
+      h.cmgr:invoke('growNote')
+      t.eq(region(h, 'fxr-1').endppq, 300, 'grow extends the end by one row')
+      h.cmgr:invoke('shrinkNote')
+      t.eq(region(h, 'fxr-1').endppq, 240, 'shrink pulls it back a row')
+    end,
+  },
+
+  {
+    name = 'fx nudgeForward shifts the whole window and the caret follows',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      injectRegion(h, { startppq = 60, endppq = 180 })   -- rows 1..3
+      local _, ci = fxColFor(h, 1)
+      h.ec:setPos(1, ci, 1)
+      h.cmgr:invoke('nudgeForward')
+      local r = region(h, 'fxr-1')
+      t.eq(r.startppq, 120, 'onset shifted +1 row')
+      t.eq(r.endppq,   240, 'end shifted +1 row (duration preserved)')
+      t.eq(h.ec:row(), 2,   'the caret tracked the shift')
+    end,
+  },
+
+  {
+    name = 'fx nudge keeps the moved region in its lane; the newly-overlapped sibling displaces right',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      h.ds:assign('fxRegions', {
+        { uuid = 'fxr-1', chan = 1, startppq = 0,   endppq = 120, fx = vib30 },  -- storage-first
+        { uuid = 'fxr-2', chan = 1, startppq = 180, endppq = 300, fx = vib30 },  -- storage-later, disjoint
+      })
+      h.tm:rebuild()
+      local _, ci = fxColFor(h, 1)
+      h.ec:setPos(3, ci, 1)                             -- on fxr-2 (onset row 3 = ppq 180)
+      h.cmgr:invoke('nudgeBack')                        -- row 2 (ppq 120): still disjoint
+      h.cmgr:invoke('nudgeBack')                        -- row 1 (ppq 60): now overlaps fxr-1
+      local regions = h.ds:get('fxRegions')
+      t.eq(regions[1].uuid, 'fxr-2', 'the moved region slid earlier in storage to keep its lane')
+      t.eq(regions[2].uuid, 'fxr-1', 'the overlapped sibling is now storage-later (a higher lane)')
+      local firstFx
+      for _, c in ipairs(h.vm.grid.cols) do
+        if c.type == 'fx' and c.midiChan == 1 then firstFx = firstFx or c end
+      end
+      t.truthy(firstFx.cells[1] and firstFx.cells[1].uuid == 'fxr-2', 'the moved region kept lane 1')
+      t.eq(h.vm:fxHostForEdit(), 'fxr-2', 'the caret tracked to the moved region')
+    end,
+  },
+
+  {
+    name = 'fx nudge of an already-overlapping region keeps its own higher lane (no reorder)',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      h.ds:assign('fxRegions', {
+        { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = vib30 },  -- lane 1
+        { uuid = 'fxr-2', chan = 1, startppq = 0, endppq = 240, fx = vib30 },  -- lane 2 (overlaps)
+      })
+      h.tm:rebuild()
+      local i2
+      for i, c in ipairs(h.vm.grid.cols) do
+        if c.type == 'fx' and c.midiChan == 1 then i2 = i end   -- last fx col = lane 2
+      end
+      h.ec:setPos(0, i2, 1)                             -- on fxr-2's lane-2 column
+      h.cmgr:invoke('nudgeForward')
+      local regions = h.ds:get('fxRegions')
+      t.eq(regions[1].uuid, 'fxr-1', 'storage order held -- fxr-1 stays lane 1')
+      t.eq(regions[2].uuid, 'fxr-2', 'the moved region kept its own lane 2')
+      t.eq(h.vm:fxHostForEdit(), 'fxr-2', 'the caret tracked to the moved region')
+    end,
+  },
+
+  {
+    name = 'fx nudge that makes an overlap disjoint tracks the caret across the column merge',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      h.ds:assign('fxRegions', {
+        { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 120, fx = vib30 },  -- lane 1
+        { uuid = 'fxr-2', chan = 1, startppq = 0, endppq = 120, fx = vib30 },  -- lane 2 (overlap -> 2 cols)
+      })
+      h.tm:rebuild()
+      local i2
+      for i, c in ipairs(h.vm.grid.cols) do
+        if c.type == 'fx' and c.midiChan == 1 then i2 = i end   -- last fx col = lane 2 = fxr-2
+      end
+      h.ec:setPos(0, i2, 1)
+      h.cmgr:invoke('nudgeForward')    -- [0,120] -> [60,180], still overlaps
+      h.cmgr:invoke('nudgeForward')    -- [60,180] -> [120,240], now disjoint: 2 cols collapse to 1
+      local n = 0
+      for _, c in ipairs(h.vm.grid.cols) do if c.type == 'fx' and c.midiChan == 1 then n = n + 1 end end
+      t.eq(n, 1, 'the now-disjoint regions share one fx column')
+      t.eq(h.vm:fxHostForEdit(), 'fxr-2', 'the caret tracked the moved region into the merged column')
+    end,
+  },
+
+  {
+    name = 'fx window edit on a disjoint region does not churn storage order',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      h.ds:assign('fxRegions', {
+        { uuid = 'fxr-1', chan = 1, startppq = 0,   endppq = 60,  fx = vib30 },
+        { uuid = 'fxr-2', chan = 1, startppq = 120, endppq = 180, fx = vib30 },
+        { uuid = 'fxr-3', chan = 1, startppq = 240, endppq = 300, fx = vib30 },
+      })
+      h.tm:rebuild()
+      local _, ci = fxColFor(h, 1)     -- all disjoint -> one shared column
+      h.ec:setPos(2, ci, 1)            -- on fxr-2 (onset ppq 120 = row 2)
+      h.cmgr:invoke('growNote')        -- [120,180] -> [120,240], still disjoint from fxr-3
+      local order = {}
+      for _, r in ipairs(h.ds:get('fxRegions')) do order[#order + 1] = r.uuid end
+      t.deepEq(order, { 'fxr-1', 'fxr-2', 'fxr-3' }, 'storage order held -- no spurious reorder')
+    end,
+  },
+
+  {
+    name = 'fx nudgeBack refuses at the top grid edge (window unchanged)',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      injectRegion(h)                          -- [0,240), onset at row 0
+      local _, ci = fxColFor(h, 1)
+      h.ec:setPos(0, ci, 1)
+      h.cmgr:invoke('nudgeBack')
+      local r = region(h, 'fxr-1')
+      t.eq(r.startppq, 0,   'onset held at the edge')
+      t.eq(r.endppq,   240, 'window unchanged')
     end,
   },
 }
