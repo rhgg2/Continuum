@@ -664,4 +664,88 @@ return {
       t.eq(r.endppq,   240, 'window unchanged')
     end,
   },
+
+  ----- Lane reorder: eventShiftLeft/right bumps the region a badge column, flipping storage precedence
+
+  {
+    name = 'fx eventShiftLeft swaps the region one lane left, flipping storage precedence',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      h.ds:assign('fxRegions', {
+        { uuid = 'fxr-1', chan = 1, startppq = 0,   endppq = 240, fx = vib30 },  -- lane 1
+        { uuid = 'fxr-2', chan = 1, startppq = 120, endppq = 360, fx = vib30 },  -- lane 2, overlaps
+      })
+      h.tm:rebuild()
+      local _, i2 = fxColFor(h, 1)                       -- lane-1 col; lane-2 col is the next fx col
+      local ci2
+      for i = i2 + 1, #h.vm.grid.cols do
+        if h.vm.grid.cols[i].type == 'fx' then ci2 = i; break end
+      end
+      h.ec:setPos(2, ci2, 1)                            -- on fxr-2 (onset row 2 = ppq 120)
+      h.cmgr:invoke('eventShiftLeft')
+      local regions = h.ds:get('fxRegions')
+      t.eq(regions[1].uuid, 'fxr-2', 'the moved region is now storage-first (lane 1, higher precedence)')
+      t.eq(regions[2].uuid, 'fxr-1', 'the sibling it passed is now storage-later (lane 2)')
+      t.eq(regions[1].chan, 1, 'no channel leak -- the region stays on channel 1')
+      t.eq(regions[2].chan, 1, 'nor does its sibling')
+      local firstFx = fxColFor(h, 1)
+      t.truthy(firstFx.cells[2] and firstFx.cells[2].uuid == 'fxr-2', 'the badge moved to the leftmost fx column')
+      t.eq(h.vm:fxHostForEdit(), 'fxr-2', 'the caret tracked to the moved region')
+    end,
+  },
+
+  {
+    name = 'fx eventShiftRight swaps the region one lane right (the inverse move)',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      h.ds:assign('fxRegions', {
+        { uuid = 'fxr-1', chan = 1, startppq = 0,   endppq = 240, fx = vib30 },  -- lane 1
+        { uuid = 'fxr-2', chan = 1, startppq = 120, endppq = 360, fx = vib30 },  -- lane 2, overlaps
+      })
+      h.tm:rebuild()
+      local _, ci1 = fxColFor(h, 1)
+      h.ec:setPos(2, ci1, 1)                            -- on fxr-1 at the overlap row (ppq 120)
+      h.cmgr:invoke('eventShiftRight')
+      local regions = h.ds:get('fxRegions')
+      t.eq(regions[1].uuid, 'fxr-2', 'fxr-1 dropped behind its sibling in storage')
+      t.eq(regions[2].uuid, 'fxr-1', 'and now holds lane 2 (lower precedence)')
+    end,
+  },
+
+  {
+    name = 'fx eventShift is a no-op at the grid edge (lone region, nothing beside it)',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      injectRegion(h)                                   -- one region, one fx column
+      local _, ci = fxColFor(h, 1)
+      h.ec:setPos(0, ci, 1)
+      h.cmgr:invoke('eventShiftLeft')                   -- target lane 0: refused
+      h.cmgr:invoke('eventShiftRight')                  -- no lane-2 column: refused
+      local regions = h.ds:get('fxRegions')
+      t.eq(#regions, 1, 'still one region')
+      t.eq(regions[1].uuid, 'fxr-1', 'storage untouched')
+    end,
+  },
+
+  {
+    name = 'fx eventShift no-ops when the adjacent lane is empty at the cursor row',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      h.ds:assign('fxRegions', {
+        { uuid = 'fxr-1', chan = 1, startppq = 0,   endppq = 240, fx = vib30 },  -- lane 1
+        { uuid = 'fxr-2', chan = 1, startppq = 120, endppq = 360, fx = vib30 },  -- lane 2, starts at row 2
+      })
+      h.tm:rebuild()
+      local _, ci1 = fxColFor(h, 1)
+      h.ec:setPos(0, ci1, 1)                            -- on fxr-1 at row 0 -- lane 2 is empty here
+      h.cmgr:invoke('eventShiftRight')
+      local order = {}
+      for _, r in ipairs(h.ds:get('fxRegions')) do order[#order + 1] = r.uuid end
+      t.deepEq(order, { 'fxr-1', 'fxr-2' }, 'no reorder -- nothing beside the cursor to swap with')
+    end,
+  },
 }

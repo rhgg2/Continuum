@@ -1173,7 +1173,7 @@ end
 
 ----- Duration & position
 
-local noteOff, adjustDuration, adjustPosition do
+local noteOff, adjustDuration, adjustPosition, shiftFxLane do
   -- The fx region the editor acts on: within the cursor's own column (its lane), the badge with
   -- the greatest onset at-or-before the cursor row. Manual scan -- fx cells sit in storage, not ppq, order.
   local function cursorRegionBefore(col)
@@ -1280,6 +1280,41 @@ local noteOff, adjustDuration, adjustPosition do
     local endRow   = ctx:ppqToRow(cell.endppqC, chan) + rowDelta
     if startRow < 0 or endRow > grid.numRows then return end
     applyRegionWindow(col, cell, ctx:rowToPPQ(startRow, chan), ctx:rowToPPQ(endRow, chan), rowDelta)
+  end
+
+  -- The k-th fx column on the channel (nil past the last lane) -- the adjacent-lane badge column.
+  local function fxColAtLane(chan, lane)
+    local n = 0
+    for _, gcol in ipairs(grid.cols) do
+      if gcol.type == 'fx' and gcol.midiChan == chan then
+        n = n + 1
+        if n == lane then return gcol end
+      end
+    end
+  end
+
+  -- Move the cursor's fx region one badge column toward dir, swapping storage precedence with the
+  -- sibling beside it at the cursor row. Nothing overlapping there -> no-op. see design/note-macros-v2.md § The fx chain
+  function shiftFxLane(col, dir)
+    local cell = cursorRegionBefore(col)
+    if not cell then return end
+    local target = fxLaneOf(col) + dir
+    if target < 1 then return end
+    local adjCol = fxColAtLane(col.midiChan, target)
+    if not adjCol then return end
+    local sib = cursorRegionBefore(adjCol)
+    if not sib or cell.ppq >= sib.endppqC or cell.endppqC <= sib.ppq then return end
+    local out = {}
+    for _, region in ipairs(ds:get('fxRegions') or {}) do out[#out + 1] = region end
+    local i, j
+    for k, region in ipairs(out) do
+      if     region.uuid == cell.uuid then i = k
+      elseif region.uuid == sib.uuid  then j = k end
+    end
+    out[i], out[j] = out[j], out[i]
+    ds:assign('fxRegions', out)
+    pa:apply()
+    recentreOnRegion(cell.uuid, 0)
   end
 
   local function cursorNoteBefore()
@@ -2252,6 +2287,8 @@ function kindAt(col, ppq)
 end
 
 local function shiftEvents(dir)
+  local cursorCol = grid.cols[ec:col()]
+  if cursorCol and cursorCol.type == 'fx' then return shiftFxLane(cursorCol, dir) end
   local function noteColsByLane(chan)
     local byLane = {}
     for ci = grid.chanFirstCol[chan], grid.chanLastCol[chan] do

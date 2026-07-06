@@ -41,9 +41,10 @@ Track A is the generator substrate, Track B the authoring UI. Checked = landed.
 - [x] fx chain C2 — continuous channels fold in-chain, per-chain absolute emission at d=0 (§ The fx chain)
 - [x] fx chain C3 — cross-chain painter fold (later storage wins) + overlapping regions render as sibling fx columns (§ The fx chain)
 - [x] fx chain — window editing on the fx column: noteOff truncates, grow/shrink resize, nudge shifts the window (§ The fx chain)
+- [x] fx chain — precedence-reorder verb: eventShiftLeft/right bumps a region one badge column, swapping storage precedence (§ The fx chain)
 
 **Open / next**
-- [ ] fx chain — precedence-reorder verb (move a region in storage order via the fx column); multi-stage modal editing (§ The fx chain)
+- [ ] fx chain — multi-stage modal editing (§ The fx chain)
 - [ ] chain surface — docked chain strip, scripted kinds pane, patch library (design only, § The chain surface)
 
 **Deferred (no consumer / intentional)**
@@ -686,8 +687,13 @@ overlapping siblings *before* it (a lane bump), it slides the region after the (
 overlap so it retains its lane and the newcomers fall to higher lanes; otherwise storage is
 untouched (no churn on a disjoint edit). Either way the caret re-centres on the region by uuid,
 so it tracks across a column merge/split. Because lane = precedence, a lane-holding reorder
-slides the moved region's precedence with it — acceptable because the eventual precedence-reorder
-verb will own that intent explicitly. Multi-stage modal editing stays open. `tv_fx_region_spec`.
+slides the moved region's precedence with it — acceptable because the precedence-reorder
+verb owns that intent explicitly. **That verb is `eventShiftLeft`/`eventShiftRight` on the fx
+column** (`shiftFxLane`): it bumps the cursor's region one badge column toward the shift, swapping
+storage order (= precedence) with the overlapping sibling beside it at the cursor row; nothing
+overlapping there is a no-op. The storage swap is the precedence flip — the folded-output
+consequence rides on the cross-region painter tests in `tm_fx_region_spec`. Multi-stage modal
+editing stays open. `tv_fx_region_spec`.
 
 **Transformers rewrite values; rate stays a source param.** A transformer
 freely rewrites event *values* and nudges *discrete* timing (velocity,
