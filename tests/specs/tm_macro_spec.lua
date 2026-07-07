@@ -139,6 +139,34 @@ return {
     end,
   },
 
+  -- The restored note re-enters its column token-less; its real mm event lands only with
+  -- the deferred tail commit. Unless wired to that backing, the cell is inert till rebuild.
+  {
+    name = 'G2b: an edit through the restored grid cell lands (cell wired to its backing)',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
+                      vel = 100, detune = 0, delay = 0, lane = 1, fx = retrig16 })
+      h.tm:flush()
+      local uuid = parkedHost(h).uuid
+
+      -- Clear exactly as the fx editor does for a parked host.
+      h.tm:assignParked(parkedHost(h), { fx = util.REMOVE })
+      h.tm:flush()
+
+      local cell
+      for _, ev in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
+        if ev.uuid == uuid then cell = ev end
+      end
+      t.truthy(cell, 'the restored note is present as a grid cell')
+
+      -- The view edits by handing the column cell straight to tm:assignEvent.
+      h.tm:assignEvent(cell, { pitch = 64 })
+      h.tm:flush()
+      t.eq(h.tm:byUuid(uuid).pitch, 64, 'edit through the restored cell reaches its backing')
+    end,
+  },
+
   ----- Lane independence — structural hosts are not gated to lane 1
 
   {

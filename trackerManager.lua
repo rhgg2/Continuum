@@ -1759,6 +1759,9 @@ end
 
 local function rebuildRegionPark(deferred, currentWindows)
   local batch = mmBatch()
+  -- Restored note cells re-enter their column token-less (the real mm event lands with the
+  -- deferred tail commit); returned so rebuild can wire each to its backing post-commit.
+  local restoredNotes = {}
 
   -- One predicate for all passes; takes anything spec-shaped (evType/chan/cc/ppqL). spec.fx (note
   -- specs only): a discrete-replace note host parks itself, like a region window (membership {self}).
@@ -1825,6 +1828,7 @@ local function rebuildRegionPark(deferred, currentWindows)
       while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
       local note = util.clone(spec)   -- keeps the parked uuid; mm:add honours it (fx handles survive unpark)
       note.ppq = tm:fromLogical(spec.chan, spec.ppqL)    -- realised onset derived fresh (spec is logical-only)
+      util.add(restoredNotes, note)
       util.add(channel.columns.notes[spec.lane].events, note)
       table.sort(channel.columns.notes[spec.lane].events, function(a, b) return a.ppqL < b.ppqL end)
       -- Lazy: reshaped at commit so it reads note.ppq/endppq after the tail-walk clip.
@@ -1976,6 +1980,7 @@ local function rebuildRegionPark(deferred, currentWindows)
 
   persistParked('fxParked', allParked)
   batch.commit()
+  return restoredNotes
 end
 
 ----- Rebuild PA
@@ -2917,7 +2922,7 @@ function tm:rebuild(takeChanged)
   end
   local currentWindows = generators.parkWindows(parkRegions)
 
-  perf.start('regionPark'); rebuildRegionPark(deferred, currentWindows); perf.stop('regionPark')  -- park covered, carry/restore prior
+  perf.start('regionPark'); local restoredNotes = rebuildRegionPark(deferred, currentWindows); perf.stop('regionPark')  -- park covered, carry/restore prior
   perf.start('pa'); rebuildPA(); perf.stop('pa')  -- project PAs into settled note columns
 
   -- Re-scan windows post park/unpark/PA: the producer reads the final columns, including a host an unpark
@@ -2926,6 +2931,13 @@ function tm:rebuild(takeChanged)
   perf.start('fx'); rebuildFx(fx, deferred, fxWindow, nextInLane, currentWindows); perf.stop('fx')  -- fx expansion: derived notes/CCs
 
   perf.start('tails'); rebuildTails(fx, deferred); perf.stop('tails')  -- unified tail/onset walk + atomic note commit
+
+  -- The deferred commit added each restored note to mm; wire its column cell to that fresh token
+  -- so an immediate edit resolves the backing (else the cell is inert until the next full rebuild).
+  for _, note in ipairs(restoredNotes) do
+    local backed = tm:byUuid(note.uuid)
+    if backed then note.token = backed.token end
+  end
   perf.start('pbs'); rebuildPbs(fx.noteLive, fx.pbChains, fx.pbBase); perf.stop('pbs')  -- absorber reconciliation + pb resynthesis
   perf.start('pcs'); rebuildPCs(fx); perf.stop('pcs')  -- PC synthesis (trackerMode)
 
