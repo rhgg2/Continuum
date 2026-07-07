@@ -1849,13 +1849,10 @@ end
 local tr = {}
 
 
------ Note FX editor (retrig + trill + arp + vibrato + slide)
+----- Note FX editor -- the interim chain editor
 
--- The fx editor is a thin renderer over the generator registry: modalOrder picks which kinds it
--- offers (and their order); each kind's label / defaults / fields come from generators.kinds.
--- A new kind ships a registry entry; surfacing it here is one modalOrder slot. The widget tags
--- ('choice' dropdown, 'int' stepper, 'stepInterval' cents-as-steps) are interpreted below.
--- see design/archive/note-macros.md § UI.
+-- A thin renderer over the generator registry: the fx list is an ordered series (C1), stages
+-- reorderable/duplicable by position. see design/note-macros-v2.md § The fx chain, § Build progress C4
 local FX_KINDS = generators.modalOrder
 
 -- A kind's default fx entry: its registry params stamped with the kind tag downstream reads.
@@ -1863,7 +1860,7 @@ local function fxSeed(kind) return util.assign({ kind = kind }, generators.kinds
 
 local fxEdit do
   local MARK_W, LABEL_W = 16, 64
-  local LEGEND = '\xe2\x86\x91\xe2\x86\x93 field    \xe2\x86\x90\xe2\x86\x92 adjust    Del remove    Enter done'
+  local LEGEND = '\xe2\x86\x91\xe2\x86\x93 nav   \xe2\x86\x90\xe2\x86\x92 adjust   \xe2\x8c\x98\xe2\x86\x91\xe2\x86\x93 reorder   \xe2\x86\x92 add   Del remove   Enter done'
 
   local function valueEq(a, b)
     if type(a) == 'table' then return type(b) == 'table' and a[1] == b[1] and a[2] == b[2] end
@@ -1894,22 +1891,19 @@ local fxEdit do
     return (tMidi - midi) * 100 + (tDetune - detune)
   end
 
-  -- One row per section header, plus one per field of an active section, in
-  -- FX_KINDS order. A header's index is nil when its section is off.
+  -- One row per stage in series order (header + fields), then one add row per modalOrder kind.
+  -- `index` is the stage's position (nil on add rows) -- identity is position, not kind.
   local function buildRows(fx)
     local rows = {}
-    for _, kind in ipairs(FX_KINDS) do
-      local idx
-      for i, e in ipairs(fx) do if e.kind == kind then idx = i; break end end
-      rows[#rows + 1] = { kind = kind, header = true, index = idx }
-      if idx then
-        for _, fd in ipairs(generators.kinds[kind].fields) do
-          if not fd.when or fd.when(fx[idx]) then
-            rows[#rows + 1] = { kind = kind, fd = fd, index = idx, entry = fx[idx] }
-          end
+    for i, entry in ipairs(fx) do
+      rows[#rows + 1] = { header = true, kind = entry.kind, index = i }
+      for _, fd in ipairs(generators.kinds[entry.kind].fields) do
+        if not fd.when or fd.when(entry) then
+          rows[#rows + 1] = { fd = fd, kind = entry.kind, index = i, entry = entry }
         end
       end
     end
+    for _, kind in ipairs(FX_KINDS) do rows[#rows + 1] = { addKind = kind } end
     return rows
   end
 
@@ -1921,38 +1915,38 @@ local fxEdit do
 
   local function drawRow(uuid, rw, focused)
     mark(focused)
+    if rw.addKind then
+      if ImGui.Button(ctx, '+ ' .. generators.kinds[rw.addKind].label .. '##fxadd_' .. rw.addKind) then
+        tv:addFxStage(uuid, fxSeed(rw.addKind))
+      end
+      return
+    end
     if rw.header then
-      local changed, on = chrome.checkbox(generators.kinds[rw.kind].label .. '##fxk_' .. rw.kind, rw.index ~= nil)
-      if changed then tv:setFxKindActive(uuid, fxSeed(rw.kind), on) end
+      ImGui.AlignTextToFramePadding(ctx)
+      ImGui.Text(ctx, rw.index .. '. ' .. generators.kinds[rw.kind].label)
       return
     end
     local fd, value = rw.fd, rw.entry[rw.fd.field]
+    local id = 'fx_' .. rw.index .. '_' .. fd.field
     ImGui.AlignTextToFramePadding(ctx); ImGui.Text(ctx, fd.label)
     ImGui.SameLine(ctx, MARK_W + LABEL_W)
     if fd.widget == 'choice' then
-      local pick = chrome.dropdown('fx_' .. rw.kind .. '_' .. fd.field,
-                     fd.options[choiceIndex(fd, value)].l, choiceLabels(fd))
+      local pick = chrome.dropdown(id, fd.options[choiceIndex(fd, value)].l, choiceLabels(fd))
       if pick then tv:setFxField(uuid, rw.index, fd.field, fd.options[pick].v) end
     elseif fd.widget == 'stepInterval' then
       local temper = slideTemper()
       local midi, detune = hostPitch(uuid)
       local per = #temper.cents
-      local rv, n = chrome.numberStepper('fx_' .. rw.kind .. '_' .. fd.field,
-                      centsToSteps(temper, midi, detune, value),
+      local rv, n = chrome.numberStepper(id, centsToSteps(temper, midi, detune, value),
                       { width = 70, min = -2 * per, max = 2 * per })
       if rv then tv:setFxField(uuid, rw.index, fd.field, stepsToCents(temper, midi, detune, n)) end
     else
-      local rv, n = chrome.numberStepper('fx_' .. rw.kind .. '_' .. fd.field, value or 0,
-                      { width = 70, min = fd.min, max = fd.max })
+      local rv, n = chrome.numberStepper(id, value or 0, { width = 70, min = fd.min, max = fd.max })
       if rv then tv:setFxField(uuid, rw.index, fd.field, n) end
     end
   end
 
   local function adjustRow(uuid, rw, right, mods)
-    if rw.header then
-      tv:setFxKindActive(uuid, fxSeed(rw.kind), right)
-      return
-    end
     local fd, value = rw.fd, rw.entry[rw.fd.field]
     if fd.widget == 'choice' then
       local i = util.clamp(choiceIndex(fd, value) + (right and 1 or -1), 1, #fd.options)
@@ -1981,6 +1975,13 @@ local fxEdit do
   modalHost:registerKind('fxEdit', function(s, close)
     local fx   = tv:noteFx(s.uuid) or {}
     local rows = buildRows(fx)
+    -- A reorder just moved a stage; put the cursor back on its renumbered header.
+    if s.focusStage then
+      for i, rw in ipairs(rows) do
+        if rw.header and rw.index == s.focusStage then s.field = i; break end
+      end
+      s.focusStage = nil
+    end
     s.field    = util.clamp(s.field or 1, 1, #rows)
 
     ImGui.TextDisabled(ctx, LEGEND)
@@ -1995,18 +1996,26 @@ local fxEdit do
     if ImGui.Button(ctx, 'Done')   then pruneEmptyRegion(s.uuid); close(false); return end
 
     if ImGui.IsAnyItemActive(ctx) then return end   -- a focused widget owns the keys
-    local press = function(k) return ImGui.IsKeyPressed(ctx, k) end
+    local press    = function(k) return ImGui.IsKeyPressed(ctx, k) end
+    local rw       = rows[s.field]
+    local reorder  = (ImGui.GetKeyMods(ctx) & ImGui.Mod_Super) ~= 0   -- the nudgeBack/Forward chord
+    local up, down = press(ImGui.Key_UpArrow), press(ImGui.Key_DownArrow)
     if press(ImGui.Key_Escape) then
       tv:setNoteFx(s.uuid, s.snapshot or util.REMOVE); close(false)
     elseif press(ImGui.Key_Enter) or press(ImGui.Key_KeypadEnter) then
       pruneEmptyRegion(s.uuid); close(false)
-    elseif press(ImGui.Key_DownArrow) then s.field = util.clamp(s.field + 1, 1, #rows)
-    elseif press(ImGui.Key_UpArrow)   then s.field = util.clamp(s.field - 1, 1, #rows)
+    elseif reorder and (up or down) then
+      if rw.index and tv:moveFxStage(s.uuid, rw.index, up and -1 or 1) then
+        s.focusStage = rw.index + (up and -1 or 1)
+      end
+    elseif down then s.field = util.clamp(s.field + 1, 1, #rows)
+    elseif up   then s.field = util.clamp(s.field - 1, 1, #rows)
     elseif press(ImGui.Key_Delete) or press(ImGui.Key_Backspace) then
-      tv:setFxKindActive(s.uuid, fxSeed(rows[s.field].kind), false)
+      if rw.index then tv:removeFxStage(s.uuid, rw.index) end
     else
       local left, right = press(ImGui.Key_LeftArrow), press(ImGui.Key_RightArrow)
-      if left or right then adjustRow(s.uuid, rows[s.field], right, ImGui.GetKeyMods(ctx)) end
+      if rw.addKind and right then tv:addFxStage(s.uuid, fxSeed(rw.addKind))
+      elseif rw.fd and (left or right) then adjustRow(s.uuid, rw, right, ImGui.GetKeyMods(ctx)) end
     end
   end)
 

@@ -345,6 +345,14 @@ kills stale auditions after `AUDITION_TIMEOUT` (0.8s). MIDI chan is
 0-indexed at the REAPER boundary only; everywhere else vm speaks
 1-indexed.
 
+## Note FX stages
+
+The fx list is an ordered series (C1); the editor addresses stages by position, not kind, so
+duplicate kinds are expressible. `addFxStage` appends a seeded stage, `removeFxStage` drops the
+stage at `index`, `moveFxStage` swaps it with its neighbour (`dir` -1 earlier / +1 later, no-op
+past an edge). All three write the whole list through `setNoteFx`, which persists per host and
+collapses an empty list to none. See `design/note-macros-v2.md` § The fx chain, § Build progress C4.
+
 ## Commands & wrappers
 
 Command registration is split by ownership: ec self-registers

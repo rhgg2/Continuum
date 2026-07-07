@@ -225,10 +225,10 @@ return {
     run = function(harness)
       local h = harness.mk()
       injectRegion(h)                                        -- fxr-1 carrying vibrato
-      h.vm:setFxKindActive('fxr-1', { kind = 'vibrato' }, false)
+      h.vm:removeFxStage('fxr-1', 1)
       t.eq(#(h.ds:get('fxRegions') or {}), 1, 'the emptied region survives mid-edit as a husk')
       t.deepEq(h.ds:get('fxRegions')[1].fx, {}, 'with an empty fx list')
-      h.vm:setFxKindActive('fxr-1', { kind = 'arp', period = { 1, 4 }, dir = 'up' }, true)
+      h.vm:addFxStage('fxr-1', { kind = 'arp', period = { 1, 4 }, dir = 'up' })
       t.eq(#(h.ds:get('fxRegions') or {}), 1, 'the reselect writes back to the same region')
       t.eq(h.vm:noteFx('fxr-1')[1].kind, 'arp', 'the reselected kind landed on the region')
     end,

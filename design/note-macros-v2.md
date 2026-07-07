@@ -42,9 +42,9 @@ Track A is the generator substrate, Track B the authoring UI. Checked = landed.
 - [x] fx chain C3 — cross-chain painter fold (later storage wins) + overlapping regions render as sibling fx columns (§ The fx chain)
 - [x] fx chain — window editing on the fx column: noteOff truncates, grow/shrink resize, nudge shifts the window (§ The fx chain)
 - [x] fx chain — precedence-reorder verb: eventShiftLeft/right bumps a region one badge column, swapping storage precedence (§ The fx chain)
+- [x] fx chain — multi-stage modal editing: fxEdit edits ordered stages (series order, reorder via nudgeBack/Forward, add-by-append, duplicate kinds) (§ The fx chain, § Build progress C4)
 
 **Open / next**
-- [ ] fx chain — multi-stage modal editing (§ The fx chain)
 - [ ] chain surface — docked chain strip, scripted kinds pane, patch library (design only, § The chain surface)
 
 **Deferred (no consumer / intentional)**
@@ -693,7 +693,7 @@ column** (`shiftFxLane`): it bumps the cursor's region one badge column toward t
 storage order (= precedence) with the overlapping sibling beside it at the cursor row; nothing
 overlapping there is a no-op. The storage swap is the precedence flip — the folded-output
 consequence rides on the cross-region painter tests in `tm_fx_region_spec`. Multi-stage modal
-editing stays open. `tv_fx_region_spec`.
+editing landed (§ Build progress, Track C — C4). `tv_fx_region_spec`.
 
 **Transformers rewrite values; rate stays a source param.** A transformer
 freely rewrites event *values* and nudges *discrete* timing (velocity,
@@ -1058,8 +1058,19 @@ column-based, not gm-backed -- the Open-questions Track-B lean, now resolved.
   construction. Pinned by the cross-region painter tests (pb + cc) in
   `tm_fx_region_spec` and the multi-column render/address tests in `tv_fx_region_spec`;
   the C2 augment / suppression pins hold value-for-value. Deferred: the
-  precedence-reorder verb (a region-index move via the fx column) and multi-stage
-  modal editing.
+  precedence-reorder verb and multi-stage modal editing -- both since landed (the fx-column
+  window-edit slice and C4 below).
+
+- **C4 — multi-stage modal editing. Landed 2026-07-07.** The fxEdit modal became the interim
+  chain editor: active stages render in the fx list's own series order (numbered), reorderable in
+  place with the nudgeBack/Forward chord (`tv:moveFxStage`, no-op past an edge, the caret follows
+  the moved stage by index); a "+ Kind" add row per modalOrder kind appends a stage, so duplicate
+  kinds are expressible (position is identity, not kind); Del removes the stage under the caret.
+  The kind-keyed `setFxKindActive` retired for index-addressed
+  `addFxStage`/`removeFxStage`/`moveFxStage`, and every modal widget id keys on the stage index
+  (duplicate-safe). Tab-across-sibling-chains and minting a co-located sibling stay on the
+  multi-chain axis (reachable via the grid caret today). Pinned by the reorder / append-duplicate /
+  remove pins in `vm_fx_ui_spec` and the migrated husk test in `tv_fx_region_spec`.
 
 ## B3 — parked notes/ccs as a third edit backing (landed)
 

@@ -114,12 +114,12 @@ return {
   },
 
   {
-    name = 'setFxKindActive adds a section, preserving the other category',
+    name = 'addFxStage appends a stage, preserving the earlier ones',
     run = function(harness)
       local h = harness.mk()
       addHost(h, { { kind = 'retrig', period = { 1, 4 }, ramp = 0 } })
       local uuid = hostUuid(h)
-      h.vm:setFxKindActive(uuid, { kind = 'vibrato', period = { 1, 2 }, depth = 30, onset = 1 }, true)
+      h.vm:addFxStage(uuid, { kind = 'vibrato', period = { 1, 2 }, depth = 30, onset = 1 })
       local k = byKind(h.vm:noteFx(uuid))
       t.truthy(k.retrig and k.vibrato, 'retrig and vibrato co-resident')
       t.eq(k.vibrato.depth, 30, 'vibrato seeded from its default')
@@ -127,28 +127,56 @@ return {
   },
 
   {
-    name = 'setFxKindActive false removes one section; last removal clears fx',
+    name = 'removeFxStage drops one stage; last removal clears fx',
     run = function(harness)
       local h = harness.mk()
       addHost(h, { { kind = 'retrig',  period = { 1, 4 }, ramp = 0 },
                    { kind = 'vibrato', period = { 1, 2 }, depth = 30, onset = 1 } })
       local uuid = hostUuid(h)
-      h.vm:setFxKindActive(uuid, { kind = 'retrig' }, false)
+      h.vm:removeFxStage(uuid, 1)
       local fx = h.vm:noteFx(uuid)
       t.eq(#fx, 1, 'retrig removed, vibrato kept')
       t.eq(fx[1].kind, 'vibrato', 'the survivor is vibrato')
-      h.vm:setFxKindActive(uuid, { kind = 'vibrato' }, false)
+      h.vm:removeFxStage(uuid, 1)
       t.falsy(h.vm:noteFx(uuid), 'emptying clears fx entirely (no empty list)')
     end,
   },
 
   {
-    name = 'setFxKindActive seeds slide alongside vibrato (continuous kinds coexist)',
+    name = 'moveFxStage swaps adjacent stages, reordering the series',
+    run = function(harness)
+      local h = harness.mk()
+      addHost(h, { { kind = 'arp',        period = { 1, 4 }, dir = 'up' },
+                   { kind = 'velPattern', pattern = { 100, 55 } } })
+      local uuid = hostUuid(h)
+      h.vm:moveFxStage(uuid, 2, -1)                      -- pull velPattern ahead of arp
+      local fx = h.vm:noteFx(uuid)
+      t.eq(fx[1].kind, 'velPattern', 'velPattern now leads')
+      t.eq(fx[2].kind, 'arp',        'arp follows')
+      t.falsy(h.vm:moveFxStage(uuid, 1, -1), 'moving the head earlier is a no-op')
+    end,
+  },
+
+  {
+    name = 'addFxStage appends a second stage of an existing kind (duplicates allowed)',
+    run = function(harness)
+      local h = harness.mk()
+      addHost(h, { { kind = 'velPattern', pattern = { 100, 55 } } })
+      local uuid = hostUuid(h)
+      h.vm:addFxStage(uuid, { kind = 'velPattern', pattern = { 100, 55, 70 } })
+      local fx = h.vm:noteFx(uuid)
+      t.eq(#fx, 2, 'two velPattern stages coexist')
+      t.eq(fx[2].pattern[3], 70, 'the appended stage keeps its own params')
+    end,
+  },
+
+  {
+    name = 'addFxStage seeds slide alongside vibrato (continuous kinds coexist)',
     run = function(harness)
       local h = harness.mk()
       addHost(h, { { kind = 'vibrato', period = { 1, 2 }, depth = 30, onset = 1 } })
       local uuid = hostUuid(h)
-      h.vm:setFxKindActive(uuid, { kind = 'slide', over = { 1, 2 }, target = 'next' }, true)
+      h.vm:addFxStage(uuid, { kind = 'slide', over = { 1, 2 }, target = 'next' })
       local k = byKind(h.vm:noteFx(uuid))
       t.truthy(k.vibrato and k.slide, 'vibrato and slide co-resident -- both sum offline into pb seats')
       t.eq(k.slide.target, 'next', 'slide seeded with target=next')

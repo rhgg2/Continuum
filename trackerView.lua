@@ -2120,16 +2120,32 @@ function tv:setFxField(uuid, index, field, value)
   self:setNoteFx(uuid, list)
 end
 
--- Toggle a macro kind on/off, preserving the other category's entry; render owns defaults.
--- The new list (maybe empty) is the write; setNoteFx decides how empty persists per host.
-function tv:setFxKindActive(uuid, entry, active)
-  local fx = self:noteFx(uuid)
+-- The fx list is an ordered series (C1); stages are addressed by position, not kind (duplicates
+-- allowed). see docs/trackerView.md § Note FX stages
+function tv:addFxStage(uuid, entry)
   local list = {}
-  if fx then
-    for _, e in ipairs(fx) do if e.kind ~= entry.kind then list[#list + 1] = e end end
-  end
-  if active then list[#list + 1] = util.deepClone(entry) end
+  for _, e in ipairs(self:noteFx(uuid) or {}) do list[#list + 1] = e end
+  list[#list + 1] = util.deepClone(entry)
   self:setNoteFx(uuid, list)
+end
+
+function tv:removeFxStage(uuid, index)
+  local fx = self:noteFx(uuid)
+  if not (fx and fx[index]) then return end
+  local list = {}
+  for i, e in ipairs(fx) do if i ~= index then list[#list + 1] = e end end
+  self:setNoteFx(uuid, list)
+end
+
+function tv:moveFxStage(uuid, index, dir)
+  local fx = self:noteFx(uuid)
+  local j  = index + dir
+  if not (fx and fx[index] and fx[j]) then return end
+  local list = {}
+  for i, e in ipairs(fx) do list[i] = e end
+  list[index], list[j] = list[j], list[index]
+  self:setNoteFx(uuid, list)
+  return true
 end
 
 ----- Deletion
