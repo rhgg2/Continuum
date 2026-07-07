@@ -1,4 +1,4 @@
-@module wiringRender  src=wiringRender.lua  loc=2690  sha=3a7206b  mode=chunk  self=wr
+@module wiringRender  src=wiringRender.lua  loc=2690  sha=fbe5034  mode=chunk  self=wr
 @deps cm, cmgr, chrome, gui, modalHost, wv, facade
 
 # Invariants & contracts
@@ -24,8 +24,8 @@
   @state uiFont = gui and gui.uiFont or nil  @ 25
   @state uiSize = gui and gui.fontSize and gui.fontSize.ui or 12  @ 26
   @state wr = {}  @ 28
-  @state NODE_W = 96  @ 30
-  @state NODE_H = 60  @ 31
+  @state NODE_W = 88  @ 30
+  @state NODE_H = 55  @ 31
   @state CORNER_R = 5  @ 32
   @state LABEL_PAD = 4  @ 33   -- inner horizontal padding for the wrapped name
   @state LABEL_MAX_LINES = 2  @ 34

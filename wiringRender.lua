@@ -27,8 +27,8 @@ local uiSize   = gui and gui.fontSize and gui.fontSize.ui or 12
 
 local wr = {}
 
-local NODE_W           = 96
-local NODE_H           = 60
+local NODE_W           = 88
+local NODE_H           = 55
 local CORNER_R         = 5
 local LABEL_PAD        = 4   -- inner horizontal padding for the wrapped name
 local LABEL_MAX_LINES  = 2

@@ -995,8 +995,9 @@ local releaseReq   = false   -- one-shot: drop paletteFocus to nil at the sink (
 local scrollReq    = false   -- one-shot: scroll the cursor row into view next draw
 
 -- FX-chain strip focus: routes the keyboard into the docked strip (mirrors paletteFocus).
-local stripFocus   = false
-local stripExitReq = false   -- one-shot: drop stripFocus after dispatch, so the exit Esc isn't re-dispatched
+local stripFocus    = false
+local stripSnapshot = nil    -- {host, fx}: chain state at keyboard-entry; Esc reverts to it, Enter commits
+local stripExitReq  = false  -- one-shot: drop stripFocus after dispatch, so the exit Esc isn't re-dispatched
 
 local function paletteFindBox()
   ImGui.SetNextItemWidth(ctx, -1)
@@ -2117,6 +2118,7 @@ local drawFxStrip, editFx, stripPlan do
     local fx   = host and tv:noteFx(host)
     if not (fx and #fx > 0) then return nil end
     local cols = stripColumns(fx)
+    cols[#cols + 1] = { isAdd = true, fields = {} }   -- rightmost slot: arrow to it, Enter adds a stage
     return { host = host, cols = cols, height = stripHeight(cols) }
   end
 
@@ -2128,49 +2130,59 @@ local drawFxStrip, editFx, stripPlan do
     return c
   end
 
+  -- First printable character typed this frame -- drives type-to-open on the add slot.
+  local function typedChar()
+    local ok, c = ImGui.GetInputQueueCharacter(ctx, 0)
+    if ok and c >= 32 and c < 127 then return string.char(c) end
+  end
+
   local function handleStripKeys(plan)
     local press = function(k) return ImGui.IsKeyPressed(ctx, k) end
-    if press(ImGui.Key_Escape) then stripExitReq = true; return end   -- drop at frame end, not now (see releaseReq)
+    if press(ImGui.Key_Escape) then                      -- revert to the entry snapshot, then leave
+      if stripSnapshot then tv:setNoteFx(stripSnapshot.host, stripSnapshot.fx or util.REMOVE) end
+      stripExitReq = true; return                         -- drop at frame end, not now (see releaseReq)
+    end
     local cols  = plan.cols
     local cur   = clampCursor(cols)
     local col   = cols[cur.stage]
     local mods  = ImGui.GetKeyMods(ctx)
     local super = (mods & ImGui.Mod_Super) ~= 0
     local left, right = press(ImGui.Key_LeftArrow), press(ImGui.Key_RightArrow)
-    if super and (left or right) then
+    if press(ImGui.Key_Enter) or press(ImGui.Key_KeypadEnter) then
+      stripExitReq = true                                 -- commit: keep the live edits, leave the strip
+    elseif super and (left or right) and not col.isAdd then
       if tv:moveFxStage(plan.host, col.index, left and -1 or 1) then
         cur.stage = cur.stage + (left and -1 or 1)
       end
-    elseif left or right then
+    elseif (left or right) and cur.param == 0 then       -- header row: arrow between stages / onto the add slot
       cur.stage = util.clamp(cur.stage + (right and 1 or -1), 1, #cols)
       local lo, hi = paramRange(cols[cur.stage])
       cur.param = util.clamp(cur.param, lo, hi)
+    elseif left or right then                            -- param row: arrow nudges the field value
+      adjustRow(plan.host, col.fields[cur.param], right, mods)
     elseif press(ImGui.Key_UpArrow) or press(ImGui.Key_DownArrow) then
       local lo, hi = paramRange(col)
       cur.param = util.clamp(cur.param + (press(ImGui.Key_DownArrow) and 1 or -1), lo, hi)
     elseif press(ImGui.Key_Minus) or press(ImGui.Key_Equal) then
       if cur.param >= 1 then adjustRow(plan.host, col.fields[cur.param], press(ImGui.Key_Equal), mods) end
-    elseif press(ImGui.Key_Enter) or press(ImGui.Key_KeypadEnter) then
-      chrome.requestPickerOpen('fxAdd')                       -- open the searchable add-stage picker
     elseif press(ImGui.Key_Backspace) or press(ImGui.Key_Delete) then
-      tv:removeFxStage(plan.host, col.index)
+      if not col.isAdd then tv:removeFxStage(plan.host, col.index) end
+    elseif col.isAdd then
+      local ch = typedChar()
+      if ch then chrome.requestPickerOpen('fxAdd', ch) end   -- type to open the searchable stage picker
     end
     tv:setStripCursor(cur)
   end
 
-  -- Header action row (chrome-styled): searchable add-stage picker + clear-chain. Always live,
-  -- so the mouse can add/clear without entering keyboard mode; Enter/Del give keyboard parity.
-  local function stageActions(host)
-    local items = {}
-    for _, kind in ipairs(FX_KINDS) do
-      items[#items + 1] = { label = generators.kinds[kind].label, key = kind }
-    end
-    chrome.drawPicker{
-      kind = 'fxAdd', buttonLabel = '+ add', items = items,
-      onPick = function(kind) tv:addFxStage(host, fxSeed(kind)) end,
-    }
+  -- Header action row (chrome-styled): del removes the stage under the cursor, clear wipes the chain.
+  -- Always live, so the mouse can del/clear without entering keyboard mode; Del gives keyboard parity.
+  local function headerActions(plan, cur)
+    local stage = plan.cols[cur.stage]
+    chrome.disabledIf(stage.isAdd, function()
+      if ImGui.Button(ctx, 'del') then tv:removeFxStage(plan.host, stage.index) end
+    end)
     ImGui.SameLine(ctx, 0, 8)
-    if ImGui.Button(ctx, 'clear') then tv:setNoteFx(host, util.REMOVE) end
+    if ImGui.Button(ctx, 'clear') then tv:setNoteFx(plan.host, util.REMOVE) end
   end
 
   -- ▸ on the keyboard cursor's field (only while the strip holds focus); a blank keeps the label
@@ -2179,6 +2191,21 @@ local drawFxStrip, editFx, stripPlan do
     ImGui.AlignTextToFramePadding(ctx)
     ImGui.Text(ctx, (onCursor and stripFocus) and '\xe2\x96\xb8' or ' ')
     ImGui.SameLine(ctx, MARK_W)
+  end
+
+  -- The add-stage picker, drawn as the chain's rightmost slot so the cursor can arrow to it.
+  local function drawAddStage(host, onCursor)
+    local items = {}
+    for _, kind in ipairs(FX_KINDS) do
+      items[#items + 1] = { label = generators.kinds[kind].label, key = kind }
+    end
+    ImGui.BeginGroup(ctx)
+    mark(onCursor)
+    chrome.drawPicker{
+      kind = 'fxAdd', buttonLabel = '+ add', items = items,
+      onPick = function(kind) tv:addFxStage(host, fxSeed(kind)) end,
+    }
+    ImGui.EndGroup(ctx)
   end
 
   -- One stage as a vertical group: numbered header, then a labelled chrome widget per field.
@@ -2209,18 +2236,18 @@ local drawFxStrip, editFx, stripPlan do
 
   function drawFxStrip(plan, x, y, w)
     local cur = clampCursor(plan.cols); tv:setStripCursor(cur)
-    painter.new(ctx, chrome, {}).segment(x, y, x + w, y, 'text', 1)   -- rule off the grid above
     ImGui.SetCursorScreenPos(ctx, x, y)
     chrome.pushChromeStyles()
     if ImGui.BeginChild(ctx, '##fxStrip', w, plan.height, ImGui.ChildFlags_None, ImGui.WindowFlags_NoNav) then
-      chrome.paletteHeader('fx chain')
-      chrome.row(function() stageActions(plan.host) end)
+      chrome.paletteHeader('fx')
+      chrome.row(function() headerActions(plan, cur) end)
       ImGui.Separator(ctx)
       local dl = ImGui.GetWindowDrawList(ctx)
       for ci, col in ipairs(plan.cols) do
         if ci > 1 then ImGui.SameLine(ctx, 0, GAP) end
-        drawStage(plan.host, col, cur.stage == ci, cur)
-        if ci < #plan.cols then
+        if col.isAdd then drawAddStage(plan.host, cur.stage == ci)
+        else              drawStage(plan.host, col, cur.stage == ci, cur) end
+        if ci < #plan.cols and not plan.cols[ci + 1].isAdd then
           local _,   gy0 = ImGui.GetItemRectMin(ctx)
           local gx1, gy1 = ImGui.GetItemRectMax(ctx)
           stageDivider(dl, gx1, gy0, gy1)
@@ -2239,6 +2266,7 @@ local drawFxStrip, editFx, stripPlan do
     local host = tv:fxHostAtCursor()
     local fx   = host and tv:noteFx(host)
     if fx and #fx > 0 then
+      if not stripFocus then stripSnapshot = { host = host, fx = util.deepClone(fx) } end
       if not tv:stripCursor() then tv:setStripCursor{ stage = 1, param = 0 } end
       stripFocus = true
     else
@@ -2420,7 +2448,7 @@ function tr:renderBody(_, w, h, dispatch)
   local ox, oy = ImGui.GetCursorScreenPos(ctx)
   local gridW  = chrome.gridWidth(w)
   local plan   = stripPlan()
-  if stripFocus and not plan then stripFocus = false end   -- caret left the chain
+  if stripFocus and not plan then stripFocus, stripSnapshot = false, nil end   -- caret left the chain
   local gridH  = plan and (h - plan.height) or h
   ImGui.PushFont(ctx, font, 15)
   computeLayout(gridW, gridH)
@@ -2439,7 +2467,7 @@ function tr:renderBody(_, w, h, dispatch)
   if not help:wasOpenAtFrameStart() then handleMouse() end
   local kr = dispatch and dispatch(self:focusState()) or { commandHeld = {} }
   if not help:wasOpenAtFrameStart() then handleKeys(kr) end
-  if stripExitReq then stripFocus, stripExitReq = false, false end   -- exit after this frame's dispatch saw us focused
+  if stripExitReq then stripFocus, stripExitReq, stripSnapshot = false, false, nil end   -- exit after this frame's dispatch saw us focused
 
   tv:tick()
 end

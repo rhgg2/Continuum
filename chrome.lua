@@ -346,10 +346,14 @@ end
 -- Per-kind state; popups close on focus loss so a missing entry just
 -- means "default empty filter / cursor at top".
 local pickerFilter, pickerCursor = {}, {}
-local pickerOpenReq = nil   -- kind name; consumed by next drawPicker(kind)
-local pickerActive  = false -- frame-scoped: any picker popup live this frame
+local pickerOpenReq  = nil   -- kind name; consumed by next drawPicker(kind)
+local pickerOpenSeed = nil   -- initial filter text for a request-driven open (type-to-open)
+local pickerActive   = false -- frame-scoped: any picker popup live this frame
+-- EEL callback: drops SetKeyboardFocusHere's select-all so a seeded filter
+-- appends instead of being overwritten by the next keystroke. Attached lazily.
+local clearSelCb     = nil
 
-local function requestPickerOpen(kind) pickerOpenReq = kind end
+local function requestPickerOpen(kind, seed) pickerOpenReq, pickerOpenSeed = kind, seed end
 local function pickerIsActive()        return pickerActive end
 local function resetPickerActive()     pickerActive = false end
 
@@ -425,12 +429,14 @@ local function drawPicker(d)
   -- position, putting a keyboard-triggered popup at the text cursor.
   local btnX = ImGui.GetItemRectMin(ctx)
   local _, btnY = ImGui.GetItemRectMax(ctx)
+  local fromReq = false
   if pickerOpenReq == d.kind then
     pickerOpenReq = nil
-    opening = true
+    opening, fromReq = true, true
   end
   if opening then
-    pickerFilter[d.kind] = ''
+    pickerFilter[d.kind] = (fromReq and pickerOpenSeed) or ''
+    if fromReq then pickerOpenSeed = nil end
     ImGui.OpenPopup(ctx, popupId)
   end
 
@@ -447,7 +453,12 @@ local function drawPicker(d)
   -- Plain InputText (no EnterReturnsTrue): with that flag, ReaImGui
   -- only commits the buffer on Enter, so the live filter would never
   -- update during typing. We watch Enter ourselves below.
-  local _, filter = ImGui.InputText(ctx, '##filter_' .. d.kind, prevFilter)
+  if not clearSelCb then
+    clearSelCb = ImGui.CreateFunctionFromEEL('InputTextCallback_ClearSelection();')
+    ImGui.Attach(ctx, clearSelCb)
+  end
+  local _, filter = ImGui.InputText(ctx, '##filter_' .. d.kind, prevFilter,
+    ImGui.InputTextFlags_CallbackAlways, clearSelCb)
   pickerFilter[d.kind] = filter
   local entered = ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)
                or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadEnter)

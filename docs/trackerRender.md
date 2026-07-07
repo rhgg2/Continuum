@@ -78,3 +78,18 @@ laid out as horizontal stage cards of live chrome widgets — each stage a
 `BeginGroup` of labelled fields sharing `fxFieldWidget` with the fxEdit modal.
 `stripFocus` mirrors `paletteFocus`: it gates whether `handleStripKeys` runs
 and drives the ▸ marker that tracks the keyboard cursor onto the current field.
+
+The chain's rightmost card is a synthetic **add slot** (`isAdd`, no fields): the
+cursor arrows onto it like any stage, and typing a character opens the searchable
+stage picker seeded with that character (`requestPickerOpen(kind, seed)`); the
+`+ add` button there opens it for the mouse. Left/right navigate stages only on
+the header row (`param == 0`); on a param row they nudge the field value (as
+`-`/`=` do). The header button row carries `del` (remove the stage under the
+cursor) and `clear` (wipe the chain); `del` is disabled while the cursor sits on
+the add slot.
+
+The keyboard session is **transactional**: `editFx` snapshots the chain
+(`stripSnapshot`) on entry, edits apply live as a preview, and — while the picker
+is closed — Enter commits (keeps the edits and leaves) while Esc reverts to the
+snapshot before leaving. This mirrors the `fxEdit` modal's Cancel/Done snapshot
+restore.
