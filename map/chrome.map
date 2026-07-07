@@ -1,4 +1,4 @@
-@module chrome  src=chrome.lua  loc=640  sha=a3a8e0b  mode=chunk
+@module chrome  src=chrome.lua  loc=651  sha=a3a8e0b  mode=chunk
 @deps cm, ctx, uiFontBold, uiSize
 
 # Shapes
@@ -95,11 +95,15 @@
   @fn rowSelectable(label, selected, flags)  @ 563-570
       -- Selectable with hover/active highlight suppressed: only the selected row shows
       -- the Col_Header fill. Shared by the tracker palette and the sampler browser/tree.
-  @fn treeRow(opts)  @ 581-608
+  @fn treeRow(opts)  @ 582-609
       -- One tree row, sampler-tree style: a draw-list chip in a fixed gutter (never
       -- highlighted), then a selectable label; the row owns its nesting indent.
       @contract  chip toggles; body click selects and toggles a parent; allowDouble suppresses both
-      @contract  childless rows show blank gutter so labels align; depth × TREE_INDENT owned here
+      @contract  childless rows show blank gutter so labels align across depths
+      @contract  nesting indent = opts.indent (px) if set, else depth × TREE_INDENT
+  @fn treeHeading(opts)  @ 613-618
+      -- Non-selectable tree heading (fx-section labels, group dividers): a dimmed label.
+      @contract  gutter=true aligns text with a same-depth row label, not its chip; else flush indent
 
 # Uses (outbound edges)
   @use call    cm.get  @ resolve:28 libPicker:368
@@ -119,33 +123,33 @@
   @use call    imgui.ColorConvertU32ToDouble4  @ headingLabel:259
   @use call    imgui.DrawList_AddLine  @ verticalSeparator:128
   @use call    imgui.DrawList_AddRectFilled  @ numberStepper:213,214
-  @use call    imgui.DrawList_AddText  @ treeRow:590
+  @use call    imgui.DrawList_AddText  @ treeRow:591
   @use call    imgui.Dummy  @ verticalSeparator:130 paletteHeader:526
   @use call    imgui.EndChild  @ palettePane:546
   @use call    imgui.EndDisabled  @ disabledIf:138
   @use call    imgui.EndGroup  @ makeToolbar:289,332
   @use call    imgui.EndPopup  @ dropdown:250 drawPicker:497
   @use call    imgui.GetColor  @ numberStepper:212
-  @use call    imgui.GetContentRegionAvail  @ makeToolbar:314 paletteHeader:517 treeRow:585
+  @use call    imgui.GetContentRegionAvail  @ makeToolbar:314 paletteHeader:517 treeRow:586
   @use call    imgui.GetCursorPosX  @ row:147
   @use call    imgui.GetCursorPosY  @ row:147 compactControl:157
-  @use call    imgui.GetCursorScreenPos  @ verticalSeparator:126 makeToolbar:281,313 paletteHeader:514 treeRow:587
+  @use call    imgui.GetCursorScreenPos  @ verticalSeparator:126 makeToolbar:281,313 paletteHeader:514 treeRow:588
   @use call    imgui.GetFrameHeight  @ verticalSeparator:127 row:146 compactControl:155,157 numberStepper:178
   @use call    imgui.GetItemRectMax  @ numberStepper:210 dropdown:241 makeToolbar:291,334 drawPicker:427
   @use call    imgui.GetItemRectMin  @ numberStepper:209 dropdown:240 makeToolbar:290,333 drawPicker:426
   @use call    imgui.GetScrollMaxY  @ paletteHeader:518
   @use call    imgui.GetStyleColor  @ rowSelectable:564
   @use call    imgui.GetStyleVar  @ pushChromeStyles:69 row:145 numberStepper:179,180 dropdown:235 drawPicker:414 paletteHeader:519
-  @use call    imgui.GetTextLineHeight  @ treeRow:586
+  @use call    imgui.GetTextLineHeight  @ treeRow:587
   @use call    imgui.GetTextLineHeightWithSpacing  @ paletteHeader:521
-  @use call    imgui.GetWindowDrawList  @ verticalSeparator:128 numberStepper:212 treeRow:590
-  @use call    imgui.Indent  @ treeRow:583
+  @use call    imgui.GetWindowDrawList  @ verticalSeparator:128 numberStepper:212 treeRow:591
+  @use call    imgui.Indent  @ treeRow:584 treeHeading:615
   @use call    imgui.InputDouble  @ numberStepper:197
   @use call    imgui.InputInt  @ numberStepper:198
   @use call    imgui.InputText  @ drawPicker:450
-  @use call    imgui.InvisibleButton  @ treeRow:588
+  @use call    imgui.InvisibleButton  @ treeRow:589
   @use call    imgui.IsKeyPressed  @ drawPicker:452,453,472,474,481
-  @use call    imgui.IsMouseDoubleClicked  @ treeRow:599
+  @use call    imgui.IsMouseDoubleClicked  @ treeRow:600
   @use call    imgui.IsWindowAppearing  @ drawPicker:444,466
   @use call    imgui.IsWindowFocused  @ palettePane:540
   @use call    imgui.OpenPopup  @ dropdown:238 drawPicker:434
@@ -156,7 +160,7 @@
   @use call    imgui.PushStyleColor  @ pushChromeStyles:71,72,75,76,77,80,81,82,83,84,85,86,89,92,95,96,97 pushChromeWindow:109,110,111,112,113,114 headingLabel:261 rowSelectable:565,566
   @use call    imgui.PushStyleVar  @ pushChromeStyles:65,66,70 pushChromeWindow:108 compactControl:156 numberStepper:194,205 dropdown:244 makeToolbar:282 drawPicker:419
   @use call    imgui.RadioButton  @ radio:168
-  @use call    imgui.SameLine  @ numberStepper:206 makeToolbar:286,323,325 drawPicker:403 treeRow:593
+  @use call    imgui.SameLine  @ numberStepper:206 makeToolbar:286,323,325 drawPicker:403 treeRow:594
   @use call    imgui.Selectable  @ dropdown:248 drawPicker:492 rowSelectable:567
   @use call    imgui.Separator  @ drawPicker:454,490
   @use call    imgui.SetCursorPos  @ row:149
@@ -167,7 +171,8 @@
   @use call    imgui.SetNextWindowPos  @ dropdown:242 drawPicker:437
   @use call    imgui.SetNextWindowSize  @ dropdown:243
   @use call    imgui.Text  @ headingLabel:263 drawPicker:402
-  @use call    imgui.Unindent  @ treeRow:602
+  @use call    imgui.TextDisabled  @ treeHeading:616
+  @use call    imgui.Unindent  @ treeRow:603 treeHeading:617
   @use call    painter.new  @ paletteHeader:513 palettePane:533
   @use require imgui  @ 9
   @use require painter  @ 10

@@ -289,6 +289,14 @@ function M.new()
     return names and #names or 0
   end
 
+  -- VST3-unit / CLAP-module a param belongs to; '' when unreported. Seed via
+  -- r:setFxParamSections(ident, { 'Amp', nil, 'Filter' }) (holes = unreported).
+  state.fxParamSections = {}
+  function r.TrackFX_GetParamSectionName(track, fxIdx, paramIdx)
+    local sections = state.fxParamSections[fxIdentOf(fxEntry(track, fxIdx))]
+    return sections and sections[paramIdx + 1] or ''
+  end
+
   -- Track state chunk — minimal FXCHAIN round-trip used by the wm applier's
   -- per-FX MIDI routing surgery. Emits one <VST ...> block per non-JS fx
   -- (default flag byte 0x10, bus bytes zero) and one <JS ...> block per JS
@@ -1274,6 +1282,9 @@ function M.new()
   end
   function r:setFxParamNames(ident, names)
     state.fxParamNames[ident] = names
+  end
+  function r:setFxParamSections(ident, sections)
+    state.fxParamSections[ident] = sections
   end
   function r:setProjectTracks(tracks)
     state.projectTracks = tracks

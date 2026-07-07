@@ -1011,8 +1011,41 @@ end
 -- creation trips ReaImGui's short-lived guard; module-load faults the test fake.
 local paramClipper = nil
 
--- Ordered render plan: {kind='heading',text} | {kind='fx',row,open} | {kind='param',row,prm}.
--- Non-empty needle prunes to matched subtrees, forced open — see docs/trackerRender.md § Filtering.
+local PARAM_INDENT = 6   -- px param labels nest past the fx-name / section-heading column
+
+-- Group an fx's (frecency-ordered) params into section subgroups, each a section
+-- heading + its params. See docs/trackerRender.md § Parameter sections.
+local function emitParams(plan, row, params)
+  local groups, minIndex, ungrouped = {}, {}, {}
+  for _, prm in ipairs(params) do
+    if prm.section then
+      if not groups[prm.section] then groups[prm.section] = {}; minIndex[prm.section] = prm.index end
+      if prm.index < minIndex[prm.section] then minIndex[prm.section] = prm.index end
+      local bucket = groups[prm.section]
+      bucket[#bucket + 1] = prm
+    else
+      ungrouped[#ungrouped + 1] = prm
+    end
+  end
+  local order = {}
+  for name in pairs(groups) do order[#order + 1] = name end
+  if #order == 0 then
+    for _, prm in ipairs(ungrouped) do plan[#plan + 1] = { kind = 'param', row = row, prm = prm } end
+    return
+  end
+  table.sort(order, function(a, b) return minIndex[a] < minIndex[b] end)
+  local function emitGroup(label, bucket)
+    plan[#plan + 1] = { kind = 'section', row = row, text = label }
+    for _, prm in ipairs(bucket) do
+      plan[#plan + 1] = { kind = 'param', row = row, prm = prm }
+    end
+  end
+  for _, label in ipairs(order) do emitGroup(label, groups[label]) end
+  if #ungrouped > 0 then emitGroup('(ungrouped)', ungrouped) end
+end
+
+--shape: plan item = {kind='heading',text} | {kind='fx',row,open} | {kind='section',row,text} | {kind='param',row,prm}
+--contract: non-empty needle prunes to matched subtrees (forced open); see docs § Filtering
 local function buildPlan(rows, needle)
   local plan, heading = {}, nil
   for _, row in ipairs(rows) do
@@ -1025,7 +1058,7 @@ local function buildPlan(rows, needle)
     else
       shownParams = {}
       for _, prm in ipairs(tv:listParams(row.trackGuid, row.fxGuid)) do
-        if (row.name .. ' ' .. prm.name):lower():find(needle, 1, true) then
+        if (row.name .. ' ' .. (prm.section or '') .. ' ' .. prm.name):lower():find(needle, 1, true) then
           shownParams[#shownParams + 1] = prm
         end
       end
@@ -1037,9 +1070,7 @@ local function buildPlan(rows, needle)
         plan[#plan + 1] = { kind = 'heading', text = section }
       end
       plan[#plan + 1] = { kind = 'fx', row = row, open = open }
-      for _, prm in ipairs(open and shownParams or {}) do
-        plan[#plan + 1] = { kind = 'param', row = row, prm = prm }
-      end
+      if open then emitParams(plan, row, shownParams) end
     end
   end
   return plan
@@ -1148,7 +1179,9 @@ end
 
 local function drawTreeItem(it, cur, showLearn, btns)
   if it.kind == 'heading' then
-    ImGui.TextDisabled(ctx, it.text)
+    chrome.treeHeading{ text = it.text }
+  elseif it.kind == 'section' then
+    chrome.treeHeading{ text = it.text, gutter = true }
   elseif it.kind == 'fx' then
     local row     = it.row
     local onCur   = cur and cur.fxGuid == row.fxGuid and cur.param == nil
@@ -1180,7 +1213,7 @@ local function drawTreeItem(it, cur, showLearn, btns)
     local onCur = cur and cur.fxGuid == row.fxGuid and cur.param == it.prm.index
     -- id from guid+index alone: truncation/width must not remint it.
     local r = chrome.treeRow{ id = 'p' .. row.fxGuid .. it.prm.index, label = it.prm.name,
-                              depth = 1, hasChildren = false, selected = onCur,
+                              indent = PARAM_INDENT, hasChildren = false, selected = onCur,
                               allowDouble = true }
     scrollFollow(onCur)
     if r.selected or r.doubleClicked then

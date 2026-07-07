@@ -577,10 +577,11 @@ local CHIP_OPEN, CHIP_SHUT = '\xe2\x96\xbe', '\xe2\x96\xb8'   -- ▾ / ▸
 -- One tree row, sampler-tree style: a draw-list chip in a fixed gutter (never
 -- highlighted), then a selectable label; the row owns its nesting indent.
 --contract: chip toggles; body click selects and toggles a parent; allowDouble suppresses both
---contract: childless rows show blank gutter so labels align; depth × TREE_INDENT owned here
+--contract: childless rows show blank gutter so labels align across depths
+--contract: nesting indent = opts.indent (px) if set, else depth × TREE_INDENT
 local function treeRow(opts)
-  local depth = opts.depth or 0
-  if depth > 0 then ImGui.Indent(ctx, depth * TREE_INDENT) end
+  local indent = opts.indent or (opts.depth or 0) * TREE_INDENT
+  if indent > 0 then ImGui.Indent(ctx, indent) end
 
   local availW  = select(1, ImGui.GetContentRegionAvail(ctx))
   local rowH    = ImGui.GetTextLineHeight(ctx)
@@ -599,12 +600,21 @@ local function treeRow(opts)
   local double  = clicked and opts.allowDouble and ImGui.IsMouseDoubleClicked(ctx, 0) or false
   local bodySel = clicked and not double
 
-  if depth > 0 then ImGui.Unindent(ctx, depth * TREE_INDENT) end
+  if indent > 0 then ImGui.Unindent(ctx, indent) end
   return {
     toggled       = opts.hasChildren and (chipHit or bodySel) or false,
     selected      = bodySel,
     doubleClicked = double,
   }
+end
+
+-- Non-selectable tree heading (fx-section labels, group dividers): a dimmed label.
+--contract: gutter=true aligns text with a same-depth row label, not its chip; else flush indent
+local function treeHeading(opts)
+  local indent = (opts.depth or 0) * TREE_INDENT + (opts.gutter and ARROW_GUTTER or 0)
+  if indent > 0 then ImGui.Indent(ctx, indent) end
+  ImGui.TextDisabled(ctx, opts.text)
+  if indent > 0 then ImGui.Unindent(ctx, indent) end
 end
 
 return {
@@ -636,5 +646,6 @@ return {
   fitLabel           = fitLabel,
   rowSelectable      = rowSelectable,
   treeRow            = treeRow,
+  treeHeading        = treeHeading,
 }
 

@@ -1,4 +1,4 @@
-@module paramAutomation  src=paramAutomation.lua  loc=432  sha=2d2415d  mode=chunk  self=pa
+@module paramAutomation  src=paramAutomation.lua  loc=433  sha=672fb18  mode=chunk  self=pa
 @deps cm, ds, facade, ccm
 
 # Invariants & contracts
@@ -8,7 +8,7 @@
 # Shapes
   @shape  binding = { busCode=int, trackGuid=str, fxGuid=str, param=int, scale=num, offset=num, label=str }
   @shape  trackSpec = { filter={ {src=code,dst=code},... }, listen={ {code,fxGuid,param,scale,offset},... }, sends={dstGuid,...} }
-  @shape  paramFrecency (ds global) = { [fxIdent] = { n=int, params={ [name]={s=num,n0=int} } } }
+  @shape  paramFrecency (ds global) = { [fxIdent] = { n=int, params={ [paramIndex]={s=num,n0=int} } } }
 
 # Imports
   @require util = 'util'  @ 10
@@ -72,22 +72,22 @@
   @api pa:binding(chan, lane)  @ 354-357
   @api pa:targets()  @ 360-365
       @contract  palette rows from the wiring facade's cone walk; {} without a take or wiring
-  @api pa:params(trackGuid, fxGuid)  @ 368-388
+  @api pa:params(trackGuid, fxGuid)  @ 368-389
       @contract  cached per fxGuid (param-count change invalidates); frecency-hot params first
-  @api pa:bumpFrecency(trackGuid, fxGuid, paramName)  @ 391-405
+  @api pa:bumpFrecency(trackGuid, fxGuid, paramIndex)  @ 392-406
       @contract  advances the ident's use counter; the param's score decays to it, then +1
-  @api pa:floatFx(trackGuid, fxGuid)  @ 408-413
+  @api pa:floatFx(trackGuid, fxGuid)  @ 409-414
       @contract  floats the fx ui; true only when pa floated it — caller owns popping it down
-  @api pa:unfloatFx(trackGuid, fxGuid)  @ 415-418
-  @api pa:lastTouched()  @ 421-430
+  @api pa:unfloatFx(trackGuid, fxGuid)  @ 416-419
+  @api pa:lastTouched()  @ 422-431
       @contract  last-touched track-fx param as guids + name; nil for take/container/input fx
 
 # Uses (outbound edges)
   @use call    ccm.claim  @ applyTrack:219
   @use call    ccm.release  @ applyTrack:212
   @use call    cm.boundTake  @ boundTrack:64
-  @use call    ds.assign  @ automate:340 unautomate:350 bumpFrecency:403
-  @use call    ds.get  @ automate:333 unautomate:346 binding:355 params:385 bumpFrecency:395
+  @use call    ds.assign  @ automate:340 unautomate:350 bumpFrecency:404
+  @use call    ds.get  @ automate:333 unautomate:346 binding:355 params:386 bumpFrecency:396
   @use call    ds.getAt  @ gatherBindings:72 usedLanes:241,243 allocBusCode:266
   @use call    facade.get  @ arrange:15 targets:362
   @use call    util.atomic  @ apply:320
@@ -102,7 +102,7 @@
   @reaper GetTrackGUID
   @reaper CountTracks
   @reaper GetTrack
-  @reaper TrackFX_GetCount, TrackFX_GetFXGUID, TrackFX_SetNamedConfigParm, TrackFX_SetParam, TrackFX_GetNamedConfigParm, TrackFX_GetNumParams, TrackFX_GetParamName, TrackFX_GetFloatingWindow, TrackFX_Show
+  @reaper TrackFX_GetCount, TrackFX_GetFXGUID, TrackFX_SetNamedConfigParm, TrackFX_SetParam, TrackFX_GetNamedConfigParm, TrackFX_GetNumParams, TrackFX_GetParamName, TrackFX_GetParamSectionName, TrackFX_GetFloatingWindow, TrackFX_Show
   @reaper CountMediaItems
   @reaper GetMediaItem
   @reaper CountTakes

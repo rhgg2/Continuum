@@ -5,7 +5,7 @@
 --invariant: authored (chan,lane) codes are track-unique across takes; bus codes project-unique
 --shape: binding = { busCode=int, trackGuid=str, fxGuid=str, param=int, scale=num, offset=num, label=str }
 --shape: trackSpec = { filter={ {src=code,dst=code},... }, listen={ {code,fxGuid,param,scale,offset},... }, sends={dstGuid,...} }
---shape: paramFrecency (ds global) = { [fxIdent] = { n=int, params={ [name]={s=num,n0=int} } } }
+--shape: paramFrecency (ds global) = { [fxIdent] = { n=int, params={ [paramIndex]={s=num,n0=int} } } }
 --contract: apply() is a full-project idempotent reconcile; mirror-matching tracks are untouched
 local util = require 'util'
 local cm, ds, facade, ccm = (...).cm, (...).ds, (...).facade, (...).ccm
@@ -292,7 +292,7 @@ function pa.frecencyOrder(params, fxScores)
   local sorted = { table.unpack(params) }
   if not fxScores then return sorted end
   local function score(prm)
-    local entry = fxScores.params[prm.name]
+    local entry = fxScores.params[prm.index]
     return entry and entry.s * DECAY ^ (fxScores.n - entry.n0) or 0
   end
   table.sort(sorted, function(a, b)
@@ -373,8 +373,9 @@ function pa:params(trackGuid, fxGuid)
   if not (cached and cached.count == count) then
     local params = {}
     for p = 0, count - 1 do
-      local _, name = reaper.TrackFX_GetParamName(track, fxIdx, p)
-      params[p + 1] = { index = p, name = name }
+      local _, name  = reaper.TrackFX_GetParamName(track, fxIdx, p)
+      local section  = reaper.TrackFX_GetParamSectionName(track, fxIdx, p)
+      params[p + 1] = { index = p, name = name, section = section ~= '' and section or nil }
     end
     cached = { count = count, params = params }
     paramCache[fxGuid] = cached
@@ -388,15 +389,15 @@ function pa:params(trackGuid, fxGuid)
 end
 
 --contract: advances the ident's use counter; the param's score decays to it, then +1
-function pa:bumpFrecency(trackGuid, fxGuid, paramName)
+function pa:bumpFrecency(trackGuid, fxGuid, paramIndex)
   local track, fxIdx = resolveFx(trackGuid, fxGuid)
   local ident = track and fxIdentAt(track, fxIdx)
   if not ident then return end
   local all = ds:get('paramFrecency') or {}
   local fxScores = all[ident] or { n = 0, params = {} }
   local n = fxScores.n + 1
-  local entry = fxScores.params[paramName]
-  fxScores.params[paramName] =
+  local entry = fxScores.params[paramIndex]
+  fxScores.params[paramIndex] =
     { s = (entry and entry.s * DECAY ^ (n - entry.n0) or 0) + 1, n0 = n }
   fxScores.n = n
   all[ident] = fxScores

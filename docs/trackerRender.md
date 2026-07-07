@@ -5,7 +5,8 @@ ImGui/drawlist calls; `trackerView` holds the logical state it reads.
 
 ## Param palette — keyboard focus
 
-The palette is a child pane (find box + a two-level fx→param tree) sharing the
+The palette is a child pane (find box + an fx→param tree, params optionally
+grouped into sections) sharing the
 body region with the tracker grid. The grid is *not* an ImGui child window: it
 reads keys through the command dispatcher, gated by `focusState().acceptCmds`,
 which is false whenever an ImGui item is active.
@@ -45,10 +46,28 @@ sits near the top of the pane so scrolling never culls it out of submission.
 ### Filtering
 
 A non-empty find box prunes the tree to fx subtrees holding a matching param,
-each forced open for that frame only. `paletteExpanded` is never touched, so
-clearing the box restores the prior expansion for free. While filtering the
-cursor visits matched params only — the fx headings still show but aren't
-navigable or togglable, and the per-fx learn button is hidden.
+each forced open for that frame only. The needle matches against fx name,
+section name, and param name. `paletteExpanded` is never touched, so clearing
+the box restores the prior expansion for free. While filtering the cursor
+visits matched params only — the fx headings still show but aren't navigable or
+togglable, and the per-fx learn button is hidden.
+
+### Parameter sections
+
+VST3/CLAP plugins can tag each param with a unit/module name
+(`TrackFX_GetParamSectionName`, empty when unsupported). `buildPlan` partitions
+an fx's params into those sections as non-navigable heading rows. The grouping
+is a *stable partition* of the already-frecency-ordered list, so a hot param
+still floats within its own section; sections themselves order by their first
+param index so they don't reshuffle as frecency moves. An fx reporting no
+sections renders flat; unsectioned params under a mixed fx collect in a trailing
+“(ungrouped)” group. All param labels share one indent column just past the
+fx-name / section-heading column, so flat and grouped fx line up.
+
+Frecency is keyed by param *index*, not name (`paramAutomation`), so
+identically-named params — ReaEQ's eight “Freq” — score independently. The
+transient touch-learn hoist was already index-keyed; this aligns the persisted
+scores with it.
 
 ## FX chain strip — chrome pane
 

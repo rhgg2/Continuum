@@ -3043,7 +3043,7 @@ function tv:automateParam()
   if not (col and paletteParam) then return end
   local lane = pa:automate(col.midiChan, paletteParam)
   if not lane then return end
-  pa:bumpFrecency(paletteParam.trackGuid, paletteParam.fxGuid, paletteParam.label)
+  pa:bumpFrecency(paletteParam.trackGuid, paletteParam.fxGuid, paletteParam.param)
   tv:cancelLearn()
   local extras = ds:get('extraColumns') or {}
   -- Absence-default mirrors tm:rebuild's, like addExtraCol: no entry means one note col.
