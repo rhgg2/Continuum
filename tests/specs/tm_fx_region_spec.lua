@@ -1502,4 +1502,35 @@ return {
     end,
   },
 
+  ----- Parked-host continuous windows: deleting a self-parked fx host sweeps its seats
+
+  {
+    name = 'deleting a self-parked [trill, vibrato] host leaves no orphaned pb seats',
+    run = function(harness)
+      local h = harness.mk()
+      -- trill (note-replace) self-parks the host; vibrato (pb-augment) seats a pb stream over the
+      -- parked window. The chain is on the note's own fx, so it parks with no take round-trip.
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
+                      vel = 100, detune = 0, delay = 0, lane = 1,
+                      fx = { { kind = 'trill', period = { 1, 4 }, step = 2 },
+                             { kind = 'vibrato', period = { 1, 4 }, depth = 30, onset = 0 } } })
+      h.tm:flush()
+      local function allPbs()
+        local out = {}
+        for _, c in ipairs(h.fm:dump().ccs) do
+          if c.evType == 'pb' and c.chan == 1 then out[#out + 1] = c end
+        end
+        return out
+      end
+      t.truthy(#allPbs() > 0, 'the parked host seats a vibrato pb stream')
+      t.eq(#h.tm:getChannel(1).parked, 1, 'the trill host is parked off-take')
+
+      h.tm:rebuild()   -- settle: parked host is now off-take when the window set is recomputed
+
+      h.tm:deleteParked(h.tm:getChannel(1).parked[1]); h.tm:flush()
+      t.falsy(h.ds:get('fxParked'), 'the parked host is gone from the stash')
+      t.eq(#allPbs(), 0, 'no vibrato seat orphans as an authored pb after the host is deleted')
+    end,
+  },
+
 }
