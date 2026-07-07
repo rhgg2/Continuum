@@ -19,10 +19,6 @@ local perf  = require 'perf'
 
 math.randomseed(os.time())
 
-local function print(...)
-  return util.print(...)
-end
-
 local function err_handler(err)
   reaper.ShowConsoleMsg('\nERROR:\n' .. tostring(err) .. '\n\n')
   reaper.ShowConsoleMsg(debug.traceback() .. '\n')

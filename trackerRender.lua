@@ -2083,7 +2083,8 @@ end
 
 -- see docs/trackerRender.md § FX chain strip for the chrome-pane idiom and layout grammar.
 local drawFxStrip, editFx, stripPlan do
-  local GAP, MARK_W, LABEL_W = 30, 16, 64
+  local GAP, MARK_W, LABEL_W = 30, 14, 64
+  local GUILLEMET, MARK_SIZE = '\xc2\xbb', 14   -- flow marker glyph + its (small) point size
 
   -- Columns: one per stage, holding its currently-visible fields (adding is the header picker).
   local function stripColumns(fx)
@@ -2103,13 +2104,17 @@ local drawFxStrip, editFx, stripPlan do
   -- A stage walks header(0)..fields.
   local function paramRange(col) return 0, #col.fields end
 
-  -- Reserve the band from live ImGui metrics: header + actions row + stage title + field rows.
+  -- Reserve the band from live ImGui metrics; trailing pad matches the gap above row 1
+  -- so the space below the last field row reads the same as the space above the first.
   local function stripHeight(cols)
     local maxFields = 0
     for _, c in ipairs(cols) do maxFields = math.max(maxFields, #c.fields) end
-    local rowStep = ImGui.GetFrameHeight(ctx) + select(2, ImGui.GetStyleVar(ctx, ImGui.StyleVar_ItemSpacing))
-    local header  = ImGui.GetTextLineHeightWithSpacing(ctx) + 12
-    return header + rowStep * (2 + maxFields) + 12
+    local frameH  = ImGui.GetFrameHeight(ctx)
+    local gapY    = select(2, ImGui.GetStyleVar(ctx, ImGui.StyleVar_ItemSpacing))
+    local header  = ImGui.GetTextLineHeightWithSpacing(ctx) + 12          -- paletteHeader band
+    local topBand = (frameH + gapY) + (1 + gapY)                          -- actions row + separator
+    local grid    = frameH * (1 + maxFields) + gapY * maxFields           -- stage title + field rows
+    return header + topBand + grid + gapY
   end
 
   -- host + columns + reserved band height for the chain under the caret, or nil when none.
@@ -2149,7 +2154,8 @@ local drawFxStrip, editFx, stripPlan do
     local super = (mods & ImGui.Mod_Super) ~= 0
     local left, right = press(ImGui.Key_LeftArrow), press(ImGui.Key_RightArrow)
     if press(ImGui.Key_Enter) or press(ImGui.Key_KeypadEnter) then
-      stripExitReq = true                                 -- commit: keep the live edits, leave the strip
+      if col.isAdd then chrome.requestPickerOpen('fxAdd')  -- Enter on the add slot opens the picker
+      else stripExitReq = true end                         -- commit: keep the live edits, leave the strip
     elseif super and (left or right) and not col.isAdd then
       if tv:moveFxStage(plan.host, col.index, left and -1 or 1) then
         cur.stage = cur.stage + (left and -1 or 1)
@@ -2174,15 +2180,22 @@ local drawFxStrip, editFx, stripPlan do
     tv:setStripCursor(cur)
   end
 
-  -- Header action row (chrome-styled): del removes the stage under the cursor, clear wipes the chain.
-  -- Always live, so the mouse can del/clear without entering keyboard mode; Del gives keyboard parity.
+  -- del/clear edit the chain; commit/cancel end the keyboard session (mouse parity for
+  -- Enter/Esc). Always live, so the mouse can act without entering keyboard mode.
   local function headerActions(plan, cur)
     local stage = plan.cols[cur.stage]
     chrome.disabledIf(stage.isAdd, function()
       if ImGui.Button(ctx, 'del') then tv:removeFxStage(plan.host, stage.index) end
     end)
     ImGui.SameLine(ctx, 0, 8)
-    if ImGui.Button(ctx, 'clear') then tv:setNoteFx(plan.host, util.REMOVE) end
+    if ImGui.Button(ctx, 'clear')  then tv:setNoteFx(plan.host, util.REMOVE) end
+    ImGui.SameLine(ctx, 0, 8)
+    if ImGui.Button(ctx, 'commit') then stripExitReq = true end
+    ImGui.SameLine(ctx, 0, 8)
+    if ImGui.Button(ctx, 'cancel') then
+      if stripSnapshot then tv:setNoteFx(stripSnapshot.host, stripSnapshot.fx or util.REMOVE) end
+      stripExitReq = true
+    end
   end
 
   -- ▸ on the keyboard cursor's field (only while the strip holds focus); a blank keeps the label
@@ -2202,36 +2215,50 @@ local drawFxStrip, editFx, stripPlan do
     ImGui.BeginGroup(ctx)
     mark(onCursor)
     chrome.drawPicker{
-      kind = 'fxAdd', buttonLabel = '+ add', items = items,
+      kind = 'fxAdd', buttonLabel = 'add', items = items,
       onPick = function(kind) tv:addFxStage(host, fxSeed(kind)) end,
     }
     ImGui.EndGroup(ctx)
   end
 
-  -- One stage as a vertical group: numbered header, then a labelled chrome widget per field.
+  -- Clicking a row's label moves the selection chip there and takes strip focus, snapshotting
+  -- on entry so commit/cancel have a baseline (mirrors editFx's transactional open).
+  local function clickToCursor(host, stage, param)
+    if not ImGui.IsItemClicked(ctx) then return end
+    if not stripFocus then stripSnapshot = { host = host, fx = util.deepClone(tv:noteFx(host)) } end
+    tv:setStripCursor{ stage = stage, param = param }
+    stripFocus = true
+  end
+
+  -- One stage as a vertical group: header, then a labelled chrome widget per field.
   local function drawStage(host, col, onStage, cur)
     ImGui.BeginGroup(ctx)
     mark(onStage and cur.param == 0)
     ImGui.AlignTextToFramePadding(ctx)
-    ImGui.Text(ctx, col.index .. ' \xc2\xb7 ' .. col.label)
+    ImGui.Text(ctx, col.label)
+    clickToCursor(host, col.index, 0)
     for k, f in ipairs(col.fields) do
       mark(onStage and cur.param == k)
       ImGui.AlignTextToFramePadding(ctx); ImGui.Text(ctx, f.fd.label)
+      clickToCursor(host, col.index, k)
       ImGui.SameLine(ctx, MARK_W + LABEL_W)
       fxFieldWidget(host, col.index, f.fd, f.entry)
     end
     ImGui.EndGroup(ctx)
   end
 
-  -- Full-height rule + centred flow chevron drawn in the gap after a stage group.
+  -- Full-height rule with a mid-line cut-out holding a small » flow marker.
   local function stageDivider(dl, groupRight, y0, y1)
-    local dx  = groupRight + math.floor(GAP / 2)
-    local mid = (y0 + y1) / 2
-    local h   = math.max(5, math.min(9, (y1 - y0) * 0.18))
-    local ink = chrome.colour('text')
-    ImGui.DrawList_AddLine(dl, dx, y0 + 2, dx, y1 - 2, ink, 1)
-    ImGui.DrawList_AddLine(dl, dx - h * 0.5, mid - h, dx + h * 0.5, mid, ink, 2)
-    ImGui.DrawList_AddLine(dl, dx + h * 0.5, mid, dx - h * 0.5, mid + h, ink, 2)
+    local dx     = groupRight + math.floor(GAP / 2)
+    local mid    = (y0 + y1) / 2
+    local scale  = MARK_SIZE / ImGui.GetFontSize(ctx)
+    local gw, gh = ImGui.CalcTextSize(ctx, GUILLEMET)
+    gw, gh       = gw * scale, gh * scale
+    local half   = gh / 2 + 1
+    local ink    = chrome.colour('text')
+    ImGui.DrawList_AddLine(dl, dx, y0 + 2, dx, mid - half, ink, 1)
+    ImGui.DrawList_AddLine(dl, dx, mid + half, dx, y1, ink, 1)
+    ImGui.DrawList_AddTextEx(dl, font, MARK_SIZE, dx - gw / 2, mid - gh / 2, ink, GUILLEMET)
   end
 
   function drawFxStrip(plan, x, y, w)
@@ -2243,16 +2270,20 @@ local drawFxStrip, editFx, stripPlan do
       chrome.row(function() headerActions(plan, cur) end)
       ImGui.Separator(ctx)
       local dl = ImGui.GetWindowDrawList(ctx)
+      -- Stages share one row: gather each group's right edge and the tallest extent,
+      -- then rule every gap (including before the add slot) at that common height.
+      local rights, top, bottom = {}, nil, nil
       for ci, col in ipairs(plan.cols) do
         if ci > 1 then ImGui.SameLine(ctx, 0, GAP) end
         if col.isAdd then drawAddStage(plan.host, cur.stage == ci)
         else              drawStage(plan.host, col, cur.stage == ci, cur) end
-        if ci < #plan.cols and not plan.cols[ci + 1].isAdd then
-          local _,   gy0 = ImGui.GetItemRectMin(ctx)
-          local gx1, gy1 = ImGui.GetItemRectMax(ctx)
-          stageDivider(dl, gx1, gy0, gy1)
-        end
+        local _,  y0 = ImGui.GetItemRectMin(ctx)
+        local x1, y1 = ImGui.GetItemRectMax(ctx)
+        rights[ci] = x1
+        top    = top and math.min(top, y0) or y0
+        bottom = bottom and math.max(bottom, y1) or y1
       end
+      for ci = 1, #plan.cols - 1 do stageDivider(dl, rights[ci], top, bottom) end
       if stripFocus and not chrome.pickerIsActive() and not ImGui.IsAnyItemActive(ctx) then
         handleStripKeys(plan)
       end
