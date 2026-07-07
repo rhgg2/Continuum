@@ -2012,13 +2012,6 @@ local fxEdit do
     fxFieldWidget(uuid, rw.index, rw.fd, rw.entry)
   end
 
-  -- A freshly-minted region opened with no kinds added is an inert husk; drop it
-  -- on a plain Done/Enter (Cancel/Esc already restore the nil snapshot via REMOVE).
-  local function pruneEmptyRegion(uuid)
-    local fx = tv:noteFx(uuid)
-    if fx and #fx == 0 then tv:setNoteFx(uuid, util.REMOVE) end
-  end
-
   modalHost:registerKind('fxEdit', function(s, close)
     local fx   = tv:noteFx(s.uuid) or {}
     local rows = buildRows(fx)
@@ -2040,7 +2033,7 @@ local fxEdit do
     ImGui.SameLine(ctx)
     if ImGui.Button(ctx, 'Cancel') then tv:setNoteFx(s.uuid, s.snapshot or util.REMOVE); close(false); return end
     ImGui.SameLine(ctx)
-    if ImGui.Button(ctx, 'Done')   then pruneEmptyRegion(s.uuid); close(false); return end
+    if ImGui.Button(ctx, 'Done')   then tv:pruneEmptyRegion(s.uuid); close(false); return end
 
     if ImGui.IsAnyItemActive(ctx) then return end   -- a focused widget owns the keys
     local press    = function(k) return ImGui.IsKeyPressed(ctx, k) end
@@ -2050,7 +2043,7 @@ local fxEdit do
     if press(ImGui.Key_Escape) then
       tv:setNoteFx(s.uuid, s.snapshot or util.REMOVE); close(false)
     elseif press(ImGui.Key_Enter) or press(ImGui.Key_KeypadEnter) then
-      pruneEmptyRegion(s.uuid); close(false)
+      tv:pruneEmptyRegion(s.uuid); close(false)
     elseif reorder and (up or down) then
       if rw.index and tv:moveFxStage(s.uuid, rw.index, up and -1 or 1) then
         s.focusStage = rw.index + (up and -1 or 1)
@@ -2326,17 +2319,20 @@ local drawFxStrip, editFx, stripPlan do
     chrome.popChromeStyles()
   end
 
-  -- Super+X: enter the strip when a chain sits under the caret; else the modal (which mints).
+  -- Super+X: a selection always mints a fresh region, winning over whatever the caret sits
+  -- inside; with no selection, enter the strip under the caret, else the modal (which mints).
   function editFx()
-    local host = tv:fxHostAtCursor()
-    local fx   = host and tv:noteFx(host)
-    if fx and #fx > 0 then
-      if not stripFocus then stripSnapshot = { host = host, fx = util.deepClone(fx) } end
-      if not tv:stripCursor() then tv:setStripCursor{ stage = 1, param = 0 } end
-      stripFocus = true
-    else
-      fxEdit()
+    if not tv:ec():hasSelection() then
+      local host = tv:fxHostAtCursor()
+      local fx   = host and tv:noteFx(host)
+      if fx and #fx > 0 then
+        if not stripFocus then stripSnapshot = { host = host, fx = util.deepClone(fx) } end
+        if not tv:stripCursor() then tv:setStripCursor{ stage = 1, param = 0 } end
+        stripFocus = true
+        return
+      end
     end
+    fxEdit()
   end
 end
 
@@ -2513,7 +2509,10 @@ function tr:renderBody(_, w, h, dispatch)
   local ox, oy = ImGui.GetCursorScreenPos(ctx)
   local gridW  = chrome.gridWidth(w)
   local plan   = stripPlan()
-  if stripFocus and not plan then stripFocus, stripSnapshot = false, nil end   -- caret left the chain
+  if stripFocus and not plan then   -- caret left the chain, or its last stage was removed
+    if stripSnapshot then tv:pruneEmptyRegion(stripSnapshot.host) end   -- cull an emptied husk
+    stripFocus, stripSnapshot = false, nil
+  end
   local gridH  = plan and (h - plan.height) or h
   ImGui.PushFont(ctx, font, 15)
   computeLayout(gridW, gridH)

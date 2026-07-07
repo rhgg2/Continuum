@@ -2032,22 +2032,16 @@ local function mintRegionUuid()
   return 'fxr-' .. (maxN + 1)
 end
 
--- A selection authors a region over (channel, ppq span); find-or-create by exact
--- footprint so re-opening the same span reuses the region, never duplicates it.
-local function ensureRegionForSelection()
+-- A selection always mints a fresh region over its (channel, ppq span). Regions may
+-- overlap, so a repeated selection stacks a new one rather than reopening the last.
+local function mintRegionForSelection()
   local row1, row2, col1 = ec:region()
   local col = grid.cols[col1]
   if not col then return end
-  local chan     = col.midiChan
-  local startppq = tv:rowToPPQ(row1, chan)
-  local endppq   = tv:rowToPPQ(row2 + 1, chan)
-  for _, region in ipairs(ds:get('fxRegions') or {}) do
-    if region.chan == chan and region.startppq == startppq and region.endppq == endppq then
-      return region.uuid, false
-    end
-  end
+  local chan   = col.midiChan
   local region = { uuid = mintRegionUuid(), chan = chan,
-                   startppq = startppq, endppq = endppq, fx = {} }
+                   startppq = tv:rowToPPQ(row1, chan),
+                   endppq   = tv:rowToPPQ(row2 + 1, chan), fx = {} }
   local out = {}
   for _, existing in ipairs(ds:get('fxRegions') or {}) do out[#out + 1] = existing end
   out[#out + 1] = region
@@ -2084,10 +2078,10 @@ function tv:fxHostAtCursor()
   return host and host.uuid or nil
 end
 
--- The fx host the editor opens on: a selection authors/reopens a region (minting one);
--- else the read-only caret host (v1). 2nd return = freshly minted (modal takes no snapshot).
+-- The fx host the editor opens on: a selection always mints a fresh region; else the
+-- read-only caret host (v1). 2nd return = freshly minted (modal takes no snapshot).
 function tv:fxHostForEdit()
-  if ec:hasSelection() then return ensureRegionForSelection() end
+  if ec:hasSelection() then return mintRegionForSelection() end
   return self:fxHostAtCursor()
 end
 
@@ -2153,6 +2147,13 @@ function tv:removeFxStage(uuid, index)
   local list = {}
   for i, e in ipairs(fx) do if i ~= index then list[#list + 1] = e end end
   self:setNoteFx(uuid, list)
+end
+
+-- A region husk with no kinds is inert; drop it. Notes/parked never hold an empty fx
+-- list (setNoteFx normalises those to absence), so in practice this only culls regions.
+function tv:pruneEmptyRegion(uuid)
+  local fx = self:noteFx(uuid)
+  if fx and #fx == 0 then self:setNoteFx(uuid, util.REMOVE) end
 end
 
 function tv:moveFxStage(uuid, index, dir)
