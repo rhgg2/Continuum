@@ -277,6 +277,30 @@ return {
   },
 
   {
+    name = 'fxHostAtCursor: a selection does not mint -- cursor movement has no side effect',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      h.tm:rebuild()
+      h.ec:setSelection{ row1 = 0, row2 = 3, col1 = 1, col2 = 1, part1 = 'pitch', part2 = 'pitch' }
+      t.falsy(h.vm:fxHostAtCursor(), 'no host off a note, even under a selection')
+      t.eq(#(h.ds:get('fxRegions') or {}), 0, 'and no region was minted (unlike fxHostForEdit)')
+    end,
+  },
+
+  {
+    name = 'fxHostAtCursor: caret on an fx cell returns the region uuid',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      injectRegion(h)
+      local _, idx = fxColFor(h, 1)
+      h.ec:setPos(0, idx, 1)
+      t.eq(h.vm:fxHostAtCursor(), 'fxr-1', 'the region under the caret is the host, no selection branch')
+    end,
+  },
+
+  {
     name = 'fxHostForEdit: off a note with no selection is nil; on a note, its uuid (v1)',
     run = function(harness)
       local h = harness.mk()
@@ -746,6 +770,42 @@ return {
       local order = {}
       for _, r in ipairs(h.ds:get('fxRegions')) do order[#order + 1] = r.uuid end
       t.deepEq(order, { 'fxr-1', 'fxr-2' }, 'no reorder -- nothing beside the cursor to swap with')
+    end,
+  },
+
+  ----- Time/duration edits on a parked note route to the logical stash
+
+  {
+    name = 'parked note: noteOff shortens its tail in the stash, stays parked',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      addNote(h)                              -- C4 [0,240)
+      injectRegion(h, { fx = arpUp })         -- parks it, window [0,240)
+      local idx = noteColIdx(h, 1)
+      h.ec:setPos(2, idx, 1)                  -- row 2 = ppq 120, past onset
+      h.cmgr:invoke('noteOff')
+      local stash = h.ds:get('fxParked') or {}
+      t.eq(#stash, 1, 'still one parked note')
+      t.eq(stash[1].endppqL, 120, 'tail shortened to the cursor row')
+      t.deepEq(authoredPitches(h), {}, 'still parked, not on take')
+    end,
+  },
+
+  {
+    name = 'parked note: a time nudge within the window retimes the stash, stays parked',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      addNote(h)                              -- C4 [0,240)
+      injectRegion(h, { fx = arpUp })         -- parks it, window [0,240)
+      local idx = noteColIdx(h, 1)
+      h.ec:setPos(0, idx, 1)
+      h.cmgr:invoke('nudgeForward')           -- row 0 -> row 1 (ppq 60), still in window
+      local stash = h.ds:get('fxParked') or {}
+      t.eq(#stash, 1, 'still one parked note')
+      t.eq(stash[1].ppqL, 60, 'onset moved to ppq 60 in the stash')
+      t.deepEq(authoredPitches(h), {}, 'still parked, not on take')
     end,
   },
 }

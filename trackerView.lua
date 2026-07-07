@@ -59,6 +59,19 @@ local function toParkedSpec(evt)
                    { ppqL = evt.ppq, endppqL = evt.endppq })
 end
 
+-- Same view->logical normalisation for an assign update: the time verbs write realised
+-- ppq/endppq (== logical here) plus an rpb rebase the logical stash has no use for; the stash
+-- keys on ppqL/endppqL. Other fields (pitch/vel/val/...) are frame-agnostic, so pass through.
+local function toParkedUpdate(update)
+  local out = {}
+  for field, value in pairs(update) do
+    if     field == 'ppq'    then out.ppqL    = value
+    elseif field == 'endppq' then out.endppqL = value
+    elseif field ~= 'rpb'    then out[field]  = value end
+  end
+  return out
+end
+
 local backing = {
   plain = {
     add    = function(evt)         tm:addEvent(evt) end,
@@ -76,7 +89,7 @@ local backing = {
   },
   parked = {
     add    = function(evt)         tm:addParked(toParkedSpec(evt))   end,
-    assign = function(evt, update) tm:assignParked(evt, update)      end,
+    assign = function(evt, update) tm:assignParked(evt, toParkedUpdate(update)) end,
     delete = function(evt)         tm:deleteParked(evt)              end,
     -- move-out sheds the stash key so mm:add mints a fresh take uuid (§ B3 decisions).
     relocateDrop = { token = true, loc = true, uuid = true },
