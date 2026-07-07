@@ -49,3 +49,13 @@ each forced open for that frame only. `paletteExpanded` is never touched, so
 clearing the box restores the prior expansion for free. While filtering the
 cursor visits matched params only — the fx headings still show but aren't
 navigable or togglable, and the per-fx learn button is hidden.
+
+## FX chain strip — chrome pane
+
+See design/note-macros-v2.md § The chain surface for the strip's layout and
+input grammar. The strip itself is a chrome child pane, built on the
+swingEditor idiom (`pushChromeStyles` + `BeginChild` + `paletteHeader`) and
+laid out as horizontal stage cards of live chrome widgets — each stage a
+`BeginGroup` of labelled fields sharing `fxFieldWidget` with the fxEdit modal.
+`stripFocus` mirrors `paletteFocus`: it gates whether `handleStripKeys` runs
+and drives the ▸ marker that tracks the keyboard cursor onto the current field.

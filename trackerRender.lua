@@ -1913,6 +1913,27 @@ local function adjustRow(uuid, rw, right, mods)
   end
 end
 
+-- The label-less value control for one fx field: dropdown, temper-step stepper, or number
+-- stepper. Shared verbatim by the fxEdit modal and the docked strip; id keys ImGui per field.
+local function fxFieldWidget(host, index, fd, entry)
+  local value = entry[fd.field]
+  local id    = 'fx_' .. index .. '_' .. fd.field
+  if fd.widget == 'choice' then
+    local pick = chrome.dropdown(id, fd.options[choiceIndex(fd, value)].l, choiceLabels(fd))
+    if pick then tv:setFxField(host, index, fd.field, fd.options[pick].v) end
+  elseif fd.widget == 'stepInterval' then
+    local temper = slideTemper()
+    local midi, detune = hostPitch(host)
+    local per = #temper.cents
+    local rv, n = chrome.numberStepper(id, centsToSteps(temper, midi, detune, value),
+                    { width = 70, min = -2 * per, max = 2 * per })
+    if rv then tv:setFxField(host, index, fd.field, stepsToCents(temper, midi, detune, n)) end
+  else
+    local rv, n = chrome.numberStepper(id, value or 0, { width = 70, min = fd.min, max = fd.max })
+    if rv then tv:setFxField(host, index, fd.field, n) end
+  end
+end
+
 local fxEdit do
   local MARK_W, LABEL_W = 16, 64
   local LEGEND = '\xe2\x86\x91\xe2\x86\x93 nav   \xe2\x86\x90\xe2\x86\x92 adjust   \xe2\x8c\x98\xe2\x86\x91\xe2\x86\x93 reorder   \xe2\x86\x92 add   Del remove   Enter done'
@@ -1952,24 +1973,9 @@ local fxEdit do
       ImGui.Text(ctx, rw.index .. '. ' .. generators.kinds[rw.kind].label)
       return
     end
-    local fd, value = rw.fd, rw.entry[rw.fd.field]
-    local id = 'fx_' .. rw.index .. '_' .. fd.field
-    ImGui.AlignTextToFramePadding(ctx); ImGui.Text(ctx, fd.label)
+    ImGui.AlignTextToFramePadding(ctx); ImGui.Text(ctx, rw.fd.label)
     ImGui.SameLine(ctx, MARK_W + LABEL_W)
-    if fd.widget == 'choice' then
-      local pick = chrome.dropdown(id, fd.options[choiceIndex(fd, value)].l, choiceLabels(fd))
-      if pick then tv:setFxField(uuid, rw.index, fd.field, fd.options[pick].v) end
-    elseif fd.widget == 'stepInterval' then
-      local temper = slideTemper()
-      local midi, detune = hostPitch(uuid)
-      local per = #temper.cents
-      local rv, n = chrome.numberStepper(id, centsToSteps(temper, midi, detune, value),
-                      { width = 70, min = -2 * per, max = 2 * per })
-      if rv then tv:setFxField(uuid, rw.index, fd.field, stepsToCents(temper, midi, detune, n)) end
-    else
-      local rv, n = chrome.numberStepper(id, value or 0, { width = 70, min = fd.min, max = fd.max })
-      if rv then tv:setFxField(uuid, rw.index, fd.field, n) end
-    end
+    fxFieldWidget(uuid, rw.index, rw.fd, rw.entry)
   end
 
   -- A freshly-minted region opened with no kinds added is an inert husk; drop it
@@ -2041,15 +2047,11 @@ end
 
 ----- FX chain strip (docked; edits the chain under the caret in place)
 
--- see design/note-macros-v2.md § The chain surface for layout/grammar. Draw-list only +
--- keyboard-driven so no widget steals focus; stripFocus mirrors paletteFocus, stripCursor on tv.
+-- see docs/trackerRender.md § FX chain strip for the chrome-pane idiom and layout grammar.
 local drawFxStrip, editFx, stripPlan do
-  local PAD_X, PAD_Y, STAGE_W = 12, 6, 132
-  local ARROW  = '\xe2\x86\x92'
-  local LEGEND = '\xe2\x86\x90\xe2\x86\x92 stage   \xe2\x86\x91\xe2\x86\x93 param   \xe2\x88\x92/= adjust   \xe2\x8c\x98\xe2\x86\x90\xe2\x86\x92 reorder   \xe2\x8f\x8e add   \xe2\x8c\xab remove   Esc done'
-  local function rowH() return gui.fontSize.ui + 4 end
+  local GAP, MARK_W, LABEL_W = 30, 16, 64
 
-  -- Columns: one per stage (its visible fields), then a trailing add slot cycling FX_KINDS.
+  -- Columns: one per stage, holding its currently-visible fields (adding is the header picker).
   local function stripColumns(fx)
     local cols = {}
     for i, entry in ipairs(fx) do
@@ -2061,20 +2063,19 @@ local drawFxStrip, editFx, stripPlan do
       end
       cols[#cols + 1] = { index = i, label = generators.kinds[entry.kind].label, fields = fields }
     end
-    cols[#cols + 1] = { add = true, kinds = FX_KINDS }
     return cols
   end
 
-  -- A stage walks header(0)..fields; the add slot picks a kind (1..N).
-  local function paramRange(col)
-    if col.add then return 1, #col.kinds end
-    return 0, #col.fields
-  end
+  -- A stage walks header(0)..fields.
+  local function paramRange(col) return 0, #col.fields end
 
+  -- Reserve the band from live ImGui metrics: header + actions row + stage title + field rows.
   local function stripHeight(cols)
     local maxFields = 0
-    for _, c in ipairs(cols) do if not c.add then maxFields = math.max(maxFields, #c.fields) end end
-    return PAD_Y * 2 + rowH() * (2 + maxFields)   -- legend + header + fields
+    for _, c in ipairs(cols) do maxFields = math.max(maxFields, #c.fields) end
+    local rowStep = ImGui.GetFrameHeight(ctx) + select(2, ImGui.GetStyleVar(ctx, ImGui.StyleVar_ItemSpacing))
+    local header  = ImGui.GetTextLineHeightWithSpacing(ctx) + 12
+    return header + rowStep * (2 + maxFields) + 12
   end
 
   -- host + columns + reserved band height for the chain under the caret, or nil when none.
@@ -2094,19 +2095,6 @@ local drawFxStrip, editFx, stripPlan do
     return c
   end
 
-  -- Field value as display text: choice label, signed temper steps, or the bare number.
-  local function fieldText(host, f)
-    local fd, value = f.fd, f.entry[f.fd.field]
-    if fd.widget == 'choice' then return fd.options[choiceIndex(fd, value)].l end
-    if fd.widget == 'stepInterval' then
-      local temper = slideTemper()
-      local midi, detune = hostPitch(host)
-      local n = centsToSteps(temper, midi, detune, value)
-      return (n > 0 and '+' or '') .. n
-    end
-    return tostring(value or 0)
-  end
-
   local function handleStripKeys(plan)
     local press = function(k) return ImGui.IsKeyPressed(ctx, k) end
     if press(ImGui.Key_Escape) then stripExitReq = true; return end   -- drop at frame end, not now (see releaseReq)
@@ -2117,7 +2105,7 @@ local drawFxStrip, editFx, stripPlan do
     local super = (mods & ImGui.Mod_Super) ~= 0
     local left, right = press(ImGui.Key_LeftArrow), press(ImGui.Key_RightArrow)
     if super and (left or right) then
-      if not col.add and tv:moveFxStage(plan.host, col.index, left and -1 or 1) then
+      if tv:moveFxStage(plan.host, col.index, left and -1 or 1) then
         cur.stage = cur.stage + (left and -1 or 1)
       end
     elseif left or right then
@@ -2128,55 +2116,89 @@ local drawFxStrip, editFx, stripPlan do
       local lo, hi = paramRange(col)
       cur.param = util.clamp(cur.param + (press(ImGui.Key_DownArrow) and 1 or -1), lo, hi)
     elseif press(ImGui.Key_Minus) or press(ImGui.Key_Equal) then
-      if not col.add and cur.param >= 1 then
-        adjustRow(plan.host, col.fields[cur.param], press(ImGui.Key_Equal), mods)
-      end
+      if cur.param >= 1 then adjustRow(plan.host, col.fields[cur.param], press(ImGui.Key_Equal), mods) end
     elseif press(ImGui.Key_Enter) or press(ImGui.Key_KeypadEnter) then
-      if col.add then tv:addFxStage(plan.host, fxSeed(col.kinds[cur.param])); cur.param = 0 end
+      chrome.requestPickerOpen('fxAdd')                       -- open the searchable add-stage picker
     elseif press(ImGui.Key_Backspace) or press(ImGui.Key_Delete) then
-      if not col.add then tv:removeFxStage(plan.host, col.index) end
+      tv:removeFxStage(plan.host, col.index)
     end
     tv:setStripCursor(cur)
   end
 
+  -- Header action row (chrome-styled): searchable add-stage picker + clear-chain. Always live,
+  -- so the mouse can add/clear without entering keyboard mode; Enter/Del give keyboard parity.
+  local function stageActions(host)
+    local items = {}
+    for _, kind in ipairs(FX_KINDS) do
+      items[#items + 1] = { label = generators.kinds[kind].label, key = kind }
+    end
+    chrome.drawPicker{
+      kind = 'fxAdd', buttonLabel = '+ add', items = items,
+      onPick = function(kind) tv:addFxStage(host, fxSeed(kind)) end,
+    }
+    ImGui.SameLine(ctx, 0, 8)
+    if ImGui.Button(ctx, 'clear') then tv:setNoteFx(host, util.REMOVE) end
+  end
+
+  -- ▸ on the keyboard cursor's field (only while the strip holds focus); a blank keeps the label
+  -- column aligned. Mirrors the fxEdit modal's marker so both editors read the same.
+  local function mark(onCursor)
+    ImGui.AlignTextToFramePadding(ctx)
+    ImGui.Text(ctx, (onCursor and stripFocus) and '\xe2\x96\xb8' or ' ')
+    ImGui.SameLine(ctx, MARK_W)
+  end
+
+  -- One stage as a vertical group: numbered header, then a labelled chrome widget per field.
+  local function drawStage(host, col, onStage, cur)
+    ImGui.BeginGroup(ctx)
+    mark(onStage and cur.param == 0)
+    ImGui.AlignTextToFramePadding(ctx)
+    ImGui.Text(ctx, col.index .. ' \xc2\xb7 ' .. col.label)
+    for k, f in ipairs(col.fields) do
+      mark(onStage and cur.param == k)
+      ImGui.AlignTextToFramePadding(ctx); ImGui.Text(ctx, f.fd.label)
+      ImGui.SameLine(ctx, MARK_W + LABEL_W)
+      fxFieldWidget(host, col.index, f.fd, f.entry)
+    end
+    ImGui.EndGroup(ctx)
+  end
+
+  -- Full-height rule + centred flow chevron drawn in the gap after a stage group.
+  local function stageDivider(dl, groupRight, y0, y1)
+    local dx  = groupRight + math.floor(GAP / 2)
+    local mid = (y0 + y1) / 2
+    local h   = math.max(5, math.min(9, (y1 - y0) * 0.18))
+    local ink = chrome.colour('text')
+    ImGui.DrawList_AddLine(dl, dx, y0 + 2, dx, y1 - 2, ink, 1)
+    ImGui.DrawList_AddLine(dl, dx - h * 0.5, mid - h, dx + h * 0.5, mid, ink, 2)
+    ImGui.DrawList_AddLine(dl, dx + h * 0.5, mid, dx - h * 0.5, mid + h, ink, 2)
+  end
+
   function drawFxStrip(plan, x, y, w)
-    local p     = painter.new(ctx, chrome, {}, 'tracker')
-    local lineH = rowH()
-    local cur   = clampCursor(plan.cols)
-    tv:setStripCursor(cur)
-    p.fill({ x0 = x, y0 = y, x1 = x + w, y1 = y + plan.height }, 'tracker.rowBarStart')
-    p.segment(x, y, x + w, y, 'global.separator', 1)
-    p.text(x + PAD_X, y + PAD_Y, 'tracker.inactive', LEGEND, uiFont, gui.fontSize.ui)
-    local top = y + PAD_Y + lineH
-
-    local function put(px, py, text, isCur, colName)
-      if isCur and stripFocus then
-        p.fill({ x0 = px - 3, y0 = py, x1 = px + STAGE_W - 24, y1 = py + lineH }, 'tracker.cursor')
-        p.text(px, py + 1, 'tracker.cursorText', text, uiFont, gui.fontSize.ui)
-      else
-        p.text(px, py + 1, stripFocus and colName or 'tracker.inactive', text, uiFont, gui.fontSize.ui)
-      end
-    end
-
-    local cx = x + PAD_X
-    for ci, col in ipairs(plan.cols) do
-      local onStage = cur.stage == ci
-      if col.add then
-        local pick = onStage and cur.param or 1
-        put(cx, top, '\xef\xbc\x8b ' .. generators.kinds[col.kinds[pick]].label, onStage, 'accent')
-      else
-        put(cx, top, col.index .. '. ' .. col.label, onStage and cur.param == 0, 'tracker.chanHeader')
-        for k, f in ipairs(col.fields) do
-          put(cx, top + k * lineH, f.fd.label .. '  ' .. fieldText(plan.host, f),
-              onStage and cur.param == k, 'text')
-        end
-        if ci < #plan.cols - 1 then
-          p.text(cx + STAGE_W - 20, top + 1, 'tracker.inactive', ARROW, uiFont, gui.fontSize.ui)
+    local cur = clampCursor(plan.cols); tv:setStripCursor(cur)
+    painter.new(ctx, chrome, {}).segment(x, y, x + w, y, 'text', 1)   -- rule off the grid above
+    ImGui.SetCursorScreenPos(ctx, x, y)
+    chrome.pushChromeStyles()
+    if ImGui.BeginChild(ctx, '##fxStrip', w, plan.height, ImGui.ChildFlags_None, ImGui.WindowFlags_NoNav) then
+      chrome.paletteHeader('fx chain')
+      chrome.row(function() stageActions(plan.host) end)
+      ImGui.Separator(ctx)
+      local dl = ImGui.GetWindowDrawList(ctx)
+      for ci, col in ipairs(plan.cols) do
+        if ci > 1 then ImGui.SameLine(ctx, 0, GAP) end
+        drawStage(plan.host, col, cur.stage == ci, cur)
+        if ci < #plan.cols then
+          local _,   gy0 = ImGui.GetItemRectMin(ctx)
+          local gx1, gy1 = ImGui.GetItemRectMax(ctx)
+          stageDivider(dl, gx1, gy0, gy1)
         end
       end
-      cx = cx + STAGE_W
+      if stripFocus and not chrome.pickerIsActive() and not ImGui.IsAnyItemActive(ctx) then
+        handleStripKeys(plan)
+      end
     end
-    if stripFocus then handleStripKeys(plan) end
+    ImGui.EndChild(ctx)
+    chrome.popChromeStyles()
   end
 
   -- Super+X: enter the strip when a chain sits under the caret; else the modal (which mints).
