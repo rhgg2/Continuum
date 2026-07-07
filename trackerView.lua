@@ -2006,15 +2006,6 @@ end
 -- The fx editor addresses hosts by durable uuid (survives rebuilds) and
 -- writes through setNoteFx (whole list) / setFxField (one field).
 
--- The note under the caret, or nil on a non-note / empty cell. The fx
--- editor command gates on this (it is a no-op off a note).
-function tv:cursorNote()
-  local col = grid.cols[ec:col()]
-  if not col or col.type ~= 'note' then return nil end
-  local evt = col.cells and col.cells[ec:row()]
-  return (evt and util.isNote(evt)) and evt or nil
-end
-
 -- An fx host is a note (mm, integer uuid), a parked note host (off-take, original or minted
 -- 'fxp-N' uuid), or a region (ds, 'fxr-N'); the editor addresses all three by uuid.
 -- Disjoint namespaces: a missed lookup falls through in that order.
@@ -2073,16 +2064,24 @@ function tv:noteFx(uuid)
   return region and region.fx or nil
 end
 
--- The chain host under the caret, read-only: the caret's fx cell, else the caret's note.
+-- The chain host whose window covers the caret, read-only: a note or fx region whose
+-- [onset, tail) span brackets the caret row -- so the strip opens anywhere in the region,
+-- not just its onset. Hostable = a durable uuid and not a derived realisation hit.
 -- No selection branch -- cursor movement must never mint a region (the strip reads this).
 function tv:fxHostAtCursor()
   local col = grid.cols[ec:col()]
-  if col and col.type == 'fx' then
-    local cell = col.cells and col.cells[ec:row()]
-    return cell and cell.uuid or nil
+  if not (col and (col.type == 'note' or col.type == 'fx')) then return nil end
+  local rowStart = ctx:rowToPPQ(ec:row(),     col.midiChan)
+  local rowEnd   = ctx:rowToPPQ(ec:row() + 1, col.midiChan)
+  local host
+  for _, e in ipairs(col.events) do
+    if e.uuid and not e.derived                     -- hostable: authored note / region cell
+       and e.ppq < rowEnd and rowStart < e.endppqC  -- its window brackets the caret row
+       and (not host or e.ppq > host.ppq) then       -- innermost when nested: greatest onset wins
+      host = e
+    end
   end
-  local note = self:cursorNote()
-  return note and note.uuid or nil
+  return host and host.uuid or nil
 end
 
 -- The fx host the editor opens on: a selection authors/reopens a region (minting one);

@@ -289,14 +289,19 @@ return {
   },
 
   {
-    name = 'fxHostAtCursor: caret on an fx cell returns the region uuid',
+    name = 'fxHostAtCursor: caret anywhere in an fx region returns its uuid, nil past the tail',
     run = function(harness)
       local h = harness.mk()
       h.vm:setGridSize(80, 40)
-      injectRegion(h)
+      injectRegion(h, { endppq = 960 })
       local _, idx = fxColFor(h, 1)
-      h.ec:setPos(0, idx, 1)
-      t.eq(h.vm:fxHostAtCursor(), 'fxr-1', 'the region under the caret is the host, no selection branch')
+      local tail = h.vm.grid.cols[idx].tails[1]
+      h.ec:setPos(tail.startRow, idx, 1)
+      t.eq(h.vm:fxHostAtCursor(), 'fxr-1', 'the badge row resolves the region, no selection branch')
+      h.ec:setPos(tail.endRow - 1, idx, 1)
+      t.eq(h.vm:fxHostAtCursor(), 'fxr-1', 'a mid-span row resolves the same region')
+      h.ec:setPos(tail.endRow, idx, 1)
+      t.falsy(h.vm:fxHostAtCursor(), 'past the tail resolves nothing')
     end,
   },
 

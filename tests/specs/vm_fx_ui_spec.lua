@@ -1,4 +1,4 @@
--- UI wiring for the note-FX editor (retrig + vibrato + slide). Pins cursorNote ->
+-- UI wiring for the note-FX editor (retrig + vibrato + slide). Pins fxHostAtCursor ->
 -- setNoteFx / setFxKindActive / setFxField. Continuous kinds coexist -- both sum offline into pb seats.
 
 local t          = require('support')
@@ -39,16 +39,22 @@ end
 
 return {
   {
-    name = 'cursorNote returns the caret note, nil off a note',
+    name = 'fxHostAtCursor covers the whole note span, nil past its tail',
     run = function(harness)
       local h = harness.mk()
-      addHost(h, nil)
+      h.tm:addEvent{ evType = 'note', ppq = 0, endppq = 960, chan = 1, pitch = 60,
+                     vel = 100, detune = 0, delay = 0, lane = 1 }
+      h.tm:flush()
       h.vm:setGridSize(80, 40)
       local ci = lane1Idx(h)
-      h.ec:setPos(0, ci, 1)
-      t.truthy(h.vm:cursorNote(), 'note under caret returned')
-      h.ec:setPos(8, ci, 1)              -- empty row
-      t.falsy(h.vm:cursorNote(), 'no note on an empty cell')
+      local tail = h.vm.grid.cols[ci].tails[1]
+      h.ec:setPos(tail.startRow, ci, 1)
+      local host = h.vm:fxHostAtCursor()
+      t.truthy(host, 'onset row resolves the host')
+      h.ec:setPos(tail.endRow - 1, ci, 1)
+      t.eq(h.vm:fxHostAtCursor(), host, 'a sustained row resolves the same host')
+      h.ec:setPos(tail.endRow, ci, 1)
+      t.falsy(h.vm:fxHostAtCursor(), 'past the tail resolves nothing')
     end,
   },
 
@@ -261,8 +267,9 @@ return {
       t.eq(col.cellKind[0], 'parked', 'onset row tagged parked')
       t.falsy(col.cellKind[1], 'tail rows untagged: adds inside the span stay plain')
       h.ec:setPos(0, ci, 1)
-      local note = h.vm:cursorNote()
-      t.truthy(note and note.fx, 'the caret sees the parked cell carrying its fx')
+      local host = h.vm:fxHostAtCursor()
+      t.eq(host, hostUuid(h), 'the caret resolves the parked host by uuid')
+      t.truthy(h.vm:noteFx(host), 'the resolved host carries its fx')
       t.eq(h.vm:fxHostForEdit(), hostUuid(h), 'Super-X addresses the parked host by uuid')
     end,
   },
