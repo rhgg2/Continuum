@@ -2,7 +2,7 @@
 
 --shape: chrome = { colour(name, scope?)->u32, pushChromeStyles(), popChromeStyles(), pushChromeWindow(), popChromeWindow(), verticalSeparator(), disabledIf(cond,fn), row(h?,fn), checkbox(label,v), radio(label,active), headingLabel(text), makeToolbar()->fn(segments), drawPicker(d), libPicker(key, current, excludeOthers?)->items, pickerIsActive()->bool, resetPickerActive(), requestPickerOpen(kind)}
 --shape: chrome (shared row primitives) = { fitLabel(text,maxW)->text, rowSelectable(label,sel,flags?)->clicked, treeRow(opts)->{toggled,selected,doubleClicked}, numberStepper(id,value,opts)->changed,value }
---shape: pickerSpec = { kind: string, heading: string?, buttonLabel: string, items: [{label, key, group?=int, current?=bool}], onPick: fn(key), width?, minWidth?, maxWidth? }
+--shape: pickerSpec = { kind: string, heading: string?, buttonLabel: string, items: [{label, key, group?=int, current?=bool}], onPick: fn(key), onCancel?: fn(), placement?: 'above', width?, minWidth?, maxWidth? }
 --shape: palettePaneSpec = { x, y, h, label, draw = fn(childFocused) }
 --contract: one chrome instance per coordinator; threaded into every page
 --invariant: colour cache lives on the chrome instance and is invalidated on cm:configChanged
@@ -427,8 +427,8 @@ local function drawPicker(d)
   ImGui.PopStyleVar(ctx, 1)
   -- Anchor popup to the button rect; OpenPopup otherwise uses mouse
   -- position, putting a keyboard-triggered popup at the text cursor.
-  local btnX = ImGui.GetItemRectMin(ctx)
-  local _, btnY = ImGui.GetItemRectMax(ctx)
+  local btnX, btnTop = ImGui.GetItemRectMin(ctx)
+  local _, btnBot    = ImGui.GetItemRectMax(ctx)
   local fromReq = false
   if pickerOpenReq == d.kind then
     pickerOpenReq = nil
@@ -440,7 +440,10 @@ local function drawPicker(d)
     ImGui.OpenPopup(ctx, popupId)
   end
 
-  ImGui.SetNextWindowPos(ctx, btnX, btnY, ImGui.Cond_Appearing)
+  -- placement='above' anchors the popup's bottom to the button's top (pivotY=1) so it grows
+  -- upward -- for pickers docked near the window's bottom edge, where opening below would clip.
+  if d.placement == 'above' then ImGui.SetNextWindowPos(ctx, btnX, btnTop, ImGui.Cond_Appearing, 0, 1)
+  else                           ImGui.SetNextWindowPos(ctx, btnX, btnBot, ImGui.Cond_Appearing) end
   -- NoNav: kill ImGui's built-in keyboard nav highlight on the popup —
   -- otherwise it draws a second cursor that fights ours and steals
   -- arrow keys / character input from the filter InputText.
@@ -490,6 +493,7 @@ local function drawPicker(d)
   pickerCursor[d.kind] = cursor
 
   if ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
+    if d.onCancel then d.onCancel() end
     ImGui.CloseCurrentPopup(ctx)
   elseif entered then
     if matches[cursor] then d.onPick(matches[cursor].key) end

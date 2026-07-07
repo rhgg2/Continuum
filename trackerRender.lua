@@ -996,6 +996,7 @@ local scrollReq    = false   -- one-shot: scroll the cursor row into view next d
 
 -- FX-chain strip focus: routes the keyboard into the docked strip (mirrors paletteFocus).
 local stripFocus    = false
+local stripHost     = nil    -- uuid the strip is pinned to while focused; lets a just-minted empty chain render
 local stripSnapshot = nil    -- {host, fx}: chain state at keyboard-entry; Esc reverts to it, Enter commits
 local stripExitReq  = false  -- one-shot: drop stripFocus after dispatch, so the exit Esc isn't re-dispatched
 
@@ -1887,7 +1888,7 @@ end
 local tr = {}
 
 
------ Note FX editor -- the interim chain editor
+----- Note FX -- generator descriptors shared by the docked chain strip
 
 -- A thin renderer over the generator registry: the fx list is an ordered series (C1), stages
 -- reorderable/duplicable by position. see design/note-macros-v2.md § The fx chain, § Build progress C4
@@ -1896,7 +1897,7 @@ local FX_KINDS = generators.modalOrder
 -- A kind's default fx entry: its registry params stamped with the kind tag downstream reads.
 local function fxSeed(kind) return util.assign({ kind = kind }, generators.kinds[kind].defaults) end
 
------ FX field descriptors (shared: fxEdit modal + fx strip)
+----- FX field descriptors (used by the fx strip)
 
 local function valueEq(a, b)
   if type(a) == 'table' then return type(b) == 'table' and a[1] == b[1] and a[2] == b[2] end
@@ -1948,7 +1949,7 @@ local function adjustRow(uuid, rw, right, mods)
 end
 
 -- The label-less value control for one fx field: dropdown, temper-step stepper, or number
--- stepper. Shared verbatim by the fxEdit modal and the docked strip; id keys ImGui per field.
+-- stepper. Used by the docked strip; id keys ImGui per field.
 local function fxFieldWidget(host, index, fd, entry)
   local value = entry[fd.field]
   local id    = 'fx_' .. index .. '_' .. fd.field
@@ -1965,110 +1966,6 @@ local function fxFieldWidget(host, index, fd, entry)
   else
     local rv, n = chrome.numberStepper(id, value or 0, { width = 70, min = fd.min, max = fd.max })
     if rv then tv:setFxField(host, index, fd.field, n) end
-  end
-end
-
-local fxEdit do
-  local MARK_W, LABEL_W = 16, 64
-  local LEGEND = '\xe2\x86\x91\xe2\x86\x93 nav   \xe2\x86\x90\xe2\x86\x92 adjust   \xe2\x8c\x98\xe2\x86\x91\xe2\x86\x93 reorder   \xe2\x86\x92 add   Del remove   Enter done'
-
-  -- One row per stage in series order (header + fields), then one add row per modalOrder kind.
-  -- `index` is the stage's position (nil on add rows) -- identity is position, not kind.
-  local function buildRows(fx)
-    local rows = {}
-    for i, entry in ipairs(fx) do
-      rows[#rows + 1] = { header = true, kind = entry.kind, index = i }
-      for _, fd in ipairs(generators.kinds[entry.kind].fields) do
-        if not fd.when or fd.when(entry) then
-          rows[#rows + 1] = { fd = fd, kind = entry.kind, index = i, entry = entry }
-        end
-      end
-    end
-    for _, kind in ipairs(FX_KINDS) do rows[#rows + 1] = { addKind = kind } end
-    return rows
-  end
-
-  local function mark(focused)
-    ImGui.AlignTextToFramePadding(ctx)
-    ImGui.Text(ctx, focused and '\xe2\x96\xb8' or ' ')   -- ▸ on the cursor row
-    ImGui.SameLine(ctx, MARK_W)
-  end
-
-  local function drawRow(uuid, rw, focused)
-    mark(focused)
-    if rw.addKind then
-      if ImGui.Button(ctx, '+ ' .. generators.kinds[rw.addKind].label .. '##fxadd_' .. rw.addKind) then
-        tv:addFxStage(uuid, fxSeed(rw.addKind))
-      end
-      return
-    end
-    if rw.header then
-      ImGui.AlignTextToFramePadding(ctx)
-      ImGui.Text(ctx, rw.index .. '. ' .. generators.kinds[rw.kind].label)
-      return
-    end
-    ImGui.AlignTextToFramePadding(ctx); ImGui.Text(ctx, rw.fd.label)
-    ImGui.SameLine(ctx, MARK_W + LABEL_W)
-    fxFieldWidget(uuid, rw.index, rw.fd, rw.entry)
-  end
-
-  modalHost:registerKind('fxEdit', function(s, close)
-    local fx   = tv:noteFx(s.uuid) or {}
-    local rows = buildRows(fx)
-    -- A reorder just moved a stage; put the cursor back on its renumbered header.
-    if s.focusStage then
-      for i, rw in ipairs(rows) do
-        if rw.header and rw.index == s.focusStage then s.field = i; break end
-      end
-      s.focusStage = nil
-    end
-    s.field    = util.clamp(s.field or 1, 1, #rows)
-
-    ImGui.TextDisabled(ctx, LEGEND)
-    ImGui.Spacing(ctx)
-    for i, rw in ipairs(rows) do drawRow(s.uuid, rw, i == s.field) end
-
-    ImGui.Spacing(ctx)
-    if ImGui.Button(ctx, 'Clear')  then tv:setNoteFx(s.uuid, util.REMOVE);               close(false); return end
-    ImGui.SameLine(ctx)
-    if ImGui.Button(ctx, 'Cancel') then tv:setNoteFx(s.uuid, s.snapshot or util.REMOVE); close(false); return end
-    ImGui.SameLine(ctx)
-    if ImGui.Button(ctx, 'Done')   then tv:pruneEmptyRegion(s.uuid); close(false); return end
-
-    if ImGui.IsAnyItemActive(ctx) then return end   -- a focused widget owns the keys
-    local press    = function(k) return ImGui.IsKeyPressed(ctx, k) end
-    local rw       = rows[s.field]
-    local reorder  = (ImGui.GetKeyMods(ctx) & ImGui.Mod_Super) ~= 0   -- the nudgeBack/Forward chord
-    local up, down = press(ImGui.Key_UpArrow), press(ImGui.Key_DownArrow)
-    if press(ImGui.Key_Escape) then
-      tv:setNoteFx(s.uuid, s.snapshot or util.REMOVE); close(false)
-    elseif press(ImGui.Key_Enter) or press(ImGui.Key_KeypadEnter) then
-      tv:pruneEmptyRegion(s.uuid); close(false)
-    elseif reorder and (up or down) then
-      if rw.index and tv:moveFxStage(s.uuid, rw.index, up and -1 or 1) then
-        s.focusStage = rw.index + (up and -1 or 1)
-      end
-    elseif down then s.field = util.clamp(s.field + 1, 1, #rows)
-    elseif up   then s.field = util.clamp(s.field - 1, 1, #rows)
-    elseif press(ImGui.Key_Delete) or press(ImGui.Key_Backspace) then
-      if rw.index then tv:removeFxStage(s.uuid, rw.index) end
-    else
-      local left, right = press(ImGui.Key_LeftArrow), press(ImGui.Key_RightArrow)
-      if rw.addKind and right then tv:addFxStage(s.uuid, fxSeed(rw.addKind))
-      elseif rw.fd and (left or right) then adjustRow(s.uuid, rw, right, ImGui.GetKeyMods(ctx)) end
-    end
-  end)
-
-  function fxEdit()
-    local uuid, isNew = tv:fxHostForEdit()
-    if not uuid then return end
-    local fx = tv:noteFx(uuid)
-    modalHost:open{
-      kind = 'fxEdit', title = 'FX',
-      uuid = uuid, field = 1,
-      snapshot = (not isNew) and fx and util.deepClone(fx) or nil,
-      flags = ImGui.WindowFlags_NoNavInputs,
-    }
   end
 end
 
@@ -2113,11 +2010,14 @@ local drawFxStrip, editFx, stripPlan do
     return header + topBand + grid + gapY
   end
 
-  -- host + columns + reserved band height for the chain under the caret, or nil when none.
+  -- While focused the strip pins to stripHost (so a just-minted empty chain renders on the add
+  -- slot alone); unfocused it auto-shows the non-empty chain under the caret. nil = nothing to draw.
   function stripPlan()
-    local host = tv:fxHostAtCursor()
-    local fx   = host and tv:noteFx(host)
-    if not (fx and #fx > 0) then return nil end
+    local host   = stripFocus and stripHost or tv:fxHostAtCursor()
+    local pinned = stripFocus and host == stripHost
+    local fx     = host and tv:noteFx(host) or (pinned and {})   -- a note host reads nil until its first stage
+    if not fx then return nil end
+    if #fx == 0 and not pinned then return nil end
     local cols = stripColumns(fx)
     cols[#cols + 1] = { isAdd = true, fields = {} }   -- rightmost slot: arrow to it, Enter adds a stage
     return { host = host, cols = cols, height = stripHeight(cols) }
@@ -2137,12 +2037,16 @@ local drawFxStrip, editFx, stripPlan do
     if ok and c >= 32 and c < 127 then return string.char(c) end
   end
 
+  -- Revert the chain to its keyboard-entry baseline, then request exit. Shared by the strip's own
+  -- Esc, the cancel button, and the add-slot picker's Esc (which aborts a still-empty gesture).
+  local function cancelStrip()
+    if stripSnapshot then tv:setNoteFx(stripSnapshot.host, stripSnapshot.fx or util.REMOVE) end
+    stripExitReq = true   -- drop at frame end, not now, so the exit Esc isn't re-dispatched
+  end
+
   local function handleStripKeys(plan)
     local press = function(k) return ImGui.IsKeyPressed(ctx, k) end
-    if press(ImGui.Key_Escape) then                      -- revert to the entry snapshot, then leave
-      if stripSnapshot then tv:setNoteFx(stripSnapshot.host, stripSnapshot.fx or util.REMOVE) end
-      stripExitReq = true; return                         -- drop at frame end, not now (see releaseReq)
-    end
+    if press(ImGui.Key_Escape) then cancelStrip(); return end
     local cols  = plan.cols
     local cur   = clampCursor(cols)
     local col   = cols[cur.stage]
@@ -2184,14 +2088,11 @@ local drawFxStrip, editFx, stripPlan do
     ImGui.SameLine(ctx, 0, 4)
     if ImGui.Button(ctx, 'commit') then stripExitReq = true end
     ImGui.SameLine(ctx, 0, 4)
-    if ImGui.Button(ctx, 'cancel') then
-      if stripSnapshot then tv:setNoteFx(stripSnapshot.host, stripSnapshot.fx or util.REMOVE) end
-      stripExitReq = true
-    end
+    if ImGui.Button(ctx, 'cancel') then cancelStrip() end
   end
 
   -- ▸ on the keyboard cursor's field (only while the strip holds focus); a blank keeps the label
-  -- column aligned. Mirrors the fxEdit modal's marker so both editors read the same.
+  -- column aligned.
   local function mark(onCursor)
     ImGui.AlignTextToFramePadding(ctx)
     ImGui.Text(ctx, (onCursor and stripFocus) and '\xe2\x96\xb8' or ' ')
@@ -2212,8 +2113,10 @@ local drawFxStrip, editFx, stripPlan do
     ImGui.BeginGroup(ctx)
     mark(onCursor)
     chrome.drawPicker{
-      kind = 'fxAdd', buttonLabel = 'add', items = kindItems(), 
-      onPick = function(kind) tv:addFxStage(host, fxSeed(kind)) end,
+      kind = 'fxAdd', buttonLabel = 'add', items = kindItems(), placement = 'above',
+      onPick   = function(kind) tv:addFxStage(host, fxSeed(kind)) end,
+      -- Esc while the chain is still empty aborts the whole add gesture, not just the popup.
+      onCancel = function() if #(tv:noteFx(host) or {}) == 0 then cancelStrip() end end,
     }
     ImGui.EndGroup(ctx)
   end
@@ -2223,6 +2126,7 @@ local drawFxStrip, editFx, stripPlan do
   local function clickToCursor(host, stage, param)
     if not ImGui.IsItemClicked(ctx) then return end
     if not stripFocus then stripSnapshot = { host = host, fx = util.deepClone(tv:noteFx(host)) } end
+    stripHost = host
     tv:setStripCursor{ stage = stage, param = param }
     stripFocus = true
   end
@@ -2319,20 +2223,24 @@ local drawFxStrip, editFx, stripPlan do
     chrome.popChromeStyles()
   end
 
-  -- Super+X: a selection always mints a fresh region, winning over whatever the caret sits
-  -- inside; with no selection, enter the strip under the caret, else the modal (which mints).
+  -- Super+X enters the docked strip on tv:fxHostForEdit's host (selection mints, else caret pins);
+  -- an empty chain opens on the add slot. A new host re-baselines the snapshot; the same host keeps it.
   function editFx()
-    if not tv:ec():hasSelection() then
-      local host = tv:fxHostAtCursor()
-      local fx   = host and tv:noteFx(host)
-      if fx and #fx > 0 then
-        if not stripFocus then stripSnapshot = { host = host, fx = util.deepClone(fx) } end
-        if not tv:stripCursor() then tv:setStripCursor{ stage = 1, param = 0 } end
-        stripFocus = true
-        return
-      end
+    local host, fresh = tv:fxHostForEdit()
+    if not host then return end
+    local existing = tv:noteFx(host)
+    if host ~= stripHost then
+      stripSnapshot = { host = host, fx = (not fresh) and existing and util.deepClone(existing) or nil }
     end
-    fxEdit()
+    stripHost = host
+    -- Empty chain: park on the add slot and pop its picker at once, so there's no dead Enter first.
+    if not existing or #existing == 0 then
+      tv:setStripCursor{ stage = 1, param = 0 }
+      chrome.requestPickerOpen('fxAdd')
+    elseif not tv:stripCursor() then
+      tv:setStripCursor{ stage = 1, param = 0 }
+    end
+    stripFocus = true
   end
 end
 
@@ -2509,9 +2417,9 @@ function tr:renderBody(_, w, h, dispatch)
   local ox, oy = ImGui.GetCursorScreenPos(ctx)
   local gridW  = chrome.gridWidth(w)
   local plan   = stripPlan()
-  if stripFocus and not plan then   -- caret left the chain, or its last stage was removed
-    if stripSnapshot then tv:pruneEmptyRegion(stripSnapshot.host) end   -- cull an emptied husk
-    stripFocus, stripSnapshot = false, nil
+  if stripFocus and not plan then   -- the pinned host vanished (undo/removal); tidy and drop focus
+    if stripHost then tv:pruneEmptyRegion(stripHost) end   -- cull an emptied husk
+    stripFocus, stripSnapshot, stripHost = false, nil, nil
   end
   local gridH  = plan and (h - plan.height) or h
   ImGui.PushFont(ctx, font, 15)
@@ -2531,7 +2439,10 @@ function tr:renderBody(_, w, h, dispatch)
   if not help:wasOpenAtFrameStart() then handleMouse() end
   local kr = dispatch and dispatch(self:focusState()) or { commandHeld = {} }
   if not help:wasOpenAtFrameStart() then handleKeys(kr) end
-  if stripExitReq then stripFocus, stripExitReq, stripSnapshot = false, false, nil end   -- exit after this frame's dispatch saw us focused
+  if stripExitReq then   -- exit after this frame's dispatch saw us focused; prune a husk left empty
+    if stripHost then tv:pruneEmptyRegion(stripHost) end
+    stripFocus, stripExitReq, stripSnapshot, stripHost = false, false, nil, nil
+  end
 
   tv:tick()
 end
