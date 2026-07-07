@@ -75,23 +75,24 @@ See design/note-macros-v2.md § The chain surface for the strip's layout and
 input grammar. The strip itself is a chrome child pane, built on the
 swingEditor idiom (`pushChromeStyles` + `BeginChild` + `paletteHeader`) and
 laid out as horizontal stage cards of live chrome widgets — each stage a
-`BeginGroup` of labelled fields sharing `fxFieldWidget` with the fxEdit modal.
+`BeginGroup` of labelled fields, each rendered by `fxFieldWidget`.
 `stripFocus` mirrors `paletteFocus`: it gates whether `handleStripKeys` runs
 and drives the ▸ marker that tracks the keyboard cursor onto the current field.
 
 The chain's rightmost card is a synthetic **add slot** (`isAdd`, no fields): the
-cursor arrows onto it like any stage, and both Enter and typing a character open
-the searchable stage picker (typing seeds the filter with that character,
-`requestPickerOpen(kind, seed)`); the `add` button there opens it for the mouse.
-Every real stage's **title is that same picker** (`fxSwap_<index>`, current kind
-flagged so Enter opens with it highlighted): picking swaps the kind in place
-(`replaceFxStage`), and — as on the add slot — Enter or type-to-open works from
-the header under the cursor. Each stage card also carries `<`/`>` (reorder) and
-`del` (remove) buttons acting on that stage directly. Left/right navigate stages
-only on the header row (`param == 0`); on a param row they nudge the field value
-(as `-`/`=` do). Keyboard commit is therefore Enter on a **param** row (or the
-`commit` button) — Enter on a header opens the swap picker; the global button row
-keeps `clear` (wipe the chain) and `commit`/`cancel` (mouse parity for Enter/Esc).
+cursor arrows onto it like any stage, and **Up** (or typing a character) opens the
+searchable stage picker (typing seeds the filter with that character,
+`requestPickerOpen(kind, seed)`); the `add` button there opens it for the mouse,
+and the picker draws *above* the button (`placement='above'`) so it clears the
+bottom-docked strip. Every real stage's **title is that same picker**
+(`fxSwap_<index>`, current kind flagged): **Up** on the header swaps the kind in
+place (`replaceFxStage`), as does type-to-open. Each stage card also carries
+`<`/`>` (reorder) and `del` (remove) buttons acting on that stage directly.
+Left/right navigate stages only on the header row (`param == 0`); on a param row
+they nudge the field value (as `-`/`=` do), and up/down move between the header
+and its fields. **Enter always commits** (keep edits, leave) from any row; the
+global button row keeps `clear` (wipe the chain) and `commit`/`cancel` (mouse
+parity for Enter/Esc).
 
 Between stage cards sits a full-height rule — every gap ruled to the tallest
 card's height, including the gap before the add slot — with a small `»` flow
@@ -104,9 +105,14 @@ clearance above and below.
 
 The keyboard session is **transactional**: `editFx` (or a mouse click on any
 field-row label) snapshots the chain (`stripSnapshot`) on entry and takes strip
-focus; edits apply live as a preview, and — while the picker is closed — Enter (on
-a param row) or the `commit` button keeps the edits and leaves, while Esc or
-`cancel` reverts to the snapshot before leaving. Clicking a field label also moves
-the selection chip there. The per-card `<`/`>`/`del` buttons are always-live (like
-`clear`), so a mouse-only edit acts without taking focus. This mirrors the
-`fxEdit` modal's Cancel/Done snapshot restore.
+focus; edits apply live as a preview, and — while the picker is closed — Enter or
+the `commit` button keeps the edits and leaves, while Esc or `cancel` reverts to
+the snapshot before leaving. Clicking a field label also moves the selection chip
+there. The per-card `<`/`>`/`del` buttons are always-live (like `clear`), so a
+mouse-only edit acts without taking focus.
+
+When `editFx` opens an **empty** chain — a note host with no fx yet, or a
+selection that mints a fresh region — the strip pins to that host (`stripHost`)
+so the add slot renders on its own, and pops the add picker straight away. Esc
+there aborts the whole gesture (`cancelStrip`) and the frame-end sink prunes the
+empty husk, rather than merely dismissing the popup.

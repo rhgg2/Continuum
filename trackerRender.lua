@@ -2054,9 +2054,10 @@ local drawFxStrip, editFx, stripPlan do
     local super = (mods & ImGui.Mod_Super) ~= 0
     local left, right = press(ImGui.Key_LeftArrow), press(ImGui.Key_RightArrow)
     if press(ImGui.Key_Enter) or press(ImGui.Key_KeypadEnter) then
-      if col.isAdd then chrome.requestPickerOpen('fxAdd')          -- Enter on the add slot opens the picker
-      elseif cur.param == 0 then chrome.requestPickerOpen('fxSwap_' .. col.index)  -- header: open swap (current kind flagged)
-      else stripExitReq = true end                                 -- commit from a param row: keep edits, leave
+      stripExitReq = true                                  -- Enter always commits: keep edits, leave
+    elseif press(ImGui.Key_UpArrow) and (col.isAdd or cur.param == 0) then
+      -- Up on the add slot adds a new stage; on a header it swaps the kind (current flagged).
+      chrome.requestPickerOpen(col.isAdd and 'fxAdd' or ('fxSwap_' .. col.index))
     elseif super and (left or right) and not col.isAdd then
       if tv:moveFxStage(plan.host, col.index, left and -1 or 1) then
         cur.stage = cur.stage + (left and -1 or 1)
