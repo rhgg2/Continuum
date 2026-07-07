@@ -2167,6 +2167,15 @@ function tv:moveFxStage(uuid, index, dir)
   return true
 end
 
+function tv:replaceFxStage(uuid, index, entry)
+  local fx = self:noteFx(uuid)
+  if not (fx and fx[index]) then return end
+  local list = {}
+  for i, e in ipairs(fx) do list[i] = e end
+  list[index] = util.deepClone(entry)
+  self:setNoteFx(uuid, list)
+end
+
 ----- Deletion
 
 local deleteEvent, deleteSelection do

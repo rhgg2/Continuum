@@ -82,20 +82,31 @@ and drives the ▸ marker that tracks the keyboard cursor onto the current field
 The chain's rightmost card is a synthetic **add slot** (`isAdd`, no fields): the
 cursor arrows onto it like any stage, and both Enter and typing a character open
 the searchable stage picker (typing seeds the filter with that character,
-`requestPickerOpen(kind, seed)`); the `+ add` button there opens it for the
-mouse. Left/right navigate stages only on the header row (`param == 0`); on a
-param row they nudge the field value (as `-`/`=` do). The header button row
-carries `del` (remove the stage under the cursor), `clear` (wipe the chain), and
-`commit`/`cancel` (mouse parity for Enter/Esc); `del` is disabled while the
-cursor sits on the add slot.
+`requestPickerOpen(kind, seed)`); the `add` button there opens it for the mouse.
+Every real stage's **title is that same picker** (`fxSwap_<index>`, current kind
+flagged so Enter opens with it highlighted): picking swaps the kind in place
+(`replaceFxStage`), and — as on the add slot — Enter or type-to-open works from
+the header under the cursor. Each stage card also carries `<`/`>` (reorder) and
+`del` (remove) buttons acting on that stage directly. Left/right navigate stages
+only on the header row (`param == 0`); on a param row they nudge the field value
+(as `-`/`=` do). Keyboard commit is therefore Enter on a **param** row (or the
+`commit` button) — Enter on a header opens the swap picker; the global button row
+keeps `clear` (wipe the chain) and `commit`/`cancel` (mouse parity for Enter/Esc).
 
 Between stage cards sits a full-height rule — every gap ruled to the tallest
 card's height, including the gap before the add slot — with a small `»` flow
-marker set into a mid-line cut-out.
+marker set into a mid-line cut-out. A horizontal rule under each stage's title
+(`nameDividers`, add slot excepted) reaches out toward those flanking rules —
+the leftmost starting at the card edge, the rest from the prior stage's
+flanking rule — setting the card header off from its fields. It's centred in
+the `DIV_BAND` gap `drawStage` reserves under the title, keeping ~2px of
+clearance above and below.
 
 The keyboard session is **transactional**: `editFx` (or a mouse click on any
-row's label) snapshots the chain (`stripSnapshot`) on entry and takes strip
-focus; edits apply live as a preview, and — while the picker is closed — Enter or
-the `commit` button keeps the edits and leaves, while Esc or `cancel` reverts to
-the snapshot before leaving. Clicking a label also moves the selection chip to
-that row. This mirrors the `fxEdit` modal's Cancel/Done snapshot restore.
+field-row label) snapshots the chain (`stripSnapshot`) on entry and takes strip
+focus; edits apply live as a preview, and — while the picker is closed — Enter (on
+a param row) or the `commit` button keeps the edits and leaves, while Esc or
+`cancel` reverts to the snapshot before leaving. Clicking a field label also moves
+the selection chip there. The per-card `<`/`>`/`del` buttons are always-live (like
+`clear`), so a mouse-only edit acts without taking focus. This mirrors the
+`fxEdit` modal's Cancel/Done snapshot restore.
