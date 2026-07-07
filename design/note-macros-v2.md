@@ -43,9 +43,10 @@ Track A is the generator substrate, Track B the authoring UI. Checked = landed.
 - [x] fx chain — window editing on the fx column: noteOff truncates, grow/shrink resize, nudge shifts the window (§ The fx chain)
 - [x] fx chain — precedence-reorder verb: eventShiftLeft/right bumps a region one badge column, swapping storage precedence (§ The fx chain)
 - [x] fx chain — multi-stage modal editing: fxEdit edits ordered stages (series order, reorder via nudgeBack/Forward, add-by-append, duplicate kinds) (§ The fx chain, § Build progress C4)
+- [x] fx chain C5 — docked chain strip (first cut): stages left→right under the grid, ←→ stage / ↑↓ param / −= adjust / ⌘←→ reorder / Enter add / Del remove; Super-X enters it, modal still mints (§ The chain surface, § Build progress C5)
 
 **Open / next**
-- [ ] chain surface — docked chain strip, scripted kinds pane, patch library (design only, § The chain surface)
+- [ ] chain surface — scripted kinds pane, patch library (design only, § The chain surface); strip follow-ups: per-stage bypass, chain-signature badge, ghost-on-focus, Tab-cycle siblings, retire the modal
 
 **Deferred (no consumer / intentional)**
 - [ ] **PA** replace — no generic park/rebind path (§ A4)
@@ -706,8 +707,8 @@ to the source as params. "Shape the arp's velocity" is a transformer;
 vibrato's loop, swapping its closed-form breakpoint placement for a phase
 accumulator.
 
-**Tab scope — resolved: the cursor's ppq.** The editor (modal now, strip
-later) cycles the chains stacked at the cursor's ppq, not every chain on
+**Tab scope — resolved: the cursor's ppq.** The editor (modal + strip;
+the strip's first cut shows one chain, sibling-cycling deferred) cycles the chains stacked at the cursor's ppq, not every chain on
 the channel — that is what the cursor means everywhere else in the
 tracker. Overlap disambiguation falls out; a chain elsewhere is reached
 by moving the cursor to it.
@@ -1071,6 +1072,21 @@ column-based, not gm-backed -- the Open-questions Track-B lean, now resolved.
   (duplicate-safe). Tab-across-sibling-chains and minting a co-located sibling stay on the
   multi-chain axis (reachable via the grid caret today). Pinned by the reorder / append-duplicate /
   remove pins in `vm_fx_ui_spec` and the migrated husk test in `tv_fx_region_spec`.
+
+- **C5 — docked chain strip (first cut). Landed 2026-07-07.** A keyboard-focusable strip pinned
+  below the grid, shown whenever the caret sits on a chain (`tv:fxHostAtCursor`, a read-only host
+  query that never mints — the selection branch stays in `fxHostForEdit`). Stages render
+  left→right (signal flow visible — what the modal can't show), params stacked under each, a
+  trailing slot cycling the addable kinds. Grammar: ←→ walk stages, ↑↓ walk params, −/= adjust
+  (Ctrl coarse), ⌘←→ reorder, Enter appends the shown kind, Del removes; Esc or moving the caret
+  off the chain exits. Architecture mirrors the param palette exactly: `stripFocus` (module-local
+  in trackerRender) gates `focusState.acceptCmds`, `stripCursor = {stage, param}` lives on tv,
+  keys read via direct `IsKeyPressed`, draw-list only so no widget steals focus. The modal's field
+  machinery (`choiceIndex`, `adjustRow`, cents↔steps) hoisted to module scope, shared by both.
+  Super-X enters the strip on an existing chain, else opens the modal (still the mint path).
+  Deferred: per-stage bypass (a runner change, not just UI), the chain-signature grid badge,
+  ghost-on-focus, Tab-cycling siblings, and full modal retirement. `fxHostAtCursor` pinned in
+  `tv_fx_region_spec` (returns the caret host, mints nothing under a selection).
 
 ## B3 — parked notes/ccs as a third edit backing (landed)
 

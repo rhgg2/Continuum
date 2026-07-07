@@ -2073,10 +2073,9 @@ function tv:noteFx(uuid)
   return region and region.fx or nil
 end
 
--- The fx host the editor opens on: a selection authors/reopens a region; else the caret's
--- fx cell; else the caret's note (v1). 2nd return = freshly minted (modal takes no snapshot).
-function tv:fxHostForEdit()
-  if ec:hasSelection() then return ensureRegionForSelection() end
+-- The chain host under the caret, read-only: the caret's fx cell, else the caret's note.
+-- No selection branch -- cursor movement must never mint a region (the strip reads this).
+function tv:fxHostAtCursor()
   local col = grid.cols[ec:col()]
   if col and col.type == 'fx' then
     local cell = col.cells and col.cells[ec:row()]
@@ -2084,6 +2083,13 @@ function tv:fxHostForEdit()
   end
   local note = self:cursorNote()
   return note and note.uuid or nil
+end
+
+-- The fx host the editor opens on: a selection authors/reopens a region (minting one);
+-- else the read-only caret host (v1). 2nd return = freshly minted (modal takes no snapshot).
+function tv:fxHostForEdit()
+  if ec:hasSelection() then return ensureRegionForSelection() end
+  return self:fxHostAtCursor()
 end
 
 -- The host note behind a uuid; the stepInterval editor reads its pitch/detune to
@@ -2930,6 +2936,8 @@ local paletteFilter = ''
 local paletteExpanded = {}
 --shape: paletteCursor = { fxGuid, param } — palette tree cursor; param nil = the fx heading row
 local paletteCursor   = nil
+--shape: stripCursor = { stage, param } — fx-strip caret; param 0 = stage header, k = its k-th field
+local stripCursor     = nil
 
 -- Learn-touched params float above pa's frecency order until the bound
 -- take changes; validated lazily against cm:boundTake, no lifecycle hook.
@@ -2961,6 +2969,8 @@ function tv:paletteExpanded()         return paletteExpanded end
 function tv:setFxExpanded(fxGuid, on) paletteExpanded[fxGuid] = on or nil end
 function tv:paletteCursor()           return paletteCursor end
 function tv:setPaletteCursor(c)        paletteCursor = c end
+function tv:stripCursor()             return stripCursor end
+function tv:setStripCursor(c)          stripCursor = c end
 
 function tv:paramTargets()           return pa:targets() end
 function tv:paramBinding(chan, lane) return pa:binding(chan, lane) end

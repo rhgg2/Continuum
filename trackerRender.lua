@@ -994,6 +994,10 @@ local defocusReq   = false   -- one-shot: park focus on the sink, leaving the fi
 local releaseReq   = false   -- one-shot: drop paletteFocus to nil at the sink (Esc/Enter)
 local scrollReq    = false   -- one-shot: scroll the cursor row into view next draw
 
+-- FX-chain strip focus: routes the keyboard into the docked strip (mirrors paletteFocus).
+local stripFocus   = false
+local stripExitReq = false   -- one-shot: drop stripFocus after dispatch, so the exit Esc isn't re-dispatched
+
 local function paletteFindBox()
   ImGui.SetNextItemWidth(ctx, -1)
   if focusFindReq then ImGui.SetKeyboardFocusHere(ctx); focusFindReq, paletteFocus = false, 'find' end
@@ -1694,7 +1698,7 @@ local lastEditKey
 --contract: a note key typed while armed exits region mode then enters (execute-through)
 local function handleKeys(kr)
   if modalHost:isOpen() or chrome.pickerIsActive() then return end
-  if ImGui.IsAnyItemActive(ctx) or paletteFocus then return end
+  if ImGui.IsAnyItemActive(ctx) or paletteFocus or stripFocus then return end
   local ec = tv:ec()
   local commandHeld = kr.commandHeld
 
@@ -1858,38 +1862,60 @@ local FX_KINDS = generators.modalOrder
 -- A kind's default fx entry: its registry params stamped with the kind tag downstream reads.
 local function fxSeed(kind) return util.assign({ kind = kind }, generators.kinds[kind].defaults) end
 
+----- FX field descriptors (shared: fxEdit modal + fx strip)
+
+local function valueEq(a, b)
+  if type(a) == 'table' then return type(b) == 'table' and a[1] == b[1] and a[2] == b[2] end
+  return a == b
+end
+local function choiceIndex(fd, value)
+  for i, o in ipairs(fd.options) do if valueEq(o.v, value) then return i end end
+  return 1
+end
+local function choiceLabels(fd)
+  local out = {}; for i, o in ipairs(fd.options) do out[i] = o.l end; return out
+end
+
+-- stepInterval: stored value is signed cents (a host-relative pitch demand);
+-- shown/stepped as temper steps, anchored at the host. see design/archive/note-macros.md § UI
+local function slideTemper() return tv:activeTemper() or tuning.findTemper('12EDO') end
+local function hostPitch(uuid)
+  local n = tv:noteByUuid(uuid)
+  return (n and n.pitch) or 60, (n and n.detune) or 0
+end
+local function centsToSteps(temper, midi, detune, cents)
+  local hStep, hOct = tuning.midiToStep(temper, midi, detune)
+  local tStep, tOct = tuning.midiToStep(temper, 0, midi * 100 + detune + (cents or 0))
+  return (tOct - hOct) * #temper.cents + (tStep - hStep)
+end
+local function stepsToCents(temper, midi, detune, n)
+  local tMidi, tDetune = tuning.transposeStep(temper, midi, detune, n)
+  return (tMidi - midi) * 100 + (tDetune - detune)
+end
+
+-- Adjust rw's field one step: right increments, Ctrl coarse. The generic write both editors drive.
+local function adjustRow(uuid, rw, right, mods)
+  local fd, value = rw.fd, rw.entry[rw.fd.field]
+  if fd.widget == 'choice' then
+    local i = util.clamp(choiceIndex(fd, value) + (right and 1 or -1), 1, #fd.options)
+    tv:setFxField(uuid, rw.index, fd.field, fd.options[i].v)
+  elseif fd.widget == 'stepInterval' then
+    local temper = slideTemper()
+    local midi, detune = hostPitch(uuid)
+    local steps = centsToSteps(temper, midi, detune, value)
+    local delta = (mods & ImGui.Mod_Ctrl) ~= 0 and #temper.cents or 1
+    tv:setFxField(uuid, rw.index, fd.field,
+                  stepsToCents(temper, midi, detune, steps + (right and 1 or -1) * delta))
+  else
+    local step = (mods & ImGui.Mod_Ctrl) ~= 0 and fd.coarse or fd.base
+    local n = util.clamp((value or 0) + (right and 1 or -1) * step, fd.min, fd.max)
+    tv:setFxField(uuid, rw.index, fd.field, n)
+  end
+end
+
 local fxEdit do
   local MARK_W, LABEL_W = 16, 64
   local LEGEND = '\xe2\x86\x91\xe2\x86\x93 nav   \xe2\x86\x90\xe2\x86\x92 adjust   \xe2\x8c\x98\xe2\x86\x91\xe2\x86\x93 reorder   \xe2\x86\x92 add   Del remove   Enter done'
-
-  local function valueEq(a, b)
-    if type(a) == 'table' then return type(b) == 'table' and a[1] == b[1] and a[2] == b[2] end
-    return a == b
-  end
-  local function choiceIndex(fd, value)
-    for i, o in ipairs(fd.options) do if valueEq(o.v, value) then return i end end
-    return 1
-  end
-  local function choiceLabels(fd)
-    local out = {}; for i, o in ipairs(fd.options) do out[i] = o.l end; return out
-  end
-
-  -- stepInterval: stored value is signed cents (a host-relative pitch demand);
-  -- shown/stepped as temper steps, anchored at the host. see design/archive/note-macros.md § UI
-  local function slideTemper() return tv:activeTemper() or tuning.findTemper('12EDO') end
-  local function hostPitch(uuid)
-    local n = tv:noteByUuid(uuid)
-    return (n and n.pitch) or 60, (n and n.detune) or 0
-  end
-  local function centsToSteps(temper, midi, detune, cents)
-    local hStep, hOct = tuning.midiToStep(temper, midi, detune)
-    local tStep, tOct = tuning.midiToStep(temper, 0, midi * 100 + detune + (cents or 0))
-    return (tOct - hOct) * #temper.cents + (tStep - hStep)
-  end
-  local function stepsToCents(temper, midi, detune, n)
-    local tMidi, tDetune = tuning.transposeStep(temper, midi, detune, n)
-    return (tMidi - midi) * 100 + (tDetune - detune)
-  end
 
   -- One row per stage in series order (header + fields), then one add row per modalOrder kind.
   -- `index` is the stage's position (nil on add rows) -- identity is position, not kind.
@@ -1943,25 +1969,6 @@ local fxEdit do
     else
       local rv, n = chrome.numberStepper(id, value or 0, { width = 70, min = fd.min, max = fd.max })
       if rv then tv:setFxField(uuid, rw.index, fd.field, n) end
-    end
-  end
-
-  local function adjustRow(uuid, rw, right, mods)
-    local fd, value = rw.fd, rw.entry[rw.fd.field]
-    if fd.widget == 'choice' then
-      local i = util.clamp(choiceIndex(fd, value) + (right and 1 or -1), 1, #fd.options)
-      tv:setFxField(uuid, rw.index, fd.field, fd.options[i].v)
-    elseif fd.widget == 'stepInterval' then
-      local temper = slideTemper()
-      local midi, detune = hostPitch(uuid)
-      local steps = centsToSteps(temper, midi, detune, value)
-      local delta = (mods & ImGui.Mod_Ctrl) ~= 0 and #temper.cents or 1
-      tv:setFxField(uuid, rw.index, fd.field,
-                    stepsToCents(temper, midi, detune, steps + (right and 1 or -1) * delta))
-    else
-      local step = (mods & ImGui.Mod_Ctrl) ~= 0 and fd.coarse or fd.base
-      local n = util.clamp((value or 0) + (right and 1 or -1) * step, fd.min, fd.max)
-      tv:setFxField(uuid, rw.index, fd.field, n)
     end
   end
 
@@ -2029,6 +2036,159 @@ local fxEdit do
       snapshot = (not isNew) and fx and util.deepClone(fx) or nil,
       flags = ImGui.WindowFlags_NoNavInputs,
     }
+  end
+end
+
+----- FX chain strip (docked; edits the chain under the caret in place)
+
+-- see design/note-macros-v2.md § The chain surface for layout/grammar. Draw-list only +
+-- keyboard-driven so no widget steals focus; stripFocus mirrors paletteFocus, stripCursor on tv.
+local drawFxStrip, editFx, stripPlan do
+  local PAD_X, PAD_Y, STAGE_W = 12, 6, 132
+  local ARROW  = '\xe2\x86\x92'
+  local LEGEND = '\xe2\x86\x90\xe2\x86\x92 stage   \xe2\x86\x91\xe2\x86\x93 param   \xe2\x88\x92/= adjust   \xe2\x8c\x98\xe2\x86\x90\xe2\x86\x92 reorder   \xe2\x8f\x8e add   \xe2\x8c\xab remove   Esc done'
+  local function rowH() return gui.fontSize.ui + 4 end
+
+  -- Columns: one per stage (its visible fields), then a trailing add slot cycling FX_KINDS.
+  local function stripColumns(fx)
+    local cols = {}
+    for i, entry in ipairs(fx) do
+      local fields = {}
+      for _, fd in ipairs(generators.kinds[entry.kind].fields) do
+        if not fd.when or fd.when(entry) then
+          fields[#fields + 1] = { fd = fd, entry = entry, index = i }
+        end
+      end
+      cols[#cols + 1] = { index = i, label = generators.kinds[entry.kind].label, fields = fields }
+    end
+    cols[#cols + 1] = { add = true, kinds = FX_KINDS }
+    return cols
+  end
+
+  -- A stage walks header(0)..fields; the add slot picks a kind (1..N).
+  local function paramRange(col)
+    if col.add then return 1, #col.kinds end
+    return 0, #col.fields
+  end
+
+  local function stripHeight(cols)
+    local maxFields = 0
+    for _, c in ipairs(cols) do if not c.add then maxFields = math.max(maxFields, #c.fields) end end
+    return PAD_Y * 2 + rowH() * (2 + maxFields)   -- legend + header + fields
+  end
+
+  -- host + columns + reserved band height for the chain under the caret, or nil when none.
+  function stripPlan()
+    local host = tv:fxHostAtCursor()
+    local fx   = host and tv:noteFx(host)
+    if not (fx and #fx > 0) then return nil end
+    local cols = stripColumns(fx)
+    return { host = host, cols = cols, height = stripHeight(cols) }
+  end
+
+  local function clampCursor(cols)
+    local c = tv:stripCursor() or { stage = 1, param = 0 }
+    c.stage = util.clamp(c.stage, 1, #cols)
+    local lo, hi = paramRange(cols[c.stage])
+    c.param = util.clamp(c.param, lo, hi)
+    return c
+  end
+
+  -- Field value as display text: choice label, signed temper steps, or the bare number.
+  local function fieldText(host, f)
+    local fd, value = f.fd, f.entry[f.fd.field]
+    if fd.widget == 'choice' then return fd.options[choiceIndex(fd, value)].l end
+    if fd.widget == 'stepInterval' then
+      local temper = slideTemper()
+      local midi, detune = hostPitch(host)
+      local n = centsToSteps(temper, midi, detune, value)
+      return (n > 0 and '+' or '') .. n
+    end
+    return tostring(value or 0)
+  end
+
+  local function handleStripKeys(plan)
+    local press = function(k) return ImGui.IsKeyPressed(ctx, k) end
+    if press(ImGui.Key_Escape) then stripExitReq = true; return end   -- drop at frame end, not now (see releaseReq)
+    local cols  = plan.cols
+    local cur   = clampCursor(cols)
+    local col   = cols[cur.stage]
+    local mods  = ImGui.GetKeyMods(ctx)
+    local super = (mods & ImGui.Mod_Super) ~= 0
+    local left, right = press(ImGui.Key_LeftArrow), press(ImGui.Key_RightArrow)
+    if super and (left or right) then
+      if not col.add and tv:moveFxStage(plan.host, col.index, left and -1 or 1) then
+        cur.stage = cur.stage + (left and -1 or 1)
+      end
+    elseif left or right then
+      cur.stage = util.clamp(cur.stage + (right and 1 or -1), 1, #cols)
+      local lo, hi = paramRange(cols[cur.stage])
+      cur.param = util.clamp(cur.param, lo, hi)
+    elseif press(ImGui.Key_UpArrow) or press(ImGui.Key_DownArrow) then
+      local lo, hi = paramRange(col)
+      cur.param = util.clamp(cur.param + (press(ImGui.Key_DownArrow) and 1 or -1), lo, hi)
+    elseif press(ImGui.Key_Minus) or press(ImGui.Key_Equal) then
+      if not col.add and cur.param >= 1 then
+        adjustRow(plan.host, col.fields[cur.param], press(ImGui.Key_Equal), mods)
+      end
+    elseif press(ImGui.Key_Enter) or press(ImGui.Key_KeypadEnter) then
+      if col.add then tv:addFxStage(plan.host, fxSeed(col.kinds[cur.param])); cur.param = 0 end
+    elseif press(ImGui.Key_Backspace) or press(ImGui.Key_Delete) then
+      if not col.add then tv:removeFxStage(plan.host, col.index) end
+    end
+    tv:setStripCursor(cur)
+  end
+
+  function drawFxStrip(plan, x, y, w)
+    local p     = painter.new(ctx, chrome, {}, 'tracker')
+    local lineH = rowH()
+    local cur   = clampCursor(plan.cols)
+    tv:setStripCursor(cur)
+    p.fill({ x0 = x, y0 = y, x1 = x + w, y1 = y + plan.height }, 'tracker.rowBarStart')
+    p.segment(x, y, x + w, y, 'global.separator', 1)
+    p.text(x + PAD_X, y + PAD_Y, 'tracker.inactive', LEGEND, uiFont, gui.fontSize.ui)
+    local top = y + PAD_Y + lineH
+
+    local function put(px, py, text, isCur, colName)
+      if isCur and stripFocus then
+        p.fill({ x0 = px - 3, y0 = py, x1 = px + STAGE_W - 24, y1 = py + lineH }, 'tracker.cursor')
+        p.text(px, py + 1, 'tracker.cursorText', text, uiFont, gui.fontSize.ui)
+      else
+        p.text(px, py + 1, stripFocus and colName or 'tracker.inactive', text, uiFont, gui.fontSize.ui)
+      end
+    end
+
+    local cx = x + PAD_X
+    for ci, col in ipairs(plan.cols) do
+      local onStage = cur.stage == ci
+      if col.add then
+        local pick = onStage and cur.param or 1
+        put(cx, top, '\xef\xbc\x8b ' .. generators.kinds[col.kinds[pick]].label, onStage, 'accent')
+      else
+        put(cx, top, col.index .. '. ' .. col.label, onStage and cur.param == 0, 'tracker.chanHeader')
+        for k, f in ipairs(col.fields) do
+          put(cx, top + k * lineH, f.fd.label .. '  ' .. fieldText(plan.host, f),
+              onStage and cur.param == k, 'text')
+        end
+        if ci < #plan.cols - 1 then
+          p.text(cx + STAGE_W - 20, top + 1, 'tracker.inactive', ARROW, uiFont, gui.fontSize.ui)
+        end
+      end
+      cx = cx + STAGE_W
+    end
+    if stripFocus then handleStripKeys(plan) end
+  end
+
+  -- Super+X: enter the strip when a chain sits under the caret; else the modal (which mints).
+  function editFx()
+    local host = tv:fxHostAtCursor()
+    local fx   = host and tv:noteFx(host)
+    if fx and #fx > 0 then
+      if not tv:stripCursor() then tv:setStripCursor{ stage = 1, param = 0 } end
+      stripFocus = true
+    else
+      fxEdit()
+    end
   end
 end
 
@@ -2102,7 +2262,7 @@ tracker:registerAll{
   openTemperPicker = function() chrome.requestPickerOpen('temper') end,
   openSwingPicker  = function() chrome.requestPickerOpen('swing')  end,
 
-  editNoteFx = { fxEdit, 'Edit note FX' },
+  editNoteFx = { editFx, 'Edit note FX' },
 }
 
 cmgr:doAfter({ 'quantize', 'quantizeKeepRealised' },
@@ -2204,13 +2364,17 @@ function tr:renderBody(_, w, h, dispatch)
   end
   local ox, oy = ImGui.GetCursorScreenPos(ctx)
   local gridW  = chrome.gridWidth(w)
+  local plan   = stripPlan()
+  if stripFocus and not plan then stripFocus = false end   -- caret left the chain
+  local gridH  = plan and (h - plan.height) or h
   ImGui.PushFont(ctx, font, 15)
-  computeLayout(gridW, h)
+  computeLayout(gridW, gridH)
   drawLaneStrip()
   -- Lane-drag callbacks may rebuild grid.cols; re-layout for drawTracker.
-  computeLayout(gridW, h)
+  computeLayout(gridW, gridH)
   drawTracker()
   ImGui.PopFont(ctx)
+  if plan then drawFxStrip(plan, ox, oy + gridH, gridW) end
   -- Full body width (grid + palette) so the cheat-sheet can flow across both.
   help:anchor('body.grid', gridOriginX, gridOriginY, ox + w - gridOriginX, gridHeight * gridY)
 
@@ -2220,6 +2384,7 @@ function tr:renderBody(_, w, h, dispatch)
   if not help:wasOpenAtFrameStart() then handleMouse() end
   local kr = dispatch and dispatch(self:focusState()) or { commandHeld = {} }
   if not help:wasOpenAtFrameStart() then handleKeys(kr) end
+  if stripExitReq then stripFocus, stripExitReq = false, false end   -- exit after this frame's dispatch saw us focused
 
   tv:tick()
 end
@@ -2237,7 +2402,7 @@ function tr:focusState()
   return {
     suppressKbd    = suppressKbd,
     pageSuppressed = false,
-    acceptCmds     = (not suppressKbd) and not ImGui.IsAnyItemActive(ctx) and not paletteFocus,
+    acceptCmds     = (not suppressKbd) and not ImGui.IsAnyItemActive(ctx) and not paletteFocus and not stripFocus,
   }
 end
 
