@@ -2338,6 +2338,14 @@ local function rebuildTails(fx, deferred)
     end
     if #notes == 0 then goto nextChan end
 
+    -- Parked members left the columns but still bound a preceding on-take tail at their onset --
+    -- the symmetric partner of realiseParked's on-take bounds. Bound-only: never rewritten below.
+    local parkedBounds = {}
+    for _, cell in ipairs(channels[chan].parked or {}) do
+      util.add(parkedBounds, { ppq = tm:fromLogical(chan, cell.ppqL), ppqL = cell.ppqL,
+                               lane = cell.lane, pitch = cell.pitch })
+    end
+
     local function rawThenLogical(a, b)
       if a.ppq ~= b.ppq then return a.ppq < b.ppq end
       return a.ppqL < b.ppqL
@@ -2367,12 +2375,25 @@ local function rebuildTails(fx, deferred)
     local laneNextOf  = strictNextMap(byLane)
     local pitchNextOf = strictNextMap(byPitch)
 
+    -- On-take tails clip against parked members too (a real onset the columns no longer carry); a
+    -- region's own tiles never do -- they'd be cut by the members they replaced. So only on-take reads these.
+    local laneNextOn, pitchNextOn = laneNextOf, pitchNextOf
+    if #parkedBounds > 0 then
+      local byLaneP, byPitchP = {}, {}
+      for _, n in ipairs(notes)        do util.bucket(byLaneP, n.lane, n);  util.bucket(byPitchP, n.pitch, n) end
+      for _, b in ipairs(parkedBounds) do util.bucket(byLaneP, b.lane, b);  util.bucket(byPitchP, b.pitch, b) end
+      for _, g in pairs(byLaneP)  do table.sort(g, rawThenLogical) end
+      for _, g in pairs(byPitchP) do table.sort(g, rawThenLogical) end
+      laneNextOn, pitchNextOn = strictNextMap(byLaneP), strictNextMap(byPitchP)
+    end
+
     for _, e in ipairs(notes) do
+      local onTake    = not e.derived
       local ceiling   = e.endppqL == util.OPEN and math.huge
                         or e.endppqL and tm:fromLogical(chan, e.endppqL)
                         or math.huge
-      local laneNext  = laneNextOf[e]
-      local pitchNext = pitchNextOf[e]
+      local laneNext  = (onTake and laneNextOn  or laneNextOf)[e]
+      local pitchNext = (onTake and pitchNextOn or pitchNextOf)[e]
       local laneClip  = laneNext
         and tm:fromLogical(chan, laneNext.ppqL) + (e.overlap or 0)
         or math.huge

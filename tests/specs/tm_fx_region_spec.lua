@@ -1460,4 +1460,46 @@ return {
     end,
   },
 
+  ----- Parked members bound a preceding on-take tail (symmetric to realiseParked's bounds)
+
+  {
+    name = 'replace: a preceding on-take tail clips at the parked chord onset, not past it',
+    run = function(harness)
+      local h = harness.mk()
+      -- A voice on lane 2 running into the region; before the region it clips at 240 against its
+      -- lane successor. The successor is the retrig host -- parking it must not free the clip.
+      addNote(h, { pitch = 62, ppq = 0,   endppq = 480, lane = 2 })   -- note A: authored ceiling 480
+      addNote(h, { pitch = 60, ppq = 240, endppq = 480, lane = 2 })   -- host inside the region
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 240, endppq = 480,
+                                   fx = { { kind = 'retrig', period = { 1, 4 }, ramp = 0 } } } })
+      h.tm:rebuild()
+      local a
+      for _, evt in ipairs(h.tm:getChannel(1).columns.notes[2].events) do
+        if evt.pitch == 62 then a = evt end
+      end
+      t.truthy(a, 'note A is on the take, lane 2')
+      t.eq(a.endppqC, 240, 'note A clips at the parked host onset (240), not its authored ceiling (480)')
+    end,
+  },
+
+  {
+    name = 'replace: a derived tile is not truncated by a parked member it replaced',
+    run = function(harness)
+      local h = harness.mk()
+      -- Two consecutive lane-1 notes; both park. A parked member onsets at 90, mid-way through the
+      -- second tile [60,120). The tile must reach 120 -- a non-sounding parked note cannot cut it.
+      addNote(h, { pitch = 60, ppq = 0,  endppq = 90,  lane = 1 })
+      addNote(h, { pitch = 62, ppq = 90, endppq = 240, lane = 1 })
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+                                   fx = { { kind = 'retrig', period = { 1, 4 }, ramp = 0 } } } })
+      h.tm:rebuild()
+      local tileAt60
+      for _, n in ipairs(h.fm:dump().notes) do
+        if n.derived == 'fxr-1' and n.ppq == 60 then tileAt60 = n end
+      end
+      t.truthy(tileAt60, 'the retrig tile at onset 60 exists')
+      t.eq(tileAt60.endppq, 120, 'the tile spans its full step to 120, not clipped to the parked onset 90')
+    end,
+  },
+
 }
