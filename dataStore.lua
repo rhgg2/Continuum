@@ -32,6 +32,7 @@ local registry = {
   slotEntries         = 'track',
   arrangeSlots        = 'track',
   arrangeColours      = 'project',
+  fxPatterns          = 'project',
   guardedTrack        = 'project',
   paramFrecency       = 'global',
 }

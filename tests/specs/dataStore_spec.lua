@@ -43,10 +43,12 @@ return {
       ds:assign('groups',         { a = 1 })     -- take
       ds:assign('slotEntries',    { 'x' })       -- track
       ds:assign('arrangeColours', { [7] = 3 })   -- project
+      ds:assign('fxPatterns',     { p1 = { kind = 'notes' } })  -- project
       ds:assign('paramFrecency',  { p = 9 })     -- global
       t.deepEq(ds:get('groups'),         { a = 1 },   'take key round-trips')
       t.deepEq(ds:get('slotEntries'),    { 'x' },     'track key round-trips')
       t.deepEq(ds:get('arrangeColours'), { [7] = 3 }, 'project key round-trips')
+      t.deepEq(ds:get('fxPatterns'),     { p1 = { kind = 'notes' } }, 'project pattern lib round-trips')
       t.deepEq(ds:get('paramFrecency'),  { p = 9 },   'global key round-trips')
     end,
   },

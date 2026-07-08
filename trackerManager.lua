@@ -3086,6 +3086,10 @@ do
     elseif change.name == 'noteDelay' then
       -- noteDelay is a display offset -- nothing in the tm pipeline reads it; reproject only.
       if not flushingParked then tm:rebuild(false) end
+    elseif change.name == 'fxPatterns' then
+      -- Shared pattern-library edit (P3 write-through): re-realise every consumer. v1 dirties
+      -- all 16; pattern->consumer targeting is P4. see design/fx-patterns.md § The checkout model
+      dirtyChan(); tm:rebuild(false)
     end
   end)
 

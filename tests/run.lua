@@ -80,6 +80,7 @@ local specs = {
   'tm_trill_spec',
   'generators_spec',
   'tm_dormant_config_spec',
+  'tm_fx_patterns_spec',
   'groups_core_spec',
   'gm_propagate_spec',
   'gm_realisation_spec',

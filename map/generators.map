@@ -1,4 +1,4 @@
-@module generators  src=generators.lua  loc=362  sha=38d20ea  mode=namespace  self=generators
+@module generators  src=generators.lua  loc=365  sha=3c77bf5  mode=namespace  self=generators
 
 # Invariants & contracts
   @invariant  pure module, no state; a stage is fn(stream, host, params, ctx) -> { notes, delta }
@@ -6,73 +6,74 @@
   @invariant  pb/ccs are absolute curves over the closed window (edge values seeded); pb val is cents
   @invariant  ctx binds resolution, pbRangeCents, nextSameLaneNote(host), step(pitch,detune,n)
   @invariant  periods are QN per the periodQN convention -- scalar or {num,den}
+  @invariant  mode is the stream fold -- replace overwrites the dest channel, augment adds to it
 
 # Shapes
   @shape  stream/host = { window={startppqL,endppqL}, chan, lane, id, notes={ {pitch,vel,detune,ppqL,endppqL},.. }, pas={ {ppqL,pitch,vel},.. }, ccs={ [cc]={ {ppqL,val,shape},.. } }, ats={ {ppqL,val},.. }, pb={ {ppqL,val,shape},.. } }
   @shape  result = { notes = { {ppqL,endppqL,pitch,vel,detune}, ... }, delta = { {ppqL,val,shape,[tension]}, ... } }
   @shape  kinds[kind] = { expand, mode='replace'|'augment', dest='note'|'pb'|<cc>, label, defaults, fields }
+  @shape  fxPatterns (ds project) = { [name] = { kind='notes'|'curve', lengthPpq, root?=midiPitch, specs?={ {lane=1,ppqL,endppqL,pitch,vel,detune,delay,sample?},.. }, points?={ {ppq,val,shape,tension?},.. } } }
   @shape  parkWindows -> { {evType='note'|'cc'|'pb', chan, cc?, startppq, endppq}, ... } (cc on cc windows only)
 
 # Imports
-  @const util = 'util'  @ 18
-      @invariant  mode is the stream fold -- replace overwrites the dest channel, augment adds to it
+  @const util = 'util'  @ 21
 
 # Module-level constants
-  @const generators = {}  @ 20
-  @const PERIODS = { { l = '1/2', v = { 1, 2 } }, { l = '1/3', v = { 1, 3 } },  @ 234
-  @const SLIDE_TARGETS = { { l = 'Next', v = 'next' }, { l = 'Fixed', v = 'fixed' } }  @ 237
-  @const DIR_OPTIONS = { { l = 'Up', v = 'up' }, { l = 'Down', v = 'down' }, { l...  @ 238
-  @const VEL_PATTERNS = { { l = '> .',     v = { 100, 55 } },  @ 239
+  @const generators = {}  @ 23
+  @const PERIODS = { { l = '1/2', v = { 1, 2 } }, { l = '1/3', v = { 1, 3 } },  @ 237
+  @const SLIDE_TARGETS = { { l = 'Next', v = 'next' }, { l = 'Fixed', v = 'fixed' } }  @ 240
+  @const DIR_OPTIONS = { { l = 'Up', v = 'up' }, { l = 'Down', v = 'down' }, { l...  @ 241
+  @const VEL_PATTERNS = { { l = '> .',     v = { 100, 55 } },  @ 242
 
 # Private functions
-  @fn periodTicks(period, resolution)  @ 22-25
-  @fn retrig(stream, host, params, ctx)  @ 29-48
+  @fn periodTicks(period, resolution)  @ 25-28
+  @fn retrig(stream, host, params, ctx)  @ 32-51
       @contract  retrig tiles the host window with evenly-spaced same-pitch fxNotes; every hit is derived
       @contract  velocity ramps params.ramp per tile from the host vel, clamped 1..127; detune inherited verbatim
-  @fn trill(stream, host, params, ctx)  @ 51-72
+  @fn trill(stream, host, params, ctx)  @ 54-75
       @contract  trill alternates host pitch with a note `step` scale-steps away (via ctx.step); every hit derived
-  @fn playingAt(events, t)  @ 75-84
+  @fn playingAt(events, t)  @ 78-87
       -- Notes sounding at logical tick `t`, ascending by realised pitch (semitone*100 + detune cents).
-  @fn arpIndex(count, dir, i)  @ 88-96
+  @fn arpIndex(count, dir, i)  @ 91-99
       -- Which voice of the active set step `i` plays, by direction. updown bounces without
       -- repeating the extremes (span 2*(n-1)); up/down wrap.
-  @fn arp(stream, host, params, ctx)  @ 101-121
+  @fn arp(stream, host, params, ctx)  @ 104-124
       @contract  arp samples the sounding notes at each step (period QN), playing one by `dir`
       @contract  dir up|down|updown cycles the current active set; an empty active set -> a rest
       @contract  hits abut (endppqL = next step), clamped to the window; vel/detune from the voice
-  @fn vibrato(stream, host, params, ctx)  @ 126-146
+  @fn vibrato(stream, host, params, ctx)  @ 129-149
       @contract  vibrato -> lane-1 pb-delta breakpoints in cents; sine of depth cents at 1/period QN
       @contract  breakpoints at sine extrema, 'slow'-shaped; linear ramp-in over onset QN
       @contract  returns to 0 (centre) at window end -- no residual bend on the channel
-  @fn interval(a, b)  @ 150-152
+  @fn interval(a, b)  @ 153-155
       -- Cents between two notes' realised pitches. The microtonal offset already rides
       -- in detune, so this is pure note arithmetic -- no temper needed.
-  @fn slide(stream, host, params, ctx)  @ 157-187
+  @fn slide(stream, host, params, ctx)  @ 160-190
       @contract  slide glide-in -> lane-1 pb-delta; slur to target over `over` QN; re-centres at end
       @contract  target 'next' = interval to next same-lane note; 'fixed' = params.cents; pb-range clamps
       @contract  no next note or unison target -> empty delta (channel untouched)
-  @fn autopan(stream, host, params, ctx)  @ 191-205
+  @fn autopan(stream, host, params, ctx)  @ 194-208
       @contract  auto-pan -> cc-delta breakpoints in cc steps; sine of depth steps at 1/period QN
       @contract  extrema-only, 'slow'-shaped; anchored 0 at both ends so the channel re-centres
-  @fn velPattern(stream, host, params, ctx)  @ 209-226
+  @fn velPattern(stream, host, params, ctx)  @ 212-229
       @contract  velPattern rewrites stream-note velocities by a pattern; other fields carry verbatim
       @contract  pattern steps per distinct onset (a chord shares one step) and cycles; vel clamps 1..127
 
 # Public API (generators.*)
   -- Generator registry
   -- Region park predicate + windows
-  @api generators.parksNotes(region)  @ 318-324
+  @api generators.parksNotes(region)  @ 321-327
       -- A region parks its covered chord iff it carries a note-dest kind: the chain's final note stream
       -- stands in for the members (ownership by dest, not mode). A husk (no kinds) parks nothing.
-  @api generators.chainDestType(fx, target)  @ 328-334
+  @api generators.chainDestType(fx, target)  @ 331-337
       -- The fold mode a chain presents for one continuous target: replace if any stage targeting it
       -- replaces, else augment -- drives cross-chain layering (a later replace wins). see design/note-macros-v2.md § The fx chain
-  @api generators.parkWindows(regions)  @ 339-360
+  @api generators.parkWindows(regions)  @ 342-363
       -- The single source for "what 4.5 parks over": a note window for a discrete-replace chord, a cc window
       -- per continuous cc target and a pb window per continuous pb target (both replace or augment).
 
 # Uses (outbound edges)
-  @use call    util.add  @ velPattern:211,221 parkWindows:342
-  @use call    util.clamp  @ velPattern:222
-  @use call    util.round  @ velPattern:222
-  @use require util  @ 18
+  @use call    util.add  @ velPattern:214,224 parkWindows:345
+  @use call    util.clamp  @ velPattern:225
+  @use call    util.round  @ velPattern:225
+  @use require util  @ 21
