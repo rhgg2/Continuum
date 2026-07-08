@@ -1,0 +1,74 @@
+@module patternEditor  src=patternEditor.lua  loc=86  sha=untracked  mode=chunk  self=pe
+@deps facade, ds
+
+# Imports
+  @require util = 'util'  @ 6
+      @contract  OWNS ps/cm/ds/eventMeta + mm/tm/tv/cmgr/ccm/pa; RECEIVES the host facade + main ds
+      @contract  checkout take parks on scratch, never slot-registered; close deletes it directly
+      @contract  bind/unbind pass skipGuard -- the mini stack must never touch the host's guardedTrack
+  @require scratch = 'scratch'  @ 7
+
+# Constructed sub-instances
+  @construct ps        = util.instantiate('pextStore')  @ 12
+  @construct cm        = util.instantiate('configManager')  @ 13
+  @construct ds        = util.instantiate('dataStore')  @ 14
+  @construct eventMeta = util.instantiate('eventMeta')  @ 15
+  @construct mm        = util.instantiate('midiManager')  @ 16
+  @construct tm        = util.instantiate('trackerManager')  @ 17
+  @construct ccm       = util.instantiate('ccManager')  @ 18
+  @construct pa        = util.instantiate('paramAutomation')  @ 19
+  @construct cmgr      = util.instantiate('commandManager')  @ 20
+  @construct tv        = util.instantiate('trackerView')  @ 21
+
+# Private state
+  @state pe = {}  @ 24
+  @state item, poolGuid  @ 26   -- set between open and close; nil while dormant
+
+# Private functions
+  -- Own stack -- the harness `mk` shape, wired to the real shared facade
+  -- Materialise the stored body onto the bound checkout take
+  @fn materialiseNotes(specs)  @ 32-40
+      -- Specs are park-shaped and unswung, so wire ppq == logical ppqL. The stamped
+      -- fields (lane/detune/delay) must ride or tm crashes at pickStampedLane.
+  @fn materialiseCurve(points)  @ 44-50
+      -- Curve points are bipolar -1..+1; the pb column authors in cents, full-scale
+      -- at the take's pbRange. Commit (P3 step e) normalises back by the same factor.
+
+# Public API (pe:*)
+  @api pe:open(name)  @ 56-71
+      @contract  mint a checkout take on scratch, materialise `name`'s body, bind the mini tm
+      @contract  no-op if already open or `name` is unknown
+  @api pe:close()  @ 75-81
+      @contract  sweep the pool metadata (write-through, so leaks without this)
+      @contract  unbind the mini tm, delete the checkout item
+  @api pe:isOpen()  @ 83
+  @api pe:currentTake()  @ 84
+
+# Uses (outbound edges)
+  @use call    configManager.get  @ materialiseCurve:45
+  @use call    eventMeta.dropPool  @ close:77
+  @use call    midiManager.modify  @ open:67
+  @use call    midiManager.poolGuid  @ open:64
+  @use call    midiManager.resolution  @ open:66
+  @use call    midiManager.setLength  @ open:66
+  @use call    scratch.track  @ open:61 close:79
+  @use call    trackerManager.bindTake  @ open:63 close:78
+  @use call    trackerManager.currentTake  @ currentTake:84
+  @use call    util.instantiate  @ 12,13,14,15,16,17,18,19,20,21
+  @use require ccManager  @ 18
+  @use require commandManager  @ 20
+  @use require configManager  @ 13
+  @use require dataStore  @ 14
+  @use require eventMeta  @ 15
+  @use require midiManager  @ 16
+  @use require paramAutomation  @ 19
+  @use require pextStore  @ 12
+  @use require scratch  @ 7
+  @use require trackerManager  @ 17
+  @use require trackerView  @ 21
+  @use require util  @ 6
+
+# REAPER API surface
+  @reaper CreateNewMIDIItemInProj
+  @reaper GetActiveTake
+  @reaper DeleteTrackMediaItem

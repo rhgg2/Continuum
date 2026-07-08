@@ -1118,6 +1118,9 @@ function mm:take()
   return liveTake()
 end
 
+--contract: the bound take's POOLEDEVTS pool guid (the metadata key); nil when dormant
+function mm:poolGuid() return poolGuid end
+
 -- REAPER convention: shape on A governs the curve from A to next. field defaults to
 -- 'val'; pass 'cents' to interpolate the authored cents stream (rebuildPbs seats).
 function mm:interpolate(A, B, ppq, field)

@@ -82,6 +82,7 @@ local specs = {
   'tm_dormant_config_spec',
   'tm_fx_patterns_spec',
   'tm_bind_skipguard_spec',
+  'patternEditor_lifecycle_spec',
   'groups_core_spec',
   'gm_propagate_spec',
   'gm_realisation_spec',

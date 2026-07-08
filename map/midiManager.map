@@ -1,4 +1,4 @@
-@module midiManager  src=midiManager.lua  loc=1243  sha=371d7bd  mode=chunk  self=mm
+@module midiManager  src=midiManager.lua  loc=1246  sha=ed57e38  mode=chunk  self=mm
 @deps take, eventMeta
 
 # Invariants & contracts
@@ -155,7 +155,7 @@
       @contract  addCC lazy-sidecar: uuid + sidecar only when t has a non-structural key
   -- Unified token-keyed surface
   -- Take data
-  @fn setEot(buf, targetPpq)  @ 1162-1181
+  @fn setEot(buf, targetPpq)  @ 1165-1184
       -- Reposition the take's trailing end marker (CC 0x7B all-notes-off, or FF 2F meta) to targetPpq.
       -- Shrink assumes events past targetPpq are already deleted upstream (tm:setLength does this).
 
@@ -200,23 +200,25 @@
       @contract  yields (token, evt-clone) over all live events, notes then ccs
       @invariant  events()'s clone carries .token; loc is intentionally absent
   @api mm:take()  @ 1117-1119
-  @api mm:interpolate(A, B, ppq, field)  @ 1123-1130
+  @api mm:poolGuid()  @ 1122
+      @contract  the bound take's POOLEDEVTS pool guid (the metadata key); nil when dormant
+  @api mm:interpolate(A, B, ppq, field)  @ 1126-1133
       -- REAPER convention: shape on A governs the curve from A to next. field defaults to
       -- 'val'; pass 'cents' to interpolate the authored cents stream (rebuildPbs seats).
-  @api mm:ccInterp()  @ 1134
+  @api mm:ccInterp()  @ 1137
       -- CCINTERP from the item chunk: interpolated points per QN REAPER linearizes CC at
       -- (not ticks). rebuildPbs converts to a tick step via resolution. Default 32.
-  @api mm:resolution()  @ 1136-1139
-  @api mm:length()  @ 1142-1147
+  @api mm:resolution()  @ 1139-1142
+  @api mm:length()  @ 1145-1150
       -- Source length. setLength positions the source's EOT explicitly to keep this in sync.
-  @api mm:name()  @ 1149-1153
-  @api mm:setName(name)  @ 1155-1158
-  @api mm:setLength(qn)  @ 1187-1199
+  @api mm:name()  @ 1152-1156
+  @api mm:setName(name)  @ 1158-1161
+  @api mm:setLength(qn)  @ 1190-1202
       -- MIDI_SetItemExtents only resizes the item; on grow it leaves source EOT short,
       -- on shrink it leaves source EOT stale. Reposition the source EOT first so the
       -- source is the right size, then bring the item to match.
       -- Project metadata only — bypasses modify(); fires reload so tm picks up the new length.
-  @api mm:timeSigs()  @ 1201-1239
+  @api mm:timeSigs()  @ 1204-1242
 
 # Signals emitted (via util.installHooks)
   @emits takeSwapped   -- nil; only when load received a different take   @ load:707
@@ -237,7 +239,7 @@
   @use call    perf.line  @ resolveCollisions:761,773
   @use call    perf.start  @ rebuild:317,318,322,325 flushTake:379,394,398 load:435,456 modify:810,817,824
   @use call    perf.stop  @ rebuild:321,324,341,343 flushTake:388,396,403 load:460,722 modify:810,817,824
-  @use call    util.add  @ flushTake:382,385,387 load:468,469,472,473,475,525,532,554,560,578,606,683,689,690 resolveCollisions:755,759,771 timeSigs:1234
+  @use call    util.add  @ flushTake:382,385,387 load:468,469,472,473,475,525,532,554,560,578,606,683,689,690 resolveCollisions:755,759,771 timeSigs:1237
   @use call    util.assign  @ rebuild:331,338 load:468,472,496,607 assignNote:869,881 assignCC:960,974
   @use call    util.bucket  @ load:485,510,522,548,594,595
   @use call    util.clamp  @ bezierSample:104
