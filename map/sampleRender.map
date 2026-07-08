@@ -1,4 +1,4 @@
-@module sampleRender  src=sampleRender.lua  loc=633  sha=a3a8e0b  mode=chunk  self=sr
+@module sampleRender  src=sampleRender.lua  loc=626  sha=a3a8e0b  mode=chunk  self=sr
 @deps cm, ds, cmgr, chrome, gui, sv
 
 # Invariants & contracts

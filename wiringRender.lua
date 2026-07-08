@@ -2682,9 +2682,6 @@ wiring:registerAll{
   wiringAddFx          = openFxPicker,
   wiringClearSelection = function() wv:setSelection{} end,
 }
-wiring:bindAll{
-  wiringAddFx          = { ImGui.Key_N      },
-  wiringClearSelection = { ImGui.Key_Escape },
-}
+wiring:bindAll(require('pageBindings').wiring)
 
 return wr

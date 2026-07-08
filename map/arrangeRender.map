@@ -1,4 +1,4 @@
-@module arrangeRender  src=arrangeRender.lua  loc=902  sha=a5d6834  mode=chunk  self=ar
+@module arrangeRender  src=arrangeRender.lua  loc=856  sha=a5d6834  mode=chunk  self=ar
 @deps cm, cmgr, chrome, gui, modalHost, av
 
 # Invariants & contracts
@@ -42,7 +42,6 @@
   @state toolbarSegments = {  @ 746
   @state arrange = cmgr:scope('arrange')  @ 835
       @invariant  createSlot (Ctrl+Enter) opens the create modal — the only slot-minting gesture.
-  @state binds = {  @ 856
 
 # Private functions
   @fn drainWheel(accum, wheel, step)  @ 53-57
@@ -86,9 +85,6 @@
       -- Three columns: key (monospace — hotkey), kind glyph, name (UI font).
       -- Selectable in col 0 with SpanAllColumns; key text painted on top via SameLine.
   @fn renderPaletteBody(focusedTrack)  @ 735-741
-  @fn placeKey(slotIdx)  @ 889-893
-      -- Place-command keys: 0..9 → digit keys, 10..35 → letters, 36..61 →
-      -- Shift+letter. ImGui.Key_0 + n and Key_A + n are contiguous.
 
 # Public API (ar:*)
   @api ar:toolbarSegments()  @ 767
@@ -117,7 +113,7 @@
   @use call    av.gutterLoopCand  @ handleGridMouse:285
   @use call    av.hitTake  @ handleGridMouse:256
   @use call    av.isSelected  @ handleGridMouse:263
-  @use call    av.keyForSlot  @ openDeleteModal:635 renderPaletteList:722 895
+  @use call    av.keyForSlot  @ openDeleteModal:635 renderPaletteList:722
   @use call    av.lassoCandidate  @ handleGridMouse:290
   @use call    av.loopRangeQN  @ renderGrid:523
   @use call    av.nextFreeSlot  @ 648

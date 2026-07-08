@@ -851,52 +851,6 @@ arrange:registerAll {
   end,
 }
 
--- Cursor-nav and take-edit commands reuse the tracker scope's keys but not its names:
--- cmgr.commands is flat, so a shared name would overwrite the other scope's gate.
-local binds = {
-  arrangeCursorUp     = { ImGui.Key_UpArrow   },
-  arrangeCursorDown   = { ImGui.Key_DownArrow },
-  arrangeCursorLeft   = { ImGui.Key_LeftArrow },
-  arrangeCursorRight  = { ImGui.Key_RightArrow},
-  arrangePageUp       = { ImGui.Key_PageUp    },
-  arrangePageDown     = { ImGui.Key_PageDown  },
-  arrangeHome         = { ImGui.Key_Home      },
-  arrangeEnd          = { ImGui.Key_End       },
-  createSlot          = { { ImGui.Key_Enter, ImGui.Mod_Super } },
-  arrangeNudgeBack    = { { ImGui.Key_UpArrow,   ImGui.Mod_Super } },
-  arrangeNudgeForward = { { ImGui.Key_DownArrow, ImGui.Mod_Super } },
-  arrangeShrinkTake   = { { ImGui.Key_UpArrow,   ImGui.Mod_Super, ImGui.Mod_Shift } },
-  arrangeGrowTake     = { { ImGui.Key_DownArrow, ImGui.Mod_Super, ImGui.Mod_Shift } },
-  arrangeDeleteTake             = { ImGui.Key_Delete },
-  arrangeDeleteAdvance          = { ImGui.Key_Period },
-  arrangeDive                   = { ImGui.Key_Enter },
-  arrangeTakeProperties         = { { ImGui.Key_Backspace, ImGui.Mod_Super } },
-  arrangeDuplicateBelow         = { { ImGui.Key_D, ImGui.Mod_Ctrl } },
-  arrangeDuplicateUnpooledBelow = { { ImGui.Key_Enter, ImGui.Mod_Super, ImGui.Mod_Shift } },
-  arrangeSetLoopStart           = { { ImGui.Key_B, ImGui.Mod_Ctrl } },
-  arrangeSetLoopEnd             = { { ImGui.Key_E, ImGui.Mod_Ctrl } },
-  arrangePlayFromCursor         = { ImGui.Key_F6 },
-  toggleFollowPlay              = { { ImGui.Key_F, ImGui.Mod_Super } },
-  arrangeClearLoop              = { ImGui.Key_Escape },
-  arrangeClearSelection         = { { ImGui.Key_G, ImGui.Mod_Ctrl } },
-  arrangeZoomIn                 = { { ImGui.Key_Equal, ImGui.Mod_Super } },
-  arrangeZoomOut                = { { ImGui.Key_Minus, ImGui.Mod_Super } },
-  arrangeSetBeatPerRow          = { { ImGui.Key_Z,     ImGui.Mod_Super } },
-}
-
--- Place-command keys: 0..9 → digit keys, 10..35 → letters, 36..61 →
--- Shift+letter. ImGui.Key_0 + n and Key_A + n are contiguous.
-local function placeKey(slotIdx)
-  if slotIdx < 10 then return { ImGui.Key_0 + slotIdx } end
-  if slotIdx < 36 then return { ImGui.Key_A + (slotIdx - 10) } end
-  return { ImGui.Key_A + (slotIdx - 36), ImGui.Mod_Shift }
-end
-for i = 0, 61 do
-  binds['drop' .. av:keyForSlot(i)] = { placeKey(i) }
-end
-for i = 0, 9 do
-  binds['arrangeAdvanceBy' .. i] = { { ImGui.Key_0 + i, ImGui.Mod_Ctrl } }
-end
-arrange:bindAll(binds)
+arrange:bindAll(require('pageBindings').arrange)
 
 return ar

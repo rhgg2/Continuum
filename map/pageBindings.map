@@ -1,0 +1,31 @@
+@module pageBindings  src=pageBindings.lua  loc=175  sha=untracked  mode=chunk
+
+# Shapes
+  @shape  { scope = { command = { keySpec, ... } } } -- keySpec is ImGui.Key_* or { Key, Mod }
+
+# Imports
+  @require ImGui = 'imgui'  @ 10
+  @require util = 'util'  @ 11
+
+# Private state
+  @state M = {}  @ 13
+  @state arrange = {  @ 128
+
+# Private functions
+  -- tracker (command bodies in trackerRender + trackerView)
+  -- region (overlay within the tracker page; springLoaded scope config lives on ec)
+  -- sample (command bodies + slot-clamp invariant in sampleRender)
+  -- wiring
+  -- arrange (command bodies in arrangeRender + arrangeView)
+  @fn placeKey(slotIdx)  @ 161-165
+      -- Place-command keys: 0..9 → digit keys, 10..35 → letters, 36..61 →
+      -- Shift+letter. ImGui.Key_0 + n and Key_A + n are contiguous.
+
+# Uses (outbound edges)
+  @use call    util.toBase62  @ 168
+  @use require imgui  @ 10
+  @use require util  @ 11
+
+# REAPER API surface
+  @reaper ImGui_GetBuiltinPath
+  @reaper MB

@@ -11,7 +11,7 @@
 ## Status at a glance
 
 **Open**
-- [ ] P1 — gridPane extraction: grid core + lane strip out of trackerRender; binding table becomes shared data
+- [x] P1 — gridPane extraction: grid core + lane strip out of trackerRender; binding table becomes shared data
 - [ ] P2 — pattern store: `fxPatterns` ds key, generator param types, tm `dataChanged` branch
 - [ ] P3 — patternEditor: checkout stack + modal, both kinds, live preview
 - [ ] P4 — polish: pattern management, isolated preview, mini undo, targeted dirtying, polyphony
@@ -120,8 +120,8 @@ Scoping is three boundaries, no engine surgery:
 
 1. **Bindings, not registration.** tv registers its full command set
    against whatever cmgr it is handed; unbound commands are inert. The
-   tracker binding table (today inline in trackerRender) becomes shared
-   data in P1; the mini cmgr binds a filtered subset: nav, note entry,
+   tracker binding table (now `pageBindings.tracker`) is shared data; the
+   mini cmgr binds a filtered subset: nav, note entry,
    octave, delete, selection + interpolate/transpose/duplicate,
    rowPerBeat zoom, Esc/Enter (cancel/commit). Not bound: fx strip,
    groups, add/remove column, take lifecycle, swing/temper, palette,
@@ -157,8 +157,8 @@ plus the **lane strip**, whose layout rows and gesture arbitration
 (`laneConsumed`) are grid-coupled and whose curve editor the curve kind
 needs. Host interface is exactly two members: one `inputAllowed()`
 predicate (folding modal/picker/palette/strip-focus gates) and the
-per-frame dispatch result. The tracker binding table moves out as shared
-data. trackerRender constructs one gridPane and delegates; existing
+per-frame dispatch result. The tracker binding table moves out to
+`pageBindings.tracker`. trackerRender constructs one gridPane and delegates; existing
 specs pin behaviour.
 
 ## Risks & accepted quirks

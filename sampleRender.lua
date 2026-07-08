@@ -620,14 +620,7 @@ sampler:registerAll {
     rename = { slot = idx, buf = (entry and entry.name) or '', justOpened = true }
   end,
 }
-sampler:bindAll {
-  browserUp      = { { ImGui.Key_UpArrow,    ImGui.Mod_Ctrl  } },
-  browserPreview = { { ImGui.Key_DownArrow,  ImGui.Mod_Ctrl  } },
-  browserAssign  = { { ImGui.Key_RightArrow, ImGui.Mod_Ctrl  } },
-  slotNext       = { { ImGui.Key_Period,     ImGui.Mod_Shift } },
-  slotPrev       = { { ImGui.Key_Comma,      ImGui.Mod_Shift } },
-  slotRename     = { ImGui.Key_Enter, ImGui.Key_KeypadEnter },
-}
+sampler:bindAll(require('pageBindings').sample)
 
 return sr
 

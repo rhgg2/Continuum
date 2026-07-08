@@ -581,9 +581,9 @@ end
 
 ----- Input
 
--- Tracker-scope bindings; trackerBindings lets the fx-pattern mini cmgr bind
--- a filtered subset (design/fx-patterns.md P1). Globals bind on root in Main().
-cmgr:scope('tracker'):bindAll(require 'trackerBindings')
+-- Tracker-scope bindings live in pageBindings (every page keymap in one place);
+-- the fx-pattern mini cmgr binds a filtered subset. Globals bind on root in Main().
+cmgr:scope('tracker'):bindAll(require('pageBindings').tracker)
 
 ----- F1 help manifest — toolbar callouts pinned to their segments, plus a
 ----- flowed panel of grid/global bindings packed over the grid body.
@@ -1281,12 +1281,7 @@ cmgr:doAfter({ 'quantize', 'quantizeKeepRealised' },
 
 -- Overlay + verb bodies live on ec. Page wires only the \ entry and overlay-only keys
 -- (exit/bail/paint); move/size/stamp/delete redirect off tracker commands, no keys needed.
-cmgr:scope('region'):bindAll{
-  regionExit        = { ImGui.Key_Escape, ImGui.Key_Enter, ImGui.Key_KeypadEnter },
-  regionBail        = { {ImGui.Key_G, ImGui.Mod_Super} },
-  regionPaintExtend = { ImGui.Key_Equal },
-  regionPaintShrink = { ImGui.Key_Minus },
-}
+cmgr:scope('region'):bindAll(require('pageBindings').region)
 
 -- Group quick-verb bodies + lifetime live on trackerView; install the
 -- copy snapshot + clear-on-mutation sweep now that every tracker command
