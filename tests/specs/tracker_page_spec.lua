@@ -67,6 +67,7 @@ end
 local fakeWiring = { samplerReachable = function() return false end }
 local fakeFacade = {
   publish = function() end,
+  publishDebug = function() end,
   get = function(name)
     if name == 'arrange' then return fakeArrange end
     if name == 'wiring'  then return fakeWiring  end

@@ -100,6 +100,9 @@ function tp:bindFromSelection()
   end
 end
 
+-- Raw stack for the reaper bridge (diagnostics only). See design/reaper-bridge.md.
+facade.publishDebug('tracker', { mm = mm, tm = tm, gm = gm, ccm = ccm, pa = pa, tv = tv, tr = tr })
+
 -- Dive is the one cross-page entry: arrange sets the tracker's selection; the
 -- pickers/Alt-arrows go straight to tv. bindFromSelection binds next frame.
 facade.publish('tracker', {

@@ -92,4 +92,25 @@ return {
       t.eq(#tracker.calls, before, 'no page churn without an arrange page')
     end,
   },
+
+  {
+    name = 'coordinator constructs the reaper bridge with an env exposing coord and the page() debug resolver',
+    run = function(harness)
+      local h = harness.mk()
+      local capturedEnv, capturedFacade
+      util._stubs['bridge']  = function(deps) capturedEnv = deps.env; return { tick = function() end } end
+      util._stubs['tracker'] = function(deps) capturedFacade = deps.facade; return fakePage() end
+      local ok, err = pcall(function()
+        local coord = util.instantiate('coordinator',
+          { cm = h.cm, cmgr = h.cmgr, gui = { ctx = {}, uiFont = {}, uiFontBold = {}, fontSize = { ui = 12 } } })
+        coord:register('tracker', 'tracker')
+        capturedFacade.publishDebug('tracker', { tm = 'TM', mm = 'MM' })
+        t.eq(capturedEnv.coord, coord, 'env.coord is the live coordinator')
+        t.eq(capturedEnv.page('tracker').tm, 'TM', 'page() resolves the published debug stack')
+      end)
+      util._stubs['bridge']  = nil
+      util._stubs['tracker'] = nil
+      assert(ok, err)
+    end,
+  },
 }

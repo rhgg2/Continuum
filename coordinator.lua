@@ -24,6 +24,8 @@ local toolbar = chrome.makeToolbar()   -- one shared toolbar; renders the active
 local modalHost = util.instantiate('modalHost', { ctx = ctx, chrome = chrome })
 local help      = util.instantiate('help', { ctx = ctx, chrome = chrome, cmgr = cmgr })
 local masterMix = util.instantiate('masterMix', { ctx = ctx, chrome = chrome })
+-- reaper-bridge eval bridge — assigned after coord (its env captures coord). See design/reaper-bridge.md.
+local bridge
 
 -- F1 toggles the keybinding cheat-sheet (root scope, so every page picks it
 -- up). Held off while a modal owns input — the overlay would cover the dialog.
@@ -31,10 +33,12 @@ cmgr:register('toggleHelp', function() if not modalHost:isOpen() then help:toggl
 cmgr:bind('toggleHelp', { ImGui.Key_F1 })
 
 -- see docs/coordinator.md § Façade registry
-local facades = {}
+local facades, debugHandles = {}, {}
 local facade  = {
   publish = function(name, iface) facades[name] = iface end,
   get     = function(name) return facades[name] or error('no facade: ' .. name) end,
+  -- Raw page stack for the reaper bridge ONLY — diagnostics, not a production surface. See design/reaper-bridge.md.
+  publishDebug = function(name, stack) debugHandles[name] = stack end,
 }
 local STD = { cm = cm, ds = ds, eventMeta = eventMeta, cmgr = cmgr, chrome = chrome, gui = gui, modalHost = modalHost, help = help, facade = facade }
 
@@ -63,6 +67,7 @@ local function tick()
     pages.wiring:tick()
     if active == 'wiring' then pages.wiring:syncExternal() end
   end
+  bridge:tick()
 end
 
 local function drawSwitcher()
@@ -346,5 +351,14 @@ end
 function coord:quit()      quitting = true end
 --contract: handler wraps every deferred frame; without it, post-frame-1 errors raise raw dialogs
 function coord:run(handler) errHandler = handler or function(e) error(e) end; frame() end
+
+-- reaper-bridge eval env. page() is a labelled hole in the layering rule: raw page
+-- stacks for diagnostics, while facades stay the curated surface. See design/reaper-bridge.md.
+bridge = util.instantiate('bridge', { env = {
+  reaper = reaper, util = util,
+  cm = cm, ds = ds, eventMeta = eventMeta, cmgr = cmgr, coord = coord,
+  facade = function(name) return coord:getFacade(name) end,
+  page   = function(name) return debugHandles[name] end,
+} })
 
 return coord
