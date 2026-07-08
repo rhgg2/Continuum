@@ -207,7 +207,12 @@ local miniFocus = { acceptCmds = true, suppressKbd = false, pageSuppressed = fal
 --contract: draw pass -- the grid fills a viewport fraction; the auto-resize popup sizes to it
 function pe:draw()
   local vw, vh = ImGui.Viewport_GetWorkSize(ImGui.GetWindowViewport(ctx))
-  gridPane:draw(vw * 0.7, vh * 0.6)
+  local w, h = vw * 0.7, vh * 0.6
+  -- The grid draws cells on transparent modal bg; back it with the tracker bg so it
+  -- reads as the tracker, not the (deliberately distinct) modal surface.
+  local x, y = ImGui.GetCursorScreenPos(ctx)
+  ImGui.DrawList_AddRectFilled(ImGui.GetWindowDrawList(ctx), x, y, x + w, y + h, chrome.colour('bg'))
+  gridPane:draw(w, h)
 end
 
 --contract: input pass -- mouse, dispatch against mini cmgr, note entry; unconsumed Esc cancels, Enter commits

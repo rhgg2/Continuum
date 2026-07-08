@@ -915,7 +915,8 @@ local function adjustRow(uuid, rw, right, mods)
     local delta = (mods & ImGui.Mod_Ctrl) ~= 0 and #temper.cents or 1
     tv:setFxField(uuid, rw.index, fd.field,
                   stepsToCents(temper, midi, detune, steps + (right and 1 or -1) * delta))
-  elseif fd.widget == 'pattern' then   -- no scalar to nudge; Enter opens the editor
+  elseif fd.widget == 'pattern' then   -- no scalar to nudge; arrowing opens the editor
+    launchPattern(uuid, rw.index, fd, rw.entry)
   else
     local step = (mods & ImGui.Mod_Ctrl) ~= 0 and fd.coarse or fd.base
     local n = util.clamp((value or 0) + (right and 1 or -1) * step, fd.min, fd.max)
@@ -1031,14 +1032,9 @@ local drawFxStrip, editFx, stripPlan do
     local super = (mods & ImGui.Mod_Super) ~= 0
     local left, right = press(ImGui.Key_LeftArrow), press(ImGui.Key_RightArrow)
     if press(ImGui.Key_Enter) or press(ImGui.Key_KeypadEnter) then
-      local field = not col.isAdd and cur.param >= 1 and col.fields[cur.param]
-      if field and field.fd.widget == 'pattern' then       -- Enter on a pattern field opens its editor
-        launchPattern(plan.host, col.index, field.fd, field.entry)
-      else
-        stripExitReq = true                                -- Enter otherwise commits: keep edits, leave
-      end
-    elseif press(ImGui.Key_UpArrow) and (col.isAdd or cur.param == 0) then
-      -- Up on the add slot adds a new stage; on a header it swaps the kind (current flagged).
+      stripExitReq = true                                  -- Enter commits everywhere: keep edits, leave
+    elseif (press(ImGui.Key_UpArrow) and (col.isAdd or cur.param == 0)) or (press(ImGui.Key_DownArrow) and col.isAdd) then
+      -- Up/Down on the add slot adds a new stage; on a header, Up swaps the kind (current flagged).
       chrome.requestPickerOpen(col.isAdd and 'fxAdd' or ('fxSwap_' .. col.index))
     elseif super and (left or right) and not col.isAdd then
       if tv:moveFxStage(plan.host, col.index, left and -1 or 1) then
@@ -1198,7 +1194,8 @@ local drawFxStrip, editFx, stripPlan do
       end
       for ci = 1, #plan.cols - 1 do stageDivider(dl, rights[ci], top, bottom) end
       nameDividers(dl, plan.cols, lefts, rights, top)
-      if stripFocus and not chrome.pickerIsActive() and not ImGui.IsAnyItemActive(ctx) then
+      if stripFocus and not modalHost:isOpen()
+         and not chrome.pickerIsActive() and not ImGui.IsAnyItemActive(ctx) then
         handleStripKeys(plan)
       end
     end

@@ -65,7 +65,7 @@ function modalHost:draw()
   chrome.pushChromeWindow()
   -- A modal is always the focused window, so only the *Active title slot shows.
   ImGui.PushStyleColor(ctx, ImGui.Col_TitleBgActive, chrome.colour('modal.titleBg'))
-  ImGui.PushStyleVar(ctx, ImGui.StyleVar_WindowRounding, 2)
+  ImGui.PushStyleVar(ctx, ImGui.StyleVar_WindowRounding, 5)
   -- Title-bar height is font + FramePadding.y*2; pad it taller, then drop the
   -- override right after Begin so interior widgets keep normal padding.
   local padX, padY = ImGui.GetStyleVar(ctx, ImGui.StyleVar_FramePadding)

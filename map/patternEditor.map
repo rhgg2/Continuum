@@ -1,4 +1,4 @@
-@module patternEditor  src=patternEditor.lua  loc=243  sha=fee8334  mode=chunk  self=pe
+@module patternEditor  src=patternEditor.lua  loc=248  sha=59b23ca  mode=chunk  self=pe
 @deps facade, chrome, gui, modalHost
 
 # Invariants & contracts
@@ -78,32 +78,36 @@
   @api pe:isOpen()  @ 198
   @api pe:currentTake()  @ 199
   -- Modal editing surface
-  @api pe:draw()  @ 208-211
+  @api pe:draw()  @ 208-216
       @contract  draw pass -- the grid fills a viewport fraction; the auto-resize popup sizes to it
-  @api pe:handleInput(close)  @ 215-228
+  @api pe:handleInput(close)  @ 220-233
       @contract  input pass -- mouse, dispatch against mini cmgr, note entry; unconsumed Esc cancels, Enter commits
       @contract  returns the dispatch result kr = { consumed, commandHeld }
-  @api pe:launch(body, commit)  @ 236-241
+  @api pe:launch(body, commit)  @ 241-246
       @contract  production entry -- mint the checkout on `body` and raise the editing modal; onClose sweeps it
 
 # Uses (outbound edges)
+  @use call    chrome.colour  @ draw:214
   @use call    commandManager.loadOverrides  @ 76
   @use call    commandManager.push  @ 77
   @use call    commandManager.scope  @ 71
   @use call    configManager.get  @ materialiseNotes:86 materialiseCurve:99,100 readbackBody:115
   @use call    dataStore.assign  @ open:176,179
   @use call    eventMeta.dropPool  @ close:192
-  @use call    gridPane.draw  @ draw:210
-  @use call    gridPane.handleKeys  @ handleInput:218
-  @use call    gridPane.handleMouse  @ handleInput:216
+  @use call    gridPane.draw  @ draw:215
+  @use call    gridPane.handleKeys  @ handleInput:223
+  @use call    gridPane.handleMouse  @ handleInput:221
+  @use call    imgui.DrawList_AddRectFilled  @ draw:214
+  @use call    imgui.GetCursorScreenPos  @ draw:213
+  @use call    imgui.GetWindowDrawList  @ draw:214
   @use call    imgui.GetWindowViewport  @ draw:209
-  @use call    imgui.IsKeyPressed  @ handleInput:220,222,223
+  @use call    imgui.IsKeyPressed  @ handleInput:225,227,228
   @use call    imgui.Viewport_GetWorkSize  @ draw:209
-  @use call    keyDispatch.dispatchKeys  @ handleInput:217
+  @use call    keyDispatch.dispatchKeys  @ handleInput:222
   @use call    midiManager.poolGuid  @ open:168
   @use call    midiManager.resolution  @ open:169
   @use call    midiManager.setLength  @ open:173
-  @use call    modalHost.registerKind  @ 230
+  @use call    modalHost.registerKind  @ 235
   @use call    scratch.track  @ open:165 close:194
   @use call    trackerManager.bindTake  @ open:167 close:193
   @use call    trackerManager.currentTake  @ currentTake:199
