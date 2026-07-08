@@ -1,106 +1,113 @@
-@module patternEditor  src=patternEditor.lua  loc=169  sha=03a66a4  mode=chunk  self=pe
+@module patternEditor  src=patternEditor.lua  loc=198  sha=0b35eb3  mode=chunk  self=pe
 @deps facade, ds, chrome, gui, modalHost
 
 # Invariants & contracts
-  @contract  OWNS ps/cm/ds/eventMeta + mm/tm/tv/cmgr + gridPane
+  @contract  OWNS ps/cm/ds/eventMeta + mm/tm/gm/tv/cmgr + gridPane
   @contract  RECEIVES host facade + main ds + chrome/gui/modalHost
   @contract  checkout take parks on scratch, never slot-registered; close deletes it directly
   @contract  bind/unbind pass skipGuard -- the mini stack must never touch the host's guardedTrack
+  @contract  real gm over an empty groups key -- every edit falls through to tm, wash is empty
   @contract  no paramAutomation -- nullPa stands in for tv's structural pa handle
   @contract  mini cmgr binds only the pattern-editing keymap subset; rest stay inert
 
 # Imports
-  @require util = 'util'  @ 9
-  @require scratch = 'scratch'  @ 10
-  @require ImGui = 'imgui'  @ 16
-  @require keyDispatch = 'keyDispatch'  @ 17
-  @require pageBindings = 'pageBindings'  @ 18
+  @require util = 'util'  @ 10
+  @require scratch = 'scratch'  @ 11
+  @require ImGui = 'imgui'  @ 17
+  @require keyDispatch = 'keyDispatch'  @ 18
+  @require pageBindings = 'pageBindings'  @ 19
 
 # Constructed sub-instances
-  @construct ps        = util.instantiate('pextStore')  @ 30
-  @construct cm        = util.instantiate('configManager')  @ 31
-  @construct ds        = util.instantiate('dataStore')  @ 32
-  @construct eventMeta = util.instantiate('eventMeta')  @ 33
-  @construct mm        = util.instantiate('midiManager')  @ 34
-  @construct tm        = util.instantiate('trackerManager')  @ 35
-  @construct cmgr      = util.instantiate('commandManager')  @ 36
-  @construct tv        = util.instantiate('trackerView')  @ 37
-  @construct gridPane  = util.instantiate('gridPane')  @ 43
+  @construct ps        = util.instantiate('pextStore')  @ 31
+  @construct cm        = util.instantiate('configManager')  @ 32
+  @construct ds        = util.instantiate('dataStore')  @ 33
+  @construct eventMeta = util.instantiate('eventMeta')  @ 34
+  @construct mm        = util.instantiate('midiManager')  @ 35
+  @construct tm        = util.instantiate('trackerManager')  @ 36
+  @construct gm        = util.instantiate('groupManager')  @ 37
+  @construct cmgr      = util.instantiate('commandManager')  @ 38
+  @construct tv        = util.instantiate('trackerView')  @ 39
+  @construct gridPane  = util.instantiate('gridPane')  @ 45
 
 # Private state
-  @state ctx = gui.ctx  @ 22
-  @state nullPa = { binding = function() end, apply = function() end }  @ 28
-  @state pe = {}  @ 40
-  @state item, poolGuid  @ 41   -- set between open and close; nil while dormant
-  @state EDIT_COMMANDS = {  @ 52
-  @state miniScope = cmgr:scope('tracker')  @ 64
-  @state miniFocus = { acceptCmds = true, suppressKbd = false, pageSuppressed ...  @ 134
+  @state ctx = gui.ctx  @ 23
+  @state nullPa = { binding = function() end, apply = function() end }  @ 29
+  @state pe = {}  @ 42
+  @state item, poolGuid  @ 43   -- set between open and close; nil while dormant
+  @state EDIT_COMMANDS = {  @ 54
+  @state miniScope = cmgr:scope('tracker')  @ 66
+  @state DEMO = 'demo'  @ 105
+  @state miniFocus = { acceptCmds = true, suppressKbd = false, pageSuppressed ...  @ 163
 
 # Private functions
   -- Own stack -- the harness `mk` shape, wired to the real shared facade
   -- Editing surface -- bind the pattern-editing subset of the tracker keymap
   -- Materialise the stored body onto the bound checkout take
-  @fn materialiseNotes(specs)  @ 76-84
-      -- Specs are park-shaped and unswung, so wire ppq == logical ppqL. The stamped
-      -- fields (lane/detune/delay) must ride or tm crashes at pickStampedLane.
-  @fn materialiseCurve(points)  @ 88-94
+  @fn materialiseNotes(specs)  @ 80-89
+      -- Specs are park-shaped (logical-only). Route through the authoring add -- the same
+      -- tm:addEvent tv's edit.add reaches -- so materialised notes are editable exactly like
+      -- typed ones: addEvent takes logical ppq, stamps ppqL/endppqL, files a uuid. rpb rides
+      -- like an authored note (tv stamps currentRpb); flush commits. see design/fx-patterns.md § Editing surface
+  @fn materialiseCurve(points)  @ 93-100
       -- Curve points are bipolar -1..+1; the pb column authors in cents, full-scale
       -- at the take's pbRange. Commit (P3 step e) normalises back by the same factor.
+  @fn seedDemo(resolution)  @ 106-115
 
 # Public API (pe:*)
-  @api pe:open(name)  @ 100-115
+  @api pe:open(name)  @ 121-144
       @contract  mint a checkout take on scratch, materialise `name`'s body, bind the mini tm
-      @contract  no-op if already open or `name` is unknown
-  @api pe:close()  @ 119-125
+      @contract  a nil `name` seeds the throwaway demo; an unknown one tears the mint back down (net no-op)
+  @api pe:close()  @ 148-154
       @contract  sweep the pool metadata (write-through, so leaks without this)
       @contract  unbind the mini tm, delete the checkout item
-  @api pe:isOpen()  @ 127
-  @api pe:currentTake()  @ 128
+  @api pe:isOpen()  @ 156
+  @api pe:currentTake()  @ 157
   -- Modal editing surface
-  @api pe:draw()  @ 137-140
+  @api pe:draw()  @ 166-169
       @contract  draw pass -- the grid fills a viewport fraction; the auto-resize popup sizes to it
-  @api pe:handleInput(close)  @ 144-155
+  @api pe:handleInput(close)  @ 173-184
       @contract  input pass -- mouse, dispatch against mini cmgr, note entry; unconsumed Esc/Enter close
       @contract  returns the dispatch result kr = { consumed, commandHeld }
-  @api pe:launch(name)  @ 163-167
+  @api pe:launch(name)  @ 192-196
       @contract  production entry -- mint the checkout and raise the editing modal; onClose sweeps it
 
 # Uses (outbound edges)
-  @use call    commandManager.loadOverrides  @ 69
-  @use call    commandManager.push  @ 70
-  @use call    commandManager.scope  @ 64
-  @use call    configManager.get  @ materialiseCurve:89
-  @use call    eventMeta.dropPool  @ close:121
-  @use call    gridPane.draw  @ draw:139
-  @use call    gridPane.handleKeys  @ handleInput:147
-  @use call    gridPane.handleMouse  @ handleInput:145
-  @use call    imgui.GetWindowViewport  @ draw:138
-  @use call    imgui.IsKeyPressed  @ handleInput:149,150,151
-  @use call    imgui.Viewport_GetWorkSize  @ draw:138
-  @use call    keyDispatch.dispatchKeys  @ handleInput:146
-  @use call    midiManager.modify  @ open:111
-  @use call    midiManager.poolGuid  @ open:108
-  @use call    midiManager.resolution  @ open:110
-  @use call    midiManager.setLength  @ open:110
-  @use call    modalHost.registerKind  @ 157
-  @use call    scratch.track  @ open:105 close:123
-  @use call    trackerManager.bindTake  @ open:107 close:122
-  @use call    trackerManager.currentTake  @ currentTake:128
-  @use call    util.instantiate  @ 30,31,32,33,34,35,36,37,43
-  @use require commandManager  @ 36
-  @use require configManager  @ 31
-  @use require dataStore  @ 32
-  @use require eventMeta  @ 33
-  @use require gridPane  @ 43
-  @use require imgui  @ 16
-  @use require keyDispatch  @ 17
-  @use require midiManager  @ 34
-  @use require pageBindings  @ 18
-  @use require pextStore  @ 30
-  @use require scratch  @ 10
-  @use require trackerManager  @ 35
-  @use require trackerView  @ 37
-  @use require util  @ 9
+  @use call    commandManager.loadOverrides  @ 71
+  @use call    commandManager.push  @ 72
+  @use call    commandManager.scope  @ 66
+  @use call    configManager.get  @ materialiseNotes:81 materialiseCurve:94,95
+  @use call    eventMeta.dropPool  @ close:150
+  @use call    gridPane.draw  @ draw:168
+  @use call    gridPane.handleKeys  @ handleInput:176
+  @use call    gridPane.handleMouse  @ handleInput:174
+  @use call    imgui.GetWindowViewport  @ draw:167
+  @use call    imgui.IsKeyPressed  @ handleInput:178,179,180
+  @use call    imgui.Viewport_GetWorkSize  @ draw:167
+  @use call    keyDispatch.dispatchKeys  @ handleInput:175
+  @use call    midiManager.poolGuid  @ open:127
+  @use call    midiManager.resolution  @ open:128
+  @use call    midiManager.setLength  @ open:139
+  @use call    modalHost.registerKind  @ 186
+  @use call    scratch.track  @ open:124,134 close:152
+  @use call    trackerManager.bindTake  @ open:126,133 close:151
+  @use call    trackerManager.currentTake  @ currentTake:157
+  @use call    trackerManager.flush  @ open:142
+  @use call    util.instantiate  @ 31,32,33,34,35,36,37,38,39,45
+  @use require commandManager  @ 38
+  @use require configManager  @ 32
+  @use require dataStore  @ 33
+  @use require eventMeta  @ 34
+  @use require gridPane  @ 45
+  @use require groupManager  @ 37
+  @use require imgui  @ 17
+  @use require keyDispatch  @ 18
+  @use require midiManager  @ 35
+  @use require pageBindings  @ 19
+  @use require pextStore  @ 31
+  @use require scratch  @ 11
+  @use require trackerManager  @ 36
+  @use require trackerView  @ 39
+  @use require util  @ 10
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath

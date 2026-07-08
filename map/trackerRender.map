@@ -1,4 +1,4 @@
-@module trackerRender  src=trackerRender.lua  loc=1423  sha=217c1f8  mode=chunk  self=tr
+@module trackerRender  src=trackerRender.lua  loc=1423  sha=0b35eb3  mode=chunk  self=tr
 @deps cm, ds, cmgr, chrome, gui, modalHost, facade, tv, help, pe
 
 # Invariants & contracts
@@ -211,7 +211,7 @@
   @use call    cmgr.keySpec  @ 736
   @use call    cmgr.keysFor  @ 742,743
   @use call    cmgr.scope  @ 586,1247,1295
-  @use call    ds.get  @ drawSampleDropdown:57 163,177,1279 drawStatusBar:565
+  @use call    ds.get  @ drawSampleDropdown:57 163,177 drawStatusBar:565
   @use call    facade.get  @ arrange:25
   @use call    gridPane.draw  @ renderBody:1385
   @use call    gridPane.geom  @ renderBody:1388

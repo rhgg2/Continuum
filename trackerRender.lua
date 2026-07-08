@@ -1273,11 +1273,11 @@ tracker:registerAll{
 
   editNoteFx = { editFx, 'Edit note FX' },
 
-  -- Throwaway P3 entry until the fx-strip param row (P3.5) opens patterns in place:
-  -- launch the first stored pattern in the checkout editor. see design/fx-patterns.md § P3
+  -- Throwaway P3 entry until the fx-strip param row (P3.5) opens patterns in place.
+  -- No authoring UI yet, so always reseed the demo fresh (nil name) -- a stale stored
+  -- entry from a prior open would otherwise shadow it. see design/fx-patterns.md § P3
   openPatternEditor = function()
-    local name = next(ds:get('fxPatterns') or {})
-    if name then pe:launch(name) end
+    pe:launch()
   end,
 }
 
