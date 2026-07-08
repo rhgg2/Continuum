@@ -31,11 +31,6 @@ local function parseRes(text)
   }
 end
 
-local function baseEnv()
-  return { error = error, pairs = pairs, string = string, table = table,
-           math = math, tostring = tostring, io = io }
-end
-
 -- Plant `chunk` as the sole request, tick the bridge once, return the parsed res.
 -- opts.reaper(r) may add extra REAPER stubs (e.g. Undo_*) before the tick.
 local function runChunk(chunk, opts)
@@ -50,7 +45,7 @@ local function runChunk(chunk, opts)
   }
   if opts.reaper then opts.reaper(reaper) end
   local saved = _G.reaper; _G.reaper = reaper
-  local bridge = util.instantiate('bridge', { spoolDir = dir, env = opts.env or baseEnv() })
+  local bridge = util.instantiate('bridge', { spoolDir = dir, env = opts.env or {} })
   bridge:tick()
   _G.reaper = saved
   return parseRes(readFile(dir .. '/res-1.txt') or ''), dir
@@ -64,6 +59,14 @@ return {
       t.eq(res.status, 'ok')
       t.eq(res.value, '3')
       t.falsy(fileExists(dir .. '/req-1.lua'), 'request must be deleted')
+    end,
+  },
+  {
+    name = "chunk sees the Lua stdlib via _G fallback (env holds only handles)",
+    run = function()
+      local res = runChunk('local n = 0; for _ in pairs({ a = 1, b = 2 }) do n = n + 1 end; return n')
+      t.eq(res.status, 'ok')
+      t.eq(res.value, '2')
     end,
   },
   {
@@ -137,6 +140,26 @@ return {
         return outer
       ]])
       t.truthy(res.value:find('truncated', 1, true))
+    end,
+  },
+  {
+    name = "scan invalidates the EnumerateFiles cache (idx -1) before listing",
+    run = function()
+      local dir = tmpDir()
+      writeFile(dir .. '/req-1.lua', 'return 1')
+      local calls = {}
+      local saved = _G.reaper
+      _G.reaper = {
+        EnumerateFiles = function(_, i)
+          calls[#calls + 1] = i
+          if i == 0 and fileExists(dir .. '/req-1.lua') then return 'req-1.lua' end
+        end,
+        time_precise = function() return 0 end,
+      }
+      local bridge = util.instantiate('bridge', { spoolDir = dir, env = {} })
+      bridge:tick()
+      _G.reaper = saved
+      t.eq(calls[1], -1, 'first EnumerateFiles call must be the -1 cache invalidation')
     end,
   },
   {

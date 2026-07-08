@@ -7,10 +7,15 @@
 --contract: tick() is the only entry; execute/render/scan are internal. Deps: { env, spoolDir? }.
 --invariant: a bad chunk never escapes — load failure and runtime error both land in the res file
 --invariant: request file is read then deleted BEFORE execute, so a mid-chunk crash cannot replay it
+--invariant: chunk env = deps.env over a _G fallback (stdlib+reaper); chunk global writes stay in env
+--reaper: EnumerateFiles caches per-dir; each scan invalidates with idx -1, else stale/deleted reqs linger
 --shape: response = "status: ok|error\nms: N\n--- value ---\n<render>\n--- print ---\n<buffered>\n"
 
 local deps = ... or {}
 local env  = deps.env or {}
+-- Chunks need the Lua stdlib; _G supplies it (plus reaper) but not Continuum's
+-- module locals, so deps.env stays the sole manager surface.
+setmetatable(env, { __index = _G })
 
 local function defaultSpoolDir()
   local here = debug.getinfo(1, 'S').source:match('^@?(.*[/\\])') or './'
@@ -168,6 +173,9 @@ end
 ----- scan — process at most one pending request per call
 
 local function firstReq()
+  -- EnumerateFiles caches the listing; the early return below never enumerates to nil
+  -- to free it, so force a re-read (-1) or a later tick reads a stale, deleted-req snapshot.
+  reaper.EnumerateFiles(spoolDir, -1)
   local i = 0
   while true do
     local f = reaper.EnumerateFiles(spoolDir, i)
