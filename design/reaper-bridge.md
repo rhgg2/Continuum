@@ -1,6 +1,6 @@
 # Design — reaper_eval bridge (live-REAPER MCP tool)
 
-Status: designed, ready to implement in slices (S1–S4 below).
+Status: implemented — S1–S4 landed. docs/bridge.md carries the durable model.
 
 The one-line pitch: **an MCP tool that executes a Lua chunk inside the
 running Continuum instance and returns the rendered result** — closing

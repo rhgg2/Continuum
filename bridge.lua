@@ -1,13 +1,10 @@
--- bridge.lua — live-REAPER eval bridge. See design/reaper-bridge.md for the model.
---
--- Executes a Lua chunk inside the running Continuum instance and renders the
--- result to a file, so an external process (the reaper MCP server) can observe
--- the real manager stack. Driven from the coordinator's per-frame tick().
+-- See docs/bridge.md for the model.
 
 --contract: tick() is the only entry; execute/render/scan are internal. Deps: { env, spoolDir? }.
 --invariant: a bad chunk never escapes — load failure and runtime error both land in the res file
 --invariant: request file is read then deleted BEFORE execute, so a mid-chunk crash cannot replay it
 --invariant: chunk env = deps.env over a _G fallback (stdlib+reaper); chunk global writes stay in env
+--invariant: dormant until the spool dir exists (re-stat ~60 frames); once enabled, stays enabled
 --reaper: EnumerateFiles caches per-dir; each scan invalidates with idx -1, else stale/deleted reqs linger
 --shape: response = "status: ok|error\nms: N\n--- value ---\n<render>\n--- print ---\n<buffered>\n"
 
@@ -32,7 +29,7 @@ env.print = function(...)
   printBuf[#printBuf + 1] = table.concat(parts, '\t')
 end
 
------ small IO
+----- Small IO
 
 local function join(name) return spoolDir .. '/' .. name end
 
@@ -58,9 +55,10 @@ local function nowMs()
   return os.clock() * 1000
 end
 
------ render — bridge-local serialiser, NOT util.prettySerialise (which targets
------ round-tripping). Survives cycles and userdata; caps depth/width/string/total
------ so a manager table can't blow the response up.
+----- Render
+
+-- Not util.prettySerialise (a round-tripping serialiser): a view must survive
+-- cycles and userdata and cap its output. See docs/bridge.md § Rendering.
 
 local DEFAULTS = { depth = 4, entries = 40, str = 200, total = 64 * 1024 }
 local CAP = {}   -- sentinel thrown when the total byte cap is exceeded
@@ -116,7 +114,7 @@ local function render(value, opts)
   return table.concat(out)
 end
 
------ directives — leading `--#key arg` lines, stripped before load
+----- Directives
 
 local function parseDirectives(code)
   local d = {}
@@ -132,7 +130,7 @@ local function parseDirectives(code)
   return d, code
 end
 
------ execute — one chunk under the bridge's own xpcall; render its return value
+----- Execute
 
 local function execute(rawCode)
   for i = #printBuf, 1, -1 do printBuf[i] = nil end
@@ -170,7 +168,7 @@ local function formatResponse(r)
   }, '\n') .. '\n'
 end
 
------ scan — process at most one pending request per call
+----- Scan
 
 local function firstReq()
   -- EnumerateFiles caches the listing; the early return below never enumerates to nil
@@ -196,8 +194,7 @@ end
 
 ----------- PUBLIC
 
--- Enable-gate: until the spool dir exists the bridge is off, re-stat'd once per
--- ~60 frames. The MCP server creating the dir switches it on; then it stays on.
+-- Enable-gate: the MCP server creating the spool dir switches the bridge on.
 local bridge = {}
 local enabled, cooldown = false, 0
 

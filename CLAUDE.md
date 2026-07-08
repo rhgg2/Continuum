@@ -69,7 +69,7 @@ caps above. Model docs to imitate: `docs/timing.md`, `docs/tuning.md`,
   here too: before the first call to any MCP tool in a session, run
   `ToolSearch select:<name>` and match every parameter to the live
   schema. Project-specific MCP tools: `mcp__readium_docs__*`,
-  `mcp__readium_tests__*`.
+  `mcp__readium_tests__*`, `mcp__reaper__*`.
 
 - Read `map/<file>.map` before fetching source ranges from
   `<file>.lua` — including for files you've worked with before.
@@ -93,6 +93,14 @@ caps above. Model docs to imitate: `docs/timing.md`, `docs/tuning.md`,
 - Tests: `mcp__readium_tests__lua_test_run`. Bugfixes red-first;
   refactors pin the invariant. Specs in `tests/specs/`, registered
   in `tests/run.lua`.
+
+- Live REAPER: `mcp__reaper__reaper_eval` runs a Lua chunk inside the
+  running Continuum instance — reach for it when harness and REAPER
+  disagree, or to verify real behaviour after a change. Needs Continuum
+  open in REAPER (times out otherwise). The tool description carries
+  the env and safety contract; `docs/bridge.md` the model. Confirm
+  before destructive chunks; route undoable edits through mm/tm with
+  an `undo_label`; chunks must terminate — a hang freezes REAPER.
 
 - Wired-behaviour specs (commands, hooks, lifetime, UI path) must
   exercise the **real** production wiring — not a fake handler that

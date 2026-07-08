@@ -9,7 +9,7 @@ One tool: reaper_eval. Writes a Lua chunk to a spool dir that bridge.lua —
 running inside the live Continuum instance's defer loop — executes, then
 returns the rendered result. This closes the fake/real gap for REAPER-specific
 behaviour (playback stranding, take round-trips, API layout quirks) that
-harness tests can't observe. See design/reaper-bridge.md.
+harness tests can't observe. See docs/bridge.md for the model.
 
 Sister servers: readium_docs, readium_tests. Same uv-script idiom.
 """
@@ -89,7 +89,9 @@ def reaper_eval(
         ANY mutation so it lands as one named REAPER undo step.
       - Mutations through mm/tm fire hooks and need nothing further. After a raw
         reaper.* edit to the bound take, the chunk must call
-        coord:reloadAfterExternalMutation() or tm/vm drift from the take.
+        coord:reloadAfterExternalMutation() or tm/vm drift from the take — and
+        that reload finalises the pending undo capture empty, so undo_label is
+        only honoured for mm/tm mutations. Route anything undoable through mm/tm.
       - The chunk MUST terminate: it runs on REAPER's UI thread, so a hang or
         infinite loop freezes REAPER with no remedy from outside.
       - No ImGui calls — the chunk runs outside the draw pass.
