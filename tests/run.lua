@@ -165,6 +165,7 @@ local specs = {
   'arrange_view_spec',
   'arrange_page_spec',
   'coordinator_spec',
+  'keyDispatch_spec',
   'masterMix_spec',
   'dag_validate_spec',
   'dag_srcset_spec',

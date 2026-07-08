@@ -1,0 +1,42 @@
+@module keyDispatch  src=keyDispatch.lua  loc=83  sha=untracked  mode=namespace  self=M
+
+# Invariants & contracts
+  @contract  returns early (no dispatch) when state.suppressKbd or not state.acceptCmds
+  @contract  state.pageSuppressed shrinks the walk to the root keymap only — body-region editors (swing, tuning) suppress page bindings without shadowing globals like playPause/quit
+  @contract  first-hit wins; false declines, releases the key, and lets the page char queue see it
+  @contract  while cmgr:isPrefixActive(), digits and '/' are captured (no dispatch); Esc cancels; any other key freezes the prefix and falls through to the keychain walk so commands can consumePrefix()
+
+# Shapes
+  @shape  dispatchResult = { consumed: bool, commandHeld: { [imguiKey]=true } } — commandHeld holds only keys that are command-bound AND down
+
+# Imports
+  @const ImGui = 'imgui'  @ 9
+
+# Module-level constants
+  @const M = {}  @ 11
+
+# Private functions
+  @fn isDigitMods(mods)  @ 22-24
+      -- Capture digits and '/' into the prefix buffer; Esc cancels. Returns
+      -- 'consumed' if a prefix-accumulating key fired this frame; nil otherwise
+      -- (so the normal keychain walk proceeds). The prefix is NOT finished here
+      -- on fall-through: dispatchKeys calls finishPrefix only at the moment a
+      -- bound command is about to fire, so idle frames don't kill the buffer.
+      -- In prefix mode, digit keys count even with Ctrl/Super held: holding the
+      -- chord open while typing a count is a natural reach, and any Ctrl-N or
+      -- Super-N command binding is overridden for the duration of prefix mode.
+      -- Shift/Alt still disqualify (Shift-digit emits a different char).
+  @fn handlePrefixCapture(cmgr, ctx)  @ 26-41
+
+# Public API (M.*)
+  @api M.dispatchKeys(state, cmgr, ctx)  @ 48-81
+
+# Uses (outbound edges)
+  @use call    imgui.GetKeyMods  @ handlePrefixCapture:28 dispatchKeys:65
+  @use call    imgui.IsKeyDown  @ dispatchKeys:62
+  @use call    imgui.IsKeyPressed  @ handlePrefixCapture:30,34,37 dispatchKeys:65
+  @use require imgui  @ 9
+
+# REAPER API surface
+  @reaper ImGui_GetBuiltinPath
+  @reaper MB
