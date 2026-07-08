@@ -49,29 +49,30 @@ local function poolMeta(guid)
   return em:load(guid)
 end
 
-local NOTES = { ost = {
+local NOTES_BODY = {
   kind = 'notes', lengthPpq = 960,
   specs = {
     { lane = 1, ppqL = 0,   endppqL = 240, pitch = 60, vel = 100, detune = 0, delay = 0 },
     { lane = 1, ppqL = 240, endppqL = 480, pitch = 64, vel = 100, detune = 0, delay = 0 },
   },
-} }
+}
 
-local CURVE = { lfo = {
+local CURVE_BODY = {
   kind = 'curve', lengthPpq = 960,
   points = {
     { ppq = 0,   val = 0,    shape = 'linear' },
     { ppq = 480, val = 1,    shape = 'linear' },   -- full-scale +1 exercises the cents scaling
     { ppq = 960, val = -0.5, shape = 'linear' },
   },
-} }
+}
 
--- Build a host stack, seed the library on its ds, hand that ds to a fresh editor.
-local function withEditor(harness, library)
+local function noop() end
+
+-- Build a host stack (for the scratch-track environment) and a fresh editor. The body is
+-- handed straight to open() now -- the fxPatterns store is a P4 concern, not the editor's.
+local function withEditor(harness)
   local h = harness.mk()
-  h.ds:assign('fxPatterns', library)
-  local pe = loadPE{ facade = fakeFacade, ds = h.ds,
-                     chrome = fakeChrome, gui = fakeGui, modalHost = fakeModalHost }
+  local pe = loadPE{ facade = fakeFacade, chrome = fakeChrome, gui = fakeGui, modalHost = fakeModalHost }
   return h, pe
 end
 
@@ -79,9 +80,9 @@ return {
   {
     name = 'open mints a checkout on scratch and materialises the notes body; close sweeps it',
     run = function(harness)
-      local h, pe = withEditor(harness, NOTES)
+      local h, pe = withEditor(harness)
 
-      pe:open('ost')
+      pe:open(NOTES_BODY, noop)
       t.truthy(pe:isOpen(), 'the editor is open after open()')
       local take = pe:currentTake()
       t.truthy(take, 'a checkout take is bound on the mini tm')
@@ -102,9 +103,9 @@ return {
   {
     name = 'a curve body materialises as pb events; close removes the checkout',
     run = function(harness)
-      local h, pe = withEditor(harness, CURVE)
+      local h, pe = withEditor(harness)
 
-      pe:open('lfo')
+      pe:open(CURVE_BODY, noop)
       local take = pe:currentTake()
       t.eq(ccCount(take), 3, 'all three curve points materialised as pb events')
 
@@ -116,31 +117,21 @@ return {
   },
 
   {
-    name = 'open is a no-op for an unknown pattern name',
-    run = function(harness)
-      local h, pe = withEditor(harness, NOTES)
-      pe:open('nope')
-      t.eq(pe:isOpen(), false, 'no checkout is minted for an unknown name')
-      t.eq(reaper.CountTrackMediaItems(scratch.track()), 0, 'no item parked on scratch')
-    end,
-  },
-
-  {
     -- The production shape: trackerPage builds one editor and cycles it. Pins that
     -- close() fully resets -- a fresh checkout, distinct pool guid, body re-materialised.
     name = 'the singleton editor cycles open/close/open, minting a fresh pool each time',
     run = function(harness)
-      local h, pe = withEditor(harness, NOTES)
+      local h, pe = withEditor(harness)
       local strack = scratch.track()
 
-      pe:open('ost')
+      pe:open(NOTES_BODY, noop)
       local guid1 = poolGuidOf(pe:currentTake())
       t.eq(reaper.CountTrackMediaItems(strack), 1, 'first open mints a checkout')
 
       pe:close()
       t.eq(reaper.CountTrackMediaItems(strack), 0, 'first close removes it')
 
-      pe:open('ost')
+      pe:open(NOTES_BODY, noop)
       t.truthy(pe:isOpen(), 're-open on the same instance works')
       local guid2 = poolGuidOf(pe:currentTake())
       t.eq(reaper.CountTrackMediaItems(strack), 1, 'second open mints a fresh checkout')

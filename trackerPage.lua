@@ -36,9 +36,9 @@ local pa = util.instantiate('paramAutomation', { cm = cm, ds = ds, facade = faca
 local tv = util.instantiate('trackerView',    { tm = tm, cm = cm, ds = ds, cmgr = cmgr, gm = gm, pa = pa, facade = facade })
 
 -- The fx-pattern checkout editor: a self-contained mini tracker stack + modal.
--- trackerRender gets the handle so its (throwaway) entry command can launch it.
+-- trackerRender gets the handle so an fx-strip pattern field can launch it in place.
 local pe = util.instantiate('patternEditor',
-  { facade = facade, ds = ds, chrome = chrome, gui = gui, modalHost = modalHost })
+  { facade = facade, chrome = chrome, gui = gui, modalHost = modalHost })
 
 local tr = util.instantiate('trackerRender',
   { tv = tv, cm = cm, ds = ds, cmgr = cmgr, chrome = chrome,
@@ -104,7 +104,7 @@ function tp:bindFromSelection()
   end
 end
 
--- Raw stack for the reaper bridge (diagnostics only). See design/reaper-bridge.md.
+-- Raw stack for the reaper bridge (diagnostics only). See docs/bridge.md § The eval environment.
 facade.publishDebug('tracker', { mm = mm, tm = tm, gm = gm, ccm = ccm, pa = pa, tv = tv, tr = tr })
 
 -- Dive is the one cross-page entry: arrange sets the tracker's selection; the

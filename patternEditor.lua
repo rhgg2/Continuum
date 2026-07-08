@@ -1,13 +1,13 @@
 -- See docs/patternEditor.md for the model.
 
 --contract: OWNS ps/cm/ds/eventMeta + mm/tm/gm/tv/cmgr + gridPane
---contract: RECEIVES host facade + main ds + chrome/gui/modalHost
+--contract: RECEIVES host facade + chrome/gui/modalHost
 --contract: checkout take parks on scratch, never slot-registered; close deletes it directly
 --contract: bind/unbind pass skipGuard -- the mini stack must never touch the host's guardedTrack
 --contract: real gm over an empty groups key -- every edit falls through to tm, wash is empty
 --contract: no paramAutomation -- nullPa stands in for tv's structural pa handle
 --contract: mini cmgr binds only the pattern-editing keymap subset; rest stay inert
---contract: edits write through on every mini rebuild -- readback strips to the whitelist, deepEq-guarded into main ds
+--contract: edits write through on every mini rebuild -- readback strips to the whitelist, deepEq-guarded via the commit callback
 --contract: Esc restores the open snapshot; Enter commits; `armed` gates out the open/close rebuilds
 local util    = require 'util'
 local scratch = require 'scratch'
@@ -20,8 +20,8 @@ local ImGui        = require 'imgui' '0.10'
 local keyDispatch  = require 'keyDispatch'
 local pageBindings = require 'pageBindings'
 
-local facade, mainDs, chrome, gui, modalHost =
-  (...).facade, (...).ds, (...).chrome, (...).gui, (...).modalHost
+local facade, chrome, gui, modalHost =
+  (...).facade, (...).chrome, (...).gui, (...).modalHost
 local ctx = gui.ctx
 
 ----- Own stack -- the harness `mk` shape, wired to the real shared facade
@@ -43,7 +43,8 @@ local tv        = util.instantiate('trackerView',
 
 local pe = {}
 local item, poolGuid           -- set between open and close; nil while dormant
-local editName, editBody       -- pattern key + open-snapshot body; nil while dormant
+local editBody, commitFn       -- open-snapshot body + write-back closure; nil while dormant
+local lastWritten              -- last body committed; deepEq-compared to skip a no-op write-through
 local armed = false            -- gate write-through to genuine edits, not open/close rebuilds
 
 local gridPane = util.instantiate('gridPane', {
@@ -137,73 +138,28 @@ end
 -- materialise flush, the unbind) whose take is not yet/no longer the edited body.
 local function writeThrough()
   if not armed then return end
-  local all = mainDs:get('fxPatterns') or {}
   local body = readbackBody()
-  if not util.deepEq(all[editName], body) then
-    all[editName] = body
-    mainDs:assign('fxPatterns', all)
+  if not util.deepEq(lastWritten, body) then
+    lastWritten = body
+    commitFn(body)
   end
 end
 tm:subscribe('rebuild', writeThrough)
 
--- Esc discards: write-through already made the store track the edits, so restore the open
--- snapshot with one guarded write. Enter needs no counterpart -- the store is already current.
+-- Esc discards: write-through already made the param track the edits, so restore the open
+-- snapshot with one guarded write. Enter needs no counterpart -- the param is already current.
 local function cancel(close)
   armed = false
-  local all = mainDs:get('fxPatterns') or {}
-  if not util.deepEq(all[editName], editBody) then
-    all[editName] = editBody
-    mainDs:assign('fxPatterns', all)
-  end
+  if not util.deepEq(lastWritten, editBody) then commitFn(editBody) end
   close(false)
-end
-
--- Throwaway until the authoring UI (P3.5): one-bar demos so the editor has something to open.
--- ppq rides the take's resolution -- a hardcoded value would be a sliver of a beat under a
--- higher-resolution project. `demoKind` picks which the nil-name launch seeds; both go at P3.5.
-local DEMO       = 'demo'
-local DEMO_CURVE = 'democurve'
-local demoKind   = 'notes'
-
--- Seed a demo body only when the store lacks it, merging so a prior demo (or a real
--- pattern) survives -- otherwise every open would reseed over your write-through edits.
-local function seedIfAbsent(name, body)
-  local all = mainDs:get('fxPatterns') or {}
-  if not all[name] then all[name] = body; mainDs:assign('fxPatterns', all) end
-  return name
-end
-
-local function seedNotesDemo(resolution)
-  return seedIfAbsent(DEMO, {
-    kind = 'notes', lengthPpq = 4 * resolution,
-    specs = {
-      { lane = 1, ppqL = 0,          endppqL = resolution,     pitch = 60, vel = 100, detune = 0, delay = 0 },
-      { lane = 1, ppqL = resolution, endppqL = 2 * resolution, pitch = 64, vel = 100, detune = 0, delay = 0 },
-    },
-  })
-end
-
-local function seedCurveDemo(resolution)
-  return seedIfAbsent(DEMO_CURVE, {
-    kind = 'curve', lengthPpq = 4 * resolution,
-    points = {
-      { ppq = 0,              val = 0,    shape = 'linear' },
-      { ppq = 2 * resolution, val = 1,    shape = 'linear' },
-      { ppq = 4 * resolution, val = -0.5, shape = 'linear' },
-    },
-  })
-end
-
-local function seedDemo(resolution)
-  return demoKind == 'curve' and seedCurveDemo(resolution) or seedNotesDemo(resolution)
 end
 
 ----------- PUBLIC
 
---contract: mint a checkout take on scratch, materialise `name`'s body, bind the mini tm
+--contract: mint a checkout take on scratch, materialise `body`, bind the mini tm; `commit(newBody)` is the write-back
 --contract: snapshots the body and arms write-through once materialised (open/close rebuilds stay silent)
---contract: a nil `name` seeds the throwaway demo; an unknown one tears the mint back down (net no-op)
-function pe:open(name)
+--contract: an empty body (no lengthPpq) defaults its loop to one bar of the checkout take
+function pe:open(body, commit)
   if item then return end
 
   item = reaper.CreateNewMIDIItemInProj(scratch.track(), 0, 1, true)
@@ -212,22 +168,20 @@ function pe:open(name)
   poolGuid = mm:poolGuid()
   local resolution = mm:resolution()
 
-  if not name then name = seedDemo(resolution) end
-  local body = (mainDs:get('fxPatterns') or {})[name]
-  if not body then                          -- unknown name: undo the mint, stay dormant
-    tm:bindTake(nil, { skipGuard = true })
-    reaper.DeleteTrackMediaItem(scratch.track(), item)
-    item, poolGuid = nil, nil
-    return
-  end
-
+  body = util.deepClone(body)
+  body.lengthPpq = body.lengthPpq or 4 * resolution
   mm:setLength(body.lengthPpq / resolution)
-  editName, editBody = name, util.deepClone(body)
-  if body.kind == 'curve' then materialiseCurve(body.points)
-  else                         materialiseNotes(body.specs) end
+  editBody, commitFn, lastWritten = body, commit, body
+  if body.kind == 'curve' then
+    ds:assign('extraColumns', { [1] = { notes = 0, pb = true } })   -- force a pb column so an empty curve is editable
+    materialiseCurve(body.points)
+  else
+    ds:assign('extraColumns', { [1] = { notes = 1 } })   -- force a note column so an empty pattern is typeable
+    materialiseNotes(body.specs)
+  end
   tm:flush()   -- authoring stages into tm; flush drives the one mm:modify + rebuild
   armed = true
-  return name
+  return true
 end
 
 --contract: sweep the pool metadata (write-through, so leaks without this)
@@ -238,7 +192,7 @@ function pe:close()
   eventMeta:dropPool(poolGuid)
   tm:bindTake(nil, { skipGuard = true })
   reaper.DeleteTrackMediaItem(scratch.track(), item)
-  item, poolGuid, editName, editBody = nil, nil, nil, nil
+  item, poolGuid, editBody, commitFn, lastWritten = nil, nil, nil, nil, nil
 end
 
 function pe:isOpen()      return item ~= nil      end
@@ -278,17 +232,12 @@ modalHost:registerKind('patternEditor', function(_, close)
   pe:handleInput(close)
 end)
 
---contract: production entry -- mint the checkout and raise the editing modal; onClose sweeps it
-function pe:launch(name)
-  local opened = self:open(name)
-  if item then modalHost:open{ kind = 'patternEditor', title = opened,
-                               onClose = function() self:close() end } end
-end
-
--- Throwaway P3 helper: pick which demo the nil-name launch seeds, then raise it. Gone at P3.5.
-function pe:launchDemo(kind)
-  demoKind = kind
-  self:launch()
+--contract: production entry -- mint the checkout on `body` and raise the editing modal; onClose sweeps it
+function pe:launch(body, commit)
+  if self:open(body, commit) then
+    modalHost:open{ kind = 'patternEditor', title = body.kind or 'pattern',
+                    onClose = function() self:close() end }
+  end
 end
 
 return pe

@@ -884,6 +884,24 @@ local function stepsToCents(temper, midi, detune, n)
   return (tMidi - midi) * 100 + (tDetune - detune)
 end
 
+-- The strip's pattern-body fields (ostinato): a summary label + launch into the checkout editor,
+-- which writes the edited body back through setFxField. see design/fx-patterns.md § P3.5
+local function emptyBody(kind)
+  if kind == 'curve' then return { kind = 'curve', points = {} } end
+  return { kind = 'notes', specs = {} }
+end
+
+local function patternSummary(body)
+  if not body then return 'empty' end
+  if body.kind == 'curve' then return ('curve \xc2\xb7 %d'):format(#(body.points or {})) end
+  return ('notes \xc2\xb7 %d'):format(#(body.specs or {}))
+end
+
+local function launchPattern(host, index, fd, entry)
+  pe:launch(entry[fd.field] or emptyBody(fd.kind),
+            function(body) tv:setFxField(host, index, fd.field, body) end)
+end
+
 -- Adjust rw's field one step: right increments, Ctrl coarse. The generic write both editors drive.
 local function adjustRow(uuid, rw, right, mods)
   local fd, value = rw.fd, rw.entry[rw.fd.field]
@@ -897,6 +915,7 @@ local function adjustRow(uuid, rw, right, mods)
     local delta = (mods & ImGui.Mod_Ctrl) ~= 0 and #temper.cents or 1
     tv:setFxField(uuid, rw.index, fd.field,
                   stepsToCents(temper, midi, detune, steps + (right and 1 or -1) * delta))
+  elseif fd.widget == 'pattern' then   -- no scalar to nudge; Enter opens the editor
   else
     local step = (mods & ImGui.Mod_Ctrl) ~= 0 and fd.coarse or fd.base
     local n = util.clamp((value or 0) + (right and 1 or -1) * step, fd.min, fd.max)
@@ -919,6 +938,8 @@ local function fxFieldWidget(host, index, fd, entry)
     local rv, n = chrome.numberStepper(id, centsToSteps(temper, midi, detune, value),
                     { width = 70, min = -2 * per, max = 2 * per })
     if rv then tv:setFxField(host, index, fd.field, stepsToCents(temper, midi, detune, n)) end
+  elseif fd.widget == 'pattern' then
+    if ImGui.Button(ctx, patternSummary(value) .. '##' .. id) then launchPattern(host, index, fd, entry) end
   else
     local rv, n = chrome.numberStepper(id, value or 0, { width = 70, min = fd.min, max = fd.max })
     if rv then tv:setFxField(host, index, fd.field, n) end
@@ -1010,7 +1031,12 @@ local drawFxStrip, editFx, stripPlan do
     local super = (mods & ImGui.Mod_Super) ~= 0
     local left, right = press(ImGui.Key_LeftArrow), press(ImGui.Key_RightArrow)
     if press(ImGui.Key_Enter) or press(ImGui.Key_KeypadEnter) then
-      stripExitReq = true                                  -- Enter always commits: keep edits, leave
+      local field = not col.isAdd and cur.param >= 1 and col.fields[cur.param]
+      if field and field.fd.widget == 'pattern' then       -- Enter on a pattern field opens its editor
+        launchPattern(plan.host, col.index, field.fd, field.entry)
+      else
+        stripExitReq = true                                -- Enter otherwise commits: keep edits, leave
+      end
     elseif press(ImGui.Key_UpArrow) and (col.isAdd or cur.param == 0) then
       -- Up on the add slot adds a new stage; on a header it swaps the kind (current flagged).
       chrome.requestPickerOpen(col.isAdd and 'fxAdd' or ('fxSwap_' .. col.index))
@@ -1272,21 +1298,10 @@ tracker:registerAll{
   openSwingPicker  = function() chrome.requestPickerOpen('swing')  end,
 
   editNoteFx = { editFx, 'Edit note FX' },
-
-  -- Throwaway P3 entries until the fx-strip param row (P3.5) opens patterns in place. No authoring
-  -- UI yet, so each opens a fixed demo (nil name), seeded once and reused so edits persist.
-  -- see design/fx-patterns.md § P3
-  openPatternEditor      = function() pe:launchDemo('notes') end,
-  openPatternEditorCurve = function() pe:launchDemo('curve') end,
 }
 
 cmgr:doAfter({ 'quantize', 'quantizeKeepRealised' },
              function() tv:ec():unstick() end)
-
--- Throwaway binding for the P3 pattern-editor entry; kept out of the canonical
--- pageBindings since P3.5 replaces the whole gesture with the fx-strip param row.
-tracker:bind('openPatternEditor',      { { ImGui.Key_E, ImGui.Mod_Super, ImGui.Mod_Shift } })
-tracker:bind('openPatternEditorCurve', { { ImGui.Key_C, ImGui.Mod_Super, ImGui.Mod_Shift } })
 
 ----- Region overlay keymap
 

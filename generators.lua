@@ -123,6 +123,31 @@ local function arp(stream, host, params, ctx)
   return { notes = notes, delta = {} }
 end
 
+--contract: ostinato gates the sounding region notes by a stored pattern -- pattern gives onset/dur/vel, each voice its pitch/detune
+--contract: every voice sounding at a gate onset emits (none -> rest); the pattern loops from the window start; no lengthPpq -> inert
+local function ostinato(stream, host, params, ctx)
+  local body = params.pattern
+  local loop = body and body.lengthPpq
+  if not (body and loop and loop > 0) then return { notes = {}, delta = {} } end
+  local startL, endL = stream.window[1], stream.window[2]
+  local notes = {}
+  local base = startL
+  while base < endL do
+    for _, spec in ipairs(body.specs or {}) do
+      local onset = base + spec.ppqL
+      if onset >= startL and onset < endL then
+        local endppqL = math.min(base + spec.endppqL, endL)
+        for _, voice in ipairs(playingAt(stream.notes, onset)) do
+          notes[#notes + 1] = { ppqL = onset, endppqL = endppqL,
+                                pitch = voice.pitch, vel = spec.vel, detune = voice.detune or 0 }
+        end
+      end
+    end
+    base = base + loop
+  end
+  return { notes = notes, delta = {} }
+end
+
 --contract: vibrato -> lane-1 pb-delta breakpoints in cents; sine of depth cents at 1/period QN
 --contract: breakpoints at sine extrema, 'slow'-shaped; linear ramp-in over onset QN
 --contract: returns to 0 (centre) at window end -- no residual bend on the channel
@@ -268,6 +293,13 @@ generators.kinds = {
       { field = 'dir',    label = 'Dir',    widget = 'choice', options = DIR_OPTIONS },
     },
   },
+  ostinato = {
+    expand = ostinato, mode = 'replace', dest = 'note', label = 'Ostinato',
+    defaults = { pattern = { kind = 'notes', specs = {} } },
+    fields = {
+      { field = 'pattern', label = 'Pattern', widget = 'pattern', kind = 'notes' },
+    },
+  },
   vibrato = {
     expand = vibrato, mode = 'augment', dest = 'pb', label = 'Vibrato',
     defaults = { period = { 1, 2 }, depth = 30, onset = 1 },
@@ -312,7 +344,7 @@ for cc = 71, 79 do generators.ccDefaultRest[cc] = 64 end
 
 -- Which kinds the fxEdit modal offers, in order. Every kind works on either host: a region
 -- arpeggiates its covered chord, a single note degenerates cleanly (arp -> retrig, one voice).
-generators.modalOrder = { 'retrig', 'trill', 'arp', 'velPattern', 'vibrato', 'slide', 'autopan' }
+generators.modalOrder = { 'retrig', 'trill', 'arp', 'ostinato', 'velPattern', 'vibrato', 'slide', 'autopan' }
 
 ----- Region park predicate + windows
 

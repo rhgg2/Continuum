@@ -55,20 +55,20 @@ local fakeFacade = { get = function(name)
   end
 end }
 
-local NOTES = { ost = {
+local NOTES_BODY = {
   kind = 'notes', lengthPpq = 960,
   specs = {
     { lane = 1, ppqL = 0,   endppqL = 240, pitch = 60, vel = 100, detune = 0, delay = 0 },
     { lane = 1, ppqL = 240, endppqL = 480, pitch = 64, vel = 100, detune = 0, delay = 0 },
   },
-} }
+}
+
+local function noop() end
 
 local function withEditor(harness)
   local h  = harness.mk()
-  h.ds:assign('fxPatterns', NOTES)
   local mh = newModalHost()
-  local pe = loadPE{ facade = fakeFacade, ds = h.ds,
-                     chrome = fakeChrome, gui = fakeGui, modalHost = mh }
+  local pe = loadPE{ facade = fakeFacade, chrome = fakeChrome, gui = fakeGui, modalHost = mh }
   return h, pe, mh
 end
 
@@ -80,7 +80,7 @@ return {
       local strack = scratch.track()
       local before = reaper.CountTrackMediaItems(strack)
 
-      pe:launch('ost')
+      pe:launch(NOTES_BODY, noop)
       t.truthy(pe:isOpen(), 'the editor is open after launch')
       t.eq(mh.last and mh.last.kind, 'patternEditor', 'launch raised the pattern-editor modal')
       t.eq(reaper.CountTrackMediaItems(strack), before + 1, 'a checkout is parked on scratch')
@@ -95,7 +95,7 @@ return {
     name = 'a whitelisted key dispatches on the mini cmgr; an excluded chord is inert',
     run = function(harness)
       local h, pe = withEditor(harness)
-      pe:open('ost')
+      pe:open(NOTES_BODY, noop)
 
       -- Super+X (editNoteFx) is excluded, so it is unbound on the mini cmgr and the
       -- walk does not consume it. Note-mutating effects need a prior draw to size the
@@ -113,7 +113,7 @@ return {
     name = 'an unconsumed Esc closes the modal',
     run = function(harness)
       local h, pe = withEditor(harness)
-      pe:open('ost')
+      pe:open(NOTES_BODY, noop)
       local closedWith
       setKeys({ fakeImGui.Key_Escape }, fakeImGui.Mod_None)
       pe:handleInput(function(invoke) closedWith = invoke end)

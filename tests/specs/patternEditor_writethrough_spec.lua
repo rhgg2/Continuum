@@ -1,7 +1,7 @@
--- design/fx-patterns.md P3 step e: write-through commit. A checkout edit persists
--- back to the shared fxPatterns store, stripped to the whitelist; a curve normalises
--- its pb cents back to bipolar; Esc restores the open snapshot, Enter commits. Drives
--- the real edit -> flush -> rebuild -> write-through path against a controllable imgui.
+-- design/fx-patterns.md P3.5: write-through commit. A checkout edit persists back through
+-- the commit callback (an inline generator param in production), stripped to the whitelist;
+-- a curve normalises its pb cents back to bipolar; Esc restores the open snapshot, Enter
+-- commits. Drives the real edit -> flush -> rebuild -> write-through path against a fake imgui.
 
 local t    = require('support')
 local util = require('util')
@@ -58,33 +58,34 @@ local fakeFacade = { get = function(name)
   end
 end }
 
-local function notesLib()
-  return { ost = {
+local function notesBody()
+  return {
     kind = 'notes', lengthPpq = 960, root = 60,
     specs = {
       { lane = 1, ppqL = 0,   endppqL = 240, pitch = 60, vel = 100, detune = 0, delay = 0 },
       { lane = 1, ppqL = 240, endppqL = 480, pitch = 64, vel = 100, detune = 0, delay = 0 },
     },
-  } }
+  }
 end
 
-local function curveLib()
-  return { lfo = {
+local function curveBody()
+  return {
     kind = 'curve', lengthPpq = 960,
     points = {
       { ppq = 0,   val = 0,    shape = 'linear' },
       { ppq = 480, val = 1,    shape = 'linear' },   -- full-scale +1 exercises the cents scaling
       { ppq = 960, val = -0.5, shape = 'linear' },
     },
-  } }
+  }
 end
 
-local function withEditor(harness, library)
+-- Open the editor on `body`, capturing each write-through commit; get() reads the latest.
+local function withEditor(harness, body)
   local h  = harness.mk()
-  h.ds:assign('fxPatterns', library)
-  local pe = loadPE{ facade = fakeFacade, ds = h.ds,
-                     chrome = fakeChrome, gui = fakeGui, modalHost = fakeModalHost }
-  return h, pe
+  local committed = body
+  local pe = loadPE{ facade = fakeFacade, chrome = fakeChrome, gui = fakeGui, modalHost = fakeModalHost }
+  pe:open(body, function(b) committed = b end)
+  return h, pe, function() return committed end
 end
 
 -- Delete the event under the (default row-0) cursor via the real dispatch path.
@@ -97,19 +98,18 @@ local function approx(a, b) return math.abs(a - b) < 0.02 end
 
 return {
   {
-    name = 'a checkout edit writes through to the store, stripped to the whitelist',
+    name = 'a checkout edit writes through the commit callback, stripped to the whitelist',
     run = function(harness)
-      local h, pe = withEditor(harness, notesLib())
-      pe:open('ost')
+      local h, pe, get = withEditor(harness, notesBody())
       pressDelete(pe)
 
-      local body = h.ds:get('fxPatterns').ost
-      t.eq(#body.specs, 1, 'the deleted note is gone from the persisted body')
+      local body = get()
+      t.eq(#body.specs, 1, 'the deleted note is gone from the committed body')
       local spec = body.specs[1]
       t.eq(spec.ppqL, 240, 'the surviving note is the second spec')
       t.eq(spec.lane, 1,   'lane is fixed at 1')
-      t.eq(spec.fx,   nil, 'no fx field leaks into the store')
-      t.eq(spec.chan, nil, 'no chan field leaks into the store')
+      t.eq(spec.fx,   nil, 'no fx field leaks into the commit')
+      t.eq(spec.chan, nil, 'no chan field leaks into the commit')
       t.eq(body.lengthPpq, 960, 'loop length rides the snapshot forward')
       t.eq(body.root,       60, 'root rides the snapshot forward')
     end,
@@ -118,11 +118,10 @@ return {
   {
     name = 'a curve edit persists as normalised bipolar points, not raw cents',
     run = function(harness)
-      local h, pe = withEditor(harness, curveLib())
-      pe:open('lfo')
+      local h, pe, get = withEditor(harness, curveBody())
       pressDelete(pe)
 
-      local pts = h.ds:get('fxPatterns').lfo.points
+      local pts = get().points
       t.eq(#pts, 2, 'the deleted breakpoint is gone from the persisted body')
       local hiFound, loFound = false, false
       for _, p in ipairs(pts) do
@@ -138,41 +137,35 @@ return {
   {
     name = 'Enter commits: the edit stays in the store',
     run = function(harness)
-      local h, pe = withEditor(harness, notesLib())
-      pe:open('ost')
+      local h, pe, get = withEditor(harness, notesBody())
       pressDelete(pe)
       setKeys({ fakeImGui.Key_Enter }, fakeImGui.Mod_None)
       pe:handleInput(function() end)
-      t.eq(#h.ds:get('fxPatterns').ost.specs, 1, 'commit keeps the deletion')
+      t.eq(#get().specs, 1, 'commit keeps the deletion')
     end,
   },
 
   {
     name = 'Esc cancels: the store is restored to the open snapshot',
     run = function(harness)
-      local h, pe = withEditor(harness, notesLib())
-      pe:open('ost')
+      local h, pe, get = withEditor(harness, notesBody())
       pressDelete(pe)
-      t.eq(#h.ds:get('fxPatterns').ost.specs, 1, 'write-through recorded the edit')
+      t.eq(#get().specs, 1, 'write-through recorded the edit')
 
       setKeys({ fakeImGui.Key_Escape }, fakeImGui.Mod_None)
       pe:handleInput(function() end)
-      t.eq(#h.ds:get('fxPatterns').ost.specs, 2, 'Esc restored both original specs')
+      t.eq(#get().specs, 2, 'Esc restored both original specs')
     end,
   },
 
   {
-    name = 'open/edit/close leaves sibling patterns untouched',
+    name = 'close does not clobber the committed body via the unbind rebuild',
     run = function(harness)
-      local lib = notesLib(); lib.other = { kind = 'notes', lengthPpq = 480, specs = {} }
-      local h, pe = withEditor(harness, lib)
-      pe:open('ost')
+      local h, pe, get = withEditor(harness, notesBody())
       pressDelete(pe)
       pe:close()
 
-      local all = h.ds:get('fxPatterns')
-      t.truthy(all.other, 'the sibling pattern survives open/edit/close')
-      t.eq(#all.ost.specs, 1, 'the unbind rebuild did not clobber the edited body')
+      t.eq(#get().specs, 1, 'the unbind rebuild (armed=false) left the committed edit intact')
     end,
   },
 }

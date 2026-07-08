@@ -194,4 +194,50 @@ return {
     end,
   },
 
+  ----- Ostinato: gate the sounding region notes; pattern supplies onset/dur/vel, each voice its pitch
+
+  {
+    name = 'ostinato tracks the sounding pitch across the region, not just the first note',
+    run = function()
+      local host = { window = { 0, 480 }, notes = {
+        { pitch = 60, vel = 100, detune = 0, ppqL = 0,   endppqL = 240 },
+        { pitch = 67, vel = 100, detune = 0, ppqL = 240, endppqL = 480 },
+      } }
+      local pattern = { kind = 'notes', lengthPpq = 240, specs = { { ppqL = 0, endppqL = 60, vel = 90 } } }
+      local out = expand('ostinato', host, { kind = 'ostinato', pattern = pattern }, {})
+      t.eq(#out.notes, 2, 'one gate per loop over a two-loop window')
+      t.deepEq({ out.notes[1].pitch, out.notes[2].pitch }, { 60, 67 },
+        'each gate takes the pitch sounding at its onset -- pitch changes are followed')
+      t.eq(out.notes[1].vel, 90, 'velocity comes from the pattern spec, not the host note')
+    end,
+  },
+
+  {
+    name = 'ostinato rests when no region note sounds at the gate onset',
+    run = function()
+      local host = { window = { 0, 480 }, notes = {
+        { pitch = 60, vel = 100, detune = 0, ppqL = 0, endppqL = 240 },
+      } }
+      local pattern = { kind = 'notes', lengthPpq = 240, specs = { { ppqL = 0, endppqL = 60, vel = 100 } } }
+      local out = expand('ostinato', host, { kind = 'ostinato', pattern = pattern }, {})
+      t.eq(#out.notes, 1, 'the second loop gate falls in the gap -> rest, no note')
+      t.eq(out.notes[1].ppqL, 0, 'only the gate over the sounding note emits')
+    end,
+  },
+
+  {
+    name = 'ostinato emits one gated note per sounding voice (a chord -> multiple lanes)',
+    run = function()
+      local host = { window = { 0, 240 }, notes = {
+        { pitch = 60, vel = 100, detune = 0,  ppqL = 0, endppqL = 240 },
+        { pitch = 64, vel = 100, detune = 25, ppqL = 0, endppqL = 240 },
+      } }
+      local pattern = { kind = 'notes', lengthPpq = 240, specs = { { ppqL = 0, endppqL = 60, vel = 80 } } }
+      local out = expand('ostinato', host, { kind = 'ostinato', pattern = pattern }, {})
+      t.eq(#out.notes, 2, 'both voices gate at the onset')
+      t.deepEq({ out.notes[1].pitch, out.notes[2].pitch }, { 60, 64 }, 'ascending by pitch')
+      t.eq(out.notes[2].detune, 25, 'detune rides the voice, not the pattern')
+    end,
+  },
+
 }
