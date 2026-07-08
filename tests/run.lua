@@ -84,6 +84,7 @@ local specs = {
   'tm_bind_skipguard_spec',
   'patternEditor_lifecycle_spec',
   'patternEditor_modal_spec',
+  'patternEditor_writethrough_spec',
   'groups_core_spec',
   'gm_propagate_spec',
   'gm_realisation_spec',

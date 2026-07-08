@@ -7,6 +7,8 @@
 --contract: real gm over an empty groups key -- every edit falls through to tm, wash is empty
 --contract: no paramAutomation -- nullPa stands in for tv's structural pa handle
 --contract: mini cmgr binds only the pattern-editing keymap subset; rest stay inert
+--contract: edits write through on every mini rebuild -- readback strips to the whitelist, deepEq-guarded into main ds
+--contract: Esc restores the open snapshot; Enter commits; `armed` gates out the open/close rebuilds
 local util    = require 'util'
 local scratch = require 'scratch'
 
@@ -40,7 +42,9 @@ local tv        = util.instantiate('trackerView',
   { tm = tm, cm = cm, ds = ds, cmgr = cmgr, gm = gm, pa = nullPa, facade = facade })
 
 local pe = {}
-local item, poolGuid   -- set between open and close; nil while dormant
+local item, poolGuid           -- set between open and close; nil while dormant
+local editName, editBody       -- pattern key + open-snapshot body; nil while dormant
+local armed = false            -- gate write-through to genuine edits, not open/close rebuilds
 
 local gridPane = util.instantiate('gridPane', {
   cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, tv = tv,
@@ -89,7 +93,7 @@ local function materialiseNotes(specs)
 end
 
 -- Curve points are bipolar -1..+1; the pb column authors in cents, full-scale
--- at the take's pbRange. Commit (P3 step e) normalises back by the same factor.
+-- at the take's pbRange. readbackBody normalises back by the same factor on write-through.
 local function materialiseCurve(points)
   local rpb = cm:get('rowPerBeat')
   local fullScaleCents = cm:get('pbRange') * 100
@@ -99,6 +103,61 @@ local function materialiseCurve(points)
   end
 end
 
+----- Write-through commit -- persist checkout edits back to the shared store
+
+-- Read channel 1 back through tm and rebuild the whitelisted body: notes drop fx/chan and fix
+-- lane 1, a curve normalises the pb column's cents to bipolar. lengthPpq/root ride the open
+-- snapshot (no bound command edits them). The field pick IS the whitelist. see design/fx-patterns.md § checkout model
+local function readbackBody()
+  local cols = (tm:getChannel(1) or {}).columns or {}
+  if editBody.kind == 'curve' then
+    local fullScaleCents = cm:get('pbRange') * 100
+    local points = {}
+    for _, e in ipairs(cols.pb and cols.pb.events or {}) do
+      util.add(points, { ppq = e.ppqL, val = (e.val + (e.detune or 0)) / fullScaleCents,
+                         shape = e.shape, tension = e.tension })
+    end
+    return { kind = 'curve', lengthPpq = editBody.lengthPpq, points = points }
+  end
+  local specs = {}
+  for _, col in ipairs(cols.notes or {}) do
+    for _, e in ipairs(col.events) do
+      if e.evType ~= 'pa' and e.ppqL ~= nil then
+        util.add(specs, { lane = 1, ppqL = e.ppqL, endppqL = e.endppqL,
+                          pitch = e.pitch, vel = e.vel,
+                          detune = e.detune or 0, delay = e.delay or 0, sample = e.sample })
+      end
+    end
+  end
+  table.sort(specs, function(a, b) return a.ppqL < b.ppqL end)   -- stable order -> deepEq no-op on reopen
+  return { kind = 'notes', lengthPpq = editBody.lengthPpq, root = editBody.root, specs = specs }
+end
+
+-- Fires on every mini rebuild; `armed` gates out the open/close rebuilds (bindTake, the
+-- materialise flush, the unbind) whose take is not yet/no longer the edited body.
+local function writeThrough()
+  if not armed then return end
+  local all = mainDs:get('fxPatterns') or {}
+  local body = readbackBody()
+  if not util.deepEq(all[editName], body) then
+    all[editName] = body
+    mainDs:assign('fxPatterns', all)
+  end
+end
+tm:subscribe('rebuild', writeThrough)
+
+-- Esc discards: write-through already made the store track the edits, so restore the open
+-- snapshot with one guarded write. Enter needs no counterpart -- the store is already current.
+local function cancel(close)
+  armed = false
+  local all = mainDs:get('fxPatterns') or {}
+  if not util.deepEq(all[editName], editBody) then
+    all[editName] = editBody
+    mainDs:assign('fxPatterns', all)
+  end
+  close(false)
+end
+
 -- Throwaway until the authoring UI (P3.5): one-bar demos so the editor has something to open.
 -- ppq rides the take's resolution -- a hardcoded value would be a sliver of a beat under a
 -- higher-resolution project. `demoKind` picks which the nil-name launch seeds; both go at P3.5.
@@ -106,27 +165,33 @@ local DEMO       = 'demo'
 local DEMO_CURVE = 'democurve'
 local demoKind   = 'notes'
 
+-- Seed a demo body only when the store lacks it, merging so a prior demo (or a real
+-- pattern) survives -- otherwise every open would reseed over your write-through edits.
+local function seedIfAbsent(name, body)
+  local all = mainDs:get('fxPatterns') or {}
+  if not all[name] then all[name] = body; mainDs:assign('fxPatterns', all) end
+  return name
+end
+
 local function seedNotesDemo(resolution)
-  mainDs:assign('fxPatterns', { [DEMO] = {
+  return seedIfAbsent(DEMO, {
     kind = 'notes', lengthPpq = 4 * resolution,
     specs = {
       { lane = 1, ppqL = 0,          endppqL = resolution,     pitch = 60, vel = 100, detune = 0, delay = 0 },
       { lane = 1, ppqL = resolution, endppqL = 2 * resolution, pitch = 64, vel = 100, detune = 0, delay = 0 },
     },
-  } })
-  return DEMO
+  })
 end
 
 local function seedCurveDemo(resolution)
-  mainDs:assign('fxPatterns', { [DEMO_CURVE] = {
+  return seedIfAbsent(DEMO_CURVE, {
     kind = 'curve', lengthPpq = 4 * resolution,
     points = {
       { ppq = 0,              val = 0,    shape = 'linear' },
       { ppq = 2 * resolution, val = 1,    shape = 'linear' },
       { ppq = 4 * resolution, val = -0.5, shape = 'linear' },
     },
-  } })
-  return DEMO_CURVE
+  })
 end
 
 local function seedDemo(resolution)
@@ -136,6 +201,7 @@ end
 ----------- PUBLIC
 
 --contract: mint a checkout take on scratch, materialise `name`'s body, bind the mini tm
+--contract: snapshots the body and arms write-through once materialised (open/close rebuilds stay silent)
 --contract: a nil `name` seeds the throwaway demo; an unknown one tears the mint back down (net no-op)
 function pe:open(name)
   if item then return end
@@ -156,9 +222,11 @@ function pe:open(name)
   end
 
   mm:setLength(body.lengthPpq / resolution)
+  editName, editBody = name, util.deepClone(body)
   if body.kind == 'curve' then materialiseCurve(body.points)
   else                         materialiseNotes(body.specs) end
   tm:flush()   -- authoring stages into tm; flush drives the one mm:modify + rebuild
+  armed = true
   return name
 end
 
@@ -166,10 +234,11 @@ end
 --contract: unbind the mini tm, delete the checkout item
 function pe:close()
   if not item then return end
+  armed = false   -- before the unbind rebuild, else it writes an empty body over the store
   eventMeta:dropPool(poolGuid)
   tm:bindTake(nil, { skipGuard = true })
   reaper.DeleteTrackMediaItem(scratch.track(), item)
-  item, poolGuid = nil, nil
+  item, poolGuid, editName, editBody = nil, nil, nil, nil
 end
 
 function pe:isOpen()      return item ~= nil      end
@@ -187,17 +256,19 @@ function pe:draw()
   gridPane:draw(vw * 0.7, vh * 0.6)
 end
 
---contract: input pass -- mouse, dispatch against mini cmgr, note entry; unconsumed Esc/Enter close
+--contract: input pass -- mouse, dispatch against mini cmgr, note entry; unconsumed Esc cancels, Enter commits
 --contract: returns the dispatch result kr = { consumed, commandHeld }
 function pe:handleInput(close)
   gridPane:handleMouse()
   local kr = keyDispatch.dispatchKeys(miniFocus, cmgr, ctx)
   gridPane:handleKeys(kr)
-  if not kr.consumed
-     and (ImGui.IsKeyPressed(ctx, ImGui.Key_Escape)
-       or ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)
-       or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadEnter)) then
-    close(false)
+  if not kr.consumed then
+    if ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
+      cancel(close)
+    elseif ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)
+        or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadEnter) then
+      close(false)
+    end
   end
   return kr
 end

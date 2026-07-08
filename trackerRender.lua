@@ -1274,7 +1274,7 @@ tracker:registerAll{
   editNoteFx = { editFx, 'Edit note FX' },
 
   -- Throwaway P3 entries until the fx-strip param row (P3.5) opens patterns in place. No authoring
-  -- UI yet, so each reseeds its demo fresh (nil name) -- a stale stored entry would shadow it.
+  -- UI yet, so each opens a fixed demo (nil name), seeded once and reused so edits persist.
   -- see design/fx-patterns.md § P3
   openPatternEditor      = function() pe:launchDemo('notes') end,
   openPatternEditorCurve = function() pe:launchDemo('curve') end,
