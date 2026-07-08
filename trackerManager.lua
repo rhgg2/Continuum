@@ -50,6 +50,9 @@ local function print(...)
 end
 
 local mm, cm, ds = (...).mm, (...).cm, (...).ds
+-- Forced note columns per channel absent an extraColumns entry. Main passes nothing (1: every
+-- channel is note-typeable); the pattern editor passes 0 so only channels with data appear.
+local defaultNoteCols = (...).defaultNoteCols or 1
 
 local tm = {}
 local fire = util.installHooks(tm)
@@ -1613,7 +1616,7 @@ local function rebuildExtraColumns()
   local grew   = false
   for i = 1, 16 do
     local c    = channels[i].columns
-    local want = extras[i] or { notes = 1 }
+    local want = extras[i] or { notes = defaultNoteCols }
     local n    = #c.notes
     if n > want.notes then
       want.notes = n

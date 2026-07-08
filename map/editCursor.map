@@ -1,4 +1,4 @@
-@module editCursor  src=editCursor.lua  loc=878  sha=cb34a83  mode=chunk  self=ec
+@module editCursor  src=editCursor.lua  loc=881  sha=fcf8d06  mode=chunk  self=ec
 @deps grid, cm, cmgr, rowPerBar, logPerRow, moveHook, groupBridge
 
 # Invariants & contracts
@@ -44,100 +44,100 @@
   @state sel, selAnchor  @ 42
   @state regionCursor  @ 46   -- { groupId, instId } | nil
   @state regionScope, regionPushed  @ 47
-  @state ec = {}  @ 335
-  @state REGION_KEEPALIVE = {  @ 484
+  @state ec = {}  @ 338
+  @state REGION_KEEPALIVE = {  @ 487
 
 # Private functions
   -- Position
-  @fn clampPos()  @ 53-58
+  @fn clampPos()  @ 53-61
       @contract  clamps to grid extents; idempotent; stop is bound to the current col's stopPos
       @invariant  col-changes must precede stop reads (stop is clamped against the current col)
   -- Parts
-  @fn partAt(col, stop)  @ 62-65
-  @fn cursorPart()  @ 67
-  @fn firstStopForPart(col, part)  @ 70-77
+  @fn partAt(col, stop)  @ 65-68
+  @fn cursorPart()  @ 70
+  @fn firstStopForPart(col, part)  @ 73-80
       @contract  returns first stop whose partAt name matches; caret lands on part-leading char
   -- Selection
-  @fn isSticky()  @ 81
-  @fn selStart()  @ 84-88
+  @fn isSticky()  @ 84
+  @fn selStart()  @ 87-91
       @contract  pins anchor at cursor and produces a 1x1 sel; precondition for selUpdate
-  @fn selUpdate()  @ 92-131
+  @fn selUpdate()  @ 95-134
       @contract  recomputes sel from anchor + cursor + scopes; no-op if selAnchor is nil
       @invariant  vBlock=1/2 snap rows to beat/bar; hBlock=2/3 expand cols to channel/all
-  @fn selClear()  @ 134-137
+  @fn selClear()  @ 137-140
       @contract  drops sel + anchor + sticky scopes; the only sticky-clear besides unstick()
-  @fn cycleHBlock()  @ 140-152
+  @fn cycleHBlock()  @ 143-155
       @contract  seeds anchor on first engage; cycles channel→all-cols→col
-  @fn cycleVBlock()  @ 155-168
+  @fn cycleVBlock()  @ 158-171
       @contract  seeds anchor on first engage; beat→bar, each press grows by a bar; no-op on empty grid
-  @fn swapEnds()  @ 172-183
+  @fn swapEnds()  @ 175-186
       @contract  swaps anchor↔cursor on scope-unlocked axes; no-op without a selection
       @invariant  swapEnds: vBlock<1 swaps row; hBlock<2 swaps col+stop
   -- Movement
-  @fn moveRow(n, selecting)  @ 188-195
+  @fn moveRow(n, selecting)  @ 191-198
       @contract  selecting or sticky extends sel; else clears; clamps top/bottom, no wrap
-  @fn moveStop(n, selecting)  @ 199-225
+  @fn moveStop(n, selecting)  @ 202-228
       @contract  walks stops within col, crossing into the adjacent col at the boundary
       @contract  no wrap at first/last col; hBlock≥2 collapses scope to 1 and re-anchors
-  @fn moveUnit(n, toFirstStop, toLastStop)  @ 228-248
-  @fn moveCol(n)  @ 251-267
+  @fn moveUnit(n, toFirstStop, toLastStop)  @ 231-251
+  @fn moveCol(n)  @ 254-270
       @contract  jumps one col, landing on first/last stop; sticky extends/contracts 1 col
-  @fn moveChannel(n)  @ 271-297
+  @fn moveChannel(n)  @ 274-300
       @contract  jumps one channel; non-sticky lands on first note col (skipping pc/pb)
       @contract  sticky preserves the raw chan-edge land
   -- Regions (group authoring mode)
-  @fn gmgr()  @ 304
+  @fn gmgr()  @ 307
       -- All group geometry/persistence is gm's, reached through the bridge
       -- (trackerView's grid<->logical surface). ec never touches gm directly.
-  @fn orderedInstances()  @ 308-316
+  @fn orderedInstances()  @ 311-319
       -- gm:eachInstance iterates pairs(); sort to a stable (groupId, instId)
       -- order so next/prev cycle deterministically.
-  @fn cursorIndex(list)  @ 318-324
-  @fn currentEntry()  @ 326-331
+  @fn cursorIndex(list)  @ 321-327
+  @fn currentEntry()  @ 329-334
   -- Position
   -- Part & Region
   -- Motion
-  @fn selectSpan(scope, col, stop1, stop2)  @ 459-464
+  @fn selectSpan(scope, col, stop1, stop2)  @ 462-467
   -- Region mode (group authoring)
-  @fn sealMove()  @ 496-513
+  @fn sealMove()  @ 499-516
       -- Commit the pending drag (row + channel + lane): clear swept-onto cells,
       -- re-anchor (gm relanes via del+add, withholds off-take), flush. Verbs seal first.
-  @fn exitMode()  @ 515-520
-  @fn enterArmed()  @ 522-526
-  @fn newFromSelection()  @ 528-536
-  @fn stampAt(anchor)  @ 540-546
+  @fn exitMode()  @ 518-523
+  @fn enterArmed()  @ 525-529
+  @fn newFromSelection()  @ 531-539
+  @fn stampAt(anchor)  @ 543-549
       -- Clear before staging (gm re-places its own concretes only); stamp a fresh
       -- instance, advance the border. Shared by paste-at-caret and cascade-duplicate.
-  @fn newInstance()  @ 548
-  @fn duplicate()  @ 552-558
+  @fn newInstance()  @ 551
+  @fn duplicate()  @ 555-561
       -- Cascade: the copy lands one group-length past the armed instance and
       -- the border advances onto it, so repeats lay a run hands-free.
-  @fn dropInstance()  @ 560-568
-  @fn moveBy(rowDelta)  @ 572-583
+  @fn dropInstance()  @ 563-571
+  @fn moveBy(rowDelta)  @ 575-586
       -- A nudge accumulates moveDelta and tracks the caret; gm/tm are untouched
       -- until sealMove. Top pinned at row 0; bottom hangs (gm withholds off-take).
-  @fn moveByChan(chanStep)  @ 587-601
+  @fn moveByChan(chanStep)  @ 590-604
       -- Channel sibling of moveBy: chanDelta clamped so every member channel stays in 1..16
       -- (no hang-off). moveChannel rides caret + fires hook; lane is preserved by moveInstance.
-  @fn noteLanesIn(chan)  @ 605-613
+  @fn noteLanesIn(chan)  @ 608-616
       -- Walk a single-channel all-notes instance sideways one lane per step,
       -- spilling the whole block into the next channel's edge -- shiftEvents' wrap.
-  @fn topLaneIn(chan)  @ 615-621
-  @fn blockKeys(rect)  @ 623-631
-  @fn blockFits(keys, chan, total)  @ 633-639
-  @fn laneWalkable(rect)  @ 641-649
-  @fn caretToBlock(cur, keys)  @ 652-662
+  @fn topLaneIn(chan)  @ 618-624
+  @fn blockKeys(rect)  @ 626-634
+  @fn blockFits(keys, chan, total)  @ 636-642
+  @fn laneWalkable(rect)  @ 644-652
+  @fn caretToBlock(cur, keys)  @ 655-665
       -- Caret rides the block's lowest realised lane column at the pending position.
-  @fn moveByLane(step)  @ 666-696
+  @fn moveByLane(step)  @ 669-699
       -- Lane sibling of moveByChan: accumulate laneDelta (channel-spill at the
       -- boundary) + caret tracking; gm/tm untouched until sealMove.
-  @fn shiftSideways(step)  @ 700-703
+  @fn shiftSideways(step)  @ 703-706
       -- eventShiftLeft/Right dispatch (mirrors shiftEvents' note-vs-other split):
       -- single-channel all-notes walks lanes; else channel-move (3a).
-  @fn resizeBy(edits)  @ 705-708
-  @fn paintCell(on)  @ 710-714
+  @fn resizeBy(edits)  @ 708-711
+  @fn paintCell(on)  @ 713-717
   -- Group-instance hop (editing mode)
-  @fn hopInstance(step)  @ 769-787
+  @fn hopInstance(step)  @ 772-790
       -- [ / ] in normal editing jump the caret to the same row offset in the
       -- prev/next instance of the group it sits inside. Column is left as-is:
       -- "same place" is the relative row; chasing the stream across instances
@@ -145,67 +145,67 @@
       -- for this verb. The border feedback is the rendering layer's.
   -- Commands
   -- Decoration
-  @fn partsFor(type, showDelay, trackerMode)  @ 835-849
+  @fn partsFor(type, showDelay, trackerMode)  @ 838-852
       -- One char of separator between adjacent parts in the rendered cell.
 
 # Public API (ec:*)
-  @api ec:row()  @ 339
-  @api ec:col()  @ 340
-  @api ec:pos()  @ 341
-  @api ec:setPos(row, col, stop)  @ 344-349
+  @api ec:row()  @ 342
+  @api ec:col()  @ 343
+  @api ec:pos()  @ 344
+  @api ec:setPos(row, col, stop)  @ 347-352
       @contract  nil arg leaves that axis untouched; clamps and fires moveHook unconditionally
-  @api ec:clampPos()  @ 351
-  @api ec:rescaleRow(oldRPB, newRPB)  @ 354-356
+  @api ec:clampPos()  @ 354
+  @api ec:rescaleRow(oldRPB, newRPB)  @ 357-359
       @contract  scales cursorRow by newRPB/oldRPB so caret stays at the same musical time
-  @api ec:reset()  @ 358-362
-  @api ec:cursorPart()  @ 366
-  @api ec:hasSelection()  @ 367
-  @api ec:isSticky()  @ 368
-  @api ec:anchorRow()  @ 369
-  @api ec:region()  @ 371-377
-  @api ec:regionStart()  @ 380-383
+  @api ec:reset()  @ 361-365
+  @api ec:cursorPart()  @ 369
+  @api ec:hasSelection()  @ 370
+  @api ec:isSticky()  @ 371
+  @api ec:anchorRow()  @ 372
+  @api ec:region()  @ 374-380
+  @api ec:regionStart()  @ 383-386
       -- Pair so callers can splat: `ec:setPos(row, ec:regionStart())`.
-  @api ec:eachSelectedCol()  @ 385-404
-  @api ec:setSelection(r)  @ 407-412
+  @api ec:eachSelectedCol()  @ 388-407
+  @api ec:setSelection(r)  @ 410-415
       @contract  installs sel from part record; clears sticky; anchor at top-left part-start
-  @api ec:selectionStopSpan(col)  @ 414-430
-  @api ec:selClear()  @ 432
-  @api ec:unstick()  @ 433
-  @api ec:extendTo(row, col, stop)  @ 436-440
+  @api ec:selectionStopSpan(col)  @ 417-433
+  @api ec:selClear()  @ 435
+  @api ec:unstick()  @ 436
+  @api ec:extendTo(row, col, stop)  @ 439-443
       -- Mouse shift-click and drag both speak this verb.
-  @api ec:shiftSelection(rowDelta)  @ 444-451
+  @api ec:shiftSelection(rowDelta)  @ 447-454
       @contract  shifts sel rows + anchor + cursor by rowDelta; each axis clamped independently
       @invariant  shiftSelection: sel may compress against an edge while cursor doesn't
-  @api ec:advance()  @ 456
+  @api ec:advance()  @ 459
       @contract  advances by cm.advanceBy rows; the per-keystroke auto-step after a write
-  @api ec:selectChannel(chan)  @ 466-469
-  @api ec:selectColumn(col)  @ 471-474
-  @api ec:isInRegionMode()  @ 479
-  @api ec:regionCursor()  @ 480
-  @api ec:regionArm()  @ 718-729
+  @api ec:selectChannel(chan)  @ 469-472
+  @api ec:selectColumn(col)  @ 474-477
+  @api ec:isInRegionMode()  @ 482
+  @api ec:regionCursor()  @ 483
+  @api ec:regionArm()  @ 721-732
       -- DWIM: a selection seeds a new group; else arm the caret's instance; else nothing.
       -- enterArmed is idempotent: a re-press just re-points the border at the caret.
-  @api ec:regionExit()  @ 733
+  @api ec:regionExit()  @ 736
       -- Leave armed mode without touching the selection (Esc/Enter/note-key execute-through).
       -- regionBail (Super-G) also clears the selection.
-  @api ec:registerCommands(scope)  @ 791-818
-  @api ec:decorateCol(col, pitchWidth)  @ 853-875
+  @api ec:registerCommands(scope)  @ 794-821
+  @api ec:decorateCol(col, pitchWidth)  @ 856-878
       @contract  derives col part fields from type/showDelay/trackerMode; pitch width = pitchWidth
       @invariant  ec is the sole writer of col.{parts, stopPos, partAt, partStart, width}
 
 # Uses (outbound edges)
-  @use call    cm.get  @ selUpdate:99 advance:456
-  @use call    cmgr.pop  @ exitMode:517
-  @use call    cmgr.push  @ enterArmed:524
-  @use call    cmgr.scope  @ 738
-  @use call    groupBridge.clearAt  @ stampAt:542
-  @use call    groupBridge.clearMoveGap  @ sealMove:509
-  @use call    groupBridge.commit  @ sealMove:512 newFromSelection:535 stampAt:545
-  @use call    groupBridge.cursorAnchor  @ newInstance:548
-  @use call    groupBridge.eventsInRect  @ newFromSelection:531
-  @use call    groupBridge.instanceAt  @ regionArm:725 hopInstance:771
-  @use call    groupBridge.paintStream  @ paintCell:712
-  @use call    groupBridge.selectionAsRect  @ newFromSelection:529
-  @use call    util.add  @ blockKeys:627 partsFor:838,839,840 decorateCol:865,866,867
-  @use call    util.clamp  @ clampPos:55,56,57 shiftSelection:446,447,448 moveBy:578 moveByChan:595
+  @use call    cm.get  @ selUpdate:102 advance:459
+  @use call    cmgr.pop  @ exitMode:520
+  @use call    cmgr.push  @ enterArmed:527
+  @use call    cmgr.scope  @ 741
+  @use call    groupBridge.clearAt  @ stampAt:545
+  @use call    groupBridge.clearMoveGap  @ sealMove:512
+  @use call    groupBridge.commit  @ sealMove:515 newFromSelection:538 stampAt:548
+  @use call    groupBridge.cursorAnchor  @ newInstance:551
+  @use call    groupBridge.eventsInRect  @ newFromSelection:534
+  @use call    groupBridge.instanceAt  @ regionArm:728 hopInstance:774
+  @use call    groupBridge.paintStream  @ paintCell:715
+  @use call    groupBridge.selectionAsRect  @ newFromSelection:532
+  @use call    util.add  @ blockKeys:630 partsFor:841,842,843 decorateCol:868,869,870
+  @use call    util.clamp  @ clampPos:55,59,60 shiftSelection:449,450,451 moveBy:581 moveByChan:598
   @use require util  @ 25

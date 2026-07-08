@@ -33,7 +33,7 @@ local cm        = util.instantiate('configManager',  { ps = ps })
 local ds        = util.instantiate('dataStore',      { ps = ps })
 local eventMeta = util.instantiate('eventMeta',      { ps = ps })
 local mm        = util.instantiate('midiManager',    { take = nil, eventMeta = eventMeta })
-local tm        = util.instantiate('trackerManager', { mm = mm, cm = cm, ds = ds })
+local tm        = util.instantiate('trackerManager', { mm = mm, cm = cm, ds = ds, defaultNoteCols = 0 })
 local gm        = util.instantiate('groupManager',   { tm = tm, ds = ds })
 local cmgr      = util.instantiate('commandManager', { cm = cm })
 local tv        = util.instantiate('trackerView',
@@ -99,11 +99,14 @@ local function materialiseCurve(points)
   end
 end
 
--- Throwaway until the authoring UI (P3.5): a one-bar two-note demo so Super-Shift-E
--- has something to open. ppq rides the take's resolution -- a hardcoded value would be
--- a sliver of a beat under a higher-resolution project. Deleted with openPatternEditor.
-local DEMO = 'demo'
-local function seedDemo(resolution)
+-- Throwaway until the authoring UI (P3.5): one-bar demos so the editor has something to open.
+-- ppq rides the take's resolution -- a hardcoded value would be a sliver of a beat under a
+-- higher-resolution project. `demoKind` picks which the nil-name launch seeds; both go at P3.5.
+local DEMO       = 'demo'
+local DEMO_CURVE = 'democurve'
+local demoKind   = 'notes'
+
+local function seedNotesDemo(resolution)
   mainDs:assign('fxPatterns', { [DEMO] = {
     kind = 'notes', lengthPpq = 4 * resolution,
     specs = {
@@ -112,6 +115,22 @@ local function seedDemo(resolution)
     },
   } })
   return DEMO
+end
+
+local function seedCurveDemo(resolution)
+  mainDs:assign('fxPatterns', { [DEMO_CURVE] = {
+    kind = 'curve', lengthPpq = 4 * resolution,
+    points = {
+      { ppq = 0,              val = 0,    shape = 'linear' },
+      { ppq = 2 * resolution, val = 1,    shape = 'linear' },
+      { ppq = 4 * resolution, val = -0.5, shape = 'linear' },
+    },
+  } })
+  return DEMO_CURVE
+end
+
+local function seedDemo(resolution)
+  return demoKind == 'curve' and seedCurveDemo(resolution) or seedNotesDemo(resolution)
 end
 
 ----------- PUBLIC
@@ -193,6 +212,12 @@ function pe:launch(name)
   local opened = self:open(name)
   if item then modalHost:open{ kind = 'patternEditor', title = opened,
                                onClose = function() self:close() end } end
+end
+
+-- Throwaway P3 helper: pick which demo the nil-name launch seeds, then raise it. Gone at P3.5.
+function pe:launchDemo(kind)
+  demoKind = kind
+  self:launch()
 end
 
 return pe

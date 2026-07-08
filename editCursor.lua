@@ -53,6 +53,9 @@ local regionScope, regionPushed
 local function clampPos()
   local maxRow = math.max(0, (grid.numRows or 1) - 1)
   cursorRow = util.clamp(cursorRow, 0, maxRow)
+  -- The pattern editor (defaultNoteCols=0) rebuilds a column-less grid between bindTake and
+  -- materialise; park the cursor rather than index a column that isn't there.
+  if #grid.cols == 0 then cursorCol, cursorStop = 1, 1; return end
   cursorCol  = util.clamp(cursorCol, 1, #grid.cols)
   cursorStop = util.clamp(cursorStop, 1, #grid.cols[cursorCol].stopPos)
 end

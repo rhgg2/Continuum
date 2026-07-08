@@ -1,4 +1,4 @@
-@module patternEditor  src=patternEditor.lua  loc=198  sha=0b35eb3  mode=chunk  self=pe
+@module patternEditor  src=patternEditor.lua  loc=223  sha=c71900d  mode=chunk  self=pe
 @deps facade, ds, chrome, gui, modalHost
 
 # Invariants & contracts
@@ -37,7 +37,9 @@
   @state EDIT_COMMANDS = {  @ 54
   @state miniScope = cmgr:scope('tracker')  @ 66
   @state DEMO = 'demo'  @ 105
-  @state miniFocus = { acceptCmds = true, suppressKbd = false, pageSuppressed ...  @ 163
+  @state DEMO_CURVE = 'democurve'  @ 106
+  @state demoKind = 'notes'  @ 107
+  @state miniFocus = { acceptCmds = true, suppressKbd = false, pageSuppressed ...  @ 182
 
 # Private functions
   -- Own stack -- the harness `mk` shape, wired to the real shared facade
@@ -51,47 +53,51 @@
   @fn materialiseCurve(points)  @ 93-100
       -- Curve points are bipolar -1..+1; the pb column authors in cents, full-scale
       -- at the take's pbRange. Commit (P3 step e) normalises back by the same factor.
-  @fn seedDemo(resolution)  @ 106-115
+  @fn seedNotesDemo(resolution)  @ 109-118
+  @fn seedCurveDemo(resolution)  @ 120-130
+  @fn seedDemo(resolution)  @ 132-134
 
 # Public API (pe:*)
-  @api pe:open(name)  @ 121-144
+  @api pe:open(name)  @ 140-163
       @contract  mint a checkout take on scratch, materialise `name`'s body, bind the mini tm
       @contract  a nil `name` seeds the throwaway demo; an unknown one tears the mint back down (net no-op)
-  @api pe:close()  @ 148-154
+  @api pe:close()  @ 167-173
       @contract  sweep the pool metadata (write-through, so leaks without this)
       @contract  unbind the mini tm, delete the checkout item
-  @api pe:isOpen()  @ 156
-  @api pe:currentTake()  @ 157
+  @api pe:isOpen()  @ 175
+  @api pe:currentTake()  @ 176
   -- Modal editing surface
-  @api pe:draw()  @ 166-169
+  @api pe:draw()  @ 185-188
       @contract  draw pass -- the grid fills a viewport fraction; the auto-resize popup sizes to it
-  @api pe:handleInput(close)  @ 173-184
+  @api pe:handleInput(close)  @ 192-203
       @contract  input pass -- mouse, dispatch against mini cmgr, note entry; unconsumed Esc/Enter close
       @contract  returns the dispatch result kr = { consumed, commandHeld }
-  @api pe:launch(name)  @ 192-196
+  @api pe:launch(name)  @ 211-215
       @contract  production entry -- mint the checkout and raise the editing modal; onClose sweeps it
+  @api pe:launchDemo(kind)  @ 218-221
+      -- Throwaway P3 helper: pick which demo the nil-name launch seeds, then raise it. Gone at P3.5.
 
 # Uses (outbound edges)
   @use call    commandManager.loadOverrides  @ 71
   @use call    commandManager.push  @ 72
   @use call    commandManager.scope  @ 66
   @use call    configManager.get  @ materialiseNotes:81 materialiseCurve:94,95
-  @use call    eventMeta.dropPool  @ close:150
-  @use call    gridPane.draw  @ draw:168
-  @use call    gridPane.handleKeys  @ handleInput:176
-  @use call    gridPane.handleMouse  @ handleInput:174
-  @use call    imgui.GetWindowViewport  @ draw:167
-  @use call    imgui.IsKeyPressed  @ handleInput:178,179,180
-  @use call    imgui.Viewport_GetWorkSize  @ draw:167
-  @use call    keyDispatch.dispatchKeys  @ handleInput:175
-  @use call    midiManager.poolGuid  @ open:127
-  @use call    midiManager.resolution  @ open:128
-  @use call    midiManager.setLength  @ open:139
-  @use call    modalHost.registerKind  @ 186
-  @use call    scratch.track  @ open:124,134 close:152
-  @use call    trackerManager.bindTake  @ open:126,133 close:151
-  @use call    trackerManager.currentTake  @ currentTake:157
-  @use call    trackerManager.flush  @ open:142
+  @use call    eventMeta.dropPool  @ close:169
+  @use call    gridPane.draw  @ draw:187
+  @use call    gridPane.handleKeys  @ handleInput:195
+  @use call    gridPane.handleMouse  @ handleInput:193
+  @use call    imgui.GetWindowViewport  @ draw:186
+  @use call    imgui.IsKeyPressed  @ handleInput:197,198,199
+  @use call    imgui.Viewport_GetWorkSize  @ draw:186
+  @use call    keyDispatch.dispatchKeys  @ handleInput:194
+  @use call    midiManager.poolGuid  @ open:146
+  @use call    midiManager.resolution  @ open:147
+  @use call    midiManager.setLength  @ open:158
+  @use call    modalHost.registerKind  @ 205
+  @use call    scratch.track  @ open:143,153 close:171
+  @use call    trackerManager.bindTake  @ open:145,152 close:170
+  @use call    trackerManager.currentTake  @ currentTake:176
+  @use call    trackerManager.flush  @ open:161
   @use call    util.instantiate  @ 31,32,33,34,35,36,37,38,39,45
   @use require commandManager  @ 38
   @use require configManager  @ 32

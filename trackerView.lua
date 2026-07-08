@@ -722,6 +722,9 @@ local followViewport do
   end
 
   function followViewport()
+    -- An empty grid (the pattern editor's pre-materialise rebuild, defaultNoteCols=0) has no
+    -- column to follow; park the scroll rather than clamp scrollCol into an inverted (1,0) range.
+    if #grid.cols == 0 then scrollCol = 1; return end
     local maxRow = math.max(0, (grid.numRows or 1) - 1)
     local cRow, cCol = ec:row(), ec:col()
 

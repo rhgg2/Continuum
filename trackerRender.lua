@@ -1273,12 +1273,11 @@ tracker:registerAll{
 
   editNoteFx = { editFx, 'Edit note FX' },
 
-  -- Throwaway P3 entry until the fx-strip param row (P3.5) opens patterns in place.
-  -- No authoring UI yet, so always reseed the demo fresh (nil name) -- a stale stored
-  -- entry from a prior open would otherwise shadow it. see design/fx-patterns.md § P3
-  openPatternEditor = function()
-    pe:launch()
-  end,
+  -- Throwaway P3 entries until the fx-strip param row (P3.5) opens patterns in place. No authoring
+  -- UI yet, so each reseeds its demo fresh (nil name) -- a stale stored entry would shadow it.
+  -- see design/fx-patterns.md § P3
+  openPatternEditor      = function() pe:launchDemo('notes') end,
+  openPatternEditorCurve = function() pe:launchDemo('curve') end,
 }
 
 cmgr:doAfter({ 'quantize', 'quantizeKeepRealised' },
@@ -1286,7 +1285,8 @@ cmgr:doAfter({ 'quantize', 'quantizeKeepRealised' },
 
 -- Throwaway binding for the P3 pattern-editor entry; kept out of the canonical
 -- pageBindings since P3.5 replaces the whole gesture with the fx-strip param row.
-tracker:bind('openPatternEditor', { { ImGui.Key_E, ImGui.Mod_Super, ImGui.Mod_Shift } })
+tracker:bind('openPatternEditor',      { { ImGui.Key_E, ImGui.Mod_Super, ImGui.Mod_Shift } })
+tracker:bind('openPatternEditorCurve', { { ImGui.Key_C, ImGui.Mod_Super, ImGui.Mod_Shift } })
 
 ----- Region overlay keymap
 

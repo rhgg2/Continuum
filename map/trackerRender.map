@@ -1,4 +1,4 @@
-@module trackerRender  src=trackerRender.lua  loc=1423  sha=0b35eb3  mode=chunk  self=tr
+@module trackerRender  src=trackerRender.lua  loc=1423  sha=fb49350  mode=chunk  self=tr
 @deps cm, ds, cmgr, chrome, gui, modalHost, facade, tv, help, pe
 
 # Invariants & contracts
@@ -206,7 +206,7 @@
   @use call    cm.get  @ 39,136,145,192,200,728 drawSampleDropdown:56 drawStatusBar:559,560,561,563,564 openNewTakeModal:1213,1215 openTakeProperties:1323
   @use call    cm.getAt  @ 38
   @use call    cm.set  @ drawSampleDropdown:79 201 openNewTakeModal:1216
-  @use call    cmgr.doAfter  @ 1284
+  @use call    cmgr.doAfter  @ 1283
   @use call    cmgr.invoke  @ 154,187
   @use call    cmgr.keySpec  @ 736
   @use call    cmgr.keysFor  @ 742,743
@@ -280,7 +280,7 @@
   @use call    imgui.TextDisabled  @ drawTree:489
   @use call    modalHost.isOpen  @ focusState:1414
   @use call    modalHost.registerKind  @ 724,1222
-  @use call    pe.launch  @ 1280
+  @use call    pe.launchDemo  @ 1279,1280
   @use call    tuning.findTemper  @ 39 slideTemper:872
   @use call    tuning.midiToStep  @ centsToSteps:878,879
   @use call    tuning.transposeStep  @ stepsToCents:883
@@ -293,7 +293,7 @@
   @use call    tv.currentSlotIdx  @ 116
   @use call    tv.currentTrackIdx  @ 91,115 openNewTakeModal:1207
   @use call    tv.duplicateBoundUnpooled  @ duplicateUnpooledTake:1244
-  @use call    tv.ec  @ 173,1285 paletteActions:223 drawStatusBar:557 scopedAction:786 removeOrHideCol:830
+  @use call    tv.ec  @ 173,1284 paletteActions:223 drawStatusBar:557 scopedAction:786 removeOrHideCol:830
   @use call    tv.fxHostAtCursor  @ stripPlan:972
   @use call    tv.fxHostForEdit  @ editFx:1186
   @use call    tv.gotoTake  @ 1262,1263
