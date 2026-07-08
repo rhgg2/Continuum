@@ -17,8 +17,8 @@ local ImGui = require 'imgui' '0.10'
 
 --contract: trackerPage (the controller) owns the stack + take lifecycle and drives this renderer
 --contract: the renderer holds only tv (injected); it never reaches mm/tm/gm
-local cm, ds, cmgr, chrome, gui, modalHost, facade, tv, help =
-  (...).cm, (...).ds, (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).facade, (...).tv, (...).help
+local cm, ds, cmgr, chrome, gui, modalHost, facade, tv, help, pe =
+  (...).cm, (...).ds, (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).facade, (...).tv, (...).help, (...).pe
 
 -- The renderer reads project data (tracks/slots) through the arrange facade;
 -- the tracker's selection nav goes straight to tv. See docs/trackerPage.md.
@@ -1272,10 +1272,21 @@ tracker:registerAll{
   openSwingPicker  = function() chrome.requestPickerOpen('swing')  end,
 
   editNoteFx = { editFx, 'Edit note FX' },
+
+  -- Throwaway P3 entry until the fx-strip param row (P3.5) opens patterns in place:
+  -- launch the first stored pattern in the checkout editor. see design/fx-patterns.md § P3
+  openPatternEditor = function()
+    local name = next(ds:get('fxPatterns') or {})
+    if name then pe:launch(name) end
+  end,
 }
 
 cmgr:doAfter({ 'quantize', 'quantizeKeepRealised' },
              function() tv:ec():unstick() end)
+
+-- Throwaway binding for the P3 pattern-editor entry; kept out of the canonical
+-- pageBindings since P3.5 replaces the whole gesture with the fx-strip param row.
+tracker:bind('openPatternEditor', { { ImGui.Key_E, ImGui.Mod_Super, ImGui.Mod_Shift } })
 
 ----- Region overlay keymap
 

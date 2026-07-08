@@ -1,4 +1,4 @@
-@module pageBindings  src=pageBindings.lua  loc=175  sha=untracked  mode=chunk
+@module pageBindings  src=pageBindings.lua  loc=177  sha=217c1f8  mode=chunk
 
 # Shapes
   @shape  { scope = { command = { keySpec, ... } } } -- keySpec is ImGui.Key_* or { Key, Mod }
@@ -9,7 +9,7 @@
 
 # Private state
   @state M = {}  @ 13
-  @state arrange = {  @ 128
+  @state arrange = {  @ 130
 
 # Private functions
   -- tracker (command bodies in trackerRender + trackerView)
@@ -17,12 +17,12 @@
   -- sample (command bodies + slot-clamp invariant in sampleRender)
   -- wiring
   -- arrange (command bodies in arrangeRender + arrangeView)
-  @fn placeKey(slotIdx)  @ 161-165
+  @fn placeKey(slotIdx)  @ 163-167
       -- Place-command keys: 0..9 → digit keys, 10..35 → letters, 36..61 →
       -- Shift+letter. ImGui.Key_0 + n and Key_A + n are contiguous.
 
 # Uses (outbound edges)
-  @use call    util.toBase62  @ 168
+  @use call    util.toBase62  @ 170
   @use require imgui  @ 10
   @use require util  @ 11
 

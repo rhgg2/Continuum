@@ -1,4 +1,4 @@
-@module trackerPage  src=trackerPage.lua  loc=153  sha=61aa319  mode=chunk  self=tp
+@module trackerPage  src=trackerPage.lua  loc=158  sha=371d7bd  mode=chunk  self=tp
 @deps cm, ds, cmgr, chrome, gui, modalHost, facade, help, eventMeta
 
 # Imports
@@ -14,72 +14,74 @@
   @construct ccm = util.instantiate('ccManager')  @ 34
   @construct pa  = util.instantiate('paramAutomation')  @ 35
   @construct tv  = util.instantiate('trackerView')  @ 36
-  @construct tr  = util.instantiate('trackerRender')  @ 38
+  @construct pe  = util.instantiate('patternEditor')  @ 40
+  @construct tr  = util.instantiate('trackerRender')  @ 43
 
 # Private state
-  @state tp = {}  @ 42
-  @state lastHash = nil  @ 43   -- bound take's last-seen MIDI hash; external-mutation watcher baseline
-  @state wasDormant = false  @ 46
+  @state tp = {}  @ 47
+  @state lastHash = nil  @ 48   -- bound take's last-seen MIDI hash; external-mutation watcher baseline
+  @state wasDormant = false  @ 51
 
 # Private functions
   @fn arrange()  @ 20
   @fn samplerMode(take)  @ 24-27
       -- trackerMode is wiring-derived per bind, not a per-frame probe — follows the bound
       -- take, not the arrange cursor. See docs/trackerManager.md § PC synthesis under trackerMode.
-  @fn takeHash()  @ 49-53
+  @fn takeHash()  @ 54-58
       @reaper  MIDI_GetHash on the bound take — the external-mutation watcher baseline
 
 # Public API (tp:*)
   -- Take lifecycle (take ops on tm, view-state on tv)
-  @api tp:currentTake()  @ 59
-  @api tp:bind(t)  @ 62-68
+  @api tp:currentTake()  @ 64
+  @api tp:bind(t)  @ 67-73
       @contract  with a take, bind it on tm and seed tv; no arg = activation, resolve the selection
-  @api tp:unbind()  @ 69
-  @api tp:dropTake()  @ 72
+  @api tp:unbind()  @ 74
+  @api tp:dropTake()  @ 77
       @contract  if take is destroyed, detach tm and blank the grid. Distinct from unbind.
-  @api tp:reloadFromReaper()  @ 75
+  @api tp:reloadFromReaper()  @ 80
       @contract  for coord's external-mutation watcher; re-reads the bound take, no swap
   -- Selection — the tracker owns (track, slot) in cm; tv holds the nav + resolve,
-  @api tp:bindFromSelection()  @ 81-96
+  @api tp:bindFromSelection()  @ 86-101
       @contract  rebind to the selection take on change. See docs/trackerPage.md § Selection
   -- Page interface — render delegates to the renderer; the watcher brackets the frame
-  @api tp:toolbarSegments()  @ 142
-  @api tp:renderStatusBar(ctx)  @ 143
-  @api tp:focusState()  @ 144
-  @api tp:renderBody(ctx, w, h, dispatch)  @ 147-151
+  @api tp:toolbarSegments()  @ 147
+  @api tp:renderStatusBar(ctx)  @ 148
+  @api tp:focusState()  @ 149
+  @api tp:renderBody(ctx, w, h, dispatch)  @ 152-156
       @contract  resolve selection, draw, then snapshot the take hash as next frame's watcher baseline
 
 # Uses (outbound edges)
-  @use call    cm.get  @ 110
-  @use call    cm.getAt  @ bindFromSelection:82
+  @use call    cm.get  @ 115
+  @use call    cm.getAt  @ bindFromSelection:87
   @use call    facade.get  @ arrange:20 samplerMode:26
-  @use call    facade.publish  @ 100
-  @use call    paramAutomation.apply  @ bind:67
-  @use call    trackerManager.bindTake  @ bind:64 unbind:69 127,131
-  @use call    trackerManager.currentTake  @ takeHash:50 currentTake:59 bindFromSelection:88 124,130
-  @use call    trackerManager.detach  @ dropTake:72
-  @use call    trackerManager.reloadFromReaper  @ reloadFromReaper:75 bindFromSelection:94
-  @use call    trackerManager.restoreGuarded  @ 104
-  @use call    trackerRender.focusState  @ focusState:144
-  @use call    trackerRender.renderBody  @ renderBody:149
-  @use call    trackerRender.renderStatusBar  @ renderStatusBar:143
-  @use call    trackerRender.toolbarSegments  @ toolbarSegments:142
-  @use call    trackerView.cursorAnchor  @ 136
-  @use call    trackerView.dropGrid  @ dropTake:72
-  @use call    trackerView.newParkedTake  @ 110
-  @use call    trackerView.resolveSelectionTake  @ bindFromSelection:87
-  @use call    trackerView.retargetTrackTier  @ bind:65
-  @use call    trackerView.seedSharedSlots  @ bind:66
-  @use call    trackerView.selectTrack  @ bindFromSelection:85 101,109
-  @use call    trackerView.setSwingComposite  @ 137
-  @use call    trackerView.timeSig  @ 135
-  @use call    util.instantiate  @ 31,32,33,34,35,36,38
+  @use call    facade.publish  @ 105
+  @use call    paramAutomation.apply  @ bind:72
+  @use call    trackerManager.bindTake  @ bind:69 unbind:74 132,136
+  @use call    trackerManager.currentTake  @ takeHash:55 currentTake:64 bindFromSelection:93 129,135
+  @use call    trackerManager.detach  @ dropTake:77
+  @use call    trackerManager.reloadFromReaper  @ reloadFromReaper:80 bindFromSelection:99
+  @use call    trackerManager.restoreGuarded  @ 109
+  @use call    trackerRender.focusState  @ focusState:149
+  @use call    trackerRender.renderBody  @ renderBody:154
+  @use call    trackerRender.renderStatusBar  @ renderStatusBar:148
+  @use call    trackerRender.toolbarSegments  @ toolbarSegments:147
+  @use call    trackerView.cursorAnchor  @ 141
+  @use call    trackerView.dropGrid  @ dropTake:77
+  @use call    trackerView.newParkedTake  @ 115
+  @use call    trackerView.resolveSelectionTake  @ bindFromSelection:92
+  @use call    trackerView.retargetTrackTier  @ bind:70
+  @use call    trackerView.seedSharedSlots  @ bind:71
+  @use call    trackerView.selectTrack  @ bindFromSelection:90 106,114
+  @use call    trackerView.setSwingComposite  @ 142
+  @use call    trackerView.timeSig  @ 140
+  @use call    util.instantiate  @ 31,32,33,34,35,36,40,43
   @use require ccManager  @ 34
   @use require groupManager  @ 33
   @use require midiManager  @ 31
   @use require paramAutomation  @ 35
+  @use require patternEditor  @ 40
   @use require trackerManager  @ 32
-  @use require trackerRender  @ 38
+  @use require trackerRender  @ 43
   @use require trackerView  @ 36
   @use require util  @ 11
 

@@ -3178,6 +3178,8 @@ tracker:registerAll{
   end,
   doubleRPB               = function() tv:setRowPerBeat(cm:get('rowPerBeat') * 2) end,
   halveRPB                = function() tv:setRowPerBeat(math.floor(cm:get('rowPerBeat') / 2)) end,
+  incRPB                  = function() tv:setRowPerBeat(cm:get('rowPerBeat') + 1) end,
+  decRPB                  = function() tv:setRowPerBeat(cm:get('rowPerBeat') - 1) end,
   matchGridToCursor       = matchGridToCursor,
   groupDuplicate          = { groupDuplicate, 'Duplicate group' },
   groupPaste              = { groupPaste,     'Paste group'     },

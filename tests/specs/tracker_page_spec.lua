@@ -16,6 +16,11 @@ local fakeImGui = setmetatable({ Mod_None = 0,
 package.preload['imgui'] = function()
   return function(_) return fakeImGui end
 end
+-- Earlier specs (patternEditor_*) rebind imgui to their own auto-viv fake (PushFont
+-- resolves to a number); drop that cache + imgui-capturing modules so our preload rebinds.
+for _, m in ipairs({ 'imgui', 'keyDispatch', 'pageBindings', 'gridPane', 'curveEditor', 'painter' }) do
+  package.loaded[m] = nil
+end
 _G.reaper.ImGui_GetBuiltinPath = function() return '/stub' end
 
 local util = require('util')

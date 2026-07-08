@@ -1,5 +1,5 @@
-@module trackerRender  src=trackerRender.lua  loc=1412  sha=3d3e736  mode=chunk  self=tr
-@deps cm, ds, cmgr, chrome, gui, modalHost, facade, tv, help
+@module trackerRender  src=trackerRender.lua  loc=1423  sha=217c1f8  mode=chunk  self=tr
+@deps cm, ds, cmgr, chrome, gui, modalHost, facade, tv, help, pe
 
 # Invariants & contracts
   @invariant  page is render + input only; tracker state lives in tv/ec/tm, never cached
@@ -171,7 +171,7 @@
 # Public API (tr:*)
   -- Region overlay keymap
   -- Take properties modal helper
-  @api tr:openTakeProperties(args)  @ 1310-1348
+  @api tr:openTakeProperties(args)  @ 1321-1359
       -- onClose fires exactly once, after the whole modal chain — including
       -- any truncate-confirm follow-up. Two sources of "chain done":
       -- the apply path (callback ran, valid input, either direct apply or
@@ -181,45 +181,45 @@
       -- exclusive: once a valid callback starts the apply chain it claims
       -- ownership, so modalHost's onClose becomes a no-op.
   -- Page interface (rendering only; trackerPage drives lifecycle and the dispatch)
-  @api tr:toolbarSegments()  @ 1352
-  @api tr:renderBody(_, w, h, dispatch)  @ 1354-1392
-  @api tr:renderStatusBar(_)  @ 1394-1396
-  @api tr:focusState()  @ 1401-1409
+  @api tr:toolbarSegments()  @ 1363
+  @api tr:renderBody(_, w, h, dispatch)  @ 1365-1403
+  @api tr:renderStatusBar(_)  @ 1405-1407
+  @api tr:focusState()  @ 1412-1420
       -- suppressKbd: modal/picker owns input. pageSuppressed: unused (swing/temper on own page).
       -- acceptCmds: page visible and no item active (toolbar focus is transient; see IsAnyItemActive).
 
 # Uses (outbound edges)
   @use call    chrome.checkbox  @ 200
-  @use call    chrome.colour  @ stageDivider:1130 nameDividers:1143 renderBody:1360
+  @use call    chrome.colour  @ stageDivider:1130 nameDividers:1143 renderBody:1371
   @use call    chrome.disabledIf  @ 176 paletteActions:225,229 drawStage:1102,1106
   @use call    chrome.dropdown  @ fxFieldWidget:913
-  @use call    chrome.gridWidth  @ renderBody:1367
+  @use call    chrome.gridWidth  @ renderBody:1378
   @use call    chrome.headingLabel  @ 89,113,134,143,160,198
   @use call    chrome.libPicker  @ 150,168,182
   @use call    chrome.numberStepper  @ 136 fxFieldWidget:919,923
   @use call    chrome.paletteHeader  @ drawFxStrip:1156
-  @use call    chrome.pickerIsActive  @ drawFxStrip:1175 focusState:1403
+  @use call    chrome.pickerIsActive  @ drawFxStrip:1175 focusState:1414
   @use call    chrome.popChromeStyles  @ drawFxStrip:1180
   @use call    chrome.pushChromeStyles  @ drawFxStrip:1154
   @use call    chrome.requestPickerOpen  @ handleStripKeys:1016,1036 editFx:1196 1271,1272
   @use call    chrome.row  @ drawFxStrip:1157
-  @use call    cm.get  @ 39,136,145,192,200,728 drawSampleDropdown:56 drawStatusBar:559,560,561,563,564 openNewTakeModal:1213,1215 openTakeProperties:1312
+  @use call    cm.get  @ 39,136,145,192,200,728 drawSampleDropdown:56 drawStatusBar:559,560,561,563,564 openNewTakeModal:1213,1215 openTakeProperties:1323
   @use call    cm.getAt  @ 38
   @use call    cm.set  @ drawSampleDropdown:79 201 openNewTakeModal:1216
-  @use call    cmgr.doAfter  @ 1277
+  @use call    cmgr.doAfter  @ 1284
   @use call    cmgr.invoke  @ 154,187
   @use call    cmgr.keySpec  @ 736
   @use call    cmgr.keysFor  @ 742,743
-  @use call    cmgr.scope  @ 586,1247,1284
-  @use call    ds.get  @ drawSampleDropdown:57 163,177 drawStatusBar:565
+  @use call    cmgr.scope  @ 586,1247,1295
+  @use call    ds.get  @ drawSampleDropdown:57 163,177,1279 drawStatusBar:565
   @use call    facade.get  @ arrange:25
-  @use call    gridPane.draw  @ renderBody:1374
-  @use call    gridPane.geom  @ renderBody:1377
-  @use call    gridPane.handleKeys  @ renderBody:1385
-  @use call    gridPane.handleMouse  @ renderBody:1383
-  @use call    help.anchor  @ renderBody:1378
+  @use call    gridPane.draw  @ renderBody:1385
+  @use call    gridPane.geom  @ renderBody:1388
+  @use call    gridPane.handleKeys  @ renderBody:1396
+  @use call    gridPane.handleMouse  @ renderBody:1394
+  @use call    help.anchor  @ renderBody:1389
   @use call    help.registerPage  @ 591
-  @use call    help.wasOpenAtFrameStart  @ renderBody:1383,1385
+  @use call    help.wasOpenAtFrameStart  @ renderBody:1394,1396
   @use call    imgui.AlignTextToFramePadding  @ 133 mark:1054 drawStage:1114
   @use call    imgui.Attach  @ drawTree:502
   @use call    imgui.BeginChild  @ drawFxStrip:1155
@@ -233,7 +233,7 @@
   @use call    imgui.EndChild  @ drawFxStrip:1179
   @use call    imgui.EndGroup  @ drawAddStage:1078 drawStage:1119
   @use call    imgui.GetContentRegionAvail  @ drawTreeItem:435
-  @use call    imgui.GetCursorScreenPos  @ renderBody:1366
+  @use call    imgui.GetCursorScreenPos  @ renderBody:1377
   @use call    imgui.GetFontSize  @ stageDivider:1126
   @use call    imgui.GetFrameHeight  @ stripHeight:961 drawStage:1094 nameDividers:1139
   @use call    imgui.GetInputQueueCharacter  @ typedChar:992
@@ -249,25 +249,25 @@
   @use call    imgui.InputText  @ 752,761,1226,1229
   @use call    imgui.InputTextWithHint  @ paletteFindBox:251
   @use call    imgui.InvisibleButton  @ drawParamPalette:534
-  @use call    imgui.IsAnyItemActive  @ drawFxStrip:1175 focusState:1407
+  @use call    imgui.IsAnyItemActive  @ drawFxStrip:1175 focusState:1418
   @use call    imgui.IsItemActive  @ paletteFindBox:253
   @use call    imgui.IsItemClicked  @ clickToCursor:1084
   @use call    imgui.IsKeyPressed  @ handlePaletteKeys:356 737,773,774,777,1232,1233,1236 addColumn:812 handleStripKeys:1004
   @use call    imgui.IsMouseClicked  @ drawParamPalette:543
   @use call    imgui.IsWindowAppearing  @ 747,1223
-  @use call    imgui.IsWindowFocused  @ renderBody:1381
+  @use call    imgui.IsWindowFocused  @ renderBody:1392
   @use call    imgui.IsWindowHovered  @ drawParamPalette:543
   @use call    imgui.ListClipper_Begin  @ drawTree:504
   @use call    imgui.ListClipper_End  @ drawTree:515
   @use call    imgui.ListClipper_GetDisplayRange  @ drawTree:510
   @use call    imgui.ListClipper_IncludeItemByIndex  @ drawTree:507
   @use call    imgui.ListClipper_Step  @ drawTree:509
-  @use call    imgui.PopFont  @ renderBody:1363
+  @use call    imgui.PopFont  @ renderBody:1374
   @use call    imgui.PopID  @ 762
-  @use call    imgui.PopStyleColor  @ renderBody:1362
-  @use call    imgui.PushFont  @ renderBody:1359
+  @use call    imgui.PopStyleColor  @ renderBody:1373
+  @use call    imgui.PushFont  @ renderBody:1370
   @use call    imgui.PushID  @ 760
-  @use call    imgui.PushStyleColor  @ renderBody:1360
+  @use call    imgui.PushStyleColor  @ renderBody:1371
   @use call    imgui.RadioButton  @ 769
   @use call    imgui.SameLine  @ 90,114,135,144,153,161,175,186,199,764,765,768,775,1234 paletteActions:228 drawTreeItem:451,453 headerActions:1045,1047 mark:1056 drawStage:1101,1105,1109,1116 drawFxStrip:1164
   @use call    imgui.Separator  @ drawParamPalette:527 drawFxStrip:1158
@@ -276,10 +276,11 @@
   @use call    imgui.SetNextItemWidth  @ paletteFindBox:249
   @use call    imgui.SetScrollY  @ scrollFollow:423,424
   @use call    imgui.SmallButton  @ drawTreeItem:452,454
-  @use call    imgui.Text  @ drawStatusBar:576 749,755,1224,1228 mark:1055 drawStage:1114 renderBody:1361
+  @use call    imgui.Text  @ drawStatusBar:576 749,755,1224,1228 mark:1055 drawStage:1114 renderBody:1372
   @use call    imgui.TextDisabled  @ drawTree:489
-  @use call    modalHost.isOpen  @ focusState:1403
+  @use call    modalHost.isOpen  @ focusState:1414
   @use call    modalHost.registerKind  @ 724,1222
+  @use call    pe.launch  @ 1280
   @use call    tuning.findTemper  @ 39 slideTemper:872
   @use call    tuning.midiToStep  @ centsToSteps:878,879
   @use call    tuning.transposeStep  @ stepsToCents:883
@@ -292,7 +293,7 @@
   @use call    tv.currentSlotIdx  @ 116
   @use call    tv.currentTrackIdx  @ 91,115 openNewTakeModal:1207
   @use call    tv.duplicateBoundUnpooled  @ duplicateUnpooledTake:1244
-  @use call    tv.ec  @ 173,1278 paletteActions:223 drawStatusBar:557 scopedAction:786 removeOrHideCol:830
+  @use call    tv.ec  @ 173,1285 paletteActions:223 drawStatusBar:557 scopedAction:786 removeOrHideCol:830
   @use call    tv.fxHostAtCursor  @ stripPlan:972
   @use call    tv.fxHostForEdit  @ editFx:1186
   @use call    tv.gotoTake  @ 1262,1263
@@ -312,8 +313,8 @@
   @use call    tv.paramTargets  @ drawParamPalette:536
   @use call    tv.pickTake  @ 126
   @use call    tv.pickTrack  @ 106
-  @use call    tv.pollLearn  @ renderBody:1381
-  @use call    tv.pruneEmptyRegion  @ renderBody:1370,1387
+  @use call    tv.pollLearn  @ renderBody:1392
+  @use call    tv.pruneEmptyRegion  @ renderBody:1381,1398
   @use call    tv.removeFxStage  @ handleStripKeys:1033 drawStage:1110
   @use call    tv.replaceFxStage  @ drawStage:1099
   @use call    tv.setColSwingSlot  @ 45
@@ -329,10 +330,10 @@
   @use call    tv.showDelay  @ addColumn:819
   @use call    tv.showFx  @ drawTreeItem:452
   @use call    tv.stripCursor  @ clampCursor:983 editFx:1197
-  @use call    tv.takeName  @ openTakeProperties:1323
-  @use call    tv.tick  @ renderBody:1391
+  @use call    tv.takeName  @ openTakeProperties:1334
+  @use call    tv.tick  @ renderBody:1402
   @use call    tv.unautomateParam  @ removeAutomation:215,218
-  @use call    tv.wireGroupLifetime  @ 1289
+  @use call    tv.wireGroupLifetime  @ 1300
   @use call    util.assign  @ fxSeed:854
   @use call    util.atomic  @ 37,44,45 drawSampleDropdown:79 openNewTakeModal:1214
   @use call    util.clamp  @ adjustRow:891,902 clampCursor:984,986 handleStripKeys:1022,1024,1029

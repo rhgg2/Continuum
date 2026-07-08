@@ -5,7 +5,27 @@ local t       = require('support')
 local util    = require('util')
 local scratch = require('scratch')
 
--- pa/tv take the real shared facade in production; here the boundary is stubbed
+-- patternEditor pulls imgui/keyDispatch/pageBindings/gridPane at load; stub imgui (auto-viv
+-- ids), hand it chrome/gui/modalHost, and re-require per test so ids stay order-independent.
+local nextId = 0
+local fakeImGui = setmetatable({ Mod_None = 0 }, {
+  __index = function(tbl, k) nextId = nextId + 1; rawset(tbl, k, nextId); return nextId end,
+})
+_G.reaper.ImGui_GetBuiltinPath = _G.reaper.ImGui_GetBuiltinPath or function() return '/stub' end
+
+local fakeChrome    = setmetatable({}, { __index = function() return function() end end })
+local fakeGui       = { ctx = {}, font = 'grid', uiFont = 'ui', fontSize = { ui = 13 } }
+local fakeModalHost = { registerKind = function() end, open = function() end }
+
+local function loadPE(deps)
+  package.preload['imgui'] = function() return function(_) return fakeImGui end end
+  for _, m in ipairs({ 'imgui', 'keyDispatch', 'pageBindings', 'curveEditor', 'painter' }) do
+    package.loaded[m] = nil
+  end
+  return util.instantiate('patternEditor', deps)
+end
+
+-- tv takes the real shared facade in production; here the boundary is stubbed
 -- (mirrors harness mk's paFacade). open()/close() never route through it.
 local fakeFacade = { get = function(name)
   if name == 'arrange' then
@@ -50,7 +70,8 @@ local CURVE = { lfo = {
 local function withEditor(harness, library)
   local h = harness.mk()
   h.ds:assign('fxPatterns', library)
-  local pe = util.instantiate('patternEditor', { facade = fakeFacade, ds = h.ds })
+  local pe = loadPE{ facade = fakeFacade, ds = h.ds,
+                     chrome = fakeChrome, gui = fakeGui, modalHost = fakeModalHost }
   return h, pe
 end
 

@@ -35,9 +35,14 @@ local ccm = util.instantiate('ccManager')
 local pa = util.instantiate('paramAutomation', { cm = cm, ds = ds, facade = facade, ccm = ccm })
 local tv = util.instantiate('trackerView',    { tm = tm, cm = cm, ds = ds, cmgr = cmgr, gm = gm, pa = pa, facade = facade })
 
+-- The fx-pattern checkout editor: a self-contained mini tracker stack + modal.
+-- trackerRender gets the handle so its (throwaway) entry command can launch it.
+local pe = util.instantiate('patternEditor',
+  { facade = facade, ds = ds, chrome = chrome, gui = gui, modalHost = modalHost })
+
 local tr = util.instantiate('trackerRender',
   { tv = tv, cm = cm, ds = ds, cmgr = cmgr, chrome = chrome,
-    gui = gui, modalHost = modalHost, help = help, facade = facade })
+    gui = gui, modalHost = modalHost, help = help, facade = facade, pe = pe })
 
 local tp = {}
 local lastHash = nil   -- bound take's last-seen MIDI hash; external-mutation watcher baseline

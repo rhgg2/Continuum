@@ -1,0 +1,48 @@
+@module bridge  src=bridge.lua  loc=206  sha=untracked  mode=chunk  self=bridge
+
+# Invariants & contracts
+  @contract  tick() is the only entry; execute/render/scan are internal. Deps: { env, spoolDir? }.
+  @invariant  a bad chunk never escapes — load failure and runtime error both land in the res file
+  @invariant  request file is read then deleted BEFORE execute, so a mid-chunk crash cannot replay it
+
+# Shapes
+  @shape  response = "status: ok|error\nms: N\n--- value ---\n<render>\n--- print ---\n<buffered>\n"
+
+# Private state
+  @state deps = ... or {}  @ 12
+  @state env = deps.env or {}  @ 13
+  @state spoolDir = deps.spoolDir or defaultSpoolDir()  @ 19
+  @state printBuf = {}  @ 23
+  @state DEFAULTS = { depth = 4, entries = 40, str = 200, total = 64 * 1024 }  @ 60
+  @state CAP = {}  @ 61   -- sentinel thrown when the total byte cap is exceeded
+  @state bridge = {}  @ 193
+  @state enabled, cooldown = false, 0  @ 194
+
+# Private functions
+  @fn defaultSpoolDir()  @ 15-18
+  -- small IO
+  @fn join(name)  @ 32
+  @fn readAll(path)  @ 34-37
+  @fn writeAtomic(path, text)  @ 39-44
+  @fn dirExists(path)  @ 46-49
+  @fn nowMs()  @ 51-54
+  -- render — bridge-local serialiser, NOT util.prettySerialise (which targets
+  -- round-tripping). Survives cycles and userdata; caps depth/width/string/total
+  -- so a manager table can't blow the response up.
+  @fn render(value, opts)  @ 63-112
+  -- directives — leading `--#key arg` lines, stripped before load
+  @fn parseDirectives(code)  @ 116-128
+  -- execute — one chunk under the bridge's own xpcall; render its return value
+  @fn execute(rawCode)  @ 132-157
+  @fn formatResponse(r)  @ 159-166
+  -- scan — process at most one pending request per call
+  @fn firstReq()  @ 170-178
+  @fn scanOnce()  @ 180-187
+
+# Public API (bridge:*)
+  @api bridge:tick()  @ 196-204
+
+# REAPER API surface
+  @reaper time_precise
+  @reaper Undo_BeginBlock, Undo_EndBlock2
+  @reaper EnumerateFiles
