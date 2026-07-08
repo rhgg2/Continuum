@@ -3121,9 +3121,11 @@ do
   --contract: opts.trackerMode (wiring-derived) seeds trackerMode under the same suppression window
   --contract: opts.markSwingStale=true rebuilds raw from ppqL under new (cm, mm) (seqMgr:reswingAll)
   --contract: bindTake(nil) is the dormant seam (e.g. samplePage)
+  --contract: opts.skipGuard skips restore/guardTrack; mini stacks never touch the shared guard
   --invariant: bindTake(nil): cm clears under suppression; mm:load(nil) no-op; tm/tv keep last frame
   function tm:bindTake(take, opts)
-    tm:restoreGuarded()
+    local skipGuard = opts and opts.skipGuard
+    if not skipGuard then tm:restoreGuarded() end
     bindingTake = true
     cm:setContext(take)
     if take then cm:set('transient', 'trackerMode', (opts and opts.trackerMode) or false) end
@@ -3132,7 +3134,7 @@ do
       for i = 1, 16 do staleSwing[i] = true end
     end
     mm:load(take)
-    if take then guardTrack(reaper.GetMediaItemTake_Track(take)) end
+    if take and not skipGuard then guardTrack(reaper.GetMediaItemTake_Track(take)) end
     snapshotSwingState()
   end
 

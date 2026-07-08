@@ -1,4 +1,4 @@
-@module keyDispatch  src=keyDispatch.lua  loc=83  sha=untracked  mode=namespace  self=M
+@module keyDispatch  src=keyDispatch.lua  loc=83  sha=3c864e1  mode=namespace  self=keyDispatch
 
 # Invariants & contracts
   @contract  returns early (no dispatch) when state.suppressKbd or not state.acceptCmds
@@ -13,7 +13,7 @@
   @const ImGui = 'imgui'  @ 9
 
 # Module-level constants
-  @const M = {}  @ 11
+  @const keyDispatch = {}  @ 11
 
 # Private functions
   @fn isDigitMods(mods)  @ 22-24
@@ -28,8 +28,8 @@
       -- Shift/Alt still disqualify (Shift-digit emits a different char).
   @fn handlePrefixCapture(cmgr, ctx)  @ 26-41
 
-# Public API (M.*)
-  @api M.dispatchKeys(state, cmgr, ctx)  @ 48-81
+# Public API (keyDispatch.*)
+  @api keyDispatch.dispatchKeys(state, cmgr, ctx)  @ 48-81
 
 # Uses (outbound edges)
   @use call    imgui.GetKeyMods  @ handlePrefixCapture:28 dispatchKeys:65
