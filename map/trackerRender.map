@@ -1,4 +1,4 @@
-@module trackerRender  src=trackerRender.lua  loc=1493  sha=7361143  mode=chunk  self=tr
+@module trackerRender  src=trackerRender.lua  loc=1417  sha=cee3782  mode=chunk  self=tr
 @deps cm, ds, cmgr, chrome, gui, modalHost, facade, tv, help
 
 # Invariants & contracts
@@ -22,7 +22,7 @@
   @require ImGui = 'imgui'  @ 16
 
 # Constructed sub-instances
-  @construct gridPane = util.instantiate('gridPane')  @ 918
+  @construct gridPane = util.instantiate('gridPane')  @ 842
 
 # Private state
   @state ctx, font, uiFont = gui.ctx, gui.font, gui.uiFont  @ 29
@@ -43,9 +43,9 @@
   @state stripExitReq = false  @ 246   -- one-shot: drop stripFocus after dispatch, so the exit Esc isn't re-dispatched
   @state paramClipper = nil  @ 259
   @state PARAM_INDENT = 6  @ 261   -- px param labels nest past the fx-name / section-heading column
-  @state tr = {}  @ 914
-  @state FX_KINDS = generators.modalOrder  @ 927
-  @state tracker = cmgr:scope('tracker')  @ 1323
+  @state tr = {}  @ 838
+  @state FX_KINDS = generators.modalOrder  @ 851
+  @state tracker = cmgr:scope('tracker')  @ 1247
 
 # Private functions
   @fn arrange()  @ 25
@@ -88,90 +88,90 @@
   -- F1 help manifest — toolbar callouts pinned to their segments, plus a
   -- flowed panel of grid/global bindings packed over the grid body.
   -- Modal-driven commands
-  @fn openPrompt(title, prompt, callback, resolve, onChord)  @ 786-788
-  @fn openConfirm(title, callback, prompt)  @ 790-792
-  @fn scopedAction(title, base)  @ 860-866
+  @fn openPrompt(title, prompt, callback, resolve, onChord)  @ 710-712
+  @fn openConfirm(title, callback, prompt)  @ 714-716
+  @fn scopedAction(title, base)  @ 784-790
       -- Naming convention <base>Selection / <base>All is the contract.
       @contract  requires tv to expose both `<base>Selection` and `<base>All` methods
-  @fn resolveColType(s)  @ 870-881
+  @fn resolveColType(s)  @ 794-805
       -- Add-Column type vocabulary. First letter is unique except p (pb/pc):
       -- `p`→pb, a following `c`→pc. Digits ride through (only cc takes an id).
-  @fn addColumn()  @ 883-901
-  @fn removeOrHideCol()  @ 905-910
+  @fn addColumn()  @ 807-825
+  @fn removeOrHideCol()  @ 829-834
       -- Ctrl-Left drops the cursor column: a bound automation (cc) column goes
       -- through the remove-automation flow; anything else just hides.
   -- Note FX -- generator descriptors shared by the docked chain strip
-  @fn fxSeed(kind)  @ 930
+  @fn fxSeed(kind)  @ 854
       -- A kind's default fx entry: its registry params stamped with the kind tag downstream reads.
   -- FX field descriptors (used by the fx strip)
-  @fn valueEq(a, b)  @ 934-937
-  @fn choiceIndex(fd, value)  @ 938-941
-  @fn choiceLabels(fd)  @ 942-944
-  @fn slideTemper()  @ 948
+  @fn valueEq(a, b)  @ 858-861
+  @fn choiceIndex(fd, value)  @ 862-865
+  @fn choiceLabels(fd)  @ 866-868
+  @fn slideTemper()  @ 872
       -- stepInterval: stored value is signed cents (a host-relative pitch demand);
       -- shown/stepped as temper steps, anchored at the host. see design/archive/note-macros.md § UI
-  @fn hostPitch(uuid)  @ 949-952
-  @fn centsToSteps(temper, midi, detune, cents)  @ 953-957
-  @fn stepsToCents(temper, midi, detune, n)  @ 958-961
-  @fn adjustRow(uuid, rw, right, mods)  @ 964-981
+  @fn hostPitch(uuid)  @ 873-876
+  @fn centsToSteps(temper, midi, detune, cents)  @ 877-881
+  @fn stepsToCents(temper, midi, detune, n)  @ 882-885
+  @fn adjustRow(uuid, rw, right, mods)  @ 888-905
       -- Adjust rw's field one step: right increments, Ctrl coarse. The generic write both editors drive.
-  @fn fxFieldWidget(host, index, fd, entry)  @ 985-1002
+  @fn fxFieldWidget(host, index, fd, entry)  @ 909-926
       -- The label-less value control for one fx field: dropdown, temper-step stepper, or number
       -- stepper. Used by the docked strip; id keys ImGui per field.
   -- FX chain strip (docked; edits the chain under the caret in place)
-  @fn stripColumns(fx)  @ 1014-1027
+  @fn stripColumns(fx)  @ 938-951
       -- Columns: one per stage, holding its currently-visible fields (adding is the header picker).
-  @fn paramRange(col)  @ 1030
+  @fn paramRange(col)  @ 954
       -- A stage walks header(0)..fields.
-  @fn stripHeight(cols)  @ 1034-1043
+  @fn stripHeight(cols)  @ 958-967
       -- Reserve the band from live ImGui metrics; trailing pad matches the gap above row 1
       -- so the space below the last field row reads the same as the space above the first.
-  @fn stripPlan()  @ 1047-1056
+  @fn stripPlan()  @ 971-980
       -- While focused the strip pins to stripHost (so a just-minted empty chain renders on the add
       -- slot alone); unfocused it auto-shows the non-empty chain under the caret. nil = nothing to draw.
-  @fn clampCursor(cols)  @ 1058-1064
-  @fn typedChar()  @ 1067-1070
+  @fn clampCursor(cols)  @ 982-988
+  @fn typedChar()  @ 991-994
       -- First printable character typed this frame -- drives type-to-open on the add slot.
-  @fn cancelStrip()  @ 1074-1077
+  @fn cancelStrip()  @ 998-1001
       -- Revert the chain to its keyboard-entry baseline, then request exit. Shared by the strip's own
       -- Esc, the cancel button, and the add-slot picker's Esc (which aborts a still-empty gesture).
-  @fn handleStripKeys(plan)  @ 1079-1115
-  @fn headerActions(plan)  @ 1119-1125
+  @fn handleStripKeys(plan)  @ 1003-1039
+  @fn headerActions(plan)  @ 1043-1049
       -- clear wipes the chain; commit/cancel end the keyboard session (mouse parity for
       -- Enter/Esc). Always live, so the mouse can act without entering keyboard mode.
-  @fn mark(onCursor)  @ 1129-1133
+  @fn mark(onCursor)  @ 1053-1057
       -- ▸ on the keyboard cursor's field (only while the strip holds focus); a blank keeps the label
       -- column aligned.
-  @fn kindItems(currentKind)  @ 1136-1142
+  @fn kindItems(currentKind)  @ 1060-1066
       -- Picker items for every fx kind; flags the caller's current kind (nil on the add slot).
-  @fn drawAddStage(host, onCursor)  @ 1145-1155
+  @fn drawAddStage(host, onCursor)  @ 1069-1079
       -- The add-stage picker, drawn as the chain's rightmost slot so the cursor can arrow to it.
-  @fn clickToCursor(host, stage, param)  @ 1159-1165
+  @fn clickToCursor(host, stage, param)  @ 1083-1089
       -- Clicking a row's label moves the selection chip there and takes strip focus, snapshotting
       -- on entry so commit/cancel have a baseline (mirrors editFx's transactional open).
-  @fn drawStage(host, col, onStage, cur, isFirst, isLast)  @ 1169-1196
+  @fn drawStage(host, col, onStage, cur, isFirst, isLast)  @ 1093-1120
       -- One stage as a vertical group: header (title-as-swap-picker + reorder/del aligned to the field
       -- column), a divider band, then a labelled chrome widget per field. Title picking swaps in place.
-  @fn stageDivider(dl, groupRight, y0, y1)  @ 1199-1210
+  @fn stageDivider(dl, groupRight, y0, y1)  @ 1123-1134
       -- Full-height rule with a mid-line cut-out holding a small » flow marker.
-  @fn nameDividers(dl, cols, lefts, rights, top)  @ 1214-1225
+  @fn nameDividers(dl, cols, lefts, rights, top)  @ 1138-1149
       -- Rule under each real stage's title (add slot excepted), reaching toward the flanking >>
       -- rules so titles and dividers read as one grid — see docs/trackerRender.md § FX chain strip.
-  @fn drawFxStrip(plan, x, y, w)  @ 1227-1257
-  @fn editFx()  @ 1261-1277
+  @fn drawFxStrip(plan, x, y, w)  @ 1151-1181
+  @fn editFx()  @ 1185-1201
       -- Super+X enters the docked strip on tv:fxHostForEdit's host (selection mints, else caret pins);
       -- an empty chain opens on the add slot. A new host re-baselines the snapshot; the same host keeps it.
-  @fn openNewTakeModal()  @ 1282-1296
+  @fn openNewTakeModal()  @ 1206-1220
       -- New take from the tracker: name + length modal, mint a parked slot, select it.
       -- Length seeds from / persists to the project-tier newTakeBeats config.
-  @fn duplicateUnpooledTake()  @ 1319-1321
+  @fn duplicateUnpooledTake()  @ 1243-1245
       -- Mint the clone, open take-properties focused on name. No rebind: slot selection re-binds
       -- to the clone before any commit lands, so the seed and commit both target the clone.
 
 # Public API (tr:*)
   -- Region overlay keymap
   -- Take properties modal helper
-  @api tr:openTakeProperties(args)  @ 1391-1429
+  @api tr:openTakeProperties(args)  @ 1315-1353
       -- onClose fires exactly once, after the whole modal chain — including
       -- any truncate-confirm follow-up. Two sources of "chain done":
       -- the apply path (callback ran, valid input, either direct apply or
@@ -181,166 +181,166 @@
       -- exclusive: once a valid callback starts the apply chain it claims
       -- ownership, so modalHost's onClose becomes a no-op.
   -- Page interface (rendering only; trackerPage drives lifecycle and the dispatch)
-  @api tr:toolbarSegments()  @ 1433
-  @api tr:renderBody(_, w, h, dispatch)  @ 1435-1473
-  @api tr:renderStatusBar(_)  @ 1475-1477
-  @api tr:focusState()  @ 1482-1490
+  @api tr:toolbarSegments()  @ 1357
+  @api tr:renderBody(_, w, h, dispatch)  @ 1359-1397
+  @api tr:renderStatusBar(_)  @ 1399-1401
+  @api tr:focusState()  @ 1406-1414
       -- suppressKbd: modal/picker owns input. pageSuppressed: unused (swing/temper on own page).
       -- acceptCmds: page visible and no item active (toolbar focus is transient; see IsAnyItemActive).
 
 # Uses (outbound edges)
   @use call    chrome.checkbox  @ 200
-  @use call    chrome.colour  @ stageDivider:1206 nameDividers:1219 renderBody:1441
-  @use call    chrome.disabledIf  @ 176 paletteActions:225,229 drawStage:1178,1182
-  @use call    chrome.dropdown  @ fxFieldWidget:989
-  @use call    chrome.gridWidth  @ renderBody:1448
+  @use call    chrome.colour  @ stageDivider:1130 nameDividers:1143 renderBody:1365
+  @use call    chrome.disabledIf  @ 176 paletteActions:225,229 drawStage:1102,1106
+  @use call    chrome.dropdown  @ fxFieldWidget:913
+  @use call    chrome.gridWidth  @ renderBody:1372
   @use call    chrome.headingLabel  @ 89,113,134,143,160,198
   @use call    chrome.libPicker  @ 150,168,182
-  @use call    chrome.numberStepper  @ 136 fxFieldWidget:995,999
-  @use call    chrome.paletteHeader  @ drawFxStrip:1232
-  @use call    chrome.pickerIsActive  @ drawFxStrip:1251 focusState:1484
-  @use call    chrome.popChromeStyles  @ drawFxStrip:1256
-  @use call    chrome.pushChromeStyles  @ drawFxStrip:1230
-  @use call    chrome.requestPickerOpen  @ handleStripKeys:1092,1112 editFx:1272 1347,1348
-  @use call    chrome.row  @ drawFxStrip:1233
-  @use call    cm.get  @ 39,136,145,192,200,804 drawSampleDropdown:56 drawStatusBar:559,560,561,563,564 openNewTakeModal:1289,1291 openTakeProperties:1393
+  @use call    chrome.numberStepper  @ 136 fxFieldWidget:919,923
+  @use call    chrome.paletteHeader  @ drawFxStrip:1156
+  @use call    chrome.pickerIsActive  @ drawFxStrip:1175 focusState:1408
+  @use call    chrome.popChromeStyles  @ drawFxStrip:1180
+  @use call    chrome.pushChromeStyles  @ drawFxStrip:1154
+  @use call    chrome.requestPickerOpen  @ handleStripKeys:1016,1036 editFx:1196 1271,1272
+  @use call    chrome.row  @ drawFxStrip:1157
+  @use call    cm.get  @ 39,136,145,192,200,728 drawSampleDropdown:56 drawStatusBar:559,560,561,563,564 openNewTakeModal:1213,1215 openTakeProperties:1317
   @use call    cm.getAt  @ 38
-  @use call    cm.set  @ drawSampleDropdown:79 201 openNewTakeModal:1292
-  @use call    cmgr.doAfter  @ 1353
+  @use call    cm.set  @ drawSampleDropdown:79 201 openNewTakeModal:1216
+  @use call    cmgr.doAfter  @ 1277
   @use call    cmgr.invoke  @ 154,187
-  @use call    cmgr.keySpec  @ 812
-  @use call    cmgr.keysFor  @ 818,819
-  @use call    cmgr.scope  @ 586,661,1323,1360
+  @use call    cmgr.keySpec  @ 736
+  @use call    cmgr.keysFor  @ 742,743
+  @use call    cmgr.scope  @ 586,1247,1284
   @use call    ds.get  @ drawSampleDropdown:57 163,177 drawStatusBar:565
   @use call    facade.get  @ arrange:25
-  @use call    gridPane.draw  @ renderBody:1455
-  @use call    gridPane.geom  @ renderBody:1458
-  @use call    gridPane.handleKeys  @ renderBody:1466
-  @use call    gridPane.handleMouse  @ renderBody:1464
-  @use call    help.anchor  @ renderBody:1459
-  @use call    help.registerPage  @ 667
-  @use call    help.wasOpenAtFrameStart  @ renderBody:1464,1466
-  @use call    imgui.AlignTextToFramePadding  @ 133 mark:1130 drawStage:1190
+  @use call    gridPane.draw  @ renderBody:1379
+  @use call    gridPane.geom  @ renderBody:1382
+  @use call    gridPane.handleKeys  @ renderBody:1390
+  @use call    gridPane.handleMouse  @ renderBody:1388
+  @use call    help.anchor  @ renderBody:1383
+  @use call    help.registerPage  @ 591
+  @use call    help.wasOpenAtFrameStart  @ renderBody:1388,1390
+  @use call    imgui.AlignTextToFramePadding  @ 133 mark:1054 drawStage:1114
   @use call    imgui.Attach  @ drawTree:502
-  @use call    imgui.BeginChild  @ drawFxStrip:1231
-  @use call    imgui.BeginGroup  @ drawAddStage:1146 drawStage:1171
-  @use call    imgui.Button  @ 154,187,840,841,848,852,1307,1311 paletteActions:226,230 headerActions:1120,1122,1124 drawStage:1179,1183,1186
-  @use call    imgui.CalcTextSize  @ drawTree:494,495 stageDivider:1203
+  @use call    imgui.BeginChild  @ drawFxStrip:1155
+  @use call    imgui.BeginGroup  @ drawAddStage:1070 drawStage:1095
+  @use call    imgui.Button  @ 154,187,764,765,772,776,1231,1235 paletteActions:226,230 headerActions:1044,1046,1048 drawStage:1103,1107,1110
+  @use call    imgui.CalcTextSize  @ drawTree:494,495 stageDivider:1127
   @use call    imgui.CreateListClipper  @ drawTree:501
-  @use call    imgui.DrawList_AddLine  @ stageDivider:1207,1208 nameDividers:1223
-  @use call    imgui.DrawList_AddTextEx  @ stageDivider:1209
-  @use call    imgui.Dummy  @ drawStage:1187
-  @use call    imgui.EndChild  @ drawFxStrip:1255
-  @use call    imgui.EndGroup  @ drawAddStage:1154 drawStage:1195
+  @use call    imgui.DrawList_AddLine  @ stageDivider:1131,1132 nameDividers:1147
+  @use call    imgui.DrawList_AddTextEx  @ stageDivider:1133
+  @use call    imgui.Dummy  @ drawStage:1111
+  @use call    imgui.EndChild  @ drawFxStrip:1179
+  @use call    imgui.EndGroup  @ drawAddStage:1078 drawStage:1119
   @use call    imgui.GetContentRegionAvail  @ drawTreeItem:435
-  @use call    imgui.GetCursorScreenPos  @ renderBody:1447
-  @use call    imgui.GetFontSize  @ stageDivider:1202
-  @use call    imgui.GetFrameHeight  @ stripHeight:1037 drawStage:1170 nameDividers:1215
-  @use call    imgui.GetInputQueueCharacter  @ typedChar:1068
-  @use call    imgui.GetItemRectMax  @ scrollFollow:419 drawFxStrip:1244
-  @use call    imgui.GetItemRectMin  @ scrollFollow:418 drawFxStrip:1243
-  @use call    imgui.GetKeyMods  @ handlePaletteKeys:398 813 addColumn:887 handleStripKeys:1085
+  @use call    imgui.GetCursorScreenPos  @ renderBody:1371
+  @use call    imgui.GetFontSize  @ stageDivider:1126
+  @use call    imgui.GetFrameHeight  @ stripHeight:961 drawStage:1094 nameDividers:1139
+  @use call    imgui.GetInputQueueCharacter  @ typedChar:992
+  @use call    imgui.GetItemRectMax  @ scrollFollow:419 drawFxStrip:1168
+  @use call    imgui.GetItemRectMin  @ scrollFollow:418 drawFxStrip:1167
+  @use call    imgui.GetKeyMods  @ handlePaletteKeys:398 737 addColumn:811 handleStripKeys:1009
   @use call    imgui.GetScrollY  @ scrollFollow:422
-  @use call    imgui.GetStyleVar  @ drawTree:493 stripHeight:1038 nameDividers:1216
-  @use call    imgui.GetTextLineHeightWithSpacing  @ stripHeight:1039
-  @use call    imgui.GetWindowDrawList  @ drawFxStrip:1235
+  @use call    imgui.GetStyleVar  @ drawTree:493 stripHeight:962 nameDividers:1140
+  @use call    imgui.GetTextLineHeightWithSpacing  @ stripHeight:963
+  @use call    imgui.GetWindowDrawList  @ drawFxStrip:1159
   @use call    imgui.GetWindowHeight  @ scrollFollow:421
   @use call    imgui.GetWindowPos  @ scrollFollow:420
-  @use call    imgui.InputText  @ 828,837,1302,1305
+  @use call    imgui.InputText  @ 752,761,1226,1229
   @use call    imgui.InputTextWithHint  @ paletteFindBox:251
   @use call    imgui.InvisibleButton  @ drawParamPalette:534
-  @use call    imgui.IsAnyItemActive  @ drawFxStrip:1251 focusState:1488
+  @use call    imgui.IsAnyItemActive  @ drawFxStrip:1175 focusState:1412
   @use call    imgui.IsItemActive  @ paletteFindBox:253
-  @use call    imgui.IsItemClicked  @ clickToCursor:1160
-  @use call    imgui.IsKeyPressed  @ handlePaletteKeys:356 813,849,850,853,1308,1309,1312 addColumn:888 handleStripKeys:1080
+  @use call    imgui.IsItemClicked  @ clickToCursor:1084
+  @use call    imgui.IsKeyPressed  @ handlePaletteKeys:356 737,773,774,777,1232,1233,1236 addColumn:812 handleStripKeys:1004
   @use call    imgui.IsMouseClicked  @ drawParamPalette:543
-  @use call    imgui.IsWindowAppearing  @ 823,1299
-  @use call    imgui.IsWindowFocused  @ renderBody:1462
+  @use call    imgui.IsWindowAppearing  @ 747,1223
+  @use call    imgui.IsWindowFocused  @ renderBody:1386
   @use call    imgui.IsWindowHovered  @ drawParamPalette:543
   @use call    imgui.ListClipper_Begin  @ drawTree:504
   @use call    imgui.ListClipper_End  @ drawTree:515
   @use call    imgui.ListClipper_GetDisplayRange  @ drawTree:510
   @use call    imgui.ListClipper_IncludeItemByIndex  @ drawTree:507
   @use call    imgui.ListClipper_Step  @ drawTree:509
-  @use call    imgui.PopFont  @ renderBody:1444
-  @use call    imgui.PopID  @ 838
-  @use call    imgui.PopStyleColor  @ renderBody:1443
-  @use call    imgui.PushFont  @ renderBody:1440
-  @use call    imgui.PushID  @ 836
-  @use call    imgui.PushStyleColor  @ renderBody:1441
-  @use call    imgui.RadioButton  @ 845
-  @use call    imgui.SameLine  @ 90,114,135,144,153,161,175,186,199,840,841,844,851,1310 paletteActions:228 drawTreeItem:451,453 headerActions:1121,1123 mark:1132 drawStage:1177,1181,1185,1192 drawFxStrip:1240
-  @use call    imgui.Separator  @ drawParamPalette:527 drawFxStrip:1234
-  @use call    imgui.SetCursorScreenPos  @ drawFxStrip:1229
-  @use call    imgui.SetKeyboardFocusHere  @ paletteFindBox:250 drawParamPalette:532 827,833,1301
+  @use call    imgui.PopFont  @ renderBody:1368
+  @use call    imgui.PopID  @ 762
+  @use call    imgui.PopStyleColor  @ renderBody:1367
+  @use call    imgui.PushFont  @ renderBody:1364
+  @use call    imgui.PushID  @ 760
+  @use call    imgui.PushStyleColor  @ renderBody:1365
+  @use call    imgui.RadioButton  @ 769
+  @use call    imgui.SameLine  @ 90,114,135,144,153,161,175,186,199,764,765,768,775,1234 paletteActions:228 drawTreeItem:451,453 headerActions:1045,1047 mark:1056 drawStage:1101,1105,1109,1116 drawFxStrip:1164
+  @use call    imgui.Separator  @ drawParamPalette:527 drawFxStrip:1158
+  @use call    imgui.SetCursorScreenPos  @ drawFxStrip:1153
+  @use call    imgui.SetKeyboardFocusHere  @ paletteFindBox:250 drawParamPalette:532 751,757,1225
   @use call    imgui.SetNextItemWidth  @ paletteFindBox:249
   @use call    imgui.SetScrollY  @ scrollFollow:423,424
   @use call    imgui.SmallButton  @ drawTreeItem:452,454
-  @use call    imgui.Text  @ drawStatusBar:576 825,831,1300,1304 mark:1131 drawStage:1190 renderBody:1442
+  @use call    imgui.Text  @ drawStatusBar:576 749,755,1224,1228 mark:1055 drawStage:1114 renderBody:1366
   @use call    imgui.TextDisabled  @ drawTree:489
-  @use call    modalHost.isOpen  @ focusState:1484
-  @use call    modalHost.registerKind  @ 800,1298
-  @use call    tuning.findTemper  @ 39 slideTemper:948
-  @use call    tuning.midiToStep  @ centsToSteps:954,955
-  @use call    tuning.transposeStep  @ stepsToCents:959
-  @use call    tv.activeTemper  @ slideTemper:948
-  @use call    tv.addExtraCol  @ addColumn:898
-  @use call    tv.addFxStage  @ drawAddStage:1150
+  @use call    modalHost.isOpen  @ focusState:1408
+  @use call    modalHost.registerKind  @ 724,1222
+  @use call    tuning.findTemper  @ 39 slideTemper:872
+  @use call    tuning.midiToStep  @ centsToSteps:878,879
+  @use call    tuning.transposeStep  @ stepsToCents:883
+  @use call    tv.activeTemper  @ slideTemper:872
+  @use call    tv.addExtraCol  @ addColumn:822
+  @use call    tv.addFxStage  @ drawAddStage:1074
   @use call    tv.armLearn  @ handlePaletteKeys:399 drawTreeItem:455
   @use call    tv.automateParam  @ paletteActions:226 handlePaletteKeys:405 drawTreeItem:472
   @use call    tv.barBeatSub  @ drawStatusBar:571
   @use call    tv.currentSlotIdx  @ 116
-  @use call    tv.currentTrackIdx  @ 91,115 openNewTakeModal:1283
-  @use call    tv.duplicateBoundUnpooled  @ duplicateUnpooledTake:1320
-  @use call    tv.ec  @ 173,1354 paletteActions:223 drawStatusBar:557 scopedAction:862 removeOrHideCol:906
-  @use call    tv.fxHostAtCursor  @ stripPlan:1048
-  @use call    tv.fxHostForEdit  @ editFx:1262
-  @use call    tv.gotoTake  @ 1338,1339
-  @use call    tv.gotoTrack  @ 1336,1337
-  @use call    tv.hideExtraCol  @ removeOrHideCol:909
+  @use call    tv.currentTrackIdx  @ 91,115 openNewTakeModal:1207
+  @use call    tv.duplicateBoundUnpooled  @ duplicateUnpooledTake:1244
+  @use call    tv.ec  @ 173,1278 paletteActions:223 drawStatusBar:557 scopedAction:786 removeOrHideCol:830
+  @use call    tv.fxHostAtCursor  @ stripPlan:972
+  @use call    tv.fxHostForEdit  @ editFx:1186
+  @use call    tv.gotoTake  @ 1262,1263
+  @use call    tv.gotoTrack  @ 1260,1261
+  @use call    tv.hideExtraCol  @ removeOrHideCol:833
   @use call    tv.learnFxGuid  @ handlePaletteKeys:400 drawTreeItem:448
   @use call    tv.listParams  @ buildPlan:304,307
-  @use call    tv.moveFxStage  @ handleStripKeys:1094 drawStage:1179,1183
-  @use call    tv.newParkedTake  @ openNewTakeModal:1293
-  @use call    tv.noteByUuid  @ hostPitch:950
-  @use call    tv.noteFx  @ stripPlan:1050 drawAddStage:1152 clickToCursor:1161 editFx:1264
+  @use call    tv.moveFxStage  @ handleStripKeys:1018 drawStage:1103,1107
+  @use call    tv.newParkedTake  @ openNewTakeModal:1217
+  @use call    tv.noteByUuid  @ hostPitch:874
+  @use call    tv.noteFx  @ stripPlan:974 drawAddStage:1076 clickToCursor:1085 editFx:1188
   @use call    tv.paletteCursor  @ handlePaletteKeys:370 drawTree:492
   @use call    tv.paletteExpanded  @ buildPlan:302
   @use call    tv.paletteFilter  @ paletteFindBox:251 handlePaletteKeys:374 drawTree:489,496 drawParamPalette:536,537
   @use call    tv.paletteParam  @ paletteActions:225
-  @use call    tv.paramBinding  @ paletteActions:224 removeOrHideCol:907
+  @use call    tv.paramBinding  @ paletteActions:224 removeOrHideCol:831
   @use call    tv.paramTargets  @ drawParamPalette:536
   @use call    tv.pickTake  @ 126
   @use call    tv.pickTrack  @ 106
-  @use call    tv.pollLearn  @ renderBody:1462
-  @use call    tv.pruneEmptyRegion  @ renderBody:1451,1468
-  @use call    tv.removeFxStage  @ handleStripKeys:1109 drawStage:1186
-  @use call    tv.replaceFxStage  @ drawStage:1175
+  @use call    tv.pollLearn  @ renderBody:1386
+  @use call    tv.pruneEmptyRegion  @ renderBody:1375,1392
+  @use call    tv.removeFxStage  @ handleStripKeys:1033 drawStage:1110
+  @use call    tv.replaceFxStage  @ drawStage:1099
   @use call    tv.setColSwingSlot  @ 45
   @use call    tv.setFxExpanded  @ handlePaletteKeys:380,384,400,409 drawTreeItem:446
-  @use call    tv.setFxField  @ adjustRow:968,974,979 fxFieldWidget:990,997,1000
-  @use call    tv.setNoteFx  @ cancelStrip:1075 headerActions:1120
+  @use call    tv.setFxField  @ adjustRow:892,898,903 fxFieldWidget:914,921,924
+  @use call    tv.setNoteFx  @ cancelStrip:999 headerActions:1044
   @use call    tv.setPaletteFilter  @ paletteFindBox:252 handlePaletteKeys:365,406
-  @use call    tv.setRowPerBeat  @ 137,1328
-  @use call    tv.setStripCursor  @ handleStripKeys:1114 drawFxStrip:1228
+  @use call    tv.setRowPerBeat  @ 137,1252
+  @use call    tv.setStripCursor  @ handleStripKeys:1038 drawFxStrip:1152
   @use call    tv.setSwingSlot  @ 44
   @use call    tv.setTemper  @ 39
   @use call    tv.setTemperSlot  @ 41
-  @use call    tv.showDelay  @ addColumn:895
+  @use call    tv.showDelay  @ addColumn:819
   @use call    tv.showFx  @ drawTreeItem:452
-  @use call    tv.stripCursor  @ clampCursor:1059 editFx:1273
-  @use call    tv.takeName  @ openTakeProperties:1404
-  @use call    tv.tick  @ renderBody:1472
+  @use call    tv.stripCursor  @ clampCursor:983 editFx:1197
+  @use call    tv.takeName  @ openTakeProperties:1328
+  @use call    tv.tick  @ renderBody:1396
   @use call    tv.unautomateParam  @ removeAutomation:215,218
-  @use call    tv.wireGroupLifetime  @ 1370
-  @use call    util.assign  @ fxSeed:930
-  @use call    util.atomic  @ 37,44,45 drawSampleDropdown:79 openNewTakeModal:1290
-  @use call    util.clamp  @ adjustRow:967,978 clampCursor:1060,1062 handleStripKeys:1098,1100,1105
-  @use call    util.deepClone  @ clickToCursor:1161 editFx:1266
-  @use call    util.instantiate  @ 918
-  @use call    util.oneOf  @ addColumn:896
+  @use call    tv.wireGroupLifetime  @ 1294
+  @use call    util.assign  @ fxSeed:854
+  @use call    util.atomic  @ 37,44,45 drawSampleDropdown:79 openNewTakeModal:1214
+  @use call    util.clamp  @ adjustRow:891,902 clampCursor:984,986 handleStripKeys:1022,1024,1029
+  @use call    util.deepClone  @ clickToCursor:1085 editFx:1190
+  @use call    util.instantiate  @ 842
+  @use call    util.oneOf  @ addColumn:820
   @use require generators  @ 10
-  @use require gridPane  @ 918
+  @use require gridPane  @ 842
   @use require imgui  @ 16
   @use require tuning  @ 9
   @use require util  @ 8
