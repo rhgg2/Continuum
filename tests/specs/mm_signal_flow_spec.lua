@@ -159,4 +159,38 @@ return {
       t.eq(last.chans, nil, 'wholesale carries no per-chan set — tm reads nil as all 16')
     end,
   },
+
+  -- `flushed` = mm reprojected the take (a self-write). Consumers keying baselines
+  -- off take content (the trackerPage watcher) resync on it instead of reading the
+  -- write as an external mutation.
+  {
+    name = 'mm.flushed fires after reload on a structural modify, not on a clean one',
+    run = function()
+      local fm = harness.bareMM()
+      local stream = recordOn(fm, { 'reload', 'flushed' })
+      fm:modify(function() end)     -- clean: nothing structural, no reprojection
+      t.eq(table.concat(stream, ','), 'reload', 'clean modify does not fire flushed')
+      fm:modify(function()
+        fm:add{ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100 }
+      end)
+      t.eq(table.concat(stream, ','), 'reload,reload,flushed',
+        'structural modify fires flushed after reload')
+    end,
+  },
+
+  {
+    name = 'mm.flushed fires on a load that reprojected the take, silent on the clean re-load',
+    run = function()
+      local h = harness.mk()
+      -- Bare note, no sidecars: load mints a uuid, dirties, reprojects.
+      h.reaper:seedMidi(h.fm:take(),
+        { notes = { { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100 } } })
+      local fired = 0
+      h.fm:subscribe('flushed', function() fired = fired + 1 end)
+      h.fm:load(h.fm:take())
+      t.eq(fired, 1, 'normalising load fired flushed')
+      h.fm:load(h.fm:take())        -- sidecars now present: clean read, no write
+      t.eq(fired, 1, 'clean re-load did not fire flushed')
+    end,
+  },
 }

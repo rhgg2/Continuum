@@ -697,11 +697,12 @@ function mm:load(newTake)
 
   ----- Rebuild dense indices, reproject the normalised model, persist metadata
   rebuild(metadata)
-  if dirty then flushTake() end
+  local wroteTake = dirty
+  if wroteTake then flushTake() end
   saveMetadata()
 
   --contract: load fires signals in order: takeSwapped, notesDeduped, uuidsReassigned
-  --contract: then: ccsDeduped, ccsReconciled, collisionsResolved, reload
+  --contract: then: ccsDeduped, ccsReconciled, collisionsResolved, reload, flushed (iff wrote)
   --contract: dedup/reconcile signals fire only when their event kind has ≥1 record
   --emits: takeSwapped    -- nil; only when load received a different take
   if takeSwapped           then fire('takeSwapped',     nil) end
@@ -717,6 +718,8 @@ function mm:load(newTake)
   if #collisionEvents > 0  then fire('collisionsResolved', { events = collisionEvents }) end
   --emits: reload -- { wholesale=true }; full re-read, every event object is new
   fire('reload', { wholesale = true })
+  --emits: flushed -- nil; flushTake reprojected the take (self-write, not an external mutation)
+  if wroteTake then fire('flushed') end
 
   perf.count('events', noteCount + ccCount)
   perf.stop('load')
@@ -825,6 +828,8 @@ function mm:modify(fn)
     if flushPending then
       flushPending = false
       flushTake()
+      --emits: flushed -- nil; flushTake reprojected the take (self-write, not an external mutation)
+      fire('flushed')
     end
   end
   if not ok then print('Error in modify: ' .. tostring(err)) end

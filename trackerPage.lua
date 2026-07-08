@@ -57,6 +57,10 @@ local function takeHash()
   return ok and h or nil
 end
 
+-- Owned flushes move the hash: resync so only foreign writes read as external.
+-- See docs/trackerPage.md § External-mutation watcher (the bridge-undo incident).
+mm:subscribe('flushed', function() lastHash = takeHash() end)
+
 ----------- PUBLIC
 
 ----- Take lifecycle (take ops on tm, view-state on tv)

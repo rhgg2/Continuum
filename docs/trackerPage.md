@@ -472,6 +472,31 @@ right after `tm:bindTake`: for a parked take (`am:isParkedTake`) it re-points
 the track tier at the selection's track, before `seedSharedSlots` and the
 rest read per-track config.
 
+## External-mutation watcher
+
+`lastHash` is a `MIDI_GetHash` baseline of the bound take, snapshotted
+after each frame's draw. When `bindFromSelection` finds the take's hash
+drifted from the baseline, something outside the stack wrote the take
+(REAPER's MIDI editor, an undo), and the page reloads tm from REAPER.
+
+The stack's own writes must not read as external. Draw-time edits never
+did — they land between the hash check and the end-of-frame snapshot.
+But a tick-time edit (the reaper bridge mutating through tm before the
+page draws) lands outside that bracket, and the next check fired a
+spurious `reloadFromReaper`. That reload was worse than wasted work: in
+REAPER, its take re-read cleared the pending undo capture before the
+defer cycle yielded, so a bridge mutation's labelled undo block
+finalised *empty* — a point that reverted nothing (the 2026-07
+bridge-undo incident). Hence the `flushed` subscription: mm announces
+every reprojection of the take, and the page resyncs the baseline
+instead of reloading, leaving the watcher to fire only on genuinely
+foreign hashes.
+
+Residue: a raw `reaper.*` edit to the bound take from a bridge chunk
+still needs `coord:reloadAfterExternalMutation()`, and that explicit
+reload wipes the chunk's undo capture just the same. Mutate through tm
+when the edit must be undoable.
+
 ### Empty grid: one state
 
 No resolvable take ⇒ `tv.grid.cols` is empty ⇒ the grid is replaced by

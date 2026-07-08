@@ -210,6 +210,45 @@ return {
     end,
   },
 
+  -- The watcher must not read the stack's own writes as external: a tick-time bridge
+  -- edit through tm used to trip a spurious reload, which in REAPER wiped the pending
+  -- undo capture — see docs/trackerPage.md § External-mutation watcher.
+  {
+    name = 'an owned tm flush resyncs the watcher baseline; only a foreign write trips the reload',
+    run = function(harness)
+      local h = harness.mk()
+      h.reaper:setProjectTracks{ 'tr1' }
+      h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
+                                pos = 0, len = 1, poolGuid = '{p1}' })
+      h.reaper:seedMidi('tr1/t1',
+        { notes = { { ppq = 0, endppq = 60, chan = 1, pitch = 60, vel = 100 } } })
+      local stack
+      local origPublishDebug = fakeFacade.publishDebug
+      fakeFacade.publishDebug = function(_, s) stack = s end
+      local tp = newTrackerPage(h.cm, h.ds, h.cmgr, nil, {})
+      fakeFacade.publishDebug = origPublishDebug
+      fakeArrange.takeByKey['0:0'] = 'tr1/t1'
+      tp:bindFromSelection()
+      local wholesale = 0
+      stack.mm:subscribe('reload', function(d)
+        if d and d.wholesale then wholesale = wholesale + 1 end
+      end)
+
+      -- Bridge-style tick-time edit: through tm, outside any render pass.
+      local first; for _, n in stack.mm:notes() do first = n; break end
+      stack.tm:assignEvent(stack.tm:byUuid(first.uuid), { pitch = 67 })
+      stack.tm:flush()
+      tp:bindFromSelection()
+      t.eq(wholesale, 0, 'own write did not read as an external mutation')
+
+      -- A genuinely foreign take write must still trip the watcher.
+      h.reaper:seedMidi('tr1/t1',
+        { notes = { { ppq = 0, endppq = 60, chan = 1, pitch = 72, vel = 100 } } })
+      tp:bindFromSelection()
+      t.eq(wholesale, 1, 'foreign write tripped the watcher reload')
+    end,
+  },
+
   {
     name = 'bindFromSelection re-keys cm on return from dormancy even when the take is unchanged',
     run = function(harness)

@@ -1101,6 +1101,12 @@ function M.new()
     return true
   end
 
+  -- Content digest: the serialised blob itself (equal content ⇔ equal hash).
+  function r.MIDI_GetHash(take, _)
+    local ok, blob = r.MIDI_GetAllEvts(take)
+    return ok, blob
+  end
+
   function r.MIDI_GetNote(take, i)
     local n = midi(take).notes[i + 1]
     if not n then return false end
