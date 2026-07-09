@@ -356,11 +356,17 @@ local function delayToPPQ(delay) return timing.delayToPPQ(delay, mm:resolution()
 -- feeds generator events + fixed lane occupancy. see design/note-macros-v2.md § The anchor generalized
 local function eachWindowNote(chan, startL, endL, fn)
   for laneIdx, col in ipairs(channels[chan].columns.notes) do
+    -- A lane is monophonic + ppq-sorted, so a note's sounding tail ends at the next note's onset
+    -- (or the window): mirror rebuildTails' laneClip so an OPEN ceiling never streams a phantom overlap.
+    local onsets = {}
     for _, evt in ipairs(col.events) do
-      if evt.evType ~= 'pa' and evt.ppqL ~= nil then
-        local hi = (evt.endppqL == nil or evt.endppqL == util.OPEN) and endL or evt.endppqL
-        if evt.ppqL < endL and hi > startL then fn(laneIdx, evt.ppqL, hi, evt) end
-      end
+      if evt.evType ~= 'pa' and evt.ppqL ~= nil then util.add(onsets, evt) end
+    end
+    for i, evt in ipairs(onsets) do
+      local ceil   = (evt.endppqL == nil or evt.endppqL == util.OPEN) and endL or evt.endppqL
+      local nextOn = onsets[i + 1] and onsets[i + 1].ppqL or endL
+      local hi     = math.min(ceil, nextOn)
+      if evt.ppqL < endL and hi > startL then fn(laneIdx, evt.ppqL, hi, evt) end
     end
   end
 end

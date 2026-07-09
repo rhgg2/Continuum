@@ -146,13 +146,19 @@ local function readbackBody()
   for _, col in ipairs(cols.notes or {}) do
     for _, e in ipairs(col.events) do
       if e.evType ~= 'pa' and e.ppqL ~= nil then
-        util.add(specs, { lane = 1, ppqL = e.ppqL, endppqL = e.endppqL,
+        local endppqL = (e.endppqL == nil or e.endppqL == util.OPEN) and editBody.lengthPpq or e.endppqL
+        util.add(specs, { lane = 1, ppqL = e.ppqL, endppqL = endppqL,
                           pitch = e.pitch, vel = e.vel,
                           detune = e.detune or 0, delay = e.delay or 0, sample = e.sample })
       end
     end
   end
   table.sort(specs, function(a, b) return a.ppqL < b.ppqL end)   -- stable order -> deepEq no-op on reopen
+  -- Lane 1 is the only lane, so a note's tail ends at the next onset: clip so an OPEN/over-long
+  -- ceiling never serialises as an overlap. The trailing note keeps its lengthPpq cap.
+  for i = 1, #specs - 1 do
+    specs[i].endppqL = math.min(specs[i].endppqL, specs[i + 1].ppqL)
+  end
   return { kind = 'notes', lengthPpq = editBody.lengthPpq, root = editBody.root, specs = specs }
 end
 

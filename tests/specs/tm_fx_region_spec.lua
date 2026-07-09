@@ -676,6 +676,33 @@ return {
   },
 
   {
+    name = 'fx region: an OPEN member clips to the next same-lane onset, not the window end',
+    run = function(harness)
+      local h = harness.mk()
+      -- First note is OPEN, successor at ppq 120: membersOf must clip the OPEN tail to 120,
+      -- else the generator sees a phantom [0,240) overlapping [120,240).
+      addNote(h, { pitch = 60, ppq = 0,   endppq = util.OPEN })
+      addNote(h, { pitch = 67, ppq = 120, endppq = 240 })
+
+      local captured
+      generators.kinds.capture = {
+        expand = function(host) captured = host; return { notes = {}, delta = {} } end,
+        mode = 'augment', dest = 'pb', label = 'Capture', defaults = {}, fields = {},
+      }
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+                                   fx = { { kind = 'capture' } } } })
+      h.tm:rebuild()
+      generators.kinds.capture = nil
+
+      t.truthy(captured, 'the capture kind ran')
+      local byPitch = {}
+      for _, n in ipairs(captured.notes) do byPitch[n.pitch] = n end
+      t.eq(byPitch[60].endppqL, 120, 'the OPEN member clips to the next same-lane onset')
+      t.eq(byPitch[67].endppqL, 240, 'the trailing member fills to the window end')
+    end,
+  },
+
+  {
     name = 'fx region: host.pb carries authored pb breakpoints, excluding absorber fakes',
     run = function(harness)
       local h = harness.mk()

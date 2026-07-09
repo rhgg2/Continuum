@@ -66,6 +66,17 @@ local function notesBody()
   }
 end
 
+-- An OPEN first note followed by a finite one: readback must clip the open tail to the successor.
+local function openNotesBody()
+  return {
+    kind = 'notes', lengthPpq = 960, root = 60,
+    specs = {
+      { lane = 1, ppqL = 0,   endppqL = util.OPEN, pitch = 60, vel = 100, detune = 0, delay = 0 },
+      { lane = 1, ppqL = 240, endppqL = 480,       pitch = 64, vel = 100, detune = 0, delay = 0 },
+    },
+  }
+end
+
 local function curveBody()
   return {
     kind = 'curve', lengthPpq = 960,
@@ -122,6 +133,21 @@ return {
       t.eq(spec.chan, nil, 'no chan field leaks into the commit')
       t.eq(body.lengthPpq, 960, 'loop length rides the snapshot forward')
       t.eq(body.root,       60, 'root rides the snapshot forward')
+    end,
+  },
+
+  {
+    name = 'readback clips an OPEN note to its successor onset, not the loop length',
+    run = function(harness)
+      local h, pe, get = withEditor(harness, openNotesBody())
+      -- Ctrl+= nudges the row-0 note's pitch: keeps both notes (and the OPEN tail) but fires a write-through.
+      setKeys({ fakeImGui.Key_Equal }, fakeImGui.Mod_Ctrl)
+      pe:handleInput(function() end)
+
+      local specs = get().specs
+      t.eq(#specs, 2, 'both notes survive the pitch nudge')
+      t.eq(specs[1].endppqL, 240, 'the OPEN note clips to the next onset, not lengthPpq (960)')
+      t.eq(specs[2].endppqL, 480, 'the trailing note keeps its authored ceiling')
     end,
   },
 
