@@ -140,6 +140,7 @@ local declarations = {
   { 'colour.tracker.rowBarStart', {'base.zone6', 0.4} },
   { 'colour.tracker.selection',   {'base.zone10', 0.5} },
   { 'colour.tracker.localScrim',  {'base.zone1',  0.25} },  -- local-mode wash over instances the caret isn't inside
+  { 'colour.tracker.focusScrim',  {'base.zone8', 0.5} },  -- disabled-style wash (editor.bg) over the grid while the fx strip or param palette holds focus
   { 'colour.tracker.accent',      'base.zone6' },
   { 'colour.tracker.mute',        'colour.tracker.negative' },
   { 'colour.tracker.solo',        'yellow'     },

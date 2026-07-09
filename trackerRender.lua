@@ -219,11 +219,14 @@ local function removeAutomation(col)
   end
 end
 
+-- one-shot: a mouse automate (button / tree double-click) fired — hand palette focus back to the grid.
+local automateReq = false
+
 local function paletteActions()
   local col   = tv.grid.cols[tv:ec():col()]
   local bound = col and col.type == 'cc' and tv:paramBinding(col.midiChan, col.cc)
   chrome.disabledIf(not tv:paletteParam(), function()
-    if ImGui.Button(ctx, 'automate##param') then tv:automateParam() end
+    if ImGui.Button(ctx, 'automate##param') then tv:automateParam(); automateReq = true end
   end)
   ImGui.SameLine(ctx, 0, 4)
   chrome.disabledIf(not bound, function()
@@ -244,6 +247,15 @@ local stripFocus    = false
 local stripHost     = nil    -- uuid the strip is pinned to while focused; lets a just-minted empty chain render
 local stripSnapshot = nil    -- {host, fx}: chain state at keyboard-entry; Esc reverts to it, Enter commits
 local stripExitReq  = false  -- one-shot: drop stripFocus after dispatch, so the exit Esc isn't re-dispatched
+
+-- Disabled-style wash over the whole current child window: the strip and palette
+-- dim each other (the grid dims via renderBody) so the pane holding focus reads as the only live one.
+local function washCurrentWindow()
+  local wx, wy = ImGui.GetWindowPos(ctx)
+  local ww, wh = ImGui.GetWindowSize(ctx)
+  ImGui.DrawList_AddRectFilled(ImGui.GetWindowDrawList(ctx), wx, wy, wx + ww, wy + wh,
+                               chrome.colour('tracker.focusScrim'))
+end
 
 local function paletteFindBox()
   ImGui.SetNextItemWidth(ctx, -1)
@@ -469,7 +481,7 @@ local function drawTreeItem(it, cur, showLearn, btns)
                           param = it.prm.index, label = it.prm.name }
       paletteFocus = 'tree'
     end
-    if r.doubleClicked then tv:automateParam() end
+    if r.doubleClicked then tv:automateParam(); automateReq = true end
   end
 end
 
@@ -539,12 +551,14 @@ local function drawParamPalette(x, y, h)
 
       -- Reconcile paletteFocus with ImGui state: find box wins unless parking,
       -- a pane click grabs tree focus, clicking elsewhere releases to the grid.
-      if not focusChanged then
+      if automateReq then paletteFocus, automateReq = nil, false   -- mouse automate: hand focus back to the grid
+      elseif not focusChanged then
         local clicked = ImGui.IsWindowHovered(ctx) and ImGui.IsMouseClicked(ctx, 0)
         if findActive and not parking then paletteFocus = 'find'
         elseif clicked then paletteFocus = paletteFocus or 'tree'
         elseif paletteFocus and not childFocused then paletteFocus = nil end
       end
+      if stripFocus then washCurrentWindow() end   -- strip holds focus: dim the palette
     end,
   }
 end
@@ -927,24 +941,26 @@ end
 -- The label-less value control for one fx field: dropdown, temper-step stepper, or number
 -- stepper. Used by the docked strip; id keys ImGui per field.
 local function fxFieldWidget(host, index, fd, entry)
-  local value = entry[fd.field]
-  local id    = 'fx_' .. index .. '_' .. fd.field
+  local value   = entry[fd.field]
+  local id      = 'fx_' .. index .. '_' .. fd.field
+  local changed = false
   if fd.widget == 'choice' then
     local pick = chrome.dropdown(id, fd.options[choiceIndex(fd, value)].l, choiceLabels(fd))
-    if pick then tv:setFxField(host, index, fd.field, fd.options[pick].v) end
+    if pick then tv:setFxField(host, index, fd.field, fd.options[pick].v); changed = true end
   elseif fd.widget == 'stepInterval' then
     local temper = slideTemper()
     local midi, detune = hostPitch(host)
     local per = #temper.cents
     local rv, n = chrome.numberStepper(id, centsToSteps(temper, midi, detune, value),
                     { width = 70, min = -2 * per, max = 2 * per })
-    if rv then tv:setFxField(host, index, fd.field, stepsToCents(temper, midi, detune, n)) end
+    if rv then tv:setFxField(host, index, fd.field, stepsToCents(temper, midi, detune, n)); changed = true end
   elseif fd.widget == 'pattern' then
-    if ImGui.Button(ctx, patternSummary(value) .. '##' .. id) then launchPattern(host, index, fd, entry) end
+    if ImGui.Button(ctx, patternSummary(value) .. '##' .. id) then launchPattern(host, index, fd, entry); changed = true end
   else
     local rv, n = chrome.numberStepper(id, value or 0, { width = 70, min = fd.min, max = fd.max })
-    if rv then tv:setFxField(host, index, fd.field, n) end
+    if rv then tv:setFxField(host, index, fd.field, n); changed = true end
   end
+  return changed
 end
 
 ----- FX chain strip (docked; edits the chain under the caret in place)
@@ -1060,14 +1076,16 @@ local drawFxStrip, editFx, stripPlan do
     tv:setStripCursor(cur)
   end
 
-  -- clear wipes the chain; commit/cancel end the keyboard session (mouse parity for
-  -- Enter/Esc). Always live, so the mouse can act without entering keyboard mode.
+  -- clear wipes the chain (always live). commit/cancel end the keyboard session, so they gate
+  -- on strip focus (mouse parity for Enter/Esc) — there's no session to end when unfocused.
   local function headerActions(plan)
     if ImGui.Button(ctx, 'clear')  then tv:setNoteFx(plan.host, util.REMOVE) end
     ImGui.SameLine(ctx, 0, 4)
-    if ImGui.Button(ctx, 'commit') then stripExitReq = true end
-    ImGui.SameLine(ctx, 0, 4)
-    if ImGui.Button(ctx, 'cancel') then cancelStrip() end
+    chrome.disabledIf(not stripFocus, function()
+      if ImGui.Button(ctx, 'commit') then stripExitReq = true end
+      ImGui.SameLine(ctx, 0, 4)
+      if ImGui.Button(ctx, 'cancel') then cancelStrip() end
+    end)
   end
 
   -- ▸ on the keyboard cursor's field (only while the strip holds focus); a blank keeps the label
@@ -1100,14 +1118,17 @@ local drawFxStrip, editFx, stripPlan do
     ImGui.EndGroup(ctx)
   end
 
-  -- Clicking a row's label moves the selection chip there and takes strip focus, snapshotting
-  -- on entry so commit/cancel have a baseline (mirrors editFx's transactional open).
-  local function clickToCursor(host, stage, param)
-    if not ImGui.IsItemClicked(ctx) then return end
+  -- Take strip focus and move the selection chip to (stage, param), snapshotting on entry so
+  -- commit/cancel have a baseline (mirrors editFx's transactional open). Shared by a label
+  -- click and mouse interaction with a field's control.
+  local function enterStrip(host, stage, param)
     if not stripFocus then stripSnapshot = { host = host, fx = util.deepClone(tv:noteFx(host)) } end
     stripHost = host
     tv:setStripCursor{ stage = stage, param = param }
     stripFocus = true
+  end
+  local function clickToCursor(host, stage, param)
+    if ImGui.IsItemClicked(ctx) then enterStrip(host, stage, param) end
   end
 
   -- One stage as a vertical group: header (title-as-swap-picker + reorder/del aligned to the field
@@ -1136,7 +1157,8 @@ local drawFxStrip, editFx, stripPlan do
       ImGui.AlignTextToFramePadding(ctx); ImGui.Text(ctx, f.fd.label)
       clickToCursor(host, col.index, k)
       ImGui.SameLine(ctx, MARK_W + LABEL_W)
-      fxFieldWidget(host, col.index, f.fd, f.entry)
+      local touched = fxFieldWidget(host, col.index, f.fd, f.entry)
+      if touched or ImGui.IsItemActive(ctx) then enterStrip(host, col.index, k) end
     end
     ImGui.EndGroup(ctx)
   end
@@ -1194,6 +1216,7 @@ local drawFxStrip, editFx, stripPlan do
       end
       for ci = 1, #plan.cols - 1 do stageDivider(dl, rights[ci], top, bottom) end
       nameDividers(dl, plan.cols, lefts, rights, top)
+      if paletteFocus then washCurrentWindow() end   -- palette holds focus: dim the strip
       if stripFocus and not modalHost:isOpen()
          and not chrome.pickerIsActive() and not ImGui.IsAnyItemActive(ctx) then
         handleStripKeys(plan)
@@ -1395,6 +1418,10 @@ function tr:renderBody(_, w, h, dispatch)
   end
   local gridH  = plan and (h - plan.height) or h
   gridPane:draw(gridW, gridH)
+  if stripFocus or paletteFocus then   -- focus lives in the strip/palette: wash the grid to disabled
+    ImGui.DrawList_AddRectFilled(ImGui.GetWindowDrawList(ctx),
+      ox, oy, ox + gridW, oy + gridH, chrome.colour('tracker.focusScrim'))
+  end
   if plan then drawFxStrip(plan, ox, oy + gridH, gridW) end
   -- Full body width (grid + palette) so the cheat-sheet can flow across both.
   local g = gridPane:geom()
@@ -1404,6 +1431,10 @@ function tr:renderBody(_, w, h, dispatch)
   tv:pollLearn(ImGui.IsWindowFocused(ctx, ImGui.FocusedFlags_AnyWindow))
 
   if not help:wasOpenAtFrameStart() then gridPane:handleMouse() end
+  if stripFocus and ImGui.IsMouseClicked(ctx, 0) then   -- a click in the grid commits the strip and returns focus
+    local mx, my = ImGui.GetMousePos(ctx)
+    if mx >= ox and mx < ox + gridW and my >= oy and my < oy + gridH then stripExitReq = true end
+  end
   local kr = dispatch and dispatch(self:focusState()) or { commandHeld = {} }
   if not help:wasOpenAtFrameStart() then gridPane:handleKeys(kr) end
   if stripExitReq then   -- exit after this frame's dispatch saw us focused; prune a husk left empty
