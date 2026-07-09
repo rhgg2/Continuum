@@ -14,7 +14,7 @@
 --invariant: clipboard symmetry is on (row, chan), not absolute ppq
 --shape: grid = { cols, chanFirstCol, chanLastCol, lane1Col, numRows }
 --invariant: grid.chanFirst/Last/lane1Col are chan-keyed; numRows is int
---shape: gridCol core = { type, midiChan, [lane], [cc], label, events, width }
+--shape: gridCol core = { type, midiChan, [lane], [cc], label, events, width, [normalized], [bipolar], ['14bit'] }
 --shape: gridCol parts = { parts, stopPos, partAt, partStart, showDelay }
 --shape: gridCol render = { cells={[y]=evt}, overflow, offGrid, ghosts, [tails] }
 --shape: selection = { row1, row2, col1, col2, part1, part2 }
@@ -961,17 +961,28 @@ do
     local update
     if util.oneOf('cc at pc', type) then
       local d = hexDigit[char]; if not d then return end
-      update = { val = util.clamp(util.setDigit(evt and evt.val or 0, d, 1 - digit, 16, half), 0, 127) }
+      if col['14bit'] then
+        -- 4 hex digits over a display integer (val*256), forced even: the 14-bit LSB
+        -- never fills bit 0. Stored val is the fractional cc mm's midiBlob splits.
+        local disp = util.setDigit(math.floor((evt and evt.val or 0) * 256 + 0.5), d, 3 - digit, 16, half)
+        disp = math.floor(util.clamp(disp, 0, 0x7FFE) / 2) * 2
+        update = { val = disp / 256 }
+      else
+        update = { val = util.clamp(util.setDigit(evt and evt.val or 0, d, 1 - digit, 16, half), 0, 127) }
+      end
     elseif type == 'pb' then
       local old = evt and evt.val or 0
+      local unipolar = col.normalized and not col.bipolar
       if char == string.byte('-') then
-        if old == 0 then return end
+        if old == 0 or unipolar then return end
         update = { val = -old }
       else
         local d = char - string.byte('0')
         if d < 0 or d > 9 then return end
         local sign = old < 0 and -1 or 1
-        update = { val = sign * util.setDigit(math.abs(old), d, 3 - digit, 10, half) }
+        local mag  = util.setDigit(math.abs(old), d, 3 - digit, 10, half)
+        if col.normalized then mag = math.min(mag, 1000) end
+        update = { val = sign * mag }
       end
     else
       return
@@ -1894,6 +1905,8 @@ local nudge do
   end
 
   local function valueBounds(col)
+    if col.normalized then return (col.bipolar and -1000 or 0), 1000 end
+    if col['14bit']   then return 0, 127 + 127 / 128 end
     if col.type == 'pb' then local lim = cm:get('pbRange') * 100; return -lim, lim end
     return 0, 127
   end
@@ -3256,6 +3269,7 @@ function tv:rebuild(takeChanged)
     grid.lane1Col     = {}
 
     local noteDelayCfg = ds:get('noteDelay') or {}
+    local colDisplay   = ds:get('columnDisplay') or {}
     local trackerMode  = cm:get('trackerMode')
     local temper       = tuning.findTemper(cm:get('temper'), cm:get('tempers'))
     local pitchWidth   = temper and temper.cellWidth or 3
@@ -3275,6 +3289,16 @@ function tv:rebuild(takeChanged)
         cells       = {},
         cellKind    = {},   -- [row] = 'member' | 'plain'; the leaf-edit dispatch tag
       }
+      -- Curve/automation display flags ride the take DS, keyed like extraColumns:
+      -- pb per channel, cc per number. Absent = plain hex/decimal column.
+      local disp  = colDisplay[chan]
+      local flags = disp and (type == 'cc' and (disp.ccs or {})[key]
+                          or  type == 'pb' and disp.pb)
+      if flags then
+        gridCol.normalized = flags.normalized
+        gridCol.bipolar    = flags.bipolar
+        gridCol['14bit']   = flags['14bit']
+      end
       ec:decorateCol(gridCol, pitchWidth)   -- stamps parts/stopPos/partAt/partStart/width
       util.add(grid.cols, gridCol)
       grid.chanFirstCol[chan] = grid.chanFirstCol[chan] or #grid.cols

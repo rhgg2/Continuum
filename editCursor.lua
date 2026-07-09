@@ -858,11 +858,15 @@ do
     col.parts = parts
     pitchWidth = pitchWidth or 3
     local pitch = { width = pitchWidth, stops = { 0, pitchWidth - 1 } }
+    -- 14-bit cc widens the scalar part to 4 hex digits (even last: 0000..7FFE).
+    local val14 = { width = 4, stops = { 0, 1, 2, 3 } }
 
     local stopPos, partAt, partStart = {}, {}, {}
     local x = 0
     for _, name in ipairs(parts) do
-      local p = name == 'pitch' and pitch or PARTS[name]
+      local p = name == 'pitch' and pitch
+             or (name == 'val' and col['14bit'] and val14)
+             or PARTS[name]
       local first = #stopPos + 1
       for _, off in ipairs(p.stops) do
         util.add(stopPos,   x + off)

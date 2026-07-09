@@ -85,6 +85,20 @@ return {
   },
 
   {
+    -- The 14-bit flag widens the scalar to 4 hex digits (even last: 0000..7FFE).
+    -- Same 'val' part, four stops; partStart layout drives 2- vs 4-digit entry.
+    name = '14-bit cc: parts={val}; stopPos={0,1,2,3}; width=4',
+    run = function()
+      local c = decorate({ type = 'cc', ['14bit'] = true })
+      t.deepEq(c.parts,     {'val'},                     'parts')
+      t.deepEq(c.stopPos,   {0, 1, 2, 3},                'four hex stops')
+      t.eq    (c.width,     4,                           'width')
+      t.deepEq(c.partAt,    {'val','val','val','val'},   'partAt')
+      t.deepEq(c.partStart, {1, 1, 1, 1},                'partStart')
+    end,
+  },
+
+  {
     name = 'partAt mirrors stops: note+delay = {pitch,pitch,vel,vel,delay,delay,delay}',
     run = function()
       local c = decorate(mkCol('note', true))

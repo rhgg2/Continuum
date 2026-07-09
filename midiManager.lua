@@ -170,7 +170,9 @@ local noteSidecarEncode, noteSidecarDecode, ccSidecarEncode, ccSidecarDecode do
     elseif cc.evType == 'pa' then
       lo, hi = (cc.vel or 0) & 0x7F, 0
     else
-      lo, hi = (cc.val or 0) & 0x7F, 0
+      -- 14-bit cc carries its value on the wire (MSB/LSB); the sidecar keeps the
+      -- integer part for identity -- val regenerates from the wire. floor: bit-op needs int.
+      lo, hi = math.floor(cc.val or 0) & 0x7F, 0
     end
 
     return SIDECAR_MAGIC

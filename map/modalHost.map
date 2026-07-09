@@ -1,4 +1,4 @@
-@module modalHost  src=modalHost.lua  loc=151  sha=d013d39  mode=chunk  self=modalHost
+@module modalHost  src=modalHost.lua  loc=151  sha=a0cb94a  mode=chunk  self=modalHost
 @deps ctx, chrome
 
 # Invariants & contracts

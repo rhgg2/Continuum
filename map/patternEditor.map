@@ -1,4 +1,4 @@
-@module patternEditor  src=patternEditor.lua  loc=248  sha=59b23ca  mode=chunk  self=pe
+@module patternEditor  src=patternEditor.lua  loc=248  sha=a0cb94a  mode=chunk  self=pe
 @deps facade, chrome, gui, modalHost
 
 # Invariants & contracts

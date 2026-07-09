@@ -141,9 +141,13 @@ local function renderPB(evt)
   else return '····' end
 end
 
-local function renderCC(evt)
-  if evt and evt.val then return string.format('%02X', evt.val)
-  else return '··' end
+local function renderCC(evt, col)
+  local wide = col and col['14bit']
+  if evt and evt.val then
+    if wide then return string.format('%04X', math.floor(evt.val * 256 + 0.5)) end
+    return string.format('%02X', evt.val)
+  end
+  return wide and '····' or '··'
 end
 
 -- One glyph per fx kind; the fx-region cell shows the region's primary kind.

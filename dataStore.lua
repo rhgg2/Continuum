@@ -20,6 +20,7 @@ local function print(...) return util.print(...) end
 local registry = {
   groups              = 'take',
   paramAutomation     = 'take',
+  columnDisplay       = 'take',
   noteDelay           = 'take',
   swing               = 'take',
   extraColumns        = 'take',
