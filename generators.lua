@@ -38,13 +38,13 @@ local function retrig(stream, host, params, ctx)
   local notes = {}
   local i = 0
   while startL + i * step < endL do
-    notes[#notes + 1] = {
+    util.add(notes, {
       ppqL    = startL + i * step,
       endppqL = math.min(startL + (i + 1) * step, endL),
       pitch   = h.pitch,
       vel     = math.max(1, math.min(127, h.vel + i * ramp)),
       detune  = h.detune or 0,
-    }
+    })
     i = i + 1
   end
   return { notes = notes, delta = {} }
@@ -62,13 +62,13 @@ local function trill(stream, host, params, ctx)
   local i = 0
   while startL + i * step < endL do
     local odd = i % 2 == 1   -- even tiles carry the host pitch; odd tiles the alternation
-    notes[#notes + 1] = {
+    util.add(notes, {
       ppqL    = startL + i * step,
       endppqL = math.min(startL + (i + 1) * step, endL),
       pitch   = odd and altPitch  or h.pitch,
       vel     = h.vel,
       detune  = odd and altDetune or (h.detune or 0),
-    }
+    })
     i = i + 1
   end
   return { notes = notes, delta = {} }
@@ -78,7 +78,7 @@ end
 local function playingAt(events, t)
   local active = {}
   for _, n in ipairs(events) do
-    if n.ppqL <= t and t < n.endppqL then active[#active + 1] = n end
+    if n.ppqL <= t and t < n.endppqL then util.add(active, n) end
   end
   table.sort(active, function(a, b)
     return a.pitch * 100 + (a.detune or 0) < b.pitch * 100 + (b.detune or 0)
@@ -112,10 +112,10 @@ local function arp(stream, host, params, ctx)
     local active = playingAt(stream.notes, at)
     if #active > 0 then
       local src = active[arpIndex(#active, dir, i) + 1]
-      notes[#notes + 1] = {
+      util.add(notes, {
         ppqL = at, endppqL = math.min(at + step, endL),
         pitch = src.pitch, vel = src.vel, detune = src.detune or 0,
-      }
+      })
     end
     i = i + 1
     at = startL + i * step
@@ -138,8 +138,8 @@ local function ostinato(stream, host, params, ctx)
       if onset >= startL and onset < endL then
         local endppqL = math.min(base + spec.endppqL, endL)
         for _, voice in ipairs(playingAt(stream.notes, onset)) do
-          notes[#notes + 1] = { ppqL = onset, endppqL = endppqL,
-                                pitch = voice.pitch, vel = spec.vel, detune = voice.detune or 0 }
+          util.add(notes, { ppqL = onset, endppqL = endppqL,
+                                pitch = voice.pitch, vel = spec.vel, detune = voice.detune or 0 })
         end
       end
     end
@@ -165,11 +165,11 @@ local function vibrato(stream, host, params, ctx)
   while at < endL do
     local gain = onset > 0 and math.min(1, (at - startL) / onset) or 1
     local sign = k % 2 == 0 and 1 or -1
-    delta[#delta + 1] = { ppqL = at, val = sign * gain * depth, shape = 'slow' }
+    util.add(delta, { ppqL = at, val = sign * gain * depth, shape = 'slow' })
     k  = k + 1
     at = startL + period / 4 + k * period / 2
   end
-  delta[#delta + 1] = { ppqL = endL, val = 0, shape = 'slow' }
+  util.add(delta, { ppqL = endL, val = 0, shape = 'slow' })
   return { notes = {}, delta = delta }
 end
 
@@ -206,7 +206,7 @@ local function slide(stream, host, params, ctx)
   local glideStart = math.max(startL, arrive - over)
 
   local delta = {}
-  local function bp(ppqL, val, shape) delta[#delta + 1] = { ppqL = ppqL, val = val, shape = shape } end
+  local function bp(ppqL, val, shape) util.add(delta, { ppqL = ppqL, val = val, shape = shape }) end
   bp(startL, 0, glideStart > startL and 'step' or 'slow')   -- hold true pitch until the slur
   if glideStart > startL then bp(glideStart, 0, 'slow') end   -- slur begins (half-cosine ease)
   bp(arrive, target, 'step')                                -- arrived; hold to the handoff
@@ -224,11 +224,56 @@ local function autopan(stream, host, params, ctx)
   local k, at = 0, startL + period / 4
   while at < endL do
     local sign = k % 2 == 0 and 1 or -1
-    delta[#delta + 1] = { ppqL = at, val = sign * depth, shape = 'slow' }
+    util.add(delta, { ppqL = at, val = sign * depth, shape = 'slow' })
     k  = k + 1
     at = startL + period / 4 + k * period / 2
   end
-  delta[#delta + 1] = { ppqL = endL, val = 0, shape = 'slow' }
+  util.add(delta, { ppqL = endL, val = 0, shape = 'slow' })
+  return { notes = {}, delta = delta }
+end
+
+-- Linear-interpolated normalized value at authored ppq `a`; points ascend in ppq, edges clamp flat.
+local function curveAt(points, a)
+  if a <= points[1].ppq then return points[1].val end
+  for i = 2, #points do
+    local prev, cur = points[i - 1], points[i]
+    if a <= cur.ppq then
+      local span = cur.ppq - prev.ppq
+      return span > 0 and prev.val + (cur.val - prev.val) * (a - prev.ppq) / span or cur.val
+    end
+  end
+  return points[#points].val
+end
+
+--contract: lfo tiles a normalized curve at 1/period QN, mapping each val by centre + scale
+--contract: emits absolute cc breakpoints (augment onto rest), clamped 0..127; dest cc1, no UI yet
+--contract: each cycle stretches the body lengthPpq -> period ticks; both window edges seeded
+local function lfo(stream, host, params, ctx)
+  local body   = params.pattern
+  local loop   = body and body.lengthPpq
+  local points = body and body.points
+  if not (loop and loop > 0 and points and #points > 0) then return { notes = {}, delta = {} } end
+  local startL, endL = stream.window[1], stream.window[2]
+  local period  = periodTicks(params.period, ctx.resolution)
+  local stretch = period / loop
+  local centre, amp = params.centre or 64, params.scale or 0
+  local function ccVal(norm) return util.clamp(util.round(centre + amp * norm), 0, 127) end
+
+  -- Seed startL (phase 0); tile interior cycles, skipping the ppq==loop endpoint (owned by the next
+  -- cycle's phase 0, or by the endL seed) so a loop-closed curve emits no duplicate boundary breakpoint.
+  local delta = { { ppqL = startL, val = ccVal(curveAt(points, 0)), shape = points[1].shape } }
+  local base = startL
+  while base < endL do
+    for _, p in ipairs(points) do
+      local at = base + p.ppq * stretch
+      if at > startL and at < endL and p.ppq < loop then
+        delta[#delta + 1] = { ppqL = at, val = ccVal(p.val), shape = p.shape, tension = p.tension }
+      end
+    end
+    base = base + period
+  end
+  local phaseEnd = ((endL - startL) % period) / stretch   -- authored ppq at the window's trailing edge
+  delta[#delta + 1] = { ppqL = endL, val = ccVal(curveAt(points, phaseEnd)), shape = 'linear' }
   return { notes = {}, delta = delta }
 end
 
@@ -335,6 +380,17 @@ generators.kinds = {
       { field = 'pattern', label = 'Pattern', widget = 'choice', options = VEL_PATTERNS },
     },
   },
+  lfo = {
+    expand = lfo, mode = 'augment', dest = 1, label = 'LFO',
+    defaults = { period = { 1, 4 }, centre = 64, scale = 63,
+                 pattern = { kind = 'curve', domain = 'normalized', display = 'bipolar', points = {} } },
+    fields = {
+      { field = 'pattern', label = 'Curve',  widget = 'pattern', kind = 'curve' },
+      { field = 'period',  label = 'Period', widget = 'choice', options = PERIODS },
+      { field = 'centre',  label = 'Centre', widget = 'int', base = 1, coarse = 8, min = 0,    max = 127 },
+      { field = 'scale',   label = 'Scale',  widget = 'int', base = 1, coarse = 8, min = -127, max = 127 },  -- amplitude, cc steps
+    },
+  },
 }
 
 -- Resting base for a cc-augment target with no authored automation: bipolar controllers
@@ -344,7 +400,7 @@ for cc = 71, 79 do generators.ccDefaultRest[cc] = 64 end
 
 -- Which kinds the fxEdit modal offers, in order. Every kind works on either host: a region
 -- arpeggiates its covered chord, a single note degenerates cleanly (arp -> retrig, one voice).
-generators.modalOrder = { 'retrig', 'trill', 'arp', 'ostinato', 'velPattern', 'vibrato', 'slide', 'autopan' }
+generators.modalOrder = { 'retrig', 'trill', 'arp', 'ostinato', 'velPattern', 'vibrato', 'slide', 'autopan', 'lfo' }
 
 ----- Region park predicate + windows
 

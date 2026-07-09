@@ -1,4 +1,4 @@
-@module generators  src=generators.lua  loc=397  sha=6712376  mode=namespace  self=generators
+@module generators  src=generators.lua  loc=453  sha=59b23ca  mode=namespace  self=generators
 
 # Invariants & contracts
   @invariant  pure module, no state; a stage is fn(stream, host, params, ctx) -> { notes, delta }
@@ -20,10 +20,10 @@
 
 # Module-level constants
   @const generators = {}  @ 23
-  @const PERIODS = { { l = '1/2', v = { 1, 2 } }, { l = '1/3', v = { 1, 3 } },  @ 262
-  @const SLIDE_TARGETS = { { l = 'Next', v = 'next' }, { l = 'Fixed', v = 'fixed' } }  @ 265
-  @const DIR_OPTIONS = { { l = 'Up', v = 'up' }, { l = 'Down', v = 'down' }, { l...  @ 266
-  @const VEL_PATTERNS = { { l = '> .',     v = { 100, 55 } },  @ 267
+  @const PERIODS = { { l = '1/2', v = { 1, 2 } }, { l = '1/3', v = { 1, 3 } },  @ 307
+  @const SLIDE_TARGETS = { { l = 'Next', v = 'next' }, { l = 'Fixed', v = 'fixed' } }  @ 310
+  @const DIR_OPTIONS = { { l = 'Up', v = 'up' }, { l = 'Down', v = 'down' }, { l...  @ 311
+  @const VEL_PATTERNS = { { l = '> .',     v = { 100, 55 } },  @ 312
 
 # Private functions
   @fn periodTicks(period, resolution)  @ 25-28
@@ -58,25 +58,31 @@
   @fn autopan(stream, host, params, ctx)  @ 219-233
       @contract  auto-pan -> cc-delta breakpoints in cc steps; sine of depth steps at 1/period QN
       @contract  extrema-only, 'slow'-shaped; anchored 0 at both ends so the channel re-centres
-  @fn velPattern(stream, host, params, ctx)  @ 237-254
+  @fn curveAt(points, a)  @ 236-246
+      -- Linear-interpolated normalized value at authored ppq `a`; points ascend in ppq, edges clamp flat.
+  @fn lfo(stream, host, params, ctx)  @ 251-278
+      @contract  lfo tiles a normalized curve at 1/period QN, mapping each val by centre + scale
+      @contract  emits absolute cc breakpoints (augment onto rest), clamped 0..127; dest cc1, no UI yet
+      @contract  each cycle stretches the body lengthPpq -> period ticks; both window edges seeded
+  @fn velPattern(stream, host, params, ctx)  @ 282-299
       @contract  velPattern rewrites stream-note velocities by a pattern; other fields carry verbatim
       @contract  pattern steps per distinct onset (a chord shares one step) and cycles; vel clamps 1..127
 
 # Public API (generators.*)
   -- Generator registry
   -- Region park predicate + windows
-  @api generators.parksNotes(region)  @ 353-359
+  @api generators.parksNotes(region)  @ 409-415
       -- A region parks its covered chord iff it carries a note-dest kind: the chain's final note stream
       -- stands in for the members (ownership by dest, not mode). A husk (no kinds) parks nothing.
-  @api generators.chainDestType(fx, target)  @ 363-369
+  @api generators.chainDestType(fx, target)  @ 419-425
       -- The fold mode a chain presents for one continuous target: replace if any stage targeting it
       -- replaces, else augment -- drives cross-chain layering (a later replace wins). see design/note-macros-v2.md § The fx chain
-  @api generators.parkWindows(regions)  @ 374-395
+  @api generators.parkWindows(regions)  @ 430-451
       -- The single source for "what 4.5 parks over": a note window for a discrete-replace chord, a cc window
       -- per continuous cc target and a pb window per continuous pb target (both replace or augment).
 
 # Uses (outbound edges)
-  @use call    util.add  @ velPattern:239,249 parkWindows:377
-  @use call    util.clamp  @ velPattern:250
-  @use call    util.round  @ velPattern:250
+  @use call    util.add  @ retrig:41 trill:65 playingAt:81 arp:115 ostinato:141 vibrato:168,172 slide:209 autopan:227,231 velPattern:284,294 parkWindows:433
+  @use call    util.clamp  @ lfo:260 velPattern:295
+  @use call    util.round  @ lfo:260 velPattern:295
   @use require util  @ 21

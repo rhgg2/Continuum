@@ -1,6 +1,7 @@
 -- generators.lua: slide glide-in envelope.
 
 local t = require('support')
+local util = require('util')
 local generators = require('generators')
 
 -- Kinds run alone here, so the chain state equals the original: stream == host (the chain head).
@@ -17,6 +18,15 @@ local function slideHost(detune)
   return { window = { 0, 240 }, notes = { { pitch = 60, vel = 100, detune = detune or 0 } } }
 end
 local slideP = { kind = 'slide', over = { 1, 2 }, target = 'next' }
+
+-- A loop-closed triangle in the normalized domain (-1 .. +1 .. -1), one QN long.
+local function triangle()
+  return { kind = 'curve', domain = 'normalized', lengthPpq = 240, points = {
+    { ppq = 0,   val = -1, shape = 'linear' }, { ppq = 60,  val = 0, shape = 'linear' },
+    { ppq = 120, val = 1,  shape = 'linear' }, { ppq = 180, val = 0, shape = 'linear' },
+    { ppq = 240, val = -1, shape = 'linear' },
+  } }
+end
 
 return {
 
@@ -237,6 +247,55 @@ return {
       t.eq(#out.notes, 2, 'both voices gate at the onset')
       t.deepEq({ out.notes[1].pitch, out.notes[2].pitch }, { 60, 64 }, 'ascending by pitch')
       t.eq(out.notes[2].detune, 25, 'detune rides the voice, not the pattern')
+    end,
+  },
+
+  ----- lfo: tile a normalized curve onto an absolute cc via centre + scale
+
+  {
+    name = 'lfo tiles the curve at 1/period QN, mapping each val by centre + scale, edges seeded',
+    run = function()
+      -- res 240, period 1 QN -> 240-tick cycle == lengthPpq (stretch 1); window is two cycles.
+      local out = expand('lfo', { window = { 0, 480 } },
+        { kind = 'lfo', period = { 1, 1 }, centre = 64, scale = 63, pattern = triangle() },
+        { resolution = 240 })
+      t.eq(#out.notes, 0, 'continuous: no structural notes')
+      local d = out.delta
+      t.eq(d[1].ppqL, 0);      t.eq(d[1].val, 1,   'start seed maps norm -1 -> centre-scale (1)')
+      t.eq(d[#d].ppqL, 480);   t.eq(d[#d].val, 1,  'end seed closes the loop back to the start value')
+      local peaks, mid = 0, {}
+      for _, bp in ipairs(d) do
+        if bp.val == 127 then peaks = peaks + 1 end   -- norm +1 -> centre+scale, at ppq 120 & 360
+        if bp.val == 64  then mid[#mid + 1] = bp.ppqL end
+      end
+      t.eq(peaks, 2, 'the +1 apex recurs once per tiled cycle')
+      t.truthy(#mid >= 2, 'the norm-0 midpoints land on centre (64)')
+    end,
+  },
+
+  {
+    name = 'lfo clamps centre +/- scale to 0..127',
+    run = function()
+      local out = expand('lfo', { window = { 0, 240 } },
+        { kind = 'lfo', period = { 1, 1 }, centre = 64, scale = 100, pattern = triangle() },
+        { resolution = 240 })
+      t.eq(out.delta[1].val, 0, 'centre 64 - scale 100 clamps up to 0')
+      local sawHi = false
+      for _, bp in ipairs(out.delta) do if bp.val == 127 then sawHi = true end end
+      t.truthy(sawHi, 'centre 64 + scale 100 clamps down to 127')
+    end,
+  },
+
+  {
+    name = 'lfo with an empty or lengthless curve is inert (no delta)',
+    run = function()
+      local base = { kind = 'lfo', period = { 1, 1 }, centre = 64, scale = 63 }
+      local empty = expand('lfo', { window = { 0, 240 } },
+        util.assign({}, base, { pattern = { kind = 'curve', lengthPpq = 240, points = {} } }), { resolution = 240 })
+      t.eq(#empty.delta, 0, 'no points -> nothing to emit')
+      local lengthless = expand('lfo', { window = { 0, 240 } },
+        util.assign({}, base, { pattern = { kind = 'curve', points = { { ppq = 0, val = 0 } } } }), { resolution = 240 })
+      t.eq(#lengthless.delta, 0, 'no lengthPpq -> no cycle to tile')
     end,
   },
 
