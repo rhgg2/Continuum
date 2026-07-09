@@ -118,6 +118,9 @@ direct. Compact, but clear.
 
 - Comments should not contain in-progress work context.
 - This repo is closures-over-state, not objects-with-methods.
+- Tables that cross a function or pass boundary (layout plans, geometry,
+  results) get role-named fields — `xLo/xHi`, `chanLeft`, `pitchWidth`,
+  never `x1/x2/hW`. Bare coordinate names are for tight local math only.
 - Scope tightly: wrap private helpers in `local fn do ... end`.
 - Section banners: `----- Name`. Major: `----------- PUBLIC`.
 - No OO-type conventions: no underscore-prefixed "private" names, no

@@ -1,12 +1,24 @@
--- See docs/trackerPage.md for the model. The grid + lane render core, lifted
--- out of trackerRender (P1, design/fx-patterns.md). The host wires it with tv
--- + the shared services and an inputAllowed() gate, and keeps the toolbar,
--- param palette, fx strip, commands and the renderBody orchestration.
+-- gridPane — the tracker grid's render + input core (see docs/trackerPage.md
+-- for the model). Lifted out of trackerRender (P1, design/fx-patterns.md);
+-- the host page wires tv + shared services and an inputAllowed() gate, and
+-- keeps the toolbar, param palette, fx strip, commands and orchestration.
+--
+-- Three coordinate systems appear here; names declare which one is meant:
+--   cell coords — integer grid cells, 0-indexed at the grid origin; headers
+--     at negative y, the row-number gutter at negative x. Inclusive spans
+--     are xLo..xHi / yLo..yHi. The visible grid is viewCols x viewRows.
+--   screen px — cellW/cellH is the pixel size of one cell; gridOriginX/Y
+--     places cell (0,0) on screen. Printer/painter and screenPainter only.
+--   char stops — glyph offsets inside one column's cell text (col.stopPos).
+--
+-- A draw() frame: computeLayout, drawLaneStrip, computeLayout again (lane
+-- drags may rebuild grid.cols), drawTracker. Mouse input inverts the same
+-- transform the draw pass used (gridPainter.fromScreen).
 
 --invariant: grid render + input only; tracker state lives in tv/ec, never cached here
 --invariant: col.x == nil is the visibility predicate; per-column draws must gate on it
 --invariant: cell coords 0-indexed; header rows at -HEADER, row-num gutter at -GUTTER
---invariant: page-persistent state: gridX/Y, dragging, laneConsumed, paintLast
+--invariant: page-persistent state: cellW/H, dragging, laneConsumed, paintLast
 --contract: host supplies inputAllowed() -- folds modal/picker/item-active/palette/strip gates
 local util   = require 'util'
 local groups = require 'groups'
@@ -26,34 +38,34 @@ local cm, cmgr, chrome, gui, tv, inputAllowed =
 local GUTTER      = 5    -- in grid chars: 3-char row num + spacer + region slot
 local HEADER      = 3    -- header rows, fixed; vertical param names truncate to fit, never grow it
 
-local gridX       = nil
-local gridY       = nil
+local cellW       = nil   -- px per cell; set on first computeLayout
+local cellH       = nil
 local gridOriginX = 0
 local gridOriginY = 0
-local gridWidth   = 0
-local gridHeight  = 0
+local viewCols    = 0
+local viewRows    = 0
 local gridPainter = nil   -- cell painter, rebuilt each frame in drawTracker; hit-test reads its fromScreen so draw and hit can't drift
 
-local chanX, chanW, chanOrder, totalWidth = {}, {}, {}, 0
+local chanLeft, chanWidth, chanOrder, totalWidth = {}, {}, {}, 0
 
 --contract: clears col.x on every col before assigning; off-screen cols stay nil
 local function layoutColumns(cols, scrollCol)
   for _, col in ipairs(cols) do col.x = nil end
-  local cX, cW, cOrder = {}, {}, {}
-  local cx = 0
+  local left, width, order = {}, {}, {}
+  local x = 0
   for i = scrollCol, #cols do
     local col = cols[i]
-    if cx + col.width > gridWidth then break end
-    col.x = cx
+    if x + col.width > viewCols then break end
+    col.x = x
     local chan = col.midiChan
-    if cX[chan] == nil then
-      cX[chan] = cx
-      util.add(cOrder, chan)
+    if left[chan] == nil then
+      left[chan] = x
+      util.add(order, chan)
     end
-    cW[chan] = (cx + col.width) - cX[chan]
-    cx = cx + col.width + 1
+    width[chan] = (x + col.width) - left[chan]
+    x = x + col.width + 1
   end
-  return cX, cW, cOrder, math.max(0, cx - 1)
+  return left, width, order, math.max(0, x - 1)
 end
 
 local ctx, font, uiFont = gui.ctx, gui.font, gui.uiFont
@@ -80,9 +92,9 @@ local function renderNote(evt, col, row)
 
   local showDelay   = col and col.showDelay
   local showSample  = col and col.trackerMode
-  local cellWidth   = tv:cellWidth()
+  local pitchWidth  = tv:cellWidth()
   local octaveWidth = tv:octaveWidth()
-  local blank      = string.rep('·', cellWidth)   -- cellWidth dots = empty pitch field
+  local blank       = string.rep('·', pitchWidth)  -- pitchWidth dots = empty pitch field
 
   if not evt then
     local s = blank .. (showSample and ' ··' or '') .. ' ··'
@@ -94,11 +106,11 @@ local function renderNote(evt, col, row)
   if evt.evType ~= 'pa' then
     local note, octave = tv:noteProjection(evt)
     if note then
-      -- Both parts right-aligned in their own fields (note field = cellWidth -
+      -- Both parts right-aligned in their own fields (note field = pitchWidth -
       -- octaveWidth) so the separator and octave units keep fixed columns.
-      label = rightAlign(note, cellWidth - octaveWidth) .. rightAlign(octave, octaveWidth)
+      label = rightAlign(note, pitchWidth - octaveWidth) .. rightAlign(octave, octaveWidth)
     else
-      label = rightAlign(noteName(evt.pitch), cellWidth)
+      label = rightAlign(noteName(evt.pitch), pitchWidth)
     end
   end
   local isPA      = evt.evType == 'pa'
@@ -107,11 +119,11 @@ local function renderNote(evt, col, row)
   local sampleTxt = showSample and (' ' .. (isPA and '··' or string.format('%02X', evt.sample or 0))) or ''
   local text      = noteTxt .. sampleTxt .. ' ' .. velTxt
 
-  -- Sample digits at cellWidth+2, +3 (after note label + trailing space).
+  -- Sample digits at pitchWidth+2, +3 (after note label + trailing space).
   -- Shadowed and negative-delay overrides occupy disjoint ranges.
   local overrides
   if showSample and evt.sampleShadowed then
-    overrides = { [cellWidth + 2] = 'shadowed', [cellWidth + 3] = 'shadowed' }
+    overrides = { [pitchWidth + 2] = 'shadowed', [pitchWidth + 3] = 'shadowed' }
   end
 
   -- delayC is the realised-frame delay; divergence (delay ~= delayC) means
@@ -173,26 +185,23 @@ local function renderCell(evt, col, row)
 end
 
 -- Offset of the gap before the 3 delay digits in a note cell (* marker slot).
--- Layout: pitch(W) + optional sample(3) + ' ' + vel(2); W = active cellWidth.
-local function delayMarkerOffset(col, cellWidth)
-  return cellWidth + (col.trackerMode and 3 or 0) + 1 + 2
+-- Layout: pitch(W) + optional sample(3) + ' ' + vel(2); W = active pitchWidth.
+local function delayMarkerOffset(col, pitchWidth)
+  return pitchWidth + (col.trackerMode and 3 or 0) + 1 + 2
 end
 
 -- The fx badge sits in the pre-vel separator slot -- one column inboard of
 -- the delay-marker slot, so the two markers never collide.
-local function fxMarkerOffset(col, cellWidth)
-  return cellWidth + (col.trackerMode and 3 or 0)
+local function fxMarkerOffset(col, pitchWidth)
+  return pitchWidth + (col.trackerMode and 3 or 0)
 end
 
 ----- Drawing
 
--- A cell adapter over the shared painter: methods speak grid CELLS (integer
--- col/row), the painter maps them to screen through one transform. gX/gY are
--- odd integers, so an integer cell already lands on a whole pixel; snap rounds
--- the fractional cases (centred text, the inset cursor box) crisp, the way the
--- old per-call math.floor did. text is monospace by cell, not by glyph advance.
-local function printer(ctx, gX, gY, x0, y0)
-  local p  = painter.new(ctx, chrome, { ox = x0, oy = y0, sx = gX, sy = gY, snap = true }, 'tracker')
+-- Cell adapter over the shared painter: col/row → screen via one transform.
+-- cellW/cellH are odd integers (whole-pixel landing); snap handles fractional cases.
+local function printer(ctx, cellW, cellH, x0, y0)
+  local p  = painter.new(ctx, chrome, { ox = x0, oy = y0, sx = cellW, sy = cellH, snap = true }, 'tracker')
   local pt = {}
 
   -- One glyph per cell: advance by a whole cell so the grid stays aligned
@@ -205,54 +214,54 @@ local function printer(ctx, gX, gY, x0, y0)
     end
   end
 
-  -- Logical x that centres txt (measured at font/size) across cells x1..x2.
-  local function centreX(x1, x2, txt, font, size)
-    return x1 + ((x2 - x1 + 1) - p.measure(txt, font, size) / gX) / 2
+  -- Logical x that centres txt (measured at font/size) across cells xLo..xHi.
+  local function centreX(xLo, xHi, txt, font, size)
+    return xLo + ((xHi - xLo + 1) - p.measure(txt, font, size) / cellW) / 2
   end
 
   function pt:text(x, y, txt, colour, font)
     cellText(x, y, txt, colour, font, font and 15 or nil)
   end
 
-  function pt:textCentred(x1, x2, y, txt, colour)
-    cellText(centreX(x1, x2, txt), y, txt, colour)
+  function pt:textCentred(xLo, xHi, y, txt, colour)
+    cellText(centreX(xLo, xHi, txt), y, txt, colour)
   end
 
-  function pt:textCentredSmall(x1, x2, y, txt, size, colour, fnt)
+  function pt:textCentredSmall(xLo, xHi, y, txt, size, colour, fnt)
     fnt = fnt or font
-    p.text(centreX(x1, x2, txt, fnt, size), y, colour, txt, fnt, size)
+    p.text(centreX(xLo, xHi, txt, fnt, size), y, colour, txt, fnt, size)
   end
 
   -- A bound cc column's header: the param name one glyph per line, reading
   -- down, bottom-anchored where the horizontal labels sit.
-  function pt:textVertical(x1, x2, yBottom, txt, font, size, colour)
+  function pt:textVertical(xLo, xHi, yBottom, txt, font, size, colour)
     local glyphs = {}
     for char in txt:gmatch(utf8.charpattern) do glyphs[#glyphs + 1] = char end
     for i, char in ipairs(glyphs) do
-      p.text(centreX(x1, x2, char, font, size),
-             yBottom - (#glyphs - i + 1) * size / gY, colour, char, font, size)
+      p.text(centreX(xLo, xHi, char, font, size),
+             yBottom - (#glyphs - i + 1) * size / cellH, colour, char, font, size)
     end
   end
 
   -- Small glyph centred in a single cell: the * tp drops by a note whose
   -- authored delay could not be realised (delay ~= delayC).
   function pt:smallGlyph(x, y, txt, size, colour)
-    local lx = x + (1 - p.measure(txt, font, size) / gX) / 2
-    local ly = y + (1 - size / gY) / 2
+    local lx = x + (1 - p.measure(txt, font, size) / cellW) / 2
+    local ly = y + (1 - size / cellH) / 2
     p.text(lx, ly, colour, txt, font, size)
   end
 
-  function pt:vLine(x, y1, y2, colour)
-    p.segment(x, y1, x, y2 + 1, colour)
+  function pt:vLine(x, yLo, yHi, colour)
+    p.segment(x, yLo, x, yHi + 1, colour)
   end
 
-  function pt:hLine(x1, x2, y, colour, yOff)
+  function pt:hLine(xLo, xHi, y, colour, yOff)
     local ly = y + (yOff or 0)
-    p.segment(x1, ly, x2 + 1, ly, colour)
+    p.segment(xLo, ly, xHi + 1, ly, colour)
   end
 
-  function pt:box(x1, x2, y1, y2, colour)
-    p.fill({ x0 = x1, y0 = y1, x1 = x2 + 1, y1 = y2 + 1 }, colour)
+  function pt:box(xLo, xHi, yLo, yHi, colour)
+    p.fill({ x0 = xLo, y0 = yLo, x1 = xHi + 1, y1 = yHi + 1 }, colour)
   end
 
   return pt, p   -- p: the raw painter, for cell-edge strokes and the hit-test inverse
@@ -268,10 +277,10 @@ end
 -- inside (`hole`, grid units); nil hole washes everything. Overlays the cell pass.
 local function drawLocalScrim(draw, hole, w, h)
   if not hole then draw:box(0, w - 1, 0, h - 1, 'localScrim'); return end
-  if hole.y1 > 0     then draw:box(0, w - 1, 0, hole.y1 - 1, 'localScrim') end
-  if hole.y2 < h - 1 then draw:box(0, w - 1, hole.y2 + 1, h - 1, 'localScrim') end
-  if hole.x1 > 0     then draw:box(0, hole.x1 - 1, hole.y1, hole.y2, 'localScrim') end
-  if hole.x2 < w - 1 then draw:box(hole.x2 + 1, w - 1, hole.y1, hole.y2, 'localScrim') end
+  if hole.yLo > 0     then draw:box(0, w - 1, 0, hole.yLo - 1, 'localScrim') end
+  if hole.yHi < h - 1 then draw:box(0, w - 1, hole.yHi + 1, h - 1, 'localScrim') end
+  if hole.xLo > 0     then draw:box(0, hole.xLo - 1, hole.yLo, hole.yHi, 'localScrim') end
+  if hole.xHi < w - 1 then draw:box(hole.xHi + 1, w - 1, hole.yLo, hole.yHi, 'localScrim') end
 end
 
 -- Vertical param-name header. Names read top-to-bottom, one glyph per row
@@ -282,7 +291,7 @@ local function vnameSize() return math.floor(gui.fontSize.ui * 0.8) end
 
 -- Bottom gap under a vertical name, in rows: clear of the grid's top rule
 -- with a couple of px of breathing room.
-local function vnameGap() return 0.35 + 5 / gridY end
+local function vnameGap() return 0.35 + 5 / cellH end
 
 -- Rotated param name, trimmed to fit the fixed header. Binary search finds
 -- the longest prefix whose rotated strip fits, exact under variable-width fonts.
@@ -292,7 +301,7 @@ local function vname(label)
 
   local len = utf8.len(label) or #label
   if len == 0 then return label end
-  local budget = (HEADER - vnameGap()) * gridY
+  local budget = (HEADER - vnameGap()) * cellH
 
   local function prefixFitting(n)
     local c = utf8.offset(label, n + 1)
@@ -313,24 +322,24 @@ local function vname(label)
   return best or (select(2, prefixFitting(1)))
 end
 
---contract: must run before draws reading chanX/chanW/chanOrder/totalWidth/gridHeight
+--contract: must run before draws reading chanLeft/chanWidth/chanOrder/totalWidth/viewRows
 --contract: calls tv:setGridSize so tv scroll math sees the live viewport
 local function computeLayout(budgetW, budgetH)
   local grid = tv.grid
   local _, scrollCol = tv:scroll()
 
-  if not gridX then
+  if not cellW then
     local charW, charH = ImGui.CalcTextSize(ctx, 'W')
-    gridX = 2 * math.ceil(charW / 2) - 1
-    gridY = 2 * math.ceil(charH / 2) - 1
+    cellW = 2 * math.ceil(charW / 2) - 1
+    cellH = 2 * math.ceil(charH / 2) - 1
   end
 
-  gridWidth  = math.max(1, math.floor(budgetW / gridX) - GUTTER)
+  viewCols = math.max(1, math.floor(budgetW / cellW) - GUTTER)
   local laneRows = laneStripRows()
-  gridHeight = math.max(1, math.floor(budgetH / gridY) - HEADER - 1 - laneRows)
-  tv:setGridSize(gridWidth, gridHeight)
+  viewRows = math.max(1, math.floor(budgetH / cellH) - HEADER - 1 - laneRows)
+  tv:setGridSize(viewCols, viewRows)
 
-  chanX, chanW, chanOrder, totalWidth = layoutColumns(grid.cols, scrollCol)
+  chanLeft, chanWidth, chanOrder, totalWidth = layoutColumns(grid.cols, scrollCol)
 end
 
 ----- Lane strip
@@ -349,18 +358,18 @@ local function drawLaneStrip()
   if laneRows <= 0 then laneConsumed = false; return end
 
   local px, py    = ImGui.GetCursorScreenPos(ctx)
-  local x0        = px + GUTTER * gridX
+  local x0        = px + GUTTER * cellW
   local y0        = py
-  local w         = totalWidth * gridX
-  local h         = laneRows  * gridY
+  local w         = totalWidth * cellW
+  local h         = laneRows  * cellH
   local p         = painter.new(ctx, chrome, {}, 'tracker')
   local scrollRow = select(1, tv:scroll())
   local numRows   = tv.grid.numRows or 0
   -- rowSpan = rows actually rendered (matches grid below).
-  local rowSpan   = math.max(1, math.min(gridHeight, numRows - scrollRow))
+  local rowSpan   = math.max(1, math.min(viewRows, numRows - scrollRow))
   local function rowToX(row) return x0 + (row - scrollRow) / rowSpan * w end
 
-  local pad  = gridY / 2
+  local pad  = cellH / 2
   local yTop = y0 + pad
   local yBot = y0 + h - pad
 
@@ -369,8 +378,8 @@ local function drawLaneStrip()
       local x = math.floor(rowToX(row))
       local isBar, isBeat = tv:rowBeatInfo(row)
       if isBar or isBeat then
-        local x2 = math.floor(rowToX(row + 1))
-        p.fill({ x0 = x, y0 = yTop, x1 = x2, y1 = yBot }, isBar and 'rowBarStart' or 'rowBeat')
+        local xNext = math.floor(rowToX(row + 1))
+        p.fill({ x0 = x, y0 = yTop, x1 = xNext, y1 = yBot }, isBar and 'rowBarStart' or 'rowBeat')
       end
       p.segment(x, yTop, x, yBot, 'laneRowDivider')
     end
@@ -379,11 +388,11 @@ local function drawLaneStrip()
   -- Claim the curve rect as a real item so empty-space drags don't
   -- fall through to the parent window. IsItemActive keeps the strip
   -- "hovered" through a held drag even if the mouse leaves the rect.
-  local cbX, cbY = ImGui.GetCursorScreenPos(ctx)
+  local savedX, savedY = ImGui.GetCursorScreenPos(ctx)
   ImGui.SetCursorScreenPos(ctx, x0, yTop)
   ImGui.InvisibleButton(ctx, '##laneStripHit', math.max(1, w), math.max(1, yBot - yTop))
   local stripHovered = ImGui.IsItemHovered(ctx) or ImGui.IsItemActive(ctx)
-  ImGui.SetCursorScreenPos(ctx, cbX, cbY)
+  ImGui.SetCursorScreenPos(ctx, savedX, savedY)
 
   laneConsumed = false
   local colIdx = tv:ec():col()
@@ -439,9 +448,9 @@ local function drawLaneStrip()
     p.stroke({ x0 = x0, y0 = yTop, x1 = x0 + w, y1 = yBot }, 'rowBeat', 1)
   end
 
-  ImGui.Dummy(ctx, (totalWidth + GUTTER) * gridX, h)
+  ImGui.Dummy(ctx, (totalWidth + GUTTER) * cellW, h)
 
-  local cx, cy = ImGui.GetCursorScreenPos(ctx)
+  local afterX, afterY = ImGui.GetCursorScreenPos(ctx)
   local rows = cm:get('laneStrip.rows') or 0
   ImGui.SetCursorScreenPos(ctx, px - 2, yTop)
   chrome.pushChromeStyles()
@@ -453,24 +462,24 @@ local function drawLaneStrip()
     cm:set('global', 'laneStrip.rows', math.min(LANE_ROW_MAX, rows + 1))
   end
   chrome.popChromeStyles()
-  ImGui.SetCursorScreenPos(ctx, cx, cy)
+  ImGui.SetCursorScreenPos(ctx, afterX, afterY)
 end
 
---contract: assumes computeLayout ran this frame; reads chanX/W/Order, gridOriginX/Y
+--contract: assumes computeLayout ran this frame; reads chanLeft/Width/Order, gridOriginX/Y
 -- Bottom header row for a note column: one ui-font label per part, centred
 -- over that part's char span (PITCH/VEL/DELAY/SAMP). Replaces the old lane number.
 local PART_LABEL = { pitch = 'PITCH', sample = 'SAMP', vel = 'VEL', delay = 'DELAY' }
 
 local function notePartHeaders(col)
   local headers, partAt, stopPos = {}, col.partAt, col.stopPos
-  local s = 1
-  while s <= #partAt do
-    local name, e = partAt[s], s
-    while e < #partAt and partAt[e + 1] == name do e = e + 1 end
+  local first = 1
+  while first <= #partAt do
+    local name, last = partAt[first], first
+    while last < #partAt and partAt[last + 1] == name do last = last + 1 end
     headers[#headers + 1] = {
-      x1 = col.x + stopPos[s], x2 = col.x + stopPos[e], label = PART_LABEL[name],
+      xLo = col.x + stopPos[first], xHi = col.x + stopPos[last], label = PART_LABEL[name],
     }
-    s = e + 1
+    first = last + 1
   end
   return headers
 end
@@ -482,11 +491,11 @@ local function drawTracker()
   local scrollRow, scrollCol, lastVisCol = tv:scroll()
 
   local px, py = ImGui.GetCursorScreenPos(ctx)
-  gridOriginX  = px + GUTTER * gridX
-  gridOriginY  = py + HEADER * gridY
+  gridOriginX  = px + GUTTER * cellW
+  gridOriginY  = py + HEADER * cellH
 
   local numRows = grid.numRows or 0
-  local draw, p = printer(ctx, gridX, gridY, gridOriginX, gridOriginY)
+  local draw, p = printer(ctx, cellW, cellH, gridOriginX, gridOriginY)
   gridPainter = p
   -- Screen-space painter (identity transform) for draws sized in pixels, not
   -- cells: the tail bracket's arc radius and the temperament rule's tick. Colour
@@ -501,8 +510,8 @@ local function drawTracker()
   for _, col in ipairs(grid.cols) do
     if col.x and col.type == 'note' then
       local span = noteSpan[col.midiChan]
-      if span then span.x2 = col.x + col.width - 1
-      else noteSpan[col.midiChan] = { x1 = col.x, x2 = col.x + col.width - 1 } end
+      if span then span.xHi = col.x + col.width - 1
+      else noteSpan[col.midiChan] = { xLo = col.x, xHi = col.x + col.width - 1 } end
     end
   end
   for chan = 1, 16 do
@@ -511,26 +520,26 @@ local function drawTracker()
       local key = tv:isChannelSoloed(chan) and 'solo'
                or tv:isChannelMuted(chan)  and 'mute'
                or 'tracker.chanHeader'
-      draw:textCentred(span.x1, span.x2, -HEADER, 'Ch ' .. chan, key)
+      draw:textCentred(span.xLo, span.xHi, -HEADER, 'Ch ' .. chan, key)
     end
   end
   for _, col in ipairs(grid.cols) do
     if col.x then
-      local xr = col.x + col.width - 1
+      local xHi = col.x + col.width - 1
       local binding = col.type == 'cc' and tv:paramBinding(col.midiChan, col.cc)
       if binding then
         local vertical = vname(binding.label)
-        if not p.textUp((col.x + xr + 1) / 2, -vnameGap(), 'text', vertical, vnameSize()) then
-          draw:textVertical(col.x, xr, -vnameGap(), vertical, uiFont, gui.fontSize.ui, 'text')
+        if not p.textUp((col.x + xHi + 1) / 2, -vnameGap(), 'text', vertical, vnameSize()) then
+          draw:textVertical(col.x, xHi, -vnameGap(), vertical, uiFont, gui.fontSize.ui, 'text')
         end
       else
-        draw:textCentred(col.x, xr, -2.1, col.label, 'text')
+        draw:textCentred(col.x, xHi, -2.1, col.label, 'text')
         if col.type == 'note' then
           for _, h in ipairs(notePartHeaders(col)) do
-            draw:textCentredSmall(h.x1, h.x2, -1.2 + 2 / gridY, h.label, vnameSize(), 'tracker.partHeader', uiFont)
+            draw:textCentredSmall(h.xLo, h.xHi, -1.2 + 2 / cellH, h.label, vnameSize(), 'tracker.partHeader', uiFont)
           end
         elseif col.type == 'cc' then
-          draw:textCentredSmall(col.x, xr, -1.2 + 2 / gridY, tostring(col.cc), vnameSize(), 'tracker.partHeader', uiFont)
+          draw:textCentredSmall(col.x, xHi, -1.2 + 2 / cellH, tostring(col.cc), vnameSize(), 'tracker.partHeader', uiFont)
         end
       end
     end
@@ -538,12 +547,7 @@ local function drawTracker()
 
   draw:hLine(-GUTTER, totalWidth - 1, 0, 'text', -0.25)
 
-  -- for i = 1, #chanOrder - 1 do
-  --   local chan = chanOrder[i]
-  --   draw:vLine(chanX[chan] + chanW[chan], -HEADER, gridHeight - 1, 'separator')
-  -- end
-
-  for y = 0, gridHeight - 1 do
+  for y = 0, viewRows - 1 do
     local row = scrollRow + y
     if row >= numRows then break end
 
@@ -552,8 +556,8 @@ local function drawTracker()
     if isBarStart or isBeatStart then
       local style = isBarStart and 'rowBarStart' or 'rowBeat'
       for chan = 1, 16 do
-        if chanX[chan] then
-          draw:box(chanX[chan], chanX[chan] + chanW[chan] - 1, y, y, style)
+        if chanLeft[chan] then
+          draw:box(chanLeft[chan], chanLeft[chan] + chanWidth[chan] - 1, y, y, style)
         end
       end
     end
@@ -592,7 +596,7 @@ local function drawTracker()
     local ppqLo = inst.anchor.ppq + shift * logPerRow
     local ppqHi = ppqLo + rect.dur
     local yLo = math.max(math.floor(ppqLo / logPerRow + 0.5) - scrollRow, 0)
-    local yHi = math.min(math.floor(ppqHi / logPerRow + 0.5) - scrollRow, gridHeight, numRows - scrollRow)
+    local yHi = math.min(math.floor(ppqHi / logPerRow + 0.5) - scrollRow, viewRows, numRows - scrollRow)
     if yHi > yLo then
       local baseTint = groups.regionKey(inst.colour, 'tint')
       local xMin, xMax, conflicted, cursorIn
@@ -600,10 +604,10 @@ local function drawTracker()
         if col.x then
           local off, sid = tv:streamRefAt(x, chanOrigin, laneOrigin)
           if off and rect.streams[off] and rect.streams[off][sid] then
-            local x1, x2 = col.x, col.x + col.width - 1
-            xMin = math.min(xMin or x1, x1)
-            xMax = math.max(xMax or x2, x2)
-            draw:box(x1, x2, yLo, yHi - 1, baseTint)
+            local xLo, xHi = col.x, col.x + col.width - 1
+            xMin = math.min(xMin or xLo, xLo)
+            xMax = math.max(xMax or xHi, xHi)
+            draw:box(xLo, xHi, yLo, yHi - 1, baseTint)
             local srcCol = (previewing and movePrev.destSrc[x]) or x
             local cells  = grid.cols[srcCol] and grid.cols[srcCol].cells
             for y = yLo, yHi - 1 do
@@ -612,9 +616,9 @@ local function drawTracker()
               local st  = evt and evt.uuid and tv:stateOf(evt.uuid)
               if st == 'conflicted' then conflicted = true end
               local key = st and groups.tintKey(st)
-              if key then draw:box(x1, x2, y, y, key)
+              if key then draw:box(xLo, xHi, y, y, key)
               elseif not evt and deleted[srcCol] and deleted[srcCol][row] then
-                draw:box(x1, x2, y, y, groups.tintKey('overridden'))
+                draw:box(xLo, xHi, y, y, groups.tintKey('overridden'))
               end
             end
             if x == cursorCol and cursorPpq >= ppqLo and cursorPpq < ppqHi then
@@ -633,27 +637,28 @@ local function drawTracker()
           p.border({ x0 = xMin, y0 = yLo, x1 = xMax + 1, y1 = yHi }, outlineName, isCursorInst and 2 or 1)
         end
         if isLocal and cursorIn then
-          localHole = { x1 = xMin, x2 = xMax, y1 = yLo, y2 = yHi - 1 }
+          localHole = { xLo = xMin, xHi = xMax, yLo = yLo, yHi = yHi - 1 }
         end
       end
     end
   end
 
+  -- Note-tail brackets, in screen px along the column's left edge.
   local viewTop  = scrollRow
-  local viewBot  = scrollRow + gridHeight
+  local viewBot  = scrollRow + viewRows
   for _, col in ipairs(grid.cols) do
     if col.x and col.tails then
       for _, tail in ipairs(col.tails) do
         if tail.endRow > viewTop and tail.startRow < viewBot then
-          local y1 = gridOriginY + math.max(tail.startRow - scrollRow, 0) * gridY
-          local y2 = gridOriginY + math.min(tail.endRow - scrollRow, gridHeight) * gridY
-          local x1 = gridOriginX + col.x * gridX
-          local r  = 5
+          local yTop = gridOriginY + math.max(tail.startRow - scrollRow, 0) * cellH
+          local yBot = gridOriginY + math.min(tail.endRow - scrollRow, viewRows) * cellH
+          local colX = gridOriginX + col.x * cellW
+          local r    = 5
           screenPainter.pathClear()
-          screenPainter.pathArcTo(x1, y1 + r, r, 3 * math.pi / 2, math.pi)
-          screenPainter.pathLineTo(x1 - r, y1 + r + 1)
-          screenPainter.pathLineTo(x1 - r, y2 - r - 1)
-          screenPainter.pathArcTo(x1, y2 - r, r, math.pi, math.pi / 2)
+          screenPainter.pathArcTo(colX, yTop + r, r, 3 * math.pi / 2, math.pi)
+          screenPainter.pathLineTo(colX - r, yTop + r + 1)
+          screenPainter.pathLineTo(colX - r, yBot - r - 1)
+          screenPainter.pathArcTo(colX, yBot - r, r, math.pi, math.pi / 2)
           screenPainter.pathStroke('tail', 1.5)
           screenPainter.pathClear()
         end
@@ -661,8 +666,8 @@ local function drawTracker()
     end
   end
 
-  local cellWidth = tv:cellWidth()
-  for y = 0, gridHeight - 1 do
+  local pitchWidth = tv:cellWidth()
+  for y = 0, viewRows - 1 do
     local row = scrollRow + y
     if row >= numRows then break end
     for x, col in ipairs(grid.cols) do
@@ -706,10 +711,10 @@ local function drawTracker()
           cx = cx + 1
         end
         if divergent and col.showDelay then
-          draw:smallGlyph(col.x + delayMarkerOffset(col, cellWidth)-0.1, y-0.3, '*', 14, textCol)
+          draw:smallGlyph(col.x + delayMarkerOffset(col, pitchWidth)-0.1, y-0.3, '*', 14, textCol)
         end
         if evt and evt.fx and evt.fx[1] and col.type == 'note' and not muted and not previewGhost then
-          draw:smallGlyph(col.x + fxMarkerOffset(col, cellWidth)-0.1, y-0.3, '*', 14, textCol)
+          draw:smallGlyph(col.x + fxMarkerOffset(col, pitchWidth)-0.1, y-0.3, '*', 14, textCol)
         end
       end
     end
@@ -718,21 +723,21 @@ local function drawTracker()
   if tv:activeTemper() then
     for _, col in ipairs(grid.cols) do
       if col.x and col.type == 'note' and col.cells then
-        local x0 = gridOriginX + col.x * gridX
-        local x1 = x0 + cellWidth * gridX
-        local cx = (x0 + x1) / 2
-        local halfW = (x1 - x0) / 2 - 1
-        for y = 0, gridHeight - 1 do
+        local fieldLeft  = gridOriginX + col.x * cellW
+        local fieldRight = fieldLeft + pitchWidth * cellW
+        local fieldMid   = (fieldLeft + fieldRight) / 2
+        local halfW      = (fieldRight - fieldLeft) / 2 - 1
+        for y = 0, viewRows - 1 do
           local row = scrollRow + y
           if row >= numRows then break end
           local evt = col.cells[row]
           if evt and evt.pitch then
             local _, _, gap, halfGap = tv:noteProjection(evt)
             if gap and gap ~= 0 and halfGap > 0 then
-              local yTop = gridOriginY + y * gridY + 1
+              local yTop = gridOriginY + y * cellH + 1
               local offset = util.clamp(gap / halfGap, -1, 1) * halfW
-              screenPainter.line(x0, yTop, x1, yTop, 'accent', 1)
-              local tickX = cx + offset
+              screenPainter.line(fieldLeft, yTop, fieldRight, yTop, 'accent', 1)
+              local tickX = fieldMid + offset
               screenPainter.line(tickX, yTop - 1, tickX, yTop + 2, 'accent', 1)
             end
           end
@@ -743,37 +748,37 @@ local function drawTracker()
 
   -- Scrim spans only populated rows; blank space past the take's end stays clear.
   if isLocal then
-    drawLocalScrim(draw, localHole, totalWidth, math.min(gridHeight, math.max(numRows - scrollRow, 0)))
+    drawLocalScrim(draw, localHole, totalWidth, math.min(viewRows, math.max(numRows - scrollRow, 0)))
   end
 
   if ec:hasSelection() then
-    local r1, r2, c1i, c2i = ec:region()
-    if c2i >= scrollCol and c1i <= lastVisCol then
-      local yFrom = math.max(r1 - scrollRow, 0)
-      local yTo   = math.min(r2 - scrollRow, gridHeight - 1)
-      local c1, c2 = grid.cols[c1i], grid.cols[c2i]
-      local s1   = ec:selectionStopSpan(c1i)
-      local _,s2 = ec:selectionStopSpan(c2i)
-      local x1 = c1.x and c1.x + c1.stopPos[s1]  or 0
-      local x2 = c2.x and c2.x + c2.stopPos[s2]  or totalWidth
-      draw:box(x1, x2, yFrom, yTo, 'selection')
+    local rowLo, rowHi, colLoIdx, colHiIdx = ec:region()
+    if colHiIdx >= scrollCol and colLoIdx <= lastVisCol then
+      local yLo = math.max(rowLo - scrollRow, 0)
+      local yHi = math.min(rowHi - scrollRow, viewRows - 1)
+      local colLo, colHi = grid.cols[colLoIdx], grid.cols[colHiIdx]
+      local stopLo    = ec:selectionStopSpan(colLoIdx)
+      local _, stopHi = ec:selectionStopSpan(colHiIdx)
+      local xLo = colLo.x and colLo.x + colLo.stopPos[stopLo] or 0
+      local xHi = colHi.x and colHi.x + colHi.stopPos[stopHi] or totalWidth
+      draw:box(xLo, xHi, yLo, yHi, 'selection')
     end
   end
 
   local col = grid.cols[cursorCol]
   if col and col.x then
     local stopOffset = (col.stopPos and col.stopPos[cursorStop]) or 0
-    local charX = col.x + stopOffset
-    local charY = cursorRow - scrollRow
-    draw:box(charX, charX, charY+0.1, charY-0.1, 'cursor')
+    local cellX = col.x + stopOffset
+    local cellY = cursorRow - scrollRow
+    draw:box(cellX, cellX, cellY+0.1, cellY-0.1, 'cursor')
     local evt = col.cells and col.cells[cursorRow]
     local text = renderCell(evt, col, cursorRow)
     local ch = utf8.offset(text, stopOffset + 1) and text:sub(utf8.offset(text, stopOffset + 1), utf8.offset(text, stopOffset + 2) - 1) or ''
-    if ch ~= '' then draw:text(charX, charY, ch, 'cursorText') end
+    if ch ~= '' then draw:text(cellX, cellY, ch, 'cursorText') end
   end
 
   -- Reserve content space so ImGui knows the drawable area
-  ImGui.Dummy(ctx, (totalWidth + GUTTER) * gridX, (gridHeight + HEADER) * gridY)
+  ImGui.Dummy(ctx, (totalWidth + GUTTER) * cellW, (viewRows + HEADER) * cellH)
 end
 
 ----- Input
@@ -844,7 +849,7 @@ end
 
 -- Grid geometry for the host's help:anchor (which spans grid + palette).
 function gridPane:geom()
-  return { originX = gridOriginX, originY = gridOriginY, height = gridHeight, cellH = gridY }
+  return { originX = gridOriginX, originY = gridOriginY, height = viewRows, cellH = cellH }
 end
 
 --contract: bails if laneConsumed; lane strip wins gestures over the tracker grid
@@ -872,8 +877,8 @@ function gridPane:handleMouse()
     local sub  = (mods & ImGui.Mod_Alt)   ~= 0
     if add or sub then
       local mouseX, mouseY = ImGui.GetMousePos(ctx)
-      local _, charY = cellAt(mouseX, mouseY)
-      if charY >= 0 and charY < gridHeight then
+      local _, cellY = cellAt(mouseX, mouseY)
+      if cellY >= 0 and cellY < viewRows then
         local col  = nearestStop(mouseX, mouseY)
         local cell = col and (col .. (add and '+' or '-'))
         if col and cell ~= paintLast then
@@ -889,9 +894,9 @@ function gridPane:handleMouse()
 
   if rightClicked and ImGui.IsWindowHovered(ctx) then
     local mouseX, mouseY = ImGui.GetMousePos(ctx)
-    local _, charY = cellAt(mouseX, mouseY)
+    local _, cellY = cellAt(mouseX, mouseY)
     local col, _, fracX = nearestStop(mouseX, mouseY)
-    if col and charY == -HEADER and fracX >= 0 then
+    if col and cellY == -HEADER and fracX >= 0 then
       local last = grid.cols[col]
       if fracX < last.x + last.width + 1 then
         tv:toggleChannelMute(last.midiChan)
@@ -902,10 +907,10 @@ function gridPane:handleMouse()
 
   if clicked and ImGui.IsWindowHovered(ctx) then
     local mouseX, mouseY = ImGui.GetMousePos(ctx)
-    local _, charY = cellAt(mouseX, mouseY)
+    local _, cellY = cellAt(mouseX, mouseY)
     local col, stop, fracX = nearestStop(mouseX, mouseY)
     if not col then return end
-    if charY < -HEADER or charY >= gridHeight then return end
+    if cellY < -HEADER or cellY >= viewRows then return end
     if fracX < 0 then return end
     local last = grid.cols[col]
     if fracX >= last.x + last.width + 1 then return end
@@ -917,9 +922,9 @@ function gridPane:handleMouse()
     -- label-row select, shift-extend (both below) and drag (in the
     -- dragging branch). Mirrors cursor-key behaviour.
 
-    if charY < 0 then
+    if cellY < 0 then
       tv:endReselectCascades()   -- label-row select is a re-selection
-      if charY == -HEADER then ec:selectChannel(last.midiChan)
+      if cellY == -HEADER then ec:selectChannel(last.midiChan)
       else ec:selectColumn(col) end
       return
     end
@@ -928,17 +933,17 @@ function gridPane:handleMouse()
 
     if shift then
       tv:endReselectCascades()   -- shift-extend is a re-selection
-      ec:extendTo(scrollRow + charY, col, stop)
+      ec:extendTo(scrollRow + cellY, col, stop)
     else
       ec:selClear()
-      ec:setPos(scrollRow + charY, col, stop)
+      ec:setPos(scrollRow + cellY, col, stop)
       dragging = true
     end
 
   elseif dragging and held then
     local mouseX, mouseY = ImGui.GetMousePos(ctx)
-    local fracX, charY = cellAt(mouseX, mouseY)
-    local row = scrollRow + charY
+    local fracX, cellY = cellAt(mouseX, mouseY)
+    local row = scrollRow + cellY
     local rightEdge = grid.cols[lastVisCol].x + grid.cols[lastVisCol].width
 
     local col, stop

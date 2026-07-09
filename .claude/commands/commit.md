@@ -6,7 +6,8 @@ One pass. No iterative refinement.
 
 1. `git status --porcelain`. Empty → clean tree; say so and stop. Don't spawn.
 2. Decide the headline yourself — you have the change's intent from this conversation, a cold subagent wouldn't. `<scope>: <headline>`, imperative, ≤70 chars, scoped to the affected area (eg `tm: fix off-by-one in selection rect`). Glance at `git diff --stat` if you need to confirm scope; don't read the full diff.
-3. Spawn one subagent — Agent tool, `subagent_type: general-purpose`, `model: sonnet` — and hand it the headline. It owns everything else and does **not** spawn further subagents. Prompt it with:
+3. Decision log: if the change embodies a non-trivial design decision — a chosen trade-off, a rejected alternative, a new convention — append a dated one/two-line entry at the top of `docs/decisions.md` now, so it rides the same commit. Most commits don't; skip silently.
+4. Spawn one subagent — Agent tool, `subagent_type: general-purpose`, `model: sonnet` — and hand it the headline. It owns everything else and does **not** spawn further subagents. Prompt it with:
 
 > You are finishing a commit. Do these in order, then stop — do not spawn any subagent:
 > 1. `git status` and `git diff` to see what's landing.
@@ -15,6 +16,4 @@ One pass. No iterative refinement.
 > 4. `git commit -m "<HEADLINE>"` — exactly the headline given, no body, no `Co-Authored-By`, no Claude tagline.
 > 5. Report the hygiene fixes (one line each) and the commit hash. Don't push, don't offer to.
 
-4. When it returns, eyeball its summary — don't re-audit.
-</content>
-</invoke>
+5. When it returns, eyeball its summary — don't re-audit.
