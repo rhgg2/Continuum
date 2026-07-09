@@ -93,14 +93,29 @@ local function materialiseNotes(specs)
   end
 end
 
--- Curve points are bipolar -1..+1; the pb column authors in cents, full-scale
--- at the take's pbRange. readbackBody normalises back by the same factor on write-through.
-local function materialiseCurve(points)
+-- Normalized substrate: pb column, points -1..+1 <-> thousandths (pbRange 10 makes +-1000 full-scale).
+-- CC substrate: fixed scratch CURVE_CC, points 0..127 verbatim. Generator owns the real destination.
+local CURVE_CC = 1
+
+-- columnDisplay flags for the curve column, from the body's domain + display hint:
+-- normalized -> pb thousandths (bipolar unless 'unipolar'); cc -> 14-bit unless 'cc7'.
+local function curveDisplay(body)
+  if body.domain == 'cc' then
+    return { [1] = { ccs = { [CURVE_CC] = { ['14bit'] = body.display ~= 'cc7' } } } }
+  end
+  return { [1] = { pb = { normalized = true, bipolar = body.display ~= 'unipolar' } } }
+end
+
+local function materialiseCurve(body)
   local rpb = cm:get('rowPerBeat')
-  local fullScaleCents = cm:get('pbRange') * 100
-  for _, p in ipairs(points or {}) do
-    tm:addEvent{ evType = 'pb', chan = 1, ppq = p.ppq, rpb = rpb,
-                 val = p.val * fullScaleCents, shape = p.shape, tension = p.tension }
+  for _, p in ipairs(body.points or {}) do
+    if body.domain == 'cc' then
+      tm:addEvent{ evType = 'cc', chan = 1, cc = CURVE_CC, ppq = p.ppq, rpb = rpb,
+                   val = p.val, shape = p.shape, tension = p.tension }
+    else
+      tm:addEvent{ evType = 'pb', chan = 1, ppq = p.ppq, rpb = rpb,
+                   val = p.val * 1000, shape = p.shape, tension = p.tension }
+    end
   end
 end
 
@@ -112,13 +127,20 @@ end
 local function readbackBody()
   local cols = (tm:getChannel(1) or {}).columns or {}
   if editBody.kind == 'curve' then
-    local fullScaleCents = cm:get('pbRange') * 100
     local points = {}
-    for _, e in ipairs(cols.pb and cols.pb.events or {}) do
-      util.add(points, { ppq = e.ppqL, val = (e.val + (e.detune or 0)) / fullScaleCents,
-                         shape = e.shape, tension = e.tension })
+    if editBody.domain == 'cc' then
+      local col = cols.ccs and cols.ccs[CURVE_CC]
+      for _, e in ipairs(col and col.events or {}) do
+        util.add(points, { ppq = e.ppqL, val = e.val, shape = e.shape, tension = e.tension })
+      end
+    else
+      for _, e in ipairs(cols.pb and cols.pb.events or {}) do
+        util.add(points, { ppq = e.ppqL, val = (e.val + (e.detune or 0)) / 1000,
+                           shape = e.shape, tension = e.tension })
+      end
     end
-    return { kind = 'curve', lengthPpq = editBody.lengthPpq, points = points }
+    return { kind = 'curve', domain = editBody.domain, display = editBody.display,
+             lengthPpq = editBody.lengthPpq, points = points }
   end
   local specs = {}
   for _, col in ipairs(cols.notes or {}) do
@@ -173,8 +195,18 @@ function pe:open(body, commit)
   mm:setLength(body.lengthPpq / resolution)
   editBody, commitFn, lastWritten = body, commit, body
   if body.kind == 'curve' then
-    ds:assign('extraColumns', { [1] = { notes = 0, pb = true } })   -- force a pb column so an empty curve is editable
-    materialiseCurve(body.points)
+    body.domain = body.domain or 'normalized'
+    -- Substrate column per domain, display flags, then body. see design/fx-patterns.md § Curve signature
+    local col
+    if body.domain == 'cc' then
+      col = { notes = 0, ccs = { [CURVE_CC] = true } }
+    else
+      col = { notes = 0, pb = true }
+      cm:set('take', 'pbRange', 10)
+    end
+    ds:assign('extraColumns',  { [1] = col })
+    ds:assign('columnDisplay', curveDisplay(body))
+    materialiseCurve(body)
   else
     ds:assign('extraColumns', { [1] = { notes = 1 } })   -- force a note column so an empty pattern is typeable
     materialiseNotes(body.specs)

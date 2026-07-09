@@ -43,7 +43,9 @@ fxPatterns = { [name] = {
   root      = midiPitch,         -- reference; realisation transposes host − root
   specs     = { { lane=1, ppqL, endppqL, pitch, vel, detune, delay, sample? }, ... },
   -- curve:
-  points    = { { ppq, val, shape, tension? }, ... },   -- val bipolar −1..+1
+  domain    = 'normalized' | 'cc',                 -- baked: the value space the generator sees
+  display   = 'bipolar'|'unipolar' | 'cc7'|'cc14', -- soft: within-domain entry variant
+  points    = { { ppq, val, shape, tension? }, ... },   -- val per domain: −1..+1 or 0..127
 } }
 ```
 
@@ -61,10 +63,44 @@ Decisions taken:
   host − root in temper steps (the `stepInterval` precedent). The user
   edits in the temper's terms because that is the only vocabulary the
   grid has.
-- **Curves are normalized bipolar −1..+1** with a generator-side depth
-  param. For editing, values scale onto the checkout column's native
-  range (cc 7-bit / pb 14-bit) and normalize back at commit, so the
-  persisted form is resolution-agnostic.
+- **Curves carry a baked `domain` and a soft `display`.** The generator
+  is coded against the domain (`normalized` −1..+1 / `cc` 0..127) and
+  never sees the editing substrate. See § Curve signature.
+
+## Curve signature
+
+One baked axis, one soft axis.
+
+**Domain** (baked, `domain`) is the value space the generator is coded
+against and the only thing it sees: `normalized` hands it points in
+−1..+1, `cc` hands it 0..127. The editing substrate — a pb column for
+normalized, a fixed scratch cc (`CURVE_CC`) for cc — is invisible to
+both author and generator; the generator owns the real destination.
+
+**Display** (soft, `display`) is a within-domain entry variant, user-
+toggleable, that the generator never sees: normalized → `bipolar`
+(−1..+1) | `unipolar` (0..1); cc → `cc7` | `cc14`. Display equals
+entry — the cell you read is the cell you edit. (An inferred reading —
+"440 Hz" — is a future status-line concern for all cells, not a
+display/entry split here.)
+
+Storage is three column flags on the take's `columnDisplay` ds key —
+`normalized`, `bipolar`, `14bit` — stamped onto the gridCol at rebuild.
+Absent = unset = the pre-existing byte-for-byte column behaviour; the
+whole mechanism is purely additive. It is also the machinery a main-
+tracker 14-bit cc affordance would reuse — midiManager already reads/
+writes 14-bit; only the grid entry side was missing.
+
+Two substrate details worth pinning:
+
+- **Normalized rides pb thousandths.** `centsToRaw` scales cents onto
+  the pb wire and clamps at ±8192; pinning the checkout take to
+  `pbRange = 10` makes the wire full-scale exactly ±1000, so a
+  thousandths value (−1.000..+1.000) round-trips losslessly with no
+  engine change and `renderPB` shows thousandths natively.
+- **14-bit cc displays as 4 hex digits**, `0000..7FFE`, even last
+  digit: the display integer is `val × 256`, and the 14-bit LSB never
+  reaches wire bit 0, so the low digit stays even.
 
 ## The checkout model
 
@@ -174,8 +210,6 @@ specs pin behaviour.
 
 ## Open details
 
-- Curve checkout column: cc (7-bit) vs pb (14-bit) — possibly per-param,
-  from the generator's declared destination.
 - If tracker selection turns out to be region-overlay-only, the overlay
   wiring joins P3 as a measured add.
 - rowPerBeat zoom persists on the checkout take's tier and dies with it;

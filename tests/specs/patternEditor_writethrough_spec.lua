@@ -1,7 +1,5 @@
--- design/fx-patterns.md P3.5: write-through commit. A checkout edit persists back through
--- the commit callback (an inline generator param in production), stripped to the whitelist;
--- a curve normalises its pb cents back to bipolar; Esc restores the open snapshot, Enter
--- commits. Drives the real edit -> flush -> rebuild -> write-through path against a fake imgui.
+-- design/fx-patterns.md P3.5: write-through commit; curve normalises pb thousandths back to bipolar.
+-- Drives the real edit -> flush -> rebuild -> write-through path against a fake imgui.
 
 local t    = require('support')
 local util = require('util')
@@ -73,8 +71,20 @@ local function curveBody()
     kind = 'curve', lengthPpq = 960,
     points = {
       { ppq = 0,   val = 0,    shape = 'linear' },
-      { ppq = 480, val = 1,    shape = 'linear' },   -- full-scale +1 exercises the cents scaling
+      { ppq = 480, val = 1,    shape = 'linear' },   -- +1 exercises full-scale thousandths (pbRange 10)
       { ppq = 960, val = -0.5, shape = 'linear' },
+    },
+  }
+end
+
+-- cc-domain curve: points ride a fixed scratch cc verbatim (0..127), no normalisation.
+local function ccCurveBody()
+  return {
+    kind = 'curve', domain = 'cc', display = 'cc14', lengthPpq = 960,
+    points = {
+      { ppq = 0,   val = 0,   shape = 'linear' },
+      { ppq = 480, val = 100, shape = 'linear' },
+      { ppq = 960, val = 64,  shape = 'linear' },
     },
   }
 end
@@ -116,7 +126,7 @@ return {
   },
 
   {
-    name = 'a curve edit persists as normalised bipolar points, not raw cents',
+    name = 'a curve edit persists as normalised bipolar points, not raw thousandths',
     run = function(harness)
       local h, pe, get = withEditor(harness, curveBody())
       pressDelete(pe)
@@ -125,12 +135,32 @@ return {
       t.eq(#pts, 2, 'the deleted breakpoint is gone from the persisted body')
       local hiFound, loFound = false, false
       for _, p in ipairs(pts) do
-        t.truthy(math.abs(p.val) <= 1.01, 'val is bipolar, not raw cents')
+        t.truthy(math.abs(p.val) <= 1.01, 'val is bipolar, not raw thousandths')
         if approx(p.val, 1)    then hiFound = true end
         if approx(p.val, -0.5) then loFound = true end
       end
       t.truthy(hiFound, 'the +1 breakpoint round-trips to bipolar')
       t.truthy(loFound, 'the -0.5 breakpoint round-trips to bipolar')
+    end,
+  },
+
+  {
+    name = 'a cc-domain curve persists its points verbatim, echoing the domain',
+    run = function(harness)
+      local h, pe, get = withEditor(harness, ccCurveBody())
+      pressDelete(pe)
+
+      local body = get()
+      t.eq(body.domain, 'cc', 'the cc domain rides the readback forward')
+      local pts = body.points
+      t.eq(#pts, 2, 'the deleted breakpoint is gone from the persisted body')
+      local hiFound, loFound = false, false
+      for _, p in ipairs(pts) do
+        if approx(p.val, 100) then hiFound = true end
+        if approx(p.val, 64)  then loFound = true end
+      end
+      t.truthy(hiFound, 'the 100 breakpoint round-trips verbatim, not normalised')
+      t.truthy(loFound, 'the 64 breakpoint round-trips verbatim')
     end,
   },
 
