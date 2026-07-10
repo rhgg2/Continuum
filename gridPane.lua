@@ -38,6 +38,7 @@ local cm, cmgr, chrome, gui, tv, inputAllowed =
 local GUTTER      = 5    -- in grid chars: 3-char row num + spacer + region slot
 local HEADER      = 3    -- header rows, fixed; vertical param names truncate to fit, never grow it
 local RESERVE_ROWS = 0.3 -- bottom breathing left clear below the last row (status band / modal edge)
+local ANCHOR_HALO  = 6   -- px; matches curveEditor HIT_PX so the hit-rect covers anchors on the rect edge
 
 local cellW       = nil   -- px per cell; set on first computeLayout
 local cellH       = nil
@@ -449,8 +450,9 @@ local function drawLaneStrip()
   -- fall through to the parent window. IsItemActive keeps the strip
   -- "hovered" through a held drag even if the mouse leaves the rect.
   local savedX, savedY = ImGui.GetCursorScreenPos(ctx)
-  ImGui.SetCursorScreenPos(ctx, x0, yTop)
-  ImGui.InvisibleButton(ctx, '##laneStripHit', math.max(1, w), math.max(1, yBot - yTop))
+  ImGui.SetCursorScreenPos(ctx, x0 - ANCHOR_HALO, yTop - ANCHOR_HALO)
+  ImGui.InvisibleButton(ctx, '##laneStripHit',
+    math.max(1, w + 2 * ANCHOR_HALO), math.max(1, yBot - yTop + 2 * ANCHOR_HALO))
   local stripHovered = ImGui.IsItemHovered(ctx) or ImGui.IsItemActive(ctx)
   ImGui.SetCursorScreenPos(ctx, savedX, savedY)
 
@@ -923,8 +925,11 @@ function gridPane:drawCurveEditor(rect)
 
   -- Claim the rect so empty-space drags don't fall through to the modal window.
   local savedX, savedY = ImGui.GetCursorScreenPos(ctx)
-  ImGui.SetCursorScreenPos(ctx, x0, top)
-  ImGui.InvisibleButton(ctx, '##curvePaneHit', math.max(1, w), math.max(1, bot - top))
+  -- Grow the hit-rect by ANCHOR_HALO: edge anchors (value extremes) sit on the rect
+  -- boundary and their grab halo spills past it, else they highlight but won't grab.
+  ImGui.SetCursorScreenPos(ctx, x0 - ANCHOR_HALO, top - ANCHOR_HALO)
+  ImGui.InvisibleButton(ctx, '##curvePaneHit',
+    math.max(1, w + 2 * ANCHOR_HALO), math.max(1, bot - top + 2 * ANCHOR_HALO))
   local hovered = ImGui.IsItemHovered(ctx) or ImGui.IsItemActive(ctx)
   ImGui.SetCursorScreenPos(ctx, savedX, savedY)
 

@@ -133,28 +133,42 @@ function curveEditor:frame(a)
       previewSuppress = nil
       local mouseT = pt.fromScreen(mx, my)
       if mouseT >= tMin and mouseT < tMax then
-        local snappedT = a.snap and a.snap(mouseT) or nil
-        local nearLine = snappedT and math.abs(mx - tToX(snappedT)) <= HIT_PX
-
-        if nearLine then
-          local val = util.clamp(util.round(evalAtT(snappedT)), vMin, vMax)
-          local py  = valToY(val)
-          if math.abs(my - py) <= HIT_PX then
-            local occupied = false
-            for i = 1, n do
-              if a.snap(tArr[i]) == snappedT then occupied = true; break end
-            end
-            if not occupied then
-              pt.circle(snappedT, val, R_PREVIEW, cols.anchorActive)
-              preview = { t = snappedT, val = val }
+        -- Step risers carry no curve value at their x, so nearLine misses them;
+        -- detect separately -- see docs/curveEditor.md § Step riser as a hover target.
+        for i = 1, n - 1 do
+          local shp = events[i].shape
+          if (shp == nil or shp == 'step')
+             and math.abs(mx - tToX(tArr[i + 1])) <= HIT_PX then
+            local yA, yB = valToY(events[i].val or 0), valToY(events[i + 1].val or 0)
+            if my >= math.min(yA, yB) - HIT_PX and my <= math.max(yA, yB) + HIT_PX then
+              segHover = i; break
             end
           end
-        elseif n >= 2 then
-          local curveY = valToY(evalAtT(mouseT))
-          if math.abs(my - curveY) <= HIT_PX then
-            for i = 1, n - 1 do
-              if mouseT >= tArr[i] and mouseT < tArr[i + 1] then
-                segHover = i; break
+        end
+
+        if not segHover then
+          local snappedT = a.snap and a.snap(mouseT) or nil
+          local nearLine = snappedT and math.abs(mx - tToX(snappedT)) <= HIT_PX
+          if nearLine then
+            local val = util.clamp(util.round(evalAtT(snappedT)), vMin, vMax)
+            local py  = valToY(val)
+            if math.abs(my - py) <= HIT_PX then
+              local occupied = false
+              for i = 1, n do
+                if a.snap(tArr[i]) == snappedT then occupied = true; break end
+              end
+              if not occupied then
+                pt.circle(snappedT, val, R_PREVIEW, cols.anchorActive)
+                preview = { t = snappedT, val = val }
+              end
+            end
+          elseif n >= 2 then
+            local curveY = valToY(evalAtT(mouseT))
+            if math.abs(my - curveY) <= HIT_PX then
+              for i = 1, n - 1 do
+                if mouseT >= tArr[i] and mouseT < tArr[i + 1] then
+                  segHover = i; break
+                end
               end
             end
           end

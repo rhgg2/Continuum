@@ -997,6 +997,10 @@ do
         chan = col.midiChan, rpb = rpbNow,
       })
       update.evType = type
+      -- Inherit the governing (previous visible) breakpoint's shape, as the curve pane's
+      -- insert does, so a seeded-linear curve keeps interpolating on grid entry.
+      local prev = util.seek(col.events, 'before', cursorppq, function(e) return not e.hidden end)
+      update.shape = prev and prev.shape or nil
       edit.add(update)
     end
     commit()

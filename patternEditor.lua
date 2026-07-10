@@ -220,6 +220,12 @@ function pe:open(body, commit)
     end
     ds:assign('extraColumns',  { [1] = col })
     ds:assign('columnDisplay', curveDisplay(body))
+    if #(body.points or {}) == 0 then
+      -- Fresh curve: two linear zero anchors span the loop, so the pane opens non-empty and
+      -- a grid-typed breakpoint inherits linear interpolation from its neighbour.
+      body.points = { { ppq = 0, val = 0, shape = 'linear' },
+                      { ppq = body.lengthPpq, val = 0, shape = 'linear' } }
+    end
     materialiseCurve(body)
   else
     ds:assign('extraColumns', { [1] = { notes = 1 } })   -- force a note column so an empty pattern is typeable

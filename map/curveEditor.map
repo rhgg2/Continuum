@@ -1,4 +1,4 @@
-@module curveEditor  src=curveEditor.lua  loc=329  sha=d013d39  mode=chunk  self=curveEditor
+@module curveEditor  src=curveEditor.lua  loc=343  sha=d013d39  mode=chunk  self=curveEditor
 @deps ctx, chrome, page
 
 # Invariants & contracts
@@ -33,21 +33,21 @@
   @state curveEditor = {}  @ 33
 
 # Public API (curveEditor:*)
-  @api curveEditor:frame(a)  @ 39-326
+  @api curveEditor:frame(a)  @ 39-340
       @contract  returns true iff the editor consumed the mouse this frame (host should suppress its own click handling)
       @contract  callbacks fire synchronously during frame(); host must tolerate re-entrant reads of events on the same frame
       @contract  host must call frame() inside the window whose drawlist the painter binds; gate a.hovered on its own IsWindowHovered
       · Mouse handling
 
 # Uses (outbound edges)
-  @use call    imgui.GetKeyMods  @ frame:298
-  @use call    imgui.GetMousePos  @ frame:108,128,170,205,212,227,260
-  @use call    imgui.IsMouseClicked  @ frame:195
-  @use call    imgui.IsMouseDoubleClicked  @ frame:196
-  @use call    imgui.IsMouseDown  @ frame:197
+  @use call    imgui.GetKeyMods  @ frame:312
+  @use call    imgui.GetMousePos  @ frame:108,128,184,219,226,241,274
+  @use call    imgui.IsMouseClicked  @ frame:209
+  @use call    imgui.IsMouseDoubleClicked  @ frame:210
+  @use call    imgui.IsMouseDown  @ frame:211
   @use call    painter.new  @ frame:53
-  @use call    util.clamp  @ frame:100,140,186,282,297,301
-  @use call    util.round  @ frame:140,297,307
+  @use call    util.clamp  @ frame:100,153,200,296,311,315
+  @use call    util.round  @ frame:153,311,321
   @use require imgui  @ 19
   @use require painter  @ 20
   @use require util  @ 13

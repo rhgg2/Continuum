@@ -42,6 +42,14 @@ the lane. So the envelope and active-segment sample loops clamp val to
 its anchors would draw past the lane (the ±4px clip only hides a hair of
 it). Keep the clamp where the samples are built.
 
+## Step riser as a hover target
+
+A step (or shapeless) segment holds its left anchor's value then jumps
+vertically at the trailing anchor; that riser carries no curve value at
+its x, so the nearLine insert branch (which tests the snap line, where
+the anchor already sits) never finds it. The segment-hover pass detects
+the riser explicitly so it is still a shape-cycle target.
+
 ## Snap vs. free move
 
 Two move modes, two callbacks. Snapped (`onMove`) constrains t to

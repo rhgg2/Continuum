@@ -4,6 +4,11 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-10** — Pattern-editor curves default to linear by *seeding* a fresh
+  body with two linear zero anchors + having `tv:enterValue` inherit the previous
+  breakpoint's shape (like the curve pane's mouse insert). Rejected a
+  `newBreakpointShape` config key: seeding needs no per-context default and unifies
+  grid-entry with mouse-insert. Main tracker keeps REAPER's step (no linear seed).
 - **2026-07-10** — `chrome.screenPainter()` (identity painter over the current
   window's draw list) is the reach for screen-space drawlist work; raw
   `GetWindowDrawList`/`DrawList_Add*` is out — it loses chrome's colour
