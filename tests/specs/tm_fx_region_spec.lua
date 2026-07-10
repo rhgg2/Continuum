@@ -254,6 +254,46 @@ return {
     end,
   },
 
+  {
+    -- A PA rides its host note: when a region parks the host, the PA parks off-take (silent -- stale
+    -- PA against a fresh derived stream is meaningless), stashed for unpark, still shown in host lane.
+    name = 'replace: a PA under the parked host parks off-take with it, restores on unpark',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { pitch = 60, lane = 1 })
+      h.tm:addEvent{ evType = 'pa', ppq = 120, chan = 1, pitch = 60, vel = 64, lane = 1, rpb = 2 }
+      h.tm:flush()
+      injectArp(h)
+
+      local function takePAs()
+        local out = {}
+        for _, c in ipairs(h.fm:dump().ccs) do if c.evType == 'pa' then out[#out + 1] = c end end
+        return out
+      end
+      local function colPAs()
+        local out = {}
+        for _, col in ipairs(h.tm:getChannel(1).columns.notes) do
+          for _, e in ipairs(col.events) do if e.evType == 'pa' then out[#out + 1] = e end end
+        end
+        return out
+      end
+
+      t.eq(#takePAs(), 0, 'the parked PA left the take -- it no longer sounds against the derived stream')
+      local parked = stashOfType(h, 'pa')
+      t.eq(#parked, 1, 'the PA rode into the fxParked stash')
+      t.eq(parked[1].vel, 64, 'its pressure rode the park')
+      t.eq(parked[1].rpb, 2,  'its rpb metadata rode the park')
+      t.eq(#colPAs(), 1, 'the parked PA still displays in the host note column')
+
+      h.ds:assign('fxRegions', {})
+      h.tm:rebuild()
+      local restored = takePAs()
+      t.eq(#restored, 1, 'the PA returned to the take on unpark')
+      t.eq(restored[1].rpb, 2, 'rpb survived the park round-trip')
+      t.eq(#stashOfType(h, 'pa'), 0, 'the stash is empty once the host is back on-take')
+    end,
+  },
+
   ----- Phase A: generator output is self-sufficient of mm array order (design/deferred-reindex.md)
 
   {

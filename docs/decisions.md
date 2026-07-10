@@ -4,6 +4,11 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-10** — A `pa` parks off-take with its host note (replace-region /
+  note-host park), rather than staying take-side and sounding against the fresh
+  derived stream (rejected: stale PAs against different derived notes are
+  meaningless). It still rides the host's note column for display; the generator
+  owns any new realisation PAs.
 - **2026-07-10** — FX chain moved from a docked 2D strip to a `parameters|fx`
   palette tab, rotated vertical for 1D nav (Up/Down walk all fields, Left/Right
   edit). fx auto-raises under the caret; Super-R parks a parameters override

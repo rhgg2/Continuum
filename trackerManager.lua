@@ -31,10 +31,11 @@
 --shape:   event minus the realisation frame (ppq/endppq/loc/token/derived/frame/cents), so new metadata
 --shape:   rides park automatically. Baseline fields per type (realised ppq re-derived on restore):
 --shape:   note { evType='note', chan, lane, uuid, ppqL, endppqL, pitch, vel, detune, delay, sample, [fx] }
---shape:   cc { evType='cc', chan, cc, ppqL, val, shape }  |  pb { evType='pb', chan, ppqL, val (=cents), shape, [tension] }
+--shape:   cc { evType='cc', chan, cc, ppqL, val, shape }  |  pb { evType='pb', chan, ppqL, val (=cents), shape, [tension] }  |  pa { evType='pa', chan, pitch, ppqL, vel, [rpb] }
 --shape: channels[chan].parked = { { evType='note', chan, uuid, ppq, ppqL, endppq, endppqL, endppqC, pitch, vel, detune, sample, delay, lane, [fx] }, ... } -- render-ready off-take replace cells (ppq==ppqL; endppq is the authored ceiling the view edits, endppqC==endppqL clipped for render)
 --shape: channels[chan].parkedCC = { { evType='cc', chan, cc, ppq, ppqL, val, shape }, ... } -- off-take cc-replace render cells (ppq==ppqL)
 --shape: channels[chan].parkedPb = { { evType='pb', chan, ppq, ppqL, val (=cents), cents, shape, [tension] }, ... } -- off-take pb-replace render cells (ppq==ppqL)
+--shape: channels[chan].parkedPA = { { evType='pa', chan, pitch, ppq, ppqL, vel, [rpb] }, ... } -- off-take PA cells; rebuildPA re-projects them into the host note column
 --contract: a discrete-replace kind parks its host: a region parks its covered chord, a note parks itself
 --invariant: parked members feed generator + grid only; never sounding (mute fails for CC/PA)
 
@@ -1873,6 +1874,43 @@ local function rebuildRegionPark(deferred, currentWindows)
     end
   end
 
+  -- PA: rides its host note, so it parks exactly when the host does -- off-take (silent), still
+  -- shown in the host lane by rebuildPA. Reconciled against the parked-note set. see docs/trackerManager.md § Region-replace parking
+  do
+    local function hostParked(chan, pitch, ppqL)
+      for _, cell in ipairs(channels[chan].parked or {}) do
+        if cell.pitch == pitch and ppqL >= cell.ppqL and ppqL < cell.endppqL then return true end
+      end
+      return false
+    end
+
+    local newParked = {}
+    -- Fresh: an on-take PA whose host just parked leaves the take and stashes.
+    for _, cc in mm:ccsRaw() do
+      if cc.evType == 'pa' and dirtyChans[cc.chan]
+         and hostParked(cc.chan, cc.pitch, cc.ppqL or cc.ppq) then
+        batch.del({ token = mm:tokenOf(cc) })
+        local spec = parkSpec(cc, { ppqL = cc.ppqL or cc.ppq })   -- evType/chan/pitch/vel/rpb ride; drop realisation
+        spec.uuid = nil                                           -- restore re-mints the rpb sidecar uuid
+        util.add(newParked, spec)
+      end
+    end
+    -- Prior parked PAs: host still parked -> carry; host returned on-take -> restore to the take.
+    for _, spec in ipairs(priorByType.pa or {}) do
+      if hostParked(spec.chan, spec.pitch, spec.ppqL) then
+        util.add(newParked, spec)
+      else
+        dirtyChan(spec.chan)
+        batch.add(util.assign(util.clone(spec), { ppq = tm:fromLogical(spec.chan, spec.ppqL) }))
+      end
+    end
+    for _, spec in ipairs(newParked) do util.add(allParked, spec) end
+
+    renderUnion('parkedPA', newParked, function(spec)
+      return util.assign(util.clone(spec), { ppq = spec.ppqL })
+    end)
+  end
+
   -- CCs: a point event has no tail, so the Pass-A curve stands in on the target lane and
   -- restores add back immediately, seating a token-less projection for the view.
   do
@@ -2003,8 +2041,8 @@ local function findNoteColumnForPitch(channel, pitch, ppq_pos)
       end
     end
   end
-  -- Parked note hosts left the take but keep their PA display anchored to their lane
-  -- (the PA stays take-side and sounds against the derived same-pitch hits).
+  -- Parked note hosts left the take (off-take, silent); their PAs park with them but stay
+  -- shown here, anchored to the host's lane -- rebuildPA re-projects them off-take.
   for _, cell in ipairs(channel.parked or {}) do
     if cell.pitch == pitch and tm:fromLogical(channel.chan, cell.ppqL) <= ppq_pos
        and tm:fromLogical(channel.chan, cell.endppqL) > ppq_pos then
@@ -2026,6 +2064,20 @@ local function rebuildPA()
       local noteCol, lane = findNoteColumnForPitch(channels[cc.chan], cc.pitch, cc.ppq)
       if noteCol then
         util.add(noteCol.events, projectCC(cc, mm:tokenOf(cc), { lane = lane }))
+      end
+    end
+  end
+
+  -- Parked PAs left the take (off-take, silent) but still ride their host's note column --
+  -- projected token-less into the parked host's lane. see docs/trackerManager.md § PA dispatch
+  for chan = 1, 16 do
+    if dirtyChans[chan] then
+      for _, cell in ipairs(channels[chan].parkedPA or {}) do
+        local ppq = tm:fromLogical(chan, cell.ppqL)
+        local noteCol, lane = findNoteColumnForPitch(channels[chan], cell.pitch, ppq)
+        if noteCol then
+          util.add(noteCol.events, projectCC(cell, nil, { lane = lane, ppq = ppq }))
+        end
       end
     end
   end

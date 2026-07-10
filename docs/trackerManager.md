@@ -314,11 +314,18 @@ runs it, with a pointer to its detail where one exists.
   `scan` builds its `spec` inline at the scan site, where that pass's
   `chan`/`lane`/`cc` are in scope; `reconcilePark`'s optional `onPark`
   callback fires only for specs newly parked this rebuild (e.g. marking
-  the note pass's channel dirty), never for carried-forward priors.
+  the note pass's channel dirty), never for carried-forward priors. A
+  `pa` rides its host note, so it parks exactly when the host does:
+  deleted from the take (silent — a stale PA against a fresh derived
+  stream is meaningless; the generator owns any new realisation PAs),
+  stashed in `fxParked` tagged `pa`, reconciled against the parked-note
+  set rather than in its own window pass.
 - **PA dispatch** (`rebuildPA`). Attach each `pa` to the note column
   whose voice it modulates. Runs after column layout so the view and fx
   expansion read PAs inline, and after externals so foreign-MIDI PAs find
-  their host.
+  their host. A parked PA is gone from `mm`, so it is re-projected from
+  `channels[chan].parkedPA` into its parked host's lane — visible
+  off-take, riding the note column as an on-take PA would.
 - **Fx expansion** (`rebuildFx`). First the read-only **window** pass:
   walk each channel's same-lane successor map in the logical frame, so
   each fx host's window is its voice extent (the next same-lane onset's
