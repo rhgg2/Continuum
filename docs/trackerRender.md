@@ -81,7 +81,8 @@ nil`) — and **parameters** otherwise. So a chain auto-raises under the caret
 exactly as the old docked strip did, and lapses when the caret leaves it.
 
 The one manual force is a **parameters override**: **Super-R** (`focusParams`)
-parks parameters over an auto-shown chain and focuses the tree. The override is
+parks parameters over an auto-shown chain and lands on the find box (mirroring the
+Tab-to-find idiom, so the child takes real keyboard focus and the reconcile keeps it). The override is
 anchored to the caret and clears on the next caret move (`tv:overrideParams` and
 the `caretKey` check in `tv:paletteTab`). **Super-X** cancels it with no other
 change — from the grid via `editFx`'s guard, or, while parameters holds focus,

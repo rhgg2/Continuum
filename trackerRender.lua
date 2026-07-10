@@ -270,6 +270,7 @@ end
 local paramClipper = nil
 
 local PARAM_INDENT = 6   -- px param labels nest past the fx-name / section-heading column
+local PALETTE_PAGE = 12  -- PgUp / PgDn cursor step through the param list (arrow nav is too slow on big VSTs)
 
 -- Group an fx's (frecency-ordered) params into section subgroups, each a section
 -- heading + its params. See docs/trackerRender.md § Parameter sections.
@@ -389,6 +390,8 @@ local function handlePaletteKeys(nav)
   local newIdx = idx
   if press(ImGui.Key_DownArrow) then newIdx = math.min(idx + 1, #nav)
   elseif press(ImGui.Key_UpArrow) then newIdx = math.max(idx - 1, 1)
+  elseif press(ImGui.Key_PageDown) then newIdx = math.min(idx + PALETTE_PAGE, #nav)
+  elseif press(ImGui.Key_PageUp) then newIdx = math.max(idx - PALETTE_PAGE, 1)
   elseif treeArrows and press(ImGui.Key_RightArrow) then
     local e = nav[idx]
     if e.param == nil and not e.item.open then tv:setFxExpanded(e.fxGuid, true)
@@ -417,7 +420,7 @@ local function handlePaletteKeys(nav)
     if cur.param then
       -- Deferred drop (see Esc) so the same Enter doesn't reach the grid.
       selectParam(cur); tv:automateParam()
-      tv:setPaletteFilter(''); defocusReq, releaseReq = true, true
+      tv:setPaletteFilter(''); tv:setPaletteCursor(nil); defocusReq, releaseReq = true, true
       return true
     end
     tv:setFxExpanded(cur.fxGuid, not cur.item.open)
@@ -1064,7 +1067,7 @@ local editFx, stripPlan do
     local super = (mods & ImGui.Mod_Super) ~= 0
     if press(ImGui.Key_Escape) then cancelStrip(); return end
     if super and press(ImGui.Key_R) then                    -- commit, then raise the parameters tab
-      stripExitReq = true; tv:overrideParams(caretKeyNow()); paletteFocus = 'tree'; return
+      stripExitReq = true; tv:overrideParams(caretKeyNow()); paletteFocus, focusFindReq = 'find', true; return
     end
     local cols = plan.cols
     local cur  = clampCursor(cols)
@@ -1293,9 +1296,9 @@ local function duplicateUnpooledTake()
   if tv:duplicateBoundUnpooled() then tr:openTakeProperties{ focusName = true } end
 end
 
--- Super-R: park the parameters tab over an auto-shown chain and focus it (Super-X cancels).
+-- Super-R: park the parameters tab over an auto-shown chain and land on the find box (Super-X cancels).
 local function focusParams()
-  tv:overrideParams(caretKeyNow()); paletteFocus = 'tree'
+  tv:overrideParams(caretKeyNow()); paletteFocus, focusFindReq = 'find', true
 end
 
 local tracker = cmgr:scope('tracker')
