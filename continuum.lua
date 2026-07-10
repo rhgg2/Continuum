@@ -37,9 +37,12 @@ local function createImGui()
 
   local osName = reaper.GetOS()
   local font   = ImGui.CreateFont('Source Code Pro')
-  local isMac  = osName:find('OSX') or osName:find('mac')
-  local uiFamily = isMac and 'Helvetica Neue'
-                          or (osName:find('Win') and 'Segoe UI' or 'sans-serif')
+  local uiFamily = 'sans-serif'
+  if osName:find('OSX') or osName:find('mac') then
+    uiFamily = 'Helvetica Neue'
+  elseif osName:find('Win') then
+    uiFamily =  'Segoe UI'
+  end
   local uiFont     = ImGui.CreateFont(uiFamily)
   -- Wiring node labels want a heavier face; FontFlags_Bold is rasterizer-simulated (same family).
   local wireFont   = ImGui.CreateFont(uiFamily, ImGui.FontFlags_Bold)
@@ -48,7 +51,7 @@ local function createImGui()
   ImGui.Attach(ctx, wireFont)
   -- Chrome (toolbar, status, popups, swing editor) all scale off the
   -- grid size so the two registers stay in proportion if either moves.
-  local GRID_SIZE = 15
+  local GRID_SIZE = 16
   local UI_SIZE   = 11
   local WIRE_SIZE = 12
   return {

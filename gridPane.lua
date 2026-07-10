@@ -220,7 +220,7 @@ local function printer(ctx, cellW, cellH, x0, y0)
   end
 
   function pt:text(x, y, txt, colour, font)
-    cellText(x, y, txt, colour, font, font and 15 or nil)
+    cellText(x, y, txt, colour, font, font and gui.fontSize.grid or nil)
   end
 
   function pt:textCentred(xLo, xHi, y, txt, colour)
@@ -839,7 +839,7 @@ local gridPane = {}
 -- so drawTracker needs a fresh layout), with the grid font pushed throughout.
 --invariant: lane-strip drag callbacks may flush tv.grid.cols and clear col.x
 function gridPane:draw(gridW, gridH)
-  ImGui.PushFont(ctx, font, 15)
+  ImGui.PushFont(ctx, font, gui.fontSize.grid)
   computeLayout(gridW, gridH)
   drawLaneStrip()
   computeLayout(gridW, gridH)
