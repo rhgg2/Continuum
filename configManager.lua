@@ -240,6 +240,7 @@ local declarations = {
   { 'colour.chrome.editor.buttonActive',  'base.zone7' },
   { 'colour.chrome.scrollHandle', 'colour.global.text' },
   { 'colour.chrome.scrollBg',     'colour.global.bg'   },
+  { 'colour.chrome.palette.tabInactive', 'base.zone5' },  -- inactive palette tab label (muted against the text-ink active)
 }
 
 -- region.N reuse the eight accents (red last; the old 8th hue was olive).

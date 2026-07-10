@@ -3,14 +3,13 @@
 --shape: chrome = { colour(name, scope?)->u32, pushChromeStyles(), popChromeStyles(), pushChromeWindow(), popChromeWindow(), verticalSeparator(), disabledIf(cond,fn), row(h?,fn), checkbox(label,v), radio(label,active), headingLabel(text), makeToolbar()->fn(segments), drawPicker(d), libPicker(key, current, excludeOthers?)->items, pickerIsActive()->bool, resetPickerActive(), requestPickerOpen(kind)}
 --shape: chrome (shared row primitives) = { fitLabel(text,maxW)->text, rowSelectable(label,sel,flags?)->clicked, treeRow(opts)->{toggled,selected,doubleClicked}, numberStepper(id,value,opts)->changed,value }
 --shape: pickerSpec = { kind: string, heading: string?, buttonLabel: string, items: [{label, key, group?=int, current?=bool}], onPick: fn(key), onCancel?: fn(), placement?: 'above', width?, minWidth?, maxWidth? }
---shape: palettePaneSpec = { x, y, h, label, draw = fn(childFocused) }
+--shape: palettePaneSpec = { x, y, h, label | {tabs=[{key,label}], activeTab, onTab}, draw = fn(childFocused) }
 --contract: one chrome instance per coordinator; threaded into every page
 --invariant: colour cache lives on the chrome instance and is invalidated on cm:configChanged
 local ImGui   = require 'imgui' '0.10'
 local painter = require 'painter'
 
 local cm, ctx       = (...).cm, (...).ctx
-local uiFontBold    = (...).uiFontBold
 local uiSize        = (...).uiSize
 
 local cache = {}
@@ -483,9 +482,9 @@ local function drawPicker(d)
   local cursor = pickerCursor[d.kind] or 1
   local n = #matches
   if n > 0 then
-    if ImGui.IsKeyPressed(ctx, ImGui.Key_DownArrow) then
+    if ImGui.IsKeyPressed(ctx, ImGui.Key_DownArrow) or ImGui.IsKeyPressed(ctx, ImGui.Key_RightArrow) then
       cursor = cursor % n + 1
-    elseif ImGui.IsKeyPressed(ctx, ImGui.Key_UpArrow) then
+    elseif ImGui.IsKeyPressed(ctx, ImGui.Key_UpArrow) or ImGui.IsKeyPressed(ctx, ImGui.Key_LeftArrow) then
       cursor = (cursor - 2) % n + 1
     end
   end
@@ -542,6 +541,33 @@ local function paletteHeader(label)
   return oy + headerH
 end
 
+-- Tabbed header: equal-width cells, active in text ink, rest dimmed (palette.tabInactive).
+-- Dividers run the full header height with a bottom gap; a click fires onTab(key).
+local function paletteTabsHeader(tabs, activeKey, onTab)
+  local p       = painter.new(ctx, paintBinder, {})
+  local ox, oy  = ImGui.GetCursorScreenPos(ctx)
+  local avail   = select(1, ImGui.GetContentRegionAvail(ctx))
+  local sbw     = ImGui.GetScrollMaxY(ctx) > 0
+                  and select(1, ImGui.GetStyleVar(ctx, ImGui.StyleVar_ScrollbarSize)) or 0
+  local paneW   = avail + sbw
+  local rowH    = math.max(1, ImGui.GetTextLineHeightWithSpacing(ctx))
+  local headerH = rowH + HEADER_PAD
+  local cellW   = paneW / #tabs
+  for i, tab in ipairs(tabs) do
+    local ink = (tab.key == activeKey) and 'text' or 'palette.tabInactive'
+    local tw  = p.measure(tab.label)
+    local cx  = ox + (i - 1) * cellW
+    p.text(cx + math.floor((cellW - tw) / 2), oy + HEADER_PAD, ink, tab.label)
+    if i > 1 then p.segment(math.floor(cx), oy, math.floor(cx), oy + headerH - HEADER_GAP, 'text', 1) end
+    ImGui.SetCursorScreenPos(ctx, cx, oy)
+    if ImGui.InvisibleButton(ctx, '##ptab_' .. tab.key, cellW, headerH) and onTab then onTab(tab.key) end
+  end
+  p.segment(ox, oy + headerH, ox + paneW, oy + headerH, 'text', 1)
+  ImGui.SetCursorScreenPos(ctx, ox, oy)
+  ImGui.Dummy(ctx, avail, headerH + HEADER_GAP)
+  return oy + headerH
+end
+
 --contract: x/y/h are body-window screen coords at the gap's left edge; draw paints the body.
 local function palettePane(spec)
   -- vrule on the BODY draw list — it sits in the gap, outside the child.
@@ -554,7 +580,8 @@ local function palettePane(spec)
                       ImGui.ChildFlags_None, ImGui.WindowFlags_NoNav) then
     local childFocused = ImGui.IsWindowFocused(ctx)
     pushChromeStyles()
-    paletteHeader(spec.label)
+    if spec.tabs then paletteTabsHeader(spec.tabs, spec.activeTab, spec.onTab)
+    else              paletteHeader(spec.label) end
     spec.draw(childFocused)
     popChromeStyles()
   end

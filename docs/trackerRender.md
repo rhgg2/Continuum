@@ -69,50 +69,58 @@ identically-named params — ReaEQ's eight “Freq” — score independently. T
 transient touch-learn hoist was already index-keyed; this aligns the persisted
 scores with it.
 
-## FX chain strip — chrome pane
+## Palette tabs
 
-See design/note-macros-v2.md § The chain surface for the strip's layout and
-input grammar. The strip itself is a chrome child pane, built on the
-swingEditor idiom (`pushChromeStyles` + `BeginChild` + `paletteHeader`) and
-laid out as horizontal stage cards of live chrome widgets — each stage a
-`BeginGroup` of labelled fields, each rendered by `fxFieldWidget`.
-`stripFocus` mirrors `paletteFocus`: it gates whether `handleStripKeys` runs
-and drives the ▸ marker that tracks the keyboard cursor onto the current field.
+The right-hand pane carries two tabs — **parameters** | **fx** — sharing one
+child and one focus (`chrome.paletteTabsHeader`: equal-width cells, the active
+label in text ink and the inactive one dimmed, a crisp cell divider). The active
+tab is *derived*, not stored:
+`tv:paletteTab(caretKey, fxAvailable)` returns **fx** whenever a chain is
+showable — the caret sits on an fx host, or a session is live (`stripPlan ~=
+nil`) — and **parameters** otherwise. So a chain auto-raises under the caret
+exactly as the old docked strip did, and lapses when the caret leaves it.
 
-The chain's rightmost card is a synthetic **add slot** (`isAdd`, no fields): the
-cursor arrows onto it like any stage, and **Up** (or typing a character) opens the
-searchable stage picker (typing seeds the filter with that character,
-`requestPickerOpen(kind, seed)`); the `add` button there opens it for the mouse,
-and the picker draws *above* the button (`placement='above'`) so it clears the
-bottom-docked strip. Every real stage's **title is that same picker**
-(`fxSwap_<index>`, current kind flagged): **Up** on the header swaps the kind in
-place (`replaceFxStage`), as does type-to-open. Each stage card also carries
-`<`/`>` (reorder) and `del` (remove) buttons acting on that stage directly.
-Left/right navigate stages only on the header row (`param == 0`); on a param row
-they nudge the field value (as `-`/`=` do), and up/down move between the header
-and its fields. **Enter always commits** (keep edits, leave) from any row; the
-global button row keeps `clear` (wipe the chain) and `commit`/`cancel` (mouse
-parity for Enter/Esc).
+The one manual force is a **parameters override**: **Super-R** (`focusParams`)
+parks parameters over an auto-shown chain and focuses the tree. The override is
+anchored to the caret and clears on the next caret move (`tv:overrideParams` and
+the `caretKey` check in `tv:paletteTab`). **Super-X** cancels it with no other
+change — from the grid via `editFx`'s guard, or, while parameters holds focus,
+intercepted in `handlePaletteKeys` (grid commands can't dispatch while a pane is
+focused). Symmetrically, **Super-R** while an fx session is live commits it
+first, intercepted in `handleFxChainKeys`.
 
-Between stage cards sits a full-height rule — every gap ruled to the tallest
-card's height, including the gap before the add slot — with a small `»` flow
-marker set into a mid-line cut-out. A horizontal rule under each stage's title
-(`nameDividers`, add slot excepted) reaches out toward those flanking rules —
-the leftmost starting at the card edge, the rest from the prior stage's
-flanking rule — setting the card header off from its fields. It's centred in
-the `DIV_BAND` gap `drawStage` reserves under the title, keeping ~2px of
-clearance above and below.
+One pane, one focus: `drawParamPalette` forces `paletteFocus = nil` whenever the
+active tab isn't parameters, so the fx tab runs on `stripFocus` alone and the
+two panes never both wash the grid.
 
-The keyboard session is **transactional**: `editFx` (or a mouse click on any
+## FX chain — palette tab
+
+See design/note-macros-v2.md § The chain surface for the model. The chain draws
+*inside* the palette child (`drawFxChainBody`; the tab header and chrome styles
+are already pushed) as tree rows echoing the parameters tab: an action row
+(`clear` / `commit` / `cancel`), then each stage top-to-bottom — a heading (the
+swap picker, current kind flagged) with `↑`/`↓` reorder and `del` aligned to the
+value column's left edge, then one row per field: label left, `fxFieldWidget` in a
+fixed column flush to the right margin — with a `↓` flow marker (a crisp rule split
+around the arrow) between stages and a terminal **add** row.
+`stripFocus` gates `handleFxChainKeys` and highlights the cursor's row up to the
+value column (the tree's selection fill, replacing the old ▸ marker).
+
+**One axis navigates, the other edits.** `stripCursor = {stage, param}` (param 0
+= header) still keys the caret, but the whole chain flattens to a single column
+(`chainRows`): **Up/Down** walk header → fields → the next stage's header as one
+run. **Left/Right** *edit* the current row — nudging a field value (as `−`/`=`
+do), or, on a header or the add row, opening the kind picker; the picker then
+cycles on Left/Right too (`drawPicker` treats them as Up/Down). **Super+Up/Down**
+reorder the stage; **Enter** commits from any row; **Delete/Backspace** removes a
+stage; typing on a header/add row opens the picker seeded with that character. No
+axis does double duty — the confusion of the old horizontal strip, where
+Left/Right meant *navigate* on a header but *edit* on a field, is gone.
+
+The keyboard session stays **transactional**: `editFx` (or a mouse click on a
 field-row label) snapshots the chain (`stripSnapshot`) on entry and takes strip
-focus; edits apply live as a preview, and — while the picker is closed — Enter or
-the `commit` button keeps the edits and leaves, while Esc or `cancel` reverts to
-the snapshot before leaving. Clicking a field label also moves the selection chip
-there. The per-card `<`/`>`/`del` buttons are always-live (like `clear`), so a
-mouse-only edit acts without taking focus.
-
-When `editFx` opens an **empty** chain — a note host with no fx yet, or a
-selection that mints a fresh region — the strip pins to that host (`stripHost`)
-so the add slot renders on its own, and pops the add picker straight away. Esc
-there aborts the whole gesture (`cancelStrip`) and the frame-end sink prunes the
-empty husk, rather than merely dismissing the popup.
+focus; edits apply live as a preview; Enter/`commit` keep them and leave, Esc/
+`cancel` revert to the snapshot. Opening `editFx` on an **empty** chain — a note
+host with no fx, or a selection that mints a fresh region — pins the host and
+pops the add picker at once; Esc there aborts the whole gesture (`cancelStrip`)
+and the frame-end sink prunes the empty husk.

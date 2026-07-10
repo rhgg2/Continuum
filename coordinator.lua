@@ -19,7 +19,7 @@ local ctx, uiFont   = gui.ctx, gui.uiFont
 local uiSize        = gui.fontSize.ui
 
 local chrome = util.instantiate('chrome',
-  { cm = cm, ctx = ctx, uiFontBold = gui.uiFontBold, uiSize = uiSize })
+  { cm = cm, ctx = ctx, uiSize = uiSize })
 local toolbar = chrome.makeToolbar()   -- one shared toolbar; renders the active page's row
 local modalHost = util.instantiate('modalHost', { ctx = ctx, chrome = chrome })
 local help      = util.instantiate('help', { ctx = ctx, chrome = chrome, cmgr = cmgr })

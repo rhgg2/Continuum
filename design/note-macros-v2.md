@@ -788,6 +788,15 @@ realisation metadata riding the fx entry, never passed through
 `fn(host, params, ctx)`. The `FX_FIELDS` row-walk ports near-verbatim,
 rendered horizontally with params under each stage.
 
+**Update (2026-07-10) — vertical palette tab.** The docked horizontal strip
+became an **fx** tab in the right-hand palette (parameters | fx), rotated to a
+vertical list. The rotation buys clean 1D navigation: Up/Down walk every field
+across stages as one column, Left/Right always *edit* (nudge a field, or open a
+stage's kind picker) — killing the old strip's Left/Right double meaning
+(navigate on a header, edit on a field). fx auto-raises under the caret as the
+strip did; Super-R parks parameters over it, Super-X cancels. See
+docs/trackerRender.md § Palette tabs, § FX chain.
+
 **Grid-side affordances.** The fx-column badge grows into a **chain
 signature** — stacked one-char glyphs in series order (`a·v·h`) — so a
 region's behaviour reads without opening anything. The ghost display mode

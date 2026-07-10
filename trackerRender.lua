@@ -26,7 +26,7 @@ local function arrange() return facade.get('arrange') end
 
 ---------- PRIVATE
 
-local ctx, font, uiFont = gui.ctx, gui.font, gui.uiFont
+local ctx, uiFont = gui.ctx, gui.uiFont
 
 -- Group quick-verb state and lifetime moved to trackerView (this page is
 -- pure render/UI). The 'region' overlay keymap and the
@@ -242,19 +242,18 @@ local defocusReq   = false   -- one-shot: park focus on the sink, leaving the fi
 local releaseReq   = false   -- one-shot: drop paletteFocus to nil at the sink (Esc/Enter)
 local scrollReq    = false   -- one-shot: scroll the cursor row into view next draw
 
--- FX-chain strip focus: routes the keyboard into the docked strip (mirrors paletteFocus).
+-- FX-chain session focus: routes the keyboard into the fx palette tab (mirrors paletteFocus).
 local stripFocus    = false
 local stripHost     = nil    -- uuid the strip is pinned to while focused; lets a just-minted empty chain render
 local stripSnapshot = nil    -- {host, fx}: chain state at keyboard-entry; Esc reverts to it, Enter commits
 local stripExitReq  = false  -- one-shot: drop stripFocus after dispatch, so the exit Esc isn't re-dispatched
+local fxFocusReq    = false  -- one-shot: a click on the fx tab enters the session (washes the grid) next fx-body draw
 
--- Disabled-style wash over the whole current child window: the strip and palette
--- dim each other (the grid dims via renderBody) so the pane holding focus reads as the only live one.
-local function washCurrentWindow()
-  local wx, wy = ImGui.GetWindowPos(ctx)
-  local ww, wh = ImGui.GetWindowSize(ctx)
-  ImGui.DrawList_AddRectFilled(ImGui.GetWindowDrawList(ctx), wx, wy, wx + ww, wy + wh,
-                               chrome.colour('tracker.focusScrim'))
+-- Caret identity ('row,col') — the anchor for the Super-R parameters override, which
+-- lapses as soon as the caret moves off it (see tv:paletteTab).
+local function caretKeyNow()
+  local e = tv:ec()
+  return e and (e:row() .. ',' .. e:col()) or ''
 end
 
 local function paletteFindBox()
@@ -376,6 +375,9 @@ local function handlePaletteKeys(nav)
     -- through this frame's focusState so the same Esc isn't dispatched.
     tv:setPaletteFilter(''); defocusReq, releaseReq = true, true
     return true
+  end
+  if ImGui.GetKeyMods(ctx) == ImGui.Mod_Super and press(ImGui.Key_X) then
+    tv:clearParamsOverride(); return true   -- cancel the override; drawParamPalette drops focus, fx re-shows
   end
   if #nav == 0 then return end
 
@@ -527,38 +529,55 @@ local function drawTree(plan)
   ImGui.ListClipper_End(paramClipper)
 end
 
--- The 1px vrule + palette child, positioned from the body origin so the split
--- matches arrange/wiring's even though the tracker grid isn't a child window.
-local function drawParamPalette(x, y, h)
+-- Assigned in the FX chain block below; drawn when the fx tab is active.
+local drawFxChainBody
+
+local PALETTE_TABS = { { key = 'parameters', label = 'parameters' },
+                       { key = 'fx',         label = 'fx' } }
+
+-- The parameters tree body — the palette's former sole content, drawn on the params tab.
+local function drawParamsBody(childFocused)
+  paletteActions()
+  local findActive = paletteFindBox()
+  ImGui.Separator(ctx)
+
+  -- Focus sink: SetKeyboardFocusHere parks here to deactivate the find box
+  -- (Tab→tree, Esc/Enter→grid). Kept near the top so scroll never culls it.
+  local parking = defocusReq
+  if defocusReq then ImGui.SetKeyboardFocusHere(ctx); defocusReq = false end
+  if releaseReq then paletteFocus, releaseReq = nil, false end
+  ImGui.InvisibleButton(ctx, '##paletteSink', 1, 1)
+
+  local plan = buildPlan(tv:paramTargets(), tv:paletteFilter():lower())
+  local focusChanged = paletteFocus and handlePaletteKeys(navRows(plan, tv:paletteFilter() ~= ''))
+  drawTree(plan)
+
+  -- Reconcile paletteFocus with ImGui state: find box wins unless parking,
+  -- a pane click grabs tree focus, clicking elsewhere releases to the grid.
+  if automateReq then paletteFocus, automateReq = nil, false   -- mouse automate: hand focus back to the grid
+  elseif not focusChanged then
+    local clicked = ImGui.IsWindowHovered(ctx) and ImGui.IsMouseClicked(ctx, 0)
+    if findActive and not parking then paletteFocus = 'find'
+    elseif clicked then paletteFocus = paletteFocus or 'tree'
+    elseif paletteFocus and not childFocused then paletteFocus = nil end
+  end
+end
+
+-- The right-hand pane: parameters | fx tabs. fx auto-raises on a showable chain; Super-R parks
+-- parameters over it. See docs/trackerRender.md § Palette tabs.
+local function drawParamPalette(x, y, h, caretKey, fxAvailable, fxPlan)
+  local activeTab = tv:paletteTab(caretKey, fxAvailable)
+  if activeTab ~= 'parameters' and paletteFocus then paletteFocus = nil end
   chrome.palettePane{
     x = x, y = y, h = h,
-    label = 'parameters',
-    draw  = function(childFocused)
-      paletteActions()
-      local findActive = paletteFindBox()
-      ImGui.Separator(ctx)
-
-      -- Focus sink: SetKeyboardFocusHere parks here to deactivate the find box
-      -- (Tab→tree, Esc/Enter→grid). Kept near the top so scroll never culls it.
-      local parking = defocusReq
-      if defocusReq then ImGui.SetKeyboardFocusHere(ctx); defocusReq = false end
-      if releaseReq then paletteFocus, releaseReq = nil, false end
-      ImGui.InvisibleButton(ctx, '##paletteSink', 1, 1)
-
-      local plan = buildPlan(tv:paramTargets(), tv:paletteFilter():lower())
-      local focusChanged = paletteFocus and handlePaletteKeys(navRows(plan, tv:paletteFilter() ~= ''))
-      drawTree(plan)
-
-      -- Reconcile paletteFocus with ImGui state: find box wins unless parking,
-      -- a pane click grabs tree focus, clicking elsewhere releases to the grid.
-      if automateReq then paletteFocus, automateReq = nil, false   -- mouse automate: hand focus back to the grid
-      elseif not focusChanged then
-        local clicked = ImGui.IsWindowHovered(ctx) and ImGui.IsMouseClicked(ctx, 0)
-        if findActive and not parking then paletteFocus = 'find'
-        elseif clicked then paletteFocus = paletteFocus or 'tree'
-        elseif paletteFocus and not childFocused then paletteFocus = nil end
-      end
-      if stripFocus then washCurrentWindow() end   -- strip holds focus: dim the palette
+    tabs = PALETTE_TABS, activeTab = activeTab,
+    onTab = function(key)
+      if key == 'parameters' then tv:overrideParams(caretKey); paletteFocus = 'tree'
+      else tv:clearParamsOverride(); if fxAvailable then fxFocusReq = true end end
+    end,
+    draw = function(childFocused)
+      if activeTab == 'fx' then drawFxChainBody(fxPlan)
+      else                      drawParamsBody(childFocused) end
     end,
   }
 end
@@ -858,7 +877,7 @@ local gridPane = util.instantiate('gridPane', {
   inputAllowed = function() return tr:focusState().acceptCmds end,
 })
 
------ Note FX -- generator descriptors shared by the docked chain strip
+----- Note FX -- generator descriptors shared by the fx chain tab
 
 -- A thin renderer over the generator registry: the fx list is an ordered series (C1), stages
 -- reorderable/duplicable by position. see design/note-macros-v2.md § The fx chain, § Build progress C4
@@ -938,12 +957,14 @@ local function adjustRow(uuid, rw, right, mods)
   end
 end
 
--- The label-less value control for one fx field: dropdown, temper-step stepper, or number
--- stepper. Used by the docked strip; id keys ImGui per field.
-local function fxFieldWidget(host, index, fd, entry)
+-- Value control for one fx field (dropdown / temper-step / number stepper); id keys ImGui per
+-- field. width is the value column; stepper shrinks for -/+ buttons, choice dropdowns self-size.
+local function fxFieldWidget(host, index, fd, entry, width)
   local value   = entry[fd.field]
   local id      = 'fx_' .. index .. '_' .. fd.field
   local changed = false
+  -- numberStepper's width sizes its input box only; its -/+ buttons add 2×(innerSpacing + frameH).
+  local stepBoxW = width - 2 * (ImGui.GetStyleVar(ctx, ImGui.StyleVar_ItemInnerSpacing) + ImGui.GetFrameHeight(ctx))
   if fd.widget == 'choice' then
     local pick = chrome.dropdown(id, fd.options[choiceIndex(fd, value)].l, choiceLabels(fd))
     if pick then tv:setFxField(host, index, fd.field, fd.options[pick].v); changed = true end
@@ -952,25 +973,39 @@ local function fxFieldWidget(host, index, fd, entry)
     local midi, detune = hostPitch(host)
     local per = #temper.cents
     local rv, n = chrome.numberStepper(id, centsToSteps(temper, midi, detune, value),
-                    { width = 70, min = -2 * per, max = 2 * per })
+                    { width = stepBoxW, min = -2 * per, max = 2 * per })
     if rv then tv:setFxField(host, index, fd.field, stepsToCents(temper, midi, detune, n)); changed = true end
   elseif fd.widget == 'pattern' then
-    if ImGui.Button(ctx, patternSummary(value) .. '##' .. id) then launchPattern(host, index, fd, entry); changed = true end
+    if ImGui.Button(ctx, patternSummary(value) .. '##' .. id, width) then launchPattern(host, index, fd, entry); changed = true end
   else
-    local rv, n = chrome.numberStepper(id, value or 0, { width = 70, min = fd.min, max = fd.max })
+    local rv, n = chrome.numberStepper(id, value or 0, { width = stepBoxW, min = fd.min, max = fd.max })
     if rv then tv:setFxField(host, index, fd.field, n); changed = true end
   end
   return changed
 end
 
------ FX chain strip (docked; edits the chain under the caret in place)
+----- FX chain (palette tab; edits the chain under the caret in place)
 
--- see docs/trackerRender.md § FX chain strip for the chrome-pane idiom and layout grammar.
-local drawFxStrip, editFx, stripPlan do
-  local GAP, MARK_W, LABEL_W    = 20, 14, 64
-  local DIV_BAND, SEP_INSET     = 2, 4    -- name-divider band height; the rule's gap from the >> rules
-  local BTN_GAP, DEL_GAP        = 4, 4    -- <->  then  >-del  spacings (del sits a touch further out)
-  local GUILLEMET, MARK_SIZE = '\xc2\xbb', 14   -- flow marker glyph + its (small) point size
+-- see docs/trackerRender.md § FX chain for the vertical row grammar and 1D navigation.
+local editFx, stripPlan do
+  local LABEL_W, VALUE_W = 64, 96    -- swap-picker width; value-column width (flush to the right margin)
+  local FIELD_INDENT     = 12        -- fields nest one level under the fx-name heading
+  local BTN_GAP, DEL_GAP = 4, 4      -- title→reorder, then reorder→del spacings
+
+  -- The chain flattened to one navigable column: each stage's header then its fields, crossing
+  -- stage boundaries so Up/Down walk the whole chain as a single list.
+  local function chainRows(cols)
+    local rows = {}
+    for si, col in ipairs(cols) do
+      rows[#rows + 1] = { stage = si, param = 0 }
+      for k = 1, #col.fields do rows[#rows + 1] = { stage = si, param = k } end
+    end
+    return rows
+  end
+  local function rowIndexOf(rows, cur)
+    for i, r in ipairs(rows) do if r.stage == cur.stage and r.param == cur.param then return i end end
+    return 1
+  end
 
   -- Columns: one per stage, holding its currently-visible fields (adding is the header picker).
   local function stripColumns(fx)
@@ -991,20 +1026,7 @@ local drawFxStrip, editFx, stripPlan do
   -- A stage walks header(0)..fields.
   local function paramRange(col) return 0, #col.fields end
 
-  -- Reserve the band from live ImGui metrics; trailing pad matches the gap above row 1
-  -- so the space below the last field row reads the same as the space above the first.
-  local function stripHeight(cols)
-    local maxFields = 0
-    for _, c in ipairs(cols) do maxFields = math.max(maxFields, #c.fields) end
-    local frameH  = ImGui.GetFrameHeight(ctx)
-    local gapY    = select(2, ImGui.GetStyleVar(ctx, ImGui.StyleVar_ItemSpacing))
-    local header  = ImGui.GetTextLineHeightWithSpacing(ctx) + 12          -- paletteHeader band
-    local topBand = (frameH + gapY) + (1 + gapY)                          -- actions row + separator
-    local grid    = frameH * (1 + maxFields) + DIV_BAND + gapY * (maxFields + 1)  -- title, divider band, fields
-    return header + topBand + grid + gapY
-  end
-
-  -- While focused the strip pins to stripHost (so a just-minted empty chain renders on the add
+  -- While focused the chain pins to stripHost (so a just-minted empty chain renders on the add
   -- slot alone); unfocused it auto-shows the non-empty chain under the caret. nil = nothing to draw.
   function stripPlan()
     local host   = stripFocus and stripHost or tv:fxHostAtCursor()
@@ -1013,8 +1035,8 @@ local drawFxStrip, editFx, stripPlan do
     if not fx then return nil end
     if #fx == 0 and not pinned then return nil end
     local cols = stripColumns(fx)
-    cols[#cols + 1] = { isAdd = true, fields = {} }   -- rightmost slot: arrow to it, Enter adds a stage
-    return { host = host, cols = cols, height = stripHeight(cols) }
+    cols[#cols + 1] = { isAdd = true, fields = {} }   -- terminal slot: arrow onto it, type/←→ opens the add picker
+    return { host = host, cols = cols }
   end
 
   local function clampCursor(cols)
@@ -1038,39 +1060,39 @@ local drawFxStrip, editFx, stripPlan do
     stripExitReq = true   -- drop at frame end, not now, so the exit Esc isn't re-dispatched
   end
 
-  local function handleStripKeys(plan)
+  -- 1D grammar: Up/Down walk rows; Left/Right nudge a field or open the kind picker on a header.
+  -- Super+Up/Down reorder; Enter commits; Super+R hands off to the parameters tab.
+  local function handleFxChainKeys(plan)
     local press = function(k) return ImGui.IsKeyPressed(ctx, k) end
-    if press(ImGui.Key_Escape) then cancelStrip(); return end
-    local cols  = plan.cols
-    local cur   = clampCursor(cols)
-    local col   = cols[cur.stage]
     local mods  = ImGui.GetKeyMods(ctx)
     local super = (mods & ImGui.Mod_Super) ~= 0
+    if press(ImGui.Key_Escape) then cancelStrip(); return end
+    if super and press(ImGui.Key_R) then                    -- commit, then raise the parameters tab
+      stripExitReq = true; tv:overrideParams(caretKeyNow()); paletteFocus = 'tree'; return
+    end
+    local cols = plan.cols
+    local cur  = clampCursor(cols)
+    local col  = cols[cur.stage]
+    local up, down    = press(ImGui.Key_UpArrow),   press(ImGui.Key_DownArrow)
     local left, right = press(ImGui.Key_LeftArrow), press(ImGui.Key_RightArrow)
     if press(ImGui.Key_Enter) or press(ImGui.Key_KeypadEnter) then
-      stripExitReq = true                                  -- Enter commits everywhere: keep edits, leave
-    elseif (press(ImGui.Key_UpArrow) and (col.isAdd or cur.param == 0)) or (press(ImGui.Key_DownArrow) and col.isAdd) then
-      -- Up/Down on the add slot adds a new stage; on a header, Up swaps the kind (current flagged).
+      stripExitReq = true                                   -- Enter commits everywhere: keep edits, leave
+    elseif super and (up or down) and not col.isAdd then
+      if tv:moveFxStage(plan.host, col.index, up and -1 or 1) then cur.stage = cur.stage + (up and -1 or 1) end
+    elseif up or down then                                  -- walk the whole chain as one column
+      local rows = chainRows(cols)
+      local i    = util.clamp(rowIndexOf(rows, cur) + (down and 1 or -1), 1, #rows)
+      cur.stage, cur.param = rows[i].stage, rows[i].param
+    elseif (left or right) and cur.param == 0 then          -- header/add row: open the picker (it cycles on ←→)
       chrome.requestPickerOpen(col.isAdd and 'fxAdd' or ('fxSwap_' .. col.index))
-    elseif super and (left or right) and not col.isAdd then
-      if tv:moveFxStage(plan.host, col.index, left and -1 or 1) then
-        cur.stage = cur.stage + (left and -1 or 1)
-      end
-    elseif (left or right) and cur.param == 0 then       -- header row: arrow between stages / onto the add slot
-      cur.stage = util.clamp(cur.stage + (right and 1 or -1), 1, #cols)
-      local lo, hi = paramRange(cols[cur.stage])
-      cur.param = util.clamp(cur.param, lo, hi)
-    elseif left or right then                            -- param row: arrow nudges the field value
+    elseif left or right then                               -- field row: nudge the value
       adjustRow(plan.host, col.fields[cur.param], right, mods)
-    elseif press(ImGui.Key_UpArrow) or press(ImGui.Key_DownArrow) then
-      local lo, hi = paramRange(col)
-      cur.param = util.clamp(cur.param + (press(ImGui.Key_DownArrow) and 1 or -1), lo, hi)
     elseif press(ImGui.Key_Minus) or press(ImGui.Key_Equal) then
       if cur.param >= 1 then adjustRow(plan.host, col.fields[cur.param], press(ImGui.Key_Equal), mods) end
     elseif press(ImGui.Key_Backspace) or press(ImGui.Key_Delete) then
       if not col.isAdd then tv:removeFxStage(plan.host, col.index) end
     elseif col.isAdd or cur.param == 0 then
-      local ch = typedChar()                                 -- type-to-open: add slot appends, a header swaps
+      local ch = typedChar()                                -- type-to-open: add slot appends, a header swaps
       if ch then chrome.requestPickerOpen(col.isAdd and 'fxAdd' or ('fxSwap_' .. col.index), ch) end
     end
     tv:setStripCursor(cur)
@@ -1088,12 +1110,14 @@ local drawFxStrip, editFx, stripPlan do
     end)
   end
 
-  -- ▸ on the keyboard cursor's field (only while the strip holds focus); a blank keeps the label
-  -- column aligned.
-  local function mark(onCursor)
-    ImGui.AlignTextToFramePadding(ctx)
-    ImGui.Text(ctx, (onCursor and stripFocus) and '\xe2\x96\xb8' or ' ')
-    ImGui.SameLine(ctx, MARK_W)
+  -- Fill behind the keyboard cursor's row (replacing the old ▸): drawn before the row content so it
+  -- sits underneath; spans the current indent to the value column's left edge (not the margin).
+  local function rowHighlight(active)
+    if not active then return end
+    local x, y   = ImGui.GetCursorScreenPos(ctx)
+    local availW = select(1, ImGui.GetContentRegionAvail(ctx))
+    ImGui.DrawList_AddRectFilled(ImGui.GetWindowDrawList(ctx),
+      x, y, x + availW - VALUE_W - BTN_GAP, y + ImGui.GetFrameHeight(ctx), chrome.colour('toolbar.selectedRow'))
   end
 
   -- Picker items for every fx kind; flags the caller's current kind (nil on the add slot).
@@ -1105,17 +1129,15 @@ local drawFxStrip, editFx, stripPlan do
     return items
   end
 
-  -- The add-stage picker, drawn as the chain's rightmost slot so the cursor can arrow to it.
-  local function drawAddStage(host, onCursor)
-    ImGui.BeginGroup(ctx)
-    mark(onCursor)
+  -- The add-stage picker, drawn as the chain's terminal row so the cursor can arrow onto it.
+  local function drawAddChainStage(host, onCursor)
+    rowHighlight(onCursor and stripFocus)
     chrome.drawPicker{
-      kind = 'fxAdd', buttonLabel = 'add', items = kindItems(), placement = 'above',
+      kind = 'fxAdd', buttonLabel = 'add', items = kindItems(),
       onPick   = function(kind) tv:addFxStage(host, fxSeed(kind)) end,
       -- Esc while the chain is still empty aborts the whole add gesture, not just the popup.
       onCancel = function() if #(tv:noteFx(host) or {}) == 0 then cancelStrip() end end,
     }
-    ImGui.EndGroup(ctx)
   end
 
   -- Take strip focus and move the selection chip to (stage, param), snapshotting on entry so
@@ -1131,104 +1153,82 @@ local drawFxStrip, editFx, stripPlan do
     if ImGui.IsItemClicked(ctx) then enterStrip(host, stage, param) end
   end
 
-  -- One stage as a vertical group: header (title-as-swap-picker + reorder/del aligned to the field
-  -- column), a divider band, then a labelled chrome widget per field. Title picking swaps in place.
-  local function drawStage(host, col, onStage, cur, isFirst, isLast)
-    local btnSide = ImGui.GetFrameHeight(ctx)   -- square side for the < / > reorder buttons
-    ImGui.BeginGroup(ctx)
-    mark(onStage and cur.param == 0)
+  -- One stage as tree rows: heading (swap-picker) with ↑/↓ reorder + del, then a field per row —
+  -- label left, value column flush right. Cursor row highlights while the strip holds focus.
+  local function drawChainStage(host, col, onStage, cur, isFirst, isLast)
+    local btnSide = ImGui.GetFrameHeight(ctx)   -- square side for the ↑/↓ reorder buttons
+
+    rowHighlight(onStage and cur.param == 0 and stripFocus)
+    local headX, availW = ImGui.GetCursorPosX(ctx), select(1, ImGui.GetContentRegionAvail(ctx))
     chrome.drawPicker{
-      kind = 'fxSwap_' .. col.index, buttonLabel = col.label, width = LABEL_W - BTN_GAP, items = kindItems(col.kind),
+      kind = 'fxSwap_' .. col.index, buttonLabel = col.label, width = LABEL_W, items = kindItems(col.kind),
       onPick = function(kind) tv:replaceFxStage(host, col.index, fxSeed(kind)) end,
     }
-    ImGui.SameLine(ctx, MARK_W + LABEL_W)   -- reorder/del start on the field-widget column
+    clickToCursor(host, col.index, 0)
+    ImGui.SameLine(ctx); ImGui.SetCursorPosX(ctx, headX + availW - VALUE_W)   -- ↑/↓/del left-align with the value column
     chrome.disabledIf(isFirst, function()
-      if ImGui.Button(ctx, '<##fxup' .. col.index, btnSide, btnSide) then tv:moveFxStage(host, col.index, -1) end
+      if ImGui.Button(ctx, '\xe2\x86\x91##fxup' .. col.index, btnSide, btnSide) then tv:moveFxStage(host, col.index, -1) end
     end)
     ImGui.SameLine(ctx, 0, BTN_GAP)
     chrome.disabledIf(isLast, function()
-      if ImGui.Button(ctx, '>##fxdn' .. col.index, btnSide, btnSide) then tv:moveFxStage(host, col.index, 1) end
+      if ImGui.Button(ctx, '\xe2\x86\x93##fxdn' .. col.index, btnSide, btnSide) then tv:moveFxStage(host, col.index, 1) end
     end)
     ImGui.SameLine(ctx, 0, DEL_GAP)
     if ImGui.Button(ctx, 'del##fxdel' .. col.index) then tv:removeFxStage(host, col.index) end
-    ImGui.Dummy(ctx, 0, DIV_BAND)   -- room for the name divider drawn in the post-pass
+
     for k, f in ipairs(col.fields) do
-      mark(onStage and cur.param == k)
+      ImGui.Indent(ctx, FIELD_INDENT)
+      rowHighlight(onStage and cur.param == k and stripFocus)
+      local labelX, rowW = ImGui.GetCursorPosX(ctx), select(1, ImGui.GetContentRegionAvail(ctx))
       ImGui.AlignTextToFramePadding(ctx); ImGui.Text(ctx, f.fd.label)
       clickToCursor(host, col.index, k)
-      ImGui.SameLine(ctx, MARK_W + LABEL_W)
-      local touched = fxFieldWidget(host, col.index, f.fd, f.entry)
+      ImGui.SameLine(ctx); ImGui.SetCursorPosX(ctx, labelX + rowW - VALUE_W)
+      local touched = fxFieldWidget(host, col.index, f.fd, f.entry, VALUE_W)
       if touched or ImGui.IsItemActive(ctx) then enterStrip(host, col.index, k) end
-    end
-    ImGui.EndGroup(ctx)
-  end
-
-  -- Full-height rule with a mid-line cut-out holding a small » flow marker.
-  local function stageDivider(dl, groupRight, y0, y1)
-    local dx     = groupRight + math.floor(GAP / 2)
-    local mid    = (y0 + y1) / 2
-    local scale  = MARK_SIZE / ImGui.GetFontSize(ctx)
-    local gw, gh = ImGui.CalcTextSize(ctx, GUILLEMET)
-    gw, gh       = gw * scale, gh * scale
-    local half   = gh / 2 + 1
-    local ink    = chrome.colour('text')
-    ImGui.DrawList_AddLine(dl, dx, y0 + 2, dx, mid - half, ink, 1)
-    ImGui.DrawList_AddLine(dl, dx, mid + half, dx, y1, ink, 1)
-    ImGui.DrawList_AddTextEx(dl, font, MARK_SIZE, dx - gw / 2, mid - gh / 2, ink, GUILLEMET)
-  end
-
-  -- Rule under each real stage's title (add slot excepted), reaching toward the flanking >>
-  -- rules so titles and dividers read as one grid — see docs/trackerRender.md § FX chain strip.
-  local function nameDividers(dl, cols, lefts, rights, top)
-    local frameH = ImGui.GetFrameHeight(ctx)
-    local gapY   = select(2, ImGui.GetStyleVar(ctx, ImGui.StyleVar_ItemSpacing))
-    local half   = math.floor(GAP / 2)
-    local y      = top + frameH + gapY + DIV_BAND / 2
-    local ink    = chrome.colour('text')
-    for ci = 1, #cols - 1 do
-      local x0 = (ci == 1) and lefts[ci] or (rights[ci - 1] + half + SEP_INSET)
-      local x1 = rights[ci] + half - SEP_INSET
-      ImGui.DrawList_AddLine(dl, x0, y, x1, y, ink, 1)
+      ImGui.Unindent(ctx, FIELD_INDENT)
     end
   end
 
-  function drawFxStrip(plan, x, y, w)
+  -- A crisp text-colour rule across the pane, split around a centred ↓ — signal flow down the
+  -- chain (mirrors the old strip's divider). AddRectFilled, not AddLine, so the rule stays non-AA.
+  local FLOW_GLYPH, FLOW_GAP = '\xe2\x87\xa9', 4
+  local function drawFlowMarker()
+    local dl     = ImGui.GetWindowDrawList(ctx)
+    local ox, oy = ImGui.GetCursorScreenPos(ctx)
+    local availW = select(1, ImGui.GetContentRegionAvail(ctx))
+    local gw, gh = ImGui.CalcTextSize(ctx, FLOW_GLYPH)
+    local ink    = chrome.colour('text')
+    local midX   = math.floor(ox + availW / 2)
+    local ruleY  = math.floor(oy + gh / 2)
+    local half   = math.ceil(gw / 2) + FLOW_GAP
+    ImGui.DrawList_AddRectFilled(dl, ox, ruleY, midX - half, ruleY + 1, ink)
+    ImGui.DrawList_AddRectFilled(dl, midX + half, ruleY, ox + availW, ruleY + 1, ink)
+    ImGui.DrawList_AddText(dl, midX - math.floor(gw / 2), oy, ink, FLOW_GLYPH)
+    ImGui.Dummy(ctx, availW, gh)
+  end
+
+  -- Drawn inside the palette child (the tab header + chrome styles are already pushed): the action
+  -- row, then each stage top-to-bottom with a ↓ between, ending on the add row.
+  function drawFxChainBody(plan)
     local cur = clampCursor(plan.cols); tv:setStripCursor(cur)
-    ImGui.SetCursorScreenPos(ctx, x, y)
-    chrome.pushChromeStyles()
-    if ImGui.BeginChild(ctx, '##fxStrip', w, plan.height, ImGui.ChildFlags_None, ImGui.WindowFlags_NoNav) then
-      chrome.paletteHeader('fx')
-      chrome.row(function() headerActions(plan) end)
-      ImGui.Separator(ctx)
-      local dl = ImGui.GetWindowDrawList(ctx)
-      -- Stages share one row: gather each group's left/right edges and the tallest extent,
-      -- then rule every gap (including before the add slot) at that common height.
-      local rights, lefts, top, bottom = {}, {}, nil, nil
-      for ci, col in ipairs(plan.cols) do
-        if ci > 1 then ImGui.SameLine(ctx, 0, GAP) end
-        if col.isAdd then drawAddStage(plan.host, cur.stage == ci)
-        else              drawStage(plan.host, col, cur.stage == ci, cur, ci == 1, ci == #plan.cols - 1) end
-        local x0, y0 = ImGui.GetItemRectMin(ctx)
-        local x1, y1 = ImGui.GetItemRectMax(ctx)
-        lefts[ci], rights[ci] = x0, x1
-        top    = top and math.min(top, y0) or y0
-        bottom = bottom and math.max(bottom, y1) or y1
-      end
-      for ci = 1, #plan.cols - 1 do stageDivider(dl, rights[ci], top, bottom) end
-      nameDividers(dl, plan.cols, lefts, rights, top)
-      if paletteFocus then washCurrentWindow() end   -- palette holds focus: dim the strip
-      if stripFocus and not modalHost:isOpen()
-         and not chrome.pickerIsActive() and not ImGui.IsAnyItemActive(ctx) then
-        handleStripKeys(plan)
-      end
+    if fxFocusReq then enterStrip(plan.host, cur.stage, cur.param); fxFocusReq = false end
+    headerActions(plan)
+    ImGui.Separator(ctx)
+    for ci, col in ipairs(plan.cols) do
+      if ci > 1 then drawFlowMarker() end
+      if col.isAdd then drawAddChainStage(plan.host, cur.stage == ci)
+      else              drawChainStage(plan.host, col, cur.stage == ci, cur, ci == 1, ci == #plan.cols - 1) end
     end
-    ImGui.EndChild(ctx)
-    chrome.popChromeStyles()
+    if stripFocus and not modalHost:isOpen()
+       and not chrome.pickerIsActive() and not ImGui.IsAnyItemActive(ctx) then
+      handleFxChainKeys(plan)
+    end
   end
 
-  -- Super+X enters the docked strip on tv:fxHostForEdit's host (selection mints, else caret pins);
-  -- an empty chain opens on the add slot. A new host re-baselines the snapshot; the same host keeps it.
+  -- Super+X enters the fx session (selection mints host, caret pins); empty chain opens add slot.
+  -- Super-R override up: Super+X cancels it instead, re-revealing the auto chain.
   function editFx()
+    if tv:paramsOverrideActive() then tv:clearParamsOverride(); return end
     local host, fresh = tv:fxHostForEdit()
     if not host then return end
     local existing = tv:noteFx(host)
@@ -1290,6 +1290,11 @@ local function duplicateUnpooledTake()
   if tv:duplicateBoundUnpooled() then tr:openTakeProperties{ focusName = true } end
 end
 
+-- Super-R: park the parameters tab over an auto-shown chain and focus it (Super-X cancels).
+local function focusParams()
+  tv:overrideParams(caretKeyNow()); paletteFocus = 'tree'
+end
+
 local tracker = cmgr:scope('tracker')
 
 tracker:registerAll{
@@ -1317,7 +1322,8 @@ tracker:registerAll{
   openTemperPicker = function() chrome.requestPickerOpen('temper') end,
   openSwingPicker  = function() chrome.requestPickerOpen('swing')  end,
 
-  editNoteFx = { editFx, 'Edit note FX' },
+  editNoteFx        = { editFx,      'Edit note FX' },
+  focusParamPalette = { focusParams, 'Focus parameters' },
 }
 
 cmgr:doAfter({ 'quantize', 'quantizeKeepRealised' },
@@ -1416,24 +1422,22 @@ function tr:renderBody(_, w, h, dispatch)
     if stripHost then tv:pruneEmptyRegion(stripHost) end   -- cull an emptied husk
     stripFocus, stripSnapshot, stripHost = false, nil, nil
   end
-  local gridH  = plan and (h - plan.height) or h
-  gridPane:draw(gridW, gridH)
-  if stripFocus or paletteFocus then   -- focus lives in the strip/palette: wash the grid to disabled
+  gridPane:draw(gridW, h)   -- grid owns the full body height; the fx chain lives in the palette now
+  if stripFocus or paletteFocus then   -- focus lives in the palette: wash the grid to disabled
     ImGui.DrawList_AddRectFilled(ImGui.GetWindowDrawList(ctx),
-      ox, oy, ox + gridW, oy + gridH, chrome.colour('tracker.focusScrim'))
+      ox, oy, ox + gridW, oy + h, chrome.colour('tracker.focusScrim'))
   end
-  if plan then drawFxStrip(plan, ox, oy + gridH, gridW) end
   -- Full body width (grid + palette) so the cheat-sheet can flow across both.
   local g = gridPane:geom()
   help:anchor('body.grid', g.originX, g.originY, ox + w - g.originX, g.height * g.cellH)
 
-  drawParamPalette(ox + gridW, oy, h)
+  drawParamPalette(ox + gridW, oy, h, caretKeyNow(), plan ~= nil, plan)
   tv:pollLearn(ImGui.IsWindowFocused(ctx, ImGui.FocusedFlags_AnyWindow))
 
   if not help:wasOpenAtFrameStart() then gridPane:handleMouse() end
   if stripFocus and ImGui.IsMouseClicked(ctx, 0) then   -- a click in the grid commits the strip and returns focus
     local mx, my = ImGui.GetMousePos(ctx)
-    if mx >= ox and mx < ox + gridW and my >= oy and my < oy + gridH then stripExitReq = true end
+    if mx >= ox and mx < ox + gridW and my >= oy and my < oy + h then stripExitReq = true end
   end
   local kr = dispatch and dispatch(self:focusState()) or { commandHeld = {} }
   if not help:wasOpenAtFrameStart() then gridPane:handleKeys(kr) end

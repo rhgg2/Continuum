@@ -41,15 +41,10 @@ local function createImGui()
   local uiFamily = isMac and 'Helvetica Neue'
                           or (osName:find('Win') and 'Segoe UI' or 'sans-serif')
   local uiFont     = ImGui.CreateFont(uiFamily)
-  -- FontFlags_Bold is rasterizer-simulated: same family, usable bold, no
-  -- separate face to ship.
-  local uiFontBold = ImGui.CreateFont(uiFamily, ImGui.FontFlags_Bold)
-  -- Wiring node labels want a heavier face at a size between ui and grid;
-  -- same family/flags as uiFontBold, its own slot so wiring can diverge.
+  -- Wiring node labels want a heavier face; FontFlags_Bold is rasterizer-simulated (same family).
   local wireFont   = ImGui.CreateFont(uiFamily, ImGui.FontFlags_Bold)
   ImGui.Attach(ctx, font)
   ImGui.Attach(ctx, uiFont)
-  ImGui.Attach(ctx, uiFontBold)
   ImGui.Attach(ctx, wireFont)
   -- Chrome (toolbar, status, popups, swing editor) all scale off the
   -- grid size so the two registers stay in proportion if either moves.
@@ -60,7 +55,6 @@ local function createImGui()
     ctx        = ctx,
     font       = font,
     uiFont     = uiFont,
-    uiFontBold = uiFontBold,
     wireFont   = wireFont,
     fontSize   = { grid = GRID_SIZE, ui = UI_SIZE, wire = WIRE_SIZE },
   }
