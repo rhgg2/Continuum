@@ -245,7 +245,7 @@ local scrollReq    = false   -- one-shot: scroll the cursor row into view next d
 -- FX-chain session focus: routes the keyboard into the fx palette tab (mirrors paletteFocus).
 local stripFocus    = false
 local stripHost     = nil    -- uuid the strip is pinned to while focused; lets a just-minted empty chain render
-local stripSnapshot = nil    -- {host, fx}: chain state at keyboard-entry; Esc reverts to it, Enter commits
+local stripSnapshot = nil    -- {host, fx}: chain state at keyboard-entry; Esc reverts to it, commit keeps the edits
 local stripExitReq  = false  -- one-shot: drop stripFocus after dispatch, so the exit Esc isn't re-dispatched
 local fxFocusReq    = false  -- one-shot: a click on the fx tab enters the session (washes the grid) next fx-body draw
 
@@ -378,7 +378,10 @@ local function handlePaletteKeys(nav)
     return true
   end
   if ImGui.GetKeyMods(ctx) == ImGui.Mod_Super and press(ImGui.Key_X) then
-    tv:clearParamsOverride(); return true   -- cancel the override; drawParamPalette drops focus, fx re-shows
+    tv:clearParamsOverride(); fxFocusReq = true; return true   -- cross to fx: drop the override, focus the chain next fx draw
+  end
+  if ImGui.GetKeyMods(ctx) == ImGui.Mod_Super and press(ImGui.Key_R) then
+    tv:clearParamsOverride(); return true   -- toggle parameters off: the auto chain re-shows and focus falls to the grid
   end
   if #nav == 0 then return end
 
@@ -964,26 +967,24 @@ end
 local function fxFieldWidget(host, index, fd, entry, width)
   local value   = entry[fd.field]
   local id      = 'fx_' .. index .. '_' .. fd.field
-  local changed = false
   -- numberStepper's width sizes its input box only; its -/+ buttons add 2×(innerSpacing + frameH).
   local stepBoxW = width - 2 * (ImGui.GetStyleVar(ctx, ImGui.StyleVar_ItemInnerSpacing) + ImGui.GetFrameHeight(ctx))
   if fd.widget == 'choice' then
     local pick = chrome.dropdown(id, fd.options[choiceIndex(fd, value)].l, choiceLabels(fd))
-    if pick then tv:setFxField(host, index, fd.field, fd.options[pick].v); changed = true end
+    if pick then tv:setFxField(host, index, fd.field, fd.options[pick].v) end
   elseif fd.widget == 'stepInterval' then
     local temper = slideTemper()
     local midi, detune = hostPitch(host)
     local per = #temper.cents
     local rv, n = chrome.numberStepper(id, centsToSteps(temper, midi, detune, value),
                     { width = stepBoxW, min = -2 * per, max = 2 * per })
-    if rv then tv:setFxField(host, index, fd.field, stepsToCents(temper, midi, detune, n)); changed = true end
+    if rv then tv:setFxField(host, index, fd.field, stepsToCents(temper, midi, detune, n)) end
   elseif fd.widget == 'pattern' then
-    if ImGui.Button(ctx, patternSummary(value) .. '##' .. id, width) then launchPattern(host, index, fd, entry); changed = true end
+    if ImGui.Button(ctx, patternSummary(value) .. '##' .. id, width) then launchPattern(host, index, fd, entry) end
   else
     local rv, n = chrome.numberStepper(id, value or 0, { width = stepBoxW, min = fd.min, max = fd.max })
-    if rv then tv:setFxField(host, index, fd.field, n); changed = true end
+    if rv then tv:setFxField(host, index, fd.field, n) end
   end
-  return changed
 end
 
 ----- FX chain (palette tab; edits the chain under the caret in place)
@@ -1063,13 +1064,14 @@ local editFx, stripPlan do
     stripExitReq = true   -- drop at frame end, not now, so the exit Esc isn't re-dispatched
   end
 
-  -- 1D grammar: Up/Down walk rows; Left/Right nudge a field or open the kind picker on a header.
-  -- Tab/Shift-Tab jump between stages; Super+Up/Down reorder; Enter commits; Super+R hands off to the parameters tab.
+  -- 1D grammar: Up/Down walk rows, Left/Right edit or open a picker, Super+Up/Down reorder.
+  -- Enter/Super+X/Super+R/Esc — see docs/trackerRender.md § FX chain — palette tab.
   local function handleFxChainKeys(plan)
     local press = function(k) return ImGui.IsKeyPressed(ctx, k) end
     local mods  = ImGui.GetKeyMods(ctx)
     local super = (mods & ImGui.Mod_Super) ~= 0
     if press(ImGui.Key_Escape) then cancelStrip(); return end
+    if super and press(ImGui.Key_X) then stripExitReq = true; return end   -- commit and leave (Super+X toggles the session)
     if super and press(ImGui.Key_R) then                    -- commit, then raise the parameters tab
       stripExitReq = true; tv:overrideParams(caretKeyNow()); paletteFocus, focusFindReq = 'find', true; return
     end
@@ -1085,7 +1087,12 @@ local editFx, stripPlan do
     local up, down    = press(ImGui.Key_UpArrow),   press(ImGui.Key_DownArrow)
     local left, right = press(ImGui.Key_LeftArrow), press(ImGui.Key_RightArrow)
     if press(ImGui.Key_Enter) or press(ImGui.Key_KeypadEnter) then
-      stripExitReq = true                                   -- Enter commits everywhere: keep edits, leave
+      if cur.param == 0 then                                -- header/add row: open the kind picker (mirrors ←→)
+        chrome.requestPickerOpen(col.isAdd and 'fxAdd' or ('fxSwap_' .. col.index))
+      else                                                  -- field row: pattern opens its editor, plain values inert
+        local rw = col.fields[cur.param]
+        if rw.fd.widget == 'pattern' then launchPattern(plan.host, rw.index, rw.fd, rw.entry) end
+      end
     elseif super and (up or down) and not col.isAdd then
       if tv:moveFxStage(plan.host, col.index, up and -1 or 1) then cur.stage = cur.stage + (up and -1 or 1) end
     elseif up or down then                                  -- walk the whole chain as one column
@@ -1108,7 +1115,7 @@ local editFx, stripPlan do
   end
 
   -- clear wipes the chain (always live). commit/cancel end the keyboard session, so they gate
-  -- on strip focus (mouse parity for Enter/Esc) — there's no session to end when unfocused.
+  -- on strip focus (mouse parity for Super+X/Esc) — there's no session to end when unfocused.
   local function headerActions(plan)
     if ImGui.Button(ctx, 'clear')  then tv:setNoteFx(plan.host, util.REMOVE) end
     ImGui.SameLine(ctx, 0, 4)
@@ -1150,9 +1157,8 @@ local editFx, stripPlan do
     }
   end
 
-  -- Take strip focus and move the selection chip to (stage, param), snapshotting on entry so
-  -- commit/cancel have a baseline (mirrors editFx's transactional open). Shared by a label
-  -- click and mouse interaction with a field's control.
+  -- Take strip focus and move the selection chip to (stage, param), snapshotting on entry.
+  -- Label click enters; a value-widget edit doesn't — see docs/trackerRender.md § FX chain — palette tab.
   local function enterStrip(host, stage, param)
     if not stripFocus then stripSnapshot = { host = host, fx = util.deepClone(tv:noteFx(host)) } end
     stripHost = host
@@ -1175,7 +1181,7 @@ local editFx, stripPlan do
       kind = 'fxSwap_' .. col.index, buttonLabel = col.label, flat = true, minWidth = LABEL_W, maxWidth = availW - VALUE_W - LABEL_GAP, items = kindItems(col.kind),
       onPick = function(kind) tv:replaceFxStage(host, col.index, fxSeed(kind)) end,
     }
-    clickToCursor(host, col.index, 0)
+    -- No clickToCursor here: picking a kind applies live via onPick without grabbing strip focus (mirrors a value edit).
     ImGui.SameLine(ctx); ImGui.SetCursorPosX(ctx, headX + availW - VALUE_W)   -- ↑/↓/del left-align with the value column
     chrome.disabledIf(isFirst, function()
       if ImGui.Button(ctx, '\xe2\x86\x91##fxup' .. col.index, btnSide, btnSide) then tv:moveFxStage(host, col.index, -1) end
@@ -1194,8 +1200,7 @@ local editFx, stripPlan do
       ImGui.AlignTextToFramePadding(ctx); ImGui.Text(ctx, f.fd.label)
       clickToCursor(host, col.index, k)
       ImGui.SameLine(ctx); ImGui.SetCursorPosX(ctx, labelX + rowW - VALUE_W)
-      local touched = fxFieldWidget(host, col.index, f.fd, f.entry, VALUE_W)
-      if touched or ImGui.IsItemActive(ctx) then enterStrip(host, col.index, k) end
+      fxFieldWidget(host, col.index, f.fd, f.entry, VALUE_W)   -- edits apply live; a value edit never grabs strip focus
       ImGui.Unindent(ctx, FIELD_INDENT)
     end
   end
@@ -1236,9 +1241,9 @@ local editFx, stripPlan do
   end
 
   -- Super+X enters the fx session (selection mints host, caret pins); empty chain opens add slot.
-  -- Super-R override up: Super+X cancels it instead, re-revealing the auto chain.
+  -- A parameters override clears first, so Super-X always lands keyboard focus in the fx palette.
   function editFx()
-    if tv:paramsOverrideActive() then tv:clearParamsOverride(); return end
+    if tv:paramsOverrideActive() then tv:clearParamsOverride() end   -- fall through into the fx session
     local host, fresh = tv:fxHostForEdit()
     if not host then return end
     local existing = tv:noteFx(host)
@@ -1300,8 +1305,10 @@ local function duplicateUnpooledTake()
   if tv:duplicateBoundUnpooled() then tr:openTakeProperties{ focusName = true } end
 end
 
--- Super-R: park the parameters tab over an auto-shown chain and land on the find box (Super-X cancels).
+-- Super-R toggles the parameters tab: park it over an auto-shown chain and land on the find box, or,
+-- if already parked, drop the override back to the auto chain. Super-X (editFx) is the mirror, owning fx.
 local function focusParams()
+  if tv:paramsOverrideActive() then tv:clearParamsOverride(); return end
   tv:overrideParams(caretKeyNow()); paletteFocus, focusFindReq = 'find', true
 end
 

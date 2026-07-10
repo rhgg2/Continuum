@@ -80,15 +80,20 @@ showable — the caret sits on an fx host, or a session is live (`stripPlan ~=
 nil`) — and **parameters** otherwise. So a chain auto-raises under the caret
 exactly as the old docked strip did, and lapses when the caret leaves it.
 
-The one manual force is a **parameters override**: **Super-R** (`focusParams`)
-parks parameters over an auto-shown chain and lands on the find box (mirroring the
-Tab-to-find idiom, so the child takes real keyboard focus and the reconcile keeps it). The override is
-anchored to the caret and clears on the next caret move (`tv:overrideParams` and
-the `caretKey` check in `tv:paletteTab`). **Super-X** cancels it with no other
-change — from the grid via `editFx`'s guard, or, while parameters holds focus,
-intercepted in `handlePaletteKeys` (grid commands can't dispatch while a pane is
-focused). Symmetrically, **Super-R** while an fx session is live commits it
-first, intercepted in `handleFxChainKeys`.
+Two symmetric toggles bind the two panes: **Super-R** owns **parameters**,
+**Super-X** owns the **fx** palette. Super-R (`focusParams`) parks parameters
+over an auto-shown chain and lands on the find box (mirroring the Tab-to-find
+idiom, so the child takes real keyboard focus and the reconcile keeps it);
+pressed again — from the grid, or while parameters holds focus via
+`handlePaletteKeys` — it drops the override, re-revealing the auto chain and
+letting focus fall to the grid. The override is anchored to the caret and clears
+on the next caret move (`tv:overrideParams` and the `caretKey` check in
+`tv:paletteTab`). Super-X (`editFx`) enters the fx session; while parameters is
+up it clears the override first, so Super-X always lands keyboard focus in the fx
+palette — from the grid via `editFx`, or while parameters holds focus via
+`handlePaletteKeys`, which raises `fxFocusReq`. Symmetrically, inside a live fx
+session `handleFxChainKeys` binds **Super-R** to commit-then-raise-parameters and
+**Super-X** to commit-and-leave.
 
 One pane, one focus: `drawParamPalette` forces `paletteFocus = nil` whenever the
 active tab isn't parameters, so the fx tab runs on `stripFocus` alone and the
@@ -113,15 +118,19 @@ value column (the tree's selection fill, replacing the old ▸ marker).
 run. **Left/Right** *edit* the current row — nudging a field value (as `−`/`=`
 do), or, on a header or the add row, opening the kind picker; the picker then
 cycles on Left/Right too (`drawPicker` treats them as Up/Down). **Super+Up/Down**
-reorder the stage; **Enter** commits from any row; **Delete/Backspace** removes a
+reorder the stage; **Enter** activates the row — opening the kind picker on a
+header/add row, the pattern editor on a pattern field, inert on a plain value;
+**Super+X** commits from any row and leaves; **Delete/Backspace** removes a
 stage; typing on a header/add row opens the picker seeded with that character. No
 axis does double duty — the confusion of the old horizontal strip, where
 Left/Right meant *navigate* on a header but *edit* on a field, is gone.
 
 The keyboard session stays **transactional**: `editFx` (or a mouse click on a
 field-row label) snapshots the chain (`stripSnapshot`) on entry and takes strip
-focus; edits apply live as a preview; Enter/`commit` keep them and leave, Esc/
-`cancel` revert to the snapshot. Opening `editFx` on an **empty** chain — a note
+focus; edits apply live as a preview; **Super+X**/`commit` keep them and leave, Esc/
+`cancel` revert to the snapshot. A mouse edit of a value widget, by contrast,
+applies live without entering the session — it never grabs strip focus.
+Opening `editFx` on an **empty** chain — a note
 host with no fx, or a selection that mints a fresh region — pins the host and
 pops the add picker at once; Esc there aborts the whole gesture (`cancelStrip`)
 and the frame-end sink prunes the empty husk.

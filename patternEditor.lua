@@ -46,6 +46,7 @@ local item, poolGuid           -- set between open and close; nil while dormant
 local editBody, commitFn       -- open-snapshot body + write-back closure; nil while dormant
 local lastWritten              -- last body committed; deepEq-compared to skip a no-op write-through
 local armed = false            -- gate write-through to genuine edits, not open/close rebuilds
+local swallowInput = false     -- one-shot: drop the keystroke that launched the modal, so its press-edge (Enter=commit, ←→) isn't re-read here
 
 local gridPane = util.instantiate('gridPane', {
   cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, tv = tv,
@@ -306,6 +307,7 @@ end
 --contract: input pass -- mouse, dispatch against mini cmgr, note entry; unconsumed Esc cancels, Enter commits
 --contract: returns the dispatch result kr = { consumed, commandHeld }
 function pe:handleInput(close)
+  if swallowInput then swallowInput = false; return { consumed = true, commandHeld = {} } end
   gridPane:handleMouse()
   local kr = keyDispatch.dispatchKeys(miniFocus, cmgr, ctx)
   gridPane:handleKeys(kr)
@@ -328,6 +330,7 @@ end)
 --contract: production entry -- mint the checkout on `body` and raise the editing modal; onClose sweeps it
 function pe:launch(body, commit)
   if self:open(body, commit) then
+    swallowInput = true   -- the launching key (Enter/←→) still has a live press-edge; skip the modal's first input pass so it isn't re-read as commit/nav
     local vw = ImGui.Viewport_GetWorkSize(ImGui.GetWindowViewport(ctx))
     -- Height fits the whole grid capped at 32 content rows (curve mode adds the endL terminal
     -- row), plus the modal chrome. Width stays a viewport fraction; both axes stay user-resizable.
