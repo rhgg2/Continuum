@@ -1191,7 +1191,7 @@ local editFx, stripPlan do
 
   -- A crisp text-colour rule across the pane, split around a centred ↓ — signal flow down the
   -- chain (mirrors the old strip's divider). AddRectFilled, not AddLine, so the rule stays non-AA.
-  local FLOW_GLYPH, FLOW_GAP = '\xe2\x87\xa9', 4
+  local FLOW_GLYPH, FLOW_GAP = '\xe2\x8f\xb7', 4
   local function drawFlowMarker()
     local dl     = ImGui.GetWindowDrawList(ctx)
     local ox, oy = ImGui.GetCursorScreenPos(ctx)

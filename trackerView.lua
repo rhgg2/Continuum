@@ -2074,10 +2074,8 @@ function tv:noteFx(uuid)
   return region and region.fx or nil
 end
 
--- The chain host whose window covers the caret, read-only: a note or fx region whose
--- [onset, tail) span brackets the caret row -- so the strip opens anywhere in the region,
--- not just its onset. Hostable = a durable uuid and not a derived realisation hit.
--- No selection branch -- cursor movement must never mint a region (the strip reads this).
+-- Chain host at the caret: note/region whose [onset, tail) brackets the row (strip opens anywhere
+-- in the region). PA is skipped -- point-event, no window. No selection: movement must not mint regions.
 function tv:fxHostAtCursor()
   local col = grid.cols[ec:col()]
   if not (col and (col.type == 'note' or col.type == 'fx')) then return nil end
@@ -2085,9 +2083,9 @@ function tv:fxHostAtCursor()
   local rowEnd   = ctx:rowToPPQ(ec:row() + 1, col.midiChan)
   local host
   for _, e in ipairs(col.events) do
-    if e.uuid and not e.derived                     -- hostable: authored note / region cell
-       and e.ppq < rowEnd and rowStart < e.endppqC  -- its window brackets the caret row
-       and (not host or e.ppq > host.ppq) then       -- innermost when nested: greatest onset wins
+    if e.uuid and not e.derived and e.evType ~= 'pa'  -- hostable: authored note / region cell, not a PA
+       and e.ppq < rowEnd and rowStart < e.endppqC    -- its window brackets the caret row
+       and (not host or e.ppq > host.ppq) then         -- innermost when nested: greatest onset wins
       host = e
     end
   end

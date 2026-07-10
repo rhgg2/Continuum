@@ -59,6 +59,24 @@ return {
   },
 
   {
+    -- A PA carries a durable uuid (rpb rides a sidecar) but is a point-event with no
+    -- endppqC. The host scan must skip it, not compare rowStart against its nil window.
+    name = 'fxHostAtCursor: a PA under the caret is skipped, not treated as a host',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent{ evType = 'note', ppq = 0, endppq = 960, chan = 1, pitch = 60,
+                     vel = 100, detune = 0, delay = 0, lane = 1 }
+      h.tm:addEvent{ evType = 'pa', ppq = 240, chan = 1, pitch = 60, vel = 64, lane = 1, rpb = 2 }
+      h.tm:flush()
+      h.vm:setGridSize(80, 40)
+      local ci = lane1Idx(h)
+      local tail = h.vm.grid.cols[ci].tails[1]
+      h.ec:setPos(tail.endRow - 1, ci, 1)
+      t.eq(h.vm:fxHostAtCursor(), hostUuid(h), 'the note host resolves; the PA point-event is skipped')
+    end,
+  },
+
+  {
     name = 'setNoteFx seeds retrig -> rebuild expands; REMOVE clears',
     run = function(harness)
       local h = harness.mk()
