@@ -74,6 +74,10 @@ for _, name in ipairs(EDIT_COMMANDS) do
   local keys = pageBindings.tracker[name]
   if keys then miniScope:bind(name, keys) end
 end
+-- Ctrl+digit advBy0..9 arm the auto-step; bind the generated series alongside the edit subset.
+for i = 0, 9 do
+  miniScope:bind('advBy' .. i, pageBindings.tracker['advBy' .. i])
+end
 cmgr:loadOverrides(ImGui)   -- user rebinds (global tier) apply to the mini editor too
 cmgr:push(miniScope)        -- single-purpose cmgr: the tracker scope stays active for its life
 
