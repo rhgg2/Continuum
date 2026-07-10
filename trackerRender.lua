@@ -247,7 +247,7 @@ local stripFocus    = false
 local stripHost     = nil    -- uuid the strip is pinned to while focused; lets a just-minted empty chain render
 local stripSnapshot = nil    -- {host, fx}: chain state at keyboard-entry; Esc reverts to it, commit keeps the edits
 local stripExitReq  = false  -- one-shot: drop stripFocus after dispatch, so the exit Esc isn't re-dispatched
-local fxFocusReq    = false  -- one-shot: a click on the fx tab enters the session (washes the grid) next fx-body draw
+local fxFocusReq    = false  -- one-shot: Super-X from the parameters pane enters the fx session next fx-body draw
 
 -- Caret identity ('row,col') — the anchor for the Super-R parameters override, which
 -- lapses as soon as the caret moves off it (see tv:paletteTab).
@@ -378,10 +378,10 @@ local function handlePaletteKeys(nav)
     return true
   end
   if ImGui.GetKeyMods(ctx) == ImGui.Mod_Super and press(ImGui.Key_X) then
-    tv:clearParamsOverride(); fxFocusReq = true; return true   -- cross to fx: drop the override, focus the chain next fx draw
+    tv:clearTabOverride(); fxFocusReq = true; return true   -- cross to fx: drop the pin, focus the chain next fx draw
   end
   if ImGui.GetKeyMods(ctx) == ImGui.Mod_Super and press(ImGui.Key_R) then
-    tv:clearParamsOverride(); return true   -- toggle parameters off: the auto chain re-shows and focus falls to the grid
+    tv:clearTabOverride(); return true   -- toggle parameters off: the auto chain re-shows and focus falls to the grid
   end
   if #nav == 0 then return end
 
@@ -535,8 +535,10 @@ local function drawTree(plan)
   ImGui.ListClipper_End(paramClipper)
 end
 
--- Assigned in the FX chain block below; drawn when the fx tab is active.
+-- Assigned in the FX chain block below; drawn when the fx tab is active. editFx is hoisted here
+-- too so the fx-tab click (drawParamPalette, above the block) can launch the session.
 local drawFxChainBody
+local editFx
 
 local PALETTE_TABS = { { key = 'parameters', label = 'parameters' },
                        { key = 'fx',         label = 'fx' } }
@@ -577,10 +579,7 @@ local function drawParamPalette(x, y, h, caretKey, fxAvailable, fxPlan)
   chrome.palettePane{
     x = x, y = y, h = h,
     tabs = PALETTE_TABS, activeTab = activeTab,
-    onTab = function(key)
-      if key == 'parameters' then tv:overrideParams(caretKey); paletteFocus = 'tree'
-      else tv:clearParamsOverride(); if fxAvailable then fxFocusReq = true end end
-    end,
+    onTab = function(key) tv:overrideTab(key, caretKey) end,   -- a tab click just switches the view; it never grabs focus
     draw = function(childFocused)
       if activeTab == 'fx' then drawFxChainBody(fxPlan)
       else                      drawParamsBody(childFocused) end
@@ -990,7 +989,7 @@ end
 ----- FX chain (palette tab; edits the chain under the caret in place)
 
 -- see docs/trackerRender.md § FX chain for the vertical row grammar and 1D navigation.
-local editFx, stripPlan do
+local stripPlan do
   local LABEL_W, LABEL_GAP, VALUE_W = 64, 24, 96    -- swap-picker min width; value-column width (flush to the right margin)
   local FIELD_INDENT     = 12        -- fields nest one level under the fx-name heading
   local BTN_GAP, DEL_GAP = 4, 4      -- title→reorder, then reorder→del spacings
@@ -1030,15 +1029,15 @@ local editFx, stripPlan do
   -- A stage walks header(0)..fields.
   local function paramRange(col) return 0, #col.fields end
 
-  -- While focused the chain pins to stripHost (so a just-minted empty chain renders on the add
-  -- slot alone); unfocused it auto-shows the non-empty chain under the caret. nil = nothing to draw.
-  function stripPlan()
+  -- The chain the fx tab draws. A non-empty chain (or a focused, pinned session) shows its stages;
+  -- when fx is the chosen tab but nothing's there yet, show the bare add row alone (mint on first add).
+  function stripPlan(fxChosen)
     local host   = stripFocus and stripHost or tv:fxHostAtCursor()
     local pinned = stripFocus and host == stripHost
     local fx     = host and tv:noteFx(host) or (pinned and {})   -- a note host reads nil until its first stage
-    if not fx then return nil end
-    if #fx == 0 and not pinned then return nil end
-    local cols = stripColumns(fx)
+    local haveChain = fx and (#fx > 0 or pinned)
+    if not haveChain and not fxChosen then return nil end
+    local cols = haveChain and stripColumns(fx) or {}
     cols[#cols + 1] = { isAdd = true, fields = {} }   -- terminal slot: arrow onto it, type/←→ opens the add picker
     return { host = host, cols = cols }
   end
@@ -1073,7 +1072,7 @@ local editFx, stripPlan do
     if press(ImGui.Key_Escape) then cancelStrip(); return end
     if super and press(ImGui.Key_X) then stripExitReq = true; return end   -- commit and leave (Super+X toggles the session)
     if super and press(ImGui.Key_R) then                    -- commit, then raise the parameters tab
-      stripExitReq = true; tv:overrideParams(caretKeyNow()); paletteFocus, focusFindReq = 'find', true; return
+      stripExitReq = true; tv:overrideTab('parameters', caretKeyNow()); paletteFocus, focusFindReq = 'find', true; return
     end
     local cols = plan.cols
     local cur  = clampCursor(cols)
@@ -1117,7 +1116,7 @@ local editFx, stripPlan do
   -- clear wipes the chain (always live). commit/cancel end the keyboard session, so they gate
   -- on strip focus (mouse parity for Super+X/Esc) — there's no session to end when unfocused.
   local function headerActions(plan)
-    if ImGui.Button(ctx, 'clear')  then tv:setNoteFx(plan.host, util.REMOVE) end
+    if ImGui.Button(ctx, 'clear') and plan.host then tv:setNoteFx(plan.host, util.REMOVE) end
     ImGui.SameLine(ctx, 0, 4)
     chrome.disabledIf(not stripFocus, function()
       if ImGui.Button(ctx, 'commit') then stripExitReq = true end
@@ -1151,9 +1150,10 @@ local editFx, stripPlan do
     rowHighlight(onCursor and stripFocus)
     chrome.drawPicker{
       kind = 'fxAdd', buttonLabel = 'add', flat = true, items = kindItems(),
-      onPick   = function(kind) tv:addFxStage(host, fxSeed(kind)) end,
-      -- Esc while the chain is still empty aborts the whole add gesture, not just the popup.
-      onCancel = function() if #(tv:noteFx(host) or {}) == 0 then cancelStrip() end end,
+      -- Lazy mint: the host under the caret wins; absent one (a bare selection), materialise its region now.
+      onPick   = function(kind) local h = host or tv:fxHostForEdit(); if h then tv:addFxStage(h, fxSeed(kind)) end end,
+      -- Esc aborts a still-empty keyboard gesture (prunes the eager-minted husk); the mouse path minted nothing.
+      onCancel = function() if stripFocus and #(tv:noteFx(host) or {}) == 0 then cancelStrip() end end,
     }
   end
 
@@ -1229,6 +1229,8 @@ local editFx, stripPlan do
     if fxFocusReq then enterStrip(plan.host, cur.stage, cur.param); fxFocusReq = false end
     headerActions(plan)
     ImGui.Separator(ctx)
+    local availW = select(1, ImGui.GetContentRegionAvail(ctx))
+    ImGui.Dummy(ctx, availW, 2)
     for ci, col in ipairs(plan.cols) do
       if ci > 1 then drawFlowMarker() end
       if col.isAdd then drawAddChainStage(plan.host, cur.stage == ci)
@@ -1240,10 +1242,10 @@ local editFx, stripPlan do
     end
   end
 
-  -- Super+X enters the fx session (selection mints host, caret pins); empty chain opens add slot.
-  -- A parameters override clears first, so Super-X always lands keyboard focus in the fx palette.
+  -- Super+X enters the fx session (a selection mints its region, the caret pins); any tab pin clears
+  -- first so entry always lands keyboard focus in the fx palette. Mouse entry is hostless (see stripPlan).
   function editFx()
-    if tv:paramsOverrideActive() then tv:clearParamsOverride() end   -- fall through into the fx session
+    tv:clearTabOverride()   -- drop any tab pin: the keyboard session owns the fx tab now
     local host, fresh = tv:fxHostForEdit()
     if not host then return end
     local existing = tv:noteFx(host)
@@ -1251,7 +1253,7 @@ local editFx, stripPlan do
       stripSnapshot = { host = host, fx = (not fresh) and existing and util.deepClone(existing) or nil }
     end
     stripHost = host
-    -- Empty chain: park on the add slot and pop its picker at once, so there's no dead Enter first.
+    -- Empty chain: park on the add slot and pop the add picker at once, so there's no dead Enter first.
     if not existing or #existing == 0 then
       tv:setStripCursor{ stage = 1, param = 0 }
       chrome.requestPickerOpen('fxAdd')
@@ -1308,8 +1310,8 @@ end
 -- Super-R toggles the parameters tab: park it over an auto-shown chain and land on the find box, or,
 -- if already parked, drop the override back to the auto chain. Super-X (editFx) is the mirror, owning fx.
 local function focusParams()
-  if tv:paramsOverrideActive() then tv:clearParamsOverride(); return end
-  tv:overrideParams(caretKeyNow()); paletteFocus, focusFindReq = 'find', true
+  if tv:tabOverride(caretKeyNow()) == 'parameters' then tv:clearTabOverride(); return end
+  tv:overrideTab('parameters', caretKeyNow()); paletteFocus, focusFindReq = 'find', true
 end
 
 local tracker = cmgr:scope('tracker')
@@ -1434,7 +1436,8 @@ function tr:renderBody(_, w, h, dispatch)
   end
   local ox, oy = ImGui.GetCursorScreenPos(ctx)
   local gridW  = chrome.gridWidth(w)
-  local plan   = stripPlan()
+  local fxChosen = stripFocus or tv:tabOverride(caretKeyNow()) == 'fx'
+  local plan     = stripPlan(fxChosen)   -- fxChosen shows the bare add row when the fx tab is picked on an empty host
   if stripFocus and not plan then   -- the pinned host vanished (undo/removal); tidy and drop focus
     if stripHost then tv:pruneEmptyRegion(stripHost) end   -- cull an emptied husk
     stripFocus, stripSnapshot, stripHost = false, nil, nil

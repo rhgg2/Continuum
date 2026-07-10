@@ -3017,8 +3017,8 @@ local paletteExpanded = {}
 local paletteCursor   = nil
 --shape: stripCursor = { stage, param } — fx-strip caret; param 0 = stage header, k = its k-th field
 local stripCursor     = nil
---shape: paramsOverride = { on, anchor } — Super-R parks parameters over an auto-shown chain; caret move clears it
-local paramsOverride  = { on = false, anchor = nil }
+--shape: tabOverride = { tab, anchor } — a clicked/keyboard tab pin ('parameters'|'fx'); caret move clears it
+local tabOverride  = { tab = nil, anchor = nil }
 
 -- Learn-touched params float above pa's frecency order until the bound
 -- take changes; validated lazily against cm:boundTake, no lifecycle hook.
@@ -3053,16 +3053,17 @@ function tv:setPaletteCursor(c)        paletteCursor = c end
 function tv:stripCursor()             return stripCursor end
 function tv:setStripCursor(c)          stripCursor = c end
 
--- Effective palette tab. fx auto-wins whenever a chain is showable, unless the Super-R
--- parameters override holds; the override lapses on the next caret move (a new caretKey).
-function tv:paletteTab(caretKey, fxAvailable)
-  if paramsOverride.on and caretKey ~= paramsOverride.anchor then paramsOverride.on = false end
-  if paramsOverride.on then return 'parameters' end
-  return fxAvailable and 'fx' or 'parameters'
+-- A clicked or keyboard override pins a tab; absent one, fx auto-wins whenever a chain is
+-- showable. The pin lapses on the next caret move (a new caretKey), like the old params override.
+function tv:tabOverride(caretKey)
+  if tabOverride.tab and caretKey ~= tabOverride.anchor then tabOverride.tab = nil end
+  return tabOverride.tab
 end
-function tv:overrideParams(caretKey)  paramsOverride.on, paramsOverride.anchor = true, caretKey end
-function tv:clearParamsOverride()     paramsOverride.on = false end
-function tv:paramsOverrideActive()    return paramsOverride.on end
+function tv:overrideTab(tab, caretKey) tabOverride.tab, tabOverride.anchor = tab, caretKey end
+function tv:clearTabOverride()         tabOverride.tab = nil end
+function tv:paletteTab(caretKey, fxAvailable)
+  return self:tabOverride(caretKey) or (fxAvailable and 'fx' or 'parameters')
+end
 
 function tv:paramTargets()           return pa:targets() end
 function tv:paramBinding(chan, lane) return pa:binding(chan, lane) end

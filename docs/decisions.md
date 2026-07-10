@@ -4,6 +4,12 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-10** — The fx palette tab stands alone: a mouse click pins either tab
+  (`tabOverride`, generalising the old params-only override) *without* grabbing
+  focus, and `stripPlan` draws a bare add row on a host with no fx. Minting splits
+  by entry path — the mouse mints the host lazily on the first `add`, the keyboard
+  `editFx` still mints eagerly and pops the picker. Rejected making the keyboard
+  path lazy too (kept its eager snapshot/husk-prune session).
 - **2026-07-10** — Empty pb cells inherit their entry sign — the displayed
   ghost's, else the previous visible breakpoint's — so a negative run is one
   `-` plus digits and typing edits what you see; explicit zeros don't inherit
