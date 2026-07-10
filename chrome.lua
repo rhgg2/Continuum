@@ -2,7 +2,7 @@
 
 --shape: chrome = { colour(name, scope?)->u32, pushChromeStyles(), popChromeStyles(), pushChromeWindow(), popChromeWindow(), verticalSeparator(), disabledIf(cond,fn), row(h?,fn), checkbox(label,v), radio(label,active), headingLabel(text), makeToolbar()->fn(segments), drawPicker(d), libPicker(key, current, excludeOthers?)->items, pickerIsActive()->bool, resetPickerActive(), requestPickerOpen(kind)}
 --shape: chrome (shared row primitives) = { fitLabel(text,maxW)->text, rowSelectable(label,sel,flags?)->clicked, treeRow(opts)->{toggled,selected,doubleClicked}, numberStepper(id,value,opts)->changed,value }
---shape: pickerSpec = { kind: string, heading: string?, buttonLabel: string, items: [{label, key, group?=int, current?=bool}], onPick: fn(key), onCancel?: fn(), placement?: 'above', width?, minWidth?, maxWidth? }
+--shape: pickerSpec = { kind: string, heading: string?, buttonLabel: string, items: [{label, key, group?=int, current?=bool}], onPick: fn(key), onCancel?: fn(), placement?: 'above', width?, minWidth?, maxWidth?, flat?: bool }
 --shape: palettePaneSpec = { x, y, h, label | {tabs=[{key,label}], activeTab, onTab}, draw = fn(childFocused) }
 --contract: one chrome instance per coordinator; threaded into every page
 --invariant: colour cache lives on the chrome instance and is invalidated on cm:configChanged
@@ -420,9 +420,11 @@ local function drawPicker(d)
     if maxW and btnW > maxW then btnW = maxW end
   end
   ImGui.PushStyleVar(ctx, ImGui.StyleVar_ButtonTextAlign, 0, 0.5)
+  if d.flat then ImGui.PushStyleColor(ctx, ImGui.Col_Button, 0x00000000) end   -- transparent rest; hover/active still give feedback
   local opening
   if btnW then opening = ImGui.Button(ctx, btnTxt, btnW, 0)
   else         opening = ImGui.Button(ctx, btnTxt) end
+  if d.flat then ImGui.PopStyleColor(ctx, 1) end
   ImGui.PopStyleVar(ctx, 1)
   -- Anchor popup to the button rect; OpenPopup otherwise uses mouse
   -- position, putting a keyboard-triggered popup at the text cursor.

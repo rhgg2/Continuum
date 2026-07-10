@@ -888,12 +888,8 @@ local function fxSeed(kind) return util.assign({ kind = kind }, generators.kinds
 
 ----- FX field descriptors (used by the fx strip)
 
-local function valueEq(a, b)
-  if type(a) == 'table' then return type(b) == 'table' and a[1] == b[1] and a[2] == b[2] end
-  return a == b
-end
 local function choiceIndex(fd, value)
-  for i, o in ipairs(fd.options) do if valueEq(o.v, value) then return i end end
+  for i, o in ipairs(fd.options) do if util.deepEq(o.v, value) then return i end end
   return 1
 end
 local function choiceLabels(fd)
@@ -988,7 +984,7 @@ end
 
 -- see docs/trackerRender.md § FX chain for the vertical row grammar and 1D navigation.
 local editFx, stripPlan do
-  local LABEL_W, VALUE_W = 64, 96    -- swap-picker width; value-column width (flush to the right margin)
+  local LABEL_W, LABEL_GAP, VALUE_W = 64, 24, 96    -- swap-picker min width; value-column width (flush to the right margin)
   local FIELD_INDENT     = 12        -- fields nest one level under the fx-name heading
   local BTN_GAP, DEL_GAP = 4, 4      -- title→reorder, then reorder→del spacings
 
@@ -1061,7 +1057,7 @@ local editFx, stripPlan do
   end
 
   -- 1D grammar: Up/Down walk rows; Left/Right nudge a field or open the kind picker on a header.
-  -- Super+Up/Down reorder; Enter commits; Super+R hands off to the parameters tab.
+  -- Tab/Shift-Tab jump between stages; Super+Up/Down reorder; Enter commits; Super+R hands off to the parameters tab.
   local function handleFxChainKeys(plan)
     local press = function(k) return ImGui.IsKeyPressed(ctx, k) end
     local mods  = ImGui.GetKeyMods(ctx)
@@ -1073,6 +1069,12 @@ local editFx, stripPlan do
     local cols = plan.cols
     local cur  = clampCursor(cols)
     local col  = cols[cur.stage]
+    if press(ImGui.Key_Tab) then                            -- jump to the next/prev stage, onto its first field (add slot lands on its row)
+      local back = (mods & ImGui.Mod_Shift) ~= 0
+      cur.stage  = util.clamp(cur.stage + (back and -1 or 1), 1, #cols)
+      cur.param  = #cols[cur.stage].fields > 0 and 1 or 0
+      tv:setStripCursor(cur); return
+    end
     local up, down    = press(ImGui.Key_UpArrow),   press(ImGui.Key_DownArrow)
     local left, right = press(ImGui.Key_LeftArrow), press(ImGui.Key_RightArrow)
     if press(ImGui.Key_Enter) or press(ImGui.Key_KeypadEnter) then
@@ -1133,7 +1135,7 @@ local editFx, stripPlan do
   local function drawAddChainStage(host, onCursor)
     rowHighlight(onCursor and stripFocus)
     chrome.drawPicker{
-      kind = 'fxAdd', buttonLabel = 'add', items = kindItems(),
+      kind = 'fxAdd', buttonLabel = 'add', flat = true, items = kindItems(),
       onPick   = function(kind) tv:addFxStage(host, fxSeed(kind)) end,
       -- Esc while the chain is still empty aborts the whole add gesture, not just the popup.
       onCancel = function() if #(tv:noteFx(host) or {}) == 0 then cancelStrip() end end,
@@ -1161,7 +1163,8 @@ local editFx, stripPlan do
     rowHighlight(onStage and cur.param == 0 and stripFocus)
     local headX, availW = ImGui.GetCursorPosX(ctx), select(1, ImGui.GetContentRegionAvail(ctx))
     chrome.drawPicker{
-      kind = 'fxSwap_' .. col.index, buttonLabel = col.label, width = LABEL_W, items = kindItems(col.kind),
+      -- Grow to fit the label, but stop short of the reorder cluster (which sits at availW - VALUE_W).
+      kind = 'fxSwap_' .. col.index, buttonLabel = col.label, flat = true, minWidth = LABEL_W, maxWidth = availW - VALUE_W - LABEL_GAP, items = kindItems(col.kind),
       onPick = function(kind) tv:replaceFxStage(host, col.index, fxSeed(kind)) end,
     }
     clickToCursor(host, col.index, 0)
