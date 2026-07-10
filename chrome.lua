@@ -1,6 +1,7 @@
 -- See docs/chrome.md for the model.
 
---shape: chrome = { colour(name, scope?)->u32, pushChromeStyles(), popChromeStyles(), pushChromeWindow(), popChromeWindow(), verticalSeparator(), disabledIf(cond,fn), row(h?,fn), checkbox(label,v), radio(label,active), headingLabel(text), makeToolbar()->fn(segments), drawPicker(d), libPicker(key, current, excludeOthers?)->items, pickerIsActive()->bool, resetPickerActive(), requestPickerOpen(kind)}
+--shape: chrome = { colour(name, scope?)->u32, pushChromeStyles(), popChromeStyles(), pushChromeWindow(), popChromeWindow(), verticalSeparator(), disabledIf(cond,fn), row(h?,fn), checkbox(label,v), radio(label,active), headingLabel(text), screenPainter()->painter}
+--shape: chrome (pickers) = { makeToolbar()->fn(segments), drawPicker(d), libPicker(key, current, excludeOthers?)->items, pickerIsActive()->bool, resetPickerActive(), requestPickerOpen(kind) }
 --shape: chrome (shared row primitives) = { fitLabel(text,maxW)->text, rowSelectable(label,sel,flags?)->clicked, treeRow(opts)->{toggled,selected,doubleClicked}, numberStepper(id,value,opts)->changed,value }
 --shape: pickerSpec = { kind: string, heading: string?, buttonLabel: string, items: [{label, key, group?=int, current?=bool}], onPick: fn(key), onCancel?: fn(), placement?: 'above', width?, minWidth?, maxWidth?, flat?: bool }
 --shape: palettePaneSpec = { x, y, h, label | {tabs=[{key,label}], activeTab, onTab}, draw = fn(childFocused) }
@@ -59,6 +60,10 @@ end
 
 -- painter binds colour names through chrome; it touches only colour().
 local paintBinder = { colour = colour }
+
+-- Identity-transform painter over the current window's draw list: screen coords, chrome's
+-- palette. Build one per draw fn — the draw list is captured now, so call it in the target window.
+local function screenPainter() return painter.new(ctx, paintBinder, {}) end
 
 local function pushChromeStyles()
   ImGui.PushStyleVar(ctx, ImGui.StyleVar_FrameBorderSize, 0)
@@ -526,7 +531,7 @@ local function gridWidth(w) return math.max(120, w - PALETTE_W - PANE_GAP) end
 -- Hand-drawn header: centred label + 1px divider at headerH; shares HEADER_PAD/HEADER_GAP
 -- with the flanking grid header so dividers align across PANE_GAP. Returns divider screen-y.
 local function paletteHeader(label)
-  local p       = painter.new(ctx, paintBinder, {})
+  local p       = screenPainter()
   local ox, oy  = ImGui.GetCursorScreenPos(ctx)
   -- Centre against the FULL pane width: GetContentRegionAvail shrinks by the
   -- scrollbar when the list overflows, which would drift the heading left.
@@ -546,7 +551,7 @@ end
 -- Tabbed header: equal-width cells, active in text ink, rest dimmed (palette.tabInactive).
 -- Dividers run the full header height with a bottom gap; a click fires onTab(key).
 local function paletteTabsHeader(tabs, activeKey, onTab)
-  local p       = painter.new(ctx, paintBinder, {})
+  local p       = screenPainter()
   local ox, oy  = ImGui.GetCursorScreenPos(ctx)
   local avail   = select(1, ImGui.GetContentRegionAvail(ctx))
   local sbw     = ImGui.GetScrollMaxY(ctx) > 0
@@ -573,7 +578,7 @@ end
 --contract: x/y/h are body-window screen coords at the gap's left edge; draw paints the body.
 local function palettePane(spec)
   -- vrule on the BODY draw list — it sits in the gap, outside the child.
-  local p     = painter.new(ctx, paintBinder, {})
+  local p     = screenPainter()
   local lineX = spec.x + math.floor(PANE_GAP / 2)
   p.segment(lineX, spec.y, lineX, spec.y + spec.h, 'text', 1)
 
@@ -687,6 +692,7 @@ return {
   gridWidth          = gridWidth,
   paletteHeader      = paletteHeader,
   palettePane        = palettePane,
+  screenPainter      = screenPainter,
   fitLabel           = fitLabel,
   rowSelectable      = rowSelectable,
   treeRow            = treeRow,

@@ -4,6 +4,11 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-10** — `chrome.screenPainter()` (identity painter over the current
+  window's draw list) is the reach for screen-space drawlist work; raw
+  `GetWindowDrawList`/`DrawList_Add*` is out — it loses chrome's colour
+  discipline (names/tokens, not raw ints). Extracted from three palette sites;
+  the fx palette's row-highlight + flow rule adopt it.
 - **2026-07-10** — A `pa` parks off-take with its host note (replace-region /
   note-host park), rather than staying take-side and sounding against the fresh
   derived stream (rejected: stale PAs against different derived notes are

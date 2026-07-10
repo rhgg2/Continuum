@@ -990,6 +990,7 @@ local editFx, stripPlan do
   local LABEL_W, LABEL_GAP, VALUE_W = 64, 24, 96    -- swap-picker min width; value-column width (flush to the right margin)
   local FIELD_INDENT     = 12        -- fields nest one level under the fx-name heading
   local BTN_GAP, DEL_GAP = 4, 4      -- title→reorder, then reorder→del spacings
+  local stripPaint                   -- identity screen painter, rebuilt each drawFxChainBody
 
   -- The chain flattened to one navigable column: each stage's header then its fields, crossing
   -- stage boundaries so Up/Down walk the whole chain as a single list.
@@ -1121,8 +1122,9 @@ local editFx, stripPlan do
     if not active then return end
     local x, y   = ImGui.GetCursorScreenPos(ctx)
     local availW = select(1, ImGui.GetContentRegionAvail(ctx))
-    ImGui.DrawList_AddRectFilled(ImGui.GetWindowDrawList(ctx),
-      x, y, x + availW - VALUE_W - BTN_GAP, y + ImGui.GetFrameHeight(ctx), chrome.colour('toolbar.selectedRow'))
+    stripPaint.fill({ x0 = x, y0 = y,
+                      x1 = x + availW - VALUE_W - BTN_GAP, y1 = y + ImGui.GetFrameHeight(ctx) },
+                    'toolbar.selectedRow')
   end
 
   -- Picker items for every fx kind; flags the caller's current kind (nil on the add slot).
@@ -1196,26 +1198,25 @@ local editFx, stripPlan do
   end
 
   -- A crisp text-colour rule across the pane, split around a centred ↓ — signal flow down the
-  -- chain (mirrors the old strip's divider). AddRectFilled, not AddLine, so the rule stays non-AA.
+  -- chain (mirrors the old strip's divider). p.segment keeps the rule non-AA (a filled strip).
   local FLOW_GLYPH, FLOW_GAP = '\xe2\x8f\xb7', 4
   local function drawFlowMarker()
-    local dl     = ImGui.GetWindowDrawList(ctx)
     local ox, oy = ImGui.GetCursorScreenPos(ctx)
     local availW = select(1, ImGui.GetContentRegionAvail(ctx))
     local gw, gh = ImGui.CalcTextSize(ctx, FLOW_GLYPH)
-    local ink    = chrome.colour('text')
     local midX   = math.floor(ox + availW / 2)
     local ruleY  = math.floor(oy + gh / 2)
     local half   = math.ceil(gw / 2) + FLOW_GAP
-    ImGui.DrawList_AddRectFilled(dl, ox, ruleY, midX - half, ruleY + 1, ink)
-    ImGui.DrawList_AddRectFilled(dl, midX + half, ruleY, ox + availW, ruleY + 1, ink)
-    ImGui.DrawList_AddText(dl, midX - math.floor(gw / 2), oy, ink, FLOW_GLYPH)
+    stripPaint.segment(ox, ruleY, midX - half, ruleY, 'text', 1)
+    stripPaint.segment(midX + half, ruleY, ox + availW, ruleY, 'text', 1)
+    stripPaint.text(midX - math.floor(gw / 2), oy, 'text', FLOW_GLYPH)
     ImGui.Dummy(ctx, availW, gh)
   end
 
   -- Drawn inside the palette child (the tab header + chrome styles are already pushed): the action
   -- row, then each stage top-to-bottom with a ↓ between, ending on the add row.
   function drawFxChainBody(plan)
+    stripPaint = chrome.screenPainter()
     local cur = clampCursor(plan.cols); tv:setStripCursor(cur)
     if fxFocusReq then enterStrip(plan.host, cur.stage, cur.param); fxFocusReq = false end
     headerActions(plan)

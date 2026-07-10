@@ -126,6 +126,10 @@ direct. Compact, but clear.
 - No OO-type conventions: no underscore-prefixed "private" names, no
   `setmetatable`-driven inheritance or metatable-as-class, no
   `ClassName` UpperCamelCase for modules or constructors.
+- Screen-space drawlist work goes through `chrome.screenPainter()` (identity
+  painter, chrome's palette), never raw `GetWindowDrawList` + `DrawList_Add*` —
+  it keeps colours named and lines crisp. Build one per draw fn, inside the
+  target window. See docs/decisions.md § 2026-07-10.
 
 ## Committing
 
