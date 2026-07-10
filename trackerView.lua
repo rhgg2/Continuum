@@ -1963,7 +1963,9 @@ local nudge do
   local function valueBounds(col)
     if col.normalized then return (col.bipolar and -1000 or 0), 1000 end
     if col['14bit']   then return 0, 127 + 127 / 128 end
-    if col.type == 'pb' then local lim = cm:get('pbRange') * 100; return -lim, lim end
+    -- Authored pb is cents intent, bounded by the 4-digit display cap as
+    -- digit entry is; tm's centsToRaw clamps to the pbRange window at flush.
+    if col.type == 'pb' then return -9999, 9999 end
     return 0, 127
   end
 
@@ -2017,7 +2019,8 @@ local nudge do
   end
 
   local function applyNudge(col, evt, part, dir, coarse, audible, p)
-    if     part == 'val'   then nudgeValue(col, evt, dir, coarse, p)
+    if     part == 'val'
+        or part == 'pb'    then nudgeValue(col, evt, dir, coarse, p)
     elseif part == 'vel'   then nudgeVel(evt, dir, coarse, p)
     elseif part == 'delay' then nudgeDelay(col, evt, dir, coarse, p)
     elseif part == 'pitch' then nudgePitch(col, evt, dir, coarse, audible, p) end
