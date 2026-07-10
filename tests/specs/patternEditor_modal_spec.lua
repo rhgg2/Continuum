@@ -24,6 +24,7 @@ fakeImGui.IsKeyDown       = function(_, k) return down[k] == true end
 fakeImGui.IsMouseClicked  = function() return false end
 fakeImGui.IsMouseDown     = function() return false end
 fakeImGui.IsWindowHovered = function() return false end
+fakeImGui.IsAnyItemActive = function() return false end   -- no toolbar widget active headless
 fakeImGui.GetWindowViewport   = function() return 0 end
 fakeImGui.Viewport_GetWorkSize = function() return 1200, 800 end
 -- pe:launch sizes the modal via gridPane:heightForRows -> ensureCellSize, which pushes the

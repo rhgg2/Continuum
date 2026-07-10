@@ -48,6 +48,13 @@ every keystroke, so **Enter** merely closes (the store is current) and
 **Esc** restores the snapshot taken at open with one guarded write. Cancel is
 therefore a single write, not an undo of each edit.
 
+The toolbar's **Commit** and **Cancel** buttons mirror Enter and Esc. The toolbar
+runs inside the modal's chrome style push (`modalHost` pushes it), so its widgets
+match the main toolbar with no local style block. A button click lands in `draw`,
+which owns no `close` handle, so it only flags `pendingAction`; `handleInput`
+(which does hold `close`) drains the flag on the same frame and routes it to the
+same close/cancel path the keys use.
+
 ## Ownership
 
 Owns `ps`/`cm`/`ds`/`eventMeta` plus the full `mm`/`tm`/`tv`/`cmgr`/`ccm`/`pa`

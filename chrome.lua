@@ -124,13 +124,13 @@ local function popChromeWindow()
   popChromeStyles()
 end
 
--- reaper-imgui has no Separator(Vertical); draw a 1px vertical line
--- via the window draw list and reserve a Dummy slot so SameLine works.
+-- reaper-imgui has no Separator(Vertical); draw a 1px vertical rule via the window draw
+-- list and reserve a Dummy slot so SameLine works. see docs/chrome.md § Vertical separator
 local function verticalSeparator()
   local x, y = ImGui.GetCursorScreenPos(ctx)
   local h    = ImGui.GetFrameHeight(ctx)
-  ImGui.DrawList_AddLine(ImGui.GetWindowDrawList(ctx),
-    x, y, x, y + h, colour('separator'), 1)
+  ImGui.DrawList_AddRectFilled(ImGui.GetWindowDrawList(ctx),
+    x, y, x + 1, y + h, colour('separator'))
   ImGui.Dummy(ctx, 1, h)
 end
 

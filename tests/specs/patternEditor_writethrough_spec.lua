@@ -32,6 +32,7 @@ fakeImGui.IsKeyDown       = function(_, k) return down[k] == true end
 fakeImGui.IsMouseClicked  = function() return false end
 fakeImGui.IsMouseDown     = function() return false end
 fakeImGui.IsWindowHovered = function() return false end
+fakeImGui.IsAnyItemActive = function() return false end   -- no toolbar widget active headless
 
 local function setKeys(keys, mods)
   pressed, down, curMods = {}, {}, mods or 0

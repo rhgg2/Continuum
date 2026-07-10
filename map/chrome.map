@@ -1,4 +1,4 @@
-@module chrome  src=chrome.lua  loc=701  sha=b9f121b  mode=chunk
+@module chrome  src=chrome.lua  loc=701  sha=613dfcc  mode=chunk
 @deps cm, ctx, uiSize
 
 # Shapes
@@ -50,8 +50,8 @@
       -- Floating surfaces fill with editor.bg (opaque); toolbar.bg is 0.5 alpha and would bleed the grid through.
   @fn popChromeWindow()  @ 121-125
   @fn verticalSeparator()  @ 129-135
-      -- reaper-imgui has no Separator(Vertical); draw a 1px vertical line
-      -- via the window draw list and reserve a Dummy slot so SameLine works.
+      -- reaper-imgui has no Separator(Vertical); draw a 1px vertical rule via the window draw
+      -- list and reserve a Dummy slot so SameLine works. see docs/chrome.md § Vertical separator
   @fn disabledIf(cond, fn)  @ 139-143
       -- RAII wrapper for ImGui.BeginDisabled / EndDisabled: dropping the
       -- bracket-match removes a class of mismatched-pop bugs on early return.
@@ -132,8 +132,7 @@
   @use call    imgui.ColorConvertDouble4ToU32  @ colour:56 headingLabel:264
   @use call    imgui.ColorConvertU32ToDouble4  @ headingLabel:263
   @use call    imgui.CreateFunctionFromEEL  @ drawPicker:466
-  @use call    imgui.DrawList_AddLine  @ verticalSeparator:132
-  @use call    imgui.DrawList_AddRectFilled  @ numberStepper:217,218
+  @use call    imgui.DrawList_AddRectFilled  @ verticalSeparator:132 numberStepper:217,218
   @use call    imgui.DrawList_AddText  @ treeRow:640
   @use call    imgui.Dummy  @ verticalSeparator:134 paletteHeader:547 paletteTabsHeader:574
   @use call    imgui.EndChild  @ palettePane:595

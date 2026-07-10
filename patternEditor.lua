@@ -8,7 +8,8 @@
 --contract: no paramAutomation -- nullPa stands in for tv's structural pa handle
 --contract: mini cmgr binds only the pattern-editing keymap subset; rest stay inert
 --contract: edits write through on every mini rebuild -- readback strips to the whitelist, deepEq-guarded via the commit callback
---contract: Esc restores the open snapshot; Enter commits; `armed` gates out the open/close rebuilds
+--contract: Esc/Cancel restore the open snapshot; Enter/Commit close on the current store
+--contract: `armed` gates out the open/close rebuilds
 local util    = require 'util'
 local scratch = require 'scratch'
 
@@ -47,10 +48,15 @@ local editBody, commitFn       -- open-snapshot body + write-back closure; nil w
 local lastWritten              -- last body committed; deepEq-compared to skip a no-op write-through
 local armed = false            -- gate write-through to genuine edits, not open/close rebuilds
 local swallowInput = false     -- one-shot: drop the keystroke that launched the modal, so its press-edge (Enter=commit, ←→) isn't re-read here
+local pendingAction            -- 'commit'|'cancel' set by a toolbar button in draw; handleInput drains it next
+
+-- Note entry and command dispatch both self-suppress while a toolbar widget holds focus, mirroring
+-- the main grid (trackerRender: inputAllowed folds focusState.acceptCmds). item==nil means dormant.
+local function acceptInput() return item ~= nil and not ImGui.IsAnyItemActive(ctx) end
 
 local gridPane = util.instantiate('gridPane', {
   cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, tv = tv,
-  inputAllowed = function() return item ~= nil end,
+  inputAllowed = acceptInput,
 })
 
 ----- Editing surface -- bind the pattern-editing subset of the tracker keymap
@@ -263,12 +269,31 @@ local modalChrome
 -- Rows the last launch sized the modal for; pe:draw snaps the first-ever window to fit them exactly.
 local launchRows
 
--- The mini editor owns the keyboard whenever its popup is up; there is no picker or
--- palette to gate, so acceptCmds is always on.
+-- The mini editor owns the keyboard whenever its popup is up. acceptCmds is refreshed each frame in
+-- handleInput so command dispatch pauses while a toolbar widget (RPB stepper, buttons) holds focus.
 local miniFocus = { acceptCmds = true, suppressKbd = false, pageSuppressed = false }
 
---contract: draw pass -- the grid fills a viewport fraction; the auto-resize popup sizes to it
+-- Mini toolbar: a copy of the tracker RPB ticker plus Commit/Cancel.
+-- see docs/patternEditor.md § Write-through commit for the button/pendingAction handoff.
+local function drawToolbar()
+  ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, 6, 2)   -- match the main toolbar's element height (coordinator pushes the same)
+  ImGui.AlignTextToFramePadding(ctx)
+  chrome.headingLabel('RPB')
+  ImGui.SameLine(ctx, 0, 8)
+  local changed, n = chrome.numberStepper('rpb', cm:get('rowPerBeat'), { min = 1, max = 32, align = 'center' })
+  if changed then tv:setRowPerBeat(n) end
+  ImGui.SameLine(ctx, 0, 12); chrome.verticalSeparator(); ImGui.SameLine(ctx, 0, 12)
+  if ImGui.Button(ctx, 'Commit##peCommit') then pendingAction = 'commit' end
+  ImGui.SameLine(ctx, 0, 6)
+  if ImGui.Button(ctx, 'Cancel##peCancel') then pendingAction = 'cancel' end
+  ImGui.PopStyleVar(ctx, 1)
+end
+
+--contract: draw pass -- toolbar row, grid fills the region below; popup sizes to fit
 function pe:draw()
+  drawToolbar()
+  ImGui.Dummy(ctx, 0, 4)   -- gap so the grid bg fill clears the toolbar
+
   local x, y = ImGui.GetCursorScreenPos(ctx)
   local w, h = ImGui.GetContentRegionAvail(ctx)
   -- Measure the modal chrome (window height - content height) once so the next launch sizes
@@ -312,7 +337,13 @@ end
 --contract: returns the dispatch result kr = { consumed, commandHeld }
 function pe:handleInput(close)
   if swallowInput then swallowInput = false; return { consumed = true, commandHeld = {} } end
+  if pendingAction then
+    local action = pendingAction; pendingAction = nil
+    if action == 'commit' then close(false) else cancel(close) end
+    return { consumed = true, commandHeld = {} }
+  end
   gridPane:handleMouse()
+  miniFocus.acceptCmds = acceptInput()   -- pause command dispatch while a toolbar widget holds focus
   local kr = keyDispatch.dispatchKeys(miniFocus, cmgr, ctx)
   gridPane:handleKeys(kr)
   if not kr.consumed then
@@ -348,10 +379,14 @@ function pe:launch(body, commit)
       local _, wpadY = ImGui.GetStyleVar(ctx, ImGui.StyleVar_WindowPadding)
       local _, fpadY = ImGui.GetStyleVar(ctx, ImGui.StyleVar_FramePadding)
       chromeH = gui.fontSize.ui + 2 * (fpadY + 2) + 2 * wpadY + gridPane:cellHeight() * 1.5
+                + gui.fontSize.ui + 2 * fpadY + 4   -- toolbar row (a frame height) + its gap
     end
     local title = body.kind == 'curve' and 'Curve editor' or 'Note editor'
     modalHost:open{ kind = 'patternEditor', title = title,
                     size = { vw * 0.72, gridPane:heightForRows(rows) + chromeH },
+                    -- NoNav: kill ImGui's keyboard-nav highlight; else it flits between the toolbar
+                    -- buttons on arrow keys and steals them from the grid. see gridPane focus model.
+                    flags = ImGui.WindowFlags_NoNav,
                     onClose = function() self:close() end }
   end
 end

@@ -33,6 +33,12 @@ jumps the body down on the following frame. Per-segment screen rects are refresh
 each frame into `lastToolbarRects` and read by the help overlay via
 `chrome.toolbarRects()`.
 
+## Vertical separator
+
+`verticalSeparator` draws a filled 1px rect, not `DrawList_AddLine`: axis-aligned
+rect edges skip ImGui's line anti-aliasing, so the rule stays crisp instead of
+blurring across the pixel boundary.
+
 ## numberStepper
 
 `numberStepper(id, value, opts)` is an InputInt (or InputDouble when `format` is set) with native step buttons suppressed, flanked by two frame-height-square -/+ buttons that hold-repeat via `ImGui.ItemFlags_ButtonRepeat`. It owns its own frame padding so it renders consistently under any ambient padding (e.g. the toolbar's wide 9 px): a fixed `BOX_PAD` inset for the box, and a `btnSz/2` inset that auto-sizes each button to exactly `btnSz` square.
