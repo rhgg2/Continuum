@@ -228,6 +228,7 @@ function pe:open(body, commit)
     end
     materialiseCurve(body)
   else
+    cm:set('take', 'laneStrip.visible', false)   -- note editor is grid-only; no curve pane
     ds:assign('extraColumns', { [1] = { notes = 1 } })   -- force a note column so an empty pattern is typeable
     materialiseNotes(body.specs)
   end
@@ -279,14 +280,19 @@ function pe:draw()
   ImGui.DrawList_AddRectFilled(ImGui.GetWindowDrawList(ctx), x, y, x + w, y + h, chrome.colour('bg'))
 
   if editBody and editBody.kind == 'curve' then
-    -- Curve is the hero, filling all width left of the grid; the grid rides the right at its
-    -- exact intrinsic width. Draw grid first: its laneConsumed reset must not clobber the curve pane's.
-    local gap    = 8
-    local gridW  = gridPane:naturalWidth()
-    local curveW = w - gridW - gap
-    ImGui.SetCursorScreenPos(ctx, x + curveW + gap, y)
+    -- Curve is the hero, filling the width between a half-cell left inset and the grid; the grid rides
+    -- the right at its exact intrinsic width, half a cell clear of the window edge. Both insets sit on
+    -- the content fill above, so they read as grid bg. Draw grid first: its laneConsumed reset must not
+    -- clobber the curve pane's.
+    local gap       = 8
+    local pad       = gridPane:cellWidth()
+    local gridW     = gridPane:naturalWidth()
+    local curveLeft = x + pad
+    local gridLeft  = x + w - pad - gridW
+    local curveW    = gridLeft - gap - curveLeft
+    ImGui.SetCursorScreenPos(ctx, gridLeft, y)
     gridPane:draw(gridW, h)
-    gridPane:drawCurveEditor{ x0 = x, yTop = y, w = curveW, h = h, endRow = tv:ppqToRow(editBody.lengthPpq) }
+    gridPane:drawCurveEditor{ x0 = curveLeft, yTop = y, w = curveW, h = h, endRow = tv:ppqToRow(editBody.lengthPpq) }
   else
     gridPane:draw(w, h)
   end
@@ -336,7 +342,8 @@ function pe:launch(body, commit)
       local _, fpadY = ImGui.GetStyleVar(ctx, ImGui.StyleVar_FramePadding)
       chromeH = gui.fontSize.ui + 2 * (fpadY + 2) + 2 * wpadY + gridPane:cellHeight() * 1.5
     end
-    modalHost:open{ kind = 'patternEditor', title = body.kind or 'pattern',
+    local title = body.kind == 'curve' and 'Curve editor' or 'Note editor'
+    modalHost:open{ kind = 'patternEditor', title = title,
                     size = { vw * 0.72, gridPane:heightForRows(rows) + chromeH },
                     onClose = function() self:close() end }
   end

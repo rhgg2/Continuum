@@ -1,4 +1,4 @@
-@module patternEditor  src=patternEditor.lua  loc=345  sha=c68027d  mode=chunk  self=pe
+@module patternEditor  src=patternEditor.lua  loc=352  sha=84c795b  mode=chunk  self=pe
 @deps facade, chrome, gui, modalHost
 
 # Invariants & contracts
@@ -42,9 +42,9 @@
   @state EDIT_COMMANDS = {  @ 59
   @state miniScope = cmgr:scope('tracker')  @ 71
   @state CURVE_CC = 1  @ 98
-  @state modalChrome  @ 256
-  @state launchRows  @ 258
-  @state miniFocus = { acceptCmds = true, suppressKbd = false, pageSuppressed ...  @ 262
+  @state modalChrome  @ 257
+  @state launchRows  @ 259
+  @state miniFocus = { acceptCmds = true, suppressKbd = false, pageSuppressed ...  @ 263
 
 # Private functions
   -- Own stack -- the harness `mk` shape, wired to the real shared facade
@@ -72,62 +72,63 @@
       -- snapshot with one guarded write. Enter needs no counterpart -- the param is already current.
 
 # Public API (pe:*)
-  @api pe:open(body, commit)  @ 190-237
+  @api pe:open(body, commit)  @ 190-238
       @contract  mint a checkout take on scratch, materialise `body`, bind the mini tm; `commit(newBody)` is the write-back
       @contract  snapshots the body and arms write-through once materialised (open/close rebuilds stay silent)
       @contract  an empty body (no lengthPpq) defaults its loop to one bar of the checkout take
-  @api pe:close()  @ 241-248
+  @api pe:close()  @ 242-249
       @contract  sweep the pool metadata (write-through, so leaks without this)
       @contract  unbind the mini tm, delete the checkout item
-  @api pe:isOpen()  @ 250
-  @api pe:currentTake()  @ 251
+  @api pe:isOpen()  @ 251
+  @api pe:currentTake()  @ 252
   -- Modal editing surface
-  @api pe:draw()  @ 265-298
+  @api pe:draw()  @ 266-304
       @contract  draw pass -- the grid fills a viewport fraction; the auto-resize popup sizes to it
-  @api pe:handleInput(close)  @ 302-315
+  @api pe:handleInput(close)  @ 308-321
       @contract  input pass -- mouse, dispatch against mini cmgr, note entry; unconsumed Esc cancels, Enter commits
       @contract  returns the dispatch result kr = { consumed, commandHeld }
-  @api pe:launch(body, commit)  @ 323-343
+  @api pe:launch(body, commit)  @ 329-350
       @contract  production entry -- mint the checkout on `body` and raise the editing modal; onClose sweeps it
 
 # Uses (outbound edges)
-  @use call    chrome.colour  @ draw:279
+  @use call    chrome.colour  @ draw:280
   @use call    commandManager.loadOverrides  @ 76
   @use call    commandManager.push  @ 77
   @use call    commandManager.scope  @ 71
   @use call    configManager.get  @ materialiseNotes:86 materialiseCurve:110
-  @use call    configManager.set  @ open:196,212,219
-  @use call    dataStore.assign  @ open:221,222,231
-  @use call    eventMeta.dropPool  @ close:244
-  @use call    gridPane.cellHeight  @ launch:337
-  @use call    gridPane.draw  @ draw:288,291
-  @use call    gridPane.handleKeys  @ handleInput:305
-  @use call    gridPane.handleMouse  @ handleInput:303
-  @use call    gridPane.heightForRows  @ draw:275 launch:340
-  @use call    gridPane.naturalWidth  @ draw:285
-  @use call    imgui.DrawList_AddRectFilled  @ draw:279
-  @use call    imgui.Dummy  @ draw:297
-  @use call    imgui.GetContentRegionAvail  @ draw:267
-  @use call    imgui.GetCursorScreenPos  @ draw:266
-  @use call    imgui.GetStyleVar  @ launch:335,336
-  @use call    imgui.GetWindowDrawList  @ draw:279
-  @use call    imgui.GetWindowSize  @ draw:273
-  @use call    imgui.GetWindowViewport  @ launch:325
-  @use call    imgui.IsKeyPressed  @ handleInput:307,309,310
-  @use call    imgui.SetCursorScreenPos  @ draw:287,296
-  @use call    imgui.SetWindowSize  @ draw:275
-  @use call    imgui.Viewport_GetWorkSize  @ launch:325
-  @use call    keyDispatch.dispatchKeys  @ handleInput:304
+  @use call    configManager.set  @ open:196,212,219,231
+  @use call    dataStore.assign  @ open:221,222,232
+  @use call    eventMeta.dropPool  @ close:245
+  @use call    gridPane.cellHeight  @ launch:343
+  @use call    gridPane.cellWidth  @ draw:288
+  @use call    gridPane.draw  @ draw:294,297
+  @use call    gridPane.handleKeys  @ handleInput:311
+  @use call    gridPane.handleMouse  @ handleInput:309
+  @use call    gridPane.heightForRows  @ draw:276 launch:347
+  @use call    gridPane.naturalWidth  @ draw:289
+  @use call    imgui.DrawList_AddRectFilled  @ draw:280
+  @use call    imgui.Dummy  @ draw:303
+  @use call    imgui.GetContentRegionAvail  @ draw:268
+  @use call    imgui.GetCursorScreenPos  @ draw:267
+  @use call    imgui.GetStyleVar  @ launch:341,342
+  @use call    imgui.GetWindowDrawList  @ draw:280
+  @use call    imgui.GetWindowSize  @ draw:274
+  @use call    imgui.GetWindowViewport  @ launch:331
+  @use call    imgui.IsKeyPressed  @ handleInput:313,315,316
+  @use call    imgui.SetCursorScreenPos  @ draw:293,302
+  @use call    imgui.SetWindowSize  @ draw:276
+  @use call    imgui.Viewport_GetWorkSize  @ launch:331
+  @use call    keyDispatch.dispatchKeys  @ handleInput:310
   @use call    midiManager.poolGuid  @ open:197
   @use call    midiManager.resolution  @ open:198
   @use call    midiManager.setLength  @ open:206
-  @use call    modalHost.registerKind  @ 317
-  @use call    scratch.track  @ open:193 close:246
-  @use call    trackerManager.bindTake  @ open:195 close:245
-  @use call    trackerManager.currentTake  @ currentTake:251
-  @use call    trackerManager.flush  @ open:234
+  @use call    modalHost.registerKind  @ 323
+  @use call    scratch.track  @ open:193 close:247
+  @use call    trackerManager.bindTake  @ open:195 close:246
+  @use call    trackerManager.currentTake  @ currentTake:252
+  @use call    trackerManager.flush  @ open:235
   @use call    trackerManager.getChannel  @ readbackBody:128
-  @use call    trackerView.ppqToRow  @ draw:289
+  @use call    trackerView.ppqToRow  @ draw:295
   @use call    util.add  @ readbackBody:134,138,150
   @use call    util.deepClone  @ open:200
   @use call    util.deepEq  @ writeThrough:170 cancel:181

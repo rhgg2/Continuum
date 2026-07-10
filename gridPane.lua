@@ -899,6 +899,7 @@ function gridPane:heightForRows(rows)
 end
 
 function gridPane:cellHeight() ensureCellSize(); return cellH end
+function gridPane:cellWidth()  ensureCellSize(); return cellW end
 
 --contract: renders the current column's curve into `rect`; sets laneConsumed
 -- time -> X across the grid's scrolled window, so scrolling pans/zooms the curve and a
