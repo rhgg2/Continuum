@@ -40,7 +40,7 @@ local function handlePrefixCapture(cmgr, ctx)
   return nil
 end
 
---shape: dispatchResult = { consumed: bool, commandHeld: { [imguiKey]=true } } — commandHeld holds only keys that are command-bound AND down
+--shape: dispatchResult = { consumed: bool, commandHeld: { [imguiKey]=true } } — commandHeld holds keys down AND command-bound for the live chord
 --contract: returns early (no dispatch) when state.suppressKbd or not state.acceptCmds
 --contract: state.pageSuppressed shrinks the walk to the root keymap only — body-region editors (swing, tuning) suppress page bindings without shadowing globals like playPause/quit
 --contract: first-hit wins; false declines, releases the key, and lets the page char queue see it
@@ -54,24 +54,27 @@ function keyDispatch.dispatchKeys(state, cmgr, ctx)
     return { consumed = true, commandHeld = {} }
   end
   local commandHeld = {}
+  local modsNow = ImGui.GetKeyMods(ctx)
   local keychain = state.pageSuppressed and { cmgr:rootKeymap() } or cmgr:keychain()
   for _, keymap in ipairs(keychain) do
     for command, keys in pairs(keymap) do
       for _, spec in ipairs(keys) do
         local key, mods = cmgr:keySpec(spec, ImGui)
-        if ImGui.IsKeyDown(ctx, key) and mods == ImGui.Mod_None then
-          commandHeld[key] = true
-        end
-        if ImGui.IsKeyPressed(ctx, key) and ImGui.GetKeyMods(ctx) == mods then
-          -- Freeze the prefix buffer immediately before invoke so
-          -- pendingPrefix is set when invoke reads it as the first arg.
-          if cmgr:isPrefixActive() and command ~= 'beginPrefix' then
-            cmgr:finishPrefix()
+        if mods == modsNow then
+          if ImGui.IsKeyDown(ctx, key) then
+            commandHeld[key] = true
           end
-          if cmgr:invoke(command) == false then
-            commandHeld[key] = nil
-          else
-            return { consumed = true, commandHeld = commandHeld }
+          if ImGui.IsKeyPressed(ctx, key) then
+            -- Freeze the prefix buffer immediately before invoke so
+            -- pendingPrefix is set when invoke reads it as the first arg.
+            if cmgr:isPrefixActive() and command ~= 'beginPrefix' then
+              cmgr:finishPrefix()
+            end
+            if cmgr:invoke(command) == false then
+              commandHeld[key] = nil
+            else
+              return { consumed = true, commandHeld = commandHeld }
+            end
           end
         end
       end

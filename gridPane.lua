@@ -524,7 +524,7 @@ local function drawTracker()
   local screenPainter = painter.new(ctx, chrome, {}, 'tracker')
 
   -- Solo (amber) wins over mute (red): audibility semantic.
-  draw:text(-GUTTER, -HEADER, 'Row', 'accent')
+  draw:text(-GUTTER, -2.1, 'Row', 'text')
   -- Channel banner centres over the note columns only — automation/cc
   -- columns protrude past them and would pull the label off-centre.
   local noteSpan = {}
@@ -721,6 +721,15 @@ local function drawTracker()
           end
           if previewGhost and evt then textCol, overrides, divergent = 'ghost', nil, false end
         end
+        -- Entry-sign pre-echo: the cursor cell wears the sign its next digit lands with.
+        local hintPart, hintSign = tv:entrySignAt(row, x)
+        if hintPart == 'delay' and text then
+          local n = utf8.len(text)
+          overrides = overrides or {}
+          overrides[n-2], overrides[n-1], overrides[n] = 'negative', 'negative', 'negative'
+        elseif hintPart == 'pb' then
+          textCol = hintSign < 0 and 'negative' or (ghost and 'ghost' or textCol)
+        end
         local muted = tv:isChannelEffectivelyMuted(col.midiChan)
         if muted then textCol, overrides, divergent = 'inactive', nil, false end
         if not text then text = '' end
@@ -834,11 +843,11 @@ end
 -- autorepeats every key uniformly; the char queue dropped repeats under macOS.
 local editKeys = {}
 do
-  local function add(key, byte) editKeys[#editKeys + 1] = { key = key, char = byte } end
+  local function add(key, byte, digit) editKeys[#editKeys + 1] = { key = key, char = byte, digit = digit } end
   for i = 0, 25 do add(ImGui.Key_A + i, string.byte('a') + i) end
   for d = 0, 9 do
-    add(ImGui.Key_0 + d,      string.byte('0') + d)
-    add(ImGui.Key_Keypad0 + d, string.byte('0') + d)
+    add(ImGui.Key_0 + d,       string.byte('0') + d, true)
+    add(ImGui.Key_Keypad0 + d, string.byte('0') + d, true)
   end
   add(ImGui.Key_Minus,     string.byte('-'))
   add(ImGui.Key_KeypadSubtract, string.byte('-'))
@@ -1086,14 +1095,17 @@ end
 --contract: every fresh press enters; only lastEditKey autorepeats
 --contract: scans editKeys per frame; reads ec/grid fresh (editEvent may rebuild)
 --contract: a note key typed while armed exits region mode then enters (execute-through)
+--contract: Shift admits digit keys only (half-place entry); other chords bypass the drain
 function gridPane:handleKeys(kr)
   if not inputAllowed() then return end
   local ec = tv:ec()
   local commandHeld = kr.commandHeld
 
-  if ImGui.GetKeyMods(ctx) == ImGui.Mod_None and not cmgr:isPrefixActive() then
+  local modsNow = ImGui.GetKeyMods(ctx)
+  local shiftHeld = modsNow == ImGui.Mod_Shift
+  if (modsNow == ImGui.Mod_None or shiftHeld) and not cmgr:isPrefixActive() then
     for _, entry in ipairs(editKeys) do
-      if not commandHeld[entry.key] then
+      if not commandHeld[entry.key] and (not shiftHeld or entry.digit) then
         local fresh  = ImGui.IsKeyPressed(ctx, entry.key, false)
         local repeated = ImGui.IsKeyPressed(ctx, entry.key, true)
         if fresh or (repeated and entry.key == lastEditKey) then
@@ -1102,7 +1114,7 @@ function gridPane:handleKeys(kr)
           if fresh then lastEditKey = entry.key end
           local row, colIdx, stop = ec:pos()
           local c = tv.grid.cols[colIdx]
-          if c then tv:editEvent(c, c.cells and c.cells[row], stop, entry.char) end
+          if c then tv:editEvent(c, c.cells and c.cells[row], stop, entry.char, shiftHeld) end
         end
       end
     end

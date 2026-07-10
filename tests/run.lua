@@ -145,6 +145,7 @@ local specs = {
   'vm_reswing_cc_spec',
   'vm_logical_ppq_spec',
   'vm_delay_entry_spec',
+  'vm_signed_entry_spec',
   'tv_wide_cc_entry_spec',
   'mm_pa_assign_spec',
   'vm_lane_drag_spec',

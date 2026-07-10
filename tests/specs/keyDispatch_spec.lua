@@ -160,4 +160,46 @@ return {
       t.deepEq(log.fired, { 'alpha' }, 'global binding still fires under pageSuppressed')
     end,
   },
+
+  {
+    name = 'a shift-chord binding fires under shift and reports held',
+    run = function()
+      local cmgr, log = freshCmgr()
+      cmgr:registerAll{ gamma = function() log.fired[#log.fired + 1] = 'gamma' end }
+      cmgr:bind('gamma', { { fakeImGui.Key_9, fakeImGui.Mod_Shift } })
+      local kd = loadKD()
+      setKeys{ pressed = { fakeImGui.Key_9 }, mods = fakeImGui.Mod_Shift }
+      local r = kd.dispatchKeys({ acceptCmds = true }, cmgr, {})
+      t.eq(r.consumed, true, 'chord binding consumed under matching mods')
+      t.deepEq(log.fired, { 'gamma' }, 'chord command fired')
+      t.eq(r.commandHeld[fakeImGui.Key_9], true, 'chord key reported held, gating grid entry')
+    end,
+  },
+
+  {
+    name = 'the same key pressed bare ignores the shift binding entirely',
+    run = function()
+      local cmgr, log = freshCmgr()
+      cmgr:registerAll{ gamma = function() log.fired[#log.fired + 1] = 'gamma' end }
+      cmgr:bind('gamma', { { fakeImGui.Key_9, fakeImGui.Mod_Shift } })
+      local kd = loadKD()
+      setKeys{ pressed = { fakeImGui.Key_9 } }
+      local r = kd.dispatchKeys({ acceptCmds = true }, cmgr, {})
+      t.eq(r.consumed, false, 'bare press does not match the chord')
+      t.eq(r.commandHeld[fakeImGui.Key_9], nil, 'key not held-marked: free for digit entry')
+      t.deepEq(log.fired, {}, 'no command fired')
+    end,
+  },
+
+  {
+    name = 'held marking follows the live chord: bare binding unmarked while shift is down',
+    run = function()
+      local cmgr, log = freshCmgr()
+      local kd = loadKD()
+      setKeys{ down = { fakeImGui.Key_A }, mods = fakeImGui.Mod_Shift }
+      local r = kd.dispatchKeys({ acceptCmds = true }, cmgr, {})
+      t.eq(r.commandHeld[fakeImGui.Key_A], nil, 'mod-none binding not held under an active chord')
+      t.deepEq(log.fired, {}, 'nothing fired')
+    end,
+  },
 }

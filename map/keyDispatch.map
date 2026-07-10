@@ -1,4 +1,4 @@
-@module keyDispatch  src=keyDispatch.lua  loc=83  sha=3c864e1  mode=namespace  self=keyDispatch
+@module keyDispatch  src=keyDispatch.lua  loc=86  sha=3c864e1  mode=namespace  self=keyDispatch
 
 # Invariants & contracts
   @contract  returns early (no dispatch) when state.suppressKbd or not state.acceptCmds
@@ -7,7 +7,7 @@
   @contract  while cmgr:isPrefixActive(), digits and '/' are captured (no dispatch); Esc cancels; any other key freezes the prefix and falls through to the keychain walk so commands can consumePrefix()
 
 # Shapes
-  @shape  dispatchResult = { consumed: bool, commandHeld: { [imguiKey]=true } } — commandHeld holds only keys that are command-bound AND down
+  @shape  dispatchResult = { consumed: bool, commandHeld: { [imguiKey]=true } } — commandHeld holds keys down AND command-bound for the live chord
 
 # Imports
   @const ImGui = 'imgui'  @ 9
@@ -29,12 +29,12 @@
   @fn handlePrefixCapture(cmgr, ctx)  @ 26-41
 
 # Public API (keyDispatch.*)
-  @api keyDispatch.dispatchKeys(state, cmgr, ctx)  @ 48-81
+  @api keyDispatch.dispatchKeys(state, cmgr, ctx)  @ 48-84
 
 # Uses (outbound edges)
-  @use call    imgui.GetKeyMods  @ handlePrefixCapture:28 dispatchKeys:65
-  @use call    imgui.IsKeyDown  @ dispatchKeys:62
-  @use call    imgui.IsKeyPressed  @ handlePrefixCapture:30,34,37 dispatchKeys:65
+  @use call    imgui.GetKeyMods  @ handlePrefixCapture:28 dispatchKeys:57
+  @use call    imgui.IsKeyDown  @ dispatchKeys:64
+  @use call    imgui.IsKeyPressed  @ handlePrefixCapture:30,34,37 dispatchKeys:67
   @use require imgui  @ 9
 
 # REAPER API surface

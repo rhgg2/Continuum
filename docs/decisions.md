@@ -4,6 +4,17 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-10** — Empty pb cells inherit their entry sign — the displayed
+  ghost's, else the previous visible breakpoint's — so a negative run is one
+  `-` plus digits and typing edits what you see; explicit zeros don't inherit
+  (they display unsigned). The `-` arm is now a flip of the inherited sign, and
+  a sub-thousands digit on full scale wraps (clears the thousands) rather than
+  clamping to a silent no-op.
+- **2026-07-10** — Signed grid entry: `-` sign-flips in place (no advance); on a
+  zero cell it arms a *transient* `-0` held in trackerView, not the event —
+  pb serialises to a wire where -0 == 0, so a persisted signed zero dies at the
+  next flush/rebuild. Key clashes (Shift+8 octave, plain-1 noteOff pattern)
+  resolve by commands *declining* in value-part context, not by rebinding.
 - **2026-07-10** — Pattern-editor curves default to linear by *seeding* a fresh
   body with two linear zero anchors + having `tv:enterValue` inherit the previous
   breakpoint's shape (like the curve pane's mouse insert). Rejected a

@@ -37,6 +37,8 @@ local function print(...)
   return util.print(...)
 end
 
+local function notHidden(evt) return not evt.hidden end
+
 -- Leaf-edit facade: routes an event to 'member' (gm), 'parked' (tm fx off-take), or
 -- 'plain' (tm) by position; colFor reads its self-describing column, kindAt the region
 -- tag. Fallback, move, see design/group-aware-editing.md § Kind-keyed facade.
@@ -788,23 +790,68 @@ do
     return pas
   end
 
+  -- '-' on a zero cell arms a transient sign flip (a '-0' the wire cannot
+  -- hold); it acts and renders only while the cursor sits there.
+  local pendingFlip   -- { row, colIdx, part } | nil
+  local function toggleSignFlip(part)
+    local row, colIdx = ec:pos()
+    if pendingFlip and pendingFlip.row == row and pendingFlip.colIdx == colIdx then
+      pendingFlip = nil
+    else
+      pendingFlip = { row = row, colIdx = colIdx, part = part }
+    end
+  end
+
+  -- Sign a digit lands with on an empty cell: the displayed ghost's, else the
+  -- previous visible breakpoint's, else positive.
+  local function inheritedSign(col, row)
+    local ghost = col.ghosts and col.ghosts[row]
+    if ghost then return ghost.val < 0 and -1 or 1 end
+    local prev = util.seek(col.events, 'before', row * logPerRowFor(currentRpb()), notHidden)
+    return (prev and prev.val < 0) and -1 or 1
+  end
+
+  -- Part name + the sign the next digit lands with, for cells where that sign
+  -- is fixed by arm or inheritance; nil unless the cursor is on the cell.
+  function tv:entrySignAt(row, colIdx)
+    local curRow, curCol = ec:pos()
+    if not (curRow == row and curCol == colIdx) then return end
+    local armed = pendingFlip and pendingFlip.row == row and pendingFlip.colIdx == colIdx
+      and pendingFlip.part
+    if armed == 'delay' then return 'delay', -1 end
+    local col = grid.cols[colIdx]
+    if not (col and col.type == 'pb') then return end
+    if col.normalized and not col.bipolar then return end
+    local evt = col.cells and col.cells[row]
+    if evt and evt.val ~= 0 then return end
+    local sign = evt and 1 or inheritedSign(col, row)
+    return 'pb', armed and -sign or sign
+  end
+
   --contract: single typed-input entry point; dispatches on (col.type, stop, evt-kind)
   --contract: off-grid edits run through snap to repin evt.ppq to cursor row and restamp frame
-  --contract: commit flushes, advances by advanceBy, and may audition
+  --contract: commit flushes, advances by advanceBy ('-' sign flips stay put), may audition
   function tv:editEvent(col, evt, stop, char, half)
     if not col then return end
     local type      = col.type
     local rpbNow         = currentRpb()
     local logPerRowNow   = logPerRowFor(rpbNow)
     local cursorppq      = ec:row() * logPerRowNow
+    local skipAdvance    = false   -- '-' sign flips edit in place
+    local function entrySign(old)
+      if old ~= 0 then return old < 0 and -1 or 1 end
+      local _, sign = tv:entrySignAt(ec:pos())
+      return sign or 1
+    end
 
     local function commit(auditionPitch, auditionVel, auditionDetune)
       -- The one mutation that bypasses cmgr (trackerPage's char drain
       -- calls editEvent direct), so the keep-set doBefore sweeps never
       -- see it: end every cascade by hand.
+      pendingFlip = nil
       tv:endAllCascades()
       tm:flush()
-      ec:advance()
+      if not skipAdvance then ec:advance() end
       killAudition()
       if auditionPitch then audition(auditionPitch, auditionVel or 100, col.midiChan, auditionDetune) end
     end
@@ -906,14 +953,14 @@ do
 
         local newDelay
         if char == string.byte('-') then
-          if old == 0 then return end
+          if old == 0 then toggleSignFlip('delay'); return end
           newDelay = -old
+          skipAdvance = true
         else
           local d = char - string.byte('0')
           if d < 0 or d > 9 then return end
-          local sign = old < 0 and -1 or 1
-          local mag  = util.clamp(util.setDigit(math.abs(old), d, 2 - digit, 10, half), 0, 999)
-          newDelay = sign * mag
+          local mag = util.clamp(util.setDigit(math.abs(old), d, 2 - digit, 10, half), 0, 999)
+          newDelay = entrySign(old) * mag
         end
 
         -- Authored delay is intent: write through unbounded (modulo the
@@ -974,15 +1021,22 @@ do
       local old = evt and evt.val or 0
       local unipolar = col.normalized and not col.bipolar
       if char == string.byte('-') then
-        if old == 0 or unipolar then return end
+        if unipolar then return end
+        if old == 0 then toggleSignFlip('pb'); return end
         update = { val = -old }
+        skipAdvance = true
+      elseif char == string.byte('f') and col.normalized then
+        update = { val = entrySign(old) * 1000 }
       else
         local d = char - string.byte('0')
         if d < 0 or d > 9 then return end
-        local sign = old < 0 and -1 or 1
-        local mag  = util.setDigit(math.abs(old), d, 3 - digit, 10, half)
-        if col.normalized then mag = math.min(mag, 1000) end
-        update = { val = sign * mag }
+        local mag = util.setDigit(math.abs(old), d, 3 - digit, 10, half)
+        if col.normalized and mag > 1000 then
+          -- Sub-thousands overflow only comes from full scale: the typed digit
+          -- declares a 3-digit value, so the stale thousands digit clears.
+          mag = digit == 0 and 1000 or mag % 1000
+        end
+        update = { val = entrySign(old) * mag }
       end
     else
       return
@@ -999,7 +1053,7 @@ do
       update.evType = type
       -- Inherit the governing (previous visible) breakpoint's shape, as the curve pane's
       -- insert does, so a seeded-linear curve keeps interpolating on grid entry.
-      local prev = util.seek(col.events, 'before', cursorppq, function(e) return not e.hidden end)
+      local prev = util.seek(col.events, 'before', cursorppq, notHidden)
       update.shape = prev and prev.shape or nil
       edit.add(update)
     end
@@ -1054,8 +1108,7 @@ end
 function tv:addLaneEvent(col, colIdx, ppq, val)
   if not col or not util.oneOf('cc pb at', col.type) then return end
   local chan = col.midiChan
-  local prev = util.seek(col.events, 'before', ppq,
-                         function(e) return not e.hidden end)
+  local prev = util.seek(col.events, 'before', ppq, notHidden)
   local update = {
     val   = val,
     ppq   = ppq,
@@ -1102,7 +1155,6 @@ end
 local interpolate, interpolateValues do
   local interpolable = { cc = true, pb = true, at = true }
   local shapeCycle = { 'step', 'linear', 'slow', 'fast-start', 'fast-end', 'bezier' }
-  local function notHidden(e) return not e.hidden end  -- interpolate targets visible breakpoints only
 
   local function nextShape(s)
     for i, n in ipairs(shapeCycle) do
@@ -3161,6 +3213,15 @@ end
 
 ----- Command table
 
+-- Shift+8 doubles as digit entry: octave-up only claims the key on a pitch
+-- part; anywhere digits edit values it declines and the grid drain enters.
+local function inputOctaveUp()
+  local _, ccol = ec:pos()
+  local col = tv.grid.cols[ccol]
+  if not (col and col.type == 'note' and ec:cursorPart() == 'pitch') then return false end
+  cm:set('take', 'currentOctave', util.clamp(cm:get('currentOctave') + 1, -1, 9))
+end
+
 local tracker = cmgr:scope('tracker')
 
 tracker:registerAll{
@@ -3169,7 +3230,7 @@ tracker:registerAll{
   interpolate             = { function() interpolate() end,                       'Interpolate' },
   deleteSel               = { function() deleteSelection() end,                   'Delete selection' },
   duplicateDown           = { duplicate,                                          'Duplicate' },
-  inputOctaveUp           = function() cm:set('take', 'currentOctave', util.clamp(cm:get('currentOctave')+1, -1, 9)) end,
+  inputOctaveUp           = inputOctaveUp,
   inputOctaveDown         = function() cm:set('take', 'currentOctave', util.clamp(cm:get('currentOctave')-1, -1, 9)) end,
   inputSampleUp           = function() stepSample( 1) end,
   inputSampleDown         = function() stepSample(-1) end,
@@ -3180,14 +3241,14 @@ tracker:registerAll{
   nudgeForward            = { function(p) adjustPosition(p,  1) end,              'Nudge' },
   -- '(' halves: with prefix p = pn/pd, k = pd/pn (reciprocal). Default 1/2.
   scaleHalf               = { function()
-    if not ec:hasSelection() then return end
+    if not ec:hasSelection() then return false end   -- decline: Shift+9 falls through to digit entry
     local pn, pd = cmgr:prefixRational()
     if pn then tv:scaleSelection(pd, pn)
     else       tv:scaleSelection(1, 2) end
   end, 'Halve' },
   -- ')' doubles: with prefix p = pn/pd, k = pn/pd. Default 2/1.
   scaleDouble             = { function()
-    if not ec:hasSelection() then return end
+    if not ec:hasSelection() then return false end
     local pn, pd = cmgr:prefixRational()
     if pn then tv:scaleSelection(pn, pd)
     else       tv:scaleSelection(2, 1) end
