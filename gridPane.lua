@@ -37,6 +37,7 @@ local cm, cmgr, chrome, gui, tv, inputAllowed =
 
 local GUTTER      = 5    -- in grid chars: 3-char row num + spacer + region slot
 local HEADER      = 3    -- header rows, fixed; vertical param names truncate to fit, never grow it
+local RESERVE_ROWS = 0.3 -- bottom breathing left clear below the last row (status band / modal edge)
 
 local cellW       = nil   -- px per cell; set on first computeLayout
 local cellH       = nil
@@ -322,21 +323,31 @@ local function vname(label)
   return best or (select(2, prefixFitting(1)))
 end
 
+-- cellW/cellH: odd px so 1px strokes land on pixel centres. Lazy: first layout or measure.
+-- Measure under the grid font: naturalWidth() may trigger this before draw's font push.
+local function ensureCellSize()
+  if not cellW then
+    ImGui.PushFont(ctx, font, gui.fontSize.grid)
+    local charW, charH = ImGui.CalcTextSize(ctx, 'W')
+    ImGui.PopFont(ctx)
+    cellW = 2 * math.ceil(charW / 2) - 1
+    cellH = 2 * math.ceil(charH / 2) - 1
+  end
+end
+
 --contract: must run before draws reading chanLeft/chanWidth/chanOrder/totalWidth/viewRows
 --contract: calls tv:setGridSize so tv scroll math sees the live viewport
+-- RESERVE_ROWS of breathing is kept clear at the bottom for every caller; the grid fills the rest.
 local function computeLayout(budgetW, budgetH)
   local grid = tv.grid
   local _, scrollCol = tv:scroll()
 
-  if not cellW then
-    local charW, charH = ImGui.CalcTextSize(ctx, 'W')
-    cellW = 2 * math.ceil(charW / 2) - 1
-    cellH = 2 * math.ceil(charH / 2) - 1
-  end
+  ensureCellSize()
 
   viewCols = math.max(1, math.floor(budgetW / cellW) - GUTTER)
   local laneRows = laneStripRows()
-  viewRows = math.max(1, math.floor(budgetH / cellH) - HEADER - 1 - laneRows)
+  local usableH  = budgetH - RESERVE_ROWS * cellH
+  viewRows = math.max(1, math.floor(usableH / cellH) - HEADER - laneRows)
   tv:setGridSize(viewCols, viewRows)
 
   chanLeft, chanWidth, chanOrder, totalWidth = layoutColumns(grid.cols, scrollCol)
@@ -349,6 +360,55 @@ local laneRenderable = { cc = true, pb = true, at = true }
 
 local LANE_ROW_MIN = 3
 local LANE_ROW_MAX = 32
+
+-- Build the curve-editor FrameArgs for `col` over row-space [tMin,tMax] in `rect`; returns
+-- true iff it consumed the mouse. Shared by the lane strip and the pattern editor's curve pane.
+local function curveEditorFrame(col, colIdx, rect, tMin, tMax, hovered)
+  local chan = col.midiChan
+  local visible = {}
+  for _, evt in ipairs(col.events) do
+    if not evt.hidden then util.add(visible, evt) end
+  end
+
+  local vMin, vMax
+  if col.type == 'pb' then
+    local cents = (cm:get('pbRange') or 2) * 100
+    vMin, vMax = -cents, cents
+  else
+    vMin, vMax = 0, 127
+  end
+
+  return curveEditor:frame {
+    rect      = rect,
+    vMin = vMin, vMax = vMax,
+    tMin = tMin, tMax = tMax,
+    events    = visible,
+    tOf       = function(evt) return tv:ppqToRow(evt.ppq, chan) end,
+    -- t is in row-space; map fracT back to ppq before sampling so
+    -- tv:rowToPPQ's integer rounding doesn't plateau the curve.
+    evalCurve = function(A, B, fracT)
+      local fracP = A.ppq + fracT * (B.ppq - A.ppq)
+      return tv:sampleCurve(A, B, fracP)
+    end,
+    snap    = function(t) return util.round(t) end,
+    hovered = hovered,
+    dragId  = colIdx,
+    colours = {
+      axis         = 'laneAxis',
+      envelope     = 'laneEnvelope',
+      anchor       = 'laneAnchor',
+      anchorActive = 'laneAnchorActive',
+    },
+    callbacks = {
+      onMove     = function(idx, newT, newVal) tv:moveLaneEvent(col, idx, newT, newVal) end,
+      onMoveFree = function(idx, newT, newVal) tv:moveLaneEvent(col, idx, newT, newVal) end,
+      onInsert   = function(t, val) return tv:addLaneEvent(col, colIdx, tv:rowToPPQ(t, chan), val) end,
+      onDelete     = function(idx)      tv:deleteLaneEvent(col, idx) end,
+      onTension    = function(idx, tau) tv:setLaneTension (col, idx, tau) end,
+      onCycleShape = function(idx)      tv:cycleLaneShape (col, idx) end,
+    },
+  }
+end
 
 --contract: publishes laneConsumed=true if curve editor claimed input this frame
 --contract: handleMouse short-circuits on laneConsumed
@@ -398,50 +458,9 @@ local function drawLaneStrip()
   local colIdx = tv:ec():col()
   local col    = tv.grid.cols[colIdx]
   if w > 0 and col and laneRenderable[col.type] then
-    local chan = col.midiChan
-    local visible = {}
-    for _, evt in ipairs(col.events) do
-      if not evt.hidden then util.add(visible, evt) end
-    end
-
-    local vMin, vMax
-    if col.type == 'pb' then
-      local cents = (cm:get('pbRange') or 2) * 100
-      vMin, vMax = -cents, cents
-    else
-      vMin, vMax = 0, 127
-    end
-
-    laneConsumed = curveEditor:frame {
-      rect     = { x0 = x0, yTop = yTop, w = w, h = yBot - yTop },
-      vMin = vMin, vMax = vMax,
-      tMin = scrollRow, tMax = scrollRow + rowSpan,
-      events    = visible,
-      tOf       = function(evt) return tv:ppqToRow(evt.ppq, chan) end,
-      -- t is in row-space; map fracT back to ppq before sampling so
-      -- tv:rowToPPQ's integer rounding doesn't plateau the curve.
-      evalCurve = function(A, B, fracT)
-        local fracP = A.ppq + fracT * (B.ppq - A.ppq)
-        return tv:sampleCurve(A, B, fracP)
-      end,
-      snap    = function(t) return util.round(t) end,
-      hovered = stripHovered,
-      dragId  = colIdx,
-      colours = {
-        axis         = 'laneAxis',
-        envelope     = 'laneEnvelope',
-        anchor       = 'laneAnchor',
-        anchorActive = 'laneAnchorActive',
-      },
-      callbacks = {
-        onMove     = function(idx, newT, newVal) tv:moveLaneEvent(col, idx, newT, newVal) end,
-        onMoveFree = function(idx, newT, newVal) tv:moveLaneEvent(col, idx, newT, newVal) end,
-        onInsert   = function(t, val) return tv:addLaneEvent(col, colIdx, tv:rowToPPQ(t, chan), val) end,
-        onDelete     = function(idx)      tv:deleteLaneEvent(col, idx) end,
-        onTension    = function(idx, tau) tv:setLaneTension (col, idx, tau) end,
-        onCycleShape = function(idx)      tv:cycleLaneShape (col, idx) end,
-      },
-    }
+    laneConsumed = curveEditorFrame(col, colIdx,
+      { x0 = x0, yTop = yTop, w = w, h = yBot - yTop },
+      scrollRow, scrollRow + rowSpan, stripHovered)
   end
 
   if w > 0 then
@@ -850,6 +869,69 @@ end
 -- Grid geometry for the host's help:anchor (which spans grid + palette).
 function gridPane:geom()
   return { originX = gridOriginX, originY = gridOriginY, height = viewRows, cellH = cellH }
+end
+
+-- Intrinsic pixel width of the current grid (gutter + every column). Lets the pattern
+-- editor size the grid to its exact content and hand the rest of the width to the curve.
+function gridPane:naturalWidth()
+  ensureCellSize()
+  local cols, cells = tv.grid.cols, GUTTER
+  for i = 1, #cols do cells = cells + cols[i].width + (i > 1 and 1 or 0) end
+  return cells * cellW
+end
+
+-- Content-region pixel height for `rows` grid rows (header, lane strip, bottom breathing);
+-- inverts computeLayout. +2px cancels its RESERVE subtraction so pixel rounding can't clip the last row.
+function gridPane:heightForRows(rows)
+  ensureCellSize()
+  return (rows + HEADER + laneStripRows() + RESERVE_ROWS) * cellH + 2
+end
+
+function gridPane:cellHeight() ensureCellSize(); return cellH end
+
+--contract: renders the current column's curve into `rect`; sets laneConsumed
+-- time -> X across the grid's scrolled window, so scrolling pans/zooms the curve and a
+-- fitting pattern shows whole; assumes gridPane:draw ran first this frame (reads viewRows).
+function gridPane:drawCurveEditor(rect)
+  local colIdx = tv:ec():col()
+  local col    = tv.grid.cols[colIdx]
+  laneConsumed = false
+  if not (col and laneRenderable[col.type]) then return false end
+
+  local x0, yTop  = rect.x0, rect.yTop
+  local w, h      = rect.w, rect.h
+  -- endRow caps the curve at the loop's true end (the endL anchor): the pe extends the live loop
+  -- by a tick to make endL editable, which can spill one grid row the curve must not render.
+  local endRow    = rect.endRow or (tv.grid.numRows or 0)
+  local scrollRow = select(1, tv:scroll())
+  local rowSpan   = math.max(1, math.min(viewRows, endRow - scrollRow))
+  local pad       = 6
+  local top, bot  = yTop + pad, yTop + h - pad
+  local p         = painter.new(ctx, chrome, {}, 'tracker')
+  local xRight    = x0 + w
+  local function rowToX(row) return math.min(xRight, x0 + (row - scrollRow) / rowSpan * w) end
+
+  for row = scrollRow, scrollRow + math.ceil(rowSpan) - 1 do
+    local x = math.floor(rowToX(row))
+    local isBar, isBeat = tv:rowBeatInfo(row)
+    if isBar or isBeat then
+      p.fill({ x0 = x, y0 = top, x1 = math.floor(rowToX(row + 1)), y1 = bot },
+             isBar and 'rowBarStart' or 'rowBeat')
+    end
+    p.segment(x, top, x, bot, 'laneRowDivider')
+  end
+
+  -- Claim the rect so empty-space drags don't fall through to the modal window.
+  local savedX, savedY = ImGui.GetCursorScreenPos(ctx)
+  ImGui.SetCursorScreenPos(ctx, x0, top)
+  ImGui.InvisibleButton(ctx, '##curvePaneHit', math.max(1, w), math.max(1, bot - top))
+  local hovered = ImGui.IsItemHovered(ctx) or ImGui.IsItemActive(ctx)
+  ImGui.SetCursorScreenPos(ctx, savedX, savedY)
+
+  laneConsumed = curveEditorFrame(col, colIdx,
+    { x0 = x0, yTop = top, w = w, h = bot - top }, scrollRow, scrollRow + rowSpan, hovered)
+  p.stroke({ x0 = x0, y0 = top, x1 = x0 + w, y1 = bot }, 'rowBeat', 1)
+  return laneConsumed
 end
 
 --contract: bails if laneConsumed; lane strip wins gestures over the tracker grid

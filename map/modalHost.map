@@ -1,4 +1,4 @@
-@module modalHost  src=modalHost.lua  loc=151  sha=a0cb94a  mode=chunk  self=modalHost
+@module modalHost  src=modalHost.lua  loc=154  sha=a0cb94a  mode=chunk  self=modalHost
 @deps ctx, chrome
 
 # Invariants & contracts
@@ -30,29 +30,30 @@
   @api modalHost:isOpen()  @ 50
   @api modalHost:wasOpenAtFrameStart()  @ 51
   @api modalHost:tick()  @ 53
-  @api modalHost:draw()  @ 55-102
+  @api modalHost:draw()  @ 55-105
 
 # Uses (outbound edges)
   @use call    chrome.colour  @ draw:67
-  @use call    chrome.popChromeWindow  @ draw:101
+  @use call    chrome.popChromeWindow  @ draw:104
   @use call    chrome.pushChromeWindow  @ draw:65
-  @use call    imgui.BeginPopupModal  @ draw:74
-  @use call    imgui.CloseCurrentPopup  @ draw:83
-  @use call    imgui.EndPopup  @ draw:95
+  @use call    imgui.BeginPopupModal  @ draw:77
+  @use call    imgui.CloseCurrentPopup  @ draw:86
+  @use call    imgui.EndPopup  @ draw:98
   @use call    imgui.GetStyleVar  @ draw:71
   @use call    imgui.GetWindowViewport  @ draw:62
-  @use call    imgui.InputText  @ 128,139
-  @use call    imgui.IsKeyPressed  @ 108,110,132,133,135,143
+  @use call    imgui.InputText  @ 131,142
+  @use call    imgui.IsKeyPressed  @ 111,113,135,136,138,146
   @use call    imgui.IsPopupOpen  @ draw:59
-  @use call    imgui.IsWindowAppearing  @ 116
+  @use call    imgui.IsWindowAppearing  @ 119
   @use call    imgui.OpenPopup  @ open:26 draw:60
-  @use call    imgui.PopStyleColor  @ draw:100
-  @use call    imgui.PopStyleVar  @ draw:75,99
+  @use call    imgui.PopStyleColor  @ draw:103
+  @use call    imgui.PopStyleVar  @ draw:78,102
   @use call    imgui.PushStyleColor  @ draw:67
   @use call    imgui.PushStyleVar  @ draw:68,72
-  @use call    imgui.SetKeyboardFocusHere  @ 117
+  @use call    imgui.SetKeyboardFocusHere  @ 120
   @use call    imgui.SetNextWindowPos  @ draw:63
-  @use call    imgui.Text  @ 107,118,131
+  @use call    imgui.SetNextWindowSize  @ draw:75
+  @use call    imgui.Text  @ 110,121,134
   @use call    imgui.Viewport_GetCenter  @ draw:62
   @use require imgui  @ 7
 

@@ -24,6 +24,14 @@ fakeImGui.IsKeyDown       = function(_, k) return down[k] == true end
 fakeImGui.IsMouseClicked  = function() return false end
 fakeImGui.IsMouseDown     = function() return false end
 fakeImGui.IsWindowHovered = function() return false end
+fakeImGui.GetWindowViewport   = function() return 0 end
+fakeImGui.Viewport_GetWorkSize = function() return 1200, 800 end
+-- pe:launch sizes the modal via gridPane:heightForRows -> ensureCellSize, which pushes the
+-- grid font and measures a glyph; stub the font/style calls the auto-viv would hand back numbers.
+fakeImGui.PushFont     = function() end
+fakeImGui.PopFont      = function() end
+fakeImGui.CalcTextSize = function() return 8, 14 end
+fakeImGui.GetStyleVar  = function() return 4, 4 end
 
 local function setKeys(keys, mods)
   pressed, down, curMods = {}, {}, mods or 0

@@ -3309,6 +3309,7 @@ function tv:rebuild(takeChanged)
         gridCol.normalized = flags.normalized
         gridCol.bipolar    = flags.bipolar
         gridCol['14bit']   = flags['14bit']
+        if flags.label then gridCol.label = flags.label end   -- curve columns override the type label (e.g. 'Curve')
       end
       ec:decorateCol(gridCol, pitchWidth)   -- stamps parts/stopPos/partAt/partStart/width
       util.add(grid.cols, gridCol)

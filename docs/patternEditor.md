@@ -12,6 +12,20 @@ drops the pool metadata `eventMeta` wrote — skipping that leaks the pool's
 projext blobs forever, since the item is never slot-registered to trigger
 `deleteSlot`'s keeper-removal.
 
+## The endL row
+
+A curve body's final anchor — the envelope/LFO endpoint — sits at
+`ppq = lengthPpq`, the loop boundary. `viewContext:ppqToRow` clamps any
+`ppq >= length` to the phantom row `numRows`, one past the last cursorable
+row, so at the true loop length the endL anchor has no grid cell: it can't be
+displayed, and a keystroke on the last row creates a duplicate instead of
+editing it. So `open` sets the *live* loop one ppq longer than `lengthPpq`,
+making `ppq = lengthPpq` a strictly-interior position with its own row. The
+stored body keeps the true `lengthPpq` (readback reads points by ppq, not by
+loop length), and the checkout is discarded on close, so the extension never
+escapes the mini take. The curve pane caps its span at the endL anchor, so the
+extra row shows only in the grid.
+
 ## Write-through commit
 
 Edits persist by write-through, not a discrete save. The mini `tm` fires

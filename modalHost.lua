@@ -70,7 +70,10 @@ function modalHost:draw()
   -- override right after Begin so interior widgets keep normal padding.
   local padX, padY = ImGui.GetStyleVar(ctx, ImGui.StyleVar_FramePadding)
   ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, padX, padY + 2)
-  local flags = ImGui.WindowFlags_AlwaysAutoResize | (state.flags or 0)
+  -- state.size opens the modal at that size, still user-resizable; the default is
+  -- auto-resize-to-content (sizes to the interior widgets).
+  if state.size then ImGui.SetNextWindowSize(ctx, state.size[1], state.size[2], ImGui.Cond_Appearing) end
+  local flags = (state.size and 0 or ImGui.WindowFlags_AlwaysAutoResize) | (state.flags or 0)
   local opened = ImGui.BeginPopupModal(ctx, label(), nil, flags)
   ImGui.PopStyleVar(ctx, 1)
   if opened then
