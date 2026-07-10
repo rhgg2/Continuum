@@ -128,14 +128,14 @@ return {
   },
 
   {
-    name = "'f' enters full scale; sign comes from the arm or the old value",
+    name = 'a letter enters digit+carry, clamped; sign comes from the arm or the old value',
     run = function(harness)
       local h = mkCurve(harness)
-      typePB(h, 0, 1, 'f')
-      t.eq(pbValAt(h, 0), 1000, 'full scale from any stop')
+      typePB(h, 0, 1, 'f')                       -- letter at the thousands stop overflows, clamps
+      t.eq(pbValAt(h, 0), 1000, 'clamped to full scale')
       typePB(h, 2, 3, '-')
-      typePB(h, 2, 3, 'f')
-      t.eq(pbValAt(h, 2), -1000, 'armed full scale is negative')
+      typePB(h, 2, 3, 'f')                        -- 'f' = 5 at tens (+100 carry), armed negative
+      t.eq(pbValAt(h, 2), -150, 'armed letter entry: digit plus a carried place, negative')
     end,
   },
 

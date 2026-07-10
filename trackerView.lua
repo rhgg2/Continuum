@@ -957,9 +957,16 @@ do
           newDelay = -old
           skipAdvance = true
         else
-          local d = char - string.byte('0')
-          if d < 0 or d > 9 then return end
-          local mag = util.clamp(util.setDigit(math.abs(old), d, 2 - digit, 10, half), 0, 999)
+          local place  = 2 - digit
+          local letter = char - string.byte('a')   -- a..j enter 0..9, carrying 1 left
+          local mag
+          if letter >= 0 and letter <= 9 then
+            mag = util.clamp(util.setDigit(math.abs(old), letter, place, 10, half) + (10 ^ (place + 1) // 1), 0, 999)
+          else
+            local d = char - string.byte('0')
+            if d < 0 or d > 9 then return end
+            mag = util.clamp(util.setDigit(math.abs(old), d, place, 10, half), 0, 999)
+          end
           newDelay = entrySign(old) * mag
         end
 
@@ -1025,16 +1032,22 @@ do
         if old == 0 then toggleSignFlip('pb'); return end
         update = { val = -old }
         skipAdvance = true
-      elseif char == string.byte('f') and col.normalized then
-        update = { val = entrySign(old) * 1000 }
       else
-        local d = char - string.byte('0')
-        if d < 0 or d > 9 then return end
-        local mag = util.setDigit(math.abs(old), d, 3 - digit, 10, half)
-        if col.normalized and mag > 1000 then
-          -- Sub-thousands overflow only comes from full scale: the typed digit
-          -- declares a 3-digit value, so the stale thousands digit clears.
-          mag = digit == 0 and 1000 or mag % 1000
+        local place  = 3 - digit
+        local letter = char - string.byte('a')   -- a..j enter 0..9, carrying 1 left
+        local mag
+        if letter >= 0 and letter <= 9 then
+          local cap = col.normalized and 1000 or 9999
+          mag = util.clamp(util.setDigit(math.abs(old), letter, place, 10, half) + (10 ^ (place + 1) // 1), 0, cap)
+        else
+          local d = char - string.byte('0')
+          if d < 0 or d > 9 then return end
+          mag = util.setDigit(math.abs(old), d, place, 10, half)
+          if col.normalized and mag > 1000 then
+            -- Sub-thousands overflow only comes from full scale: the typed digit
+            -- declares a 3-digit value, so the stale thousands digit clears.
+            mag = digit == 0 and 1000 or mag % 1000
+          end
         end
         update = { val = entrySign(old) * mag }
       end

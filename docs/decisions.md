@@ -4,6 +4,13 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-11** — Decimal grid value entry (pb, delay): letters `a`–`j` enter
+  digit `0`–`9` at the current place plus an *additive* `+1` carry into the place
+  to its left (a tracker range-extender: `a`=10 … `j`=19), clamped to the field cap.
+  Chose additive carry over literal-set-to-1 (non-destructive: `350`+tens`b`→`410`,
+  not `110`). Dropped the `f`→full-scale special-case; full scale now falls out of a
+  carry that overflows the top place and clamps.
+
 - **2026-07-10** — The fx palette tab stands alone: a mouse click pins either tab
   (`tabOverride`, generalising the old params-only override) *without* grabbing
   focus, and `stripPlan` draws a bare add row on a host with no fx. Minting splits
