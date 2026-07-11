@@ -59,4 +59,47 @@ return {
       t.eq(entry.uuid, pbUuid, 'carrying its uuid into the um index')
     end,
   },
+
+  {
+    name = 'pb member: a value edit propagates to every instance (updToGroup)',
+    run = function(harness)
+      -- tv authors the pb column as intent ({ val = intent }); updToGroup carries it
+      -- into the shared frame and reproject re-stamps siblings. Pins it isn't dropped.
+      local h = harness.mk{
+        groups = true,
+        seed   = { ccs = {
+          { ppq = 0, chan = 1, evType = 'pb', val = 0, cents = 50, shape = 'step' },
+        } },
+      }
+      local rect = { ppq = 0, dur = 960, chanLo = 1,
+                     streams = { [0] = { ['pb:0'] = true } } }
+      local gid = h.gm:markGroup(h.vm:eventsInRect(rect), rect)
+      t.truthy(gid, 'pb region marked as a group')
+      h.gm:newInstance(gid, { ppq = 960, chan = 1 })
+      h.tm:flush()
+
+      local function pbByPpq()
+        local out = {}
+        for _, cc in ipairs(h.fm:dump().ccs) do
+          if cc.evType == 'pb' then out[cc.ppq] = cc.val end
+        end
+        return out
+      end
+
+      local before = pbByPpq()
+      local pbUuid
+      for _, cc in ipairs(h.fm:dump().ccs) do
+        if cc.evType == 'pb' and cc.ppq == 0 then pbUuid = cc.uuid end
+      end
+      t.truthy(pbUuid, 'origin pb member has a uuid')
+
+      h.gm:assignEvent(pbUuid, { val = 300 })
+      h.tm:flush()
+
+      local after = pbByPpq()
+      t.truthy(after[0] ~= before[0], 'origin pb value changed under the edit')
+      t.eq(after[960], after[0],
+           'sibling tracked the pb value edit through the shared pattern')
+    end,
+  },
 }
