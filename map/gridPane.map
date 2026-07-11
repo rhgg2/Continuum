@@ -1,4 +1,4 @@
-@module gridPane  src=gridPane.lua  loc=1156  sha=ed3fba2  mode=chunk  self=gridPane
+@module gridPane  src=gridPane.lua  loc=1156  sha=b9a99d6  mode=chunk  self=gridPane
 @deps cm, cmgr, chrome, gui, tv, inputAllowed, chordEntry
 
 # Invariants & contracts
@@ -16,7 +16,7 @@
   @contract  every fresh press enters; only lastEditKey autorepeats
   @contract  scans editKeys per frame; reads ec/grid fresh (editEvent may rebuild)
   @contract  a note key typed while armed exits region mode then enters (execute-through)
-  @contract  Shift+notechar strikes chords (+Ctrl spreads channels); Shift+digit value place-walk
+  @contract  Shift+notechar strikes chords (+Alt spreads channels); Shift+digit value place-walk
   @contract  Backspace deletes last chord note; Shift+=/- nudges vel; shift release commits
 
 # Imports

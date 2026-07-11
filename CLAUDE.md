@@ -98,9 +98,11 @@ caps above. Model docs to imitate: `docs/timing.md`, `docs/tuning.md`,
   running Continuum instance — reach for it when harness and REAPER
   disagree, or to verify real behaviour after a change. Needs Continuum
   open in REAPER (times out otherwise). The tool description carries
-  the env and safety contract; `docs/bridge.md` the model. Confirm
-  before destructive chunks; route undoable edits through mm/tm with
-  an `undo_label`; chunks must terminate — a hang freezes REAPER.
+  the env and safety contract; `docs/bridge-cookbook.md` the recipes
+  (read state, add/edit/delete notes, units) — read it instead of
+  rediscovering; `docs/bridge.md` the model. Confirm before
+  destructive chunks; route undoable edits through mm/tm with an
+  `undo_label`; chunks must terminate — a hang freezes REAPER.
 
 - Wired-behaviour specs (commands, hooks, lifetime, UI path) must
   exercise the **real** production wiring — not a fake handler that

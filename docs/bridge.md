@@ -7,6 +7,9 @@ back a rendered result. The client is the `reaper` MCP server
 (`.claude/mcp/reaper/server.py`), whose one tool `reaper_eval` makes
 "observe the real thing" a single call when harness and REAPER disagree.
 
+For task-oriented recipes (read state, add/edit/delete notes, units),
+see `docs/bridge-cookbook.md`; this file is the model behind them.
+
 ## Why in-process, why files
 
 Each ReaScript runs in its own Lua state. A sibling script could call
