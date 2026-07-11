@@ -125,6 +125,7 @@ local specs = {
   'timing_composite_spec',
   'vm_grid_spec',
   'vm_editing_spec',
+  'vm_chord_entry_spec',
   'view_context_spec',
   'tuning_spec',
   'parts_spec',

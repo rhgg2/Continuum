@@ -4,6 +4,14 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-11** — Chord entry (shift-held): velocity digits live on Shift+Alt, not
+  plain Shift, because the upper note row *is* the digit row (`2 3 5 6 7 9 0` are
+  black keys/high notes) — plain digits stay strikeable. A struck pitch already at
+  the pinned row is adopted into the gesture, never duplicated (one voice per
+  (chan, pitch, ppq); the voicing pass would eat a duplicate unpredictably); a
+  re-strike toggles off. Accepted: chords can't *start* on 9/0/,/. (Shift-bound
+  commands win at dispatch; they decline only once a gesture is live).
+
 - **2026-07-11** — Decimal grid value entry (pb, delay): letters `a`–`j` enter
   digit `0`–`9` at the current place plus an *additive* `+1` carry into the place
   to its left (a tracker range-extender: `a`=10 … `j`=19), clamped to the field cap.

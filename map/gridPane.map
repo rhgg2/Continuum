@@ -1,4 +1,4 @@
-@module gridPane  src=gridPane.lua  loc=1125  sha=7a6fb55  mode=chunk  self=gridPane
+@module gridPane  src=gridPane.lua  loc=1147  sha=43ba780  mode=chunk  self=gridPane
 @deps cm, cmgr, chrome, gui, tv, inputAllowed
 
 # Invariants & contracts
@@ -15,7 +15,8 @@
   @contract  every fresh press enters; only lastEditKey autorepeats
   @contract  scans editKeys per frame; reads ec/grid fresh (editEvent may rebuild)
   @contract  a note key typed while armed exits region mode then enters (execute-through)
-  @contract  Shift admits digit keys only (half-place entry); other chords bypass the drain
+  @contract  Shift+notechar strikes the chord gesture; Shift admits other digits (half-place)
+  @contract  Shift+Alt+digit sets the last chord strike's velocity; shift release commits
 
 # Imports
   @require util = 'util'  @ 23
@@ -132,7 +133,7 @@
       -- fitting pattern shows whole; assumes gridPane:draw ran first this frame (reads viewRows).
       @contract  renders the current column's curve into `rect`; sets laneConsumed
   @api gridPane:handleMouse()  @ 956-1091
-  @api gridPane:handleKeys(kr)  @ 1100-1123
+  @api gridPane:handleKeys(kr)  @ 1101-1145
       -- commandHeld gates note entry per key: a key bound to both a command and note
       -- entry (e.g. '.' = delete) fires the command; unrelated keys still enter.
 
@@ -142,20 +143,21 @@
   @use call    cm.get  @ laneStripRows:274,275 curveEditorFrame:376 drawLaneStrip:475
   @use call    cm.set  @ drawLaneStrip:479,483
   @use call    cmgr.invoke  @ handleMouse:1080,1087
-  @use call    cmgr.isPrefixActive  @ handleKeys:1107
+  @use call    cmgr.isPrefixActive  @ handleKeys:1113
+  @use call    cmgr.noteChars  @ handleKeys:1121
   @use call    groups.outlineKey  @ drawTracker:656
   @use call    groups.regionKey  @ drawTracker:622
   @use call    groups.tintKey  @ drawTracker:639,642
   @use call    imgui.CalcTextSize  @ ensureCellSize:332
   @use call    imgui.Dummy  @ drawLaneStrip:472 drawTracker:811
   @use call    imgui.GetCursorScreenPos  @ drawLaneStrip:421,452,474 drawTracker:514 drawCurveEditor:937
-  @use call    imgui.GetKeyMods  @ handleMouse:972,1029 handleKeys:1105
+  @use call    imgui.GetKeyMods  @ handleMouse:972,1029 handleKeys:1102
   @use call    imgui.GetMousePos  @ handleMouse:976,993,1006,1041
   @use call    imgui.GetMouseWheel  @ handleMouse:1075
   @use call    imgui.InvisibleButton  @ drawLaneStrip:454 drawCurveEditor:941
   @use call    imgui.IsItemActive  @ drawLaneStrip:456 drawCurveEditor:943
   @use call    imgui.IsItemHovered  @ drawLaneStrip:456 drawCurveEditor:943
-  @use call    imgui.IsKeyPressed  @ handleKeys:1110,1111
+  @use call    imgui.IsKeyPressed  @ handleKeys:1123,1124
   @use call    imgui.IsMouseClicked  @ handleMouse:964,965
   @use call    imgui.IsMouseDown  @ handleMouse:966
   @use call    imgui.IsWindowHovered  @ handleMouse:971,992,1005,1074
@@ -169,12 +171,16 @@
   @use call    tv.activeTemper  @ drawTracker:753
   @use call    tv.addLaneEvent  @ curveEditorFrame:406
   @use call    tv.cellWidth  @ renderNote:97 drawTracker:690
+  @use call    tv.chordActive  @ handleKeys:1105,1112,1136
+  @use call    tv.chordCommit  @ handleKeys:1105
+  @use call    tv.chordStrike  @ handleKeys:1135
+  @use call    tv.chordVelocity  @ handleKeys:1127
   @use call    tv.cycleLaneShape  @ curveEditorFrame:409
   @use call    tv.deleteLaneEvent  @ curveEditorFrame:407
   @use call    tv.deletedCells  @ drawTracker:608
   @use call    tv.eachInstance  @ drawTracker:605
-  @use call    tv.ec  @ drawLaneStrip:460 drawTracker:510,600,601 drawCurveEditor:908 handleMouse:960 handleKeys:1102
-  @use call    tv.editEvent  @ handleKeys:1118
+  @use call    tv.ec  @ drawLaneStrip:460 drawTracker:510,600,601 drawCurveEditor:908 handleMouse:960 handleKeys:1108
+  @use call    tv.editEvent  @ handleKeys:1117
   @use call    tv.endReselectCascades  @ handleMouse:1023,1032,1066
   @use call    tv.entrySignAt  @ drawTracker:725
   @use call    tv.isChannelEffectivelyMuted  @ drawTracker:733

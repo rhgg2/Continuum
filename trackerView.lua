@@ -671,9 +671,9 @@ end
 
 ----- Audition
 
-local audition, killAudition do
-  local auditionNote     = nil  -- { chan, pitch } (chan is 0-indexed for MIDI)
-  local auditionTime     = 0    -- reaper.time_precise() when note was sent
+local audition, auditionAdd, auditionRelease, killAudition do
+  local voices           = {}   -- { { chan, pitch }, ... } (chan is 0-indexed for MIDI)
+  local auditionTime     = 0    -- reaper.time_precise() when a note was last sent
   local AUDITION_TIMEOUT = 0.8  -- seconds
 
   -- Detune→live pitch-bend on the audition channel; mirrors tm's centsToRaw
@@ -686,23 +686,41 @@ local audition, killAudition do
   end
 
   function killAudition()
-    if not auditionNote then return end
-    reaper.StuffMIDIMessage(0, 0x80 | auditionNote.chan, auditionNote.pitch, 0)
-    sendBend(auditionNote.chan, 0)
-    auditionNote = nil
+    for _, voice in ipairs(voices) do
+      reaper.StuffMIDIMessage(0, 0x80 | voice.chan, voice.pitch, 0)
+    end
+    if voices[1] then sendBend(voices[1].chan, 0) end
+    voices = {}
+  end
+
+  -- Additive: joins the sounding set. Chord voices share one channel, so only
+  -- the first voice's detune bends — mirrors "only lane-1 notes drive detune".
+  function auditionAdd(pitch, vel, chan, detune)
+    local midiChan = (chan or 1) - 1
+    if not voices[1] then sendBend(midiChan, detune) end
+    reaper.StuffMIDIMessage(0, 0x90 | midiChan, pitch, vel or 100)
+    util.add(voices, { chan = midiChan, pitch = pitch })
+    auditionTime = reaper.time_precise()
+  end
+
+  function auditionRelease(pitch)
+    for i, voice in ipairs(voices) do
+      if voice.pitch == pitch then
+        reaper.StuffMIDIMessage(0, 0x80 | voice.chan, voice.pitch, 0)
+        table.remove(voices, i)
+        if not voices[1] then sendBend(voice.chan, 0) end
+        return
+      end
+    end
   end
 
   function audition(pitch, vel, chan, detune)
     killAudition()
-    local midiChan = (chan or 1) - 1
-    sendBend(midiChan, detune)
-    reaper.StuffMIDIMessage(0, 0x90 | midiChan, pitch, vel or 100)
-    auditionNote = { chan = midiChan, pitch = pitch }
-    auditionTime = reaper.time_precise()
+    auditionAdd(pitch, vel, chan, detune)
   end
 
   function tv:tick()
-    if auditionNote and reaper.time_precise() - auditionTime > AUDITION_TIMEOUT then
+    if voices[1] and reaper.time_precise() - auditionTime > AUDITION_TIMEOUT then
       killAudition()
     end
   end
@@ -756,6 +774,17 @@ end
 
 ----- Editing
 
+-- Column lookup by descriptor { chan, type, lane?, cc? } → col, index.
+local function findCol(d)
+  for i, c in ipairs(grid.cols) do
+    if c.midiChan == d.chan and c.type == d.type
+       and (d.type ~= 'note' or (c.lane or 1) == d.lane)
+       and (d.type ~= 'cc'   or c.cc == d.cc) then
+      return c, i
+    end
+  end
+end
+
 do
   local hexDigit = {}
   for i = 0, 9 do hexDigit[string.byte(tostring(i))] = i end
@@ -764,16 +793,15 @@ do
     hexDigit[string.byte('A') + i] = 10 + i
   end
 
-  -- Caller has already pinned (ppq, ppqL, rpb) onto `update`. A freshly
-  -- placed note is unbounded: author endppq = util.OPEN. tm stamps the
-  -- open ceiling and a provisional raw note-off; the universal tail
-  -- pass derives the real tail (next onset / take length) every
-  -- rebuild.
+  --invariant: a freshly placed note is unbounded: endppq = util.OPEN, no authored ceiling
+  --invariant: universal tail pass derives the real tail (next onset/take length) each rebuild
+  --contract: caller pre-pins (ppq, ppqL, rpb) onto `update` before calling
+  --contract: col nil only for a chord sprout (no column yet): no prev-vel to inherit, lane pre-set
   local function placeNewNote(col, update)
-    local prev    = util.seek(col.events, 'before', update.ppq, util.isNote)
+    local prev    = col and util.seek(col.events, 'before', update.ppq, util.isNote)
     update.vel    = prev and prev.vel or cm:get('defaultVelocity')
     update.endppq = util.OPEN
-    update.lane   = col.lane
+    update.lane   = update.lane or col.lane
     if cm:get('trackerMode') then update.sample = cm:get('currentSample') end
     update.evType = 'note'
     edit.add(update)
@@ -788,6 +816,56 @@ do
       end
     end
     return pas
+  end
+
+  -- Off-grid occupant: repin evt.ppq to the row, preserving span length.
+  local function repinToRow(evt, update, ppq, rpb)
+    if not evt or evt.ppq == ppq then return update end
+    update.ppq = ppq
+    update.rpb = rpb
+    if evt.endppq then update.endppq = ppq + (evt.endppq - evt.ppq) end
+    return update
+  end
+
+  -- Key → MIDI pitch at the input octave, snapped onto the active temper.
+  local function pitchFromKey(nk)
+    local pitch  = util.clamp((cm:get('currentOctave') + 1 + nk[2]) * 12 + nk[1], 0, 127)
+    local temper = ctx:activeTemper()
+    if temper then return tuning.snap(temper, pitch, 0) end
+    return pitch, 0
+  end
+
+  --shape: target = { col?, evt?, ppq, rpb, lane?, chan? } (evt is the cell's occupant)
+  --contract: shared by editEvent and the chord gesture (tv:chordStrike)
+  --contract: col nil only for a chord strike sprouting a new lane (no column yet)
+  --contract: returns the struck note's vel, for the caller to audition
+  local function strikePitch(target, pitch, detune)
+    local col, evt = target.col, target.evt
+
+    if util.isNote(evt) then
+      local update = { pitch = pitch, detune = detune }
+      if cm:get('trackerMode') then update.sample = cm:get('currentSample') end
+      edit.assign(evt, repinToRow(evt, update, target.ppq, target.rpb))
+      return evt.vel
+    end
+
+    -- PA cell → wipe host's PA tail, then fall through to placement
+    if evt and evt.evType == 'pa' then
+      local host = util.seek(col.events, 'before', evt.ppq, util.isNote)
+      if host and host.endppq > evt.ppq then
+        for _, pa in ipairs(notePAEvents(col, host.pitch, evt.ppq, host.endppq)) do
+          edit.delete(pa)
+        end
+      else
+        edit.delete(evt)
+      end
+    end
+
+    local new = { pitch = pitch, detune = detune, lane = target.lane,
+                  ppq = target.ppq, chan = target.chan or col.midiChan,
+                  rpb = target.rpb }
+    placeNewNote(col, new)
+    return new.vel
   end
 
   -- '-' on a zero cell arms a transient sign flip (a '-0' the wire cannot
@@ -856,15 +934,7 @@ do
       if auditionPitch then audition(auditionPitch, auditionVel or 100, col.midiChan, auditionDetune) end
     end
 
-    local function snap(update)
-      if not evt or evt.ppq == cursorppq then return update end
-      update.ppq = cursorppq
-      update.rpb = rpbNow
-      if evt.endppq then
-        update.endppq = cursorppq + (evt.endppq - evt.ppq)
-      end
-      return update
-    end
+    local function snap(update) return repinToRow(evt, update, cursorppq, rpbNow) end
 
 
     -- Within a part the cursor walks left-to-right (digit 0 = MS char,
@@ -877,37 +947,10 @@ do
 
       if part == 'pitch' and digit == 0 then
         local nk = cmgr:noteChars(char); if not nk then return end
-        local pitch = util.clamp((cm:get('currentOctave') + 1 + nk[2]) * 12 + nk[1], 0, 127)
-        local detune = 0
-        local temper = ctx:activeTemper()
-        if temper then pitch, detune = tuning.snap(temper, pitch, 0) end
-
-        if util.isNote(evt) then
-          local upd = { pitch = pitch, detune = detune }
-          if cm:get('trackerMode') then upd.sample = cm:get('currentSample') end
-          edit.assign(evt, snap(upd))
-          return commit(pitch, evt.vel, detune)
-        end
-
-        -- PA cell → wipe host's PA tail, then fall through
-        if evt and evt.evType == 'pa' then
-          local host = util.seek(col.events, 'before', evt.ppq, util.isNote)
-          if host and host.endppq > evt.ppq then
-            for _, pa in ipairs(notePAEvents(col, host.pitch, evt.ppq, host.endppq)) do
-              edit.delete(pa)
-            end
-          else
-            edit.delete(evt)
-          end
-        end
-
-        local new = {
-          pitch = pitch, detune = detune,
-          ppq = cursorppq,
-          chan = col.midiChan, rpb = rpbNow,
-        }
-        placeNewNote(col, new)
-        return commit(pitch, new.vel, detune)
+        local pitch, detune = pitchFromKey(nk)
+        local vel = strikePitch({ col = col, evt = evt, ppq = cursorppq, rpb = rpbNow },
+                                pitch, detune)
+        return commit(pitch, vel, detune)
 
       elseif part == 'pitch' then  -- octave digit
         if not util.isNote(evt) then return end
@@ -1073,9 +1116,122 @@ do
     commit()
   end
 
-  -- Every keystroke that flows through editEvent is one undo block.
-  -- Includes note entry, pitch octave digit, sample/vel/delay/pb/val digits.
-  tv.editEvent = util.atomic('Edit', tv.editEvent)
+  ----- Chord entry (shift-held gesture; gridPane's key drain routes here)
+
+  --shape: chord = { row, ppq, rpb, chan, startLane, notes = { { pitch, lane }, ... } }
+  --invariant: notes ordered by entry; members re-resolved via cells[row], never held event refs
+  local chord = nil
+
+  -- The gesture's occupant cell in `lane`: fresh col fetch every call — each
+  -- flush reclones columns.
+  local function chordCell(lane)
+    local laneCol = findCol{ chan = chord.chan, type = 'note', lane = lane }
+    return laneCol and laneCol.cells and laneCol.cells[chord.row], laneCol
+  end
+
+  -- Typed chord mutations bypass cmgr exactly like editEvent's commit: end
+  -- every cascade by hand (see the comment there), then flush.
+  local function settleChordEdit()
+    pendingFlip = nil
+    tv:endAllCascades()
+    tm:flush()
+  end
+
+  function tv:chordActive() return chord ~= nil end
+
+  --contract: arms on a note col's first pitch stop; pins (row, chan) until shift release
+  --contract: returns true iff consumed; false lets the drain fall through (half-place digits)
+  --contract: re-striking a gesture pitch toggles it off; freed lanes are reused lowest-first
+  function tv:chordStrike(char)
+    local nk = cmgr:noteChars(char); if not nk then return false end
+    if not chord then
+      local row, colIdx, stop = ec:pos()
+      local col = grid.cols[colIdx]
+      if not (col and col.type == 'note' and col.partAt[stop] == 'pitch'
+              and stop == col.partStart[stop]) then return false end
+      local rpb = currentRpb()
+      chord = { row = row, ppq = row * logPerRowFor(rpb), rpb = rpb,
+                chan = col.midiChan, startLane = col.lane or 1, notes = {} }
+    end
+
+    local pitch, detune = pitchFromKey(nk)
+
+    -- toggle: a pitch the gesture already holds leaves it, freeing its lane
+    for i, member in ipairs(chord.notes) do
+      if member.pitch == pitch then
+        local evt = chordCell(member.lane)
+        if util.isNote(evt) then edit.delete(evt) end
+        table.remove(chord.notes, i)
+        settleChordEdit()
+        auditionRelease(pitch)
+        return true
+      end
+    end
+
+    -- adopt: pitch already sounding at this row joins the gesture (a second
+    -- onset at (chan,pitch,ppq) collides); `or` keeps an empty channel from erroring
+    for colIdx = grid.chanFirstCol[chord.chan] or 1, grid.chanLastCol[chord.chan] or 0 do
+      local laneCol = grid.cols[colIdx]
+      local occupant = laneCol and laneCol.type == 'note' and laneCol.cells
+                       and laneCol.cells[chord.row]
+      if util.isNote(occupant) and occupant.pitch == pitch then
+        util.add(chord.notes, { pitch = pitch, lane = laneCol.lane or 1 })
+        auditionAdd(pitch, occupant.vel, chord.chan, occupant.detune)
+        return true
+      end
+    end
+
+    -- place at the lowest lane the gesture doesn't hold (freed lanes reused)
+    local held = {}
+    for _, member in ipairs(chord.notes) do held[member.lane] = true end
+    local lane = chord.startLane
+    while held[lane] do lane = lane + 1 end
+
+    local occupant, laneCol = chordCell(lane)
+    local vel = strikePitch({ col = laneCol, evt = occupant, ppq = chord.ppq,
+                              rpb = chord.rpb, lane = lane, chan = chord.chan },
+                            pitch, detune)
+    util.add(chord.notes, { pitch = pitch, lane = lane })
+    settleChordEdit()
+    auditionAdd(pitch, vel, chord.chan, detune)
+    return true
+  end
+
+  --contract: digit 0..8 → vel 01/10/../70/7f on the last-entered gesture note; else ignored
+  function tv:chordVelocity(digit)
+    if not chord or digit > 8 then return end
+    local last = chord.notes[#chord.notes]
+    if not last then return end
+    local evt = chordCell(last.lane)
+    if not util.isNote(evt) then return end
+    local vel    = digit == 8 and 0x7f or math.max(digit * 16, 1)
+    local detune = evt.detune
+    edit.assign(evt, { vel = vel })
+    settleChordEdit()
+    auditionRelease(last.pitch)
+    auditionAdd(last.pitch, vel, chord.chan, detune)
+  end
+
+  --contract: shift release commits: advance once if any note survives, silence the chord
+  function tv:chordCommit()
+    if not chord then return end
+    local advance = chord.notes[1] ~= nil
+    tv:chordAbandon()
+    if advance then ec:advance() end
+  end
+
+  --contract: drops the gesture without committing; rebuild(takeChanged)/dropGrid route here
+  function tv:chordAbandon()
+    if not chord then return end
+    chord = nil
+    killAudition()
+  end
+
+  -- Every keystroke that flows through editEvent or a chord strike is one
+  -- undo block. Includes note entry, octave/sample/vel/delay/pb/val digits.
+  tv.editEvent     = util.atomic('Edit', tv.editEvent)
+  tv.chordStrike   = util.atomic('Chord entry', tv.chordStrike)
+  tv.chordVelocity = util.atomic('Chord velocity', tv.chordVelocity)
 end
 
 ----- Lane-strip edits (drag, add, delete, shape, tension)
@@ -2428,16 +2584,6 @@ local function shiftEvents(dir)
     return byLane
   end
 
-  local function findCol(d)
-    for i, c in ipairs(grid.cols) do
-      if c.midiChan == d.chan and c.type == d.type
-         and (d.type ~= 'note' or (c.lane or 1) == d.lane)
-         and (d.type ~= 'cc'   or c.cc == d.cc) then
-        return c, i
-      end
-    end
-  end
-
   -- Gather source column + the events that move.
   local srcCol, rows, moving
   if ec:hasSelection() then
@@ -3249,8 +3395,9 @@ tracker:registerAll{
   duplicateDown           = { duplicate,                                          'Duplicate' },
   inputOctaveUp           = inputOctaveUp,
   inputOctaveDown         = function() cm:set('take', 'currentOctave', util.clamp(cm:get('currentOctave')-1, -1, 9)) end,
-  inputSampleUp           = function() stepSample( 1) end,
-  inputSampleDown         = function() stepSample(-1) end,
+  -- Shift+./, are chord-strikable note chars: decline while a gesture is live
+  inputSampleUp           = function() if tv:chordActive() then return false end stepSample( 1) end,
+  inputSampleDown         = function() if tv:chordActive() then return false end stepSample(-1) end,
   noteOff                 = { noteOff,                                            'Note off' },
   growNote                = { function(p) adjustDuration(p,  1) end,              'Resize note' },
   shrinkNote              = { function(p) adjustDuration(p, -1) end,              'Resize note' },
@@ -3258,14 +3405,15 @@ tracker:registerAll{
   nudgeForward            = { function(p) adjustPosition(p,  1) end,              'Nudge' },
   -- '(' halves: with prefix p = pn/pd, k = pd/pn (reciprocal). Default 1/2.
   scaleHalf               = { function()
-    if not ec:hasSelection() then return false end   -- decline: Shift+9 falls through to digit entry
+    -- decline: Shift+9 falls through to entry (digit / chord strike)
+    if tv:chordActive() or not ec:hasSelection() then return false end
     local pn, pd = cmgr:prefixRational()
     if pn then tv:scaleSelection(pd, pn)
     else       tv:scaleSelection(1, 2) end
   end, 'Halve' },
   -- ')' doubles: with prefix p = pn/pd, k = pn/pd. Default 2/1.
   scaleDouble             = { function()
-    if not ec:hasSelection() then return false end
+    if tv:chordActive() or not ec:hasSelection() then return false end
     local pn, pd = cmgr:prefixRational()
     if pn then tv:scaleSelection(pn, pd)
     else       tv:scaleSelection(2, 1) end
@@ -3276,8 +3424,16 @@ tracker:registerAll{
   deleteRowCol            = { function() deleteRowCol() end,      'Delete row in column' },
   nudgeCoarseUp           = { function(p) nudge(p,  1, true)  end, 'Nudge' },
   nudgeCoarseDown         = { function(p) nudge(p, -1, true)  end, 'Nudge' },
-  nudgeFineUp             = { function(p) nudge(p,  1, false) end, 'Nudge' },
-  nudgeFineDown           = { function(p) nudge(p, -1, false) end, 'Nudge' },
+  -- Fine nudges decline while a chord gesture is live: Shift+=/- would move a
+  -- gesture note under its pitch bookkeeping ('-' is also an azerty note char)
+  nudgeFineUp             = { function(p)
+    if tv:chordActive() then return false end
+    nudge(p,  1, false)
+  end, 'Nudge' },
+  nudgeFineDown           = { function(p)
+    if tv:chordActive() then return false end
+    nudge(p, -1, false)
+  end, 'Nudge' },
   eventShiftLeft          = { function() shiftEvents(-1) end,     'Move event left'  },
   eventShiftRight         = { function() shiftEvents( 1) end,     'Move event right' },
   playFromTop             = function() tm:playFrom(0) end,
@@ -3337,6 +3493,7 @@ function tv:rebuild(takeChanged)
   timeSigs   = tm:timeSigs()
   if takeChanged then
     ec:reset()
+    tv:chordAbandon()
   end
 
   do
@@ -3609,6 +3766,7 @@ end
 
 --contract: blank the grid so renderBody falls through to the "Select a MIDI item" placeholder. Counterpart to bindTake(nil)'s dormant seam, for when the take is destroyed rather than handed off.
 function tv:dropGrid()
+  tv:chordAbandon()
   grid.cols         = {}
   grid.chanFirstCol = {}
   grid.chanLastCol  = {}
