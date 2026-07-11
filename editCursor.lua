@@ -568,6 +568,7 @@ do
     local pick  = after[math.min(idx, #after)]
     regionCursor = pick and { groupId = pick.groupId, instId = pick.instId }
                         or nil
+    if groupBridge.commit then groupBridge.commit() end
   end
 
   -- A nudge accumulates moveDelta and tracks the caret; gm/tm are untouched
@@ -708,12 +709,14 @@ do
   local function resizeBy(edits)
     if not regionCursor then return end
     gmgr():resizeGroup(regionCursor.groupId, regionCursor.instId, edits)
+    if groupBridge.commit then groupBridge.commit() end
   end
 
   local function paintCell(on)
     if not regionCursor then return end
     groupBridge.paintStream(regionCursor.groupId, regionCursor.instId,
                             cursorCol, on)
+    if groupBridge.commit then groupBridge.commit() end
   end
 
   -- DWIM: a selection seeds a new group; else arm the caret's instance; else nothing.

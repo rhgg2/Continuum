@@ -1,4 +1,4 @@
-@module pageBindings  src=pageBindings.lua  loc=179  sha=1438cf3  mode=chunk
+@module pageBindings  src=pageBindings.lua  loc=179  sha=4ef168e  mode=chunk
 
 # Shapes
   @shape  { scope = { command = { keySpec, ... } } } -- keySpec is ImGui.Key_* or { Key, Mod }
@@ -8,7 +8,7 @@
   @require util = 'util'  @ 11
 
 # Private state
-  @state M = {}  @ 13
+  @state pageBindings = {}  @ 13
   @state arrange = {  @ 132
 
 # Private functions

@@ -4,6 +4,15 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-12** — Every region-mutating ec verb flushes via `groupBridge.commit()`,
+  not just the creation verbs. `tm:requestRebuild()`'s deferred flag is inert until a
+  flush consumes it, so `dropInstance`/`paintCell`/`resizeBy` (delete/paint/grow-shrink)
+  left the rebuild — and tv's `cellKind` region tags — stale until the *next* command
+  happened to flush. Commit at the call site (gm only stages; the verb flushes) closes
+  it: the resize/delete's own flush now honours the flag this command. Also added the
+  missing `tm:requestRebuild()` to `gm:resizeGroup`, which alone among the geometry
+  verbs never signalled a rebuild.
+
 - **2026-07-11** — A pb gm member stores INTENT in the group frame under `val`
   (its existing name), and `toGroup` sources it from `evt.cents` — frame-invariant
   intent — never the um entry's `val`, which `makeEntry` builds as `rawToCents(wire)`

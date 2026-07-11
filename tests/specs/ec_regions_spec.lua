@@ -224,6 +224,7 @@ return {
       t.eq(#instances(c.gm, g), 1, 'deleteSel dropped one')
       c.cmgr:invoke('delete')
       t.eq(#instances(c.gm, g), 0, 'delete dropped the last')
+      t.eq(c.bridge.commits, 2, 'each drop flushed so the screen updates now, not next command')
       t.truthy(ec:isInRegionMode(), 'still armed')
     end,
   },
@@ -387,6 +388,7 @@ return {
       c.cmgr:invoke('shrinkNote')
       c.cmgr:invoke('shrinkNote')
       t.eq(instances(c.gm, g)[1].rect.dur, LPR, 'end in -2 lpr')
+      t.eq(c.bridge.commits, 3, 'each resize flushed so the screen updates now, not next command')
     end,
   },
 
@@ -417,6 +419,7 @@ return {
       t.eq(#c.bridge.paintCalls, 2)
       t.deepEq(c.bridge.paintCalls[1], { g, iid, 2, true })
       t.deepEq(c.bridge.paintCalls[2], { g, iid, 2, false })
+      t.eq(c.bridge.commits, 2, 'each paint flushed so the screen updates now, not next command')
     end,
   },
 

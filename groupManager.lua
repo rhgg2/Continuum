@@ -875,6 +875,7 @@ function gm:resizeGroup(groupId, instId, edits)
 
   reproject(groupId)
   persist()
+  tm:requestRebuild()   -- a paint over empty/off-take cells stages no mm ops; re-tag cellKind for the resized footprint
   return true
 end
 

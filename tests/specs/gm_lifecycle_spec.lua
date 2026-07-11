@@ -48,6 +48,19 @@ return {
     end,
   },
 
+  {
+    name = 'empty-group resizeGroup forces a rebuild so tv re-tags cellKind',
+    run = function()
+      local gm, staged = mk()
+      local g = gm:mark({}, rect(0, 480))            -- empty group: paint over empty cells
+      local iid = instOf(gm, g)[1].instId
+      staged.rebuildRequests = 0
+      t.truthy(gm:resizeGroup(g, iid, { endDelta = 240 }))
+      t.eq(#staged.add, 0, 'empty resize staged no concretes')
+      t.truthy(staged.rebuildRequests >= 1, 'resize still forced a rebuild')
+    end,
+  },
+
   ----- deleteInstance
 
   {

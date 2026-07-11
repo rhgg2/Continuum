@@ -1,4 +1,4 @@
-@module groupManager  src=groupManager.lua  loc=881  sha=1c5f224  mode=chunk  self=gm
+@module groupManager  src=groupManager.lua  loc=882  sha=c17034c  mode=chunk  self=gm
 @deps tm, ds
 
 # Invariants & contracts
@@ -162,7 +162,7 @@
       -- Value edit of a member (assign half of the facade): localMode or an existing override
       -- => sticky localAmend, else edit the shared pattern. Consumes tv's AUTHORED update (updToGroup).
       @contract  (uuid, update) -> true | nil,'not a member'. Defers to reproject (pendingReproject).
-  @api gm:resizeGroup(groupId, instId, edits)  @ 825-879
+  @api gm:resizeGroup(groupId, instId, edits)  @ 825-880
       -- Resizes the SHARED rect from edge instance `instId`'s drag (Model A re-origin); a member
       -- the new rect drops leaves the group, `gained` folds in at instId's anchor -- see docs/groupManager.md § Instance lifecycle & region resize.
       @contract  (groupId, instId, {startDelta?,endDelta?,streams?,gained?}) -> true|nil,reason.
@@ -185,7 +185,7 @@
   @use call    tm.byUuid  @ rehydrate:242 633
   @use call    tm.deleteEvent  @ reproject:575 deleteInstance:658 moveInstance:701,707
   @use call    tm.length  @ onTake:152
-  @use call    tm.requestRebuild  @ 608 deleteInstance:669 moveInstance:713
+  @use call    tm.requestRebuild  @ 608 deleteInstance:669 moveInstance:713 resizeGroup:878
   @use call    util.assign  @ localAmend:594 assignEvent:799,816
   @use call    util.clone  @ rehydrate:245 markGroup:407 newInstance:436 reproject:567,573 moveInstance:704 assignEvent:798 resizeGroup:873
   @use require groups  @ 11
