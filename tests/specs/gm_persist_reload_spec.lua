@@ -8,29 +8,6 @@
 local t    = require('support')
 local util = require('util')
 
-local function fakeTm(uuidMap)
-  local hooks, staged, seq = {}, { add = {}, assign = {}, del = {} }, 0
-  local tm = {}
-  function tm:length()            return math.huge end   -- off-take clip irrelevant here
-  function tm:subscribe(sig, fn)  hooks[sig] = fn end
-  function tm:requestRebuild()    end
-  function tm:addEvent(e)         staged.add[#staged.add + 1] = e end
-  function tm:assignEvent(e, u)   staged.assign[#staged.assign + 1] = { evt = e, update = u } end
-  function tm:deleteEvent(e)      staged.del[#staged.del + 1] = e end
-  function tm:byUuid(u)           return uuidMap and uuidMap[u] end
-  function tm:flush(adds, assigns, deletes)
-    if hooks.preflush then hooks.preflush(adds or {}, assigns or {}, deletes or {}) end
-    for _, e in ipairs(staged.add) do
-      if e.uuid == nil then seq = seq + 1; e.uuid = 1000 + seq end
-    end
-    if hooks.postflush then hooks.postflush() end
-  end
-  function tm:fireRebuild(takeChanged)
-    if hooks.rebuild then hooks.rebuild(takeChanged) end
-  end
-  return tm, staged, hooks
-end
-
 local nextUuid = 0
 local function note(ppq, chan, lane, extra)
   nextUuid = nextUuid + 1
@@ -69,7 +46,7 @@ return {
 
       -- Session 1: stamp a group + sibling, then a global create whose
       -- group event lands last-in-lane (open tail -> math.huge dur).
-      local tmA, stagedA = fakeTm()
+      local tmA, stagedA = t.fakeTm()
       local A   = util.instantiate('groupManager', { tm = tmA, ds = ds })
       local src = note(0, 1, 1)
       local gid = A:markGroup({ src }, rect(0, 1))
@@ -84,7 +61,7 @@ return {
 
       -- Session 2: fresh gm sharing the (serialised) cm. Without the
       -- finite-dur normalisation rehydrate raises in mirror.project.
-      local tmB = fakeTm(uuidMap)
+      local tmB = t.fakeTm({ uuidMap = uuidMap })
       local B   = util.instantiate('groupManager', { tm = tmB, ds = ds })
       tmB:fireRebuild(true)
 
@@ -98,7 +75,7 @@ return {
       local ds = t.fakeDs()
 
       -- Session 1: stamp a group + one mirrored instance, commit (persists).
-      local tmA, stagedA = fakeTm()
+      local tmA, stagedA = t.fakeTm()
       local A   = util.instantiate('groupManager', { tm = tmA, ds = ds })
       local src = note(0, 1, 1, { pitch = 60 })
       local gid = A:markGroup({ src }, rect(0, 1))
@@ -109,7 +86,7 @@ return {
 
       -- Session 2: a fresh gm sharing cm; its tm resolves the durable
       -- uuids mm would have re-minted on the reloaded take.
-      local tmB, stagedB = fakeTm({ [src.uuid] = src, [addEvt.uuid] = addEvt })
+      local tmB, stagedB = t.fakeTm({ uuidMap = { [src.uuid] = src, [addEvt.uuid] = addEvt } })
       local B = util.instantiate('groupManager', { tm = tmB, ds = ds })
 
       tmB:fireRebuild(true)
@@ -143,7 +120,7 @@ return {
       -- Ctrl-Z path: ds fires dataChanged invalidate=true; gm must re-read
       -- or its `groups` dict still shows pre-undo geometry.
       local ds = t.fakeDs()
-      local tmA = fakeTm()
+      local tmA = t.fakeTm()
       local A   = util.instantiate('groupManager', { tm = tmA, ds = ds })
       local src = note(0, 1, 1)
       local gid = A:markGroup({ src }, rect(0, 1))

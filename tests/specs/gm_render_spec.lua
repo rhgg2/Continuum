@@ -8,25 +8,8 @@ local t      = require('support')
 local util   = require('util')
 local groups = require('groups')
 
-local function fakeTm()
-  local staged, seq = { add = {} }, 0
-  local tm = {}
-  function tm:length() return math.huge end   -- off-take clip irrelevant here
-  function tm:subscribe() end
-  function tm:requestRebuild() end
-  function tm:addEvent(e)    staged.add[#staged.add + 1] = e end
-  function tm:assignEvent() end
-  function tm:deleteEvent() end
-  function tm:flush()
-    for _, e in ipairs(staged.add) do
-      if e.uuid == nil then seq = seq + 1; e.uuid = 1000 + seq end
-    end
-  end
-  return tm
-end
-
 local function mk()
-  return util.instantiate('groupManager', { tm = fakeTm(), ds = t.fakeDs() })
+  return util.instantiate('groupManager', { tm = t.fakeTm(), ds = t.fakeDs() })
 end
 
 local function note(ppq, lane)

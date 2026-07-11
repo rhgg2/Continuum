@@ -10,26 +10,6 @@
 local t    = require('support')
 local util = require('util')
 
-local function fakeTm()
-  local hooks, staged, seq = {}, { add = {}, flushes = 0 }, 0
-  local tm = {}
-  function tm:length()         return math.huge end   -- off-take clip irrelevant here
-  function tm:subscribe(s, fn) hooks[s] = fn end
-  function tm:requestRebuild() end
-  function tm:addEvent(e)      staged.add[#staged.add + 1] = e end
-  function tm:assignEvent()    end
-  function tm:deleteEvent()    end
-  function tm:flush()
-    staged.flushes = staged.flushes + 1
-    if hooks.preflush then hooks.preflush({}, {}, {}) end
-    for _, e in ipairs(staged.add) do
-      if e.uuid == nil then seq = seq + 1; e.uuid = 1000 + seq end
-    end
-    if hooks.postflush then hooks.postflush() end
-  end
-  return tm, staged
-end
-
 local function fakeCm()
   local store = {}
   return { get = function(_, k) return store[k] end,
@@ -85,7 +65,7 @@ local function wire(gm, cmgr, tm, ctl)
 end
 
 local function mk()
-  local tm, staged = fakeTm()
+  local tm, staged = t.fakeTm()
   local cm   = fakeCm()
   local ctl  = { sel = true }   -- a live selection by default
   local gm = util.instantiate('groupManager', { tm = tm, ds = t.fakeDs() })

@@ -198,4 +198,35 @@ function M.fakeDs()
   }
 end
 
+-- Faithful trackerManager fake for gm specs: records staged intent
+-- (add/assign/del) and drives the real preflush/applyEdit/postflush path,
+-- stamping uuids at flush the way REAPER does. opts.length sets the take
+-- edge (default open); opts.uuidMap backs byUuid for the reload specs.
+function M.fakeTm(opts)
+  opts = opts or {}
+  local length, uuidMap = opts.length or math.huge, opts.uuidMap
+  local hooks, seq = {}, 0
+  local staged = { add = {}, assign = {}, del = {}, flushes = 0, rebuildRequests = 0 }
+  local tm = {}
+  function tm:length()            return length end
+  function tm:subscribe(sig, fn)  hooks[sig] = fn end
+  function tm:requestRebuild()    staged.rebuildRequests = staged.rebuildRequests + 1 end
+  function tm:addEvent(evt)       staged.add[#staged.add + 1] = evt end
+  function tm:assignEvent(evt, u) staged.assign[#staged.assign + 1] = { evt = evt, update = u } end
+  function tm:deleteEvent(evt)    staged.del[#staged.del + 1] = evt end
+  function tm:byUuid(u)           return uuidMap and uuidMap[u] end
+  function tm:flush(adds, assigns, deletes)
+    staged.flushes = staged.flushes + 1
+    if hooks.preflush then hooks.preflush(adds or {}, assigns or {}, deletes or {}) end
+    for _, e in ipairs(staged.add) do
+      if e.uuid == nil then seq = seq + 1; e.uuid = 1000 + seq end
+    end
+    if hooks.postflush then hooks.postflush() end
+  end
+  function tm:fireRebuild(takeChanged)
+    if hooks.rebuild then hooks.rebuild(takeChanged) end
+  end
+  return tm, staged, hooks
+end
+
 return M

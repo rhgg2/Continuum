@@ -9,27 +9,8 @@
 local t    = require('support')
 local util = require('util')
 
-local function fakeTm()
-  local hooks, staged, seq = {}, { add = {}, assign = {}, del = {}, rebuildRequests = 0 }, 0
-  local tm = {}
-  function tm:length()           return math.huge end   -- off-take clip irrelevant here
-  function tm:subscribe(sig, fn) hooks[sig] = fn end
-  function tm:requestRebuild()   staged.rebuildRequests = staged.rebuildRequests + 1 end
-  function tm:addEvent(evt)      staged.add[#staged.add + 1] = evt end
-  function tm:assignEvent(e, u)  staged.assign[#staged.assign + 1] = { evt = e, update = u } end
-  function tm:deleteEvent(evt)   staged.del[#staged.del + 1] = evt end
-  function tm:flush()
-    if hooks.preflush then hooks.preflush({}, {}, {}) end
-    for _, e in ipairs(staged.add) do
-      if e.uuid == nil then seq = seq + 1; e.uuid = 1000 + seq end
-    end
-    if hooks.postflush then hooks.postflush() end
-  end
-  return tm, staged
-end
-
 local function mk()
-  local tm, staged = fakeTm()
+  local tm, staged = t.fakeTm()
   return util.instantiate('groupManager', { tm = tm, ds = t.fakeDs() }), staged, tm
 end
 
