@@ -151,4 +151,38 @@ return {
       t.falsy(fakeIn(h.fm:dump()), 'absorber dropped — no jump remains')
     end,
   },
+
+  {
+    name = 'authoring a pb onto an anchor seat adopts it, no token-colliding rival (stuck-digit bug)',
+    run = function(harness)
+      -- I2a anchor plants a hidden absorber seat at a pb-active onset. Authoring there must
+      -- adopt that seat, not push a token-colliding rival — see docs/tuning.md § Authoring onto a hidden seat.
+      local h = harness.mk{
+        seed = {
+          notes = {
+            { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
+              detune = 0, delay = 0, ppqL = 0, endppqL = 240 },
+          },
+          ccs = {
+            { ppq = 480, chan = 1, evType = 'pb', val = rawFor50 },  -- later authored pb → channel pb-active
+          },
+        },
+      }
+      local seat = fakeIn(h.fm:dump())
+      t.truthy(seat, 'I2a anchor seat planted at the pb-active onset')
+      t.eq(seat.ppq, 0, 'seat sits at the note onset')
+
+      -- Author 100¢ into that pitchbend cell.
+      h.tm:addEvent({ evType = 'pb', chan = 1, ppq = 0, ppqL = 0, val = 100 })
+      h.tm:flush()
+
+      local atOnset = {}
+      for _, c in ipairs(h.fm:dump().ccs) do
+        if c.evType == 'pb' and c.chan == 1 and c.ppq == 0 then atOnset[#atOnset + 1] = c end
+      end
+      t.eq(#atOnset, 1, 'one pb at the onset — the seat was adopted, no rival pushed')
+      t.eq(atOnset[1].val, 2 * rawFor50, 'authored 100¢ survives (raw 4096), not reset to the seat 0')
+      t.falsy(atOnset[1].derived, 'adopted pb sheds its absorber identity')
+    end,
+  },
 }

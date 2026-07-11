@@ -922,7 +922,14 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     else
       if not rawCaller then realiseAddPpq(evt, false) end
       if evt.evType == 'pb' then evt.cents, evt.val = evt.val or 0, nil end
-      addLowlevel(evt)
+      -- pb is one value per tick: adopt a pb already at this slot -- including a hidden
+      -- absorber seat -- so we never push a token-colliding rival. see docs/tuning.md § Absorber reconciliation
+      local seat = evt.evType == 'pb' and byToken[mm:tokenOf(evt)]
+      if seat and seat.evType == 'pb' then
+        assignLowlevel(seat, { cents = evt.cents, shape = evt.shape, derived = util.REMOVE })
+      else
+        addLowlevel(evt)
+      end
     end
   end
 
