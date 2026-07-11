@@ -326,10 +326,14 @@ Columns beyond the data-driven ones are materialised by tm from
 - `addExtraCol(type, cc)` — bumps the `notes` count, sets `ccs[cc]`,
   or sets the singleton flag. Applies to every unique channel in the
   active selection, or the cursor col's channel when no selection.
-- `hideExtraCol` — current cursor col only; refuses populated cols
-  and the sole note column of a channel. For notes, compacts
-  higher-lane indices down by 1 (both in the events via `assignEvent`
-  and in `noteDelay` keys).
+- `hideExtraCol` — non-note cols: refuses unless the cursor column
+  itself is empty. Note lanes: always targets the topmost lane
+  regardless of cursor position, refusing unless that lane is empty.
+  Lane is rebuild-only at tm (`assignNote` rejects writes), so
+  interior holes can't be closed by shifting higher lanes down — a
+  previous version tried and silently failed (the column reappeared
+  on the next rebuild); hide from the right inwards to drop
+  interior-adjacent lanes.
 - `showDelay()` — turns on the delay sub-column (via
   `cfg.noteDelay[chan][lane] = true`) on every note col in the active
   selection, or on the cursor col when no selection. Idempotent.

@@ -3241,7 +3241,9 @@ function tv:hideExtraCol()
     end
   end
 
-  if #col.events > 0 then return end
+  -- Non-note columns remove only when the cursor column itself is empty;
+  -- note lanes drop the topmost empty lane from any lane (handled below).
+  if col.type ~= 'note' and #col.events > 0 then return end
 
   local extras = ds:get('extraColumns') or {}
   local want   = extras[chan] or { notes = 0 }
@@ -3254,11 +3256,10 @@ function tv:hideExtraCol()
       if c.type == 'note' then util.add(noteCols, c) end
     end
     if #noteCols <= 1 then return end
-    -- Lane is rebuild-only at tm (assignNote rejects lane writes), so
-    -- we can't shift higher lanes down to close an interior hole. Only
-    -- the topmost empty lane can be hidden; to drop interior empties,
-    -- the user hides from the right inwards.
-    if col.lane ~= #noteCols then return end
+    -- Only the topmost lane can drop (lane is rebuild-only at tm).
+    -- See docs/trackerView.md § Extra columns & delay sub-column.
+    local top = noteCols[#noteCols]
+    if #top.events > 0 then return end
     want.notes = #noteCols - 1
   elseif col.type == 'cc' then
     if pa:binding(chan, col.cc) then pa:unautomate(chan, col.cc) end
