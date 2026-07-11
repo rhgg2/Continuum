@@ -306,7 +306,14 @@ runs it, with a pointer to its detail where one exists.
   hosting its own discrete-replace kind (note-host replace parks the
   host; see `design/note-macros-v2.md` § Note-host replace parks). The
   prior parked set splits into still-covered carry-forward and restores
-  that re-enter their columns token-less, keeping their uuid and fx. Carried-forward tails clip against on-take note
+  that re-enter their columns token-less, keeping their uuid and fx. A
+  restored cc, though, reuses the exact ppq-token (`cc|chan|cc|ppq`) of
+  the fill seat still on the take from the wider window: its restore
+  deletes that seat first (`batch` commits del before add) and drops it
+  from `fx.ccExisting`, or the ppq collision leaves the fill value in
+  place and the fill reconcile then deletes the authored event by the
+  shared token — the value silently drifting to the fill on every
+  window round-trip. Carried-forward tails clip against on-take note
   bounds the same way the tail walk clips real notes, so a parked tail
   stops at the first successor past its region, not just the next
   parked member. The note del/adds ride the tail walk's atomic

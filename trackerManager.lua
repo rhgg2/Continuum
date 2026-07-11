@@ -1757,6 +1757,14 @@ local function unlink(events, evt)
   for i, e in ipairs(events) do if e == evt then table.remove(events, i); break end end
 end
 
+-- Drops the stale fill seat from ccExisting so rebuildFx's fill reconcile can't delete a restored
+-- cc by its shared ppq-token. see docs/trackerManager.md § Region-replace parking
+local function dropFillSeat(existing, cc, ppq)
+  for i, e in ipairs(existing or {}) do
+    if e.cc == cc and e.ppq == ppq then table.remove(existing, i); return end
+  end
+end
+
 -- Off-take render union: parked specs stay visible in-column as render-ready cells.
 local function renderUnion(field, newParked, toCell)
   for chan = 1, 16 do channels[chan][field] = {} end
@@ -1774,7 +1782,7 @@ end
 -- Region-replace parking: authored events a replace window covers leave the take;
 -- the prior parked set carries still-covered forward, restores the rest. see design/note-macros-v2.md § Generator output
 
-local function rebuildRegionPark(deferred, currentWindows)
+local function rebuildRegionPark(fx, deferred, currentWindows)
   local batch = mmBatch()
   -- Restored note cells re-enter their column token-less (the real mm event lands with the
   -- deferred tail commit); returned so rebuild can wire each to its backing post-commit.
@@ -1942,8 +1950,13 @@ local function rebuildRegionPark(deferred, currentWindows)
     -- Seat a token-less projection so the view shows the restored cc this frame; next rebuild
     -- re-reads the real token'd event from the take. The add rides the shared park commit.
     for _, spec in ipairs(restores) do
-      local ppq = tm:fromLogical(spec.chan, spec.ppqL)   -- realised onset derived fresh (spec is logical-only)
-      batch.add(ccCell(spec, ppq))
+      local ppq  = tm:fromLogical(spec.chan, spec.ppqL)   -- realised onset derived fresh (spec is logical-only)
+      local cell = ccCell(spec, ppq)
+      -- Fill collides on the same token; del-before-add (batch order) lands the authored value over
+      -- it, and dropFillSeat keeps the fill reconcile from re-deleting it by that token.
+      batch.del({ token = mm:tokenOf(cell) })
+      batch.add(cell)
+      dropFillSeat(fx.ccExisting[spec.chan], spec.cc, ppq)
       local channel = channels[spec.chan]
       local col = channel.columns.ccs[spec.cc]
       if not col then col = { cc = spec.cc, events = {} }; channel.columns.ccs[spec.cc] = col end
@@ -2990,7 +3003,7 @@ function tm:rebuild(takeChanged)
   end
   local currentWindows = generators.parkWindows(parkRegions)
 
-  perf.start('regionPark'); local restoredNotes = rebuildRegionPark(deferred, currentWindows); perf.stop('regionPark')  -- park covered, carry/restore prior
+  perf.start('regionPark'); local restoredNotes = rebuildRegionPark(fx, deferred, currentWindows); perf.stop('regionPark')  -- park covered, carry/restore prior
   perf.start('pa'); rebuildPA(); perf.stop('pa')  -- project PAs into settled note columns
 
   -- Re-scan windows post park/unpark/PA: the producer reads the final columns, including a host an unpark

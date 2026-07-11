@@ -611,6 +611,52 @@ return {
   },
 
   {
+    -- Restore lands on a ppq the fill already seats; cc's ppq-token key means a naive add collides,
+    -- and the fill reconcile then deletes the restored event by that shared token.
+    name = 'shrinking a cc-replace window restores the authored cc value, not the fill it sat under',
+    run = function(harness)
+      local h = harness.mk()
+      -- Two authored cc74 inside the window; values distinct from the 100 fill.
+      h.tm:addEvent({ evType = 'cc', ppq = 60,  chan = 1, cc = 74, val = 30 }); h.tm:flush()
+      h.tm:addEvent({ evType = 'cc', ppq = 180, chan = 1, cc = 74, val = 45 }); h.tm:flush()
+
+      -- Replace curve seating a breakpoint every 60t (val 100) -- so each authored ppq sits under a fill seat.
+      generators.kinds.ccRep = {
+        expand = function(host)
+          local delta = {}
+          for ppqL = host.window[1], host.window[2] - 1, 60 do
+            delta[#delta + 1] = { ppqL = ppqL, val = 100, shape = 'step' }
+          end
+          return { notes = {}, delta = delta }
+        end,
+        mode = 'replace', dest = 74, label = 'CcRep', defaults = {}, fields = {},
+      }
+
+      -- Grow: window covers both authored cc; both park off-take.
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+                                   fx = { { kind = 'ccRep' } } } })
+      local grown = {}
+      for _, s in ipairs(stashOfType(h, 'cc')) do grown[s.ppqL] = s.val end
+
+      -- Shrink so cc74@180 falls outside (restored); cc74@60 stays covered (parked).
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 120,
+                                   fx = { { kind = 'ccRep' } } } })
+      generators.kinds.ccRep = nil   -- generators is shared: restore before asserting
+
+      t.eq(grown[60],  30, 'cc74@60 parked with its authored value')
+      t.eq(grown[180], 45, 'cc74@180 parked with its authored value')
+
+      local restored = authoredCC(h, 1, 74, 180)
+      t.truthy(restored, 'cc74@180 restored to the take once outside the window')
+      t.eq(restored.val, 45, 'the restored cc keeps its authored value, not the fill (100) it sat under')
+
+      local stillParked = stashOfType(h, 'cc')
+      t.eq(#stillParked, 1, 'cc74@60 stays parked under the shrunk window')
+      t.eq(stillParked[1].ppqL, 60, 'the still-covered cc is the one left parked')
+    end,
+  },
+
+  {
     name = 'one flush, one rebuild: a parked edit + a normal note land together (the multi-select guard)',
     run = function(harness)
       local h = harness.mk()
