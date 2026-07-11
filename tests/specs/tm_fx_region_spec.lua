@@ -1646,4 +1646,59 @@ return {
     end,
   },
 
+  {
+    -- Removing the last note-dest kind un-parks the host, but a surviving continuous kind still governs
+    -- its cc target and must persist its window. see design/note-macros-v2.md § Route-by-window
+    name = 'removing the note kind from a self-parked [autopan, trill] host keeps its authored cc parked',
+    run = function(harness)
+      local h = harness.mk()
+      -- Authored cc10 the augment parks; values distinct from the autopan output so a stray restore shows.
+      h.tm:addEvent({ evType = 'cc', ppq = 60,  chan = 1, cc = 10, val = 20 });  h.tm:flush()
+      h.tm:addEvent({ evType = 'cc', ppq = 180, chan = 1, cc = 10, val = 100 }); h.tm:flush()
+
+      -- Note-host: autopan (cc10-augment) parks the authored cc and seats a derived stream over the window.
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
+                      detune = 0, delay = 0, lane = 1,
+                      fx = { { kind = 'autopan', period = { 1, 4 }, depth = 32 } } })
+      h.tm:flush()
+      local uuid = h.tm:getChannel(1).columns.notes[1].events[1].uuid
+      t.truthy(uuid, 'the on-take host carries a uuid')
+      t.eq(#stashOfType(h, 'cc'), 2, 'autopan parks both authored cc off-take')
+
+      -- The realised cc10 (on-take derived seats) + the parked authored stash, as an order-stable
+      -- fingerprint. Add-then-remove trill is a round-trip: this must return to its pre-trill value.
+      local function ccFingerprint()
+        local seats = {}
+        for _, c in ipairs(h.fm:dump().ccs) do
+          if c.evType == 'cc' and c.cc == 10 and c.chan == 1 then
+            seats[#seats + 1] = { ppq = c.ppq, val = c.val }
+          end
+        end
+        table.sort(seats, function(a, b)
+          if a.ppq ~= b.ppq then return a.ppq < b.ppq end
+          return a.val < b.val
+        end)
+        local parked = {}
+        for _, s in ipairs(stashOfType(h, 'cc')) do parked[#parked + 1] = { ppqL = s.ppqL, val = s.val } end
+        table.sort(parked, function(a, b) return a.ppqL < b.ppqL end)
+        return { seats = seats, parked = parked }
+      end
+      local baseline = ccFingerprint()
+      t.eq(#baseline.parked, 2, 'both authored cc parked in the baseline')
+
+      -- Add trill: the host now self-parks as a note; the autopan cc window must persist.
+      h.vm:addFxStage(uuid, { kind = 'trill', period = { 1, 4 }, step = 2 })
+      t.eq(#h.tm:getChannel(1).parked, 1, 'the host self-parks once a note-replace kind joins the chain')
+      t.eq(#stashOfType(h, 'cc'), 2, 'the authored cc stay parked under the persisting autopan window')
+
+      -- Remove trill: the host un-parks as a note; autopan still governs cc10, so its window must
+      -- persist -- the authored cc carry forward parked, not restore onto the take under the seats.
+      local fx = h.vm:noteFx(uuid); local trillIdx
+      for i, e in ipairs(fx) do if e.kind == 'trill' then trillIdx = i end end
+      h.vm:removeFxStage(uuid, trillIdx)
+
+      t.deepEq(ccFingerprint(), baseline, 'the cc realisation round-trips: seats + parked stash unchanged')
+    end,
+  },
+
 }

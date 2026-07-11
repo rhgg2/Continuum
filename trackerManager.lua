@@ -2989,12 +2989,10 @@ function tm:rebuild(takeChanged)
       end
     end
   end
-  -- A self-parked host (note-replace kind) is off-take but still runs a producer, so its continuous
-  -- (pb/cc) windows must register too -- else the persisted set drops them and a delete has no sweep
-  -- baseline, orphaning the markerless seats as authored pbs. Extent is the stash's authored ceiling
-  -- (realised == authored for a lone host; a clipped host self-heals in one rebuild). see § Route-by-window
+  -- A self-parked host is off-take but still runs a producer, so its continuous (pb/cc) windows must
+  -- register on any surviving fx, not just parksNotes -- see § Route-by-window: mixed-kind un-parking.
   for _, spec in ipairs(ds:get('fxParked') or {}) do
-    if spec.evType == 'note' and spec.fx and generators.parksNotes(spec) then
+    if spec.evType == 'note' and spec.fx then
       local endL = (spec.endppqL == nil or spec.endppqL == util.OPEN)
                    and tm:toLogical(spec.chan, tm:length()) or spec.endppqL
       util.add(parkRegions, { chan = spec.chan, startppq = spec.ppqL, endppq = endL,

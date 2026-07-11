@@ -571,6 +571,18 @@ edge can land just outside the current-swing bounds and escape recognition.
 channel's replace-target seats (churn on swing is acceptable) rather than
 reconciling.
 
+**Known edge — mixed-kind self-parked host un-parking.** A self-parked host can
+chain a note-replace kind (parks the host, e.g. trill) alongside a continuous
+kind targeting cc/pb (e.g. autopan). Removing the last note-replace kind
+un-parks the host as a note *in the same rebuild* the surviving continuous
+kind still runs — its target window must keep registering, or the authored
+cc/pb it covers restore onto the take and collide with the seats the
+surviving kind still derives. The self-parked-host window pass in
+`rebuild` (`tm:2999`) therefore registers on any surviving `spec.fx`, not
+`generators.parksNotes(spec)` — that predicate is only true while a
+note-replace kind is present, so it dropped the window on exactly this
+frame. Extent is unchanged: the stash's authored ceiling.
+
 **Pin (landed).** The existing `tm_fx_region_spec` seated-curve / I1 / densify /
 suppression-reversibility tests hold unchanged; dense-curve tests (pb and cc) assert the
 seats are markerless (`uuid == nil`, no `eventMeta`) — the regression the slice exists to
