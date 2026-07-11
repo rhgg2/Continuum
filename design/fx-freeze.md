@@ -70,33 +70,38 @@ and its payload crossing as scalars. "Neither implemented nor not":
 the type-specific seams were never built. F1 is the audit +
 completion, pinned by specs.
 
-**The one design decision — pb `val` is realisation, not intent.**
-`val` is not in `DERIVED`, so a pb member's raw wire value crosses
-frames as a scalar. But pb raw = `centsToRaw(cents + governing
-detune)` — realisation, stale at any destination whose detune
-differs. The deny must become type-aware: **deny pb `val`, carry
-`cents`**; the absorber re-derives the wire at the destination
-(VERIFY it recomputes authored pb raws — believed yes, it owns the
-wire). at and cc `val` *are* the intent and keep crossing. Same
-intent-in / realisation-out discipline as note tails
-(docs/groupManager.md).
+**The one design decision — the group frame stores pb intent under
+`val`.** `makeEntry` builds the um entry's `val` as `rawToCents(wire)`
+= intent + governing detune — realisation, stale at any sibling whose
+detune differs. The group frame instead stores the frame-invariant
+intent, keeping the existing field name `val`: `toGroup` sources it
+from `evt.cents` (the intent), never the um `val`, and `detune` stays
+`DERIVED`-denied so each seat re-derives its own wire at flush. One arm
+at the single intent-ingress chokepoint (`toGroup`) beat renaming the
+field to `cents` at every boundary. `makeEntry`'s pb pick also carries
+`uuid`, without which gm's per-rebuild re-anchor (`tm:byUuid`) loses
+the member and no-ops every later edit. at and cc `val` *are* the
+intent and cross generically. (Landed 2026-07-11 — docs/decisions.md.)
 
 **Audit surface** (each either works generically — pin it — or gets
 its arm):
 
-- region collection → `rect.streams`: do region-mode paint and the
-  markGroup caller include pb/at columns?
-- facade routing: are pb/at cells inside a footprint tagged `member`,
-  and does a member pb edit reach `gm:assignEvent` with authored
-  fields (cents)? `updToGroup` pb arm.
-- `classifyCreate` adoption of a typed pb/at (generic `keyOf` works
-  iff the stream is in `rect.streams`).
-- `moveInstance` sideways dispatch: the "multi-channel or has-CC"
-  predicate must count pb/at as non-note (channel-move, never the
-  lane walk).
-- `revivableVuid` stream+onset matching (generic streamId — likely
-  fine, pin it).
-- undo, persistence round-trip (cents sidecar through ds `groups`).
+- ✓ region collection → `rect.streams`: generic — the pb propagation
+  spec marks a group off a `pb:0` stream via `eventsInRect`. A mixed
+  pb+at+note rect stays unpinned.
+- ✓ facade routing: a member pb value edit reaches `gm:assignEvent`
+  and propagates to siblings (`gm_pb_member_spec`). No dedicated
+  `updToGroup` pb arm — the group frame tolerates the `val`
+  passthrough (verified red-first: only dropping `val` breaks it).
+- ⏳ `classifyCreate` adoption of a typed pb/at (generic `keyOf` works
+  iff the stream is in `rect.streams`) — unpinned.
+- ✓ `moveInstance` sideways dispatch: `laneWalkable`'s positive
+  `^note:` allowlist (`editCursor.lua:648`) fails `pb:0`/`at:0`,
+  routing them to channel-move. Verified by reading; no spec yet.
+- ⏳ `revivableVuid` stream+onset matching (generic streamId — likely
+  fine) — unpinned.
+- ⏳ undo, persistence round-trip (cents sidecar through ds `groups`) —
+  unpinned.
 
 **pa stays out.** `keyOf` would collapse every pa lane onto `'pa:0'`,
 and pa is note-column resident — it needs a lane-aware key arm and
@@ -231,9 +236,12 @@ on host-reading kinds; re-check the gate when any new kind lands.
 
 ## Tests
 
-F1 (gm specs): pb+at members project to a second instance; member pb
-cents edit propagates; destination detune re-derives wire raw;
-sideways move dispatches channel-move; persistence + undo round-trip.
+F1 (`gm_pb_member_spec`, `gm_at_member_spec`): ✓ pb intent frame (`val`
+is intent, not the realised wire); pb+at uuid survives the rebuild so
+gm re-anchors via `tm:byUuid`; pb value edit propagates to a sibling;
+at `val` crosses verbatim (no cents leak). ⏳ still to pin: destination
+detune re-derives wire raw; sideways move dispatches channel-move;
+persistence + undo round-trip.
 
 F2 (`tm_fx_region_spec` / `tv_fx_region_spec`): freeze-to-raw — arp
 authored + audible, chord gone, seats stand, *no restore on the next
