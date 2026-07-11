@@ -1531,19 +1531,20 @@ local function rewriteRegion(uuid, mutate)
   pa:apply()
 end
 
+-- The fx region a verb acts on within a column (its lane): the badge with the greatest onset
+-- at-or-before the cursor row. Manual scan -- fx cells sit in storage, not ppq, order.
+local function cursorRegionBefore(col)
+  local limit = ctx:rowToPPQ(ec:row() + 1, col.midiChan)
+  local best
+  for _, cell in ipairs(col.events) do
+    if cell.ppq < limit and (not best or cell.ppq > best.ppq) then best = cell end
+  end
+  return best
+end
+
 ----- Duration & position
 
 local noteOff, adjustDuration, adjustPosition, shiftFxLane do
-  -- The fx region the editor acts on: within the cursor's own column (its lane), the badge with
-  -- the greatest onset at-or-before the cursor row. Manual scan -- fx cells sit in storage, not ppq, order.
-  local function cursorRegionBefore(col)
-    local limit = ctx:rowToPPQ(ec:row() + 1, col.midiChan)
-    local best
-    for _, cell in ipairs(col.events) do
-      if cell.ppq < limit and (not best or cell.ppq > best.ppq) then best = cell end
-    end
-    return best
-  end
 
   -- The lane (1-based) of the cursor's fx column -- columns are added in lane order, so the k-th
   -- fx column on the channel is lane k. A window edit reorders storage to hold this lane.
@@ -2382,13 +2383,17 @@ local function regionByUuid(uuid)
   end
 end
 
-local function mintRegionUuid()
+local function maxFxRegionN(list)
   local maxN = 0
-  for _, region in ipairs(ds:get('fxRegions') or {}) do
+  for _, region in ipairs(list) do
     local n = tonumber(tostring(region.uuid):match('^fxr%-(%d+)$'))
     if n and n > maxN then maxN = n end
   end
-  return 'fxr-' .. (maxN + 1)
+  return maxN
+end
+
+local function mintRegionUuid()
+  return 'fxr-' .. (maxFxRegionN(ds:get('fxRegions') or {}) + 1)
 end
 
 -- A selection always mints a fresh region over its (channel, ppq span). Regions may
@@ -2406,6 +2411,88 @@ local function mintRegionForSelection()
   out[#out + 1] = region
   ds:assign('fxRegions', out)
   return region.uuid, true
+end
+
+----- FX region clipboard
+
+-- Visit every fx region the copy rectangle catches: authored onset within the row band, in a
+-- selected fx column -- the one capture rule copy and delete-selection share.
+local function eachFxRegionInRect(r1, r2, c1, c2, fn)
+  for ci = c1, c2 do
+    local col = grid.cols[ci]
+    if col and col.type == 'fx' then
+      local chan   = col.midiChan
+      local bandLo = ctx:rowToPPQ(r1, chan)
+      local bandHi = ctx:rowToPPQ(r2 + 1, chan)
+      for _, cell in ipairs(col.events) do
+        local region = regionByUuid(cell.uuid)
+        if region and region.startppq >= bandLo and region.startppq < bandHi then
+          fn(region, chan)
+        end
+      end
+    end
+  end
+end
+
+-- Clip-top-relative rows + chanDelta off the rectangle's left edge, as multi-mode cells;
+-- see docs/trackerView.md § FX regions for why the whole window rides past the band.
+local function gatherFxRegions(r1, r2, c1, c2, anchorChan)
+  local out = {}
+  eachFxRegionInRect(r1, r2, c1, c2, function(region, chan)
+    out[#out + 1] = {
+      chanDelta = chan - anchorChan,
+      row       = ctx:ppqToRow(region.startppq, chan) - r1,
+      endRow    = ctx:ppqToRow(region.endppq,   chan) - r1,
+      fx        = util.deepClone(region.fx),
+    }
+  end)
+  return out
+end
+
+-- Drop each gathered region at the cursor: fresh uuid, channel rebased by chanDelta, window off
+-- the cursor row. Regions stack (no destination wipe) -- they overlap by design, unlike cell paste.
+local function pasteFxRegions(list)
+  local cursor = grid.cols[ec:col()]
+  if not cursor then return end
+  local cursorRow, cursorChan = ec:row(), cursor.midiChan
+  local out = {}
+  for _, region in ipairs(ds:get('fxRegions') or {}) do out[#out + 1] = region end
+  local nextN = maxFxRegionN(out)
+  for _, entry in ipairs(list) do
+    local chan = cursorChan + entry.chanDelta
+    if chan >= 1 and chan <= 16 then
+      nextN = nextN + 1
+      out[#out + 1] = {
+        uuid     = 'fxr-' .. nextN,
+        chan     = chan,
+        startppq = ctx:rowToPPQ(cursorRow + entry.row,    chan),
+        endppq   = ctx:rowToPPQ(cursorRow + entry.endRow, chan),
+        fx       = util.deepClone(entry.fx),
+      }
+    end
+  end
+  ds:assign('fxRegions', out)
+  pa:apply()
+end
+
+-- Caret delete: the region under the cursor (whole window), matching the sibling fx verbs' target --
+-- not the onset-in-band rule copy uses.
+local function deleteFxRegionAtCursor(col)
+  local cell = cursorRegionBefore(col)
+  if cell then rewriteRegion(cell.uuid, function() return nil end) end
+end
+
+-- Delete-selection's fx arm: drop every region the rectangle catches (the copy rule) in one write.
+local function deleteFxRegionsInRect(r1, r2, c1, c2)
+  local doomed = {}
+  eachFxRegionInRect(r1, r2, c1, c2, function(region) doomed[region.uuid] = true end)
+  if not next(doomed) then return end
+  local out = {}
+  for _, region in ipairs(ds:get('fxRegions') or {}) do
+    if not doomed[region.uuid] then out[#out + 1] = region end
+  end
+  ds:assign('fxRegions', next(out) and out or util.REMOVE)
+  pa:apply()
 end
 
 function tv:noteFx(uuid)
@@ -2590,6 +2677,7 @@ local deleteEvent, deleteSelection do
   function deleteEvent()
     local col = grid.cols[ec:col()]
     if not col then return end
+    if col.type == 'fx' then return deleteFxRegionAtCursor(col) end
     local r = ec:row()
     local evt = col.cells and col.cells[r]
     if not evt then
@@ -2625,6 +2713,7 @@ local deleteEvent, deleteSelection do
       DELETE_BY_PART[g.part](g.col, g.locs)
     end
     tm:flush()
+    deleteFxRegionsInRect(ec:region())
     ec:selClear()
   end
 end
@@ -3958,6 +4047,8 @@ ec = util.instantiate('editCursor', {
 clipboard = util.instantiate('clipboard', {
   ec = ec, grid = grid, tm = tm, cm = cm,
   edit         = edit,
+  -- FX regions ride the clip as clip.fxRegions; trackerView owns their ds gather/replay.
+  fx           = { gather = gatherFxRegions, paste = pasteFxRegions },
   -- Injectivity gate (decision 5): refuse a paste whose footprint aliases one
   -- group in global mode; localMode (per-instance adds) dissolves it.
   aliases      = function(cells)

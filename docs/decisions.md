@@ -4,6 +4,15 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-11** — FX regions join the rectangle clipboard (copy/paste/delete),
+  captured by *onset-in-band* — a region starting inside the rectangle rides whole,
+  tail spilling past the band, exactly as a note's tail copies; one starting above and
+  merely passing through is skipped. Over overlap-capture (would make fx unlike every
+  other column) or clip-to-band (meaningless for a chain, whose identity is its window).
+  Paste *stacks* (no destination wipe) since regions overlap by design. Rides the cell
+  clip as `clip.fxRegions` via an injected `fx` hook; delete-caret still targets the
+  region under the cursor (`cursorRegionBefore`), not the onset rule.
+
 - **2026-07-11** — Chord channel spread rides Alt *per strike* (Shift+Alt+note
   walks to the lowest gesture-free channel; plain Shift+note stacks lanes on home),
   over a mode-at-arm modifier or a config toggle — per-strike subsumes both and

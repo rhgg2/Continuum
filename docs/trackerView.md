@@ -297,6 +297,19 @@ touching the user clipboard: it calls `clipboard:collect()` and
 off, not the end — so selection follows and repeated invocations stack
 cleanly.
 
+### FX regions
+
+FX regions ride the clip as `clip.fxRegions`, gathered/replayed by
+trackerView through an `fx` hook injected into `clipboard`'s deps
+(`gatherFxRegions`/`pasteFxRegions`) rather than by clipboard reaching
+into `fxRegions` storage itself — clipboard stays column-shaped, fx
+regions don't. Entries carry clip-top-relative rows and a `chanDelta`
+off the rectangle's left edge, same as multi-mode cells; the whole
+window rides even when it spills past the copy band, since a region's
+identity is its window, not the rectangle that caught it (see decision
+2026-07-11). Paste stacks — regions overlap by design, so unlike cell
+paste there's no destination wipe.
+
 ## Quantize
 
 vm exposes paired domain verbs `vm:quantize{Selection,All}` and

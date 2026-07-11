@@ -827,4 +827,99 @@ return {
       t.deepEq(authoredPitches(h), {}, 'still parked, not on take')
     end,
   },
+
+  ----- Copy / paste / delete: fx regions ride the rectangle clip (capture-by-onset, stack on paste)
+
+  {
+    name = 'fx copy captures a region by onset; the whole window rides, tail spilling past the band',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      injectRegion(h, { startppq = 180, endppq = 600 })   -- onset row 3, tail row 10
+      local _, ci = fxColFor(h, 1)
+      h.ec:setPos(2, ci, 1)
+      h.ec:extendTo(4, ci, 1)                             -- band rows 2..4
+      local clip = h.clipboard:collect()
+      t.truthy(clip and clip.fxRegions, 'the clip carries the caught fx region')
+      t.eq(#clip.fxRegions, 1, 'onset in band -> captured')
+      local e = clip.fxRegions[1]
+      t.eq(e.row, 1, 'row is band-relative (onset row 3 - r1 2)')
+      t.eq(e.endRow, 8, 'full window rides -- endRow 10 - r1 2, spilling past the 3-row band')
+      t.eq(e.chanDelta, 0, 'anchored to the rectangle left edge (same channel)')
+      t.eq(e.fx[1].kind, 'vibrato', 'the fx chain rode along')
+      e.fx[1].kind = 'arp'
+      t.eq(region(h, 'fxr-1').fx[1].kind, 'vibrato', 'the clip deep-cloned -- mutating it does not touch ds')
+    end,
+  },
+
+  {
+    name = 'fx copy skips a region that only passes through the band (onset above it)',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      injectRegion(h, { startppq = 0, endppq = 600 })     -- onset row 0, spans to row 10
+      local _, ci = fxColFor(h, 1)
+      h.ec:setPos(4, ci, 1)
+      h.ec:extendTo(6, ci, 1)                             -- band rows 4..6: region passes through, onset above
+      t.falsy(h.clipboard:collect(), 'a region starting above the band is not captured, matching notes')
+    end,
+  },
+
+  {
+    name = 'fx copy + paste stacks a duplicate region at the cursor row, original intact',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      injectRegion(h)                                     -- fxr-1 [0,240), rows 0..4
+      local _, ci = fxColFor(h, 1)
+      h.ec:setPos(0, ci, 1)
+      h.ec:extendTo(3, ci, 1)                             -- band rows 0..3
+      h.cmgr:invoke('copy')
+      h.ec:setPos(8, ci, 1)                               -- paste 8 rows down
+      h.cmgr:invoke('paste')
+      local regions = h.ds:get('fxRegions')
+      t.eq(#regions, 2, 'the paste stacked a second region (no destination wipe)')
+      t.eq(region(h, 'fxr-1').startppq, 0,   'the original onset is untouched')
+      t.eq(region(h, 'fxr-1').endppq,   240, 'the original window is untouched')
+      local pasted = region(h, 'fxr-2')
+      t.truthy(pasted, 'the paste minted fxr-2')
+      t.eq(pasted.startppq, h.vm:rowToPPQ(8, 1),  'onset landed at the cursor row')
+      t.eq(pasted.endppq,   h.vm:rowToPPQ(12, 1), 'window length preserved (4 rows off the cursor)')
+      t.eq(pasted.fx[1].kind, 'vibrato', 'the copied chain came with it')
+    end,
+  },
+
+  {
+    name = 'fx delete removes the region under the caret',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      injectRegion(h)                                     -- fxr-1 [0,240)
+      local _, ci = fxColFor(h, 1)
+      h.ec:setPos(2, ci, 1)                               -- mid-window, no selection
+      h.cmgr:invoke('delete')
+      t.eq(#(h.ds:get('fxRegions') or {}), 0, 'the region under the caret is gone')
+    end,
+  },
+
+  {
+    name = 'fx deleteSel drops every region the rectangle catches (onset in band), sparing the rest',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      h.ds:assign('fxRegions', {
+        { uuid = 'fxr-1', chan = 1, startppq = 0,   endppq = 120, fx = vib30 },  -- onset row 0, in band
+        { uuid = 'fxr-2', chan = 1, startppq = 120, endppq = 240, fx = vib30 },  -- onset row 2, in band
+        { uuid = 'fxr-3', chan = 1, startppq = 480, endppq = 600, fx = vib30 },  -- onset row 8, out of band
+      })
+      h.tm:rebuild()
+      local _, ci = fxColFor(h, 1)                        -- all disjoint -> one shared column
+      h.ec:setPos(0, ci, 1)
+      h.ec:extendTo(3, ci, 1)                             -- band rows 0..3
+      h.cmgr:invoke('deleteSel')
+      local left = {}
+      for _, r in ipairs(h.ds:get('fxRegions') or {}) do left[#left + 1] = r.uuid end
+      t.deepEq(left, { 'fxr-3' }, 'only the out-of-band region survives')
+    end,
+  },
 }

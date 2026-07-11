@@ -42,6 +42,7 @@ local getCtx       = deps.getCtx
 local getLength    = deps.getLength
 local edit         = deps.edit       -- leaf-edit facade: routes add/delete/assign to gm or tm by cell kind
 local aliases      = deps.aliases    -- (cells) -> bool: refuse a paste whose footprint aliases one group
+local fx           = deps.fx         -- { gather(r1,r2,c1,c2,anchorChan), paste(list) }: fx regions ride the clip
 
 local function save(clip)
   reaper.SetExtState('rdm', 'clipboard', util.serialise(clip), false)
@@ -91,30 +92,39 @@ local function collect()
     return { row = rowOf(evt.ppq), val = evt.vel }
   end
 
+  -- FX regions are gathered independently of the cell mode and ride on clip.fxRegions; anchor
+  -- their chanDelta to the rectangle's left edge so paste rebases them alongside the cells.
+  local anchorChan = grid.cols[c1] and grid.cols[c1].midiChan
+  local fxRegions  = anchorChan and fx.gather(r1, r2, c1, c2, anchorChan) or {}
+
   -- Single-column mode
   if c1 == c2 then
     local col = grid.cols[c1]
     if not col then return end
-    local startppq, endppq = ctx:rowToPPQ(r1, col.midiChan), ctx:rowToPPQ(r2 + 1, col.midiChan)
 
+    -- fx columns carry regions, not cells: skip the cell collect, let clip.fxRegions carry them.
     local clipType, events = nil, {}
-    local emit
-    if col.type == 'note' and part1 == 'pitch' then
-      clipType, emit = 'note', noteEvent
-    elseif col.type == 'note' and part1 == 'vel' then
-      clipType, emit = '7bit', velEvent
-    elseif col.type == 'pb' then
-      clipType, emit = 'pb',   scalarEvent
-    else
-      clipType, emit = '7bit', scalarEvent
-    end
-    for evt in util.between(col.events, startppq, endppq) do
-      util.add(events, emit(evt))
+    if col.type ~= 'fx' then
+      local startppq, endppq = ctx:rowToPPQ(r1, col.midiChan), ctx:rowToPPQ(r2 + 1, col.midiChan)
+      local emit
+      if col.type == 'note' and part1 == 'pitch' then
+        clipType, emit = 'note', noteEvent
+      elseif col.type == 'note' and part1 == 'vel' then
+        clipType, emit = '7bit', velEvent
+      elseif col.type == 'pb' then
+        clipType, emit = 'pb',   scalarEvent
+      else
+        clipType, emit = '7bit', scalarEvent
+      end
+      for evt in util.between(col.events, startppq, endppq) do
+        util.add(events, emit(evt))
+      end
     end
 
-    if #events == 0 then return end
+    if #events == 0 and #fxRegions == 0 then return end
     local clip = { mode = 'single', type = clipType, numRows = numRows,
                    events = events }
+    if #fxRegions > 0 then clip.fxRegions = fxRegions end
     return clip
   end
 
@@ -122,6 +132,7 @@ local function collect()
   local leftChan
   local notePosByChan = {}
   for col in ec:eachSelectedCol() do
+    if col.type == 'fx' then goto skipCol end   -- regions ride clip.fxRegions, not the cell cols
     leftChan = leftChan or col.midiChan
 
     local entry = {
@@ -146,11 +157,13 @@ local function collect()
       end
     end
     util.add(cols, entry)
+    ::skipCol::
   end
 
-  if #cols == 0 then return end
-  local clip = { mode = 'multi', numRows = numRows, startType = cols[1].type,
+  if #cols == 0 and #fxRegions == 0 then return end
+  local clip = { mode = 'multi', numRows = numRows, startType = cols[1] and cols[1].type,
                  cols = cols }
+  if #fxRegions > 0 then clip.fxRegions = fxRegions end
   return clip
 end
 
@@ -427,6 +440,7 @@ end
 local function pasteClip(clip)
   if clip.mode == 'single' then pasteSingle(clip)
   else                          pasteMulti(clip) end
+  if clip.fxRegions then fx.paste(clip.fxRegions) end
   tm:flush()
 end
 
@@ -451,6 +465,7 @@ local function trimTop(clip, trim)
   else
     for _, c in ipairs(clip.cols) do filter(c.events) end
   end
+  if clip.fxRegions then filter(clip.fxRegions) end
 end
 
 ---------- PUBLIC
