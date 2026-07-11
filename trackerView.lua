@@ -719,8 +719,11 @@ local audition, auditionAdd, auditionRelease, killAudition do
     auditionAdd(pitch, vel, chan, detune)
   end
 
+  -- A live chord gesture pins the voices sounding: shift is held down, so the
+  -- timeout is suspended until chordCommit/chordAbandon drops them on release.
   function tv:tick()
-    if voices[1] and reaper.time_precise() - auditionTime > AUDITION_TIMEOUT then
+    if voices[1] and not tv:chordActive()
+       and reaper.time_precise() - auditionTime > AUDITION_TIMEOUT then
       killAudition()
     end
   end

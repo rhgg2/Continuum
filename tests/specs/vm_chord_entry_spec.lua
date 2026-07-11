@@ -25,6 +25,15 @@ end
 
 local function strike(h, ch) return h.vm:chordStrike(string.byte(ch)) end
 
+-- Count StuffMIDIMessage note-offs (0x80|chan) in the fake reaper's call log.
+local function noteOffs(h)
+  local n = 0
+  for _, c in ipairs(h.reaper._state.calls) do
+    if c.fn == 'StuffMIDIMessage' and (c.b1 & 0xF0) == 0x80 then n = n + 1 end
+  end
+  return n
+end
+
 return {
   {
     name = 'strikes stack lanes at the pinned row; commit advances once',
@@ -184,6 +193,24 @@ return {
       t.falsy(laneNoteAt(h, 1, 120), 'second press toggled the snapped note off')
       t.eq(#h.fm:dump().notes, 0, 'gesture is empty')
       h.vm:chordCommit()
+    end,
+  },
+
+  {
+    name = 'a live gesture suspends the audition timeout; commit drops the voices',
+    run = function(harness)
+      local h = mk(harness)
+      h.ec:setPos(2, 1, 1)
+      strike(h, 'z')
+
+      h.reaper:clearCalls()
+      h.reaper:tick(2.0)   -- well past AUDITION_TIMEOUT (0.8s)
+      h.vm:tick()
+      t.eq(noteOffs(h), 0, 'shift held: the tick leaves the voices sounding')
+
+      h.reaper:clearCalls()
+      h.vm:chordCommit()
+      t.truthy(noteOffs(h) > 0, 'shift release drops the gesture voices')
     end,
   },
 
