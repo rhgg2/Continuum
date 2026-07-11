@@ -556,6 +556,20 @@ return {
   },
 
   {
+    name = 'fx noteOff on the window end row re-opens it to the pattern length',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      injectRegion(h)                          -- fxr-1 [0,240), end row = 4
+      local _, ci = fxColFor(h, 1)
+      h.ec:setPos(4, ci, 1)                     -- cursor on the window's own end row
+      h.cmgr:invoke('noteOff')
+      t.eq(region(h, 'fxr-1').endppq, h.vm:rowToPPQ(h.vm.grid.numRows, 1),
+           'the tail re-opens to the full pattern length')
+    end,
+  },
+
+  {
     name = 'fx growNote / shrinkNote resize the region from its end',
     run = function(harness)
       local h = harness.mk()

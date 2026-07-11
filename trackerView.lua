@@ -1616,7 +1616,13 @@ local noteOff, adjustDuration, adjustPosition, shiftFxLane do
   local function regionNoteOff(col)
     local cell = cursorRegionBefore(col)
     if not cell then return end
-    local targetppq = ctx:rowToPPQ(ec:row(), col.midiChan)
+    local chan = col.midiChan
+    -- At the window's own end row, re-open to the pattern length, mirroring the
+    -- util.OPEN toggle a note gets when noteOff lands on its tail.
+    if ctx:snapRow(cell.endppqC, chan) == ec:row() then
+      return applyRegionWindow(col, cell, cell.ppq, ctx:rowToPPQ(grid.numRows, chan), 0)
+    end
+    local targetppq = ctx:rowToPPQ(ec:row(), chan)
     if targetppq <= cell.ppq then return end
     applyRegionWindow(col, cell, cell.ppq, targetppq, 0)
   end
