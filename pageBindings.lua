@@ -10,11 +10,11 @@ package.path = reaper.ImGui_GetBuiltinPath() .. '/?.lua;' .. package.path
 local ImGui = require 'imgui' '0.10'
 local util  = require 'util'
 
-local M = {}
+local pageBindings = {}
 
 ----- tracker (command bodies in trackerRender + trackerView)
 
-M.tracker = {
+pageBindings.tracker = {
   cursorUp               = { ImGui.Key_UpArrow,    {ImGui.Key_P, ImGui.Mod_Super} },
   cursorDown             = { ImGui.Key_DownArrow,  {ImGui.Key_N, ImGui.Mod_Super} },
   cursorLeft             = { ImGui.Key_LeftArrow,  {ImGui.Key_B, ImGui.Mod_Super} },
@@ -94,12 +94,12 @@ M.tracker = {
 }
 -- Universal-argument digit prefixes: Ctrl+0..9 arm advBy0..advBy9.
 for i = 0, 9 do
-  M.tracker['advBy' .. i] = { {ImGui.Key_0 + i, ImGui.Mod_Ctrl} }
+  pageBindings.tracker['advBy' .. i] = { {ImGui.Key_0 + i, ImGui.Mod_Ctrl} }
 end
 
 ----- region (overlay within the tracker page; springLoaded scope config lives on ec)
 
-M.region = {
+pageBindings.region = {
   regionExit        = { ImGui.Key_Escape, ImGui.Key_Enter, ImGui.Key_KeypadEnter },
   regionBail        = { {ImGui.Key_G, ImGui.Mod_Super} },
   regionPaintExtend = { ImGui.Key_Equal },
@@ -108,7 +108,7 @@ M.region = {
 
 ----- sample (command bodies + slot-clamp invariant in sampleRender)
 
-M.sample = {
+pageBindings.sample = {
   browserUp      = { { ImGui.Key_UpArrow,    ImGui.Mod_Ctrl  } },
   browserPreview = { { ImGui.Key_DownArrow,  ImGui.Mod_Ctrl  } },
   browserAssign  = { { ImGui.Key_RightArrow, ImGui.Mod_Ctrl  } },
@@ -119,7 +119,7 @@ M.sample = {
 
 ----- wiring
 
-M.wiring = {
+pageBindings.wiring = {
   wiringAddFx          = { ImGui.Key_N      },
   wiringClearSelection = { ImGui.Key_Escape },
 }
@@ -174,6 +174,6 @@ end
 for i = 0, 9 do
   arrange['arrangeAdvanceBy' .. i] = { { ImGui.Key_0 + i, ImGui.Mod_Ctrl } }
 end
-M.arrange = arrange
+pageBindings.arrange = arrange
 
-return M
+return pageBindings
