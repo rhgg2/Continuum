@@ -12,10 +12,15 @@
 ## Status at a glance
 
 **Open**
-- [ ] F1 — pb/at as first-class gm members: finish + pin the
-      half-existing generic support
 - [ ] F2 — the freeze pair: freeze-to-raw, freeze-to-group, and the
       curve thinner freeze-to-group needs
+
+**Done**
+- [x] F1 — pb/at as first-class gm members: audited and pinned
+      (`gm_pb_member_spec` ×6, `gm_at_member_spec` ×2). Every seam
+      rides generically; the only production change was `toGroup`
+      sourcing pb intent from `evt.cents` + `makeEntry` carrying the
+      pb `uuid` (see docs/decisions.md 2026-07-11).
 
 **Pinned (design later, not gating)**
 - [ ] fx on groups — group events are the *host material*, the fx
@@ -93,15 +98,18 @@ its arm):
   and propagates to siblings (`gm_pb_member_spec`). No dedicated
   `updToGroup` pb arm — the group frame tolerates the `val`
   passthrough (verified red-first: only dropping `val` breaks it).
-- ⏳ `classifyCreate` adoption of a typed pb/at (generic `keyOf` works
-  iff the stream is in `rect.streams`) — unpinned.
+- ✓ `classifyCreate` adoption: a fresh in-region pb is adopted and
+  propagates (`gm_pb_member_spec`); generic `keyOf`/`streamId`, no type
+  arm. Its add-target is the member backing's `add` (trackerView.lua:85).
 - ✓ `moveInstance` sideways dispatch: `laneWalkable`'s positive
   `^note:` allowlist (`editCursor.lua:648`) fails `pb:0`/`at:0`,
   routing them to channel-move. Verified by reading; no spec yet.
 - ⏳ `revivableVuid` stream+onset matching (generic streamId — likely
   fine) — unpinned.
-- ⏳ undo, persistence round-trip (cents sidecar through ds `groups`) —
-  unpinned.
+- ✓ persistence/undo: the `groups` blob carries pb intent under `val`
+  (no cents sidecar — the landed design's whole point), survives
+  serialise, and rehydrates live (`gm_pb_member_spec`). Undo is the
+  same rehydrate off a ds-invalidate (`gm_persist_reload_spec`).
 
 **pa stays out.** `keyOf` would collapse every pa lane onto `'pa:0'`,
 and pa is note-column resident — it needs a lane-aware key arm and
@@ -239,9 +247,12 @@ on host-reading kinds; re-check the gate when any new kind lands.
 F1 (`gm_pb_member_spec`, `gm_at_member_spec`): ✓ pb intent frame (`val`
 is intent, not the realised wire); pb+at uuid survives the rebuild so
 gm re-anchors via `tm:byUuid`; pb value edit propagates to a sibling;
-at `val` crosses verbatim (no cents leak). ⏳ still to pin: destination
-detune re-derives wire raw; sideways move dispatches channel-move;
-persistence + undo round-trip.
+a fresh in-region pb create is adopted (`classifyCreate`); at `val`
+crosses verbatim (no cents leak); the persisted blob carries intent and
+rehydrates live; a sibling under a different governing detune
+re-derives its own wire (`50 + seatDetune`, not a baked origin value) —
+the core intent-vs-realisation payoff. Sideways channel-move dispatch
+is verified by reading (`editCursor.lua:648`), not separately specced.
 
 F2 (`tm_fx_region_spec` / `tv_fx_region_spec`): freeze-to-raw — arp
 authored + audible, chord gone, seats stand, *no restore on the next
