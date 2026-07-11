@@ -4,8 +4,8 @@
 --shape: instance = { anchor = { ppq, chan, [laneDelta] }, assigns, adds, deletes }  -- pure data, persisted verbatim
 --shape: proj[groupId][instId][vuid] = { uuid, groupEvt=clone, evt=liveEvt }  -- module-level, runtime; only `uuid` serialised, persisted as `uuids[groupId][instId][vuid]`
 --shape: persisted groups = { groups = groups, uuids = { [groupId]={ [instId]={ [vuid]=uuid } } } }
---invariant: localMode is a single global UI flag, not per-instance; default propagate edits the shared group
---invariant: a staged edit is matched to its vuid by evt-table identity (proj evt slot), else by the rect predicate gated on streamIds already present
+--invariant: localMode is a single global UI flag; off (default), edits propagate to every sibling
+--invariant: a staged edit matches its vuid by evt-table identity, else falls to the rect predicate
 
 local util   = require 'util'
 local groupsCore = require 'groups'
@@ -31,14 +31,12 @@ local groups      = blob.groups or {}
 local localMode   = false
 local nextGroupId = 1
 
--- The active group: a transient pointer (never persisted), dupeClip-idiom.
--- Set on mark / stamp-new; the command layer clears it on any other
--- tracker command, on ec:selClear, and on take rebind.
+-- The active group: a transient pointer (never persisted), dupeClip-idiom;
+-- set on mark/stamp-new, cleared by the command layer on any other tracker command, ec:selClear, or take rebind.
 local activeGroup = nil
 
--- Runtime projection, kept out of `groups` so instances stay pure
--- serialisable data. locByUuid is the sole O(1) reverse lookup; uuid
--- is the durable key (tm's token is internal and re-keyed).
+-- Runtime projection, kept out of `groups` so instances stay pure serialisable data.
+-- locByUuid is the sole O(1) reverse lookup; uuid is the durable key (tm's token is internal, re-keyed).
 local proj      = {}
 local locByUuid = {}  -- concrete uuid -> { groupId, instId, vuid }
 -- Verbs (addEvent/deleteEvent/assignEvent, newInstance, moveInstance,
@@ -108,16 +106,12 @@ local function copyScalars(src, dst)
   return dst
 end
 
--- A note's group dur is its INTENT ceiling span (endppqL - onset), never
--- the realised endppq tm re-derives every rebuild. An open note
--- (endppqL == util.OPEN, no ceiling) carries no dur: a nil dur IS open
--- in the group frame.
+-- Group dur is the note's INTENT ceiling span (endppqL - onset), never the realised
+-- endppq tm re-derives every rebuild -- see docs/groupManager.md § Intent in, realisation out.
 --invariant: pb group-frame val is INTENT; toGroup reads evt.cents, not realised val
 local function toGroup(evt, anchor)
-  -- The group frame is LOGICAL. A concrete's realised ppq carries swing
-  -- and delay; ppqL is its logical onset. Rebase off ppqL so neither
-  -- leaks into the shared template (ppqL absent only under identity
-  -- swing + zero delay, where raw == logical).
+  -- Group frame is LOGICAL: rebase off ppqL, not realised ppq (swing+delay baked in);
+  -- ppqL is nil only under identity swing + zero delay, where raw ppq already equals it.
   local onset = evt.ppqL or evt.ppq
   local g = copyScalars(evt, { evType    = evt.evType,
                                chanDelta = evt.chan - anchor.chan,
@@ -133,10 +127,8 @@ local function toGroup(evt, anchor)
   return g
 end
 
--- A nil group dur is an open note: author endppq = util.OPEN. A finite
--- dur is the intent ceiling: author endppq = onset + dur. tm stamps
--- endppqL and derives the raw tail, so a blocker delete regrows the
--- tail back up to the ceiling rather than merely clipping.
+-- A nil group dur is an open note (author endppq = util.OPEN); a finite dur is the intent
+-- ceiling (author endppq = onset + dur); tm stamps endppqL and regrows the tail on a blocker delete, never merely clips.
 local function toInstance(g, anchor)
   local e = copyScalars(g, { evType = g.evType,
                              chan   = anchor.chan + (g.chanDelta or 0),
@@ -160,16 +152,12 @@ local function onTake(e)
   return e.ppq < tm:length()
 end
 
--- Instance-frame partial update -> group-frame partial update. `groupEvt`
--- is the event's current group entry, the reference for ceiling<->dur.
--- A note's ceiling is INTENT: endppqL (authored), or open -> dur removed
--- (nil dur IS open). The realised endppq never enters the group frame.
+-- Instance-frame partial update -> group-frame partial update; groupEvt is the event's
+-- current group entry (ceiling<->dur reference) -- see docs/groupManager.md § Intent in, realisation out.
 local function updToGroup(update, anchor, groupEvt)
   local u = copyScalars(update, {})
-  -- The facade hands gm tv's AUTHORED (logical) update: onset in ppq, ceiling in
-  -- endppq, no tm-private ppqL/endppqL (no realisation runs upstream). The group
-  -- frame is logical, so read those directly. A pure delay edit carries no ppq, so
-  -- it moves no group onset -- delay rides as its own scalar via copyScalars.
+  -- The facade hands gm tv's AUTHORED (logical) update (ppq/endppq, no tm-private
+  -- ppqL/endppqL) -- see docs/groupManager.md § Intent in, realisation out.
   if update.ppq ~= nil then u.ppq = update.ppq - anchor.ppq end
   if update.chan ~= nil then u.chanDelta = update.chan - anchor.chan end
   if update.lane ~= nil then u.key = update.lane end
@@ -183,11 +171,8 @@ local function updToGroup(update, anchor, groupEvt)
   return u
 end
 
--- Exact inverse: group-frame partial update -> instance-frame update.
--- dur removed (util.REMOVE), OR a move of an already-open note, => the
--- note is open: author endppq = util.OPEN. A finite dur (or a move of
--- a finite note) authors the intent ceiling on endppq; tm stamps
--- endppqL and derives the raw tail.
+-- Exact inverse of updToGroup: dur removed, or a move of an already-open note, authors
+-- endppq=util.OPEN; else authors the intent ceiling on endppq -- tm stamps endppqL and derives the raw tail.
 local function updToInstance(update, anchor, groupEvt)
   local u = copyScalars(update, {})
   if update.ppq ~= nil then u.ppq = anchor.ppq + update.ppq end
@@ -238,10 +223,8 @@ local function persist()
   ds:assign('groups', { groups = groups, uuids = uuids })
 end
 
--- Construction-time cm read runs before any take binds, so it is empty;
--- live data arrives only on the take-changed rebuild. Without it
--- restored groups are inert and nextGroupId stays 1, clobbering the
--- persisted group on the next markGroup.
+-- Construction-time cm read runs before any take binds, so it is empty; live data arrives
+-- only on the take-changed rebuild -- without rehydrate, restored groups are inert and nextGroupId clobbers on the next markGroup.
 local function rehydrate()
   local b = ds:get('groups') or {}
   groups      = b.groups or {}
@@ -283,9 +266,8 @@ end
 local function classify(evt)
   local loc = evt.uuid and locByUuid[evt.uuid]
   if not loc then return end
-  -- A link is only valid while its vuid still has a home: the shared group
-  -- event, or (a local-only add) the instance's own adds. A delete leaves
-  -- a dead link -- drop it and let the edit fall through to classifyCreate.
+  -- A link is valid only while its vuid still has a home: the shared group event, or
+  -- (a local-only add) the instance's own adds. A delete leaves a dead link -- drop it, fall through to classifyCreate.
   local group  = groups[loc.groupId]
   local inst   = group and group.instances[loc.instId]
   local backed = group and (group.events[loc.vuid]
@@ -294,26 +276,22 @@ local function classify(evt)
     unlink(projOf(loc.groupId, loc.instId), loc.vuid)
     return
   end
-  -- Keep the projection's live handle on the table the user is actually
-  -- editing: covers an edit that lands before this flush's rebuild
-  -- refresh (origin-skip and 'set' ops read rec.evt).
+  -- Keep the projection's live handle on the table the user is actually editing: covers an
+  -- edit that lands before this flush's rebuild refresh (origin-skip and 'set' ops read rec.evt).
   local rec = projOf(loc.groupId, loc.instId)[loc.vuid]
   if rec and rec.evt ~= evt then rec.evt = evt end
   return loc.groupId, loc.instId, loc.vuid
 end
 
--- Two group-frame events occupy the same region slot: same onset, same
--- channel offset, same stream. The identity the override-transition
--- helpers (revive, sibling absorb) match on.
+-- Two group-frame events occupy the same region slot: same onset, same channel offset, same
+-- stream -- the identity the override-transition helpers (revive, sibling absorb) match on.
 local function sameSlot(a, b)
   return a.ppq == b.ppq and a.chanDelta == b.chanDelta
          and groupsCore.streamId(a) == groupsCore.streamId(b)
 end
 
--- A global-mode create on a slot this instance locally deleted: the group
--- event whose delete is shadowing it, still alive in the shared pattern.
--- Returns its vuid so the create revives it in place instead of
--- allocating a coincident second vuid.
+-- A global-mode create on a slot this instance locally deleted: revives the shadowed group
+-- event in place instead of allocating a coincident vuid -- see docs/groupManager.md § localMode.
 local function revivableVuid(group, instance, evt)
   local g = toGroup(evt, instance.anchor)
   for vuid in pairs(instance.deletes) do
@@ -322,15 +300,8 @@ local function revivableVuid(group, instance, evt)
   end
 end
 
--- A global-mode group-event create/delete flips whether a shared event
--- exists at a slot. A SIBLING instance carrying its own override there
--- must keep its visible event: re-express the override across the flip
--- instead of letting it collide (create) or orphan (delete). create:
--- a colliding add-ov upgrades to an assign-ov on the now-real vuid.
--- delete: an assign-ov demotes to a materialised add-ov -- resolve
--- needs the live base, so this runs before the group event is cleared.
--- The acting instance is the on-ov-local path's job; skip it. A sibling
--- that locally hides the slot has no visible event -- nothing to keep.
+-- A global-mode create/delete flips whether a shared event exists at a slot; a sibling's
+-- own override there is re-expressed across the flip -- see docs/groupManager.md § Override transitions.
 local function absorbSiblingOverrides(group, vuid, actingInstId, created)
   local g = group.events[vuid]
   if not g then return end
@@ -375,13 +346,8 @@ local function classifyCreate(evt)
 end
 
 
--- Overlapping mirror groups have no defined semantics: classifyCreate
--- adopts a fresh event into whichever group pairs() yields first, and
--- two groups projecting the same slot collide with no cross-group
--- dedup. Regions are kept disjoint instead. Disjoint is per
--- (channel, streamId, time): same bars on a different lane or channel
--- do not conflict, and an adjacent stack (next = ppq+dur, half-open)
--- does not either.
+-- Overlapping mirror groups have no defined semantics (classifyCreate takes pairs()'s first
+-- match); regions are kept disjoint instead -- see docs/groupManager.md § Regions are disjoint.
 local function rectCells(rect, anchor)
   local cells = {}                       -- cells[chan][streamId] = true
   for chanOff, streams in pairs(rect.streams) do
@@ -399,9 +365,8 @@ local function spansOverlap(aPpq, aDur, bPpq, bDur)
   return aPpq < bPpq + bDur and bPpq < aPpq + aDur
 end
 
--- groupId of an existing group an instance of `rect` at `anchor` would
--- collide with -- shared time span AND a shared (channel, streamId)
--- cell -- or nil.
+-- groupId of an existing group an instance of `rect` at `anchor` would collide with --
+-- shared time span AND a shared (channel, streamId) cell -- or nil.
 local function regionConflict(rect, anchor, exclude)
   local cells = rectCells(rect, anchor)
   for groupId, group in pairs(groups) do
@@ -425,11 +390,7 @@ end
 
 ----------- PUBLIC
 
---contract: seeds a new group from clipboard-sourced concrete `events` and a
---          resolved region `rect`. Instance 1's anchor is the region origin
---          { rect.ppq, rect.chanLo }; proj points at the passed events.
---          Returns the new groupId, or (nil, reason) if the region
---          collides with a live group (disjoint-region invariant).
+--contract: seeds a group from events+rect; anchor = region origin; nil,reason on collision.
 function gm:markGroup(events, rect)
   if regionConflict(rect, { ppq = rect.ppq, chan = rect.chanLo }) then
     return nil, 'overlaps an existing mirror group'
@@ -514,13 +475,7 @@ function gm:stamp(events, rect, anchor)
   return activeGroup, self:newInstance(activeGroup, anchor)
 end
 
---contract: explicit-group duplicate, used by the groupDuplicate
---          cascade. `groupId` live -> drop one more copy at `anchor`
---          into it; nil or stale -> seed group + first copy. Returns
---          the groupId either way. Sets it active for render parity,
---          but NEVER reads the shared active pointer -- the caller's
---          token is the sole continuation state (stamp's activeGroup
---          fallback belongs to mark/paste, not the cascade).
+--contract: explicit-group duplicate for the cascade -- see docs/groupManager.md § duplicateInto.
 function gm:duplicateInto(groupId, events, rect, anchor)
   if not (groupId and groups[groupId]) then
     groupId = self:markGroup(events, rect)
@@ -545,10 +500,8 @@ end
 --contract: (evt) -> groupId, instId of the instance covering evt's cell, or nil (localMode guard)
 function gm:instanceOf(evt) return classifyCreate(evt) end
 
--- Read accessor for the render pass: every live instance with the group
--- rect it projects, its anchor, and whether its group is active. No new
--- mutable state; rect/anchor are by reference (render reads, never
--- mutates).
+-- Read accessor for the render pass: every live instance with the group rect it projects,
+-- its anchor, and whether its group is active; rect/anchor are by reference (render reads, never mutates).
 function gm:eachInstance()
   local out = {}
   for groupId, group in pairs(groups) do
@@ -627,10 +580,8 @@ local function reproject(groupId)
 end
 
 
--- Local edit of an existing override -- shared by localMode and the
--- on-ov-in-global path. An assign'd / synced group event accrues a
--- sticky per-instance assign; a local-only add is edited in place.
--- Never touches group.events, so no sibling sees it.
+-- Local edit of an existing override, shared by localMode and the on-ov-in-global path;
+-- never touches group.events, so no sibling sees it -- see docs/groupManager.md § Override transitions.
 local function localAmend(instance, vuid, group, update)
   local groupEvt = group.events[vuid]
   if groupEvt then
@@ -670,10 +621,8 @@ tm:subscribe('postflush', function()
   persist()
 end)
 
--- Re-anchor every projection record to the freshly rebuilt event by
--- uuid each window: a sibling's cached evt is never reclassified (the
--- user never edits it) and would otherwise go stale, silently
--- no-oping all later assigns/deletes.
+-- Re-anchor every projection record to the freshly rebuilt event by uuid each window: a
+-- sibling's cached evt is never reclassified, so skipping this would silently no-op its later assigns/deletes.
 tm:subscribe('rebuild', function(takeChanged)
   if takeChanged then return rehydrate() end
   perf.start('gmAnchor')
@@ -696,10 +645,9 @@ end)
 
 ----------- INSTANCE / GROUP LIFECYCLE
 
--- Stage a tm delete for every projected concrete of one instance, drop
--- the instance, and -- if it was the group's last -- drop the group,
--- clearing the active pointer if it named it. Unknown id -> nil, reason.
---contract: (groupId, instId) -> true | nil,reason; stages tm deletes for the instance's concretes, last instance drops the group + clears active. Unknown id -> nil,reason.
+-- Cascades: dropping the group's last instance also drops the group,
+-- clearing activeGroup if it pointed here (else it would dangle).
+--contract: (groupId, instId) -> true | nil,reason. Unknown id -> nil,reason.
 function gm:deleteInstance(groupId, instId)
   local group = groups[groupId]
   if not group then return nil, 'no such group' end
@@ -871,17 +819,8 @@ function gm:assignEvent(uuid, update)
   return true
 end
 
--- Resize the SHARED rect from edge instance `instId`'s drag. startDelta
--- re-origins (Model A: every anchor += startDelta, every group event
--- ppq -= startDelta) so realised positions hold while the boundary
--- slides; endDelta moves the end edge; streams swaps the per-channel
--- stream-set. A member the new rect no longer covers leaves the group --
--- unlinked from every instance BEFORE reproject so reconcile emits no
--- del: its concrete survives as an ordinary event. `gained` concretes
--- (from the acting instance, caller-supplied -- gm has no tm-enumeration
--- surface) fold in at that instance's anchor. Whole op rejected, nothing
--- mutated, if any instance's new placement collides with another group
--- or a sibling instance of the same group, or the region would vanish.
+-- Resizes the SHARED rect from edge instance `instId`'s drag (Model A re-origin); a member
+-- the new rect drops leaves the group, `gained` folds in at instId's anchor -- see docs/groupManager.md § Instance lifecycle & region resize.
 --contract: (groupId, instId, {startDelta?,endDelta?,streams?,gained?}) -> true|nil,reason.
 function gm:resizeGroup(groupId, instId, edits)
   local group = groups[groupId]

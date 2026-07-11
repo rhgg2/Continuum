@@ -253,6 +253,15 @@ cross-group disjointness, the moving instance excluded from its own
 collision. `takeLen` stays advisory; gm holds no take authority, as
 `newInstance` already established.
 
+## `duplicateInto` and the active pointer
+
+`duplicateInto` is the explicit-group duplicate the `groupDuplicate` cascade drives: a
+live `groupId` drops one more copy at `anchor`; nil or stale seeds the group and its
+first copy. It *sets* `activeGroup` for render parity, but never *reads* the shared
+pointer — the caller's returned `groupId` is the cascade's sole continuation state.
+`stamp`'s active-group fallback belongs to `mark`/paste, not the cascade: reading it
+here would let a stray global active pointer redirect a duplicate into the wrong group.
+
 ## localMode
 
 A single global UI flag, not per-instance. Off (default), an edit
