@@ -13,7 +13,7 @@
 **Open**
 - [x] P1 — gridPane extraction: grid core + lane strip out of trackerRender; binding table becomes shared data
 - [x] P2 — pattern store: `fxPatterns` ds key (project scope), tm `dataChanged` arm (v1 dirties all 16), `fxPatterns` shape annotated in `generators.lua`. Generator param *types* land with their consumer at P3 — no executable orphan in P2.
-- [ ] P3 — patternEditor: checkout stack + modal, both kinds, live preview
+- [x] P3 — patternEditor: checkout stack + modal, both kinds, live preview
 - [ ] P4 — polish: pattern management, isolated preview, mini undo, targeted dirtying, polyphony
 
 ## The idea
