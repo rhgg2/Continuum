@@ -703,7 +703,8 @@ help:registerPage('tracker', {
     { cmd = 'duplicateDown', label = 'Duplicate' },
   }},
   { anchor = 'body.grid', place = 'flow', title = 'Columns & rows', items = {
-    { cmd = 'addTypedCol', label = 'Add column' },
+    { cmd = 'addNoteLane', label = 'Add note lane' },
+    { cmd = 'addTypedCol', label = 'Add cc/pb/at/pc column' },
     { cmd = 'hideExtraCol', label = 'Remove column' },
     { cmd = 'insertRowCol', label = 'Insert row' },
     { cmd = 'deleteRowCol', label = 'Delete row' },
@@ -827,39 +828,30 @@ local function scopedAction(title, base)
   end
 end
 
--- Add-Column type vocabulary. First letter is unique except p (pb/pc):
--- `p`→pb, a following `c`→pc. Digits ride through (only cc takes an id).
+-- Add-Column type vocabulary. See docs/trackerView.md § Extra columns.
 local function resolveColType(s)
   local a, digits = s:lower():match('^(%a*)(%d*)$')
-  if not a or a == '' then return digits or '' end
+  if not a or a == '' then return digits ~= '' and ('cc' .. digits) or '' end
   local first = a:sub(1, 1)
-  local canon = first == 'n' and 'note'
-             or first == 'c' and 'cc'
+  local canon = first == 'c' and 'pc'
              or first == 'a' and 'at'
              or first == 'd' and 'dly'
-             or first == 'p' and (a:sub(2, 2) == 'c' and 'pc' or 'pb')
+             or first == 'p' and 'pb'
              or a
   return canon .. digits
 end
 
 local function addColumn()
-  -- A second Ctrl-→ (the chord that opened this prompt) dives straight to the
-  -- automation palette — 'a' no longer seeds it, so 'a' is free for 'at'.
-  local function chordToAutomation()
-    if ImGui.GetKeyMods(ctx) == ImGui.Mod_Ctrl
-    and ImGui.IsKeyPressed(ctx, ImGui.Key_RightArrow, false) then return 'automation' end
-  end
-  openPrompt('Add Column', 'note, cc0-127, pb, at, pc, dly — Ctrl-→ for automation', function(typeStr)
+  openPrompt('Add Column', 'cc number, pb, at, pc, dly', function(typeStr)
     local type, idStr = typeStr:lower():match('^(%a+)(%d*)$')
     if not type then return end
-    if type == 'automation' then focusFindReq = true; return end
     local id = idStr ~= '' and tonumber(idStr) or nil
     if type == 'dly' then tv:showDelay()
-    elseif util.oneOf('note cc pb at pc', type) then
+    elseif util.oneOf('cc pb at pc', type) then
       if type == 'cc' and (not id or id < 0 or id > 127) then return end
       tv:addExtraCol(type, id)
     end
-  end, resolveColType, chordToAutomation)
+  end, resolveColType)
 end
 
 -- Ctrl-Left drops the cursor column: a bound automation (cc) column goes
@@ -1332,6 +1324,7 @@ tracker:registerAll{
   prevTake  = { function() tv:gotoTake(-1)  end, 'Previous take' },
   nextTake  = { function() tv:gotoTake(1)   end, 'Next take' },
 
+  addNoteLane = { function() tv:addExtraCol('note') end, 'Add note lane' },
   addTypedCol = addColumn,
   hideExtraCol = { removeOrHideCol, 'Hide / remove column' },
 

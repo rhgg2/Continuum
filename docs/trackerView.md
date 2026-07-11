@@ -354,6 +354,13 @@ Columns beyond the data-driven ones are materialised by tm from
 The delay sub-column is a display variant of the note column
 (`noteWithDelay` in `STOPS`/`SELGROUPS`), not a separate grid column.
 
+`addTypedCol` (Ctrl-Shift-→) prompts for a non-note column type; note
+lanes get their own binding (`addNoteLane`, Ctrl-→) so the prompt's
+vocabulary excludes `note`. `resolveColType` in trackerRender.lua reads
+bare digits as a cc number and otherwise keys off the first letter —
+`c`→pc, `a`→at, `d`→dly, `p`→pb — since those are unique among the
+remaining types now that `note` and `cc`'s digit form are out of the way.
+
 ## Audition
 
 One pending note-off at a time, keyed by `(midiChan, pitch)`, sent
@@ -390,7 +397,7 @@ in a single `cmgr:registerAll` at construction. Categories:
 - **note shaping** — `growNote`, `shrinkNote`, `noteOff`,
   `nudgeForward/Back`, `nudgeCoarse/FineUp/Down`
 - **transport** — `play`, `stop`, `playPause`, `playFromTop/Cursor`
-- **column management** — `addTypedCol`, `hideExtraCol`
+- **column management** — `addNoteLane`, `addTypedCol`, `hideExtraCol`
 - **display** — `doubleRPB`, `halveRPB`,
   `matchGridToCursor`, `inputOctaveUp/Down`, `inputSampleUp/Down`,
   `advBy0..9`
