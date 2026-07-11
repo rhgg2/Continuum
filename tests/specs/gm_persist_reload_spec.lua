@@ -13,6 +13,7 @@ local function fakeTm(uuidMap)
   local tm = {}
   function tm:length()            return math.huge end   -- off-take clip irrelevant here
   function tm:subscribe(sig, fn)  hooks[sig] = fn end
+  function tm:requestRebuild()    end
   function tm:addEvent(e)         staged.add[#staged.add + 1] = e end
   function tm:assignEvent(e, u)   staged.assign[#staged.assign + 1] = { evt = e, update = u } end
   function tm:deleteEvent(e)      staged.del[#staged.del + 1] = e end

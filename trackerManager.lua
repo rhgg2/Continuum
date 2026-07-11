@@ -71,6 +71,9 @@ local muteConform  = {}
 -- True only while flush writes the parked stash; suppresses the inline dataChanged
 -- rebuild so flush drives the single rebuild (B3 staging, see design/note-macros-v2.md).
 local flushingParked = false
+-- Set via tm:requestRebuild by a preflush subscriber whose geometry-only change stages no
+-- mm ops but still needs the grid (cellKind region tags) rebuilt. Consumed + cleared by flush.
+local rebuildRequested = false
 -- ppq tolerance for "raw agrees with its logical projection"; absorbs
 -- fromLogical rounding slop, shared by the tail pass and rebuild rule.
 local EPS         = 1
@@ -1008,7 +1011,9 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
       for chan in pairs(dirtyPcChans) do reconcilePcs(chan) end
       dirtyPcChans = {}
     end
-    if #adds == 0 and #assigns == 0 and #deletes == 0 and #parkedEdits == 0 then return end
+    if #adds == 0 and #assigns == 0 and #deletes == 0 and #parkedEdits == 0
+       and not rebuildRequested then return end
+    rebuildRequested = false
 
     -- Parked edits stage alongside mm ops. Write the stash first (guarded), then let the mm
     -- commit's reload->rebuild pick it up; with no mm ops, drive the one rebuild explicitly.
@@ -1231,6 +1236,10 @@ function tm:markSwingStale(chan)
   if chan then staleSwing[chan] = true; return end
   for i = 1, 16 do staleSwing[i] = true end
 end
+
+-- A geometry-only change (a gm region edit staging no mm ops) still needs the grid rebuilt
+-- so tv re-tags cellKind. Forces the next flush past its no-op early-return.
+function tm:requestRebuild() rebuildRequested = true end
 
 ----- Mutation
 

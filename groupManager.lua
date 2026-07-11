@@ -643,10 +643,14 @@ end
 -- Sole projection seam: drain pendingReproject, reproject each touched group.
 -- In preflush so reproject commits in the user's flush. See docs/groupManager.md § The flush seam.
 tm:subscribe('preflush', function()
+  local pending = next(pendingReproject) ~= nil
   for groupId in pairs(pendingReproject) do
     if groups[groupId] then reproject(groupId) end
     pendingReproject[groupId] = nil
   end
+  -- A pure-geometry reproject (empty group stages no concretes) leaves the flush a
+  -- no-op; force the rebuild so tv re-tags cellKind for the changed region.
+  if pending then tm:requestRebuild() end
 end)
 
 tm:subscribe('postflush', function()
@@ -710,6 +714,7 @@ function gm:deleteInstance(groupId, instId)
     if activeGroup == groupId then activeGroup = nil end
   end
   persist()
+  tm:requestRebuild()   -- empty instance deletes stage no mm ops; clear its stale cellKind tags
   return true
 end
 
@@ -753,6 +758,7 @@ function gm:moveInstance(groupId, instId, anchor)
   end
   instance.anchor = anchor
   persist()
+  tm:requestRebuild()   -- empty instance moves stage no mm ops; re-tag cellKind at the new site
   return true
 end
 

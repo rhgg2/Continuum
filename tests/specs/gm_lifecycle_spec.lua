@@ -10,10 +10,11 @@ local t    = require('support')
 local util = require('util')
 
 local function fakeTm()
-  local hooks, staged, seq = {}, { add = {}, assign = {}, del = {} }, 0
+  local hooks, staged, seq = {}, { add = {}, assign = {}, del = {}, rebuildRequests = 0 }, 0
   local tm = {}
   function tm:length()           return math.huge end   -- off-take clip irrelevant here
   function tm:subscribe(sig, fn) hooks[sig] = fn end
+  function tm:requestRebuild()   staged.rebuildRequests = staged.rebuildRequests + 1 end
   function tm:addEvent(evt)      staged.add[#staged.add + 1] = evt end
   function tm:assignEvent(e, u)  staged.assign[#staged.assign + 1] = { evt = e, update = u } end
   function tm:deleteEvent(evt)   staged.del[#staged.del + 1] = evt end
@@ -29,7 +30,7 @@ end
 
 local function mk()
   local tm, staged = fakeTm()
-  return util.instantiate('groupManager', { tm = tm, ds = t.fakeDs() }), staged
+  return util.instantiate('groupManager', { tm = tm, ds = t.fakeDs() }), staged, tm
 end
 
 local function note(ppq, uuid, lane)
@@ -51,6 +52,21 @@ local function instOf(gm, groupId)
 end
 
 return {
+  ----- rebuild seam: a geometry-only verb stages no mm ops but must still force a
+  --   rebuild — see docs/decisions.md § 2026-07-11 (tm:requestRebuild).
+  {
+    name = 'empty-group newInstance forces a rebuild though it stages no concretes',
+    run = function()
+      local gm, staged, tm = mk()
+      local g = gm:mark({}, rect(0, 480))            -- empty group: no member events
+      gm:newInstance(g, { ppq = 480, chan = 1 })     -- second instance, nothing to project
+      staged.rebuildRequests = 0                      -- count only the flush below
+      tm:flush()
+      t.eq(#staged.add, 0, 'empty group staged no concretes')
+      t.truthy(staged.rebuildRequests >= 1, 'flush still forced a rebuild')
+    end,
+  },
+
   ----- deleteInstance
 
   {

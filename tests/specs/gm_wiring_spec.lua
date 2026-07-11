@@ -15,6 +15,7 @@ local function fakeTm()
   local tm = {}
   function tm:length()         return math.huge end   -- off-take clip irrelevant here
   function tm:subscribe(s, fn) hooks[s] = fn end
+  function tm:requestRebuild() end
   function tm:addEvent(e)      staged.add[#staged.add + 1] = e end
   function tm:assignEvent()    end
   function tm:deleteEvent()    end

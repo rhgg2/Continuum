@@ -20,6 +20,7 @@ local function fakeTm()
   local hooks, staged, seq = {}, { add = {}, assign = {}, del = {} }, 0
   local tm = {}
   function tm:subscribe(sig, fn)  hooks[sig] = fn end
+  function tm:requestRebuild()    end
   function tm:addEvent(evt)       staged.add[#staged.add + 1] = evt end
   function tm:assignEvent(evt, u) staged.assign[#staged.assign + 1] = { evt = evt, update = u } end
   function tm:deleteEvent(evt)    staged.del[#staged.del + 1] = evt end

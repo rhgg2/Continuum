@@ -4,6 +4,15 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-11** — `tm:requestRebuild()` is a *deferred* force-rebuild: it sets a flag
+  the imminent flush consumes past its no-op guard, for a geometry change that stages
+  zero mm ops (an empty-group instance verb: nothing to project, so the commit flush
+  would otherwise skip the rebuild and leave tv's `cellKind` region tags stale — the
+  first edit in the region then misroutes to a plain, non-propagating note). Distinct
+  from swing/fxRegions' immediate `tm:rebuild(false)`, which fires from a config/data
+  subscriber *outside* any flush; a flag there would have nothing to consume it. Not
+  unified — the two serve opposite call contexts (mid-/pre-flush defer vs standalone now).
+
 - **2026-07-11** — FX regions join the rectangle clipboard (copy/paste/delete),
   captured by *onset-in-band* — a region starting inside the rectangle rides whole,
   tail spilling past the band, exactly as a note's tail copies; one starting above and
