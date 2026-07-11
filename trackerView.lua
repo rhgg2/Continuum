@@ -1202,19 +1202,32 @@ do
     return true
   end
 
-  --contract: digit 0..8 → vel 01/10/../70/7f on the last-entered gesture note; else ignored
-  function tv:chordVelocity(digit)
-    if not chord or digit > 8 then return end
+  --contract: deletes the last-entered gesture note, freeing its lane for reuse
+  function tv:chordBackspace()
+    if not chord then return end
+    local last = chord.notes[#chord.notes]
+    if not last then return end
+    local evt = chordCell(last.lane)
+    if util.isNote(evt) then edit.delete(evt) end
+    table.remove(chord.notes, #chord.notes)
+    settleTypedEdit()
+    auditionRelease(last.pitch)
+  end
+
+  --contract: nudges the last-entered gesture note's velocity by one, re-auditioning it
+  function tv:chordNudgeVel(dir)
+    if not chord then return end
     local last = chord.notes[#chord.notes]
     if not last then return end
     local evt = chordCell(last.lane)
     if not util.isNote(evt) then return end
-    local vel    = digit == 8 and 0x7f or math.max(digit * 16, 1)
+    local newVel = util.nudgedScalar(evt.vel, 1, 127, dir, nil)
+    if newVel == evt.vel then return end
     local detune = evt.detune
-    edit.assign(evt, { vel = vel })
+    edit.assign(evt, { vel = newVel })
     settleTypedEdit()
     auditionRelease(last.pitch)
-    auditionAdd(last.pitch, vel, chord.chan, detune)
+    auditionAdd(last.pitch, newVel, chord.chan, detune)
   end
 
   --contract: shift release commits: advance once if any note survives, silence the chord
@@ -1310,7 +1323,8 @@ do
   -- undo block. Includes note entry, octave/sample/vel/delay/pb/val digits.
   tv.editEvent       = util.atomic('Edit', tv.editEvent)
   tv.chordStrike     = util.atomic('Chord entry', tv.chordStrike)
-  tv.chordVelocity   = util.atomic('Chord velocity', tv.chordVelocity)
+  tv.chordBackspace  = util.atomic('Chord entry', tv.chordBackspace)
+  tv.chordNudgeVel   = util.atomic('Chord velocity', tv.chordNudgeVel)
   tv.digitsStrike    = util.atomic('Value entry', tv.digitsStrike)
   tv.digitsBackspace = util.atomic('Value entry', tv.digitsBackspace)
 end
@@ -2246,10 +2260,11 @@ local nudge do
     if audible then audition(pitch, note.vel, col.midiChan, detune) end
   end
 
-  local function nudgeVel(note, dir, coarse, p)
+  local function nudgeVel(col, note, dir, coarse, audible, p)
     local newVel = scaledScalar(note.vel, 1, 127, dir, coarse and 8 or nil, p)
     if newVel == note.vel then return end
     edit.assign(note, { vel = newVel })
+    if audible then audition(note.pitch, newVel, col.midiChan, note.detune) end
   end
 
   local function nudgeDelay(col, note, dir, coarse, p)
@@ -2271,7 +2286,7 @@ local nudge do
   local function applyNudge(col, evt, part, dir, coarse, audible, p)
     if     part == 'val'
         or part == 'pb'    then nudgeValue(col, evt, dir, coarse, p)
-    elseif part == 'vel'   then nudgeVel(evt, dir, coarse, p)
+    elseif part == 'vel'   then nudgeVel(col, evt, dir, coarse, audible, p)
     elseif part == 'delay' then nudgeDelay(col, evt, dir, coarse, p)
     elseif part == 'pitch' then nudgePitch(col, evt, dir, coarse, audible, p) end
   end
@@ -3505,14 +3520,14 @@ tracker:registerAll{
   deleteRowCol            = { function() deleteRowCol() end,      'Delete row in column' },
   nudgeCoarseUp           = { function(p) nudge(p,  1, true)  end, 'Nudge' },
   nudgeCoarseDown         = { function(p) nudge(p, -1, true)  end, 'Nudge' },
-  -- Fine nudges decline while a chord gesture is live: Shift+=/- would move a
-  -- gesture note under its pitch bookkeeping ('-' is also an azerty note char)
+  -- During a live chord gesture, fine nudges retune the last struck note's
+  -- velocity (re-auditioning it) rather than nudging a cursor event.
   nudgeFineUp             = { function(p)
-    if tv:chordActive() then return false end
+    if tv:chordActive() then tv:chordNudgeVel( 1); return end
     nudge(p,  1, false)
   end, 'Nudge' },
   nudgeFineDown           = { function(p)
-    if tv:chordActive() then return false end
+    if tv:chordActive() then tv:chordNudgeVel(-1); return end
     nudge(p, -1, false)
   end, 'Nudge' },
   eventShiftLeft          = { function() shiftEvents(-1) end,     'Move event left'  },

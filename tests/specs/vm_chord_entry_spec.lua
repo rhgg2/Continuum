@@ -1,7 +1,5 @@
--- Shift-held chord entry: strikes pin the cursor row and stack lanes; a
--- re-struck pitch toggles off (freed lanes reused); tv:chordVelocity sets the
--- last strike's velocity; commit advances once. Drives the real tv:chord*
--- API — gridPane's key drain is a thin router over it.
+-- Shift-held chord entry: strikes pin the row, stack lanes; backspace/nudge/commit below.
+-- Drives the real tv:chord* API — gridPane's key drain is a thin router over it.
 
 local t      = require('support')
 local tuning = require('tuning')
@@ -25,11 +23,19 @@ end
 
 local function strike(h, ch) return h.vm:chordStrike(string.byte(ch)) end
 
--- Count StuffMIDIMessage note-offs (0x80|chan) in the fake reaper's call log.
+-- Count StuffMIDIMessage note-offs (0x80|chan) / note-ons (0x90) in the log.
 local function noteOffs(h)
   local n = 0
   for _, c in ipairs(h.reaper._state.calls) do
     if c.fn == 'StuffMIDIMessage' and (c.b1 & 0xF0) == 0x80 then n = n + 1 end
+  end
+  return n
+end
+
+local function noteOns(h)
+  local n = 0
+  for _, c in ipairs(h.reaper._state.calls) do
+    if c.fn == 'StuffMIDIMessage' and (c.b1 & 0xF0) == 0x90 then n = n + 1 end
   end
   return n
 end
@@ -112,30 +118,55 @@ return {
   },
 
   {
-    name = 'velocity digits write the 16s column onto the last strike',
+    name = 'fine nudge retunes the last strike velocity and re-auditions',
     run = function(harness)
       local h = mk(harness)
       h.ec:setPos(2, 1, 1)
       strike(h, 'z')
 
-      h.vm:chordVelocity(4)
-      t.eq(laneNoteAt(h, 1, 120).vel, 0x40, 'digit 4 → 0x40')
-      h.vm:chordVelocity(8)
-      t.eq(laneNoteAt(h, 1, 120).vel, 0x7f, 'digit 8 caps at 0x7f')
-      h.vm:chordVelocity(0)
-      t.eq(laneNoteAt(h, 1, 120).vel, 1, 'digit 0 floors at 01 (vel 0 unrepresentable)')
-      h.vm:chordVelocity(9)
-      t.eq(laneNoteAt(h, 1, 120).vel, 1, 'digit 9 ignored')
+      local base = laneNoteAt(h, 1, 120).vel
+      h.vm:chordNudgeVel(1)
+      t.eq(laneNoteAt(h, 1, 120).vel, base + 1, 'up nudges velocity +1')
+      h.vm:chordNudgeVel(-1)
+      h.vm:chordNudgeVel(-1)
+      t.eq(laneNoteAt(h, 1, 120).vel, base - 1, 'down nudges velocity -1')
 
       strike(h, 'c')
-      h.vm:chordVelocity(2)
-      t.eq(laneNoteAt(h, 2, 120).vel, 0x20, 'velocity targets the newest strike')
-      t.eq(laneNoteAt(h, 1, 120).vel, 1,    'earlier strike untouched')
+      local eBase = laneNoteAt(h, 2, 120).vel
+      h.vm:chordNudgeVel(1)
+      t.eq(laneNoteAt(h, 2, 120).vel, eBase + 1, 'nudge targets the newest strike')
+      t.eq(laneNoteAt(h, 1, 120).vel, base - 1,  'earlier strike untouched')
+
+      h.reaper:clearCalls()
+      h.vm:chordNudgeVel(1)
+      t.truthy(noteOns(h) > 0, 'nudge re-auditions the note')
 
       strike(h, 'c')   -- toggle E off
-      h.vm:chordVelocity(3)
-      t.eq(laneNoteAt(h, 1, 120).vel, 0x30, 'target falls back to the surviving note')
+      h.vm:chordNudgeVel(1)
+      t.eq(laneNoteAt(h, 1, 120).vel, base, 'target falls back to the surviving note')
       h.vm:chordCommit()
+    end,
+  },
+
+  {
+    name = 'backspace deletes the last strike and frees its lane',
+    run = function(harness)
+      local h = mk(harness)
+      h.ec:setPos(2, 1, 1)
+      strike(h, 'z'); strike(h, 'c')
+
+      h.vm:chordBackspace()
+      t.falsy(laneNoteAt(h, 2, 120), 'last strike (E) deleted')
+      t.truthy(laneNoteAt(h, 1, 120), 'earlier strike (C) survives')
+
+      strike(h, 'b')
+      t.eq(laneNoteAt(h, 2, 120).pitch, 67, 'G reuses the freed lane 2')
+
+      h.vm:chordBackspace()
+      h.vm:chordBackspace()
+      t.eq(#h.fm:dump().notes, 0, 'backspace empties the gesture')
+      h.vm:chordCommit()
+      t.eq(h.ec:row(), 2, 'emptied gesture commits without advancing')
     end,
   },
 
