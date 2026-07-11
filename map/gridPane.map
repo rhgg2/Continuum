@@ -1,5 +1,5 @@
-@module gridPane  src=gridPane.lua  loc=1154  sha=8a6d0a3  mode=chunk  self=gridPane
-@deps cm, cmgr, chrome, gui, tv, inputAllowed
+@module gridPane  src=gridPane.lua  loc=1156  sha=ed3fba2  mode=chunk  self=gridPane
+@deps cm, cmgr, chrome, gui, tv, inputAllowed, chordEntry
 
 # Invariants & contracts
   @invariant  grid render + input only; tracker state lives in tv/ec, never cached here
@@ -7,6 +7,7 @@
   @invariant  cell coords 0-indexed; header rows at -HEADER, row-num gutter at -GUTTER
   @invariant  page-persistent state: cellW/H, dragging, laneConsumed, paintLast
   @contract  host supplies inputAllowed() -- folds modal/picker/item-active/palette/strip gates
+  @contract  host chordEntry=false gates the chord gesture off (the pattern editor passes false)
   @contract  bails if laneConsumed; lane strip wins gestures over the tracker grid
   @contract  right-click on channel-label row toggles mute
   @contract  click on label rows selects channel/column
@@ -15,208 +16,208 @@
   @contract  every fresh press enters; only lastEditKey autorepeats
   @contract  scans editKeys per frame; reads ec/grid fresh (editEvent may rebuild)
   @contract  a note key typed while armed exits region mode then enters (execute-through)
-  @contract  Shift+notechar strikes chords; Shift+digit drives the value place-walk gesture
+  @contract  Shift+notechar strikes chords (+Ctrl spreads channels); Shift+digit value place-walk
   @contract  Backspace deletes last chord note; Shift+=/- nudges vel; shift release commits
 
 # Imports
-  @require util = 'util'  @ 23
-  @require groups = 'groups'  @ 24
-  @require ImGui = 'imgui'  @ 30
-  @require painter = 'painter'  @ 31
+  @require util = 'util'  @ 24
+  @require groups = 'groups'  @ 25
+  @require ImGui = 'imgui'  @ 31
+  @require painter = 'painter'  @ 32
 
 # Constructed sub-instances
-  @construct curveEditor = util.instantiate('curveEditor')  @ 75
+  @construct curveEditor = util.instantiate('curveEditor')  @ 76
 
 # Private state
-  @state GUTTER = 5  @ 38   -- in grid chars: 3-char row num + spacer + region slot
-  @state HEADER = 3  @ 39   -- header rows, fixed; vertical param names truncate to fit, never grow it
-  @state RESERVE_ROWS = 0.3  @ 40   -- bottom breathing left clear below the last row (status band / modal edge)
-  @state ANCHOR_HALO = 6  @ 41   -- px; matches curveEditor HIT_PX so the hit-rect covers anchors on the rect edge
-  @state cellW = nil  @ 43   -- px per cell; set on first computeLayout
-  @state cellH = nil  @ 44
-  @state gridOriginX = 0  @ 45
-  @state gridOriginY = 0  @ 46
-  @state viewCols = 0  @ 47
-  @state viewRows = 0  @ 48
-  @state gridPainter = nil  @ 49   -- cell painter, rebuilt each frame in drawTracker; hit-test reads its fromScreen so draw and hit can't drift
-  @state chanLeft, chanWidth, chanOrder, totalWidth = {}, {}, {}, 0  @ 51
-  @state ctx, font, uiFont = gui.ctx, gui.font, gui.uiFont  @ 73
-  @state dragging = false  @ 74   -- tracker-grid selection drag: click → held → release
-  @state laneConsumed = false  @ 76
-  @state paintLast = nil  @ 78   -- region-paint per-cell debounce
-  @state FX_GLYPH = { retrig = 'R', trill = 'T', vibrato = 'V', slide = 'S', ...  @ 168
-  @state renderFns = {  @ 174
-  @state VNAME_MAX = 14  @ 290
-  @state laneRenderable = { cc = true, pb = true, at = true }  @ 360
+  @state GUTTER = 5  @ 39   -- in grid chars: 3-char row num + spacer + region slot
+  @state HEADER = 3  @ 40   -- header rows, fixed; vertical param names truncate to fit, never grow it
+  @state RESERVE_ROWS = 0.3  @ 41   -- bottom breathing left clear below the last row (status band / modal edge)
+  @state ANCHOR_HALO = 6  @ 42   -- px; matches curveEditor HIT_PX so the hit-rect covers anchors on the rect edge
+  @state cellW = nil  @ 44   -- px per cell; set on first computeLayout
+  @state cellH = nil  @ 45
+  @state gridOriginX = 0  @ 46
+  @state gridOriginY = 0  @ 47
+  @state viewCols = 0  @ 48
+  @state viewRows = 0  @ 49
+  @state gridPainter = nil  @ 50   -- cell painter, rebuilt each frame in drawTracker; hit-test reads its fromScreen so draw and hit can't drift
+  @state chanLeft, chanWidth, chanOrder, totalWidth = {}, {}, {}, 0  @ 52
+  @state ctx, font, uiFont = gui.ctx, gui.font, gui.uiFont  @ 74
+  @state dragging = false  @ 75   -- tracker-grid selection drag: click → held → release
+  @state laneConsumed = false  @ 77
+  @state paintLast = nil  @ 79   -- region-paint per-cell debounce
+  @state FX_GLYPH = { retrig = 'R', trill = 'T', vibrato = 'V', slide = 'S', ...  @ 169
+  @state renderFns = {  @ 175
+  @state VNAME_MAX = 14  @ 291
+  @state laneRenderable = { cc = true, pb = true, at = true }  @ 361
       @invariant  lane strip renders only cc/pb/at; other types show as tinted background
-  @state LANE_ROW_MIN = 3  @ 362
-  @state LANE_ROW_MAX = 32  @ 363
-  @state PART_LABEL = { pitch = 'PITCH', sample = 'SAMP', vel = 'VEL', delay = ...  @ 492
+  @state LANE_ROW_MIN = 3  @ 363
+  @state LANE_ROW_MAX = 32  @ 364
+  @state PART_LABEL = { pitch = 'PITCH', sample = 'SAMP', vel = 'VEL', delay = ...  @ 493
       @contract  assumes computeLayout ran this frame; reads chanLeft/Width/Order, gridOriginX/Y
-  @state editKeys = {}  @ 844
-  @state lastEditKey  @ 862
-  @state gridPane = {}  @ 866
+  @state editKeys = {}  @ 845
+  @state lastEditKey  @ 863
+  @state gridPane = {}  @ 867
 
 # Private functions
-  @fn layoutColumns(cols, scrollCol)  @ 54-71
+  @fn layoutColumns(cols, scrollCol)  @ 55-72
       @contract  clears col.x on every col before assigning; off-screen cols stay nil
   -- Cell renderers
-  @fn renderNote(evt, col, row)  @ 82-149
-  @fn renderPB(evt)  @ 151-156
-  @fn renderCC(evt, col)  @ 158-165
-  @fn renderFx(evt)  @ 169-172
-  @fn renderCell(evt, col, row)  @ 184-187
-  @fn delayMarkerOffset(col, pitchWidth)  @ 191-193
+  @fn renderNote(evt, col, row)  @ 83-150
+  @fn renderPB(evt)  @ 152-157
+  @fn renderCC(evt, col)  @ 159-166
+  @fn renderFx(evt)  @ 170-173
+  @fn renderCell(evt, col, row)  @ 185-188
+  @fn delayMarkerOffset(col, pitchWidth)  @ 192-194
       -- Offset of the gap before the 3 delay digits in a note cell (* marker slot).
       -- Layout: pitch(W) + optional sample(3) + ' ' + vel(2); W = active pitchWidth.
-  @fn fxMarkerOffset(col, pitchWidth)  @ 197-199
+  @fn fxMarkerOffset(col, pitchWidth)  @ 198-200
       -- The fx badge sits in the pre-vel separator slot -- one column inboard of
       -- the delay-marker slot, so the two markers never collide.
   -- Drawing
-  @fn printer(ctx, cellW, cellH, x0, y0)  @ 205-270
+  @fn printer(ctx, cellW, cellH, x0, y0)  @ 206-271
       -- Cell adapter over the shared painter: col/row → screen via one transform.
       -- cellW/cellH are odd integers (whole-pixel landing); snap handles fractional cases.
-  @fn laneStripRows()  @ 273-276
+  @fn laneStripRows()  @ 274-277
       @contract  returns 0 when laneStrip.visible is false; layout and draw branch on this
-  @fn drawLocalScrim(draw, hole, w, h)  @ 280-286
+  @fn drawLocalScrim(draw, hole, w, h)  @ 281-287
       -- Local-mode wash: dim the whole grid except a hole at the instance the caret sits
       -- inside (`hole`, grid units); nil hole washes everything. Overlays the cell pass.
-  @fn vnameSize()  @ 292
-  @fn vnameGap()  @ 296
+  @fn vnameSize()  @ 293
+  @fn vnameGap()  @ 297
       -- Bottom gap under a vertical name, in rows: clear of the grid's top rule
       -- with a couple of px of breathing room.
-  @fn vname(label)  @ 300-325
+  @fn vname(label)  @ 301-326
       -- Rotated param name, trimmed to fit the fixed header. Binary search finds
       -- the longest prefix whose rotated strip fits, exact under variable-width fonts.
-  @fn ensureCellSize()  @ 329-337
+  @fn ensureCellSize()  @ 330-338
       -- cellW/cellH: odd px so 1px strokes land on pixel centres. Lazy: first layout or measure.
       -- Measure under the grid font: naturalWidth() may trigger this before draw's font push.
-  @fn computeLayout(budgetW, budgetH)  @ 342-355
+  @fn computeLayout(budgetW, budgetH)  @ 343-356
       -- RESERVE_ROWS of breathing is kept clear at the bottom for every caller; the grid fills the rest.
       @contract  must run before draws reading chanLeft/chanWidth/chanOrder/totalWidth/viewRows
       @contract  calls tv:setGridSize so tv scroll math sees the live viewport
   -- Lane strip
-  @fn curveEditorFrame(col, colIdx, rect, tMin, tMax, hovered)  @ 367-412
+  @fn curveEditorFrame(col, colIdx, rect, tMin, tMax, hovered)  @ 368-413
       -- Build the curve-editor FrameArgs for `col` over row-space [tMin,tMax] in `rect`; returns
       -- true iff it consumed the mouse. Shared by the lane strip and the pattern editor's curve pane.
-  @fn drawLaneStrip()  @ 416-487
+  @fn drawLaneStrip()  @ 417-488
       @contract  publishes laneConsumed=true if curve editor claimed input this frame
       @contract  handleMouse short-circuits on laneConsumed
-  @fn notePartHeaders(col)  @ 494-506
-  @fn drawTracker()  @ 508-812
+  @fn notePartHeaders(col)  @ 495-507
+  @fn drawTracker()  @ 509-813
   -- Input
-  @fn cellAt(mouseX, mouseY)  @ 818-821
+  @fn cellAt(mouseX, mouseY)  @ 819-822
       -- Screen point -> (fractional column, integer row) through the grid painter's
       -- inverse, so a click resolves against the exact transform the draw pass used.
-  @fn nearestStop(mouseX, mouseY)  @ 825-840
+  @fn nearestStop(mouseX, mouseY)  @ 826-841
       @contract  returns (col, stop, fracX) or (nil, nil, fracX)
       @invariant  fracX is separate so callers distinguish 'past last col' from 'inside col N'
-  @fn add(key, byte, digit)  @ 846
+  @fn add(key, byte, digit)  @ 847
 
 # Public API (gridPane:*)
-  @api gridPane:draw(gridW, gridH)  @ 871-878
+  @api gridPane:draw(gridW, gridH)  @ 872-879
       -- Draw pass: computeLayout twice (lane-drag callbacks may rebuild grid.cols,
       -- so drawTracker needs a fresh layout), with the grid font pushed throughout.
       @invariant  lane-strip drag callbacks may flush tv.grid.cols and clear col.x
-  @api gridPane:geom()  @ 881-883
+  @api gridPane:geom()  @ 882-884
       -- Grid geometry for the host's help:anchor (which spans grid + palette).
-  @api gridPane:naturalWidth()  @ 887-892
+  @api gridPane:naturalWidth()  @ 888-893
       -- Intrinsic pixel width of the current grid (gutter + every column). Lets the pattern
       -- editor size the grid to its exact content and hand the rest of the width to the curve.
-  @api gridPane:heightForRows(rows)  @ 896-899
+  @api gridPane:heightForRows(rows)  @ 897-900
       -- Content-region pixel height for `rows` grid rows (header, lane strip, bottom breathing);
       -- inverts computeLayout. +2px cancels its RESERVE subtraction so pixel rounding can't clip the last row.
-  @api gridPane:cellHeight()  @ 901
-  @api gridPane:cellWidth()  @ 902
-  @api gridPane:drawCurveEditor(rect)  @ 907-950
+  @api gridPane:cellHeight()  @ 902
+  @api gridPane:cellWidth()  @ 903
+  @api gridPane:drawCurveEditor(rect)  @ 908-951
       -- time -> X across the grid's scrolled window, so scrolling pans/zooms the curve and a
       -- fitting pattern shows whole; assumes gridPane:draw ran first this frame (reads viewRows).
       @contract  renders the current column's curve into `rect`; sets laneConsumed
-  @api gridPane:handleMouse()  @ 956-1091
-  @api gridPane:handleKeys(kr)  @ 1101-1152
+  @api gridPane:handleMouse()  @ 957-1092
+  @api gridPane:handleKeys(kr)  @ 1102-1154
       -- commandHeld gates note entry per key: a key bound to both a command and note
       -- entry (e.g. '.' = delete) fires the command; unrelated keys still enter.
 
 # Uses (outbound edges)
-  @use call    chrome.popChromeStyles  @ drawLaneStrip:485
-  @use call    chrome.pushChromeStyles  @ drawLaneStrip:477
-  @use call    cm.get  @ laneStripRows:274,275 curveEditorFrame:376 drawLaneStrip:475
-  @use call    cm.set  @ drawLaneStrip:479,483
-  @use call    cmgr.invoke  @ handleMouse:1080,1087
-  @use call    cmgr.isPrefixActive  @ handleKeys:1120
-  @use call    cmgr.noteChars  @ handleKeys:1134
-  @use call    groups.outlineKey  @ drawTracker:656
-  @use call    groups.regionKey  @ drawTracker:622
-  @use call    groups.tintKey  @ drawTracker:639,642
-  @use call    imgui.CalcTextSize  @ ensureCellSize:332
-  @use call    imgui.Dummy  @ drawLaneStrip:472 drawTracker:811
-  @use call    imgui.GetCursorScreenPos  @ drawLaneStrip:421,452,474 drawTracker:514 drawCurveEditor:937
-  @use call    imgui.GetKeyMods  @ handleMouse:972,1029 handleKeys:1102
-  @use call    imgui.GetMousePos  @ handleMouse:976,993,1006,1041
-  @use call    imgui.GetMouseWheel  @ handleMouse:1075
-  @use call    imgui.InvisibleButton  @ drawLaneStrip:454 drawCurveEditor:941
-  @use call    imgui.IsItemActive  @ drawLaneStrip:456 drawCurveEditor:943
-  @use call    imgui.IsItemHovered  @ drawLaneStrip:456 drawCurveEditor:943
-  @use call    imgui.IsKeyPressed  @ handleKeys:1112,1128,1129
-  @use call    imgui.IsMouseClicked  @ handleMouse:964,965
-  @use call    imgui.IsMouseDown  @ handleMouse:966
-  @use call    imgui.IsWindowHovered  @ handleMouse:971,992,1005,1074
-  @use call    imgui.PopFont  @ ensureCellSize:333 draw:877
-  @use call    imgui.PushFont  @ ensureCellSize:331 draw:872
-  @use call    imgui.SameLine  @ drawLaneStrip:481
-  @use call    imgui.SetCursorScreenPos  @ drawLaneStrip:453,457,476,486 drawCurveEditor:940,944
-  @use call    imgui.SmallButton  @ drawLaneStrip:478,482
-  @use call    painter.measureRotated  @ vname:311
-  @use call    painter.new  @ printer:206 drawLaneStrip:426 drawTracker:524 drawCurveEditor:922
-  @use call    tv.activeTemper  @ drawTracker:753
-  @use call    tv.addLaneEvent  @ curveEditorFrame:406
-  @use call    tv.cellWidth  @ renderNote:97 drawTracker:690
-  @use call    tv.chordActive  @ handleKeys:1106,1113
-  @use call    tv.chordBackspace  @ handleKeys:1113
-  @use call    tv.chordCommit  @ handleKeys:1106
-  @use call    tv.chordStrike  @ handleKeys:1139
-  @use call    tv.cycleLaneShape  @ curveEditorFrame:409
-  @use call    tv.deleteLaneEvent  @ curveEditorFrame:407
-  @use call    tv.deletedCells  @ drawTracker:608
-  @use call    tv.digitsActive  @ handleKeys:1107,1114
-  @use call    tv.digitsBackspace  @ handleKeys:1114
-  @use call    tv.digitsCommit  @ handleKeys:1107
-  @use call    tv.digitsStrike  @ handleKeys:1140
-  @use call    tv.eachInstance  @ drawTracker:605
-  @use call    tv.ec  @ drawLaneStrip:460 drawTracker:510,600,601 drawCurveEditor:908 handleMouse:960 handleKeys:1116
-  @use call    tv.editEvent  @ handleKeys:1124
-  @use call    tv.endReselectCascades  @ handleMouse:1023,1032,1066
-  @use call    tv.entrySignAt  @ drawTracker:725
-  @use call    tv.isChannelEffectivelyMuted  @ drawTracker:733
-  @use call    tv.isChannelMuted  @ drawTracker:542
-  @use call    tv.isChannelSoloed  @ drawTracker:541
-  @use call    tv.localMode  @ drawTracker:603
-  @use call    tv.logPerRow  @ drawTracker:598
-  @use call    tv.moveLaneEvent  @ curveEditorFrame:404,405
-  @use call    tv.movePreview  @ drawTracker:602
-  @use call    tv.noteProjection  @ renderNote:109 drawTracker:765
-  @use call    tv.octaveWidth  @ renderNote:98
-  @use call    tv.paintRegionStream  @ handleMouse:983
-  @use call    tv.paramBinding  @ drawTracker:550
-  @use call    tv.ppqToRow  @ curveEditorFrame:387
-  @use call    tv.rowBeatInfo  @ drawLaneStrip:440 drawTracker:575 drawCurveEditor:928
-  @use call    tv.rowToPPQ  @ curveEditorFrame:406
-  @use call    tv.sampleCurve  @ curveEditorFrame:392
-  @use call    tv.scroll  @ computeLayout:344 drawLaneStrip:427 drawTracker:512 drawCurveEditor:918 handleMouse:962
-  @use call    tv.setGridSize  @ computeLayout:352
-  @use call    tv.setLaneTension  @ curveEditorFrame:408
-  @use call    tv.stateOf  @ drawTracker:637
-  @use call    tv.streamRefAt  @ drawTracker:626
-  @use call    tv.toggleChannelMute  @ handleMouse:999
-  @use call    util.add  @ layoutColumns:65 curveEditorFrame:371
-  @use call    util.clamp  @ drawTracker:768
-  @use call    util.instantiate  @ 75
-  @use call    util.round  @ curveEditorFrame:394 handleMouse:1077,1084
-  @use require curveEditor  @ 75
-  @use require groups  @ 24
-  @use require imgui  @ 30
-  @use require painter  @ 31
-  @use require util  @ 23
+  @use call    chrome.popChromeStyles  @ drawLaneStrip:486
+  @use call    chrome.pushChromeStyles  @ drawLaneStrip:478
+  @use call    cm.get  @ laneStripRows:275,276 curveEditorFrame:377 drawLaneStrip:476
+  @use call    cm.set  @ drawLaneStrip:480,484
+  @use call    cmgr.invoke  @ handleMouse:1081,1088
+  @use call    cmgr.isPrefixActive  @ handleKeys:1122
+  @use call    cmgr.noteChars  @ handleKeys:1136
+  @use call    groups.outlineKey  @ drawTracker:657
+  @use call    groups.regionKey  @ drawTracker:623
+  @use call    groups.tintKey  @ drawTracker:640,643
+  @use call    imgui.CalcTextSize  @ ensureCellSize:333
+  @use call    imgui.Dummy  @ drawLaneStrip:473 drawTracker:812
+  @use call    imgui.GetCursorScreenPos  @ drawLaneStrip:422,453,475 drawTracker:515 drawCurveEditor:938
+  @use call    imgui.GetKeyMods  @ handleMouse:973,1030 handleKeys:1103
+  @use call    imgui.GetMousePos  @ handleMouse:977,994,1007,1042
+  @use call    imgui.GetMouseWheel  @ handleMouse:1076
+  @use call    imgui.InvisibleButton  @ drawLaneStrip:455 drawCurveEditor:942
+  @use call    imgui.IsItemActive  @ drawLaneStrip:457 drawCurveEditor:944
+  @use call    imgui.IsItemHovered  @ drawLaneStrip:457 drawCurveEditor:944
+  @use call    imgui.IsKeyPressed  @ handleKeys:1113,1130,1131
+  @use call    imgui.IsMouseClicked  @ handleMouse:965,966
+  @use call    imgui.IsMouseDown  @ handleMouse:967
+  @use call    imgui.IsWindowHovered  @ handleMouse:972,993,1006,1075
+  @use call    imgui.PopFont  @ ensureCellSize:334 draw:878
+  @use call    imgui.PushFont  @ ensureCellSize:332 draw:873
+  @use call    imgui.SameLine  @ drawLaneStrip:482
+  @use call    imgui.SetCursorScreenPos  @ drawLaneStrip:454,458,477,487 drawCurveEditor:941,945
+  @use call    imgui.SmallButton  @ drawLaneStrip:479,483
+  @use call    painter.measureRotated  @ vname:312
+  @use call    painter.new  @ printer:207 drawLaneStrip:427 drawTracker:525 drawCurveEditor:923
+  @use call    tv.activeTemper  @ drawTracker:754
+  @use call    tv.addLaneEvent  @ curveEditorFrame:407
+  @use call    tv.cellWidth  @ renderNote:98 drawTracker:691
+  @use call    tv.chordActive  @ handleKeys:1107,1114
+  @use call    tv.chordBackspace  @ handleKeys:1114
+  @use call    tv.chordCommit  @ handleKeys:1107
+  @use call    tv.chordStrike  @ handleKeys:1141
+  @use call    tv.cycleLaneShape  @ curveEditorFrame:410
+  @use call    tv.deleteLaneEvent  @ curveEditorFrame:408
+  @use call    tv.deletedCells  @ drawTracker:609
+  @use call    tv.digitsActive  @ handleKeys:1108,1115
+  @use call    tv.digitsBackspace  @ handleKeys:1115
+  @use call    tv.digitsCommit  @ handleKeys:1108
+  @use call    tv.digitsStrike  @ handleKeys:1142
+  @use call    tv.eachInstance  @ drawTracker:606
+  @use call    tv.ec  @ drawLaneStrip:461 drawTracker:511,601,602 drawCurveEditor:909 handleMouse:961 handleKeys:1117
+  @use call    tv.editEvent  @ handleKeys:1126
+  @use call    tv.endReselectCascades  @ handleMouse:1024,1033,1067
+  @use call    tv.entrySignAt  @ drawTracker:726
+  @use call    tv.isChannelEffectivelyMuted  @ drawTracker:734
+  @use call    tv.isChannelMuted  @ drawTracker:543
+  @use call    tv.isChannelSoloed  @ drawTracker:542
+  @use call    tv.localMode  @ drawTracker:604
+  @use call    tv.logPerRow  @ drawTracker:599
+  @use call    tv.moveLaneEvent  @ curveEditorFrame:405,406
+  @use call    tv.movePreview  @ drawTracker:603
+  @use call    tv.noteProjection  @ renderNote:110 drawTracker:766
+  @use call    tv.octaveWidth  @ renderNote:99
+  @use call    tv.paintRegionStream  @ handleMouse:984
+  @use call    tv.paramBinding  @ drawTracker:551
+  @use call    tv.ppqToRow  @ curveEditorFrame:388
+  @use call    tv.rowBeatInfo  @ drawLaneStrip:441 drawTracker:576 drawCurveEditor:929
+  @use call    tv.rowToPPQ  @ curveEditorFrame:407
+  @use call    tv.sampleCurve  @ curveEditorFrame:393
+  @use call    tv.scroll  @ computeLayout:345 drawLaneStrip:428 drawTracker:513 drawCurveEditor:919 handleMouse:963
+  @use call    tv.setGridSize  @ computeLayout:353
+  @use call    tv.setLaneTension  @ curveEditorFrame:409
+  @use call    tv.stateOf  @ drawTracker:638
+  @use call    tv.streamRefAt  @ drawTracker:627
+  @use call    tv.toggleChannelMute  @ handleMouse:1000
+  @use call    util.add  @ layoutColumns:66 curveEditorFrame:372
+  @use call    util.clamp  @ drawTracker:769
+  @use call    util.instantiate  @ 76
+  @use call    util.round  @ curveEditorFrame:395 handleMouse:1078,1085
+  @use require curveEditor  @ 76
+  @use require groups  @ 25
+  @use require imgui  @ 31
+  @use require painter  @ 32
+  @use require util  @ 24
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath

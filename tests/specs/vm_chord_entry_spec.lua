@@ -13,15 +13,18 @@ local function mk(harness, seedNotes)
   return h
 end
 
--- Lane-indexed onset lookup straight from tm (columns.notes[lane]).
-local function laneNoteAt(h, lane, ppq)
-  local laneCol = h.tm:getChannel(1).columns.notes[lane]
+-- Onset lookup straight from tm (getChannel(chan).columns.notes[lane]).
+local function chanNoteAt(h, chan, lane, ppq)
+  local laneCol = h.tm:getChannel(chan).columns.notes[lane]
   for _, evt in ipairs(laneCol and laneCol.events or {}) do
     if evt.ppq == ppq then return evt end
   end
 end
 
+local function laneNoteAt(h, lane, ppq) return chanNoteAt(h, 1, lane, ppq) end
+
 local function strike(h, ch) return h.vm:chordStrike(string.byte(ch)) end
+local function spread(h, ch) return h.vm:chordStrike(string.byte(ch), true) end
 
 -- Count StuffMIDIMessage note-offs (0x80|chan) / note-ons (0x90) in the log.
 local function noteOffs(h)
@@ -242,6 +245,88 @@ return {
       h.reaper:clearCalls()
       h.vm:chordCommit()
       t.truthy(noteOffs(h) > 0, 'shift release drops the gesture voices')
+    end,
+  },
+
+  {
+    name = 'spread strikes walk channels from home; commit advances once',
+    run = function(harness)
+      local h = mk(harness)
+      h.ec:setPos(2, 1, 1)
+
+      t.truthy(spread(h, 'z'), 'first spread strike consumed (arms the gesture)')
+      t.truthy(spread(h, 'c'), 'second spread strike consumed')
+      t.truthy(spread(h, 'b'), 'third spread strike consumed')
+
+      t.eq(chanNoteAt(h, 1, 1, 120).pitch, 60, 'C on the home channel, cursor cell')
+      t.eq(chanNoteAt(h, 2, 1, 120).pitch, 64, 'E spread to channel 2')
+      t.eq(chanNoteAt(h, 3, 1, 120).pitch, 67, 'G spread to channel 3')
+
+      h.vm:chordCommit()
+      t.eq(h.ec:row(), 3, 'commit advanced one step')
+    end,
+  },
+
+  {
+    name = 'plain and spread strikes mix: lanes stack on home, spread walks past it',
+    run = function(harness)
+      local h = mk(harness)
+      h.ec:setPos(2, 1, 1)
+      strike(h, 'z')          -- C: chan 1, lane 1
+      spread(h, 'c')          -- E: home held, walks to chan 2
+      strike(h, 'b')          -- G: stacks chan 1, lane 2
+
+      t.eq(chanNoteAt(h, 1, 1, 120).pitch, 60, 'C in chan 1 lane 1')
+      t.eq(chanNoteAt(h, 2, 1, 120).pitch, 64, 'E spread to chan 2 lane 1')
+      t.eq(chanNoteAt(h, 1, 2, 120).pitch, 67, 'G stacked in chan 1 lane 2')
+      h.vm:chordCommit()
+    end,
+  },
+
+  {
+    name = 'a toggled-off spread pitch frees its channel for reuse',
+    run = function(harness)
+      local h = mk(harness)
+      h.ec:setPos(2, 1, 1)
+      spread(h, 'z'); spread(h, 'c')
+
+      t.truthy(spread(h, 'z'), 'toggle strike consumed')
+      t.falsy(chanNoteAt(h, 1, 1, 120), 'C toggled off the home channel')
+
+      spread(h, 'b')
+      t.eq(chanNoteAt(h, 1, 1, 120).pitch, 67, 'G reused the freed channel 1')
+      t.truthy(chanNoteAt(h, 2, 1, 120), 'E untouched on channel 2')
+      h.vm:chordCommit()
+    end,
+  },
+
+  {
+    name = 'a spread strike adopts an existing note on its target channel',
+    run = function(harness)
+      local h = mk(harness, {
+        { ppq = 120, endppq = 240, chan = 2, pitch = 64, vel = 80, detune = 0, delay = 0 },
+      })
+      h.ec:setPos(2, 1, 1)
+      spread(h, 'z')
+      t.truthy(spread(h, 'c'), 'strike onto the occupied channel consumed')
+
+      t.eq(#h.fm:dump().notes, 2, 'no duplicate onset placed')
+      t.eq(chanNoteAt(h, 2, 1, 120).vel, 80, 'adopted note keeps its velocity')
+      h.vm:chordCommit()
+    end,
+  },
+
+  {
+    name = 'backspace on a spread member deletes from its own channel',
+    run = function(harness)
+      local h = mk(harness)
+      h.ec:setPos(2, 1, 1)
+      spread(h, 'z'); spread(h, 'c')
+
+      h.vm:chordBackspace()
+      t.falsy(chanNoteAt(h, 2, 1, 120), 'last strike (E, chan 2) deleted')
+      t.truthy(chanNoteAt(h, 1, 1, 120), 'home-channel strike survives')
+      h.vm:chordCommit()
     end,
   },
 

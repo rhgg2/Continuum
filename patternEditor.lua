@@ -55,7 +55,7 @@ local pendingAction            -- 'commit'|'cancel' set by a toolbar button in d
 local function acceptInput() return item ~= nil and not ImGui.IsAnyItemActive(ctx) end
 
 local gridPane = util.instantiate('gridPane', {
-  cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, tv = tv,
+  cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, tv = tv, chordEntry = false,
   inputAllowed = acceptInput,
 })
 

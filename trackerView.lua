@@ -1123,14 +1123,14 @@ do
 
   ----- Chord entry (shift-held gesture; gridPane's key drain routes here)
 
-  --shape: chord = { row, ppq, rpb, chan, startLane, notes = { { pitch, lane }, ... } }
+  --shape: chord = { row, ppq, rpb, chan, startLane, notes = { { pitch, lane, chan }, ... } }
   --invariant: notes ordered by entry; members re-resolved via cells[row], never held event refs
   local chord = nil
 
-  -- The gesture's occupant cell in `lane`: fresh col fetch every call — each
-  -- flush reclones columns.
-  local function chordCell(lane)
-    local laneCol = findCol{ chan = chord.chan, type = 'note', lane = lane }
+  -- The gesture's occupant cell at (chan, lane): fresh col fetch every call —
+  -- each flush reclones columns.
+  local function chordCell(chan, lane)
+    local laneCol = findCol{ chan = chan, type = 'note', lane = lane }
     return laneCol and laneCol.cells and laneCol.cells[chord.row], laneCol
   end
 
@@ -1146,8 +1146,9 @@ do
 
   --contract: arms on a note col's first pitch stop; pins (row, chan) until shift release
   --contract: returns true iff consumed; false lets the drain fall through (to value-digit entry)
-  --contract: re-striking a gesture pitch toggles it off; freed lanes are reused lowest-first
-  function tv:chordStrike(char)
+  --contract: re-striking a gesture pitch toggles it off; freed slots are reused lowest-first
+  --contract: spreadChan strikes walk channels up from home; plain strikes stack home-channel lanes
+  function tv:chordStrike(char, spreadChan)
     local nk = cmgr:noteChars(char); if not nk then return false end
     if not chord then
       local row, colIdx, stop = ec:pos()
@@ -1164,7 +1165,7 @@ do
     -- toggle: a pitch the gesture already holds leaves it, freeing its lane
     for i, member in ipairs(chord.notes) do
       if member.pitch == pitch then
-        local evt = chordCell(member.lane)
+        local evt = chordCell(member.chan, member.lane)
         if util.isNote(evt) then edit.delete(evt) end
         table.remove(chord.notes, i)
         settleTypedEdit()
@@ -1173,32 +1174,44 @@ do
       end
     end
 
-    -- adopt: pitch already sounding at this row joins the gesture (a second
-    -- onset at (chan,pitch,ppq) collides); `or` keeps an empty channel from erroring
-    for colIdx = grid.chanFirstCol[chord.chan] or 1, grid.chanLastCol[chord.chan] or 0 do
+    -- target channel: home for plain strikes; a spread strike walks up to the
+    -- lowest channel the gesture doesn't hold (freed channels reused)
+    local chan = chord.chan
+    if spreadChan then
+      local heldChan = {}
+      for _, member in ipairs(chord.notes) do heldChan[member.chan] = true end
+      while heldChan[chan] do chan = chan + 1 end
+      if chan > 16 then return true end   -- consumed: no channel left to spread onto
+    end
+
+    -- adopt: pitch already sounding at this row on the target channel joins the
+    -- gesture (a second onset at (chan,pitch,ppq) collides; `or` guards an empty channel)
+    for colIdx = grid.chanFirstCol[chan] or 1, grid.chanLastCol[chan] or 0 do
       local laneCol = grid.cols[colIdx]
       local occupant = laneCol and laneCol.type == 'note' and laneCol.cells
                        and laneCol.cells[chord.row]
       if util.isNote(occupant) and occupant.pitch == pitch then
-        util.add(chord.notes, { pitch = pitch, lane = laneCol.lane or 1 })
-        auditionAdd(pitch, occupant.vel, chord.chan, occupant.detune)
+        util.add(chord.notes, { pitch = pitch, lane = laneCol.lane or 1, chan = chan })
+        auditionAdd(pitch, occupant.vel, chan, occupant.detune)
         return true
       end
     end
 
-    -- place at the lowest lane the gesture doesn't hold (freed lanes reused)
+    -- place at the lowest lane the gesture doesn't hold on the target channel
     local held = {}
-    for _, member in ipairs(chord.notes) do held[member.lane] = true end
-    local lane = chord.startLane
+    for _, member in ipairs(chord.notes) do
+      if member.chan == chan then held[member.lane] = true end
+    end
+    local lane = chan == chord.chan and chord.startLane or 1
     while held[lane] do lane = lane + 1 end
 
-    local occupant, laneCol = chordCell(lane)
+    local occupant, laneCol = chordCell(chan, lane)
     local vel = strikePitch({ col = laneCol, evt = occupant, ppq = chord.ppq,
-                              rpb = chord.rpb, lane = lane, chan = chord.chan },
+                              rpb = chord.rpb, lane = lane, chan = chan },
                             pitch, detune)
-    util.add(chord.notes, { pitch = pitch, lane = lane })
+    util.add(chord.notes, { pitch = pitch, lane = lane, chan = chan })
     settleTypedEdit()
-    auditionAdd(pitch, vel, chord.chan, detune)
+    auditionAdd(pitch, vel, chan, detune)
     return true
   end
 
@@ -1207,7 +1220,7 @@ do
     if not chord then return end
     local last = chord.notes[#chord.notes]
     if not last then return end
-    local evt = chordCell(last.lane)
+    local evt = chordCell(last.chan, last.lane)
     if util.isNote(evt) then edit.delete(evt) end
     table.remove(chord.notes, #chord.notes)
     settleTypedEdit()
@@ -1219,7 +1232,7 @@ do
     if not chord then return end
     local last = chord.notes[#chord.notes]
     if not last then return end
-    local evt = chordCell(last.lane)
+    local evt = chordCell(last.chan, last.lane)
     if not util.isNote(evt) then return end
     local newVel = util.nudgedScalar(evt.vel, 1, 127, dir, nil)
     if newVel == evt.vel then return end
@@ -1227,7 +1240,7 @@ do
     edit.assign(evt, { vel = newVel })
     settleTypedEdit()
     auditionRelease(last.pitch)
-    auditionAdd(last.pitch, newVel, chord.chan, detune)
+    auditionAdd(last.pitch, newVel, last.chan, detune)
   end
 
   --contract: shift release commits: advance once if any note survives, silence the chord

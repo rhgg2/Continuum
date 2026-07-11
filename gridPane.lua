@@ -20,6 +20,7 @@
 --invariant: cell coords 0-indexed; header rows at -HEADER, row-num gutter at -GUTTER
 --invariant: page-persistent state: cellW/H, dragging, laneConsumed, paintLast
 --contract: host supplies inputAllowed() -- folds modal/picker/item-active/palette/strip gates
+--contract: host chordEntry=false gates the chord gesture off (the pattern editor passes false)
 local util   = require 'util'
 local groups = require 'groups'
 
@@ -30,8 +31,8 @@ package.path = reaper.ImGui_GetBuiltinPath() .. '/?.lua;' .. package.path
 local ImGui   = require 'imgui' '0.10'
 local painter = require 'painter'
 
-local cm, cmgr, chrome, gui, tv, inputAllowed =
-  (...).cm, (...).cmgr, (...).chrome, (...).gui, (...).tv, (...).inputAllowed
+local cm, cmgr, chrome, gui, tv, inputAllowed, chordEntry =
+  (...).cm, (...).cmgr, (...).chrome, (...).gui, (...).tv, (...).inputAllowed, (...).chordEntry
 
 ---------- PRIVATE
 
@@ -1096,7 +1097,7 @@ end
 --contract: every fresh press enters; only lastEditKey autorepeats
 --contract: scans editKeys per frame; reads ec/grid fresh (editEvent may rebuild)
 --contract: a note key typed while armed exits region mode then enters (execute-through)
---contract: Shift+notechar strikes chords; Shift+digit drives the value place-walk gesture
+--contract: Shift+notechar strikes chords (+Alt spreads channels); Shift+digit value place-walk
 --contract: Backspace deletes last chord note; Shift+=/- nudges vel; shift release commits
 function gridPane:handleKeys(kr)
   local modsNow = ImGui.GetKeyMods(ctx)
@@ -1116,8 +1117,9 @@ function gridPane:handleKeys(kr)
   local ec = tv:ec()
   local commandHeld = kr.commandHeld
 
-  local shiftHeld = modsNow == ImGui.Mod_Shift
-  if (modsNow == ImGui.Mod_None or shiftHeld) and not cmgr:isPrefixActive() then
+  local shiftHeld  = modsNow == ImGui.Mod_Shift
+  local spreadHeld = modsNow == (ImGui.Mod_Shift | ImGui.Mod_Alt)
+  if (modsNow == ImGui.Mod_None or shiftHeld or spreadHeld) and not cmgr:isPrefixActive() then
     local function enterAtCursor(char)
       local row, colIdx, stop = ec:pos()
       local c = tv.grid.cols[colIdx]
@@ -1128,16 +1130,16 @@ function gridPane:handleKeys(kr)
         local fresh    = ImGui.IsKeyPressed(ctx, entry.key, false)
         local repeated = ImGui.IsKeyPressed(ctx, entry.key, true)
         if fresh or (repeated and entry.key == lastEditKey) then
-          if shiftHeld then
-            -- Shift gestures are fresh-only: chord strike on a note col, else the value
-            -- place-walk. Each declines off its context, so try them in turn.
+          if shiftHeld or spreadHeld then
+            -- Shift gestures are fresh-only: chord strike on a note col (+Ctrl spreads
+            -- channels), else the value place-walk. Each declines off its context.
             local noteChar = cmgr:noteChars(entry.char) ~= nil
             local hexChar  = entry.char >= string.byte('a') and entry.char <= string.byte('f')
-            if fresh and (noteChar or entry.digit or hexChar) then
+            if fresh and (noteChar or (shiftHeld and (entry.digit or hexChar))) then
               if ec:isInRegionMode() then ec:regionExit() end
               if ec:isSticky() then ec:selClear(); break end
-              local struck = noteChar and tv:chordStrike(entry.char)
-              if not struck then tv:digitsStrike(entry.char) end
+              local struck = chordEntry and noteChar and tv:chordStrike(entry.char, spreadHeld)
+              if not struck and shiftHeld then tv:digitsStrike(entry.char) end
             end
           else   -- plain entry (Mod_None)
             if ec:isInRegionMode() then ec:regionExit() end   -- a typed note executes through

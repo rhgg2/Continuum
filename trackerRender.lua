@@ -878,7 +878,7 @@ local tr = {}
 -- The grid + lane render core (design/fx-patterns.md § P1). inputAllowed
 -- folds focusState.acceptCmds so note-entry self-suppresses under modal/picker/palette/strip focus.
 local gridPane = util.instantiate('gridPane', {
-  cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, tv = tv,
+  cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, tv = tv, chordEntry = true,
   inputAllowed = function() return tr:focusState().acceptCmds end,
 })
 

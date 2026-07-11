@@ -119,6 +119,33 @@ return {
   },
 
   {
+    name = 'the chord gesture is gated off the pattern surface',
+    run = function(harness)
+      local h, pe = withEditor(harness)
+      local writeThroughs = 0
+      pe:open(NOTES_BODY, function() writeThroughs = writeThroughs + 1 end)
+
+      -- gridPane registers letters as Key_A + offset; mirror that arithmetic so
+      -- the auto-viv fake hands both sides the same id.
+      local function letterKey(ch)
+        return fakeImGui.Key_A + (string.byte(ch) - string.byte('a'))
+      end
+
+      -- Control: plain note entry writes through, so the seam observes edits.
+      setKeys({ letterKey('x') }, fakeImGui.Mod_None)
+      pe:handleInput(function() end)
+      t.truthy(writeThroughs > 0, 'plain note entry writes through (control)')
+
+      -- The same surface with Shift held must be inert: the pattern editor
+      -- instantiates gridPane with chordEntry = false.
+      writeThroughs = 0
+      setKeys({ letterKey('c') }, fakeImGui.Mod_Shift)
+      pe:handleInput(function() end)
+      t.eq(writeThroughs, 0, 'Shift+notechar wrote nothing through')
+    end,
+  },
+
+  {
     name = 'an unconsumed Esc closes the modal',
     run = function(harness)
       local h, pe = withEditor(harness)
