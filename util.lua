@@ -247,10 +247,11 @@ function util.clamp(val,min,max)
   end
 end
 
-function util.setDigit(val, d, pos, base, half)
+function util.setDigit(val, d, pos, base, keepBelow)
   local place = base ^ pos // 1
   local above = val - (val % (place * base))
-  return above + d * place + (half and place // 2 or 0)
+  local below = keepBelow and (val % place) or 0
+  return above + d * place + below
 end
 
 --contract: advances at least one full interval; values already on a boundary do not no-op

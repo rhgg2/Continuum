@@ -1096,15 +1096,21 @@ end
 --contract: every fresh press enters; only lastEditKey autorepeats
 --contract: scans editKeys per frame; reads ec/grid fresh (editEvent may rebuild)
 --contract: a note key typed while armed exits region mode then enters (execute-through)
---contract: Shift+notechar strikes the chord gesture; Shift admits other digits (half-place)
+--contract: Shift+notechar strikes chords; Shift+digit drives the value place-walk gesture
 --contract: Shift+Alt+digit sets the last chord strike's velocity; shift release commits
 function gridPane:handleKeys(kr)
   local modsNow = ImGui.GetKeyMods(ctx)
   -- Poll-based commit: catches the release wherever it lands (focus loss,
   -- modal open). Bit-test — extra modifiers must not read as a release.
-  if tv:chordActive() and (modsNow & ImGui.Mod_Shift) == 0 then tv:chordCommit() end
+  local shiftGone = (modsNow & ImGui.Mod_Shift) == 0
+  if tv:chordActive()  and shiftGone then tv:chordCommit()  end
+  if tv:digitsActive() and shiftGone then tv:digitsCommit() end
 
   if not inputAllowed() then return end
+  -- Backspace steps the value gesture back one place (restore-to-retype).
+  if tv:digitsActive() and ImGui.IsKeyPressed(ctx, ImGui.Key_Backspace, false) then
+    tv:digitsBackspace()
+  end
   local ec = tv:ec()
   local commandHeld = kr.commandHeld
 
@@ -1114,29 +1120,31 @@ function gridPane:handleKeys(kr)
     local function enterAtCursor(char)
       local row, colIdx, stop = ec:pos()
       local c = tv.grid.cols[colIdx]
-      if c then tv:editEvent(c, c.cells and c.cells[row], stop, char, shiftHeld) end
+      if c then tv:editEvent(c, c.cells and c.cells[row], stop, char) end
     end
     for _, entry in ipairs(editKeys) do
       if not commandHeld[entry.key] then
-        local chordKey = shiftHeld and cmgr:noteChars(entry.char) ~= nil
-        local plainKey = not shiftHeld or entry.digit
         local fresh    = ImGui.IsKeyPressed(ctx, entry.key, false)
         local repeated = ImGui.IsKeyPressed(ctx, entry.key, true)
         if fresh or (repeated and entry.key == lastEditKey) then
           if chordVel then
             if fresh and entry.digit then tv:chordVelocity(entry.char - string.byte('0')) end
-          elseif chordKey or plainKey then
+          elseif shiftHeld then
+            -- Shift gestures are fresh-only: chord strike on a note col, else the value
+            -- place-walk. Each declines off its context, so try them in turn.
+            local noteChar = cmgr:noteChars(entry.char) ~= nil
+            local hexChar  = entry.char >= string.byte('a') and entry.char <= string.byte('f')
+            if fresh and (noteChar or entry.digit or hexChar) then
+              if ec:isInRegionMode() then ec:regionExit() end
+              if ec:isSticky() then ec:selClear(); break end
+              local struck = noteChar and tv:chordStrike(entry.char)
+              if not struck then tv:digitsStrike(entry.char) end
+            end
+          else   -- plain entry (Mod_None)
             if ec:isInRegionMode() then ec:regionExit() end   -- a typed note executes through
             if ec:isSticky() then ec:selClear(); break end
             if fresh then lastEditKey = entry.key end
-            if chordKey then
-              -- strikes are fresh-only (a repeat would re-toggle); a declined
-              -- strike on a digit falls back to half-place entry as before
-              local struck = fresh and tv:chordStrike(entry.char)
-              if not struck and entry.digit and not tv:chordActive() then enterAtCursor(entry.char) end
-            else
-              enterAtCursor(entry.char)
-            end
+            enterAtCursor(entry.char)
           end
         end
       end

@@ -47,12 +47,13 @@ return {
     end,
   },
   {
-    name = 'setDigit: half adds place/2 (shift-digit half-step entry)',
+    name = 'setDigit: keepBelow preserves the places below the target',
     run = function()
-      -- With half=true at ones place in base 10, result = d*1 + 0 (1//2==0).
-      t.eq(util.setDigit(0, 5, 0, 10, true), 5)
-      -- At tens place, half adds 10//2 = 5.
-      t.eq(util.setDigit(0, 5, 1, 10, true), 55)
+      -- keepBelow=false zeroes below the written place; true keeps them.
+      t.eq(util.setDigit(347, 5, 2, 10, false), 500)
+      t.eq(util.setDigit(347, 5, 2, 10, true),  547)
+      -- hex: overwrite the high nibble, keep the low.
+      t.eq(util.setDigit(0x73, 0x5, 1, 16, true), 0x53)
     end,
   },
 

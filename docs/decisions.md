@@ -4,6 +4,14 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-11** — Shift-held value entry is a keep-below overwrite cursor over a
+  field's places: each digit overwrites only its own place (lower places intact),
+  the sub-caret steps right, and the row stays pinned while shift is down.
+  Backspace restores the place the last digit overwrote (retype it); shift release
+  jumps back to the entry column, then advances. Replaces the old half-a-place
+  Shift trick (setDigit's `half` -> `keepBelow`). Hex parts take 0-9a-f, decimal
+  0-9 (the a-j additive carry stays a separate non-shift mechanism).
+
 - **2026-07-11** — Chord entry (shift-held): velocity digits live on Shift+Alt, not
   plain Shift, because the upper note row *is* the digit row (`2 3 5 6 7 9 0` are
   black keys/high notes) — plain digits stay strikeable. A struck pitch already at

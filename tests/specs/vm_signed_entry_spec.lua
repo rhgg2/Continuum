@@ -1,8 +1,5 @@
--- Signed-decimal grid entry: '-' is an in-place sign flip (no advance) and, on
--- a zero cell, arms a transient sign flip consumed by the next digit; empty
--- cells inherit their sign from the displayed ghost, else the previous visible
--- breakpoint; 'f' enters full scale on normalized pb columns; half=true
--- (Shift) adds half a place. Born with the curve-entry UX rework.
+-- Signed-decimal grid entry: '-' is an in-place sign flip; empty cells inherit
+-- sign from the ghost or prior breakpoint. See docs/decisions.md § 2026-07-10.
 
 local t = require('support')
 
@@ -28,10 +25,10 @@ end
 
 -- Stops 1..4 = thousands..ones. Re-pins the cursor each call; a commit
 -- auto-steps the row, a bare '-' must not (asserted per test).
-local function typePB(h, row, stop, ch, half)
+local function typePB(h, row, stop, ch, keep)
   local col, ci = pbCol(h)
   h.ec:setPos(row, ci, stop)
-  h.vm:editEvent(col, col.cells and col.cells[row], stop, string.byte(ch), half or false)
+  h.vm:editEvent(col, col.cells and col.cells[row], stop, string.byte(ch), keep or false)
 end
 
 local function pbValAt(h, row)
@@ -151,15 +148,6 @@ return {
   },
 
   {
-    name = 'half=true adds half a place: Shift+5 at hundreds -> 550',
-    run = function(harness)
-      local h = mkCurve(harness)
-      typePB(h, 0, 2, '5', true)
-      t.eq(pbValAt(h, 0), 550, 'half-place entry')
-    end,
-  },
-
-  {
     name = 'normalized magnitude caps at 1000: 9 at the thousands stop',
     run = function(harness)
       local h = mkCurve(harness)
@@ -175,9 +163,6 @@ return {
       typePB(h, 0, 1, 'f')
       typePB(h, 0, 2, '9')
       t.eq(pbValAt(h, 0), 900, 'stale thousands digit cleared')
-      typePB(h, 2, 3, 'f')
-      typePB(h, 2, 2, '9', true)
-      t.eq(pbValAt(h, 2), 950, 'half-place entry wraps too')
     end,
   },
 

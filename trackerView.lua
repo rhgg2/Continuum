@@ -911,14 +911,16 @@ do
 
   --contract: single typed-input entry point; dispatches on (col.type, stop, evt-kind)
   --contract: off-grid edits run through snap to repin evt.ppq to cursor row and restamp frame
-  --contract: commit flushes, advances by advanceBy ('-' sign flips stay put), may audition
-  function tv:editEvent(col, evt, stop, char, half)
+  --contract: commit flushes+advances by advanceBy; '-' flips and keep gesture stay put
+  function tv:editEvent(col, evt, stop, char, keep)
     if not col then return end
     local type      = col.type
     local rpbNow         = currentRpb()
     local logPerRowNow   = logPerRowFor(rpbNow)
     local cursorppq      = ec:row() * logPerRowNow
-    local skipAdvance    = false   -- '-' sign flips edit in place
+    -- keep = the shift-held value gesture: overwrite one place, stay on the row;
+    -- plain entry (keep nil) zeroes below the place and advances.
+    local skipAdvance    = keep or false
     local function entrySign(old)
       if old ~= 0 then return old < 0 and -1 or 1 end
       local _, sign = tv:entrySignAt(ec:pos())
@@ -984,7 +986,7 @@ do
         if not util.isNote(evt) then return end
         local d = hexDigit[char]; if not d then return end
         local newSample = util.clamp(
-          util.setDigit(evt.sample or 0, d, 1 - digit, 16, half), 0, 127)
+          util.setDigit(evt.sample or 0, d, 1 - digit, 16, keep), 0, 127)
         edit.assign(evt, { sample = newSample })
         commit()
         -- After flush so the configChanged-driven rebuild reads the
@@ -1007,11 +1009,11 @@ do
           local letter = char - string.byte('a')   -- a..j enter 0..9, carrying 1 left
           local mag
           if letter >= 0 and letter <= 9 then
-            mag = util.clamp(util.setDigit(math.abs(old), letter, place, 10, half) + (10 ^ (place + 1) // 1), 0, 999)
+            mag = util.clamp(util.setDigit(math.abs(old), letter, place, 10, keep) + (10 ^ (place + 1) // 1), 0, 999)
           else
             local d = char - string.byte('0')
             if d < 0 or d > 9 then return end
-            mag = util.clamp(util.setDigit(math.abs(old), d, place, 10, half), 0, 999)
+            mag = util.clamp(util.setDigit(math.abs(old), d, place, 10, keep), 0, 999)
           end
           newDelay = entrySign(old) * mag
         end
@@ -1026,7 +1028,7 @@ do
       else  -- part == 'vel'
         local d = hexDigit[char]; if not d then return end
         local function newVel(old)
-          return util.clamp(util.setDigit(old, d, 1 - digit, 16, half), 1, 127)
+          return util.clamp(util.setDigit(old, d, 1 - digit, 16, keep), 1, 127)
         end
 
         if evt and evt.evType == 'pa' then
@@ -1064,11 +1066,11 @@ do
       if col['14bit'] then
         -- 4 hex digits over a display integer (val*256), forced even: the 14-bit LSB
         -- never fills bit 0. Stored val is the fractional cc mm's midiBlob splits.
-        local disp = util.setDigit(math.floor((evt and evt.val or 0) * 256 + 0.5), d, 3 - digit, 16, half)
+        local disp = util.setDigit(math.floor((evt and evt.val or 0) * 256 + 0.5), d, 3 - digit, 16, keep)
         disp = math.floor(util.clamp(disp, 0, 0x7FFE) / 2) * 2
         update = { val = disp / 256 }
       else
-        update = { val = util.clamp(util.setDigit(evt and evt.val or 0, d, 1 - digit, 16, half), 0, 127) }
+        update = { val = util.clamp(util.setDigit(evt and evt.val or 0, d, 1 - digit, 16, keep), 0, 127) }
       end
     elseif type == 'pb' then
       local old = evt and evt.val or 0
@@ -1084,11 +1086,11 @@ do
         local mag
         if letter >= 0 and letter <= 9 then
           local cap = col.normalized and 1000 or 9999
-          mag = util.clamp(util.setDigit(math.abs(old), letter, place, 10, half) + (10 ^ (place + 1) // 1), 0, cap)
+          mag = util.clamp(util.setDigit(math.abs(old), letter, place, 10, keep) + (10 ^ (place + 1) // 1), 0, cap)
         else
           local d = char - string.byte('0')
           if d < 0 or d > 9 then return end
-          mag = util.setDigit(math.abs(old), d, place, 10, half)
+          mag = util.setDigit(math.abs(old), d, place, 10, keep)
           if col.normalized and mag > 1000 then
             -- Sub-thousands overflow only comes from full scale: the typed digit
             -- declares a 3-digit value, so the stale thousands digit clears.
@@ -1132,9 +1134,9 @@ do
     return laneCol and laneCol.cells and laneCol.cells[chord.row], laneCol
   end
 
-  -- Typed chord mutations bypass cmgr exactly like editEvent's commit: end
+  -- Typed gesture mutations bypass cmgr exactly like editEvent's commit: end
   -- every cascade by hand (see the comment there), then flush.
-  local function settleChordEdit()
+  local function settleTypedEdit()
     pendingFlip = nil
     tv:endAllCascades()
     tm:flush()
@@ -1143,7 +1145,7 @@ do
   function tv:chordActive() return chord ~= nil end
 
   --contract: arms on a note col's first pitch stop; pins (row, chan) until shift release
-  --contract: returns true iff consumed; false lets the drain fall through (half-place digits)
+  --contract: returns true iff consumed; false lets the drain fall through (to value-digit entry)
   --contract: re-striking a gesture pitch toggles it off; freed lanes are reused lowest-first
   function tv:chordStrike(char)
     local nk = cmgr:noteChars(char); if not nk then return false end
@@ -1165,7 +1167,7 @@ do
         local evt = chordCell(member.lane)
         if util.isNote(evt) then edit.delete(evt) end
         table.remove(chord.notes, i)
-        settleChordEdit()
+        settleTypedEdit()
         auditionRelease(pitch)
         return true
       end
@@ -1195,7 +1197,7 @@ do
                               rpb = chord.rpb, lane = lane, chan = chord.chan },
                             pitch, detune)
     util.add(chord.notes, { pitch = pitch, lane = lane })
-    settleChordEdit()
+    settleTypedEdit()
     auditionAdd(pitch, vel, chord.chan, detune)
     return true
   end
@@ -1210,7 +1212,7 @@ do
     local vel    = digit == 8 and 0x7f or math.max(digit * 16, 1)
     local detune = evt.detune
     edit.assign(evt, { vel = vel })
-    settleChordEdit()
+    settleTypedEdit()
     auditionRelease(last.pitch)
     auditionAdd(last.pitch, vel, chord.chan, detune)
   end
@@ -1230,11 +1232,87 @@ do
     killAudition()
   end
 
+  ----- Value entry (shift-held gesture: a left-to-right overwrite cursor over a field's places)
+
+  -- Gesture-editable value parts → the event field each stores (pb rides on val).
+  local DIGIT_FIELD = { sample = 'sample', vel = 'vel', delay = 'delay', pb = 'val', val = 'val' }
+  local HEX_PART    = { sample = true, vel = true, val = true }   -- decimal: delay, pb
+
+  --shape: digits = { colIdx, row, part, stop0, undo = { { existed, val, stop }, ... } }
+  --invariant: pins (col,row,part); overwrites a place keep-below, steps the sub-caret right
+  --invariant: field re-read via cells[row] each keystroke; undo snapshots drive backspace-restore
+  local digits = nil
+
+  -- The pinned field's part if the caret sits on a gesture-editable value part.
+  local function digitPartAt(colIdx, stop)
+    local col  = grid.cols[colIdx]
+    local part = col and col.partAt and col.partAt[stop]
+    if part and DIGIT_FIELD[part] then return part, col end
+  end
+
+  local function validDigit(part, char)
+    if HEX_PART[part] then return hexDigit[char] ~= nil end
+    return char >= string.byte('0') and char <= string.byte('9')
+  end
+
+  function tv:digitsActive() return digits ~= nil end
+
+  --contract: arms on a value part; false declines (off a value part / char not a field digit)
+  --contract: overwrites the caret's place keep-below, then steps the sub-caret one place right
+  function tv:digitsStrike(char)
+    local row, colIdx, stop = ec:pos()
+    local part, col = digitPartAt(colIdx, stop)
+    if not part or not validDigit(part, char) then return false end
+
+    if not (digits and digits.colIdx == colIdx and digits.row == row and digits.part == part) then
+      digits = { colIdx = colIdx, row = row, part = part, stop0 = stop, undo = {} }
+    end
+
+    local evt = col.cells and col.cells[row]
+    util.add(digits.undo, { existed = evt ~= nil, val = evt and evt[DIGIT_FIELD[part]], stop = stop })
+
+    tv:editEvent(col, evt, stop, char, true)   -- keep-below, no per-keystroke advance
+
+    local live = grid.cols[colIdx]
+    if live and live.partAt[stop + 1] == part then ec:setPos(nil, nil, stop + 1) end
+    return true
+  end
+
+  --contract: restores the place the last digit overwrote and steps the sub-caret back onto it
+  function tv:digitsBackspace()
+    if not digits then return false end
+    local snap = table.remove(digits.undo)
+    if not snap then digits = nil; return false end
+    local col = grid.cols[digits.colIdx]
+    local evt = col and col.cells and col.cells[digits.row]
+    if snap.existed then
+      if evt then edit.assign(evt, { [DIGIT_FIELD[digits.part]] = snap.val }) end
+    elseif evt then
+      edit.delete(evt)   -- the gesture created this event; drop it
+    end
+    ec:setPos(nil, nil, snap.stop)
+    settleTypedEdit()
+    return true
+  end
+
+  --contract: shift release restores the entry column, advances one row, drops the gesture
+  function tv:digitsCommit()
+    if not digits then return end
+    ec:setPos(nil, nil, digits.stop0)   -- back to where the gesture began, then advance
+    digits = nil
+    ec:advance()
+  end
+
+  --contract: drops the gesture without advancing; rebuild(takeChanged)/dropGrid route here
+  function tv:digitsAbandon() digits = nil end
+
   -- Every keystroke that flows through editEvent or a chord strike is one
   -- undo block. Includes note entry, octave/sample/vel/delay/pb/val digits.
-  tv.editEvent     = util.atomic('Edit', tv.editEvent)
-  tv.chordStrike   = util.atomic('Chord entry', tv.chordStrike)
-  tv.chordVelocity = util.atomic('Chord velocity', tv.chordVelocity)
+  tv.editEvent       = util.atomic('Edit', tv.editEvent)
+  tv.chordStrike     = util.atomic('Chord entry', tv.chordStrike)
+  tv.chordVelocity   = util.atomic('Chord velocity', tv.chordVelocity)
+  tv.digitsStrike    = util.atomic('Value entry', tv.digitsStrike)
+  tv.digitsBackspace = util.atomic('Value entry', tv.digitsBackspace)
 end
 
 ----- Lane-strip edits (drag, add, delete, shape, tension)
@@ -3497,6 +3575,7 @@ function tv:rebuild(takeChanged)
   if takeChanged then
     ec:reset()
     tv:chordAbandon()
+    tv:digitsAbandon()
   end
 
   do
@@ -3770,6 +3849,7 @@ end
 --contract: blank the grid so renderBody falls through to the "Select a MIDI item" placeholder. Counterpart to bindTake(nil)'s dormant seam, for when the take is destroyed rather than handed off.
 function tv:dropGrid()
   tv:chordAbandon()
+  tv:digitsAbandon()
   grid.cols         = {}
   grid.chanFirstCol = {}
   grid.chanLastCol  = {}
