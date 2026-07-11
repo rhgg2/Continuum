@@ -604,7 +604,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     if e.evType == 'pb' then
       -- val is raw 14-bit converted to cents (um's frame). cents sidecar is authored logical value;
       -- nil for foreign-MIDI/pre-cents pbs — back-derived in rebuild's absorber pass from lane-1 layout.
-      evt = util.pick(e, 'ppq ppqL chan shape tension derived frame cents',
+      evt = util.pick(e, 'ppq ppqL chan shape tension derived frame cents uuid',
                       { val = rawToCents(e.val), token = tok, evType = 'pb' })
     else
       evt = e

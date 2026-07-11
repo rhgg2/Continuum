@@ -197,6 +197,29 @@ return {
   },
 
   {
+    name = 'a pb event steps channel too (not the note lane-walk)',
+    run = function(harness)
+      -- laneWalkable allowlists note: streams, so a pb column (stream pb:0)
+      -- routes through moveByChan -- pb/at never walk lanes. F1 audit pin.
+      local h = harness.mk{ seed = { ccs = {
+        { ppq = 0, chan = 1, evType = 'pb', val = 0, cents = 0, shape = 'step' },
+      }}}
+      h.vm:setGridSize(80, 40)
+
+      local ci = findCol(h, function(c) return c.type == 'pb' and c.midiChan == 1 end)
+      h.ec:setPos(0, ci, 1)
+      h.cmgr:invoke('eventShiftRight')
+
+      local moved
+      for _, c in ipairs(h.fm:dump().ccs) do
+        if c.evType == 'pb' then moved = c end
+      end
+      t.truthy(moved, 'pb still exists')
+      t.eq(moved.chan, 2, 'pb stepped to channel 2')
+    end,
+  },
+
+  {
     name = "a moved note's tail is truncated, not blocked, by a later destination note",
     run = function(harness)
       -- 60 spans rows 0..2 (ppq 0..180). Dest chan-2 has a note-on at

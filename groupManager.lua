@@ -112,6 +112,7 @@ end
 -- the realised endppq tm re-derives every rebuild. An open note
 -- (endppqL == util.OPEN, no ceiling) carries no dur: a nil dur IS open
 -- in the group frame.
+--invariant: pb group-frame val is INTENT; toGroup reads evt.cents, not realised val
 local function toGroup(evt, anchor)
   -- The group frame is LOGICAL. A concrete's realised ppq carries swing
   -- and delay; ppqL is its logical onset. Rebase off ppqL so neither
@@ -126,6 +127,9 @@ local function toGroup(evt, anchor)
      and evt.endppqL ~= nil then
     g.dur = evt.endppqL - onset
   end
+  -- pb intent rides `cents` (frame-invariant); a fresh create has none, so val
+  -- (intent in tv's frame) is the fallback. see docs/groupManager.md § Intent in, realisation out
+  if evt.evType == 'pb' then g.val, g.cents = evt.cents or evt.val, nil end
   return g
 end
 

@@ -57,6 +57,19 @@ partial-update inverses (`util.OPEN` ⇒ `dur` removed, a finite `dur` ⇒
 `endppqL` restamped). The realised note-off never enters the group
 frame.
 
+The same discipline governs pb value. A concrete's `val` is realised —
+`rawToCents(wire) = intent + governing detune` — while the intent lives
+in the `cents` sidecar. `toGroup` sources the group-frame `val` from
+`evt.cents`, so the governing detune never enters the template and each
+instance re-derives its wire at its own seat at flush. `cents` is intent
+in *every* frame gm ingests — the `byUuid` um entry (`val` realised) and
+the column projection (`val` reset to cents) alike — which is why reading
+it is frame-invariant where reading `val` is not. A fresh tv create
+carries no `cents`, so `val` — itself intent in tv's frame — is the
+fallback, and the group frame then holds intent under the single name
+`val` (the sidecar is dropped, else an edit that only rewrites `val`
+would leave it stale).
+
 The onset is logical the same way the ceiling is. The group frame is
 the authoring grid; a concrete's `ppq` is realised — swing and the
 note's `delay` baked in by tm's `realiseNoteUpdate`. `toGroup` is fed

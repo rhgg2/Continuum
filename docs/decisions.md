@@ -4,6 +4,16 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-11** — A pb gm member stores INTENT in the group frame under `val`
+  (its existing name), and `toGroup` sources it from `evt.cents` — frame-invariant
+  intent — never the um entry's `val`, which `makeEntry` builds as `rawToCents(wire)`
+  (intent + governing detune, i.e. realisation, stale at any sibling whose detune
+  differs). Over renaming the group field to `cents` at every boundary: the intent
+  ingress is a single chokepoint (`toGroup`), so one arm there beats N renames, and
+  `detune` is already `DERIVED`-denied so the wire re-derives per seat at flush.
+  `makeEntry`'s pb pick also now carries `uuid`, without which gm's per-rebuild
+  re-anchor (`tm:byUuid`) silently loses the member and no-ops every later edit.
+
 - **2026-07-11** — `tm:requestRebuild()` is a *deferred* force-rebuild: it sets a flag
   the imminent flush consumes past its no-op guard, for a geometry change that stages
   zero mm ops (an empty-group instance verb: nothing to project, so the commit flush
