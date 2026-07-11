@@ -51,9 +51,11 @@ Track A is the generator substrate, Track B the authoring UI. Checked = landed.
 **Deferred (no consumer / intentional)**
 - [ ] **PA** replace — no generic park/rebind path (§ A4)
 - [ ] Note-fx hosted on a parked note
-- [ ] Freeze (to raw / to mirror group), ghost-note display, bake-on-export
+- [ ] Ghost-note display, bake-on-export
 
-**Owned elsewhere** — R5 plink → `design/cv-2.md`; R4 dirty-registry & R3 `forEachEffectiveNote` build on demand.
+**Owned elsewhere** — R5 plink → `design/cv-2.md`; freeze →
+`design/fx-freeze.md`; R4 dirty-registry & R3 `forEachEffectiveNote`
+build on demand.
 
 ## What v1 left standing
 
@@ -302,6 +304,14 @@ that already says "computed, not editable." Same idiom, no new invention;
 the choice turns only on whether you want the arp *seen* or just *heard*.
 
 ## Freeze — the invertibility axis as a feature
+
+> **Superseded (2026-07-11).** Freeze now lives in
+> `design/fx-freeze.md`, and it is one-way both ways: the group target
+> survives but as a *plain authored* group — the generator is
+> discarded, there is no unfreeze. The live-generator-over-invertible-
+> substrate want this section gestured at became a separate pinned
+> feature (fx on groups). Kept below as the record of the original
+> spectrum framing.
 
 Two ways to commit a region's output, and they are the generator
 spectrum's invertibility axis surfacing as user-facing commands, not two
