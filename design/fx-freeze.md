@@ -12,8 +12,12 @@
 ## Status at a glance
 
 **Open**
+- [ ] F2a — projext undo (gates F2's undo-wholeness only): pextStore
+      mirrors project scope to scratch so undo reverts it — split to
+      design/projext-undo.md
 - [ ] F2 — the freeze pair: freeze-to-raw, freeze-to-group, and the
-      curve thinner freeze-to-group needs
+      curve thinner freeze-to-group needs; plan reviewed + pinned
+      (§ Implementation notes)
 
 **Done**
 - [x] F1 — pb/at as first-class gm members: audited and pinned
@@ -203,19 +207,76 @@ undo block:
   standing reconcile — region gone → `parkWindows` no longer covers →
   next rebuild restores the chord on top of the output. The entries
   leave the stash.
-- **Observer baselines resync, never sweep.** `enqueuePbTransitions`
-  / `enqueueCcTransitions` would see the vanished window and stage a
-  seat sweep. Freeze needs the invalidate-style path (the
-  `dataStore.lua:127` analogue): resync the baseline, enqueue
-  nothing. cc drains inline in `rebuildCCs` *before* the park pass —
-  the seam covers both drain points.
+- **Observer baselines resync, never sweep.** The observer is the
+  `prevWindows` route-by-window baseline — no enqueue stage exists
+  (this section previously named `enqueuePbTransitions` /
+  `enqueueCcTransitions`, which were never built). Rebuild diffs
+  current windows against last rebuild's persisted set: a removed
+  window sweeps its seats (`pbRemoved`; cc recognition in
+  `rebuildCCs` is prevWindows-keyed too). Resync = drop the frozen
+  windows from `prevWindows` in the same flush; the next rebuild
+  sees the window on neither side of the diff and the seats stand
+  as authored.
 - **Marker strip + region delete together.** A rebuild between them
   regenerates the full output while `reconcileDerived` can no longer
   match the now-markerless notes — a complete duplicate set.
 - **(group verb) ds `groups` write + take write revert as one.** gm
-  persists on `postflush`; VERIFY the group's existence and the
-  marker strip share an undo block, or undo leaves a group standing
-  over re-markered derived notes.
+  persists on `postflush`, so the mint must precede the one flush:
+  stage the thinned events, `markGroup` with the staged um events,
+  then a single `tm:flush` inside the undo block (postflush
+  back-fills member uuids and persists) — the clipboard idiom.
+  Flush-then-mint pushes the `groups` write to the *next* flush,
+  outside the block.
+- **The derived-clear rides eventMeta — project scope — which undo
+  does not rewind natively.** Without F2a, undo restores
+  region/stash/baseline/MIDI over notes that lost their tags: the
+  next rebuild re-emits a fresh derived set and parks the untagged
+  originals as bogus authored members. F2a
+  (design/projext-undo.md) closes this; it gates the
+  one-undo-reverts-wholly spec, nothing else in F2.
+
+## F2 — implementation notes (2026-07-12 round)
+
+Plan audited against source by an independent review; corrections
+pinned:
+
+- **The primitive is producer-shaped, not region-shaped.**
+  `tm:freezeRegion(uuid)` handles both hosts — a region record, or a
+  note host (self-parked: its fxParked spec IS the destroyed parked
+  member; on-take augment host: clear its `fx` chain instead). One
+  seam, per § Eligibility's "both hosts freeze".
+- **Conversion order**, all before one rebuild, ds writes under the
+  `flushingParked` suppression (which needs an error-path reset —
+  today an error while the flag is up leaves every later region
+  edit silently not rebuilding — and a widened comment): clear
+  `derived` (mm metadata assign; notes keep uuid/lane/detune) →
+  drop covered fxParked entries → drop the region → drop its
+  windows from `prevWindows` → dirtyChan + rebuild.
+- **Gate placement.** Note-window overlap, continuous-target
+  overlap, and the fx-carrying-host-note gate all live in tm
+  (take-semantic); only the gm rect-conflict gate rides the tv verb
+  — forced, tm has no gm reference. Compute the mint rect once,
+  pre-freeze; reuse it for gate and mint.
+- **Freeze-to-group choreography** — the § Atomicity VERIFY,
+  resolved there. Members passed to `markGroup` must be um-live
+  staged events (gm re-anchors via `tm:byUuid`; detached clones
+  make later mirror edits silently no-op).
+- **Thinner input.** Post-freeze the standing seats already ARE the
+  densified polyline — thin those. tm's densify is a
+  deriveChan-local closure, not reachable machinery; nothing to
+  reuse.
+- **`util.atomic` wraps the post-confirm continuation**, not the
+  verb — the modal resolves on a later frame.
+- **Extra specs:** note-host freeze; a post-freeze take round-trip
+  pinning that the cents-carrying seat assign mints uuid + sidecar
+  durably.
+- Verified sound by the audit: prevWindows resync suffices (pb
+  absorber tags are per-rebuild clone marks off *current* windows;
+  cc recognition is prevWindows-keyed; note reconcile keys on
+  `derived`); lane stability (promoted notes carry persisted
+  `lane`; `allocateRegionLanes` assigns lanes only to derived
+  specs); the `derived` clear is metadata-only and takes mm's
+  lockless path.
 
 ## Pinned — fx on groups, and the split verb
 
