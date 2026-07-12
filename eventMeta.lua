@@ -49,6 +49,22 @@ local function writeKb(guid, index)
 end
 
 local eventMeta = {}
+local fire = util.installHooks(eventMeta)
+
+-- All 'ctm.' slots are document data: they ride the projext-undo mirror.
+ps:declareUndoable{ prefixes = { 'ctm.' } }
+
+--emits: poolsRewound -- { guids = set }; a REAPER undo rewound these pools' metadata slots
+ps:subscribe('projectRewound', function(slots)
+  local guids = {}
+  for _, slot in ipairs(slots) do
+    local guid = slot:match('^ctm%.(.+)%.kb$')
+              or slot:match('^ctm%.(.+)%.keys%.%d+$')
+              or slot:match('^ctm%.(.+)%.u%.%w+$')
+    if guid then guids[guid] = true; keysCache[guid] = nil end
+  end
+  if next(guids) then fire('poolsRewound', { guids = guids }) end
+end)
 
 --contract: { [uuid:int] = fields }; empty table if the guid has no metadata
 function eventMeta:load(guid)

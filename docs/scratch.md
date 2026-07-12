@@ -1,10 +1,15 @@
 # scratch
 
-One hidden, muted REAPER track that the project parks things on. Three
+One hidden, muted REAPER track that the project parks things on. Four
 tenants share it:
 
+- **`pextStore`** mirrors every *undoable* project-scope slot (eventMeta
+  tags, project-tier config, dataStore's project keys) onto the track's
+  P_EXT under `ctm_ps.*`, so REAPER undo rewinds them
+  (docs/pextStore.md § The mirror).
 - **`routingManager`** mirrors its fx-meta projext blobs onto the track's
   chunk, so REAPER undo reverts them (projext doesn't reverse natively).
+  Pinned to migrate onto pextStore's mirror (design/projext-undo.md).
 - **`wiringManager`** parks FX that have no compile-graph track —
   disconnected nodes, lowered-parked instances.
 - **`arrangeManager`** (forthcoming) parks the MIDI of emptied palette

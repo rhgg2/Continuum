@@ -194,15 +194,17 @@ local function promote(name)
   cm:set('global', 'tempers', g)
 end
 
-local function demote(name)
+-- Wrapped: a project-tier write is undoable but mints no undo point of its
+-- own (projext); atomic gives it one so it doesn't rewind as a passenger.
+local demote = util.atomic('Demote temper', function(name)
   if not name then return end
   local p = projectTempers()
   p[name] = util.deepClone(globalTempers()[name] or temperFor(name))
   cm:set('project', 'tempers', p)
   selectTemper(name, 'project')
-end
+end)
 
-local function deleteSel(tier, name)
+local deleteSel = util.atomic('Delete temper', function(tier, name)
   local lib = tier == 'global' and globalTempers() or projectTempers()
   if lib[name] ~= nil then
     lib[name] = nil
@@ -213,7 +215,7 @@ local function deleteSel(tier, name)
   else
     selectTemper(nil)
   end
-end
+end)
 
 local function buildDescriptor()
   local globalNames = sortedNames(globalTempers())

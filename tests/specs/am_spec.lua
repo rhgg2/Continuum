@@ -640,7 +640,11 @@ return {
       am:deleteTake(am:tracksTakes(0)[1])
       t.eq(#am:tracksTakes(0), 1, 'the sibling instance remains live')
       t.eq(am:trackSlots(0)[1].parked, false, 'slot still has a live instance')
-      t.eq(scratch.peek(), nil, 'nothing parked — no scratch track minted')
+      -- Scratch may exist regardless (it hosts the projext-undo mirror); the
+      -- pin is that nothing was PARKED there.
+      local _, scratchTrack = scratch.peek()
+      t.eq(scratchTrack and h.reaper.CountTrackMediaItems(scratchTrack) or 0, 0,
+           'nothing parked on scratch')
     end,
   },
 

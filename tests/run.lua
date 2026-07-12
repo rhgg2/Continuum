@@ -22,6 +22,7 @@ local specs = {
   'config_schema_spec',
   'cm_poll_undo_spec',
   'pext_store_spec',
+  'ps_mirror_spec',
   'dataStore_spec',
   'eventMeta_spec',
   'util_edit_primitives_spec',

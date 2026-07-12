@@ -26,8 +26,10 @@ instance. Every pooled take resolves the one blob.
 
 ## Storage
 
-A thin face over `pextStore`'s `project` scope (so the engine's projext and
-undo machinery carry it), under three slot families per pool:
+A thin face over `pextStore`'s `project` scope, declared undoable by the
+`ctm.` prefix — the engine mirrors every write onto the scratch track so
+REAPER undo rewinds it (docs/pextStore.md § The mirror) — under three
+slot families per pool:
 
 - `ctm.<guid>.kb` — the bucket index: which key buckets exist.
 - `ctm.<guid>.keys.<b>` — one uuidTxt set per bucket (`b = uuid // 256`).
@@ -51,13 +53,16 @@ writes were 0–1.
 
 So the set is held in memory (`keysCache`, keyed by guid) and only round-trips to
 projext when it changes. This is safe because the cache can only go stale via an
-external projext rewrite — REAPER undo/redo — and that path already re-enters
-through `load`: membership changes only on structural edits, which rewrite the
-MIDI take, so the tracker's take-hash watcher fires `reloadFromReaper` → `load`.
-`load` clears the guid's cache and re-reads, making it the sole re-sync point. A
-value-only edit (detune change on an already-keyed note) leaves membership — and
-the cache — correct with no reload. Field *values* are never cached; `load`
-reads each `ctm.<guid>.u.<uuidTxt>` blob fresh.
+external projext rewrite — REAPER undo/redo — and both such paths re-enter
+through `load`. Structural edits rewrite the MIDI take, so the tracker's
+take-hash watcher fires `reloadFromReaper` → `load`; a metadata-only undo
+writes no MIDI, so that watcher is blind to it — there the engine's
+`projectRewound` signal lands here instead, the affected guids' caches drop,
+and `poolsRewound` re-fires so the bound `midiManager` reloads. `load` clears
+the guid's cache and re-reads, making it the sole re-sync point. A value-only
+edit (detune change on an already-keyed note) leaves membership — and the
+cache — correct with no reload. Field *values* are never cached; `load` reads
+each `ctm.<guid>.u.<uuidTxt>` blob fresh.
 
 Caching killed the re-parse, but the *write* stayed monolithic: any uuid birth
 or death reserialised the entire keys set — for a saturated ~12k-uuid pool,

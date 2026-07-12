@@ -1,4 +1,4 @@
-@module pextStore  src=pextStore.lua  loc=239  sha=bd5520e  mode=chunk  self=ps
+@module pextStore  src=pextStore.lua  loc=433  sha=bd5520e  mode=chunk  self=ps
 
 # Invariants & contracts
   @invariant  single source of bound take/track context, shared by every face; setTake derives track from the take's item
@@ -6,86 +6,129 @@
   @invariant  a stale take/track ptr is dropped (handle→nil, its baselines→'') before any read on a poll tick
   @contract  get/assign (de)serialise by scope; no schema prune — each face owns its own key registry
   @reaper  take/track P_EXT via GetSetMedia{ItemTake,Track}Info_String; project via Get/SetProjExtState; global via io
+  @invariant  undoable project slots mirror to scratch P_EXT (two-level hash manifest); rest don't
+  @invariant  polls project state count per frame; on tick re-reads watched blobs, fires diverged groups once each
+  @invariant  mirror resync runs before the watch groups, so a rewound blob diverges same tick
+  @contract  no-op without GetProjectStateChangeCount (test harness); one int compare per frame otherwise
+
+# Shapes
+  @shape  mirror = { guid, buckets = { [b] = { [slot] = hash } }, manifestHash = { [b] = hash }, rootRaw }
 
 # Imports
-  @require util = 'util'  @ 8
+  @require util = 'util'  @ 9
+  @require scratch = 'scratch'  @ 10
 
 # Private state
-  @state PROJEXT_SECTION = 'rdm'  @ 16
-  @state globalLocked = {}  @ 26
-  @state take, track = nil, nil  @ 28
-  @state lastStateCount = -1  @ 32
-  @state baseline = {}  @ 33   -- [scope/slot] = last-seen raw string (watched blobs only)
-  @state watchGroups = {}  @ 34   -- { { blobs = { { scope, slot }, ... }, onDiverge = fn }, ... }
-  @state ps = {}  @ 155
-  @state fire = util.installHooks(ps)  @ 156
+  @state PROJEXT_SECTION = 'rdm'  @ 18
+  @state globalLocked = {}  @ 28
+  @state take, track = nil, nil  @ 30
+  @state lastStateCount = -1  @ 34
+  @state baseline = {}  @ 35   -- [scope/slot] = last-seen raw string (watched blobs only)
+  @state watchGroups = {}  @ 36   -- { { blobs = { { scope, slot }, ... }, onDiverge = fn }, ... }
+  @state MIRROR_BUCKETS = 64  @ 75
+  @state undoableSlots, undoablePrefixes = {}, {}  @ 77
+  @state mirror = nil  @ 111
+  @state ps = {}  @ 337
+  @state fire = util.installHooks(ps)  @ 338
 
 # Private functions
-  @fn print(...)  @ 10-12
+  @fn print(...)  @ 12-14
   -- PRIVATE STATE
-  @fn globalPath(slot)  @ 20-22
+  @fn globalPath(slot)  @ 22-24
       -- Global blobs are disk files in the resource dir, one per slot: 'config' ->
       -- continuum-config.lua, 'data' -> continuum-data.lua. Lazy so load needs no reaper.
   -- RAW BACKEND I/O
-  @fn takeRaw(handle, slot)  @ 38-42
-  @fn trackRaw(handle, slot)  @ 44-48
-  @fn readRaw(scope, slot, handle)  @ 51-66
+  @fn takeRaw(handle, slot)  @ 40-44
+  @fn trackRaw(handle, slot)  @ 46-50
+  @fn readRaw(scope, slot, handle)  @ 53-68
       -- handle overrides the bound context (foreign-handle reads); scope picks the backend.
-  @fn writeRaw(scope, slot, raw, handle)  @ 68-87
-  @fn decode(scope, slot, raw)  @ 91-109
+  -- PROJEXT UNDO MIRROR
+  @fn isUndoable(slot)  @ 79-85
+  @fn mirrorKey(name)  @ 89
+      -- Scratch P_EXT keys, namespaced to mark ownership (rm's fx-meta mirrors share
+      -- the track): s.<slot> mirrored raw, m.<b> bucket manifest, root watermark.
+  @fn mirrorRead(strack, name)  @ 91-94
+  @fn mirrorWrite(strack, name, raw)  @ 96-98
+  @fn decodeMirror(raw)  @ 100-104
+  @fn bucketOf(slot)  @ 106
+  @fn seedMirror()  @ 113-122
+  @fn writeBucketAndRoot(strack, b, set)  @ 126-135
+      -- Persist one bucket's manifest + the root, merge-reading the root first: a second
+      -- engine (patternEditor) writes this mirror too, and adopting the merge covers it too.
+  @fn knownSlots()  @ 137-143
+  @fn remirrorMissing(strack, slots)  @ 147-163
+      -- Replay slots the mirror lacks, from projext (current-project truth). Reached on
+      -- any scratch change (re-mint, switch, other engine); a switch just replays nothing.
+  @fn ensureScratch()  @ 167-183
+      -- Resolve the live scratch handle; guid is re-checked even when ValidatePtr2 passes
+      -- (REAPER reuses freed pointers) — see docs/pextStore.md § Guid changes.
+  @fn mirrorAssign(slot, raw)  @ 187-204
+      -- The mirror half of an undoable project write: slot raw + its bucket manifest
+      -- + root. The bucket is merge-read for the same second-writer reason as the root.
+  @fn resyncMirror()  @ 208-247
+      -- Undo rewound the scratch chunk: walk root → buckets → slots, copying back only
+      -- genuine diffs from projext. Adopts state as expected before the caller fires.
+  @fn writeRaw(scope, slot, raw, handle)  @ 249-269
+  @fn decode(scope, slot, raw)  @ 273-291
       -- Format by backend: global -> hand-editable Lua literal, P_EXT/projext ->
       -- compact wire. A bad global parse locks writes. See docs/pextStore.md § Formats.
-  @fn encode(scope, value)  @ 111-114
+  @fn encode(scope, value)  @ 293-296
   -- WATCHER
-  @fn blobKey(blob)  @ 118
-  @fn snapshotBaseline()  @ 120-128
-  @fn zeroBaselines(scope)  @ 132-138
+  @fn blobKey(blob)  @ 300
+  @fn snapshotBaseline()  @ 302-310
+  @fn zeroBaselines(scope)  @ 314-320
       -- A dropped handle's watched blobs read as '' on the next poll; zeroing their
       -- baselines to match keeps that drop from registering as an external diff.
-  @fn dropStale()  @ 140-151
+  @fn dropStale()  @ 322-333
 
 # Public API (ps:*)
   -- PUBLIC INTERFACE
   -- Context
-  @api ps:setTake(newTake)  @ 162-171
+  @api ps:setTake(newTake)  @ 344-353
       @contract  setTake(nil) clears take+track; setTake(take) derives track via GetMediaItemTrack; resnapshots baselines
-  @api ps:clearTake()  @ 173-177
-  @api ps:setTrack(newTrack)  @ 179-183
-  @api ps:boundTake()  @ 185
-  @api ps:boundTrack()  @ 186
+  @api ps:clearTake()  @ 355-359
+  @api ps:setTrack(newTrack)  @ 361-365
+  @api ps:boundTake()  @ 367
+  @api ps:boundTrack()  @ 368
   -- Storage
-  @api ps:get(scope, slot)  @ 191
+  @api ps:get(scope, slot)  @ 373
       @contract  returns the decoded value at (scope, slot) under bound context; nil if absent or undecodable
-  @api ps:getAt(handle, scope, slot)  @ 192
-  @api ps:assign(scope, slot, value)  @ 195-200
+  @api ps:getAt(handle, scope, slot)  @ 374
+  @api ps:assign(scope, slot, value)  @ 377-382
       @contract  writes value at (scope, slot); util.REMOVE clears; refreshes watcher baseline if watched
-  @api ps:assignAt(handle, scope, slot, value)  @ 203-205
+  @api ps:assignAt(handle, scope, slot, value)  @ 385-387
       -- Foreign-handle write: bypasses bound context and never touches the baseline.
   -- Watcher
-  @api ps:watch(blobs, onDiverge)  @ 210-215
+  @api ps:declareUndoable(spec)  @ 392-397
+      @contract  declared project slots mirror to scratch and rewind with undo; others stay projext-only
+  @api ps:watch(blobs, onDiverge)  @ 400-405
       @contract  blobs = { { scope, slot }, ... }; onDiverge(divergedBlobs) fires once per poll tick that diverges
-  @api ps:pollUndo()  @ 219-237
-      @invariant  polls project state count per frame; on tick re-reads watched blobs, fires diverged groups once each
-      @contract  no-op without GetProjectStateChangeCount (test harness); one int compare per frame otherwise
+  @api ps:pollUndo()  @ 411-431
 
 # Signals emitted (via util.installHooks)
-  @emits contextChanged   -- {} on every context change so faces drop+reload their scope caches   @ setTake:170 clearTake:176 setTrack:182
+  @emits contextChanged   -- {} on every context change so faces drop+reload their scope caches   @ setTake:352 clearTake:358 setTrack:364
+  @emits projectRewound   -- [slot, ...]; undo rewound these mirrored slots (already copied back)   @ pollUndo:418
 
 # Uses (outbound edges)
-  @use call    util.installHooks  @ 156
-  @use call    util.prettySerialise  @ encode:112
-  @use call    util.prettyUnserialise  @ decode:97
-  @use call    util.print  @ print:11
-  @use call    util.serialise  @ encode:113
-  @use require util  @ 8
+  @use call    scratch.peek  @ seedMirror:114 ensureScratch:174
+  @use call    scratch.track  @ mirrorAssign:195
+  @use call    util.hash  @ bucketOf:106 writeBucketAndRoot:131 remirrorMissing:157 mirrorAssign:202
+  @use call    util.installHooks  @ 338
+  @use call    util.prettySerialise  @ encode:294
+  @use call    util.prettyUnserialise  @ decode:279
+  @use call    util.print  @ print:13
+  @use call    util.serialise  @ writeBucketAndRoot:127,133 encode:295
+  @use require scratch  @ 10
+  @use require util  @ 9
 
 # REAPER API surface
   @reaper GetResourcePath
   @reaper GetSetMediaItemTakeInfo_String
   @reaper GetSetMediaTrackInfo_String
   @reaper GetProjExtState
+  @reaper ValidatePtr2
+  @reaper GetTrackGUID
   @reaper SetProjExtState
   @reaper GetProjectStateChangeCount
-  @reaper ValidatePtr2
   @reaper GetMediaItemTake_Item
   @reaper GetMediaItemTrack

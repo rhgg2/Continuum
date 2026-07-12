@@ -397,9 +397,14 @@ end
 local cm = {}
 fire = util.installHooks(cm)
 
--- cm's two P_EXT tiers as one watcher group: the engine fires this callback
--- once per undo tick that rewinds either blob, and we reload the diverged tiers.
-ps:watch({ { scope = 'take', slot = 'ctm_config' }, { scope = 'track', slot = 'ctm_config' } },
+-- Project-tier config rides the projext-undo mirror like any document data;
+-- global stays disk, outside undo, by design (design/projext-undo.md § Policy).
+ps:declareUndoable{ slots = { 'config' } }
+
+-- cm's persisted tiers as one watcher group: fires once per undo tick that rewinds
+-- any blob — project included, via the mirror resync — and we reload the diverged tiers.
+ps:watch({ { scope = 'take', slot = 'ctm_config' }, { scope = 'track', slot = 'ctm_config' },
+           { scope = 'project', slot = 'config' } },
   function(diverged)
     for _, blob in ipairs(diverged) do cache[blob.scope] = loaders[blob.scope]() end
     --emits: configChanged -- configChangedPayload.reload (external diff observed)

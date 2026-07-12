@@ -1,4 +1,4 @@
-@module configManager  src=configManager.lua  loc=541  sha=1438cf3  mode=chunk  self=cm
+@module configManager  src=configManager.lua  loc=546  sha=1438cf3  mode=chunk  self=cm
 @deps ps
 
 # Invariants & contracts
@@ -58,55 +58,55 @@
   @fn checkKey(key)  @ 389-393
   -- PUBLIC INTERFACE
   -- Reading
-  @fn mergedKey(key)  @ 445-458
+  @fn mergedKey(key)  @ 450-463
       -- Per-subkey union of a single key's tables across defaults→tiers; most-specific tier wins.
       -- Non-table contributions are skipped, so the result is always a table.
 
 # Public API (cm:*)
-  @api cm:setContext(newTake)  @ 411-416
+  @api cm:setContext(newTake)  @ 416-421
       @contract  setContext(nil) clears take+track; setContext(take) derives track via GetMediaItemTrack
       @contract  refreshes all persisted caches (transient resets to {}) and fires configChanged {}
-  @api cm:clearTake()  @ 418-423
-  @api cm:boundTake()  @ 426
+  @api cm:clearTake()  @ 423-428
+  @api cm:boundTake()  @ 431
       @contract  bound take pointer; nil when context is cleared (take/track tiers resolve off empty)
-  @api cm:boundTrack()  @ 429
+  @api cm:boundTrack()  @ 434
       @contract  bound track pointer; nil when context is cleared (track tier resolves off empty)
-  @api cm:setTrack(newTrack)  @ 431-436
-  @api cm:pollUndo()  @ 439
+  @api cm:setTrack(newTrack)  @ 436-441
+  @api cm:pollUndo()  @ 444
       @contract  delegates to the engine watcher; cm's watch group reloads tiers and fires configChanged
-  @api cm:isDeclared(key)  @ 461
+  @api cm:isDeclared(key)  @ 466
       @contract  non-raising existence test against the schema; true iff key is declared
-  @api cm:get(key, opts)  @ 465-469
+  @api cm:get(key, opts)  @ 470-474
       @contract  returns deep-copy of merged value (defaults + all tiers); raises on unknown key
       @contract  opts.mergeTiers=true → per-subkey union across defaults+tiers; table-valued keys only
-  @api cm:getAt(level, key)  @ 472-481
+  @api cm:getAt(level, key)  @ 477-486
       @contract  reads single tier only (no merge, no defaults); key nil → whole-cache clone
-  @api cm:seedGlobalFromDefault(key, exclude)  @ 484-492
+  @api cm:seedGlobalFromDefault(key, exclude)  @ 489-497
       @contract  seeds global tier for key from its default catalogue when empty; excluded names omitted
   -- Writing
-  @api cm:set(level, key, value)  @ 497-507
+  @api cm:set(level, key, value)  @ 502-512
       @contract  deep-copies value into tier cache, persists, fires targeted configChanged
-  @api cm:remove(level, key)  @ 510-521
+  @api cm:remove(level, key)  @ 515-526
       @contract  removes key from named tier; no-op (no signal) if that tier's cache is unloaded
-  @api cm:assign(level, updates)  @ 524-538
+  @api cm:assign(level, updates)  @ 529-543
       @contract  validates all keys before any write (all-or-nothing); REMOVE deletes; fires signal
 
 # Signals emitted (via util.installHooks)
-  @emits configChanged   -- configChangedPayload.bulk   @ 406 setContext:415 clearTake:422 setTrack:435 set:506 remove:519 assign:537
+  @emits configChanged   -- configChangedPayload.bulk   @ 411 setContext:420 clearTake:427 setTrack:440 set:511 remove:524 assign:542
 
 # Uses (outbound edges)
   @use call    ps.assign  @ 346,347,350,354
-  @use call    ps.boundTake  @ 354 boundTake:426
-  @use call    ps.boundTrack  @ 349 boundTrack:429
-  @use call    ps.clearTake  @ clearTake:419
+  @use call    ps.boundTake  @ 354 boundTake:431
+  @use call    ps.boundTrack  @ 349 boundTrack:434
+  @use call    ps.clearTake  @ clearTake:424
   @use call    ps.get  @ 338,339,340,341
-  @use call    ps.pollUndo  @ pollUndo:439
-  @use call    ps.setTake  @ setContext:412
-  @use call    ps.setTrack  @ setTrack:432
-  @use call    ps.watch  @ 402
+  @use call    ps.pollUndo  @ pollUndo:444
+  @use call    ps.setTake  @ setContext:417
+  @use call    ps.setTrack  @ setTrack:437
+  @use call    ps.watch  @ 406
   @use call    util.add  @ 249,250,258,259
   @use call    util.assign  @ mergedTable:377
-  @use call    util.deepClone  @ 79 copy:298 getAt:480
+  @use call    util.deepClone  @ 79 copy:298 getAt:485
   @use call    util.installHooks  @ 398
   @use call    util.print  @ print:19
   @use require tuning  @ 13

@@ -1,4 +1,4 @@
-@module eventMeta  src=eventMeta.lua  loc=146  sha=d937bb7  mode=chunk  self=eventMeta
+@module eventMeta  src=eventMeta.lua  loc=162  sha=c2787f6  mode=chunk  self=eventMeta
 @deps ps
 
 # Invariants & contracts
@@ -15,6 +15,7 @@
   @state BUCKET = 256  @ 12   -- uuids per key bucket; a uuid birth/death rewrites one bucket, not the pool
   @state keysCache = {}  @ 20
   @state eventMeta = {}  @ 51
+  @state fire = util.installHooks(eventMeta)  @ 52
 
 # Private functions
   @fn kbSlot(guid)  @ 14
@@ -27,24 +28,29 @@
   @fn writeKb(guid, index)  @ 47-49
 
 # Public API (eventMeta:*)
-  @api eventMeta:load(guid)  @ 54-65
+  @api eventMeta:load(guid)  @ 70-81
       @contract  { [uuid:int] = fields }; empty table if the guid has no metadata
-  @api eventMeta:flush(guid, dirty, deleted)  @ 69-96
+  @api eventMeta:flush(guid, dirty, deleted)  @ 85-112
       @contract  batched incremental persist: applies dirty={[uuid]=fields} + deleted={[uuid]=true}
       @contract  per-modify hot path: entry writes plus touched-bucket writes, never the whole set
-  @api eventMeta:saveAll(guid, byUuid)  @ 99-124
+  @api eventMeta:saveAll(guid, byUuid)  @ 115-140
       @contract  replaces the pool's whole metadata with byUuid={[uuid]=fields}; sweeps uuids no longer present
-  @api eventMeta:copyPool(srcGuid, dstGuid)  @ 127-130
+  @api eventMeta:copyPool(srcGuid, dstGuid)  @ 143-146
       @contract  forks srcGuid's metadata onto dstGuid (an unpooled clone mints a fresh pool; this seeds it)
-  @api eventMeta:dropPool(guid)  @ 133-144
+  @api eventMeta:dropPool(guid)  @ 149-160
       @contract  forever-deletes a pool's metadata (deleteSlot's keeper removal)
 
+# Signals emitted (via util.installHooks)
+  @emits poolsRewound   -- { guids = set }; a REAPER undo rewound these pools' metadata slots   @ 66
+
 # Uses (outbound edges)
-  @use call    perf.start  @ flush:72,89
-  @use call    perf.stop  @ flush:88,95
-  @use call    ps.assign  @ writeBucket:38,41 writeKb:48 flush:75,83 saveAll:104,113,115,120 dropPool:138,140,142
-  @use call    ps.get  @ readIndex:24,26 load:60
-  @use call    util.fromBase36  @ load:61
-  @use call    util.toBase36  @ flush:74,82 saveAll:103
+  @use call    perf.start  @ flush:88,105
+  @use call    perf.stop  @ flush:104,111
+  @use call    ps.assign  @ writeBucket:38,41 writeKb:48 flush:91,99 saveAll:120,129,131,136 dropPool:154,156,158
+  @use call    ps.get  @ readIndex:24,26 load:76
+  @use call    util.fromBase36  @ load:77
+  @use call    util.installHooks  @ 52
+  @use call    util.toBase36  @ flush:90,98 saveAll:119
   @use require perf  @ 8
   @use require util  @ 7
+  @use sub     ps:projectRewound  @ 58

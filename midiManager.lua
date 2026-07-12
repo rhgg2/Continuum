@@ -732,6 +732,12 @@ function mm:reload()
   self:load(take)
 end
 
+-- A projext undo rewound this pool's metadata: the take-hash watcher can't see
+-- it (a metadata-only undo writes no MIDI), so reload off the rewound signal.
+eventMeta:subscribe('poolsRewound', function(payload)
+  if poolGuid and payload.guids[poolGuid] then mm:reload() end
+end)
+
 --contract: clears mm.take and event tables when take dies; distinct from load(nil) dormant seam
 function mm:unload()
   take, poolGuid = nil, nil

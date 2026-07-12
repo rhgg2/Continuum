@@ -8,18 +8,48 @@
 
 ## Status at a glance
 
-**Open**
-- [ ] the mirror: undoable project slots mirrored to scratch under a
-      two-level hash manifest; resync cost ∝ divergence
-- [ ] rewound signal → mm metadata reload + full-dirty rebuild
-- [ ] per-key undoable policy (§ Policy) + util.atomic audit of the
-      pure-project edit sites (§ Implications)
+**Landed 2026-07-12** (specs: tests/specs/ps_mirror_spec.lua)
+- [x] the mirror: pextStore writes undoable project slots to scratch
+      P_EXT (`ctm_ps.*`) under the two-level hash manifest
+- [x] rewound signal: `projectRewound` → eventMeta `poolsRewound` →
+      bound mm reloads (standard reload→rebuild chain)
+- [x] per-key policy: `ps:declareUndoable`; cm declares `config`, ds
+      declares its project keys minus `PROJECT_PLAIN` (guardedTrack),
+      eventMeta declares the `ctm.` prefix
+- [x] docs: pextStore.md § The mirror; eventMeta.md claim corrected
+- [x] util.atomic wraps on the pure-project user-facing edits:
+      swing/temper demote + tier-delete (§ Implications). Preferences
+      (arrangeBeatPerRow, arrangeAdvanceBy, trackerTrack, lastProjectPath)
+      and setSwingSlot/localizeSwing left unwrapped — they ride a take
+      write or are not undo-meaningful.
 
 **Pinned (later, not gating)**
 - [ ] migrate rm's private fxMeta/busMeta mirror onto this and
       delete rm:pollUndo/resyncMeta
-- [ ] docs: eventMeta.md claims "the engine's projext and undo
-      machinery carry it" — wrong today; rewrite when this lands
+- [ ] batch the manifest/root writes across an eventMeta flush if the
+      per-assign cost (~2 reads + 3 writes on scratch) shows in the
+      perf tree
+
+## Deviations from the design below (as landed)
+
+- **Guid changes: adopt + replay, no discrimination.** "Project switch
+  resets the expected root" was under-specified: rm's heartbeat re-mints
+  a deleted scratch within one frame, and treating a re-mint as a switch
+  would silently drop all mirror protection. As landed: on a new guid,
+  adopt the new scratch's mirror state, then replay from projext any
+  known slot it lacks — correct for a switch (absent slots drop out), a
+  re-mint (full set replayed), and a second engine's earlier partial
+  replay (topped up). The cached handle's guid is re-checked even while
+  ValidatePtr2-valid: REAPER reuses freed pointers.
+- **Two writers.** patternEditor's own engine stack writes the same
+  mirror, so manifest/root writes merge-read scratch before overlaying;
+  either engine's poll then protects both. PE's engine stays unpolled:
+  its checkout pool is dropped at close and re-persisted per edit.
+- **No mint on absence.** A REMOVE with no scratch minted writes
+  nothing — an empty pool's `saveAll` must not insert a track.
+- **Accepted window.** A `setTake` between undo and the next poll
+  swallows one tick; the root diff persists, so resync lands on the
+  next state-count change.
 
 ## The problem
 

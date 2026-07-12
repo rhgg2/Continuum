@@ -288,6 +288,16 @@ end
 
 function util.lcm(a, b) return a // util.gcd(a, b) * b end
 
+-- FNV-1a 32-bit with the length folded into the basis. Fingerprints the
+-- projext-undo mirror manifests; collisions accepted (docs/pextStore.md § Mirror).
+function util.hash(s)
+  local h = 2166136261 ~ #s
+  for i = 1, #s do
+    h = ((h ~ s:byte(i)) * 16777619) & 0xFFFFFFFF
+  end
+  return h
+end
+
 local BASE36 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
 function util.toBase36(n)

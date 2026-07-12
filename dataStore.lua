@@ -114,11 +114,25 @@ end)
 
 ----- Watcher
 
--- take/track per-key blobs ride pextStore's undo watcher as one group. project +
--- global live outside REAPER's undo (like configManager's), so they aren't watched.
+-- Project keys ride the projext-undo mirror as document data, except runtime
+-- bookkeeping (guardedTrack would desync from live flags) — design/projext-undo.md § Policy.
+local PROJECT_PLAIN = { guardedTrack = true }
+
+local function projectUndoable(name)
+  return registry[name] == 'project' and not PROJECT_PLAIN[name]
+end
+
+local undoable = {}
+for name in pairs(registry) do
+  if projectUndoable(name) then undoable[#undoable + 1] = slotFor('project', name) end
+end
+ps:declareUndoable{ slots = undoable }
+
+-- take/track per-key blobs ride pextStore's undo watcher as one group; undoable
+-- project keys join them (mirror resync rewinds them); global stays outside undo.
 local watched = {}
 for name, scope in pairs(registry) do
-  if scope == 'take' or scope == 'track' then
+  if scope == 'take' or scope == 'track' or projectUndoable(name) then
     watched[#watched + 1] = { scope = scope, slot = slotFor(scope, name), name = name }
   end
 end

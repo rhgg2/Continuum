@@ -451,21 +451,23 @@ local function promote(name)
 end
 
 -- Fork a global entry down into the project tier and edit that copy.
-local function demote(name)
+-- Wrapped: a project-tier write is undoable but creates no undo point of
+-- its own (projext); atomic mints one so it doesn't rewind as a passenger.
+local demote = util.atomic('Demote swing', function(name)
   if not name then return end
   local p = projectSwings()
   p[name] = util.deepClone(globalSwings()[name])
   cm:set('project', 'swings', p)
   switchTo(name, 'project')
-end
+end)
 
 -- Delete from the row's tier; fall back to a surviving shadow in the other
--- tier if any, else clear the selection.
-local function deleteSel(tier, name)
+-- tier if any, else clear the selection. Wrapped for the project tier (see demote).
+local deleteSel = util.atomic('Delete swing', function(tier, name)
   deleteFromTier(tier, name)
   if projectSwings()[name] or globalSwings()[name] then switchTo(name)
   else switchTo(nil) end
-end
+end)
 
 -- Resolved take and channel slots for the open-default and the
 -- library-row shortcut buttons. 'identity' at the take tier is treated

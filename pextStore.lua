@@ -5,7 +5,9 @@
 --invariant: a stale take/track ptr is dropped (handle→nil, its baselines→'') before any read on a poll tick
 --contract: get/assign (de)serialise by scope; no schema prune — each face owns its own key registry
 --reaper: take/track P_EXT via GetSetMedia{ItemTake,Track}Info_String; project via Get/SetProjExtState; global via io
+--invariant: undoable project slots mirror to scratch P_EXT (two-level hash manifest); rest don't
 local util = require 'util'
+local scratch = require 'scratch'
 
 local function print(...)
   return util.print(...)
@@ -65,6 +67,185 @@ local function readRaw(scope, slot, handle)
   error('pextStore: unknown scope ' .. tostring(scope))
 end
 
+----------- PROJEXT UNDO MIRROR
+
+-- REAPER undo rewinds the scratch chunk but not projext; undoable project slots
+-- write both, and pollUndo copies rewound mirrors back — docs/pextStore.md § Mirror.
+
+local MIRROR_BUCKETS = 64
+
+local undoableSlots, undoablePrefixes = {}, {}
+
+local function isUndoable(slot)
+  if undoableSlots[slot] then return true end
+  for _, prefix in ipairs(undoablePrefixes) do
+    if slot:sub(1, #prefix) == prefix then return true end
+  end
+  return false
+end
+
+-- Scratch P_EXT keys, namespaced to mark ownership (rm's fx-meta mirrors share
+-- the track): s.<slot> mirrored raw, m.<b> bucket manifest, root watermark.
+local function mirrorKey(name) return 'P_EXT:ctm_ps.' .. name end
+
+local function mirrorRead(strack, name)
+  local _, v = reaper.GetSetMediaTrackInfo_String(strack, mirrorKey(name), '', false)
+  return v or ''
+end
+
+local function mirrorWrite(strack, name, raw)
+  reaper.GetSetMediaTrackInfo_String(strack, mirrorKey(name), raw, true)
+end
+
+local function decodeMirror(raw)
+  if raw == '' then return {} end
+  local ok, v = pcall(util.unserialise, raw)
+  return (ok and type(v) == 'table') and v or {}
+end
+
+local function bucketOf(slot) return util.hash(slot) % MIRROR_BUCKETS end
+
+--shape: mirror = { guid, buckets = { [b] = { [slot] = hash } }, manifestHash = { [b] = hash }, rootRaw }
+-- The expected state: what scratch looks like after our own writes. nil until
+-- seeded; seeded once from root + manifests (~65 small reads), never the slots.
+local mirror = nil
+
+local function seedMirror()
+  local guid, strack = scratch.peek()
+  mirror = { guid = guid, strack = strack, buckets = {}, manifestHash = {}, rootRaw = '' }
+  if not strack then return end
+  mirror.rootRaw = mirrorRead(strack, 'root')
+  mirror.manifestHash = decodeMirror(mirror.rootRaw)
+  for b in pairs(mirror.manifestHash) do
+    mirror.buckets[b] = decodeMirror(mirrorRead(strack, 'm.' .. b))
+  end
+end
+
+-- Persist one bucket's manifest + the root, merge-reading the root first: a second
+-- engine (patternEditor) writes this mirror too, and adopting the merge covers it too.
+local function writeBucketAndRoot(strack, b, set)
+  local manifestRaw = next(set) and util.serialise(set) or ''
+  mirror.buckets[b] = next(set) and set or nil
+  mirrorWrite(strack, 'm.' .. b, manifestRaw)
+  local root = decodeMirror(mirrorRead(strack, 'root'))
+  root[b] = manifestRaw ~= '' and util.hash(manifestRaw) or nil
+  mirror.manifestHash = root
+  mirror.rootRaw = next(root) and util.serialise(root) or ''
+  mirrorWrite(strack, 'root', mirror.rootRaw)
+end
+
+local function knownSlots()
+  local known = {}
+  for _, set in pairs(mirror.buckets) do
+    for slot in pairs(set) do known[#known + 1] = slot end
+  end
+  return known
+end
+
+-- Replay slots the mirror lacks, from projext (current-project truth). Reached on
+-- any scratch change (re-mint, switch, other engine); a switch just replays nothing.
+local function remirrorMissing(strack, slots)
+  local touched = {}
+  for _, slot in ipairs(slots) do
+    local b = bucketOf(slot)
+    local set = mirror.buckets[b]
+    if not (set and set[slot]) then
+      local raw = readRaw('project', slot)
+      if raw ~= '' then
+        mirrorWrite(strack, 's.' .. slot, raw)
+        if not set then set = {}; mirror.buckets[b] = set end
+        set[slot] = util.hash(raw)
+        touched[b] = true
+      end
+    end
+  end
+  for b in pairs(touched) do writeBucketAndRoot(strack, b, mirror.buckets[b]) end
+end
+
+-- Resolve the live scratch handle; guid is re-checked even when ValidatePtr2 passes
+-- (REAPER reuses freed pointers) — see docs/pextStore.md § Guid changes.
+local function ensureScratch()
+  if mirror.strack and reaper.ValidatePtr2
+     and reaper.ValidatePtr2(0, mirror.strack, 'MediaTrack*')
+     and reaper.GetTrackGUID(mirror.strack) == mirror.guid then
+    return mirror.strack
+  end
+  mirror.strack = nil
+  local guid, strack = scratch.peek()
+  if not strack then return nil end
+  if guid ~= mirror.guid then
+    local known = knownSlots()
+    seedMirror()
+    remirrorMissing(strack, known)
+  end
+  mirror.strack = strack
+  return strack
+end
+
+-- The mirror half of an undoable project write: slot raw + its bucket manifest
+-- + root. The bucket is merge-read for the same second-writer reason as the root.
+local function mirrorAssign(slot, raw)
+  if not mirror then seedMirror() end
+  local strack = ensureScratch()
+  if not strack then
+    -- A removal with no scratch mirrors nothing: don't mint a track to record
+    -- it. Stale bookkeeping self-heals at the next real write's remirror.
+    if raw == '' then return end
+    local known = knownSlots()
+    strack = scratch.track()
+    seedMirror()
+    remirrorMissing(strack, known)
+  end
+  mirrorWrite(strack, 's.' .. slot, raw)
+  local b = bucketOf(slot)
+  local set = decodeMirror(mirrorRead(strack, 'm.' .. b))
+  if raw == '' then set[slot] = nil else set[slot] = util.hash(raw) end
+  writeBucketAndRoot(strack, b, set)
+end
+
+-- Undo rewound the scratch chunk: walk root → buckets → slots, copying back only
+-- genuine diffs from projext. Adopts state as expected before the caller fires.
+local function resyncMirror()
+  if not mirror then seedMirror(); return end
+  local prevGuid = mirror.guid
+  local strack = ensureScratch()
+  if not strack then return end                    -- deleted: the next write re-mints
+  if mirror.guid ~= prevGuid then return end       -- re-mint/switch absorbed; not a rewind
+  local rootRaw = mirrorRead(strack, 'root')
+  if rootRaw == mirror.rootRaw then return end
+  local actualRoot = decodeMirror(rootRaw)
+  local buckets = {}
+  for b in pairs(actualRoot) do buckets[b] = true end
+  for b in pairs(mirror.manifestHash) do buckets[b] = true end
+  local candidates = {}
+  for b in pairs(buckets) do
+    if actualRoot[b] ~= mirror.manifestHash[b] then
+      local actual   = decodeMirror(mirrorRead(strack, 'm.' .. b))
+      local expected = mirror.buckets[b] or {}
+      local slots = {}
+      for slot in pairs(actual)   do slots[slot] = true end
+      for slot in pairs(expected) do slots[slot] = true end
+      for slot in pairs(slots) do
+        if actual[slot] ~= expected[slot] then candidates[#candidates + 1] = slot end
+      end
+      mirror.buckets[b] = next(actual) and actual or nil
+    end
+  end
+  mirror.manifestHash = actualRoot
+  mirror.rootRaw = rootRaw
+  local diverged = {}
+  for _, slot in ipairs(candidates) do
+    -- Load-bearing filter, not an optimisation: adoption/merge can leave
+    -- expected buckets stale, inflating candidates; only a genuine diff copies.
+    local raw = mirrorRead(strack, 's.' .. slot)
+    if raw ~= readRaw('project', slot) then
+      reaper.SetProjExtState(0, PROJEXT_SECTION, slot, raw)   -- direct: must not re-mirror
+      diverged[#diverged + 1] = slot
+    end
+  end
+  if #diverged > 0 then return diverged end
+end
+
 local function writeRaw(scope, slot, raw, handle)
   if scope == 'take' then
     reaper.GetSetMediaItemTakeInfo_String(handle or take, 'P_EXT:' .. slot, raw, true)
@@ -72,6 +253,7 @@ local function writeRaw(scope, slot, raw, handle)
     reaper.GetSetMediaTrackInfo_String(handle or track, 'P_EXT:' .. slot, raw, true)
   elseif scope == 'project' then
     reaper.SetProjExtState(0, PROJEXT_SECTION, slot, raw)
+    if isUndoable(slot) then mirrorAssign(slot, raw) end
   elseif scope == 'global' then
     if globalLocked[slot] then
       print('Error! Refusing to overwrite unreadable ' .. globalPath(slot) .. '; fix or delete it.')
@@ -206,6 +388,14 @@ end
 
 ----- Watcher
 
+--contract: declared project slots mirror to scratch and rewind with undo; others stay projext-only
+function ps:declareUndoable(spec)
+  for _, slot in ipairs(spec.slots or {}) do undoableSlots[slot] = true end
+  for _, prefix in ipairs(spec.prefixes or {}) do
+    undoablePrefixes[#undoablePrefixes + 1] = prefix
+  end
+end
+
 --contract: blobs = { { scope, slot }, ... }; onDiverge(divergedBlobs) fires once per poll tick that diverges
 function ps:watch(blobs, onDiverge)
   watchGroups[#watchGroups + 1] = { blobs = blobs, onDiverge = onDiverge }
@@ -215,13 +405,17 @@ function ps:watch(blobs, onDiverge)
 end
 
 --invariant: polls project state count per frame; on tick re-reads watched blobs, fires diverged groups once each
+--invariant: mirror resync runs before the watch groups, so a rewound blob diverges same tick
 --contract: no-op without GetProjectStateChangeCount (test harness); one int compare per frame otherwise
+--emits: projectRewound -- [slot, ...]; undo rewound these mirrored slots (already copied back)
 function ps:pollUndo()
   if not reaper.GetProjectStateChangeCount then return end
   local count = reaper.GetProjectStateChangeCount(0)
   if count == lastStateCount then return end
   lastStateCount = count
   dropStale()
+  local rewound = resyncMirror()
+  if rewound then fire('projectRewound', rewound) end
   for _, group in ipairs(watchGroups) do
     local diverged = {}
     for _, blob in ipairs(group.blobs) do
