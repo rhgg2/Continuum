@@ -647,7 +647,9 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     end
     byToken[tok] = nil
     if prev then
-      if prev.uuid then byUuid[prev.uuid] = nil end
+      -- pairs(touched) order is hash-random: the new token's insert may already
+      -- own this uuid (reseat re-key), so evict only our own mapping.
+      if prev.uuid and byUuid[prev.uuid] == prev then byUuid[prev.uuid] = nil end
       chansRemove(prev)
     end
     if e then chansInsert(makeEntry(e, tok)) end

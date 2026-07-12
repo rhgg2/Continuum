@@ -130,6 +130,45 @@ return {
     end,
   },
 
+  {
+    name = 'a member edit still propagates after a take swing change',
+    run = function()
+      -- Incident 2: reswing's token re-key could drop a byUuid entry, so gm's
+      -- rebuild re-anchor kept a dead table -- see docs/trackerManager.md § Incremental index reconciliation.
+      local h = harness.mk{
+        config = C55.config,   -- c55 in the library, but no take swing yet
+        groups = true,
+        seed   = { length = 7680, resolution = 240, notes = {
+          { ppq = 180, endppq = 360, chan = 1, lane = 1,
+            pitch = 60, vel = 100, uuid = 1 },
+        } },
+      }
+      local gm = h.gm
+
+      local rect = { ppq = 0, dur = 8 * LPR, chanLo = 1,
+                     streams = { [0] = { ['note:1'] = true } } }
+      local src = h.vm:eventsInRect(rect)
+      local gid = gm:markGroup(src, rect)
+      gm:newInstance(gid, { ppq = 960, chan = 1 })
+      h.tm:flush()
+
+      h.vm:setSwingSlot('c55')
+      h.tm:rebuild(false)
+
+      t.truthy(gm:assignEvent(1, { pitch = 72 }), 'member edit accepted')
+      h.tm:flush()
+
+      local byRaw = {}
+      for _, n in ipairs(h.fm:dump().notes) do byRaw[n.ppq] = n end
+      local origin  = byRaw[h.tm:fromLogical(1, 180)]
+      local sibling = byRaw[h.tm:fromLogical(1, 1140)]
+      t.truthy(origin and sibling, 'both concretes on the swung grid')
+      t.eq(origin.pitch, 72, 'origin re-driven from the group')
+      t.eq(sibling.pitch, 72,
+        'edit propagated to the sibling (bug: its stale table was mutated instead)')
+    end,
+  },
+
   ----- Unit pins on tm's public API with the exact update shapes
   ----- groupManager.updToInstance emits. Production surface, not a fake.
 

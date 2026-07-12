@@ -131,4 +131,36 @@ return {
       t.eq(h.tm:fromLogical(1, 120), 139, 'swing took effect after rebuild')
     end,
   },
+
+  {
+    name = 'a swing change keeps every uuid resolvable (reseat re-keys tokens)',
+    run = function(harness)
+      -- Reswing re-keys every note's token; hash order between old-token
+      -- eviction and new-token insert is a per-note coin flip, so 12 notes pin it (see docs/trackerManager.md § Incremental index reconciliation).
+      local notes = {}
+      for i = 1, 12 do
+        local on = (i - 1) * 240 + 60
+        notes[i] = { ppq = on, endppq = on + 120, chan = 1, lane = 1,
+                     pitch = 48 + i, vel = 100, uuid = i }
+      end
+      local h = harness.mk{
+        config = { project = { swings = { ['c58'] = classic58 } } },
+        seed   = { length = 7680, resolution = 240, notes = notes },
+      }
+      h.vm:setSwingSlot('c58')
+      h.tm:rebuild(false)
+
+      -- Prove the reseat actually ran before pinning the index.
+      t.truthy(h.tm:fromLogical(1, 60) ~= 60, 'swing is live')
+      local raws = {}
+      for _, n in ipairs(h.fm:dump().notes) do raws[n.ppq] = true end
+      t.truthy(raws[h.tm:fromLogical(1, 60)], 'first note reseated to the swung grid')
+
+      for i = 1, 12 do
+        local live = h.tm:byUuid(i)
+        t.truthy(live, 'uuid ' .. i .. ' still resolvable after the reswing')
+        if live then t.eq(live.pitch, 48 + i, 'uuid ' .. i .. ' resolves to its own note') end
+      end
+    end,
+  },
 }

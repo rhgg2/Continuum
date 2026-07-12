@@ -76,6 +76,12 @@ the whole `mm:modify` batch commits, not op-by-op: reconciling mid-batch
 would be vulnerable to reseat sequences whose intermediate token re-keys
 collide, where an op-by-op replay could net a live token out of the index.
 
+`idxReconcile` evicts a token's old `byUuid` entry only if it still owns it
+(`byUuid[uuid] == prev`). A reswing re-keys every note's token, and the batch's
+`pairs(touched)` walk visits tokens in hash order, so a uuid's new-token insert
+can land before its old-token eviction; evicting unconditionally would then
+delete the just-inserted live entry instead of the stale one.
+
 Because every mm write maintains the index, it is authoritative and survives
 across rebuilds. A rebuild only full-`reload()`s when mm re-read its entire
 event set from REAPER; ordinary edit rebuilds keep the live index and just
