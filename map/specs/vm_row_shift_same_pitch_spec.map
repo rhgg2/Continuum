@@ -1,0 +1,27 @@
+@spec vm_row_shift_same_pitch_spec  src=tests/specs/vm_row_shift_same_pitch_spec.lua  loc=72  sha=4a6bfb0  cases=2
+@exercises trackerView (h.vm), editCursor (h.ec), commandManager (h.cmgr), midiManager (h.fm)
+@surface   vm:setGridSize, ec:setPos, cmgr:invoke, fm:dump
+@harness   mk{seed.notes}
+
+# Intent
+  Row-shift same-pitch bug: writePlans iterates forward, so when N
+  same-pitch back-to-back notes get shifted, each write's
+  clearSameKeyRange kills the next-still-at-old-ppq peer.
+  
+  Repro:
+    * AAA at rows 0,1,2; insertRow at row 0 → expect rows 1,2,3.
+      Without the fix, row-2 note dies and we end up with .A.A.
+    * AB at rows 0,1; deleteRow at row 0 → expect B at row 0.
+
+# Helpers
+  @fn byPpq(notes)  @ 12-17
+
+# Cases
+  @case 'insertRow at row 0 on three back-to-back same-pitch notes keeps all three'  [harness]  @ 22-45
+  @case 'deleteRow at row 0 on AB shifts B cleanly to row 0'  [harness]  @ 49-69
+
+# Uses (outbound edges)
+  @use call trackerView.setGridSize  @ 35,59
+  @use call editCursor.setPos  @ 37,61
+  @use call commandManager.invoke  @ 38,62
+  @use call midiManager.dump  @ 40,64

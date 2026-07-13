@@ -1,0 +1,37 @@
+@spec wm_apply_midi_merge_spec  src=tests/specs/wm_apply_midi_merge_spec.lua  loc=180  sha=e2be081  cases=3
+@exercises wiringManager (wm)
+@surface   wm:load, wm:instantiateFxOnScratch, wm:applyOps, wm:diff, wm:targetState, wm:snapshot, wm:graph, wm:mutate
+@harness   mk, reaper:setFxParamNames, reaper.TrackFX_GetCount, reaper.TrackFX_GetFXName, reaper.TrackFX_GetFXGUID, r._state.projectTracks, r._state.trackGuids, r._state.calls
+
+# Intent
+  (none)
+
+# Helpers
+  @fn mkWm(harness)  @ 11-18
+  @fn seedSource(h, guid)  @ 20-25
+  @fn source(guid)  @ 27-30
+  @fn mintFx(wm, ident, opts)  @ 34-40
+      -- Mint an fx on scratch (as wm:addFxNode does in production) so the node enters the
+      -- graph carrying a live guid; reconcile then MOVES it onto its track.
+  @fn midiEdge(from, to)  @ 45-47
+  @fn apply(wm)  @ 49-51
+  @fn slotOf(h, track, ident)  @ 54-58
+      -- First slot on `track` whose fx ident matches, or nil.
+  @fn fxAt(h, track, slot)  @ 60-63
+  @fn paramSetsOn(h, track, fxIdx)  @ 65-73
+  @fn mergeStamp(wm)  @ 75-77
+
+# Cases
+  @case 'merge apply: two same-track producers into one consumer mint a Merge CU'  [harness]  @ 81-118
+  @case 'merge apply: idempotent — second reconcile drops no setFXChain op'  [harness]  @ 121-142
+  @case 'merge apply: dropping a feeder retracts the Merge CU on re-apply'  [harness]  @ 145-178
+
+# Uses (outbound edges)
+  @use call wiringManager.load  @ 16
+  @use call wiringManager.instantiateFxOnScratch  @ 36
+  @use call wiringManager.applyOps  @ 50
+  @use call wiringManager.diff  @ 50,137
+  @use call wiringManager.targetState  @ 50,137
+  @use call wiringManager.snapshot  @ 50,137
+  @use call wiringManager.graph  @ 76,117
+  @use call wiringManager.mutate  @ 85,126,149,163

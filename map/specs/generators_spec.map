@@ -1,0 +1,34 @@
+@spec generators_spec  src=tests/specs/generators_spec.lua  loc=302  sha=a77fea4  cases=19
+
+# Intent
+  generators.lua: slide glide-in envelope.
+
+# Helpers
+  @fn expand(kind, hostRec, params, ctx)  @ 8-10
+      -- Kinds run alone here, so the chain state equals the original: stream == host (the chain head).
+  @fn slideCtx(nextNote, pbRangeCents)  @ 13-16
+      -- A slide host (pitch 60) and a ctx supplying the next same-lane note + pb ceiling.
+  @fn slideHost(detune)  @ 17-19
+  @fn triangle()  @ 23-29
+      -- A loop-closed triangle in the normalized domain (-1 .. +1 .. -1), one QN long.
+
+# Cases
+  @case 'slide glides in: flat hold, slur to the interval, re-centre at the window end'  [pure]  @ 36-47
+  @case 'slide interval includes detune (the microtonal offset rides in detune, not pitch)'  [pure]  @ 51-55
+  @case 'slide clamps the target to ctx.pbRangeCents (a pb can only bend so far)'  [pure]  @ 59-63
+  @case 'slide.target='fixed' is a fixed-cents bend (cents demand, no next-note lookup)'  [pure]  @ 67-72
+  @case 'slide.target='next' with no following note yields no delta (carrier untouched)'  [pure]  @ 76-80
+  @case 'slide to a unison next note yields no delta (zero interval)'  [pure]  @ 84-88
+  @case 'trill tiles the window from its start, alternating host pitch with the stepped note'  [pure]  @ 94-110
+  @case 'trill carries host detune verbatim on the return (even) tiles'  [pure]  @ 114-121
+  @case 'parksNotes is true for any note-dest kind, false for a continuous kind / husk'  [pure]  @ 127-132
+  @case 'parkWindows emits an evType-tagged window per continuous/replace target (note discrete, cc, pb augment)'  [pure]  @ 136-151
+  @case 'autopan tiles the window with sine extrema in cc steps, anchored 0 at both ends'  [pure]  @ 157-169
+  @case 'velPattern cycles its percent pattern per distinct onset; a chord shares one step'  [pure]  @ 175-190
+  @case 'velPattern walks onset order regardless of input order, clamping vel to 1..127'  [pure]  @ 194-204
+  @case 'ostinato tracks the sounding pitch across the region, not just the first note'  [pure]  @ 210-222
+  @case 'ostinato rests when no region note sounds at the gate onset'  [pure]  @ 226-235
+  @case 'ostinato emits one gated note per sounding voice (a chord -> multiple lanes)'  [pure]  @ 239-250
+  @case 'lfo tiles the curve at 1/period QN, mapping each val by centre + scale, edges seeded'  [pure]  @ 256-273
+  @case 'lfo clamps centre +/- scale to 0..127'  [pure]  @ 277-286
+  @case 'lfo with an empty or lengthless curve is inert (no delta)'  [pure]  @ 290-299

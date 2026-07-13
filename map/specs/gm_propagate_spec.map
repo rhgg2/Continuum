@@ -1,0 +1,39 @@
+@spec gm_propagate_spec  src=tests/specs/gm_propagate_spec.lua  loc=223  sha=f8aa484  cases=8
+@exercises groupManager (gm), trackerManager (h.tm)
+@surface   gm:markGroup, gm:newInstance, tm:flush, gm:assignEvent, gm:addEvent, gm:setLocalMode
+
+# Intent
+  Stateful mirror manager (gm). Wraps the pure mirror core with anchor
+  maths and rides tm's preflush/postflush seam: a staged edit landing in a
+  group's region mutates the shared group, reprojects every sibling
+  instance, and stages the diff back through tm so it commits in the same
+  mm:modify.
+  
+  gm is a constructor chunk (util.instantiate('groupManager', {tm,cm})).
+  The fake tm captures the seam handlers and records staged peer ops;
+  flush(trio) fires preflush, fakes mm uuid-stamping on staged adds, then
+  fires postflush.
+
+# Helpers
+  @fn mk()  @ 15-19
+  @fn note(ppq, chan, lane, extra)  @ 22-28
+  @fn rect(ppq, chan)  @ 31-34
+      -- One note:1 stream on the anchor channel, a bar wide.
+
+# Cases
+  @case 'newInstance stages a concrete copy of every group event at the new anchor'  [pure]  @ 38-52
+  @case 'newInstance rejects a projection whose channel falls out of range'  [pure]  @ 56-63
+  @case 'a staged edit inside one instance propagates to the sibling via the group'  [pure]  @ 67-94
+  @case 'a moved group note carries its tail to the sibling (endppq shifts with ppq)'  [pure]  @ 98-125
+  @case 'a create inside the region on a selected stream propagates to siblings'  [pure]  @ 129-147
+  @case 'a create on a stream the region does not select is ignored'  [pure]  @ 151-161
+  @case 'localMode keeps the edit local: no propagation, shared group untouched'  [pure]  @ 165-194
+  @case 'editing a localMode-added event after leaving localMode does not crash'  [pure]  @ 198-221
+
+# Uses (outbound edges)
+  @use call groupManager.markGroup  @ 42,59,71,102,133,154,169,202
+  @use call groupManager.newInstance  @ 43,60,72,103,134,155,170,191,203,219
+  @use call trackerManager.flush  @ 73,77,104,110,135,138,156,158,171,175,204,208,217
+  @use call groupManager.assignEvent  @ 76,109,174,216
+  @use call groupManager.addEvent  @ 138,158,208
+  @use call groupManager.setLocalMode  @ 173,190,206,213

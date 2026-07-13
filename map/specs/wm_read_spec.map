@@ -1,0 +1,55 @@
+@spec wm_read_spec  src=tests/specs/wm_read_spec.lua  loc=516  sha=e2be081  cases=20
+@exercises wiringManager (wm)
+@surface   wm:load, wm:instantiateFxOnScratch, wm.readGraph, wm:mutate, wm:targetState, wm:enableLive, wm:moveNodes, wm:read, wm:setSourceTagPos, wm:graph, wm:trackNames
+@harness   mk, reaper.GetSetMediaTrackInfo_String, reaper.GetMediaTrackInfo_Value, r._state.projectTracks, r._state.trackGuids
+
+# Intent
+  read : wiringSnapshot -> userGraph. Audio routing + CU collapse + gain + full midi-bus
+  walk (fan-in, merge, brackets). Drives wm.readGraph, via wm:targetState or a built snapshot.
+
+# Helpers
+  @fn mkWm(harness)  @ 8-14
+  @fn seedSource(h, guid)  @ 16-21
+  @fn source(guid)  @ 23-26
+  @fn fx(ident, opts)  @ 28-33
+  @fn mintFx(wm, ident, opts)  @ 37-42
+      -- Mint an fx on scratch (as wm:addFxNode does) so a reconcile-path node carries a live guid;
+      -- the readGraph(snap) tests above build nodes directly with fx() and never reconcile.
+  @fn edgeSet(g)  @ 45-55
+      -- Compare graph shape without depending on edge order or node table identity.
+  @fn nodeKinds(g)  @ 56-60
+
+# Cases
+  @case 'read: a source fx reading bus 0 wires from the source even with no take'  [harness]  @ 66-81
+  @case 'read: generator chain s -(midi)-> synth -(audio)-> f2 -> master'  [harness]  @ 86-112
+  @case 'read: two sources -> fx -> master (parent-send merge)'  [harness]  @ 117-138
+  @case 'read: audio source -> fx recovers no phantom bus-0 midi'  [harness]  @ 143-158
+  @case 'read: gained s -> f recovers ops.gain, CU collapsed'  [harness]  @ 163-180
+  @case 'read: sum-tree master fan-in collapses, leaf gain recovered'  [harness]  @ 185-205
+  @case 'read: two midi sends into one fx recover cross-track fan-in'  [harness]  @ 210-229
+  @case 'read: a take-less source midi-sending to a bus-0 reader still wires the edge'  [harness]  @ 234-247
+  @case 'read: same-track merge CU unions two midi producer buses'  [harness]  @ 252-279
+  @case 'read: busRoute brackets are transparent, recover the wrapped JSFX edges'  [harness]  @ 284-313
+  @case 'read: blocking brackets silence a disconnected JSFX, parked stream crosses'  [harness]  @ 318-336
+  @case 'read: pure-audio JSFX leaves the bus-0 producer untouched'  [harness]  @ 341-358
+  @case 'read: recv-only JSFX consumes bus 0 — nothing downstream hears it'  [harness]  @ 361-380
+  @case 'read: a bus-aware fx quarantines its whole component'  [harness]  @ 385-400
+  @case 'read: a send cycle is surfaced and quarantined as feedback'  [harness]  @ 405-424
+  @case 'read: node positions round-trip through the decoration store'  [harness]  @ 429-448
+  @case 'read: source tag offsets round-trip through the decoration store'  [harness]  @ 453-465
+  @case 'setSourceTagPos: removing a source edge prunes its orphaned tag key'  [harness]  @ 470-485
+  @case 'read: fx node carries a short display name from the plugin name'  [harness]  @ 490-499
+  @case 'trackNames: an unnamed track falls back to "Track n"'  [harness]  @ 504-514
+
+# Uses (outbound edges)
+  @use call wiringManager.load  @ 12
+  @use call wiringManager.instantiateFxOnScratch  @ 39
+  @use call wiringManager.readGraph  @ 76,100,130,153,173,198,222,243,270,305,333,355,377,395,419,497
+  @use call wiringManager.mutate  @ 90,122,147,167,189,434,458,474,481
+  @use call wiringManager.targetState  @ 99,130,153,173,198
+  @use call wiringManager.enableLive  @ 432,456
+  @use call wiringManager.moveNodes  @ 440
+  @use call wiringManager.read  @ 442,463,483
+  @use call wiringManager.setSourceTagPos  @ 462,478
+  @use call wiringManager.graph  @ 479,482
+  @use call wiringManager.trackNames  @ 511

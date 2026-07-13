@@ -1,0 +1,32 @@
+@spec curveEditor_spec  src=tests/specs/curveEditor_spec.lua  loc=197  sha=9446a73  cases=5
+
+# Intent
+  curveEditor regression net, written BEFORE the painter migration so it
+  pins behaviour the migration must preserve: the forward map (anchors and
+  the axis draw at their mapped screen positions) and — the real prize — the
+  inverse map (a click resolves to the right anchor, a drag maps the cursor
+  back to t/val, insert/delete/cycle fire with the right indices).
+  
+  The fixture is deliberately contract-agnostic: it feeds NAMES as colours
+  and an identity chrome, and the fake's GetWindowDrawList returns the same
+  'DL' passed as drawList. So whether curveEditor draws straight to a.drawList
+  with pre-resolved colours (today) or through a painter that grabs the window
+  drawlist and resolves names (after), the recorded calls are identical and
+  this spec stays green across the change.
+
+# Helpers
+  @fn record(name)  @ 29-31
+  @fn newEd()  @ 68-76
+  @fn events()  @ 79-81
+      -- Three anchors: (t,val) -> screen  (0,20)->(100,130) (5,80)->(200,70) (10,40)->(300,110)
+  @fn frameArgs(extra)  @ 83-100
+  @fn setMouse(x, y, b)  @ 102-106
+  @fn frame(ed, extra)  @ 108
+  @fn recsOf(name)  @ 110-114
+
+# Cases
+  @case 'forward map: axis, envelope, clip and anchors draw at mapped positions; idle frame consumes nothing'  [pure]  @ 118-145
+  @case 'inverse map: click hits the nearest anchor, then a held drag maps the cursor back to t/val'  [pure]  @ 148-161
+  @case 'double-click on an anchor deletes it'  [pure]  @ 164-171
+  @case 'click on a snapped, unoccupied grid line inserts at the evaluated curve value'  [pure]  @ 174-183
+  @case 'double-click on a segment (between snap lines) cycles its shape'  [pure]  @ 186-195

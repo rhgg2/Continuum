@@ -1,0 +1,18 @@
+@spec scratch_spec  src=tests/specs/scratch_spec.lua  loc=40  sha=ca82072  cases=3
+@exercises harness (harness), scratch (scratch)
+@surface   harness.mk, scratch.peek, scratch.id, scratch.track
+@harness   mk, reaper.CountTracks, reaper.GetProjExtState, reaper.GetTrackGUID, reaper.GetMediaTrackInfo_Value
+
+# Intent
+  scratch.lua: stateless gateway to the project's one hidden, muted scratch track.
+
+# Cases
+  @case 'peek never mints: nil before first use, no track created'  [pure]  @ 8-14
+  @case 'id mints once, persists, and is idempotent'  [pure]  @ 17-27
+  @case 'track is the handle for the guid; minted hidden and muted'  [pure]  @ 30-38
+
+# Uses (outbound edges)
+  @use call harness.mk  @ 10,19,32
+  @use call scratch.peek  @ 12
+  @use call scratch.id  @ 21,22,34
+  @use call scratch.track  @ 33

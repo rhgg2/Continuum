@@ -1,0 +1,31 @@
+@spec wm_undo_spec  src=tests/specs/wm_undo_spec.lua  loc=96  sha=e2be081  cases=3
+@exercises wiringManager (wm)
+@surface   wm:load, wm:instantiateFxOnScratch, wm:enableLive, wm:mutate, wm:snapshot, wm:subscribe, wm:syncExternal, wm:graph
+@harness   mk, r._state.projectTracks, r._state.trackGuids, r._state.projStateCount
+
+# Intent
+  (none)
+
+# Helpers
+  @fn mkWm(harness)  @ 4-10
+  @fn seedSource(h, guid)  @ 12-17
+  @fn source(guid)  @ 19-22
+  @fn mintFx(wm, ident, opts)  @ 26-31
+      -- Mint an fx on scratch (as wm:addFxNode does) so the node enters the graph with a live
+      -- guid; reconcile then MOVES it onto its track. Called inside the mutator.
+  @fn audioEdge(from, to)  @ 33-35
+
+# Cases
+  @case 'addressing: each newTrack carries its trackKey on its own meta (recovered by snapshot)'  [harness]  @ 39-59
+  @case 'syncExternal: project state moved under us → reread + fire load'  [harness]  @ 62-78
+  @case 'syncExternal: no-op when the state count has not moved (our writes are baselined)'  [harness]  @ 81-94
+
+# Uses (outbound edges)
+  @use call wiringManager.load  @ 8
+  @use call wiringManager.instantiateFxOnScratch  @ 28
+  @use call wiringManager.enableLive  @ 44,66,85
+  @use call wiringManager.mutate  @ 45,67,86
+  @use call wiringManager.snapshot  @ 55
+  @use call wiringManager.subscribe  @ 70,88
+  @use call wiringManager.syncExternal  @ 75,91,92
+  @use call wiringManager.graph  @ 77

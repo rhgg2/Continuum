@@ -1,0 +1,21 @@
+@spec wv_activate_spec  src=tests/specs/wv_activate_spec.lua  loc=49  sha=e2be081  cases=3
+@exercises wiringView (wv)
+@surface   wv:nodeViews, wv:addFx, wv:graph
+@harness   mk, reaper:setFxIO
+
+# Intent
+  (none)
+
+# Helpers
+  @fn mkWv(harness)  @ 4-10
+  @fn viewById(wv, id)  @ 12-16
+
+# Cases
+  @case 'nodeView.activate = "fx" for a materialised plain fx node'  [harness]  @ 20-26
+  @case 'nodeView.activate = "sampler" when fxDisplay names the Continuum Sampler'  [harness]  @ 29-35
+  @case 'master and source nodes are inert (activate = nil)'  [harness]  @ 38-47
+
+# Uses (outbound edges)
+  @use call wiringView.nodeViews  @ 13
+  @use call wiringView.addFx  @ 23,32,42
+  @use call wiringView.graph  @ 44

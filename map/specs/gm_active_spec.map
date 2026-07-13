@@ -1,0 +1,26 @@
+@spec gm_active_spec  src=tests/specs/gm_active_spec.lua  loc=77  sha=f8aa484  cases=4
+@exercises groupManager (h.gm)
+@surface   gm:mark, gm:activeGroup, gm:stamp, gm:clearActive
+
+# Intent
+  gm active-group selector (dupeClip idiom). mark = case 1 (group, no
+  copy). stamp = case 2 (no active: seed group + first copy, group goes
+  active) or case 3 (active live: one more copy, no new group).
+  clearActive drops the pointer so the next stamp seeds afresh.
+
+# Helpers
+  @fn mk()  @ 9-12
+  @fn note(ppq)  @ 14-15
+  @fn rect()  @ 17-18
+
+# Cases
+  @case 'mark seeds a group, copies nothing, and makes it active'  [pure]  @ 22-29
+  @case 'stamp with no active seeds group + first copy, returns (gid, iid), goes active'  [pure]  @ 33-41
+  @case 'stamp with active live drops one more copy, no new group (single return)'  [pure]  @ 45-56
+  @case 'clearActive drops the pointer; the next stamp seeds a fresh group'  [pure]  @ 60-75
+
+# Uses (outbound edges)
+  @use call groupManager.mark  @ 25
+  @use call groupManager.activeGroup  @ 27,38,51,65,74
+  @use call groupManager.stamp  @ 36,48,49,63,71
+  @use call groupManager.clearActive  @ 64

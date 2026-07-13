@@ -1,0 +1,39 @@
+@spec dataStore_spec  src=tests/specs/dataStore_spec.lua  loc=163  sha=6712376  cases=12
+@exercises pextStore (ps), dataStore (ds)
+@surface   ps:setTake, ds:assign, ds:get, ds:delete, ds:assignAt, ds:getAt, ds:subscribe, ps:pollUndo
+@harness   fakeReaper.new
+
+# Intent
+  Pin-tests for dataStore -- the per-key document face over pextStore, exercised
+  in isolation (no configManager). Covers registry-scoped round-trips, the
+  continuum-data.lua global file, foreign-handle access, the dataChanged signal,
+  undo divergence, and context-rebind cache drops.
+
+# Helpers
+  @fn readFile(path)  @ 18-21
+  @fn freshDs()  @ 23-34
+  @fn bump(r)  @ 36
+
+# Cases
+  @case 'assign / get round-trips each scope through its backend'  [pure]  @ 40-53
+  @case 'an unset key reads as nil'  [pure]  @ 56-60
+  @case 'an unknown name raises on every entry point'  [pure]  @ 63-68
+  @case 'delete clears a per-key blob back to nil, not {}'  [pure]  @ 71-77
+  @case 'util.REMOVE on assign deletes, matching delete'  [pure]  @ 80-86
+  @case 'reads deep-clone out; callers cannot mutate ds state'  [pure]  @ 89-96
+  @case 'the global scope persists as a load()-able continuum-data.lua'  [pure]  @ 99-106
+  @case 'per-key take blobs are isolated -- one write does not share a slot'  [pure]  @ 109-116
+  @case 'getAt / assignAt address a foreign handle'  [pure]  @ 119-126
+  @case 'assign fires dataChanged { scope, name }'  [pure]  @ 129-136
+  @case 'an undo tick that rewinds a blob fires dataChanged for that key'  [pure]  @ 139-150
+  @case 'contextChanged drops take/track caches so the next read reloads'  [pure]  @ 153-161
+
+# Uses (outbound edges)
+  @use call pextStore.setTake  @ 32,159
+  @use call dataStore.assign  @ 43,44,45,46,47,67,74,83,84,92,102,112,113,134,142,156
+  @use call dataStore.get  @ 48,49,50,51,52,59,66,76,85,93,95,105,125,149,160
+  @use call dataStore.delete  @ 75
+  @use call dataStore.assignAt  @ 122
+  @use call dataStore.getAt  @ 123
+  @use call dataStore.subscribe  @ 133,144
+  @use call pextStore.pollUndo  @ 147

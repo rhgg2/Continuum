@@ -1,0 +1,29 @@
+@spec dag_folder_capacity_spec  src=tests/specs/dag_folder_capacity_spec.lua  loc=111  sha=22b4f02  cases=3
+@exercises DAG (DAG)
+@surface   DAG.allocate, DAG.targetTracks, DAG.compile
+
+# Intent
+  (none)
+
+# Helpers
+  @fn source(guid, opts)  @ 14-19
+  @fn fx(ident)  @ 21-24
+  @fn master()  @ 26-29
+  @fn nChildFamily(n)  @ 34-51
+      -- n single-fx children of one parent, each threading a distinct crossing gen_i -> cons_i through
+      -- the pipe. The cons_i form one linear fx chain ON the parent (so every crossing lands on a family
+      -- member); all n stay live into the parent block, so n past 126 overflows the one family domain.
+  @fn deepChildFamily(n)  @ 54-75
+      -- One child whose fx chain taps a distinct parent fx at every stage: n stages live at once.
+  @fn allocOf(g)  @ 77
+  @fn trackCount(out)  @ 79-83
+
+# Cases
+  @case 'folder capacity: 130 single-fx children overflow one family, eviction resolves it'  [pure]  @ 87-93
+  @case 'folder capacity: a deep-chain child overflows and bisects out of the family'  [pure]  @ 96-102
+  @case 'folder capacity: family eviction is deterministic'  [pure]  @ 105-109
+
+# Uses (outbound edges)
+  @use call DAG.allocate  @ 77
+  @use call DAG.targetTracks  @ 77,90,99
+  @use call DAG.compile  @ 77,90,99

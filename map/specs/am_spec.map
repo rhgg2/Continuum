@@ -1,0 +1,120 @@
+@spec am_spec  src=tests/specs/am_spec.lua  loc=1128  sha=3970445  cases=67
+@exercises arrangeManager (am), scratch (scratch), dataStore (h.ds)
+@surface   am:projectTracks, am:trackSlots, am:tracksTakes, am:hasPlacedTakes, am:mintParkedTake, am:createAndDropMidi, am:takeForSlot, scratch.peek, am:ownerTrack, am:renameSlot, am:deleteSlot, am:dropInstance, am:duplicateTake, am:startIsClear, am:keyForSlot, ds:assign, am:takesUsing, am:moveTake, am:deleteTake, am:resizeTake, ds:getAt, am:isParkedTake, am:findTake, am:initialCursor, am:editCursorQN, am:setEditCursorQN, am:loopRangeQN, am:setLoopRangeQN, am:clearLoopRange, am:playPositionQN, am:projectEndQN, am:duplicateBelow, am:duplicateUnpooledBelow, am:newTakeBelow
+@harness   mk, reaper:setTrackName, reaper:addItem, reaper:setProjectTracks, reaper.GetMediaItemTake_Track, reaper.GetTakeName, reaper.MIDI_SetAllEvts, reaper.MIDI_GetAllEvts, reaper.CountTrackMediaItems, reaper.SetMediaItemSelected, reaper:setCursor, reaper:setLoopRange, reaper:setPlay, reaper.GetMediaItemTakeInfo_Value, reaper.SetMediaItemTakeInfo_Value
+
+# Intent
+  arrangeManager: discovery, slot auto-allocation, placement, reswing.
+
+# Helpers
+  @fn mkAm(harness, opts)  @ 7-12
+  @fn seedTracks(h, specs)  @ 18-40
+      -- Seed two arbitrary tracks and a per-track item list. Returns the
+      -- track tokens so each test can name them. The harness's default
+      -- bindTake(take1) is unrelated — we manage these via setProjectTracks
+      -- so am sees them in CountTracks/GetTrack order.
+
+# Cases
+  @case 'projectTracks lists every track in REAPER order with item count'  [harness]  @ 47-63
+  @case 'trackSlots auto-allocates slot indices for live takes'  [harness]  @ 70-84
+  @case 'tracksTakes assigns slotIdx to every grouped take'  [harness]  @ 88-106
+  @case 'ensureSlots is idempotent — second read does not reallocate'  [harness]  @ 110-121
+  @case 'hasPlacedTakes ignores parked takes, sees placed instances'  [harness]  @ 125-134
+  @case 'ownerTrack resolves a parked take to its logical track, not scratch'  [harness]  @ 141-155
+  @case 'renameSlot writes SetTakeName across every matching item'  [harness]  @ 162-178
+  @case 'deleteSlot removes every matching item and prunes the dict entry'  [harness]  @ 182-200
+  @case 'createAndDropMidi mints slot 0, creates a take, names it'  [harness]  @ 207-223
+  @case 'createAndDropMidi allocates lowest-free index across calls'  [harness]  @ 227-238
+  @case 'dropInstance pools to an existing slot'  [harness]  @ 242-253
+  @case 'dropInstance overwrites a take already starting at the drop position'  [harness]  @ 257-274
+  @case 'createAndDropMidi overwrites a take already starting at the create position'  [harness]  @ 278-293
+  @case 'dropInstance returns nil for missing slot or missing track'  [harness]  @ 297-303
+  @case 'duplicateTake clones a MIDI take into a pooled sibling'  [harness]  @ 307-322
+  @case 'dropInstance and duplicateTake name the new take after the slot'  [harness]  @ 326-337
+  @case 'duplicateTake returns nil for a missing track'  [harness]  @ 341-349
+  @case 'dropInstance carries the sibling MIDI events into the new instance'  [harness]  @ 353-363
+  @case 'duplicateTake carries the source MIDI events into the clone'  [harness]  @ 367-378
+  @case 'startIsClear only collides on an exact start match (item ~= exceptItem)'  [harness]  @ 382-397
+  @case 'createAndDropMidi returns nil when no track exists'  [harness]  @ 401-406
+  @case 'keyForSlot maps 0..61 through util.toBase62'  [harness]  @ 413-422
+  @case 'takesUsing scans each take swing map (ds) for the named swing'  [harness]  @ 429-447
+  @case 'tracksTakes relayouts on read: an OPEN take grows to its source length'  [harness]  @ 457-466
+  @case 'build relayout: OPEN takes fill to source; an earlier one capped at its gap (no overlap)'  [harness]  @ 469-480
+  @case 'build relayout: an OPEN take whose item outruns its shrunk source is pulled back'  [harness]  @ 483-491
+  @case 'a later take truncates an earlier one; deleting the later regrows it'  [harness]  @ 495-509
+  @case 'resizeTake stores a numeric natural; ≥ source demotes back to util.OPEN'  [harness]  @ 513-529
+  @case 'audio take longer than its source keeps its length across a move'  [harness]  @ 532-547
+  @case 'trimmed audio take keeps its trim across a move (no balloon to source)'  [harness]  @ 550-562
+  @case 'moveTake shifts start; refused on start-collision; returns ok flag'  [harness]  @ 566-577
+  @case 'resizeTake writes natural; rendered is min(natural, source, gap)'  [harness]  @ 581-592
+  @case 'deleteTake removes the item, leaving the other take intact'  [harness]  @ 596-607
+  @case 'deleteTake parks a slot\'s last instance; the slot survives, greyed'  [harness]  @ 613-629
+  @case 'deleteTake of a non-last instance deletes outright (no park)'  [harness]  @ 633-648
+  @case 're-dropping from a parked slot re-materialises off the keeper'  [harness]  @ 652-665
+  @case 'deleteSlot forever-deletes: live instances and the parked keeper'  [harness]  @ 669-682
+  @case 'deleteSlot forever-deletes the pool per-event metadata'  [harness]  @ 686-697
+  @case 'mintParkedTake shows the new slot at once; isParkedTake flags scratch-hosted takes'  [harness]  @ 701-715
+  @case 'findTake resolves a REAPER take handle back to its grid take-shape'  [harness]  @ 722-736
+  @case 'initialCursor reads the selected item: its take track and start'  [harness]  @ 740-752
+  @case 'initialCursor falls back to the edit cursor and selected track'  [harness]  @ 756-765
+  @case 'initialCursor defaults to track 0 when nothing is selected'  [harness]  @ 769-777
+  @case 'editCursorQN reads the REAPER edit cursor'  [harness]  @ 784-789
+  @case 'setEditCursorQN moves the REAPER edit cursor'  [harness]  @ 793-798
+  @case 'loopRangeQN returns the project loop range'  [harness]  @ 802-809
+  @case 'loopRangeQN is nil when no loop is set'  [harness]  @ 813-817
+  @case 'setLoopRangeQN writes the project loop range'  [harness]  @ 821-828
+  @case 'clearLoopRange removes the project loop range'  [harness]  @ 832-838
+  @case 'playPositionQN is nil when the transport is stopped'  [harness]  @ 842-846
+  @case 'playPositionQN returns the play head qn while playing'  [harness]  @ 850-855
+  @case 'projectEndQN is 0 for a project with no items'  [harness]  @ 859-863
+  @case 'projectEndQN reports the largest take end across all tracks'  [harness]  @ 867-876
+  @case 'duplicateBelow places a pooled clone at startQN + naturalLenQN'  [harness]  @ 883-899
+  @case 'duplicateBelow lands past a truncating downstream neighbour'  [harness]  @ 903-921
+  @case 'duplicateBelow refuses on exact-start collision at the destination'  [harness]  @ 925-935
+  @case 'duplicateBelow refuses on audio takes'  [harness]  @ 939-948
+  @case 'duplicateUnpooledBelow mints a fresh slot and copies the MIDI blob'  [harness]  @ 952-971
+  @case 'duplicateUnpooledBelow forks the source per-event metadata onto the fresh pool'  [harness]  @ 977-988
+  @case 'duplicateUnpooledBelow refuses on collision and on audio'  [harness]  @ 992-1005
+  @case 'newTakeBelow creates an empty MIDI take at natural end'  [harness]  @ 1009-1028
+  @case 'newTakeBelow refuses on collision and on audio'  [harness]  @ 1032-1045
+  @case 'distinct pool guids on different tracks get distinct colourIdx'  [harness]  @ 1050-1063
+  @case 'pooled instances on different tracks share one colourIdx'  [harness]  @ 1067-1077
+  @case 'createAndDropMidi stamps I_CUSTOMCOLOR on the new take'  [harness]  @ 1081-1089
+  @case 'duplicateUnpooledBelow strips the source colour and mints a fresh one'  [harness]  @ 1093-1109
+  @case 'placement does not overwrite a pre-existing take colour (preserve override)'  [harness]  @ 1113-1125
+
+# Uses (outbound edges)
+  @use call arrangeManager.projectTracks  @ 56
+  @use call arrangeManager.trackSlots  @ 78,117,118,170,190,197,220,621,642,675,677,679,694,710
+  @use call arrangeManager.tracksTakes  @ 95,147,174,195,214,248,269,288,312,313,334,346,372,395,463,477,490,503,504,508,519,520,523,524,539,542,557,558,559,573,574,575,576,587,588,603,604,619,620,640,641,658,659,662,676,692,707,729,747,889,892,912,913,919,932,934,945,947,958,962,983,1000,1015,1019,1040,1057,1058,1074,1075,1099
+  @use call arrangeManager.hasPlacedTakes  @ 129,131,133
+  @use call arrangeManager.mintParkedTake  @ 130,148,708
+  @use call arrangeManager.createAndDropMidi  @ 132,211,231,232,233,236,246,261,263,282,284,311,330,345,357,371,405,656,1085,1117
+  @use call arrangeManager.takeForSlot  @ 149,711
+  @use call scratch.peek  @ 151,626,645,680
+  @use call arrangeManager.ownerTrack  @ 152,153,154
+  @use call arrangeManager.renameSlot  @ 173
+  @use call arrangeManager.deleteSlot  @ 193,235,678,695
+  @use call arrangeManager.dropInstance  @ 247,262,265,283,301,302,331,359,660,1122
+  @use call arrangeManager.duplicateTake  @ 312,334,348,374
+  @use call arrangeManager.startIsClear  @ 391,392,393,394,396
+  @use call arrangeManager.keyForSlot  @ 416,417,418,419,420,421
+  @use call dataStore.assign  @ 439
+  @use call arrangeManager.takesUsing  @ 441,445
+  @use call arrangeManager.moveTake  @ 503,541,558,573,575,912
+  @use call arrangeManager.deleteTake  @ 507,603,619,640,658,676
+  @use call arrangeManager.resizeTake  @ 519,523,587
+  @use call dataStore.getAt  @ 527,545
+  @use call arrangeManager.isParkedTake  @ 713,714
+  @use call arrangeManager.findTake  @ 730,734,735
+  @use call arrangeManager.initialCursor  @ 749,762,774
+  @use call arrangeManager.editCursorQN  @ 788,797
+  @use call arrangeManager.setEditCursorQN  @ 796
+  @use call arrangeManager.loopRangeQN  @ 806,816,825,837
+  @use call arrangeManager.setLoopRangeQN  @ 824
+  @use call arrangeManager.clearLoopRange  @ 836
+  @use call arrangeManager.playPositionQN  @ 845,854
+  @use call arrangeManager.projectEndQN  @ 862,875
+  @use call arrangeManager.duplicateBelow  @ 890,916,933,946
+  @use call arrangeManager.duplicateUnpooledBelow  @ 960,985,1001,1004,1101
+  @use call arrangeManager.newTakeBelow  @ 1017,1041,1044

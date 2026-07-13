@@ -1,0 +1,34 @@
+@spec tv_param_learn_spec  src=tests/specs/tv_param_learn_spec.lua  loc=117  sha=1278d64  cases=5
+@exercises trackerView (h.vm), dataStore (h.ds), editCursor (h.ec)
+@surface   vm:armLearn, vm:learnFxGuid, vm:cancelLearn, vm:pollLearn, vm:paletteParam, vm:listParams, ds:get, vm:setGridSize, ec:setPos, vm:automateParam, vm:paramBinding
+@harness   mk{seed.notes}, r:setTrackFX, r:setFxGuid, r:setFxParamNames, r.TrackFX_Show, r:clearCalls, r._state.projectTracks, r._state.trackGuids, r._state.projectItems, r._state.calls, r._state.lastTouched
+
+# Intent
+  Touch-learn through the real tv + pa stack: arming floats the fx ui
+  (remembering whether pa floated it), a stale pre-arm touch never
+  selects, a fresh touch selects + hoists without writing frecency, and
+  focus regain after a loss cancels and pops the window back down.
+
+# Helpers
+  @fn mkScenario(harness)  @ 13-25
+  @fn shows(r, flag)  @ 27-33
+
+# Cases
+  @case 'arm floats the fx ui; re-arm toggles off and pops it down'  [harness]  @ 38-47
+  @case 'an fx the user already floated stays up on cancel'  [harness]  @ 51-59
+  @case 'stale pre-arm touch never selects; fresh touch selects + hoists, no frecency'  [harness]  @ 63-84
+  @case 'focus regain after a loss cancels and unfloats'  [harness]  @ 88-98
+  @case 'automateParam bumps frecency and ends the learn'  [harness]  @ 102-114
+
+# Uses (outbound edges)
+  @use call trackerView.armLearn  @ 41,44,56,67,91,107
+  @use call trackerView.learnFxGuid  @ 42,45,93,96,112
+  @use call trackerView.cancelLearn  @ 57
+  @use call trackerView.pollLearn  @ 68,72,92,94,95,109
+  @use call trackerView.paletteParam  @ 69,73
+  @use call trackerView.listParams  @ 79
+  @use call dataStore.get  @ 83,113
+  @use call trackerView.setGridSize  @ 105
+  @use call editCursor.setPos  @ 106
+  @use call trackerView.automateParam  @ 110
+  @use call trackerView.paramBinding  @ 111

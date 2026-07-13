@@ -1,0 +1,43 @@
+@spec vm_logical_ppq_spec  src=tests/specs/vm_logical_ppq_spec.lua  loc=383  sha=a86b164  cases=12
+@exercises trackerView (h.vm), editCursor (h.ec), midiManager (h.fm), commandManager (h.cmgr), trackerManager (h.tm)
+@surface   vm:setGridSize, ec:setPos, vm:editEvent, fm:dump, cmgr:invoke, tm:markSwingStale, tm:rebuild
+@harness   mk{seed.ccs, seed.notes}
+
+# Intent
+  Pins the ppqL invariant across vm's authoring + editing paths.
+  
+  Storage model: every event Continuum stamps carries ppqL (and
+  endppqL for notes), the canonical authoring-grid position
+  pre-swing, pre-delay; evt.rpb marks it as authored.
+  Mutation rules:
+    - snap-to-row              writes ppqL = row * logPerRow
+    - shift-by-row              ppqL += rowDelta * logPerRow
+    - delay nudge               ppqL unchanged, rpb unchanged
+    - reswing                   ppqL unchanged, raw re-applied, rpb unchanged
+
+# Helpers
+  @fn noteByPitch(dump, pitch)  @ 16-18
+  @fn ccByCC(dump, cc)  @ 20-22
+
+# Cases
+  @case 'fresh note at cursor row r writes ppqL = r·logPerRow in current frame'  [harness]  @ 29-43
+  @case 'fresh note under c58 stamps ppqL at the logical row, ppq at the swung position'  [harness]  @ 47-67
+  @case 'fresh cc at cursor row writes ppqL at row * logPerRow'  [harness]  @ 71-96
+  @case 'delay nudge shifts realised onset but leaves end + ppqL intact'  [harness]  @ 102-131
+  @case 'pasteSingle does not shrink an overhung note: intent survives, tm clips the realised tail'  [harness]  @ 141-165
+  @case 'pasteMulti does not shrink overhung notes: intent survives, tm clips the realised tails'  [harness]  @ 171-203
+  @case 'noteOff under cross-rpb restamps frame and lands endppqL on current grid'  [harness]  @ 218-238
+  @case 'insertRow into a cross-rpb note rewrites tail with frame restamped'  [harness]  @ 244-264
+  @case 'agreeing onset: endppqL is authoritative intent, raw realises up to it'  [harness]  @ 277-292
+  @case 'reswing leaves ppqL and rpb untouched on cross-rpb event'  [harness]  @ 299-316
+  @case 'PA emitted on a sustain row stamps the take's current rpb'  [harness]  @ 326-351
+  @case 'reswing under same swing is a no-op on ppqL'  [harness]  @ 357-381
+
+# Uses (outbound edges)
+  @use call trackerView.setGridSize  @ 32,56,79,117,154,188,230,256,287,309,340,373
+  @use call editCursor.setPos  @ 35,59,86,156,158,194,231,257,342
+  @use call trackerView.editEvent  @ 36,60,87,123,343
+  @use call midiManager.dump  @ 38,62,90,125,161,197,198,234,260,289,312,346,376
+  @use call commandManager.invoke  @ 157,159,193,195,232,258
+  @use call trackerManager.markSwingStale  @ 310,374
+  @use call trackerManager.rebuild  @ 310,374

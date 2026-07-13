@@ -1,0 +1,24 @@
+@spec mm_sort_order_spec  src=tests/specs/mm_sort_order_spec.lua  loc=78  sha=3081312  cases=3
+@exercises midiManager (h.mm)
+@surface   mm:modify, mm:notesRaw, mm:ccsRaw
+@harness   bareMM
+
+# Intent
+  Pins rebuild's ordering contract: after a modify, notes/ccs come back
+  ppq-sorted with equal-ppq events in insertion order. Exercises both sort
+  paths: the near-sorted insertion pass and the shift-budget fallback that a
+  bulk reverse-order add trips.
+
+# Helpers
+  @fn orderedPpqs(iter)  @ 8-12
+  @fn sortedCopy(list)  @ 14-19
+
+# Cases
+  @case 'a scattered add lands in ppq order (near-sorted fast path)'  [harness]  @ 23-35
+  @case 'equal-ppq ccs keep insertion order across rebuilds'  [harness]  @ 39-54
+  @case 'bulk reverse-order add trips the shift budget and still lands sorted, stably'  [harness]  @ 58-76
+
+# Uses (outbound edges)
+  @use call midiManager.modify  @ 30,42,48,61
+  @use call midiManager.notesRaw  @ 33,70,74
+  @use call midiManager.ccsRaw  @ 52

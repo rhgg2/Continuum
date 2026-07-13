@@ -1,0 +1,41 @@
+@spec ps_mirror_spec  src=tests/specs/ps_mirror_spec.lua  loc=262  sha=e2be081  cases=10
+@exercises pextStore (ps), midiManager (h.mm)
+@surface   ps:watch, ps:assign, ps:pollUndo, ps:get, ps:subscribe, mm:modify, mm:add, mm:assign, mm:notes
+@harness   reaper:bindTake, reaper:setResolution, r._state.trackExt, r._state.projStateCount, r._state.projExt, r._state.projectTracks, r._state.trackGuids
+
+# Intent
+  projext undo (design/archive/projext-undo.md): undoable project-scope slots mirror
+  onto the scratch track's P_EXT, which REAPER undo rewinds natively; projext
+  does not. pollUndo detects a rewound mirror through the two-level hash
+  manifest, copies only the genuinely diverged slots back into projext, and
+  fires 'projectRewound' so faces can reload.
+
+# Helpers
+  @fn fresh()  @ 10-15
+  @fn snapshot(reaper)  @ 19
+      -- REAPER undo in fake terms: track chunks (trackExt) rewind to an earlier
+      -- snapshot and the state count ticks; projext survives untouched.
+  @fn rewindTo(reaper, snap)  @ 20-23
+
+# Cases
+  @case 'undo restores an undoable project slot and fires its watch group'  [pure]  @ 27-41
+  @case 'a plain (undeclared) slot never rewinds'  [pure]  @ 45-58
+  @case 'resync copies back only the diverged slots'  [pure]  @ 62-79
+  @case 'own writes never read as a rewind'  [pure]  @ 83-95
+  @case 'slot deletion round-trips: undo restores, redo re-deletes'  [pure]  @ 99-113
+  @case 'a project switch reseeds; it never reads as a rewind'  [pure]  @ 117-149
+  @case 'scratch deleted: resync no-ops; the next write re-mints and remirrors'  [pure]  @ 153-180
+  @case 'scratch deleted and re-minted by another tenant: protection survives'  [pure]  @ 184-212
+  @case 'a fresh session seeds from the mirror and still detects a rewind'  [pure]  @ 216-230
+  @case 'undo across a metadata edit reloads the pool and restores detune'  [pure]  @ 234-260
+
+# Uses (outbound edges)
+  @use call pextStore.watch  @ 32
+  @use call pextStore.assign  @ 33,35,49,50,52,53,68,69,71,89,103,105,123,143,145,157,158,173,175,188,189,207,220,222
+  @use call pextStore.pollUndo  @ 37,55,73,92,108,111,139,147,169,177,203,209,226,228,253
+  @use call pextStore.get  @ 38,56,57,77,78,94,109,112,141,148,178,179,210,211,229
+  @use call pextStore.subscribe  @ 67,88,122,168,202
+  @use call midiManager.modify  @ 246,251
+  @use call midiManager.add  @ 247
+  @use call midiManager.assign  @ 251
+  @use call midiManager.notes  @ 255

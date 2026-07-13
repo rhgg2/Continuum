@@ -1,0 +1,29 @@
+@spec gm_render_spec  src=tests/specs/gm_render_spec.lua  loc=67  sha=f8aa484  cases=4
+@exercises groups (groups), groupManager (h.gm)
+@surface   groups.tintKey, groups.regionKey, groups.outlineKey, gm:mark, gm:newInstance, gm:eachInstance, gm:markGroup
+
+# Intent
+  4d render-pass seam: the pure state->theme-key mapping and the
+  gm:eachInstance read accessor the trackerPage render pass drives.
+  The geometry/draw itself is REAPER-only; what is unit-testable is
+  (a) the mapping is total and stable, (b) eachInstance reports rect /
+  anchor / active faithfully.
+
+# Helpers
+  @fn mk()  @ 11-13
+  @fn note(ppq, lane)  @ 15-18
+
+# Cases
+  @case 'tintKey: synced has no overlay; deviation states map to .tint'  [pure]  @ 25-30
+  @case 'regionKey/outlineKey: group hue by default, conflicted is loud'  [pure]  @ 33-39
+  @case 'eachInstance enumerates every instance with rect+anchor+active'  [pure]  @ 42-55
+  @case 'eachInstance: a markGroup (no copy) group is inactive'  [pure]  @ 58-65
+
+# Uses (outbound edges)
+  @use call groups.tintKey  @ 27,28,29
+  @use call groups.regionKey  @ 35,36
+  @use call groups.outlineKey  @ 37,38
+  @use call groupManager.mark  @ 45
+  @use call groupManager.newInstance  @ 46
+  @use call groupManager.eachInstance  @ 47,62
+  @use call groupManager.markGroup  @ 61

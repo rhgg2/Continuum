@@ -1,0 +1,39 @@
+@spec gm_delete_conform_integration_spec  src=tests/specs/gm_delete_conform_integration_spec.lua  loc=82  sha=9e7e85d  cases=1
+@exercises trackerManager (h.tm), groupManager (h.gm), midiManager (h.fm), editCursor (h.ec), commandManager (h.cmgr)
+@surface   tm:byUuid, gm:markGroup, gm:newInstance, tm:flush, fm:dump, ec:setPos, cmgr:invoke
+@harness   mk{seed.length, seed.resolution, seed.notes}
+
+# Intent
+  Integration repro driving the REAL tracker delete command, so
+  trackerView's queueDeleteNotes (column legato) and trackerManager's
+  conform-tail pass both run, wired to a real groupManager.
+  
+  AB in col1 rows 0-1 (B last-in-lane, open tail to take end). Mirror-
+  duplicate down: instance 2 at rows 2-3, sharing chan|lane -- so the
+  single column holds [A1, B1, A2, B2] interleaved. Single-cell delete
+  (the '.' command) of the duplicate's A2 must not shrink the
+  duplicate's B2: the column legato would grow the conform predecessor
+  B1 over the instance-boundary hole, and that endppq leaks into the
+  shared group as a duration edit collapsing B's infinite tail.
+
+# Helpers
+  @fn rect()  @ 19-22
+  @fn noteAt(notes, ppq, pitch)  @ 24-28
+  @fn longTailB(notes)  @ 35-41
+      -- Stable identifier for the long-tailed B: gm's mirror placement leaves
+      -- TWO pitch-62 notes at the same raw onset (a malformed-MIDI shape
+      -- tm's same-pitch onset clamp now separates by 1 tick), so noteAt(ppq,
+      -- 62) is ambiguous and ppqL can be re-derived from raw. The duplicate
+      -- B is identified instead by its take-spanning tail.
+
+# Cases
+  @case 'single-cell delete of the duplicate A must not shrink the duplicate B'  [harness]  @ 45-80
+
+# Uses (outbound edges)
+  @use call trackerManager.byUuid  @ 55
+  @use call groupManager.markGroup  @ 57
+  @use call groupManager.newInstance  @ 58
+  @use call trackerManager.flush  @ 59
+  @use call midiManager.dump  @ 61,72
+  @use call editCursor.setPos  @ 69
+  @use call commandManager.invoke  @ 70

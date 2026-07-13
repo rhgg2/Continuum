@@ -1,0 +1,51 @@
+@spec dag_validate_spec  src=tests/specs/dag_validate_spec.lua  loc=423  sha=1694e27  cases=32
+@exercises DAG (DAG)
+@surface   DAG.validate
+
+# Intent
+  (none)
+
+# Helpers
+  @fn source(id, guid)  @ 4-9
+  @fn fx(id, opts)  @ 11-19
+  @fn master(opts)  @ 21-26
+  @fn mk(nodes, edges, opts)  @ 30-37
+      -- mk auto-adds a default master (matches production: every graph has one)
+      -- unless opts.noMaster is set, or the caller already supplied one.
+
+# Cases
+  @case 'empty graph passes'  [pure]  @ 41-44
+  @case 'edge with unknown from-id rejects'  [pure]  @ 47-55
+  @case 'edge with unknown to-id rejects'  [pure]  @ 58-66
+  @case 'source-as-sink rejects on audio'  [pure]  @ 69-80
+  @case 'source-as-sink rejects on midi'  [pure]  @ 83-94
+  @case 'MIDI edge with port index rejects'  [pure]  @ 97-106
+  @case 'audio from-port out of range rejects'  [pure]  @ 109-119
+  @case 'audio to-port out of range rejects'  [pure]  @ 122-132
+  @case 'audio edge to MIDI-only FX (no audio ports) rejects'  [pure]  @ 135-146
+  @case 'audio edge: nil port resolves to port 1 (single-port fx)'  [pure]  @ 149-157
+  @case 'audio edge: explicit portIdx=2 valid on 2-port-in fx'  [pure]  @ 160-168
+  @case 'self-loop is a cycle'  [pure]  @ 171-179
+  @case 'two-cycle (A→B, B→A) rejects'  [pure]  @ 182-192
+  @case 'three-cycle (A→B→C→A) rejects'  [pure]  @ 195-207
+  @case 'cycle across audio and midi layers rejects'  [pure]  @ 210-221
+  @case 'DAG with fan-in and fan-out passes'  [pure]  @ 224-236
+  @case 'no master rejects (singleton)'  [pure]  @ 239-244
+  @case 'two masters reject (singleton)'  [pure]  @ 247-257
+  @case 'master cannot be `from` of any edge'  [pure]  @ 260-271
+  @case 'MIDI wire to master rejects'  [pure]  @ 274-284
+  @case 'audio wire from source to master passes'  [pure]  @ 287-294
+  @case 'audio wire to master with port=2 oob (default ins=1) rejects'  [pure]  @ 297-306
+  @case 'audio wire to master with explicit port 2 (2-port master) passes'  [pure]  @ 309-317
+  @case 'duplicate midi edge rejects (same from, same to)'  [pure]  @ 320-332
+  @case 'duplicate audio edge rejects (same fromPort/toPort)'  [pure]  @ 335-345
+  @case 'audio edge: nil port collides with explicit port 1 (shorthand)'  [pure]  @ 348-358
+  @case 'audio edges differing only in toPort coexist'  [pure]  @ 361-370
+  @case 'duplicate source trackId rejects'  [pure]  @ 373-381
+  @case 'distinct source trackGuids pass'  [pure]  @ 384-390
+  @case 'unknown edge type rejects'  [pure]  @ 393-402
+  @case 'fx node with busAware=true rejects (safety net for ext_midi_bus JSFX)'  [pure]  @ 405-413
+  @case 'fx node with busAware=false passes'  [pure]  @ 416-421
+
+# Uses (outbound edges)
+  @use call DAG.validate  @ 43,50,61,74,88,102,114,127,140,154,165,174,187,201,216,231,241,254,264,278,291,301,314,325,340,353,366,378,389,398,409,420

@@ -1,0 +1,19 @@
+@spec vm_extra_cols_spec  src=tests/specs/vm_extra_cols_spec.lua  loc=120  sha=947646b  cases=3
+@exercises trackerView (h.vm), editCursor (h.ec), dataStore (h.ds)
+@surface   vm:setGridSize, ec:setPos, vm:hideExtraCol, ds:get
+@harness   mk{seed.notes}
+
+# Intent
+  Pins hideExtraCol's contract: only the topmost empty lane drops, from
+  any lane. See docs/trackerView.md § Extra columns & delay sub-column.
+
+# Cases
+  @case 'hideExtraCol on topmost empty note lane shrinks extraColumns'  [harness]  @ 10-43
+  @case 'hideExtraCol from a lower lane drops the topmost empty lane'  [harness]  @ 47-77
+  @case 'hideExtraCol with an occupied top lane is a no-op'  [harness]  @ 81-117
+
+# Uses (outbound edges)
+  @use call trackerView.setGridSize  @ 21,60,94
+  @use call editCursor.setPos  @ 28,62,100
+  @use call trackerView.hideExtraCol  @ 29,63,101
+  @use call dataStore.get  @ 31,65,103

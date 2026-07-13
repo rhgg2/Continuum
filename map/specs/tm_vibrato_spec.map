@@ -1,0 +1,38 @@
+@spec tm_vibrato_spec  src=tests/specs/tm_vibrato_spec.lua  loc=203  sha=2b7e591  cases=9
+@exercises trackerManager (h.tm), midiManager (h.fm), configManager (h.cm), dataStore (h.ds)
+@surface   tm:addEvent, tm:flush, fm:dump, tm:rebuild, tm:getChannel, tm:assignEvent, cm:assign, fm:load, ds:get
+@harness   mk
+
+# Intent
+  Note macros: vibrato (continuous pb-augment). Offline park-and-seat: the macro sums onto the
+  authored pb base and seats a markerless pb stream on the base lane (no carrier). see design/note-macros-v2.md § Continuous pb
+
+# Helpers
+  @fn centsToRaw(cents, pbRange)  @ 13-15
+  @fn pbSeatsOf(dump, chan)  @ 19-28
+      -- pb-augment seats a summed stream on the base lane (markerless, no carrier). A seat carries a raw
+      -- pb `val` (centsToRaw of summed cents + detune) and `shape`; densified linear between feature points.
+  @fn pbSeatAt(dump, chan, ppq)  @ 30-32
+  @fn addVibHost(h, over)  @ 34-40
+
+# Cases
+  @case 'vibrato seats a summed pb stream: rest 0 + depth at the extrema, markerless'  [harness]  @ 47-59
+  @case 'vibrato re-centres the channel at the window end (no residual bend)'  [harness]  @ 65-73
+  @case 'seats are confined to the host window; the window opens at centre'  [harness]  @ 79-86
+  @case 'G4: vibrato pb seat stream is byte-identical across flush -> rebuild -> flush (swing + delay)'  [harness]  @ 92-108
+  @case 'G2: fx present yields pb seats; fx removed leaves none after reconcile'  [harness]  @ 114-124
+  @case 'regeneration: a pbRange change rescales pb seat values (cents -> raw at flush)'  [harness]  @ 130-140
+  @case 'vibrato on a higher lane seats a channel pb stream (lane-blind gesture)'  [harness]  @ 146-155
+  @case 'noteOff shrink after reload neither parks seats nor restores them as authored pbs'  [harness]  @ 161-187
+  @case 'vibrato seats never surface as a visible cc or pb column'  [harness]  @ 193-200
+
+# Uses (outbound edges)
+  @use call trackerManager.addEvent  @ 38,98,149,151
+  @use call trackerManager.flush  @ 39,100,105,122,153,172
+  @use call midiManager.dump  @ 51,69,83,102,106,118,123,134,138,154,183
+  @use call trackerManager.rebuild  @ 104,137,168
+  @use call trackerManager.getChannel  @ 120,170,186,197
+  @use call trackerManager.assignEvent  @ 121,171
+  @use call configManager.assign  @ 136
+  @use call midiManager.load  @ 168
+  @use call dataStore.get  @ 177

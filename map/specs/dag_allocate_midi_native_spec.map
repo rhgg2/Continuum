@@ -1,0 +1,14 @@
+@spec dag_allocate_midi_native_spec  src=tests/specs/dag_allocate_midi_native_spec.lua  loc=101  sha=986bc78  cases=3
+@exercises DAG (DAG)
+@surface   DAG.allocate
+
+# Intent
+  (none)
+
+# Cases
+  @case 'native: VST consumer surfaces its resolved input bus (JS sibling excluded)'  [pure]  @ 13-42
+  @case 'native: VST producer outBus matches downstream VST consumer inBus'  [pure]  @ 45-70
+  @case 'native: mixed merge-CU + VST trackKey — synthNode CU excluded, VST present'  [pure]  @ 73-99
+
+# Uses (outbound edges)
+  @use call DAG.allocate  @ 36,65,96

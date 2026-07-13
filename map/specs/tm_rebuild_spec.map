@@ -1,0 +1,39 @@
+@spec tm_rebuild_spec  src=tests/specs/tm_rebuild_spec.lua  loc=396  sha=1747f65  cases=18
+@exercises trackerManager (h.tm), midiManager (h.fm), configManager (h.cm)
+@surface   tm:getChannel, fm:dump, tm:rebuild, tm:addEvent, tm:flush, tm:deleteEvent, fm:unload, tm:currentTake, cm:set, tm:assignEvent
+@harness   mk{seed.notes, seed.ccs}
+
+# Intent
+  Exercises tm:rebuild against seeded mm state.
+
+# Cases
+  @case 'empty take has 16 channels each with one empty lane'  [harness]  @ 7-16
+  @case 'a single note surfaces as one lane-1 event'  [harness]  @ 20-33
+  @case 'tm seeds detune and delay metadata on rebuild'  [harness]  @ 37-47
+  @case 'existing detune/delay survive rebuild (defaults do not clobber)'  [harness]  @ 51-64
+  @case 'partial metadata: only the missing field is defaulted'  [harness]  @ 68-81
+  @case 'a second rebuild after seeding is a no-op on metadata'  [harness]  @ 85-98
+  @case 'rebuild from a seeded detuned note + matching fake pb keeps pb hidden'  [harness]  @ 102-122
+  @case 'fake pb sits at host logical (Phase 6 col-event projection)'  [harness]  @ 126-159
+  @case 'overlapping notes on the same pitch/channel are truncated'  [harness]  @ 163-177
+  @case 'distinct pitches on same ppq share a channel in separate lanes'  [harness]  @ 181-193
+  @case 'a pb event populates the pb column with logical cents'  [harness]  @ 197-208
+  @case 'same intent onset with different delays still spills to a new lane'  [harness]  @ 215-230
+  @case 'realised collision via delay does not force a spill if intents are disjoint'  [harness]  @ 237-253
+  @case 'arbitrary metadata on cc/pb/pa survives the projection'  [harness]  @ 263-306
+  @case 'tm:addEvent + flush round-trips through mm'  [harness]  @ 310-322
+  @case 'delete-then-add in a single flush leaves one note at new ppq'  [harness]  @ 326-341
+  @case 'dormant tracker (dead take) ignores a foreign configChanged instead of rebuilding'  [harness]  @ 347-368
+  @case 'opening a note tail (util.OPEN) keeps its attached PAs'  [harness]  @ 372-394
+
+# Uses (outbound edges)
+  @use call trackerManager.getChannel  @ 11,27,118,147,191,204,227,249,281,320,333,355,366,385
+  @use call midiManager.dump  @ 44,61,78,95,173,316,338,390
+  @use call trackerManager.rebuild  @ 94
+  @use call trackerManager.addEvent  @ 313,335
+  @use call trackerManager.flush  @ 314,336,387
+  @use call trackerManager.deleteEvent  @ 334
+  @use call midiManager.unload  @ 359
+  @use call trackerManager.currentTake  @ 360
+  @use call configManager.set  @ 364
+  @use call trackerManager.assignEvent  @ 386

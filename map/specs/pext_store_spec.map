@@ -1,0 +1,42 @@
+@spec pext_store_spec  src=tests/specs/pext_store_spec.lua  loc=206  sha=13ebf25  cases=13
+@exercises pextStore (ps)
+@surface   ps:setTake, ps:boundTake, ps:boundTrack, ps:assign, ps:get, ps:assignAt, ps:getAt, ps:watch, ps:pollUndo
+@harness   fakeReaper.new
+
+# Intent
+  Pin-tests for pextStore -- the storage + context + undo engine extracted
+  from configManager. These exercise the engine directly (no schema face):
+  context binding, raw round-trip per backend, and the state-count watcher
+  that catches REAPER undo/redo rewriting P_EXT under us.
+
+# Helpers
+  @fn readFile(path)  @ 20-23
+  @fn writeFile(path, content)  @ 25-27
+  @fn freshPs()  @ 29-38
+  @fn bump(r)  @ 40
+
+# Cases
+  @case 'setTake derives the track from the take item'  [pure]  @ 44-49
+  @case 'setTake(nil) clears both take and track'  [pure]  @ 52-58
+  @case 'assign / get round-trips each backend scope'  [pure]  @ 61-69
+  @case 'get returns nil for an absent blob'  [pure]  @ 72-76
+  @case 'getAt / assignAt address a foreign handle'  [pure]  @ 79-86
+  @case 'watcher fires onDiverge for an externally rewritten blob'  [pure]  @ 89-103
+  @case 'watcher does not fire without a state-count tick'  [pure]  @ 106-116
+  @case 'watcher does not fire when the blob is still in sync'  [pure]  @ 119-129
+  @case 'a bound assign updates the baseline so our own write never self-triggers'  [pure]  @ 132-143
+  @case 'a stale take handle is dropped silently with no fire'  [pure]  @ 146-163
+  @case 'a group with two diverged blobs fires onDiverge once'  [pure]  @ 166-180
+  @case 'global persists as a hand-editable Lua literal and round-trips'  [pure]  @ 183-192
+  @case 'a corrupt global file is read as nil and never clobbered'  [pure]  @ 195-204
+
+# Uses (outbound edges)
+  @use call pextStore.setTake  @ 36,55
+  @use call pextStore.boundTake  @ 47,56,162
+  @use call pextStore.boundTrack  @ 48,57
+  @use call pextStore.assign  @ 65,138,149,186,200
+  @use call pextStore.get  @ 66,75,85,189,199
+  @use call pextStore.assignAt  @ 82
+  @use call pextStore.getAt  @ 83
+  @use call pextStore.watch  @ 93,110,123,136,151,170
+  @use call pextStore.pollUndo  @ 98,113,126,140,160,176

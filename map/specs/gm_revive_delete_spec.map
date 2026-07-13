@@ -1,0 +1,35 @@
+@spec gm_revive_delete_spec  src=tests/specs/gm_revive_delete_spec.lua  loc=105  sha=f8aa484  cases=2
+@exercises groupManager (gm), trackerManager (h.tm)
+@surface   gm:markGroup, gm:newInstance, tm:flush, gm:setLocalMode, gm:deleteEvent, gm:addEvent, gm:deletedCells, gm:revertDelete
+
+# Intent
+  Revive-on-type. A group event the *current* instance locally deleted is
+  still alive in the shared group. In global mode, a create on that slot
+  must clear the local delete and overwrite the existing group vuid -- not
+  allocate a fresh vuid, which would leave two coincident group events and
+  corrupt every sibling that never deleted it.
+  
+  Same faithful-fake seam as mirm_propagate_spec: real gm rides the fake
+  tm's preflush/postflush; group state is read back by projecting a fresh
+  instance and counting its staged concrete copies.
+
+# Helpers
+  @fn mk()  @ 14-18
+  @fn note(ppq, chan, lane, pitch)  @ 21-25
+  @fn rect(ppq, chan)  @ 28-31
+      -- One note:1 stream on the anchor channel, four bars-worth wide.
+  @fn atPpq(list, ppq)  @ 33-35
+
+# Cases
+  @case 'global create on a slot this instance locally deleted revives the existing group vuid'  [pure]  @ 39-72
+  @case 'gm:revertDelete lifts a local delete override back to the synced value'  [pure]  @ 75-103
+
+# Uses (outbound edges)
+  @use call groupManager.markGroup  @ 45,80
+  @use call groupManager.newInstance  @ 47,64,81
+  @use call trackerManager.flush  @ 48,55,60,82,87,97
+  @use call groupManager.setLocalMode  @ 54,56,86,88
+  @use call groupManager.deleteEvent  @ 55,87
+  @use call groupManager.addEvent  @ 60
+  @use call groupManager.deletedCells  @ 90,101
+  @use call groupManager.revertDelete  @ 96,102

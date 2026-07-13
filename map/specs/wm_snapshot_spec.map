@@ -1,0 +1,40 @@
+@spec wm_snapshot_spec  src=tests/specs/wm_snapshot_spec.lua  loc=302  sha=e2be081  cases=15
+@exercises wiringManager (wm)
+@surface   wm:mutate, wm:load, wm:snapshot
+@harness   mk, reaper.GetSetMediaTrackInfo_String, reaper.TrackFX_AddByName, reaper:setFxGuid, reaper:setFxParamNames, reaper:addSend, reaper.SetMediaTrackInfo_Value, reaper.SetTrackSendInfo_Value, reaper:setFxIO, reaper.TrackFX_SetPinMappings, r._state.projectTracks, r._state.trackGuids
+
+# Intent
+  (none)
+
+# Helpers
+  @fn mkWm(harness)  @ 4-9
+  @fn seedSourceTrack(h, wm, guid)  @ 13-23
+      -- Seed a source track + its graph node (production pairs them 1:1, so snapshot derives
+      -- source identity from the node). guid is the literal guid fakeReaper reports.
+  @fn seedNewTrack(h, guid, trackKey)  @ 27-35
+      -- newTracks have no graph node — each carries its own trackKey on its track meta
+      -- (production: rm:addTrack{trackKey}), recovered by snapshot's rm:tracks() scan.
+  @fn seedFx(h, track, ident, fxId)  @ 38-42
+      -- Add an fx with a known guid to a track. Returns the fxIdx.
+
+# Cases
+  @case 'empty project: snapshot only carries the scratch entry'  [harness]  @ 46-56
+  @case 'sourceTrack: trackKey is the track guid, mainSend defaults on (REAPER parity)'  [harness]  @ 59-71
+  @case 'fx: a bus-aware JSFX is stamped busAware, a plain one is not'  [harness]  @ 75-95
+  @case 'fx surfaces the whole managed chain (foreign FX adopted, not filtered)'  [harness]  @ 98-113
+  @case 'CU instance registered via node.midiInBracketGuid appears in fx'  [harness]  @ 116-137
+  @case 'sends surface as {to=trackKey, kind=audio|midi}; a bare project track is adopted as a dst'  [harness]  @ 140-161
+  @case 'newTrack trackKey: recovered from the newTrack meta (multi-guid)'  [harness]  @ 164-173
+  @case 'B_MAINSEND=0 round-trips as mainSend.on=false'  [harness]  @ 176-184
+  @case 'audio send D_VOL round-trips as send gain; midi send carries none'  [harness]  @ 187-200
+  @case 'send I_SENDMODE=1 round-trips as pos=preFx; pre/post-FX coexist on same channels'  [harness]  @ 203-219
+  @case 'track D_VOL round-trips as mainSend.gain'  [harness]  @ 222-230
+  @case 'I_NCHAN round-trips as nchan'  [harness]  @ 233-241
+  @case 'C_MAINSEND_OFFS round-trips as mainSend.tgtOffset'  [harness]  @ 244-255
+  @case 'C_MAINSEND_NCH round-trips as mainSend.nchan'  [harness]  @ 258-269
+  @case 'pin maps round-trip nested on fx[i].pinMaps; disconnected ports dropped'  [harness]  @ 272-300
+
+# Uses (outbound edges)
+  @use call wiringManager.mutate  @ 18,82,124,289
+  @use call wiringManager.load  @ 49,62,78,101,119,143,167,179,190,206,225,236,247,261,275
+  @use call wiringManager.snapshot  @ 50,64,92,107,131,154,169,182,195,214,228,239,250,253,264,267,293

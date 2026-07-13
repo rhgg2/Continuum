@@ -1,0 +1,59 @@
+@spec tuning_spec  src=tests/specs/tuning_spec.lua  loc=321  sha=d1f01c9  cases=26
+@exercises tuning (tuning)
+@surface   tuning.stepToText, tuning.derive, tuning.scalaPitch, tuning.parseScalaFile, tuning.parseScalaPitches, tuning.scalaToTemper, tuning.genEqual, tuning.edoDegrees, tuning.degreesToSpec, tuning.genHarmonics, tuning.genSubharmonics, tuning.parseChord, tuning.genChord, tuning.genCPS, tuning.genRank2, tuning.nextMosSize, tuning.mosInfo
+
+# Intent
+  Pins tuning.lua's pure display + derivation layer: the Option-B nameless
+  step labels and the derived octaveStep / cellWidth fields. Realisation
+  invariants (I1-I5) live in tm_tuning_spec; projection wiring in
+  view_context_spec.
+
+# Helpers
+  @fn nameless(cents)  @ 9-11
+
+# Cases
+  @case 'preset EDOs derive width 3 and a past-the-end octaveStep'  [pure]  @ 15-25
+  @case 'named step renders name + octave'  [pure]  @ 29-34
+  @case 'nameless step falls back to degree-octave with a dash'  [pure]  @ 38-46
+  @case 'nameless scale past 9 steps widens the cell for 2-digit degrees'  [pure]  @ 50-57
+  @case 'sub-octave period widens the octave field for 2-digit octaves'  [pure]  @ 61-70
+  @case 'derive recomputes width when names are dropped'  [pure]  @ 74-82
+  @case 'partially named scale: named steps keep their label, blanks fall back'  [pure]  @ 86-93
+  @case 'scalaPitch parses ratios, cents, bare integers and n\\m steps'  [pure]  @ 97-111
+  @case 'derive compiles pitches → cents and periodPitch → period'  [pure]  @ 115-123
+  @case 'EDO presets carry n\\m source tokens that derive back to their cents'  [pure]  @ 127-134
+  @case 'parseScalaFile strips comments, description and count; returns pitch tokens'  [pure]  @ 138-146
+  @case 'parseScalaPitches keeps every non-comment, non-blank line'  [pure]  @ 150-155
+  @case 'scalaToTemper prepends the unison, splits the period, flags periodAsStep'  [pure]  @ 159-170
+  @case 'scalaToTemper sorts unordered pitches ascending; widest becomes the period'  [pure]  @ 174-183
+  @case 'scalaToTemper rejects an unparseable token'  [pure]  @ 187-192
+  @case 'genEqual: full EDO and a diatonic subset, base implicit, period last'  [pure]  @ 196-208
+  @case 'edoDegrees: relative cumulates, absolute sorts; non-octave equave suffixes'  [pure]  @ 212-220
+  @case 'degreesToSpec round-trips edoDegrees in both modes'  [pure]  @ 224-228
+  @case 'genHarmonics / genSubharmonics: rooted on the low harmonic, top is period'  [pure]  @ 232-241
+  @case 'genChord: otonal vs inverted, last member is the period'  [pure]  @ 245-257
+  @case 'parseChord rejects fewer than two notes or non-integers'  [pure]  @ 261-265
+  @case 'genCPS: hexany rooted on the smallest product, 1/1 first, ascending'  [pure]  @ 269-275
+  @case 'genRank2: pure-fifth size 7 / up 5 is Pythagorean major, 1/1 first'  [pure]  @ 279-285
+  @case 'genRank2: size 4 / up 2 matches the Scale Workshop worked example'  [pure]  @ 289-294
+  @case 'genRank2: irrational (EDO-step) generator emits cents tokens'  [pure]  @ 298-303
+  @case 'nextMosSize / mosInfo: pure-fifth ladder 2->3->5->7->12; 7 is 5L 2s'  [pure]  @ 307-319
+
+# Uses (outbound edges)
+  @use call tuning.stepToText  @ 31,32,43,44,45,56,69,90,91,92
+  @use call tuning.derive  @ 80
+  @use call tuning.scalaPitch  @ 99,100,101,102,103,104,105,107,108,109,110
+  @use call tuning.parseScalaFile  @ 140
+  @use call tuning.parseScalaPitches  @ 152
+  @use call tuning.scalaToTemper  @ 161,176,189
+  @use call tuning.genEqual  @ 198,204,218
+  @use call tuning.edoDegrees  @ 198,204,214,215,216,218
+  @use call tuning.degreesToSpec  @ 226,227
+  @use call tuning.genHarmonics  @ 234
+  @use call tuning.genSubharmonics  @ 238
+  @use call tuning.parseChord  @ 247,263,264
+  @use call tuning.genChord  @ 250,254
+  @use call tuning.genCPS  @ 271
+  @use call tuning.genRank2  @ 281,291,300
+  @use call tuning.nextMosSize  @ 309,310,311,312,313
+  @use call tuning.mosInfo  @ 314,318

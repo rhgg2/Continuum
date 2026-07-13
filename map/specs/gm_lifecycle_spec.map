@@ -1,0 +1,48 @@
+@spec gm_lifecycle_spec  src=tests/specs/gm_lifecycle_spec.lua  loc=267  sha=9db4384  cases=16
+@exercises groupManager (h.gm), trackerManager (h.tm)
+@surface   gm:eachInstance, gm:mark, gm:newInstance, tm:flush, gm:resizeGroup, gm:deleteInstance, gm:duplicateInto, gm:activeGroup, gm:moveInstance, gm:stateOf
+
+# Intent
+  Commit 1 lifecycle verbs on the real groupManager (fake tm/cm, the
+  same faithful seam as gm_active_spec):
+    deleteInstance -- stage tm deletes, last instance drops the group;
+    moveInstance   -- re-place concretes through the anchor dual, the
+                      moving instance excluded from its own collision;
+    resizeGroup    -- Model A re-origin, leaving members orphaned (not
+                      deleted), gained members absorbed from the actor.
+
+# Helpers
+  @fn mk()  @ 12-15
+  @fn note(ppq, uuid, lane)  @ 17-20
+  @fn rect(ppq, dur, lane)  @ 22-25
+  @fn instOf(gm, groupId)  @ 27-33
+
+# Cases
+  @case 'empty-group newInstance forces a rebuild though it stages no concretes'  [pure]  @ 39-48
+  @case 'empty-group resizeGroup forces a rebuild so tv re-tags cellKind'  [pure]  @ 52-61
+  @case 'deleteInstance: unknown group / instance -> nil, reason'  [pure]  @ 67-75
+  @case 'deleteInstance non-last: stages deletes, instance gone, group stays'  [pure]  @ 79-93
+  @case 'deleteInstance last: group dropped, active pointer cleared'  [pure]  @ 97-106
+  @case 'moveInstance: unknown -> nil, reason'  [pure]  @ 112-118
+  @case 'moveInstance re-places projected concretes at the new anchor'  [pure]  @ 122-134
+  @case 'moveInstance rejects out-of-channel-range, instance untouched'  [pure]  @ 138-146
+  @case 'moveInstance rejects a collision with another group'  [pure]  @ 150-160
+  @case 'moveInstance self-exclusion: overlap with its own old span is allowed'  [pure]  @ 164-171
+  @case 'resizeGroup: unknown / vanishing region -> nil, reason'  [pure]  @ 177-186
+  @case 'resizeGroup end-trim: a member leaving is orphaned, not deleted'  [pure]  @ 190-201
+  @case 'resizeGroup start-trim re-origins (Model A): anchors slide, member leaves'  [pure]  @ 205-217
+  @case 'resizeGroup gained: actor concretes absorbed, fanned to siblings'  [pure]  @ 221-235
+  @case 'resizeGroup rejects when a resized instance would hit another group'  [pure]  @ 239-248
+  @case 'resizeGroup rejects growing one instance into a sibling'  [pure]  @ 252-264
+
+# Uses (outbound edges)
+  @use call groupManager.eachInstance  @ 29
+  @use call groupManager.mark  @ 42,55,70,100,115,126,141,153,154,167,180,193,208,242,243
+  @use call groupManager.newInstance  @ 43,85
+  @use call trackerManager.flush  @ 45
+  @use call groupManager.resizeGroup  @ 58,181,182,184,196,211,230,245,261
+  @use call groupManager.deleteInstance  @ 71,73,90,103
+  @use call groupManager.duplicateInto  @ 82,224,255
+  @use call groupManager.activeGroup  @ 101,105
+  @use call groupManager.moveInstance  @ 116,117,128,143,157,169
+  @use call groupManager.stateOf  @ 195,197,198,215,216,228,232

@@ -1,0 +1,30 @@
+@spec tv_param_bind_spec  src=tests/specs/tv_param_bind_spec.lua  loc=118  sha=a86b164  cases=4
+@exercises trackerView (h.vm), editCursor (h.ec), dataStore (h.ds)
+@surface   vm:setGridSize, ec:setPos, vm:automateParam, vm:paramBinding, ds:get, vm:rebuild, vm:unautomateParam, vm:hideExtraCol
+@harness   mk{seed.notes, seed.ccs}, r:seedMidi, r._state.projectItems, r._state.takeIsMidi
+
+# Intent
+  Binding mutations through the real tv path. automateParam binds the
+  palette param at the cursor channel and requests its cc column;
+  unautomateParam empties the lane, then column + binding go via
+  hideExtraCol; hideExtraCol alone also drops the binding of an empty
+  bound column. Real trackerView + real paramAutomation via harness.mk.
+
+# Helpers
+  @fn ccColIndex(h, cc)  @ 15-19
+
+# Cases
+  @case 'automateParam binds the palette param and requests its cc column'  [harness]  @ 24-48
+  @case 'allocation skips authored cc columns and event-bearing ccs'  [harness]  @ 52-71
+  @case 'unautomateParam deletes lane events then removes column and binding'  [harness]  @ 75-96
+  @case 'hideExtraCol on an empty bound cc column drops the binding'  [harness]  @ 100-115
+
+# Uses (outbound edges)
+  @use call trackerView.setGridSize  @ 28,64,86,107
+  @use call editCursor.setPos  @ 29,65,90,110
+  @use call trackerView.automateParam  @ 31,44,67
+  @use call trackerView.paramBinding  @ 33,45,69,93,113
+  @use call dataStore.get  @ 38,95
+  @use call trackerView.rebuild  @ 39
+  @use call trackerView.unautomateParam  @ 91
+  @use call trackerView.hideExtraCol  @ 111

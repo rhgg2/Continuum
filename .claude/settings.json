@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "jq -r '.tool_input.file_path // empty' | { read -r filepath; if [[ \"$filepath\" == *.lua ]]; then project_root=\"$CLAUDE_PROJECT_DIR\"; [[ \"$filepath\" == \"$project_root\"/* ]] && relpath=\"${filepath#$project_root/}\" && [[ \"$relpath\" != */* ]] && cd \"$project_root\" && python3 tools/map_extract.py \"$relpath\" map/ 2>/dev/null || true; fi; }",
+            "command": "jq -r '.tool_input.file_path // empty' | { read -r filepath; if [[ \"$filepath\" == *.lua && \"$filepath\" == \"$CLAUDE_PROJECT_DIR\"/* ]]; then relpath=\"${filepath#$CLAUDE_PROJECT_DIR/}\"; cd \"$CLAUDE_PROJECT_DIR\"; if [[ \"$relpath\" != */* ]]; then python3 tools/map_extract.py \"$relpath\" map/ 2>/dev/null; elif [[ \"$relpath\" == tests/specs/*.lua ]]; then python3 tools/map_extract.py \"$relpath\" map/specs/ 2>/dev/null; fi; fi; true; }",
             "statusMessage": "Regenerating .map file..."
           }
         ]

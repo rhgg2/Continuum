@@ -1,0 +1,48 @@
+@spec tm_conform_tail_spec  src=tests/specs/tm_conform_tail_spec.lua  loc=169  sha=36ed5a5  cases=7
+@exercises midiManager (h.fm), trackerManager (h.tm)
+@surface   fm:dump, tm:deleteEvent, tm:flush
+@harness   mk{seed.length, seed.notes}
+
+# Intent
+  Universal tail realisation. EVERY note's natural length is logical
+  intent (endppqL, a ceiling; util.OPEN => unbounded; nil => uncached,
+  derive from raw); its raw MIDI note-off is a realised projection tm
+  re-derives every rebuild:
+  
+    raw endppq = max(ppqL+1,
+                     min(ceiling,
+                         nextSameLaneOnsetL + (overlap or 0),
+                         nextSamePitchChanWideOnsetL,
+                         takeLenL))
+  
+    ceiling = (endppqL == util.OPEN) and inf
+              or (endppqL or toLogical(endppq))
+  
+  endppqL is intent: never overwritten from a clipped raw, only
+  backfilled once when absent. A util.OPEN note carries no ceiling
+  (the freshly-placed legato note) and keeps the sentinel. Deleting a
+  blocker grows the raw tail back up to the ceiling (take length when
+  open). There is no `conform` flag: legato is universal, a finite
+  ceiling shorter than every gap is staccato, and `overlap` is the
+  only per-note legato datum (it overruns the next column onset, never
+  the same-pitch MIDI onset).
+  
+  Identity swing in the harness (no swing config) => raw == logical,
+  so a note's ppq/endppq equal its ppqL/endppqL on the way in.
+
+# Helpers
+  @fn noteByPitch(notes, pitch)  @ 30-32
+
+# Cases
+  @case 'open note (no ceiling) clips its raw tail to the next same-lane onset'  [harness]  @ 37-52
+  @case 'finite ceiling shorter than the gap is staccato — stays on blocker delete'  [harness]  @ 56-75
+  @case 'finite ceiling longer than the gap clips down, regrows up to the ceiling'  [harness]  @ 79-97
+  @case 'overlap overruns the next column onset but never the same-pitch MIDI onset'  [harness]  @ 101-124
+  @case 'a trailing open note with no follower clips its raw tail to take length'  [harness]  @ 128-138
+  @case 'a coincident-onset chord-mate is not "following" -> no clip'  [harness]  @ 142-154
+  @case 'raw note-off is floored at onset+1 (degenerate ceiling)'  [harness]  @ 158-167
+
+# Uses (outbound edges)
+  @use call midiManager.dump  @ 47,66,68,72,89,91,94,111,122,136,152,165
+  @use call trackerManager.deleteEvent  @ 69,91
+  @use call trackerManager.flush  @ 70,92

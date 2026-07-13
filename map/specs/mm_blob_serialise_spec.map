@@ -1,0 +1,26 @@
+@spec mm_blob_serialise_spec  src=tests/specs/mm_blob_serialise_spec.lua  loc=84  sha=c1de112  cases=4
+@exercises midiBlob (midiBlob)
+@surface   midiBlob.parse, midiBlob.serialise
+
+# Intent
+  Round-trip pin for midiBlob.serialise (inverse of parse).
+  
+  serialise is the write-path codec: mm-shape records -> a MIDI_SetAllEvts blob.
+  The contract is parse(serialise(x)) == x -- byte layout may reorder events that
+  share a ppq, but the per-type record lists round-trip identically. Passthrough
+  carries events parse doesn't model so a whole-take rewrite stays lossless.
+
+# Helpers
+  @fn tailPpq(blob)  @ 43-50
+      -- The trailing all-notes-off marker carries the take length (EOT); endPpq
+      -- places it past the last event so a whole-take rewrite never shrinks the take.
+
+# Cases
+  @case 'records survive serialise -> parse:  ..'  [pure]  @ 16-24
+  @case 'unmodelled events round-trip through passthrough'  [pure]  @ 29-38
+  @case 'colliding note onsets warn loudly and still serialise'  [pure]  @ 55-71
+  @case 'endPpq positions the EOT tail; never shrinks past the last event'  [pure]  @ 75-81
+
+# Uses (outbound edges)
+  @use call midiBlob.parse  @ 18,20,33,36,69
+  @use call midiBlob.serialise  @ 19,36,66,78,79,80

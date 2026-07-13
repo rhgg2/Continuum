@@ -1,0 +1,38 @@
+@spec timing_atoms_spec  src=tests/specs/timing_atoms_spec.lua  loc=364  sha=4a6bfb0  cases=19
+@exercises timing (timing)
+@surface   timing.resolveFactors, timing.applyFactors, timing.unapplyFactors, timing.atomTilePeriod, timing.logPerRow
+
+# Intent
+  Atoms are pure unit-interval functions {forward, inverse}. forward
+  pins endpoints (id excepted), is monotone on [0,1] for in-range
+  shift, and inverse closes the round-trip to machine precision via
+  Newton iteration. resolveFactors lifts atoms to a tiled
+  ResolvedFactor[]; applyFactors / unapplyFactors consume it.
+
+# Cases
+  @case 'atomTilePeriod doubles for lilt and pocket, passes through for the rest'  [pure]  @ 43-52
+  @case 'forward(u, 0) = u for every atom (zero-shift identity)'  [pure]  @ 58-67
+  @case 'smooth atoms pin endpoints: forward(0, s) = 0 and forward(1, s) = 1'  [pure]  @ 71-83
+  @case 'id forward shifts; inverse undoes it'  [pure]  @ 87-98
+  @case 'smooth inverses close the round-trip to machine precision'  [pure]  @ 102-120
+  @case 'forward is strictly monotone on [0, 1] for in-range shift'  [pure]  @ 124-143
+  @case 'analytic slope stays within [1/K, K] at max in-range shift'  [pure]  @ 147-170
+  @case 'principal lands at nominal + shift, atom-independent'  [pure]  @ 176-192
+  @case 'shift is period-decoupled: same shift, different periods, both land shift away'  [pure]  @ 196-204
+  @case 'classic-58 preset matches the legacy 0.58 mapping'  [pure]  @ 208-212
+  @case 'identity atom shift = 0: pass-through'  [pure]  @ 216-223
+  @case 'identity atom shift ≠ 0: constant output translation, period-scaled'  [pure]  @ 227-245
+  @case 'identity atom shift ≠ 0: apply/unapply round-trip'  [pure]  @ 249-258
+  @case 'per-factor phase: shifts the fixed-point lattice from {kT} to {phase + kT}'  [pure]  @ 264-275
+  @case 'per-factor phase: apply/unapply round-trip'  [pure]  @ 279-288
+  @case 'per-factor phase: phase = nil and phase = 0 are equivalent'  [pure]  @ 292-304
+  @case 'K constant is exposed and atom ranges are derived from it'  [pure]  @ 310-335
+  @case 'existing presets stay within their K-bounded atom ranges'  [pure]  @ 339-352
+  @case 'logPerRow handles non-divisor rpbs (returns float, no truncation)'  [pure]  @ 358-362
+
+# Uses (outbound edges)
+  @use call timing.resolveFactors  @ 181,198,200,210,218,233,251,266,281,294,296
+  @use call timing.applyFactors  @ 184,202,203,211,221,237,254,269,273,284,299,300
+  @use call timing.unapplyFactors  @ 254,284
+  @use call timing.atomTilePeriod  @ 343
+  @use call timing.logPerRow  @ 360

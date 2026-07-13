@@ -1,0 +1,20 @@
+@spec rm_folders_spec  src=tests/specs/rm_folders_spec.lua  loc=60  sha=e2be081  cases=2
+@exercises harness (harness)
+@surface   harness.mk
+@harness   mk, reaper.CountTracks, reaper.InsertTrackAtIndex, reaper.GetTrack, reaper.GetSetMediaTrackInfo_String, reaper.SetMediaTrackInfo_Value, reaper.GetTrackGUID
+
+# Intent
+  routingManager folder structure: positional parent stamping + emergent-track
+  top-level pin. See design/archive/wiring-folders.md § read delta / § plan step 1.
+
+# Helpers
+  @fn mkRm()  @ 7-10
+  @fn seedTrack(reaper, name, opts)  @ 12-22
+  @fn byId(rm, id)  @ 24-26
+
+# Cases
+  @case 'tracks() stamps each foldered track its parent guid (nested)'  [pure]  @ 30-43
+  @case 'addTrack pins emergent tracks top-level when the project ends in an open folder'  [pure]  @ 46-58
+
+# Uses (outbound edges)
+  @use call harness.mk  @ 8

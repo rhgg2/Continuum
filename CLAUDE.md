@@ -73,7 +73,11 @@ caps above. Model docs to imitate: `docs/timing.md`, `docs/tuning.md`,
 
 - Read `map/<file>.map` before fetching source ranges from
   `<file>.lua` — including for files you've worked with before.
-  `docs/<file>.md` for the WHY.
+  `docs/<file>.md` for the WHY. Specs have maps too:
+  `map/specs/<spec>.map` outlines each `tests/specs/*_spec.lua`
+  (intent, cases, harness surface), and `map_query`'s `usedby`
+  includes them — ask it "which specs exercise X" before reading
+  spec source.
 
 - Cross-module navigation: use `mcp__readium_docs__map_query` before
   grepping `map/*.map` — the tool's schema documents filters,

@@ -1,0 +1,34 @@
+@spec vm_slot_writers_spec  src=tests/specs/vm_slot_writers_spec.lua  loc=181  sha=2e28b65  cases=15
+@exercises trackerView (h.vm), configManager (h.cm), dataStore (h.ds)
+@surface   vm:setTemperSlot, cm:getAt, vm:setSwingSlot, ds:get, vm:setColSwingSlot, vm:seedSharedSlots, cm:set
+@harness   mk
+
+# Intent
+  Pin the swing/temper slot-write contract: swing is the take's document-data map
+  (defaultSwing is the config seed); temper is a view-only multi-tier config key.
+
+# Cases
+  @case 'setTemperSlot writes the pick to take, track and project tiers'  [harness]  @ 13-22
+  @case 'setTemperSlot(nil) writes the 12EDO sentinel across the tiers'  [harness]  @ 25-31
+  @case 'setTemperSlot("") writes the 12EDO sentinel across the tiers'  [harness]  @ 34-40
+  @case 'setSwingSlot writes the take map global slot and seeds defaultSwing at project + track'  [harness]  @ 46-55
+  @case 'setSwingSlot localizes a catalogue preset into the project library'  [harness]  @ 58-65
+  @case 'setSwingSlot(nil) never localizes the identity floor'  [harness]  @ 68-73
+  @case 'setColSwingSlot localizes a catalogue preset into the project library'  [harness]  @ 76-81
+  @case 'setSwingSlot(nil) writes the identity sentinel into the take map and seed'  [harness]  @ 84-90
+  @case 'setColSwingSlot writes the channel into the take map and the track seed only'  [harness]  @ 96-105
+  @case 'setColSwingSlot preserves entries on other channels'  [harness]  @ 108-119
+  @case 'setColSwingSlot(chan, nil) removes only that channel'  [harness]  @ 122-133
+  @case 'seedSharedSlots copies defaultSwing into a fresh take\'s swing map'  [harness]  @ 139-147
+  @case 'seedSharedSlots does not overwrite a take that already has a swing map'  [harness]  @ 150-158
+  @case 'seedSharedSlots materialises the identity floor when no seed tier is set'  [harness]  @ 161-166
+  @case 'seedSharedSlots: a take left at Off is not re-seeded after the default changes'  [harness]  @ 171-179
+
+# Uses (outbound edges)
+  @use call trackerView.setTemperSlot  @ 18,28,37
+  @use call configManager.getAt  @ 19,20,21,29,30,38,39,53,54,61,63,72,80,89,103,104
+  @use call trackerView.setSwingSlot  @ 51,62,71,87
+  @use call dataStore.get  @ 52,88,102,115,129,146,157,165,178
+  @use call trackerView.setColSwingSlot  @ 79,101,114,128
+  @use call trackerView.seedSharedSlots  @ 145,156,164,174,177
+  @use call configManager.set  @ 175,176

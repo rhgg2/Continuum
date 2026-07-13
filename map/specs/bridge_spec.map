@@ -1,0 +1,40 @@
+@spec bridge_spec  src=tests/specs/bridge_spec.lua  loc=177  sha=e6ceed1  cases=12
+@exercises bridge (bridge)
+@surface   bridge:tick
+
+# Intent
+  Pin-tests for bridge.lua. Every case drives the REAL entry point — tick() ->
+  scan -> execute -> write — against a temp spool dir, faking only REAPER's
+  EnumerateFiles (the directory-listing seam, exactly as fs_spec does). The
+  request/response protocol is thus exercised end to end, not through a
+  re-implemented handler.
+
+# Helpers
+  @fn tmpDir()  @ 10-12
+  @fn writeFile(p, s)  @ 13
+  @fn readFile(p)  @ 14-17
+  @fn fileExists(p)  @ 18-21
+  @fn parseRes(text)  @ 26-32
+      -- Parse a res file back into fields. The value section is always one line (render
+      -- never emits newlines); print may span lines; an error value carries a
+      -- multi-line traceback — all captured by the non-greedy value / greedy print cut.
+  @fn runChunk(chunk, opts)  @ 36-52
+      -- Plant `chunk` as the sole request, tick the bridge once, return the parsed res.
+      -- opts.reaper(r) may add extra REAPER stubs (e.g. Undo_*) before the tick.
+
+# Cases
+  @case 'round trip: request executed, response written, request deleted first'  [pure]  @ 56-62
+  @case 'chunk sees the Lua stdlib via _G fallback (env holds only handles)'  [pure]  @ 65-70
+  @case 'error path carries message and traceback'  [pure]  @ 73-79
+  @case 'print() output is captured into the print section'  [pure]  @ 82-87
+  @case 'directive --#depth caps render depth'  [pure]  @ 90-95
+  @case 'directive --#undo wraps execution in an undo block'  [pure]  @ 98-109
+  @case 'render survives a cyclic table'  [pure]  @ 112-117
+  @case 'render prints userdata via tostring'  [pure]  @ 120-125
+  @case 'render truncates a wide table with a +N more marker'  [pure]  @ 128-132
+  @case 'render stops at the total byte cap'  [pure]  @ 135-143
+  @case 'scan invalidates the EnumerateFiles cache (idx -1) before listing'  [pure]  @ 146-163
+  @case 'tick over an empty spool writes nothing and does not error'  [pure]  @ 166-175
+
+# Uses (outbound edges)
+  @use call bridge.tick  @ 49,160,172

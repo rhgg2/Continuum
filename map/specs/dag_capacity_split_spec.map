@@ -1,0 +1,25 @@
+@spec dag_capacity_split_spec  src=tests/specs/dag_capacity_split_spec.lua  loc=66  sha=e3c39a1  cases=3
+@exercises DAG (DAG)
+@surface   DAG.allocate
+
+# Intent
+  Capacity bisection (design/wiring-implicit-graph.md § Capacity, step 3): a class whose
+  allocated stream exceeds a REAPER ceiling is split across tracks until each fits. These
+  drive the split directly with a hand-built over-cap partition; the read-side bijection
+  on a *compiled* overflow is pinned by wm_roundtrip_spec.
+
+# Helpers
+  @fn overCapTracks(kind, n)  @ 12-29
+      -- One over-cap track: n fx, each producing one stream value that leaves via a send to a
+      -- distinct dest, so all n stay live to chain-end (no cascade compression). n past the
+      -- ceiling forces a bisection. A single FX never exceeds a ceiling, so this is the
+      -- minimal shape that actually overflows.
+  @fn trackCount(out)  @ 33-37
+
+# Cases
+  @case 'capacity: 65 audio producers over the ceiling bisect until every track fits'  [pure]  @ 41-48
+  @case 'capacity: midi bus overflow bisects too (130 producers past 128 buses)'  [pure]  @ 51-57
+  @case 'capacity: bisection is deterministic'  [pure]  @ 60-64
+
+# Uses (outbound edges)
+  @use call DAG.allocate  @ 43,55,62,63

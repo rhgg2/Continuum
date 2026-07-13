@@ -1,0 +1,26 @@
+@spec dag_allocate_midi_bracket_spec  src=tests/specs/dag_allocate_midi_bracket_spec.lua  loc=238  sha=986bc78  cases=10
+@exercises DAG (DAG)
+@surface   DAG.allocate
+
+# Intent
+  (none)
+
+# Helpers
+  @fn twoSendersOneTrack(opts)  @ 12-36
+      -- Stage-2 fixture: two source-tracks each midi-sending into trackKey-c, hitting
+      -- a distinct terminal-consumer JSFX. fxC2 ends up on bus 1 (fxC1 holds bus 0).
+
+# Cases
+  @case 'midi bracket: terminal consumer on bus N≠0 parks on 127 and swallows its out'  [pure]  @ 40-53
+  @case 'midi bracket: bus-0 consumer needs only the out-blocker'  [pure]  @ 56-72
+  @case 'midi bracket: busAware JSFX is never bracketed (refusal upstream is bypassed here)'  [pure]  @ 75-82
+  @case 'midi bracket: non-JSFX fx is never bracketed (VST bus filter is its own slice)'  [pure]  @ 85-92
+  @case 'midi bracket: consumer-producer JSFX routes its emission to the allocated out bus'  [pure]  @ 95-137
+  @case 'midi bracket: disconnected midi-in JSFX is silenced; bus-0 stream crosses intact'  [pure]  @ 140-162
+  @case 'midi bracket: pure-audio JSFX (scanned midi 0/0) is never bracketed'  [pure]  @ 165-182
+  @case 'midi bracket: send-only JSFX parks the crossing stream before taking its out bus'  [pure]  @ 185-215
+  @case 'midi bracket: bracket pinMaps pass audio identity on pair 1'  [pure]  @ 218-226
+  @case 'midi bracket: same input → same output (determinism)'  [pure]  @ 229-236
+
+# Uses (outbound edges)
+  @use call DAG.allocate  @ 43,67,78,88,122,155,180,204,221,232,233

@@ -1,0 +1,39 @@
+@spec mm_token_spec  src=tests/specs/mm_token_spec.lua  loc=169  sha=bfdeb03  cases=8
+@exercises midiManager (h.mm)
+@surface   mm:tokenOf, fm:notes, fm:byToken, fm:ccs, fm:reload, fm:modify, fm:assign
+@harness   mk{seed.notes, seed.ccs}, bareMM
+
+# Intent
+  Pin-tests for opaque content-keyed addressing on midiManager.
+  
+  Token contract:
+    * Built from the event's identity fields (evType, chan, ppq, and
+      pitch|cc as relevant). Opaque to callers; mm:byToken is the inverse.
+    * Stable across reload as long as identity fields don't change.
+    * Exists for every event mm returns — including plain ccs that have
+      no uuid.
+  
+  This spec exercises the read side only. Step 3 will add the unified
+  write surface and exercise round-trips through assign / delete.
+
+# Helpers
+  @fn token(mm, kind, fields)  @ 15-21
+
+# Cases
+  @case 'note: tokenOf round-trips through byToken'  [harness]  @ 25-38
+  @case 'cc: tokenOf round-trips for a plain (un-uuid\'d) cc'  [harness]  @ 42-51
+  @case 'pb / pa / at / pc: every evType yields a working token'  [harness]  @ 55-76
+  @case 'tokens are stable across reload'  [harness]  @ 80-100
+  @case 'mutating an identity field retires the old token'  [harness]  @ 104-120
+  @case 'distinct events with overlapping fields get distinct tokens'  [harness]  @ 124-147
+  @case 'tokenOf returns nil for a non-event'  [harness]  @ 151-156
+  @case 'byToken returns nil for an unknown token'  [harness]  @ 160-167
+
+# Uses (outbound edges)
+  @use call midiManager.tokenOf  @ 20,31,90,110,116,139,140,154,155
+  @use call midiManager.notes  @ 30,88,109,115,139
+  @use call midiManager.byToken  @ 33,46,71,94,95,114,118,165,166
+  @use call midiManager.ccs  @ 89,140
+  @use call midiManager.reload  @ 92
+  @use call midiManager.modify  @ 112
+  @use call midiManager.assign  @ 112

@@ -1,0 +1,24 @@
+@spec tm_rescale_conform_spec  src=tests/specs/tm_rescale_conform_spec.lua  loc=39  sha=4a24ef6  cases=1
+@exercises midiManager (h.fm)
+@surface   fm:name, fm:length, fm:dump
+@harness   mk{seed.notes}
+
+# Intent
+  Rescale-grow self-repair for conform notes.
+  
+  rescaleLength stages every event's doubled geometry, flushes, THEN
+  grows the take (tm:975-979). At that flush the take is still the OLD
+  length, so the flush-time CSK seam clips a trailing conform note's
+  raw note-off to the stale length. The conform note's natural endppqL
+  is preserved (the seam never writes endppqL for a conform note), so
+  conform-tail on setLength's reload rebuild re-derives the raw tail at
+  the now-current take length. Pins that round-trip: the clip is
+  transient, the end state correct.
+
+# Cases
+  @case 'rescale grow 2x re-grows a trailing conform note raw tail'  [harness]  @ 16-37
+
+# Uses (outbound edges)
+  @use call midiManager.name  @ 26
+  @use call midiManager.length  @ 28
+  @use call midiManager.dump  @ 30

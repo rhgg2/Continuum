@@ -1,0 +1,32 @@
+@spec rm_midi_routing_spec  src=tests/specs/rm_midi_routing_spec.lua  loc=156  sha=e2be081  cases=9
+@exercises harness (harness), routingManager (rm)
+@surface   harness.mk, rm:tracks, rm:assignFx, rm:writeChainMidi
+@harness   mk, reaper.CountTracks, reaper.InsertTrackAtIndex, reaper.GetTrack, reaper.GetSetMediaTrackInfo_String, reaper:setTrackFX, reaper.GetTrackGUID
+
+# Intent
+  routingManager Phase 5: per-FX MIDI routing. tracks() nests fx.midi =
+  { inBus, outBus, outDisabled } for non-JS fx (nil for JS fx). assignFx{midi}
+  drives the in/out bus + out-passthrough bits via state-chunk surgery, which
+  stays private. The chunk addresses FX blocks by non-JS index, so the write
+  must skip JS fx when locating the target block.
+
+# Helpers
+  @fn mkRm()  @ 10-14
+  @fn seedTrack(reaper, name, fx)  @ 16-23
+
+# Cases
+  @case 'tracks() nests midi for non-JS fx with passthrough defaults'  [pure]  @ 27-35
+  @case 'JS fx carries no midi record'  [pure]  @ 38-44
+  @case 'assignFx{midi} sets in/out bus; read reflects it'  [pure]  @ 47-58
+  @case 'assignFx{midi} toggles output passthrough off'  [pure]  @ 61-70
+  @case 'midi block index skips JS fx: write lands on the right non-JS fx'  [pure]  @ 73-86
+  @case 'midi block index skips a bare-ident JS fx (real fx_ident has no JS: prefix)'  [pure]  @ 89-107
+  @case 'reads routing from the stream tail past a preset name'  [pure]  @ 110-119
+  @case 'routing write on a preset-bearing fx targets the record, not the name'  [pure]  @ 122-135
+  @case 'writeChainMidi patches several fx in one chunk pass; later patch keeps the earlier'  [pure]  @ 138-154
+
+# Uses (outbound edges)
+  @use call harness.mk  @ 11
+  @use call routingManager.tracks  @ 32,43,51,55,65,69,77,82,99,105,116,127,131,142,149
+  @use call routingManager.assignFx  @ 53,67,80,103,129
+  @use call routingManager.writeChainMidi  @ 144

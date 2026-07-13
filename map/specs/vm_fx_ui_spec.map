@@ -1,0 +1,53 @@
+@spec vm_fx_ui_spec  src=tests/specs/vm_fx_ui_spec.lua  loc=353  sha=2e802f5  cases=18
+@exercises trackerManager (h.tm), midiManager (h.fm), trackerView (h.vm), editCursor (h.ec)
+@surface   tm:flush, tm:getChannel, fm:dump, vm:setGridSize, ec:setPos, vm:fxHostAtCursor, vm:setNoteFx, vm:setFxField, vm:noteFx, vm:addFxStage, vm:removeFxStage, vm:moveFxStage, vm:fxHostForEdit, tm:addEvent
+@harness   mk
+
+# Intent
+  UI wiring for the note-FX editor (retrig + vibrato + slide). Pins fxHostAtCursor ->
+  setNoteFx / setFxKindActive / setFxField. Continuous kinds coexist -- both sum offline into pb seats.
+
+# Helpers
+  @fn addHost(h, fx, lane)  @ 8-12
+  @fn lane1Idx(h)  @ 14-18
+  @fn hostUuid(h)  @ 22-26
+      -- The host: parked off-take once it carries a discrete kind, else the sole
+      -- authored (non-derived) take note.
+  @fn fxNoteCount(h, uuid)  @ 28-34
+  @fn byKind(fx)  @ 36-38
+
+# Cases
+  @case 'fxHostAtCursor covers the whole note span, nil past its tail'  [harness]  @ 42-58
+  @case 'fxHostAtCursor: a PA under the caret is skipped, not treated as a host'  [harness]  @ 64-76
+  @case 'setNoteFx seeds retrig -> rebuild expands; REMOVE clears'  [harness]  @ 80-90
+  @case 'setFxField writes period; finer period adds fxNotes'  [harness]  @ 94-104
+  @case 'setFxField writes ramp; fxNote velocities shift'  [harness]  @ 108-122
+  @case 'setFxField rewrites one entry, leaving siblings intact'  [harness]  @ 126-137
+  @case 'addFxStage appends a stage, preserving the earlier ones'  [harness]  @ 141-150
+  @case 'removeFxStage drops one stage; last removal clears fx'  [harness]  @ 154-166
+  @case 'moveFxStage swaps adjacent stages, reordering the series'  [harness]  @ 170-181
+  @case 'addFxStage appends a second stage of an existing kind (duplicates allowed)'  [harness]  @ 185-194
+  @case 'addFxStage seeds slide alongside vibrato (continuous kinds coexist)'  [harness]  @ 198-209
+  @case 'slide target='fixed' bends by its cents demand; 'next' needs a following note'  [harness]  @ 213-228
+  @case 'setFxField writes vibrato depth and onset'  [harness]  @ 232-242
+  @case 'a vibrato entry on a lane-1 host seats a pb stream'  [harness]  @ 246-257
+  @case 'authoring fx reconciles the CC node (pa:apply on every setNoteFx)'  [harness]  @ 261-274
+  @case 'a parked host cell routes to the parked backing at its onset row only'  [harness]  @ 278-292
+  @case 'note-host augment: cc cells under the window tag parked (route to the off-take base)'  [harness]  @ 296-322
+  @case 'each chain verb mints one labelled undo point'  [harness]  @ 328-351
+
+# Uses (outbound edges)
+  @use call trackerManager.flush  @ 11,47,70,307
+  @use call trackerManager.getChannel  @ 23
+  @use call midiManager.dump  @ 25,30,117,220,253
+  @use call trackerView.setGridSize  @ 48,71,84,98,112,131,282,309,332
+  @use call editCursor.setPos  @ 51,54,56,74,287
+  @use call trackerView.fxHostAtCursor  @ 52,55,57,75,288
+  @use call trackerView.setNoteFx  @ 86,88,251,268,272
+  @use call trackerView.setFxField  @ 101,114,133,207,226,237,238,270,345
+  @use call trackerView.noteFx  @ 102,115,134,147,161,165,177,191,204,208,239,290
+  @use call trackerView.addFxStage  @ 146,190,203,344
+  @use call trackerView.removeFxStage  @ 160,164,346
+  @use call trackerView.moveFxStage  @ 176,180
+  @use call trackerView.fxHostForEdit  @ 291
+  @use call trackerManager.addEvent  @ 307

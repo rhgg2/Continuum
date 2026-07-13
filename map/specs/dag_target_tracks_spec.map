@@ -1,0 +1,60 @@
+@spec dag_target_tracks_spec  src=tests/specs/dag_target_tracks_spec.lua  loc=904  sha=8233379  cases=39
+@exercises DAG (DAG)
+@surface   DAG.targetTracks, DAG.compile
+
+# Intent
+  (none)
+
+# Helpers
+  @fn source(id, guid)  @ 4-9
+  @fn fx(id, opts)  @ 11-19
+  @fn master(opts)  @ 21-26
+  @fn mk(nodes, edges)  @ 28-33
+  @fn tracksOf(g)  @ 35-37
+  @fn cuEntries(entry)  @ 40-44
+      -- The merge CUs of a tracks entry as {id, node} pairs (synthNodes is cuId-keyed).
+
+# Cases
+  @case 'empty graph: only master, tracks is empty (master implicit, no scratch needed)'  [pure]  @ 48-52
+  @case 'source + master, no edges: source-track entry only, master implicit'  [pure]  @ 55-66
+  @case 'inert fx alone: parks on scratch'  [pure]  @ 69-78
+  @case 'multiple inert fx coexist on scratch (sorted by id)'  [pure]  @ 81-89
+  @case 'inert fx + active source path: scratch and source-track coexist independently'  [pure]  @ 92-107
+  @case 'wire from inert fx to live class produces no send (inert vertex carries no signal)'  [pure]  @ 110-128
+  @case 'source -> fx -> master: one class on source track, fxOrder=[f], mainSend=true'  [pure]  @ 131-145
+  @case 'two-source fanin: mix+master share class, mix lands on REAPER master'  [pure]  @ 148-170
+  @case 'inter-class send between two managed tracks (non-master target)'  [pure]  @ 173-201
+  @case 'multiple audio wires to same target class: outWires has one entry per wire (no collapse)'  [pure]  @ 204-227
+  @case 'fan-out to co-trackKey consumers: outWires stay distinct (no identical sends)'  [pure]  @ 232-254
+  @case 'intra-class fxOrder is topological (CU then downstream fx)'  [pure]  @ 257-272
+  @case 'fxOrder drains ready consumers before sibling producers (GH tiebreak)'  [pure]  @ 275-293
+  @case 'cross-track midi fan-in coalesces onto one bus, no merge CU'  [pure]  @ 296-320
+  @case 'gain on an inter-class wire folds onto the send (no CU in fxOrder)'  [pure]  @ 323-342
+  @case 'gain on the sole wire to master folds onto mainSendGain (no CU)'  [pure]  @ 345-357
+  @case 'two wires to master from one class keep their CU (one fader, two gains)'  [pure]  @ 360-379
+  @case 'absorb: single audio parent (extra src via midi) → B hosts on guid-s1, midi send retargets'  [pure]  @ 383-399
+  @case 'absorb: primary override picks trackKey even with two audio parents'  [pure]  @ 403-418
+  @case 'absorb: chain through two hops lands on terminal source trackKey'  [pure]  @ 422-447
+  @case 'absorb: gain on now-intra-trackKey wire stays CU (no send to fold onto)'  [pure]  @ 451-466
+  @case 'absorb: master-hosted class never absorbed even with single audio parent'  [pure]  @ 470-490
+  @case 'absorb: source-hosted class is never the absorbee (its trackKey is the source track)'  [pure]  @ 494-506
+  @case 'absorb: send from another non-trackKey class retargets to trackKey classKey'  [pure]  @ 510-533
+  @case 'intraConns: source -> fx is the only intra wire; fx -> master is a parent send'  [pure]  @ 544-560
+  @case 'intraConns: fx -> fx chain conn carries both port indices'  [pure]  @ 564-581
+  @case 'intraConns: fx -> master inside master-hosted class anchors track-output'  [pure]  @ 585-603
+  @case 'intraConns: folded boundary gain CU never appears'  [pure]  @ 607-625
+  @case 'parentFeed: cross-trackKey source-to-master stamps source on sender'  [pure]  @ 632-647
+  @case 'parentFeed: cross-trackKey fx-to-master names the fx producer (post-fold)'  [pure]  @ 651-668
+  @case 'parentFeed: folded gain CU on master-bound wire bypassed to real producer'  [pure]  @ 672-687
+  @case 'parentFeed: midi cross-trackKey to master-hosted does not set parentFeed'  [pure]  @ 692-706
+  @case 'intraConns: un-folded gain CU on intra-trackKey wire is included'  [pure]  @ 710-736
+  @case 'merge: intra gain is a per-consumer merge CU (nPairs=1, audioSum=0)'  [pure]  @ 742-762
+  @case 'merge: two gained wires to master collapse to one audioSum CU (last-wins fix)'  [pure]  @ 765-795
+  @case 'merge: matrix-fed audio fan-in past 16 fans out to a CU cascade'  [pure]  @ 798-825
+  @case 'merge: parent-send audio fan-in past 16 builds a sum-tree of CUs'  [pure]  @ 828-857
+  @case 'merge: distinct consumers get distinct merge CUs (per-consumer identity)'  [pure]  @ 860-877
+  @case 'midi absorption: consumer of a lone source-direct parent co-hosts, no new track'  [pure]  @ 880-902
+
+# Uses (outbound edges)
+  @use call DAG.targetTracks  @ 36
+  @use call DAG.compile  @ 36

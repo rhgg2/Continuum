@@ -1,0 +1,48 @@
+@spec group_clear_zone_spec  src=tests/specs/group_clear_zone_spec.lua  loc=349  sha=fcf8d06  cases=11
+@exercises midiManager (h.fm), trackerView (h.vm), trackerManager (h.tm), commandManager (h.cmgr), editCursor (h.ec), groupManager (h.gm)
+@surface   fm:dump, vm:clearRegionAt, tm:flush, tm:getChannel, cmgr:invoke, ec:setPos, gm:mark, vm:eventsInRect, ec:regionArm, ec:isInRegionMode, vm:clearMoveGap, vm:movePreview, gm:moveInstance
+@harness   mk{seed.notes, seed.ppq, seed.dur, seed.chanLo, seed.streams, seed.length}
+
+# Intent
+  tv:clearRegionAt and the group quick-verbs that drive it. A group
+  dropped on populated cells must clear the destination first (gm only
+  re-places its own concretes). The load-bearing case: a note that
+  STARTS before the zone and sustains into it is tail-trimmed to the
+  boundary, never deleted and never left overlapping -- an overlapping
+  survivor spills the projection onto another lane on rebuild, and lane
+  identity is strictly preserved under groups. Real trackerView + real
+  groupManager via harness.mk (the wired path, not a fake).
+
+# Helpers
+  @fn noteCol(h, chan)  @ 13-17
+  @fn laneCol(h, chan, lane)  @ 19-23
+  @fn byPitch(notes, p)  @ 25-27
+  @fn pitches(notes)  @ 29-34
+
+# Cases
+  @case 'clearRegionAt: in-zone deleted, pre-zone straddler keeps authored tail, outside untouched'  [harness]  @ 38-69
+  @case 'clearRegionAt trims an open-tailed straddler to the zone boundary'  [harness]  @ 76-96
+  @case 'clearRegionAt: a stream not in the rect is left alone'  [harness]  @ 100-114
+  @case 'groupPaste clears the destination before stamping the projection'  [harness]  @ 118-145
+  @case 'a wired move previews non-destructively, then clears + relocates on exit'  [harness]  @ 149-178
+  @case 'clearMoveGap on an overlapping nudge spares the cells the source still covers'  [harness]  @ 182-197
+  @case 'committing a move that hangs off the take withholds the off-take member; a later move revives it'  [harness]  @ 201-232
+  @case 'tv:movePreview reports the armed drag geometry; nil when idle'  [harness]  @ 236-257
+  @case 'a channel move clears the destination channel, relocates the member, preserves lane'  [harness]  @ 261-291
+  @case 'a lane move clears the destination lane, relanes the member via del+add, holds through rebuild'  [harness]  @ 295-327
+  @case 'a lane move onto another group\'s lane is rejected (lane-aware conflict)'  [harness]  @ 331-347
+
+# Uses (outbound edges)
+  @use call midiManager.dump  @ 50,59,111,135,168,173,194,220,229,280,285,316,321,346
+  @use call trackerView.clearRegionAt  @ 54,84,107
+  @use call trackerManager.flush  @ 57,87,110,193
+  @use call trackerManager.getChannel  @ 90
+  @use call commandManager.invoke  @ 131,133,165,166,172,215,216,217,218,227,228,248,274,284,309,320
+  @use call editCursor.setPos  @ 132,161,213,225,244,272,307
+  @use call groupManager.mark  @ 159,211,243,270,305,339,340
+  @use call trackerView.eventsInRect  @ 159,211,243,270,305,339,340
+  @use call editCursor.regionArm  @ 162,214,226,245,273,308
+  @use call editCursor.isInRegionMode  @ 163
+  @use call trackerView.clearMoveGap  @ 190
+  @use call trackerView.movePreview  @ 246,249,276,311
+  @use call groupManager.moveInstance  @ 343

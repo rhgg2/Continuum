@@ -1,0 +1,33 @@
+@spec dag_bus_spec  src=tests/specs/dag_bus_spec.lua  loc=325  sha=37a60a3  cases=10
+@exercises DAG (DAG)
+@surface   DAG.compile, DAG.targetTracks, DAG.allocate
+
+# Intent
+  Matrix-buss isolation + sub-threshold splice (design/wiring-busses-v2.md § DAG):
+  ≥2x2 bus is classed alone; anything below splices to direct edges at product gains.
+
+# Helpers
+  @fn source(id, guid)  @ 6-11
+  @fn fx(id, opts)  @ 13-20
+  @fn bus(id)  @ 22-25
+  @fn mk(nodes, edges)  @ 27-33
+  @fn audio(from, to, gain)  @ 35-39
+  @fn matrix()  @ 42-58
+      -- s1, s2 -> bus -> fa, fb -> master: the canonical 2x2 matrix.
+
+# Cases
+  @case 'signal-bearing bus sits alone in its class; children inherit sources, not the marker'  [pure]  @ 64-70
+  @case 'bus class never absorbs into its single audio parent class'  [pure]  @ 73-93
+  @case 'fx fed solely by the bus keeps its own track — never absorbed onto the summing track'  [pure]  @ 96-104
+  @case 'matrix realizes one fx-less summing track: in-sends pair 1, out-sends preFx, nchan 2'  [pure]  @ 107-130
+  @case 'gains land natively: in-send, out-send, main-send volumes; no CU anywhere'  [pure]  @ 133-163
+  @case 'two matrix taps from one track: each wire keeps its own gain on its own send'  [pure]  @ 166-191
+  @case 'degenerate busses splice to nothing: no class, no track, no stray wires'  [pure]  @ 194-223
+  @case 'fan-in splices out: per-source direct sends at in×out product gains'  [pure]  @ 226-253
+  @case 'fan-out splice: crossings carry composed gains + full provenance'  [pure]  @ 256-287
+  @case 'chained fans compose: n→1→m splices to n×m crossings with three-factor gains'  [pure]  @ 290-323
+
+# Uses (outbound edges)
+  @use call DAG.compile  @ 66,84,98,110,141,175,204,236,265,300
+  @use call DAG.targetTracks  @ 101,111,148,184,213,244
+  @use call DAG.allocate  @ 111

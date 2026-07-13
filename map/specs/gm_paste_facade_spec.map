@@ -1,0 +1,37 @@
+@spec gm_paste_facade_spec  src=tests/specs/gm_paste_facade_spec.lua  loc=116  sha=78d7dd3  cases=5
+@exercises midiManager (h.fm), trackerView (h.vm), groupManager (h.gm), editCursor (h.ec), trackerManager (h.tm), commandManager (h.cmgr)
+@surface   fm:notes, vm:selectionAsRect, gm:markGroup, vm:eventsInRect, ec:selClear, gm:newInstance, tm:flush, ec:setPos, cmgr:invoke, gm:setLocalMode
+@harness   mk{seed.notes}
+
+# Intent
+  Stage 6 full-stack: paste routes its clear+write through the leaf facade, so a
+  paste into a group region auto-joins + propagates, an overwrite rewrites every
+  instance, and an aliasing paste is refused in global mode. Real tm/mm/gm/tv;
+  fake REAPER. see design/group-aware-editing.md § Stages (6).
+
+# Helpers
+  @fn noteCol(h, chan)  @ 8-12
+  @fn allNotes(h)  @ 14-20
+  @fn noteAt(h, chan, ppq)  @ 22-26
+  @fn setup(harness, sibPpq, extraSeed)  @ 30-42
+      -- Region spans ppq 0..120 (rows 0-1) on chan 1, member at ppq 0; a sibling
+      -- instance sits `sibPpq` later. Returns the harness and chan-1 note column index.
+
+# Cases
+  @case 'paste into a region auto-joins the pattern and propagates to every instance'  [harness]  @ 46-56
+  @case 'paste overwriting a member rewrites the shared slot for every instance'  [harness]  @ 59-71
+  @case 'in localMode a paste into a region stays a per-instance add (sibling untouched)'  [harness]  @ 74-85
+  @case 'a paste whose footprint spans two instances of one group is refused (global)'  [harness]  @ 88-100
+  @case 'a paste landing wholly inside one instance is allowed (precision, not over-refusal)'  [harness]  @ 103-114
+
+# Uses (outbound edges)
+  @use call midiManager.notes  @ 16
+  @use call trackerView.selectionAsRect  @ 36
+  @use call groupManager.markGroup  @ 37
+  @use call trackerView.eventsInRect  @ 37
+  @use call editCursor.selClear  @ 38
+  @use call groupManager.newInstance  @ 39
+  @use call trackerManager.flush  @ 40
+  @use call editCursor.setPos  @ 49,51,64,66,77,80,97,110
+  @use call commandManager.invoke  @ 50,52,65,67,78,81,94,98,108,111
+  @use call groupManager.setLocalMode  @ 79

@@ -1,0 +1,47 @@
+@spec gm_realisation_spec  src=tests/specs/gm_realisation_spec.lua  loc=166  sha=f8aa484  cases=5
+@exercises groupManager (gm), trackerManager (h.tm)
+@surface   gm:markGroup, gm:newInstance, tm:flush, gm:addEvent, gm:deleteEvent, gm:duplicateInto
+
+# Intent
+  The gm <-> tm intent/realisation seam (Option B: the per-instance
+  `conform` marker and the group-frame legato passes are gone; tm's
+  universal tail pass owns every realised note-off, pinned by
+  tm_conform_tail_spec). gm's job is now narrow: carry INTENT into the
+  group frame and back out to siblings. It reads a concrete's intent
+  from the tm-stamped endppqL (anchor-rebased to a group `dur`, or
+  open == nil dur) and STAGES that intent back as endppq (finite, or
+  util.OPEN); the real tm stamps endppqL and derives the realised
+  tail. The fake tm does neither, so these tests assert the staged
+  endppq, never a realised clip.
+  
+  These tests pin that seam through the real preflush/reproject path
+  with a faithful fake tm (it does NOT run the tail pass -- so it can
+  only assert what gm STAGES as intent, never a realised clip).
+
+# Helpers
+  @fn mk()  @ 19-23
+  @fn note(ppq, pitch, dur, extra)  @ 30-38
+      -- Finite by default: a real authored note carries endppqL (intent
+      -- ceiling). `extra.open=true` seeds the freshly-placed open note --
+      -- endppqL = util.OPEN. (`open` itself is not a note field any more;
+      -- it must not leak into the group template via copyScalars.)
+  @fn rect()  @ 42-43
+      -- 960-wide region; siblings stack at the next bar (half-open: [0,960)
+      -- and [960,1920) are disjoint, so no regionConflict).
+  @fn addAt(staged, ppq)  @ 45-47
+  @fn assignFor(staged, evt)  @ 48-50
+
+# Cases
+  @case 'a finite note carries its ceiling (endppqL) rigidly to the sibling'  [pure]  @ 54-66
+  @case 'an open note travels as open: no ceiling, provisional onset+1 tail'  [pure]  @ 70-81
+  @case 'a group-level create is open in the group frame (no birth ceiling)'  [pure]  @ 85-112
+  @case 'a group-level delete does NOT grow the predecessor in the group frame'  [pure]  @ 116-138
+  @case 'markGroup seed is canonical -- it never rewrites the take geometry'  [pure]  @ 142-164
+
+# Uses (outbound edges)
+  @use call groupManager.markGroup  @ 58,74,89,120
+  @use call groupManager.newInstance  @ 59,75,90,121
+  @use call trackerManager.flush  @ 91,94,122,124,152
+  @use call groupManager.addEvent  @ 94
+  @use call groupManager.deleteEvent  @ 124
+  @use call groupManager.duplicateInto  @ 151

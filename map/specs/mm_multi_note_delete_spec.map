@@ -1,0 +1,26 @@
+@spec mm_multi_note_delete_spec  src=tests/specs/mm_multi_note_delete_spec.lua  loc=56  sha=4a6bfb0  cases=1
+@exercises midiManager (h.mm)
+@surface   mm:modify, mm:notes, mm:tokenOf, mm:delete
+@harness   fakeReaper:bindTake
+
+# Intent
+  Multi-deleteNote in one mm:modify must resolve REAPER note idxs against
+  the live array, not against idxs captured before the deletes started
+  shifting things. MIDI_DeleteNote shifts all higher idxs down by one;
+  a subsequent delete using a stale captured idx hits the wrong note.
+  
+  Reproduces the symptom the user hit: notes ABAB in one column, select
+  first AB, delete → .B.B (A1 deleted as expected, but the second delete
+  hit A2 instead of B1, leaving B1 and B2 surviving).
+
+# Helpers
+  @fn freshTake()  @ 13-19
+
+# Cases
+  @case 'multi-deleteNote in one modify deletes exactly the tokens passed'  [pure]  @ 23-54
+
+# Uses (outbound edges)
+  @use call midiManager.modify  @ 29,40
+  @use call midiManager.notes  @ 37,46
+  @use call midiManager.tokenOf  @ 37
+  @use call midiManager.delete  @ 41,42

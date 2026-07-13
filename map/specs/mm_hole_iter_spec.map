@@ -1,0 +1,30 @@
+@spec mm_hole_iter_spec  src=tests/specs/mm_hole_iter_spec.lua  loc=98  sha=480c432  cases=3
+@exercises midiManager (h.mm)
+@surface   mm:notes, mm:tokenOf, mm:modify, mm:delete, mm:ccs, mm:ccsRaw, mm:events
+@harness   bareMM
+
+# Intent
+  Phase B pin - design/deferred-reindex.md item 2. mm's four iterators skip
+  the holes a delete leaves in the sparse note/cc arrays and keep yielding
+  survivors past the hole, up to the noteCount/ccCount high-water mark.
+  
+  The holes only exist mid-modify today (mm:modify compacts at unwind), so
+  the spec observes them from inside the modify closure - the exact state
+  the deferred-reindex flip (Phase D) makes the whole pipeline run against.
+
+# Helpers
+  @fn ppqsOf(iter)  @ 11-16
+
+# Cases
+  @case 'notes() skips a mid-array delete hole and yields the survivor past it'  [harness]  @ 20-39
+  @case 'ccs() and ccsRaw() skip a mid-array delete hole'  [harness]  @ 43-64
+  @case 'events() skips holes in both the note and the cc array'  [harness]  @ 68-96
+
+# Uses (outbound edges)
+  @use call midiManager.notes  @ 28,33,83
+  @use call midiManager.tokenOf  @ 28,51,83,84
+  @use call midiManager.modify  @ 31,54,87
+  @use call midiManager.delete  @ 32,55,88,89
+  @use call midiManager.ccs  @ 51,56,84
+  @use call midiManager.ccsRaw  @ 57
+  @use call midiManager.events  @ 90

@@ -1,0 +1,28 @@
+@spec patternEditor_modal_spec  src=tests/specs/patternEditor_modal_spec.lua  loc=159  sha=b9a99d6  cases=4
+@exercises scratch (scratch)
+@surface   scratch.track
+@harness   mk, reaper.GetMediaItemTake_Track, reaper.CountTrackMediaItems
+
+# Intent
+  design/fx-patterns.md P3 step d: the modal editing surface. Pins that launch
+  raises the modal + sweeps on close, that the mini cmgr dispatches the editing
+  subset onto the checkout (a whitelisted command edits it, an excluded chord is
+  inert), and that an unconsumed Esc closes. Drives the real handleInput pass
+  against a controllable imgui; no grid draw.
+
+# Helpers
+  @fn setKeys(keys, mods)  @ 37-40
+  @fn newModalHost()  @ 46-51
+      -- Capture the open state so a test can invoke onClose the way modalHost would.
+  @fn loadPE(deps)  @ 53-59
+  @fn noop()  @ 75
+  @fn withEditor(harness)  @ 77-82
+
+# Cases
+  @case 'launch mints a checkout and raises the modal; onClose sweeps it'  [harness]  @ 86-100
+  @case 'a whitelisted key dispatches on the mini cmgr; an excluded chord is inert'  [harness]  @ 104-118
+  @case 'the chord gesture is gated off the pattern surface'  [harness]  @ 122-145
+  @case 'an unconsumed Esc closes the modal'  [harness]  @ 149-157
+
+# Uses (outbound edges)
+  @use call scratch.track  @ 89

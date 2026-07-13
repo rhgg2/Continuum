@@ -1,0 +1,33 @@
+@spec tm_swing_spec  src=tests/specs/tm_swing_spec.lua  loc=166  sha=d20cba1  cases=9
+@exercises trackerManager (h.tm), timing (timing), dataStore (h.ds), trackerView (h.vm), midiManager (h.fm)
+@surface   tm:fromLogical, tm:toLogical, tm:resolution, timing.resolveFactors, timing.applyFactors, ds:assign, vm:setSwingSlot, tm:rebuild, fm:dump, tm:byUuid
+@harness   mk{seed.length, seed.resolution, seed.notes}
+
+# Intent
+  Exercises tm's swing transforms via tm:fromLogical / tm:toLogical
+  (the public swing entry points). Contract: missing slots pass through;
+  column is inner and global is outer (see design/swing.md). The
+  eval/invert round-trip itself is timed-level — see timing_composite_spec.
+
+# Cases
+  @case 'no slot configured ⇒ fromLogical / toLogical are identity'  [harness]  @ 14-21
+  @case 'global classic-58 fixes period boundaries and bows the interior'  [harness]  @ 25-39
+  @case 'offset is added inside the round (folds with delay-ppq)'  [harness]  @ 43-54
+  @case 'colSwing applies only to the named channel'  [harness]  @ 58-69
+  @case 'column is inner, global is outer (order matters)'  [harness]  @ 73-94
+  @case 'missing slot name falls back to identity'  [harness]  @ 98-107
+  @case 'identity composite (empty array) acts as pass-through'  [harness]  @ 111-120
+  @case 'cache invalidates across a swing edit'  [harness]  @ 124-132
+  @case 'a swing change keeps every uuid resolvable (reseat re-keys tokens)'  [harness]  @ 136-164
+
+# Uses (outbound edges)
+  @use call trackerManager.fromLogical  @ 18,34,35,36,38,52,66,68,89,106,119,129,131,154,157
+  @use call trackerManager.toLogical  @ 19
+  @use call trackerManager.resolution  @ 83
+  @use call timing.resolveFactors  @ 84,85
+  @use call timing.applyFactors  @ 86,87
+  @use call dataStore.assign  @ 130
+  @use call trackerView.setSwingSlot  @ 150
+  @use call trackerManager.rebuild  @ 151
+  @use call midiManager.dump  @ 156
+  @use call trackerManager.byUuid  @ 160

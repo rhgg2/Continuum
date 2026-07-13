@@ -1,0 +1,35 @@
+@spec tm_proj_symmetry_spec  src=tests/specs/tm_proj_symmetry_spec.lua  loc=95  sha=652cbb1  cases=2
+@exercises harness (harness), trackerManager (h.tm)
+@surface   harness.mk, tm:getChannel
+@harness   mk{seed.length, seed.resolution, seed.notes}
+
+# Intent
+  Projection symmetry: the column-projection step must expose BOTH the
+  onset and the tail in the logical frame, never raw.
+  
+  Before: the logical projection set only evt.ppq = round(ppqL); evt.endppq was
+  left as the tail pass's CLIPPED RAW value. So a tv consumer reading
+  evt.endppq got a swung, clipped realisation while evt.ppq was logical
+  -- the asymmetry this suite pins shut.
+  
+  After: evt.endppq = endppqL (authored logical ceiling, UNCLIPPED;
+  util.OPEN stays OPEN). evt.endppqC = clipped logical ceiling, the
+  float inversion of the realised raw tail (render-only; the tp tail
+  build is the sole consumer; ctx:isOnGrid owns the row-membership
+  tolerance). Raw never appears on the tv surface.
+  
+  Real tm, real cm under a non-identity swing (classic-55) so a raw
+  leak is detectable: logical 600 and swung-raw(600) differ.
+
+# Helpers
+  @fn probe()  @ 27
+  @fn seeded(notes)  @ 29-35
+  @fn noteAt(tm, pitch)  @ 37-41
+
+# Cases
+  @case 'finite clipped note: endppq is authored logical, endppqC is clipped logical, neither is raw'  [pure]  @ 45-71
+  @case 'open tail: endppq stays util.OPEN, endppqC is the clipped logical render position'  [pure]  @ 75-93
+
+# Uses (outbound edges)
+  @use call harness.mk  @ 27
+  @use call trackerManager.getChannel  @ 38

@@ -1,0 +1,36 @@
+@spec gm_pb_member_spec  src=tests/specs/gm_pb_member_spec.lua  loc=215  sha=f513b2b  cases=6
+@exercises groupManager (gm), midiManager (h.fm), trackerManager (h.tm), trackerView (h.vm), dataStore (h.ds)
+@surface   gm:markGroup, gm:newInstance, fm:dump, tm:byUuid, vm:eventsInRect, tm:flush, gm:assignEvent, ds:get, B:eachInstance
+@harness   mk{seed.evType, seed.chan, seed.ppq, seed.shape, seed.val, seed.cents, seed.ccs, seed.notes}
+
+# Intent
+  F1: pb as a first-class gm member. The group frame stores pb INTENT under
+  `val`; toGroup sources it from evt.cents (frame-agnostic), never the um
+  entry's realised val. A member sitting under governing detune must not bake
+  that detune into the shared template -- else every sibling at a different
+  detune projects a stale wire. See design/fx-freeze.md § F1.
+
+# Helpers
+  @fn rect()  @ 10-11
+  @fn serialisingDs()  @ 15-22
+      -- Round-trips the persisted blob through serialise/unserialise, as the take
+      -- tier does, so a reload assertion proves survival through serialisation too.
+
+# Cases
+  @case 'pb member: toGroup carries intent (cents), not the realised val'  [pure]  @ 26-46
+  @case 'pb member: uuid survives the rebuild so gm can re-anchor it (tm:byUuid)'  [harness]  @ 50-71
+  @case 'pb member: a value edit propagates to every instance (updToGroup)'  [harness]  @ 75-114
+  @case 'pb member: a fresh in-region pb is adopted and propagates (classifyCreate)'  [harness]  @ 118-145
+  @case 'pb member: the persisted blob carries intent (not the wire) and rehydrates live'  [pure]  @ 149-179
+  @case 'pb member: a sibling under a different detune re-derives its own wire'  [harness]  @ 183-213
+
+# Uses (outbound edges)
+  @use call groupManager.markGroup  @ 36,87,130,160,196
+  @use call groupManager.newInstance  @ 38,89,131,161,197
+  @use call midiManager.dump  @ 62,94,102,140,201
+  @use call trackerManager.byUuid  @ 67,207,208
+  @use call trackerView.eventsInRect  @ 87,130,196
+  @use call trackerManager.flush  @ 90,108,132,137,198
+  @use call groupManager.assignEvent  @ 107
+  @use call dataStore.get  @ 165
+  @use call groupManager.eachInstance  @ 178

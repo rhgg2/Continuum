@@ -1,0 +1,70 @@
+@spec slot_store_spec  src=tests/specs/slot_store_spec.lua  loc=702  sha=93c0f56  cases=31
+@exercises configManager (h.cm), dataStore (h.ds), pextStore (ps2)
+@surface   cm:setTrack, ds:assign, ds:get, ps2:setTake, ds:getAt, cm:set, cm:get
+@harness   mk, reaper:setTrackFX, reaper:setProjectTracks, reaper:setFxGuid, reaper.gmem_read, reaper.gmem_write, reaper.GetSetMediaTrackInfo_String, reaper:clearGmem, reaper:setProjectPath, r._state.calls
+
+# Intent
+  Pin tests for slot persistence and the ds-authoritative bundled mailbox protocol on sampleManager.
+  ds is real; fileOps is a call-recording stub; gmem via fakeReaper; tracks are opaque tokens.
+
+# Helpers
+  @fn newSampleManager(fileOps, cm, ds)  @ 8-10
+  @fn mkOps()  @ 20-32
+  @fn bindSamplerTrack(h, track, guidOverride)  @ 38-43
+      -- Plant a sampler FX on track, register it with the project, and bind cm
+      -- to the same track so cm-side reads/writes match what sm:tick will see.
+      -- Default GUID per-track is supplied by fakeReaper; pass guidOverride to
+      -- control it.
+  @fn gmemSpan(h, base, len)  @ 48-56
+      -- Read N bytes from gmem starting at base, dropping at 0 or N exhaust.
+      -- The mailbox packs path then name with no separator; gmemString would
+      -- run past path into name, so length-bounded reads are mandatory.
+  @fn readMailbox(h, instanceId)  @ 59-75
+      -- Read the bundled mailbox header for instance_id at SLOT_BASE.
+  @fn ackMailbox(h, instanceId)  @ 79-82
+      -- JSFX echoes [0] into [1] after consuming. Tests fake that ack so the
+      -- channel-clear gate lets the next sm:tick drain another queued slot.
+  @fn plantBootToken(h, instanceId, token)  @ 85-87
+      -- Seed a nonzero boot-token so the first sm:tick triggers rehydrate.
+
+# Cases
+  @case 'reads deep-clone out; a mutated slotEntries read does not pollute ds'  [harness]  @ 91-98
+  @case 'slotEntries round-trips through track ext-state'  [harness]  @ 101-108
+  @case 'ds:getAt reads a track scope without changing context'  [harness]  @ 111-128
+  @case 'getInstanceId assigns next-free, persists P_EXT, pushes slider'  [harness]  @ 131-148
+  @case 'getInstanceId reads existing P_EXT without reassigning'  [harness]  @ 151-158
+  @case 'getInstanceId skips taken ids when assigning a new track'  [harness]  @ 161-170
+  @case 'isLive reflects sampler FX presence'  [harness]  @ 173-183
+  @case 'watchPath sets the prefix on reopen even when the breadcrumb already matches'  [harness]  @ 186-204
+  @case 'assign copies, writes cm rel path, queues abs in mailbox after tick'  [harness]  @ 207-243
+  @case 'assign returns false on copy failure, leaves cm and mailbox untouched'  [harness]  @ 246-260
+  @case 'assign preserves other slot fields when overwriting path'  [harness]  @ 263-276
+  @case 'assign clears start/end so the new sample plays full by default'  [harness]  @ 279-295
+  @case 'stageInto copies + queues mailbox, returns rel, leaves cm alone'  [harness]  @ 298-320
+  @case 'stageInto returns nil on copy failure, leaves mailbox quiet'  [harness]  @ 323-335
+  @case 'clearSlot zeros cm entry and queues op=1 in mailbox'  [harness]  @ 338-354
+  @case 'previewSlot stamps target_id alongside slot and bounds'  [harness]  @ 357-368
+  @case 'setTrim mirrors start/end onto cm and queues a mailbox update'  [harness]  @ 371-393
+  @case 'setName writes name onto cm and queues a name-only mailbox update'  [harness]  @ 396-416
+  @case 'tick rehydrates a track when boot-token first appears'  [harness]  @ 419-448
+  @case 'tick rehydrates a non-active track via ds:getAt'  [harness]  @ 451-474
+  @case 'tick refires rehydrate when boot-token changes'  [harness]  @ 477-496
+  @case 'tick resets per-track state and refires rehydrate on FX-GUID change'  [harness]  @ 499-521
+  @case 'syncSlot pushes cm truth back through the mailbox'  [harness]  @ 524-543
+  @case 'syncSlot of an empty cm slot queues a clear'  [harness]  @ 546-559
+  @case 'tick drains at most one slot per call'  [harness]  @ 562-582
+  @case 'tick blocks a drain until the previous write is acked'  [harness]  @ 585-603
+  @case 'setPrefix updates abs composition for subsequent pushes'  [harness]  @ 606-623
+  @case 'migrate moves bytes when project path changes'  [harness]  @ 626-644
+  @case 'migrate is a no-op when paths match or oldPath is nil'  [harness]  @ 647-657
+  @case 'migrate walks every sampler track, not just the bound one'  [harness]  @ 660-678
+  @case 'watchPath sets prefix, writes breadcrumb, fires migrate on change'  [harness]  @ 681-700
+
+# Uses (outbound edges)
+  @use call configManager.setTrack  @ 42,117,119,457,459,666,668
+  @use call dataStore.assign  @ 94,104,118,120,267,283,342,375,400,423,458,481,503,516,528,630,651,667,669,685
+  @use call dataStore.get  @ 95,97,107,126,227,257,273,291,312,348,381,406,642
+  @use call pextStore.setTake  @ 105
+  @use call dataStore.getAt  @ 122,123
+  @use call configManager.set  @ 194
+  @use call configManager.get  @ 691,696

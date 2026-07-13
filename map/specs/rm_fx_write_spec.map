@@ -1,0 +1,32 @@
+@spec rm_fx_write_spec  src=tests/specs/rm_fx_write_spec.lua  loc=157  sha=e2be081  cases=8
+@exercises harness (harness), routingManager (rm)
+@surface   harness.mk, rm:tracks, rm:addFx, rm:deleteFx, rm:assignFx
+@harness   mk, reaper.CountTracks, reaper.InsertTrackAtIndex, reaper.GetTrack, reaper.GetSetMediaTrackInfo_String, reaper:setTrackFX, reaper.GetTrackGUID, reaper:setFxParamNames, reaper.TrackFX_GetParam
+
+# Intent
+  routingManager Phase 3: fx write. addFx/deleteFx/assignFx, addressed by the
+  opaque fx id (guid). Covers append, the append-then-CopyToTrack reorder,
+  cross-track move, param push by name, and delete.
+
+# Helpers
+  @fn mkRm()  @ 8-12
+  @fn seedTrack(reaper, name, fx)  @ 14-21
+  @fn fxById(rm, id)  @ 23-27
+  @fn chainIdents(rm, name)  @ 29-37
+
+# Cases
+  @case 'addFx appends and returns an id that resolves to the new fx'  [pure]  @ 41-53
+  @case 'addFx with index inserts at position via the append-then-move reorder'  [pure]  @ 56-64
+  @case 'addFx pushes params by name'  [pure]  @ 67-75
+  @case 'deleteFx removes the addressed fx'  [pure]  @ 78-87
+  @case 'assignFx{index} reorders within the track'  [pure]  @ 90-100
+  @case 'assignFx{track} moves the fx across tracks, id preserved'  [pure]  @ 103-117
+  @case 'assignFx{params} sets params on the addressed fx; unknown name raises'  [pure]  @ 120-132
+  @case 'param-name resolution is memoised per ident across instances'  [pure]  @ 135-155
+
+# Uses (outbound edges)
+  @use call harness.mk  @ 9
+  @use call routingManager.tracks  @ 24,30,95,108,125,149,150
+  @use call routingManager.addFx  @ 46,61,73,82
+  @use call routingManager.deleteFx  @ 84
+  @use call routingManager.assignFx  @ 98,110,127,130,151,152

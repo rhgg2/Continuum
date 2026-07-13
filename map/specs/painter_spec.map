@@ -1,0 +1,39 @@
+@spec painter_spec  src=tests/specs/painter_spec.lua  loc=248  sha=1d2bf54  cases=17
+@exercises painter (painter)
+@surface   painter.new, painter.hue
+
+# Intent
+  painter: coordinate-parametrised, colour-disciplined drawlist binder.
+  A recording ImGui stub captures DrawList_* calls so we can assert that
+  positions convert through the transform, colours resolve by NAME, and the
+  font path uses AddTextEx (no stack push) while measure pushes/pops.
+
+# Helpers
+  @fn rec(name)  @ 9-11
+  @fn mk()  @ 53
+      -- ox=100 oy=200 sx=2 sy=3 — distinct per axis so a swapped axis is caught.
+  @fn last()  @ 55
+  @fn has(fn)  @ 56-59
+
+# Cases
+  @case 'toScreen / fromScreen are inverse — one transform, no drift'  [pure]  @ 63-72
+  @case 'fill converts both corners, resolves colour by name, passes rounding'  [pure]  @ 75-81
+  @case 'stroke maps corners but leaves thickness / rounding in screen px'  [pure]  @ 84-90
+  @case 'line and tri convert every endpoint'  [pure]  @ 93-103
+  @case 'circle maps the centre but keeps the radius in screen px'  [pure]  @ 106-112
+  @case 'polyline converts every logical pair; closed sets the closed flag'  [pure]  @ 115-124
+  @case 'text without a font uses AddText at the mapped position'  [pure]  @ 127-133
+  @case 'text with a font uses AddTextEx and never pushes the font stack'  [pure]  @ 136-143
+  @case 'measure without a font reads CalcTextSize directly'  [pure]  @ 146-152
+  @case 'measure with a font brackets CalcTextSize in Push/PopFont'  [pure]  @ 155-165
+  @case 'a name routes through chrome; a token passes its packed colour straight through'  [pure]  @ 168-176
+  @case 'a bare int colour is rejected — the one way to bypass the palette'  [pure]  @ 179-186
+  @case 'painter.hue mints an opaque token; golden-ratio rotation makes adjacent indices distinct'  [pure]  @ 189-196
+  @case 'pushClip converts both corners; intersect defaults true, explicit false respected'  [pure]  @ 199-209
+  @case 'ox/oy round to whole pixels; sx/sy pass through unrounded'  [pure]  @ 212-220
+  @case 'snap rounds toScreen output for fractional logical coords; fromScreen stays exact'  [pure]  @ 223-231
+  @case 'path: points convert, arc keeps screen-px radius and raw angles, stroke resolves colour by name'  [pure]  @ 234-246
+
+# Uses (outbound edges)
+  @use call painter.new  @ 53,215,226
+  @use call painter.hue  @ 191,192

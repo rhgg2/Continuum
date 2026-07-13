@@ -1,0 +1,27 @@
+@spec dag_classes_spec  src=tests/specs/dag_classes_spec.lua  loc=137  sha=1694e27  cases=6
+@exercises DAG (DAG)
+@surface   DAG.compile
+
+# Intent
+  (none)
+
+# Helpers
+  @fn source(id, guid)  @ 4-9
+  @fn fx(id, opts)  @ 11-19
+  @fn master(opts)  @ 21-26
+  @fn mk(nodes, edges)  @ 28-33
+  @fn partition(graph)  @ 37-44
+      -- {classKey → {id=true}} reconstructed via classOf(); classes() is private to
+      -- DAG so this validates it only through its public inverse.
+  @fn keysOf(byKey)  @ 46-51
+
+# Cases
+  @case 'empty graph: master splits into its own class'  [pure]  @ 55-60
+  @case 'source + master, no edges: two classes'  [pure]  @ 63-71
+  @case 'chain s → f → master: master splits, s+f share a class'  [pure]  @ 74-86
+  @case 'two sources, common mix → master: four classes'  [pure]  @ 89-104
+  @case 'classKey is sorted regardless of source declaration order'  [pure]  @ 107-120
+  @case 'gain op adds no class member (CU is invisible to the partition)'  [pure]  @ 123-135
+
+# Uses (outbound edges)
+  @use call DAG.compile  @ 39

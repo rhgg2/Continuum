@@ -1,0 +1,32 @@
+@spec gm_take_clip_spec  src=tests/specs/gm_take_clip_spec.lua  loc=81  sha=f8aa484  cases=2
+@exercises groupManager (gm), trackerManager (h.tm)
+@surface   gm:markGroup, gm:newInstance, tm:flush
+
+# Intent
+  A mirror group may extend off the bottom of the take, but the
+  REALISED concretes are clipped to the take edge: a projected note
+  whose onset lands at or past tm:length() is withheld (it would push
+  REAPER's EOT out and grow the take). The group keeps every member,
+  so a sibling placed fully in-bounds still projects them all, and a
+  withheld member revives the moment an instance brings it on-take.
+  
+  This parallels tm's tail clamp (which only bounds note-OFFs); the
+  onset clip lives in gm because gm is the only layer that knows where
+  each projected concrete lands. Pinned against the real
+  newInstance/preflush/reproject path with a faithful fake tm.
+
+# Helpers
+  @fn mk()  @ 18-22
+  @fn note(ppq, pitch)  @ 25-30
+  @fn rect()  @ 33-34
+      -- 960-wide region; members on rows 0/240/480/720.
+  @fn addAt(staged, ppq)  @ 36-38
+
+# Cases
+  @case 'an instance straddling the take edge writes only on-take concretes'  [pure]  @ 42-60
+  @case 'the group keeps every member -- an in-bounds sibling projects them all'  [pure]  @ 64-79
+
+# Uses (outbound edges)
+  @use call groupManager.markGroup  @ 46,68
+  @use call groupManager.newInstance  @ 50,70,76
+  @use call trackerManager.flush  @ 51,71,77

@@ -1,0 +1,22 @@
+@spec wv_folder_spec  src=tests/specs/wv_folder_spec.lua  loc=49  sha=e2be081  cases=1
+@exercises wiringManager (wm), wiringView (wv)
+@surface   wm:load, wv:nodeViews, wv:wireViews
+@harness   mk, reaper.SetMediaTrackInfo_Value, r._state.projectTracks, r._state.trackGuids
+
+# Intent
+  The read→view seam (uncovered before this): readGraph mints a folder parent as a source node
+  with audio.ins>=1; the view must project it as a bodied 'folder' node, not a bodiless source
+  tag, so its children's parent-send wires have a rect to land on. See docs/wiringView.md § source bodies.
+
+# Helpers
+  @fn mkWv(harness)  @ 7-13
+  @fn seedTrack(h, guid)  @ 15-20
+  @fn byId(views)  @ 22-26
+
+# Cases
+  @case 'folder parent projects as a bodied folder node; leaf source stays a tag'  [harness]  @ 30-47
+
+# Uses (outbound edges)
+  @use call wiringManager.load  @ 37
+  @use call wiringView.nodeViews  @ 39
+  @use call wiringView.wireViews  @ 44

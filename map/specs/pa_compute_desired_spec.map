@@ -1,0 +1,14 @@
+@spec pa_compute_desired_spec  src=tests/specs/pa_compute_desired_spec.lua  loc=59  sha=31b8f53  cases=3
+
+# Intent
+  pa.computeDesired: pure bindings -> per-track trackSpecs. Pins the
+  pooled-duplicate collapse, the same-track no-send rule, and the sorted
+  slot order the mirror diff depends on for a stable REAPER image.
+
+# Helpers
+  @fn binding(over)  @ 10-16
+
+# Cases
+  @case 'same-track binding: filter + listen on one spec, no send'  [pure]  @ 21-30
+  @case 'cross-track binding fans out by send; pooled duplicates collapse'  [pure]  @ 34-43
+  @case 'slots sort by src code / bus code for a stable image'  [pure]  @ 47-56

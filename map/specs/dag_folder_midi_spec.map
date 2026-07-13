@@ -1,0 +1,27 @@
+@spec dag_folder_midi_spec  src=tests/specs/dag_folder_midi_spec.lua  loc=199  sha=22b4f02  cases=6
+@exercises DAG (DAG)
+@surface   DAG.targetTracks, DAG.compile, DAG.allocate
+
+# Intent
+  (none)
+
+# Helpers
+  @fn source(guid, opts)  @ 7-12
+  @fn fx(opts)  @ 14-19
+  @fn master()  @ 21-24
+  @fn tracksOf(g)  @ 26
+  @fn allocOf(g)  @ 27
+  @fn midiOutWires(entry)  @ 29-35
+
+# Cases
+  @case 'folder midi: child audio+midi to parent rides the pipe, no explicit midi send'  [pure]  @ 41-60
+  @case 'folder midi: child midi into the parent node is a bus-0 merge, no send'  [pure]  @ 65-83
+  @case 'folder alloc: distinct child->parent-fx crossing shares one family bus >= 1'  [pure]  @ 90-116
+  @case 'folder alloc: merge rides bus 0 and forces a co-resident distinct stream off it'  [pure]  @ 122-148
+  @case 'folder alloc: a distinct crossing never reclaims a just-freed bus 0'  [pure]  @ 153-174
+  @case 'folder alloc: a child generator sending off-track is floored off the pipe bus 0'  [pure]  @ 179-197
+
+# Uses (outbound edges)
+  @use call DAG.targetTracks  @ 26,27
+  @use call DAG.compile  @ 26,27
+  @use call DAG.allocate  @ 27

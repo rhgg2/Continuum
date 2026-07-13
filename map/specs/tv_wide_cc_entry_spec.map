@@ -1,0 +1,30 @@
+@spec tv_wide_cc_entry_spec  src=tests/specs/tv_wide_cc_entry_spec.lua  loc=72  sha=a17a7a7  cases=4
+@exercises trackerView (h.vm), editCursor (h.ec), midiManager (h.fm)
+@surface   vm:setGridSize, ec:setPos, vm:editEvent, fm:dump
+@harness   mk{seed.ccs}
+
+# Intent
+  14-bit cc grid entry. A `14bit` column flag (the columnDisplay take-DS key,
+  stamped onto the gridCol at rebuild) widens the scalar to 4 hex digits over a
+  display integer (val*256, even last: 0000..7FFE). editEvent stores the
+  fractional cc mm's blob splits to an MSB/LSB pair. see design/fx-patterns.md
+
+# Helpers
+  @fn ccCol(h)  @ 8-12
+  @fn mk(harness)  @ 14-21
+  @fn typeHex(h, stop, ch)  @ 25-29
+      -- One hex nibble at `stop` (1..4 = MS..LS), row 0 re-pinned each call since
+      -- editEvent's commit auto-steps the cursor row.
+  @fn ccVal(h)  @ 31-34
+
+# Cases
+  @case 'flagged cc column widens to 4 hex stops'  [harness]  @ 38-43
+  @case 'MS nibble sets the high byte: 7 at stop 1 -> val 112'  [harness]  @ 47-52
+  @case 'value clamps to 0x7FFE: F at stop 1 -> 127+127/128'  [harness]  @ 56-61
+  @case 'last nibble forced even: 3 at stop 4 -> 2/256'  [harness]  @ 65-70
+
+# Uses (outbound edges)
+  @use call trackerView.setGridSize  @ 19
+  @use call editCursor.setPos  @ 27
+  @use call trackerView.editEvent  @ 28
+  @use call midiManager.dump  @ 32

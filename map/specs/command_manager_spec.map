@@ -1,0 +1,33 @@
+@spec command_manager_spec  src=tests/specs/command_manager_spec.lua  loc=309  sha=1a1393f  cases=21
+
+# Intent
+  commandManager: doBefore/doAfter accept either a single name or a
+  list. The list form is sugar; pin that it composes hooks in order
+  and that the single-name form still works.
+
+# Helpers
+  @fn newCommandManager(cm)  @ 8-10
+  @fn fresh()  @ 12-21
+
+# Cases
+  @case 'doBefore with a string still wraps a single command'  [pure]  @ 25-32
+  @case 'doAfter with a list applies the hook to every named command'  [pure]  @ 36-44
+  @case 'doBefore with a list fires before each named command'  [pure]  @ 48-56
+  @case 'list form composes with prior single-name wraps'  [pure]  @ 60-70
+  @case 'scope command resolves only when its scope is pushed'  [pure]  @ 74-85
+  @case 'doAfter composes inside the scope gate — off-stack invoke fires neither orig nor after'  [pure]  @ 89-98
+  @case 'invoke on a global-only name still works regardless of pushed scope'  [pure]  @ 102-110
+  @case 'keychain returns top-down; global-only when nothing pushed'  [pure]  @ 114-129
+  @case 'keysFor walks the stack; upper shadows global'  [pure]  @ 133-144
+  @case 'prefix: inactive by default; invoke passes default 1'  [pure]  @ 148-156
+  @case 'prefix: begin → digits → finish → invoke passes integer'  [pure]  @ 160-174
+  @case 'prefix: fraction a/b passes as a number'  [pure]  @ 178-188
+  @case 'prefix: empty buffer at finish yields default 1 at invoke'  [pure]  @ 192-201
+  @case 'prefix: cancel discards buffer and any pending'  [pure]  @ 205-215
+  @case 'prefix: only one slash accepted'  [pure]  @ 219-231
+  @case 'prefix: malformed buffer (e.g. lone slash) defaults to 1'  [pure]  @ 235-244
+  @case 'prefix: prefixRational returns (n, d) for an integer inside invoke'  [pure]  @ 248-257
+  @case 'prefix: prefixRational returns (n, d) for a fraction; invoke clears'  [pure]  @ 261-272
+  @case 'prefix: prefixRational on empty buffer yields (nil, nil)'  [pure]  @ 276-281
+  @case 'prefix: beginPrefix-via-invoke leaves the buffer active'  [pure]  @ 285-291
+  @case 'keySpec decodes bare key and chord'  [pure]  @ 295-307

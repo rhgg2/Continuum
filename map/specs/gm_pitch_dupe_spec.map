@@ -1,0 +1,25 @@
+@spec gm_pitch_dupe_spec  src=tests/specs/gm_pitch_dupe_spec.lua  loc=61  sha=bb5e29b  cases=1
+@exercises trackerManager (h.tm), trackerView (h.vm), groupManager (gm)
+@surface   tm:getChannel, vm:selectionAsRect, vm:eventsInRect, gm:markGroup, gm:newInstance, tm:flush, gm:assignEvent
+@harness   mk{seed.notes}
+
+# Intent
+  Repro: a pitch edit on the origin instance must UPDATE the sibling's
+  note in place, not leave a stale old-pitch note beside a new one.
+  Rides the REAL tm flush seam (gm subscribes to h.tm preflush/postflush).
+
+# Helpers
+  @fn noteCol(h, chan)  @ 8-12
+  @fn chanNotes(h, chan)  @ 14-23
+
+# Cases
+  @case 'origin pitch edit updates the sibling note in place (no stale dupe)'  [harness]  @ 27-59
+
+# Uses (outbound edges)
+  @use call trackerManager.getChannel  @ 15
+  @use call trackerView.selectionAsRect  @ 39
+  @use call trackerView.eventsInRect  @ 40
+  @use call groupManager.markGroup  @ 43
+  @use call groupManager.newInstance  @ 44
+  @use call trackerManager.flush  @ 45,52
+  @use call groupManager.assignEvent  @ 51

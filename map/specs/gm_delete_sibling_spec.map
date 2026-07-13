@@ -1,0 +1,30 @@
+@spec gm_delete_sibling_spec  src=tests/specs/gm_delete_sibling_spec.lua  loc=108  sha=f8aa484  cases=3
+@exercises groupManager (gm), trackerManager (h.tm)
+@surface   gm:markGroup, gm:newInstance, tm:flush, gm:deleteEvent, gm:addEvent
+
+# Intent
+  Deleting both notes of a mirror instance must propagate BOTH deletes
+  to the sibling. Repro: AB group at instance 1; mirror-duplicate down
+  (instance 2); delete instance 2's A then its B. The sibling's A AND B
+  must both be staged for deletion -- the reported bug left the sibling
+  B alive (a stray B in the source region).
+
+# Helpers
+  @fn mk()  @ 10-14
+  @fn note(ppq, pitch)  @ 17-21
+  @fn rect()  @ 22-23
+  @fn copyAt(staged, ppq)  @ 26-28
+      -- The instance-2 copy at a given ppq among the staged adds.
+  @fn delPitches(staged)  @ 30-34
+
+# Cases
+  @case 'deleting both instance notes one flush at a time propagates both deletes'  [pure]  @ 38-56
+  @case 'deleting both instance notes in one flush propagates both deletes'  [pure]  @ 60-75
+  @case 'deleting the predecessor must not shrink an infinite last-in-lane tail'  [pure]  @ 79-106
+
+# Uses (outbound edges)
+  @use call groupManager.markGroup  @ 42,64,85
+  @use call groupManager.newInstance  @ 43,65,88,100
+  @use call trackerManager.flush  @ 44,50,54,66,71,87,89,94
+  @use call groupManager.deleteEvent  @ 50,54,71,94
+  @use call groupManager.addEvent  @ 87

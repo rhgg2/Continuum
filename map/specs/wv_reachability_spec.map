@@ -1,0 +1,24 @@
+@spec wv_reachability_spec  src=tests/specs/wv_reachability_spec.lua  loc=107  sha=e2be081  cases=6
+@exercises wiringView (wv)
+@surface   wv:addFx, wv:ancestorsOf, wv:descendantsOf
+@harness   mk
+
+# Intent
+  (none)
+
+# Helpers
+  @fn mkWv(harness)  @ 10-16
+  @fn sortedKeys(set)  @ 18-23
+
+# Cases
+  @case 'isolated node: ancestors = { itself }'  [harness]  @ 27-32
+  @case 'audio chain: ancestors of master include everything upstream'  [harness]  @ 35-44
+  @case 'reachability follows midi edges too (edge type ignored)'  [harness]  @ 47-56
+  @case 'unrelated branches are excluded'  [harness]  @ 59-69
+  @case 'cycle-rejection set: ancestors of mid-chain == upstream incl self'  [harness]  @ 75-88
+  @case 'descendants of mid-chain == downstream incl self'  [harness]  @ 93-105
+
+# Uses (outbound edges)
+  @use call wiringView.addFx  @ 30,38,39,50,51,62,63,64,78,79,80,96,97,98
+  @use call wiringView.ancestorsOf  @ 31,42,54,66,84
+  @use call wiringView.descendantsOf  @ 102

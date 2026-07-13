@@ -1,0 +1,35 @@
+@spec vm_reswing_cc_spec  src=tests/specs/vm_reswing_cc_spec.lua  loc=251  sha=d415ad4  cases=8
+@exercises dataStore (h.ds), trackerView (h.vm), midiManager (h.fm), trackerManager (h.tm), editCursor (h.ec)
+@surface   ds:delete, vm:setGridSize, fm:dump, tm:markSwingStale, tm:rebuild, tm:addEvent, tm:flush, ec:setPos, vm:editEvent, ds:assign, tm:getChannel
+@harness   mk{seed.ccs, seed.notes}
+
+# Intent
+  Reswing under cm's current swing. Each CC/PB/AT/PC/PA carries an
+  evt.rpb authoring marker; ppqL is the truth, raw is reproduced
+  under cm.swing — no per-event swing stamp, no host-frame borrowing.
+
+# Helpers
+  @fn findCC(dump, evType, chan)  @ 10-14
+
+# Cases
+  @case 'CC authored under c58 reswings to identity using its ppqL'  [harness]  @ 18-44
+  @case 'CC without an rpb stamp is skipped by reswing'  [harness]  @ 48-68
+  @case 'reswing leaves cc.rpb untouched and reseats raw under cm.swing'  [harness]  @ 72-93
+  @case 'tm:addEvent does NOT auto-stamp rpb (vm/ec own that responsibility)'  [harness]  @ 97-111
+  @case 'vm:editEvent on a cc column stamps the current rpb'  [harness]  @ 115-152
+  @case 'PB reswung twice: ppqL + rpb survive the first pass'  [harness]  @ 156-184
+  @case 'reswing into tighter swing: same-lane swap survives, delay stays authored'  [harness]  @ 194-225
+  @case 'CC rpb metadata surfaces on tm column events after rebuild'  [harness]  @ 229-249
+
+# Uses (outbound edges)
+  @use call dataStore.delete  @ 38,175
+  @use call trackerView.setGridSize  @ 39,63,88,128,176,216
+  @use call midiManager.dump  @ 41,66,91,108,147,179,219
+  @use call trackerManager.markSwingStale  @ 64,89,177
+  @use call trackerManager.rebuild  @ 64,89,177
+  @use call trackerManager.addEvent  @ 106
+  @use call trackerManager.flush  @ 107
+  @use call editCursor.setPos  @ 137,143
+  @use call trackerView.editEvent  @ 144
+  @use call dataStore.assign  @ 215
+  @use call trackerManager.getChannel  @ 244

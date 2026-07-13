@@ -1,0 +1,33 @@
+@spec tm_absorber_reseat_spec  src=tests/specs/tm_absorber_reseat_spec.lua  loc=188  sha=2710573  cases=5
+@exercises midiManager (h.fm), trackerManager (h.tm), dataStore (h.ds)
+@surface   fm:dump, tm:getChannel, ds:delete, tm:assignEvent, tm:flush, tm:addEvent
+@harness   mk{seed.notes, seed.ccs}
+
+# Intent
+  Phase 5 (two-frame timing): absorbers stop carrying their own delay
+  and reseat from the host's raw on every rebuild.
+  
+    - mm-side: absorber.ppq is host's raw, set by reconcileBoundary on
+      edits and reseated post-rule when the rule moves the host.
+    - column-side: no delay field → tidyCol is a no-op for absorbers.
+      They surface at host raw, while the host note surfaces at host
+      intent. Hidden absorbers don't render, so the divergence is
+      invisible to consumers (Phase 6 collapses it entirely).
+
+# Helpers
+  @fn fakeIn(dump)  @ 17-21
+
+# Cases
+  @case 'delayed lane-1 host with detune jump → absorber tracks host logical (Phase 6)'  [harness]  @ 26-55
+  @case 'swing change reseats absorber alongside its host'  [harness]  @ 59-93
+  @case 'delay change on host moves absorber to new raw'  [harness]  @ 97-121
+  @case 'removing the detune jump drops the absorber (I2 second clause)'  [harness]  @ 125-152
+  @case 'authoring a pb onto an anchor seat adopts it, no token-colliding rival (stuck-digit bug)'  [harness]  @ 156-186
+
+# Uses (outbound edges)
+  @use call midiManager.dump  @ 43,80,86,118,141,151,171,180
+  @use call trackerManager.getChannel  @ 47,114,145
+  @use call dataStore.delete  @ 84
+  @use call trackerManager.assignEvent  @ 115,148
+  @use call trackerManager.flush  @ 116,149,177
+  @use call trackerManager.addEvent  @ 176

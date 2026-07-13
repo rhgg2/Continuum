@@ -1,0 +1,21 @@
+@spec util_install_hooks_spec  src=tests/specs/util_install_hooks_spec.lua  loc=117  sha=fa4a61d  cases=7
+
+# Intent
+  Pin-tests for the signal-keyed util.installHooks. The contract:
+    subscribe(signal, fn)    registers fn under exactly one signal kind
+    fire(signal, data)       calls only callbacks registered for `signal`,
+                             forwarding `data` (no owner arg)
+    unsubscribe              is signal-scoped
+    forward(signal, source)  subscribes on source, re-fires on owner
+
+# Helpers
+  @fn newOwner()  @ 11-15
+
+# Cases
+  @case 'installHooks: callback only fires for its own signal'  [pure]  @ 19-35
+  @case 'installHooks: fire on unsubscribed signal is a no-op'  [pure]  @ 38-46
+  @case 'installHooks: callback receives data only, no owner arg'  [pure]  @ 49-57
+  @case 'installHooks: multiple listeners on one signal all fire'  [pure]  @ 60-68
+  @case 'installHooks: unsubscribe is signal-scoped'  [pure]  @ 71-83
+  @case 'installHooks: forward re-fires source signal on dest with same payload'  [pure]  @ 86-98
+  @case 'installHooks: forward does not cross signal kinds'  [pure]  @ 101-115

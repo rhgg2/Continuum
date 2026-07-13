@@ -1,0 +1,26 @@
+@spec mm_blob_wide_spec  src=tests/specs/mm_blob_wide_spec.lua  loc=96  sha=8cc9255  cases=6
+@exercises midiBlob (midiBlob)
+@surface   midiBlob.serialise, midiBlob.parse
+
+# Intent
+  14-bit CC lives in the codec, not a registry: a fractional cc val on a code
+  in 0..31 splits to an MSB(shaped)/LSB(step) wire pair on serialise and
+  coalesces back on parse. The value's type is the whole signal -- integer val
+  stays a plain 7-bit CC, one wire event.
+
+# Helpers
+  @fn wireCCs(blob)  @ 11-23
+      -- Raw channel-voice CC events straight off the blob, no coalescing.
+  @fn ccOf(extra)  @ 25-29
+
+# Cases
+  @case 'fractional cc in 0..31 serialises to an MSB(shaped)/LSB(step) wire pair'  [pure]  @ 33-43
+  @case 'the wire pair coalesces back to one fractional record (round-trip)'  [pure]  @ 47-53
+  @case 'carrier-style value (14-bit around 8192) round-trips exactly'  [pure]  @ 57-63
+  @case 'integer cc in 0..31 stays a plain 7-bit CC: one wire event'  [pure]  @ 67-74
+  @case 'a lone LSB-range code (>= 32) with no MSB partner stays independent'  [pure]  @ 78-84
+  @case 'bezier wide cc keeps its tension on the MSB across the round-trip'  [pure]  @ 88-94
+
+# Uses (outbound edges)
+  @use call midiBlob.serialise  @ 35,50,60,70,81,91
+  @use call midiBlob.parse  @ 50,60,72,81,91

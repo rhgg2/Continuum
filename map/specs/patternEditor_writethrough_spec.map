@@ -1,0 +1,31 @@
+@spec patternEditor_writethrough_spec  src=tests/specs/patternEditor_writethrough_spec.lua  loc=228  sha=e7e51e3  cases=7
+@harness   mk, reaper.GetMediaItemTake_Track
+
+# Intent
+  design/fx-patterns.md P3.5: write-through commit; curve normalises pb thousandths back to bipolar.
+  Drives the real edit -> flush -> rebuild -> write-through path against a fake imgui.
+
+# Helpers
+  @fn keyId(name)  @ 13-22
+  @fn setKeys(keys, mods)  @ 37-40
+  @fn loadPE(deps)  @ 46-52
+  @fn notesBody()  @ 60-68
+  @fn openNotesBody()  @ 71-79
+      -- An OPEN first note followed by a finite one: readback must clip the open tail to the successor.
+  @fn curveBody()  @ 81-90
+  @fn ccCurveBody()  @ 93-102
+      -- cc-domain curve: points ride a fixed scratch cc verbatim (0..127), no normalisation.
+  @fn withEditor(harness, body)  @ 105-111
+      -- Open the editor on `body`, capturing each write-through commit; get() reads the latest.
+  @fn pressDelete(pe)  @ 114-117
+      -- Delete the event under the (default row-0) cursor via the real dispatch path.
+  @fn approx(a, b)  @ 119
+
+# Cases
+  @case 'a checkout edit writes through the commit callback, stripped to the whitelist'  [harness]  @ 123-137
+  @case 'readback clips an OPEN note to its successor onset, not the loop length'  [harness]  @ 141-152
+  @case 'a curve edit persists as normalised bipolar points, not raw thousandths'  [harness]  @ 156-171
+  @case 'a cc-domain curve persists its points verbatim, echoing the domain'  [harness]  @ 175-191
+  @case 'Enter commits: the edit stays in the store'  [harness]  @ 195-202
+  @case 'Esc cancels: the store is restored to the open snapshot'  [harness]  @ 206-215
+  @case 'close does not clobber the committed body via the unbind rebuild'  [harness]  @ 219-226

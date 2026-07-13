@@ -1,0 +1,35 @@
+@spec util_edit_primitives_spec  src=tests/specs/util_edit_primitives_spec.lua  loc=150  sha=8a6d0a3  cases=14
+@exercises commandManager (h.cmgr)
+@surface   cmgr:noteChars
+
+# Intent
+  Pin-tests for the numeric-edit primitives hoisted from viewManager into
+  util.lua (setDigit, snapTo, nudgedScalar) and the cmgr:noteChars lookup
+  (absorbed from the former noteInput module).
+  Each case encodes an invariant that the refactor must preserve; if any
+  fails, the hoist has changed observable behaviour.
+
+# Helpers
+  @fn newCommandManager(cm)  @ 10-12
+  @fn byte(c)  @ 14
+  @fn stubCm(layout)  @ 17-19
+      -- Minimal cm stub: cmgr only calls cm:get('noteLayout').
+
+# Cases
+  @case 'setDigit: places ones digit in decimal, zeroing below'  [pure]  @ 26-31
+  @case 'setDigit: places tens digit in decimal, zeroing ones'  [pure]  @ 34-38
+  @case 'setDigit: hex base, keeps places above the target'  [pure]  @ 41-47
+  @case 'setDigit: keepBelow preserves the places below the target'  [pure]  @ 50-57
+  @case 'snapTo: positive dir snaps up; on-boundary values move a full step'  [pure]  @ 64-69
+  @case 'snapTo: negative dir snaps down; on-boundary values move a full step'  [pure]  @ 72-77
+  @case 'nudgedScalar: no interval → unit step, clamped to bounds'  [pure]  @ 84-89
+  @case 'nudgedScalar: with interval, snaps and then clamps'  [pure]  @ 92-98
+  @case 'cmgr:noteChars colemak: Z-row maps base octave, semi 0'  [pure]  @ 105-109
+  @case 'cmgr:noteChars colemak: Q-row maps +1 octave'  [pure]  @ 112-116
+  @case 'cmgr:noteChars colemak: semi increments along the row'  [pure]  @ 119-124
+  @case 'cmgr:noteChars azerty: accepts Unicode codepoints as keys'  [pure]  @ 127-132
+  @case 'cmgr.layouts: all four layouts present'  [pure]  @ 135-141
+  @case 'cmgr:noteChars: unbound char returns nil'  [pure]  @ 144-148
+
+# Uses (outbound edges)
+  @use call commandManager.noteChars  @ 108,115,123,131,147

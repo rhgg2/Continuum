@@ -1,0 +1,54 @@
+@spec gm_override_transition_spec  src=tests/specs/gm_override_transition_spec.lua  loc=257  sha=f8aa484  cases=7
+@exercises groupManager (gm), trackerManager (h.tm)
+@surface   gm:newInstance, tm:flush, gm:markGroup, gm:setLocalMode, gm:assignEvent, gm:deleteEvent, gm:addEvent
+
+# Intent
+  Override transitions (docs/groupManager.md "Override transitions").
+  
+  Two mechanisms, one principle: a local override pins this instance's
+  visible event at a slot; a group-event existence flip never silently
+  breaks that pin.
+  
+   Same-instance, global mode -- "on-ov => local":
+     add-ov    + amend  -> edit the add locally (no propagation)
+     add-ov    + delete -> the local add is just gone
+     assign-ov + amend  -> edit the divergence locally (group untouched)
+     assign-ov + delete -> drop the divergence, rejoin the group value
+     delete-ov + delete -> no-op (unreachable by construction: a hidden
+                           slot has no concrete event to delete -- the
+                           guard only stops a propagating group delete)
+  
+   Cross-instance (a SIBLING carries the override):
+     sibling add-ov    + peer global CREATE at that slot -> upgrade to
+                           an assign-ov on the now-real vuid
+     sibling assign-ov + peer global DELETE of that event -> demote to
+                           a materialised add-ov
+  
+  Real gm; fake tm/cm as in mirm_propagate_spec. tm:flush(adds,
+  assigns, deletes) drives the real preflush/applyEdit/reproject path.
+
+# Helpers
+  @fn mk()  @ 28-32
+  @fn note(ppq, chan, lane, extra)  @ 35-41
+  @fn rect(ppq, chan)  @ 43-46
+  @fn groupPitch(gm, tm, staged, anchorPpq)  @ 50-58
+      -- Pitch of the lone event a fresh probe instance projects (group state
+      -- as every clean sibling sees it); nil if the group projects nothing.
+
+# Cases
+  @case 'assign-ov + global amend stays local: shared group untouched'  [pure]  @ 62-88
+  @case 'assign-ov + global delete drops the divergence, group survives'  [pure]  @ 92-112
+  @case 'assign-ov + global delete re-materialises the group note in the acting instance'  [pure]  @ 116-139
+  @case 'add-ov + global delete removes the local add (no crash, group intact)'  [pure]  @ 143-164
+  @case 'add-ov + global amend edits the add locally, never the group'  [pure]  @ 168-188
+  @case 'sibling add-ov upgrades to assign-ov on a peer global create'  [pure]  @ 192-220
+  @case 'sibling assign-ov demotes to a materialised add on a peer global delete'  [pure]  @ 224-255
+
+# Uses (outbound edges)
+  @use call groupManager.newInstance  @ 52,67,97,121,197,229
+  @use call trackerManager.flush  @ 53,68,72,77,98,102,106,122,126,130,148,152,158,173,177,184,198,203,209,230,239,244
+  @use call groupManager.markGroup  @ 66,96,120,147,172,196,228
+  @use call groupManager.setLocalMode  @ 70,73,100,103,124,127,150,156,175,181,201,205,237,240
+  @use call groupManager.assignEvent  @ 71,76,101,125,183,238
+  @use call groupManager.deleteEvent  @ 106,130,158,244
+  @use call groupManager.addEvent  @ 152,177,203,209

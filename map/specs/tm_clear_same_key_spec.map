@@ -1,0 +1,27 @@
+@spec tm_clear_same_key_spec  src=tests/specs/tm_clear_same_key_spec.lua  loc=88  sha=47931cf  cases=3
+@exercises trackerManager (h.tm), midiManager (h.fm)
+@surface   tm:addEvent, tm:flush, fm:dump
+@harness   mk{seed.notes}
+
+# Intent
+  Same-(chan, pitch) overlap is hard MIDI physics: one voice per
+  (chan, pitch), so a realised collision truncates the earlier note's
+  raw note-off. Under the universal tail model that clip is REALISED
+  only -- endppqL is intent and survives it, so removing the blocker
+  regrows the raw tail back up to the authored ceiling. The vm-side
+  delayRange gate still prevents legitimate edits from manufacturing
+  these collisions.
+  
+  F3 #3: tm:addEvent must not shift endppq by delay (endppq is intent,
+  delay a realisation-level shift on the note-on only). No caller
+  passes delay≠0 to addEvent today; this pins it as the contract.
+
+# Cases
+  @case 'F3 #3: tm:addEvent with delay≠0 leaves endppq at caller value'  [harness]  @ 26-43
+  @case 'same-pitch peer clips realised endppq; endppqL (intent) survives'  [harness]  @ 50-66
+  @case 'self clamped by a later same-pitch peer; endppqL (intent) survives'  [harness]  @ 70-86
+
+# Uses (outbound edges)
+  @use call trackerManager.addEvent  @ 31,56,76
+  @use call trackerManager.flush  @ 35,58,78
+  @use call midiManager.dump  @ 37,60,80

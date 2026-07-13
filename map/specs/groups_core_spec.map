@@ -1,0 +1,59 @@
+@spec groups_core_spec  src=tests/specs/groups_core_spec.lua  loc=351  sha=7dae3ed  cases=26
+@exercises groups (groups)
+@surface   groups.project, groups.reconcile, groups.deriveAssign, groups.streamId, groups.inRect
+
+# Intent
+  Pure groups core. project(head, inst) -> desired, conflicts, states:
+  resolves a head template plus an instance's override/locals/drops state
+  into the events the instance should contain, local-wins, flagging a
+  conflict where an override's captured base has drifted from the live head.
+  reconcile(desired, current) diffs by vuid into minimal add/del/set ops --
+  a move or resize is one `set`, never del+add. deriveOverride captures the
+  merge base at fork time. streamId/inRect are the region membership
+  primitives: identity-by-(evType+key), not by view-column index.
+  
+  Templates are flat, field-agnostic, head-relative (pasteMulti vocabulary:
+  chanDelta/key/ppq/dur). The core never interprets a field. No REAPER, no
+  anchor maths -- that belongs to the stateful groupManager wrapper.
+
+# Helpers
+  @fn note(ppq, extra)  @ 17-21
+  @fn hd(events)  @ 26-29
+      -- Wrap an events table in a head. project() only reads head.events; the
+      -- rect is the stateful layer's membership predicate, exercised separately
+      -- by the streamId/inRect tests below.
+
+# Cases
+  @case 'no overrides -> every head event synced, no conflicts'  [pure]  @ 35-45
+  @case 'dropped head event is absent from desired'  [pure]  @ 49-55
+  @case 'a local add is an override (no separate "local" state)'  [pure]  @ 59-64
+  @case 'clean override: base matches head -> local wins, no conflict'  [pure]  @ 70-78
+  @case 'a drifted base is NOT a conflict: local still wins, no flag'  [pure]  @ 82-90
+  @case 'orthogonal override: head edits a different field, no conflict, both apply'  [pure]  @ 94-102
+  @case 'move is a ppq override; resize is a dur override; each one override'  [pure]  @ 106-117
+  @case 'channel/lane shift is a chanDelta/key override like any field'  [pure]  @ 121-128
+  @case 'assign whose group event vanished is dropped (group is the authority)'  [pure]  @ 132-140
+  @case 'delete does not extend the predecessor -- project carries intent, tm regrows'  [pure]  @ 146-161
+  @case 'a bare add carries no dur (open) and does not clip the note it lands in'  [pure]  @ 165-175
+  @case 'an overrunning note keeps its dur -- project never clips to a neighbour'  [pure]  @ 179-185
+  @case 'add onto an occupied (lane, onset) is skipped and conflicted'  [pure]  @ 189-199
+  @case 'an assign that moves a note onto a sibling onset collides and is skipped'  [pure]  @ 203-211
+  @case 'project is idempotent and does not mutate the group'  [pure]  @ 215-222
+  @case 'add when desired has a vuid current lacks'  [pure]  @ 228-234
+  @case 'del when current has a vuid desired lacks'  [pure]  @ 238-244
+  @case 'move emits a single set, never del+add'  [pure]  @ 248-257
+  @case 'unchanged vuid emits no op'  [pure]  @ 261-265
+  @case 'deriveAssign captures live head value as base'  [pure]  @ 271-274
+  @case 'deriveAssign on a local-only (no head template) captures nil base'  [pure]  @ 278-281
+  @case 'streamId is evType:key -- distinguishes lanes and cc numbers, ignores column position'  [pure]  @ 287-295
+  @case 'inRect: span is anchor-relative [0, dur), rect.ppq does not shift it'  [pure]  @ 301-317
+  @case 'inRect false for a channel offset that does not participate'  [pure]  @ 321-326
+  @case 'inRect false for a stream not selected on its channel -- cc-only region excludes notes'  [pure]  @ 330-335
+  @case 'inRect: per-channel selectors differ -- notes+cc on ch0, cc1 only on ch1'  [pure]  @ 339-349
+
+# Uses (outbound edges)
+  @use call groups.project  @ 38,52,62,74,86,98,113,125,136,156,170,182,194,207,218,219
+  @use call groups.reconcile  @ 230,240,252,264
+  @use call groups.deriveAssign  @ 273,280
+  @use call groups.streamId  @ 289,290,291,292,293,294
+  @use call groups.inRect  @ 312,313,314,315,324,325,333,334,345,346,347,348

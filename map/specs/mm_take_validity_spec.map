@@ -1,0 +1,26 @@
+@spec mm_take_validity_spec  src=tests/specs/mm_take_validity_spec.lua  loc=46  sha=25dbe02  cases=1
+@exercises midiManager (h.mm)
+@surface   mm:load, mm:take, mm:length, mm:resolution, mm:name
+@harness   fakeReaper:bindTake, fakeReaper:seedMidi
+
+# Intent
+  Integration spec: real midiManager + fakeReaper. Pins the dead-take
+  self-heal: when a bound take is deleted in REAPER (ValidatePtr2 -> false),
+  mm treats it as absent instead of dereferencing the dangling pointer.
+  Without this, the dormant "keep last frame" seam (bindTake(nil) leaves the
+  old take in mm) crashes the next configChanged-driven tm:rebuild via
+  mm:length -> GetMediaItemTake_Source on a dead take.
+
+# Helpers
+  @fn freshTake()  @ 12-19
+  @fn killTake(fakeReaper, take)  @ 21-27
+
+# Cases
+  @case 'a deleted take reads as absent; deref accessors return nil, not a crash'  [pure]  @ 31-44
+
+# Uses (outbound edges)
+  @use call midiManager.load  @ 35
+  @use call midiManager.take  @ 36,40
+  @use call midiManager.length  @ 41
+  @use call midiManager.resolution  @ 42
+  @use call midiManager.name  @ 43

@@ -1,0 +1,30 @@
+@spec patternEditor_lifecycle_spec  src=tests/specs/patternEditor_lifecycle_spec.lua  loc=142  sha=59b23ca  cases=3
+@exercises eventMeta (em), scratch (scratch)
+@surface   em:load, scratch.track
+@harness   mk, reaper.GetMediaItemTake_Track, reaper.MIDI_CountEvts, reaper.GetMediaItemTake_Item, reaper.GetItemStateChunk, reaper.CountTrackMediaItems
+
+# Intent
+  design/fx-patterns.md P3 step c: the checkout lifecycle; see docs/patternEditor.md.
+  Pins mint+materialise (both kinds), the parked item, and dropPool clearing eventMeta's write-through blobs.
+
+# Helpers
+  @fn loadPE(deps)  @ 20-26
+  @fn noteCount(take)  @ 36
+  @fn ccCount(take)  @ 37
+  @fn poolGuidOf(take)  @ 39-43
+  @fn poolMeta(guid)  @ 47-50
+      -- A fresh eventMeta over its own ps reads the same projext mm's flush wrote, so
+      -- it observes the pool metadata independently of the editor's own instance.
+  @fn noop()  @ 69
+  @fn withEditor(harness)  @ 73-77
+      -- Build a host stack (for the scratch-track environment) and a fresh editor. The body is
+      -- handed straight to open() now -- the fxPatterns store is a P4 concern, not the editor's.
+
+# Cases
+  @case 'open mints a checkout on scratch and materialises the notes body; close sweeps it'  [harness]  @ 81-100
+  @case 'a curve body materialises as pb events; close removes the checkout'  [harness]  @ 104-116
+  @case 'the singleton editor cycles open/close/open, minting a fresh pool each time'  [harness]  @ 122-140
+
+# Uses (outbound edges)
+  @use call eventMeta.load  @ 49
+  @use call scratch.track  @ 89,112,125

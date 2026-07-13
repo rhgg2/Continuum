@@ -1,0 +1,54 @@
+@spec config_schema_spec  src=tests/specs/config_schema_spec.lua  loc=456  sha=3039308  cases=30
+@exercises configManager (h.cm)
+@surface   cm:get, cm:set, cm:setContext, cm:remove, cm:assign, cm:getAt, cm:clearTake, cm:setTrack, cm:subscribe, cm:seedGlobalFromDefault
+@harness   mk, r._state.takeExt, r._state.trackExt
+
+# Intent
+  Pin-tests for configManager's schema enforcement and ownership contract.
+  Covers: unknown-key rejection at every API entry; silent prune of unknown
+  keys on persistence load; deep-copy at read AND write boundaries so
+  callers never alias cm's internal state.
+
+# Cases
+  @case 'cm:get on an unknown key raises'  [harness]  @ 14-20
+  @case 'cm:set on an unknown key raises'  [harness]  @ 23-28
+  @case 'take-tier write with no bound take is a silent no-op (dormant seam)'  [harness]  @ 31-45
+  @case 'cm:remove on an unknown key raises'  [harness]  @ 48-53
+  @case 'cm:assign rejects updates that contain unknown keys'  [harness]  @ 56-65
+  @case 'cm:getAt on an unknown key raises'  [harness]  @ 68-73
+  @case 'cm:getAt full-level read does not require a key'  [harness]  @ 76-83
+  @case 'schema default surfaces when no level has set the key'  [harness]  @ 96-100
+  @case 'null-defaulted keys are declared but return nil'  [harness]  @ 103-115
+  @case 'unknown keys in persisted data are pruned on load'  [harness]  @ 126-145
+  @case 'cm:get returns a deep copy — caller mutation does not leak'  [harness]  @ 152-163
+  @case 'cm:get of a default table returns a fresh table each call'  [harness]  @ 166-173
+  @case 'cm:set deep-copies the incoming value — caller mutation after set does not leak'  [harness]  @ 176-186
+  @case 'more specific level overrides less specific'  [harness]  @ 193-202
+  @case 'remove at a level falls back to the next less-specific level'  [harness]  @ 205-217
+  @case 'transient is the most-specific level (overrides take)'  [harness]  @ 224-235
+  @case 'transient writes do not persist across cm reconstruction'  [harness]  @ 238-251
+  @case 'clearTake empties take cache; lower tiers and track tier survive'  [harness]  @ 257-272
+  @case 'setTrack rebinds the track tier to a different track\'s P_EXT'  [harness]  @ 275-288
+  @case 'setTrack is independent of take — take cache stays put'  [harness]  @ 291-298
+  @case 'clearTake and setTrack both fire configChanged (keyless)'  [harness]  @ 301-313
+  @case 'mergeTiers unions tier tables per sub-key'  [harness]  @ 330-349
+  @case 'mergeTiers returns a fresh deep copy'  [harness]  @ 352-366
+  @case 'mergeTiers with no tier contributions returns the schema default'  [harness]  @ 369-379
+  @case 'mergeTiers default + tier writes union per sub-key'  [harness]  @ 382-390
+  @case 'mergeTiers: tier write on a default-named key wins'  [harness]  @ 393-403
+  @case 'cm:seedGlobalFromDefault seeds the global library from the catalogue when empty'  [harness]  @ 409-417
+  @case 'cm:seedGlobalFromDefault is a no-op once the global library exists'  [harness]  @ 420-427
+  @case 'cm:seedGlobalFromDefault seeds tempers from the EDO catalogue'  [harness]  @ 430-437
+  @case 'cm fires changes with their level on the broadcast'  [harness]  @ 441-454
+
+# Uses (outbound edges)
+  @use call configManager.get  @ 17,64,99,112,138,139,157,160,169,171,183,201,214,216,232,234,244,249,266,268,339,345,360,363,376,387,398
+  @use call configManager.set  @ 26,38,142,180,243,446
+  @use call configManager.setContext  @ 34,137,248
+  @use call configManager.remove  @ 51,110,213,215,233,447
+  @use call configManager.assign  @ 60,448
+  @use call configManager.getAt  @ 71,81,250,269,270,271,285,287,297,412,414,424,434
+  @use call configManager.clearTake  @ 267,306
+  @use call configManager.setTrack  @ 286,296,307
+  @use call configManager.subscribe  @ 305,445
+  @use call configManager.seedGlobalFromDefault  @ 413,423,433

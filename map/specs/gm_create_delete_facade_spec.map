@@ -1,0 +1,34 @@
+@spec gm_create_delete_facade_spec  src=tests/specs/gm_create_delete_facade_spec.lua  loc=78  sha=1747f65  cases=3
+@exercises midiManager (h.fm), trackerView (h.vm), groupManager (h.gm), editCursor (h.ec), trackerManager (h.tm), commandManager (h.cmgr)
+@surface   fm:notes, vm:selectionAsRect, gm:markGroup, vm:eventsInRect, ec:selClear, gm:newInstance, tm:flush, ec:setPos, vm:editEvent, cmgr:invoke, gm:setLocalMode
+@harness   mk{seed.notes}
+
+# Intent
+  Stage 4a full-stack: typed create / delete on a member rides the leaf-edit facade
+  (-> gm:addEvent/gm:deleteEvent), real tm/mm/gm/tv. Region spans ppq 0..120; row 1 (ppq 60) is an empty in-region cell.
+
+# Helpers
+  @fn noteCol(h, chan)  @ 6-10
+  @fn allNotes(h)  @ 12-18
+  @fn noteAt(h, chan, ppq)  @ 20-24
+  @fn setup(harness)  @ 28-41
+      -- Seed one member at ppq 0, mark rows 0-1 of its column as a region, and add a
+      -- sibling instance at ppq 240 (rows 4-5). Returns the harness and column index.
+
+# Cases
+  @case 'typed create inside a region auto-joins the pattern and propagates to every instance'  [harness]  @ 45-53
+  @case 'delete of a synced member propagates: every instance loses it'  [harness]  @ 56-63
+  @case 'in localMode a typed create stays a per-instance add (sibling untouched)'  [harness]  @ 66-76
+
+# Uses (outbound edges)
+  @use call midiManager.notes  @ 14
+  @use call trackerView.selectionAsRect  @ 35
+  @use call groupManager.markGroup  @ 36
+  @use call trackerView.eventsInRect  @ 36
+  @use call editCursor.selClear  @ 37
+  @use call groupManager.newInstance  @ 38
+  @use call trackerManager.flush  @ 39
+  @use call editCursor.setPos  @ 48,59,70
+  @use call trackerView.editEvent  @ 49,71
+  @use call commandManager.invoke  @ 60
+  @use call groupManager.setLocalMode  @ 69,72

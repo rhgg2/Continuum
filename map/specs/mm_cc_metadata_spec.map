@@ -1,0 +1,29 @@
+@spec mm_cc_metadata_spec  src=tests/specs/mm_cc_metadata_spec.lua  loc=148  sha=bfdeb03  cases=9
+@exercises midiManager (h.mm)
+@surface   mm:ccs, fm:assign, fm:modify, fm:delete
+@harness   mk{seed.ccs}, bareMM
+
+# Intent
+  Pin-tests for the cc-side of the per-event metadata contract — uuid
+  allocation on first stamp, lockless carve-out for subsequent metadata,
+  and clean-up on delete.
+
+# Helpers
+  @fn ccAt(mm, i)  @ 14-20
+
+# Cases
+  @case 'metadata-only assign on a plain (un-uuid\'d) cc requires the lock'  [harness]  @ 24-30
+  @case 'first metadata stamp allocates a uuid and persists the field'  [harness]  @ 34-43
+  @case 'subsequent metadata writes on a stamped cc are lockless'  [harness]  @ 47-56
+  @case 'mixed structural+metadata write under modify stamps in one go'  [harness]  @ 60-70
+  @case 'pure-structural writes leave plain ccs un-uuid\'d'  [harness]  @ 74-80
+  @case 'distinct first stamps get distinct uuids'  [harness]  @ 84-101
+  @case 'a stamped cc keeps its uuid across a lockless metadata assign'  [harness]  @ 105-120
+  @case 'delete removes both event and uuid identity'  [harness]  @ 124-134
+  @case 'util.REMOVE clears a metadata field on a stamped cc (no lock)'  [harness]  @ 138-146
+
+# Uses (outbound edges)
+  @use call midiManager.ccs  @ 16
+  @use call midiManager.assign  @ 27,39,52,54,65,78,95,96,116,129,144
+  @use call midiManager.modify  @ 39,52,65,78,94,129,132
+  @use call midiManager.delete  @ 132

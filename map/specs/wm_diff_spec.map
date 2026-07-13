@@ -1,0 +1,57 @@
+@spec wm_diff_spec  src=tests/specs/wm_diff_spec.lua  loc=556  sha=e2be081  cases=35
+@exercises wiringManager (wm)
+@surface   wm:load, wm:targetState, wm:mutate, wm:diff, wm:snapshot
+@harness   mk, reaper.SetMediaTrackInfo_Value, reaper.TrackFX_AddByName, reaper:setFxGuid, r._state.projectTracks, r._state.trackGuids
+
+# Intent
+  (none)
+
+# Helpers
+  @fn mkWm(harness)  @ 4-9
+  @fn byOp(ops)  @ 13-20
+      -- Sort ops by op-name so spec assertions don't depend on insertion order
+      -- within a logical phase (creates/mutates/deletes still grouped though).
+
+# Cases
+  @case 'targetState on fresh graph: only scratch (master is implicit)'  [harness]  @ 26-34
+  @case 'targetState carries fxId from user-graph nodes through to fx'  [harness]  @ 37-54
+  @case 'targetState fx id is nil for unmaterialised fx nodes'  [harness]  @ 57-70
+  @case 'targetState: intra gain materialises as a per-consumer merge CU in fx'  [harness]  @ 74-97
+  @case 'diff: params change triggers setFXChain (full-replace)'  [harness]  @ 100-114
+  @case 'diff: identical params → no op'  [harness]  @ 117-127
+  @case 'diff: midi change triggers setFXChain'  [harness]  @ 131-143
+  @case 'diff: identical midi → no op'  [harness]  @ 146-156
+  @case 'diff: empty target vs empty snap → no ops'  [harness]  @ 162-166
+  @case 'diff: identical target and snap → no ops'  [harness]  @ 169-178
+  @case 'diff: target-only newTrack trackKey emits createTrack + setFXChain + setSends (id lives in wiringTracks)'  [harness]  @ 184-205
+  @case 'diff: fresh newTrack with mainSend off emits setMainSend(false) — REAPER mints master-send ON'  [harness]  @ 208-221
+  @case 'diff: target-only sourceTrack trackKey emits no createTrack and no ext-state op (trackKey ≡ id)'  [harness]  @ 224-234
+  @case 'diff: mainSend transitions emit setMainSend'  [harness]  @ 237-247
+  @case 'diff: fx reorder emits setFXChain'  [harness]  @ 250-261
+  @case 'diff: sends are order-insensitive (rearranged sends → no op)'  [harness]  @ 264-274
+  @case 'diff: snap-only newTrack trackKey emits deleteTrack'  [harness]  @ 277-287
+  @case 'diff: snap-only sourceTrack is NOT deleted (user owns it)'  [harness]  @ 290-299
+  @case 'diff: snap-only scratch is NOT deleted'  [harness]  @ 302-311
+  @case 'diff: field ops carry trackKind so applier can resolve master without a class tag'  [harness]  @ 317-326
+  @case 'diff: newTrack → master transition deletes the old newTrack and installs on master'  [harness]  @ 329-344
+  @case 'diff: master → newTrack transition drains master, creates a newTrack, installs there'  [harness]  @ 347-367
+  @case 'integration: snapshot of a seeded source track matches targetState'  [harness]  @ 373-398
+  @case 'diff: send gain drift drives setSends'  [harness]  @ 404-415
+  @case 'diff: identical send gain → no op'  [harness]  @ 418-427
+  @case 'diff: mainSend.gain drift drives setMainSend carrying the gain'  [harness]  @ 430-439
+  @case 'diff: nchan drift drives setNchan'  [harness]  @ 445-454
+  @case 'diff: identical nchan → no setNchan'  [harness]  @ 457-463
+  @case 'diff: target nchan=2 vs snap with no nchan → no op (REAPER default)'  [harness]  @ 466-474
+  @case 'diff: pinMaps drift drives setPinMaps (fxId-keyed)'  [harness]  @ 477-490
+  @case 'diff: identical pinMaps → no setPinMaps'  [harness]  @ 493-501
+  @case 'diff: unmaterialised target pinMaps (no id) always drives setPinMaps'  [harness]  @ 504-519
+  @case 'diff: mainSend.tgtOffset drift drives setMainSend carrying offs'  [harness]  @ 522-531
+  @case 'diff: mainSend.nchan drift drives setMainSend carrying nch'  [harness]  @ 534-543
+  @case 'diff: fresh class setMainSend carries offs (defaults to 0)'  [harness]  @ 546-554
+
+# Uses (outbound edges)
+  @use call wiringManager.load  @ 29,40,60,77,376
+  @use call wiringManager.targetState  @ 30,48,67,86,392
+  @use call wiringManager.mutate  @ 41,61,78,385
+  @use call wiringManager.diff  @ 109,126,141,155,165,177,195,218,231,244,259,273,284,297,309,324,338,356,394,412,426,435,450,462,473,485,500,514,527,539,551
+  @use call wiringManager.snapshot  @ 393

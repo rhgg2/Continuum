@@ -1,0 +1,18 @@
+@spec wm_installed_fx_spec  src=tests/specs/wm_installed_fx_spec.lua  loc=62  sha=e2be081  cases=3
+@exercises wiringManager (wm)
+@surface   wm:listInstalledFX
+@harness   mk
+
+# Intent
+  (none)
+
+# Helpers
+  @fn mkWm(harness)  @ 4-9
+
+# Cases
+  @case 'listInstalledFX enumerates reaper.EnumInstalledFX until false'  [harness]  @ 13-35
+  @case 'listInstalledFX caches: second call does not re-enumerate'  [harness]  @ 38-51
+  @case 'listInstalledFX returns empty list when EnumInstalledFX gives nothing'  [harness]  @ 54-60
+
+# Uses (outbound edges)
+  @use call wiringManager.listInstalledFX  @ 28,47,49,58

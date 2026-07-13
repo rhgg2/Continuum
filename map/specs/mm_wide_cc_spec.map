@@ -1,0 +1,27 @@
+@spec mm_wide_cc_spec  src=tests/specs/mm_wide_cc_spec.lua  loc=143  sha=8cc9255  cases=6
+@exercises midiManager (h.mm)
+@surface   mm:ccs, mm:modify, mm:delete
+@harness   fakeReaper:bindTake
+
+# Intent
+  14-bit CC primitive: a fractional val on cc 0..31 splits to an MSB/LSB wire pair; the codec
+  owns it, not a registry. see docs/midiManager.md § 14-bit CCs
+
+# Helpers
+  @fn freshTake(name)  @ 9-15
+  @fn wireCCs(rp, take)  @ 18-30
+      -- Raw wire CCs straight from REAPER, bypassing the codec's coalescing. cc-sorted.
+  @fn readCCs(mm)  @ 32-40
+
+# Cases
+  @case 'fractional val (code 0..31) splits into an MSB-shaped / LSB-step wire pair'  [pure]  @ 44-62
+  @case 'wide CC reads back as one coalesced fixed-point event (round-trip)'  [pure]  @ 66-81
+  @case 'carrier-style value (14-bit around 8192) round-trips exactly'  [pure]  @ 85-97
+  @case 'a lone code 0..31 on the wire (no +32 partner) stays a plain 7-bit CC'  [pure]  @ 101-112
+  @case 'integer val is untouched: one message, no LSB companion'  [pure]  @ 116-126
+  @case 'deleting a wide CC removes both wire lanes'  [pure]  @ 130-141
+
+# Uses (outbound edges)
+  @use call midiManager.ccs  @ 34
+  @use call midiManager.modify  @ 48,70,90,120,135,139
+  @use call midiManager.delete  @ 139

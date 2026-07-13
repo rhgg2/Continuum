@@ -1,0 +1,48 @@
+@spec mm_signal_flow_spec  src=tests/specs/mm_signal_flow_spec.lua  loc=196  sha=ef4e5a4  cases=11
+@exercises harness (harness), midiManager (h.fm), trackerManager (h.tm)
+@surface   harness.mk, fm:load, fm:take, fm:subscribe, fm:modify, tm:subscribe, harness.bareMM, fm:notes, fm:tokenOf, fm:assign
+@harness   mk, bareMM, reaper:seedMidi
+
+# Intent
+  Pin-tests for the mm → tm signal split landed in the callbacks revamp.
+  
+  Contract under test:
+    * mm fires `takeSwapped` only when mm:load receives a different take,
+      and always BEFORE its `reload` fire on that load.
+    * mm fires `reload` on every load, with no payload.
+    * tm forwards `takeSwapped` to its own subscribers and consumes the
+      flag transiently, calling tm:rebuild(true) on the next reload.
+    * tm fires `rebuild` (no payload) on every rebuild.
+    * The takeSwapped flag is one-shot: a subsequent same-take reload
+      does not re-fire takeSwapped and tm:rebuild sees takeChanged=false.
+
+# Helpers
+  @fn recordOn(owner, signals)  @ 19-25
+      -- Records the sequence of signals fired on a single owner. Listener order
+      -- across owners is non-deterministic (set iteration), so each owner gets
+      -- its own stream and ordering assertions stay within one source.
+
+# Cases
+  @case 'mm:load with a different take fires mm.takeSwapped before mm.reload'  [pure]  @ 29-41
+  @case 'mm:load with the same take fires reload only'  [pure]  @ 45-55
+  @case 'takeSwapped is one-shot: next same-take reload sees takeChanged=false'  [pure]  @ 59-75
+  @case 'mm.reload carries wholesale: true from load, false from modify'  [pure]  @ 81-94
+  @case 'tm.rebuild forwards takeChanged (so gm can reload take-tier state)'  [pure]  @ 98-106
+  @case 'multiple subscribers on the same signal both fire'  [pure]  @ 110-119
+  @case 'mm.reload chans: an add marks only the touched channel'  [pure]  @ 125-135
+  @case 'mm.reload chans: an assign changing chan marks both old and new'  [pure]  @ 139-148
+  @case 'mm.reload chans: a wholesale load carries no chans (nil = all 16)'  [pure]  @ 152-160
+  @case 'mm.flushed fires after reload on a structural modify, not on a clean one'  [pure]  @ 167-178
+  @case 'mm.flushed fires on a load that reprojected the take, silent on the clean re-load'  [pure]  @ 182-194
+
+# Uses (outbound edges)
+  @use call harness.mk  @ 31,47,61,83,100,112,184
+  @use call midiManager.load  @ 35,51,70,71,87,103,116,157,190,192
+  @use call midiManager.take  @ 51,87,116,157,186,190,192
+  @use call midiManager.subscribe  @ 85,114,115,129,145,156,189
+  @use call midiManager.modify  @ 91,130,146,171,173
+  @use call trackerManager.subscribe  @ 102
+  @use call harness.bareMM  @ 127,154,169
+  @use call midiManager.notes  @ 142
+  @use call midiManager.tokenOf  @ 143
+  @use call midiManager.assign  @ 146

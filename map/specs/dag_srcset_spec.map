@@ -1,0 +1,26 @@
+@spec dag_srcset_spec  src=tests/specs/dag_srcset_spec.lua  loc=133  sha=1694e27  cases=8
+@exercises DAG (DAG)
+@surface   DAG.compile
+
+# Intent
+  (none)
+
+# Helpers
+  @fn source(id, guid)  @ 7-12
+  @fn fx(id, opts)  @ 14-22
+  @fn master(opts)  @ 24-29
+  @fn mk(nodes, edges)  @ 31-36
+  @fn classKey(nodes, edges, id)  @ 38-40
+
+# Cases
+  @case 'source node srcSet = {its own trackId}'  [pure]  @ 44-49
+  @case 'isolated master carries its own split marker'  [pure]  @ 52-55
+  @case 'single-chain fx inherits source srcSet'  [pure]  @ 58-66
+  @case 'two-source fan-in: mix srcSet = union of both'  [pure]  @ 69-79
+  @case 'diamond from single source collapses to one srcSet'  [pure]  @ 82-96
+  @case 'master receiving from chain: chain-rooted srcSet plus its split marker'  [pure]  @ 99-108
+  @case 'gain op on a wire does not alter srcSet propagation (CU is invisible to the partition)'  [pure]  @ 111-119
+  @case 'memoisation returns the identical partition table on repeat call'  [pure]  @ 122-131
+
+# Uses (outbound edges)
+  @use call DAG.compile  @ 39,127

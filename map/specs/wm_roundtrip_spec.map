@@ -1,0 +1,35 @@
+@spec wm_roundtrip_spec  src=tests/specs/wm_roundtrip_spec.lua  loc=439  sha=e2be081  cases=1
+@exercises wiringManager (wm)
+@surface   wm:load, wm:mutate, wm:targetState, wm.readGraph
+@harness   mk, r._state.projectTracks, r._state.trackGuids
+
+# Intent
+  read ∘ compile = id (invariant 1, design/wiring-implicit-graph.md § The algebra): for each authored graph g,
+  read(compile(g)) = g (rm-id rename). Both former non-injectivities fixed; quarantine is off image(compile) — invariant 2.
+
+# Helpers
+  @fn mkWm(harness)  @ 6-12
+  @fn seedSource(h, guid)  @ 14-19
+  @fn source(guid, opts)  @ 21-25
+  @fn fx(ident, opts)  @ 27-32
+  @fn rmId(id, n)  @ 37
+      -- node key -> rm id: the vertex map read realises (source=trackId, fx=fxId, sink='master').
+  @fn normalForm(g)  @ 41-61
+      -- Audio-semantic normal form: rm-id-keyed, bus/track/position dropped, ports defaulted to read's
+      -- conventions (audio fromPort 1, toPort 1 except into master, midi portless). {kinds, edges[]}
+  @fn edgeDiff(readEdges, gEdges)  @ 64-75
+      -- Symmetric edge difference as two lists: read-only (phantoms compile adds), g-only (drops).
+  @fn roundtrip(harness, fixture)  @ 78-104
+      -- Run one fixture through compile then read; assert the bijection up to declared diffs.
+  @fn folderCapacityFixture(n, evicts)  @ 110-137
+      -- Folder family of n single-fx children, each with a distinct crossing gen_i->cons_i on the parent chain.
+      -- Past 126 buses `allocate` evicts children to top-level (crossings→explicit sends); read must recover the graph. See design/archive/wiring-folders.md § Bus domains (step 4).
+
+# Cases
+  @case 'folder midi: merge on bus 0 and a distinct stream on bus >=1 coexist'  [harness]  @ 408-437
+
+# Uses (outbound edges)
+  @use call wiringManager.load  @ 10
+  @use call wiringManager.mutate  @ 83
+  @use call wiringManager.targetState  @ 86
+  @use call wiringManager.readGraph  @ 99

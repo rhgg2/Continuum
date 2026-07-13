@@ -1,0 +1,27 @@
+@spec cmgr_stack_spec  src=tests/specs/cmgr_stack_spec.lua  loc=287  sha=7e24684  cases=16
+
+# Intent
+  commandManager: scope stack + modal/passthrough resolution.
+
+# Helpers
+  @fn newCmgr()  @ 6
+  @fn newModalScope(mgr, passthrough)  @ 10-15
+  @fn newSpringScope(mgr, opts)  @ 17-24
+
+# Cases
+  @case 'push/pop is LIFO; pop asserts top identity'  [pure]  @ 28-38
+  @case 'pop of a non-top scope raises'  [pure]  @ 42-48
+  @case 'modal scope without passthrough blocks lower commands'  [pure]  @ 52-63
+  @case 'passthrough exempts named commands'  [pure]  @ 67-81
+  @case 'keysFor honors modal: shadow first, then pass-through, else nil'  [pure]  @ 85-101
+  @case 'keychain top-down; modal filters lower keymaps to passthrough names'  [pure]  @ 105-130
+  @case 'commandAtKey: bare + chord match, mods distinguish, skips exceptName, nil when free'  [pure]  @ 134-147
+  @case 'commandAtKey: top-down shadowing — top scope wins on a shared key'  [pure]  @ 151-158
+  @case 'commandAtKey: modal-without-passthrough hides a lower binding from conflict'  [pure]  @ 162-170
+  @case 'bindingSite: bound scope when reachable; gate scope when unbound; global for root'  [pure]  @ 174-186
+  @case 'mgr.commands is flat; mgr.keymap aliases global keymap'  [pure]  @ 190-198
+  @case 'spring redirect reinterprets a foreign command, stays armed'  [pure]  @ 204-220
+  @case 'spring redirect receives the pending prefix (defaults 1)'  [pure]  @ 224-233
+  @case 'spring keepAlive command runs and stays armed'  [pure]  @ 237-251
+  @case 'spring foreign command bails then dispatches (execute-through)'  [pure]  @ 255-268
+  @case 'spring own command does not auto-bail'  [pure]  @ 272-285

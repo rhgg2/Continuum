@@ -1,0 +1,34 @@
+@spec tracker_page_spec  src=tests/specs/tracker_page_spec.lua  loc=275  sha=ef4e5a4  cases=9
+@exercises configManager (h.cm), commandManager (h.cmgr), midiManager (h.mm), trackerManager (h.tm)
+@surface   cm:setContext, cmgr:push, cmgr:invoke, cm:getAt, mm:subscribe, mm:notes, tm:assignEvent, tm:byUuid, tm:flush
+@harness   mk, reaper:addItem, reaper:seedMidi
+
+# Intent
+  Pin-tests for trackerPage's Page interface (bind / unbind / focusState / bind-from-cursor).
+  render / handleInput are stubs wired in step 3 and verified in REAPER, not here.
+
+# Helpers
+  @fn resetArrange()  @ 45-66
+  @fn newTrackerPage(cm, ds, cmgr, chrome, gui)  @ 78-85
+
+# Cases
+  @case 'bind(take) drives cm:setContext via the page's own tm:bindTake'  [harness]  @ 89-97
+  @case 'unbind() drives cm:setContext(nil) via the page's own tm:bindTake'  [harness]  @ 100-109
+  @case 'focusState before any render returns both bits false'  [harness]  @ 112-119
+  @case 'bindFromSelection binds tm to the resolved selection take, drops when the track has no slots'  [harness]  @ 125-138
+  @case 'newTakeBelow + duplicateUnpooledBelow mint a parked slot on scratch and select it'  [harness]  @ 142-163
+  @case 'prev/next track + take drive the tv selection, not the arrange cursor'  [harness]  @ 167-190
+  @case 'empty grid shows the single no-takes message'  [harness]  @ 196-210
+  @case 'an owned tm flush resyncs the watcher baseline; only a foreign write trips the reload'  [harness]  @ 217-249
+  @case 'bindFromSelection re-keys cm on return from dormancy even when the take is unchanged'  [harness]  @ 253-273
+
+# Uses (outbound edges)
+  @use call configManager.setContext  @ 100
+  @use call commandManager.push  @ 151,180
+  @use call commandManager.invoke  @ 153,159,182,184,186,188
+  @use call configManager.getAt  @ 157,161,183,185,187,189
+  @use call midiManager.subscribe  @ 233
+  @use call midiManager.notes  @ 238
+  @use call trackerManager.assignEvent  @ 239
+  @use call trackerManager.byUuid  @ 239
+  @use call trackerManager.flush  @ 240

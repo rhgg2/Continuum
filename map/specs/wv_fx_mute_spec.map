@@ -1,0 +1,25 @@
+@spec wv_fx_mute_spec  src=tests/specs/wv_fx_mute_spec.lua  loc=54  sha=e2be081  cases=2
+@exercises wiringView (wv), routingManager (rm)
+@surface   wv:addFx, rm:fx, wv:muted, wv:setMuted, wv:bypassed, wv:setBypassed
+@harness   mk
+
+# Intent
+  M/B fx-node actions through the real wv→wm→rm stack: mute silences via rm's
+  pin-stash (ReaEQ is a processor, so its input side is cleared; the wire
+  survives, reported from below), bypass flips the REAPER-native enable. nodeId
+  is the fxId, so both resolve straight through.
+
+# Helpers
+  @fn mkWv(harness)  @ 10-16
+
+# Cases
+  @case 'mute reaches rm through the stack and keeps the output wiring reported'  [harness]  @ 20-35
+  @case 'bypass flips the native enable, independent of mute'  [harness]  @ 38-52
+
+# Uses (outbound edges)
+  @use call wiringView.addFx  @ 23,41
+  @use call routingManager.fx  @ 24,29
+  @use call wiringView.muted  @ 25,28,34
+  @use call wiringView.setMuted  @ 27,33,47
+  @use call wiringView.bypassed  @ 42,45,48,51
+  @use call wiringView.setBypassed  @ 44,50

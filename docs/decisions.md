@@ -4,6 +4,14 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-13** — Specs get maps. `tests/specs/*_spec.lua` → `map/specs/*.map`
+  (`@spec` header, intent/helpers/cases, same `@use` grammar), so `map_query
+  usedby` answers "which specs exercise X" instead of a grep-and-read session
+  over 51k spec lines. Chosen over a bespoke test index: reusing the map
+  grammar means zero new query surface. Receiver→module aliasing rides a
+  hardcoded `HARNESS_MEMBERS` mirror of `harness.mk`'s return table — update
+  it when mk grows a member.
+
 - **2026-07-13** — Pools never span tracks. REAPER undo on a cross-track MIDI
   pool obeys a one-era law: only the first script run after create/load mints
   working points; later runs silently lose all but their first gesture until

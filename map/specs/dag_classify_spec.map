@@ -1,0 +1,26 @@
+@spec dag_classify_spec  src=tests/specs/dag_classify_spec.lua  loc=93  sha=b5bd4f7  cases=7
+@exercises DAG (DAG)
+@surface   DAG.classify
+
+# Intent
+  DAG.classify: post-hoc component grouping over read's domain (master-excluded union-find)
+  + bus-aware quarantine. See design/wiring-implicit-graph.md § Quarantine.
+
+# Helpers
+  @fn g(nodes, edges)  @ 6-8
+  @fn src()  @ 11-13
+  @fn fx(opts)  @ 14-17
+  @fn byNodes(comps)  @ 20-24
+      -- components keyed by their sorted node list -> reason (false = managed), for order-free asserts.
+
+# Cases
+  @case 'classify: one source->fx->master chain is a single managed component'  [pure]  @ 28-34
+  @case 'classify: master never bridges two independent chains'  [pure]  @ 37-44
+  @case 'classify: a bus-aware fx quarantines its whole component'  [pure]  @ 47-54
+  @case 'classify: bus-aware in one component leaves a sibling managed'  [pure]  @ 57-64
+  @case 'classify: an isolated node with no edges is its own managed component'  [pure]  @ 67-71
+  @case 'classify: a seeded feedback component is tagged feedback'  [pure]  @ 74-81
+  @case 'classify: feedback outranks bus-aware on the same component'  [pure]  @ 84-91
+
+# Uses (outbound edges)
+  @use call DAG.classify  @ 30,39,49,59,69,76,86

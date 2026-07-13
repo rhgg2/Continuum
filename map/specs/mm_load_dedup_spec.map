@@ -1,0 +1,26 @@
+@spec mm_load_dedup_spec  src=tests/specs/mm_load_dedup_spec.lua  loc=116  sha=23e5095  cases=3
+@exercises midiManager (h.mm)
+@surface   mm:subscribe, mm:load, mm:notes, mm:byToken
+@harness   fakeReaper:bindTake, reaper:seedMidi
+
+# Intent
+  Phase 3 pin (design/same-pitch-enforcement.md item 3) -- load-dedup runs
+  sidecar binding first so voicing verdicts nudge distinct voices apart.
+
+# Helpers
+  @fn freshTake()  @ 8-14
+  @fn notation(ppq, chan, pitch, uuid)  @ 17-20
+      -- Notation sidecar for a note; uuids stay in 0-9 so %d doubles as base36.
+  @fn loadWithCapture(take)  @ 22-33
+  @fn notesOut(mm)  @ 35-39
+
+# Cases
+  @case 'raw-colliding notes with distinct detune load as two nudged voices'  [pure]  @ 43-67
+  @case 'foreign MIDI (no sidecars) still collapses to the longer note'  [pure]  @ 71-87
+  @case 'killed duplicate's metadata is dropped from eventMeta'  [pure]  @ 91-114
+
+# Uses (outbound edges)
+  @use call midiManager.subscribe  @ 25,26,30
+  @use call midiManager.load  @ 31
+  @use call midiManager.notes  @ 37
+  @use call midiManager.byToken  @ 65

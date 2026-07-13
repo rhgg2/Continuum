@@ -1,0 +1,25 @@
+@spec mm_reindex_if_stale_spec  src=tests/specs/mm_reindex_if_stale_spec.lua  loc=50  sha=07eac20  cases=2
+@exercises midiManager (h.mm)
+@surface   mm:events, mm:reindexIfStale, mm:notes, mm:tokenOf, mm:modify, mm:delete
+@harness   bareMM
+
+# Intent
+  Phase C pin - design/deferred-reindex.md item 5. mm:reindexIfStale() is the
+  scaffold Phase D flips onto: it runs a reindex only when a deferred modify
+  left the arrays stale. Nothing sets the stale flag yet, so today the call
+  verifiably reindexes nothing - loadIndex gained it at its head as a no-op.
+
+# Helpers
+  @fn tokPpqs(mm)  @ 8-12
+
+# Cases
+  @case 'reindexIfStale() is a no-op on already-compact state'  [harness]  @ 16-30
+  @case 'reindexIfStale() stays inert after a compacting modify'  [harness]  @ 34-48
+
+# Uses (outbound edges)
+  @use call midiManager.events  @ 10
+  @use call midiManager.reindexIfStale  @ 28,46
+  @use call midiManager.notes  @ 42
+  @use call midiManager.tokenOf  @ 42
+  @use call midiManager.modify  @ 43
+  @use call midiManager.delete  @ 43

@@ -1,0 +1,35 @@
+@spec tv_dup_cascade_spec  src=tests/specs/tv_dup_cascade_spec.lua  loc=148  sha=4a6bfb0  cases=8
+@exercises trackerView (h.vm), editCursor (h.ec), midiManager (h.fm), commandManager (h.cmgr)
+@surface   vm:setGridSize, ec:setPos, fm:dump, cmgr:invoke, ec:selClear, ec:extendTo, ec:hasSelection
+@harness   mk{seed.notes}
+
+# Intent
+  Plain duplicate cascade (tv:duplicateCascade, clip payload + cursorRect
+  fallback). The single-shot 1x1/no-sel part dispatch is pinned in
+  edit_cursor_spec; this pins the *run* semantics the unification added:
+  an unmoved cursor stacks the next copy one region below the last, a
+  moved cursor redirects it to the cursor, and every copy leaves the
+  new region selected so a follow-up dup/move targets it.
+
+# Helpers
+  @fn noteH(harness)  @ 10-18
+  @fn ppqs(h)  @ 20-25
+
+# Cases
+  @case 'unmoved cursor stacks each copy one region below the last'  [harness]  @ 29-35
+  @case 'a cursor move redirects the next copy to the cursor row'  [harness]  @ 38-48
+  @case 'after a cursor-move redirect, repeated dups keep stacking from there'  [harness]  @ 51-63
+  @case 'a mouse-style cursor move (selClear+setPos, no cmgr) keeps the cascade'  [harness]  @ 66-75
+  @case 'selection seed: redirect then repeated dups keep stacking'  [harness]  @ 78-96
+  @case 'channel-change cursor move: redirect then repeated dups keep stacking'  [harness]  @ 99-126
+  @case 'no-selection seed leaves no selection (classic cell duplicate)'  [harness]  @ 129-137
+  @case 'selection seed re-selects each copy'  [harness]  @ 140-146
+
+# Uses (outbound edges)
+  @use call trackerView.setGridSize  @ 15,84,109
+  @use call editCursor.setPos  @ 16,70,85,110
+  @use call midiManager.dump  @ 22,120
+  @use call commandManager.invoke  @ 32,33,41,42,43,44,45,54,55,56,57,58,59,60,69,71,72,87,88,89,90,91,92,93,111,112,113,114,115,116,117,118,133,135,144
+  @use call editCursor.selClear  @ 70
+  @use call editCursor.extendTo  @ 86,143
+  @use call editCursor.hasSelection  @ 132,134,136,145

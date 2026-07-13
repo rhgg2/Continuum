@@ -1,0 +1,47 @@
+@spec mm_cc_reconcile_spec  src=tests/specs/mm_cc_reconcile_spec.lua  loc=283  sha=61aa319  cases=8
+@exercises midiManager (h.mm)
+@surface   mm:ccs, mm:subscribe, mm:load, mm:modify, mm:assign
+@harness   fakeReaper:bindTake, reaper:seedMidi, reaper.MIDI_CountEvts, reaper:dumpMidi
+
+# Intent
+  Integration spec: real midiManager + midi-extended fakeReaper, exercising
+  the load-time sidecar reconciliation pipeline end-to-end. Per-tier logic
+  is pinned in sidecar_tier{1,2,3,4}_spec; this spec covers the wiring:
+  bind → cc.uuid attachment, sidecar rewrite/delete, ccsReconciled signal,
+  and post-load index hygiene (cc.uuidIdx still resolves a sidecar after
+  mid-load deletions).
+
+# Helpers
+  @fn ccAt(mm, i)  @ 14-20
+  @fn freshTake()  @ 23-29
+      -- Build a fresh take + reaper. Returns (take, reaper).
+  @fn packCc(c)  @ 34-47
+      -- Cc-shaped record → REAPER's (chanmsg, msg2, msg3) packing. Mirrors
+      -- midiManager.lua's reconstruct(). chan stays 1-indexed here; convert at the
+      -- seed-call site.
+  @fn seed(take, reaper, spec)  @ 52-78
+      -- Spec for an event-row plus optional metadata. Sidecar specs that include
+      -- a `metadata` field also seed per-event metadata via eventMeta. uuids must be
+      -- explicit and globally unique within the take.
+  @fn loadWithCapture(take)  @ 84-94
+      -- Subscribe to all signals on a fresh mm and return the load-time payloads
+      -- keyed by signal name. Construction calls mm:load() internally, so signals
+      -- fire during mm = realMM(take). We use a thunk to attach subscribers right
+      -- before construction triggers them.
+
+# Cases
+  @case 'tier 1: matching sidecar+cc binds silently, no ccsReconciled fire'  [pure]  @ 98-111
+  @case 'tier 2: value drift produces valueRebound, sidecar body rewritten'  [pure]  @ 115-134
+  @case 'tier 3: uniform group drag, consensus rebinds all'  [pure]  @ 138-166
+  @case 'tier 4: orphan deletes sidecar, drops metadata, fires orphaned'  [pure]  @ 170-189
+  @case 'tier 4: single candidate yields guessedRebound and binds'  [pure]  @ 193-206
+  @case 'tier 4: multi-candidate is ambiguous, sidecar deleted, metadata dropped'  [pure]  @ 210-229
+  @case 'cc.uuidIdx survives mid-load orphan deletions and points at the right sysex'  [pure]  @ 233-263
+  @case 'reconcile fires before reload (signal ordering)'  [pure]  @ 267-281
+
+# Uses (outbound edges)
+  @use call midiManager.ccs  @ 16,160,226
+  @use call midiManager.subscribe  @ 87,88,89,90,91,277,278
+  @use call midiManager.load  @ 92,279
+  @use call midiManager.modify  @ 257
+  @use call midiManager.assign  @ 257

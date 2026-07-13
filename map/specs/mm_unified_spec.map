@@ -1,0 +1,37 @@
+@spec mm_unified_spec  src=tests/specs/mm_unified_spec.lua  loc=176  sha=bfdeb03  cases=9
+@exercises midiManager (h.fm)
+@surface   fm:modify, fm:byToken, fm:notes, fm:tokenOf, fm:assign, fm:ccs, fm:delete, fm:events, fm:add
+@harness   mk{seed.notes, seed.ccs}, bareMM
+
+# Intent
+  Pin-tests for the unified token-keyed write/iter surface on midiManager:
+    mm:add(t) → token
+    mm:assign(token, t) → token'
+    mm:delete(token)
+    mm:events() → token, evt iterator
+  
+  The loc-form methods (addNote/addCC/assignNote/assignCC/deleteNote/deleteCC)
+  still exist alongside in this step; tm migrates in step 4. These tests
+  exercise the unified surface in isolation.
+
+# Cases
+  @case 'add(note): returns a token that resolves to the new note'  [harness]  @ 15-27
+  @case 'add(cc/pb/pa/at/pc): every evType lands and is byToken-addressable'  [harness]  @ 31-47
+  @case 'assign: metadata-only change preserves the token'  [harness]  @ 51-63
+  @case 'assign: identity-field change retires the old token, returns the new one'  [harness]  @ 67-80
+  @case 'assign: cc identity change (chan or cc#) re-keys'  [harness]  @ 84-95
+  @case 'delete(token): event vanishes from byToken and from the iterators'  [harness]  @ 99-121
+  @case 'delete(unknown token): silent no-op'  [harness]  @ 125-134
+  @case 'events(): yields all live events as (token, evt), notes then ccs'  [harness]  @ 138-161
+  @case 'add(nil) / add{} / assign(nil, t): nil-paths return nil, no crash'  [harness]  @ 165-174
+
+# Uses (outbound edges)
+  @use call midiManager.modify  @ 19,35,59,75,90,111,115,130,168
+  @use call midiManager.byToken  @ 23,43,61,77,78,92,93,112,113,116,154
+  @use call midiManager.notes  @ 56,72,107
+  @use call midiManager.tokenOf  @ 57,73,88,109
+  @use call midiManager.assign  @ 59,75,90,171
+  @use call midiManager.ccs  @ 87,108
+  @use call midiManager.delete  @ 111,115,130,172
+  @use call midiManager.events  @ 119,132,151
+  @use call midiManager.add  @ 169

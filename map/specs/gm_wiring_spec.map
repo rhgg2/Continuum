@@ -1,0 +1,46 @@
+@spec gm_wiring_spec  src=tests/specs/gm_wiring_spec.lua  loc=131  sha=f8aa484  cases=4
+@exercises commandManager (cmgr), groupManager (gm), trackerManager (h.tm)
+@surface   cmgr:scope, gm:mark, gm:stamp, tm:flush, cmgr:doBefore, gm:clearActive, cmgr:push, cmgr:invoke, gm:activeGroup
+
+# Intent
+  Pins the mirror lifetime contract that trackerPage's wiring depends
+  on: the active group and the source snapshot survive pure navigation
+  but are cleared by ANY mutation command (the doBefore sweep whose
+  keep-set is navigation). mirrorPaste mirrors only while a source
+  snapshot is live, else it falls back to ordinary paste. BOTH copy
+  and mirrorMark must take that snapshot, or mark -> paste silently
+  degrades to plain paste. Real gm + real cmgr; fake tm as in
+  mirm_active_spec.
+
+# Helpers
+  @fn fakeCm()  @ 13-18
+  @fn note(ppq)  @ 20-21
+  @fn rect()  @ 22-23
+  @fn wire(gm, cmgr, tm, ctl)  @ 34-65
+      -- Faithfully mirrors trackerPage's real mirrorPaste gate: it stamps iff
+      -- a `mirrorSrc` snapshot is live, else falls back to ordinary paste.
+      -- Both mirrorMark AND copy snapshot that source (the documented
+      -- "mirrorSrc + active (mark/copy -> mirrorPaste)" lifetime). fell.v
+      -- records a fallback.
+      -- `sel` models a live selection; selRect() is tv:selectionAsRect (nil
+      -- once cleared). copy ends with selClear (clipboard:copy does), so the
+      -- page's source snapshot MUST hook doBefore('copy') -- a doAfter would
+      -- see the emptied selection. ctl exposes sel so tests can arm it.
+  @fn mk()  @ 67-75
+
+# Cases
+  @case 'mark goes active; navigation preserves it; a mutation clears it'  [pure]  @ 79-88
+  @case 'mirrorMark then nav then mirrorPaste mirrors (does NOT fall back)'  [pure]  @ 91-100
+  @case 'copy snapshots the source BEFORE its own selClear'  [pure]  @ 103-111
+  @case 'mirrorPaste mirrors while pristine, falls back after a mutation'  [pure]  @ 114-129
+
+# Uses (outbound edges)
+  @use call commandManager.scope  @ 39
+  @use call groupManager.mark  @ 46
+  @use call groupManager.stamp  @ 50
+  @use call trackerManager.flush  @ 50
+  @use call commandManager.doBefore  @ 54,59
+  @use call groupManager.clearActive  @ 61
+  @use call commandManager.push  @ 63
+  @use call commandManager.invoke  @ 82,84,86,94,95,96,106,107,117,118,119,124,125,126
+  @use call groupManager.activeGroup  @ 83,85,87,120

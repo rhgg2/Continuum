@@ -1,0 +1,34 @@
+@spec gm_local_guard_spec  src=tests/specs/gm_local_guard_spec.lua  loc=77  sha=9eea2ce  cases=2
+@exercises midiManager (h.fm), trackerView (h.vm), groupManager (h.gm), trackerManager (h.tm), commandManager (h.cmgr)
+@surface   fm:notes, vm:selectionAsRect, gm:markGroup, vm:eventsInRect, gm:newInstance, tm:flush, gm:setLocalMode, cmgr:invoke
+@harness   mk{seed.notes}
+
+# Intent
+  localMode read-only guard: with the caret over bare grid (no instance under it),
+  the leaf-edit facade refuses mutations, so a real nudge command is a no-op. With
+  localMode off the same command applies -- proving it is the guard, not the wiring.
+  Full-stack: real tm/mm/gm/tv driven by the nudge command, as the user would.
+
+# Helpers
+  @fn noteCol(h, chan)  @ 8-12
+  @fn rowOfPpq(col, ppq)  @ 14-18
+  @fn pitchByPpq(h)  @ 20-26
+  @fn setup(harness)  @ 31-48
+      -- Origin note at ppq 0 marked as a group with a sibling instance at 960; a plain
+      -- note at 1920 sits outside every instance. Returns h, the note col index, and the
+      -- plain note's grid row.
+  @fn selectPlain(h, ci, row)  @ 50-52
+
+# Cases
+  @case 'localMode blocks an edit whose caret is over bare grid (no active instance)'  [harness]  @ 56-65
+  @case 'with localMode off the same edit applies (proves it is the guard)'  [harness]  @ 68-75
+
+# Uses (outbound edges)
+  @use call midiManager.notes  @ 22
+  @use call trackerView.selectionAsRect  @ 41
+  @use call groupManager.markGroup  @ 42
+  @use call trackerView.eventsInRect  @ 42
+  @use call groupManager.newInstance  @ 43
+  @use call trackerManager.flush  @ 44
+  @use call groupManager.setLocalMode  @ 60,62
+  @use call commandManager.invoke  @ 61,72

@@ -1,0 +1,21 @@
+@spec tm_fx_patterns_spec  src=tests/specs/tm_fx_patterns_spec.lua  loc=34  sha=6712376  cases=2
+@exercises trackerManager (h.tm), dataStore (h.ds)
+@surface   tm:subscribe, ds:assign, tm:bindTake
+@harness   mk
+
+# Intent
+  P2 of design/fx-patterns.md: an fxPatterns library edit arrives as dataChanged and re-realises
+  every consumer via a full rebuild (v1 dirties all 16). Pins the fxPatterns arm in tm's handler,
+  and that the dormant guard still suppresses it. No consumer/editor exists yet -- that's P3.
+
+# Helpers
+  @fn countRebuilds(tm)  @ 7-11
+
+# Cases
+  @case 'an fxPatterns edit fires a rebuild'  [harness]  @ 15-21
+  @case 'a dormant tracker ignores fxPatterns edits'  [harness]  @ 24-32
+
+# Uses (outbound edges)
+  @use call trackerManager.subscribe  @ 9
+  @use call dataStore.assign  @ 19,30
+  @use call trackerManager.bindTake  @ 28

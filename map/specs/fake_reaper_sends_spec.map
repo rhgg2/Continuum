@@ -1,0 +1,21 @@
+@spec fake_reaper_sends_spec  src=tests/specs/fake_reaper_sends_spec.lua  loc=130  sha=2d8c907  cases=11
+@harness   FR.new
+
+# Intent
+  (none)
+
+# Helpers
+  @fn mk()  @ 4-9
+
+# Cases
+  @case 'B_MAINSEND defaults to 1 (REAPER parity)'  [pure]  @ 13-19
+  @case 'TrackFX_GetFXGUID is per-(track,fxIdx), stable across reads'  [pure]  @ 22-32
+  @case 'setFxGuid two-arg legacy form pins fxIdx 0'  [pure]  @ 35-40
+  @case 'setFxGuid three-arg pins a specific fxIdx'  [pure]  @ 43-49
+  @case 'no sends: counts and reads return 0'  [pure]  @ 52-58
+  @case 'addSend default (both): srcChan=0, midiFlags=0; P_DESTTRACK reads back'  [pure]  @ 61-69
+  @case 'addSend type='audio': midiFlags=31 (MIDI disabled), srcChan=0'  [pure]  @ 72-78
+  @case 'addSend type='midi': srcChan=-1 (audio disabled), midiFlags=0'  [pure]  @ 81-87
+  @case 'receives (category=-1) are derived: count and reads'  [pure]  @ 90-104
+  @case 'multiple sends on one track preserve insertion order'  [pure]  @ 107-115
+  @case 'send D_VOL defaults to 1.0 and round-trips; I_SENDMODE defaults 0'  [pure]  @ 118-128

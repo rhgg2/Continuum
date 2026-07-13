@@ -1,0 +1,19 @@
+@spec dag_allocate_midi_spec  src=tests/specs/dag_allocate_midi_spec.lua  loc=182  sha=1694e27  cases=8
+@exercises DAG (DAG)
+@surface   DAG.allocate
+
+# Intent
+  (none)
+
+# Cases
+  @case 'midi: source-midi outgoing send anchored to bus 0'  [pure]  @ 11-27
+  @case 'midi: fx-midi outgoing send reuses bus 0 after source-midi releases'  [pure]  @ 30-45
+  @case 'midi: source-midi-out keeps boundary live; fx-midi claims fresh bus'  [pure]  @ 48-73
+  @case 'midi: per-fx producer fans intra + outgoing onto one bus'  [pure]  @ 76-94
+  @case 'midi: branching one producer to two dests shares one src bus'  [pure]  @ 97-119
+  @case 'midi: incoming sends to the same receiver node coalesce onto one bus'  [pure]  @ 122-141
+  @case 'midi: pure midi chain leaves audio side untouched (nchan=2, no pinMaps)'  [pure]  @ 144-159
+  @case 'midi: same input -> same output (determinism)'  [pure]  @ 162-180
+
+# Uses (outbound edges)
+  @use call DAG.allocate  @ 22,42,65,91,114,138,156,179

@@ -1,0 +1,39 @@
+@spec gm_shift_in_spec  src=tests/specs/gm_shift_in_spec.lua  loc=136  sha=cd206c9  cases=3
+@exercises midiManager (h.fm), groupManager (h.gm), trackerView (h.vm), editCursor (h.ec), trackerManager (h.tm), commandManager (h.cmgr)
+@surface   fm:notes, gm:markGroup, vm:eventsInRect, vm:selectionAsRect, ec:selClear, gm:newInstance, tm:flush, ec:setPos, cmgr:invoke, gm:setLocalMode
+@harness   mk{seed.notes}
+
+# Intent
+  Shift a note INTO a region (the add.member arm: gm:addEvent). A move whose
+  destination falls in a region auto-joins that group's shared pattern
+  (decision 2, global): the moved event propagates to every instance. Covers
+  the three destinations the dispatch is generic over -- into a group, from
+  one group to another, from one instance to another -- all in global mode.
+  Row pitch is 60 ppq (resolution 240, rowPerBeat 4): a 2-row region spans
+  ppq 0..120, so row 1 (ppq 60) is an empty in-region cell to receive a move.
+
+# Helpers
+  @fn noteCol(h, chan, lane)  @ 11-16
+  @fn allNotes(h)  @ 18-26
+  @fn noteAt(h, chan, ppq)  @ 28-32
+  @fn rowOfPpq(h, colIx, ppq)  @ 35-39
+      -- The grid row of the cell at colIx with the given ppq (ppq/row is not fixed).
+  @fn markRows(h, ci, r1, r2)  @ 42-49
+      -- Mark grid rows [r1,r2] of one note column as a region; returns the groupId.
+
+# Cases
+  @case 'move a standalone INTO a group: adopted + propagates to every instance'  [harness]  @ 53-77
+  @case 'move a member from one group to another: leaves A, joins B, propagates in B'  [harness]  @ 80-103
+  @case 'move a member from one instance to another: lands in the sibling, shared globally'  [harness]  @ 106-134
+
+# Uses (outbound edges)
+  @use call midiManager.notes  @ 20
+  @use call groupManager.markGroup  @ 45
+  @use call trackerView.eventsInRect  @ 45
+  @use call trackerView.selectionAsRect  @ 45,46
+  @use call editCursor.selClear  @ 47
+  @use call groupManager.newInstance  @ 64,92,116
+  @use call trackerManager.flush  @ 65,93,117,123
+  @use call editCursor.setPos  @ 68,95,126
+  @use call commandManager.invoke  @ 69,96,127
+  @use call groupManager.setLocalMode  @ 121,124

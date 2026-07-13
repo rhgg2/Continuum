@@ -1,0 +1,23 @@
+@spec mm_ppql_roundtrip_spec  src=tests/specs/mm_ppql_roundtrip_spec.lua  loc=126  sha=999f37e  cases=5
+@exercises midiManager (h.mm)
+@surface   mm:modify
+@harness   fakeReaper:bindTake
+
+# Intent
+  Phase 1 (two-frame timing): ppqL/endppqL ride the per-event metadata
+  channel through mm's save/load loop without explicit whitelist entries.
+  Author notes/ccs through the real mm under modify(), then bring up a
+  second mm against the same take and confirm ppqL/endppqL come back.
+
+# Helpers
+  @fn freshTake()  @ 11-17
+
+# Cases
+  @case 'note ppqL/endppqL survive a save/load round-trip'  [pure]  @ 21-37
+  @case 'cc ppqL survives a save/load round-trip (lazy-sidecar allocates uuid)'  [pure]  @ 41-56
+  @case 'pb ppqL survives a save/load round-trip'  [pure]  @ 60-75
+  @case 'plain cc with no ppqL stays plain (no uuid; no P_EXT entry)'  [pure]  @ 79-92
+  @case 'mixed take: many events, all ppqL stamps survive concurrently'  [pure]  @ 96-124
+
+# Uses (outbound edges)
+  @use call midiManager.modify  @ 25,45,64,83,100

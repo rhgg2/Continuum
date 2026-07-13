@@ -1,0 +1,128 @@
+@spec tm_fx_region_spec  src=tests/specs/tm_fx_region_spec.lua  loc=1704  sha=4f2d6af  cases=61
+@exercises dataStore (h.ds), midiManager (h.fm), trackerManager (h.tm), trackerView (h.vm)
+@surface   ds:get, fm:dump, tm:getChannel, ds:assign, tm:rebuild, tm:addEvent, tm:flush, tm:assignParked, tm:deleteParked, tm:addParked, tm:subscribe, vm:addFxStage, vm:noteFx, vm:removeFxStage
+@harness   mk
+
+# Intent
+  Note macros v2: region hosts. The N=0 vibrato pb seat stream proves the generator-side substrate
+  (ds, 4.6 producer split, reconcile, G4 round-trip). see design/note-macros-v2.md
+
+# Helpers
+  @fn centsToRaw(cents, pbRange)  @ 11-13
+  @fn inPbWindow(h, chan, ppq)  @ 17-22
+      -- A seat is recognized purely by region membership: any pb inside a live region's span (bounds
+      -- inclusive of endppq, so the terminal re-centre seat counts). see design/note-macros-v2.md § Route-by-window
+  @fn authoredPb(h, chan, ppq)  @ 26-30
+      -- An authored pb on the wire: one no live pb window covers (a covered pb is a seat). `val` is raw
+      -- (centsToRaw of wire-cents + detune); `cents` the persisted intent. nil while a window parks it off.
+  @fn colPbCents(h, chan, ppq)  @ 34-38
+      -- The pb column projects intent: the event's `val` is the authored cents (stays visible even when
+      -- a replace region overwrites the wire).
+  @fn derivedPbs(h, chan)  @ 42-48
+      -- The seated curve of a pb-replace region, hidden from columns. Seats are markerless -- there is no
+      -- marker to filter on; the live window IS their identity. Recognized purely by region membership.
+  @fn derivedPb(h, chan, ppq)  @ 50-52
+  @fn stashOfType(h, evType)  @ 55-61
+      -- The cc / pb slice of the unified fxParked off-take stash.
+  @fn inCcSpan(h, chan, ppq)  @ 65-70
+      -- Half-open region membership on a channel (matches production's covered()): a cc-replace seat lives
+      -- in [startppq, endppq). see design/note-macros-v2.md § Route-by-window
+  @fn fillRecords(h, chan, cc)  @ 74-82
+      -- The seated replace curve on a cc target, hidden from columns. Seats are markerless -- the live region
+      -- span IS their identity; the authored cc it covers is parked off-take.
+  @fn fillsOf(h, chan, cc)  @ 83-90
+  @fn ccFillAt(h, chan, cc, ppq)  @ 91-93
+  @fn authoredCC(h, chan, cc, ppq)  @ 97-102
+      -- A non-derived authored cc on the take, outside any live cc-replace window (an in-window cc is a
+      -- markerless seat, not authored); nil once a window parks the authored cc off.
+  @fn injectRegion(h, over)  @ 105-110
+      -- A region is channel x ppq span + fx; no host note. Inject via ds, then rebuild.
+  @fn anyNoteOnChan(h, chan)  @ 112-117
+  @fn addNote(h, over)  @ 123-128
+  @fn injectArp(h, over)  @ 130-135
+  @fn derivedNotes(h)  @ 139-151
+      -- Derived notes the region produced -- routed out of columns, tagged with the region
+      -- uuid. Sorted by onset then lane; identity swing, so ppq == the logical step time.
+  @fn field(ns, k)  @ 153
+  @fn authoredPitches(h)  @ 157-164
+      -- Authored (non-derived) note pitches still sounding in the take, sorted. Empty when a
+      -- replace region has parked the whole chord off-take.
+
+# Cases
+  @case 'fx region (N=0): vibrato over a span seats a free-LFO pb stream with no host note'  [harness]  @ 171-181
+  @case 'fx region: pb seats re-centre the channel at the region window end'  [harness]  @ 187-196
+  @case 'G4: region pb seat stream is byte-identical across rebuild -> flush'  [harness]  @ 202-216
+  @case 'G2: removing the region leaves no pb seat after reconcile'  [harness]  @ 222-236
+  @case 'replace: arp over a held triad packs into lane 1; the chord parks off the take'  [harness]  @ 242-254
+  @case 'replace: a PA under the parked host parks off-take with it, restores on unpark'  [harness]  @ 260-294
+  @case 'two rebuilds over an arp region allocate byte-identical derived notes + lanes'  [harness]  @ 300-312
+  @case 'replace: arp samples the playing notes continuously, with no collision nudge'  [harness]  @ 316-327
+  @case 'replace: a parked member tail is realised against its same-lane successor'  [harness]  @ 331-339
+  @case 'chain [arp, velPattern]: the pattern accents the arp steps'  [harness]  @ 345-356
+  @case 'chain [velPattern, arp]: the chord takes the pattern first, the arp reads the folded stream'  [harness]  @ 360-372
+  @case 'velPattern alone owns the note stream: the chord parks and re-emits re-velocitied'  [harness]  @ 376-386
+  @case 'replace: a parked member tail is clipped by an on-take note after the region'  [harness]  @ 390-403
+  @case 'replace: a parked member tail is clipped by a parked note in a later region'  [harness]  @ 407-424
+  @case 'replace husk (no kinds) parks nothing -- its members keep sounding'  [harness]  @ 428-434
+  @case 'replace: removing the region restores the parked chord to the take'  [harness]  @ 438-453
+  @case 'G4: replace arp + parked chord are byte-identical across rebuild -> flush'  [harness]  @ 457-469
+  @case 'park identity (note): render cell carries chan+uuid; the fxParked stash is logical-only'  [harness]  @ 475-489
+  @case 'park round-trip carries arbitrary authored metadata, not just whitelisted fields'  [harness]  @ 493-505
+  @case 'park identity (cc): render cell carries chan+ppqL; the fxParkedCC stash is logical-only'  [harness]  @ 509-530
+  @case 'assignParked (note): edit a parked pitch -> stash updated, still parked, renders the new pitch'  [harness]  @ 536-547
+  @case 'deleteParked (note): a parked note leaves the stash and is not restored while still covered'  [harness]  @ 551-560
+  @case 'addParked (note): typing into a replace window stashes a logical spec (minted uuid), off the take'  [harness]  @ 564-584
+  @case 'parked cc: assignParked then deleteParked edits the off-take cc stash symmetrically'  [harness]  @ 588-610
+  @case 'shrinking a cc-replace window restores the authored cc value, not the fill it sat under'  [harness]  @ 616-656
+  @case 'one flush, one rebuild: a parked edit + a normal note land together (the multi-select guard)'  [harness]  @ 660-674
+  @case 'parked-only flush drives exactly one rebuild (no mm round-trip)'  [harness]  @ 678-688
+  @case 'fxParked dataChanged (undo rewind) rebuilds the grid'  [harness]  @ 692-701
+  @case 'augment by kind: a continuous (vibrato) region leaves its covered notes sounding'  [harness]  @ 707-714
+  @case 'arp over a span with no sounding notes emits nothing'  [harness]  @ 720-725
+  @case 'fx region: the producer hands the generator notes/pas/ccs/ats input streams'  [harness]  @ 731-761
+  @case 'fx region: an OPEN member clips to the next same-lane onset, not the window end'  [harness]  @ 765-788
+  @case 'fx region: host.pb carries authored pb breakpoints, excluding absorber fakes'  [harness]  @ 792-816
+  @case 'fx region: pb replace seats the absolute curve on the base lane, no carrier'  [harness]  @ 822-855
+  @case 'fx region: pb replace with no authored base seats the curve verbatim'  [harness]  @ 859-878
+  @case 'fx chain (continuous): [replace, augment] -- the augment stage wobbles the replaced curve'  [harness]  @ 884-912
+  @case 'fx chain (continuous): [augment, replace] -- the replace stage overwrites the folded stream'  [harness]  @ 916-942
+  @case 'fx region (pb): two overlapping replace regions -- later storage wins pointwise, not summed'  [harness]  @ 948-974
+  @case 'fx region (pb): a later replace region wipes an earlier augment (storage = precedence)'  [harness]  @ 978-1006
+  @case 'fx region (pb): overlapping replace regions with differing windows -- each owns its exclusive tail'  [harness]  @ 1010-1040
+  @case 'fx region (cc): two overlapping replace regions -- later storage wins, not the additive fold'  [harness]  @ 1044-1070
+  @case 'fx region (cc augment): overlapping differing windows -- each augment folds only in its own window'  [harness]  @ 1074-1105
+  @case 'fx region (pb): differing-window overlap seats are byte-stable across a no-change rebuild'  [harness]  @ 1109-1154
+  @case 'fx region: pb replace rides the curve over the detune -- I1 holds'  [harness]  @ 1158-1183
+  @case 'fx region: removing a pb replace region restores the authored wire'  [harness]  @ 1187-1212
+  @case 'fx region: pb replace densifies a curved segment split by a detune onset'  [harness]  @ 1216-1249
+  @case 'fx region: a dense pb replace curve seats markerless -- no uuid, no metadata sidecar'  [harness]  @ 1255-1282
+  @case 'fx region: removing a pb replace region sweeps its seats, leaving only the restored authored pb'  [harness]  @ 1286-1318
+  @case 'fx region (cc replace): the generated curve lands on the target cc lane; no carrier'  [harness]  @ 1324-1350
+  @case 'fx region (cc replace): removing the region restores the parked cc and drops the fill'  [harness]  @ 1354-1380
+  @case 'G4 (cc replace): the fill is byte-identical and re-adds nothing across a no-change rebuild'  [harness]  @ 1384-1410
+  @case 'cc replace: a dense fill curve seats markerlessly (no uuid, no eventMeta)'  [harness]  @ 1414-1434
+  @case 'fx region (cc augment): un-automated target seats base(rest) + macro, markerless, off columns'  [harness]  @ 1440-1462
+  @case 'fx region (cc augment): over authored automation the seat is authored-base + macro'  [harness]  @ 1466-1486
+  @case 'fx region (cc augment): two overlapping regions sum every stream (N-stream regression guard)'  [harness]  @ 1490-1518
+  @case 'fx region (cc augment): region.fx.rest overrides the default resting base'  [harness]  @ 1522-1540
+  @case 'note-host augment (cc): a sounding note drives summed seats like a degenerate region'  [harness]  @ 1544-1573
+  @case 'replace: a preceding on-take tail clips at the parked chord onset, not past it'  [harness]  @ 1579-1595
+  @case 'replace: a derived tile is not truncated by a parked member it replaced'  [harness]  @ 1599-1615
+  @case 'deleting a self-parked [trill, vibrato] host leaves no orphaned pb seats'  [harness]  @ 1621-1646
+  @case 'removing the note kind from a self-parked [autopan, trill] host keeps its authored cc parked'  [harness]  @ 1652-1701
+
+# Uses (outbound edges)
+  @use call dataStore.get  @ 18,57,66,484,498,545,558,572,1644
+  @use call midiManager.dump  @ 27,44,76,98,141,159,228,270,503,1312,1376,1558,1610,1633,1672
+  @use call trackerManager.getChannel  @ 35,113,275,397,418,480,523,541,542,556,557,581,602,604,606,608,667,672,685,687,853,1182,1204,1211,1461,1590,1639,1643,1664,1691
+  @use call dataStore.assign  @ 108,133,233,288,412,449,500,519,598,636,642,699,748,778,806,840,871,903,934,965,996,1029,1061,1095,1128,1172,1198,1206,1231,1271,1301,1307,1339,1364,1371,1394,1425,1451,1478,1509,1534,1586,1606
+  @use call trackerManager.rebuild  @ 109,134,214,234,289,309,416,450,466,501,521,600,750,780,808,842,873,905,936,969,1000,1033,1065,1099,1132,1142,1174,1200,1207,1233,1273,1303,1308,1341,1366,1372,1396,1405,1427,1453,1480,1513,1535,1570,1588,1608,1641
+  @use call trackerManager.addEvent  @ 127,512,591,620,621,668,737,738,739,796,827,828,1162,1190,1289,1328,1329,1357,1469,1626,1656,1657,1660
+  @use call trackerManager.flush  @ 127,214,265,466,512,541,556,571,591,602,606,620,621,670,685,740,797,829,1163,1190,1220,1289,1330,1357,1469,1630,1643,1656,1657,1663
+  @use call trackerManager.assignParked  @ 541,602,667,685
+  @use call trackerManager.deleteParked  @ 556,606,1643
+  @use call trackerManager.addParked  @ 569
+  @use call trackerManager.subscribe  @ 666,684,698
+  @use call trackerView.addFxStage  @ 1690
+  @use call trackerView.noteFx  @ 1696
+  @use call trackerView.removeFxStage  @ 1698

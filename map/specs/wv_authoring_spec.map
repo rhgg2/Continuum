@@ -1,0 +1,50 @@
+@spec wv_authoring_spec  src=tests/specs/wv_authoring_spec.lua  loc=359  sha=e2be081  cases=23
+@exercises wiringView (wv)
+@surface   wv:graph, wv:addFx, wv:nodeViews, wv:listInstalledFX, wv:selection, wv:setSelection, wv:wiredPorts, wv:wireViews, wv:setSourceTagPos
+@harness   mk, reaper:setFxIO, reaper.CountTracks, reaper.GetTrack, reaper.GetTrackGUID, reaper.GetSetMediaTrackInfo_String
+
+# Intent
+  (none)
+
+# Helpers
+  @fn mkWv(harness)  @ 6-12
+  @fn fxNodes(g)  @ 14-20
+  @fn fxCount(g)  @ 22-26
+  @fn sourceId(wv)  @ 29-33
+      -- The lone source node a generator addFx spawns (read-era id == its track guid).
+
+# Cases
+  @case 'addFx mints a node keyed by its rm fxId, writes logical pos'  [harness]  @ 37-52
+  @case 'addFx on generator (ins=0) auto-spawns source node, midi edge, and REAPER track'  [harness]  @ 55-74
+  @case 'source label tracks REAPER renames (live, not snapshotted)'  [harness]  @ 77-95
+  @case 'addFx on generator pins fx pos, fallback source pos, midi-in + master-out edges'  [harness]  @ 98-118
+  @case 'addFx on generator honours opts.sourcePos for the spawned source'  [harness]  @ 121-130
+  @case 'successive addFx calls mint distinct ids and leave master alone'  [harness]  @ 133-142
+  @case 'moveNodes writes pos for one node via wm:mutate'  [harness]  @ 145-153
+  @case 'moveNodes writes several ids atomically in one mutate'  [harness]  @ 156-169
+  @case 'moveNodes skips missing ids; existing ids still land'  [harness]  @ 172-184
+  @case 'moveNodes with empty map is a no-op (mutate still succeeds)'  [harness]  @ 187-195
+  @case 'listInstalledFX is a passthrough to wm'  [harness]  @ 198-210
+  @case 'selection starts empty, setSelection writes the id set'  [harness]  @ 213-219
+  @case 'setSelection replaces wholesale (no merge with previous)'  [harness]  @ 222-228
+  @case 'setSelection{} clears'  [harness]  @ 231-237
+  @case 'source node exposes midi out but no midi in (never a midi sink)'  [harness]  @ 240-252
+  @case 'setSelection defensive-copies its argument'  [harness]  @ 255-262
+  @case 'wiredPorts on fresh graph is empty for either direction'  [harness]  @ 265-271
+  @case 'wiredPorts("out") reflects fromPort for audio edges sourced on the node'  [harness]  @ 274-283
+  @case 'wiredPorts("in") reflects toPort for audio edges sinking into the node'  [harness]  @ 286-295
+  @case 'wiredPorts ignores midi edges'  [harness]  @ 298-306
+  @case 'wiredPorts ignores edges incident on other nodes'  [harness]  @ 309-318
+  @case 'wireViews stamps fromKind / fromLabel from the from-node'  [harness]  @ 321-339
+  @case 'setSourceTagPos round-trips as wireView.fromOffset on the same edge'  [harness]  @ 342-357
+
+# Uses (outbound edges)
+  @use call wiringView.graph  @ 30,42,61,83,105,127,137,150,165,180,191,193
+  @use call wiringView.addFx  @ 40,59,81,103,125,136,148,159,175,190,244,268,279,291,302,314,325,327,346
+  @use call wiringView.nodeViews  @ 69,91,247
+  @use call wiringView.listInstalledFX  @ 206
+  @use call wiringView.selection  @ 216,218,227,236,261
+  @use call wiringView.setSelection  @ 259
+  @use call wiringView.wiredPorts  @ 269,270,282,293,294,304,305,316,317
+  @use call wiringView.wireViews  @ 330,349
+  @use call wiringView.setSourceTagPos  @ 354

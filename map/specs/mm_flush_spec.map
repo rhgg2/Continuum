@@ -1,0 +1,22 @@
+@spec mm_flush_spec  src=tests/specs/mm_flush_spec.lua  loc=70  sha=b8ec85e  cases=2
+@exercises midiManager (h.mm)
+@surface   mm:load, mm:notes, mm:modify, mm:assign
+@harness   fakeReaper:bindTake
+
+# Intent
+  A modify rewrites the whole take, so events mm doesn't model -- a non-sidecar
+  text meta, an unmodelled status byte -- must be carried through, not dropped.
+  ("Respect what's there.") Pins the load->modify flush as lossless.
+
+# Helpers
+  @fn freshTake()  @ 8-14
+
+# Cases
+  @case 'modify carries through unmodelled text + passthrough events'  [pure]  @ 18-43
+  @case 'editing a cached note re-encodes its notation sidecar at the new pitch'  [pure]  @ 49-68
+
+# Uses (outbound edges)
+  @use call midiManager.load  @ 28,57
+  @use call midiManager.notes  @ 30,59
+  @use call midiManager.modify  @ 31,60
+  @use call midiManager.assign  @ 31,60

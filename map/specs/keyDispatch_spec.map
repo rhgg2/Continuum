@@ -1,0 +1,39 @@
+@spec keyDispatch_spec  src=tests/specs/keyDispatch_spec.lua  loc=205  sha=65573d0  cases=10
+@exercises commandManager (cmgr)
+@surface   cmgr:bind, cmgr:beginPrefix, cmgr:isPrefixActive, cmgr:scope, cmgr:push
+
+# Intent
+  keyDispatch: the prefix-capture + keychain walk extracted from coordinator
+  (design/fx-patterns.md P3 step a). Now an importable module the fx-pattern
+  mini modal reuses, so pin the dispatch contract directly: consume/first-hit,
+  commandHeld hold-tracking, the acceptCmds gate, prefix capture + finish,
+  false-declines, and the pageSuppressed root narrowing.
+
+# Helpers
+  @fn setKeys(opts)  @ 23-27
+      -- A pressed key is also down; `down` alone models a hold with no fresh press.
+  @fn loadKD()  @ 33-38
+      -- Rebind imgui to ours before loading keyDispatch: earlier specs' module-load
+      -- preloads cache a different fake, so nil both and re-require (curveEditor idiom).
+  @fn freshCmgr()  @ 42-56
+      -- Fresh real cmgr with commands bound to bare (Mod_None) keys; the returned log
+      -- records which bodies ran and the last prefix arg one received.
+
+# Cases
+  @case 'a pressed bound key fires its command, consumes, and reports as held'  [pure]  @ 60-69
+  @case 'acceptCmds=false short-circuits: nothing dispatched'  [pure]  @ 73-81
+  @case 'a held (not freshly pressed) bound key reports in commandHeld but does not fire'  [pure]  @ 85-94
+  @case 'a digit while a prefix is open is captured, not dispatched'  [pure]  @ 98-108
+  @case 'with a prefix open, a bound key freezes the prefix, dispatches, and clears it'  [pure]  @ 112-124
+  @case 'a command returning false declines: not consumed, key released from commandHeld'  [pure]  @ 128-137
+  @case 'pageSuppressed narrows the walk to root: page bindings die, globals live'  [pure]  @ 141-161
+  @case 'a shift-chord binding fires under shift and reports held'  [pure]  @ 165-176
+  @case 'the same key pressed bare ignores the shift binding entirely'  [pure]  @ 180-191
+  @case 'held marking follows the live chord: bare binding unmarked while shift is down'  [pure]  @ 195-203
+
+# Uses (outbound edges)
+  @use call commandManager.bind  @ 51,52,53,54,169,184
+  @use call commandManager.beginPrefix  @ 102,116
+  @use call commandManager.isPrefixActive  @ 106,123
+  @use call commandManager.scope  @ 144
+  @use call commandManager.push  @ 147

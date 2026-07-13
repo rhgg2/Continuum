@@ -1,0 +1,52 @@
+@spec vm_chord_entry_spec  src=tests/specs/vm_chord_entry_spec.lua  loc=345  sha=b9a99d6  cases=16
+@exercises trackerView (h.vm), trackerManager (h.tm), editCursor (h.ec), midiManager (h.fm), commandManager (h.cmgr)
+@surface   vm:setGridSize, tm:getChannel, vm:chordStrike, ec:setPos, ec:row, vm:chordCommit, vm:chordActive, fm:dump, vm:chordNudgeVel, vm:chordBackspace, vm:rebuild, vm:tick, cmgr:invoke
+@harness   mk{seed.notes}, reaper:clearCalls, reaper:tick, r._state.calls
+
+# Intent
+  Shift-held chord entry: strikes pin the row, stack lanes; backspace/nudge/commit below.
+  Drives the real tv:chord* API — gridPane's key drain is a thin router over it.
+
+# Helpers
+  @fn mk(harness, seedNotes)  @ 7-14
+  @fn chanNoteAt(h, chan, lane, ppq)  @ 17-22
+      -- Onset lookup straight from tm (getChannel(chan).columns.notes[lane]).
+  @fn laneNoteAt(h, lane, ppq)  @ 24
+  @fn strike(h, ch)  @ 26
+  @fn spread(h, ch)  @ 27
+  @fn noteOffs(h)  @ 30-36
+      -- Count StuffMIDIMessage note-offs (0x80|chan) / note-ons (0x90) in the log.
+  @fn noteOns(h)  @ 38-44
+
+# Cases
+  @case 'strikes stack lanes at the pinned row; commit advances once'  [harness]  @ 48-65
+  @case 'a re-struck pitch toggles off and frees its lane for reuse'  [harness]  @ 69-82
+  @case 'a pre-existing note of the struck pitch is adopted, not duplicated'  [harness]  @ 86-103
+  @case 'first strike overwrites the occupant pitch and keeps its velocity'  [harness]  @ 107-120
+  @case 'fine nudge retunes the last strike velocity and re-auditions'  [harness]  @ 124-151
+  @case 'backspace deletes the last strike and frees its lane'  [harness]  @ 155-173
+  @case 'an emptied gesture commits without advancing'  [harness]  @ 177-188
+  @case 'a take switch abandons the gesture without advancing'  [harness]  @ 192-201
+  @case 'toggle matches on the temper-snapped pitch'  [harness]  @ 205-230
+  @case 'a live gesture suspends the audition timeout; commit drops the voices'  [harness]  @ 234-248
+  @case 'spread strikes walk channels from home; commit advances once'  [harness]  @ 252-267
+  @case 'plain and spread strikes mix: lanes stack on home, spread walks past it'  [harness]  @ 271-283
+  @case 'a toggled-off spread pitch frees its channel for reuse'  [harness]  @ 287-300
+  @case 'a spread strike adopts an existing note on its target channel'  [harness]  @ 304-316
+  @case 'backspace on a spread member deletes from its own channel'  [harness]  @ 320-330
+  @case 'shadowed shift commands decline while a gesture is live'  [harness]  @ 334-343
+
+# Uses (outbound edges)
+  @use call trackerView.setGridSize  @ 12,221
+  @use call trackerManager.getChannel  @ 18
+  @use call trackerView.chordStrike  @ 26,27
+  @use call editCursor.setPos  @ 51,72,91,112,127,158,180,195,222,237,255,274,290,309,323,337
+  @use call editCursor.row  @ 57,64,172,186,200,266
+  @use call trackerView.chordCommit  @ 62,81,102,119,150,171,185,229,246,265,282,299,315,329,342
+  @use call trackerView.chordActive  @ 63,187,199
+  @use call midiManager.dump  @ 94,118,170,184,228,313
+  @use call trackerView.chordNudgeVel  @ 131,133,134,139,144,148
+  @use call trackerView.chordBackspace  @ 161,168,169,326
+  @use call trackerView.rebuild  @ 198
+  @use call trackerView.tick  @ 242
+  @use call commandManager.invoke  @ 340

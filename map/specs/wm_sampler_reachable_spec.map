@@ -1,0 +1,28 @@
+@spec wm_sampler_reachable_spec  src=tests/specs/wm_sampler_reachable_spec.lua  loc=90  sha=e2be081  cases=4
+@exercises wiringManager (wm)
+@surface   wm:load, wm:mutate, wm:samplerReachable
+@harness   mk, r._state.projectTracks, r._state.trackGuids
+
+# Intent
+  wm:samplerReachable — wiring is the authority on whether a take is a tracker
+  take: does its source track's MIDI cone reach a Continuum Sampler. Replaces
+  sampleManager's legacy per-track FX scan.
+
+# Helpers
+  @fn mkWm(harness)  @ 8-14
+  @fn seedTrack(h, guid)  @ 16-21
+  @fn source(guid)  @ 23-26
+  @fn fx(ident, display)  @ 28-31
+  @fn sampler()  @ 33
+  @fn edge(type, from, to)  @ 35
+
+# Cases
+  @case 'sampler in the midi cone makes the source a tracker take'  [harness]  @ 39-50
+  @case 'a sampler reached only over audio does not count'  [harness]  @ 53-64
+  @case 'sampler reached through a midi fx hop still counts'  [harness]  @ 67-80
+  @case 'a track outside the graph is not a tracker take'  [harness]  @ 83-88
+
+# Uses (outbound edges)
+  @use call wiringManager.load  @ 12
+  @use call wiringManager.mutate  @ 43,57,71
+  @use call wiringManager.samplerReachable  @ 49,63,79,87

@@ -1,0 +1,51 @@
+@spec vm_signed_entry_spec  src=tests/specs/vm_signed_entry_spec.lua  loc=290  sha=8a6d0a3  cases=18
+@exercises trackerView (h.vm), editCursor (h.ec), midiManager (h.fm), commandManager (h.cmgr)
+@surface   vm:setGridSize, ec:setPos, vm:editEvent, ec:row, vm:entrySignAt, fm:dump, cmgr:invoke
+@harness   mk{seed.ccs, seed.notes}
+
+# Intent
+  Signed-decimal grid entry: '-' is an in-place sign flip; empty cells inherit
+  sign from the ghost or prior breakpoint. See docs/decisions.md § 2026-07-10.
+
+# Helpers
+  @fn pbCol(h)  @ 8-12
+  @fn mkCurve(harness, flags, events)  @ 17-24
+      -- Normalized bipolar pb column (the pattern editor's curve substrate) unless
+      -- flags override; one pb breakpoint at row 0 so the column materialises.
+      -- Rows are 60 ppq apart (rpb 4, resolution 240).
+  @fn typePB(h, row, stop, ch, keep)  @ 28-32
+      -- Stops 1..4 = thousands..ones. Re-pins the cursor each call; a commit
+      -- auto-steps the row, a bare '-' must not (asserted per test).
+  @fn pbValAt(h, row)  @ 34-38
+  @fn mkDelayed(harness, delay)  @ 42-55
+      -- Seed ppq is the raw note-on; cells key on the logical row, so pin the note
+      -- to row 4 (logical 240) by adding the delay's ppq offset back onto the raw.
+
+# Cases
+  @case 'coarse entry: 5 at the hundreds stop -> 500, cursor advances'  [harness]  @ 59-65
+  @case ''-' on a nonzero value flips the sign in place, no advance'  [harness]  @ 69-78
+  @case ''-' on zero arms a transient -0; the next digit lands negative'  [harness]  @ 82-95
+  @case 'a second '-' disarms; the digit then lands positive'  [harness]  @ 99-109
+  @case 'an armed cell is inert while the cursor is elsewhere, live again on return'  [harness]  @ 113-124
+  @case 'a letter enters digit+carry, clamped; sign comes from the arm or the old value'  [harness]  @ 128-136
+  @case 'a digit preserves the sign of an existing value'  [harness]  @ 140-147
+  @case 'normalized magnitude caps at 1000: 9 at the thousands stop'  [harness]  @ 151-156
+  @case 'full scale wraps at a sub-thousands stop: 1000 then 9 at hundreds -> 900'  [harness]  @ 160-166
+  @case 'a digit on a negative ghost lands negative, and the hint says so'  [harness]  @ 172-185
+  @case ''-' on a negative ghost flips the inheritance; digit lands positive'  [harness]  @ 189-201
+  @case 'no ghost (step curve): sign inherits from the previous breakpoint'  [harness]  @ 205-212
+  @case 'an explicit zero breakpoint does not inherit: digit lands positive'  [harness]  @ 216-224
+  @case 'unipolar column refuses '-' outright: no flip, no arm'  [harness]  @ 228-236
+  @case 'delay: '-' on zero arms; the digit lands negative'  [harness]  @ 242-252
+  @case 'delay: '-' on a nonzero value flips in place, no advance'  [harness]  @ 256-264
+  @case 'inputOctaveUp declines off the pitch part, fires on it'  [harness]  @ 270-277
+  @case 'scaleHalf and scaleDouble decline without a selection'  [harness]  @ 281-288
+
+# Uses (outbound edges)
+  @use call trackerView.setGridSize  @ 22,53
+  @use call editCursor.setPos  @ 30,93,118,120,179,246,260,273,275,285
+  @use call trackerView.editEvent  @ 31,247,250,261
+  @use call editCursor.row  @ 64,75,263
+  @use call trackerView.entrySignAt  @ 88,94,105,119,121,180,197,235,249
+  @use call midiManager.dump  @ 248,251,262
+  @use call commandManager.invoke  @ 274,276,286,287

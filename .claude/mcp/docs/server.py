@@ -216,9 +216,9 @@ def reaper_doc_lookup(
 
 # ----- map_query ------------------------------------------------------------
 
-_MAP_HEADER = re.compile(r'^@module\s+(\S+)\s+src=(\S+)\s+loc=(\d+)\s+sha=(\S+)')
+_MAP_HEADER = re.compile(r'^@(?:module|spec)\s+(\S+)\s+src=(\S+)\s+loc=(\d+)\s+sha=(\S+)')
 _DECL = re.compile(
-    r'^(?P<indent>\s*)@(?P<kind>fn|api|state|const|require|construct)\s+'
+    r'^(?P<indent>\s*)@(?P<kind>fn|api|state|const|require|construct|case)\s+'
     r'(?P<head>.+?)\s*@\s*(?P<line>\d+)(?:-(?P<end>\d+))?\s*'
     r'(?P<doc>(?:--|·).*)?$'
 )
@@ -226,7 +226,7 @@ _DECL = re.compile(
 # any of which may carry a leading `?` (`@?invariant …`) for inferred-rather-
 # than-doc-grounded variants. `@deps` is rendered on its own line in the header.
 _ANN = re.compile(
-    r'^(?P<indent>\s*)@(?P<kind>\??(?:invariant|contract|shape|emits|reaper|deps))\s+'
+    r'^(?P<indent>\s*)@(?P<kind>\??(?:invariant|contract|shape|emits|reaper|deps|exercises|surface|harness))\s+'
     r'(?P<body>.*)$'
 )
 # `@use <kind> <target>  @ <caller>:<line>[,<line>] [<caller>:<line>...]`
@@ -249,6 +249,11 @@ def _iter_use_sites(sites: str):
                 yield caller, n
 
 
+def _src_of(mp: Path, text: str) -> str:
+    h = _MAP_HEADER.match(text.split("\n", 1)[0])
+    return h.group(2) if h else mp.stem + ".lua"
+
+
 def _bare_name(kind: str, head: str) -> str:
     if kind == "fn":
         m = re.match(r"^(\w+)\(", head)
@@ -258,6 +263,9 @@ def _bare_name(kind: str, head: str) -> str:
         return m.group(1) if m else head
     if kind in ("state", "const", "require", "construct"):
         m = re.match(r"^(\w+)", head)
+        return m.group(1) if m else head
+    if kind == "case":
+        m = re.match(r"^'(.*)'", head)
         return m.group(1) if m else head
     return head
 
@@ -272,6 +280,7 @@ def _normalize_kind(k: str) -> str:
         "states": "state", "consts": "const", "constants": "const",
         "requires": "require", "import": "require", "imports": "require",
         "constructs": "construct",
+        "cases": "case",
         "use": "uses", "usedby": "usedby", "used-by": "usedby", "used_by": "usedby",
     }
     return aliases.get(k, k)
@@ -303,14 +312,17 @@ def map_query(
              Omit to return everything matching the other filters.
       kind: filter by entry kind. Accepted (case-insensitive, plurals
             ok): fn, api, state, const, require/import, construct,
-            invariant, contract, shape, emits/signal, reaper, deps,
-            uses, usedby. `uses` lists a module's outbound edges
-            (calls / subs / forwards / requires); `usedby` reverses
-            it — every caller of the symbol(s) matched by `query`.
-            Omit for any.
+            case (spec test cases), invariant, contract, shape,
+            emits/signal, reaper, deps, uses, usedby. `uses` lists a
+            module's outbound edges (calls / subs / forwards /
+            requires); `usedby` reverses it — every caller of the
+            symbol(s) matched by `query`, spec files included, so it
+            also answers "which specs exercise X". Omit for any.
       module: restrict to a module by stem (e.g. `trackerManager`) or
               glob (e.g. `tm_*`, `*Manager`). Matches the .map filename
-              (without extension).
+              (without extension). Spec maps (map/specs/, one per
+              tests/specs/*_spec.lua) join every query; their stems end
+              `_spec`, so module='*_spec' restricts to specs.
       max_results: cap (default 60).
 
     Returns:
@@ -334,14 +346,14 @@ def map_query(
 
     kind_filter = _normalize_kind(kind) if kind else None
 
+    dirs = (MAP_DIR, MAP_DIR / "specs")
     if module:
         if "*" in module or "?" in module:
-            module_files = sorted(MAP_DIR.glob(f"{module}.map"))
+            module_files = [p for d in dirs for p in sorted(d.glob(f"{module}.map"))]
         else:
-            mp = MAP_DIR / f"{module}.map"
-            module_files = [mp] if mp.exists() else []
+            module_files = [p for d in dirs if (p := d / f"{module}.map").exists()]
     else:
-        module_files = sorted(MAP_DIR.glob("*.map"))
+        module_files = [p for d in dirs for p in sorted(d.glob("*.map"))]
 
     if not module_files:
         return f"(no .map files matched module={module!r})"
@@ -353,7 +365,7 @@ def map_query(
     if kind_filter in ('uses', 'usedby'):
         for mp in module_files:
             text = mp.read_text(encoding="utf-8", errors="replace")
-            src = mp.stem + ".lua"
+            src = _src_of(mp, text)
             for raw in text.splitlines():
                 mu = _USE.match(raw)
                 if not mu:
@@ -384,11 +396,7 @@ def map_query(
     for mp in module_files:
         text = mp.read_text(encoding="utf-8", errors="replace")
         lines = text.splitlines()
-        src = mp.stem + ".lua"
-        if lines:
-            h = _MAP_HEADER.match(lines[0])
-            if h:
-                src = h.group(2)
+        src = _src_of(mp, text)
 
         for raw in lines:
             if not raw.strip():

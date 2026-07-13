@@ -1,0 +1,30 @@
+@spec rm_tracks_spec  src=tests/specs/rm_tracks_spec.lua  loc=112  sha=e2be081  cases=5
+@exercises harness (harness), routingManager (rm)
+@surface   harness.mk, rm:tracks, rm:addTrack, rm:assignTrack, rm:deleteTrack, rm:transaction
+@harness   mk, reaper.CountTracks, reaper.InsertTrackAtIndex, reaper.GetTrack, reaper.GetSetMediaTrackInfo_String, reaper.SetMediaTrackInfo_Value, reaper.GetTrackGUID
+
+# Intent
+  routingManager Phase 1: track read/write + transaction.
+  rm is dependency-free — a thin record abstraction over the reaper global.
+
+# Helpers
+  @fn mkRm()  @ 7-11
+  @fn seedTrack(reaper, name, opts)  @ 15-23
+      -- Seed a pre-existing project track via the real fake API so its guid and
+      -- P_NAME are read back through the same accessors rm uses.
+  @fn byId(rm, id)  @ 25-27
+
+# Cases
+  @case 'tracks() reads project tracks as records; master appears last with isMaster'  [pure]  @ 31-51
+  @case 'addTrack appends, applies fields, returns a resolvable id'  [pure]  @ 54-67
+  @case 'assignTrack dispatches on present fields: name, nchan, mainSend'  [pure]  @ 70-82
+  @case 'deleteTrack removes the addressed track'  [pure]  @ 85-95
+  @case 'transaction wraps fn in Undo block + UI-refresh guard, in order'  [pure]  @ 98-110
+
+# Uses (outbound edges)
+  @use call harness.mk  @ 8
+  @use call routingManager.tracks  @ 26,37,91,93
+  @use call routingManager.addTrack  @ 59
+  @use call routingManager.assignTrack  @ 75
+  @use call routingManager.deleteTrack  @ 92
+  @use call routingManager.transaction  @ 108

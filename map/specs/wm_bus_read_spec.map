@@ -1,0 +1,32 @@
+@spec wm_bus_read_spec  src=tests/specs/wm_bus_read_spec.lua  loc=166  sha=e2be081  cases=5
+@exercises wiringManager (wm)
+@surface   wm:load, wm:mutate, wm:targetState, wm.readGraph
+@harness   mk, r._state.projectTracks, r._state.trackGuids
+
+# Intent
+  read-side of wiring busses v2: trackId-flagged track mints the matrix buss; record taps mint
+  sub-threshold busses, consuming crossing sends (design/wiring-busses-v2.md § Persistence).
+
+# Helpers
+  @fn mkWm(harness)  @ 6-12
+  @fn seedSource(h, guid)  @ 14-19
+  @fn source(guid)  @ 21-24
+  @fn fx(ident, opts)  @ 26-31
+  @fn bus()  @ 33-36
+  @fn edgeSet(g)  @ 38-48
+  @fn flagBusTrack(target, guid)  @ 52-59
+      -- The summing track is the one fx-less newTrack in the target; flag it with
+      -- the guid the bus record carries.
+
+# Cases
+  @case 'matrix round-trip: flagged track mints the bus, gains land on the right edges'  [harness]  @ 63-92
+  @case 'flagged track with no incoming sends still mints the bus node'  [harness]  @ 95-107
+  @case 'sub-threshold round-trip: taps mint the buss and consume the crossing sends'  [harness]  @ 110-133
+  @case 'degenerate busses round-trip purely from the record'  [harness]  @ 136-152
+  @case 'a bus→bus tap mints one edge though both records mirror it'  [harness]  @ 155-164
+
+# Uses (outbound edges)
+  @use call wiringManager.load  @ 10
+  @use call wiringManager.mutate  @ 68,115
+  @use call wiringManager.targetState  @ 79,123
+  @use call wiringManager.readGraph  @ 81,103,123,144,159

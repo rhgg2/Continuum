@@ -1,0 +1,31 @@
+@spec eventMeta_spec  src=tests/specs/eventMeta_spec.lua  loc=110  sha=c2787f6  cases=8
+@exercises eventMeta (em), pextStore (ps)
+@surface   em:flush, em:load, em:saveAll, em:copyPool, ps:assign, em:dropPool
+
+# Intent
+  eventMeta: per-event metadata keyed by POOL guid (not take), so every pooled
+  instance — and a parked survivor — resolves one shared blob. Pins the contract
+  that fixes "parking a take on scratch desyncs its notes from their metadata":
+  pre-fix, ctm_ lived in per-take ext-data while note uuids rode the shared pool,
+  so a sibling/parked instance read its notes' uuids but a stale/empty metadata.
+
+# Helpers
+  @fn fresh()  @ 10-16
+
+# Cases
+  @case 'flush/load round-trips a uuid fields table under a pool guid'  [pure]  @ 20-27
+  @case 'distinct pool guids are isolated'  [pure]  @ 31-36
+  @case 'pooled instances sharing a guid resolve one shared blob'  [pure]  @ 42-47
+  @case 'flush delete removes a uuid and its keys entry, leaving siblings'  [pure]  @ 51-59
+  @case 'saveAll replaces the pool and sweeps stale uuids'  [pure]  @ 63-71
+  @case 'copyPool forks a pool metadata to a new guid, then they diverge'  [pure]  @ 77-85
+  @case 'load re-reads the keyset after an external (undo-style) projext wipe'  [pure]  @ 91-98
+  @case 'dropPool forever-deletes a pool metadata'  [pure]  @ 102-108
+
+# Uses (outbound edges)
+  @use call eventMeta.flush  @ 23,34,45,54,55,66,80,83,94,105
+  @use call eventMeta.load  @ 24,35,46,56,68,82,84,95,97,107
+  @use call eventMeta.saveAll  @ 67
+  @use call eventMeta.copyPool  @ 81
+  @use call pextStore.assign  @ 96
+  @use call eventMeta.dropPool  @ 106

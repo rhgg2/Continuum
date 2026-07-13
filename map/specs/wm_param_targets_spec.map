@@ -1,0 +1,26 @@
+@spec wm_param_targets_spec  src=tests/specs/wm_param_targets_spec.lua  loc=86  sha=e2be081  cases=2
+@exercises wiringManager (wm)
+@surface   wm:load, wm:mutate, wm:paramTargets
+@harness   mk, reaper:setTrackFX, reaper:setFxGuid, r._state.projectTracks, r._state.trackGuids
+
+# Intent
+  wm:paramTargets — the cone walk feeding the tracker's param palette.
+  From a source track: midi-reachable fx come first flagged generator,
+  audio-only fx follow in flow order; fx outside the cone and tracks
+  outside the graph yield nothing.
+
+# Helpers
+  @fn mkWm(harness)  @ 9-15
+  @fn seedTrack(h, guid)  @ 17-22
+  @fn source(guid)  @ 24-27
+  @fn fx(ident)  @ 29-32
+  @fn edge(type, from, to)  @ 34
+
+# Cases
+  @case 'midi cone first as generators, audio fx after, off-cone excluded'  [harness]  @ 39-74
+  @case 'a track outside the graph yields no rows'  [harness]  @ 78-83
+
+# Uses (outbound edges)
+  @use call wiringManager.load  @ 13
+  @use call wiringManager.mutate  @ 53
+  @use call wiringManager.paramTargets  @ 66,82

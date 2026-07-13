@@ -1,0 +1,40 @@
+@spec tm_pc_synthesis_spec  src=tests/specs/tm_pc_synthesis_spec.lua  loc=280  sha=652cbb1  cases=11
+@exercises midiManager (h.mm), trackerManager (h.tm)
+@surface   mm:notes, mm:tokenOf, tm:getChannel, fm:dump, tm:addEvent, tm:flush, tm:assignEvent, tm:deleteEvent
+@harness   mk{seed.notes, seed.ccs}
+
+# Intent
+  Pins commit 2b: tm synthesises PCs from per-note `sample` under
+  trackerMode. Realised-time grouping; leftmost lane wins; losers
+  carry `sampleShadowed=true` for renderer dimming. Mutation hooks
+  keep the synthesised stream in lockstep with note edits.
+
+# Helpers
+  @fn pcsOnChan(dump, chan)  @ 8-17
+  @fn tokenOfNote(mm, chan, pitch)  @ 21-25
+      -- Locate a note by (chan, pitch) and return its addressing token. mm:notes
+      -- still yields (loc, evt); we ignore the loc and ask mm for the token.
+  @fn laneEvent(tm, chan, lane, i)  @ 27-29
+
+# Cases
+  @case 'three lane-1 notes synthesise three PCs at their realised onsets'  [harness]  @ 36-50
+  @case 'PC lands at realised ppq, not intent (delay shifts the PC too)'  [harness]  @ 54-68
+  @case 'changing sample on a note resyncs its PC val'  [harness]  @ 74-90
+  @case 'deleting the only note at a realised ppq drops its PC'  [harness]  @ 94-109
+  @case 'cross-channel: editing one chan does not clobber another chan\'s PC'  [harness]  @ 119-137
+  @case 'trackerMode off: user-authored PCs are not touched'  [harness]  @ 143-152
+  @case 'external note enters trackerMode with sample=0 (no PC inheritance)'  [harness]  @ 163-178
+  @case 'lane-2 note alone (no simultaneous lane-1) emits its own PC'  [harness]  @ 184-204
+  @case 'simultaneous lane-1 and lane-2: leftmost wins, loser is shadowed'  [harness]  @ 208-224
+  @case 'splitting realised ppqs (delay) un-collides chord into two PCs'  [harness]  @ 228-248
+  @case 'deleting the shadower un-shadows the survivor and PC val flips'  [harness]  @ 252-278
+
+# Uses (outbound edges)
+  @use call midiManager.notes  @ 22
+  @use call midiManager.tokenOf  @ 23
+  @use call trackerManager.getChannel  @ 28,271
+  @use call midiManager.dump  @ 48,67,88,108,135,136,151,172,174,201,219,242,266
+  @use call trackerManager.addEvent  @ 62,237,239
+  @use call trackerManager.flush  @ 66,87,107,134,200,241,265
+  @use call trackerManager.assignEvent  @ 86,133,199
+  @use call trackerManager.deleteEvent  @ 106,264

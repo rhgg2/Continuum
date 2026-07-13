@@ -1,7 +1,7 @@
 #!/bin/bash
 # PostToolUse hook for mcp__patches__apply_patches and __retry_patches.
-# Regenerates the .map for every top-level .lua whose .map is missing or
-# older than the source. Staleness-based rather than path-based on purpose:
+# Regenerates the .map for every top-level .lua and tests/specs spec whose
+# .map is missing or older than the source. Staleness-based rather than path-based on purpose:
 # retry_patches reports no file paths in either its input or its response
 # (the touched paths live only in the server's stored batch), so the only
 # reliable signal is which sources are now newer than their map.
@@ -23,6 +23,13 @@ for lua in *.lua; do
   # `-nt` is true when lua is newer than map, or when map does not exist.
   if [ "$lua" -nt "$map" ]; then
     python3 tools/map_extract.py "$lua" map/ 2>/dev/null
+  fi
+done
+
+for lua in tests/specs/*.lua; do
+  map="map/specs/$(basename "$lua" .lua).map"
+  if [ "$lua" -nt "$map" ]; then
+    python3 tools/map_extract.py "$lua" map/specs/ 2>/dev/null
   fi
 done
 

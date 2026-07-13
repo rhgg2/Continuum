@@ -1,0 +1,17 @@
+@spec pa_crosstrack_spec  src=tests/specs/pa_crosstrack_spec.lua  loc=46  sha=8d87c30  cases=2
+@exercises paramAutomation (h.pa)
+@surface   pa:params
+@harness   mk, r:setTrackFX, r:setFxGuid, r:setFxParamNames, r._state.projectTracks, r._state.trackGuids, r._state.master
+
+# Intent
+  pa:params must resolve fx wherever the cone-walk row places them — including
+  the master track. wm:paramTargets resolves rows via rm's locateFx (which
+  checks master), so a master-hosted bus fx yields a row; pa:params must be
+  able to fetch its names too, or the palette shows an empty subtree.
+
+# Cases
+  @case 'params resolve for fx on a regular non-first track'  [harness]  @ 11-26
+  @case 'params resolve for fx on the master track'  [harness]  @ 30-44
+
+# Uses (outbound edges)
+  @use call paramAutomation.params  @ 24,42

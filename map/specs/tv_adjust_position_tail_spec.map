@@ -1,0 +1,25 @@
+@spec tv_adjust_position_tail_spec  src=tests/specs/tv_adjust_position_tail_spec.lua  loc=61  sha=9d0c40c  cases=2
+@exercises trackerView (h.vm), editCursor (h.ec), commandManager (h.cmgr), midiManager (h.fm)
+@surface   vm:setGridSize, ec:setPos, cmgr:invoke, fm:dump
+@harness   mk{seed.notes}
+
+# Intent
+  Position-nudge round-trip for note tails. adjustPosition shifts the
+  authored ceiling (endppqL) by the same ppq delta as the onset, so a
+  downward move that pushes endppqL past the take length still regrows
+  the tail when the note moves back up. Routing the end through a row
+  (ctx:ppqToRow clamps to numRows) would erase the overshoot and shrink
+  the tail one row per round-trip.
+
+# Helpers
+  @fn noteCol(h, chan)  @ 11-15
+
+# Cases
+  @case 'tail regrows after a downward-then-upward nudge that overshot the take end'  [harness]  @ 20-38
+  @case 'a util.OPEN tail stays open across a nudge'  [harness]  @ 42-58
+
+# Uses (outbound edges)
+  @use call trackerView.setGridSize  @ 29,51
+  @use call editCursor.setPos  @ 31,53
+  @use call commandManager.invoke  @ 32,33,54
+  @use call midiManager.dump  @ 35,56

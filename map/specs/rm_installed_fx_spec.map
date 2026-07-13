@@ -1,0 +1,23 @@
+@spec rm_installed_fx_spec  src=tests/specs/rm_installed_fx_spec.lua  loc=71  sha=e2be081  cases=4
+@exercises harness (harness), routingManager (rm)
+@surface   harness.mk, rm:installedFx, rm:showFx
+@harness   mk, reaper.CountTracks, reaper.InsertTrackAtIndex, reaper.GetTrack, reaper.GetSetMediaTrackInfo_String, reaper:setInstalledFx, reaper:setTrackFX, reaper:setFxGuid, r._state.calls
+
+# Intent
+  routingManager Phase 7: installedFx + showFx. Static plugin enumeration
+  (memoised) and floating the window for a live fx id.
+
+# Helpers
+  @fn mkRm()  @ 7-11
+  @fn seedTrack(reaper, name)  @ 13-19
+
+# Cases
+  @case 'installedFx enumerates the installed plugins as {ident, name}'  [pure]  @ 23-35
+  @case 'installedFx memoises the runtime-fixed list'  [pure]  @ 38-44
+  @case 'showFx floats the window for a live fx id'  [pure]  @ 47-62
+  @case 'showFx returns false for an unknown id'  [pure]  @ 65-69
+
+# Uses (outbound edges)
+  @use call harness.mk  @ 8
+  @use call routingManager.installedFx  @ 30,42,43
+  @use call routingManager.showFx  @ 54,68

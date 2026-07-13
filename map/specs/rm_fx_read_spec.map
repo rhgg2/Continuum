@@ -1,0 +1,23 @@
+@spec rm_fx_read_spec  src=tests/specs/rm_fx_read_spec.lua  loc=89  sha=e2be081  cases=4
+@exercises harness (harness), routingManager (rm)
+@surface   harness.mk, rm:tracks
+@harness   mk, reaper.CountTracks, reaper.InsertTrackAtIndex, reaper.GetTrack, reaper.GetSetMediaTrackInfo_String, reaper:setTrackFX, reaper:setFxIO, reaper:setFxGuid
+
+# Intent
+  routingManager Phase 2: fx read. tracks() nests each track's fx chain as
+  records — id (fx guid), ident, display name, and port counts (pins/2).
+
+# Helpers
+  @fn mkRm()  @ 7-11
+  @fn seedTrack(reaper, name)  @ 13-19
+  @fn trackByName(rm, name)  @ 21-23
+
+# Cases
+  @case 'tracks() nests the fx chain: id, ident, name, port counts'  [pure]  @ 27-53
+  @case 'fx name prefers a user instance rename over the plugin name'  [pure]  @ 56-65
+  @case 'a track with no fx reads an empty chain'  [pure]  @ 68-73
+  @case 'chain order is list order'  [pure]  @ 76-87
+
+# Uses (outbound edges)
+  @use call harness.mk  @ 8
+  @use call routingManager.tracks  @ 22

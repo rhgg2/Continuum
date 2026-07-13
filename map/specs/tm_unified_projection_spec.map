@@ -1,0 +1,17 @@
+@spec tm_unified_projection_spec  src=tests/specs/tm_unified_projection_spec.lua  loc=95  sha=1d7d136  cases=2
+@exercises dataStore (h.ds), midiManager (h.fm), trackerManager (h.tm)
+@surface   ds:assign, fm:dump, tm:getChannel
+@harness   mk{seed.notes}
+
+# Intent
+  Unified onset+tail pass at tm:rebuild. Pins the prod path:
+  ds:assign('swing', {global='c58'}) drives dataChanged → markSwingStale → rebuild.
+
+# Cases
+  @case 'authored swap survives: B lands before A in raw, no clamp; A retro-clips B tail'  [harness]  @ 16-47
+  @case 'raw collision: ppqL-later note clamps to predecessor + 1; delayC carries give-way'  [harness]  @ 55-93
+
+# Uses (outbound edges)
+  @use call dataStore.assign  @ 35,74
+  @use call midiManager.dump  @ 38,77
+  @use call trackerManager.getChannel  @ 87

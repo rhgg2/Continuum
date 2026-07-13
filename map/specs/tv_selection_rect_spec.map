@@ -1,0 +1,25 @@
+@spec tv_selection_rect_spec  src=tests/specs/tv_selection_rect_spec.lua  loc=90  sha=4a6bfb0  cases=4
+@exercises trackerView (h.vm)
+@surface   vm:selectionAsRect, vm:eventsInRect
+@harness   mk{seed.notes}
+
+# Intent
+  tv:selectionAsRect / tv:eventsInRect -- the trackerView -> mirror bridge.
+  A selection rectangle becomes a mirror `rect` (logical time span x
+  per-channel streamId set, chanOffset relative to the lowest selected
+  channel). eventsInRect resolves that rect back to the concrete events it
+  contains. streamId is index-free (evType:key), so it survives column
+  reorder -- the column IS the stream.
+
+# Helpers
+  @fn noteCol(h, chan)  @ 10-14
+
+# Cases
+  @case 'single note-col selection -> exact rect shape (logical frame, note:1 stream)'  [harness]  @ 18-33
+  @case 'multi-channel selection -> chanLo is the lowest, offsets relative to it'  [harness]  @ 37-56
+  @case 'eventsInRect returns concrete events inside, excludes out-of-time and unselected streams'  [harness]  @ 60-78
+  @case 'no selection -> nil'  [harness]  @ 82-88
+
+# Uses (outbound edges)
+  @use call trackerView.selectionAsRect  @ 27,50,73,87
+  @use call trackerView.eventsInRect  @ 74

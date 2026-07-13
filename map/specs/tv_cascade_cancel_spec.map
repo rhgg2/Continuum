@@ -1,0 +1,32 @@
+@spec tv_cascade_cancel_spec  src=tests/specs/tv_cascade_cancel_spec.lua  loc=82  sha=261b161  cases=2
+@exercises midiManager (h.fm), trackerView (h.vm), editCursor (h.ec), commandManager (h.cmgr)
+@surface   fm:dump, vm:setGridSize, ec:setPos, ec:extendTo, cmgr:invoke, ec:selClear, vm:editEvent
+@harness   mk{seed.notes}
+
+# Intent
+  A duplicate / groupDuplicate run is meant to die on any real edit:
+  the keep-sets only spare navigation. But the keep-set doBefore
+  sweeps fire on cmgr dispatch, and typed entry does NOT go through
+  cmgr -- trackerPage's char drain calls tv:editEvent straight. So a
+  committed keystroke used to leave the run token alive and the next
+  duplicate press silently continued the cascade. tv:editEvent's
+  commit now ends every cascade by hand. Real trackerView (+ real
+  groupManager for the group case) via harness.mk -- the wired path.
+
+# Helpers
+  @fn noteCol(h, chan)  @ 12-16
+  @fn pitch60Ppqs(h)  @ 18-25
+  @fn noteAt(h, ppq)  @ 27-31
+
+# Cases
+  @case 'a typed note edit cancels the plain duplicate cascade'  [harness]  @ 35-56
+  @case 'a typed note edit cancels the groupDuplicate cascade'  [harness]  @ 60-80
+
+# Uses (outbound edges)
+  @use call midiManager.dump  @ 20,28
+  @use call trackerView.setGridSize  @ 41
+  @use call editCursor.setPos  @ 42,48,72
+  @use call editCursor.extendTo  @ 43
+  @use call commandManager.invoke  @ 45,53,69,77
+  @use call editCursor.selClear  @ 48,72
+  @use call trackerView.editEvent  @ 49,73

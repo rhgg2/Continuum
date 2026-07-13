@@ -1,0 +1,40 @@
+@spec mm_cc_dedup_spec  src=tests/specs/mm_cc_dedup_spec.lua  loc=374  sha=61aa319  cases=12
+@exercises midiManager (h.mm)
+@surface   mm:subscribe, mm:load, mm:ccs, mm:modify, mm:assign
+@harness   fakeReaper:bindTake, reaper:seedMidi, reaper:dumpMidi
+
+# Intent
+  Integration spec: real midiManager + midi-extended fakeReaper, exercising
+  the load-time cc dedup pass. Pins the sidecar-aware survivor heuristic
+  (prefer a cc whose ppq+val matches a sidecar — i.e. a stage-1 reconcile
+  candidate — else highest loc), the ccsDeduped signal payload, post-dedup
+  index hygiene (cc.uuidIdx still resolves a sidecar after mid-load
+  deletions), and ordering relative to ccsReconciled/reload.
+
+# Helpers
+  @fn freshTake()  @ 14-20
+  @fn packCc(c)  @ 22-35
+  @fn seed(take, reaper, spec)  @ 37-55
+  @fn loadWithCapture(take)  @ 57-65
+  @fn sidecarBodies(reaper, take)  @ 67-73
+
+# Cases
+  @case 'sidecar-matched group: surviving cc picks up the sidecar metadata'  [pure]  @ 77-102
+  @case 'no sidecar in group: highest-loc cc wins'  [pure]  @ 106-121
+  @case 'sidecar val matches one dup: that dup wins over a higher-loc non-match'  [pure]  @ 125-149
+  @case 'sidecar val matches none: fall back to highest-loc, sidecar value-rebinds'  [pure]  @ 153-173
+  @case 'two sidecars match different dups: one binds, the other orphans cleanly'  [pure]  @ 177-220
+  @case 'three-in-group: droppedCount = 2, only winner remains'  [pure]  @ 224-239
+  @case 'multiple groups in one load fire one event each'  [pure]  @ 243-258
+  @case 'no false dedup across (chan), (cc#), or (evType) boundaries'  [pure]  @ 262-277
+  @case 'pa dedup: id is pitch, not cc'  [pure]  @ 281-294
+  @case 'pb dedup: channel-wide id (id=0) collapses dups'  [pure]  @ 298-310
+  @case 'signal ordering: ccsDeduped → ccsReconciled → reload'  [pure]  @ 314-334
+  @case 'survivor cc.uuidIdx tracks sidecar across dedup deletions'  [pure]  @ 338-372
+
+# Uses (outbound edges)
+  @use call midiManager.subscribe  @ 60,61,62,329,330,331
+  @use call midiManager.load  @ 63,332
+  @use call midiManager.ccs  @ 98,119,143,165,196,237,256,275,361
+  @use call midiManager.modify  @ 360
+  @use call midiManager.assign  @ 362

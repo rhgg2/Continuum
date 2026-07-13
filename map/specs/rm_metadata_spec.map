@@ -1,0 +1,24 @@
+@spec rm_metadata_spec  src=tests/specs/rm_metadata_spec.lua  loc=105  sha=e2be081  cases=5
+@exercises harness (harness), configManager (h.cm)
+@surface   harness.mk, cm:pollUndo
+@harness   mk, reaper.CountTracks, reaper.InsertTrackAtIndex, reaper.GetTrack, reaper.GetSetMediaTrackInfo_String, reaper.GetTrackGUID, reaper:setFxIO, reaper.GetProjExtState, r._state.trackExt, r._state.projStateCount
+
+# Intent
+  rm metadata facility: non-native record fields persist behind the scenes —
+  fx/bus-meta ride pextStore's undo mirror as ds keys; track-meta rides P_EXT.
+
+# Helpers
+  @fn mkRm()  @ 7-10
+  @fn seedTrack(reaper, name)  @ 12-18
+  @fn addFx(reaper, rm, tid, ident)  @ 20-23
+
+# Cases
+  @case 'track meta rides the track P_EXT and folds back onto the record'  [pure]  @ 27-37
+  @case 'native-only fx write mints no scratch and stores no metadata'  [pure]  @ 40-50
+  @case 'fx meta lives in projext, mirrors to scratch, folds onto records'  [pure]  @ 53-67
+  @case 'fx-meta partial merge keeps earlier fields; util.REMOVE clears one'  [pure]  @ 70-83
+  @case 'fx-meta rides undo: a rewound scratch mirror restores it through ds'  [pure]  @ 86-103
+
+# Uses (outbound edges)
+  @use call harness.mk  @ 8
+  @use call configManager.pollUndo  @ 101

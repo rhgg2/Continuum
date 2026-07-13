@@ -20,6 +20,11 @@ Author-written annotations:
   --reaper:    BODY      notes on REAPER surface
 A leading `?` (`--?invariant: …`) marks the line as inferred rather than
 doc-grounded. Anything else is plain comment prose and is ignored.
+
+Spec files (tests/specs/*_spec.lua) get a sibling grammar: `@spec` header
+(cases=N), @exercises/@surface/@harness summary lines, # Intent (the file's
+leading comment), # Helpers, # Cases (`@case 'name'  [pure|harness]`), and
+the same # Uses section — so map_query's usedby sees spec coverage.
 """
 
 from __future__ import annotations
@@ -800,6 +805,234 @@ def emit(cm: MapFile) -> str:
     return '\n'.join(out).rstrip() + '\n'
 
 
+# ----- Spec maps (tests/specs/*_spec.lua)
+
+# harness.mk's return-table members (tests/harness.lua) — the module identity
+# behind `h.tm:...` receivers. `mm` covers the harness.bareMM convention.
+HARNESS_MEMBERS = {
+    'fm': 'midiManager', 'mm': 'midiManager', 'tm': 'trackerManager',
+    'vm': 'trackerView', 'cm': 'configManager', 'ds': 'dataStore',
+    'ps': 'pextStore', 'gm': 'groupManager', 'pa': 'paramAutomation',
+    'ccm': 'ccManager', 'cmgr': 'commandManager', 'ec': 'editCursor',
+    'clipboard': 'clipboard', 'reaper': 'fakeReaper',
+}
+# Plumbing receivers, not the surface under test.
+SPEC_NOISE = {'util', 'support'}
+
+SPEC_NAME_RE      = re.compile(r"^(\s*)name\s*=\s*(['\"])(.+?)\2\s*(\.\.[^,]*)?,")
+SPEC_RUN_RE       = re.compile(r"^(\s*)run\s*=\s*function\s*\(([^)]*)\)")
+SPEC_INST_RE      = re.compile(r"\b(\w+)\s*=\s*util\.instantiate\(\s*['\"]([\w.]+)['\"]")
+SPEC_MKCALL_RE    = re.compile(r"\bharness\.(mk|bareMM)\b")
+SPEC_STATE_RE     = re.compile(r"\b(\w+)\._state\.(\w+)")
+SPEC_HLOCAL_RE    = re.compile(r"\blocal\s+(\w+)\s*=\s*h\.(\w+)\s*$")
+SPEC_REQ_LOCAL_RE = re.compile(r"^\s*local\s+(\w+)\s*=\s*require\s*\(?\s*['\"]([\w.]+)['\"]")
+
+
+@dataclass
+class SpecCase:
+    name: str
+    line: int
+    end_line: int
+    harness: bool
+
+
+@dataclass
+class SpecMap:
+    module: str
+    rel_src: str
+    loc: int
+    sha: str
+    intent: list[str] = field(default_factory=list)
+    helpers: list[Block] = field(default_factory=list)
+    cases: list[SpecCase] = field(default_factory=list)
+    exercises: list[tuple[str, str]] = field(default_factory=list)  # (module, receiver display)
+    surface: list[str] = field(default_factory=list)                # 'pa.frecencyOrder', 'tm:getChannel'
+    harness_bits: list[str] = field(default_factory=list)
+    uses: list[tuple[str, str, int]] = field(default_factory=list)  # (kind, target, line)
+
+
+def spec_intent(lines: list[str]) -> list[str]:
+    """File-leading comment block; ends at the first blank line after it."""
+    out: list[str] = []
+    for raw in lines:
+        if not raw.strip():
+            if out:
+                break
+            continue
+        m = COMMENT_RE.match(raw)
+        if not m:
+            break
+        out.append(m.group(1).rstrip())
+    return out
+
+
+def spec_seed_keys(masked: str) -> list[str]:
+    """Immediate keys of every `seed = {…}` table. Operates on string-masked
+    text so braces inside string literals can't skew the depth walk."""
+    keys: dict[str, None] = {}
+    for m in re.finditer(r"\bseed\s*=\s*{", masked):
+        depth, i, seg = 1, m.end(), m.end()
+        top: list[str] = []
+        while i < len(masked) and depth > 0:
+            c = masked[i]
+            if c == '{':
+                if depth == 1:
+                    top.append(masked[seg:i])
+                depth += 1
+            elif c == '}':
+                depth -= 1
+                if depth == 1:
+                    seg = i + 1
+                elif depth == 0:
+                    top.append(masked[seg:i])
+            i += 1
+        for km in re.finditer(r"(\w+)\s*=", ' '.join(top)):
+            keys.setdefault(km.group(1))
+    return list(keys)
+
+
+def parse_spec(path: Path) -> SpecMap:
+    text = path.read_text()
+    lines = text.splitlines()
+    code_lines = strip_code(text)
+    deltas, level_after = block_levels(code_lines)
+    fn_depth = function_depth_before(code_lines)
+
+    sm = SpecMap(module=path.stem, rel_src='/'.join(path.parts[-3:]),
+                 loc=len(lines), sha=short_sha(path))
+    sm.intent = spec_intent(lines)
+
+    # Alias table: harness members + instantiated / required modules + locals
+    # rebinding a harness member (`local r = h.reaper`).
+    aliases = dict(HARNESS_MEMBERS)
+    local_aliases: set[str] = set()
+    for raw in lines:
+        code = raw.split('--', 1)[0] if '--' in raw else raw
+        for m in SPEC_INST_RE.finditer(code):
+            aliases[m.group(1)] = m.group(2)
+            local_aliases.add(m.group(1))
+        mreq = SPEC_REQ_LOCAL_RE.match(code)
+        if mreq:
+            aliases[mreq.group(1)] = mreq.group(2)
+            local_aliases.add(mreq.group(1))
+        mloc = SPEC_HLOCAL_RE.search(code)
+        if mloc and mloc.group(2) in HARNESS_MEMBERS:
+            aliases[mloc.group(1)] = HARNESS_MEMBERS[mloc.group(2)]
+            local_aliases.add(mloc.group(1))
+
+    pending: list[tuple[str, str, int]] = []   # (indent, name, 1-based line)
+    exercised: dict[str, str] = {}             # module -> receiver display
+    surface: dict[tuple[str, str], str] = {}   # (module, fn) -> display
+    fake_calls: dict[str, None] = {}
+    state_pokes: dict[str, None] = {}
+    mk_forms: dict[str, None] = {}
+
+    for i, raw in enumerate(lines):
+        mfn = LOCAL_FN_RE.match(raw) or NESTED_FN_RE.match(raw)
+        if mfn and fn_depth[i] == 0:
+            blk = Block(name=mfn.group(2), args=mfn.group(3).strip(),
+                        line=i + 1, kind='fn', doc=collect_doc(lines, i))
+            blk.end_line = span_end(deltas, level_after, i) + 1
+            sm.helpers.append(blk)
+
+        mn = SPEC_NAME_RE.match(raw)
+        if mn:
+            name = mn.group(3) + (' ..' if mn.group(4) else '')
+            pending.append((mn.group(1), name, i + 1))
+
+        mr = SPEC_RUN_RE.match(raw)
+        if mr:
+            # The case's own `name =` shares the run line's indent; deeper
+            # name= keys are data inside the case, not case names.
+            picked = next((c for c in reversed(pending) if c[0] == mr.group(1)),
+                          pending[-1] if pending else None)
+            if picked:
+                sm.cases.append(SpecCase(
+                    name=picked[1], line=picked[2],
+                    end_line=span_end(deltas, level_after, i) + 1,
+                    harness='harness' in mr.group(2)))
+                pending.clear()
+
+        code = raw.split('--', 1)[0] if '--' in raw else raw
+        for m in SPEC_MKCALL_RE.finditer(code):
+            mk_forms.setdefault(m.group(1))
+        for m in SPEC_STATE_RE.finditer(code):
+            if aliases.get(m.group(1)) == 'fakeReaper':
+                state_pokes.setdefault(m.group(2))
+        for m in CALL_RE.finditer(code):
+            recv, sep, fn = m.group(1), m.group(2), m.group(3)
+            mod = aliases.get(recv)
+            if not mod or mod in SPEC_NOISE:
+                continue
+            if mod == 'fakeReaper':
+                fake_calls.setdefault(f'{recv}{sep}{fn}')
+                continue
+            display = recv if recv in local_aliases else f'h.{recv}'
+            exercised.setdefault(mod, display)
+            surface.setdefault((mod, fn), f'{recv}{sep}{fn}')
+            sm.uses.append(('call', f'{mod}.{fn}', i + 1))
+
+    if 'mk' in mk_forms:
+        seeds = spec_seed_keys('\n'.join(code_lines))
+        sm.harness_bits.append(
+            'mk{' + ', '.join(f'seed.{k}' for k in seeds) + '}' if seeds else 'mk')
+    if 'bareMM' in mk_forms:
+        sm.harness_bits.append('bareMM')
+    sm.harness_bits += list(fake_calls) + [f'r._state.{f}' for f in state_pokes]
+    sm.exercises = list(exercised.items())
+    sm.surface = list(surface.values())
+    return sm
+
+
+def emit_spec(sm: SpecMap) -> str:
+    out: list[str] = []
+    add = out.append
+    add(f"@spec {sm.module}  src={sm.rel_src}  loc={sm.loc}  sha={sm.sha}  cases={len(sm.cases)}")
+    if sm.exercises:
+        add("@exercises " + ', '.join(f"{mod} ({alias})" for mod, alias in sm.exercises))
+    if sm.surface:
+        add("@surface   " + ', '.join(sm.surface))
+    if sm.harness_bits:
+        add("@harness   " + ', '.join(sm.harness_bits))
+    add('')
+
+    add("# Intent")
+    for line in (sm.intent or ['(none)']):
+        add(f"  {line}")
+    add('')
+
+    if sm.helpers:
+        add("# Helpers")
+        for b in sm.helpers:
+            loc = f"{b.line}-{b.end_line}" if b.end_line > b.line else f"{b.line}"
+            add(f"  @fn {b.name}{fmt_args(b.args)}  @ {loc}")
+            for d in b.doc:
+                add(f"      -- {d}")
+        add('')
+
+    if sm.cases:
+        add("# Cases")
+        for c in sm.cases:
+            tag = 'harness' if c.harness else 'pure'
+            add(f"  @case '{c.name}'  [{tag}]  @ {c.line}-{c.end_line}")
+        add('')
+
+    if sm.uses:
+        add("# Uses (outbound edges)")
+        grouped: dict[tuple[str, str], list[tuple[None, int]]] = {}
+        order: list[tuple[str, str]] = []
+        for kind, target, line in sm.uses:
+            key = (kind, target)
+            if key not in grouped:
+                grouped[key] = []
+                order.append(key)
+            grouped[key].append((None, line))
+        for kind, target in order:
+            add(f"  @use {kind} {target}  @ {render_caller_groups(grouped[(kind, target)])}")
+
+    return '\n'.join(out).rstrip() + '\n'
+
+
 # ----- CLI
 
 def main(argv: list[str]) -> int:
@@ -809,9 +1042,10 @@ def main(argv: list[str]) -> int:
     src = Path(argv[1]).resolve()
     out_dir = Path(argv[2]).resolve() if len(argv) > 2 else src.parent / 'map'
     out_dir.mkdir(parents=True, exist_ok=True)
-    cm = parse(src)
+    is_spec = src.parent.name == 'specs'
+    text = emit_spec(parse_spec(src)) if is_spec else emit(parse(src))
     out_path = out_dir / (src.stem + '.map')
-    out_path.write_text(emit(cm))
+    out_path.write_text(text)
     print(out_path)
     return 0
 

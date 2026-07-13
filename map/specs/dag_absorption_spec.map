@@ -1,0 +1,28 @@
+@spec dag_absorption_spec  src=tests/specs/dag_absorption_spec.lua  loc=205  sha=8233379  cases=10
+@exercises DAG (DAG)
+@surface   DAG.compile
+
+# Intent
+  (none)
+
+# Helpers
+  @fn source(id, guid)  @ 7-12
+  @fn fx(id, opts)  @ 14-22
+  @fn master(opts)  @ 24-29
+  @fn mk(nodes, edges)  @ 31-36
+  @fn classTrackKey(g, cls)  @ 38-40
+
+# Cases
+  @case 'single class: no absorption (nothing to absorb)'  [pure]  @ 44-54
+  @case 'two parents both reach master: class keys to the master sentinel'  [pure]  @ 57-69
+  @case 'two parents + primary: mix absorbs into the primary parent'  [pure]  @ 72-83
+  @case 'primary survives an inserted gain CU: still absorbs into the primary parent'  [pure]  @ 86-100
+  @case 'master class with two audio parents keys to the master sentinel'  [pure]  @ 103-115
+  @case 'chain absorption resolves to the terminal trackKey'  [pure]  @ 118-136
+  @case 'two primaries on same target: hosts itself (ambiguous)'  [pure]  @ 139-150
+  @case 'midi-only inter-class edge does not trigger audio absorption'  [pure]  @ 153-164
+  @case 'lone source-direct midi parent hosts its consumer'  [pure]  @ 167-183
+  @case 'two fx midi parents, none source-direct: hosts itself'  [pure]  @ 186-203
+
+# Uses (outbound edges)
+  @use call DAG.compile  @ 39

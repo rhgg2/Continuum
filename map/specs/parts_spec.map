@@ -1,0 +1,35 @@
+@spec parts_spec  src=tests/specs/parts_spec.lua  loc=154  sha=a17a7a7  cases=10
+@exercises editCursor (ec)
+@surface   ec:decorateCol
+
+# Intent
+  Pinning specs for the column-parts shape: ec:decorateCol stamps
+  col.parts (ordered name list), col.stopPos (absolute char offsets per
+  stop), col.partAt (part name per stop), col.partStart (stop index of
+  first stop in this stop's part), and col.width (sum of part widths +
+  inter-part separators). Behaviour-preserving refactor — these pin the
+  shape so a future addition (e.g. tracker-mode `sample` part) can't
+  silently drift the layout of existing col types.
+
+# Helpers
+  @fn mkCol(type, showDelay, trackerMode)  @ 14-18
+      -- decorateCol only reads col.type, col.showDelay and col.trackerMode.
+      -- We don't need a full harness — a minimal shell is enough.
+  @fn decorate(col, pitchWidth)  @ 22-30
+      -- Decorate a col through ec; ec needs deps but only `grid` is touched by
+      -- decorateCol. Pass an empty grid.
+
+# Cases
+  @case 'note (no delay): parts={pitch,vel}; stopPos={0,2,4,5}; width=6'  [pure]  @ 35-41
+  @case 'note+delay: parts={pitch,vel,delay}; stopPos={0,2,4,5,7,8,9}; width=10'  [pure]  @ 45-51
+  @case 'note pitch width follows the active temper: width 4 → stopPos {0,3,5,6}, width 7'  [pure]  @ 55-61
+  @case 'pb: parts={pb}; stopPos={0,1,2,3}; width=4'  [pure]  @ 65-71
+  @case 'scalar (cc): parts={val}; stopPos={0,1}; width=2'  [pure]  @ 78-84
+  @case '14-bit cc: parts={val}; stopPos={0,1,2,3}; width=4'  [pure]  @ 90-98
+  @case 'partAt mirrors stops: note+delay = {pitch,pitch,vel,vel,delay,delay,delay}'  [pure]  @ 102-107
+  @case 'partStart pins ordering: note+delay = {1,1,3,3,5,5,5}'  [pure]  @ 115-119
+  @case 'note tracker (no delay): parts={pitch,sample,vel}; stopPos={0,2,4,5,7,8}; width=9'  [pure]  @ 129-138
+  @case 'note tracker + delay: parts={pitch,sample,vel,delay}; stopPos={0,2,4,5,7,8,10,11,12}; width=13'  [pure]  @ 142-152
+
+# Uses (outbound edges)
+  @use call editCursor.decorateCol  @ 28

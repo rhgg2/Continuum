@@ -1,0 +1,29 @@
+@spec vm_conform_overlap_spec  src=tests/specs/vm_conform_overlap_spec.lua  loc=89  sha=1a88dca  cases=3
+@exercises trackerView (h.vm), editCursor (h.ec), commandManager (h.cmgr), midiManager (h.fm)
+@surface   vm:setGridSize, ec:setPos, cmgr:invoke, fm:dump
+@harness   mk{seed.notes}
+
+# Intent
+  vm position edits use an onset-only band (rowBounds): NO predecessor's
+  tail constrains a later same-col note's nudge -- conform or not. tm
+  owns the realised clip. A conform note's STORED tail (endppqL) is an
+  intended overrun, so vm must additionally (b) not shorten a conform
+  note's own planned tail in conformOverlaps. (The former conform-only
+  rowBounds carve-out is now the universal onset-only rule.)
+  
+  Harness identity swing: ppq == ppqL. resolution 240, rpb 4 ->
+  60 ppq/row. overlapOffset default 1/16 -> lenient 15 ppq.
+
+# Helpers
+  @fn byPitch(notes, p)  @ 13-15
+
+# Cases
+  @case 'conform predecessor does not block nudging a later same-col note back'  [harness]  @ 20-39
+  @case 'a non-conform predecessor tail also does not block (onset-only band)'  [harness]  @ 43-62
+  @case 'conformOverlaps does not shorten a conform note stored tail when it shifts'  [harness]  @ 66-87
+
+# Uses (outbound edges)
+  @use call trackerView.setGridSize  @ 31,53,77
+  @use call editCursor.setPos  @ 32,54,78
+  @use call commandManager.invoke  @ 33,55,79
+  @use call midiManager.dump  @ 35,37,57,59,81,83

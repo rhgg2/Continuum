@@ -1,0 +1,35 @@
+@spec vm_tracker_mode_spec  src=tests/specs/vm_tracker_mode_spec.lua  loc=354  sha=1747f65  cases=15
+@exercises trackerView (h.vm), editCursor (h.ec), midiManager (h.fm), commandManager (h.cmgr), configManager (h.cm)
+@surface   vm:setGridSize, ec:setPos, vm:editEvent, fm:dump, cmgr:invoke, cm:get
+@harness   mk{seed.notes, seed.ccs}
+
+# Intent
+  Pin commit 2a of the sampler-integration plan: enabling trackerMode
+  inserts a `sample` part into note cells, hides the PC col, and routes
+  sample-stop edits onto note.sample. tm doesn't yet act on the field
+  (synthesis lands in 2b) — these specs cover only the vm-side wiring.
+
+# Cases
+  @case 'trackerMode off: pc events surface as a pc col'  [harness]  @ 13-27
+  @case 'trackerMode on: pc col is hidden'  [harness]  @ 31-45
+  @case 'trackerMode on: note col carries sample part'  [harness]  @ 51-67
+  @case 'editing sample stops on an existing note: high then low nibble = 0x55'  [harness]  @ 73-105
+  @case 'sample value clamps to 0..127 (PC byte range)'  [harness]  @ 109-126
+  @case 'sample edits work on lane-2 notes too (no lane gating in 2a)'  [harness]  @ 130-164
+  @case 'placing a new note in trackerMode stamps note.sample = currentSample'  [harness]  @ 170-191
+  @case 'placing a new note with trackerMode off does not stamp sample'  [harness]  @ 195-212
+  @case 'inputSampleUp increments by 1 even into empty slots'  [harness]  @ 221-226
+  @case 'inputSampleDown decrements by 1 even into empty slots'  [harness]  @ 230-235
+  @case 'inputSampleUp clamps at 127'  [harness]  @ 239-244
+  @case 'inputSampleDown clamps at 0'  [harness]  @ 248-253
+  @case 'editing a sample stop sets currentSample to the new value'  [harness]  @ 261-286
+  @case 'typing into sample part of a PA cell does nothing'  [harness]  @ 292-322
+  @case 'delete on sample part of a PA cell does nothing'  [harness]  @ 326-352
+
+# Uses (outbound edges)
+  @use call trackerView.setGridSize  @ 21,40,59,82,118,142,179,201,273,302,336
+  @use call editCursor.setPos  @ 98,154,184,206,280,314,345
+  @use call trackerView.editEvent  @ 99,101,124,155,157,186,207,281,283,315
+  @use call midiManager.dump  @ 103,125,160,188,209,317,321,348
+  @use call commandManager.invoke  @ 224,233,242,251,346
+  @use call configManager.get  @ 225,234,243,252,284

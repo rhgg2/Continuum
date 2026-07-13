@@ -1,0 +1,30 @@
+@spec tm_pb_interp_spec  src=tests/specs/tm_pb_interp_spec.lua  loc=151  sha=a2620db  cases=5
+@exercises midiManager (h.fm), trackerManager (h.tm)
+@surface   fm:dump, tm:rebuild, tm:flush
+@harness   mk{seed.notes, seed.ccs}
+
+# Intent
+  pb interpolation across a detune onset (design/archive/pb-interpolation.md, Step 1).
+  A derived absorber seat samples the prevailing authored pb value at its ppq
+  and adds detune, instead of punching the wire down to detune-only. Linear
+  glides land exactly; curved glides densify to a linear polyline; the detune
+  step rides a dual point so it never smears across the curve.
+
+# Helpers
+  @fn c2r(c)  @ 11
+      -- Matches tm's centsToRaw at the default pbRange (2 semitones = 200 cents).
+  @fn pbWire(dump, chan)  @ 13-20
+  @fn twoNotesStepDetune()  @ 23-28
+      -- Two sequential lane-1 notes; detune steps 0 -> 50 at the second's onset (ppq 120).
+
+# Cases
+  @case 'linear glide across a detune onset -> seat carries the interpolated value'  [harness]  @ 33-51
+  @case 'held single pb across a detune onset -> seat keeps the held value (hold-left)'  [harness]  @ 55-69
+  @case 'curved glide across a detune onset -> densified, endpoints exact, no notch'  [harness]  @ 73-109
+  @case 'densified channel: flush -> rebuild -> flush is churn-free (stable grid keys)'  [harness]  @ 113-129
+  @case 'curved authored segment with no interior onset -> untouched, no seats'  [harness]  @ 133-149
+
+# Uses (outbound edges)
+  @use call midiManager.dump  @ 44,65,84,124,127,146
+  @use call trackerManager.rebuild  @ 125
+  @use call trackerManager.flush  @ 126

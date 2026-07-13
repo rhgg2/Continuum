@@ -1,0 +1,52 @@
+@spec tm_rebuild_rule_spec  src=tests/specs/tm_rebuild_rule_spec.lua  loc=515  sha=d415ad4  cases=20
+@exercises midiManager (h.fm), trackerManager (h.tm), dataStore (h.ds), configManager (h.cm)
+@surface   fm:dump, tm:markSwingStale, fm:notes, fm:modify, fm:assign, fm:ccs, tm:getChannel, tm:assignEvent, tm:flush, tm:rebuild, ds:assign, cm:set
+@harness   mk{seed.notes, seed.ccs}
+
+# Intent
+  Phase 2 (two-frame timing): the rebuild rule. tm reconciles raw ppq
+  with ppqL on every rebuild under three branches:
+    - stale=true  & ppqL present  → raw rebuilt from ppqL (+ delay)
+    - stale=false & raw matches   → no-op (steady state)
+    - stale=false & raw disagrees → ppqL rederived from raw
+  The rpb mark survives as authorship provenance but no longer gates the rule.
+
+# Helpers
+  @fn noteByPitch(dump, pitch)  @ 13-15
+  @fn ccByCC(dump, ccNum)  @ 16-20
+
+# Cases
+  @case 'note with no ppqL gets ppqL written on first rebuild'  [harness]  @ 26-37
+  @case 'note with ppqL disagreeing with raw gets ppqL rederived'  [harness]  @ 41-55
+  @case 'cc with no ppqL gets ppqL written and uuid allocated'  [harness]  @ 59-69
+  @case 'note with matching ppqL is left alone'  [harness]  @ 75-88
+  @case 'matching ppqL under c58 is steady-state (predicted=raw within ε)'  [harness]  @ 92-109
+  @case 'markSwingStale rebuilds raw from ppqL on next rebuild and clears the flag'  [harness]  @ 115-147
+  @case 'markSwingStale restamps cc-event loc so column writes route correctly'  [harness]  @ 151-178
+  @case 'markSwingStale(nil) marks all 16 channels'  [harness]  @ 182-204
+  @case 'stale on event without ppqL falls through to disagreement (ppqL written, raw untouched)'  [harness]  @ 208-229
+  @case 'rpb-stamped event with stale ppqL: predicted-check rederives from raw'  [harness]  @ 235-250
+  @case 'global swing change reseats raw across all channels (ppqL preserved)'  [harness]  @ 260-282
+  @case 'per-column swing change moves only the named channel'  [harness]  @ 286-304
+  @case 'editing a referenced library entry reseats channels using it'  [harness]  @ 308-329
+  @case 'reassigning a column slot to a different library entry reseats that channel'  [harness]  @ 333-357
+  @case 'colSwing change marks only altered channels'  [harness]  @ 366-388
+  @case 'swings library edit marks only channels using changed names'  [harness]  @ 392-415
+  @case 'swings library edit of the global-swing name marks all 16'  [harness]  @ 419-439
+  @case 'global swing change emits a single nil mark (covers all 16)'  [harness]  @ 443-459
+  @case 'colSwing set to identical value emits no marks'  [harness]  @ 463-480
+  @case 'non-swing config change does not flip stale (preserves externally-edited raw)'  [harness]  @ 484-513
+
+# Uses (outbound edges)
+  @use call midiManager.dump  @ 33,52,66,83,106,134,143,171,177,201,221,226,247,275,301,323,326,350,351,354,504,510
+  @use call trackerManager.markSwingStale  @ 130,167,196,224
+  @use call midiManager.notes  @ 131,141,198,502
+  @use call midiManager.modify  @ 132,142,168,197,503
+  @use call midiManager.assign  @ 132,142,169,198,503
+  @use call midiManager.ccs  @ 169
+  @use call trackerManager.getChannel  @ 174
+  @use call trackerManager.assignEvent  @ 175
+  @use call trackerManager.flush  @ 176
+  @use call trackerManager.rebuild  @ 225
+  @use call dataStore.assign  @ 274,300,353,384,456,478
+  @use call configManager.set  @ 325,411,435,509

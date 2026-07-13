@@ -1,0 +1,31 @@
+@spec mm_delete_then_sidecar_write_spec  src=tests/specs/mm_delete_then_sidecar_write_spec.lua  loc=61  sha=bfe20fc  cases=1
+@exercises midiManager (h.mm)
+@surface   mm:modify, mm:notes, mm:tokenOf, mm:delete, mm:assign
+@harness   fakeReaper:bindTake
+
+# Intent
+  A note delete and a surviving note's sidecar WRITE in ONE mm:modify must
+  land the write on the survivor's OWN notation event, not a neighbour's.
+  
+  Notation (text type 15) sidecars share one MIDI_*TextSysexEvt index space.
+  MIDI_DeleteNote cascade-removes the deleted note's notation, shifting every
+  later notation's wire index down by one. A structural assign on a survivor
+  then rewrites its notation; if it uses a uuidIdx cached before the cascade
+  shifted it, the write lands on a DIFFERENT note's notation — overwriting it
+  with the survivor's uuid. On the load that closes the modify, the clobbered
+  note finds no matching notation, mints a fresh uuid with empty metadata, and
+  silently loses its detune. This pins the write path the same way
+  mm_note_cascade_sidecar_spec pins the delete path.
+
+# Helpers
+  @fn freshTake()  @ 17-23
+
+# Cases
+  @case 'delete + survivor sidecar-write in one modify keeps every survivor detune'  [pure]  @ 27-59
+
+# Uses (outbound edges)
+  @use call midiManager.modify  @ 34,46
+  @use call midiManager.notes  @ 41,52
+  @use call midiManager.tokenOf  @ 41
+  @use call midiManager.delete  @ 47
+  @use call midiManager.assign  @ 48

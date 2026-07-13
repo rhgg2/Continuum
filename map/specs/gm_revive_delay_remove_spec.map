@@ -1,0 +1,24 @@
+@spec gm_revive_delay_remove_spec  src=tests/specs/gm_revive_delay_remove_spec.lua  loc=54  sha=48499bd  cases=1
+@exercises midiManager (h.fm), groupManager (gm), trackerView (h.vm), trackerManager (h.tm)
+@surface   fm:dump, gm:markGroup, vm:eventsInRect, gm:newInstance, tm:flush, gm:setLocalMode, gm:deleteEvent
+@harness   mk{seed.length, seed.resolution, seed.notes}
+
+# Intent
+  diffGroup emits {delay=util.REMOVE} on revive when original delay=0; that sentinel crashed
+  realiseNoteUpdate (delayToPPQ on a table). Real tm+gm: fake-tm never realises the assign.
+
+# Helpers
+  @fn seededHarness()  @ 7-15
+  @fn noteAtPpq(h, ppq)  @ 20-24
+
+# Cases
+  @case 'global type-over a locally-deleted slot revives without choking on delay=REMOVE'  [pure]  @ 28-52
+
+# Uses (outbound edges)
+  @use call midiManager.dump  @ 21
+  @use call groupManager.markGroup  @ 32
+  @use call trackerView.eventsInRect  @ 32
+  @use call groupManager.newInstance  @ 33
+  @use call trackerManager.flush  @ 34,40,47
+  @use call groupManager.setLocalMode  @ 39,41
+  @use call groupManager.deleteEvent  @ 40

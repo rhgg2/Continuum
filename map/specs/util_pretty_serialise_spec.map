@@ -1,0 +1,18 @@
+@spec util_pretty_serialise_spec  src=tests/specs/util_pretty_serialise_spec.lua  loc=86  sha=a0856a6  cases=9
+
+# Intent
+  (none)
+
+# Helpers
+  @fn roundtrip(v)  @ 4-6
+
+# Cases
+  @case 'prettySerialise: scalars round-trip through load()'  [pure]  @ 10-18
+  @case 'prettySerialise: nested tables and float arrays round-trip'  [pure]  @ 21-27
+  @case 'prettySerialise: edge-whitespace and control strings survive'  [pure]  @ 30-36
+  @case 'prettySerialise: dotted and keyword keys are quoted, not bare'  [pure]  @ 39-45
+  @case 'prettySerialise: util.OPEN (inf) round-trips by value'  [pure]  @ 48-54
+  @case 'prettySerialise: nan emits 0/0 and reads back as a nan'  [pure]  @ 57-62
+  @case 'prettySerialise: mixed array + sparse integer keys round-trip'  [pure]  @ 65-69
+  @case 'prettyUnserialise: bad chunk returns nil + error, never raises'  [pure]  @ 72-78
+  @case 'prettySerialise: output is a `return` chunk'  [pure]  @ 81-84

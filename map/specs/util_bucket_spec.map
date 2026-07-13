@@ -1,0 +1,11 @@
+@spec util_bucket_spec  src=tests/specs/util_bucket_spec.lua  loc=57  sha=fa4a61d  cases=5
+
+# Intent
+  (none)
+
+# Cases
+  @case 'bucket: lazy-inits a fresh array on first key'  [pure]  @ 6-13
+  @case 'bucket: appends to an existing key, preserving order'  [pure]  @ 16-24
+  @case 'bucket: distinct keys do not interfere'  [pure]  @ 27-35
+  @case 'bucket: returns the bucket so callers can keep operating on it'  [pure]  @ 38-45
+  @case 'bucket: false is a usable value (not treated as missing)'  [pure]  @ 48-55

@@ -1,0 +1,21 @@
+@spec cmgr_overrides_spec  src=tests/specs/cmgr_overrides_spec.lua  loc=134  sha=884c6a9  cases=6
+
+# Intent
+  commandManager binding overrides (step 0): the token codec and the
+  persist/reload plumbing behind clickable keybinding customisation.
+  Tokens are the stable ASCII on-disk form ('Ctrl+Z'); rebind writes both
+  the live keymap and the persisted tokens, loadOverrides reads them back.
+
+# Helpers
+  @fn newCommandManager(cm)  @ 9-11
+  @fn fakeCm(initial)  @ 34-45
+      -- Deep-copy at the boundary mirrors the real configManager contract, so a test
+      -- can't accidentally rely on aliasing cm's internal state.
+
+# Cases
+  @case 'token codec round-trips bare / modified / multi-mod / keypad / punctuation'  [pure]  @ 49-65
+  @case 'specForToken reports unknown key and unknown modifier'  [pure]  @ 69-76
+  @case 'rebind updates the live keymap and persists tokens'  [pure]  @ 80-90
+  @case 'rebind to an empty list explicitly unbinds and persists the empty array'  [pure]  @ 94-101
+  @case 'loadOverrides re-applies persisted tokens onto a fresh manager'  [pure]  @ 105-118
+  @case 'loadOverrides skips malformed tokens, keeps the good ones, tolerates unknown scopes'  [pure]  @ 122-132

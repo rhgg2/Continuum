@@ -1,0 +1,27 @@
+@spec pa_frecency_spec  src=tests/specs/pa_frecency_spec.lua  loc=110  sha=d15eb89  cases=6
+@exercises paramAutomation (pa), dataStore (h.ds)
+@surface   pa.frecencyOrder, pa:bumpFrecency, ds:get, pa:params
+@harness   mk, r:setTrackFX, r:setFxGuid, r:setFxParamNames, r:setFxParamSections, r._state.projectTracks, r._state.trackGuids
+
+# Intent
+  Frecency decays per plugin-use, not per day: each bump advances the fx
+  ident's counter and rebases the param's score against it, so idle
+  wall-clock costs nothing. Pins frecencyOrder (decayed score desc, index
+  tie-break) and the bump arithmetic through cm's global tier.
+
+# Helpers
+  @fn names(params)  @ 15-19
+
+# Cases
+  @case 'no scores: index order'  [pure]  @ 24-27
+  @case 'hot param first; untouched params tie-break by index'  [pure]  @ 31-38
+  @case 'per-use decay: an old pile of bumps loses to recent use'  [pure]  @ 42-49
+  @case 'same-named params score independently (index-keyed frecency)'  [pure]  @ 53-62
+  @case 'bumpFrecency: counter advances, score decays then +1, params re-sort'  [harness]  @ 66-86
+  @case 'params surface their section name; unreported sections are nil'  [harness]  @ 90-107
+
+# Uses (outbound edges)
+  @use call paramAutomation.frecencyOrder  @ 26,35,46,59
+  @use call paramAutomation.bumpFrecency  @ 77,78
+  @use call dataStore.get  @ 80
+  @use call paramAutomation.params  @ 85,103

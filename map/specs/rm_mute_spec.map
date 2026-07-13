@@ -1,0 +1,34 @@
+@spec rm_mute_spec  src=tests/specs/rm_mute_spec.lua  loc=136  sha=e2be081  cases=6
+@exercises harness (harness), routingManager (rm2)
+@surface   harness.mk, rm2:muted, rm2:tracks
+@harness   mk, reaper:setFxIO, reaper.CountTracks, reaper.InsertTrackAtIndex, reaper.GetTrack, reaper.GetSetMediaTrackInfo_String, reaper:setTrackFX, reaper.TrackFX_GetPinMappings
+
+# Intent
+  rm mute primitive: a muted fx has the live pins on its *silencing side* cleared
+  but keeps reporting the real pinout there, so readGraph never loses the wire.
+  A processor silences its INPUT (it then overwrites its outputs with silence); a
+  generator, which ignores input, silences its OUTPUT. Writes to the cleared side
+  divert to the stash; unmute restores it; state persists in fx-meta across reload.
+
+# Helpers
+  @fn mkRm()  @ 10-13
+  @fn seedFx(reaper, rm, io, pinMaps)  @ 15-25
+  @fn seedProcessor(reaper, rm)  @ 28-31
+      -- A stereo-in/stereo-out processor wired 1,2 -> fx -> 1,2.
+  @fn seedGenerator(reaper, rm)  @ 34-37
+      -- An instrument: no audio inputs, stereo out on 1,2.
+  @fn liveCleared(reaper, track, isoutput)  @ 39-45
+  @fn reported(rm)  @ 47
+
+# Cases
+  @case 'processor mute clears live INPUT pins yet reports the stashed inputs'  [pure]  @ 51-64
+  @case 'generator mute clears live OUTPUT pins yet reports the stashed outputs'  [pure]  @ 67-78
+  @case 'a write while muted diverts to the stash; the cleared side stays cleared'  [pure]  @ 81-92
+  @case 'unmute restores the live input pins from the stash'  [pure]  @ 95-105
+  @case 'unmute after a diverted write restores the latest (diverted) inputs'  [pure]  @ 108-118
+  @case 'mute persists: a fresh rm still reads muted and reports the wire'  [pure]  @ 121-134
+
+# Uses (outbound edges)
+  @use call harness.mk  @ 11
+  @use call routingManager.muted  @ 131
+  @use call routingManager.tracks  @ 132

@@ -1,0 +1,33 @@
+@spec gm_delay_propagate_spec  src=tests/specs/gm_delay_propagate_spec.lua  loc=98  sha=bb5e29b  cases=2
+@exercises midiManager (h.fm), trackerView (h.vm), groupManager (gm), trackerManager (h.tm)
+@surface   fm:dump, vm:eventsInRect, gm:markGroup, gm:newInstance, tm:flush, gm:assignEvent
+@harness   mk{seed.length, seed.resolution, seed.notes}
+
+# Intent
+  Groups × delay: a pure delay edit must not leak into the group's
+  logical onset. Real tm, real cm (identity swing), real gm wired into
+  the production flush pipeline; the edit drives gm:assignEvent (the
+  facade's member path), as tv's delay edit now does.
+  
+  The group frame is logical. A delay edit authors {delay=X} alone --
+  no ppq -- so updToGroup moves no group onset; delay travels as the
+  scalar and each instance re-realises it once at reproject. (Original
+  incident: when gm sniffed tm's REALISED update, the delay-baked raw
+  ppq leaked into the group onset and every sibling re-realised it
+  twice. Routing the authored update straight to gm removes that path.)
+
+# Helpers
+  @fn seededHarness()  @ 20-28
+  @fn notesByPpq(h)  @ 34-41
+
+# Cases
+  @case 'a delay edit shifts every copy by the delay, none off-grid'  [pure]  @ 45-66
+  @case 'a delay edit leaves the group onset logical (fresh instance lands on-grid)'  [pure]  @ 70-96
+
+# Uses (outbound edges)
+  @use call midiManager.dump  @ 36
+  @use call trackerView.eventsInRect  @ 49,51,74,76
+  @use call groupManager.markGroup  @ 51,76
+  @use call groupManager.newInstance  @ 52,77,86
+  @use call trackerManager.flush  @ 53,57,78,81,87
+  @use call groupManager.assignEvent  @ 56,80

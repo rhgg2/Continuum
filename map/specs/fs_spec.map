@@ -1,0 +1,31 @@
+@spec fs_spec  src=tests/specs/fs_spec.lua  loc=86  sha=fa4a61d  cases=8
+@exercises fs (fs)
+@surface   fs.isAudio, fs.basename, fs.parent, fs.join, fs.listDirs, fs.listAudioFiles
+@harness   mk
+
+# Intent
+  Pin-tests for fs.lua. The string helpers (isAudio/basename/parent/join)
+  are pure; the enumeration wrappers (listDirs/listAudioFiles) get their
+  input by stubbing reaper.Enumerate* on the fakeReaper, which the
+  harness installs as _G.reaper.
+
+# Helpers
+  @fn stubEnum(h, key, items)  @ 9-13
+
+# Cases
+  @case 'isAudio recognises common audio extensions case-insensitively'  [harness]  @ 17-26
+  @case 'isAudio rejects non-audio and missing extensions'  [harness]  @ 29-34
+  @case 'basename returns the last path component'  [harness]  @ 37-42
+  @case 'parent strips the last component, '' for top-level'  [harness]  @ 45-50
+  @case 'join inserts '/' unless the left already ends with a separator'  [harness]  @ 53-58
+  @case 'listDirs returns subdirectory names case-insensitively sorted'  [harness]  @ 61-66
+  @case 'listAudioFiles filters non-audio and sorts case-insensitively'  [harness]  @ 69-76
+  @case 'listAudioFiles empty when no audio present'  [harness]  @ 79-84
+
+# Uses (outbound edges)
+  @use call fs.isAudio  @ 19,20,21,22,23,24,25,31,32,33
+  @use call fs.basename  @ 39,40,41
+  @use call fs.parent  @ 47,48,49
+  @use call fs.join  @ 55,56,57
+  @use call fs.listDirs  @ 65
+  @use call fs.listAudioFiles  @ 74,83

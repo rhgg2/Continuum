@@ -1,0 +1,40 @@
+@spec wm_jsfx_bus_aware_spec  src=tests/specs/wm_jsfx_bus_aware_spec.lua  loc=228  sha=e2be081  cases=17
+@exercises wiringManager (wm)
+@surface   wm:load, wm:addFxNode, wm:graph
+@harness   mk, reaper:setFxIO, reaper.TrackFX_GetCount, reaper.GetTrack
+
+# Intent
+  3c.3a.0: ext_midi_bus JSFX refusal.
+  Pure parser tests + the wm:addFxNode boundary that gates them.
+
+# Helpers
+  @fn mkWm(harness)  @ 6-12
+  @fn seedJsfx(wm, byIdent)  @ 16-18
+      -- Test override of wm:readJSFXContent: maps ident → desc string. Production
+      -- reads from REAPER's Effects dir; tests bypass io.
+  @fn parser()  @ 20-23
+  @fn traitsParser()  @ 25-28
+
+# Cases
+  @case 'parser: ext_midi_bus = 1 matches'  [pure]  @ 33-36
+  @case 'parser: ext_midi_bus=1 (no spaces) matches'  [pure]  @ 39-42
+  @case 'parser: ext_midi_bus = 1; (trailing semicolon) matches'  [pure]  @ 45-48
+  @case 'parser: //ext_midi_bus = 1 (commented) does not match'  [pure]  @ 51-56
+  @case 'parser: ext_midi_bus = 0 does not match'  [pure]  @ 59-62
+  @case 'parser: ext_midi_bus = 10 does not match (frontier on the digit)'  [pure]  @ 65-68
+  @case 'parser: empty + nil content do not match'  [pure]  @ 71-75
+  @case 'parser: finds declaration buried in a multi-line desc'  [pure]  @ 78-89
+  @case 'parser: file with no ext_midi_bus declaration does not match'  [pure]  @ 92-102
+  @case 'addFxNode refuses an ext_midi_bus JSFX, no REAPER state touched'  [harness]  @ 107-120
+  @case 'addFxNode accepts a normal JSFX and stamps busAware=false'  [harness]  @ 123-131
+  @case 'addFxNode does not probe non-JSFX idents (no readJSFXContent call)'  [harness]  @ 134-144
+  @case 'addFxNode accepts JSFX whose desc file is missing (read returns nil)'  [harness]  @ 147-155
+  @case 'traits: midirecv/midisend detection, comments stripped, nil assumes both'  [pure]  @ 160-174
+  @case 'addFxNode stamps ports.midi from the scan'  [harness]  @ 177-190
+  @case 'addFxNode: audio-only generator wires to master, no auto source'  [harness]  @ 193-206
+  @case 'addFxNode: synth generator spawns source, wires midi-in + master-out'  [harness]  @ 209-226
+
+# Uses (outbound edges)
+  @use call wiringManager.load  @ 10
+  @use call wiringManager.addFxNode  @ 113,128,140,152,186,187,198,214
+  @use call wiringManager.graph  @ 119,130,143,188,189,200,217

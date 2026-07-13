@@ -1,0 +1,30 @@
+@spec pa_apply_spec  src=tests/specs/pa_apply_spec.lua  loc=120  sha=672fb18  cases=4
+@exercises paramAutomation (h.pa), ccManager (h.ccm)
+@surface   pa:automate, pa:apply, pa:unautomate, ccm:claim
+@harness   mk, r:setTrackFX, r:setFxGuid, r.TrackFX_GetNamedConfigParm, r.TrackFX_GetParam, r:clearCalls, r.GetSetMediaTrackInfo_String, r._state.projectTracks, r._state.trackGuids, r._state.projectItems, r._state.fxByTrack, r._state.sendsByTrack, r._state.calls
+
+# Intent
+  pa:apply realises bindings into fakeReaper: a Continuum CC node pinned
+  at the chain head of both ends, filter/listen banks, plink config on
+  the target fx, and a bus-126 midi-only send fanning out. The mirror
+  short-circuit makes a second apply touch nothing; unbinding tears the
+  whole image back down.
+
+# Helpers
+  @fn mkScenario(harness)  @ 15-26
+      -- Two live tracks: the bound take's own (src) and a target (dst) hosting
+      -- a synth. projectItems carries the bound take so pa's project-wide
+      -- binding/allocation scans see it.
+  @fn namedParm(r, track, fxIdx, parm)  @ 28-31
+
+# Cases
+  @case 'automate realises filter, listen, plink, and the bus send'  [harness]  @ 38-69
+  @case 'mirror-matching apply is a no-op'  [harness]  @ 73-82
+  @case 'unautomate tears down nodes, plinks, sends, and mirrors'  [harness]  @ 86-100
+  @case 'ccm: a co-resident claimant keeps the node alive when pa unbinds'  [harness]  @ 104-117
+
+# Uses (outbound edges)
+  @use call paramAutomation.automate  @ 41,76,89,107
+  @use call paramAutomation.apply  @ 78
+  @use call paramAutomation.unautomate  @ 90,112
+  @use call ccManager.claim  @ 111

@@ -1,0 +1,24 @@
+@spec tm_bind_skipguard_spec  src=tests/specs/tm_bind_skipguard_spec.lua  loc=56  sha=37a1053  cases=2
+@exercises trackerManager (h.tm), dataStore (h.ds)
+@surface   tm:bindTake, ds:get
+@harness   mk, reaper.GetMediaTrackInfo_Value, reaper:setProjectTracks, reaper:bindTake, reaper.GetTrackGUID
+
+# Intent
+  design/fx-patterns.md P3 step b: tm:bindTake gains opts.skipGuard so the mini
+  checkout stack can bind a take WITHOUT touching the project-scoped guardedTrack
+  record. Unconditional restoreGuarded/guardTrack would un-guard the host's
+  playing track and stamp the scratch track guarded. Pins both paths.
+
+# Helpers
+  @fn perfFlags(reaper, track)  @ 10-12
+  @fn withHostGuard(harness)  @ 16-24
+      -- Establish a host guard on take1's track, then add a second take (take2) on its
+      -- own track ready to bind. Returns the two track handles + the host guid.
+
+# Cases
+  @case 'skipGuard bind leaves the host guardedTrack record and both tracks untouched'  [harness]  @ 28-40
+  @case 'a normal bind still guards: host track un-guarded, checkout track stamped'  [harness]  @ 44-54
+
+# Uses (outbound edges)
+  @use call trackerManager.bindTake  @ 21,33,48
+  @use call dataStore.get  @ 35,50

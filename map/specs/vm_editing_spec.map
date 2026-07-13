@@ -1,0 +1,32 @@
+@spec vm_editing_spec  src=tests/specs/vm_editing_spec.lua  loc=537  sha=1747f65  cases=15
+@exercises trackerView (h.vm), editCursor (h.ec), commandManager (h.cmgr), midiManager (h.fm), trackerManager (h.tm)
+@surface   vm:setGridSize, ec:setPos, cmgr:invoke, fm:dump, tm:getChannel, vm:editEvent
+@harness   mk{seed.notes, seed.ccs}
+
+# Intent
+  Exercises vm editing commands against seeded tm state.
+
+# Cases
+  @case 'delete on delay stop zeroes delay metadata'  [harness]  @ 14-38
+  @case 'growNote past a same-pitch successor authors a tail past, tm clips realised'  [harness]  @ 47-67
+  @case 'noteOff at the rendered tail row reopens authored endppq to util.OPEN'  [harness]  @ 75-92
+  @case 'noteOff reopens a tail to util.OPEN under fractional ppqPerRow'  [harness]  @ 102-121
+  @case 'placing a new note clears same-pitch coverage in other cols of the channel'  [harness]  @ 131-171
+  @case 'placing a new note clamps its endppq to a same-pitch successor in another col'  [harness]  @ 179-215
+  @case 'delete on pitch tied predecessor extends to next note'  [harness]  @ 223-256
+  @case 'growNote past an open-tailed same-pitch predecessor does not throw'  [harness]  @ 265-289
+  @case 'delete on vel inherits from a prior PA event'  [harness]  @ 295-318
+  @case 'delete on pitch over a PA cell is a no-op'  [harness]  @ 324-347
+  @case 'selection pitch delete leaves PAs alone'  [harness]  @ 355-383
+  @case 'selection vel delete deletes PAs and resets note vels'  [harness]  @ 388-414
+  @case 'edit existing PA value reads vel and persists via val'  [harness]  @ 422-447
+  @case 'PA stamped under swing is reachable and deletable'  [harness]  @ 455-512
+  @case 'delete on delay stop is a no-op when delay is already 0'  [harness]  @ 516-535
+
+# Uses (outbound edges)
+  @use call trackerView.setGridSize  @ 28,53,81,110,150,201,243,277,308,336,369,401,434,472,527
+  @use call editCursor.setPos  @ 31,55,83,112,159,206,244,278,309,337,438,476,485,495,505,528
+  @use call commandManager.invoke  @ 32,56,84,113,245,279,310,338,374,405,496,506,529
+  @use call midiManager.dump  @ 34,162,210,247,282,313,340,376,407,442,499,508,531
+  @use call trackerManager.getChannel  @ 59,87,116
+  @use call trackerView.editEvent  @ 160,207,439,477,486

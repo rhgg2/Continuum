@@ -1,0 +1,36 @@
+@spec rm_fx_ports_spec  src=tests/specs/rm_fx_ports_spec.lua  loc=130  sha=e2be081  cases=8
+@exercises harness (harness), routingManager (rm)
+@surface   harness.mk, rm:track, rm:addFx, rm:fx, rm:assignFx, rm:params, rm:setSendGain, rm:tracks, rm:addTrack, rm:reaperTrack, rm:deleteTrack
+@harness   mk, reaper.CountTracks, reaper.InsertTrackAtIndex, reaper.GetTrack, reaper.GetSetMediaTrackInfo_String, reaper.GetTrackGUID, reaper:setFxIO, reaper:setFxParamNames, reaper:addSend, reaper:setMissingFx, reaper:wantDefaultsOf, reaper.GetMediaTrackInfo_Value
+
+# Intent
+  routingManager scratch + live-poke primitives: rm:fx, setSendGain, addTrack{hidden,defaults},
+  addFx ident guard. Backs wm's scratch path and live gain poke.
+
+# Helpers
+  @fn mkRm()  @ 7-11
+  @fn seedTrack(reaper, name)  @ 13-19
+  @fn sendGain(rm, id, to)  @ 21-23
+
+# Cases
+  @case 'fx() reports ports (pins/2), collapses L/R pin names, carries host trackId'  [pure]  @ 27-46
+  @case 'params() reads live param values keyed by display name; unset reads 0'  [pure]  @ 49-61
+  @case 'fx() on a gone id returns nil'  [pure]  @ 64-69
+  @case 'setSendGain sets the audio send D_VOL; false when no such send is live'  [pure]  @ 72-83
+  @case 'addFx returns nil for an unknown ident instead of forging a slot'  [pure]  @ 86-94
+  @case 'addTrack{defaults} inserts with REAPER track defaults; plain addTrack stays bare'  [pure]  @ 97-104
+  @case 'addTrack{hidden} hides the track from mixer and TCP'  [pure]  @ 107-118
+  @case 'reaperTrack returns the live MediaTrack handle for an id; nil once gone'  [pure]  @ 121-128
+
+# Uses (outbound edges)
+  @use call harness.mk  @ 8
+  @use call routingManager.track  @ 22
+  @use call routingManager.addFx  @ 36,55,92
+  @use call routingManager.fx  @ 38,67
+  @use call routingManager.assignFx  @ 57
+  @use call routingManager.params  @ 58,68
+  @use call routingManager.setSendGain  @ 80,82
+  @use call routingManager.tracks  @ 93
+  @use call routingManager.addTrack  @ 100,101,110,124
+  @use call routingManager.reaperTrack  @ 125,127
+  @use call routingManager.deleteTrack  @ 126

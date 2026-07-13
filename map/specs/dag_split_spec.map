@@ -1,0 +1,37 @@
+@spec dag_split_spec  src=tests/specs/dag_split_spec.lua  loc=270  sha=1694e27  cases=13
+@exercises DAG (DAG)
+@surface   DAG.compile, DAG.targetTracks, DAG.validate
+
+# Intent
+  (none)
+
+# Helpers
+  @fn source(id, guid)  @ 4-9
+  @fn fx(id, opts)  @ 11-20
+  @fn master(opts)  @ 22-27
+  @fn mk(nodes, edges)  @ 29-34
+  @fn twoSourceChain(splitB)  @ 38-50
+      -- s1 -> a -> b -> master, s2 -> master. Two sources, so master's class
+      -- differs from the {s1} chain: marking b evicts it cleanly.
+  @fn hasOutWire(entry, to, from)  @ 52-57
+  @fn inList(list, id)  @ 59-62
+
+# Cases
+  @case 'unmarked: chain stays one class'  [pure]  @ 66-71
+  @case 'split tag evicts the node into its own class'  [pure]  @ 74-80
+  @case 'split-tagged class never absorbs into its single audio parent'  [pure]  @ 83-89
+  @case 'targetTracks: cut edge is a send, cone is its own newTrack'  [pure]  @ 92-98
+  @case 'unmarked: a->b is intra-trackKey, no eviction'  [pure]  @ 101-110
+  @case 'sole contributor to master re-merges (no eviction)'  [pure]  @ 113-127
+  @case 'validate rejects split on a source node'  [pure]  @ 130-136
+  @case 'validate rejects split on the master node'  [pure]  @ 139-146
+  @case 'multi-class sidechain stays on master (two ports, two hosts)'  [pure]  @ 151-170
+  @case 'same-trackKey two ports: split at the post-dominator below the violator'  [pure]  @ 173-195
+  @case 'disjoint paths to master: marker lands on the master node'  [pure]  @ 198-221
+  @case 'dead-end violator off the cone lands on its own track'  [pure]  @ 224-246
+  @case 'off-cone parallel mixer is evicted (not a single-entry cone)'  [pure]  @ 249-268
+
+# Uses (outbound edges)
+  @use call DAG.compile  @ 68,76,87,94,103,120,162,184,210,235,258
+  @use call DAG.targetTracks  @ 94,103,126,194,267
+  @use call DAG.validate  @ 135,145

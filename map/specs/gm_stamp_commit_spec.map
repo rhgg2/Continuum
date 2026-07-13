@@ -1,0 +1,35 @@
+@spec gm_stamp_commit_spec  src=tests/specs/gm_stamp_commit_spec.lua  loc=89  sha=bb5e29b  cases=1
+@exercises trackerManager (h.tm), trackerView (h.vm), groupManager (gm)
+@surface   tm:getChannel, vm:selectionAsRect, vm:eventsInRect, gm:stamp, tm:flush, gm:assignEvent
+@harness   mk{seed.notes}
+
+# Intent
+  Repro: mirrorDuplicate (stamp) must COMMIT its projection before the
+  next user edit. The command flushes after gm:stamp (duplicateDown
+  commits the same way, via pasteClip's flush). Skipping that flush left
+  the sibling add staged in tm until the next edit's flush, where it
+  collided with the origin edit's reproject: the sibling materialised
+  with the OLD value and its proj record went stale, so further edits
+  had no effect ("empty boxes -> fills with A -> no effect").
+  
+  This pins the gm + real-tm seam the command drives. It cannot invoke
+  trackerPage's command closure (trackerPage builds its own tm, not the
+  harness's), so it models the fixed command's sequence:
+    stamp -> tm:flush (commit) -> edit -> tm:flush -> edit -> tm:flush
+  and asserts the sibling tracks every origin edit in place.
+
+# Helpers
+  @fn noteCol(h, chan)  @ 18-22
+  @fn chanNotes(h, chan)  @ 24-32
+  @fn originEvt(h, chan)  @ 34-38
+
+# Cases
+  @case 'a committed stamp tracks repeated origin edits in place (no stale dupe)'  [harness]  @ 42-87
+
+# Uses (outbound edges)
+  @use call trackerManager.getChannel  @ 26
+  @use call trackerView.selectionAsRect  @ 54
+  @use call trackerView.eventsInRect  @ 55
+  @use call groupManager.stamp  @ 60
+  @use call trackerManager.flush  @ 61,71,81
+  @use call groupManager.assignEvent  @ 70,80

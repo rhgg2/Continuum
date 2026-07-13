@@ -1,0 +1,22 @@
+@spec tm_cc_gating_spec  src=tests/specs/tm_cc_gating_spec.lua  loc=42  sha=d03715b  cases=1
+@exercises midiManager (h.fm), dataStore (h.ds), trackerManager (h.tm)
+@surface   fm:dump, ds:assign, tm:fromLogical
+@harness   mk{seed.ccs}
+
+# Intent
+  Phase A of the dirt spine (design/dirty-channels.md § Scheme): the CC walk's timing
+  reconcile is gated per dirty channel. A clean channel is converged (raw agrees with its
+  logical projection), so skipping it stages nothing -- but a swing change must still reseat
+  the channels it resolves to. That dirt is config, not carried by the mm reload payload, so
+  markSwingStale must feed the spine or the gate wrongly skips the reseat. This pins that.
+
+# Helpers
+  @fn ccRaw(h)  @ 12-14
+
+# Cases
+  @case 'swing change reseats a CC through the dirtyChans gate'  [harness]  @ 18-40
+
+# Uses (outbound edges)
+  @use call midiManager.dump  @ 13
+  @use call dataStore.assign  @ 35
+  @use call trackerManager.fromLogical  @ 38

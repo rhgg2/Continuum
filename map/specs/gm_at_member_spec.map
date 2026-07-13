@@ -1,0 +1,24 @@
+@spec gm_at_member_spec  src=tests/specs/gm_at_member_spec.lua  loc=56  sha=1e11bba  cases=2
+@exercises groupManager (gm), midiManager (h.fm), trackerManager (h.tm)
+@surface   gm:markGroup, gm:newInstance, fm:dump, tm:byUuid
+@harness   mk{seed.evType, seed.chan, seed.ppq, seed.shape, seed.val, seed.ccs}
+
+# Intent
+  F1: channel aftertouch (`at`) as a first-class gm member. Unlike pb, at has
+  no detune realisation frame -- its `val` IS the intent -- so it rides the
+  fully generic seams (no special makeEntry/toGroup arm) with stream identity
+  `at:0`. These pins would fire if someone grew an at-specific branch that
+  dropped its val or uuid. See design/fx-freeze.md § F1.
+
+# Helpers
+  @fn rect()  @ 10-11
+
+# Cases
+  @case 'at member: toGroup carries val verbatim (no cents rewrite)'  [pure]  @ 15-30
+  @case 'at member: uuid survives the rebuild so gm can re-anchor it (tm:byUuid)'  [harness]  @ 34-54
+
+# Uses (outbound edges)
+  @use call groupManager.markGroup  @ 22
+  @use call groupManager.newInstance  @ 24
+  @use call midiManager.dump  @ 45
+  @use call trackerManager.byUuid  @ 50

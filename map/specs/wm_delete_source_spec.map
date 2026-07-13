@@ -1,0 +1,33 @@
+@spec wm_delete_source_spec  src=tests/specs/wm_delete_source_spec.lua  loc=119  sha=e2be081  cases=5
+@exercises wiringManager (wm)
+@surface   wm:load, wm:addFxNode, wm:mutate, wm:deleteSource, wm:graph, wm:isScratchTrack
+@harness   mk, reaper:setFxIO, reaper.CountTracks, reaper.GetTrack, reaper.GetTrackGUID, r._state.projectTracks, r._state.trackGuids, r._state.itemsByTrack
+
+# Intent
+  Source-track deletion is explicit and guarded: reconcile treats sourceTracks as
+  undeletable (drains FX, never deletes), so wm:deleteSource must remove the node +
+  incident edges AND delete the REAPER track itself — refusing when the track holds
+  takes unless forced.
+
+# Helpers
+  @fn mkWm(harness)  @ 8-14
+  @fn seedSource(h, guid)  @ 16-21
+  @fn seedGraph(wm, guid)  @ 25-34
+      -- Source 'src' (track guid) --midi--> fx 'n1', built by hand so validate sees a
+      -- well-formed graph. JS:plain has ins=2, so addFxNode spawns no auto-source.
+  @fn trackPresent(h, track)  @ 36-41
+
+# Cases
+  @case 'deleteSource drops the node, its incident edges, and the REAPER track'  [harness]  @ 45-58
+  @case 'deleteSource refuses a track holding takes, returning the count; nothing changes'  [harness]  @ 61-73
+  @case 'deleteSource(force) deletes a take-bearing track anyway'  [harness]  @ 76-87
+  @case 'addSourceNode mints a standalone source node backed by a real source track'  [harness]  @ 90-104
+  @case 'addFxNode with autoSource=false skips the auto source for a 0-in generator'  [harness]  @ 107-117
+
+# Uses (outbound edges)
+  @use call wiringManager.load  @ 12
+  @use call wiringManager.addFxNode  @ 27,111
+  @use call wiringManager.mutate  @ 28
+  @use call wiringManager.deleteSource  @ 51,68,83
+  @use call wiringManager.graph  @ 53,54,71,85,94,113
+  @use call wiringManager.isScratchTrack  @ 103

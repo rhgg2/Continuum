@@ -1,0 +1,42 @@
+@spec dag_allocate_spec  src=tests/specs/dag_allocate_spec.lua  loc=639  sha=654679f  cases=31
+@exercises DAG (DAG)
+@surface   DAG.allocate
+
+# Intent
+  (none)
+
+# Cases
+  @case 'allocate: empty tracks returns empty'  [pure]  @ 9-12
+  @case 'allocate: empty trackKey yields no sends, empty pinMaps, nchan=2, intra/out fields stripped'  [pure]  @ 15-29
+  @case 'allocate: passes through trackKind / trackId / fxOrder / mainSend / mainSendGain'  [pure]  @ 32-47
+  @case 'allocate: source-from intra seeds fx input pin on pair 1'  [pure]  @ 50-63
+  @case 'allocate: serial chain fx1->fx2 collapses to pair 1 (in-place reuse)'  [pure]  @ 66-86
+  @case 'allocate: serial chain s->fx1->fx2->fx3 collapses to one pair, nchan=2'  [pure]  @ 89-109
+  @case 'allocate: branching producer shares one output pair across both branches'  [pure]  @ 112-133
+  @case 'allocate: directed square A->B, A->C, B->D, C->D fits in 2 pairs (nchan=4)'  [pure]  @ 136-163
+  @case 'allocate: multi-port intra-conns each claim their own pair'  [pure]  @ 166-185
+  @case 'allocate: source-out outWire anchors srcChan to 0; receiver assigns dstChan'  [pure]  @ 188-207
+  @case 'allocate: fx-out outWire reuses fx input pair in-place (srcChan=0)'  [pure]  @ 210-228
+  @case 'allocate: incoming sends to same receiver get distinct dstChans'  [pure]  @ 231-255
+  @case 'allocate: incoming sends to the same input pin coalesce onto one dest pair'  [pure]  @ 258-281
+  @case 'allocate: midi conns keep srcChan/dstChan = 0, no audio pin map'  [pure]  @ 284-304
+  @case 'allocate: gain on outWire flows through to its send'  [pure]  @ 307-322
+  @case 'allocate: sends sorted by (to, type, srcChan, dstChan)'  [pure]  @ 325-349
+  @case 'allocate: does not mutate input tracks'  [pure]  @ 352-368
+  @case 'allocate: master-to intra (master-hosted trackKey) anchors fx output to pair 1'  [pure]  @ 371-384
+  @case 'allocate: master-to producer with downstream chain holds pair 1 to end'  [pure]  @ 389-409
+  @case 'mainSendOffs: mainSend=true with no parentFeed defaults to 0'  [pure]  @ 412-423
+  @case 'mainSendOffs: parentFeed from source (not in fxSet) stays at 0, no pin'  [pure]  @ 426-438
+  @case 'mainSendOffs: parentFeed reuses fx input pair in-place (offs=0)'  [pure]  @ 441-456
+  @case 'mainSendOffs: chain ending in parentFeed collapses to one pair'  [pure]  @ 459-477
+  @case 'mainSendOffs: parentFeed shares its pair with the outgoing send (split-share)'  [pure]  @ 480-499
+  @case 'split-share: fx output feeding an intra consumer and a send shares one pair'  [pure]  @ 502-523
+  @case 'mainSendOffs: absent on master-hosted trackKey (mainSend=false)'  [pure]  @ 526-538
+  @case 'mainSendOffs: absent on hosts with mainSend=false'  [pure]  @ 541-551
+  @case 'preFx: source-out send taps raw input, coexists with fx master feed'  [pure]  @ 554-571
+  @case 'preFx: fx-origin send stays post-fx (no preFx flag)'  [pure]  @ 574-588
+  @case 'mainSendOffs: master-hosted fx, parent-send OFFS = receiver dest pair (sidechain)'  [pure]  @ 591-616
+  @case 'allocate: same input -> same output (determinism)'  [pure]  @ 619-637
+
+# Uses (outbound edges)
+  @use call DAG.allocate  @ 11,23,41,60,79,103,126,152,180,201,224,249,276,298,320,343,363,381,403,408,420,435,451,473,492,517,536,549,566,586,611,636

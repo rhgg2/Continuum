@@ -1,0 +1,60 @@
+@spec view_context_spec  src=tests/specs/view_context_spec.lua  loc=517  sha=fdb66b0  cases=32
+@exercises tuning (tuning), trackerView (h.vm), configManager (h.cm)
+@surface   tuning.stepToMidi, vm:activeTemper, cm:set, vm:setTemper
+@harness   mk{seed.ccs}
+
+# Intent
+  Pins the projection contract of newViewContext directly, without
+  going through vm. The context is built by hand from synthetic args so
+  failures localise to newViewContext rather than to vm:rebuild's wiring.
+  vm-integration tests live in vm_grid_spec.
+
+# Helpers
+  @fn logicalGrid()  @ 13-17
+      -- Uniform logical grid for 240 ppq/QN, 4 rows/beat, length 3840 ppq.
+  @fn mkCtx(overrides)  @ 19-31
+  @fn mkCtxRpb(rpb, ppqPerQN)  @ 37-48
+      -- Non-divisor rpb: ppqPerRow is fractional, so row · ppqPerRow lands
+      -- between integers for most rows. Pins that rowToPPQ / ppqToRow are
+      -- now both float — the old F4 asymmetry (rowToPPQ rounded at the
+      -- realisation boundary) is gone; "on the grid" is owned by isOnGrid.
+
+# Cases
+  @case 'identity swing: ppqToRow / rowToPPQ round-trip on grid-aligned rows'  [pure]  @ 54-61
+  @case 'identity swing: ppqToRow and rowToPPQ are exact inverses, both returning float'  [pure]  @ 65-73
+  @case 'snapRow snaps fractional ppq to the nearest row'  [pure]  @ 77-86
+  @case 'ppq above length saturates at numRows; ppq below 0 saturates at 0'  [pure]  @ 90-97
+  @case 'snapRow(rowToPPQ(r,c),c) == r under non-divisor rpb'  [pure]  @ 107-116
+  @case 'on-grid p round-trips exactly under non-divisor rpb'  [pure]  @ 120-130
+  @case 'ppqToRow ∘ rowToPPQ is the identity (float) under non-divisor rpb'  [pure]  @ 134-147
+  @case 'isOnGrid: exact row ppqs are on-grid'  [pure]  @ 153-160
+  @case 'isOnGrid: tolerates float drift up to (but not including) 0.5 ppq'  [pure]  @ 164-175
+  @case 'isOnGrid: rebuild-inverted ppqs land on-grid under non-divisor rpb'  [pure]  @ 179-190
+  @case 'ppqPerRow exposes the rebuild frame logical ppq width'  [pure]  @ 196-199
+  @case 'activeTemper is nil when no temperament is bound'  [pure]  @ 205-208
+  @case 'activeTemper returns the bound temperament object'  [pure]  @ 212-216
+  @case 'noteProjection returns nil when no temperament is bound'  [pure]  @ 220-223
+  @case 'noteProjection under 12EDO: pitch 60 maps to C-4 with zero gap'  [pure]  @ 227-234
+  @case 'noteProjection signed gap: positive detune yields positive gap (sharp)'  [pure]  @ 238-245
+  @case 'noteProjection: sub-epsilon detune offset reads on-temper (gap clamped)'  [pure]  @ 249-260
+  @case 'noteProjection halfGap is half the cents-distance to the nearest neighbour'  [pure]  @ 264-276
+  @case 'rowBeatInfo at row 0 under 4/4 reports (bar, beat) = (true, true)'  [pure]  @ 282-287
+  @case 'rowBeatInfo at beat boundary: only beat flag set'  [pure]  @ 291-297
+  @case 'rowBeatInfo at bar boundary: both flags set'  [pure]  @ 301-306
+  @case 'rowBeatInfo at non-boundary row: both flags clear'  [pure]  @ 310-315
+  @case 'rowBeatInfo respects mid-take time-sig change'  [pure]  @ 319-334
+  @case 'barBeatSub at row 0 returns (1, 1, 1, ts)'  [pure]  @ 338-343
+  @case 'barBeatSub mid-bar: (bar, beat, sub) walks the row index'  [pure]  @ 347-352
+  @case 'barBeatSub crosses a time-sig change and resumes counting'  [pure]  @ 356-373
+  @case 'ghosts: linear pair populates interior rows with proportional vals'  [harness]  @ 389-409
+  @case 'ghosts: entries carry fromEvt and toEvt references'  [harness]  @ 413-432
+  @case 'ghosts: step shape produces no ghosts'  [harness]  @ 436-451
+  @case 'ghosts: single event yields no ghosts'  [harness]  @ 455-469
+  @case 'ghosts: non-linear shape routes through tm:interpolate'  [harness]  @ 473-490
+  @case 'temper resolves via cfg.tempers, falls back to built-in presets, returns nil for unknown names'  [harness]  @ 494-515
+
+# Uses (outbound edges)
+  @use call tuning.stepToMidi  @ 254
+  @use call trackerView.activeTemper  @ 500,505,510,514
+  @use call configManager.set  @ 504,509,513
+  @use call trackerView.setTemper  @ 512

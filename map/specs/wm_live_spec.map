@@ -1,0 +1,38 @@
+@spec wm_live_spec  src=tests/specs/wm_live_spec.lua  loc=172  sha=f1b7084  cases=6
+@exercises wiringManager (wm)
+@surface   wm:load, wm:instantiateFxOnScratch, wm:enableLive, wm:mutate, wm:graph, wm:diff, wm:targetState, wm:snapshot, wm:moveNodes
+@harness   mk, reaper.TrackFX_GetCount, reaper.TrackFX_Delete, r._state.projectTracks, r._state.trackGuids
+
+# Intent
+  (none)
+
+# Helpers
+  @fn mkWm(harness)  @ 4-10
+  @fn seedSource(h, guid)  @ 12-17
+  @fn source(guid)  @ 19-22
+  @fn mintFx(wm, ident, opts)  @ 26-31
+      -- Mint an fx on scratch (as wm:addFxNode does in production) so the node enters the
+      -- graph carrying a live guid; reconcile then MOVES it onto its track.
+  @fn audioEdge(from, to)  @ 33-35
+  @fn audioOnlyJSFX()  @ 39
+      -- Scan the test JSFX as audio-only. A MIDI-capable scan brackets the chain with a bus-route
+      -- CU when the graph is re-read from REAPER, which the authored-node stacks above never see.
+
+# Cases
+  @case 'enableLive: mutate auto-applies — no explicit applyOps call'  [harness]  @ 43-58
+  @case 'enableLive: a pos-only moveNodes skips reconcile'  [harness]  @ 61-77
+  @case 'enableLive: initial reconcile syncs REAPER to already-persisted graph'  [harness]  @ 80-93
+  @case 'enableLive: idempotent — second call does not double-subscribe'  [harness]  @ 96-115
+  @case 'wm:load re-reads REAPER; a behind-the-back FX delete drops from the graph'  [harness]  @ 118-140
+  @case 'enableLive: a settled project reconciles to zero ops and opens no undo block'  [harness]  @ 143-170
+
+# Uses (outbound edges)
+  @use call wiringManager.load  @ 8,135,165
+  @use call wiringManager.instantiateFxOnScratch  @ 28
+  @use call wiringManager.enableLive  @ 47,65,91,103,104,122,148,166
+  @use call wiringManager.mutate  @ 48,66,84,105,123,149
+  @use call wiringManager.graph  @ 55,76,129,138
+  @use call wiringManager.diff  @ 56,168
+  @use call wiringManager.targetState  @ 56,168
+  @use call wiringManager.snapshot  @ 56,168
+  @use call wiringManager.moveNodes  @ 74

@@ -1,0 +1,33 @@
+@spec wm_diff_midi_bus_spec  src=tests/specs/wm_diff_midi_bus_spec.lua  loc=148  sha=e2be081  cases=4
+@exercises wiringManager (wm)
+@surface   wm:load, wm:instantiateFxOnScratch, wm:applyOps, wm:diff, wm:targetState, wm:snapshot, wm:mutate
+@harness   mk, reaper:setFxParamNames, reaper.GetTrackSendInfo_Value, r._state.projectTracks, r._state.trackGuids
+
+# Intent
+  (none)
+
+# Helpers
+  @fn mkWm(harness)  @ 14-21
+  @fn seedSource(h, guid)  @ 23-28
+  @fn source(guid)  @ 30-33
+  @fn mintFx(wm, ident, opts)  @ 37-42
+      -- Mint an fx on scratch (as wm:addFxNode does in production) so the node enters the
+      -- graph carrying a live guid; reconcile then MOVES it onto its track.
+  @fn midiEdge(from, to)  @ 44-46
+  @fn apply(wm)  @ 48-50
+  @fn decodeBus(field, shift)  @ 52-54
+
+# Cases
+  @case 'midi bus: srcChan=0/dstChan=0 leaves I_MIDIFLAGS at 0 (REAPER default)'  [harness]  @ 58-70
+  @case 'midi bus: two sources into one fx share one receiver bus (coalesced)'  [harness]  @ 73-93
+  @case 'midi bus: snapshot decodes I_MIDIFLAGS bus bits back into srcChan/dstChan'  [harness]  @ 96-122
+  @case 'midi bus: idempotent — encode-decode roundtrip leaves diff empty on re-apply'  [harness]  @ 125-146
+
+# Uses (outbound edges)
+  @use call wiringManager.load  @ 19
+  @use call wiringManager.instantiateFxOnScratch  @ 39
+  @use call wiringManager.applyOps  @ 49
+  @use call wiringManager.diff  @ 49,141
+  @use call wiringManager.targetState  @ 49,141
+  @use call wiringManager.snapshot  @ 49,109,141
+  @use call wiringManager.mutate  @ 62,78,101,130

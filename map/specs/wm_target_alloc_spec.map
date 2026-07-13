@@ -1,0 +1,30 @@
+@spec wm_target_alloc_spec  src=tests/specs/wm_target_alloc_spec.lua  loc=139  sha=e2be081  cases=3
+@exercises wiringManager (wm)
+@surface   wm:load, wm:mutate, wm:targetState
+@harness   mk, r._state.projectTracks, r._state.trackGuids
+
+# Intent
+  3c.2 — wm:targetState carries the allocator outputs (pinMaps, nchan,
+  mainSendOffs) through projectEntry. The diff/snapshot/apply layers all
+  consume these fields; if they aren't on target entries, every layer
+  downstream silently no-ops on identity.
+
+# Helpers
+  @fn mkWm(harness)  @ 9-15
+  @fn seedSource(h, guid)  @ 17-22
+  @fn source(guid)  @ 24-27
+  @fn fx(ident, opts)  @ 29-34
+  @fn audioEdge(from, to)  @ 36-38
+  @fn pinmapByNode(entry, id)  @ 41-45
+      -- pinMaps nest on fx entries; node entries carry their fxId (no origin), so find by id.
+  @fn pinmapByMerge(entry, consumer, trackKey)  @ 46-51
+
+# Cases
+  @case 'targetState: pinMaps + nchan carried for intra fan-out'  [harness]  @ 57-86
+  @case 'targetState: in-class master producer with downstream chain holds pair 1'  [harness]  @ 91-115
+  @case 'targetState: linear source -> fx -> master keeps explicit pair-1 routes'  [harness]  @ 120-137
+
+# Uses (outbound edges)
+  @use call wiringManager.load  @ 13
+  @use call wiringManager.mutate  @ 61,96,124
+  @use call wiringManager.targetState  @ 72,108,130

@@ -1,0 +1,46 @@
+@spec tm_gate_parity_spec  src=tests/specs/tm_gate_parity_spec.lua  loc=159  sha=0efbe16  cases=1
+@exercises trackerManager (h.tm), midiManager (h.fm), dataStore (h.ds)
+@surface   tm:getChannel, fm:dump, tm:rebuild, tm:addEvent, tm:flush, ds:assign, tm:fromLogical, tm:assignEvent
+@harness   mk
+
+# Intent
+  Gated-vs-full parity: the shadow harness design/dirty-channels.md § Validation names as the
+  prerequisite for phase B. Exploits I8 (a no-edit rebuild is a fixpoint): after an edit, a gated
+  rebuild -- which re-READS untouched channels' persisted derivation -- must project byte-identically
+  to a forced all-16 rebuild that re-DERIVES every channel from mm. Divergence means a gate froze a
+  channel whose persisted state was not a true fixpoint. Volatile identity (token/loc) is stripped;
+  everything the view renders is compared. This pins phase A now and guards phase B's retention next.
+
+# Helpers
+  @fn note(chan, ppq, pitch, extra)  @ 15-20
+  @fn projEvt(e)  @ 26-30
+  @fn projCol(col)  @ 34-40
+      -- Canonical, order-independent column projection: strip volatile fields, sort by repr so a
+      -- same-ppq tie (Lua's table.sort is unstable) can't spuriously diverge the two frames.
+  @fn projectFrame(tm)  @ 42-56
+  @fn projGrid(vm)  @ 60-77
+      -- The rendered grid: each column's built cells/tails/ghosts. B2 carries a clean channel's built cells
+      -- across an edit rebuild; this pins that carry against a forced full re-derive, as the frame is above.
+  @fn stripRec(e)  @ 83-87
+      -- The wire-side derived state (carriers, absorber pbs, derived fx notes) is routed out of columns or
+      -- hidden, so the projected frame never sees it. mm content is its shadow: a converged take that a full
+      -- re-derive leaves byte-identical proves those hidden derivations were a fixpoint too. token/loc churn
+      -- each rebuild; uuid is durable, so a content bag keyed on the rest is the stable comparison.
+  @fn mmBag(h)  @ 89-94
+  @fn assertParity(h, msg)  @ 99-107
+      -- Snapshot the gated frame + mm content, then force a full all-16 re-derive. rebuild(true) marks every
+      -- channel dirty (the didReload/takeChanged seam) without a take swap, so it re-derives from mm rather
+      -- than re-reading. Both the projected frame and the mm content must be the fixpoint the gate assumed.
+
+# Cases
+  @case 'gated rebuild projects identically to a forced full rebuild across a rich frame'  [harness]  @ 111-157
+
+# Uses (outbound edges)
+  @use call trackerManager.getChannel  @ 45,150
+  @use call midiManager.dump  @ 90,135
+  @use call trackerManager.rebuild  @ 103,130
+  @use call trackerManager.addEvent  @ 123,124,125,126,146,155
+  @use call trackerManager.flush  @ 123,124,125,126,146,151,155
+  @use call dataStore.assign  @ 127
+  @use call trackerManager.fromLogical  @ 143
+  @use call trackerManager.assignEvent  @ 151

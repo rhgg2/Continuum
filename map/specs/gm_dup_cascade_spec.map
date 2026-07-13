@@ -1,0 +1,40 @@
+@spec gm_dup_cascade_spec  src=tests/specs/gm_dup_cascade_spec.lua  loc=111  sha=f8aa484  cases=3
+@exercises commandManager (cmgr), groupManager (gm)
+@surface   cmgr:scope, gm:duplicateInto, cmgr:doBefore, cmgr:push, cmgr:invoke
+
+# Intent
+  mirrorDuplicate cascade lifetime (trackerPage wiring contract).
+  
+  A run of mirrorDuplicate presses links every copy into ONE group so
+  they mirror-track. The run is page UX state (mirrorDupGroupId), held
+  by a doBefore keep-set: pure cursor moves keep it; any new selection
+  or mutation drops it, so the next mirrorDuplicate seeds a fresh
+  group instead of silently extending the old one wherever the cursor
+  drifted.
+  
+  The earlier bug: the cascade rode gm's shared active pointer,
+  whose keep-set is the broad MIRROR_KEEP, so it never stopped "as
+  long as there's a selection". gm:duplicateInto takes the explicit
+  token only and never falls back to active. Real gm + real cmgr;
+  fake tm as in mirm_wiring_spec.
+
+# Helpers
+  @fn fakeCm()  @ 19-24
+  @fn note()  @ 26-27
+  @fn rect()  @ 28-29
+  @fn wire(gm, cmgr)  @ 33-62
+      -- Reproduces trackerPage's mirrorDuplicate body + DUP_KEEP sweep
+      -- against a real cmgr scope. groupOf() exposes the page token.
+  @fn mk()  @ 64-71
+
+# Cases
+  @case 'a cursor move keeps the cascade: the next duplicate joins the same group'  [pure]  @ 75-84
+  @case 'a new selection ends the cascade: the next duplicate seeds a fresh group'  [pure]  @ 87-97
+  @case 'a mutation ends the cascade: the next duplicate seeds a fresh group'  [pure]  @ 100-109
+
+# Uses (outbound edges)
+  @use call commandManager.scope  @ 45
+  @use call groupManager.duplicateInto  @ 51
+  @use call commandManager.doBefore  @ 59
+  @use call commandManager.push  @ 60
+  @use call commandManager.invoke  @ 78,81,82,90,92,94,103,105,107

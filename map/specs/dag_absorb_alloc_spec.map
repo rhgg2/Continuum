@@ -1,0 +1,26 @@
+@spec dag_absorb_alloc_spec  src=tests/specs/dag_absorb_alloc_spec.lua  loc=168  sha=37a60a3  cases=5
+@exercises DAG (DAG)
+@surface   DAG.compile, DAG.allocate, DAG.targetTracks
+
+# Intent
+  (none)
+
+# Helpers
+  @fn source(id, guid)  @ 12-17
+  @fn fx(id, opts)  @ 19-26
+  @fn master(opts)  @ 28-33
+  @fn mk(nodes, edges)  @ 35-38
+  @fn allocOf(g)  @ 41-45
+      -- The whole compile pipeline a live recompile runs: tracks + channel alloc.
+
+# Cases
+  @case 'two audio parents + primary: send lands on the absorbed FX second pin'  [pure]  @ 49-71
+  @case 'three audio parents + primary: two sends claim distinct dest pairs'  [pure]  @ 74-90
+  @case 'absorbed node feeds master: parentFeed on trackKey, non-primary parent sends in'  [pure]  @ 93-121
+  @case 'gain on a non-primary parent folds onto the send (D_VOL), no trackKey CU'  [pure]  @ 124-136
+  @case 'two-hop primary chain: both FX collapse to the terminal trackKey, sends retarget'  [pure]  @ 139-166
+
+# Uses (outbound edges)
+  @use call DAG.compile  @ 43
+  @use call DAG.allocate  @ 44
+  @use call DAG.targetTracks  @ 44

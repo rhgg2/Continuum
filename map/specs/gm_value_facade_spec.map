@@ -1,0 +1,32 @@
+@spec gm_value_facade_spec  src=tests/specs/gm_value_facade_spec.lua  loc=64  sha=bb5e29b  cases=2
+@exercises midiManager (h.fm), trackerView (h.vm), groupManager (h.gm), trackerManager (h.tm), commandManager (h.cmgr)
+@surface   fm:notes, vm:selectionAsRect, gm:markGroup, vm:eventsInRect, gm:newInstance, tm:flush, cmgr:invoke, gm:setLocalMode
+@harness   mk{seed.notes}
+
+# Intent
+  Stage 3: a value edit on a group member rides the leaf-edit facade
+  (cellEdit.assign -> gm:assignEvent) and propagates to every instance; in
+  localMode it stays a per-instance override. Full-stack: real tm/mm/gm/tv,
+  driven by the real nudge command on a selected member cell, as the user would.
+
+# Helpers
+  @fn noteCol(h, chan)  @ 8-12
+  @fn pitchByPpq(h)  @ 14-20
+  @fn setup(harness)  @ 25-37
+      -- One seeded note, marked as a group, plus a sibling instance at ppq 960.
+      -- The selection is left on the origin member cell (part pitch) so the nudge
+      -- command transposes it through the facade.
+
+# Cases
+  @case 'a pitch nudge on a synced member propagates to every instance (facade -> gm)'  [harness]  @ 41-49
+  @case 'in localMode the nudge stays a per-instance override (sibling untouched)'  [harness]  @ 52-62
+
+# Uses (outbound edges)
+  @use call midiManager.notes  @ 16
+  @use call trackerView.selectionAsRect  @ 32
+  @use call groupManager.markGroup  @ 33
+  @use call trackerView.eventsInRect  @ 33
+  @use call groupManager.newInstance  @ 34
+  @use call trackerManager.flush  @ 35
+  @use call commandManager.invoke  @ 44,56
+  @use call groupManager.setLocalMode  @ 55,57

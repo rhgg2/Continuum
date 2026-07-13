@@ -1,0 +1,26 @@
+@spec gm_two_channel_spec  src=tests/specs/gm_two_channel_spec.lua  loc=60  sha=f8aa484  cases=1
+@exercises groupManager (gm), trackerManager (h.tm)
+@surface   gm:duplicateInto, tm:flush
+
+# Intent
+  A group two channels wide, note lane 1 in each, notes at the same onset.
+  The group-frame slot/lane identity must include the channel offset:
+  streamId alone is evType:key (lane), so two channels at the same lane and
+  onset collapse to one slot. mirror.project's slot-dedup then conflicts the
+  higher-vuid (rightmost) note out of `desired`, so it never projects into a
+  copy and never propagates -- only the leftmost channel mirrors.
+  
+  Same faithful-fake seam as mirm_propagate_spec.
+
+# Helpers
+  @fn mk()  @ 13-17
+  @fn note(chan, ppq, endppq, pitch)  @ 20-24
+  @fn rect2ch()  @ 26-30
+  @fn copyNotesByChan(staged)  @ 32-40
+
+# Cases
+  @case 'a two-channel group projects both channels into a duplicate copy'  [pure]  @ 44-58
+
+# Uses (outbound edges)
+  @use call groupManager.duplicateInto  @ 52
+  @use call trackerManager.flush  @ 53

@@ -1,0 +1,32 @@
+@spec mm_note_cascade_sidecar_spec  src=tests/specs/mm_note_cascade_sidecar_spec.lua  loc=80  sha=4ae9c74  cases=1
+@exercises midiManager (h.mm)
+@surface   mm:modify, mm:events, mm:delete
+@harness   fakeReaper:bindTake
+
+# Intent
+  A note delete and a pb-sidecar delete in ONE mm:modify must not
+  collateral-damage a surviving note's notation sidecar.
+  
+  Notation (text type 15) and pb/cc (text type -1) sidecars share one
+  MIDI_*TextSysexEvt index space. MIDI_DeleteNote cascade-removes the
+  deleted note's notation event, shifting that shared stream. The old
+  code deleted the pb's sidecar by a uuidIdx cached before the cascade
+  shifted it — landing on the *survivor's* notation event. The survivor
+  was then orphaned and, on the load that closes the modify, minted a
+  fresh uuid with empty metadata: its detune silently became 0.
+  
+  Reproduces the user's 19EDO stacked-group repro: D then E in the first
+  copy; deleting the predecessor (D) zeroed the survivor (E)'s detune
+  while pb/sound stayed correct (detune 0 = no pb). Order-dependent —
+  deleting the predecessor hoses the survivor; the reverse is clean.
+
+# Helpers
+  @fn freshTake()  @ 20-26
+
+# Cases
+  @case 'mixed note-cascade + pb-sidecar multi-delete keeps every survivor detune'  [pure]  @ 30-78
+
+# Uses (outbound edges)
+  @use call midiManager.modify  @ 40,61
+  @use call midiManager.events  @ 50,69
+  @use call midiManager.delete  @ 62,63,64,65

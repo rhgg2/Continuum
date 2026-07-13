@@ -1,0 +1,38 @@
+@spec harness_sanity_spec  src=tests/specs/harness_sanity_spec.lua  loc=192  sha=999f37e  cases=10
+@exercises trackerManager (h.tm), midiManager (h.fm), configManager (h.cm), trackerView (h.vm), editCursor (h.ec)
+@surface   tm:getChannel, fm:modify, fm:dump, fm:byToken, fm:notes, cm:set, cm:get, fm:resolution, tm:resolution, fm:length, tm:length, tm:play, vm:setGridSize, ec:selectChannel, ec:col
+@harness   mk{seed.notes, seed.resolution, seed.length}, reaper:clearCalls, r._state.takeExt, r._state.calls
+
+# Intent
+  Meta-tests that validate the harness itself. Each case targets a
+  specific wire; disabling or weakening that wire in the fakes should
+  cause the matching case to fail loudly rather than pass silently.
+
+# Cases
+  @case 'writing to mm outside modify() errors'  [harness]  @ 11-19
+  @case 'mm fires callbacks after modify() — tm rebuilds'  [harness]  @ 26-37
+  @case 'byToken returns a shallow clone — mutation does not leak'  [harness]  @ 44-56
+  @case 'notes are observed in ppq order regardless of seed order'  [harness]  @ 63-77
+  @case 'scenarios are isolated — fresh mk gives a clean mm'  [harness]  @ 84-94
+  @case 'cm write → read round-trips through fake reaper ext-state'  [harness]  @ 100-112
+  @case 'mm resolution and length reflect the seed'  [harness]  @ 119-128
+  @case 'tm:play routes to reaper.Main_OnCommand'  [harness]  @ 134-143
+  @case 'mm → tm → vm callback chain delivers data to the grid'  [harness]  @ 149-170
+  @case 'assertion helpers distinguish equal from unequal'  [harness]  @ 177-190
+
+# Uses (outbound edges)
+  @use call trackerManager.getChannel  @ 29,36,93
+  @use call midiManager.modify  @ 31
+  @use call midiManager.dump  @ 49,89,92
+  @use call midiManager.byToken  @ 50,53
+  @use call midiManager.notes  @ 75
+  @use call configManager.set  @ 103
+  @use call configManager.get  @ 104
+  @use call midiManager.resolution  @ 124
+  @use call trackerManager.resolution  @ 125
+  @use call midiManager.length  @ 126
+  @use call trackerManager.length  @ 127
+  @use call trackerManager.play  @ 138
+  @use call trackerView.setGridSize  @ 152
+  @use call editCursor.selectChannel  @ 164,166
+  @use call editCursor.col  @ 165,167

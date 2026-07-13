@@ -1,0 +1,29 @@
+@spec tv_region_paint_spec  src=tests/specs/tv_region_paint_spec.lua  loc=99  sha=e25c39b  cases=4
+@exercises groupManager (h.gm), trackerView (h.vm)
+@surface   gm:mark, vm:eventsInRect, gm:eachInstance, gm:stateOf, vm:paintRegionStream
+@harness   mk{seed.notes, seed.ppq, seed.dur, seed.chanLo, seed.streams}
+
+# Intent
+  tv:paintRegionStream -- the region-paint translation. Toggles a
+  column's stream in the active group's rect, hands newly-covered
+  concretes to gm:resizeGroup as `gained`, lets resizeGroup orphan the
+  ones a narrower stream-set drops. Runs the real trackerView + real
+  groupManager: harness.mk wires gm into tv exactly as trackerPage
+  does in production, so this drives the wired path, not a fake.
+
+# Helpers
+  @fn noteCol(h, chan)  @ 10-14
+  @fn chan2Note(h)  @ 16-19
+
+# Cases
+  @case 'paint extend adds the column stream to the active group and absorbs its note'  [harness]  @ 28-46
+  @case 'paint shrink removes the stream and orphans its note (concrete kept)'  [harness]  @ 50-66
+  @case 'paint is idempotent: re-painting an already-on stream is a no-op true'  [harness]  @ 70-86
+  @case 'unknown group is a silent nil (ec carries no geometry)'  [harness]  @ 90-97
+
+# Uses (outbound edges)
+  @use call groupManager.mark  @ 34,57,78
+  @use call trackerView.eventsInRect  @ 34,57,78
+  @use call groupManager.eachInstance  @ 35,41,58,63,79,80,84
+  @use call groupManager.stateOf  @ 38,44,60,65
+  @use call trackerView.paintRegionStream  @ 40,62,82,96

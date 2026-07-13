@@ -1,0 +1,52 @@
+@spec tm_macro_spec  src=tests/specs/tm_macro_spec.lua  loc=372  sha=c234626  cases=14
+@exercises trackerManager (h.tm), midiManager (h.fm)
+@surface   tm:addEvent, tm:flush, tm:getChannel, fm:dump, tm:rebuild, tm:byUuid, tm:assignParked, tm:assignEvent, fm:notes, fm:tokenOf, fm:modify, fm:assign
+@harness   mk{seed.length}
+
+# Intent
+  Note macros, v1: retrig (structural). Pins G1-G4 (see design/archive/note-macros.md § Invariants).
+  G4 runs under swing+delay first — the frame/rounding tripwire for steady-state churn.
+
+# Helpers
+  @fn pcsOnChan(dump, chan)  @ 11-20
+  @fn addPlainHost(h, over)  @ 23-29
+      -- Identity swing, zero delay: realised == logical. (G4 runs under swing+delay; the rest don't.)
+  @fn notesView(dump)  @ 33-42
+      -- A stable, order-independent view of every note in the dump, uuid and
+      -- all. Byte-identical means this deepEq's across the round trip.
+  @fn fxNotesOf(dump, hostUuid)  @ 44-51
+  @fn parkedHost(h)  @ 55-57
+      -- Note-host replace parks: the authored note leaves the take and remains the
+      -- visible, editable surface in channels[chan].parked.
+  @fn mkRetrigHost(harness)  @ 60-73
+      -- Host + retrig under swing and delay. Shared across the G-tests.
+
+# Cases
+  @case 'G4: flush -> rebuild -> flush is byte-identical (retrig, swing + delay)'  [harness]  @ 80-97
+  @case 'G1: every fxNote resolves via derived to the parked host carrying the structural fx'  [harness]  @ 103-115
+  @case 'G2: fx present yields fxNotes; fx removed leaves none after reconcile'  [harness]  @ 121-139
+  @case 'G2b: an edit through the restored grid cell lands (cell wired to its backing)'  [harness]  @ 145-167
+  @case 'a higher-lane note hosts retrig (structural expansion is lane-blind)'  [harness]  @ 173-190
+  @case 'G3: a foreign edit to an fxNote is overwritten, not kept'  [harness]  @ 196-214
+  @case 'the host parks; all hits are derived; authored ceiling preserved; fxNotes clip in turn'  [harness]  @ 220-235
+  @case 'velocity ramps per fxNote and floors at 1'  [harness]  @ 239-248
+  @case 'under trackerMode the derived tiles enter PC synthesis carrying the host sample'  [harness]  @ 254-261
+  @case 'a same-pitch note inside a retrig truncates the window and is not clobbered'  [harness]  @ 267-289
+  @case 'a same-lane note inside a retrig truncates the window and the host tail'  [harness]  @ 295-313
+  @case 'a retrig whose authored tail overruns the take generates nothing past the take end'  [harness]  @ 319-338
+  @case 'the parked host cell shows the authored length (the visible, editable surface)'  [harness]  @ 344-351
+  @case 'a PA on a parked host projects into the host lane column (display anchor survives parking)'  [harness]  @ 357-369
+
+# Uses (outbound edges)
+  @use call trackerManager.addEvent  @ 27,67,148,177,179,275,303,325,361
+  @use call trackerManager.flush  @ 28,71,93,128,150,155,165,181,277,305,327,362
+  @use call trackerManager.getChannel  @ 56,131,158,364
+  @use call midiManager.dump  @ 88,91,94,106,125,130,133,182,210,224,243,258,271,279,299,307,329
+  @use call trackerManager.rebuild  @ 92,209
+  @use call trackerManager.byUuid  @ 113,166
+  @use call trackerManager.assignParked  @ 127,154
+  @use call trackerManager.assignEvent  @ 164
+  @use call midiManager.notes  @ 203
+  @use call midiManager.tokenOf  @ 204
+  @use call midiManager.modify  @ 207
+  @use call midiManager.assign  @ 207

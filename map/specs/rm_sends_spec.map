@@ -1,0 +1,30 @@
+@spec rm_sends_spec  src=tests/specs/rm_sends_spec.lua  loc=170  sha=e2be081  cases=9
+@exercises harness (harness), routingManager (rm)
+@surface   harness.mk, rm:tracks, rm:assignTrack
+@harness   mk, reaper.CountTracks, reaper.InsertTrackAtIndex, reaper.GetTrack, reaper.GetSetMediaTrackInfo_String, reaper.GetTrackGUID, reaper:addSend
+
+# Intent
+  routingManager Phase 6: track.sends read + assignTrack{sends} full-replace
+  reconcile. Sends are a track attribute (no id); `to` is a dest-track guid.
+
+# Helpers
+  @fn mkRm()  @ 7-11
+  @fn seedTrack(reaper, name)  @ 13-19
+  @fn trackById(rm, id)  @ 21-23
+  @fn sendTo(rec, toId)  @ 25-27
+
+# Cases
+  @case 'tracks() reads audio + midi sends as records keyed by dest guid'  [pure]  @ 31-51
+  @case 'tracks() sends empty when a track has none'  [pure]  @ 54-59
+  @case 'audio send channels decode from I_SRCCHAN / I_DSTCHAN'  [pure]  @ 62-71
+  @case 'assignTrack{sends} creates a send from a record'  [pure]  @ 74-87
+  @case 'assignTrack{sends} is full-replace: drops unlisted, adds new, keeps listed'  [pure]  @ 90-103
+  @case 'assignTrack{sends} re-syncs gain on a matching send identity'  [pure]  @ 106-118
+  @case 'midi send round-trips channels and pos through reconcile'  [pure]  @ 121-134
+  @case 'pos round-trips preFx / preFader / postFader'  [pure]  @ 137-154
+  @case 'assignTrack without sends leaves existing sends untouched'  [pure]  @ 157-168
+
+# Uses (outbound edges)
+  @use call harness.mk  @ 8
+  @use call routingManager.tracks  @ 22
+  @use call routingManager.assignTrack  @ 80,98,113,127,145,164

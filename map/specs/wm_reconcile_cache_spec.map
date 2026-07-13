@@ -1,0 +1,39 @@
+@spec wm_reconcile_cache_spec  src=tests/specs/wm_reconcile_cache_spec.lua  loc=141  sha=e2be081  cases=7
+@exercises wiringManager (wm)
+@surface   wm:load, wm:instantiateFxOnScratch, wm:mutate, wm:enableLive, wm:diff, wm:targetState, wm:snapshot, wm:graph, wm:fastGainCommit, wm:reconcile, wm:syncExternal
+@harness   mk, r._state.projectTracks, r._state.trackGuids, r._state.projStateCount
+
+# Intent
+  (none)
+
+# Helpers
+  @fn mkWm(harness)  @ 4-12
+  @fn seedSource(h, guid)  @ 14-19
+  @fn source(guid)  @ 21-24
+  @fn mintFx(wm, ident)  @ 26-30
+  @fn wireSimple(wm)  @ 33-40
+      -- A self-driven authoring gesture: source → fx → master, materialised by live reconcile.
+  @fn trackReadSpy(rm)  @ 43-47
+      -- Count rm:tracks() calls — the ~80ms decode the model exists to elide.
+
+# Cases
+  @case 'enableLive after load takes no read — the load snapshot seeded the model'  [harness]  @ 51-57
+  @case 'minting an FX warms the model, not invalidates it: add-FX takes no full read'  [harness]  @ 60-68
+  @case 'warm pure re-wire reads tracks zero times'  [harness]  @ 71-85
+  @case 'model stays truthful: a fresh snapshot still equals target after a mint+apply'  [harness]  @ 88-96
+  @case 'fastGainCommit mirrors into the model: a follow-up reconcile re-issues no gain write'  [harness]  @ 99-114
+  @case 'syncExternal invalidates the model → next reconcile reads'  [harness]  @ 117-127
+  @case 'load invalidates the model → reconcile reads REAPER, not stale intent'  [harness]  @ 130-139
+
+# Uses (outbound edges)
+  @use call wiringManager.load  @ 10,137
+  @use call wiringManager.instantiateFxOnScratch  @ 27
+  @use call wiringManager.mutate  @ 34,78
+  @use call wiringManager.enableLive  @ 55,65,75,92,103,121,134
+  @use call wiringManager.diff  @ 94
+  @use call wiringManager.targetState  @ 94
+  @use call wiringManager.snapshot  @ 94
+  @use call wiringManager.graph  @ 106
+  @use call wiringManager.fastGainCommit  @ 109
+  @use call wiringManager.reconcile  @ 112
+  @use call wiringManager.syncExternal  @ 125

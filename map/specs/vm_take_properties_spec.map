@@ -1,0 +1,38 @@
+@spec vm_take_properties_spec  src=tests/specs/vm_take_properties_spec.lua  loc=328  sha=4ae9c74  cases=11
+@exercises midiManager (h.fm), configManager (h.cm)
+@surface   fm:setName, cm:get, fm:name, fm:length, fm:dump
+@harness   mk{seed.notes, seed.ccs}
+
+# Intent
+  Pins the take-properties dialog's commit path across all three modes:
+    resize  — events past the new end are deleted; spanning notes clamped.
+    rescale — logical-frame stretch: every event on row r goes to row f·r.
+              Under identity swing this scales ppq by f; ppqL scales by f.
+              delay scales by f. No events deleted.
+    tile    — replicates the [0, oldPpq) pattern at offsets k·oldPpq;
+              copies past newPpq dropped, endppqs clamped.
+  
+  Layer split under test:
+    vm:applyTakeProperties — converts beats → rows → ppq, dispatches by mode.
+    tm:setLength / rescaleLength / tileLength — own the event walk.
+    tm:setName             — proxies to mm:setName.
+
+# Cases
+  @case 'rename only: name written, length untouched'  [harness]  @ 22-36
+  @case 'grow: setLength called, no events mutated'  [harness]  @ 40-56
+  @case 'shrink: events past boundary deleted; spanning note clamped'  [harness]  @ 60-98
+  @case 'rescale grow 2×: ppq + endppq scale, length doubles, no deletions'  [harness]  @ 104-132
+  @case 'rescale shrink 0.5×: ppq + endppq halve, length halves'  [harness]  @ 136-153
+  @case 'rescale scales delay: realised stretch is uniform when swing is identity'  [harness]  @ 157-175
+  @case 'tile grow 2×: pattern duplicated once at oldPpq offset'  [harness]  @ 181-211
+  @case 'tile non-multiple 1.5×: full tile + partial tail; events past newPpq dropped'  [harness]  @ 215-236
+  @case 'tile clamps copy endppq at newPpq'  [harness]  @ 240-258
+  @case 'tile preserves cc number, pb shape, and arbitrary metadata on copies'  [harness]  @ 262-306
+  @case 'tile shrink falls through to truncation (resize semantics)'  [harness]  @ 310-325
+
+# Uses (outbound edges)
+  @use call midiManager.setName  @ 30
+  @use call configManager.get  @ 31
+  @use call midiManager.name  @ 33,49,82,117,145,169,193,227,250,282,319
+  @use call midiManager.length  @ 34,51,84,119,147,195,229,321
+  @use call midiManager.dump  @ 35,52,86,95,120,129,148,171,196,206,230,252,287,322

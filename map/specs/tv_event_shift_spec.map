@@ -1,0 +1,41 @@
+@spec tv_event_shift_spec  src=tests/specs/tv_event_shift_spec.lua  loc=323  sha=1c5f224  cases=13
+@exercises midiManager (h.fm), trackerView (h.vm), editCursor (h.ec), commandManager (h.cmgr)
+@surface   fm:dump, vm:setGridSize, ec:setPos, cmgr:invoke, ec:region, ec:col
+@harness   mk{seed.notes, seed.ccs, seed.length}
+
+# Intent
+  eventShiftLeft / eventShiftRight -- horizontal move of the cursor
+  event (or an n-row x 1-col selection block) to an adjacent column.
+  Notes step to the next/prev lane that exists, else cross channel
+  (right -> lane 1, left -> the channel's highest lane). Other event
+  types just step channel. All-or-nothing: refuse off the grid edge or
+  onto an occupied destination cell.
+
+# Helpers
+  @fn findCol(h, pred)  @ 10-14
+  @fn noteCol(h, chan, lane)  @ 16-20
+  @fn notesByChanLane(h)  @ 22-28
+  @fn noteByPitch(h, pitch)  @ 30-34
+
+# Cases
+  @case 'note shifts right to the next lane that exists in the channel'  [harness]  @ 39-56
+  @case 'note with no further lane crosses to the next channel, lane 1'  [harness]  @ 60-73
+  @case 'left is the inverse of right across a channel boundary'  [harness]  @ 77-90
+  @case 'refuses the move when the destination cell is occupied'  [harness]  @ 94-110
+  @case 'refuses to move off the right edge of the grid'  [harness]  @ 114-125
+  @case 'an n-row x 1-col selection moves as a block and the selection follows'  [harness]  @ 129-154
+  @case 'a multi-column selection is a no-op'  [harness]  @ 158-175
+  @case 'a non-note event just steps to the next channel'  [harness]  @ 179-196
+  @case 'a pb event steps channel too (not the note lane-walk)'  [harness]  @ 200-219
+  @case 'a moved note's tail is truncated, not blocked, by a later destination note'  [harness]  @ 223-241
+  @case 'a clipped note keeps its full intent ceiling when shifted (clip must not clobber endppqL)'  [harness]  @ 245-271
+  @case 'refuses when a dest onset sits on a selected-but-empty row'  [harness]  @ 275-298
+  @case 'a moving note truncates the tail of an earlier destination note'  [harness]  @ 302-320
+
+# Uses (outbound edges)
+  @use call midiManager.dump  @ 24,31,191,214
+  @use call trackerView.setGridSize  @ 47,65,82,102,119,136,164,184,207,232,260,287,311
+  @use call editCursor.setPos  @ 49,67,84,104,121,187,210,234,264,313
+  @use call commandManager.invoke  @ 50,68,85,105,122,141,170,188,211,235,265,292,314
+  @use call editCursor.region  @ 150
+  @use call editCursor.col  @ 153

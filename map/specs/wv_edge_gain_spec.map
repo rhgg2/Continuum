@@ -1,0 +1,25 @@
+@spec wv_edge_gain_spec  src=tests/specs/wv_edge_gain_spec.lua  loc=84  sha=e2be081  cases=6
+@exercises wiringView (wv)
+@surface   wv:addFx, wv:edgeGain, wv:setEdgeGain, wv:graph
+@harness   mk
+
+# Intent
+  (none)
+
+# Helpers
+  @fn mkWv(harness)  @ 6-12
+  @fn mkAudioWire(wv)  @ 14-19
+
+# Cases
+  @case 'edgeGain defaults to 1.0 when ops.gain is unset'  [harness]  @ 23-28
+  @case 'edgeGain returns the stored ops.gain when set'  [harness]  @ 31-38
+  @case 'setEdgeGain creates ops table when absent'  [harness]  @ 41-48
+  @case 'setEdgeGain is a no-op on a non-audio edge'  [harness]  @ 51-60
+  @case 'setEdgeGain on out-of-range idx is a no-op (no crash)'  [harness]  @ 63-68
+  @case 'edgeGain returns 1.0 for non-audio edge regardless of ops'  [harness]  @ 71-82
+
+# Uses (outbound edges)
+  @use call wiringView.addFx  @ 15,16,54,55,74,75
+  @use call wiringView.edgeGain  @ 27,36,58,81
+  @use call wiringView.setEdgeGain  @ 35,46,57,66
+  @use call wiringView.graph  @ 37,45,47,59,67,80

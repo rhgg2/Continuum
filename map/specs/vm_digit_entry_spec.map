@@ -1,0 +1,48 @@
+@spec vm_digit_entry_spec  src=tests/specs/vm_digit_entry_spec.lua  loc=176  sha=8a6d0a3  cases=7
+@exercises trackerView (h.vm), editCursor (h.ec)
+@surface   vm:setGridSize, vm:digitsStrike, ec:setPos, vm:digitsCommit, ec:row, vm:digitsActive, ec:pos, vm:digitsBackspace, vm:rebuild
+@harness   mk{seed.ccs, seed.notes}
+
+# Intent
+  Shift-held value entry: a left-to-right overwrite cursor over a numeric
+  field's places. Each digit overwrites only its own place keep-below (lower
+  places intact), the sub-caret steps right, and the row stays pinned until
+  shift release. Backspace restores the place the last digit overwrote;
+  commit jumps back to the entry column, then advances. Drives tv:digits*
+  directly -- gridPane's key drain is a thin router over it.
+
+# Helpers
+  @fn pbCol(h)  @ 12-16
+  @fn mkPB(harness, val)  @ 23-30
+      -- Normalized bipolar pb (the pattern editor's curve substrate): gesture writes
+      -- land on evt.val directly as the display integer (cap 1000, four decimal
+      -- places). A raw ccs seed round-trips through pitchbend and quantizes, so the
+      -- seed sets only presence -- tests build magnitudes with the gesture, not it.
+      -- One breakpoint at row 0 materialises the column; other rows stay empty.
+  @fn pbValAt(h, row)  @ 32-36
+  @fn noteCol(h)  @ 40-44
+  @fn mkNote(harness, vel)  @ 47-55
+      -- The note sits at raw ppq 120 (delay 0) -> logical row 2 (60 ppq/row).
+  @fn velAt(h)  @ 57-61
+  @fn firstStop(col, part)  @ 63-67
+  @fn strike(h, ch)  @ 69
+
+# Cases
+  @case 'place-walk: shift-547 on the hundreds of 023 keeps the lower places'  [harness]  @ 73-96
+  @case 'backspace restores the overwritten place so you can retype it'  [harness]  @ 100-111
+  @case 'hex velocity: nibbles overwrite high then low, keep-below'  [harness]  @ 115-125
+  @case 'backspace on a gesture-created cell deletes it'  [harness]  @ 129-138
+  @case 'declines on the pitch part (not a value field)'  [harness]  @ 142-150
+  @case 'declines a char that is not a digit of the field'  [harness]  @ 154-161
+  @case 'a take switch abandons the gesture'  [harness]  @ 165-174
+
+# Uses (outbound edges)
+  @use call trackerView.setGridSize  @ 28,53
+  @use call trackerView.digitsStrike  @ 69
+  @use call editCursor.setPos  @ 78,79,84,104,120,133,147,158,169
+  @use call trackerView.digitsCommit  @ 80,91
+  @use call editCursor.row  @ 88,93
+  @use call trackerView.digitsActive  @ 89,92,149,160,171,173
+  @use call editCursor.pos  @ 94
+  @use call trackerView.digitsBackspace  @ 107,136
+  @use call trackerView.rebuild  @ 172

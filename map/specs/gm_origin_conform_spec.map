@@ -1,0 +1,44 @@
+@spec gm_origin_conform_spec  src=tests/specs/gm_origin_conform_spec.lua  loc=154  sha=f8aa484  cases=2
+@exercises groupManager (gm), trackerManager (h.tm)
+@surface   gm:markGroup, gm:newInstance, tm:flush, gm:assignEvent, gm:stamp, tm:getChannel
+@harness   mk{seed.length, seed.notes}
+
+# Intent
+  Repro: select an empty col1/row1, duplicateMirror (empty group + one
+  sibling), then type a note into instance 1 whose tail overruns the
+  group bound into the sibling's region.
+  
+  conform is a per-instance REALISATION marker: the last-in-lane note of
+  every instance — the origin region included — may overrun its region,
+  and tm clips its realised note-off. But reproject reconciles the marker
+  only on non-origin instances ("the origin's geometry is the user's
+  own"). conform is not geometry; it's realisation. So the origin's
+  overrunning note never gets clipped, physically collides (same pitch)
+  with the projected sibling copy at the next region, and the column
+  allocator bumps one into lane 2.
+  
+  The asymmetry the user observed — "if I add the note to the SECOND
+  instance it correctly truncates the first instance's copy" — is the
+  same bug seen from the other side: editing instance 2 makes instance 1
+  non-origin, so its copy DOES get reconciled and clipped.
+  
+  Drives the real preflush/postflush seam via the fake tm, as in
+  mirm_propagate_spec / mirm_conform_spec.
+
+# Helpers
+  @fn mk()  @ 25-28
+  @fn note(ppq, chan, lane, extra)  @ 31-37
+  @fn rect(ppq, chan)  @ 40-43
+      -- One note:1 stream on the anchor channel, a bar (960) wide.
+
+# Cases
+  @case 'a same-flush edit in two instances round-trips both, origin included'  [pure]  @ 55-96
+  @case 'instance 1 clips its overrun to instance 2 (real tm, no lane-2 bump)'  [harness]  @ 109-152
+
+# Uses (outbound edges)
+  @use call groupManager.markGroup  @ 61
+  @use call groupManager.newInstance  @ 62
+  @use call trackerManager.flush  @ 63,77,117,123
+  @use call groupManager.assignEvent  @ 75,76
+  @use call groupManager.stamp  @ 116
+  @use call trackerManager.getChannel  @ 127,133

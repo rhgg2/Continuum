@@ -1,0 +1,29 @@
+@spec vm_delay_entry_spec  src=tests/specs/vm_delay_entry_spec.lua  loc=306  sha=1d7d136  cases=9
+@exercises trackerView (h.vm), editCursor (h.ec), midiManager (h.fm), trackerManager (h.tm)
+@surface   vm:setGridSize, ec:setPos, vm:editEvent, fm:dump, tm:getChannel
+@harness   mk{seed.notes}
+
+# Intent
+  Authored delay is intent: vm writes it through unbounded (modulo the
+  ±999 digit-entry cap). tm clamps raw at realisation -- raw ≥ 0 in
+  realiseNoteUpdate, same-pitch onset floor in the tail walk -- and exposes
+  the realised-frame equivalent as evt.delayC. tp surfaces the
+  divergence (delay ~= delayC) via a small * next to the delay digits.
+
+# Cases
+  @case 'positive delay accepted on a note ending at item length'  [harness]  @ 15-35
+  @case 'delay past intent-end survives — tail walk handles realisation'  [harness]  @ 43-64
+  @case 'different-pitch next imposes no delay constraint'  [harness]  @ 70-93
+  @case 'same-pitch prev: authored delay survives; A.endppq clips to B.ppq'  [harness]  @ 100-125
+  @case 'same-pitch prev in another column — A.endppq still clips'  [harness]  @ 131-158
+  @case 'same-column prev: authored swap survives in raw'  [harness]  @ 167-199
+  @case 'negative-on-zero is a vm no-op (no futile assign)'  [harness]  @ 208-228
+  @case 'raw < 0 clamped in tm; delay ~= delayC flags the divergence'  [harness]  @ 236-267
+  @case 'same-pitch raw collision: tail walk clamps B; delayC reflects it'  [harness]  @ 273-304
+
+# Uses (outbound edges)
+  @use call trackerView.setGridSize  @ 26,54,83,113,147,186,219,252,288
+  @use call editCursor.setPos  @ 29,57,86,117,151,190,222,255,291
+  @use call trackerView.editEvent  @ 30,58,87,118,152,191,223,256,292
+  @use call midiManager.dump  @ 32,60,89,120,154,194,225,258
+  @use call trackerManager.getChannel  @ 263,294

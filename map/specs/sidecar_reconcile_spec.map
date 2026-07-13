@@ -1,0 +1,61 @@
+@spec sidecar_reconcile_spec  src=tests/specs/sidecar_reconcile_spec.lua  loc=552  sha=999f37e  cases=23
+@exercises midiManager (h.mm)
+@surface   mm:ccs, mm:subscribe, mm:load
+@harness   fakeReaper:bindTake, reaper:seedMidi
+
+# Intent
+  Algorithm pin-tests for the load-time sidecar↔cc reconciliation pass folded
+  into mm:load. Bucket once by (evType, chan, id) and run four stages:
+    1. exact (ppq, val) match    → silent bind (no ccsReconciled event)
+    2. same ppq, val differs     → valueRebound
+    3. consensus offset          → consensusRebound (≥ 50% of bucket sidecars,
+                                   min 2 voters)
+    4. per-orphan 0/1/many       → orphaned / guessedRebound / ambiguous
+  
+  Wiring (signal ordering, metadata merge, ext-data hygiene, post-load idx
+  fixup) is covered in mm_cc_reconcile_spec; this spec stays algorithm-only.
+
+# Helpers
+  @fn ccAt(mm, i)  @ 18-24
+  @fn freshTake()  @ 26-32
+  @fn packCc(c)  @ 35-48
+      -- Cc-shaped record → REAPER's (chanmsg, msg2, msg3) packing.
+  @fn seed(take, reaper, spec)  @ 52-65
+      -- Seed ccs + sidecars onto the take. No metadata laid down — algorithm tests
+      -- don't need the ext-data side effects.
+  @fn load(take)  @ 70-80
+      -- Returns (mm, events_by_uuid, events_array). `events_by_uuid` collapses
+      -- ccsReconciled entries by uuid for compact assertions; the array preserves
+      -- order.
+  @fn ccsByLoc(mm)  @ 83-87
+      -- All ccs on the loaded mm, by location.
+
+# Cases
+  @case 'exact (ppq, val) match → silent bind, no event'  [pure]  @ 94-104
+  @case 'pa events bind on pitch (silent)'  [pure]  @ 108-118
+  @case 'pb fingerprint match (signed val) binds silently'  [pure]  @ 122-132
+  @case 'multiple coincident matches all bind silently'  [pure]  @ 136-156
+  @case 'val differs at same ppq → valueRebound + non-silent bind'  [pure]  @ 162-180
+  @case 'pb val drift round-trips signed val into oldVal/newVal'  [pure]  @ 184-196
+  @case 'two sidecars same partKey, one val-differing cc → first binds, second orphans'  [pure]  @ 200-213
+  @case 'two sidecars + two ccs at uniform +20 offset → consensus binds both'  [pure]  @ 219-241
+  @case 'consensusRebound payload reports the bound cc's ppq + offset'  [pure]  @ 245-263
+  @case 'three uniformly-drifted sidecars in one bucket bind despite cross-pair noise'  [pure]  @ 267-288
+  @case 'tied top vote-getters drop through stage 3, fall to stage 4 (ambiguous)'  [pure]  @ 292-315
+  @case 'no candidates → orphaned (no bind)'  [pure]  @ 321-338
+  @case 'one candidate at drifted ppq → guessedRebound binds at the cc's ppq'  [pure]  @ 342-356
+  @case 'two candidates → ambiguous, no bind, candidateppqs reported'  [pure]  @ 360-376
+  @case 'pa orphan reports pitch (not cc)'  [pure]  @ 380-390
+  @case 'two sidecars, one cc same bucket → first guesses, second orphans'  [pure]  @ 394-410
+  @case 'mismatched chan: separate buckets → orphaned + unbound cc'  [pure]  @ 416-427
+  @case 'mismatched evType: separate buckets (cc vs pb)'  [pure]  @ 431-442
+  @case 'mismatched cc#: separate buckets'  [pure]  @ 446-456
+  @case 'cc with no sidecars stays uuid-less, no event'  [pure]  @ 460-470
+  @case 'separate (chan, cc#) buckets resolve independently'  [pure]  @ 474-495
+  @case 'cross-evType events live in different buckets — stage 4 each'  [pure]  @ 499-517
+  @case 'mixed: silent + valueRebound + consensus + orphan in one load'  [pure]  @ 523-550
+
+# Uses (outbound edges)
+  @use call midiManager.ccs  @ 20,85,154,239,314,375
+  @use call midiManager.subscribe  @ 73
+  @use call midiManager.load  @ 76

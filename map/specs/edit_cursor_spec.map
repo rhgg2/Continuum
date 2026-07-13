@@ -1,0 +1,73 @@
+@spec edit_cursor_spec  src=tests/specs/edit_cursor_spec.lua  loc=997  sha=5b72451  cases=35
+@exercises trackerView (h.vm), editCursor (h.ec), commandManager (h.cmgr), midiManager (h.fm), trackerManager (h.tm), dataStore (h.ds)
+@surface   vm:setGridSize, ec:extendTo, ec:pos, ec:setPos, cmgr:invoke, fm:dump, ec:region, ec:row, tm:getChannel, ec:eachSelectedCol, vm:showDelay, ds:get, ec:hasSelection, tm:deleteEvent, tm:flush
+@harness   mk{seed.notes, seed.length, seed.ccs}
+
+# Intent
+  Stage-1 pins for the editCursor refactor (design/editCursor-refactor.md).
+  These assert current vm behaviour so Stage 2's mechanical rewrites can't
+  drift it silently. They cover the seams where cursor-only and selection
+  paths are expected to coincide, and the asymmetric-defaults carveouts.
+
+# Helpers
+  @fn mkNoteHarness(harness, noteOverrides, takeData)  @ 12-24
+      -- Shared seed: a single chan-1 note at row 4 (ppq 240 with resolution=240,
+      -- 4 rpb → 60 ppq/row), endppq at row 6. Used wherever a spec pokes the
+      -- cursor onto a delay/vel/pitch stop of an existing note.
+  @fn degenerateSel(h)  @ 28-30
+      -- Selection with both ends at the current cursor → 1×1 region at cursor.
+      -- extendTo to current pos: creates a fresh sel (no movement, no anchor drift).
+
+# Cases
+  @case 'delete on delay stop ≡ deleteSel on 1×1 delay-stop selection'  [harness]  @ 40-67
+  @case 'delete on vel stop ≡ deleteSel on 1×1 vel-stop selection'  [harness]  @ 76-100
+  @case 'copy/paste round-trip with no selection copies cursor-row note'  [harness]  @ 111-130
+  @case 'copy of 1-row slice of a longer note pastes at source duration'  [harness]  @ 138-155
+  @case 'copy on empty cursor cell leaves clipboard intact'  [harness]  @ 162-182
+  @case 'insertRow with no sel shifts every col; with 1×1 sel shifts only sel col'  [harness]  @ 190-227
+  @case 'duplicateDown with no sel clones cursor-row note to next row'  [harness]  @ 234-251
+  @case 'duplicateDown with 1x1 pitch-part sel clones cursor-row note'  [harness]  @ 261-279
+  @case 'duplicateDown with 1x1 vel-part sel copies vel to target-row note'  [harness]  @ 290-320
+  @case 'duplicateDown near the tail clamps the re-selection to the take edge'  [harness]  @ 330-348
+  @case 'nudgeForward with no sel advances cursor-row note by 1 row and cursor follows'  [harness]  @ 356-366
+  @case 'nudgeBack past a neighbour tail is allowed; tm clips the tail'  [harness]  @ 375-395
+  @case 'nudgeBack onto a neighbour onset row refuses the move'  [harness]  @ 403-418
+  @case 'nudgeBack on a note at ppq 0 refuses move; length preserved'  [harness]  @ 426-439
+  @case 'nudgeForward leaves cursor put when destination row holds another note'  [harness]  @ 446-465
+  @case 'nudgeForward overrunning the next note is allowed; tm clips the tail'  [harness]  @ 472-490
+  @case 'nudgeForward moves a cc event one row and the cursor follows'  [harness]  @ 496-516
+  @case 'nudgeForward refuses a cc onto an occupied row'  [harness]  @ 522-543
+  @case 'selection nudgeForward refuses when a foreign onset is in the destination span'  [harness]  @ 549-568
+  @case 'selection nudgeForward shifts the block when the destination span is clear'  [harness]  @ 574-592
+  @case 'growNote caps endppq at next-note INTENT onset, not realised'  [harness]  @ 602-630
+  @case 'growNote reaches overlap bound on first press under c58 swing'  [harness]  @ 642-682
+  @case 'growNote against same-pitch next clamps at intent onset (no off)'  [harness]  @ 690-715
+  @case 'nudgeForward under c58 swing reaches a row-aligned next-note onset'  [harness]  @ 725-761
+  @case 'nudgeBack into a grown lenient overlap is allowed (diff-pitch)'  [harness]  @ 771-792
+  @case 'nudgeFineUp with no sel on pitch stop raises pitch by 1'  [harness]  @ 798-806
+  @case 'noteOff with no sel truncates the active note to cursor ppq'  [harness]  @ 813-822
+  @case 'eachSelectedCol with no selection yields the cursor col as a 1x1 fallback'  [harness]  @ 828-838
+  @case 'eachSelectedCol yields (col, ci) for each column in the selection'  [harness]  @ 842-863
+  @case 'vm:showDelay enables delay on every note col in the selection'  [harness]  @ 869-887
+  @case 'ec:extendTo with no sel anchors at cursor and grows to target'  [harness]  @ 895-904
+  @case 'ec:extendTo with active sel preserves anchor, moves the loose end'  [harness]  @ 908-917
+  @case 'ec:pos round-trips ec:setPos in (row, col, stop) order'  [harness]  @ 924-932
+  @case 'setSelection / region round-trip preserves part'  [harness]  @ 940-951
+  @case 'growNote on an open note closes it and authors a finite ceiling'  [harness]  @ 961-995
+
+# Uses (outbound edges)
+  @use call trackerView.setGridSize  @ 22,203,302,341,381,409,431,452,478,501,528,558,580,614,664,701,746,779,851,878,974
+  @use call editCursor.extendTo  @ 29,343,899,912,913
+  @use call editCursor.pos  @ 29,928
+  @use call editCursor.setPos  @ 48,81,114,116,144,146,166,169,172,213,221,237,264,303,342,359,382,410,432,453,479,506,533,621,669,706,751,784,801,816,831,898,911,927,979
+  @use call commandManager.invoke  @ 53,58,86,91,115,117,145,147,167,170,173,214,223,238,266,305,344,360,383,411,433,454,480,507,534,561,583,622,670,707,752,785,802,817,980
+  @use call midiManager.dump  @ 54,59,87,92,119,150,175,215,224,240,268,309,362,386,414,435,457,483,510,537,564,586,625,673,710,755,788,804,819,977,982,989,992
+  @use call editCursor.region  @ 346,589,901,914,944
+  @use call editCursor.row  @ 365,394,438,464,515,542,760,791
+  @use call trackerManager.getChannel  @ 617,666,703,748,781
+  @use call editCursor.eachSelectedCol  @ 833,855
+  @use call trackerView.showDelay  @ 881
+  @use call dataStore.get  @ 882
+  @use call editCursor.hasSelection  @ 900
+  @use call trackerManager.deleteEvent  @ 989
+  @use call trackerManager.flush  @ 990

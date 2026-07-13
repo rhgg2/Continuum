@@ -1,0 +1,53 @@
+@spec tm_tuning_spec  src=tests/specs/tm_tuning_spec.lua  loc=884  sha=1d7d136  cases=24
+@exercises trackerManager (h.tm), midiManager (h.fm)
+@surface   tm:addEvent, tm:flush, fm:dump, tm:getChannel, tm:assignEvent, tm:rebuild, tm:deleteEvent
+@harness   mk{seed.ccs, seed.notes}
+
+# Intent
+  Exercises tm's detune/pb realisation. Invariants:
+    - view layer speaks intent (note.detune); tm realises via raw pb.
+    - a col-1 note with non-zero detune seats a "fake" pb absorbing the step.
+    - clearing detune back to prevailing cleans up the fake pb.
+    - at every seat P: logicalAt(P) = rawAt(P) - detuneAt(P), and a fake
+      pb carries `fake=true` (persisted as cc metadata).
+
+# Helpers
+  @fn cents2raw(c)  @ 12
+      -- pbRange default = 2 semitones = 200 cents total. So cents 50 → raw 2048.
+  @fn findNote(dump, pitch)  @ 14-18
+  @fn pbsAt(dump, ppq)  @ 20-26
+
+# Cases
+  @case 'adding a note with detune seats a fake pb at the note'  [harness]  @ 30-48
+  @case 'logical pb at the note seat is zero (detune absorbs the raw step)'  [harness]  @ 52-69
+  @case 'clearing detune back to 0 removes the fake pb'  [harness]  @ 73-92
+  @case 'first lane-1 note anchors a pb-active channel even at detune 0'  [harness]  @ 98-115
+  @case 'a pristine all-zero channel seats no anchor'  [harness]  @ 119-128
+  @case 'two notes with different detunes produce stepwise pbs between them'  [harness]  @ 132-155
+  @case 'mutating a note past a same-channel neighbour keeps fake pbs fake'  [harness]  @ 168-203
+  @case 'pb.derived survives a rebuild (persisted as cc metadata)'  [harness]  @ 207-226
+  @case 'deleting a detuned note cleans up its fake pb'  [harness]  @ 230-247
+  @case 'a real (user-authored) pb at a note seat suppresses fake-pb bookkeeping'  [harness]  @ 251-277
+  @case 'overwriting middle of A A B with B (different detunes) drops the now-redundant fake pb'  [harness]  @ 288-331
+  @case 'inserting B between A and B drops the now-redundant fake pb at the existing B'  [harness]  @ 338-365
+  @case 'A A A then B A A then B B A keeps the fake-pb invariant at every note seat'  [harness]  @ 373-427
+  @case 'moving a detuned note past a same-detune neighbour seats absorber at the unmasked seat'  [harness]  @ 440-486
+  @case 'deleting middle B in A B A drops the now-redundant fake pb at row 3'  [harness]  @ 493-520
+  @case 'lane-2 detuned note seats no pb (lane-1 monopoly on realisation)'  [harness]  @ 526-550
+  @case 'deleting a lane-2 note at a lane-1 fake-pb seat leaves the absorber intact'  [harness]  @ 557-595
+  @case 'pure delay change shifts the fake pb with its host (count and value preserved)'  [harness]  @ 602-639
+  @case 'editing a real pb does not retro-mutate any note detune'  [harness]  @ 645-677
+  @case 'detune update on a note seated atop a real pb leaves it real'  [harness]  @ 683-713
+  @case 'flush + rebuild + flush is idempotent on the pb dump'  [harness]  @ 720-759
+  @case 'editing a lane-2 note detune does not seat or move any pb'  [harness]  @ 765-797
+  @case 'negative delay reorders lane-1 hosts; absorbers seat at realised ppqs'  [harness]  @ 806-842
+  @case 'foreign pb (no cents sidecar) back-derives cents; survives detune edit'  [harness]  @ 850-882
+
+# Uses (outbound edges)
+  @use call trackerManager.addEvent  @ 33,55,76,101,105,122,135,139,171,175,210,233,260,293,297,301,341,345,351,376,380,384,443,447,451,496,500,504,529,533,560,564,605,654,690,723,727,731,768,772
+  @use call trackerManager.flush  @ 37,59,80,85,109,126,143,179,193,214,237,242,264,305,324,349,355,388,407,419,455,478,508,512,537,568,586,609,626,658,670,694,705,735,750,776,789,826,877
+  @use call midiManager.dump  @ 39,87,111,127,145,183,196,217,238,244,266,310,358,392,459,515,540,546,572,590,613,634,673,697,739,780,793,829,865
+  @use call trackerManager.getChannel  @ 63,83,191,224,240,322,405,417,476,510,580,624,660,703,787,822,875
+  @use call trackerManager.assignEvent  @ 84,192,323,406,418,477,625,669,704,788,825,876
+  @use call trackerManager.rebuild  @ 223,749
+  @use call trackerManager.deleteEvent  @ 241,511,585

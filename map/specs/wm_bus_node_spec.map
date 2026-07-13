@@ -1,0 +1,45 @@
+@spec wm_bus_node_spec  src=tests/specs/wm_bus_node_spec.lua  loc=270  sha=e2be081  cases=10
+@exercises wiringManager (wm), routingManager (rm)
+@surface   wm:mutate, wm:instantiateFxOnScratch, wm:addBusNode, wm:graph, rm:meta, wm:moveNodes, wm:deleteBus, wm:load, wm:enableLive, wm:read, wm:pokeEdgeGain, wm:fastGainCommit, wm:diff, wm:targetState, wm:snapshot
+@harness   mk, r._state.projectTracks, r._state.trackGuids
+
+# Intent
+  (none)
+
+# Helpers
+  @fn mkWm(harness, opts)  @ 4-9
+  @fn seedSource(wm, id)  @ 13-18
+      -- Seed a source node directly (no REAPER track) so wiring/validate tests stay
+      -- fake-light; deleteBus and validate never touch the source's track.
+  @fn seedTrack(h, guid)  @ 21-25
+      -- Live-harness helpers for the reconcile-driven tests below.
+  @fn mintFx(wm, ident)  @ 27-31
+
+# Cases
+  @case 'addBusNode mints a placed, unwired buss node + decoration record'  [harness]  @ 35-51
+  @case 'buss ids increment and never collide'  [harness]  @ 54-60
+  @case 'moveNodes persists a buss pos to the bus store (not via persistNodeMeta)'  [harness]  @ 63-73
+  @case 'deleteBus removes the node, its incident edges, and clears the record'  [harness]  @ 76-92
+  @case 'deleteBus refuses a non-buss node'  [harness]  @ 95-101
+  @case 'a wired buss graph passes DAG.validate (source -> bus -> master)'  [harness]  @ 104-114
+  @case 'live reconcile stamps record.trackId for a matrix buss; sub-threshold clears it'  [harness]  @ 117-167
+  @case 'fan tap pokes ride the splice: 1:1 on the many side, group fader on the lone side'  [harness]  @ 170-212
+  @case 'insertBus re-points the port edges through a new buss + unity trunk'  [harness]  @ 215-243
+  @case 'tap mirror: wiring writes through; a dead node GCs its tap'  [harness]  @ 246-268
+
+# Uses (outbound edges)
+  @use call wiringManager.mutate  @ 14,81,109,126,152,178,220,252,259
+  @use call wiringManager.instantiateFxOnScratch  @ 28
+  @use call wiringManager.addBusNode  @ 38,57,58,59,66,79,107,124,177,249
+  @use call wiringManager.graph  @ 40,68,86,88,91,100,186,229
+  @use call routingManager.meta  @ 47,69,84,87,125,141,159,209,239,251,256,267
+  @use call wiringManager.moveNodes  @ 67
+  @use call wiringManager.deleteBus  @ 85,99
+  @use call wiringManager.load  @ 122,175
+  @use call wiringManager.enableLive  @ 123,176
+  @use call wiringManager.read  @ 146,161
+  @use call wiringManager.pokeEdgeGain  @ 196,201
+  @use call wiringManager.fastGainCommit  @ 208
+  @use call wiringManager.diff  @ 210
+  @use call wiringManager.targetState  @ 210
+  @use call wiringManager.snapshot  @ 210

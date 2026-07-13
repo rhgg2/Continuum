@@ -1,0 +1,25 @@
+@spec wm_probe_fx_io_spec  src=tests/specs/wm_probe_fx_io_spec.lua  loc=111  sha=e2be081  cases=8
+@exercises wiringManager (wm), wiringView (wv)
+@surface   wm:instantiateFxOnScratch, wv:addFx, wv:graph
+@harness   mk, reaper:setFxIO, reaper.GetTrack, reaper.TrackFX_GetFXGUID, reaper.TrackFX_GetCount, reaper.CountTracks
+
+# Intent
+  (none)
+
+# Helpers
+  @fn mkWm(harness)  @ 4-9
+
+# Cases
+  @case 'instantiateFxOnScratch returns stereo-port counts (pins/2)'  [harness]  @ 13-20
+  @case 'instantiateFxOnScratch reads in_pin_X / out_pin_X via TrackFX_GetNamedConfigParm'  [harness]  @ 23-34
+  @case 'instantiateFxOnScratch returns the live fxId (matches TrackFX_GetFXGUID on scratch)'  [harness]  @ 37-44
+  @case 'instantiateFxOnScratch KEEPS the instance (no TrackFX_Delete; count stays at 1)'  [harness]  @ 47-54
+  @case 'instantiateFxOnScratch does not cache: each call mints a fresh instance'  [harness]  @ 57-66
+  @case 'instantiateFxOnScratch on unknown ident (AddByName returns -1) gives fxId=nil, ins=outs=0'  [harness]  @ 69-79
+  @case 'instantiateFxOnScratch triggers scratch creation lazily when load was skipped'  [harness]  @ 82-89
+  @case 'addFx writes probed ins/outs + per-port names onto the node'  [harness]  @ 92-109
+
+# Uses (outbound edges)
+  @use call wiringManager.instantiateFxOnScratch  @ 17,31,41,51,61,62,73,87
+  @use call wiringView.addFx  @ 103
+  @use call wiringView.graph  @ 104

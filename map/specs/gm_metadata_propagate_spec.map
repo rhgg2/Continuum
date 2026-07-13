@@ -1,0 +1,20 @@
+@spec gm_metadata_propagate_spec  src=tests/specs/gm_metadata_propagate_spec.lua  loc=44  sha=f8aa484  cases=1
+@exercises groupManager (gm)
+@surface   gm:markGroup, gm:newInstance
+
+# Intent
+  The group<->instance duals copy the event's full payload, not a
+  closed allowlist: any persisted metadata field (rpb, and arbitrary
+  unknown keys mm round-trips) survives a duplicate. The mirror image:
+  regenerated/derived keys (loc, sampleShadowed, fake) must NOT enter
+  the shared group template, or they leak into every sibling.
+
+# Helpers
+  @fn rect()  @ 10-11
+
+# Cases
+  @case 'a duplicated note carries rpb and arbitrary metadata; derived keys do not leak'  [pure]  @ 15-42
+
+# Uses (outbound edges)
+  @use call groupManager.markGroup  @ 26
+  @use call groupManager.newInstance  @ 28

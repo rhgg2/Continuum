@@ -1,0 +1,31 @@
+@spec mm_collision_backstop_spec  src=tests/specs/mm_collision_backstop_spec.lua  loc=106  sha=4d08384  cases=4
+@exercises midiManager (h.mm)
+@surface   mm:notes, mm:subscribe, mm:byToken, mm:modify, mm:assign
+@harness   bareMM
+
+# Intent
+  Phase 2 pin - design/same-pitch-enforcement.md item 2. mm's write-path
+  backstop: a verb filing over a live tokenIdx slot records (chan, pitch);
+  the outermost modify unwind resolves the settled model via
+  voicing.resolveGroup and fires collisionsResolved. bareMM on purpose:
+  with tm wired, its reload rebuild separates the collision first and the
+  backstop (correctly) finds nothing.
+
+# Helpers
+  @fn ppqsOf(mm)  @ 10-15
+  @fn noteAt(mm, ppq)  @ 17-19
+  @fn twoVoices(harness)  @ 22-27
+      -- Two distinct voices (different ppqL) on one (chan, pitch).
+
+# Cases
+  @case 'distinct voices colliding via direct mm:assign are nudged apart'  [harness]  @ 31-49
+  @case 'true duplicates (same ppqL, same detune) collapse to the longer'  [harness]  @ 53-72
+  @case 'resolution is idempotent - the next modify finds nothing'  [harness]  @ 76-87
+  @case 'a transient mid-batch collision resolves to nothing'  [harness]  @ 91-104
+
+# Uses (outbound edges)
+  @use call midiManager.notes  @ 12,18
+  @use call midiManager.subscribe  @ 35,61,80,95
+  @use call midiManager.byToken  @ 37
+  @use call midiManager.modify  @ 40,63,82,83,97
+  @use call midiManager.assign  @ 40,63,82,83,98,99

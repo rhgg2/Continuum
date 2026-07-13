@@ -1,0 +1,17 @@
+@spec wp_smoke_spec  src=tests/specs/wp_smoke_spec.lua  loc=60  sha=e2be081  cases=2
+@harness   mk
+
+# Intent
+  Pin-tests for wiringPage's Page interface (bind / unbind / focusState).
+  Render methods pull in ImGui and are exercised manually in REAPER.
+  Persistence round-trips are pinned in wm_persistence_spec.
+  
+  wiringPage requires ImGui at module scope; stub via package.preload
+  before the first require so the module loads in the pure-Lua harness.
+
+# Helpers
+  @fn newWiringPage(cm, ds, cmgr, chrome, gui)  @ 30-34
+
+# Cases
+  @case 'bind / unbind are no-ops — wiring page never re-keys cm'  [harness]  @ 38-47
+  @case 'focusState before any render returns both bits false'  [harness]  @ 51-58

@@ -1,0 +1,37 @@
+@spec wm_fx_locations_spec  src=tests/specs/wm_fx_locations_spec.lua  loc=92  sha=e2be081  cases=3
+@exercises wiringManager (wm)
+@surface   wm:load, wm:instantiateFxOnScratch, wm:applyOps, wm:diff, wm:targetState, wm:snapshot, wm:mutate, wm:graph, wm:fxTrack
+@harness   mk, r._state.projectTracks, r._state.trackGuids
+
+# Intent
+  wm:fxTrack resolves an fx guid to its host MediaTrack via rm:fx + rm:reaperTrack.
+  No wm-side cache: re-resolves through rm on every call, so chain reorders never go stale.
+
+# Helpers
+  @fn mkWm(harness)  @ 6-12
+  @fn seedSource(h, guid)  @ 14-19
+  @fn source(guid)  @ 21-24
+  @fn mintFx(wm, ident, opts)  @ 28-33
+      -- Mint an fx on scratch (as wm:addFxNode does in production) so the node enters the
+      -- graph carrying a live guid; reconcile then MOVES it onto its track.
+  @fn audioEdge(from, to)  @ 35-37
+  @fn apply(wm)  @ 39
+  @fn twoFxChain(harness)  @ 43-56
+      -- Builds s → f1 → f2 → master on one source track; returns the track and the
+      -- post-apply graph so callers can read the minted fxGuids.
+
+# Cases
+  @case 'fxTrack resolves each fx guid to its host MediaTrack'  [harness]  @ 60-65
+  @case 'fxTrack re-resolves after the chain grows (no stale host)'  [harness]  @ 68-83
+  @case 'fxTrack returns nil for an unknown guid'  [harness]  @ 86-90
+
+# Uses (outbound edges)
+  @use call wiringManager.load  @ 10
+  @use call wiringManager.instantiateFxOnScratch  @ 30
+  @use call wiringManager.applyOps  @ 39
+  @use call wiringManager.diff  @ 39
+  @use call wiringManager.targetState  @ 39
+  @use call wiringManager.snapshot  @ 39
+  @use call wiringManager.mutate  @ 46,71
+  @use call wiringManager.graph  @ 55,80
+  @use call wiringManager.fxTrack  @ 63,64,81,82,89

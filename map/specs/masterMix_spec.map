@@ -1,0 +1,13 @@
+@spec masterMix_spec  src=tests/specs/masterMix_spec.lua  loc=26  sha=4a6c156  cases=1
+
+# Intent
+  masterMix exposes a render-only toolbar segment (peak/loudness meter + master
+  fader). The meter visuals and fader drag are exercised manually in REAPER --
+  the pure-Lua ImGui fake can't drive drawlist or InvisibleButton. This pins the
+  one thing the coordinator depends on: a segment with id 'master' and a render fn.
+
+# Helpers
+  @fn fakeChrome()  @ 15
+
+# Cases
+  @case 'exposes a master toolbar segment with a render fn'  [pure]  @ 19-24

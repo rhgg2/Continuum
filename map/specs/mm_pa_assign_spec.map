@@ -1,0 +1,24 @@
+@spec mm_pa_assign_spec  src=tests/specs/mm_pa_assign_spec.lua  loc=50  sha=1ac9618  cases=1
+@exercises midiManager (h.mm)
+@surface   mm:load, mm:ccs, mm:modify, mm:assign, mm:tokenOf
+@harness   fakeReaper:bindTake, reaper:seedMidi
+
+# Intent
+  Integration spec: real midiManager + fakeReaper. A value-only assign on a
+  PA event carries its value in `vel` (not `val`). assignCC must reconstruct
+  and write the new pressure to reaper, else the edit only mutates the
+  in-memory record and is lost on reload. Pins the write-through.
+
+# Helpers
+  @fn freshTake()  @ 12-18
+  @fn seedPA(take, reaper, pa)  @ 20-25
+
+# Cases
+  @case 'assignCC writes a value-only PA vel through to reaper'  [pure]  @ 29-48
+
+# Uses (outbound edges)
+  @use call midiManager.load  @ 35
+  @use call midiManager.ccs  @ 36
+  @use call midiManager.modify  @ 39
+  @use call midiManager.assign  @ 39
+  @use call midiManager.tokenOf  @ 39

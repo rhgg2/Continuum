@@ -1,0 +1,50 @@
+@spec wm_apply_ops_spec  src=tests/specs/wm_apply_ops_spec.lua  loc=519  sha=e2be081  cases=18
+@exercises wiringManager (wm)
+@surface   wm:load, wm:instantiateFxOnScratch, wm:applyOps, wm:diff, wm:targetState, wm:snapshot, wm:mutate, wm:graph, wm:subscribe
+@harness   mk, reaper.CountTracks, reaper.GetTrack, reaper.GetSetMediaTrackInfo_String, reaper.TrackFX_GetCount, reaper.TrackFX_GetFXName, reaper.TrackFX_GetFXGUID, reaper:setFxParamNames, reaper.GetTrackNumSends, reaper.GetTrackSendInfo_Value, reaper.GetMasterTrack, reaper.GetMediaTrackInfo_Value, reaper:setFxIO, reaper.TrackFX_GetPinMappings, reaper.TrackFX_SetPinMappings, r._state.projectTracks, r._state.trackGuids, r._state.calls
+
+# Intent
+  (none)
+
+# Helpers
+  @fn mkWm(harness)  @ 11-17
+  @fn seedSource(h, guid)  @ 19-24
+  @fn findNewTrack(h)  @ 27-34
+      -- Locate the realised newTrack by the trackKey on its own meta (no central map).
+  @fn source(guid)  @ 36-39
+  @fn mintFx(wm, ident, opts)  @ 43-48
+      -- Mint an fx on scratch (as wm:addFxNode does in production) so the node enters the graph
+      -- with a live guid; reconcile MOVES it (commit C retired reconcile's fxId stamp-back).
+  @fn audioEdge(from, to, extra)  @ 50-54
+  @fn apply(wm, label)  @ 56-58
+
+# Cases
+  @case 'apply: scratch-minted fx moves onto its track, guid stable'  [harness]  @ 62-78
+  @case 'apply: idempotent — re-diff yields zero ops after first apply'  [harness]  @ 81-94
+  @case 'apply: dropping an fx node deletes by guid; siblings keep their slots'  [harness]  @ 97-125
+  @case 'apply: reorder moves via CopyToTrack rather than re-add'  [harness]  @ 128-155
+  @case 'apply: gain CU — params pushed, stamp lands on consumer mergeGuids'  [harness]  @ 158-186
+  @case 'apply: inter-class fan-in creates an audio send with midi disabled'  [harness]  @ 189-214
+  @case 'apply: does not fire wiringChanged'  [harness]  @ 217-231
+  @case 'apply: connecting an existing fan-in fx to master migrates it onto REAPER master'  [harness]  @ 234-280
+  @case 'apply: removing fx→master moves fx back off the master onto a fresh newTrack'  [harness]  @ 283-323
+  @case 'apply: gain on an inter-class wire folds onto the send D_VOL (post-FX), no CU'  [harness]  @ 326-345
+  @case 'apply: raw-source-origin send is pre-FX (I_SENDMODE=1)'  [harness]  @ 348-363
+  @case 'apply: gain on the sole wire to master folds onto the source-track fader, no CU'  [harness]  @ 366-380
+  @case 'apply: gain wire crossing into a new class folds — merge CU deleted, mergeGuids cleared'  [harness]  @ 383-414
+  @case 'apply: two gained wires to master keep the CU; the fader stays unity'  [harness]  @ 417-435
+  @case 'apply: setNchan writes I_NCHAN to the resolved track'  [harness]  @ 441-450
+  @case 'apply: setMainSend with value=true writes C_MAINSEND_OFFS'  [harness]  @ 453-465
+  @case 'apply: setPinMaps fxId-keyed → TrackFX_SetPinMappings'  [harness]  @ 468-491
+  @case 'apply: setPinMaps full-replace — owned ports absent from map are disconnected'  [harness]  @ 494-517
+
+# Uses (outbound edges)
+  @use call wiringManager.load  @ 15
+  @use call wiringManager.instantiateFxOnScratch  @ 45
+  @use call wiringManager.applyOps  @ 57,445,457,481,510
+  @use call wiringManager.diff  @ 57,92
+  @use call wiringManager.targetState  @ 57,92
+  @use call wiringManager.snapshot  @ 57,92
+  @use call wiringManager.mutate  @ 66,85,101,113,132,144,163,196,221,244,259,291,303,331,353,370,389,403,422,473,499
+  @use call wiringManager.graph  @ 76,111,141,142,183,269,398,409,480,506
+  @use call wiringManager.subscribe  @ 228

@@ -1,0 +1,32 @@
+@spec timing_composite_spec  src=tests/specs/timing_composite_spec.lua  loc=214  sha=4a6bfb0  cases=11
+@exercises timing (timing)
+@surface   timing.eval, timing.invert, timing.resolveComposite
+
+# Intent
+  timing.resolveComposite returns a Shape with linear ramps on
+  [0, a] / [b, length] and an analytic middle on (a, b). Endpoints are
+  pinned; slopes stay in [1/K, K]; round-trip is exact via Newton.
+  Tests assert semantics through eval/invert rather than the Shape's
+  internal layout.
+
+# Helpers
+  @fn evalAt(S, x)  @ 11
+  @fn invAt(S, y)  @ 12
+
+# Cases
+  @case 'identity composite: eval and invert are identity over [0, length]'  [pure]  @ 28-36
+  @case 'length = 0: degenerate Shape evaluates trivially'  [pure]  @ 40-44
+  @case 'endpoints are pinned: eval(0)=0, eval(L)=L, and invert agrees'  [pure]  @ 48-56
+  @case 'id-shift (a > 0): interior tile boundaries land at p + T·a'  [pure]  @ 60-74
+  @case 'id-shift: mid-tile interior carries the +T·a offset'  [pure]  @ 78-89
+  @case 'eval-derived secant slopes stay within [1/K, K] across the take'  [pure]  @ 93-118
+  @case 'eval/invert round-trip is exact across the take'  [pure]  @ 122-131
+  @case 'tile-aligned classic: interior matches un-clipped applyFactors'  [pure]  @ 135-143
+  @case 'delay presets: tile-interior carries shift × T_ppq, sign respected'  [pure]  @ 147-165
+  @case 'composite.phase slides every factor lattice additively'  [pure]  @ 169-193
+  @case 'composed factors: id-shift + classic round-trip + endpoints pinned'  [pure]  @ 197-212
+
+# Uses (outbound edges)
+  @use call timing.eval  @ 11
+  @use call timing.invert  @ 12
+  @use call timing.resolveComposite  @ 31,42,51,66,82,108,125,140,157,172,175,185,204

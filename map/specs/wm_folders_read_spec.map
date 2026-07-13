@@ -1,0 +1,38 @@
+@spec wm_folders_read_spec  src=tests/specs/wm_folders_read_spec.lua  loc=308  sha=e2be081  cases=11
+@exercises wiringManager (wm), DAG (DAG)
+@surface   wm:load, wm.readGraph, DAG.validate
+@harness   mk
+
+# Intent
+  read : folder track parents. Child midi takes wire into the parent node; parent emits bus 0
+  from its own take. See design/archive/wiring-folders.md § Model + read.
+
+# Helpers
+  @fn mkWm(harness)  @ 7-13
+  @fn edgeSet(g)  @ 15-25
+  @fn nodeKinds(g)  @ 26-30
+  @fn child(parent)  @ 33-36
+      -- A foldered source: mainSend lands on `parent` (a parent-send), pair 1, no fx.
+  @fn parent()  @ 38-40
+      -- A top-level folder parent main-sending to master.
+  @fn audioFx(id, ident)  @ 42-46
+      -- A plain audio fx with explicit pin maps and midi disabled (no phantom edges).
+  @fn withId(entry, id)  @ 47
+
+# Cases
+  @case 'folder: two children sum into the parent, parent feeds master'  [harness]  @ 53-70
+  @case 'folder: parent hosting fx reads as source -> fx -> master'  [harness]  @ 75-91
+  @case 'folder: a child tail midi wires into the parent node, then the parent fx'  [harness]  @ 96-113
+  @case 'folder: the parent own midi take emits on bus 0 and feeds a parent fx'  [harness]  @ 118-135
+  @case 'folder: a parent fx reading bus 0 wires from the node even with no take'  [harness]  @ 140-157
+  @case 'folder: parent-send and an explicit send to a sibling coexist'  [harness]  @ 162-181
+  @case 'folder: nested parents chain leaf -> inner -> outer -> master'  [harness]  @ 186-202
+  @case 'folder: a child with mainSend off does not edge into its parent'  [harness]  @ 207-227
+  @case 'validate: an audio edge into a source with ins>=1 is legal'  [pure]  @ 232-248
+  @case 'folder: a child bus-1 producer wires direct to the parent fx reading bus 1'  [harness]  @ 253-272
+  @case 'folder: bus-0 take aggregates via the node, bus-1 stream wires direct'  [harness]  @ 277-306
+
+# Uses (outbound edges)
+  @use call wiringManager.load  @ 11
+  @use call wiringManager.readGraph  @ 61,83,105,129,151,174,194,220,265,297
+  @use call DAG.validate  @ 247

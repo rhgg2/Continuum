@@ -1,0 +1,21 @@
+@spec vm_quantize_lane_stability_spec  src=tests/specs/vm_quantize_lane_stability_spec.lua  loc=67  sha=cbe9ac3  cases=1
+@exercises trackerView (h.vm), midiManager (h.fm)
+@surface   vm:setGridSize, vm:quantizeAll, fm:dump
+@harness   mk{seed.notes}
+
+# Intent
+  L2 lane stability under quantize. Quantize snaps each event to the
+  nearest grid row independently, so two off-grid col-mates can
+  collapse onto the same intent ppq, or onto adjacent rows whose
+  post-snap distance crosses the lenient threshold. Same root-cause
+  as the reswing fragility — exercised here through quantize's
+  different code path (assignStamp / row-snap rather than
+  swing.fromLogical).
+
+# Cases
+  @case 'diff-pitch col-mates that quantize-collapse onto the same ppq stay in lane 1'  [harness]  @ 14-64
+
+# Uses (outbound edges)
+  @use call trackerView.setGridSize  @ 47
+  @use call trackerView.quantizeAll  @ 48
+  @use call midiManager.dump  @ 50

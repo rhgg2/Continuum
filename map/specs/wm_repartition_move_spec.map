@@ -1,0 +1,35 @@
+@spec wm_repartition_move_spec  src=tests/specs/wm_repartition_move_spec.lua  loc=76  sha=e2be081  cases=1
+@exercises wiringManager (wm)
+@surface   wm:load, wm:instantiateFxOnScratch, wm:applyOps, wm:diff, wm:targetState, wm:snapshot, wm:mutate, wm:graph, wm:fxTrack
+@harness   mk, r._state.projectTracks, r._state.trackGuids
+
+# Intent
+  Pins guid-preservation when a fan-in re-partitions a RESIDENT user fx onto a
+  new emergent track: the relocation must MOVE the instance (CopyToTrack,
+  is_move=true), not delete+re-add — else the plugin's state is silently lost.
+  This is the A→B→Master + (add C→B) review case. Distinct from
+  wm_track_move_spec, which pins the scratch→source first-wiring move.
+
+# Helpers
+  @fn mkWm(harness)  @ 9-15
+  @fn seedSource(h, guid)  @ 17-22
+  @fn source(guid)  @ 24-27
+  @fn mintFx(wm, ident, opts)  @ 31-36
+      -- Mint an fx on scratch (as wm:addFxNode does in production) so the node enters the
+      -- graph carrying a live guid; reconcile then MOVES it onto its track.
+  @fn audioEdge(from, to)  @ 38
+  @fn apply(wm)  @ 40
+
+# Cases
+  @case 'fan-in re-partition MOVES a resident user fx to its new track (guid stable)'  [harness]  @ 44-74
+
+# Uses (outbound edges)
+  @use call wiringManager.load  @ 13
+  @use call wiringManager.instantiateFxOnScratch  @ 33
+  @use call wiringManager.applyOps  @ 40
+  @use call wiringManager.diff  @ 40
+  @use call wiringManager.targetState  @ 40
+  @use call wiringManager.snapshot  @ 40
+  @use call wiringManager.mutate  @ 49,64
+  @use call wiringManager.graph  @ 57,70
+  @use call wiringManager.fxTrack  @ 59,72

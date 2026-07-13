@@ -1,0 +1,23 @@
+@spec vm_insert_delete_row_lane_spec  src=tests/specs/vm_insert_delete_row_lane_spec.lua  loc=157  sha=d415ad4  cases=4
+@exercises trackerView (h.vm), editCursor (h.ec), commandManager (h.cmgr), midiManager (h.fm), trackerManager (h.tm)
+@surface   vm:setGridSize, ec:setPos, cmgr:invoke, fm:dump, tm:getChannel
+@harness   mk{seed.notes}
+
+# Intent
+  L2 lane stability under insertRow/deleteRow with non-identity swing.
+  Each event's new ppq is recomputed from `swing.fromLogical`, which
+  rounds independently per event. Two diff-pitch col-mates sitting at
+  exactly `lenient` pre-edit overlap can land past it post-shift.
+
+# Cases
+  @case 'insertRow under c58 keeps threshold-brushing diff-pitch col-mates in lane 1'  [harness]  @ 14-58
+  @case 'insertRow over an open-tailed note keeps endppq == util.OPEN'  [harness]  @ 67-93
+  @case 'insertRow over an open-tailed spanning note keeps endppq == util.OPEN'  [harness]  @ 100-124
+  @case 'deleteRow bracketing an open-tailed spanning note keeps endppq == util.OPEN'  [harness]  @ 130-154
+
+# Uses (outbound edges)
+  @use call trackerView.setGridSize  @ 41,78,111,141
+  @use call editCursor.setPos  @ 45,80,113,143
+  @use call commandManager.invoke  @ 46,81,114,144
+  @use call midiManager.dump  @ 48
+  @use call trackerManager.getChannel  @ 84,117,147

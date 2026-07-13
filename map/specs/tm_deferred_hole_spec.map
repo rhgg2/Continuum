@@ -1,0 +1,33 @@
+@spec tm_deferred_hole_spec  src=tests/specs/tm_deferred_hole_spec.lua  loc=114  sha=96c6d9e  cases=3
+@exercises midiManager (h.mm), trackerManager (h.tm)
+@surface   mm:notes, mm:tokenOf, mm:ccsRaw, tm:getChannel, tm:deleteEvent, tm:flush
+@harness   mk{seed.notes, seed.ccs}
+
+# Intent
+  Phase D pins - design/deferred-reindex.md item 1. With the reindex deferred to
+  one rebuild at the outermost unwind, the whole tm:rebuild pipeline runs against
+  the sparse (holed) cc array a mid-pipeline delete leaves behind. Three pipeline
+  stages read mm:ccsRaw() downstream of such a delete; each must see the survivors
+  past the hole, not truncate at it. Green today rests on Phase B's hole-tolerant
+  iterators AND Phase D's deferral - revert either and a survivor vanishes.
+
+# Helpers
+  @fn tokenOfNote(mm, chan, pitch)  @ 10-14
+  @fn ccTokenAt(mm, chan, evType, ppq)  @ 16-20
+  @fn pcCol(h, chan)  @ 22-29
+  @fn pasInCol(h, chan)  @ 31-40
+  @fn authoredPbCol(h, chan)  @ 43-51
+      -- Authored (visible) pbs projected into the pb column, as { ppq, cents }.
+
+# Cases
+  @case 'PC re-projection reads past a mid-pipeline PC-delete hole (:2362)'  [harness]  @ 56-71
+  @case 'PA dispatch reads past a mid-pipeline cc-delete hole (:1598)'  [harness]  @ 75-89
+  @case 'absorber snapshot reads past a mid-pipeline cc-delete hole (:2063)'  [harness]  @ 93-112
+
+# Uses (outbound edges)
+  @use call midiManager.notes  @ 11
+  @use call midiManager.tokenOf  @ 12,18
+  @use call midiManager.ccsRaw  @ 17
+  @use call trackerManager.getChannel  @ 24,33,45
+  @use call trackerManager.deleteEvent  @ 68,86,108
+  @use call trackerManager.flush  @ 69,87,109

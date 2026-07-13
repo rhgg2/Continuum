@@ -1,0 +1,34 @@
+@spec gm_persist_reload_spec  src=tests/specs/gm_persist_reload_spec.lua  loc=137  sha=f8aa484  cases=3
+@exercises groupManager (A), dataStore (h.ds)
+@surface   A:markGroup, A:newInstance, B:eachInstance, B:stateOf, B:assignEvent, ds._rewind
+
+# Intent
+  Persistence reload: gm reads `groups` once at construction —
+  before any take is bound (continuum builds the stack with no take), so
+  that read is always empty. The take-changed rebuild must re-read cm and
+  rehydrate the runtime projection (proj / locByUuid / nextGroupId) from
+  the persisted `groups` + `uuids`, or restored groups are inert and a
+  fresh markGroup clobbers group 1.
+
+# Helpers
+  @fn note(ppq, chan, lane, extra)  @ 12-18
+  @fn rect(ppq, chan)  @ 20-23
+  @fn serialisingDs()  @ 30-39
+      -- Round-trips the persisted blob through util.serialise/unserialise, as
+      -- the real take tier does. util.OPEN (= math.huge) round-trips by an
+      -- explicit "inf" literal, so an open lane tail survives the reload as a
+      -- number, not a string. The group frame still uses nil-dur to express
+      -- "open" (no ceiling), independent of how endppqL is persisted.
+
+# Cases
+  @case 'an open last-in-lane group note survives the serialised reload'  [pure]  @ 43-70
+  @case 'a persisted group rehydrates on the take-changed rebuild'  [pure]  @ 73-115
+  @case 'REAPER undo: a ds invalidate rehydrates gm from the rewound blob'  [pure]  @ 118-135
+
+# Uses (outbound edges)
+  @use call groupManager.markGroup  @ 52,81,98,126
+  @use call groupManager.newInstance  @ 53,82,127
+  @use call groupManager.eachInstance  @ 68,94,129,133
+  @use call groupManager.stateOf  @ 69,95,134
+  @use call groupManager.assignEvent  @ 102
+  @use call dataStore._rewind  @ 131

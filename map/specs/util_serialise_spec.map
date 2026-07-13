@@ -1,0 +1,14 @@
+@spec util_serialise_spec  src=tests/specs/util_serialise_spec.lua  loc=66  sha=8e1d9ef  cases=5
+
+# Intent
+  (none)
+
+# Helpers
+  @fn roundtrip(v)  @ 4-6
+
+# Cases
+  @case 'serialise: math.huge round-trips as the inf literal'  [pure]  @ 10-16
+  @case 'serialise: util.OPEN round-trips through a table value'  [pure]  @ 19-26
+  @case 'serialise: nan emits the nan literal and parses back as a string'  [pure]  @ 29-36
+  @case 'serialise: finite numbers, booleans and strings keep their existing shapes'  [pure]  @ 39-47
+  @case 'serialise: control bytes hex-escape so the wire form is NUL-free (REAPER ext-state transport)'  [pure]  @ 50-64

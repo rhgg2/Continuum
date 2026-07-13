@@ -1,0 +1,65 @@
+@spec ec_regions_spec  src=tests/specs/ec_regions_spec.lua  loc=450  sha=9db4384  cases=21
+@exercises trackerManager (h.tm), editCursor (ec), commandManager (cmgr), groupManager (gm)
+@surface   tm:length, tm:subscribe, tm:requestRebuild, tm:addEvent, tm:assignEvent, tm:deleteEvent, tm:flush, ec:decorateCol, cmgr:scope, cmgr:push, gm:eachInstance, ec:regionArm, ec:isInRegionMode, ec:regionCursor, ec:hasSelection, gm:mark, cmgr:invoke, gm:newInstance, ec:setPos, ec:row, ec:col
+
+# Intent
+  ec group-authoring mode: real cmgr spring-loaded stack, real groupManager (fake tm/cm).
+  ec builds 'region' scope at instantiate; bridge fakes tv surface, not ec's verb bodies.
+
+# Helpers
+  @fn fakeTm()  @ 7-24
+  @fn rect(ppq, dur)  @ 27-30
+      -- rect over a single note stream at chan offset 0; dur a multiple of lpr.
+  @fn rectMulti(ppq, dur)  @ 34-37
+      -- rect spanning two channels (one note lane each) -- the multi-channel
+      -- dispatch: eventShift channel-moves rather than lane-walks.
+  @fn mk(opts)  @ 41-91
+  @fn instances(gm, groupId)  @ 93-99
+  @fn anchorPpqs(gm, groupId)  @ 101-106
+  @fn armOn(ec, c, groupId, instId)  @ 108-111
+
+# Cases
+  @case 'regionArm with a selection seeds a group, arms, clears selection'  [pure]  @ 118-131
+  @case 'regionArm with no selection arms on the caret instance'  [pure]  @ 135-143
+  @case 'regionArm with no selection and no caret instance is a no-op'  [pure]  @ 147-154
+  @case 'regionBail exits and clears any selection'  [pure]  @ 158-169
+  @case 'regionExit exits but leaves the selection intact'  [pure]  @ 173-184
+  @case 'region-owned verbs unreachable outside mode'  [pure]  @ 188-195
+  @case 'paste / groupPaste drop a new instance at the caret, stay armed'  [pure]  @ 201-213
+  @case 'delete / deleteSel drop the armed instance, stay armed'  [pure]  @ 217-229
+  @case 'a nudge previews the move without mutating gm; the caret tracks it'  [pure]  @ 233-245
+  @case 'leaving region mode commits the net drag'  [pure]  @ 249-260
+  @case 'a nudged-then-returned drag commits nothing on exit'  [pure]  @ 264-276
+  @case 'move pins the top at row 0 but lets the bottom hang off, one row left'  [pure]  @ 280-304
+  @case 'eventShift walks a single-lane region across lanes, then spills to the next channel'  [pure]  @ 308-327
+  @case 'a single-lane region cannot walk past lane 1 of channel 1'  [pure]  @ 331-340
+  @case 'a multi-channel region channel-moves and clamps at channel 16'  [pure]  @ 344-360
+  @case 'row and lane deltas compose into a diagonal commit'  [pure]  @ 364-377
+  @case 'growNote / shrinkNote resize the instance end edge'  [pure]  @ 381-392
+  @case 'duplicate (duplicateDown / groupDuplicate) cascades one group-length on'  [pure]  @ 396-406
+  @case 'paint forwards (groupId, instId, cursorCol, on) to the bridge'  [pure]  @ 410-423
+  @case 'keepAlive nav command runs and keeps the mode armed'  [pure]  @ 429-436
+  @case 'any other command bails then runs (execute-through)'  [pure]  @ 440-448
+
+# Uses (outbound edges)
+  @use call trackerManager.length  @ 10
+  @use call trackerManager.subscribe  @ 11
+  @use call trackerManager.requestRebuild  @ 12
+  @use call trackerManager.addEvent  @ 13
+  @use call trackerManager.assignEvent  @ 14
+  @use call trackerManager.deleteEvent  @ 15
+  @use call trackerManager.flush  @ 16,64
+  @use call editCursor.decorateCol  @ 77
+  @use call commandManager.scope  @ 82
+  @use call commandManager.push  @ 87
+  @use call groupManager.eachInstance  @ 95
+  @use call editCursor.regionArm  @ 110,124,151
+  @use call editCursor.isInRegionMode  @ 125,140,152,166,181,194,212,228,244,405,435,446
+  @use call editCursor.regionCursor  @ 127,141,142,153,167,182,315,316,320,321,338,339,351,352,359,415,447
+  @use call editCursor.hasSelection  @ 130,168,183
+  @use call groupManager.mark  @ 138,161,176,204,220,236,252,267,284,294,311,334,347,367,384,399,413,432,443
+  @use call commandManager.invoke  @ 165,180,192,207,210,223,225,239,242,255,256,258,270,271,273,287,289,297,298,300,302,314,319,323,337,350,353,358,370,371,373,386,388,389,401,403,417,418,434,445
+  @use call groupManager.newInstance  @ 221,356
+  @use call editCursor.setPos  @ 238,254,269,286,296,313,336,349,369,416
+  @use call editCursor.row  @ 241,243,288,299,301
+  @use call editCursor.col  @ 317,322

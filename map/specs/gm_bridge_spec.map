@@ -1,0 +1,25 @@
+@spec gm_bridge_spec  src=tests/specs/gm_bridge_spec.lua  loc=61  sha=840964c  cases=2
+@exercises trackerView (h.vm), groupManager (gm), editCursor (h.ec)
+@surface   vm:selectionAsRect, vm:eventsInRect, gm:mark, gm:stamp, ec:setPos, vm:cursorAnchor
+@harness   mk{seed.notes}
+
+# Intent
+  Repro: the live tv -> gm bridge. selectionAsRect + eventsInRect feed
+  gm:mark / gm:stamp with REAL trackerView column events (not the
+  hand-built {chan=1,...} the gm unit specs use). Pins the seam that
+  crashed in REAPER ("arithmetic on nil field 'chan'").
+
+# Helpers
+  @fn noteCol(h, chan)  @ 9-13
+
+# Cases
+  @case 'gm:mark accepts real eventsInRect output (chan present on tv col events)'  [harness]  @ 17-36
+  @case 'gm:stamp (mirrorDuplicate path) accepts real rect + cursor anchor'  [harness]  @ 39-59
+
+# Uses (outbound edges)
+  @use call trackerView.selectionAsRect  @ 28,49
+  @use call trackerView.eventsInRect  @ 29,50
+  @use call groupManager.mark  @ 34
+  @use call groupManager.stamp  @ 39,57
+  @use call editCursor.setPos  @ 52
+  @use call trackerView.cursorAnchor  @ 53

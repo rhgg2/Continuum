@@ -1,0 +1,40 @@
+@spec vm_grid_spec  src=tests/specs/vm_grid_spec.lua  loc=419  sha=510a60e  cases=17
+@exercises trackerView (h.vm), editCursor (h.ec), timing (timing), dataStore (h.ds), midiManager (h.fm)
+@surface   vm:setGridSize, ec:selectChannel, ec:col, vm:rowBeatInfo, vm:addExtraCol, timing.resolveFactors, timing.applyFactors, ds:assign, ec:setPos, vm:editEvent, fm:dump, timing.logPerRow
+@harness   mk{seed.notes, seed.ccs, seed.resolution, seed.length}
+
+# Intent
+  Exercises vm's grid construction against seeded tm state.
+
+# Cases
+  @case 'one note on channel 1 surfaces as one note col with that event'  [harness]  @ 9-25
+  @case 'notes on two channels expose both via channel selection'  [harness]  @ 29-46
+  @case 'rowBeatInfo flags bar and beat boundaries under 4/4'  [harness]  @ 53-61
+  @case 'cc columns appear sorted by cc number'  [harness]  @ 67-83
+  @case 'kinds within a channel: pc → pb → note → at → cc'  [harness]  @ 87-105
+  @case 'note grid columns carry their lane number'  [harness]  @ 110-126
+  @case 'non-note columns have nil lane'  [harness]  @ 130-147
+  @case 'grid.lane1Col indexes the lane-1 note column for each channel'  [harness]  @ 152-168
+  @case 'addExtraCol on a channel with no notes preserves the implicit note column'  [harness]  @ 175-201
+  @case 'empty take: 16 implicit lane-1 note cols, lane1Col covers all chans'  [harness]  @ 207-216
+  @case 'note col without delay has the compact stop layout'  [harness]  @ 221-234
+  @case 'note col with delay extends stops and widens'  [harness]  @ 238-252
+  @case 'extreme swing: a note authored under the current swing lands on its row, no off-grid flag'  [harness]  @ 261-288
+  @case 'Phase 6: ppqL-stamped notes stay on-grid through a swing change'  [harness]  @ 297-324
+  @case 'fresh PB authored under swing lands on-grid (no off-grid flag, regardless of period position)'  [harness]  @ 330-358
+  @case 'fresh PB carries ppqL + frame after authoring'  [harness]  @ 364-393
+  @case 'fractional ppqPerRow: an on-grid onset a tick below its row boundary snaps up, not down'  [harness]  @ 399-417
+
+# Uses (outbound edges)
+  @use call trackerView.setGridSize  @ 39,178,343,377
+  @use call editCursor.selectChannel  @ 41,43,179
+  @use call editCursor.col  @ 42,44
+  @use call trackerView.rowBeatInfo  @ 56
+  @use call trackerView.addExtraCol  @ 196
+  @use call timing.resolveFactors  @ 267
+  @use call timing.applyFactors  @ 269
+  @use call dataStore.assign  @ 318
+  @use call editCursor.setPos  @ 352,383
+  @use call trackerView.editEvent  @ 353,384
+  @use call midiManager.dump  @ 387
+  @use call timing.logPerRow  @ 401

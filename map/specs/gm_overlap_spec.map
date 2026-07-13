@@ -1,0 +1,30 @@
+@spec gm_overlap_spec  src=tests/specs/gm_overlap_spec.lua  loc=82  sha=f8aa484  cases=4
+@exercises groupManager (h.gm)
+@surface   gm:eachInstance, gm:mark, gm:duplicateInto, gm:newInstance
+
+# Intent
+  Disjoint-region invariant. Overlapping mirror groups have no defined
+  semantics (classifyCreate's group adoption is pairs()-order, two
+  groups project the same slot with no cross-group dedup), so markGroup
+  and newInstance reject a region that shares time AND a (channel,
+  streamId) cell with a live instance. Same faithful-fake seam as
+  mirm_seed_conform_spec.
+
+# Helpers
+  @fn mk()  @ 11-13
+  @fn note(chan, lane)  @ 16-20
+  @fn rect(ppq, dur, chanLo, lane)  @ 23-26
+      -- streamId is `evType:key`; lane N -> 'note:N'.
+  @fn instanceCount(gm)  @ 28-30
+
+# Cases
+  @case 'mark over a live group region is rejected; no group allocated'  [pure]  @ 34-44
+  @case 'same bars, different lane does not conflict'  [pure]  @ 47-54
+  @case 'adjacent cascade stack (next = ppq+dur) is allowed'  [pure]  @ 57-67
+  @case 'a copy landing on an existing sibling is rejected'  [pure]  @ 70-80
+
+# Uses (outbound edges)
+  @use call groupManager.eachInstance  @ 29
+  @use call groupManager.mark  @ 37,40,50,51
+  @use call groupManager.duplicateInto  @ 60,63,73
+  @use call groupManager.newInstance  @ 76

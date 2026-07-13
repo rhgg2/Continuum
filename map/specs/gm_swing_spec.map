@@ -1,0 +1,51 @@
+@spec gm_swing_spec  src=tests/specs/gm_swing_spec.lua  loc=247  sha=d20cba1  cases=6
+@exercises harness (harness), trackerView (h.vm), groupManager (gm), trackerManager (h.tm), midiManager (h.fm)
+@surface   harness.mk, vm:eventsInRect, gm:markGroup, gm:newInstance, tm:flush, fm:dump, tm:fromLogical, gm:resizeGroup, vm:setSwingSlot, tm:rebuild, gm:assignEvent, tm:byUuid, tm:assignEvent
+@harness   mk{seed.length, seed.resolution, seed.notes}
+
+# Intent
+  Groups × swing: the gm→tm intent/realisation seam under a non-identity
+  swing. Real tm, real cm (classic-55 take swing), real gm wired into
+  the production flush pipeline.
+  
+  The incident: groupManager.updToInstance is a LOGICAL caller -- it
+  builds instance-frame updates with ppq/endppq in the authoring grid
+  and emits endppqL as the intent ceiling. tm.realiseNoteUpdate used to
+  treat the mere PRESENCE of endppqL (or ppqL) as the "caller already
+  computed raw" bypass, skipping swing on update.ppq. So a propagated
+  reproject `set` placed a sibling's note-on at its logical position
+  read as raw -- off-grid by exactly the swing displacement (the
+  reported "row 2 copy lands off-grid in row 9" under classic-55).
+  
+  Fix: the bypass is an explicit, consumed-and-stripped `rawTime` flag,
+  not the presence of a data stamp. Logical callers (gm) no longer trip
+  it; the genuine raw caller (reswing/rescale) sets it.
+
+# Helpers
+  @fn probe()  @ 33-35
+      -- One probe scenario to resolve the swung raw for a logical position
+      -- without hand-coding the closed form -- the same transform tm uses.
+  @fn seededHarness(notes)  @ 37-44
+
+# Cases
+  @case 'newInstance copies land on the swung grid (add path guard)'  [pure]  @ 50-85
+  @case 'a propagated reproject set keeps siblings on the swung grid'  [pure]  @ 89-130
+  @case 'a member edit still propagates after a take swing change'  [pure]  @ 134-169
+  @case 'assignEvent: a logical (ppq+endppqL) update swings the onset'  [pure]  @ 176-194
+  @case 'assignEvent: reopening (endppq=util.OPEN) still swings the onset'  [pure]  @ 198-217
+  @case 'assignEvent: explicit rawTime threads caller raw unmodified'  [pure]  @ 221-245
+
+# Uses (outbound edges)
+  @use call harness.mk  @ 34
+  @use call trackerView.eventsInRect  @ 69,102,150
+  @use call groupManager.markGroup  @ 72,103,151
+  @use call groupManager.newInstance  @ 73,104,152
+  @use call trackerManager.flush  @ 74,105,124,153,159,187,210,236
+  @use call midiManager.dump  @ 77,109,162,189,212,238
+  @use call trackerManager.fromLogical  @ 78,108,110,163,164,190,213,240
+  @use call groupManager.resizeGroup  @ 122
+  @use call trackerView.setSwingSlot  @ 155
+  @use call trackerManager.rebuild  @ 156
+  @use call groupManager.assignEvent  @ 158
+  @use call trackerManager.byUuid  @ 184,206,215,229,243,244
+  @use call trackerManager.assignEvent  @ 186,209,234

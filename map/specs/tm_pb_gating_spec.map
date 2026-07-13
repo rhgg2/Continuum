@@ -1,0 +1,20 @@
+@spec tm_pb_gating_spec  src=tests/specs/tm_pb_gating_spec.lua  loc=47  sha=76793d5  cases=2
+@exercises trackerManager (h.tm), dataStore (h.ds)
+@surface   tm:getChannel, tm:rebuild, ds:assign
+@harness   mk{seed.ccs}
+
+# Intent
+  Stage 1b: the pb view column is carried across the rebuild-entry wipe. A clean
+  channel reuses its column object (no re-clone); a dirtied channel re-derives.
+  The passing suite proves dirty channels stay correct, but nothing else pins the
+  reuse itself -- a regression that re-cloned every rebuild would stay green here
+  without this spec. see design/incremental-pbs.md § Stage 1b
+
+# Cases
+  @case 'clean rebuild reuses the carried pb column object'  [harness]  @ 12-26
+  @case 'extraColumns edit dirties pb: carried column replaced'  [harness]  @ 30-44
+
+# Uses (outbound edges)
+  @use call trackerManager.getChannel  @ 18,19,24,25,35,41
+  @use call trackerManager.rebuild  @ 22
+  @use call dataStore.assign  @ 39

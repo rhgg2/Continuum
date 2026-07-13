@@ -1,0 +1,27 @@
+@spec wm_track_move_spec  src=tests/specs/wm_track_move_spec.lua  loc=102  sha=e2be081  cases=3
+@exercises wiringManager (wm)
+@surface   wm:load, wm:enableLive, wm:addFxNode, wm:graph, wm:mutate, wm:isScratchTrack
+@harness   mk, reaper:setFxIO, reaper.GetTrack, reaper.TrackFX_GetCount, reaper.TrackFX_GetFXGUID, reaper.CountTracks, r._state.projectTracks, r._state.trackGuids
+
+# Intent
+  Pins the no-delete-on-trackKey-move invariant: addFxNode parks on scratch, then
+  CopyToTrack(is_move=true) relocates. Node delete is the one TrackFX_Delete trigger.
+
+# Helpers
+  @fn mkWm(harness)  @ 6-14
+  @fn seedSource(h, guid)  @ 16-21
+  @fn instrumentAddByName()  @ 23-31
+  @fn sourceNode(guid)  @ 33-36
+
+# Cases
+  @case 'addFxNode parks the FX on scratch with its fxId stamped into the node'  [harness]  @ 40-51
+  @case 'wiring source->fx MOVES the live instance; fxId stable, AddByName fires once total'  [harness]  @ 54-84
+  @case 'removing the fx-node from the graph deletes the instance (the one legit delete)'  [harness]  @ 87-100
+
+# Uses (outbound edges)
+  @use call wiringManager.load  @ 12
+  @use call wiringManager.enableLive  @ 44,61,91
+  @use call wiringManager.addFxNode  @ 45,62,92
+  @use call wiringManager.graph  @ 48,63
+  @use call wiringManager.mutate  @ 66,96
+  @use call wiringManager.isScratchTrack  @ 77

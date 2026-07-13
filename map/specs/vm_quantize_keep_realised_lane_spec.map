@@ -1,0 +1,21 @@
+@spec vm_quantize_keep_realised_lane_spec  src=tests/specs/vm_quantize_keep_realised_lane_spec.lua  loc=54  sha=cbe9ac3  cases=1
+@exercises trackerView (h.vm), midiManager (h.fm)
+@surface   vm:setGridSize, vm:quantizeKeepRealisedAll, fm:dump
+@harness   mk{seed.notes}
+
+# Intent
+  L2 lane stability under quantizeKeepRealised. Same column-allocation
+  fragility as the other scopes: snapping intent onto grid can collapse
+  two col-mates onto a same-onset collision or push their intent
+  overlap past lenient. Differs from plain quantize because endppq
+  stays put and delay absorbs the intent shift — so any post-conform
+  newppq adjustment requires a corresponding newDelay correction to
+  preserve the realised-onset contract (or be honestly clamped).
+
+# Cases
+  @case 'quantizeKeepRealised on diff-pitch col-mates keeps both in lane 1'  [harness]  @ 14-51
+
+# Uses (outbound edges)
+  @use call trackerView.setGridSize  @ 43
+  @use call trackerView.quantizeKeepRealisedAll  @ 44
+  @use call midiManager.dump  @ 46

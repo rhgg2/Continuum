@@ -1,0 +1,22 @@
+@spec mm_blob_parse_spec  src=tests/specs/mm_blob_parse_spec.lua  loc=46  sha=52943e4  cases=2
+@exercises midiBlob (midiBlob)
+@surface   midiBlob.parse
+
+# Intent
+  Golden pin for midiBlob.parse against real REAPER MIDI_GetAllEvts blobs.
+  
+  Fixtures are captured by tests/spikes/spike_capture_blobs.lua: each carries
+  a raw blob plus the per-event API decode mm:load consumes today. parse(blob)
+  must reproduce notes/ccs/texts exactly -- including the 0-based per-type idx,
+  note-off pairing, cc-shape-from-flags, and CCBZ tension folded onto its cc
+  while staying out of the text index space.
+
+# Helpers
+  @fn byName(name)  @ 13-15
+
+# Cases
+  @case 'parse reproduces ground truth:  ..'  [pure]  @ 21-27
+  @case 'bezier CCBZ folds onto its cc and stays out of the text index space'  [pure]  @ 32-43
+
+# Uses (outbound edges)
+  @use call midiBlob.parse  @ 23,35

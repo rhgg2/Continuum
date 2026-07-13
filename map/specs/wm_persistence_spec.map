@@ -1,0 +1,24 @@
+@spec wm_persistence_spec  src=tests/specs/wm_persistence_spec.lua  loc=100  sha=e2be081  cases=6
+@exercises wiringManager (wm)
+@surface   wm:graph, wm:load, wm:subscribe, wm:mutate
+@harness   mk, r._state.projectTracks, r._state.trackGuids
+
+# Intent
+  (none)
+
+# Helpers
+  @fn mkWm(harness, opts)  @ 4-9
+
+# Cases
+  @case 'fresh project: graph has master node, empty edges'  [harness]  @ 13-20
+  @case 'load reconstructs the graph from REAPER routing (read is the store)'  [harness]  @ 23-37
+  @case 'mutate that fails validation returns false+err, graph unchanged, no signal'  [harness]  @ 40-58
+  @case 'successful mutate fires one wiringChanged{kind=mutate}'  [harness]  @ 61-75
+  @case 'wm:load() fires wiringChanged{kind=load}'  [harness]  @ 78-86
+  @case 'wm:graph() returns a deep copy — caller mutation does not leak'  [harness]  @ 89-98
+
+# Uses (outbound edges)
+  @use call wiringManager.graph  @ 16,32,43,55,89,92,95
+  @use call wiringManager.load  @ 31,78,83
+  @use call wiringManager.subscribe  @ 45,65,82
+  @use call wiringManager.mutate  @ 48,66

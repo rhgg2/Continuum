@@ -1,0 +1,33 @@
+@spec wv_bus_spec  src=tests/specs/wv_bus_spec.lua  loc=132  sha=e2be081  cases=9
+@exercises wiringView (wv), wiringManager (wm)
+@surface   wv:addFx, wv:wireViews, wm:addBusNode, wv:busViews, wv:nodeViews, wv:deleteNode, wm:busRecords, wv:moveNodes
+@harness   mk
+
+# Intent
+  (none)
+
+# Helpers
+  @fn mkWv(harness)  @ 6-12
+  @fn mkAudioWire(wv)  @ 15-20
+      -- a --audio--> b, both real fx nodes.
+
+# Cases
+  @case 'wireViews: insertBus at the consumer re-points the feed and tags both edges'  [harness]  @ 24-33
+  @case 'wireViews: insertBus at the producer re-points the consumer wire from the bar'  [harness]  @ 36-45
+  @case 'wireViews: the `to` end wins when both endpoints are busses'  [harness]  @ 48-55
+  @case 'wireViews: an unclaimed edge carries no bus stamp'  [harness]  @ 58-63
+  @case 'wireViews: edges incident to a bus node are tagged structurally (matrix)'  [harness]  @ 66-76
+  @case 'busViews: an inserted buss projects from its node at every degree'  [harness]  @ 79-88
+  @case 'busViews + nodeViews: a bus node projects matrix=true and category bus'  [harness]  @ 91-105
+  @case 'deleting a tapped node drops its taps; the buss survives'  [harness]  @ 108-119
+  @case 'moveNodes persists an inserted buss pos through the record'  [harness]  @ 122-130
+
+# Uses (outbound edges)
+  @use call wiringView.addFx  @ 16,17
+  @use call wiringView.wireViews  @ 30,42,54,62,73
+  @use call wiringManager.addBusNode  @ 51,52,70,94
+  @use call wiringView.busViews  @ 85,95
+  @use call wiringView.nodeViews  @ 101
+  @use call wiringView.deleteNode  @ 114
+  @use call wiringManager.busRecords  @ 115,129
+  @use call wiringView.moveNodes  @ 128

@@ -1,0 +1,35 @@
+@spec wm_pin_grow_reassert_spec  src=tests/specs/wm_pin_grow_reassert_spec.lua  loc=106  sha=e2be081  cases=4
+@exercises wiringManager (wm)
+@surface   wm:load, wm:instantiateFxOnScratch, wm:mutate, wm:applyOps, wm:diff, wm:targetState, wm:snapshot, wm:graph
+@harness   mk, reaper:setFxIO, reaper.TrackFX_GetPinMappings, reaper.TrackFX_SetPinMappings, r._state.projectTracks, r._state.trackGuids, r._state.deferred
+
+# Intent
+  (none)
+
+# Helpers
+  @fn mkWm(harness)  @ 4-10
+  @fn seedSource(h, guid)  @ 12-17
+  @fn source(guid)  @ 19-22
+  @fn mintFx(wm, ident, opts)  @ 24-29
+  @fn audioEdge(from, to)  @ 31
+  @fn drainDeferred(h)  @ 33-38
+  @fn seedFx(harness)  @ 41-54
+      -- A source track hosting one materialised fx; returns the harness, wm, track, and the fx guid.
+  @fn nchanOp(value)  @ 56-58
+  @fn pinMapsOp(fxId)  @ 59-62
+
+# Cases
+  @case 'grow + setPinMaps schedules one off-cycle pin re-assert'  [harness]  @ 66-71
+  @case 'the deferred re-assert restores the intended map after a grow OR-corrupts it'  [harness]  @ 74-86
+  @case 'grow with no setPinMaps schedules nothing (grow alone is harmless)'  [harness]  @ 89-96
+  @case 'setPinMaps with no grow schedules nothing (no OR without a grow)'  [harness]  @ 99-104
+
+# Uses (outbound edges)
+  @use call wiringManager.load  @ 8
+  @use call wiringManager.instantiateFxOnScratch  @ 26
+  @use call wiringManager.mutate  @ 45
+  @use call wiringManager.applyOps  @ 51,69,77,94,102
+  @use call wiringManager.diff  @ 51
+  @use call wiringManager.targetState  @ 51
+  @use call wiringManager.snapshot  @ 51
+  @use call wiringManager.graph  @ 53

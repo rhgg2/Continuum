@@ -1,0 +1,17 @@
+@spec vm_scale_spec  src=tests/specs/vm_scale_spec.lua  loc=48  sha=1a1393f  cases=2
+@exercises trackerView (h.vm), midiManager (h.fm)
+@surface   vm:scaleSelection, fm:dump
+@harness   mk{seed.notes}
+
+# Intent
+  Pins tv:scaleSelection's length guard: a scale that would push any
+  note onset off the end of the take is silently refused. Tails are out
+  of scope (tm's universal tail pass clips realised against length).
+
+# Cases
+  @case 'scaleSelection 2× refuses when any onset would exceed length'  [harness]  @ 9-27
+  @case 'scaleSelection 2× commits when every onset stays inside length'  [harness]  @ 31-46
+
+# Uses (outbound edges)
+  @use call trackerView.scaleSelection  @ 19,40
+  @use call midiManager.dump  @ 21,42

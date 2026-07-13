@@ -1,0 +1,28 @@
+@spec cm_poll_undo_spec  src=tests/specs/cm_poll_undo_spec.lua  loc=108  sha=e788faf  cases=5
+@exercises configManager (h.cm)
+@surface   cm:set, cm:get, cm:pollUndo, cm:subscribe
+@harness   mk, r._state.takeExt
+
+# Intent
+  Pin-tests for cm:pollUndo -- the per-frame watcher that catches REAPER
+  undo / redo of take + track P_EXT writes. REAPER rewinds P_EXT
+  directly, bypassing cm; without the watcher, cm's cache stays stale
+  and subscribers (toolbar, view layer) keep displaying the post-edit
+  value after a Ctrl-Z.
+
+# Helpers
+  @fn bumpState(r)  @ 10
+  @fn takeExtKey(take)  @ 11
+
+# Cases
+  @case 'pollUndo refreshes take cache when P_EXT changed under us'  [harness]  @ 15-28
+  @case 'pollUndo fires configChanged reload on external diff'  [harness]  @ 31-47
+  @case 'pollUndo no-ops when state count has not changed'  [harness]  @ 50-66
+  @case 'pollUndo does not fire when state ticked but our P_EXT is in sync'  [harness]  @ 69-83
+  @case 'pollUndo drops a stale take handle silently and does not crash'  [harness]  @ 88-106
+
+# Uses (outbound edges)
+  @use call configManager.set  @ 18,34,53,72,91
+  @use call configManager.get  @ 19,27,65
+  @use call configManager.pollUndo  @ 26,42,62,80,102
+  @use call configManager.subscribe  @ 37,61,79,101

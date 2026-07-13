@@ -1,0 +1,39 @@
+@spec gm_block_shift_alias_spec  src=tests/specs/gm_block_shift_alias_spec.lua  loc=88  sha=b8c32e6  cases=2
+@exercises midiManager (h.fm), groupManager (h.gm), trackerView (h.vm), editCursor (h.ec), trackerManager (h.tm), commandManager (h.cmgr)
+@surface   fm:notes, gm:markGroup, vm:eventsInRect, vm:selectionAsRect, ec:selClear, gm:newInstance, tm:flush, cmgr:invoke
+@harness   mk{seed.notes}
+
+# Intent
+  Stage 2: the injectivity guard on block shifts (design/group-aware-editing.md
+  decision 3, gm:footprintAliases). A propagating block op must map its
+  footprint onto region slots one-to-one. A block spanning two instances of one
+  group AT THE SAME relative slot aliases -- the re-adds would double-write the
+  shared pattern; refuse it (no-op). Disjoint relative slots stay injective and
+  move freely (precise per-cell, not conservative-by-instance-count).
+  
+  Region spans chan 1+2 (so a shift to chan 2 stays IN region -> auto-join, the
+  corrupting path), rows 0..1. Two instances stacked: instance 1 rows 0..1,
+  instance 2 rows 2..3. Shared members at relative rows 0 and 1 on chan 1.
+  Row pitch 60 ppq (resolution 240, rowPerBeat 4).
+
+# Helpers
+  @fn noteCol(h, chan)  @ 15-19
+  @fn allNotes(h)  @ 21-27
+  @fn notesOn(h, chan)  @ 29-33
+  @fn twoInstanceGroup(harness)  @ 37-54
+      -- Region across chan 1+2 rows 0..1; a second instance stacked at rows 2..3;
+      -- shared members at relative rows 0 and 1 on chan 1 (four notes once projected).
+
+# Cases
+  @case 'aliasing block shift refused: two instances at one slot, no double-write'  [harness]  @ 58-71
+  @case 'disjoint block shift allowed: two instances at different slots move injectively'  [harness]  @ 74-86
+
+# Uses (outbound edges)
+  @use call midiManager.notes  @ 23
+  @use call groupManager.markGroup  @ 48
+  @use call trackerView.eventsInRect  @ 48
+  @use call trackerView.selectionAsRect  @ 48,49
+  @use call editCursor.selClear  @ 50
+  @use call groupManager.newInstance  @ 51
+  @use call trackerManager.flush  @ 52
+  @use call commandManager.invoke  @ 66,81

@@ -1,0 +1,38 @@
+@spec wm_fx_routing_apply_spec  src=tests/specs/wm_fx_routing_apply_spec.lua  loc=195  sha=e2be081  cases=5
+@exercises wiringManager (wm)
+@surface   wm:load, wm:instantiateFxOnScratch, wm:applyOps, wm:diff, wm:targetState, wm:snapshot, wm:mutate
+@harness   mk, reaper.TrackFX_GetCount, reaper.TrackFX_GetFXName, reaper:setFxParamNames, r._state.projectTracks, r._state.trackGuids, r._state.fxByTrack
+
+# Intent
+  Integration: wm:applyOps reconciles per-FX MIDI routing against the user graph;
+  wm:snapshot decodes it back. See docs/wiringManager.md § Routing as ground truth.
+
+# Helpers
+  @fn mkWm(harness)  @ 12-18
+  @fn seedSource(h, guid)  @ 20-25
+  @fn source(guid)  @ 27-30
+  @fn mintFx(wm, ident, opts)  @ 34-39
+      -- Mint an fx on scratch (as wm:addFxNode does in production) so the node enters the
+      -- graph carrying a live guid; reconcile then MOVES it onto its track.
+  @fn audioEdge(from, to, extra)  @ 41-45
+  @fn midiEdge(from, to)  @ 46-48
+  @fn apply(wm)  @ 50
+  @fn routingFlag(h, track, idx)  @ 54-62
+      -- Fall back to the fake's default (0x10) for non-JS FX when no write
+      -- happened; JS plugins have no routing trailer at all so return nil.
+
+# Cases
+  @case 'fxRouting/apply: audio-only fx gets midi-out disabled'  [harness]  @ 66-80
+  @case 'fxRouting/apply: midi-emitter has bit clear, midi-tail has bit set'  [harness]  @ 86-110
+  @case 'fxRouting/apply: removing the midi edge flips f1 from clear to set'  [harness]  @ 113-143
+  @case 'fxRouting/apply: CU bridge JSFX is not patched and not counted'  [harness]  @ 146-167
+  @case 'fxRouting/apply: snapshot decodes routing back; re-apply emits no setFXChain'  [harness]  @ 170-193
+
+# Uses (outbound edges)
+  @use call wiringManager.load  @ 16
+  @use call wiringManager.instantiateFxOnScratch  @ 36
+  @use call wiringManager.applyOps  @ 50
+  @use call wiringManager.diff  @ 50,190
+  @use call wiringManager.targetState  @ 50,184
+  @use call wiringManager.snapshot  @ 50,183
+  @use call wiringManager.mutate  @ 70,90,117,133,154,174

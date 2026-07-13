@@ -1,0 +1,29 @@
+@spec coordinator_spec  src=tests/specs/coordinator_spec.lua  loc=137  sha=e73ba95  cases=5
+@exercises coordinator (coord)
+@surface   coord:register, coord:setActive, coord:returnToArrange, coord:reloadAfterExternalMutation
+@harness   mk
+
+# Intent
+  Pin-tests for the coordinator's page-routing surface: setActive scope-swap and returnToArrange.
+  Render (frame/run) pulls in ImGui and is exercised manually in REAPER.
+
+# Helpers
+  @fn fakePage()  @ 21-31
+      -- A page that records every bind / unbind so a test can read back what
+      -- the coordinator did to it. revealTake is recorded too (returnToArrange).
+  @fn lastCall(page)  @ 33-35
+  @fn newCoord(h, registrations)  @ 38-48
+      -- see docs/coordinator.md § Test wiring for newCoord
+
+# Cases
+  @case 'setActive swaps scope, unbinds the outgoing page, and binds the incoming tracker from the cursor'  [harness]  @ 52-64
+  @case 'returnToArrange unbinds the tracker and rebinds arrange (no reveal)'  [harness]  @ 68-79
+  @case 'returnToArrange is a no-op when the arrange page is not registered'  [harness]  @ 83-93
+  @case 'reloadAfterExternalMutation resyncs the undo mirror before reloading the take'  [harness]  @ 99-114
+  @case 'coordinator constructs the reaper bridge with an env exposing coord and the page() debug resolver'  [harness]  @ 118-135
+
+# Uses (outbound edges)
+  @use call coordinator.register  @ 44,127
+  @use call coordinator.setActive  @ 59,74
+  @use call coordinator.returnToArrange  @ 75,90
+  @use call coordinator.reloadAfterExternalMutation  @ 110

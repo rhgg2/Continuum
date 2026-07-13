@@ -1,0 +1,33 @@
+@spec tm_trill_spec  src=tests/specs/tm_trill_spec.lua  loc=137  sha=a1b74fe  cases=3
+@exercises trackerManager (h.tm), midiManager (h.fm), tuning (tuning)
+@surface   tm:addEvent, tm:flush, tm:getChannel, fm:dump, tm:rebuild, tuning.findTemper, tuning.transposeStep
+@harness   mk
+
+# Intent
+  Note macros, v1: trill (structural, second kind). Trill alternates the host
+  pitch with a note `step` scale-steps away, resolved through the temper to
+  per-fxNote detune -- which the absorber pass realises once the 4.9 gather
+  unions derived lane-1 fxNotes. G4 runs microtonally (19EDO) under swing+delay:
+  the frame/rounding AND detune/absorber round-trip tripwire.
+
+# Helpers
+  @fn cents2raw(c)  @ 17
+      -- Matches tm's centsToRaw at the default pbRange (2 semitones = 200 cents).
+  @fn fxNotesOf(dump, hostUuid)  @ 19-26
+  @fn pbsByPpq(dump)  @ 28-35
+  @fn fullView(dump)  @ 38-47
+      -- Stable, order-independent view of notes + pbs for byte-identical assertions.
+
+# Cases
+  @case 'G4: flush -> rebuild -> flush byte-identical (trill, 19EDO, swing + delay)'  [harness]  @ 54-82
+  @case 'trill alternates host pitch with the stepped note; the host parks, all hits derived'  [harness]  @ 88-108
+  @case 'a microtonal trill seats absorbers at the alternation fxNote seats'  [harness]  @ 114-134
+
+# Uses (outbound edges)
+  @use call trackerManager.addEvent  @ 62,91,117
+  @use call trackerManager.flush  @ 64,79,93,119
+  @use call trackerManager.getChannel  @ 68,96
+  @use call midiManager.dump  @ 70,75,77,80,95,127
+  @use call trackerManager.rebuild  @ 78
+  @use call tuning.findTemper  @ 121
+  @use call tuning.transposeStep  @ 122

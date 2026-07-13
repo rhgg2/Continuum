@@ -1,0 +1,23 @@
+@spec tm_dormant_config_spec  src=tests/specs/tm_dormant_config_spec.lua  loc=64  sha=c7fee67  cases=3
+@exercises trackerManager (h.tm), configManager (h.cm), dataStore (h.ds)
+@surface   tm:subscribe, tm:bindTake, cm:set, ds:assign, tm:detach
+@harness   mk
+
+# Intent
+  A dormant tracker must ignore shared cm's configChanged churn (any page can write it).
+  See docs/trackerManager.md § Dormant seam for the invariant this pins.
+
+# Helpers
+  @fn countRebuilds(tm)  @ 8-12
+
+# Cases
+  @case 'dormant tracker (bindTake nil) ignores configChanged churn'  [harness]  @ 16-31
+  @case 'detach also makes the tracker dormant'  [harness]  @ 35-47
+  @case 'bound tracker still rebuilds on a swing edit'  [harness]  @ 51-62
+
+# Uses (outbound edges)
+  @use call trackerManager.subscribe  @ 10
+  @use call trackerManager.bindTake  @ 24
+  @use call configManager.set  @ 28,45
+  @use call dataStore.assign  @ 29,60
+  @use call trackerManager.detach  @ 42

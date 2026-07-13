@@ -1,0 +1,36 @@
+@spec sample_view_spec  src=tests/specs/sample_view_spec.lua  loc=209  sha=1278d64  cases=15
+@exercises configManager (h.cm), dataStore (h.ds)
+@surface   cm:set, cm:getAt, cm:setContext, ds:assign, cm:get
+@harness   mk, r._state.trackExt
+
+# Intent
+  Pin-tests for sampleView state management (draw() needs ImGui; rendering verified manually).
+  sv holds sm directly; a fake sm records calls.
+
+# Helpers
+  @fn fakeSm()  @ 7-30
+  @fn newSampleView(cm, ds, sm)  @ 32-34
+
+# Cases
+  @case 'newSampleView starts with no track'  [harness]  @ 38-42
+  @case 'setTrack stores the track'  [harness]  @ 45-50
+  @case 'setTrack(nil) clears the track'  [harness]  @ 53-59
+  @case 'selectedFile starts nil; setSelectedFile stores; setSelectedFile(nil) clears'  [harness]  @ 62-70
+  @case 'loadSelectedIntoCurrent is a no-op when no file is selected'  [harness]  @ 73-80
+  @case 'loadSelectedIntoCurrent passes (currentSample, selectedFile) to sm:assign'  [harness]  @ 83-94
+  @case 'loadSelectedIntoCurrent surfaces sm:assign failure'  [harness]  @ 97-104
+  @case 'auditionPath(nil) is a no-op'  [harness]  @ 107-114
+  @case 'auditionPath(p) calls sm:previewPath with that path'  [harness]  @ 117-126
+  @case 'setTrack with cm injected rekeys cm and clears transient currentSample'  [harness]  @ 129-143
+  @case 'setTrack with cm and same track still rehydrates cm and clears transient'  [harness]  @ 146-155
+  @case 'listTracks proxies sm:listTracks'  [harness]  @ 158-169
+  @case 'loadSelectedIntoCurrent advances to next free slot when advanceOnLoad is true'  [harness]  @ 172-182
+  @case 'loadSelectedIntoCurrent leaves currentSample alone when advanceOnLoad is false'  [harness]  @ 185-194
+  @case 'auditionSlot(idx) calls sm:previewSlot(track, idx, 1)'  [harness]  @ 197-207
+
+# Uses (outbound edges)
+  @use call configManager.set  @ 88,132,151,175,176,188,189
+  @use call configManager.getAt  @ 139,141,153
+  @use call configManager.setContext  @ 154
+  @use call dataStore.assign  @ 177
+  @use call configManager.get  @ 181,193

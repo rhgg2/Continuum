@@ -1,0 +1,43 @@
+@spec gm_row_atomic_spec  src=tests/specs/gm_row_atomic_spec.lua  loc=187  sha=bafaec0  cases=6
+@exercises midiManager (h.fm), groupManager (h.gm), trackerView (h.vm), editCursor (h.ec), trackerManager (h.tm), commandManager (h.cmgr)
+@surface   fm:notes, gm:markGroup, vm:eventsInRect, vm:selectionAsRect, ec:selClear, gm:newInstance, tm:flush, ec:setPos, cmgr:invoke, gm:eachInstance
+@harness   mk{seed.notes}
+
+# Intent
+  Stage 5: time-topology atomicity (design/group-aware-editing.md decision 4).
+  A row op treats each group instance as a rigid block: an instance wholly past
+  the cut re-anchors as a unit (gm:moveInstance) without touching the shared
+  pattern (which would move the macro in EVERY instance); a cut that strikes an
+  instance's interior refuses the whole op. A column-scoped op that would slice
+  only some of an instance's columns also refuses.
+  
+  Two instances of one chan-1 group, members at relative rows 0..1 (ppq 0, 60;
+  resolution 240, rowPerBeat 4 -> 60 ppq/row). Instance 1 anchored at row 0
+  (rows 0..1), instance 2 at ppq 240 (rows 4..5); rows 2..3 are an empty gap.
+
+# Helpers
+  @fn noteCol(h, chan)  @ 14-18
+  @fn ppqsOn(h, chan)  @ 20-27
+  @fn eq(a, b)  @ 29-33
+  @fn stackedGroup(harness)  @ 36-53
+      -- chan-1 group, two stacked instances with a two-row gap between them.
+
+# Cases
+  @case 'insertRow past an instance re-anchors it alone; the sibling does not move'  [harness]  @ 57-71
+  @case 'insertRow inside an instance refuses the whole op'  [harness]  @ 74-83
+  @case 'deleteRow before an instance re-anchors it up; the sibling does not move'  [harness]  @ 86-96
+  @case 'column-scoped row op refuses when it would slice some of an instance\'s columns'  [harness]  @ 99-126
+  @case 'insertRow sliding an instance partly off the take keeps the rows that remain'  [harness]  @ 129-157
+  @case 'insertRow shoving an instance entirely off the take deletes it'  [harness]  @ 160-185
+
+# Uses (outbound edges)
+  @use call midiManager.notes  @ 22
+  @use call groupManager.markGroup  @ 47,115,144,173
+  @use call trackerView.eventsInRect  @ 47,115,144,173
+  @use call trackerView.selectionAsRect  @ 47,48,115,116,144,145,173,174
+  @use call editCursor.selClear  @ 49,117,146,175
+  @use call groupManager.newInstance  @ 50,147,176
+  @use call trackerManager.flush  @ 51,118,148,177
+  @use call editCursor.setPos  @ 63,78,90,121,151,180
+  @use call commandManager.invoke  @ 64,79,91,122,152,181
+  @use call groupManager.eachInstance  @ 156,184

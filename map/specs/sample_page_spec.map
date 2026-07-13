@@ -1,0 +1,18 @@
+@spec sample_page_spec  src=tests/specs/sample_page_spec.lua  loc=74  sha=3848a7b  cases=4
+@harness   mk
+
+# Intent
+  Pin-tests for samplePage's Page interface (bind / unbind / focusState).
+  Render methods pull in ImGui and are exercised manually in REAPER.
+  
+  samplePage requires ImGui at module scope; stub via package.preload
+  before the first require so the module loads in the pure-Lua harness.
+
+# Helpers
+  @fn newSamplePage(cm, cmgr, chrome, gui)  @ 24-27
+
+# Cases
+  @case 'setTrack(track) re-keys cm to that track via the page's own sv'  [harness]  @ 31-39
+  @case 'setTrack(nil) does not re-key cm'  [harness]  @ 42-50
+  @case 'focusState before any render returns both bits false'  [harness]  @ 53-60
+  @case 'bind re-keys cm to the page track on every activation, not just the first'  [harness]  @ 63-72

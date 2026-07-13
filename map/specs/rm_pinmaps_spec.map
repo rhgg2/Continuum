@@ -1,0 +1,24 @@
+@spec rm_pinmaps_spec  src=tests/specs/rm_pinmaps_spec.lua  loc=81  sha=e2be081  cases=4
+@exercises harness (harness), routingManager (rm)
+@surface   harness.mk, rm:tracks, rm:assignFx
+@harness   mk, reaper.CountTracks, reaper.InsertTrackAtIndex, reaper.GetTrack, reaper.GetSetMediaTrackInfo_String, reaper:setTrackFX, reaper.GetTrackGUID, reaper:setFxIO
+
+# Intent
+  routingManager Phase 4: pin maps. tracks() nests fx.pinMaps = {ins, outs},
+  each keyed by port → { pair, ... }; disconnected ports (zero mask) are absent.
+  assignFx{pinMaps} is a full per-fx replace. Bit math stays private.
+
+# Helpers
+  @fn mkRm()  @ 8-12
+  @fn seedTrack(reaper, name, fx)  @ 14-21
+
+# Cases
+  @case 'tracks() nests pinMaps; identity pins decode to port→own pair'  [pure]  @ 25-33
+  @case 'a port mapped to two pairs reads both; disconnected ports are absent'  [pure]  @ 36-49
+  @case 'a high pair (channels 64-127, second mapping bank) round-trips'  [pure]  @ 52-62
+  @case 'assignFx{pinMaps} is a full replace: omitted ports become disconnected'  [pure]  @ 65-79
+
+# Uses (outbound edges)
+  @use call harness.mk  @ 9
+  @use call routingManager.tracks  @ 30,41,46,56,60,70,76
+  @use call routingManager.assignFx  @ 43,58,72,74

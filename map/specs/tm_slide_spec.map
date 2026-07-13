@@ -1,0 +1,37 @@
+@spec tm_slide_spec  src=tests/specs/tm_slide_spec.lua  loc=200  sha=0efbe16  cases=9
+@exercises trackerManager (h.tm), midiManager (h.fm), configManager (h.cm)
+@surface   tm:addEvent, tm:flush, fm:dump, cm:assign, tm:rebuild, tm:getChannel
+@harness   mk
+
+# Intent
+  Slide spec (portamento, continuous pb-augment): the glide-in curve sums onto the authored pb base
+  and seats a markerless pb stream on the base lane. see design/note-macros-v2.md § Continuous pb
+
+# Helpers
+  @fn centsToRaw(cents, pbRange)  @ 9-11
+  @fn pbSeatsOf(dump, chan)  @ 15-24
+      -- pb-augment seats a summed stream on the base lane (markerless, no carrier). A seat carries a raw
+      -- pb `val` (centsToRaw of summed cents + detune); densified linear between feature points.
+  @fn pbSeatAt(dump, chan, ppq)  @ 25-27
+  @fn addSlidePair(h, nextPitch, nextDetune)  @ 31-38
+      -- A slide host (pitch 60, lane 1) gliding into a following lane-1 note. The host
+      -- window ends at that next note's onset (240), so snap 15 -> arrival at ppq 225.
+
+# Cases
+  @case 'slide seats a glide-in pb stream that arrives at the interval and re-centres at the handoff'  [harness]  @ 45-58
+  @case 'slide interval includes the next note detune (wire path)'  [harness]  @ 64-69
+  @case 'slide target=next resolves the next note in the host lane, not lane 1'  [harness]  @ 75-89
+  @case 'slide clamps to the pb ceiling and regenerates when pbRange widens'  [harness]  @ 95-106
+  @case 'a lone slide host with no following note emits no pb seats'  [harness]  @ 112-120
+  @case 'G4: slide pb seat stream is byte-identical across flush -> rebuild -> flush (swing + delay)'  [harness]  @ 126-143
+  @case 'slide seats never surface as a visible cc column'  [harness]  @ 149-154
+  @case 'vibrato and slide on one host sum into a single pb seat stream (N-stream overlap)'  [harness]  @ 160-175
+  @case 'disjoint vibrato and slide windows each seat their own pb span'  [harness]  @ 181-197
+
+# Uses (outbound edges)
+  @use call trackerManager.addEvent  @ 32,35,79,82,84,115,132,135,163,167,184,187,190
+  @use call trackerManager.flush  @ 37,86,118,137,141,169,192
+  @use call midiManager.dump  @ 49,68,87,99,104,119,139,142,171,194
+  @use call configManager.assign  @ 102
+  @use call trackerManager.rebuild  @ 103,141
+  @use call trackerManager.getChannel  @ 153
