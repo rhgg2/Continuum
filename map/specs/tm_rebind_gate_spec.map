@@ -1,0 +1,45 @@
+@spec tm_rebind_gate_spec  src=tests/specs/tm_rebind_gate_spec.lua  loc=122  sha=untracked  cases=4
+@exercises pextStore (ps), dataStore (ds), midiManager (h.fm), trackerManager (h.tm), configManager (h.cm)
+@surface   ps:setTake, ds:assign, fm:notesRaw, tm:getChannel, fm:dump, tm:addEvent, tm:flush, tm:currentTake, tm:bindTake, cm:set
+@harness   mk{seed.notes}
+
+# Intent
+  The converged-rebind gate (design/incremental-rebuild.md § gap 3): a rebind whose take is
+  byte-identical to the one mm's model was built from skips both the re-read and the re-derive.
+  
+  The gate's observable is work NOT done. Deriving a converged take stages zero writes either
+  way (I8), so equal output proves nothing; object identity does. mm keeps its event records
+  only if it never re-parsed the blob, and tm keeps its column cells only if it never re-derived
+  the channel. The dormant cases pin the dirt sources that the old mark-all-16-on-wholesale
+  blanket used to hide: config, document data, and the trackerMode re-seed at bind.
+
+# Helpers
+  @fn storageWriteBehindTmsBack(take, name, value)  @ 18-23
+      -- Rewrite the take's document storage behind tm's back -- what a REAPER undo does while the tracker
+      -- is dormant: the P_EXT blob rewinds, ps watches only the bound take's slots so nothing fires, and
+      -- ds/cm simply refill their caches at the next setContext. No signal exists for tm to have missed.
+  @fn note(chan, ppq, pitch, extra)  @ 25-30
+  @fn firstRawNote(h)  @ 33-35
+      -- mm's own record, not a copy: its identity dies the moment load re-parses the blob.
+  @fn firstCell(h, chan)  @ 38-40
+      -- tm's column cell: its identity dies the moment the channel re-materialises.
+  @fn pbOn(h, chan)  @ 42-46
+  @fn pcsOn(h, chan)  @ 48-54
+
+# Cases
+  @case 'converged rebind re-reads nothing and re-derives nothing'  [harness]  @ 58-72
+  @case 'a config change made while dormant re-derives on rebind'  [harness]  @ 76-88
+  @case 'a swing edit made while dormant reseats raw on rebind'  [harness]  @ 92-104
+  @case 'a trackerMode flip across the dormant window re-derives PCs'  [harness]  @ 108-120
+
+# Uses (outbound edges)
+  @use call pextStore.setTake  @ 21
+  @use call dataStore.assign  @ 22
+  @use call midiManager.notesRaw  @ 34
+  @use call trackerManager.getChannel  @ 39
+  @use call midiManager.dump  @ 43,50
+  @use call trackerManager.addEvent  @ 61,79,95
+  @use call trackerManager.flush  @ 61,79,95
+  @use call trackerManager.currentTake  @ 62,80,96,113
+  @use call trackerManager.bindTake  @ 67,68,83,85,99,101,116,117
+  @use call configManager.set  @ 84

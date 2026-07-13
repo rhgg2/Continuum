@@ -1002,7 +1002,10 @@ function M.new()
     return string.char(status, msg2 or 0, msg3 or 0)
   end
 
-  local function serialiseMidi(m)
+  -- REAPER's trailing all-notes-off marker sits at the SOURCE end (midiBlob.lua § tail: at
+  -- max(endPpq, last-event ppq)), so a take resize moves the blob -- which is the only way an
+  -- arrange-side resize reaches mm. Emitting it at offset 0 would hide length changes from the blob.
+  local function serialiseMidi(m, endPpq)
     local wire = {}
     local function push(ppq, rank, seq, flags, msg)
       wire[#wire + 1] = { ppq = ppq, rank = rank, seq = seq, flags = flags, msg = msg }
@@ -1038,7 +1041,8 @@ function M.new()
       out[#out + 1] = string.pack('i4Bs4', ev.ppq - prev, ev.flags, ev.msg)
       prev = ev.ppq
     end
-    out[#out + 1] = string.pack('i4Bs4', 0, 0, '\xB0\x7B\x00')   -- all-notes-off tail (parse excludes it)
+    local tailPpq = math.max(endPpq or 0, prev)
+    out[#out + 1] = string.pack('i4Bs4', tailPpq - prev, 0, '\xB0\x7B\x00')   -- all-notes-off tail (parse excludes it)
     return table.concat(out)
   end
 
@@ -1091,10 +1095,20 @@ function M.new()
   -- rebuilt from a whole-take Set) and a raw blob. SetAllEvts replays the wire
   -- into the structured store so Get/Count/dump stay consistent after it.
   state.midiBlob = state.midiBlob or {}
+
+  -- The source's end in ppq: where the blob's tail marker sits, so the bytes track a resize.
+  local function sourceEndPpq(take)
+    local src   = state.takeSrc[take]
+    local lenQN = src and state.srcLen[src]
+    if not lenQN or lenQN == math.huge then return 0 end
+    local ppqPerQN = r.MIDI_GetPPQPosFromProjQN(take, 1) - r.MIDI_GetPPQPosFromProjQN(take, 0)
+    return math.floor(lenQN * ppqPerQN + 0.5)
+  end
+
   function r.MIDI_GetAllEvts(take, _)
     local m = midi(take)
     if #m.notes > 0 or #m.ccs > 0 or #m.texts > 0 or (m.passthrough and #m.passthrough > 0) then
-      return true, serialiseMidi(m)
+      return true, serialiseMidi(m, sourceEndPpq(take))
     end
     return true, state.midiBlob[take] or ''
   end

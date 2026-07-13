@@ -66,6 +66,9 @@ local lastMuteSet = {}
 local staleSwing  = {}
 --invariant: dirtyChans[chan]: gated stages (ccs/fx/park/tails/pbs/pcs) re-derive it, else freeze
 local dirtyChans   = {}
+-- Deep clone of derivationInputs() as of the last rebuild: what the current frame was derived under.
+-- bindTake diffs against it, because a rebind can find any of it changed with no signal to hear.
+local derivedInputs
 -- Rebuilt chans re-read the wire, so muted flags need re-conforming; setMutedChannels consumes.
 local muteConform  = {}
 -- True only while flush writes the parked stash; suppresses the inline dataChanged
@@ -92,6 +95,21 @@ end
 local function dirtyChan(chan)
   if chan then dirtyChans[chan] = true; return end
   for i = 1, 16 do dirtyChans[i] = true end
+end
+
+-- Everything the pipeline derives from beyond the take itself. A dormant tracker hears nothing when
+-- this changes: an undo rewinds take-scoped ds/cm storage while ps watches only the bound take's
+-- slots, and the caches simply refill at the next setContext. So the rebind diffs it instead.
+-- see design/incremental-rebuild.md § The take-hash gate
+local function derivationInputs()
+  return {
+    trackerMode  = cm:get('trackerMode'),      swings       = cm:get('swings', { mergeTiers = true }),
+    pbRange      = cm:get('pbRange'),          temper       = cm:get('temper'),
+    overlapOffset= cm:get('overlapOffset'),
+    swing        = ds:get('swing'),            fxRegions    = ds:get('fxRegions'),
+    extraColumns = ds:get('extraColumns'),     fxParked     = ds:get('fxParked'),
+    prevWindows  = ds:get('prevWindows'),      fxPatterns   = ds:get('fxPatterns'),
+  }
 end
 
 -- pbRange resolves through cm's 5 tiers -- too costly to re-fetch per pb in the
@@ -3055,6 +3073,7 @@ function tm:rebuild(takeChanged)
   perf.start('view'); if didReload then reload() else clearStaging() end; perf.stop('view')
   for chan in pairs(dirtyChans) do muteConform[chan] = true end
   dirtyChans = {}   -- gated stages consumed the spine; next edit window accumulates fresh
+  derivedInputs = util.deepClone(derivationInputs())   -- after the pipeline's own ds writes have settled
   rebuilding = false
 
   --emits: rebuild -- takeChanged:boolean
@@ -3146,8 +3165,8 @@ do
     tm:rebuild(pendingTakeSwap)
     pendingTakeSwap = false
   end)
-  -- Skip configChanged while dormant (cm unbound, mm/cm mismatch).
-  -- see docs/trackerManager.md § Dormant guard
+  -- Skip configChanged while dormant (cm unbound, mm/cm mismatch): the rebind diffs derivationInputs
+  -- rather than replaying what it missed. see docs/trackerManager.md § Dormant guard
   cm:subscribe('configChanged', function(change)
     if bindingTake or not cm:boundTake() then return end
     local key = change.key
@@ -3235,6 +3254,10 @@ do
     if opts and opts.markSwingStale then
       for i = 1, 16 do staleSwing[i] = true end
     end
+    -- Nothing above marked dirt (cm ran suppressed), and the converged gate in mm:load no longer
+    -- blanket-dirties a rebind. Whatever changed unheard -- an undo of the take's swing, a wiring
+    -- flip re-seeding trackerMode -- shows up here as a diff. markSwingStale covers dirt AND reseat.
+    if take and not util.deepEq(derivationInputs(), derivedInputs or {}) then tm:markSwingStale(nil) end
     mm:load(take)
     if take and not skipGuard then guardTrack(reaper.GetMediaItemTake_Track(take)) end
     snapshotSwingState()

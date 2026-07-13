@@ -55,6 +55,36 @@ hold, and the whole re-read is skipped. Self-inflicted reloads are always
 clean, so this elides the second `MIDI_GetNote` sweep on every keystroke;
 foreign-MIDI / undo loads that need fixups still pay it.
 
+### Converged load — the rebind gate
+
+The third elision, and the one that pays at bind rather than at keystroke.
+Re-binding a take Continuum itself last wrote — leave the tracker page, come
+back — re-read and re-parsed a blob that could not have changed, and handed tm
+a `wholesale` reload, which tm reads as "every event object is new" and answers
+by marking all 16 channels dirty. A converged take then paid a full derivation
+pass to stage exactly zero writes.
+
+So mm keeps `loadedBlob`: the take's bytes as of the last moment its model
+agreed with them, stashed by `flushTake` (re-read *after* `MIDI_Sort`, since
+REAPER's canonical encoding need not be the one we handed it) and by a clean
+`load`. A `load` of the same take whose bytes still equal it re-reads nothing —
+and since nothing was re-parsed, no event object was replaced, so the reload it
+fires is **not** wholesale and carries an empty dirty set. tm keeps its
+incremental index and carries its whole frame. The signal still fires, because a
+rebuild must run to consume dirt marked while the page was away.
+
+The blob, not a hash: a pure-Lua digest over a few hundred KB is not obviously
+cheap, `MIDI_GetHash`'s coverage of text events is not something to bet
+correctness on, and Lua string equality is a memcmp. The cost is one retained
+string per bound take.
+
+What the bytes *don't* cover has to be invalidated by hand. `eventMeta` lives
+outside the blob, so a metadata-only undo (`poolsRewound`) moves derivation
+inputs with the take untouched: that subscriber drops `loadedBlob` before
+reloading. The take's *length* needs no such care — REAPER's end-of-track marker
+is an event in the blob, so a resize moves the bytes (see trackerManager.md §
+Length operations).
+
 ### Notes — notation-event carrier
 
 Every note carries a UUID stored as a REAPER **notation event**

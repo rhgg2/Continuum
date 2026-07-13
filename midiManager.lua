@@ -66,6 +66,8 @@ local flushPending = false  -- a dirty modify happened somewhere in the nest; fl
 local indexStale   = false  -- a deferred modify left arrays sparse/unsorted; the next reindex compacts+sorts; cleared by rebuild
 local carriedTexts       = {}  -- parsed text/meta events mm doesn't model; re-emitted verbatim on flush
 local carriedPassthrough = {}  -- parsed system messages mm doesn't model; re-emitted verbatim on flush
+--invariant: loadedBlob is the take's bytes as of the model agreeing with them; nil = unknown, never gate
+local loadedBlob            -- converged-rebind gate; see design/incremental-rebuild.md § The take-hash gate
 
 -- Opaque, content-keyed addressing. Token is private string built from
 -- the event's identity fields; collision-free by construction across the
@@ -410,6 +412,10 @@ local function flushTake()
 
   perf.count('notes', #notes); perf.count('ccs', #ccs); perf.count('texts', #texts)
   dirty = false
+  -- Stash REAPER's canonical bytes (post-Sort), not the ones we handed it: the gate in load
+  -- compares the take against these, and a re-encode would read as an external mutation.
+  local _, canonical = reaper.MIDI_GetAllEvts(take)
+  loadedBlob = canonical
 end
 
 ---------- PUBLIC
@@ -436,9 +442,23 @@ local fire = util.installHooks(mm)
 
 --contract: load is always external (lock-free): reads the take, normalises in-memory, reprojects
 --contract: dedup/unify/reconcile mutate the model + set dirty; flushTake writes once if dirty
+--contract: a take still holding loadedBlob is converged: fires reload{wholesale=false, chans={}}, returns
 function mm:load(newTake)
   if not newTake then return end
   perf.start('load')
+
+  -- Converged rebind: the take holds the bytes the model was built from, so there is nothing to
+  -- re-read -- and no new event objects, hence no materialisation dirt for tm either. The signal
+  -- still fires: a rebuild must run to consume dirt marked while dormant.
+  if newTake == take and loadedBlob then
+    local _, current = reaper.MIDI_GetAllEvts(take)
+    if current == loadedBlob then
+      --emits: reload -- { wholesale=false, chans={} }; model already agrees with the take: no re-parse, no dirt
+      fire('reload', { wholesale = false, chans = {} })
+      perf.stop('load')
+      return
+    end
+  end
 
   local takeSwapped = take ~= newTake
   if takeSwapped then take = newTake; setTakeGuid() end
@@ -704,7 +724,8 @@ function mm:load(newTake)
   ----- Rebuild dense indices, reproject the normalised model, persist metadata
   rebuild(metadata)
   local wroteTake = dirty
-  if wroteTake then flushTake() end
+  if wroteTake then flushTake()      -- restashes loadedBlob off the reprojected take
+  else loadedBlob = blob end         -- nothing written: the bytes we parsed are still the take's
   saveMetadata()
 
   --contract: load fires signals in order: takeSwapped, notesDeduped, uuidsReassigned
@@ -739,12 +760,15 @@ end
 -- A projext undo rewound this pool's metadata: the take-hash watcher can't see
 -- it (a metadata-only undo writes no MIDI), so reload off the rewound signal.
 eventMeta:subscribe('poolsRewound', function(payload)
-  if poolGuid and payload.guids[poolGuid] then mm:reload() end
+  if poolGuid and payload.guids[poolGuid] then
+    loadedBlob = nil   -- metadata moved with the blob untouched: the converged gate must not fire
+    mm:reload()
+  end
 end)
 
 --contract: clears mm.take and event tables when take dies; distinct from load(nil) dormant seam
 function mm:unload()
-  take, poolGuid = nil, nil
+  take, poolGuid, loadedBlob = nil, nil, nil
   notes, ccs, eventsByUuid, tokenIdx, maxUUID, lock = {}, {}, {}, {}, 0, false
   noteCount, ccCount, dirty = 0, 0, false
   carriedTexts, carriedPassthrough = {}, {}

@@ -80,15 +80,20 @@ return {
     -- after a wholesale re-read. The payload's `wholesale` bit is that discriminator.
     name = 'mm.reload carries wholesale: true from load, false from modify',
     run = function()
-      local h = harness.mk()
+      -- bareMM: no tm, so the only reloads are the ones this case drives. (Wired to tm, the foreign
+      -- note below would draw a second reload as tm stamps it back through mm:modify.)
+      local fm = harness.bareMM{ notes = { { ppq = 0, endppq = 240, chan = 3, pitch = 60, vel = 100 } } }
       local payloads = {}
-      h.fm:subscribe('reload', function(data) payloads[#payloads+1] = data end)
+      fm:subscribe('reload', function(data) payloads[#payloads+1] = data end)
 
-      h.fm:load(h.fm:take())        -- full re-read of the take's events
+      -- A foreign write behind mm's back, so load genuinely re-reads: re-reading replaces every event
+      -- object, which is what wholesale announces. (A load finding the take unchanged gates -- below.)
+      reaper.MIDI_InsertNote(fm:take(), false, false, 0, 240, 2, 64, 100, false)
+      fm:load(fm:take())            -- full re-read of the take's events
       t.eq(#payloads, 1, 'load fired reload once')
       t.eq(payloads[1] and payloads[1].wholesale, true, 'load reload is wholesale')
 
-      h.fm:modify(function() end)   -- in-place; a consumer's incremental cache stays valid
+      fm:modify(function() end)     -- in-place; a consumer's incremental cache stays valid
       t.eq(#payloads, 2, 'modify fired reload once')
       t.eq(payloads[2].wholesale, false, 'modify reload is not wholesale')
     end,
@@ -154,9 +159,25 @@ return {
       local fm = harness.bareMM()
       local last
       fm:subscribe('reload', function(data) last = data end)
+      reaper.MIDI_InsertNote(fm:take(), false, false, 0, 240, 2, 64, 100, false)   -- foreign write: a real re-read
       fm:load(fm:take())
       t.eq(last.wholesale, true, 'load is wholesale')
       t.eq(last.chans, nil, 'wholesale carries no per-chan set — tm reads nil as all 16')
+    end,
+  },
+
+  {
+    -- The converged-rebind gate (design/incremental-rebuild.md § The take-hash gate): a load whose
+    -- take still holds the bytes the model was built from re-reads nothing, so no event object is
+    -- replaced -- not wholesale -- and no content moved, so no channel is dirty. tm carries its frame.
+    name = 'mm.reload: a load finding the take converged gates — not wholesale, no dirty chans',
+    run = function()
+      local fm = harness.bareMM{ notes = { { ppq = 0, endppq = 240, chan = 3, pitch = 60, vel = 100 } } }
+      local last
+      fm:subscribe('reload', function(data) last = data end)
+      fm:load(fm:take())
+      t.eq(last.wholesale, false, 'the take is unchanged: nothing was re-parsed')
+      t.deepEq(last.chans, {}, 'and nothing is dirty')
     end,
   },
 

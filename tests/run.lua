@@ -65,6 +65,7 @@ local specs = {
   'tm_fx_gating_spec',
   'tm_regionpark_gating_spec',
   'tm_gate_parity_spec',
+  'tm_rebind_gate_spec',
   'tm_pb_interp_spec',
   'tm_tuning_spec',
   'tm_swing_spec',

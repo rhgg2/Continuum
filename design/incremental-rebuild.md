@@ -109,33 +109,57 @@ from-scratch reindex alongside, assert identical arrays / `loc`s /
 indices), strip the scaffold at parity, keep one permanent gated-vs-full
 spec.
 
-### 3. `dirty-channels` item 4 — the take-hash gate
+### 3. `dirty-channels` item 4 — the take-hash gate — landed 2026-07-14, **closed**
 
-Never started. This is the whole of the bind-time bucket: rebinding a
-converged take currently pays full derivation to stage zero writes.
+The bind-time bucket. Rebinding a take Continuum itself last wrote paid a full
+derivation pass to stage zero writes. It now costs one `MIDI_GetAllEvts` and a
+string compare. The model lives in `docs/midiManager.md` § Converged load and
+`docs/trackerManager.md` § Dormant guard; pinned by `tm_rebind_gate_spec` and
+`mm_signal_flow_spec`.
 
-Scheme: `flushTake` already holds the exact blob it wrote — hash it and
-stash `(hash, configGen)` under the take GUID. `mm:load` hashes the
-`GetAllEvts` blob *before* parsing; on match, fire `reload` with
-`wholesale=true, chans={}` — full reprojection, zero derivation. That path
-already exists (phase A/B built it). No per-take model retention, no
-eviction: two values per GUID. `configGen` is one global counter bumped by
-any derivation-relevant config change, because convergence is relative to
-the config that produced it (edit the swing library while take A is
-unbound, and a rebind must derive). A stale gen just costs one full pass.
+Three of the sketch above turned out wrong, and they are the interesting part.
 
-Three questions to settle while implementing:
+**"Fire `wholesale=true, chans={}` — full reprojection, zero derivation."** That
+path does not exist. Materialisation and derivation are *one* gate, not two:
+under frame retention (B1) a clean channel's freeze is total — `rebuildInternals`
+clones nothing for it, the CC walk clones nothing, `rebuildPA` projects nothing.
+A channel's fx-derived notes, park restores and PA projections enter its columns
+*from the derivation stages*, so materialising fresh columns while skipping
+derivation yields a frame with every fx note missing. Skipping derivation
+therefore means carrying the previous frame, which is sound only if that frame
+was built from this same take. Hence the gate fires as `wholesale=false, chans={}`:
+nothing was re-parsed, so no object is new, so there is nothing to re-materialise.
+The wholesale blanket at the rebuild head is untouched — a genuine re-read still
+dirties all 16.
 
-- **Blob hashing in Lua.** A pure-Lua hash over a few hundred KB per flush
-  may not be cheap. Fallback: stash the blob itself and compare with `==`
-  (memcmp); the cost is one blob per seen GUID.
-- **Dormant guard.** `configChanged` while no take is bound bumps
-  `configGen` but marks no channels; confirm the rebind path cannot consume
-  a gen written after the stash.
-- **Specs.** Hash-gated rebind (16 channels clean, zero staged writes,
-  columns identical to an ungated rebuild); and `configGen` (change the
-  swing library while unbound — the rebind hash-matches but must still
-  derive).
+**The hash.** Skipped: Lua string equality is a memcmp, and `MIDI_GetHash`'s
+coverage of text events is not worth betting correctness on. The doc's own
+fallback (stash the blob) is simply better.
+
+**`configGen`.** A counter can only be bumped by a path someone remembered to
+bump, and the paths that matter here fire *no signal at all*: take-scoped ds/cm
+state rewound by an undo while `ps` watches only the bound take's slots, and the
+`trackerMode` re-seed inside `bindTake`'s own suppression window. Both simply
+refill their caches at the next `setContext`, unheard. So the bind diffs values
+rather than counting events: `derivationInputs()` vs the `derivedInputs` each
+rebuild stashes.
+
+Two bugs fell out, neither introduced by the gate:
+
+- **Swing authored while dormant was silently lost.** The rebind's blanket marked
+  channels *dirty* but never marked swing *stale*, and only staleness drives the
+  raw reseat — so the notes never re-realised. The bind-time diff answers with
+  `markSwingStale(nil)`, which covers both.
+- **`fakeReaper` hid take-length changes from the blob.** It emitted REAPER's
+  trailing all-notes-off marker at offset 0 from the last event and discarded it
+  on `SetAllEvts`, so a resize left the bytes identical — length lived outside the
+  wire, unlike REAPER, where the marker sits at the source end (which is what gap 1
+  verified live, and what `midiBlob.serialise` has always done). The gate read a
+  resize as converged, and four length specs caught it. The fake now places its
+  tail at the source end.
+
+Still unmeasured against a real take: the win is a full derivation pass, but no
+live number is recorded. Fold it into gap 7's re-profile.
 
 ### 4. fx dirt signal — the conservative row nobody else knows about
 

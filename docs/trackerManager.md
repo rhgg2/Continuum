@@ -440,6 +440,29 @@ fired in this state would resolve swing/trackerMode off empty take tiers, causin
 a mm/cm mismatch. The `configChanged` subscriber therefore returns early if
 `cm:boundTake()` is nil; the next real `bindTake` call fires a coherent rebuild.
 
+That guard **drops** the change, which was harmless only while every rebind
+marked all 16 channels dirty anyway. Under the converged-rebind gate
+(midiManager.md § Converged load) a rebind may mark nothing, so what happened
+while the tracker was away has to be recovered at the bind.
+
+Replaying the missed signals is not enough, because the worst case fires no
+signal at all: take-scoped ds/cm state (`swing`, `fxRegions`, `extraColumns`,
+`fxParked`, the take config tier) is rewound by a REAPER undo while `ps` watches
+only the *bound* take's slots — nothing is listening, and cm/ds simply refill
+their caches from storage at the next `setContext`. The same blind spot swallows
+the `trackerMode` re-seed, which `bindTake` writes under its own suppression
+window.
+
+So the bind compares rather than listens: `derivationInputs()` gathers everything
+the pipeline derives from beyond the take itself, each rebuild stashes it as
+`derivedInputs`, and `bindTake` diffs the two before `mm:load`. A difference
+means the frame was derived under inputs that no longer hold, and
+`markSwingStale(nil)` covers both halves of the answer — every channel dirty,
+and the raw reseat that a swing change (unlike a config change) additionally
+needs. A spurious diff costs one derivation; a missed one writes stale output,
+which is why the diff is over values and not over a change counter that only
+ticks when someone remembered to tick it.
+
 ## PC synthesis under trackerMode
 
 `note.sample` is per-note authoring intent (which sample the note
