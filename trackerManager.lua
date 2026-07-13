@@ -74,6 +74,9 @@ local flushingParked = false
 -- Set via tm:requestRebuild by a preflush subscriber whose geometry-only change stages no
 -- mm ops but still needs the grid (cellKind region tags) rebuilt. Consumed + cleared by flush.
 local rebuildRequested = false
+-- Held only across tm:setLength's shrink flush: derivation (tail clip, fx windows, parked
+-- realisation) must see the new take end before mm:setLength moves the EOT. see § Length
+local pendingLen
 -- ppq tolerance for "raw agrees with its logical projection"; absorbs
 -- fromLogical rounding slop, shared by the tail pass and rebuild rule.
 local EPS         = 1
@@ -1168,7 +1171,8 @@ function tm:editCursor()
   return reaper.MIDI_GetPPQPosFromProjTime(mm:take(), editCursorTime)
 end
 
-function tm:length()               return mm and mm:length() or 0 end
+--contract: reports the pending end while setLength's shrink flush runs; mm's take length otherwise
+function tm:length()               return pendingLen or (mm and mm:length()) or 0 end
 function tm:resolution()           return mm and mm:resolution() end
 function tm:name()                 return mm and mm:name() end
 function tm:setName(name)          if mm then mm:setName(name) end end
@@ -1255,7 +1259,9 @@ function tm:flush() flush() end
 
 ----- Length
 
--- On shrink, notes spanning the boundary keep their onset and have endppq clamped.
+-- On shrink, an OPEN endppqL is authored intent, not a casualty of resize: only the realised
+-- tail clips to the new end. See docs/trackerManager.md § Length operations for the ordering.
+--contract: a util.OPEN endppqL survives a shrink; only its realised tail comes down
 function tm:setLength(newPpq)
   if not mm then return end
   local oldPpq = mm:length() or 0
@@ -1264,13 +1270,19 @@ function tm:setLength(newPpq)
     forEachEvent(function(_, evt, _, isNote)
       if evt.ppq >= newPpq then
         util.add(kills, evt)
-      elseif isNote and evt.endppq > newPpq then
+      elseif isNote and evt.endppq > newPpq and evt.endppqL ~= util.OPEN then
         util.add(clamps, evt)
       end
     end)
     for _, evt in ipairs(kills)  do deleteEvent(evt)                       end
     for _, evt in ipairs(clamps) do assignEvent(evt, { endppq = newPpq })  end
+    -- mm:setLength runs last, so the take is still long here: pendingLen is what tells the tail
+    -- walk the new end. All-16 dirt because any channel may hold an OPEN tail spanning it.
+    pendingLen = newPpq
+    dirtyChan()
+    tm:requestRebuild()   -- an OPEN-only shrink stages no mm ops; flush must rebuild regardless
     flush()
+    pendingLen = nil
   end
   if newPpq ~= oldPpq then mm:setLength(newPpq / mm:resolution()) end
 end

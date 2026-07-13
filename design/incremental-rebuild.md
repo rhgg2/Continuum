@@ -70,16 +70,27 @@ so the seat math it would have optimised no longer costs anything.
 Ordered correctness-first, then by size of win. Each is self-contained —
 the archived slice docs are not needed to implement any of them.
 
-### 1. Take-length dirty source — unaudited, and the gated code is live
+### 1. Take-length dirty source — audited 2026-07-14, **closed**
 
-**Correctness, not perf.** `dirty-channels` flagged this as "audit before
-phase A", and phase A shipped without a recorded audit: *an arrange-side
-item resize reaches tm via which signal?* An external take-length change
-must mark all 16 channels dirty. If no path does, a gated rebuild after a
-resize keeps stale derivation on every clean channel. Phases A and B are
-both live in production, so this is the one gap that is a latent bug
-rather than a missed optimisation. Audit the signal path; add an explicit
-all-16 dirty source if it is absent; pin it.
+The question was: *an arrange-side item resize reaches tm via which signal?*
+If none marks all 16 channels dirty, a gated rebuild after a resize keeps
+stale derivation on every clean channel.
+
+**The source exists — it is the wholesale reload.** `mm:length()` is the
+*source* length, i.e. the EOT marker's position, so any take-length change
+necessarily rewrites the event blob. **External:** `trackerPage`'s per-frame
+`MIDI_GetHash` watcher sees the drift → `tm:reloadFromReaper()` → `mm:load` →
+`reload{wholesale=true}` → `mmReloaded` → `dirtyChan()`, all 16. **Owned**
+(`setLength`/`rescaleLength`/`tileLength`): `mm:setLength` → `mm:reload` → the
+same wholesale path. Verified live in REAPER — an item-edge drag moves the
+hash, and so does an EOT-only change with no note touched — and now pinned in
+`tm_tail_gating_spec`: a converged take, grown externally, re-derives the tails
+on channels that were never edited.
+
+No latent bug, then. The audit did turn up a real one next door, now fixed: the
+shrink path stamped a concrete `endppqL` over `util.OPEN`, destroying authored
+intent, and a re-grow could not reopen the tail. See `docs/trackerManager.md`
+§ Length operations for the fix and the ordering knot behind it.
 
 ### 2. `deferred-reindex` Phase E — slim the unwind reindex
 

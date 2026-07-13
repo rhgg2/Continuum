@@ -617,6 +617,33 @@ regrow to it.
 
 ## Length operations
 
+### setLength(newPpq)
+
+Shrink deletes events at-or-past the new end and clamps spanning notes;
+grow touches no events. The subtlety is what "clamp" means for a note
+whose `endppqL` is `util.OPEN` — the freshly-placed legato note with no
+authored ceiling. Stamping a concrete `endppqL` on it is lossy: the
+sentinel is *intent*, and a resize is not an edit of intent. Grow the
+take back and a concreted note stays short forever.
+
+So OPEN notes are left out of the clamp list, and the tail walk clips
+their raw note-off instead — which it does anyway, `takeLen` being one of
+its bounds. That inverts an ordering. `setLength` must clamp and flush
+*before* `mm:setLength` moves the EOT, because `setEot` cannot place the
+EOT behind a live note-off: the take will not shrink while a tail still
+spans the boundary. But the rebuild inside that flush reads the take
+length from mm, which is still long — so it would regrow the OPEN tail to
+the *old* end and deadlock the shrink.
+
+`pendingLen` is the seam. Held across the shrink flush, it makes
+`tm:length()` report the new end, so every stage that bounds on take
+length (tail clip, fx windows, parked realisation) sees the take tm is
+about to create rather than the one it still has. All 16 channels are
+marked dirty, because any of them may hold a spanning OPEN tail and a
+clean channel's frame would otherwise carry forward unclipped — this is
+also the explicit all-16 take-length dirty source that
+`design/dirty-channels.md` asked for.
+
 ### rescaleLength(newPpq)
 
 Stretches the take by linearly remapping the logical frame. Each event on

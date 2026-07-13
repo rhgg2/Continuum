@@ -4,6 +4,13 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-14** — `pendingLen`: during `tm:setLength`'s shrink, `tm:length()`
+  reports the end tm is *about* to create, not mm's current one. Chosen over
+  threading a `takeLen` override through `rebuild` → tails/fx/park (four sites
+  that all just call `tm:length()`). The shrink must flush before `mm:setLength`
+  moves the EOT (`setEot` cannot sit behind a live note-off), so that flush's
+  rebuild would otherwise regrow OPEN tails to the old end and deadlock it.
+
 - **2026-07-13** — Specs get maps. `tests/specs/*_spec.lua` → `map/specs/*.map`
   (`@spec` header, intent/helpers/cases, same `@use` grammar), so `map_query
   usedby` answers "which specs exercise X" instead of a grep-and-read session

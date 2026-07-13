@@ -51,10 +51,10 @@ Separately (2026-07-03), the clean-channel *walk* cost went too: `mm:notesRaw()`
 `rebuildCCs` moved its `tokenOf` below the dirty gate — internals 7.3→0.5, ccs
 2.8→0.7.
 
-Still open: item 4 (take-hash gate), plus the open questions below — the
-take-length dirty source (a correctness gap: flagged "audit before phase A",
-but phase A shipped) and the fx dirt signal. Tracked as gaps 1, 3 and 4 in
-`incremental-rebuild.md`. The enduring model lives in
+Still open: item 4 (take-hash gate) and the fx dirt signal — gaps 3 and 4 in
+`incremental-rebuild.md`. The take-length dirty source (gap 1) was audited on
+2026-07-14 and closed: the wholesale reload already marks all 16, on both the
+external and the owned path, and it is now pinned. The enduring model lives in
 `docs/trackerManager.md` § Derivation dirt.
 
 ## Problem
@@ -219,9 +219,12 @@ projection only, roughly half of today's bind cost.
 - **Where the chans seed lives.** mm verbs (owns `modify`, catches
   every writer) vs um ops (tm-side, knows lane-1/detune semantics).
   Leaning mm for the spine, um for stage-specific refinement.
-- **External take-length changes.** An arrange-side item resize
-  reaches tm via which signal? Needs an explicit all-16 dirty source;
-  audit before phase A.
+- **External take-length changes.** ~~An arrange-side item resize
+  reaches tm via which signal? Needs an explicit all-16 dirty source.~~
+  Answered 2026-07-14: the EOT sits in the event blob, so any resize
+  moves `MIDI_GetHash`; `trackerPage`'s watcher turns that into a
+  wholesale reload, which already dirties all 16. See
+  `incremental-rebuild.md` § gap 1.
 - **Blob hashing in Lua.** A pure-Lua hash over a few hundred KB per
   flush may not be cheap; stashing the blob itself and using `==`
   (memcmp) is the fallback — memory cost is one blob per seen GUID.
