@@ -1766,7 +1766,11 @@ end
 
 --contract: walks ops in order inside one rm:transaction; setFXChain mints guids via rm:addFx
 --contract: stamps them inline without firing wiringChanged; params/midi/pinMaps write through rm
+--contract: no-op on an empty op list — no write, no undo block, hence no undo point
 function wm:applyOps(ops, label)
+  -- REAPER mints an undo point for any block it is handed, empty or not; a zero-op reconcile
+  -- (page open on a settled project) would bury the user's last real action under a dud step.
+  if #ops == 0 then return end
   ensureLoaded()
   local grewKeys, pinFxByKey = {}, {}
   rm:transaction(label or 'wiring: apply', function()

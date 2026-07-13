@@ -1,4 +1,4 @@
-@module wiringManager  src=wiringManager.lua  loc=2085  sha=fbe5034  mode=chunk  self=wm
+@module wiringManager  src=wiringManager.lua  loc=2089  sha=fbe5034  mode=chunk  self=wm
 @deps rm
 
 # Invariants & contracts
@@ -145,25 +145,25 @@
   @fn reconcileFXChain(trackId, target, owners)  @ 1688-1765
       -- Full-replace `trackId`'s FX chain to `target` via rm. Whole-track-set quarantine means the
       -- live chain is wm's working set: live fx absent from target are deleted, id-less bridges minted.
-  @fn authoredRouting(routing, spliceParts)  @ 1875-1890
+  @fn authoredRouting(routing, spliceParts)  @ 1879-1894
       -- A spliced product edge maps back to its authored taps: each tap collects the
       -- crossings it participates in, so a lone-side poke fans out (the group fader).
-  @fn gainRouting()  @ 1895-1920
+  @fn gainRouting()  @ 1899-1924
       -- Gain routing derived once per structural change from the cached ctx.
       -- Merge-CU entries carry consumerId/trackKey (not a guid); mergeGuids are stamped live by applyOps.
-  @fn idForKey(trackKey)  @ 1924-1928
+  @fn idForKey(trackKey)  @ 1928-1932
       -- trackKey → opaque id for the live-poke path: a source is self-keyed, newTracks resolve
       -- through the in-memory addressing map (refreshed by snapshot/applyOps), scratch via scratch.lua, master via rm.
-  @fn pokeGainTarget(target, gain)  @ 1930-1946
-  @fn setStateGain(target, gain)  @ 1949-1968
+  @fn pokeGainTarget(target, gain)  @ 1934-1950
+  @fn setStateGain(target, gain)  @ 1953-1972
       -- Mirror a live gain poke into the model so the next reconcile sees no spurious change.
-  @fn crossingGain(parts, pokedIdx, pokedGain)  @ 1972-1978
+  @fn crossingGain(parts, pokedIdx, pokedGain)  @ 1976-1982
       -- A crossing's realized volume: the product of its taps' gains, the poked tap
       -- riding the live drag value (its ops.gain is only written at commit).
-  @fn rememberApplied()  @ 2037-2045
+  @fn rememberApplied()  @ 2041-2049
       -- After a self-driven apply REAPER equals the applied target; overlay realised track ids so the
       -- model stands in for a fresh snapshot on the next reconcile. see docs/wiringManager.md § actual-state model
-  @fn stampBusTracks()  @ 2049-2059
+  @fn stampBusTracks()  @ 2053-2063
       -- A matrix buss record carries its summing track's guid: stamped once the track exists,
       -- cleared when its class loses one. Never on the node, so the id survives fan⇄matrix.
 
@@ -262,68 +262,69 @@
   @api wm:diff(target, snap)  @ 1525-1629
       -- Op order and deletion rules: see docs/wiringManager.md § diff op ordering
       @contract  pure structural diff → wiringOp[] that carries snap to target.
-  @api wm:applyOps(ops, label)  @ 1769-1871
+  @api wm:applyOps(ops, label)  @ 1770-1875
       @contract  walks ops in order inside one rm:transaction; setFXChain mints guids via rm:addFx
       @contract  stamps them inline without firing wiringChanged; params/midi/pinMaps write through rm
-  @api wm:pokeEdgeGain(edgeIdx, gain)  @ 1982-2001
+      @contract  no-op on an empty op list — no write, no undo block, hence no undo point
+  @api wm:pokeEdgeGain(edgeIdx, gain)  @ 1986-2005
       -- see docs/wiringManager.md § pokeEdgeGain routing
       @contract  pokes the live gain for an edge via cached routing; no mutate/signal/undo.
-  @api wm:fastGainCommit(edgeIdx, gain)  @ 2004-2016
+  @api wm:fastGainCommit(edgeIdx, gain)  @ 2008-2020
       @contract  in-place gain commit + scratch mirror, one Undo block, no wiringChanged/reconcile
-  @api wm:listInstalledFX()  @ 2019-2021
+  @api wm:listInstalledFX()  @ 2023-2025
       @contract  delegates to rm:installedFx — raw REAPER "Type: Name (Author)" rows, memoised there
-  @api wm:syncExternal()  @ 2026-2033
+  @api wm:syncExternal()  @ 2030-2037
       -- see docs/wiringManager.md § external sync
       @contract  rereads the graph from routing when REAPER's project state moved without us — undo/redo
       @contract  or a manual routing edit. Our own writes rebaseline (markState), so they never trigger.
-  @api wm:reconcile(label)  @ 2063-2070
+  @api wm:reconcile(label)  @ 2067-2074
       @contract  one reconcile pass — diff targetState vs the actual side (the actualState model or a
       @contract  fresh snapshot), applyOps, then refresh the model for the next self-driven reconcile
-  @api wm:enableLive(label)  @ 2073-2083
+  @api wm:enableLive(label)  @ 2077-2087
       @contract  idempotent; hooks wiringChanged so mutate/load reconciles + one immediate sync pass.
 
 # Signals emitted (via util.installHooks)
-  @emits wiringChanged   @ load:164 mutate:224 syncExternal:2032
+  @emits wiringChanged   @ load:164 mutate:224 syncExternal:2036
 
 # Uses (outbound edges)
   @use call    DAG.allocate  @ targetState:1019
   @use call    DAG.classify  @ readGraph:1426
   @use call    DAG.compile  @ ensureCompiled:116 targetState:1017
-  @use call    DAG.targetTracks  @ targetState:1019 gainRouting:1899
+  @use call    DAG.targetTracks  @ targetState:1019 gainRouting:1903
   @use call    DAG.validate  @ mutate:217
   @use call    fs.join  @ readJSFXContent:340
   @use call    rm.addFx  @ instantiateFxOnScratch:363 reconcileFXChain:1729
-  @use call    rm.addTrack  @ applyOps:1801
-  @use call    rm.assignFx  @ persistNodeMeta:232 reconcileFXChain:1746,1756 applyOps:1827,1838 pokeGainTarget:1935
-  @use call    rm.assignMeta  @ moveBus:276 moveNodes:291 317 deleteBus:631 addBusNode:693 rotateBus:711 insertBus:723,750 stampBusTracks:2056
-  @use call    rm.assignTrack  @ persistNodeMeta:235,237 applyOps:1814,1818,1850 pokeGainTarget:1940
+  @use call    rm.addTrack  @ applyOps:1805
+  @use call    rm.assignFx  @ persistNodeMeta:232 reconcileFXChain:1746,1756 applyOps:1831,1842 pokeGainTarget:1939
+  @use call    rm.assignMeta  @ moveBus:276 moveNodes:291 317 deleteBus:631 addBusNode:693 rotateBus:711 insertBus:723,750 stampBusTracks:2060
+  @use call    rm.assignTrack  @ persistNodeMeta:235,237 applyOps:1818,1822,1854 pokeGainTarget:1944
   @use call    rm.bypassed  @ bypassed:207
   @use call    rm.deleteFx  @ reconcileFXChain:1719
-  @use call    rm.deleteTrack  @ deleteSource:610 applyOps:1804
+  @use call    rm.deleteTrack  @ deleteSource:610 applyOps:1808
   @use call    rm.fx  @ instantiateFxOnScratch:369
   @use call    rm.fxIds  @ reconcileFXChain:1694
   @use call    rm.fxTrack  @ fxTrack:408
-  @use call    rm.installedFx  @ listInstalledFX:2020
-  @use call    rm.masterId  @ persistNodeMeta:234 stampDecoration:1440 applyOps:1781 idForKey:1926 rememberApplied:2039
-  @use call    rm.meta  @ 301 nextBusId:674 busRecords:759 read:1464 stampBusTracks:2050
+  @use call    rm.installedFx  @ listInstalledFX:2024
+  @use call    rm.masterId  @ persistNodeMeta:234 stampDecoration:1440 applyOps:1785 idForKey:1930 rememberApplied:2043
+  @use call    rm.meta  @ 301 nextBusId:674 busRecords:759 read:1464 stampBusTracks:2054
   @use call    rm.muted  @ muted:198
   @use call    rm.params  @ snapFx:832
-  @use call    rm.reaperTrack  @ deleteSource:598 pokeGainTarget:1939
+  @use call    rm.reaperTrack  @ deleteSource:598 pokeGainTarget:1943
   @use call    rm.rewritePins  @ schedulePinCorrection:94
   @use call    rm.setBypassed  @ setBypassed:203
   @use call    rm.setMuted  @ setMuted:194
-  @use call    rm.setSendGain  @ pokeGainTarget:1943
+  @use call    rm.setSendGain  @ pokeGainTarget:1947
   @use call    rm.showFx  @ showFxWindow:413
   @use call    rm.track  @ 899
   @use call    rm.trackLabels  @ trackNames:395
   @use call    rm.tracks  @ snapshot:914 read:1462
-  @use call    rm.transaction  @ setMuted:193 setBypassed:202 addFxNode:540 deleteSource:601 deleteBus:622 addSourceNode:642 addBusNode:683 insertBus:721 applyOps:1772 fastGainCommit:2008
+  @use call    rm.transaction  @ setMuted:193 setBypassed:202 addFxNode:540 deleteSource:601 deleteBus:622 addSourceNode:642 addBusNode:683 insertBus:721 applyOps:1776 fastGainCommit:2012
   @use call    rm.writeChainMidi  @ reconcileFXChain:1762
-  @use call    scratch.id  @ instantiateFxOnScratch:363,368 snapshot:911 targetState:1020 read:1461 idForKey:1925
+  @use call    scratch.id  @ instantiateFxOnScratch:363,368 snapshot:911 targetState:1020 read:1461 idForKey:1929
   @use call    scratch.peek  @ isScratchTrack:376
-  @use call    util.add  @ 310,311 samplerReachable:439 paramTargets:467,483,487,491,504,505,509 addFxNode:572,575 deleteSource:606 deleteBus:627 insertBus:743,746 snapFxList:847 ownedSends:860 projectEntry:985,994 readGraph:1055,1070,1074,1093,1094,1124,1165,1170,1175,1178,1182,1194,1198,1237,1278,1287,1334,1367,1387,1408 diff:1539,1556,1571,1578,1583,1603,1608,1620,1622 reconcileFXChain:1699,1733,1760 applyOps:1846 authoredRouting:1885
-  @use call    util.bucket  @ adjacencies:105,106 samplerReachable:431 paramTargets:459,460 readGraph:1374 applyOps:1828
-  @use call    util.clone  @ applyOps:1775
+  @use call    util.add  @ 310,311 samplerReachable:439 paramTargets:467,483,487,491,504,505,509 addFxNode:572,575 deleteSource:606 deleteBus:627 insertBus:743,746 snapFxList:847 ownedSends:860 projectEntry:985,994 readGraph:1055,1070,1074,1093,1094,1124,1165,1170,1175,1178,1182,1194,1198,1237,1278,1287,1334,1367,1387,1408 diff:1539,1556,1571,1578,1583,1603,1608,1620,1622 reconcileFXChain:1699,1733,1760 applyOps:1850 authoredRouting:1889
+  @use call    util.bucket  @ adjacencies:105,106 samplerReachable:431 paramTargets:459,460 readGraph:1374 applyOps:1832
+  @use call    util.clone  @ applyOps:1779
   @use call    util.deepClone  @ ensureCompiled:115 graph:170 mutate:215 busRecords:759 projectEntry:990 stampDecoration:1452
   @use call    util.deepEq  @ 316 fxOrderEq:1479,1480 pinMapsEq:1517
   @use call    util.installHooks  @ 30
@@ -332,7 +333,7 @@
   @use require fs  @ 24
   @use require scratch  @ 25
   @use require util  @ 22
-  @use sub     wiringManager:wiringChanged  @ enableLive:2078
+  @use sub     wiringManager:wiringChanged  @ enableLive:2082
 
 # REAPER API surface
   @reaper defer

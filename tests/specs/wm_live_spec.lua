@@ -34,6 +34,10 @@ local function audioEdge(from, to)
   return { type='audio', from=from, to=to }
 end
 
+-- Scan the test JSFX as audio-only. A MIDI-capable scan brackets the chain with a bus-route
+-- CU when the graph is re-read from REAPER, which the authored-node stacks above never see.
+local function audioOnlyJSFX() return 'desc:plain\n@sample\nspl0 *= 1;\n' end
+
 return {
   {
     name = 'enableLive: mutate auto-applies — no explicit applyOps call',
@@ -133,6 +137,36 @@ return {
       local hasFx = false
       for _, n in pairs(wm:graph().nodes) do if n.kind == 'fx' then hasFx = true end end
       t.falsy(hasFx, 'graph no longer carries the vanished fx')
+    end,
+  },
+  {
+    name = 'enableLive: a settled project reconciles to zero ops and opens no undo block',
+    run = function(harness)
+      local h, wm = mkWm(harness)
+      wm.readJSFXContent = audioOnlyJSFX
+      seedSource(h, 'guid-A')
+      wm:enableLive()
+      wm:mutate(function(g)
+        g.nodes.s = source('guid-A')
+        g.nodes.f = mintFx(wm, 'JS:foo', nil)
+        util.add(g.edges, audioEdge('s', 'f'))
+        util.add(g.edges, audioEdge('f', 'master'))
+      end)
+
+      local blocks    = 0
+      local realBegin = h.reaper.Undo_BeginBlock
+      h.reaper.Undo_BeginBlock = function() blocks = blocks + 1; return realBegin() end
+
+      -- Reopening the wiring page on the realised project: a fresh stack reading the same
+      -- REAPER state has nothing to apply, so enableLive's reconcile must write nothing.
+      local rm2 = util.instantiate('routingManager', { ds = h.ds })
+      local wm2 = util.instantiate('wiringManager', { cm = h.cm, rm = rm2 })
+      wm2.readJSFXContent = audioOnlyJSFX
+      wm2:load()
+      wm2:enableLive()
+
+      t.eq(#wm2:diff(wm2:targetState(), wm2:snapshot()), 0, 'nothing to reconcile')
+      t.eq(blocks, 0, 'zero ops → no undo block, so no spurious undo point')
     end,
   },
 }

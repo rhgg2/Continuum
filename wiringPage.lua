@@ -35,6 +35,9 @@ facade.publish('wiring', {
   samplerReachable   = function(track) return wm:samplerReachable(track) end,
 })
 
+-- Raw stack for the reaper bridge (diagnostics only). See docs/bridge.md § The eval environment.
+facade.publishDebug('wiring', { rm = rm, wm = wm, wv = wv })
+
 local wp = {}
 
 ----------- PUBLIC
