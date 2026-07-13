@@ -1,4 +1,4 @@
-@module trackerView  src=trackerView.lua  loc=4161  sha=62b2736  mode=chunk  self=tv
+@module trackerView  src=trackerView.lua  loc=4161  sha=52a5eef  mode=chunk  self=tv
 @deps tm, cm, ds, cmgr, gm, pa, facade
 
 # Invariants & contracts

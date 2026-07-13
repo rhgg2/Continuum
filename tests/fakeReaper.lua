@@ -97,6 +97,8 @@ function M.new()
   function r.GetTakeGUID(take) return '{take:' .. tostring(take) .. '}' end
 
   function r.GetMediaItemTake_Item(take) return state.itemForTake[take] end
+  function r.MarkTrackItemsDirty() end
+
   function r.GetMediaItemTrack(item)     return state.trackForItem[item] end
   function r.GetMediaItemTake_Track(take)
     return state.trackForItem[state.itemForTake[take]]
@@ -656,6 +658,7 @@ function M.new()
   state.srcIsQN         = {}    -- src   → true if MIDI (beat-based)
   state.itemCustomColor = {}    -- item  → REAPER native int (|0x1000000 set), 0 = unset
   state.takeCustomColor = {}    -- take  → REAPER native int (|0x1000000 set), 0 = unset
+  function r.GetMediaItem_Track(item) return state.trackForItem[item] end
   function r.CountTrackMediaItems(track) return #(state.itemsByTrack[track] or {}) end
   function r.GetTrackMediaItem(track, i) return (state.itemsByTrack[track] or {})[i + 1] end
   function r.GetActiveTake(item)         return state.activeTake[item] end

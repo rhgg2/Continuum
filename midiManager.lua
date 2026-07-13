@@ -402,6 +402,10 @@ local function flushTake()
   -- SetAllEvts swaps the data but leaves REAPER's play cursor indexing the old event
   -- layout; mid-play it swallows the boundary events. See docs/midiManager.md § Live-edit note release.
   reaper.MIDI_Sort(take)
+  -- MIDI API writes bump no undo dirty-counter: without this mark the blob never
+  -- enters undo capture, so undo is a no-op on the MIDI (pooled takes can't rewind).
+  local item = reaper.GetMediaItemTake_Item(take)
+  reaper.MarkTrackItemsDirty(reaper.GetMediaItemTrack(item), item)
   perf.stop('setEvts')
 
   perf.count('notes', #notes); perf.count('ccs', #ccs); perf.count('texts', #texts)
@@ -1211,6 +1215,7 @@ function mm:setLength(qn)
     if newBuf ~= buf then reaper.MIDI_SetAllEvts(take, newBuf) end
   end
   reaper.MIDI_SetItemExtents(item, startQN, startQN + qn)
+  reaper.MarkTrackItemsDirty(reaper.GetMediaItemTrack(item), item)   -- EOT write bypasses flushTake; same undo-capture mark
   self:reload()
 end
 

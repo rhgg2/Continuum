@@ -59,10 +59,10 @@ because an item still references it. At most one item is parked per id
 (the dedup guard), so re-drop/delete cycles never accumulate copies.
 
 Re-dropping from an emptied slot works because `siblingInstance` falls
-back to the parked keeper as the chunk source, so `dropInstance` clones a
-fresh pooled instance straight off the park. A slot with neither a live
-nor a parked instance is the genuine forever-gone case, reached only
-through `deleteSlot`.
+back to the parked keeper, and `dropInstance` moves the keeper itself
+back onto the grid — a clone would pool across tracks (see § Pools
+never span tracks). A slot with neither a live nor a parked instance is
+the genuine forever-gone case, reached only through `deleteSlot`.
 
 `am:mintParkedTake` reaches the same end-state forward: it mints a fresh
 slot whose sole instance is born on the scratch track, never grid-placed.
@@ -187,6 +187,44 @@ MIDI drops resolve their chunk source through `siblingInstance`, which
 prefers a live instance on the track and falls back to the slot's parked
 keeper. A drop returns nil only when neither exists — a slot with no live
 and no parked instance, which `ensureSlots` would already have pruned.
+
+### Pools never span tracks
+
+Undo on a MIDI pool spanning tracks obeys a **one-era law** (isolated
+2026-07-13; `tests/spikes/spike_pooled_undo_matrix.lua`): after the
+pair is created or the project loaded, the first script run's gestures
+all mint and restore perfectly; from the next run on, only a run's
+first gesture mints — later gestures silently produce no undo point —
+until a save+reload grants one more healthy era. Same-track pools are
+immune. The matrix harness exonerated everything else we chased on the
+way (see this section's git history): chunk reads with either `isundo`
+flag, marking discipline, and chunk-stamped vs UI-built construction
+all test clean. An identity `SetItemStateChunk` appears to open a
+fresh era the way reload does (the old heal in
+`spike_pooled_undo_crosstrack.lua` worked this way) — consistent with
+the defect being about in-memory- vs chunk-derived item state. In
+Continuum the dead era presented as *lumped undo* rather than missing
+points: every gesture's P_EXT traffic forced hollow points that popped
+without restoring, so N edits rewound on the oldest one. Reported
+upstream against REAPER 7.77.
+
+The only cross-track pool arrange ever wanted was scratch keeper ↔ grid
+instance, so the rule is structural: unparking **moves** the keeper
+back to the grid (`dropInstance`), mirroring how `deleteTake` parks by
+moving. A keeper therefore exists only while its slot has no live
+instance. Same-track duplicates share pools freely; cross-slot copies
+re-pool.
+
+### takeIdOf is memoised
+
+trackerPage rebinds per frame through `am:takeForSlot` →
+`siblingInstance` → `takeIdOf`, which used to `GetItemStateChunk` the
+bound item every frame; the weak per-take memo keeps that to one read
+at first sight (pool identity is stable for a take's lifetime). Chunk
+reads were suspected of poisoning undo capture during the pooled-undo
+investigation but were exonerated by the matrix harness — the memo
+survives purely as a cost saving (chunk reads are not cheap; cf. the
+GetTrackStateChunk lesson).
 
 ## Audio drops are not pooled
 

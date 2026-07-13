@@ -4,6 +4,15 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-13** — Pools never span tracks. REAPER undo on a cross-track MIDI
+  pool obeys a one-era law: only the first script run after create/load mints
+  working points; later runs silently lose all but their first gesture until
+  save+reload (in Continuum, P_EXT traffic turned this into lumped undo).
+  Every per-gesture workaround was falsified live, so the rule is structural:
+  `dropInstance` unparks the scratch keeper by moving it back to the grid
+  (mirroring park-by-move), never cloning. Reported upstream (REAPER 7.77).
+  Ledger: docs/arrangeManager.md § Pools never span tracks.
+
 - **2026-07-12** — Every region-mutating ec verb flushes via `groupBridge.commit()`,
   not just the creation verbs. `tm:requestRebuild()`'s deferred flag is inert until a
   flush consumes it, so `dropInstance`/`paintCell`/`resizeBy` (delete/paint/grow-shrink)

@@ -36,17 +36,26 @@ local function invalidate() dirty = true end
 
 ----- Helpers
 
+-- Memoized: a GetItemStateChunk read poisons the item's next undo point, and
+-- takeForSlot polls this per frame. See docs/arrangeManager.md § Chunk reads poison undo.
+local takeIdCache = setmetatable({}, { __mode = 'k' })
 local function takeIdOf(take)
+  local cached = takeIdCache[take]
+  if cached then return cached end
+  local id
   if reaper.TakeIsMIDI(take) then
     local item = reaper.GetMediaItemTake_Item(take)
     if not item then return end
     local ok, chunk = reaper.GetItemStateChunk(item, '', false)
     if not ok or not chunk then return end
-    return chunk:match('POOLEDEVTS%s+({[^}]+})')
+    id = chunk:match('POOLEDEVTS%s+({[^}]+})')
+  else
+    local src = reaper.GetMediaItemTake_Source(take)
+    if not src then return end
+    id = reaper.GetMediaSourceFileName(src)
   end
-  local src = reaper.GetMediaItemTake_Source(take)
-  if not src then return end
-  return reaper.GetMediaSourceFileName(src)
+  takeIdCache[take] = id
+  return id
 end
 
 local function itemQNRange(item)
@@ -631,6 +640,14 @@ local function chunkSetPool(chunk, guid)
   return (chunk:gsub('(<SOURCE MIDI\n)', '%1    POOLEDEVTS ' .. guid .. '\n', 1))
 end
 
+-- REAPER keys undo bookkeeping by item GUID: a clone replaying srcItem's IGUID is
+-- invisible to undo capture (dirty marks resolve to the original), so edits on it never rewind.
+local function chunkFreshGuids(chunk)
+  return (chunk
+    :gsub('(IGUID%s+){[^}]+}',      function(pre) return pre .. reaper.genGuid('') end)
+    :gsub('(%f[%w]GUID%s+){[^}]+}', function(pre) return pre .. reaper.genGuid('') end))
+end
+
 local function harvestPoolGuid(item)
   local ok, chunk = reaper.GetItemStateChunk(item, '', false)
   if not ok or not chunk then return end
@@ -676,7 +693,7 @@ local function cloneMidiItem(track, srcItem, qnPos, lengthQN, rePool)
       eventMeta:copyPool(harvestPoolGuid(srcItem), freshGuid)   -- fresh pool: fork metadata
     end
   end
-  reaper.SetItemStateChunk(newItem, chunk, false)
+  reaper.SetItemStateChunk(newItem, chunkFreshGuids(chunk), false)
   -- Chunk replays src POSITION/LENGTH and may swap the active take; restore + refetch.
   setItemQNRange(newItem, qnPos, qnPos + lengthQN)
   local newTake = reaper.GetActiveTake(newItem)
@@ -781,7 +798,15 @@ function am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)
   local take
   if entry.kind == 'midi' then
     if not sibItem then return end
-    take = cloneMidiItem(track, sibItem, qnPos, len, false)
+    if reaper.GetMediaItem_Track(sibItem) ~= track then
+      -- Unpark by moving: a clone would pool across tracks, which breaks undo
+      -- restore for consecutive edits. See docs/arrangeManager.md § Pools never span tracks.
+      reaper.MoveMediaItemToTrack(sibItem, track)
+      setItemQNRange(sibItem, qnPos, qnPos + len)
+      take = reaper.GetActiveTake(sibItem)
+    else
+      take = cloneMidiItem(track, sibItem, qnPos, len, false)
+    end
   else
     take = placeAudio(track, entry.id, qnPos, len)
   end

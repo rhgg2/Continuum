@@ -1,4 +1,4 @@
-@module voicing  src=voicing.lua  loc=72  sha=55ac771  mode=namespace  self=voicing
+@module voicing  src=voicing.lua  loc=72  sha=9d13d4a  mode=namespace  self=voicing
 
 # Imports
   @const util = 'util'  @ 5
