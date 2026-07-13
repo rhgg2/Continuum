@@ -1,4 +1,4 @@
-@module wiringManager  src=wiringManager.lua  loc=2089  sha=fbe5034  mode=chunk  self=wm
+@module wiringManager  src=wiringManager.lua  loc=2089  sha=f1b7084  mode=chunk  self=wm
 @deps rm
 
 # Invariants & contracts
@@ -48,7 +48,7 @@
   @state CC_IDENT = 'JS:Continuum CC'  @ 43
   @state AUTO_BUS = 126  @ 44   -- its CC-propagation bus; sends on it aren't wiring's
   @state compiledCache = nil  @ 52   -- { graph, ctx, reach } | nil; cleared on every graph swap
-  @state PIN_GROW_FIXED_VERSION = nil  @ 74   -- maj*1000+min of the fix; nil = unfixed, guard always holds
+  @state PIN_GROW_FIXED_VERSION = 7075  @ 74   -- maj*1000+min of the fix; nil = unfixed, guard always holds
   @state jsfxTraitsMemo = {}  @ 143
   @state pruneSourceTags, mirrorBusTaps  @ 209   -- defined below; decoration GC + tap write-through on mutates
   @state CU_MODE_TO_FLOAT = { busRoute = 0, merge = 1 }  @ 805

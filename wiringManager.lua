@@ -71,7 +71,7 @@ end
 
 -- REAPER's pin-grow bug (filed against 7.74) re-stamps a same-cycle pin write; set
 -- PIN_GROW_FIXED_VERSION to the build that fixes it to retire the workaround below.
-local PIN_GROW_FIXED_VERSION = nil  -- maj*1000+min of the fix; nil = unfixed, guard always holds
+local PIN_GROW_FIXED_VERSION = 7075  -- maj*1000+min of the fix; nil = unfixed, guard always holds
 
 local function affectedByPinGrowBug()
   if not PIN_GROW_FIXED_VERSION then return true end
