@@ -4,6 +4,14 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-14** — eventMeta stores fields in entry buckets
+  (`e.<b> = {[uuid]=fields}`, `b = uuid//256`), not per-uuid slots. Chosen over
+  batching the projext-undo mirror's manifest/root writes (the pinned remedy):
+  per-uuid slots made pool slot count ≈ event count, and mirror manifests scale
+  with slot count — a 384-entry flush cost 585ms on a 14k-event take, now 15ms.
+  Kills the keyset cache outright; old projects' metadata is hosed, accepted
+  pre-beta.
+
 - **2026-07-14** — `pendingLen`: during `tm:setLength`'s shrink, `tm:length()`
   reports the end tm is *about* to create, not mm's current one. Chosen over
   threading a `takeLen` override through `rebuild` → tails/fx/park (four sites

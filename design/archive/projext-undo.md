@@ -33,9 +33,11 @@
       mints; the `peek()` callers are read-only and no-op when it's absent.
 
 **Pinned (later, not gating)**
-- [ ] batch the manifest/root writes across an eventMeta flush if the
-      per-assign cost (~2 reads + 3 writes on scratch) shows in the
-      perf tree
+- [x] the per-assign mirror cost did show (2026-07-14: 384 dirty
+      entries → 585ms on a 14k-event take, manifests ∝ pool slot count)
+      — resolved by coarsening eventMeta to entry buckets (~57
+      slots/pool instead of ~14k) rather than batching the mirror; see
+      docs/eventMeta.md § Granularity
 
 ## Deviations from the design below (as landed)
 

@@ -28,49 +28,50 @@ instance. Every pooled take resolves the one blob.
 
 A thin face over `pextStore`'s `project` scope, declared undoable by the
 `ctm.` prefix — the engine mirrors every write onto the scratch track so
-REAPER undo rewinds it (docs/pextStore.md § The mirror) — under three
+REAPER undo rewinds it (docs/pextStore.md § The mirror) — under two
 slot families per pool:
 
-- `ctm.<guid>.kb` — the bucket index: which key buckets exist.
-- `ctm.<guid>.keys.<b>` — one uuidTxt set per bucket (`b = uuid // 256`).
-  projext has no enumerate-by-prefix, so the uuids under a pool are tracked
-  explicitly; the buckets are the loader's index.
-- `ctm.<guid>.u.<uuidTxt>` — one `util.serialise`d field table per event.
+- `ctm.<guid>.kb` — the bucket index: which entry buckets exist.
+- `ctm.<guid>.e.<b>` — one `{ [uuid] = fields }` table per bucket
+  (`b = uuid // 256`). projext has no enumerate-by-prefix, so `kb` tracks
+  the buckets; the bucket itself is both the data and its enumeration.
 
-`flush` extends the keys set only when a uuid is new, so re-stamping an
-existing event stays a single-entry write — the keystroke-latency budget
-`midiManager` cares about (see docs/midiManager.md § Metadata I/O). The blobs are
-opaque here: which fields count as metadata (the structural strip) is
-`midiManager`'s alone.
+`flush` groups edits by bucket and read-modify-writes only the touched
+buckets, so a keystroke costs one bounded bucket round-trip — the
+keystroke-latency budget `midiManager` cares about (see
+docs/midiManager.md § Metadata I/O). The field tables are opaque here:
+which fields count as metadata (the structural strip) is `midiManager`'s
+alone.
 
-## Keyset cache
+## Granularity
 
-The keys set is read once per metadata-touching flush to fold in adds/deletes.
-Unserialising it is O(N) in the pool's whole uuid count — for a saturated pool
-(every note carries detune) that was ~5k entries re-parsed on every keystroke, to
-write one slot. It dominated flush time (`meta` in the perf tree) while the actual
-writes were 0–1.
+The shape above is the fourth attempt; each predecessor died to a
+measured hot path, so the lineage is worth keeping:
 
-So the set is held in memory (`keysCache`, keyed by guid) and only round-trips to
-projext when it changes. This is safe because the cache can only go stale via an
-external projext rewrite — REAPER undo/redo — and both such paths re-enter
-through `load`. Structural edits rewrite the MIDI take, so the tracker's
-take-hash watcher fires `reloadFromReaper` → `load`; a metadata-only undo
-writes no MIDI, so that watcher is blind to it — there the engine's
-`projectRewound` signal lands here instead, the affected guids' caches drop,
-and `poolsRewound` re-fires so the bound `midiManager` reloads. `load` clears
-the guid's cache and re-reads, making it the sole re-sync point. A value-only
-edit (detune change on an already-keyed note) leaves membership — and the
-cache — correct with no reload. Field *values* are never cached; `load` reads
-each `ctm.<guid>.u.<uuidTxt>` blob fresh.
+1. **Flat keyset + one slot per uuid.** The loader's uuid set was a
+   single blob, re-parsed on every metadata flush — O(pool) per
+   keystroke, ~5k entries on a saturated pool. It dominated flush time
+   while the actual writes were 0–1.
+2. **In-memory keyset cache.** Killed the re-parse, but the *write*
+   stayed monolithic: any uuid birth or death reserialised the whole
+   set (~5ms per note-entry keystroke on a ~12k-uuid pool). It also
+   bought a staleness protocol: `load` as the sole re-sync point, cache
+   drops on `projectRewound`.
+3. **Key buckets.** Bounded the keyset write to one ~256-uuid bucket —
+   but each event still held its own `u.<uuidTxt>` slot, so a saturated
+   pool carried ~12k+ undoable slots. The projext-undo mirror pays 2
+   scratch reads + 3 writes per undoable assign, with bucket manifests
+   proportional to the pool's *slot count* (~9KB each at 14k events): a
+   384-entry flush cost ~585ms, nearly all of it mirror traffic.
+4. **Entry buckets** (current). The fields live in the bucket, so slots
+   per pool collapse to ~pool/256 + 1: mirror manifests are near-empty
+   and a flush costs O(touched buckets). With no per-flush O(pool) work
+   left there is nothing to cache — the keyset cache and its staleness
+   protocol are deleted outright, and an external rewrite (undo/redo)
+   is simply visible to the next `load`.
 
-Caching killed the re-parse, but the *write* stayed monolithic: any uuid birth
-or death reserialised the entire keys set — for a saturated ~12k-uuid pool,
-~5ms of serialise + `SetProjExtState` per note-entry keystroke (`keys` under
-`meta` in the perf tree). Hence the buckets: a birth/death rewrites one
-~256-uuid bucket, and the tiny bucket index only when a bucket is born or
-dies. Same re-sync rule as before: `load` drops the whole cached index and
-re-reads.
+The keystroke bound is one ~256-entry bucket reserialise; `BUCKET` is
+tunable down if that ever shows in the perf tree.
 
 ## Pooled vs unpooled
 

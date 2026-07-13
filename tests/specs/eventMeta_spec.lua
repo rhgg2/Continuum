@@ -48,7 +48,7 @@ return {
   },
 
   {
-    name = 'flush delete removes a uuid and its keys entry, leaving siblings',
+    name = 'flush delete removes a uuid, leaving siblings',
     run = function()
       local em = fresh()
       em:flush('{p1}', { [1] = { detune = -50 }, [2] = { detune = 10 } }, {})
@@ -86,15 +86,43 @@ return {
   },
 
   {
-    -- The keyset is cached in memory to keep flush off an O(N) re-parse; load() must
-    -- still re-sync from projext, since REAPER undo/redo rewrites the blob behind us.
-    name = 'load re-reads the keyset after an external (undo-style) projext wipe',
+    -- eventMeta holds no in-memory state, so an external projext rewrite (REAPER
+    -- undo/redo) is visible to the very next load — pinned so a cache never sneaks back.
+    name = 'load reflects an external (undo-style) projext wipe',
     run = function()
       local em, _, ps = fresh()
       em:flush('{p1}', { [1] = { detune = -50 } }, {})
-      t.eq(em:load('{p1}')[1].detune, -50)                    -- primes the cache
+      t.eq(em:load('{p1}')[1].detune, -50)
       ps:assign('project', 'ctm.{p1}.kb', util.REMOVE)        -- undo wipes the pool bucket index
-      t.eq(next(em:load('{p1}')), nil, 'load reflects the wipe, not the stale cache')
+      t.eq(next(em:load('{p1}')), nil, 'load reflects the wipe')
+      em:flush('{p1}', { [2] = { detune = 10 } }, {})         -- post-wipe flush re-reads, not resurrects
+      local meta = em:load('{p1}')
+      t.eq(meta[1], nil, 'wiped uuid not resurrected by a later flush')
+      t.eq(meta[2].detune, 10)
+    end,
+  },
+
+  {
+    name = 'a flush spanning a bucket boundary round-trips both buckets',
+    run = function()
+      local em = fresh()
+      em:flush('{p1}', { [1] = { detune = -50 }, [300] = { detune = 25 } }, {})  -- buckets 0 and 1
+      local meta = em:load('{p1}')
+      t.eq(meta[1].detune, -50)
+      t.eq(meta[300].detune, 25)
+    end,
+  },
+
+  {
+    name = 'a delete that empties a bucket removes its slot and kb entry',
+    run = function()
+      local em, _, ps = fresh()
+      em:flush('{p1}', { [1] = { detune = -50 }, [300] = { detune = 25 } }, {})
+      em:flush('{p1}', {}, { [300] = true })
+      t.eq(ps:get('project', 'ctm.{p1}.e.1'), nil, 'emptied bucket slot removed')
+      t.eq(ps:get('project', 'ctm.{p1}.kb')[1], nil, 'kb entry removed')
+      t.eq(ps:get('project', 'ctm.{p1}.kb')[0], true, 'live bucket stays indexed')
+      t.eq(em:load('{p1}')[1].detune, -50, 'sibling bucket untouched')
     end,
   },
 
