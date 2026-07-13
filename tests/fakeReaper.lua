@@ -1,6 +1,6 @@
--- In-memory stand-in for the REAPER API. Covers just the surface touched
--- by configManager, trackerManager, and viewManager; midiManager's MIDI
--- calls are bypassed by using the fake midiManager instead.
+-- In-memory stand-in for the REAPER API. Covers just the surface production
+-- touches, including the MIDI take store the real midiManager runs against.
+-- See docs/tests.md for the model.
 
 local M = {}
 

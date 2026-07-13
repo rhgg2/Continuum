@@ -4,6 +4,7 @@
 -- mm:add), not poked into a fake mm.
 --
 -- Caller sets package.path (see run.lua) before requiring this module.
+-- See docs/tests.md for the model.
 
 local harness = {}
 

@@ -1,7 +1,7 @@
 -- Returns a `newMidiManager` function that builds a fresh real mm per call.
--- Bypasses util._stubs (which the harness sets to the fake) by going
--- straight through loadfile — these specs deliberately want the real
--- sidecar/dedup/reconcile pipeline.
+-- Bypasses util._stubs (where the harness installs its own mm factory) by
+-- going straight through loadfile — resolving 'midiManager' via require
+-- would loop back into that stub.
 --
 -- eventMeta is a real face over a real pextStore: all instances read/write the
 -- one project ext-state on the live fakeReaper, so a second mm on the same take
