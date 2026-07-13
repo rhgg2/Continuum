@@ -1,4 +1,4 @@
-@module coordinator  src=coordinator.lua  loc=364  sha=af57f2a  mode=chunk  self=coord
+@module coordinator  src=coordinator.lua  loc=366  sha=1438cf3  mode=chunk  self=coord
 @deps cm, ds, eventMeta, cmgr, gui
 
 # Invariants & contracts
@@ -73,12 +73,13 @@
   @api coord:togglePage()  @ 329-337
       -- Cycle tracker → arrange → sample → wiring → tracker. Unregistered pages
       -- are skipped; with ≥1 track every page activates.
-  @api coord:reloadAfterExternalMutation()  @ 340-344
+  @api coord:reloadAfterExternalMutation()  @ 341-346
       @contract  invoke after firing a REAPER action that mutates the bound take from inside a frame (Ctrl-Z, Ctrl-Shift-Z). The watcher's end-of-frame baseline would otherwise absorb the mutation; this reloads now so tm/vm stay coherent with the take.
-  @api coord:onExternalCommand(extKey, command)  @ 347-349
+      @invariant  mirror resync precedes reload — see docs/coordinator.md § Undo mid-frame
+  @api coord:onExternalCommand(extKey, command)  @ 349-351
       @contract  registers an ExtState key→command bridge polled each frame to fire Continuum commands
-  @api coord:quit()  @ 351
-  @api coord:run(handler)  @ 353
+  @api coord:quit()  @ 353
+  @api coord:run(handler)  @ 355
       @contract  handler wraps every deferred frame; without it, post-frame-1 errors raise raw dialogs
 
 # Uses (outbound edges)
@@ -89,7 +90,7 @@
   @use call    chrome.resetPickerActive  @ frame:229
   @use call    chrome.resetToolbar  @ setActive:305
   @use call    chrome.toolbarLineCount  @ frame:226
-  @use call    cm.pollUndo  @ frame:142
+  @use call    cm.pollUndo  @ frame:142 reloadAfterExternalMutation:342
   @use call    cmgr.bind  @ 33
   @use call    cmgr.invoke  @ drawSwitcher:82 pollExternalCommands:120
   @use call    cmgr.pop  @ setActive:306
@@ -132,7 +133,7 @@
   @use call    modalHost.isOpen  @ 32
   @use call    modalHost.tick  @ tick:64
   @use call    util.assign  @ register:292
-  @use call    util.instantiate  @ 21,24,25,26,357 register:292
+  @use call    util.instantiate  @ 21,24,25,26,359 register:292
   @use require chrome  @ 21
   @use require help  @ 25
   @use require imgui  @ 14

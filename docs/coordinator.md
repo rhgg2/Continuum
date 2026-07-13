@@ -14,6 +14,14 @@ The sample page is bound to a specific sampler track. The coordinator holds the 
 
 The loop is a bare `reaper.defer` chain. Each frame reschedules itself before returning. `coord:quit()` sets a flag that prevents rescheduling; REAPER then reclaims all Lua state on script unload. There is no explicit teardown path — adding one would encode assumptions about destruction order that REAPER does not guarantee.
 
+## Undo mid-frame: resync before reload
+
+A REAPER undo rewinds two things unevenly. The take's MIDI it rewinds itself; the note metadata (authored tails, uuids) lives in projext, which undo does not touch — it comes back only when `ps:pollUndo` copies it from the scratch mirror. `frame()` polls at the top, so the everyday path is safe: REAPER's own Ctrl-Z lands between frames, metadata is rewound first, and the take-hash watcher then reloads against a coherent pair.
+
+Continuum's own Ctrl-Z does not land between frames. It fires from inside the page's dispatch and reloads the take immediately, which is what `reloadAfterExternalMutation` is for. Without a resync it reloaded a rewound take against un-rewound metadata: the rebuild's tail pass re-derived the note-off from the stale authored ceiling and flushed it back to the take, erasing the undo. Only the tracker page reloads mid-frame, so it was the only page where undo appeared dead (2026-07-13).
+
+Hence the `cm:pollUndo()` at the head of `reloadAfterExternalMutation`. Any caller that mutates the take mid-frame — including the bridge's raw-edit path — inherits the same hazard and the same fix.
+
 ## Error surface
 
 Errors in the defer loop propagate to the same `xpcall` frame in `continuum.lua` that started the loop, because each iteration is a new closure passed to `defer` rather than a tail call. The handler in `continuum.lua` prints the traceback and schedules a no-op defer to cleanly exit the loop.

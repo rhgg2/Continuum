@@ -94,6 +94,27 @@ return {
   },
 
   {
+    -- Reload before resync reads post-edit metadata and flushes the undone edit
+    -- straight back. See docs/coordinator.md § Undo mid-frame.
+    name = 'reloadAfterExternalMutation resyncs the undo mirror before reloading the take',
+    run = function(harness)
+      local h = harness.mk()
+      local tracker = fakePage()
+      local coord = newCoord(h, { { 'tracker', tracker } })
+
+      local order = {}
+      local pollUndo = h.cm.pollUndo
+      h.cm.pollUndo = function(self) order[#order + 1] = 'pollUndo'; return pollUndo(self) end
+      tracker.reloadFromReaper = function() order[#order + 1] = 'reloadFromReaper' end
+
+      coord:reloadAfterExternalMutation()
+
+      t.eq(order[1], 'pollUndo',         'mirror resync runs first')
+      t.eq(order[2], 'reloadFromReaper', 'take reload sees the rewound metadata')
+    end,
+  },
+
+  {
     name = 'coordinator constructs the reaper bridge with an env exposing coord and the page() debug resolver',
     run = function(harness)
       local h = harness.mk()

@@ -337,7 +337,9 @@ function coord:togglePage()
 end
 
 --contract: invoke after firing a REAPER action that mutates the bound take from inside a frame (Ctrl-Z, Ctrl-Shift-Z). The watcher's end-of-frame baseline would otherwise absorb the mutation; this reloads now so tm/vm stay coherent with the take.
+--invariant: mirror resync precedes reload — see docs/coordinator.md § Undo mid-frame
 function coord:reloadAfterExternalMutation()
+  cm:pollUndo()
   if active == 'tracker' and pages.tracker then
     pages.tracker:reloadFromReaper()
   end
