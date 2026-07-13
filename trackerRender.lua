@@ -1334,8 +1334,8 @@ tracker:registerAll{
   openTemperPicker = function() chrome.requestPickerOpen('temper') end,
   openSwingPicker  = function() chrome.requestPickerOpen('swing')  end,
 
-  editNoteFx        = { editFx,      'Edit note FX' },
-  focusParamPalette = { focusParams, 'Focus parameters' },
+  editNoteFx        = editFx,
+  focusParamPalette = focusParams,
 }
 
 cmgr:doAfter({ 'quantize', 'quantizeKeepRealised' },

@@ -2620,6 +2620,16 @@ function tv:replaceFxStage(uuid, index, entry)
   self:setNoteFx(uuid, list)
 end
 
+-- One undo block per chain verb: fx writes are undoable but mint no point of their own, so
+-- unwrapped they rewind with the next edit. Inner blocks (setNoteFx, pa:apply) collapse in.
+tv.setNoteFx        = util.atomic('Note FX',          tv.setNoteFx)
+tv.setFxField       = util.atomic('Edit FX',          tv.setFxField)
+tv.addFxStage       = util.atomic('Add FX stage',     tv.addFxStage)
+tv.removeFxStage    = util.atomic('Delete FX stage',  tv.removeFxStage)
+tv.moveFxStage      = util.atomic('Move FX stage',    tv.moveFxStage)
+tv.replaceFxStage   = util.atomic('Swap FX stage',    tv.replaceFxStage)
+tv.pruneEmptyRegion = util.atomic('Delete FX region', tv.pruneEmptyRegion)
+
 ----- Deletion
 
 local deleteEvent, deleteSelection do

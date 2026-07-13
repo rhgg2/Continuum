@@ -543,6 +543,7 @@ function M.new()
   end
   function r.PreventUIRefresh(_) end
   function r.Undo_BeginBlock() end
+  function r.Undo_EndBlock(_name, _flags) end
   function r.Undo_EndBlock2(_proj, _name, _flags) end
   state.master = { __track = 'master' }
   function r.GetMasterTrack(_proj) return state.master end

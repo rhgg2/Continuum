@@ -321,4 +321,33 @@ return {
       generators.kinds.ccCap = nil
     end,
   },
+
+  {
+    -- The chain writes ride undo but mint no point of their own: unblocked, an fx edit
+    -- rewinds as a passenger of whatever edit follows it.
+    name = 'each chain verb mints one labelled undo point',
+    run = function(harness)
+      local h = harness.mk()
+      addHost(h, nil)
+      h.vm:setGridSize(80, 40)
+      local uuid = hostUuid(h)
+
+      -- Only the outermost block mints a point; count depth so nested ones don't inflate.
+      local depth, points = 0, {}
+      local realBegin, realEnd = h.reaper.Undo_BeginBlock, h.reaper.Undo_EndBlock
+      h.reaper.Undo_BeginBlock = function() depth = depth + 1 end
+      h.reaper.Undo_EndBlock = function(label)
+        depth = depth - 1
+        if depth == 0 then points[#points + 1] = label end
+      end
+
+      h.vm:addFxStage(uuid, { kind = 'retrig', period = { 1, 4 }, ramp = 0 })
+      h.vm:setFxField(uuid, 1, 'ramp', 20)
+      h.vm:removeFxStage(uuid, 1)
+
+      h.reaper.Undo_BeginBlock, h.reaper.Undo_EndBlock = realBegin, realEnd
+      t.deepEq(points, { 'Continuum: Add FX stage', 'Continuum: Edit FX', 'Continuum: Delete FX stage' },
+               'add / edit / delete each land as their own labelled undo point')
+    end,
+  },
 }
