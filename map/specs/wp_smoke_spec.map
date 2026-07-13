@@ -1,4 +1,4 @@
-@spec wp_smoke_spec  src=tests/specs/wp_smoke_spec.lua  loc=60  sha=e2be081  cases=2
+@spec wp_smoke_spec  src=tests/specs/wp_smoke_spec.lua  loc=64  sha=e2be081  cases=2
 @harness   mk
 
 # Intent
@@ -10,8 +10,8 @@
   before the first require so the module loads in the pure-Lua harness.
 
 # Helpers
-  @fn newWiringPage(cm, ds, cmgr, chrome, gui)  @ 30-34
+  @fn newWiringPage(cm, ds, cmgr, chrome, gui)  @ 34-38
 
 # Cases
-  @case 'bind / unbind are no-ops — wiring page never re-keys cm'  [harness]  @ 38-47
-  @case 'focusState before any render returns both bits false'  [harness]  @ 51-58
+  @case 'bind / unbind are no-ops — wiring page never re-keys cm'  [harness]  @ 42-51
+  @case 'focusState before any render returns both bits false'  [harness]  @ 55-62

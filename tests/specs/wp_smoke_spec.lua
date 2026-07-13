@@ -26,7 +26,11 @@ local fakeModalHost = {
   isOpen              = function() return false end,
   wasOpenAtFrameStart = function() return false end,
 }
-local fakeFacade = { publish = function() end, get = function() return {} end }
+local fakeFacade = {
+  publish      = function() end,
+  publishDebug = function() end,
+  get          = function() return {} end,
+}
 local function newWiringPage(cm, ds, cmgr, chrome, gui)
   return util.instantiate('wiringPage',
     { cm = cm, ds = ds, cmgr = cmgr, chrome = chrome, gui = gui,

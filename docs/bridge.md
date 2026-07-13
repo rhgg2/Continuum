@@ -63,9 +63,9 @@ leak into Continuum.
 `page()` is a deliberate, labelled hole in the layering rule. Facades
 remain the curated production surface; `page(name)` returns the raw
 stack a page published via `facade.publishDebug` — trackerPage's
-`{ mm, tm, gm, ccm, pa, tv, tr }` is the first and so far only
-customer. The hole exists only for the bridge; other pages publish
-when a third real need appears, not before.
+`{ mm, tm, gm, ccm, pa, tv, tr }` and wiringPage's `{ rm, wm, wv }`
+are the only customers. The hole exists only for the bridge; a page
+publishes when a real diagnostic need appears, not before.
 
 ## Rendering
 
