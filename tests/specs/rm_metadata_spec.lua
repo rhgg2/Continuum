@@ -1,14 +1,12 @@
 -- rm metadata facility: non-native record fields persist behind the scenes —
--- track-meta on the track's own P_EXT, fx-meta in a projext blob mirrored to the
--- scratch track for undo. Plus rm's ownership of the scratch track.
+-- fx/bus-meta ride pextStore's undo mirror as ds keys; track-meta rides P_EXT.
 local t       = require('support')
 local harness = require('harness')
 local util    = require('util')
-local scratch = require('scratch')
 
 local function mkRm()
   local h = harness.mk()
-  return h.reaper, util.instantiate('routingManager')
+  return h.reaper, util.instantiate('routingManager', { ds = h.ds }), h
 end
 
 local function seedTrack(reaper, name)
@@ -85,47 +83,23 @@ return {
     end,
   },
   {
-    name = 'resyncMeta restores projext from the scratch mirror after an undo',
+    name = 'fx-meta rides undo: a rewound scratch mirror restores it through ds',
     run = function()
-      local reaper, rm = mkRm()
+      local reaper, rm, h = mkRm()
       local _, tid = seedTrack(reaper, 'Bus')
       local fxId = addFx(reaper, rm, tid, 'FX:comp')
       rm:assignFx(fxId, { split = true })
 
-      -- Simulate undo: projext reverts (it does not ride native undo) but the
-      -- scratch chunk mirror does, so the value is still there.
-      reaper.SetProjExtState(0, 'continuum_wiring', 'fxMeta', '')
-      t.eq(rm:fx(fxId).split, nil, 'projext cleared → meta gone')
-      rm:resyncMeta()
-      t.eq(rm:fx(fxId).split, true, 'resync pulls the scratch mirror back into projext')
-    end,
-  },
-  {
-    name = 'pollUndo is the scratch heartbeat: mints once, idempotent',
-    run = function()
-      local reaper, rm = mkRm()
-      local before = reaper.CountTracks(0)
-      rm:pollUndo()
-      t.eq(reaper.CountTracks(0), before + 1, 'heartbeat minted the scratch')
-      rm:pollUndo()
-      t.eq(reaper.CountTracks(0), before + 1, 'second beat reused it — no duplicate')
-    end,
-  },
-  {
-    name = 'pollUndo resyncs fx-meta when the scratch mirror diverges from its watermark',
-    run = function()
-      local reaper, rm = mkRm()
-      local _, tid = seedTrack(reaper, 'Bus')
-      local fxId = addFx(reaper, rm, tid, 'FX:comp')
-      rm:assignFx(fxId, { split = true })          -- watermark = {split=true}
-      rm:assignFx(fxId, { split = util.REMOVE })    -- watermark = {} ; projext = {}
+      -- REAPER undo rewinds the scratch track's chunk but not projext; the mirror
+      -- lives in the chunk, so the poll copies the pre-edit value back.
+      local snap = util.clone(reaper._state.trackExt)
+      rm:assignFx(fxId, { split = util.REMOVE })
+      t.eq(rm:fx(fxId).split, nil, 'cleared before the undo')
 
-      -- REAPER undo rewinds the scratch chunk to the pre-removal state; projext
-      -- (which does not reverse) stays empty until the heartbeat pulls it back.
-      reaper.GetSetMediaTrackInfo_String(scratch.track(), 'P_EXT:ctm_fxMeta',
-        util.serialise({ [fxId] = { split = true } }), true)
-      rm:pollUndo()
-      t.eq(rm:fx(fxId).split, true, 'mirror diverged → resync restored projext')
+      reaper._state.trackExt = util.clone(snap)
+      reaper._state.projStateCount = reaper._state.projStateCount + 1
+      h.cm:pollUndo()   -- coordinator.frame's entry point: mirror resync + ds invalidate
+      t.eq(rm:fx(fxId).split, true, 'undo restored fx-meta through the mirror')
     end,
   },
 }

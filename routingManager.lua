@@ -1,17 +1,18 @@
 -- See docs/routingManager.md for the model. A thin record abstraction over
 -- REAPER's audio/MIDI graph.
 --invariant: id is a track/fx GUID string — opaque to callers, stable across reload
---invariant: stateless; mirrors fx-meta onto scratch.lua's track under an undo watermark
+--invariant: stateless; fx/bus meta are project-scope ds keys, so they ride ds's undo mirror
 --invariant: non-native record fields are metadata; rm persists them (see docs/routingManager.md)
 
 local util = require('util')
-local scratch = require('scratch')
+
+local deps = ...
+local ds   = assert(deps and deps.ds, 'routingManager requires a dataStore dep { ds = ... }')
 
 local PROJ = 0
 
 local rm = {}
 local installedFxCache = nil  -- reaper's installed-FX set is fixed at runtime
-local metaSeen        = {}   -- store -> last scratch-mirror raw rm:pollUndo saw; resync only on change
 
 ----------- track resolution
 
@@ -550,15 +551,11 @@ local FX_NATIVE = {
   trackId = true, params = true, index = true, track = true,
 }
 
-local EXT_SECTION  = 'continuum_wiring'
-local META_PEXT    = 'P_EXT:ctm_meta'    -- per-track metadata blob
+local META_PEXT = 'P_EXT:ctm_meta'    -- per-track metadata blob
 
--- Each store is a {[id]=meta} projext blob mirrored to scratch so REAPER undo reverts it.
--- Stores never share a blob; each consumer reads only the shape it expects.
-local META_STORES = {
-  fx  = { key = 'fxMeta',  mirror = 'P_EXT:ctm_fxMeta'  },
-  bus = { key = 'busMeta', mirror = 'P_EXT:ctm_busMeta' },
-}
+-- Each store is a {[id]=meta} ds key at project scope, so it rides the projext-undo
+-- mirror. Stores never share a blob; each consumer reads only the shape it expects.
+local META_KEY = { fx = 'fxMeta', bus = 'busMeta' }
 
 local function decodeBlob(raw)
   return (raw and raw ~= '') and util.unserialise(raw) or nil
@@ -578,13 +575,11 @@ local function writeTrackMeta(track, meta)
 end
 
 local function readMeta(store)
-  local _, raw = reaper.GetProjExtState(PROJ, EXT_SECTION, META_STORES[store].key)
-  return decodeBlob(raw) or {}
+  return ds:get(META_KEY[store]) or {}
 end
 
 -- nil meta deletes the entry; otherwise patch-merge (util.REMOVE clears a field).
 local function writeMeta(store, id, meta)
-  local def  = META_STORES[store]
   local blob = readMeta(store)
   if meta == nil then
     blob[id] = nil
@@ -593,10 +588,7 @@ local function writeMeta(store, id, meta)
     util.assign(blob[id], meta)
     if not next(blob[id]) then blob[id] = nil end
   end
-  local raw = util.serialise(blob)
-  reaper.SetProjExtState(PROJ, EXT_SECTION, def.key, raw)
-  reaper.GetSetMediaTrackInfo_String(scratch.track(), def.mirror, raw, true)
-  metaSeen[store] = raw
+  ds:assign(META_KEY[store], blob)
 end
 
 ----- Mute: clear live pins on one side, stash the real pinout in fx-meta so reads stay wired.
@@ -842,29 +834,6 @@ end
 function rm:masterId()
   local master = reaper.GetMasterTrack(PROJ)
   return master and reaper.GetTrackGUID(master) or nil
-end
-
---contract: pull every meta store's scratch P_EXT mirror back into projext after a
---contract: REAPER undo/redo — projext doesn't reverse natively, the scratch chunk does
-function rm:resyncMeta()
-  local _, track = scratch.peek()
-  if not track then return end
-  for _, def in pairs(META_STORES) do
-    local _, raw = reaper.GetSetMediaTrackInfo_String(track, def.mirror, '', false)
-    reaper.SetProjExtState(PROJ, EXT_SECTION, def.key, raw)
-  end
-end
-
---contract: per-frame heartbeat — ensures the scratch exists, and on a scratch-chunk
---contract: rewind (REAPER undo/redo) pulls the meta mirrors back into projext
-function rm:pollUndo()
-  local track = scratch.track()
-  local changed = false
-  for store, def in pairs(META_STORES) do
-    local _, raw = reaper.GetSetMediaTrackInfo_String(track, def.mirror, '', false)
-    if raw ~= metaSeen[store] then metaSeen[store] = raw; changed = true end
-  end
-  if changed then self:resyncMeta() end
 end
 
 function rm:addTrack(t)

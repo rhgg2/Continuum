@@ -9,7 +9,7 @@ local util    = require('util')
 
 local function mkRm()
   local h = harness.mk()
-  return h.reaper, util.instantiate('routingManager')
+  return h.reaper, util.instantiate('routingManager', { ds = h.ds }), h
 end
 
 local function seedFx(reaper, rm, io, pinMaps)
@@ -120,11 +120,14 @@ return {
   {
     name = 'mute persists: a fresh rm still reads muted and reports the wire',
     run = function()
-      local reaper, rm = mkRm()
+      local reaper, rm, h = mkRm()
       local _, id = seedProcessor(reaper, rm)
       rm:setMuted(id, true)
 
-      local rm2 = util.instantiate('routingManager')
+      -- Fresh ds over the same engine, so the read round-trips through storage
+      -- rather than hitting the first ds's cache.
+      local rm2 = util.instantiate('routingManager',
+        { ds = util.instantiate('dataStore', { ps = h.ps }) })
       t.eq(rm2:muted(id), true, 'a fresh rm still sees the mute (persisted fx-meta)')
       t.deepEq(rm2:tracks()[1].fx[1].pinMaps.ins, { [1] = { 1 }, [2] = { 2 } },
                'wire still reported after the reload')

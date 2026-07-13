@@ -34,6 +34,8 @@ local registry = {
   arrangeSlots        = 'track',
   arrangeColours      = 'project',
   fxPatterns          = 'project',
+  fxMeta              = 'project',
+  busMeta             = 'project',
   guardedTrack        = 'project',
   paramFrecency       = 'global',
 }
@@ -115,7 +117,7 @@ end)
 ----- Watcher
 
 -- Project keys ride the projext-undo mirror as document data, except runtime
--- bookkeeping (guardedTrack would desync from live flags) — design/projext-undo.md § Policy.
+-- bookkeeping (guardedTrack would desync from live flags) — design/archive/projext-undo.md § Policy.
 local PROJECT_PLAIN = { guardedTrack = true }
 
 local function projectUndoable(name)

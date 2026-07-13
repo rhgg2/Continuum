@@ -103,20 +103,22 @@ per-record-kind native-key set. The two kinds store differently:
 - **Track-meta** rides the track's own `P_EXT` blob — it reverses with
   native undo for free, so source/master node decoration (`pos`, …) needs
   nothing more.
-- **Fx-meta** has no per-fx channel (see `design/fx-metadata-spike.md`), so
-  it lives in a project-extstate blob keyed by fx guid, mirrored to the
-  scratch track's `P_EXT` so native undo captures it. `resyncFxMeta` pulls
-  that mirror back into projext after an undo/redo, since projext alone
-  does not reverse.
+- **Fx-meta** (and bus-meta) has no per-fx channel (see
+  `design/fx-metadata-spike.md`), so each is one blob keyed by guid. They are
+  `dataStore` keys at **project** scope (`fxMeta`, `busMeta`), which makes them
+  undoable document data: pextStore mirrors every undoable project slot onto the
+  scratch track's `P_EXT`, and its per-frame poll copies a rewound slot back into
+  projext. rm neither mirrors nor polls — it just reads and writes ds.
 
 Writes patch-merge (a partial write never wipes a sibling; `util.REMOVE`
-clears a field), and an all-native write touches no extstate at all — the
-reconcile hot path stays clean. The scratch track is owned by `scratch.lua`
-(`scratch.id` mints it lazily — hidden + muted — guid persisted in projext);
-rm is one tenant, mirroring fx-meta onto its `P_EXT`. `rm:pollUndo` (driven
-each frame by `wp:tick`) is the heartbeat that ensures the scratch exists
-and, on a scratch-chunk rewind, resyncs the fx-meta mirror back into projext
-— gated by a watermark so steady-state frames touch no extstate.
+clears a field), and an all-native write touches no store at all — the
+reconcile hot path stays clean.
+
+rm held a private version of that mirror until 2026-07-13 (its own projext
+blobs, a scratch-chunk mirror, and a `pollUndo` heartbeat on `wp:tick`). The
+mechanism was right but the altitude was wrong: eventMeta and the config tiers
+needed the same thing, so it moved into pextStore and rm became an ordinary
+ds face. See `design/archive/projext-undo.md`.
 
 ## Mute
 

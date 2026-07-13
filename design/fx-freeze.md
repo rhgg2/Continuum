@@ -14,7 +14,7 @@
 **Open**
 - [ ] F2a — projext undo (gates F2's undo-wholeness only): pextStore
       mirrors project scope to scratch so undo reverts it — split to
-      design/projext-undo.md
+      design/archive/projext-undo.md
 - [ ] F2 — the freeze pair: freeze-to-raw, freeze-to-group, and the
       curve thinner freeze-to-group needs; plan reviewed + pinned
       (§ Implementation notes)
@@ -232,7 +232,7 @@ undo block:
   region/stash/baseline/MIDI over notes that lost their tags: the
   next rebuild re-emits a fresh derived set and parks the untagged
   originals as bogus authored members. F2a
-  (design/projext-undo.md) closes this; it gates the
+  (design/archive/projext-undo.md) closes this; it gates the
   one-undo-reverts-wholly spec, nothing else in F2.
 
 ## F2 — implementation notes (2026-07-12 round)

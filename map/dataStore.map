@@ -1,4 +1,4 @@
-@module dataStore  src=dataStore.lua  loc=202  sha=a17a7a7  mode=chunk  self=ds
+@module dataStore  src=dataStore.lua  loc=204  sha=91409db  mode=chunk  self=ds
 @deps ps
 
 # Invariants & contracts
@@ -15,61 +15,61 @@
 # Private state
   @state ps = assert(deps and deps.ps, 'dataStore requires a pextStore ...  @ 13
   @state registry = {  @ 20
-  @state GLOBAL_SLOT = 'data'  @ 41
-  @state cache = { take = nil, track = nil, project = nil, global = nil }  @ 64
-  @state ds = {}  @ 105
-  @state fire = util.installHooks(ds)  @ 106
-  @state PROJECT_PLAIN = { guardedTrack = true }  @ 119
-  @state undoable = {}  @ 125
-  @state watched = {}  @ 133
+  @state GLOBAL_SLOT = 'data'  @ 43
+  @state cache = { take = nil, track = nil, project = nil, global = nil }  @ 66
+  @state ds = {}  @ 107
+  @state fire = util.installHooks(ds)  @ 108
+  @state PROJECT_PLAIN = { guardedTrack = true }  @ 121
+  @state undoable = {}  @ 127
+  @state watched = {}  @ 135
 
 # Private functions
   @fn print(...)  @ 15
   -- REGISTRY
-  @fn slotFor(scope, name)  @ 45-49
+  @fn slotFor(scope, name)  @ 47-51
       -- take/track keep one P_EXT slot per name for write isolation + per-key undo
       -- baselines; project reuses the engine's projext section with slot = name.
-  @fn checkName(name)  @ 51-53
-  @fn copy(v)  @ 55-58
+  @fn checkName(name)  @ 53-55
+  @fn copy(v)  @ 57-60
   -- CACHE
-  @fn loadScope(scope)  @ 68-81
+  @fn loadScope(scope)  @ 70-83
       -- Tolerant: a stale name in the global file (post-rename) is dropped, not raised
       -- (mirrors cm's pruneUnknown). Per-key blobs can't accrue unknowns -- skip them.
-  @fn ensureScope(scope)  @ 83-85
-  @fn persist(scope, name, value)  @ 89-101
+  @fn ensureScope(scope)  @ 85-87
+  @fn persist(scope, name, value)  @ 91-103
       -- util.REMOVE clears the slot. take/track writes are loud if unbound (document
       -- data isn't recomputable, unlike configManager's silent take-tier skip).
   -- PUBLIC INTERFACE
   -- Watcher
-  @fn projectUndoable(name)  @ 121-123
+  @fn projectUndoable(name)  @ 123-125
 
 # Public API (ds:*)
   -- Reading
-  @api ds:get(name)  @ 152-157
+  @api ds:get(name)  @ 154-159
       @contract  returns deep copy at name's scope; nil if absent; raises on unknown name
-  @api ds:getAt(handle, name)  @ 160-164
+  @api ds:getAt(handle, name)  @ 162-166
       -- Foreign-handle read: bypasses bound context; scope (take/track) from the registry.
   -- Writing
-  @api ds:assign(name, value)  @ 169-182
+  @api ds:assign(name, value)  @ 171-184
       @contract  writes one key at its registry scope; REMOVE deletes; fires dataChanged { scope, name }
-  @api ds:delete(name)  @ 184
-  @api ds:assignAt(handle, name, value)  @ 188-200
+  @api ds:delete(name)  @ 186
+  @api ds:assignAt(handle, name, value)  @ 190-202
       -- Foreign-handle write; util.REMOVE deletes. Refreshes the cache + signals only for
       -- the bound handle, so a write aimed at another take/track doesn't disturb the view.
 
 # Signals emitted (via util.installHooks)
-  @emits dataChanged   -- { scope, name }   @ 145 assign:181 assignAt:198
+  @emits dataChanged   -- { scope, name }   @ 147 assign:183 assignAt:200
 
 # Uses (outbound edges)
-  @use call    ps.assign  @ persist:91,93,96,99
-  @use call    ps.assignAt  @ assignAt:191
-  @use call    ps.boundTake  @ persist:98 assignAt:192
-  @use call    ps.boundTrack  @ persist:95 assignAt:193
-  @use call    ps.get  @ loadScope:71,77 143
-  @use call    ps.getAt  @ getAt:163
-  @use call    ps.watch  @ 140
-  @use call    util.deepClone  @ copy:56
-  @use call    util.installHooks  @ 106
+  @use call    ps.assign  @ persist:93,95,98,101
+  @use call    ps.assignAt  @ assignAt:193
+  @use call    ps.boundTake  @ persist:100 assignAt:194
+  @use call    ps.boundTrack  @ persist:97 assignAt:195
+  @use call    ps.get  @ loadScope:73,79 145
+  @use call    ps.getAt  @ getAt:165
+  @use call    ps.watch  @ 142
+  @use call    util.deepClone  @ copy:58
+  @use call    util.installHooks  @ 108
   @use call    util.print  @ print:15
   @use require util  @ 10
-  @use sub     ps:contextChanged  @ 110
+  @use sub     ps:contextChanged  @ 112

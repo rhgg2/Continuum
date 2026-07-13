@@ -1,15 +1,12 @@
 # scratch
 
-One hidden, muted REAPER track that the project parks things on. Four
+One hidden, muted REAPER track that the project parks things on. Three
 tenants share it:
 
 - **`pextStore`** mirrors every *undoable* project-scope slot (eventMeta
-  tags, project-tier config, dataStore's project keys) onto the track's
-  P_EXT under `ctm_ps.*`, so REAPER undo rewinds them
-  (docs/pextStore.md § The mirror).
-- **`routingManager`** mirrors its fx-meta projext blobs onto the track's
-  chunk, so REAPER undo reverts them (projext doesn't reverse natively).
-  Pinned to migrate onto pextStore's mirror (design/projext-undo.md).
+  tags, project-tier config, dataStore's project keys — rm's fx/bus meta
+  among them) onto the track's P_EXT under `ctm_ps.*`, so REAPER undo
+  rewinds them (docs/pextStore.md § The mirror).
 - **`wiringManager`** parks FX that have no compile-graph track —
   disconnected nodes, lowered-parked instances.
 - **`arrangeManager`** (forthcoming) parks the MIDI of emptied palette
@@ -17,12 +14,13 @@ tenants share it:
 
 ## Why its own module
 
-The three needs are unrelated to each other and to the modules that have
-them. "Provide a shared scratch track" is not a routing concern, a wiring
+The needs are unrelated to each other and to the modules that have them.
+"Provide a shared scratch track" is not a routing concern, a wiring
 concern, or a config concern — so it lives nowhere but here. rm used to
 own it, which fused "I need a track for my undo mirror" with "the project
-has a scratch track"; this module splits them. rm, wm, am are now equal
-tenants.
+has a scratch track"; this module splits them. rm has since given up its
+private mirror entirely — its meta is project-scope `dataStore` data, so
+pextStore mirrors it like any other undoable slot.
 
 ## Why `require`, not injected
 

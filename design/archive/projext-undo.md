@@ -23,9 +23,16 @@
       and setSwingSlot/localizeSwing left unwrapped — they ride a take
       write or are not undo-meaningful.
 
+- [x] rm migrated (2026-07-13): fxMeta/busMeta are project-scope ds keys,
+      so they ride this mirror like any other document data. rm's private
+      mirror, `rm:resyncMeta`, `rm:pollUndo` and `wp:tick` are gone; rm
+      takes a `ds` dep and neither mirrors nor polls. Consequence: the
+      per-frame scratch mint went with the heartbeat, so scratch is now
+      minted on the first undoable write — an untouched project has none.
+      Every tenant that needs it already calls `scratch.track()`, which
+      mints; the `peek()` callers are read-only and no-op when it's absent.
+
 **Pinned (later, not gating)**
-- [ ] migrate rm's private fxMeta/busMeta mirror onto this and
-      delete rm:pollUndo/resyncMeta
 - [ ] batch the manifest/root writes across an eventMeta flush if the
       per-assign cost (~2 reads + 3 writes on scratch) shows in the
       perf tree

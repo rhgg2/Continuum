@@ -68,7 +68,7 @@ clears the moment the file reads clean (or empty) again.
 REAPER undo rewinds take/track P_EXT and the scratch track's chunk, but
 projext does not reverse natively. Everything at project scope therefore
 used to survive undo — eventMeta's tags being the motivating casualty
-(design/projext-undo.md). The engine closes the gap once, at the
+(design/archive/projext-undo.md). The engine closes the gap once, at the
 `writeRaw` altitude, so every face inherits it without knowing.
 
 **Policy is per key, not per scope.** Faces declare undoable slots at
@@ -120,4 +120,4 @@ rebind is swallowed for one tick; the root comparison still differs
 afterwards, so it resyncs at the next state-count change.
 
 Undo-point bundling and undo-storage weight are design decisions, not
-engine mechanics — see design/projext-undo.md § Implications.
+engine mechanics — see design/archive/projext-undo.md § Implications.

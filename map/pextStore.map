@@ -1,4 +1,4 @@
-@module pextStore  src=pextStore.lua  loc=433  sha=bd5520e  mode=chunk  self=ps
+@module pextStore  src=pextStore.lua  loc=433  sha=3970445  mode=chunk  self=ps
 
 # Invariants & contracts
   @invariant  single source of bound take/track context, shared by every face; setTake derives track from the take's item
@@ -45,8 +45,8 @@
   -- PROJEXT UNDO MIRROR
   @fn isUndoable(slot)  @ 79-85
   @fn mirrorKey(name)  @ 89
-      -- Scratch P_EXT keys, namespaced to mark ownership (rm's fx-meta mirrors share
-      -- the track): s.<slot> mirrored raw, m.<b> bucket manifest, root watermark.
+      -- Scratch P_EXT keys, namespaced to mark ownership (the track has other tenants):
+      -- s.<slot> mirrored raw, m.<b> bucket manifest, root watermark.
   @fn mirrorRead(strack, name)  @ 91-94
   @fn mirrorWrite(strack, name, raw)  @ 96-98
   @fn decodeMirror(raw)  @ 100-104

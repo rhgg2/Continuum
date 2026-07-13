@@ -6,7 +6,7 @@ local DAG  = require('DAG')
 
 local function mkWm(harness)
   local h  = harness.mk()
-  local rm = util.instantiate('routingManager')
+  local rm = util.instantiate('routingManager', { ds = h.ds })
   local wm = util.instantiate('wiringManager', { cm = h.cm, rm = rm })
   wm:load()
   return h, wm

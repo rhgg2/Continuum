@@ -9,7 +9,7 @@ local util    = require('util')
 
 local function mkRm()
   local h  = harness.mk()
-  local rm = util.instantiate('routingManager')
+  local rm = util.instantiate('routingManager', { ds = h.ds })
   return h.reaper, rm
 end
 

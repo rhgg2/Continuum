@@ -8,19 +8,19 @@
 
 --contract: constructs the substack (rm/wm local, only wv leaves); the renderer is handed wv, never wm/rm
 --contract: wiring is project-wide — bind() takes no take and never re-keys cm; tracker take and sampler track are unaffected
---contract: render hooks delegate to wiringRender; lifecycle (unbind/enableLive/tick) drives wv/wr directly
+--contract: render hooks delegate to wiringRender; lifecycle (unbind/enableLive) drives wv/wr
 local util = require 'util'
 
 if not reaper.ImGui_GetBuiltinPath then
   return reaper.MB('ReaImGui is not installed or too old.', 'My script', 0)
 end
 
-local cm, cmgr, chrome, gui, modalHost, facade =
-  (...).cm, (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).facade
+local cm, ds, cmgr, chrome, gui, modalHost, facade =
+  (...).cm, (...).ds, (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).facade
 
 -- rm/wm stay local to this chunk; only wv leaves, handed to the renderer, so the
 -- renderer can't reach wm/rm — every graph query and mutation flows through wv.
-local rm = util.instantiate('routingManager')
+local rm = util.instantiate('routingManager', { ds = ds })
 local wm = util.instantiate('wiringManager', { cm = cm, rm = rm })
 local wv = util.instantiate('wiringView',    { cm = cm, cmgr = cmgr, wm = wm })
 
@@ -47,9 +47,6 @@ function wp:unbind() wr:closeTransients() end
 
 --contract: turn on live recompile — every wiringChanged drives a diff+apply, plus one immediate reconcile pass to sync REAPER with the persisted graph at boot. Idempotent. Called once from continuum after registration.
 function wp:enableLive() wv:enableLive() end
-
---contract: per-frame heartbeat — rm:pollUndo (scratch + fx-meta). Always-on, any active page.
-function wp:tick() rm:pollUndo() end
 
 --contract: reread the graph when REAPER routing changed under us; active page only (coord-gated)
 function wp:syncExternal() wv:syncExternal() end

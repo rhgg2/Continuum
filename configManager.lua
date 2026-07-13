@@ -398,7 +398,7 @@ local cm = {}
 fire = util.installHooks(cm)
 
 -- Project-tier config rides the projext-undo mirror like any document data;
--- global stays disk, outside undo, by design (design/projext-undo.md § Policy).
+-- global stays disk, outside undo (design/archive/projext-undo.md § Policy).
 ps:declareUndoable{ slots = { 'config' } }
 
 -- cm's persisted tiers as one watcher group: fires once per undo tick that rewinds

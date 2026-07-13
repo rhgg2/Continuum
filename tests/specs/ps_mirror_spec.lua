@@ -1,4 +1,4 @@
--- projext undo (design/projext-undo.md): undoable project-scope slots mirror
+-- projext undo (design/archive/projext-undo.md): undoable project-scope slots mirror
 -- onto the scratch track's P_EXT, which REAPER undo rewinds natively; projext
 -- does not. pollUndo detects a rewound mirror through the two-level hash
 -- manifest, copies only the genuinely diverged slots back into projext, and

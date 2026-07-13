@@ -6,7 +6,7 @@ local util    = require('util')
 
 local function mkRm()
   local h  = harness.mk()
-  return h.reaper, util.instantiate('routingManager')
+  return h.reaper, util.instantiate('routingManager', { ds = h.ds })
 end
 
 local function seedTrack(reaper, name, opts)

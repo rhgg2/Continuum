@@ -84,8 +84,8 @@ local function isUndoable(slot)
   return false
 end
 
--- Scratch P_EXT keys, namespaced to mark ownership (rm's fx-meta mirrors share
--- the track): s.<slot> mirrored raw, m.<b> bucket manifest, root watermark.
+-- Scratch P_EXT keys, namespaced to mark ownership (the track has other tenants):
+-- s.<slot> mirrored raw, m.<b> bucket manifest, root watermark.
 local function mirrorKey(name) return 'P_EXT:ctm_ps.' .. name end
 
 local function mirrorRead(strack, name)

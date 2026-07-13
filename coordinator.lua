@@ -63,10 +63,7 @@ local jsFocus       = reaper.JS_Window_GetForeground ~= nil   -- js_ReaScriptAPI
 local function tick()
   modalHost:tick()
   if pages.sample then pages.sample:tick() end
-  if pages.wiring then
-    pages.wiring:tick()
-    if active == 'wiring' then pages.wiring:syncExternal() end
-  end
+  if pages.wiring and active == 'wiring' then pages.wiring:syncExternal() end
   bridge:tick()
 end
 

@@ -27,9 +27,9 @@ local fakeModalHost = {
   wasOpenAtFrameStart = function() return false end,
 }
 local fakeFacade = { publish = function() end, get = function() return {} end }
-local function newWiringPage(cm, cmgr, chrome, gui)
+local function newWiringPage(cm, ds, cmgr, chrome, gui)
   return util.instantiate('wiringPage',
-    { cm = cm, cmgr = cmgr, chrome = chrome, gui = gui,
+    { cm = cm, ds = ds, cmgr = cmgr, chrome = chrome, gui = gui,
       modalHost = fakeModalHost, facade = fakeFacade })
 end
 
@@ -41,7 +41,7 @@ return {
       local calls = 0
       h.cm.setTrack   = function() calls = calls + 1 end
       h.cm.setContext = function() calls = calls + 1 end
-      local wp = newWiringPage(h.cm, h.cmgr, nil, {})
+      local wp = newWiringPage(h.cm, h.ds, h.cmgr, nil, {})
       wp:bind(); wp:bind('ignored'); wp:unbind()
       t.eq(calls, 0, 'no cm re-key from bind/unbind')
     end,
@@ -51,7 +51,7 @@ return {
     name = 'focusState before any render returns both bits false',
     run = function(harness)
       local h  = harness.mk()
-      local wp = newWiringPage(h.cm, h.cmgr, nil, {})
+      local wp = newWiringPage(h.cm, h.ds, h.cmgr, nil, {})
       local fs = wp:focusState()
       t.eq(fs.suppressKbd, false, 'no suppression without a context')
       t.eq(fs.acceptCmds,  false, 'no acceptance without a context')

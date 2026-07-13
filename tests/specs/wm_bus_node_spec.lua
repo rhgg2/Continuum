@@ -3,7 +3,7 @@ local util = require('util')
 
 local function mkWm(harness, opts)
   local h  = harness.mk(opts)
-  local rm = util.instantiate('routingManager')
+  local rm = util.instantiate('routingManager', { ds = h.ds })
   local wm = util.instantiate('wiringManager', { cm = h.cm, rm = rm })
   return h, wm, rm
 end
