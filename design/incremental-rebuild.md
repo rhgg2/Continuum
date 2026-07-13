@@ -1,103 +1,190 @@
-# incremental rebuild — programme overview & sequencing
+# incremental rebuild — programme status & residuals
 
-> Master doc. The slices live in their own working docs
-> (`deferred-reindex.md`, `same-pitch-enforcement.md`,
-> `incremental-pbs.md`, `dirty-channels.md`); this one carries the
-> shared model, the cross-slice dependencies, and the order of work.
+> Master doc. The programme is substantially landed; this doc is now the
+> ledger of what shipped and the record of what did not. Two slices are
+> finished and archived (`archive/same-pitch-enforcement.md`,
+> `archive/incremental-pbs.md`); the two with residuals stay live
+> (`deferred-reindex.md`, `dirty-channels.md`). The enduring model lives
+> in `docs/trackerManager.md` § Derivation dirt — read that first; this
+> doc carries history and the open work.
 
 ## Goal & baseline
 
-One edit on a large take (3070 notes, 6219 ccs, 9212 texts) costs
-~100ms at flush. The money is in four buckets:
+One edit on a large take (3070 notes, 6219 ccs, 9212 texts) cost ~100ms
+at flush. The money was in four buckets:
 
-| bucket | ~ms | attacked by |
-|---|---|---|
-| mm whole-model reindexes (2–3 per flush) | 21–32 | `deferred-reindex` |
-| pbs derivation (absorber reconciliation) | 16 | `incremental-pbs` |
-| walk stages (internals, ccs, projLogical, tails, fx, park) | ~33 | `dirty-channels` phase A/B |
-| write side (serialise, meta, sidecars, setEvts) | ~27 | out of scope (future: per-event serialise memoisation) |
+| bucket | ~ms | attacked by | outcome |
+|---|---|---|---|
+| mm whole-model reindexes (2–3 per flush) | 21–32 | `deferred-reindex` | partial — one reindex per flush, but still the full one (gap 2) |
+| pbs derivation (absorber reconciliation) | 16 | `incremental-pbs` | closed — stage 27.8ms → 0.4ms |
+| walk stages (internals, ccs, projLogical, tails, fx, park) | ~33 | `dirty-channels` phase A/B | closed — internals 7.3 → 0.5, ccs 2.8 → 0.7 |
+| write side (serialise, meta, sidecars, setEvts) | ~27 | out of scope | partly attacked anyway (gap 7) |
 
-Bind-time cost — a full derivation pass over an unchanged take — is a
-fifth target (`dirty-channels` take-hash gate). `same-pitch-enforcement`
-buys no time; it is the correctness net the others run under.
+Bind-time cost — a full derivation pass over an unchanged take — was a
+fifth target, and is the one bucket that went **entirely unaddressed**
+(gap 3). `same-pitch-enforcement` bought no time; it was the correctness
+net the others run under, and it landed in full.
 
 ## Shared model
 
+(Canonical statement: `docs/trackerManager.md` § Derivation dirt.
+Retained here because the gaps below lean on it.)
+
 **Two axes of dirt.** Rebuild does two jobs and they invalidate
-independently. *Materialisation* (columns, um index) is keyed by
-object identity — mm's `wholesale` bit. *Derivation* (reconcile,
-synthesise, write back) is keyed by content: a per-channel dirty set,
-fed by edit verbs and config, zeroed by a take-hash match. The old
-three "levels" of rebuild are just cardinalities of that set.
+independently. *Materialisation* (columns, um index) is keyed by object
+identity — mm's `wholesale` bit. *Derivation* (reconcile, synthesise,
+write back) is keyed by content: a per-channel dirty set, fed by edit
+verbs and config, zeroed by a take-hash match. The old three "levels" of
+rebuild are just cardinalities of that set.
 
 **I8 is the soundness oracle.** Rebuild converges in one pass (flush →
-rebuild → flush is a fixpoint), so "no dirty source fired" ⟹
-re-deriving stages nothing ⟹ skipping is pure savings. Every gate in
-the programme leans on this argument.
+rebuild → flush is a fixpoint), so "no dirty source fired" ⟹ re-deriving
+stages nothing ⟹ skipping is pure savings. Every gate in the programme
+leans on this argument.
 
-**Channel granularity is closure-free.** Every blast-radius rule
-(tail clip/regrow, same-pitch nudges, absorbers, PC streams, fx
-windows) is intra-channel, so a whole dirty channel over-approximates
-the closure without fixpoint computation. Verified stage-by-stage in
-`dirty-channels.md`.
-
-**Shadow-compare is the migration pattern.** Each gated slice runs the
-full path in shadow and asserts zero staged writes + identical output
-for skipped work — the pattern that carried the um-index migration.
-Scaffolding strips once parity holds; one rich-fixture gated-vs-full
-spec stays permanently.
+**Channel granularity is closure-free.** Every blast-radius rule (tail
+clip/regrow, same-pitch nudges, absorbers, PC streams, fx windows) is
+intra-channel, so a whole dirty channel over-approximates the closure
+without fixpoint computation.
 
 **The residual risk is a missed dirty source**, and its failure mode is
-silent take corruption (an unseparated same-pitch collision). Hence
-the net: mm enforces its own collision invariant at the modify unwind,
+silent take corruption (an unseparated same-pitch collision). Hence the
+net: mm enforces its own collision invariant at the modify unwind,
 turning the worst case into a logged, self-repairing event.
 
-## Sequencing
+## What landed
 
-1. **`deferred-reindex`.** First: independent of everything, the order
-   audit is already done (2026-07-02), biggest standalone number, and
-   its unwind is where the same-pitch backstop naturally lives.
-   Includes the hole-tolerant iterators and tm order self-sufficiency.
-2. **`same-pitch-enforcement`.** Before any gating lands: converts the
-   programme's riskiest failure into a visible self-repair. Its
-   backstop slots into (1)'s unwind reindex; the provenance log then
-   audits every later slice for free.
-3. **`incremental-pbs` stage 1** (+ its orthogonal `streamValue` merge
-   win). The first gated slice: proves the clean-path argument, the
-   dirty-source table, and the shadow harness on the biggest stage.
-4. **`dirty-channels` spine + phase A.** Generalise (3)'s seed into
-   mm's `reload` payload; gate ccs/tails/fx/park/pcs derivation;
-   apply the ds-key merge discipline at all four persist sites.
-5. **Take-hash gate.** Cheap once the spine exists — a hash-matched
-   rebind is just "wholesale, empty dirty set", a path (4) already
-   built. Stash `(hash, configGen)` at flush; compare in `mm:load`
-   before parse.
-6. **Re-profile, then choose:**
-   - `incremental-pbs` stage 2 (seat windows) — only if dense-pb
-     channels still hurt;
-   - `dirty-channels` phase B (`channels[]` retention) — removes the
-     materialisation floor; tv contract change; only after phase A's
-     shadow has been quiet in real use;
-   - write-side memoisation — a new programme; by this point it
-     dominates the flush.
+| slice | phases | commits |
+|---|---|---|
+| `deferred-reindex` | A–D (order self-sufficiency, hole-tolerant iterators, reindex-if-stale, defer to one unwind reindex) | `52bd301` `480c432` `07eac20` `96c6d9e` |
+| `same-pitch-enforcement` | 1–5, complete | `7baa1b6` `4d08384` `23e5095` `c1de112` `55ac771` |
+| `incremental-pbs` | stage 1, stage 1b, + the `streamValue` merge win | `8d29327` `76793d5` `6af36d2` |
+| `dirty-channels` | spine, phase A gate, ds-key carry, phase B/B1/B2, parity harness | `c231f5a` `d03715b` `c3b9b58` `4115377` `c034529` `a4a4b4a` `1a7fb79` `a8b841f` `fe3573f` `81d0284` |
 
-Gates between steps: a slice's shadow scaffolding strips only after
-parity on the rich fixture; phase B does not start until phase A's
-shadow is silent in daily use; pbs stage 2 needs the sub-timer
-evidence called for in its doc.
+`incremental-pbs` stage 2 (seat-level windows) was **deliberately** dropped,
+not missed: stage 1+1b took the pbs stage off the critical path entirely,
+so the seat math it would have optimised no longer costs anything.
 
-## Expected trajectory
+## Known gaps
 
-Steady-state single-channel edit, cumulative:
+Ordered correctness-first, then by size of win. Each is self-contained —
+the archived slice docs are not needed to implement any of them.
 
-| after | ~ms/flush |
-|---|---|
-| baseline | 100 |
-| deferred-reindex | ~85 |
-| + incremental-pbs stage 1 | ~60 (clean flushes skip the unwind reindex too) |
-| + phase A walk gating | ~50 |
-| + phase B retention | ~30 — write-side floor |
+### 1. Take-length dirty source — unaudited, and the gated code is live
 
-Rebind of a converged take: roughly halved by the hash gate (parse +
-projection remain). Numbers are directional; re-profile after each
-slice against the same fixture take.
+**Correctness, not perf.** `dirty-channels` flagged this as "audit before
+phase A", and phase A shipped without a recorded audit: *an arrange-side
+item resize reaches tm via which signal?* An external take-length change
+must mark all 16 channels dirty. If no path does, a gated rebuild after a
+resize keeps stale derivation on every clean channel. Phases A and B are
+both live in production, so this is the one gap that is a latent bug
+rather than a missed optimisation. Audit the signal path; add an explicit
+all-16 dirty source if it is absent; pin it.
+
+### 2. `deferred-reindex` Phase E — slim the unwind reindex
+
+Phases A–D collapsed 2–3 reindexes per flush into one, but that one is
+still the *full* from-scratch reindex. Phase E: `rebuild(metadata, slim)`
+keeps compact + sort + `loc` recompute but drops the
+`tokenIdx`/`eventsByUuid` reconstruction — the verbs already maintain both
+incrementally (add, assign re-key, delete). Modify-path/unwind and
+`reindexIfStale` pass `slim=true`; `mm:load` keeps `slim=false`, since its
+dedup/unify paths genuinely need from-scratch.
+
+Worth doing: the index reconstruction is over ~12k string keys and is a
+large share of the ≤11ms reindex, so the slice as it stands has banked
+perhaps half its available win. Validate by shadow-compare (run the
+from-scratch reindex alongside, assert identical arrays / `loc`s /
+indices), strip the scaffold at parity, keep one permanent gated-vs-full
+spec.
+
+### 3. `dirty-channels` item 4 — the take-hash gate
+
+Never started. This is the whole of the bind-time bucket: rebinding a
+converged take currently pays full derivation to stage zero writes.
+
+Scheme: `flushTake` already holds the exact blob it wrote — hash it and
+stash `(hash, configGen)` under the take GUID. `mm:load` hashes the
+`GetAllEvts` blob *before* parsing; on match, fire `reload` with
+`wholesale=true, chans={}` — full reprojection, zero derivation. That path
+already exists (phase A/B built it). No per-take model retention, no
+eviction: two values per GUID. `configGen` is one global counter bumped by
+any derivation-relevant config change, because convergence is relative to
+the config that produced it (edit the swing library while take A is
+unbound, and a rebind must derive). A stale gen just costs one full pass.
+
+Three questions to settle while implementing:
+
+- **Blob hashing in Lua.** A pure-Lua hash over a few hundred KB per flush
+  may not be cheap. Fallback: stash the blob itself and compare with `==`
+  (memcmp); the cost is one blob per seen GUID.
+- **Dormant guard.** `configChanged` while no take is bound bumps
+  `configGen` but marks no channels; confirm the rebind path cannot consume
+  a gen written after the stash.
+- **Specs.** Hash-gated rebind (16 channels clean, zero staged writes,
+  columns identical to an ungated rebuild); and `configGen` (change the
+  swing library while unbound — the rebind hash-matches but must still
+  derive).
+
+### 4. fx dirt signal — the conservative row nobody else knows about
+
+fx output regenerates every rebuild with no change tracking, so
+fx-hosting channels are marked dirty **wholesale** on every rebuild. That
+is a deliberate conservatism, and it is correct, but it means macro-heavy
+takes get materially less of the gating win than the numbers above
+suggest. This limitation is shipped and, until now, recorded only in the
+design docs.
+
+Giving fx its own dirt signal (hash the generator inputs per host?) retires
+the wholesale row, and unblocks a queued follow-up: `rebuildPbs` currently
+re-walks every cc via `mm:ccsRaw()` purely to find and clone the pbs, which
+`rebuildCCs` already visits. Folding the clone into the cc walk buys ~0.4ms
+but cannot be gated safely today — fx-activeness isn't resolved until the
+later fx stage, so gating the cc-loop clone on pb-dirt alone would silently
+miss fx-active channels and delete every absorber on them.
+
+### 5. `deferred-reindex` follow-up — wrap load/config rebuilds in an outer `mm:modify`
+
+Only the *flush* path nests the pipeline's commits inside an outer modify.
+A rebuild fired by `configChanged` or `load` still runs each pipeline
+commit as its own top-level modify — its own reindex, its own `flushTake`.
+Wrapping the pipeline body in an `mm:modify` extends the deferral win to
+those paths and collapses the multiple serialises; the extra `reload` fire
+at unwind is harmless (the sole subscriber is reentrancy-guarded).
+
+This also closes out the older mm-write goal of *rewriting the take at most
+once per rebuild*: the flush path meets it today, these paths do not.
+
+### 6. `deferred-reindex` follow-up — split hole-dirt from order-dirt
+
+Micro-opt, no correctness content. `dirty` is boolean; assign-only commits
+that move no ppq (value edits) need neither compact nor sort. Splitting the
+flag lets the unwind reindex skip the sort when nothing moved, and skip
+compaction when nothing was deleted.
+
+### 7. Re-profile, and the undocumented write-side work
+
+**No end-to-end number has been recorded since the programme began.** The
+stage-level wins are measured and real (pbs 27.8 → 0.4, internals 7.3 →
+0.5, ccs 2.8 → 0.7), but nothing states what one edit on the fixture take
+costs now against the 100ms baseline. The original projection was ~50ms
+after phase A and ~30ms after phase B, at which point the write side
+dominates. Re-profile the same fixture before declaring the programme
+closed — every remaining gap should be prioritised against that number, not
+against the projections.
+
+Relatedly, `15a343d` ("cache rebuild tokens and serialise chunks across
+flushes") began attacking the write-side bucket that this programme had
+declared out of scope. It is undocumented by any design doc. Per-event
+serialise memoisation was always meant to be the *next* programme; fold
+what landed into that doc when it is written.
+
+### 8. Housekeeping — shadow scaffolding
+
+Every slice's validation plan said "run the full path in shadow, assert
+parity, strip the scaffolding once parity holds, keep one permanent
+gated-vs-full spec". The permanent spec exists (`a4a4b4a`,
+`tm_gate_parity_spec`, extended by B2 to assert the carried grid equals a
+forced full re-derive). No commit strips live shadow scaffolding — so
+either it was never built, or it is still in the tree burning time behind a
+perf gate. Check before closing.

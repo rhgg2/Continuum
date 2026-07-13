@@ -32,7 +32,7 @@ blindly — it ran before the metadata join and couldn't see intent. The
 blind copy ate voices on external collapse (Ctrl-Z or a foreign script
 moving two authored notes onto one raw). Hoisting the verdicts and the
 separation walk into one pure module lets mm and tm consume the same
-policy (`design/same-pitch-enforcement.md`).
+policy (`design/archive/same-pitch-enforcement.md`).
 
 `resolveGroup` sorts its group `(ppq, ppqL)` in place before walking,
 so callers can't skip the ordering the nudge cascade depends on.

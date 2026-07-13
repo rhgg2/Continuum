@@ -2,7 +2,7 @@
 
 > Working design doc. Final leg of the incremental-rebuild programme
 > (`incremental-rebuild.md`).
-> `incremental-pbs.md` gates one stage; this generalises the dirt into
+> `archive/incremental-pbs.md` gates one stage; this generalises the dirt into
 > a shared per-channel spine, extends the gate across the walk stages
 > (phase A), and adds the take-hash gate so rebinding a converged take
 > derives nothing. Retaining `channels[]` across rebuilds (phase B) is
@@ -51,7 +51,10 @@ Separately (2026-07-03), the clean-channel *walk* cost went too: `mm:notesRaw()`
 `rebuildCCs` moved its `tokenOf` below the dirty gate — internals 7.3→0.5, ccs
 2.8→0.7.
 
-Still open: item 4 (take-hash gate). The enduring model lives in
+Still open: item 4 (take-hash gate), plus the open questions below — the
+take-length dirty source (a correctness gap: flagged "audit before phase A",
+but phase A shipped) and the fx dirt signal. Tracked as gaps 1, 3 and 4 in
+`incremental-rebuild.md`. The enduring model lives in
 `docs/trackerManager.md` § Derivation dirt.
 
 ## Problem

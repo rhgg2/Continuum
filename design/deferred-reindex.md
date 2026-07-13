@@ -1,12 +1,17 @@
 # deferred reindex — one mm reindex per flush
 
-> Working design doc. Companion to `incremental-pbs.md`: same programme
+> Working design doc. Companion to `archive/incremental-pbs.md`: same programme
 > (`incremental-rebuild.md`), mm-side slice. Stop paying mm's whole-model reindex at every dirty
 > `modify`; pay one slim reindex at the outermost unwind.
+>
+> **Status.** Phases A–D landed (2026-07-02). **Phase E — slimming the unwind
+> reindex — never landed**, so the one remaining reindex is still the full
+> from-scratch one; both follow-ups below are also open. Tracked as gaps 2, 5
+> and 6 in `incremental-rebuild.md`.
 
 ## Problem
 
-Same profile as `incremental-pbs.md` (3070 notes, 6219 ccs, ~100ms per
+Same profile as `archive/incremental-pbs.md` (3070 notes, 6219 ccs, ~100ms per
 edit at flush). mm's internal `rebuild` (midiManager.lua:275) runs at
 every dirty `mm:modify`: once after tm's flush verbs (~10ms), then once
 per dirty nested commit inside the rebuild pipeline — pbs ~11ms, tails
@@ -111,7 +116,7 @@ order-independent:**
 
 Per flush: 2–3 reindexes (~21–32ms) collapse to one slim one (≤11ms;
 less once item 3 lands — the index reconstruction over 12k string keys
-is a large share). Combines with `incremental-pbs.md`: once the
+is a large share). Combines with `archive/incremental-pbs.md`: once the
 absorber pass stages nothing on clean channels, its nested commit
 disappears entirely and the unwind reindex is only paid when some
 pipeline stage actually wrote.
@@ -139,7 +144,7 @@ Phase D. Every phase lands green with a pinning spec.
   Also fixes a latent bug today: externals append unsorted at the column
   tail (trackerManager.lua:1377). **Pin:** generator lane stability.
   Lands independent of everything.
-- **Phase B — hole-tolerant iterators (item 2).** `mm:notes` (:711),
+- **Phase B — hole-tolerant iterators (item 2). ✅ landed.** `mm:notes` (:711),
   `mm:ccs` (:779), `mm:ccsRaw` (:790), `mm:events` (:957) skip nils up to
   the `noteCount`/`ccCount` high-water marks instead of stopping at the
   first hole. No-op today. **Pin:** hole-injection spec.
