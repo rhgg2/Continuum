@@ -90,6 +90,12 @@ local function sortByPPQ(tbl)
   table.sort(tbl, function(a, b) return a.ppq < b.ppq end)
 end
 
+-- Note columns are logical-frame indices: the fx/park subsystem tests ppqL, so they sort on it.
+-- PAs may carry no ppqL (raw-sourced); coalesce so the comparator never sees nil. see design/logical-column-order.md
+local function sortByPPQL(tbl)
+  table.sort(tbl, function(a, b) return (a.ppqL or a.ppq) < (b.ppqL or b.ppq) end)
+end
+
 -- General derivation-dirt spine: any edit/config change re-derives a channel's gated stages.
 -- Spurious dirt costs a re-derive; missed dirt writes silent wrong output. see design/archive/dirty-channels.md § Scheme
 local function dirtyChan(chan)
@@ -2212,16 +2218,16 @@ local function computeFxWindows()
   local takeLen = tm:length()
   for chan = 1, 16 do
     if dirtyChans[chan] then
-      for _, col in ipairs(channels[chan].columns.notes) do sortByPPQ(col.events) end
+      for _, col in ipairs(channels[chan].columns.notes) do sortByPPQL(col.events) end
     end
     local takeLenL = tm:toLogical(chan, takeLen)
     for _, col in ipairs(channels[chan].columns.notes) do
       -- Chord-mates share an onset and so share a successor: hold each host open until an event with a
-      -- greater ppq arrives, then clip them all against it. col.events is ppq-ordered.
+      -- greater ppqL arrives, then clip them all against it. col.events is ppqL-ordered.
       local openHosts = {}
       for _, evt in ipairs(col.events) do
         if evt.evType ~= 'pa' and evt.ppqL ~= nil then
-          if openHosts[1] and evt.ppq > openHosts[1].ppq then
+          if openHosts[1] and evt.ppqL > openHosts[1].ppqL then
             for _, host in ipairs(openHosts) do fxWindow[host] = math.min(fxWindow[host], evt.ppqL) end
             openHosts = {}
           end
@@ -2245,7 +2251,7 @@ local function rebuildFx(fx, deferred, fxWindow, currentWindows)
   -- allocateRegionLanes / membersOf iterate col.events directly). see design/archive/deferred-reindex.md § Phase A
   for chan = 1, 16 do
     if dirtyChans[chan] then
-      for _, col in ipairs(channels[chan].columns.notes) do sortByPPQ(col.events) end
+      for _, col in ipairs(channels[chan].columns.notes) do sortByPPQL(col.events) end
     end
   end
 
@@ -2329,7 +2335,7 @@ local function rebuildFx(fx, deferred, fxWindow, currentWindows)
           if evt.evType ~= 'pa' and evt.ppqL ~= nil then util.bucket(byLane, laneIdx, evt) end
         end
       end
-      laneNextOf = strictNextMap(byLane)   -- groups are ppq-ordered: computeFxWindows sorted col.events
+      laneNextOf = strictNextMap(byLane, function(evt) return evt.ppqL end)   -- ppqL-ordered: computeFxWindows sorted col.events
       laneNextByChan[note.chan] = laneNextOf
     end
     return laneNextOf[note]
