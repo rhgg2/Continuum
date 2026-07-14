@@ -18,11 +18,15 @@ Partly landed.
   no-fx take builds an empty scan and spends nothing. This is exact (same predicate
   `reconcilePark` applies) and self-contained — it needs neither the `fxHosts` set nor
   a sorted-column range query, and captures the full 15.6ms without them.
-- **Step 2 (`computeFxWindows` host set) — deferred.** Its win (fxWindows 7.3 + fx
-  4.8) turns on whether that cost is the `openHosts` walk (which a host set removes) or
-  the dirt-gated sort (which it does not). Validate that split live on the
-  Hammerklavier take before building the `seatNote`/`unseat`/`fxHosts` machinery, which
-  adds four cross-site maintenance points.
+- **Step 2/3 (sort cost) — landed as a sort-dedup, not the `fxHosts` host set.** Live
+  profiling on the Hammerklavier take settled the split: `fxWindows`/`fx` are dominated by
+  the full note-column sort, not the `openHosts` walk a host set would remove. So the win is
+  collapsing redundant sorts, not `seatNote`/`unseat`/`fxHosts`. Per rebuild the column is
+  sorted four times (`computeFxWindows` ×2, `rebuildFx`, `projectLogical`); three follow a
+  real column mutation, but `rebuildFx`'s re-sort is provably redundant — `computeFxWindows`
+  runs immediately upstream and nothing between reorders. Removed it: `fx` 5.9 → 2.2ms live
+  (the 3.7ms delta is one full column sort; the 2.2ms floor is the host walk + reconcile,
+  which run with zero hosts). The other three sorts are load-bearing and stay.
 
 ## Problem
 
@@ -80,7 +84,8 @@ is deleting a frame confusion.
 
 1. **Sort note columns by `ppqL`** at `:2215` and `:2248`. Costs nothing: the
    sort already runs, on the wrong key.
-2. **Drive `computeFxWindows` from a host set, not an event scan.** The fx hosts
+2. *[Superseded — see Status: the cost was the sort, not the walk, so this landed as a
+   sort-dedup rather than a host set.]* **Drive `computeFxWindows` from a host set, not an event scan.** The fx hosts
    of a channel are known where every note is already visited: `rebuildInternals`
    (`:1545-1551`). Keep them as a per-channel list on the channel frame — built
    for dirty channels, carried for clean ones, exactly like the columns

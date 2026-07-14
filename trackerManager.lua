@@ -2252,13 +2252,8 @@ end
 -- Fx expansion: fx-carrying notes / fx-regions -> derived notes, CCs;
 -- reconcile vs existing, note writes deferred to the tail walk. see design/note-macros-v2.md § Offline continuous realisation
 local function rebuildFx(fx, deferred, fxWindow, currentWindows)
-  -- Note columns read in ppq order regardless of mm array order (eachWindowNote /
-  -- allocateRegionLanes / membersOf iterate col.events directly). see design/archive/deferred-reindex.md § Phase A
-  for chan = 1, 16 do
-    if dirtyChans[chan] then
-      for _, col in ipairs(channels[chan].columns.notes) do sortByPPQL(col.events) end
-    end
-  end
+  -- Columns must be ppqL-ordered here (eachWindowNote / allocateRegionLanes / membersOf read col.events
+  -- directly); the computeFxWindows call immediately upstream sorted them and nothing since reorders.
 
   -- Region note-park windows: a parked cell inside one is region membership, not a note host.
   local function noteParkCovered(chan, ppqL)
