@@ -92,22 +92,39 @@ shrink path stamped a concrete `endppqL` over `util.OPEN`, destroying authored
 intent, and a re-grow could not reopen the tail. See `docs/trackerManager.md`
 § Length operations for the fix and the ordering knot behind it.
 
-### 2. `deferred-reindex` Phase E — slim the unwind reindex
+### 2. `deferred-reindex` Phase E — slim the unwind reindex — measured 2026-07-14, **dropped**
 
-Phases A–D collapsed 2–3 reindexes per flush into one, but that one is
-still the *full* from-scratch reindex. Phase E: `rebuild(metadata, slim)`
-keeps compact + sort + `loc` recompute but drops the
-`tokenIdx`/`eventsByUuid` reconstruction — the verbs already maintain both
-incrementally (add, assign re-key, delete). Modify-path/unwind and
-`reindexIfStale` pass `slim=true`; `mm:load` keeps `slim=false`, since its
-dedup/unify paths genuinely need from-scratch.
+The plan was `rebuild(metadata, slim)`: keep compact + sort + `loc` recompute,
+drop the `tokenIdx`/`eventsByUuid` reconstruction, on the grounds that the verbs
+maintain both incrementally. The premise is sound (see below) but the win is not
+there. **`tokenIdx` is 1.7ms of a 32.5ms edit** (gap 7's profile) — the sub-span
+the slice targets. Its parent `rebuild` is 2.3ms, not the ≤11ms the plan assumed:
+phases A–D took that bucket off the table more thoroughly than this doc realised.
+And slim cannot take even all of that — the loop still runs to recompute `loc`,
+so only the two hash-table inserts go. ~1.5ms, ~4%.
 
-Worth doing: the index reconstruction is over ~12k string keys and is a
-large share of the ≤11ms reindex, so the slice as it stands has banked
-perhaps half its available win. Validate by shadow-compare (run the
-from-scratch reindex alongside, assert identical arrays / `loc`s /
-indices), strip the scaffold at parity, keep one permanent gated-vs-full
-spec.
+Against that stands real correctness surgery, which is the part worth keeping:
+
+**`resolveCollisions` is not index-maintaining, and slim would expose it.** It is
+the one non-verb, non-load mutator of the model. A kill nils `notes[n.loc]` and
+`eventsByUuid[n.uuid]` but leaves the dead note's token in `tokenIdx`; a nudge
+rewrites `n.ppq` — an *identity* field — without re-keying. Both are laundered
+today by the from-scratch rebuild that its own `indexStale` triggers two lines
+later. Slim that rebuild and the backstop starts leaving dangling tokens.
+
+Making it maintain the index is fiddlier than it looks, because a collision *is*
+the state where `tokenIdx`'s 1:1 map is broken: two notes share a token, the
+second write shadowed the first, so the shadowed note is already absent from the
+index — and a naive `tokenIdx[tokenOf(n)] = nil` on kill evicts the *other*
+note's entry. The shape that works exploits the group being closed under (chan,
+pitch): nudges only move ppq, so no token outside the group can be disturbed.
+Clear each group member's owned token (identity-checked), resolve, re-register
+the survivors. Relatedly, the re-key clears in `assignNote` and `assignCC` want
+the same identity check (`if tokenIdx[oldTok] == evt`), for the same reason.
+
+Paying that — on the one component whose failure mode is silent take corruption
+— to buy 4% is a bad trade. Dropped. If a future slice makes the reindex hot
+again, the analysis above is the entry price.
 
 ### 3. `dirty-channels` item 4 — the take-hash gate — landed 2026-07-14, **closed**
 
@@ -197,24 +214,82 @@ that move no ppq (value edits) need neither compact nor sort. Splitting the
 flag lets the unwind reindex skip the sort when nothing moved, and skip
 compaction when nothing was deleted.
 
-### 7. Re-profile, and the undocumented write-side work
+### 7. Re-profile, and the undocumented write-side work — profiled 2026-07-14, **closed**
 
-**No end-to-end number has been recorded since the programme began.** The
-stage-level wins are measured and real (pbs 27.8 → 0.4, internals 7.3 →
-0.5, ccs 2.8 → 0.7), but nothing states what one edit on the fixture take
-costs now against the 100ms baseline. The original projection was ~50ms
-after phase A and ~30ms after phase B, at which point the write side
-dominates. Re-profile the same fixture before declaring the programme
-closed — every remaining gap should be prioritised against that number, not
-against the projections.
+**A one-note edit costs 32.5ms; a 128-note grouped edit costs 52.2ms.** Measured
+live through the bridge on a near-fixture take — 3193 notes, 4097 ccs, 7290
+sidecars, 53EDO, no fx. Both edits are semantically null (each note assigned a
+field's own current value), so they pay the full write path and change nothing.
+The small one goes straight to `mm:modify` (one write, one dirty channel, averaged
+over 5); the large one stages 128 `tm:assignEvent`s into one `tm:flush`, which is
+the shape a grouped channel-1 edit actually produces. Not the take the 100ms
+baseline was taken on, so this is same-order, not like-for-like; the shape of the
+split is the finding, not the third digit.
 
-Relatedly, `15a343d` ("cache rebuild tokens and serialise chunks across
-flushes") began attacking the write-side bucket that this programme had
-declared out of scope. It is undocumented by any design doc. Per-event
-serialise memoisation was always meant to be the *next* programme; fold
-what landed into that doc when it is written.
+| stage | 1 note | 128 notes |
+|---|---|---|
+| reload — all derivation (pbs, internals, regionPark, fire, tails, ccs, fx, …) | 11.0 | **12.5** |
+| serialise (pack 4.0, sort 3.6, keys 1.3, concat 0.7) | 11.5 | 9.7 |
+| setEvts | 5.4 | 8.3 |
+| meta — `eventMeta` buckets | 0.3 | **7.3** |
+| rebuild — the reindex (tokenIdx 2.3, sort 0.6, compact 0.2) | 2.3 | 3.2 |
+| sidecars | 1.2 | 1.5 |
+| verbs + tm staging | ~0 | 2.9 |
+| **total** | **32.5** | **52.2** |
 
-### 8. Housekeeping — shadow scaffolding
+This lands on the original projection — "~30ms after phase B, at which point the
+write side dominates" — and it does: **serialise + setEvts is 16.9ms on the small
+edit, 52% of it.** That is the next programme, and `15a343d` ("cache rebuild
+tokens and serialise chunks across flushes") is its first landed commit,
+undocumented by any design doc. `serialise`'s own split (pack / sort / concat) is
+the map for where to start. Fold `15a343d` into that doc when it is written.
+
+Two further findings, both new buckets:
+
+- **Derivation is flat in edit size** — 128× the writes moved `reload` by 1.5ms.
+  Roughly 32ms of the 52ms fat edit is fixed cost with no relation to what was
+  edited; the marginal cost of an actual note is ~0.15ms. See gap 8.
+- **`meta` is 7.3ms on a fat edit** (0.3ms on a small one, which is why the
+  programme never saw it), essentially all inside `eventMeta`'s `buckets` — 128
+  dirty metadata entries at ~57µs each. Third-biggest span on the fat edit. Note
+  `e441984` already attacked this once (585ms → 15ms at flush); it is cheap now
+  but not free, and it scales with edit size where nothing else does.
+
+### 8. The traversal floor — gating removed the derive cost, not the scan cost
+
+Found by gap 7's profile, and the largest thing on this list. A one-channel edit
+on a take with **zero fx notes** (verified live: 3193 notes, 11 channels in use,
+no `fx` or `derived` note anywhere) still pays 11ms of `reload` — a third of the
+edit. Not gap 4: there is nothing for the wholesale-fx row to mark.
+
+**The proof is that derivation is flat in edit size.** One note dirtying one
+channel costs 11.0ms of `reload`; 128 notes on the same channel cost 12.5ms.
+Whatever `reload` is spending its time on, it is not the edit — it is the take.
+
+The cost is the pipeline's own traversal, and the profile's shape is the second
+tell — it is smeared thin across every stage (pbs 2.1, internals 2.0, regionPark
+1.1, fire 1.0, tails 0.7, ccs 0.6, fx 0.5) rather than pooled in one, with a
+further ~2.3ms outside any perf span. **Every stage still pays an O(all events)
+walk to discover it has nothing to do.** The channel gate can't touch that: the
+walk happens *before* the gate is consulted.
+
+Ungated work per rebuild, from `trackerManager.lua:2998-3076`:
+
+- `computeFxWindows()` runs twice (`:3020`, `:3050`).
+- `:3023-3032` walks every note column on all 16 channels to build `parkRegions`
+  — the `if host.fx` filter sits in the innermost loop, so the scan runs in full
+  even when it yields nothing.
+- `:3067` `util.deepEq` over the window set; `:3076`
+  `util.deepClone(derivationInputs())`.
+- Plus the per-stage scan floor inside the gated stages themselves.
+
+This does not invalidate `dirty-channels`: its stage-level wins are real and
+measured (internals 7.3 → 0.5). What is left underneath is a different quantity,
+and it now rivals the write side (16.9ms). First step is instrumentation — perf
+spans around the interstitial work above, to attribute the ~2.3ms currently
+outside any span.
+
+### 9. Housekeeping — shadow scaffolding
 
 Every slice's validation plan said "run the full path in shadow, assert
 parity, strip the scaffolding once parity holds, keep one permanent
