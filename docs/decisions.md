@@ -4,6 +4,14 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-14** — mm indexes events by channel (`chanIdx[kind][chan].byLoc`),
+  and the reindex reconstructs it from scratch every flush. That laundering costs
+  +0.9ms against a −2.4ms `reload` win; keying by event instead of `loc` would let
+  the reindex skip it, but the collision backstop and load dedup kill events
+  *outside* `mm:delete`, so they would have to maintain the index themselves.
+  Rejected on gap 2's ruling: no correctness surgery on the backstop, whose failure
+  mode is silent take corruption, to buy a millisecond.
+
 - **2026-07-14** — eventMeta stores fields in entry buckets
   (`e.<b> = {[uuid]=fields}`, `b = uuid//256`), not per-uuid slots. Chosen over
   batching the projext-undo mirror's manifest/root writes (the pinned remedy):

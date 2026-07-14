@@ -1,0 +1,41 @@
+@spec mm_chan_index_spec  src=tests/specs/mm_chan_index_spec.lua  loc=159  sha=untracked  cases=6
+@exercises midiManager (h.mm)
+@surface   mm:notesRaw, mm:ccsRaw, mm:modify, mm:tokenOf, mm:delete, mm:assign
+@harness   bareMM
+
+# Intent
+  Pins the per-channel event index behind mm:notesRaw(chan) / mm:ccsRaw(chan).
+  design/incremental-rebuild.md § The traversal floor.
+  
+  The index is maintained by the verbs (add / delete / chan-move) and reconstructed
+  wholesale by the reindex, so a missed maintenance point is SILENT: the channel walk
+  just yields too few events and a gated stage under-derives. Every case here asserts
+  the same net -- one channel's slice of the index is identical, record-for-record and
+  in the same order, to filtering a whole-array walk by that channel.
+  
+  Both states matter and they are different code paths: mid-modify the arrays are sparse
+  and only the verbs have touched the index; at unwind the reindex has rebuilt it.
+
+# Helpers
+  @fn collect(iter)  @ 15-19
+  @fn onChan(iter, chan)  @ 21-27
+  @fn assertParity(mm, when)  @ 31-45
+      -- Raw iterators yield mm's own records, so identity comparison is the strongest available check:
+      -- it catches a stale bucket holding a dead record as readily as a missing one.
+  @fn fixture(harness)  @ 47-62
+
+# Cases
+  @case 'the reindex reconstructs the index: a freshly loaded take walks per-channel'  [harness]  @ 66-73
+  @case 'an added note and cc join their channel mid-modify, before any reindex'  [harness]  @ 77-88
+  @case 'a delete leaves the channel walk hole-free, mid-modify and after the reindex'  [harness]  @ 92-107
+  @case 'a chan move leaves the old bucket and joins the new one'  [harness]  @ 111-128
+  @case 'a non-structural assign does not disturb the index'  [harness]  @ 132-142
+  @case 'the collision backstop kills a note outside mm:delete; the reindex launders it'  [harness]  @ 146-157
+
+# Uses (outbound edges)
+  @use call midiManager.notesRaw  @ 33,70,71,84,96,103,115,122,123,136,152
+  @use call midiManager.ccsRaw  @ 39,72,85,97,104,116,124,125
+  @use call midiManager.modify  @ 80,99,118,137,153
+  @use call midiManager.tokenOf  @ 96,97,115,116,136,152
+  @use call midiManager.delete  @ 100,101
+  @use call midiManager.assign  @ 119,120,138,154

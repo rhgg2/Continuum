@@ -1525,13 +1525,15 @@ end
 -- see docs/trackerManager.md § Rebuild: partition
 local function rebuildInternals(fx)
   local internal, external = {}, {}
-  for _, raw in mm:notesRaw() do
-    -- clean channels carry their columns whole; clone (with token) only the dirty notes we place.
-    if dirtyChans[raw.chan] then
-      local note = util.clone(raw); note.token = mm:tokenOf(raw)
-      if note.derived then util.add(fx.noteExisting[note.chan], note)
-      elseif rawDivergesFromLogical(note) then util.add(external, note)
-      else util.add(internal, note)
+  -- Clean channels carry their columns whole: never visited, so never cloned.
+  for chan = 1, 16 do
+    if dirtyChans[chan] then
+      for _, raw in mm:notesRaw(chan) do
+        local note = util.clone(raw); note.token = mm:tokenOf(raw)
+        if note.derived then util.add(fx.noteExisting[note.chan], note)
+        elseif rawDivergesFromLogical(note) then util.add(external, note)
+        else util.add(internal, note)
+        end
       end
     end
   end
@@ -1613,51 +1615,55 @@ local function rebuildCCs(fx)
   end
   local fillWin = rawSpanMap(ccWins)
 
-  for _, cc in mm:ccsRaw() do
-    if not dirtyChans[cc.chan] then goto continue end   -- clean: cc/at/pc columns carried whole
-    local token = mm:tokenOf(cc)
-    -- fx cc event: a markerless seat inside a prev cc window (its authored cc parked), routed out and
-    -- reconciled fresh at fx expansion. A removed window's orphans reconcile away there. see § Route-by-window
-    if cc.evType == 'cc' and inSpan(fillWin, cc.chan, cc.cc, cc.ppq) then
-      util.add(fx.ccExisting[cc.chan],
-        { ppq = cc.ppq, val = cc.val, shape = cc.shape, cc = cc.cc, token = token })
-      goto continue
-    end
+  -- Clean channels carry their cc/at/pc columns whole: never visited.
+  for chan = 1, 16 do
+    if not dirtyChans[chan] then goto nextChan end
+    for _, cc in mm:ccsRaw(chan) do
+      local token = mm:tokenOf(cc)
+      -- fx cc event: a markerless seat inside a prev cc window (its authored cc parked), routed out and
+      -- reconciled fresh at fx expansion. A removed window's orphans reconcile away there. see § Route-by-window
+      if cc.evType == 'cc' and inSpan(fillWin, cc.chan, cc.cc, cc.ppq) then
+        util.add(fx.ccExisting[cc.chan],
+          { ppq = cc.ppq, val = cc.val, shape = cc.shape, cc = cc.cc, token = token })
+        goto continue
+      end
 
-    -- Timing reconcile on the raw (read-only) record; capture what moved for the column clone.
-    local movedPpq, movedPpqL
-    if not cc.derived and dirtyChans[cc.chan] then
-      if staleSwing[cc.chan] and cc.ppqL ~= nil then
-        local newPpq = tm:fromLogical(cc.chan, cc.ppqL)
-        if newPpq ~= cc.ppq then
-          ccWrites.assign({ token = token }, { ppq = newPpq })
-          movedPpq = newPpq
+      -- Timing reconcile on the raw (read-only) record; capture what moved for the column clone.
+      local movedPpq, movedPpqL
+      if not cc.derived then
+        if staleSwing[cc.chan] and cc.ppqL ~= nil then
+          local newPpq = tm:fromLogical(cc.chan, cc.ppqL)
+          if newPpq ~= cc.ppq then
+            ccWrites.assign({ token = token }, { ppq = newPpq })
+            movedPpq = newPpq
+          end
+        elseif rawDivergesFromLogical(cc) then
+          local newPpqL = tm:toLogical(cc.chan, cc.ppq)
+          ccWrites.assign({ token = token }, { ppqL = newPpqL })
+          movedPpqL = newPpqL
         end
-      elseif rawDivergesFromLogical(cc) then
-        local newPpqL = tm:toLogical(cc.chan, cc.ppq)
-        ccWrites.assign({ token = token }, { ppqL = newPpqL })
-        movedPpqL = newPpqL
       end
-    end
 
-    -- pb/pa reconcile-only (no column); cc/at/pc clone into their column carrying the reseat.
-    if cc.evType == 'cc' or cc.evType == 'at' or cc.evType == 'pc' then
-      local event = util.clone(cc)
-      event.token = token
-      if movedPpq  then event.ppq  = movedPpq; event.token = mm:tokenOf(event) end
-      if movedPpqL then event.ppqL = movedPpqL end
-      local channel = channels[cc.chan]
-      local col
-      if cc.evType == 'cc' then
-        col = channel.columns.ccs[cc.cc] or { cc = cc.cc, events = {} }
-        channel.columns.ccs[cc.cc] = col
-      else
-        col = channel.columns[cc.evType] or { events = {} }
-        channel.columns[cc.evType] = col
+      -- pb/pa reconcile-only (no column); cc/at/pc clone into their column carrying the reseat.
+      if cc.evType == 'cc' or cc.evType == 'at' or cc.evType == 'pc' then
+        local event = util.clone(cc)
+        event.token = token
+        if movedPpq  then event.ppq  = movedPpq; event.token = mm:tokenOf(event) end
+        if movedPpqL then event.ppqL = movedPpqL end
+        local channel = channels[cc.chan]
+        local col
+        if cc.evType == 'cc' then
+          col = channel.columns.ccs[cc.cc] or { cc = cc.cc, events = {} }
+          channel.columns.ccs[cc.cc] = col
+        else
+          col = channel.columns[cc.evType] or { events = {} }
+          channel.columns[cc.evType] = col
+        end
+        util.add(col.events, event)
       end
-      util.add(col.events, event)
+      ::continue::
     end
-    ::continue::
+    ::nextChan::
   end
   ccWrites.commit()
 end
@@ -1942,13 +1948,16 @@ local function rebuildRegionPark(fx, deferred, currentWindows)
 
     local newParked = {}
     -- Fresh: an on-take PA whose host just parked leaves the take and stashes.
-    for _, cc in mm:ccsRaw() do
-      if cc.evType == 'pa' and dirtyChans[cc.chan]
-         and hostParked(cc.chan, cc.pitch, cc.ppqL or cc.ppq) then
-        batch.del({ token = mm:tokenOf(cc) })
-        local spec = parkSpec(cc, { ppqL = cc.ppqL or cc.ppq })   -- evType/chan/pitch/vel/rpb ride; drop realisation
-        spec.uuid = nil                                           -- restore re-mints the rpb sidecar uuid
-        util.add(newParked, spec)
+    for chan = 1, 16 do
+      if dirtyChans[chan] then
+        for _, cc in mm:ccsRaw(chan) do
+          if cc.evType == 'pa' and hostParked(cc.chan, cc.pitch, cc.ppqL or cc.ppq) then
+            batch.del({ token = mm:tokenOf(cc) })
+            local spec = parkSpec(cc, { ppqL = cc.ppqL or cc.ppq })   -- evType/chan/pitch/vel/rpb ride; drop realisation
+            spec.uuid = nil                                           -- restore re-mints the rpb sidecar uuid
+            util.add(newParked, spec)
+          end
+        end
       end
     end
     -- Prior parked PAs: host still parked -> carry; host returned on-take -> restore to the take.
@@ -2043,8 +2052,8 @@ local function rebuildRegionPark(fx, deferred, currentWindows)
     local scan = {}
     for _, win in ipairs(pbCreated) do
       local sRaw, eRaw = tm:fromLogical(win.chan, win.startppq), tm:fromLogical(win.chan, win.endppq)
-      for _, cc in mm:ccsRaw() do
-        if cc.evType == 'pb' and not cc.derived and cc.chan == win.chan
+      for _, cc in mm:ccsRaw(win.chan) do
+        if cc.evType == 'pb' and not cc.derived
            and cc.ppq >= sRaw and cc.ppq <= eRaw and not seatByRegion(cc.chan, cc.ppq) then
           dirtyChan(cc.chan)
           -- val: logical cents from mm's cents sidecar (restore maps back); a foreign pre-cents pb
@@ -2072,8 +2081,8 @@ local function rebuildRegionPark(fx, deferred, currentWindows)
     -- in the swept raw span. The authored restored above is a token-less add, so delete-first order is safe.
     for _, win in ipairs(pbRemoved) do
       local sRaw, eRaw = tm:fromLogical(win.chan, win.startppq), tm:fromLogical(win.chan, win.endppq)
-      for _, cc in mm:ccsRaw() do
-        if cc.evType == 'pb' and cc.chan == win.chan and cc.ppq >= sRaw and cc.ppq <= eRaw then
+      for _, cc in mm:ccsRaw(win.chan) do
+        if cc.evType == 'pb' and cc.ppq >= sRaw and cc.ppq <= eRaw then
           dirtyChan(cc.chan)
           batch.del({ token = mm:tokenOf(cc) })
         end
@@ -2120,11 +2129,15 @@ end
 -- Late PA projection: mixes into note columns once lanes are settled, so the view (and rebuildFx's
 -- channelStreams) read it inline. Must follow column layout, so it can't ride the CC walk.
 local function rebuildPA()
-  for _, cc in mm:ccsRaw() do
-    if cc.evType == 'pa' and dirtyChans[cc.chan] then   -- clean: PA already sits in the carried note column
-      local noteCol, lane = findNoteColumnForPitch(channels[cc.chan], cc.pitch, cc.ppq)
-      if noteCol then
-        util.add(noteCol.events, projectCC(cc, mm:tokenOf(cc), { lane = lane }))
+  for chan = 1, 16 do
+    if dirtyChans[chan] then   -- clean: PA already sits in the carried note column
+      for _, cc in mm:ccsRaw(chan) do
+        if cc.evType == 'pa' then
+          local noteCol, lane = findNoteColumnForPitch(channels[chan], cc.pitch, cc.ppq)
+          if noteCol then
+            util.add(noteCol.events, projectCC(cc, mm:tokenOf(cc), { lane = lane }))
+          end
+        end
       end
     end
   end
@@ -2200,12 +2213,16 @@ local function rebuildFx(fx, deferred, fxWindow, currentWindows)
     return false
   end
 
-  -- Authored pb breakpoints per channel, exposed to the generator as channel input
-  -- (authored only, fakes excluded). see design/note-macros-v2.md § A4
+  -- Authored pb breakpoints per channel, exposed to the generator as channel input (authored
+  -- only, fakes excluded) -- only expandChannel reads it, gated dirty. see design/note-macros-v2.md § A4
   local authoredPbByChan = {}
-  for _, cc in mm:ccsRaw() do
-    if cc.evType == 'pb' and not cc.derived and cc.cents ~= nil then
-      util.bucket(authoredPbByChan, cc.chan, { ppqL = cc.ppqL or cc.ppq, cents = cc.cents, shape = cc.shape })
+  for chan = 1, 16 do
+    if dirtyChans[chan] then
+      for _, cc in mm:ccsRaw(chan) do
+        if cc.evType == 'pb' and not cc.derived and cc.cents ~= nil then
+          util.bucket(authoredPbByChan, cc.chan, { ppqL = cc.ppqL or cc.ppq, cents = cc.cents, shape = cc.shape })
+        end
+      end
     end
   end
   for _, list in pairs(authoredPbByChan) do
@@ -2606,11 +2623,15 @@ local function rebuildPbs(noteLive, pbChains, pbBase)
   -- mm uses content-keyed tokens: any pb whose ppq we touch needs its pre-mutation token
   -- captured up front, on our own clone (origTok set once) -- only dirty channels clone here.
   local pbsByChan = {}
-  for _, cc in mm:ccsRaw() do
-    if cc.evType == 'pb' and dirty[cc.chan] then
-      local pb = util.clone(cc)
-      pb.origTok, pb.origShape = mm:tokenOf(cc), cc.shape
-      util.bucket(pbsByChan, pb.chan, pb)
+  for chan = 1, 16 do
+    if dirty[chan] then
+      for _, cc in mm:ccsRaw(chan) do
+        if cc.evType == 'pb' then
+          local pb = util.clone(cc)
+          pb.origTok, pb.origShape = mm:tokenOf(cc), cc.shape
+          util.bucket(pbsByChan, pb.chan, pb)
+        end
+      end
     end
   end
   perf.stop('gather')
@@ -2926,11 +2947,13 @@ local function rebuildPCs(fx)
   -- Refresh every pc column from mm (frozen channels' PCs stand). reconcilePCsForChan leaves
   -- c.pc.events unwritten (its invariant), so rebuild it here from the committed stream.
   for chan = 1, 16 do
-    if dirtyChans[chan] then channels[chan].columns.pc = { events = {} } end
-  end
-  for _, cc in mm:ccsRaw() do
-    if cc.evType == 'pc' and dirtyChans[cc.chan] then
-      util.add(channels[cc.chan].columns.pc.events, projectCC(cc, mm:tokenOf(cc)))
+    if dirtyChans[chan] then
+      channels[chan].columns.pc = { events = {} }
+      for _, cc in mm:ccsRaw(chan) do
+        if cc.evType == 'pc' then
+          util.add(channels[chan].columns.pc.events, projectCC(cc, mm:tokenOf(cc)))
+        end
+      end
     end
   end
 end

@@ -255,9 +255,13 @@ Two further findings, both new buckets:
   `e441984` already attacked this once (585ms → 15ms at flush); it is cheap now
   but not free, and it scales with edit size where nothing else does.
 
-### 8. The traversal floor — gating removed the derive cost, not the scan cost
+### 8. The traversal floor — attacked 2026-07-14, **closed**
 
-Found by gap 7's profile, and the largest thing on this list. A one-channel edit
+Gating removed the derive cost, not the scan cost. Found by gap 7's profile, and
+the largest thing on this list; the floor is now 1.15ms and what is left of it is
+not derivation. Two cuts landed — `nextInLane`, then the per-channel index.
+
+The original finding, kept because the reasoning is the entry price for the fixes. A one-channel edit
 on a take with **zero fx notes** (verified live: 3193 notes, 11 channels in use,
 no `fx` or `derived` note anywhere) still pays 11ms of `reload` — a third of the
 edit. Not gap 4: there is nothing for the wholesale-fx row to mark.
@@ -282,21 +286,30 @@ and it rivals the write side (16.9ms).
 A rebuild with **zero dirty channels** — nothing to derive, every gated stage
 skipping — costs 6.4ms on this take. That is the floor, isolated: no edit, no
 derivation, pure traversal. Perf spans on the interstitial work account for all
-of it, and the `nextInLane` fix below is measured against it.
+of it, and the two fixes below are measured against it.
 
-| span | before | after |
-|---|---|---|
-| `fxWindows` (×2) | **2.82** | **0.64** |
-| `fire` — subscriber notify, not derivation | 0.78 | 0.72 |
-| `fx` | 0.52 | 0.46 |
-| `internals` | 0.48 | 0.42 |
-| `ccs` | 0.44 | 0.34 |
-| `regionPark` | 0.40 | 0.32 |
-| `pbs` | 0.38 | 0.32 |
-| `pa` | 0.28 | 0.24 |
-| `parkRegions` | 0.14 | 0.12 |
-| `derivedInputs` | 0.12 | 0.10 |
-| **total** | **6.42** | **3.76** |
+Columns: **(a)** as found; **(b)** after `nextInLane` died; **(c)** after the
+per-channel index. All warm — a cold Continuum reads ~30% high across every
+span, which is how the retracted `meta` finding below got made.
+
+| span | (a) | (b) | (c) |
+|---|---|---|---|
+| `fxWindows` (×2) | **2.82** | 0.64 | 0.34 |
+| `fire` — subscriber notify, not derivation | 0.78 | 0.72 | 0.53 |
+| `fx` | 0.52 | 0.46 | 0.07 |
+| `internals` | 0.48 | 0.42 | **0.00** |
+| `ccs` | 0.44 | 0.34 | **0.00** |
+| `regionPark` | 0.40 | 0.32 | 0.01 |
+| `pbs` | 0.38 | 0.32 | **0.00** |
+| `pa` | 0.28 | 0.24 | **0.00** |
+| `parkRegions` | 0.14 | 0.12 | 0.08 |
+| `derivedInputs` | 0.12 | 0.10 | 0.09 |
+| `tails` / `projLogical` | — | — | **0.00** |
+| **total** | **6.42** | **3.76** | **1.15** |
+
+The six gated stages now read *literally zero*: they are no longer entered for a
+clean channel, so there is nothing left to shave. `fire` is 46% of what remains
+and it is subscriber notification, not derivation.
 
 #### Landed: kill `nextInLane`
 
@@ -320,25 +333,74 @@ Unbudgeted second win: **every other stage got faster too** (ccs 0.44 → 0.34, 
 0.38 → 0.32, internals 0.48 → 0.42). Two 3193-entry hash allocations per rebuild
 were putting the whole pipeline under GC load.
 
-#### What is left — 3.76ms
+#### Landed: the per-channel event index
 
-- **`fxWindows` 0.64** — still two calls. The re-scan at `:3052` exists only
-  because park/unpark/PA may have moved the columns; when nothing was restored,
-  nothing parked and PA added nothing — the common case — call #1's result still
-  stands. Halves it.
-- **~2.1ms across the six gated stages**, each paying an O(all events) walk
-  because the `dirtyChans` check sits *inside* the loop: `rebuildCCs` walks all
-  4097 ccs to test `dirtyChans[cc.chan]` per event, `rebuildPA` likewise.
-  Hoisting the gate needs a channel-bucketed event index in `mm`, which does not
-  exist. Its own slice, and the bigger of the two.
-- `fire` 0.72 is subscriber notification, not derivation — out of scope here.
+The gate was never really *inside* the loop — the loop was in the wrong place.
+`tm:rebuild` walked mm's 4097-entry cc array **six separate times** (`rebuildCCs`,
+`rebuildRegionPark`, `rebuildPA`, `rebuildFx`'s authored-pb pass, `rebuildPbs`,
+`rebuildPCs`) plus the note array once: ~28,000 event visits to find, on a
+one-note edit, the ~370 events on one channel.
 
-#### A second floor: `meta`
+A tm-side snapshot cannot fix that. The pipeline **writes to mm mid-rebuild** —
+`regionPark` deletes parked PAs and pbs, `rebuildPCs` explicitly re-reads mm
+*after* its own commit — so any head-of-pipeline cache is stale by the time half
+the stages run. The index has to live in mm, under mm's own verbs.
 
-Gap 7 read `meta` at 7.3ms over 128 dirty entries and called it the one bucket
-that scales with edit size. Half right: a **one-note** edit with a single dirty
-entry still pays 2.6ms, only 0.34ms of which is `buckets`. So `meta` has a fixed
-cost of its own, invisible in the fat-edit reading. Unattributed as yet.
+So `mm` now keys events by channel: `chanIdx[kind][chan].byLoc[loc] = evt`, behind
+`mm:notesRaw(chan)` / `mm:ccsRaw(chan)`. Three things made it cheap:
+
+- **Every event already carries `.loc`**, so the bucket is a sparse map — O(1)
+  insert, O(1) delete, no array shuffling.
+- **The maintenance hooks already existed.** mm brackets `assign` and `delete`
+  with `markChan` at exactly the three points the index needs (old chan, new chan,
+  delete); they were there for the reload signal.
+- **Order-independence was already paid for** by `deferred-reindex` Phase A. The
+  bucket yields ascending `loc`, hole-tolerant — one channel's slice of exactly
+  what the whole-array walk yielded, in the same order — so within a channel
+  nothing moved. Across channels the walk becomes channel-major, which no consumer
+  can see: all nine key their output per channel.
+
+The index is keyed on **chan alone**, which makes its invalidation surface strictly
+smaller than `tokenIdx`'s: `resolveCollisions`'s ppq *nudge* — the thing that
+silently breaks `tokenIdx` (gap 2) — cannot disturb it. Its *kill* can, and that is
+laundered by the from-scratch reconstruction at the reindex, exactly as `tokenIdx`
+is. `mm_chan_index_spec` pins the whole net: per-channel walk ≡ filtered whole-array
+walk, record-for-record, across add / delete / chan-move / metadata-only assign /
+backstop kill, and both mid-modify (verbs maintaining) and post-unwind (reindex
+reconstructing).
+
+A latent quadratic died with it: the pb sweeps at `:2046` / `:2075` walked all 4097
+ccs *per created or removed fx window*. Now O(that window's channel).
+
+**It is not free.** The reindex reconstructs the index every flush, and that costs
+**+0.9ms** (`tokenIdx` 1.8 → 2.6) against a **−2.4ms** `reload` win (10.0 → 7.5) on
+a one-note edit. Net ≈ −1.5ms of 37ms. Three shapes were tried — lazy sort,
+append-in-order, inlined bulk seat — and none moved it, so the cost is inherent to
+touching 7290 events, not a code-shape defect. Keying by event instead of `loc`
+would let the reindex skip the rebuild entirely, but then the collision backstop
+and load-time dedup — which kill events *outside* `mm:delete` — would have to
+maintain the index themselves. Gap 2 already ruled on that trade: correctness
+surgery on the backstop, whose failure mode is silent take corruption, is not worth
+a millisecond. The laundering stays.
+
+#### What is left — 1.15ms
+
+- **`fire` 0.53** — subscriber notification, not derivation. Out of scope here,
+  and now the largest single item in the floor.
+- **`fxWindows` 0.34** — still two calls, still scanning all 16 channels' columns
+  (parking and recognition need the complete window set). The re-scan at `:3070`
+  exists only because park/unpark may have moved the columns; when nothing was
+  restored and nothing parked — the common case — call #1's result still stands.
+  Halves it. Small, and no longer obviously worth the plumbing.
+
+#### Retracted: the `meta` "second floor"
+
+This doc previously recorded that `meta` pays 2.6ms on a one-note edit with a
+single dirty entry, and called it an unattributed fixed cost. **That was a
+measurement artifact** — a cold Continuum, before the caches and GC settle. Every
+warm run reads `meta` at **0.32ms** per flush, essentially all of it `buckets`.
+Gap 7's fat-edit reading (7.3ms / 128 entries) stands; there is no fixed floor
+under it. Warm the instance before believing any span in this doc.
 
 ### 9. Housekeeping — shadow scaffolding
 

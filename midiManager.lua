@@ -58,6 +58,8 @@ local noteCount  = 0    -- high-water extent of notes/ccs; verbs leave holes, re
 local ccCount    = 0
 local eventsByUuid      = {}
 local tokenIdx   = {}
+--invariant: chanIdx[kind][chan].byLoc[loc] = evt; keyed on chan alone, immune to ppq/pitch rewrites
+local chanIdx    = { note = {}, cc = {} }   -- per-channel index; rebuild reconstructs, the verbs maintain
 local maxUUID    = 0
 local lock       = false
 local dirty      = false  -- a structural write happened; the take needs reprojecting via flushTake
@@ -314,9 +316,67 @@ local function cachedToken(evt)
   return token
 end
 
--- Compact the sparse note/cc arrays to dense (verbs and dedup leave holes),
--- order by ppq, recompute loc, and rebuild the token + uuid indices. metadata
--- (load only) joins the per-uuid non-structural fields back onto the records.
+----- Per-channel index
+
+-- Backs notesRaw(chan) / ccsRaw(chan). tm's gated stages re-derive one channel and would otherwise
+-- walk every event to find it. see design/incremental-rebuild.md § The traversal floor
+local function chanBucket(slots, chan)
+  local bucket = slots[chan]
+  if not bucket then bucket = { byLoc = {}, locs = {}, n = 0 }; slots[chan] = bucket end
+  return bucket
+end
+
+local function slotsFor(evt) return chanIdx[evt.evType == 'note' and 'note' or 'cc'] end
+
+-- locs stays ascending by appending, never sorting: an add takes the highest loc and the reindex
+-- seats in loc order, so both hit the fast path. Only a chan move can arrive out of order.
+local function seat(bucket, evt)
+  local loc = evt.loc
+  bucket.byLoc[loc] = evt
+  local locs, n = bucket.locs, bucket.n
+  if locs and (n == 0 or locs[n] < loc) then
+    bucket.n = n + 1
+    locs[n + 1] = loc
+  else
+    bucket.locs = nil   -- out of order: the next walk re-derives it
+  end
+end
+
+local function indexPut(evt)
+  seat(chanBucket(slotsFor(evt), evt.chan), evt)
+end
+
+local function indexDrop(evt)
+  local bucket = chanBucket(slotsFor(evt), evt.chan)
+  bucket.byLoc[evt.loc] = nil   -- locs keeps the key; the walk is hole-tolerant and skips it
+end
+
+-- Ascending loc, hole-tolerant: one channel's slice of exactly what a whole-array sparsePairs walk
+-- yields, in the same order, with the same tolerance of a delete landing mid-iteration.
+local function rawInChan(kind, chan)
+  local bucket = chanIdx[kind][chan]
+  if not bucket then return function() end end
+  if not bucket.locs then
+    local locs = {}
+    for loc in pairs(bucket.byLoc) do locs[#locs + 1] = loc end
+    table.sort(locs)
+    bucket.locs, bucket.n = locs, #locs
+  end
+  local locs, byLoc, i = bucket.locs, bucket.byLoc, 0
+  return function()
+    while true do
+      i = i + 1
+      local loc = locs[i]
+      if not loc then return nil end
+      if byLoc[loc] then return loc, byLoc[loc] end
+    end
+  end
+end
+
+----- Reindex
+
+-- Compact the sparse note/cc arrays to dense (verbs and dedup leave holes), order by ppq, and
+-- recompute loc; rebuild token/uuid/channel indices. metadata (load only) rejoins per-uuid fields.
 local function rebuild(metadata)
   perf.start('rebuild')
   perf.start('compact')
@@ -328,15 +388,21 @@ local function rebuild(metadata)
   perf.stop('sort')
   perf.start('tokenIdx')
   tokenIdx, eventsByUuid = {}, {}
+  chanIdx = { note = {}, cc = {} }
+  -- Seat inline rather than via indexPut: this is the one bulk path (every event, every flush), and
+  -- the kind is known per loop, so it skips the dispatch the verbs' single-event path needs.
+  local noteSlots, ccSlots = chanIdx.note, chanIdx.cc
   for i, n in ipairs(notes) do
     n.loc = i
     tokenIdx[cachedToken(n)] = n
+    seat(chanBucket(noteSlots, n.chan), n)
     if n.uuid then eventsByUuid[n.uuid] = n end
     if metadata then util.assign(n, metadata[n.uuid]) end
   end
   for i, c in ipairs(ccs) do
     c.loc = i
     tokenIdx[cachedToken(c)] = c
+    seat(chanBucket(ccSlots, c.chan), c)
     if c.uuid then
       eventsByUuid[c.uuid] = c
       if metadata then util.assign(c, metadata[c.uuid]) end
@@ -894,7 +960,9 @@ function mm:notes()
 end
 
 --contract: yields mm-internal note records uncloned; do not mutate (read-only fast path)
-function mm:notesRaw()
+--contract: notesRaw(chan) yields just that channel's, ascending loc -- same slice, same order
+function mm:notesRaw(chan)
+  if chan then return rawInChan('note', chan) end
   return util.sparsePairs(notes, noteCount)
 end
 
@@ -959,6 +1027,7 @@ local function addNote(t)
   noteCount = noteCount + 1
   notes[noteCount] = note
   note.loc = noteCount
+  indexPut(note)
   local tok = tokenOf(note)
   if tokenIdx[tok] then noteCollision(note, 'add') end
   tokenIdx[tok] = note
@@ -978,7 +1047,9 @@ function mm:ccs()
 end
 
 --contract: yields mm-internal cc records uncloned; consumers must NOT mutate them (read-only fast path)
-function mm:ccsRaw()
+--contract: ccsRaw(chan) yields just that channel's, ascending loc -- same slice, same order
+function mm:ccsRaw(chan)
+  if chan then return rawInChan('cc', chan) end
   return util.sparsePairs(ccs, ccCount)
 end
 
@@ -1045,6 +1116,7 @@ local function pushCC(t)
   ccCount = ccCount + 1
   ccs[ccCount] = msg
   msg.loc = ccCount
+  indexPut(msg)
   tokenIdx[tokenOf(msg)] = msg
   return msg
 end
@@ -1114,8 +1186,11 @@ function mm:assign(token, t)
   local evt = tokenIdx[token]
   if not evt then return nil end
   markChan(evt.chan)                       -- old chan; a chan move dirties both
+  local chanMove = t.chan ~= nil and t.chan ~= evt.chan
+  if chanMove then indexDrop(evt) end      -- drop from the old bucket while evt.chan still names it
   if evt.evType == 'note' then assignNote(evt.loc, t)
   else                         assignCC(evt.loc, t) end
+  if chanMove then indexPut(evt) end
   markChan(t.chan)                          -- new chan; nil-guarded when the assign leaves chan untouched
   return tokenOf(evt)
 end
@@ -1127,6 +1202,7 @@ function mm:delete(token)
   local evt = tokenIdx[token]
   if not evt then return end
   markChan(evt.chan)
+  indexDrop(evt)
 
   if evt.evType == 'note' then
     tokenIdx[token] = nil
