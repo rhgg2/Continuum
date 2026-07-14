@@ -16,6 +16,9 @@ local t = require('support')
 -- depth 30c, period 1/4 QN; at res 240 one cycle = 60 ticks. see tm_vibrato_spec
 local vib30 = { { kind = 'vibrato', period = { 1, 4 }, depth = 30, onset = 0 } }
 
+-- Note-dest kind: an arp region parks the chord it covers (parksNotes true). see tm_regionpark_gating_spec
+local arpUp = { { kind = 'arp', period = { 1, 4 }, dir = 'up' } }
+
 -- Host at ppqL 60 authored long (endppqL 240): its window is bounded by the lane successor, not its
 -- own tail, so the clip is what the seat stream reveals.
 local function host()
@@ -113,6 +116,27 @@ return {
 
       t.deepEq(glideSeats(h, 1, 60), expected,
         'delay reorders raw only -- the grid successor still sets the glide target')
+    end,
+  },
+
+  {
+    name = 'a note delayed out of a window in raw still parks (membership is grid intent)',
+    run = function(harness)
+      local h = harness.mk()
+      -- ppqL 300 sits inside the region [240, 360); +300 milli-QN (+72 ppq) pushes the raw onset to
+      -- 372, outside the window in the realisation frame. Park membership is intent -- it still parks.
+      h.tm:addEvent({ evType = 'note', ppq = 300, endppq = 420, chan = 1, pitch = 62,
+                      vel = 100, detune = 0, delay = 300, lane = 1 })
+      h.tm:flush()
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 240, endppq = 360, fx = arpUp } })
+      h.tm:rebuild()
+
+      local parked = {}
+      for _, spec in ipairs(h.ds:get('fxParked') or {}) do
+        if spec.evType == 'note' and spec.chan == 1 then parked[#parked + 1] = spec end
+      end
+      t.truthy(#parked > 0,
+        'the delayed note parks off-take -- covered() keys ppqL (300), not the raw onset (372)')
     end,
   },
 }

@@ -1887,13 +1887,14 @@ local function rebuildRegionPark(fx, deferred, currentWindows)
   -- deferred tail commit); returned so rebuild can wire each to its backing post-commit.
   local restoredNotes = {}
 
-  -- One predicate for all passes; takes anything spec-shaped (evType/chan/cc/ppqL). spec.fx (note
-  -- specs only): a discrete-replace note host parks itself, like a region window (membership {self}).
+  -- One predicate for all passes: spec.fx (note specs only) parks itself; otherwise membership
+  -- matches a currentWindows entry. see docs/trackerManager.md § Region-replace parking
   local function covered(spec)
     if spec.fx and generators.parksNotes(spec) then return true end
+    local ppqL = spec.ppqL or spec.ppq
     for _, w in ipairs(currentWindows) do
       if w.evType == spec.evType and w.chan == spec.chan and w.cc == spec.cc
-         and spec.ppqL >= w.startppq and spec.ppqL < w.endppq then return true end
+         and ppqL >= w.startppq and ppqL < w.endppq then return true end
     end
     return false
   end
@@ -1931,7 +1932,9 @@ local function rebuildRegionPark(fx, deferred, currentWindows)
       if dirtyChans[chan] then   -- clean chan holds no on-take candidate a window could newly cover
         for laneIdx, col in ipairs(channels[chan].columns.notes) do
           for _, evt in ipairs(col.events) do
-            if evt.evType ~= 'pa' and evt.ppqL ~= nil then
+            -- Gate the clone on coverage: a no-fx take covers nothing, so the scan stays empty and the
+            -- 8438-note column never spawns a throwaway parkSpec. covered(evt) == covered(its parkSpec).
+            if evt.evType ~= 'pa' and evt.ppqL ~= nil and covered(evt) then
               util.add(scan, { evt = evt, events = col.events,
                 spec = parkSpec(evt, { lane = laneIdx }) })   -- evType/chan ride the event; lane pins the column index
             end
@@ -2036,8 +2039,10 @@ local function rebuildRegionPark(fx, deferred, currentWindows)
       if dirtyChans[chan] then
         for cc, col in pairs(channels[chan].columns.ccs) do
           for _, evt in ipairs(col.events) do
-            util.add(scan, { evt = evt, events = col.events,
-              spec = parkSpec(evt, { cc = cc, ppqL = evt.ppqL or evt.ppq }) })   -- cc pins the column key; ppqL coalesces a raw-sourced event
+            if covered(evt) then   -- pre-filter (see the note pass): only covered ccs pay a parkSpec clone
+              util.add(scan, { evt = evt, events = col.events,
+                spec = parkSpec(evt, { cc = cc, ppqL = evt.ppqL or evt.ppq }) })   -- cc pins the column key; ppqL coalesces a raw-sourced event
+            end
           end
         end
       end

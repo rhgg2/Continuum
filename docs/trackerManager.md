@@ -327,8 +327,12 @@ runs it, with a pointer to its detail where one exists.
   `scan` builds its `spec` inline at the scan site, where that pass's
   `chan`/`lane`/`cc` are in scope; `reconcilePark`'s optional `onPark`
   callback fires only for specs newly parked this rebuild (e.g. marking
-  the note pass's channel dirty), never for carried-forward priors. A
-  `pa` rides its host note, so it parks exactly when the host does:
+  the note pass's channel dirty), never for carried-forward priors.
+  `covered()` — the same predicate `reconcilePark` applies — gates both
+  scan loops before they clone a `parkSpec`, so a take with no fx
+  windows builds an empty scan and pays nothing per event; it accepts a
+  spec or a raw column event, coalescing `ppqL` for a raw-sourced cc.
+  A `pa` rides its host note, so it parks exactly when the host does:
   deleted from the take (silent — a stale PA against a fresh derived
   stream is meaningless; the generator owns any new realisation PAs),
   stashed in `fxParked` tagged `pa`, reconciled against the parked-note

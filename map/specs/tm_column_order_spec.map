@@ -1,6 +1,6 @@
-@spec tm_column_order_spec  src=tests/specs/tm_column_order_spec.lua  loc=118  sha=untracked  cases=3
-@exercises midiManager (h.fm), trackerManager (h.tm)
-@surface   fm:dump, tm:addEvent, tm:flush
+@spec tm_column_order_spec  src=tests/specs/tm_column_order_spec.lua  loc=142  sha=500e776  cases=4
+@exercises midiManager (h.fm), trackerManager (h.tm), dataStore (h.ds)
+@surface   fm:dump, tm:addEvent, tm:flush, ds:assign, tm:rebuild, ds:get
 @harness   mk
 
 # Intent
@@ -18,28 +18,32 @@
   assertion isolates the ordering effect.
 
 # Helpers
-  @fn host()  @ 21-24
+  @fn host()  @ 24-27
       -- Host at ppqL 60 authored long (endppqL 240): its window is bounded by the lane successor, not its
       -- own tail, so the clip is what the seat stream reveals.
-  @fn mate(delay)  @ 28-31
+  @fn mate(delay)  @ 31-34
       -- Same lane, one row past the host's authored end is irrelevant -- it sits inside it, so it is the
       -- strict next onset and the host's window must stop there.
-  @fn pbSeatPpqs(h, chan)  @ 33-40
-  @fn lastSeat(h, chan)  @ 42-45
-  @fn glideSeats(h, chan, fromPpq)  @ 49-58
+  @fn pbSeatPpqs(h, chan)  @ 36-43
+  @fn lastSeat(h, chan)  @ 45-48
+  @fn glideSeats(h, chan, fromPpq)  @ 52-61
       -- Glide seats in the host window [fromPpq, ..]: excludes the successor's own realised-onset pb
       -- baseline, which the delay relocates (raw 48) but which nextSameLaneNote's ordering does not govern.
-  @fn slideHost()  @ 62-66
+  @fn slideHost()  @ 65-69
       -- A slide host gliding into its lane successor (pitch 61 = +100c). target='next' resolves the
       -- successor via nextSameLaneNote's strictNextMap, which reads the column in array order.
-  @fn slideMate(delay)  @ 67-70
+  @fn slideMate(delay)  @ 70-73
 
 # Cases
-  @case 'control: an fx host window clips at its strict next same-lane onset'  [harness]  @ 74-82
-  @case 'a lane successor delayed earlier in raw still bounds the host window'  [harness]  @ 86-97
-  @case 'slide(target=next) aims at the grid successor, not the raw-next note'  [harness]  @ 101-116
+  @case 'control: an fx host window clips at its strict next same-lane onset'  [harness]  @ 77-85
+  @case 'a lane successor delayed earlier in raw still bounds the host window'  [harness]  @ 89-100
+  @case 'slide(target=next) aims at the grid successor, not the raw-next note'  [harness]  @ 104-119
+  @case 'a note delayed out of a window in raw still parks (membership is grid intent)'  [harness]  @ 123-140
 
 # Uses (outbound edges)
-  @use call midiManager.dump  @ 35,51
-  @use call trackerManager.addEvent  @ 77,78,89,93,104,109,112
-  @use call trackerManager.flush  @ 77,78,89,93,104,112
+  @use call midiManager.dump  @ 38,54
+  @use call trackerManager.addEvent  @ 80,81,92,96,107,112,115,128
+  @use call trackerManager.flush  @ 80,81,92,96,107,115,130
+  @use call dataStore.assign  @ 131
+  @use call trackerManager.rebuild  @ 132
+  @use call dataStore.get  @ 135

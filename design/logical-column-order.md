@@ -6,7 +6,23 @@
 
 ## Status
 
-Proposed. `tm_column_order_spec` pins the host-clip manifestation red.
+Partly landed.
+
+- **Steps 1 & 3 (correctness) — done.** Note columns sort on `ppqL` (`sortByPPQL`),
+  `computeFxWindows`' chord-mate clip and `nextSameLaneNote`'s `strictNextMap` key on
+  `ppqL`. `tm_column_order_spec` pins the host clip, the `slide(target='next')`
+  successor, and (step 4's motivating rule) a note delayed out of a window in raw
+  still parking.
+- **Step 4 (regionPark perf) — done as a `covered()` pre-filter, not a binary
+  search.** The note/cc park scans gate the `parkSpec` clone on `covered()`, so a
+  no-fx take builds an empty scan and spends nothing. This is exact (same predicate
+  `reconcilePark` applies) and self-contained — it needs neither the `fxHosts` set nor
+  a sorted-column range query, and captures the full 15.6ms without them.
+- **Step 2 (`computeFxWindows` host set) — deferred.** Its win (fxWindows 7.3 + fx
+  4.8) turns on whether that cost is the `openHosts` walk (which a host set removes) or
+  the dirt-gated sort (which it does not). Validate that split live on the
+  Hammerklavier take before building the `seatNote`/`unseat`/`fxHosts` machinery, which
+  adds four cross-site maintenance points.
 
 ## Problem
 
