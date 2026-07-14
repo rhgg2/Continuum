@@ -65,8 +65,10 @@ function eventMeta:flush(guid, dirty, deleted)
   for uuid in pairs(deleted) do edit(uuid, false) end
   if not next(byBucket) then return end
   perf.start('buckets')
+  local written = 0
   local kb, kbChanged = readKb(guid), false
   for b, edits in pairs(byBucket) do
+    written = written + 1
     local set = kb[b] and readBucket(guid, b) or {}
     for uuid, fields in pairs(edits) do set[uuid] = fields or nil end
     if next(set) then
@@ -78,12 +80,14 @@ function eventMeta:flush(guid, dirty, deleted)
     end
   end
   if kbChanged then writeKb(guid, kb) end
+  perf.count('flushBuckets', written)
   perf.stop('buckets')
 end
 
 --contract: replaces the pool's whole metadata with byUuid={[uuid]=fields}; sweeps uuids no longer present
 function eventMeta:saveAll(guid, byUuid)
   if not guid then return end
+  perf.start('saveAll')
   local byBucket, kb = {}, {}
   for uuid, fields in pairs(byUuid) do
     local b   = uuid // BUCKET
@@ -94,10 +98,14 @@ function eventMeta:saveAll(guid, byUuid)
   for b in pairs(readKb(guid)) do
     if not byBucket[b] then ps:assign('project', bucketSlot(guid, b), util.REMOVE) end
   end
+  local written = 0
   for b, set in pairs(byBucket) do
     ps:assign('project', bucketSlot(guid, b), set)
+    written = written + 1
   end
   writeKb(guid, kb)
+  perf.count('saveAllBuckets', written)
+  perf.stop('saveAll')
 end
 
 --contract: forks srcGuid's metadata onto dstGuid (an unpooled clone mints a fresh pool; this seeds it)

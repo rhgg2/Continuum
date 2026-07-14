@@ -4,6 +4,20 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-14** — mm writes metadata only where it changed. `load` persisted by rewriting the whole
+  pool (`eventMeta:saveAll`) on the strength of an unstated fact: it *reads* metadata and joins it
+  onto events, but never edits it — so every surviving uuid's stored bytes were already correct and
+  the write was pure churn. It now persists the delta: reassignment clones out, uuids no event claims
+  swept (the sweep `saveAll` did implicitly; `mm_cc_dedup_spec` and `mm_cc_reconcile_spec` pin it).
+  Chosen over gating `saveAll` behind a did-anything-change flag, which is a smaller diff but helps
+  only the native rebind — a foreign take mints every uuid, so the flag is always true on the path
+  that hurts. The win compounds: an empty bucket index means the rebuild's flush writes its 40 buckets
+  fresh instead of read-modify-writing 33 that load had just created for it (30ms + 26ms). Corollary,
+  now load-bearing: **an empty metadata entry is indistinguishable from an absent one**, so neither
+  load nor a minted uuid writes `{}`. Same rule downstream — `assignNote`/`assignCC` persist only when
+  the assign touches a metadata key, so a velocity edit does no metadata I/O at all (it re-serialised
+  a 256-entry bucket + 5 projext-mirror ops). Foreign bind 452ms → 404ms; metadata 27% → 17% of it.
+
 - **2026-07-14** — tm's rebuild pipeline nests in `mm:batch(fn)`, a depth-holder, not an outer
   `mm:modify`. A modify fires `reload` on every unwind whether or not its fn wrote — so a modify
   wrapper announces a mutation that never happened, on every rebuild and every keystroke edit

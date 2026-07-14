@@ -230,6 +230,13 @@ local function metaFieldsOf(evt)
   return meta
 end
 
+-- Keyed on the key, so a util.REMOVE clearing a metadata field counts as touching it.
+local function touchesMetadata(evt, t)
+  local strip = (evt.evType == 'note') and noteEventFields or ccEventFields
+  for k in pairs(t) do if not strip[k] then return true end end
+  return false
+end
+
 -- Per-modify metadata write buffer: incremental saves/deletes coalesce here so the
 -- project-ext keys set is (de)serialised once at flushMetadata(), not per event.
 local metaDirty, metaDeleted = {}, {}
@@ -256,12 +263,6 @@ local function flushMetadata()
     end
     eventMeta:flush(poolGuid, metaDirty, metaDeleted)
   end
-end
-
-local function saveMetadata()
-  local byUuid = {}
-  for uuid, evt in pairs(eventsByUuid) do byUuid[uuid] = metaFieldsOf(evt) end
-  eventMeta:saveAll(poolGuid, byUuid)
 end
 
 ----- Utils
@@ -520,6 +521,7 @@ local fire = util.installHooks(mm)
 --contract: load is always external (lock-free): reads the take, normalises in-memory, reprojects
 --contract: dedup/unify/reconcile mutate the model + set dirty; flushTake writes once if dirty
 --contract: a take still holding loadedBlob is converged: fires reload{wholesale=false, chans={}}, returns
+--contract: metadata persists incrementally: reassignment clones out, uuids no event claims swept
 function mm:load(newTake)
   if not newTake then return end
   perf.start('load')
@@ -544,6 +546,7 @@ function mm:load(newTake)
   carriedTexts, carriedPassthrough, dirty = {}, {}, false
   local ccSidecars, noteSidecars = {}, {}
   local noteDedupEvents, ccDedupEvents, reassignEvents, reconcileEvents = {}, {}, {}, {}
+  local metaWrites = {}   -- the only metadata load authors: the clones minted by uuid reassignment
 
   local metadata = eventMeta:load(poolGuid)
   for uuid in pairs(metadata) do if uuid > maxUUID then maxUUID = uuid end end
@@ -677,6 +680,7 @@ function mm:load(newTake)
       local newUUID = assignNewUUID(note)
       uuidCount[uuid] = uuidCount[uuid] - 1
       metadata[newUUID] = util.clone(metadata[uuid]) or {}
+      if next(metadata[newUUID]) then metaWrites[newUUID] = metadata[newUUID] end
       dirty = true
       util.add(reassignEvents, util.pick(note, 'ppq chan pitch', { oldUuid = uuid, newUuid = newUUID }))
     elseif not uuid then
@@ -804,7 +808,14 @@ function mm:load(newTake)
   local wroteTake = dirty
   if wroteTake then flushTake()      -- restashes loadedBlob off the reprojected take
   else loadedBlob = blob end         -- nothing written: the bytes we parsed are still the take's
-  saveMetadata()
+
+  -- A surviving uuid's metadata is the store's own bytes: load joins them onto events and never edits
+  -- them, so only the clones go back out. see docs/midiManager.md § Metadata I/O
+  local metaDrops = {}
+  for uuid in pairs(metadata) do
+    if not eventsByUuid[uuid] then metaDrops[uuid] = true end
+  end
+  eventMeta:flush(poolGuid, metaWrites, metaDrops)
 
   --contract: load fires signals in order: takeSwapped, notesDeduped, uuidsReassigned
   --contract: then: ccsDeduped, ccsReconciled, collisionsResolved, reload, flushed (iff wrote)
@@ -996,16 +1007,19 @@ function mm:notesRaw(chan)
 end
 
 --contract: assignNote: lockless write when t touches no structural field
+--contract: persists metadata only when t touches a metadata key; structural-only writes none
 --invariant: assignNote structural fields = {ppq, endppq, pitch, vel, chan, muted}
 local function assignNote(loc, t)
   if not take then return end
 
-  if not (t.ppq or t.endppq or t.pitch or t.vel or t.chan or t.muted ~= nil) then
+  local hasStructural = t.ppq or t.endppq or t.pitch or t.vel or t.chan or t.muted ~= nil
+
+  if not hasStructural then
     local note = notes[loc]
     if not note then return end
 
     util.assign(note, t)
-    saveMetadatum(note.uuid)
+    if touchesMetadata(note, t) then saveMetadatum(note.uuid) end
     return
   end
 
@@ -1027,7 +1041,7 @@ local function assignNote(loc, t)
     tokenIdx[newTok] = note
   end
 
-  saveMetadatum(note.uuid)
+  if touchesMetadata(note, t) then saveMetadatum(note.uuid) end
 end
 
 --contract: addNote always allocates a uuid; flushTake regenerates its notation sidecar
@@ -1086,6 +1100,7 @@ end
 
 --contract: assignCC: lockless iff t touches no structural field and the cc has a uuid
 --contract: first metadata stamp on a plain cc needs lock — inserts a sidecar sysex
+--contract: persists metadata only when t touches a metadata key; structural-only writes none
 local function assignCC(loc, t)
   if not take then return end
 
@@ -1094,14 +1109,11 @@ local function assignCC(loc, t)
 
   local hasStructural = t.ppq or t.evType or t.chan or t.cc or t.pitch
                         or t.val or t.vel or t.muted ~= nil or t.shape or t.tension
-  local hasMetadata = false
-  for k in pairs(t) do
-    if not ccEventFields[k] then hasMetadata = true; break end
-  end
+  local hasMetadata = touchesMetadata(msg, t)
 
   if not hasStructural and msg.uuid then
     util.assign(msg, t)
-    saveMetadatum(msg.uuid)
+    if hasMetadata then saveMetadatum(msg.uuid) end
     return
   end
 
@@ -1134,7 +1146,7 @@ local function assignCC(loc, t)
     assignNewUUID(msg)   -- flushTake writes the new sidecar
   end
 
-  if msg.uuid then saveMetadatum(msg.uuid) end
+  if hasMetadata and msg.uuid then saveMetadatum(msg.uuid) end
 end
 
 -- Build one ordinary CC record (its wire event is regenerated on flush). No

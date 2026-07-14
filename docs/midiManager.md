@@ -20,28 +20,33 @@ storage shape.
 UUIDs are monotonic integers, base-36 encoded; the namespace is unified across
 notes and ccs, and is per-pool — the sidecars that carry them ride the pool.
 
-### Metadata I/O — internal vs external reload
+### Metadata I/O
 
-`load` reaches the metadata store twice: `eventMeta:load(poolGuid)` reads
-the pool's blob up front, `saveMetadata` (→ `eventMeta:saveAll`) re-writes
-it at the end (plus a stale-uuid sweep). Both are O(all uuids) — and
-`mm:modify` triggers a full reload on **every** edit, so with a few
-hundred notes this dominated keystroke latency.
+`load` reads the pool's metadata once, up front (`eventMeta:load(poolGuid)`),
+and joins it onto the events it parses — at sidecar binding, and again in
+`rebuild`. It never *edits* what it read. The store's bytes flow onto the event
+records and no further, which means that for every uuid that survives the load,
+the store is already correct and there is nothing to write back.
 
-The round-trip is redundant on a *self-inflicted* reload — one driven by
-`mm:modify`, identified by `lock` still being held when `load` runs:
-- The writes are redundant because `add`/`assign` already self-persist
-  each touched uuid via `saveMetadatum` (→ `eventMeta:saveOne`), and
-  `delete` wipes its own entry via `deleteMetadatum` (→ `eventMeta:deleteOne`).
-  The store stays current incrementally, so the wholesale `saveMetadata`
-  adds nothing.
-- The read is redundant because the in-memory events still carry that
-  same metadata; `snapshotMetadata` reconstructs the `uuid → fields`
-  table from them (before the table clear) instead of re-reading.
+Two things do change, and they are the whole of what `load` persists:
 
-So internal reloads skip both. External loads — take swap, undo, the
-watcher, initial bind — keep the full `eventMeta:load` + `saveMetadata`,
-which is where dedup/reconcile and orphan compaction must run.
+- **The reassignment clones.** When two notes claim one uuid, the loser is
+  minted a fresh one and the metadata is cloned onto it. That entry is new; it
+  goes out. A note minted a uuid from *nothing* (a foreign note, no sidecar) has
+  empty metadata, and an empty entry is indistinguishable from an absent one —
+  so it is not written at all.
+- **The deaths.** Every uuid the store knows about that no surviving event
+  claims: dedup kills, orphaned sidecars, the losers of a reconcile. Swept.
+
+This used to be an `eventMeta:saveAll` — the entire pool rewritten on every
+load, O(all uuids), whatever had changed. It was doubly wasteful. On a foreign
+bind it wrote 33 buckets of *empty* field tables (~30ms), which the rebuild
+pipeline then superseded outright a few milliseconds later when it stamped
+`ppqL` onto all 10k events and rewrote all 40 buckets. Worse, those 33 buckets
+now **existed**, so `eventMeta:flush` had to read-modify-write each one rather
+than write it fresh — load's redundant write made the real write more expensive
+than it needed to be. Persisting only the delta leaves a foreign pool's bucket
+index empty, and the pipeline writes each bucket exactly once.
 
 ### Index re-read elision
 
@@ -179,8 +184,8 @@ Sidecars are not touched at this stage. A sidecar whose preferred cc has
 just been dropped — or that never had one — flows through reconciliation
 as a `valueRebound` / `consensusRebound` / `guessedRebound` / `ambiguous`
 / `orphaned` event, and the post-reconcile cleanup deletes orphan
-sidecars. The stale-key sweep in `saveMetadata` purges any
-`ctm_<uuid>` ext-data left behind. Emits `ccsDeduped` with one event per
+sidecars. `load`'s metadata sweep (§ Metadata I/O) purges any entry
+left behind. Emits `ccsDeduped` with one event per
 group; running before reconciliation means dedup has no uuid attachments
 to report, so the event no longer carries `keptHadUuid`.
 

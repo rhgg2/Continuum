@@ -1,4 +1,4 @@
-@module eventMeta  src=eventMeta.lua  loc=118  sha=3970445  mode=chunk  self=eventMeta
+@module eventMeta  src=eventMeta.lua  loc=126  sha=e441984  mode=chunk  self=eventMeta
 @deps ps
 
 # Invariants & contracts
@@ -29,23 +29,24 @@
 # Public API (eventMeta:*)
   @api eventMeta:load(guid)  @ 44-51
       @contract  { [uuid:int] = fields }; empty table if the guid has no metadata
-  @api eventMeta:flush(guid, dirty, deleted)  @ 55-82
+  @api eventMeta:flush(guid, dirty, deleted)  @ 55-85
       @contract  batched incremental persist: applies dirty={[uuid]=fields} + deleted={[uuid]=true}
       @contract  per-modify hot path: read-modify-writes touched buckets only, never the whole pool
-  @api eventMeta:saveAll(guid, byUuid)  @ 85-101
+  @api eventMeta:saveAll(guid, byUuid)  @ 88-109
       @contract  replaces the pool's whole metadata with byUuid={[uuid]=fields}; sweeps uuids no longer present
-  @api eventMeta:copyPool(srcGuid, dstGuid)  @ 104-107
+  @api eventMeta:copyPool(srcGuid, dstGuid)  @ 112-115
       @contract  forks srcGuid's metadata onto dstGuid (an unpooled clone mints a fresh pool; this seeds it)
-  @api eventMeta:dropPool(guid)  @ 110-116
+  @api eventMeta:dropPool(guid)  @ 118-124
       @contract  forever-deletes a pool's metadata (deleteSlot's keeper removal)
 
 # Signals emitted (via util.installHooks)
   @emits poolsRewound   -- { guids = set }; a REAPER undo rewound these pools' metadata slots   @ 40
 
 # Uses (outbound edges)
-  @use call    perf.start  @ flush:67
-  @use call    perf.stop  @ flush:81
-  @use call    ps.assign  @ writeKb:24 flush:73,76 saveAll:95,98 dropPool:113,115
+  @use call    perf.count  @ flush:83 saveAll:107
+  @use call    perf.start  @ flush:67 saveAll:90
+  @use call    perf.stop  @ flush:84 saveAll:108
+  @use call    ps.assign  @ writeKb:24 flush:75,78 saveAll:99,103 dropPool:121,123
   @use call    ps.get  @ readKb:20 readBucket:21
   @use call    util.installHooks  @ 28
   @use require perf  @ 9
