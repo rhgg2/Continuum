@@ -78,8 +78,14 @@ Inline comments cap at **2 lines**. A WHY that needs more belongs in
 
 One test settles every case: if an annotation wants a second line, or
 a comment a third, the constraint is either two of them (split) or a
-model concern (the doc's job). No exceptions. The `.map` is the API
-reference; prose lives in the doc.
+model concern (the doc's job). The `.map` is the API reference; prose
+lives in the doc.
+
+Specs under `tests/` are the one exception to the 2-line comment cap.
+There the file header and the preamble above each case *are* the
+documentation — `map/specs/<spec>.map` is derived from them, and a case
+whose intent needs a paragraph should have one. The `--KIND:` length
+caps still apply. `tools/comment_hygiene.py` enforces this split.
 
 ## `--contract:` discipline
 

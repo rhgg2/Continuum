@@ -9,7 +9,12 @@ Rules (docs/CONVENTIONS.md § Length discipline):
   prose stuffed in alongside the fields, or a dense shape that should be
   decomposed into named sub-shapes. Both fixes have the same form: split.
 - Contiguous WHY-comment runs (consecutive `--` lines that are not KIND
-  annotations) cap at 2 lines.
+  annotations) cap at 2 lines. Section dividers (`-----`, `----- Name`,
+  `---------- PUBLIC`) are structure, not WHY, so they neither count toward
+  a run nor join two runs into one.
+- Specs are exempt from the run cap: a spec's header and per-case preambles
+  ARE its documentation (map/specs/*.map is derived from them). The KIND
+  length caps still apply there.
 
 A violation is only flagged when a participating line is in scope: the
 added/modified lines in diff mode, every line in cleanup mode. In diff mode
@@ -26,6 +31,7 @@ KIND_CAPPED = re.compile(r'^\s*--\??(invariant|contract|emits|reaper):')
 SHAPE       = re.compile(r'^\s*--\??shape:')
 ANY_KIND    = re.compile(r'^\s*--\??(invariant|contract|shape|emits|reaper):')
 COMMENT     = re.compile(r'^\s*--')
+DIVIDER     = re.compile(r'^\s*-{3,}')
 HUNK_HEAD   = re.compile(r'^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@')
 MAX_KIND_LEN  = 100
 MAX_SHAPE_LEN = 400
@@ -57,11 +63,17 @@ def diff_added_lines():
     return added
 
 
+def is_spec(path):
+    return 'tests' in Path(path).parts
+
+
 def why_runs(lines):
     """Yield (start, end) 1-based inclusive for contiguous WHY-comment runs."""
     start = None
     for i, line in enumerate(lines, 1):
-        is_why = COMMENT.match(line) and not ANY_KIND.match(line)
+        is_why = (COMMENT.match(line)
+                  and not ANY_KIND.match(line)
+                  and not DIVIDER.match(line))
         if is_why:
             if start is None:
                 start = i
@@ -90,6 +102,8 @@ def check_file(path, added):
                             f'shape line too long ({len(line)} > {MAX_SHAPE_LEN}) '
                             f'— split prose to docs/<file>.md or factor sub-shapes',
                             line.strip()[:120] + '...'))
+    if is_spec(path):
+        return out
     for start, end in why_runs(lines):
         n = end - start + 1
         if n <= MAX_RUN:
