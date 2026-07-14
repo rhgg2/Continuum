@@ -294,7 +294,7 @@ return {
     end,
   },
 
-  ----- Phase A: generator output is self-sufficient of mm array order (design/deferred-reindex.md)
+  ----- Phase A: generator output is self-sufficient of mm array order (design/archive/deferred-reindex.md)
 
   {
     name = 'two rebuilds over an arp region allocate byte-identical derived notes + lanes',

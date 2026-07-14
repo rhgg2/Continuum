@@ -71,7 +71,7 @@ local needsCompact = false  -- a delete left a hole in the arrays; cleared by re
 local carriedTexts       = {}  -- parsed text/meta events mm doesn't model; re-emitted verbatim on flush
 local carriedPassthrough = {}  -- parsed system messages mm doesn't model; re-emitted verbatim on flush
 --invariant: loadedBlob is the take's bytes as of the model agreeing with them; nil = unknown, never gate
-local loadedBlob            -- converged-rebind gate; see design/incremental-rebuild.md § The take-hash gate
+local loadedBlob            -- converged-rebind gate; see design/archive/incremental-rebuild.md § The take-hash gate
 
 -- Opaque, content-keyed addressing. Token is private string built from
 -- the event's identity fields; collision-free by construction across the
@@ -322,7 +322,7 @@ end
 ----- Per-channel index
 
 -- Backs notesRaw(chan) / ccsRaw(chan). tm's gated stages re-derive one channel and would otherwise
--- walk every event to find it. see design/incremental-rebuild.md § The traversal floor
+-- walk every event to find it. see design/archive/incremental-rebuild.md § The traversal floor
 local function chanBucket(slots, chan)
   local bucket = slots[chan]
   if not bucket then bucket = { byLoc = {}, locs = {}, n = 0 }; slots[chan] = bucket end
@@ -422,7 +422,7 @@ local function rebuild(metadata)
 end
 
 -- An assign that moves no ppq leaves the arrays dense and ordered: nothing for the reindex
--- to do, and the verbs have already maintained every index. see design/incremental-rebuild.md § 6
+-- to do, and the verbs have already maintained every index. see design/archive/incremental-rebuild.md § 6
 local function indexStale() return needsSort or needsCompact end
 
 -- Reuse each uuid'd event's sidecar record across flushes; recompute only when a
@@ -912,7 +912,7 @@ end
 ----- Dirty channels (rebuild dirt spine)
 
 -- Seeds the reload payload so tm gates derivation per channel.
--- See design/dirty-channels.md § Scheme.
+-- See design/archive/dirty-channels.md § Scheme.
 local dirtyChans = {}
 local function markChan(chan) if chan then dirtyChans[chan] = true end end
 
@@ -969,7 +969,7 @@ end
 --contract: holds the nest open across the caller's modifies; takes no lock, writes nothing
 --contract: not a gesture -- fires no reload, and an error propagates rather than printing
 -- A caller staging through many separate modifies (tm's rebuild pipeline) would otherwise reindex and
--- reproject the take once per stage. see design/incremental-rebuild.md § 5
+-- reproject the take once per stage. see design/archive/incremental-rebuild.md § 5
 function mm:batch(fn)
   enterNest()
   local ok, err = pcall(fn)

@@ -4,7 +4,7 @@
 @harness   mk{seed.notes, seed.ccs}
 
 # Intent
-  Phase D pins - design/deferred-reindex.md item 1. With the reindex deferred to
+  Phase D pins - design/archive/deferred-reindex.md item 1. With the reindex deferred to
   one rebuild at the outermost unwind, the whole tm:rebuild pipeline runs against
   the sparse (holed) cc array a mid-pipeline delete leaves behind. Three pipeline
   stages read mm:ccsRaw() downstream of such a delete; each must see the survivors

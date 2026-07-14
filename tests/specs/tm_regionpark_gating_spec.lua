@@ -1,4 +1,4 @@
--- Phase A of the dirt spine (design/dirty-channels.md § Scheme): regionPark's new-park scan is
+-- Phase A of the dirt spine (design/archive/dirty-channels.md § Scheme): regionPark's new-park scan is
 -- gated per dirty channel. A clean channel contributes no on-take candidates -- any coverage
 -- transition (note moved into a window, region edited) dirties its channel first -- so skipping
 -- the scan is behaviour-preserving. Its reconcile still *partitions* the prior fxParked set, so a

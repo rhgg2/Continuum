@@ -4,6 +4,18 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-15** — the `incremental-rebuild` programme is closed and archived; its one open gap (4,
+  the fx dirt signal) is **deferred rather than done**. fx-hosting channels are marked dirty wholesale
+  every rebuild, and the obvious fix — hash the generator inputs per host — was rejected: it bolts a
+  second dirt axis alongside `dirtyChans`, to be plumbed through every stage that reads it, and the
+  successor deletes it again. That successor (`design/interval-dirt.md`, live, unstarted) makes the
+  dirt unit a **ppq interval within a channel**, and fx then needs no dirt signal at all: a host
+  regenerates exactly when a dirty interval intersects its window, which `computeFxWindows` already
+  yields as a per-host logical-ppq extent. The channel model is the degenerate case (interval = whole
+  channel), so the migration is stage-by-stage. Convention this sets: `design/` is live work, `design/
+  archive/` is finished — so a closed programme moves wholesale, and anything still live in it gets
+  spun out rather than buried. Archiving repointed 31 inbound `see design/…` pointers.
+
 - **2026-07-15** — `cm:get` resolves one key by walking the tiers, instead of materialising the merged
   table. Building it cost 164 default copies + 5 tier overlays to answer a question about one key: a
   scalar read was 13µs against the 0.13µs of a single-tier `getAt`, and the cost had already leaked

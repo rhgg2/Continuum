@@ -1,10 +1,10 @@
-@spec tm_tail_gating_spec  src=tests/specs/tm_tail_gating_spec.lua  loc=90  sha=c3b9b58  cases=3
+@spec tm_tail_gating_spec  src=tests/specs/tm_tail_gating_spec.lua  loc=90  sha=f83ed57  cases=3
 @exercises midiManager (h.fm), dataStore (h.ds), trackerManager (h.tm)
 @surface   fm:dump, ds:assign, tm:fromLogical, tm:rebuild, fm:setLength, fm:length, tm:setLength
 @harness   mk{seed.length, seed.notes}
 
 # Intent
-  Pins the tail-clip gate (design/dirty-channels.md § Scheme) against its two dirt sources:
+  Pins the tail-clip gate (design/archive/dirty-channels.md § Scheme) against its two dirt sources:
   swing reseat and take-length resize. See docs/trackerManager.md § Derivation dirt, § Length operations.
 
 # Helpers

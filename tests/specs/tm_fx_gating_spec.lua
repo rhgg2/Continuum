@@ -1,4 +1,4 @@
--- Phase A of the dirt spine (design/dirty-channels.md § Scheme): a clean fx channel freezes and its
+-- Phase A of the dirt spine (design/archive/dirty-channels.md § Scheme): a clean fx channel freezes and its
 -- derived notes/CCs/pb seats stand in mm; here a channel frozen by another channel's edit keeps its pb seat stream byte-identical and hidden.
 
 local t    = require('support')

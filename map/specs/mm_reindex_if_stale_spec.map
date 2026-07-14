@@ -1,11 +1,11 @@
-@spec mm_reindex_if_stale_spec  src=tests/specs/mm_reindex_if_stale_spec.lua  loc=117  sha=07eac20  cases=5
+@spec mm_reindex_if_stale_spec  src=tests/specs/mm_reindex_if_stale_spec.lua  loc=117  sha=683a533  cases=5
 @exercises midiManager (h.mm)
 @surface   mm:events, mm:notesRaw, mm:tokenOf, mm:reindexIfStale, mm:notes, mm:modify, mm:delete, mm:assign
 @harness   bareMM
 
 # Intent
   Pins the reindex gate: an add/ppq move unsorts, a delete holes, an assign touching neither
-  skips the reindex outright -- and a missed flag fails silently. design/incremental-rebuild.md § 6.
+  skips the reindex outright -- and a missed flag fails silently. design/archive/incremental-rebuild.md § 6.
 
 # Helpers
   @fn tokPpqs(mm)  @ 6-10

@@ -1,4 +1,4 @@
-@module midiManager  src=midiManager.lua  loc=1410  sha=1639a4d  mode=chunk  self=mm
+@module midiManager  src=midiManager.lua  loc=1410  sha=3a5925b  mode=chunk  self=mm
 @deps take, eventMeta
 
 # Invariants & contracts
@@ -69,7 +69,7 @@
   @state needsCompact = false  @ 70   -- a delete left a hole in the arrays; cleared by rebuild
   @state carriedTexts = {}  @ 71   -- parsed text/meta events mm doesn't model; re-emitted verbatim on flush
   @state carriedPassthrough = {}  @ 72   -- parsed system messages mm doesn't model; re-emitted verbatim on flush
-  @state loadedBlob  @ 74   -- converged-rebind gate; see design/incremental-rebuild.md § The take-hash gate
+  @state loadedBlob  @ 74   -- converged-rebind gate; see design/archive/incremental-rebuild.md § The take-hash gate
       @invariant  loadedBlob is the take's bytes as of the model agreeing with them; nil = unknown, never gate
   @state shapeLUT = { step = 0, linear = 1, slow = 2, ['fast-start'] = 3, ['f...  @ 90
   @state noteEventFields = {  @ 213
@@ -123,7 +123,7 @@
   -- Per-channel index
   @fn chanBucket(slots, chan)  @ 326-330
       -- Backs notesRaw(chan) / ccsRaw(chan). tm's gated stages re-derive one channel and would otherwise
-      -- walk every event to find it. see design/incremental-rebuild.md § The traversal floor
+      -- walk every event to find it. see design/archive/incremental-rebuild.md § The traversal floor
   @fn slotsFor(evt)  @ 332
   @fn seat(bucket, evt)  @ 336-346
       -- locs stays ascending by appending, never sorting: an add takes the highest loc and the reindex
@@ -139,7 +139,7 @@
       -- recompute loc; rebuild token/uuid/channel indices. metadata (load only) rejoins per-uuid fields.
   @fn indexStale()  @ 426
       -- An assign that moves no ppq leaves the arrays dense and ordered: nothing for the reindex
-      -- to do, and the verbs have already maintained every index. see design/incremental-rebuild.md § 6
+      -- to do, and the verbs have already maintained every index. see design/archive/incremental-rebuild.md § 6
   @fn noteSidecarEntry(note)  @ 432-441
   @fn ccSidecarEntry(cc)  @ 443-455
   @fn flushTake()  @ 459-497
@@ -204,7 +204,7 @@
       -- are both deferred to the outermost unwind. See docs/midiManager.md § Mutation contract.
   @api mm:batch(fn)  @ 973-978
       -- A caller staging through many separate modifies (tm's rebuild pipeline) would otherwise reindex and
-      -- reproject the take once per stage. see design/incremental-rebuild.md § 5
+      -- reproject the take once per stage. see design/archive/incremental-rebuild.md § 5
   @api mm:reindexIfStale()  @ 981-983
       @contract  run the deferred reindex when a modify left arrays stale (sparse/unsorted); else no-op
   @api mm:notes()  @ 994-1000

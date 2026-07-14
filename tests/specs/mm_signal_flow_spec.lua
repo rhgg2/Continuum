@@ -125,7 +125,7 @@ return {
   },
 
   {
-    -- Dirt spine (design/dirty-channels.md § Scheme): reload names channels touched.
+    -- Dirt spine (design/archive/dirty-channels.md § Scheme): reload names channels touched.
     -- bareMM: no tm rebuild pipeline to fire follow-on reloads over the payload.
     name = 'mm.reload chans: an add marks only the touched channel',
     run = function()
@@ -167,7 +167,7 @@ return {
   },
 
   {
-    -- The converged-rebind gate (design/incremental-rebuild.md § The take-hash gate): a load whose
+    -- The converged-rebind gate (design/archive/incremental-rebuild.md § The take-hash gate): a load whose
     -- take still holds the bytes the model was built from re-reads nothing, so no event object is
     -- replaced -- not wholesale -- and no content moved, so no channel is dirty. tm carries its frame.
     name = 'mm.reload: a load finding the take converged gates — not wholesale, no dirty chans',

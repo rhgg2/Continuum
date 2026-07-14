@@ -4,7 +4,7 @@
 @harness   bareMM
 
 # Intent
-  Phase B pin - design/deferred-reindex.md item 2. mm's four iterators skip
+  Phase B pin - design/archive/deferred-reindex.md item 2. mm's four iterators skip
   the holes a delete leaves in the sparse note/cc arrays and keep yielding
   survivors past the hole, up to the noteCount/ccCount high-water mark.
   

@@ -225,7 +225,7 @@ load-bearing where a from-scratch `rebuild` used to launder it: `mm:assign`
 re-keys `tokenIdx` in place and brackets a chan move with `indexDrop` /
 `indexPut`. The two mutators that write outside the verbs — `resolveCollisions`
 and load's dedup — set both flags themselves. See
-design/incremental-rebuild.md § 6.
+design/archive/incremental-rebuild.md § 6.
 
 **Same-pitch backstop.** `tm`'s separation sites uphold the `(ppq, chan,
 pitch)` invariant in steady state; `resolveCollisions` catches any write path

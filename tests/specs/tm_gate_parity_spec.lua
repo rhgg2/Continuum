@@ -1,4 +1,4 @@
--- Gated-vs-full parity: the shadow harness design/dirty-channels.md § Validation names as the
+-- Gated-vs-full parity: the shadow harness design/archive/dirty-channels.md § Validation names as the
 -- prerequisite for phase B. Exploits I8 (a no-edit rebuild is a fixpoint): after an edit, a gated
 -- rebuild -- which re-READS untouched channels' persisted derivation -- must project byte-identically
 -- to a forced all-16 rebuild that re-DERIVES every channel from mm. Divergence means a gate froze a

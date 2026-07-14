@@ -1,4 +1,4 @@
--- The converged-rebind gate (design/incremental-rebuild.md § gap 3): a rebind whose take is
+-- The converged-rebind gate (design/archive/incremental-rebuild.md § gap 3): a rebind whose take is
 -- byte-identical to the one mm's model was built from skips both the re-read and the re-derive.
 --
 -- The gate's observable is work NOT done. Deriving a converged take stages zero writes either

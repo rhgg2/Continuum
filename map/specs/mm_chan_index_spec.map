@@ -1,11 +1,11 @@
-@spec mm_chan_index_spec  src=tests/specs/mm_chan_index_spec.lua  loc=175  sha=94897ae  cases=7
+@spec mm_chan_index_spec  src=tests/specs/mm_chan_index_spec.lua  loc=175  sha=683a533  cases=7
 @exercises midiManager (h.mm)
 @surface   mm:notesRaw, mm:ccsRaw, mm:modify, mm:tokenOf, mm:delete, mm:assign
 @harness   bareMM
 
 # Intent
   Pins the per-channel event index behind mm:notesRaw(chan) / mm:ccsRaw(chan).
-  design/incremental-rebuild.md § The traversal floor.
+  design/archive/incremental-rebuild.md § The traversal floor.
   
   The index is maintained by the verbs (add / delete / chan-move) and reconstructed
   wholesale by the reindex, so a missed maintenance point is SILENT: the channel walk

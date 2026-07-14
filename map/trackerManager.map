@@ -1,4 +1,4 @@
-@module trackerManager  src=trackerManager.lua  loc=3385  sha=a698ee3  mode=chunk  self=tm
+@module trackerManager  src=trackerManager.lua  loc=3385  sha=1639a4d  mode=chunk  self=tm
 @deps mm, cm, ds, defaultNoteCols
 
 # Invariants & contracts
@@ -123,12 +123,12 @@
   @fn sortByPPQ(tbl)  @ 89-91
   @fn dirtyChan(chan)  @ 95-98
       -- General derivation-dirt spine: any edit/config change re-derives a channel's gated stages.
-      -- Spurious dirt costs a re-derive; missed dirt writes silent wrong output. see design/dirty-channels.md § Scheme
+      -- Spurious dirt costs a re-derive; missed dirt writes silent wrong output. see design/archive/dirty-channels.md § Scheme
   @fn derivationInputs()  @ 104-113
       -- Everything the pipeline derives from beyond the take itself. A dormant tracker hears nothing when
       -- this changes: an undo rewinds take-scoped ds/cm storage while ps watches only the bound take's
       -- slots, and the caches simply refill at the next setContext. So the rebind diffs it instead.
-      -- see design/incremental-rebuild.md § The take-hash gate
+      -- see design/archive/incremental-rebuild.md § The take-hash gate
   @fn pbLim()  @ 118-121
   @fn centsToRaw(cents)  @ 123-125
   @fn isCurved(shape)  @ 127-129

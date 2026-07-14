@@ -1,4 +1,4 @@
--- Phase A of the dirt spine (design/dirty-channels.md § Scheme): the CC walk's timing
+-- Phase A of the dirt spine (design/archive/dirty-channels.md § Scheme): the CC walk's timing
 -- reconcile is gated per dirty channel. A clean channel is converged (raw agrees with its
 -- logical projection), so skipping it stages nothing -- but a swing change must still reseat
 -- the channels it resolves to. That dirt is config, not carried by the mm reload payload, so

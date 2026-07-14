@@ -1,5 +1,5 @@
 -- Pins the reindex gate: an add/ppq move unsorts, a delete holes, an assign touching neither
--- skips the reindex outright -- and a missed flag fails silently. design/incremental-rebuild.md § 6.
+-- skips the reindex outright -- and a missed flag fails silently. design/archive/incremental-rebuild.md § 6.
 
 local t = require('support')
 

@@ -1,4 +1,4 @@
-@module configManager  src=configManager.lua  loc=548  sha=e2be081  mode=chunk  self=cm
+@module configManager  src=configManager.lua  loc=548  sha=fe11d27  mode=chunk  self=cm
 @deps ps
 
 # Invariants & contracts

@@ -3677,7 +3677,7 @@ local rebuilding = false
 local lastEpochSig   -- projection-epoch signature carried from the last rebuild; guards the cell cache
 
 -- The (ppq,chan)->row projection is a pure function of viewContext's constructor inputs, so a
--- column's built cells stay valid iff these hold. see design/dirty-channels.md § Phase B
+-- column's built cells stay valid iff these hold. see design/archive/dirty-channels.md § Phase B
 local function projectionEpoch(length, numRows, rpb, ppqPerRow, timeSigs, temperKey)
   local parts = { length, numRows, rpb, ppqPerRow, temperKey }
   for _, ts in ipairs(timeSigs) do
@@ -3722,7 +3722,7 @@ function tv:rebuild(takeChanged)
     local ppqPerRow = (resolution * 4 / denom) / rpb
 
     -- Snapshot each outgoing column's built cells keyed by its events table; B1 keeps a clean channel's
-    -- events table identical across rebuilds, so the hit below reuses cells. see design/dirty-channels.md § Phase B
+    -- events table identical across rebuilds, so the hit below reuses cells. see design/archive/dirty-channels.md § Phase B
     local prevBuilt = {}
     for _, col in ipairs(grid.cols) do
       prevBuilt[col.events] = { cells = col.cells, overflow = col.overflow,

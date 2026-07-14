@@ -1,12 +1,16 @@
 # incremental rebuild — programme status & residuals
 
-> Master doc. The programme is substantially landed; this doc is now the
-> ledger of what shipped and the record of what did not. Two slices are
-> finished and archived (`archive/same-pitch-enforcement.md`,
-> `archive/incremental-pbs.md`); the two with residuals stay live
-> (`deferred-reindex.md`, `dirty-channels.md`). The enduring model lives
-> in `docs/trackerManager.md` § Derivation dirt — read that first; this
-> doc carries history and the open work.
+> Master doc, **closed 2026-07-15** — every gap below is landed, dropped,
+> or deliberately deferred. This doc is the ledger of what shipped and the
+> record of what did not; the whole programme is archived alongside its
+> four slice docs (`same-pitch-enforcement.md`, `incremental-pbs.md`,
+> `deferred-reindex.md`, `dirty-channels.md`), which are kept for their
+> history. The enduring model lives in `docs/trackerManager.md` §
+> Derivation dirt — read that first.
+>
+> One gap (4, the fx dirt signal) is deferred rather than done, because a
+> successor project — dirt as **ppq intervals** rather than whole channels
+> — subsumes it. That project is live at `design/interval-dirt.md`.
 
 ## Goal & baseline
 
@@ -67,8 +71,11 @@ so the seat math it would have optimised no longer costs anything.
 
 ## Known gaps
 
-Ordered correctness-first, then by size of win. Each is self-contained —
-the archived slice docs are not needed to implement any of them.
+All resolved. Ordered correctness-first, then by size of win; each was
+self-contained — the archived slice docs are not needed to read any of
+them. Kept in full because the *reasoning* is the asset: several were
+closed by measuring rather than by coding, and gap 2 was dropped outright
+once measured.
 
 ### 1. Take-length dirty source — audited 2026-07-14, **closed**
 
@@ -178,22 +185,39 @@ Two bugs fell out, neither introduced by the gate:
 Still unmeasured against a real take: the win is a full derivation pass, but no
 live number is recorded. Fold it into gap 7's re-profile.
 
-### 4. fx dirt signal — the conservative row nobody else knows about
+### 4. fx dirt signal — deferred 2026-07-15, **subsumed by interval dirt**
 
 fx output regenerates every rebuild with no change tracking, so
 fx-hosting channels are marked dirty **wholesale** on every rebuild. That
 is a deliberate conservatism, and it is correct, but it means macro-heavy
 takes get materially less of the gating win than the numbers above
-suggest. This limitation is shipped and, until now, recorded only in the
-design docs.
+suggest. This limitation is shipped.
 
-Giving fx its own dirt signal (hash the generator inputs per host?) retires
-the wholesale row, and unblocks a queued follow-up: `rebuildPbs` currently
+The obvious fix — give fx its own dirt signal, hashing the generator inputs
+per host — is **deliberately not being built**. It would add a second dirt
+axis to plumb alongside `dirtyChans`, and the successor below deletes it
+again. Two mechanisms wired together where one suffices.
+
+It also blocks a queued follow-up, which stays blocked: `rebuildPbs`
 re-walks every cc via `mm:ccsRaw()` purely to find and clone the pbs, which
 `rebuildCCs` already visits. Folding the clone into the cc walk buys ~0.4ms
 but cannot be gated safely today — fx-activeness isn't resolved until the
 later fx stage, so gating the cc-loop clone on pb-dirt alone would silently
 miss fx-active channels and delete every absorber on them.
+
+#### The successor: dirty ppq intervals, not dirty channels
+
+A separate project, not a residual of this one, and it is **live** at
+`design/interval-dirt.md` — read that, not this summary.
+
+In one line: make the dirt unit a **ppq interval within a channel** rather
+than the whole channel, and fx needs no dirt signal of its own — a host
+regenerates exactly when a dirty interval intersects its window, which
+`computeFxWindows` already computes as a per-host logical-ppq extent. The
+channel model is then the degenerate case (interval = whole channel), which
+is what makes the migration tractable. The hard part is forward propagation:
+intra-channel is not ppq-local, so a dirty interval is the *seed* of a blast
+radius rather than the radius itself.
 
 ### 5. `deferred-reindex` follow-up — nest the whole pipeline in one mm unwind — landed 2026-07-14, **closed**
 
@@ -510,12 +534,14 @@ warm run reads `meta` at **0.32ms** per flush, essentially all of it `buckets`.
 Gap 7's fat-edit reading (7.3ms / 128 entries) stands; there is no fixed floor
 under it. Warm the instance before believing any span in this doc.
 
-### 9. Housekeeping — shadow scaffolding
+### 9. Housekeeping — shadow scaffolding — checked 2026-07-15, **closed**
 
 Every slice's validation plan said "run the full path in shadow, assert
 parity, strip the scaffolding once parity holds, keep one permanent
 gated-vs-full spec". The permanent spec exists (`a4a4b4a`,
 `tm_gate_parity_spec`, extended by B2 to assert the carried grid equals a
-forced full re-derive). No commit strips live shadow scaffolding — so
-either it was never built, or it is still in the tree burning time behind a
-perf gate. Check before closing.
+forced full re-derive). No commit strips live shadow scaffolding because
+**none was ever built** — the tracker stack has no shadow/parity path in
+production (the only `shadow` names in tm are sample-shadowing and
+swing-slot shadowing, both unrelated). Nothing to strip; the parity spec
+stands as the permanent net.

@@ -1,5 +1,5 @@
 -- Pins the per-channel event index behind mm:notesRaw(chan) / mm:ccsRaw(chan).
--- design/incremental-rebuild.md § The traversal floor.
+-- design/archive/incremental-rebuild.md § The traversal floor.
 --
 -- The index is maintained by the verbs (add / delete / chan-move) and reconstructed
 -- wholesale by the reindex, so a missed maintenance point is SILENT: the channel walk

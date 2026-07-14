@@ -1,4 +1,4 @@
--- Pins the tail-clip gate (design/dirty-channels.md § Scheme) against its two dirt sources:
+-- Pins the tail-clip gate (design/archive/dirty-channels.md § Scheme) against its two dirt sources:
 -- swing reseat and take-length resize. See docs/trackerManager.md § Derivation dirt, § Length operations.
 
 local t    = require('support')

@@ -1,4 +1,4 @@
-@spec mm_signal_flow_spec  src=tests/specs/mm_signal_flow_spec.lua  loc=217  sha=ef4e5a4  cases=12
+@spec mm_signal_flow_spec  src=tests/specs/mm_signal_flow_spec.lua  loc=217  sha=a2a3815  cases=12
 @exercises harness (harness), midiManager (h.fm), trackerManager (h.tm)
 @surface   harness.mk, fm:load, fm:take, fm:subscribe, fm:modify, tm:subscribe, harness.bareMM, fm:notes, fm:tokenOf, fm:assign
 @harness   mk, bareMM, reaper.MIDI_InsertNote, reaper:seedMidi

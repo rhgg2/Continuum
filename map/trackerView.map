@@ -473,7 +473,7 @@
   -- Rebuild
   @fn projectionEpoch(length, numRows, rpb, ppqPerRow, timeSigs, temperKey)  @ 3681-3687
       -- The (ppq,chan)->row projection is a pure function of viewContext's constructor inputs, so a
-      -- column's built cells stay valid iff these hold. see design/dirty-channels.md § Phase B
+      -- column's built cells stay valid iff these hold. see design/archive/dirty-channels.md § Phase B
 
 # Public API (tv:*)
   @api tv:currentTrackIdx()  @ 188

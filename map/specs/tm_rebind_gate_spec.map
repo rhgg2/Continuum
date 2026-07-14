@@ -1,10 +1,10 @@
-@spec tm_rebind_gate_spec  src=tests/specs/tm_rebind_gate_spec.lua  loc=122  sha=untracked  cases=4
+@spec tm_rebind_gate_spec  src=tests/specs/tm_rebind_gate_spec.lua  loc=122  sha=a2a3815  cases=4
 @exercises pextStore (ps), dataStore (ds), midiManager (h.fm), trackerManager (h.tm), configManager (h.cm)
 @surface   ps:setTake, ds:assign, fm:notesRaw, tm:getChannel, fm:dump, tm:addEvent, tm:flush, tm:currentTake, tm:bindTake, cm:set
 @harness   mk{seed.notes}
 
 # Intent
-  The converged-rebind gate (design/incremental-rebuild.md § gap 3): a rebind whose take is
+  The converged-rebind gate (design/archive/incremental-rebuild.md § gap 3): a rebind whose take is
   byte-identical to the one mm's model was built from skips both the re-read and the re-derive.
   
   The gate's observable is work NOT done. Deriving a converged take stages zero writes either

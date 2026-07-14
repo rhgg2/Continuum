@@ -665,7 +665,7 @@ about to create rather than the one it still has. All 16 channels are
 marked dirty, because any of them may hold a spanning OPEN tail and a
 clean channel's frame would otherwise carry forward unclipped — this is
 also the explicit all-16 take-length dirty source that
-`design/dirty-channels.md` asked for.
+`design/archive/dirty-channels.md` asked for.
 
 ### rescaleLength(newPpq)
 

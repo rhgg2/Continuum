@@ -91,7 +91,7 @@ local function sortByPPQ(tbl)
 end
 
 -- General derivation-dirt spine: any edit/config change re-derives a channel's gated stages.
--- Spurious dirt costs a re-derive; missed dirt writes silent wrong output. see design/dirty-channels.md § Scheme
+-- Spurious dirt costs a re-derive; missed dirt writes silent wrong output. see design/archive/dirty-channels.md § Scheme
 local function dirtyChan(chan)
   if chan then dirtyChans[chan] = true; return end
   for i = 1, 16 do dirtyChans[i] = true end
@@ -100,7 +100,7 @@ end
 -- Everything the pipeline derives from beyond the take itself. A dormant tracker hears nothing when
 -- this changes: an undo rewinds take-scoped ds/cm storage while ps watches only the bound take's
 -- slots, and the caches simply refill at the next setContext. So the rebind diffs it instead.
--- see design/incremental-rebuild.md § The take-hash gate
+-- see design/archive/incremental-rebuild.md § The take-hash gate
 local function derivationInputs()
   return {
     trackerMode  = cm:get('trackerMode'),      swings       = cm:get('swings', { mergeTiers = true }),
@@ -420,7 +420,7 @@ local function channelStreams(chan, startL, endL, pbBase, ccBases)
     local ppqL = evt.ppqL or evt.ppq
     if within(ppqL) then util.add(ats, { ppqL = ppqL, val = evt.val }) end
   end
-  -- Generators read these streams in ppq order (bases pre-sorted, slices preserve order). see design/deferred-reindex.md § Phase A
+  -- Generators read these streams in ppq order (bases pre-sorted, slices preserve order). see design/archive/deferred-reindex.md § Phase A
   local function byPpqL(a, b) return a.ppqL < b.ppqL end
   table.sort(pas, byPpqL)
   table.sort(ats, byPpqL)
@@ -2242,7 +2242,7 @@ end
 -- reconcile vs existing, note writes deferred to the tail walk. see design/note-macros-v2.md § Offline continuous realisation
 local function rebuildFx(fx, deferred, fxWindow, currentWindows)
   -- Note columns read in ppq order regardless of mm array order (eachWindowNote /
-  -- allocateRegionLanes / membersOf iterate col.events directly). see design/deferred-reindex.md § Phase A
+  -- allocateRegionLanes / membersOf iterate col.events directly). see design/archive/deferred-reindex.md § Phase A
   for chan = 1, 16 do
     if dirtyChans[chan] then
       for _, col in ipairs(channels[chan].columns.notes) do sortByPPQ(col.events) end
@@ -2316,7 +2316,7 @@ local function rebuildFx(fx, deferred, fxWindow, currentWindows)
     return tuning.transposeStep(temper, pitch, detune, n)
   end
   -- Strict next same-lane note, built per channel on first ask: slide(target='next') is its only
-  -- consumer, so a channel no slide queries never pays for the map. see design/incremental-rebuild.md § 8
+  -- consumer, so a channel no slide queries never pays for the map. see design/archive/incremental-rebuild.md § 8
   local laneNextByChan = {}
   local function nextSameLaneNote(host)
     local note = host.notes[1]
@@ -2518,7 +2518,7 @@ local function rebuildFx(fx, deferred, fxWindow, currentWindows)
 
   for chan = 1, 16 do
     -- Frozen: derived notes/CCs stand untouched in mm; leave noteLive empty so tails/pbs/pcs skip too.
-    -- see design/dirty-channels.md § Phase A
+    -- see design/archive/dirty-channels.md § Phase A
     if dirtyChans[chan] then expandChannel(chan) end
   end
 end
@@ -3161,7 +3161,7 @@ function tm:rebuild(takeChanged)
 
   clearSwing()   -- rebuild is the (cm, mm) coherence point
   -- Carry each clean channel's whole frame forward (B1): re-deriving it is waste, and every
-  -- gated stage below skips clean chans so the carried columns stand. see design/dirty-channels.md § Phase B
+  -- gated stage below skips clean chans so the carried columns stand. see design/archive/dirty-channels.md § Phase B
   local prevChannels = channels
   channels = {}
   for i = 1, 16 do
@@ -3259,7 +3259,7 @@ do
   mm:subscribe('reload', function(info)
     mmReloaded = (info and info.wholesale) or false
     -- Own pipeline commits are converged output, not dirt (I8).
-    -- see design/dirty-channels.md § Scheme item 1
+    -- see design/archive/dirty-channels.md § Scheme item 1
     if not rebuilding and info and info.chans then
       for chan in pairs(info.chans) do dirtyChans[chan] = true end
     end
@@ -3287,7 +3287,7 @@ do
   -- arrive as dataChanged. swing diffs its map; the rest force a full rebuild.
   ds:subscribe('dataChanged', function(change)
     -- Pipeline's own ds:assigns during rebuild (fxParked/extraColumns) are converged
-    -- output, not edits; re-entering marks all 16 dirty and breaks B1. see design/dirty-channels.md § Phase B
+    -- output, not edits; re-entering marks all 16 dirty and breaks B1. see design/archive/dirty-channels.md § Phase B
     if rebuilding then return end
     if bindingTake or not cm:boundTake() then return end
     if change.name == 'swing' then
