@@ -5,9 +5,22 @@ description: Write the commit headline here, then a subagent runs hygiene + add 
 One pass. No iterative refinement.
 
 1. `git status --porcelain`. Empty → clean tree; say so and stop. Don't spawn.
-2. Decide the headline yourself — you have the change's intent from this conversation, a cold subagent wouldn't. `<scope>: <headline>`, imperative, ≤70 chars, scoped to the affected area (eg `tm: fix off-by-one in selection rect`). Glance at `git diff --stat` if you need to confirm scope; don't read the full diff.
-3. Decision log: if the change embodies a non-trivial design decision — a chosen trade-off, a rejected alternative, a new convention — append a dated one/two-line entry at the top of `docs/decisions.md` now, so it rides the same commit. Most commits don't; skip silently.
-4. Spawn one subagent — Agent tool, `subagent_type: general-purpose`, `model: sonnet` — and hand it the headline. It owns everything else and does **not** spawn further subagents. Prompt it with:
+2. Map-tooling survey. Append one JSON object, one line, to `map/feedback.jsonl` — **you** write it, not the subagent; the subagent never touched the map tools and would invent an answer. Fields:
+
+   - `date` — today, `YYYY-MM-DD`.
+   - `score` — 1-5, how helpful the map tooling was **this session**. Rate the tooling, not the session's outcome. Use `null` when the session never exercised it (a config or docs task with no Lua in it) — a neutral 3 would be a lie that poisons the average.
+   - `used` — array of what you actually reached for: `"map_query"`, `"map"` (read a `.map` directly), `"grep"` / `"read"` (you went around the map tooling), `[]` (never needed it).
+   - `comment` — optional, and the point of the exercise. What would have made the tooling more useful *on this task*: a query you couldn't express, an edge the index missed, a lookup that took three calls and should have taken one. Omit rather than pad. A bare score with no comment is a fine entry when nothing stood out.
+
+   Be honest and specific — this is a defect log for the tooling, not a compliment. If you bypassed the maps entirely, say so and say why.
+
+   ```json
+   {"date":"2026-07-14","score":3,"used":["map_query","map"],"comment":"usedby missed trackerPage's call — runtime receiver, not in the alias table; had to grep"}
+   ```
+
+3. Decide the headline yourself — you have the change's intent from this conversation, a cold subagent wouldn't. `<scope>: <headline>`, imperative, ≤70 chars, scoped to the affected area (eg `tm: fix off-by-one in selection rect`). Glance at `git diff --stat` if you need to confirm scope; don't read the full diff.
+4. Decision log: if the change embodies a non-trivial design decision — a chosen trade-off, a rejected alternative, a new convention — append a dated one/two-line entry at the top of `docs/decisions.md` now, so it rides the same commit. Most commits don't; skip silently.
+5. Spawn one subagent — Agent tool, `subagent_type: general-purpose`, `model: sonnet` — and hand it the headline. It owns everything else and does **not** spawn further subagents. Prompt it with:
 
 > You are finishing a commit. Do these in order, then stop — do not spawn any subagent:
 > 1. `git status` and `git diff` to see what's landing.
@@ -20,4 +33,4 @@ One pass. No iterative refinement.
 >
 >    If the user sent you instructions directly while you were working (a message mid-run, or hunk `feedback:` returned by `apply_patches`), say so explicitly in the report (call them "the user", not "you"): quote or paraphrase what they asked and what you did about it. The parent agent cannot see your conversation and will otherwise read the change as yours.
 
-5. When it returns, eyeball its summary — don't re-audit.
+6. When it returns, eyeball its summary — don't re-audit.

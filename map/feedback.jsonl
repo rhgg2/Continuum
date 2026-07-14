@@ -1,0 +1,1 @@
+{"date":"2026-07-14","score":null,"used":[],"comment":"Config task, no Lua touched — the map tooling was never exercised. Located the commit skill with find+grep over .claude/, which map/ does not index and should not."}
