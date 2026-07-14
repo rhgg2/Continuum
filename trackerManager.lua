@@ -1697,44 +1697,58 @@ end
 
 ----- Rebuild externals
 
---contract: true iff note fits col: no over-threshold overlap, coincident onset always refuses
---invariant: overlap threshold: same-pitch 0, cross-pitch lenient; dominated-by≥2 refuses
---contract: consulted only for unstamped raw notes; stamped notes never reach it
-local function noteColumnAccepts(col, note)
+-- Lane packing for one externals pass: the overlap threshold and each event's intent onset are
+-- invariant across the pass's O(notes × lanes × column) probe walk, so both lift out of it.
+local function externalLanePacker()
   local lenient = cm:get('overlapOffset') * mm:resolution()
-  local noteppqI    = note.ppq - delayToPPQ(note.delay or 0)
-  local noteEndppqI = note.endppq
-  local dominated = 0
-  for _, evt in ipairs(col.events) do
-    local evtppqI = evt.ppq - delayToPPQ(evt.delay or 0)
-    if noteppqI == evtppqI then return false end
-    if noteppqI < evt.endppq and evtppqI < noteEndppqI then
-      local threshold = (evt.pitch == note.pitch) and 0 or lenient
-      local overlapAmount = math.min(evt.endppq, noteEndppqI) - math.max(evtppqI, noteppqI)
-      if overlapAmount > threshold then return false end
-      dominated = dominated + 1
-    end
-  end
-  if dominated >= 2 then return false end
-  return true
-end
+  local onsetI  = {}   -- [evt] = intent-frame onset; an event's never moves while the pass runs
 
---contract: pick a lane for an external (unstamped) note via accept → sibling → push bump
---invariant: called up front after internals placed + swing-reseated; tail walk clips tails after
-local function packExternalLane(channel, note)
-  local notes = channel.columns.notes
-  if note.lane then
-    local col = notes[note.lane]
-    if col and noteColumnAccepts(col, note) then return col, note.lane end
-    if not col then
-      while #notes < note.lane do pushNoteCol(channel) end
-      return notes[note.lane], note.lane
+  local function onsetOf(evt)
+    local ppqI = onsetI[evt]
+    if not ppqI then
+      ppqI        = evt.ppq - delayToPPQ(evt.delay or 0)
+      onsetI[evt] = ppqI
     end
+    return ppqI
   end
-  for i, col in ipairs(notes) do
-    if noteColumnAccepts(col, note) then return col, i end
+
+  --contract: true iff note fits col: no over-threshold overlap, coincident onset always refuses
+  --invariant: overlap threshold: same-pitch 0, cross-pitch lenient; dominated-by≥2 refuses
+  --contract: consulted only for unstamped raw notes; stamped notes never reach it
+  local function columnAccepts(col, note)
+    local noteppqI    = onsetOf(note)
+    local noteEndppqI = note.endppq
+    local dominated   = 0
+    for _, evt in ipairs(col.events) do
+      local evtppqI = onsetOf(evt)
+      if noteppqI == evtppqI then return false end
+      if noteppqI < evt.endppq and evtppqI < noteEndppqI then
+        local threshold     = (evt.pitch == note.pitch) and 0 or lenient
+        local overlapAmount = math.min(evt.endppq, noteEndppqI) - math.max(evtppqI, noteppqI)
+        if overlapAmount > threshold then return false end
+        dominated = dominated + 1
+      end
+    end
+    return dominated < 2
   end
-  return pushNoteCol(channel)
+
+  --contract: pick a lane for an external (unstamped) note via accept → sibling → push bump
+  --invariant: called up front after internals placed + swing-reseated; tail walk clips tails after
+  return function(channel, note)
+    local notes = channel.columns.notes
+    if note.lane then
+      local col = notes[note.lane]
+      if col and columnAccepts(col, note) then return col, note.lane end
+      if not col then
+        while #notes < note.lane do pushNoteCol(channel) end
+        return notes[note.lane], note.lane
+      end
+    end
+    for i, col in ipairs(notes) do
+      if columnAccepts(col, note) then return col, i end
+    end
+    return pushNoteCol(channel)
+  end
 end
 
 -- Reintroduce externals: pack lane, stamp ppqL/endppqL, backfill metadata, tag `fixed`;
@@ -1744,13 +1758,14 @@ local function rebuildExternals(external)
 
   table.sort(external, function(a, b) return a.ppq < b.ppq end)
   local trackerMode = cm:get('trackerMode')
-  local extWrites = mmBatch()
+  local packLane    = externalLanePacker()
+  local extWrites   = mmBatch()
   for _, note in ipairs(external) do
     local delay     = note.delay or 0
     local d         = delayToPPQ(delay)
     local probe     = { ppq = note.ppq, endppq = note.endppq,
                         pitch = note.pitch, delay = delay, lane = note.lane }
-    local col, lane = packExternalLane(channels[note.chan], probe)
+    local col, lane = packLane(channels[note.chan], probe)
     local update    = {
       ppqL    = tm:toLogical(note.chan, note.ppq - d),
       endppqL = tm:toLogical(note.chan, note.endppq),
