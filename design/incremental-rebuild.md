@@ -273,21 +273,72 @@ further ~2.3ms outside any perf span. **Every stage still pays an O(all events)
 walk to discover it has nothing to do.** The channel gate can't touch that: the
 walk happens *before* the gate is consulted.
 
-Ungated work per rebuild, from `trackerManager.lua:2998-3076`:
-
-- `computeFxWindows()` runs twice (`:3020`, `:3050`).
-- `:3023-3032` walks every note column on all 16 channels to build `parkRegions`
-  — the `if host.fx` filter sits in the innermost loop, so the scan runs in full
-  even when it yields nothing.
-- `:3067` `util.deepEq` over the window set; `:3076`
-  `util.deepClone(derivationInputs())`.
-- Plus the per-stage scan floor inside the gated stages themselves.
-
 This does not invalidate `dirty-channels`: its stage-level wins are real and
 measured (internals 7.3 → 0.5). What is left underneath is a different quantity,
-and it now rivals the write side (16.9ms). First step is instrumentation — perf
-spans around the interstitial work above, to attribute the ~2.3ms currently
-outside any span.
+and it rivals the write side (16.9ms).
+
+#### The floor, measured — 2026-07-14
+
+A rebuild with **zero dirty channels** — nothing to derive, every gated stage
+skipping — costs 6.4ms on this take. That is the floor, isolated: no edit, no
+derivation, pure traversal. Perf spans on the interstitial work account for all
+of it, and the `nextInLane` fix below is measured against it.
+
+| span | before | after |
+|---|---|---|
+| `fxWindows` (×2) | **2.82** | **0.64** |
+| `fire` — subscriber notify, not derivation | 0.78 | 0.72 |
+| `fx` | 0.52 | 0.46 |
+| `internals` | 0.48 | 0.42 |
+| `ccs` | 0.44 | 0.34 |
+| `regionPark` | 0.40 | 0.32 |
+| `pbs` | 0.38 | 0.32 |
+| `pa` | 0.28 | 0.24 |
+| `parkRegions` | 0.14 | 0.12 |
+| `derivedInputs` | 0.12 | 0.10 |
+| **total** | **6.42** | **3.76** |
+
+#### Landed: kill `nextInLane`
+
+`computeFxWindows` was 44% of the floor **on a take with no fx at all**. It built
+a 3193-entry `nextInLane` map — a bucket pass plus a `strictNextMap` pass over
+every note on all 16 channels — and it did so twice per rebuild. Both of its
+outputs are only ever *read* for an fx note: `fxWindow` is guarded by `if
+host.fx` at every read site, and `nextInLane` reaches exactly one consumer,
+`slide(target='next')`, through `ctx.nextSameLaneNote`.
+
+So the map is gone. `computeFxWindows` now clamps each host's window in a single
+forward pass over the ppq-sorted column — chord-mates share an onset and so share
+a successor, so it holds the open hosts and clips them together when a greater
+ppq arrives. `nextSameLaneNote` builds the lane-next map lazily, per channel, on
+first ask: a channel no slide queries never pays for it, and one that does pays
+exactly what it paid before rather than a per-query rescan (the naive on-demand
+scan is O(fx notes × column) — quadratic on a channel where every note carries a
+generator).
+
+Unbudgeted second win: **every other stage got faster too** (ccs 0.44 → 0.34, pbs
+0.38 → 0.32, internals 0.48 → 0.42). Two 3193-entry hash allocations per rebuild
+were putting the whole pipeline under GC load.
+
+#### What is left — 3.76ms
+
+- **`fxWindows` 0.64** — still two calls. The re-scan at `:3052` exists only
+  because park/unpark/PA may have moved the columns; when nothing was restored,
+  nothing parked and PA added nothing — the common case — call #1's result still
+  stands. Halves it.
+- **~2.1ms across the six gated stages**, each paying an O(all events) walk
+  because the `dirtyChans` check sits *inside* the loop: `rebuildCCs` walks all
+  4097 ccs to test `dirtyChans[cc.chan]` per event, `rebuildPA` likewise.
+  Hoisting the gate needs a channel-bucketed event index in `mm`, which does not
+  exist. Its own slice, and the bigger of the two.
+- `fire` 0.72 is subscriber notification, not derivation — out of scope here.
+
+#### A second floor: `meta`
+
+Gap 7 read `meta` at 7.3ms over 128 dirty entries and called it the one bucket
+that scales with edit size. Half right: a **one-note** edit with a single dirty
+entry still pays 2.6ms, only 0.34ms of which is `buckets`. So `meta` has a fixed
+cost of its own, invisible in the fat-edit reading. Unattributed as yet.
 
 ### 9. Housekeeping — shadow scaffolding
 

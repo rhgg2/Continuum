@@ -2146,43 +2146,42 @@ end
 
 ----- Rebuild Fx
 
--- fx host voice extents + per-note same-lane successor ppqL, floored by authored end; a pure, G4-stable scan
--- of the settled note columns. Runs for all 16 chans so parking + recognition see the complete window set. see design/archive/note-macros.md § host contract
+-- fx host voice extents: authored end, take end, or strict next same-lane onset -- soonest wins. A pure,
+-- G4-stable scan of the settled note columns; all 16 chans so parking + recognition see the whole set. see design/archive/note-macros.md § host contract
 local function computeFxWindows()
-  local fxWindow, nextInLane = {}, {}
+  local fxWindow = {}
   local takeLen = tm:length()
   for chan = 1, 16 do
     if dirtyChans[chan] then
       for _, col in ipairs(channels[chan].columns.notes) do sortByPPQ(col.events) end
     end
     local takeLenL = tm:toLogical(chan, takeLen)
-    local byLane = {}
-    for laneIdx, col in ipairs(channels[chan].columns.notes) do
+    for _, col in ipairs(channels[chan].columns.notes) do
+      -- Chord-mates share an onset and so share a successor: hold each host open until an event with a
+      -- greater ppq arrives, then clip them all against it. col.events is ppq-ordered.
+      local openHosts = {}
       for _, evt in ipairs(col.events) do
-        if evt.evType ~= 'pa' and evt.ppqL ~= nil then util.bucket(byLane, laneIdx, evt) end
-      end
-    end
-    local laneNextOf = strictNextMap(byLane)   -- groups are ppq-ordered: col.events sorted above
-    for _, g in pairs(byLane) do
-      for _, evt in ipairs(g) do
-        local nextEvt = laneNextOf[evt]
-        nextInLane[evt] = nextEvt
-        if evt.fx then
-          -- Take is the world: a tail past take end (paste / overshooting move) can't sound past it.
-          local endL = (evt.endppqL == nil or evt.endppqL == util.OPEN)
-                       and takeLenL or math.min(evt.endppqL, takeLenL)
-          if nextEvt then endL = math.min(endL, nextEvt.ppqL) end
-          fxWindow[evt] = endL
+        if evt.evType ~= 'pa' and evt.ppqL ~= nil then
+          if openHosts[1] and evt.ppq > openHosts[1].ppq then
+            for _, host in ipairs(openHosts) do fxWindow[host] = math.min(fxWindow[host], evt.ppqL) end
+            openHosts = {}
+          end
+          if evt.fx then
+            -- Take is the world: a tail past take end (paste / overshooting move) can't sound past it.
+            fxWindow[evt] = (evt.endppqL == nil or evt.endppqL == util.OPEN)
+                            and takeLenL or math.min(evt.endppqL, takeLenL)
+            util.add(openHosts, evt)
+          end
         end
       end
     end
   end
-  return fxWindow, nextInLane
+  return fxWindow
 end
 
 -- Fx expansion: fx-carrying notes / fx-regions -> derived notes, CCs;
 -- reconcile vs existing, note writes deferred to the tail walk. see design/note-macros-v2.md § Offline continuous realisation
-local function rebuildFx(fx, deferred, fxWindow, nextInLane, currentWindows)
+local function rebuildFx(fx, deferred, fxWindow, currentWindows)
   -- Note columns read in ppq order regardless of mm array order (eachWindowNote /
   -- allocateRegionLanes / membersOf iterate col.events directly). see design/deferred-reindex.md § Phase A
   for chan = 1, 16 do
@@ -2253,8 +2252,27 @@ local function rebuildFx(fx, deferred, fxWindow, nextInLane, currentWindows)
   local function stepOp(pitch, detune, n)        -- trill: scale steps -> (pitch, detune) via the temper
     return tuning.transposeStep(temper, pitch, detune, n)
   end
+  -- Strict next same-lane note, built per channel on first ask: slide(target='next') is its only
+  -- consumer, so a channel no slide queries never pays for the map. see design/incremental-rebuild.md § 8
+  local laneNextByChan = {}
+  local function nextSameLaneNote(host)
+    local note = host.notes[1]
+    if not note then return nil end
+    local laneNextOf = laneNextByChan[note.chan]
+    if not laneNextOf then
+      local byLane = {}
+      for laneIdx, col in ipairs(channels[note.chan].columns.notes) do
+        for _, evt in ipairs(col.events) do
+          if evt.evType ~= 'pa' and evt.ppqL ~= nil then util.bucket(byLane, laneIdx, evt) end
+        end
+      end
+      laneNextOf = strictNextMap(byLane)   -- groups are ppq-ordered: computeFxWindows sorted col.events
+      laneNextByChan[note.chan] = laneNextOf
+    end
+    return laneNextOf[note]
+  end
   local chanCtx = { resolution = res, pbRangeCents = pbRangeCents, step = stepOp,
-                    nextSameLaneNote = function(host) return nextInLane[host.notes[1]] end }
+                    nextSameLaneNote = nextSameLaneNote }
   -- Explicit fx-regions (channel x ppq span + fx, no host note), re-queried each
   -- rebuild and bucketed by channel. see design/note-macros-v2.md § The anchor generalized
   local fxRegionsByChan = {}
@@ -3017,7 +3035,8 @@ function tm:rebuild(takeChanged)
 
   -- Park window set: fx-regions plus every on-take note host as a degenerate region (note-is-a-region),
   -- from the settled columns. The producer re-scans post-unpark below. see design/note-macros-v2.md § Offline continuous realisation
-  local hostWindows = computeFxWindows()
+  perf.start('fxWindows'); local hostWindows = computeFxWindows(); perf.stop('fxWindows')
+  perf.start('parkRegions')
   local parkRegions = {}
   for _, r in ipairs(ds:get('fxRegions') or {}) do util.add(parkRegions, r) end
   for chan = 1, 16 do
@@ -3041,14 +3060,15 @@ function tm:rebuild(takeChanged)
     end
   end
   local currentWindows = generators.parkWindows(parkRegions)
+  perf.stop('parkRegions')
 
   perf.start('regionPark'); local restoredNotes = rebuildRegionPark(fx, deferred, currentWindows); perf.stop('regionPark')  -- park covered, carry/restore prior
   perf.start('pa'); rebuildPA(); perf.stop('pa')  -- project PAs into settled note columns
 
   -- Re-scan windows post park/unpark/PA: the producer reads the final columns, including a host an unpark
   -- just restored (a replace host that lost its note-producing kind falls back to on-take augment).
-  local fxWindow, nextInLane = computeFxWindows()
-  perf.start('fx'); rebuildFx(fx, deferred, fxWindow, nextInLane, currentWindows); perf.stop('fx')  -- fx expansion: derived notes/CCs
+  perf.start('fxWindows'); local fxWindow = computeFxWindows(); perf.stop('fxWindows')
+  perf.start('fx'); rebuildFx(fx, deferred, fxWindow, currentWindows); perf.stop('fx')  -- fx expansion: derived notes/CCs
 
   perf.start('tails'); rebuildTails(fx, deferred); perf.stop('tails')  -- unified tail/onset walk + atomic note commit
 
@@ -3064,16 +3084,20 @@ function tm:rebuild(takeChanged)
   perf.start('projLogical'); projectLogical(); perf.stop('projLogical')  -- project columns to logical
 
   -- Persist this rebuild's window set: next rebuild recognizes seats against it (prev-keyed). see § Route-by-window
+  perf.start('prevWindows')
   if mm:take() and not util.deepEq(ds:get('prevWindows') or {}, currentWindows) then
     ds:assign('prevWindows', #currentWindows > 0 and currentWindows or util.REMOVE)
   end
+  perf.stop('prevWindows')
 
   -- Index: full reload only when mm re-read its event set (load/reload); edit rebuilds
   -- trust the incremental index and just clear staging. see docs § Incremental index reconciliation
   perf.start('view'); if didReload then reload() else clearStaging() end; perf.stop('view')
   for chan in pairs(dirtyChans) do muteConform[chan] = true end
   dirtyChans = {}   -- gated stages consumed the spine; next edit window accumulates fresh
+  perf.start('derivedInputs')
   derivedInputs = util.deepClone(derivationInputs())   -- after the pipeline's own ds writes have settled
+  perf.stop('derivedInputs')
   rebuilding = false
 
   --emits: rebuild -- takeChanged:boolean
