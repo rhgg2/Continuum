@@ -4,6 +4,14 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-14** — mm's reindex is gated on `needsSort` / `needsCompact`, which describe
+  the *arrays* (an add or a ppq move unsorts; a delete holes), not the write — so an assign
+  touching neither skips `rebuild` outright. Chosen over the filed hole-vs-order split, which
+  buys only the 0.6ms sort or the 0.2ms compact because either fixup moves every `loc` and
+  drags the 2.3ms index loop with it. Consequence, and the price: a new mm mutator that
+  unsorts or holes an array **must set a flag** — on the skipped path the verbs' incremental
+  index maintenance is load-bearing, not laundered by a from-scratch rebuild behind it.
+
 - **2026-07-14** — mm indexes events by channel (`chanIdx[kind][chan].byLoc`),
   and the reindex reconstructs it from scratch every flush. That laundering costs
   +0.9ms against a −2.4ms `reload` win; keying by event instead of `loc` would let

@@ -195,24 +195,110 @@ but cannot be gated safely today — fx-activeness isn't resolved until the
 later fx stage, so gating the cc-loop clone on pb-dirt alone would silently
 miss fx-active channels and delete every absorber on them.
 
-### 5. `deferred-reindex` follow-up — wrap load/config rebuilds in an outer `mm:modify`
+### 5. `deferred-reindex` follow-up — wrap load/config rebuilds in an outer `mm:modify` — audited 2026-07-14, **open**
 
-Only the *flush* path nests the pipeline's commits inside an outer modify.
-A rebuild fired by `configChanged` or `load` still runs each pipeline
-commit as its own top-level modify — its own reindex, its own `flushTake`.
-Wrapping the pipeline body in an `mm:modify` extends the deferral win to
-those paths and collapses the multiple serialises; the extra `reload` fire
-at unwind is harmless (the sole subscriber is reentrancy-guarded).
+Only the *flush* path nests the pipeline's commits inside an outer modify. A rebuild fired by
+`configChanged` or `load` still runs each pipeline commit as its own top-level modify — its own
+reindex, its own `flushTake`. Wrapping the pipeline body in an `mm:modify` extends the deferral
+win to those paths and collapses the multiple serialises. This also closes out the older mm-write
+goal of *rewriting the take at most once per rebuild*: the flush path meets it today, these paths
+do not.
 
-This also closes out the older mm-write goal of *rewriting the take at most
-once per rebuild*: the flush path meets it today, these paths do not.
+Filed as a follow-up; the audit says it is bigger than that. **`tm:rebuild`'s pipeline has nine
+`mmBatch` commit sites** — `reseats`, `ccWrites`, `extWrites`, regionPark's `batch`, `wires`
+(which is *inside a loop*), `clampWrites`, `deferred`, `pbWrites`, `pcWrites`. Every one that
+stages anything is, on these paths, a top-level modify, and every top-level unwind pays a reindex
+(3.1ms, gap 6's live reading) **and** a full `flushTake` (serialise 8.7 + setEvts 5.1 + sidecars
+1.2 ≈ 15ms warm). So a bind that re-derives pbs, PCs, tails and fx plausibly reprojects the whole
+take five or more times — 100ms+ of pure redundancy, and it lands on take-bind and import, which
+the user feels.
 
-### 6. `deferred-reindex` follow-up — split hole-dirt from order-dirt
+**The flush path is the existence proof.** The pipeline already runs entirely nested inside
+`flush`'s modify on every edit, with commits that neither reindex nor flush. That regime is the
+common and well-tested one; `load` / `configChanged` are the odd paths out. Wrapping makes the
+rare path behave like the hot one. `mm:events()` is already protected on the load path —
+`loadIndex` (`trackerManager.lua:1143`) calls `mm:reindexIfStale()` at its head, and its comment
+already cites this item.
 
-Micro-opt, no correctness content. `dirty` is boolean; assign-only commits
-that move no ppq (value edits) need neither compact nor sort. Splitting the
-flag lets the unwind reindex skip the sort when nothing moved, and skip
-compaction when nothing was deleted.
+**The trap, and it fails silently.** `rebuilding = false` (`trackerManager.lua:3124`) must stay
+*outside* the wrapper. The wrapper's own unwind fires `reload`, and tm's subscriber both re-enters
+`tm:rebuild` and folds `info.chans` into `dirtyChans`. With `rebuilding` already false at that
+moment you get a second full rebuild *and* the pipeline's own writes read back as external dirt —
+the exact I8 violation `dirty-channels` exists to prevent, surfacing as "everything re-derives on
+the next edit".
+
+One real cost: `mm:modify` `pcall`s its function and *prints* the error rather than propagating,
+so wrapping the pipeline turns a derivation exception into a print over a half-derived model that
+mm then flushes. Today such an error propagates.
+
+**Not a blocker, but it corrects the record:** `rebuildTails`' comment at `trackerManager.lua:2573`
+("clamps reindex colliding same-pitch onsets separately") describes a mechanism that isn't there.
+The separation is done by `mm:assign`'s in-verb `tokenIdx` re-key plus `mmBatch`'s `idxReconcile`,
+both depth-independent — as they must be, since the flush path already nests that very commit.
+
+**Unmeasured.** It needs a rebuild that genuinely re-derives — a foreign-take bind, or a config
+change that moves derivation output (temper / pbRange). Note gap 3's take-hash gate means a
+*converged* rebind now stages zero commits and will show nothing: reach for a foreign take. Count
+top-level modifies (wrap `mm.modify`, count `depth == 1`) and `flushed` fires. If a bind really is
+reprojecting six times, this stops being a follow-up and becomes the next slice; if the stages
+mostly stage nothing, it is four lines for nothing and should be dropped.
+
+### 6. `deferred-reindex` follow-up — split hole-dirt from order-dirt — landed 2026-07-14, **closed**
+
+Filed as a micro-opt. It is not one — but only because the framing above misses its own
+third case. `indexStale` was set by the blanket `if dirty` at the modify unwind, i.e. by
+*any* structural write. Two flags replace it, and they describe the arrays rather than the
+write:
+
+| the commit contains | array state | reindex |
+|---|---|---|
+| a delete | sparse — a hole at `evt.loc` | `needsCompact`: compact, then the index loop |
+| an add, or an assign that moves `ppq` | dense, out of ppq order | `needsSort`: sort, then the index loop |
+| an assign touching neither | **untouched** | **skipped entirely** |
+
+The index loop — `loc`, `tokenIdx`, `chanIdx`, `eventsByUuid`, 2.3ms of the 3.1ms reindex —
+runs whenever either fixup does, because both move every `loc`. That is exactly why the
+split *as filed* is worth so little: it buys the 0.6ms sort or the 0.2ms compact, in the
+narrow case where only one kind of dirt fired. The win is the third row. An assign touching
+only `vel` / `pitch` / `chan` / `muted` / `endppq` / a cc value leaves the array dense and
+still ppq-ascending, so the whole reindex is dead work: `pitch` and `chan` are in the token
+but not the sort key, and `endppq` is in neither.
+
+It pays on the hot path. Gap 7's one-note edit *is* a value-only assign, so the reindex it
+attributes to `rebuild` now costs nothing — as does every rebuild whose only commit is tail
+clips, which is most of them. A delete still compacts; an add or a note move still sorts.
+
+#### Measured — 2026-07-14
+
+Warm, live through the bridge, on a 3195-note / 3974-cc / 7169-text take (the fixture family
+gap 7 profiled). Both edits restore what they touch, so neither changes the take.
+
+| edit | `rebuild` | flush |
+|---|---|---|
+| value-only assign (a note's vel to its own value) | **absent — not entered** | 27.2ms |
+| ppq move (+1 logical, then back) | 3.1 (`tokenIdx` 2.6, `sort` 0.5, **no `compact`**) | 31.6ms |
+
+The gate fires. **3.1ms of a ~30ms edit** goes on every value-only edit, and the two-flag
+split earns its keep in the same reading: the ppq move sorts but does not compact, so a delete
+will compact but not sort. (`serialise`'s own `sort` span, midiBlob.lua:269, is unrelated and
+still there — don't read it as the reindex's.)
+
+Second-order, and the pleasing part: gap 8 bought its `reload` win by paying **+0.9ms at the
+reindex** (`tokenIdx` 1.8 → 2.6). On a value-only edit that cost is now zero, so the per-channel
+index's trade got strictly better after the fact.
+
+What is left is the write side, exactly where gap 7 left it: **serialise 8.7 + setEvts 5.1 =
+13.8ms, 51% of the edit.**
+
+What changed underneath is that **the verbs' incremental index maintenance is now
+load-bearing** on the skipped path rather than laundered by the from-scratch rebuild behind
+it. `mm:assign` re-keys `tokenIdx` in-verb and brackets a chan move with `indexDrop` /
+`indexPut`, so it was already correct; it just never had to be. The two mutators that write
+outside the verbs mark themselves, so gap 2's ruling stands untouched: `resolveCollisions`
+sets both flags bluntly (it kills *and* nudges — the backstop gets no correctness surgery to
+save a millisecond), and load's dedup sets both before its own rebuild. `mm_reindex_if_stale_spec`
+pins the gate per verb class; `mm_chan_index_spec` gains the parity case with no reindex
+behind it.
 
 ### 7. Re-profile, and the undocumented write-side work — profiled 2026-07-14, **closed**
 

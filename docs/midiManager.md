@@ -204,12 +204,23 @@ because nothing reads project ext-state mid-modify.
 
 **Reindex deferral.** `rebuild` used to run inline on every dirty `modify`,
 including the nested reseat pass. That reindex is deferred the same way as the
-flush: a dirty `modify` sets `indexStale` instead of calling `rebuild`
-directly, and only `modifyDepth == 0` pays for the one reindex, after the
-nested reseat's writes have landed. Callers inside a nested `modify` — the
-reseat pass included — see sparse/unsorted arrays until that unwind; nothing
-in the pipeline reads position-dependent state mid-modify, so this is safe for
-the same reason the flush deferral is.
+flush: only `modifyDepth == 0` pays for the one reindex, after the nested
+reseat's writes have landed. Callers inside a nested `modify` — the reseat pass
+included — see sparse/unsorted arrays until that unwind; nothing in the pipeline
+reads position-dependent state mid-modify, so this is safe for the same reason
+the flush deferral is.
+
+**The reindex gate.** Dirty is not the same as stale. `needsSort` and
+`needsCompact` describe the *arrays*, not the write: an add or a `ppq` move
+leaves them dense but out of order, a delete leaves a hole, and an assign
+touching neither leaves them exactly as they were — so the unwind skips the
+reindex outright. (`pitch` and `chan` are in the token but not the sort key;
+`endppq` is in neither.) The skip makes the verbs' own index maintenance
+load-bearing where a from-scratch `rebuild` used to launder it: `mm:assign`
+re-keys `tokenIdx` in place and brackets a chan move with `indexDrop` /
+`indexPut`. The two mutators that write outside the verbs — `resolveCollisions`
+and load's dedup — set both flags themselves. See
+design/incremental-rebuild.md § 6.
 
 **Same-pitch backstop.** `tm`'s separation sites uphold the `(ppq, chan,
 pitch)` invariant in steady state; `resolveCollisions` catches any write path

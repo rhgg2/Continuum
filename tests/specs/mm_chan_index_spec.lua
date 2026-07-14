@@ -143,6 +143,22 @@ return {
   },
 
   {
+    name = 'a value-only assign keeps the index right with no reindex behind it',
+    run = function(harness)
+      local mm = fixture(harness)
+      local tok
+      for _, n in mm:notesRaw() do if n.ppq == 240 then tok = mm:tokenOf(n) end end
+      -- Structural, so it takes the locked path, but it moves no ppq: neither flag fires and the
+      -- unwind skips the reindex. The verbs' own maintenance is all that stands behind the index.
+      mm:modify(function()
+        mm:assign(tok, { pitch = 65, vel = 90 })
+        assertParity(mm, 'mid-modify after a value-only assign')
+      end)
+      assertParity(mm, 'after the value-only assign unwound, unlaundered')
+    end,
+  },
+
+  {
     name = 'the collision backstop kills a note outside mm:delete; the reindex launders it',
     run = function(harness)
       local mm = fixture(harness)

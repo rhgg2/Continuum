@@ -65,7 +65,9 @@ local lock       = false
 local dirty      = false  -- a structural write happened; the take needs reprojecting via flushTake
 local modifyDepth  = 0      -- reload can re-enter modify; only the outermost flushes
 local flushPending = false  -- a dirty modify happened somewhere in the nest; flush once on unwind
-local indexStale   = false  -- a deferred modify left arrays sparse/unsorted; the next reindex compacts+sorts; cleared by rebuild
+--invariant: adds/ppq-moves unsort the arrays; deletes hole them; neither fired = no reindex needed
+local needsSort    = false  -- an add or a ppq move left the arrays out of ppq order; cleared by rebuild
+local needsCompact = false  -- a delete left a hole in the arrays; cleared by rebuild
 local carriedTexts       = {}  -- parsed text/meta events mm doesn't model; re-emitted verbatim on flush
 local carriedPassthrough = {}  -- parsed system messages mm doesn't model; re-emitted verbatim on flush
 --invariant: loadedBlob is the take's bytes as of the model agreeing with them; nil = unknown, never gate
@@ -379,13 +381,18 @@ end
 -- recompute loc; rebuild token/uuid/channel indices. metadata (load only) rejoins per-uuid fields.
 local function rebuild(metadata)
   perf.start('rebuild')
-  perf.start('compact')
-  notes = util.compact(notes, noteCount); noteCount = #notes
-  ccs   = util.compact(ccs,   ccCount);   ccCount   = #ccs
-  perf.stop('compact')
-  perf.start('sort')
-  stableByPpq(notes); stableByPpq(ccs)
-  perf.stop('sort')
+  -- Compact and sort run only when their flag fired; the index loop always does -- either moves every loc.
+  if needsCompact then
+    perf.start('compact')
+    notes = util.compact(notes, noteCount); noteCount = #notes
+    ccs   = util.compact(ccs,   ccCount);   ccCount   = #ccs
+    perf.stop('compact')
+  end
+  if needsSort then
+    perf.start('sort')
+    stableByPpq(notes); stableByPpq(ccs)
+    perf.stop('sort')
+  end
   perf.start('tokenIdx')
   tokenIdx, eventsByUuid = {}, {}
   chanIdx = { note = {}, cc = {} }
@@ -409,9 +416,13 @@ local function rebuild(metadata)
     end
   end
   perf.stop('tokenIdx')
-  indexStale = false
+  needsSort, needsCompact = false, false
   perf.stop('rebuild')
 end
+
+-- An assign that moves no ppq leaves the arrays dense and ordered: nothing for the reindex
+-- to do, and the verbs have already maintained every index. see design/incremental-rebuild.md § 6
+local function indexStale() return needsSort or needsCompact end
 
 -- Reuse each uuid'd event's sidecar record across flushes; recompute only when a
 -- field feeding its body changes. Weak keys drop a deleted event's row. See docs.
@@ -788,6 +799,7 @@ function mm:load(newTake)
   end
 
   ----- Rebuild dense indices, reproject the normalised model, persist metadata
+  needsSort, needsCompact = true, true   -- dedup holes the arrays; a foreign blob's order isn't ours to trust
   rebuild(metadata)
   local wroteTake = dirty
   if wroteTake then flushTake()      -- restashes loadedBlob off the reprojected take
@@ -881,7 +893,7 @@ local function resolveCollisions()
   end
   pendingCollisions = {}
   if #events == 0 then return nil end
-  indexStale, flushPending = true, true
+  needsSort, needsCompact, flushPending = true, true, true   -- kills hole the arrays, nudges unsort them
   return events
 end
 
@@ -913,17 +925,14 @@ function mm:modify(fn)
   dirty = false
   if modifyDepth == 1 then metaDirty, metaDeleted, pendingCollisions, dirtyChans = {}, {}, {}, {} end   -- reset once; nested modifies accumulate
   perf.start('verbs'); local ok, err = pcall(fn); perf.stop('verbs')
-  if dirty then                                 -- clean (metadata-only) gestures touch no structure
-    indexStale = true                           -- defer the reindex; nested pipeline reads run against sparse/unsorted arrays
-    flushPending = true
-  end
+  if dirty then flushPending = true end         -- clean (metadata-only) gestures touch no structure
   lock = false
   --emits: reload -- { wholesale=false, chans=set }; chans nil only when wholesale
   perf.start('reload'); fire('reload', { wholesale = false, chans = dirtyChans }); perf.stop('reload')
   modifyDepth = modifyDepth - 1
   if modifyDepth == 0 then
     local resolved = resolveCollisions()
-    if indexStale then rebuild(nil) end         -- pay one reindex, after every nested pipeline write
+    if indexStale() then rebuild(nil) end       -- pay one reindex, after every nested pipeline write
     --emits: collisionsResolved -- { events = [collisionEvent, ...] }; repaired a missed collision
     if resolved then fire('collisionsResolved', { events = resolved }) end
     perf.start('meta'); flushMetadata(); perf.stop('meta')
@@ -939,7 +948,7 @@ end
 
 --contract: run the deferred reindex when a modify left arrays stale (sparse/unsorted); else no-op
 function mm:reindexIfStale()
-  if indexStale then rebuild(nil) end
+  if indexStale() then rebuild(nil) end
 end
 
 ----- Notes
@@ -986,6 +995,7 @@ local function assignNote(loc, t)
   if not note then return end
 
   local oldTok = tokenOf(note)
+  if t.ppq and t.ppq ~= note.ppq then needsSort = true end   -- ppq is the sort key; no other field is
 
   util.assign(note, t)
   if note.muted == false then note.muted = nil end
@@ -1028,6 +1038,7 @@ local function addNote(t)
   notes[noteCount] = note
   note.loc = noteCount
   indexPut(note)
+  needsSort = true   -- appended past the tail: dense, but no longer in ppq order
   local tok = tokenOf(note)
   if tokenIdx[tok] then noteCollision(note, 'add') end
   tokenIdx[tok] = note
@@ -1082,6 +1093,7 @@ local function assignCC(loc, t)
   end
 
   local oldTok = tokenOf(msg)
+  if t.ppq and t.ppq ~= msg.ppq then needsSort = true end   -- ppq is the sort key; no other field is
 
   util.assign(msg, t)
 
@@ -1117,6 +1129,7 @@ local function pushCC(t)
   ccs[ccCount] = msg
   msg.loc = ccCount
   indexPut(msg)
+  needsSort = true   -- appended past the tail: dense, but no longer in ppq order
   tokenIdx[tokenOf(msg)] = msg
   return msg
 end
@@ -1203,6 +1216,7 @@ function mm:delete(token)
   if not evt then return end
   markChan(evt.chan)
   indexDrop(evt)
+  needsCompact = true   -- the slot below becomes a hole; ppq order is undisturbed
 
   if evt.evType == 'note' then
     tokenIdx[token] = nil

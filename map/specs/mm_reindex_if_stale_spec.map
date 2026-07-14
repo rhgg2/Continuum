@@ -1,25 +1,31 @@
-@spec mm_reindex_if_stale_spec  src=tests/specs/mm_reindex_if_stale_spec.lua  loc=50  sha=07eac20  cases=2
+@spec mm_reindex_if_stale_spec  src=tests/specs/mm_reindex_if_stale_spec.lua  loc=117  sha=07eac20  cases=5
 @exercises midiManager (h.mm)
-@surface   mm:events, mm:reindexIfStale, mm:notes, mm:tokenOf, mm:modify, mm:delete
+@surface   mm:events, mm:notesRaw, mm:tokenOf, mm:reindexIfStale, mm:notes, mm:modify, mm:delete, mm:assign
 @harness   bareMM
 
 # Intent
-  Phase C pin - design/deferred-reindex.md item 5. mm:reindexIfStale() is the
-  scaffold Phase D flips onto: it runs a reindex only when a deferred modify
-  left the arrays stale. Nothing sets the stale flag yet, so today the call
-  verifiably reindexes nothing - loadIndex gained it at its head as a no-op.
+  Pins the reindex gate: an add/ppq move unsorts, a delete holes, an assign touching neither
+  skips the reindex outright -- and a missed flag fails silently. design/incremental-rebuild.md § 6.
 
 # Helpers
-  @fn tokPpqs(mm)  @ 8-12
+  @fn tokPpqs(mm)  @ 6-10
+  @fn noteField(mm, field)  @ 12-16
+  @fn pair(harness)  @ 18-23
+  @fn tokenAtPpq(mm, ppq)  @ 25-27
 
 # Cases
-  @case 'reindexIfStale() is a no-op on already-compact state'  [harness]  @ 16-30
-  @case 'reindexIfStale() stays inert after a compacting modify'  [harness]  @ 34-48
+  @case 'reindexIfStale() is a no-op on already-compact state'  [harness]  @ 31-45
+  @case 'reindexIfStale() stays inert after a compacting modify'  [harness]  @ 49-63
+  @case 'a value-only assign is index-clean: the verb re-keys, and nothing launders it'  [harness]  @ 67-86
+  @case 'a ppq move re-sorts the arrays; it leaves no hole to compact'  [harness]  @ 90-99
+  @case 'an add sorts into place; a delete compacts around the hole'  [harness]  @ 103-115
 
 # Uses (outbound edges)
-  @use call midiManager.events  @ 10
-  @use call midiManager.reindexIfStale  @ 28,46
-  @use call midiManager.notes  @ 42
-  @use call midiManager.tokenOf  @ 42
-  @use call midiManager.modify  @ 43
-  @use call midiManager.delete  @ 43
+  @use call midiManager.events  @ 8
+  @use call midiManager.notesRaw  @ 14,26
+  @use call midiManager.tokenOf  @ 26,57
+  @use call midiManager.reindexIfStale  @ 43,61
+  @use call midiManager.notes  @ 57
+  @use call midiManager.modify  @ 58,75,79,94,106,112
+  @use call midiManager.delete  @ 58,112
+  @use call midiManager.assign  @ 75,79,94
