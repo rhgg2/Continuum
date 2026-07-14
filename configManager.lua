@@ -367,19 +367,6 @@ local function ensureCache()
   if not cache.global then refreshCache() end
 end
 
---contract: overlays levels[] in order onto schema defaults; later (more-specific) tiers win
-local function mergedTable()
-  ensureCache()
-  local merged = {}
-  for k, v in pairs(defaults) do merged[k] = v end
-  for _, level in ipairs(levels) do
-    if cache[level] then
-      util.assign(merged, cache[level])
-    end
-  end
-  return merged
-end
-
 local function checkLevel(level)
   if not levelSet[level] then
     error('Unknown config level: ' .. tostring(level), 3)
@@ -445,6 +432,21 @@ function cm:pollUndo() ps:pollUndo() end
 
 ----- Reading
 
+--contract: resolves one key: most-specific tier holding it wins, else the schema default
+-- Walks the 5 tiers rather than building the whole merged table: a read touches 5 slots, not 164.
+-- see docs/configManager.md § Levels & merge
+local function resolveKey(key)
+  ensureCache()
+  for i = #levels, 1, -1 do
+    local tier = cache[levels[i]]
+    if tier then
+      local value = tier[key]
+      if value ~= nil then return value end
+    end
+  end
+  return defaults[key]
+end
+
 -- Per-subkey union of a single key's tables across defaults→tiers; most-specific tier wins.
 -- Non-table contributions are skipped, so the result is always a table.
 local function mergedKey(key)
@@ -465,12 +467,12 @@ end
 --contract: non-raising existence test against the schema; true iff key is declared
 function cm:isDeclared(key) return declared[key] == true end
 
---contract: returns deep-copy of merged value (defaults + all tiers); raises on unknown key
+--contract: deep-copy of resolved value (most-specific tier, else default); raises on unknown key
 --contract: opts.mergeTiers=true → per-subkey union across defaults+tiers; table-valued keys only
 function cm:get(key, opts)
   checkKey(key)
   if opts and opts.mergeTiers then return copy(mergedKey(key)) end
-  return copy(mergedTable()[key])
+  return copy(resolveKey(key))
 end
 
 --contract: reads single tier only (no merge, no defaults); key nil → whole-cache clone

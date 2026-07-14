@@ -73,11 +73,20 @@ global  → project → track → take → transient
 less specific ──────────────────→ more specific
 ```
 
-The merged view is built by starting from schema defaults, then layering
-each level's cache in order. A key's resolved value is whichever level's
-cache last set it (or the default if none did). `getLevel(key)` walks
-the same stack from most to least specific and returns the first level
-defining the key, or nil.
+A key resolves to the value held by the most-specific tier that has it,
+falling back to the schema default when no tier does. `cm:get` finds that
+by walking the stack downward from `transient` and returning the first
+hit — it does **not** materialise a merged table. Building one cost 164
+key copies plus five tier overlays to answer a question about one key,
+which made a scalar read ~13µs against the 0.13µs of a single-tier
+lookup; the walk touches five slots. Tiers can never hold `util.REMOVE`
+(`assign` turns it into a deletion before it reaches the cache), so
+"present in the tier" and "wins the merge" mean the same thing, and the
+walk is exactly what layering the tiers in order would have produced.
+
+`cm:get(key, { mergeTiers = true })` is the other resolution rule: rather
+than letting the most-specific tier's table win whole, it unions the
+tiers per subkey. Table-valued keys only.
 
 `take` and `track` levels require a take context (see below). Without
 one they contribute nothing to the merge.

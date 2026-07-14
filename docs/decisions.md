@@ -4,6 +4,19 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-15** — `cm:get` resolves one key by walking the tiers, instead of materialising the merged
+  table. Building it cost 164 default copies + 5 tier overlays to answer a question about one key: a
+  scalar read was 13µs against the 0.13µs of a single-tier `getAt`, and the cost had already leaked
+  into callers as hand-rolled memos (tm's `pbLimCents`, *"too costly to re-fetch per pb"*). The walk
+  is exactly equivalent because `util.assign` is a flat overlay and a tier can never hold `util.REMOVE`
+  (`assign` deletes before the cache sees it), so "present in the tier" and "wins the merge" coincide.
+  Chosen over memoising the merged table, which buys O(1) over O(5) — noise beside the `deepClone`
+  both still pay — at the price of a sixth cache and four invalidation points. Scalar reads 13µs →
+  0.28µs; table reads keep only their clone (`tempers` 46 → 34µs), which is the ownership invariant.
+  Now load-bearing: resolution tests **presence, not truth** (`value ~= nil`), or a tier holding
+  `false` loses to a truthy default and every boolean key becomes un-disableable — pinned in
+  `config_schema_spec`, which nothing else in the suite was holding down.
+
 - **2026-07-14** — mm writes metadata only where it changed. `load` persisted by rewriting the whole
   pool (`eventMeta:saveAll`) on the strength of an unstated fact: it *reads* metadata and joins it
   onto events, but never edits it — so every surviving uuid's stored bytes were already correct and

@@ -202,6 +202,24 @@ return {
     end,
   },
   {
+    -- Resolution tests presence, not truth: a tier holding `false` must beat a truthy
+    -- default and a truthy tier below it, or every boolean key becomes un-disableable.
+    name = 'a false at a tier shadows a truthy default and a truthy lesser tier',
+    run = function(harness)
+      local h = harness.mk{
+        config = {
+          global  = { polyAftertouch = true },
+          project = { polyAftertouch = false },
+        },
+      }
+      t.eq(h.cm:get('polyAftertouch'), false, 'project false beats global true')
+      t.eq(h.cm:get('laneStrip.visible'), true, 'untouched key still resolves to its default')
+
+      h.cm:set('take', 'laneStrip.visible', false)
+      t.eq(h.cm:get('laneStrip.visible'), false, 'take false beats the true default')
+    end,
+  },
+  {
     name = 'remove at a level falls back to the next less-specific level',
     run = function(harness)
       local h = harness.mk{

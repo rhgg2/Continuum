@@ -1,4 +1,4 @@
-@spec config_schema_spec  src=tests/specs/config_schema_spec.lua  loc=456  sha=3039308  cases=30
+@spec config_schema_spec  src=tests/specs/config_schema_spec.lua  loc=474  sha=3039308  cases=31
 @exercises configManager (h.cm)
 @surface   cm:get, cm:set, cm:setContext, cm:remove, cm:assign, cm:getAt, cm:clearTake, cm:setTrack, cm:subscribe, cm:seedGlobalFromDefault
 @harness   mk, r._state.takeExt, r._state.trackExt
@@ -24,31 +24,32 @@
   @case 'cm:get of a default table returns a fresh table each call'  [harness]  @ 166-173
   @case 'cm:set deep-copies the incoming value — caller mutation after set does not leak'  [harness]  @ 176-186
   @case 'more specific level overrides less specific'  [harness]  @ 193-202
-  @case 'remove at a level falls back to the next less-specific level'  [harness]  @ 205-217
-  @case 'transient is the most-specific level (overrides take)'  [harness]  @ 224-235
-  @case 'transient writes do not persist across cm reconstruction'  [harness]  @ 238-251
-  @case 'clearTake empties take cache; lower tiers and track tier survive'  [harness]  @ 257-272
-  @case 'setTrack rebinds the track tier to a different track\'s P_EXT'  [harness]  @ 275-288
-  @case 'setTrack is independent of take — take cache stays put'  [harness]  @ 291-298
-  @case 'clearTake and setTrack both fire configChanged (keyless)'  [harness]  @ 301-313
-  @case 'mergeTiers unions tier tables per sub-key'  [harness]  @ 330-349
-  @case 'mergeTiers returns a fresh deep copy'  [harness]  @ 352-366
-  @case 'mergeTiers with no tier contributions returns the schema default'  [harness]  @ 369-379
-  @case 'mergeTiers default + tier writes union per sub-key'  [harness]  @ 382-390
-  @case 'mergeTiers: tier write on a default-named key wins'  [harness]  @ 393-403
-  @case 'cm:seedGlobalFromDefault seeds the global library from the catalogue when empty'  [harness]  @ 409-417
-  @case 'cm:seedGlobalFromDefault is a no-op once the global library exists'  [harness]  @ 420-427
-  @case 'cm:seedGlobalFromDefault seeds tempers from the EDO catalogue'  [harness]  @ 430-437
-  @case 'cm fires changes with their level on the broadcast'  [harness]  @ 441-454
+  @case 'a false at a tier shadows a truthy default and a truthy lesser tier'  [harness]  @ 207-220
+  @case 'remove at a level falls back to the next less-specific level'  [harness]  @ 223-235
+  @case 'transient is the most-specific level (overrides take)'  [harness]  @ 242-253
+  @case 'transient writes do not persist across cm reconstruction'  [harness]  @ 256-269
+  @case 'clearTake empties take cache; lower tiers and track tier survive'  [harness]  @ 275-290
+  @case 'setTrack rebinds the track tier to a different track\'s P_EXT'  [harness]  @ 293-306
+  @case 'setTrack is independent of take — take cache stays put'  [harness]  @ 309-316
+  @case 'clearTake and setTrack both fire configChanged (keyless)'  [harness]  @ 319-331
+  @case 'mergeTiers unions tier tables per sub-key'  [harness]  @ 348-367
+  @case 'mergeTiers returns a fresh deep copy'  [harness]  @ 370-384
+  @case 'mergeTiers with no tier contributions returns the schema default'  [harness]  @ 387-397
+  @case 'mergeTiers default + tier writes union per sub-key'  [harness]  @ 400-408
+  @case 'mergeTiers: tier write on a default-named key wins'  [harness]  @ 411-421
+  @case 'cm:seedGlobalFromDefault seeds the global library from the catalogue when empty'  [harness]  @ 427-435
+  @case 'cm:seedGlobalFromDefault is a no-op once the global library exists'  [harness]  @ 438-445
+  @case 'cm:seedGlobalFromDefault seeds tempers from the EDO catalogue'  [harness]  @ 448-455
+  @case 'cm fires changes with their level on the broadcast'  [harness]  @ 459-472
 
 # Uses (outbound edges)
-  @use call configManager.get  @ 17,64,99,112,138,139,157,160,169,171,183,201,214,216,232,234,244,249,266,268,339,345,360,363,376,387,398
-  @use call configManager.set  @ 26,38,142,180,243,446
-  @use call configManager.setContext  @ 34,137,248
-  @use call configManager.remove  @ 51,110,213,215,233,447
-  @use call configManager.assign  @ 60,448
-  @use call configManager.getAt  @ 71,81,250,269,270,271,285,287,297,412,414,424,434
-  @use call configManager.clearTake  @ 267,306
-  @use call configManager.setTrack  @ 286,296,307
-  @use call configManager.subscribe  @ 305,445
-  @use call configManager.seedGlobalFromDefault  @ 413,423,433
+  @use call configManager.get  @ 17,64,99,112,138,139,157,160,169,171,183,201,215,216,219,232,234,250,252,262,267,284,286,357,363,378,381,394,405,416
+  @use call configManager.set  @ 26,38,142,180,218,261,464
+  @use call configManager.setContext  @ 34,137,266
+  @use call configManager.remove  @ 51,110,231,233,251,465
+  @use call configManager.assign  @ 60,466
+  @use call configManager.getAt  @ 71,81,268,287,288,289,303,305,315,430,432,442,452
+  @use call configManager.clearTake  @ 285,324
+  @use call configManager.setTrack  @ 304,314,325
+  @use call configManager.subscribe  @ 323,463
+  @use call configManager.seedGlobalFromDefault  @ 431,441,451
