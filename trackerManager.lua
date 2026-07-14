@@ -563,7 +563,7 @@ end
 
 ---------- UPDATE MANAGER
 
-local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked, flush, reload, idxReconcile, clearStaging do
+local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked, flush, reload, idxReconcile, withDeferredSort, clearStaging do
 
   ----- State
 
@@ -616,6 +616,16 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     local tbl = chansListFor(evt, chan or evt.chan, lane or evt.lane)
     if not tbl then return end
     for i, item in ipairs(tbl) do if item == evt then table.remove(tbl, i); return end end
+  end
+
+  -- The batching door: chans is um's, so um owns the deferral. Inserts inside fn flag their list;
+  -- each is sorted once here. A caller reaching for the flag directly gets a nil it cannot see.
+  function withDeferredSort(fn)
+    local prev = deferredSort
+    deferredSort = {}
+    fn()
+    for tbl in pairs(deferredSort) do sortByPPQ(tbl) end
+    deferredSort = prev
   end
 
   -- Construct the um-frame index entry for one mm clone and file it into byToken/byUuid.
@@ -1485,6 +1495,7 @@ local function mmBatch()
     commit  = function()
       if #dels + #assigns + #adds + #lazyAdds == 0 then return end
       local touched = {}
+      perf.start('batchModify')
       mm:modify(function()
         for _, e in ipairs(dels) do mm:delete(e.token); touched[e.token] = true end
         for _, a in ipairs(assigns) do
@@ -1499,11 +1510,14 @@ local function mmBatch()
         for _, s  in ipairs(adds)     do local t = mm:add(s);    if t then touched[t] = true end end
         for _, fn in ipairs(lazyAdds) do local t = mm:add(fn()); if t then touched[t] = true end end
       end)
-      local prevDeferred = deferredSort
-      deferredSort = {}
-      for tok in pairs(touched) do idxReconcile(tok) end
-      for tbl in pairs(deferredSort) do sortByPPQ(tbl) end
-      deferredSort = prevDeferred
+      perf.stop('batchModify')
+      perf.start('batchIdx')
+      local n = 0
+      withDeferredSort(function()
+        for tok in pairs(touched) do idxReconcile(tok); n = n + 1 end
+      end)
+      perf.count('reconciled', n)
+      perf.stop('batchIdx')
     end,
   }
 end
@@ -1697,11 +1711,19 @@ end
 
 ----- Rebuild externals
 
--- Lane packing for one externals pass: the overlap threshold and each event's intent onset are
--- invariant across the pass's O(notes × lanes × column) probe walk, so both lift out of it.
-local function externalLanePacker()
+-- Lane packing for one externals pass. The overlap threshold and each event's intent onset are
+-- invariant across the probe walk; a per-column head retires what the sweep has passed. see docs/trackerManager.md § Rebuild: externals
+local function externalLanePacker(external)
   local lenient = cm:get('overlapOffset') * mm:resolution()
   local onsetI  = {}   -- [evt] = intent-frame onset; an event's never moves while the pass runs
+  local head    = {}   -- [col] = first live index; everything below it ends too early to ever overlap
+
+  -- Probes arrive in raw-ppq order but test in the intent frame, so the retirement floor trails the
+  -- sweep by the pass's largest delay: monotone without reordering the pack. Diverged notes carry one.
+  local maxDelayPpq = 0
+  for _, note in ipairs(external) do
+    maxDelayPpq = math.max(maxDelayPpq, delayToPPQ(note.delay or 0))
+  end
 
   local function onsetOf(evt)
     local ppqI = onsetI[evt]
@@ -1716,10 +1738,19 @@ local function externalLanePacker()
   --invariant: overlap threshold: same-pitch 0, cross-pitch lenient; dominated-by≥2 refuses
   --contract: consulted only for unstamped raw notes; stamped notes never reach it
   local function columnAccepts(col, note)
+    local events  = col.events
+    local floorPpq = note.ppq - maxDelayPpq
+    local live     = head[col] or 1
+    while live <= #events and events[live].endppq <= floorPpq do live = live + 1 end
+    head[col] = live
+
     local noteppqI    = onsetOf(note)
     local noteEndppqI = note.endppq
     local dominated   = 0
-    for _, evt in ipairs(col.events) do
+    -- Backwards: a refusal and the dominated tally are both order-free, and a conflicting note is
+    -- always a recent one -- so the conflict surfaces at once instead of a column-walk away.
+    for i = #events, live, -1 do
+      local evt     = events[i]
       local evtppqI = onsetOf(evt)
       if noteppqI == evtppqI then return false end
       if noteppqI < evt.endppq and evtppqI < noteEndppqI then
@@ -1758,7 +1789,7 @@ local function rebuildExternals(external)
 
   table.sort(external, function(a, b) return a.ppq < b.ppq end)
   local trackerMode = cm:get('trackerMode')
-  local packLane    = externalLanePacker()
+  local packLane    = externalLanePacker(external)
   local extWrites   = mmBatch()
   for _, note in ipairs(external) do
     local delay     = note.delay or 0

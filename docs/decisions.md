@@ -4,6 +4,13 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-14** — `chans` belongs to the update manager, so um owns its sort deferral:
+  `withDeferredSort(fn)` is the only door. `mmBatch` had been setting `deferredSort` from
+  outside the um do-block — a *global*, invisible to the block-local `chansInsert` reads —
+  so the deferral never once fired and every insert re-sorted the whole lane (1.7s of a
+  foreign Hammerklavier bind). A private local reached from outside its block fails silently,
+  as a nil: cross-boundary state needs a function, not a shared name.
+
 - **2026-07-14** — mm's reindex is gated on `needsSort` / `needsCompact`, which describe
   the *arrays* (an add or a ppq move unsorts; a delete holes), not the write — so an assign
   touching neither skips `rebuild` outright. Chosen over the filed hole-vs-order split, which
