@@ -4,6 +4,15 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-14** — tm's rebuild pipeline nests in `mm:batch(fn)`, a depth-holder, not an outer
+  `mm:modify`. A modify fires `reload` on every unwind whether or not its fn wrote — so a modify
+  wrapper announces a mutation that never happened, on every rebuild and every keystroke edit
+  (four `mm_signal_flow_spec` cases catch it); gating that fire on `dirty` is out, since
+  metadata-only gestures set no `dirty` and still need the reload to drive a rebuild. `batch` takes
+  no lock, writes nothing, fires no reload, and propagates errors: mm's signal stream is unchanged,
+  and the nine pipeline commits now share one reindex and one `flushTake` on every path, not just
+  flush. Foreign bind 539ms → 454ms; take reprojections 3 → 2.
+
 - **2026-07-14** — `chans` belongs to the update manager, so um owns its sort deferral:
   `withDeferredSort(fn)` is the only door. `mmBatch` had been setting `deferredSort` from
   outside the um do-block — a *global*, invisible to the block-local `chansInsert` reads —

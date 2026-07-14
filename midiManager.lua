@@ -916,34 +916,54 @@ local function checkLock()
   return true
 end
 
+local function enterNest()
+  modifyDepth = modifyDepth + 1
+  if modifyDepth == 1 then metaDirty, metaDeleted, pendingCollisions, dirtyChans = {}, {}, {}, {} end   -- reset once; nested modifies accumulate
+end
+
+-- The outermost unwind, and the whole point of the nest: one reindex, one metadata round-trip,
+-- one take reprojection, however many gestures ran inside.
+local function leaveNest()
+  modifyDepth = modifyDepth - 1
+  if modifyDepth > 0 then return end
+  local resolved = resolveCollisions()
+  if indexStale() then rebuild(nil) end         -- pay one reindex, after every nested pipeline write
+  --emits: collisionsResolved -- { events = [collisionEvent, ...] }; repaired a missed collision
+  if resolved then fire('collisionsResolved', { events = resolved }) end
+  perf.start('meta'); flushMetadata(); perf.stop('meta')
+  if flushPending then
+    flushPending = false
+    flushTake()
+    --emits: flushed -- nil; flushTake reprojected the take (self-write, not an external mutation)
+    fire('flushed')
+  end
+end
+
 -- Re-entrant: reload reseats absorbers via a nested modify. Reindex and flush
 -- are both deferred to the outermost unwind. See docs/midiManager.md § Mutation contract.
 function mm:modify(fn)
   if not liveTake() then return end
-  modifyDepth = modifyDepth + 1
+  enterNest()
   lock = true
   dirty = false
-  if modifyDepth == 1 then metaDirty, metaDeleted, pendingCollisions, dirtyChans = {}, {}, {}, {} end   -- reset once; nested modifies accumulate
   perf.start('verbs'); local ok, err = pcall(fn); perf.stop('verbs')
   if dirty then flushPending = true end         -- clean (metadata-only) gestures touch no structure
   lock = false
   --emits: reload -- { wholesale=false, chans=set }; chans nil only when wholesale
   perf.start('reload'); fire('reload', { wholesale = false, chans = dirtyChans }); perf.stop('reload')
-  modifyDepth = modifyDepth - 1
-  if modifyDepth == 0 then
-    local resolved = resolveCollisions()
-    if indexStale() then rebuild(nil) end       -- pay one reindex, after every nested pipeline write
-    --emits: collisionsResolved -- { events = [collisionEvent, ...] }; repaired a missed collision
-    if resolved then fire('collisionsResolved', { events = resolved }) end
-    perf.start('meta'); flushMetadata(); perf.stop('meta')
-    if flushPending then
-      flushPending = false
-      flushTake()
-      --emits: flushed -- nil; flushTake reprojected the take (self-write, not an external mutation)
-      fire('flushed')
-    end
-  end
+  leaveNest()
   if not ok then print('Error in modify: ' .. tostring(err)) end
+end
+
+--contract: holds the nest open across the caller's modifies; takes no lock, writes nothing
+--contract: not a gesture -- fires no reload, and an error propagates rather than printing
+-- A caller staging through many separate modifies (tm's rebuild pipeline) would otherwise reindex and
+-- reproject the take once per stage. see design/incremental-rebuild.md § 5
+function mm:batch(fn)
+  enterNest()
+  local ok, err = pcall(fn)
+  leaveNest()
+  if not ok then error(err, 0) end
 end
 
 --contract: run the deferred reindex when a modify left arrays stale (sparse/unsorted); else no-op

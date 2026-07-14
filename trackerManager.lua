@@ -3055,33 +3055,9 @@ local rebuilding = false
 -- incremental index; full-reloads when set, else keeps it. see docs § Incremental index reconciliation
 local mmReloaded = false
 
---contract: reentrancy-guarded; rebuilds channels[] from mm, reloads um cache, fires 'rebuild'
---contract: takeChanged forwarded to subscribers via the captured pendingTakeSwap
---contract: dead take (mm:take() nil) is a no-op; tv retains its last frame
--- see docs/trackerManager.md § Rebuild
-function tm:rebuild(takeChanged)
-  if rebuilding then return end
-  if not mm:take() then return end
-  rebuilding = true
-  takeChanged = takeChanged or false
-  -- Capture before the pipeline's nested mm:modify calls re-fire 'reload' and clear it.
-  local didReload = mmReloaded; mmReloaded = false
-  if didReload or takeChanged then dirtyChan() end   -- wholesale re-read / take swap: prevWindows (dataStore) carries the recognition baseline
-  pbLimCents = nil   -- coherence point: refresh cached pbRange for cents<->raw conversions
-
-  clearSwing()   -- rebuild is the (cm, mm) coherence point
-  -- Carry each clean channel's whole frame forward (B1): re-deriving it is waste, and every
-  -- gated stage below skips clean chans so the carried columns stand. see design/dirty-channels.md § Phase B
-  local prevChannels = channels
-  channels = {}
-  for i = 1, 16 do
-    if dirtyChans[i] then
-      channels[i] = { chan = i, columns = { notes = {}, ccs = {} } }
-    else
-      channels[i] = prevChannels[i]
-    end
-  end
-
+--contract: the staging pipeline; runs inside tm:rebuild's mm:modify, never called bare
+--invariant: nine stages stage mm ops; all nest, so reindex/reprojection defer to one unwind
+local function rebuildPipeline(didReload)
   -- Per-channel fx state: noteExisting/noteLive (fx notes, derived vs post-expansion), ccExisting
   -- (cc seats, recognized by window), pbChains + pbBase (per-chain pb curves + the authored base they fold onto).
   local fx = { noteExisting = {}, noteLive = {}, ccExisting = {}, pbChains = {}, pbBase = {} }
@@ -3167,6 +3143,38 @@ function tm:rebuild(takeChanged)
   perf.start('derivedInputs')
   derivedInputs = util.deepClone(derivationInputs())   -- after the pipeline's own ds writes have settled
   perf.stop('derivedInputs')
+end
+
+--contract: reentrancy-guarded; rebuilds channels[] from mm, reloads um cache, fires 'rebuild'
+--contract: takeChanged forwarded to subscribers via the captured pendingTakeSwap
+--contract: dead take (mm:take() nil) is a no-op; tv retains its last frame
+-- see docs/trackerManager.md § Rebuild
+function tm:rebuild(takeChanged)
+  if rebuilding then return end
+  if not mm:take() then return end
+  rebuilding = true
+  takeChanged = takeChanged or false
+  -- Capture before the pipeline's nested mm:modify calls re-fire 'reload' and clear it.
+  local didReload = mmReloaded; mmReloaded = false
+  if didReload or takeChanged then dirtyChan() end   -- wholesale re-read / take swap: prevWindows (dataStore) carries the recognition baseline
+  pbLimCents = nil   -- coherence point: refresh cached pbRange for cents<->raw conversions
+
+  clearSwing()   -- rebuild is the (cm, mm) coherence point
+  -- Carry each clean channel's whole frame forward (B1): re-deriving it is waste, and every
+  -- gated stage below skips clean chans so the carried columns stand. see design/dirty-channels.md § Phase B
+  local prevChannels = channels
+  channels = {}
+  for i = 1, 16 do
+    if dirtyChans[i] then
+      channels[i] = { chan = i, columns = { notes = {}, ccs = {} } }
+    else
+      channels[i] = prevChannels[i]
+    end
+  end
+
+  -- One nest for all nine staging stages, so the reindex and the take reprojection land once each
+  -- rather than once per stage. rebuilding must outlive it: each stage's commit re-enters via 'reload'.
+  mm:batch(function() rebuildPipeline(didReload) end)
   rebuilding = false
 
   --emits: rebuild -- takeChanged:boolean

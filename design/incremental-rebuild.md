@@ -195,7 +195,7 @@ but cannot be gated safely today — fx-activeness isn't resolved until the
 later fx stage, so gating the cc-loop clone on pb-dirt alone would silently
 miss fx-active channels and delete every absorber on them.
 
-### 5. `deferred-reindex` follow-up — wrap load/config rebuilds in an outer `mm:modify` — audited 2026-07-14, **open**
+### 5. `deferred-reindex` follow-up — nest the whole pipeline in one mm unwind — landed 2026-07-14, **closed**
 
 Only the *flush* path nests the pipeline's commits inside an outer modify. A rebuild fired by
 `configChanged` or `load` still runs each pipeline commit as its own top-level modify — its own
@@ -227,21 +227,43 @@ moment you get a second full rebuild *and* the pipeline's own writes read back a
 the exact I8 violation `dirty-channels` exists to prevent, surfacing as "everything re-derives on
 the next edit".
 
-One real cost: `mm:modify` `pcall`s its function and *prints* the error rather than propagating,
-so wrapping the pipeline turns a derivation exception into a print over a half-derived model that
-mm then flushes. Today such an error propagates.
+**Outcome, on the Hammerklavier bind (8437 notes, 1685 ccs): 539ms → 454ms, and take
+reprojections 3 → 2.** The audit above over-priced it. Only two of the three top-level modifies
+were flushing, not five-plus, and the reindex they each paid is the cheap half: the expensive
+shared cost is the metadata round-trip (`meta` 106ms, nearly all `buckets`), which is one keyset
+write of every dirty entry *however many unwinds it lands under* — collapsing the unwinds doesn't
+shrink it. The two survivors are structural, not accidental: `mm:load`'s own normalisation flush
+(dedup + collision repair, before tm ever sees the take) and the pipeline's single one. That is
+the old mm-write goal — *rewrite the take at most once per rebuild* — finally met on every path.
+
+**It is not an outer `mm:modify`, and it can't be.** `mm:modify` fires `reload` on every unwind
+whether or not its `fn` wrote anything, so a modify wrapper announces a mutation that never
+happened — on every rebuild, including converged ones that stage nothing, and including every
+keystroke edit (where it nests at depth 2). Four `mm_signal_flow_spec` cases catch it. Gating the
+fire on `dirty` is not available either: metadata-only gestures set no `dirty` (`midiManager.lua`,
+the `flushPending` line) and still need the `reload` to drive tm's rebuild.
+
+What tm needs from mm is not a gesture but a **nest**. `mm:batch(fn)` holds `modifyDepth` open
+across the caller's own modifies so their unwinds stay nested, then runs the outermost unwind
+once; `enterNest` / `leaveNest` factor out of `mm:modify` so both doors share one definition of
+it. It takes no lock (a bare write inside it still trips the assert), writes nothing, and fires no
+reload — mm's signal stream is unchanged, which is why the four specs pass untouched. It also
+*propagates* errors rather than `pcall`-and-print, so the cost this item used to file — "wrapping
+turns a derivation exception into a print over a half-derived model" — never materialised.
+
+The pipeline is now `rebuildPipeline(didReload)`, a named function rather than 85 lines indented
+into a closure, and `tm:rebuild` reads as guard → carry the clean channel frames → one nest →
+drop the guard → fire.
 
 **Not a blocker, but it corrects the record:** `rebuildTails`' comment at `trackerManager.lua:2573`
 ("clamps reindex colliding same-pitch onsets separately") describes a mechanism that isn't there.
 The separation is done by `mm:assign`'s in-verb `tokenIdx` re-key plus `mmBatch`'s `idxReconcile`,
 both depth-independent — as they must be, since the flush path already nests that very commit.
 
-**Unmeasured.** It needs a rebuild that genuinely re-derives — a foreign-take bind, or a config
-change that moves derivation output (temper / pbRange). Note gap 3's take-hash gate means a
-*converged* rebind now stages zero commits and will show nothing: reach for a foreign take. Count
-top-level modifies (wrap `mm.modify`, count `depth == 1`) and `flushed` fires. If a bind really is
-reprojecting six times, this stops being a follow-up and becomes the next slice; if the stages
-mostly stage nothing, it is four lines for nothing and should be dropped.
+The measurement protocol, for reuse: gap 3's take-hash gate means a *converged* rebind stages zero
+commits and shows nothing at all — it needs a genuinely re-deriving rebuild, i.e. a foreign-take
+bind. Arm `perf`, count `flushed` fires, time `mm:load` (the bind runs inside it: load fires
+`reload`, whose subscriber is `tm:rebuild`).
 
 ### 6. `deferred-reindex` follow-up — split hole-dirt from order-dirt — landed 2026-07-14, **closed**
 
