@@ -263,12 +263,35 @@ than avoidable.
   buy); no-op is the forced-full ceiling the parity spec compares
   against. The draft's higher numbers (reload 92.6, tails 33.5) were a
   cold/GC-inflated run.
-- **Macro-heavy: build it.** The predecessor's corpus was fx-free (its
-  gap 8 verified the take had zero fx notes), so the cost of
-  regenerating non-intersecting producers is still unmeasured. ~3000
-  notes, most channels hosting generators, one retrig-dense (the
-  expansion-volume worst case). It gates phase 5's continuous-side
-  decision, not the project.
+- **Macro-heavy (Glasswork): measured, go.** 1268 model notes over 16
+  channels, 32 bars, 53EDO + classic58 swing. Exercises all 9 generator
+  kinds, an fx chain (retrig→velPattern), a mirror-group canon, and
+  cc11 / channel-AT / poly-AT — ~16.9k raw events (incl. 4759 sidecars).
+  Builder at `tests/fixtures/glasswork.lua` (authors events given tm/gm;
+  the caller presets temper/swing/length). Driven live off the bridge,
+  not blob-reproducible — tuning/swing/groups/fx live in config, not the
+  MIDI. Two baselines re-measured warm 2026-07-15:
+
+  | span (ms, warm) | no-op (`rebuild(true)`) | edit (one note) |
+  |---|---|---|
+  | total | 78 | 25 flush |
+  | `fx` | 35.7 | 0.0 |
+  | `pbs` | 20.8 (`seats` 11.1×16) | 0.1 |
+  | `ccs` | 9.0 | 0.1 |
+  | `regionPark` | 3.0 | 1.4 |
+  | `tails` | 3.5 | 0.1 |
+  | `internals` | 2.5 | 0.1 |
+  | `serialise`/`setEvts`/`sidecars` | — | 9.1/7.9/1.2 |
+
+  The complement to the dense take: where that one is internals/tails-
+  bound, the macro no-op is **producer-bound** — `fx` + `pbs` + `ccs`
+  ≈ 65 of 78ms, phase 5's target, and the pb/cc seats (30ms) are *not*
+  negligible here (§ phase 5's continuous-side decision). The edit path
+  is **write-bound**: the re-derive subtree is ~3ms (one channel dirty),
+  while `serialise`+`setEvts` ≈ 17ms rewrite the whole 16.9k-event blob
+  every flush — the write-side successor, not what phases 3–5 narrow.
+  Import is skipped: destructive to a non-reproducible fixture, and the
+  bind path is already the dense take's import column.
 
 ### Phase 1 — the interval set, pure
 
@@ -413,8 +436,10 @@ skipped producer's cc seats (`fx.ccExisting`, window-recognised) must
 carry rather than reconcile away, and its pb chain feeds
 `rebuildPbs`'s channel-wide fold — so either the continuous stages of a
 skipped chain still run (gating only note expansion), or the fold
-learns to keep window-keyed emitted output. The macro fixture decides;
-note expansion first.
+learns to keep window-keyed emitted output. The macro fixture puts this
+at `pbs` 20.8 + `ccs` 9.0 ≈ 30ms of the 78ms no-op (§ phase 0) — large
+enough that leaving it wholesale caps the phase-5 win; note expansion
+first, then the continuous side decides on the measured residual.
 
 Same phase: the all-16 region/parking dirt sources narrow to their own
 spans — a region edit knows its chan and extent
