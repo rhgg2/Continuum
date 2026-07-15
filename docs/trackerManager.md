@@ -342,7 +342,10 @@ runs it, with a pointer to its detail where one exists.
   expansion read PAs inline, and after externals so foreign-MIDI PAs find
   their host. A parked PA is gone from `mm`, so it is re-projected from
   `channels[chan].parkedPA` into its parked host's lane — visible
-  off-take, riding the note column as an on-take PA would.
+  off-take, riding the note column as an on-take PA would. Returns the
+  per-chan touched set — the columns whose ppqL order it broke — so
+  `computeFxWindows`' second sort gates on it instead of resorting every
+  dirty chan.
 - **Fx expansion** (`rebuildFx`). First the read-only **window** pass:
   walk each channel's same-lane successor map in the logical frame, so
   each fx host's window is its voice extent (the next same-lane onset's

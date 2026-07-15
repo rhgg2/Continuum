@@ -2184,8 +2184,9 @@ local function findNoteColumnForPitch(channel, pitch, ppq_pos)
 end
 
 -- Late PA projection: mixes into note columns once lanes are settled, so the view (and rebuildFx's
--- channelStreams) read it inline. Must follow column layout, so it can't ride the CC walk.
+-- channelStreams) read it inline. see docs/trackerManager.md § PA dispatch
 local function rebuildPA()
+  local touched = {}
   for chan = 1, 16 do
     if dirtyChans[chan] then   -- clean: PA already sits in the carried note column
       for _, cc in mm:ccsRaw(chan) do
@@ -2193,6 +2194,7 @@ local function rebuildPA()
           local noteCol, lane = findNoteColumnForPitch(channels[chan], cc.pitch, cc.ppq)
           if noteCol then
             util.add(noteCol.events, projectCC(cc, mm:tokenOf(cc), { lane = lane }))
+            touched[chan] = true
           end
         end
       end
@@ -2208,21 +2210,23 @@ local function rebuildPA()
         local noteCol, lane = findNoteColumnForPitch(channels[chan], cell.pitch, ppq)
         if noteCol then
           util.add(noteCol.events, projectCC(cell, nil, { lane = lane, ppq = ppq }))
+          touched[chan] = true
         end
       end
     end
   end
+  return touched
 end
 
 ----- Rebuild Fx
 
 -- fx host voice extents: authored end, take end, or strict next same-lane onset -- soonest wins. A pure,
--- G4-stable scan of the settled note columns; all 16 chans so parking + recognition see the whole set. see design/archive/note-macros.md § host contract
-local function computeFxWindows()
+-- G4-stable scan of all 16 chans (parking + recognition see the whole set), sort gated by unsortedChans. see design/archive/note-macros.md § host contract, design/logical-column-order.md
+local function computeFxWindows(unsortedChans)
   local fxWindow = {}
   local takeLen = tm:length()
   for chan = 1, 16 do
-    if dirtyChans[chan] then
+    if unsortedChans[chan] then
       for _, col in ipairs(channels[chan].columns.notes) do sortByPPQL(col.events) end
     end
     local takeLenL = tm:toLogical(chan, takeLen)
@@ -3086,7 +3090,7 @@ local function rebuildPipeline(didReload)
 
   -- Park window set: fx-regions plus every on-take note host as a degenerate region (note-is-a-region),
   -- from the settled columns. The producer re-scans post-unpark below. see design/note-macros-v2.md § Offline continuous realisation
-  perf.start('fxWindows'); local hostWindows = computeFxWindows(); perf.stop('fxWindows')
+  perf.start('fxWindows'); local hostWindows = computeFxWindows(dirtyChans); perf.stop('fxWindows')
   perf.start('parkRegions')
   local parkRegions = {}
   for _, r in ipairs(ds:get('fxRegions') or {}) do util.add(parkRegions, r) end
@@ -3114,11 +3118,11 @@ local function rebuildPipeline(didReload)
   perf.stop('parkRegions')
 
   perf.start('regionPark'); local restoredNotes = rebuildRegionPark(fx, deferred, currentWindows); perf.stop('regionPark')  -- park covered, carry/restore prior
-  perf.start('pa'); rebuildPA(); perf.stop('pa')  -- project PAs into settled note columns
+  perf.start('pa'); local paTouched = rebuildPA(); perf.stop('pa')  -- project PAs into settled note columns
 
   -- Re-scan windows post park/unpark/PA: the producer reads the final columns, including a host an unpark
   -- just restored (a replace host that lost its note-producing kind falls back to on-take augment).
-  perf.start('fxWindows'); local fxWindow = computeFxWindows(); perf.stop('fxWindows')
+  perf.start('fxWindows'); local fxWindow = computeFxWindows(paTouched); perf.stop('fxWindows')
   perf.start('fx'); rebuildFx(fx, deferred, fxWindow, currentWindows); perf.stop('fx')  -- fx expansion: derived notes/CCs
 
   perf.start('tails'); rebuildTails(fx, deferred); perf.stop('tails')  -- unified tail/onset walk + atomic note commit

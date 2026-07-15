@@ -26,7 +26,14 @@ Partly landed.
   real column mutation, but `rebuildFx`'s re-sort is provably redundant — `computeFxWindows`
   runs immediately upstream and nothing between reorders. Removed it: `fx` 5.9 → 2.2ms live
   (the 3.7ms delta is one full column sort; the 2.2ms floor is the host walk + reconcile,
-  which run with zero hosts). The other three sorts are load-bearing and stay.
+  which run with zero hosts). Then a second cut, same principle: `computeFxWindows`' *second*
+  sort (post-park/PA) is needed only for columns `rebuildPA` appended into — the sole mutation
+  between the two calls that unsorts a column (park removes in place; restore re-sorts its lane
+  inline). `rebuildPA` now returns its touched-channel set and `computeFxWindows` gates sort #2
+  on it, so a PA-free rebuild skips it: `fxWindows` 9.7 → 4.8ms live. That leaves two sorts:
+  `computeFxWindows`' first (all dirty, fresh from internals) and `projectLogical`'s (for tv) —
+  both load-bearing. Dropping the first needs the find/clip split + `rebuildFx` re-gate (the
+  audited full plan); banked, not built.
 
 ## Problem
 
