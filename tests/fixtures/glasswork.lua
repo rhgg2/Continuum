@@ -104,18 +104,21 @@ local function build(tm, gm)
   local phrase6 = { 159,176, 168,159, 145,159, 154,168 }   -- vibrato lead arch
   local phrase7 = { 137,123, 123,106, 128,113, 115,101 }   -- slide counter-line
   local phrase2 = { 176,181, 168,176, 159,168, 168,159 }   -- trill line
-  local function layer(chan, startBar, endBar, phrase, vel, fx)
+  -- delay (milli-QN) nudges only the raw note-on: the lead sits behind the
+  -- beat, the counter-line leans ahead -- non-uniform raw!=logical on top
+  -- of the global swing. Too small to cross an onset (design close q5).
+  local function layer(chan, startBar, endBar, phrase, vel, fx, delay)
     for b = startBar, endBar do
       local o = (b - startBar) % 4
       for half = 0, 1 do
         local pit, det = e53(C2, phrase[o*2 + half + 1])
-        note(tm, { evType='note', chan=chan, pitch=pit, detune=det, vel=vel,
+        note(tm, { evType='note', chan=chan, pitch=pit, detune=det, vel=vel, delay=delay,
                    ppq=b*BAR + half*H, endppq=b*BAR + half*H + H, lane=1, fx=fx })
       end
     end
   end
-  layer(6, 16, 31, phrase6, 88, vibrato)
-  layer(7, 16, 31, phrase7, 72, slide)
+  layer(6, 16, 31, phrase6, 88, vibrato, 40)   -- laid-back lead
+  layer(7, 16, 31, phrase7, 72, slide, -25)    -- counter-line leans ahead
   layer(2, 16, 27, phrase2, 80, trill)
 
   ----- Expression: cc11 swell + channel-AT (ch13), poly-AT chords (ch14)

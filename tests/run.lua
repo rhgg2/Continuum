@@ -129,6 +129,7 @@ local specs = {
   'timing_period_spec',
   'timing_atoms_spec',
   'timing_composite_spec',
+  'intervals_spec',
   'vm_grid_spec',
   'vm_editing_spec',
   'vm_chord_entry_spec',
