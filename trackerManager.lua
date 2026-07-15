@@ -43,6 +43,7 @@ local util    = require 'util'
 local timing  = require 'timing'
 local tuning  = require 'tuning'
 local voicing = require 'voicing'
+local intervals  = require 'intervals'
 local generators = require 'generators'
 local perf       = require 'perf'
 
@@ -569,13 +570,15 @@ end
 
 ---------- UPDATE MANAGER
 
-local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked, flush, reload, idxReconcile, withDeferredSort, clearStaging do
+local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked, flush, reload, idxReconcile, withDeferredSort, clearStaging, absorbReloadDirt do
 
   ----- State
 
   local adds = {}
   local assigns = {}
   local deletes = {}
+  --shape: seeds[chan] = list of intervals.seed objs (pre-merge); folded into dirtyChans at reload. see design § phase 2
+  local seeds = {}
   local parkedEdits = {}
   local parkedUuidSeq = 0
   local chans = {}
@@ -706,11 +709,19 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     return false
   end
 
+  -- Every low-level verb drops a point seed at the event's logical position; flush folds them
+  -- into interval-valued dirt (§ phase 2). A delete seed's dying uuid is safe: see docs/trackerManager.md § Interval seeds.
+  local function seedAt(chan, ppqL, uuid)
+    util.bucket(seeds, chan, intervals.seed(ppqL, ppqL, uuid, uuid))
+  end
+  local function seedEvent(evt) seedAt(evt.chan, evt.ppqL or evt.ppq, evt.uuid) end
+
   --contract: only lane==1 notes index into chans[chan].notes
   --contract: higher-lane notes get queued for mm but don't feed detune/realisation reads
   --contract: caller supplies evt.evType
   local function addLowlevel(evt)
     if pbSource(evt, evt.lane) then dirtyChan(evt.chan) end
+    seedEvent(evt)
     chansInsert(evt)
     util.add(adds, { evt = evt })
   end
@@ -719,8 +730,12 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   --invariant: util.REMOVE markers must survive merging
   local function assignLowlevel(evt, update)
     local oldChan, oldLane = evt.chan, evt.lane
+    local oldPpqL = evt.ppqL or evt.ppq
     util.assign(evt, update)
     if assignDirtiesPb(evt, oldLane, update) then dirtyChan(oldChan); dirtyChan(evt.chan) end
+    -- A move (onset shifts) is delete-at-old + insert-at-new: seed both positions. see design § Intervals are event-anchored
+    if update.ppq ~= nil or update.ppqL ~= nil or update.delay ~= nil then seedAt(oldChan, oldPpqL, evt.uuid) end
+    seedEvent(evt)
     -- Keep the lane-1 detune index coherent: a chan OR lane move migrates the
     -- entry between lists; a ppq move resorts in place (util.seek needs ascending).
     local oldList = chansListFor(evt, oldChan, oldLane)
@@ -744,6 +759,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
 
   local function deleteLowlevel(evt)
     if pbSource(evt, evt.lane) then dirtyChan(evt.chan) end
+    seedEvent(evt)
     chansRemove(evt)
     if evt.uuid then byUuid[evt.uuid] = nil end
 
@@ -1169,12 +1185,19 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     -- the per-channel filter above preserves that order, so no re-sort is needed.
   end
 
+  -- Fold this flush's per-verb seeds into dirtyChans as interval dirt: payload chans the seeds cover
+  -- stay narrowed, unseeded payload chans (mm-internal writes) fold whole. see design § phase 2
+  function absorbReloadDirt(payloadChans)
+    intervals.absorbSeeds(dirtyChans, seeds, payloadChans)
+  end
+
   -- Drop un-flushed staging: a rebuild must not carry command-path ops across
   -- (tokens may be stale for newly-added events; matches prior "fresh um per rebuild").
   function clearStaging()
     adds, assigns, deletes = {}, {}, {}
     parkedEdits            = {}
     dirtyPcChans           = {}
+    seeds                  = {}
   end
 
   function reload() clearStaging(); loadIndex() end
@@ -3271,7 +3294,7 @@ do
     -- Own pipeline commits are converged output, not dirt (I8).
     -- see design/archive/dirty-channels.md § Scheme item 1
     if not rebuilding and info and info.chans then
-      for chan in pairs(info.chans) do dirtyChans[chan] = true end
+      absorbReloadDirt(info.chans)
     end
     tm:rebuild(pendingTakeSwap)
     pendingTakeSwap = false

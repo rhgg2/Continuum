@@ -93,6 +93,20 @@ calls re-fire `'reload'` and would otherwise clear it. The incremental path
 was validated against a full `reload()` by a perf-gated shadow-compare during
 the migration; that scaffolding is removed now that parity is established.
 
+### Interval seeds
+
+um's low-level verbs (`addLowlevel`/`assignLowlevel`/`deleteLowlevel`) each drop a point seed
+(`intervals.seed`) at the event's own uuid and logical position, accumulated in a `seeds[chan]`
+list separate from `adds`/`assigns`/`deletes`. A move (`ppq`/`ppqL`/`delay` change) seeds both the
+old and new position; `flush` folds the merged seeds into `dirtyChans` via `absorbReloadDirt`.
+
+A delete's seed carries the deleted event's own (dying) uuid rather than hand-anchoring to its
+surviving neighbours: `intervals.close` re-anchors a point to its neighbouring onsets at
+consumption, and `intervals.merge` reads only `ppqL`, so the dying uuid is never dereferenced
+before `close` replaces it. Hand-anchoring at seed time would duplicate that work and pull in the
+raw-order index deferred to a later phase. See design/interval-dirt.md § Phase 2 for the seed
+shapes and the reload fold's flushing guard.
+
 ## Pitchbend: tm's role in the tuning model
 
 See `docs/tuning.md` for the cross-cutting model — detune as intent,

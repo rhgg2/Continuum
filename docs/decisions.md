@@ -4,6 +4,14 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-15** — interval-dirt phase 2 (seeds born at the verbs): a delete seed carries the deleted
+  event's own (dying) uuid, rather than hand-anchoring to the surviving neighbours the design names.
+  `intervals.close` already re-anchors a point to its neighbouring onsets at consumption, and `merge`
+  reads only ppqL, so the dead uuid is never dereferenced before close replaces it — hand-anchoring
+  would duplicate that work and pull in the raw-order index deferred to phase 4. Per-verb seed shapes
+  are pinned by zero-behaviour (suite + `tm_gate_parity_spec` green), not a test-only `tm` accessor;
+  the pure fold (`intervals.absorbSeeds`) is unit-specced directly.
+
 - **2026-07-15** — the `incremental-rebuild` programme is closed and archived; its one open gap (4,
   the fx dirt signal) is **deferred rather than done**. fx-hosting channels are marked dirty wholesale
   every rebuild, and the obvious fix — hash the generator inputs per host — was rejected: it bolts a

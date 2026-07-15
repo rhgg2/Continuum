@@ -1,6 +1,6 @@
-@spec intervals_spec  src=tests/specs/intervals_spec.lua  loc=204  sha=untracked  cases=16
+@spec intervals_spec  src=tests/specs/intervals_spec.lua  loc=236  sha=fd2f183  cases=19
 @exercises intervals (intervals)
-@surface   intervals.seed, intervals.merge, intervals.intersects, intervals.close
+@surface   intervals.seed, intervals.merge, intervals.intersects, intervals.close, intervals.absorbSeeds
 
 # Intent
   intervals is the pure dirt-interval algebra (design/interval-dirt.md).
@@ -33,9 +33,13 @@
   @case 'close unions extensions across every group the interval touches'  [pure]  @ 162-172
   @case 'close steps in ppqL order -- delay-reordered raw is a phase-4 gap (design q5)'  [pure]  @ 176-192
   @case 'close does not mutate its input set'  [pure]  @ 196-202
+  @case 'absorbSeeds narrows a seeded chan to its merged intervals'  [pure]  @ 208-215
+  @case 'absorbSeeds folds an unseeded payload chan whole'  [pure]  @ 219-225
+  @case 'absorbSeeds narrows a seeded chan even absent from the payload, overriding a prior true'  [pure]  @ 229-234
 
 # Uses (outbound edges)
-  @use call intervals.seed  @ 27,36,47,56,57,58,71,81,90,100,121,136,145,155,170,188,198
+  @use call intervals.seed  @ 27,36,47,56,57,58,71,81,90,100,121,136,145,155,170,188,198,211,222,232
   @use call intervals.merge  @ 46,48,60,72,91
   @use call intervals.intersects  @ 101,102,103
   @use call intervals.close  @ 112,121,136,145,155,170,188,200
+  @use call intervals.absorbSeeds  @ 212,222,232
