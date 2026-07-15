@@ -4,6 +4,12 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-16** — rebuild's target dataflow fixed (`design/rebuild-pipeline.md`): round-trip through
+  intent space with ordered, declared commits — over a single terminal commit (three commit groups are
+  genuinely ordered and tokens mint at commit) and over the status-quo blackboard. Frame law adopted:
+  no event list is ever part-raw, part-realised; columns go logical-only, raw confined to stage-local
+  working sets. Lands via interval-dirt phases 3–4, mechanical pre-phase 2.5 first.
+
 - **2026-07-15** — interval-dirt phase 2 (seeds born at the verbs): a delete seed carries the deleted
   event's own (dying) uuid, rather than hand-anchoring to the surviving neighbours the design names.
   `intervals.close` already re-anchors a point to its neighbouring onsets at consumption, and `merge`

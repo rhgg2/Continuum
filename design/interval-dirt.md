@@ -234,7 +234,10 @@ independently with the suite green, `tm_gate_parity_spec` extends at
 each new consumer (interval-gated vs forced full re-derive, frame
 equality, on both fixtures), "skipped means zero mm writes" is pinned
 by write-counting under the harness, and later phases gate on measured
-numbers. The split is by take shape: **phases 3–4 are the dense-take
+numbers. Phases 3–5 also restructure the stages they touch toward the
+target dataflow in `design/rebuild-pipeline.md`; each such phase lands
+the restructure as its own green commit before its gating commit, so a
+regression bisects to a half. The split is by take shape: **phases 3–4 are the dense-take
 programme, phase 5 the macro-take programme**, each measured against
 its own fixture. I8 stays intact through phase 3; the multi-pass
 restatement (§ The cascade commutes) arrives with phase 4, core rather
@@ -349,6 +352,17 @@ later only if a phase pays for it.
 Zero behaviour change by construction; specs pin the seed shapes per
 verb and the flushing guard.
 
+### Phase 2.5 — pipeline dataflow pre-phase
+
+The mechanical half of `design/rebuild-pipeline.md` (§ The pre-phase),
+landed before any stage goes interval-native: hoist the pipeline's ds
+reads into one head snapshot, replace the `fx` blackboard with
+explicit stage inputs/outputs, pin zero-write convergence by
+write-counting on both fixtures, and audit non-tm ds subscribers for
+mid-pipeline write-timing dependence. Shape only — no behaviour,
+ordering, or commit changes; the suite and the phase-0 baselines pin
+it. Phases 3–5 then port stages that are already functions.
+
 ### Phase 3 — interval materialisation: columns, projection, windows
 
 The dense take's edit-path `internals` 18.5 + `projLogical` 8.5 +
@@ -361,9 +375,11 @@ The dense take's edit-path `internals` 18.5 + `projLogical` 8.5 +
   closures** — those stages read the fresh clones, so whatever they
   will re-derive must be re-materialised. Anchors resolve against the
   carried columns (uuids survive; § Intervals are event-anchored).
-- **Projection follows the splice.** `projectLogical` projects only
-  spliced events; carried events are already logical — today's
-  per-channel argument, applied per event.
+- **Projection precedes the splice.** Spliced events project in a
+  stage-local scratch list and land already logical: no column ever
+  holds a raw event (`design/rebuild-pipeline.md` § The frame law — no
+  event list is ever part-raw, part-realised). Carried events were
+  logical already, so retention is unchanged.
 - **fx windows are carried state**, same regime as columns. A window
   recomputes iff a dirty interval intersects its extent
   (edge-inclusive — deleting the bounding next same-lane onset seeds
