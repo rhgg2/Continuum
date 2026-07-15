@@ -1647,13 +1647,13 @@ end
 
 -- CC walk: build the carrier routing map, reconcile (raw,ppqL), project CCs.
 -- Returns a carrier-map persister; run after fx expansion. see docs/trackerManager.md § Rebuild: CC walk
-local function rebuildCCs(fx)
+local function rebuildCCs(fx, prevWindows)
   local ccWrites = mmBatch()
 
   -- Seats are recognized against last rebuild's persisted windows: an on-take cc inside a prev cc window is a
   -- seat; a just-created window's cc still parks, a removed one's orphans reconcile away. see design/note-macros-v2.md § Route-by-window
   local ccWins = {}
-  for _, w in ipairs(ds:get('prevWindows') or {}) do
+  for _, w in ipairs(prevWindows or {}) do
     if w.evType == 'cc' then util.add(ccWins, w) end
   end
   local fillWin = rawSpanMap(ccWins)
@@ -1715,8 +1715,8 @@ end
 
 -- Reconcile extra columns against the persisted extraColumns spec; grow the spec when a
 -- channel already holds more note lanes than recorded.
-local function rebuildExtraColumns()
-  local extras = ds:get('extraColumns') or {}
+local function rebuildExtraColumns(extraColumns)
+  local extras = extraColumns or {}
   local grew   = false
   for i = 1, 16 do
     local c    = channels[i].columns
@@ -1895,8 +1895,8 @@ local function renderUnion(field, newParked, toCell)
   end
 end
 
-local function persistParked(key, newParked)
-  if not util.deepEq(ds:get(key) or {}, newParked) and mm:take() then
+local function persistParked(key, newParked, prior)
+  if not util.deepEq(prior or {}, newParked) and mm:take() then
     ds:assign(key, #newParked > 0 and newParked or util.REMOVE)
   end
 end
@@ -1904,7 +1904,7 @@ end
 -- Region-replace parking: authored events a replace window covers leave the take;
 -- the prior parked set carries still-covered forward, restores the rest. see design/note-macros-v2.md § Generator output
 
-local function rebuildRegionPark(fx, deferred, currentWindows)
+local function rebuildRegionPark(fx, deferred, currentWindows, fxParked, prevWindows)
   local batch = mmBatch()
   -- Restored note cells re-enter their column token-less (the real mm event lands with the
   -- deferred tail commit); returned so rebuild can wire each to its backing post-commit.
@@ -1946,7 +1946,7 @@ local function rebuildRegionPark(fx, deferred, currentWindows)
   -- Notes, ccs and pbs park in one batch -> a single delete-first commit for the whole phase, and
   -- one evType-tagged fxParked stash. Each pass reconciles its own slice of the prior stash.
   local priorByType = {}
-  for _, spec in ipairs(ds:get('fxParked') or {}) do util.bucket(priorByType, spec.evType, spec) end
+  for _, spec in ipairs(fxParked or {}) do util.bucket(priorByType, spec.evType, spec) end
 
   -- Notes: can't mute (note-on/off + CC matching), so a covered authored note leaves the take.
   do
@@ -2106,7 +2106,7 @@ local function rebuildRegionPark(fx, deferred, currentWindows)
   -- pb: seats are markerless, so the scan can't run every rebuild -- it diffs current pb windows against
   -- last rebuild's persisted set: a created window parks its authored pbs, a removed one sweeps. see § Route-by-window
   local prevPb, curPb = {}, {}
-  for _, w in ipairs(ds:get('prevWindows') or {}) do
+  for _, w in ipairs(prevWindows or {}) do
     if w.evType == 'pb' then prevPb[util.key(w.chan, w.startppq, w.endppq)] = w end
   end
   for _, w in ipairs(currentWindows) do
@@ -2175,7 +2175,7 @@ local function rebuildRegionPark(fx, deferred, currentWindows)
     end)
   end
 
-  persistParked('fxParked', allParked)
+  persistParked('fxParked', allParked, fxParked)
   batch.commit()
   return restoredNotes
 end
@@ -2278,7 +2278,7 @@ end
 
 -- Fx expansion: fx-carrying notes / fx-regions -> derived notes, CCs;
 -- reconcile vs existing, note writes deferred to the tail walk. see design/note-macros-v2.md § Offline continuous realisation
-local function rebuildFx(fx, deferred, fxWindow, currentWindows)
+local function rebuildFx(fx, deferred, fxWindow, currentWindows, fxRegions)
   -- Columns must be ppqL-ordered here (eachWindowNote / allocateRegionLanes / membersOf read col.events
   -- directly); the computeFxWindows call immediately upstream sorted them and nothing since reorders.
 
@@ -2372,7 +2372,7 @@ local function rebuildFx(fx, deferred, fxWindow, currentWindows)
   -- Explicit fx-regions (channel x ppq span + fx, no host note), re-queried each
   -- rebuild and bucketed by channel. see design/note-macros-v2.md § The anchor generalized
   local fxRegionsByChan = {}
-  for _, region in ipairs(ds:get('fxRegions') or {}) do
+  for _, region in ipairs(fxRegions or {}) do
     util.bucket(fxRegionsByChan, region.chan, region)
   end
 
@@ -3105,10 +3105,19 @@ local function rebuildPipeline(didReload)
   -- walk's atomic note commit: host clip + these inserts in one mm:modify (one MIDI_Sort, canonical delete-first).
   local deferred = mmBatch()
 
+  -- One head snapshot of the ds intent keys the pipeline reads; stages take these as params.
+  -- Every key is read before any same-pass write, so a head read equals each old use-site value.
+  local sources = {
+    fxRegions    = ds:get('fxRegions'),
+    fxParked     = ds:get('fxParked'),
+    prevWindows  = ds:get('prevWindows'),
+    extraColumns = ds:get('extraColumns'),
+  }
+
   perf.start('internals'); local external = rebuildInternals(fx); perf.stop('internals')  -- partition; internal cols; reseat swing notes
-  perf.start('ccs'); rebuildCCs(fx); perf.stop('ccs')  -- CC walk; reseat swing CCs
+  perf.start('ccs'); rebuildCCs(fx, sources.prevWindows); perf.stop('ccs')  -- CC walk; reseat swing CCs
   staleSwing = {}                               -- swing consumers (partition + CC walk) done; see :53 invariant
-  perf.start('extraCols'); rebuildExtraColumns(); perf.stop('extraCols')  -- reconcile persisted extra columns
+  perf.start('extraCols'); rebuildExtraColumns(sources.extraColumns); perf.stop('extraCols')  -- reconcile persisted extra columns
   perf.start('externals'); rebuildExternals(external); perf.stop('externals')  -- reintroduce foreign / diverged notes
 
   -- Park window set: fx-regions plus every on-take note host as a degenerate region (note-is-a-region),
@@ -3116,7 +3125,7 @@ local function rebuildPipeline(didReload)
   perf.start('fxWindows'); local hostWindows = computeFxWindows(dirtyChans); perf.stop('fxWindows')
   perf.start('parkRegions')
   local parkRegions = {}
-  for _, r in ipairs(ds:get('fxRegions') or {}) do util.add(parkRegions, r) end
+  for _, r in ipairs(sources.fxRegions or {}) do util.add(parkRegions, r) end
   for chan = 1, 16 do
     for _, col in ipairs(channels[chan].columns.notes) do
       for _, host in ipairs(col.events) do
@@ -3129,7 +3138,7 @@ local function rebuildPipeline(didReload)
   end
   -- A self-parked host is off-take but still runs a producer, so its continuous (pb/cc) windows must
   -- register on any surviving fx, not just parksNotes -- see § Route-by-window: mixed-kind un-parking.
-  for _, spec in ipairs(ds:get('fxParked') or {}) do
+  for _, spec in ipairs(sources.fxParked or {}) do
     if spec.evType == 'note' and spec.fx then
       local endL = (spec.endppqL == nil or spec.endppqL == util.OPEN)
                    and tm:toLogical(spec.chan, tm:length()) or spec.endppqL
@@ -3140,13 +3149,13 @@ local function rebuildPipeline(didReload)
   local currentWindows = generators.parkWindows(parkRegions)
   perf.stop('parkRegions')
 
-  perf.start('regionPark'); local restoredNotes = rebuildRegionPark(fx, deferred, currentWindows); perf.stop('regionPark')  -- park covered, carry/restore prior
+  perf.start('regionPark'); local restoredNotes = rebuildRegionPark(fx, deferred, currentWindows, sources.fxParked, sources.prevWindows); perf.stop('regionPark')  -- park covered, carry/restore prior
   perf.start('pa'); local paTouched = rebuildPA(); perf.stop('pa')  -- project PAs into settled note columns
 
   -- Re-scan windows post park/unpark/PA: the producer reads the final columns, including a host an unpark
   -- just restored (a replace host that lost its note-producing kind falls back to on-take augment).
   perf.start('fxWindows'); local fxWindow = computeFxWindows(paTouched); perf.stop('fxWindows')
-  perf.start('fx'); rebuildFx(fx, deferred, fxWindow, currentWindows); perf.stop('fx')  -- fx expansion: derived notes/CCs
+  perf.start('fx'); rebuildFx(fx, deferred, fxWindow, currentWindows, sources.fxRegions); perf.stop('fx')  -- fx expansion: derived notes/CCs
 
   perf.start('tails'); rebuildTails(fx, deferred); perf.stop('tails')  -- unified tail/onset walk + atomic note commit
 
@@ -3156,14 +3165,14 @@ local function rebuildPipeline(didReload)
     local backed = tm:byUuid(note.uuid)
     if backed then note.token = backed.token end
   end
-  perf.start('pbs'); rebuildPbs(fx.noteLive, fx.pbChains, fx.pbBase); perf.stop('pbs')  -- absorber reconciliation + pb resynthesis
+  perf.start('pbs'); rebuildPbs(fx.noteLive, fx.pbChains, fx.pbBase, sources.extraColumns); perf.stop('pbs')  -- absorber reconciliation + pb resynthesis
   perf.start('pcs'); rebuildPCs(fx); perf.stop('pcs')  -- PC synthesis (trackerMode)
 
   perf.start('projLogical'); projectLogical(); perf.stop('projLogical')  -- project columns to logical
 
   -- Persist this rebuild's window set: next rebuild recognizes seats against it (prev-keyed). see § Route-by-window
   perf.start('prevWindows')
-  if mm:take() and not util.deepEq(ds:get('prevWindows') or {}, currentWindows) then
+  if mm:take() and not util.deepEq(sources.prevWindows or {}, currentWindows) then
     ds:assign('prevWindows', #currentWindows > 0 and currentWindows or util.REMOVE)
   end
   perf.stop('prevWindows')
