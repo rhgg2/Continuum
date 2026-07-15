@@ -91,7 +91,7 @@ local function sortByPPQ(tbl)
 end
 
 -- Note columns are logical-frame indices: the fx/park subsystem tests ppqL, so they sort on it.
--- PAs may carry no ppqL (raw-sourced); coalesce so the comparator never sees nil. see design/logical-column-order.md
+-- PAs may carry no ppqL (raw-sourced); coalesce so the comparator never sees nil. see design/archive/logical-column-order.md
 local function sortByPPQL(tbl)
   table.sort(tbl, function(a, b) return (a.ppqL or a.ppq) < (b.ppqL or b.ppq) end)
 end
@@ -2221,7 +2221,7 @@ end
 ----- Rebuild Fx
 
 -- fx host voice extents: authored end, take end, or strict next same-lane onset -- soonest wins. A pure,
--- G4-stable scan of all 16 chans (parking + recognition see the whole set), sort gated by unsortedChans. see design/archive/note-macros.md § host contract, design/logical-column-order.md
+-- G4-stable scan of all 16 chans (parking + recognition see the whole set), sort gated by unsortedChans. see design/archive/note-macros.md § host contract, design/archive/logical-column-order.md
 local function computeFxWindows(unsortedChans)
   local fxWindow = {}
   local takeLen = tm:length()

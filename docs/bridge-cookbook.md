@@ -81,6 +81,33 @@ return ch and ch.columns.notes
 
 Edit-cursor position in ppq: `p.tm:editCursor()`.
 
+## Profiling a rebuild
+
+`perf` (the nested profiler) isn't an env handle, but every Continuum
+module is a cached `require`, so `require('perf')` hands back the *same*
+singleton the app uses. Two wrinkles make a naive read come back empty:
+`perf.report()` no-ops unless `perf.on` (armed live with Ctrl+Shift+P),
+and it emits through `util.print` — REAPER's console, not the chunk's
+redirected `print` — so you must swap that sink to capture it. A bare
+`tm:rebuild` also runs the pipeline *outside* any span, scattering its
+stages as throwaway roots; wrap it in your own root span.
+
+```lua
+local perf, util = require('perf'), require('util')
+local lines, wasOn = {}, perf.on
+local real = util.print; util.print = function(s) lines[#lines+1] = tostring(s) end
+perf.on = true
+perf.start('probe'); page('tracker').tm:rebuild(true); perf.stop('probe')
+perf.report()          -- last-frame tree; perf.dump() for run totals
+perf.on = wasOn; util.print = real
+return lines
+```
+
+`rebuild(true)` forces a full-dirty (all-channel) re-derivation — no
+mutation, just recompute — so the tree covers every stage. The result
+is `[perf] <indented stage> <ms>` lines (`internals`, `tails`,
+`fxWindows`, `projLogical`, …), sorted within the tree by cost.
+
 ## Writing — the golden rules
 
 1. **Confirm with the user before any destructive chunk.**

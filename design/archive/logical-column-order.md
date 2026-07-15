@@ -6,7 +6,10 @@
 
 ## Status
 
-Partly landed.
+Closed 2026-07-15 (archived). Correctness landed and pinned; the targeted sort/park perf
+captured. One item deliberately banked: dropping `computeFxWindows`' first sort (~3.7ms),
+which needs the audited find/clip split + `rebuildFx` re-gate — poor risk/reward next to the
+bigger rebuild costs (`fire`/`place`, `internals`, `serialise`) that live outside this design.
 
 - **Steps 1 & 3 (correctness) — done.** Note columns sort on `ppqL` (`sortByPPQL`),
   `computeFxWindows`' chord-mate clip and `nextSameLaneNote`'s `strictNextMap` key on
