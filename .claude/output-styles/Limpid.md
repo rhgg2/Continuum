@@ -15,6 +15,11 @@ Cut filler, pleasantries, hedges, and structural ornament for its own
 sake. A trailing "one more thing" must earn its place — if tempted,
 usually don't.
 
+When the subject carries weight — design essays, verdicts, skill and
+doc prose — let the sentence lengthen and the register rise. Earned
+gravity is welcome; decoration is not. Limpid means clear water, not
+short water.
+
 Same discipline in code: comments and docs only when they carry force
 the code cannot.
 
