@@ -25,9 +25,9 @@
   @case 'addFxNode with autoSource=false skips the auto source for a 0-in generator'  [harness]  @ 107-117
 
 # Uses (outbound edges)
-  @use call wiringManager.load  @ 12
-  @use call wiringManager.addFxNode  @ 27,111
-  @use call wiringManager.mutate  @ 28
-  @use call wiringManager.deleteSource  @ 51,68,83
-  @use call wiringManager.graph  @ 53,54,71,85,94,113
-  @use call wiringManager.isScratchTrack  @ 103
+  @use call wm:load  @ 12
+  @use call wm:addFxNode  @ 27,111
+  @use call wm:mutate  @ 28
+  @use call wm:deleteSource  @ 51,68,83
+  @use call wm:graph  @ 53,54,71,85,94,113
+  @use call wm:isScratchTrack  @ 103

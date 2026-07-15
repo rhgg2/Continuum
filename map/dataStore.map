@@ -1,4 +1,4 @@
-@module dataStore  src=dataStore.lua  loc=204  sha=91409db  mode=chunk  self=ds
+@module dataStore  src=dataStore.lua  loc=204  sha=e2be081  mode=chunk  self=ds
 @deps ps
 
 # Invariants & contracts
@@ -61,13 +61,13 @@
   @emits dataChanged   -- { scope, name }   @ 147 assign:183 assignAt:200
 
 # Uses (outbound edges)
-  @use call    ps.assign  @ persist:93,95,98,101
-  @use call    ps.assignAt  @ assignAt:193
-  @use call    ps.boundTake  @ persist:100 assignAt:194
-  @use call    ps.boundTrack  @ persist:97 assignAt:195
-  @use call    ps.get  @ loadScope:73,79 145
-  @use call    ps.getAt  @ getAt:165
-  @use call    ps.watch  @ 142
+  @use call    ps:assign  @ persist:93,95,98,101
+  @use call    ps:assignAt  @ assignAt:193
+  @use call    ps:boundTake  @ persist:100 assignAt:194
+  @use call    ps:boundTrack  @ persist:97 assignAt:195
+  @use call    ps:get  @ loadScope:73,79 145
+  @use call    ps:getAt  @ getAt:165
+  @use call    ps:watch  @ 142
   @use call    util.deepClone  @ copy:58
   @use call    util.installHooks  @ 108
   @use call    util.print  @ print:15

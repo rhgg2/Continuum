@@ -37,17 +37,17 @@
   @case 'each chain verb mints one labelled undo point'  [harness]  @ 328-351
 
 # Uses (outbound edges)
-  @use call trackerManager.flush  @ 11,47,70,307
-  @use call trackerManager.getChannel  @ 23
-  @use call midiManager.dump  @ 25,30,117,220,253
-  @use call trackerView.setGridSize  @ 48,71,84,98,112,131,282,309,332
-  @use call editCursor.setPos  @ 51,54,56,74,287
-  @use call trackerView.fxHostAtCursor  @ 52,55,57,75,288
-  @use call trackerView.setNoteFx  @ 86,88,251,268,272
-  @use call trackerView.setFxField  @ 101,114,133,207,226,237,238,270,345
-  @use call trackerView.noteFx  @ 102,115,134,147,161,165,177,191,204,208,239,290
-  @use call trackerView.addFxStage  @ 146,190,203,344
-  @use call trackerView.removeFxStage  @ 160,164,346
-  @use call trackerView.moveFxStage  @ 176,180
-  @use call trackerView.fxHostForEdit  @ 291
-  @use call trackerManager.addEvent  @ 307
+  @use call tm:flush  @ 11,47,70,307
+  @use call tm:getChannel  @ 23
+  @use call fm:dump  @ 25,30,117,220,253
+  @use call vm:setGridSize  @ 48,71,84,98,112,131,282,309,332
+  @use call ec:setPos  @ 51,54,56,74,287
+  @use call vm:fxHostAtCursor  @ 52,55,57,75,288
+  @use call vm:setNoteFx  @ 86,88,251,268,272
+  @use call vm:setFxField  @ 101,114,133,207,226,237,238,270,345
+  @use call vm:noteFx  @ 102,115,134,147,161,165,177,191,204,208,239,290
+  @use call vm:addFxStage  @ 146,190,203,344
+  @use call vm:removeFxStage  @ 160,164,346
+  @use call vm:moveFxStage  @ 176,180
+  @use call vm:fxHostForEdit  @ 291
+  @use call tm:addEvent  @ 307

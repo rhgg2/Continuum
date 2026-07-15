@@ -1,4 +1,4 @@
-@module arrangeManager  src=arrangeManager.lua  loc=996  sha=188df77  mode=chunk  self=am
+@module arrangeManager  src=arrangeManager.lua  loc=996  sha=bd03e0c  mode=chunk  self=am
 @deps cm, ds, facade, eventMeta
 
 # Invariants & contracts
@@ -187,12 +187,12 @@
       @contract  hands takesUsing(name) to the 'tracker' facade; transient-rebinds each and restores
 
 # Uses (outbound edges)
-  @use call    ds.assign  @ writeColours:249
-  @use call    ds.assignAt  @ writeSlots:92 setNaturalLenOf:150,151
-  @use call    ds.get  @ readColours:248
-  @use call    ds.getAt  @ readSlots:88 naturalLenOf:145 takesUsing:981
-  @use call    eventMeta.copyPool  @ cloneMidiItem:693 mintParkedTake:894
-  @use call    eventMeta.dropPool  @ deleteSlot:627
+  @use call    ds:assign  @ writeColours:249
+  @use call    ds:assignAt  @ writeSlots:92 setNaturalLenOf:150,151
+  @use call    ds:get  @ readColours:248
+  @use call    ds:getAt  @ readSlots:88 naturalLenOf:145 takesUsing:981
+  @use call    eventMeta:copyPool  @ cloneMidiItem:693 mintParkedTake:894
+  @use call    eventMeta:dropPool  @ deleteSlot:627
   @use call    facade.get  @ isVisibleTrack:302 reswingAll:993
   @use call    painter.hueNative  @ stampColour:284
   @use call    scratch.peek  @ parkedItemFor:118 isVisibleTrack:300 deleteSlot:626 isParkedTake:769

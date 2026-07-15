@@ -1,4 +1,4 @@
-@module paramAutomation  src=paramAutomation.lua  loc=433  sha=672fb18  mode=chunk  self=pa
+@module paramAutomation  src=paramAutomation.lua  loc=433  sha=d15eb89  mode=chunk  self=pa
 @deps cm, ds, facade, ccm
 
 # Invariants & contracts
@@ -83,12 +83,12 @@
       @contract  last-touched track-fx param as guids + name; nil for take/container/input fx
 
 # Uses (outbound edges)
-  @use call    ccm.claim  @ applyTrack:219
-  @use call    ccm.release  @ applyTrack:212
-  @use call    cm.boundTake  @ boundTrack:64
-  @use call    ds.assign  @ automate:340 unautomate:350 bumpFrecency:404
-  @use call    ds.get  @ automate:333 unautomate:346 binding:355 params:386 bumpFrecency:396
-  @use call    ds.getAt  @ gatherBindings:72 usedLanes:241,243 allocBusCode:266
+  @use call    ccm:claim  @ applyTrack:219
+  @use call    ccm:release  @ applyTrack:212
+  @use call    cm:boundTake  @ boundTrack:64
+  @use call    ds:assign  @ automate:340 unautomate:350 bumpFrecency:404
+  @use call    ds:get  @ automate:333 unautomate:346 binding:355 params:386 bumpFrecency:396
+  @use call    ds:getAt  @ gatherBindings:72 usedLanes:241,243 allocBusCode:266
   @use call    facade.get  @ arrange:15 targets:362
   @use call    util.atomic  @ apply:320
   @use call    util.deepEq  @ apply:315

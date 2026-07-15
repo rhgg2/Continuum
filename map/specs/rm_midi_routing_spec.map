@@ -27,6 +27,6 @@
 
 # Uses (outbound edges)
   @use call harness.mk  @ 11
-  @use call routingManager.tracks  @ 32,43,51,55,65,69,77,82,99,105,116,127,131,142,149
-  @use call routingManager.assignFx  @ 53,67,80,103,129
-  @use call routingManager.writeChainMidi  @ 144
+  @use call rm:tracks  @ 32,43,51,55,65,69,77,82,99,105,116,127,131,142,149
+  @use call rm:assignFx  @ 53,67,80,103,129
+  @use call rm:writeChainMidi  @ 144

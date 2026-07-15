@@ -42,10 +42,10 @@
   @case 'scaleHalf and scaleDouble decline without a selection'  [harness]  @ 281-288
 
 # Uses (outbound edges)
-  @use call trackerView.setGridSize  @ 22,53
-  @use call editCursor.setPos  @ 30,93,118,120,179,246,260,273,275,285
-  @use call trackerView.editEvent  @ 31,247,250,261
-  @use call editCursor.row  @ 64,75,263
-  @use call trackerView.entrySignAt  @ 88,94,105,119,121,180,197,235,249
-  @use call midiManager.dump  @ 248,251,262
-  @use call commandManager.invoke  @ 274,276,286,287
+  @use call vm:setGridSize  @ 22,53
+  @use call ec:setPos  @ 30,93,118,120,179,246,260,273,275,285
+  @use call vm:editEvent  @ 31,247,250,261
+  @use call ec:row  @ 64,75,263
+  @use call vm:entrySignAt  @ 88,94,105,119,121,180,197,235,249
+  @use call fm:dump  @ 248,251,262
+  @use call cmgr:invoke  @ 274,276,286,287

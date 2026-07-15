@@ -22,14 +22,14 @@
   @case 'CC rpb metadata surfaces on tm column events after rebuild'  [harness]  @ 229-249
 
 # Uses (outbound edges)
-  @use call dataStore.delete  @ 38,175
-  @use call trackerView.setGridSize  @ 39,63,88,128,176,216
-  @use call midiManager.dump  @ 41,66,91,108,147,179,219
-  @use call trackerManager.markSwingStale  @ 64,89,177
-  @use call trackerManager.rebuild  @ 64,89,177
-  @use call trackerManager.addEvent  @ 106
-  @use call trackerManager.flush  @ 107
-  @use call editCursor.setPos  @ 137,143
-  @use call trackerView.editEvent  @ 144
-  @use call dataStore.assign  @ 215
-  @use call trackerManager.getChannel  @ 244
+  @use call ds:delete  @ 38,175
+  @use call vm:setGridSize  @ 39,63,88,128,176,216
+  @use call fm:dump  @ 41,66,91,108,147,179,219
+  @use call tm:markSwingStale  @ 64,89,177
+  @use call tm:rebuild  @ 64,89,177
+  @use call tm:addEvent  @ 106
+  @use call tm:flush  @ 107
+  @use call ec:setPos  @ 137,143
+  @use call vm:editEvent  @ 144
+  @use call ds:assign  @ 215
+  @use call tm:getChannel  @ 244

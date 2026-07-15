@@ -346,6 +346,55 @@
       @contract  acceptCmds=false if any picker active, any item active, or modal open at frame start.
 
 # Uses (outbound edges)
+  @use call    ImGui.BeginChild  @ renderBody:2538 2670
+  @use call    ImGui.BeginPopup  @ renderCanvas:2326,2354,2406
+  @use call    ImGui.BeginTooltip  @ drawSlot:330 drawWireEndLabel:974
+  @use call    ImGui.Button  @ renderPaletteActions:2465,2468
+  @use call    ImGui.CalcTextSize  @ wrapLabel:205 drawNode:265,269 layoutList:385,389
+  @use call    ImGui.CloseCurrentPopup  @ renderCanvas:2336,2360,2364,2373,2383 commitFx:2616 2665
+  @use call    ImGui.Dummy  @ renderCanvas:2428
+  @use call    ImGui.EndChild  @ renderBody:2545 2676
+  @use call    ImGui.EndPopup  @ renderCanvas:2339,2386,2408
+  @use call    ImGui.EndTooltip  @ drawSlot:332 drawWireEndLabel:976
+  @use call    ImGui.GetCursorScreenPos  @ renderCanvas:1703 renderBody:2536
+  @use call    ImGui.GetKeyMods  @ renderCanvas:1716
+  @use call    ImGui.GetMousePos  @ renderCanvas:1711 2597
+  @use call    ImGui.GetMouseWheel  @ renderCanvas:2042
+  @use call    ImGui.GetStyleVar  @ renderPaletteList:2477
+  @use call    ImGui.GetWindowPos  @ renderCanvas:2333,2380
+  @use call    ImGui.GetWindowSize  @ renderCanvas:2334,2381
+  @use call    ImGui.GetWindowViewport  @ renderCanvas:2401
+  @use call    ImGui.Indent  @ renderPaletteList:2478
+  @use call    ImGui.InputText  @ 2640
+  @use call    ImGui.InvisibleButton  @ drawSlot:319 drawWireEndLabel:968
+  @use call    ImGui.IsAnyItemActive  @ focusState:2569
+  @use call    ImGui.IsItemActive  @ renderPaletteList:2490
+  @use call    ImGui.IsItemHovered  @ drawSlot:324 drawWireEndLabel:969
+  @use call    ImGui.IsKeyPressed  @ renderCanvas:1971,1974 2642,2643,2657,2658,2664
+  @use call    ImGui.IsMouseClicked  @ renderCanvas:1728,1981,2026,2085,2098,2301
+  @use call    ImGui.IsMouseDoubleClicked  @ renderCanvas:2016,2069
+  @use call    ImGui.IsMouseDown  @ renderCanvas:1832,2219,2262,2272,2279,2287
+  @use call    ImGui.IsMouseDragging  @ renderPaletteList:2491
+  @use call    ImGui.IsWindowAppearing  @ renderCanvas:2332,2379 2637,2653
+  @use call    ImGui.IsWindowHovered  @ renderCanvas:1715
+  @use call    ImGui.OpenPopup  @ renderCanvas:2305,2312 2610
+  @use call    ImGui.PopFont  @ drawNode:273 layoutList:392
+  @use call    ImGui.PopStyleColor  @ drawSlot:335 drawWireEndLabel:979 renderCanvas:2343,2390,2412 popBodyStyles:2434
+  @use call    ImGui.PopStyleVar  @ drawSlot:334 drawWireEndLabel:978
+  @use call    ImGui.PushFont  @ drawNode:263 layoutList:384
+  @use call    ImGui.PushStyleColor  @ drawSlot:328 drawWireEndLabel:972 renderCanvas:2325,2353,2405 pushBodyStyles:2432
+  @use call    ImGui.PushStyleVar  @ drawSlot:329 drawWireEndLabel:973
+  @use call    ImGui.SameLine  @ renderPaletteActions:2466
+  @use call    ImGui.Selectable  @ renderCanvas:2357,2362,2371 renderPaletteList:2485 2673
+  @use call    ImGui.Separator  @ renderPaletteBody:2516 2644
+  @use call    ImGui.SetCursorScreenPos  @ drawSlot:318 drawWireEndLabel:967 renderCanvas:2427
+  @use call    ImGui.SetKeyboardFocusHere  @ 2637
+  @use call    ImGui.SetNextItemWidth  @ 2638
+  @use call    ImGui.SetNextWindowPos  @ drawSlot:325 drawWireEndLabel:970 renderCanvas:2323,2351,2398,2402
+  @use call    ImGui.Text  @ drawSlot:331 drawWireEndLabel:975 renderStatusBar:2559
+  @use call    ImGui.TextDisabled  @ renderPaletteList:2480
+  @use call    ImGui.Unindent  @ renderPaletteList:2481,2501
+  @use call    ImGui.Viewport_GetCenter  @ renderCanvas:2401
   @use call    chrome.checkbox  @ renderCanvas:2328
   @use call    chrome.colour  @ drawSlot:328 drawWireEndLabel:972 renderCanvas:2325,2353,2405 pushBodyStyles:2432
   @use call    chrome.disabledIf  @ renderPaletteActions:2467
@@ -353,94 +402,45 @@
   @use call    chrome.pickerIsActive  @ focusState:2565
   @use call    chrome.popChromeWindow  @ renderCanvas:2344,2391,2413
   @use call    chrome.pushChromeWindow  @ renderCanvas:2324,2352,2404
-  @use call    cmgr.invoke  @ renderCanvas:2076
-  @use call    cmgr.scope  @ 2680
+  @use call    cmgr:invoke  @ renderCanvas:2076
+  @use call    cmgr:scope  @ 2680
   @use call    facade.get  @ commitFx:2625,2626
-  @use call    imgui.BeginChild  @ renderBody:2538 2670
-  @use call    imgui.BeginPopup  @ renderCanvas:2326,2354,2406
-  @use call    imgui.BeginTooltip  @ drawSlot:330 drawWireEndLabel:974
-  @use call    imgui.Button  @ renderPaletteActions:2465,2468
-  @use call    imgui.CalcTextSize  @ wrapLabel:205 drawNode:265,269 layoutList:385,389
-  @use call    imgui.CloseCurrentPopup  @ renderCanvas:2336,2360,2364,2373,2383 commitFx:2616 2665
-  @use call    imgui.Dummy  @ renderCanvas:2428
-  @use call    imgui.EndChild  @ renderBody:2545 2676
-  @use call    imgui.EndPopup  @ renderCanvas:2339,2386,2408
-  @use call    imgui.EndTooltip  @ drawSlot:332 drawWireEndLabel:976
-  @use call    imgui.GetCursorScreenPos  @ renderCanvas:1703 renderBody:2536
-  @use call    imgui.GetKeyMods  @ renderCanvas:1716
-  @use call    imgui.GetMousePos  @ renderCanvas:1711 2597
-  @use call    imgui.GetMouseWheel  @ renderCanvas:2042
-  @use call    imgui.GetStyleVar  @ renderPaletteList:2477
-  @use call    imgui.GetWindowPos  @ renderCanvas:2333,2380
-  @use call    imgui.GetWindowSize  @ renderCanvas:2334,2381
-  @use call    imgui.GetWindowViewport  @ renderCanvas:2401
-  @use call    imgui.Indent  @ renderPaletteList:2478
-  @use call    imgui.InputText  @ 2640
-  @use call    imgui.InvisibleButton  @ drawSlot:319 drawWireEndLabel:968
-  @use call    imgui.IsAnyItemActive  @ focusState:2569
-  @use call    imgui.IsItemActive  @ renderPaletteList:2490
-  @use call    imgui.IsItemHovered  @ drawSlot:324 drawWireEndLabel:969
-  @use call    imgui.IsKeyPressed  @ renderCanvas:1971,1974 2642,2643,2657,2658,2664
-  @use call    imgui.IsMouseClicked  @ renderCanvas:1728,1981,2026,2085,2098,2301
-  @use call    imgui.IsMouseDoubleClicked  @ renderCanvas:2016,2069
-  @use call    imgui.IsMouseDown  @ renderCanvas:1832,2219,2262,2272,2279,2287
-  @use call    imgui.IsMouseDragging  @ renderPaletteList:2491
-  @use call    imgui.IsWindowAppearing  @ renderCanvas:2332,2379 2637,2653
-  @use call    imgui.IsWindowHovered  @ renderCanvas:1715
-  @use call    imgui.OpenPopup  @ renderCanvas:2305,2312 2610
-  @use call    imgui.PopFont  @ drawNode:273 layoutList:392
-  @use call    imgui.PopStyleColor  @ drawSlot:335 drawWireEndLabel:979 renderCanvas:2343,2390,2412 popBodyStyles:2434
-  @use call    imgui.PopStyleVar  @ drawSlot:334 drawWireEndLabel:978
-  @use call    imgui.PushFont  @ drawNode:263 layoutList:384
-  @use call    imgui.PushStyleColor  @ drawSlot:328 drawWireEndLabel:972 renderCanvas:2325,2353,2405 pushBodyStyles:2432
-  @use call    imgui.PushStyleVar  @ drawSlot:329 drawWireEndLabel:973
-  @use call    imgui.SameLine  @ renderPaletteActions:2466
-  @use call    imgui.Selectable  @ renderCanvas:2357,2362,2371 renderPaletteList:2485 2673
-  @use call    imgui.Separator  @ renderPaletteBody:2516 2644
-  @use call    imgui.SetCursorScreenPos  @ drawSlot:318 drawWireEndLabel:967 renderCanvas:2427
-  @use call    imgui.SetKeyboardFocusHere  @ 2637
-  @use call    imgui.SetNextItemWidth  @ 2638
-  @use call    imgui.SetNextWindowPos  @ drawSlot:325 drawWireEndLabel:970 renderCanvas:2323,2351,2398,2402
-  @use call    imgui.Text  @ drawSlot:331 drawWireEndLabel:975 renderStatusBar:2559
-  @use call    imgui.TextDisabled  @ renderPaletteList:2480
-  @use call    imgui.Unindent  @ renderPaletteList:2481,2501
-  @use call    imgui.Viewport_GetCenter  @ renderCanvas:2401
-  @use call    modalHost.wasOpenAtFrameStart  @ focusState:2571
+  @use call    modalHost:wasOpenAtFrameStart  @ focusState:2571
   @use call    painter.new  @ renderCanvas:1706
   @use call    util.add  @ leastOccupiedDir:1266 sourceSegments:1301,1302 busSegments:1363,1389,1491 bussablePorts:1555 renderCanvas:1734,1768 renderPaletteBody:2508 2604
   @use call    util.key  @ wireGroups:808
-  @use call    wv.addBusNode  @ commitFx:2620
-  @use call    wv.addFx  @ commitFx:2622
-  @use call    wv.ancestorsOf  @ renderCanvas:2137,2185 renderPaletteList:2495
-  @use call    wv.busViews  @ renderCanvas:1762
-  @use call    wv.bypassed  @ renderCanvas:1930,2108
-  @use call    wv.deleteBus  @ renderCanvas:2358
-  @use call    wv.deleteNode  @ renderCanvas:2359
-  @use call    wv.deleteSource  @ deleteSourceGuarded:2454,2460
-  @use call    wv.descendantsOf  @ renderCanvas:2184
-  @use call    wv.edgeGain  @ renderCanvas:1859,1986,2030
-  @use call    wv.listInstalledFX  @ 2604
-  @use call    wv.masterPos  @ sourceSegments:1305 sourcePosFor:2582
-  @use call    wv.moveBus  @ renderCanvas:2276
-  @use call    wv.moveNodes  @ renderCanvas:2284
-  @use call    wv.muted  @ renderCanvas:1930,2107
-  @use call    wv.nodeViews  @ renderCanvas:1733 renderPaletteBody:2506
-  @use call    wv.openFxWindow  @ renderCanvas:2078
-  @use call    wv.pokeEdgeGain  @ renderCanvas:1831,1995,2033,2050
-  @use call    wv.removeWireAt  @ renderCanvas:2249
-  @use call    wv.rewireEdgeEnd  @ renderCanvas:2235
-  @use call    wv.rotateBus  @ renderCanvas:2363
-  @use call    wv.samplerTrack  @ renderCanvas:2075
-  @use call    wv.selection  @ renderCanvas:1743
-  @use call    wv.setBypassed  @ renderCanvas:2108
-  @use call    wv.setEdgeGain  @ renderCanvas:1834,1863,1996,2020,2034,2051,2058
-  @use call    wv.setEdgePrimary  @ renderCanvas:2329
-  @use call    wv.setHover  @ renderCanvas:1966
-  @use call    wv.setMuted  @ renderCanvas:2107
-  @use call    wv.setSelection  @ renderCanvas:2291
-  @use call    wv.setSourceTagPos  @ renderCanvas:2268
-  @use call    wv.wireViews  @ renderCanvas:1761
-  @use call    wv.wiredPorts  @ layoutPortRow:453
+  @use call    wv:addBusNode  @ commitFx:2620
+  @use call    wv:addFx  @ commitFx:2622
+  @use call    wv:ancestorsOf  @ renderCanvas:2137,2185 renderPaletteList:2495
+  @use call    wv:busViews  @ renderCanvas:1762
+  @use call    wv:bypassed  @ renderCanvas:1930,2108
+  @use call    wv:deleteBus  @ renderCanvas:2358
+  @use call    wv:deleteNode  @ renderCanvas:2359
+  @use call    wv:deleteSource  @ deleteSourceGuarded:2454,2460
+  @use call    wv:descendantsOf  @ renderCanvas:2184
+  @use call    wv:edgeGain  @ renderCanvas:1859,1986,2030
+  @use call    wv:listInstalledFX  @ 2604
+  @use call    wv:masterPos  @ sourceSegments:1305 sourcePosFor:2582
+  @use call    wv:moveBus  @ renderCanvas:2276
+  @use call    wv:moveNodes  @ renderCanvas:2284
+  @use call    wv:muted  @ renderCanvas:1930,2107
+  @use call    wv:nodeViews  @ renderCanvas:1733 renderPaletteBody:2506
+  @use call    wv:openFxWindow  @ renderCanvas:2078
+  @use call    wv:pokeEdgeGain  @ renderCanvas:1831,1995,2033,2050
+  @use call    wv:removeWireAt  @ renderCanvas:2249
+  @use call    wv:rewireEdgeEnd  @ renderCanvas:2235
+  @use call    wv:rotateBus  @ renderCanvas:2363
+  @use call    wv:samplerTrack  @ renderCanvas:2075
+  @use call    wv:selection  @ renderCanvas:1743
+  @use call    wv:setBypassed  @ renderCanvas:2108
+  @use call    wv:setEdgeGain  @ renderCanvas:1834,1863,1996,2020,2034,2051,2058
+  @use call    wv:setEdgePrimary  @ renderCanvas:2329
+  @use call    wv:setHover  @ renderCanvas:1966
+  @use call    wv:setMuted  @ renderCanvas:2107
+  @use call    wv:setSelection  @ renderCanvas:2291
+  @use call    wv:setSourceTagPos  @ renderCanvas:2268
+  @use call    wv:wireViews  @ renderCanvas:1761
+  @use call    wv:wiredPorts  @ layoutPortRow:453
   @use require imgui  @ 16
   @use require painter  @ 17
   @use require util  @ 10

@@ -1,4 +1,4 @@
-@module modalHost  src=modalHost.lua  loc=154  sha=a0cb94a  mode=chunk  self=modalHost
+@module modalHost  src=modalHost.lua  loc=154  sha=c68027d  mode=chunk  self=modalHost
 @deps ctx, chrome
 
 # Invariants & contracts
@@ -33,28 +33,28 @@
   @api modalHost:draw()  @ 55-105
 
 # Uses (outbound edges)
+  @use call    ImGui.BeginPopupModal  @ draw:77
+  @use call    ImGui.CloseCurrentPopup  @ draw:86
+  @use call    ImGui.EndPopup  @ draw:98
+  @use call    ImGui.GetStyleVar  @ draw:71
+  @use call    ImGui.GetWindowViewport  @ draw:62
+  @use call    ImGui.InputText  @ 131,142
+  @use call    ImGui.IsKeyPressed  @ 111,113,135,136,138,146
+  @use call    ImGui.IsPopupOpen  @ draw:59
+  @use call    ImGui.IsWindowAppearing  @ 119
+  @use call    ImGui.OpenPopup  @ open:26 draw:60
+  @use call    ImGui.PopStyleColor  @ draw:103
+  @use call    ImGui.PopStyleVar  @ draw:78,102
+  @use call    ImGui.PushStyleColor  @ draw:67
+  @use call    ImGui.PushStyleVar  @ draw:68,72
+  @use call    ImGui.SetKeyboardFocusHere  @ 120
+  @use call    ImGui.SetNextWindowPos  @ draw:63
+  @use call    ImGui.SetNextWindowSize  @ draw:75
+  @use call    ImGui.Text  @ 110,121,134
+  @use call    ImGui.Viewport_GetCenter  @ draw:62
   @use call    chrome.colour  @ draw:67
   @use call    chrome.popChromeWindow  @ draw:104
   @use call    chrome.pushChromeWindow  @ draw:65
-  @use call    imgui.BeginPopupModal  @ draw:77
-  @use call    imgui.CloseCurrentPopup  @ draw:86
-  @use call    imgui.EndPopup  @ draw:98
-  @use call    imgui.GetStyleVar  @ draw:71
-  @use call    imgui.GetWindowViewport  @ draw:62
-  @use call    imgui.InputText  @ 131,142
-  @use call    imgui.IsKeyPressed  @ 111,113,135,136,138,146
-  @use call    imgui.IsPopupOpen  @ draw:59
-  @use call    imgui.IsWindowAppearing  @ 119
-  @use call    imgui.OpenPopup  @ open:26 draw:60
-  @use call    imgui.PopStyleColor  @ draw:103
-  @use call    imgui.PopStyleVar  @ draw:78,102
-  @use call    imgui.PushStyleColor  @ draw:67
-  @use call    imgui.PushStyleVar  @ draw:68,72
-  @use call    imgui.SetKeyboardFocusHere  @ 120
-  @use call    imgui.SetNextWindowPos  @ draw:63
-  @use call    imgui.SetNextWindowSize  @ draw:75
-  @use call    imgui.Text  @ 110,121,134
-  @use call    imgui.Viewport_GetCenter  @ draw:62
   @use require imgui  @ 7
 
 # REAPER API surface

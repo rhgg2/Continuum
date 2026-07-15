@@ -23,12 +23,12 @@
   @case 'bindFromSelection re-keys cm on return from dormancy even when the take is unchanged'  [harness]  @ 253-273
 
 # Uses (outbound edges)
-  @use call configManager.setContext  @ 100
-  @use call commandManager.push  @ 151,180
-  @use call commandManager.invoke  @ 153,159,182,184,186,188
-  @use call configManager.getAt  @ 157,161,183,185,187,189
-  @use call midiManager.subscribe  @ 233
-  @use call midiManager.notes  @ 238
-  @use call trackerManager.assignEvent  @ 239
-  @use call trackerManager.byUuid  @ 239
-  @use call trackerManager.flush  @ 240
+  @use call cm:setContext  @ 100
+  @use call cmgr:push  @ 151,180
+  @use call cmgr:invoke  @ 153,159,182,184,186,188
+  @use call cm:getAt  @ 157,161,183,185,187,189
+  @use call mm:subscribe  @ 233
+  @use call mm:notes  @ 238
+  @use call tm:assignEvent  @ 239
+  @use call tm:byUuid  @ 239
+  @use call tm:flush  @ 240

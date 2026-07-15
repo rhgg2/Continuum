@@ -1,4 +1,4 @@
-@spec tm_gate_parity_spec  src=tests/specs/tm_gate_parity_spec.lua  loc=159  sha=0efbe16  cases=1
+@spec tm_gate_parity_spec  src=tests/specs/tm_gate_parity_spec.lua  loc=159  sha=285f562  cases=1
 @exercises trackerManager (h.tm), midiManager (h.fm), dataStore (h.ds)
 @surface   tm:getChannel, fm:dump, tm:rebuild, tm:addEvent, tm:flush, ds:assign, tm:fromLogical, tm:assignEvent
 @harness   mk
@@ -36,11 +36,11 @@
   @case 'gated rebuild projects identically to a forced full rebuild across a rich frame'  [harness]  @ 111-157
 
 # Uses (outbound edges)
-  @use call trackerManager.getChannel  @ 45,150
-  @use call midiManager.dump  @ 90,135
-  @use call trackerManager.rebuild  @ 103,130
-  @use call trackerManager.addEvent  @ 123,124,125,126,146,155
-  @use call trackerManager.flush  @ 123,124,125,126,146,151,155
-  @use call dataStore.assign  @ 127
-  @use call trackerManager.fromLogical  @ 143
-  @use call trackerManager.assignEvent  @ 151
+  @use call tm:getChannel  @ 45,150
+  @use call fm:dump  @ 90,135
+  @use call tm:rebuild  @ 103,130
+  @use call tm:addEvent  @ 123,124,125,126,146,155
+  @use call tm:flush  @ 123,124,125,126,146,151,155
+  @use call ds:assign  @ 127
+  @use call tm:fromLogical  @ 143
+  @use call tm:assignEvent  @ 151

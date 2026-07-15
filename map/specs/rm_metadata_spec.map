@@ -21,4 +21,4 @@
 
 # Uses (outbound edges)
   @use call harness.mk  @ 8
-  @use call configManager.pollUndo  @ 101
+  @use call cm:pollUndo  @ 101

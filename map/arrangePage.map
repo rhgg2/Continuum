@@ -1,4 +1,4 @@
-@module arrangePage  src=arrangePage.lua  loc=67  sha=3a7206b  mode=chunk  self=ap
+@module arrangePage  src=arrangePage.lua  loc=67  sha=61aa319  mode=chunk  self=ap
 @deps cm, ds, cmgr, chrome, gui, modalHost, facade, eventMeta
 
 # Imports
@@ -30,26 +30,26 @@
   @api ap:focusState()  @ 65
 
 # Uses (outbound edges)
-  @use call    arrangeRender.focusState  @ focusState:65
-  @use call    arrangeRender.renderBody  @ renderBody:63
-  @use call    arrangeRender.renderStatusBar  @ renderStatusBar:64
-  @use call    arrangeRender.toolbarSegments  @ toolbarSegments:62
-  @use call    arrangeView.cursorCol  @ 42
-  @use call    arrangeView.dropSlot  @ 53
-  @use call    arrangeView.hasPlacedTakes  @ 54
-  @use call    arrangeView.isParkedTake  @ 55
-  @use call    arrangeView.keyForSlot  @ 48
-  @use call    arrangeView.midiSlots  @ 44
-  @use call    arrangeView.mintParkedTake  @ 51
-  @use call    arrangeView.nextFreeSlot  @ 49
-  @use call    arrangeView.ownerTrack  @ 56
-  @use call    arrangeView.projectTracks  @ 43
-  @use call    arrangeView.reswingAll  @ 57
-  @use call    arrangeView.seedCursor  @ seedCursorFromReaper:38
-  @use call    arrangeView.takeForSlot  @ 45
-  @use call    arrangeView.takesUsing  @ 58
-  @use call    arrangeView.trackHandle  @ 47
-  @use call    arrangeView.trackIdxForGuid  @ 46
+  @use call    ar:focusState  @ focusState:65
+  @use call    ar:renderBody  @ renderBody:63
+  @use call    ar:renderStatusBar  @ renderStatusBar:64
+  @use call    ar:toolbarSegments  @ toolbarSegments:62
+  @use call    av:cursorCol  @ 42
+  @use call    av:dropSlot  @ 53
+  @use call    av:hasPlacedTakes  @ 54
+  @use call    av:isParkedTake  @ 55
+  @use call    av:keyForSlot  @ 48
+  @use call    av:midiSlots  @ 44
+  @use call    av:mintParkedTake  @ 51
+  @use call    av:nextFreeSlot  @ 49
+  @use call    av:ownerTrack  @ 56
+  @use call    av:projectTracks  @ 43
+  @use call    av:reswingAll  @ 57
+  @use call    av:seedCursor  @ seedCursorFromReaper:38
+  @use call    av:takeForSlot  @ 45
+  @use call    av:takesUsing  @ 58
+  @use call    av:trackHandle  @ 47
+  @use call    av:trackIdxForGuid  @ 46
   @use call    facade.publish  @ 41
   @use call    util.instantiate  @ 23,24,25
   @use require arrangeManager  @ 23

@@ -23,7 +23,7 @@
   @case 'util.REMOVE clears a metadata field on a stamped cc (no lock)'  [harness]  @ 138-146
 
 # Uses (outbound edges)
-  @use call midiManager.ccs  @ 16
-  @use call midiManager.assign  @ 27,39,52,54,65,78,95,96,116,129,144
-  @use call midiManager.modify  @ 39,52,65,78,94,129,132
-  @use call midiManager.delete  @ 132
+  @use call mm:ccs  @ 16
+  @use call fm:assign  @ 27,39,52,54,65,78,95,96,116,129,144
+  @use call fm:modify  @ 39,52,65,78,94,129,132
+  @use call fm:delete  @ 132

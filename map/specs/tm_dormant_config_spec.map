@@ -16,8 +16,8 @@
   @case 'bound tracker still rebuilds on a swing edit'  [harness]  @ 51-62
 
 # Uses (outbound edges)
-  @use call trackerManager.subscribe  @ 10
-  @use call trackerManager.bindTake  @ 24
-  @use call configManager.set  @ 28,45
-  @use call dataStore.assign  @ 29,60
-  @use call trackerManager.detach  @ 42
+  @use call tm:subscribe  @ 10
+  @use call tm:bindTake  @ 24
+  @use call cm:set  @ 28,45
+  @use call ds:assign  @ 29,60
+  @use call tm:detach  @ 42

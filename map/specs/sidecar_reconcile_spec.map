@@ -56,6 +56,6 @@
   @case 'mixed: silent + valueRebound + consensus + orphan in one load'  [pure]  @ 523-550
 
 # Uses (outbound edges)
-  @use call midiManager.ccs  @ 20,85,154,239,314,375
-  @use call midiManager.subscribe  @ 73
-  @use call midiManager.load  @ 76
+  @use call mm:ccs  @ 20,85,154,239,314,375
+  @use call mm:subscribe  @ 73
+  @use call mm:load  @ 76

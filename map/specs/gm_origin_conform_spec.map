@@ -36,9 +36,9 @@
   @case 'instance 1 clips its overrun to instance 2 (real tm, no lane-2 bump)'  [harness]  @ 109-152
 
 # Uses (outbound edges)
-  @use call groupManager.markGroup  @ 61
-  @use call groupManager.newInstance  @ 62
-  @use call trackerManager.flush  @ 63,77,117,123
-  @use call groupManager.assignEvent  @ 75,76
-  @use call groupManager.stamp  @ 116
-  @use call trackerManager.getChannel  @ 127,133
+  @use call gm:markGroup  @ 61
+  @use call gm:newInstance  @ 62
+  @use call tm:flush  @ 63,77,117,123
+  @use call gm:assignEvent  @ 75,76
+  @use call gm:stamp  @ 116
+  @use call tm:getChannel  @ 127,133

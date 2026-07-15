@@ -25,11 +25,11 @@
   @case 'setPinMaps with no grow schedules nothing (no OR without a grow)'  [harness]  @ 99-104
 
 # Uses (outbound edges)
-  @use call wiringManager.load  @ 8
-  @use call wiringManager.instantiateFxOnScratch  @ 26
-  @use call wiringManager.mutate  @ 45
-  @use call wiringManager.applyOps  @ 51,69,77,94,102
-  @use call wiringManager.diff  @ 51
-  @use call wiringManager.targetState  @ 51
-  @use call wiringManager.snapshot  @ 51
-  @use call wiringManager.graph  @ 53
+  @use call wm:load  @ 8
+  @use call wm:instantiateFxOnScratch  @ 26
+  @use call wm:mutate  @ 45
+  @use call wm:applyOps  @ 51,69,77,94,102
+  @use call wm:diff  @ 51
+  @use call wm:targetState  @ 51
+  @use call wm:snapshot  @ 51
+  @use call wm:graph  @ 53

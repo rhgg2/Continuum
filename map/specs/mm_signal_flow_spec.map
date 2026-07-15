@@ -1,4 +1,4 @@
-@spec mm_signal_flow_spec  src=tests/specs/mm_signal_flow_spec.lua  loc=217  sha=a2a3815  cases=12
+@spec mm_signal_flow_spec  src=tests/specs/mm_signal_flow_spec.lua  loc=217  sha=285f562  cases=12
 @exercises harness (harness), midiManager (h.fm), trackerManager (h.tm)
 @surface   harness.mk, fm:load, fm:take, fm:subscribe, fm:modify, tm:subscribe, harness.bareMM, fm:notes, fm:tokenOf, fm:assign
 @harness   mk, bareMM, reaper.MIDI_InsertNote, reaper:seedMidi
@@ -38,12 +38,12 @@
 
 # Uses (outbound edges)
   @use call harness.mk  @ 31,47,61,105,117,205
-  @use call midiManager.load  @ 35,51,70,71,92,108,121,163,178,211,213
-  @use call midiManager.take  @ 51,91,92,121,162,163,178,207,211,213
-  @use call midiManager.subscribe  @ 87,119,120,134,150,161,177,210
-  @use call midiManager.modify  @ 96,135,151,192,194
-  @use call trackerManager.subscribe  @ 107
+  @use call fm:load  @ 35,51,70,71,92,108,121,163,178,211,213
+  @use call fm:take  @ 51,91,92,121,162,163,178,207,211,213
+  @use call fm:subscribe  @ 87,119,120,134,150,161,177,210
+  @use call fm:modify  @ 96,135,151,192,194
+  @use call tm:subscribe  @ 107
   @use call harness.bareMM  @ 132,159,190
-  @use call midiManager.notes  @ 147
-  @use call midiManager.tokenOf  @ 148
-  @use call midiManager.assign  @ 151
+  @use call fm:notes  @ 147
+  @use call fm:tokenOf  @ 148
+  @use call fm:assign  @ 151

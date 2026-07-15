@@ -28,18 +28,18 @@
   @case 'tap mirror: wiring writes through; a dead node GCs its tap'  [harness]  @ 246-268
 
 # Uses (outbound edges)
-  @use call wiringManager.mutate  @ 14,81,109,126,152,178,220,252,259
-  @use call wiringManager.instantiateFxOnScratch  @ 28
-  @use call wiringManager.addBusNode  @ 38,57,58,59,66,79,107,124,177,249
-  @use call wiringManager.graph  @ 40,68,86,88,91,100,186,229
-  @use call routingManager.meta  @ 47,69,84,87,125,141,159,209,239,251,256,267
-  @use call wiringManager.moveNodes  @ 67
-  @use call wiringManager.deleteBus  @ 85,99
-  @use call wiringManager.load  @ 122,175
-  @use call wiringManager.enableLive  @ 123,176
-  @use call wiringManager.read  @ 146,161
-  @use call wiringManager.pokeEdgeGain  @ 196,201
-  @use call wiringManager.fastGainCommit  @ 208
-  @use call wiringManager.diff  @ 210
-  @use call wiringManager.targetState  @ 210
-  @use call wiringManager.snapshot  @ 210
+  @use call wm:mutate  @ 14,81,109,126,152,178,220,252,259
+  @use call wm:instantiateFxOnScratch  @ 28
+  @use call wm:addBusNode  @ 38,57,58,59,66,79,107,124,177,249
+  @use call wm:graph  @ 40,68,86,88,91,100,186,229
+  @use call rm:meta  @ 47,69,84,87,125,141,159,209,239,251,256,267
+  @use call wm:moveNodes  @ 67
+  @use call wm:deleteBus  @ 85,99
+  @use call wm:load  @ 122,175
+  @use call wm:enableLive  @ 123,176
+  @use call wm:read  @ 146,161
+  @use call wm:pokeEdgeGain  @ 196,201
+  @use call wm:fastGainCommit  @ 208
+  @use call wm:diff  @ 210
+  @use call wm:targetState  @ 210
+  @use call wm:snapshot  @ 210

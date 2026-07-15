@@ -56,18 +56,18 @@
   @case 'growNote on an open note closes it and authors a finite ceiling'  [harness]  @ 961-995
 
 # Uses (outbound edges)
-  @use call trackerView.setGridSize  @ 22,203,302,341,381,409,431,452,478,501,528,558,580,614,664,701,746,779,851,878,974
-  @use call editCursor.extendTo  @ 29,343,899,912,913
-  @use call editCursor.pos  @ 29,928
-  @use call editCursor.setPos  @ 48,81,114,116,144,146,166,169,172,213,221,237,264,303,342,359,382,410,432,453,479,506,533,621,669,706,751,784,801,816,831,898,911,927,979
-  @use call commandManager.invoke  @ 53,58,86,91,115,117,145,147,167,170,173,214,223,238,266,305,344,360,383,411,433,454,480,507,534,561,583,622,670,707,752,785,802,817,980
-  @use call midiManager.dump  @ 54,59,87,92,119,150,175,215,224,240,268,309,362,386,414,435,457,483,510,537,564,586,625,673,710,755,788,804,819,977,982,989,992
-  @use call editCursor.region  @ 346,589,901,914,944
-  @use call editCursor.row  @ 365,394,438,464,515,542,760,791
-  @use call trackerManager.getChannel  @ 617,666,703,748,781
-  @use call editCursor.eachSelectedCol  @ 833,855
-  @use call trackerView.showDelay  @ 881
-  @use call dataStore.get  @ 882
-  @use call editCursor.hasSelection  @ 900
-  @use call trackerManager.deleteEvent  @ 989
-  @use call trackerManager.flush  @ 990
+  @use call vm:setGridSize  @ 22,203,302,341,381,409,431,452,478,501,528,558,580,614,664,701,746,779,851,878,974
+  @use call ec:extendTo  @ 29,343,899,912,913
+  @use call ec:pos  @ 29,928
+  @use call ec:setPos  @ 48,81,114,116,144,146,166,169,172,213,221,237,264,303,342,359,382,410,432,453,479,506,533,621,669,706,751,784,801,816,831,898,911,927,979
+  @use call cmgr:invoke  @ 53,58,86,91,115,117,145,147,167,170,173,214,223,238,266,305,344,360,383,411,433,454,480,507,534,561,583,622,670,707,752,785,802,817,980
+  @use call fm:dump  @ 54,59,87,92,119,150,175,215,224,240,268,309,362,386,414,435,457,483,510,537,564,586,625,673,710,755,788,804,819,977,982,989,992
+  @use call ec:region  @ 346,589,901,914,944
+  @use call ec:row  @ 365,394,438,464,515,542,760,791
+  @use call tm:getChannel  @ 617,666,703,748,781
+  @use call ec:eachSelectedCol  @ 833,855
+  @use call vm:showDelay  @ 881
+  @use call ds:get  @ 882
+  @use call ec:hasSelection  @ 900
+  @use call tm:deleteEvent  @ 989
+  @use call tm:flush  @ 990

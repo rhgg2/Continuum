@@ -15,10 +15,10 @@
   @case 'global type-over a locally-deleted slot revives without choking on delay=REMOVE'  [pure]  @ 28-52
 
 # Uses (outbound edges)
-  @use call midiManager.dump  @ 21
-  @use call groupManager.markGroup  @ 32
-  @use call trackerView.eventsInRect  @ 32
-  @use call groupManager.newInstance  @ 33
-  @use call trackerManager.flush  @ 34,40,47
-  @use call groupManager.setLocalMode  @ 39,41
-  @use call groupManager.deleteEvent  @ 40
+  @use call fm:dump  @ 21
+  @use call gm:markGroup  @ 32
+  @use call vm:eventsInRect  @ 32
+  @use call gm:newInstance  @ 33
+  @use call tm:flush  @ 34,40,47
+  @use call gm:setLocalMode  @ 39,41
+  @use call gm:deleteEvent  @ 40

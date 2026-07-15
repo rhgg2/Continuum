@@ -483,15 +483,17 @@ def parse(path: Path) -> MapFile:
 
 
 def extract_uses(cm: MapFile, lines: list[str], caller_at) -> None:
-    """Walk lines collecting outbound edges. Resolves receivers through the
-    alias table (imports/constructs/self → module); calls on unresolved
-    receivers are dropped — see docs/map_uses.md for the recall caveat."""
+    """Walk lines collecting outbound edges. Stores each receiver verbatim
+    (source-faithful: `cm:get`, `util.deepClone`); the alias table is
+    consulted only to drop unresolved receivers and skip intra-module calls.
+    The querier resolves the short name to a module via the self-name
+    registry (unique per module, from each map's `self=` marker)."""
     aliases: dict[str, str] = {}
     for d in cm.imports:    aliases[d.name] = d.init   # name → module
     for d in cm.constructs: aliases[d.name] = d.init
     # Chunk deps (passed via `(...)`) have no statically-known module identity:
-    # alias them to themselves so `tm:foo` records as `tm.foo`, and let the
-    # querier resolve the short name through project convention.
+    # alias them to themselves so `tm:foo` is emitted verbatim (not dropped),
+    # and let the querier resolve the short name through project convention.
     for dep in cm.deps:
         aliases.setdefault(dep, dep)
     if cm.return_target:
@@ -523,13 +525,13 @@ def extract_uses(cm: MapFile, lines: list[str], caller_at) -> None:
                 continue  # sub/forward are their own edge kinds
             if mod == cm.module and (recv == 'self' or recv == cm.return_target):
                 continue  # intra-module call, not an outbound edge
-            add('call', f'{mod}.{fn}', line)
+            add('call', f'{recv}{sep}{fn}', line)
 
         for m in SUB_RE.finditer(code):
             recv, sig = m.group(1), m.group(2)
             mod = aliases.get(recv)
             if mod:
-                add('sub', f'{mod}:{sig}', line)
+                add('sub', f'{recv}:{sig}', line)
 
         for m in FORWARD_RE.finditer(code):
             # forward(signal, source): outbound edge is to the SOURCE's signal —
@@ -538,7 +540,7 @@ def extract_uses(cm: MapFile, lines: list[str], caller_at) -> None:
             sig, source = m.group(1), m.group(2)
             mod = aliases.get(source)
             if mod:
-                add('forward', f'{mod}:{sig}', line)
+                add('forward', f'{source}:{sig}', line)
 
     cm.uses.sort(key=lambda u: (u[0], u[1], u[2]))
 
@@ -970,7 +972,7 @@ def parse_spec(path: Path) -> SpecMap:
             display = recv if recv in local_aliases else f'h.{recv}'
             exercised.setdefault(mod, display)
             surface.setdefault((mod, fn), f'{recv}{sep}{fn}')
-            sm.uses.append(('call', f'{mod}.{fn}', i + 1))
+            sm.uses.append(('call', f'{recv}{sep}{fn}', i + 1))
 
     if 'mk' in mk_forms:
         seeds = spec_seed_keys('\n'.join(code_lines))

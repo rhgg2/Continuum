@@ -1,4 +1,4 @@
-@module temperEditor  src=temperEditor.lua  loc=760  sha=d013d39  mode=chunk  self=temperEditor
+@module temperEditor  src=temperEditor.lua  loc=760  sha=3970445  mode=chunk  self=temperEditor
 @deps cm, chrome, ctx, gui, modalHost
 
 # Imports
@@ -125,6 +125,48 @@
   @api temperEditor:libraryDescriptor()  @ 759
 
 # Uses (outbound edges)
+  @use call    ImGui.AlignTextToFramePadding  @ drawHeader:265 drawStepRow:293 drawStepTable:352 407,434 labeledInput:509 drawRank2Fields:592
+  @use call    ImGui.BeginChild  @ drawEditBody:716 draw:741
+  @use call    ImGui.BeginDisabled  @ drawStepRow:299 drawGenerators:666 drawStepsTop:698,702
+  @use call    ImGui.BeginTable  @ drawStepTable:337
+  @use call    ImGui.Button  @ drawStepRow:316 drawStepTable:367 417,419,441,455,457 pillButton:490 drawGenerators:681
+  @use call    ImGui.EndChild  @ drawEditBody:719 draw:746
+  @use call    ImGui.EndDisabled  @ drawStepRow:301 drawGenerators:683 drawStepsTop:700,706
+  @use call    ImGui.EndTable  @ drawStepTable:370
+  @use call    ImGui.GetContentRegionAvail  @ drawStepTable:334 draw:743
+  @use call    ImGui.GetCursorScreenPos  @ drawEditBody:722
+  @use call    ImGui.GetFrameHeight  @ pushUiPadToGrid:281,285
+  @use call    ImGui.GetMousePos  @ drawEditBody:727
+  @use call    ImGui.GetStyleVar  @ pushUiPadToGrid:283
+  @use call    ImGui.InputText  @ tokenBox:254 drawStepRow:309 413,438 labeledInput:511
+  @use call    ImGui.InputTextMultiline  @ 453
+  @use call    ImGui.InvisibleButton  @ drawEditBody:724
+  @use call    ImGui.IsItemActive  @ drawEditBody:725
+  @use call    ImGui.IsItemDeactivatedAfterEdit  @ tokenBox:256 drawEqualFields:525
+  @use call    ImGui.IsItemHovered  @ drawEditBody:725
+  @use call    ImGui.IsKeyPressed  @ 419,457
+  @use call    ImGui.IsWindowAppearing  @ 404
+  @use call    ImGui.PopFont  @ pushUiPadToGrid:282 drawStepRow:310
+  @use call    ImGui.PopID  @ drawStepRow:320 drawStepTable:359 414
+  @use call    ImGui.PopStyleColor  @ pillButton:491
+  @use call    ImGui.PopStyleVar  @ drawStepRow:302,317 drawStepTable:358,368,372 drawStepsTop:705
+  @use call    ImGui.PushFont  @ pushUiPadToGrid:280 drawStepRow:308
+  @use call    ImGui.PushID  @ drawStepRow:290 drawStepTable:350 412
+  @use call    ImGui.PushStyleColor  @ pillButton:488,489
+  @use call    ImGui.PushStyleVar  @ pushUiPadToGrid:284 drawStepTable:336 drawStepsTop:703
+  @use call    ImGui.SameLine  @ drawHeader:268,271 409,416,418,436,440,456 genKindSelector:497 labeledInput:509 drawRank2Fields:592,599,605 drawGenerators:684
+  @use call    ImGui.Separator  @ drawGenerators:668 drawStepsTop:701
+  @use call    ImGui.SetCursorScreenPos  @ drawEditBody:723,734
+  @use call    ImGui.SetKeyboardFocusHere  @ 405
+  @use call    ImGui.SetMouseCursor  @ drawEditBody:733
+  @use call    ImGui.SetNextItemWidth  @ drawHeader:269 drawStepRow:297,307 drawStepTable:355 410,437 labeledInput:510
+  @use call    ImGui.Spacing  @ drawGenerators:670,679
+  @use call    ImGui.TableNextColumn  @ drawStepRow:292,296,306,313 drawColumnLabels:328 drawStepTable:351,354,364,365
+  @use call    ImGui.TableNextRow  @ drawStepRow:289 drawColumnLabels:326 drawStepTable:349,363
+  @use call    ImGui.TableSetupColumn  @ drawStepTable:338,339,340,341
+  @use call    ImGui.Text  @ drawHeader:267 drawStepRow:294 408,435 labeledInput:509 drawRank2Fields:592 drawStepsTop:695
+  @use call    ImGui.TextColored  @ 430,470 drawGenerators:684
+  @use call    ImGui.TextDisabled  @ drawColumnLabels:329 drawStepTable:353 452 drawRank2Fields:607 drawGenerators:669
   @use call    chrome.checkbox  @ drawHeader:273 drawChordFields:559 drawRank2Fields:600
   @use call    chrome.colour  @ 430,470 pillButton:487 drawGenerators:684
   @use call    chrome.disabledIf  @ drawGenerators:680
@@ -133,55 +175,13 @@
   @use call    chrome.popChromeStyles  @ draw:747
   @use call    chrome.pushChromeStyles  @ draw:740
   @use call    chrome.row  @ drawGenerators:667 drawStepsTop:699
-  @use call    cm.get  @ viewedName:41 temperFor:65 activeTemper:70 buildDescriptor:224 424,462
-  @use call    cm.getAt  @ projectTempers:43 globalTempers:48 editedTemper:77 temperWrite:109
-  @use call    cm.seedGlobalFromDefault  @ globalTempers:47
-  @use call    cm.set  @ temperWrite:111 promote:194 203,211,384,397
+  @use call    cm:get  @ viewedName:41 temperFor:65 activeTemper:70 buildDescriptor:224 424,462
+  @use call    cm:getAt  @ projectTempers:43 globalTempers:48 editedTemper:77 temperWrite:109
+  @use call    cm:seedGlobalFromDefault  @ globalTempers:47
+  @use call    cm:set  @ temperWrite:111 promote:194 203,211,384,397
   @use call    fs.basename  @ 448
   @use call    fs.readText  @ 444
-  @use call    imgui.AlignTextToFramePadding  @ drawHeader:265 drawStepRow:293 drawStepTable:352 407,434 labeledInput:509 drawRank2Fields:592
-  @use call    imgui.BeginChild  @ drawEditBody:716 draw:741
-  @use call    imgui.BeginDisabled  @ drawStepRow:299 drawGenerators:666 drawStepsTop:698,702
-  @use call    imgui.BeginTable  @ drawStepTable:337
-  @use call    imgui.Button  @ drawStepRow:316 drawStepTable:367 417,419,441,455,457 pillButton:490 drawGenerators:681
-  @use call    imgui.EndChild  @ drawEditBody:719 draw:746
-  @use call    imgui.EndDisabled  @ drawStepRow:301 drawGenerators:683 drawStepsTop:700,706
-  @use call    imgui.EndTable  @ drawStepTable:370
-  @use call    imgui.GetContentRegionAvail  @ drawStepTable:334 draw:743
-  @use call    imgui.GetCursorScreenPos  @ drawEditBody:722
-  @use call    imgui.GetFrameHeight  @ pushUiPadToGrid:281,285
-  @use call    imgui.GetMousePos  @ drawEditBody:727
-  @use call    imgui.GetStyleVar  @ pushUiPadToGrid:283
-  @use call    imgui.InputText  @ tokenBox:254 drawStepRow:309 413,438 labeledInput:511
-  @use call    imgui.InputTextMultiline  @ 453
-  @use call    imgui.InvisibleButton  @ drawEditBody:724
-  @use call    imgui.IsItemActive  @ drawEditBody:725
-  @use call    imgui.IsItemDeactivatedAfterEdit  @ tokenBox:256 drawEqualFields:525
-  @use call    imgui.IsItemHovered  @ drawEditBody:725
-  @use call    imgui.IsKeyPressed  @ 419,457
-  @use call    imgui.IsWindowAppearing  @ 404
-  @use call    imgui.PopFont  @ pushUiPadToGrid:282 drawStepRow:310
-  @use call    imgui.PopID  @ drawStepRow:320 drawStepTable:359 414
-  @use call    imgui.PopStyleColor  @ pillButton:491
-  @use call    imgui.PopStyleVar  @ drawStepRow:302,317 drawStepTable:358,368,372 drawStepsTop:705
-  @use call    imgui.PushFont  @ pushUiPadToGrid:280 drawStepRow:308
-  @use call    imgui.PushID  @ drawStepRow:290 drawStepTable:350 412
-  @use call    imgui.PushStyleColor  @ pillButton:488,489
-  @use call    imgui.PushStyleVar  @ pushUiPadToGrid:284 drawStepTable:336 drawStepsTop:703
-  @use call    imgui.SameLine  @ drawHeader:268,271 409,416,418,436,440,456 genKindSelector:497 labeledInput:509 drawRank2Fields:592,599,605 drawGenerators:684
-  @use call    imgui.Separator  @ drawGenerators:668 drawStepsTop:701
-  @use call    imgui.SetCursorScreenPos  @ drawEditBody:723,734
-  @use call    imgui.SetKeyboardFocusHere  @ 405
-  @use call    imgui.SetMouseCursor  @ drawEditBody:733
-  @use call    imgui.SetNextItemWidth  @ drawHeader:269 drawStepRow:297,307 drawStepTable:355 410,437 labeledInput:510
-  @use call    imgui.Spacing  @ drawGenerators:670,679
-  @use call    imgui.TableNextColumn  @ drawStepRow:292,296,306,313 drawColumnLabels:328 drawStepTable:351,354,364,365
-  @use call    imgui.TableNextRow  @ drawStepRow:289 drawColumnLabels:326 drawStepTable:349,363
-  @use call    imgui.TableSetupColumn  @ drawStepTable:338,339,340,341
-  @use call    imgui.Text  @ drawHeader:267 drawStepRow:294 408,435 labeledInput:509 drawRank2Fields:592 drawStepsTop:695
-  @use call    imgui.TextColored  @ 430,470 drawGenerators:684
-  @use call    imgui.TextDisabled  @ drawColumnLabels:329 drawStepTable:353 452 drawRank2Fields:607 drawGenerators:669
-  @use call    modalHost.registerKind  @ 403,433
+  @use call    modalHost:registerKind  @ 403,433
   @use call    tuning.degreesToSpec  @ reseedEqual:516,517 drawEqualFields:538,544
   @use call    tuning.derive  @ temperWrite:108
   @use call    tuning.edoDegrees  @ drawEqualFields:537,543 buildGen:619

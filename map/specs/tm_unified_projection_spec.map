@@ -12,6 +12,6 @@
   @case 'raw collision: ppqL-later note clamps to predecessor + 1; delayC carries give-way'  [harness]  @ 55-93
 
 # Uses (outbound edges)
-  @use call dataStore.assign  @ 35,74
-  @use call midiManager.dump  @ 38,77
-  @use call trackerManager.getChannel  @ 87
+  @use call ds:assign  @ 35,74
+  @use call fm:dump  @ 38,77
+  @use call tm:getChannel  @ 87

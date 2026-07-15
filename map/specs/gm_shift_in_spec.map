@@ -27,13 +27,13 @@
   @case 'move a member from one instance to another: lands in the sibling, shared globally'  [harness]  @ 106-134
 
 # Uses (outbound edges)
-  @use call midiManager.notes  @ 20
-  @use call groupManager.markGroup  @ 45
-  @use call trackerView.eventsInRect  @ 45
-  @use call trackerView.selectionAsRect  @ 45,46
-  @use call editCursor.selClear  @ 47
-  @use call groupManager.newInstance  @ 64,92,116
-  @use call trackerManager.flush  @ 65,93,117,123
-  @use call editCursor.setPos  @ 68,95,126
-  @use call commandManager.invoke  @ 69,96,127
-  @use call groupManager.setLocalMode  @ 121,124
+  @use call fm:notes  @ 20
+  @use call gm:markGroup  @ 45
+  @use call vm:eventsInRect  @ 45
+  @use call vm:selectionAsRect  @ 45,46
+  @use call ec:selClear  @ 47
+  @use call gm:newInstance  @ 64,92,116
+  @use call tm:flush  @ 65,93,117,123
+  @use call ec:setPos  @ 68,95,126
+  @use call cmgr:invoke  @ 69,96,127
+  @use call gm:setLocalMode  @ 121,124

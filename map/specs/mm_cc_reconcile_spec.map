@@ -40,8 +40,8 @@
   @case 'reconcile fires before reload (signal ordering)'  [pure]  @ 267-281
 
 # Uses (outbound edges)
-  @use call midiManager.ccs  @ 16,160,226
-  @use call midiManager.subscribe  @ 87,88,89,90,91,277,278
-  @use call midiManager.load  @ 92,279
-  @use call midiManager.modify  @ 257
-  @use call midiManager.assign  @ 257
+  @use call mm:ccs  @ 16,160,226
+  @use call mm:subscribe  @ 87,88,89,90,91,277,278
+  @use call mm:load  @ 92,279
+  @use call mm:modify  @ 257
+  @use call mm:assign  @ 257

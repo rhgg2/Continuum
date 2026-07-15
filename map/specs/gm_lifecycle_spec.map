@@ -36,13 +36,13 @@
   @case 'resizeGroup rejects growing one instance into a sibling'  [pure]  @ 252-264
 
 # Uses (outbound edges)
-  @use call groupManager.eachInstance  @ 29
-  @use call groupManager.mark  @ 42,55,70,100,115,126,141,153,154,167,180,193,208,242,243
-  @use call groupManager.newInstance  @ 43,85
-  @use call trackerManager.flush  @ 45
-  @use call groupManager.resizeGroup  @ 58,181,182,184,196,211,230,245,261
-  @use call groupManager.deleteInstance  @ 71,73,90,103
-  @use call groupManager.duplicateInto  @ 82,224,255
-  @use call groupManager.activeGroup  @ 101,105
-  @use call groupManager.moveInstance  @ 116,117,128,143,157,169
-  @use call groupManager.stateOf  @ 195,197,198,215,216,228,232
+  @use call gm:eachInstance  @ 29
+  @use call gm:mark  @ 42,55,70,100,115,126,141,153,154,167,180,193,208,242,243
+  @use call gm:newInstance  @ 43,85
+  @use call tm:flush  @ 45
+  @use call gm:resizeGroup  @ 58,181,182,184,196,211,230,245,261
+  @use call gm:deleteInstance  @ 71,73,90,103
+  @use call gm:duplicateInto  @ 82,224,255
+  @use call gm:activeGroup  @ 101,105
+  @use call gm:moveInstance  @ 116,117,128,143,157,169
+  @use call gm:stateOf  @ 195,197,198,215,216,228,232

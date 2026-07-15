@@ -50,8 +50,8 @@
   @case 'diff: fresh class setMainSend carries offs (defaults to 0)'  [harness]  @ 546-554
 
 # Uses (outbound edges)
-  @use call wiringManager.load  @ 29,40,60,77,376
-  @use call wiringManager.targetState  @ 30,48,67,86,392
-  @use call wiringManager.mutate  @ 41,61,78,385
-  @use call wiringManager.diff  @ 109,126,141,155,165,177,195,218,231,244,259,273,284,297,309,324,338,356,394,412,426,435,450,462,473,485,500,514,527,539,551
-  @use call wiringManager.snapshot  @ 393
+  @use call wm:load  @ 29,40,60,77,376
+  @use call wm:targetState  @ 30,48,67,86,392
+  @use call wm:mutate  @ 41,61,78,385
+  @use call wm:diff  @ 109,126,141,155,165,177,195,218,231,244,259,273,284,297,309,324,338,356,394,412,426,435,450,462,473,485,500,514,527,539,551
+  @use call wm:snapshot  @ 393

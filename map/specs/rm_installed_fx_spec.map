@@ -19,5 +19,5 @@
 
 # Uses (outbound edges)
   @use call harness.mk  @ 8
-  @use call routingManager.installedFx  @ 30,42,43
-  @use call routingManager.showFx  @ 54,68
+  @use call rm:installedFx  @ 30,42,43
+  @use call rm:showFx  @ 54,68

@@ -21,13 +21,13 @@
   @case 'a swing change keeps every uuid resolvable (reseat re-keys tokens)'  [harness]  @ 136-164
 
 # Uses (outbound edges)
-  @use call trackerManager.fromLogical  @ 18,34,35,36,38,52,66,68,89,106,119,129,131,154,157
-  @use call trackerManager.toLogical  @ 19
-  @use call trackerManager.resolution  @ 83
+  @use call tm:fromLogical  @ 18,34,35,36,38,52,66,68,89,106,119,129,131,154,157
+  @use call tm:toLogical  @ 19
+  @use call tm:resolution  @ 83
   @use call timing.resolveFactors  @ 84,85
   @use call timing.applyFactors  @ 86,87
-  @use call dataStore.assign  @ 130
-  @use call trackerView.setSwingSlot  @ 150
-  @use call trackerManager.rebuild  @ 151
-  @use call midiManager.dump  @ 156
-  @use call trackerManager.byUuid  @ 160
+  @use call ds:assign  @ 130
+  @use call vm:setSwingSlot  @ 150
+  @use call tm:rebuild  @ 151
+  @use call fm:dump  @ 156
+  @use call tm:byUuid  @ 160

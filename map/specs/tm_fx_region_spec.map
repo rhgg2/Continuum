@@ -1,4 +1,4 @@
-@spec tm_fx_region_spec  src=tests/specs/tm_fx_region_spec.lua  loc=1704  sha=4f2d6af  cases=61
+@spec tm_fx_region_spec  src=tests/specs/tm_fx_region_spec.lua  loc=1704  sha=285f562  cases=61
 @exercises dataStore (h.ds), midiManager (h.fm), trackerManager (h.tm), trackerView (h.vm)
 @surface   ds:get, fm:dump, tm:getChannel, ds:assign, tm:rebuild, tm:addEvent, tm:flush, tm:assignParked, tm:deleteParked, tm:addParked, tm:subscribe, vm:addFxStage, vm:noteFx, vm:removeFxStage
 @harness   mk
@@ -112,17 +112,17 @@
   @case 'removing the note kind from a self-parked [autopan, trill] host keeps its authored cc parked'  [harness]  @ 1652-1701
 
 # Uses (outbound edges)
-  @use call dataStore.get  @ 18,57,66,484,498,545,558,572,1644
-  @use call midiManager.dump  @ 27,44,76,98,141,159,228,270,503,1312,1376,1558,1610,1633,1672
-  @use call trackerManager.getChannel  @ 35,113,275,397,418,480,523,541,542,556,557,581,602,604,606,608,667,672,685,687,853,1182,1204,1211,1461,1590,1639,1643,1664,1691
-  @use call dataStore.assign  @ 108,133,233,288,412,449,500,519,598,636,642,699,748,778,806,840,871,903,934,965,996,1029,1061,1095,1128,1172,1198,1206,1231,1271,1301,1307,1339,1364,1371,1394,1425,1451,1478,1509,1534,1586,1606
-  @use call trackerManager.rebuild  @ 109,134,214,234,289,309,416,450,466,501,521,600,750,780,808,842,873,905,936,969,1000,1033,1065,1099,1132,1142,1174,1200,1207,1233,1273,1303,1308,1341,1366,1372,1396,1405,1427,1453,1480,1513,1535,1570,1588,1608,1641
-  @use call trackerManager.addEvent  @ 127,512,591,620,621,668,737,738,739,796,827,828,1162,1190,1289,1328,1329,1357,1469,1626,1656,1657,1660
-  @use call trackerManager.flush  @ 127,214,265,466,512,541,556,571,591,602,606,620,621,670,685,740,797,829,1163,1190,1220,1289,1330,1357,1469,1630,1643,1656,1657,1663
-  @use call trackerManager.assignParked  @ 541,602,667,685
-  @use call trackerManager.deleteParked  @ 556,606,1643
-  @use call trackerManager.addParked  @ 569
-  @use call trackerManager.subscribe  @ 666,684,698
-  @use call trackerView.addFxStage  @ 1690
-  @use call trackerView.noteFx  @ 1696
-  @use call trackerView.removeFxStage  @ 1698
+  @use call ds:get  @ 18,57,66,484,498,545,558,572,1644
+  @use call fm:dump  @ 27,44,76,98,141,159,228,270,503,1312,1376,1558,1610,1633,1672
+  @use call tm:getChannel  @ 35,113,275,397,418,480,523,541,542,556,557,581,602,604,606,608,667,672,685,687,853,1182,1204,1211,1461,1590,1639,1643,1664,1691
+  @use call ds:assign  @ 108,133,233,288,412,449,500,519,598,636,642,699,748,778,806,840,871,903,934,965,996,1029,1061,1095,1128,1172,1198,1206,1231,1271,1301,1307,1339,1364,1371,1394,1425,1451,1478,1509,1534,1586,1606
+  @use call tm:rebuild  @ 109,134,214,234,289,309,416,450,466,501,521,600,750,780,808,842,873,905,936,969,1000,1033,1065,1099,1132,1142,1174,1200,1207,1233,1273,1303,1308,1341,1366,1372,1396,1405,1427,1453,1480,1513,1535,1570,1588,1608,1641
+  @use call tm:addEvent  @ 127,512,591,620,621,668,737,738,739,796,827,828,1162,1190,1289,1328,1329,1357,1469,1626,1656,1657,1660
+  @use call tm:flush  @ 127,214,265,466,512,541,556,571,591,602,606,620,621,670,685,740,797,829,1163,1190,1220,1289,1330,1357,1469,1630,1643,1656,1657,1663
+  @use call tm:assignParked  @ 541,602,667,685
+  @use call tm:deleteParked  @ 556,606,1643
+  @use call tm:addParked  @ 569
+  @use call tm:subscribe  @ 666,684,698
+  @use call vm:addFxStage  @ 1690
+  @use call vm:noteFx  @ 1696
+  @use call vm:removeFxStage  @ 1698

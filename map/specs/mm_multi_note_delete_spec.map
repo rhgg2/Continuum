@@ -20,7 +20,7 @@
   @case 'multi-deleteNote in one modify deletes exactly the tokens passed'  [pure]  @ 23-54
 
 # Uses (outbound edges)
-  @use call midiManager.modify  @ 29,40
-  @use call midiManager.notes  @ 37,46
-  @use call midiManager.tokenOf  @ 37
-  @use call midiManager.delete  @ 41,42
+  @use call mm:modify  @ 29,40
+  @use call mm:notes  @ 37,46
+  @use call mm:tokenOf  @ 37
+  @use call mm:delete  @ 41,42

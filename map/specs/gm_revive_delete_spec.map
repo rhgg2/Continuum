@@ -25,11 +25,11 @@
   @case 'gm:revertDelete lifts a local delete override back to the synced value'  [pure]  @ 75-103
 
 # Uses (outbound edges)
-  @use call groupManager.markGroup  @ 45,80
-  @use call groupManager.newInstance  @ 47,64,81
-  @use call trackerManager.flush  @ 48,55,60,82,87,97
-  @use call groupManager.setLocalMode  @ 54,56,86,88
-  @use call groupManager.deleteEvent  @ 55,87
-  @use call groupManager.addEvent  @ 60
-  @use call groupManager.deletedCells  @ 90,101
-  @use call groupManager.revertDelete  @ 96,102
+  @use call gm:markGroup  @ 45,80
+  @use call gm:newInstance  @ 47,64,81
+  @use call tm:flush  @ 48,55,60,82,87,97
+  @use call gm:setLocalMode  @ 54,56,86,88
+  @use call gm:deleteEvent  @ 55,87
+  @use call gm:addEvent  @ 60
+  @use call gm:deletedCells  @ 90,101
+  @use call gm:revertDelete  @ 96,102

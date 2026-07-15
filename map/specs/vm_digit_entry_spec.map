@@ -37,12 +37,12 @@
   @case 'a take switch abandons the gesture'  [harness]  @ 165-174
 
 # Uses (outbound edges)
-  @use call trackerView.setGridSize  @ 28,53
-  @use call trackerView.digitsStrike  @ 69
-  @use call editCursor.setPos  @ 78,79,84,104,120,133,147,158,169
-  @use call trackerView.digitsCommit  @ 80,91
-  @use call editCursor.row  @ 88,93
-  @use call trackerView.digitsActive  @ 89,92,149,160,171,173
-  @use call editCursor.pos  @ 94
-  @use call trackerView.digitsBackspace  @ 107,136
-  @use call trackerView.rebuild  @ 172
+  @use call vm:setGridSize  @ 28,53
+  @use call vm:digitsStrike  @ 69
+  @use call ec:setPos  @ 78,79,84,104,120,133,147,158,169
+  @use call vm:digitsCommit  @ 80,91
+  @use call ec:row  @ 88,93
+  @use call vm:digitsActive  @ 89,92,149,160,171,173
+  @use call ec:pos  @ 94
+  @use call vm:digitsBackspace  @ 107,136
+  @use call vm:rebuild  @ 172

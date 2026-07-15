@@ -25,12 +25,14 @@
   @case 'pb member: a sibling under a different detune re-derives its own wire'  [harness]  @ 183-213
 
 # Uses (outbound edges)
-  @use call groupManager.markGroup  @ 36,87,130,160,196
-  @use call groupManager.newInstance  @ 38,89,131,161,197
-  @use call midiManager.dump  @ 62,94,102,140,201
-  @use call trackerManager.byUuid  @ 67,207,208
-  @use call trackerView.eventsInRect  @ 87,130,196
-  @use call trackerManager.flush  @ 90,108,132,137,198
-  @use call groupManager.assignEvent  @ 107
-  @use call dataStore.get  @ 165
-  @use call groupManager.eachInstance  @ 178
+  @use call gm:markGroup  @ 36,87,130,196
+  @use call gm:newInstance  @ 38,89,131,197
+  @use call fm:dump  @ 62,94,102,140,201
+  @use call tm:byUuid  @ 67,207,208
+  @use call vm:eventsInRect  @ 87,130,196
+  @use call tm:flush  @ 90,108,132,137,198
+  @use call gm:assignEvent  @ 107
+  @use call A:markGroup  @ 160
+  @use call A:newInstance  @ 161
+  @use call ds:get  @ 165
+  @use call B:eachInstance  @ 178

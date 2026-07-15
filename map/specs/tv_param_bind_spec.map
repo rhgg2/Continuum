@@ -20,11 +20,11 @@
   @case 'hideExtraCol on an empty bound cc column drops the binding'  [harness]  @ 100-115
 
 # Uses (outbound edges)
-  @use call trackerView.setGridSize  @ 28,64,86,107
-  @use call editCursor.setPos  @ 29,65,90,110
-  @use call trackerView.automateParam  @ 31,44,67
-  @use call trackerView.paramBinding  @ 33,45,69,93,113
-  @use call dataStore.get  @ 38,95
-  @use call trackerView.rebuild  @ 39
-  @use call trackerView.unautomateParam  @ 91
-  @use call trackerView.hideExtraCol  @ 111
+  @use call vm:setGridSize  @ 28,64,86,107
+  @use call ec:setPos  @ 29,65,90,110
+  @use call vm:automateParam  @ 31,44,67
+  @use call vm:paramBinding  @ 33,45,69,93,113
+  @use call ds:get  @ 38,95
+  @use call vm:rebuild  @ 39
+  @use call vm:unautomateParam  @ 91
+  @use call vm:hideExtraCol  @ 111

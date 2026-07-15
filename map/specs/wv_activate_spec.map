@@ -16,6 +16,6 @@
   @case 'master and source nodes are inert (activate = nil)'  [harness]  @ 38-47
 
 # Uses (outbound edges)
-  @use call wiringView.nodeViews  @ 13
-  @use call wiringView.addFx  @ 23,32,42
-  @use call wiringView.graph  @ 44
+  @use call wv:nodeViews  @ 13
+  @use call wv:addFx  @ 23,32,42
+  @use call wv:graph  @ 44

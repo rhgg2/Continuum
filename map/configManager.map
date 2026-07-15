@@ -97,15 +97,15 @@
   @emits configChanged   -- configChangedPayload.bulk   @ 398 setContext:407 clearTake:414 setTrack:427 set:513 remove:526 assign:544
 
 # Uses (outbound edges)
-  @use call    ps.assign  @ 346,347,350,354
-  @use call    ps.boundTake  @ 354 boundTake:418
-  @use call    ps.boundTrack  @ 349 boundTrack:421
-  @use call    ps.clearTake  @ clearTake:411
-  @use call    ps.get  @ 338,339,340,341
-  @use call    ps.pollUndo  @ pollUndo:431
-  @use call    ps.setTake  @ setContext:404
-  @use call    ps.setTrack  @ setTrack:424
-  @use call    ps.watch  @ 393
+  @use call    ps:assign  @ 346,347,350,354
+  @use call    ps:boundTake  @ 354 boundTake:418
+  @use call    ps:boundTrack  @ 349 boundTrack:421
+  @use call    ps:clearTake  @ clearTake:411
+  @use call    ps:get  @ 338,339,340,341
+  @use call    ps:pollUndo  @ pollUndo:431
+  @use call    ps:setTake  @ setContext:404
+  @use call    ps:setTrack  @ setTrack:424
+  @use call    ps:watch  @ 393
   @use call    util.add  @ 249,250,258,259
   @use call    util.deepClone  @ 79 copy:298 getAt:487
   @use call    util.installHooks  @ 385

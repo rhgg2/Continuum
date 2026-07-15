@@ -27,12 +27,17 @@
   @case 'enableLive: a settled project reconciles to zero ops and opens no undo block'  [harness]  @ 143-170
 
 # Uses (outbound edges)
-  @use call wiringManager.load  @ 8,135,165
-  @use call wiringManager.instantiateFxOnScratch  @ 28
-  @use call wiringManager.enableLive  @ 47,65,91,103,104,122,148,166
-  @use call wiringManager.mutate  @ 48,66,84,105,123,149
-  @use call wiringManager.graph  @ 55,76,129,138
-  @use call wiringManager.diff  @ 56,168
-  @use call wiringManager.targetState  @ 56,168
-  @use call wiringManager.snapshot  @ 56,168
-  @use call wiringManager.moveNodes  @ 74
+  @use call wm:load  @ 8,135
+  @use call wm:instantiateFxOnScratch  @ 28
+  @use call wm:enableLive  @ 47,65,91,103,104,122,148
+  @use call wm:mutate  @ 48,66,84,105,123,149
+  @use call wm:graph  @ 55,76,129,138
+  @use call wm:diff  @ 56
+  @use call wm:targetState  @ 56
+  @use call wm:snapshot  @ 56
+  @use call wm:moveNodes  @ 74
+  @use call wm2:load  @ 165
+  @use call wm2:enableLive  @ 166
+  @use call wm2:diff  @ 168
+  @use call wm2:targetState  @ 168
+  @use call wm2:snapshot  @ 168

@@ -39,12 +39,12 @@
   @case 'apply: setPinMaps full-replace — owned ports absent from map are disconnected'  [harness]  @ 494-517
 
 # Uses (outbound edges)
-  @use call wiringManager.load  @ 15
-  @use call wiringManager.instantiateFxOnScratch  @ 45
-  @use call wiringManager.applyOps  @ 57,445,457,481,510
-  @use call wiringManager.diff  @ 57,92
-  @use call wiringManager.targetState  @ 57,92
-  @use call wiringManager.snapshot  @ 57,92
-  @use call wiringManager.mutate  @ 66,85,101,113,132,144,163,196,221,244,259,291,303,331,353,370,389,403,422,473,499
-  @use call wiringManager.graph  @ 76,111,141,142,183,269,398,409,480,506
-  @use call wiringManager.subscribe  @ 228
+  @use call wm:load  @ 15
+  @use call wm:instantiateFxOnScratch  @ 45
+  @use call wm:applyOps  @ 57,445,457,481,510
+  @use call wm:diff  @ 57,92
+  @use call wm:targetState  @ 57,92
+  @use call wm:snapshot  @ 57,92
+  @use call wm:mutate  @ 66,85,101,113,132,144,163,196,221,244,259,291,303,331,353,370,389,403,422,473,499
+  @use call wm:graph  @ 76,111,141,142,183,269,398,409,480,506
+  @use call wm:subscribe  @ 228

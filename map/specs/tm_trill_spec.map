@@ -24,10 +24,10 @@
   @case 'a microtonal trill seats absorbers at the alternation fxNote seats'  [harness]  @ 114-134
 
 # Uses (outbound edges)
-  @use call trackerManager.addEvent  @ 62,91,117
-  @use call trackerManager.flush  @ 64,79,93,119
-  @use call trackerManager.getChannel  @ 68,96
-  @use call midiManager.dump  @ 70,75,77,80,95,127
-  @use call trackerManager.rebuild  @ 78
+  @use call tm:addEvent  @ 62,91,117
+  @use call tm:flush  @ 64,79,93,119
+  @use call tm:getChannel  @ 68,96
+  @use call fm:dump  @ 70,75,77,80,95,127
+  @use call tm:rebuild  @ 78
   @use call tuning.findTemper  @ 121
   @use call tuning.transposeStep  @ 122

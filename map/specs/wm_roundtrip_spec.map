@@ -29,7 +29,7 @@
   @case 'folder midi: merge on bus 0 and a distinct stream on bus >=1 coexist'  [harness]  @ 408-437
 
 # Uses (outbound edges)
-  @use call wiringManager.load  @ 10
-  @use call wiringManager.mutate  @ 83
-  @use call wiringManager.targetState  @ 86
-  @use call wiringManager.readGraph  @ 99
+  @use call wm:load  @ 10
+  @use call wm:mutate  @ 83
+  @use call wm:targetState  @ 86
+  @use call wm.readGraph  @ 99

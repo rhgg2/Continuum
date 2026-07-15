@@ -17,9 +17,9 @@
   @case 'bypass flips the native enable, independent of mute'  [harness]  @ 38-52
 
 # Uses (outbound edges)
-  @use call wiringView.addFx  @ 23,41
-  @use call routingManager.fx  @ 24,29
-  @use call wiringView.muted  @ 25,28,34
-  @use call wiringView.setMuted  @ 27,33,47
-  @use call wiringView.bypassed  @ 42,45,48,51
-  @use call wiringView.setBypassed  @ 44,50
+  @use call wv:addFx  @ 23,41
+  @use call rm:fx  @ 24,29
+  @use call wv:muted  @ 25,28,34
+  @use call wv:setMuted  @ 27,33,47
+  @use call wv:bypassed  @ 42,45,48,51
+  @use call wv:setBypassed  @ 44,50

@@ -26,12 +26,12 @@
   @case 'fxTrack returns nil for an unknown guid'  [harness]  @ 86-90
 
 # Uses (outbound edges)
-  @use call wiringManager.load  @ 10
-  @use call wiringManager.instantiateFxOnScratch  @ 30
-  @use call wiringManager.applyOps  @ 39
-  @use call wiringManager.diff  @ 39
-  @use call wiringManager.targetState  @ 39
-  @use call wiringManager.snapshot  @ 39
-  @use call wiringManager.mutate  @ 46,71
-  @use call wiringManager.graph  @ 55,80
-  @use call wiringManager.fxTrack  @ 63,64,81,82,89
+  @use call wm:load  @ 10
+  @use call wm:instantiateFxOnScratch  @ 30
+  @use call wm:applyOps  @ 39
+  @use call wm:diff  @ 39
+  @use call wm:targetState  @ 39
+  @use call wm:snapshot  @ 39
+  @use call wm:mutate  @ 46,71
+  @use call wm:graph  @ 55,80
+  @use call wm:fxTrack  @ 63,64,81,82,89

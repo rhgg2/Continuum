@@ -1,4 +1,4 @@
-@module swingEditor  src=swingEditor.lua  loc=752  sha=d013d39  mode=chunk  self=swingEditor
+@module swingEditor  src=swingEditor.lua  loc=752  sha=3970445  mode=chunk  self=swingEditor
 @deps cm, ds, chrome, ctx, gui, facade, modalHost
 
 # Invariants & contracts
@@ -146,6 +146,38 @@
   @api swingEditor:isOpen()  @ 749
 
 # Uses (outbound edges)
+  @use call    ImGui.AlignTextToFramePadding  @ drawFactorRow:315,351,378 565 drawToolsRow:611,630
+  @use call    ImGui.BeginChild  @ draw:707
+  @use call    ImGui.BeginDisabled  @ drawEditBody:690 renderToolbar:740
+  @use call    ImGui.Button  @ drawFactorRow:399,403,406 575,577 drawEditBody:695
+  @use call    ImGui.CalcTextSize  @ gridMetrics:113 drawBandInto:207 drawFactorRow:318 drawEditBody:691
+  @use call    ImGui.Dummy  @ drawEditBody:671
+  @use call    ImGui.EndChild  @ draw:710
+  @use call    ImGui.EndDisabled  @ drawEditBody:696 renderToolbar:742
+  @use call    ImGui.GetContentRegionAvail  @ drawEditBody:656
+  @use call    ImGui.GetCursorPosX  @ drawFactorRow:317
+  @use call    ImGui.GetCursorScreenPos  @ drawEditBody:667,676
+  @use call    ImGui.GetMousePos  @ drawEditBody:681
+  @use call    ImGui.InputText  @ 571
+  @use call    ImGui.InvisibleButton  @ drawEditBody:678
+  @use call    ImGui.IsItemActive  @ drawEditBody:679
+  @use call    ImGui.IsItemDeactivatedAfterEdit  @ drawFactorRow:347,395 drawToolsRow:644
+  @use call    ImGui.IsItemHovered  @ drawEditBody:679
+  @use call    ImGui.IsKeyPressed  @ 577
+  @use call    ImGui.IsWindowAppearing  @ 562
+  @use call    ImGui.PopFont  @ bandLayout:178 drawBandInto:208,231
+  @use call    ImGui.PopID  @ drawFactorRow:408 572
+  @use call    ImGui.PushFont  @ bandLayout:169 drawBandInto:192,206
+  @use call    ImGui.PushID  @ drawFactorRow:311 570
+  @use call    ImGui.SameLine  @ drawFactorRow:320,333,350,353,377,380,382,397,401,405 567,574,576 drawToolsRow:613,618,620,627,629,632
+  @use call    ImGui.SetCursorPosX  @ drawFactorRow:318
+  @use call    ImGui.SetCursorScreenPos  @ drawEditBody:677,688
+  @use call    ImGui.SetKeyboardFocusHere  @ 563
+  @use call    ImGui.SetMouseCursor  @ drawEditBody:687
+  @use call    ImGui.SetNextItemWidth  @ drawFactorRow:337,383 568 drawToolsRow:636
+  @use call    ImGui.SliderDouble  @ drawFactorRow:339,386 drawToolsRow:637
+  @use call    ImGui.Text  @ drawFactorRow:319,352,379,381 566 drawToolsRow:612,631
+  @use call    ImGui.TextColored  @ 588
   @use call    chrome.checkbox  @ drawToolsRow:622
   @use call    chrome.colour  @ 588
   @use call    chrome.disabledIf  @ drawFactorRow:336,398,402 drawToolsRow:633
@@ -155,45 +187,13 @@
   @use call    chrome.popChromeStyles  @ draw:711
   @use call    chrome.pushChromeStyles  @ draw:706
   @use call    chrome.verticalSeparator  @ drawToolsRow:619,628
-  @use call    cm.get  @ swingRead:237 582 open:727
-  @use call    cm.getAt  @ swingRead:235 projectSwings:415 globalSwings:420
-  @use call    cm.seedGlobalFromDefault  @ globalSwings:419
-  @use call    cm.set  @ deleteFromTier:442 promote:450 460
-  @use call    ds.get  @ resolvedSlots:477 activeEntries:495
+  @use call    cm:get  @ swingRead:237 582 open:727
+  @use call    cm:getAt  @ swingRead:235 projectSwings:415 globalSwings:420
+  @use call    cm:seedGlobalFromDefault  @ globalSwings:419
+  @use call    cm:set  @ deleteFromTier:442 promote:450 460
+  @use call    ds:get  @ resolvedSlots:477 activeEntries:495
   @use call    facade.get  @ arrange:45 tracker:46
-  @use call    imgui.AlignTextToFramePadding  @ drawFactorRow:315,351,378 565 drawToolsRow:611,630
-  @use call    imgui.BeginChild  @ draw:707
-  @use call    imgui.BeginDisabled  @ drawEditBody:690 renderToolbar:740
-  @use call    imgui.Button  @ drawFactorRow:399,403,406 575,577 drawEditBody:695
-  @use call    imgui.CalcTextSize  @ gridMetrics:113 drawBandInto:207 drawFactorRow:318 drawEditBody:691
-  @use call    imgui.Dummy  @ drawEditBody:671
-  @use call    imgui.EndChild  @ draw:710
-  @use call    imgui.EndDisabled  @ drawEditBody:696 renderToolbar:742
-  @use call    imgui.GetContentRegionAvail  @ drawEditBody:656
-  @use call    imgui.GetCursorPosX  @ drawFactorRow:317
-  @use call    imgui.GetCursorScreenPos  @ drawEditBody:667,676
-  @use call    imgui.GetMousePos  @ drawEditBody:681
-  @use call    imgui.InputText  @ 571
-  @use call    imgui.InvisibleButton  @ drawEditBody:678
-  @use call    imgui.IsItemActive  @ drawEditBody:679
-  @use call    imgui.IsItemDeactivatedAfterEdit  @ drawFactorRow:347,395 drawToolsRow:644
-  @use call    imgui.IsItemHovered  @ drawEditBody:679
-  @use call    imgui.IsKeyPressed  @ 577
-  @use call    imgui.IsWindowAppearing  @ 562
-  @use call    imgui.PopFont  @ bandLayout:178 drawBandInto:208,231
-  @use call    imgui.PopID  @ drawFactorRow:408 572
-  @use call    imgui.PushFont  @ bandLayout:169 drawBandInto:192,206
-  @use call    imgui.PushID  @ drawFactorRow:311 570
-  @use call    imgui.SameLine  @ drawFactorRow:320,333,350,353,377,380,382,397,401,405 567,574,576 drawToolsRow:613,618,620,627,629,632
-  @use call    imgui.SetCursorPosX  @ drawFactorRow:318
-  @use call    imgui.SetCursorScreenPos  @ drawEditBody:677,688
-  @use call    imgui.SetKeyboardFocusHere  @ 563
-  @use call    imgui.SetMouseCursor  @ drawEditBody:687
-  @use call    imgui.SetNextItemWidth  @ drawFactorRow:337,383 568 drawToolsRow:636
-  @use call    imgui.SliderDouble  @ drawFactorRow:339,386 drawToolsRow:637
-  @use call    imgui.Text  @ drawFactorRow:319,352,379,381 566 drawToolsRow:612,631
-  @use call    imgui.TextColored  @ 588
-  @use call    modalHost.registerKind  @ 561
+  @use call    modalHost:registerKind  @ 561
   @use call    painter.new  @ drawBandInto:193
   @use call    timing.applyFactors  @ drawSwingStrip:156
   @use call    timing.atomTilePeriod  @ shiftCap:89 drawFactorRow:355

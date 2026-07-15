@@ -19,9 +19,9 @@
   @case 'removing the fx-node from the graph deletes the instance (the one legit delete)'  [harness]  @ 87-100
 
 # Uses (outbound edges)
-  @use call wiringManager.load  @ 12
-  @use call wiringManager.enableLive  @ 44,61,91
-  @use call wiringManager.addFxNode  @ 45,62,92
-  @use call wiringManager.graph  @ 48,63
-  @use call wiringManager.mutate  @ 66,96
-  @use call wiringManager.isScratchTrack  @ 77
+  @use call wm:load  @ 12
+  @use call wm:enableLive  @ 44,61,91
+  @use call wm:addFxNode  @ 45,62,92
+  @use call wm:graph  @ 48,63
+  @use call wm:mutate  @ 66,96
+  @use call wm:isScratchTrack  @ 77

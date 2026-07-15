@@ -27,9 +27,9 @@
   @case 'delete on sample part of a PA cell does nothing'  [harness]  @ 326-352
 
 # Uses (outbound edges)
-  @use call trackerView.setGridSize  @ 21,40,59,82,118,142,179,201,273,302,336
-  @use call editCursor.setPos  @ 98,154,184,206,280,314,345
-  @use call trackerView.editEvent  @ 99,101,124,155,157,186,207,281,283,315
-  @use call midiManager.dump  @ 103,125,160,188,209,317,321,348
-  @use call commandManager.invoke  @ 224,233,242,251,346
-  @use call configManager.get  @ 225,234,243,252,284
+  @use call vm:setGridSize  @ 21,40,59,82,118,142,179,201,273,302,336
+  @use call ec:setPos  @ 98,154,184,206,280,314,345
+  @use call vm:editEvent  @ 99,101,124,155,157,186,207,281,283,315
+  @use call fm:dump  @ 103,125,160,188,209,317,321,348
+  @use call cmgr:invoke  @ 224,233,242,251,346
+  @use call cm:get  @ 225,234,243,252,284

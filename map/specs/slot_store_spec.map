@@ -61,10 +61,11 @@
   @case 'watchPath sets prefix, writes breadcrumb, fires migrate on change'  [harness]  @ 681-700
 
 # Uses (outbound edges)
-  @use call configManager.setTrack  @ 42,117,119,457,459,666,668
-  @use call dataStore.assign  @ 94,104,118,120,267,283,342,375,400,423,458,481,503,516,528,630,651,667,669,685
-  @use call dataStore.get  @ 95,97,107,126,227,257,273,291,312,348,381,406,642
-  @use call pextStore.setTake  @ 105
-  @use call dataStore.getAt  @ 122,123
-  @use call configManager.set  @ 194
-  @use call configManager.get  @ 691,696
+  @use call cm:setTrack  @ 42,117,119,457,459,666,668
+  @use call ds:assign  @ 94,104,118,120,267,283,342,375,400,423,458,481,503,516,528,630,651,667,669,685
+  @use call ds:get  @ 95,97,126,227,257,273,291,312,348,381,406,642
+  @use call ps2:setTake  @ 105
+  @use call ds2:get  @ 107
+  @use call ds:getAt  @ 122,123
+  @use call cm:set  @ 194
+  @use call cm:get  @ 691,696

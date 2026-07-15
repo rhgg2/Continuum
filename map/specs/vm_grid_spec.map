@@ -26,15 +26,15 @@
   @case 'fractional ppqPerRow: an on-grid onset a tick below its row boundary snaps up, not down'  [harness]  @ 399-417
 
 # Uses (outbound edges)
-  @use call trackerView.setGridSize  @ 39,178,343,377
-  @use call editCursor.selectChannel  @ 41,43,179
-  @use call editCursor.col  @ 42,44
-  @use call trackerView.rowBeatInfo  @ 56
-  @use call trackerView.addExtraCol  @ 196
+  @use call vm:setGridSize  @ 39,178,343,377
+  @use call ec:selectChannel  @ 41,43,179
+  @use call ec:col  @ 42,44
+  @use call vm:rowBeatInfo  @ 56
+  @use call vm:addExtraCol  @ 196
   @use call timing.resolveFactors  @ 267
   @use call timing.applyFactors  @ 269
-  @use call dataStore.assign  @ 318
-  @use call editCursor.setPos  @ 352,383
-  @use call trackerView.editEvent  @ 353,384
-  @use call midiManager.dump  @ 387
+  @use call ds:assign  @ 318
+  @use call ec:setPos  @ 352,383
+  @use call vm:editEvent  @ 353,384
+  @use call fm:dump  @ 387
   @use call timing.logPerRow  @ 401

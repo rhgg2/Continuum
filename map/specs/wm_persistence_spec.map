@@ -18,7 +18,7 @@
   @case 'wm:graph() returns a deep copy — caller mutation does not leak'  [harness]  @ 89-98
 
 # Uses (outbound edges)
-  @use call wiringManager.graph  @ 16,32,43,55,89,92,95
-  @use call wiringManager.load  @ 31,78,83
-  @use call wiringManager.subscribe  @ 45,65,82
-  @use call wiringManager.mutate  @ 48,66
+  @use call wm:graph  @ 16,32,43,55,89,92,95
+  @use call wm:load  @ 31,78,83
+  @use call wm:subscribe  @ 45,65,82
+  @use call wm:mutate  @ 48,66

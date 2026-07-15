@@ -1,4 +1,4 @@
-@module coordinator  src=coordinator.lua  loc=363  sha=e73ba95  mode=chunk  self=coord
+@module coordinator  src=coordinator.lua  loc=363  sha=e2be081  mode=chunk  self=coord
 @deps cm, ds, eventMeta, cmgr, gui
 
 # Invariants & contracts
@@ -83,6 +83,33 @@
       @contract  handler wraps every deferred frame; without it, post-frame-1 errors raise raw dialogs
 
 # Uses (outbound edges)
+  @use call    ImGui.Begin  @ frame:165
+  @use call    ImGui.BeginChild  @ frame:209,230,261
+  @use call    ImGui.Button  @ drawSwitcher:78
+  @use call    ImGui.End  @ frame:274
+  @use call    ImGui.EndChild  @ frame:214,235,266
+  @use call    ImGui.GetContentRegionAvail  @ frame:184,243
+  @use call    ImGui.GetCursorPosY  @ frame:242,248
+  @use call    ImGui.GetCursorScreenPos  @ frame:206
+  @use call    ImGui.GetFrameHeight  @ frame:220
+  @use call    ImGui.GetFrameHeightWithSpacing  @ frame:244
+  @use call    ImGui.GetStyleVar  @ frame:222
+  @use call    ImGui.Indent  @ frame:247
+  @use call    ImGui.IsWindowFocused  @ frame:177
+  @use call    ImGui.PopFont  @ frame:277
+  @use call    ImGui.PopStyleColor  @ drawSwitcher:81 frame:237,268,276
+  @use call    ImGui.PopStyleVar  @ frame:171,198,215,221,236,267
+  @use call    ImGui.PushFont  @ frame:152
+  @use call    ImGui.PushStyleColor  @ drawSwitcher:75,76 frame:153,154,155,156,157,227,258,259
+  @use call    ImGui.PushStyleVar  @ frame:159,194,207,208,219,228,260
+  @use call    ImGui.SameLine  @ drawSwitcher:84,86,88,90
+  @use call    ImGui.SetCursorPosY  @ frame:248,257
+  @use call    ImGui.SetCursorScreenPos  @ frame:216
+  @use call    ImGui.SetNextWindowContentSize  @ frame:229
+  @use call    ImGui.SetNextWindowFocus  @ frame:161
+  @use call    ImGui.SetScrollX  @ frame:175
+  @use call    ImGui.SetScrollY  @ frame:175
+  @use call    ImGui.Unindent  @ frame:253
   @use call    chrome.colour  @ drawSwitcher:75,76 frame:153,154,155,156,157,227,258,259
   @use call    chrome.makeToolbar  @ 23
   @use call    chrome.popChromeStyles  @ frame:199
@@ -90,48 +117,21 @@
   @use call    chrome.resetPickerActive  @ frame:226
   @use call    chrome.resetToolbar  @ setActive:302
   @use call    chrome.toolbarLineCount  @ frame:223
-  @use call    cm.pollUndo  @ frame:139 reloadAfterExternalMutation:339
-  @use call    cmgr.bind  @ 33
-  @use call    cmgr.invoke  @ drawSwitcher:79 pollExternalCommands:117
-  @use call    cmgr.pop  @ setActive:303
-  @use call    cmgr.push  @ setActive:307
-  @use call    cmgr.register  @ 32
-  @use call    help.beginFrame  @ frame:149
-  @use call    help.draw  @ frame:271
-  @use call    help.isOpen  @ dispatch:101
-  @use call    help.setPage  @ setActive:306
-  @use call    help.toggle  @ 32
-  @use call    imgui.Begin  @ frame:165
-  @use call    imgui.BeginChild  @ frame:209,230,261
-  @use call    imgui.Button  @ drawSwitcher:78
-  @use call    imgui.End  @ frame:274
-  @use call    imgui.EndChild  @ frame:214,235,266
-  @use call    imgui.GetContentRegionAvail  @ frame:184,243
-  @use call    imgui.GetCursorPosY  @ frame:242,248
-  @use call    imgui.GetCursorScreenPos  @ frame:206
-  @use call    imgui.GetFrameHeight  @ frame:220
-  @use call    imgui.GetFrameHeightWithSpacing  @ frame:244
-  @use call    imgui.GetStyleVar  @ frame:222
-  @use call    imgui.Indent  @ frame:247
-  @use call    imgui.IsWindowFocused  @ frame:177
-  @use call    imgui.PopFont  @ frame:277
-  @use call    imgui.PopStyleColor  @ drawSwitcher:81 frame:237,268,276
-  @use call    imgui.PopStyleVar  @ frame:171,198,215,221,236,267
-  @use call    imgui.PushFont  @ frame:152
-  @use call    imgui.PushStyleColor  @ drawSwitcher:75,76 frame:153,154,155,156,157,227,258,259
-  @use call    imgui.PushStyleVar  @ frame:159,194,207,208,219,228,260
-  @use call    imgui.SameLine  @ drawSwitcher:84,86,88,90
-  @use call    imgui.SetCursorPosY  @ frame:248,257
-  @use call    imgui.SetCursorScreenPos  @ frame:216
-  @use call    imgui.SetNextWindowContentSize  @ frame:229
-  @use call    imgui.SetNextWindowFocus  @ frame:161
-  @use call    imgui.SetScrollX  @ frame:175
-  @use call    imgui.SetScrollY  @ frame:175
-  @use call    imgui.Unindent  @ frame:253
+  @use call    cm:pollUndo  @ frame:139 reloadAfterExternalMutation:339
+  @use call    cmgr:bind  @ 33
+  @use call    cmgr:invoke  @ drawSwitcher:79 pollExternalCommands:117
+  @use call    cmgr:pop  @ setActive:303
+  @use call    cmgr:push  @ setActive:307
+  @use call    cmgr:register  @ 32
+  @use call    help:beginFrame  @ frame:149
+  @use call    help:draw  @ frame:271
+  @use call    help:isOpen  @ dispatch:101
+  @use call    help:setPage  @ setActive:306
+  @use call    help:toggle  @ 32
   @use call    keyDispatch.dispatchKeys  @ dispatch:104
-  @use call    modalHost.draw  @ frame:272
-  @use call    modalHost.isOpen  @ 32
-  @use call    modalHost.tick  @ tick:64
+  @use call    modalHost:draw  @ frame:272
+  @use call    modalHost:isOpen  @ 32
+  @use call    modalHost:tick  @ tick:64
   @use call    util.assign  @ register:289
   @use call    util.instantiate  @ 21,24,25,26,356 register:289
   @use require chrome  @ 21

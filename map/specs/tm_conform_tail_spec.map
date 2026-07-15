@@ -43,6 +43,6 @@
   @case 'raw note-off is floored at onset+1 (degenerate ceiling)'  [harness]  @ 158-167
 
 # Uses (outbound edges)
-  @use call midiManager.dump  @ 47,66,68,72,89,91,94,111,122,136,152,165
-  @use call trackerManager.deleteEvent  @ 69,91
-  @use call trackerManager.flush  @ 70,92
+  @use call fm:dump  @ 47,66,68,72,89,91,94,111,122,136,152,165
+  @use call tm:deleteEvent  @ 69,91
+  @use call tm:flush  @ 70,92

@@ -31,9 +31,9 @@
   @case 'editing a localMode-added event after leaving localMode does not crash'  [pure]  @ 198-221
 
 # Uses (outbound edges)
-  @use call groupManager.markGroup  @ 42,59,71,102,133,154,169,202
-  @use call groupManager.newInstance  @ 43,60,72,103,134,155,170,191,203,219
-  @use call trackerManager.flush  @ 73,77,104,110,135,138,156,158,171,175,204,208,217
-  @use call groupManager.assignEvent  @ 76,109,174,216
-  @use call groupManager.addEvent  @ 138,158,208
-  @use call groupManager.setLocalMode  @ 173,190,206,213
+  @use call gm:markGroup  @ 42,59,71,102,133,154,169,202
+  @use call gm:newInstance  @ 43,60,72,103,134,155,170,191,203,219
+  @use call tm:flush  @ 73,77,104,110,135,138,156,158,171,175,204,208,217
+  @use call gm:assignEvent  @ 76,109,174,216
+  @use call gm:addEvent  @ 138,158,208
+  @use call gm:setLocalMode  @ 173,190,206,213

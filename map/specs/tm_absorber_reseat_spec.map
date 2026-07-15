@@ -25,9 +25,9 @@
   @case 'authoring a pb onto an anchor seat adopts it, no token-colliding rival (stuck-digit bug)'  [harness]  @ 156-186
 
 # Uses (outbound edges)
-  @use call midiManager.dump  @ 43,80,86,118,141,151,171,180
-  @use call trackerManager.getChannel  @ 47,114,145
-  @use call dataStore.delete  @ 84
-  @use call trackerManager.assignEvent  @ 115,148
-  @use call trackerManager.flush  @ 116,149,177
-  @use call trackerManager.addEvent  @ 176
+  @use call fm:dump  @ 43,80,86,118,141,151,171,180
+  @use call tm:getChannel  @ 47,114,145
+  @use call ds:delete  @ 84
+  @use call tm:assignEvent  @ 115,148
+  @use call tm:flush  @ 116,149,177
+  @use call tm:addEvent  @ 176

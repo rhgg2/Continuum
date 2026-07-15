@@ -21,7 +21,7 @@
   @case 'deleteRow at row 0 on AB shifts B cleanly to row 0'  [harness]  @ 49-69
 
 # Uses (outbound edges)
-  @use call trackerView.setGridSize  @ 35,59
-  @use call editCursor.setPos  @ 37,61
-  @use call commandManager.invoke  @ 38,62
-  @use call midiManager.dump  @ 40,64
+  @use call vm:setGridSize  @ 35,59
+  @use call ec:setPos  @ 37,61
+  @use call cmgr:invoke  @ 38,62
+  @use call fm:dump  @ 40,64

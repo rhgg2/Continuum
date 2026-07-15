@@ -1,4 +1,4 @@
-@module intervals  src=intervals.lua  loc=125  sha=fd2f183  mode=namespace  self=intervals
+@module intervals  src=intervals.lua  loc=125  sha=922a349  mode=namespace  self=intervals
 
 # Shapes
   @shape  interval = { loPpqL, hiPpqL: number; loUuid, hiUuid: string? } -- nil uuid edge = open toward channel start/end

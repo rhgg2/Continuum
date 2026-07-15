@@ -33,8 +33,8 @@
   @case 'survivor cc.uuidIdx tracks sidecar across dedup deletions'  [pure]  @ 338-372
 
 # Uses (outbound edges)
-  @use call midiManager.subscribe  @ 60,61,62,329,330,331
-  @use call midiManager.load  @ 63,332
-  @use call midiManager.ccs  @ 98,119,143,165,196,237,256,275,361
-  @use call midiManager.modify  @ 360
-  @use call midiManager.assign  @ 362
+  @use call mm:subscribe  @ 60,61,62,329,330,331
+  @use call mm:load  @ 63,332
+  @use call mm:ccs  @ 98,119,143,165,196,237,256,275,361
+  @use call mm:modify  @ 360
+  @use call mm:assign  @ 362

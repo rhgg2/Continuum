@@ -16,8 +16,8 @@
   @case 'deleteRow bracketing an open-tailed spanning note keeps endppq == util.OPEN'  [harness]  @ 130-154
 
 # Uses (outbound edges)
-  @use call trackerView.setGridSize  @ 41,78,111,141
-  @use call editCursor.setPos  @ 45,80,113,143
-  @use call commandManager.invoke  @ 46,81,114,144
-  @use call midiManager.dump  @ 48
-  @use call trackerManager.getChannel  @ 84,117,147
+  @use call vm:setGridSize  @ 41,78,111,141
+  @use call ec:setPos  @ 45,80,113,143
+  @use call cmgr:invoke  @ 46,81,114,144
+  @use call fm:dump  @ 48
+  @use call tm:getChannel  @ 84,117,147

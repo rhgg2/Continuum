@@ -1,4 +1,4 @@
-@spec tm_cc_gating_spec  src=tests/specs/tm_cc_gating_spec.lua  loc=42  sha=d03715b  cases=1
+@spec tm_cc_gating_spec  src=tests/specs/tm_cc_gating_spec.lua  loc=42  sha=285f562  cases=1
 @exercises midiManager (h.fm), dataStore (h.ds), trackerManager (h.tm)
 @surface   fm:dump, ds:assign, tm:fromLogical
 @harness   mk{seed.ccs}
@@ -17,6 +17,6 @@
   @case 'swing change reseats a CC through the dirtyChans gate'  [harness]  @ 18-40
 
 # Uses (outbound edges)
-  @use call midiManager.dump  @ 13
-  @use call dataStore.assign  @ 35
-  @use call trackerManager.fromLogical  @ 38
+  @use call fm:dump  @ 13
+  @use call ds:assign  @ 35
+  @use call tm:fromLogical  @ 38

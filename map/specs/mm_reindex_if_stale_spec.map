@@ -1,4 +1,4 @@
-@spec mm_reindex_if_stale_spec  src=tests/specs/mm_reindex_if_stale_spec.lua  loc=117  sha=683a533  cases=5
+@spec mm_reindex_if_stale_spec  src=tests/specs/mm_reindex_if_stale_spec.lua  loc=117  sha=285f562  cases=5
 @exercises midiManager (h.mm)
 @surface   mm:events, mm:notesRaw, mm:tokenOf, mm:reindexIfStale, mm:notes, mm:modify, mm:delete, mm:assign
 @harness   bareMM
@@ -21,11 +21,11 @@
   @case 'an add sorts into place; a delete compacts around the hole'  [harness]  @ 103-115
 
 # Uses (outbound edges)
-  @use call midiManager.events  @ 8
-  @use call midiManager.notesRaw  @ 14,26
-  @use call midiManager.tokenOf  @ 26,57
-  @use call midiManager.reindexIfStale  @ 43,61
-  @use call midiManager.notes  @ 57
-  @use call midiManager.modify  @ 58,75,79,94,106,112
-  @use call midiManager.delete  @ 58,112
-  @use call midiManager.assign  @ 75,79,94
+  @use call mm:events  @ 8
+  @use call mm:notesRaw  @ 14,26
+  @use call mm:tokenOf  @ 26,57
+  @use call mm:reindexIfStale  @ 43,61
+  @use call mm:notes  @ 57
+  @use call mm:modify  @ 58,75,79,94,106,112
+  @use call mm:delete  @ 58,112
+  @use call mm:assign  @ 75,79,94

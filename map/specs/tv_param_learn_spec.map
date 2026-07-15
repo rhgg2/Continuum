@@ -21,14 +21,14 @@
   @case 'automateParam bumps frecency and ends the learn'  [harness]  @ 102-114
 
 # Uses (outbound edges)
-  @use call trackerView.armLearn  @ 41,44,56,67,91,107
-  @use call trackerView.learnFxGuid  @ 42,45,93,96,112
-  @use call trackerView.cancelLearn  @ 57
-  @use call trackerView.pollLearn  @ 68,72,92,94,95,109
-  @use call trackerView.paletteParam  @ 69,73
-  @use call trackerView.listParams  @ 79
-  @use call dataStore.get  @ 83,113
-  @use call trackerView.setGridSize  @ 105
-  @use call editCursor.setPos  @ 106
-  @use call trackerView.automateParam  @ 110
-  @use call trackerView.paramBinding  @ 111
+  @use call vm:armLearn  @ 41,44,56,67,91,107
+  @use call vm:learnFxGuid  @ 42,45,93,96,112
+  @use call vm:cancelLearn  @ 57
+  @use call vm:pollLearn  @ 68,72,92,94,95,109
+  @use call vm:paletteParam  @ 69,73
+  @use call vm:listParams  @ 79
+  @use call ds:get  @ 83,113
+  @use call vm:setGridSize  @ 105
+  @use call ec:setPos  @ 106
+  @use call vm:automateParam  @ 110
+  @use call vm:paramBinding  @ 111

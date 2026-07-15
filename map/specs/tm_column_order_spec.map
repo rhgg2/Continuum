@@ -1,4 +1,4 @@
-@spec tm_column_order_spec  src=tests/specs/tm_column_order_spec.lua  loc=142  sha=500e776  cases=4
+@spec tm_column_order_spec  src=tests/specs/tm_column_order_spec.lua  loc=142  sha=7884dc3  cases=4
 @exercises midiManager (h.fm), trackerManager (h.tm), dataStore (h.ds)
 @surface   fm:dump, tm:addEvent, tm:flush, ds:assign, tm:rebuild, ds:get
 @harness   mk
@@ -41,9 +41,9 @@
   @case 'a note delayed out of a window in raw still parks (membership is grid intent)'  [harness]  @ 123-140
 
 # Uses (outbound edges)
-  @use call midiManager.dump  @ 38,54
-  @use call trackerManager.addEvent  @ 80,81,92,96,107,112,115,128
-  @use call trackerManager.flush  @ 80,81,92,96,107,115,130
-  @use call dataStore.assign  @ 131
-  @use call trackerManager.rebuild  @ 132
-  @use call dataStore.get  @ 135
+  @use call fm:dump  @ 38,54
+  @use call tm:addEvent  @ 80,81,92,96,107,112,115,128
+  @use call tm:flush  @ 80,81,92,96,107,115,130
+  @use call ds:assign  @ 131
+  @use call tm:rebuild  @ 132
+  @use call ds:get  @ 135

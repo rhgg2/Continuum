@@ -23,7 +23,7 @@
   @use call groups.tintKey  @ 27,28,29
   @use call groups.regionKey  @ 35,36
   @use call groups.outlineKey  @ 37,38
-  @use call groupManager.mark  @ 45
-  @use call groupManager.newInstance  @ 46
-  @use call groupManager.eachInstance  @ 47,62
-  @use call groupManager.markGroup  @ 61
+  @use call gm:mark  @ 45
+  @use call gm:newInstance  @ 46
+  @use call gm:eachInstance  @ 47,62
+  @use call gm:markGroup  @ 61

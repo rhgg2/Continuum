@@ -37,16 +37,16 @@
   @case 'shadowed shift commands decline while a gesture is live'  [harness]  @ 334-343
 
 # Uses (outbound edges)
-  @use call trackerView.setGridSize  @ 12,221
-  @use call trackerManager.getChannel  @ 18
-  @use call trackerView.chordStrike  @ 26,27
-  @use call editCursor.setPos  @ 51,72,91,112,127,158,180,195,222,237,255,274,290,309,323,337
-  @use call editCursor.row  @ 57,64,172,186,200,266
-  @use call trackerView.chordCommit  @ 62,81,102,119,150,171,185,229,246,265,282,299,315,329,342
-  @use call trackerView.chordActive  @ 63,187,199
-  @use call midiManager.dump  @ 94,118,170,184,228,313
-  @use call trackerView.chordNudgeVel  @ 131,133,134,139,144,148
-  @use call trackerView.chordBackspace  @ 161,168,169,326
-  @use call trackerView.rebuild  @ 198
-  @use call trackerView.tick  @ 242
-  @use call commandManager.invoke  @ 340
+  @use call vm:setGridSize  @ 12,221
+  @use call tm:getChannel  @ 18
+  @use call vm:chordStrike  @ 26,27
+  @use call ec:setPos  @ 51,72,91,112,127,158,180,195,222,237,255,274,290,309,323,337
+  @use call ec:row  @ 57,64,172,186,200,266
+  @use call vm:chordCommit  @ 62,81,102,119,150,171,185,229,246,265,282,299,315,329,342
+  @use call vm:chordActive  @ 63,187,199
+  @use call fm:dump  @ 94,118,170,184,228,313
+  @use call vm:chordNudgeVel  @ 131,133,134,139,144,148
+  @use call vm:chordBackspace  @ 161,168,169,326
+  @use call vm:rebuild  @ 198
+  @use call vm:tick  @ 242
+  @use call cmgr:invoke  @ 340

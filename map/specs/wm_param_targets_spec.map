@@ -21,6 +21,6 @@
   @case 'a track outside the graph yields no rows'  [harness]  @ 78-83
 
 # Uses (outbound edges)
-  @use call wiringManager.load  @ 13
-  @use call wiringManager.mutate  @ 53
-  @use call wiringManager.paramTargets  @ 66,82
+  @use call wm:load  @ 13
+  @use call wm:mutate  @ 53
+  @use call wm:paramTargets  @ 66,82

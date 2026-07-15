@@ -22,6 +22,6 @@
   @case 'self clamped by a later same-pitch peer; endppqL (intent) survives'  [harness]  @ 70-86
 
 # Uses (outbound edges)
-  @use call trackerManager.addEvent  @ 31,56,76
-  @use call trackerManager.flush  @ 35,58,78
-  @use call midiManager.dump  @ 37,60,80
+  @use call tm:addEvent  @ 31,56,76
+  @use call tm:flush  @ 35,58,78
+  @use call fm:dump  @ 37,60,80

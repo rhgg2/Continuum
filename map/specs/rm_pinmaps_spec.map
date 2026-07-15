@@ -20,5 +20,5 @@
 
 # Uses (outbound edges)
   @use call harness.mk  @ 9
-  @use call routingManager.tracks  @ 30,41,46,56,60,70,76
-  @use call routingManager.assignFx  @ 43,58,72,74
+  @use call rm:tracks  @ 30,41,46,56,60,70,76
+  @use call rm:assignFx  @ 43,58,72,74

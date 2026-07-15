@@ -106,29 +106,29 @@
   @api help:draw()  @ 481-539
 
 # Uses (outbound edges)
+  @use call    ImGui.CalcTextSize  @ layoutCluster:79,83 drawCluster:141,155,160 layoutBox:188,190 drawConflict:239,242,264
+  @use call    ImGui.DrawList_AddLine  @ drawTag:127,128
+  @use call    ImGui.DrawList_AddRect  @ drawCluster:153 drawBox:198 drawConflict:253,263
+  @use call    ImGui.DrawList_AddRectFilled  @ crispBorder:107,108,109,110 drawTag:119,131,132 drawCluster:152 drawBox:197 drawConflict:252,262 draw:490
+  @use call    ImGui.DrawList_AddText  @ drawCluster:146,156,161 drawBox:200,204 drawConflict:255,257,265
+  @use call    ImGui.GetForegroundDrawList  @ draw:486
+  @use call    ImGui.GetInputQueueCharacter  @ anyKeyPressed:350
+  @use call    ImGui.GetKeyMods  @ pollCapture:427
+  @use call    ImGui.GetMousePos  @ handleConflict:454 handleClicks:469
+  @use call    ImGui.GetTextLineHeight  @ draw:487
+  @use call    ImGui.GetWindowPos  @ draw:488
+  @use call    ImGui.GetWindowSize  @ draw:489
+  @use call    ImGui.IsKeyPressed  @ anyKeyPressed:353 pollCapture:425,429 handleConflict:450,451,452 draw:533
+  @use call    ImGui.IsMouseClicked  @ handleConflict:453 handleClicks:467,468
   @use call    chrome.colour  @ draw:490,493,494,495,496,497,498,499,500,501,502
   @use call    chrome.toolbarRects  @ rectFor:61
-  @use call    cmgr.bindingSite  @ rebindWithout:385 dropChord:397
-  @use call    cmgr.commandAtKey  @ commitCapture:405
-  @use call    cmgr.keyLabel  @ drawConflict:226
-  @use call    cmgr.keyLabelList  @ layoutBox:183
-  @use call    cmgr.keySpec  @ dropChord:391,394
-  @use call    cmgr.keysFor  @ layoutBox:186 rebindWithout:381 dropChord:393
-  @use call    cmgr.rebind  @ rebindWithout:385 dropChord:397
-  @use call    imgui.CalcTextSize  @ layoutCluster:79,83 drawCluster:141,155,160 layoutBox:188,190 drawConflict:239,242,264
-  @use call    imgui.DrawList_AddLine  @ drawTag:127,128
-  @use call    imgui.DrawList_AddRect  @ drawCluster:153 drawBox:198 drawConflict:253,263
-  @use call    imgui.DrawList_AddRectFilled  @ crispBorder:107,108,109,110 drawTag:119,131,132 drawCluster:152 drawBox:197 drawConflict:252,262 draw:490
-  @use call    imgui.DrawList_AddText  @ drawCluster:146,156,161 drawBox:200,204 drawConflict:255,257,265
-  @use call    imgui.GetForegroundDrawList  @ draw:486
-  @use call    imgui.GetInputQueueCharacter  @ anyKeyPressed:350
-  @use call    imgui.GetKeyMods  @ pollCapture:427
-  @use call    imgui.GetMousePos  @ handleConflict:454 handleClicks:469
-  @use call    imgui.GetTextLineHeight  @ draw:487
-  @use call    imgui.GetWindowPos  @ draw:488
-  @use call    imgui.GetWindowSize  @ draw:489
-  @use call    imgui.IsKeyPressed  @ anyKeyPressed:353 pollCapture:425,429 handleConflict:450,451,452 draw:533
-  @use call    imgui.IsMouseClicked  @ handleConflict:453 handleClicks:467,468
+  @use call    cmgr:bindingSite  @ rebindWithout:385 dropChord:397
+  @use call    cmgr:commandAtKey  @ commitCapture:405
+  @use call    cmgr:keyLabel  @ drawConflict:226
+  @use call    cmgr:keyLabelList  @ layoutBox:183
+  @use call    cmgr:keySpec  @ dropChord:391,394
+  @use call    cmgr:keysFor  @ layoutBox:186 rebindWithout:381 dropChord:393
+  @use call    cmgr:rebind  @ rebindWithout:385 dropChord:397
   @use call    util.add  @ layoutCluster:84,97 drawTag:135 drawCluster:165 layoutBox:185 drawConflict:266 placePins:282,304 placeFlow:323 buildDismissKeys:332,343 draw:517,519
   @use require imgui  @ 8
   @use require util  @ 9

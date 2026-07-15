@@ -32,8 +32,8 @@
   @case 'held marking follows the live chord: bare binding unmarked while shift is down'  [pure]  @ 195-203
 
 # Uses (outbound edges)
-  @use call commandManager.bind  @ 51,52,53,54,169,184
-  @use call commandManager.beginPrefix  @ 102,116
-  @use call commandManager.isPrefixActive  @ 106,123
-  @use call commandManager.scope  @ 144
-  @use call commandManager.push  @ 147
+  @use call cmgr:bind  @ 51,52,53,54,169,184
+  @use call cmgr:beginPrefix  @ 102,116
+  @use call cmgr:isPrefixActive  @ 106,123
+  @use call cmgr:scope  @ 144
+  @use call cmgr:push  @ 147

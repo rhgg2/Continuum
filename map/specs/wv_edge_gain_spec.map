@@ -19,7 +19,7 @@
   @case 'edgeGain returns 1.0 for non-audio edge regardless of ops'  [harness]  @ 71-82
 
 # Uses (outbound edges)
-  @use call wiringView.addFx  @ 15,16,54,55,74,75
-  @use call wiringView.edgeGain  @ 27,36,58,81
-  @use call wiringView.setEdgeGain  @ 35,46,57,66
-  @use call wiringView.graph  @ 37,45,47,59,67,80
+  @use call wv:addFx  @ 15,16,54,55,74,75
+  @use call wv:edgeGain  @ 27,36,58,81
+  @use call wv:setEdgeGain  @ 35,46,57,66
+  @use call wv:graph  @ 37,45,47,59,67,80

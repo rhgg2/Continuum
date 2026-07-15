@@ -4,6 +4,14 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-16** — map `@use` edges store the receiver **source-faithfully** (`cm:get`, `util.deepClone`
+  — instance name, separator kept), resolving short name → module at **query** time via each map's `self=`
+  registry — over resolving at generation time. Generation stays a pure per-file transcription, so a
+  post-edit regen never depends on another file (rename a module's `self=` and no chunk map goes stale).
+  `map_query usedby` becomes a genuine reverse scan (was the same loop as `uses`): it scans every map,
+  matches the target through the registry accepting all four spellings, and `module=` names the *used*
+  target, not a file to read — fixing the twice-logged back-to-front.
+
 - **2026-07-16** — rebuild's target dataflow fixed (`design/rebuild-pipeline.md`): round-trip through
   intent space with ordered, declared commits — over a single terminal commit (three commit groups are
   genuinely ordered and tokens mint at commit) and over the status-quo blackboard. Frame law adopted:

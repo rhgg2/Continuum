@@ -16,6 +16,6 @@
   @case 'a dormant tracker ignores fxPatterns edits'  [harness]  @ 24-32
 
 # Uses (outbound edges)
-  @use call trackerManager.subscribe  @ 9
-  @use call dataStore.assign  @ 19,30
-  @use call trackerManager.bindTake  @ 28
+  @use call tm:subscribe  @ 9
+  @use call ds:assign  @ 19,30
+  @use call tm:bindTake  @ 28

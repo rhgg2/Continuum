@@ -138,36 +138,36 @@
 
 # Uses (outbound edges)
   @use call    util.add  @ midiPorts:92 addWire:211 deleteNode:228 nodeViews:326 busViews:337 wireViews:378
-  @use call    wm.addBusNode  @ addBusNode:192
-  @use call    wm.addFxNode  @ addFx:147
-  @use call    wm.addSourceNode  @ addSource:152
-  @use call    wm.busRecords  @ ensureView:26
-  @use call    wm.bypassed  @ bypassed:274
-  @use call    wm.deleteBus  @ deleteBus:198
-  @use call    wm.deleteSource  @ deleteSource:157
-  @use call    wm.edgeGain  @ edgeGain:251
-  @use call    wm.enableLive  @ enableLive:140
-  @use call    wm.fastGainCommit  @ setEdgeGain:256
-  @use call    wm.fxTrack  @ samplerTrack:175
-  @use call    wm.graph  @ graph:138
-  @use call    wm.insertBus  @ insertBus:189
-  @use call    wm.isSamplerNode  @ activation:114
-  @use call    wm.listInstalledFX  @ listInstalledFX:160
-  @use call    wm.load  @ load:139
-  @use call    wm.moveBus  @ moveBus:185
-  @use call    wm.moveNodes  @ moveNodes:180
-  @use call    wm.mutate  @ addWire:205 removeWireAt:217 deleteNode:224 rewireEdgeEnd:236 setEdgeGain:257 setEdgePrimary:278
-  @use call    wm.muted  @ muted:270
-  @use call    wm.pokeEdgeGain  @ setEdgeGain:256 pokeEdgeGain:266
-  @use call    wm.reach  @ ensureView:25
-  @use call    wm.rotateBus  @ rotateBus:195
-  @use call    wm.setBypassed  @ setBypassed:273
-  @use call    wm.setMuted  @ setMuted:269
-  @use call    wm.setSourceTagPos  @ setSourceTagPos:201
-  @use call    wm.showFxWindow  @ openFxWindow:167
   @use call    wm.srcTagKey  @ setSourceTagPos:201 wireViews:376
-  @use call    wm.syncExternal  @ syncExternal:141
-  @use call    wm.trackNames  @ ensureView:30
-  @use call    wm.viewGraph  @ ensureView:24
+  @use call    wm:addBusNode  @ addBusNode:192
+  @use call    wm:addFxNode  @ addFx:147
+  @use call    wm:addSourceNode  @ addSource:152
+  @use call    wm:busRecords  @ ensureView:26
+  @use call    wm:bypassed  @ bypassed:274
+  @use call    wm:deleteBus  @ deleteBus:198
+  @use call    wm:deleteSource  @ deleteSource:157
+  @use call    wm:edgeGain  @ edgeGain:251
+  @use call    wm:enableLive  @ enableLive:140
+  @use call    wm:fastGainCommit  @ setEdgeGain:256
+  @use call    wm:fxTrack  @ samplerTrack:175
+  @use call    wm:graph  @ graph:138
+  @use call    wm:insertBus  @ insertBus:189
+  @use call    wm:isSamplerNode  @ activation:114
+  @use call    wm:listInstalledFX  @ listInstalledFX:160
+  @use call    wm:load  @ load:139
+  @use call    wm:moveBus  @ moveBus:185
+  @use call    wm:moveNodes  @ moveNodes:180
+  @use call    wm:mutate  @ addWire:205 removeWireAt:217 deleteNode:224 rewireEdgeEnd:236 setEdgeGain:257 setEdgePrimary:278
+  @use call    wm:muted  @ muted:270
+  @use call    wm:pokeEdgeGain  @ setEdgeGain:256 pokeEdgeGain:266
+  @use call    wm:reach  @ ensureView:25
+  @use call    wm:rotateBus  @ rotateBus:195
+  @use call    wm:setBypassed  @ setBypassed:273
+  @use call    wm:setMuted  @ setMuted:269
+  @use call    wm:setSourceTagPos  @ setSourceTagPos:201
+  @use call    wm:showFxWindow  @ openFxWindow:167
+  @use call    wm:syncExternal  @ syncExternal:141
+  @use call    wm:trackNames  @ ensureView:30
+  @use call    wm:viewGraph  @ ensureView:24
   @use require util  @ 8
   @use sub     wm:wiringChanged  @ 420

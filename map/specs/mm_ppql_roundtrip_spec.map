@@ -20,4 +20,4 @@
   @case 'mixed take: many events, all ppqL stamps survive concurrently'  [pure]  @ 96-124
 
 # Uses (outbound edges)
-  @use call midiManager.modify  @ 25,45,64,83,100
+  @use call mm:modify  @ 25,45,64,83,100

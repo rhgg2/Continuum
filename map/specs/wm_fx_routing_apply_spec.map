@@ -29,10 +29,10 @@
   @case 'fxRouting/apply: snapshot decodes routing back; re-apply emits no setFXChain'  [harness]  @ 170-193
 
 # Uses (outbound edges)
-  @use call wiringManager.load  @ 16
-  @use call wiringManager.instantiateFxOnScratch  @ 36
-  @use call wiringManager.applyOps  @ 50
-  @use call wiringManager.diff  @ 50,190
-  @use call wiringManager.targetState  @ 50,184
-  @use call wiringManager.snapshot  @ 50,183
-  @use call wiringManager.mutate  @ 70,90,117,133,154,174
+  @use call wm:load  @ 16
+  @use call wm:instantiateFxOnScratch  @ 36
+  @use call wm:applyOps  @ 50
+  @use call wm:diff  @ 50,190
+  @use call wm:targetState  @ 50,184
+  @use call wm:snapshot  @ 50,183
+  @use call wm:mutate  @ 70,90,117,133,154,174

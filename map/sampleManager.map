@@ -104,11 +104,11 @@
       @contract  cm.lastProjectPath persists at project-tier so close-during-save is caught next open
 
 # Uses (outbound edges)
-  @use call    cm.get  @ watchPath:432
-  @use call    cm.set  @ watchPath:435
-  @use call    ds.assign  @ setEntry:125 clearEntry:131 assign:296
-  @use call    ds.get  @ setEntry:122 clearEntry:129 syncSlot:228 assign:292
-  @use call    ds.getAt  @ rehydrateTrack:212 migrate:410
+  @use call    cm:get  @ watchPath:432
+  @use call    cm:set  @ watchPath:435
+  @use call    ds:assign  @ setEntry:125 clearEntry:131 assign:296
+  @use call    ds:get  @ setEntry:122 clearEntry:129 syncSlot:228 assign:292
+  @use call    ds:getAt  @ rehydrateTrack:212 migrate:410
   @use call    fileOps.copy  @ assign:287 stageInto:338
   @use call    fileOps.exists  @ assign:287 stageInto:338
   @use call    fileOps.hash  @ assign:282 stageInto:333

@@ -24,9 +24,9 @@
   @case 'delete on delay stop is a no-op when delay is already 0'  [harness]  @ 516-535
 
 # Uses (outbound edges)
-  @use call trackerView.setGridSize  @ 28,53,81,110,150,201,243,277,308,336,369,401,434,472,527
-  @use call editCursor.setPos  @ 31,55,83,112,159,206,244,278,309,337,438,476,485,495,505,528
-  @use call commandManager.invoke  @ 32,56,84,113,245,279,310,338,374,405,496,506,529
-  @use call midiManager.dump  @ 34,162,210,247,282,313,340,376,407,442,499,508,531
-  @use call trackerManager.getChannel  @ 59,87,116
-  @use call trackerView.editEvent  @ 160,207,439,477,486
+  @use call vm:setGridSize  @ 28,53,81,110,150,201,243,277,308,336,369,401,434,472,527
+  @use call ec:setPos  @ 31,55,83,112,159,206,244,278,309,337,438,476,485,495,505,528
+  @use call cmgr:invoke  @ 32,56,84,113,245,279,310,338,374,405,496,506,529
+  @use call fm:dump  @ 34,162,210,247,282,313,340,376,407,442,499,508,531
+  @use call tm:getChannel  @ 59,87,116
+  @use call vm:editEvent  @ 160,207,439,477,486

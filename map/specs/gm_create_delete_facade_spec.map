@@ -21,14 +21,14 @@
   @case 'in localMode a typed create stays a per-instance add (sibling untouched)'  [harness]  @ 66-76
 
 # Uses (outbound edges)
-  @use call midiManager.notes  @ 14
-  @use call trackerView.selectionAsRect  @ 35
-  @use call groupManager.markGroup  @ 36
-  @use call trackerView.eventsInRect  @ 36
-  @use call editCursor.selClear  @ 37
-  @use call groupManager.newInstance  @ 38
-  @use call trackerManager.flush  @ 39
-  @use call editCursor.setPos  @ 48,59,70
-  @use call trackerView.editEvent  @ 49,71
-  @use call commandManager.invoke  @ 60
-  @use call groupManager.setLocalMode  @ 69,72
+  @use call fm:notes  @ 14
+  @use call vm:selectionAsRect  @ 35
+  @use call gm:markGroup  @ 36
+  @use call vm:eventsInRect  @ 36
+  @use call ec:selClear  @ 37
+  @use call gm:newInstance  @ 38
+  @use call tm:flush  @ 39
+  @use call ec:setPos  @ 48,59,70
+  @use call vm:editEvent  @ 49,71
+  @use call cmgr:invoke  @ 60
+  @use call gm:setLocalMode  @ 69,72

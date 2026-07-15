@@ -1,4 +1,4 @@
-@spec wp_smoke_spec  src=tests/specs/wp_smoke_spec.lua  loc=64  sha=e2be081  cases=2
+@spec wp_smoke_spec  src=tests/specs/wp_smoke_spec.lua  loc=64  sha=67c7fd1  cases=2
 @harness   mk
 
 # Intent

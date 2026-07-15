@@ -35,6 +35,6 @@
   @case 'addFxNode: synth generator spawns source, wires midi-in + master-out'  [harness]  @ 209-226
 
 # Uses (outbound edges)
-  @use call wiringManager.load  @ 10
-  @use call wiringManager.addFxNode  @ 113,128,140,152,186,187,198,214
-  @use call wiringManager.graph  @ 119,130,143,188,189,200,217
+  @use call wm:load  @ 10
+  @use call wm:addFxNode  @ 113,128,140,152,186,187,198,214
+  @use call wm:graph  @ 119,130,143,188,189,200,217

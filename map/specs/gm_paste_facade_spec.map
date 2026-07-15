@@ -25,13 +25,13 @@
   @case 'a paste landing wholly inside one instance is allowed (precision, not over-refusal)'  [harness]  @ 103-114
 
 # Uses (outbound edges)
-  @use call midiManager.notes  @ 16
-  @use call trackerView.selectionAsRect  @ 36
-  @use call groupManager.markGroup  @ 37
-  @use call trackerView.eventsInRect  @ 37
-  @use call editCursor.selClear  @ 38
-  @use call groupManager.newInstance  @ 39
-  @use call trackerManager.flush  @ 40
-  @use call editCursor.setPos  @ 49,51,64,66,77,80,97,110
-  @use call commandManager.invoke  @ 50,52,65,67,78,81,94,98,108,111
-  @use call groupManager.setLocalMode  @ 79
+  @use call fm:notes  @ 16
+  @use call vm:selectionAsRect  @ 36
+  @use call gm:markGroup  @ 37
+  @use call vm:eventsInRect  @ 37
+  @use call ec:selClear  @ 38
+  @use call gm:newInstance  @ 39
+  @use call tm:flush  @ 40
+  @use call ec:setPos  @ 49,51,64,66,77,80,97,110
+  @use call cmgr:invoke  @ 50,52,65,67,78,81,94,98,108,111
+  @use call gm:setLocalMode  @ 79

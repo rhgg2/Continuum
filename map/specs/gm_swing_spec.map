@@ -37,15 +37,15 @@
 
 # Uses (outbound edges)
   @use call harness.mk  @ 34
-  @use call trackerView.eventsInRect  @ 69,102,150
-  @use call groupManager.markGroup  @ 72,103,151
-  @use call groupManager.newInstance  @ 73,104,152
-  @use call trackerManager.flush  @ 74,105,124,153,159,187,210,236
-  @use call midiManager.dump  @ 77,109,162,189,212,238
-  @use call trackerManager.fromLogical  @ 78,108,110,163,164,190,213,240
-  @use call groupManager.resizeGroup  @ 122
-  @use call trackerView.setSwingSlot  @ 155
-  @use call trackerManager.rebuild  @ 156
-  @use call groupManager.assignEvent  @ 158
-  @use call trackerManager.byUuid  @ 184,206,215,229,243,244
-  @use call trackerManager.assignEvent  @ 186,209,234
+  @use call vm:eventsInRect  @ 69,102,150
+  @use call gm:markGroup  @ 72,103,151
+  @use call gm:newInstance  @ 73,104,152
+  @use call tm:flush  @ 74,105,124,153,159,187,210,236
+  @use call fm:dump  @ 77,109,162,189,212,238
+  @use call tm:fromLogical  @ 78,108,110,163,164,190,213,240
+  @use call gm:resizeGroup  @ 122
+  @use call vm:setSwingSlot  @ 155
+  @use call tm:rebuild  @ 156
+  @use call gm:assignEvent  @ 158
+  @use call tm:byUuid  @ 184,206,215,229,243,244
+  @use call tm:assignEvent  @ 186,209,234

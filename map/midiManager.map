@@ -1,4 +1,4 @@
-@module midiManager  src=midiManager.lua  loc=1410  sha=3a5925b  mode=chunk  self=mm
+@module midiManager  src=midiManager.lua  loc=1410  sha=285f562  mode=chunk  self=mm
 @deps take, eventMeta
 
 # Invariants & contracts
@@ -269,8 +269,8 @@
   @emits flushed   -- nil; flushTake reprojected the take (self-write, not an external mutation)   @ load:838 leaveNest:949
 
 # Uses (outbound edges)
-  @use call    eventMeta.flush  @ flushMetadata:264 load:818
-  @use call    eventMeta.load  @ load:551
+  @use call    eventMeta:flush  @ flushMetadata:264 load:818
+  @use call    eventMeta:load  @ load:551
   @use call    midiBlob.parse  @ load:565
   @use call    midiBlob.serialise  @ flushTake:477
   @use call    perf.count  @ flushMetadata:262 flushTake:491 load:840

@@ -34,10 +34,10 @@
   @case 'reswing under same swing is a no-op on ppqL'  [harness]  @ 357-381
 
 # Uses (outbound edges)
-  @use call trackerView.setGridSize  @ 32,56,79,117,154,188,230,256,287,309,340,373
-  @use call editCursor.setPos  @ 35,59,86,156,158,194,231,257,342
-  @use call trackerView.editEvent  @ 36,60,87,123,343
-  @use call midiManager.dump  @ 38,62,90,125,161,197,198,234,260,289,312,346,376
-  @use call commandManager.invoke  @ 157,159,193,195,232,258
-  @use call trackerManager.markSwingStale  @ 310,374
-  @use call trackerManager.rebuild  @ 310,374
+  @use call vm:setGridSize  @ 32,56,79,117,154,188,230,256,287,309,340,373
+  @use call ec:setPos  @ 35,59,86,156,158,194,231,257,342
+  @use call vm:editEvent  @ 36,60,87,123,343
+  @use call fm:dump  @ 38,62,90,125,161,197,198,234,260,289,312,346,376
+  @use call cmgr:invoke  @ 157,159,193,195,232,258
+  @use call tm:markSwingStale  @ 310,374
+  @use call tm:rebuild  @ 310,374

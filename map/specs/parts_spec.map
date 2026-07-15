@@ -32,4 +32,4 @@
   @case 'note tracker + delay: parts={pitch,sample,vel,delay}; stopPos={0,2,4,5,7,8,10,11,12}; width=13'  [pure]  @ 142-152
 
 # Uses (outbound edges)
-  @use call editCursor.decorateCol  @ 28
+  @use call ec:decorateCol  @ 28

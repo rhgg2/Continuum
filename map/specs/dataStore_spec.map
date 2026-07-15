@@ -29,11 +29,11 @@
   @case 'contextChanged drops take/track caches so the next read reloads'  [pure]  @ 153-161
 
 # Uses (outbound edges)
-  @use call pextStore.setTake  @ 32,159
-  @use call dataStore.assign  @ 43,44,45,46,47,67,74,83,84,92,102,112,113,134,142,156
-  @use call dataStore.get  @ 48,49,50,51,52,59,66,76,85,93,95,105,125,149,160
-  @use call dataStore.delete  @ 75
-  @use call dataStore.assignAt  @ 122
-  @use call dataStore.getAt  @ 123
-  @use call dataStore.subscribe  @ 133,144
-  @use call pextStore.pollUndo  @ 147
+  @use call ps:setTake  @ 32,159
+  @use call ds:assign  @ 43,44,45,46,47,67,74,83,84,92,102,112,113,134,142,156
+  @use call ds:get  @ 48,49,50,51,52,59,66,76,85,93,95,105,125,149,160
+  @use call ds:delete  @ 75
+  @use call ds:assignAt  @ 122
+  @use call ds:getAt  @ 123
+  @use call ds:subscribe  @ 133,144
+  @use call ps:pollUndo  @ 147

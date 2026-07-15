@@ -14,4 +14,4 @@
   @case 'params resolve for fx on the master track'  [harness]  @ 30-44
 
 # Uses (outbound edges)
-  @use call paramAutomation.params  @ 24,42
+  @use call pa:params  @ 24,42

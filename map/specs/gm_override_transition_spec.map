@@ -45,10 +45,10 @@
   @case 'sibling assign-ov demotes to a materialised add on a peer global delete'  [pure]  @ 224-255
 
 # Uses (outbound edges)
-  @use call groupManager.newInstance  @ 52,67,97,121,197,229
-  @use call trackerManager.flush  @ 53,68,72,77,98,102,106,122,126,130,148,152,158,173,177,184,198,203,209,230,239,244
-  @use call groupManager.markGroup  @ 66,96,120,147,172,196,228
-  @use call groupManager.setLocalMode  @ 70,73,100,103,124,127,150,156,175,181,201,205,237,240
-  @use call groupManager.assignEvent  @ 71,76,101,125,183,238
-  @use call groupManager.deleteEvent  @ 106,130,158,244
-  @use call groupManager.addEvent  @ 152,177,203,209
+  @use call gm:newInstance  @ 52,67,97,121,197,229
+  @use call tm:flush  @ 53,68,72,77,98,102,106,122,126,130,148,152,158,173,177,184,198,203,209,230,239,244
+  @use call gm:markGroup  @ 66,96,120,147,172,196,228
+  @use call gm:setLocalMode  @ 70,73,100,103,124,127,150,156,175,181,201,205,237,240
+  @use call gm:assignEvent  @ 71,76,101,125,183,238
+  @use call gm:deleteEvent  @ 106,130,158,244
+  @use call gm:addEvent  @ 152,177,203,209

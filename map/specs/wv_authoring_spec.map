@@ -39,12 +39,12 @@
   @case 'setSourceTagPos round-trips as wireView.fromOffset on the same edge'  [harness]  @ 342-357
 
 # Uses (outbound edges)
-  @use call wiringView.graph  @ 30,42,61,83,105,127,137,150,165,180,191,193
-  @use call wiringView.addFx  @ 40,59,81,103,125,136,148,159,175,190,244,268,279,291,302,314,325,327,346
-  @use call wiringView.nodeViews  @ 69,91,247
-  @use call wiringView.listInstalledFX  @ 206
-  @use call wiringView.selection  @ 216,218,227,236,261
-  @use call wiringView.setSelection  @ 259
-  @use call wiringView.wiredPorts  @ 269,270,282,293,294,304,305,316,317
-  @use call wiringView.wireViews  @ 330,349
-  @use call wiringView.setSourceTagPos  @ 354
+  @use call wv:graph  @ 30,42,61,83,105,127,137,150,165,180,191,193
+  @use call wv:addFx  @ 40,59,81,103,125,136,148,159,175,190,244,268,279,291,302,314,325,327,346
+  @use call wv:nodeViews  @ 69,91,247
+  @use call wv:listInstalledFX  @ 206
+  @use call wv:selection  @ 216,218,227,236,261
+  @use call wv:setSelection  @ 259
+  @use call wv:wiredPorts  @ 269,270,282,293,294,304,305,316,317
+  @use call wv:wireViews  @ 330,349
+  @use call wv:setSourceTagPos  @ 354

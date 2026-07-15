@@ -25,9 +25,9 @@
   @case 'a delay edit leaves the group onset logical (fresh instance lands on-grid)'  [pure]  @ 70-96
 
 # Uses (outbound edges)
-  @use call midiManager.dump  @ 36
-  @use call trackerView.eventsInRect  @ 49,51,74,76
-  @use call groupManager.markGroup  @ 51,76
-  @use call groupManager.newInstance  @ 52,77,86
-  @use call trackerManager.flush  @ 53,57,78,81,87
-  @use call groupManager.assignEvent  @ 56,80
+  @use call fm:dump  @ 36
+  @use call vm:eventsInRect  @ 49,51,74,76
+  @use call gm:markGroup  @ 51,76
+  @use call gm:newInstance  @ 52,77,86
+  @use call tm:flush  @ 53,57,78,81,87
+  @use call gm:assignEvent  @ 56,80

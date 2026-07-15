@@ -19,8 +19,8 @@
   @case 'assignEvent: endppq past take-end is clamped to takeLen; endppqL keeps the authored intent'  [harness]  @ 164-180
 
 # Uses (outbound edges)
-  @use call trackerManager.addEvent  @ 22,46,113,126,128
-  @use call trackerManager.flush  @ 27,51,75,99,115,130,150,172
-  @use call midiManager.dump  @ 29,53,77,101,174
-  @use call trackerManager.getChannel  @ 73,97,116,132,148,151,170,178
-  @use call trackerManager.assignEvent  @ 74,98,149,171
+  @use call tm:addEvent  @ 22,46,113,126,128
+  @use call tm:flush  @ 27,51,75,99,115,130,150,172
+  @use call fm:dump  @ 29,53,77,101,174
+  @use call tm:getChannel  @ 73,97,116,132,148,151,170,178
+  @use call tm:assignEvent  @ 74,98,149,171

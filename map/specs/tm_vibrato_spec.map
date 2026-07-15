@@ -27,12 +27,12 @@
   @case 'vibrato seats never surface as a visible cc or pb column'  [harness]  @ 193-200
 
 # Uses (outbound edges)
-  @use call trackerManager.addEvent  @ 38,98,149,151
-  @use call trackerManager.flush  @ 39,100,105,122,153,172
-  @use call midiManager.dump  @ 51,69,83,102,106,118,123,134,138,154,183
-  @use call trackerManager.rebuild  @ 104,137,168
-  @use call trackerManager.getChannel  @ 120,170,186,197
-  @use call trackerManager.assignEvent  @ 121,171
-  @use call configManager.assign  @ 136
-  @use call midiManager.load  @ 168
-  @use call dataStore.get  @ 177
+  @use call tm:addEvent  @ 38,98,149,151
+  @use call tm:flush  @ 39,100,105,122,153,172
+  @use call fm:dump  @ 51,69,83,102,106,118,123,134,138,154,183
+  @use call tm:rebuild  @ 104,137,168
+  @use call tm:getChannel  @ 120,170,186,197
+  @use call tm:assignEvent  @ 121,171
+  @use call cm:assign  @ 136
+  @use call fm:load  @ 168
+  @use call ds:get  @ 177

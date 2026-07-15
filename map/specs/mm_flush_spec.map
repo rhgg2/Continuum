@@ -16,7 +16,7 @@
   @case 'editing a cached note re-encodes its notation sidecar at the new pitch'  [pure]  @ 49-68
 
 # Uses (outbound edges)
-  @use call midiManager.load  @ 28,57
-  @use call midiManager.notes  @ 30,59
-  @use call midiManager.modify  @ 31,60
-  @use call midiManager.assign  @ 31,60
+  @use call mm:load  @ 28,57
+  @use call mm:notes  @ 30,59
+  @use call mm:modify  @ 31,60
+  @use call mm:assign  @ 31,60

@@ -18,7 +18,7 @@
   @case 'at member: uuid survives the rebuild so gm can re-anchor it (tm:byUuid)'  [harness]  @ 34-54
 
 # Uses (outbound edges)
-  @use call groupManager.markGroup  @ 22
-  @use call groupManager.newInstance  @ 24
-  @use call midiManager.dump  @ 45
-  @use call trackerManager.byUuid  @ 50
+  @use call gm:markGroup  @ 22
+  @use call gm:newInstance  @ 24
+  @use call fm:dump  @ 45
+  @use call tm:byUuid  @ 50

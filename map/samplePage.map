@@ -38,16 +38,16 @@
 
 # Uses (outbound edges)
   @use call    facade.publish  @ 63
-  @use call    sampleManager.tick  @ tick:60
-  @use call    sampleManager.watchPath  @ tick:59
-  @use call    sampleRender.closeTransients  @ unbind:55
-  @use call    sampleRender.focusState  @ focusState:69
-  @use call    sampleRender.renderBody  @ renderBody:67
-  @use call    sampleRender.renderStatusBar  @ renderStatusBar:68
-  @use call    sampleRender.toolbarSegments  @ toolbarSegments:66
-  @use call    sampleView.getTrack  @ bind:38
-  @use call    sampleView.listTracks  @ bind:40 listTracks:52
-  @use call    sampleView.setTrack  @ bind:43 setTrack:48
+  @use call    sm:tick  @ tick:60
+  @use call    sm:watchPath  @ tick:59
+  @use call    sr:closeTransients  @ unbind:55
+  @use call    sr:focusState  @ focusState:69
+  @use call    sr:renderBody  @ renderBody:67
+  @use call    sr:renderStatusBar  @ renderStatusBar:68
+  @use call    sr:toolbarSegments  @ toolbarSegments:66
+  @use call    sv:getTrack  @ bind:38
+  @use call    sv:listTracks  @ bind:40 listTracks:52
+  @use call    sv:setTrack  @ bind:43 setTrack:48
   @use call    util.instantiate  @ 23,24,25
   @use require fs  @ 11
   @use require sampleManager  @ 23

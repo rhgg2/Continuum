@@ -17,9 +17,9 @@
   @case 'gm:stamp (mirrorDuplicate path) accepts real rect + cursor anchor'  [harness]  @ 39-59
 
 # Uses (outbound edges)
-  @use call trackerView.selectionAsRect  @ 28,49
-  @use call trackerView.eventsInRect  @ 29,50
-  @use call groupManager.mark  @ 34
-  @use call groupManager.stamp  @ 39,57
-  @use call editCursor.setPos  @ 52
-  @use call trackerView.cursorAnchor  @ 53
+  @use call vm:selectionAsRect  @ 28,49
+  @use call vm:eventsInRect  @ 29,50
+  @use call gm:mark  @ 34
+  @use call gm:stamp  @ 39,57
+  @use call ec:setPos  @ 52
+  @use call vm:cursorAnchor  @ 53

@@ -23,11 +23,11 @@
   @case 'moveNodes persists an inserted buss pos through the record'  [harness]  @ 122-130
 
 # Uses (outbound edges)
-  @use call wiringView.addFx  @ 16,17
-  @use call wiringView.wireViews  @ 30,42,54,62,73
-  @use call wiringManager.addBusNode  @ 51,52,70,94
-  @use call wiringView.busViews  @ 85,95
-  @use call wiringView.nodeViews  @ 101
-  @use call wiringView.deleteNode  @ 114
-  @use call wiringManager.busRecords  @ 115,129
-  @use call wiringView.moveNodes  @ 128
+  @use call wv:addFx  @ 16,17
+  @use call wv:wireViews  @ 30,42,54,62,73
+  @use call wm:addBusNode  @ 51,52,70,94
+  @use call wv:busViews  @ 85,95
+  @use call wv:nodeViews  @ 101
+  @use call wv:deleteNode  @ 114
+  @use call wm:busRecords  @ 115,129
+  @use call wv:moveNodes  @ 128

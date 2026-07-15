@@ -27,9 +27,9 @@
   @case 'a committed stamp tracks repeated origin edits in place (no stale dupe)'  [harness]  @ 42-87
 
 # Uses (outbound edges)
-  @use call trackerManager.getChannel  @ 26
-  @use call trackerView.selectionAsRect  @ 54
-  @use call trackerView.eventsInRect  @ 55
-  @use call groupManager.stamp  @ 60
-  @use call trackerManager.flush  @ 61,71,81
-  @use call groupManager.assignEvent  @ 70,80
+  @use call tm:getChannel  @ 26
+  @use call vm:selectionAsRect  @ 54
+  @use call vm:eventsInRect  @ 55
+  @use call gm:stamp  @ 60
+  @use call tm:flush  @ 61,71,81
+  @use call gm:assignEvent  @ 70,80

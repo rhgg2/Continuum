@@ -20,5 +20,5 @@
   @case 'a normal bind still guards: host track un-guarded, checkout track stamped'  [harness]  @ 44-54
 
 # Uses (outbound edges)
-  @use call trackerManager.bindTake  @ 21,33,48
-  @use call dataStore.get  @ 35,50
+  @use call tm:bindTake  @ 21,33,48
+  @use call ds:get  @ 35,50

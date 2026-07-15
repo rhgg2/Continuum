@@ -100,54 +100,54 @@
       @contract  production entry -- mint the checkout on `body` and raise the editing modal; onClose sweeps it
 
 # Uses (outbound edges)
+  @use call    ImGui.AlignTextToFramePadding  @ drawToolbar:280
+  @use call    ImGui.Button  @ drawToolbar:286,288
+  @use call    ImGui.DrawList_AddRectFilled  @ draw:310
+  @use call    ImGui.Dummy  @ draw:295,333
+  @use call    ImGui.GetContentRegionAvail  @ draw:298
+  @use call    ImGui.GetCursorScreenPos  @ draw:297
+  @use call    ImGui.GetStyleVar  @ launch:379,380
+  @use call    ImGui.GetWindowDrawList  @ draw:310
+  @use call    ImGui.GetWindowSize  @ draw:304
+  @use call    ImGui.GetWindowViewport  @ launch:369
+  @use call    ImGui.IsAnyItemActive  @ acceptInput:55
+  @use call    ImGui.IsKeyPressed  @ handleInput:350,352,353
+  @use call    ImGui.PopStyleVar  @ drawToolbar:289
+  @use call    ImGui.PushStyleVar  @ drawToolbar:279
+  @use call    ImGui.SameLine  @ drawToolbar:282,285,287
+  @use call    ImGui.SetCursorScreenPos  @ draw:323,332
+  @use call    ImGui.SetWindowSize  @ draw:306
+  @use call    ImGui.Viewport_GetWorkSize  @ launch:369
   @use call    chrome.colour  @ draw:310
   @use call    chrome.headingLabel  @ drawToolbar:281
   @use call    chrome.numberStepper  @ drawToolbar:283
   @use call    chrome.verticalSeparator  @ drawToolbar:285
-  @use call    commandManager.loadOverrides  @ 87
-  @use call    commandManager.push  @ 88
-  @use call    commandManager.scope  @ 78
-  @use call    configManager.get  @ materialiseNotes:97 materialiseCurve:121 drawToolbar:283
-  @use call    configManager.set  @ open:207,223,230,242
-  @use call    dataStore.assign  @ open:232,233,243
-  @use call    eventMeta.dropPool  @ close:256
-  @use call    gridPane.cellHeight  @ launch:381
-  @use call    gridPane.cellWidth  @ draw:318
-  @use call    gridPane.draw  @ draw:324,327
-  @use call    gridPane.handleKeys  @ handleInput:348
-  @use call    gridPane.handleMouse  @ handleInput:345
-  @use call    gridPane.heightForRows  @ draw:306 launch:386
-  @use call    gridPane.naturalWidth  @ draw:319
-  @use call    imgui.AlignTextToFramePadding  @ drawToolbar:280
-  @use call    imgui.Button  @ drawToolbar:286,288
-  @use call    imgui.DrawList_AddRectFilled  @ draw:310
-  @use call    imgui.Dummy  @ draw:295,333
-  @use call    imgui.GetContentRegionAvail  @ draw:298
-  @use call    imgui.GetCursorScreenPos  @ draw:297
-  @use call    imgui.GetStyleVar  @ launch:379,380
-  @use call    imgui.GetWindowDrawList  @ draw:310
-  @use call    imgui.GetWindowSize  @ draw:304
-  @use call    imgui.GetWindowViewport  @ launch:369
-  @use call    imgui.IsAnyItemActive  @ acceptInput:55
-  @use call    imgui.IsKeyPressed  @ handleInput:350,352,353
-  @use call    imgui.PopStyleVar  @ drawToolbar:289
-  @use call    imgui.PushStyleVar  @ drawToolbar:279
-  @use call    imgui.SameLine  @ drawToolbar:282,285,287
-  @use call    imgui.SetCursorScreenPos  @ draw:323,332
-  @use call    imgui.SetWindowSize  @ draw:306
-  @use call    imgui.Viewport_GetWorkSize  @ launch:369
+  @use call    cm:get  @ materialiseNotes:97 materialiseCurve:121 drawToolbar:283
+  @use call    cm:set  @ open:207,223,230,242
+  @use call    cmgr:loadOverrides  @ 87
+  @use call    cmgr:push  @ 88
+  @use call    cmgr:scope  @ 78
+  @use call    ds:assign  @ open:232,233,243
+  @use call    eventMeta:dropPool  @ close:256
+  @use call    gridPane:cellHeight  @ launch:381
+  @use call    gridPane:cellWidth  @ draw:318
+  @use call    gridPane:draw  @ draw:324,327
+  @use call    gridPane:handleKeys  @ handleInput:348
+  @use call    gridPane:handleMouse  @ handleInput:345
+  @use call    gridPane:heightForRows  @ draw:306 launch:386
+  @use call    gridPane:naturalWidth  @ draw:319
   @use call    keyDispatch.dispatchKeys  @ handleInput:347
-  @use call    midiManager.poolGuid  @ open:208
-  @use call    midiManager.resolution  @ open:209
-  @use call    midiManager.setLength  @ open:217
-  @use call    modalHost.registerKind  @ 360
+  @use call    mm:poolGuid  @ open:208
+  @use call    mm:resolution  @ open:209
+  @use call    mm:setLength  @ open:217
+  @use call    modalHost:registerKind  @ 360
   @use call    scratch.track  @ open:204 close:258
-  @use call    trackerManager.bindTake  @ open:206 close:257
-  @use call    trackerManager.currentTake  @ currentTake:263
-  @use call    trackerManager.flush  @ open:246
-  @use call    trackerManager.getChannel  @ readbackBody:139
-  @use call    trackerView.ppqToRow  @ draw:325
-  @use call    trackerView.setRowPerBeat  @ drawToolbar:284
+  @use call    tm:bindTake  @ open:206 close:257
+  @use call    tm:currentTake  @ currentTake:263
+  @use call    tm:flush  @ open:246
+  @use call    tm:getChannel  @ readbackBody:139
+  @use call    tv:ppqToRow  @ draw:325
+  @use call    tv:setRowPerBeat  @ drawToolbar:284
   @use call    util.add  @ readbackBody:145,149,161
   @use call    util.deepClone  @ open:211
   @use call    util.deepEq  @ writeThrough:181 cancel:192
@@ -167,7 +167,7 @@
   @use require trackerManager  @ 39
   @use require trackerView  @ 42
   @use require util  @ 13
-  @use sub     trackerManager:rebuild  @ 186
+  @use sub     tm:rebuild  @ 186
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath

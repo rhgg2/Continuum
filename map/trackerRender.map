@@ -206,6 +206,61 @@
       -- acceptCmds: page visible and no item active (toolbar focus is transient; see IsAnyItemActive).
 
 # Uses (outbound edges)
+  @use call    ImGui.AlignTextToFramePadding  @ 133 drawChainStage:1192
+  @use call    ImGui.Attach  @ drawTree:522
+  @use call    ImGui.Button  @ 154,187,803,804,811,815,1286,1290 paletteActions:229,233 fxFieldWidget:974 headerActions:1111,1114,1116 drawChainStage:1179,1183,1186
+  @use call    ImGui.CalcTextSize  @ drawTree:514,515 drawFlowMarker:1206
+  @use call    ImGui.CreateListClipper  @ drawTree:521
+  @use call    ImGui.DrawList_AddRectFilled  @ renderBody:1440
+  @use call    ImGui.Dummy  @ drawFlowMarker:1213 drawFxChainBody:1225
+  @use call    ImGui.GetContentRegionAvail  @ drawTreeItem:455 rowHighlight:1125 drawChainStage:1170,1191 drawFlowMarker:1205 drawFxChainBody:1224
+  @use call    ImGui.GetCursorPosX  @ drawChainStage:1170,1191
+  @use call    ImGui.GetCursorScreenPos  @ rowHighlight:1124 drawFlowMarker:1204 renderBody:1430
+  @use call    ImGui.GetFrameHeight  @ fxFieldWidget:962 rowHighlight:1127 drawChainStage:1167
+  @use call    ImGui.GetInputQueueCharacter  @ typedChar:1047
+  @use call    ImGui.GetItemRectMax  @ scrollFollow:439
+  @use call    ImGui.GetItemRectMin  @ scrollFollow:438
+  @use call    ImGui.GetKeyMods  @ handlePaletteKeys:380,383,418 776 handleFxChainKeys:1062
+  @use call    ImGui.GetMousePos  @ renderBody:1452
+  @use call    ImGui.GetScrollY  @ scrollFollow:442
+  @use call    ImGui.GetStyleVar  @ drawTree:513 fxFieldWidget:962
+  @use call    ImGui.GetWindowDrawList  @ renderBody:1440
+  @use call    ImGui.GetWindowHeight  @ scrollFollow:441
+  @use call    ImGui.GetWindowPos  @ scrollFollow:440
+  @use call    ImGui.Indent  @ drawChainStage:1189
+  @use call    ImGui.InputText  @ 791,800,1281,1284
+  @use call    ImGui.InputTextWithHint  @ paletteFindBox:262
+  @use call    ImGui.InvisibleButton  @ drawParamsBody:557
+  @use call    ImGui.IsAnyItemActive  @ drawFxChainBody:1232 focusState:1478
+  @use call    ImGui.IsItemActive  @ paletteFindBox:264
+  @use call    ImGui.IsItemClicked  @ clickToCursor:1161
+  @use call    ImGui.IsKeyPressed  @ handlePaletteKeys:368 776,812,813,816,1287,1288,1291 handleFxChainKeys:1061
+  @use call    ImGui.IsMouseClicked  @ drawParamsBody:567 renderBody:1451
+  @use call    ImGui.IsWindowAppearing  @ 786,1278
+  @use call    ImGui.IsWindowFocused  @ renderBody:1448
+  @use call    ImGui.IsWindowHovered  @ drawParamsBody:567
+  @use call    ImGui.ListClipper_Begin  @ drawTree:524
+  @use call    ImGui.ListClipper_End  @ drawTree:535
+  @use call    ImGui.ListClipper_GetDisplayRange  @ drawTree:530
+  @use call    ImGui.ListClipper_IncludeItemByIndex  @ drawTree:527
+  @use call    ImGui.ListClipper_Step  @ drawTree:529
+  @use call    ImGui.PopFont  @ renderBody:1427
+  @use call    ImGui.PopID  @ 801
+  @use call    ImGui.PopStyleColor  @ renderBody:1426
+  @use call    ImGui.PushFont  @ renderBody:1423
+  @use call    ImGui.PushID  @ 799
+  @use call    ImGui.PushStyleColor  @ renderBody:1424
+  @use call    ImGui.RadioButton  @ 808
+  @use call    ImGui.SameLine  @ 90,114,135,144,153,161,175,186,199,803,804,807,814,1289 paletteActions:231 drawTreeItem:471,473 headerActions:1112,1115 drawChainStage:1177,1181,1185,1194
+  @use call    ImGui.Separator  @ drawParamsBody:550 drawFxChainBody:1223
+  @use call    ImGui.SetCursorPosX  @ drawChainStage:1177,1194
+  @use call    ImGui.SetKeyboardFocusHere  @ paletteFindBox:261 drawParamsBody:555 790,796,1280
+  @use call    ImGui.SetNextItemWidth  @ paletteFindBox:260
+  @use call    ImGui.SetScrollY  @ scrollFollow:443,444
+  @use call    ImGui.SmallButton  @ drawTreeItem:472,474
+  @use call    ImGui.Text  @ drawStatusBar:614 788,794,1279,1283 drawChainStage:1192 renderBody:1425
+  @use call    ImGui.TextDisabled  @ drawTree:509
+  @use call    ImGui.Unindent  @ drawChainStage:1196
   @use call    chrome.checkbox  @ 200
   @use call    chrome.colour  @ renderBody:1424,1441
   @use call    chrome.disabledIf  @ 176 paletteActions:228,232 headerActions:1113 drawChainStage:1178,1182
@@ -217,139 +272,84 @@
   @use call    chrome.pickerIsActive  @ drawFxChainBody:1232 focusState:1474
   @use call    chrome.requestPickerOpen  @ handleFxChainKeys:1082,1094,1103 editFx:1251 1334,1335
   @use call    chrome.screenPainter  @ drawFxChainBody:1219
-  @use call    cm.get  @ 39,136,145,192,200,767 drawSampleDropdown:56 drawStatusBar:597,598,599,601,602 openNewTakeModal:1268,1270 openTakeProperties:1376
-  @use call    cm.getAt  @ 38
-  @use call    cm.set  @ drawSampleDropdown:79 201 openNewTakeModal:1271
-  @use call    cmgr.doAfter  @ 1341
-  @use call    cmgr.invoke  @ 154,187
-  @use call    cmgr.keySpec  @ 775
-  @use call    cmgr.keysFor  @ 781,782
-  @use call    cmgr.scope  @ 624,1309,1348
-  @use call    ds.get  @ drawSampleDropdown:57 163,177 drawStatusBar:603
+  @use call    cm:get  @ 39,136,145,192,200,767 drawSampleDropdown:56 drawStatusBar:597,598,599,601,602 openNewTakeModal:1268,1270 openTakeProperties:1376
+  @use call    cm:getAt  @ 38
+  @use call    cm:set  @ drawSampleDropdown:79 201 openNewTakeModal:1271
+  @use call    cmgr:doAfter  @ 1341
+  @use call    cmgr:invoke  @ 154,187
+  @use call    cmgr:keySpec  @ 775
+  @use call    cmgr:keysFor  @ 781,782
+  @use call    cmgr:scope  @ 624,1309,1348
+  @use call    ds:get  @ drawSampleDropdown:57 163,177 drawStatusBar:603
   @use call    facade.get  @ arrange:25
-  @use call    gridPane.draw  @ renderBody:1438
-  @use call    gridPane.geom  @ renderBody:1444
-  @use call    gridPane.handleKeys  @ renderBody:1456
-  @use call    gridPane.handleMouse  @ renderBody:1450
-  @use call    help.anchor  @ renderBody:1445
-  @use call    help.registerPage  @ 629
-  @use call    help.wasOpenAtFrameStart  @ renderBody:1450,1456
-  @use call    imgui.AlignTextToFramePadding  @ 133 drawChainStage:1192
-  @use call    imgui.Attach  @ drawTree:522
-  @use call    imgui.Button  @ 154,187,803,804,811,815,1286,1290 paletteActions:229,233 fxFieldWidget:974 headerActions:1111,1114,1116 drawChainStage:1179,1183,1186
-  @use call    imgui.CalcTextSize  @ drawTree:514,515 drawFlowMarker:1206
-  @use call    imgui.CreateListClipper  @ drawTree:521
-  @use call    imgui.DrawList_AddRectFilled  @ renderBody:1440
-  @use call    imgui.Dummy  @ drawFlowMarker:1213 drawFxChainBody:1225
-  @use call    imgui.GetContentRegionAvail  @ drawTreeItem:455 rowHighlight:1125 drawChainStage:1170,1191 drawFlowMarker:1205 drawFxChainBody:1224
-  @use call    imgui.GetCursorPosX  @ drawChainStage:1170,1191
-  @use call    imgui.GetCursorScreenPos  @ rowHighlight:1124 drawFlowMarker:1204 renderBody:1430
-  @use call    imgui.GetFrameHeight  @ fxFieldWidget:962 rowHighlight:1127 drawChainStage:1167
-  @use call    imgui.GetInputQueueCharacter  @ typedChar:1047
-  @use call    imgui.GetItemRectMax  @ scrollFollow:439
-  @use call    imgui.GetItemRectMin  @ scrollFollow:438
-  @use call    imgui.GetKeyMods  @ handlePaletteKeys:380,383,418 776 handleFxChainKeys:1062
-  @use call    imgui.GetMousePos  @ renderBody:1452
-  @use call    imgui.GetScrollY  @ scrollFollow:442
-  @use call    imgui.GetStyleVar  @ drawTree:513 fxFieldWidget:962
-  @use call    imgui.GetWindowDrawList  @ renderBody:1440
-  @use call    imgui.GetWindowHeight  @ scrollFollow:441
-  @use call    imgui.GetWindowPos  @ scrollFollow:440
-  @use call    imgui.Indent  @ drawChainStage:1189
-  @use call    imgui.InputText  @ 791,800,1281,1284
-  @use call    imgui.InputTextWithHint  @ paletteFindBox:262
-  @use call    imgui.InvisibleButton  @ drawParamsBody:557
-  @use call    imgui.IsAnyItemActive  @ drawFxChainBody:1232 focusState:1478
-  @use call    imgui.IsItemActive  @ paletteFindBox:264
-  @use call    imgui.IsItemClicked  @ clickToCursor:1161
-  @use call    imgui.IsKeyPressed  @ handlePaletteKeys:368 776,812,813,816,1287,1288,1291 handleFxChainKeys:1061
-  @use call    imgui.IsMouseClicked  @ drawParamsBody:567 renderBody:1451
-  @use call    imgui.IsWindowAppearing  @ 786,1278
-  @use call    imgui.IsWindowFocused  @ renderBody:1448
-  @use call    imgui.IsWindowHovered  @ drawParamsBody:567
-  @use call    imgui.ListClipper_Begin  @ drawTree:524
-  @use call    imgui.ListClipper_End  @ drawTree:535
-  @use call    imgui.ListClipper_GetDisplayRange  @ drawTree:530
-  @use call    imgui.ListClipper_IncludeItemByIndex  @ drawTree:527
-  @use call    imgui.ListClipper_Step  @ drawTree:529
-  @use call    imgui.PopFont  @ renderBody:1427
-  @use call    imgui.PopID  @ 801
-  @use call    imgui.PopStyleColor  @ renderBody:1426
-  @use call    imgui.PushFont  @ renderBody:1423
-  @use call    imgui.PushID  @ 799
-  @use call    imgui.PushStyleColor  @ renderBody:1424
-  @use call    imgui.RadioButton  @ 808
-  @use call    imgui.SameLine  @ 90,114,135,144,153,161,175,186,199,803,804,807,814,1289 paletteActions:231 drawTreeItem:471,473 headerActions:1112,1115 drawChainStage:1177,1181,1185,1194
-  @use call    imgui.Separator  @ drawParamsBody:550 drawFxChainBody:1223
-  @use call    imgui.SetCursorPosX  @ drawChainStage:1177,1194
-  @use call    imgui.SetKeyboardFocusHere  @ paletteFindBox:261 drawParamsBody:555 790,796,1280
-  @use call    imgui.SetNextItemWidth  @ paletteFindBox:260
-  @use call    imgui.SetScrollY  @ scrollFollow:443,444
-  @use call    imgui.SmallButton  @ drawTreeItem:472,474
-  @use call    imgui.Text  @ drawStatusBar:614 788,794,1279,1283 drawChainStage:1192 renderBody:1425
-  @use call    imgui.TextDisabled  @ drawTree:509
-  @use call    imgui.Unindent  @ drawChainStage:1196
-  @use call    modalHost.isOpen  @ drawFxChainBody:1231 focusState:1474
-  @use call    modalHost.registerKind  @ 763,1277
-  @use call    pe.launch  @ launchPattern:931
+  @use call    gridPane:draw  @ renderBody:1438
+  @use call    gridPane:geom  @ renderBody:1444
+  @use call    gridPane:handleKeys  @ renderBody:1456
+  @use call    gridPane:handleMouse  @ renderBody:1450
+  @use call    help:anchor  @ renderBody:1445
+  @use call    help:registerPage  @ 629
+  @use call    help:wasOpenAtFrameStart  @ renderBody:1450,1456
+  @use call    modalHost:isOpen  @ drawFxChainBody:1231 focusState:1474
+  @use call    modalHost:registerKind  @ 763,1277
+  @use call    pe:launch  @ launchPattern:931
   @use call    tuning.findTemper  @ 39 slideTemper:898
   @use call    tuning.midiToStep  @ centsToSteps:904,905
   @use call    tuning.transposeStep  @ stepsToCents:909
-  @use call    tv.activeTemper  @ slideTemper:898
-  @use call    tv.addExtraCol  @ addColumn:852 1327
-  @use call    tv.addFxStage  @ drawAddChainStage:1146
-  @use call    tv.armLearn  @ handlePaletteKeys:419 drawTreeItem:475
-  @use call    tv.automateParam  @ paletteActions:229 handlePaletteKeys:425 drawTreeItem:492
-  @use call    tv.barBeatSub  @ drawStatusBar:609
-  @use call    tv.clearTabOverride  @ handlePaletteKeys:381,384 editFx:1240 focusParams:1305
-  @use call    tv.currentSlotIdx  @ 116
-  @use call    tv.currentTrackIdx  @ 91,115 openNewTakeModal:1262
-  @use call    tv.duplicateBoundUnpooled  @ duplicateUnpooledTake:1299
-  @use call    tv.ec  @ 173,1342 paletteActions:226 caretKeyNow:255 drawStatusBar:595 scopedAction:825 removeOrHideCol:860
-  @use call    tv.fxHostAtCursor  @ stripPlan:1027
-  @use call    tv.fxHostForEdit  @ drawAddChainStage:1146 editFx:1241
-  @use call    tv.gotoTake  @ 1324,1325
-  @use call    tv.gotoTrack  @ 1322,1323
-  @use call    tv.hideExtraCol  @ removeOrHideCol:863
-  @use call    tv.learnFxGuid  @ handlePaletteKeys:420 drawTreeItem:468
-  @use call    tv.listParams  @ buildPlan:316,319
-  @use call    tv.moveFxStage  @ handleFxChainKeys:1088 drawChainStage:1179,1183
-  @use call    tv.newParkedTake  @ openNewTakeModal:1272
-  @use call    tv.noteByUuid  @ hostPitch:900
-  @use call    tv.noteFx  @ stripPlan:1029 drawAddChainStage:1148 enterStrip:1155 editFx:1243
-  @use call    tv.overrideTab  @ drawParamPalette:582 handleFxChainKeys:1067 focusParams:1306
-  @use call    tv.paletteCursor  @ handlePaletteKeys:388 drawTree:512
-  @use call    tv.paletteExpanded  @ buildPlan:314
-  @use call    tv.paletteFilter  @ paletteFindBox:262 handlePaletteKeys:392 drawTree:509,516 drawParamsBody:559,560
-  @use call    tv.paletteParam  @ paletteActions:228
-  @use call    tv.paletteTab  @ drawParamPalette:577
-  @use call    tv.paramBinding  @ paletteActions:227 removeOrHideCol:861
-  @use call    tv.paramTargets  @ drawParamsBody:559
-  @use call    tv.pickTake  @ 126
-  @use call    tv.pickTrack  @ 106
-  @use call    tv.pollLearn  @ renderBody:1448
-  @use call    tv.pruneEmptyRegion  @ renderBody:1435,1458
-  @use call    tv.removeFxStage  @ handleFxChainKeys:1100 drawChainStage:1186
-  @use call    tv.replaceFxStage  @ drawChainStage:1174
-  @use call    tv.setColSwingSlot  @ 45
-  @use call    tv.setFxExpanded  @ handlePaletteKeys:400,404,420,429 drawTreeItem:466
-  @use call    tv.setFxField  @ launchPattern:931 adjustRow:939,945,952 fxFieldWidget:965,972,977
-  @use call    tv.setNoteFx  @ cancelStrip:1054 headerActions:1111
-  @use call    tv.setPaletteCursor  @ handlePaletteKeys:426
-  @use call    tv.setPaletteFilter  @ paletteFindBox:263 handlePaletteKeys:377,426
-  @use call    tv.setRowPerBeat  @ 137,1314
-  @use call    tv.setStripCursor  @ handleFxChainKeys:1076,1105 drawFxChainBody:1220
-  @use call    tv.setSwingSlot  @ 44
-  @use call    tv.setTemper  @ 39
-  @use call    tv.setTemperSlot  @ 41
-  @use call    tv.showDelay  @ addColumn:849
-  @use call    tv.showFx  @ drawTreeItem:472
-  @use call    tv.stripCursor  @ clampCursor:1038 editFx:1252
-  @use call    tv.tabOverride  @ focusParams:1305 renderBody:1432
-  @use call    tv.takeName  @ openTakeProperties:1387
-  @use call    tv.tick  @ renderBody:1462
-  @use call    tv.unautomateParam  @ removeAutomation:215,218
-  @use call    tv.wireGroupLifetime  @ 1353
+  @use call    tv:activeTemper  @ slideTemper:898
+  @use call    tv:addExtraCol  @ addColumn:852 1327
+  @use call    tv:addFxStage  @ drawAddChainStage:1146
+  @use call    tv:armLearn  @ handlePaletteKeys:419 drawTreeItem:475
+  @use call    tv:automateParam  @ paletteActions:229 handlePaletteKeys:425 drawTreeItem:492
+  @use call    tv:barBeatSub  @ drawStatusBar:609
+  @use call    tv:clearTabOverride  @ handlePaletteKeys:381,384 editFx:1240 focusParams:1305
+  @use call    tv:currentSlotIdx  @ 116
+  @use call    tv:currentTrackIdx  @ 91,115 openNewTakeModal:1262
+  @use call    tv:duplicateBoundUnpooled  @ duplicateUnpooledTake:1299
+  @use call    tv:ec  @ 173,1342 paletteActions:226 caretKeyNow:255 drawStatusBar:595 scopedAction:825 removeOrHideCol:860
+  @use call    tv:fxHostAtCursor  @ stripPlan:1027
+  @use call    tv:fxHostForEdit  @ drawAddChainStage:1146 editFx:1241
+  @use call    tv:gotoTake  @ 1324,1325
+  @use call    tv:gotoTrack  @ 1322,1323
+  @use call    tv:hideExtraCol  @ removeOrHideCol:863
+  @use call    tv:learnFxGuid  @ handlePaletteKeys:420 drawTreeItem:468
+  @use call    tv:listParams  @ buildPlan:316,319
+  @use call    tv:moveFxStage  @ handleFxChainKeys:1088 drawChainStage:1179,1183
+  @use call    tv:newParkedTake  @ openNewTakeModal:1272
+  @use call    tv:noteByUuid  @ hostPitch:900
+  @use call    tv:noteFx  @ stripPlan:1029 drawAddChainStage:1148 enterStrip:1155 editFx:1243
+  @use call    tv:overrideTab  @ drawParamPalette:582 handleFxChainKeys:1067 focusParams:1306
+  @use call    tv:paletteCursor  @ handlePaletteKeys:388 drawTree:512
+  @use call    tv:paletteExpanded  @ buildPlan:314
+  @use call    tv:paletteFilter  @ paletteFindBox:262 handlePaletteKeys:392 drawTree:509,516 drawParamsBody:559,560
+  @use call    tv:paletteParam  @ paletteActions:228
+  @use call    tv:paletteTab  @ drawParamPalette:577
+  @use call    tv:paramBinding  @ paletteActions:227 removeOrHideCol:861
+  @use call    tv:paramTargets  @ drawParamsBody:559
+  @use call    tv:pickTake  @ 126
+  @use call    tv:pickTrack  @ 106
+  @use call    tv:pollLearn  @ renderBody:1448
+  @use call    tv:pruneEmptyRegion  @ renderBody:1435,1458
+  @use call    tv:removeFxStage  @ handleFxChainKeys:1100 drawChainStage:1186
+  @use call    tv:replaceFxStage  @ drawChainStage:1174
+  @use call    tv:setColSwingSlot  @ 45
+  @use call    tv:setFxExpanded  @ handlePaletteKeys:400,404,420,429 drawTreeItem:466
+  @use call    tv:setFxField  @ launchPattern:931 adjustRow:939,945,952 fxFieldWidget:965,972,977
+  @use call    tv:setNoteFx  @ cancelStrip:1054 headerActions:1111
+  @use call    tv:setPaletteCursor  @ handlePaletteKeys:426
+  @use call    tv:setPaletteFilter  @ paletteFindBox:263 handlePaletteKeys:377,426
+  @use call    tv:setRowPerBeat  @ 137,1314
+  @use call    tv:setStripCursor  @ handleFxChainKeys:1076,1105 drawFxChainBody:1220
+  @use call    tv:setSwingSlot  @ 44
+  @use call    tv:setTemper  @ 39
+  @use call    tv:setTemperSlot  @ 41
+  @use call    tv:showDelay  @ addColumn:849
+  @use call    tv:showFx  @ drawTreeItem:472
+  @use call    tv:stripCursor  @ clampCursor:1038 editFx:1252
+  @use call    tv:tabOverride  @ focusParams:1305 renderBody:1432
+  @use call    tv:takeName  @ openTakeProperties:1387
+  @use call    tv:tick  @ renderBody:1462
+  @use call    tv:unautomateParam  @ removeAutomation:215,218
+  @use call    tv:wireGroupLifetime  @ 1353
   @use call    util.assign  @ fxSeed:884
   @use call    util.atomic  @ 37,44,45 drawSampleDropdown:79 openNewTakeModal:1269
   @use call    util.clamp  @ adjustRow:938,951 clampCursor:1039,1041 handleFxChainKeys:1074,1091

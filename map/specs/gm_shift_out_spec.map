@@ -22,14 +22,14 @@
   @case 'shift an overridden member out: override peels to reveal the synced note, standalone at dest'  [harness]  @ 75-105
 
 # Uses (outbound edges)
-  @use call midiManager.notes  @ 17
-  @use call groupManager.markGroup  @ 51
-  @use call trackerView.eventsInRect  @ 51
-  @use call trackerView.selectionAsRect  @ 51
-  @use call editCursor.selClear  @ 52
-  @use call groupManager.newInstance  @ 61,78
-  @use call trackerManager.flush  @ 62,79,83
-  @use call editCursor.setPos  @ 63,86
-  @use call commandManager.invoke  @ 64,87
-  @use call groupManager.setLocalMode  @ 81,84
-  @use call groupManager.assignEvent  @ 82
+  @use call fm:notes  @ 17
+  @use call gm:markGroup  @ 51
+  @use call vm:eventsInRect  @ 51
+  @use call vm:selectionAsRect  @ 51
+  @use call ec:selClear  @ 52
+  @use call gm:newInstance  @ 61,78
+  @use call tm:flush  @ 62,79,83
+  @use call ec:setPos  @ 63,86
+  @use call cmgr:invoke  @ 64,87
+  @use call gm:setLocalMode  @ 81,84
+  @use call gm:assignEvent  @ 82

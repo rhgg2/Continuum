@@ -35,12 +35,12 @@
   @case 'mirrorPaste mirrors while pristine, falls back after a mutation'  [pure]  @ 114-129
 
 # Uses (outbound edges)
-  @use call commandManager.scope  @ 39
-  @use call groupManager.mark  @ 46
-  @use call groupManager.stamp  @ 50
-  @use call trackerManager.flush  @ 50
-  @use call commandManager.doBefore  @ 54,59
-  @use call groupManager.clearActive  @ 61
-  @use call commandManager.push  @ 63
-  @use call commandManager.invoke  @ 82,84,86,94,95,96,106,107,117,118,119,124,125,126
-  @use call groupManager.activeGroup  @ 83,85,87,120
+  @use call cmgr:scope  @ 39
+  @use call gm:mark  @ 46
+  @use call gm:stamp  @ 50
+  @use call tm:flush  @ 50
+  @use call cmgr:doBefore  @ 54,59
+  @use call gm:clearActive  @ 61
+  @use call cmgr:push  @ 63
+  @use call cmgr:invoke  @ 82,84,86,94,95,96,106,107,117,118,119,124,125,126
+  @use call gm:activeGroup  @ 83,85,87,120

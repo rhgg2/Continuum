@@ -23,7 +23,7 @@
   @case 'conformOverlaps does not shorten a conform note stored tail when it shifts'  [harness]  @ 66-87
 
 # Uses (outbound edges)
-  @use call trackerView.setGridSize  @ 31,53,77
-  @use call editCursor.setPos  @ 32,54,78
-  @use call commandManager.invoke  @ 33,55,79
-  @use call midiManager.dump  @ 35,37,57,59,81,83
+  @use call vm:setGridSize  @ 31,53,77
+  @use call ec:setPos  @ 32,54,78
+  @use call cmgr:invoke  @ 33,55,79
+  @use call fm:dump  @ 35,37,57,59,81,83

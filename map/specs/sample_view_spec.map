@@ -29,8 +29,8 @@
   @case 'auditionSlot(idx) calls sm:previewSlot(track, idx, 1)'  [harness]  @ 197-207
 
 # Uses (outbound edges)
-  @use call configManager.set  @ 88,132,151,175,176,188,189
-  @use call configManager.getAt  @ 139,141,153
-  @use call configManager.setContext  @ 154
-  @use call dataStore.assign  @ 177
-  @use call configManager.get  @ 181,193
+  @use call cm:set  @ 88,132,151,175,176,188,189
+  @use call cm:getAt  @ 139,141,153
+  @use call cm:setContext  @ 154
+  @use call ds:assign  @ 177
+  @use call cm:get  @ 181,193

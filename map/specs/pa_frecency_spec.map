@@ -21,7 +21,7 @@
   @case 'params surface their section name; unreported sections are nil'  [harness]  @ 90-107
 
 # Uses (outbound edges)
-  @use call paramAutomation.frecencyOrder  @ 26,35,46,59
-  @use call paramAutomation.bumpFrecency  @ 77,78
-  @use call dataStore.get  @ 80
-  @use call paramAutomation.params  @ 85,103
+  @use call pa.frecencyOrder  @ 26,35,46,59
+  @use call pa:bumpFrecency  @ 77,78
+  @use call ds:get  @ 80
+  @use call pa:params  @ 85,103

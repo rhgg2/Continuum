@@ -42,14 +42,14 @@
   @case 'trackNames: an unnamed track falls back to "Track n"'  [harness]  @ 504-514
 
 # Uses (outbound edges)
-  @use call wiringManager.load  @ 12
-  @use call wiringManager.instantiateFxOnScratch  @ 39
-  @use call wiringManager.readGraph  @ 76,100,130,153,173,198,222,243,270,305,333,355,377,395,419,497
-  @use call wiringManager.mutate  @ 90,122,147,167,189,434,458,474,481
-  @use call wiringManager.targetState  @ 99,130,153,173,198
-  @use call wiringManager.enableLive  @ 432,456
-  @use call wiringManager.moveNodes  @ 440
-  @use call wiringManager.read  @ 442,463,483
-  @use call wiringManager.setSourceTagPos  @ 462,478
-  @use call wiringManager.graph  @ 479,482
-  @use call wiringManager.trackNames  @ 511
+  @use call wm:load  @ 12
+  @use call wm:instantiateFxOnScratch  @ 39
+  @use call wm.readGraph  @ 76,100,130,153,173,198,222,243,270,305,333,355,377,395,419,497
+  @use call wm:mutate  @ 90,122,147,167,189,434,458,474,481
+  @use call wm:targetState  @ 99,130,153,173,198
+  @use call wm:enableLive  @ 432,456
+  @use call wm:moveNodes  @ 440
+  @use call wm:read  @ 442,463,483
+  @use call wm:setSourceTagPos  @ 462,478
+  @use call wm:graph  @ 479,482
+  @use call wm:trackNames  @ 511

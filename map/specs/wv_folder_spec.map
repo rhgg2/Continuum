@@ -17,6 +17,6 @@
   @case 'folder parent projects as a bodied folder node; leaf source stays a tag'  [harness]  @ 30-47
 
 # Uses (outbound edges)
-  @use call wiringManager.load  @ 37
-  @use call wiringView.nodeViews  @ 39
-  @use call wiringView.wireViews  @ 44
+  @use call wm:load  @ 37
+  @use call wv:nodeViews  @ 39
+  @use call wv:wireViews  @ 44

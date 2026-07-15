@@ -25,10 +25,10 @@
   @case 'seedSharedSlots: a take left at Off is not re-seeded after the default changes'  [harness]  @ 171-179
 
 # Uses (outbound edges)
-  @use call trackerView.setTemperSlot  @ 18,28,37
-  @use call configManager.getAt  @ 19,20,21,29,30,38,39,53,54,61,63,72,80,89,103,104
-  @use call trackerView.setSwingSlot  @ 51,62,71,87
-  @use call dataStore.get  @ 52,88,102,115,129,146,157,165,178
-  @use call trackerView.setColSwingSlot  @ 79,101,114,128
-  @use call trackerView.seedSharedSlots  @ 145,156,164,174,177
-  @use call configManager.set  @ 175,176
+  @use call vm:setTemperSlot  @ 18,28,37
+  @use call cm:getAt  @ 19,20,21,29,30,38,39,53,54,61,63,72,80,89,103,104
+  @use call vm:setSwingSlot  @ 51,62,71,87
+  @use call ds:get  @ 52,88,102,115,129,146,157,165,178
+  @use call vm:setColSwingSlot  @ 79,101,114,128
+  @use call vm:seedSharedSlots  @ 145,156,164,174,177
+  @use call cm:set  @ 175,176

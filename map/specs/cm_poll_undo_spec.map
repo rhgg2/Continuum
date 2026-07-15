@@ -22,7 +22,7 @@
   @case 'pollUndo drops a stale take handle silently and does not crash'  [harness]  @ 88-106
 
 # Uses (outbound edges)
-  @use call configManager.set  @ 18,34,53,72,91
-  @use call configManager.get  @ 19,27,65
-  @use call configManager.pollUndo  @ 26,42,62,80,102
-  @use call configManager.subscribe  @ 37,61,79,101
+  @use call cm:set  @ 18,34,53,72,91
+  @use call cm:get  @ 19,27,65
+  @use call cm:pollUndo  @ 26,42,62,80,102
+  @use call cm:subscribe  @ 37,61,79,101

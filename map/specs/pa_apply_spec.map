@@ -24,7 +24,7 @@
   @case 'ccm: a co-resident claimant keeps the node alive when pa unbinds'  [harness]  @ 104-117
 
 # Uses (outbound edges)
-  @use call paramAutomation.automate  @ 41,76,89,107
-  @use call paramAutomation.apply  @ 78
-  @use call paramAutomation.unautomate  @ 90,112
-  @use call ccManager.claim  @ 111
+  @use call pa:automate  @ 41,76,89,107
+  @use call pa:apply  @ 78
+  @use call pa:unautomate  @ 90,112
+  @use call ccm:claim  @ 111

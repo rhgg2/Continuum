@@ -27,6 +27,6 @@
   @case 'the group keeps every member -- an in-bounds sibling projects them all'  [pure]  @ 64-79
 
 # Uses (outbound edges)
-  @use call groupManager.markGroup  @ 46,68
-  @use call groupManager.newInstance  @ 50,70,76
-  @use call trackerManager.flush  @ 51,71,77
+  @use call gm:markGroup  @ 46,68
+  @use call gm:newInstance  @ 50,70,76
+  @use call tm:flush  @ 51,71,77

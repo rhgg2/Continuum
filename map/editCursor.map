@@ -1,4 +1,4 @@
-@module editCursor  src=editCursor.lua  loc=888  sha=a17a7a7  mode=chunk  self=ec
+@module editCursor  src=editCursor.lua  loc=888  sha=9db4384  mode=chunk  self=ec
 @deps grid, cm, cmgr, rowPerBar, logPerRow, moveHook, groupBridge
 
 # Invariants & contracts
@@ -194,10 +194,10 @@
       @invariant  ec is the sole writer of col.{parts, stopPos, partAt, partStart, width}
 
 # Uses (outbound edges)
-  @use call    cm.get  @ selUpdate:102 advance:459
-  @use call    cmgr.pop  @ exitMode:520
-  @use call    cmgr.push  @ enterArmed:527
-  @use call    cmgr.scope  @ 744
+  @use call    cm:get  @ selUpdate:102 advance:459
+  @use call    cmgr:pop  @ exitMode:520
+  @use call    cmgr:push  @ enterArmed:527
+  @use call    cmgr:scope  @ 744
   @use call    groupBridge.clearAt  @ stampAt:545
   @use call    groupBridge.clearMoveGap  @ sealMove:512
   @use call    groupBridge.commit  @ sealMove:515 newFromSelection:538 stampAt:548 dropInstance:571 resizeBy:712 paintCell:719

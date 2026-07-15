@@ -1,4 +1,4 @@
-@module masterMix  src=masterMix.lua  loc=140  sha=85177d4  mode=chunk
+@module masterMix  src=masterMix.lua  loc=140  sha=e32512e  mode=chunk
 @deps chrome, ctx
 
 # Shapes
@@ -52,18 +52,18 @@
   @fn render()  @ 80-138
 
 # Uses (outbound edges)
-  @use call    imgui.CalcTextSize  @ render:131
-  @use call    imgui.DrawList_AddRectFilled  @ hrule:42 vrule:43 chip:44 drawBar:53,57,59 render:124,134
-  @use call    imgui.DrawList_AddText  @ render:136
-  @use call    imgui.GetCursorScreenPos  @ render:84
-  @use call    imgui.GetForegroundDrawList  @ render:132
-  @use call    imgui.GetFrameHeight  @ render:86
-  @use call    imgui.GetMousePos  @ render:96
-  @use call    imgui.GetWindowDrawList  @ render:87
-  @use call    imgui.InvisibleButton  @ render:90
-  @use call    imgui.IsItemActive  @ render:91
-  @use call    imgui.IsItemHovered  @ render:92
-  @use call    imgui.IsMouseDoubleClicked  @ render:92
+  @use call    ImGui.CalcTextSize  @ render:131
+  @use call    ImGui.DrawList_AddRectFilled  @ hrule:42 vrule:43 chip:44 drawBar:53,57,59 render:124,134
+  @use call    ImGui.DrawList_AddText  @ render:136
+  @use call    ImGui.GetCursorScreenPos  @ render:84
+  @use call    ImGui.GetForegroundDrawList  @ render:132
+  @use call    ImGui.GetFrameHeight  @ render:86
+  @use call    ImGui.GetMousePos  @ render:96
+  @use call    ImGui.GetWindowDrawList  @ render:87
+  @use call    ImGui.InvisibleButton  @ render:90
+  @use call    ImGui.IsItemActive  @ render:91
+  @use call    ImGui.IsItemHovered  @ render:92
+  @use call    ImGui.IsMouseDoubleClicked  @ render:92
   @use require imgui  @ 6
 
 # REAPER API surface

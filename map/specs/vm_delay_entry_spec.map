@@ -22,8 +22,8 @@
   @case 'same-pitch raw collision: tail walk clamps B; delayC reflects it'  [harness]  @ 273-304
 
 # Uses (outbound edges)
-  @use call trackerView.setGridSize  @ 26,54,83,113,147,186,219,252,288
-  @use call editCursor.setPos  @ 29,57,86,117,151,190,222,255,291
-  @use call trackerView.editEvent  @ 30,58,87,118,152,191,223,256,292
-  @use call midiManager.dump  @ 32,60,89,120,154,194,225,258
-  @use call trackerManager.getChannel  @ 263,294
+  @use call vm:setGridSize  @ 26,54,83,113,147,186,219,252,288
+  @use call ec:setPos  @ 29,57,86,117,151,190,222,255,291
+  @use call vm:editEvent  @ 30,58,87,118,152,191,223,256,292
+  @use call fm:dump  @ 32,60,89,120,154,194,225,258
+  @use call tm:getChannel  @ 263,294

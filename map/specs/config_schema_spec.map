@@ -1,4 +1,4 @@
-@spec config_schema_spec  src=tests/specs/config_schema_spec.lua  loc=474  sha=3039308  cases=31
+@spec config_schema_spec  src=tests/specs/config_schema_spec.lua  loc=474  sha=fe11d27  cases=31
 @exercises configManager (h.cm)
 @surface   cm:get, cm:set, cm:setContext, cm:remove, cm:assign, cm:getAt, cm:clearTake, cm:setTrack, cm:subscribe, cm:seedGlobalFromDefault
 @harness   mk, r._state.takeExt, r._state.trackExt
@@ -43,13 +43,17 @@
   @case 'cm fires changes with their level on the broadcast'  [harness]  @ 459-472
 
 # Uses (outbound edges)
-  @use call configManager.get  @ 17,64,99,112,138,139,157,160,169,171,183,201,215,216,219,232,234,250,252,262,267,284,286,357,363,378,381,394,405,416
-  @use call configManager.set  @ 26,38,142,180,218,261,464
-  @use call configManager.setContext  @ 34,137,266
-  @use call configManager.remove  @ 51,110,231,233,251,465
-  @use call configManager.assign  @ 60,466
-  @use call configManager.getAt  @ 71,81,268,287,288,289,303,305,315,430,432,442,452
-  @use call configManager.clearTake  @ 285,324
-  @use call configManager.setTrack  @ 304,314,325
-  @use call configManager.subscribe  @ 323,463
-  @use call configManager.seedGlobalFromDefault  @ 431,441,451
+  @use call cm:get  @ 17,64,99,112,157,160,169,171,183,201,215,216,219,232,234,250,252,262,284,286,357,363,378,381,394,405,416
+  @use call cm:set  @ 26,38,180,218,261,464
+  @use call cm:setContext  @ 34
+  @use call cm:remove  @ 51,110,231,233,251,465
+  @use call cm:assign  @ 60,466
+  @use call cm:getAt  @ 71,81,287,288,289,303,305,315,430,432,442,452
+  @use call cm2:setContext  @ 137,266
+  @use call cm2:get  @ 138,139,267
+  @use call cm2:set  @ 142
+  @use call cm2:getAt  @ 268
+  @use call cm:clearTake  @ 285,324
+  @use call cm:setTrack  @ 304,314,325
+  @use call cm:subscribe  @ 323,463
+  @use call cm:seedGlobalFromDefault  @ 431,441,451

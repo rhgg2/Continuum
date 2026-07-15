@@ -20,6 +20,6 @@
   @case 'addFx writes probed ins/outs + per-port names onto the node'  [harness]  @ 92-109
 
 # Uses (outbound edges)
-  @use call wiringManager.instantiateFxOnScratch  @ 17,31,41,51,61,62,73,87
-  @use call wiringView.addFx  @ 103
-  @use call wiringView.graph  @ 104
+  @use call wm:instantiateFxOnScratch  @ 17,31,41,51,61,62,73,87
+  @use call wv:addFx  @ 103
+  @use call wv:graph  @ 104

@@ -26,14 +26,14 @@
   @case 'load invalidates the model → reconcile reads REAPER, not stale intent'  [harness]  @ 130-139
 
 # Uses (outbound edges)
-  @use call wiringManager.load  @ 10,137
-  @use call wiringManager.instantiateFxOnScratch  @ 27
-  @use call wiringManager.mutate  @ 34,78
-  @use call wiringManager.enableLive  @ 55,65,75,92,103,121,134
-  @use call wiringManager.diff  @ 94
-  @use call wiringManager.targetState  @ 94
-  @use call wiringManager.snapshot  @ 94
-  @use call wiringManager.graph  @ 106
-  @use call wiringManager.fastGainCommit  @ 109
-  @use call wiringManager.reconcile  @ 112
-  @use call wiringManager.syncExternal  @ 125
+  @use call wm:load  @ 10,137
+  @use call wm:instantiateFxOnScratch  @ 27
+  @use call wm:mutate  @ 34,78
+  @use call wm:enableLive  @ 55,65,75,92,103,121,134
+  @use call wm:diff  @ 94
+  @use call wm:targetState  @ 94
+  @use call wm:snapshot  @ 94
+  @use call wm:graph  @ 106
+  @use call wm:fastGainCommit  @ 109
+  @use call wm:reconcile  @ 112
+  @use call wm:syncExternal  @ 125

@@ -39,29 +39,29 @@
       @contract  REAPER native int (|0x1000000 set) for I_CUSTOMCOLOR; chroma/light match grid fill hue.
 
 # Uses (outbound edges)
-  @use call    imgui.Attach  @ rasteriseRotated:73
-  @use call    imgui.CalcTextSize  @ new:240,242
-  @use call    imgui.ColorConvertDouble4ToU32  @ hue:301
-  @use call    imgui.CreateImageFromSize  @ rasteriseRotated:71
-  @use call    imgui.DrawList_AddCircleFilled  @ new:192
-  @use call    imgui.DrawList_AddImageQuad  @ new:257
-  @use call    imgui.DrawList_AddLine  @ new:179
-  @use call    imgui.DrawList_AddPolyline  @ new:203
-  @use call    imgui.DrawList_AddRect  @ new:138
-  @use call    imgui.DrawList_AddRectFilled  @ new:132,149,150,151,152,162
-  @use call    imgui.DrawList_AddText  @ new:172
-  @use call    imgui.DrawList_AddTextEx  @ new:170
-  @use call    imgui.DrawList_AddTriangleFilled  @ new:186
-  @use call    imgui.DrawList_PathArcTo  @ new:229
-  @use call    imgui.DrawList_PathClear  @ new:219
-  @use call    imgui.DrawList_PathLineTo  @ new:223
-  @use call    imgui.DrawList_PathStroke  @ new:233
-  @use call    imgui.DrawList_PopClipRect  @ new:214
-  @use call    imgui.DrawList_PushClipRect  @ new:211
-  @use call    imgui.GetWindowDrawList  @ new:102
-  @use call    imgui.Image_SetPixels_Array  @ rasteriseRotated:72
-  @use call    imgui.PopFont  @ new:243
-  @use call    imgui.PushFont  @ new:241
+  @use call    ImGui.Attach  @ rasteriseRotated:73
+  @use call    ImGui.CalcTextSize  @ new:240,242
+  @use call    ImGui.ColorConvertDouble4ToU32  @ hue:301
+  @use call    ImGui.CreateImageFromSize  @ rasteriseRotated:71
+  @use call    ImGui.DrawList_AddCircleFilled  @ new:192
+  @use call    ImGui.DrawList_AddImageQuad  @ new:257
+  @use call    ImGui.DrawList_AddLine  @ new:179
+  @use call    ImGui.DrawList_AddPolyline  @ new:203
+  @use call    ImGui.DrawList_AddRect  @ new:138
+  @use call    ImGui.DrawList_AddRectFilled  @ new:132,149,150,151,152,162
+  @use call    ImGui.DrawList_AddText  @ new:172
+  @use call    ImGui.DrawList_AddTextEx  @ new:170
+  @use call    ImGui.DrawList_AddTriangleFilled  @ new:186
+  @use call    ImGui.DrawList_PathArcTo  @ new:229
+  @use call    ImGui.DrawList_PathClear  @ new:219
+  @use call    ImGui.DrawList_PathLineTo  @ new:223
+  @use call    ImGui.DrawList_PathStroke  @ new:233
+  @use call    ImGui.DrawList_PopClipRect  @ new:214
+  @use call    ImGui.DrawList_PushClipRect  @ new:211
+  @use call    ImGui.GetWindowDrawList  @ new:102
+  @use call    ImGui.Image_SetPixels_Array  @ rasteriseRotated:72
+  @use call    ImGui.PopFont  @ new:243
+  @use call    ImGui.PushFont  @ new:241
   @use require imgui  @ 24
 
 # REAPER API surface

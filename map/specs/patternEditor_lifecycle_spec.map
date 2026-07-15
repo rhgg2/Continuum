@@ -26,5 +26,5 @@
   @case 'the singleton editor cycles open/close/open, minting a fresh pool each time'  [harness]  @ 122-140
 
 # Uses (outbound edges)
-  @use call eventMeta.load  @ 49
+  @use call em:load  @ 49
   @use call scratch.track  @ 89,112,125

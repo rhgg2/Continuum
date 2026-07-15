@@ -24,10 +24,10 @@
   @case 'midi bus: idempotent — encode-decode roundtrip leaves diff empty on re-apply'  [harness]  @ 125-146
 
 # Uses (outbound edges)
-  @use call wiringManager.load  @ 19
-  @use call wiringManager.instantiateFxOnScratch  @ 39
-  @use call wiringManager.applyOps  @ 49
-  @use call wiringManager.diff  @ 49,141
-  @use call wiringManager.targetState  @ 49,141
-  @use call wiringManager.snapshot  @ 49,109,141
-  @use call wiringManager.mutate  @ 62,78,101,130
+  @use call wm:load  @ 19
+  @use call wm:instantiateFxOnScratch  @ 39
+  @use call wm:applyOps  @ 49
+  @use call wm:diff  @ 49,141
+  @use call wm:targetState  @ 49,141
+  @use call wm:snapshot  @ 49,109,141
+  @use call wm:mutate  @ 62,78,101,130

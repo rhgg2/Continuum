@@ -168,24 +168,24 @@
       @contract  (groupId, instId, {startDelta?,endDelta?,streams?,gained?}) -> true|nil,reason.
 
 # Uses (outbound edges)
-  @use call    ds.assign  @ persist:223
-  @use call    ds.get  @ 29 rehydrate:229
-  @use call    groups.deriveAssign  @ absorbSiblingOverrides:317 localAmend:590
-  @use call    groups.inRect  @ classifyCreate:338 resizeGroup:856
-  @use call    groups.laneId  @ footprintAliases:542
-  @use call    groups.project  @ rehydrate:239 newInstance:431 stateOf:496 reproject:556 moveInstance:690
-  @use call    groups.reconcile  @ reproject:558
-  @use call    groups.resolve  @ absorbSiblingOverrides:326
-  @use call    groups.shiftStream  @ rectCells:358 regionConflict:382
-  @use call    groups.streamId  @ sameSlot:290
+  @use call    ds:assign  @ persist:223
+  @use call    ds:get  @ 29 rehydrate:229
+  @use call    groupsCore.deriveAssign  @ absorbSiblingOverrides:317 localAmend:590
+  @use call    groupsCore.inRect  @ classifyCreate:338 resizeGroup:856
+  @use call    groupsCore.laneId  @ footprintAliases:542
+  @use call    groupsCore.project  @ rehydrate:239 newInstance:431 stateOf:496 reproject:556 moveInstance:690
+  @use call    groupsCore.reconcile  @ reproject:558
+  @use call    groupsCore.resolve  @ absorbSiblingOverrides:326
+  @use call    groupsCore.shiftStream  @ rectCells:358 regionConflict:382
+  @use call    groupsCore.streamId  @ sameSlot:290
   @use call    perf.start  @ 628
   @use call    perf.stop  @ 638
-  @use call    tm.addEvent  @ newInstance:435 reproject:565 moveInstance:703
-  @use call    tm.assignEvent  @ reproject:570 moveInstance:697
-  @use call    tm.byUuid  @ rehydrate:242 633
-  @use call    tm.deleteEvent  @ reproject:575 deleteInstance:658 moveInstance:701,707
-  @use call    tm.length  @ onTake:152
-  @use call    tm.requestRebuild  @ 608 deleteInstance:669 moveInstance:713 resizeGroup:878
+  @use call    tm:addEvent  @ newInstance:435 reproject:565 moveInstance:703
+  @use call    tm:assignEvent  @ reproject:570 moveInstance:697
+  @use call    tm:byUuid  @ rehydrate:242 633
+  @use call    tm:deleteEvent  @ reproject:575 deleteInstance:658 moveInstance:701,707
+  @use call    tm:length  @ onTake:152
+  @use call    tm:requestRebuild  @ 608 deleteInstance:669 moveInstance:713 resizeGroup:878
   @use call    util.assign  @ localAmend:594 assignEvent:799,816
   @use call    util.clone  @ rehydrate:245 markGroup:407 newInstance:436 reproject:567,573 moveInstance:704 assignEvent:798 resizeGroup:873
   @use require groups  @ 11

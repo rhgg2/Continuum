@@ -24,11 +24,11 @@
   @case 'with localMode off the same edit applies (proves it is the guard)'  [harness]  @ 68-75
 
 # Uses (outbound edges)
-  @use call midiManager.notes  @ 22
-  @use call trackerView.selectionAsRect  @ 41
-  @use call groupManager.markGroup  @ 42
-  @use call trackerView.eventsInRect  @ 42
-  @use call groupManager.newInstance  @ 43
-  @use call trackerManager.flush  @ 44
-  @use call groupManager.setLocalMode  @ 60,62
-  @use call commandManager.invoke  @ 61,72
+  @use call fm:notes  @ 22
+  @use call vm:selectionAsRect  @ 41
+  @use call gm:markGroup  @ 42
+  @use call vm:eventsInRect  @ 42
+  @use call gm:newInstance  @ 43
+  @use call tm:flush  @ 44
+  @use call gm:setLocalMode  @ 60,62
+  @use call cmgr:invoke  @ 61,72

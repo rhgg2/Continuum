@@ -1,4 +1,4 @@
-@spec mm_chan_index_spec  src=tests/specs/mm_chan_index_spec.lua  loc=175  sha=683a533  cases=7
+@spec mm_chan_index_spec  src=tests/specs/mm_chan_index_spec.lua  loc=175  sha=285f562  cases=7
 @exercises midiManager (h.mm)
 @surface   mm:notesRaw, mm:ccsRaw, mm:modify, mm:tokenOf, mm:delete, mm:assign
 @harness   bareMM
@@ -34,9 +34,9 @@
   @case 'the collision backstop kills a note outside mm:delete; the reindex launders it'  [harness]  @ 162-173
 
 # Uses (outbound edges)
-  @use call midiManager.notesRaw  @ 33,70,71,84,96,103,115,122,123,136,150,168
-  @use call midiManager.ccsRaw  @ 39,72,85,97,104,116,124,125
-  @use call midiManager.modify  @ 80,99,118,137,153,169
-  @use call midiManager.tokenOf  @ 96,97,115,116,136,150,168
-  @use call midiManager.delete  @ 100,101
-  @use call midiManager.assign  @ 119,120,138,154,170
+  @use call mm:notesRaw  @ 33,70,71,84,96,103,115,122,123,136,150,168
+  @use call mm:ccsRaw  @ 39,72,85,97,104,116,124,125
+  @use call mm:modify  @ 80,99,118,137,153,169
+  @use call mm:tokenOf  @ 96,97,115,116,136,150,168
+  @use call mm:delete  @ 100,101
+  @use call mm:assign  @ 119,120,138,154,170

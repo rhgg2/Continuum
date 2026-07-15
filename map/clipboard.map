@@ -1,4 +1,4 @@
-@module clipboard  src=clipboard.lua  loc=490  sha=78d7dd3  mode=chunk  self=clipboard
+@module clipboard  src=clipboard.lua  loc=490  sha=52a5eef  mode=chunk  self=clipboard
 @deps ec, grid, tm, cm, currentRpb, getCtx, getLength, edit, aliases, fx
 
 # Invariants & contracts
@@ -56,20 +56,20 @@
   @api clipboard:registerCommands(scope)  @ 479-488
 
 # Uses (outbound edges)
-  @use call    cm.get  @ pasteVelocities:185,207 pasteSingle:265
-  @use call    ec.col  @ pasteSingle:229 pasteMulti:322
-  @use call    ec.cursorPart  @ pasteSingle:235
-  @use call    ec.eachSelectedCol  @ collect:134
-  @use call    ec.isSticky  @ registerCommands:483
-  @use call    ec.region  @ collect:60
-  @use call    ec.row  @ pasteSingle:232 pasteMulti:369
-  @use call    ec.selClear  @ registerCommands:481,483
+  @use call    cm:get  @ pasteVelocities:185,207 pasteSingle:265
+  @use call    ec:col  @ pasteSingle:229 pasteMulti:322
+  @use call    ec:cursorPart  @ pasteSingle:235
+  @use call    ec:eachSelectedCol  @ collect:134
+  @use call    ec:isSticky  @ registerCommands:483
+  @use call    ec:region  @ collect:60
+  @use call    ec:row  @ pasteSingle:232 pasteMulti:369
+  @use call    ec:selClear  @ registerCommands:481,483
   @use call    edit.add  @ pasteVelocities:212 pasteSingle:290,312 pasteMulti:433
   @use call    edit.assign  @ pasteVelocities:202
   @use call    edit.delete  @ pasteVelocities:189 pasteSingle:275,304 pasteMulti:412,416
   @use call    fx.gather  @ collect:98
   @use call    fx.paste  @ pasteClip:443
-  @use call    tm.flush  @ pasteVelocities:223 pasteSingle:292,314 pasteMulti:437 pasteClip:444
+  @use call    tm:flush  @ pasteVelocities:223 pasteSingle:292,314 pasteMulti:437 pasteClip:444
   @use call    util.add  @ collect:120,154,156,159 refusePaste:176 pasteSingle:252,261 pasteMulti:398
   @use call    util.between  @ collect:119,152 pasteVelocities:188,194 pasteSingle:259,274,303 pasteMulti:411,415
   @use call    util.clamp  @ pasteVelocities:198,216 pasteSingle:282

@@ -38,15 +38,15 @@
   @case 'non-swing config change does not flip stale (preserves externally-edited raw)'  [harness]  @ 484-513
 
 # Uses (outbound edges)
-  @use call midiManager.dump  @ 33,52,66,83,106,134,143,171,177,201,221,226,247,275,301,323,326,350,351,354,504,510
-  @use call trackerManager.markSwingStale  @ 130,167,196,224
-  @use call midiManager.notes  @ 131,141,198,502
-  @use call midiManager.modify  @ 132,142,168,197,503
-  @use call midiManager.assign  @ 132,142,169,198,503
-  @use call midiManager.ccs  @ 169
-  @use call trackerManager.getChannel  @ 174
-  @use call trackerManager.assignEvent  @ 175
-  @use call trackerManager.flush  @ 176
-  @use call trackerManager.rebuild  @ 225
-  @use call dataStore.assign  @ 274,300,353,384,456,478
-  @use call configManager.set  @ 325,411,435,509
+  @use call fm:dump  @ 33,52,66,83,106,134,143,171,177,201,221,226,247,275,301,323,326,350,351,354,504,510
+  @use call tm:markSwingStale  @ 130,167,196,224
+  @use call fm:notes  @ 131,141,198,502
+  @use call fm:modify  @ 132,142,168,197,503
+  @use call fm:assign  @ 132,142,169,198,503
+  @use call fm:ccs  @ 169
+  @use call tm:getChannel  @ 174
+  @use call tm:assignEvent  @ 175
+  @use call tm:flush  @ 176
+  @use call tm:rebuild  @ 225
+  @use call ds:assign  @ 274,300,353,384,456,478
+  @use call cm:set  @ 325,411,435,509

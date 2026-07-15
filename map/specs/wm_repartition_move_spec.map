@@ -24,12 +24,12 @@
   @case 'fan-in re-partition MOVES a resident user fx to its new track (guid stable)'  [harness]  @ 44-74
 
 # Uses (outbound edges)
-  @use call wiringManager.load  @ 13
-  @use call wiringManager.instantiateFxOnScratch  @ 33
-  @use call wiringManager.applyOps  @ 40
-  @use call wiringManager.diff  @ 40
-  @use call wiringManager.targetState  @ 40
-  @use call wiringManager.snapshot  @ 40
-  @use call wiringManager.mutate  @ 49,64
-  @use call wiringManager.graph  @ 57,70
-  @use call wiringManager.fxTrack  @ 59,72
+  @use call wm:load  @ 13
+  @use call wm:instantiateFxOnScratch  @ 33
+  @use call wm:applyOps  @ 40
+  @use call wm:diff  @ 40
+  @use call wm:targetState  @ 40
+  @use call wm:snapshot  @ 40
+  @use call wm:mutate  @ 49,64
+  @use call wm:graph  @ 57,70
+  @use call wm:fxTrack  @ 59,72

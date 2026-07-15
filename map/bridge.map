@@ -1,4 +1,4 @@
-@module bridge  src=bridge.lua  loc=211  sha=e6ceed1  mode=chunk  self=bridge
+@module bridge  src=bridge.lua  loc=211  sha=af57f2a  mode=chunk  self=bridge
 
 # Invariants & contracts
   @contract  tick() is the only entry; execute/render/scan are internal. Deps: { env, spoolDir? }.

@@ -20,7 +20,7 @@
   @case 'killed duplicate's metadata is dropped from eventMeta'  [pure]  @ 91-114
 
 # Uses (outbound edges)
-  @use call midiManager.subscribe  @ 25,26,30
-  @use call midiManager.load  @ 31
-  @use call midiManager.notes  @ 37
-  @use call midiManager.byToken  @ 65
+  @use call mm:subscribe  @ 25,26,30
+  @use call mm:load  @ 31
+  @use call mm:notes  @ 37
+  @use call mm:byToken  @ 65

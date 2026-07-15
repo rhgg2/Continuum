@@ -16,5 +16,5 @@
   @case 'a duplicated note carries rpb and arbitrary metadata; derived keys do not leak'  [pure]  @ 15-42
 
 # Uses (outbound edges)
-  @use call groupManager.markGroup  @ 26
-  @use call groupManager.newInstance  @ 28
+  @use call gm:markGroup  @ 26
+  @use call gm:newInstance  @ 28

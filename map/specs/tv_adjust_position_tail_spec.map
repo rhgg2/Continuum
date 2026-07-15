@@ -19,7 +19,7 @@
   @case 'a util.OPEN tail stays open across a nudge'  [harness]  @ 42-58
 
 # Uses (outbound edges)
-  @use call trackerView.setGridSize  @ 29,51
-  @use call editCursor.setPos  @ 31,53
-  @use call commandManager.invoke  @ 32,33,54
-  @use call midiManager.dump  @ 35,56
+  @use call vm:setGridSize  @ 29,51
+  @use call ec:setPos  @ 31,53
+  @use call cmgr:invoke  @ 32,33,54
+  @use call fm:dump  @ 35,56

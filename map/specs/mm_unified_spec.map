@@ -26,12 +26,12 @@
   @case 'add(nil) / add{} / assign(nil, t): nil-paths return nil, no crash'  [harness]  @ 165-174
 
 # Uses (outbound edges)
-  @use call midiManager.modify  @ 19,35,59,75,90,111,115,130,168
-  @use call midiManager.byToken  @ 23,43,61,77,78,92,93,112,113,116,154
-  @use call midiManager.notes  @ 56,72,107
-  @use call midiManager.tokenOf  @ 57,73,88,109
-  @use call midiManager.assign  @ 59,75,90,171
-  @use call midiManager.ccs  @ 87,108
-  @use call midiManager.delete  @ 111,115,130,172
-  @use call midiManager.events  @ 119,132,151
-  @use call midiManager.add  @ 169
+  @use call fm:modify  @ 19,35,59,75,90,111,115,130,168
+  @use call fm:byToken  @ 23,43,61,77,78,92,93,112,113,116,154
+  @use call fm:notes  @ 56,72,107
+  @use call fm:tokenOf  @ 57,73,88,109
+  @use call fm:assign  @ 59,75,90,171
+  @use call fm:ccs  @ 87,108
+  @use call fm:delete  @ 111,115,130,172
+  @use call fm:events  @ 119,132,151
+  @use call fm:add  @ 169

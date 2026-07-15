@@ -22,8 +22,8 @@
   @case 'unknown group is a silent nil (ec carries no geometry)'  [harness]  @ 90-97
 
 # Uses (outbound edges)
-  @use call groupManager.mark  @ 34,57,78
-  @use call trackerView.eventsInRect  @ 34,57,78
-  @use call groupManager.eachInstance  @ 35,41,58,63,79,80,84
-  @use call groupManager.stateOf  @ 38,44,60,65
-  @use call trackerView.paintRegionStream  @ 40,62,82,96
+  @use call gm:mark  @ 34,57,78
+  @use call vm:eventsInRect  @ 34,57,78
+  @use call gm:eachInstance  @ 35,41,58,63,79,80,84
+  @use call gm:stateOf  @ 38,44,60,65
+  @use call vm:paintRegionStream  @ 40,62,82,96

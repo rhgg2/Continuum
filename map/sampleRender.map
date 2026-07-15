@@ -1,4 +1,4 @@
-@module sampleRender  src=sampleRender.lua  loc=626  sha=a3a8e0b  mode=chunk  self=sr
+@module sampleRender  src=sampleRender.lua  loc=626  sha=217c1f8  mode=chunk  self=sr
 @deps cm, ds, cmgr, chrome, gui, sv
 
 # Invariants & contracts
@@ -87,6 +87,47 @@
       @contract  acceptCmds is also blocked by ImGui.IsAnyItemActive (e.g. an InputInt being edited) so trim-field typing doesn't trigger commands
 
 # Uses (outbound edges)
+  @use call    ImGui.AlignTextToFramePadding  @ drawStrip:370,378
+  @use call    ImGui.BeginChild  @ renderBody:478,493,511
+  @use call    ImGui.BeginTable  @ drawSlots:230
+  @use call    ImGui.Button  @ drawStrip:386 renderBody:483,498,500,503,536,538,541
+  @use call    ImGui.CalcTextSize  @ drawSlots:238
+  @use call    ImGui.DrawList_AddQuadFilled  @ drawStrip:331
+  @use call    ImGui.DrawList_AddRectFilled  @ drawStrip:316,338,342,343,344
+  @use call    ImGui.EndChild  @ renderBody:488,507,516
+  @use call    ImGui.EndTable  @ drawSlots:281
+  @use call    ImGui.GetContentRegionAvail  @ drawSlots:239 renderBody:513
+  @use call    ImGui.GetCursorPosX  @ drawSlots:240
+  @use call    ImGui.GetCursorScreenPos  @ drawStrip:309 renderBody:459
+  @use call    ImGui.GetKeyMods  @ drawFiles:198,202
+  @use call    ImGui.GetMousePos  @ drawStrip:347
+  @use call    ImGui.GetStyleColor  @ drawSlots:243
+  @use call    ImGui.GetWindowDrawList  @ drawStrip:313
+  @use call    ImGui.InputInt  @ drawStrip:373,381
+  @use call    ImGui.InputText  @ drawSlots:250
+  @use call    ImGui.InvisibleButton  @ drawStrip:310
+  @use call    ImGui.IsAnyItemActive  @ focusState:585
+  @use call    ImGui.IsItemActive  @ drawSlots:253 drawStrip:311
+  @use call    ImGui.IsItemHovered  @ drawStrip:311
+  @use call    ImGui.IsKeyPressed  @ drawFiles:197,201 drawSlots:257
+  @use call    ImGui.IsMouseClicked  @ renderBody:553
+  @use call    ImGui.IsMouseDoubleClicked  @ drawFiles:214 drawSlots:276
+  @use call    ImGui.PopStyleColor  @ drawSlots:279 renderBody:560
+  @use call    ImGui.PushStyleColor  @ drawSlots:244,245 renderBody:457
+  @use call    ImGui.SameLine  @ drawStrip:371,377,379,385 423 renderBody:490,499,502,537,540
+  @use call    ImGui.Selectable  @ drawSlots:272
+  @use call    ImGui.Separator  @ renderBody:485,504,542
+  @use call    ImGui.SetCursorPosX  @ drawSlots:240
+  @use call    ImGui.SetCursorScreenPos  @ renderBody:510
+  @use call    ImGui.SetKeyboardFocusHere  @ drawSlots:248
+  @use call    ImGui.SetMouseCursor  @ drawStrip:365 renderBody:559
+  @use call    ImGui.SetNextItemWidth  @ drawSlots:249 drawStrip:372,380
+  @use call    ImGui.SetScrollHereY  @ drawFiles:221
+  @use call    ImGui.TableNextRow  @ drawSlots:235
+  @use call    ImGui.TableSetColumnIndex  @ drawSlots:236,242
+  @use call    ImGui.TableSetupColumn  @ drawSlots:231,232
+  @use call    ImGui.Text  @ drawStrip:371,379 renderStatusBar:568
+  @use call    ImGui.TextDisabled  @ drawSlots:241 drawStrip:294,301
   @use call    chrome.checkbox  @ 417,424
   @use call    chrome.colour  @ drawStrip:316,333,338,342,343,344 renderBody:457
   @use call    chrome.disabledIf  @ renderBody:462,482,497,535
@@ -96,80 +137,39 @@
   @use call    chrome.popChromeStyles  @ renderBody:528
   @use call    chrome.pushChromeStyles  @ renderBody:465
   @use call    chrome.rowSelectable  @ drawFiles:210
-  @use call    cm.get  @ triggerPreviewInPlace:53 drawFiles:217 drawSlots:228 drawStrip:290 418,425,608,612,616 renderBody:475,538,552 renderStatusBar:565
-  @use call    cm.set  @ drawSlots:274 420,426,609,613
-  @use call    cmgr.scope  @ 591
-  @use call    ds.get  @ drawSlots:227 drawStrip:291 renderBody:474 renderStatusBar:566 618
+  @use call    cm:get  @ triggerPreviewInPlace:53 drawFiles:217 drawSlots:228 drawStrip:290 418,425,608,612,616 renderBody:475,538,552 renderStatusBar:565
+  @use call    cm:set  @ drawSlots:274 420,426,609,613
+  @use call    cmgr:scope  @ 591
+  @use call    ds:get  @ drawSlots:227 drawStrip:291 renderBody:474 renderStatusBar:566 618
   @use call    fs.join  @ drawTree:141 drawFiles:176,179
   @use call    fs.listAudioFiles  @ drawFiles:178
   @use call    fs.listDirs  @ drawTree:140,142 drawFiles:174
   @use call    fs.parent  @ goUp:161 renderBody:481
-  @use call    imgui.AlignTextToFramePadding  @ drawStrip:370,378
-  @use call    imgui.BeginChild  @ renderBody:478,493,511
-  @use call    imgui.BeginTable  @ drawSlots:230
-  @use call    imgui.Button  @ drawStrip:386 renderBody:483,498,500,503,536,538,541
-  @use call    imgui.CalcTextSize  @ drawSlots:238
-  @use call    imgui.DrawList_AddQuadFilled  @ drawStrip:331
-  @use call    imgui.DrawList_AddRectFilled  @ drawStrip:316,338,342,343,344
-  @use call    imgui.EndChild  @ renderBody:488,507,516
-  @use call    imgui.EndTable  @ drawSlots:281
-  @use call    imgui.GetContentRegionAvail  @ drawSlots:239 renderBody:513
-  @use call    imgui.GetCursorPosX  @ drawSlots:240
-  @use call    imgui.GetCursorScreenPos  @ drawStrip:309 renderBody:459
-  @use call    imgui.GetKeyMods  @ drawFiles:198,202
-  @use call    imgui.GetMousePos  @ drawStrip:347
-  @use call    imgui.GetStyleColor  @ drawSlots:243
-  @use call    imgui.GetWindowDrawList  @ drawStrip:313
-  @use call    imgui.InputInt  @ drawStrip:373,381
-  @use call    imgui.InputText  @ drawSlots:250
-  @use call    imgui.InvisibleButton  @ drawStrip:310
-  @use call    imgui.IsAnyItemActive  @ focusState:585
-  @use call    imgui.IsItemActive  @ drawSlots:253 drawStrip:311
-  @use call    imgui.IsItemHovered  @ drawStrip:311
-  @use call    imgui.IsKeyPressed  @ drawFiles:197,201 drawSlots:257
-  @use call    imgui.IsMouseClicked  @ renderBody:553
-  @use call    imgui.IsMouseDoubleClicked  @ drawFiles:214 drawSlots:276
-  @use call    imgui.PopStyleColor  @ drawSlots:279 renderBody:560
-  @use call    imgui.PushStyleColor  @ drawSlots:244,245 renderBody:457
-  @use call    imgui.SameLine  @ drawStrip:371,377,379,385 423 renderBody:490,499,502,537,540
-  @use call    imgui.Selectable  @ drawSlots:272
-  @use call    imgui.Separator  @ renderBody:485,504,542
-  @use call    imgui.SetCursorPosX  @ drawSlots:240
-  @use call    imgui.SetCursorScreenPos  @ renderBody:510
-  @use call    imgui.SetKeyboardFocusHere  @ drawSlots:248
-  @use call    imgui.SetMouseCursor  @ drawStrip:365 renderBody:559
-  @use call    imgui.SetNextItemWidth  @ drawSlots:249 drawStrip:372,380
-  @use call    imgui.SetScrollHereY  @ drawFiles:221
-  @use call    imgui.TableNextRow  @ drawSlots:235
-  @use call    imgui.TableSetColumnIndex  @ drawSlots:236,242
-  @use call    imgui.TableSetupColumn  @ drawSlots:231,232
-  @use call    imgui.Text  @ drawStrip:371,379 renderStatusBar:568
-  @use call    imgui.TextDisabled  @ drawSlots:241 drawStrip:294,301
   @use call    painter.new  @ renderBody:524
-  @use call    sv.auditionPath  @ drawFiles:218 renderBody:500 600
-  @use call    sv.auditionSlot  @ drawSlots:276 drawStrip:386 renderBody:538
-  @use call    sv.browseRoot  @ goUp:158 renderBody:453
-  @use call    sv.clearCurrentSlot  @ renderBody:536
-  @use call    sv.getBrowserPath  @ triggerPreviewInPlace:58 drawFiles:185,207 renderBody:551 596
-  @use call    sv.getCurrentFolder  @ drawTree:139 goUp:159 renderBody:454
-  @use call    sv.getSelectedFile  @ renderBody:473,500 600
-  @use call    sv.getTrack  @ triggerPreviewInPlace:54 395 boundTrackName:433
-  @use call    sv.isBrowserFolder  @ 595,604
-  @use call    sv.isFolderExpanded  @ drawTree:143
-  @use call    sv.isLive  @ renderBody:455
-  @use call    sv.listTracks  @ 394 boundTrackName:434
-  @use call    sv.loadSelectedIntoCurrent  @ renderBody:498 605
-  @use call    sv.setBrowseRoot  @ drawTree:148 renderBody:483
-  @use call    sv.setBrowserItem  @ goUp:163 drawFiles:192,200,204,213
-  @use call    sv.setCurrentFolder  @ drawTree:149 goUp:164 drawFiles:216 598
-  @use call    sv.setFolderExpanded  @ drawTree:150
-  @use call    sv.setName  @ drawSlots:255
-  @use call    sv.setSlotFocus  @ drawSlots:275
-  @use call    sv.setTrack  @ 410
-  @use call    sv.setTrim  @ drawStrip:361,375,383
-  @use call    sv.stageInto  @ triggerPreviewInPlace:55
-  @use call    sv.stopAudition  @ renderBody:503,541
-  @use call    sv.syncSlot  @ revertPreviewInPlace:45
+  @use call    sv:auditionPath  @ drawFiles:218 renderBody:500 600
+  @use call    sv:auditionSlot  @ drawSlots:276 drawStrip:386 renderBody:538
+  @use call    sv:browseRoot  @ goUp:158 renderBody:453
+  @use call    sv:clearCurrentSlot  @ renderBody:536
+  @use call    sv:getBrowserPath  @ triggerPreviewInPlace:58 drawFiles:185,207 renderBody:551 596
+  @use call    sv:getCurrentFolder  @ drawTree:139 goUp:159 renderBody:454
+  @use call    sv:getSelectedFile  @ renderBody:473,500 600
+  @use call    sv:getTrack  @ triggerPreviewInPlace:54 395 boundTrackName:433
+  @use call    sv:isBrowserFolder  @ 595,604
+  @use call    sv:isFolderExpanded  @ drawTree:143
+  @use call    sv:isLive  @ renderBody:455
+  @use call    sv:listTracks  @ 394 boundTrackName:434
+  @use call    sv:loadSelectedIntoCurrent  @ renderBody:498 605
+  @use call    sv:setBrowseRoot  @ drawTree:148 renderBody:483
+  @use call    sv:setBrowserItem  @ goUp:163 drawFiles:192,200,204,213
+  @use call    sv:setCurrentFolder  @ drawTree:149 goUp:164 drawFiles:216 598
+  @use call    sv:setFolderExpanded  @ drawTree:150
+  @use call    sv:setName  @ drawSlots:255
+  @use call    sv:setSlotFocus  @ drawSlots:275
+  @use call    sv:setTrack  @ 410
+  @use call    sv:setTrim  @ drawStrip:361,375,383
+  @use call    sv:stageInto  @ triggerPreviewInPlace:55
+  @use call    sv:stopAudition  @ renderBody:503,541
+  @use call    sv:syncSlot  @ revertPreviewInPlace:45
   @use require fs  @ 13
   @use require imgui  @ 19
   @use require painter  @ 20

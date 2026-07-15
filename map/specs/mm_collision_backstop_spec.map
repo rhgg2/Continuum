@@ -24,8 +24,8 @@
   @case 'a transient mid-batch collision resolves to nothing'  [harness]  @ 91-104
 
 # Uses (outbound edges)
-  @use call midiManager.notes  @ 12,18
-  @use call midiManager.subscribe  @ 35,61,80,95
-  @use call midiManager.byToken  @ 37
-  @use call midiManager.modify  @ 40,63,82,83,97
-  @use call midiManager.assign  @ 40,63,82,83,98,99
+  @use call mm:notes  @ 12,18
+  @use call mm:subscribe  @ 35,61,80,95
+  @use call mm:byToken  @ 37
+  @use call mm:modify  @ 40,63,82,83,97
+  @use call mm:assign  @ 40,63,82,83,98,99

@@ -22,6 +22,6 @@
   @case 'deleting a wide CC removes both wire lanes'  [pure]  @ 130-141
 
 # Uses (outbound edges)
-  @use call midiManager.ccs  @ 34
-  @use call midiManager.modify  @ 48,70,90,120,135,139
-  @use call midiManager.delete  @ 139
+  @use call mm:ccs  @ 34
+  @use call mm:modify  @ 48,70,90,120,135,139
+  @use call mm:delete  @ 139

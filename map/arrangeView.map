@@ -1,4 +1,4 @@
-@module arrangeView  src=arrangeView.lua  loc=660  sha=6a6bfde  mode=chunk  self=av
+@module arrangeView  src=arrangeView.lua  loc=660  sha=3a7206b  mode=chunk  self=av
 @deps cm, cmgr, facade, am
 
 # Invariants & contracts
@@ -197,47 +197,47 @@
       @contract  seeds the cursor from am:initialCursor (selected take, else edit cursor); no selection.
 
 # Uses (outbound edges)
-  @use call    am.clearLoopRange  @ clearLoop:295 clearLoopRange:445
-  @use call    am.columnChanRange  @ columnChanRange:416
-  @use call    am.createAndDropMidi  @ createSlot:589
-  @use call    am.deleteSlot  @ deleteSlot:601
-  @use call    am.deleteTake  @ deleteSelected:215
-  @use call    am.dropInstance  @ dropAt:263 dropSlot:431
-  @use call    am.duplicateBelow  @ duplicateSelectedBelow:240
-  @use call    am.duplicateTake  @ commitGroupDrag:551 commitDrag:573
-  @use call    am.duplicateUnpooledBelow  @ duplicateUnpooledSelectedBelow:250
-  @use call    am.editCursorQN  @ editCursorQN:433
-  @use call    am.findTake  @ advanceCursorPastNewTake:85 selectedTakes:96
-  @use call    am.hasPlacedTakes  @ hasPlacedTakes:432
-  @use call    am.initialCursor  @ seedCursor:609
-  @use call    am.isParkedTake  @ isParkedTake:429
-  @use call    am.keyForSlot  @ keyForSlot:424 656
-  @use call    am.loopRangeQN  @ setLoopStartHere:279 setLoopEndHere:286 loopRangeQN:435
-  @use call    am.mintParkedTake  @ mintParkedTake:427
-  @use call    am.moveTake  @ moveTakesBy:179 commitDrag:576
-  @use call    am.nextFreeSlot  @ nextFreeSlot:425
-  @use call    am.ownerTrack  @ ownerTrack:430
-  @use call    am.playFromQN  @ playFromCursor:292
-  @use call    am.playPositionQN  @ followPlay:333 playPositionQN:434
-  @use call    am.projectEndQN  @ setLoopStartHere:281 627
-  @use call    am.projectTracks  @ diveSelected:222 projectTracks:414 createSlot:593
-  @use call    am.renameSlot  @ renameSlot:584
-  @use call    am.resizeTake  @ resizeSelected:199 commitDrag:571
-  @use call    am.reswingAll  @ reswingAll:437
-  @use call    am.setEditCursorQN  @ setEditCursorQN:443
-  @use call    am.setLoopRangeQN  @ setLoopStartHere:281 setLoopEndHere:288 setLoopRangeQN:444
-  @use call    am.startIsClear  @ dragCandidate:502
-  @use call    am.takeForSlot  @ takeForSlot:421
-  @use call    am.takesUsing  @ takesUsing:436
-  @use call    am.trackHandle  @ trackHandle:423
-  @use call    am.trackIdxForGuid  @ trackIdxForGuid:422
-  @use call    am.trackSlots  @ midiSlots:146 trackSlots:420
-  @use call    am.tracksTakes  @ takeAtCursor:70 groupFits:163 tracksTakes:415 hitTake:452 lassoCandidate:531
-  @use call    am.visibleTakes  @ visibleTakes:418
-  @use call    cm.get  @ dropAt:264 deleteSelectedAndAdvance:270 followsPlay:326 followPlay:332 beatPerRow:387 setBeatPerRow:391
-  @use call    cm.set  @ setFollowPlay:327 setBeatPerRow:394 651
-  @use call    cmgr.invoke  @ diveSelected:227 createSlot:595
-  @use call    cmgr.scope  @ 617
+  @use call    am:clearLoopRange  @ clearLoop:295 clearLoopRange:445
+  @use call    am:columnChanRange  @ columnChanRange:416
+  @use call    am:createAndDropMidi  @ createSlot:589
+  @use call    am:deleteSlot  @ deleteSlot:601
+  @use call    am:deleteTake  @ deleteSelected:215
+  @use call    am:dropInstance  @ dropAt:263 dropSlot:431
+  @use call    am:duplicateBelow  @ duplicateSelectedBelow:240
+  @use call    am:duplicateTake  @ commitGroupDrag:551 commitDrag:573
+  @use call    am:duplicateUnpooledBelow  @ duplicateUnpooledSelectedBelow:250
+  @use call    am:editCursorQN  @ editCursorQN:433
+  @use call    am:findTake  @ advanceCursorPastNewTake:85 selectedTakes:96
+  @use call    am:hasPlacedTakes  @ hasPlacedTakes:432
+  @use call    am:initialCursor  @ seedCursor:609
+  @use call    am:isParkedTake  @ isParkedTake:429
+  @use call    am:keyForSlot  @ keyForSlot:424 656
+  @use call    am:loopRangeQN  @ setLoopStartHere:279 setLoopEndHere:286 loopRangeQN:435
+  @use call    am:mintParkedTake  @ mintParkedTake:427
+  @use call    am:moveTake  @ moveTakesBy:179 commitDrag:576
+  @use call    am:nextFreeSlot  @ nextFreeSlot:425
+  @use call    am:ownerTrack  @ ownerTrack:430
+  @use call    am:playFromQN  @ playFromCursor:292
+  @use call    am:playPositionQN  @ followPlay:333 playPositionQN:434
+  @use call    am:projectEndQN  @ setLoopStartHere:281 627
+  @use call    am:projectTracks  @ diveSelected:222 projectTracks:414 createSlot:593
+  @use call    am:renameSlot  @ renameSlot:584
+  @use call    am:resizeTake  @ resizeSelected:199 commitDrag:571
+  @use call    am:reswingAll  @ reswingAll:437
+  @use call    am:setEditCursorQN  @ setEditCursorQN:443
+  @use call    am:setLoopRangeQN  @ setLoopStartHere:281 setLoopEndHere:288 setLoopRangeQN:444
+  @use call    am:startIsClear  @ dragCandidate:502
+  @use call    am:takeForSlot  @ takeForSlot:421
+  @use call    am:takesUsing  @ takesUsing:436
+  @use call    am:trackHandle  @ trackHandle:423
+  @use call    am:trackIdxForGuid  @ trackIdxForGuid:422
+  @use call    am:trackSlots  @ midiSlots:146 trackSlots:420
+  @use call    am:tracksTakes  @ takeAtCursor:70 groupFits:163 tracksTakes:415 hitTake:452 lassoCandidate:531
+  @use call    am:visibleTakes  @ visibleTakes:418
+  @use call    cm:get  @ dropAt:264 deleteSelectedAndAdvance:270 followsPlay:326 followPlay:332 beatPerRow:387 setBeatPerRow:391
+  @use call    cm:set  @ setFollowPlay:327 setBeatPerRow:394 651
+  @use call    cmgr:invoke  @ diveSelected:227 createSlot:595
+  @use call    cmgr:scope  @ 617
   @use call    facade.get  @ tracker:18
   @use call    util.atomic  @ nudgeSelected:188 resizeSelected:197 deleteSelected:214 commitGroupDrag:548,557 commitDrag:569
   @use call    util.clamp  @ followViewport:46,50 setBeatPerRow:390

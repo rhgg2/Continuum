@@ -1,4 +1,4 @@
-@spec tm_regionpark_gating_spec  src=tests/specs/tm_regionpark_gating_spec.lua  loc=67  sha=c034529  cases=1
+@spec tm_regionpark_gating_spec  src=tests/specs/tm_regionpark_gating_spec.lua  loc=67  sha=285f562  cases=1
 @exercises trackerManager (h.tm), dataStore (h.ds)
 @surface   tm:addEvent, tm:flush, ds:assign, tm:rebuild, ds:get, tm:getChannel
 @harness   mk
@@ -21,9 +21,9 @@
   @case 'a chan-1 edit freezes chan 2 regionPark and keeps its parked spec + render cell'  [harness]  @ 33-65
 
 # Uses (outbound edges)
-  @use call trackerManager.addEvent  @ 36,37,52,60
-  @use call trackerManager.flush  @ 36,37,52,60
-  @use call dataStore.assign  @ 40
-  @use call trackerManager.rebuild  @ 44
-  @use call dataStore.get  @ 46,53,63
-  @use call trackerManager.getChannel  @ 48,55,61
+  @use call tm:addEvent  @ 36,37,52,60
+  @use call tm:flush  @ 36,37,52,60
+  @use call ds:assign  @ 40
+  @use call tm:rebuild  @ 44
+  @use call ds:get  @ 46,53,63
+  @use call tm:getChannel  @ 48,55,61

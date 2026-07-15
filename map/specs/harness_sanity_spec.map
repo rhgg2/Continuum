@@ -21,18 +21,18 @@
   @case 'assertion helpers distinguish equal from unequal'  [harness]  @ 177-190
 
 # Uses (outbound edges)
-  @use call trackerManager.getChannel  @ 29,36,93
-  @use call midiManager.modify  @ 31
-  @use call midiManager.dump  @ 49,89,92
-  @use call midiManager.byToken  @ 50,53
-  @use call midiManager.notes  @ 75
-  @use call configManager.set  @ 103
-  @use call configManager.get  @ 104
-  @use call midiManager.resolution  @ 124
-  @use call trackerManager.resolution  @ 125
-  @use call midiManager.length  @ 126
-  @use call trackerManager.length  @ 127
-  @use call trackerManager.play  @ 138
-  @use call trackerView.setGridSize  @ 152
-  @use call editCursor.selectChannel  @ 164,166
-  @use call editCursor.col  @ 165,167
+  @use call tm:getChannel  @ 29,36,93
+  @use call fm:modify  @ 31
+  @use call fm:dump  @ 49,89,92
+  @use call fm:byToken  @ 50,53
+  @use call fm:notes  @ 75
+  @use call cm:set  @ 103
+  @use call cm:get  @ 104
+  @use call fm:resolution  @ 124
+  @use call tm:resolution  @ 125
+  @use call fm:length  @ 126
+  @use call tm:length  @ 127
+  @use call tm:play  @ 138
+  @use call vm:setGridSize  @ 152
+  @use call ec:selectChannel  @ 164,166
+  @use call ec:col  @ 165,167

@@ -1,4 +1,4 @@
-@spec tm_rebind_gate_spec  src=tests/specs/tm_rebind_gate_spec.lua  loc=122  sha=a2a3815  cases=4
+@spec tm_rebind_gate_spec  src=tests/specs/tm_rebind_gate_spec.lua  loc=122  sha=285f562  cases=4
 @exercises pextStore (ps), dataStore (ds), midiManager (h.fm), trackerManager (h.tm), configManager (h.cm)
 @surface   ps:setTake, ds:assign, fm:notesRaw, tm:getChannel, fm:dump, tm:addEvent, tm:flush, tm:currentTake, tm:bindTake, cm:set
 @harness   mk{seed.notes}
@@ -33,13 +33,13 @@
   @case 'a trackerMode flip across the dormant window re-derives PCs'  [harness]  @ 108-120
 
 # Uses (outbound edges)
-  @use call pextStore.setTake  @ 21
-  @use call dataStore.assign  @ 22
-  @use call midiManager.notesRaw  @ 34
-  @use call trackerManager.getChannel  @ 39
-  @use call midiManager.dump  @ 43,50
-  @use call trackerManager.addEvent  @ 61,79,95
-  @use call trackerManager.flush  @ 61,79,95
-  @use call trackerManager.currentTake  @ 62,80,96,113
-  @use call trackerManager.bindTake  @ 67,68,83,85,99,101,116,117
-  @use call configManager.set  @ 84
+  @use call ps:setTake  @ 21
+  @use call ds:assign  @ 22
+  @use call fm:notesRaw  @ 34
+  @use call tm:getChannel  @ 39
+  @use call fm:dump  @ 43,50
+  @use call tm:addEvent  @ 61,79,95
+  @use call tm:flush  @ 61,79,95
+  @use call tm:currentTake  @ 62,80,96,113
+  @use call tm:bindTake  @ 67,68,83,85,99,101,116,117
+  @use call cm:set  @ 84

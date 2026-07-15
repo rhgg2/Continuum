@@ -22,11 +22,11 @@
   @case 'in localMode the nudge stays a per-instance override (sibling untouched)'  [harness]  @ 52-62
 
 # Uses (outbound edges)
-  @use call midiManager.notes  @ 16
-  @use call trackerView.selectionAsRect  @ 32
-  @use call groupManager.markGroup  @ 33
-  @use call trackerView.eventsInRect  @ 33
-  @use call groupManager.newInstance  @ 34
-  @use call trackerManager.flush  @ 35
-  @use call commandManager.invoke  @ 44,56
-  @use call groupManager.setLocalMode  @ 55,57
+  @use call fm:notes  @ 16
+  @use call vm:selectionAsRect  @ 32
+  @use call gm:markGroup  @ 33
+  @use call vm:eventsInRect  @ 33
+  @use call gm:newInstance  @ 34
+  @use call tm:flush  @ 35
+  @use call cmgr:invoke  @ 44,56
+  @use call gm:setLocalMode  @ 55,57

@@ -21,15 +21,15 @@
   @case 'arbitrary metadata survives cc-mode collect→paste round-trip'  [harness]  @ 291-329
 
 # Uses (outbound edges)
-  @use call trackerView.setGridSize  @ 25,95,133,176,229,261,299
-  @use call editCursor.setPos  @ 27,98,104,135,144,195,200,270,318
-  @use call editCursor.extendTo  @ 28,99,136,196
-  @use call editCursor.pos  @ 28,99,136,196
-  @use call clipboard.collect  @ 30,100,137,197,233,264,313
-  @use call clipboard.trimTop  @ 66
-  @use call midiManager.dump  @ 96,108,148,156,186,274,322
-  @use call clipboard.pasteClip  @ 105,145,201,271,319
-  @use call trackerManager.deleteEvent  @ 159
-  @use call trackerManager.flush  @ 160,175
-  @use call trackerManager.addEvent  @ 173
-  @use call trackerManager.getChannel  @ 180
+  @use call vm:setGridSize  @ 25,95,133,176,229,261,299
+  @use call ec:setPos  @ 27,98,104,135,144,195,200,270,318
+  @use call ec:extendTo  @ 28,99,136,196
+  @use call ec:pos  @ 28,99,136,196
+  @use call clipboard:collect  @ 30,100,137,197,233,264,313
+  @use call clipboard:trimTop  @ 66
+  @use call fm:dump  @ 96,108,148,156,186,274,322
+  @use call clipboard:pasteClip  @ 105,145,201,271,319
+  @use call tm:deleteEvent  @ 159
+  @use call tm:flush  @ 160,175
+  @use call tm:addEvent  @ 173
+  @use call tm:getChannel  @ 180

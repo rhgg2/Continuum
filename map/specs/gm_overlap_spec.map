@@ -24,7 +24,7 @@
   @case 'a copy landing on an existing sibling is rejected'  [pure]  @ 70-80
 
 # Uses (outbound edges)
-  @use call groupManager.eachInstance  @ 29
-  @use call groupManager.mark  @ 37,40,50,51
-  @use call groupManager.duplicateInto  @ 60,63,73
-  @use call groupManager.newInstance  @ 76
+  @use call gm:eachInstance  @ 29
+  @use call gm:mark  @ 37,40,50,51
+  @use call gm:duplicateInto  @ 60,63,73
+  @use call gm:newInstance  @ 76

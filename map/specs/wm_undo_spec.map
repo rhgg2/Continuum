@@ -21,11 +21,11 @@
   @case 'syncExternal: no-op when the state count has not moved (our writes are baselined)'  [harness]  @ 81-94
 
 # Uses (outbound edges)
-  @use call wiringManager.load  @ 8
-  @use call wiringManager.instantiateFxOnScratch  @ 28
-  @use call wiringManager.enableLive  @ 44,66,85
-  @use call wiringManager.mutate  @ 45,67,86
-  @use call wiringManager.snapshot  @ 55
-  @use call wiringManager.subscribe  @ 70,88
-  @use call wiringManager.syncExternal  @ 75,91,92
-  @use call wiringManager.graph  @ 77
+  @use call wm:load  @ 8
+  @use call wm:instantiateFxOnScratch  @ 28
+  @use call wm:enableLive  @ 44,66,85
+  @use call wm:mutate  @ 45,67,86
+  @use call wm:snapshot  @ 55
+  @use call wm:subscribe  @ 70,88
+  @use call wm:syncExternal  @ 75,91,92
+  @use call wm:graph  @ 77

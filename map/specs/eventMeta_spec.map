@@ -1,4 +1,4 @@
-@spec eventMeta_spec  src=tests/specs/eventMeta_spec.lua  loc=138  sha=c2787f6  cases=10
+@spec eventMeta_spec  src=tests/specs/eventMeta_spec.lua  loc=138  sha=e441984  cases=10
 @exercises eventMeta (em), pextStore (ps)
 @surface   em:flush, em:load, em:saveAll, em:copyPool, ps:assign, ps:get, em:dropPool
 
@@ -25,10 +25,10 @@
   @case 'dropPool forever-deletes a pool metadata'  [pure]  @ 130-136
 
 # Uses (outbound edges)
-  @use call eventMeta.flush  @ 23,34,45,54,55,66,80,83,94,98,109,120,121,133
-  @use call eventMeta.load  @ 24,35,46,56,68,82,84,95,97,99,110,125,135
-  @use call eventMeta.saveAll  @ 67
-  @use call eventMeta.copyPool  @ 81
-  @use call pextStore.assign  @ 96
-  @use call pextStore.get  @ 122,123,124
-  @use call eventMeta.dropPool  @ 134
+  @use call em:flush  @ 23,34,45,54,55,66,80,83,94,98,109,120,121,133
+  @use call em:load  @ 24,35,46,56,68,82,84,95,97,99,110,125,135
+  @use call em:saveAll  @ 67
+  @use call em:copyPool  @ 81
+  @use call ps:assign  @ 96
+  @use call ps:get  @ 122,123,124
+  @use call em:dropPool  @ 134

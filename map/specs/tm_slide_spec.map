@@ -29,9 +29,9 @@
   @case 'disjoint vibrato and slide windows each seat their own pb span'  [harness]  @ 181-197
 
 # Uses (outbound edges)
-  @use call trackerManager.addEvent  @ 32,35,79,82,84,115,132,135,163,167,184,187,190
-  @use call trackerManager.flush  @ 37,86,118,137,141,169,192
-  @use call midiManager.dump  @ 49,68,87,99,104,119,139,142,171,194
-  @use call configManager.assign  @ 102
-  @use call trackerManager.rebuild  @ 103,141
-  @use call trackerManager.getChannel  @ 153
+  @use call tm:addEvent  @ 32,35,79,82,84,115,132,135,163,167,184,187,190
+  @use call tm:flush  @ 37,86,118,137,141,169,192
+  @use call fm:dump  @ 49,68,87,99,104,119,139,142,171,194
+  @use call cm:assign  @ 102
+  @use call tm:rebuild  @ 103,141
+  @use call tm:getChannel  @ 153

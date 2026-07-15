@@ -33,8 +33,8 @@
   @case 'a mutation ends the cascade: the next duplicate seeds a fresh group'  [pure]  @ 100-109
 
 # Uses (outbound edges)
-  @use call commandManager.scope  @ 45
-  @use call groupManager.duplicateInto  @ 51
-  @use call commandManager.doBefore  @ 59
-  @use call commandManager.push  @ 60
-  @use call commandManager.invoke  @ 78,81,82,90,92,94,103,105,107
+  @use call cmgr:scope  @ 45
+  @use call gm:duplicateInto  @ 51
+  @use call cmgr:doBefore  @ 59
+  @use call cmgr:push  @ 60
+  @use call cmgr:invoke  @ 78,81,82,90,92,94,103,105,107

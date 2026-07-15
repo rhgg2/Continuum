@@ -15,4 +15,4 @@
   @case 'listInstalledFX returns empty list when EnumInstalledFX gives nothing'  [harness]  @ 54-60
 
 # Uses (outbound edges)
-  @use call wiringManager.listInstalledFX  @ 28,47,49,58
+  @use call wm:listInstalledFX  @ 28,47,49,58

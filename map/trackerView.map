@@ -1,4 +1,4 @@
-@module trackerView  src=trackerView.lua  loc=4171  sha=2e802f5  mode=chunk  self=tv
+@module trackerView  src=trackerView.lua  loc=4171  sha=285f562  mode=chunk  self=tv
 @deps tm, cm, ds, cmgr, gm, pa, facade
 
 # Invariants & contracts
@@ -724,78 +724,78 @@
       -- mutation the keep-set sweeps cannot see (it never reaches cmgr).
 
 # Uses (outbound edges)
-  @use call    cm.assign  @ releaseTransientFrame:481 matchGridToCursor:533
-  @use call    cm.boundTake  @ takeHoist:3408
-  @use call    cm.boundTrack  @ resolveSelectionTake:202
-  @use call    cm.get  @ overlapBounds:309 currentRpb:475 releaseTransientFrame:480,482 matchGridToCursor:531 setRowPerBeat:538,544 localizeSwing:583 seedSharedSlots:618 sendBend:682 placeNewNote:805,808 pitchFromKey:835 strikePitch:850 editEvent:1044 queueResetVelocities:2661 stepSample:2910 inputOctaveUp:3600 3612,3659,3660,3661,3662 rebuild:3716,3739,3740,3877
-  @use call    cm.getAt  @ selectedTrackIdx:180 effectiveSlot:185 resolveSelectionTake:203 selectTrack:226 releaseTransientFrame:479 setDefaultSwing:572 localizeSwing:581 setSwingComposite:625 setTemper:633
-  @use call    cm.set  @ resolveSelectionTake:206 selectTrack:224,228 selectSlot:232 setRowPerBeat:545 setDefaultSwing:574 localizeSwing:586 setTemperSlot:610,611,612 setSwingComposite:627 setTemper:635 editEvent:994 scaleScope:2045 stepSample:2909 inputOctaveUp:3600 3612,3671
-  @use call    cm.setTrack  @ resolveSelectionTake:202 retargetTrackTier:217 selectTrack:225
-  @use call    cmgr.doAfter  @ 4075,4082
-  @use call    cmgr.doBefore  @ 4084,4106 wireGroupLifetime:4147,4153,4154
-  @use call    cmgr.invoke  @ groupPaste:3587
-  @use call    cmgr.noteChars  @ editEvent:954 chordStrike:1152
-  @use call    cmgr.prefixRational  @ 3625,3632
-  @use call    cmgr.scope  @ 3603
-  @use call    ds.assign  @ setTakeSwing:568 seedSharedSlots:618 toggleChannelFlag:646 rewriteRegion:1530 applyRegionWindow:1610 shiftFxLane:1682 mintRegionForSelection:2412 pasteFxRegions:2474 deleteFxRegionsInRect:2494 addExtraCol:3323 hideExtraCol:3343,3382 automateParam:3524 showDelay:3551
-  @use call    ds.get  @ setTakeSwing:566 seedSharedSlots:617 toggleChannelFlag:644 pushMute:653,654 isChannelMuted:665 isChannelSoloed:666 rewriteRegion:1522 applyRegionWindow:1578 shiftFxLane:1675 regionByUuid:2381 mintRegionUuid:2396 mintRegionForSelection:2410 pasteFxRegions:2459 deleteFxRegionsInRect:2491 addExtraCol:3302 hideExtraCol:3338,3353 automateParam:3518 showDelay:3539 rebuild:3737,3738,3779,3947
+  @use call    cm:assign  @ releaseTransientFrame:481 matchGridToCursor:533
+  @use call    cm:boundTake  @ takeHoist:3408
+  @use call    cm:boundTrack  @ resolveSelectionTake:202
+  @use call    cm:get  @ overlapBounds:309 currentRpb:475 releaseTransientFrame:480,482 matchGridToCursor:531 setRowPerBeat:538,544 localizeSwing:583 seedSharedSlots:618 sendBend:682 placeNewNote:805,808 pitchFromKey:835 strikePitch:850 editEvent:1044 queueResetVelocities:2661 stepSample:2910 inputOctaveUp:3600 3612,3659,3660,3661,3662 rebuild:3716,3739,3740,3877
+  @use call    cm:getAt  @ selectedTrackIdx:180 effectiveSlot:185 resolveSelectionTake:203 selectTrack:226 releaseTransientFrame:479 setDefaultSwing:572 localizeSwing:581 setSwingComposite:625 setTemper:633
+  @use call    cm:set  @ resolveSelectionTake:206 selectTrack:224,228 selectSlot:232 setRowPerBeat:545 setDefaultSwing:574 localizeSwing:586 setTemperSlot:610,611,612 setSwingComposite:627 setTemper:635 editEvent:994 scaleScope:2045 stepSample:2909 inputOctaveUp:3600 3612,3671
+  @use call    cm:setTrack  @ resolveSelectionTake:202 retargetTrackTier:217 selectTrack:225
+  @use call    cmgr:doAfter  @ 4075,4082
+  @use call    cmgr:doBefore  @ 4084,4106 wireGroupLifetime:4147,4153,4154
+  @use call    cmgr:invoke  @ groupPaste:3587
+  @use call    cmgr:noteChars  @ editEvent:954 chordStrike:1152
+  @use call    cmgr:prefixRational  @ 3625,3632
+  @use call    cmgr:scope  @ 3603
+  @use call    ds:assign  @ setTakeSwing:568 seedSharedSlots:618 toggleChannelFlag:646 rewriteRegion:1530 applyRegionWindow:1610 shiftFxLane:1682 mintRegionForSelection:2412 pasteFxRegions:2474 deleteFxRegionsInRect:2494 addExtraCol:3323 hideExtraCol:3343,3382 automateParam:3524 showDelay:3551
+  @use call    ds:get  @ setTakeSwing:566 seedSharedSlots:617 toggleChannelFlag:644 pushMute:653,654 isChannelMuted:665 isChannelSoloed:666 rewriteRegion:1522 applyRegionWindow:1578 shiftFxLane:1675 regionByUuid:2381 mintRegionUuid:2396 mintRegionForSelection:2410 pasteFxRegions:2459 deleteFxRegionsInRect:2491 addExtraCol:3302 hideExtraCol:3338,3353 automateParam:3518 showDelay:3539 rebuild:3737,3738,3779,3947
   @use call    facade.get  @ arrange:34
-  @use call    gm.addEvent  @ 85
-  @use call    gm.assignEvent  @ 86
-  @use call    gm.clearActive  @ wireGroupLifetime:4153 endAllCascades:4166
-  @use call    gm.deleteEvent  @ 87
-  @use call    gm.deleteInstance  @ forEachRowOp:2212
-  @use call    gm.deletedCells  @ deletedCells:3214
-  @use call    gm.duplicateInto  @ groupDuplicate:3567
-  @use call    gm.eachInstance  @ planInstanceMoves:2165 instanceAtCursor:3183 eachInstance:3206 movePreview:3232 paintRegionStream:3267 rebuild:3925
-  @use call    gm.footprintAliases  @ shiftEvents:2832 4065
-  @use call    gm.groupRect  @ 4033,4039
-  @use call    gm.instanceOf  @ 3201
-  @use call    gm.localMode  @ shiftEvents:2826 localMode:3195 3666,4065
-  @use call    gm.moveInstance  @ forEachRowOp:2213
-  @use call    gm.resizeGroup  @ paintRegionStream:3290
-  @use call    gm.revertDelete  @ deleteEvent:2701
-  @use call    gm.setLocalMode  @ 3666
-  @use call    gm.stamp  @ groupPaste:3583
-  @use call    gm.stateOf  @ stateOf:3207
-  @use call    groups.shiftStream  @ colInInstance:2148 eachMemberEvent:3110 clearMoveGap:3155 streamRefAt:3174
-  @use call    pa.apply  @ rewriteRegion:1531 applyRegionWindow:1611 shiftFxLane:1683 pasteFxRegions:2475 deleteFxRegionsInRect:2495 setNoteFx:2546,2556 addExtraCol:3326
-  @use call    pa.automate  @ automateParam:3514
-  @use call    pa.binding  @ hideExtraCol:3370 paramBinding:3446
-  @use call    pa.bumpFrecency  @ automateParam:3516
-  @use call    pa.floatFx  @ armLearn:3474 showFx:3481
-  @use call    pa.lastTouched  @ armLearn:3475 pollLearn:3498
-  @use call    pa.params  @ listParams:3450
-  @use call    pa.targets  @ paramTargets:3445
-  @use call    pa.unautomate  @ hideExtraCol:3370
-  @use call    pa.unfloatFx  @ cancelLearn:3485
+  @use call    gm:addEvent  @ 85
+  @use call    gm:assignEvent  @ 86
+  @use call    gm:clearActive  @ wireGroupLifetime:4153 endAllCascades:4166
+  @use call    gm:deleteEvent  @ 87
+  @use call    gm:deleteInstance  @ forEachRowOp:2212
+  @use call    gm:deletedCells  @ deletedCells:3214
+  @use call    gm:duplicateInto  @ groupDuplicate:3567
+  @use call    gm:eachInstance  @ planInstanceMoves:2165 instanceAtCursor:3183 eachInstance:3206 movePreview:3232 paintRegionStream:3267 rebuild:3925
+  @use call    gm:footprintAliases  @ shiftEvents:2832 4065
+  @use call    gm:groupRect  @ 4033,4039
+  @use call    gm:instanceOf  @ 3201
+  @use call    gm:localMode  @ shiftEvents:2826 localMode:3195 3666,4065
+  @use call    gm:moveInstance  @ forEachRowOp:2213
+  @use call    gm:resizeGroup  @ paintRegionStream:3290
+  @use call    gm:revertDelete  @ deleteEvent:2701
+  @use call    gm:setLocalMode  @ 3666
+  @use call    gm:stamp  @ groupPaste:3583
+  @use call    gm:stateOf  @ stateOf:3207
+  @use call    groupsCore.shiftStream  @ colInInstance:2148 eachMemberEvent:3110 clearMoveGap:3155 streamRefAt:3174
+  @use call    pa:apply  @ rewriteRegion:1531 applyRegionWindow:1611 shiftFxLane:1683 pasteFxRegions:2475 deleteFxRegionsInRect:2495 setNoteFx:2546,2556 addExtraCol:3326
+  @use call    pa:automate  @ automateParam:3514
+  @use call    pa:binding  @ hideExtraCol:3370 paramBinding:3446
+  @use call    pa:bumpFrecency  @ automateParam:3516
+  @use call    pa:floatFx  @ armLearn:3474 showFx:3481
+  @use call    pa:lastTouched  @ armLearn:3475 pollLearn:3498
+  @use call    pa:params  @ listParams:3450
+  @use call    pa:targets  @ paramTargets:3445
+  @use call    pa:unautomate  @ hideExtraCol:3370
+  @use call    pa:unfloatFx  @ cancelLearn:3485
   @use call    perf.start  @ rebuild:3801,3881,3921,3968,3979
   @use call    perf.stop  @ rebuild:3862,3919,3966,3974,3979
   @use call    timing.delayToPPQ  @ quantizeKeepRealisedScope:1959
   @use call    timing.logPerRow  @ logPerRowFor:463
   @use call    timing.ppqToDelay  @ quantizeKeepRealisedScope:1960
-  @use call    tm.addEvent  @ 79,85
-  @use call    tm.addParked  @ 93
-  @use call    tm.assignEvent  @ 80,86
-  @use call    tm.assignParked  @ 94 setNoteFx:2554
-  @use call    tm.byUuid  @ noteFx:2499 noteByUuid:2534 setNoteFx:2540
-  @use call    tm.channels  @ rebuild:3802,3960
-  @use call    tm.currentTake  @ retargetTrackTier:213 duplicateBoundUnpooled:270 rebuild:3695
-  @use call    tm.deleteEvent  @ 81,87 clearRegionAt:3143 clearMoveGap:3157
-  @use call    tm.deleteParked  @ 95
-  @use call    tm.flush  @ editEvent:936 settleTypedEdit:1142 moveLaneEvent:1380 addLaneEvent:1399 deleteLaneEvent:1417 setLaneTension:1427 cycleLaneShape:1456 interpolate:1477,1489 noteOff:1730,1749 adjustDuration:1785 adjustPositionMulti:1834 adjustPosition:1872,1884 quantizeScope:1935 quantizeKeepRealisedScope:1965 scaleScope:2007 forEachRowOp:2216 nudge:2352,2360 setNoteFx:2545,2555 deleteEvent:2702,2712,2718 deleteSelection:2725 shiftEvents:2893 unautomateParam:3532 groupDuplicate:3568 groupPaste:3584 4044
-  @use call    tm.getChannel  @ overlapBounds:313 rowBounds:334 parkedByUuid:2374
-  @use call    tm.interpolate  @ interpolateValues:1508 sampleCurve:3019
-  @use call    tm.length  @ 554 duplicateCascade:3067,3072 groupPaste:3580 rebuild:3707
-  @use call    tm.name  @ 551 takeName:3009
-  @use call    tm.playFrom  @ 3654,3657
-  @use call    tm.rescaleLength  @ 556
-  @use call    tm.resolution  @ rebuild:3706
-  @use call    tm.setLength  @ 558
-  @use call    tm.setMutedChannels  @ pushMute:662
-  @use call    tm.setName  @ 551
-  @use call    tm.tileLength  @ 557
-  @use call    tm.timeSigs  @ rebuild:3708
+  @use call    tm:addEvent  @ 79,85
+  @use call    tm:addParked  @ 93
+  @use call    tm:assignEvent  @ 80,86
+  @use call    tm:assignParked  @ 94 setNoteFx:2554
+  @use call    tm:byUuid  @ noteFx:2499 noteByUuid:2534 setNoteFx:2540
+  @use call    tm:channels  @ rebuild:3802,3960
+  @use call    tm:currentTake  @ retargetTrackTier:213 duplicateBoundUnpooled:270 rebuild:3695
+  @use call    tm:deleteEvent  @ 81,87 clearRegionAt:3143 clearMoveGap:3157
+  @use call    tm:deleteParked  @ 95
+  @use call    tm:flush  @ editEvent:936 settleTypedEdit:1142 moveLaneEvent:1380 addLaneEvent:1399 deleteLaneEvent:1417 setLaneTension:1427 cycleLaneShape:1456 interpolate:1477,1489 noteOff:1730,1749 adjustDuration:1785 adjustPositionMulti:1834 adjustPosition:1872,1884 quantizeScope:1935 quantizeKeepRealisedScope:1965 scaleScope:2007 forEachRowOp:2216 nudge:2352,2360 setNoteFx:2545,2555 deleteEvent:2702,2712,2718 deleteSelection:2725 shiftEvents:2893 unautomateParam:3532 groupDuplicate:3568 groupPaste:3584 4044
+  @use call    tm:getChannel  @ overlapBounds:313 rowBounds:334 parkedByUuid:2374
+  @use call    tm:interpolate  @ interpolateValues:1508 sampleCurve:3019
+  @use call    tm:length  @ 554 duplicateCascade:3067,3072 groupPaste:3580 rebuild:3707
+  @use call    tm:name  @ 551 takeName:3009
+  @use call    tm:playFrom  @ 3654,3657
+  @use call    tm:rescaleLength  @ 556
+  @use call    tm:resolution  @ rebuild:3706
+  @use call    tm:setLength  @ 558
+  @use call    tm:setMutedChannels  @ pushMute:662
+  @use call    tm:setName  @ 551
+  @use call    tm:tileLength  @ 557
+  @use call    tm:timeSigs  @ rebuild:3708
   @use call    tuning.findTemper  @ rebuild:3740
   @use call    tuning.midiToStep  @ editEvent:974
   @use call    tuning.snap  @ pitchFromKey:837

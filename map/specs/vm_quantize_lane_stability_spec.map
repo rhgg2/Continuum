@@ -16,6 +16,6 @@
   @case 'diff-pitch col-mates that quantize-collapse onto the same ppq stay in lane 1'  [harness]  @ 14-64
 
 # Uses (outbound edges)
-  @use call trackerView.setGridSize  @ 47
-  @use call trackerView.quantizeAll  @ 48
-  @use call midiManager.dump  @ 50
+  @use call vm:setGridSize  @ 47
+  @use call vm:quantizeAll  @ 48
+  @use call fm:dump  @ 50

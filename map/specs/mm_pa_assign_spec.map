@@ -17,8 +17,8 @@
   @case 'assignCC writes a value-only PA vel through to reaper'  [pure]  @ 29-48
 
 # Uses (outbound edges)
-  @use call midiManager.load  @ 35
-  @use call midiManager.ccs  @ 36
-  @use call midiManager.modify  @ 39
-  @use call midiManager.assign  @ 39
-  @use call midiManager.tokenOf  @ 39
+  @use call mm:load  @ 35
+  @use call mm:ccs  @ 36
+  @use call mm:modify  @ 39
+  @use call mm:assign  @ 39
+  @use call mm:tokenOf  @ 39

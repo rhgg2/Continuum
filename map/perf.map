@@ -1,4 +1,4 @@
-@module perf  src=perf.lua  loc=136  sha=e87e69d  mode=namespace  self=perf
+@module perf  src=perf.lua  loc=136  sha=5a61324  mode=namespace  self=perf
 
 # Imports
   @const util = 'util'  @ 21

@@ -16,10 +16,10 @@
   @case 'origin pitch edit updates the sibling note in place (no stale dupe)'  [harness]  @ 27-59
 
 # Uses (outbound edges)
-  @use call trackerManager.getChannel  @ 15
-  @use call trackerView.selectionAsRect  @ 39
-  @use call trackerView.eventsInRect  @ 40
-  @use call groupManager.markGroup  @ 43
-  @use call groupManager.newInstance  @ 44
-  @use call trackerManager.flush  @ 45,52
-  @use call groupManager.assignEvent  @ 51
+  @use call tm:getChannel  @ 15
+  @use call vm:selectionAsRect  @ 39
+  @use call vm:eventsInRect  @ 40
+  @use call gm:markGroup  @ 43
+  @use call gm:newInstance  @ 44
+  @use call tm:flush  @ 45,52
+  @use call gm:assignEvent  @ 51

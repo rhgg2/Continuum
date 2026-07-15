@@ -26,9 +26,12 @@
   @case 'REAPER undo: a ds invalidate rehydrates gm from the rewound blob'  [pure]  @ 118-135
 
 # Uses (outbound edges)
-  @use call groupManager.markGroup  @ 52,81,98,126
-  @use call groupManager.newInstance  @ 53,82,127
-  @use call groupManager.eachInstance  @ 68,94,129,133
-  @use call groupManager.stateOf  @ 69,95,134
-  @use call groupManager.assignEvent  @ 102
-  @use call dataStore._rewind  @ 131
+  @use call A:markGroup  @ 52,81,126
+  @use call A:newInstance  @ 53,82,127
+  @use call B:eachInstance  @ 68,94
+  @use call B:stateOf  @ 69,95
+  @use call B:markGroup  @ 98
+  @use call B:assignEvent  @ 102
+  @use call A:eachInstance  @ 129,133
+  @use call ds._rewind  @ 131
+  @use call A:stateOf  @ 134

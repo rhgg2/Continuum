@@ -290,6 +290,75 @@ def _entry_kind(raw_kind: str) -> str:
     return raw_kind.lstrip("?")
 
 
+# usedby is a reverse index over @use targets; resolving a target's short
+# receiver (`cm`) to its module (`configManager`) needs the self-name registry.
+_SELF_RX = re.compile(r'^@module\s+(?P<mod>\S+)\b.*\bself=(?P<self>\S+)')
+_TARGET_RX = re.compile(r'^(\w+)[.:](\w+)$')
+
+
+def _selfname_registry() -> dict:
+    """Short instance name -> module, from each module map's `self=` header.
+    Namespace modules map their name to itself; wiring files without `self=`
+    are absent (they are never receivers, so never usedby targets)."""
+    reg: dict = {}
+    for mp in sorted(MAP_DIR.glob("*.map")):
+        try:
+            head = mp.read_text(encoding="utf-8", errors="replace").split("\n", 1)[0]
+        except OSError:
+            continue
+        m = _SELF_RX.match(head)
+        if m:
+            reg[m.group("self")] = m.group("mod")
+    return reg
+
+
+def _canon_target(target: str, reg: dict):
+    """(module, method|None) for a @use target, resolving the receiver's short
+    name to its module. A bare target (a require edge) carries no method."""
+    m = _TARGET_RX.match(target)
+    if m:
+        return reg.get(m.group(1), m.group(1)), m.group(2)
+    return reg.get(target, target), None
+
+
+def _usedby_selectors(query, module, reg):
+    """Selectors for a usedby scan, collapsing short names and `:`/`.` spellings.
+    Returns (module_pred | None, method | None, raw_regex | None): a @use target
+    matches when its canonical module satisfies module_pred, its method equals
+    `method`, and its raw text matches raw_regex — each constraint optional."""
+    mod_preds = []
+    modules = set(reg.values())
+
+    def want_module(tok):
+        if ("*" in tok) or ("?" in tok):
+            rx = _glob_to_regex(tok)
+            mod_preds.append(lambda mod, rx=rx: bool(rx.match(mod)))
+        else:
+            canon = reg.get(tok, tok)
+            mod_preds.append(lambda mod, canon=canon: mod == canon)
+
+    if module:
+        want_module(module)
+
+    method = None
+    raw_rx = None
+    if query:
+        if ("*" in query) or ("?" in query):
+            raw_rx = _glob_to_regex(query)
+        else:
+            m = _TARGET_RX.match(query)
+            if m:                                   # `cm:get`, `configManager.get`
+                want_module(m.group(1))
+                method = m.group(2)
+            elif query in reg or query in modules:  # bare module / self name
+                want_module(query)
+            else:                                   # bare method name
+                raw_rx = re.compile(re.escape(query), re.IGNORECASE)
+
+    module_pred = (lambda mod: all(p(mod) for p in mod_preds)) if mod_preds else None
+    return module_pred, method, raw_rx
+
+
 @mcp.tool(structured_output=False)
 def map_query(
     query: Optional[str] = None,
@@ -314,15 +383,22 @@ def map_query(
             ok): fn, api, state, const, require/import, construct,
             case (spec test cases), invariant, contract, shape,
             emits/signal, reaper, deps, uses, usedby. `uses` lists a
-            module's outbound edges (calls / subs / forwards /
-            requires); `usedby` reverses it — every caller of the
-            symbol(s) matched by `query`, spec files included, so it
-            also answers "which specs exercise X". Omit for any.
+            module's own outbound edges (calls / subs / forwards /
+            requires). `usedby` reverses it — scanning every map (specs
+            included, so it also answers "which specs exercise X") for
+            callers of the queried symbol or module, resolving short
+            instance names and `:`/`.` spellings so `cm:get`,
+            `configManager.get`, and module='configManager' all match.
+            Omit for any.
       module: restrict to a module by stem (e.g. `trackerManager`) or
               glob (e.g. `tm_*`, `*Manager`). Matches the .map filename
               (without extension). Spec maps (map/specs/, one per
               tests/specs/*_spec.lua) join every query; their stems end
               `_spec`, so module='*_spec' restricts to specs.
+              Exception: under kind='usedby' `module` names the *used*
+              target (the module whose callers you want), resolved via
+              the self-name registry — so usedby+module='eventMeta'
+              answers "who uses eventMeta", not eventMeta's own edges.
       max_results: cap (default 60).
 
     Returns:
@@ -347,6 +423,56 @@ def map_query(
     kind_filter = _normalize_kind(kind) if kind else None
 
     dirs = (MAP_DIR, MAP_DIR / "specs")
+
+    # `usedby` is a reverse index: it scans EVERY map (a caller can live
+    # anywhere) and matches the target through the self-name registry, so
+    # `module` here names the used target, not a file to read. Handled up
+    # front — it needs neither `module` as a filename nor `query_rx`.
+    if kind_filter == 'usedby':
+        reg = _selfname_registry()
+        module_pred, q_fn, raw_rx = _usedby_selectors(query, module, reg)
+        if module_pred is None and q_fn is None and raw_rx is None:
+            return ("(usedby needs a target: pass query= or module= naming "
+                    "the used symbol or module, e.g. query='cm:get' or "
+                    "module='configManager')")
+        results: list = []
+        truncated = False
+        for d in dirs:
+            for mp in sorted(d.glob("*.map")):
+                text = mp.read_text(encoding="utf-8", errors="replace")
+                src = _src_of(mp, text)
+                for raw in text.splitlines():
+                    mu = _USE.match(raw)
+                    if not mu:
+                        continue
+                    target = mu.group("target")
+                    t_module, t_fn = _canon_target(target, reg)
+                    if module_pred and not module_pred(t_module):
+                        continue
+                    if q_fn is not None and t_fn != q_fn:
+                        continue
+                    if raw_rx and not raw_rx.search(target):
+                        continue
+                    ukind = mu.group("ukind")
+                    for caller, n in _iter_use_sites(mu.group("sites")):
+                        if len(results) >= max_results:
+                            truncated = True
+                            break
+                        where = f"  (in {caller})" if caller else ""
+                        results.append(f"{src}:{n}  @use {ukind} {target}{where}")
+                    if truncated:
+                        break
+                if truncated:
+                    break
+            if truncated:
+                break
+        if not results:
+            return f"(no callers found for query={query!r}, module={module!r})"
+        if truncated:
+            results.append(f"--- truncated at {max_results}; narrow the query ---")
+        results.append("--- note: calls on runtime receivers (not import/construct/dep aliases) are dropped — recall is incomplete for those ---")
+        return "\n".join(results)
+
     if module:
         if "*" in module or "?" in module:
             module_files = [p for d in dirs for p in sorted(d.glob(f"{module}.map"))]
@@ -361,8 +487,8 @@ def map_query(
     results: list[str] = []
     truncated = False
 
-    # `uses` / `usedby` walk the `@use` lines, not structural entries / annotations.
-    if kind_filter in ('uses', 'usedby'):
+    # `uses` walks a module's own outbound @use lines. (`usedby` handled above.)
+    if kind_filter == 'uses':
         for mp in module_files:
             text = mp.read_text(encoding="utf-8", errors="replace")
             src = _src_of(mp, text)
@@ -389,8 +515,6 @@ def map_query(
             return f"(no matches for kind={kind!r}, query={query!r}, module={module!r})"
         if truncated:
             results.append(f"--- truncated at {max_results}; narrow the query ---")
-        if kind_filter == 'usedby':
-            results.append("--- note: method calls on runtime receivers (not import/construct/dep aliases) are dropped — recall is incomplete for those ---")
         return "\n".join(results)
 
     for mp in module_files:

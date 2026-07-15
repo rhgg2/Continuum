@@ -16,6 +16,6 @@
   @case 'quantizeKeepRealised on diff-pitch col-mates keeps both in lane 1'  [harness]  @ 14-51
 
 # Uses (outbound edges)
-  @use call trackerView.setGridSize  @ 43
-  @use call trackerView.quantizeKeepRealisedAll  @ 44
-  @use call midiManager.dump  @ 46
+  @use call vm:setGridSize  @ 43
+  @use call vm:quantizeKeepRealisedAll  @ 44
+  @use call fm:dump  @ 46

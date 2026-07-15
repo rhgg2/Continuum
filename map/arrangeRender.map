@@ -1,4 +1,4 @@
-@module arrangeRender  src=arrangeRender.lua  loc=856  sha=a5d6834  mode=chunk  self=ar
+@module arrangeRender  src=arrangeRender.lua  loc=856  sha=217c1f8  mode=chunk  self=ar
 @deps cm, cmgr, chrome, gui, modalHost, av
 
 # Invariants & contracts
@@ -97,48 +97,83 @@
       @contract  acceptCmds=false if picker active, any item active, or modal was open at frame start.
 
 # Uses (outbound edges)
-  @use call    av.addToSelection  @ handleGridMouse:298
-  @use call    av.beatPerRow  @ handleGridMouse:226 760,846 renderStatusBar:816
-  @use call    av.clearLoopRange  @ handleGridMouse:234
-  @use call    av.commitDrag  @ handleGridMouse:294
-  @use call    av.createCandidate  @ handleGridMouse:287
-  @use call    av.createSlot  @ 657
-  @use call    av.cursorCol  @ renderGrid:336 renderBody:801 renderStatusBar:816 839
-  @use call    av.cursorRow  @ renderGrid:336 renderStatusBar:816 839
-  @use call    av.deleteSlot  @ openDeleteModal:641
-  @use call    av.dragCandidate  @ handleGridMouse:283
-  @use call    av.editCursorQN  @ renderGrid:575
-  @use call    av.followPlay  @ handleGridMouse:248
-  @use call    av.followsPlay  @ 750,841
-  @use call    av.gutterLoopCand  @ handleGridMouse:285
-  @use call    av.hitTake  @ handleGridMouse:256
-  @use call    av.isSelected  @ handleGridMouse:263
-  @use call    av.keyForSlot  @ openDeleteModal:635 renderPaletteList:722
-  @use call    av.lassoCandidate  @ handleGridMouse:290
-  @use call    av.loopRangeQN  @ renderGrid:523
-  @use call    av.nextFreeSlot  @ 648
-  @use call    av.paletteSlot  @ renderPaletteList:707 renderPaletteBody:737
-  @use call    av.playPositionQN  @ renderGrid:576
-  @use call    av.projectTracks  @ renderBody:777
-  @use call    av.qnToRow  @ renderGrid:411,412,427,428,476,477,492,493,526,567
-  @use call    av.renameSlot  @ openRenameModal:630
-  @use call    av.rowToQN  @ rowLabel:74 handleGridMouse:227 renderGrid:345,461 839
-  @use call    av.scroll  @ gridGeom:193
-  @use call    av.scrollBy  @ handleGridMouse:244
-  @use call    av.selectionSet  @ renderGrid:367
-  @use call    av.setBeatPerRow  @ 762,848
-  @use call    av.setCursor  @ handleGridMouse:308
-  @use call    av.setEditCursorQN  @ handleGridMouse:306
-  @use call    av.setFocus  @ handleGridMouse:269,314
-  @use call    av.setFollowPlay  @ 751,841
-  @use call    av.setGridSize  @ handleGridMouse:221 renderBody:781
-  @use call    av.setLoopRangeQN  @ handleGridMouse:296
-  @use call    av.setMaxCol  @ handleGridMouse:222
-  @use call    av.setPaletteSlot  @ renderPaletteList:718
-  @use call    av.setSelection  @ handleGridMouse:299
-  @use call    av.toggleSelected  @ handleGridMouse:311
-  @use call    av.trackSlots  @ renderPaletteBody:736
-  @use call    av.visibleTakes  @ renderGrid:462
+  @use call    ImGui.AlignTextToFramePadding  @ 757
+  @use call    ImGui.BeginChild  @ renderBody:791
+  @use call    ImGui.BeginTable  @ renderPaletteList:708
+  @use call    ImGui.Button  @ 673,677 renderPaletteActions:688,694
+  @use call    ImGui.Dummy  @ renderGrid:603
+  @use call    ImGui.EndChild  @ renderBody:799
+  @use call    ImGui.EndTable  @ renderPaletteList:732
+  @use call    ImGui.GetContentRegionAvail  @ gridGeom:188
+  @use call    ImGui.GetCursorScreenPos  @ gridGeom:186 renderBody:787
+  @use call    ImGui.GetKeyMods  @ handleGridMouse:228,257
+  @use call    ImGui.GetMousePos  @ handleGridMouse:224
+  @use call    ImGui.GetMouseWheel  @ handleGridMouse:238
+  @use call    ImGui.GetTextLineHeightWithSpacing  @ gridGeom:189
+  @use call    ImGui.InputText  @ 668,671
+  @use call    ImGui.IsAnyItemActive  @ focusState:827
+  @use call    ImGui.IsKeyPressed  @ 674,675,678
+  @use call    ImGui.IsMouseClicked  @ handleGridMouse:232,249
+  @use call    ImGui.IsMouseDoubleClicked  @ handleGridMouse:270
+  @use call    ImGui.IsMouseDragging  @ handleGridMouse:280
+  @use call    ImGui.IsMouseReleased  @ handleGridMouse:292
+  @use call    ImGui.IsWindowAppearing  @ 665
+  @use call    ImGui.IsWindowHovered  @ handleGridMouse:232,239,249
+  @use call    ImGui.PopFont  @ renderPaletteList:723
+  @use call    ImGui.PopStyleColor  @ popBodyStyles:69
+  @use call    ImGui.PushFont  @ renderPaletteList:721
+  @use call    ImGui.PushStyleColor  @ pushBodyStyles:62,63,64,65,66,67
+  @use call    ImGui.SameLine  @ 676,759 renderPaletteActions:692 renderPaletteList:720
+  @use call    ImGui.Selectable  @ renderPaletteList:716
+  @use call    ImGui.Separator  @ renderPaletteBody:739
+  @use call    ImGui.SetKeyboardFocusHere  @ 667
+  @use call    ImGui.TableNextRow  @ renderPaletteList:714
+  @use call    ImGui.TableSetColumnIndex  @ renderPaletteList:715,725,728
+  @use call    ImGui.TableSetupColumn  @ renderPaletteList:709,710,711
+  @use call    ImGui.Text  @ 666,670 renderPaletteList:722,726,729 renderBody:780 renderStatusBar:814
+  @use call    ImGui.TextDisabled  @ renderPaletteList:704
+  @use call    av:addToSelection  @ handleGridMouse:298
+  @use call    av:beatPerRow  @ handleGridMouse:226 760,846 renderStatusBar:816
+  @use call    av:clearLoopRange  @ handleGridMouse:234
+  @use call    av:commitDrag  @ handleGridMouse:294
+  @use call    av:createCandidate  @ handleGridMouse:287
+  @use call    av:createSlot  @ 657
+  @use call    av:cursorCol  @ renderGrid:336 renderBody:801 renderStatusBar:816 839
+  @use call    av:cursorRow  @ renderGrid:336 renderStatusBar:816 839
+  @use call    av:deleteSlot  @ openDeleteModal:641
+  @use call    av:dragCandidate  @ handleGridMouse:283
+  @use call    av:editCursorQN  @ renderGrid:575
+  @use call    av:followPlay  @ handleGridMouse:248
+  @use call    av:followsPlay  @ 750,841
+  @use call    av:gutterLoopCand  @ handleGridMouse:285
+  @use call    av:hitTake  @ handleGridMouse:256
+  @use call    av:isSelected  @ handleGridMouse:263
+  @use call    av:keyForSlot  @ openDeleteModal:635 renderPaletteList:722
+  @use call    av:lassoCandidate  @ handleGridMouse:290
+  @use call    av:loopRangeQN  @ renderGrid:523
+  @use call    av:nextFreeSlot  @ 648
+  @use call    av:paletteSlot  @ renderPaletteList:707 renderPaletteBody:737
+  @use call    av:playPositionQN  @ renderGrid:576
+  @use call    av:projectTracks  @ renderBody:777
+  @use call    av:qnToRow  @ renderGrid:411,412,427,428,476,477,492,493,526,567
+  @use call    av:renameSlot  @ openRenameModal:630
+  @use call    av:rowToQN  @ rowLabel:74 handleGridMouse:227 renderGrid:345,461 839
+  @use call    av:scroll  @ gridGeom:193
+  @use call    av:scrollBy  @ handleGridMouse:244
+  @use call    av:selectionSet  @ renderGrid:367
+  @use call    av:setBeatPerRow  @ 762,848
+  @use call    av:setCursor  @ handleGridMouse:308
+  @use call    av:setEditCursorQN  @ handleGridMouse:306
+  @use call    av:setFocus  @ handleGridMouse:269,314
+  @use call    av:setFollowPlay  @ 751,841
+  @use call    av:setGridSize  @ handleGridMouse:221 renderBody:781
+  @use call    av:setLoopRangeQN  @ handleGridMouse:296
+  @use call    av:setMaxCol  @ handleGridMouse:222
+  @use call    av:setPaletteSlot  @ renderPaletteList:718
+  @use call    av:setSelection  @ handleGridMouse:299
+  @use call    av:toggleSelected  @ handleGridMouse:311
+  @use call    av:trackSlots  @ renderPaletteBody:736
+  @use call    av:visibleTakes  @ renderGrid:462
   @use call    chrome.checkbox  @ 750
   @use call    chrome.colour  @ pushBodyStyles:62,63,64,65,66,67
   @use call    chrome.disabledIf  @ renderPaletteActions:687,693
@@ -146,46 +181,11 @@
   @use call    chrome.headingLabel  @ 758
   @use call    chrome.numberStepper  @ 760
   @use call    chrome.pickerIsActive  @ focusState:823
-  @use call    cm.get  @ 653,655 renderStatusBar:817
-  @use call    cm.set  @ 656
-  @use call    cmgr.scope  @ 835
-  @use call    imgui.AlignTextToFramePadding  @ 757
-  @use call    imgui.BeginChild  @ renderBody:791
-  @use call    imgui.BeginTable  @ renderPaletteList:708
-  @use call    imgui.Button  @ 673,677 renderPaletteActions:688,694
-  @use call    imgui.Dummy  @ renderGrid:603
-  @use call    imgui.EndChild  @ renderBody:799
-  @use call    imgui.EndTable  @ renderPaletteList:732
-  @use call    imgui.GetContentRegionAvail  @ gridGeom:188
-  @use call    imgui.GetCursorScreenPos  @ gridGeom:186 renderBody:787
-  @use call    imgui.GetKeyMods  @ handleGridMouse:228,257
-  @use call    imgui.GetMousePos  @ handleGridMouse:224
-  @use call    imgui.GetMouseWheel  @ handleGridMouse:238
-  @use call    imgui.GetTextLineHeightWithSpacing  @ gridGeom:189
-  @use call    imgui.InputText  @ 668,671
-  @use call    imgui.IsAnyItemActive  @ focusState:827
-  @use call    imgui.IsKeyPressed  @ 674,675,678
-  @use call    imgui.IsMouseClicked  @ handleGridMouse:232,249
-  @use call    imgui.IsMouseDoubleClicked  @ handleGridMouse:270
-  @use call    imgui.IsMouseDragging  @ handleGridMouse:280
-  @use call    imgui.IsMouseReleased  @ handleGridMouse:292
-  @use call    imgui.IsWindowAppearing  @ 665
-  @use call    imgui.IsWindowHovered  @ handleGridMouse:232,239,249
-  @use call    imgui.PopFont  @ renderPaletteList:723
-  @use call    imgui.PopStyleColor  @ popBodyStyles:69
-  @use call    imgui.PushFont  @ renderPaletteList:721
-  @use call    imgui.PushStyleColor  @ pushBodyStyles:62,63,64,65,66,67
-  @use call    imgui.SameLine  @ 676,759 renderPaletteActions:692 renderPaletteList:720
-  @use call    imgui.Selectable  @ renderPaletteList:716
-  @use call    imgui.Separator  @ renderPaletteBody:739
-  @use call    imgui.SetKeyboardFocusHere  @ 667
-  @use call    imgui.TableNextRow  @ renderPaletteList:714
-  @use call    imgui.TableSetColumnIndex  @ renderPaletteList:715,725,728
-  @use call    imgui.TableSetupColumn  @ renderPaletteList:709,710,711
-  @use call    imgui.Text  @ 666,670 renderPaletteList:722,726,729 renderBody:780 renderStatusBar:814
-  @use call    imgui.TextDisabled  @ renderPaletteList:704
-  @use call    modalHost.registerKind  @ 664
-  @use call    modalHost.wasOpenAtFrameStart  @ focusState:828
+  @use call    cm:get  @ 653,655 renderStatusBar:817
+  @use call    cm:set  @ 656
+  @use call    cmgr:scope  @ 835
+  @use call    modalHost:registerKind  @ 664
+  @use call    modalHost:wasOpenAtFrameStart  @ focusState:828
   @use call    painter.hue  @ slotFill:88,89
   @use call    painter.new  @ gridGeom:198 renderGrid:326
   @use call    util.atomic  @ openRenameModal:630 openDeleteModal:641 654

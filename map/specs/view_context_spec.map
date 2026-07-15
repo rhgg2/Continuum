@@ -55,6 +55,6 @@
 
 # Uses (outbound edges)
   @use call tuning.stepToMidi  @ 254
-  @use call trackerView.activeTemper  @ 500,505,510,514
-  @use call configManager.set  @ 504,509,513
-  @use call trackerView.setTemper  @ 512
+  @use call vm:activeTemper  @ 500,505,510,514
+  @use call cm:set  @ 504,509,513
+  @use call vm:setTemper  @ 512

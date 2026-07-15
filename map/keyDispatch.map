@@ -1,4 +1,4 @@
-@module keyDispatch  src=keyDispatch.lua  loc=86  sha=3c864e1  mode=namespace  self=keyDispatch
+@module keyDispatch  src=keyDispatch.lua  loc=86  sha=65573d0  mode=namespace  self=keyDispatch
 
 # Invariants & contracts
   @contract  returns early (no dispatch) when state.suppressKbd or not state.acceptCmds
@@ -32,9 +32,9 @@
   @api keyDispatch.dispatchKeys(state, cmgr, ctx)  @ 48-84
 
 # Uses (outbound edges)
-  @use call    imgui.GetKeyMods  @ handlePrefixCapture:28 dispatchKeys:57
-  @use call    imgui.IsKeyDown  @ dispatchKeys:64
-  @use call    imgui.IsKeyPressed  @ handlePrefixCapture:30,34,37 dispatchKeys:67
+  @use call    ImGui.GetKeyMods  @ handlePrefixCapture:28 dispatchKeys:57
+  @use call    ImGui.IsKeyDown  @ dispatchKeys:64
+  @use call    ImGui.IsKeyPressed  @ handlePrefixCapture:30,34,37 dispatchKeys:67
   @use require imgui  @ 9
 
 # REAPER API surface

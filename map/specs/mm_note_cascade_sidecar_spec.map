@@ -27,6 +27,6 @@
   @case 'mixed note-cascade + pb-sidecar multi-delete keeps every survivor detune'  [pure]  @ 30-78
 
 # Uses (outbound edges)
-  @use call midiManager.modify  @ 40,61
-  @use call midiManager.events  @ 50,69
-  @use call midiManager.delete  @ 62,63,64,65
+  @use call mm:modify  @ 40,61
+  @use call mm:events  @ 50,69
+  @use call mm:delete  @ 62,63,64,65

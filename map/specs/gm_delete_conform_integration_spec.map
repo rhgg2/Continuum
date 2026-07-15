@@ -30,10 +30,10 @@
   @case 'single-cell delete of the duplicate A must not shrink the duplicate B'  [harness]  @ 45-80
 
 # Uses (outbound edges)
-  @use call trackerManager.byUuid  @ 55
-  @use call groupManager.markGroup  @ 57
-  @use call groupManager.newInstance  @ 58
-  @use call trackerManager.flush  @ 59
-  @use call midiManager.dump  @ 61,72
-  @use call editCursor.setPos  @ 69
-  @use call commandManager.invoke  @ 70
+  @use call tm:byUuid  @ 55
+  @use call gm:markGroup  @ 57
+  @use call gm:newInstance  @ 58
+  @use call tm:flush  @ 59
+  @use call fm:dump  @ 61,72
+  @use call ec:setPos  @ 69
+  @use call cmgr:invoke  @ 70

@@ -1,4 +1,4 @@
-@module curveEditor  src=curveEditor.lua  loc=343  sha=d013d39  mode=chunk  self=curveEditor
+@module curveEditor  src=curveEditor.lua  loc=343  sha=84c795b  mode=chunk  self=curveEditor
 @deps ctx, chrome, page
 
 # Invariants & contracts
@@ -40,11 +40,11 @@
       · Mouse handling
 
 # Uses (outbound edges)
-  @use call    imgui.GetKeyMods  @ frame:312
-  @use call    imgui.GetMousePos  @ frame:108,128,184,219,226,241,274
-  @use call    imgui.IsMouseClicked  @ frame:209
-  @use call    imgui.IsMouseDoubleClicked  @ frame:210
-  @use call    imgui.IsMouseDown  @ frame:211
+  @use call    ImGui.GetKeyMods  @ frame:312
+  @use call    ImGui.GetMousePos  @ frame:108,128,184,219,226,241,274
+  @use call    ImGui.IsMouseClicked  @ frame:209
+  @use call    ImGui.IsMouseDoubleClicked  @ frame:210
+  @use call    ImGui.IsMouseDown  @ frame:211
   @use call    painter.new  @ frame:53
   @use call    util.clamp  @ frame:100,153,200,296,311,315
   @use call    util.round  @ frame:153,311,321

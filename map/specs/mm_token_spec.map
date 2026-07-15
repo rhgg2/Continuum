@@ -30,10 +30,11 @@
   @case 'byToken returns nil for an unknown token'  [harness]  @ 160-167
 
 # Uses (outbound edges)
-  @use call midiManager.tokenOf  @ 20,31,90,110,116,139,140,154,155
-  @use call midiManager.notes  @ 30,88,109,115,139
-  @use call midiManager.byToken  @ 33,46,71,94,95,114,118,165,166
-  @use call midiManager.ccs  @ 89,140
-  @use call midiManager.reload  @ 92
-  @use call midiManager.modify  @ 112
-  @use call midiManager.assign  @ 112
+  @use call mm:tokenOf  @ 20
+  @use call fm:notes  @ 30,88,109,115,139
+  @use call fm:tokenOf  @ 31,90,110,116,139,140,154,155
+  @use call fm:byToken  @ 33,46,71,94,95,114,118,165,166
+  @use call fm:ccs  @ 89,140
+  @use call fm:reload  @ 92
+  @use call fm:modify  @ 112
+  @use call fm:assign  @ 112

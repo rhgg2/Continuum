@@ -26,7 +26,7 @@
   @case 'a bus→bus tap mints one edge though both records mirror it'  [harness]  @ 155-164
 
 # Uses (outbound edges)
-  @use call wiringManager.load  @ 10
-  @use call wiringManager.mutate  @ 68,115
-  @use call wiringManager.targetState  @ 79,123
-  @use call wiringManager.readGraph  @ 81,103,123,144,159
+  @use call wm:load  @ 10
+  @use call wm:mutate  @ 68,115
+  @use call wm:targetState  @ 79,123
+  @use call wm.readGraph  @ 81,103,123,144,159

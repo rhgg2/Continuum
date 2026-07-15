@@ -30,5 +30,5 @@
 
 # Uses (outbound edges)
   @use call harness.mk  @ 11
-  @use call routingManager.muted  @ 131
-  @use call routingManager.tracks  @ 132
+  @use call rm2:muted  @ 131
+  @use call rm2:tracks  @ 132

@@ -24,7 +24,7 @@
   @case 'last nibble forced even: 3 at stop 4 -> 2/256'  [harness]  @ 65-70
 
 # Uses (outbound edges)
-  @use call trackerView.setGridSize  @ 19
-  @use call editCursor.setPos  @ 27
-  @use call trackerView.editEvent  @ 28
-  @use call midiManager.dump  @ 32
+  @use call vm:setGridSize  @ 19
+  @use call ec:setPos  @ 27
+  @use call vm:editEvent  @ 28
+  @use call fm:dump  @ 32

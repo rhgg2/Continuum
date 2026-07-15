@@ -30,12 +30,14 @@
   @case 'undo across a metadata edit reloads the pool and restores detune'  [pure]  @ 234-260
 
 # Uses (outbound edges)
-  @use call pextStore.watch  @ 32
-  @use call pextStore.assign  @ 33,35,49,50,52,53,68,69,71,89,103,105,123,143,145,157,158,173,175,188,189,207,220,222
-  @use call pextStore.pollUndo  @ 37,55,73,92,108,111,139,147,169,177,203,209,226,228,253
-  @use call pextStore.get  @ 38,56,57,77,78,94,109,112,141,148,178,179,210,211,229
-  @use call pextStore.subscribe  @ 67,88,122,168,202
-  @use call midiManager.modify  @ 246,251
-  @use call midiManager.add  @ 247
-  @use call midiManager.assign  @ 251
-  @use call midiManager.notes  @ 255
+  @use call ps:watch  @ 32
+  @use call ps:assign  @ 33,35,49,50,52,53,68,69,71,89,103,105,123,143,145,157,158,173,175,188,189,207,220,222
+  @use call ps:pollUndo  @ 37,55,73,92,108,111,139,147,169,177,203,209,253
+  @use call ps:get  @ 38,56,57,77,78,94,109,112,141,148,178,179,210,211
+  @use call ps:subscribe  @ 67,88,122,168,202
+  @use call ps2:pollUndo  @ 226,228
+  @use call ps2:get  @ 229
+  @use call mm:modify  @ 246,251
+  @use call mm:add  @ 247
+  @use call mm:assign  @ 251
+  @use call mm:notes  @ 255

@@ -19,8 +19,8 @@
   @case 'a deleted take reads as absent; deref accessors return nil, not a crash'  [pure]  @ 31-44
 
 # Uses (outbound edges)
-  @use call midiManager.load  @ 35
-  @use call midiManager.take  @ 36,40
-  @use call midiManager.length  @ 41
-  @use call midiManager.resolution  @ 42
-  @use call midiManager.name  @ 43
+  @use call mm:load  @ 35
+  @use call mm:take  @ 36,40
+  @use call mm:length  @ 41
+  @use call mm:resolution  @ 42
+  @use call mm:name  @ 43

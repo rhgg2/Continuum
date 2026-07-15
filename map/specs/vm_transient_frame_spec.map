@@ -18,12 +18,12 @@
   @case 'cm:set at the transient tier does NOT trigger self-release'  [harness]  @ 111-124
 
 # Uses (outbound edges)
-  @use call trackerView.setGridSize  @ 27,53,73,97,118
-  @use call editCursor.setPos  @ 29,54,100
-  @use call commandManager.invoke  @ 31,56,59
-  @use call configManager.getAt  @ 33,57,60,80,105,123
-  @use call configManager.get  @ 34,61,75,81,104
-  @use call configManager.assign  @ 74,98,119
-  @use call configManager.set  @ 78,122
-  @use call editCursor.row  @ 101,106
-  @use call trackerView.setRowPerBeat  @ 103
+  @use call vm:setGridSize  @ 27,53,73,97,118
+  @use call ec:setPos  @ 29,54,100
+  @use call cmgr:invoke  @ 31,56,59
+  @use call cm:getAt  @ 33,57,60,80,105,123
+  @use call cm:get  @ 34,61,75,81,104
+  @use call cm:assign  @ 74,98,119
+  @use call cm:set  @ 78,122
+  @use call ec:row  @ 101,106
+  @use call vm:setRowPerBeat  @ 103

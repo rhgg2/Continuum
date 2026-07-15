@@ -23,10 +23,10 @@
   @case 'a typed note edit cancels the groupDuplicate cascade'  [harness]  @ 60-80
 
 # Uses (outbound edges)
-  @use call midiManager.dump  @ 20,28
-  @use call trackerView.setGridSize  @ 41
-  @use call editCursor.setPos  @ 42,48,72
-  @use call editCursor.extendTo  @ 43
-  @use call commandManager.invoke  @ 45,53,69,77
-  @use call editCursor.selClear  @ 48,72
-  @use call trackerView.editEvent  @ 49,73
+  @use call fm:dump  @ 20,28
+  @use call vm:setGridSize  @ 41
+  @use call ec:setPos  @ 42,48,72
+  @use call ec:extendTo  @ 43
+  @use call cmgr:invoke  @ 45,53,69,77
+  @use call ec:selClear  @ 48,72
+  @use call vm:editEvent  @ 49,73

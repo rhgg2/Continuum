@@ -23,9 +23,9 @@
   @case 'pitch nudge keeps a note in the addressable range (refuses past the ceiling)'  [harness]  @ 107-134
 
 # Uses (outbound edges)
-  @use call trackerView.setGridSize  @ 26
-  @use call editCursor.setPos  @ 56,65,87,96,113,119
-  @use call trackerView.editEvent  @ 57,66,88,97,114
+  @use call vm:setGridSize  @ 26
+  @use call ec:setPos  @ 56,65,87,96,113,119
+  @use call vm:editEvent  @ 57,66,88,97,114
   @use call tuning.midiToStep  @ 61,70
-  @use call trackerView.noteProjection  @ 75
-  @use call commandManager.invoke  @ 120,130
+  @use call vm:noteProjection  @ 75
+  @use call cmgr:invoke  @ 120,130

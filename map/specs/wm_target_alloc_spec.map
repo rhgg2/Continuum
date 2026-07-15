@@ -25,6 +25,6 @@
   @case 'targetState: linear source -> fx -> master keeps explicit pair-1 routes'  [harness]  @ 120-137
 
 # Uses (outbound edges)
-  @use call wiringManager.load  @ 13
-  @use call wiringManager.mutate  @ 61,96,124
-  @use call wiringManager.targetState  @ 72,108,130
+  @use call wm:load  @ 13
+  @use call wm:mutate  @ 61,96,124
+  @use call wm:targetState  @ 72,108,130

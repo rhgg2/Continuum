@@ -23,8 +23,8 @@
   @case 'deleting the predecessor must not shrink an infinite last-in-lane tail'  [pure]  @ 79-106
 
 # Uses (outbound edges)
-  @use call groupManager.markGroup  @ 42,64,85
-  @use call groupManager.newInstance  @ 43,65,88,100
-  @use call trackerManager.flush  @ 44,50,54,66,71,87,89,94
-  @use call groupManager.deleteEvent  @ 50,54,71,94
-  @use call groupManager.addEvent  @ 87
+  @use call gm:markGroup  @ 42,64,85
+  @use call gm:newInstance  @ 43,65,88,100
+  @use call tm:flush  @ 44,50,54,66,71,87,89,94
+  @use call gm:deleteEvent  @ 50,54,71,94
+  @use call gm:addEvent  @ 87

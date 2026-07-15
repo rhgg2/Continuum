@@ -29,11 +29,11 @@
   @case 'disjoint block shift allowed: two instances at different slots move injectively'  [harness]  @ 74-86
 
 # Uses (outbound edges)
-  @use call midiManager.notes  @ 23
-  @use call groupManager.markGroup  @ 48
-  @use call trackerView.eventsInRect  @ 48
-  @use call trackerView.selectionAsRect  @ 48,49
-  @use call editCursor.selClear  @ 50
-  @use call groupManager.newInstance  @ 51
-  @use call trackerManager.flush  @ 52
-  @use call commandManager.invoke  @ 66,81
+  @use call fm:notes  @ 23
+  @use call gm:markGroup  @ 48
+  @use call vm:eventsInRect  @ 48
+  @use call vm:selectionAsRect  @ 48,49
+  @use call ec:selClear  @ 50
+  @use call gm:newInstance  @ 51
+  @use call tm:flush  @ 52
+  @use call cmgr:invoke  @ 66,81

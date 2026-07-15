@@ -27,11 +27,11 @@
   @case 'merge apply: dropping a feeder retracts the Merge CU on re-apply'  [harness]  @ 145-178
 
 # Uses (outbound edges)
-  @use call wiringManager.load  @ 16
-  @use call wiringManager.instantiateFxOnScratch  @ 36
-  @use call wiringManager.applyOps  @ 50
-  @use call wiringManager.diff  @ 50,137
-  @use call wiringManager.targetState  @ 50,137
-  @use call wiringManager.snapshot  @ 50,137
-  @use call wiringManager.graph  @ 76,117
-  @use call wiringManager.mutate  @ 85,126,149,163
+  @use call wm:load  @ 16
+  @use call wm:instantiateFxOnScratch  @ 36
+  @use call wm:applyOps  @ 50
+  @use call wm:diff  @ 50,137
+  @use call wm:targetState  @ 50,137
+  @use call wm:snapshot  @ 50,137
+  @use call wm:graph  @ 76,117
+  @use call wm:mutate  @ 85,126,149,163

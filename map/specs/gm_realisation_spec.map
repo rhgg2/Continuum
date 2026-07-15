@@ -39,9 +39,9 @@
   @case 'markGroup seed is canonical -- it never rewrites the take geometry'  [pure]  @ 142-164
 
 # Uses (outbound edges)
-  @use call groupManager.markGroup  @ 58,74,89,120
-  @use call groupManager.newInstance  @ 59,75,90,121
-  @use call trackerManager.flush  @ 91,94,122,124,152
-  @use call groupManager.addEvent  @ 94
-  @use call groupManager.deleteEvent  @ 124
-  @use call groupManager.duplicateInto  @ 151
+  @use call gm:markGroup  @ 58,74,89,120
+  @use call gm:newInstance  @ 59,75,90,121
+  @use call tm:flush  @ 91,94,122,124,152
+  @use call gm:addEvent  @ 94
+  @use call gm:deleteEvent  @ 124
+  @use call gm:duplicateInto  @ 151

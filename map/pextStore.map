@@ -1,4 +1,4 @@
-@module pextStore  src=pextStore.lua  loc=433  sha=3970445  mode=chunk  self=ps
+@module pextStore  src=pextStore.lua  loc=433  sha=e2be081  mode=chunk  self=ps
 
 # Invariants & contracts
   @invariant  single source of bound take/track context, shared by every face; setTake derives track from the take's item

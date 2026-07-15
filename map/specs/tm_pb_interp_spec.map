@@ -25,6 +25,6 @@
   @case 'curved authored segment with no interior onset -> untouched, no seats'  [harness]  @ 133-149
 
 # Uses (outbound edges)
-  @use call midiManager.dump  @ 44,65,84,124,127,146
-  @use call trackerManager.rebuild  @ 125
-  @use call trackerManager.flush  @ 126
+  @use call fm:dump  @ 44,65,84,124,127,146
+  @use call tm:rebuild  @ 125
+  @use call tm:flush  @ 126

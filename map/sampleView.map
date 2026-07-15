@@ -70,19 +70,19 @@
       @contract  takes a track arg; PIP revert restores track captured at trigger, not sv's current one
 
 # Uses (outbound edges)
-  @use call cm.get  @ browseRoot:37 auditionCurrent:69 loadSelectedIntoCurrent:80,82 clearCurrentSlot:110
-  @use call cm.remove  @ setTrack:30
-  @use call cm.set  @ setBrowseRoot:43 loadSelectedIntoCurrent:86
-  @use call cm.setTrack  @ setTrack:29
-  @use call ds.get  @ loadSelectedIntoCurrent:83
-  @use call sm.assign  @ loadSelectedIntoCurrent:81
-  @use call sm.clearSlot  @ clearCurrentSlot:110
-  @use call sm.isLive  @ isLive:121
-  @use call sm.listTracks  @ listTracks:34
-  @use call sm.previewPath  @ auditionPath:97
-  @use call sm.previewSlot  @ auditionSlot:104
-  @use call sm.setName  @ setName:129
-  @use call sm.setTrim  @ setTrim:125
-  @use call sm.stageInto  @ stageInto:134
-  @use call sm.stopPreview  @ stopAudition:114
-  @use call sm.syncSlot  @ syncSlot:139
+  @use call cm:get  @ browseRoot:37 auditionCurrent:69 loadSelectedIntoCurrent:80,82 clearCurrentSlot:110
+  @use call cm:remove  @ setTrack:30
+  @use call cm:set  @ setBrowseRoot:43 loadSelectedIntoCurrent:86
+  @use call cm:setTrack  @ setTrack:29
+  @use call ds:get  @ loadSelectedIntoCurrent:83
+  @use call sm:assign  @ loadSelectedIntoCurrent:81
+  @use call sm:clearSlot  @ clearCurrentSlot:110
+  @use call sm:isLive  @ isLive:121
+  @use call sm:listTracks  @ listTracks:34
+  @use call sm:previewPath  @ auditionPath:97
+  @use call sm:previewSlot  @ auditionSlot:104
+  @use call sm:setName  @ setName:129
+  @use call sm:setTrim  @ setTrim:125
+  @use call sm:stageInto  @ stageInto:134
+  @use call sm:stopPreview  @ stopAudition:114
+  @use call sm:syncSlot  @ syncSlot:139

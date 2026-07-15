@@ -33,16 +33,16 @@
   @case 'a lane move onto another group\'s lane is rejected (lane-aware conflict)'  [harness]  @ 331-347
 
 # Uses (outbound edges)
-  @use call midiManager.dump  @ 50,59,111,135,168,173,194,220,229,280,285,316,321,346
-  @use call trackerView.clearRegionAt  @ 54,84,107
-  @use call trackerManager.flush  @ 57,87,110,193
-  @use call trackerManager.getChannel  @ 90
-  @use call commandManager.invoke  @ 131,133,165,166,172,215,216,217,218,227,228,248,274,284,309,320
-  @use call editCursor.setPos  @ 132,161,213,225,244,272,307
-  @use call groupManager.mark  @ 159,211,243,270,305,339,340
-  @use call trackerView.eventsInRect  @ 159,211,243,270,305,339,340
-  @use call editCursor.regionArm  @ 162,214,226,245,273,308
-  @use call editCursor.isInRegionMode  @ 163
-  @use call trackerView.clearMoveGap  @ 190
-  @use call trackerView.movePreview  @ 246,249,276,311
-  @use call groupManager.moveInstance  @ 343
+  @use call fm:dump  @ 50,59,111,135,168,173,194,220,229,280,285,316,321,346
+  @use call vm:clearRegionAt  @ 54,84,107
+  @use call tm:flush  @ 57,87,110,193
+  @use call tm:getChannel  @ 90
+  @use call cmgr:invoke  @ 131,133,165,166,172,215,216,217,218,227,228,248,274,284,309,320
+  @use call ec:setPos  @ 132,161,213,225,244,272,307
+  @use call gm:mark  @ 159,211,243,270,305,339,340
+  @use call vm:eventsInRect  @ 159,211,243,270,305,339,340
+  @use call ec:regionArm  @ 162,214,226,245,273,308
+  @use call ec:isInRegionMode  @ 163
+  @use call vm:clearMoveGap  @ 190
+  @use call vm:movePreview  @ 246,249,276,311
+  @use call gm:moveInstance  @ 343

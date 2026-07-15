@@ -38,15 +38,15 @@
   @case 'a PA on a parked host projects into the host lane column (display anchor survives parking)'  [harness]  @ 357-369
 
 # Uses (outbound edges)
-  @use call trackerManager.addEvent  @ 27,67,148,177,179,275,303,325,361
-  @use call trackerManager.flush  @ 28,71,93,128,150,155,165,181,277,305,327,362
-  @use call trackerManager.getChannel  @ 56,131,158,364
-  @use call midiManager.dump  @ 88,91,94,106,125,130,133,182,210,224,243,258,271,279,299,307,329
-  @use call trackerManager.rebuild  @ 92,209
-  @use call trackerManager.byUuid  @ 113,166
-  @use call trackerManager.assignParked  @ 127,154
-  @use call trackerManager.assignEvent  @ 164
-  @use call midiManager.notes  @ 203
-  @use call midiManager.tokenOf  @ 204
-  @use call midiManager.modify  @ 207
-  @use call midiManager.assign  @ 207
+  @use call tm:addEvent  @ 27,67,148,177,179,275,303,325,361
+  @use call tm:flush  @ 28,71,93,128,150,155,165,181,277,305,327,362
+  @use call tm:getChannel  @ 56,131,158,364
+  @use call fm:dump  @ 88,91,94,106,125,130,133,182,210,224,243,258,271,279,299,307,329
+  @use call tm:rebuild  @ 92,209
+  @use call tm:byUuid  @ 113,166
+  @use call tm:assignParked  @ 127,154
+  @use call tm:assignEvent  @ 164
+  @use call fm:notes  @ 203
+  @use call fm:tokenOf  @ 204
+  @use call fm:modify  @ 207
+  @use call fm:assign  @ 207

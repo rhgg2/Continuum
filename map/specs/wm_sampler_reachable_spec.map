@@ -23,6 +23,6 @@
   @case 'a track outside the graph is not a tracker take'  [harness]  @ 83-88
 
 # Uses (outbound edges)
-  @use call wiringManager.load  @ 12
-  @use call wiringManager.mutate  @ 43,57,71
-  @use call wiringManager.samplerReachable  @ 49,63,79,87
+  @use call wm:load  @ 12
+  @use call wm:mutate  @ 43,57,71
+  @use call wm:samplerReachable  @ 49,63,79,87

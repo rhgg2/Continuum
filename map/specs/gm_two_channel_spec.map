@@ -22,5 +22,5 @@
   @case 'a two-channel group projects both channels into a duplicate copy'  [pure]  @ 44-58
 
 # Uses (outbound edges)
-  @use call groupManager.duplicateInto  @ 52
-  @use call trackerManager.flush  @ 53
+  @use call gm:duplicateInto  @ 52
+  @use call tm:flush  @ 53

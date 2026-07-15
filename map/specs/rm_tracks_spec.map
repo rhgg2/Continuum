@@ -23,8 +23,8 @@
 
 # Uses (outbound edges)
   @use call harness.mk  @ 8
-  @use call routingManager.tracks  @ 26,37,91,93
-  @use call routingManager.addTrack  @ 59
-  @use call routingManager.assignTrack  @ 75
-  @use call routingManager.deleteTrack  @ 92
-  @use call routingManager.transaction  @ 108
+  @use call rm:tracks  @ 26,37,91,93
+  @use call rm:addTrack  @ 59
+  @use call rm:assignTrack  @ 75
+  @use call rm:deleteTrack  @ 92
+  @use call rm:transaction  @ 108

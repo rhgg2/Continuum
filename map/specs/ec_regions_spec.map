@@ -42,24 +42,24 @@
   @case 'any other command bails then runs (execute-through)'  [pure]  @ 440-448
 
 # Uses (outbound edges)
-  @use call trackerManager.length  @ 10
-  @use call trackerManager.subscribe  @ 11
-  @use call trackerManager.requestRebuild  @ 12
-  @use call trackerManager.addEvent  @ 13
-  @use call trackerManager.assignEvent  @ 14
-  @use call trackerManager.deleteEvent  @ 15
-  @use call trackerManager.flush  @ 16,64
-  @use call editCursor.decorateCol  @ 77
-  @use call commandManager.scope  @ 82
-  @use call commandManager.push  @ 87
-  @use call groupManager.eachInstance  @ 95
-  @use call editCursor.regionArm  @ 110,124,151
-  @use call editCursor.isInRegionMode  @ 125,140,152,166,181,194,212,228,244,405,435,446
-  @use call editCursor.regionCursor  @ 127,141,142,153,167,182,315,316,320,321,338,339,351,352,359,415,447
-  @use call editCursor.hasSelection  @ 130,168,183
-  @use call groupManager.mark  @ 138,161,176,204,220,236,252,267,284,294,311,334,347,367,384,399,413,432,443
-  @use call commandManager.invoke  @ 165,180,192,207,210,223,225,239,242,255,256,258,270,271,273,287,289,297,298,300,302,314,319,323,337,350,353,358,370,371,373,386,388,389,401,403,417,418,434,445
-  @use call groupManager.newInstance  @ 221,356
-  @use call editCursor.setPos  @ 238,254,269,286,296,313,336,349,369,416
-  @use call editCursor.row  @ 241,243,288,299,301
-  @use call editCursor.col  @ 317,322
+  @use call tm:length  @ 10
+  @use call tm:subscribe  @ 11
+  @use call tm:requestRebuild  @ 12
+  @use call tm:addEvent  @ 13
+  @use call tm:assignEvent  @ 14
+  @use call tm:deleteEvent  @ 15
+  @use call tm:flush  @ 16,64
+  @use call ec:decorateCol  @ 77
+  @use call cmgr:scope  @ 82
+  @use call cmgr:push  @ 87
+  @use call gm:eachInstance  @ 95
+  @use call ec:regionArm  @ 110,124,151
+  @use call ec:isInRegionMode  @ 125,140,152,166,181,194,212,228,244,405,435,446
+  @use call ec:regionCursor  @ 127,141,142,153,167,182,315,316,320,321,338,339,351,352,359,415,447
+  @use call ec:hasSelection  @ 130,168,183
+  @use call gm:mark  @ 138,161,176,204,220,236,252,267,284,294,311,334,347,367,384,399,413,432,443
+  @use call cmgr:invoke  @ 165,180,192,207,210,223,225,239,242,255,256,258,270,271,273,287,289,297,298,300,302,314,319,323,337,350,353,358,370,371,373,386,388,389,401,403,417,418,434,445
+  @use call gm:newInstance  @ 221,356
+  @use call ec:setPos  @ 238,254,269,286,296,313,336,349,369,416
+  @use call ec:row  @ 241,243,288,299,301
+  @use call ec:col  @ 317,322

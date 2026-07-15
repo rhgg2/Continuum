@@ -33,6 +33,6 @@
   @case 'folder: bus-0 take aggregates via the node, bus-1 stream wires direct'  [harness]  @ 277-306
 
 # Uses (outbound edges)
-  @use call wiringManager.load  @ 11
-  @use call wiringManager.readGraph  @ 61,83,105,129,151,174,194,220,265,297
+  @use call wm:load  @ 11
+  @use call wm.readGraph  @ 61,83,105,129,151,174,194,220,265,297
   @use call DAG.validate  @ 247

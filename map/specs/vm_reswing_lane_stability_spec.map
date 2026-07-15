@@ -18,7 +18,7 @@
   @case 'diff-pitch col-mates at lenient overlap survive a reswing into c58 in lane 1'  [harness]  @ 18-68
 
 # Uses (outbound edges)
-  @use call trackerView.setGridSize  @ 48
-  @use call trackerManager.markSwingStale  @ 49
-  @use call trackerManager.rebuild  @ 49
-  @use call midiManager.dump  @ 51
+  @use call vm:setGridSize  @ 48
+  @use call tm:markSwingStale  @ 49
+  @use call tm:rebuild  @ 49
+  @use call fm:dump  @ 51

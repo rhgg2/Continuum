@@ -1,4 +1,4 @@
-@module commandManager  src=commandManager.lua  loc=594  sha=d013d39  mode=chunk  self=cmgr
+@module commandManager  src=commandManager.lua  loc=594  sha=7e24684  mode=chunk  self=cmgr
 @deps cm
 
 # Invariants & contracts
@@ -122,8 +122,8 @@
       @contract  overwrites the scope's binding for name and persists it as tokens (global tier)
 
 # Uses (outbound edges)
-  @use call    cm.get  @ noteChars:352 loadOverrides:565 rebind:586
-  @use call    cm.set  @ rebind:591
+  @use call    cm:get  @ noteChars:352 loadOverrides:565 rebind:586
+  @use call    cm:set  @ rebind:591
   @use call    util.atomic  @ newScope:91
   @use call    util.print  @ loadOverrides:573
   @use require util  @ 15

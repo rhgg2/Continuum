@@ -20,7 +20,7 @@
   @case 'clearActive drops the pointer; the next stamp seeds a fresh group'  [pure]  @ 60-75
 
 # Uses (outbound edges)
-  @use call groupManager.mark  @ 25
-  @use call groupManager.activeGroup  @ 27,38,51,65,74
-  @use call groupManager.stamp  @ 36,48,49,63,71
-  @use call groupManager.clearActive  @ 64
+  @use call gm:mark  @ 25
+  @use call gm:activeGroup  @ 27,38,51,65,74
+  @use call gm:stamp  @ 36,48,49,63,71
+  @use call gm:clearActive  @ 64

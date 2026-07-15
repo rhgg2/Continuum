@@ -1,4 +1,4 @@
-@module wiringManager  src=wiringManager.lua  loc=2089  sha=f1b7084  mode=chunk  self=wm
+@module wiringManager  src=wiringManager.lua  loc=2089  sha=53b8124  mode=chunk  self=wm
 @deps rm
 
 # Invariants & contracts
@@ -293,33 +293,33 @@
   @use call    DAG.targetTracks  @ targetState:1019 gainRouting:1903
   @use call    DAG.validate  @ mutate:217
   @use call    fs.join  @ readJSFXContent:340
-  @use call    rm.addFx  @ instantiateFxOnScratch:363 reconcileFXChain:1729
-  @use call    rm.addTrack  @ applyOps:1805
-  @use call    rm.assignFx  @ persistNodeMeta:232 reconcileFXChain:1746,1756 applyOps:1831,1842 pokeGainTarget:1939
-  @use call    rm.assignMeta  @ moveBus:276 moveNodes:291 317 deleteBus:631 addBusNode:693 rotateBus:711 insertBus:723,750 stampBusTracks:2060
-  @use call    rm.assignTrack  @ persistNodeMeta:235,237 applyOps:1818,1822,1854 pokeGainTarget:1944
-  @use call    rm.bypassed  @ bypassed:207
-  @use call    rm.deleteFx  @ reconcileFXChain:1719
-  @use call    rm.deleteTrack  @ deleteSource:610 applyOps:1808
-  @use call    rm.fx  @ instantiateFxOnScratch:369
-  @use call    rm.fxIds  @ reconcileFXChain:1694
-  @use call    rm.fxTrack  @ fxTrack:408
-  @use call    rm.installedFx  @ listInstalledFX:2024
-  @use call    rm.masterId  @ persistNodeMeta:234 stampDecoration:1440 applyOps:1785 idForKey:1930 rememberApplied:2043
-  @use call    rm.meta  @ 301 nextBusId:674 busRecords:759 read:1464 stampBusTracks:2054
-  @use call    rm.muted  @ muted:198
-  @use call    rm.params  @ snapFx:832
-  @use call    rm.reaperTrack  @ deleteSource:598 pokeGainTarget:1943
-  @use call    rm.rewritePins  @ schedulePinCorrection:94
-  @use call    rm.setBypassed  @ setBypassed:203
-  @use call    rm.setMuted  @ setMuted:194
-  @use call    rm.setSendGain  @ pokeGainTarget:1947
-  @use call    rm.showFx  @ showFxWindow:413
-  @use call    rm.track  @ 899
-  @use call    rm.trackLabels  @ trackNames:395
-  @use call    rm.tracks  @ snapshot:914 read:1462
-  @use call    rm.transaction  @ setMuted:193 setBypassed:202 addFxNode:540 deleteSource:601 deleteBus:622 addSourceNode:642 addBusNode:683 insertBus:721 applyOps:1776 fastGainCommit:2012
-  @use call    rm.writeChainMidi  @ reconcileFXChain:1762
+  @use call    rm:addFx  @ instantiateFxOnScratch:363 reconcileFXChain:1729
+  @use call    rm:addTrack  @ applyOps:1805
+  @use call    rm:assignFx  @ persistNodeMeta:232 reconcileFXChain:1746,1756 applyOps:1831,1842 pokeGainTarget:1939
+  @use call    rm:assignMeta  @ moveBus:276 moveNodes:291 317 deleteBus:631 addBusNode:693 rotateBus:711 insertBus:723,750 stampBusTracks:2060
+  @use call    rm:assignTrack  @ persistNodeMeta:235,237 applyOps:1818,1822,1854 pokeGainTarget:1944
+  @use call    rm:bypassed  @ bypassed:207
+  @use call    rm:deleteFx  @ reconcileFXChain:1719
+  @use call    rm:deleteTrack  @ deleteSource:610 applyOps:1808
+  @use call    rm:fx  @ instantiateFxOnScratch:369
+  @use call    rm:fxIds  @ reconcileFXChain:1694
+  @use call    rm:fxTrack  @ fxTrack:408
+  @use call    rm:installedFx  @ listInstalledFX:2024
+  @use call    rm:masterId  @ persistNodeMeta:234 stampDecoration:1440 applyOps:1785 idForKey:1930 rememberApplied:2043
+  @use call    rm:meta  @ 301 nextBusId:674 busRecords:759 read:1464 stampBusTracks:2054
+  @use call    rm:muted  @ muted:198
+  @use call    rm:params  @ snapFx:832
+  @use call    rm:reaperTrack  @ deleteSource:598 pokeGainTarget:1943
+  @use call    rm:rewritePins  @ schedulePinCorrection:94
+  @use call    rm:setBypassed  @ setBypassed:203
+  @use call    rm:setMuted  @ setMuted:194
+  @use call    rm:setSendGain  @ pokeGainTarget:1947
+  @use call    rm:showFx  @ showFxWindow:413
+  @use call    rm:track  @ 899
+  @use call    rm:trackLabels  @ trackNames:395
+  @use call    rm:tracks  @ snapshot:914 read:1462
+  @use call    rm:transaction  @ setMuted:193 setBypassed:202 addFxNode:540 deleteSource:601 deleteBus:622 addSourceNode:642 addBusNode:683 insertBus:721 applyOps:1776 fastGainCommit:2012
+  @use call    rm:writeChainMidi  @ reconcileFXChain:1762
   @use call    scratch.id  @ instantiateFxOnScratch:363,368 snapshot:911 targetState:1020 read:1461 idForKey:1929
   @use call    scratch.peek  @ isScratchTrack:376
   @use call    util.add  @ 310,311 samplerReachable:439 paramTargets:467,483,487,491,504,505,509 addFxNode:572,575 deleteSource:606 deleteBus:627 insertBus:743,746 snapFxList:847 ownedSends:860 projectEntry:985,994 readGraph:1055,1070,1074,1093,1094,1124,1165,1170,1175,1178,1182,1194,1198,1237,1278,1287,1334,1367,1387,1408 diff:1539,1556,1571,1578,1583,1603,1608,1620,1622 reconcileFXChain:1699,1733,1760 applyOps:1850 authoredRouting:1889
@@ -333,7 +333,7 @@
   @use require fs  @ 24
   @use require scratch  @ 25
   @use require util  @ 22
-  @use sub     wiringManager:wiringChanged  @ enableLive:2082
+  @use sub     self:wiringChanged  @ enableLive:2082
 
 # REAPER API surface
   @reaper defer

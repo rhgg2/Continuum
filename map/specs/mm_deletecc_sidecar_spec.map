@@ -24,8 +24,8 @@
   @case 'multi-deleteCC after mid-fn metadata stamp leaves unrelated sidecar intact'  [pure]  @ 53-122
 
 # Uses (outbound edges)
-  @use call midiManager.load  @ 88
-  @use call midiManager.ccs  @ 92,108,116
-  @use call midiManager.modify  @ 95
-  @use call midiManager.assign  @ 96,97
-  @use call midiManager.delete  @ 98,99
+  @use call mm:load  @ 88
+  @use call mm:ccs  @ 92,108,116
+  @use call mm:modify  @ 95
+  @use call mm:assign  @ 96,97
+  @use call mm:delete  @ 98,99

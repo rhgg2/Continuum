@@ -19,6 +19,6 @@
   @case 'rescale grow 2x re-grows a trailing conform note raw tail'  [harness]  @ 16-37
 
 # Uses (outbound edges)
-  @use call midiManager.name  @ 26
-  @use call midiManager.length  @ 28
-  @use call midiManager.dump  @ 30
+  @use call fm:name  @ 26
+  @use call fm:length  @ 28
+  @use call fm:dump  @ 30

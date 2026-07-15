@@ -31,12 +31,12 @@
   @case 'a corrupt global file is read as nil and never clobbered'  [pure]  @ 195-204
 
 # Uses (outbound edges)
-  @use call pextStore.setTake  @ 36,55
-  @use call pextStore.boundTake  @ 47,56,162
-  @use call pextStore.boundTrack  @ 48,57
-  @use call pextStore.assign  @ 65,138,149,186,200
-  @use call pextStore.get  @ 66,75,85,189,199
-  @use call pextStore.assignAt  @ 82
-  @use call pextStore.getAt  @ 83
-  @use call pextStore.watch  @ 93,110,123,136,151,170
-  @use call pextStore.pollUndo  @ 98,113,126,140,160,176
+  @use call ps:setTake  @ 36,55
+  @use call ps:boundTake  @ 47,56,162
+  @use call ps:boundTrack  @ 48,57
+  @use call ps:assign  @ 65,138,149,186,200
+  @use call ps:get  @ 66,75,85,189,199
+  @use call ps:assignAt  @ 82
+  @use call ps:getAt  @ 83
+  @use call ps:watch  @ 93,110,123,136,151,170
+  @use call ps:pollUndo  @ 98,113,126,140,160,176

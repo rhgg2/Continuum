@@ -27,13 +27,13 @@
   @case 'opening a note tail (util.OPEN) keeps its attached PAs'  [harness]  @ 372-394
 
 # Uses (outbound edges)
-  @use call trackerManager.getChannel  @ 11,27,118,147,191,204,227,249,281,320,333,355,366,385
-  @use call midiManager.dump  @ 44,61,78,95,173,316,338,390
-  @use call trackerManager.rebuild  @ 94
-  @use call trackerManager.addEvent  @ 313,335
-  @use call trackerManager.flush  @ 314,336,387
-  @use call trackerManager.deleteEvent  @ 334
-  @use call midiManager.unload  @ 359
-  @use call trackerManager.currentTake  @ 360
-  @use call configManager.set  @ 364
-  @use call trackerManager.assignEvent  @ 386
+  @use call tm:getChannel  @ 11,27,118,147,191,204,227,249,281,320,333,355,366,385
+  @use call fm:dump  @ 44,61,78,95,173,316,338,390
+  @use call tm:rebuild  @ 94
+  @use call tm:addEvent  @ 313,335
+  @use call tm:flush  @ 314,336,387
+  @use call tm:deleteEvent  @ 334
+  @use call fm:unload  @ 359
+  @use call tm:currentTake  @ 360
+  @use call cm:set  @ 364
+  @use call tm:assignEvent  @ 386

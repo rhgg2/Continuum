@@ -37,4 +37,4 @@
   @case 'tick over an empty spool writes nothing and does not error'  [pure]  @ 166-175
 
 # Uses (outbound edges)
-  @use call bridge.tick  @ 49,160,172
+  @use call bridge:tick  @ 49,160,172

@@ -23,7 +23,7 @@
   @case 'coordinator constructs the reaper bridge with an env exposing coord and the page() debug resolver'  [harness]  @ 118-135
 
 # Uses (outbound edges)
-  @use call coordinator.register  @ 44,127
-  @use call coordinator.setActive  @ 59,74
-  @use call coordinator.returnToArrange  @ 75,90
-  @use call coordinator.reloadAfterExternalMutation  @ 110
+  @use call coord:register  @ 44,127
+  @use call coord:setActive  @ 59,74
+  @use call coord:returnToArrange  @ 75,90
+  @use call coord:reloadAfterExternalMutation  @ 110

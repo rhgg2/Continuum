@@ -30,11 +30,11 @@
   @case 'deleting the shadower un-shadows the survivor and PC val flips'  [harness]  @ 252-278
 
 # Uses (outbound edges)
-  @use call midiManager.notes  @ 22
-  @use call midiManager.tokenOf  @ 23
-  @use call trackerManager.getChannel  @ 28,271
-  @use call midiManager.dump  @ 48,67,88,108,135,136,151,172,174,201,219,242,266
-  @use call trackerManager.addEvent  @ 62,237,239
-  @use call trackerManager.flush  @ 66,87,107,134,200,241,265
-  @use call trackerManager.assignEvent  @ 86,133,199
-  @use call trackerManager.deleteEvent  @ 106,264
+  @use call mm:notes  @ 22
+  @use call mm:tokenOf  @ 23
+  @use call tm:getChannel  @ 28,271
+  @use call fm:dump  @ 48,67,88,108,135,136,151,172,174,201,219,242,266
+  @use call tm:addEvent  @ 62,237,239
+  @use call tm:flush  @ 66,87,107,134,200,241,265
+  @use call tm:assignEvent  @ 86,133,199
+  @use call tm:deleteEvent  @ 106,264

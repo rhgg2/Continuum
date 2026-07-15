@@ -40,13 +40,13 @@
   @case 'setLaneTension on non-renderable col is a no-op'  [harness]  @ 512-526
 
 # Uses (outbound edges)
-  @use call trackerView.setGridSize  @ 37,64,86,109,131,152,184,240,291,334,363,386,407,430,453,475,497,522
-  @use call trackerView.moveLaneEvent  @ 41,68,90,113,133,155,210,256,307
-  @use call midiManager.dump  @ 134,432,477,524
-  @use call trackerManager.addEvent  @ 177,181,182,233,237,238
-  @use call trackerManager.flush  @ 183,239,339,501
-  @use call trackerManager.assignEvent  @ 338,500
-  @use call trackerView.addLaneEvent  @ 341,366,387
-  @use call trackerView.deleteLaneEvent  @ 410,431
-  @use call trackerView.cycleLaneShape  @ 456,459,476
-  @use call trackerView.setLaneTension  @ 503,523
+  @use call vm:setGridSize  @ 37,64,86,109,131,152,184,240,291,334,363,386,407,430,453,475,497,522
+  @use call vm:moveLaneEvent  @ 41,68,90,113,133,155,210,256,307
+  @use call fm:dump  @ 134,432,477,524
+  @use call tm:addEvent  @ 177,181,182,233,237,238
+  @use call tm:flush  @ 183,239,339,501
+  @use call tm:assignEvent  @ 338,500
+  @use call vm:addLaneEvent  @ 341,366,387
+  @use call vm:deleteLaneEvent  @ 410,431
+  @use call vm:cycleLaneShape  @ 456,459,476
+  @use call vm:setLaneTension  @ 503,523
