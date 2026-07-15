@@ -85,28 +85,155 @@ Edit-cursor position in ppq: `p.tm:editCursor()`.
 
 `perf` (the nested profiler) isn't an env handle, but every Continuum
 module is a cached `require`, so `require('perf')` hands back the *same*
-singleton the app uses. Two wrinkles make a naive read come back empty:
-`perf.report()` no-ops unless `perf.on` (armed live with Ctrl+Shift+P),
-and it emits through `util.print` — REAPER's console, not the chunk's
-redirected `print` — so you must swap that sink to capture it. A bare
-`tm:rebuild` also runs the pipeline *outside* any span, scattering its
-stages as throwaway roots; wrap it in your own root span.
+singleton the app uses. Wrinkles that make a naive read wrong:
+`perf.report()` no-ops unless `perf.on` (armed live with Ctrl+Shift+P);
+it emits through `util.print` — REAPER's console, not the chunk's
+redirected `print` — so you must swap that sink to capture it; and GC
+(~20ms) plus a cold first frame inflate any single run, so
+`collectgarbage('collect')` first and **discard run 1**. A bare
+`tm:rebuild` runs the pipeline *outside* any span, scattering its stages
+as throwaway roots; wrap it in your own root span.
+
+There are **three baselines** — distinct pipeline paths that do not move
+together. Measure all three; each `[perf] <indented stage> <ms>` tree is
+sorted within itself by cost.
+
+### 1. Import — the foreign-MIDI bind (`externals`-dominated)
+
+A genuine import has no uuids and no metadata anywhere; mm mints
+everything fresh. Dropping the eventMeta pool is *not* enough — sidecars
+left in the blob still carry uuids and route the bind down the
+*adoption* path, not first-contact. Tear the blob back to raw MIDI
+(strip every 0xFF text + 0xF0 sysex event), drop the pool, then reload.
+Destructive but repeatable: the bind re-stamps to state 2, so re-strip
+for state 1 again. (Lane assignments are lost — reload the file to
+recover the original voicing.)
 
 ```lua
 local perf, util = require('perf'), require('util')
+local mm = page('tracker').mm
+local take, guid = mm:take(), mm:poolGuid()
+
+local ok, blob = reaper.MIDI_GetAllEvts(take, '')
+local pos, absppq, kept = 1, 0, {}
+while pos < #blob do
+  local offset, flag, msg, np = string.unpack('i4Bs4', blob, pos)
+  absppq = absppq + offset
+  local status = msg:byte(1) or 0
+  if status >= 0x80 and status <= 0xEF then          -- channel-voice only
+    kept[#kept+1] = { ppq = absppq, flag = flag, msg = msg }
+  end
+  pos = np
+end
+local out, last = {}, 0
+for _, e in ipairs(kept) do
+  out[#out+1] = string.pack('i4Bs4', e.ppq - last, e.flag, e.msg); last = e.ppq
+end
+reaper.MIDI_SetAllEvts(take, table.concat(out)); reaper.MIDI_Sort(take)
+eventMeta:dropPool(guid)
+
+collectgarbage('collect')
 local lines, wasOn = {}, perf.on
 local real = util.print; util.print = function(s) lines[#lines+1] = tostring(s) end
 perf.on = true
-perf.start('probe'); page('tracker').tm:rebuild(true); perf.stop('probe')
-perf.report()          -- last-frame tree; perf.dump() for run totals
+perf.start('import'); coord:reloadAfterExternalMutation(); perf.stop('import')
+perf.report()
 perf.on = wasOn; util.print = real
 return lines
 ```
 
-`rebuild(true)` forces a full-dirty (all-channel) re-derivation — no
-mutation, just recompute — so the tree covers every stage. The result
-is `[perf] <indented stage> <ms>` lines (`internals`, `tails`,
-`fxWindows`, `projLogical`, …), sorted within the tree by cost.
+The import tree is dominated by first-contact work absent from steady
+state: `externals` (one uuid minted per note) plus a *doubled*
+`serialise`/`setEvts`/`sidecars` writing all metadata out for the first
+time.
+
+### 2. Steady no-op — forced full re-derive (`internals`-dominated)
+
+`rebuild(true)` re-derives every channel from the settled internal
+columns — no mutation, `externals` is 0. Infinitely repeatable; the
+forced-full ceiling the parity spec compares against.
+
+```lua
+local perf, util = require('perf'), require('util')
+collectgarbage('collect')
+local lines, wasOn = {}, perf.on
+local real = util.print; util.print = function(s) lines[#lines+1] = tostring(s) end
+perf.on = true
+perf.start('probe'); page('tracker').tm:rebuild(true); perf.stop('probe')
+perf.report()
+perf.on = wasOn; util.print = real
+return lines
+```
+
+### 3. Steady edit — one dirty channel (the maintenance path)
+
+A one-note edit; `flush` self-reports its `flush → mm → reload → …`
+tree. Self-revert to leave the take byte-identical, so it stays
+repeatable without a reload. This is the path interval dirt narrows.
+
+```lua
+local perf, util = require('perf'), require('util')
+local tm, mm = page('tracker').tm, page('tracker').mm
+local function firstNote() for _, e in mm:events() do if e.evType == 'note' then return e end end end
+local t = firstNote(); local orig = t.vel; local nv = orig == 100 and 99 or 100
+collectgarbage('collect')
+local lines, wasOn = {}, perf.on
+local real = util.print; util.print = function(s) lines[#lines+1] = tostring(s) end
+perf.on = true
+tm:assignEvent(t.token, { vel = nv }); tm:flush()               -- MEASURED
+perf.on = wasOn; util.print = real
+local b = firstNote(); tm:assignEvent(b.token, { vel = orig }); tm:flush()  -- revert
+return lines
+```
+
+## Swapping fixtures without reloading a project
+
+The open ctm take is a scratch canvas: inject a raw-MIDI blob and the
+take *becomes* that fixture, so you profile several fixtures in one
+session without opening a project file. Works for MIDI-shaped fixtures
+(the dense single-channel take); a macro/fx-heavy fixture also needs its
+generator config, which a blob does not carry.
+
+Capture the current take's raw MIDI — strip metadata so a later inject
+reproduces the import→settle cycle (all three baselines from one blob).
+The blob stores note-on and note-off as *separate* events, so its count
+is ≈2× the model's note+cc count.
+
+```lua
+local mm = page('tracker').mm
+local ok, blob = reaper.MIDI_GetAllEvts(mm:take(), '')
+local pos, absppq, kept = 1, 0, {}
+while pos < #blob do
+  local offset, flag, msg, np = string.unpack('i4Bs4', blob, pos)
+  absppq = absppq + offset
+  local status = msg:byte(1) or 0
+  if status >= 0x80 and status <= 0xEF then          -- channel-voice only
+    kept[#kept+1] = { ppq = absppq, flag = flag, msg = msg }
+  end
+  pos = np
+end
+local out, last = {}, 0
+for _, e in ipairs(kept) do
+  out[#out+1] = string.pack('i4Bs4', e.ppq - last, e.flag, e.msg); last = e.ppq
+end
+local f = io.open('/abs/path/fixture.rawmidi', 'wb'); f:write(table.concat(out)); f:close()
+return #kept
+```
+
+Inject a saved blob into the open take (this IS the import baseline; it
+settles to state 2 afterward, so re-inject for a fresh import):
+
+```lua
+local mm = page('tracker').mm
+local f = io.open('/abs/path/fixture.rawmidi', 'rb'); local raw = f:read('a'); f:close()
+reaper.MIDI_SetAllEvts(mm:take(), raw); reaper.MIDI_Sort(mm:take())
+eventMeta:dropPool(mm:poolGuid())
+coord:reloadAfterExternalMutation()
+return 'injected'
+```
+
+Clear the take with a terminal-only blob:
+`reaper.MIDI_SetAllEvts(take, string.pack('i4Bs4', 0, 0, '\xB0\x7B\x00'))`.
 
 ## Writing — the golden rules
 

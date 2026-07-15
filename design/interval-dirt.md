@@ -206,8 +206,9 @@ A first-draft bullet here — "not the one-note edit, it's at a ~1.15ms
 floor" — was falsified 2026-07-15 by a live profile: that floor was
 fixture-relative (3193 notes spread over 11 channels). On a dense take
 whose notes sit on one channel (8437 notes), the same one-note edit
-pays 92.6ms of reload, nearly all whole-channel materialisation and
-walks — channel granularity is worthless when one channel ≈ the take.
+pays ~60ms of reload (warm; § Implementation plan, phase 0 pins all
+three baselines), nearly all whole-channel materialisation and walks —
+channel granularity is worthless when one channel ≈ the take.
 The win is therefore two-sided: **dense single-channel takes**
 (phases 3–4) and **fx/macro-heavy takes** (phase 5, gap 4's original
 target).
@@ -216,11 +217,11 @@ target).
 
 > Restructured 2026-07-15, same day as the first draft: a live profile
 > on a dense single-channel take (8437 notes, 1685 ccs; one-note edit =
-> 149ms flush, 92.6ms reload) falsified the draft's scoping. The draft
-> kept materialisation channel-granular and deferred the tail walk as
-> "expected dropped", on numbers from a fixture an order smaller where
-> no channel dominated — but `internals` 26.9 + `tails` 33.5 +
-> `projLogical` 8.4 + `fxWindows` 4.7×2 + `ccs` 3.4 ≈ 77ms of that
+> ~96ms flush, ~60ms reload, warm) falsified the draft's scoping. The
+> draft kept materialisation channel-granular and deferred the tail walk
+> as "expected dropped", on numbers from a fixture an order smaller where
+> no channel dominated — but `internals` 18.5 + `tails` 14.0 +
+> `projLogical` 8.5 + `fxWindows` 4.9×2 + `ccs` 3.0 ≈ 54ms of that
 > reload sit exactly there. Channel granularity's virtue ("a whole
 > dirty channel over-approximates the closure") is void when one
 > channel ≈ the take. § Framing already named the true model — re-run
@@ -241,9 +242,27 @@ than avoidable.
 
 ### Phase 0 — two fixtures
 
-- **Dense single-channel: measured, go.** The 2026-07-15 profile above
-  is the baseline; phases 3–4 are judged against its `internals` /
-  `tails` / `projLogical` / `fxWindows` / `ccs` spans.
+- **Dense single-channel (HAMMERKLAVIER): measured, go.** 8437 notes,
+  1685 ccs, all on channel 1. Three baselines, re-measured warm on
+  2026-07-15 (`collectgarbage` first, run 1 discarded; profiler recipe
+  in `docs/bridge-cookbook.md` § Profiling a rebuild):
+
+  | span (ms, warm) | import (virgin bind) | no-op (`rebuild(true)`) | edit (one note) |
+  |---|---|---|---|
+  | total | 415 | 72 | ~96 flush / ~60 reload |
+  | `externals` | 98 (8437 uuids minted) | 0 | 0 |
+  | `internals` | 12.5 | 27 | 18.5 |
+  | `tails` | 34 | 14 | 14 |
+  | `projLogical` | 9 | 8.6 | 8.5 |
+  | `fxWindows` | 6.4×2 | 4.8×2 | 4.9×2 |
+  | `ccs` | 11 | 3.4 | 3.0 |
+  | `serialise`/`setEvts`/`sidecars` | 43/20/13, each ×2 | — | 14/10/2 |
+
+  Phases 3–4 are judged against the **edit** column — the maintenance
+  path they narrow. Import is the bind reference (§ What this does not
+  buy); no-op is the forced-full ceiling the parity spec compares
+  against. The draft's higher numbers (reload 92.6, tails 33.5) were a
+  cold/GC-inflated run.
 - **Macro-heavy: build it.** The predecessor's corpus was fx-free (its
   gap 8 verified the take had zero fx notes), so the cost of
   regenerating non-intersecting producers is still unmeasured. ~3000
@@ -309,7 +328,8 @@ verb and the flushing guard.
 
 ### Phase 3 — interval materialisation: columns, projection, windows
 
-The dense take's 26.9 + 8.4 + 3.4 + 4.7×2.
+The dense take's edit-path `internals` 18.5 + `projLogical` 8.5 +
+`ccs` 3.0 + `fxWindows` 4.9×2 (§ phase 0).
 
 - **Columns splice.** `rebuildInternals` / `rebuildCCs` clone from mm
   only events inside the closed interval and splice them into the
@@ -355,7 +375,8 @@ The dense take's 26.9 + 8.4 + 3.4 + 4.7×2.
 
 ### Phase 4 — the interval tail walk, and the cascade machinery
 
-The dense take's 33.5. Tails close per the crux row — [prev onset,
+The dense take's edit-path `tails` ~14 (§ phase 0; the draft's 33.5
+was a cold/GC-inflated run). Tails close per the crux row — [prev onset,
 next onset], same-lane + same-pitch, raw order — and the walk's groups
 build only over closed intervals. The raw-order anchor query (open q5)
 is needed here; candidate answer: mm's per-channel index, whose array
@@ -412,10 +433,10 @@ without interval machinery in the frame.
 
 ### The ceiling, stated
 
-On the dense take, phases 3–4 take `reload` 92.6 → ~15ms: what remains
-is `fire` 10.4 — the output side, tm's monolithic `'rebuild'` signal,
-§ Framing's named successor — plus residuals. The flush stays ≈60ms,
-because `serialise` 15.8 + `setEvts` 13.2 + reindex 4.0 + `meta` 1.6
+On the dense take, phases 3–4 take `reload` ~60 → ~15ms: what remains
+is `fire` ~8 — the output side, tm's monolithic `'rebuild'` signal,
+§ Framing's named successor — plus residuals. The flush's write side
+stays put, because `serialise` ~14 + `setEvts` ~10 + `sidecars` ~2
 is the write-side programme (`15a343d` is its first landed commit).
 Interval dirt narrows the compute between the edit and the writes; it
 touches neither neighbour.
