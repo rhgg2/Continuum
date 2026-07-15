@@ -11,10 +11,10 @@
 
 | | |
 |---|---|
-| state | pinned, unstarted |
+| state | planned (§ Implementation plan), unstarted |
 | supersedes | `incremental-rebuild` gap 4 (fx dirt signal) |
 | enduring model it changes | `docs/trackerManager.md` § Derivation dirt |
-| the hard part | was forward propagation — closed 2026-07-15 by onset-bounded closures + the cascade commute (§ The crux, closed); residual risk is the multi-pass I8 restatement |
+| the hard part | was forward propagation — closed 2026-07-15 by onset-bounded closures + the cascade commute (§ The crux, closed); the multi-pass I8 restatement arrives with phase 4 (the interval tail walk) and is core |
 
 ## The problem it solves
 
@@ -194,16 +194,247 @@ have no persistent index yet (open question 5).
 
 Worth stating plainly, so the project is scoped honestly rather than sold:
 
-- **Not the one-note edit.** That path is already at a ~1.15ms floor, and
-  its largest single item (`fire`, 0.53ms) is subscriber notification, not
-  derivation. There is little left to gate away.
 - **Not the bind.** A foreign-take bind marks everything dirty by
   definition — every event is genuinely new.
+- **Not the write side or the output side.** `serialise` + `setEvts` +
+  reindex + `meta` (≈35ms on the dense take below) and tm's monolithic
+  `'rebuild'` fire (10.4ms) bracket the derivation this project
+  narrows; each is its own successor programme (§ Framing;
+  `15a343d`).
 
-The win is concentrated on **fx/macro-heavy takes**, which is exactly gap
-4's target, plus finer gating on fat multi-channel edits. If that is not a
-shape of project you are working on, this buys nothing, and the honest
-move is to leave the wholesale fx row where it is.
+A first-draft bullet here — "not the one-note edit, it's at a ~1.15ms
+floor" — was falsified 2026-07-15 by a live profile: that floor was
+fixture-relative (3193 notes spread over 11 channels). On a dense take
+whose notes sit on one channel (8437 notes), the same one-note edit
+pays 92.6ms of reload, nearly all whole-channel materialisation and
+walks — channel granularity is worthless when one channel ≈ the take.
+The win is therefore two-sided: **dense single-channel takes**
+(phases 3–4) and **fx/macro-heavy takes** (phase 5, gap 4's original
+target).
+
+## Implementation plan
+
+> Restructured 2026-07-15, same day as the first draft: a live profile
+> on a dense single-channel take (8437 notes, 1685 ccs; one-note edit =
+> 149ms flush, 92.6ms reload) falsified the draft's scoping. The draft
+> kept materialisation channel-granular and deferred the tail walk as
+> "expected dropped", on numbers from a fixture an order smaller where
+> no channel dominated — but `internals` 26.9 + `tails` 33.5 +
+> `projLogical` 8.4 + `fxWindows` 4.7×2 + `ccs` 3.4 ≈ 77ms of that
+> reload sit exactly there. Channel granularity's virtue ("a whole
+> dirty channel over-approximates the closure") is void when one
+> channel ≈ the take. § Framing already named the true model — re-run
+> the load derivation over the closed region — and the plan now follows
+> it: materialisation, projection, windows, and the tail walk all
+> consume intervals.
+
+Discipline as in the predecessor programme: each phase lands
+independently with the suite green, `tm_gate_parity_spec` extends at
+each new consumer (interval-gated vs forced full re-derive, frame
+equality, on both fixtures), "skipped means zero mm writes" is pinned
+by write-counting under the harness, and later phases gate on measured
+numbers. The split is by take shape: **phases 3–4 are the dense-take
+programme, phase 5 the macro-take programme**, each measured against
+its own fixture. I8 stays intact through phase 3; the multi-pass
+restatement (§ The cascade commutes) arrives with phase 4, core rather
+than avoidable.
+
+### Phase 0 — two fixtures
+
+- **Dense single-channel: measured, go.** The 2026-07-15 profile above
+  is the baseline; phases 3–4 are judged against its `internals` /
+  `tails` / `projLogical` / `fxWindows` / `ccs` spans.
+- **Macro-heavy: build it.** The predecessor's corpus was fx-free (its
+  gap 8 verified the take had zero fx notes), so the cost of
+  regenerating non-intersecting producers is still unmeasured. ~3000
+  notes, most channels hosting generators, one retrig-dense (the
+  expansion-volume worst case). It gates phase 5's continuous-side
+  decision, not the project.
+
+### Phase 1 — the interval set, pure
+
+`dirtyChans[chan]` becomes one of:
+
+```
+true                          -- whole channel: every unported dirt source,
+                              -- and the widening fallback for edge cases
+{ { loPpqL, hiPpqL,           -- logical span: merging + bookkeeping
+    loUuid, hiUuid }, ... }   -- event anchors (§ Intervals are event-anchored);
+                              -- nil uuid edge = open toward channel start/end
+                              -- merged: ppqL-ascending, non-overlapping
+```
+
+Operations as a pure module `intervals.lua` (shape-peer of `voicing`:
+stateless, directly unit-specced): `seed`, `merge` (coalesce; collapse
+to `true` past a size cap), `intersects(set, lo, hi)` (edge-inclusive —
+see phase 3), `close(set, sortedEvents, opts)` — the § crux closure,
+parameterised by grouping and frame. Merge at seed time, close at
+consumption (open q3: merging can pull a new anchor into range, so the
+consuming stage closes the merged set against its own ordering). An
+anchor that dies before consumption widens its edge open; a set that
+degenerates collapses to `true`. Spurious dirt is one re-derive; the
+fallback is always available.
+
+Alternative considered: tm-local helpers instead of a module — rejected
+because the closure rules are exactly the pure logic that wants direct
+unit specs, and tm internals are reachable only through the harness.
+
+No consumer changes. Every gated stage already tests
+`dirtyChans[chan]` truthy, so an interval-valued entry reads as "dirty"
+and the stage re-derives the whole channel: over-approximation, today's
+behaviour. (One audit needed: nothing may test `== true` or count
+entries.)
+
+### Phase 2 — seeds born at the verbs
+
+um's low-level verbs (`addLowlevel` / `assignLowlevel` /
+`deleteLowlevel`, `trackerManager.lua:712`) see every edit; they
+accumulate seeds beside `adds`/`assigns`/`deletes`. An add seeds its
+event; a delete seeds its point anchored to the surviving neighbours;
+an assign that moves `ppq`/`ppqL`/`delay` seeds **both** positions; a
+value-only assign seeds the point. `flush` hands the merged seeds to
+the rebuild.
+
+The mm `reload` subscriber's channel fold (`trackerManager.lua:3273`)
+gains a flushing guard: during tm's own flush, a payload chan covered
+by seeds is not widened — but a payload chan the seeds do NOT cover
+still folds whole (mm-internal mutators — the collision backstop,
+dedup — write outside the verbs, and their dirt must not be lost).
+Every other dirt source keeps calling `dirtyChan()` unchanged: config,
+swing, take-length, external modifies stay whole-channel, narrowing
+later only if a phase pays for it.
+
+Zero behaviour change by construction; specs pin the seed shapes per
+verb and the flushing guard.
+
+### Phase 3 — interval materialisation: columns, projection, windows
+
+The dense take's 26.9 + 8.4 + 3.4 + 4.7×2.
+
+- **Columns splice.** `rebuildInternals` / `rebuildCCs` clone from mm
+  only events inside the closed interval and splice them into the
+  carried columns: dirty span out, fresh clones in. The
+  materialisation closure is the **union of the consuming stages'
+  closures** — those stages read the fresh clones, so whatever they
+  will re-derive must be re-materialised. Anchors resolve against the
+  carried columns (uuids survive; § Intervals are event-anchored).
+- **Projection follows the splice.** `projectLogical` projects only
+  spliced events; carried events are already logical — today's
+  per-channel argument, applied per event.
+- **fx windows are carried state**, same regime as columns. A window
+  recomputes iff a dirty interval intersects its extent
+  (edge-inclusive — deleting the bounding next same-lane onset seeds
+  exactly at the old window edge, and that delete is precisely the
+  edit that grows the window) **or the window is itself dirty**: its
+  defining spec changed — region edit, parking change, a host's fx
+  edit — which seeds the spec's span. Clean windows carry from the
+  prior set; the pipeline already persists exactly that set as the
+  recognition baseline (`prevWindows`), so the carrier exists. Both
+  `computeFxWindows` calls gate identically; the second (post-unpark
+  re-scan) additionally short-circuits when park/unpark moved nothing.
+- **Park scans ride the same rule.** `rebuildRegionPark`'s three scans
+  (note/pa/cc — 1.1ms on the dense take) hunt events newly covered by
+  a window, and coverage changes only where events changed or windows
+  changed: the scan set is dirty intervals ∪ recomputed-window extents,
+  the two-source rule again. `reconcilePark` already partitions the
+  prior parked set, so carry needs nothing new.
+- **PA dispatch is part of the splice.** A spliced interval's PAs
+  re-attach to their host columns; carried events keep their
+  attachments (`rebuildPA`'s per-chan touched set already exists to
+  gate the re-sort).
+- **Externals come for free; extraColumns has nothing to port.**
+  Externals are discovered by the partition walk, which this phase
+  scopes to the closed interval — a foreign event only appears under
+  wholesale dirt or inside an edited interval. `extraColumns` is
+  grow-only and merge-safe (§ Derivation dirt) already.
+- **One deliberate wholesale residue.** The derived-note routing into
+  `fx.noteExisting` stays whole-channel until phase 5: the fx
+  reconcile is still channel-wide there, and a partial `noteExisting`
+  would read as mass deletion. Cost is per *derived* note — zero on
+  fx-free channels — so the dense-take win is untouched.
+
+### Phase 4 — the interval tail walk, and the cascade machinery
+
+The dense take's 33.5. Tails close per the crux row — [prev onset,
+next onset], same-lane + same-pitch, raw order — and the walk's groups
+build only over closed intervals. The raw-order anchor query (open q5)
+is needed here; candidate answer: mm's per-channel index, whose array
+order is raw-ppq ascending after reindex, with the per-pass sorted
+groups as fallback.
+
+This is where the exempt cascade arrives for real: `collisionsResolved`
+becomes a seed source for the next maintenance pass, the signal owes
+the scheduling guarantee § The cascade commutes records, and I8
+restates as "finitely many passes when a cascade escapes an interval",
+with the soundness specs updated in those terms. The walk still unions
+`noteLive` wholesale until phase 5 — predicted fxNotes outside dirty
+intervals re-derive converged clips, zero writes, macro-take cost only.
+
+### Phase 5 — fx producers consume intervals
+
+The macro-take programme, and the same predicate as phase 3's windows
+one level up — window recompute is the geometric half, producer re-run
+the generative half: **a producer runs iff its window intersects dirt
+or its spec is dirty.**
+
+A skipped producer keeps its output by **identity-keep**: its existing
+derived notes (`fx.noteExisting` — mm clones carrying every `fxKey`
+field plus `lane`) feed `predicted` verbatim, so `reconcileFx` keeps
+them all and stamps token + realised end through the normal `onKeep`
+(`trackerManager.lua:565`). `noteLive` then carries the union of
+regenerated and kept specs — unchanged in content — which resolves
+open q4: `noteLive` stays the carrier, no cross-stage dirt plumbing.
+Phases 3's and 4's wholesale residues (derived-note routing, the
+`noteLive` union) narrow to intervals here.
+
+The fiddly half is the continuous side, and it may stay wholesale. A
+skipped producer's cc seats (`fx.ccExisting`, window-recognised) must
+carry rather than reconcile away, and its pb chain feeds
+`rebuildPbs`'s channel-wide fold — so either the continuous stages of a
+skipped chain still run (gating only note expansion), or the fold
+learns to keep window-keyed emitted output. The macro fixture decides;
+note expansion first.
+
+Same phase: the all-16 region/parking dirt sources narrow to their own
+spans — a region edit knows its chan and extent
+(`trackerManager.lua:3314`, `flushParked` :1019); seed that interval
+instead of `dirtyChan()`.
+
+### Phase 6 — seats, PCs, and the sample stamp (profile-gated)
+
+`pbs` 1.5 and `pcs` 0.0 on the dense take: genuinely small, so the
+seats/PC closures (crux rows 2–3) run only if a profile ever says
+otherwise. The `note.sample` stamping (§ crux bearing rule) is
+independent and landable any time — free under the no-legacy-data
+policy, it unblocks PC closure, and it lands the semantic change
+(inheritance freezes at stamp time) where its UX is judged on its own,
+without interval machinery in the frame.
+
+### The ceiling, stated
+
+On the dense take, phases 3–4 take `reload` 92.6 → ~15ms: what remains
+is `fire` 10.4 — the output side, tm's monolithic `'rebuild'` signal,
+§ Framing's named successor — plus residuals. The flush stays ≈60ms,
+because `serialise` 15.8 + `setEvts` 13.2 + reindex 4.0 + `meta` 1.6
+is the write-side programme (`15a343d` is its first landed commit).
+Interval dirt narrows the compute between the edit and the writes; it
+touches neither neighbour.
+
+### The end state — rebuild(∅) does literally nothing
+
+The plan's terminal invariant: every stage consumes intervals, so the
+degenerate rebuild — empty dirt, no stale swing, not wholesale, no
+take swap — short-circuits **before** the pipeline: no nest, no
+`clearSwing`, no `derivedInputs` clone, and no `'rebuild'` fire — the
+fire is 10.4ms of tv re-placing a frame that did not change. Empty
+dirt implies no staged ops, so the skipped `clearStaging` is vacuous.
+The one fire that must survive is `takeChanged`: a converged rebind
+carries no dirt but tv still needs the bind signal. This subsumes the
+predecessor's 1.15ms floor — that number was the traversal cost of
+discovering there was nothing to do; the short-circuit is the
+statement that discovery is O(dirt), not O(take). (`fire` on a rebuild
+that *did* derive something stays whole — that is the delta-signal
+successor, not this project.)
 
 ## Open questions
 
@@ -214,14 +445,19 @@ move is to leave the wholesale fx row where it is.
    um verbs, which know exactly what they touched. mm's `reload`
    payload stays channel-named; wholesale remains the external
    dirt-everything path.
-3. How do intervals merge? A fat edit produces many; coalescing overlapping
-   ranges per channel keeps the set small, but the closure must run
-   *after* the merge, not before.
+3. How do intervals merge? **Resolved** (§ Implementation plan,
+   phase 1): coalesce per channel at seed time; each consuming stage
+   closes the merged set against its own ordering — closure after
+   merge, since merging can pull a new anchor into range.
 4. Is `noteLive` still the right carrier between fx and its downstream
-   readers (`tails`, `pbs`, `pcs`)? Its current virtue — one gate, no
-   cross-stage dirt plumbing — is worth preserving if the interval can
-   ride it.
+   readers (`tails`, `pbs`, `pcs`)? **Resolved** (§ Implementation
+   plan, phase 5): yes — a skipped producer's existing output feeds
+   `predicted` verbatim, so `noteLive`'s contents are unchanged and no
+   cross-stage dirt plumbing appears.
 5. Which index answers raw-order anchor queries? Tails/seats/PCs close
    to raw-order neighbours (delay can reorder onsets between frames),
    and nothing persistent indexes that — the tail walk's ppq-sorted
-   groups are per-pass transients.
+   groups are per-pass transients. **Needed at phase 4** (the interval
+   tail walk). Candidate: mm's per-channel index — array order is
+   raw-ppq ascending after reindex — with the per-pass sorted groups as
+   fallback.
