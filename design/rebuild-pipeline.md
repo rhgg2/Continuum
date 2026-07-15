@@ -148,6 +148,37 @@ An edge absent from this table is incidental: a phase touching those
 stages may reorder freely, and must add a row if it creates a new
 dependency.
 
+## Stage returns: shaped by producer
+
+Blackboard → returns has a degenerate outcome: the shared table
+reshuffled into long positional parameter lists — signatures grow, no
+structure gained (`rebuildPbs(noteLive, pbChains, pbBase)` is the
+style, already in the tree). The measured dataflow says this is
+avoidable: the `fx` blackboard is five point-to-point channels in one
+bag — every field has exactly one producer, and no stage consumes
+more than two:
+
+| field | producer | consumers |
+|---|---|---|
+| `noteExisting` | internals | fx expansion |
+| `ccExisting` | ccs | regionPark (mutates), fx expansion |
+| `noteLive` | fx expansion | tails, pbs, pcs |
+| `pbChains` | fx expansion | pbs |
+| `pbBase` | fx expansion | pbs |
+
+The rules that keep returns from degenerating:
+
+- **A stage returns one record of what it produced**; consumers take
+  the records they read. fx expansion returns one record carrying
+  `noteLive` + `pbChains` + `pbBase`, and `rebuildPbs` takes that one
+  record, not three positional fields.
+- **No `ctx`.** One aggregate threaded through every stage is the
+  blackboard renamed. A stage's signature carries only what it reads.
+- **Parameter count = in-degree in the derive DAG.** Signature width
+  is a measurement, not noise: a stage ballooning past its DAG row
+  means the edge table above is missing rows — add them; don't hide
+  edges in a bag.
+
 ## Commits: ordered and declared
 
 One terminal commit is not achievable and is not the target. Three
@@ -212,9 +243,11 @@ change, pinned by the existing suite and the phase-0 perf baselines:
 1. **Sources snapshot.** Hoist the pipeline's ds reads into one read
    at the head; stages take what they need as parameters.
 2. **Blackboard → returns.** Replace `fx` with explicit per-stage
-   inputs and outputs. Least mechanical corner: `regionPark`'s
-   `ccExisting` mutation becomes a declared input→output — which is
-   the point; the drift hazard gets a signature.
+   inputs and outputs, shaped per § Stage returns — producer-owned
+   records, no flat parameter lists, no `ctx` bag. Least mechanical
+   corner: `regionPark`'s `ccExisting` mutation becomes a declared
+   input→output — which is the point; the drift hazard gets a
+   signature.
 3. **Zero-write convergence spec.** Pin "a converged pass makes zero
    mm *and ds* writes" by write-counting on both fixtures (the
    `deepEq` guards at the `fxParked`/`prevWindows` assign sites are

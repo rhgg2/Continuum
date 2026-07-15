@@ -47,10 +47,6 @@ local intervals  = require 'intervals'
 local generators = require 'generators'
 local perf       = require 'perf'
 
-local function print(...)
-  return util.print(...)
-end
-
 local mm, cm, ds = (...).mm, (...).cm, (...).ds
 -- Forced note columns per channel absent an extraColumns entry. Main passes nothing (1: every
 -- channel is note-typeable); the pattern editor passes 0 so only channels with data appear.
