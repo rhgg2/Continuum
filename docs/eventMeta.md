@@ -33,7 +33,7 @@ slot families per pool:
 
 - `ctm.<guid>.kb` — the bucket index: which entry buckets exist.
 - `ctm.<guid>.e.<b>` — one `{ [uuid] = fields }` table per bucket
-  (`b = uuid // 256`). projext has no enumerate-by-prefix, so `kb` tracks
+  (`b = uuid // BUCKET`, currently 64). projext has no enumerate-by-prefix, so `kb` tracks
   the buckets; the bucket itself is both the data and its enumeration.
 
 `flush` groups edits by bucket and read-modify-writes only the touched
@@ -64,14 +64,19 @@ measured hot path, so the lineage is worth keeping:
    proportional to the pool's *slot count* (~9KB each at 14k events): a
    384-entry flush cost ~585ms, nearly all of it mirror traffic.
 4. **Entry buckets** (current). The fields live in the bucket, so slots
-   per pool collapse to ~pool/256 + 1: mirror manifests are near-empty
+   per pool collapse to ~pool/BUCKET + 1: mirror manifests are near-empty
    and a flush costs O(touched buckets). With no per-flush O(pool) work
    left there is nothing to cache — the keyset cache and its staleness
    protocol are deleted outright, and an external rewrite (undo/redo)
    is simply visible to the next `load`.
 
-The keystroke bound is one ~256-entry bucket reserialise; `BUCKET` is
-tunable down if that ever shows in the perf tree.
+The keystroke bound is one ~BUCKET-entry bucket reserialise. It showed in
+the perf tree (2026-07-16, macro fixture: ~8ms of pure-Lua decode +
+re-encode per 256-entry, ~19KB bucket — the whole `meta` span of a
+one-note flush), so `BUCKET` dropped 256 → 64. Re-bucketing carries no
+migration (pre-beta): a pool written under the old width self-heals only
+via `saveAll`; until then a flush can leave a uuid's stale entry in its
+old bucket, shadowing nondeterministically at `load`.
 
 ## Pooled vs unpooled
 

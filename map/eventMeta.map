@@ -3,7 +3,7 @@
 
 # Invariants & contracts
   @invariant  per-event metadata keyed by POOL guid, not take — every pooled instance shares one blob  @ 3
-  @invariant  'ctm.<guid>.' slots: kb=live bucket set, e.<b>={[uuid]=fields}, b=uuid//256  @ 4
+  @invariant  'ctm.<guid>.' slots: kb=live bucket set, e.<b>={[uuid]=fields}, b=uuid//64  @ 4
   @invariant  one writer per guid — bucket read-modify-write loses concurrent same-guid updates  @ 5
   @invariant  stores opaque field tables; the strip (which fields are metadata) is mm's, never inspected here  @ 6
   @contract  a nil guid is a no-op/empty everywhere — a take with no derivable pool carries no persisted metadata  @ 7
@@ -13,7 +13,7 @@
   @require perf = 'perf'  @ 9
 
 # Private state
-  @state BUCKET = 256  @ 13   -- uuids per entry bucket; an edit rewrites its bucket, never the pool
+  @state BUCKET = 64  @ 13   -- uuids per entry bucket; an edit rewrites its bucket, never the pool
   @state eventMeta = {}  @ 27
   @state fire = util.installHooks(eventMeta)  @ 28
 

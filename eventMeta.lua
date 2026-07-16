@@ -1,7 +1,7 @@
 -- See docs/eventMeta.md for the model.
 
 --invariant: per-event metadata keyed by POOL guid, not take — every pooled instance shares one blob
---invariant: 'ctm.<guid>.' slots: kb=live bucket set, e.<b>={[uuid]=fields}, b=uuid//256
+--invariant: 'ctm.<guid>.' slots: kb=live bucket set, e.<b>={[uuid]=fields}, b=uuid//64
 --invariant: one writer per guid — bucket read-modify-write loses concurrent same-guid updates
 --invariant: stores opaque field tables; the strip (which fields are metadata) is mm's, never inspected here
 --contract: a nil guid is a no-op/empty everywhere — a take with no derivable pool carries no persisted metadata
@@ -10,7 +10,7 @@ local perf = require 'perf'
 
 local ps   = (...).ps
 
-local BUCKET = 256   -- uuids per entry bucket; an edit rewrites its bucket, never the pool
+local BUCKET = 64   -- uuids per entry bucket; an edit rewrites its bucket, never the pool
 
 local function kbSlot(guid)        return 'ctm.' .. guid .. '.kb'      end
 local function bucketSlot(guid, b) return 'ctm.' .. guid .. '.e.' .. b end
