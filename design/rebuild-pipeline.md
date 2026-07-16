@@ -77,14 +77,21 @@ Consequences:
 
 - **Columns are logical-only.** Whatever lands in `channels[].columns`
   is already projected. Interval materialisation (phase 3) clones and
-  projects in a stage-local scratch list and splices only logical
-  events; `delayC`/`endppqC` are computed at the projection point,
-  where raw is still in hand.
+  projects at ingestion and splices only logical events;
+  `delayC`/`endppqC` are stamped in two moments — at ingestion from
+  the mm raw in hand, re-stamped by the walk where it moved or
+  clipped, since give-way and clip are post-walk facts. One standing
+  carve-out: raw-sourced PAs carry no `ppqL` and ride through on raw
+  ppq; the splice preserves it.
 - **Raw lives in stage-local working sets.** Stages that consume raw
   order (the tail walk's groups, seat reconciliation) read raw-frame
-  working structures, never columns. `interval-dirt.md` open question
-  5's raw-order anchor query and this law share one answer: the
-  raw-order source that serves interval closure serves the walk.
+  working structures, never columns. The working sets are built from
+  mm — the persistent raw store — never retained as fields on column
+  events: a retained raw field is a hand-synced cache with a
+  silent-stale failure mode. `interval-dirt.md` open question 5's
+  raw-order anchor query and this law share one answer (resolved
+  there): the raw-order source that serves interval closure serves
+  the walk.
 - **Carry-forward is preserved by construction.** Today a carried
   column is "already logical" by a per-channel argument
   (`docs/trackerManager.md` § Derivation dirt); under the law it is
@@ -226,7 +233,8 @@ restructured by nobody.
 | zero-write convergence spec | pre-phase |
 | mid-pipeline ds write timing: audit non-tm subscribers | pre-phase |
 | intent/baseline key split | pre-phase (doc + read sites); phase 3 owns the `prevWindows` carry |
-| frame law: project-before-splice; raw working sets | phase 3 (columns/projection); phase 4 (walk's raw-order source) |
+| frame law: project-before-splice; the mm-sourced raw working set | phase 3 (columns, both projection moments, scratch build); phase 4 (narrows the scratch to the closed region) |
+| `rebuildPCs`' raw column reads → the raw working set | phase 3 (permanent: phase 6 is profile-gated) |
 | placement fixpoint: gate both scans + convergence argument | phase 3 |
 | `deferred` threading + token read-back → declared commit node | phase 4 |
 | derive-DAG edges kept named as stages are touched | every phase, reviewed against this doc |

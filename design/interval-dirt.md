@@ -375,11 +375,35 @@ The dense take's edit-path `internals` 18.5 + `projLogical` 8.5 +
   closures** — those stages read the fresh clones, so whatever they
   will re-derive must be re-materialised. Anchors resolve against the
   carried columns (uuids survive; § Intervals are event-anchored).
-- **Projection precedes the splice.** Spliced events project in a
-  stage-local scratch list and land already logical: no column ever
+  Splice position at equal `ppqL` is defined and `sortByPPQ` gains a
+  tie-break: chord-mate order must be deterministic or the parity
+  spec's frame comparisons flap.
+- **Projection precedes the splice — in two moments.** Spliced events
+  project at ingestion (`ppq := ppqL`, view end from `endppqL`/OPEN,
+  initial `delayC`/`endppqC` from the mm raw in hand): no column ever
   holds a raw event (`design/rebuild-pipeline.md` § The frame law — no
-  event list is ever part-raw, part-realised). Carried events were
-  logical already, so retention is unchanged.
+  event list is ever part-raw, part-realised). But `delayC`/`endppqC`
+  are post-walk facts — the give-way and the clip — so the walk
+  re-stamps them through scratch backrefs at its write sites, which by
+  I8 touch only the blast radius. `projectLogical` dissolves into
+  these two moments. Carried events were logical already, so retention
+  is unchanged.
+- **The raw working set: scratch-from-mm.** Logical-born columns
+  strand every raw consumer — the tail walk's gather, `rebuildPbs`'
+  lane-1 list, the PA matcher, `rebuildPCs` — so materialisation's
+  counterpart is their replacement: per dirty channel, light records
+  (not clones) built from mm's per-channel index, **minus** members
+  parked this pass, **plus** `restoredNotes` (in columns but absent
+  from mm until the walk's deferred commit), each carrying a backref
+  to its column event for the re-stamping above. `noteLive` unions at
+  the walk, as today. Built whole-channel here — a cheap iteration
+  re-added for the interim — and narrowed to the closed region by
+  phase 4. `rebuildPCs` reads it permanently: phase 6 is
+  profile-gated and may never run. *Alternative rejected:* retaining
+  raw fields on column events — a hand-synced cache of mm with a
+  dual-write invariant at every mm write site, whose failure mode is
+  the silent-stale class this design names the governing risk. mm is
+  already the persistent raw store; read it.
 - **fx windows are carried state**, same regime as columns. A window
   recomputes iff a dirty interval intersects its extent
   (edge-inclusive — deleting the bounding next same-lane onset seeds
@@ -417,10 +441,10 @@ The dense take's edit-path `internals` 18.5 + `projLogical` 8.5 +
 The dense take's edit-path `tails` ~14 (§ phase 0; the draft's 33.5
 was a cold/GC-inflated run). Tails close per the crux row — [prev onset,
 next onset], same-lane + same-pitch, raw order — and the walk's groups
-build only over closed intervals. The raw-order anchor query (open q5)
-is needed here; candidate answer: mm's per-channel index, whose array
-order is raw-ppq ascending after reindex, with the per-pass sorted
-groups as fallback.
+build only over closed intervals. The raw-order anchor query is
+phase 3's scratch (open q5, resolved): this phase narrows its build
+from whole channel to the closed region, slicing mm's per-channel
+index between the interval's anchors.
 
 This is where the exempt cascade arrives for real: `collisionsResolved`
 becomes a seed source for the next maintenance pass, the signal owes
@@ -518,8 +542,8 @@ successor, not this project.)
    cross-stage dirt plumbing appears.
 5. Which index answers raw-order anchor queries? Tails/seats/PCs close
    to raw-order neighbours (delay can reorder onsets between frames),
-   and nothing persistent indexes that — the tail walk's ppq-sorted
-   groups are per-pass transients. **Needed at phase 4** (the interval
-   tail walk). Candidate: mm's per-channel index — array order is
-   raw-ppq ascending after reindex — with the per-pass sorted groups as
-   fallback.
+   and nothing persistent indexes that. **Resolved** (§ Implementation
+   plan, phase 3): the raw working set, built per pass from mm's
+   per-channel index — array order is raw-ppq ascending after
+   reindex — whole-channel at phase 3, narrowed to the closed region
+   at phase 4.
