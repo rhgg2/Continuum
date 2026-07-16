@@ -2,13 +2,13 @@
 @deps ec, grid, tm, cm, currentRpb, getCtx, getLength, edit, aliases, fx
 
 # Invariants & contracts
-  @invariant  clipboard persists via REAPER ExtState under ('rdm','clipboard'), serialised by util.serialise
-  @invariant  clip rows are 0-relative to the clip's top (row=0 is first row of selection); paste re-bases against current cursor row
-  @invariant  single vs multi mode is decided by selected-col count: c1==c2 -> single, otherwise multi
-  @invariant  single.type ∈ { 'note', '7bit', 'pb' } — note/vel split decided at copy by region's part1
-  @invariant  multi.cols carry chanDelta from leftmost source channel; cursor's channel becomes the leftmost destination
-  @invariant  CLIP_RESERVED keys are stripped at copy; CLIP_ARTIFACTS (row/endRow) are stripped at paste; everything else (including custom metadata) round-trips
-  @invariant  velEvent is the only collector that synthesises a clip event rather than cloning the source — vel-mode pastes must not carry note metadata onto cc destinations
+  @invariant  clipboard persists via REAPER ExtState under ('rdm','clipboard'), serialised by util.serialise  @ 4
+  @invariant  clip rows are 0-relative to the clip's top (row=0 is first row of selection); paste re-bases against current cursor row  @ 5
+  @invariant  single vs multi mode is decided by selected-col count: c1==c2 -> single, otherwise multi  @ 6
+  @invariant  single.type ∈ { 'note', '7bit', 'pb' } — note/vel split decided at copy by region's part1  @ 7
+  @invariant  multi.cols carry chanDelta from leftmost source channel; cursor's channel becomes the leftmost destination  @ 8
+  @invariant  CLIP_RESERVED keys are stripped at copy; CLIP_ARTIFACTS (row/endRow) are stripped at paste; everything else (including custom metadata) round-trips  @ 9
+  @invariant  velEvent is the only collector that synthesises a clip event rather than cloning the source — vel-mode pastes must not carry note metadata onto cc destinations  @ 10
 
 # Imports
   @require util = 'util'  @ 11
@@ -32,21 +32,21 @@
   @fn save(clip)  @ 47-49
   @fn load()  @ 51-55
   @fn collect()  @ 58-168
-      @contract  nil if the resolved selection is empty; single-col → { mode='single', type, ... }; multi-col → { mode='multi', cols=[...] }.
+      @contract  nil if the resolved selection is empty; single-col → { mode='single', type, ... }; multi-col → { mode='multi', cols=[...] }.  @ 57
   @fn refusePaste(chan, evType, lane, cc, startRow, numRows)  @ 173-180
       -- One footprint cell per destination row, fed to aliases() so a paste covering
       -- >=2 instances of one group is refused in global mode (decision 5). Mirrors the
       -- shiftEvents gate; see design/group-aware-editing.md § Injectivity predicate.
   @fn pasteVelocities(events, dstCol, startppq, endppq)  @ 183-224
-      @contract  carry-forward over note-ons in region (clip val updates currentVel, then writes onto next note-ons); pass 2 may emit PA events on sustain rows when cm.polyAftertouch is set
+      @contract  carry-forward over note-ons in region (clip val updates currentVel, then writes onto next note-ons); pass 2 may emit PA events on sustain rows when cm.polyAftertouch is set  @ 182
   @fn pasteSingle(clip)  @ 227-317
-      @contract  dispatches by (clip.type, dstCol.type, cursorPart): note->note(pitch), 7bit->note(vel) via pasteVelocities, pb->pb, 7bit->cc/at/pc; mismatched combos silently no-op.
+      @contract  dispatches by (clip.type, dstCol.type, cursorPart): note->note(pitch), 7bit->note(vel) via pasteVelocities, pb->pb, 7bit->cc/at/pc; mismatched combos silently no-op.  @ 226
   @fn pasteMulti(clip)  @ 320-438
-      @contract  resolves each clip col against cursor's chan via chanDelta; out-of-range channels and missing destinations skip silently; bails entirely if startType=='note' but cursor isn't on a note col.
+      @contract  resolves each clip col against cursor's chan via chanDelta; out-of-range channels and missing destinations skip silently; bails entirely if startType=='note' but cursor isn't on a note col.  @ 319
   @fn pasteClip(clip)  @ 440-445
   @fn trimTop(clip, trim)  @ 449-469
       -- A note whose start row falls within the trimmed band is dropped entirely.
-      @contract  mutates clip in place; survives both modes; used by duplicate-up at row 0 to keep selection-following behaviour cumulative
+      @contract  mutates clip in place; survives both modes; used by duplicate-up at row 0 to keep selection-following behaviour cumulative  @ 447
 
 # Public API (clipboard:*)
   @api clipboard:collect()  @ 474

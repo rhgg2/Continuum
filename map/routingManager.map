@@ -2,13 +2,13 @@
 @deps ds
 
 # Invariants & contracts
-  @invariant  id is a track/fx GUID string — opaque to callers, stable across reload
-  @invariant  stateless; fx/bus meta are project-scope ds keys, so they ride ds's undo mirror
-  @invariant  non-native record fields are metadata; rm persists them (see docs/routingManager.md)
+  @invariant  id is a track/fx GUID string — opaque to callers, stable across reload  @ 3
+  @invariant  stateless; fx/bus meta are project-scope ds keys, so they ride ds's undo mirror  @ 4
+  @invariant  non-native record fields are metadata; rm persists them (see docs/routingManager.md)  @ 5
 
 # Shapes
-  @shape  fx = { id=guid, ident=string, fxType=string, name=string, ins=int, outs=int, inNames={str,...}, outNames={str,...}, pinMaps={ins={[port]={pair,...}}, outs=...}, midi={inBus,outBus,inDisabled,outDisabled} }  -- ident JS-normalised; midi only for VST/AU/CLAP; rm:fx adds trackId
-  @shape  send = { to=guid, kind='audio'|'midi', gain=number, srcChan=int, dstChan=int, pos='preFx'|'preFader'|'postFader' }  -- track output routing; no id
+  @shape  fx = { id=guid, ident=string, fxType=string, name=string, ins=int, outs=int, inNames={str,...}, outNames={str,...}, pinMaps={ins={[port]={pair,...}}, outs=...}, midi={inBus,outBus,inDisabled,outDisabled} }  -- ident JS-normalised; midi only for VST/AU/CLAP; rm:fx adds trackId  @ 335
+  @shape  send = { to=guid, kind='audio'|'midi', gain=number, srcChan=int, dstChan=int, pos='preFx'|'preFader'|'postFader' }  -- track output routing; no id  @ 424
 
 # Imports
   @require util = 'util'  @ 7
@@ -20,7 +20,7 @@
   @state installedFxCache = nil  @ 15   -- reaper's installed-FX set is fixed at runtime
   @state BANK2 = 0x1000000  @ 54
   @state midiCache = {}  @ 149
-      @invariant  midiCache[fxGuid]=midi; serves reads, gates no-op writes, pruned when fx leaves
+      @invariant  midiCache[fxGuid]=midi; serves reads, gates no-op writes, pruned when fx leaves  @ 146
   @state b64alpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123...  @ 170
   @state b64dec = {}  @ 171
   @state SENDMODE_TO_POS = { [0] = 'postFader', [1] = 'preFx', [3] = 'preFader' }  @ 428
@@ -143,7 +143,7 @@
   @fn writeMainSend(track, ms)  @ 678-686
   @fn paramsByName(track, fxIdx)  @ 692-705
   @fn writeParams(track, fxIdx, params)  @ 708-715
-      @contract  params keyed by display name; an unknown name raises
+      @contract  params keyed by display name; an unknown name raises  @ 707
   @fn readParams(track, fxIdx)  @ 718-724
       -- Live { [name] = value } for every named param — the read counterpart to writeParams.
   @fn routingIdxOf(track, fxIdx)  @ 728-735
@@ -154,57 +154,57 @@
 
 # Public API (rm:*)
   @api rm:trackLabels()  @ 769-781
-      @contract  lightweight {id, name, number, isMaster} per project track + master; no fx/sends/chunk reads.
+      @contract  lightweight {id, name, number, isMaster} per project track + master; no fx/sends/chunk reads.  @ 768
   @api rm:tracks()  @ 783-797
   @api rm:track(id)  @ 800-807
-      @contract  full record for one track by id (single-track rm:tracks()); nil if the id is gone
+      @contract  full record for one track by id (single-track rm:tracks()); nil if the id is gone  @ 799
   @api rm:fxIds(id)  @ 811-821
-      @contract  ordered live fx ids for a track via TrackFX — no chunk read; nil if the id is gone
-      @contract  second return: { [id] = ident } over the same chain
+      @contract  ordered live fx ids for a track via TrackFX — no chunk read; nil if the id is gone  @ 809
+      @contract  second return: { [id] = ident } over the same chain  @ 810
   @api rm:reaperTrack(id)  @ 824-826
-      @contract  raw MediaTrack handle for id — escape hatch for reaper ops rm doesn't model; nil if gone
+      @contract  raw MediaTrack handle for id — escape hatch for reaper ops rm doesn't model; nil if gone  @ 823
   @api rm:fxTrack(id)  @ 829-831
-      @contract  live MediaTrack hosting fx id, resolved without reading its record/chunk; nil if gone
+      @contract  live MediaTrack hosting fx id, resolved without reading its record/chunk; nil if gone  @ 828
   @api rm:masterId()  @ 834-837
-      @contract  the master track's guid; resolves master without an rm:tracks() scan
+      @contract  the master track's guid; resolves master without an rm:tracks() scan  @ 833
   @api rm:addTrack(t)  @ 839-859
   @api rm:assignTrack(id, t)  @ 861-867
   @api rm:deleteTrack(id)  @ 869-872
   @api rm:setSendGain(srcId, dstId, gain)  @ 876-887
-      @contract  targeted live D_VOL on the audio send srcId→dstId; false if no such send is live.
-      @contract  the partial write assignTrack{sends} (full-replace) can't serve — for live gain pokes.
+      @contract  targeted live D_VOL on the audio send srcId→dstId; false if no such send is live.  @ 874
+      @contract  the partial write assignTrack{sends} (full-replace) can't serve — for live gain pokes.  @ 875
   @api rm:addFx(trackId, t)  @ 889-903
   @api rm:assignFx(id, t)  @ 905-923
   @api rm:rewritePins(id, pinMaps)  @ 927-930
       -- Undo-free pin re-assert (no transaction; muted fx stash-divert may touch meta):
       -- repairs the identity-OR a same-cycle I_NCHAN grow stamps onto a just-written pin. See docs/wiringManager.md § Pin re-assert after grow.
   @api rm:meta(store, id)  @ 933-937
-      @contract  read a named meta store ('fx'|'bus'): whole blob, or one entry when id given
+      @contract  read a named meta store ('fx'|'bus'): whole blob, or one entry when id given  @ 932
   @api rm:assignMeta(store, id, meta)  @ 940-942
-      @contract  write a named meta store: nil deletes store[id], else patch-merge (util.REMOVE to clear)
+      @contract  write a named meta store: nil deletes store[id], else patch-merge (util.REMOVE to clear)  @ 939
   @api rm:writeChainMidi(trackId, writes)  @ 946-971
-      @contract  batch per-FX MIDI routing for one track in one chunk Get+Set; writes={{id,midi},...};
-      @contract  drops writes the cache says are current; all-unchanged skips the chunk read entirely
+      @contract  batch per-FX MIDI routing for one track in one chunk Get+Set; writes={{id,midi},...};  @ 944
+      @contract  drops writes the cache says are current; all-unchanged skips the chunk read entirely  @ 945
   @api rm:deleteFx(id)  @ 973-976
   @api rm:fx(id)  @ 979-991
-      @contract  fx record by id (ports, names, pinMaps, midi, trackId); nil if gone. Params separate.
+      @contract  fx record by id (ports, names, pinMaps, midi, trackId); nil if gone. Params separate.  @ 978
   @api rm:params(id)  @ 995-998
-      @contract  live { [name] = value } param values for the fx by id; nil if gone.
-      @contract  the mutable control-state counterpart to the structural rm:fx record.
+      @contract  live { [name] = value } param values for the fx by id; nil if gone.  @ 993
+      @contract  the mutable control-state counterpart to the structural rm:fx record.  @ 994
   @api rm:setMuted(fxId, on)  @ 1003-1023
-      @contract  silence/relight an fx. Muted: the silencing side's live pins are cleared
-      @contract  (input for a processor, output for a generator), the real pinout stashed in
-      @contract  fx-meta + reported up (wire kept); writes to that side divert to the stash.
+      @contract  silence/relight an fx. Muted: the silencing side's live pins are cleared  @ 1000
+      @contract  (input for a processor, output for a generator), the real pinout stashed in  @ 1001
+      @contract  fx-meta + reported up (wire kept); writes to that side divert to the stash.  @ 1002
   @api rm:muted(fxId)  @ 1026-1029
-      @contract  true iff fxId is currently muted; false for a live or absent fx.
+      @contract  true iff fxId is currently muted; false for a live or absent fx.  @ 1025
   @api rm:setBypassed(fxId, on)  @ 1032-1035
-      @contract  bypass = REAPER-native FX enable (pass-through, topology-safe, not in the snapshot).
+      @contract  bypass = REAPER-native FX enable (pass-through, topology-safe, not in the snapshot).  @ 1031
   @api rm:bypassed(fxId)  @ 1038-1041
-      @contract  true iff fxId is bypassed (REAPER-disabled); false for an enabled or absent fx.
+      @contract  true iff fxId is bypassed (REAPER-disabled); false for an enabled or absent fx.  @ 1037
   @api rm:showFx(id)  @ 1044-1049
-      @contract  floats the fx window for id; false if the fx is no longer live
+      @contract  floats the fx window for id; false if the fx is no longer live  @ 1043
   @api rm:installedFx()  @ 1052-1063
-      @contract  enumerates reaper.EnumInstalledFX once, memoised; the set is runtime-fixed
+      @contract  enumerates reaper.EnumInstalledFX once, memoised; the set is runtime-fixed  @ 1051
   @api rm:transaction(label, fn)  @ 1065-1071
 
 # Uses (outbound edges)

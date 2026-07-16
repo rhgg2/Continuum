@@ -2,20 +2,20 @@
 @deps cm, cmgr, facade, am
 
 # Invariants & contracts
-  @invariant  av owns arrange-page state — cursor, scroll, selection, paletteSlot; page renders.
-  @invariant  page builds am and injects it; av owns the ref — all mutations route through av.
-  @invariant  av speaks no ImGui — modifiers arrive as plain booleans; av works in QN/rows only.
-  @invariant  cursor/scroll are in-memory module-locals; only beatPerRow persists via cm.
-  @invariant  cursorRow is integer rows; cursorCol is 0-based track index. qn = row * beatPerRow.
-  @invariant  gridRows/gridCols set by the page each frame; followViewport runs on every cursor move.
-  @invariant  av registers arrange-scope command bodies; page owns key bindings and createSlot.
-  @invariant  selection is a per-session set of take handles; setFocus/focus are single-element.
-  @invariant  paletteSlot is per-session (0..61 or nil) — palette rename/delete; not cursorCol.
-  @invariant  edit cmds target via actionTargets; off-screen + nothing selected = no-op.
-  @invariant  drop0..dropZ place a fresh instance at the cursor and advance cm.arrangeAdvanceBy rows.
-  @invariant  arrangeAdvanceBy0..9 (Ctrl+digit) set the advance step.
-  @invariant  drop on an empty slot is a no-op; new takes inherit the slot's instance length.
-  @invariant  drop over a take starting at the cursor overwrites it; drops never stack.
+  @invariant  av owns arrange-page state — cursor, scroll, selection, paletteSlot; page renders.  @ 4
+  @invariant  page builds am and injects it; av owns the ref — all mutations route through av.  @ 5
+  @invariant  av speaks no ImGui — modifiers arrive as plain booleans; av works in QN/rows only.  @ 6
+  @invariant  cursor/scroll are in-memory module-locals; only beatPerRow persists via cm.  @ 7
+  @invariant  cursorRow is integer rows; cursorCol is 0-based track index. qn = row * beatPerRow.  @ 8
+  @invariant  gridRows/gridCols set by the page each frame; followViewport runs on every cursor move.  @ 9
+  @invariant  av registers arrange-scope command bodies; page owns key bindings and createSlot.  @ 10
+  @invariant  selection is a per-session set of take handles; setFocus/focus are single-element.  @ 11
+  @invariant  paletteSlot is per-session (0..61 or nil) — palette rename/delete; not cursorCol.  @ 12
+  @invariant  edit cmds target via actionTargets; off-screen + nothing selected = no-op.  @ 153
+  @invariant  drop0..dropZ place a fresh instance at the cursor and advance cm.arrangeAdvanceBy rows.  @ 258
+  @invariant  arrangeAdvanceBy0..9 (Ctrl+digit) set the advance step.  @ 259
+  @invariant  drop on an empty slot is a no-op; new takes inherit the slot's instance length.  @ 260
+  @invariant  drop over a take starting at the cursor overwrites it; drops never stack.  @ 261
 
 # Imports
   @require util = 'util'  @ 14
@@ -66,7 +66,7 @@
       -- when on-screen. Empty (no-op) when nothing's held and the cursor is off.
   @fn singleTarget()  @ 133-136
   @fn moveCursorBy(dRow, dCol)  @ 139-141
-      @invariant  cursor-nav steps whole rows/cols; only negative coords clamp. See docs/arrangeView.md.
+      @invariant  cursor-nav steps whole rows/cols; only negative coords clamp. See docs/arrangeView.md.  @ 138
   @fn midiSlots(trackIdx)  @ 144-150
       -- MIDI slots on a track — for the tracker's pickers/nav via the arrange facade.
   -- Take edits — move / resize / delete / dive the action targets
@@ -77,23 +77,23 @@
       -- Apply a uniform shift in travel order so a contiguous block never collides
       -- with an as-yet-unmoved member: forward → highest start first, back → lowest.
   @fn nudgeSelected(direction)  @ 183-190
-      @invariant  nudge steps one row, all-or-nothing; refused if any selected dest start is occupied.
+      @invariant  nudge steps one row, all-or-nothing; refused if any selected dest start is occupied.  @ 182
   @fn resizeSelected(direction)  @ 193-209
-      @invariant  resize writes natural length (±1 bpr, floored 1 bpr). See docs/arrangeView.md § Resize.
+      @invariant  resize writes natural length (±1 bpr, floored 1 bpr). See docs/arrangeView.md § Resize.  @ 192
   @fn deleteSelected()  @ 211-218
   @fn diveSelected()  @ 221-228
-      @invariant  dive follows the grid cursor: track ← cursor; take ← cursor or else restore
+      @invariant  dive follows the grid cursor: track ← cursor; take ← cursor or else restore  @ 220
   @fn selectedTakeProperties()  @ 231-234
-      @invariant  arrangeTakeProperties is MIDI-only + single-target; routes via the tracker façade.
+      @invariant  arrangeTakeProperties is MIDI-only + single-target; routes via the tracker façade.  @ 230
   @fn duplicateSelectedBelow()  @ 237-245
-      @invariant  duplicateBelow: single-target clone at natural end; focus+cursor advance. MIDI-only.
+      @invariant  duplicateBelow: single-target clone at natural end; focus+cursor advance. MIDI-only.  @ 236
   @fn duplicateUnpooledSelectedBelow()  @ 247-256
   @fn dropAt(slotIdx)  @ 262-266
   @fn deleteSelectedAndAdvance()  @ 268-271
   -- Loop + transport — REAPER loop range and playback, driven from the cursor
   @fn setLoopStartHere()  @ 277-282
-      @invariant  setLoopStart/End move one loop endpoint to cursorQN; never inverts the range.
-      @invariant  with no loop yet, defaults are {qn, projectEnd} (start) and {0, qn} (end).
+      @invariant  setLoopStart/End move one loop endpoint to cursorQN; never inverts the range.  @ 275
+      @invariant  with no loop yet, defaults are {qn, projectEnd} (start) and {0, qn} (end).  @ 276
   @fn setLoopEndHere()  @ 284-289
   @fn playFromCursor()  @ 291-293
   @fn clearLoop()  @ 295
@@ -115,39 +115,39 @@
   @api av:focus()  @ 304
   @api av:paletteSlot()  @ 305
   @api av:setCursor(row, col)  @ 308-314
-      @contract  clamps negative coords to 0; clamps cursorCol to maxCol if set; no row upper bound.
+      @contract  clamps negative coords to 0; clamps cursorCol to maxCol if set; no row upper bound.  @ 307
   @api av:scrollBy(dRow, dCol)  @ 318-324
-      @contract  wheel-driven viewport pan, independent of the cursor; cursor stays put.
-      @contract  scroll-right stops once the last column is fully visible (maxCol - gridCols + 1).
+      @contract  wheel-driven viewport pan, independent of the cursor; cursor stays put.  @ 316
+      @contract  scroll-right stops once the last column is fully visible (maxCol - gridCols + 1).  @ 317
   @api av:followsPlay()  @ 326
   @api av:setFollowPlay(on)  @ 327
   @api av:followPlay()  @ 331-350
-      @contract  no-op unless follow is on and transport runs; boundary-scrolls play head into view.
-      @contract  a manual scrollBy suspends follow until the next play-start or a transport seek.
+      @contract  no-op unless follow is on and transport runs; boundary-scrolls play head into view.  @ 329
+      @contract  a manual scrollBy suspends follow until the next play-start or a transport seek.  @ 330
   @api av:setFocus(handle)  @ 353
-      @contract  setFocus(h) makes {h} the selection (nil clears); focus() returns the first handle.
+      @contract  setFocus(h) makes {h} the selection (nil clears); focus() returns the first handle.  @ 352
   @api av:isSelected(handle)  @ 356
-      @contract  isSelected(handle) → true iff that handle is currently selected (no liveness check).
+      @contract  isSelected(handle) → true iff that handle is currently selected (no liveness check).  @ 355
   @api av:addToSelection(handles)  @ 359-363
-      @contract  addToSelection unions handles in (already-present and nil handles skipped).
+      @contract  addToSelection unions handles in (already-present and nil handles skipped).  @ 358
   @api av:toggleSelected(handle)  @ 366-369
-      @contract  toggleSelected adds the handle if absent, removes it if present.
+      @contract  toggleSelected adds the handle if absent, removes it if present.  @ 365
   @api av:selectionSet()  @ 372-376
-      @contract  selectionSet() = {[handle]=true} of live selected takes, for the renderer's highlight.
+      @contract  selectionSet() = {[handle]=true} of live selected takes, for the renderer's highlight.  @ 371
   @api av:setSelection(handles)  @ 379
-      @contract  setSelection replaces the selection with the handle list (nils filtered); [] clears.
+      @contract  setSelection replaces the selection with the handle list (nils filtered); [] clears.  @ 378
   @api av:clearSelection()  @ 380
   @api av:setPaletteSlot(idx)  @ 383-385
-      @contract  setPaletteSlot(nil) clears; numeric values clamp into 0..61 (the base62 slot range).
+      @contract  setPaletteSlot(nil) clears; numeric values clamp into 0..61 (the base62 slot range).  @ 382
   @api av:beatPerRow()  @ 387
   @api av:setBeatPerRow(v)  @ 389-396
-      @contract  clamps to [1/4, 64]; rescales cursorRow to hold its QN, so zoom anchors on the cursor.
+      @contract  clamps to [1/4, 64]; rescales cursorRow to hold its QN, so zoom anchors on the cursor.  @ 388
   @api av:qnToRow(qn)  @ 397
   @api av:rowToQN(row)  @ 398
   @api av:setGridSize(rows, cols)  @ 401-407
-      @contract  page hands over visible cell counts each frame; follows cursor only on resize.
+      @contract  page hands over visible cell counts each frame; follows cursor only on resize.  @ 400
   @api av:setMaxCol(n)  @ 410
-      @contract  page pushes live track count each frame; setCursor clamps cursorCol to it.
+      @contract  page pushes live track count each frame; setCursor clamps cursorCol to it.  @ 409
   @api av:projectTracks()  @ 414
   @api av:tracksTakes(trackIdx)  @ 415
   @api av:columnChanRange(c)  @ 416
@@ -173,28 +173,28 @@
   @api av:setLoopRangeQN(lo, hi)  @ 444
   @api av:clearLoopRange()  @ 445
   @api av:hitTake(trackIdx, qn, qnPerPx)  @ 451-460
-      @contract  returns take, mode='resizeEnd' within DRAG_EDGE_PX of end, else 'move'; nil if no hit.
-      @contract  end-edge band clamps to half the take so short takes stay movable; qnPerPx scales px→QN.
+      @contract  returns take, mode='resizeEnd' within DRAG_EDGE_PX of end, else 'move'; nil if no hit.  @ 449
+      @contract  end-edge band clamps to half the take so short takes stay movable; qnPerPx scales px→QN.  @ 450
   @api av:dragCandidate(press, mouseQN, snapped)  @ 484-504
-      @contract  returns { ghosts={{take,startQN,lengthQN},…}, fits }; one ghost per selected member.
-      @contract  fits false iff any ghost's destination start is occupied.
-      @contract  move/dup ghost = naturalLenQN; resize ghost grows/shrinks from current rendered length.
+      @contract  returns { ghosts={{take,startQN,lengthQN},…}, fits }; one ghost per selected member.  @ 481
+      @contract  fits false iff any ghost's destination start is occupied.  @ 482
+      @contract  move/dup ghost = naturalLenQN; resize ghost grows/shrinks from current rendered length.  @ 483
   @api av:gutterLoopCand(press, mouseQN, snapped)  @ 507-514
-      @contract  returns { loQN, hiQN } floored to row boxes unless snapped=false; widens to ≥1 row.
+      @contract  returns { loQN, hiQN } floored to row boxes unless snapped=false; widens to ≥1 row.  @ 506
   @api av:createCandidate(press, mouseQN, snapped)  @ 517-522
-      @contract  returns {startQN=press.qn, lengthQN}; end floors to row box if snapped; >=1 row.
+      @contract  returns {startQN=press.qn, lengthQN}; end floors to row box if snapped; >=1 row.  @ 516
   @api av:lassoCandidate(press, mcol, mqn)  @ 525-541
-      @contract  takes intersecting the free press/drag rect (colFrac x QN); returns bounds + handles.
+      @contract  takes intersecting the free press/drag rect (colFrac x QN); returns bounds + handles.  @ 524
   @api av:commitDrag(press, cand)  @ 562-579
-      @contract  group drag moves/dups the whole selection; single drag keeps focus, dup reselects copy.
+      @contract  group drag moves/dups the whole selection; single drag keeps focus, dup reselects copy.  @ 561
   -- Slot operations — the page's modal commits these
   @api av:renameSlot(trackIdx, slotIdx, name)  @ 583-585
   @api av:createSlot(trackIdx, qnPos, lengthQN, name)  @ 588-598
-      @contract  mints a MIDI slot via am, palette-focuses it, dives the tracker onto it; nil if am refused.
+      @contract  mints a MIDI slot via am, palette-focuses it, dives the tracker onto it; nil if am refused.  @ 587
   @api av:deleteSlot(trackIdx, slotIdx)  @ 600-603
   -- Boot + reveal — the page interface delegates here
   @api av:seedCursor()  @ 608-612
-      @contract  seeds the cursor from am:initialCursor (selected take, else edit cursor); no selection.
+      @contract  seeds the cursor from am:initialCursor (selected take, else edit cursor); no selection.  @ 607
 
 # Uses (outbound edges)
   @use call    am:clearLoopRange  @ clearLoop:295 clearLoopRange:445

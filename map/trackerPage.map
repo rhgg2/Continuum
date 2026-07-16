@@ -3,9 +3,9 @@
 
 # Imports
   @require util = 'util'  @ 11
-      @contract  mm/tm/gm local, only tv leaves; take lifecycle drives tm, view-state drives tv
-      @contract  the bound take follows the arrange cursor; renderBody rebinds, then arms the external-mutation watcher
-      @contract  render hooks delegate to trackerRender; lifecycle (bind/unbind/dropTake/reload) is native here
+      @contract  mm/tm/gm local, only tv leaves; take lifecycle drives tm, view-state drives tv  @ 8
+      @contract  the bound take follows the arrange cursor; renderBody rebinds, then arms the external-mutation watcher  @ 9
+      @contract  render hooks delegate to trackerRender; lifecycle (bind/unbind/dropTake/reload) is native here  @ 10
 
 # Constructed sub-instances
   @construct mm  = util.instantiate('midiManager')  @ 31
@@ -28,27 +28,27 @@
       -- trackerMode is wiring-derived per bind, not a per-frame probe — follows the bound
       -- take, not the arrange cursor. See docs/trackerManager.md § PC synthesis under trackerMode.
   @fn takeHash()  @ 54-58
-      @reaper  MIDI_GetHash on the bound take — the external-mutation watcher baseline
+      @reaper  MIDI_GetHash on the bound take — the external-mutation watcher baseline  @ 53
 
 # Public API (tp:*)
   -- Take lifecycle (take ops on tm, view-state on tv)
   @api tp:currentTake()  @ 68
   @api tp:bind(t)  @ 71-77
-      @contract  with a take, bind it on tm and seed tv; no arg = activation, resolve the selection
+      @contract  with a take, bind it on tm and seed tv; no arg = activation, resolve the selection  @ 70
   @api tp:unbind()  @ 78
   @api tp:dropTake()  @ 81
-      @contract  if take is destroyed, detach tm and blank the grid. Distinct from unbind.
+      @contract  if take is destroyed, detach tm and blank the grid. Distinct from unbind.  @ 80
   @api tp:reloadFromReaper()  @ 84
-      @contract  for coord's external-mutation watcher; re-reads the bound take, no swap
+      @contract  for coord's external-mutation watcher; re-reads the bound take, no swap  @ 83
   -- Selection — the tracker owns (track, slot) in cm; tv holds the nav + resolve,
   @api tp:bindFromSelection()  @ 90-105
-      @contract  rebind to the selection take on change. See docs/trackerPage.md § Selection
+      @contract  rebind to the selection take on change. See docs/trackerPage.md § Selection  @ 89
   -- Page interface — render delegates to the renderer; the watcher brackets the frame
   @api tp:toolbarSegments()  @ 154
   @api tp:renderStatusBar(ctx)  @ 155
   @api tp:focusState()  @ 156
   @api tp:renderBody(ctx, w, h, dispatch)  @ 159-163
-      @contract  resolve selection, draw, then snapshot the take hash as next frame's watcher baseline
+      @contract  resolve selection, draw, then snapshot the take hash as next frame's watcher baseline  @ 158
 
 # Uses (outbound edges)
   @use call    cm:get  @ 122

@@ -2,18 +2,18 @@
 @deps cm, ds, sm
 
 # Invariants & contracts
-  @invariant  sv keys against a REAPER track (not a take); cm is rebound only via sv:setTrack
-  @invariant  sv emits no signals — passive state holder polled by the renderer each frame
-  @invariant  sv never speaks REAPER, gmem, or ImGui directly; all side-effects route through sm
-  @invariant  browserPath/selectedFile/previewSource are transient locals; nothing in sv is persisted
-  @invariant  selectedFile mirrors browserPath only when the highlighted item is a file (folders null it)
-  @invariant  previewSource gates auditionCurrent dispatch: 'file' → path branch, 'slot' → currentSample branch
-  @invariant  slot index space is 0..63 (advanceOnLoad scan upper bound)
+  @invariant  sv keys against a REAPER track (not a take); cm is rebound only via sv:setTrack  @ 4
+  @invariant  sv emits no signals — passive state holder polled by the renderer each frame  @ 5
+  @invariant  sv never speaks REAPER, gmem, or ImGui directly; all side-effects route through sm  @ 6
+  @invariant  browserPath/selectedFile/previewSource are transient locals; nothing in sv is persisted  @ 7
+  @invariant  selectedFile mirrors browserPath only when the highlighted item is a file (folders null it)  @ 8
+  @invariant  previewSource gates auditionCurrent dispatch: 'file' → path branch, 'slot' → currentSample branch  @ 9
+  @invariant  slot index space is 0..63 (advanceOnLoad scan upper bound)  @ 10
 
 # Shapes
-  @shape  browserState = { track, currentFolder, browserPath, browserIsFolder, selectedFile, previewSource = 'file'|'slot'|nil }
-  @shape  trackEntry = { track, name }   -- sm:listTracks() element
-  @shape  expanded = { [folderPath]=true } -- open subtrees in the left folder tree (transient)
+  @shape  browserState = { track, currentFolder, browserPath, browserIsFolder, selectedFile, previewSource = 'file'|'slot'|nil }  @ 11
+  @shape  trackEntry = { track, name }   -- sm:listTracks() element  @ 12
+  @shape  expanded = { [folderPath]=true } -- open subtrees in the left folder tree (transient)  @ 22
 
 # Private state
   @state sv = {}  @ 15
@@ -27,47 +27,47 @@
 
 # Public API (sv:*)
   @api sv:setTrack(t)  @ 26-32
-      @contract  idempotent rebind: always re-primes cm.track tier so cache survives a prior cm:setContext(nil) (e.g. tm:bindTake(nil) on page switch)
+      @contract  idempotent rebind: always re-primes cm.track tier so cache survives a prior cm:setContext(nil) (e.g. tm:bindTake(nil) on page switch)  @ 25
   @api sv:getTrack()  @ 33
   @api sv:listTracks()  @ 34
   @api sv:browseRoot()  @ 36-38
-      @contract  resolution order: cm:sampleBrowserRoot → $HOME → '/'; never returns nil
+      @contract  resolution order: cm:sampleBrowserRoot → $HOME → '/'; never returns nil  @ 35
   @api sv:getCurrentFolder()  @ 39
   @api sv:setCurrentFolder(p)  @ 40
   @api sv:setBrowseRoot(path)  @ 42-45
-      @contract  persists at the global tier; resets currentFolder so the new root takes effect immediately
+      @contract  persists at the global tier; resets currentFolder so the new root takes effect immediately  @ 41
   @api sv:isFolderExpanded(p)  @ 46
   @api sv:setFolderExpanded(p, open)  @ 47
   @api sv:getBrowserPath()  @ 48
   @api sv:isBrowserFolder()  @ 49
   @api sv:setBrowserItem(path, isFolder)  @ 51-56
-      @contract  folder selection clears selectedFile and leaves previewSource untouched; file selection sets both selectedFile and previewSource='file'
+      @contract  folder selection clears selectedFile and leaves previewSource untouched; file selection sets both selectedFile and previewSource='file'  @ 50
   @api sv:setSlotFocus()  @ 58
   @api sv:canAuditionCurrent()  @ 61-64
-      @contract  slot branch needs a track; file branch needs a selected file (track is checked downstream by auditionPath)
+      @contract  slot branch needs a track; file branch needs a selected file (track is checked downstream by auditionPath)  @ 60
   @api sv:auditionCurrent()  @ 67-72
-      @contract  dispatches to slot/path branch by previewSource; defaults to slot 0 if cm is absent
+      @contract  dispatches to slot/path branch by previewSource; defaults to slot 0 if cm is absent  @ 66
   @api sv:setSelectedFile(p)  @ 73
   @api sv:getSelectedFile()  @ 74
   @api sv:loadSelectedIntoCurrent()  @ 78-92
-      @contract  returns false on no selection or sm:assign failure; on success may advance currentSample
-      @contract  advance is a no-op when no empty slot exists in range (currentSample left unchanged)
+      @contract  returns false on no selection or sm:assign failure; on success may advance currentSample  @ 76
+      @contract  advance is a no-op when no empty slot exists in range (currentSample left unchanged)  @ 77
   @api sv:auditionPath(path)  @ 95-99
-      @contract  requires both path and track; returns false otherwise without invoking sm:previewPath
+      @contract  requires both path and track; returns false otherwise without invoking sm:previewPath  @ 94
   @api sv:auditionSlot(idx)  @ 102-105
-      @contract  requires track; bounds=1 (honours SH_START/SH_END trim)
+      @contract  requires track; bounds=1 (honours SH_START/SH_END trim)  @ 101
   @api sv:clearCurrentSlot()  @ 108-111
-      @contract  no-op when cm is unbound
+      @contract  no-op when cm is unbound  @ 107
   @api sv:stopAudition()  @ 113-115
   -- Slot mutations — the renderer routes JSFX-side edits through here, never sm
   @api sv:isLive()  @ 120-122
-      @contract  live only when a track is bound and it carries the sampler FX
+      @contract  live only when a track is bound and it carries the sampler FX  @ 119
   @api sv:setTrim(slot, startFrames, endFrames)  @ 124-126
   @api sv:setName(slot, name)  @ 128-130
   @api sv:stageInto(slot, srcPath)  @ 133-135
-      @contract  stages srcPath into the slot's JSFX mailbox without touching cm; false on failure
+      @contract  stages srcPath into the slot's JSFX mailbox without touching cm; false on failure  @ 132
   @api sv:syncSlot(stagedTrack, slot)  @ 138-140
-      @contract  takes a track arg; PIP revert restores track captured at trigger, not sv's current one
+      @contract  takes a track arg; PIP revert restores track captured at trigger, not sv's current one  @ 137
 
 # Uses (outbound edges)
   @use call cm:get  @ browseRoot:37 auditionCurrent:69 loadSelectedIntoCurrent:80,82 clearCurrentSlot:110

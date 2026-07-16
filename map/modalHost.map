@@ -2,15 +2,15 @@
 @deps ctx, chrome
 
 # Invariants & contracts
-  @invariant  one modalHost per coordinator; threaded into every page that opens modals
-  @invariant  state.kind picks the render; built-ins are 'prompt' and 'confirm'; pages register custom kinds at load time
+  @invariant  one modalHost per coordinator; threaded into every page that opens modals  @ 3
+  @invariant  state.kind picks the render; built-ins are 'prompt' and 'confirm'; pages register custom kinds at load time  @ 4
 
 # Shapes
-  @shape  state = { kind, title, callback?, onClose?, flags?, ... per-kind fields }
+  @shape  state = { kind, title, callback?, onClose?, flags?, ... per-kind fields }  @ 5
 
 # Imports
   @require ImGui = 'imgui'  @ 7
-      @contract  render(state, close) draws inside an active BeginPopupModal; close(invoke, ...args) captures+clears state, closes popup, pcalls callback if invoke, then pcalls onClose unconditionally
+      @contract  render(state, close) draws inside an active BeginPopupModal; close(invoke, ...args) captures+clears state, closes popup, pcalls callback if invoke, then pcalls onClose unconditionally  @ 6
 
 # Private state
   @state POPUP_ID = '###modalHost'  @ 12

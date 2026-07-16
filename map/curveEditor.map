@@ -2,20 +2,20 @@
 @deps ctx, chrome, page
 
 # Invariants & contracts
-  @invariant  anchors never cross; t is clamped strictly between immediate neighbours before any onMove/onMoveFree fire
-  @invariant  editor owns no domain data; events/projections/eval/callbacks all supplied by host per frame
-  @invariant  transient state (hover, segHover, segPin, preview, previewSuppress, drag) lives in factory closure; segPin and drag straddle frames and are invalidated when host's dragId changes
-  @invariant  snapped move (no shift) constrains t to integer ticks; shift-held free move uses FREE_EPS_T margin against neighbours
-  @invariant  exactly one of {move-drag, hover, insert-preview, segHover} is active per frame; later branches are gated on earlier ones being absent
-  @contract  evalAtT mutates the enclosing segIdx; safe across forward and backward t sequences but not concurrent with itself
-  @contract  inert drag consumes input but never invokes callbacks; pure ImGui empty-area-move suppression
+  @invariant  anchors never cross; t is clamped strictly between immediate neighbours before any onMove/onMoveFree fire  @ 4
+  @invariant  editor owns no domain data; events/projections/eval/callbacks all supplied by host per frame  @ 5
+  @invariant  transient state (hover, segHover, segPin, preview, previewSuppress, drag) lives in factory closure; segPin and drag straddle frames and are invalidated when host's dragId changes  @ 6
+  @invariant  snapped move (no shift) constrains t to integer ticks; shift-held free move uses FREE_EPS_T margin against neighbours  @ 7
+  @invariant  exactly one of {move-drag, hover, insert-preview, segHover} is active per frame; later branches are gated on earlier ones being absent  @ 8
+  @contract  evalAtT mutates the enclosing segIdx; safe across forward and backward t sequences but not concurrent with itself  @ 82
+  @contract  inert drag consumes input but never invokes callbacks; pure ImGui empty-area-move suppression  @ 271
 
 # Shapes
-  @shape  drag = { kind='move'|'tension'|'inert', id=dragId, idx=number, startMx, startMy, moved=bool, [startMouseT], [startTension, ax, ay, bx, by] }
-  @shape  segPin = { id=dragId, segI=number, mx=number, my=number }
-  @shape  preview = { t=number, val=number }
-  @shape  previewSuppress = { x=number, y=number }
-  @shape  FrameArgs = { rect={x0,yTop,w,h}, vMin, vMax, tMin, tMax, events, tOf=(evt)->t, evalCurve=(A,B,fracT)->val, snap=(t)->snappedT|nil, hovered=bool, dragId, colours=config-names{axis,envelope,anchor,anchorActive}, callbacks={onMove(idx,t,val), onMoveFree(idx,t,val), onInsert(t,val)->newIdx, onDelete(idx), onTension(idx,tau), onCycleShape(idx)} }
+  @shape  drag = { kind='move'|'tension'|'inert', id=dragId, idx=number, startMx, startMy, moved=bool, [startMouseT], [startTension, ax, ay, bx, by] }  @ 9
+  @shape  segPin = { id=dragId, segI=number, mx=number, my=number }  @ 10
+  @shape  preview = { t=number, val=number }  @ 11
+  @shape  previewSuppress = { x=number, y=number }  @ 12
+  @shape  FrameArgs = { rect={x0,yTop,w,h}, vMin, vMax, tMin, tMax, events, tOf=(evt)->t, evalCurve=(A,B,fracT)->val, snap=(t)->snappedT|nil, hovered=bool, dragId, colours=config-names{axis,envelope,anchor,anchorActive}, callbacks={onMove(idx,t,val), onMoveFree(idx,t,val), onInsert(t,val)->newIdx, onDelete(idx), onTension(idx,tau), onCycleShape(idx)} }  @ 35
 
 # Imports
   @require util = 'util'  @ 13
@@ -34,9 +34,9 @@
 
 # Public API (curveEditor:*)
   @api curveEditor:frame(a)  @ 39-340
-      @contract  returns true iff the editor consumed the mouse this frame (host should suppress its own click handling)
-      @contract  callbacks fire synchronously during frame(); host must tolerate re-entrant reads of events on the same frame
-      @contract  host must call frame() inside the window whose drawlist the painter binds; gate a.hovered on its own IsWindowHovered
+      @contract  returns true iff the editor consumed the mouse this frame (host should suppress its own click handling)  @ 36
+      @contract  callbacks fire synchronously during frame(); host must tolerate re-entrant reads of events on the same frame  @ 37
+      @contract  host must call frame() inside the window whose drawlist the painter binds; gate a.hovered on its own IsWindowHovered  @ 38
       · Mouse handling
 
 # Uses (outbound edges)

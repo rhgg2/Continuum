@@ -2,11 +2,11 @@
 @deps ps
 
 # Invariants & contracts
-  @invariant  per-event metadata keyed by POOL guid, not take — every pooled instance shares one blob
-  @invariant  'ctm.<guid>.' slots: kb=live bucket set, e.<b>={[uuid]=fields}, b=uuid//256
-  @invariant  one writer per guid — bucket read-modify-write loses concurrent same-guid updates
-  @invariant  stores opaque field tables; the strip (which fields are metadata) is mm's, never inspected here
-  @contract  a nil guid is a no-op/empty everywhere — a take with no derivable pool carries no persisted metadata
+  @invariant  per-event metadata keyed by POOL guid, not take — every pooled instance shares one blob  @ 3
+  @invariant  'ctm.<guid>.' slots: kb=live bucket set, e.<b>={[uuid]=fields}, b=uuid//256  @ 4
+  @invariant  one writer per guid — bucket read-modify-write loses concurrent same-guid updates  @ 5
+  @invariant  stores opaque field tables; the strip (which fields are metadata) is mm's, never inspected here  @ 6
+  @contract  a nil guid is a no-op/empty everywhere — a take with no derivable pool carries no persisted metadata  @ 7
 
 # Imports
   @require util = 'util'  @ 8
@@ -28,16 +28,16 @@
 
 # Public API (eventMeta:*)
   @api eventMeta:load(guid)  @ 44-51
-      @contract  { [uuid:int] = fields }; empty table if the guid has no metadata
+      @contract  { [uuid:int] = fields }; empty table if the guid has no metadata  @ 43
   @api eventMeta:flush(guid, dirty, deleted)  @ 55-85
-      @contract  batched incremental persist: applies dirty={[uuid]=fields} + deleted={[uuid]=true}
-      @contract  per-modify hot path: read-modify-writes touched buckets only, never the whole pool
+      @contract  batched incremental persist: applies dirty={[uuid]=fields} + deleted={[uuid]=true}  @ 53
+      @contract  per-modify hot path: read-modify-writes touched buckets only, never the whole pool  @ 54
   @api eventMeta:saveAll(guid, byUuid)  @ 88-109
-      @contract  replaces the pool's whole metadata with byUuid={[uuid]=fields}; sweeps uuids no longer present
+      @contract  replaces the pool's whole metadata with byUuid={[uuid]=fields}; sweeps uuids no longer present  @ 87
   @api eventMeta:copyPool(srcGuid, dstGuid)  @ 112-115
-      @contract  forks srcGuid's metadata onto dstGuid (an unpooled clone mints a fresh pool; this seeds it)
+      @contract  forks srcGuid's metadata onto dstGuid (an unpooled clone mints a fresh pool; this seeds it)  @ 111
   @api eventMeta:dropPool(guid)  @ 118-124
-      @contract  forever-deletes a pool's metadata (deleteSlot's keeper removal)
+      @contract  forever-deletes a pool's metadata (deleteSlot's keeper removal)  @ 117
 
 # Signals emitted (via util.installHooks)
   @emits poolsRewound   -- { guids = set }; a REAPER undo rewound these pools' metadata slots   @ 40

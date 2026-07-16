@@ -2,12 +2,12 @@
 @deps cm, ds, eventMeta, cmgr, gui
 
 # Invariants & contracts
-  @invariant  owns the active tracker take; polls REAPER's selection each frame while tracker page is active (sticky on no-item or non-MIDI)
-  @invariant  no teardown path — quit() sets a flag that stops scheduling further defers; REAPER reclaims state on script unload
-  @invariant  each deferred frame xpcalls via coord:run's handler; reaper.defer drops the xpcall
+  @invariant  owns the active tracker take; polls REAPER's selection each frame while tracker page is active (sticky on no-item or non-MIDI)  @ 3
+  @invariant  no teardown path — quit() sets a flag that stops scheduling further defers; REAPER reclaims state on script unload  @ 4
+  @invariant  each deferred frame xpcalls via coord:run's handler; reaper.defer drops the xpcall  @ 5
 
 # Shapes
-  @shape  page = { toolbarSegments(), renderBody(ctx,w,h,dispatch), renderStatusBar(ctx), bind(...), unbind() }
+  @shape  page = { toolbarSegments(), renderBody(ctx,w,h,dispatch), renderStatusBar(ctx), bind(...), unbind() }  @ 284
 
 # Imports
   @require util = 'util'  @ 7
@@ -44,12 +44,12 @@
   @state switcherSeg = { id = 'switcher', render = drawSwitcher }  @ 96
   @state externalCommands = {}  @ 111   -- list of { extKey, command }
   @state coord = {}  @ 286
-      @contract  register instantiates page; first registered becomes active; returns page handle
+      @contract  register instantiates page; first registered becomes active; returns page handle  @ 285
 
 # Private functions
   -- Coordinator
   @fn tick()  @ 63-68
-      @contract  tick() runs once per frame before the page draws; no selection bus here
+      @contract  tick() runs once per frame before the page draws; no selection bus here  @ 62
   @fn drawSwitcher()  @ 70-92
   @fn dispatch(state)  @ 98-105
   -- External commands (REAPER-keymap bridge)
@@ -62,25 +62,25 @@
 # Public API (coord:*)
   @api coord:register(name, moduleName, extra)  @ 288-293
   @api coord:setActive(name)  @ 297-310
-      @contract  setActive(name) no-ops if name==active; else unbind outgoing, swap scope, bind incoming
-      @contract  tracker's no-arg bind resolves its stored selection; renderBody keeps it current
+      @contract  setActive(name) no-ops if name==active; else unbind outgoing, swap scope, bind incoming  @ 295
+      @contract  tracker's no-arg bind resolves its stored selection; renderBody keeps it current  @ 296
   @api coord:returnToArrange()  @ 313-316
-      @contract  tracker back to arrange; no reveal (cursor never left). No-op if arrange unregistered.
+      @contract  tracker back to arrange; no reveal (cursor never left). No-op if arrange unregistered.  @ 312
   @api coord:getFacade(name)  @ 319
-      @contract  resolve a published page facade by name; the contents are owned by the publishing page
+      @contract  resolve a published page facade by name; the contents are owned by the publishing page  @ 318
   @api coord:previousPage()  @ 322
-      @contract  the page active immediately before the current one; closeEditor returns here
+      @contract  the page active immediately before the current one; closeEditor returns here  @ 321
   @api coord:togglePage()  @ 326-334
       -- Cycle tracker → arrange → sample → wiring → tracker. Unregistered pages
       -- are skipped; with ≥1 track every page activates.
   @api coord:reloadAfterExternalMutation()  @ 338-343
-      @contract  invoke after firing a REAPER action that mutates the bound take from inside a frame (Ctrl-Z, Ctrl-Shift-Z). The watcher's end-of-frame baseline would otherwise absorb the mutation; this reloads now so tm/vm stay coherent with the take.
-      @invariant  mirror resync precedes reload — see docs/coordinator.md § Undo mid-frame
+      @contract  invoke after firing a REAPER action that mutates the bound take from inside a frame (Ctrl-Z, Ctrl-Shift-Z). The watcher's end-of-frame baseline would otherwise absorb the mutation; this reloads now so tm/vm stay coherent with the take.  @ 336
+      @invariant  mirror resync precedes reload — see docs/coordinator.md § Undo mid-frame  @ 337
   @api coord:onExternalCommand(extKey, command)  @ 346-348
-      @contract  registers an ExtState key→command bridge polled each frame to fire Continuum commands
+      @contract  registers an ExtState key→command bridge polled each frame to fire Continuum commands  @ 345
   @api coord:quit()  @ 350
   @api coord:run(handler)  @ 352
-      @contract  handler wraps every deferred frame; without it, post-frame-1 errors raise raw dialogs
+      @contract  handler wraps every deferred frame; without it, post-frame-1 errors raise raw dialogs  @ 351
 
 # Uses (outbound edges)
   @use call    ImGui.Begin  @ frame:165

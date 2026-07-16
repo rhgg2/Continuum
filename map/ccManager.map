@@ -1,13 +1,13 @@
 @module ccManager  src=ccManager.lua  loc=52  sha=c1012ac  mode=chunk  self=ccm
 
 # Invariants & contracts
-  @invariant  the node exists iff a producer claims it; release reaps it when the last claim drops
-  @contract  claim pins the node at index 0, records the producer's claim, returns 0
-  @contract  release drops the claim; returns the surviving node index, or nil if it reaped/absent
-  @reaper  TrackFX_AddByName/CopyToTrack/Delete; node = fx_type JS with fx_ident 'Continuum CC'
+  @invariant  the node exists iff a producer claims it; release reaps it when the last claim drops  @ 4
+  @contract  claim pins the node at index 0, records the producer's claim, returns 0  @ 6
+  @contract  release drops the claim; returns the surviving node index, or nil if it reaped/absent  @ 7
+  @reaper  TrackFX_AddByName/CopyToTrack/Delete; node = fx_type JS with fx_ident 'Continuum CC'  @ 8
 
 # Shapes
-  @shape  claims = { [producer:str] = { [trackGuid:str] = MediaTrack } }
+  @shape  claims = { [producer:str] = { [trackGuid:str] = MediaTrack } }  @ 5
 
 # Private state
   @state CC_ADDNAME = 'JS:Continuum CC'  @ 10

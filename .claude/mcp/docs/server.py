@@ -227,7 +227,7 @@ _DECL = re.compile(
 # than-doc-grounded variants. `@deps` is rendered on its own line in the header.
 _ANN = re.compile(
     r'^(?P<indent>\s*)@(?P<kind>\??(?:invariant|contract|shape|emits|reaper|deps|exercises|surface|harness))\s+'
-    r'(?P<body>.*)$'
+    r'(?P<body>.*?)(?:\s+@\s+(?P<line>\d+))?\s*$'
 )
 # `@use <kind> <target>  @ <caller>:<line>[,<line>] [<caller>:<line>...]`
 # Top-level edges (e.g. requires) appear as bare line numbers, no caller.
@@ -565,7 +565,9 @@ def map_query(
                 if len(results) >= max_results:
                     truncated = True
                     break
-                results.append(f"{src}  @{raw_kind}  {body}")
+                ann_line = ma.group("line")
+                loc = f"{src}:{ann_line}" if ann_line else src
+                results.append(f"{loc}  @{raw_kind}  {body}")
                 continue
 
         if truncated:

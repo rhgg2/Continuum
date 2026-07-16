@@ -119,7 +119,7 @@
 # Public API (temperEditor:*)
   -- Public
   @api temperEditor:open(name)  @ 753-756
-      @contract  open(name?) selects entry; default is active tuning, 12EDO treated as nil.
+      @contract  open(name?) selects entry; default is active tuning, 12EDO treated as nil.  @ 752
   @api temperEditor:hasSelection()  @ 757
   @api temperEditor:render(w, h)  @ 758
   @api temperEditor:libraryDescriptor()  @ 759

@@ -1,7 +1,7 @@
 @module pageBindings  src=pageBindings.lua  loc=179  sha=4ef168e  mode=chunk
 
 # Shapes
-  @shape  { scope = { command = { keySpec, ... } } } -- keySpec is ImGui.Key_* or { Key, Mod }
+  @shape  { scope = { command = { keySpec, ... } } } -- keySpec is ImGui.Key_* or { Key, Mod }  @ 4
 
 # Imports
   @require ImGui = 'imgui'  @ 10

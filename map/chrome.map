@@ -2,17 +2,17 @@
 @deps cm, ctx, uiSize
 
 # Shapes
-  @shape  chrome = { colour(name, scope?)->u32, pushChromeStyles(), popChromeStyles(), pushChromeWindow(), popChromeWindow(), verticalSeparator(), disabledIf(cond,fn), row(h?,fn), checkbox(label,v), radio(label,active), headingLabel(text), screenPainter()->painter}
-  @shape  chrome (pickers) = { makeToolbar()->fn(segments), drawPicker(d), libPicker(key, current, excludeOthers?)->items, pickerIsActive()->bool, resetPickerActive(), requestPickerOpen(kind) }
-  @shape  chrome (shared row primitives) = { fitLabel(text,maxW)->text, rowSelectable(label,sel,flags?)->clicked, treeRow(opts)->{toggled,selected,doubleClicked}, numberStepper(id,value,opts)->changed,value }
-  @shape  pickerSpec = { kind: string, heading: string?, buttonLabel: string, items: [{label, key, group?=int, current?=bool}], onPick: fn(key), onCancel?: fn(), placement?: 'above', width?, minWidth?, maxWidth?, flat?: bool }
-  @shape  palettePaneSpec = { x, y, h, label | {tabs=[{key,label}], activeTab, onTab}, draw = fn(childFocused) }
-  @shape  toolbarSegment = { id: string, render: fn, visible?: fn() -> bool }
+  @shape  chrome = { colour(name, scope?)->u32, pushChromeStyles(), popChromeStyles(), pushChromeWindow(), popChromeWindow(), verticalSeparator(), disabledIf(cond,fn), row(h?,fn), checkbox(label,v), radio(label,active), headingLabel(text), screenPainter()->painter}  @ 3
+  @shape  chrome (pickers) = { makeToolbar()->fn(segments), drawPicker(d), libPicker(key, current, excludeOthers?)->items, pickerIsActive()->bool, resetPickerActive(), requestPickerOpen(kind) }  @ 4
+  @shape  chrome (shared row primitives) = { fitLabel(text,maxW)->text, rowSelectable(label,sel,flags?)->clicked, treeRow(opts)->{toggled,selected,doubleClicked}, numberStepper(id,value,opts)->changed,value }  @ 5
+  @shape  pickerSpec = { kind: string, heading: string?, buttonLabel: string, items: [{label, key, group?=int, current?=bool}], onPick: fn(key), onCancel?: fn(), placement?: 'above', width?, minWidth?, maxWidth?, flat?: bool }  @ 6
+  @shape  palettePaneSpec = { x, y, h, label | {tabs=[{key,label}], activeTab, onTab}, draw = fn(childFocused) }  @ 7
+  @shape  toolbarSegment = { id: string, render: fn, visible?: fn() -> bool }  @ 271
 
 # Imports
   @require ImGui = 'imgui'  @ 10
-      @contract  one chrome instance per coordinator; threaded into every page
-      @invariant  colour cache lives on the chrome instance and is invalidated on cm:configChanged
+      @contract  one chrome instance per coordinator; threaded into every page  @ 8
+      @invariant  colour cache lives on the chrome instance and is invalidated on cm:configChanged  @ 9
   @require painter = 'painter'  @ 11
 
 # Private state
@@ -23,7 +23,7 @@
   @state DROP_ARROW = ' \xe2\x96\xbe'  @ 232
   @state lastToolbarRects = {}  @ 273
   @state toolbarWidths = {}  @ 275
-      @invariant  one page draws per frame; cleared at next toolbar() start — no cross-page collision.
+      @invariant  one page draws per frame; cleared at next toolbar() start — no cross-page collision.  @ 274
   @state toolbarLines = 1  @ 276   -- wrapped-row count from the last toolbar() draw
   @state resetPending = false  @ 277
   @state pickerFilter, pickerCursor = {}, {}  @ 352
@@ -38,7 +38,7 @@
 
 # Private functions
   @fn resolve(key)  @ 20-39
-      @contract  walks colour aliases (see docs/configManager.md) to a terminal atom; outermost alpha override wins; cycles raise with the resolved chain
+      @contract  walks colour aliases (see docs/configManager.md) to a terminal atom; outermost alpha override wins; cycles raise with the resolved chain  @ 19
   @fn scopedKey(name, scope)  @ 45-50
   @fn colour(name, scope)  @ 52-59
   @fn screenPainter()  @ 66
@@ -90,7 +90,7 @@
       -- separators show only when filter is empty.
   -- Palette pane (shared right-hand pane: arrange / wiring / tracker / sampler)
   @fn gridWidth(w)  @ 529
-      @contract  width of the main pane left of the palette; floors at 120.
+      @contract  width of the main pane left of the palette; floors at 120.  @ 528
   @fn paletteHeader(label)  @ 533-549
       -- Hand-drawn header: centred label + 1px divider at headerH; shares HEADER_PAD/HEADER_GAP
       -- with the flanking grid header so dividers align across PANE_GAP. Returns divider screen-y.
@@ -98,7 +98,7 @@
       -- Tabbed header: equal-width cells, active in text ink, rest dimmed (palette.tabInactive).
       -- Dividers run the full header height with a bottom gap; a click fires onTab(key).
   @fn palettePane(spec)  @ 579-596
-      @contract  x/y/h are body-window screen coords at the gap's left edge; draw paints the body.
+      @contract  x/y/h are body-window screen coords at the gap's left edge; draw paints the body.  @ 578
   @fn fitLabel(text, maxW)  @ 599-608
       -- Ellipsis-fit to a fixed pane width; no horizontal scroll exists.
   @fn rowSelectable(label, selected, flags)  @ 612-619
@@ -107,12 +107,12 @@
   @fn treeRow(opts)  @ 631-658
       -- One tree row, sampler-tree style: a draw-list chip in a fixed gutter (never
       -- highlighted), then a selectable label; the row owns its nesting indent.
-      @contract  chip toggles; body click selects and toggles a parent; allowDouble suppresses both
-      @contract  childless rows show blank gutter so labels align across depths
-      @contract  nesting indent = opts.indent (px) if set, else depth × TREE_INDENT
+      @contract  chip toggles; body click selects and toggles a parent; allowDouble suppresses both  @ 628
+      @contract  childless rows show blank gutter so labels align across depths  @ 629
+      @contract  nesting indent = opts.indent (px) if set, else depth × TREE_INDENT  @ 630
   @fn treeHeading(opts)  @ 662-667
       -- Non-selectable tree heading (fx-section labels, group dividers): a dimmed label.
-      @contract  gutter=true aligns text with a same-depth row label, not its chip; else flush indent
+      @contract  gutter=true aligns text with a same-depth row label, not its chip; else flush indent  @ 661
 
 # Uses (outbound edges)
   @use call    ImGui.AlignTextToFramePadding  @ headingLabel:266 drawPicker:409

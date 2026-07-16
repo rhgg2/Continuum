@@ -2,18 +2,18 @@
 @deps cm, ds, chrome, ctx, gui, facade, modalHost
 
 # Invariants & contracts
-  @invariant  editor stores no swing data; swingRead = tier copy of state.name, else merged floor
-  @invariant  all writes go through swingWrite (idempotent); commit() triggers cross-take reswing
-  @invariant  state == nil iff closed; open(name?) re-selects when open; close() is page-driven
-  @invariant  snapshot captured at open() and palette-switch; never mutated; Reset writes a deepClone
-  @invariant  shift is in QN and atom-independent — preserved across atom swap, only re-clamped to the new atom's cap
-  @invariant  on period change shift scales by newPeriod/oldPeriod, holding resolved s = shift/tileQN (and thus slope) constant; then re-clamped
-  @invariant  slider lo/hi = T_tile · {-negRange, +posRange} (asymmetric for shuffle/tilt); Wild unlocks hard, otherwise clamped to ±SWING_SOFT_QN; hi <= 0 freezes the slider
-  @invariant  atom-combo speaks tile-QN (user-period × pulsesPerCycle); writes divide back via periodOverPPC so storage stays user-period
+  @invariant  editor stores no swing data; swingRead = tier copy of state.name, else merged floor  @ 4
+  @invariant  all writes go through swingWrite (idempotent); commit() triggers cross-take reswing  @ 5
+  @invariant  state == nil iff closed; open(name?) re-selects when open; close() is page-driven  @ 6
+  @invariant  snapshot captured at open() and palette-switch; never mutated; Reset writes a deepClone  @ 7
+  @invariant  shift is in QN and atom-independent — preserved across atom swap, only re-clamped to the new atom's cap  @ 8
+  @invariant  on period change shift scales by newPeriod/oldPeriod, holding resolved s = shift/tileQN (and thus slope) constant; then re-clamped  @ 9
+  @invariant  slider lo/hi = T_tile · {-negRange, +posRange} (asymmetric for shuffle/tilt); Wild unlocks hard, otherwise clamped to ±SWING_SOFT_QN; hi <= 0 freezes the slider  @ 10
+  @invariant  atom-combo speaks tile-QN (user-period × pulsesPerCycle); writes divide back via periodOverPPC so storage stays user-period  @ 11
 
 # Shapes
-  @shape  state = { name, tier, snapshot, rpb, wild }  -- composite is NOT cached here
-  @shape  PeriodPreset = { label = string, period = number|{num,den} }  -- period in user-facing QN
+  @shape  state = { name, tier, snapshot, rpb, wild }  -- composite is NOT cached here  @ 12
+  @shape  PeriodPreset = { label = string, period = number|{num,den} }  -- period in user-facing QN  @ 13
 
 # Imports
   @require util = 'util'  @ 14
@@ -44,7 +44,7 @@
       -- Fired on widget release so the project-wide pass runs once per gesture, not per frame.
   @fn meterQN()  @ 55-60
   @fn periodPresetIndex(tileQN)  @ 63-68
-      @contract  returns 0 (not nil) when tileQN matches no preset; callers append a synthetic label in that case
+      @contract  returns 0 (not nil) when tileQN matches no preset; callers append a synthetic label in that case  @ 62
   @fn periodLabel(tileQN)  @ 70-74
   @fn periodOverPPC(period, ppC)  @ 78-82
       -- Preset .period is already a tidy rational; halving it for ppC=2 keeps
@@ -79,15 +79,15 @@
   @fn phaseQN(p)  @ 247
       -- QN value of an optional period-shaped slot (scalar, {n,d}, or nil).
   @fn compositesEqual(a, b)  @ 250-264
-      @contract  compares composite phase, per-factor phase, period, atom and shift — phase fields normalise to QN before comparing, so {1,2} and {2,4} count equal
+      @contract  compares composite phase, per-factor phase, period, atom and shift — phase fields normalise to QN before comparing, so {1,2} and {2,4} count equal  @ 249
   @fn swingWrite(composite)  @ 267-270
-      @contract  sole write path; idempotent on equal composites; refresh via setSwingComposite
+      @contract  sole write path; idempotent on equal composites; refresh via setSwingComposite  @ 266
   @fn cloneForEdit()  @ 274-278
       -- Editable clone with a guaranteed factors[] array, so write paths can
       -- index it without re-checking. Phase is preserved as-is.
   @fn patchFactor(i, patch)  @ 280-285
   @fn addFactor()  @ 288-292
-      @contract  default new factor is identity (atom='id', shift=0, period=1) — visually inert until edited
+      @contract  default new factor is identity (atom='id', shift=0, period=1) — visually inert until edited  @ 287
   @fn removeFactor(i)  @ 294-298
   @fn moveFactor(i, dir)  @ 300-308
   @fn drawFactorRow(i, f, numColW, n)  @ 310-409
@@ -104,7 +104,7 @@
       -- snapshot so Reset/dirty-check stay coherent; tier defaults to the home tier.
   @fn deleteFromTier(level, name)  @ 438-443
   @fn promote(name)  @ 446-451
-      @contract  promote copies the composite to global; the project copy survives, still shadowing it
+      @contract  promote copies the composite to global; the project copy survives, still shadowing it  @ 445
   @fn resolvedSlots()  @ 476-483
       -- Resolved take and channel slots for the open-default and the
       -- library-row shortcut buttons. 'identity' at the take tier is treated
@@ -135,8 +135,8 @@
 # Public API (swingEditor:*)
   -- Public
   @api swingEditor:open(name)  @ 720-730
-      @contract  open(name?) selects entry; default prefers chan override → take swing → nil.
-      @contract  when already open, re-selects resolved target; snapshot captured at selection time.
+      @contract  open(name?) selects entry; default prefers chan override → take swing → nil.  @ 718
+      @contract  when already open, re-selects resolved target; snapshot captured at selection time.  @ 719
   @api swingEditor:render(w, h)  @ 732
   @api swingEditor:renderToolbar()  @ 736-743
       -- Tools row (Reset / Rows-per-qn / Wild / Composite-phase) drawn into the page

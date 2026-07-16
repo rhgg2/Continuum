@@ -3,9 +3,9 @@
 
 # Imports
   @require util = 'util'  @ 12
-      @contract  constructs the substack (am local, only av leaves); the renderer is handed av, never am
-      @contract  arrange is project-wide — bind() takes no take and never re-keys cm
-      @contract  render hooks delegate to arrangeRender; seedCursor drive av directly
+      @contract  constructs the substack (am local, only av leaves); the renderer is handed av, never am  @ 9
+      @contract  arrange is project-wide — bind() takes no take and never re-keys cm  @ 10
+      @contract  render hooks delegate to arrangeRender; seedCursor drive av directly  @ 11
 
 # Constructed sub-instances
   @construct am = util.instantiate('arrangeManager')  @ 23
@@ -18,10 +18,10 @@
 # Public API (ap:*)
   -- Page lifecycle — arrange is project-wide, so bind takes no take
   @api ap:bind()  @ 34
-      @contract  bind takes no take — arrange is project-wide; coord may call with nil or a take.
+      @contract  bind takes no take — arrange is project-wide; coord may call with nil or a take.  @ 33
   @api ap:unbind()  @ 35
   @api ap:seedCursorFromReaper()  @ 38
-      @contract  seeds the cursor from am:initialCursor (selected take, else edit cursor); no selection.
+      @contract  seeds the cursor from am:initialCursor (selected take, else edit cursor); no selection.  @ 37
   -- Arrange service surface — av passthroughs
   -- Page interface — render delegates to the renderer
   @api ap:toolbarSegments()  @ 62

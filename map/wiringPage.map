@@ -3,9 +3,9 @@
 
 # Imports
   @require util = 'util'  @ 12
-      @contract  constructs the substack (rm/wm local, only wv leaves); the renderer is handed wv, never wm/rm
-      @contract  wiring is project-wide — bind() takes no take and never re-keys cm; tracker take and sampler track are unaffected
-      @contract  render hooks delegate to wiringRender; lifecycle (unbind/enableLive) drives wv/wr
+      @contract  constructs the substack (rm/wm local, only wv leaves); the renderer is handed wv, never wm/rm  @ 9
+      @contract  wiring is project-wide — bind() takes no take and never re-keys cm; tracker take and sampler track are unaffected  @ 10
+      @contract  render hooks delegate to wiringRender; lifecycle (unbind/enableLive) drives wv/wr  @ 11
 
 # Constructed sub-instances
   @construct rm = util.instantiate('routingManager')  @ 23
@@ -19,12 +19,12 @@
 # Public API (wp:*)
   -- Page lifecycle — wiring is project-wide, so bind takes no take
   @api wp:bind()  @ 48
-      @contract  bind takes no take — wiring is project-wide. coord may call with no args (or a take, ignored).
+      @contract  bind takes no take — wiring is project-wide. coord may call with no args (or a take, ignored).  @ 47
   @api wp:unbind()  @ 49
   @api wp:enableLive()  @ 52
-      @contract  turn on live recompile — every wiringChanged drives a diff+apply, plus one immediate reconcile pass to sync REAPER with the persisted graph at boot. Idempotent. Called once from continuum after registration.
+      @contract  turn on live recompile — every wiringChanged drives a diff+apply, plus one immediate reconcile pass to sync REAPER with the persisted graph at boot. Idempotent. Called once from continuum after registration.  @ 51
   @api wp:syncExternal()  @ 55
-      @contract  reread the graph when REAPER routing changed under us; active page only (coord-gated)
+      @contract  reread the graph when REAPER routing changed under us; active page only (coord-gated)  @ 54
   -- Page interface — render delegates to the renderer
   @api wp:toolbarSegments()  @ 58
   @api wp:renderBody(ctx, w, h, dispatch)  @ 59

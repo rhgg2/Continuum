@@ -1,9 +1,9 @@
 @module scratch  src=scratch.lua  loc=72  sha=ca82072  mode=namespace  self=scratch
 
 # Invariants & contracts
-  @invariant  identity is the projext guid (continuum_wiring/scratch), not module state — instances interchangeable
-  @invariant  the track is always hidden + muted; re-located by guid each call (REAPER handles go stale)
-  @contract  id()/track() mint on first use; peek() never mints
+  @invariant  identity is the projext guid (continuum_wiring/scratch), not module state — instances interchangeable  @ 4
+  @invariant  the track is always hidden + muted; re-located by guid each call (REAPER handles go stale)  @ 5
+  @contract  id()/track() mint on first use; peek() never mints  @ 6
 
 # Module-level constants
   @const PROJ = 0  @ 8
@@ -22,11 +22,11 @@
 
 # Public API (scratch.*)
   @api scratch.peek()  @ 52-57
-      @contract  persisted guid + live handle, or nil if none minted yet. Never mints.
+      @contract  persisted guid + live handle, or nil if none minted yet. Never mints.  @ 51
   @api scratch.id()  @ 60-63
-      @contract  the scratch track's guid, minted (hidden + muted) on first use; persisted in projext.
+      @contract  the scratch track's guid, minted (hidden + muted) on first use; persisted in projext.  @ 59
   @api scratch.track()  @ 66-70
-      @contract  the scratch track handle; mints on first use.
+      @contract  the scratch track handle; mints on first use.  @ 65
 
 # REAPER API surface
   @reaper CountTracks

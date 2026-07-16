@@ -3,9 +3,9 @@
 
 # Imports
   @require fs = 'fs'  @ 11
-      @contract  builds the substack (sm/sv local, only sv leaves); lifecycle drives sm/sv directly
-      @contract  owns its active track: the renderer's picker sets sv
-      @contract  render hooks delegate to sampleRender
+      @contract  builds the substack (sm/sv local, only sv leaves); lifecycle drives sm/sv directly  @ 8
+      @contract  owns its active track: the renderer's picker sets sv  @ 9
+      @contract  render hooks delegate to sampleRender  @ 10
   @require util = 'util'  @ 12
 
 # Constructed sub-instances
@@ -21,15 +21,15 @@
   @api sp:bind()  @ 37-44
       -- The shared cm is re-keyed by whichever page is active, so re-assert ours each
       -- time even when sv already remembers a track -- a prior tracker unbind nulled it.
-      @contract  bind re-keys cm to the page's track on every activation (seeds a default on the first)
+      @contract  bind re-keys cm to the page's track on every activation (seeds a default on the first)  @ 34
   @api sp:setTrack(track)  @ 47-49
-      @contract  setTrack re-keys cm to the given track via sv; the sample facade and the picker drive it
+      @contract  setTrack re-keys cm to the given track via sv; the sample facade and the picker drive it  @ 46
   @api sp:listTracks()  @ 52
-      @contract  listTracks proxies sm:listTracks via sv — coord queries this to seed its active sampler track on first activation
+      @contract  listTracks proxies sm:listTracks via sv — coord queries this to seed its active sampler track on first activation  @ 51
   @api sp:unbind()  @ 55
-      @contract  unbind reverts any preview-in-place but leaves cm and sv state alone — the next bind can resume on the same track
+      @contract  unbind reverts any preview-in-place but leaves cm and sv state alone — the next bind can resume on the same track  @ 54
   @api sp:tick()  @ 58-61
-      @contract  tick runs every frame regardless of active page; watchPath then sm:tick
+      @contract  tick runs every frame regardless of active page; watchPath then sm:tick  @ 57
   -- Page interface — render delegates to the renderer
   @api sp:toolbarSegments()  @ 66
   @api sp:renderBody(ctx, w, h, dispatch)  @ 67

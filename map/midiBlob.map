@@ -1,19 +1,19 @@
 @module midiBlob  src=midiBlob.lua  loc=292  sha=15a343d  mode=namespace  self=midiBlob
 
 # Invariants & contracts
-  @invariant  idx is the 0-based REAPER per-type index; note idx counts note-ons, text idx skips CCBZ
-  @reaper  blob = repeat(i4 offset, B flags, s4 msg) + trailing 12-byte all-notes-off tail (excluded)
-  @reaper  flags bit1=muted; bits4-6=cc shape; status byte classifies; CCBZ rides FF-0F after its cc
-  @invariant  parse(serialise(x))==x; coincident events may reorder, per-type record lists preserved
-  @invariant  note onsets unique per (ppq,chan,pitch); collision is upstream bug, warn+write
-  @reaper  matches MIDI_SetAllEvts format; tail at max(endPpq, last-event ppq) (default: last event)
+  @invariant  idx is the 0-based REAPER per-type index; note idx counts note-ons, text idx skips CCBZ  @ 13
+  @reaper  blob = repeat(i4 offset, B flags, s4 msg) + trailing 12-byte all-notes-off tail (excluded)  @ 14
+  @reaper  flags bit1=muted; bits4-6=cc shape; status byte classifies; CCBZ rides FF-0F after its cc  @ 15
+  @invariant  parse(serialise(x))==x; coincident events may reorder, per-type record lists preserved  @ 141
+  @invariant  note onsets unique per (ppq,chan,pitch); collision is upstream bug, warn+write  @ 142
+  @reaper  matches MIDI_SetAllEvts format; tail at max(endPpq, last-event ppq) (default: last event)  @ 143
 
 # Shapes
-  @shape  parse(blob) -> notes, ccs, texts, passthrough
-  @shape  note = { idx, evType='note', ppq, endppq, chan(1..16), pitch, vel, [muted] }
-  @shape  cc = { idx, ppq, evType, chan(1..16), [cc|pitch], [val|vel], shape, [tension], [muted] }
-  @shape  text = { idx, ppq, eventtype, msg }  -- 15=notation, -1=sysex; CCBZ tension folds onto its cc
-  @shape  serialise(notes, ccs, texts, passthrough, endPpq?) -> blob   -- inverse of parse; endPpq places the tail
+  @shape  parse(blob) -> notes, ccs, texts, passthrough  @ 9
+  @shape  note = { idx, evType='note', ppq, endppq, chan(1..16), pitch, vel, [muted] }  @ 10
+  @shape  cc = { idx, ppq, evType, chan(1..16), [cc|pitch], [val|vel], shape, [tension], [muted] }  @ 11
+  @shape  text = { idx, ppq, eventtype, msg }  -- 15=notation, -1=sysex; CCBZ tension folds onto its cc  @ 12
+  @shape  serialise(notes, ccs, texts, passthrough, endPpq?) -> blob   -- inverse of parse; endPpq places the tail  @ 140
 
 # Imports
   @const util = 'util'  @ 17

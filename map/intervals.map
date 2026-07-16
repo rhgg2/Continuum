@@ -1,11 +1,11 @@
 @module intervals  src=intervals.lua  loc=125  sha=922a349  mode=namespace  self=intervals
 
 # Shapes
-  @shape  interval = { loPpqL, hiPpqL: number; loUuid, hiUuid: string? } -- nil uuid edge = open toward channel start/end
+  @shape  interval = { loPpqL, hiPpqL: number; loUuid, hiUuid: string? } -- nil uuid edge = open toward channel start/end  @ 5
 
 # Imports
   @const util = 'util'  @ 6
-      @invariant  pure module: no state; a set is `true` (whole channel) or a ppqL-ascending, non-overlapping list
+      @invariant  pure module: no state; a set is `true` (whole channel) or a ppqL-ascending, non-overlapping list  @ 4
 
 # Module-level constants
   @const intervals = {}  @ 8
@@ -15,21 +15,21 @@
   -- Construction
   @api intervals.seed(loPpqL, hiPpqL, loUuid, hiUuid)  @ 15-21
   @api intervals.merge(set)  @ 24-47
-      @contract  coalesces edge-inclusive touching/overlapping intervals; returns `true` past MAX; input not mutated
+      @contract  coalesces edge-inclusive touching/overlapping intervals; returns `true` past MAX; input not mutated  @ 23
   -- Queries
   @api intervals.intersects(set, lo, hi)  @ 52-58
-      @contract  edge-inclusive overlap of [lo, hi] against any interval; `true` set always intersects
+      @contract  edge-inclusive overlap of [lo, hi] against any interval; `true` set always intersects  @ 51
   -- Closure
   @api intervals.close(set, sortedEvents, opts)  @ 66-108
       -- Widen each seed to its stage's anchoring onsets: forward to the next in-group onset (all stages),
       -- and back to the previous in-group onset when opts.stepBack (tails only). See design § The crux.
       -- Does not mutate set: each stage closes the same merged seed set against its own ordering.
-      @contract  opts = { key = fn(e)->groupKey|nil, stepBack: bool }; events in the stage's consumption order
+      @contract  opts = { key = fn(e)->groupKey|nil, stepBack: bool }; events in the stage's consumption order  @ 65
   -- Reload fold
   @api intervals.absorbSeeds(dirt, seeds, payloadChans)  @ 115-123
       -- Reload fold: a seeded chan narrows to the merge of its seeds; an unseeded payload chan
       -- (mm-internal writes -- dedup, collision backstop) still folds whole. See design/interval-dirt.md § phase 2.
-      @contract  mutates+returns dirt; seeded chan -> merge(seeds[chan]), unseeded payload chan -> true
+      @contract  mutates+returns dirt; seeded chan -> merge(seeds[chan]), unseeded payload chan -> true  @ 114
 
 # Uses (outbound edges)
   @use call    util.add  @ merge:29,41 close:104

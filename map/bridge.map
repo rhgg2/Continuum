@@ -1,15 +1,15 @@
 @module bridge  src=bridge.lua  loc=211  sha=af57f2a  mode=chunk  self=bridge
 
 # Invariants & contracts
-  @contract  tick() is the only entry; execute/render/scan are internal. Deps: { env, spoolDir? }.
-  @invariant  a bad chunk never escapes — load failure and runtime error both land in the res file
-  @invariant  request file is read then deleted BEFORE execute, so a mid-chunk crash cannot replay it
-  @invariant  chunk env = deps.env over a _G fallback (stdlib+reaper); chunk global writes stay in env
-  @invariant  dormant until the spool dir exists (re-stat ~60 frames); once enabled, stays enabled
-  @reaper  EnumerateFiles caches per-dir; each scan invalidates with idx -1, else stale/deleted reqs linger
+  @contract  tick() is the only entry; execute/render/scan are internal. Deps: { env, spoolDir? }.  @ 3
+  @invariant  a bad chunk never escapes — load failure and runtime error both land in the res file  @ 4
+  @invariant  request file is read then deleted BEFORE execute, so a mid-chunk crash cannot replay it  @ 5
+  @invariant  chunk env = deps.env over a _G fallback (stdlib+reaper); chunk global writes stay in env  @ 6
+  @invariant  dormant until the spool dir exists (re-stat ~60 frames); once enabled, stays enabled  @ 7
+  @reaper  EnumerateFiles caches per-dir; each scan invalidates with idx -1, else stale/deleted reqs linger  @ 8
 
 # Shapes
-  @shape  response = "status: ok|error\nms: N\n--- value ---\n<render>\n--- print ---\n<buffered>\n"
+  @shape  response = "status: ok|error\nms: N\n--- value ---\n<render>\n--- print ---\n<buffered>\n"  @ 9
 
 # Private state
   @state deps = ... or {}  @ 11

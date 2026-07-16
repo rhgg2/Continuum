@@ -1,18 +1,18 @@
 @module groups  src=groups.lua  loc=135  sha=fcf8d06  mode=namespace  self=groups
 
 # Invariants & contracts
-  @invariant  evType is identity, never merged or overridden; changing type is delete+create upstream
-  @invariant  the core is field-agnostic -- it merges every event key except evType and never interprets one
-  @invariant  an assign is sticky -- local value always wins; a drifted base only raises a conflict flag, it does not change the resolved value
-  @invariant  the region is the identity, not an event set; membership is the rect predicate (time span x per-channel streamId set), so streamId must be index-free (evType+key) and survive column insert/reorder
+  @invariant  evType is identity, never merged or overridden; changing type is delete+create upstream  @ 9
+  @invariant  the core is field-agnostic -- it merges every event key except evType and never interprets one  @ 10
+  @invariant  an assign is sticky -- local value always wins; a drifted base only raises a conflict flag, it does not change the resolved value  @ 11
+  @invariant  the region is the identity, not an event set; membership is the rect predicate (time span x per-channel streamId set), so streamId must be index-free (evType+key) and survive column insert/reorder  @ 12
 
 # Shapes
-  @shape  group = { rect, events = { [vuid] = groupEvt } }
-  @shape  rect = { ppq, dur, chanLo, streams = { [chanOffset] = { [streamId]=true } } }  -- chanHi derived from max chanOffset
-  @shape  groupEvt = { evType, <scalar fields: chanDelta,key,ppq,dur,pitch,vel,detune,delay,val,shape,tension,muted...> }
-  @shape  instanceState = { assigns={[vuid]={[field]={base,value}}}, adds={[vuid]=groupEvt}, deletes={[vuid]=true} }
-  @shape  conflict = { [vuid] = { [field] = { base, group, value } } }
-  @shape  op = { op='add'|'del'|'set', vuid, [uuid], [groupEvt] }
+  @shape  group = { rect, events = { [vuid] = groupEvt } }  @ 3
+  @shape  rect = { ppq, dur, chanLo, streams = { [chanOffset] = { [streamId]=true } } }  -- chanHi derived from max chanOffset  @ 4
+  @shape  groupEvt = { evType, <scalar fields: chanDelta,key,ppq,dur,pitch,vel,detune,delay,val,shape,tension,muted...> }  @ 5
+  @shape  instanceState = { assigns={[vuid]={[field]={base,value}}}, adds={[vuid]=groupEvt}, deletes={[vuid]=true} }  @ 6
+  @shape  conflict = { [vuid] = { [field] = { base, group, value } } }  @ 7
+  @shape  op = { op='add'|'del'|'set', vuid, [uuid], [groupEvt] }  @ 8
 
 # Imports
   @const util = 'util'  @ 14
@@ -24,21 +24,21 @@
 
 # Public API (groups.*)
   @api groups.resolve(groupEvt, assign)  @ 19-24
-      @contract  (groupEvt, assign?) -> resolved event, 'synced'|'overridden'. Local value wins; per the sticky-assign invariant a drifted base raises no conflict here.
+      @contract  (groupEvt, assign?) -> resolved event, 'synced'|'overridden'. Local value wins; per the sticky-assign invariant a drifted base raises no conflict here.  @ 18
   @api groups.project(group, instance)  @ 28-69
-      @contract  (group, instance?) -> desired, conflicts, states. desired[vuid] is provenance-free intent (dur is the authored ceiling; nil dur = open); states[vuid] is synced|overridden|conflicted. Recomputed from scratch each call (terminal set, never a diff). Carries intent only -- tm's universal tail pass derives every realised note-off, so project never clips or grows a dur.
+      @contract  (group, instance?) -> desired, conflicts, states. desired[vuid] is provenance-free intent (dur is the authored ceiling; nil dur = open); states[vuid] is synced|overridden|conflicted. Recomputed from scratch each call (terminal set, never a diff). Carries intent only -- tm's universal tail pass derives every realised note-off, so project never clips or grows a dur.  @ 27
   @api groups.reconcile(desired, current)  @ 72-88
-      @contract  (desired, current) where current[vuid]={uuid,groupEvt} -> op list; a move/resize is one `set`, never del+add.
+      @contract  (desired, current) where current[vuid]={uuid,groupEvt} -> op list; a move/resize is one `set`, never del+add.  @ 71
   @api groups.deriveAssign(groupEvt, field, value)  @ 91-93
-      @contract  (groupEvt?, field, value) -> assign rec capturing the live group value as the merge base at fork time (nil groupEvt -> nil base).
+      @contract  (groupEvt?, field, value) -> assign rec capturing the live group value as the merge base at fork time (nil groupEvt -> nil base).  @ 90
   @api groups.streamId(evt)  @ 96-98
-      @contract  stream identity = evType..':'..(key or 0) (note->lane, cc->cc-number); index-free per the region invariant.
+      @contract  stream identity = evType..':'..(key or 0) (note->lane, cc->cc-number); index-free per the region invariant.  @ 95
   @api groups.shiftStream(sid, delta)  @ 101-106
-      @contract  shift a note stream's lane by δ (note:L -> note:L+δ); non-notes pass through.
+      @contract  shift a note stream's lane by δ (note:L -> note:L+δ); non-notes pass through.  @ 100
   @api groups.laneId(evt)  @ 109-111
-      @contract  group-frame lane identity = (chanDelta or 0)..'/'..streamId; per-channel, so two channels at one lane+onset are distinct slots.
+      @contract  group-frame lane identity = (chanDelta or 0)..'/'..streamId; per-channel, so two channels at one lane+onset are distinct slots.  @ 108
   @api groups.inRect(rect, ppq, chanOffset, evt)  @ 114-118
-      @contract  membership predicate; ppq/chanOffset are anchor-relative (caller does the anchor maths). True iff 0<=ppq<rect.dur AND rect.streams[chanOffset][streamId(evt)]. rect.ppq is the placement origin, not the membership origin.
+      @contract  membership predicate; ppq/chanOffset are anchor-relative (caller does the anchor maths). True iff 0<=ppq<rect.dur AND rect.streams[chanOffset][streamId(evt)]. rect.ppq is the placement origin, not the membership origin.  @ 113
   @api groups.tintKey(state)  @ 124-126
   @api groups.regionKey(colour, kind)  @ 127-129
   @api groups.outlineKey(state, colour)  @ 130-133

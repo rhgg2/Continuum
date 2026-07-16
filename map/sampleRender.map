@@ -2,29 +2,29 @@
 @deps cm, ds, cmgr, chrome, gui, sv
 
 # Invariants & contracts
-  @invariant  render + input only — handed sv only, never sm; slot mutations route through sv
-  @invariant  only frame-local caches + ephemeral drag/preview/rename state live here
-  @invariant  slot index space is linear 0..N_SLOTS-1 (N_SLOTS=64); the slot grid is a 2-col ImGui table (right-aligned index, stretch label) — no row/col addressing
-  @invariant  strip coordinates are audio sample-frames (0..frames-1); pixel x is derived only at draw via frameToX, and InputInt round-trips frames directly
-  @invariant  peakCache/durCache are file-path-keyed and survive across frames; peakCache entries are dropped whenever the requested column count changes (window resize) so a strip never reuses peaks computed at a foreign width
-  @invariant  browser keyboard shortcuts (browserUp/Preview/Assign, slotNext/Prev) are dispatched only when the sample-scope is active in cmgr; the middle pane disables ImGui nav so its own arrow handling produces a single focus rectangle
-  @invariant  preview-in-place leaves ds:slotEntries untouched while the JSFX slot is staged
-  @invariant  sv:syncSlot pushes ds's truth back on revert
-  @invariant  drag.handle is set on the first active frame (closest of start/end to the mouse wins) and held until the button releases — the choice does not switch mid-drag
-  @contract  samplePage (the controller) owns the stack (sm/sv) and hands this renderer sv only
-  @contract  left=chrome.gridWidth(w): browser row over a strip, both width gridW
-  @contract  slots fill chrome.palettePane (full height) on the right
-  @contract  1px painter dividers: tree|files, browser|strip
-  @contract  verticals stop GAP/2 short of the horizontal rule; strip bottom-pad clears status bar
-  @contract  whole body is wrapped in chrome.disabledIf(not isLive) — when the bound track has no live sampler FX the entire interactive surface is greyed and inert
-  @contract  pip auto-revert is checked at end of body: justTriggered=true edge consumes the trigger frame, after which any browser/slot-focus change or stray mouse click reverts
+  @invariant  render + input only — handed sv only, never sm; slot mutations route through sv  @ 3
+  @invariant  only frame-local caches + ephemeral drag/preview/rename state live here  @ 4
+  @invariant  slot index space is linear 0..N_SLOTS-1 (N_SLOTS=64); the slot grid is a 2-col ImGui table (right-aligned index, stretch label) — no row/col addressing  @ 5
+  @invariant  strip coordinates are audio sample-frames (0..frames-1); pixel x is derived only at draw via frameToX, and InputInt round-trips frames directly  @ 6
+  @invariant  peakCache/durCache are file-path-keyed and survive across frames; peakCache entries are dropped whenever the requested column count changes (window resize) so a strip never reuses peaks computed at a foreign width  @ 7
+  @invariant  browser keyboard shortcuts (browserUp/Preview/Assign, slotNext/Prev) are dispatched only when the sample-scope is active in cmgr; the middle pane disables ImGui nav so its own arrow handling produces a single focus rectangle  @ 8
+  @invariant  preview-in-place leaves ds:slotEntries untouched while the JSFX slot is staged  @ 9
+  @invariant  sv:syncSlot pushes ds's truth back on revert  @ 10
+  @invariant  drag.handle is set on the first active frame (closest of start/end to the mouse wins) and held until the button releases — the choice does not switch mid-drag  @ 11
+  @contract  samplePage (the controller) owns the stack (sm/sv) and hands this renderer sv only  @ 12
+  @contract  left=chrome.gridWidth(w): browser row over a strip, both width gridW  @ 446
+  @contract  slots fill chrome.palettePane (full height) on the right  @ 447
+  @contract  1px painter dividers: tree|files, browser|strip  @ 448
+  @contract  verticals stop GAP/2 short of the horizontal rule; strip bottom-pad clears status bar  @ 449
+  @contract  whole body is wrapped in chrome.disabledIf(not isLive) — when the bound track has no live sampler FX the entire interactive surface is greyed and inert  @ 450
+  @contract  pip auto-revert is checked at end of body: justTriggered=true edge consumes the trigger frame, after which any browser/slot-focus change or stray mouse click reverts  @ 451
 
 # Shapes
-  @shape  peakCacheEntry = { src?=PCM_Source, cols=int, fs=number, nch=int, frames=int, lenSec=number, building=bool, amps?={number,...} } | false
-  @shape  durCacheEntry  = number | false
-  @shape  drag = { handle='start'|'end'|nil, slot=int|nil, startF=int|nil, endF=int|nil }
-  @shape  pip = { slot=int|nil, track=track|nil, justTriggered=bool, browserAtTrigger=path|nil, slotAtTrigger=int|nil }
-  @shape  ToolbarSegment = { id, render = fn(), visible? = fn() -> bool }
+  @shape  peakCacheEntry = { src?=PCM_Source, cols=int, fs=number, nch=int, frames=int, lenSec=number, building=bool, amps?={number,...} } | false  @ 31
+  @shape  durCacheEntry  = number | false  @ 32
+  @shape  drag = { handle='start'|'end'|nil, slot=int|nil, startF=int|nil, endF=int|nil }  @ 33
+  @shape  pip = { slot=int|nil, track=track|nil, justTriggered=bool, browserAtTrigger=path|nil, slotAtTrigger=int|nil }  @ 38
+  @shape  ToolbarSegment = { id, render = fn(), visible? = fn() -> bool }  @ 389
 
 # Imports
   @require fs = 'fs'  @ 13
@@ -43,13 +43,13 @@
   @state toolbarSegments = {  @ 390
   @state sr = {}  @ 442
   @state sampler = cmgr:scope('sample')  @ 591
-      @invariant  sample-scope command bindings: Ctrl+Up=browserUp, Ctrl+Down=browserPreview (descend folder or audition file), Ctrl+Right=browserAssign (load file into current slot), Shift+./Shift+,=slotNext/Prev (clamped to [0, N_SLOTS-1])
+      @invariant  sample-scope command bindings: Ctrl+Up=browserUp, Ctrl+Down=browserPreview (descend folder or audition file), Ctrl+Right=browserAssign (load file into current slot), Shift+./Shift+,=slotNext/Prev (clamped to [0, N_SLOTS-1])  @ 590
 
 # Private functions
   @fn revertPreviewInPlace()  @ 43-49
-      @contract  no-op when no preview is staged; otherwise restores the JSFX slot to cm's stored entry and clears all pip fields
+      @contract  no-op when no preview is staged; otherwise restores the JSFX slot to cm's stored entry and clears all pip fields  @ 42
   @fn triggerPreviewInPlace(srcPath)  @ 52-61
-      @contract  silently aborts if sm:stageInto fails (returns false); otherwise pip captures the nav state at trigger so any subsequent change reverts
+      @contract  silently aborts if sm:stageInto fails (returns false); otherwise pip captures the nav state at trigger so any subsequent change reverts  @ 51
   @fn durFor(abs)  @ 63-72
   @fn peakFor(abs, cols)  @ 80-134
       -- PCM_Source_GetPeaks lays the buffer out as two blocks back-to-back:
@@ -57,23 +57,23 @@
       -- are interleaved within each block per pixel. Reduce to per-pixel
       -- (hi, lo) — signed max/min across channels — so the strip can draw
       -- asymmetrically and reveal DC offset or one-sided transients.
-      @contract  returns nil for unreadable files (cached as false); returns an entry with hi=nil while peaks are still building (caller must draw a flat line); width-mismatched cache entries are dropped before re-reading
+      @contract  returns nil for unreadable files (cached as false); returns an entry with hi=nil while peaks are still building (caller must draw a flat line); width-mismatched cache entries are dropped before re-reading  @ 79
   @fn drawTree(path, depth)  @ 138-154
-      @contract  recursive walk; descends expanded subtrees; listDirs on all nodes to find leaf folders
-      @contract  chip toggles expansion; body click selects, double-click rebrowses root (chrome.treeRow)
+      @contract  recursive walk; descends expanded subtrees; listDirs on all nodes to find leaf folders  @ 136
+      @contract  chip toggles expansion; body click selects, double-click rebrowses root (chrome.treeRow)  @ 137
   @fn goUp()  @ 157-165
-      @contract  no-op at the browse root; otherwise highlights the folder being left so a subsequent down-arrow lands somewhere meaningful
+      @contract  no-op at the browse root; otherwise highlights the folder being left so a subsequent down-arrow lands somewhere meaningful  @ 156
   @fn drawFiles(folder, root)  @ 169-223
-      @contract  items are ordered '..' (if not at root), then folders (alpha), then audio files; selection auto-snaps to items[1] when the prior selection isn't in the new list
-      @contract  double-click semantics: '..' → goUp; folder → setCurrentFolder; file → triggerPreviewInPlace if previewInPlace is on, else auditionPath
+      @contract  items are ordered '..' (if not at root), then folders (alpha), then audio files; selection auto-snaps to items[1] when the prior selection isn't in the new list  @ 167
+      @contract  double-click semantics: '..' → goUp; folder → setCurrentFolder; file → triggerPreviewInPlace if previewInPlace is on, else auditionPath  @ 168
   @fn drawSlots()  @ 226-282
-      @contract  iterates all N_SLOTS rows whether populated or not (empty rows render as '(empty)'); single-click sets currentSample and slotFocus, double-click also auditions
+      @contract  iterates all N_SLOTS rows whether populated or not (empty rows render as '(empty)'); single-click sets currentSample and slotFocus, double-click also auditions  @ 225
   @fn drawStrip(stripW, stripH)  @ 289-387
       -- Drag locally overrides start/end this frame so the markers track the
       -- cursor without round-trip lag; cm catches up on the next setTrim.
-      @contract  early-returns when the focused slot is empty or the source can't be read; otherwise every code path through here calls sm:setTrim before frame end if the user changed start/end
-      @contract  drag handle is held in `drag` across frames keyed by slot — switching to a different slot mid-drag implicitly drops the drag (liveDrag check fails)
-      @contract  trim invariants enforced at write: 0 <= start <= end-1 and start+1 <= end <= frames-2 (last 2 frames reserved)
+      @contract  early-returns when the focused slot is empty or the source can't be read; otherwise every code path through here calls sm:setTrim before frame end if the user changed start/end  @ 286
+      @contract  drag handle is held in `drag` across frames keyed by slot — switching to a different slot mid-drag implicitly drops the drag (liveDrag check fails)  @ 287
+      @contract  trim invariants enforced at write: 0 <= start <= end-1 and start+1 <= end <= frames-2 (last 2 frames reserved)  @ 288
   @fn boundTrackName()  @ 432-438
       -- Bound sampler track's name, for the status bar.
 
@@ -82,9 +82,9 @@
   @api sr:renderBody(_, w, h, dispatch)  @ 452-561
   @api sr:renderStatusBar(_)  @ 563-570
   @api sr:closeTransients()  @ 573-577
-      @contract  clear ephemeral preview/rename/drag state; the controller calls this on unbind
+      @contract  clear ephemeral preview/rename/drag state; the controller calls this on unbind  @ 572
   @api sr:focusState()  @ 580-587
-      @contract  acceptCmds is also blocked by ImGui.IsAnyItemActive (e.g. an InputInt being edited) so trim-field typing doesn't trigger commands
+      @contract  acceptCmds is also blocked by ImGui.IsAnyItemActive (e.g. an InputInt being edited) so trim-field typing doesn't trigger commands  @ 579
 
 # Uses (outbound edges)
   @use call    ImGui.AlignTextToFramePadding  @ drawStrip:370,378

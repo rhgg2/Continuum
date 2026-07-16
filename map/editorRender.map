@@ -2,13 +2,13 @@
 @deps swingEditor, temperEditor, cmgr, chrome, gui, modalHost
 
 # Invariants & contracts
-  @contract  render-only; owns pane-selection UI state; reaches the swing/temper panes, never cm/ds
-  @contract  body editor — focusState always page-suppresses (root globals stay live, page bindings off)
+  @contract  render-only; owns pane-selection UI state; reaches the swing/temper panes, never cm/ds  @ 9
+  @contract  body editor — focusState always page-suppresses (root globals stay live, page bindings off)  @ 10
 
 # Shapes
-  @shape  libraryTreeSpec = { x, y, h, label, active={{col,name}}, project={name}, global={name}, synthetic={[name]=true}, undeletable={[name]=true}, sel={tier,name}, dirty?:bool, onSelect(tier,name), onNew(), onImport?(), onPromote(name), onDemote(name), onReset?(), onDelete(tier,name) }
-  @shape  ToolbarSegment = { id, render = fn(), visible? = fn() -> bool }
-  @shape  focusState = { suppressKbd:bool, pageSuppressed:bool, acceptCmds:bool }
+  @shape  libraryTreeSpec = { x, y, h, label, active={{col,name}}, project={name}, global={name}, synthetic={[name]=true}, undeletable={[name]=true}, sel={tier,name}, dirty?:bool, onSelect(tier,name), onNew(), onImport?(), onPromote(name), onDemote(name), onReset?(), onDelete(tier,name) }  @ 31
+  @shape  ToolbarSegment = { id, render = fn(), visible? = fn() -> bool }  @ 141
+  @shape  focusState = { suppressKbd:bool, pageSuppressed:bool, acceptCmds:bool }  @ 206
 
 # Imports
   @require ImGui = 'imgui'  @ 15

@@ -2,11 +2,11 @@
 @deps chrome, ctx
 
 # Shapes
-  @shape  masterMix = { segment = { id = 'master', render } }   -- one shared toolbar segment
+  @shape  masterMix = { segment = { id = 'master', render } }   -- one shared toolbar segment  @ 4
 
 # Imports
   @require ImGui = 'imgui'  @ 6
-      @reaper  reads GetMasterTrack + D_VOL + Track_GetPeakInfo(0/1 peak, 1024 loudness) + time_precise; writes via CSurf_OnVolumeChange
+      @reaper  reads GetMasterTrack + D_VOL + Track_GetPeakInfo(0/1 peak, 1024 loudness) + time_precise; writes via CSurf_OnVolumeChange  @ 3
 
 # Private state
   @state colour = chrome.colour  @ 9

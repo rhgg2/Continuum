@@ -2,22 +2,22 @@
 @deps cm, cmgr, chrome, gui, tv, inputAllowed, chordEntry
 
 # Invariants & contracts
-  @invariant  grid render + input only; tracker state lives in tv/ec, never cached here
-  @invariant  col.x == nil is the visibility predicate; per-column draws must gate on it
-  @invariant  cell coords 0-indexed; header rows at -HEADER, row-num gutter at -GUTTER
-  @invariant  page-persistent state: cellW/H, dragging, laneConsumed, paintLast
-  @contract  host supplies inputAllowed() -- folds modal/picker/item-active/palette/strip gates
-  @contract  host chordEntry=false gates the chord gesture off (the pattern editor passes false)
-  @contract  bails if laneConsumed; lane strip wins gestures over the tracker grid
-  @contract  right-click on channel-label row toggles mute
-  @contract  click on label rows selects channel/column
-  @contract  body click moves cursor and arms drag
-  @contract  no-op unless inputAllowed(); host folds modal/picker/item-active/palette/strip
-  @contract  every fresh press enters; only lastEditKey autorepeats
-  @contract  scans editKeys per frame; reads ec/grid fresh (editEvent may rebuild)
-  @contract  a note key typed while armed exits region mode then enters (execute-through)
-  @contract  Shift+notechar strikes chords (+Alt spreads channels); Shift+digit value place-walk
-  @contract  Backspace deletes last chord note; Shift+=/- nudges vel; shift release commits
+  @invariant  grid render + input only; tracker state lives in tv/ec, never cached here  @ 18
+  @invariant  col.x == nil is the visibility predicate; per-column draws must gate on it  @ 19
+  @invariant  cell coords 0-indexed; header rows at -HEADER, row-num gutter at -GUTTER  @ 20
+  @invariant  page-persistent state: cellW/H, dragging, laneConsumed, paintLast  @ 21
+  @contract  host supplies inputAllowed() -- folds modal/picker/item-active/palette/strip gates  @ 22
+  @contract  host chordEntry=false gates the chord gesture off (the pattern editor passes false)  @ 23
+  @contract  bails if laneConsumed; lane strip wins gestures over the tracker grid  @ 953
+  @contract  right-click on channel-label row toggles mute  @ 954
+  @contract  click on label rows selects channel/column  @ 955
+  @contract  body click moves cursor and arms drag  @ 956
+  @contract  no-op unless inputAllowed(); host folds modal/picker/item-active/palette/strip  @ 1096
+  @contract  every fresh press enters; only lastEditKey autorepeats  @ 1097
+  @contract  scans editKeys per frame; reads ec/grid fresh (editEvent may rebuild)  @ 1098
+  @contract  a note key typed while armed exits region mode then enters (execute-through)  @ 1099
+  @contract  Shift+notechar strikes chords (+Alt spreads channels); Shift+digit value place-walk  @ 1100
+  @contract  Backspace deletes last chord note; Shift+=/- nudges vel; shift release commits  @ 1101
 
 # Imports
   @require util = 'util'  @ 24
@@ -49,18 +49,18 @@
   @state renderFns = {  @ 175
   @state VNAME_MAX = 14  @ 291
   @state laneRenderable = { cc = true, pb = true, at = true }  @ 361
-      @invariant  lane strip renders only cc/pb/at; other types show as tinted background
+      @invariant  lane strip renders only cc/pb/at; other types show as tinted background  @ 360
   @state LANE_ROW_MIN = 3  @ 363
   @state LANE_ROW_MAX = 32  @ 364
   @state PART_LABEL = { pitch = 'PITCH', sample = 'SAMP', vel = 'VEL', delay = ...  @ 493
-      @contract  assumes computeLayout ran this frame; reads chanLeft/Width/Order, gridOriginX/Y
+      @contract  assumes computeLayout ran this frame; reads chanLeft/Width/Order, gridOriginX/Y  @ 490
   @state editKeys = {}  @ 845
   @state lastEditKey  @ 863
   @state gridPane = {}  @ 867
 
 # Private functions
   @fn layoutColumns(cols, scrollCol)  @ 55-72
-      @contract  clears col.x on every col before assigning; off-screen cols stay nil
+      @contract  clears col.x on every col before assigning; off-screen cols stay nil  @ 54
   -- Cell renderers
   @fn renderNote(evt, col, row)  @ 83-150
   @fn renderPB(evt)  @ 152-157
@@ -78,7 +78,7 @@
       -- Cell adapter over the shared painter: col/row → screen via one transform.
       -- cellW/cellH are odd integers (whole-pixel landing); snap handles fractional cases.
   @fn laneStripRows()  @ 274-277
-      @contract  returns 0 when laneStrip.visible is false; layout and draw branch on this
+      @contract  returns 0 when laneStrip.visible is false; layout and draw branch on this  @ 273
   @fn drawLocalScrim(draw, hole, w, h)  @ 281-287
       -- Local-mode wash: dim the whole grid except a hole at the instance the caret sits
       -- inside (`hole`, grid units); nil hole washes everything. Overlays the cell pass.
@@ -94,15 +94,15 @@
       -- Measure under the grid font: naturalWidth() may trigger this before draw's font push.
   @fn computeLayout(budgetW, budgetH)  @ 343-356
       -- RESERVE_ROWS of breathing is kept clear at the bottom for every caller; the grid fills the rest.
-      @contract  must run before draws reading chanLeft/chanWidth/chanOrder/totalWidth/viewRows
-      @contract  calls tv:setGridSize so tv scroll math sees the live viewport
+      @contract  must run before draws reading chanLeft/chanWidth/chanOrder/totalWidth/viewRows  @ 340
+      @contract  calls tv:setGridSize so tv scroll math sees the live viewport  @ 341
   -- Lane strip
   @fn curveEditorFrame(col, colIdx, rect, tMin, tMax, hovered)  @ 368-413
       -- Build the curve-editor FrameArgs for `col` over row-space [tMin,tMax] in `rect`; returns
       -- true iff it consumed the mouse. Shared by the lane strip and the pattern editor's curve pane.
   @fn drawLaneStrip()  @ 417-488
-      @contract  publishes laneConsumed=true if curve editor claimed input this frame
-      @contract  handleMouse short-circuits on laneConsumed
+      @contract  publishes laneConsumed=true if curve editor claimed input this frame  @ 415
+      @contract  handleMouse short-circuits on laneConsumed  @ 416
   @fn notePartHeaders(col)  @ 495-507
   @fn drawTracker()  @ 509-813
   -- Input
@@ -110,15 +110,15 @@
       -- Screen point -> (fractional column, integer row) through the grid painter's
       -- inverse, so a click resolves against the exact transform the draw pass used.
   @fn nearestStop(mouseX, mouseY)  @ 826-841
-      @contract  returns (col, stop, fracX) or (nil, nil, fracX)
-      @invariant  fracX is separate so callers distinguish 'past last col' from 'inside col N'
+      @contract  returns (col, stop, fracX) or (nil, nil, fracX)  @ 824
+      @invariant  fracX is separate so callers distinguish 'past last col' from 'inside col N'  @ 825
   @fn add(key, byte, digit)  @ 847
 
 # Public API (gridPane:*)
   @api gridPane:draw(gridW, gridH)  @ 872-879
       -- Draw pass: computeLayout twice (lane-drag callbacks may rebuild grid.cols,
       -- so drawTracker needs a fresh layout), with the grid font pushed throughout.
-      @invariant  lane-strip drag callbacks may flush tv.grid.cols and clear col.x
+      @invariant  lane-strip drag callbacks may flush tv.grid.cols and clear col.x  @ 871
   @api gridPane:geom()  @ 882-884
       -- Grid geometry for the host's help:anchor (which spans grid + palette).
   @api gridPane:naturalWidth()  @ 888-893
@@ -132,7 +132,7 @@
   @api gridPane:drawCurveEditor(rect)  @ 908-951
       -- time -> X across the grid's scrolled window, so scrolling pans/zooms the curve and a
       -- fitting pattern shows whole; assumes gridPane:draw ran first this frame (reads viewRows).
-      @contract  renders the current column's curve into `rect`; sets laneConsumed
+      @contract  renders the current column's curve into `rect`; sets laneConsumed  @ 905
   @api gridPane:handleMouse()  @ 957-1092
   @api gridPane:handleKeys(kr)  @ 1102-1154
       -- commandHeld gates note entry per key: a key bound to both a command and note

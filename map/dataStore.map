@@ -2,15 +2,15 @@
 @deps ps
 
 # Invariants & contracts
-  @invariant  per-key document storage over pextStore; each name lives at one scope (no tier merge)
-  @invariant  registry is sole truth for valid names; unknown names raise on every entry point
-  @invariant  owns its cache: deep-clone out and in; callers never alias ds state
-  @invariant  take/track caches drop on contextChanged; project/global are context-free
-  @contract  take/track scopes are per-key P_EXT blobs (ctm_data.<name>); global is a disk file
+  @invariant  per-key document storage over pextStore; each name lives at one scope (no tier merge)  @ 3
+  @invariant  registry is sole truth for valid names; unknown names raise on every entry point  @ 4
+  @invariant  owns its cache: deep-clone out and in; callers never alias ds state  @ 5
+  @invariant  take/track caches drop on contextChanged; project/global are context-free  @ 6
+  @contract  take/track scopes are per-key P_EXT blobs (ctm_data.<name>); global is a disk file  @ 7
 
 # Imports
   @require util = 'util'  @ 10
-      @reaper  none directly; storage + undo watcher are delegated to pextStore
+      @reaper  none directly; storage + undo watcher are delegated to pextStore  @ 9
 
 # Private state
   @state ps = assert(deps and deps.ps, 'dataStore requires a pextStore ...  @ 13
@@ -46,12 +46,12 @@
 # Public API (ds:*)
   -- Reading
   @api ds:get(name)  @ 154-159
-      @contract  returns deep copy at name's scope; nil if absent; raises on unknown name
+      @contract  returns deep copy at name's scope; nil if absent; raises on unknown name  @ 153
   @api ds:getAt(handle, name)  @ 162-166
       -- Foreign-handle read: bypasses bound context; scope (take/track) from the registry.
   -- Writing
   @api ds:assign(name, value)  @ 171-184
-      @contract  writes one key at its registry scope; REMOVE deletes; fires dataChanged { scope, name }
+      @contract  writes one key at its registry scope; REMOVE deletes; fires dataChanged { scope, name }  @ 170
   @api ds:delete(name)  @ 186
   @api ds:assignAt(handle, name, value)  @ 190-202
       -- Foreign-handle write; util.REMOVE deletes. Refreshes the cache + signals only for

@@ -1,10 +1,10 @@
 @module painter  src=painter.lua  loc=313  sha=e14e515  mode=namespace  self=painter
 
 # Invariants & contracts
-  @contract  centre is logical; radius is screen px so the dot stays round under non-uniform scale.
-  @contract  centre is logical; radius is screen px and angles pass through, so arcs need sx==sy.
-  @contract  x is the strip's horizontal centre, yBottom its bottom edge; size is screen px
-  @contract  returns false (drawing nothing) when the LICE path is unavailable; callers fall back
+  @contract  centre is logical; radius is screen px so the dot stays round under non-uniform scale.  @ 189
+  @contract  centre is logical; radius is screen px and angles pass through, so arcs need sx==sy.  @ 226
+  @contract  x is the strip's horizontal centre, yBottom its bottom edge; size is screen px  @ 249
+  @contract  returns false (drawing nothing) when the LICE path is unavailable; callers fall back  @ 250
 
 # Imports
   @const ImGui = 'imgui'  @ 24
@@ -29,14 +29,14 @@
 
 # Public API (painter.*)
   @api painter.measureRotated(ctx, s, size)  @ 89-93
-      @contract  strip (w,h) in screen px for textUp at this size; nil when the LICE path is unavailable
+      @contract  strip (w,h) in screen px for textUp at this size; nil when the LICE path is unavailable  @ 88
   @api painter.new(ctx, chrome, transform, page)  @ 96-264
-      @contract  sx/sy default 1 and must be non-zero (fromScreen divides); ox/oy default 0.
+      @contract  sx/sy default 1 and must be non-zero (fromScreen divides); ox/oy default 0.  @ 95
   @api painter.hue(idx, chroma, light, alpha)  @ 299-302
       -- The idx-th perceptually-even hue. chroma/light/alpha tone it.
-      @contract  returns an opaque colour token (not a bare int); pass to a draw method's colour arg.
+      @contract  returns an opaque colour token (not a bare int); pass to a draw method's colour arg.  @ 297
   @api painter.hueNative(idx)  @ 305-311
-      @contract  REAPER native int (|0x1000000 set) for I_CUSTOMCOLOR; chroma/light match grid fill hue.
+      @contract  REAPER native int (|0x1000000 set) for I_CUSTOMCOLOR; chroma/light match grid fill hue.  @ 304
 
 # Uses (outbound edges)
   @use call    ImGui.Attach  @ rasteriseRotated:73

@@ -2,16 +2,16 @@
 @deps facade, chrome, gui, modalHost
 
 # Invariants & contracts
-  @contract  OWNS ps/cm/ds/eventMeta + mm/tm/gm/tv/cmgr + gridPane
-  @contract  RECEIVES host facade + chrome/gui/modalHost
-  @contract  checkout take parks on scratch, never slot-registered; close deletes it directly
-  @contract  bind/unbind pass skipGuard -- the mini stack must never touch the host's guardedTrack
-  @contract  real gm over an empty groups key -- every edit falls through to tm, wash is empty
-  @contract  no paramAutomation -- nullPa stands in for tv's structural pa handle
-  @contract  mini cmgr binds only the pattern-editing keymap subset; rest stay inert
-  @contract  edits write through on every mini rebuild -- readback strips to the whitelist, deepEq-guarded via the commit callback
-  @contract  Esc/Cancel restore the open snapshot; Enter/Commit close on the current store
-  @contract  `armed` gates out the open/close rebuilds
+  @contract  OWNS ps/cm/ds/eventMeta + mm/tm/gm/tv/cmgr + gridPane  @ 3
+  @contract  RECEIVES host facade + chrome/gui/modalHost  @ 4
+  @contract  checkout take parks on scratch, never slot-registered; close deletes it directly  @ 5
+  @contract  bind/unbind pass skipGuard -- the mini stack must never touch the host's guardedTrack  @ 6
+  @contract  real gm over an empty groups key -- every edit falls through to tm, wash is empty  @ 7
+  @contract  no paramAutomation -- nullPa stands in for tv's structural pa handle  @ 8
+  @contract  mini cmgr binds only the pattern-editing keymap subset; rest stay inert  @ 9
+  @contract  edits write through on every mini rebuild -- readback strips to the whitelist, deepEq-guarded via the commit callback  @ 10
+  @contract  Esc/Cancel restore the open snapshot; Enter/Commit close on the current store  @ 11
+  @contract  `armed` gates out the open/close rebuilds  @ 12
 
 # Imports
   @require util = 'util'  @ 13
@@ -83,21 +83,21 @@
 
 # Public API (pe:*)
   @api pe:open(body, commit)  @ 201-249
-      @contract  mint a checkout take on scratch, materialise `body`, bind the mini tm; `commit(newBody)` is the write-back
-      @contract  snapshots the body and arms write-through once materialised (open/close rebuilds stay silent)
-      @contract  an empty body (no lengthPpq) defaults its loop to one bar of the checkout take
+      @contract  mint a checkout take on scratch, materialise `body`, bind the mini tm; `commit(newBody)` is the write-back  @ 198
+      @contract  snapshots the body and arms write-through once materialised (open/close rebuilds stay silent)  @ 199
+      @contract  an empty body (no lengthPpq) defaults its loop to one bar of the checkout take  @ 200
   @api pe:close()  @ 253-260
-      @contract  sweep the pool metadata (write-through, so leaks without this)
-      @contract  unbind the mini tm, delete the checkout item
+      @contract  sweep the pool metadata (write-through, so leaks without this)  @ 251
+      @contract  unbind the mini tm, delete the checkout item  @ 252
   @api pe:isOpen()  @ 262
   @api pe:currentTake()  @ 263
   @api pe:draw()  @ 293-334
-      @contract  draw pass -- toolbar row, grid fills the region below; popup sizes to fit
+      @contract  draw pass -- toolbar row, grid fills the region below; popup sizes to fit  @ 292
   @api pe:handleInput(close)  @ 338-358
-      @contract  input pass -- mouse, dispatch against mini cmgr, note entry; unconsumed Esc cancels, Enter commits
-      @contract  returns the dispatch result kr = { consumed, commandHeld }
+      @contract  input pass -- mouse, dispatch against mini cmgr, note entry; unconsumed Esc cancels, Enter commits  @ 336
+      @contract  returns the dispatch result kr = { consumed, commandHeld }  @ 337
   @api pe:launch(body, commit)  @ 366-392
-      @contract  production entry -- mint the checkout on `body` and raise the editing modal; onClose sweeps it
+      @contract  production entry -- mint the checkout on `body` and raise the editing modal; onClose sweeps it  @ 365
 
 # Uses (outbound edges)
   @use call    ImGui.AlignTextToFramePadding  @ drawToolbar:280

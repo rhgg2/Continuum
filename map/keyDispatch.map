@@ -1,13 +1,13 @@
 @module keyDispatch  src=keyDispatch.lua  loc=86  sha=65573d0  mode=namespace  self=keyDispatch
 
 # Invariants & contracts
-  @contract  returns early (no dispatch) when state.suppressKbd or not state.acceptCmds
-  @contract  state.pageSuppressed shrinks the walk to the root keymap only — body-region editors (swing, tuning) suppress page bindings without shadowing globals like playPause/quit
-  @contract  first-hit wins; false declines, releases the key, and lets the page char queue see it
-  @contract  while cmgr:isPrefixActive(), digits and '/' are captured (no dispatch); Esc cancels; any other key freezes the prefix and falls through to the keychain walk so commands can consumePrefix()
+  @contract  returns early (no dispatch) when state.suppressKbd or not state.acceptCmds  @ 44
+  @contract  state.pageSuppressed shrinks the walk to the root keymap only — body-region editors (swing, tuning) suppress page bindings without shadowing globals like playPause/quit  @ 45
+  @contract  first-hit wins; false declines, releases the key, and lets the page char queue see it  @ 46
+  @contract  while cmgr:isPrefixActive(), digits and '/' are captured (no dispatch); Esc cancels; any other key freezes the prefix and falls through to the keychain walk so commands can consumePrefix()  @ 47
 
 # Shapes
-  @shape  dispatchResult = { consumed: bool, commandHeld: { [imguiKey]=true } } — commandHeld holds keys down AND command-bound for the live chord
+  @shape  dispatchResult = { consumed: bool, commandHeld: { [imguiKey]=true } } — commandHeld holds keys down AND command-bound for the live chord  @ 43
 
 # Imports
   @const ImGui = 'imgui'  @ 9

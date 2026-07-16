@@ -2,15 +2,15 @@
 @deps cm, cmgr, chrome, gui, modalHost, wv, facade
 
 # Invariants & contracts
-  @invariant  render + input only — holds wv only, never wm/rm; all queries/mutations go through wv.
-  @invariant  renderer owns every pixel — geometry, port layout, hit-tests. See docs/wiringPage.md
-  @invariant  wires draw as a pre-pass before nodes — centre-to-centre lines occluded by the bodies; parallel wires in one unordered pair are offset perpendicularly, MIDI sorted to the right.
-  @invariant  port rows are top/bottom only. See docs/wiringPage.md § The port band.
-  @invariant  key bindings + wiring-scope command bodies live here; coord pushes scope on activation.
-  @contract  wiringPage (the controller) owns the stack (rm/wm/wv) and hands this renderer wv only
+  @invariant  render + input only — holds wv only, never wm/rm; all queries/mutations go through wv.  @ 3
+  @invariant  renderer owns every pixel — geometry, port layout, hit-tests. See docs/wiringPage.md  @ 4
+  @invariant  wires draw as a pre-pass before nodes — centre-to-centre lines occluded by the bodies; parallel wires in one unordered pair are offset perpendicularly, MIDI sorted to the right.  @ 5
+  @invariant  port rows are top/bottom only. See docs/wiringPage.md § The port band.  @ 6
+  @invariant  key bindings + wiring-scope command bodies live here; coord pushes scope on activation.  @ 7
+  @contract  wiringPage (the controller) owns the stack (rm/wm/wv) and hands this renderer wv only  @ 8
 
 # Shapes
-  @shape  returns { slots, handle, bandRect, list, hoverRect, side, popup } (all canvas-local).
+  @shape  returns { slots, handle, bandRect, list, hoverRect, side, popup } (all canvas-local).  @ 414
 
 # Imports
   @require util = 'util'  @ 10
@@ -135,7 +135,7 @@
       -- when they share a line. ' ' between words, '' between CamelCase pieces of
       -- one word, so a re-joined line has no space at the case boundary.
   @fn wrapLabel(text, maxW, widthOf)  @ 204-253
-      @contract  with no widthOf supplied, the caller must have pushed the measuring font.
+      @contract  with no widthOf supplied, the caller must have pushed the measuring font.  @ 203
   @fn drawNode(p, nv, isSelected)  @ 255-274
   @fn drawKeyboardIcon(p, x, y)  @ 278-291
       -- Piano-keyboard icon (C, C#, D, D#, E): 3 outlined white keys, 2 filled
@@ -160,7 +160,7 @@
       -- By-name dropdown anchored to the handle. Rows are tight-bound (no hit pad)
       -- so neighbours don't bleed; hitRect reaches LIST_GAP back so chevron→list has no dead zone.
   @fn layoutPortRow(nv, dir, mx, my, keep, forceSide)  @ 415-543
-      @contract  face = forceSide, else derived from my; keep hides the mismatched kind during target hover.
+      @contract  face = forceSide, else derived from my; keep hides the mismatched kind during target hover.  @ 413
   @fn slotHit(slots, mx, my)  @ 545-551
   @fn rowHit(rows, mx, my)  @ 555-561
       -- Tight hit-test for list rows (no pad — rows are full-height boxes
@@ -338,12 +338,12 @@
 # Public API (wr:*)
   @api wr:toolbarSegments()  @ 2522
   @api wr:closeTransients()  @ 2525-2529
-      @contract  clear ephemeral gesture/hover state; the controller calls this on unbind.
+      @contract  clear ephemeral gesture/hover state; the controller calls this on unbind.  @ 2524
   @api wr:renderBody(_, w, h, dispatch)  @ 2532-2555
-      @contract  body = wiring canvas | source palette; dispatch at end-of-body routes wiring-scope keys.
+      @contract  body = wiring canvas | source palette; dispatch at end-of-body routes wiring-scope keys.  @ 2531
   @api wr:renderStatusBar(_)  @ 2557-2560
   @api wr:focusState()  @ 2563-2573
-      @contract  acceptCmds=false if any picker active, any item active, or modal open at frame start.
+      @contract  acceptCmds=false if any picker active, any item active, or modal open at frame start.  @ 2562
 
 # Uses (outbound edges)
   @use call    ImGui.BeginChild  @ renderBody:2538 2670

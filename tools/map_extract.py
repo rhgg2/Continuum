@@ -74,7 +74,7 @@ FORWARD_RE    = re.compile(
 ATTACH_GAP = 3   # max line gap from annotation to following structural element
 
 
-Annotation = tuple[str, str, bool]   # (kind, body, inferred)
+Annotation = tuple[str, str, bool, int]   # (kind, body, inferred, line)
 
 
 @dataclass
@@ -588,11 +588,11 @@ def attach_annotations(cm: MapFile) -> None:
         first_line = run[0][0]
         target = next((t for t in targets if t.line >= first_line), None)
         if target and target.line - first_line <= ATTACH_GAP:
-            for _, k, b, q in run:
-                target.annotations.append((k, b, q))
+            for L, k, b, q in run:
+                target.annotations.append((k, b, q, L))
         else:
-            for _, k, b, q in run:
-                cm.module_annotations.append((k, b, q))
+            for L, k, b, q in run:
+                cm.module_annotations.append((k, b, q, L))
 
 
 # ----- Emission
@@ -619,9 +619,9 @@ def fmt_args(args: str) -> str:
 
 
 def fmt_ann(ann: Annotation) -> str:
-    kind, body, inferred = ann
+    kind, body, inferred, line = ann
     mark = '?' if inferred else ''
-    return f"@{mark}{kind}  {body}"
+    return f"@{mark}{kind}  {body}  @ {line}"
 
 
 def emit_anns(out: list[str], anns: list[Annotation], indent: str) -> None:
@@ -687,9 +687,9 @@ def emit(cm: MapFile) -> str:
 
     if cm.shape_annotations:
         add("# Shapes")
-        for kind, body, inferred, _ in cm.shape_annotations:
+        for kind, body, inferred, line in cm.shape_annotations:
             mark = '?' if inferred else ''
-            add(f"  @{mark}shape  {body}")
+            add(f"  @{mark}shape  {body}  @ {line}")
         add('')
 
     if cm.imports:

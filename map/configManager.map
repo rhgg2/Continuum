@@ -2,19 +2,19 @@
 @deps ps
 
 # Invariants & contracts
-  @invariant  sole truth for valid keys; in-code access raises on unknowns, loaded unknowns pruned
-  @invariant  owns cache: reads deep-clone out, writes deep-clone in; callers never alias cm state
-  @invariant  5-tier merge: global→project→track→take→transient; most-specific wins, else defaults
-  @invariant  transient tier never persists (saver is a no-op) and resets to {} on every refreshCache
-  @invariant  declarations is ordered array-of-pairs; nil-default keys coexist with non-nil defaults
-  @invariant  track/take tiers require REAPER context; without it loaders return {}, savers error
-  @contract  caches lazy: first getter triggers refreshCache; setContext/setTrack refresh eagerly
-  @contract  no take context drops track too (track derived from take in setContext)
+  @invariant  sole truth for valid keys; in-code access raises on unknowns, loaded unknowns pruned  @ 3
+  @invariant  owns cache: reads deep-clone out, writes deep-clone in; callers never alias cm state  @ 4
+  @invariant  5-tier merge: global→project→track→take→transient; most-specific wins, else defaults  @ 5
+  @invariant  transient tier never persists (saver is a no-op) and resets to {} on every refreshCache  @ 6
+  @invariant  declarations is ordered array-of-pairs; nil-default keys coexist with non-nil defaults  @ 7
+  @invariant  track/take tiers require REAPER context; without it loaders return {}, savers error  @ 8
+  @contract  caches lazy: first getter triggers refreshCache; setContext/setTrack refresh eagerly  @ 302
+  @contract  no take context drops track too (track derived from take in setContext)  @ 303
 
 # Shapes
-  @shape  configChangedPayload.targeted = { key = string, level = string }   -- set / remove
-  @shape  configChangedPayload.bulk     = { level = string }                  -- assign (keyless)
-  @shape  configChangedPayload.reload   = {}                                  -- setContext / clearTake / setTrack
+  @shape  configChangedPayload.targeted = { key = string, level = string }   -- set / remove  @ 9
+  @shape  configChangedPayload.bulk     = { level = string }                  -- assign (keyless)  @ 10
+  @shape  configChangedPayload.reload   = {}                                  -- setContext / clearTake / setTrack  @ 11
 
 # Imports
   @require util = 'util'  @ 12
@@ -59,39 +59,39 @@
   @fn resolveKey(key)  @ 438-448
       -- Walks the 5 tiers rather than building the whole merged table: a read touches 5 slots, not 164.
       -- see docs/configManager.md § Levels & merge
-      @contract  resolves one key: most-specific tier holding it wins, else the schema default
+      @contract  resolves one key: most-specific tier holding it wins, else the schema default  @ 435
   @fn mergedKey(key)  @ 452-465
       -- Per-subkey union of a single key's tables across defaults→tiers; most-specific tier wins.
       -- Non-table contributions are skipped, so the result is always a table.
 
 # Public API (cm:*)
   @api cm:setContext(newTake)  @ 403-408
-      @contract  setContext(nil) clears take+track; setContext(take) derives track via GetMediaItemTrack
-      @contract  refreshes all persisted caches (transient resets to {}) and fires configChanged {}
+      @contract  setContext(nil) clears take+track; setContext(take) derives track via GetMediaItemTrack  @ 401
+      @contract  refreshes all persisted caches (transient resets to {}) and fires configChanged {}  @ 402
   @api cm:clearTake()  @ 410-415
   @api cm:boundTake()  @ 418
-      @contract  bound take pointer; nil when context is cleared (take/track tiers resolve off empty)
+      @contract  bound take pointer; nil when context is cleared (take/track tiers resolve off empty)  @ 417
   @api cm:boundTrack()  @ 421
-      @contract  bound track pointer; nil when context is cleared (track tier resolves off empty)
+      @contract  bound track pointer; nil when context is cleared (track tier resolves off empty)  @ 420
   @api cm:setTrack(newTrack)  @ 423-428
   @api cm:pollUndo()  @ 431
-      @contract  delegates to the engine watcher; cm's watch group reloads tiers and fires configChanged
+      @contract  delegates to the engine watcher; cm's watch group reloads tiers and fires configChanged  @ 430
   @api cm:isDeclared(key)  @ 468
-      @contract  non-raising existence test against the schema; true iff key is declared
+      @contract  non-raising existence test against the schema; true iff key is declared  @ 467
   @api cm:get(key, opts)  @ 472-476
-      @contract  deep-copy of resolved value (most-specific tier, else default); raises on unknown key
-      @contract  opts.mergeTiers=true → per-subkey union across defaults+tiers; table-valued keys only
+      @contract  deep-copy of resolved value (most-specific tier, else default); raises on unknown key  @ 470
+      @contract  opts.mergeTiers=true → per-subkey union across defaults+tiers; table-valued keys only  @ 471
   @api cm:getAt(level, key)  @ 479-488
-      @contract  reads single tier only (no merge, no defaults); key nil → whole-cache clone
+      @contract  reads single tier only (no merge, no defaults); key nil → whole-cache clone  @ 478
   @api cm:seedGlobalFromDefault(key, exclude)  @ 491-499
-      @contract  seeds global tier for key from its default catalogue when empty; excluded names omitted
+      @contract  seeds global tier for key from its default catalogue when empty; excluded names omitted  @ 490
   -- Writing
   @api cm:set(level, key, value)  @ 504-514
-      @contract  deep-copies value into tier cache, persists, fires targeted configChanged
+      @contract  deep-copies value into tier cache, persists, fires targeted configChanged  @ 503
   @api cm:remove(level, key)  @ 517-528
-      @contract  removes key from named tier; no-op (no signal) if that tier's cache is unloaded
+      @contract  removes key from named tier; no-op (no signal) if that tier's cache is unloaded  @ 516
   @api cm:assign(level, updates)  @ 531-545
-      @contract  validates all keys before any write (all-or-nothing); REMOVE deletes; fires signal
+      @contract  validates all keys before any write (all-or-nothing); REMOVE deletes; fires signal  @ 530
 
 # Signals emitted (via util.installHooks)
   @emits configChanged   -- configChangedPayload.bulk   @ 398 setContext:407 clearTake:414 setTrack:427 set:513 remove:526 assign:544

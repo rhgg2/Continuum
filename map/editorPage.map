@@ -3,8 +3,8 @@
 
 # Imports
   @require util = 'util'  @ 6
-      @contract  constructs swing/temper panes + renderer; publishes the 'editor' facade
-      @contract  render delegates to editorRender; close returns to coord's previous page
+      @contract  constructs swing/temper panes + renderer; publishes the 'editor' facade  @ 4
+      @contract  render delegates to editorRender; close returns to coord's previous page  @ 5
 
 # Constructed sub-instances
   @construct swingEditor  = util.instantiate('swingEditor')  @ 16

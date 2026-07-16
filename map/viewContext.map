@@ -2,12 +2,12 @@
 @deps length, numRows, rowPerBeat, ppqPerRow, timeSigs, temper
 
 # Shapes
-  @shape  args = { length, numRows, rowPerBeat, ppqPerRow, timeSigs, temper }
+  @shape  args = { length, numRows, rowPerBeat, ppqPerRow, timeSigs, temper }  @ 6
 
 # Imports
   @require util = 'util'  @ 7
-      @invariant  pure: no side effects, no signals, no mutation of args
-      @invariant  identity row math: ppqToRow and rowToPPQ are exact inverses under uniform ppqPerRow; both return float. "on the grid" is a tolerance question, owned by ctx:isOnGrid (PPQ_GRID_EPS).
+      @invariant  pure: no side effects, no signals, no mutation of args  @ 4
+      @invariant  identity row math: ppqToRow and rowToPPQ are exact inverses under uniform ppqPerRow; both return float. "on the grid" is a tolerance question, owned by ctx:isOnGrid (PPQ_GRID_EPS).  @ 5
   @require tuning = 'tuning'  @ 8
 
 # Private state
@@ -31,13 +31,13 @@
   @api ctx:activeTemper()  @ 22
   @api ctx:noteProjection(evt)  @ 28-45
   @api ctx:ppqToRow(ppqI, chan)  @ 50-54
-      @contract  identity row math: column-event ppq is the logical position; rows are uniform ppqPerRow units. Exact inverse of rowToPPQ. Returns float; integer rows are float fixpoints. The chan argument is unused at this layer (kept for the call-site signature).
+      @contract  identity row math: column-event ppq is the logical position; rows are uniform ppqPerRow units. Exact inverse of rowToPPQ. Returns float; integer rows are float fixpoints. The chan argument is unused at this layer (kept for the call-site signature).  @ 49
   @api ctx:rowToPPQ(row, chan)  @ 57-61
-      @contract  identity row math: row × ppqPerRow, clamped at length. Returns float; no rounding. On-grid is a tolerance question — see ctx:isOnGrid.
+      @contract  identity row math: row × ppqPerRow, clamped at length. Returns float; no rounding. On-grid is a tolerance question — see ctx:isOnGrid.  @ 56
   @api ctx:snapRow(ppqI, chan)  @ 63
   @api ctx:ppqPerRow()  @ 65
   @api ctx:isOnGrid(ppqI, chan)  @ 74-77
-      @contract  true iff ppqI lies within PPQ_GRID_EPS ppq of the nearest row's ppq under this ctx. The sole owner of the on-grid threshold; callers must not re-implement it from rowToPPQ.
+      @contract  true iff ppqI lies within PPQ_GRID_EPS ppq of the nearest row's ppq under this ctx. The sole owner of the on-grid threshold; callers must not re-implement it from rowToPPQ.  @ 73
   @api ctx:rowBeatInfo(row)  @ 91-96
   @api ctx:barBeatSub(row)  @ 98-114
 

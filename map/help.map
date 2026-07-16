@@ -2,13 +2,13 @@
 @deps ctx, chrome, cmgr
 
 # Shapes
-  @shape  helpGroup = { anchor, title, place='pin'|'flow', items=[{cmd,label}] }
+  @shape  helpGroup = { anchor, title, place='pin'|'flow', items=[{cmd,label}] }  @ 4
 
 # Imports
   @require ImGui = 'imgui'  @ 8
-      @invariant  anchors are frame-scoped — cleared each frame, repopulated by render code only while open
-      @invariant  edit state (editing/capturing/conflict) resets on overlay close or page change
-      @contract  'toolbar.<id>' anchors resolve through chrome.toolbarRects(); others via help:anchor
+      @invariant  anchors are frame-scoped — cleared each frame, repopulated by render code only while open  @ 5
+      @invariant  edit state (editing/capturing/conflict) resets on overlay close or page change  @ 6
+      @contract  'toolbar.<id>' anchors resolve through chrome.toolbarRects(); others via help:anchor  @ 7
   @require util = 'util'  @ 9
 
 # Private state

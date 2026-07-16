@@ -1,40 +1,40 @@
 @module DAG  src=DAG.lua  loc=1919  sha=d013d39  mode=namespace  self=DAG
 
 # Invariants & contracts
-  @invariant  DAG.validate is pure; derivations live on DAG.compile's ctx
-  @invariant  REAPER tracks are always stereo; audio I/O is a count of stereo pairs, never channels
-  @invariant  every user-graph node carries node.ports={audio={…},midi={ins,outs}} at construction
-  @invariant  fx midi: JSFX ports come from midirecv/midisend scan; native fx get {1,1}.
-  @invariant  master is a singleton node (id='master'); ports.audio.ins is an explicit integer port count (default 1); no audio outs, no MIDI; terminal-only (never `from`)
-  @invariant  fx nodes carry busAware; wm:addFxNode and DAG.validate refuse true
-  @invariant  fxId is nil until materialised; stamped into the node after TrackFX_AddByName succeeds
-  @invariant  edge ops ride as metadata; gain on a sole send-wire folds onto send volume, else CU
-  @invariant  node.split (fx only): seeds 'split:'..id into srcSet; node+cone get own class/track
-  @invariant  a split-tagged class never absorbs
-  @invariant  signal-bearing bus seeds 'bus:'..id; marker never spreads — bus sits alone in its class
-  @invariant  bus classes absorb in neither direction; a dangling bus is inert (empty srcSet)
-  @invariant  a class with no audio parents and a lone source-direct midi parent absorbs onto it
-  @invariant  busses below 2x2 splice out at compile; crossings become direct edges at product gain
-  @invariant  srcSet unions node.split with derived master-min split markers
+  @invariant  DAG.validate is pure; derivations live on DAG.compile's ctx  @ 6
+  @invariant  REAPER tracks are always stereo; audio I/O is a count of stereo pairs, never channels  @ 7
+  @invariant  every user-graph node carries node.ports={audio={…},midi={ins,outs}} at construction  @ 8
+  @invariant  fx midi: JSFX ports come from midirecv/midisend scan; native fx get {1,1}.  @ 9
+  @invariant  master is a singleton node (id='master'); ports.audio.ins is an explicit integer port count (default 1); no audio outs, no MIDI; terminal-only (never `from`)  @ 10
+  @invariant  fx nodes carry busAware; wm:addFxNode and DAG.validate refuse true  @ 13
+  @invariant  fxId is nil until materialised; stamped into the node after TrackFX_AddByName succeeds  @ 14
+  @invariant  edge ops ride as metadata; gain on a sole send-wire folds onto send volume, else CU  @ 17
+  @invariant  node.split (fx only): seeds 'split:'..id into srcSet; node+cone get own class/track  @ 19
+  @invariant  a split-tagged class never absorbs  @ 20
+  @invariant  signal-bearing bus seeds 'bus:'..id; marker never spreads — bus sits alone in its class  @ 21
+  @invariant  bus classes absorb in neither direction; a dangling bus is inert (empty srcSet)  @ 22
+  @invariant  a class with no audio parents and a lone source-direct midi parent absorbs onto it  @ 23
+  @invariant  busses below 2x2 splice out at compile; crossings become direct edges at product gain  @ 24
+  @invariant  srcSet unions node.split with derived master-min split markers  @ 25
 
 # Shapes
-  @shape  userGraph = { nodes = {[id]=userNode}, edges = edge[] }  -- node ids are rm guids (read era)
-  @shape  userNode = { kind='source'|'fx'|'master'|'bus', pos={x,y}, ports={audio={ins,outs,inNames?,outNames?}, midi={ins,outs}}, trackId?=string, fxIdent?=string, fxDisplay?=string, fxId?=string, busAware?=bool, split?=true, orient?='V'|'H' }  -- bus: synthetic id, no source/fx; its summing track's guid lives on the bus record, not the node
-  @shape  edge = { type='audio'|'midi', from=id, fromPort=nil|portIdx, to=id, toPort=nil|portIdx, ops?={gain?=number}, primary?=true }
-  @shape  synthNode = { kind='fx', fxIdent=CU_IDENT, fxId?=string, params=table, originNode?=string, originSide?='in'|'out', originConsumer?=string, originTrackKey?=string, inputEdges?=int[] }
-  @shape  outWire = { from=id, fromPort?=int, to=trackKey, toNode=id, toPort?=int, type='audio'|'midi', gain?=number }
-  @shape  intraConn = { from=id, fromPort?=int, to=id, toPort?=int, type='audio'|'midi' }
-  @shape  trackSpec = { trackKind='sourceTrack'|'newTrack'|'master'|'scratch', trackId?=string, fxOrder=id[], mainSend=bool,
-  @shape  mainSendGain?=number, parentFeed?={from=id, fromPort?=int, toNode=id, toPort?=int, sink=trackKey},
-  @shape  synthNodes?={[cuId]=synthNode}, outWires=outWire[], intraConns=intraConn[],
-  @shape  pipeMidi?={{from=id, consumer=id},...} }  -- parentFeed.sink is MASTER or folder parent trackKey; pipeMidi = un-gateable crossings
-  @shape  targetTracks = { [trackKey] = trackSpec }
-  @shape  allocatedSend = { to=trackKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int, preFx?=true }; audio src/dstChan are (pair-1)*2, midi are bus 0..127; preFx marks a raw-source-origin (pre-FX) send
-  @shape  allocatedPinMap = { [fxId] = { ins={[port]={pair,...}}, outs={[port]={pair,...}} } }
-  @shape  allocatedTracks = { [trackKey] = { trackKind=..., trackId?=..., fxOrder=..., mainSend=..., mainSendGain?=..., sends=allocatedSend[], fxMidiBus?={ [fxId]={inBus,outBus} } (native fx only), pinMaps=allocatedPinMap, nchan=int, mainSendOffs?=int, bracketNodes?={ [bracketId]=synthNode } } }; see docs/DAG.md § allocate for the allocator + bracket model.
-  @shape  component = { nodes=id[] (sorted), reason=nil|'feedback'|'busAware' }
-  @shape  spliceProv = { parts = {[splicedIdx]=authoredIdx[]} }  -- a product edge lists every authored tap it folds
-  @shape  flow = { type, from?, fromPort?, fromSlot?, to?, toPort?, toSlot?, escape?='send'|'feed', sendIdx?, inc?=incoming entry }
+  @shape  userGraph = { nodes = {[id]=userNode}, edges = edge[] }  -- node ids are rm guids (read era)  @ 11
+  @shape  userNode = { kind='source'|'fx'|'master'|'bus', pos={x,y}, ports={audio={ins,outs,inNames?,outNames?}, midi={ins,outs}}, trackId?=string, fxIdent?=string, fxDisplay?=string, fxId?=string, busAware?=bool, split?=true, orient?='V'|'H' }  -- bus: synthetic id, no source/fx; its summing track's guid lives on the bus record, not the node  @ 12
+  @shape  edge = { type='audio'|'midi', from=id, fromPort=nil|portIdx, to=id, toPort=nil|portIdx, ops?={gain?=number}, primary?=true }  @ 16
+  @shape  synthNode = { kind='fx', fxIdent=CU_IDENT, fxId?=string, params=table, originNode?=string, originSide?='in'|'out', originConsumer?=string, originTrackKey?=string, inputEdges?=int[] }  @ 26
+  @shape  outWire = { from=id, fromPort?=int, to=trackKey, toNode=id, toPort?=int, type='audio'|'midi', gain?=number }  @ 28
+  @shape  intraConn = { from=id, fromPort?=int, to=id, toPort?=int, type='audio'|'midi' }  @ 29
+  @shape  trackSpec = { trackKind='sourceTrack'|'newTrack'|'master'|'scratch', trackId?=string, fxOrder=id[], mainSend=bool,  @ 30
+  @shape  mainSendGain?=number, parentFeed?={from=id, fromPort?=int, toNode=id, toPort?=int, sink=trackKey},  @ 31
+  @shape  synthNodes?={[cuId]=synthNode}, outWires=outWire[], intraConns=intraConn[],  @ 32
+  @shape  pipeMidi?={{from=id, consumer=id},...} }  -- parentFeed.sink is MASTER or folder parent trackKey; pipeMidi = un-gateable crossings  @ 33
+  @shape  targetTracks = { [trackKey] = trackSpec }  @ 34
+  @shape  allocatedSend = { to=trackKey, type='audio'|'midi', gain?=number, srcChan=int, dstChan=int, preFx?=true }; audio src/dstChan are (pair-1)*2, midi are bus 0..127; preFx marks a raw-source-origin (pre-FX) send  @ 36
+  @shape  allocatedPinMap = { [fxId] = { ins={[port]={pair,...}}, outs={[port]={pair,...}} } }  @ 37
+  @shape  allocatedTracks = { [trackKey] = { trackKind=..., trackId?=..., fxOrder=..., mainSend=..., mainSendGain?=..., sends=allocatedSend[], fxMidiBus?={ [fxId]={inBus,outBus} } (native fx only), pinMaps=allocatedPinMap, nchan=int, mainSendOffs?=int, bracketNodes?={ [bracketId]=synthNode } } }; see docs/DAG.md § allocate for the allocator + bracket model.  @ 38
+  @shape  component = { nodes=id[] (sorted), reason=nil|'feedback'|'busAware' }  @ 170
+  @shape  spliceProv = { parts = {[splicedIdx]=authoredIdx[]} }  -- a product edge lists every authored tap it folds  @ 1048
+  @shape  flow = { type, from?, fromPort?, fromSlot?, to?, toPort?, toSlot?, escape?='send'|'feed', sendIdx?, inc?=incoming entry }  @ 1278
 
 # Imports
   @const util = 'util'  @ 39
@@ -102,8 +102,8 @@
   @fn allocateOnce(tracks, nodes)  @ 1210-1685
       -- One assignment pass over a fixed partition; returns allocatedTracks + per-track capacity meta.
       -- Per-track live-range allocation, one register file per stream (audio pairs b1, midi buses b0).
-      @contract  outWires/intraConns/parentFeed -> sends+pinMaps+nchan+mainSendOffs.
-      @contract  nodes=userGraph.nodes; synth CUs ride spec.synthNodes, not nodes
+      @contract  outWires/intraConns/parentFeed -> sends+pinMaps+nchan+mainSendOffs.  @ 1208
+      @contract  nodes=userGraph.nodes; synth CUs ride spec.synthNodes, not nodes  @ 1209
       · midi register file (family-wide): the folder pipe makes a parent-send-connected set ONE bus domain.
       · per-track midi post-pass: merge-CU params, native-fx bus surface, JSFX bracket splice.
       · bracket post-pass — see docs/DAG.md § allocate
@@ -135,18 +135,18 @@
 
 # Public API (DAG.*)
   @api DAG.validate(userGraph)  @ 62-163
-      @contract  returns nil on success, or { code, ... } describing the first failure; wm:mutate gates persistence on nil
+      @contract  returns nil on success, or { code, ... } describing the first failure; wm:mutate gates persistence on nil  @ 61
   @api DAG.classify(userGraph, feedbackSeeds)  @ 171-216
       -- Post-hoc component classifier over read's domain (design/wiring-implicit-graph.md
       -- § Quarantine): validate's successor on the graphs REAPER allows, not just authorable ones.
-      @contract  groups non-master nodes into components; feedbackSeeds + busAware tag quarantined ones
+      @contract  groups non-master nodes into components; feedbackSeeds + busAware tag quarantined ones  @ 169
   @api DAG.targetTracks(ctx)  @ 922-932
       -- Realisation pass: turns the structural ctx into per-track specs (fxOrder,
       -- wires, synth merge CUs). Reads only the ctx public surface + ctx.userGraph.
-      @contract  realisation pass over a compile ctx; returns the targetTracks shape (not cached)
+      @contract  realisation pass over a compile ctx; returns the targetTracks shape (not cached)  @ 921
   @api DAG.compile(userGraph)  @ 1112-1117
       -- ctx.splice (spliceProv) is present iff sub-threshold busses were spliced out.
-      @contract  assumes DAG.validate(userGraph)==nil; returns a lazy-caching compile ctx
+      @contract  assumes DAG.validate(userGraph)==nil; returns a lazy-caching compile ctx  @ 1110
   @api DAG.allocate(tracks, nodes)  @ 1907-1917
       -- Capacity-resolving allocation: assign, bisect any over-ceiling class/family, re-assign
       -- until everything fits. The only entry point; allocateOnce is the inner pass.

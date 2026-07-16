@@ -1,8 +1,8 @@
 @module continuum  src=continuum.lua  loc=195  sha=0ad122f  mode=chunk
 
 # Invariants & contracts
-  @invariant  entry point — owns lifecycle (Main runs once per ReaScript invocation), wires the layered manager stack, drives the render loop via reaper.defer
-  @invariant  module load order is bottom-up: util first (everyone calls util.installHooks), commandManager before view layers (which self-register commands), pages last
+  @invariant  entry point — owns lifecycle (Main runs once per ReaScript invocation), wires the layered manager stack, drives the render loop via reaper.defer  @ 3
+  @invariant  module load order is bottom-up: util first (everyone calls util.installHooks), commandManager before view layers (which self-register commands), pages last  @ 4
 
 # Imports
   @require util = 'util'  @ 16
@@ -14,8 +14,8 @@
   @fn run(fn)  @ 28-31
   @fn createImGui()  @ 33-64
   @fn Main()  @ 68-193
-      @contract  Main builds the manager stack bottom-up, then enters the defer loop via coord:run()
-      @contract  each page owns its cross-page state, exposed through the facade registry coord wires
+      @contract  Main builds the manager stack bottom-up, then enters the defer loop via coord:run()  @ 66
+      @contract  each page owns its cross-page state, exposed through the facade registry coord wires  @ 67
 
 # Uses (outbound edges)
   @use call    ImGui.Attach  @ createImGui:49,50,51

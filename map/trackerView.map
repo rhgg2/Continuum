@@ -2,72 +2,72 @@
 @deps tm, cm, ds, cmgr, gm, pa, facade
 
 # Invariants & contracts
-  @invariant  rows 0-indexed, cols 1-indexed, channels 1..16, stops 1-indexed
-  @invariant  vm.grid is a live handle; rm reads it each frame
-  @invariant  vm.grid is mutated in place on rebuild, never reassigned
-  @invariant  rm is pull-only; vm fires no render callbacks
-  @invariant  rm queries vm.grid / vm:ec() / vm:rowPerBar() each frame
-  @invariant  writes go via tm (add/assign/delete/flush Event); vm never touches mm
-  @invariant  vm works in logical time and detune-intent for pitch
-  @invariant  vm never reads/writes raw pb directly (docs/tuning.md)
-  @invariant  authoring stamps evt.rpb and evt.ppq = row·logPerRow before tm:addEvent
-  @invariant  off-grid edits snap evt.ppq to cursor row; delay survives, rpb restamps
-  @invariant  clipboard encodes rows in source's logical frame; paste decodes against dest's rpb
-  @invariant  clipboard symmetry is on (row, chan), not absolute ppq
-  @invariant  grid.chanFirst/Last/lane1Col are chan-keyed; numRows is int
-  @invariant  selection part names: pitch/vel/delay on note; pb on pb; val on scalar
-  @contract  resolves same-onset plan collisions in a per-column plan list (mutates in place)
-  @invariant  fromLogical is monotone but not isotone; two logical onsets can round onto one raw ppq
-  @contract  later-source-ppq plan (curr by tie-break) shifts up 1 ppq, else predecessor shifts back
-  @invariant  tail overlaps NOT resolved here; tm's universal tail pass owns every raw note-off
-  @contract  skips non-note plans/cols; optional `deleted` event-set excluded from the walk
-  @invariant  deleted corpses still live in col.events snapshot until next rebuild
-  @invariant  a freshly placed note is unbounded: endppq = util.OPEN, no authored ceiling
-  @invariant  universal tail pass derives the real tail (next onset/take length) each rebuild
-  @contract  caller pre-pins (ppq, ppqL, rpb) onto `update` before calling
-  @contract  col nil only for a chord sprout (no column yet): no prev-vel to inherit, lane pre-set
-  @invariant  notes ordered by entry; members re-resolved via cells[row], never held event refs
-  @contract  arms on a note col's first pitch stop; pins (row, chan) until shift release
-  @contract  returns true iff consumed; false lets the drain fall through (to value-digit entry)
-  @contract  re-striking a gesture pitch toggles it off; freed slots are reused lowest-first
-  @contract  spreadChan strikes walk channels up from home; plain strikes stack home-channel lanes
-  @invariant  pins (col,row,part); overwrites a place keep-below, steps the sub-caret right
-  @invariant  field re-read via cells[row] each keystroke; undo snapshots drive backspace-restore
-  @contract  selection must be exactly one grid column; multi-col selection is a no-op
-  @invariant  a 1-col block stays contiguous when it lands on the destination col
-  @contract  cursor follows to the destination column (single event and selection alike)
-  @contract  refuse if dest col has any onset in source's row extent (note: note-on; else any event)
-  @invariant  source's row extent = selection's [r1,r2] for a block, moved event's onset row for a single
-  @invariant  tails (either direction) clipped by tm's tail pass; never block
-  @contract  reentrancy-guarded; bails on no-take (page shows placeholder)
-  @contract  takeChanged=true resets ec and re-reads resolution/length/timeSigs
-  @contract  grid + ctx rebuild each call; pushMute at end
-  @contract  a column's cells/ghosts carry while its events table + projection epoch are unchanged
-  @contract  tv consumes configChanged only for transient-frame release and mute pulse
-  @contract  rebuild is driven by tm's 'rebuild' signal — closes the (cm, tm) double-fire race
-  @contract  non-transient FRAME_KEYS write while transient override active routes into releaseTransientFrame
-  @invariant  releaseTransientFrame's cm:assign fires configChanged → tm:rebuild → tv:rebuild
+  @invariant  rows 0-indexed, cols 1-indexed, channels 1..16, stops 1-indexed  @ 3
+  @invariant  vm.grid is a live handle; rm reads it each frame  @ 4
+  @invariant  vm.grid is mutated in place on rebuild, never reassigned  @ 5
+  @invariant  rm is pull-only; vm fires no render callbacks  @ 6
+  @invariant  rm queries vm.grid / vm:ec() / vm:rowPerBar() each frame  @ 7
+  @invariant  writes go via tm (add/assign/delete/flush Event); vm never touches mm  @ 8
+  @invariant  vm works in logical time and detune-intent for pitch  @ 9
+  @invariant  vm never reads/writes raw pb directly (docs/tuning.md)  @ 10
+  @invariant  authoring stamps evt.rpb and evt.ppq = row·logPerRow before tm:addEvent  @ 11
+  @invariant  off-grid edits snap evt.ppq to cursor row; delay survives, rpb restamps  @ 12
+  @invariant  clipboard encodes rows in source's logical frame; paste decodes against dest's rpb  @ 13
+  @invariant  clipboard symmetry is on (row, chan), not absolute ppq  @ 14
+  @invariant  grid.chanFirst/Last/lane1Col are chan-keyed; numRows is int  @ 16
+  @invariant  selection part names: pitch/vel/delay on note; pb on pb; val on scalar  @ 21
+  @contract  resolves same-onset plan collisions in a per-column plan list (mutates in place)  @ 343
+  @invariant  fromLogical is monotone but not isotone; two logical onsets can round onto one raw ppq  @ 344
+  @contract  later-source-ppq plan (curr by tie-break) shifts up 1 ppq, else predecessor shifts back  @ 345
+  @invariant  tail overlaps NOT resolved here; tm's universal tail pass owns every raw note-off  @ 346
+  @contract  skips non-note plans/cols; optional `deleted` event-set excluded from the walk  @ 347
+  @invariant  deleted corpses still live in col.events snapshot until next rebuild  @ 348
+  @invariant  a freshly placed note is unbounded: endppq = util.OPEN, no authored ceiling  @ 799
+  @invariant  universal tail pass derives the real tail (next onset/take length) each rebuild  @ 800
+  @contract  caller pre-pins (ppq, ppqL, rpb) onto `update` before calling  @ 801
+  @contract  col nil only for a chord sprout (no column yet): no prev-vel to inherit, lane pre-set  @ 802
+  @invariant  notes ordered by entry; members re-resolved via cells[row], never held event refs  @ 1127
+  @contract  arms on a note col's first pitch stop; pins (row, chan) until shift release  @ 1147
+  @contract  returns true iff consumed; false lets the drain fall through (to value-digit entry)  @ 1148
+  @contract  re-striking a gesture pitch toggles it off; freed slots are reused lowest-first  @ 1149
+  @contract  spreadChan strikes walk channels up from home; plain strikes stack home-channel lanes  @ 1150
+  @invariant  pins (col,row,part); overwrites a place keep-below, steps the sub-caret right  @ 1268
+  @invariant  field re-read via cells[row] each keystroke; undo snapshots drive backspace-restore  @ 1269
+  @contract  selection must be exactly one grid column; multi-col selection is a no-op  @ 2748
+  @invariant  a 1-col block stays contiguous when it lands on the destination col  @ 2749
+  @contract  cursor follows to the destination column (single event and selection alike)  @ 2750
+  @contract  refuse if dest col has any onset in source's row extent (note: note-on; else any event)  @ 2751
+  @invariant  source's row extent = selection's [r1,r2] for a block, moved event's onset row for a single  @ 2752
+  @invariant  tails (either direction) clipped by tm's tail pass; never block  @ 2753
+  @contract  reentrancy-guarded; bails on no-take (page shows placeholder)  @ 3689
+  @contract  takeChanged=true resets ec and re-reads resolution/length/timeSigs  @ 3690
+  @contract  grid + ctx rebuild each call; pushMute at end  @ 3691
+  @contract  a column's cells/ghosts carry while its events table + projection epoch are unchanged  @ 3692
+  @contract  tv consumes configChanged only for transient-frame release and mute pulse  @ 4005
+  @contract  rebuild is driven by tm's 'rebuild' signal — closes the (cm, tm) double-fire race  @ 4006
+  @contract  non-transient FRAME_KEYS write while transient override active routes into releaseTransientFrame  @ 4007
+  @invariant  releaseTransientFrame's cm:assign fires configChanged → tm:rebuild → tv:rebuild  @ 4008
 
 # Shapes
-  @shape  grid = { cols, chanFirstCol, chanLastCol, lane1Col, numRows }
-  @shape  gridCol core = { type, midiChan, [lane], [cc], label, events, width, [normalized], [bipolar], ['14bit'] }
-  @shape  gridCol parts = { parts, stopPos, partAt, partStart, showDelay }
-  @shape  gridCol render = { cells={[y]=evt}, overflow, offGrid, ghosts, [tails] }
-  @shape  selection = { row1, row2, col1, col2, part1, part2 }
-  @shape  plan = { col, e, [newppq], [newEndppq], [newDelay] }
-  @shape  target = { col?, evt?, ppq, rpb, lane?, chan? } (evt is the cell's occupant)
-  @shape  chord = { row, ppq, rpb, chan, startLane, notes = { { pitch, lane, chan }, ... } }
-  @shape  digits = { colIdx, row, part, stop0, undo = { { existed, val, stop }, ... } }
-  @shape  paletteParam = { trackGuid, fxGuid, param, label } — the palette's selected parameter
-  @shape  paletteExpanded = { [fxGuid] = true } — open fx subtrees in the palette tree
-  @shape  paletteCursor = { fxGuid, param } — palette tree cursor; param nil = the fx heading row
-  @shape  stripCursor = { stage, param } — fx-strip caret; param 0 = stage header, k = its k-th field
-  @shape  tabOverride = { tab, anchor } — a clicked/keyboard tab pin ('parameters'|'fx'); caret move clears it
-  @shape  learn = { trackGuid, fxGuid, floated, away, baseline } — armed touch-learn, or nil
+  @shape  grid = { cols, chanFirstCol, chanLastCol, lane1Col, numRows }  @ 15
+  @shape  gridCol core = { type, midiChan, [lane], [cc], label, events, width, [normalized], [bipolar], ['14bit'] }  @ 17
+  @shape  gridCol parts = { parts, stopPos, partAt, partStart, showDelay }  @ 18
+  @shape  gridCol render = { cells={[y]=evt}, overflow, offGrid, ghosts, [tails] }  @ 19
+  @shape  selection = { row1, row2, col1, col2, part1, part2 }  @ 20
+  @shape  plan = { col, e, [newppq], [newEndppq], [newDelay] }  @ 22
+  @shape  target = { col?, evt?, ppq, rpb, lane?, chan? } (evt is the cell's occupant)  @ 841
+  @shape  chord = { row, ppq, rpb, chan, startLane, notes = { { pitch, lane, chan }, ... } }  @ 1126
+  @shape  digits = { colIdx, row, part, stop0, undo = { { existed, val, stop }, ... } }  @ 1267
+  @shape  paletteParam = { trackGuid, fxGuid, param, label } — the palette's selected parameter  @ 3388
+  @shape  paletteExpanded = { [fxGuid] = true } — open fx subtrees in the palette tree  @ 3391
+  @shape  paletteCursor = { fxGuid, param } — palette tree cursor; param nil = the fx heading row  @ 3393
+  @shape  stripCursor = { stage, param } — fx-strip caret; param 0 = stage header, k = its k-th field  @ 3395
+  @shape  tabOverride = { tab, anchor } — a clicked/keyboard tab pin ('parameters'|'fx'); caret move clears it  @ 3397
+  @shape  learn = { trackGuid, fxGuid, floated, away, baseline } — armed touch-learn, or nil  @ 3404
 
 # Imports
   @require util = 'util'  @ 25
-      @invariant  plan is consumed by writePlans / conformOverlaps
+      @invariant  plan is consumed by writePlans / conformOverlaps  @ 23
   @require timing = 'timing'  @ 26
   @require tuning = 'tuning'  @ 27
   @require groupsCore = 'groups'  @ 28
@@ -153,7 +153,7 @@
       -- so it must not bound the move (mirrors shiftEvents' reorder-not-tail
       -- rule). No prev -> the -1 sentinel makes minRow 0, the item-start
       -- guard. e.ppq is exact logical-ppq post-projection.
-      @contract  onset-only; tails never bound the move (tm clips overrun on rebuild)
+      @contract  onset-only; tails never bound the move (tm clips overrun on rebuild)  @ 328
   @fn conformOverlaps(plans, deleted)  @ 349-396
   @fn writePlans(plans)  @ 401-420
       -- Sort by shift direction so a still-old same-pitch peer vacates
@@ -168,8 +168,8 @@
   -- Frames & timing
   @fn logPerRowFor(rpb)  @ 461-464
   @fn isFrameChange(change)  @ 471-473
-      @contract  a non-transient write to a FRAME_KEYS member is a real frame change
-      @contract  real frame change fires releaseTransientFrame from configCallback
+      @contract  a non-transient write to a FRAME_KEYS member is a real frame change  @ 469
+      @contract  real frame change fires releaseTransientFrame from configCallback  @ 470
   @fn currentRpb()  @ 475
   @fn releaseTransientFrame()  @ 478-488
       -- Returns true iff a transient override was released.
@@ -180,7 +180,7 @@
       -- endppqL makes tm stamp the ceiling from this note-off (closing a
       -- previously util.OPEN note), so the universal tail pass honours it
       -- instead of treating the note as unbounded every rebuild.
-      @contract  on tail move: stamps endppqL ceiling via tm; rebases evt.rpb alongside endppq
+      @contract  on tail move: stamps endppqL ceiling via tm; rebases evt.rpb alongside endppq  @ 504
   @fn assignNoteMove(evt, rowS)  @ 514-521
       -- Shift onset to rowS and shift endppq by the same ppq delta. endppq
       -- is the authored logical ceiling (endppqL), which may run past the
@@ -198,9 +198,9 @@
   -- Mute / solo
   @fn toggleChannelFlag(key, chan)  @ 643-647
   @fn pushMute()  @ 652-663
-      @contract  effective mute = persistent-mute ∪ solo-implied mute
-      @invariant  any solo: non-soloed forced muted, soloed forced audible (DAW solo-wins)
-      @invariant  both sets persist in ds so reload's tm:lastMuteSet matches the wire
+      @contract  effective mute = persistent-mute ∪ solo-implied mute  @ 649
+      @invariant  any solo: non-soloed forced muted, soloed forced audible (DAW solo-wins)  @ 650
+      @invariant  both sets persist in ds so reload's tm:lastMuteSet matches the wire  @ 651
   -- Audition
   @fn sendBend(chan, cents)  @ 681-686
       -- Detune→live pitch-bend on the audition channel; mirrors tm's centsToRaw
@@ -224,9 +224,9 @@
   @fn pitchFromKey(nk)  @ 834-839
       -- Key → MIDI pitch at the input octave, snapped onto the active temper.
   @fn strikePitch(target, pitch, detune)  @ 845-872
-      @contract  shared by editEvent and the chord gesture (tv:chordStrike)
-      @contract  col nil only for a chord strike sprouting a new lane (no column yet)
-      @contract  returns the struck note's vel, for the caller to audition
+      @contract  shared by editEvent and the chord gesture (tv:chordStrike)  @ 842
+      @contract  col nil only for a chord strike sprouting a new lane (no column yet)  @ 843
+      @contract  returns the struck note's vel, for the caller to audition  @ 844
   @fn toggleSignFlip(part)  @ 877-884
   @fn inheritedSign(col, row)  @ 888-893
       -- Sign a digit lands with on an empty cell: the displayed ghost's, else the
@@ -306,8 +306,8 @@
       -- (cursorNoteBefore would otherwise retarget it). Non-note events
       -- nudge in time too, all-or-nothing like shiftEvents: refuse off the
       -- grid edge or onto a same-column event (a same-ppq collision).
-      @contract  single move: notes blocked only by onset reorder; cc/at/pa/pc by occupied dest row
-      @contract  selection: refuse if any col's [selLo..selHi]+rowDelta destination holds a foreign onset
+      @contract  single move: notes blocked only by onset reorder; cc/at/pa/pc by occupied dest row  @ 1844
+      @contract  selection: refuse if any col's [selLo..selHi]+rowDelta destination holds a foreign onset  @ 1845
   -- Quantize / scale
   @fn allGroups()  @ 1894-1902
       -- Every column, every event, as a groups list (for *-all variants).
@@ -483,21 +483,21 @@
       -- nearest extant one and writes through, so storage tracks what's displayed.
   @api tv:retargetTrackTier()  @ 212-218
       -- per-track reads (swing seed, trackerSlot) stay coherent. See docs § Selection.
-      @contract  parked take hosts on scratch; re-point track tier at the selection's track so
+      @contract  parked take hosts on scratch; re-point track tier at the selection's track so  @ 210
   @api tv:selectTrack(guid, optSlot)  @ 221-229
-      @contract  point at a track by GUID; optSlot pins a slot, else restore its last-viewed slot
+      @contract  point at a track by GUID; optSlot pins a slot, else restore its last-viewed slot  @ 220
   @api tv:selectSlot(slotIdx)  @ 232
-      @contract  pin a slot on the current track
+      @contract  pin a slot on the current track  @ 231
   @api tv:gotoTrack(dir)  @ 235-239
-      @contract  step ±1 over all tracks (may land on an empty one); restores its last slot
+      @contract  step ±1 over all tracks (may land on an empty one); restores its last slot  @ 234
   @api tv:gotoTake(dir)  @ 242-251
-      @contract  step ±1 slot on the current track, from the effective slot
+      @contract  step ±1 slot on the current track, from the effective slot  @ 241
   @api tv:pickTrack(trackIdx)  @ 253-256
   @api tv:pickTake(slotIdx)  @ 257
   @api tv:newParkedTake(name, beats)  @ 260-265
-      @contract  mint an empty parked take on the current track, select it; returns its slot
+      @contract  mint an empty parked take on the current track, select it; returns its slot  @ 259
   @api tv:duplicateBoundUnpooled()  @ 268-275
-      @contract  clone the bound take (unpooled) into a fresh parked slot, select it, return slotIdx
+      @contract  clone the bound take (unpooled) into a fresh parked slot, select it, return slotIdx  @ 267
   @api tv:setRowPerBeat(n)  @ 536-546
   @api tv:setSwingSlot(name)  @ 591-597
       -- Take-wide swing: the take map's 'global' slot + project & track seed.
@@ -506,7 +506,7 @@
       -- (the project tier carries 'global' alone, never per-channel).
   @api tv:setTemperSlot(name)  @ 608-613
   @api tv:seedSharedSlots()  @ 616-620
-      @contract  bind materialises a take's swing from defaultSwing (identity floor); no-op once set
+      @contract  bind materialises a take's swing from defaultSwing (identity floor); no-op once set  @ 615
   @api tv:setSwingComposite(name, composite, tier)  @ 622-628
   @api tv:setTemper(name, temper, tier)  @ 630-636
   @api tv:isChannelMuted(chan)  @ 665
@@ -522,32 +522,32 @@
       -- Part name + the sign the next digit lands with, for cells where that sign
       -- is fixed by arm or inheritance; nil unless the cursor is on the cell.
   @api tv:editEvent(col, evt, stop, char, keep)  @ 915-1122
-      @contract  single typed-input entry point; dispatches on (col.type, stop, evt-kind)
-      @contract  off-grid edits run through snap to repin evt.ppq to cursor row and restamp frame
-      @contract  commit flushes+advances by advanceBy; '-' flips and keep gesture stay put
+      @contract  single typed-input entry point; dispatches on (col.type, stop, evt-kind)  @ 912
+      @contract  off-grid edits run through snap to repin evt.ppq to cursor row and restamp frame  @ 913
+      @contract  commit flushes+advances by advanceBy; '-' flips and keep gesture stay put  @ 914
   @api tv:chordActive()  @ 1145
   @api tv:chordStrike(char, spreadChan)  @ 1151-1216
   @api tv:chordBackspace()  @ 1219-1228
-      @contract  deletes the last-entered gesture note, freeing its lane for reuse
+      @contract  deletes the last-entered gesture note, freeing its lane for reuse  @ 1218
   @api tv:chordNudgeVel(dir)  @ 1231-1244
-      @contract  nudges the last-entered gesture note's velocity by one, re-auditioning it
+      @contract  nudges the last-entered gesture note's velocity by one, re-auditioning it  @ 1230
   @api tv:chordCommit()  @ 1247-1252
-      @contract  shift release commits: advance once if any note survives, silence the chord
+      @contract  shift release commits: advance once if any note survives, silence the chord  @ 1246
   @api tv:chordAbandon()  @ 1255-1259
-      @contract  drops the gesture without committing; rebuild(takeChanged)/dropGrid route here
+      @contract  drops the gesture without committing; rebuild(takeChanged)/dropGrid route here  @ 1254
   @api tv:digitsActive()  @ 1284
   @api tv:digitsStrike(char)  @ 1288-1305
-      @contract  arms on a value part; false declines (off a value part / char not a field digit)
-      @contract  overwrites the caret's place keep-below, then steps the sub-caret one place right
+      @contract  arms on a value part; false declines (off a value part / char not a field digit)  @ 1286
+      @contract  overwrites the caret's place keep-below, then steps the sub-caret one place right  @ 1287
   @api tv:digitsBackspace()  @ 1308-1322
-      @contract  restores the place the last digit overwrote and steps the sub-caret back onto it
+      @contract  restores the place the last digit overwrote and steps the sub-caret back onto it  @ 1307
   @api tv:digitsCommit()  @ 1325-1330
-      @contract  shift release restores the entry column, advances one row, drops the gesture
+      @contract  shift release restores the entry column, advances one row, drops the gesture  @ 1324
   @api tv:digitsAbandon()  @ 1333
-      @contract  drops the gesture without advancing; rebuild(takeChanged)/dropGrid route here
+      @contract  drops the gesture without advancing; rebuild(takeChanged)/dropGrid route here  @ 1332
   @api tv:moveLaneEvent(col, i, toRow, toVal)  @ 1361-1381
-      @contract  clamps newppq strictly inside (prev.ppq, next.ppq) by ±1
-      @invariant  ±1 clamp is necessary-and-sufficient for identity-by-visible-index across rebuild
+      @contract  clamps newppq strictly inside (prev.ppq, next.ppq) by ±1  @ 1359
+      @invariant  ±1 clamp is necessary-and-sufficient for identity-by-visible-index across rebuild  @ 1360
   @api tv:addLaneEvent(col, colIdx, ppq, val)  @ 1385-1410
       -- Inherits prev visible's envelope shape so prev→next curve survives the new midpoint.
       -- Returns the new event's visible index post-flush for drag-seed.
@@ -656,14 +656,14 @@
   @api tv:deletedCells(groupId, instId)  @ 3212-3221
       -- gm's delete overrides resolved to grid cells for render highlight and deleteEvent's revert.
       -- Located by group event projection (no concrete = no uuid) rather than uuid.
-      @contract  (groupId, instId) -> { { col, row, vuid } }
+      @contract  (groupId, instId) -> { { col, row, vuid } }  @ 3211
   @api tv:movePreview()  @ 3225-3260
       -- Drag preview for trackerRender: armed instance shifted by pending row /
       -- channel / lane deltas; srcMember = suppressed source cols, destSrc[x] = its source col.
   @api tv:paintRegionStream(groupId, instId, colIx, on)  @ 3265-3291
-      @contract  extend hands newly-covered concretes in as `gained` (gm:resizeGroup never rescans)
-      @contract  idempotent: re-painting an already on/off stream is a no-op true
-      @invariant  group's live rect found by id off gm:eachInstance — ec carries no geometry
+      @contract  extend hands newly-covered concretes in as `gained` (gm:resizeGroup never rescans)  @ 3262
+      @contract  idempotent: re-painting an already on/off stream is a no-op true  @ 3263
+      @invariant  group's live rect found by id off gm:eachInstance — ec carries no geometry  @ 3264
   @api tv:setGridSize(w, h)  @ 3295-3297
   @api tv:addExtraCol(type, cc)  @ 3301-3327
   @api tv:hideExtraCol()  @ 3329-3384
@@ -686,25 +686,25 @@
   @api tv:paramTargets()  @ 3445
   @api tv:paramBinding(chan, lane)  @ 3446
   @api tv:listParams(trackGuid, fxGuid)  @ 3449-3464
-      @contract  pa's frecency order with this take's learn-touched params on top, recent first
+      @contract  pa's frecency order with this take's learn-touched params on top, recent first  @ 3448
   @api tv:armLearn(row)  @ 3469-3476
-      @contract  arming floats the fx ui; the pre-arm touch is snapshotted so it can't select
+      @contract  arming floats the fx ui; the pre-arm touch is snapshotted so it can't select  @ 3468
   @api tv:learnFxGuid()  @ 3478
   @api tv:showFx(row)  @ 3481
       -- The palette's 'show' button: float the fx ui without arming learn.
   @api tv:cancelLearn()  @ 3484-3487
-      @contract  pops the fx window down only when arming floated it
+      @contract  pops the fx window down only when arming floated it  @ 3483
   @api tv:pollLearn(focused)  @ 3491-3508
-      @contract  focused = any ImGui window focused; cancel fires on regain after a loss
-      @contract  a touch on the armed fx selects + hoists; frecency is bumped by automate only
+      @contract  focused = any ImGui window focused; cancel fires on regain after a loss  @ 3489
+      @contract  a touch on the armed fx selects + hoists; frecency is bumped by automate only  @ 3490
   @api tv:automateParam()  @ 3511-3525
-      @contract  binds the selected palette param at the cursor column's channel; adds its cc column
+      @contract  binds the selected palette param at the cursor column's channel; adds its cc column  @ 3510
   @api tv:unautomateParam()  @ 3528-3536
-      @contract  deletes the cursor cc column's events; column + binding then go via hideExtraCol
+      @contract  deletes the cursor cc column's events; column + binding then go via hideExtraCol  @ 3527
   @api tv:showDelay()  @ 3538-3552
   @api tv:rebuild(takeChanged)  @ 3693-3981
   @api tv:dropGrid()  @ 3984-3991
-      @contract  blank the grid so renderBody falls through to the "Select a MIDI item" placeholder. Counterpart to bindTake(nil)'s dormant seam, for when the take is destroyed rather than handed off.
+      @contract  blank the grid so renderBody falls through to the "Select a MIDI item" placeholder. Counterpart to bindTake(nil)'s dormant seam, for when the take is destroyed rather than handed off.  @ 3983
   -- Lifecycle
   -- Factory load
   -- Group quick-verb lifetimes

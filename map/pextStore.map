@@ -1,18 +1,18 @@
 @module pextStore  src=pextStore.lua  loc=433  sha=e2be081  mode=chunk  self=ps
 
 # Invariants & contracts
-  @invariant  single source of bound take/track context, shared by every face; setTake derives track from the take's item
-  @invariant  watcher baselines refresh on bound writes (assign) and context changes; foreign assignAt leaves them stale
-  @invariant  a stale take/track ptr is dropped (handle→nil, its baselines→'') before any read on a poll tick
-  @contract  get/assign (de)serialise by scope; no schema prune — each face owns its own key registry
-  @reaper  take/track P_EXT via GetSetMedia{ItemTake,Track}Info_String; project via Get/SetProjExtState; global via io
-  @invariant  undoable project slots mirror to scratch P_EXT (two-level hash manifest); rest don't
-  @invariant  polls project state count per frame; on tick re-reads watched blobs, fires diverged groups once each
-  @invariant  mirror resync runs before the watch groups, so a rewound blob diverges same tick
-  @contract  no-op without GetProjectStateChangeCount (test harness); one int compare per frame otherwise
+  @invariant  single source of bound take/track context, shared by every face; setTake derives track from the take's item  @ 3
+  @invariant  watcher baselines refresh on bound writes (assign) and context changes; foreign assignAt leaves them stale  @ 4
+  @invariant  a stale take/track ptr is dropped (handle→nil, its baselines→'') before any read on a poll tick  @ 5
+  @contract  get/assign (de)serialise by scope; no schema prune — each face owns its own key registry  @ 6
+  @reaper  take/track P_EXT via GetSetMedia{ItemTake,Track}Info_String; project via Get/SetProjExtState; global via io  @ 7
+  @invariant  undoable project slots mirror to scratch P_EXT (two-level hash manifest); rest don't  @ 8
+  @invariant  polls project state count per frame; on tick re-reads watched blobs, fires diverged groups once each  @ 407
+  @invariant  mirror resync runs before the watch groups, so a rewound blob diverges same tick  @ 408
+  @contract  no-op without GetProjectStateChangeCount (test harness); one int compare per frame otherwise  @ 409
 
 # Shapes
-  @shape  mirror = { guid, buckets = { [b] = { [slot] = hash } }, manifestHash = { [b] = hash }, rootRaw }
+  @shape  mirror = { guid, buckets = { [b] = { [slot] = hash } }, manifestHash = { [b] = hash }, rootRaw }  @ 108
 
 # Imports
   @require util = 'util'  @ 9
@@ -85,24 +85,24 @@
   -- PUBLIC INTERFACE
   -- Context
   @api ps:setTake(newTake)  @ 344-353
-      @contract  setTake(nil) clears take+track; setTake(take) derives track via GetMediaItemTrack; resnapshots baselines
+      @contract  setTake(nil) clears take+track; setTake(take) derives track via GetMediaItemTrack; resnapshots baselines  @ 342
   @api ps:clearTake()  @ 355-359
   @api ps:setTrack(newTrack)  @ 361-365
   @api ps:boundTake()  @ 367
   @api ps:boundTrack()  @ 368
   -- Storage
   @api ps:get(scope, slot)  @ 373
-      @contract  returns the decoded value at (scope, slot) under bound context; nil if absent or undecodable
+      @contract  returns the decoded value at (scope, slot) under bound context; nil if absent or undecodable  @ 372
   @api ps:getAt(handle, scope, slot)  @ 374
   @api ps:assign(scope, slot, value)  @ 377-382
-      @contract  writes value at (scope, slot); util.REMOVE clears; refreshes watcher baseline if watched
+      @contract  writes value at (scope, slot); util.REMOVE clears; refreshes watcher baseline if watched  @ 376
   @api ps:assignAt(handle, scope, slot, value)  @ 385-387
       -- Foreign-handle write: bypasses bound context and never touches the baseline.
   -- Watcher
   @api ps:declareUndoable(spec)  @ 392-397
-      @contract  declared project slots mirror to scratch and rewind with undo; others stay projext-only
+      @contract  declared project slots mirror to scratch and rewind with undo; others stay projext-only  @ 391
   @api ps:watch(blobs, onDiverge)  @ 400-405
-      @contract  blobs = { { scope, slot }, ... }; onDiverge(divergedBlobs) fires once per poll tick that diverges
+      @contract  blobs = { { scope, slot }, ... }; onDiverge(divergedBlobs) fires once per poll tick that diverges  @ 399
   @api ps:pollUndo()  @ 411-431
 
 # Signals emitted (via util.installHooks)

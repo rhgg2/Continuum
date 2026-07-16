@@ -2,23 +2,23 @@
 @deps cm
 
 # Invariants & contracts
-  @invariant  cmgr owns a flat command namespace; scopes own keymaps + modal/passthrough only
-  @invariant  scope:register installs a gated wrapper; invoke returns nil when scope is unreachable
-  @invariant  scopes form a stack walked top-down; the bottom is the 'global' scope pushed at module load
-  @invariant  a modal scope without passthrough[name] blocks both key dispatch and invoke for names below it
-  @invariant  command return: nil = handled (stop dispatch); false = declined (let char queue see the keypress)
-  @invariant  spring-loaded scope: redirect[] reinterprets; keepAlive[] passes; else onBail()
-  @invariant  a keymap entry is an array of keyspecs — multiple bindings dispatch to the same command
-  @invariant  layouts row 1 = base octave (15 semitones, C..D+1oct); row 2 = +1 octave (17 semitones, C..F+1oct)
-  @invariant  chars is folded from layouts at load time so the LUT can't drift from the declaration
-  @contract  optional undoDesc wraps fn in util.atomic(undoDesc, fn) so REAPER's undo stack records this command as a labelled block
-  @contract  registerAll value is either fn or {fn, undoDesc}; the tuple form opts the command into REAPER undo wrapping with the given label
+  @invariant  cmgr owns a flat command namespace; scopes own keymaps + modal/passthrough only  @ 3
+  @invariant  scope:register installs a gated wrapper; invoke returns nil when scope is unreachable  @ 4
+  @invariant  scopes form a stack walked top-down; the bottom is the 'global' scope pushed at module load  @ 5
+  @invariant  a modal scope without passthrough[name] blocks both key dispatch and invoke for names below it  @ 6
+  @invariant  command return: nil = handled (stop dispatch); false = declined (let char queue see the keypress)  @ 7
+  @invariant  spring-loaded scope: redirect[] reinterprets; keepAlive[] passes; else onBail()  @ 8
+  @invariant  a keymap entry is an array of keyspecs — multiple bindings dispatch to the same command  @ 9
+  @invariant  layouts row 1 = base octave (15 semitones, C..D+1oct); row 2 = +1 octave (17 semitones, C..F+1oct)  @ 10
+  @invariant  chars is folded from layouts at load time so the LUT can't drift from the declaration  @ 11
+  @contract  optional undoDesc wraps fn in util.atomic(undoDesc, fn) so REAPER's undo stack records this command as a labelled block  @ 88
+  @contract  registerAll value is either fn or {fn, undoDesc}; the tuple form opts the command into REAPER undo wrapping with the given label  @ 95
 
 # Shapes
-  @shape  keyspec = keyConstant | { keyConstant, mod1, mod2, ... }   -- mods OR'd into a single mask
-  @shape  keymapEntry = { keyspec, ... }                              -- array; each keyspec triggers the same command
-  @shape  noteChar = { semi = 0..16, octOff = 0..1 }
-  @shape  scope = { keymap={}, registered={}, modal?, passthrough?, springLoaded?, redirect={[name]=fn}?, keepAlive={[name]=true}?, onBail? }
+  @shape  keyspec = keyConstant | { keyConstant, mod1, mod2, ... }   -- mods OR'd into a single mask  @ 12
+  @shape  keymapEntry = { keyspec, ... }                              -- array; each keyspec triggers the same command  @ 13
+  @shape  noteChar = { semi = 0..16, octOff = 0..1 }  @ 14
+  @shape  scope = { keymap={}, registered={}, modal?, passthrough?, springLoaded?, redirect={[name]=fn}?, keepAlive={[name]=true}?, onBail? }  @ 79
 
 # Imports
   @require util = 'util'  @ 15
@@ -62,64 +62,64 @@
 
 # Public API (cmgr:*)
   @api cmgr:register(name, fn, undoDesc)  @ 123
-      @contract  delegates to the global scope — root-level commands are gated-to-global, which is always reachable; the duplicated registration body now lives only in scope:register
+      @contract  delegates to the global scope — root-level commands are gated-to-global, which is always reachable; the duplicated registration body now lives only in scope:register  @ 122
   @api cmgr:registerAll(tbl)  @ 124
   @api cmgr:rootKeymap()  @ 127
-      @contract  returns the bottom-of-stack ('global') keymap directly — used by dispatchers that want to fire ONLY root bindings (e.g. trackerPage's swing editor wants playPause/quit live but page-scoped commands off)
+      @contract  returns the bottom-of-stack ('global') keymap directly — used by dispatchers that want to fire ONLY root bindings (e.g. trackerPage's swing editor wants playPause/quit live but page-scoped commands off)  @ 126
   @api cmgr:bind(name, keys)  @ 129
   @api cmgr:bindAll(tbl)  @ 130
   @api cmgr:wrap(name, wrapper)  @ 133-137
-      @contract  wrap is a no-op if name has no registered command; wrappers stack (compose outward)
+      @contract  wrap is a no-op if name has no registered command; wrappers stack (compose outward)  @ 132
   @api cmgr:doBefore(name, before)  @ 142-150
-      @contract  doBefore/doAfter accept either a single name or an array of names
-      @contract  doAfter preserves the original command's return values (the dispatch signal)
-      @invariant  wraps compose inside the gate — when invoke skips a gated command, no doBefore / doAfter side-effect fires
+      @contract  doBefore/doAfter accept either a single name or an array of names  @ 139
+      @contract  doAfter preserves the original command's return values (the dispatch signal)  @ 140
+      @invariant  wraps compose inside the gate — when invoke skips a gated command, no doBefore / doAfter side-effect fires  @ 141
   @api cmgr:doAfter(name, after)  @ 152-162
   @api cmgr:beginPrefix()  @ 184
-      @contract  buffer accepts only '0'..'9' and '/'; cancel/finish/invoke each leave the state inactive
+      @contract  buffer accepts only '0'..'9' and '/'; cancel/finish/invoke each leave the state inactive  @ 183
   @api cmgr:isPrefixActive()  @ 185
   @api cmgr:appendPrefix(ch)  @ 187-191
   @api cmgr:cancelPrefix()  @ 193
   @api cmgr:finishPrefix()  @ 196-214
-      @contract  empty buffer or unparseable input → nil pending value; '/' with empty numerator or denominator parses as nil; integer N stored as (N/1)
+      @contract  empty buffer or unparseable input → nil pending value; '/' with empty numerator or denominator parses as nil; integer N stored as (N/1)  @ 195
   @api cmgr:prefixRational()  @ 217-219
-      @contract  non-consuming reader of the parsed rational; safe to call inside a command body. Returns (nil, nil) when no prefix is pending. State is cleared at the end of invoke, not by this call.
+      @contract  non-consuming reader of the parsed rational; safe to call inside a command body. Returns (nil, nil) when no prefix is pending. State is cleared at the end of invoke, not by this call.  @ 216
   @api cmgr:scope(name)  @ 224-231
-      @contract  creates the scope on first request; idempotent thereafter
+      @contract  creates the scope on first request; idempotent thereafter  @ 223
   @api cmgr:push(s)  @ 236-240
-      @contract  push(name|scope); creates a named scope if absent. Top-of-stack is the most recently pushed.
+      @contract  push(name|scope); creates a named scope if absent. Top-of-stack is the most recently pushed.  @ 235
   @api cmgr:pop(s)  @ 243-247
-      @contract  pop(name|scope) asserts the named scope is currently on top; pops it
+      @contract  pop(name|scope) asserts the named scope is currently on top; pops it  @ 242
   @api cmgr:invoke(name, ...)  @ 254-273
-      @contract  returns nil when the command is unknown OR registered on a scope that is not currently reachable (off-stack or blocked by a modal above)
-      @contract  always prepends the pending prefix (defaulted to 1 when nothing is pending) as the first argument to the command body. Bodies that need to distinguish "user typed 1" from "no prefix" read prefixRational() — it returns (nil, nil) when nothing is pending. State stays live for the call so the body may read it; cleared on return ONLY if there was a pending prefix at entry, so a command body that opens prefix mode (beginPrefix) is not wiped out by its own invoke.
-      @contract  spring-loaded scope: redirect[] runs fn in-place; keepAlive[] passes; else onBail()
+      @contract  returns nil when the command is unknown OR registered on a scope that is not currently reachable (off-stack or blocked by a modal above)  @ 251
+      @contract  always prepends the pending prefix (defaulted to 1 when nothing is pending) as the first argument to the command body. Bodies that need to distinguish "user typed 1" from "no prefix" read prefixRational() — it returns (nil, nil) when nothing is pending. State stays live for the call so the body may read it; cleared on return ONLY if there was a pending prefix at entry, so a command body that opens prefix mode (beginPrefix) is not wiped out by its own invoke.  @ 252
+      @contract  spring-loaded scope: redirect[] runs fn in-place; keepAlive[] passes; else onBail()  @ 253
   @api cmgr:keysFor(name)  @ 289
   @api cmgr:keychain()  @ 292-309
-      @contract  returns one keymap per stack scope in top-down order; modal scopes filter lower keymaps to their passthrough name set, then halt the walk
+      @contract  returns one keymap per stack scope in top-down order; modal scopes filter lower keymaps to their passthrough name set, then halt the walk  @ 291
   @api cmgr:keySpec(spec, ImGui)  @ 312-317
       -- ImGui injected so cmgr stays free of REAPER-side imports at module load.
   @api cmgr:commandAtKey(spec, exceptName, ImGui)  @ 323-335
-      @contract  reachable command for spec's key (keychain top-down); skips exceptName; nil if free
+      @contract  reachable command for spec's key (keychain top-down); skips exceptName; nil if free  @ 322
   @api cmgr:bindingSite(name)  @ 338-345
-      @contract  scope to edit name's binding in: scope currently binding it, else its gate scope
+      @contract  scope to edit name's binding in: scope currently binding it, else its gate scope  @ 337
   @api cmgr:noteChars(char)  @ 351-353
       -- Re-read noteLayout on each call so a config change takes effect
       -- without rebuilding vm.
   @api cmgr:keyLabel(spec, ImGui)  @ 440-452
   @api cmgr:keyLabelList(name, ImGui)  @ 455-461
-      @contract  list of human labels, one per bound keyspec of the reachable command, or nil if unbound
+      @contract  list of human labels, one per bound keyspec of the reachable command, or nil if unbound  @ 454
   @api cmgr:keyLabels(name, ImGui)  @ 464-467
-      @contract  keyLabelList joined by ' / ', or nil if unbound on the current stack
+      @contract  keyLabelList joined by ' / ', or nil if unbound on the current stack  @ 463
   @api cmgr:tokenForSpec(spec, ImGui)  @ 529-540
-      @contract  spec -> stable ASCII token ("Ctrl+Z"); nil if the key has no token name
+      @contract  spec -> stable ASCII token ("Ctrl+Z"); nil if the key has no token name  @ 528
   @api cmgr:specForToken(token, ImGui)  @ 543-558
-      @contract  token -> keyspec (bare key | {key, mod...}); (nil, err) on an unknown key/modifier
+      @contract  token -> keyspec (bare key | {key, mod...}); (nil, err) on an unknown key/modifier  @ 542
   -- Binding overrides (persisted, hand-editable)
   @api cmgr:loadOverrides(ImGui)  @ 564-579
-      @contract  a malformed token is warned and skipped; the command keeps its other (good) bindings
+      @contract  a malformed token is warned and skipped; the command keeps its other (good) bindings  @ 563
   @api cmgr:rebind(scopeName, name, specs, ImGui)  @ 582-592
-      @contract  overwrites the scope's binding for name and persists it as tokens (global tier)
+      @contract  overwrites the scope's binding for name and persists it as tokens (global tier)  @ 581
 
 # Uses (outbound edges)
   @use call    cm:get  @ noteChars:352 loadOverrides:565 rebind:586

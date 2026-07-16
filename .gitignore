@@ -1,7 +1,6 @@
 /.DS_Store
 /tests/.DS_Store
 .DS_Store
-/.claude/mcp/patches/__pycache__/
+/.claude/mcp/*/__pycache__/
 /.claude/mcp/reaper/spool/
 /.claude/precedent.json
-/.claude/mcp/reaper/__pycache__/

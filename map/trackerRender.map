@@ -2,18 +2,18 @@
 @deps cm, ds, cmgr, chrome, gui, modalHost, facade, tv, help, pe
 
 # Invariants & contracts
-  @invariant  page is render + input only; tracker state lives in tv/ec/tm, never cached
-  @invariant  cm/tv read fresh each frame; only ephemeral UI state persists across frames
-  @invariant  page-persistent state: picker*, paletteFocus, stripFocus (modal state on modalHost)
-  @invariant  grid/lane render state lives in gridPane, not this page
-  @invariant  writes go through tv or cmgr commands; page never reaches into tm
-  @contract  trackerPage (the controller) owns the stack + take lifecycle and drives this renderer
-  @contract  the renderer holds only tv (injected); it never reaches mm/tm/gm
+  @invariant  page is render + input only; tracker state lives in tv/ec/tm, never cached  @ 3
+  @invariant  cm/tv read fresh each frame; only ephemeral UI state persists across frames  @ 4
+  @invariant  page-persistent state: picker*, paletteFocus, stripFocus (modal state on modalHost)  @ 5
+  @invariant  grid/lane render state lives in gridPane, not this page  @ 6
+  @invariant  writes go through tv or cmgr commands; page never reaches into tm  @ 7
+  @contract  trackerPage (the controller) owns the stack + take lifecycle and drives this renderer  @ 18
+  @contract  the renderer holds only tv (injected); it never reaches mm/tm/gm  @ 19
 
 # Shapes
-  @shape  ToolbarSegment = { id, render = fn(), visible? = fn() -> bool }
-  @shape  plan item = {kind='heading',text} | {kind='fx',row,open} | {kind='section',row,text} | {kind='param',row,prm}
-  @shape  focusState = { suppressKbd:bool, pageSuppressed:bool, acceptCmds:bool }
+  @shape  ToolbarSegment = { id, render = fn(), visible? = fn() -> bool }  @ 84
+  @shape  plan item = {kind='heading',text} | {kind='fx',row,open} | {kind='section',row,text} | {kind='param',row,prm}  @ 306
+  @shape  focusState = { suppressKbd:bool, pageSuppressed:bool, acceptCmds:bool }  @ 1471
 
 # Imports
   @require util = 'util'  @ 8
@@ -70,7 +70,7 @@
       -- Group an fx's (frecency-ordered) params into section subgroups, each a section
       -- heading + its params. See docs/trackerRender.md § Parameter sections.
   @fn buildPlan(rows, needle)  @ 308-336
-      @contract  non-empty needle prunes to matched subtrees (forced open); see docs § Filtering
+      @contract  non-empty needle prunes to matched subtrees (forced open); see docs § Filtering  @ 307
   @fn navRows(plan, paramsOnly)  @ 340-351
       -- Navigable rows in display order; headings are skipped, and so are fx rows
       -- when filtering — the cursor then visits matched params only.
@@ -101,7 +101,7 @@
   @fn openConfirm(title, callback, prompt)  @ 753-755
   @fn scopedAction(title, base)  @ 823-829
       -- Naming convention <base>Selection / <base>All is the contract.
-      @contract  requires tv to expose both `<base>Selection` and `<base>All` methods
+      @contract  requires tv to expose both `<base>Selection` and `<base>All` methods  @ 822
   @fn resolveColType(s)  @ 832-842
       -- Add-Column type vocabulary. See docs/trackerView.md § Extra columns.
   @fn addColumn()  @ 844-855

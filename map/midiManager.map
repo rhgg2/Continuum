@@ -2,42 +2,42 @@
 @deps take, eventMeta
 
 # Invariants & contracts
-  @invariant  channels are 1..16 internally; +1 applied on read from REAPER, -1 on write
-  @invariant  loc is 1-indexed REAPER event-order; not stable across reloads
-  @invariant  mm holds realisation frame; delay baked into note-on ppq (docs/timing.md)
-  @invariant  mm holds raw pb; cents/detune + absorber pb live in tm (docs/tuning.md)
-  @invariant  muted is true-or-absent; false coerces to nil at write; pass false to clear
-  @invariant  per-event metadata persists via eventMeta, keyed by the take's POOL guid (docs/eventMeta.md)
-  @invariant  note.chan ∈ 1..16; pitch/vel ∈ 0..127; muted is true-or-absent
-  @invariant  cc.evType ∈ {cc, pb, pa, at, pc}; pa stores in .vel, others in .val
-  @invariant  cc.cc set on evType='cc'; cc.pitch set on 'pa'; chan ∈ 1..16; cc/pitch ∈ 0..127
-  @invariant  cc.shape ∈ {step, linear, slow, fast-start, fast-end, bezier}; tension only on bezier
-  @contract  load is always external (lock-free): reads the take, normalises in-memory, reprojects
-  @contract  dedup/unify/reconcile mutate the model + set dirty; flushTake writes once if dirty
-  @contract  a take still holding loadedBlob is converged: fires reload{wholesale=false, chans={}}, returns
-  @contract  metadata persists incrementally: reassignment clones out, uuids no event claims swept
-  @contract  stage-3 consensus: winning offset needs ≥ max(2, ceil(0.5·n)) votes, unique
-  @contract  load fires signals in order: takeSwapped, notesDeduped, uuidsReassigned
-  @contract  then: ccsDeduped, ccsReconciled, collisionsResolved, reload, flushed (iff wrote)
-  @contract  dedup/reconcile signals fire only when their event kind has ≥1 record
-  @contract  holds the nest open across the caller's modifies; takes no lock, writes nothing
-  @contract  not a gesture -- fires no reload, and an error propagates rather than printing
+  @invariant  channels are 1..16 internally; +1 applied on read from REAPER, -1 on write  @ 2
+  @invariant  loc is 1-indexed REAPER event-order; not stable across reloads  @ 3
+  @invariant  mm holds realisation frame; delay baked into note-on ppq (docs/timing.md)  @ 4
+  @invariant  mm holds raw pb; cents/detune + absorber pb live in tm (docs/tuning.md)  @ 5
+  @invariant  muted is true-or-absent; false coerces to nil at write; pass false to clear  @ 6
+  @invariant  per-event metadata persists via eventMeta, keyed by the take's POOL guid (docs/eventMeta.md)  @ 7
+  @invariant  note.chan ∈ 1..16; pitch/vel ∈ 0..127; muted is true-or-absent  @ 502
+  @invariant  cc.evType ∈ {cc, pb, pa, at, pc}; pa stores in .vel, others in .val  @ 504
+  @invariant  cc.cc set on evType='cc'; cc.pitch set on 'pa'; chan ∈ 1..16; cc/pitch ∈ 0..127  @ 505
+  @invariant  cc.shape ∈ {step, linear, slow, fast-start, fast-end, bezier}; tension only on bezier  @ 506
+  @contract  load is always external (lock-free): reads the take, normalises in-memory, reprojects  @ 521
+  @contract  dedup/unify/reconcile mutate the model + set dirty; flushTake writes once if dirty  @ 522
+  @contract  a take still holding loadedBlob is converged: fires reload{wholesale=false, chans={}}, returns  @ 523
+  @contract  metadata persists incrementally: reassignment clones out, uuids no event claims swept  @ 524
+  @contract  stage-3 consensus: winning offset needs ≥ max(2, ceil(0.5·n)) votes, unique  @ 694
+  @contract  load fires signals in order: takeSwapped, notesDeduped, uuidsReassigned  @ 820
+  @contract  then: ccsDeduped, ccsReconciled, collisionsResolved, reload, flushed (iff wrote)  @ 821
+  @contract  dedup/reconcile signals fire only when their event kind has ≥1 record  @ 822
+  @contract  holds the nest open across the caller's modifies; takes no lock, writes nothing  @ 969
+  @contract  not a gesture -- fires no reload, and an error propagates rather than printing  @ 970
 
 # Shapes
-  @shape  ccSidecar.body = '}RDM' [typeNib chan-1 id val_lo7 val_hi7] uuid-base36
-  @shape  noteSidecar.body = 'NOTE <chan-1> <pitch> custom ctm_<base36>'   (text type 15)
-  @shape  note = { evType, ppq, endppq, chan, pitch, vel, [muted], [uuid], [...meta] }
-  @shape  cc = { evType, ppq, chan, val, shape, [tension], [muted], [uuid], [...meta] }
-  @shape  noteSidecarPayload = { ppq, chan, pitch, droppedCount }  -- notesDeduped event
-  @shape  uuidsReassignedEvent = { ppq, chan, pitch, oldUuid, newUuid }
-  @shape  collisionEvent = { kind='killed'|'nudged', oldToken, [token], uuid, chan, pitch, ppq }
-  @shape  ccDedupEvent = { ppq, chan, evType, cc, pitch, droppedCount }  -- ccsDeduped event
-  @shape  reconcileEvent base = { kind, uuid, chan, evType, [cc], [pitch], ppq }
-  @shape  reconcileEvent.valueRebound = base + { oldVal, newVal }
-  @shape  reconcileEvent.consensusRebound = base + { offset }
-  @shape  reconcileEvent.guessedRebound = base
-  @shape  reconcileEvent.ambiguous = { kind, uuid, candidateppqs }
-  @shape  reconcileEvent.orphaned = base + { lastppq } (lastppq replaces ppq)
+  @shape  ccSidecar.body = '}RDM' [typeNib chan-1 id val_lo7 val_hi7] uuid-base36  @ 150
+  @shape  noteSidecar.body = 'NOTE <chan-1> <pitch> custom ctm_<base36>'   (text type 15)  @ 151
+  @shape  note = { evType, ppq, endppq, chan, pitch, vel, [muted], [uuid], [...meta] }  @ 501
+  @shape  cc = { evType, ppq, chan, val, shape, [tension], [muted], [uuid], [...meta] }  @ 503
+  @shape  noteSidecarPayload = { ppq, chan, pitch, droppedCount }  -- notesDeduped event  @ 507
+  @shape  uuidsReassignedEvent = { ppq, chan, pitch, oldUuid, newUuid }  @ 508
+  @shape  collisionEvent = { kind='killed'|'nudged', oldToken, [token], uuid, chan, pitch, ppq }  @ 509
+  @shape  ccDedupEvent = { ppq, chan, evType, cc, pitch, droppedCount }  -- ccsDeduped event  @ 510
+  @shape  reconcileEvent base = { kind, uuid, chan, evType, [cc], [pitch], ppq }  @ 511
+  @shape  reconcileEvent.valueRebound = base + { oldVal, newVal }  @ 512
+  @shape  reconcileEvent.consensusRebound = base + { offset }  @ 513
+  @shape  reconcileEvent.guessedRebound = base  @ 514
+  @shape  reconcileEvent.ambiguous = { kind, uuid, candidateppqs }  @ 515
+  @shape  reconcileEvent.orphaned = base + { lastppq } (lastppq replaces ppq)  @ 516
 
 # Imports
   @require util = 'util'  @ 8
@@ -49,7 +49,7 @@
   @state poolGuid, ccInterp  @ 28
   @state mm = {}  @ 45
   @state chanMsgLUT = { pa = 0xA0, cc = 0xB0, pc = 0xC0, at = 0xD0, pb = 0xE0 }  @ 48
-      @invariant  chanMsgEvTypes is derived from chanMsgLUT so the two directions can't drift
+      @invariant  chanMsgEvTypes is derived from chanMsgLUT so the two directions can't drift  @ 47
   @state chanMsgEvTypes  @ 49   -- inverse of chanMsgLUT
   @state notes = {}  @ 55
   @state ccs = {}  @ 56
@@ -58,19 +58,19 @@
   @state eventsByUuid = {}  @ 59
   @state tokenIdx = {}  @ 60
   @state chanIdx = { note = {}, cc = {} }  @ 62   -- per-channel index; rebuild reconstructs, the verbs maintain
-      @invariant  chanIdx[kind][chan].byLoc[loc] = evt; keyed on chan alone, immune to ppq/pitch rewrites
+      @invariant  chanIdx[kind][chan].byLoc[loc] = evt; keyed on chan alone, immune to ppq/pitch rewrites  @ 61
   @state maxUUID = 0  @ 63
   @state lock = false  @ 64
   @state dirty = false  @ 65   -- a structural write happened; the take needs reprojecting via flushTake
   @state modifyDepth = 0  @ 66   -- reload can re-enter modify; only the outermost flushes
   @state flushPending = false  @ 67   -- a dirty modify happened somewhere in the nest; flush once on unwind
   @state needsSort = false  @ 69   -- an add or a ppq move left the arrays out of ppq order; cleared by rebuild
-      @invariant  adds/ppq-moves unsort the arrays; deletes hole them; neither fired = no reindex needed
+      @invariant  adds/ppq-moves unsort the arrays; deletes hole them; neither fired = no reindex needed  @ 68
   @state needsCompact = false  @ 70   -- a delete left a hole in the arrays; cleared by rebuild
   @state carriedTexts = {}  @ 71   -- parsed text/meta events mm doesn't model; re-emitted verbatim on flush
   @state carriedPassthrough = {}  @ 72   -- parsed system messages mm doesn't model; re-emitted verbatim on flush
   @state loadedBlob  @ 74   -- converged-rebind gate; see design/archive/incremental-rebuild.md § The take-hash gate
-      @invariant  loadedBlob is the take's bytes as of the model agreeing with them; nil = unknown, never gate
+      @invariant  loadedBlob is the take's bytes as of the model agreeing with them; nil = unknown, never gate  @ 73
   @state shapeLUT = { step = 0, linear = 1, slow = 2, ['fast-start'] = 3, ['f...  @ 90
   @state noteEventFields = {  @ 213
   @state ccEventFields = {  @ 218
@@ -159,13 +159,13 @@
   -- Same-pitch backstop
   @fn noteCollision(note, verb)  @ 872-874
   @fn resolveCollisions()  @ 877-909
-      @contract  resolves missed same-pitch collisions at the outermost unwind; steady state finds none
+      @contract  resolves missed same-pitch collisions at the outermost unwind; steady state finds none  @ 876
   -- Dirty channels (rebuild dirt spine)
   @fn markChan(chan)  @ 917
   -- Locking
   @fn checkLock()  @ 924-928
-      @contract  writes (add*, delete*, structural assign*) must run inside mm:modify(fn)
-      @contract  a structural write marks the take dirty; modify reprojects it once via flushTake
+      @contract  writes (add*, delete*, structural assign*) must run inside mm:modify(fn)  @ 922
+      @contract  a structural write marks the take dirty; modify reprojects it once via flushTake  @ 923
   @fn enterNest()  @ 930-933
   @fn leaveNest()  @ 937-951
       -- The outermost unwind, and the whole point of the nest: one reindex, one metadata round-trip,
@@ -173,21 +173,21 @@
   -- Notes
   @fn cloneOut(evt)  @ 987-992
   @fn assignNote(loc, t)  @ 1012-1045
-      @contract  assignNote: lockless write when t touches no structural field
-      @contract  persists metadata only when t touches a metadata key; structural-only writes none
-      @invariant  assignNote structural fields = {ppq, endppq, pitch, vel, chan, muted}
+      @contract  assignNote: lockless write when t touches no structural field  @ 1009
+      @contract  persists metadata only when t touches a metadata key; structural-only writes none  @ 1010
+      @invariant  assignNote structural fields = {ppq, endppq, pitch, vel, chan, muted}  @ 1011
   @fn addNote(t)  @ 1048-1081
-      @contract  addNote always allocates a uuid; flushTake regenerates its notation sidecar
+      @contract  addNote always allocates a uuid; flushTake regenerates its notation sidecar  @ 1047
   -- CCs
   @fn assignCC(loc, t)  @ 1104-1150
-      @contract  assignCC: lockless iff t touches no structural field and the cc has a uuid
-      @contract  first metadata stamp on a plain cc needs lock — inserts a sidecar sysex
-      @contract  persists metadata only when t touches a metadata key; structural-only writes none
+      @contract  assignCC: lockless iff t touches no structural field and the cc has a uuid  @ 1101
+      @contract  first metadata stamp on a plain cc needs lock — inserts a sidecar sysex  @ 1102
+      @contract  persists metadata only when t touches a metadata key; structural-only writes none  @ 1103
   @fn pushCC(t)  @ 1154-1167
       -- Build one ordinary CC record (its wire event is regenerated on flush). No
       -- metadata (the lazy-sidecar path lives in addCC).
   @fn addCC(t)  @ 1170-1197
-      @contract  addCC lazy-sidecar: uuid + sidecar only when t has a non-structural key
+      @contract  addCC lazy-sidecar: uuid + sidecar only when t has a non-structural key  @ 1169
   -- Unified token-keyed surface
   -- Take data
   @fn setEot(buf, targetPpq)  @ 1328-1347
@@ -198,7 +198,7 @@
   @api mm:load(newTake)  @ 525-842
   @api mm:reload()  @ 844-847
   @api mm:unload()  @ 859-864
-      @contract  clears mm.take and event tables when take dies; distinct from load(nil) dormant seam
+      @contract  clears mm.take and event tables when take dies; distinct from load(nil) dormant seam  @ 858
   @api mm:modify(fn)  @ 955-967
       -- Re-entrant: reload reseats absorbers via a nested modify. Reindex and flush
       -- are both deferred to the outermost unwind. See docs/midiManager.md § Mutation contract.
@@ -206,40 +206,40 @@
       -- A caller staging through many separate modifies (tm's rebuild pipeline) would otherwise reindex and
       -- reproject the take once per stage. see design/archive/incremental-rebuild.md § 5
   @api mm:reindexIfStale()  @ 981-983
-      @contract  run the deferred reindex when a modify left arrays stale (sparse/unsorted); else no-op
+      @contract  run the deferred reindex when a modify left arrays stale (sparse/unsorted); else no-op  @ 980
   @api mm:notes()  @ 994-1000
   @api mm:notesRaw(chan)  @ 1004-1007
-      @contract  yields mm-internal note records uncloned; do not mutate (read-only fast path)
-      @contract  notesRaw(chan) yields just that channel's, ascending loc -- same slice, same order
+      @contract  yields mm-internal note records uncloned; do not mutate (read-only fast path)  @ 1002
+      @contract  notesRaw(chan) yields just that channel's, ascending loc -- same slice, same order  @ 1003
   @api mm:ccs()  @ 1086-1092
-      @invariant  a cc in 0..31 with fractional val is 14-bit; MSB/LSB split lives in midiBlob
+      @invariant  a cc in 0..31 with fractional val is 14-bit; MSB/LSB split lives in midiBlob  @ 1085
   @api mm:ccsRaw(chan)  @ 1096-1099
-      @contract  yields mm-internal cc records uncloned; consumers must NOT mutate them (read-only fast path)
-      @contract  ccsRaw(chan) yields just that channel's, ascending loc -- same slice, same order
+      @contract  yields mm-internal cc records uncloned; consumers must NOT mutate them (read-only fast path)  @ 1094
+      @contract  ccsRaw(chan) yields just that channel's, ascending loc -- same slice, same order  @ 1095
   @api mm:tokenOf(evt)  @ 1202-1205
-      @contract  token stable across reload while identity fields don't change
-      @invariant  token identity fields = evType, chan, ppq, and pitch|cc as relevant
-      @contract  mutating an identity field retires the old token and issues a new one
+      @contract  token stable across reload while identity fields don't change  @ 1199
+      @invariant  token identity fields = evType, chan, ppq, and pitch|cc as relevant  @ 1200
+      @contract  mutating an identity field retires the old token and issues a new one  @ 1201
   @api mm:byToken(token)  @ 1210-1214
-      @contract  returns (loc, evt-clone, kind) for the token, or nil if absent
-      @contract  works on every event (including plain ccs with no uuid)
-      @invariant  byToken's evt-clone carries .token equal to the input
+      @contract  returns (loc, evt-clone, kind) for the token, or nil if absent  @ 1207
+      @contract  works on every event (including plain ccs with no uuid)  @ 1208
+      @invariant  byToken's evt-clone carries .token equal to the input  @ 1209
   @api mm:add(t)  @ 1220-1225
-      @contract  t.evType='note' routes to addNote; anything else to addCC
-      @contract  returns the new token, or nil if t is malformed; inherits inner lock req
+      @contract  t.evType='note' routes to addNote; anything else to addCC  @ 1218
+      @contract  returns the new token, or nil if t is malformed; inherits inner lock req  @ 1219
   @api mm:assign(token, t)  @ 1230-1241
-      @contract  dispatches on the resolved event's evType
-      @contract  returns the event's token, == input iff no identity field changed (caller re-keys)
-      @contract  inherits the inner method's metadata-only lockless carve-out
+      @contract  dispatches on the resolved event's evType  @ 1227
+      @contract  returns the event's token, == input iff no identity field changed (caller re-keys)  @ 1228
+      @contract  inherits the inner method's metadata-only lockless carve-out  @ 1229
   @api mm:delete(token)  @ 1245-1264
-      @contract  removes the event in-memory (a hole until rebuild compacts); flushTake reprojects
-      @contract  wipes the event's ctm_<uuid> metadata via deleteMetadatum
+      @contract  removes the event in-memory (a hole until rebuild compacts); flushTake reprojects  @ 1243
+      @contract  wipes the event's ctm_<uuid> metadata via deleteMetadatum  @ 1244
   @api mm:events()  @ 1268-1276
-      @contract  yields (token, evt-clone) over all live events, notes then ccs
-      @invariant  events()'s clone carries .token; loc is intentionally absent
+      @contract  yields (token, evt-clone) over all live events, notes then ccs  @ 1266
+      @invariant  events()'s clone carries .token; loc is intentionally absent  @ 1267
   @api mm:take()  @ 1280-1282
   @api mm:poolGuid()  @ 1285
-      @contract  the bound take's POOLEDEVTS pool guid (the metadata key); nil when dormant
+      @contract  the bound take's POOLEDEVTS pool guid (the metadata key); nil when dormant  @ 1284
   @api mm:interpolate(A, B, ppq, field)  @ 1289-1296
       -- REAPER convention: shape on A governs the curve from A to next. field defaults to
       -- 'val'; pass 'cents' to interpolate the authored cents stream (rebuildPbs seats).

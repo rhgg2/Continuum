@@ -2,14 +2,14 @@
 @deps cm, cmgr, chrome, gui, modalHost, av
 
 # Invariants & contracts
-  @invariant  render + input only — holds av only, never am; all queries/mutations go through av.
-  @invariant  key bindings here; command bodies in av; coord pushes the scope on activation.
-  @contract  arrangePage (the controller) owns the stack (am/av) and hands this renderer av only
+  @invariant  render + input only — holds av only, never am; all queries/mutations go through av.  @ 3
+  @invariant  key bindings here; command bodies in av; coord pushes the scope on activation.  @ 4
+  @contract  arrangePage (the controller) owns the stack (am/av) and hands this renderer av only  @ 16
 
 # Shapes
-  @shape  body = grid pane (variable width) | fixed-width palette (chrome.palettePane); palette shows slots for the track under av:cursorCol().
-  @shape  press = { qn, row, col, take, mode = 'move'|'resizeEnd', duplicate, moved, gutter, create } — nil when no button down. Track-col: take/row/col/mode; gutter: qn+gutter=true; dbl-click: qn/col+create=true. moved flips at drag threshold.
-  @shape  ToolbarSegment = { id, render = fn() }
+  @shape  body = grid pane (variable width) | fixed-width palette (chrome.palettePane); palette shows slots for the track under av:cursorCol().  @ 5
+  @shape  press = { qn, row, col, take, mode = 'move'|'resizeEnd', duplicate, moved, gutter, create } — nil when no button down. Track-col: take/row/col/mode; gutter: qn+gutter=true; dbl-click: qn/col+create=true. moved flips at drag threshold.  @ 41
+  @shape  ToolbarSegment = { id, render = fn() }  @ 745
 
 # Imports
   @require util = 'util'  @ 7
@@ -27,9 +27,9 @@
   @state SLOT_KEY_W, SLOT_KIND_W = 18, 16  @ 36
   @state openCreateModal  @ 39
   @state press = nil  @ 45
-      @invariant  drag relocates via am:startIsClear; cursor moves only on clean (no-drag) release.
-      @invariant  gutter press drives REAPER transport — release sets edit cursor, drag sets loop range.
-      @invariant  double-click on empty space starts a create press; release opens create modal.
+      @invariant  drag relocates via am:startIsClear; cursor moves only on clean (no-drag) release.  @ 42
+      @invariant  gutter press drives REAPER transport — release sets edit cursor, drag sets loop range.  @ 43
+      @invariant  double-click on empty space starts a create press; release opens create modal.  @ 44
   @state WHEEL_STEP_ROWS = 1  @ 46   -- viewport rows panned per mouse-wheel notch
   @state WHEEL_STEP_COLS = 0.5  @ 47   -- viewport cols panned per mouse-wheel notch
   @state wheelAccumV = 0  @ 48   -- fractional vertical wheel carried between frames
@@ -41,7 +41,7 @@
   @state HEADER_GAP = 4  @ 178
   @state toolbarSegments = {  @ 746
   @state arrange = cmgr:scope('arrange')  @ 835
-      @invariant  createSlot (Ctrl+Enter) opens the create modal — the only slot-minting gesture.
+      @invariant  createSlot (Ctrl+Enter) opens the create modal — the only slot-minting gesture.  @ 833
 
 # Private functions
   @fn drainWheel(accum, wheel, step)  @ 53-57
@@ -61,7 +61,7 @@
   @fn peaksFor(take, startQN, lengthQN, pxPerSec, loop)  @ 115-166
       -- PCM_Source_GetPeaks: maxes block then mins block, channels interleaved per column;
       -- reduce to per-column signed hi/lo. Loops sample ONE source period; others map the window.
-      @contract  nil for an unreadable source; entry with hi=nil while peaks still build
+      @contract  nil for an unreadable source; entry with hi=nil while peaks still build  @ 114
   -- MIDI note previews (channel→X, time→Y; note-on caps darker than bodies)
   -- Grid pane
   @fn floorTo(v, step)  @ 181
@@ -89,12 +89,12 @@
 # Public API (ar:*)
   @api ar:toolbarSegments()  @ 767
   @api ar:renderBody(_, w, h, dispatch)  @ 772-810
-      @invariant  grid is hand-drawn (no ImGui table) — tints, gridlines, take rects, cursor on top.
-      @contract  pushes parchment body palette (coord popped chrome before); palette tables need it.
-      @contract  invokes dispatch at end-of-body so arrange-scope keys reach the dispatcher.
+      @invariant  grid is hand-drawn (no ImGui table) — tints, gridlines, take rects, cursor on top.  @ 769
+      @contract  pushes parchment body palette (coord popped chrome before); palette tables need it.  @ 770
+      @contract  invokes dispatch at end-of-body so arrange-scope keys reach the dispatcher.  @ 771
   @api ar:renderStatusBar(_)  @ 812-818
   @api ar:focusState()  @ 821-830
-      @contract  acceptCmds=false if picker active, any item active, or modal was open at frame start.
+      @contract  acceptCmds=false if picker active, any item active, or modal was open at frame start.  @ 820
 
 # Uses (outbound edges)
   @use call    ImGui.AlignTextToFramePadding  @ 757

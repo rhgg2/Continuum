@@ -2,33 +2,33 @@
 @deps grid, cm, cmgr, rowPerBar, logPerRow, moveHook, groupBridge
 
 # Invariants & contracts
-  @invariant  cursor (row, col, stop); stop indexes col.stopPos (char-offset), not parts
-  @invariant  cursorRow is 0-indexed; cursorCol/cursorStop are 1-indexed (Lua-array)
-  @invariant  ec owns caret/selection/clipboard; no MIDI state — mutations go via tm/cm
-  @invariant  selection = anchor (fixed) + cursor (moving); sel is the resolved rect
-  @invariant  sel == nil iff no selection
-  @invariant  region()'s cursor-degenerate fallback is callsite policy, not stored
-  @invariant  hBlockScope ∈ {0=free, 1=col, 2=channel, 3=all-cols}
-  @invariant  vBlockScope ∈ {0=free, 1=beat, 2=bar×vBlockBars, 3=all-rows}; scopes are orthogonal
-  @invariant  sticky == any nonzero scope; moves under sticky update sel, never clear
-  @invariant  hBlock=2/3 use part1=part2='*'; selectionStopSpan falls through to whole-col
-  @invariant  parts within a col order by col.partStart, not stop (parts may be multi-stop)
-  @invariant  moveHook fires after every position change (paired with clampPos)
-  @invariant  sel.part1/part2 are part names, or '*' sentinel under hBlock=2/3
-  @invariant  clip.single.type ∈ {'note', '7bit', 'pb'}
+  @invariant  cursor (row, col, stop); stop indexes col.stopPos (char-offset), not parts  @ 3
+  @invariant  cursorRow is 0-indexed; cursorCol/cursorStop are 1-indexed (Lua-array)  @ 4
+  @invariant  ec owns caret/selection/clipboard; no MIDI state — mutations go via tm/cm  @ 5
+  @invariant  selection = anchor (fixed) + cursor (moving); sel is the resolved rect  @ 6
+  @invariant  sel == nil iff no selection  @ 7
+  @invariant  region()'s cursor-degenerate fallback is callsite policy, not stored  @ 8
+  @invariant  hBlockScope ∈ {0=free, 1=col, 2=channel, 3=all-cols}  @ 9
+  @invariant  vBlockScope ∈ {0=free, 1=beat, 2=bar×vBlockBars, 3=all-rows}; scopes are orthogonal  @ 10
+  @invariant  sticky == any nonzero scope; moves under sticky update sel, never clear  @ 11
+  @invariant  hBlock=2/3 use part1=part2='*'; selectionStopSpan falls through to whole-col  @ 12
+  @invariant  parts within a col order by col.partStart, not stop (parts may be multi-stop)  @ 13
+  @invariant  moveHook fires after every position change (paired with clampPos)  @ 14
+  @invariant  sel.part1/part2 are part names, or '*' sentinel under hBlock=2/3  @ 16
+  @invariant  clip.single.type ∈ {'note', '7bit', 'pb'}  @ 19
 
 # Shapes
-  @shape  selection = { row1, row2, col1, col2, part1, part2 }  -- inclusive both axes
-  @shape  selAnchor = { row, col, stop }  -- fixed end of an active selection
-  @shape  clip.single = { mode='single', type, numRows, events=[clipEvent,...] }
-  @shape  clip.multi  = { mode='multi', numRows, startType, cols=[clipColEntry,...] }
-  @shape  clipColEntry = { type, chanDelta, key, events=[clipEvent,...] }
-  @shape  clipEvent = source-event minus CLIP_RESERVED, plus { row, [endRow] }
+  @shape  selection = { row1, row2, col1, col2, part1, part2 }  -- inclusive both axes  @ 15
+  @shape  selAnchor = { row, col, stop }  -- fixed end of an active selection  @ 17
+  @shape  clip.single = { mode='single', type, numRows, events=[clipEvent,...] }  @ 18
+  @shape  clip.multi  = { mode='multi', numRows, startType, cols=[clipColEntry,...] }  @ 20
+  @shape  clipColEntry = { type, chanDelta, key, events=[clipEvent,...] }  @ 21
+  @shape  clipEvent = source-event minus CLIP_RESERVED, plus { row, [endRow] }  @ 23
 
 # Imports
   @require util = 'util'  @ 25
-      @invariant  clipColEntry.key: note→lane-pos, cc→cc#, nil for singletons
-      @invariant  clipEvent.row is 0-relative to clip top
+      @invariant  clipColEntry.key: note→lane-pos, cc→cc#, nil for singletons  @ 22
+      @invariant  clipEvent.row is 0-relative to clip top  @ 24
 
 # Private state
   @state grid = deps.grid  @ 31
@@ -50,41 +50,41 @@
 # Private functions
   -- Position
   @fn clampPos()  @ 53-61
-      @contract  clamps to grid extents; idempotent; stop is bound to the current col's stopPos
-      @invariant  col-changes must precede stop reads (stop is clamped against the current col)
+      @contract  clamps to grid extents; idempotent; stop is bound to the current col's stopPos  @ 51
+      @invariant  col-changes must precede stop reads (stop is clamped against the current col)  @ 52
   -- Parts
   @fn partAt(col, stop)  @ 65-68
   @fn cursorPart()  @ 70
   @fn firstStopForPart(col, part)  @ 73-80
-      @contract  returns first stop whose partAt name matches; caret lands on part-leading char
+      @contract  returns first stop whose partAt name matches; caret lands on part-leading char  @ 72
   -- Selection
   @fn isSticky()  @ 84
   @fn selStart()  @ 87-91
-      @contract  pins anchor at cursor and produces a 1x1 sel; precondition for selUpdate
+      @contract  pins anchor at cursor and produces a 1x1 sel; precondition for selUpdate  @ 86
   @fn selUpdate()  @ 95-134
-      @contract  recomputes sel from anchor + cursor + scopes; no-op if selAnchor is nil
-      @invariant  vBlock=1/2 snap rows to beat/bar; hBlock=2/3 expand cols to channel/all
+      @contract  recomputes sel from anchor + cursor + scopes; no-op if selAnchor is nil  @ 93
+      @invariant  vBlock=1/2 snap rows to beat/bar; hBlock=2/3 expand cols to channel/all  @ 94
   @fn selClear()  @ 137-140
-      @contract  drops sel + anchor + sticky scopes; the only sticky-clear besides unstick()
+      @contract  drops sel + anchor + sticky scopes; the only sticky-clear besides unstick()  @ 136
   @fn cycleHBlock()  @ 143-155
-      @contract  seeds anchor on first engage; cycles channel→all-cols→col
+      @contract  seeds anchor on first engage; cycles channel→all-cols→col  @ 142
   @fn cycleVBlock()  @ 158-171
-      @contract  seeds anchor on first engage; beat→bar, each press grows by a bar; no-op on empty grid
+      @contract  seeds anchor on first engage; beat→bar, each press grows by a bar; no-op on empty grid  @ 157
   @fn swapEnds()  @ 175-186
-      @contract  swaps anchor↔cursor on scope-unlocked axes; no-op without a selection
-      @invariant  swapEnds: vBlock<1 swaps row; hBlock<2 swaps col+stop
+      @contract  swaps anchor↔cursor on scope-unlocked axes; no-op without a selection  @ 173
+      @invariant  swapEnds: vBlock<1 swaps row; hBlock<2 swaps col+stop  @ 174
   -- Movement
   @fn moveRow(n, selecting)  @ 191-198
-      @contract  selecting or sticky extends sel; else clears; clamps top/bottom, no wrap
+      @contract  selecting or sticky extends sel; else clears; clamps top/bottom, no wrap  @ 190
   @fn moveStop(n, selecting)  @ 202-228
-      @contract  walks stops within col, crossing into the adjacent col at the boundary
-      @contract  no wrap at first/last col; hBlock≥2 collapses scope to 1 and re-anchors
+      @contract  walks stops within col, crossing into the adjacent col at the boundary  @ 200
+      @contract  no wrap at first/last col; hBlock≥2 collapses scope to 1 and re-anchors  @ 201
   @fn moveUnit(n, toFirstStop, toLastStop)  @ 231-251
   @fn moveCol(n)  @ 254-270
-      @contract  jumps one col, landing on first/last stop; sticky extends/contracts 1 col
+      @contract  jumps one col, landing on first/last stop; sticky extends/contracts 1 col  @ 253
   @fn moveChannel(n)  @ 274-300
-      @contract  jumps one channel; non-sticky lands on first note col (skipping pc/pb)
-      @contract  sticky preserves the raw chan-edge land
+      @contract  jumps one channel; non-sticky lands on first note col (skipping pc/pb)  @ 272
+      @contract  sticky preserves the raw chan-edge land  @ 273
   -- Regions (group authoring mode)
   @fn gmgr()  @ 307
       -- All group geometry/persistence is gm's, reached through the bridge
@@ -153,10 +153,10 @@
   @api ec:col()  @ 343
   @api ec:pos()  @ 344
   @api ec:setPos(row, col, stop)  @ 347-352
-      @contract  nil arg leaves that axis untouched; clamps and fires moveHook unconditionally
+      @contract  nil arg leaves that axis untouched; clamps and fires moveHook unconditionally  @ 346
   @api ec:clampPos()  @ 354
   @api ec:rescaleRow(oldRPB, newRPB)  @ 357-359
-      @contract  scales cursorRow by newRPB/oldRPB so caret stays at the same musical time
+      @contract  scales cursorRow by newRPB/oldRPB so caret stays at the same musical time  @ 356
   @api ec:reset()  @ 361-365
   @api ec:cursorPart()  @ 369
   @api ec:hasSelection()  @ 370
@@ -167,17 +167,17 @@
       -- Pair so callers can splat: `ec:setPos(row, ec:regionStart())`.
   @api ec:eachSelectedCol()  @ 388-407
   @api ec:setSelection(r)  @ 410-415
-      @contract  installs sel from part record; clears sticky; anchor at top-left part-start
+      @contract  installs sel from part record; clears sticky; anchor at top-left part-start  @ 409
   @api ec:selectionStopSpan(col)  @ 417-433
   @api ec:selClear()  @ 435
   @api ec:unstick()  @ 436
   @api ec:extendTo(row, col, stop)  @ 439-443
       -- Mouse shift-click and drag both speak this verb.
   @api ec:shiftSelection(rowDelta)  @ 447-454
-      @contract  shifts sel rows + anchor + cursor by rowDelta; each axis clamped independently
-      @invariant  shiftSelection: sel may compress against an edge while cursor doesn't
+      @contract  shifts sel rows + anchor + cursor by rowDelta; each axis clamped independently  @ 445
+      @invariant  shiftSelection: sel may compress against an edge while cursor doesn't  @ 446
   @api ec:advance()  @ 459
-      @contract  advances by cm.advanceBy rows; the per-keystroke auto-step after a write
+      @contract  advances by cm.advanceBy rows; the per-keystroke auto-step after a write  @ 458
   @api ec:selectChannel(chan)  @ 469-472
   @api ec:selectColumn(col)  @ 474-477
   @api ec:isInRegionMode()  @ 482
@@ -190,8 +190,8 @@
       -- regionBail (Super-G) also clears the selection.
   @api ec:registerCommands(scope)  @ 797-824
   @api ec:decorateCol(col, pitchWidth)  @ 859-885
-      @contract  derives col part fields from type/showDelay/trackerMode; pitch width = pitchWidth
-      @invariant  ec is the sole writer of col.{parts, stopPos, partAt, partStart, width}
+      @contract  derives col part fields from type/showDelay/trackerMode; pitch width = pitchWidth  @ 857
+      @invariant  ec is the sole writer of col.{parts, stopPos, partAt, partStart, width}  @ 858
 
 # Uses (outbound edges)
   @use call    cm:get  @ selUpdate:102 advance:459
