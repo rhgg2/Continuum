@@ -1576,21 +1576,68 @@ local function emptyChans()
   return t
 end
 
+----- Interval materialisation
+
+-- The materialisation closure unions the consuming stages' own groupings -- tails same-pitch, seats/PCs
+-- same-lane, each subsuming the other's reach. see docs/trackerManager.md § Interval materialisation
+local function noteClosure(chan)
+  local dirt = dirtyChans[chan]
+  if dirt == true then return true end
+  local carried = {}
+  for _, col in ipairs(channels[chan].columns.notes) do
+    for _, evt in ipairs(col.events) do
+      if evt.evType ~= 'pa' then util.add(carried, evt) end
+    end
+  end
+  sortByPPQ(carried)
+  local byPitch = intervals.close(dirt, carried, { key = function(e) return e.pitch end, stepBack = true })
+  local byLane  = intervals.close(dirt, carried, { key = function(e) return e.lane  end, stepBack = true })
+  if byPitch == true or byLane == true then return true end
+  local union = {}
+  for _, iv in ipairs(byPitch) do util.add(union, iv) end
+  for _, iv in ipairs(byLane)  do util.add(union, iv) end
+  return intervals.merge(union)
+end
+
+-- Drop the carried events this pass's clones will replace. PAs go whatever the closure says:
+-- rebuildPA re-projects every PA on a dirty chan, so a carried one would double up.
+local function exciseNotes(chan, closed)
+  for _, col in ipairs(channels[chan].columns.notes) do
+    local kept = {}
+    for _, evt in ipairs(col.events) do
+      if evt.evType ~= 'pa' and not intervals.intersects(closed, evt.ppq, evt.ppq) then
+        util.add(kept, evt)
+      end
+    end
+    col.events = kept
+  end
+end
+
 ----- Rebuild internals
 
 -- Partition mm notes stamped/external, lay internal columns, reseat stale-swing.
--- Returns external notes + the per-channel derived-note existing set. see docs/trackerManager.md § Rebuild: partition
+-- Returns seated internals + external notes + the per-channel derived-note existing set. see docs/trackerManager.md § Rebuild: partition
+--contract: interval dirt: non-derived notes carry ppqL -- an external mutation reloads wholesale
 local function rebuildInternals()
   local internal, external = {}, {}
   local noteExisting = emptyChans()
-  -- Clean channels carry their columns whole: never visited, so never cloned.
+  -- Clean channels carry their columns whole: never visited, so never cloned. Interval-dirty ones
+  -- excise the closed span and re-clone just that; the rest of the column carries untouched.
   for chan = 1, 16 do
     if dirtyChans[chan] then
+      local closed = noteClosure(chan)
+      if closed ~= true then exciseNotes(chan, closed) end
       for _, raw in mm:notesRaw(chan) do
-        local note = util.clone(raw); note.token = mm:tokenOf(raw)
-        if note.derived then util.add(noteExisting[note.chan], note)
-        elseif rawDivergesFromLogical(note) then util.add(external, note)
-        else util.add(internal, note)
+        -- Derived notes route to fx whole-channel whatever the closure: a partial noteExisting
+        -- reads as mass deletion until the fx reconcile goes interval-native. see design § phase 3
+        if raw.derived then
+          local note = util.clone(raw); note.token = mm:tokenOf(raw)
+          util.add(noteExisting[chan], note)
+        elseif closed == true or intervals.intersects(closed, raw.ppqL, raw.ppqL) then
+          local note = util.clone(raw); note.token = mm:tokenOf(raw)
+          if rawDivergesFromLogical(note) then util.add(external, note)
+          else util.add(internal, note)
+          end
         end
       end
     end
@@ -1634,7 +1681,7 @@ local function rebuildInternals()
   end
   reseats.commit()
 
-  return external, noteExisting
+  return internal, external, noteExisting
 end
 
 ----- Rebuild CCs
@@ -1834,15 +1881,16 @@ local function externalLanePacker(external)
   end
 end
 
--- Reintroduce externals: pack lane, stamp ppqL/endppqL, backfill metadata, tag `fixed`;
--- block window + tail passes -- onsets frozen, tails clipped. see docs/trackerManager.md § Rebuild: externals
+-- Reintroduce externals: pack lane, stamp ppqL/endppqL, backfill metadata, tag `fixed`; block window
+-- + tail passes. Returns the seated notes, still raw, for projectNotes. see docs/trackerManager.md § Rebuild: externals
 local function rebuildExternals(external)
-  if #external == 0 then return end
+  if #external == 0 then return {} end
 
   table.sort(external, function(a, b) return a.ppq < b.ppq end)
   local trackerMode = cm:get('trackerMode')
   local packLane    = externalLanePacker(external)
   local extWrites   = mmBatch()
+  local seated      = {}
   for _, note in ipairs(external) do
     local delay     = note.delay or 0
     local d         = delayToPPQ(delay)
@@ -1861,9 +1909,11 @@ local function rebuildExternals(external)
     util.assign(colNote, update)
     colNote.fixed = true
     util.add(col.events, colNote)
+    util.add(seated, colNote)
     extWrites.assign(colNote, update)
   end
   extWrites.commit()
+  return seated
 end
 
 ----- Rebuild region park
@@ -3140,22 +3190,17 @@ local function rebuildPipeline(didReload)
     extraColumns = ds:get('extraColumns'),
   }
 
-  perf.start('internals'); local external, noteExisting = rebuildInternals(); perf.stop('internals')  -- partition; internal cols; reseat swing notes
+  perf.start('internals'); local internal, external, noteExisting = rebuildInternals(); perf.stop('internals')  -- partition; internal cols; reseat swing notes
   perf.start('ccs'); local ccExisting = rebuildCCs(sources.prevWindows); perf.stop('ccs')  -- CC walk; reseat swing CCs
   staleSwing = {}                               -- swing consumers (partition + CC walk) done; see :53 invariant
   perf.start('extraCols'); rebuildExtraColumns(sources.extraColumns); perf.stop('extraCols')  -- reconcile persisted extra columns
-  perf.start('externals'); rebuildExternals(external); perf.stop('externals')  -- reintroduce foreign / diverged notes
+  perf.start('externals'); local seatedExternals = rebuildExternals(external); perf.stop('externals')  -- reintroduce foreign / diverged notes
 
-  -- Note columns flip to logical here, not at ingestion: partition, reseat and the externals'
-  -- lane packer all need the raw frame. Every later stage reads ppqL or the raw scratch.
+  -- Note columns flip to logical here, not at ingestion: partition, reseat and the externals' lane
+  -- packer need the raw frame; the walk covers this pass's clones only. see docs/trackerManager.md § Rebuild: logical projection
   perf.start('projectNotes')
-  for chan = 1, 16 do
-    if dirtyChans[chan] then
-      for _, col in ipairs(channels[chan].columns.notes) do
-        for _, evt in ipairs(col.events) do projectEvent(evt, chan) end
-      end
-    end
-  end
+  for _, evt in ipairs(internal)        do projectEvent(evt, evt.chan) end
+  for _, evt in ipairs(seatedExternals) do projectEvent(evt, evt.chan) end
   perf.stop('projectNotes')
 
   -- Park window set: fx-regions plus every on-take note host as a degenerate region (note-is-a-region),
@@ -3244,8 +3289,12 @@ function tm:rebuild(takeChanged)
   local prevChannels = channels
   channels = {}
   for i = 1, 16 do
-    if dirtyChans[i] then
+    if dirtyChans[i] == true then
       channels[i] = { chan = i, columns = { notes = {}, ccs = {} } }
+    elseif dirtyChans[i] then
+      -- Interval dirt narrows note materialisation only: every other producer (ccs, park, pb) still
+      -- wants the fresh channel a dirty chan has always handed it. see docs/trackerManager.md § Derivation dirt: the gated spine
+      channels[i] = { chan = i, columns = { notes = prevChannels[i].columns.notes, ccs = {} } }
     else
       channels[i] = prevChannels[i]
     end

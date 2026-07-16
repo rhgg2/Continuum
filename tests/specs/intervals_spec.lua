@@ -1,6 +1,6 @@
 -- intervals is the pure dirt-interval algebra (design/interval-dirt.md).
--- A set is `true` (whole channel) or a ppqL-ascending, non-overlapping
--- list of { loPpqL, hiPpqL, loUuid, hiUuid }. seed normalises; merge
+-- A set is `true` (whole channel) or a ppq-ascending, non-overlapping
+-- list of { loPpq, hiPpq, loUuid, hiUuid }. seed normalises; merge
 -- coalesces edge-inclusive and collapses to `true` past the cap;
 -- intersects is edge-inclusive; close widens each seed to its stage's
 -- anchoring onsets (forward always, back only under stepBack) without
@@ -9,10 +9,10 @@
 local t = require('support')
 local intervals = require('intervals')
 
--- An event as the closure consumes it: a logical position, a uuid anchor,
--- and whatever fields opts.key groups on (lane, pitch).
+-- An event as the closure consumes it: column events are one-frame, so the
+-- logical position is `.ppq`; plus a uuid anchor and opts.key's group fields.
 local function evt(ppqL, uuid, lane, pitch)
-  return { ppqL = ppqL, uuid = uuid, lane = lane, pitch = pitch }
+  return { ppq = ppqL, uuid = uuid, lane = lane, pitch = pitch }
 end
 
 local byPitch = { key = function(e) return e.pitch end, stepBack = true }   -- tails-shaped
@@ -25,7 +25,7 @@ return {
     name = 'seed normalises reversed bounds, swapping uuids with them',
     run = function()
       local iv = intervals.seed(100, 40, 'hi', 'lo')
-      t.eq(iv.loPpqL, 40); t.eq(iv.hiPpqL, 100)
+      t.eq(iv.loPpq, 40); t.eq(iv.hiPpq, 100)
       t.eq(iv.loUuid, 'lo'); t.eq(iv.hiUuid, 'hi')
     end,
   },
@@ -34,7 +34,7 @@ return {
     name = 'seed keeps a point interval degenerate',
     run = function()
       local iv = intervals.seed(50, 50, 'u', 'u')
-      t.eq(iv.loPpqL, 50); t.eq(iv.hiPpqL, 50); t.eq(iv.loUuid, 'u')
+      t.eq(iv.loPpq, 50); t.eq(iv.hiPpq, 50); t.eq(iv.loUuid, 'u')
     end,
   },
 
@@ -59,9 +59,9 @@ return {
       }
       local m = intervals.merge(set)
       t.eq(#m, 2)
-      t.eq(m[1].loPpqL, 0);  t.eq(m[1].hiPpqL, 20)
+      t.eq(m[1].loPpq, 0);  t.eq(m[1].hiPpq, 20)
       t.eq(m[1].loUuid, 'a0'); t.eq(m[1].hiUuid, 'b20')
-      t.eq(m[2].loPpqL, 50); t.eq(m[2].hiPpqL, 60)
+      t.eq(m[2].loPpq, 50); t.eq(m[2].hiPpq, 60)
     end,
   },
 
@@ -70,8 +70,8 @@ return {
     run = function()
       local set = { intervals.seed(50, 60), intervals.seed(0, 10) }
       local m = intervals.merge(set)
-      t.eq(#m, 2); t.eq(m[1].loPpqL, 0)
-      t.eq(set[1].loPpqL, 50)   -- caller's list untouched
+      t.eq(#m, 2); t.eq(m[1].loPpq, 0)
+      t.eq(set[1].loPpq, 50)   -- caller's list untouched
     end,
   },
 
@@ -79,7 +79,7 @@ return {
     name = 'merge subsumes a fully-contained interval without extending the outer hi',
     run = function()
       local m = intervals.merge{ intervals.seed(0, 100, 'a', 'z'), intervals.seed(20, 30, 'p', 'q') }
-      t.eq(#m, 1); t.eq(m[1].hiPpqL, 100); t.eq(m[1].hiUuid, 'z')
+      t.eq(#m, 1); t.eq(m[1].hiPpq, 100); t.eq(m[1].hiUuid, 'z')
     end,
   },
 
@@ -120,8 +120,8 @@ return {
       local events = { evt(0,'a',1,60), evt(100,'b',1,60), evt(200,'c',1,60), evt(300,'d',1,60) }
       local m = intervals.close({ intervals.seed(100, 100, 'b', 'b') }, events, byPitch)
       t.eq(#m, 1)
-      t.eq(m[1].loPpqL, 0);   t.eq(m[1].loUuid, 'a')
-      t.eq(m[1].hiPpqL, 200); t.eq(m[1].hiUuid, 'c')
+      t.eq(m[1].loPpq, 0);   t.eq(m[1].loUuid, 'a')
+      t.eq(m[1].hiPpq, 200); t.eq(m[1].hiUuid, 'c')
     end,
   },
 
@@ -134,7 +134,7 @@ return {
         evt(150,'y',1,64), evt(200,'c',1,60),
       }
       local m = intervals.close({ intervals.seed(100, 100, 'b', 'b') }, events, byPitch)
-      t.eq(m[1].loPpqL, 0);   t.eq(m[1].hiPpqL, 200)   -- same-pitch anchors, not 50/150
+      t.eq(m[1].loPpq, 0);   t.eq(m[1].hiPpq, 200)   -- same-pitch anchors, not 50/150
     end,
   },
 
@@ -143,8 +143,8 @@ return {
     run = function()
       local events = { evt(0,'a',1,60), evt(100,'b',1,60) }
       local m = intervals.close({ intervals.seed(0, 0, 'a', 'a') }, events, byPitch)
-      t.eq(m[1].loPpqL, -math.huge); t.eq(m[1].loUuid, nil)   -- nothing earlier
-      t.eq(m[1].hiPpqL, 100);        t.eq(m[1].hiUuid, 'b')
+      t.eq(m[1].loPpq, -math.huge); t.eq(m[1].loUuid, nil)   -- nothing earlier
+      t.eq(m[1].hiPpq, 100);        t.eq(m[1].hiUuid, 'b')
     end,
   },
 
@@ -153,8 +153,8 @@ return {
     run = function()
       local events = { evt(0,'a',1,60), evt(100,'b',1,60), evt(200,'c',1,60) }
       local m = intervals.close({ intervals.seed(100, 100, 'b', 'b') }, events, forward)
-      t.eq(m[1].loPpqL, 100); t.eq(m[1].loUuid, 'b')   -- no step back
-      t.eq(m[1].hiPpqL, 200); t.eq(m[1].hiUuid, 'c')
+      t.eq(m[1].loPpq, 100); t.eq(m[1].loUuid, 'b')   -- no step back
+      t.eq(m[1].hiPpq, 200); t.eq(m[1].hiUuid, 'c')
     end,
   },
 
@@ -168,7 +168,7 @@ return {
         evt(200,'c',1,60), evt(400,'z',1,64),
       }
       local m = intervals.close({ intervals.seed(100, 110, 'b', 'y') }, events, forward)
-      t.eq(#m, 1); t.eq(m[1].hiPpqL, 400); t.eq(m[1].hiUuid, 'z')
+      t.eq(#m, 1); t.eq(m[1].hiPpq, 400); t.eq(m[1].hiUuid, 'z')
     end,
   },
 
@@ -180,15 +180,15 @@ return {
       -- (ppqL 200) but pulled early (raw 150). The tail walk consumes them in RAW
       -- order [B, A], where B's tail reaches A -- so editing A should pull B into
       -- the interval. close compares ppqL, not raw position, so it currently does
-      -- NOT (B.ppqL 200 > A.ppqL 100 fails the stepBack guard). Pinned as the
+      -- NOT (B.ppq 200 > A.ppq 100 fails the stepBack guard). Pinned as the
       -- known limitation until the interval tail walk (phase 4) steps in the raw
       -- frame against mm's per-channel index. See design/interval-dirt.md q5.
-      local A = { ppqL = 100, uuid = 'A', pitch = 60 }
-      local B = { ppqL = 200, uuid = 'B', pitch = 60 }
+      local A = { ppq = 100, uuid = 'A', pitch = 60 }
+      local B = { ppq = 200, uuid = 'B', pitch = 60 }
       local m = intervals.close({ intervals.seed(100, 100, 'A', 'A') }, { B, A }, byPitch)
       t.eq(#m, 1)
-      t.eq(m[1].loPpqL, 100); t.eq(m[1].loUuid, 'A')   -- B NOT captured (the gap)
-      t.eq(m[1].hiPpqL, math.huge)                      -- A is raw-last -> open end
+      t.eq(m[1].loPpq, 100); t.eq(m[1].loUuid, 'A')   -- B NOT captured (the gap)
+      t.eq(m[1].hiPpq, math.huge)                      -- A is raw-last -> open end
     end,
   },
 
@@ -198,7 +198,7 @@ return {
       local set = { intervals.seed(100, 100, 'b', 'b') }
       local events = { evt(0,'a',1,60), evt(100,'b',1,60), evt(200,'c',1,60) }
       intervals.close(set, events, byPitch)
-      t.eq(set[1].loPpqL, 100); t.eq(set[1].hiPpqL, 100)   -- untouched
+      t.eq(set[1].loPpq, 100); t.eq(set[1].hiPpq, 100)   -- untouched
     end,
   },
 
@@ -211,7 +211,7 @@ return {
       local seeds = { [3] = { intervals.seed(0, 10, 'a', 'b'), intervals.seed(10, 20, 'b', 'c') } }
       intervals.absorbSeeds(dirt, seeds, { [3] = true })
       t.eq(type(dirt[3]), 'table')                      -- interval-valued, not true
-      t.eq(#dirt[3], 1); t.eq(dirt[3][1].hiPpqL, 20)    -- the two seeds coalesced
+      t.eq(#dirt[3], 1); t.eq(dirt[3][1].hiPpq, 20)    -- the two seeds coalesced
     end,
   },
 
@@ -230,7 +230,7 @@ return {
     run = function()
       local dirt = { [3] = true }    -- e.g. a verb-level dirtyChan already fired for this chan
       intervals.absorbSeeds(dirt, { [3] = { intervals.seed(5, 5, 'p', 'p') } }, {})
-      t.eq(type(dirt[3]), 'table'); t.eq(dirt[3][1].loPpqL, 5)   -- narrowed, not left true
+      t.eq(type(dirt[3]), 'table'); t.eq(dirt[3][1].loPpq, 5)   -- narrowed, not left true
     end,
   },
 }

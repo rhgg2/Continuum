@@ -4,6 +4,20 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-16** — interval dirt materialises note columns and nothing else: every other producer (ccs,
+  park, pb) still gets the fresh channel a dirty chan has always been handed. Carrying the whole channel
+  was tried first and broke 18 specs — those stages clone from mm and append, so a carried `.parked` /
+  `columns.ccs` doubles up. Confining the carry keeps the biggest number (`internals`, 18.5ms of ~34) and
+  leaves the rest to phase 3's remainder. Two designs for foreign/diverged notes inside an interval were
+  worked up and both dropped as dead code: a widen-to-wholesale fallback, and seeding the externals' own
+  positions. Neither state can arise — every external mutation routes through `mm:load`'s full re-read,
+  and `tm:rebuild`'s `didReload → dirtyChan()` widens *after* `absorbSeeds` narrows, so a diverged note
+  can never sit in an interval-dirty channel. That ordering is load-bearing and unpinned: pinning it needs
+  harness surface we didn't want to author, and if it inverts, `intervals.intersects` takes a nil ppqL and
+  errors loudly rather than deriving silently wrong output. Interval bounds also lost their `L` (`loPpqL`
+  → `loPpq`): single-frame algebra, one construction site (`seedEvent`'s `evt.ppqL or evt.ppq`), and once
+  `close` moved to `e.ppq` the suffix read as a frame mismatch that wasn't.
+
 - **2026-07-16** — foreign MIDI keeps its logical anchor: the CC walk stamps every sidecar-less
   non-derived cc/pb/pa/at with `ppqL = toLogical(raw)` on the first rebuild that dirties the channel
   (`rawDivergesFromLogical` reads a missing sidecar as divergence). Reviewed under the theory that

@@ -1,8 +1,8 @@
 -- See design/interval-dirt.md for the model.
 -- @noindex
 
---invariant: pure module: no state; a set is `true` (whole channel) or a ppqL-ascending, non-overlapping list
---shape: interval = { loPpqL, hiPpqL: number; loUuid, hiUuid: string? } -- nil uuid edge = open toward channel start/end
+--invariant: pure, stateless; a set is `true` (whole chan) or a ppq-ascending, non-overlapping list
+--shape: interval = { loPpq, hiPpq: number; loUuid, hiUuid: string? } -- nil uuid edge = open toward channel start/end
 local util = require 'util'
 
 local intervals = {}
@@ -12,12 +12,12 @@ local MAX = 64
 
 ----- Construction
 
-function intervals.seed(loPpqL, hiPpqL, loUuid, hiUuid)
-  if loPpqL > hiPpqL then
-    loPpqL, hiPpqL = hiPpqL, loPpqL
+function intervals.seed(loPpq, hiPpq, loUuid, hiUuid)
+  if loPpq > hiPpq then
+    loPpq, hiPpq = hiPpq, loPpq
     loUuid, hiUuid = hiUuid, loUuid
   end
-  return { loPpqL = loPpqL, hiPpqL = hiPpqL, loUuid = loUuid, hiUuid = hiUuid }
+  return { loPpq = loPpq, hiPpq = hiPpq, loUuid = loUuid, hiUuid = hiUuid }
 end
 
 --contract: coalesces edge-inclusive touching/overlapping intervals; returns `true` past MAX; input not mutated
@@ -27,17 +27,17 @@ function intervals.merge(set)
 
   local sorted = {}
   for _, iv in ipairs(set) do util.add(sorted, iv) end
-  table.sort(sorted, function(a, b) return a.loPpqL < b.loPpqL end)
+  table.sort(sorted, function(a, b) return a.loPpq < b.loPpq end)
 
   local out = {}
   local cur
   for _, iv in ipairs(sorted) do
-    if cur and iv.loPpqL <= cur.hiPpqL then
-      if iv.hiPpqL > cur.hiPpqL then
-        cur.hiPpqL, cur.hiUuid = iv.hiPpqL, iv.hiUuid
+    if cur and iv.loPpq <= cur.hiPpq then
+      if iv.hiPpq > cur.hiPpq then
+        cur.hiPpq, cur.hiUuid = iv.hiPpq, iv.hiUuid
       end
     else
-      cur = { loPpqL = iv.loPpqL, hiPpqL = iv.hiPpqL, loUuid = iv.loUuid, hiUuid = iv.hiUuid }
+      cur = { loPpq = iv.loPpq, hiPpq = iv.hiPpq, loUuid = iv.loUuid, hiUuid = iv.hiUuid }
       util.add(out, cur)
     end
   end
@@ -52,7 +52,7 @@ end
 function intervals.intersects(set, lo, hi)
   if set == true then return true end
   for _, iv in ipairs(set) do
-    if iv.loPpqL <= hi and iv.hiPpqL >= lo then return true end
+    if iv.loPpq <= hi and iv.hiPpq >= lo then return true end
   end
   return false
 end
@@ -63,6 +63,7 @@ end
 -- and back to the previous in-group onset when opts.stepBack (tails only). See design § The crux.
 -- Does not mutate set: each stage closes the same merged seed set against its own ordering.
 --contract: opts = { key = fn(e)->groupKey|nil, stepBack: bool }; events in the stage's consumption order
+--contract: events carry logical position in `.ppq` (the column frame); interval bounds stay ppqL
 function intervals.close(set, sortedEvents, opts)
   if set == true then return true end
 
@@ -74,12 +75,12 @@ function intervals.close(set, sortedEvents, opts)
 
   local closed = {}
   for _, iv in ipairs(set) do
-    local loPpqL, hiPpqL = iv.loPpqL, iv.hiPpqL
+    local loPpq, hiPpq = iv.loPpq, iv.hiPpq
     local loUuid, hiUuid = iv.loUuid, iv.hiUuid
     for _, g in pairs(groups) do
       local firstInside, lastInside
       for i, e in ipairs(g) do
-        if e.ppqL >= iv.loPpqL and e.ppqL <= iv.hiPpqL then
+        if e.ppq >= iv.loPpq and e.ppq <= iv.hiPpq then
           firstInside = firstInside or i
           lastInside = i
         end
@@ -88,20 +89,20 @@ function intervals.close(set, sortedEvents, opts)
         if opts.stepBack then
           local prev = g[firstInside - 1]
           if not prev then
-            loPpqL, loUuid = -math.huge, nil
-          elseif prev.ppqL < loPpqL then
-            loPpqL, loUuid = prev.ppqL, prev.uuid
+            loPpq, loUuid = -math.huge, nil
+          elseif prev.ppq < loPpq then
+            loPpq, loUuid = prev.ppq, prev.uuid
           end
         end
         local nxt = g[lastInside + 1]
         if not nxt then
-          hiPpqL, hiUuid = math.huge, nil
-        elseif nxt.ppqL > hiPpqL then
-          hiPpqL, hiUuid = nxt.ppqL, nxt.uuid
+          hiPpq, hiUuid = math.huge, nil
+        elseif nxt.ppq > hiPpq then
+          hiPpq, hiUuid = nxt.ppq, nxt.uuid
         end
       end
     end
-    util.add(closed, { loPpqL = loPpqL, hiPpqL = hiPpqL, loUuid = loUuid, hiUuid = hiUuid })
+    util.add(closed, { loPpq = loPpq, hiPpq = hiPpq, loUuid = loUuid, hiUuid = hiUuid })
   end
 
   return intervals.merge(closed)

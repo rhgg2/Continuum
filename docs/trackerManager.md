@@ -107,6 +107,16 @@ before `close` replaces it. Hand-anchoring at seed time would duplicate that wor
 raw-order index deferred to a later phase. See design/interval-dirt.md § Phase 2 for the seed
 shapes and the reload fold's flushing guard.
 
+### Interval materialisation
+
+`noteClosure` (trackerManager.lua) turns a channel's absorbed seed set into the closed span that
+gets excised and re-cloned before the raw notes walk. It closes against the carried columns using
+the union of every consuming stage's own grouping — tails group same-pitch, seats/PCs same-lane,
+both stepping back — since each grouping subsumes the channel-wide reach the other needs; closing
+against only one would leave the other stage's neighbours uncaptured. The narrowing is logical-order
+only: the raw-order narrowing design/interval-dirt.md's table calls for needs a per-channel
+raw-order index that doesn't exist yet, deferred to phase 4 (§ q5).
+
 ## Pitchbend: tm's role in the tuning model
 
 See `docs/tuning.md` for the cross-cutting model — detune as intent,
@@ -454,6 +464,13 @@ and re-projecting it would corrupt `delayC` (recomputing `evt.ppq - baseline`
 from an already-logical `ppq`). Only dirty channels, freshly materialised,
 reach it.
 
+Interval dirt (design/interval-dirt.md) narrows this freeze one producer at a time: a channel whose
+only dirt is note-column edits still carries its CC/park/pb state forward like a clean channel would,
+but hands `rebuildInternals` a live channel to excise and re-clone the closed note span into (§
+Interval materialisation). Every other producer — `ccs`, `regionPark`, `pbs` — doesn't yet
+distinguish interval dirt from wholesale dirt, so it still replaces the whole channel; folding them
+in is the rest of phase 3.
+
 ### Dormant guard
 
 When the tracker page is not active, `bindTake(nil)` clears cm's take context
@@ -759,6 +776,9 @@ external's pack sees prior ones. Tagged `evt.fixed = true`: the tail walk
 freezes its onset (the same-pitch clamp skips it) but clips its tail like
 any other note, and it blocks neighbours' tails as a 'next' lookup.
 
+Returns the seated column notes, still raw: `rebuildPipeline`'s `projectNotes` step projects them
+once the pack settles, alongside the internals `rebuildInternals` seated earlier in the pass.
+
 ## Rebuild: tail walk
 
 Tail target for each internal note:
@@ -820,3 +840,10 @@ the CLIPPED logical ceiling — render-only, plus the sounding extent a
 parked cell hands a generator. An uncached note (no `endppqL` stamp in
 mm) has no authored ceiling, so its authored ceiling equals the realised
 one.
+
+Under interval dirt (§ Interval materialisation) a channel's columns mix carried and freshly-seated
+events: only this pass's own clones — `rebuildInternals`'s internals and `rebuildExternals`'s seated
+externals — are raw. Carried events already flipped to logical when their own pass seated them, so
+`projectNotes` walks those two materialised sets directly rather than re-scanning the channel's
+columns; re-projecting a carried event would corrupt `delayC` the same way projecting a clean
+channel's column would.

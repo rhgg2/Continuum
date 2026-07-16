@@ -4,8 +4,8 @@
 
 # Intent
   intervals is the pure dirt-interval algebra (design/interval-dirt.md).
-  A set is `true` (whole channel) or a ppqL-ascending, non-overlapping
-  list of { loPpqL, hiPpqL, loUuid, hiUuid }. seed normalises; merge
+  A set is `true` (whole channel) or a ppq-ascending, non-overlapping
+  list of { loPpq, hiPpq, loUuid, hiUuid }. seed normalises; merge
   coalesces edge-inclusive and collapses to `true` past the cap;
   intersects is edge-inclusive; close widens each seed to its stage's
   anchoring onsets (forward always, back only under stepBack) without
@@ -13,8 +13,8 @@
 
 # Helpers
   @fn evt(ppqL, uuid, lane, pitch)  @ 14-16
-      -- An event as the closure consumes it: a logical position, a uuid anchor,
-      -- and whatever fields opts.key groups on (lane, pitch).
+      -- An event as the closure consumes it: column events are one-frame, so the
+      -- logical position is `.ppq`; plus a uuid anchor and opts.key's group fields.
 
 # Cases
   @case 'seed normalises reversed bounds, swapping uuids with them'  [pure]  @ 25-30

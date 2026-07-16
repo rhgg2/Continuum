@@ -303,10 +303,10 @@ than avoidable.
 ```
 true                          -- whole channel: every unported dirt source,
                               -- and the widening fallback for edge cases
-{ { loPpqL, hiPpqL,           -- logical span: merging + bookkeeping
+{ { loPpq, hiPpq,             -- logical span: merging + bookkeeping
     loUuid, hiUuid }, ... }   -- event anchors (§ Intervals are event-anchored);
                               -- nil uuid edge = open toward channel start/end
-                              -- merged: ppqL-ascending, non-overlapping
+                              -- merged: ppq-ascending, non-overlapping
 ```
 
 Operations as a pure module `intervals.lua` (shape-peer of `voicing`:
