@@ -1,45 +1,30 @@
-@spec intervals_spec  src=tests/specs/intervals_spec.lua  loc=236  sha=922a349  cases=19
+@spec intervals_spec  src=tests/specs/intervals_spec.lua  loc=128  sha=2541738  cases=11
 @exercises intervals (intervals)
-@surface   intervals.seed, intervals.merge, intervals.intersects, intervals.close, intervals.absorbSeeds
+@surface   intervals.seed, intervals.merge, intervals.intersects, intervals.absorbSeeds
 
 # Intent
   intervals is the pure dirt-interval algebra (design/interval-dirt.md).
   A set is `true` (whole channel) or a ppq-ascending, non-overlapping
   list of { loPpq, hiPpq, loUuid, hiUuid }. seed normalises; merge
   coalesces edge-inclusive and collapses to `true` past the cap;
-  intersects is edge-inclusive; close widens each seed to its stage's
-  anchoring onsets (forward always, back only under stepBack) without
-  mutating its input.
-
-# Helpers
-  @fn evt(ppqL, uuid, lane, pitch)  @ 14-16
-      -- An event as the closure consumes it: column events are one-frame, so the
-      -- logical position is `.ppq`; plus a uuid anchor and opts.key's group fields.
+  intersects is edge-inclusive; absorbSeeds folds one flush's seeds into
+  the dirt set.
 
 # Cases
-  @case 'seed normalises reversed bounds, swapping uuids with them'  [pure]  @ 25-30
-  @case 'seed keeps a point interval degenerate'  [pure]  @ 34-38
-  @case 'merge passes true through and leaves a singleton alone'  [pure]  @ 44-49
-  @case 'merge coalesces overlapping and edge-touching intervals, keeping outer uuids'  [pure]  @ 53-65
-  @case 'merge sorts before coalescing and does not mutate its input order'  [pure]  @ 69-75
-  @case 'merge subsumes a fully-contained interval without extending the outer hi'  [pure]  @ 79-83
-  @case 'merge collapses to true past the size cap'  [pure]  @ 87-92
-  @case 'intersects is edge-inclusive and short-circuits on true'  [pure]  @ 98-104
-  @case 'close passes true through'  [pure]  @ 110-113
-  @case 'tails: stepBack widens to the previous and next same-pitch onset'  [pure]  @ 117-125
-  @case 'tails: grouping picks the same-pitch neighbour, not the nearest onset'  [pure]  @ 129-138
-  @case 'tails: a missing neighbour opens the edge toward the channel bound'  [pure]  @ 142-148
-  @case 'forward closure holds the lower edge at the seed and steps only forward'  [pure]  @ 152-158
-  @case 'close unions extensions across every group the interval touches'  [pure]  @ 162-172
-  @case 'close steps in ppqL order -- delay-reordered raw is a phase-4 gap (design q5)'  [pure]  @ 176-192
-  @case 'close does not mutate its input set'  [pure]  @ 196-202
-  @case 'absorbSeeds narrows a seeded chan to its merged intervals'  [pure]  @ 208-215
-  @case 'absorbSeeds folds an unseeded payload chan whole'  [pure]  @ 219-225
-  @case 'absorbSeeds narrows a seeded chan even absent from the payload, overriding a prior true'  [pure]  @ 229-234
+  @case 'seed normalises reversed bounds, swapping uuids with them'  [pure]  @ 15-20
+  @case 'seed keeps a point interval degenerate'  [pure]  @ 24-28
+  @case 'merge passes true through and leaves a singleton alone'  [pure]  @ 34-39
+  @case 'merge coalesces overlapping and edge-touching intervals, keeping outer uuids'  [pure]  @ 43-55
+  @case 'merge sorts before coalescing and does not mutate its input order'  [pure]  @ 59-65
+  @case 'merge subsumes a fully-contained interval without extending the outer hi'  [pure]  @ 69-73
+  @case 'merge collapses to true past the size cap'  [pure]  @ 77-82
+  @case 'intersects is edge-inclusive and short-circuits on true'  [pure]  @ 88-94
+  @case 'absorbSeeds narrows a seeded chan to its merged intervals'  [pure]  @ 100-107
+  @case 'absorbSeeds folds an unseeded payload chan whole'  [pure]  @ 111-117
+  @case 'absorbSeeds narrows a seeded chan even absent from the payload, overriding a prior true'  [pure]  @ 121-126
 
 # Uses (outbound edges)
-  @use call intervals.seed  @ 27,36,47,56,57,58,71,81,90,100,121,136,145,155,170,188,198,211,222,232
-  @use call intervals.merge  @ 46,48,60,72,91
-  @use call intervals.intersects  @ 101,102,103
-  @use call intervals.close  @ 112,121,136,145,155,170,188,200
-  @use call intervals.absorbSeeds  @ 212,222,232
+  @use call intervals.seed  @ 17,26,37,46,47,48,61,71,80,90,103,114,124
+  @use call intervals.merge  @ 36,38,50,62,81
+  @use call intervals.intersects  @ 91,92,93
+  @use call intervals.absorbSeeds  @ 104,114,124

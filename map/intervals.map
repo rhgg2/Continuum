@@ -1,4 +1,4 @@
-@module intervals  src=intervals.lua  loc=126  sha=922a349  mode=namespace  self=intervals
+@module intervals  src=intervals.lua  loc=75  sha=2541738  mode=namespace  self=intervals
 
 # Shapes
   @shape  interval = { loPpq, hiPpq: number; loUuid, hiUuid: string? } -- nil uuid edge = open toward channel start/end  @ 5
@@ -19,20 +19,12 @@
   -- Queries
   @api intervals.intersects(set, lo, hi)  @ 52-58
       @contract  edge-inclusive overlap of [lo, hi] against any interval; `true` set always intersects  @ 51
-  -- Closure
-  @api intervals.close(set, sortedEvents, opts)  @ 67-109
-      -- Widen each seed to its stage's anchoring onsets: forward to the next in-group onset (all stages),
-      -- and back to the previous in-group onset when opts.stepBack (tails only). See design § The crux.
-      -- Does not mutate set: each stage closes the same merged seed set against its own ordering.
-      @contract  opts = { key = fn(e)->groupKey|nil, stepBack: bool }; events in the stage's consumption order  @ 65
-      @contract  events carry logical position in `.ppq` (the column frame); interval bounds stay ppqL  @ 66
   -- Reload fold
-  @api intervals.absorbSeeds(dirt, seeds, payloadChans)  @ 116-124
+  @api intervals.absorbSeeds(dirt, seeds, payloadChans)  @ 65-73
       -- Reload fold: a seeded chan narrows to the merge of its seeds; an unseeded payload chan
       -- (mm-internal writes -- dedup, collision backstop) still folds whole. See design/interval-dirt.md § phase 2.
-      @contract  mutates+returns dirt; seeded chan -> merge(seeds[chan]), unseeded payload chan -> true  @ 115
+      @contract  mutates+returns dirt; seeded chan -> merge(seeds[chan]), unseeded payload chan -> true  @ 64
 
 # Uses (outbound edges)
-  @use call    util.add  @ merge:29,41 close:105
-  @use call    util.bucket  @ close:73
+  @use call    util.add  @ merge:29,41
   @use require util  @ 6

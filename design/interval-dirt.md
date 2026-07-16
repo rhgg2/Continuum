@@ -14,7 +14,7 @@
 | state | planned (§ Implementation plan), unstarted |
 | supersedes | `incremental-rebuild` gap 4 (fx dirt signal) |
 | enduring model it changes | `docs/trackerManager.md` § Derivation dirt |
-| the hard part | was forward propagation — closed 2026-07-15 by onset-bounded closures + the cascade commute (§ The crux, closed); the multi-pass I8 restatement arrives with phase 4 (the interval tail walk) and is core |
+| the hard part | was forward propagation — closed 2026-07-15 by onset-bounded closures (§ The crux, closed); same-pitch widens the tails closure rather than leaving tm (§ Same-pitch is a projection artefact), and tails *produces* its closure from the neighbour lookup it already does, rather than consuming a fence it could leak past (§ The tails closure is the walk's output, not its input) |
 
 ## The problem it solves
 
@@ -96,20 +96,31 @@ Two consequences, one extension declined:
 of it. A dirty interval is the **seed** of a blast radius, not the radius
 itself — each stage must close its seed to an anchoring event before
 consuming it. The finding: per stage, propagation is **bounded by
-neighbouring onsets**, with one true exception that commutes out of the
-loop entirely (next section). One closure vocabulary, per-stage
+neighbouring onsets**. One closure vocabulary, per-stage
 parameterisation:
 
 | stage | closure | grouping / frame |
 |---|---|---|
-| tails | [prev onset, next onset] | same-lane + same-pitch, raw order |
+| tails | [prev onset, next onset] — **produced** by the walk, not consumed | same-lane ∪ same-pitch, raw order |
 | seats (detune) | [onset, next lane-1 onset] **inclusive of that seat** | lane-1, raw order |
 | PCs | [onset, next onset] | channel notes, raw order — conditional on the bearing rule below |
 | fx | dirty interval ∩ host window | logical extents — already interval-native (§ The idea) |
-| same-pitch cascade | none — exempt | commuted to the mm backstop (§ below) |
 
-Two of these needed a correction or a rule change to get bounded:
+Three of these needed a correction or a rule change to get bounded:
 
+- **Tails: the union, not an exemption.** A 2026-07-17 draft had
+  same-pitch commute out of the loop entirely, leaving tails to close
+  same-lane alone. It cannot (§ Same-pitch is a projection artefact):
+  same-pitch is realisation, tm owns the projection, so the walk keeps
+  both groupings and closes over their union. Bounded all the same — a
+  nudge chains only while notes sit within a tick of each other, so a
+  detune cluster is bounded by its own size, and the clip needs one
+  neighbour. And tails **produces** this closure rather than consuming
+  one: the neighbour lookup that closes the interval is the same lookup
+  the bound needs, so the walk sweeps out from its seeds and the anchors
+  it reaches are the answer (§ The tails closure is the walk's output,
+  not its input). It has to work this way — a fenced walk can leak a
+  cascade, and mm's backstop cannot catch one, because it kills.
 - **Seats.** Per `docs/tuning.md`, detune prevails from a lane-1 onset
   until the **next lane-1 onset** (not `endppq`), and the absorber
   invariant runs both directions, so the next seat's fake-pb value is
@@ -130,36 +141,294 @@ The asymmetry still governs: spurious dirt costs one re-derive; missed
 dirt writes wrong notes and says nothing. Worst case a closure runs to
 the end of the channel, which *is* today's behaviour.
 
-## The cascade commutes to the edge
+## Same-pitch is a projection artefact
 
-Same-pitch cascades are the one genuinely unbounded propagation — a
-nudged onset can collide with the next same-pitch note, which nudges,
-which collides. They get no closure rule; they are **exempted from the
-interval machinery** and enforced at the edge of the loop, where the
-mechanism already exists: `same-pitch-enforcement`'s mm write-path
-backstop (landed in full) detects collisions for free at `tokenIdx`
-filing and resolves them at the outermost `modify` unwind via the shared
-`voicing` verdicts, firing `collisionsResolved`.
+> Amended 2026-07-17, twice. The first draft commuted only the
+> *cascade* and left the tail clip standing in tm's walk. The second
+> sent both to mm on an ownership argument — mm owns the raw frame, so
+> mm should own the constraint — that does not survive contact with
+> mm's code. This third version was checked against the machine before
+> it was written, which is the only reason to believe it over the other
+> two.
 
-Under interval dirt, `collisionsResolved` events become **seed intervals
-for the next maintenance pass**: the cascade's blast radius is discovered
-by running it, not predicted. Escapes are rare by construction — the
-common cascade source, retrig hosts expanding to same-pitch fxNote runs,
-lives *inside* the fx window, which is already the interval; the tail
-walk keeps nudging within intervals, and the backstop catches only
-boundary-crossers (an authored note at the exact nudge target).
+"One voice per `(chan, pitch)`" is a fact about MIDI, not about
+trackers. The tracker rule is that a column is monophonic — a note ends
+at the next onset in its own lane — and it would hold if MIDI did not
+exist. That is the only truncation the intent frame owes.
 
-Two recorded consequences:
+Same-pitch exclusion is therefore an artefact of **realisation**, and it
+belongs where the other realisation artefacts already live: at the point
+tm projects intent into raw, beside swing and delay. Not in mm. The
+ownership argument reads well and is wrong on the facts — **mm cannot
+hold this**, on two counts:
 
-- **I8 weakens, deliberately.** "Rebuild converges in one pass" becomes
-  "one pass in the common case; finitely many when a cascade escapes an
-  interval." The fixpoint survives but is reached by iteration; the
-  soundness oracle and the specs that pin it need restating in those
-  terms.
-- **A settled decision re-opens.** same-pitch-enforcement decided "no
-  forced rebuild on `collisionsResolved` — geometry trues up at the next
-  natural rebuild" *because the path should never fire*. Commuting makes
-  it a does-fire path; the signal must reliably schedule that next pass.
+- **The backstop is onset-only.** It detects a collision by exact token
+  match (`tokenIdx[newTok]`, `midiManager.lua:1039` and `:1077`), and
+  the token is `(evType, chan, ppq, pitch)`. That catches two notes
+  landing on one raw onset — the clamp's case, and for free. Tail
+  overlap produces no token collision and is structurally invisible to
+  it. A clip in mm is new code, not a mechanism already there.
+- **A clip in mm's model churns forever.** `rebuildTails` derives its
+  bound from lane geometry and writes when `rounded ~= e.endppq`, where
+  `e.endppq` was read back from mm via `buildRawScratch`. If mm clipped
+  what it stores, the walk would re-derive the unclipped lane bound and
+  write it back every rebuild, against an mm that re-clips it every
+  time. That is `tm_zero_write_spec` red on both fixtures — the very
+  fixpoint that terminates the rebuild self-trigger loop.
+
+The rule that decides the boundary: **clip what the view can't draw;
+don't clip what it can.** Two notes overlapping in one lane is
+unrepresentable, a column being a list of cells with nowhere to put the
+second, so the lane clip is intent-frame semantics and stays in tm. Two
+notes overlapping at the same pitch across lanes is perfectly drawable,
+and the overlap is right there on screen, so the truncation is
+inferable from what is displayed: unrealisable intent, shown as
+authored, no cue and no clip. The precedent is already in the model —
+same-pitch *onset* separation nudges on the realisation side and "the
+authored ceiling on `endppq` stands" (`docs/trackerManager.md` §
+Same-pitch onset separation). A cue earns its place only where the
+cause is invisible: swing collapsing two onsets is invisible, so
+`delayC` gets its `*`; a same-pitch overlap is not.
+
+**The walk computes two bounds instead of one.** The lane bound is
+intent — `max(ppq+1, min(fromLogical(endppqL), fromLogical(laneNext.ppqL)
++ overlap, takeLen))` — and drives `endppqC` and the column's displayed
+end. The raw bound is that, further clipped by the next same-pitch
+onset, and is the only value that reaches mm. `endppqL` untouched,
+`endppqC` lane-only, `endppq` clipped. Same-pitch becomes precisely what
+swing already is: something that happens on the way out, true on the
+wire, absent from the screen.
+
+**What the clip deletes in tm.** `realiseParked`'s pitch grouping —
+parked cells never reach mm, so they are pure intent and clip lane-only
+— and the parked-bounds second grouping. `rebuildTails` keeps its pitch
+grouping, because the clamp still needs it.
+
+**One clip, once.** The flush pre-clip scan (`trackerManager.lua:1073-
+1107`) carries a second same-pitch tail clip, and it is a vestige. That
+scan exists for `voicing.resolveGroup`'s *verdicts* — killing genuine
+duplicates through um's verbs, so PA culling and detune-aware resize
+happen (`:1101-1106`), with the descending-target-ppq sort after it so
+an occupying move cannot re-key onto a peer's token. None of that is
+truncation. `design/archive/same-pitch-enforcement.md` records the
+moment the loop went vestigial: when the verdicts were hoisted into
+`voicing`, "tm's flush pre-clip consumes `resolveGroup` and **keeps only
+the tail-bound loop**". The scan used to *be* the truncation site; the
+loop is what was left standing when the job moved. The walk's bound is
+strictly stronger (`ceiling ∧ lane ∧ pitch ∧ takeLen` against the scan's
+`endppq ∧ nextSamePitch ∧ takeLen`), computed against post-walk rather
+than staged geometry, and a rebuild always follows a flush — so the
+scan's clip only ever produces a value the walk overwrites moments
+later. Both docs already concede it: "This is the staging pre-clip only;
+the authoritative raw tail is re-derived by rebuild step 4.8." The loop
+goes; the verdicts stay.
+
+**Separation is three sites, and the reason is not same-pitch.**
+tm separates colliding onsets at *three* sites — the reseat
+(`trackerManager.lua:1655`), the flush pre-clip scan (`:1087`), and the
+tail walk (`:2701`) — and they look like three copies of one rule. They
+are not. They are one rule forced three times by **content-keyed
+addressing on a mutable field**. `tokenOf(evt)` hashes
+`(evType, chan, ppq, pitch)`; two same-pitch notes on one raw ppq hash
+identically; `tokenIdx` holds exactly one of them, and the other has no
+name. `mmBatch.commit` stages `a.evt.token` and hands it to `mm:assign`,
+which is a bare `tokenIdx[token]` lookup (`:1537-1544`) — so a collision
+committed at one of the pipeline's nine mm commits leaves a note
+unaddressable through the eight that follow, until the backstop
+separates it at the outermost unwind.
+
+So the sites are not handling collisions; they are preventing tm from
+minting a name it cannot use. The walk's clamp is no counter-example: it
+separates records that are not in mm yet (`:2700` — "a new fxNote (**no
+token yet**) mutates in place") or not yet colliding there. Separation
+is geometry over tm's own records and works fine with collisions
+present. Addressing is a hash lookup on the field that collided.
+
+The fix is the one the docs already name: `uuid` is stable, never
+collides, and `docs/trackerManager.md` § Conventions calls it "the
+durable cross-rebuild handle". Every note has one — `addNote` always
+allocates, load mints for unbound survivors. It is an accessor over an
+index mm already maintains (`eventsByUuid`, live across add / delete /
+backstop / load), not new machinery. With `mmBatch` naming notes by uuid
+and mm exposing a uuid-keyed assign beside the token surface, a
+collision stays nameable, tm can carry one transiently across commits,
+and separation collapses to a single site: **the walk, in tm, at the
+projection**. Reseat's nudge goes — the walk covers it, and mm's
+backstop, firing at an unwind that comes after the whole pipeline, finds
+nothing, exactly as its contract promises. The flush scan's nudge goes
+too, covered by the backstop at flush's *own* unwind, where the rebuild
+that trues it up was already coming; its **kills** stay, because killing
+a duplicate is a dedup verdict rather than separation and it is
+correctly routed through um's verbs.
+
+**And the clamp does not follow the clip to mm — a third reason, and the
+decisive one: the backstop kills, and the clamp doesn't.**
+`voicing.nudgeOnsets` only separates. `voicing.resolveGroup`, which the
+backstop runs (`midiManager.lua:885`), deletes: `redundant`
+(`voicing.lua:20`) returns true **unconditionally** when one note is
+derived and the other is not — before any `ppqL` or `detune` comparison
+— and `supersedes` then drops the derived one. `docs/voicing.md` states
+the policy outright: an fxNote "always loses to an authored note". So
+routing the walk's clamp to the backstop is not a relocation but a
+silent behaviour change: a retrig fxNote landing on an authored note's
+raw onset is separated today (+1, both voices live) and would instead be
+deleted. The walk is the only site where fxNotes and authored notes meet
+before commit — fxNotes do not exist until rebuild, so the flush scan
+cannot cover them, and `same-pitch-enforcement` records the split
+("reseat + tail walk consume `nudgeOnsets`"). The 2026-07-17 draft's
+claim that both layers "drive the same algebra" was false: they drive
+different halves, and the half mm runs is the one that kills.
+
+`delayC`'s re-stamp (`trackerManager.lua:2707`) therefore stays, and the
+draft that promised its deletion was promising something unreachable:
+the walk still nudges mid-pass, after projection, which is the exact
+condition that forces the re-stamp `0097742` had to add.
+
+**`endppqC` stops being a projection.** `projectEvent` derives it from
+mm's raw end (`tm:toLogical(chan, evt.endppq)`) — and that raw end is
+now the same-pitch-clipped bound. Left alone, the next materialisation
+would project the wire's clip straight back onto the screen: the
+truncation just removed, reappearing one rebuild later. `endppqL`
+protects `endppq`, not `endppqC`. So `endppqC` becomes an output of the
+walk's lane geometry and never a projection of the raw end — the same
+shape as `delayC`, which the walk already re-stamps rather than
+projects.
+
+That is load-bearing, because `endppqC` is not a paint value.
+`soundingCell` builds a parked cell's producer stream note from it;
+`adjustDurationCore` grows and shrinks from it ("the ceiling they
+SEE"); the region window edits, the noteOff toggle, and the fx host
+lookup all anchor to it. None wants the same-pitch component
+specifically — each wants *the end the user sees* — so all survive on
+the lane clip, with two accepted behaviour changes: a
+same-pitch-truncated note now grows from its authored end, and a parked
+cell's producer sounds to its lane clip, its derived notes clipped on
+the wire like any others.
+
+**I8 survives intact.** Because nothing commutes, the walk still
+separates in-pass, and its two in-pass consumers stand: a nudged lane-1
+onset reaches `rebuildPbs` later in the same pass, and the `delayC` stamp
+(`trackerManager.lua:2707`) carries the raw shift. A colliding edit
+converges in **one** pass, and phase 4's interval walk does not weaken
+that — because the walk is never fenced by an interval it could escape.
+
+How the first of those consumers is *delivered* changes at commit 3, and
+the next section is about that. Through commits 1–2 it is
+`dirtyChan(chan)`; after commit 3 it is the walk's own emission.
+
+**The widen and the emission are the same fact, so commit 3 deletes the
+widen.** `dirtyChan(chan)` at `trackerManager.lua:2703` is usually
+described as what carries a moved seat to `rebuildPbs`. It isn't. The
+walk runs only on channels that are already dirty (`:2665` gates the loop
+body), so the line cannot add dirt and pbs re-derives the channel either
+way; under whole-channel dirt it was a strict no-op. Under interval dirt
+it becomes a **widen** — writing `true` over the channel's interval set
+from inside the very stage phase 4 narrows.
+
+Through commits 1–2 that is harmless and it stays: the walk is still
+whole-channel there, so the promotion costs nothing. It does not survive
+commit 3, and the reason is not cost. Once the walk emits its closure for
+seats and PCs, the widen and the emission are **the same information on
+the same trigger** — a nudge moved a lane-1 onset — delivered by two
+mechanisms, and the coarse one wins: `dirtyChan` writes `true`, phase 1's
+whole-channel value, wiping the interval set the emission just built.
+Seats and PCs would read `true` and re-derive wholesale exactly as today,
+and the emission would be dead code. So commit 3 must remove the widen,
+not narrow it — the walk already knows precisely which onsets it moved,
+and crux row 2's seat closure ([onset, next lane-1 onset], inclusive of
+that seat) is exactly the consumer for them. The pipeline order is what
+makes it legal: tails discovers at `:3221`, pbs consumes at `:3229`.
+
+That also retires the idea of narrowing the widen in place — seeding both
+positions of the moved onset, as um's verbs do for a ppq-moving assign
+(`:724-726`). It reads right, and it is the wrong answer: it hand-builds
+a second delivery path for what the emission already carries, on the
+reasoning that the walk cannot reach phase 2's seeds (true — its clamp
+writes go through `mmBatch` straight to mm, never `assignLowlevel`) and
+so must hand-roll dirt. The walk does not need to reach phase 2's seeds.
+It produces dirt of its own, at the moment it has the right data in hand.
+
+What the widen costs meanwhile is small, and worth stating so it isn't
+mistaken for a headline. `dirtyChans` clears at the end of the rebuild
+(`:3243`), so a widen never crosses a pass; the only readers downstream
+of tails are `rebuildPbs` (`:2785`) and `rebuildPCs` (`:3116`), both
+phase 6, both profile-gated, measured at `pbs` 1.5 / `pcs` 0.0 on the
+dense take. The edit-path win lives upstream of the walk, not below it.
+The case for deleting the widen is coherence — one mechanism per fact —
+and, if phase 6 ever runs, correctness: a moved lane-1 onset absent from
+pbs's dirt is a stale absorber seat, the silent-stale class rather than a
+slow re-derive.
+
+Phase 2's dispensation does not cover this and should not be read as if
+it did: it lists config, swing, take-length and external modifies — dirt
+sources *outside* the pipeline, where dirt = everything is genuinely
+true. `dirtyChan()` calls the rebuild makes *mid-pass* are a different
+class, and the walk's is not the only one: the park and pb-restore stages
+widen at `:2023`, `:2028`, `:2103`, `:2195`, `:2211` and `:2223`, and
+they run *before* fx and tails, so their radius is strictly larger. Phase
+5 owns those (§ phase 5). The walk's is the one phase 4 can fix while it
+has the stage open.
+
+**The tails closure is the walk's output, not its input.** The crux table
+reads as though every stage is handed a closed region and derives inside
+it. For tails that is backwards, and building it that way does the work
+twice: closing the interval *means* finding each seed's same-lane and
+same-pitch neighbours, and that is the identical lookup the walk already
+performs to compute a bound. So the walk takes no fence. It sweeps
+outward from the dirty seeds along the neighbour links it needs anyway —
+the predecessor whose tail may reach into the seed, the successor that
+clips the seed's own — and the anchors it touches **are** the closure,
+fixed at the moment the walk has exactly the right data in hand.
+
+The pipeline already runs in the order that permits this: fx first
+(`trackerManager.lua:3219`), closing independently on window ∩ dirt, then
+tails (`:3221`), then seats (`:3229`) and PCs (`:3230`). Every stage that
+*consumes* a closed interval runs after the stage that discovers one.
+
+**And it must be an output, because an escape has no other net.** A
+2026-07-17 draft fenced the walk with a precomputed interval, let a
+cascade chain past the fence onto a note outside it, and called mm's
+backstop the net that discovers the nudge, at the price of an extra pass.
+That net does not exist. The backstop runs `resolveGroup`, and
+`resolveGroup` **kills**: an fxNote that cascades onto an authored note
+outside the region is not nudged there but deleted, `redundant`
+short-circuiting on the derived/authored mismatch before it compares
+anything (`voicing.lua:20`). The group it builds is the whole lane
+(`midiManager.lua:882-884`), not the interval, so the region's edge buys
+no protection either. And `collisionsResolved` would carry
+`kind = 'killed'` events (`:887`) — seeding the next pass from notes that
+no longer exist. It would likely still converge, since fx regenerates
+wholesale every rebuild and a second pass would have both notes in view;
+but a pass that silently deletes a retrig fxNote the whole-channel walk
+keeps is exactly the silent-stale-output class this design treats as the
+governing risk (§ The problem it solves). The draft's own reassurance
+pointed the wrong way: fxNotes being generated *inside* the fx window
+bounds where a cascade starts, not where it lands, and what it lands on
+outside is the authored note that triggers the kill.
+
+Unfenced, the escape has nowhere to go: a nudge chaining onto a further
+note follows a successor link the walk was already prepared to take.
+There is no edge, so nothing crosses one, and the case that would have
+killed an fxNote never arises. The sweep still terminates for the reason
+the bound was bounded to begin with — nudges only move onsets forward,
+each step consumes a real neighbouring onset, and chaining stops as soon
+as two notes sit more than a tick apart. The interval handed downstream
+covers every onset the walk moved, by construction rather than by
+prediction. I8 needs no restatement, `collisionsResolved` gains no
+seed-source job, and the backstop stays what its contract says it is: a
+net that in steady state finds nothing.
+
+The tail clip carries no such debt at all: nothing derives from the
+wire's end, only from the lane clip tm computes itself. Sweeping is an
+onset-side concern only.
+
+**A settled decision, still settled.** same-pitch-enforcement decided
+"no forced rebuild on `collisionsResolved` — geometry trues up at the
+next natural rebuild" *because the path should never fire*. The 2026-07-17
+draft made it a does-fire path and owed it a scheduling guarantee; this
+design does not. It stays a rare-escape net, and phase 4 gives it no new
+job — the interval walk closes its own escapes rather than reporting
+them.
 
 ## Intervals are event-anchored
 
@@ -239,9 +508,10 @@ target dataflow in `design/rebuild-pipeline.md`; each such phase lands
 the restructure as its own green commit before its gating commit, so a
 regression bisects to a half. The split is by take shape: **phases 3–4 are the dense-take
 programme, phase 5 the macro-take programme**, each measured against
-its own fixture. I8 stays intact through phase 3; the multi-pass
-restatement (§ The cascade commutes) arrives with phase 4, core rather
-than avoidable.
+its own fixture. I8 stays intact throughout, phase 4 included: the
+interval walk produces its closure instead of consuming one, so there is
+no fence to leak past and no pass to trade away (§ The tails closure is
+the walk's output, not its input).
 
 ### Phase 0 — two fixtures
 
@@ -347,7 +617,14 @@ still folds whole (mm-internal mutators — the collision backstop,
 dedup — write outside the verbs, and their dirt must not be lost).
 Every other dirt source keeps calling `dirtyChan()` unchanged: config,
 swing, take-length, external modifies stay whole-channel, narrowing
-later only if a phase pays for it.
+later only if a phase pays for it. That dispensation is for dirt sources
+*outside* the pipeline, where dirt = everything is genuinely true. It
+does not cover the `dirtyChan()` calls the rebuild itself makes mid-pass
+— those are a widen over an interval set rather than a source, they are
+uncovered until a phase names them, and each one is a wholesale write
+inside a stage some phase is narrowing (§ The walk's own dirt is a widen,
+not a seed). Phase 5 owns the park/region ones; phase 4's commit 3 owns
+the walk's.
 
 Zero behaviour change by construction; specs pin the seed shapes per
 verb and the flushing guard.
@@ -368,16 +645,21 @@ it. Phases 3–5 then port stages that are already functions.
 The dense take's edit-path `internals` 18.5 + `projLogical` 8.5 +
 `ccs` 3.0 + `fxWindows` 4.9×2 (§ phase 0).
 
-- **Columns splice.** `rebuildInternals` / `rebuildCCs` clone from mm
-  only events inside the closed interval and splice them into the
-  carried columns: dirty span out, fresh clones in. The
-  materialisation closure is the **union of the consuming stages'
-  closures** — those stages read the fresh clones, so whatever they
-  will re-derive must be re-materialised. Anchors resolve against the
-  carried columns (uuids survive; § Intervals are event-anchored).
-  Splice position at equal `ppqL` is defined and `sortByPPQ` gains a
-  tie-break: chord-mate order must be deterministic or the parity
-  spec's frame comparisons flap.
+- **Columns splice — and no closure.** `rebuildInternals` /
+  `rebuildCCs` clone from mm only the events the merged **seed set**
+  covers and splice them into the carried columns: seeded points out,
+  fresh clones in. The draft's rule — materialise the union of the
+  consuming stages' closures — rested on those stages reading the
+  fresh clones, and they don't: every raw consumer reads
+  `buildRawScratch`, built whole-channel from mm, which resolves
+  carried and freshly-cloned events alike by uuid and writes results
+  back through a `colEvt` backref. A carried event whose mm note is
+  unchanged is already correct, so widening a seed to its neighbours
+  buys nothing here (measured: it materialised ~90% of the channel and
+  changed no output). Closure is the tail walk's, computed against its
+  own raw-order scratch — phase 4. Splice position at equal `ppqL` is
+  defined and `sortByPPQ` gains a tie-break: chord-mate order must be
+  deterministic or the parity spec's frame comparisons flap.
 - **Projection precedes the splice — in two moments.** Spliced events
   project at ingestion (`ppq := ppqL`, view end from `endppqL`/OPEN,
   initial `delayC`/`endppqC` from the mm raw in hand): no column ever
@@ -436,23 +718,78 @@ The dense take's edit-path `internals` 18.5 + `projLogical` 8.5 +
   would read as mass deletion. Cost is per *derived* note — zero on
   fx-free channels — so the dense-take win is untouched.
 
-### Phase 4 — the interval tail walk, and the cascade machinery
+### Phase 4 — same-pitch, uuid addressing, and the interval tail walk
 
 The dense take's edit-path `tails` ~14 (§ phase 0; the draft's 33.5
-was a cold/GC-inflated run). Tails close per the crux row — [prev onset,
-next onset], same-lane + same-pitch, raw order — and the walk's groups
-build only over closed intervals. The raw-order anchor query is
-phase 3's scratch (open q5, resolved): this phase narrows its build
-from whole channel to the closed region, slicing mm's per-channel
-index between the interval's anchors.
+was a cold/GC-inflated run). **Three commits, in this order** — they are
+independent and bisect differently, and landing them together means a
+red suite says nothing about which idea was wrong.
 
-This is where the exempt cascade arrives for real: `collisionsResolved`
-becomes a seed source for the next maintenance pass, the signal owes
-the scheduling guarantee § The cascade commutes records, and I8
-restates as "finitely many passes when a cascade escapes an interval",
-with the soundness specs updated in those terms. The walk still unions
-`noteLive` wholesale until phase 5 — predicted fxNotes outside dirty
-intervals re-derive converged clips, zero writes, macro-take cost only.
+**1. The clip** (§ Same-pitch is a projection artefact). The walk
+computes two bounds, `endppqC` re-homes onto the lane bound,
+`realiseParked` loses its pitch grouping, and the flush pre-clip's
+tail-bound loop goes. This changes what the screen shows and which frame
+owns the constraint, not how dirt works. Not spec-neutral: the
+same-pitch tail specs restate as "displayed unclipped, wire clipped".
+
+**2. uuid addressing, and separation lands once.** `mmBatch` names notes
+by uuid, and mm grows a uuid-keyed assign over its existing
+`eventsByUuid`. The reseat's and flush scan's nudges then delete, leaving
+the walk as the single separation site.
+
+mm's half is the easy one; tm's index reconcile is the exposure. Both
+sides already maintain a uuid index (tm's at `trackerManager.lua:643`,
+evicted and re-keyed at `:659-662` and `:681`) — but the index is not
+what is token-shaped, the **reconcile** is. `idxReconcile` (`:668`)
+drives entirely from a token: `prev = byToken[tok]`, then
+`mm:byToken(tok)`, which under a collision returns only the survivor
+(`midiManager.lua:1211`). `chansListFor` then matches — same chan, same
+lane — so `refreshEntry` overwrites the loser's table in place and
+re-keys `byUuid` from the loser's uuid to the survivor's. tm loses the
+note from *both* indices, `byUuid` notwithstanding.
+
+So this commit re-keys `idxReconcile` and `mmBatch`'s touched set to
+uuid, while `byToken` stays for its other consumers (`tm:byToken`, the pb
+seat lookup) as a knowingly-lossy half under collision — sound only
+because a collision is transient within a batch and nothing reads
+`byToken` while one is open. That is the decision the commit makes, and
+it is the one worth pinning: a spec that carries a collision across two
+commits and reads both notes out afterwards.
+
+**3. The interval walk.** Tails close per the crux row — [prev onset,
+next onset], same-lane ∪ same-pitch, raw order — and the walk **emits**
+that closure for seats and PCs to consume. Closure lives here and only
+here; phase 3 materialises against raw seeds and has none.
+
+The shape of the change is not "narrow the group build to a region" but
+"stop building groups". Today `strictNextMap(byLane)` / `(byPitch)` map
+successors across the whole channel; this phase replaces them with
+per-seed neighbour queries against mm's ppq-ordered per-channel index —
+phase 3's scratch anchor query (open q5, resolved) — and the walk grows
+its working set as the sweep reaches. I8 stands unchanged and
+`collisionsResolved` gains no new job (§ The tails closure is the walk's
+output, not its input).
+
+**Delete `dirtyChan(chan)` at `:2703` in this commit** — not later, and
+not narrowed in place. It carries the same fact as the emission on the
+same trigger, and being the coarse mechanism it wins: left in, it writes
+`true` over the interval set the emission just built, seats and PCs read
+wholesale, and the emission is dead code (§ The widen and the emission
+are the same fact). It stands through commits 1–2 and dies here.
+
+Two things to pin, and one to measure. Pin that a same-pitch cascade
+seeded at a sparse region's last onset lands its nudge rather than losing
+a voice, and that the interval the walk emits covers every onset it
+moved, since seats and PCs are the consumers that would silently miss
+one. Measure the neighbour query: same-pitch successor over a ppq-ordered
+index is a forward scan past unrelated pitches, so what was one O(n)
+channel sweep becomes a per-seed scan that a dense single-channel take
+could make worse than the whole-channel build it replaces. That is the
+phase's real cost risk, and glasswork is the fixture that shows it.
+
+The walk still unions `noteLive` wholesale until phase 5 — predicted
+fxNotes outside dirty intervals re-derive converged clips, zero writes,
+macro-take cost only.
 
 ### Phase 5 — fx producers consume intervals
 
@@ -490,7 +827,11 @@ instead of `dirtyChan()`.
 
 `pbs` 1.5 and `pcs` 0.0 on the dense take: genuinely small, so the
 seats/PC closures (crux rows 2–3) run only if a profile ever says
-otherwise. The `note.sample` stamping (§ crux bearing rule) is
+otherwise. If one does, the walk's emitted dirt (phase 4's commit 3) is
+what makes the seats closure *correct* here: without it a moved lane-1
+onset is absent from pbs's dirt, which is a stale seat rather than a slow
+one. Nothing further is needed at `:2703` — commit 3 removed the widen
+that would have masked the emission with whole-channel dirt. The `note.sample` stamping (§ crux bearing rule) is
 independent and landable any time — free under the no-legacy-data
 policy, it unblocks PC closure, and it lands the semantic change
 (inheritance freezes at stamp time) where its UX is judged on its own,

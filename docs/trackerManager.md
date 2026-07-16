@@ -101,21 +101,24 @@ list separate from `adds`/`assigns`/`deletes`. A move (`ppq`/`ppqL`/`delay` chan
 old and new position; `flush` folds the merged seeds into `dirtyChans` via `absorbReloadDirt`.
 
 A delete's seed carries the deleted event's own (dying) uuid rather than hand-anchoring to its
-surviving neighbours: `intervals.close` re-anchors a point to its neighbouring onsets at
-consumption, and `intervals.merge` reads only `ppqL`, so the dying uuid is never dereferenced
-before `close` replaces it. Hand-anchoring at seed time would duplicate that work and pull in the
-raw-order index deferred to a later phase. See design/interval-dirt.md § Phase 2 for the seed
-shapes and the reload fold's flushing guard.
+surviving neighbours, and that uuid is never dereferenced. The seed's *position* is recorded at
+seed time, and that number is what materialisation excises against; the uuid rides along for
+consumers running after the tail walk's own nudges have invalidated numeric edges mid-pass. See
+design/interval-dirt.md § Phase 2 for the seed shapes and the reload fold's flushing guard.
 
 ### Interval materialisation
 
-`noteClosure` (trackerManager.lua) turns a channel's absorbed seed set into the closed span that
-gets excised and re-cloned before the raw notes walk. It closes against the carried columns using
-the union of every consuming stage's own grouping — tails group same-pitch, seats/PCs same-lane,
-both stepping back — since each grouping subsumes the channel-wide reach the other needs; closing
-against only one would leave the other stage's neighbours uncaptured. The narrowing is logical-order
-only: the raw-order narrowing design/interval-dirt.md's table calls for needs a per-channel
-raw-order index that doesn't exist yet, deferred to phase 4 (§ q5).
+Materialisation consumes the absorbed seed set directly — there is no closure. `exciseNotes`
+(trackerManager.lua) drops each carried column event a seed covers, and `rebuildInternals`
+re-clones that position from mm: an add finds the new note, a delete finds nothing and the event
+vanishes, a move seeded both ends and gets both.
+
+Widening a seed to its neighbouring onsets buys nothing *here*. No stage reads a neighbour's
+column event expecting a fresh clone — every raw consumer reads `buildRawScratch`, which is built
+whole-channel from mm and resolves carried and freshly-cloned events alike by uuid, writing its
+results back through the `colEvt` backref. A carried event whose mm note did not change is already
+correct, and re-cloning it yields an identical object. Closure belongs to the tail walk, computed
+against its own raw-order scratch — see design/interval-dirt.md § Phase 4.
 
 ## Pitchbend: tm's role in the tuning model
 

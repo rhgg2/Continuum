@@ -1576,44 +1576,21 @@ local function emptyChans()
   return t
 end
 
------ Interval materialisation
+----- Rebuild internals
 
--- The materialisation closure unions the consuming stages' own groupings -- tails same-pitch, seats/PCs
--- same-lane, each subsuming the other's reach. see docs/trackerManager.md § Interval materialisation
-local function noteClosure(chan)
-  local dirt = dirtyChans[chan]
-  if dirt == true then return true end
-  local carried = {}
-  for _, col in ipairs(channels[chan].columns.notes) do
-    for _, evt in ipairs(col.events) do
-      if evt.evType ~= 'pa' then util.add(carried, evt) end
-    end
-  end
-  sortByPPQ(carried)
-  local byPitch = intervals.close(dirt, carried, { key = function(e) return e.pitch end, stepBack = true })
-  local byLane  = intervals.close(dirt, carried, { key = function(e) return e.lane  end, stepBack = true })
-  if byPitch == true or byLane == true then return true end
-  local union = {}
-  for _, iv in ipairs(byPitch) do util.add(union, iv) end
-  for _, iv in ipairs(byLane)  do util.add(union, iv) end
-  return intervals.merge(union)
-end
-
--- Drop the carried events this pass's clones will replace. PAs go whatever the closure says:
+-- Drop the carried events this pass's clones will replace. PAs go whatever the dirt says:
 -- rebuildPA re-projects every PA on a dirty chan, so a carried one would double up.
-local function exciseNotes(chan, closed)
+local function exciseNotes(chan, dirt)
   for _, col in ipairs(channels[chan].columns.notes) do
     local kept = {}
     for _, evt in ipairs(col.events) do
-      if evt.evType ~= 'pa' and not intervals.intersects(closed, evt.ppq, evt.ppq) then
+      if evt.evType ~= 'pa' and not intervals.intersects(dirt, evt.ppq, evt.ppq) then
         util.add(kept, evt)
       end
     end
     col.events = kept
   end
 end
-
------ Rebuild internals
 
 -- Partition mm notes stamped/external, lay internal columns, reseat stale-swing.
 -- Returns seated internals + external notes + the per-channel derived-note existing set. see docs/trackerManager.md § Rebuild: partition
@@ -1622,18 +1599,18 @@ local function rebuildInternals()
   local internal, external = {}, {}
   local noteExisting = emptyChans()
   -- Clean channels carry their columns whole: never visited, so never cloned. Interval-dirty ones
-  -- excise the closed span and re-clone just that; the rest of the column carries untouched.
+  -- excise the seeded points and re-clone just those; the rest of the column carries untouched.
   for chan = 1, 16 do
-    if dirtyChans[chan] then
-      local closed = noteClosure(chan)
-      if closed ~= true then exciseNotes(chan, closed) end
+    local dirt = dirtyChans[chan]
+    if dirt then
+      if dirt ~= true then exciseNotes(chan, dirt) end
       for _, raw in mm:notesRaw(chan) do
-        -- Derived notes route to fx whole-channel whatever the closure: a partial noteExisting
+        -- Derived notes route to fx whole-channel whatever the dirt: a partial noteExisting
         -- reads as mass deletion until the fx reconcile goes interval-native. see design § phase 3
         if raw.derived then
           local note = util.clone(raw); note.token = mm:tokenOf(raw)
           util.add(noteExisting[chan], note)
-        elseif closed == true or intervals.intersects(closed, raw.ppqL, raw.ppqL) then
+        elseif dirt == true or intervals.intersects(dirt, raw.ppqL, raw.ppqL) then
           local note = util.clone(raw); note.token = mm:tokenOf(raw)
           if rawDivergesFromLogical(note) then util.add(external, note)
           else util.add(internal, note)

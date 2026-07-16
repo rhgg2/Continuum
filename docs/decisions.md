@@ -4,6 +4,51 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-17** — materialisation takes raw seeds, no closure: `noteClosure` and `intervals.close`
+  are deleted, and `exciseNotes` excises the merged seed points directly. The drafted rule —
+  materialise the union of the consuming stages' closures — rested on those stages reading the fresh
+  clones, and they don't: every raw consumer reads `buildRawScratch`, built whole-channel from mm,
+  which resolves carried and freshly-cloned events alike by uuid and writes back through a `colEvt`
+  backref, so a carried event whose mm note is unchanged is already correct. The closure was
+  materialising ~90% of the channel and changing no output (suite identical at 2043 either side).
+  `close` went rather than staying dead for phase 4: its contract (events logical in `.ppq`) is the
+  opposite of the walk's scratch frame. Closure is the tail walk's, against its own raw-order scratch.
+  (The entry originally gave a second reason — that `opts.key` served groupings the same-pitch commute
+  would remove. There is no commute; the groupings stay. The frame mismatch carries the decision alone.)
+
+- **2026-07-17** — same-pitch stays in tm entire, applied where tm projects intent into raw, beside
+  swing and delay (design only; phase 4 implements as clip → uuid+consolidate → interval walk).
+  Supersedes the same-day entry below, which sent clip *and* clamp to mm on the argument that mm owns
+  the raw frame. Three facts kill it. (1) mm's backstop detects by exact token match
+  (`(evType, chan, ppq, pitch)`): it sees colliding onsets, and is blind to tail overlap. (2) A clip in
+  mm's stored `endppq` churns forever against `rebuildTails`, which re-derives the unclipped lane bound
+  and writes it back every rebuild — `tm_zero_write_spec` red on both fixtures. (3) Decisive: **the
+  backstop kills and the clamp doesn't**. `redundant` (`voicing.lua:20`) is true unconditionally when
+  one note is derived and the other isn't, so `resolveGroup` deletes an fxNote that collides with an
+  authored note, where `nudgeOnsets` separates it — and the walk is the only site where the two meet
+  before commit. So the walk computes two bounds: lane-only drives `endppqC` and the screen,
+  lane ∧ same-pitch drives mm. The view rule stands (clip what the view can't draw, don't clip what it
+  can): same-pitch overlap draws as authored, unrealisable intent shown. `delayC`'s re-stamp stays — the
+  walk still nudges mid-pass, which is what forces it. The flush pre-clip's tail loop goes as a vestige
+  (its scan earns its keep on `resolveGroup`'s kill verdicts, not truncation). Separation still lands
+  exactly once, but in tm: `tokenOf` aliases a colliding pair onto one name across the pipeline's nine
+  mm commits, which is the whole reason three sites separate rather than one; uuid addressing dissolves
+  that and the walk absorbs the other two. I8 survives intact, phase 4 included, because tails *produces*
+  its closed interval rather than consuming one: closing an interval means finding each seed's same-lane
+  and same-pitch neighbours, which is the same lookup the tail bound already needs, so the walk sweeps
+  out from its seeds and emits the anchors for seats and PCs (which run after it, `trackerManager.lua:3221`
+  vs `:3229`/`:3230`). A fenced walk would have needed a net for cascades leaking past the fence, and the
+  backstop cannot be one — same fact (3): it kills the escaping fxNote rather than nudging it, and reports
+  `kind = 'killed'` events naming notes that no longer exist. Unfenced, nothing leaks.
+
+- **2026-07-17** — *superseded the same day by the entry above; kept for the argument it lost.*
+  same-pitch commutes to the wire entire, clamp *and* clip. Ownership, not taste: same-pitch exclusion
+  constrains the raw frame, mm owns that frame, and both layers already drive one pure module
+  (`voicing.nudgeOnsets` in tm's walk, `voicing.resolveGroup` in mm's backstop, whose contract reads
+  "steady state finds none"). Taking only the clip was rejected: `nudgeOnsets` groups internally, so the
+  clamp would survive and the closure union with it. The lesson worth keeping: the layering argument was
+  never checked against mm's code, and the two facts that killed it were both one grep away.
+
 - **2026-07-16** — interval dirt materialises note columns and nothing else: every other producer (ccs,
   park, pb) still gets the fresh channel a dirty chan has always been handed. Carrying the whole channel
   was tried first and broke 18 specs — those stages clone from mm and append, so a carried `.parked` /
