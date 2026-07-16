@@ -3060,14 +3060,6 @@ local function rebuildPCs(noteLive, scratch)
     for _, rec in ipairs(scratch[chan]) do
       util.add(records, { ppq = rec.ppq, ppqL = rec.ppqL, lane = rec.lane, sample = rec.sample or 0, key = rec.colEvt })
     end
-    -- PAs ride the note columns on raw ppq (the frame carve-out) and feed PC grouping as before.
-    for L, lane in ipairs(channels[chan].columns.notes) do
-      for _, n in ipairs(lane.events) do
-        if n.evType == 'pa' then
-          util.add(records, { ppq = n.ppq, ppqL = n.ppqL, lane = L, sample = n.sample or 0, key = n })
-        end
-      end
-    end
     for _, w in ipairs(noteLive[chan]) do
       local n = w.evt
       util.add(records, { ppq = n.ppq, ppqL = n.ppqL, lane = w.lane, sample = n.sample or 0, key = n })

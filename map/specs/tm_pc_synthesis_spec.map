@@ -1,4 +1,4 @@
-@spec tm_pc_synthesis_spec  src=tests/specs/tm_pc_synthesis_spec.lua  loc=280  sha=652cbb1  cases=11
+@spec tm_pc_synthesis_spec  src=tests/specs/tm_pc_synthesis_spec.lua  loc=331  sha=652cbb1  cases=13
 @exercises midiManager (h.mm), trackerManager (h.tm)
 @surface   mm:notes, mm:tokenOf, tm:getChannel, fm:dump, tm:addEvent, tm:flush, tm:assignEvent, tm:deleteEvent
 @harness   mk{seed.notes, seed.ccs}
@@ -28,12 +28,14 @@
   @case 'simultaneous lane-1 and lane-2: leftmost wins, loser is shadowed'  [harness]  @ 208-224
   @case 'splitting realised ppqs (delay) un-collides chord into two PCs'  [harness]  @ 228-248
   @case 'deleting the shadower un-shadows the survivor and PC val flips'  [harness]  @ 252-278
+  @case 'a PA mid-note synthesises no PC of its own'  [harness]  @ 286-300
+  @case 'a lane-1 PA does not outrank a lane-2 note at the same ppq'  [harness]  @ 306-329
 
 # Uses (outbound edges)
   @use call mm:notes  @ 22
   @use call mm:tokenOf  @ 23
-  @use call tm:getChannel  @ 28,271
-  @use call fm:dump  @ 48,67,88,108,135,136,151,172,174,201,219,242,266
+  @use call tm:getChannel  @ 28,271,322
+  @use call fm:dump  @ 48,67,88,108,135,136,151,172,174,201,219,242,266,299,320
   @use call tm:addEvent  @ 62,237,239
   @use call tm:flush  @ 66,87,107,134,200,241,265
   @use call tm:assignEvent  @ 86,133,199

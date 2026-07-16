@@ -277,4 +277,55 @@ return {
       t.falsy(survivor.sampleShadowed, 'survivor no longer shadowed')
     end,
   },
+
+  ----- PAs ride the note columns but carry no sample
+
+  -- A PA has no `sample` and never will, so admitting it to PC grouping defaults it
+  -- to program 0. The gather reads the raw scratch, which is notes-only.
+  {
+    name = 'a PA mid-note synthesises no PC of its own',
+    run = function(harness)
+      local h = harness.mk{
+        seed = {
+          notes = {
+            { ppq = 0, endppq = 480, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0, sample = 5 },
+          },
+          ccs = {
+            { ppq = 240, chan = 1, evType = 'pa', pitch = 60, vel = 90 },
+          },
+        },
+        config = { transient = { trackerMode = true } },
+      }
+      t.deepEq(pcsOnChan(h.fm:dump(), 1), { { ppq = 0, val = 5 } })
+    end,
+  },
+
+  -- rebuildPA anchors a PA to its host's lane, so an admitted PA would win the lane
+  -- sort against a higher-lane note sharing its ppq -- stealing that note's PC.
+  {
+    name = 'a lane-1 PA does not outrank a lane-2 note at the same ppq',
+    run = function(harness)
+      local h = harness.mk{
+        seed = {
+          notes = {
+            { ppq = 0,   endppq = 960, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0, sample = 5 },
+            { ppq = 480, endppq = 960, chan = 1, pitch = 64, vel = 100, detune = 0, delay = 0, sample = 3 },
+          },
+          ccs = {
+            { ppq = 480, chan = 1, evType = 'pa', pitch = 60, vel = 90 },
+          },
+        },
+        config = { transient = { trackerMode = true } },
+      }
+      t.deepEq(pcsOnChan(h.fm:dump(), 1), { { ppq = 0, val = 5 }, { ppq = 480, val = 3 } })
+      local stolen
+      for _, lane in ipairs(h.tm:getChannel(1).columns.notes) do
+        for _, evt in ipairs(lane.events) do
+          if evt.pitch == 64 and evt.evType ~= 'pa' then stolen = evt end
+        end
+      end
+      t.truthy(stolen, 'lane-2 note present')
+      t.falsy(stolen.sampleShadowed, 'a PA must not shadow a real note')
+    end,
+  },
 }
