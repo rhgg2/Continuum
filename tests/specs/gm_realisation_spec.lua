@@ -3,11 +3,11 @@
 -- universal tail pass owns every realised note-off, pinned by
 -- tm_conform_tail_spec). gm's job is now narrow: carry INTENT into the
 -- group frame and back out to siblings. It reads a concrete's intent
--- from the tm-stamped endppqL (anchor-rebased to a group `dur`, or
--- open == nil dur) and STAGES that intent back as endppq (finite, or
--- util.OPEN); the real tm stamps endppqL and derives the realised
--- tail. The fake tm does neither, so these tests assert the staged
--- endppq, never a realised clip.
+-- from the column's endppq ceiling (anchor-rebased to a group `dur`,
+-- or open == nil dur) and STAGES that intent back as endppq (finite, or
+-- util.OPEN); the real tm stamps mm's endppqL sidecar and derives the
+-- realised tail. The fake tm does neither, so these tests assert the
+-- staged endppq, never a realised clip.
 --
 -- These tests pin that seam through the real preflush/reproject path
 -- with a faithful fake tm (it does NOT run the tail pass -- so it can
@@ -23,16 +23,15 @@ local function mk()
 end
 
 local nextUuid = 0
--- Finite by default: a real authored note carries endppqL (intent
--- ceiling). `extra.open=true` seeds the freshly-placed open note --
--- endppqL = util.OPEN. (`open` itself is not a note field any more;
+-- Finite by default: a real authored note carries its intent ceiling on
+-- endppq. `extra.open=true` seeds the freshly-placed open note --
+-- endppq = util.OPEN. (`open` itself is not a note field any more;
 -- it must not leak into the group template via copyScalars.)
 local function note(ppq, pitch, dur, extra)
   nextUuid = nextUuid + 1
   local n = { evType = 'note', chan = 1, lane = 1, ppq = ppq,
-              endppq = ppq + (dur or 240), pitch = pitch, vel = 100,
-              uuid = nextUuid }
-  n.endppqL = (extra and extra.open) and util.OPEN or n.endppq
+              endppq = (extra and extra.open) and util.OPEN or ppq + (dur or 240),
+              pitch = pitch, vel = 100, uuid = nextUuid }
   for k, v in pairs(extra or {}) do if k ~= 'open' then n[k] = v end end
   return n
 end
@@ -51,7 +50,7 @@ end
 
 return {
   {
-    name = 'a finite note carries its ceiling (endppqL) rigidly to the sibling',
+    name = 'a finite note carries its ceiling (endppq) rigidly to the sibling',
     run = function()
       local gm, tm, staged = mk()
       local A = note(0, 60, 240)                 -- ceiling 240

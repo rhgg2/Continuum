@@ -85,7 +85,7 @@ return {
 
       local Bsurf
       for _, e in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
-        if e.ppqL == 180 then Bsurf = e end
+        if e.ppq == 180 then Bsurf = e end
       end
       t.truthy(Bsurf,           'B projected to tv surface')
       t.eq(Bsurf.delay,  -230,  'tv surface exposes authored delay')

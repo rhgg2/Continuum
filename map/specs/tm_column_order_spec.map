@@ -1,16 +1,16 @@
-@spec tm_column_order_spec  src=tests/specs/tm_column_order_spec.lua  loc=164  sha=7884dc3  cases=5
+@spec tm_column_order_spec  src=tests/specs/tm_column_order_spec.lua  loc=164  sha=0097742  cases=5
 @exercises midiManager (h.fm), trackerManager (h.tm), dataStore (h.ds)
 @surface   fm:dump, tm:addEvent, tm:flush, ds:assign, tm:rebuild, ds:get, tm:getChannel, tm:assignEvent
 @harness   mk{seed.notes, seed.ccs}
 
 # Intent
   The fx/park subsystem is a logical-frame subsystem: windows, membership and host extents are all
-  grid notions, tested on ppqL. But it indexes the note columns on *raw* ppq (sortByPPQ,
-  trackerManager.lua:89-91, applied at :2215 and :2248), and delay breaks the two orders apart:
-  ppq = fromLogical(ppqL) + delayToPPQ(delay), so a delay larger than the gap to a lane-mate
-  reorders the lane in raw while the grid order stands. Every consumer that reads the column in
-  array order then picks the wrong successor -- computeFxWindows' host clip (:2224), eachWindowNote's
-  onsets[i+1] (:392), nextSameLaneNote's strictNextMap (:2332).
+  grid notions. Columns are logical-born and sortNoteColumn keeps them in grid order, so the array
+  order IS the grid order. The raw frame still diverges -- raw = fromLogical(ppq) + delayToPPQ(delay),
+  so a delay larger than the gap to a lane-mate reorders the lane in raw while the grid order stands.
+  These cases pin that the consumers reading col.events in array order keep picking the *grid*
+  successor: computeFxWindows' host clip, eachWindowNote's onsets[i+1], nextSameLaneNote's
+  strictNextMap.
   
   Pins the host clip. A vibrato host's window ends at the strict next same-lane onset; that onset is
   a grid fact, so pulling the successor *earlier in raw* with a negative delay must not change it.

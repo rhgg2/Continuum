@@ -4,6 +4,17 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-16** — one frame per surface: `ppqL` retires everywhere except mm. Columns, the fx/park
+  stash, parked render cells and generator streams all key plain `ppq` (logical), and `projectEvent`
+  strips the `ppqL`/`endppqL` sidecar as it seats an event — over A2's duplicate stamp. Two names for
+  one number invited frame-mixing, and had: a cc restore seated a *raw* onset on a logical column,
+  `realiseParked` clobbered the authored ceiling to carry the render clip (now `endppqC`, leaving
+  `endppq` authoritative for the view), and `setLength`/`rescaleLength` still read a `ppqL` A2 had
+  made redundant. `parkSpec` inverts accordingly — it strips realisation (`delayC`/`endppqC`) and lets
+  `ppq`/`endppq` ride; an mm-raw source overrides `ppq` explicitly. `sortByPPQL` became
+  `sortNoteColumn` rather than merging into `sortByPPQ`: only note columns interleave notes and PAs,
+  so merging would widen that tie-break onto the mm-side sorts `sortByPPQ` also serves.
+
 - **2026-07-16** — columns project to logical **at build** (note columns right after externals — the
   partition/reseat/lane-packing stages need raw; cc-family as they seat), the tail walk re-stamping
   `delayC`/`endppqC` on movers — over the pipeline-tail `projectLogical` pass. Its hidden second job

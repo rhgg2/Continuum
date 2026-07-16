@@ -231,7 +231,7 @@ Semantics:
   dropped — so each keeps its own pb absorber (§ Same-pitch onset
   separation). The divergence surfaces as `endppq ≠ endppqC` in the
   projection and as `delayC` on the onset. Separation lives entirely on
-  the realisation side: `endppqL` retains the authored ceiling. A caller
+  the realisation side: the authored ceiling on `endppq` stands. A caller
   staging a coherent monotone plan can
   bypass the per-write logical→raw translation by setting
   `rawTime = true` on the payload — `tm:rescaleLength`'s
@@ -347,7 +347,7 @@ runs it, with a pointer to its detail where one exists.
   `covered()` — the same predicate `reconcilePark` applies — gates both
   scan loops before they clone a `parkSpec`, so a take with no fx
   windows builds an empty scan and pays nothing per event; it accepts a
-  spec or a raw column event, coalescing `ppqL` for a raw-sourced cc.
+  stash spec or a column event — both logical, so it keys `ppq` directly.
   A `pa` rides its host note, so it parks exactly when the host does:
   deleted from the take (silent — a stale PA against a fresh derived
   stream is meaningless; the generator owns any new realisation PAs),
@@ -359,13 +359,13 @@ runs it, with a pointer to its detail where one exists.
   their host. A parked PA is gone from `mm`, so it is re-projected from
   `channels[chan].parkedPA` into its parked host's lane — visible
   off-take, riding the note column as an on-take PA would. Returns the
-  per-chan touched set — the columns whose ppqL order it broke — so
+  per-chan touched set — the columns whose onset order it broke — so
   `computeFxWindows`' second sort gates on it instead of resorting every
   dirty chan.
 - **Fx expansion** (`rebuildFx`). First the read-only **window** pass:
   walk each channel's same-lane successor map in the logical frame, so
   each fx host's window is its voice extent (the next same-lane onset's
-  `ppqL`, floored by the authored end). Then every producer runs —
+  `ppq`, floored by the authored end). Then every producer runs —
   on-take fx notes (augment hosts), parked note hosts (window = the
   realised parked extent), and fx regions; the derived fxNotes reconcile
   against the partition's set (`reconcileFx`), and continuous streams seat
@@ -804,9 +804,10 @@ are floats — the logical frame is float by design, and the on-grid
 predicate (`ctx:isOnGrid`) is the sole owner of row-membership tolerance.
 Rounding here would silently widen that tolerance to 1 ppq.
 
-`evt.endppq` is the AUTHORED logical ceiling (`endppqL` or `util.OPEN`
-for a deliberately-unbounded tail). The tail pass already folded every
-blocker into mm's raw endppq; inverting gives `evt.endppqC`, the CLIPPED
-logical ceiling — render-only, sole consumer is the tp tail build. An
-uncached note (no `endppqL`) has no authored stamp, so its authored
-ceiling equals the realised one.
+`evt.endppq` is the AUTHORED logical ceiling (mm's `endppqL` stamp, or
+`util.OPEN` for a deliberately-unbounded tail). The tail pass already
+folded every blocker into mm's raw endppq; inverting gives `evt.endppqC`,
+the CLIPPED logical ceiling — render-only, plus the sounding extent a
+parked cell hands a generator. An uncached note (no `endppqL` stamp in
+mm) has no authored ceiling, so its authored ceiling equals the realised
+one.

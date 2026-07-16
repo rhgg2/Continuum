@@ -294,8 +294,8 @@ return {
       local col1 = h.tm:getChannel(1).columns.notes[1]
       local A, B
       for _, e in ipairs(col1.events) do
-        if e.ppqL == 0   then A = e end
-        if e.ppqL == 120 then B = e end
+        if e.ppq == 0   then A = e end
+        if e.ppq == 120 then B = e end
       end
       t.truthy(A and B, 'both notes survive the colliding delay edit')
       t.eq(B.delay, 0, 'authored delay 0 preserved')

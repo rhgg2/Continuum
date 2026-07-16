@@ -1,22 +1,20 @@
--- Note-macro generators: pure expansions of per-note `fx` intent into
--- derived realisation. A generator never touches swing, raw pb, or
--- REAPER -- it speaks logical frame and intent units only; the rebuild
--- seam rounds ppqL -> raw and maps cents -> pb. See design/archive/note-macros.md
--- § Generators.
+-- Note-macro generators: pure expansions of per-note `fx` intent into derived realisation. They never
+-- touch swing, raw pb or REAPER -- the seam rounds ppq -> raw, cents -> pb. see design/archive/note-macros.md
+
 -- @noindex
 
 --invariant: pure module, no state; a stage is fn(stream, host, params, ctx) -> { notes, delta }
 --invariant: stream and host share one shape; stages read stream, host is the untouched original
---shape: stream/host = { window={startppqL,endppqL}, chan, lane, id, notes={ {pitch,vel,detune,ppqL,endppqL},.. }, pas={ {ppqL,pitch,vel},.. }, ccs={ [cc]={ {ppqL,val,shape},.. } }, ats={ {ppqL,val},.. }, pb={ {ppqL,val,shape},.. } }
+--shape: stream/host = { window={startppq,endppq}, chan, lane, id, notes={ {pitch,vel,detune,ppq,endppq},.. }, pas={ {ppq,pitch,vel},.. }, ccs={ [cc]={ {ppq,val,shape},.. } }, ats={ {ppq,val},.. }, pb={ {ppq,val,shape},.. } }
 --invariant: pb/ccs are absolute curves over the closed window (edge values seeded); pb val is cents
 --invariant: ctx binds resolution, pbRangeCents, nextSameLaneNote(host), step(pitch,detune,n)
 --invariant: periods are QN per the periodQN convention -- scalar or {num,den}
---shape: result = { notes = { {ppqL,endppqL,pitch,vel,detune}, ... }, delta = { {ppqL,val,shape,[tension]}, ... } }
+--shape: result = { notes = { {ppq,endppq,pitch,vel,detune}, ... }, delta = { {ppq,val,shape,[tension]}, ... } }
 --shape: kinds[kind] = { expand, mode='replace'|'augment', dest='note'|'pb'|<cc>, label, defaults, fields }
 --invariant: mode is the stream fold -- replace overwrites the dest channel, augment adds to it
 -- P2 store (design/fx-patterns.md § Data model): the project pattern library a `pattern`/`curve`
 -- generator param names into. No consumer yet; re-homes to patternStore at P3.
---shape: fxPatterns (ds project) = { [name] = { kind='notes'|'curve', lengthPpq, root?=midiPitch, specs?={ {lane=1,ppqL,endppqL,pitch,vel,detune,delay,sample?},.. }, points?={ {ppq,val,shape,tension?},.. } } }
+--shape: fxPatterns (ds project) = { [name] = { kind='notes'|'curve', lengthPpq, root?=midiPitch, specs?={ {lane=1,ppq,endppq,pitch,vel,detune,delay,sample?},.. }, points?={ {ppq,val,shape,tension?},.. } } }
 
 local util = require 'util'
 
@@ -39,8 +37,8 @@ local function retrig(stream, host, params, ctx)
   local i = 0
   while startL + i * step < endL do
     util.add(notes, {
-      ppqL    = startL + i * step,
-      endppqL = math.min(startL + (i + 1) * step, endL),
+      ppq    = startL + i * step,
+      endppq = math.min(startL + (i + 1) * step, endL),
       pitch   = h.pitch,
       vel     = math.max(1, math.min(127, h.vel + i * ramp)),
       detune  = h.detune or 0,
@@ -63,8 +61,8 @@ local function trill(stream, host, params, ctx)
   while startL + i * step < endL do
     local odd = i % 2 == 1   -- even tiles carry the host pitch; odd tiles the alternation
     util.add(notes, {
-      ppqL    = startL + i * step,
-      endppqL = math.min(startL + (i + 1) * step, endL),
+      ppq    = startL + i * step,
+      endppq = math.min(startL + (i + 1) * step, endL),
       pitch   = odd and altPitch  or h.pitch,
       vel     = h.vel,
       detune  = odd and altDetune or (h.detune or 0),
@@ -78,7 +76,7 @@ end
 local function playingAt(events, t)
   local active = {}
   for _, n in ipairs(events) do
-    if n.ppqL <= t and t < n.endppqL then util.add(active, n) end
+    if n.ppq <= t and t < n.endppq then util.add(active, n) end
   end
   table.sort(active, function(a, b)
     return a.pitch * 100 + (a.detune or 0) < b.pitch * 100 + (b.detune or 0)
@@ -100,7 +98,7 @@ end
 
 --contract: arp samples the sounding notes at each step (period QN), playing one by `dir`
 --contract: dir up|down|updown cycles the current active set; an empty active set -> a rest
---contract: hits abut (endppqL = next step), clamped to the window; vel/detune from the voice
+--contract: hits abut (endppq = next step), clamped to the window; vel/detune from the voice
 local function arp(stream, host, params, ctx)
   local startL, endL = stream.window[1], stream.window[2]
   local step = periodTicks(params.period, ctx.resolution)
@@ -113,7 +111,7 @@ local function arp(stream, host, params, ctx)
     if #active > 0 then
       local src = active[arpIndex(#active, dir, i) + 1]
       util.add(notes, {
-        ppqL = at, endppqL = math.min(at + step, endL),
+        ppq = at, endppq = math.min(at + step, endL),
         pitch = src.pitch, vel = src.vel, detune = src.detune or 0,
       })
     end
@@ -134,11 +132,11 @@ local function ostinato(stream, host, params, ctx)
   local base = startL
   while base < endL do
     for _, spec in ipairs(body.specs or {}) do
-      local onset = base + spec.ppqL
+      local onset = base + spec.ppq
       if onset >= startL and onset < endL then
-        local endppqL = math.min(base + spec.endppqL, endL)
+        local endppq = math.min(base + spec.endppq, endL)
         for _, voice in ipairs(playingAt(stream.notes, onset)) do
-          util.add(notes, { ppqL = onset, endppqL = endppqL,
+          util.add(notes, { ppq = onset, endppq = endppq,
                                 pitch = voice.pitch, vel = spec.vel, detune = voice.detune or 0 })
         end
       end
@@ -159,17 +157,17 @@ local function vibrato(stream, host, params, ctx)
 
   -- Extrema-only breakpoints; 'slow' bridges each pair as a half-cosine.
   -- Anchored at 0 both ends; the terminal 0 re-centres the channel.
-  local delta = { { ppqL = startL, val = 0, shape = 'slow' } }
+  local delta = { { ppq = startL, val = 0, shape = 'slow' } }
   local k  = 0
   local at = startL + period / 4
   while at < endL do
     local gain = onset > 0 and math.min(1, (at - startL) / onset) or 1
     local sign = k % 2 == 0 and 1 or -1
-    util.add(delta, { ppqL = at, val = sign * gain * depth, shape = 'slow' })
+    util.add(delta, { ppq = at, val = sign * gain * depth, shape = 'slow' })
     k  = k + 1
     at = startL + period / 4 + k * period / 2
   end
-  util.add(delta, { ppqL = endL, val = 0, shape = 'slow' })
+  util.add(delta, { ppq = endL, val = 0, shape = 'slow' })
   return { notes = {}, delta = delta }
 end
 
@@ -206,7 +204,7 @@ local function slide(stream, host, params, ctx)
   local glideStart = math.max(startL, arrive - over)
 
   local delta = {}
-  local function bp(ppqL, val, shape) util.add(delta, { ppqL = ppqL, val = val, shape = shape }) end
+  local function bp(ppq, val, shape) util.add(delta, { ppq = ppq, val = val, shape = shape }) end
   bp(startL, 0, glideStart > startL and 'step' or 'slow')   -- hold true pitch until the slur
   if glideStart > startL then bp(glideStart, 0, 'slow') end   -- slur begins (half-cosine ease)
   bp(arrive, target, 'step')                                -- arrived; hold to the handoff
@@ -220,15 +218,15 @@ local function autopan(stream, host, params, ctx)
   local startL, endL = stream.window[1], stream.window[2]
   local period = periodTicks(params.period, ctx.resolution)
   local depth  = params.depth or 0
-  local delta  = { { ppqL = startL, val = 0, shape = 'slow' } }
+  local delta  = { { ppq = startL, val = 0, shape = 'slow' } }
   local k, at = 0, startL + period / 4
   while at < endL do
     local sign = k % 2 == 0 and 1 or -1
-    util.add(delta, { ppqL = at, val = sign * depth, shape = 'slow' })
+    util.add(delta, { ppq = at, val = sign * depth, shape = 'slow' })
     k  = k + 1
     at = startL + period / 4 + k * period / 2
   end
-  util.add(delta, { ppqL = endL, val = 0, shape = 'slow' })
+  util.add(delta, { ppq = endL, val = 0, shape = 'slow' })
   return { notes = {}, delta = delta }
 end
 
@@ -261,19 +259,19 @@ local function lfo(stream, host, params, ctx)
 
   -- Seed startL (phase 0); tile interior cycles, skipping the ppq==loop endpoint (owned by the next
   -- cycle's phase 0, or by the endL seed) so a loop-closed curve emits no duplicate boundary breakpoint.
-  local delta = { { ppqL = startL, val = ccVal(curveAt(points, 0)), shape = points[1].shape } }
+  local delta = { { ppq = startL, val = ccVal(curveAt(points, 0)), shape = points[1].shape } }
   local base = startL
   while base < endL do
     for _, p in ipairs(points) do
       local at = base + p.ppq * stretch
       if at > startL and at < endL and p.ppq < loop then
-        delta[#delta + 1] = { ppqL = at, val = ccVal(p.val), shape = p.shape, tension = p.tension }
+        delta[#delta + 1] = { ppq = at, val = ccVal(p.val), shape = p.shape, tension = p.tension }
       end
     end
     base = base + period
   end
   local phaseEnd = ((endL - startL) % period) / stretch   -- authored ppq at the window's trailing edge
-  delta[#delta + 1] = { ppqL = endL, val = ccVal(curveAt(points, phaseEnd)), shape = 'linear' }
+  delta[#delta + 1] = { ppq = endL, val = ccVal(curveAt(points, phaseEnd)), shape = 'linear' }
   return { notes = {}, delta = delta }
 end
 
@@ -283,15 +281,15 @@ local function velPattern(stream, host, params, ctx)
   local ordered = {}
   for _, note in ipairs(stream.notes) do util.add(ordered, note) end
   table.sort(ordered, function(a, b)   -- onset, then realised pitch (playingAt's order)
-    if a.ppqL ~= b.ppqL then return a.ppqL < b.ppqL end
+    if a.ppq ~= b.ppq then return a.ppq < b.ppq end
     return a.pitch * 100 + (a.detune or 0) < b.pitch * 100 + (b.detune or 0)
   end)
   local pattern = params.pattern or { 100 }
   local notes, step, lastOnset = {}, 0, nil
   for _, note in ipairs(ordered) do
-    if note.ppqL ~= lastOnset then step, lastOnset = step + 1, note.ppqL end
+    if note.ppq ~= lastOnset then step, lastOnset = step + 1, note.ppq end
     local pct = pattern[(step - 1) % #pattern + 1]
-    util.add(notes, { ppqL = note.ppqL, endppqL = note.endppqL, pitch = note.pitch,
+    util.add(notes, { ppq = note.ppq, endppq = note.endppq, pitch = note.pitch,
                       vel = util.clamp(util.round(note.vel * pct / 100), 1, 127),
                       detune = note.detune or 0 })
   end

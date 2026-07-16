@@ -820,7 +820,7 @@ return {
 
       local B
       for _, e in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
-        if e.ppqL == 480 then B = e end
+        if e.ppq == 480 then B = e end
       end
       h.tm:assignEvent(B, { delay = -999 })
       h.tm:flush()

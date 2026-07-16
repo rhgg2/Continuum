@@ -97,7 +97,7 @@ local function materialiseNotes(specs)
   local rpb = cm:get('rowPerBeat')
   for _, s in ipairs(specs or {}) do
     tm:addEvent{ evType = 'note', chan = 1, rpb = rpb,
-                 ppq = s.ppqL, endppq = s.endppqL,
+                 ppq = s.ppq, endppq = s.endppq,
                  pitch = s.pitch, vel = s.vel,
                  lane = s.lane or 1, detune = s.detune or 0, delay = s.delay or 0,
                  sample = s.sample }
@@ -142,11 +142,11 @@ local function readbackBody()
     if editBody.domain == 'cc' then
       local col = cols.ccs and cols.ccs[CURVE_CC]
       for _, e in ipairs(col and col.events or {}) do
-        util.add(points, { ppq = e.ppqL, val = e.val, shape = e.shape, tension = e.tension })
+        util.add(points, { ppq = e.ppq, val = e.val, shape = e.shape, tension = e.tension })
       end
     else
       for _, e in ipairs(cols.pb and cols.pb.events or {}) do
-        util.add(points, { ppq = e.ppqL, val = (e.val + (e.detune or 0)) / 1000,
+        util.add(points, { ppq = e.ppq, val = (e.val + (e.detune or 0)) / 1000,
                            shape = e.shape, tension = e.tension })
       end
     end
@@ -156,19 +156,19 @@ local function readbackBody()
   local specs = {}
   for _, col in ipairs(cols.notes or {}) do
     for _, e in ipairs(col.events) do
-      if e.evType ~= 'pa' and e.ppqL ~= nil then
-        local endppqL = (e.endppqL == nil or e.endppqL == util.OPEN) and editBody.lengthPpq or e.endppqL
-        util.add(specs, { lane = 1, ppqL = e.ppqL, endppqL = endppqL,
+      if e.evType ~= 'pa' then
+        local endppq = (e.endppq == nil or e.endppq == util.OPEN) and editBody.lengthPpq or e.endppq
+        util.add(specs, { lane = 1, ppq = e.ppq, endppq = endppq,
                           pitch = e.pitch, vel = e.vel,
                           detune = e.detune or 0, delay = e.delay or 0, sample = e.sample })
       end
     end
   end
-  table.sort(specs, function(a, b) return a.ppqL < b.ppqL end)   -- stable order -> deepEq no-op on reopen
+  table.sort(specs, function(a, b) return a.ppq < b.ppq end)   -- stable order -> deepEq no-op on reopen
   -- Lane 1 is the only lane, so a note's tail ends at the next onset: clip so an OPEN/over-long
   -- ceiling never serialises as an overlap. The trailing note keeps its lengthPpq cap.
   for i = 1, #specs - 1 do
-    specs[i].endppqL = math.min(specs[i].endppqL, specs[i + 1].ppqL)
+    specs[i].endppq = math.min(specs[i].endppq, specs[i + 1].ppq)
   end
   return { kind = 'notes', lengthPpq = editBody.lengthPpq, root = editBody.root, specs = specs }
 end

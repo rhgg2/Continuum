@@ -48,31 +48,20 @@ local function kindOf(evt) return kindAt(colFor(evt), evt.ppq) end
 -- localMode confines edits to the instance under the caret; defined after instanceAtCursor.
 local localBlocked
 
--- A parked event edits the fx replace off-take. Normalise a view event to a logical-only
--- stash spec: at this layer authoring ppq is already logical (cursorppq = row·logPerRow),
--- so ppqL = evt.ppq and the stash carries no realised ppq. see design/note-macros-v2.md § B3
+-- A parked event edits the fx replace off-take. The stash is logical, and authoring ppq is already
+-- logical at this layer (cursorppq = row·logPerRow), so it rides. see design/note-macros-v2.md § B3
 local function toParkedSpec(evt)
   if evt.evType == 'cc' then
-    return util.pick(evt, "evType chan cc val shape", { ppqL = evt.ppq })
+    return util.pick(evt, "evType chan cc ppq val shape")
   elseif evt.evType == 'pb' then
-    return util.pick(evt, "evType chan val shape", { ppqL = evt.ppq })
+    return util.pick(evt, "evType chan ppq val shape")
   end
-  return util.pick(evt, "evType chan lane pitch vel detune sample delay fx",
-                   { ppqL = evt.ppq, endppqL = evt.endppq })
+  return util.pick(evt, "evType chan lane ppq endppq pitch vel detune sample delay fx")
 end
 
--- Same view->logical normalisation for an assign update: the time verbs write realised
--- ppq/endppq (== logical here) plus an rpb rebase the logical stash has no use for; the stash
--- keys on ppqL/endppqL. Other fields (pitch/vel/val/...) are frame-agnostic, so pass through.
-local function toParkedUpdate(update)
-  local out = {}
-  for field, value in pairs(update) do
-    if     field == 'ppq'    then out.ppqL    = value
-    elseif field == 'endppq' then out.endppqL = value
-    elseif field ~= 'rpb'    then out[field]  = value end
-  end
-  return out
-end
+-- Same view->stash normalisation for an assign update: the time verbs ride an rpb rebase the
+-- logical stash has no use for. Everything else -- ppq/endppq included -- passes through.
+local function toParkedUpdate(update) return util.clone(update, { rpb = true }) end
 
 local backing = {
   plain = {

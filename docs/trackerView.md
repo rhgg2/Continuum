@@ -18,7 +18,7 @@ Two responsibilities:
 - **Row ↔ PPQ projection.** `ppqToRow(ppqI)` is `ppqI / ppqPerRow`
   (saturating at 0 and `numRows`); `rowToPPQ` is the integer-rounded
   inverse. `ppqPerRow()` exposes the bound logical row width so callers
-  (e.g. clipboard paste) can compute ppqL at the destination row. The
+  (e.g. clipboard paste) can compute the logical ppq at the destination row. The
   `chan` argument is retained on the call signature but unused at this
   layer — column-level swing transforms happen above, when events are
   written into / read out of the column tree.
@@ -42,10 +42,10 @@ previously-on-grid events as off-grid, because their realised ppq
 sits at the old grid's swung position and no longer matches
 `rowToPPQ_c(N)` under the new swing.
 
-`evt.ppqL` is not consulted by rebuild's row placement — it exists
-as the canonical authoring stamp that survives swing changes (tm's
-rebuild's stale-swing reseat rederives raw from ppqL when a channel is marked
-stale) and for editing operations that need the unswung row position.
+The tv surface carries no `ppqL`: `evt.ppq` *is* the authoring stamp at
+this layer. mm keeps the `ppqL` sidecar — the canonical stamp that
+survives swing changes, which tm's stale-swing reseat rederives raw from
+when a channel is marked stale — but it never reaches the columns.
 
 ## Ghost sampling
 

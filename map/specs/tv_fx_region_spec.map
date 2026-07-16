@@ -1,4 +1,4 @@
-@spec tv_fx_region_spec  src=tests/specs/tv_fx_region_spec.lua  loc=925  sha=52a5eef  cases=47
+@spec tv_fx_region_spec  src=tests/specs/tv_fx_region_spec.lua  loc=924  sha=52a5eef  cases=47
 @exercises dataStore (h.ds), trackerManager (h.tm), midiManager (h.fm), trackerView (h.vm), editCursor (h.ec), commandManager (h.cmgr), clipboard (h.clipboard)
 @surface   ds:assign, tm:rebuild, ds:get, tm:flush, fm:dump, vm:setGridSize, vm:ppqToRow, ec:setPos, vm:fxHostForEdit, tm:addEvent, vm:noteFx, vm:setNoteFx, vm:removeFxStage, vm:addFxStage, vm:setFxField, vm:rowToPPQ, vm:fxHostAtCursor, cmgr:invoke, tm:getChannel, vm:editEvent, tm:subscribe, ec:row, ec:extendTo, clipboard:collect
 @harness   mk
@@ -39,57 +39,57 @@
   @case 'fxHostForEdit: off a note with no selection is nil; on a note, its uuid (v1)'  [harness]  @ 309-319
   @case 'parked note: a pitch nudge edits the off-take stash and re-renders, still parked'  [harness]  @ 325-339
   @case 'parked note: delete removes it from the stash and does not restore it when the window moves off'  [harness]  @ 343-354
-  @case 'parked add: typing a note into a replace window stashes a logical spec, off the take'  [harness]  @ 358-373
-  @case 'parked move-out: nudging a parked note past the window end restores it to the take'  [harness]  @ 377-390
-  @case 'parked cc: a value nudge edits the off-take cc stash; delete removes it'  [harness]  @ 394-426
-  @case 'parked pb: a value nudge edits the off-take pb stash; delete removes it'  [harness]  @ 430-466
-  @case 'multi-select spanning a parked note and a take note: both edit under one rebuild'  [harness]  @ 470-491
-  @case 'fx noteOff truncates the region tail to the cursor row'  [harness]  @ 497-509
-  @case 'fx noteOff finds the right region in its lane when cells are in storage, not ppq, order'  [harness]  @ 513-527
-  @case 'fx noteOff past the region tail grows it to the cursor row'  [harness]  @ 531-540
-  @case 'fx noteOff on the onset row is a no-op (deletion is the delete verb, not noteOff)'  [harness]  @ 544-555
-  @case 'fx noteOff on the window end row re-opens it to the pattern length'  [harness]  @ 559-569
-  @case 'fx growNote / shrinkNote resize the region from its end'  [harness]  @ 573-584
-  @case 'fx nudgeForward shifts the whole window and the caret follows'  [harness]  @ 588-600
-  @case 'fx nudge keeps the moved region in its lane; the newly-overlapped sibling displaces right'  [harness]  @ 604-626
-  @case 'fx nudge of an already-overlapping region keeps its own higher lane (no reorder)'  [harness]  @ 630-649
-  @case 'fx nudge that makes an overlap disjoint tracks the caret across the column merge'  [harness]  @ 653-673
-  @case 'fx window edit on a disjoint region does not churn storage order'  [harness]  @ 677-693
-  @case 'fx nudgeBack refuses at the top grid edge (window unchanged)'  [harness]  @ 697-708
-  @case 'fx eventShiftLeft swaps the region one lane left, flipping storage precedence'  [harness]  @ 714-738
-  @case 'fx eventShiftRight swaps the region one lane right (the inverse move)'  [harness]  @ 742-757
-  @case 'fx eventShift is a no-op at the grid edge (lone region, nothing beside it)'  [harness]  @ 761-773
-  @case 'fx eventShift no-ops when the adjacent lane is empty at the cursor row'  [harness]  @ 777-792
-  @case 'parked note: noteOff shortens its tail in the stash, stays parked'  [harness]  @ 798-811
-  @case 'parked note: a time nudge within the window retimes the stash, stays parked'  [harness]  @ 815-828
-  @case 'fx copy captures a region by onset; the whole window rides, tail spilling past the band'  [harness]  @ 834-852
-  @case 'fx copy skips a region that only passes through the band (onset above it)'  [harness]  @ 856-865
-  @case 'fx copy + paste stacks a duplicate region at the cursor row, original intact'  [harness]  @ 869-889
-  @case 'fx delete removes the region under the caret'  [harness]  @ 893-902
-  @case 'fx deleteSel drops every region the rectangle catches (onset in band), sparing the rest'  [harness]  @ 906-923
+  @case 'parked add: typing a note into a replace window stashes a logical spec, off the take'  [harness]  @ 358-372
+  @case 'parked move-out: nudging a parked note past the window end restores it to the take'  [harness]  @ 376-389
+  @case 'parked cc: a value nudge edits the off-take cc stash; delete removes it'  [harness]  @ 393-425
+  @case 'parked pb: a value nudge edits the off-take pb stash; delete removes it'  [harness]  @ 429-465
+  @case 'multi-select spanning a parked note and a take note: both edit under one rebuild'  [harness]  @ 469-490
+  @case 'fx noteOff truncates the region tail to the cursor row'  [harness]  @ 496-508
+  @case 'fx noteOff finds the right region in its lane when cells are in storage, not ppq, order'  [harness]  @ 512-526
+  @case 'fx noteOff past the region tail grows it to the cursor row'  [harness]  @ 530-539
+  @case 'fx noteOff on the onset row is a no-op (deletion is the delete verb, not noteOff)'  [harness]  @ 543-554
+  @case 'fx noteOff on the window end row re-opens it to the pattern length'  [harness]  @ 558-568
+  @case 'fx growNote / shrinkNote resize the region from its end'  [harness]  @ 572-583
+  @case 'fx nudgeForward shifts the whole window and the caret follows'  [harness]  @ 587-599
+  @case 'fx nudge keeps the moved region in its lane; the newly-overlapped sibling displaces right'  [harness]  @ 603-625
+  @case 'fx nudge of an already-overlapping region keeps its own higher lane (no reorder)'  [harness]  @ 629-648
+  @case 'fx nudge that makes an overlap disjoint tracks the caret across the column merge'  [harness]  @ 652-672
+  @case 'fx window edit on a disjoint region does not churn storage order'  [harness]  @ 676-692
+  @case 'fx nudgeBack refuses at the top grid edge (window unchanged)'  [harness]  @ 696-707
+  @case 'fx eventShiftLeft swaps the region one lane left, flipping storage precedence'  [harness]  @ 713-737
+  @case 'fx eventShiftRight swaps the region one lane right (the inverse move)'  [harness]  @ 741-756
+  @case 'fx eventShift is a no-op at the grid edge (lone region, nothing beside it)'  [harness]  @ 760-772
+  @case 'fx eventShift no-ops when the adjacent lane is empty at the cursor row'  [harness]  @ 776-791
+  @case 'parked note: noteOff shortens its tail in the stash, stays parked'  [harness]  @ 797-810
+  @case 'parked note: a time nudge within the window retimes the stash, stays parked'  [harness]  @ 814-827
+  @case 'fx copy captures a region by onset; the whole window rides, tail spilling past the band'  [harness]  @ 833-851
+  @case 'fx copy skips a region that only passes through the band (onset above it)'  [harness]  @ 855-864
+  @case 'fx copy + paste stacks a duplicate region at the cursor row, original intact'  [harness]  @ 868-888
+  @case 'fx delete removes the region under the caret'  [harness]  @ 892-901
+  @case 'fx deleteSel drops every region the rectangle catches (onset in band), sparing the rest'  [harness]  @ 905-922
 
 # Uses (outbound edges)
-  @use call ds:assign  @ 14,104,136,517,608,634,657,681,718,746,781,910
-  @use call tm:rebuild  @ 15,82,108,140,178,266,284,406,443,521,612,638,661,686,722,750,785,915
-  @use call ds:get  @ 25,209,219,229,230,232,243,270,287,334,351,366,389,416,424,456,464,490,617,645,691,730,754,770,790,807,824,880,901,921
-  @use call tm:flush  @ 39,170,383,398,434,478
+  @use call ds:assign  @ 14,104,136,516,607,633,656,680,717,745,780,909
+  @use call tm:rebuild  @ 15,82,108,140,178,266,284,405,442,520,611,637,660,685,721,749,784,914
+  @use call ds:get  @ 25,209,219,229,230,232,243,270,287,334,351,366,388,415,423,455,463,489,616,644,690,729,753,769,789,806,823,879,900,920
+  @use call tm:flush  @ 39,170,382,397,433,477
   @use call fm:dump  @ 43,50
-  @use call vm:setGridSize  @ 65,81,91,103,135,153,169,253,265,283,295,312,328,346,361,380,397,433,473,500,516,534,547,562,576,591,607,633,656,680,700,717,745,764,780,801,818,837,859,872,896,909
+  @use call vm:setGridSize  @ 65,81,91,103,135,153,169,253,265,283,295,312,328,346,361,379,396,432,472,499,515,533,546,561,575,590,606,632,655,679,699,716,744,763,779,800,817,836,858,871,895,908
   @use call vm:ppqToRow  @ 73
-  @use call ec:setPos  @ 124,126,256,299,301,303,315,317,332,349,364,386,413,420,453,460,503,523,537,550,565,579,594,614,643,666,688,703,728,752,767,787,805,822,840,862,875,878,899,917
-  @use call vm:fxHostForEdit  @ 125,127,257,268,316,318,625,648,672,737
-  @use call tm:addEvent  @ 170,398,434
+  @use call ec:setPos  @ 124,126,256,299,301,303,315,317,332,349,364,385,412,419,452,459,502,522,536,549,564,578,593,613,642,665,687,702,727,751,766,786,804,821,839,861,874,877,898,916
+  @use call vm:fxHostForEdit  @ 125,127,257,268,316,318,624,647,671,736
+  @use call tm:addEvent  @ 170,397,433
   @use call vm:noteFx  @ 199,233
   @use call vm:setNoteFx  @ 208,218
   @use call vm:removeFxStage  @ 228
   @use call vm:addFxStage  @ 231
   @use call vm:setFxField  @ 242
-  @use call vm:rowToPPQ  @ 273,274,567,886,887
+  @use call vm:rowToPPQ  @ 273,274,566,885,886
   @use call vm:fxHostAtCursor  @ 286,300,302,304
-  @use call cmgr:invoke  @ 333,350,387,414,421,461,487,504,524,538,551,566,580,582,595,615,616,644,667,668,689,704,729,753,768,769,788,806,823,877,879,900,919
+  @use call cmgr:invoke  @ 333,350,386,413,420,460,486,503,523,537,550,565,579,581,594,614,615,643,666,667,688,703,728,752,767,768,787,805,822,876,878,899,918
   @use call tm:getChannel  @ 338
-  @use call vm:editEvent  @ 365,454
-  @use call tm:subscribe  @ 483
-  @use call ec:row  @ 599
-  @use call ec:extendTo  @ 841,863,876,918
-  @use call clipboard:collect  @ 842,864
+  @use call vm:editEvent  @ 365,453
+  @use call tm:subscribe  @ 482
+  @use call ec:row  @ 598
+  @use call ec:extendTo  @ 840,862,875,917
+  @use call clipboard:collect  @ 841,863

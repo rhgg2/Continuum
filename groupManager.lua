@@ -18,7 +18,7 @@ local tm, ds = deps.tm, deps.ds
 -- see docs/groupManager.md § DERIVED opt-out
 local DERIVED = {
   evType=true, chan=true, chanDelta=true, lane=true, key=true, cc=true,
-  ppq=true, ppqL=true, endppq=true, endppqL=true, dur=true,
+  ppq=true, endppq=true, dur=true,
   loc=true, sampleShadowed=true, derived=true, hidden=true, uuid=true,
 }
 
@@ -106,20 +106,17 @@ local function copyScalars(src, dst)
   return dst
 end
 
--- Group dur is the note's INTENT ceiling span (endppqL - onset), never the realised
--- endppq tm re-derives every rebuild -- see docs/groupManager.md § Intent in, realisation out.
+-- Group dur is the note's INTENT ceiling span (endppq - onset), never the realised end tm
+-- re-derives every rebuild -- see docs/groupManager.md § Intent in, realisation out.
 --invariant: pb group-frame val is INTENT; toGroup reads evt.cents, not realised val
 local function toGroup(evt, anchor)
-  -- Group frame is LOGICAL: rebase off ppqL, not realised ppq (swing+delay baked in);
-  -- ppqL is nil only under identity swing + zero delay, where raw ppq already equals it.
-  local onset = evt.ppqL or evt.ppq
   local g = copyScalars(evt, { evType    = evt.evType,
                                chanDelta = evt.chan - anchor.chan,
                                key       = keyOf(evt),
-                               ppq       = onset - anchor.ppq })
-  if evt.evType == 'note' and evt.endppqL ~= util.OPEN
-     and evt.endppqL ~= nil then
-    g.dur = evt.endppqL - onset
+                               ppq       = evt.ppq - anchor.ppq })
+  if evt.evType == 'note' and evt.endppq ~= util.OPEN
+     and evt.endppq ~= nil then
+    g.dur = evt.endppq - evt.ppq
   end
   -- pb intent rides `cents` (frame-invariant); a fresh create has none, so val
   -- (intent in tv's frame) is the fallback. see docs/groupManager.md § Intent in, realisation out

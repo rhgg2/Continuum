@@ -1,4 +1,4 @@
-@spec gm_realisation_spec  src=tests/specs/gm_realisation_spec.lua  loc=166  sha=f8aa484  cases=5
+@spec gm_realisation_spec  src=tests/specs/gm_realisation_spec.lua  loc=165  sha=f8aa484  cases=5
 @exercises groupManager (gm), trackerManager (h.tm)
 @surface   gm:markGroup, gm:newInstance, tm:flush, gm:addEvent, gm:deleteEvent, gm:duplicateInto
 
@@ -8,11 +8,11 @@
   universal tail pass owns every realised note-off, pinned by
   tm_conform_tail_spec). gm's job is now narrow: carry INTENT into the
   group frame and back out to siblings. It reads a concrete's intent
-  from the tm-stamped endppqL (anchor-rebased to a group `dur`, or
-  open == nil dur) and STAGES that intent back as endppq (finite, or
-  util.OPEN); the real tm stamps endppqL and derives the realised
-  tail. The fake tm does neither, so these tests assert the staged
-  endppq, never a realised clip.
+  from the column's endppq ceiling (anchor-rebased to a group `dur`,
+  or open == nil dur) and STAGES that intent back as endppq (finite, or
+  util.OPEN); the real tm stamps mm's endppqL sidecar and derives the
+  realised tail. The fake tm does neither, so these tests assert the
+  staged endppq, never a realised clip.
   
   These tests pin that seam through the real preflush/reproject path
   with a faithful fake tm (it does NOT run the tail pass -- so it can
@@ -20,28 +20,28 @@
 
 # Helpers
   @fn mk()  @ 19-23
-  @fn note(ppq, pitch, dur, extra)  @ 30-38
-      -- Finite by default: a real authored note carries endppqL (intent
-      -- ceiling). `extra.open=true` seeds the freshly-placed open note --
-      -- endppqL = util.OPEN. (`open` itself is not a note field any more;
+  @fn note(ppq, pitch, dur, extra)  @ 30-37
+      -- Finite by default: a real authored note carries its intent ceiling on
+      -- endppq. `extra.open=true` seeds the freshly-placed open note --
+      -- endppq = util.OPEN. (`open` itself is not a note field any more;
       -- it must not leak into the group template via copyScalars.)
-  @fn rect()  @ 42-43
+  @fn rect()  @ 41-42
       -- 960-wide region; siblings stack at the next bar (half-open: [0,960)
       -- and [960,1920) are disjoint, so no regionConflict).
-  @fn addAt(staged, ppq)  @ 45-47
-  @fn assignFor(staged, evt)  @ 48-50
+  @fn addAt(staged, ppq)  @ 44-46
+  @fn assignFor(staged, evt)  @ 47-49
 
 # Cases
-  @case 'a finite note carries its ceiling (endppqL) rigidly to the sibling'  [pure]  @ 54-66
-  @case 'an open note travels as open: no ceiling, provisional onset+1 tail'  [pure]  @ 70-81
-  @case 'a group-level create is open in the group frame (no birth ceiling)'  [pure]  @ 85-112
-  @case 'a group-level delete does NOT grow the predecessor in the group frame'  [pure]  @ 116-138
-  @case 'markGroup seed is canonical -- it never rewrites the take geometry'  [pure]  @ 142-164
+  @case 'a finite note carries its ceiling (endppq) rigidly to the sibling'  [pure]  @ 53-65
+  @case 'an open note travels as open: no ceiling, provisional onset+1 tail'  [pure]  @ 69-80
+  @case 'a group-level create is open in the group frame (no birth ceiling)'  [pure]  @ 84-111
+  @case 'a group-level delete does NOT grow the predecessor in the group frame'  [pure]  @ 115-137
+  @case 'markGroup seed is canonical -- it never rewrites the take geometry'  [pure]  @ 141-163
 
 # Uses (outbound edges)
-  @use call gm:markGroup  @ 58,74,89,120
-  @use call gm:newInstance  @ 59,75,90,121
-  @use call tm:flush  @ 91,94,122,124,152
-  @use call gm:addEvent  @ 94
-  @use call gm:deleteEvent  @ 124
-  @use call gm:duplicateInto  @ 151
+  @use call gm:markGroup  @ 57,73,88,119
+  @use call gm:newInstance  @ 58,74,89,120
+  @use call tm:flush  @ 90,93,121,123,151
+  @use call gm:addEvent  @ 93
+  @use call gm:deleteEvent  @ 123
+  @use call gm:duplicateInto  @ 150

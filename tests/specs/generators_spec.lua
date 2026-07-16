@@ -39,11 +39,11 @@ return {
       local out = expand('slide', slideHost(), slideP, slideCtx{ pitch = 62, detune = 0 })
       local d = out.delta
       t.eq(#out.notes, 0, 'continuous: no structural notes')
-      t.eq(d[1].ppqL, 0);   t.eq(d[1].val, 0, 'starts flat at centre')
-      t.eq(d[2].ppqL, 105); t.eq(d[2].val, 0, 'slur begins after the flat hold')
+      t.eq(d[1].ppq, 0);   t.eq(d[1].val, 0, 'starts flat at centre')
+      t.eq(d[2].ppq, 105); t.eq(d[2].val, 0, 'slur begins after the flat hold')
       t.eq(d[2].shape, 'slow', 'slur eases (slow / half-cosine)')
-      t.eq(d[3].ppqL, 225); t.eq(d[3].val, 200, 'arrives at the +200c interval before the handoff')
-      t.eq(d[4].ppqL, 240); t.eq(d[4].val, 0, 're-centres at the handoff -- next note sounds true')
+      t.eq(d[3].ppq, 225); t.eq(d[3].val, 200, 'arrives at the +200c interval before the handoff')
+      t.eq(d[4].ppq, 240); t.eq(d[4].val, 0, 're-centres at the handoff -- next note sounds true')
     end,
   },
 
@@ -102,8 +102,8 @@ return {
       t.deepEq(seen, { 60, 0, 2 }, 'ctx.step receives the host pitch, detune, and step count')
       t.eq(#out.notes, 4, '1/4-QN period over a 1-QN window: 4 fxNotes (all hits derived)')
       local n = out.notes
-      t.deepEq({ n[1].ppqL, n[2].ppqL, n[3].ppqL, n[4].ppqL }, { 0, 60, 120, 180 }, 'tiled onsets from the window start')
-      t.deepEq({ n[1].endppqL, n[2].endppqL, n[3].endppqL, n[4].endppqL }, { 60, 120, 180, 240 }, 'tails clip to next / window end')
+      t.deepEq({ n[1].ppq, n[2].ppq, n[3].ppq, n[4].ppq }, { 0, 60, 120, 180 }, 'tiled onsets from the window start')
+      t.deepEq({ n[1].endppq, n[2].endppq, n[3].endppq, n[4].endppq }, { 60, 120, 180, 240 }, 'tails clip to next / window end')
       t.deepEq({ n[1].pitch, n[2].pitch, n[3].pitch, n[4].pitch }, { 60, 62, 60, 62 }, 'even tiles carry the host pitch; odd tiles step')
       t.deepEq({ n[1].detune, n[2].detune, n[3].detune, n[4].detune }, { 0, 7, 0, 7 }, 'host detune on even; stepped detune on odd')
       t.eq(n[2].vel, 100, 'host velocity carried (no ramp)')
@@ -161,11 +161,11 @@ return {
                          { kind = 'autopan', period = { 1, 2 }, depth = 32 }, { resolution = 240 })
       t.eq(#out.notes, 0, 'continuous: no structural notes')
       local d = out.delta
-      t.eq(d[1].ppqL, 0);    t.eq(d[1].val, 0,   'anchored at centre (0) at the window start')
-      t.eq(d[2].ppqL, 30);   t.eq(d[2].val, 32,  'first extreme is +depth cc steps')
-      t.eq(d[3].ppqL, 90);   t.eq(d[3].val, -32, 'next extreme is -depth')
+      t.eq(d[1].ppq, 0);    t.eq(d[1].val, 0,   'anchored at centre (0) at the window start')
+      t.eq(d[2].ppq, 30);   t.eq(d[2].val, 32,  'first extreme is +depth cc steps')
+      t.eq(d[3].ppq, 90);   t.eq(d[3].val, -32, 'next extreme is -depth')
       t.eq(d[2].shape, 'slow', 'extrema bridged by slow (half-cosine)')
-      t.eq(d[#d].ppqL, 240); t.eq(d[#d].val, 0,  're-centres to 0 at the window end')
+      t.eq(d[#d].ppq, 240); t.eq(d[#d].val, 0,  're-centres to 0 at the window end')
     end,
   },
 
@@ -175,10 +175,10 @@ return {
     name = 'velPattern cycles its percent pattern per distinct onset; a chord shares one step',
     run = function()
       local stream = { window = { 0, 240 }, notes = {
-        { pitch = 60, vel = 100, detune = 0, ppqL = 0,   endppqL = 60 },
-        { pitch = 64, vel = 100, detune = 0, ppqL = 0,   endppqL = 60 },    -- chord mate: same step
-        { pitch = 60, vel = 100, detune = 0, ppqL = 60,  endppqL = 120 },
-        { pitch = 60, vel = 100, detune = 0, ppqL = 120, endppqL = 180 },
+        { pitch = 60, vel = 100, detune = 0, ppq = 0,   endppq = 60 },
+        { pitch = 64, vel = 100, detune = 0, ppq = 0,   endppq = 60 },    -- chord mate: same step
+        { pitch = 60, vel = 100, detune = 0, ppq = 60,  endppq = 120 },
+        { pitch = 60, vel = 100, detune = 0, ppq = 120, endppq = 180 },
       } }
       local out = expand('velPattern', stream, { kind = 'velPattern', pattern = { 100, 50 } }, {})
       t.eq(#out.delta, 0, 'structural: no continuous delta')
@@ -194,11 +194,11 @@ return {
     name = 'velPattern walks onset order regardless of input order, clamping vel to 1..127',
     run = function()
       local stream = { window = { 0, 240 }, notes = {
-        { pitch = 60, vel = 100, detune = 0, ppqL = 120, endppqL = 180 },   -- listed out of order
-        { pitch = 60, vel = 100, detune = 0, ppqL = 0,   endppqL = 60 },
+        { pitch = 60, vel = 100, detune = 0, ppq = 120, endppq = 180 },   -- listed out of order
+        { pitch = 60, vel = 100, detune = 0, ppq = 0,   endppq = 60 },
       } }
       local out = expand('velPattern', stream, { kind = 'velPattern', pattern = { 140, 0 } }, {})
-      t.deepEq({ out.notes[1].ppqL, out.notes[2].ppqL }, { 0, 120 }, 'ordered by onset, not input order')
+      t.deepEq({ out.notes[1].ppq, out.notes[2].ppq }, { 0, 120 }, 'ordered by onset, not input order')
       t.eq(out.notes[1].vel, 127, '140% of 100 clamps to 127')
       t.eq(out.notes[2].vel, 1,   '0% clamps up to the audible floor')
     end,
@@ -210,10 +210,10 @@ return {
     name = 'ostinato tracks the sounding pitch across the region, not just the first note',
     run = function()
       local host = { window = { 0, 480 }, notes = {
-        { pitch = 60, vel = 100, detune = 0, ppqL = 0,   endppqL = 240 },
-        { pitch = 67, vel = 100, detune = 0, ppqL = 240, endppqL = 480 },
+        { pitch = 60, vel = 100, detune = 0, ppq = 0,   endppq = 240 },
+        { pitch = 67, vel = 100, detune = 0, ppq = 240, endppq = 480 },
       } }
-      local pattern = { kind = 'notes', lengthPpq = 240, specs = { { ppqL = 0, endppqL = 60, vel = 90 } } }
+      local pattern = { kind = 'notes', lengthPpq = 240, specs = { { ppq = 0, endppq = 60, vel = 90 } } }
       local out = expand('ostinato', host, { kind = 'ostinato', pattern = pattern }, {})
       t.eq(#out.notes, 2, 'one gate per loop over a two-loop window')
       t.deepEq({ out.notes[1].pitch, out.notes[2].pitch }, { 60, 67 },
@@ -226,12 +226,12 @@ return {
     name = 'ostinato rests when no region note sounds at the gate onset',
     run = function()
       local host = { window = { 0, 480 }, notes = {
-        { pitch = 60, vel = 100, detune = 0, ppqL = 0, endppqL = 240 },
+        { pitch = 60, vel = 100, detune = 0, ppq = 0, endppq = 240 },
       } }
-      local pattern = { kind = 'notes', lengthPpq = 240, specs = { { ppqL = 0, endppqL = 60, vel = 100 } } }
+      local pattern = { kind = 'notes', lengthPpq = 240, specs = { { ppq = 0, endppq = 60, vel = 100 } } }
       local out = expand('ostinato', host, { kind = 'ostinato', pattern = pattern }, {})
       t.eq(#out.notes, 1, 'the second loop gate falls in the gap -> rest, no note')
-      t.eq(out.notes[1].ppqL, 0, 'only the gate over the sounding note emits')
+      t.eq(out.notes[1].ppq, 0, 'only the gate over the sounding note emits')
     end,
   },
 
@@ -239,10 +239,10 @@ return {
     name = 'ostinato emits one gated note per sounding voice (a chord -> multiple lanes)',
     run = function()
       local host = { window = { 0, 240 }, notes = {
-        { pitch = 60, vel = 100, detune = 0,  ppqL = 0, endppqL = 240 },
-        { pitch = 64, vel = 100, detune = 25, ppqL = 0, endppqL = 240 },
+        { pitch = 60, vel = 100, detune = 0,  ppq = 0, endppq = 240 },
+        { pitch = 64, vel = 100, detune = 25, ppq = 0, endppq = 240 },
       } }
-      local pattern = { kind = 'notes', lengthPpq = 240, specs = { { ppqL = 0, endppqL = 60, vel = 80 } } }
+      local pattern = { kind = 'notes', lengthPpq = 240, specs = { { ppq = 0, endppq = 60, vel = 80 } } }
       local out = expand('ostinato', host, { kind = 'ostinato', pattern = pattern }, {})
       t.eq(#out.notes, 2, 'both voices gate at the onset')
       t.deepEq({ out.notes[1].pitch, out.notes[2].pitch }, { 60, 64 }, 'ascending by pitch')
@@ -261,12 +261,12 @@ return {
         { resolution = 240 })
       t.eq(#out.notes, 0, 'continuous: no structural notes')
       local d = out.delta
-      t.eq(d[1].ppqL, 0);      t.eq(d[1].val, 1,   'start seed maps norm -1 -> centre-scale (1)')
-      t.eq(d[#d].ppqL, 480);   t.eq(d[#d].val, 1,  'end seed closes the loop back to the start value')
+      t.eq(d[1].ppq, 0);      t.eq(d[1].val, 1,   'start seed maps norm -1 -> centre-scale (1)')
+      t.eq(d[#d].ppq, 480);   t.eq(d[#d].val, 1,  'end seed closes the loop back to the start value')
       local peaks, mid = 0, {}
       for _, bp in ipairs(d) do
         if bp.val == 127 then peaks = peaks + 1 end   -- norm +1 -> centre+scale, at ppq 120 & 360
-        if bp.val == 64  then mid[#mid + 1] = bp.ppqL end
+        if bp.val == 64  then mid[#mid + 1] = bp.ppq end
       end
       t.eq(peaks, 2, 'the +1 apex recurs once per tiled cycle')
       t.truthy(#mid >= 2, 'the norm-0 midpoints land on centre (64)')

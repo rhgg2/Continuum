@@ -25,7 +25,7 @@ Three mechanisms enforce that:
 - **Intent into the group frame.** A tracker edit on a concrete
   instance event is transferred into the group frame through the
   instance anchor as pure *intent* — onset, and the ceiling (a finite
-  `endppqL` → group `dur`, or `endppqL == util.OPEN` → nil dur). The
+  `endppq` → group `dur`, or `endppq == util.OPEN` → nil dur). The
   realised note-off tm re-derives never enters the frame.
   `group.events` only ever holds the canonical pattern.
 - **Per-flush re-derivation.** `groups.project` clones the group and
@@ -49,13 +49,13 @@ flush seam; with the sniffer retired (see The flush seam) it is gone too.
 ## Intent in, realisation out
 
 gm carries *intent* across the seam and nothing else. A note's intent
-is its ceiling: a finite authored `endppqL`, anchor-rebased to a group
-`dur`; or `endppqL == util.OPEN` — a freshly-placed note with no
+is its ceiling: a finite authored `endppq`, anchor-rebased to a group
+`dur`; or `endppq == util.OPEN` — a freshly-placed note with no
 ceiling, which travels as a nil group dur. `toGroup`/`toInstance`
 rebase between frames; `updToGroup`/`updToInstance` are the exact
 partial-update inverses (`util.OPEN` ⇒ `dur` removed, a finite `dur` ⇒
-`endppqL` restamped). The realised note-off never enters the group
-frame.
+`endppq` restamped). The realised note-off never enters the group
+frame — tm derives it, and stamps the ceiling into mm's `endppqL`.
 
 The same discipline governs pb value. A concrete's `val` is realised —
 `rawToCents(wire) = intent + governing detune` — while the intent lives
@@ -70,16 +70,15 @@ fallback, and the group frame then holds intent under the single name
 `val` (the sidecar is dropped, else an edit that only rewrites `val`
 would leave it stale).
 
-The onset is logical the same way the ceiling is. The group frame is
-the authoring grid; a concrete's `ppq` is realised — swing and the
-note's `delay` baked in by tm's `realiseNoteUpdate`. `toGroup` is fed
-realised concretes (creates, projection) and rebases off `evt.ppqL`,
-the logical onset. A value edit, though, no longer passes through tm
-before reaching gm: the leaf-edit facade (`trackerView.cellEdit.assign`)
-routes a member straight to `gm:assignEvent` with tv's *authored*
-update — logical onset in `ppq`, ceiling in `endppq`, none of tm's
-private `ppqL`/`endppqL`. So `updToGroup` reads those authored fields
-directly. A pure `delay` edit authors `{delay}` alone with no `ppq`, so
+The onset is logical the same way the ceiling is. The group frame is the
+authoring grid, and so is every frame gm ingests: `toGroup` rebases off
+`evt.ppq`, logical because the column frame is, with swing and the
+note's `delay` held in mm's raw. A value edit doesn't pass through tm
+before reaching gm either: the leaf-edit facade
+(`trackerView.cellEdit.assign`) routes a member straight to
+`gm:assignEvent` with tv's *authored* update — logical onset in `ppq`,
+ceiling in `endppq`, none of mm's private `ppqL`/`endppqL`. So
+`updToGroup` reads those authored fields directly. A pure `delay` edit authors `{delay}` alone with no `ppq`, so
 it moves no group onset; `delay` rides across as its own scalar via
 `copyScalars`.
 
@@ -364,9 +363,9 @@ frame boundary, minus the keys in `DERIVED`. The list is opt-out, not
 opt-in: an allowlist would silently drop every unlisted key (the
 rpb-drop bug). Three categories of denied key:
 
-- **positional/identity** — the four duals (`ppq`/`ppqL`, `endppq`/`endppqL`)
-  translate explicitly between frames; copying them raw would
-  double-write or leak realised time.
+- **positional/identity** — `ppq`/`endppq` translate explicitly between
+  frames; copying them raw would double-write or leak realised time.
+  (mm's `ppqL`/`endppqL` never reach this layer to be denied.)
 - **regenerated** — `tm` re-derives these every rebuild; they must
   never persist into the shared group template.
 - **absorber synth** — `derived`/`hidden` pbs are re-seated from note

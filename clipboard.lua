@@ -18,7 +18,7 @@ local util    = require 'util'
 -- allowlist event payload.
 local CLIP_RESERVED = {
   -- position (rebuilt from row + cursor)
-  ppq = true, endppq = true, ppqL = true, endppqL = true,
+  ppq = true, endppq = true,
   -- destination identity
   chan = true, rpb = true, lane = true, cc = true,
   -- mm/REAPER bookkeeping

@@ -1,6 +1,6 @@
 -- See docs/trackerManager.md for the model.
 
---invariant: tm holds (ppqL, raw) per event; mm holds raw; col events expose evt.ppq as logical
+--invariant: mm holds raw + a ppqL sidecar; columns and the park stash are logical-only (evt.ppq)
 --invariant: rebuild reconciles raw ↔ ppqL each pass (docs/timing.md)
 --invariant: detune is intent (per-note); pb is realisation (channel-wide stream)
 --invariant: only lane-1 notes drive detune realisation
@@ -28,14 +28,14 @@
 --shape: extraColumns[chan] = { notes=count, [pc], [pb], [at], [ccs={[ccNum]=true}] }
 --shape: lastMuteSet = { [chan] = true }, pushed by tv via tm:setMutedChannels
 --shape: fxParked = one evType-tagged off-take stash for every replace park; each spec is the authored
---shape:   event minus the realisation frame (ppq/endppq/loc/token/derived/frame/cents), so new metadata
---shape:   rides park automatically. Baseline fields per type (realised ppq re-derived on restore):
---shape:   note { evType='note', chan, lane, uuid, ppqL, endppqL, pitch, vel, detune, delay, sample, [fx] }
---shape:   cc { evType='cc', chan, cc, ppqL, val, shape }  |  pb { evType='pb', chan, ppqL, val (=cents), shape, [tension] }  |  pa { evType='pa', chan, pitch, ppqL, vel, [rpb] }
---shape: channels[chan].parked = { { evType='note', chan, uuid, ppq, ppqL, endppq, endppqL, endppqC, pitch, vel, detune, sample, delay, lane, [fx] }, ... } -- render-ready off-take replace cells (ppq==ppqL; endppq is the authored ceiling the view edits, endppqC==endppqL clipped for render)
---shape: channels[chan].parkedCC = { { evType='cc', chan, cc, ppq, ppqL, val, shape }, ... } -- off-take cc-replace render cells (ppq==ppqL)
---shape: channels[chan].parkedPb = { { evType='pb', chan, ppq, ppqL, val (=cents), cents, shape, [tension] }, ... } -- off-take pb-replace render cells (ppq==ppqL)
---shape: channels[chan].parkedPA = { { evType='pa', chan, pitch, ppq, ppqL, vel, [rpb] }, ... } -- off-take PA cells; rebuildPA re-projects them into the host note column
+--shape:   event in the logical frame, minus realisation (delayC/endppqC/loc/token/derived/frame/cents),
+--shape:   so new metadata rides park automatically. Baseline fields per type (raw re-derived on restore):
+--shape:   note { evType='note', chan, lane, uuid, ppq, endppq, pitch, vel, detune, delay, sample, [fx] }
+--shape:   cc { evType='cc', chan, cc, ppq, val, shape }  |  pb { evType='pb', chan, ppq, val (=cents), shape, [tension] }  |  pa { evType='pa', chan, pitch, ppq, vel, [rpb] }
+--shape: channels[chan].parked = { { evType='note', chan, uuid, ppq, endppq, endppqC, pitch, vel, detune, sample, delay, lane, [fx] }, ... } -- render-ready off-take replace cells (endppq is the authored ceiling the view edits, endppqC the render clip realiseParked derives)
+--shape: channels[chan].parkedCC = { { evType='cc', chan, cc, ppq, val, shape }, ... } -- off-take cc-replace render cells
+--shape: channels[chan].parkedPb = { { evType='pb', chan, ppq, val (=cents), cents, shape, [tension] }, ... } -- off-take pb-replace render cells
+--shape: channels[chan].parkedPA = { { evType='pa', chan, pitch, ppq, vel, [rpb] }, ... } -- off-take PA cells; rebuildPA re-projects them into the host note column
 --contract: a discrete-replace kind parks its host: a region parks its covered chord, a note parks itself
 --invariant: parked members feed generator + grid only; never sounding (mute fails for CC/PA)
 
@@ -87,12 +87,11 @@ local function sortByPPQ(tbl)
   table.sort(tbl, function(a, b) return a.ppq < b.ppq end)
 end
 
--- Note columns are logical-frame indices: the fx/park subsystem tests ppqL, so they sort on it. PAs may
--- carry no ppqL (raw-sourced); ties order note-before-PA, then pitch. see design/archive/logical-column-order.md
-local function sortByPPQL(tbl)
+-- Only note columns interleave notes and PAs, which can share an onset: ties order note-before-PA,
+-- then pitch, so an equal-onset seat holds across rebuilds. see design/archive/logical-column-order.md
+local function sortNoteColumn(tbl)
   table.sort(tbl, function(a, b)
-    local aOnset, bOnset = a.ppqL or a.ppq, b.ppqL or b.ppq
-    if aOnset ~= bOnset then return aOnset < bOnset end
+    if a.ppq ~= b.ppq then return a.ppq < b.ppq end
     local aPa, bPa = a.evType == 'pa', b.evType == 'pa'
     if aPa ~= bPa then return bPa end
     return (a.pitch or 0) < (b.pitch or 0)
@@ -247,21 +246,6 @@ end
 
 ----- Continuous curves (fx chain)
 
--- Logical stream curve ({ppqL,val,shape,[tension]}) <-> sumStreams' ppq-keyed points; same values, one key.
-local function asPoints(curve)
-  local pts = {}
-  for _, point in ipairs(curve) do
-    util.add(pts, { ppq = point.ppqL, val = point.val, shape = point.shape, tension = point.tension })
-  end
-  return pts
-end
-local function asCurve(pts)
-  local curve = {}
-  for _, point in ipairs(pts) do
-    util.add(curve, { ppqL = point.ppq, val = point.val, shape = point.shape, tension = point.tension })
-  end
-  return curve
-end
 local function negated(pts)
   local out = {}
   for _, point in ipairs(pts) do
@@ -299,9 +283,9 @@ local function foldWhole(covering, span, base, opts)
     if #rec.curve > 0 then
       any = true
       if rec.mode == 'replace' then
-        stream = asPoints(rec.curve)
+        stream = rec.curve
       else
-        stream = sumStreams(stream, { asPoints(rec.curve), negated(base) }, span, opts)
+        stream = sumStreams(stream, { rec.curve, negated(base) }, span, opts)
       end
     end
   end
@@ -335,9 +319,9 @@ local function foldSub(active, a, b, base, closeHere, opts)
     if #rec.curve > 0 then
       touched = true
       if rec.mode == 'replace' then
-        stream, streamed = asPoints(rec.curve), false
+        stream, streamed = rec.curve, false
       else
-        stream = sumStreams(stream, { asPoints(rec.curve), negated(subBase) }, { a, b }, subOpts)
+        stream = sumStreams(stream, { rec.curve, negated(subBase) }, { a, b }, subOpts)
         streamed = true
       end
     end
@@ -353,7 +337,7 @@ end
 -- otherwise sub-split at record edges so each layer folds only where it applies. see design/note-macros-v2.md § The fx chain
 local function foldChains(recs, span, base, opts)
   local covering = overlapping(recs, span)
-  if #covering == 1 then return asPoints(covering[1].curve) end
+  if #covering == 1 then return covering[1].curve end
   local cuts = chainCuts(covering, span)
   if #cuts == 2 then return foldWhole(covering, span, base, opts) end
   local out = {}
@@ -394,48 +378,45 @@ local function eachWindowNote(chan, startL, endL, fn)
     -- (or the window): mirror rebuildTails' laneClip so an OPEN ceiling never streams a phantom overlap.
     local onsets = {}
     for _, evt in ipairs(col.events) do
-      if evt.evType ~= 'pa' and evt.ppqL ~= nil then util.add(onsets, evt) end
+      if evt.evType ~= 'pa' then util.add(onsets, evt) end
     end
     for i, evt in ipairs(onsets) do
-      local ceil   = (evt.endppqL == nil or evt.endppqL == util.OPEN) and endL or evt.endppqL
-      local nextOn = onsets[i + 1] and onsets[i + 1].ppqL or endL
+      local ceil   = (evt.endppq == nil or evt.endppq == util.OPEN) and endL or evt.endppq
+      local nextOn = onsets[i + 1] and onsets[i + 1].ppq or endL
       local hi     = math.min(ceil, nextOn)
-      if evt.ppqL < endL and hi > startL then fn(laneIdx, evt.ppqL, hi, evt) end
+      if evt.ppq < endL and hi > startL then fn(laneIdx, evt.ppq, hi, evt) end
     end
   end
 end
 local function membersOf(chan, startL, endL)
   local out = {}
   eachWindowNote(chan, startL, endL, function(_, lo, hi, evt)
-    util.add(out, util.pick(evt, "pitch vel detune", { ppqL = lo, endppqL = hi }))
+    util.add(out, util.pick(evt, "pitch vel detune", { ppq = lo, endppq = hi }))
   end)
   return out
 end
--- cc-family streams a generator reads (notes via membersOf); pas/ats key `evt.ppqL or evt.ppq`,
--- pb/ccs are absolute curves sliced from the per-chan bases with entering/closing edges. see design/note-macros-v2.md § The fx chain
+-- cc-family streams a generator reads (notes via membersOf); pb/ccs are absolute curves sliced
+-- from the per-chan bases with entering/closing edges. see design/note-macros-v2.md § The fx chain
 local function channelStreams(chan, startL, endL, pbBase, ccBases)
   local cols = channels[chan].columns
-  local function within(ppqL) return ppqL >= startL and ppqL < endL end
+  local function within(ppq) return ppq >= startL and ppq < endL end
   local pas, ats = {}, {}
   for _, col in ipairs(cols.notes) do
     for _, evt in ipairs(col.events) do
-      local ppqL = evt.ppqL or evt.ppq
-      if evt.evType == 'pa' and within(ppqL) then
-        util.add(pas, { ppqL = ppqL, pitch = evt.pitch, vel = evt.vel })
+      if evt.evType == 'pa' and within(evt.ppq) then
+        util.add(pas, { ppq = evt.ppq, pitch = evt.pitch, vel = evt.vel })
       end
     end
   end
   for _, evt in ipairs(cols.at and cols.at.events or {}) do
-    local ppqL = evt.ppqL or evt.ppq
-    if within(ppqL) then util.add(ats, { ppqL = ppqL, val = evt.val }) end
+    if within(evt.ppq) then util.add(ats, { ppq = evt.ppq, val = evt.val }) end
   end
   -- Generators read these streams in ppq order (bases pre-sorted, slices preserve order). see design/archive/deferred-reindex.md § Phase A
-  local function byPpqL(a, b) return a.ppqL < b.ppqL end
-  table.sort(pas, byPpqL)
-  table.sort(ats, byPpqL)
+  sortByPPQ(pas)
+  sortByPPQ(ats)
   local ccs = {}
-  for cc, base in pairs(ccBases) do ccs[cc] = asCurve(sliceCurve(base, startL, endL)) end
-  return pas, ccs, ats, asCurve(sliceCurve(pbBase, startL, endL))
+  for cc, base in pairs(ccBases) do ccs[cc] = sliceCurve(base, startL, endL) end
+  return pas, ccs, ats, sliceCurve(pbBase, startL, endL)
 end
 -- Deterministic allocator: lowest lane free of overlap, authored notes seed occupancy;
 -- emission order -> deterministic -> G4-stable. see design/note-macros-v2.md § Generator output
@@ -471,9 +452,15 @@ local function firstRestOverride(recs)   -- earliest chain's explicit rest overr
   end
   return rest
 end
+-- A parked cell as a generator stream note: it sounds to its render clip, never to the authored
+-- ceiling on endppq -- the field the view edits. Mirrors membersOf' shape for on-take notes.
+local function soundingCell(cell)
+  return util.assign(util.clone(cell), { endppq = cell.endppqC })
+end
+
 -- A note host (on-take or parked) as a producer: derived notes ride the host's lane/delay/sample.
 local function hostProducer(host, windowEnd, lane)
-  return { window = { host.ppqL, windowEnd }, notes = { host }, fx = host.fx,
+  return { window = { host.ppq, windowEnd }, notes = { host }, fx = host.fx,
            id = host.uuid, lane = lane, delay = host.delay,
            sample = host.sample, delayPpq = delayToPPQ(host.delay) }
 end
@@ -995,10 +982,8 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
 
   ----- Parked staging (B3): logical-only edits to the fx replace off-take.
 
-  -- Specs are logical (no realised ppq); rebuildRegionPark derives realisation each rebuild.
-  -- Dispatch on evType like addEvent: notes key by uuid (fxp-N minted for window-authored
-  -- adds), ccs by (chan, cc, ppqL). Edits stage here and ride flush -- a parked edit that wrote
-  -- ds inline would rebuild mid-batch and discard still-staged mm ops.
+  -- Edits stage here and ride flush: a parked edit that wrote ds inline would rebuild mid-batch and
+  -- discard still-staged mm ops. rebuildRegionPark derives realisation from the spec each pass.
 
   local function mintParkedUuid()
     parkedUuidSeq = parkedUuidSeq + 1
@@ -1018,12 +1003,13 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     util.add(parkedEdits, { op = 'delete', evt = evt })
   end
 
+  --contract: notes key by uuid (fxp-N for a window-authored add), other types by (chan, cc, ppq)
   local function findParked(list, ref)
     if ref.evType == 'note' then
       for i, s in ipairs(list) do if s.uuid == ref.uuid then return i end end
     else
       for i, s in ipairs(list) do
-        if s.chan == ref.chan and s.cc == ref.cc and s.ppqL == ref.ppqL then return i end
+        if s.chan == ref.chan and s.cc == ref.cc and s.ppq == ref.ppq then return i end
       end
     end
   end
@@ -1318,9 +1304,9 @@ function tm:flush() flush() end
 
 ----- Length
 
--- On shrink, an OPEN endppqL is authored intent, not a casualty of resize: only the realised
+-- On shrink, an OPEN ceiling is authored intent, not a casualty of resize: only the realised
 -- tail clips to the new end. See docs/trackerManager.md § Length operations for the ordering.
---contract: a util.OPEN endppqL survives a shrink; only its realised tail comes down
+--contract: a util.OPEN ceiling survives a shrink; only its realised tail comes down
 function tm:setLength(newPpq)
   if not mm then return end
   local oldPpq = mm:length() or 0
@@ -1329,7 +1315,7 @@ function tm:setLength(newPpq)
     forEachEvent(function(_, evt, _, isNote)
       if evt.ppq >= newPpq then
         util.add(kills, evt)
-      elseif isNote and evt.endppq > newPpq and evt.endppqL ~= util.OPEN then
+      elseif isNote and evt.endppq ~= util.OPEN and evt.endppq > newPpq then
         util.add(clamps, evt)
       end
     end)
@@ -1357,27 +1343,19 @@ function tm:rescaleLength(newPpq)
   end
   local f = newPpq / oldPpq
 
-  -- τ maps logical ppqL; events without ppqL fall back to raw (identical under identity swing).
-  -- slopeAt scales delays for local realised stretch. Two passes so all reads are stable.
+  -- τ maps the column's logical ppq; raw re-derives through swing, and slopeAt scales delays for
+  -- local realised stretch. Two passes so all reads are stable.
   local function applyTimeMap(tau, slopeAt)
     local plans = {}
     forEachEvent(function(_, evt, chan, isNote)
       local p = { evt = evt }
-      if evt.ppqL ~= nil then
-        p.newPpqL = tau(evt.ppqL)
-        p.newPpq  = tm:fromLogical(chan, p.newPpqL)
-      else
-        p.newPpq = util.round(tau(evt.ppq))
-      end
+      p.newPpqL = tau(evt.ppq)
+      p.newPpq  = tm:fromLogical(chan, p.newPpqL)
       if isNote then
-        if evt.endppqL ~= nil then
-          p.newEndppqL = tau(evt.endppqL)
-          p.newEndppq  = tm:fromLogical(chan, p.newEndppqL)
-        else
-          p.newEndppq = util.round(tau(evt.endppq))
-        end
+        p.newEndppqL = tau(evt.endppq)
+        p.newEndppq  = tm:fromLogical(chan, p.newEndppqL)
         if evt.delay and evt.delay ~= 0 then
-          p.newDelay = slopeAt(evt.ppqL or evt.ppq) * evt.delay
+          p.newDelay = slopeAt(evt.ppq) * evt.delay
         end
       end
       util.add(plans, p)
@@ -1521,6 +1499,9 @@ local function projectEvent(evt, chan)
       evt.endppq = evt.endppqC
     end
   end
+  -- The sidecar rode in on the mm event; drop it, or a stale copy of the frame we just
+  -- became would ride out through park / clipboard / gm. mm and the raw scratch keep theirs.
+  evt.ppqL, evt.endppqL = nil, nil
 end
 
 -- Strict-next per note: first group member with a greater ppq,
@@ -1889,6 +1870,7 @@ end
 
 -- Clip each parked member's tail to lane/pitch successor onset and take end (logical frame),
 -- against bounds (unclipped on-take notes). See docs/trackerManager.md § Region-replace parking.
+--contract: derives each member's endppqC (the render clip); the authored ceiling on endppq stands
 local function realiseParked(members, takeLenL, bounds)
   local byLane, byPitch = {}, {}
   local function seat(evt)
@@ -1897,24 +1879,23 @@ local function realiseParked(members, takeLenL, bounds)
   end
   for _, m in ipairs(members)      do seat(m) end
   for _, b in ipairs(bounds or {}) do seat(b) end
-  local onset = function(evt) return evt.ppqL end
-  local function byOnset(a, b) return onset(a) < onset(b) end
-  for _, g in pairs(byLane)  do table.sort(g, byOnset) end
-  for _, g in pairs(byPitch) do table.sort(g, byOnset) end
-  local laneNextOf  = strictNextMap(byLane,  onset)
-  local pitchNextOf = strictNextMap(byPitch, onset)
+  for _, g in pairs(byLane)  do sortByPPQ(g) end
+  for _, g in pairs(byPitch) do sortByPPQ(g) end
+  local laneNextOf  = strictNextMap(byLane)
+  local pitchNextOf = strictNextMap(byPitch)
   for _, m in ipairs(members) do
-    local ceil = (m.endppqL == nil or m.endppqL == util.OPEN) and takeLenL or m.endppqL
+    local ceil = (m.endppq == nil or m.endppq == util.OPEN) and takeLenL or m.endppq
     local laneNext, pitchNext = laneNextOf[m], pitchNextOf[m]
-    m.endppqL = math.max(m.ppqL + 1, math.min(ceil,
-      laneNext  and laneNext.ppqL  or math.huge,
-      pitchNext and pitchNext.ppqL or math.huge, takeLenL))
+    m.endppqC = math.max(m.ppq + 1, math.min(ceil,
+      laneNext  and laneNext.ppq  or math.huge,
+      pitchNext and pitchNext.ppq or math.huge, takeLenL))
   end
 end
 
 -- Park = clone minus the realisation frame, so new authored metadata rides a park/unpark
 -- round-trip untouched; restore mirrors it (clone back, re-derive realisation; pb also cents->raw).
-local REALISATION = { ppq = true, endppq = true, loc = true, token = true, derived = true, frame = true, cents = true }
+local REALISATION = { delayC = true, endppqC = true, loc = true, token = true, derived = true, frame = true, cents = true }
+--contract: evt must be logical-frame (a column event); an mm-raw source overrides ppq via `adds`
 local function parkSpec(evt, adds) return util.assign(util.clone(evt, REALISATION), adds) end
 
 -- One raw-frame scratch record per on-take note; the walk's working shape (see buildRawScratch).
@@ -1959,10 +1940,9 @@ local function rebuildRegionPark(ccExisting, deferred, currentWindows, fxParked,
   -- matches a currentWindows entry. see docs/trackerManager.md § Region-replace parking
   local function covered(spec)
     if spec.fx and generators.parksNotes(spec) then return true end
-    local ppqL = spec.ppqL or spec.ppq
     for _, w in ipairs(currentWindows) do
       if w.evType == spec.evType and w.chan == spec.chan and w.cc == spec.cc
-         and ppqL >= w.startppq and ppqL < w.endppq then return true end
+         and spec.ppq >= w.startppq and spec.ppq < w.endppq then return true end
     end
     return false
   end
@@ -2002,7 +1982,7 @@ local function rebuildRegionPark(ccExisting, deferred, currentWindows, fxParked,
           for _, evt in ipairs(col.events) do
             -- Gate the clone on coverage: a no-fx take covers nothing, so the scan stays empty and the
             -- 8438-note column never spawns a throwaway parkSpec. covered(evt) == covered(its parkSpec).
-            if evt.evType ~= 'pa' and evt.ppqL ~= nil and covered(evt) then
+            if evt.evType ~= 'pa' and covered(evt) then
               util.add(scan, { evt = evt, events = col.events,
                 spec = parkSpec(evt, { lane = laneIdx }) })   -- evType/chan ride the event; lane pins the column index
             end
@@ -2021,18 +2001,20 @@ local function rebuildRegionPark(ccExisting, deferred, currentWindows, fxParked,
       dirtyChan(spec.chan)   -- restored note re-enters columns; tail walk + absorber pass re-derive it
       local channel = channels[spec.chan]
       while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
-      local note = util.clone(spec)   -- keeps the parked uuid; mm:add honours it (fx handles survive unpark)
-      note.ppq = tm:fromLogical(spec.chan, spec.ppqL)    -- realised onset derived fresh (spec is logical-only)
-      -- The scratch rec keeps the raw frame for the walk; the cell flips logical like any column note.
-      local rec = util.pick(note, SCRATCH_FIELDS, { colEvt = note })
+      local note = util.clone(spec)   -- the cell is the spec: both are logical (keeps the parked uuid too)
+      -- The rec holds the walk's raw frame: endppq clears because only the walk can derive it (the
+      -- spec's ceiling is logical, and lands on endppqL), then rides back to the cell via colEvt.
+      local rec = util.pick(note, SCRATCH_FIELDS,
+                            { colEvt = note, ppq = tm:fromLogical(spec.chan, note.ppq),
+                              ppqL = note.ppq, endppqL = note.endppq, endppq = util.REMOVE })
       util.add(restoredNotes, rec)
       util.add(channel.columns.notes[spec.lane].events, note)
-      projectEvent(note, spec.chan)
-      sortByPPQL(channel.columns.notes[spec.lane].events)
+      sortNoteColumn(channel.columns.notes[spec.lane].events)
       -- Lazy: reshaped at commit so it reads the rec's raw ppq/endppq after the tail-walk clip.
       deferred.addLazy(function()
         return util.assign(util.clone(note, { delayC = true, endppqC = true }),
-                           { keepUuid = true, ppq = rec.ppq, endppq = rec.endppq })
+                           { keepUuid = true, ppq = rec.ppq, endppq = rec.endppq,
+                             ppqL = rec.ppqL, endppqL = rec.endppqL })
       end)
     end
 
@@ -2042,7 +2024,7 @@ local function rebuildRegionPark(ccExisting, deferred, currentWindows, fxParked,
     renderUnion('parked', newParked, function(spec)
       local channel = channels[spec.chan]
       while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
-      return util.assign(util.clone(spec), { ppq = spec.ppqL, endppq = spec.endppqL or util.OPEN })
+      return util.assign(util.clone(spec), { endppq = spec.endppq or util.OPEN })
     end)
     for chan = 1, 16 do
       local members = channels[chan].parked
@@ -2052,13 +2034,12 @@ local function rebuildRegionPark(ccExisting, deferred, currentWindows, fxParked,
         local bounds = {}
         for _, col in ipairs(channels[chan].columns.notes) do
           for _, evt in ipairs(col.events) do
-            if evt.evType ~= 'pa' and evt.ppqL ~= nil then
+            if evt.evType ~= 'pa' then
               util.add(bounds, evt)
             end
           end
         end
         realiseParked(members, tm:toLogical(chan, takeLen), bounds)
-        for _, m in ipairs(members) do m.endppqC = m.endppqL end
       end
     end
   end
@@ -2066,9 +2047,9 @@ local function rebuildRegionPark(ccExisting, deferred, currentWindows, fxParked,
   -- PA: rides its host note, so it parks exactly when the host does -- off-take (silent), still
   -- shown in the host lane by rebuildPA. Reconciled against the parked-note set. see docs/trackerManager.md § Region-replace parking
   do
-    local function hostParked(chan, pitch, ppqL)
+    local function hostParked(chan, pitch, ppq)
       for _, cell in ipairs(channels[chan].parked or {}) do
-        if cell.pitch == pitch and ppqL >= cell.ppqL and ppqL < cell.endppqL then return true end
+        if cell.pitch == pitch and ppq >= cell.ppq and ppq < cell.endppqC then return true end
       end
       return false
     end
@@ -2080,7 +2061,7 @@ local function rebuildRegionPark(ccExisting, deferred, currentWindows, fxParked,
         for _, cc in mm:ccsRaw(chan) do
           if cc.evType == 'pa' and hostParked(cc.chan, cc.pitch, cc.ppqL or cc.ppq) then
             batch.del({ token = mm:tokenOf(cc) })
-            local spec = parkSpec(cc, { ppqL = cc.ppqL or cc.ppq })   -- evType/chan/pitch/vel/rpb ride; drop realisation
+            local spec = parkSpec(cc, { ppq = cc.ppqL or cc.ppq })   -- mm-raw source: evType/chan/pitch/vel/rpb ride, ppq flips logical
             spec.uuid = nil                                           -- restore re-mints the rpb sidecar uuid
             util.add(newParked, spec)
           end
@@ -2089,18 +2070,17 @@ local function rebuildRegionPark(ccExisting, deferred, currentWindows, fxParked,
     end
     -- Prior parked PAs: host still parked -> carry; host returned on-take -> restore to the take.
     for _, spec in ipairs(priorByType.pa or {}) do
-      if hostParked(spec.chan, spec.pitch, spec.ppqL) then
+      if hostParked(spec.chan, spec.pitch, spec.ppq) then
         util.add(newParked, spec)
       else
         dirtyChan(spec.chan)
-        batch.add(util.assign(util.clone(spec), { ppq = tm:fromLogical(spec.chan, spec.ppqL) }))
+        batch.add(util.assign(util.clone(spec),   -- back to mm: raw onset, logical sidecar
+          { ppq = tm:fromLogical(spec.chan, spec.ppq), ppqL = spec.ppq }))
       end
     end
     for _, spec in ipairs(newParked) do util.add(allParked, spec) end
 
-    renderUnion('parkedPA', newParked, function(spec)
-      return util.assign(util.clone(spec), { ppq = spec.ppqL })
-    end)
+    renderUnion('parkedPA', newParked, util.clone)
   end
 
   -- CCs: a point event has no tail, so the Pass-A curve stands in on the target lane and
@@ -2113,15 +2093,16 @@ local function rebuildRegionPark(ccExisting, deferred, currentWindows, fxParked,
           for _, evt in ipairs(col.events) do
             if covered(evt) then   -- pre-filter (see the note pass): only covered ccs pay a parkSpec clone
               util.add(scan, { evt = evt, events = col.events,
-                spec = parkSpec(evt, { cc = cc, ppqL = evt.ppqL or evt.ppq }) })   -- cc pins the column key; ppqL coalesces a raw-sourced event
+                spec = parkSpec(evt, { cc = cc }) })   -- cc pins the column key; evType/chan/ppq ride the event
             end
           end
         end
       end
     end
-    -- A logical cc event from a parked spec, seated at ppq (realised onset on restore; ppqL for a render cell).
-    local function ccCell(spec, ppq)
-      return util.assign(util.clone(spec), { ppq = ppq })   -- spec carries evType/chan/cc/ppqL/val/shape
+    -- The mm-bound restore of a parked spec: raw onset, logical sidecar. Column and render cells
+    -- are the spec itself -- already logical.
+    local function ccWrite(spec, ppq)
+      return util.assign(util.clone(spec), { ppq = ppq, ppqL = spec.ppq })
     end
 
     local newParked, restores = reconcilePark(scan, priorByType.cc or {})
@@ -2129,8 +2110,8 @@ local function rebuildRegionPark(ccExisting, deferred, currentWindows, fxParked,
     -- Seat a token-less projection so the view shows the restored cc this frame; next rebuild
     -- re-reads the real token'd event from the take. The add rides the shared park commit.
     for _, spec in ipairs(restores) do
-      local ppq  = tm:fromLogical(spec.chan, spec.ppqL)   -- realised onset derived fresh (spec is logical-only)
-      local cell = ccCell(spec, ppq)
+      local ppq  = tm:fromLogical(spec.chan, spec.ppq)   -- realised onset derived fresh (the stash is logical)
+      local cell = ccWrite(spec, ppq)
       -- Fill collides on the same token; del-before-add (batch order) lands the authored value over
       -- it, and dropFillSeat keeps the fill reconcile from re-deleting it by that token.
       batch.del({ token = mm:tokenOf(cell) })
@@ -2139,8 +2120,8 @@ local function rebuildRegionPark(ccExisting, deferred, currentWindows, fxParked,
       local channel = channels[spec.chan]
       local col = channel.columns.ccs[spec.cc]
       if not col then col = { cc = spec.cc, events = {} }; channel.columns.ccs[spec.cc] = col end
-      util.add(col.events, ccCell(spec, ppq))
-      table.sort(col.events, function(a, b) return (a.ppqL or a.ppq) < (b.ppqL or b.ppq) end)
+      util.add(col.events, util.clone(spec))
+      sortByPPQ(col.events)
     end
 
     -- Render union: the parked authored cc stays the visible surface (the fill is hidden
@@ -2148,7 +2129,7 @@ local function rebuildRegionPark(ccExisting, deferred, currentWindows, fxParked,
     renderUnion('parkedCC', newParked, function(spec)
       local ccs = channels[spec.chan].columns.ccs
       ccs[spec.cc] = ccs[spec.cc] or { cc = spec.cc, events = {} }
-      return ccCell(spec, spec.ppqL)
+      return util.clone(spec)
     end)
   end
 
@@ -2187,8 +2168,8 @@ local function rebuildRegionPark(ccExisting, deferred, currentWindows, fxParked,
           dirtyChan(cc.chan)
           -- val: logical cents from mm's cents sidecar (restore maps back); a foreign pre-cents pb
           -- falls back to raw-derived cents (best-effort).
-          local spec = parkSpec(cc, { ppqL = cc.ppqL or cc.ppq,
-                                      val = cc.cents or rawToCents(cc.val) })   -- from mm-raw: evType/chan/shape/tension ride; rename cents->val
+          local spec = parkSpec(cc, { ppq = cc.ppqL or cc.ppq,
+                                      val = cc.cents or rawToCents(cc.val) })   -- from mm-raw: evType/chan/shape/tension ride; ppq flips logical, cents->val
           local pb = util.clone(cc); pb.token = mm:tokenOf(cc)
           util.add(scan, { evt = pb, spec = spec })
         end
@@ -2202,7 +2183,7 @@ local function rebuildRegionPark(ccExisting, deferred, currentWindows, fxParked,
     for _, spec in ipairs(restores) do
       dirtyChan(spec.chan)
       batch.add(util.assign(util.clone(spec),
-        { ppq = tm:fromLogical(spec.chan, spec.ppqL),
+        { ppq = tm:fromLogical(spec.chan, spec.ppq), ppqL = spec.ppq,
           cents = spec.val, val = centsToRaw(spec.val) }))   -- spec.val is cents; the wire wants raw + a cents sidecar
     end
 
@@ -2220,7 +2201,7 @@ local function rebuildRegionPark(ccExisting, deferred, currentWindows, fxParked,
 
     -- Render union for the view: the authored breakpoints stay visible in-column though off-take.
     renderUnion('parkedPb', newParked, function(spec)
-      return util.assign(util.clone(spec), { ppq = spec.ppqL, cents = spec.val })
+      return util.assign(util.clone(spec), { cents = spec.val })
     end)
   end
 
@@ -2279,8 +2260,8 @@ local function findNoteColumnForPitch(channel, pitch, ppq_pos, chanScratch)
   -- Parked note hosts left the take (off-take, silent); their PAs park with them but stay
   -- shown here, anchored to the host's lane -- rebuildPA re-projects them off-take.
   for _, cell in ipairs(channel.parked or {}) do
-    if cell.pitch == pitch and tm:fromLogical(channel.chan, cell.ppqL) <= ppq_pos
-       and tm:fromLogical(channel.chan, cell.endppqL) > ppq_pos then
+    if cell.pitch == pitch and tm:fromLogical(channel.chan, cell.ppq) <= ppq_pos
+       and tm:fromLogical(channel.chan, cell.endppqC) > ppq_pos then
       return notes[cell.lane], cell.lane
     end
   end
@@ -2317,12 +2298,10 @@ local function rebuildPA(scratch)
   for chan = 1, 16 do
     if dirtyChans[chan] then
       for _, cell in ipairs(channels[chan].parkedPA or {}) do
-        local ppq = tm:fromLogical(chan, cell.ppqL)
+        local ppq = tm:fromLogical(chan, cell.ppq)   -- raw: findNoteColumnForPitch is raw geometry
         local noteCol, lane = findNoteColumnForPitch(channels[chan], cell.pitch, ppq, scratch[chan])
         if noteCol then
-          local paCell = projectCC(cell, nil, { lane = lane, ppq = ppq })
-          projectEvent(paCell, chan)
-          util.add(noteCol.events, paCell)
+          util.add(noteCol.events, projectCC(cell, nil, { lane = lane }))   -- the cell is logical-born
           touched[chan] = true
         end
       end
@@ -2340,23 +2319,23 @@ local function computeFxWindows(unsortedChans)
   local takeLen = tm:length()
   for chan = 1, 16 do
     if unsortedChans[chan] then
-      for _, col in ipairs(channels[chan].columns.notes) do sortByPPQL(col.events) end
+      for _, col in ipairs(channels[chan].columns.notes) do sortNoteColumn(col.events) end
     end
     local takeLenL = tm:toLogical(chan, takeLen)
     for _, col in ipairs(channels[chan].columns.notes) do
       -- Chord-mates share an onset and so share a successor: hold each host open until an event with a
-      -- greater ppqL arrives, then clip them all against it. col.events is ppqL-ordered.
+      -- greater ppq arrives, then clip them all against it. col.events is ppq-ordered.
       local openHosts = {}
       for _, evt in ipairs(col.events) do
-        if evt.evType ~= 'pa' and evt.ppqL ~= nil then
-          if openHosts[1] and evt.ppqL > openHosts[1].ppqL then
-            for _, host in ipairs(openHosts) do fxWindow[host] = math.min(fxWindow[host], evt.ppqL) end
+        if evt.evType ~= 'pa' then
+          if openHosts[1] and evt.ppq > openHosts[1].ppq then
+            for _, host in ipairs(openHosts) do fxWindow[host] = math.min(fxWindow[host], evt.ppq) end
             openHosts = {}
           end
           if evt.fx then
             -- Take is the world: a tail past take end (paste / overshooting move) can't sound past it.
-            fxWindow[evt] = (evt.endppqL == nil or evt.endppqL == util.OPEN)
-                            and takeLenL or math.min(evt.endppqL, takeLenL)
+            fxWindow[evt] = (evt.endppq == nil or evt.endppq == util.OPEN)
+                            and takeLenL or math.min(evt.endppq, takeLenL)
             util.add(openHosts, evt)
           end
         end
@@ -2369,13 +2348,13 @@ end
 -- Fx expansion: fx-carrying notes / fx-regions -> derived notes, CCs;
 -- reconcile vs existing, note writes deferred to the tail walk. see design/note-macros-v2.md § Offline continuous realisation
 local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWindows, fxRegions)
-  -- Columns must be ppqL-ordered here (eachWindowNote / allocateRegionLanes / membersOf read col.events
+  -- Columns must be ppq-ordered here (eachWindowNote / allocateRegionLanes / membersOf read col.events
   -- directly); the computeFxWindows call immediately upstream sorted them and nothing since reorders.
 
   -- Region note-park windows: a parked cell inside one is region membership, not a note host.
-  local function noteParkCovered(chan, ppqL)
+  local function noteParkCovered(chan, ppq)
     for _, win in ipairs(currentWindows) do
-      if win.evType == 'note' and win.chan == chan and ppqL >= win.startppq and ppqL < win.endppq then
+      if win.evType == 'note' and win.chan == chan and ppq >= win.startppq and ppq < win.endppq then
         return true
       end
     end
@@ -2389,26 +2368,24 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
     if dirtyChans[chan] then
       for _, cc in mm:ccsRaw(chan) do
         if cc.evType == 'pb' and not cc.derived and cc.cents ~= nil then
-          util.bucket(authoredPbByChan, cc.chan, { ppqL = cc.ppqL or cc.ppq, cents = cc.cents, shape = cc.shape })
+          util.bucket(authoredPbByChan, cc.chan, { ppq = cc.ppqL or cc.ppq, cents = cc.cents, shape = cc.shape })
         end
       end
     end
   end
-  for _, list in pairs(authoredPbByChan) do
-    table.sort(list, function(a, b) return a.ppqL < b.ppqL end)
-  end
+  for _, list in pairs(authoredPbByChan) do sortByPPQ(list) end
 
   -- Absolute authored bases per channel (ppq-keyed, logical): parked events are authoritative in their
-  -- windows (dedup by ppqL), the on-take stream elsewhere. Seeds + the cross-chain fold read them.
+  -- windows (dedup by ppq), the on-take stream elsewhere. Seeds + the cross-chain fold read them.
   local function pbBaseFor(chan)
     local base, seen = {}, {}
     for _, cell in ipairs(channels[chan].parkedPb or {}) do
-      util.add(base, { ppq = cell.ppqL, val = cell.cents, shape = cell.shape or 'step', tension = cell.tension })
-      seen[cell.ppqL] = true
+      util.add(base, { ppq = cell.ppq, val = cell.cents, shape = cell.shape or 'step', tension = cell.tension })
+      seen[cell.ppq] = true
     end
     for _, point in ipairs(authoredPbByChan[chan] or {}) do
-      if not seen[point.ppqL] then
-        util.add(base, { ppq = point.ppqL, val = point.cents, shape = point.shape or 'step' })
+      if not seen[point.ppq] then
+        util.add(base, { ppq = point.ppq, val = point.cents, shape = point.shape or 'step' })
       end
     end
     sortByPPQ(base)
@@ -2417,14 +2394,13 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
   local function ccBasesFor(chan)
     local bases, seen = {}, {}
     for _, cell in ipairs(channels[chan].parkedCC or {}) do
-      util.bucket(bases, cell.cc, { ppq = cell.ppqL, val = cell.val, shape = cell.shape or 'step' })
-      seen[util.key(cell.cc, cell.ppqL)] = true
+      util.bucket(bases, cell.cc, { ppq = cell.ppq, val = cell.val, shape = cell.shape or 'step' })
+      seen[util.key(cell.cc, cell.ppq)] = true
     end
     for cc, col in pairs(channels[chan].columns.ccs) do
       for _, evt in ipairs(col.events) do
-        local ppqL = evt.ppqL or evt.ppq
-        if not seen[util.key(cc, ppqL)] then
-          util.bucket(bases, cc, { ppq = ppqL, val = evt.val, shape = evt.shape or 'step' })
+        if not seen[util.key(cc, evt.ppq)] then
+          util.bucket(bases, cc, { ppq = evt.ppq, val = evt.val, shape = evt.shape or 'step' })
         end
       end
     end
@@ -2449,10 +2425,10 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
       local byLane = {}
       for laneIdx, col in ipairs(channels[note.chan].columns.notes) do
         for _, evt in ipairs(col.events) do
-          if evt.evType ~= 'pa' and evt.ppqL ~= nil then util.bucket(byLane, laneIdx, evt) end
+          if evt.evType ~= 'pa' then util.bucket(byLane, laneIdx, evt) end
         end
       end
-      laneNextOf = strictNextMap(byLane, function(evt) return evt.ppqL end)   -- ppqL-ordered: computeFxWindows sorted col.events
+      laneNextOf = strictNextMap(byLane)   -- ppq-ordered: computeFxWindows sorted col.events
       laneNextByChan[note.chan] = laneNextOf
     end
     return laneNextOf[note]
@@ -2504,10 +2480,9 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
         else
           if #cur == 0 and target ~= 'pb' then
             local rest = producer.fx.rest or generators.ccDefaultRest[target] or 0
-            cur = { { ppqL = startL, val = rest, shape = 'step' } }
+            cur = { { ppq = startL, val = rest, shape = 'step' } }
           end
-          cur = asCurve(sumStreams(asPoints(cur), { asPoints(out.delta) },
-                                   { startL, endL }, { closed = true }))
+          cur = sumStreams(cur, { out.delta }, { startL, endL }, { closed = true })
         end
         owned[target] = true
         if target == 'pb' then stream.pb = cur else stream.ccs[target] = cur end
@@ -2555,9 +2530,9 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
           evType = 'note', chan = chan, lane = producer.lane, derived = producer.id,
           pitch = hit.pitch, vel = hit.vel, detune = hit.detune or 0,
           delay = producer.delay or 0, sample = producer.sample,
-          ppqL = hit.ppqL, endppqL = hit.endppqL,
-          ppq    = tm:fromLogical(chan, hit.ppqL,    producer.delayPpq),
-          endppq = tm:fromLogical(chan, hit.endppqL, producer.delayPpq),
+          ppqL = hit.ppq, endppqL = hit.endppq,
+          ppq    = tm:fromLogical(chan, hit.ppq,    producer.delayPpq),
+          endppq = tm:fromLogical(chan, hit.endppq, producer.delayPpq),
         })
       end
       if regionNotes then
@@ -2581,8 +2556,8 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
     -- applies the same bounds fxWindow would). A cell inside a region note-park window is region
     -- membership, not a host (own-fx suppressed -- the retained gap).
     for _, cell in ipairs(channels[chan].parked or {}) do
-      if cell.fx and not noteParkCovered(chan, cell.ppqL) then
-        runProducer(hostProducer(cell, cell.endppqL, cell.lane))
+      if cell.fx and not noteParkCovered(chan, cell.ppq) then
+        runProducer(hostProducer(soundingCell(cell), cell.endppqC, cell.lane))
       end
     end
 
@@ -2594,7 +2569,7 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
       if generators.parksNotes(region) then
         members = {}                             -- replace: derived notes stand in for the parked chord
         for _, cell in ipairs(channels[chan].parked or {}) do
-          if cell.ppqL >= startL and cell.ppqL < endL then util.add(members, cell) end
+          if cell.ppq >= startL and cell.ppq < endL then util.add(members, soundingCell(cell)) end
         end
       else
         members = membersOf(chan, startL, endL)  -- augment: members still sound
@@ -2674,7 +2649,7 @@ local function rebuildTails(noteLive, deferred, scratch)
     -- the symmetric partner of realiseParked's on-take bounds. Bound-only: never rewritten below.
     local parkedBounds = {}
     for _, cell in ipairs(channels[chan].parked or {}) do
-      util.add(parkedBounds, { ppq = tm:fromLogical(chan, cell.ppqL), ppqL = cell.ppqL,
+      util.add(parkedBounds, { ppq = tm:fromLogical(chan, cell.ppq), ppqL = cell.ppq,
                                lane = cell.lane, pitch = cell.pitch })
     end
 
@@ -3193,7 +3168,7 @@ local function rebuildPipeline(didReload)
     for _, col in ipairs(channels[chan].columns.notes) do
       for _, host in ipairs(col.events) do
         if host.fx and host.evType ~= 'pa' and hostWindows[host] then
-          util.add(parkRegions, { chan = chan, startppq = host.ppqL, endppq = hostWindows[host],
+          util.add(parkRegions, { chan = chan, startppq = host.ppq, endppq = hostWindows[host],
                                   fx = host.fx, noteHost = true })
         end
       end
@@ -3203,9 +3178,9 @@ local function rebuildPipeline(didReload)
   -- register on any surviving fx, not just parksNotes -- see § Route-by-window: mixed-kind un-parking.
   for _, spec in ipairs(sources.fxParked or {}) do
     if spec.evType == 'note' and spec.fx then
-      local endL = (spec.endppqL == nil or spec.endppqL == util.OPEN)
-                   and tm:toLogical(spec.chan, tm:length()) or spec.endppqL
-      util.add(parkRegions, { chan = spec.chan, startppq = spec.ppqL, endppq = endL,
+      local endL = (spec.endppq == nil or spec.endppq == util.OPEN)
+                   and tm:toLogical(spec.chan, tm:length()) or spec.endppq
+      util.add(parkRegions, { chan = spec.chan, startppq = spec.ppq, endppq = endL,
                               fx = spec.fx, noteHost = true })
     end
   end

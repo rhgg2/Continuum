@@ -67,7 +67,7 @@ local function build(tm, gm)
 
   ----- Groove engine: retrig pulse (ch1) + ostinato bass (ch4), bars 8-31
   local ostPat = { kind='notes', lengthPpq=Q,
-                   specs={ { ppqL=0, endppqL=4096, vel=96 }, { ppqL=6144, endppqL=9216, vel=66 } } }
+                   specs={ { ppq=0, endppq=4096, vel=96 }, { ppq=6144, endppq=9216, vel=66 } } }
   local ostinato = {{ kind='ostinato', pattern=ostPat }}
   for i = 8, 31 do
     local ci, at = (i % 4) + 1, i * BAR
@@ -160,7 +160,7 @@ local function build(tm, gm)
   for _, e in ipairs(tm:getChannel(15).columns.notes[1].events) do
     subject[#subject+1] = e
   end
-  table.sort(subject, function(a, b) return a.ppqL < b.ppqL end)
+  table.sort(subject, function(a, b) return a.ppq < b.ppq end)
   local rect = { ppq = 24*BAR, dur = 2*BAR, chanLo = 15, streams = { [0] = { ['note:1'] = true } } }
   local gid = gm:markGroup(subject, rect)
   for _, a in ipairs({ { ppq=25*BAR, chan=16 }, { ppq=27*BAR, chan=15 }, { ppq=29*BAR, chan=16 } }) do

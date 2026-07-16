@@ -170,7 +170,7 @@ return {
       h.tm:addEvent({ evType = 'cc', ppq = 0, chan = 1, cc = 74, val = 30 }); h.tm:flush()
       generators.kinds.ccRep = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 100, shape = 'step' },
+          { ppq = host.window[1], val = 100, shape = 'step' },
         } } end,
         mode = 'replace', dest = 74, label = 'CcRep', defaults = {}, fields = {},
       }
@@ -366,8 +366,7 @@ return {
       local stash = h.ds:get('fxParked') or {}
       t.eq(#stash, 1, 'the typed note went to the parked stash')
       t.eq(stash[1].pitch, 60, 'with the typed pitch')
-      t.eq(stash[1].ppqL, 0, 'logical onset captured from the cursor row')
-      t.eq(stash[1].ppq, nil, 'no realised ppq -- the stash is logical-only')
+      t.eq(stash[1].ppq, 0, 'logical onset captured from the cursor row')
       t.truthy(tostring(stash[1].uuid):match('^fxp%-'), 'a parked uuid was minted')
       t.deepEq(authoredPitches(h), {}, 'nothing entered the take')
     end,
@@ -398,7 +397,7 @@ return {
       h.tm:addEvent({ evType = 'cc', ppq = 0, chan = 1, cc = 74, val = 30 }); h.tm:flush()
       generators.kinds.ccRep = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 100, shape = 'step' },
+          { ppq = host.window[1], val = 100, shape = 'step' },
         } } end,
         mode = 'replace', dest = 74, label = 'CcRep', defaults = {}, fields = {},
       }
@@ -434,8 +433,8 @@ return {
       h.tm:addEvent({ evType = 'pb', ppq = 0, chan = 1, val = 40 }); h.tm:flush()
       generators.kinds.pbRep = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 50, shape = 'step' },
-          { ppqL = host.window[2], val = 0,  shape = 'step' },
+          { ppq = host.window[1], val = 50, shape = 'step' },
+          { ppq = host.window[2], val = 0,  shape = 'step' },
         } } end,
         mode = 'replace', dest = 'pb', label = 'PbRep', defaults = {}, fields = {},
       }
@@ -806,7 +805,7 @@ return {
       h.cmgr:invoke('noteOff')
       local stash = h.ds:get('fxParked') or {}
       t.eq(#stash, 1, 'still one parked note')
-      t.eq(stash[1].endppqL, 120, 'tail shortened to the cursor row')
+      t.eq(stash[1].endppq, 120, 'tail shortened to the cursor row')
       t.deepEq(authoredPitches(h), {}, 'still parked, not on take')
     end,
   },
@@ -823,7 +822,7 @@ return {
       h.cmgr:invoke('nudgeForward')           -- row 0 -> row 1 (ppq 60), still in window
       local stash = h.ds:get('fxParked') or {}
       t.eq(#stash, 1, 'still one parked note')
-      t.eq(stash[1].ppqL, 60, 'onset moved to ppq 60 in the stash')
+      t.eq(stash[1].ppq, 60, 'onset moved to ppq 60 in the stash')
       t.deepEq(authoredPitches(h), {}, 'still parked, not on take')
     end,
   },

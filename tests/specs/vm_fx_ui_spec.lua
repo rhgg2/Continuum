@@ -298,9 +298,9 @@ return {
       local h = harness.mk()
       generators.kinds.ccCap = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 0,  shape = 'step' },
-          { ppqL = 60,             val = 20, shape = 'step' },
-          { ppqL = host.window[2], val = 0,  shape = 'step' },
+          { ppq = host.window[1], val = 0,  shape = 'step' },
+          { ppq = 60,             val = 20, shape = 'step' },
+          { ppq = host.window[2], val = 0,  shape = 'step' },
         } } end,
         mode = 'augment', dest = 10, label = 'CcCap', defaults = {}, fields = {},
       }

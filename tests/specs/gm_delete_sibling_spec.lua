@@ -83,7 +83,7 @@ return {
       -- create has no birth ceiling -- tm derives its take-length tail).
       local A = note(0, 60)
       local gid = gm:markGroup({ A }, rect())
-      local B = note(240, 62); B.endppqL = util.OPEN
+      local B = note(240, 62); B.endppq = util.OPEN
       gm:addEvent(B); tm:flush()                           -- create B: infinite tail
       gm:newInstance(gid, { ppq = 960, chan = 1 })       -- instance 2
       tm:flush()

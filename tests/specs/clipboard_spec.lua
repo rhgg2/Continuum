@@ -41,7 +41,7 @@ return {
       -- identity from the destination column, REAPER bookkeeping mustn't
       -- ride. If any of these leak into the clip, paste will overwrite
       -- destination identity with stale source values.
-      for _, k in ipairs{'ppq','endppq','ppqL','endppqL','chan','frame','lane','loc','idx','uuid','uuidIdx','token'} do
+      for _, k in ipairs{'ppq','endppq','chan','frame','lane','loc','idx','uuid','uuidIdx','token'} do
         t.eq(e[k], nil, k .. ' not carried in clip event')
       end
     end,

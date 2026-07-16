@@ -5,7 +5,7 @@ local util       = require('util')
 local generators = require('generators')
 
 -- depth 30c, period 1/4 QN: at res 240 one cycle = 60 ticks; sine extrema at
--- ppqL 15 (peak) / 45 (trough); stream anchored 0 at both window ends.
+-- ppq 15 (peak) / 45 (trough); stream anchored 0 at both window ends.
 local vib30 = { { kind = 'vibrato', period = { 1, 4 }, depth = 30, onset = 0 } }
 
 local function centsToRaw(cents, pbRange)
@@ -482,9 +482,8 @@ return {
       t.eq(parked[1].chan, 1, 'the render cell knows its channel (the backing addresses by it)')
       t.truthy(parked[1].uuid, 'the render cell carries the durable note uuid')
       local stash = h.ds:get('fxParked')
-      t.eq(stash[1].ppqL, 0, 'the stash keeps the logical onset')
-      t.eq(stash[1].ppq, nil, 'the stash drops realised ppq -- logical-only')
-      t.eq(stash[1].endppq, nil, 'the stash drops realised endppq -- logical-only')
+      t.eq(stash[1].ppq, 0, 'the stash keeps the logical onset')
+      t.eq(stash[1].endppq, 240, 'and the authored ceiling -- both in the logical frame')
       t.eq(stash[1].uuid, parked[1].uuid, 'stash and render cell share the durable uuid')
     end,
   },
@@ -506,13 +505,13 @@ return {
   },
 
   {
-    name = 'park identity (cc): render cell carries chan+ppqL; the fxParkedCC stash is logical-only',
+    name = 'park identity (cc): render cell carries chan+ppq; the fxParkedCC stash is logical-only',
     run = function(harness)
       local h = harness.mk()
       h.tm:addEvent({ evType = 'cc', ppq = 60, chan = 1, cc = 74, val = 30 }); h.tm:flush()
       generators.kinds.ccRep = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 100, shape = 'step' },
+          { ppq = host.window[1], val = 100, shape = 'step' },
         } } end,
         mode = 'replace', dest = 74, label = 'CcRep', defaults = {}, fields = {},
       }
@@ -523,10 +522,9 @@ return {
       local parked = h.tm:getChannel(1).parkedCC
       t.eq(#parked, 1, 'the covered cc parks')
       t.eq(parked[1].chan, 1, 'the render cell knows its channel')
-      t.eq(parked[1].ppqL, 60, 'the render cell carries the logical onset (the backing key)')
+      t.eq(parked[1].ppq, 60, 'the render cell carries the logical onset (the backing key)')
       local stash = stashOfType(h, 'cc')
-      t.eq(stash[1].ppqL, 60, 'the stash keeps the logical onset')
-      t.eq(stash[1].ppq, nil, 'the stash drops realised ppq -- logical-only')
+      t.eq(stash[1].ppq, 60, 'the stash keeps the logical onset')
     end,
   },
 
@@ -566,7 +564,7 @@ return {
       local h = harness.mk()
       addNote(h, { pitch = 60, lane = 1 })
       injectArp(h)
-      h.tm:addParked({ evType = 'note', chan = 1, lane = 1, ppqL = 120, endppqL = 240,
+      h.tm:addParked({ evType = 'note', chan = 1, lane = 1, ppq = 120, endppq = 240,
                        pitch = 72, vel = 100, detune = 0, delay = 0 })
       h.tm:flush()
       local stash = h.ds:get('fxParked')
@@ -575,7 +573,7 @@ return {
       for _, s in ipairs(stash) do if s.pitch == 72 then typed = s end end
       t.truthy(typed, 'the typed note is stashed')
       t.eq(typed.uuid, 'fxp-1', 'a window-authored parked note mints an fxp uuid')
-      t.eq(typed.ppq, nil, 'the stashed spec stays logical-only')
+      t.eq(typed.ppq, 120, 'the stashed spec keeps the logical onset it was typed at')
       t.deepEq(authoredPitches(h), {}, 'the typed note never enters the take -- it is parked')
       local pitches = {}
       for _, m in ipairs(h.tm:getChannel(1).parked) do pitches[#pitches + 1] = m.pitch end
@@ -591,7 +589,7 @@ return {
       h.tm:addEvent({ evType = 'cc', ppq = 60, chan = 1, cc = 74, val = 30 }); h.tm:flush()
       generators.kinds.ccRep = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 100, shape = 'step' },
+          { ppq = host.window[1], val = 100, shape = 'step' },
         } } end,
         mode = 'replace', dest = 74, label = 'CcRep', defaults = {}, fields = {},
       }
@@ -624,8 +622,8 @@ return {
       generators.kinds.ccRep = {
         expand = function(host)
           local delta = {}
-          for ppqL = host.window[1], host.window[2] - 1, 60 do
-            delta[#delta + 1] = { ppqL = ppqL, val = 100, shape = 'step' }
+          for ppq = host.window[1], host.window[2] - 1, 60 do
+            delta[#delta + 1] = { ppq = ppq, val = 100, shape = 'step' }
           end
           return { notes = {}, delta = delta }
         end,
@@ -636,7 +634,7 @@ return {
       h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
                                    fx = { { kind = 'ccRep' } } } })
       local grown = {}
-      for _, s in ipairs(stashOfType(h, 'cc')) do grown[s.ppqL] = s.val end
+      for _, s in ipairs(stashOfType(h, 'cc')) do grown[s.ppq] = s.val end
 
       -- Shrink so cc74@180 falls outside (restored); cc74@60 stays covered (parked).
       h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 120,
@@ -652,7 +650,7 @@ return {
 
       local stillParked = stashOfType(h, 'cc')
       t.eq(#stillParked, 1, 'cc74@60 stays parked under the shrunk window')
-      t.eq(stillParked[1].ppqL, 60, 'the still-covered cc is the one left parked')
+      t.eq(stillParked[1].ppq, 60, 'the still-covered cc is the one left parked')
     end,
   },
 
@@ -732,7 +730,7 @@ return {
     run = function(harness)
       local h = harness.mk()
       -- A covered note (so a PA can ride its column) plus authored cc / channel-AT / poly-AT in
-      -- the window. Identity swing in the harness, so ppq == ppqL.
+      -- the window. Identity swing in the harness, so raw == logical.
       addNote(h, { pitch = 60, ppq = 0, endppq = 240, lane = 1 })
       h.tm:addEvent({ evType = 'cc', ppq = 60,  chan = 1, cc = 74, val = 50 })
       h.tm:addEvent({ evType = 'at', ppq = 180, chan = 1, val = 33 })
@@ -751,12 +749,12 @@ return {
       generators.kinds.capture = nil   -- restore before asserting (generators is a shared module)
 
       t.truthy(captured, 'the capture kind ran and recorded its host')
-      t.deepEq(captured.pas, { { ppqL = 120, pitch = 60, vel = 77 } }, 'the PA rides into host.pas')
-      t.deepEq(captured.ccs[74], { { ppqL = 0,   val = 50, shape = 'step' },
-                                   { ppqL = 60,  val = 50, shape = 'step' },
-                                   { ppqL = 240, val = 50, shape = 'step' } },
+      t.deepEq(captured.pas, { { ppq = 120, pitch = 60, vel = 77 } }, 'the PA rides into host.pas')
+      t.deepEq(captured.ccs[74], { { ppq = 0,   val = 50, shape = 'step' },
+                                   { ppq = 60,  val = 50, shape = 'step' },
+                                   { ppq = 240, val = 50, shape = 'step' } },
         'authored cc 74 buckets into host.ccs as an absolute curve with entering/closing edge values')
-      t.deepEq(captured.ats, { { ppqL = 180, val = 33 } }, 'channel aftertouch into host.ats')
+      t.deepEq(captured.ats, { { ppq = 180, val = 33 } }, 'channel aftertouch into host.ats')
       t.deepEq(field(captured.notes, 'pitch'), { 60 }, 'the covered note is the membership (host.notes)')
     end,
   },
@@ -783,8 +781,8 @@ return {
       t.truthy(captured, 'the capture kind ran')
       local byPitch = {}
       for _, n in ipairs(captured.notes) do byPitch[n.pitch] = n end
-      t.eq(byPitch[60].endppqL, 120, 'the OPEN member clips to the next same-lane onset')
-      t.eq(byPitch[67].endppqL, 240, 'the trailing member fills to the window end')
+      t.eq(byPitch[60].endppq, 120, 'the OPEN member clips to the next same-lane onset')
+      t.eq(byPitch[67].endppq, 240, 'the trailing member fills to the window end')
     end,
   },
 
@@ -809,9 +807,9 @@ return {
       generators.kinds.capture = nil
 
       t.truthy(captured, 'the capture kind ran and recorded its host')
-      t.deepEq(captured.pb, { { ppqL = 0,   val = 50, shape = 'step' },
-                              { ppqL = 60,  val = 50, shape = 'step' },
-                              { ppqL = 240, val = 50, shape = 'step' } },
+      t.deepEq(captured.pb, { { ppq = 0,   val = 50, shape = 'step' },
+                              { ppq = 60,  val = 50, shape = 'step' },
+                              { ppq = 240, val = 50, shape = 'step' } },
         'the authored pb rides into host.pb as an absolute cents curve; the absorber fake is excluded')
     end,
   },
@@ -831,9 +829,9 @@ return {
       -- A spec-only replace kind: an absolute +50c step curve returning to 0c at the window end.
       generators.kinds.capRep = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 50, shape = 'step' },
-          { ppqL = 60,             val = 50, shape = 'step' },
-          { ppqL = host.window[2], val = 0,  shape = 'step' },
+          { ppq = host.window[1], val = 50, shape = 'step' },
+          { ppq = 60,             val = 50, shape = 'step' },
+          { ppq = host.window[2], val = 0,  shape = 'step' },
         } } end,
         mode = 'replace', dest = 'pb', label = 'CapRep', defaults = {}, fields = {},
       }
@@ -850,7 +848,7 @@ return {
       t.eq(derivedPb(h, 1, 60).val,  centsToRaw(50), 'a derived seat carries the curve mid-window')
       t.eq(derivedPb(h, 1, 240).val, 0,              'the terminal seat re-centres at the window end')
       local at120
-      for _, p in ipairs(h.tm:getChannel(1).parkedPb) do if p.ppqL == 120 then at120 = p end end
+      for _, p in ipairs(h.tm:getChannel(1).parkedPb) do if p.ppq == 120 then at120 = p end end
       t.eq(at120 and at120.val, 40, 'the authored 40c stays visible via the parkedPb render union')
     end,
   },
@@ -862,8 +860,8 @@ return {
       generators.kinds.capRep = {
         expand = function(host)
           return { notes = {}, delta = {
-            { ppqL = host.window[1], val = 50, shape = 'step' },
-            { ppqL = host.window[2], val = 0,  shape = 'step' },
+            { ppq = host.window[1], val = 50, shape = 'step' },
+            { ppq = host.window[2], val = 0,  shape = 'step' },
           } }
         end,
         mode = 'replace', dest = 'pb', label = 'CapRep', defaults = {}, fields = {},
@@ -887,16 +885,16 @@ return {
       -- capRep replaces the pb channel with a flat 50c curve; bump augments +20c over [60,120).
       generators.kinds.capRep = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 50, shape = 'step' },
-          { ppqL = host.window[2], val = 0,  shape = 'step' },
+          { ppq = host.window[1], val = 50, shape = 'step' },
+          { ppq = host.window[2], val = 0,  shape = 'step' },
         } } end,
         mode = 'replace', dest = 'pb', label = 'CapRep', defaults = {}, fields = {},
       }
       generators.kinds.bump = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 0,  shape = 'step' },
-          { ppqL = 60,             val = 20, shape = 'step' },
-          { ppqL = 120,            val = 0,  shape = 'step' },
+          { ppq = host.window[1], val = 0,  shape = 'step' },
+          { ppq = 60,             val = 20, shape = 'step' },
+          { ppq = 120,            val = 0,  shape = 'step' },
         } } end,
         mode = 'augment', dest = 'pb', label = 'Bump', defaults = {}, fields = {},
       }
@@ -918,16 +916,16 @@ return {
       local h = harness.mk()
       generators.kinds.bump = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 0,  shape = 'step' },
-          { ppqL = 60,             val = 20, shape = 'step' },
-          { ppqL = 120,            val = 0,  shape = 'step' },
+          { ppq = host.window[1], val = 0,  shape = 'step' },
+          { ppq = 60,             val = 20, shape = 'step' },
+          { ppq = 120,            val = 0,  shape = 'step' },
         } } end,
         mode = 'augment', dest = 'pb', label = 'Bump', defaults = {}, fields = {},
       }
       generators.kinds.capRep = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 50, shape = 'step' },
-          { ppqL = host.window[2], val = 0,  shape = 'step' },
+          { ppq = host.window[1], val = 50, shape = 'step' },
+          { ppq = host.window[2], val = 0,  shape = 'step' },
         } } end,
         mode = 'replace', dest = 'pb', label = 'CapRep', defaults = {}, fields = {},
       }
@@ -950,15 +948,15 @@ return {
       local h = harness.mk()
       generators.kinds.capA = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 30, shape = 'step' },
-          { ppqL = host.window[2], val = 0,  shape = 'step' },
+          { ppq = host.window[1], val = 30, shape = 'step' },
+          { ppq = host.window[2], val = 0,  shape = 'step' },
         } } end,
         mode = 'replace', dest = 'pb', label = 'CapA', defaults = {}, fields = {},
       }
       generators.kinds.capB = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 60, shape = 'step' },
-          { ppqL = host.window[2], val = 0,  shape = 'step' },
+          { ppq = host.window[1], val = 60, shape = 'step' },
+          { ppq = host.window[2], val = 0,  shape = 'step' },
         } } end,
         mode = 'replace', dest = 'pb', label = 'CapB', defaults = {}, fields = {},
       }
@@ -980,16 +978,16 @@ return {
       local h = harness.mk()
       generators.kinds.bump = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 0,  shape = 'step' },
-          { ppqL = 60,             val = 20, shape = 'step' },
-          { ppqL = 120,            val = 0,  shape = 'step' },
+          { ppq = host.window[1], val = 0,  shape = 'step' },
+          { ppq = 60,             val = 20, shape = 'step' },
+          { ppq = 120,            val = 0,  shape = 'step' },
         } } end,
         mode = 'augment', dest = 'pb', label = 'Bump', defaults = {}, fields = {},
       }
       generators.kinds.capRep = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 50, shape = 'step' },
-          { ppqL = host.window[2], val = 0,  shape = 'step' },
+          { ppq = host.window[1], val = 50, shape = 'step' },
+          { ppq = host.window[2], val = 0,  shape = 'step' },
         } } end,
         mode = 'replace', dest = 'pb', label = 'CapRep', defaults = {}, fields = {},
       }
@@ -1014,15 +1012,15 @@ return {
       -- tail [240,360) must survive at 30c, not be wiped by r2's whole curve. see design/note-macros-v2.md § The fx chain
       generators.kinds.capA = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 30, shape = 'step' },
-          { ppqL = host.window[2], val = 0,  shape = 'step' },
+          { ppq = host.window[1], val = 30, shape = 'step' },
+          { ppq = host.window[2], val = 0,  shape = 'step' },
         } } end,
         mode = 'replace', dest = 'pb', label = 'CapA', defaults = {}, fields = {},
       }
       generators.kinds.capB = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 60, shape = 'step' },
-          { ppqL = host.window[2], val = 0,  shape = 'step' },
+          { ppq = host.window[1], val = 60, shape = 'step' },
+          { ppq = host.window[2], val = 0,  shape = 'step' },
         } } end,
         mode = 'replace', dest = 'pb', label = 'CapB', defaults = {}, fields = {},
       }
@@ -1046,15 +1044,15 @@ return {
       local h = harness.mk()
       generators.kinds.ccA = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 30, shape = 'step' },
-          { ppqL = host.window[2], val = 0,  shape = 'step' },
+          { ppq = host.window[1], val = 30, shape = 'step' },
+          { ppq = host.window[2], val = 0,  shape = 'step' },
         } } end,
         mode = 'replace', dest = 10, label = 'CcA', defaults = {}, fields = {},
       }
       generators.kinds.ccB = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 90, shape = 'step' },
-          { ppqL = host.window[2], val = 0,  shape = 'step' },
+          { ppq = host.window[1], val = 90, shape = 'step' },
+          { ppq = host.window[2], val = 0,  shape = 'step' },
         } } end,
         mode = 'replace', dest = 10, label = 'CcB', defaults = {}, fields = {},
       }
@@ -1078,17 +1076,17 @@ return {
       -- exclusive tail carries only its own delta (base rest 64). see design/note-macros-v2.md § The fx chain
       generators.kinds.ccA = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 0,  shape = 'step' },
-          { ppqL = 60,             val = 40, shape = 'step' },
-          { ppqL = host.window[2], val = 0,  shape = 'step' },
+          { ppq = host.window[1], val = 0,  shape = 'step' },
+          { ppq = 60,             val = 40, shape = 'step' },
+          { ppq = host.window[2], val = 0,  shape = 'step' },
         } } end,
         mode = 'augment', dest = 10, label = 'CcA', defaults = {}, fields = {},
       }
       generators.kinds.ccB = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 0,  shape = 'step' },
-          { ppqL = 180,            val = 10, shape = 'step' },
-          { ppqL = host.window[2], val = 0,  shape = 'step' },
+          { ppq = host.window[1], val = 0,  shape = 'step' },
+          { ppq = 180,            val = 10, shape = 'step' },
+          { ppq = host.window[2], val = 0,  shape = 'step' },
         } } end,
         mode = 'augment', dest = 10, label = 'CcB', defaults = {}, fields = {},
       }
@@ -1113,15 +1111,15 @@ return {
       -- pin that the reconcile/token layer matches them across a steady-state rebuild (G4 for sub-splits).
       generators.kinds.capA = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 30, shape = 'step' },
-          { ppqL = host.window[2], val = 0,  shape = 'step' },
+          { ppq = host.window[1], val = 30, shape = 'step' },
+          { ppq = host.window[2], val = 0,  shape = 'step' },
         } } end,
         mode = 'replace', dest = 'pb', label = 'CapA', defaults = {}, fields = {},
       }
       generators.kinds.capB = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 60, shape = 'step' },
-          { ppqL = host.window[2], val = 0,  shape = 'step' },
+          { ppq = host.window[1], val = 60, shape = 'step' },
+          { ppq = host.window[2], val = 0,  shape = 'step' },
         } } end,
         mode = 'replace', dest = 'pb', label = 'CapB', defaults = {}, fields = {},
       }
@@ -1164,8 +1162,8 @@ return {
 
       generators.kinds.capRep = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 30, shape = 'step' },
-          { ppqL = host.window[2], val = 0,  shape = 'step' },
+          { ppq = host.window[1], val = 30, shape = 'step' },
+          { ppq = host.window[2], val = 0,  shape = 'step' },
         } } end,
         mode = 'replace', dest = 'pb', label = 'CapRep', defaults = {}, fields = {},
       }
@@ -1190,8 +1188,8 @@ return {
       h.tm:addEvent({ evType = 'pb', ppq = 120, chan = 1, val = 40 }); h.tm:flush()
       generators.kinds.capRep = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 50, shape = 'step' },
-          { ppqL = host.window[2], val = 0,  shape = 'step' },
+          { ppq = host.window[1], val = 50, shape = 'step' },
+          { ppq = host.window[2], val = 0,  shape = 'step' },
         } } end,
         mode = 'replace', dest = 'pb', label = 'CapRep', defaults = {}, fields = {},
       }
@@ -1223,8 +1221,8 @@ return {
       -- segment densifies to a linear polyline on the CCINTERP grid (step 8 at res 240 / interp 32).
       generators.kinds.capRep = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 0,  shape = 'slow' },
-          { ppqL = host.window[2], val = 60, shape = 'slow' },
+          { ppq = host.window[1], val = 0,  shape = 'slow' },
+          { ppq = host.window[2], val = 60, shape = 'slow' },
         } } end,
         mode = 'replace', dest = 'pb', label = 'CapRep', defaults = {}, fields = {},
       }
@@ -1261,7 +1259,7 @@ return {
         expand = function(host)
           local delta, span = {}, host.window[2] - host.window[1]
           for i = 0, 12 do
-            delta[#delta + 1] = { ppqL = host.window[1] + span * i // 12,
+            delta[#delta + 1] = { ppq = host.window[1] + span * i // 12,
                                   val = (i % 2 == 0) and 40 or -40, shape = 'step' }
           end
           return { notes = {}, delta = delta }
@@ -1291,7 +1289,7 @@ return {
         expand = function(host)
           local delta, span = {}, host.window[2] - host.window[1]
           for i = 0, 12 do
-            delta[#delta + 1] = { ppqL = host.window[1] + span * i // 12,
+            delta[#delta + 1] = { ppq = host.window[1] + span * i // 12,
                                   val = (i % 2 == 0) and 40 or -40, shape = 'step' }
           end
           return { notes = {}, delta = delta }
@@ -1331,8 +1329,8 @@ return {
 
       generators.kinds.ccRep = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 100, shape = 'step' },
-          { ppqL = 120,            val = 20,  shape = 'step' },
+          { ppq = host.window[1], val = 100, shape = 'step' },
+          { ppq = 120,            val = 20,  shape = 'step' },
         } } end,
         mode = 'replace', dest = 74, label = 'CcRep', defaults = {}, fields = {},
       }
@@ -1357,7 +1355,7 @@ return {
       h.tm:addEvent({ evType = 'cc', ppq = 60, chan = 1, cc = 74, val = 30 }); h.tm:flush()
       generators.kinds.ccRep = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 100, shape = 'step' },
+          { ppq = host.window[1], val = 100, shape = 'step' },
         } } end,
         mode = 'replace', dest = 74, label = 'CcRep', defaults = {}, fields = {},
       }
@@ -1386,8 +1384,8 @@ return {
       local h = harness.mk()
       generators.kinds.ccRep = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 100, shape = 'step' },
-          { ppqL = 120,            val = 20,  shape = 'step' },
+          { ppq = host.window[1], val = 100, shape = 'step' },
+          { ppq = 120,            val = 20,  shape = 'step' },
         } } end,
         mode = 'replace', dest = 74, label = 'CcRep', defaults = {}, fields = {},
       }
@@ -1417,7 +1415,7 @@ return {
       generators.kinds.ccDense = {
         expand = function()
           local d = {}
-          for i = 0, 11 do d[#d + 1] = { ppqL = i * 20, val = i * 8, shape = 'linear' } end
+          for i = 0, 11 do d[#d + 1] = { ppq = i * 20, val = i * 8, shape = 'linear' } end
           return { notes = {}, delta = d }
         end,
         mode = 'replace', dest = 74, label = 'CcDense', defaults = {}, fields = {},
@@ -1442,9 +1440,9 @@ return {
       local h = harness.mk()
       generators.kinds.ccCap = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 0,  shape = 'step' },
-          { ppqL = 60,             val = 30, shape = 'step' },
-          { ppqL = host.window[2], val = 0,  shape = 'step' },
+          { ppq = host.window[1], val = 0,  shape = 'step' },
+          { ppq = 60,             val = 30, shape = 'step' },
+          { ppq = host.window[2], val = 0,  shape = 'step' },
         } } end,
         mode = 'augment', dest = 10, label = 'CcCap', defaults = {}, fields = {},   -- pan, default rest 64
       }
@@ -1469,9 +1467,9 @@ return {
       h.tm:addEvent({ evType = 'cc', ppq = 0, chan = 1, cc = 10, val = 20 }); h.tm:flush()
       generators.kinds.ccCap = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 0,  shape = 'step' },
-          { ppqL = 60,             val = 30, shape = 'step' },
-          { ppqL = host.window[2], val = 0,  shape = 'step' },
+          { ppq = host.window[1], val = 0,  shape = 'step' },
+          { ppq = 60,             val = 30, shape = 'step' },
+          { ppq = host.window[2], val = 0,  shape = 'step' },
         } } end,
         mode = 'augment', dest = 10, label = 'CcCap', defaults = {}, fields = {},
       }
@@ -1492,17 +1490,17 @@ return {
       local h = harness.mk()
       generators.kinds.ccA = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 0,  shape = 'step' },
-          { ppqL = 60,             val = 40, shape = 'step' },
-          { ppqL = host.window[2], val = 0,  shape = 'step' },
+          { ppq = host.window[1], val = 0,  shape = 'step' },
+          { ppq = 60,             val = 40, shape = 'step' },
+          { ppq = host.window[2], val = 0,  shape = 'step' },
         } } end,
         mode = 'augment', dest = 10, label = 'CcA', defaults = {}, fields = {},
       }
       generators.kinds.ccB = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 0,  shape = 'step' },
-          { ppqL = 60,             val = 10, shape = 'step' },
-          { ppqL = host.window[2], val = 0,  shape = 'step' },
+          { ppq = host.window[1], val = 0,  shape = 'step' },
+          { ppq = 60,             val = 10, shape = 'step' },
+          { ppq = host.window[2], val = 0,  shape = 'step' },
         } } end,
         mode = 'augment', dest = 10, label = 'CcB', defaults = {}, fields = {},
       }
@@ -1524,9 +1522,9 @@ return {
       local h = harness.mk()
       generators.kinds.ccCap = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 0,  shape = 'step' },
-          { ppqL = 60,             val = 10, shape = 'step' },
-          { ppqL = host.window[2], val = 0,  shape = 'step' },
+          { ppq = host.window[1], val = 0,  shape = 'step' },
+          { ppq = 60,             val = 10, shape = 'step' },
+          { ppq = host.window[2], val = 0,  shape = 'step' },
         } } end,
         mode = 'augment', dest = 10, label = 'CcCap', defaults = {}, fields = {},   -- pan, default rest 64
       }
@@ -1546,9 +1544,9 @@ return {
       local h = harness.mk()
       generators.kinds.ccCap = {
         expand = function(host) return { notes = {}, delta = {
-          { ppqL = host.window[1], val = 0,  shape = 'step' },
-          { ppqL = 60,             val = 25, shape = 'step' },
-          { ppqL = host.window[2], val = 0,  shape = 'step' },
+          { ppq = host.window[1], val = 0,  shape = 'step' },
+          { ppq = 60,             val = 25, shape = 'step' },
+          { ppq = host.window[2], val = 0,  shape = 'step' },
         } } end,
         mode = 'augment', dest = 10, label = 'CcCap', defaults = {}, fields = {},
       }
@@ -1679,8 +1677,8 @@ return {
           return a.val < b.val
         end)
         local parked = {}
-        for _, s in ipairs(stashOfType(h, 'cc')) do parked[#parked + 1] = { ppqL = s.ppqL, val = s.val } end
-        table.sort(parked, function(a, b) return a.ppqL < b.ppqL end)
+        for _, s in ipairs(stashOfType(h, 'cc')) do parked[#parked + 1] = { ppq = s.ppq, val = s.val } end
+        table.sort(parked, function(a, b) return a.ppq < b.ppq end)
         return { seats = seats, parked = parked }
       end
       local baseline = ccFingerprint()

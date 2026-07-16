@@ -61,8 +61,8 @@ local function notesBody()
   return {
     kind = 'notes', lengthPpq = 960, root = 60,
     specs = {
-      { lane = 1, ppqL = 0,   endppqL = 240, pitch = 60, vel = 100, detune = 0, delay = 0 },
-      { lane = 1, ppqL = 240, endppqL = 480, pitch = 64, vel = 100, detune = 0, delay = 0 },
+      { lane = 1, ppq = 0,   endppq = 240, pitch = 60, vel = 100, detune = 0, delay = 0 },
+      { lane = 1, ppq = 240, endppq = 480, pitch = 64, vel = 100, detune = 0, delay = 0 },
     },
   }
 end
@@ -72,8 +72,8 @@ local function openNotesBody()
   return {
     kind = 'notes', lengthPpq = 960, root = 60,
     specs = {
-      { lane = 1, ppqL = 0,   endppqL = util.OPEN, pitch = 60, vel = 100, detune = 0, delay = 0 },
-      { lane = 1, ppqL = 240, endppqL = 480,       pitch = 64, vel = 100, detune = 0, delay = 0 },
+      { lane = 1, ppq = 0,   endppq = util.OPEN, pitch = 60, vel = 100, detune = 0, delay = 0 },
+      { lane = 1, ppq = 240, endppq = 480,       pitch = 64, vel = 100, detune = 0, delay = 0 },
     },
   }
 end
@@ -128,7 +128,7 @@ return {
       local body = get()
       t.eq(#body.specs, 1, 'the deleted note is gone from the committed body')
       local spec = body.specs[1]
-      t.eq(spec.ppqL, 240, 'the surviving note is the second spec')
+      t.eq(spec.ppq, 240, 'the surviving note is the second spec')
       t.eq(spec.lane, 1,   'lane is fixed at 1')
       t.eq(spec.fx,   nil, 'no fx field leaks into the commit')
       t.eq(spec.chan, nil, 'no chan field leaks into the commit')
@@ -147,8 +147,8 @@ return {
 
       local specs = get().specs
       t.eq(#specs, 2, 'both notes survive the pitch nudge')
-      t.eq(specs[1].endppqL, 240, 'the OPEN note clips to the next onset, not lengthPpq (960)')
-      t.eq(specs[2].endppqL, 480, 'the trailing note keeps its authored ceiling')
+      t.eq(specs[1].endppq, 240, 'the OPEN note clips to the next onset, not lengthPpq (960)')
+      t.eq(specs[2].endppq, 480, 'the trailing note keeps its authored ceiling')
     end,
   },
 
