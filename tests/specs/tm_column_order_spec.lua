@@ -139,4 +139,26 @@ return {
         'the delayed note parks off-take -- covered() keys ppqL (300), not the raw onset (372)')
     end,
   },
+
+  {
+    name = 'a note seats before its PA at an equal onset, stably across rebuilds',
+    run = function(harness)
+      local h = harness.mk{
+        seed = {
+          notes = { { ppq = 0, endppq = 480, chan = 1, pitch = 60, vel = 100 } },
+          ccs   = { { ppq = 0, chan = 1, evType = 'pa', pitch = 60, vel = 90 } },
+        },
+      }
+      local events = h.tm:getChannel(1).columns.notes[1].events
+      t.eq(#events, 2, 'note and PA share the column')
+      t.eq(events[1].evType, 'note', 'note first at the shared onset')
+      t.eq(events[2].evType, 'pa', 'its PA rides after it')
+
+      h.tm:assignEvent(events[1], { vel = 101 })
+      h.tm:flush()
+      events = h.tm:getChannel(1).columns.notes[1].events
+      t.eq(events[1].evType, 'note', 'tie order survives an edit rebuild')
+      t.eq(events[2].evType, 'pa', 'PA still second')
+    end,
+  },
 }

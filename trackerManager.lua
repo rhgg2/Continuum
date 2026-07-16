@@ -87,10 +87,16 @@ local function sortByPPQ(tbl)
   table.sort(tbl, function(a, b) return a.ppq < b.ppq end)
 end
 
--- Note columns are logical-frame indices: the fx/park subsystem tests ppqL, so they sort on it.
--- PAs may carry no ppqL (raw-sourced); coalesce so the comparator never sees nil. see design/archive/logical-column-order.md
+-- Note columns are logical-frame indices: the fx/park subsystem tests ppqL, so they sort on it. PAs may
+-- carry no ppqL (raw-sourced); ties order note-before-PA, then pitch. see design/archive/logical-column-order.md
 local function sortByPPQL(tbl)
-  table.sort(tbl, function(a, b) return (a.ppqL or a.ppq) < (b.ppqL or b.ppq) end)
+  table.sort(tbl, function(a, b)
+    local aOnset, bOnset = a.ppqL or a.ppq, b.ppqL or b.ppq
+    if aOnset ~= bOnset then return aOnset < bOnset end
+    local aPa, bPa = a.evType == 'pa', b.evType == 'pa'
+    if aPa ~= bPa then return bPa end
+    return (a.pitch or 0) < (b.pitch or 0)
+  end)
 end
 
 -- General derivation-dirt spine: any edit/config change re-derives a channel's gated stages.
@@ -1493,6 +1499,30 @@ local function projectCC(cc, token, overlay)
   return evt
 end
 
+-- Columns are logical-born: each build site flips its events with this as it seats them; the
+-- tail walk re-stamps movers' delayC/endppqC. see docs/trackerManager.md § Rebuild: logical projection
+local function projectEvent(evt, chan)
+  if evt.ppqL ~= nil then
+    -- delayC: realised-frame delay equivalent. Differs from authored delay when
+    -- the unified walk clamped raw against a same-pitch predecessor; renderer cues the give-way.
+    if evt.delay ~= nil then
+      local baseline = tm:fromLogical(chan, evt.ppqL)
+      evt.delayC = util.round(timing.ppqToDelay(evt.ppq - baseline, mm:resolution()))
+    end
+    evt.ppq = evt.ppqL
+  end
+  if evt.endppq ~= nil then
+    evt.endppqC = tm:toLogical(chan, evt.endppq)
+    if evt.endppqL == util.OPEN then
+      evt.endppq = util.OPEN
+    elseif evt.endppqL ~= nil then
+      evt.endppq = evt.endppqL
+    else
+      evt.endppq = evt.endppqC
+    end
+  end
+end
+
 -- Strict-next per note: first group member with a greater ppq,
 -- chord-mates skipped. Precomputed O(n); see docs/trackerManager.md § Rebuild.
 local function strictNextMap(groups, onset)
@@ -1596,7 +1626,7 @@ local function rebuildInternals()
     while #notes < note.lane do pushNoteCol(channel) end
     local col = notes[note.lane]
     -- note is already our own mm:notes() clone -- repurpose it as the column note rather than
-    -- cloning again. mm's stored note is untouched; projectLogical later rewrites this ppq to logical.
+    -- cloning again. mm's stored note is untouched; the post-externals flip rewrites ppq to logical.
     local colNote = note
     -- set detune/delay at ingestion to skip defensive guards downstream
     colNote.detune = colNote.detune or 0
@@ -1707,9 +1737,15 @@ local function rebuildCCs(prevWindows)
           col = channel.columns[cc.evType] or { events = {} }
           channel.columns[cc.evType] = col
         end
+        projectEvent(event, cc.chan)
         util.add(col.events, event)
       end
       ::continue::
+    end
+    -- mm's cc stream is insertion-ordered mid-session (fresh adds append); columns sort by ppq.
+    for _, col in pairs(channels[chan].columns.ccs) do sortByPPQ(col.events) end
+    for _, key in ipairs{ 'at', 'pc' } do
+      if channels[chan].columns[key] then sortByPPQ(channels[chan].columns[key].events) end
     end
     ::nextChan::
   end
@@ -1881,6 +1917,9 @@ end
 local REALISATION = { ppq = true, endppq = true, loc = true, token = true, derived = true, frame = true, cents = true }
 local function parkSpec(evt, adds) return util.assign(util.clone(evt, REALISATION), adds) end
 
+-- One raw-frame scratch record per on-take note; the walk's working shape (see buildRawScratch).
+local SCRATCH_FIELDS = 'ppq ppqL endppq endppqL chan pitch lane evType detune sample overlap fixed'
+
 local function unlink(events, evt)
   for i, e in ipairs(events) do if e == evt then table.remove(events, i); break end end
 end
@@ -1912,8 +1951,8 @@ end
 
 local function rebuildRegionPark(ccExisting, deferred, currentWindows, fxParked, prevWindows)
   local batch = mmBatch()
-  -- Restored note cells re-enter their column token-less (the real mm event lands with the
-  -- deferred tail commit); returned so rebuild can wire each to its backing post-commit.
+  -- Restored notes re-enter their columns token-less (the real mm event lands with the deferred
+  -- tail commit); their raw scratch recs return so rebuild can wire each cell post-commit.
   local restoredNotes = {}
 
   -- One predicate for all passes: spec.fx (note specs only) parks itself; otherwise membership
@@ -1984,12 +2023,16 @@ local function rebuildRegionPark(ccExisting, deferred, currentWindows, fxParked,
       while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
       local note = util.clone(spec)   -- keeps the parked uuid; mm:add honours it (fx handles survive unpark)
       note.ppq = tm:fromLogical(spec.chan, spec.ppqL)    -- realised onset derived fresh (spec is logical-only)
-      util.add(restoredNotes, note)
+      -- The scratch rec keeps the raw frame for the walk; the cell flips logical like any column note.
+      local rec = util.pick(note, SCRATCH_FIELDS, { colEvt = note })
+      util.add(restoredNotes, rec)
       util.add(channel.columns.notes[spec.lane].events, note)
-      table.sort(channel.columns.notes[spec.lane].events, function(a, b) return a.ppqL < b.ppqL end)
-      -- Lazy: reshaped at commit so it reads note.ppq/endppq after the tail-walk clip.
+      projectEvent(note, spec.chan)
+      sortByPPQL(channel.columns.notes[spec.lane].events)
+      -- Lazy: reshaped at commit so it reads the rec's raw ppq/endppq after the tail-walk clip.
       deferred.addLazy(function()
-        return util.assign(util.clone(note), { keepUuid = true })   -- note carries evType/chan/lane + the fresh ppq/endppq
+        return util.assign(util.clone(note, { delayC = true, endppqC = true }),
+                           { keepUuid = true, ppq = rec.ppq, endppq = rec.endppq })
       end)
     end
 
@@ -2191,8 +2234,7 @@ end
 -- The pass's raw note view: raw consumers read these records, never the columns.
 -- see design/interval-dirt.md § Phase 3 for why, and what colEvt backrefs.
 --shape: scratch[chan] = { ppq, ppqL, endppq, endppqL, chan, pitch, lane, evType, detune, sample, overlap, fixed, colEvt }[] -- dirty chans only
-local function buildRawScratch(restoredNotes)
-  local fields = 'ppq ppqL endppq endppqL chan pitch lane evType detune sample overlap fixed'
+local function buildRawScratch(restoredRecs)
   local scratch = {}
   for chan = 1, 16 do
     if dirtyChans[chan] then
@@ -2205,7 +2247,7 @@ local function buildRawScratch(restoredNotes)
       local recs = {}
       for _, raw in mm:notesRaw(chan) do
         if not raw.derived and raw.ppqL ~= nil then
-          local rec = util.pick(raw, fields, { colEvt = colByUuid[raw.uuid] })
+          local rec = util.pick(raw, SCRATCH_FIELDS, { colEvt = colByUuid[raw.uuid] })
           rec.detune = rec.detune or 0   -- ingestion defaults it on the column note; mirror that
           util.add(recs, rec)
         end
@@ -2214,9 +2256,9 @@ local function buildRawScratch(restoredNotes)
     end
   end
   -- Restores are column-only until the tail walk's deferred commit lands them in mm;
-  -- the restored cell itself is the backref.
-  for _, note in ipairs(restoredNotes) do
-    util.add(scratch[note.chan], util.pick(note, fields, { colEvt = note }))
+  -- rebuildRegionPark built their recs (cell backref included) as it re-seated them.
+  for _, rec in ipairs(restoredRecs) do
+    util.add(scratch[rec.chan], rec)
   end
   return scratch
 end
@@ -2260,7 +2302,9 @@ local function rebuildPA(scratch)
         if cc.evType == 'pa' then
           local noteCol, lane = findNoteColumnForPitch(channels[chan], cc.pitch, cc.ppq, scratch[chan])
           if noteCol then
-            util.add(noteCol.events, projectCC(cc, mm:tokenOf(cc), { lane = lane }))
+            local cell = projectCC(cc, mm:tokenOf(cc), { lane = lane })
+            projectEvent(cell, chan)
+            util.add(noteCol.events, cell)
             touched[chan] = true
           end
         end
@@ -2276,7 +2320,9 @@ local function rebuildPA(scratch)
         local ppq = tm:fromLogical(chan, cell.ppqL)
         local noteCol, lane = findNoteColumnForPitch(channels[chan], cell.pitch, ppq, scratch[chan])
         if noteCol then
-          util.add(noteCol.events, projectCC(cell, nil, { lane = lane, ppq = ppq }))
+          local paCell = projectCC(cell, nil, { lane = lane, ppq = ppq })
+          projectEvent(paCell, chan)
+          util.add(noteCol.events, paCell)
           touched[chan] = true
         end
       end
@@ -2610,6 +2656,7 @@ end
 -- walk together (onset clamp then tail clip); host clip + fxNote del/add in one mm:modify. see docs/trackerManager.md § Rebuild: tail walk
 local function rebuildTails(noteLive, deferred, scratch)
   local takeLen = tm:length()
+  local res = mm:resolution()
   local clampWrites = mmBatch()
   for chan = 1, 16 do
     -- Clean channels freeze: fx left noteLive empty, real notes converged last rebuild.
@@ -2653,7 +2700,10 @@ local function rebuildTails(noteLive, deferred, scratch)
     for _, n in ipairs(moved) do
       if n.lane == 1 then dirtyChan(chan) end   -- nudged lane-1 onset moves absorber seats (pbs runs after tails)
       local backing = n.colEvt or n   -- scratch recs write through to their column note; fxNotes ride bare
-      if n.colEvt then n.colEvt.ppq = n.ppq end
+      if n.colEvt and n.colEvt.delay ~= nil then
+        -- The column stays logical; only the delayC give-way cue carries the raw shift.
+        n.colEvt.delayC = util.round(timing.ppqToDelay(n.ppq - tm:fromLogical(chan, n.ppqL), res))
+      end
       if backing.token then clampWrites.assign(backing, { ppq = n.ppq }) end
     end
     -- Re-sort only when a nudge actually moved an onset (rare); otherwise ordering stands.
@@ -2692,7 +2742,12 @@ local function rebuildTails(noteLive, deferred, scratch)
         local backing = e.colEvt or e
         if backing.token then deferred.assign(backing, { endppq = rounded }) end
         e.endppq = rounded
-        if e.colEvt then e.colEvt.endppq = rounded end
+        if e.colEvt then
+          -- Mirror projectEvent's endppq rule: authored ceiling shows, clipped ceiling rides endppqC.
+          e.colEvt.endppqC = tm:toLogical(chan, rounded)
+          e.colEvt.endppq  = e.endppqL == util.OPEN and util.OPEN
+                             or e.endppqL or e.colEvt.endppqC
+        end
       end
     end
     ::nextChan::
@@ -3031,8 +3086,9 @@ local function rebuildPbs(fxOut, extraColumns, scratch)
         local hidden = pb.derived ~= nil
         anyVisible = anyVisible or not hidden
         -- pb is our own working clone, done being read by the assign above -- reuse it as the
-        -- column event rather than cloning again (projLogical rewrites its ppq to logical later).
+        -- column event rather than cloning again.
         pb.token, pb.val, pb.detune, pb.hidden = pb.origTok, pb.cents, detuneOf[pb], hidden
+        projectEvent(pb, chan)
         util.add(pbColEvents, pb)
       end
       local keep = anyVisible or (extras[chan] and extras[chan].pb)
@@ -3076,53 +3132,12 @@ local function rebuildPCs(noteLive, scratch)
       channels[chan].columns.pc = { events = {} }
       for _, cc in mm:ccsRaw(chan) do
         if cc.evType == 'pc' then
-          util.add(channels[chan].columns.pc.events, projectCC(cc, mm:tokenOf(cc)))
+          local cell = projectCC(cc, mm:tokenOf(cc))
+          projectEvent(cell, chan)
+          util.add(channels[chan].columns.pc.events, cell)
         end
       end
-    end
-  end
-end
-
------ Rebuild logical projection
-
--- Project one column's events to the logical frame in place; delayC captures the walk's raw give-way.
-local function projectToLogical(col, chan, res)
-  for _, evt in ipairs(col.events) do
-    if evt.ppqL ~= nil then
-      -- delayC: realised-frame delay equivalent. Differs from authored delay when
-      -- the unified walk clamped raw against a same-pitch predecessor; renderer cues the give-way.
-      if evt.delay ~= nil then
-        local baseline = tm:fromLogical(chan, evt.ppqL)
-        evt.delayC = util.round(timing.ppqToDelay(evt.ppq - baseline, res))
-      end
-      evt.ppq = evt.ppqL
-    end
-    if evt.endppq ~= nil then
-      evt.endppqC = tm:toLogical(chan, evt.endppq)
-      if evt.endppqL == util.OPEN then
-        evt.endppq = util.OPEN
-      elseif evt.endppqL ~= nil then
-        evt.endppq = evt.endppqL
-      else
-        evt.endppq = evt.endppqC
-      end
-    end
-  end
-  sortByPPQ(col.events)
-end
-
--- Project columns to logical. tv surface is logical-only; ppq/endppq leave here as floats.
--- see docs/trackerManager.md § Rebuild: logical projection
-local function projectLogical()
-  local res = mm:resolution()
-  for _, chan in ipairs(channels) do
-    if dirtyChans[chan.chan] then   -- clean: columns carried already-logical from a prior rebuild
-      local c, n = chan.columns, chan.chan
-      if c.pc then projectToLogical(c.pc, n, res) end
-      if c.pb then projectToLogical(c.pb, n, res) end
-      for _, col in ipairs(c.notes) do projectToLogical(col, n, res) end
-      if c.at then projectToLogical(c.at, n, res) end
-      for _, col in pairs(c.ccs) do projectToLogical(col, n, res) end
+      sortByPPQ(channels[chan].columns.pc.events)
     end
   end
 end
@@ -3155,6 +3170,18 @@ local function rebuildPipeline(didReload)
   staleSwing = {}                               -- swing consumers (partition + CC walk) done; see :53 invariant
   perf.start('extraCols'); rebuildExtraColumns(sources.extraColumns); perf.stop('extraCols')  -- reconcile persisted extra columns
   perf.start('externals'); rebuildExternals(external); perf.stop('externals')  -- reintroduce foreign / diverged notes
+
+  -- Note columns flip to logical here, not at ingestion: partition, reseat and the externals'
+  -- lane packer all need the raw frame. Every later stage reads ppqL or the raw scratch.
+  perf.start('projectNotes')
+  for chan = 1, 16 do
+    if dirtyChans[chan] then
+      for _, col in ipairs(channels[chan].columns.notes) do
+        for _, evt in ipairs(col.events) do projectEvent(evt, chan) end
+      end
+    end
+  end
+  perf.stop('projectNotes')
 
   -- Park window set: fx-regions plus every on-take note host as a degenerate region (note-is-a-region),
   -- from the settled columns. The producer re-scans post-unpark below. see design/note-macros-v2.md § Offline continuous realisation
@@ -3198,14 +3225,12 @@ local function rebuildPipeline(didReload)
 
   -- The deferred commit added each restored note to mm; wire its column cell to that fresh token
   -- so an immediate edit resolves the backing (else the cell is inert until the next full rebuild).
-  for _, note in ipairs(restoredNotes) do
-    local backed = tm:byUuid(note.uuid)
-    if backed then note.token = backed.token end
+  for _, rec in ipairs(restoredNotes) do
+    local backed = tm:byUuid(rec.colEvt.uuid)
+    if backed then rec.colEvt.token = backed.token end
   end
   perf.start('pbs'); rebuildPbs(fxOut, sources.extraColumns, rawScratch); perf.stop('pbs')  -- absorber reconciliation + pb resynthesis
   perf.start('pcs'); rebuildPCs(fxOut.noteLive, rawScratch); perf.stop('pcs')  -- PC synthesis (trackerMode)
-
-  perf.start('projLogical'); projectLogical(); perf.stop('projLogical')  -- project columns to logical
 
   -- Persist this rebuild's window set: next rebuild recognizes seats against it (prev-keyed). see § Route-by-window
   perf.start('prevWindows')

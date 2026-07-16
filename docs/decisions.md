@@ -4,6 +4,12 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-16** — columns project to logical **at build** (note columns right after externals — the
+  partition/reseat/lane-packing stages need raw; cc-family as they seat), the tail walk re-stamping
+  `delayC`/`endppqC` on movers — over the pipeline-tail `projectLogical` pass. Its hidden second job
+  became explicit: cc/at/pc columns sort at build, and `sortByPPQL` gained the deterministic tie-break
+  (note before its PAs, then pitch) that replaces the old sort's arbitrary equal-onset order.
+
 - **2026-07-16** — map `@use` edges store the receiver **source-faithfully** (`cm:get`, `util.deepClone`
   — instance name, separator kept), resolving short name → module at **query** time via each map's `self=`
   registry — over resolving at generation time. Generation stays a pure per-file transcription, so a
