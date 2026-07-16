@@ -1,0 +1,48 @@
+@spec tm_zero_write_spec  src=tests/specs/tm_zero_write_spec.lua  loc=117  sha=untracked  cases=2
+@exercises trackerManager (h.tm), fixtures.glasswork (glasswork), midiManager (h.fm)
+@surface   tm:rebuild, glasswork.build, fm:dump, fm:take, tm:reloadFromReaper
+@harness   mk{seed.resolution, seed.length}, reaper.MIDI_SetAllEvts, reaper.MIDI_Sort
+
+# Intent
+  Zero-write convergence: a converged FULL re-derive stages zero mm writes and
+  zero ds writes. This is the fixpoint that terminates the rebuild self-trigger
+  loop -- a rebuild's own ds:assign fires 'dataChanged', which re-enters
+  tm:rebuild; the loop halts only because a converged pass writes nothing.
+  Pre-phase step 3 of design/rebuild-pipeline.md.
+  
+  Distinct from tm_gate_parity's pin: that asserts a gated rebuild's OUTPUT
+  equals a forced full re-derive's. Byte-identical output can still hide a
+  no-op overwrite (assign the same value back); this counts the writes
+  themselves. The deepEq guards at the fxParked/prevWindows assign sites and
+  the content-keyed reconcile are the production mechanism; this pins they hold.
+  
+  Pinned on both interval-dirt phase-0 fixtures so the property spans both take
+  shapes: the macro-heavy glasswork (fx/pbs/ccs-bound -- all 9 generators, an
+  fx chain, a canon group, 53EDO detune) and the dense single-channel
+  HAMMERKLAVIER (internals/tails-bound -- thousands of notes on one channel,
+  injected as a raw-MIDI import). See design/interval-dirt.md § Phase 0 and
+  docs/bridge-cookbook.md § Import.
+
+# Helpers
+  @fn assertConverges(h, msg)  @ 37-50
+      -- Settle to the output of a full re-derive, then count a SECOND full re-derive.
+      -- Two full re-derives over identical (mm, ds) inputs: the second must be silent,
+      -- or the derivation is not a true fixpoint. mm writes flow through add/assign/
+      -- delete (mmBatch.commit early-returns on an empty batch); ds writes through
+      -- assign. tm holds the same mm/ds tables the harness exposes, so wrapping the
+      -- fields intercepts every pipeline write.
+  @fn readBlob(relPath)  @ 55-64
+      -- A raw-MIDI blob stores note-on/off as separate delta-timed events; walk the
+      -- deltas to the last event's ppq so the injected take gets a source long enough
+      -- to hold every note (the trailing 12 bytes are the all-notes-off tail).
+
+# Cases
+  @case 'converged glasswork (macro: generators, fx chain, canon, 53EDO) re-derives with zero writes'  [harness]  @ 68-91
+  @case 'converged HAMMERKLAVIER (dense single-channel import) re-derives with zero writes'  [harness]  @ 95-115
+
+# Uses (outbound edges)
+  @use call tm:rebuild  @ 38,46
+  @use call glasswork.build  @ 76
+  @use call fm:dump  @ 81,109
+  @use call fm:take  @ 104
+  @use call tm:reloadFromReaper  @ 107
