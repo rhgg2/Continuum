@@ -258,3 +258,23 @@ change, pinned by the existing suite and the phase-0 perf baselines:
 4. **ds-subscriber audit.** Establish whether any non-tm subscriber
    depends on the current mid-pipeline timing of
    `extraColumns`/`fxParked` writes, before any commit ever moves.
+
+   *Done — clear to move.* Production `dataChanged` subscribers are
+   exactly three: `trackerManager` (self-suppressed, `if rebuilding
+   then return`), `groupManager` (reacts only to `groups` +
+   `invalidate`), `trackerView` (reacts only to
+   `mutedChannels`/`soloedChannels`). Neither non-tm subscriber names
+   any pipeline-written key, so the `dataChanged` each mid-pipeline
+   `ds:assign` fires reaches no external reactive code regardless of
+   where in the pipeline the write lands. Every pipeline ds write also
+   happens under `rebuilding = true` (set before `mm:batch`, cleared
+   after), so even the tm echo is dropped. The one cross-layer reader
+   is `trackerView`'s park-cell tagging (`trackerView.lua:3947` reads
+   `prevWindows`), but it runs from the `rebuild`-signal handler —
+   after the pipeline commits `prevWindows` and fires `rebuild` — so it
+   depends only on **write-before-`fire('rebuild')`**, the ordering
+   § Commits already guarantees ("baseline, last"), never on
+   mid-pipeline position. The commit relocations in phases 3–4 are
+   safe against subscribers as long as they hold that one invariant:
+   all ds commits land before `fire('rebuild')`, inside the
+   `rebuilding` window.

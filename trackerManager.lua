@@ -2671,9 +2671,11 @@ end
 
 -- Reseat absorber pbs against the post-walk lane-1 layout, recompute their raw vals,
 -- and project the pb column. see docs/tuning.md § Absorber reconciliation
-local function rebuildPbs(fxOut)
+local function rebuildPbs(fxOut, extraColumns)
   local noteLive, pbChains, pbBase = fxOut.noteLive, fxOut.pbChains, fxOut.pbBase
-  local extras = ds:get('extraColumns') or {}
+  -- Reads only the per-chan .pb keep-flag; rebuildExtraColumns's mid-pipeline write grows
+  -- .notes only, so the head snapshot is current for this. see design/rebuild-pipeline.md § The pre-phase
+  local extras = extraColumns or {}
 
   local function detuneAt(events, P)
     local n = util.seek(events, 'at-or-before', P)
@@ -3166,7 +3168,7 @@ local function rebuildPipeline(didReload)
     local backed = tm:byUuid(note.uuid)
     if backed then note.token = backed.token end
   end
-  perf.start('pbs'); rebuildPbs(fxOut); perf.stop('pbs')  -- absorber reconciliation + pb resynthesis
+  perf.start('pbs'); rebuildPbs(fxOut, sources.extraColumns); perf.stop('pbs')  -- absorber reconciliation + pb resynthesis
   perf.start('pcs'); rebuildPCs(fxOut.noteLive); perf.stop('pcs')  -- PC synthesis (trackerMode)
 
   perf.start('projLogical'); projectLogical(); perf.stop('projLogical')  -- project columns to logical
