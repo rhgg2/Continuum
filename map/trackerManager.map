@@ -1,4 +1,4 @@
-@module trackerManager  src=trackerManager.lua  loc=3464  sha=0097742  mode=chunk  self=tm
+@module trackerManager  src=trackerManager.lua  loc=3464  sha=14993a2  mode=chunk  self=tm
 @deps mm, cm, ds, defaultNoteCols
 
 # Invariants & contracts
@@ -304,10 +304,11 @@
   @fn projectCC(cc, token, overlay)  @ 1473-1478
       -- Column events keep chan/cc so each event is self-describing (the leaf-edit
       -- facade resolves an event's column from its own chan + lane/cc; see trackerView).
-  @fn projectEvent(evt, chan)  @ 1482-1505
+  @fn projectEvent(evt, chan)  @ 1483-1506
       -- Columns are logical-born: each build site flips its events with this as it seats them; the
       -- tail walk re-stamps movers' delayC/endppqC. see docs/trackerManager.md § Rebuild: logical projection
-  @fn strictNextMap(groups, onset)  @ 1509-1519
+      @contract  every column event arrives sidecar-stamped; the CC walk anchors foreign MIDI first  @ 1482
+  @fn strictNextMap(groups)  @ 1510-1519
       -- Strict-next per note: first group member with a greater ppq,
       -- chord-mates skipped. Precomputed O(n); see docs/trackerManager.md § Rebuild.
   @fn mmBatch()  @ 1523-1559
@@ -494,7 +495,7 @@
   @use call    mm:notesRaw  @ rebuildInternals:1589 buildRawScratch:2229
   @use call    mm:reindexIfStale  @ loadIndex:1163
   @use call    mm:reload  @ reloadFromReaper:3459
-  @use call    mm:resolution  @ ccGridStep:141 delayToPPQ:369 resolution:1221 currentSwing:1237 setLength:1332 rescaleLength:1341,1377 tileLength:1399 projectEvent:1488 externalLanePacker:1769 rebuildFx:2411 rebuildTails:2634
+  @use call    mm:resolution  @ ccGridStep:141 delayToPPQ:369 resolution:1221 currentSwing:1237 setLength:1332 rescaleLength:1341,1377 tileLength:1399 projectEvent:1489 externalLanePacker:1769 rebuildFx:2411 rebuildTails:2634
   @use call    mm:setLength  @ setLength:1332 rescaleLength:1341,1377 tileLength:1399
   @use call    mm:setName  @ setName:1223
   @use call    mm:take  @ editCursor:1214,1216 playFrom:1427,1428 rebuildExtraColumns:1761 persistParked:1925 rebuildPipeline:3212 rebuild:3233 currentTake:3455
@@ -509,7 +510,7 @@
   @use call    timing.eval  @ currentSwing:1254,1255
   @use call    timing.invert  @ currentSwing:1260,1262
   @use call    timing.isIdentity  @ currentSwing:1241
-  @use call    timing.ppqToDelay  @ projectEvent:1488 rebuildTails:2680
+  @use call    timing.ppqToDelay  @ projectEvent:1489 rebuildTails:2680
   @use call    timing.resolveComposite  @ currentSwing:1242
   @use call    tuning.findTemper  @ rebuildFx:2413
   @use call    tuning.transposeStep  @ rebuildFx:2415
@@ -523,7 +524,7 @@
   @use call    util.installHooks  @ 56
   @use call    util.key  @ fxKey:549 flush:1079,1082 rebuildRegionPark:2140,2143 rebuildFx:2398,2402,2613
   @use call    util.pick  @ membersOf:394 makeEntry:636 rebuildRegionPark:2007 buildRawScratch:2231 rebuildFx:2466
-  @use call    util.round  @ centsToRaw:132 ccGridStep:141 sumStreams:201 rawToCents:244 fromLogical:1271 projectEvent:1488 rebuildFx:2602 rebuildTails:2680,2715
+  @use call    util.round  @ centsToRaw:132 ccGridStep:141 sumStreams:201 rawToCents:244 fromLogical:1271 projectEvent:1489 rebuildFx:2602 rebuildTails:2680,2715
   @use call    util.seek  @ detuneAt:583 rebuildPbs:2749
   @use call    voicing.nudgeOnsets  @ rebuildInternals:1631 rebuildTails:2674
   @use call    voicing.resolveGroup  @ flush:1087

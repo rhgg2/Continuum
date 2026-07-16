@@ -4,6 +4,17 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-16** — foreign MIDI keeps its logical anchor: the CC walk stamps every sidecar-less
+  non-derived cc/pb/pa/at with `ppqL = toLogical(raw)` on the first rebuild that dirties the channel
+  (`rawDivergesFromLogical` reads a missing sidecar as divergence). Reviewed under the theory that
+  imported automation should stay sidecar-less to keep dense takes small, and kept: the anchor is what
+  lets a later swing edit reseat an imported event (`staleSwing` → `fromLogical(cc.ppqL)`), so without
+  it an import would freeze in raw while the rest of the take reswings. Two corrections fall out. The
+  entry below overreached — A2 made the `ppqL` read redundant for *notes* (externals stamp those); for
+  the cc family it is this stamp that does it, which is why A2b's sweep held. And the cost is real but
+  unpaid-for: the stamp mints a uuid per imported event, so a dense automation take grows an eventMeta
+  entry per cc on first rebuild. Already pinned, end to end, by `tm_cc_gating_spec`.
+
 - **2026-07-16** — one frame per surface: `ppqL` retires everywhere except mm. Columns, the fx/park
   stash, parked render cells and generator streams all key plain `ppq` (logical), and `projectEvent`
   strips the `ppqL`/`endppqL` sidecar as it seats an event — over A2's duplicate stamp. Two names for

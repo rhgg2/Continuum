@@ -804,6 +804,15 @@ are floats — the logical frame is float by design, and the on-grid
 predicate (`ctx:isOnGrid`) is the sole owner of row-membership tolerance.
 Rounding here would silently widen that tolerance to 1 ppq.
 
+Projection assumes every event it sees is sidecar-stamped, and the CC
+walk guarantees it: `rawDivergesFromLogical` counts a missing `ppqL` as
+divergence, so foreign MIDI is anchored (`ppqL = toLogical(raw)`) on the
+first rebuild that dirties its channel. Notes get the same guarantee from
+the externals pass. That stamp — not A2's now-retired duplicate — is what
+makes "columns are logical" true; gate it and sidecar-less events reach
+columns in the raw frame, where `rescaleLength` would warp them through
+swing twice. See § Swing for why the anchor is not optional.
+
 `evt.endppq` is the AUTHORED logical ceiling (mm's `endppqL` stamp, or
 `util.OPEN` for a deliberately-unbounded tail). The tail pass already
 folded every blocker into mm's raw endppq; inverting gives `evt.endppqC`,

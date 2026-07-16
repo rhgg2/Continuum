@@ -1479,6 +1479,7 @@ end
 
 -- Columns are logical-born: each build site flips its events with this as it seats them; the
 -- tail walk re-stamps movers' delayC/endppqC. see docs/trackerManager.md § Rebuild: logical projection
+--contract: every column event arrives stamped -- CC walk anchors foreign cc; externals, notes
 local function projectEvent(evt, chan)
   if evt.ppqL ~= nil then
     -- delayC: realised-frame delay equivalent. Differs from authored delay when
@@ -1506,12 +1507,11 @@ end
 
 -- Strict-next per note: first group member with a greater ppq,
 -- chord-mates skipped. Precomputed O(n); see docs/trackerManager.md § Rebuild.
-local function strictNextMap(groups, onset)
-  onset = onset or function(evt) return evt.ppq end
+local function strictNextMap(groups)
   local nextOf = {}
   for _, g in pairs(groups) do
     for i = #g - 1, 1, -1 do
-      nextOf[g[i]] = onset(g[i + 1]) > onset(g[i])
+      nextOf[g[i]] = g[i + 1].ppq > g[i].ppq
                      and g[i + 1] or nextOf[g[i + 1]]
     end
   end
