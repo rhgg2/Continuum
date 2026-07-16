@@ -1,4 +1,4 @@
-@spec bridge_spec  src=tests/specs/bridge_spec.lua  loc=177  sha=e6ceed1  cases=12
+@spec bridge_spec  src=tests/specs/bridge_spec.lua  loc=194  sha=e6ceed1  cases=14
 @exercises bridge (bridge)
 @surface   bridge:tick
 
@@ -31,10 +31,12 @@
   @case 'directive --#undo wraps execution in an undo block'  [pure]  @ 98-109
   @case 'render survives a cyclic table'  [pure]  @ 112-117
   @case 'render prints userdata via tostring'  [pure]  @ 120-125
-  @case 'render truncates a wide table with a +N more marker'  [pure]  @ 128-132
-  @case 'render stops at the total byte cap'  [pure]  @ 135-143
-  @case 'scan invalidates the EnumerateFiles cache (idx -1) before listing'  [pure]  @ 146-163
-  @case 'tick over an empty spool writes nothing and does not error'  [pure]  @ 166-175
+  @case 'render truncates a long string at the default cap'  [pure]  @ 128-133
+  @case 'directive --#str widens the string cap'  [pure]  @ 136-142
+  @case 'render truncates a wide table with a +N more marker'  [pure]  @ 145-149
+  @case 'render stops at the total byte cap'  [pure]  @ 152-160
+  @case 'scan invalidates the EnumerateFiles cache (idx -1) before listing'  [pure]  @ 163-180
+  @case 'tick over an empty spool writes nothing and does not error'  [pure]  @ 183-192
 
 # Uses (outbound edges)
-  @use call bridge:tick  @ 49,160,172
+  @use call bridge:tick  @ 49,177,189

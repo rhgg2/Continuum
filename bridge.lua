@@ -123,8 +123,8 @@ local function parseDirectives(code)
     local body = line:match('^%s*%-%-#(.*)$')
     if not body then break end
     local key, arg = body:match('^(%S+)%s*(.-)%s*$')
-    if     key == 'undo'  then d.undo  = (arg ~= '' and arg) or 'bridge eval'
-    elseif key == 'depth' then d.depth = tonumber(arg) end
+    if     key == 'undo'    then d.undo   = (arg ~= '' and arg) or 'bridge eval'
+    elseif DEFAULTS[key]    then d[key]   = tonumber(arg) end   -- any render cap: --#str/entries/depth/total N
     code = tail
   end
   return d, code
@@ -149,7 +149,7 @@ local function execute(rawCode)
       local value
       if packed.n <= 2 then value = packed[2]
       else value = table.move(packed, 2, packed.n, 1, {}) end
-      result = { status = 'ok', value = render(value, { depth = directives.depth }) }
+      result = { status = 'ok', value = render(value, directives) }
     else
       result = { status = 'error', value = tostring(packed[2]) }
     end

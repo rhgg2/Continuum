@@ -28,7 +28,8 @@ which is why ImGui calls are banned in chunks.
 
 Spool dir: `.claude/mcp/reaper/spool/`, gitignored. Request
 `req-<id>.lua` is plain Lua with optional leading `--#` directives
-(`--#undo <label>`, `--#depth N`) stripped before `load`; response
+(`--#undo <label>`, and any render cap `--#depth N` / `--#str N` /
+`--#entries N` / `--#total N`) stripped before `load`; response
 `res-<id>.txt` is line-framed. Both choices keep the parsers trivial:
 no JSON on the Lua side, and Python splits the response with
 `partition` rather than a parser.
@@ -75,7 +76,9 @@ value back — which is exactly wrong for manager tables: they are
 cyclic and userdata-laden, and the bridge's job is a *view*, not a
 value. So render marks cycles, renders userdata and functions via
 `tostring`, and caps every axis — depth, entries per table, string
-length, total bytes — so `return tm` is a safe thing to type. `print`
+length, total bytes — so `return tm` is a safe thing to type. Each cap
+is per-request overridable with a `--#<cap> N` directive (e.g. `--#str
+4000` to widen the 200-char string cut when dumping a chunk). `print`
 inside a chunk is redirected to a per-request buffer and returned as
 the response's print section.
 

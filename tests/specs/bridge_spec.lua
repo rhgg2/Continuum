@@ -125,6 +125,23 @@ return {
     end,
   },
   {
+    name = "render truncates a long string at the default cap",
+    run = function()
+      local res = runChunk('return string.rep("x", 300)')
+      t.eq(res.status, 'ok')
+      t.truthy(res.value:find('…', 1, true), 'string cut with an ellipsis past the default cap')
+    end,
+  },
+  {
+    name = "directive --#str widens the string cap",
+    run = function()
+      local res = runChunk('--#str 500\nreturn string.rep("x", 300)')
+      t.eq(res.status, 'ok')
+      t.falsy(res.value:find('…', 1, true), 'no truncation once the cap is raised above the length')
+      t.truthy(res.value:find(string.rep('x', 300), 1, true), 'full string rendered')
+    end,
+  },
+  {
     name = "render truncates a wide table with a +N more marker",
     run = function()
       local res = runChunk('local x = {}; for i = 1, 50 do x[i] = i end; return x')
