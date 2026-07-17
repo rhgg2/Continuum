@@ -21,6 +21,16 @@
             "statusMessage": "Regenerating stale .map files..."
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write|mcp__patches__apply_patches|mcp__patches__retry_patches",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/luacheck-lint.sh\"",
+            "statusMessage": "Linting edited Lua..."
+          }
+        ]
       }
     ]
   }
