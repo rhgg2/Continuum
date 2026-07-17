@@ -570,7 +570,7 @@ end
 
 local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
       flush, reload, idxReconcile, withDeferredSort, clearStaging, absorbReloadDirt,
-      stampColEvt do
+      stampColEvt, rawNotes, resortRawNotes do
 
   ----- State
 
@@ -594,6 +594,10 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     local n = util.seek(rawIndex[chan].notes, 'at-or-before', P, laneOne)
     return (n and n.detune) or 0
   end
+
+  -- The pipeline's raw working set, read in place by the walk and its raw consumers
+  -- (filtered at use); entries are live um records. see design/interval-dirt.md § Phase 4.5
+  function rawNotes(chan) return rawIndex[chan].notes end
 
   -- Ownership is intent, so it is tested logically: a PA carries its own seat and reswings from
   -- it, and a raw-frame test would let a delay or a nudge detach one. see docs/trackerManager.md § PA binding
@@ -639,6 +643,10 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     for tbl in pairs(deferredSort) do table.sort(tbl, rawThenLogical) end
     deferredSort = prev
   end
+
+  -- The tail walk nudges shared entries' ppq in place -- invisible to idxReconcile's
+  -- unchanged-ppq fast path -- and re-trues the lists it stained through this.
+  function resortRawNotes(chan) table.sort(rawIndex[chan].notes, rawThenLogical) end
 
   -- Construct the um-frame index entry for one mm clone and file it into byUuid.
   -- Shared verbatim by full reload and the incremental verbs so both build identical entries.
@@ -1499,7 +1507,7 @@ local function projectEvent(evt, chan)
     end
   end
   -- The sidecar rode in on the mm event; drop it, or a stale copy of the frame we just
-  -- became would ride out through park / clipboard / gm. mm and the raw scratch keep theirs.
+  -- became would ride out through park / clipboard / gm. mm and um's index keep theirs.
   evt.ppqL, evt.endppqL = nil, nil
 end
 
@@ -1907,11 +1915,6 @@ local REALISATION = { delayC = true, endppqC = true, loc = true, realised = true
 --contract: evt must be logical-frame (a column event); an mm-raw source overrides ppq via `adds`
 local function parkSpec(evt, adds) return util.assign(util.clone(evt, REALISATION), adds) end
 
--- One raw-frame scratch record per on-take note; the walk's working shape (see buildRawScratch).
--- uuid rides along for uuid-keyed addressing. see design/interval-dirt.md § Phase 4
-local pickScratch = util.picker(   -- compiled: this picks once per note of every dirty channel
-  'uuid ppq ppqL endppq endppqL chan pitch lane evType detune sample overlap fixed')
-
 local function unlink(events, evt)
   for i, e in ipairs(events) do if e == evt then table.remove(events, i); break end end
 end
@@ -2005,11 +2008,11 @@ local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows
       local channel = channels[spec.chan]
       while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
       local note = util.clone(spec)   -- the cell is the spec: both are logical (keeps the parked uuid too)
-      -- The rec holds the walk's raw frame: endppq clears because only the walk can derive it (the
-      -- spec's ceiling is logical, and lands on endppqL), then rides back to the cell via colEvt.
-      local rec = pickScratch(note,
-                              { colEvt = note, ppq = tm:fromLogical(spec.chan, note.ppq),
-                                ppqL = note.ppq, endppqL = note.endppq, endppq = util.REMOVE })
+      -- The rec holds the walk's raw frame: endppq stays unset because only the walk can derive it
+      -- (the spec's ceiling is logical, landing on endppqL), then rides back to the cell via colEvt.
+      local rec = util.pick(note, 'uuid chan pitch lane evType detune sample overlap fixed',
+                            { colEvt = note, ppq = tm:fromLogical(spec.chan, note.ppq),
+                              ppqL = note.ppq, endppqL = note.endppq })
       util.add(restoredNotes, rec)
       util.add(channel.columns.notes[spec.lane].events, note)
       sortNoteColumn(channel.columns.notes[spec.lane].events)
@@ -2213,42 +2216,37 @@ end
 
 ----- Raw working set
 
--- The pass's raw note view: raw consumers read these records, never the columns.
--- see design/interval-dirt.md § Phase 3 for why, and what colEvt backrefs.
---shape: scratch[chan] = { uuid, ppq, ppqL, endppq, endppqL, chan, pitch, lane, evType, detune, sample, overlap, fixed, colEvt }[] -- dirty chans only
-local function buildRawScratch(restoredRecs)
-  local scratch = {}
-  for chan = 1, 16 do
-    if dirtyChans[chan] then
-      local recs = {}
-      for _, raw in mm:notesRaw(chan) do
-        if not raw.derived and raw.ppqL ~= nil then
-          local entry = tm:byUuid(raw.uuid)
-          local rec = pickScratch(raw, { colEvt = entry and entry.colEvt })
-          rec.detune = rec.detune or 0   -- ingestion defaults it on the column note; mirror that
-          util.add(recs, rec)
-        end
+-- The pass's raw note view is um's index, read in place (entries are live um records, colEvt
+-- their seat stamp), filtered at use to authored, logically seated notes. see design/interval-dirt.md § Phase 4.5
+local function walkable(note) return not note.derived and note.ppqL ~= nil end
+
+-- One-pass merge of the pre-sorted index list (filtered) with a small sorted extras list;
+-- replaces the whole-channel sort the per-pass scratch copy used to force.
+local function mergeIndexed(indexNotes, keep, extras)
+  table.sort(extras, rawThenLogical)
+  local merged, j = {}, 1
+  for _, entry in ipairs(indexNotes) do
+    if keep(entry) then
+      while extras[j] and rawThenLogical(extras[j], entry) do
+        util.add(merged, extras[j]); j = j + 1
       end
-      scratch[chan] = recs
+      util.add(merged, entry)
     end
   end
-  -- Restores are column-only until the tail walk's deferred commit lands them in mm;
-  -- rebuildRegionPark built their recs (cell backref included) as it re-seated them.
-  for _, rec in ipairs(restoredRecs) do
-    util.add(scratch[rec.chan], rec)
-  end
-  return scratch
+  for i = j, #extras do util.add(merged, extras[i]) end
+  return merged
 end
 
 ----- Rebuild PA
 
-local function findNoteColumnForPitch(channel, pitch, ppq_pos, chanScratch)
+local function findNoteColumnForPitch(channel, pitch, ppq_pos)
   local notes = channel.columns.notes
-  -- Containment is raw geometry: scan the scratch; lowest lane wins, matching column order.
+  -- Containment is raw geometry: scan the index; lowest lane wins, matching column order.
+  -- Pre-commit restores can't match -- their endppq is nil until the walk derives it.
   local coveringLane
-  for _, rec in ipairs(chanScratch) do
-    if rec.endppq and rec.pitch == pitch and rec.ppq <= ppq_pos and rec.endppq > ppq_pos
-       and (coveringLane == nil or rec.lane < coveringLane) then
+  for _, rec in ipairs(rawNotes(channel.chan)) do
+    if walkable(rec) and rec.endppq and rec.pitch == pitch and rec.ppq <= ppq_pos
+       and rec.endppq > ppq_pos and (coveringLane == nil or rec.lane < coveringLane) then
       coveringLane = rec.lane
     end
   end
@@ -2271,13 +2269,13 @@ end
 
 -- Late PA projection: mixes into note columns once lanes are settled, so the view (and rebuildFx's
 -- channelStreams) read it inline. see docs/trackerManager.md § PA dispatch
-local function rebuildPA(scratch)
+local function rebuildPA()
   local touched = {}
   for chan = 1, 16 do
     if dirtyChans[chan] then   -- clean: PA already sits in the carried note column
       for _, cc in mm:ccsRaw(chan) do
         if cc.evType == 'pa' then
-          local noteCol, lane = findNoteColumnForPitch(channels[chan], cc.pitch, cc.ppq, scratch[chan])
+          local noteCol, lane = findNoteColumnForPitch(channels[chan], cc.pitch, cc.ppq)
           if noteCol then
             local cell = projectCC(cc, { lane = lane })
             projectEvent(cell, chan)
@@ -2295,7 +2293,7 @@ local function rebuildPA(scratch)
     if dirtyChans[chan] then
       for _, cell in ipairs(channels[chan].parkedPA or {}) do
         local ppq = tm:fromLogical(chan, cell.ppq)   -- raw: findNoteColumnForPitch is raw geometry
-        local noteCol, lane = findNoteColumnForPitch(channels[chan], cell.pitch, ppq, scratch[chan])
+        local noteCol, lane = findNoteColumnForPitch(channels[chan], cell.pitch, ppq)
         if noteCol then
           util.add(noteCol.events, projectCC(cell, nil, { lane = lane }))   -- the cell is logical-born
           touched[chan] = true
@@ -2626,21 +2624,22 @@ end
 -- Unified tail/onset walk + atomic commit: real notes, fixed externals, noteLive
 -- walk together (onset clamp then tail clip); host clip + fxNote del/add in one mm:modify. see docs/trackerManager.md § Rebuild: tail walk
 --contract: separates and bounds disturbed notes only; a nudged lane-1 onset emits its seat closure
-local function rebuildTails(noteLive, deferred, scratch)
+local function rebuildTails(noteLive, deferred, restoredNotes)
   local takeLen = tm:length()
   local res = mm:resolution()
   local clampWrites = mmBatch()
+  -- Restores are column-only until this walk's deferred commit lands them in mm; until then
+  -- they walk as extra inputs alongside the index, cell backref included.
+  local restoredByChan = {}
+  for _, rec in ipairs(restoredNotes) do util.bucket(restoredByChan, rec.chan, rec) end
   for chan = 1, 16 do
     -- Clean channels freeze: fx left noteLive empty, real notes converged last rebuild.
     local dirt = dirtyChans[chan]
     if not dirt then goto nextChan end
-    local notes = {}
-    for _, rec in ipairs(scratch[chan]) do
-      util.add(notes, rec)
-    end
-    for _, w in ipairs(noteLive[chan]) do
-      util.add(notes, w.evt)
-    end
+    local extras = {}
+    for _, rec in ipairs(restoredByChan[chan] or {}) do util.add(extras, rec) end
+    for _, w in ipairs(noteLive[chan]) do util.add(extras, w.evt) end
+    local notes = mergeIndexed(rawNotes(chan), walkable, extras)
     if #notes == 0 then goto nextChan end
 
     -- Parked members left the columns but still bound a preceding on-take tail in their lane --
@@ -2660,8 +2659,6 @@ local function rebuildTails(noteLive, deferred, scratch)
       return nearest
     end
 
-    table.sort(notes, rawThenLogical)
-
     -- Same-pitch onset separation, retro-clip subsumed by tail pass: only a disturbed note can
     -- collide, onto its same-pitch predecessor; derived notes seed unconditionally. see design/interval-dirt.md § Phase 4
     local disturbed, nudged, lastByPitch = {}, {}, {}
@@ -2676,7 +2673,7 @@ local function rebuildTails(noteLive, deferred, scratch)
           -- the clamp write stage here rather than in a second pass over a moved set.
           e.ppq = onset
           disturbed[e], nudged[e], anyNudge = true, true, true
-          local backing = e.colEvt or e   -- scratch recs write through to their column note; fxNotes ride bare
+          local backing = e.colEvt or e   -- seated entries write through to their column note; fxNotes ride bare
           if e.colEvt and e.colEvt.delay ~= nil then
             -- The column stays logical; only the delayC give-way cue carries the raw shift.
             e.colEvt.delayC = util.round(timing.ppqToDelay(e.ppq - tm:fromLogical(chan, e.ppqL), res))
@@ -2686,8 +2683,9 @@ local function rebuildTails(noteLive, deferred, scratch)
       end
       lastByPitch[e.pitch] = e
     end
-    -- Re-sort only when a nudge actually moved an onset (rare); otherwise ordering stands.
-    if anyNudge then table.sort(notes, rawThenLogical) end
+    -- Re-sort only on a real nudge (rare). The nudge moved shared index entries in place --
+    -- invisible to idxReconcile's unchanged-ppq fast path -- so re-true um's list too.
+    if anyNudge then table.sort(notes, rawThenLogical); resortRawNotes(chan) end
 
     -- Successors without groups: one backward sweep hands over next-in-lane and next-in-pitch,
     -- its running state keyed by lane and pitch rather than by note. see design/interval-dirt.md § Phase 4
@@ -2770,7 +2768,7 @@ end
 
 -- Reseat absorber pbs against the post-walk lane-1 layout, recompute their raw vals,
 -- and project the pb column. see docs/tuning.md § Absorber reconciliation
-local function rebuildPbs(fxOut, extraColumns, scratch)
+local function rebuildPbs(fxOut, extraColumns)
   local noteLive, pbChains, pbBase = fxOut.noteLive, fxOut.pbChains, fxOut.pbBase
   -- Reads only the per-chan .pb keep-flag; rebuildExtraColumns's mid-pipeline write grows
   -- .notes only, so the head snapshot is current for this. see design/rebuild-pipeline.md § The pre-phase
@@ -2789,22 +2787,19 @@ local function rebuildPbs(fxOut, extraColumns, scratch)
     dirty[chan] = dirtyChans[chan] or nil
   end
 
-  -- Per-chan lane-1 sort, consumed only by deriveChan: built for dirty channels alone. Clean
+  -- Per-chan lane-1 view, consumed only by deriveChan: built for dirty channels alone. Clean
   -- channels reuse their carried pb column and never read it.
+  local function lane1Note(entry) return entry.lane == 1 and walkable(entry) end
   local lane1ByChan = {}
   for chan = 1, 16 do
     if dirty[chan] then
-      local list = {}
-      for _, rec in ipairs(scratch[chan]) do
-        if rec.lane == 1 then util.add(list, rec) end
-      end
       -- Derived lane-1 fxNotes are routed out of columns; union them so the absorber pass seats
       -- their detune jumps.
+      local liveLane1 = {}
       for _, w in ipairs(noteLive[chan]) do
-        if w.lane == 1 then util.add(list, w.evt) end
+        if w.lane == 1 then util.add(liveLane1, w.evt) end
       end
-      table.sort(list, function(a, b) return a.ppq < b.ppq end)
-      lane1ByChan[chan] = list
+      lane1ByChan[chan] = mergeIndexed(rawNotes(chan), lane1Note, liveLane1)
     end
   end
 
@@ -2898,11 +2893,13 @@ local function rebuildPbs(fxOut, extraColumns, scratch)
       return realPbs[before], realPbs[after]
     end
 
-    -- Detune onsets: every lane-1 ppq whose detune differs from its predecessor.
+    -- Detune onsets: every lane-1 ppq whose detune differs from its predecessor; a note
+    -- without authored detune reads 0, ingestion's default on the cell.
     local onsets, prev = {}, 0
     for _, n in ipairs(lane1Events) do
-      if n.detune ~= prev then util.add(onsets, { ppq = n.ppq, ppqL = n.ppqL }) end
-      prev = n.detune
+      local detune = n.detune or 0
+      if detune ~= prev then util.add(onsets, { ppq = n.ppq, ppqL = n.ppqL }) end
+      prev = detune
     end
 
     -- Seats to realise: ppq -> { cents, ppqL, shape }. The consolidated assign turns each
@@ -3112,15 +3109,18 @@ end
 
 -- PC synthesis (trackerMode only). Runs after externals so a foreign-MIDI note inherits
 -- sample from the prevailing PC.
-local function rebuildPCs(noteLive, scratch)
+local function rebuildPCs(noteLive)
   if not cm:get('trackerMode') then return end
   local pcWrites = mmBatch()
   for chan = 1, 16 do
     -- Clean channels freeze: their PCs stand in mm and their pc column is carried forward.
     if not dirtyChans[chan] then goto nextChan end
     local records = {}
-    for _, rec in ipairs(scratch[chan]) do
-      util.add(records, { ppq = rec.ppq, ppqL = rec.ppqL, lane = rec.lane, sample = rec.sample or 0, key = rec.colEvt })
+    for _, entry in ipairs(rawNotes(chan)) do
+      if walkable(entry) then
+        util.add(records, { ppq = entry.ppq, ppqL = entry.ppqL, lane = entry.lane,
+                            sample = entry.sample or 0, key = entry.colEvt })
+      end
     end
     for _, w in ipairs(noteLive[chan]) do
       local n = w.evt
@@ -3218,23 +3218,22 @@ local function rebuildPipeline(didReload)
   perf.stop('parkRegions')
 
   perf.start('regionPark'); local restoredNotes = rebuildRegionPark(deferred, currentWindows, sources.fxParked, sources.prevWindows); perf.stop('regionPark')  -- park covered, carry/restore prior
-  perf.start('rawScratch'); local rawScratch = buildRawScratch(restoredNotes); perf.stop('rawScratch')  -- the pass's raw note view, from mm now the on-take set is settled
-  perf.start('pa'); local paTouched = rebuildPA(rawScratch); perf.stop('pa')  -- project PAs into settled note columns
+  perf.start('pa'); local paTouched = rebuildPA(); perf.stop('pa')  -- project PAs into settled note columns
 
   -- Re-scan windows post park/unpark/PA: the producer reads the final columns, including a host an unpark
   -- just restored (a replace host that lost its note-producing kind falls back to on-take augment).
   perf.start('fxWindows'); local fxWindow = computeFxWindows(paTouched); perf.stop('fxWindows')
   perf.start('fx'); local fxOut = rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWindows, sources.fxRegions); perf.stop('fx')  -- fx expansion: derived notes/CCs
 
-  perf.start('tails'); rebuildTails(fxOut.noteLive, deferred, rawScratch); perf.stop('tails')  -- unified tail/onset walk + atomic note commit
+  perf.start('tails'); rebuildTails(fxOut.noteLive, deferred, restoredNotes); perf.stop('tails')  -- unified tail/onset walk + atomic note commit
 
   -- The deferred commit added each restored note to mm; mark its column cell realised so an
   -- immediate edit resolves the backing, and seat-stamp the fresh entry like any other seat.
   for _, rec in ipairs(restoredNotes) do
     if stampColEvt(rec.colEvt) then rec.colEvt.realised = true end
   end
-  perf.start('pbs'); rebuildPbs(fxOut, sources.extraColumns, rawScratch); perf.stop('pbs')  -- absorber reconciliation + pb resynthesis
-  perf.start('pcs'); rebuildPCs(fxOut.noteLive, rawScratch); perf.stop('pcs')  -- PC synthesis (trackerMode)
+  perf.start('pbs'); rebuildPbs(fxOut, sources.extraColumns); perf.stop('pbs')  -- absorber reconciliation + pb resynthesis
+  perf.start('pcs'); rebuildPCs(fxOut.noteLive); perf.stop('pcs')  -- PC synthesis (trackerMode)
 
   -- Persist this rebuild's window set: next rebuild recognizes seats against it (prev-keyed). see § Route-by-window
   perf.start('prevWindows')

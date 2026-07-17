@@ -11,7 +11,7 @@
 
 | | |
 |---|---|
-| state | in flight — phases 1–3 landed; phase 4 landed 2026-07-17; phase 4.5 is the active front |
+| state | landed — phases 1–3; phase 4 2026-07-17; phase 4.5 2026-07-18 |
 | supersedes | `incremental-rebuild` gap 4 (fx dirt signal) |
 | enduring model it changes | `docs/trackerManager.md` § Derivation dirt |
 | the hard part | was forward propagation — closed 2026-07-15 by onset-bounded closures (§ The crux, closed); same-pitch widens the tails closure rather than leaving tm (§ Same-pitch is a projection artefact), and tails *produces* its closure from the neighbour lookup it already does, rather than consuming a fence it could leak past (§ The tails closure is the walk's output, not its input) |
@@ -941,6 +941,18 @@ Expected on the dense edit: `rawScratch` ~9.4 → ~0, the walk's sort ~5
 remains O(channel) is the sweep's own traversal (array build, seed
 test, successor bookkeeping); if a profile ever demands more, that is a
 separate narrowing with its own design, not this one.
+
+> **Landed 2026-07-18**, four commits. Two corrections to the closed
+> questions above. *The nudge's resort was not already solved*: the
+> walk mutates the shared entry's ppq in place, so by reconcile time
+> `prev.ppq == e.ppq` and the unchanged-ppq fast path keeps the stale
+> slot — the remove-and-reinsert never fires. The walk re-trues the
+> channel's list itself (`resortRawNotes`) under the same rare
+> `anyNudge` branch that re-sorts its working sequence. And restores
+> stayed extra inputs to the *walk alone*: `rebuildPA` never needed
+> them — a restore's `endppq` is nil until the walk derives it, so the
+> containment scan cannot match one — and `rebuildPbs`/`rebuildPCs`
+> run after the deferred commit has filed them into the index.
 
 ### Phase 5 — fx producers consume intervals
 

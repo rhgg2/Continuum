@@ -134,11 +134,11 @@ re-clones that position from mm: an add finds the new note, a delete finds nothi
 vanishes, a move seeded both ends and gets both.
 
 Widening a seed to its neighbouring onsets buys nothing *here*. No stage reads a neighbour's
-column event expecting a fresh clone — every raw consumer reads `buildRawScratch`, which is built
-whole-channel from mm and resolves carried and freshly-cloned events alike by uuid, writing its
-results back through the `colEvt` backref. A carried event whose mm note did not change is already
-correct, and re-cloning it yields an identical object. Closure belongs to the tail walk, computed
-against its own raw-order scratch — see design/interval-dirt.md § Phase 4.
+column event expecting a fresh clone — every raw consumer reads um's raw index, which holds every
+mm note in the raw frame and resolves carried and freshly-cloned events alike, writing its
+results back through the `colEvt` seat stamp. A carried event whose mm note did not change is
+already correct. Closure belongs to the tail walk, computed against that same index — see
+design/interval-dirt.md § Phase 4 and § Phase 4.5.
 
 ## Pitchbend: tm's role in the tuning model
 
@@ -721,8 +721,8 @@ commit, then clip tails.
 The reseat (`rebuildInternals`) and the flush scan nudged too until
 2026-07-17. Both went for one reason: a nudge they skip is not a lost
 voice but a collision riding one stage further, to a site that separates
-it before anything can read it. The reseat's clones reach the walk via
-`buildRawScratch`, in the same pass and the same `mm:batch` nest, so mm's
+it before anything can read it. The reseat's notes reach the walk through
+um's raw index, in the same pass and the same `mm:batch` nest, so mm's
 backstop — which resolves at the *outermost* unwind — still finds
 nothing. The flush scan's staged add reaches that same backstop at
 flush's own unwind, ahead of the rebuild it triggers.

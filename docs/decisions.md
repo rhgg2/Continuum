@@ -4,6 +4,11 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-18** — The tail walk re-trues `rawIndex` itself (`resortRawNotes`, under the existing
+  rare `anyNudge` branch) after nudging shared entries' ppq in place. Chosen over teaching
+  `idxReconcile` to detect the move: its unchanged-ppq fast path compares against an entry the walk
+  already mutated, so reconcile-side detection would need a separate sorted-slot key — the stainer
+  re-sorting is smaller. See design/interval-dirt.md § Phase 4.5 landed note.
 - **2026-07-18** — um's `rawIndex` widened to every note (all lanes, raw-then-logical order) with
   readers filtering at use, and column cells now reach raw consumers via a `colEvt` seat stamp on
   the index entry — stamped where columns seat, surviving reconciliation — rather than a per-pass
