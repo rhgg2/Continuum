@@ -28,6 +28,19 @@ prompts for an entry at commit time.
   with a translation hint; a quantified literal (`rebuild*`) gets an advisory note. *Chosen over*
   glob + `|` alternation, which patches glob toward regex one metacharacter at a time.
 
+- **2026-07-17** — `collisionIdx` holds **notes only**, and `assignNote` evicts only the slot it owns.
+  The table exists to detect MIDI's one-voice-per-`(chan, pitch)` rule, which is a note property, so its
+  cc/pa/pb/at/pc entries had a writer on every path and a reader on none — dead from the moment
+  `eventsByUuid` took over addressing and `tokenIdx` stopped doubling as the address book. Dropping them
+  collapses `contentKey`'s five branches to `seatKey`'s one and takes a concat plus a table store per cc
+  out of rebuild's bulk loop, the one path that runs every event every flush. *Chosen over* leaving them
+  as harmless: an index written and never read reads as load-bearing to everyone downstream. The
+  eviction guard mirrors `mm:delete`'s and is *reached* — the tail walk's own nudge commit trips it
+  (`vm_delay_entry_spec`, found by counting hits across the suite), where the unguarded evict wiped the
+  survivor's slot and only `pendingCollisions`' coarse `(chan, pitch)` key plus `resolveCollisions`'
+  whole-group rescan covered for it. Not a bug — but a live dependency on another module's key width,
+  and now a local one.
+
 - **2026-07-17** — `resizeNote` both *decides* and *performs* PA translation in the logical frame; the
   two raw-frame computations that outlived the ownership move go. Its gate asked whether the raw delta
   held at both endpoints — true under swing only when the note's logical length is an exact multiple of

@@ -255,8 +255,8 @@ the flush deferral is.
 `needsCompact` describe the *arrays*, not the write: an add or a `ppq` move
 leaves them dense but out of order, a delete leaves a hole, and an assign
 touching neither leaves them exactly as they were — so the unwind skips the
-reindex outright. (`pitch` and `chan` are in the content key but not the sort
-key; `endppq` is in neither.) The skip makes the verbs' own index maintenance
+reindex outright. (`pitch` and `chan` are in a note's seat key but not the
+sort key; `endppq` is in neither.) The skip makes the verbs' own index maintenance
 load-bearing where a from-scratch `rebuild` used to launder it: `mm:assign`
 re-keys `collisionIdx` in place and brackets a chan move with `indexDrop` /
 `indexPut`. The two mutators that write outside the verbs — `resolveCollisions`
@@ -265,7 +265,16 @@ design/archive/incremental-rebuild.md § 6.
 
 **Same-pitch backstop.** `tm`'s separation sites uphold the `(ppq, chan,
 pitch)` invariant in steady state; `resolveCollisions` catches any write path
-that missed. Verbs (`addNote`, `assignNote`) record a pending collision by
+that missed.
+
+The index it consults, `collisionIdx`, is keyed `(chan, pitch, ppq)` and holds
+**notes only**. MIDI's one-voice-per-`(chan, pitch)` rule is the only thing it
+exists to detect, so no cc key ever had a reader; they were written by every
+write path and read by none until 2026-07-17, a hangover from the era when
+`tokenIdx` doubled as the address book. Addressing is `eventsByUuid`'s job, and
+prising the two apart was the whole point of retiring tokens.
+
+Verbs (`addNote`, `assignNote`) record a pending collision by
 `(chan, pitch)` instead of resolving inline — mid-batch collisions can be
 transient, and resolving early would nudge a note a later verb was about to
 move. The outermost unwind (`modifyDepth == 0`) resolves once, after all

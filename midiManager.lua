@@ -57,7 +57,8 @@ local ccs        = {}
 local noteCount  = 0    -- high-water extent of notes/ccs; verbs leave holes, rebuild compacts
 local ccCount    = 0
 local eventsByUuid      = {}
-local collisionIdx      = {}   -- content-keyed; the same-pitch detector, never an address book
+--invariant: on a collision collisionIdx holds the survivor; the loser stays uuid-addressable
+local collisionIdx      = {}   -- note seats only; the same-pitch detector, never an address book
 --invariant: chanIdx[kind][chan].byLoc[loc] = evt; keyed on chan alone, immune to ppq/pitch rewrites
 local chanIdx    = { note = {}, cc = {} }   -- per-channel index; rebuild reconstructs, the verbs maintain
 local maxUUID    = 0
@@ -73,17 +74,13 @@ local carriedPassthrough = {}  -- parsed system messages mm doesn't model; re-em
 --invariant: loadedBlob is the take's bytes as of the model agreeing with them; nil = unknown, never gate
 local loadedBlob            -- converged-rebind gate; see design/archive/incremental-rebuild.md § The take-hash gate
 
--- Where an event sits, not which event it is: two events sharing a content key occupy one
--- MIDI slot, which is exactly what the same-pitch backstop detects. mm addresses by uuid.
+-- Where a note sits, not which note it is: two notes sharing a seat occupy one MIDI slot,
+-- which is exactly what the same-pitch backstop detects. mm addresses by uuid.
 
 -- Chained concat, not util.key: one OP_CONCAT allocates once and coerces the
 -- integer fields inline, vs util.key's per-arg tostring + table + table.concat.
-local function contentKey(evt)
-  local et = evt.evType
-  if et == 'note' then return 'note\0' .. evt.chan .. '\0' .. evt.pitch .. '\0' .. evt.ppq end
-  if et == 'pa'   then return 'pa\0'   .. evt.chan .. '\0' .. evt.pitch .. '\0' .. evt.ppq end
-  if et == 'cc'   then return 'cc\0'   .. evt.chan .. '\0' .. evt.cc    .. '\0' .. evt.ppq end
-  return et .. '\0' .. evt.chan .. '\0' .. evt.ppq
+local function seatKey(note)
+  return note.chan .. '\0' .. note.pitch .. '\0' .. note.ppq
 end
 
 local curveSample do
@@ -301,19 +298,17 @@ local function stableByPpq(list)
   end
 end
 
--- Reuse each event's content key across rebuilds; recompute only when an
--- identity field changes. Weak keys drop deleted events. Cf. sidecarCache.
-local contentKeyCache = setmetatable({}, { __mode = 'k' })
+-- Reuse each note's seat key across rebuilds; recompute only when a seat
+-- field changes. Weak keys drop deleted notes. Cf. sidecarCache.
+local seatKeyCache = setmetatable({}, { __mode = 'k' })
 
-local function cachedContentKey(evt)
-  local hit = contentKeyCache[evt]
-  if hit and hit.evType == evt.evType and hit.chan == evt.chan
-     and hit.pitch == evt.pitch and hit.cc == evt.cc and hit.ppq == evt.ppq then
+local function cachedSeatKey(note)
+  local hit = seatKeyCache[note]
+  if hit and hit.chan == note.chan and hit.pitch == note.pitch and hit.ppq == note.ppq then
     return hit.key
   end
-  local key = contentKey(evt)
-  contentKeyCache[evt] = { evType = evt.evType, chan = evt.chan, pitch = evt.pitch,
-                           cc = evt.cc, ppq = evt.ppq, key = key }
+  local key = seatKey(note)
+  seatKeyCache[note] = { chan = note.chan, pitch = note.pitch, ppq = note.ppq, key = key }
   return key
 end
 
@@ -400,14 +395,13 @@ local function rebuild(metadata)
   local noteSlots, ccSlots = chanIdx.note, chanIdx.cc
   for i, n in ipairs(notes) do
     n.loc = i
-    collisionIdx[cachedContentKey(n)] = n
+    collisionIdx[cachedSeatKey(n)] = n
     seat(chanBucket(noteSlots, n.chan), n)
     if n.uuid then eventsByUuid[n.uuid] = n end
     if metadata then util.assign(n, metadata[n.uuid]) end
   end
   for i, c in ipairs(ccs) do
     c.loc = i
-    collisionIdx[cachedContentKey(c)] = c
     seat(chanBucket(ccSlots, c.chan), c)
     if c.uuid then
       eventsByUuid[c.uuid] = c
@@ -1030,16 +1024,16 @@ local function assignNote(loc, t)
   local note = notes[loc]
   if not note then return end
 
-  local oldKey = contentKey(note)
+  local oldKey = seatKey(note)
   if t.ppq and t.ppq ~= note.ppq then needsSort = true end   -- ppq is the sort key; no other field is
 
   util.assign(note, t)
   if note.muted == false then note.muted = nil end
 
-  local newKey = contentKey(note)
+  local newKey = seatKey(note)
   if newKey ~= oldKey then
     if collisionIdx[newKey] then noteCollision(note, 'assign') end
-    collisionIdx[oldKey] = nil
+    if collisionIdx[oldKey] == note then collisionIdx[oldKey] = nil end   -- only the slot it owns
     collisionIdx[newKey] = note
   end
 
@@ -1075,7 +1069,7 @@ local function addNote(t)
   note.loc = noteCount
   indexPut(note)
   needsSort = true   -- appended past the tail: dense, but no longer in ppq order
-  local key = contentKey(note)
+  local key = seatKey(note)
   if collisionIdx[key] then noteCollision(note, 'add') end
   collisionIdx[key] = note
 
@@ -1128,7 +1122,6 @@ local function assignCC(loc, t)
     return
   end
 
-  local oldKey = contentKey(msg)
   if t.ppq and t.ppq ~= msg.ppq then needsSort = true end   -- ppq is the sort key; no other field is
 
   util.assign(msg, t)
@@ -1138,12 +1131,6 @@ local function assignCC(loc, t)
     if msg.evType ~= 'cc' then msg.cc    = nil end
     if msg.evType ~= 'pa' then msg.pitch, msg.vel = nil, nil end
     if msg.shape ~= 'bezier' then msg.tension = nil end
-  end
-
-  local newKey = contentKey(msg)
-  if newKey ~= oldKey then
-    collisionIdx[oldKey] = nil
-    collisionIdx[newKey] = msg
   end
 
   if hasMetadata then
@@ -1165,7 +1152,6 @@ local function pushCC(t)
   msg.loc = ccCount
   indexPut(msg)
   needsSort = true   -- appended past the tail: dense, but no longer in ppq order
-  collisionIdx[contentKey(msg)] = msg
   return msg
 end
 
@@ -1244,10 +1230,10 @@ function mm:delete(uuid)
   indexDrop(evt)
   needsCompact = true   -- the slot below becomes a hole; ppq order is undisturbed
 
-  -- Evict only a slot this event owns: a collision leaves the loser addressable by
-  -- uuid while collisionIdx holds the survivor.
-  local key = contentKey(evt)
-  if collisionIdx[key] == evt then collisionIdx[key] = nil end
+  if evt.evType == 'note' then
+    local key = seatKey(evt)
+    if collisionIdx[key] == evt then collisionIdx[key] = nil end   -- only the slot it owns
+  end
 
   if evt.evType == 'note' then notes[evt.loc] = nil else ccs[evt.loc] = nil end
   eventsByUuid[evt.uuid] = nil
