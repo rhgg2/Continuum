@@ -55,7 +55,7 @@ tm's write side — a staging layer folded into tm's own scope (the source
 banners it `-- UPDATE MANAGER`), not a separate object. All mutations —
 from tv and from tm's own rebuild-time housekeeping — funnel through
 `tm:addEvent` / `tm:assignEvent` / `tm:deleteEvent`, which apply to a
-local cache (`byUuid`, per-channel `chans`) and accumulate
+local cache (`byUuid`, per-channel `rawIndex`) and accumulate
 mm-facing ops in `adds`/`assigns`/`deletes`. `tm:flush()` commits the
 batch in one `mm:modify` call. The cache is maintained incrementally at
 every mm-write site (the verbs, flush, and rebuild's `mmBatch`), so a full
@@ -68,7 +68,7 @@ surface) are the reason several conventions exist.
 
 ### Incremental index reconciliation
 
-`idxReconcile(uuid)` rebuilds one event's `byUuid`/`chans` entry from mm's
+`idxReconcile(uuid)` rebuilds one event's `byUuid`/`rawIndex` entry from mm's
 canonical clone (`mm:byUuid`), producing an entry byte-identical to what a
 full `reload()` would build for it — both funnel through the shared
 `makeEntry` helper. Callers reconcile every touched uuid after the whole
@@ -77,8 +77,8 @@ vulnerable to reseat sequences whose intermediate states collide, where an
 op-by-op replay could net a live event out of the index.
 
 An entry refreshes in place only when its `ppq` is unchanged; otherwise it is
-removed and reinserted. `chans[chan].notes`/`.pbs` are ppq-sorted while
-`chansListFor` keys on evType/chan/lane alone, so refreshing in place across a
+removed and reinserted. `rawIndex[chan].notes`/`.pbs` are ppq-sorted while
+`rawIndexListFor` keys on evType/chan/lane alone, so refreshing in place across a
 moved onset would leave those lists out of order — and `refreshEntry`'s pb
 branch never copies `ppq`, so that entry would keep a stale onset for good.
 This check was free until 2026-07-17: mm addressed by content token, a ppq move
@@ -143,7 +143,7 @@ tm-specific facts:
   `cm:get('pbRange') * 100` per side.
 - **Lane-1 drives detune.** Every note has a `detune` field, but
   only lane-1 notes feed the pb-realisation logic — `detuneAt` walks
-  only `chans[chan].notes`, which is built from lane-1 entries (see
+  only `rawIndex[chan].notes`, which is built from lane-1 entries (see
   `addLowlevel`). Higher lanes' detune is dead data for realisation
   purposes; it survives so display layers and any future
   lane-promotion paths can read it back.

@@ -573,7 +573,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   local seeds = {}
   local parkedEdits = {}
   local parkedUuidSeq = 0
-  local chans = {}
+  local rawIndex = {}
   local byUuid = {}
   local dirtyPcChans = {}
 
@@ -582,7 +582,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   -- Prevailing lane-1 detune at-or-before ppq; flush derives wire-raw = cents + detuneAt(seat).
   -- Full absorber reconciliation is rebuild's absorber pass; um just stages the best-effort value.
   local function detuneAt(chan, P)
-    local n = util.seek(chans[chan].notes, 'at-or-before', P)
+    local n = util.seek(rawIndex[chan].notes, 'at-or-before', P)
     return (n and n.detune) or 0
   end
 
@@ -600,28 +600,28 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
 
   ----- Low-level mutation
 
-  -- chans indexes only what detune/seek read: lane-1 notes and pbs. One place to
+  -- rawIndex indexes only what detune/seek read: lane-1 notes and pbs. One place to
   -- resolve the target list, so insert/remove/migrate stay in sync across ops.
-  local function chansListFor(evt, chan, lane)
-    if evt.evType == 'note' and lane == 1 then return chans[chan].notes end
-    if evt.evType == 'pb' then return chans[chan].pbs end
+  local function rawIndexListFor(evt, chan, lane)
+    if evt.evType == 'note' and lane == 1 then return rawIndex[chan].notes end
+    if evt.evType == 'pb' then return rawIndex[chan].pbs end
   end
-  -- During a batched reconcile this holds the lists chansInsert touched; the batch
+  -- During a batched reconcile this holds the lists rawIndexInsert touched; the batch
   -- sorts each once at the end instead of re-sorting per insert. nil = sort inline.
   local deferredSort
-  local function chansInsert(evt)
-    local tbl = chansListFor(evt, evt.chan, evt.lane)
+  local function rawIndexInsert(evt)
+    local tbl = rawIndexListFor(evt, evt.chan, evt.lane)
     if not tbl then return end
     util.add(tbl, evt)
     if deferredSort then deferredSort[tbl] = true else sortByPPQ(tbl) end
   end
-  local function chansRemove(evt, chan, lane)
-    local tbl = chansListFor(evt, chan or evt.chan, lane or evt.lane)
+  local function rawIndexRemove(evt, chan, lane)
+    local tbl = rawIndexListFor(evt, chan or evt.chan, lane or evt.lane)
     if not tbl then return end
     for i, item in ipairs(tbl) do if item == evt then table.remove(tbl, i); return end end
   end
 
-  -- The batching door: chans is um's, so um owns the deferral. Inserts inside fn flag their list;
+  -- The batching door: rawIndex is um's, so um owns the deferral. Inserts inside fn flag their list;
   -- each is sorted once here. A caller reaching for the flag directly gets a nil it cannot see.
   function withDeferredSort(fn)
     local prev = deferredSort
@@ -649,7 +649,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   end
 
   -- Refresh an existing entry from mm's fresh clone in place: prev keeps its ppq-sorted
-  -- slot in chans, so a same-slot reconcile skips the chansRemove scan, reinsert and sort.
+  -- slot in rawIndex, so a same-slot reconcile skips the rawIndexRemove scan, reinsert and sort.
   local function refreshEntry(prev, e)
     if e.evType == 'pb' then
       prev.ppqL, prev.shape, prev.tension = e.ppqL, e.shape, e.tension
@@ -662,20 +662,20 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     end
   end
 
-  -- Incremental index upkeep for one uuid. chans lists are ppq-sorted and chansListFor ignores
+  -- Incremental index upkeep for one uuid. rawIndex lists are ppq-sorted and rawIndexListFor ignores
   -- ppq, so refresh in place only at an unchanged ppq. see docs/trackerManager.md § Incremental index reconciliation
   function idxReconcile(uuid)
     if not uuid then return end
     local prev = byUuid[uuid]
     local _, e = mm:byUuid(uuid)
     if e and prev and prev.ppq == e.ppq
-       and chansListFor(prev, prev.chan, prev.lane) == chansListFor(e, e.chan, e.lane) then
+       and rawIndexListFor(prev, prev.chan, prev.lane) == rawIndexListFor(e, e.chan, e.lane) then
       refreshEntry(prev, e)
       return
     end
     byUuid[uuid] = nil
-    if prev then chansRemove(prev) end
-    if e then chansInsert(makeEntry(e)) end
+    if prev then rawIndexRemove(prev) end
+    if e then rawIndexInsert(makeEntry(e)) end
   end
 
   -- Absorber derivation inputs: any pb, and lane-1 notes' onset/detune geometry.
@@ -699,13 +699,13 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   end
   local function seedEvent(evt) seedAt(evt.chan, evt.ppqL or evt.ppq, evt.uuid) end
 
-  --contract: only lane==1 notes index into chans[chan].notes
+  --contract: only lane==1 notes index into rawIndex[chan].notes
   --contract: higher-lane notes get queued for mm but don't feed detune/realisation reads
   --contract: caller supplies evt.evType
   local function addLowlevel(evt)
     if pbSource(evt, evt.lane) then dirtyChan(evt.chan) end
     seedEvent(evt)
-    chansInsert(evt)
+    rawIndexInsert(evt)
     util.add(adds, { evt = evt })
   end
 
@@ -721,11 +721,11 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     seedEvent(evt)
     -- Keep the lane-1 detune index coherent: a chan OR lane move migrates the
     -- entry between lists; a ppq move resorts in place (util.seek needs ascending).
-    local oldList = chansListFor(evt, oldChan, oldLane)
-    local newList = chansListFor(evt, evt.chan, evt.lane)
+    local oldList = rawIndexListFor(evt, oldChan, oldLane)
+    local newList = rawIndexListFor(evt, evt.chan, evt.lane)
     if oldList ~= newList then
-      chansRemove(evt, oldChan, oldLane)
-      chansInsert(evt)
+      rawIndexRemove(evt, oldChan, oldLane)
+      rawIndexInsert(evt)
     elseif update.ppq ~= nil and newList then
       sortByPPQ(newList)
     end
@@ -743,7 +743,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   local function deleteLowlevel(evt)
     if pbSource(evt, evt.lane) then dirtyChan(evt.chan) end
     seedEvent(evt)
-    chansRemove(evt)
+    rawIndexRemove(evt)
     if evt.uuid then byUuid[evt.uuid] = nil end
 
     if evt.realised then
@@ -967,7 +967,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
       if evt.evType == 'pb' then evt.cents, evt.val = evt.val or 0, nil end
       -- pb is one value per tick: adopt a pb already at this slot -- including a hidden
       -- absorber seat -- so we never push a rival onto it. see docs/tuning.md § Absorber reconciliation
-      local seat = evt.evType == 'pb' and util.seek(chans[evt.chan].pbs, 'at-or-before', evt.ppq)
+      local seat = evt.evType == 'pb' and util.seek(rawIndex[evt.chan].pbs, 'at-or-before', evt.ppq)
       if seat and seat.ppq == evt.ppq then
         assignLowlevel(seat, { cents = evt.cents, shape = evt.shape, derived = util.REMOVE })
       else
@@ -1119,9 +1119,9 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
       end
       for _, o in ipairs(flushAdds) do
         local uuid = mm:add(o.evt)
-        -- addLowlevel already filed the raw staged object into chans; drop it by identity
+        -- addLowlevel already filed the raw staged object into rawIndex; drop it by identity
         -- and re-file mm's canonical clone so the entry matches reload (cc shape, pb cents).
-        if uuid then chansRemove(o.evt); idxReconcile(uuid) end
+        if uuid then rawIndexRemove(o.evt); idxReconcile(uuid) end
       end
     end)
     perf.stop('mm')
@@ -1136,10 +1136,10 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   local function loadIndex()
     mm:reindexIfStale()   -- deferred edits may leave mm sparse/unsorted; events() below needs compact+sorted (item 5)
     byUuid = {}
-    for i = 1, 16 do chans[i] = { notes = {}, pbs = {} } end
+    for i = 1, 16 do rawIndex[i] = { notes = {}, pbs = {} } end
     for _, e in mm:events() do
       local evt = makeEntry(e)
-      local tbl = chansListFor(evt, evt.chan, evt.lane)
+      local tbl = rawIndexListFor(evt, evt.chan, evt.lane)
       if tbl then util.add(tbl, evt) end
     end
     -- mm:events() yields notes then ccs each already ppq-sorted (mm's stableByPpq);

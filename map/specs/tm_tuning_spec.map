@@ -1,4 +1,4 @@
-@spec tm_tuning_spec  src=tests/specs/tm_tuning_spec.lua  loc=883  sha=14993a2  cases=24
+@spec tm_tuning_spec  src=tests/specs/tm_tuning_spec.lua  loc=883  sha=5c74b87  cases=24
 @exercises trackerManager (h.tm), midiManager (h.fm)
 @surface   tm:addEvent, tm:flush, fm:dump, tm:getChannel, tm:assignEvent, tm:rebuild, tm:deleteEvent
 @harness   mk{seed.ccs, seed.notes}

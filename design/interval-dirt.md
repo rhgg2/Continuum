@@ -1,6 +1,6 @@
 # interval dirt — dirty ppq ranges, not dirty channels
 
-> Working design doc, **not started**. Successor to the
+> Working design doc, **in flight**. Successor to the
 > `incremental-rebuild` programme (`design/archive/incremental-rebuild.md`,
 > closed 2026-07-15). One idea: make the unit of derivation dirt a **ppq
 > interval within a channel** rather than the whole channel. It subsumes
@@ -11,7 +11,7 @@
 
 | | |
 |---|---|
-| state | planned (§ Implementation plan), unstarted |
+| state | in flight — phases 1–3 landed; phase 4 landed 2026-07-17; phase 4.5 is the active front |
 | supersedes | `incremental-rebuild` gap 4 (fx dirt signal) |
 | enduring model it changes | `docs/trackerManager.md` § Derivation dirt |
 | the hard part | was forward propagation — closed 2026-07-15 by onset-bounded closures (§ The crux, closed); same-pitch widens the tails closure rather than leaving tm (§ Same-pitch is a projection artefact), and tails *produces* its closure from the neighbour lookup it already does, rather than consuming a fence it could leak past (§ The tails closure is the walk's output, not its input) |
@@ -685,7 +685,9 @@ The dense take's edit-path `internals` 18.5 + `projLogical` 8.5 +
   raw fields on column events — a hand-synced cache of mm with a
   dual-write invariant at every mm write site, whose failure mode is
   the silent-stale class this design names the governing risk. mm is
-  already the persistent raw store; read it.
+  already the persistent raw store; read it. *Superseded by phase 4.5:*
+  the per-pass build was measured as the edit path's single largest
+  stage, and the working set becomes um's maintained index instead.
 - **fx windows are carried state**, same regime as columns. A window
   recomputes iff a dirty interval intersects its extent
   (edge-inclusive — deleting the bounding next same-lane onset seeds
@@ -818,10 +820,11 @@ separated from neighbours that also stood still, has no news to report.
 A note is disturbed only when this pass's dirt intersects its `ppqL`, or
 unconditionally when derived — fx regenerates `noteLive` whole, so a
 tile's raw is news whatever the dirt says. Collision is one-directional:
-a disturbed note can shove only its same-pitch predecessor, and shoving
-disturbs that predecessor in turn, so the cascade carries itself forward
-without needing a fence (§ The tails closure is the walk's output, not
-its input).
+a note colliding with its settled same-pitch predecessor gives way
+forward past it — the predecessor never moves — and giving way marks the
+mover disturbed afresh, so the cascade carries itself forward through
+successive give-ways without needing a fence (§ The tails closure is the
+walk's output, not its input).
 
 **Delete `dirtyChan(chan)` at `:2703` in this commit** — not later, and
 not narrowed in place. It carries the same fact as the emission on the
@@ -840,9 +843,104 @@ channel sweep becomes a per-seed scan that a dense single-channel take
 could make worse than the whole-channel build it replaces. That is the
 phase's real cost risk, and glasswork is the fixture that shows it.
 
+**Landed 2026-07-17** (`9a4e341`; `e4b3804` follow-up). The measured
+verdict reshaped the plan: the narrowing itself bought ~0.8ms of an
+11.7ms walk — the structural half (no group builds, one backward sweep)
+bought the rest — and the profile found the real cost a stage up, in
+`rawScratch` (§ phase 4.5). The predicted neighbour-query risk never
+materialised, because the landed shape never queries per seed: one
+backward sweep resolves lane and pitch successors for every note in a
+single pass, running state keyed by lane/pitch rather than by note.
+
 The walk still unions `noteLive` wholesale until phase 5 — predicted
 fxNotes outside dirty intervals re-derive converged clips, zero writes,
 macro-take cost only.
+
+### Phase 4.5 — the raw working set is um's index
+
+> Added 2026-07-18, out of phase 4 commit 3's post-landing profile. The
+> commit's narrowing bought ~0.8ms; `rawScratch`, the stage phase 3
+> re-added "for the interim", cost more than the whole walk saved. Half
+> of that was `util.pick` re-parsing its key string once per note
+> (fixed, `e4b3804`, 19.1 → 9.4ms); the rest is the clone itself, and
+> this phase deletes it.
+
+Phase 3's working-set bullet rejected raw fields on column events as "a
+hand-synced cache of mm with a dual-write invariant at every mm write
+site" — and then built a per-pass derivation while overlooking that the
+codebase already maintains exactly that cache, done right. um's index
+(`byUuid`, per-channel `chans`) holds an um-owned clone of **every** mm
+event in the **raw frame**, `ppqL` sidecar intact — `makeEntry` never
+projects — and every mm-write site reconciles it: the verbs, flush, and
+each `mmBatch` commit run `idxReconcile` over the touched set
+(`trackerManager.lua:1517`). The dual-write invariant the rejection
+feared is not a risk to decline; it is load-bearing, shipped, and was
+validated by shadow-compare (`docs/trackerManager.md` § Incremental
+index reconciliation). scratch re-derives a filtered copy of this index
+wholesale each pass — on the dense edit, ~9.4ms cloning 8437 records so
+the walk can bound three — and the walk then pays ~5ms sorting an array
+whose source lists were sorted all along.
+
+So the working set stops being derived and becomes the index. The walk,
+`rebuildPA`/`findNoteColumnForPitch`, `rebuildPbs` and `rebuildPCs` read
+index entries directly, with scratch's predicate (`not derived and ppqL
+~= nil`) applied at the use sites; `buildRawScratch`, `pickScratch` and
+the scratch threading die.
+
+Three questions closed before planning, one landmine found:
+
+- **Mid-pass mutation is safe, with one exemption.** Nothing reads the
+  index between the walk's nudge/clip and `clampWrites.commit()`; the
+  other readers (`detuneAt`, the pb seat adoption, `forEachAttachedPA`)
+  are command-path, which never overlaps a rebuild. The commit is
+  convergent by construction — `mm:assign` writes the values already on
+  the entry, and the post-commit `idxReconcile` refreshes it to the same
+  state. The exemption: `refreshEntry`'s nil-sweep strips fields mm's
+  clone lacks, so the `colEvt` decoration (below) joins `realised` on
+  its exempt list.
+- **A nudge's resort is already solved.** `idxReconcile` removes and
+  reinserts an entry whose `ppq` changed — the sorted lists re-true at
+  the very commit that lands the nudge. The walk reorders its own
+  working sequence only under `anyNudge`, as now.
+- **Restores stay outside the index.** A restored note has no uuid until
+  `mm:add` assigns one at `deferred.commit`; pre-filing it would
+  duplicate against the canonical entry `idxReconcile` files at that
+  commit. They remain extra walk inputs, exactly as today.
+- **The landmine: wholesale passes consume a stale index.** On
+  `wholesale=true` every mm event object is new and the index is dead —
+  and `reload()` runs at the *end* of the pipeline (`:3226`), because
+  nothing in the pipeline consumes the index today. Under this phase the
+  walk would read dead tables. So `reload()` moves to the pipeline head
+  on wholesale passes; the pipeline's own `mmBatch` commits then
+  maintain it incrementally, exactly as edit passes do, and the end
+  state is identical.
+
+Four commits, each green alone:
+
+1. **Rename.** `chans` → `rawIndex` (`chansListFor` / `chansInsert` /
+   `chansRemove` follow). It sits one letter from `channels`, the
+   logical column world; the new name says the frame and the role.
+   Mechanical, zero behaviour.
+2. **`reload()` to the pipeline head** on wholesale passes.
+   Behaviour-neutral today; load-bearing for commit 4.
+3. **Widen.** `rawIndex[chan].notes` goes all-lane, sorted
+   raw-then-logical — strictly finer than today's bare-ppq `sortByPPQ`,
+   so `at-or-before` seeks are unaffected; `detuneAt` gains a lane-1
+   filter walking back from its seek rather than keeping a second
+   overlapping list. Entries gain a `colEvt` backref stamped where
+   columns seat their cells (internals, externals, region park) —
+   O(dirty clones), replacing the per-pass O(channel) `colByUuid` scan —
+   with the `refreshEntry` exemption.
+4. **Consume and delete.** The four readers move onto the index; the
+   walk's whole-channel sort becomes a merge of the pre-sorted index
+   list with the small sorted extras (restores + `noteLive`);
+   `buildRawScratch` dies.
+
+Expected on the dense edit: `rawScratch` ~9.4 → ~0, the walk's sort ~5
+→ a sub-ms merge — roughly 14ms → 4.5ms across the two stages. What
+remains O(channel) is the sweep's own traversal (array build, seed
+test, successor bookkeeping); if a profile ever demands more, that is a
+separate narrowing with its own design, not this one.
 
 ### Phase 5 — fx producers consume intervals
 
@@ -940,4 +1038,7 @@ successor, not this project.)
    plan, phase 3): the raw working set, built per pass from mm's
    per-channel index — array order is raw-ppq ascending after
    reindex — whole-channel at phase 3, narrowed to the closed region
-   at phase 4.
+   at phase 4. **Re-resolved** (§ phase 4.5): the per-pass build was
+   measured as the edit path's largest single cost; the persistent
+   raw-order index is um's own (`byUuid` + per-channel lists), widened
+   to all lanes and consumed directly.

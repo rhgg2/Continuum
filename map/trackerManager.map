@@ -1,4 +1,4 @@
-@module trackerManager  src=trackerManager.lua  loc=3472  sha=9a4e341  mode=chunk  self=tm
+@module trackerManager  src=trackerManager.lua  loc=3472  sha=e4b3804  mode=chunk  self=tm
 @deps mm, cm, ds, defaultNoteCols
 
 # Invariants & contracts
@@ -212,22 +212,22 @@
       -- Ownership is intent, so it is tested logically: a PA carries its own seat and reswings from
       -- it, and a raw-frame test would let a delay or a nudge detach one. see docs/trackerManager.md § PA binding
       · Low-level mutation
-  @fn chansListFor(evt, chan, lane)  @ 605-608
-      -- chans indexes only what detune/seek read: lane-1 notes and pbs. One place to
+  @fn rawIndexListFor(evt, chan, lane)  @ 605-608
+      -- rawIndex indexes only what detune/seek read: lane-1 notes and pbs. One place to
       -- resolve the target list, so insert/remove/migrate stay in sync across ops.
-  @fn chansInsert(evt)  @ 612-617
-  @fn chansRemove(evt, chan, lane)  @ 618-622
+  @fn rawIndexInsert(evt)  @ 612-617
+  @fn rawIndexRemove(evt, chan, lane)  @ 618-622
   @fn withDeferredSort(fn)  @ 626-632
-      -- The batching door: chans is um's, so um owns the deferral. Inserts inside fn flag their list;
+      -- The batching door: rawIndex is um's, so um owns the deferral. Inserts inside fn flag their list;
       -- each is sorted once here. A caller reaching for the flag directly gets a nil it cannot see.
   @fn makeEntry(e)  @ 636-649
       -- Construct the um-frame index entry for one mm clone and file it into byUuid.
       -- Shared verbatim by full reload and the incremental verbs so both build identical entries.
   @fn refreshEntry(prev, e)  @ 653-663
       -- Refresh an existing entry from mm's fresh clone in place: prev keeps its ppq-sorted
-      -- slot in chans, so a same-slot reconcile skips the chansRemove scan, reinsert and sort.
+      -- slot in rawIndex, so a same-slot reconcile skips the rawIndexRemove scan, reinsert and sort.
   @fn idxReconcile(uuid)  @ 667-679
-      -- Incremental index upkeep for one uuid. chans lists are ppq-sorted and chansListFor ignores
+      -- Incremental index upkeep for one uuid. rawIndex lists are ppq-sorted and rawIndexListFor ignores
       -- ppq, so refresh in place only at an unchanged ppq. see docs/trackerManager.md § Incremental index reconciliation
   @fn pbSource(evt, lane)  @ 683-685
   @fn assignDirtiesPb(evt, oldLane, update)  @ 686-693
@@ -236,7 +236,7 @@
       -- into interval-valued dirt (§ phase 2). A delete seed's dying uuid is safe: see docs/trackerManager.md § Interval seeds.
   @fn seedEvent(evt)  @ 700
   @fn addLowlevel(evt)  @ 705-710
-      @contract  only lane==1 notes index into chans[chan].notes  @ 702
+      @contract  only lane==1 notes index into rawIndex[chan].notes  @ 702
       @contract  higher-lane notes get queued for mm but don't feed detune/realisation reads  @ 703
       @contract  caller supplies evt.evType  @ 704
   @fn assignLowlevel(evt, update)  @ 714-741
@@ -516,7 +516,7 @@
   @use call    timing.resolveComposite  @ currentSwing:1215
   @use call    tuning.findTemper  @ rebuildFx:2387
   @use call    tuning.transposeStep  @ rebuildFx:2389
-  @use call    util.add  @ mergeWindows:148,154 overlapping:161 sumStreams:191,211,228,232,239 negated:252 sliceCurve:272,274 chainCuts:303 foldChains:348,351 eachWindowNote:381 membersOf:394 channelStreams:407,412 reconcilePCsForChan:529 chansInsert:615 addLowlevel:709 assignLowlevel:740 deleteLowlevel:750 reconcilePcs:835,842 addParked:991 assignParked:995 deleteParked:999 flushParked:1021 flush:1083 loadIndex:1143 setLength:1290,1292 rescaleLength:1334 tileLength:1365 pushNoteCol:1441 mmBatch:1498,1499,1500,1502 exciseNotes:1555 rebuildInternals:1579,1582,1583,1610,1612 rawSpanMap:1634 rebuildCCs:1658,1670,1707 rebuildExternals:1849,1850 renderUnion:1896 rebuildRegionPark:1934,1940,1941,1943,1962,1986,1987,2014,2042,2050,2057,2071,2097,2120,2121,2148 buildRawScratch:2207,2216 rebuildPA:2262,2278 computeFxWindows:2313 rebuildFx:2357,2362,2474,2475,2490,2503,2514,2546,2559,2574 rebuildTails:2617,2620,2628,2691,2738 rebuildPbs:2781,2786,2823,2827,2860,2886,2972,3000,3004,3080 rebuildPCs:3105,3109,3125 rebuildPipeline:3174,3179,3191
+  @use call    util.add  @ mergeWindows:148,154 overlapping:161 sumStreams:191,211,228,232,239 negated:252 sliceCurve:272,274 chainCuts:303 foldChains:348,351 eachWindowNote:381 membersOf:394 channelStreams:407,412 reconcilePCsForChan:529 rawIndexInsert:615 addLowlevel:709 assignLowlevel:740 deleteLowlevel:750 reconcilePcs:835,842 addParked:991 assignParked:995 deleteParked:999 flushParked:1021 flush:1083 loadIndex:1143 setLength:1290,1292 rescaleLength:1334 tileLength:1365 pushNoteCol:1441 mmBatch:1498,1499,1500,1502 exciseNotes:1555 rebuildInternals:1579,1582,1583,1610,1612 rawSpanMap:1634 rebuildCCs:1658,1670,1707 rebuildExternals:1849,1850 renderUnion:1896 rebuildRegionPark:1934,1940,1941,1943,1962,1986,1987,2014,2042,2050,2057,2071,2097,2120,2121,2148 buildRawScratch:2207,2216 rebuildPA:2262,2278 computeFxWindows:2313 rebuildFx:2357,2362,2474,2475,2490,2503,2514,2546,2559,2574 rebuildTails:2617,2620,2628,2691,2738 rebuildPbs:2781,2786,2823,2827,2860,2886,2972,3000,3004,3080 rebuildPCs:3105,3109,3125 rebuildPipeline:3174,3179,3191
   @use call    util.assign  @ foldSub:315 soundingCell:458 refreshEntry:660 assignLowlevel:717 flushParked:1025 projectCC:1449 rebuildExternals:1847 parkSpec:1881 rebuildRegionPark:1991,2003,2053,2081,2159,2178 rebuildFx:2441
   @use call    util.bucket  @ allocateRegionLanes:426,432,444 reconcilePCsForChan:524 seedAt:698 flush:1073,1076 realiseParked:1864 rebuildRegionPark:1950,2127 rebuildFx:2345,2371,2377,2402,2416,2493 rebuildPbs:2802
   @use call    util.clamp  @ centsToRaw:132 sumStreams:202 rebuildFx:2576 rebuildPbs:2824
@@ -583,7 +583,7 @@
   @field r cents  @ rebuildPbs:3041,3043,3045,3051,3078
   @field w cents  @ refreshEntry:656 addEvent:972 1879 rebuildRegionPark:2161,2178 rebuildFx:2345 rebuildPbs:2824,2852,2907,2909,2911,2928
   @field w cents  @ rebuildPbs:2942,2958,3002,3041,3043,3045
-  @field r chan  @ forEachEvent:472 forEachAttachedPA:594 chansInsert:613 chansRemove:619 idxReconcile:672 seedEvent:700 addLowlevel:706 assignLowlevel:715,718,725
+  @field r chan  @ forEachEvent:472 forEachAttachedPA:594 rawIndexInsert:613 rawIndexRemove:619 idxReconcile:672 seedEvent:700 addLowlevel:706 assignLowlevel:715,718,725
   @field r chan  @ deleteLowlevel:744 addNote:769,770 deleteNote:775 resizeNote:792 assignNote:814,815 reconcilePcs:834
   @field r chan  @ reconcilePcs:840 realiseNoteUpdate:902,904,912 realiseAddPpq:925,927,929 assignEvent:941 addEvent:970 findParked:1008 flushParked:1019
   @field r chan  @ flush:1073,1076,1102,1107 loadIndex:1142 rawDivergesFromLogical:1532,1534 rebuildInternals:1594,1607,1609 rawSpanMap:1632
@@ -641,7 +641,7 @@
   @field r endppqL  @ allocateRegionLanes:431,432,443,444 fxKey:549 forEachAttachedPA:592 resizeNote:783 assignNote:820 stampEndppq:872,874
   @field r endppqL  @ tileLength:1380 projectEvent:1468,1470,1471 rebuildRegionPark:1993 rebuildTails:2700,2704,2705,2731,2732
   @field w endppqL  @ resizeNote:805 assignNote:821 rescaleLength:1342 tileLength:1380,1381 projectEvent:1478 rebuildExternals:1840 rebuildRegionPark:1985,1993 rebuildFx:2507
-  @field r evType  @ sortNoteColumn:95 eachWindowNote:381 channelStreams:406 forEachEvent:475 forEachAttachedPA:594 chansListFor:606,607 makeEntry:638 refreshEntry:654 pbSource:684
+  @field r evType  @ sortNoteColumn:95 eachWindowNote:381 channelStreams:406 forEachEvent:475 forEachAttachedPA:594 rawIndexListFor:606,607 makeEntry:638 refreshEntry:654 pbSource:684
   @field r evType  @ assignDirtiesPb:687 reconcilePcs:834,840 deleteEvent:864 assignEvent:937,942 addEvent:959,967,970 addParked:990 findParked:1004 flush:1073
   @field r evType  @ flush:1076,1101,1106 tileLength:1378 setMutedChannels:1426 rawDivergesFromLogical:1533 exciseNotes:1554 rebuildCCs:1658,1669,1692
   @field r evType  @ rebuildCCs:1699,1703,1704 rebuildRegionPark:1920,1950,1961,2013,2038,2114,2117,2140
@@ -688,7 +688,7 @@
   @field w key  @ reconcilePCsForChan:537 reconcileFx:556 rebuildFx:2587 rebuildPCs:3105,3109
   @field r kind  @ rebuildFx:2466
   @field r kinds  @ rebuildFx:2466
-  @field r lane  @ allocateRegionLanes:432 reconcilePCsForChan:528 chansInsert:613 chansRemove:619 idxReconcile:672 assignDirtiesPb:688 addLowlevel:706 assignLowlevel:715,725 deleteLowlevel:744
+  @field r lane  @ allocateRegionLanes:432 reconcilePCsForChan:528 rawIndexInsert:613 rawIndexRemove:619 idxReconcile:672 assignDirtiesPb:688 addLowlevel:706 assignLowlevel:715,725 deleteLowlevel:744
   @field r lane  @ assignNote:814 reconcilePcs:835,842 addEvent:962 loadIndex:1142 rebuildInternals:1598,1599 externalLanePacker:1807,1808,1809,1811,1812
   @field r lane  @ externalLanePacker:1812 rebuildExternals:1836,1842 realiseParked:1864 rebuildRegionPark:1979,1987,1988,2002 findNoteColumnForPitch:2229,2230,2239
   @field r lane  @ rebuildFx:2438,2501,2504,2534,2559 rebuildTails:2629,2635,2681,2683,2685
@@ -724,7 +724,7 @@
   @field w noteHost  @ rebuildPipeline:3180,3192
   @field r noteLive  @ rebuildFx:2559 rebuildPbs:2756 rebuildPipeline:3207,3215
   @field w noteLive  @ rebuildFx:2420
-  @field r notes  @ eachWindowNote:376 channelStreams:404 forEachEvent:473 detuneAt:585 chansListFor:606 setMutedChannels:1424 pushNoteCol:1440 exciseNotes:1551 rebuildInternals:1595 rebuildExtraColumns:1732,1733,1738
+  @field r notes  @ eachWindowNote:376 channelStreams:404 forEachEvent:473 detuneAt:585 rawIndexListFor:606 setMutedChannels:1424 pushNoteCol:1440 exciseNotes:1551 rebuildInternals:1595 rebuildExtraColumns:1732,1733,1738
   @field r notes  @ rebuildExtraColumns:1738 externalLanePacker:1806 rebuildRegionPark:1957,1979,1987,1988,2002,2011 buildRawScratch:2197 findNoteColumnForPitch:2224 computeFxWindows:2296,2299
   @field r notes  @ rebuildFx:2395,2400,2439,2471,2474,2475,2502,2520 rebuildPipeline:3176 rebuild:3259
   @field w notes  @ hostProducer:463 loadIndex:1139 rebuildExtraColumns:1731,1734 rebuildFx:2439,2471,2476,2551 rebuild:3255,3259
@@ -750,7 +750,7 @@
   @field w pbChains  @ rebuildFx:2420
   @field w pbRange  @ derivationInputs:115
   @field w pbRangeCents  @ rebuildFx:2410
-  @field r pbs  @ chansListFor:607 addEvent:970
+  @field r pbs  @ rawIndexListFor:607 addEvent:970
   @field w pbs  @ loadIndex:1139
   @field r pc  @ reconcilePCsForChan:521 rebuildExtraColumns:1739 rebuildPCs:3125,3128
   @field w pc  @ rebuildExtraColumns:1739 rebuildPCs:3120

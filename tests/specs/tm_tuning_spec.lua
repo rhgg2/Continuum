@@ -154,7 +154,7 @@ return {
     end,
   },
 
-  -- Regression: chans[chan].notes is sorted by ppq for util.seek, but
+  -- Regression: rawIndex[chan].notes is sorted by ppq for util.seek, but
   -- assignLowlevel mutates ppq in place. If a note's new ppq leapfrogs
   -- a same-channel neighbour, the channel index goes out of order;
   -- without a re-sort, post-mutation lookups inside resizeNote
