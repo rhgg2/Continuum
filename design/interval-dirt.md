@@ -806,7 +806,22 @@ per-seed neighbour queries against mm's ppq-ordered per-channel index —
 phase 3's scratch anchor query (open q5, resolved) — and the walk grows
 its working set as the sweep reaches. I8 stands unchanged and
 `collisionsResolved` gains no new job (§ The tails closure is the walk's
-output, not its input).
+output, not its input). The backward sweep that builds these maps runs
+once, right-to-left: at each note it reads the running next for its lane
+and pitch, and — since 'next' is strict-greater on raw ppq — a chord-mate
+sharing the note's own raw ppq is not itself next, so it hands over the
+next it already resolved rather than standing in as one.
+
+`disturbed` is the walk's per-note seed test, kept deliberately narrow:
+an unnamed note that kept its raw and its ceiling, and last pass left it
+separated from neighbours that also stood still, has no news to report.
+A note is disturbed only when this pass's dirt intersects its `ppqL`, or
+unconditionally when derived — fx regenerates `noteLive` whole, so a
+tile's raw is news whatever the dirt says. Collision is one-directional:
+a disturbed note can shove only its same-pitch predecessor, and shoving
+disturbs that predecessor in turn, so the cascade carries itself forward
+without needing a fence (§ The tails closure is the walk's output, not
+its input).
 
 **Delete `dirtyChan(chan)` at `:2703` in this commit** — not later, and
 not narrowed in place. It carries the same fact as the emission on the

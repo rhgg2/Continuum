@@ -1,4 +1,4 @@
-@module voicing  src=voicing.lua  loc=72  sha=9d13d4a  mode=namespace  self=voicing
+@module voicing  src=voicing.lua  loc=63  sha=9d13d4a  mode=namespace  self=voicing
 
 # Imports
   @const util = 'util'  @ 5
@@ -18,25 +18,22 @@
   -- Separation
   @api voicing.resolveGroup(group)  @ 27-54
       @contract  sorts group (ppq, ppqL) in place; returns kills, voiced, onsetOf (separated onsets)  @ 26
-  @api voicing.nudgeOnsets(events)  @ 58-70
-      -- Nudge colliding same-(chan,pitch) onsets to prev.ppq+1 (cascades; fixed externals frozen).
-      -- Pure geometry on evt.ppq; callers stage mm writes. Input sorted (raw, ppqL).
+  @api voicing.separateOnset(e, prev)  @ 59-61
+      -- The separation verdict for one collision: give way by a tick, unless the note is a fixed
+      -- external. Callers own the traversal (whose order decides the cascade) and stage mm writes.
+      @contract  e's separated raw onset given its settled same-(chan,pitch) predecessor; nil if e stands  @ 58
 
 # Uses (outbound edges)
-  @use call    util.add  @ resolveGroup:40,42,46,50 nudgeOnsets:65
-  @use call    util.key  @ nudgeOnsets:61
+  @use call    util.add  @ resolveGroup:40,42,46,50
   @use require util  @ 5
 
 # Fields (r read / w write incl. constructor keys)
-  @field r chan  @ nudgeOnsets:61
   @field r derived  @ supersedes:14 redundant:20
   @field r detune  @ redundant:21
   @field r endppq  @ supersedes:16
   @field r endppqL  @ supersedes:16
-  @field r fixed  @ nudgeOnsets:63
-  @field w nudgeOnsets  @ nudgeOnsets:58
-  @field r pitch  @ nudgeOnsets:61
-  @field r ppq  @ resolveGroup:29,37,49 nudgeOnsets:63,64
-  @field w ppq  @ nudgeOnsets:64
+  @field r fixed  @ separateOnset:60
+  @field r ppq  @ resolveGroup:29,37,49 separateOnset:60
   @field r ppqL  @ redundant:21 resolveGroup:30
   @field w resolveGroup  @ resolveGroup:27
+  @field w separateOnset  @ separateOnset:59

@@ -689,13 +689,22 @@ external collapse by intent-aware load-dedup (`docs/midiManager.md`
 for take integrity — a missed collision is resolved by mm and surfaced
 via `collisionsResolved` instead of silently eating a voice.
 
-`voicing.nudgeOnsets(records)` is the separation geometry: walk a
-`(raw, ppqL)`-sorted list and bump each colliding successor to
-`prev.ppq + 1` (cascading; `fixed` externals frozen). Pure geometry on
-`evt.ppq`; it returns the moved records so the caller stages its own mm
-write. **One site separates**: the tail walk (`rebuildTails`), where real
-notes and predicted fxNotes walk together — separate before the atomic
-note commit, then clip tails.
+`voicing.separateOnset(e, prev)` is the separation *verdict*: given a
+record and its settled same-pitch predecessor, it returns the raw onset
+that gives way — `prev.ppq + 1` — or nil if the record stands (a `fixed`
+external never gives way). Pure geometry on `evt.ppq`; the caller stages
+its own mm write.
+
+The traversal is deliberately not `voicing`'s. Which predecessor counts
+as settled, and how far a cascade runs, depends on which notes the pass
+has news for — and that is interval dirt, which only the caller knows
+(§ Rebuild: tail walk). `voicing` owned the walk too until 2026-07-17,
+when the tail walk went interval-native and the whole-channel traversal
+it exported stopped being the one anybody wanted.
+
+**One site separates**: the tail walk (`rebuildTails`), where real notes
+and predicted fxNotes walk together — separate before the atomic note
+commit, then clip tails.
 
 The reseat (`rebuildInternals`) and the flush scan nudged too until
 2026-07-17. Both went for one reason: a nudge they skip is not a lost
@@ -757,7 +766,7 @@ loop wrote was overwritten moments later; the onsets it separated the
 walk separates just as surely (§ Same-pitch onset separation).
 
 The kills do not follow them out, and the asymmetry is precisely why:
-`nudgeOnsets` separates but never kills. A duplicate that reaches the
+the walk separates but never kills. A duplicate that reaches the
 walk is separated rather than collapsed — and a separated pair is no
 longer a collision, so mm's backstop finds nothing left to dedup either.
 This scan is the only site in the stack that dedups a staged add against
@@ -908,7 +917,7 @@ artefact.
 
 Collision (current raw `<=` prev same-pitch raw, raw-order with ppqL
 tie-break): the successor is nudged to `prev.ppq + 1`
-(`nudgeSamePitchOnsets`; § Same-pitch onset separation). Authored swap
+(`voicing.separateOnset`; § Same-pitch onset separation). Authored swap
 survives: when raw order differs from logical order, whoever lands first
 in raw becomes the realised predecessor.
 
@@ -926,6 +935,46 @@ against them. The predicted fxNotes (`fxLive`) walk here too; a record
 with no token (a new fxNote) carries its clipped geometry into its
 `mm:add` rather than a tail assign, and the clips commit with the fxNote
 del/add in one modify.
+
+### What the walk visits, and what it emits
+
+The walk reads its whole channel but does work only where the pass has
+news. `dirtyChans[chan]` arrives as interval dirt (§ Interval seeds), and
+a note the dirt does not name kept its raw and its ceiling — last pass
+left it separated and clipped against neighbours that also stood still.
+`disturbed` is that judgement and it is the whole of the sweep: a note is
+disturbed if the dirt names its seat, if it is derived, or if a nudge
+moved it. Derived notes seed unconditionally because `rebuildFx`
+regenerates `noteLive` wholesale, so a tile's raw is this pass's news
+whatever the dirt says — `design/interval-dirt.md` § phase 5 narrows that.
+
+Separation narrows on the same judgement. Only a disturbed note can
+collide, and only onto its same-pitch predecessor — so a nudge marks its
+own note disturbed and the cascade carries forward under its own power.
+That is what keeps the sweep from fencing a chain: the walk never has to
+know in advance how far a cascade will run.
+
+A bound is stale if the note itself moved, if either binding neighbour
+moved, or if the dirt reaches inside the note's *authored* span. The last
+clause covers the neighbour that was deleted and so cannot be asked for
+its onset. It is sufficient because `endppqL` is the authored ceiling and
+clipping only ever lowers `endppq`: any successor that could bind the
+note lies inside that span by construction.
+
+Successors come from one backward pass carrying, per lane and per pitch,
+the note last seen and that note's strict next — a neighbour sharing the
+current note's raw is no successor of it, so it hands over its own. That
+replaced the `strictNextMap` bucket-and-map build the walk used until
+2026-07-17, and the separate parked-bound bucket with it: parked cells
+are few enough to scan, and only for the notes the sweep bounds.
+
+The walk **emits**. A nudged lane-1 onset moved every absorber seat
+between it and the next lane-1 onset, so the walk seeds that interval
+into `dirtyChans[chan]` and `rebuildPbs` consumes it later in the same
+pass. This replaced a `dirtyChan(chan)` widen carrying the same fact on
+the same trigger: being the coarse mechanism it would have written `true`
+over the very set the emission builds. See `design/interval-dirt.md`
+§ The widen and the emission are the same fact.
 
 ## Rebuild: logical projection
 

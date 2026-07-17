@@ -53,20 +53,11 @@ function voicing.resolveGroup(group)
   return kills, voiced, onsetOf
 end
 
--- Nudge colliding same-(chan,pitch) onsets to prev.ppq+1 (cascades; fixed externals frozen).
--- Pure geometry on evt.ppq; callers stage mm writes. Input sorted (raw, ppqL).
-function voicing.nudgeOnsets(events)
-  local moved, lastByVoice = {}, {}
-  for _, e in ipairs(events) do
-    local key = util.key(e.chan, e.pitch)
-    local prev = lastByVoice[key]
-    if prev and not e.fixed and e.ppq <= prev.ppq then
-      e.ppq = prev.ppq + 1
-      util.add(moved, e)
-    end
-    lastByVoice[key] = e
-  end
-  return moved
+-- The separation verdict for one collision: give way by a tick, unless the note is a fixed
+-- external. Callers own the traversal (whose order decides the cascade) and stage mm writes.
+--contract: e's separated raw onset given its settled same-(chan,pitch) predecessor; nil if e stands
+function voicing.separateOnset(e, prev)
+  if prev and not e.fixed and e.ppq <= prev.ppq then return prev.ppq + 1 end
 end
 
 return voicing

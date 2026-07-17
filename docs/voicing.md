@@ -30,9 +30,16 @@ The policy used to exist twice with different fidelity: tm's flush
 pre-clip scan had the full verdicts, while mm's load-dedup killed
 blindly — it ran before the metadata join and couldn't see intent. The
 blind copy ate voices on external collapse (Ctrl-Z or a foreign script
-moving two authored notes onto one raw). Hoisting the verdicts and the
-separation walk into one pure module lets mm and tm consume the same
-policy (`design/archive/same-pitch-enforcement.md`).
+moving two authored notes onto one raw). Hoisting the verdicts into one
+pure module lets mm and tm consume the same policy
+(`design/archive/same-pitch-enforcement.md`).
+
+Verdicts, not traversals. `separateOnset` judges one collision and says
+nothing about which notes to ask or in what order; tm's tail walk asks
+only the notes its interval dirt has news for, and mm's backstop asks a
+whole group. The module exported the whole-channel walk too until
+2026-07-17, when the tail walk went interval-native and no caller wanted
+it any more (`docs/trackerManager.md` § Rebuild: tail walk).
 
 `resolveGroup` sorts its group `(ppq, ppqL)` in place before walking,
 so callers can't skip the ordering the nudge cascade depends on.
@@ -41,9 +48,10 @@ so callers can't skip the ordering the nudge cascade depends on.
 
 The invariant is mm's; enforcement is layered, outermost first:
 
-- **tm separation sites** (reseat, flush scan, tail walk) separate
-  in steady state and keep tm's live clones coherent — see
-  `docs/trackerManager.md` § Same-pitch onset separation.
+- **tm's tail walk** separates in steady state and keeps tm's live
+  clones coherent — see `docs/trackerManager.md` § Same-pitch onset
+  separation. The reseat and the flush scan separated too until
+  2026-07-17; both were redundant layers below it.
 - **mm write-path backstop** repairs anything a write path missed, at
   the outermost `modify` unwind — `docs/midiManager.md` § Mutation
   contract. In steady state it finds nothing.

@@ -1881,7 +1881,8 @@ local REALISATION = { delayC = true, endppqC = true, loc = true, realised = true
 local function parkSpec(evt, adds) return util.assign(util.clone(evt, REALISATION), adds) end
 
 -- One raw-frame scratch record per on-take note; the walk's working shape (see buildRawScratch).
-local SCRATCH_FIELDS = 'ppq ppqL endppq endppqL chan pitch lane evType detune sample overlap fixed'
+-- uuid rides along for uuid-keyed addressing. see design/interval-dirt.md § Phase 4
+local SCRATCH_FIELDS = 'uuid ppq ppqL endppq endppqL chan pitch lane evType detune sample overlap fixed'
 
 local function unlink(events, evt)
   for i, e in ipairs(events) do if e == evt then table.remove(events, i); break end end
@@ -2186,7 +2187,7 @@ end
 
 -- The pass's raw note view: raw consumers read these records, never the columns.
 -- see design/interval-dirt.md § Phase 3 for why, and what colEvt backrefs.
---shape: scratch[chan] = { ppq, ppqL, endppq, endppqL, chan, pitch, lane, evType, detune, sample, overlap, fixed, colEvt }[] -- dirty chans only
+--shape: scratch[chan] = { uuid, ppq, ppqL, endppq, endppqL, chan, pitch, lane, evType, detune, sample, overlap, fixed, colEvt }[] -- dirty chans only
 local function buildRawScratch(restoredRecs)
   local scratch = {}
   for chan = 1, 16 do
@@ -2601,14 +2602,16 @@ end
 
 -- Unified tail/onset walk + atomic commit: real notes, fixed externals, noteLive
 -- walk together (onset clamp then tail clip); host clip + fxNote del/add in one mm:modify. see docs/trackerManager.md § Rebuild: tail walk
+--contract: separates and bounds disturbed notes only; a nudged lane-1 onset emits its seat closure
 local function rebuildTails(noteLive, deferred, scratch)
   local takeLen = tm:length()
   local res = mm:resolution()
   local clampWrites = mmBatch()
   for chan = 1, 16 do
     -- Clean channels freeze: fx left noteLive empty, real notes converged last rebuild.
-    if not dirtyChans[chan] then goto nextChan end
-    local notes, byLane, byPitch = {}, {}, {}
+    local dirt = dirtyChans[chan]
+    if not dirt then goto nextChan end
+    local notes = {}
     for _, rec in ipairs(scratch[chan]) do
       util.add(notes, rec)
     end
@@ -2624,61 +2627,91 @@ local function rebuildTails(noteLive, deferred, scratch)
       util.add(parkedBounds, { ppq = tm:fromLogical(chan, cell.ppq), ppqL = cell.ppq,
                                lane = cell.lane })
     end
+    -- A handful of cells at most, asked only for the notes the sweep bounds: scanned, not indexed.
+    local function parkedBoundFor(e)
+      local nearest
+      for _, b in ipairs(parkedBounds) do
+        if b.lane == e.lane and b.ppq > e.ppq
+           and (nearest == nil or b.ppq < nearest.ppq) then nearest = b end
+      end
+      return nearest
+    end
 
     local function rawThenLogical(a, b)
       if a.ppq ~= b.ppq then return a.ppq < b.ppq end
       return a.ppqL < b.ppqL
     end
-    -- Sort notes once; the buckets partition notes, so rebuilding them by walking the
-    -- sorted array yields sorted buckets in O(N) -- cheaper than re-sorting each bucket.
-    local function sortAll()
-      table.sort(notes, rawThenLogical)
-      byLane, byPitch = {}, {}
-      for _, n in ipairs(notes) do
-        util.bucket(byLane,  n.lane,  n)
-        util.bucket(byPitch, n.pitch, n)
-      end
-    end
-    sortAll()
+    table.sort(notes, rawThenLogical)
 
-    -- Same-pitch onset separation; retro-clip subsumed by tail pass. Realised events assign;
-    -- a new fxNote (not yet in mm) mutates in place, riding into mm:add at the atomic commit.
-    local moved = voicing.nudgeOnsets(notes)
-    for _, n in ipairs(moved) do
-      if n.lane == 1 then dirtyChan(chan) end   -- nudged lane-1 onset moves absorber seats (pbs runs after tails)
-      local backing = n.colEvt or n   -- scratch recs write through to their column note; fxNotes ride bare
-      if n.colEvt and n.colEvt.delay ~= nil then
-        -- The column stays logical; only the delayC give-way cue carries the raw shift.
-        n.colEvt.delayC = util.round(timing.ppqToDelay(n.ppq - tm:fromLogical(chan, n.ppqL), res))
+    -- Same-pitch onset separation, retro-clip subsumed by tail pass: only a disturbed note can
+    -- collide, onto its same-pitch predecessor; derived notes seed unconditionally. see design/interval-dirt.md § Phase 4
+    local disturbed, nudged, lastByPitch = {}, {}, {}
+    local anyNudge = false
+    for _, e in ipairs(notes) do
+      if e.derived or intervals.intersects(dirt, e.ppqL, e.ppqL) then disturbed[e] = true end
+      local prev = lastByPitch[e.pitch]
+      if disturbed[e] or (prev and disturbed[prev]) then
+        local onset = voicing.separateOnset(e, prev)
+        if onset then
+          -- A nudge is final where it lands -- notes only ever give way forward -- so the cue and
+          -- the clamp write stage here rather than in a second pass over a moved set.
+          e.ppq = onset
+          disturbed[e], nudged[e], anyNudge = true, true, true
+          local backing = e.colEvt or e   -- scratch recs write through to their column note; fxNotes ride bare
+          if e.colEvt and e.colEvt.delay ~= nil then
+            -- The column stays logical; only the delayC give-way cue carries the raw shift.
+            e.colEvt.delayC = util.round(timing.ppqToDelay(e.ppq - tm:fromLogical(chan, e.ppqL), res))
+          end
+          if backing.realised then clampWrites.assign(backing, { ppq = e.ppq }) end
+        end
       end
-      if backing.realised then clampWrites.assign(backing, { ppq = n.ppq }) end
+      lastByPitch[e.pitch] = e
     end
     -- Re-sort only when a nudge actually moved an onset (rare); otherwise ordering stands.
-    if #moved > 0 then sortAll() end
+    if anyNudge then table.sort(notes, rawThenLogical) end
 
-    local laneNextOf  = strictNextMap(byLane)
-    local pitchNextOf = strictNextMap(byPitch)
+    -- Successors without groups: one backward sweep hands over next-in-lane and next-in-pitch,
+    -- its running state keyed by lane and pitch rather than by note. see design/interval-dirt.md § Phase 4
+    local emitted = {}
+    local nearestInLane,  nextAfterLane  = {}, {}   -- lane  -> note last seen, and that note's strict next
+    local nearestInPitch, nextAfterPitch = {}, {}   -- pitch -> ditto
+    for i = #notes, 1, -1 do
+      local e = notes[i]
+      local laneAbove, pitchAbove = nearestInLane[e.lane], nearestInPitch[e.pitch]
+      -- A neighbour sharing e's raw is no successor of it: it hands over its own.
+      local laneNext  = laneAbove  and (laneAbove.ppq  > e.ppq and laneAbove  or nextAfterLane[e.lane])
+      local pitchNext = pitchAbove and (pitchAbove.ppq > e.ppq and pitchAbove or nextAfterPitch[e.pitch])
+      nearestInLane[e.lane],   nextAfterLane[e.lane]   = e, laneNext
+      nearestInPitch[e.pitch], nextAfterPitch[e.pitch] = e, pitchNext
 
-    -- On-take tails clip against parked members' lanes too -- the columns no longer carry the cell,
-    -- but the lane geometry still does. See docs/trackerManager.md § Rebuild: tail walk.
-    local laneNextOn = laneNextOf
-    if #parkedBounds > 0 then
-      local byLaneP = {}
-      for _, n in ipairs(notes)        do util.bucket(byLaneP, n.lane, n) end
-      for _, b in ipairs(parkedBounds) do util.bucket(byLaneP, b.lane, b) end
-      for _, g in pairs(byLaneP) do table.sort(g, rawThenLogical) end
-      laneNextOn = strictNextMap(byLaneP)
-    end
+      -- The walk's own dirt: a nudged lane-1 onset seeds every absorber seat up to the next lane-1
+      -- onset, for pbs to consume later this pass. see design/interval-dirt.md § The widen and the emission are the same fact
+      if nudged[e] and e.lane == 1 then
+        util.add(emitted, intervals.seed(e.ppqL, laneNext and laneNext.ppqL or math.huge,
+                                         e.uuid, laneNext and laneNext.uuid))
+      end
 
-    for _, e in ipairs(notes) do
-      local onTake    = not e.derived
-      local ceiling   = e.endppqL == util.OPEN and math.huge
-                        or e.endppqL and tm:fromLogical(chan, e.endppqL)
-                        or math.huge
-      local laneNext  = (onTake and laneNextOn or laneNextOf)[e]
-      local pitchNext = pitchNextOf[e]
-      local laneClip  = laneNext
-        and tm:fromLogical(chan, laneNext.ppqL) + (e.overlap or 0)
+      -- A bound reads e's own onset and ceiling and its two binding neighbours' onsets. Dirt inside
+      -- e's authored span covers the neighbour that left and cannot be asked. see docs/trackerManager.md § Rebuild: tail walk
+      local stale = disturbed[e]
+                    or (laneNext  and disturbed[laneNext])
+                    or (pitchNext and disturbed[pitchNext])
+                    or intervals.intersects(dirt, e.ppqL, e.endppqL or math.huge)
+      if not stale then goto nextNote end
+
+      local onTake  = not e.derived
+      local ceiling = e.endppqL == util.OPEN and math.huge
+                      or e.endppqL and tm:fromLogical(chan, e.endppqL)
+                      or math.huge
+      -- On-take tails clip against parked members' lanes too -- the columns no longer carry the cell,
+      -- but the lane geometry still does. See docs/trackerManager.md § Rebuild: tail walk.
+      local laneAnchor = laneNext
+      if onTake then
+        local parked = parkedBoundFor(e)
+        if parked and (laneAnchor == nil or parked.ppq < laneAnchor.ppq) then laneAnchor = parked end
+      end
+      local laneClip  = laneAnchor
+        and tm:fromLogical(chan, laneAnchor.ppqL) + (e.overlap or 0)
         or math.huge
       local pitchClip = pitchNext and pitchNext.ppq or math.huge
       -- Two bounds: the lane bound is intent and drives the column; the raw bound clips it to the next
@@ -2697,6 +2730,12 @@ local function rebuildTails(noteLive, deferred, scratch)
         e.colEvt.endppq  = e.endppqL == util.OPEN and util.OPEN
                            or e.endppqL or e.colEvt.endppqC
       end
+      ::nextNote::
+    end
+
+    if #emitted > 0 and dirt ~= true then
+      for _, iv in ipairs(dirt) do util.add(emitted, iv) end
+      dirtyChans[chan] = intervals.merge(emitted)
     end
     ::nextChan::
   end

@@ -4,6 +4,20 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-17** — The tail walk's narrowing is worth ~0.8ms of 11.7 on the dense take, and it lands
+  anyway. *Chosen over* dropping it and keeping only the group deletion (which is where the other
+  ~2.9ms is): the seeded sweep is what makes the emitted seat closure *correct* for phase 6, and it
+  is ~10 lines. The measurement's real finding is that `tails` cannot narrow below its input —
+  `buildRawScratch` clones every non-derived note of every dirty channel with no dirt test, so the
+  array build, the sort and the two O(N) passes are all forced from upstream. The walk's body
+  narrows to the dirt; the walk's cost does not.
+
+- **2026-07-17** — `voicing` keeps the separation *verdict* and gives up the traversal
+  (`nudgeOnsets` → `separateOnset`). *Chosen over* passing a seed predicate into `nudgeOnsets`:
+  which predecessor counts as settled and how far a cascade runs are facts about interval dirt,
+  which only the caller has — and tm's walk and mm's backstop now genuinely want different
+  traversals over the same verdict.
+
 - **2026-07-17** — W542 ("empty if branch") ignored repo-wide. All four hits are an enumerated case
   whose action is deliberately nothing — `divert` in DAG's connection triage, the rewire-to-same-port
   no-op that would otherwise burn an undo entry — and each carries a comment saying why. *Chosen over*
