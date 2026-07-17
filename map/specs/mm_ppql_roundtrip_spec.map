@@ -16,7 +16,7 @@
   @case 'note ppqL/endppqL survive a save/load round-trip'  [pure]  @ 21-37
   @case 'cc ppqL survives a save/load round-trip (lazy-sidecar allocates uuid)'  [pure]  @ 41-56
   @case 'pb ppqL survives a save/load round-trip'  [pure]  @ 60-75
-  @case 'plain cc with no ppqL stays plain (no uuid; no P_EXT entry)'  [pure]  @ 79-92
+  @case 'plain cc with no ppqL stays plain (no sidecar; no P_EXT entry)'  [pure]  @ 79-92
   @case 'mixed take: many events, all ppqL stamps survive concurrently'  [pure]  @ 96-124
 
 # Uses (outbound edges)

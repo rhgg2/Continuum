@@ -16,7 +16,7 @@ local function pbSeatsOf(dump, chan)
   local out = {}
   for _, c in ipairs(dump.ccs) do
     if c.evType == 'pb' and c.chan == chan then
-      out[#out + 1] = { ppq = c.ppq, val = c.val, shape = c.shape, uuid = c.uuid }
+      out[#out + 1] = { ppq = c.ppq, val = c.val, shape = c.shape, plain = c.plain }
     end
   end
   table.sort(out, function(a, b) return a.ppq < b.ppq end)
@@ -49,7 +49,7 @@ return {
       local dump  = h.fm:dump()
       local seats = pbSeatsOf(dump, 1)
       t.truthy(#seats >= 3, 'a glide-in seat stream is emitted')
-      for _, s in ipairs(seats) do t.falsy(s.uuid, 'seats are markerless (route-by-window)') end
+      for _, s in ipairs(seats) do t.eq(s.plain, true, 'seats are markerless (route-by-window)') end
       t.eq(pbSeatAt(dump, 1, 0).val,   centsToRaw(0),   'starts flat at centre')
       t.eq(pbSeatAt(dump, 1, 225).val, centsToRaw(100), 'arrives at the +100c interval before the handoff')
       local last = seats[#seats]

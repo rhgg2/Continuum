@@ -4,6 +4,17 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-17** — identity is not persistence: every event mm mints now carries a uuid, and a cc with
+  no metadata is `plain` — its uuid is in-memory only, re-minted each load, no `}RDM` sidecar, no
+  eventMeta bucket. Previously the two were one decision (a cc got a uuid exactly when it got a
+  sidecar), which left markerless pb seats with no handle at all and forced content-keyed tokens to
+  serve as addressing. *Rejected:* stamping uuids universally with sidecars to match — route-by-window
+  exists precisely so a resynthesised absorber seat stays plain native MIDI, and a sidecar per seat on
+  a dense pb stream is the cost that design avoids. The invariant round-trips by construction rather
+  than bookkeeping: load derives `plain` from what bound no sidecar, and `plain` is structural, so it
+  can never ride a metadata blob and contradict the take. First step of retiring tokens from
+  addressing (uuid verbs, then callers, then tokens go private to mm's collision detector).
+
 - **2026-07-17** — materialisation takes raw seeds, no closure: `noteClosure` and `intervals.close`
   are deleted, and `exciseNotes` excises the merged seed points directly. The drafted rule —
   materialise the union of the consuming stages' closures — rested on those stages reading the fresh

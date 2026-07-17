@@ -6,7 +6,7 @@ mutation lock.
 
 ## Identity & persistence
 
-Every uuid'd event has a metadata blob persisted by **`eventMeta`**, keyed by
+Every non-plain event has a metadata blob persisted by **`eventMeta`**, keyed by
 the take's **pool guid** (its `POOLEDEVTS` source identity), not the take. mm
 derives that guid from the item chunk on take-swap and caches it (`poolGuid`).
 
@@ -19,6 +19,42 @@ storage shape.
 
 UUIDs are monotonic integers, base-36 encoded; the namespace is unified across
 notes and ccs, and is per-pool — the sidecars that carry them ride the pool.
+
+### Plain ccs — identity without persistence
+
+Every event mm hands out carries a uuid. Not every event carries one *durably*: a
+cc that nothing has ever tagged is **plain**, and its uuid is minted in memory,
+re-minted on every load, and written nowhere.
+
+The split is the point. A uuid that persists costs a `}RDM` sidecar in the take
+and an `eventMeta` bucket in the project. That price is worth paying for anything
+a user authored and expects to survive a round trip, and worth paying for nothing
+else — and "nothing else" is most of a dense pb stream. `rebuildPbs` resynthesises
+absorber seats wholesale every rebuild and recognises the last rebuild's by
+*window*, not by id (docs/trackerManager.md § Route-by-window). Those seats want to
+be plain native MIDI, and they are.
+
+What they still need is to be addressable while they live. Identity and
+persistence used to be a single decision — a cc got a uuid exactly when it got a
+sidecar — so a markerless seat had no handle at all, and could only be named by
+content-keyed token. Separating them costs one table store per event and buys a
+single addressing scheme across everything mm holds.
+
+Hence the invariant: **plain ⟺ no sidecar in the take**. It round-trips by
+construction rather than by bookkeeping. Load *derives* `plain` from what it
+observes — a cc that bound no sidecar is one — and `plain` is itself a structural
+field, so it can never ride a metadata blob and contradict what the take says.
+The first metadata write promotes: `plain` clears, `flushTake` emits the sidecar,
+and the uuid is durable from that moment. Promotion is one-way, and it takes the
+lock even when nothing structural changed, because it inserts an event into the
+take.
+
+The mint itself happens at the end of `load`, after every persisted uuid has
+been read (`maxUUID`) — so a fresh in-memory mint can never collide with one
+still arriving from the sidecar sweep.
+
+The rule this puts on callers is the obvious one: **nothing may hold a plain cc's
+uuid across a reload**. It will resolve — to a different event, or to nothing.
 
 ### Metadata I/O
 

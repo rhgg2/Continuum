@@ -223,7 +223,7 @@ return {
       local e = captured.ccsReconciled[1]
       t.eq(e.kind, 'ambiguous')
       t.deepEq(e.candidateppqs, { 80, 130 })
-      for _, c in mm:ccs() do t.eq(c.uuid, nil, 'no cc takes the orphaned uuid') end
+      for _, c in mm:ccs() do t.eq(c.plain, true, 'no cc bound the orphaned sidecar') end
       local _, _, _, txtCount = reaper.MIDI_CountEvts(take)
       t.eq(txtCount, 0, 'ambiguous sidecar removed')
     end,

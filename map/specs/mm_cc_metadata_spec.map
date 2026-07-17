@@ -1,29 +1,33 @@
-@spec mm_cc_metadata_spec  src=tests/specs/mm_cc_metadata_spec.lua  loc=148  sha=bfdeb03  cases=9
+@spec mm_cc_metadata_spec  src=tests/specs/mm_cc_metadata_spec.lua  loc=153  sha=bfdeb03  cases=9
 @exercises midiManager (h.mm)
 @surface   mm:ccs, fm:assign, fm:modify, fm:delete
 @harness   mk{seed.ccs}, bareMM
 
 # Intent
-  Pin-tests for the cc-side of the per-event metadata contract — uuid
-  allocation on first stamp, lockless carve-out for subsequent metadata,
+  Pin-tests for the cc-side of the per-event metadata contract — promotion
+  off plain on first stamp, lockless carve-out for subsequent metadata,
   and clean-up on delete.
+  
+  Identity is not what the first stamp buys: every cc is minted with a uuid
+  (see mm_plain_cc_spec). What it buys is PERSISTENCE — the sidecar that
+  makes the uuid outlive a load. Hence promotion, not allocation.
 
 # Helpers
-  @fn ccAt(mm, i)  @ 14-20
+  @fn ccAt(mm, i)  @ 18-24
 
 # Cases
-  @case 'metadata-only assign on a plain (un-uuid\'d) cc requires the lock'  [harness]  @ 24-30
-  @case 'first metadata stamp allocates a uuid and persists the field'  [harness]  @ 34-43
-  @case 'subsequent metadata writes on a stamped cc are lockless'  [harness]  @ 47-56
-  @case 'mixed structural+metadata write under modify stamps in one go'  [harness]  @ 60-70
-  @case 'pure-structural writes leave plain ccs un-uuid\'d'  [harness]  @ 74-80
-  @case 'distinct first stamps get distinct uuids'  [harness]  @ 84-101
-  @case 'a stamped cc keeps its uuid across a lockless metadata assign'  [harness]  @ 105-120
-  @case 'delete removes both event and uuid identity'  [harness]  @ 124-134
-  @case 'util.REMOVE clears a metadata field on a stamped cc (no lock)'  [harness]  @ 138-146
+  @case 'metadata-only assign on a plain (un-uuid\'d) cc requires the lock'  [harness]  @ 28-34
+  @case 'first metadata stamp promotes off plain and persists the field'  [harness]  @ 38-48
+  @case 'subsequent metadata writes on a stamped cc are lockless'  [harness]  @ 52-61
+  @case 'mixed structural+metadata write under modify stamps in one go'  [harness]  @ 65-75
+  @case 'pure-structural writes leave plain ccs plain'  [harness]  @ 79-85
+  @case 'distinct first stamps get distinct uuids'  [harness]  @ 89-106
+  @case 'a stamped cc keeps its uuid across a lockless metadata assign'  [harness]  @ 110-125
+  @case 'delete removes both event and uuid identity'  [harness]  @ 129-139
+  @case 'util.REMOVE clears a metadata field on a stamped cc (no lock)'  [harness]  @ 143-151
 
 # Uses (outbound edges)
-  @use call mm:ccs  @ 16
-  @use call fm:assign  @ 27,39,52,54,65,78,95,96,116,129,144
-  @use call fm:modify  @ 39,52,65,78,94,129,132
-  @use call fm:delete  @ 132
+  @use call mm:ccs  @ 20
+  @use call fm:assign  @ 31,43,57,59,70,83,100,101,121,134,149
+  @use call fm:modify  @ 43,57,70,83,99,134,137
+  @use call fm:delete  @ 137

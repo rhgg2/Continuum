@@ -1275,7 +1275,7 @@ return {
       local seats = derivedPbs(h, 1)
       t.truthy(#seats >= 12, 'the dense curve realises many seats')
       for _, s in ipairs(seats) do
-        t.eq(s.uuid, nil, 'every seat is markerless -- no uuid means no eventMeta sidecar')
+        t.eq(s.plain, true, 'every seat is markerless -- plain means no eventMeta sidecar')
       end
     end,
   },
@@ -1427,7 +1427,7 @@ return {
       local seats = fillRecords(h, 1, 74)
       t.truthy(#seats >= 12, 'every breakpoint seats on the target lane')
       for _, s in ipairs(seats) do
-        t.eq(s.uuid, nil, 'a fill seat is markerless -- no uuid, no eventMeta sidecar')
+        t.eq(s.plain, true, 'a fill seat is markerless -- no sidecar, no eventMeta')
       end
     end,
   },
@@ -1454,7 +1454,7 @@ return {
       t.eq(ccFillAt(h, 1, 10, 0).val,  64, 'no authored automation -> base is the default rest (64) + macro 0')
       t.eq(ccFillAt(h, 1, 10, 60).val, 94, 'at the macro peak the seat is rest 64 + delta 30')
       for _, s in ipairs(fillRecords(h, 1, 10)) do
-        t.eq(s.uuid, nil, 'an augment seat is markerless -- no uuid, no eventMeta sidecar')
+        t.eq(s.plain, true, 'an augment seat is markerless -- no sidecar, no eventMeta')
       end
       t.falsy(h.tm:getChannel(1).columns.ccs[10], 'the summed seats are routed out of columns -- off-screen')
     end,

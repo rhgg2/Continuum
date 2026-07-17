@@ -32,6 +32,7 @@ local specs = {
   'util_pretty_serialise_spec',
   'mm_signal_flow_spec',
   'mm_cc_metadata_spec',
+  'mm_plain_cc_spec',
   'mm_ppql_roundtrip_spec',
   'mm_cc_reconcile_spec',
   'mm_cc_dedup_spec',

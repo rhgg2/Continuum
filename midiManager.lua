@@ -219,6 +219,7 @@ local ccEventFields = {
   loc = true, ppq = true, evType = true, chan = true,
   cc = true, pitch = true, val = true, vel = true,
   muted = true, shape = true, tension = true, uuid = true,
+  plain = true,
 }
 
 -- The metadata an event carries: every field that isn't structural or regenerated.
@@ -464,7 +465,7 @@ local function flushTake()
     if note.uuid then util.add(texts, noteSidecarEntry(note)) end
   end
   for _, cc in ipairs(ccs) do
-    if cc.uuid then util.add(texts, ccSidecarEntry(cc)) end
+    if not cc.plain then util.add(texts, ccSidecarEntry(cc)) end
   end
   for _, carried in ipairs(carriedTexts) do util.add(texts, carried) end
   perf.stop('sidecars')
@@ -500,7 +501,8 @@ end
 
 --shape: note = { evType, ppq, endppq, chan, pitch, vel, [muted], [uuid], [...meta] }
 --invariant: note.chan ∈ 1..16; pitch/vel ∈ 0..127; muted is true-or-absent
---shape: cc = { evType, ppq, chan, val, shape, [tension], [muted], [uuid], [...meta] }
+--shape: cc = { evType, ppq, chan, val, shape, [tension], [muted], uuid, [plain], [...meta] }
+--invariant: a plain cc has no sidecar in the take; its uuid is in-memory only, re-minted every load
 --invariant: cc.evType ∈ {cc, pb, pa, at, pc}; pa stores in .vel, others in .val
 --invariant: cc.cc set on evType='cc'; cc.pitch set on 'pa'; chan ∈ 1..16; cc/pitch ∈ 0..127
 --invariant: cc.shape ∈ {step, linear, slow, fast-start, fast-end, bezier}; tension only on bezier
@@ -802,6 +804,12 @@ function mm:load(newTake)
     if next(scsWorking) then dirty = true end   -- unbound sidecars: regeneration drops them
   end
 
+  -- Every hand-out is uuid-addressable: a plain cc mints its uuid here, in memory only.
+  -- Runs after persisted uuids are known, so it can't collide. See docs/midiManager.md § Plain ccs.
+  for _, cc in util.sparsePairs(ccs, ccCount) do
+    if not cc.uuid then cc.plain = true; assignNewUUID(cc) end
+  end
+
   ----- Rebuild dense indices, reproject the normalised model, persist metadata
   needsSort, needsCompact = true, true   -- dedup holes the arrays; a foreign blob's order isn't ours to trust
   rebuild(metadata)
@@ -1098,7 +1106,7 @@ function mm:ccsRaw(chan)
   return util.sparsePairs(ccs, ccCount)
 end
 
---contract: assignCC: lockless iff t touches no structural field and the cc has a uuid
+--contract: assignCC: lockless iff t touches no structural field and doesn't promote a plain cc
 --contract: first metadata stamp on a plain cc needs lock — inserts a sidecar sysex
 --contract: persists metadata only when t touches a metadata key; structural-only writes none
 local function assignCC(loc, t)
@@ -1111,7 +1119,9 @@ local function assignCC(loc, t)
                         or t.val or t.vel or t.muted ~= nil or t.shape or t.tension
   local hasMetadata = touchesMetadata(msg, t)
 
-  if not hasStructural and msg.uuid then
+  -- A promotion inserts a sidecar into the take, so it takes the lock even with no
+  -- structural field; an already-stamped cc's later metadata stays lockless.
+  if not hasStructural and not (hasMetadata and msg.plain) then
     util.assign(msg, t)
     if hasMetadata then saveMetadatum(msg.uuid) end
     return
@@ -1142,11 +1152,10 @@ local function assignCC(loc, t)
     tokenIdx[newTok] = msg
   end
 
-  if hasMetadata and not msg.uuid then
-    assignNewUUID(msg)   -- flushTake writes the new sidecar
+  if hasMetadata then
+    msg.plain = nil   -- promoted: flushTake now writes its sidecar
+    saveMetadatum(msg.uuid)
   end
-
-  if hasMetadata and msg.uuid then saveMetadatum(msg.uuid) end
 end
 
 -- Build one ordinary CC record (its wire event is regenerated on flush). No
@@ -1166,7 +1175,7 @@ local function pushCC(t)
   return msg
 end
 
---contract: addCC lazy-sidecar: uuid + sidecar only when t has a non-structural key
+--contract: addCC always mints a uuid; a cc with no non-structural key is plain -- no sidecar
 local function addCC(t)
   if not (take and checkLock()) then return end
 
@@ -1189,11 +1198,10 @@ local function addCC(t)
   for k in pairs(t) do
     if not ccEventFields[k] then hasMetadata = true; break end
   end
-  if hasMetadata then
-    assignNewUUID(msg)
-    t.uuid = msg.uuid
-    saveMetadatum(msg.uuid)
-  end
+  assignNewUUID(msg)
+  t.uuid = msg.uuid
+  if hasMetadata then saveMetadatum(msg.uuid)
+  else msg.plain = true end
 end
 
 --contract: token stable across reload while identity fields don't change
@@ -1260,7 +1268,8 @@ function mm:delete(token)
 
   tokenIdx[token] = nil
   ccs[evt.loc] = nil
-  if evt.uuid then eventsByUuid[evt.uuid] = nil; deleteMetadatum(evt.uuid) end
+  eventsByUuid[evt.uuid] = nil
+  if not evt.plain then deleteMetadatum(evt.uuid) end   -- a plain cc stores none: skip the churn
 end
 
 --contract: yields (token, evt-clone) over all live events, notes then ccs

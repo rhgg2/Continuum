@@ -311,7 +311,7 @@ return {
       local mm, _, evts = load(take)
       t.eq(#evts, 4)
       for _, e in ipairs(evts) do t.eq(e.kind, 'ambiguous') end
-      for _, c in mm:ccs() do t.eq(c.uuid, nil, 'no cc binds when all ambiguous') end
+      for _, c in mm:ccs() do t.eq(c.plain, true, 'no cc binds when all ambiguous') end
     end,
   },
 
@@ -372,7 +372,7 @@ return {
       local e = byUuid[1]
       t.eq(e.kind, 'ambiguous')
       t.deepEq(e.candidateppqs, { 50, 150 })
-      for _, c in mm:ccs() do t.eq(c.uuid, nil) end
+      for _, c in mm:ccs() do t.eq(c.plain, true, 'neither candidate bound') end
     end,
   },
 
@@ -423,7 +423,7 @@ return {
       local mm, _, evts = load(take)
       t.eq(#evts, 1)
       t.eq(evts[1].kind, 'orphaned')
-      t.eq(ccAt(mm, 1).uuid, nil)
+      t.eq(ccAt(mm, 1).plain, true, 'the cc bound nothing')
     end,
   },
 
@@ -438,7 +438,7 @@ return {
       local mm, _, evts = load(take)
       t.eq(#evts, 1)
       t.eq(evts[1].kind, 'orphaned')
-      t.eq(ccAt(mm, 1).uuid, nil)
+      t.eq(ccAt(mm, 1).plain, true, 'the cc bound nothing')
     end,
   },
 
@@ -457,7 +457,7 @@ return {
   },
 
   {
-    name = 'cc with no sidecars stays uuid-less, no event',
+    name = 'cc with no sidecars stays plain, no event',
     run = function()
       local take, reaper = freshTake()
       seed(take, reaper, {
@@ -466,7 +466,7 @@ return {
       })
       local mm, _, evts = load(take)
       t.deepEq(evts, {})
-      t.eq(ccAt(mm, 1).uuid, nil)
+      t.eq(ccAt(mm, 1).plain, true, 'nothing to bind, so it stays plain')
     end,
   },
 

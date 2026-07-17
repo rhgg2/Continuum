@@ -1,12 +1,16 @@
--- Pin-tests for the cc-side of the per-event metadata contract — uuid
--- allocation on first stamp, lockless carve-out for subsequent metadata,
+-- Pin-tests for the cc-side of the per-event metadata contract — promotion
+-- off plain on first stamp, lockless carve-out for subsequent metadata,
 -- and clean-up on delete.
+--
+-- Identity is not what the first stamp buys: every cc is minted with a uuid
+-- (see mm_plain_cc_spec). What it buys is PERSISTENCE — the sidecar that
+-- makes the uuid outlive a load. Hence promotion, not allocation.
 
 local t = require('support')
 local util = require('util')
 
 -- Plain-cc tests: tm's rebuild rule (Phase 2 two-frame) writes ppqL onto
--- any non-frame cc passing through, which allocates a uuid via the
+-- any non-frame cc passing through, which promotes it off plain via the
 -- metadata path. To pin mm's lock-on-plain-cc contract we need a cc that
 -- never went through tm — so a couple of tests below build a bare mm via
 -- harness.bareMM (real mm, no tm wired).
@@ -31,14 +35,15 @@ return {
   },
 
   {
-    name = 'first metadata stamp allocates a uuid and persists the field',
+    name = 'first metadata stamp promotes off plain and persists the field',
     run = function(harness)
       local h = harness.mk{
         seed = { ccs = { { ppq = 0, evType = 'cc', chan = 1, cc = 7, val = 64 } } },
       }
       h.fm:modify(function() h.fm:assign(ccAt(h.fm, 1).token, { foo = 'hello' }) end)
       local cc = ccAt(h.fm, 1)
-      t.truthy(cc.uuid, 'uuid allocated')
+      t.truthy(cc.uuid, 'uuid present')
+      t.eq(cc.plain, nil, 'the stamp bought persistence: a sidecar now rides the take')
       t.eq(cc.foo, 'hello')
     end,
   },
@@ -71,12 +76,12 @@ return {
   },
 
   {
-    name = 'pure-structural writes leave plain ccs un-uuid\'d',
+    name = 'pure-structural writes leave plain ccs plain',
     run = function(harness)
       -- Bare mm (no tm), to keep the cc plain — see header note.
       local fm = harness.bareMM{ ccs = { { ppq = 0, evType = 'cc', chan = 1, cc = 7, val = 64 } } }
       fm:modify(function() fm:assign(ccAt(fm, 1).token, { val = 100 }) end)
-      t.eq(ccAt(fm, 1).uuid, nil, 'no metadata, no uuid (sidecar-on-touch)')
+      t.eq(ccAt(fm, 1).plain, true, 'no metadata, no sidecar (sidecar-on-touch)')
     end,
   },
 

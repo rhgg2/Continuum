@@ -39,7 +39,7 @@ return {
   },
 
   {
-    name = 'cc: tokenOf round-trips for a plain (un-uuid\'d) cc',
+    name = 'cc: tokenOf round-trips for a plain cc',
     run = function(harness)
       local fm = harness.bareMM{ ccs = { { ppq = 120, evType = 'cc', chan = 2, cc = 7, val = 64 } } }
       local tok = token(fm, 'cc', { chan = 2, cc = 7, ppq = 120 })
@@ -47,7 +47,7 @@ return {
       t.eq(loc, 1)
       t.eq(kind, 'cc')
       t.eq(c.val, 64)
-      t.eq(c.uuid, nil, 'plain cc — no uuid, but still addressable by token')
+      t.eq(c.plain, true, 'plain cc — no sidecar, but still addressable by token')
     end,
   },
 

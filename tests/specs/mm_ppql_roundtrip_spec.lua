@@ -76,7 +76,7 @@ return {
   },
 
   {
-    name = 'plain cc with no ppqL stays plain (no uuid; no P_EXT entry)',
+    name = 'plain cc with no ppqL stays plain (no sidecar; no P_EXT entry)',
     run = function()
       local take = freshTake()
       local mm = realMM(take)
@@ -87,7 +87,7 @@ return {
       local mm2 = realMM(take)
       local _, c = mm2:ccs()()
       t.truthy(c)
-      t.eq(c.uuid, nil, 'no metadata, no uuid (lazy-sidecar)')
+      t.eq(c.plain, true, 'no metadata, no sidecar -- and it round-tripped still plain')
       t.eq(c.ppqL, nil)
     end,
   },

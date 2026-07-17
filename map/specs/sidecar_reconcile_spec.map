@@ -50,7 +50,7 @@
   @case 'mismatched chan: separate buckets → orphaned + unbound cc'  [pure]  @ 416-427
   @case 'mismatched evType: separate buckets (cc vs pb)'  [pure]  @ 431-442
   @case 'mismatched cc#: separate buckets'  [pure]  @ 446-456
-  @case 'cc with no sidecars stays uuid-less, no event'  [pure]  @ 460-470
+  @case 'cc with no sidecars stays plain, no event'  [pure]  @ 460-470
   @case 'separate (chan, cc#) buckets resolve independently'  [pure]  @ 474-495
   @case 'cross-evType events live in different buckets — stage 4 each'  [pure]  @ 499-517
   @case 'mixed: silent + valueRebound + consensus + orphan in one load'  [pure]  @ 523-550
