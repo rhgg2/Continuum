@@ -4,6 +4,17 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-17** — um owns a PA by its *logical* seat, not the host's raw window. A PA carries its own
+  `ppqL` and the CC walk reswings it from that seat, so it was never slaved to its host's realisation
+  — but `forEachAttachedPA` tested `cc.ppq` against `[host.ppq, host.endppq)`, so any realisation-only
+  shift of the host detached it: a forward delay pushed a note's raw onset past a PA it still owned,
+  and um then declined to move or cull it, orphaning it in mm (pinned red first). *Chosen over*
+  teaching each nudge site to carry its PAs: attachment is an intent relation, so the frame was the
+  defect and the sites were symptoms — fixing it closed the tail walk's nudge and the reseat nudge at
+  once, both of which write raw `ppq` only and so now cannot detach anything. `resizeNote` follows the
+  seat into the logical frame, which *removes* its `cullEnd` param: that existed only to smuggle the
+  logical `OPEN` sentinel into a raw test, and `OPEN` is `math.huge`, so an open tail needs no case.
+
 - **2026-07-17** — um records carry `realised`; the `token` vocabulary is retired everywhere. Pivoting
   mm to uuid made most `.token` reads redundant — a clone already carried `uuid` — but not all: three
   sites read `token`'s *presence* as "this event is in mm, write through to it", and `.uuid` cannot

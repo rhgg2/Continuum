@@ -1,0 +1,35 @@
+@spec tm_pa_attachment_spec  src=tests/specs/tm_pa_attachment_spec.lua  loc=70  sha=untracked  cases=2
+@exercises midiManager (h.mm), trackerManager (h.tm)
+@surface   mm:notes, mm:ccsRaw, tm:addEvent, tm:flush, tm:deleteEvent, tm:assignEvent
+@harness   mk
+
+# Intent
+  Pins PA attachment as an INTENT relation, tested in the logical frame.
+  
+  A PA carries its own ppqL and reswings from it (rebuild's CC walk), exactly like a
+  note -- it is not slaved to its host's raw onset. So attachment must be tested on
+  the logical seat: test the raw window instead and any realisation-only shift of the
+  host (a delay, a same-pitch nudge) silently detaches its PAs, and um then declines
+  to move or cull them with their host. see docs/trackerManager.md § PA binding
+  
+  Delay is the cheap reachable case; the same hole opens under the tail walk's nudge.
+
+# Helpers
+  @fn uuidOfNote(mm, chan, pitch)  @ 13-17
+  @fn pasOf(mm)  @ 19-26
+  @fn delayedHostWithPA(harness)  @ 30-37
+      -- Host authored at logical 0 but delayed a full row (delayToPPQ(1000, 240) = 240), so it
+      -- sounds at raw 240 -- past the PA it owns. Raw-frame attachment cannot see the pair.
+
+# Cases
+  @case 'a delayed host still owns the PA at its logical seat: deleting it culls the PA'  [harness]  @ 42-51
+  @case 'moving a delayed host carries its PA, in both frames'  [harness]  @ 55-67
+
+# Uses (outbound edges)
+  @use call mm:notes  @ 14
+  @use call mm:ccsRaw  @ 21
+  @use call tm:addEvent  @ 32,34
+  @use call tm:flush  @ 35,48,61
+  @use call tm:deleteEvent  @ 47
+  @use call tm:assignEvent  @ 60
+  @use call fm:ccsRaw  @ 65

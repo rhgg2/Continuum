@@ -585,11 +585,14 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     return (n and n.detune) or 0
   end
 
+  -- Ownership is intent, so it is tested logically: a PA carries its own seat and reswings from
+  -- it, and a raw-frame test would let a delay or a nudge detach one. see docs/trackerManager.md § PA binding
   local function forEachAttachedPA(host, fn)
+    local from, to = host.ppqL or host.ppq, host.endppqL or host.endppq
     for _, cc in pairs(byUuid) do
-      if cc.evType == 'pa' and cc.chan == host.chan and cc.pitch == host.pitch
-        and cc.ppq >= host.ppq and cc.ppq < host.endppq then
-        fn(cc)
+      if cc.evType == 'pa' and cc.chan == host.chan and cc.pitch == host.pitch then
+        local seat = cc.ppqL or cc.ppq
+        if seat >= from and seat < to then fn(cc) end
       end
     end
   end
@@ -773,26 +776,27 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     deleteLowlevel(n)
   end
 
-  -- cullEnd is the span ceiling PAs are tested against; for an open tail
-  -- it must be passed explicitly — see docs/trackerManager.md § Update manager.
-  local function resizeNote(n, P1, P2, cullEnd)
-    cullEnd = cullEnd or P2
-    local shift = P1 - n.ppq
+  -- P1/P2 are the new raw span, the one that reaches mm; L1/L2 the new logical span, the frame
+  -- PA attachment and culling test. An OPEN L2 needs no special case -- it is math.huge.
+  local function resizeNote(n, P1, P2, L1, L2)
+    local shift  = P1 - n.ppq
+    local shiftL = L1 - (n.ppqL or n.ppq)
     if shift ~= 0 and P2 - n.endppq == shift then
       forEachAttachedPA(n, function(evt)
-        assignLowlevel(evt, { ppq = evt.ppq + shift })
+        assignLowlevel(evt, { ppq = evt.ppq + shift, ppqL = (evt.ppqL or evt.ppq) + shiftL })
       end)
     else
-      local lastPA
+      local lastPA, lastSeat
       forEachAttachedPA(n, function(evt)
-        if evt.ppq <= P1 or evt.ppq >= cullEnd then
-          if evt.ppq <= P1 and (not lastPA or evt.ppq > lastPA.ppq) then lastPA = evt end
+        local seat = evt.ppqL or evt.ppq
+        if seat <= L1 or seat >= L2 then
+          if seat <= L1 and (not lastPA or seat > lastSeat) then lastPA, lastSeat = evt, seat end
           deleteLowlevel(evt)
         end
       end)
       if lastPA then assignLowlevel(n, { vel = lastPA.vel }) end
     end
-    assignLowlevel(n, { ppq = P1, endppq = P2 })
+    assignLowlevel(n, { ppq = P1, endppq = P2, ppqL = L1, endppqL = L2 })
   end
 
   --contract: lane/chan changes accepted; rebuild reseats columns via pickStampedLane
@@ -805,10 +809,10 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     if update.chan and update.chan ~= n.chan then dirtyPc(n.chan); dirtyPc(update.chan) end
 
     if update.ppq ~= nil or update.endppq ~= nil then
-      local endppqL = update.endppqL ~= nil and update.endppqL or n.endppqL
-      local cullEnd = endppqL == util.OPEN and util.OPEN or (update.endppq or n.endppq)
-      resizeNote(n, update.ppq or n.ppq, update.endppq or n.endppq, cullEnd)
-      update.ppq, update.endppq = nil, nil
+      resizeNote(n, update.ppq or n.ppq, update.endppq or n.endppq,
+                    update.ppqL    ~= nil and update.ppqL    or (n.ppqL    or n.ppq),
+                    update.endppqL ~= nil and update.endppqL or (n.endppqL or n.endppq))
+      update.ppq, update.endppq, update.ppqL, update.endppqL = nil, nil, nil, nil
     end
     if update.pitch then
       forEachAttachedPA(n, function(e) assignLowlevel(e, { pitch = update.pitch }) end)

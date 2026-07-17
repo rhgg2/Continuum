@@ -593,6 +593,23 @@ above is defence in depth.
 is active, any column containing any note of that pitch accepts. PAs
 with no matching pitch anywhere in the channel are dropped.
 
+Ownership in um is a separate question from column binding, and um tests
+it in the **logical** frame (`forEachAttachedPA`). A PA carries its own
+`ppqL` and the CC walk reswings it from that seat, exactly as it does a
+note — a PA is not slaved to its host's raw onset. So a host's
+realisation moves independently of the PAs it owns: a forward delay
+pushes a note's raw onset clean past a PA at its own logical seat, and
+the tail walk's same-pitch nudge does the same for a tick. A raw-frame
+test calls those PAs detached, and um then declines to move or cull them
+with their host — orphaning them in `mm`.
+
+`resizeNote` follows the same rule: it shifts a PA in **both** frames, so
+raw and intent never drift apart, and it culls on the logical seat. That
+is why it takes the logical span rather than the older `cullEnd`
+parameter, which existed only to smuggle the logical `OPEN` sentinel into
+a raw-frame test. In the logical frame `OPEN` is just `math.huge`, and an
+open tail needs no special case at all.
+
 ## Muting
 
 tv owns the effective mute set (persistent mute ∪ solo-implied mute)
