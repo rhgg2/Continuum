@@ -76,6 +76,26 @@ function util.atomic(label, fn)
   end
 end
 
+--contract: parses `keys` once, returns a pick over it; the closure owns the list, no module state
+-- pick re-parses its key string on every call: nothing at a site that runs a few times, and
+-- 9.6ms of pure gmatch at one that runs per note of a dense channel. Hoist a picker there.
+function util.picker(keys)
+  local list = {}
+  for k in keys:gmatch("%S+") do
+    list[#list + 1] = k
+  end
+  return function(src, adds)
+    local dst = {}
+    for i = 1, #list do
+      dst[list[i]] = src[list[i]]
+    end
+    if adds then
+      util.assign(dst, adds)
+    end
+    return dst
+  end
+end
+
 function util.pick(src, keys, adds)
   local dst = {}
   for k in keys:gmatch("%S+") do

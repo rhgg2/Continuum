@@ -4,6 +4,14 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-17** — `util.picker` (compile a key list once) added beside `util.pick` rather than
+  memoizing the parse inside `pick`. `pick` re-parses its key string per call: 9.7ms of pure gmatch
+  in `buildRawScratch` alone, more than the whole phase-4 tail-walk commit returned. *Chosen over*
+  a memo table in `pick` — which would be invisible to callers but would still make `util.lua:3`
+  ("no module-level mutable state") a judgement call rather than a flat rule — and over converting
+  all 15 `pick` sites to key tables, which would cost twelve cold sites their readable
+  space-separated string to fix the two hot ones. The closure owns the list, so util stays stateless.
+
 - **2026-07-17** — The tail walk's narrowing is worth ~0.8ms of 11.7 on the dense take, and it lands
   anyway. *Chosen over* dropping it and keeping only the group deletion (which is where the other
   ~2.9ms is): the seeded sweep is what makes the emitted seat closure *correct* for phase 6, and it

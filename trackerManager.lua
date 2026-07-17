@@ -1882,7 +1882,8 @@ local function parkSpec(evt, adds) return util.assign(util.clone(evt, REALISATIO
 
 -- One raw-frame scratch record per on-take note; the walk's working shape (see buildRawScratch).
 -- uuid rides along for uuid-keyed addressing. see design/interval-dirt.md § Phase 4
-local SCRATCH_FIELDS = 'uuid ppq ppqL endppq endppqL chan pitch lane evType detune sample overlap fixed'
+local pickScratch = util.picker(   -- compiled: this picks once per note of every dirty channel
+  'uuid ppq ppqL endppq endppqL chan pitch lane evType detune sample overlap fixed')
 
 local function unlink(events, evt)
   for i, e in ipairs(events) do if e == evt then table.remove(events, i); break end end
@@ -1979,9 +1980,9 @@ local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows
       local note = util.clone(spec)   -- the cell is the spec: both are logical (keeps the parked uuid too)
       -- The rec holds the walk's raw frame: endppq clears because only the walk can derive it (the
       -- spec's ceiling is logical, and lands on endppqL), then rides back to the cell via colEvt.
-      local rec = util.pick(note, SCRATCH_FIELDS,
-                            { colEvt = note, ppq = tm:fromLogical(spec.chan, note.ppq),
-                              ppqL = note.ppq, endppqL = note.endppq, endppq = util.REMOVE })
+      local rec = pickScratch(note,
+                              { colEvt = note, ppq = tm:fromLogical(spec.chan, note.ppq),
+                                ppqL = note.ppq, endppqL = note.endppq, endppq = util.REMOVE })
       util.add(restoredNotes, rec)
       util.add(channel.columns.notes[spec.lane].events, note)
       sortNoteColumn(channel.columns.notes[spec.lane].events)
@@ -2201,7 +2202,7 @@ local function buildRawScratch(restoredRecs)
       local recs = {}
       for _, raw in mm:notesRaw(chan) do
         if not raw.derived and raw.ppqL ~= nil then
-          local rec = util.pick(raw, SCRATCH_FIELDS, { colEvt = colByUuid[raw.uuid] })
+          local rec = pickScratch(raw, { colEvt = colByUuid[raw.uuid] })
           rec.detune = rec.detune or 0   -- ingestion defaults it on the column note; mirror that
           util.add(recs, rec)
         end

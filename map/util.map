@@ -1,4 +1,4 @@
-@module util  src=util.lua  loc=617  sha=3970445  mode=namespace  self=util
+@module util  src=util.lua  loc=637  sha=3970445  mode=namespace  self=util
 
 # Invariants & contracts
   @invariant  util.OPEN is the canonical "deliberately unbounded tail" marker for a note's endppqL. It is math.huge, so arithmetic on an open tail just works (inf + finite = inf, inf > finite = true) — callers no longer special-case the sentinel except to communicate intent. util.serialise/unserialise round-trip the non-finite floats via explicit inf/-inf/nan literals so the on-disk form is stable. Distinct from util.REMOVE: REMOVE clears a key on assign; OPEN is a persisted *value* of endppqL.  @ 42
@@ -7,21 +7,21 @@
   @const util = {}  @ 5
       @invariant  stateless module: pure helpers, no module-level mutable state beyond the REMOVE/OPEN sentinels  @ 3
       @invariant  util.REMOVE is the canonical delete marker honoured by assign and by mm/cm assignment APIs  @ 4
-  @const BASE36 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'  @ 301
-  @const BASE62 = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRST...  @ 320
-  @const LUA_KEYWORDS = {}  @ 519
-  @const prettyEmit  @ 544   -- forward decl (mutual recursion with emitTable)
+  @const BASE36 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'  @ 321
+  @const BASE62 = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRST...  @ 340
+  @const LUA_KEYWORDS = {}  @ 539
+  @const prettyEmit  @ 564   -- forward decl (mutual recursion with emitTable)
 
 # Private functions
   @fn print(...)  @ 15-17
-  @fn escape_string(s)  @ 187-202
+  @fn escape_string(s)  @ 207-222
   -- Lua-literal disk format (human-editable; read by load(), never P_EXT)
-  @fn bareKey(k)  @ 525-527
-  @fn luaNumber(n)  @ 530-535
+  @fn bareKey(k)  @ 545-547
+  @fn luaNumber(n)  @ 550-555
       -- inf/nan are not bare Lua, but their arithmetic forms are and need no env.
-  @fn nonFiniteNote(v)  @ 538-542
+  @fn nonFiniteNote(v)  @ 558-562
       -- Inline note so a hand-editor recognises the arithmetic non-finite forms.
-  @fn emitTable(tbl, indent, seen)  @ 546-582
+  @fn emitTable(tbl, indent, seen)  @ 566-602
 
 # Public API (util.*)
   @api util.print(...)  @ 7-13
@@ -34,57 +34,61 @@
       -- description; the wrapper forwards args, propagates errors after
       -- closing the block, and is a no-op when reaper.Undo_BeginBlock is
       -- absent (test harness).
-  @api util.pick(src, keys, adds)  @ 79-88
-  @api util.bucket(buckets, key, val)  @ 90-95
-  @api util.key(...)  @ 101-115
+  @api util.picker(keys)  @ 82-97
+      -- pick re-parses its key string on every call: nothing at a site that runs a few times, and
+      -- 9.6ms of pure gmatch at one that runs per note of a dense channel. Hoist a picker there.
+      @contract  parses `keys` once, returns a pick over it; the closure owns the list, no module state  @ 79
+  @api util.pick(src, keys, adds)  @ 99-108
+  @api util.bucket(buckets, key, val)  @ 110-115
+  @api util.key(...)  @ 121-135
       -- Opaque compound key: join identity fields with NUL, which can't appear
       -- in a guid, track-key, or stringified scalar. Never split back apart.
       -- Small arities unroll to a single concat (per-event on the load/rebuild key
       -- paths); tostring kept per arg so output is identical for any arg type.
-  @api util.keys(t)  @ 117-121
-  @api util.compact(t, n)  @ 124-128
+  @api util.keys(t)  @ 137-141
+  @api util.compact(t, n)  @ 144-148
       -- Sparse → dense; n is the pre-sparse length.
-  @api util.sparsePairs(t, n)  @ 131-139
+  @api util.sparsePairs(t, n)  @ 151-159
       -- Sparse walk; yields (index, value) for each non-nil slot up to n.
-  @api util.seek(items, mode, key, filter, keyFn)  @ 142-163
-      @contract  assumes items sorted by keyFn (defaults to .ppq); 'before' modes scan to first miss then stop  @ 141
-  @api util.clone(src, exclude, deep)  @ 166-175
-      @contract  exclude applies only to the outermost table; deep recursion drops the exclude set  @ 165
-  @api util.deepClone(src)  @ 177
-  @api util.deepEq(a, b)  @ 179-185
-  @api util.installHooks(owner)  @ 205-222
-      @contract  listeners filter by signal name at registration; forward requires source itself ran installHooks  @ 204
-  @api util.isNote(e)  @ 224
-  @api util.between(events, lo, hi, filter)  @ 227-238
-      @contract  iterates events with ppq in half-open [lo, hi); adjacent windows tile without overlap  @ 226
-  @api util.clamp(val,min,max)  @ 240-248
-  @api util.setDigit(val, d, pos, base, keepBelow)  @ 250-255
-  @api util.snapTo(v, dir, interval)  @ 258-261
-      @contract  advances at least one full interval; values already on a boundary do not no-op  @ 257
-  @api util.nudgedScalar(v, lo, hi, dir, interval)  @ 263-266
-  @api util.oneOf(choices, txt)  @ 268-273
-  @api util.round(n, to)  @ 275-281
-  @api util.gcd(a, b)  @ 283-287
-  @api util.lcm(a, b)  @ 289
-  @api util.hash(s)  @ 293-299
+  @api util.seek(items, mode, key, filter, keyFn)  @ 162-183
+      @contract  assumes items sorted by keyFn (defaults to .ppq); 'before' modes scan to first miss then stop  @ 161
+  @api util.clone(src, exclude, deep)  @ 186-195
+      @contract  exclude applies only to the outermost table; deep recursion drops the exclude set  @ 185
+  @api util.deepClone(src)  @ 197
+  @api util.deepEq(a, b)  @ 199-205
+  @api util.installHooks(owner)  @ 225-242
+      @contract  listeners filter by signal name at registration; forward requires source itself ran installHooks  @ 224
+  @api util.isNote(e)  @ 244
+  @api util.between(events, lo, hi, filter)  @ 247-258
+      @contract  iterates events with ppq in half-open [lo, hi); adjacent windows tile without overlap  @ 246
+  @api util.clamp(val,min,max)  @ 260-268
+  @api util.setDigit(val, d, pos, base, keepBelow)  @ 270-275
+  @api util.snapTo(v, dir, interval)  @ 278-281
+      @contract  advances at least one full interval; values already on a boundary do not no-op  @ 277
+  @api util.nudgedScalar(v, lo, hi, dir, interval)  @ 283-286
+  @api util.oneOf(choices, txt)  @ 288-293
+  @api util.round(n, to)  @ 295-301
+  @api util.gcd(a, b)  @ 303-307
+  @api util.lcm(a, b)  @ 309
+  @api util.hash(s)  @ 313-319
       -- FNV-1a 32-bit with the length folded into the basis. Fingerprints the
       -- projext-undo mirror manifests; collisions accepted (docs/pextStore.md § Mirror).
-  @api util.toBase36(n)  @ 303-312
-  @api util.fromBase36(txt)  @ 314-316
-  @api util.toBase62(n)  @ 322-331
-  @api util.fromBase62(txt)  @ 333-342
-  @api util.dotimes(n, v)  @ 345-353
-      @contract  overloaded on type of v: function => call n times for side effect; else build n-array filled with v  @ 344
-  @api util.serialise(value, exclude, seen)  @ 356-396
-      @contract  strict: cycles raise; exclude applies only to the outermost table (recursion drops it)  @ 355
-  @api util.unserialise(input)  @ 399-514
-      @contract  strict: trailing chars after the root value raise; scalars decode back to number/boolean/string  @ 398
-  @api util.prettySerialise(value)  @ 594-596
-      @contract  emits a `return <literal>` chunk for load(); non-finite → 1/0 -1/0 0/0; cycles raise  @ 593
-  @api util.prettyUnserialise(text)  @ 599-605
-      @contract  sandboxed load() of the disk literal (text-only, empty env); ok→value, fail→nil,err  @ 598
-  @api util.instantiate(name, deps)  @ 609-615
-      @contract  executes the named module file as a fresh chunk, passing `deps` as its `...` argument. Used for factory modules whose file body IS the constructor (vs. stateless `require`d tables). Test seam: a function in util._stubs[name] takes precedence and is called with deps — so harnesses can swap a fake without altering the production graph.  @ 607
+  @api util.toBase36(n)  @ 323-332
+  @api util.fromBase36(txt)  @ 334-336
+  @api util.toBase62(n)  @ 342-351
+  @api util.fromBase62(txt)  @ 353-362
+  @api util.dotimes(n, v)  @ 365-373
+      @contract  overloaded on type of v: function => call n times for side effect; else build n-array filled with v  @ 364
+  @api util.serialise(value, exclude, seen)  @ 376-416
+      @contract  strict: cycles raise; exclude applies only to the outermost table (recursion drops it)  @ 375
+  @api util.unserialise(input)  @ 419-534
+      @contract  strict: trailing chars after the root value raise; scalars decode back to number/boolean/string  @ 418
+  @api util.prettySerialise(value)  @ 614-616
+      @contract  emits a `return <literal>` chunk for load(); non-finite → 1/0 -1/0 0/0; cycles raise  @ 613
+  @api util.prettyUnserialise(text)  @ 619-625
+      @contract  sandboxed load() of the disk literal (text-only, empty env); ok→value, fail→nil,err  @ 618
+  @api util.instantiate(name, deps)  @ 629-635
+      @contract  executes the named module file as a fresh chunk, passing `deps` as its `...` argument. Used for factory modules whose file body IS the constructor (vs. stateless `require`d tables). Test seam: a function in util._stubs[name] takes precedence and is called with deps — so harnesses can swap a fake without altering the production graph.  @ 627
 
 # REAPER API surface
   @reaper ShowConsoleMsg
@@ -96,47 +100,48 @@
   @field w REMOVE  @ 40
   @field r Undo_BeginBlock  @ atomic:71
   @field r Undo_EndBlock  @ atomic:73
-  @field r _stubs  @ instantiate:610
-  @field w _stubs  @ 608
+  @field r _stubs  @ instantiate:630
+  @field w _stubs  @ 628
   @field w add  @ add:59
   @field w assign  @ assign:46
   @field w atomic  @ atomic:68
-  @field w between  @ between:227
-  @field w bucket  @ bucket:90
-  @field w clamp  @ clamp:240
-  @field w clone  @ clone:166
-  @field w compact  @ compact:124
-  @field w deepClone  @ deepClone:177
-  @field w deepEq  @ deepEq:179
-  @field w dotimes  @ dotimes:345
-  @field r endppq  @ isNote:224
-  @field w fromBase36  @ fromBase36:314
-  @field w fromBase62  @ fromBase62:333
-  @field w gcd  @ gcd:283
-  @field w hash  @ hash:293
-  @field r huge  @ 43 serialise:364,365 unserialise:454,455 luaNumber:532,533 nonFiniteNote:539
-  @field w installHooks  @ installHooks:205
-  @field w instantiate  @ instantiate:609
-  @field w isNote  @ isNote:224
-  @field w key  @ key:101
-  @field w keys  @ keys:117
-  @field w lcm  @ lcm:289
-  @field w nudgedScalar  @ nudgedScalar:263
-  @field w oneOf  @ oneOf:268
-  @field r path  @ instantiate:612
-  @field w pick  @ pick:79
-  @field r ppq  @ seek:143 between:234,235
-  @field w prettySerialise  @ prettySerialise:594
-  @field w prettyUnserialise  @ prettyUnserialise:599
+  @field w between  @ between:247
+  @field w bucket  @ bucket:110
+  @field w clamp  @ clamp:260
+  @field w clone  @ clone:186
+  @field w compact  @ compact:144
+  @field w deepClone  @ deepClone:197
+  @field w deepEq  @ deepEq:199
+  @field w dotimes  @ dotimes:365
+  @field r endppq  @ isNote:244
+  @field w fromBase36  @ fromBase36:334
+  @field w fromBase62  @ fromBase62:353
+  @field w gcd  @ gcd:303
+  @field w hash  @ hash:313
+  @field r huge  @ 43 serialise:384,385 unserialise:474,475 luaNumber:552,553 nonFiniteNote:559
+  @field w installHooks  @ installHooks:225
+  @field w instantiate  @ instantiate:629
+  @field w isNote  @ isNote:244
+  @field w key  @ key:121
+  @field w keys  @ keys:137
+  @field w lcm  @ lcm:309
+  @field w nudgedScalar  @ nudgedScalar:283
+  @field w oneOf  @ oneOf:288
+  @field r path  @ instantiate:632
+  @field w pick  @ pick:99
+  @field w picker  @ picker:82
+  @field r ppq  @ seek:163 between:254,255
+  @field w prettySerialise  @ prettySerialise:614
+  @field w prettyUnserialise  @ prettyUnserialise:619
   @field w print  @ print:7
   @field w print_r  @ print_r:19
-  @field w round  @ round:275
-  @field w seek  @ seek:142
-  @field w serialise  @ serialise:356
-  @field w setDigit  @ setDigit:250
-  @field w snapTo  @ snapTo:258
-  @field w sparsePairs  @ sparsePairs:131
-  @field w toBase36  @ toBase36:303
-  @field w toBase62  @ toBase62:322
+  @field w round  @ round:295
+  @field w seek  @ seek:162
+  @field w serialise  @ serialise:376
+  @field w setDigit  @ setDigit:270
+  @field w snapTo  @ snapTo:278
+  @field w sparsePairs  @ sparsePairs:151
+  @field w toBase36  @ toBase36:323
+  @field w toBase62  @ toBase62:342
   @field r traceback  @ atomic:72
-  @field w unserialise  @ unserialise:399
+  @field w unserialise  @ unserialise:419
