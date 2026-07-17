@@ -1,4 +1,4 @@
-@spec tm_unified_projection_spec  src=tests/specs/tm_unified_projection_spec.lua  loc=95  sha=14993a2  cases=2
+@spec tm_unified_projection_spec  src=tests/specs/tm_unified_projection_spec.lua  loc=94  sha=14993a2  cases=2
 @exercises dataStore (h.ds), midiManager (h.fm), trackerManager (h.tm)
 @surface   ds:assign, fm:dump, tm:getChannel
 @harness   mk{seed.notes}
@@ -8,45 +8,45 @@
   ds:assign('swing', {global='c58'}) drives dataChanged → markSwingStale → rebuild.
 
 # Cases
-  @case 'authored swap survives: B lands before A in raw, no clamp; A retro-clips B tail'  [harness]  @ 16-47
-  @case 'raw collision: ppqL-later note clamps to predecessor + 1; delayC carries give-way'  [harness]  @ 55-93
+  @case 'authored swap survives: B lands before A in raw, no clamp; A retro-clips B tail'  [harness]  @ 15-46
+  @case 'raw collision: ppqL-later note clamps to predecessor + 1; delayC carries give-way'  [harness]  @ 54-92
 
 # Uses (outbound edges)
-  @use call ds:assign  @ 35,74
-  @use call fm:dump  @ 38,77
-  @use call tm:getChannel  @ 87
+  @use call ds:assign  @ 34,73
+  @use call fm:dump  @ 37,76
+  @use call tm:getChannel  @ 86
 
 # Fields (r read / w write incl. constructor keys)
-  @field w atom  @ 7
-  @field w chan  @ 22,25,61,64
-  @field r columns  @ 87
-  @field w config  @ 29,68
-  @field r delay  @ 45,82,91
-  @field w delay  @ 23,26,62,65
-  @field r delayC  @ 92
-  @field w detune  @ 23,26,62,65
-  @field r endppq  @ 46,84
-  @field w endppq  @ 21,24,60,63
-  @field w endppqL  @ 21,24,60,63
-  @field r events  @ 87
-  @field w factors  @ 7
-  @field w global  @ 35,74
-  @field w lane  @ 22,25,61,64
-  @field w name  @ 16,55
-  @field r notes  @ 38,77,87
-  @field w notes  @ 20,59
-  @field w period  @ 7
-  @field w pitch  @ 22,25,61,64
-  @field r ppq  @ 43,44,83,88
-  @field w ppq  @ 21,24,60,63
-  @field r ppqL  @ 39,40,78,79
-  @field w ppqL  @ 21,24,60,63
-  @field w project  @ 30,69
-  @field w rowPerBeat  @ 31,70
-  @field w rpb  @ 23,26,62,65
-  @field w run  @ 17,56
-  @field w seed  @ 19,58
-  @field w shift  @ 7
-  @field w swings  @ 30,69
-  @field w take  @ 31,70
-  @field w vel  @ 22,25,61,64
+  @field w atom  @ 6
+  @field w chan  @ 21,24,60,63
+  @field r columns  @ 86
+  @field w config  @ 28,67
+  @field r delay  @ 44,81,90
+  @field w delay  @ 22,25,61,64
+  @field r delayC  @ 91
+  @field w detune  @ 22,25,61,64
+  @field r endppq  @ 45,83
+  @field w endppq  @ 20,23,59,62
+  @field w endppqL  @ 20,23,59,62
+  @field r events  @ 86
+  @field w factors  @ 6
+  @field w global  @ 34,73
+  @field w lane  @ 21,24,60,63
+  @field w name  @ 15,54
+  @field r notes  @ 37,76,86
+  @field w notes  @ 19,58
+  @field w period  @ 6
+  @field w pitch  @ 21,24,60,63
+  @field r ppq  @ 42,43,82,87
+  @field w ppq  @ 20,23,59,62
+  @field r ppqL  @ 38,39,77,78
+  @field w ppqL  @ 20,23,59,62
+  @field w project  @ 29,68
+  @field w rowPerBeat  @ 30,69
+  @field w rpb  @ 22,25,61,64
+  @field w run  @ 16,55
+  @field w seed  @ 18,57
+  @field w shift  @ 6
+  @field w swings  @ 29,68
+  @field w take  @ 30,69
+  @field w vel  @ 21,24,60,63

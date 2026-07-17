@@ -1,4 +1,4 @@
-@spec sample_page_spec  src=tests/specs/sample_page_spec.lua  loc=74  sha=3848a7b  cases=4
+@spec sample_page_spec  src=tests/specs/sample_page_spec.lua  loc=73  sha=3848a7b  cases=4
 @harness   mk
 
 # Intent
@@ -9,30 +9,30 @@
   before the first require so the module loads in the pure-Lua harness.
 
 # Helpers
-  @fn newSamplePage(cm, cmgr, chrome, gui)  @ 24-27
+  @fn newSamplePage(cm, cmgr, chrome, gui)  @ 23-26
 
 # Cases
-  @case 'setTrack(track) re-keys cm to that track via the page's own sv'  [harness]  @ 31-39
-  @case 'setTrack(nil) does not re-key cm'  [harness]  @ 42-50
-  @case 'focusState before any render returns both bits false'  [harness]  @ 53-60
-  @case 'bind re-keys cm to the page track on every activation, not just the first'  [harness]  @ 63-72
+  @case 'setTrack(track) re-keys cm to that track via the page's own sv'  [harness]  @ 30-38
+  @case 'setTrack(nil) does not re-key cm'  [harness]  @ 41-49
+  @case 'focusState before any render returns both bits false'  [harness]  @ 52-59
+  @case 'bind re-keys cm to the page track on every activation, not just the first'  [harness]  @ 62-71
 
 # Fields (r read / w write incl. constructor keys)
-  @field w ImGui_GetBuiltinPath  @ 17
-  @field w Mod_None  @ 11
-  @field w __index  @ 12
-  @field r acceptCmds  @ 59
-  @field w chrome  @ 26
-  @field w cm  @ 26
-  @field w cmgr  @ 26
-  @field w currentTake  @ 22
-  @field w facade  @ 26
-  @field w get  @ 22
-  @field w gui  @ 26
-  @field w name  @ 31,42,53,63
-  @field r preload  @ 14
-  @field w publish  @ 21
-  @field r reaper  @ 17
-  @field w run  @ 32,43,54,64
-  @field w setTrack  @ 36,47,69
-  @field r suppressKbd  @ 58
+  @field w ImGui_GetBuiltinPath  @ 16
+  @field w Mod_None  @ 10
+  @field w __index  @ 11
+  @field r acceptCmds  @ 58
+  @field w chrome  @ 25
+  @field w cm  @ 25
+  @field w cmgr  @ 25
+  @field w currentTake  @ 21
+  @field w facade  @ 25
+  @field w get  @ 21
+  @field w gui  @ 25
+  @field w name  @ 30,41,52,62
+  @field r preload  @ 13
+  @field w publish  @ 20
+  @field r reaper  @ 16
+  @field w run  @ 31,42,53,63
+  @field w setTrack  @ 35,46,68
+  @field r suppressKbd  @ 57

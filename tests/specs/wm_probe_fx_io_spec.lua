@@ -12,7 +12,7 @@ return {
   {
     name = 'instantiateFxOnScratch returns stereo-port counts (pins/2)',
     run = function(harness)
-      local h, wm = mkWm(harness)
+      local _, wm = mkWm(harness)
       reaper:setFxIO('VST3:Quad', { ins = 4, outs = 2 })
       local io = wm:instantiateFxOnScratch('VST3:Quad')
       t.eq(io.ins,  2, 'two stereo input ports from 4 pins')
@@ -22,7 +22,7 @@ return {
   {
     name = 'instantiateFxOnScratch reads in_pin_X / out_pin_X via TrackFX_GetNamedConfigParm',
     run = function(harness)
-      local h, wm = mkWm(harness)
+      local _, wm = mkWm(harness)
       reaper:setFxIO('VST3:Comp', {
         ins  = 4, outs = 2,
         inPinNames  = { 'Main L', 'Main R', 'Sidechain L', 'Sidechain R' },
@@ -36,7 +36,7 @@ return {
   {
     name = 'instantiateFxOnScratch returns the live fxId (matches TrackFX_GetFXGUID on scratch)',
     run = function(harness)
-      local h, wm = mkWm(harness)
+      local _, wm = mkWm(harness)
       reaper:setFxIO('JS:thing', { ins = 2, outs = 2 })
       local io = wm:instantiateFxOnScratch('JS:thing')
       local scratch = reaper.GetTrack(0, 0)
@@ -46,7 +46,7 @@ return {
   {
     name = 'instantiateFxOnScratch KEEPS the instance (no TrackFX_Delete; count stays at 1)',
     run = function(harness)
-      local h, wm = mkWm(harness)
+      local _, wm = mkWm(harness)
       reaper:setFxIO('JS:keep', { ins = 2, outs = 2 })
       wm:instantiateFxOnScratch('JS:keep')
       local scratch = reaper.GetTrack(0, 0)
@@ -56,7 +56,7 @@ return {
   {
     name = 'instantiateFxOnScratch does not cache: each call mints a fresh instance',
     run = function(harness)
-      local h, wm = mkWm(harness)
+      local _, wm = mkWm(harness)
       reaper:setFxIO('JS:thing', { ins = 2, outs = 2 })
       local io1 = wm:instantiateFxOnScratch('JS:thing')
       local io2 = wm:instantiateFxOnScratch('JS:thing')
@@ -68,7 +68,7 @@ return {
   {
     name = 'instantiateFxOnScratch on unknown ident (AddByName returns -1) gives fxId=nil, ins=outs=0',
     run = function(harness)
-      local h, wm = mkWm(harness)
+      local _, wm = mkWm(harness)
       reaper.TrackFX_AddByName = function() return -1 end
       local io = wm:instantiateFxOnScratch('VST3:Missing')
       t.eq(io.fxId, nil)
@@ -81,7 +81,7 @@ return {
   {
     name = 'instantiateFxOnScratch triggers scratch creation lazily when load was skipped',
     run = function(harness)
-      local h, wm = mkWm(harness)
+      local _, wm = mkWm(harness)
       reaper:setFxIO('JS:lazy', { ins = 2, outs = 2 })
       t.eq(reaper.CountTracks(0), 0)
       wm:instantiateFxOnScratch('JS:lazy')

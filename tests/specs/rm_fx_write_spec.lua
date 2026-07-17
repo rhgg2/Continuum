@@ -103,7 +103,7 @@ return {
     name = 'assignFx{track} moves the fx across tracks, id preserved',
     run = function()
       local reaper, rm = mkRm()
-      local _, srcId = seedTrack(reaper, 'Src', { { ident = 'x' } })
+      seedTrack(reaper, 'Src', { { ident = 'x' } })
       local _, dstId = seedTrack(reaper, 'Dst', { { ident = 'y' } })
       local id = rm:tracks()[1].fx[1].id
 

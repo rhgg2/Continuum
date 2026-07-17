@@ -92,9 +92,9 @@ return {
       bumpState(h.reaper)
 
       local realValidate = h.reaper.ValidatePtr2
-      h.reaper.ValidatePtr2 = function(_proj, ptr, ctype)
+      h.reaper.ValidatePtr2 = function(proj, ptr, ctype)
         if ctype == 'MediaItem_Take*' and ptr == 'take1' then return false end
-        return realValidate(_proj, ptr, ctype)
+        return realValidate(proj, ptr, ctype)
       end
 
       local fired = false

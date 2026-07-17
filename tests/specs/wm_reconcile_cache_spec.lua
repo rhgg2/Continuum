@@ -50,7 +50,7 @@ return {
   {
     name = 'enableLive after load takes no read — the load snapshot seeded the model',
     run = function(harness)
-      local h, wm, rm = mkWm(harness)
+      local _, wm, rm = mkWm(harness)
       local reads = trackReadSpy(rm)
       wm:enableLive()  -- reconcile diffs the model load seeded; applyOps seeds from newTrackIds
       t.eq(reads(), 0, 'no fresh read: load\'s snapshot is the model; applyOps did not re-read')

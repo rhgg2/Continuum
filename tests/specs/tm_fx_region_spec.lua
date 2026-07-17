@@ -29,14 +29,6 @@ local function authoredPb(h, chan, ppq)
   end
 end
 
--- The pb column projects intent: the event's `val` is the authored cents (stays visible even when
--- a replace region overwrites the wire).
-local function colPbCents(h, chan, ppq)
-  for _, e in ipairs((h.tm:getChannel(chan).columns.pb or {}).events or {}) do
-    if e.ppq == ppq then return e.val end
-  end
-end
-
 -- The seated curve of a pb-replace region, hidden from columns. Seats are markerless -- there is no
 -- marker to filter on; the live window IS their identity. Recognized purely by region membership.
 local function derivedPbs(h, chan)

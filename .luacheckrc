@@ -12,6 +12,10 @@ unused_args = false
 
 exclude_files = { "design/", "tests/spikes/" }
 
+-- "Take any element of an iterator" (tm_rebind_gate_spec.lua:34) is a deliberate
+-- idiom -- next() can't drive a stateful iterator. W512 can't tell it from a bug.
+ignore = { "512" }
+
 -- A runaway guard, not a style rule: aligned tables (timing.lua:133) are
 -- deliberate and read better wide than reflowed.
 max_code_line_length    = 150

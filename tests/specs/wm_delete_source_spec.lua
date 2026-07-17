@@ -106,7 +106,7 @@ return {
   {
     name = 'addFxNode with autoSource=false skips the auto source for a 0-in generator',
     run = function(harness)
-      local h, wm = mkWm(harness)
+      local _, wm = mkWm(harness)
       reaper:setFxIO('JS:gen', { ins = 0, outs = 2 })  -- generator: no audio in
       wm:addFxNode(0, 0, { name = 'Gen', ident = 'JS:gen' }, { autoSource = false })
       local sources = 0

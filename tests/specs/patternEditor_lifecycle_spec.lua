@@ -80,7 +80,7 @@ return {
   {
     name = 'open mints a checkout on scratch and materialises the notes body; close sweeps it',
     run = function(harness)
-      local h, pe = withEditor(harness)
+      local _, pe = withEditor(harness)
 
       pe:open(NOTES_BODY, noop)
       t.truthy(pe:isOpen(), 'the editor is open after open()')
@@ -103,7 +103,7 @@ return {
   {
     name = 'a curve body materialises as pb events; close removes the checkout',
     run = function(harness)
-      local h, pe = withEditor(harness)
+      local _, pe = withEditor(harness)
 
       pe:open(CURVE_BODY, noop)
       local take = pe:currentTake()
@@ -121,7 +121,7 @@ return {
     -- close() fully resets -- a fresh checkout, distinct pool guid, body re-materialised.
     name = 'the singleton editor cycles open/close/open, minting a fresh pool each time',
     run = function(harness)
-      local h, pe = withEditor(harness)
+      local _, pe = withEditor(harness)
       local strack = scratch.track()
 
       pe:open(NOTES_BODY, noop)

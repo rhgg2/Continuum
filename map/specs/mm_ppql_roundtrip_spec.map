@@ -1,4 +1,4 @@
-@spec mm_ppql_roundtrip_spec  src=tests/specs/mm_ppql_roundtrip_spec.lua  loc=126  sha=b5afaeb  cases=5
+@spec mm_ppql_roundtrip_spec  src=tests/specs/mm_ppql_roundtrip_spec.lua  loc=125  sha=b5afaeb  cases=5
 @exercises midiManager (h.mm)
 @surface   mm:modify
 @harness   fakeReaper:bindTake
@@ -10,36 +10,36 @@
   second mm against the same take and confirm ppqL/endppqL come back.
 
 # Helpers
-  @fn freshTake()  @ 11-17
+  @fn freshTake()  @ 10-16
 
 # Cases
-  @case 'note ppqL/endppqL survive a save/load round-trip'  [pure]  @ 21-37
-  @case 'cc ppqL survives a save/load round-trip (lazy-sidecar allocates uuid)'  [pure]  @ 41-56
-  @case 'pb ppqL survives a save/load round-trip'  [pure]  @ 60-75
-  @case 'plain cc with no ppqL stays plain (no sidecar; no P_EXT entry)'  [pure]  @ 79-92
-  @case 'mixed take: many events, all ppqL stamps survive concurrently'  [pure]  @ 96-124
+  @case 'note ppqL/endppqL survive a save/load round-trip'  [pure]  @ 20-36
+  @case 'cc ppqL survives a save/load round-trip (lazy-sidecar allocates uuid)'  [pure]  @ 40-55
+  @case 'pb ppqL survives a save/load round-trip'  [pure]  @ 59-74
+  @case 'plain cc with no ppqL stays plain (no sidecar; no P_EXT entry)'  [pure]  @ 78-91
+  @case 'mixed take: many events, all ppqL stamps survive concurrently'  [pure]  @ 95-123
 
 # Uses (outbound edges)
-  @use call mm:modify  @ 25,45,64,83,100
+  @use call mm:modify  @ 24,44,63,82,99
 
 # Fields (r read / w write incl. constructor keys)
-  @field w cc  @ 46,84,103,104
-  @field w chan  @ 26,46,65,84,101,102,103,104
-  @field r endppq  @ 34
-  @field w endppq  @ 26,101,102
-  @field r endppqL  @ 36,114,116
-  @field w endppqL  @ 27,101,102
-  @field r evType  @ 72
-  @field w evType  @ 26,46,65,84,101,102,103,104
-  @field w name  @ 21,41,60,79,96
-  @field w pitch  @ 26,101,102
-  @field r plain  @ 90
-  @field r ppq  @ 33,54,73,111,120
-  @field w ppq  @ 26,46,65,84,101,102,103,104
-  @field r ppqL  @ 35,55,74,91,113,115,122,123
-  @field w ppqL  @ 27,47,66,101,102,103,104
-  @field w reaper  @ 13
-  @field w run  @ 22,42,61,80,97
-  @field r uuid  @ 53
-  @field w val  @ 46,65,84,103,104
-  @field w vel  @ 26,101,102
+  @field w cc  @ 45,83,102,103
+  @field w chan  @ 25,45,64,83,100,101,102,103
+  @field r endppq  @ 33
+  @field w endppq  @ 25,100,101
+  @field r endppqL  @ 35,113,115
+  @field w endppqL  @ 26,100,101
+  @field r evType  @ 71
+  @field w evType  @ 25,45,64,83,100,101,102,103
+  @field w name  @ 20,40,59,78,95
+  @field w pitch  @ 25,100,101
+  @field r plain  @ 89
+  @field r ppq  @ 32,53,72,110,119
+  @field w ppq  @ 25,45,64,83,100,101,102,103
+  @field r ppqL  @ 34,54,73,90,112,114,121,122
+  @field w ppqL  @ 26,46,65,100,101,102,103
+  @field w reaper  @ 12
+  @field w run  @ 21,41,60,79,96
+  @field r uuid  @ 52
+  @field w val  @ 45,64,83,102,103
+  @field w vel  @ 25,100,101

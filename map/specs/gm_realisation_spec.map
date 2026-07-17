@@ -1,4 +1,4 @@
-@spec gm_realisation_spec  src=tests/specs/gm_realisation_spec.lua  loc=165  sha=14993a2  cases=5
+@spec gm_realisation_spec  src=tests/specs/gm_realisation_spec.lua  loc=162  sha=14993a2  cases=5
 @exercises groupManager (gm), trackerManager (h.tm)
 @surface   gm:markGroup, gm:newInstance, tm:flush, gm:addEvent, gm:deleteEvent, gm:duplicateInto
 
@@ -29,52 +29,51 @@
       -- 960-wide region; siblings stack at the next bar (half-open: [0,960)
       -- and [960,1920) are disjoint, so no regionConflict).
   @fn addAt(staged, ppq)  @ 44-46
-  @fn assignFor(staged, evt)  @ 47-49
 
 # Cases
-  @case 'a finite note carries its ceiling (endppq) rigidly to the sibling'  [pure]  @ 53-65
-  @case 'an open note travels as open: no ceiling, provisional onset+1 tail'  [pure]  @ 69-80
-  @case 'a group-level create is open in the group frame (no birth ceiling)'  [pure]  @ 84-111
-  @case 'a group-level delete does NOT grow the predecessor in the group frame'  [pure]  @ 115-137
-  @case 'markGroup seed is canonical -- it never rewrites the take geometry'  [pure]  @ 141-163
+  @case 'a finite note carries its ceiling (endppq) rigidly to the sibling'  [pure]  @ 50-62
+  @case 'an open note travels as open: no ceiling, provisional onset+1 tail'  [pure]  @ 66-77
+  @case 'a group-level create is open in the group frame (no birth ceiling)'  [pure]  @ 81-108
+  @case 'a group-level delete does NOT grow the predecessor in the group frame'  [pure]  @ 112-134
+  @case 'markGroup seed is canonical -- it never rewrites the take geometry'  [pure]  @ 138-160
 
 # Uses (outbound edges)
-  @use call gm:markGroup  @ 57,73,88,119
-  @use call gm:newInstance  @ 58,74,89,120
-  @use call tm:flush  @ 90,93,121,123,151
-  @use call gm:addEvent  @ 93
-  @use call gm:deleteEvent  @ 123
-  @use call gm:duplicateInto  @ 150
+  @use call gm:markGroup  @ 54,70,85,116
+  @use call gm:newInstance  @ 55,71,86,117
+  @use call tm:flush  @ 87,90,118,120,148
+  @use call gm:addEvent  @ 90
+  @use call gm:deleteEvent  @ 120
+  @use call gm:duplicateInto  @ 147
 
 # Fields (r read / w write incl. constructor keys)
-  @field r OPEN  @ 33,64,78,99,109
-  @field r add  @ 45,90,121
-  @field r assign  @ 48,90,105,121,131,155
-  @field w chan  @ 32,58,74,89,120,150
-  @field w chanLo  @ 41,148
-  @field r del  @ 126
-  @field w del  @ 90,121
+  @field r OPEN  @ 33,61,75,96,106
+  @field r add  @ 45,87,118
+  @field r assign  @ 87,102,118,128,152
+  @field w chan  @ 32,55,71,86,117,147
+  @field w chanLo  @ 41,145
+  @field r del  @ 123
+  @field w del  @ 87,118
   @field w ds  @ 21
-  @field r dur  @ 133,160
-  @field w dur  @ 41,148
-  @field r endppq  @ 62,64,78,99,109,158
+  @field r dur  @ 130,157
+  @field w dur  @ 41,145
+  @field r endppq  @ 59,61,75,96,106,155
   @field w endppq  @ 33
-  @field r endppqL  @ 63,79,133,159
+  @field r endppqL  @ 60,76,130,156
   @field w evType  @ 32
-  @field r evt  @ 48,106,132,156
+  @field r evt  @ 103,129,153
   @field w lane  @ 32
   @field w length  @ 20
-  @field w name  @ 53,69,84,115,141
+  @field w name  @ 50,66,81,112,138
   @field r open  @ 33
-  @field w open  @ 72,92
-  @field r pitch  @ 106,126,132
+  @field w open  @ 69,89
+  @field r pitch  @ 103,123,129
   @field w pitch  @ 34
-  @field r ppq  @ 45,157
-  @field w ppq  @ 32,41,58,74,89,120,148,150
-  @field w run  @ 54,70,85,116,142
-  @field w streams  @ 42,149
+  @field r ppq  @ 45,154
+  @field w ppq  @ 32,41,55,71,86,117,145,147
+  @field w run  @ 51,67,82,113,139
+  @field w streams  @ 42,146
   @field w tm  @ 21
-  @field r update  @ 48,106,133,157,158,159,160
-  @field r uuid  @ 123
+  @field r update  @ 103,130,154,155,156,157
+  @field r uuid  @ 120
   @field w uuid  @ 34
   @field w vel  @ 34

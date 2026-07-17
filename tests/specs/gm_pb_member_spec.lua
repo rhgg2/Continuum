@@ -82,9 +82,8 @@ return {
           { ppq = 0, chan = 1, evType = 'pb', val = 0, cents = 50, shape = 'step' },
         } },
       }
-      local rect = { ppq = 0, dur = 960, chanLo = 1,
-                     streams = { [0] = { ['pb:0'] = true } } }
-      local gid = h.gm:markGroup(h.vm:eventsInRect(rect), rect)
+      local pbRect = rect()
+      local gid = h.gm:markGroup(h.vm:eventsInRect(pbRect), pbRect)
       t.truthy(gid, 'pb region marked as a group')
       h.gm:newInstance(gid, { ppq = 960, chan = 1 })
       h.tm:flush()
@@ -125,9 +124,8 @@ return {
           { ppq = 0, chan = 1, evType = 'pb', val = 0, cents = 50, shape = 'step' },
         } },
       }
-      local rect = { ppq = 0, dur = 960, chanLo = 1,
-                     streams = { [0] = { ['pb:0'] = true } } }
-      local gid = h.gm:markGroup(h.vm:eventsInRect(rect), rect)
+      local pbRect = rect()
+      local gid = h.gm:markGroup(h.vm:eventsInRect(pbRect), pbRect)
       h.gm:newInstance(gid, { ppq = 960, chan = 1 })
       h.tm:flush()
 

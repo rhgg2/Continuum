@@ -6,7 +6,6 @@
 --     pb carries `fake=true` (persisted as cc metadata).
 
 local t = require('support')
-local util = require('util')
 
 -- pbRange default = 2 semitones = 200 cents total. So cents 50 → raw 2048.
 local function cents2raw(c) return math.floor(c * 8192 / 200 + 0.5) end

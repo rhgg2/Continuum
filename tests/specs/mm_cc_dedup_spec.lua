@@ -287,7 +287,7 @@ return {
           { ppq = 0, evType = 'pa', chan = 1, pitch = 60, vel = 110 },
         },
       })
-      local mm, captured = loadWithCapture(take)
+      local _, captured = loadWithCapture(take)
       t.eq(#captured.ccsDeduped, 1)
       local e = captured.ccsDeduped[1]
       t.eq(e.evType, 'pa'); t.eq(e.pitch, 60); t.eq(e.cc, nil)
@@ -304,7 +304,7 @@ return {
           { ppq = 0, evType = 'pb', chan = 1, val =  500 },
         },
       })
-      local mm, captured = loadWithCapture(take)
+      local _, captured = loadWithCapture(take)
       t.eq(#captured.ccsDeduped, 1)
       t.eq(captured.ccsDeduped[1].evType, 'pb')
     end,

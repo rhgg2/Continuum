@@ -5,7 +5,6 @@
 -- ResolvedFactor[]; applyFactors / unapplyFactors consume it.
 
 local t = require('support')
-local util   = require('util')
 local timing = require('timing')
 
 local SMOOTH = { 'classic', 'pocket', 'lilt', 'shuffle', 'tilt' }

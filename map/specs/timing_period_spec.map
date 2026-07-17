@@ -1,4 +1,4 @@
-@spec timing_period_spec  src=tests/specs/timing_period_spec.lua  loc=83  sha=fa4a61d  cases=8
+@spec timing_period_spec  src=tests/specs/timing_period_spec.lua  loc=82  sha=fa4a61d  cases=8
 @exercises timing (timing)
 @surface   timing.compositePeriodQN
 
@@ -9,22 +9,22 @@
   nᵢ/dᵢ the result is lcm(nᵢ)/gcd(dᵢ).
 
 # Cases
-  @case 'empty composite falls back to 1 qn'  [pure]  @ 12-16
-  @case 'single classic factor: tile period = declared period'  [pure]  @ 19-24
-  @case 'single lilt factor: tile period doubles via pulsesPerCycle'  [pure]  @ 27-32
-  @case 'lcm with lilt doubling: classic@2, lilt@3 → lcm(2,6) = 6'  [pure]  @ 35-41
-  @case 'lcm with lilt doubling: classic@2, lilt@4 → lcm(2,8) = 8'  [pure]  @ 44-50
-  @case 'fractional periods with lilt doubling: lcm(1,2)/gcd(2,3) = 2'  [pure]  @ 53-60
-  @case 'mixed: classic@1 + lilt@1/2 → lcm(1,2)/gcd(1,2) = 2'  [pure]  @ 63-70
-  @case 'pocket doubles: classic@1 + pocket@1 → lcm(1,2) = 2'  [pure]  @ 73-81
+  @case 'empty composite falls back to 1 qn'  [pure]  @ 11-15
+  @case 'single classic factor: tile period = declared period'  [pure]  @ 18-23
+  @case 'single lilt factor: tile period doubles via pulsesPerCycle'  [pure]  @ 26-31
+  @case 'lcm with lilt doubling: classic@2, lilt@3 → lcm(2,6) = 6'  [pure]  @ 34-40
+  @case 'lcm with lilt doubling: classic@2, lilt@4 → lcm(2,8) = 8'  [pure]  @ 43-49
+  @case 'fractional periods with lilt doubling: lcm(1,2)/gcd(2,3) = 2'  [pure]  @ 52-59
+  @case 'mixed: classic@1 + lilt@1/2 → lcm(1,2)/gcd(1,2) = 2'  [pure]  @ 62-69
+  @case 'pocket doubles: classic@1 + pocket@1 → lcm(1,2) = 2'  [pure]  @ 72-80
 
 # Uses (outbound edges)
-  @use call timing.compositePeriodQN  @ 14,15
+  @use call timing.compositePeriodQN  @ 13,14
 
 # Fields (r read / w write incl. constructor keys)
-  @field w atom  @ 22,30,38,39,47,48,57,58,67,68,78,79
-  @field w factors  @ 21,29,37,46,56,66,77
-  @field w name  @ 12,19,27,35,44,53,63,73
-  @field w period  @ 22,30,38,39,47,48,57,58,67,68,78,79
-  @field w run  @ 13,20,28,36,45,54,64,74
-  @field w shift  @ 22,30,38,39,47,48,57,58,67,68,78,79
+  @field w atom  @ 21,29,37,38,46,47,56,57,66,67,77,78
+  @field w factors  @ 20,28,36,45,55,65,76
+  @field w name  @ 11,18,26,34,43,52,62,72
+  @field w period  @ 21,29,37,38,46,47,56,57,66,67,77,78
+  @field w run  @ 12,19,27,35,44,53,63,73
+  @field w shift  @ 21,29,37,38,46,47,56,57,66,67,77,78

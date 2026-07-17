@@ -2,7 +2,6 @@
 -- ds:assign('swing', {global='c58'}) drives dataChanged → markSwingStale → rebuild.
 
 local t       = require('support')
-local util    = require('util')
 
 local classic58 = { factors = { { atom = 'classic', shift = 0.08, period = 1 } } }
 

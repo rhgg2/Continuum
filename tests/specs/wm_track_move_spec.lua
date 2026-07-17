@@ -39,7 +39,7 @@ return {
   {
     name = 'addFxNode parks the FX on scratch with its fxId stamped into the node',
     run = function(harness)
-      local h, wm = mkWm(harness)
+      local _, wm = mkWm(harness)
       reaper:setFxIO('JS:plain', { ins = 2, outs = 2 })  -- 1 stereo port each (pins)
       wm:enableLive()
       local fxId = wm:addFxNode(0, 0, { name = 'Plain', ident = 'JS:plain' })
@@ -86,7 +86,7 @@ return {
   {
     name = 'removing the fx-node from the graph deletes the instance (the one legit delete)',
     run = function(harness)
-      local h, wm = mkWm(harness)
+      local _, wm = mkWm(harness)
       reaper:setFxIO('JS:plain', { ins = 2, outs = 2 })  -- 1 stereo port each (pins)
       wm:enableLive()
       local fxId = wm:addFxNode(0, 0, { name = 'Plain', ident = 'JS:plain' })

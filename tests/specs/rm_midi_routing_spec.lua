@@ -75,7 +75,7 @@ return {
       local reaper, rm = mkRm()
       seedTrack(reaper, 'Mixed', { { ident = 'a' }, { ident = 'JS:mid' }, { ident = 'b' } })
       local fx = rm:tracks()[1].fx
-      local idA, idB = fx[1].id, fx[3].id
+      local idB = fx[3].id
 
       rm:assignFx(idB, { midi = { inBus = 5 } })
 

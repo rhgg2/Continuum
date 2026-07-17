@@ -240,7 +240,7 @@ return {
     run = function()
       local gm = mk()
       local a = gm:mark({ note(0, 1) }, rect(0, 480))      -- [0,480)
-      local b = gm:mark({ note(0, 2) }, rect(1000, 480))   -- [1000,1480)
+      gm:mark({ note(0, 2) }, rect(1000, 480))             -- [1000,1480): the collider
       local aIid = instOf(gm, a)[1].instId
       local ok, why = gm:resizeGroup(a, aIid, { endDelta = 700 })  -- ->[0,1180)
       t.eq(ok, nil); t.eq(why, 'overlaps an existing mirror group')

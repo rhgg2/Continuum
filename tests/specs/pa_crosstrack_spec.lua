@@ -4,7 +4,6 @@
 -- able to fetch its names too, or the palette shows an empty subtree.
 
 local t    = require('support')
-local util = require('util')
 
 return {
   {

@@ -1,4 +1,4 @@
-@spec gm_pb_member_spec  src=tests/specs/gm_pb_member_spec.lua  loc=215  sha=f513b2b  cases=6
+@spec gm_pb_member_spec  src=tests/specs/gm_pb_member_spec.lua  loc=213  sha=f513b2b  cases=6
 @exercises groupManager (gm), midiManager (h.fm), trackerManager (h.tm), trackerView (h.vm), dataStore (h.ds)
 @surface   gm:markGroup, gm:newInstance, fm:dump, tm:byUuid, vm:eventsInRect, tm:flush, gm:assignEvent, ds:get, B:eachInstance
 @harness   mk{seed.evType, seed.chan, seed.ppq, seed.shape, seed.val, seed.cents, seed.ccs, seed.notes}
@@ -19,63 +19,63 @@
 # Cases
   @case 'pb member: toGroup carries intent (cents), not the realised val'  [pure]  @ 26-46
   @case 'pb member: uuid survives the rebuild so gm can re-anchor it (tm:byUuid)'  [harness]  @ 50-71
-  @case 'pb member: a value edit propagates to every instance (updToGroup)'  [harness]  @ 75-114
-  @case 'pb member: a fresh in-region pb is adopted and propagates (classifyCreate)'  [harness]  @ 118-145
-  @case 'pb member: the persisted blob carries intent (not the wire) and rehydrates live'  [pure]  @ 149-179
-  @case 'pb member: a sibling under a different detune re-derives its own wire'  [harness]  @ 183-213
+  @case 'pb member: a value edit propagates to every instance (updToGroup)'  [harness]  @ 75-113
+  @case 'pb member: a fresh in-region pb is adopted and propagates (classifyCreate)'  [harness]  @ 117-143
+  @case 'pb member: the persisted blob carries intent (not the wire) and rehydrates live'  [pure]  @ 147-177
+  @case 'pb member: a sibling under a different detune re-derives its own wire'  [harness]  @ 181-211
 
 # Uses (outbound edges)
-  @use call gm:markGroup  @ 36,87,130,196
-  @use call gm:newInstance  @ 38,89,131,197
-  @use call fm:dump  @ 62,94,102,140,201
-  @use call tm:byUuid  @ 67,207,208
-  @use call vm:eventsInRect  @ 87,130,196
-  @use call tm:flush  @ 90,108,132,137,198
-  @use call gm:assignEvent  @ 107
-  @use call A:markGroup  @ 160
-  @use call A:newInstance  @ 161
-  @use call ds:get  @ 165
-  @use call B:eachInstance  @ 178
+  @use call gm:markGroup  @ 36,86,128,194
+  @use call gm:newInstance  @ 38,88,129,195
+  @use call fm:dump  @ 62,93,101,138,199
+  @use call tm:byUuid  @ 67,205,206
+  @use call vm:eventsInRect  @ 86,128,194
+  @use call tm:flush  @ 89,107,130,135,196
+  @use call gm:assignEvent  @ 106
+  @use call A:markGroup  @ 158
+  @use call A:newInstance  @ 159
+  @use call ds:get  @ 163
+  @use call B:eachInstance  @ 176
 
 # Fields (r read / w write incl. constructor keys)
-  @field r add  @ 40,174
+  @field r add  @ 40,172
   @field w assign  @ 19
-  @field r ccs  @ 62,94,102,140,201
-  @field w ccs  @ 57,81,124,191
-  @field r cents  @ 44,172
-  @field w cents  @ 34,58,82,125,159,191
-  @field w chan  @ 33,38,58,82,89,125,131,134,158,161,191,192
-  @field w chan  @ 197
-  @field w chanLo  @ 10,85,128
-  @field w config  @ 188
-  @field w detune  @ 193
-  @field w ds  @ 29,156,176
-  @field w dur  @ 10,85,128
-  @field w endppq  @ 192
-  @field r evType  @ 63,69,95,103,141,167,202,203
-  @field w evType  @ 33,58,82,125,134,158,191
-  @field r events  @ 166
+  @field r ccs  @ 62,93,101,138,199
+  @field w ccs  @ 57,81,123,189
+  @field r cents  @ 44,170
+  @field w cents  @ 34,58,82,124,157,189
+  @field w chan  @ 33,38,58,82,88,124,129,132,156,159,189,190
+  @field w chan  @ 195
+  @field w chanLo  @ 10
+  @field w config  @ 186
+  @field w detune  @ 191
+  @field w ds  @ 29,154,174
+  @field w dur  @ 10
+  @field w endppq  @ 190
+  @field r evType  @ 63,69,94,102,139,165,200,201
+  @field w evType  @ 33,58,82,124,132,156,189
+  @field r events  @ 164
   @field w get  @ 18
-  @field r groups  @ 165
-  @field w groups  @ 80,123,189
-  @field w lane  @ 192
-  @field w name  @ 26,50,75,118,149,183
-  @field w notes  @ 192
-  @field w pbRange  @ 188
-  @field w pitch  @ 193
-  @field r ppq  @ 95,103,141,202,203
-  @field w ppq  @ 10,33,38,58,82,85,89,125,128,131,134,158
-  @field w ppq  @ 161,191,192,197
-  @field w run  @ 27,51,76,119,150,184
-  @field w seed  @ 57,81,124,190
-  @field w shape  @ 33,58,82,125,135,158,191
-  @field w streams  @ 11,86,129
+  @field r groups  @ 163
+  @field w groups  @ 80,122,187
+  @field w lane  @ 190
+  @field w name  @ 26,50,75,117,147,181
+  @field w notes  @ 190
+  @field w pbRange  @ 186
+  @field w pitch  @ 191
+  @field r ppq  @ 94,102,139,200,201
+  @field w ppq  @ 10,33,38,58,82,88,124,129,132,156,159,189
+  @field w ppq  @ 190,195
+  @field w run  @ 27,51,76,118,148,182
+  @field w seed  @ 57,81,123,188
+  @field w shape  @ 33,58,82,124,133,156,189
+  @field w streams  @ 11
   @field w subscribe  @ 20
-  @field w take  @ 188
-  @field w tm  @ 29,156,176
-  @field r uuid  @ 63,70,103,175,202,203
-  @field w uuid  @ 159
-  @field w uuidMap  @ 175
-  @field r val  @ 42,95,171,207,208
-  @field w val  @ 34,58,82,107,125,135,159,191
-  @field w vel  @ 193
+  @field w take  @ 186
+  @field w tm  @ 29,154,174
+  @field r uuid  @ 63,70,102,173,200,201
+  @field w uuid  @ 157
+  @field w uuidMap  @ 173
+  @field r val  @ 42,94,169,205,206
+  @field w val  @ 34,58,82,106,124,133,157,189
+  @field w vel  @ 191

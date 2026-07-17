@@ -1,4 +1,4 @@
-@spec gm_dup_cascade_spec  src=tests/specs/gm_dup_cascade_spec.lua  loc=111  sha=f8aa484  cases=3
+@spec gm_dup_cascade_spec  src=tests/specs/gm_dup_cascade_spec.lua  loc=109  sha=f8aa484  cases=3
 @exercises commandManager (cmgr), groupManager (gm)
 @surface   cmgr:scope, gm:duplicateInto, cmgr:doBefore, cmgr:push, cmgr:invoke
 
@@ -21,45 +21,44 @@
 # Helpers
   @fn fakeCm()  @ 19-24
   @fn note()  @ 26-27
-  @fn rect()  @ 28-29
-  @fn wire(gm, cmgr)  @ 33-62
+  @fn wire(gm, cmgr)  @ 31-60
       -- Reproduces trackerPage's mirrorDuplicate body + DUP_KEEP sweep
       -- against a real cmgr scope. groupOf() exposes the page token.
-  @fn mk()  @ 64-71
+  @fn mk()  @ 62-69
 
 # Cases
-  @case 'a cursor move keeps the cascade: the next duplicate joins the same group'  [pure]  @ 75-84
-  @case 'a new selection ends the cascade: the next duplicate seeds a fresh group'  [pure]  @ 87-97
-  @case 'a mutation ends the cascade: the next duplicate seeds a fresh group'  [pure]  @ 100-109
+  @case 'a cursor move keeps the cascade: the next duplicate joins the same group'  [pure]  @ 73-82
+  @case 'a new selection ends the cascade: the next duplicate seeds a fresh group'  [pure]  @ 85-95
+  @case 'a mutation ends the cascade: the next duplicate seeds a fresh group'  [pure]  @ 98-107
 
 # Uses (outbound edges)
-  @use call cmgr:scope  @ 45
-  @use call gm:duplicateInto  @ 51
-  @use call cmgr:doBefore  @ 59
-  @use call cmgr:push  @ 60
-  @use call cmgr:invoke  @ 78,81,82,90,92,94,103,105,107
+  @use call cmgr:scope  @ 43
+  @use call gm:duplicateInto  @ 49
+  @use call cmgr:doBefore  @ 57
+  @use call cmgr:push  @ 58
+  @use call cmgr:invoke  @ 76,79,80,88,90,92,101,103,105
 
 # Fields (r read / w write incl. constructor keys)
-  @field w chan  @ 26,52
-  @field w chanLo  @ 28,42
-  @field w cm  @ 68
-  @field w cursorDown  @ 34,47
-  @field w deleteSel  @ 49
-  @field w ds  @ 67
-  @field w dur  @ 28,42
+  @field w chan  @ 26,50
+  @field w chanLo  @ 40
+  @field w cm  @ 66
+  @field w cursorDown  @ 32,45
+  @field w deleteSel  @ 47
+  @field w ds  @ 65
+  @field w dur  @ 40
   @field w endppq  @ 27
   @field w evType  @ 26
   @field w get  @ 21
   @field w lane  @ 26
-  @field w mirrorDuplicate  @ 34,50
-  @field w name  @ 75,87,100
+  @field w mirrorDuplicate  @ 32,48
+  @field w name  @ 73,85,98
   @field w pitch  @ 27
-  @field w ppq  @ 27,28,42,52
-  @field r registered  @ 56
-  @field w run  @ 76,88,101
-  @field w selectDown  @ 48
+  @field w ppq  @ 27,40,50
+  @field r registered  @ 54
+  @field w run  @ 74,86,99
+  @field w selectDown  @ 46
   @field w set  @ 22
-  @field w streams  @ 29,43
+  @field w streams  @ 41
   @field w subscribe  @ 23
-  @field w tm  @ 67
+  @field w tm  @ 65
   @field w vel  @ 27

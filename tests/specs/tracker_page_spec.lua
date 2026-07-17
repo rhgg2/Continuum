@@ -5,7 +5,6 @@
 -- the first require so the module loads cleanly in the pure-Lua harness.
 
 local t = require('support')
-local fs = require('fs')
 
 local n = 0
 local fakeImGui = setmetatable({ Mod_None = 0,
@@ -235,7 +234,7 @@ return {
       end)
 
       -- Bridge-style tick-time edit: through tm, outside any render pass.
-      local first; for _, n in stack.mm:notes() do first = n; break end
+      local first; for _, note in stack.mm:notes() do first = note; break end
       stack.tm:assignEvent(stack.tm:byUuid(first.uuid), { pitch = 67 })
       stack.tm:flush()
       tp:bindFromSelection()

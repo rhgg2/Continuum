@@ -1,4 +1,4 @@
-@spec timing_atoms_spec  src=tests/specs/timing_atoms_spec.lua  loc=364  sha=4a6bfb0  cases=19
+@spec timing_atoms_spec  src=tests/specs/timing_atoms_spec.lua  loc=363  sha=4a6bfb0  cases=19
 @exercises timing (timing)
 @surface   timing.resolveFactors, timing.applyFactors, timing.unapplyFactors, timing.atomTilePeriod, timing.logPerRow
 
@@ -10,67 +10,67 @@
   ResolvedFactor[]; applyFactors / unapplyFactors consume it.
 
 # Cases
-  @case 'atomTilePeriod doubles for lilt and pocket, passes through for the rest'  [pure]  @ 43-52
-  @case 'forward(u, 0) = u for every atom (zero-shift identity)'  [pure]  @ 58-67
-  @case 'smooth atoms pin endpoints: forward(0, s) = 0 and forward(1, s) = 1'  [pure]  @ 71-83
-  @case 'id forward shifts; inverse undoes it'  [pure]  @ 87-98
-  @case 'smooth inverses close the round-trip to machine precision'  [pure]  @ 102-120
-  @case 'forward is strictly monotone on [0, 1] for in-range shift'  [pure]  @ 124-143
-  @case 'analytic slope stays within [1/K, K] at max in-range shift'  [pure]  @ 147-170
-  @case 'principal lands at nominal + shift, atom-independent'  [pure]  @ 176-192
-  @case 'shift is period-decoupled: same shift, different periods, both land shift away'  [pure]  @ 196-204
-  @case 'classic-58 preset matches the legacy 0.58 mapping'  [pure]  @ 208-212
-  @case 'identity atom shift = 0: pass-through'  [pure]  @ 216-223
-  @case 'identity atom shift ≠ 0: constant output translation, period-scaled'  [pure]  @ 227-245
-  @case 'identity atom shift ≠ 0: apply/unapply round-trip'  [pure]  @ 249-258
-  @case 'per-factor phase: shifts the fixed-point lattice from {kT} to {phase + kT}'  [pure]  @ 264-275
-  @case 'per-factor phase: apply/unapply round-trip'  [pure]  @ 279-288
-  @case 'per-factor phase: phase = nil and phase = 0 are equivalent'  [pure]  @ 292-304
-  @case 'K constant is exposed and atom ranges are derived from it'  [pure]  @ 310-335
-  @case 'existing presets stay within their K-bounded atom ranges'  [pure]  @ 339-352
-  @case 'logPerRow handles non-divisor rpbs (returns float, no truncation)'  [pure]  @ 358-362
+  @case 'atomTilePeriod doubles for lilt and pocket, passes through for the rest'  [pure]  @ 42-51
+  @case 'forward(u, 0) = u for every atom (zero-shift identity)'  [pure]  @ 57-66
+  @case 'smooth atoms pin endpoints: forward(0, s) = 0 and forward(1, s) = 1'  [pure]  @ 70-82
+  @case 'id forward shifts; inverse undoes it'  [pure]  @ 86-97
+  @case 'smooth inverses close the round-trip to machine precision'  [pure]  @ 101-119
+  @case 'forward is strictly monotone on [0, 1] for in-range shift'  [pure]  @ 123-142
+  @case 'analytic slope stays within [1/K, K] at max in-range shift'  [pure]  @ 146-169
+  @case 'principal lands at nominal + shift, atom-independent'  [pure]  @ 175-191
+  @case 'shift is period-decoupled: same shift, different periods, both land shift away'  [pure]  @ 195-203
+  @case 'classic-58 preset matches the legacy 0.58 mapping'  [pure]  @ 207-211
+  @case 'identity atom shift = 0: pass-through'  [pure]  @ 215-222
+  @case 'identity atom shift ≠ 0: constant output translation, period-scaled'  [pure]  @ 226-244
+  @case 'identity atom shift ≠ 0: apply/unapply round-trip'  [pure]  @ 248-257
+  @case 'per-factor phase: shifts the fixed-point lattice from {kT} to {phase + kT}'  [pure]  @ 263-274
+  @case 'per-factor phase: apply/unapply round-trip'  [pure]  @ 278-287
+  @case 'per-factor phase: phase = nil and phase = 0 are equivalent'  [pure]  @ 291-303
+  @case 'K constant is exposed and atom ranges are derived from it'  [pure]  @ 309-334
+  @case 'existing presets stay within their K-bounded atom ranges'  [pure]  @ 338-351
+  @case 'logPerRow handles non-divisor rpbs (returns float, no truncation)'  [pure]  @ 357-361
 
 # Uses (outbound edges)
-  @use call timing.resolveFactors  @ 181,198,200,210,218,233,251,266,281,294,296
-  @use call timing.applyFactors  @ 184,202,203,211,221,237,254,269,273,284,299,300
-  @use call timing.unapplyFactors  @ 254,284
-  @use call timing.atomTilePeriod  @ 343
-  @use call timing.logPerRow  @ 360
+  @use call timing.resolveFactors  @ 180,197,199,209,217,232,250,265,280,293,295
+  @use call timing.applyFactors  @ 183,201,202,210,220,236,253,268,272,283,298,299
+  @use call timing.unapplyFactors  @ 253,283
+  @use call timing.atomTilePeriod  @ 342
+  @use call timing.logPerRow  @ 359
 
 # Fields (r read / w write incl. constructor keys)
-  @field r K  @ 152,314
-  @field r atom  @ 345,347
-  @field w atom  @ 18,19,20,21,22,23,24,25,45,46,47,48
-  @field w atom  @ 49,50,51,182,199,201,219,234,252,267,282,295
-  @field w atom  @ 297
-  @field r atomMeta  @ 75,109,131,159,329,345
-  @field r atoms  @ 61,74,89,108,130,158
-  @field w classic  @ 32
-  @field r factors  @ 342
-  @field w factors  @ 18,19,20,21,22,23,24,25,182,199,201,219
-  @field w factors  @ 234,252,267,282,295,297
-  @field r id  @ 89
-  @field w lilt  @ 34
-  @field r name  @ 329,331,333
-  @field w name  @ 43,58,71,87,102,124,147,176,196,208,216,227
-  @field w name  @ 249,264,279,292,310,317,319,321,323,325,339,358
-  @field r neg  @ 332,333
-  @field w neg  @ 318,320,322,324,326
-  @field r negRange  @ 76,110,132,160,332,333,346,349
-  @field w period  @ 18,19,20,21,22,23,24,25,45,46,47,48
-  @field w period  @ 49,50,51,182,199,201,219,234,252,267,282,295
-  @field w period  @ 297
-  @field w phase  @ 267,282,297
-  @field r pi  @ 317,318,321,322,323,324
-  @field w pocket  @ 33
-  @field r pos  @ 330,331
-  @field w pos  @ 317,319,321,323,325
-  @field r posRange  @ 76,110,132,160,330,331,346,349
-  @field w run  @ 44,59,72,88,106,127,151,177,197,209,217,230
-  @field w run  @ 250,265,280,293,313,340,359
-  @field r shift  @ 344
-  @field w shift  @ 18,19,20,21,22,23,24,25,45,46,47,48
-  @field w shift  @ 49,50,51,182,199,201,219,234,252,267,282,295
-  @field w shift  @ 297
-  @field w shuffle  @ 35
-  @field w tilt  @ 36
+  @field r K  @ 151,313
+  @field r atom  @ 344,346
+  @field w atom  @ 17,18,19,20,21,22,23,24,44,45,46,47
+  @field w atom  @ 48,49,50,181,198,200,218,233,251,266,281,294
+  @field w atom  @ 296
+  @field r atomMeta  @ 74,108,130,158,328,344
+  @field r atoms  @ 60,73,88,107,129,157
+  @field w classic  @ 31
+  @field r factors  @ 341
+  @field w factors  @ 17,18,19,20,21,22,23,24,181,198,200,218
+  @field w factors  @ 233,251,266,281,294,296
+  @field r id  @ 88
+  @field w lilt  @ 33
+  @field r name  @ 328,330,332
+  @field w name  @ 42,57,70,86,101,123,146,175,195,207,215,226
+  @field w name  @ 248,263,278,291,309,316,318,320,322,324,338,357
+  @field r neg  @ 331,332
+  @field w neg  @ 317,319,321,323,325
+  @field r negRange  @ 75,109,131,159,331,332,345,348
+  @field w period  @ 17,18,19,20,21,22,23,24,44,45,46,47
+  @field w period  @ 48,49,50,181,198,200,218,233,251,266,281,294
+  @field w period  @ 296
+  @field w phase  @ 266,281,296
+  @field r pi  @ 316,317,320,321,322,323
+  @field w pocket  @ 32
+  @field r pos  @ 329,330
+  @field w pos  @ 316,318,320,322,324
+  @field r posRange  @ 75,109,131,159,329,330,345,348
+  @field w run  @ 43,58,71,87,105,126,150,176,196,208,216,229
+  @field w run  @ 249,264,279,292,312,339,358
+  @field r shift  @ 343
+  @field w shift  @ 17,18,19,20,21,22,23,24,44,45,46,47
+  @field w shift  @ 48,49,50,181,198,200,218,233,251,266,281,294
+  @field w shift  @ 296
+  @field w shuffle  @ 34
+  @field w tilt  @ 35

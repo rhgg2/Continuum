@@ -158,7 +158,7 @@ return {
     run = function()
       local reaper, rm = mkRm()
       local a, idA = seedTrack(reaper, 'Src')
-      local b, idB = seedTrack(reaper, 'Dst')
+      local b = seedTrack(reaper, 'Dst')
       reaper:addSend(a, b, { type = 'audio' })
 
       rm:assignTrack(idA, { name = 'Renamed' })

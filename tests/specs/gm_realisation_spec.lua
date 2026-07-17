@@ -44,15 +44,12 @@ local function rect() return { ppq = 0, dur = 960, chanLo = 1,
 local function addAt(staged, ppq)
   for _, e in ipairs(staged.add) do if e.ppq == ppq then return e end end
 end
-local function assignFor(staged, evt)
-  for _, a in ipairs(staged.assign) do if a.evt == evt then return a.update end end
-end
 
 return {
   {
     name = 'a finite note carries its ceiling (endppq) rigidly to the sibling',
     run = function()
-      local gm, tm, staged = mk()
+      local gm, _, staged = mk()
       local A = note(0, 60, 240)                 -- ceiling 240
       local gid = gm:markGroup({ A }, rect())
       gm:newInstance(gid, { ppq = 960, chan = 1 })
@@ -68,7 +65,7 @@ return {
   {
     name = 'an open note travels as open: no ceiling, provisional onset+1 tail',
     run = function()
-      local gm, tm, staged = mk()
+      local gm, _, staged = mk()
       local O = note(0, 60, 240, { open = true })   -- no ceiling
       local gid = gm:markGroup({ O }, rect())
       gm:newInstance(gid, { ppq = 960, chan = 1 })

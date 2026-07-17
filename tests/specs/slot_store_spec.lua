@@ -2,7 +2,6 @@
 -- ds is real; fileOps is a call-recording stub; gmem via fakeReaper; tracks are opaque tokens.
 
 local t = require('support')
-local fs = require('fs')
 local util = require('util')
 
 local function newSampleManager(fileOps, cm, ds)

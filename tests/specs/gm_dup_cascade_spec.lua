@@ -25,8 +25,6 @@ end
 
 local function note() return { evType = 'note', chan = 1, lane = 1,
   ppq = 0, endppq = 240, pitch = 60, vel = 100 } end
-local function rect() return { ppq = 0, dur = 960, chanLo = 1,
-  streams = { [0] = { ['note:1'] = true } } } end
 
 -- Reproduces trackerPage's mirrorDuplicate body + DUP_KEEP sweep
 -- against a real cmgr scope. groupOf() exposes the page token.
@@ -74,7 +72,7 @@ return {
   {
     name = 'a cursor move keeps the cascade: the next duplicate joins the same group',
     run = function()
-      local gm, cmgr, groupOf = mk()
+      local _, cmgr, groupOf = mk()
       cmgr:invoke('mirrorDuplicate')
       local g1 = groupOf()
       t.truthy(g1, 'first duplicate seeded a cascade group')
@@ -86,7 +84,7 @@ return {
   {
     name = 'a new selection ends the cascade: the next duplicate seeds a fresh group',
     run = function()
-      local gm, cmgr, groupOf = mk()
+      local _, cmgr, groupOf = mk()
       cmgr:invoke('mirrorDuplicate')
       local g1 = groupOf()
       cmgr:invoke('selectDown')
@@ -99,7 +97,7 @@ return {
   {
     name = 'a mutation ends the cascade: the next duplicate seeds a fresh group',
     run = function()
-      local gm, cmgr, groupOf = mk()
+      local _, cmgr, groupOf = mk()
       cmgr:invoke('mirrorDuplicate')
       local g1 = groupOf()
       cmgr:invoke('deleteSel')

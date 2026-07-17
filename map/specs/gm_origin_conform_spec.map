@@ -1,4 +1,4 @@
-@spec gm_origin_conform_spec  src=tests/specs/gm_origin_conform_spec.lua  loc=154  sha=f8aa484  cases=2
+@spec gm_origin_conform_spec  src=tests/specs/gm_origin_conform_spec.lua  loc=153  sha=f8aa484  cases=2
 @exercises groupManager (gm), trackerManager (h.tm)
 @surface   gm:markGroup, gm:newInstance, tm:flush, gm:assignEvent, gm:stamp, tm:getChannel
 @harness   mk{seed.length, seed.notes}
@@ -33,49 +33,49 @@
 
 # Cases
   @case 'a same-flush edit in two instances round-trips both, origin included'  [pure]  @ 55-96
-  @case 'instance 1 clips its overrun to instance 2 (real tm, no lane-2 bump)'  [harness]  @ 109-152
+  @case 'instance 1 clips its overrun to instance 2 (real tm, no lane-2 bump)'  [harness]  @ 109-151
 
 # Uses (outbound edges)
   @use call gm:markGroup  @ 61
   @use call gm:newInstance  @ 62
-  @use call tm:flush  @ 63,77,117,123
+  @use call tm:flush  @ 63,77,116,122
   @use call gm:assignEvent  @ 75,76
-  @use call gm:stamp  @ 116
-  @use call tm:getChannel  @ 127,133
+  @use call gm:stamp  @ 115
+  @use call tm:getChannel  @ 126,132
 
 # Fields (r read / w write incl. constructor keys)
-  @field r OPEN  @ 122,144,146
+  @field r OPEN  @ 121,143,145
   @field r add  @ 67,72
   @field r assign  @ 80
   @field w assign  @ 72
-  @field w chan  @ 33,62,116,121
-  @field w chanLo  @ 41,114
-  @field r columns  @ 127,133
-  @field r conform  @ 150
+  @field w chan  @ 33,62,115,120
+  @field w chanLo  @ 41
+  @field r columns  @ 126,132
+  @field r conform  @ 149
   @field w ds  @ 27,112
-  @field w dur  @ 41,114
-  @field r endppq  @ 144,146
-  @field w endppq  @ 34,122
-  @field r endppqC  @ 145,148
-  @field w endppqL  @ 122
-  @field r evType  @ 128
-  @field w evType  @ 33,121
-  @field r events  @ 127
+  @field w dur  @ 41
+  @field r endppq  @ 143,145
+  @field w endppq  @ 34,121
+  @field r endppqC  @ 144,147
+  @field w endppqL  @ 121
+  @field r evType  @ 127
+  @field w evType  @ 33,120
+  @field r events  @ 126
   @field r evt  @ 81
-  @field w lane  @ 33,121
+  @field w lane  @ 33,120
   @field w length  @ 111
   @field w name  @ 55,109
-  @field r notes  @ 127,133
+  @field r notes  @ 126,132
   @field w notes  @ 111
   @field r pitch  @ 88,90,92,94
-  @field w pitch  @ 34,59,60,75,76,121
-  @field r ppq  @ 68,69,139,140,141
-  @field w ppq  @ 33,41,62,114,116,122
+  @field w pitch  @ 34,59,60,75,76,120
+  @field r ppq  @ 68,69,138,139,140
+  @field w ppq  @ 33,41,62,115,121
   @field w run  @ 56,110
   @field w seed  @ 111
-  @field w streams  @ 42,115
+  @field w streams  @ 42
   @field w tm  @ 27,112
   @field r update  @ 81
   @field r uuid  @ 75,76
   @field w uuid  @ 34
-  @field w vel  @ 34,122
+  @field w vel  @ 34,121

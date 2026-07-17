@@ -1,4 +1,4 @@
-@spec pa_crosstrack_spec  src=tests/specs/pa_crosstrack_spec.lua  loc=46  sha=8d87c30  cases=2
+@spec pa_crosstrack_spec  src=tests/specs/pa_crosstrack_spec.lua  loc=45  sha=8d87c30  cases=2
 @exercises paramAutomation (h.pa)
 @surface   pa:params
 @harness   mk, r:setTrackFX, r:setFxGuid, r:setFxParamNames, r._state.projectTracks, r._state.trackGuids, r._state.master
@@ -10,18 +10,18 @@
   able to fetch its names too, or the palette shows an empty subtree.
 
 # Cases
-  @case 'params resolve for fx on a regular non-first track'  [harness]  @ 11-26
-  @case 'params resolve for fx on the master track'  [harness]  @ 30-44
+  @case 'params resolve for fx on a regular non-first track'  [harness]  @ 10-25
+  @case 'params resolve for fx on the master track'  [harness]  @ 29-43
 
 # Uses (outbound edges)
-  @use call pa:params  @ 24,42
+  @use call pa:params  @ 23,41
 
 # Fields (r read / w write incl. constructor keys)
-  @field r _state  @ 16,17,18,34,35,36,37,38
-  @field w ident  @ 19,37
-  @field r master  @ 36,37,38
-  @field r name  @ 24,42
-  @field w name  @ 11,30
-  @field w projectTracks  @ 16,34
-  @field w run  @ 12,31
-  @field r trackGuids  @ 17,18,35,36
+  @field r _state  @ 15,16,17,33,34,35,36,37
+  @field w ident  @ 18,36
+  @field r master  @ 35,36,37
+  @field r name  @ 23,41
+  @field w name  @ 10,29
+  @field w projectTracks  @ 15,33
+  @field w run  @ 11,30
+  @field r trackGuids  @ 16,17,34,35

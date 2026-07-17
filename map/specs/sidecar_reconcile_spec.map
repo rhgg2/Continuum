@@ -1,4 +1,4 @@
-@spec sidecar_reconcile_spec  src=tests/specs/sidecar_reconcile_spec.lua  loc=552  sha=b5afaeb  cases=23
+@spec sidecar_reconcile_spec  src=tests/specs/sidecar_reconcile_spec.lua  loc=551  sha=b5afaeb  cases=23
 @exercises midiManager (h.mm)
 @surface   mm:ccs, mm:subscribe, mm:load
 @harness   fakeReaper:bindTake, reaper:seedMidi
@@ -16,126 +16,126 @@
   fixup) is covered in mm_cc_reconcile_spec; this spec stays algorithm-only.
 
 # Helpers
-  @fn ccAt(mm, i)  @ 18-24
-  @fn freshTake()  @ 26-32
-  @fn packCc(c)  @ 35-48
+  @fn ccAt(mm, i)  @ 17-23
+  @fn freshTake()  @ 25-31
+  @fn packCc(c)  @ 34-47
       -- Cc-shaped record → REAPER's (chanmsg, msg2, msg3) packing.
-  @fn seed(take, reaper, spec)  @ 52-65
+  @fn seed(take, reaper, spec)  @ 51-64
       -- Seed ccs + sidecars onto the take. No metadata laid down — algorithm tests
       -- don't need the ext-data side effects.
-  @fn load(take)  @ 70-80
+  @fn load(take)  @ 69-79
       -- Returns (mm, events_by_uuid, events_array). `events_by_uuid` collapses
       -- ccsReconciled entries by uuid for compact assertions; the array preserves
       -- order.
-  @fn ccsByLoc(mm)  @ 83-87
+  @fn ccsByLoc(mm)  @ 82-86
       -- All ccs on the loaded mm, by location.
 
 # Cases
-  @case 'exact (ppq, val) match → silent bind, no event'  [pure]  @ 94-104
-  @case 'pa events bind on pitch (silent)'  [pure]  @ 108-118
-  @case 'pb fingerprint match (signed val) binds silently'  [pure]  @ 122-132
-  @case 'multiple coincident matches all bind silently'  [pure]  @ 136-156
-  @case 'val differs at same ppq → valueRebound + non-silent bind'  [pure]  @ 162-180
-  @case 'pb val drift round-trips signed val into oldVal/newVal'  [pure]  @ 184-196
-  @case 'two sidecars same partKey, one val-differing cc → first binds, second orphans'  [pure]  @ 200-213
-  @case 'two sidecars + two ccs at uniform +20 offset → consensus binds both'  [pure]  @ 219-241
-  @case 'consensusRebound payload reports the bound cc's ppq + offset'  [pure]  @ 245-263
-  @case 'three uniformly-drifted sidecars in one bucket bind despite cross-pair noise'  [pure]  @ 267-288
-  @case 'tied top vote-getters drop through stage 3, fall to stage 4 (ambiguous)'  [pure]  @ 292-315
-  @case 'no candidates → orphaned (no bind)'  [pure]  @ 321-338
-  @case 'one candidate at drifted ppq → guessedRebound binds at the cc's ppq'  [pure]  @ 342-356
-  @case 'two candidates → ambiguous, no bind, candidateppqs reported'  [pure]  @ 360-376
-  @case 'pa orphan reports pitch (not cc)'  [pure]  @ 380-390
-  @case 'two sidecars, one cc same bucket → first guesses, second orphans'  [pure]  @ 394-410
-  @case 'mismatched chan: separate buckets → orphaned + unbound cc'  [pure]  @ 416-427
-  @case 'mismatched evType: separate buckets (cc vs pb)'  [pure]  @ 431-442
-  @case 'mismatched cc#: separate buckets'  [pure]  @ 446-456
-  @case 'cc with no sidecars stays plain, no event'  [pure]  @ 460-470
-  @case 'separate (chan, cc#) buckets resolve independently'  [pure]  @ 474-495
-  @case 'cross-evType events live in different buckets — stage 4 each'  [pure]  @ 499-517
-  @case 'mixed: silent + valueRebound + consensus + orphan in one load'  [pure]  @ 523-550
+  @case 'exact (ppq, val) match → silent bind, no event'  [pure]  @ 93-103
+  @case 'pa events bind on pitch (silent)'  [pure]  @ 107-117
+  @case 'pb fingerprint match (signed val) binds silently'  [pure]  @ 121-131
+  @case 'multiple coincident matches all bind silently'  [pure]  @ 135-155
+  @case 'val differs at same ppq → valueRebound + non-silent bind'  [pure]  @ 161-179
+  @case 'pb val drift round-trips signed val into oldVal/newVal'  [pure]  @ 183-195
+  @case 'two sidecars same partKey, one val-differing cc → first binds, second orphans'  [pure]  @ 199-212
+  @case 'two sidecars + two ccs at uniform +20 offset → consensus binds both'  [pure]  @ 218-240
+  @case 'consensusRebound payload reports the bound cc's ppq + offset'  [pure]  @ 244-262
+  @case 'three uniformly-drifted sidecars in one bucket bind despite cross-pair noise'  [pure]  @ 266-287
+  @case 'tied top vote-getters drop through stage 3, fall to stage 4 (ambiguous)'  [pure]  @ 291-314
+  @case 'no candidates → orphaned (no bind)'  [pure]  @ 320-337
+  @case 'one candidate at drifted ppq → guessedRebound binds at the cc's ppq'  [pure]  @ 341-355
+  @case 'two candidates → ambiguous, no bind, candidateppqs reported'  [pure]  @ 359-375
+  @case 'pa orphan reports pitch (not cc)'  [pure]  @ 379-389
+  @case 'two sidecars, one cc same bucket → first guesses, second orphans'  [pure]  @ 393-409
+  @case 'mismatched chan: separate buckets → orphaned + unbound cc'  [pure]  @ 415-426
+  @case 'mismatched evType: separate buckets (cc vs pb)'  [pure]  @ 430-441
+  @case 'mismatched cc#: separate buckets'  [pure]  @ 445-455
+  @case 'cc with no sidecars stays plain, no event'  [pure]  @ 459-469
+  @case 'separate (chan, cc#) buckets resolve independently'  [pure]  @ 473-494
+  @case 'cross-evType events live in different buckets — stage 4 each'  [pure]  @ 498-516
+  @case 'mixed: silent + valueRebound + consensus + orphan in one load'  [pure]  @ 522-549
 
 # Uses (outbound edges)
-  @use call mm:ccs  @ 20,85,154,239,314,375
-  @use call mm:subscribe  @ 73
-  @use call mm:load  @ 76
+  @use call mm:ccs  @ 19,84,153,238,313,374
+  @use call mm:subscribe  @ 72
+  @use call mm:load  @ 75
 
 # Fields (r read / w write incl. constructor keys)
-  @field w at  @ 16
-  @field r candidateppqs  @ 374
-  @field r cc  @ 45,61,176,335,354,389
-  @field w cc  @ 16,61,98,99,141,142,143,146,147,148,166,167
-  @field w cc  @ 204,206,207,224,225,228,229,250,251,254,255,272
-  @field w cc  @ 273,274,277,278,279,299,300,301,302,305,306,307
-  @field w cc  @ 308,326,346,347,365,366,368,401,403,404,420,421
-  @field w cc  @ 435,450,451,464,481,482,483,486,487,488,506,510
-  @field w cc  @ 531,532,533,534,537,538,539,540,541
-  @field r ccs  @ 54
-  @field w ccs  @ 64,98,112,126,140,166,188,204,223,249,271,298
-  @field w ccs  @ 325,346,364,384,401,420,435,450,464,480,505,530
-  @field r chan  @ 56,60,174,333
-  @field w chan  @ 56,60,98,99,112,113,126,127,141,142,143,146
-  @field w chan  @ 147,148,166,167,188,189,204,206,207,224,225,228
-  @field w chan  @ 229,250,251,254,255,272,273,274,277,278,279,299
-  @field w chan  @ 300,301,302,305,306,307,308,326,346,347,365,366
-  @field w chan  @ 368,385,401,403,404,420,421,435,436,450,451,464
-  @field w chan  @ 481,482,483,486,487,488,506,507,510,511,531,532
-  @field w chan  @ 533,534,537,538,539,540,541
-  @field w chanmsg  @ 56
-  @field r evType  @ 37,40,42,47,60,175,334
-  @field w evType  @ 60,98,99,112,113,126,127,141,142,143,146,147
-  @field w evType  @ 148,166,167,188,189,204,206,207,224,225,228,229
-  @field w evType  @ 250,251,254,255,272,273,274,277,278,279,299,300
-  @field w evType  @ 301,302,305,306,307,308,326,346,347,365,366,368
-  @field w evType  @ 385,401,403,404,420,421,435,436,450,451,464,481
-  @field w evType  @ 482,483,486,487,488,506,507,510,511,531,532,533
-  @field w evType  @ 534,537,538,539,540,541
-  @field r events  @ 74
-  @field w eventtype  @ 62
-  @field r kind  @ 172,193,211,212,235,285,313,331,352,373,408,409
-  @field r kind  @ 425,440,455,492,493,494,516,546,547,548,549
-  @field r lastppq  @ 332
-  @field w msg  @ 62
-  @field w msg2  @ 57
-  @field w msg3  @ 57
-  @field w name  @ 94,108,122,136,162,184,200,219,245,267,292,321
-  @field w name  @ 342,360,380,394,416,431,446,460,474,499,523
-  @field r newVal  @ 178,195
-  @field r offset  @ 236,261,262,286
-  @field r oldVal  @ 177,194
-  @field w pa  @ 16
-  @field w pb  @ 16
-  @field w pc  @ 16
-  @field r pitch  @ 41,61,388
-  @field w pitch  @ 61,112,113,385
-  @field r plain  @ 314,375,426,441,469
-  @field r ppq  @ 56,62,154,173,239,259,260,336,353
-  @field w ppq  @ 56,62,98,99,112,113,126,127,141,142,143,146
-  @field w ppq  @ 147,148,166,167,188,189,204,206,207,224,225,228
-  @field w ppq  @ 229,250,251,254,255,272,273,274,277,278,279,299
-  @field w ppq  @ 300,301,302,305,306,307,308,326,346,347,365,366
-  @field w ppq  @ 368,385,401,403,404,420,421,435,436,450,451,464
-  @field w ppq  @ 481,482,483,486,487,488,506,507,510,511,531,532
-  @field w ppq  @ 533,534,537,538,539,540,541
-  @field w reaper  @ 28
-  @field w run  @ 95,109,123,137,163,185,201,220,246,268,293,322
-  @field w run  @ 343,361,381,395,417,432,447,461,475,500,524
-  @field r sidecars  @ 59
-  @field w sidecars  @ 99,113,127,145,167,189,205,227,253,276,304,326
-  @field w sidecars  @ 347,368,385,402,421,436,451,465,485,509,536
-  @field w texts  @ 64
-  @field r uuid  @ 60,78,103,117,131,154,179,239,355
-  @field w uuid  @ 60,99,113,127,146,147,148,167,189,206,207,228
-  @field w uuid  @ 229,254,255,277,278,279,305,306,307,308,326,347
-  @field w uuid  @ 368,385,403,404,421,436,451,486,487,488,510,511
-  @field w uuid  @ 537,538,539,540,541
-  @field r val  @ 38,43,45,61
-  @field w val  @ 61,98,99,126,127,141,142,143,146,147,148,166
-  @field w val  @ 167,188,189,204,206,207,224,225,228,229,250,251
-  @field w val  @ 254,255,272,273,274,277,278,279,299,300,301,302
-  @field w val  @ 305,306,307,308,326,346,347,365,366,368,401,403
-  @field w val  @ 404,420,421,435,436,450,451,464,481,482,483,486
-  @field w val  @ 487,488,506,507,510,511,531,532,533,534,537,538
-  @field w val  @ 539,540,541
-  @field r vel  @ 41
-  @field w vel  @ 112,113,385
+  @field w at  @ 15
+  @field r candidateppqs  @ 373
+  @field r cc  @ 44,60,175,334,353,388
+  @field w cc  @ 15,60,97,98,140,141,142,145,146,147,165,166
+  @field w cc  @ 203,205,206,223,224,227,228,249,250,253,254,271
+  @field w cc  @ 272,273,276,277,278,298,299,300,301,304,305,306
+  @field w cc  @ 307,325,345,346,364,365,367,400,402,403,419,420
+  @field w cc  @ 434,449,450,463,480,481,482,485,486,487,505,509
+  @field w cc  @ 530,531,532,533,536,537,538,539,540
+  @field r ccs  @ 53
+  @field w ccs  @ 63,97,111,125,139,165,187,203,222,248,270,297
+  @field w ccs  @ 324,345,363,383,400,419,434,449,463,479,504,529
+  @field r chan  @ 55,59,173,332
+  @field w chan  @ 55,59,97,98,111,112,125,126,140,141,142,145
+  @field w chan  @ 146,147,165,166,187,188,203,205,206,223,224,227
+  @field w chan  @ 228,249,250,253,254,271,272,273,276,277,278,298
+  @field w chan  @ 299,300,301,304,305,306,307,325,345,346,364,365
+  @field w chan  @ 367,384,400,402,403,419,420,434,435,449,450,463
+  @field w chan  @ 480,481,482,485,486,487,505,506,509,510,530,531
+  @field w chan  @ 532,533,536,537,538,539,540
+  @field w chanmsg  @ 55
+  @field r evType  @ 36,39,41,46,59,174,333
+  @field w evType  @ 59,97,98,111,112,125,126,140,141,142,145,146
+  @field w evType  @ 147,165,166,187,188,203,205,206,223,224,227,228
+  @field w evType  @ 249,250,253,254,271,272,273,276,277,278,298,299
+  @field w evType  @ 300,301,304,305,306,307,325,345,346,364,365,367
+  @field w evType  @ 384,400,402,403,419,420,434,435,449,450,463,480
+  @field w evType  @ 481,482,485,486,487,505,506,509,510,530,531,532
+  @field w evType  @ 533,536,537,538,539,540
+  @field r events  @ 73
+  @field w eventtype  @ 61
+  @field r kind  @ 171,192,210,211,234,284,312,330,351,372,407,408
+  @field r kind  @ 424,439,454,491,492,493,515,545,546,547,548
+  @field r lastppq  @ 331
+  @field w msg  @ 61
+  @field w msg2  @ 56
+  @field w msg3  @ 56
+  @field w name  @ 93,107,121,135,161,183,199,218,244,266,291,320
+  @field w name  @ 341,359,379,393,415,430,445,459,473,498,522
+  @field r newVal  @ 177,194
+  @field r offset  @ 235,260,261,285
+  @field r oldVal  @ 176,193
+  @field w pa  @ 15
+  @field w pb  @ 15
+  @field w pc  @ 15
+  @field r pitch  @ 40,60,387
+  @field w pitch  @ 60,111,112,384
+  @field r plain  @ 313,374,425,440,468
+  @field r ppq  @ 55,61,153,172,238,258,259,335,352
+  @field w ppq  @ 55,61,97,98,111,112,125,126,140,141,142,145
+  @field w ppq  @ 146,147,165,166,187,188,203,205,206,223,224,227
+  @field w ppq  @ 228,249,250,253,254,271,272,273,276,277,278,298
+  @field w ppq  @ 299,300,301,304,305,306,307,325,345,346,364,365
+  @field w ppq  @ 367,384,400,402,403,419,420,434,435,449,450,463
+  @field w ppq  @ 480,481,482,485,486,487,505,506,509,510,530,531
+  @field w ppq  @ 532,533,536,537,538,539,540
+  @field w reaper  @ 27
+  @field w run  @ 94,108,122,136,162,184,200,219,245,267,292,321
+  @field w run  @ 342,360,380,394,416,431,446,460,474,499,523
+  @field r sidecars  @ 58
+  @field w sidecars  @ 98,112,126,144,166,188,204,226,252,275,303,325
+  @field w sidecars  @ 346,367,384,401,420,435,450,464,484,508,535
+  @field w texts  @ 63
+  @field r uuid  @ 59,77,102,116,130,153,178,238,354
+  @field w uuid  @ 59,98,112,126,145,146,147,166,188,205,206,227
+  @field w uuid  @ 228,253,254,276,277,278,304,305,306,307,325,346
+  @field w uuid  @ 367,384,402,403,420,435,450,485,486,487,509,510
+  @field w uuid  @ 536,537,538,539,540
+  @field r val  @ 37,42,44,60
+  @field w val  @ 60,97,98,125,126,140,141,142,145,146,147,165
+  @field w val  @ 166,187,188,203,205,206,223,224,227,228,249,250
+  @field w val  @ 253,254,271,272,273,276,277,278,298,299,300,301
+  @field w val  @ 304,305,306,307,325,345,346,364,365,367,400,402
+  @field w val  @ 403,419,420,434,435,449,450,463,480,481,482,485
+  @field w val  @ 486,487,505,506,509,510,530,531,532,533,536,537
+  @field w val  @ 538,539,540
+  @field r vel  @ 40
+  @field w vel  @ 111,112,384

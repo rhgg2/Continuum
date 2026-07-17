@@ -5,7 +5,6 @@
 
 local t = require('support')
 
-local util = require('util')
 local realMM = require('realMidiManager')()
 
 local function freshTake()

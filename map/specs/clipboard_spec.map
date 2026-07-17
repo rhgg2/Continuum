@@ -1,4 +1,4 @@
-@spec clipboard_spec  src=tests/specs/clipboard_spec.lua  loc=333  sha=37ed80d  cases=8
+@spec clipboard_spec  src=tests/specs/clipboard_spec.lua  loc=332  sha=37ed80d  cases=8
 @exercises trackerView (h.vm), editCursor (h.ec), clipboard (h.clipboard), midiManager (h.fm), trackerManager (h.tm)
 @surface   vm:setGridSize, ec:setPos, ec:extendTo, ec:pos, clipboard:collect, clipboard:trimTop, fm:dump, clipboard:pasteClip, tm:deleteEvent, tm:flush, tm:addEvent, tm:getChannel
 @harness   mk{seed.notes, seed.length, seed.ccs}
@@ -11,95 +11,95 @@
   so the file move can't drift the contract silently.
 
 # Cases
-  @case 'clipboard:collect on 1×1 pitch sel produces single-mode clip with row-relative event'  [harness]  @ 17-47
-  @case 'clipboard:trimTop drops top rows and re-indexes survivors'  [harness]  @ 55-75
-  @case 'copy/paste carries intent ceiling, not the clipped tail'  [harness]  @ 83-113
-  @case 'paste fit-clip against a blocker keeps intent; regrows when blocker removed'  [harness]  @ 120-163
-  @case 'copy/paste a retrig host leaves the original host intact'  [harness]  @ 170-210
-  @case 'clipboard:collect multi-col records chanDelta from leftmost col'  [harness]  @ 218-243
-  @case 'arbitrary metadata survives note pitch-mode collect→paste round-trip'  [harness]  @ 254-282
-  @case 'arbitrary metadata survives cc-mode collect→paste round-trip'  [harness]  @ 292-330
+  @case 'clipboard:collect on 1×1 pitch sel produces single-mode clip with row-relative event'  [harness]  @ 16-46
+  @case 'clipboard:trimTop drops top rows and re-indexes survivors'  [harness]  @ 54-74
+  @case 'copy/paste carries intent ceiling, not the clipped tail'  [harness]  @ 82-112
+  @case 'paste fit-clip against a blocker keeps intent; regrows when blocker removed'  [harness]  @ 119-162
+  @case 'copy/paste a retrig host leaves the original host intact'  [harness]  @ 169-209
+  @case 'clipboard:collect multi-col records chanDelta from leftmost col'  [harness]  @ 217-242
+  @case 'arbitrary metadata survives note pitch-mode collect→paste round-trip'  [harness]  @ 253-281
+  @case 'arbitrary metadata survives cc-mode collect→paste round-trip'  [harness]  @ 291-329
 
 # Uses (outbound edges)
-  @use call vm:setGridSize  @ 25,95,133,177,230,262,300
-  @use call ec:setPos  @ 27,98,104,135,144,196,201,271,319
-  @use call ec:extendTo  @ 28,99,136,197
-  @use call ec:pos  @ 28,99,136,197
-  @use call clipboard:collect  @ 30,100,137,198,234,265,314
-  @use call clipboard:trimTop  @ 66
-  @use call fm:dump  @ 96,108,148,156,187,275,323
-  @use call clipboard:pasteClip  @ 105,145,202,272,320
-  @use call tm:deleteEvent  @ 159
-  @use call tm:flush  @ 160,176
-  @use call tm:addEvent  @ 174
-  @use call tm:getChannel  @ 181
+  @use call vm:setGridSize  @ 24,94,132,176,229,261,299
+  @use call ec:setPos  @ 26,97,103,134,143,195,200,270,318
+  @use call ec:extendTo  @ 27,98,135,196
+  @use call ec:pos  @ 27,98,135,196
+  @use call clipboard:collect  @ 29,99,136,197,233,264,313
+  @use call clipboard:trimTop  @ 65
+  @use call fm:dump  @ 95,107,147,155,186,274,322
+  @use call clipboard:pasteClip  @ 104,144,201,271,319
+  @use call tm:deleteEvent  @ 158
+  @use call tm:flush  @ 159,175
+  @use call tm:addEvent  @ 173
+  @use call tm:getChannel  @ 180
 
 # Fields (r read / w write incl. constructor keys)
-  @field r cc  @ 305,324
-  @field w cc  @ 296
-  @field r ccs  @ 323
-  @field w ccs  @ 295
-  @field r chan  @ 149
-  @field w chan  @ 21,90,92,126,130,174,222,224,226,258,296
-  @field r chanDelta  @ 238,239,240
-  @field w col1  @ 232,263,311
-  @field w col2  @ 232,263,311
-  @field r cols  @ 141,237,238,239,240,241,242,304
-  @field w delay  @ 22,175,223,225,227,259
-  @field r derived  @ 187
-  @field w detune  @ 22,175,223,225,227,259
-  @field r endRow  @ 37,71,74,101
-  @field w endRow  @ 61,62
-  @field r endppq  @ 96,112,153,162
-  @field w endppq  @ 21,89,91,125,129,174,222,224,226,258
-  @field w endppqL  @ 89,91,125,129
-  @field w evType  @ 174,296
-  @field r events  @ 34,35,69,70,71,72,73,74,101,199,267,268
-  @field r events  @ 315,316
-  @field w events  @ 60
-  @field w fx  @ 175
-  @field r grid  @ 141,304
-  @field r key  @ 242
-  @field w kind  @ 172
-  @field w lane  @ 90,92,126,130,175
-  @field w length  @ 86,123
-  @field r midiChan  @ 142,305
-  @field r mode  @ 31,235
-  @field w mode  @ 59
-  @field r mood  @ 267,279,315,327
-  @field w mood  @ 259,297
-  @field w name  @ 17,55,83,120,170,218,254,292
-  @field r notes  @ 96,108,148,156,187,275
-  @field w notes  @ 20,86,123,221,257
-  @field r numRows  @ 33,68
-  @field w numRows  @ 59
-  @field r parked  @ 181
-  @field w part1  @ 232,263,312
-  @field w part2  @ 232,263,312
-  @field w period  @ 172
-  @field r pitch  @ 38,72,149,157,281
-  @field w pitch  @ 21,61,62,63,90,92,126,130,174,222,224,226
-  @field w pitch  @ 258
-  @field r ppq  @ 109,149,182,276,324
-  @field w ppq  @ 21,89,91,125,129,174,222,224,226,258,296
-  @field w ppqL  @ 89,91,125,129
-  @field w ramp  @ 172
-  @field r row  @ 36,70,73
-  @field w row  @ 61,62,63
-  @field w row1  @ 232,263,311
-  @field w row2  @ 232,263,311
-  @field w run  @ 18,56,84,121,171,219,255,293
-  @field w seed  @ 20,86,123,221,257,295
-  @field w sourceIdx  @ 59
-  @field r startType  @ 236
-  @field r tag  @ 268,280,316,328
-  @field w tag  @ 259,297
-  @field r type  @ 32,142,241,305
-  @field w type  @ 59
-  @field r uuid  @ 191,199,206
-  @field w uuid  @ 90,92,126,130
-  @field r val  @ 329
-  @field w val  @ 296
-  @field r vel  @ 39
-  @field w vel  @ 21,61,62,63,90,92,126,130,175,222,224,226
-  @field w vel  @ 258
+  @field r cc  @ 304,323
+  @field w cc  @ 295
+  @field r ccs  @ 322
+  @field w ccs  @ 294
+  @field r chan  @ 148
+  @field w chan  @ 20,89,91,125,129,173,221,223,225,257,295
+  @field r chanDelta  @ 237,238,239
+  @field w col1  @ 231,262,310
+  @field w col2  @ 231,262,310
+  @field r cols  @ 140,236,237,238,239,240,241,303
+  @field w delay  @ 21,174,222,224,226,258
+  @field r derived  @ 186
+  @field w detune  @ 21,174,222,224,226,258
+  @field r endRow  @ 36,70,73,100
+  @field w endRow  @ 60,61
+  @field r endppq  @ 95,111,152,161
+  @field w endppq  @ 20,88,90,124,128,173,221,223,225,257
+  @field w endppqL  @ 88,90,124,128
+  @field w evType  @ 173,295
+  @field r events  @ 33,34,68,69,70,71,72,73,100,198,266,267
+  @field r events  @ 314,315
+  @field w events  @ 59
+  @field w fx  @ 174
+  @field r grid  @ 140,303
+  @field r key  @ 241
+  @field w kind  @ 171
+  @field w lane  @ 89,91,125,129,174
+  @field w length  @ 85,122
+  @field r midiChan  @ 141,304
+  @field r mode  @ 30,234
+  @field w mode  @ 58
+  @field r mood  @ 266,278,314,326
+  @field w mood  @ 258,296
+  @field w name  @ 16,54,82,119,169,217,253,291
+  @field r notes  @ 95,107,147,155,186,274
+  @field w notes  @ 19,85,122,220,256
+  @field r numRows  @ 32,67
+  @field w numRows  @ 58
+  @field r parked  @ 180
+  @field w part1  @ 231,262,311
+  @field w part2  @ 231,262,311
+  @field w period  @ 171
+  @field r pitch  @ 37,71,148,156,280
+  @field w pitch  @ 20,60,61,62,89,91,125,129,173,221,223,225
+  @field w pitch  @ 257
+  @field r ppq  @ 108,148,181,275,323
+  @field w ppq  @ 20,88,90,124,128,173,221,223,225,257,295
+  @field w ppqL  @ 88,90,124,128
+  @field w ramp  @ 171
+  @field r row  @ 35,69,72
+  @field w row  @ 60,61,62
+  @field w row1  @ 231,262,310
+  @field w row2  @ 231,262,310
+  @field w run  @ 17,55,83,120,170,218,254,292
+  @field w seed  @ 19,85,122,220,256,294
+  @field w sourceIdx  @ 58
+  @field r startType  @ 235
+  @field r tag  @ 267,279,315,327
+  @field w tag  @ 258,296
+  @field r type  @ 31,141,240,304
+  @field w type  @ 58
+  @field r uuid  @ 190,198,205
+  @field w uuid  @ 89,91,125,129
+  @field r val  @ 328
+  @field w val  @ 295
+  @field r vel  @ 38
+  @field w vel  @ 20,60,61,62,89,91,125,129,174,221,223,225
+  @field w vel  @ 257

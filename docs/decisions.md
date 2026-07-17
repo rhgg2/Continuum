@@ -4,6 +4,19 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-17** — Unused *arguments* stay; unused *bindings* go. `unused_args = false` (same day)
+  spared prod's dispatch-table and stage signatures, where the callee cannot choose its parameter
+  list — but a caller writing `local h, wm = mkWm(harness)` picks what to bind, so there is no
+  protocol to protect and `_` is the honest name. *Chosen over* extending the args exemption to
+  locals: the check earns its keep in specs, where an unused binding often means a forgotten
+  assertion — it is what exposed `zz_probe2_spec`, which asserts nothing at all.
+
+- **2026-07-17** — W512 ("loop is executed at most once") ignored repo-wide. Its only three hits were
+  the deliberate take-any-element-of-an-iterator idiom, which `next()` cannot express against a
+  stateful iterator. *Chosen over* a tests-only scope (the idiom is equally valid in prod, so the
+  split had no principle behind it) and over a `util.first` helper, which would have been production
+  shape authored for a spec's convenience.
+
 - **2026-07-17** — The flush's descending `flushAssigns` sort stays, demoted from load-bearing to
   defensive. `assignNote`'s eviction guard (same day) made *either* commit order leave `collisionIdx`
   correct, so the sort no longer rescues a peer's slot from an occupier; what it still buys is one

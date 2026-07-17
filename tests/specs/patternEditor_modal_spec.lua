@@ -85,7 +85,7 @@ return {
   {
     name = 'launch mints a checkout and raises the modal; onClose sweeps it',
     run = function(harness)
-      local h, pe, mh = withEditor(harness)
+      local _, pe, mh = withEditor(harness)
       local strack = scratch.track()
       local before = reaper.CountTrackMediaItems(strack)
 
@@ -103,7 +103,7 @@ return {
   {
     name = 'a whitelisted key dispatches on the mini cmgr; an excluded chord is inert',
     run = function(harness)
-      local h, pe = withEditor(harness)
+      local _, pe = withEditor(harness)
       pe:open(NOTES_BODY, noop)
 
       -- Super+X (editNoteFx) is excluded, so it is unbound on the mini cmgr and the
@@ -121,7 +121,7 @@ return {
   {
     name = 'the chord gesture is gated off the pattern surface',
     run = function(harness)
-      local h, pe = withEditor(harness)
+      local _, pe = withEditor(harness)
       local writeThroughs = 0
       pe:open(NOTES_BODY, function() writeThroughs = writeThroughs + 1 end)
 
@@ -148,7 +148,7 @@ return {
   {
     name = 'an unconsumed Esc closes the modal',
     run = function(harness)
-      local h, pe = withEditor(harness)
+      local _, pe = withEditor(harness)
       pe:open(NOTES_BODY, noop)
       local closedWith
       setKeys({ fakeImGui.Key_Escape }, fakeImGui.Mod_None)

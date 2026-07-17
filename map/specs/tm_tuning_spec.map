@@ -1,4 +1,4 @@
-@spec tm_tuning_spec  src=tests/specs/tm_tuning_spec.lua  loc=884  sha=14993a2  cases=24
+@spec tm_tuning_spec  src=tests/specs/tm_tuning_spec.lua  loc=883  sha=14993a2  cases=24
 @exercises trackerManager (h.tm), midiManager (h.fm)
 @surface   tm:addEvent, tm:flush, fm:dump, tm:getChannel, tm:assignEvent, tm:rebuild, tm:deleteEvent
 @harness   mk{seed.ccs, seed.notes}
@@ -12,116 +12,116 @@
       pb carries `fake=true` (persisted as cc metadata).
 
 # Helpers
-  @fn cents2raw(c)  @ 12
+  @fn cents2raw(c)  @ 11
       -- pbRange default = 2 semitones = 200 cents total. So cents 50 → raw 2048.
-  @fn findNote(dump, pitch)  @ 14-18
-  @fn pbsAt(dump, ppq)  @ 20-26
+  @fn findNote(dump, pitch)  @ 13-17
+  @fn pbsAt(dump, ppq)  @ 19-25
 
 # Cases
-  @case 'adding a note with detune seats a fake pb at the note'  [harness]  @ 30-48
-  @case 'logical pb at the note seat is zero (detune absorbs the raw step)'  [harness]  @ 52-69
-  @case 'clearing detune back to 0 removes the fake pb'  [harness]  @ 73-92
-  @case 'first lane-1 note anchors a pb-active channel even at detune 0'  [harness]  @ 98-115
-  @case 'a pristine all-zero channel seats no anchor'  [harness]  @ 119-128
-  @case 'two notes with different detunes produce stepwise pbs between them'  [harness]  @ 132-155
-  @case 'mutating a note past a same-channel neighbour keeps fake pbs fake'  [harness]  @ 168-203
-  @case 'pb.derived survives a rebuild (persisted as cc metadata)'  [harness]  @ 207-226
-  @case 'deleting a detuned note cleans up its fake pb'  [harness]  @ 230-247
-  @case 'a real (user-authored) pb at a note seat suppresses fake-pb bookkeeping'  [harness]  @ 251-277
-  @case 'overwriting middle of A A B with B (different detunes) drops the now-redundant fake pb'  [harness]  @ 288-331
-  @case 'inserting B between A and B drops the now-redundant fake pb at the existing B'  [harness]  @ 338-365
-  @case 'A A A then B A A then B B A keeps the fake-pb invariant at every note seat'  [harness]  @ 373-427
-  @case 'moving a detuned note past a same-detune neighbour seats absorber at the unmasked seat'  [harness]  @ 440-486
-  @case 'deleting middle B in A B A drops the now-redundant fake pb at row 3'  [harness]  @ 493-520
-  @case 'lane-2 detuned note seats no pb (lane-1 monopoly on realisation)'  [harness]  @ 526-550
-  @case 'deleting a lane-2 note at a lane-1 fake-pb seat leaves the absorber intact'  [harness]  @ 557-595
-  @case 'pure delay change shifts the fake pb with its host (count and value preserved)'  [harness]  @ 602-639
-  @case 'editing a real pb does not retro-mutate any note detune'  [harness]  @ 645-677
-  @case 'detune update on a note seated atop a real pb leaves it real'  [harness]  @ 683-713
-  @case 'flush + rebuild + flush is idempotent on the pb dump'  [harness]  @ 720-759
-  @case 'editing a lane-2 note detune does not seat or move any pb'  [harness]  @ 765-797
-  @case 'negative delay reorders lane-1 hosts; absorbers seat at realised ppqs'  [harness]  @ 806-842
-  @case 'foreign pb (no cents sidecar) back-derives cents; survives detune edit'  [harness]  @ 850-882
+  @case 'adding a note with detune seats a fake pb at the note'  [harness]  @ 29-47
+  @case 'logical pb at the note seat is zero (detune absorbs the raw step)'  [harness]  @ 51-68
+  @case 'clearing detune back to 0 removes the fake pb'  [harness]  @ 72-91
+  @case 'first lane-1 note anchors a pb-active channel even at detune 0'  [harness]  @ 97-114
+  @case 'a pristine all-zero channel seats no anchor'  [harness]  @ 118-127
+  @case 'two notes with different detunes produce stepwise pbs between them'  [harness]  @ 131-154
+  @case 'mutating a note past a same-channel neighbour keeps fake pbs fake'  [harness]  @ 167-202
+  @case 'pb.derived survives a rebuild (persisted as cc metadata)'  [harness]  @ 206-225
+  @case 'deleting a detuned note cleans up its fake pb'  [harness]  @ 229-246
+  @case 'a real (user-authored) pb at a note seat suppresses fake-pb bookkeeping'  [harness]  @ 250-276
+  @case 'overwriting middle of A A B with B (different detunes) drops the now-redundant fake pb'  [harness]  @ 287-330
+  @case 'inserting B between A and B drops the now-redundant fake pb at the existing B'  [harness]  @ 337-364
+  @case 'A A A then B A A then B B A keeps the fake-pb invariant at every note seat'  [harness]  @ 372-426
+  @case 'moving a detuned note past a same-detune neighbour seats absorber at the unmasked seat'  [harness]  @ 439-485
+  @case 'deleting middle B in A B A drops the now-redundant fake pb at row 3'  [harness]  @ 492-519
+  @case 'lane-2 detuned note seats no pb (lane-1 monopoly on realisation)'  [harness]  @ 525-549
+  @case 'deleting a lane-2 note at a lane-1 fake-pb seat leaves the absorber intact'  [harness]  @ 556-594
+  @case 'pure delay change shifts the fake pb with its host (count and value preserved)'  [harness]  @ 601-638
+  @case 'editing a real pb does not retro-mutate any note detune'  [harness]  @ 644-676
+  @case 'detune update on a note seated atop a real pb leaves it real'  [harness]  @ 682-712
+  @case 'flush + rebuild + flush is idempotent on the pb dump'  [harness]  @ 719-758
+  @case 'editing a lane-2 note detune does not seat or move any pb'  [harness]  @ 764-796
+  @case 'negative delay reorders lane-1 hosts; absorbers seat at realised ppqs'  [harness]  @ 805-841
+  @case 'foreign pb (no cents sidecar) back-derives cents; survives detune edit'  [harness]  @ 849-881
 
 # Uses (outbound edges)
-  @use call tm:addEvent  @ 33,55,76,101,105,122,135,139,171,175,210,233,260,293,297,301,341,345,351,376,380,384,443,447,451,496,500,504,529,533,560,564,605,654,690,723,727,731,768,772
-  @use call tm:flush  @ 37,59,80,85,109,126,143,179,193,214,237,242,264,305,324,349,355,388,407,419,455,478,508,512,537,568,586,609,626,658,670,694,705,735,750,776,789,826,877
-  @use call fm:dump  @ 39,87,111,127,145,183,196,217,238,244,266,310,358,392,459,515,540,546,572,590,613,634,673,697,739,780,793,829,865
-  @use call tm:getChannel  @ 63,83,191,224,240,322,405,417,476,510,580,624,660,703,787,822,875
-  @use call tm:assignEvent  @ 84,192,323,406,418,477,625,669,704,788,825,876
-  @use call tm:rebuild  @ 223,749
-  @use call tm:deleteEvent  @ 241,511,585
+  @use call tm:addEvent  @ 32,54,75,100,104,121,134,138,170,174,209,232,259,292,296,300,340,344,350,375,379,383,442,446,450,495,499,503,528,532,559,563,604,653,689,722,726,730,767,771
+  @use call tm:flush  @ 36,58,79,84,108,125,142,178,192,213,236,241,263,304,323,348,354,387,406,418,454,477,507,511,536,567,585,608,625,657,669,693,704,734,749,775,788,825,876
+  @use call fm:dump  @ 38,86,110,126,144,182,195,216,237,243,265,309,357,391,458,514,539,545,571,589,612,633,672,696,738,779,792,828,864
+  @use call tm:getChannel  @ 62,82,190,223,239,321,404,416,475,509,579,623,659,702,786,821,874
+  @use call tm:assignEvent  @ 83,191,322,405,417,476,624,668,703,787,824,875
+  @use call tm:rebuild  @ 222,748
+  @use call tm:deleteEvent  @ 240,510,584
 
 # Fields (r read / w write incl. constructor keys)
-  @field r ccs  @ 22,183,196,310,358,392,459,515,540,572,590,613
-  @field r ccs  @ 697,739,780,829,865
-  @field w ccs  @ 255,649,687,861
-  @field r cents  @ 870,880
-  @field w chan  @ 34,56,77,102,106,123,136,140,172,176,211,234
-  @field w chan  @ 255,261,294,298,302,342,346,352,377,381,385,444
-  @field w chan  @ 448,452,497,501,505,530,534,561,565,606,649,655
-  @field w chan  @ 687,691,724,728,732,769,773,814,816,858,861
-  @field r columns  @ 64,67,68,83,191,225,240,322,405,417,476,510
-  @field r columns  @ 580,624,660,703,787,822,875
-  @field w delay  @ 35,57,78,103,107,124,137,141,173,177,212,235
-  @field w delay  @ 262,295,299,303,343,347,353,378,382,386,445,449
-  @field w delay  @ 453,498,502,506,531,535,562,566,607,625,656,692
-  @field w delay  @ 725,729,733,770,774,814,816,825,859
-  @field r derived  @ 47,114,153,154,201,219,269,485,593,630,701,709
-  @field r derived  @ 741,757,840,841,866
-  @field w derived  @ 741
-  @field r detune  @ 42,68,91,276,549,676,796
-  @field w detune  @ 35,57,78,84,103,107,124,137,141,173,177,212
-  @field w detune  @ 235,262,295,299,303,323,343,347,353,378,382,386
-  @field w detune  @ 406,418,445,449,453,498,502,506,531,535,562,566
-  @field w detune  @ 607,656,692,704,725,729,733,770,774,788,814,816
-  @field w detune  @ 859,876
-  @field w endppq  @ 34,56,77,102,106,123,136,140,172,176,192,211
-  @field w endppq  @ 234,261,294,298,302,342,346,352,377,381,385,444
-  @field w endppq  @ 448,452,477,497,501,505,530,534,561,565,606,655
-  @field w endppq  @ 691,724,728,732,769,773,813,815,858
-  @field w endppqL  @ 813,815,859
-  @field r evType  @ 23,184,197,311,359,393,460,516,541,573,591,614
-  @field r evType  @ 698,740,781,830,866
-  @field w evType  @ 33,55,76,101,105,122,135,139,171,175,210,233
-  @field w evType  @ 255,260,293,297,301,341,345,351,376,380,384,443
-  @field w evType  @ 447,451,496,500,504,529,533,560,564,605,649,654
-  @field w evType  @ 687,690,723,727,731,768,772,861
-  @field r events  @ 67,68,83,191,240,322,405,417,476,510,582,624
-  @field r events  @ 663,703,787,822,875
-  @field w lane  @ 35,57,78,103,107,124,137,141,173,177,212,235
-  @field w lane  @ 262,295,299,303,343,347,353,378,382,386,445,449
-  @field w lane  @ 453,498,502,506,531,535,562,566,607,656,692,725
-  @field w lane  @ 729,733,770,774,814,816
-  @field w name  @ 30,52,73,98,119,132,168,207,230,251,288,338
-  @field w name  @ 373,440,493,526,557,602,645,683,720,765,806,850
-  @field r notes  @ 15,67,68,83,191,240,245,322,405,417,476,510
-  @field r notes  @ 546,580,624,634,673,703,787,793,822,875
-  @field w notes  @ 812,857
-  @field r pb  @ 64,225,660
-  @field r pitch  @ 16,547,583,635,674,794
-  @field w pitch  @ 34,56,77,102,106,123,136,140,172,176,211,234
-  @field w pitch  @ 261,294,298,302,323,342,346,352,377,381,385,406
-  @field w pitch  @ 418,444,448,452,497,501,505,530,534,561,565,606
-  @field w pitch  @ 655,691,724,728,732,769,773,814,816,858
-  @field r ppq  @ 23,313,318,319,328,329,361,363,364,395
-  @field r ppq  @ 395,401,411,413,423,425,462,470,472,482,483
-  @field r ppq  @ 519,620,635,638,664,698,741,744,755,823
-  @field r ppq  @ 832,836,837
-  @field w ppq  @ 34,56,77,102,106,123,136,140,172,176,192,211
-  @field w ppq  @ 234,255,261,294,298,302,342,346,352,377,381,385
-  @field w ppq  @ 444,448,452,477,497,501,505,530,534,561,565,606
-  @field w ppq  @ 649,655,687,691,724,728,732,741,769,773,813,815
-  @field w ppq  @ 858,861
-  @field w ppqL  @ 813,815,859
-  @field w run  @ 31,53,74,99,120,133,169,208,231,252,289,339
-  @field w run  @ 374,441,494,527,558,603,646,684,721,766,807,851
-  @field w seed  @ 254,648,686,811,856
-  @field r uuid  @ 220
-  @field r val  @ 46,113,151,152,274,330,402,412,414,424,426,471
-  @field r val  @ 473,484,594,631,712,741,756,838,839,871,881
-  @field w val  @ 255,649,669,687,741,861
-  @field w vel  @ 34,56,77,102,106,123,136,140,172,176,211,234
-  @field w vel  @ 261,294,298,302,342,346,352,377,381,385,444,448
-  @field w vel  @ 452,497,501,505,530,534,561,565,606,655,691,724
-  @field w vel  @ 728,732,769,773,814,816,858
+  @field r ccs  @ 21,182,195,309,357,391,458,514,539,571,589,612
+  @field r ccs  @ 696,738,779,828,864
+  @field w ccs  @ 254,648,686,860
+  @field r cents  @ 869,879
+  @field w chan  @ 33,55,76,101,105,122,135,139,171,175,210,233
+  @field w chan  @ 254,260,293,297,301,341,345,351,376,380,384,443
+  @field w chan  @ 447,451,496,500,504,529,533,560,564,605,648,654
+  @field w chan  @ 686,690,723,727,731,768,772,813,815,857,860
+  @field r columns  @ 63,66,67,82,190,224,239,321,404,416,475,509
+  @field r columns  @ 579,623,659,702,786,821,874
+  @field w delay  @ 34,56,77,102,106,123,136,140,172,176,211,234
+  @field w delay  @ 261,294,298,302,342,346,352,377,381,385,444,448
+  @field w delay  @ 452,497,501,505,530,534,561,565,606,624,655,691
+  @field w delay  @ 724,728,732,769,773,813,815,824,858
+  @field r derived  @ 46,113,152,153,200,218,268,484,592,629,700,708
+  @field r derived  @ 740,756,839,840,865
+  @field w derived  @ 740
+  @field r detune  @ 41,67,90,275,548,675,795
+  @field w detune  @ 34,56,77,83,102,106,123,136,140,172,176,211
+  @field w detune  @ 234,261,294,298,302,322,342,346,352,377,381,385
+  @field w detune  @ 405,417,444,448,452,497,501,505,530,534,561,565
+  @field w detune  @ 606,655,691,703,724,728,732,769,773,787,813,815
+  @field w detune  @ 858,875
+  @field w endppq  @ 33,55,76,101,105,122,135,139,171,175,191,210
+  @field w endppq  @ 233,260,293,297,301,341,345,351,376,380,384,443
+  @field w endppq  @ 447,451,476,496,500,504,529,533,560,564,605,654
+  @field w endppq  @ 690,723,727,731,768,772,812,814,857
+  @field w endppqL  @ 812,814,858
+  @field r evType  @ 22,183,196,310,358,392,459,515,540,572,590,613
+  @field r evType  @ 697,739,780,829,865
+  @field w evType  @ 32,54,75,100,104,121,134,138,170,174,209,232
+  @field w evType  @ 254,259,292,296,300,340,344,350,375,379,383,442
+  @field w evType  @ 446,450,495,499,503,528,532,559,563,604,648,653
+  @field w evType  @ 686,689,722,726,730,767,771,860
+  @field r events  @ 66,67,82,190,239,321,404,416,475,509,581,623
+  @field r events  @ 662,702,786,821,874
+  @field w lane  @ 34,56,77,102,106,123,136,140,172,176,211,234
+  @field w lane  @ 261,294,298,302,342,346,352,377,381,385,444,448
+  @field w lane  @ 452,497,501,505,530,534,561,565,606,655,691,724
+  @field w lane  @ 728,732,769,773,813,815
+  @field w name  @ 29,51,72,97,118,131,167,206,229,250,287,337
+  @field w name  @ 372,439,492,525,556,601,644,682,719,764,805,849
+  @field r notes  @ 14,66,67,82,190,239,244,321,404,416,475,509
+  @field r notes  @ 545,579,623,633,672,702,786,792,821,874
+  @field w notes  @ 811,856
+  @field r pb  @ 63,224,659
+  @field r pitch  @ 15,546,582,634,673,793
+  @field w pitch  @ 33,55,76,101,105,122,135,139,171,175,210,233
+  @field w pitch  @ 260,293,297,301,322,341,345,351,376,380,384,405
+  @field w pitch  @ 417,443,447,451,496,500,504,529,533,560,564,605
+  @field w pitch  @ 654,690,723,727,731,768,772,813,815,857
+  @field r ppq  @ 22,312,317,318,327,328,360,362,363,394
+  @field r ppq  @ 394,400,410,412,422,424,461,469,471,481,482
+  @field r ppq  @ 518,619,634,637,663,697,740,743,754,822
+  @field r ppq  @ 831,835,836
+  @field w ppq  @ 33,55,76,101,105,122,135,139,171,175,191,210
+  @field w ppq  @ 233,254,260,293,297,301,341,345,351,376,380,384
+  @field w ppq  @ 443,447,451,476,496,500,504,529,533,560,564,605
+  @field w ppq  @ 648,654,686,690,723,727,731,740,768,772,812,814
+  @field w ppq  @ 857,860
+  @field w ppqL  @ 812,814,858
+  @field w run  @ 30,52,73,98,119,132,168,207,230,251,288,338
+  @field w run  @ 373,440,493,526,557,602,645,683,720,765,806,850
+  @field w seed  @ 253,647,685,810,855
+  @field r uuid  @ 219
+  @field r val  @ 45,112,150,151,273,329,401,411,413,423,425,470
+  @field r val  @ 472,483,593,630,711,740,755,837,838,870,880
+  @field w val  @ 254,648,668,686,740,860
+  @field w vel  @ 33,55,76,101,105,122,135,139,171,175,210,233
+  @field w vel  @ 260,293,297,301,341,345,351,376,380,384,443,447
+  @field w vel  @ 451,496,500,504,529,533,560,564,605,654,690,723
+  @field w vel  @ 727,731,768,772,813,815,857

@@ -64,7 +64,7 @@ return {
   {
     name = 'showFx returns false for an unknown id',
     run = function()
-      local reaper, rm = mkRm()
+      local _, rm = mkRm()
       t.eq(rm:showFx('{nope}'), false)
     end,
   },

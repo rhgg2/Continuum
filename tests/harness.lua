@@ -99,7 +99,7 @@ function harness.mk(opts)
   opts = opts or {}
   local seed = opts.seed or {}
 
-  local mm, take = buildMM(opts)
+  local mm, hostTake = buildMM(opts)
 
   -- Fresh global-tier stub file per scenario, or one scenario's
   -- cm:set('global', …) leaks into the next.
@@ -109,7 +109,7 @@ function harness.mk(opts)
   local ps = util.instantiate('pextStore')
   local cm = util.instantiate('configManager', { ps = ps })
   local ds = util.instantiate('dataStore', { ps = ps })
-  cm:setContext(take)
+  cm:setContext(hostTake)
   if opts.config then
     for level, tbl in pairs(opts.config) do cm:assign(level, tbl) end
   end

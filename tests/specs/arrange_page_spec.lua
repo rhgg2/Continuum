@@ -116,12 +116,12 @@ return {
       h.reaper:addItem('tr1', { take = 'tr1/t1', isMidi = true,
                                 pos = 10, len = 3, srcLen = 3, poolGuid = '{p1}' })
       h.reaper:setProjectTracks{ 'tr1' }
-      local ap = newArrangePage(h.cm, h.ds, h.cmgr, nil, {})
+      newArrangePage(h.cm, h.ds, h.cmgr, nil, {})   -- registers the arrange scope's commands
       h.cmgr:push('arrange')
       local am = util.instantiate('arrangeManager', { cm = h.cm, ds = h.ds, tm = h.tm })
       am:tracksTakes(0)               -- materialise {p1} into a slot
       h.cmgr:invoke('drop0')          -- drops at row 0
-      -- ap doesn't surface the cursor; observe the advance via a second
+      -- The page doesn't surface the cursor; observe the advance via a second
       -- drop, which must land at row 3 (advanceBy past the first).
       h.cmgr:invoke('drop0')
       local takes = am:tracksTakes(0)

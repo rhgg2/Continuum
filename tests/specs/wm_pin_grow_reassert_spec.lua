@@ -65,7 +65,7 @@ return {
   {
     name = 'grow + setPinMaps schedules one off-cycle pin re-assert',
     run = function(harness)
-      local h, wm, _track, fxId = seedFx(harness)
+      local h, wm, _, fxId = seedFx(harness)
       wm:applyOps({ nchanOp(4), pinMapsOp(fxId) }, 'grow')
       t.eq(#h.reaper._state.deferred, 1, 'a pin re-assert was scheduled')
     end,
@@ -98,7 +98,7 @@ return {
   {
     name = 'setPinMaps with no grow schedules nothing (no OR without a grow)',
     run = function(harness)
-      local h, wm, _track, fxId = seedFx(harness)
+      local h, wm, _, fxId = seedFx(harness)
       wm:applyOps({ pinMapsOp(fxId) }, 'pins only')
       t.eq(#h.reaper._state.deferred, 0)
     end,

@@ -1,4 +1,4 @@
-@spec tracker_page_spec  src=tests/specs/tracker_page_spec.lua  loc=275  sha=ef4e5a4  cases=9
+@spec tracker_page_spec  src=tests/specs/tracker_page_spec.lua  loc=274  sha=ef4e5a4  cases=9
 @exercises configManager (h.cm), commandManager (h.cmgr), midiManager (h.mm), trackerManager (h.tm)
 @surface   cm:setContext, cmgr:push, cmgr:invoke, cm:getAt, mm:subscribe, mm:notes, tm:assignEvent, tm:byUuid, tm:flush
 @harness   mk, reaper:addItem, reaper:seedMidi
@@ -8,122 +8,122 @@
   render / handleInput are stubs wired in step 3 and verified in REAPER, not here.
 
 # Helpers
-  @fn resetArrange()  @ 45-66
-  @fn newTrackerPage(cm, ds, cmgr, chrome, gui)  @ 78-85
+  @fn resetArrange()  @ 44-65
+  @fn newTrackerPage(cm, ds, cmgr, chrome, gui)  @ 77-84
 
 # Cases
-  @case 'bind(take) drives cm:setContext via the page's own tm:bindTake'  [harness]  @ 89-97
-  @case 'unbind() drives cm:setContext(nil) via the page's own tm:bindTake'  [harness]  @ 100-109
-  @case 'focusState before any render returns both bits false'  [harness]  @ 112-119
-  @case 'bindFromSelection binds tm to the resolved selection take, drops when the track has no slots'  [harness]  @ 125-138
-  @case 'newTakeBelow + duplicateUnpooledBelow mint a parked slot on scratch and select it'  [harness]  @ 142-163
-  @case 'prev/next track + take drive the tv selection, not the arrange cursor'  [harness]  @ 167-190
-  @case 'empty grid shows the single no-takes message'  [harness]  @ 196-210
-  @case 'an owned tm flush resyncs the watcher baseline; only a foreign write trips the reload'  [harness]  @ 217-249
-  @case 'bindFromSelection re-keys cm on return from dormancy even when the take is unchanged'  [harness]  @ 253-273
+  @case 'bind(take) drives cm:setContext via the page's own tm:bindTake'  [harness]  @ 88-96
+  @case 'unbind() drives cm:setContext(nil) via the page's own tm:bindTake'  [harness]  @ 99-108
+  @case 'focusState before any render returns both bits false'  [harness]  @ 111-118
+  @case 'bindFromSelection binds tm to the resolved selection take, drops when the track has no slots'  [harness]  @ 124-137
+  @case 'newTakeBelow + duplicateUnpooledBelow mint a parked slot on scratch and select it'  [harness]  @ 141-162
+  @case 'prev/next track + take drive the tv selection, not the arrange cursor'  [harness]  @ 166-189
+  @case 'empty grid shows the single no-takes message'  [harness]  @ 195-209
+  @case 'an owned tm flush resyncs the watcher baseline; only a foreign write trips the reload'  [harness]  @ 216-248
+  @case 'bindFromSelection re-keys cm on return from dormancy even when the take is unchanged'  [harness]  @ 252-272
 
 # Uses (outbound edges)
-  @use call cm:setContext  @ 100
-  @use call cmgr:push  @ 151,180
-  @use call cmgr:invoke  @ 153,159,182,184,186,188
-  @use call cm:getAt  @ 157,161,183,185,187,189
-  @use call mm:subscribe  @ 233
-  @use call mm:notes  @ 238
-  @use call tm:assignEvent  @ 239
-  @use call tm:byUuid  @ 239
-  @use call tm:flush  @ 240
+  @use call cm:setContext  @ 99
+  @use call cmgr:push  @ 150,179
+  @use call cmgr:invoke  @ 152,158,181,183,185,187
+  @use call cm:getAt  @ 156,160,182,184,186,188
+  @use call mm:subscribe  @ 232
+  @use call mm:notes  @ 237
+  @use call tm:assignEvent  @ 238
+  @use call tm:byUuid  @ 238
+  @use call tm:flush  @ 239
 
 # Fields (r read / w write incl. constructor keys)
-  @field w ImGui_GetBuiltinPath  @ 24
-  @field w Mod_None  @ 11
-  @field w PopFont  @ 12
-  @field w PopStyleColor  @ 13
-  @field w PushFont  @ 12
-  @field w PushStyleColor  @ 13
-  @field r ShowConsoleMsg  @ 265
-  @field w ShowConsoleMsg  @ 266,270
-  @field w Text  @ 204,209
-  @field w __index  @ 14
-  @field r acceptCmds  @ 118
-  @field w beats  @ 63
-  @field r calls  @ 63,155,156,160
-  @field w calls  @ 46
-  @field w chan  @ 224,246
-  @field w chrome  @ 81,83
-  @field w cm  @ 83
-  @field w cmgr  @ 81,83
-  @field w colour  @ 200
-  @field r ctx  @ 81
-  @field w ctx  @ 81
-  @field w currentTrackIdx  @ 51
-  @field w ds  @ 83
-  @field w endppq  @ 224,246
-  @field w facade  @ 84
-  @field r focusName  @ 162
-  @field w fontSize  @ 201
-  @field w get  @ 71
-  @field w gui  @ 83
-  @field r guid  @ 53
-  @field w guid  @ 47,173,174
-  @field w help  @ 84
-  @field r idx  @ 53
-  @field w idx  @ 47,48,173,174,177,178
-  @field w isMidi  @ 129,146,221,257
-  @field w isOpen  @ 37
-  @field w isParkedTake  @ 60
-  @field w keyForSlot  @ 58
-  @field w kind  @ 48,177,178
-  @field r last  @ 154,162
-  @field w last  @ 32,33,34,35,39
-  @field w len  @ 130,147,222,258
-  @field r loaded  @ 22
-  @field w midiSlots  @ 56
-  @field r mint  @ 155,156,160
-  @field w mint  @ 63
-  @field w mintParkedTake  @ 62
-  @field r mm  @ 233,238
-  @field w modalHost  @ 84
-  @field r name  @ 55,155
-  @field w name  @ 47,48,63,89,100,112,125,142,167,173,174,196
-  @field w name  @ 217,253
-  @field w nextFreeSlot  @ 59
-  @field w notes  @ 224,246
-  @field w open  @ 33
-  @field w openConfirm  @ 35
-  @field w openPrompt  @ 34
-  @field w ownerTrack  @ 61
-  @field w pitch  @ 224,239,246
-  @field w poolGuid  @ 130,147,222,258
-  @field w pos  @ 130,147,222,258
-  @field w ppq  @ 224,246
-  @field r preload  @ 16
-  @field w publish  @ 69
-  @field r publishDebug  @ 226
-  @field w publishDebug  @ 70,227,229
-  @field r reaper  @ 24,265,266,270
-  @field w registerKind  @ 36
-  @field w reset  @ 39
-  @field w run  @ 90,101,113,126,143,168,197,218,254
-  @field w samplerReachable  @ 67
-  @field w setContext  @ 94,105,264
-  @field r slotsByIdx  @ 56,135,202
-  @field w slotsByIdx  @ 48,176
-  @field r src  @ 156,160
-  @field w src  @ 63
-  @field r suppressKbd  @ 117
-  @field w take  @ 129,146,221,257
-  @field r takeByKey  @ 57,132,149,230,260
-  @field w takeByKey  @ 49
-  @field w takeForSlot  @ 57
-  @field r tm  @ 239,240
-  @field w trackHandle  @ 55
-  @field w trackIdx  @ 63
-  @field w trackIdxForGuid  @ 52
-  @field w tracks  @ 50
-  @field r tracksList  @ 50,53,55
-  @field w tracksList  @ 47,172
-  @field w ui  @ 201
-  @field r uuid  @ 239
-  @field w vel  @ 224,246
-  @field w wasOpenAtFrameStart  @ 38
-  @field r wholesale  @ 234
+  @field w ImGui_GetBuiltinPath  @ 23
+  @field w Mod_None  @ 10
+  @field w PopFont  @ 11
+  @field w PopStyleColor  @ 12
+  @field w PushFont  @ 11
+  @field w PushStyleColor  @ 12
+  @field r ShowConsoleMsg  @ 264
+  @field w ShowConsoleMsg  @ 265,269
+  @field w Text  @ 203,208
+  @field w __index  @ 13
+  @field r acceptCmds  @ 117
+  @field w beats  @ 62
+  @field r calls  @ 62,154,155,159
+  @field w calls  @ 45
+  @field w chan  @ 223,245
+  @field w chrome  @ 80,82
+  @field w cm  @ 82
+  @field w cmgr  @ 80,82
+  @field w colour  @ 199
+  @field r ctx  @ 80
+  @field w ctx  @ 80
+  @field w currentTrackIdx  @ 50
+  @field w ds  @ 82
+  @field w endppq  @ 223,245
+  @field w facade  @ 83
+  @field r focusName  @ 161
+  @field w fontSize  @ 200
+  @field w get  @ 70
+  @field w gui  @ 82
+  @field r guid  @ 52
+  @field w guid  @ 46,172,173
+  @field w help  @ 83
+  @field r idx  @ 52
+  @field w idx  @ 46,47,172,173,176,177
+  @field w isMidi  @ 128,145,220,256
+  @field w isOpen  @ 36
+  @field w isParkedTake  @ 59
+  @field w keyForSlot  @ 57
+  @field w kind  @ 47,176,177
+  @field r last  @ 153,161
+  @field w last  @ 31,32,33,34,38
+  @field w len  @ 129,146,221,257
+  @field r loaded  @ 21
+  @field w midiSlots  @ 55
+  @field r mint  @ 154,155,159
+  @field w mint  @ 62
+  @field w mintParkedTake  @ 61
+  @field r mm  @ 232,237
+  @field w modalHost  @ 83
+  @field r name  @ 54,154
+  @field w name  @ 46,47,62,88,99,111,124,141,166,172,173,195
+  @field w name  @ 216,252
+  @field w nextFreeSlot  @ 58
+  @field w notes  @ 223,245
+  @field w open  @ 32
+  @field w openConfirm  @ 34
+  @field w openPrompt  @ 33
+  @field w ownerTrack  @ 60
+  @field w pitch  @ 223,238,245
+  @field w poolGuid  @ 129,146,221,257
+  @field w pos  @ 129,146,221,257
+  @field w ppq  @ 223,245
+  @field r preload  @ 15
+  @field w publish  @ 68
+  @field r publishDebug  @ 225
+  @field w publishDebug  @ 69,226,228
+  @field r reaper  @ 23,264,265,269
+  @field w registerKind  @ 35
+  @field w reset  @ 38
+  @field w run  @ 89,100,112,125,142,167,196,217,253
+  @field w samplerReachable  @ 66
+  @field w setContext  @ 93,104,263
+  @field r slotsByIdx  @ 55,134,201
+  @field w slotsByIdx  @ 47,175
+  @field r src  @ 155,159
+  @field w src  @ 62
+  @field r suppressKbd  @ 116
+  @field w take  @ 128,145,220,256
+  @field r takeByKey  @ 56,131,148,229,259
+  @field w takeByKey  @ 48
+  @field w takeForSlot  @ 56
+  @field r tm  @ 238,239
+  @field w trackHandle  @ 54
+  @field w trackIdx  @ 62
+  @field w trackIdxForGuid  @ 51
+  @field w tracks  @ 49
+  @field r tracksList  @ 49,52,54
+  @field w tracksList  @ 46,171
+  @field w ui  @ 200
+  @field r uuid  @ 238
+  @field w vel  @ 223,245
+  @field w wasOpenAtFrameStart  @ 37
+  @field r wholesale  @ 233

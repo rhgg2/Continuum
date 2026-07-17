@@ -175,7 +175,7 @@ return {
         sidecars = { { ppq = 100, uuid = 42, evType = 'cc', chan = 1, cc = 7, val = 64,
                        metadata = { gone = 1 } } },
       })
-      local mm, captured = loadWithCapture(take)
+      local _, captured = loadWithCapture(take)
       t.eq(#captured.ccsReconciled, 1)
       t.eq(captured.ccsReconciled[1].kind, 'orphaned')
       t.eq(captured.ccsReconciled[1].lastppq, 100)

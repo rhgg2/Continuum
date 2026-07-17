@@ -1,4 +1,4 @@
-@spec slot_store_spec  src=tests/specs/slot_store_spec.lua  loc=702  sha=93c0f56  cases=31
+@spec slot_store_spec  src=tests/specs/slot_store_spec.lua  loc=701  sha=93c0f56  cases=31
 @exercises configManager (h.cm), dataStore (h.ds), pextStore (ps2)
 @surface   cm:setTrack, ds:assign, ds:get, ps2:setTake, ds:getAt, cm:set, cm:get
 @harness   mk, reaper:setTrackFX, reaper:setProjectTracks, reaper:setFxGuid, reaper.gmem_read, reaper.gmem_write, reaper.GetSetMediaTrackInfo_String, reaper:clearGmem, reaper:setProjectPath, r._state.calls
@@ -8,122 +8,122 @@
   ds is real; fileOps is a call-recording stub; gmem via fakeReaper; tracks are opaque tokens.
 
 # Helpers
-  @fn newSampleManager(fileOps, cm, ds)  @ 8-10
-  @fn mkOps()  @ 20-32
-  @fn bindSamplerTrack(h, track, guidOverride)  @ 38-43
+  @fn newSampleManager(fileOps, cm, ds)  @ 7-9
+  @fn mkOps()  @ 19-31
+  @fn bindSamplerTrack(h, track, guidOverride)  @ 37-42
       -- Plant a sampler FX on track, register it with the project, and bind cm
       -- to the same track so cm-side reads/writes match what sm:tick will see.
       -- Default GUID per-track is supplied by fakeReaper; pass guidOverride to
       -- control it.
-  @fn gmemSpan(h, base, len)  @ 48-56
+  @fn gmemSpan(h, base, len)  @ 47-55
       -- Read N bytes from gmem starting at base, dropping at 0 or N exhaust.
       -- The mailbox packs path then name with no separator; gmemString would
       -- run past path into name, so length-bounded reads are mandatory.
-  @fn readMailbox(h, instanceId)  @ 59-75
+  @fn readMailbox(h, instanceId)  @ 58-74
       -- Read the bundled mailbox header for instance_id at SLOT_BASE.
-  @fn ackMailbox(h, instanceId)  @ 79-82
+  @fn ackMailbox(h, instanceId)  @ 78-81
       -- JSFX echoes [0] into [1] after consuming. Tests fake that ack so the
       -- channel-clear gate lets the next sm:tick drain another queued slot.
-  @fn plantBootToken(h, instanceId, token)  @ 85-87
+  @fn plantBootToken(h, instanceId, token)  @ 84-86
       -- Seed a nonzero boot-token so the first sm:tick triggers rehydrate.
 
 # Cases
-  @case 'reads deep-clone out; a mutated slotEntries read does not pollute ds'  [harness]  @ 91-98
-  @case 'slotEntries round-trips through track ext-state'  [harness]  @ 101-108
-  @case 'ds:getAt reads a track scope without changing context'  [harness]  @ 111-128
-  @case 'getInstanceId assigns next-free, persists P_EXT, pushes slider'  [harness]  @ 131-148
-  @case 'getInstanceId reads existing P_EXT without reassigning'  [harness]  @ 151-158
-  @case 'getInstanceId skips taken ids when assigning a new track'  [harness]  @ 161-170
-  @case 'isLive reflects sampler FX presence'  [harness]  @ 173-183
-  @case 'watchPath sets the prefix on reopen even when the breadcrumb already matches'  [harness]  @ 186-204
-  @case 'assign copies, writes cm rel path, queues abs in mailbox after tick'  [harness]  @ 207-243
-  @case 'assign returns false on copy failure, leaves cm and mailbox untouched'  [harness]  @ 246-260
-  @case 'assign preserves other slot fields when overwriting path'  [harness]  @ 263-276
-  @case 'assign clears start/end so the new sample plays full by default'  [harness]  @ 279-295
-  @case 'stageInto copies + queues mailbox, returns rel, leaves cm alone'  [harness]  @ 298-320
-  @case 'stageInto returns nil on copy failure, leaves mailbox quiet'  [harness]  @ 323-335
-  @case 'clearSlot zeros cm entry and queues op=1 in mailbox'  [harness]  @ 338-354
-  @case 'previewSlot stamps target_id alongside slot and bounds'  [harness]  @ 357-368
-  @case 'setTrim mirrors start/end onto cm and queues a mailbox update'  [harness]  @ 371-393
-  @case 'setName writes name onto cm and queues a name-only mailbox update'  [harness]  @ 396-416
-  @case 'tick rehydrates a track when boot-token first appears'  [harness]  @ 419-448
-  @case 'tick rehydrates a non-active track via ds:getAt'  [harness]  @ 451-474
-  @case 'tick refires rehydrate when boot-token changes'  [harness]  @ 477-496
-  @case 'tick resets per-track state and refires rehydrate on FX-GUID change'  [harness]  @ 499-521
-  @case 'syncSlot pushes cm truth back through the mailbox'  [harness]  @ 524-543
-  @case 'syncSlot of an empty cm slot queues a clear'  [harness]  @ 546-559
-  @case 'tick drains at most one slot per call'  [harness]  @ 562-582
-  @case 'tick blocks a drain until the previous write is acked'  [harness]  @ 585-603
-  @case 'setPrefix updates abs composition for subsequent pushes'  [harness]  @ 606-623
-  @case 'migrate moves bytes when project path changes'  [harness]  @ 626-644
-  @case 'migrate is a no-op when paths match or oldPath is nil'  [harness]  @ 647-657
-  @case 'migrate walks every sampler track, not just the bound one'  [harness]  @ 660-678
-  @case 'watchPath sets prefix, writes breadcrumb, fires migrate on change'  [harness]  @ 681-700
+  @case 'reads deep-clone out; a mutated slotEntries read does not pollute ds'  [harness]  @ 90-97
+  @case 'slotEntries round-trips through track ext-state'  [harness]  @ 100-107
+  @case 'ds:getAt reads a track scope without changing context'  [harness]  @ 110-127
+  @case 'getInstanceId assigns next-free, persists P_EXT, pushes slider'  [harness]  @ 130-147
+  @case 'getInstanceId reads existing P_EXT without reassigning'  [harness]  @ 150-157
+  @case 'getInstanceId skips taken ids when assigning a new track'  [harness]  @ 160-169
+  @case 'isLive reflects sampler FX presence'  [harness]  @ 172-182
+  @case 'watchPath sets the prefix on reopen even when the breadcrumb already matches'  [harness]  @ 185-203
+  @case 'assign copies, writes cm rel path, queues abs in mailbox after tick'  [harness]  @ 206-242
+  @case 'assign returns false on copy failure, leaves cm and mailbox untouched'  [harness]  @ 245-259
+  @case 'assign preserves other slot fields when overwriting path'  [harness]  @ 262-275
+  @case 'assign clears start/end so the new sample plays full by default'  [harness]  @ 278-294
+  @case 'stageInto copies + queues mailbox, returns rel, leaves cm alone'  [harness]  @ 297-319
+  @case 'stageInto returns nil on copy failure, leaves mailbox quiet'  [harness]  @ 322-334
+  @case 'clearSlot zeros cm entry and queues op=1 in mailbox'  [harness]  @ 337-353
+  @case 'previewSlot stamps target_id alongside slot and bounds'  [harness]  @ 356-367
+  @case 'setTrim mirrors start/end onto cm and queues a mailbox update'  [harness]  @ 370-392
+  @case 'setName writes name onto cm and queues a name-only mailbox update'  [harness]  @ 395-415
+  @case 'tick rehydrates a track when boot-token first appears'  [harness]  @ 418-447
+  @case 'tick rehydrates a non-active track via ds:getAt'  [harness]  @ 450-473
+  @case 'tick refires rehydrate when boot-token changes'  [harness]  @ 476-495
+  @case 'tick resets per-track state and refires rehydrate on FX-GUID change'  [harness]  @ 498-520
+  @case 'syncSlot pushes cm truth back through the mailbox'  [harness]  @ 523-542
+  @case 'syncSlot of an empty cm slot queues a clear'  [harness]  @ 545-558
+  @case 'tick drains at most one slot per call'  [harness]  @ 561-581
+  @case 'tick blocks a drain until the previous write is acked'  [harness]  @ 584-602
+  @case 'setPrefix updates abs composition for subsequent pushes'  [harness]  @ 605-622
+  @case 'migrate moves bytes when project path changes'  [harness]  @ 625-643
+  @case 'migrate is a no-op when paths match or oldPath is nil'  [harness]  @ 646-656
+  @case 'migrate walks every sampler track, not just the bound one'  [harness]  @ 659-677
+  @case 'watchPath sets prefix, writes breadcrumb, fires migrate on change'  [harness]  @ 680-699
 
 # Uses (outbound edges)
-  @use call cm:setTrack  @ 42,117,119,457,459,666,668
-  @use call ds:assign  @ 94,104,118,120,267,283,342,375,400,423,458,481,503,516,528,630,651,667,669,685
-  @use call ds:get  @ 95,97,126,227,257,273,291,312,348,381,406,642
-  @use call ps2:setTake  @ 105
-  @use call ds2:get  @ 107
-  @use call ds:getAt  @ 122,123
-  @use call cm:set  @ 194
-  @use call cm:get  @ 691,696
+  @use call cm:setTrack  @ 41,116,118,456,458,665,667
+  @use call ds:assign  @ 93,103,117,119,266,282,341,374,399,422,457,480,502,515,527,629,650,666,668,684
+  @use call ds:get  @ 94,96,125,226,256,272,290,311,347,380,405,641
+  @use call ps2:setTake  @ 104
+  @use call ds2:get  @ 106
+  @use call ds:getAt  @ 121,122
+  @use call cm:set  @ 193
+  @use call cm:get  @ 690,695
 
 # Fields (r read / w write incl. constructor keys)
-  @field r _state  @ 142
-  @field r calls  @ 142
-  @field w cm  @ 9
-  @field r copies  @ 26,222,223,224,225,311
-  @field w copies  @ 22
-  @field w copy  @ 26
-  @field r copyResult  @ 26
-  @field w copyResult  @ 23,252,329
-  @field w ds  @ 9
-  @field r endF  @ 239,391,541
-  @field w endF  @ 69
-  @field w exists  @ 29
-  @field w fileOps  @ 9
-  @field r fn  @ 143
-  @field w hash  @ 30
-  @field w mkdir  @ 28
-  @field r mkdirs  @ 28,220,221
-  @field w mkdirs  @ 22
-  @field w move  @ 27
-  @field r moveResult  @ 27
-  @field w moveResult  @ 24
-  @field r moves  @ 27,637,639,656,673,675,692,697,698,699
-  @field w moves  @ 22
-  @field r name  @ 231,242,407,415
-  @field w name  @ 73,91,101,111,131,151,161,173,186,207,246,263
-  @field w name  @ 279,298,323,338,342,357,371,396,419,424,425,451
-  @field w name  @ 458,477,499,524,529,546,562,585,606,626,647,660
-  @field w name  @ 681
-  @field r nameLen  @ 414
-  @field w nameLen  @ 71
-  @field r op  @ 237,353,539,558
-  @field w op  @ 67
-  @field r paramIdx  @ 146
-  @field r path  @ 97,107,124,125,126,202,203,229,230,240,241,275
-  @field r path  @ 318,384,408,436,443,473,510,519,542,616,622,642
-  @field w path  @ 72,94,96,104,118,120,268,284,342,375,400,424
-  @field w path  @ 425,458,481,503,516,529,631,632,651,667,669,685
-  @field r pathLen  @ 392,413
-  @field w pathLen  @ 70
-  @field w ps  @ 106
-  @field w run  @ 92,102,112,132,152,162,174,187,208,247,264,280
-  @field w run  @ 299,324,339,358,372,397,420,452,478,500,525,547
-  @field w run  @ 563,586,607,627,648,661,682
-  @field r seq  @ 235,259,316,334,351,388,412,434,441,447,471,488
-  @field r seq  @ 491,495,574,576,578,597,599,602
-  @field w seq  @ 64
-  @field w seqAck  @ 65
-  @field r shStart  @ 274,294
-  @field w shStart  @ 268,286
-  @field r slot  @ 236,317,352,389,435,442,472,538,557
-  @field w slot  @ 66
-  @field r start  @ 292,382
-  @field w start  @ 285,529
-  @field r startF  @ 238,390,540
-  @field w startF  @ 68
-  @field r value  @ 147
+  @field r _state  @ 141
+  @field r calls  @ 141
+  @field w cm  @ 8
+  @field r copies  @ 25,221,222,223,224,310
+  @field w copies  @ 21
+  @field w copy  @ 25
+  @field r copyResult  @ 25
+  @field w copyResult  @ 22,251,328
+  @field w ds  @ 8
+  @field r endF  @ 238,390,540
+  @field w endF  @ 68
+  @field w exists  @ 28
+  @field w fileOps  @ 8
+  @field r fn  @ 142
+  @field w hash  @ 29
+  @field w mkdir  @ 27
+  @field r mkdirs  @ 27,219,220
+  @field w mkdirs  @ 21
+  @field w move  @ 26
+  @field r moveResult  @ 26
+  @field w moveResult  @ 23
+  @field r moves  @ 26,636,638,655,672,674,691,696,697,698
+  @field w moves  @ 21
+  @field r name  @ 230,241,406,414
+  @field w name  @ 72,90,100,110,130,150,160,172,185,206,245,262
+  @field w name  @ 278,297,322,337,341,356,370,395,418,423,424,450
+  @field w name  @ 457,476,498,523,528,545,561,584,605,625,646,659
+  @field w name  @ 680
+  @field r nameLen  @ 413
+  @field w nameLen  @ 70
+  @field r op  @ 236,352,538,557
+  @field w op  @ 66
+  @field r paramIdx  @ 145
+  @field r path  @ 96,106,123,124,125,201,202,228,229,239,240,274
+  @field r path  @ 317,383,407,435,442,472,509,518,541,615,621,641
+  @field w path  @ 71,93,95,103,117,119,267,283,341,374,399,423
+  @field w path  @ 424,457,480,502,515,528,630,631,650,666,668,684
+  @field r pathLen  @ 391,412
+  @field w pathLen  @ 69
+  @field w ps  @ 105
+  @field w run  @ 91,101,111,131,151,161,173,186,207,246,263,279
+  @field w run  @ 298,323,338,357,371,396,419,451,477,499,524,546
+  @field w run  @ 562,585,606,626,647,660,681
+  @field r seq  @ 234,258,315,333,350,387,411,433,440,446,470,487
+  @field r seq  @ 490,494,573,575,577,596,598,601
+  @field w seq  @ 63
+  @field w seqAck  @ 64
+  @field r shStart  @ 273,293
+  @field w shStart  @ 267,285
+  @field r slot  @ 235,316,351,388,434,441,471,537,556
+  @field w slot  @ 65
+  @field r start  @ 291,381
+  @field w start  @ 284,528
+  @field r startF  @ 237,389,539
+  @field w startF  @ 67
+  @field r value  @ 146

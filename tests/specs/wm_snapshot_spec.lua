@@ -60,7 +60,7 @@ return {
     run = function(harness)
       local h, wm = mkWm(harness)
       wm:load()
-      local track = seedSourceTrack(h, wm, 'guid-A')
+      seedSourceTrack(h, wm, 'guid-A')
       local snap  = wm:snapshot()
       t.truthy(snap['guid-A'],            'entry under track-guid trackKey')
       t.eq(snap['guid-A'].trackKind, 'sourceTrack')

@@ -151,9 +151,9 @@ return {
       ps:watch({ { scope = 'take', slot = SLOT } }, function() fired = true end)
 
       local realValidate = r.ValidatePtr2
-      r.ValidatePtr2 = function(_proj, ptr, ctype)
+      r.ValidatePtr2 = function(proj, ptr, ctype)
         if ctype == 'MediaItem_Take*' and ptr == TAKE then return false end
-        return realValidate(_proj, ptr, ctype)
+        return realValidate(proj, ptr, ctype)
       end
 
       bump(r)

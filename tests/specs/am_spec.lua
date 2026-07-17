@@ -792,7 +792,7 @@ return {
   {
     name = 'setEditCursorQN moves the REAPER edit cursor',
     run = function(harness)
-      local h, am = mkAm(harness)
+      local _, am = mkAm(harness)
       am:setEditCursorQN(8)
       t.eq(am:editCursorQN(), 8, 'edit cursor follows the write')
     end,

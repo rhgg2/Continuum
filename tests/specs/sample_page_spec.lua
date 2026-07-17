@@ -5,7 +5,6 @@
 -- before the first require so the module loads in the pure-Lua harness.
 
 local t = require('support')
-local fs = require('fs')
 
 local n = 0
 local fakeImGui = setmetatable({ Mod_None = 0 }, {
@@ -33,7 +32,7 @@ return {
       local h  = harness.mk()
       local sp = newSamplePage(h.cm, h.cmgr, nil, {})
       local got = 'sentinel'
-      h.cm.setTrack = function(_, t) got = t end
+      h.cm.setTrack = function(_, track) got = track end
       sp:setTrack('trackZ')
       t.eq(got, 'trackZ', "page forwards the track to cm via sv:setTrack")
     end,

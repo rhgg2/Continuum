@@ -1,4 +1,4 @@
-@spec wm_undo_spec  src=tests/specs/wm_undo_spec.lua  loc=96  sha=e2be081  cases=3
+@spec wm_undo_spec  src=tests/specs/wm_undo_spec.lua  loc=92  sha=e2be081  cases=3
 @exercises wiringManager (wm)
 @surface   wm:load, wm:instantiateFxOnScratch, wm:enableLive, wm:mutate, wm:snapshot, wm:subscribe, wm:syncExternal, wm:graph
 @harness   mk, r._state.projectTracks, r._state.trackGuids, r._state.projStateCount
@@ -13,59 +13,58 @@
   @fn mintFx(wm, ident, opts)  @ 26-31
       -- Mint an fx on scratch (as wm:addFxNode does) so the node enters the graph with a live
       -- guid; reconcile then MOVES it onto its track. Called inside the mutator.
-  @fn audioEdge(from, to)  @ 33-35
 
 # Cases
-  @case 'addressing: each newTrack carries its trackKey on its own meta (recovered by snapshot)'  [harness]  @ 39-59
-  @case 'syncExternal: project state moved under us → reread + fire load'  [harness]  @ 62-78
-  @case 'syncExternal: no-op when the state count has not moved (our writes are baselined)'  [harness]  @ 81-94
+  @case 'addressing: each newTrack carries its trackKey on its own meta (recovered by snapshot)'  [harness]  @ 35-55
+  @case 'syncExternal: project state moved under us → reread + fire load'  [harness]  @ 58-74
+  @case 'syncExternal: no-op when the state count has not moved (our writes are baselined)'  [harness]  @ 77-90
 
 # Uses (outbound edges)
   @use call wm:load  @ 8
   @use call wm:instantiateFxOnScratch  @ 28
-  @use call wm:enableLive  @ 44,66,85
-  @use call wm:mutate  @ 45,67,86
-  @use call wm:snapshot  @ 55
-  @use call wm:subscribe  @ 70,88
-  @use call wm:syncExternal  @ 75,91,92
-  @use call wm:graph  @ 77
+  @use call wm:enableLive  @ 40,62,81
+  @use call wm:mutate  @ 41,63,82
+  @use call wm:snapshot  @ 51
+  @use call wm:subscribe  @ 66,84
+  @use call wm:syncExternal  @ 71,87,88
+  @use call wm:graph  @ 73
 
 # Fields (r read / w write incl. constructor keys)
   @field w __label  @ 13
-  @field r _state  @ 14,15,74
+  @field r _state  @ 14,15,70
   @field w audio  @ 21,30
   @field w cm  @ 7
   @field w ds  @ 6
-  @field r edges  @ 49,50
-  @field w f  @ 48
-  @field w from  @ 34,49,50
+  @field r edges  @ 45,46
+  @field w f  @ 44
+  @field w from  @ 45,46
   @field r fxId  @ 29
   @field w fxId  @ 29
   @field w fxIdent  @ 29
   @field r ins  @ 30
-  @field w ins  @ 21,30,48
-  @field r kind  @ 71,89
+  @field w ins  @ 21,30,44
+  @field r kind  @ 67,85
   @field w kind  @ 20,29
   @field w midi  @ 21,30
-  @field w name  @ 39,62,81
-  @field r nodes  @ 46,47,48,67,77,86
+  @field w name  @ 35,58,77
+  @field r nodes  @ 42,43,44,63,73,82
   @field r outs  @ 30
   @field w outs  @ 21,30
   @field w ports  @ 21,30
   @field w pos  @ 20,29
-  @field r projStateCount  @ 74
-  @field w projStateCount  @ 74
+  @field r projStateCount  @ 70
+  @field w projStateCount  @ 70
   @field r projectTracks  @ 14
   @field w rm  @ 7
-  @field w run  @ 40,63,82
-  @field w s  @ 67,86
-  @field w sA  @ 46
-  @field w sB  @ 47
-  @field w to  @ 34,49,50
-  @field w toPort  @ 49,50
+  @field w run  @ 36,59,78
+  @field w s  @ 63,82
+  @field w sA  @ 42
+  @field w sB  @ 43
+  @field w to  @ 45,46
+  @field w toPort  @ 45,46
   @field r trackGuids  @ 15
   @field w trackId  @ 20
-  @field r trackKind  @ 56
-  @field w type  @ 34,49,50
+  @field r trackKind  @ 52
+  @field w type  @ 45,46
   @field w x  @ 20,29
   @field w y  @ 20,29

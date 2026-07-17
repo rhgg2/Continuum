@@ -111,9 +111,8 @@ return {
       local h = harness.mk{ seed = { length = 1500, notes = {} } }
       local gm = util.instantiate('groupManager', { tm = h.tm, ds = h.ds })
 
-      local rect = { ppq = 0, dur = 960, chanLo = 1,
-                     streams = { [0] = { ['note:1'] = true } } }
-      gm:stamp({}, rect, { ppq = 960, chan = 1 })   -- group + sibling
+      local anchorRect = rect(0, 1)
+      gm:stamp({}, anchorRect, { ppq = 960, chan = 1 })   -- group + sibling
       h.tm:flush()
 
       -- Type an OPEN note into instance 1 via gm:addEvent (placeNewNote semantics).

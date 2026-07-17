@@ -122,7 +122,7 @@ return {
   {
     name = 'a checkout edit writes through the commit callback, stripped to the whitelist',
     run = function(harness)
-      local h, pe, get = withEditor(harness, notesBody())
+      local _, pe, get = withEditor(harness, notesBody())
       pressDelete(pe)
 
       local body = get()
@@ -140,7 +140,7 @@ return {
   {
     name = 'readback clips an OPEN note to its successor onset, not the loop length',
     run = function(harness)
-      local h, pe, get = withEditor(harness, openNotesBody())
+      local _, pe, get = withEditor(harness, openNotesBody())
       -- Ctrl+= nudges the row-0 note's pitch: keeps both notes (and the OPEN tail) but fires a write-through.
       setKeys({ fakeImGui.Key_Equal }, fakeImGui.Mod_Ctrl)
       pe:handleInput(function() end)
@@ -155,7 +155,7 @@ return {
   {
     name = 'a curve edit persists as normalised bipolar points, not raw thousandths',
     run = function(harness)
-      local h, pe, get = withEditor(harness, curveBody())
+      local _, pe, get = withEditor(harness, curveBody())
       pressDelete(pe)
 
       local pts = get().points
@@ -174,7 +174,7 @@ return {
   {
     name = 'a cc-domain curve persists its points verbatim, echoing the domain',
     run = function(harness)
-      local h, pe, get = withEditor(harness, ccCurveBody())
+      local _, pe, get = withEditor(harness, ccCurveBody())
       pressDelete(pe)
 
       local body = get()
@@ -194,7 +194,7 @@ return {
   {
     name = 'Enter commits: the edit stays in the store',
     run = function(harness)
-      local h, pe, get = withEditor(harness, notesBody())
+      local _, pe, get = withEditor(harness, notesBody())
       pressDelete(pe)
       setKeys({ fakeImGui.Key_Enter }, fakeImGui.Mod_None)
       pe:handleInput(function() end)
@@ -205,7 +205,7 @@ return {
   {
     name = 'Esc cancels: the store is restored to the open snapshot',
     run = function(harness)
-      local h, pe, get = withEditor(harness, notesBody())
+      local _, pe, get = withEditor(harness, notesBody())
       pressDelete(pe)
       t.eq(#get().specs, 1, 'write-through recorded the edit')
 
@@ -218,7 +218,7 @@ return {
   {
     name = 'close does not clobber the committed body via the unbind rebuild',
     run = function(harness)
-      local h, pe, get = withEditor(harness, notesBody())
+      local _, pe, get = withEditor(harness, notesBody())
       pressDelete(pe)
       pe:close()
 

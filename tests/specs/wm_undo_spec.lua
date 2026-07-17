@@ -30,10 +30,6 @@ local function mintFx(wm, ident, opts)
            ports={audio={ins=opts.ins or 1, outs=opts.outs or 1}, midi={ins=0, outs=0}} }
 end
 
-local function audioEdge(from, to)
-  return { type='audio', from=from, to=to }
-end
-
 return {
   {
     name = 'addressing: each newTrack carries its trackKey on its own meta (recovered by snapshot)',

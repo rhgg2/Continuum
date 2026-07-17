@@ -90,7 +90,7 @@ return {
   {
     name = 'mirrorMark then nav then mirrorPaste mirrors (does NOT fall back)',
     run = function()
-      local gm, cmgr, staged, fell = mk()
+      local _, cmgr, staged, fell = mk()
       cmgr:invoke('mirrorMark')              -- mark: active + source snapshot
       cmgr:invoke('cursorDown')              -- nav keeps both
       cmgr:invoke('mirrorPaste')
@@ -102,7 +102,7 @@ return {
   {
     name = 'copy snapshots the source BEFORE its own selClear',
     run = function()
-      local gm, cmgr, staged, fell = mk()  -- ctl.sel = true
+      local _, cmgr, staged, fell = mk()  -- ctl.sel = true
       cmgr:invoke('copy')                    -- body selClears; hook ran first
       cmgr:invoke('mirrorPaste')
       t.eq(fell.v, false, 'copy-time snapshot survived the selClear')

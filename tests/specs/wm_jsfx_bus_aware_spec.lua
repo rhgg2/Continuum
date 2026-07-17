@@ -106,7 +106,7 @@ spl0 *= 1;
   {
     name = 'addFxNode refuses an ext_midi_bus JSFX, no REAPER state touched',
     run = function(harness)
-      local h, wm = mkWm(harness)
+      local _, wm = mkWm(harness)
       seedJsfx(wm, { ['JS:Foreign Bus'] = 'desc:Foreign\next_midi_bus = 1\n' })
       reaper:setFxIO('JS:Foreign Bus', { ins = 2, outs = 2 })
       local scratchCountBefore = reaper.TrackFX_GetCount(reaper.GetTrack(0, 0))
@@ -122,7 +122,7 @@ spl0 *= 1;
   {
     name = 'addFxNode accepts a normal JSFX and stamps busAware=false',
     run = function(harness)
-      local h, wm = mkWm(harness)
+      local _, wm = mkWm(harness)
       seedJsfx(wm, { ['JS:Plain'] = 'desc:Plain\n@sample\nspl0 *= 1;\n' })
       reaper:setFxIO('JS:Plain', { ins = 2, outs = 2 })
       local id = wm:addFxNode(0, 0, { name = 'Plain', ident = 'JS:Plain' })
@@ -133,7 +133,7 @@ spl0 *= 1;
   {
     name = 'addFxNode does not probe non-JSFX idents (no readJSFXContent call)',
     run = function(harness)
-      local h, wm = mkWm(harness)
+      local _, wm = mkWm(harness)
       local probed = false
       wm.readJSFXContent = function() probed = true; return nil end
       reaper:setFxIO('VST3:Comp', { ins = 2, outs = 2 })
@@ -146,7 +146,7 @@ spl0 *= 1;
   {
     name = 'addFxNode accepts JSFX whose desc file is missing (read returns nil)',
     run = function(harness)
-      local h, wm = mkWm(harness)
+      local _, wm = mkWm(harness)
       wm.readJSFXContent = function() return nil end
       reaper:setFxIO('JS:NoFile', { ins = 2, outs = 2 })
       local id, err = wm:addFxNode(0, 0, { name = 'NoFile', ident = 'JS:NoFile' })
@@ -176,7 +176,7 @@ spl0 *= 1;
   {
     name = 'addFxNode stamps ports.midi from the scan',
     run = function(harness)
-      local h, wm = mkWm(harness)
+      local _, wm = mkWm(harness)
       seedJsfx(wm, {
         ['JS:AudioOnly'] = 'desc:g\n@sample\nspl0 *= 1;\n',
         ['JS:MidiFx']    = 'desc:m\n@block\nwhile (midirecv(o,a,b)) ( midisend(o,a,b); );\n',
@@ -192,7 +192,7 @@ spl0 *= 1;
   {
     name = 'addFxNode: audio-only generator wires to master, no auto source',
     run = function(harness)
-      local h, wm = mkWm(harness)
+      local _, wm = mkWm(harness)
       seedJsfx(wm, { ['JS:Noise'] = 'desc:n\n@sample\nspl0 = rand(1);\n' })
       reaper:setFxIO('JS:Noise', { ins = 0, outs = 2 })
       local id = wm:addFxNode(0, 0, { name = 'Noise', ident = 'JS:Noise' })
@@ -208,7 +208,7 @@ spl0 *= 1;
   {
     name = 'addFxNode: synth generator spawns source, wires midi-in + master-out',
     run = function(harness)
-      local h, wm = mkWm(harness)
+      local _, wm = mkWm(harness)
       seedJsfx(wm, { ['JS:Synth'] = 'desc:s\n@block\nmidirecv(o,a,b);\n' })
       reaper:setFxIO('JS:Synth', { ins = 0, outs = 2 })
       local id, sourceGuid = wm:addFxNode(0, 0, { name = 'Synth', ident = 'JS:Synth' })
