@@ -4,6 +4,12 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-17** — W542 ("empty if branch") ignored repo-wide. All four hits are an enumerated case
+  whose action is deliberately nothing — `divert` in DAG's connection triage, the rewire-to-same-port
+  no-op that would otherwise burn an undo entry — and each carries a comment saying why. *Chosen over*
+  rewriting them as negated guards: the empty branch is how this code says "this case is handled, by
+  doing nothing", and a guard hides the case rather than stating it.
+
 - **2026-07-17** — Unused *arguments* stay; unused *bindings* go. `unused_args = false` (same day)
   spared prod's dispatch-table and stage signatures, where the callee cannot choose its parameter
   list — but a caller writing `local h, wm = mkWm(harness)` picks what to bind, so there is no

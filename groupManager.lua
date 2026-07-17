@@ -258,28 +258,6 @@ local function nextKey(map)
   return n + 1
 end
 
--- Locate (groupId, instId, vuid) by uuid -- the durable identity; a
--- table gm holds is valid only within one rebuild window.
-local function classify(evt)
-  local loc = evt.uuid and locByUuid[evt.uuid]
-  if not loc then return end
-  -- A link is valid only while its vuid still has a home: the shared group event, or
-  -- (a local-only add) the instance's own adds. A delete leaves a dead link -- drop it, fall through to classifyCreate.
-  local group  = groups[loc.groupId]
-  local inst   = group and group.instances[loc.instId]
-  local backed = group and (group.events[loc.vuid]
-                            or (inst and inst.adds[loc.vuid]))
-  if not backed then
-    unlink(projOf(loc.groupId, loc.instId), loc.vuid)
-    return
-  end
-  -- Keep the projection's live handle on the table the user is actually editing: covers an
-  -- edit that lands before this flush's rebuild refresh (origin-skip and 'set' ops read rec.evt).
-  local rec = projOf(loc.groupId, loc.instId)[loc.vuid]
-  if rec and rec.evt ~= evt then rec.evt = evt end
-  return loc.groupId, loc.instId, loc.vuid
-end
-
 -- Two group-frame events occupy the same region slot: same onset, same channel offset, same
 -- stream -- the identity the override-transition helpers (revive, sibling absorb) match on.
 local function sameSlot(a, b)
@@ -327,8 +305,8 @@ local function absorbSiblingOverrides(group, vuid, actingInstId, created)
   end
 end
 
--- A create with no projected ref: does it fall inside some instance's
--- region, on a stream the region already selects? inRect enforces the gate.
+-- Positional lookup: does evt fall inside some instance's region, on a
+-- stream the region already selects? inRect enforces the gate.
 local function classifyCreate(evt)
   for groupId, group in pairs(groups) do
     for instId, instance in pairs(group.instances) do
@@ -618,8 +596,8 @@ tm:subscribe('postflush', function()
   persist()
 end)
 
--- Re-anchor every projection record to the freshly rebuilt event by uuid each window: a
--- sibling's cached evt is never reclassified, so skipping this would silently no-op its later assigns/deletes.
+-- Re-anchor every projection record to the freshly rebuilt event by uuid each window: nothing else
+-- refreshes a sibling's cached evt, so skipping this would silently no-op its later assigns/deletes.
 tm:subscribe('rebuild', function(takeChanged)
   if takeChanged then return rehydrate() end
   perf.start('gmAnchor')

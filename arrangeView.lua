@@ -485,7 +485,8 @@ function av:dragCandidate(press, mouseQN, snapped)
   if press.group then return groupDragCandidate(press, mouseQN, snapped) end
   local take = press.take
   local bpr  = self:beatPerRow()
-  local startQN, lengthQN = take.startQN, take.lengthQN
+  local startQN = take.startQN
+  local lengthQN
   if press.mode == 'resizeEnd' then
     lengthQN = take.lengthQN + (mouseQN - press.qn)
     if snapped then lengthQN = roundTo(startQN + lengthQN, bpr) - startQN end

@@ -864,7 +864,8 @@ do
     -- 14-bit cc widens the scalar part to 4 hex digits (even last: 0000..7FFE).
     local val14 = { width = 4, stops = { 0, 1, 2, 3 } }
 
-    local stopPos, partAt, partStart = {}, {}, {}
+    -- Named for the col fields they become below; partAt deliberately shadows the reader fn.
+    local stopPos, partAt, partStart = {}, {}, {}   -- luacheck: ignore 431
     local x = 0
     for _, name in ipairs(parts) do
       local p = name == 'pitch' and pitch

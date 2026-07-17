@@ -190,7 +190,6 @@ local function drawFiles(folder, root)
   end
   if not selIdx and #items > 0 then
     sv:setBrowserItem(items[1].path, items[1].isFolder)
-    sel    = items[1].path
     selIdx = 1
   end
 

@@ -33,10 +33,6 @@ local tm, cm, ds, cmgr, gm, pa, facade =
 
 local function arrange() return facade.get('arrange') end
 
-local function print(...)
-  return util.print(...)
-end
-
 local function notHidden(evt) return not evt.hidden end
 
 -- Leaf-edit facade: routes an event to 'member' (gm), 'parked' (tm fx off-take), or
@@ -1968,9 +1964,7 @@ do
     if kDen == 0 then return end
     local k = kNum / kDen
     if not k or k == 1 then return end
-    local logPerRow = ctx:ppqPerRow()
-    local aRow      = ec:anchorRow() or ec:row()
-    local aLogical  = aRow * logPerRow
+    local aRow = ec:anchorRow() or ec:row()
 
     local plans = {}
     for _, g in ipairs(groups) do
@@ -3666,7 +3660,7 @@ local lastEpochSig   -- projection-epoch signature carried from the last rebuild
 
 -- The (ppq,chan)->row projection is a pure function of viewContext's constructor inputs, so a
 -- column's built cells stay valid iff these hold. see design/archive/dirty-channels.md § Phase B
-local function projectionEpoch(length, numRows, rpb, ppqPerRow, timeSigs, temperKey)
+local function projectionEpoch(length, numRows, rpb, ppqPerRow, timeSigs, temperKey)  -- luacheck: ignore 431
   local parts = { length, numRows, rpb, ppqPerRow, temperKey }
   for _, ts in ipairs(timeSigs) do
     parts[#parts + 1] = (ts.ppq or 0) .. ':' .. (ts.num or 0) .. '/' .. (ts.denom or 0)

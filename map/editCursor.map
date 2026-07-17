@@ -1,4 +1,4 @@
-@module editCursor  src=editCursor.lua  loc=888  sha=9db4384  mode=chunk  self=ec
+@module editCursor  src=editCursor.lua  loc=889  sha=d1e5be1  mode=chunk  self=ec
 @deps grid, cm, cmgr, rowPerBar, logPerRow, moveHook, groupBridge
 
 # Invariants & contracts
@@ -189,7 +189,7 @@
       -- Leave armed mode without touching the selection (Esc/Enter/note-key execute-through).
       -- regionBail (Super-G) also clears the selection.
   @api ec:registerCommands(scope)  @ 797-824
-  @api ec:decorateCol(col, pitchWidth)  @ 859-885
+  @api ec:decorateCol(col, pitchWidth)  @ 859-886
       @contract  derives col part fields from type/showDelay/trackerMode; pitch width = pitchWidth  @ 857
       @invariant  ec is the sole writer of col.{parts, stopPos, partAt, partStart, width}  @ 858
 
@@ -206,7 +206,7 @@
   @use call    groupBridge.instanceAt  @ regionArm:731 hopInstance:777
   @use call    groupBridge.paintStream  @ paintCell:717
   @use call    groupBridge.selectionAsRect  @ newFromSelection:532
-  @use call    util.add  @ blockKeys:631 partsFor:844,845,846 decorateCol:875,876,877
+  @use call    util.add  @ blockKeys:631 partsFor:844,845,846 decorateCol:876,877,878
   @use call    util.clamp  @ clampPos:55,59,60 shiftSelection:449,450,451 moveBy:582 moveByChan:599
   @use require util  @ 25
 
@@ -291,9 +291,9 @@
   @field r part2  @ region:376 setSelection:412 selectionStopSpan:429
   @field w part2  @ selStart:90 selUpdate:133 setSelection:412
   @field r partAt  @ partAt:67 firstStopForPart:76 selectionStopSpan:423,428,429
-  @field w partAt  @ decorateCol:882
+  @field w partAt  @ decorateCol:883
   @field r partStart  @ selUpdate:128
-  @field w partStart  @ decorateCol:883
+  @field w partStart  @ decorateCol:884
   @field r parts  @ moveCol:258,265
   @field w parts  @ decorateCol:861
   @field w paste  @ 749
@@ -326,8 +326,8 @@
   @field r stop  @ selUpdate:123,128 swapEnds:182
   @field w stop  @ selStart:88 cycleHBlock:145 cycleVBlock:161 moveStop:208 setSelection:413 selectSpan:464
   @field r stopPos  @ clampPos:60 moveStop:214,221 moveCol:260,264,267 moveChannel:287 selectionStopSpan:421 selectColumn:476
-  @field w stopPos  @ decorateCol:881
-  @field r stops  @ decorateCol:874
+  @field w stopPos  @ decorateCol:882
+  @field r stops  @ decorateCol:875
   @field w stops  @ 832,833,834,835,836,837 decorateCol:863,865
   @field r streams  @ moveByChan:595 blockKeys:629 laneWalkable:646
   @field w swapBlockEnds  @ 492 registerCommands:820
@@ -335,5 +335,5 @@
   @field r type  @ moveChannel:294 noteLanesIn:614 caretToBlock:661 decorateCol:860
   @field w val  @ 836
   @field w vel  @ 833
-  @field r width  @ decorateCol:879
-  @field w width  @ 832,833,834,835,836,837 decorateCol:863,865,884
+  @field r width  @ decorateCol:880
+  @field w width  @ 832,833,834,835,836,837 decorateCol:863,865,885

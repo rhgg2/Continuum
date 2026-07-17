@@ -49,26 +49,23 @@ local viewCols    = 0
 local viewRows    = 0
 local gridPainter = nil   -- cell painter, rebuilt each frame in drawTracker; hit-test reads its fromScreen so draw and hit can't drift
 
-local chanLeft, chanWidth, chanOrder, totalWidth = {}, {}, {}, 0
+local chanLeft, chanWidth, totalWidth = {}, {}, 0
 
 --contract: clears col.x on every col before assigning; off-screen cols stay nil
 local function layoutColumns(cols, scrollCol)
   for _, col in ipairs(cols) do col.x = nil end
-  local left, width, order = {}, {}, {}
+  local left, width = {}, {}
   local x = 0
   for i = scrollCol, #cols do
     local col = cols[i]
     if x + col.width > viewCols then break end
     col.x = x
     local chan = col.midiChan
-    if left[chan] == nil then
-      left[chan] = x
-      util.add(order, chan)
-    end
+    if left[chan] == nil then left[chan] = x end
     width[chan] = (x + col.width) - left[chan]
     x = x + col.width + 1
   end
-  return left, width, order, math.max(0, x - 1)
+  return left, width, math.max(0, x - 1)
 end
 
 local ctx, gridFont, uiFont = gui.ctx, gui.font, gui.uiFont
@@ -337,7 +334,7 @@ local function ensureCellSize()
   end
 end
 
---contract: must run before draws reading chanLeft/chanWidth/chanOrder/totalWidth/viewRows
+--contract: must run before draws reading chanLeft/chanWidth/totalWidth/viewRows
 --contract: calls tv:setGridSize so tv scroll math sees the live viewport
 -- RESERVE_ROWS of breathing is kept clear at the bottom for every caller; the grid fills the rest.
 local function computeLayout(budgetW, budgetH)
@@ -352,7 +349,7 @@ local function computeLayout(budgetW, budgetH)
   viewRows = math.max(1, math.floor(usableH / cellH) - HEADER - laneRows)
   tv:setGridSize(viewCols, viewRows)
 
-  chanLeft, chanWidth, chanOrder, totalWidth = layoutColumns(grid.cols, scrollCol)
+  chanLeft, chanWidth, totalWidth = layoutColumns(grid.cols, scrollCol)
 end
 
 ----- Lane strip

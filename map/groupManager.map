@@ -1,8 +1,8 @@
-@module groupManager  src=groupManager.lua  loc=879  sha=37ed80d  mode=chunk  self=gm
+@module groupManager  src=groupManager.lua  loc=857  sha=37ed80d  mode=chunk  self=gm
 @deps tm, ds
 
 # Invariants & contracts
-  @contract  rehydrate on a groups invalidate (undo rewind); own assign echoes lack it, ignored  @ 638
+  @contract  rehydrate on a groups invalidate (undo rewind); own assign echoes lack it, ignored  @ 616
 
 # Shapes
   @shape  group = { rect, events = { [vuid]=groupEvt }, nextVuid, instances = { [instId]=instance } }  @ 3
@@ -71,213 +71,209 @@
   -- Helpers
   @fn freshInstance(anchor)  @ 251-253
   @fn nextKey(map)  @ 255-259
-  @fn classify(evt)  @ 263-281
-      -- Locate (groupId, instId, vuid) by uuid -- the durable identity; a
-      -- table gm holds is valid only within one rebuild window.
-  @fn sameSlot(a, b)  @ 285-288
+  @fn sameSlot(a, b)  @ 263-266
       -- Two group-frame events occupy the same region slot: same onset, same channel offset, same
       -- stream -- the identity the override-transition helpers (revive, sibling absorb) match on.
-  @fn revivableVuid(group, instance, evt)  @ 292-298
+  @fn revivableVuid(group, instance, evt)  @ 270-276
       -- A global-mode create on a slot this instance locally deleted: revives the shadowed group
       -- event in place instead of allocating a coincident vuid -- see docs/groupManager.md § localMode.
-  @fn absorbSiblingOverrides(group, vuid, actingInstId, created)  @ 302-328
+  @fn absorbSiblingOverrides(group, vuid, actingInstId, created)  @ 280-306
       -- A global-mode create/delete flips whether a shared event exists at a slot; a sibling's
       -- own override there is re-expressed across the flip -- see docs/groupManager.md § Override transitions.
-  @fn classifyCreate(evt)  @ 332-343
-      -- A create with no projected ref: does it fall inside some instance's
-      -- region, on a stream the region already selects? inRect enforces the gate.
-  @fn rectCells(rect, anchor)  @ 348-359
+  @fn classifyCreate(evt)  @ 310-321
+      -- Positional lookup: does evt fall inside some instance's region, on a
+      -- stream the region already selects? inRect enforces the gate.
+  @fn rectCells(rect, anchor)  @ 326-337
       -- Overlapping mirror groups have no defined semantics (classifyCreate takes pairs()'s first
       -- match); regions are kept disjoint instead -- see docs/groupManager.md § Regions are disjoint.
-  @fn spansOverlap(aPpq, aDur, bPpq, bDur)  @ 361-363
-  @fn regionConflict(rect, anchor, exclude)  @ 367-386
+  @fn spansOverlap(aPpq, aDur, bPpq, bDur)  @ 339-341
+  @fn regionConflict(rect, anchor, exclude)  @ 345-364
       -- groupId of an existing group an instance of `rect` at `anchor` would collide with --
       -- shared time span AND a shared (channel, streamId) cell -- or nil.
   -- Active group (dupeClip-idiom selector; the command layer owns the
   -- clear-on-other-command lifetime, gm only the pointer)
   -- SEAM
-  @fn reproject(groupId)  @ 550-577
-  @fn localAmend(instance, vuid, group, update)  @ 582-593
+  @fn reproject(groupId)  @ 528-555
+  @fn localAmend(instance, vuid, group, update)  @ 560-571
       -- Local edit of an existing override, shared by localMode and the on-ov-in-global path;
       -- never touches group.events, so no sibling sees it -- see docs/groupManager.md § Override transitions.
 
 # Public API (gm:*)
-  @api gm:markGroup(events, rect)  @ 391-410
-      @contract  seeds a group from events+rect; anchor = region origin; nil,reason on collision.  @ 390
-  @api gm:newInstance(groupId, anchor)  @ 414-438
+  @api gm:markGroup(events, rect)  @ 369-388
+      @contract  seeds a group from events+rect; anchor = region origin; nil,reason on collision.  @ 368
+  @api gm:newInstance(groupId, anchor)  @ 392-416
       -- Caller (clipboard) has bounds-checked and cleared the target region; off-take withheld, see onTake.
-      @contract  validates projection (chan 1..16); returns instId or nil,reason on invalid/collision.  @ 413
-  @api gm:activeGroup()  @ 443
-  @api gm:clearActive()  @ 444
-  @api gm:groupRect(groupId)  @ 448-451
+      @contract  validates projection (chan 1..16); returns instId or nil,reason on invalid/collision.  @ 391
+  @api gm:activeGroup()  @ 421
+  @api gm:clearActive()  @ 422
+  @api gm:groupRect(groupId)  @ 426-429
       -- The group's projection rect, for the caller's pre-stage clear of the
       -- destination zone (gm:newInstance contract). nil if the group is gone.
-  @api gm:mark(events, rect)  @ 455-460
+  @api gm:mark(events, rect)  @ 433-438
       --          group becomes active.
-      @contract  case 1 -- seed a group from the selection, no copy. The new  @ 453
-  @api gm:stamp(events, rect, anchor)  @ 465-473
+      @contract  case 1 -- seed a group from the selection, no copy. The new  @ 431
+  @api gm:stamp(events, rect, anchor)  @ 443-451
       --          instId). No active -> case 2, seed the group AND its first copy
       --          (returns groupId, instId); the group becomes active.
-      @contract  active live -> case 3, drop one more copy at `anchor` (returns  @ 462
-  @api gm:duplicateInto(groupId, events, rect, anchor)  @ 476-484
-      @contract  explicit-group duplicate for the cascade -- see docs/groupManager.md § duplicateInto.  @ 475
-  @api gm:setLocalMode(on)  @ 486
-  @api gm:localMode()  @ 487
-  @api gm:stateOf(uuid)  @ 489-495
-  @api gm:instanceOf(evt)  @ 498
-      @contract  (evt) -> groupId, instId of the instance covering evt's cell, or nil (localMode guard)  @ 497
-  @api gm:eachInstance()  @ 502-513
+      @contract  active live -> case 3, drop one more copy at `anchor` (returns  @ 440
+  @api gm:duplicateInto(groupId, events, rect, anchor)  @ 454-462
+      @contract  explicit-group duplicate for the cascade -- see docs/groupManager.md § duplicateInto.  @ 453
+  @api gm:setLocalMode(on)  @ 464
+  @api gm:localMode()  @ 465
+  @api gm:stateOf(uuid)  @ 467-473
+  @api gm:instanceOf(evt)  @ 476
+      @contract  (evt) -> groupId, instId of the instance covering evt's cell, or nil (localMode guard)  @ 475
+  @api gm:eachInstance()  @ 480-491
       -- Read accessor for the render pass: every live instance with the group rect it projects,
       -- its anchor, and whether its group is active; rect/anchor are by reference (render reads, never mutates).
-  @api gm:deletedCells(groupId, instId)  @ 518-528
+  @api gm:deletedCells(groupId, instId)  @ 496-506
       -- Tagged with vuid so revertDelete can lift each override. A dropped group event
       -- (group is authority) leaves a moot delete -- skipped.
-      @contract  (groupId, instId) -> { { vuid, evt } }; evt = toInstance projection of an empty cell  @ 517
-  @api gm:footprintAliases(cells)  @ 533-546
+      @contract  (groupId, instId) -> { { vuid, evt } }; evt = toInstance projection of an empty cell  @ 495
+  @api gm:footprintAliases(cells)  @ 511-524
       -- Precise per-cell injectivity test for propagating block ops (decision 3): two cells
       -- on one group slot => non-injective; disjoint slots stay legal. see docs/groupManager.md § Block-shift injectivity.
-      @contract  (cells) -> bool. cells carry { ppq, chan, evType, lane?/cc? }.  @ 532
+      @contract  (cells) -> bool. cells carry { ppq, chan, evType, lane?/cc? }.  @ 510
   -- INSTANCE / GROUP LIFECYCLE
-  @api gm:deleteInstance(groupId, instId)  @ 648-668
+  @api gm:deleteInstance(groupId, instId)  @ 626-646
       -- Cascades: dropping the group's last instance also drops the group,
       -- clearing activeGroup if it pointed here (else it would dangle).
-      @contract  (groupId, instId) -> true | nil,reason. Unknown id -> nil,reason.  @ 647
-  @api gm:moveInstance(groupId, instId, anchor)  @ 673-712
+      @contract  (groupId, instId) -> true | nil,reason. Unknown id -> nil,reason.  @ 625
+  @api gm:moveInstance(groupId, instId, anchor)  @ 651-690
       -- Re-anchor directly (reproject can't see anchor-invariant moves; see docs/groupManager.md
       -- § Instance lifecycle). onTake withholds off-take members and revives on return (bottom only).
-      @contract  (groupId, instId, anchor) -> true | nil,reason. Caller cleared dest + clamped top.  @ 672
-  @api gm:addEvent(evt)  @ 717-740
+      @contract  (groupId, instId, anchor) -> true | nil,reason. Caller cleared dest + clamped top.  @ 650
+  @api gm:addEvent(evt)  @ 695-718
       -- Positional create (the add half of a facade move): classifyCreate finds the covering
       -- region; global adopts into the shared pattern (all instances gain it), localMode keeps a per-instance add.
-      @contract  (evt) -> true | nil,'not in a region'. Defers to reproject; never links clone.  @ 716
-  @api gm:deleteEvent(uuid)  @ 745-766
+      @contract  (evt) -> true | nil,'not in a region'. Defers to reproject; never links clone.  @ 694
+  @api gm:deleteEvent(uuid)  @ 723-744
       -- Delete a member: drop the shared event (synced), peel an override back to
       -- synced, or hide locally. See docs/groupManager.md § Override transitions.
-      @contract  (uuid) -> true | nil,reason  @ 744
-  @api gm:revertDelete(groupId, instId, vuid)  @ 771-778
+      @contract  (uuid) -> true | nil,reason  @ 722
+  @api gm:revertDelete(groupId, instId, vuid)  @ 749-756
       -- The group event was never removed (only shadowed), so reproject revives the synced concrete.
       -- delete-ov + delete -> revert to synced; see docs/groupManager.md.
-      @contract  (groupId, instId, vuid) -> true | nil,reason  @ 770
-  @api gm:assignEvent(uuid, update)  @ 783-817
+      @contract  (groupId, instId, vuid) -> true | nil,reason  @ 748
+  @api gm:assignEvent(uuid, update)  @ 761-795
       -- Value edit of a member (assign half of the facade): localMode or an existing override
       -- => sticky localAmend, else edit the shared pattern. Consumes tv's AUTHORED update (updToGroup).
-      @contract  (uuid, update) -> true | nil,'not a member'. Defers to reproject (pendingReproject).  @ 782
-  @api gm:resizeGroup(groupId, instId, edits)  @ 822-877
+      @contract  (uuid, update) -> true | nil,'not a member'. Defers to reproject (pendingReproject).  @ 760
+  @api gm:resizeGroup(groupId, instId, edits)  @ 800-855
       -- Resizes the SHARED rect from edge instance `instId`'s drag (Model A re-origin); a member
       -- the new rect drops leaves the group, `gained` folds in at instId's anchor -- see docs/groupManager.md § Instance lifecycle & region resize.
-      @contract  (groupId, instId, {startDelta?,endDelta?,streams?,gained?}) -> true|nil,reason.  @ 821
+      @contract  (groupId, instId, {startDelta?,endDelta?,streams?,gained?}) -> true|nil,reason.  @ 799
 
 # Uses (outbound edges)
   @use call    ds:assign  @ persist:220
   @use call    ds:get  @ 29 rehydrate:226
-  @use call    groupsCore.deriveAssign  @ absorbSiblingOverrides:314 localAmend:587
-  @use call    groupsCore.inRect  @ classifyCreate:335 resizeGroup:853
-  @use call    groupsCore.laneId  @ footprintAliases:539
-  @use call    groupsCore.project  @ rehydrate:236 newInstance:428 stateOf:493 reproject:553 moveInstance:687
-  @use call    groupsCore.reconcile  @ reproject:555
-  @use call    groupsCore.resolve  @ absorbSiblingOverrides:323
-  @use call    groupsCore.shiftStream  @ rectCells:355 regionConflict:379
-  @use call    groupsCore.streamId  @ sameSlot:287
-  @use call    perf.start  @ 625
-  @use call    perf.stop  @ 635
-  @use call    tm:addEvent  @ newInstance:432 reproject:562 moveInstance:700
-  @use call    tm:assignEvent  @ reproject:567 moveInstance:694
-  @use call    tm:byUuid  @ rehydrate:239 630
-  @use call    tm:deleteEvent  @ reproject:572 deleteInstance:655 moveInstance:698,704
+  @use call    groupsCore.deriveAssign  @ absorbSiblingOverrides:292 localAmend:565
+  @use call    groupsCore.inRect  @ classifyCreate:313 resizeGroup:831
+  @use call    groupsCore.laneId  @ footprintAliases:517
+  @use call    groupsCore.project  @ rehydrate:236 newInstance:406 stateOf:471 reproject:531 moveInstance:665
+  @use call    groupsCore.reconcile  @ reproject:533
+  @use call    groupsCore.resolve  @ absorbSiblingOverrides:301
+  @use call    groupsCore.shiftStream  @ rectCells:333 regionConflict:357
+  @use call    groupsCore.streamId  @ sameSlot:265
+  @use call    perf.start  @ 603
+  @use call    perf.stop  @ 613
+  @use call    tm:addEvent  @ newInstance:410 reproject:540 moveInstance:678
+  @use call    tm:assignEvent  @ reproject:545 moveInstance:672
+  @use call    tm:byUuid  @ rehydrate:239 608
+  @use call    tm:deleteEvent  @ reproject:550 deleteInstance:633 moveInstance:676,682
   @use call    tm:length  @ onTake:149
-  @use call    tm:requestRebuild  @ 605 deleteInstance:666 moveInstance:710 resizeGroup:875
-  @use call    util.assign  @ localAmend:591 assignEvent:796,813
-  @use call    util.clone  @ rehydrate:242 markGroup:404 newInstance:433 reproject:564,570 moveInstance:701 assignEvent:795 resizeGroup:870
+  @use call    tm:requestRebuild  @ 583 deleteInstance:644 moveInstance:688 resizeGroup:853
+  @use call    util.assign  @ localAmend:569 assignEvent:774,791
+  @use call    util.clone  @ rehydrate:242 markGroup:382 newInstance:411 reproject:542,548 moveInstance:679 assignEvent:773 resizeGroup:848
   @use require groups  @ 11
   @use require perf  @ 12
   @use require util  @ 10
-  @use sub     ds:dataChanged  @ 639
-  @use sub     tm:postflush  @ 608
-  @use sub     tm:preflush  @ 597
-  @use sub     tm:rebuild  @ 623
+  @use sub     ds:dataChanged  @ 617
+  @use sub     tm:postflush  @ 586
+  @use sub     tm:preflush  @ 575
+  @use sub     tm:rebuild  @ 601
 
 # Fields (r read / w write incl. constructor keys)
   @field r OPEN  @ toGroup:117 toInstance:136 updToGroup:162 updToInstance:186
   @field r REMOVE  @ updToGroup:163 updToInstance:182 diffGroup:202
-  @field w active  @ eachInstance:509
-  @field r adds  @ rehydrate:240 classify:271 absorbSiblingOverrides:308,317,323 localAmend:590 addEvent:733 deleteEvent:752,754,755 assignEvent:806
+  @field w active  @ eachInstance:487
+  @field r adds  @ rehydrate:240 absorbSiblingOverrides:286,295,301 localAmend:568 addEvent:711 deleteEvent:730,732,733 assignEvent:784
   @field w adds  @ freshInstance:252
-  @field r anchor  @ revivableVuid:293 classifyCreate:336,337 regionConflict:374,376,379 eachInstance:507 deletedCells:525 footprintAliases:538 reproject:560,569 localAmend:586
-  @field r anchor  @ localAmend:591 addEvent:731 assignEvent:813 resizeGroup:841,848,865
-  @field w anchor  @ freshInstance:252 eachInstance:507 moveInstance:708
-  @field r assigns  @ absorbSiblingOverrides:310,320,323,324 localAmend:585,587 deleteEvent:756,759 assignEvent:807
+  @field r anchor  @ revivableVuid:271 classifyCreate:314,315 regionConflict:352,354,357 eachInstance:485 deletedCells:503 footprintAliases:516 reproject:538,547 localAmend:564
+  @field r anchor  @ localAmend:569 addEvent:709 assignEvent:791 resizeGroup:819,826,843
+  @field w anchor  @ freshInstance:252 eachInstance:485 moveInstance:686
+  @field r assigns  @ absorbSiblingOverrides:288,298,301,302 localAmend:563,565 deleteEvent:734,737 assignEvent:785
   @field w assigns  @ freshInstance:252
   @field r cc  @ keyOf:97 updToGroup:161
   @field w cc  @ 20 toInstance:141 updToInstance:178
   @field r cents  @ toGroup:123
   @field w cents  @ toGroup:123
-  @field r chan  @ toGroup:114 toInstance:131 updToGroup:159 updToInstance:176 classifyCreate:337 rectCells:351 regionConflict:376 newInstance:418
-  @field r chan  @ newInstance:418 moveInstance:680,695 assignEvent:792 resizeGroup:841
-  @field w chan  @ 20 toInstance:131 updToInstance:176 markGroup:392,397 moveInstance:695 resizeGroup:841
-  @field r chanDelta  @ toInstance:131 updToInstance:176 sameSlot:286 resizeGroup:853
+  @field r chan  @ toGroup:114 toInstance:131 updToGroup:159 updToInstance:176 classifyCreate:315 rectCells:329 regionConflict:354 newInstance:396
+  @field r chan  @ newInstance:396 moveInstance:658,673 assignEvent:770 resizeGroup:819
+  @field w chan  @ 20 toInstance:131 updToInstance:176 markGroup:370,375 moveInstance:673 resizeGroup:819
+  @field r chanDelta  @ toInstance:131 updToInstance:176 sameSlot:264 resizeGroup:831
   @field w chanDelta  @ 20 toGroup:114 updToGroup:159
-  @field r chanLo  @ markGroup:392,397 resizeGroup:835
-  @field w chanLo  @ resizeGroup:835
-  @field w colour  @ eachInstance:508
-  @field r deletes  @ revivableVuid:294 absorbSiblingOverrides:309,320 deletedCells:523 addEvent:725 deleteEvent:753,760 revertDelete:774,775 assignEvent:808
+  @field r chanLo  @ markGroup:370,375 resizeGroup:813
+  @field w chanLo  @ resizeGroup:813
+  @field w colour  @ eachInstance:486
+  @field r deletes  @ revivableVuid:272 absorbSiblingOverrides:287,298 deletedCells:501 addEvent:703 deleteEvent:731,738 revertDelete:752,753 assignEvent:786
   @field w deletes  @ freshInstance:252
   @field w derived  @ 22
   @field r ds  @ 15
-  @field r dur  @ toInstance:135,138 updToInstance:182,183,187,188 regionConflict:373,374 resizeGroup:831
-  @field w dur  @ 21 toGroup:119 updToGroup:163,166 resizeGroup:834
-  @field r endDelta  @ resizeGroup:830
-  @field r endppq  @ toGroup:117,118,119 updToGroup:162,164,166 moveInstance:695
-  @field w endppq  @ 21 toInstance:136,138 updToInstance:186,189 moveInstance:695
-  @field r evType  @ keyOf:96,97 toGroup:113,117,123 toInstance:130,133,140 updToInstance:178,180 classifyCreate:338
-  @field w evType  @ 20 toGroup:113 toInstance:130 classifyCreate:338
-  @field r events  @ classify:270 revivableVuid:295 absorbSiblingOverrides:303 newInstance:416 deletedCells:524 localAmend:583 moveInstance:678 addEvent:735 deleteEvent:762 assignEvent:812 resizeGroup:851,858
-  @field r events  @ resizeGroup:868
-  @field w events  @ markGroup:407
-  @field r evt  @ classify:279 reproject:567,572 612,613,629 deleteInstance:655
-  @field r evt  @ moveInstance:692,694,697,698,703,704 assignEvent:794,795
-  @field w evt  @ link:71 classify:279 deletedCells:525 631
-  @field r gained  @ resizeGroup:864
-  @field r groupEvt  @ currentOf:88 reproject:560,564,568,569,570 613
-  @field w groupEvt  @ link:71 currentOf:88 reproject:570
-  @field r groupId  @ classify:268,273,278,280 regionConflict:371 stateOf:492 deleteEvent:748 assignEvent:786,793,798,815
-  @field w groupId  @ 63 link:73 eachInstance:506 moveInstance:682 resizeGroup:842
+  @field r dur  @ toInstance:135,138 updToInstance:182,183,187,188 regionConflict:351,352 resizeGroup:809
+  @field w dur  @ 21 toGroup:119 updToGroup:163,166 resizeGroup:812
+  @field r endDelta  @ resizeGroup:808
+  @field r endppq  @ toGroup:117,118,119 updToGroup:162,164,166 moveInstance:673
+  @field w endppq  @ 21 toInstance:136,138 updToInstance:186,189 moveInstance:673
+  @field r evType  @ keyOf:96,97 toGroup:113,117,123 toInstance:130,133,140 updToInstance:178,180 classifyCreate:316
+  @field w evType  @ 20 toGroup:113 toInstance:130 classifyCreate:316
+  @field r events  @ revivableVuid:273 absorbSiblingOverrides:281 newInstance:394 deletedCells:502 localAmend:561 moveInstance:656 addEvent:713 deleteEvent:740 assignEvent:790 resizeGroup:829,836,846
+  @field w events  @ markGroup:385
+  @field r evt  @ reproject:545,550 590,591,607 deleteInstance:633 moveInstance:670
+  @field r evt  @ moveInstance:670,672,675,676,681,682 assignEvent:772,773
+  @field w evt  @ link:71 deletedCells:503 609
+  @field r gained  @ resizeGroup:842
+  @field r groupEvt  @ currentOf:88 reproject:538,542,546,547,548 591
+  @field w groupEvt  @ link:71 currentOf:88 reproject:548
+  @field r groupId  @ regionConflict:349 stateOf:470 deleteEvent:726 assignEvent:764,771,776,793
+  @field w groupId  @ 63 link:73 eachInstance:484 moveInstance:660 resizeGroup:820
   @field r groups  @ 30 rehydrate:227
   @field w groups  @ persist:220
   @field w hidden  @ 22
-  @field r instId  @ classify:269,273,278,280 regionConflict:372 stateOf:493 deleteEvent:748 assignEvent:787,793,798
-  @field w instId  @ 63 link:73 eachInstance:506 moveInstance:682 resizeGroup:842
-  @field r instances  @ rehydrate:235 classify:269 absorbSiblingOverrides:305 classifyCreate:334 regionConflict:370 newInstance:424,426 stateOf:493 eachInstance:505 deletedCells:520 footprintAliases:538 reproject:552
-  @field r instances  @ deleteInstance:651,660,661 moveInstance:676 addEvent:721 deleteEvent:750 revertDelete:773 assignEvent:787 resizeGroup:825,840,847,859
-  @field w instances  @ markGroup:408
-  @field r invalidate  @ 640
+  @field r instId  @ regionConflict:350 stateOf:471 deleteEvent:726 assignEvent:765,771,776
+  @field w instId  @ 63 link:73 eachInstance:484 moveInstance:660 resizeGroup:820
+  @field r instances  @ rehydrate:235 absorbSiblingOverrides:283 classifyCreate:312 regionConflict:348 newInstance:402,404 stateOf:471 eachInstance:483 deletedCells:498 footprintAliases:516 reproject:530 deleteInstance:629
+  @field r instances  @ deleteInstance:638,639 moveInstance:654 addEvent:699 deleteEvent:728 revertDelete:751 assignEvent:765 resizeGroup:803,818,825,837
+  @field w instances  @ markGroup:386
+  @field r invalidate  @ 618
   @field r key  @ toInstance:134,141 updToInstance:177,178
-  @field w key  @ 20 toGroup:115 updToGroup:160,161 classifyCreate:338
-  @field r lane  @ keyOf:96 updToGroup:160 moveInstance:692 assignEvent:792
+  @field w key  @ 20 toGroup:115 updToGroup:160,161 classifyCreate:316
+  @field r lane  @ keyOf:96 updToGroup:160 moveInstance:670 assignEvent:770
   @field w lane  @ 20 toInstance:134 updToInstance:178
-  @field r laneDelta  @ toInstance:134 rectCells:355 regionConflict:379
-  @field w loc  @ 22 assignEvent:795
-  @field r name  @ 640
-  @field r nextVuid  @ absorbSiblingOverrides:321 addEvent:727 resizeGroup:866
-  @field w nextVuid  @ absorbSiblingOverrides:322 markGroup:407 addEvent:728 resizeGroup:867
-  @field r op  @ reproject:557,566,571
+  @field r laneDelta  @ toInstance:134 rectCells:333 regionConflict:357
+  @field w loc  @ 22 assignEvent:773
+  @field r name  @ 618
+  @field r nextVuid  @ absorbSiblingOverrides:299 addEvent:705 resizeGroup:844
+  @field w nextVuid  @ absorbSiblingOverrides:300 markGroup:385 addEvent:706 resizeGroup:845
+  @field r op  @ reproject:535,544,549
   @field r ppq  @ toGroup:116,119 toInstance:132,138 onTake:149 updToGroup:158,165
-  @field r ppq  @ updToGroup:165 updToInstance:175,181,184,187,189 sameSlot:286
-  @field r ppq  @ classifyCreate:336 regionConflict:373,374 markGroup:392,397 footprintAliases:539 moveInstance:695 assignEvent:792 resizeGroup:833,841,848
-  @field r ppq  @ resizeGroup:852,853
-  @field w ppq  @ 21 toGroup:116 toInstance:132 updToGroup:158 updToInstance:175 markGroup:392,397 moveInstance:695 resizeGroup:833,841,848,852
-  @field w realised  @ assignEvent:795
-  @field r rect  @ classifyCreate:335 regionConflict:374,375 newInstance:420 groupRect:450 eachInstance:507 moveInstance:682 resizeGroup:828
-  @field w rect  @ markGroup:407 eachInstance:507 resizeGroup:863
+  @field r ppq  @ updToGroup:165 updToInstance:175,181,184,187,189 sameSlot:264
+  @field r ppq  @ classifyCreate:314 regionConflict:351,352 markGroup:370,375 footprintAliases:517 moveInstance:673 assignEvent:770 resizeGroup:811,819,826
+  @field r ppq  @ resizeGroup:830,831
+  @field w ppq  @ 21 toGroup:116 toInstance:132 updToGroup:158 updToInstance:175 markGroup:370,375 moveInstance:673 resizeGroup:811,819,826,830
+  @field w realised  @ assignEvent:773
+  @field r rect  @ classifyCreate:313 regionConflict:352,353 newInstance:398 groupRect:428 eachInstance:485 moveInstance:660 resizeGroup:806
+  @field w rect  @ markGroup:385 eachInstance:485 resizeGroup:841
   @field w sampleShadowed  @ 22
-  @field r startDelta  @ resizeGroup:829
-  @field r streams  @ rectCells:350 regionConflict:375 resizeGroup:836
-  @field w streams  @ resizeGroup:836
+  @field r startDelta  @ resizeGroup:807
+  @field r streams  @ rectCells:328 regionConflict:353 resizeGroup:814
+  @field w streams  @ resizeGroup:814
   @field r tm  @ 15
-  @field r uuid  @ unlink:80 currentOf:88 persist:215 classify:264 markGroup:404 reproject:564 612,613,629
-  @field r uuid  @ 629 deleteInstance:656 resizeGroup:870
-  @field w uuid  @ 22,62 link:71 currentOf:88 assignEvent:795
+  @field r uuid  @ unlink:80 currentOf:88 persist:215 markGroup:382 reproject:542 590,591,607 deleteInstance:634
+  @field r uuid  @ deleteInstance:634 resizeGroup:848
+  @field w uuid  @ 22,62 link:71 currentOf:88 assignEvent:773
   @field r uuids  @ 58 rehydrate:231
   @field w uuids  @ persist:220
   @field r val  @ toGroup:123
-  @field r vuid  @ classify:270,271,273,278,280 stateOf:494 reproject:556,563,573 deleteEvent:748 assignEvent:788
-  @field w vuid  @ 63 link:73 deletedCells:525
+  @field r vuid  @ stateOf:472 reproject:534,541,551 deleteEvent:726 assignEvent:766
+  @field w vuid  @ 63 link:73 deletedCells:503

@@ -44,7 +44,7 @@
       @invariant  createSlot (Ctrl+Enter) opens the create modal — the only slot-minting gesture.  @ 833
 
 # Private functions
-  @fn drainWheel(accum, wheel, step)  @ 53-57
+  @fn drainWheel(accum, wheel, unitsPerNotch)  @ 53-57
       -- Accumulate a fractional wheel delta and drain whole notches off it.
       -- Returns the residual accumulator and the integer step to apply.
   -- Style + draw helpers

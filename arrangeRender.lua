@@ -50,10 +50,10 @@ local wheelAccumH  = 0   -- fractional horizontal wheel carried between frames
 
 -- Accumulate a fractional wheel delta and drain whole notches off it.
 -- Returns the residual accumulator and the integer step to apply.
-local function drainWheel(accum, wheel, step)
-  accum = accum + wheel * step
-  local step = (accum >= 0 and math.floor or math.ceil)(accum)
-  return accum - step, step
+local function drainWheel(accum, wheel, unitsPerNotch)
+  accum = accum + wheel * unitsPerNotch
+  local whole = (accum >= 0 and math.floor or math.ceil)(accum)
+  return accum - whole, whole
 end
 
 ----- Style + draw helpers
