@@ -3140,6 +3140,10 @@ local mmReloaded = false
 --contract: the staging pipeline; runs inside tm:rebuild's mm:modify, never called bare
 --invariant: nine stages stage mm ops; all nest, so reindex/reprojection defer to one unwind
 local function rebuildPipeline(didReload)
+  -- A wholesale mm re-read strands the incremental index: reload before any stage reads it;
+  -- the pipeline's own commits maintain it from here. see docs § Incremental index reconciliation
+  if didReload then perf.start('reload'); reload(); perf.stop('reload') end
+
   -- fxNote add/del + parked-member restores, deferred from fx expansion / region parking into the tail
   -- walk's atomic note commit: host clip + these inserts in one mm:modify (one MIDI_Sort, canonical delete-first).
   local deferred = mmBatch()
@@ -3221,9 +3225,9 @@ local function rebuildPipeline(didReload)
   end
   perf.stop('prevWindows')
 
-  -- Index: full reload only when mm re-read its event set (load/reload); edit rebuilds
-  -- trust the incremental index and just clear staging. see docs § Incremental index reconciliation
-  perf.start('view'); if didReload then reload() else clearStaging() end; perf.stop('view')
+  -- Drop un-flushed command-path staging; the index itself is already live (head reload on
+  -- wholesale passes, incremental reconciliation otherwise). see docs § Incremental index reconciliation
+  perf.start('view'); clearStaging(); perf.stop('view')
   for chan in pairs(dirtyChans) do muteConform[chan] = true end
   dirtyChans = {}   -- gated stages consumed the spine; next edit window accumulates fresh
   perf.start('derivedInputs')

@@ -422,8 +422,10 @@ source event, strips only `chan` and `cc`, and applies the caller's
 known here — rides through verbatim, so new event fields reach
 `col.events` without a change to this layer.
 
-Then the index step runs: a full `reload()` from mm on a wholesale reload,
-otherwise just `clearStaging()` to drop un-flushed ops (§ Incremental index
+Then `clearStaging()` drops un-flushed ops. The index itself needs no tail
+step: on a wholesale reload it was fully `reload()`ed at the pipeline head,
+before any stage read it, and the pipeline's own commits maintained it from
+there; edit rebuilds kept the live index throughout (§ Incremental index
 reconciliation). tm fires the `'rebuild'` signal carrying the `takeChanged`
 boolean — true only when this rebuild followed a `bindTake` (a take-tier
 reload).
