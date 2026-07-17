@@ -387,11 +387,11 @@ local function buildCtx(userGraph, derivedSplits)
       return nil
     end
 
-    local splitClasses, busClasses, srcTrack = splitClasses(), busClasses(), sourceTrackId()
+    local splitClassKeys, busClassKeys, srcTrack = splitClasses(), busClasses(), sourceTrackId()
     local direct = {}
     for cls, qEntry in pairs(q) do
-      local target = not (splitClasses[cls] or busClasses[cls] or srcTrack[cls]) and directTrackKey(qEntry) or nil
-      direct[cls] = target and not busClasses[target] and target or nil
+      local target = not (splitClassKeys[cls] or busClassKeys[cls] or srcTrack[cls]) and directTrackKey(qEntry) or nil
+      direct[cls] = target and not busClassKeys[target] and target or nil
     end
 
     local function chainEnd(cls, seen)

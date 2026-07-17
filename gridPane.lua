@@ -71,7 +71,7 @@ local function layoutColumns(cols, scrollCol)
   return left, width, order, math.max(0, x - 1)
 end
 
-local ctx, font, uiFont = gui.ctx, gui.font, gui.uiFont
+local ctx, gridFont, uiFont = gui.ctx, gui.font, gui.uiFont
 local dragging    = false   -- tracker-grid selection drag: click → held → release
 local curveEditor = util.instantiate('curveEditor', { ctx = ctx, chrome = chrome, page = 'tracker' })
 local laneConsumed = false
@@ -203,7 +203,7 @@ end
 
 -- Cell adapter over the shared painter: col/row → screen via one transform.
 -- cellW/cellH are odd integers (whole-pixel landing); snap handles fractional cases.
-local function printer(ctx, cellW, cellH, x0, y0)
+local function printer(x0, y0)
   local p  = painter.new(ctx, chrome, { ox = x0, oy = y0, sx = cellW, sy = cellH, snap = true }, 'tracker')
   local pt = {}
 
@@ -231,7 +231,7 @@ local function printer(ctx, cellW, cellH, x0, y0)
   end
 
   function pt:textCentredSmall(xLo, xHi, y, txt, size, colour, fnt)
-    fnt = fnt or font
+    fnt = fnt or gridFont
     p.text(centreX(xLo, xHi, txt, fnt, size), y, colour, txt, fnt, size)
   end
 
@@ -249,9 +249,9 @@ local function printer(ctx, cellW, cellH, x0, y0)
   -- Small glyph centred in a single cell: the * tp drops by a note whose
   -- authored delay could not be realised (delay ~= delayC).
   function pt:smallGlyph(x, y, txt, size, colour)
-    local lx = x + (1 - p.measure(txt, font, size) / cellW) / 2
+    local lx = x + (1 - p.measure(txt, gridFont, size) / cellW) / 2
     local ly = y + (1 - size / cellH) / 2
-    p.text(lx, ly, colour, txt, font, size)
+    p.text(lx, ly, colour, txt, gridFont, size)
   end
 
   function pt:vLine(x, yLo, yHi, colour)
@@ -329,7 +329,7 @@ end
 -- Measure under the grid font: naturalWidth() may trigger this before draw's font push.
 local function ensureCellSize()
   if not cellW then
-    ImGui.PushFont(ctx, font, gui.fontSize.grid)
+    ImGui.PushFont(ctx, gridFont, gui.fontSize.grid)
     local charW, charH = ImGui.CalcTextSize(ctx, 'W')
     ImGui.PopFont(ctx)
     cellW = 2 * math.ceil(charW / 2) - 1
@@ -517,7 +517,7 @@ local function drawTracker()
   gridOriginY  = py + HEADER * cellH
 
   local numRows = grid.numRows or 0
-  local draw, p = printer(ctx, cellW, cellH, gridOriginX, gridOriginY)
+  local draw, p = printer(gridOriginX, gridOriginY)
   gridPainter = p
   -- Screen-space painter (identity transform) for draws sized in pixels, not
   -- cells: the tail bracket's arc radius and the temperament rule's tick. Colour
@@ -870,7 +870,7 @@ local gridPane = {}
 -- so drawTracker needs a fresh layout), with the grid font pushed throughout.
 --invariant: lane-strip drag callbacks may flush tv.grid.cols and clear col.x
 function gridPane:draw(gridW, gridH)
-  ImGui.PushFont(ctx, font, gui.fontSize.grid)
+  ImGui.PushFont(ctx, gridFont, gui.fontSize.grid)
   computeLayout(gridW, gridH)
   drawLaneStrip()
   computeLayout(gridW, gridH)

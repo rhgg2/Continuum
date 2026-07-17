@@ -213,7 +213,7 @@ local function ensureSlots(track)
     idOrder[#idOrder+1] = id
   end)
 
-  local slotForId, dirty = {}, false
+  local slotForId, changed = {}, false
   for slotIdx, entry in pairs(dict) do
     local keep = false
     if entry.id and liveIds[entry.id] then
@@ -227,7 +227,7 @@ local function ensureSlots(track)
         keep = true
       end
     end
-    if not keep then dict[slotIdx] = nil; dirty = true end
+    if not keep then dict[slotIdx] = nil; changed = true end
   end
   for _, id in ipairs(idOrder) do
     if not slotForId[id] then
@@ -235,11 +235,11 @@ local function ensureSlots(track)
       if idx then
         dict[idx]     = { kind = kindForId[id], id = id }
         slotForId[id] = idx
-        dirty = true
+        changed = true
       end
     end
   end
-  if dirty then writeSlots(track, dict) end
+  if changed then writeSlots(track, dict) end
   return dict, slotForId, firstName, liveIds
 end
 
@@ -258,9 +258,9 @@ local function ensureColours()
     end)
   end
   local dict = readColours()
-  local used, dirty = {}, false
+  local used, changed = {}, false
   for id, idx in pairs(dict) do
-    if not live[id] then dict[id] = nil; dirty = true
+    if not live[id] then dict[id] = nil; changed = true
     else                  used[idx]  = true end
   end
   local nextFree = 0
@@ -269,10 +269,10 @@ local function ensureColours()
       while used[nextFree] do nextFree = nextFree + 1 end
       dict[id]       = nextFree
       used[nextFree] = true
-      dirty          = true
+      changed        = true
     end
   end
-  if dirty then writeColours(dict) end
+  if changed then writeColours(dict) end
   return dict
 end
 

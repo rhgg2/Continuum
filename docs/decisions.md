@@ -4,6 +4,15 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-17** — Not every luacheck shadow is a defect. A *protective* shadow stays where a pure
+  function must not reach its module's upvalues (trackerView's `projectionEpoch` shadows
+  `length`/`timeSigs` by design), as does a local mirroring the field it fills (editCursor's `partAt`
+  → `col.partAt`). The rest were renamed at the root, not the site: `newScope`'s arg became
+  `scopeName` because the collision was scope-name vs command-name, and editorPage's module-level
+  `ctx` was deleted — it was the only page of ten declaring one, so the outlier moved rather than the
+  shared `renderBody(ctx, w, h, dispatch)` interface. *Chosen over* renaming at each flagged site,
+  which treats the symptom and leaves the ambiguous name in place.
+
 - **2026-07-17** — luacheck's `.luacheckrc` carries the policy rather than the code bending to the
   linter: `unused_args = false`, because uniform call-site signatures are the idiom here
   (generators.lua:6 declares the stage protocol; viewContext.lua:49 documents `chan` as deliberately

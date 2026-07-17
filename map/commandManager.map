@@ -39,7 +39,7 @@
   -- Stack reachability
   @fn isReachable(scope, name)  @ 64-75
   -- Scope
-  @fn newScope(name)  @ 80-109
+  @fn newScope(scopeName)  @ 80-109
   -- Bottom of the stack
   -- Manager-level surface
   -- Universal-argument prefix

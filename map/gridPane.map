@@ -41,7 +41,7 @@
   @state viewRows = 0  @ 49
   @state gridPainter = nil  @ 50   -- cell painter, rebuilt each frame in drawTracker; hit-test reads its fromScreen so draw and hit can't drift
   @state chanLeft, chanWidth, chanOrder, totalWidth = {}, {}, {}, 0  @ 52
-  @state ctx, font, uiFont = gui.ctx, gui.font, gui.uiFont  @ 74
+  @state ctx, gridFont, uiFont = gui.ctx, gui.font, gui.uiFont  @ 74
   @state dragging = false  @ 75   -- tracker-grid selection drag: click → held → release
   @state laneConsumed = false  @ 77
   @state paintLast = nil  @ 79   -- region-paint per-cell debounce
@@ -74,7 +74,7 @@
       -- The fx badge sits in the pre-vel separator slot -- one column inboard of
       -- the delay-marker slot, so the two markers never collide.
   -- Drawing
-  @fn printer(ctx, cellW, cellH, x0, y0)  @ 206-271
+  @fn printer(x0, y0)  @ 206-271
       -- Cell adapter over the shared painter: col/row → screen via one transform.
       -- cellW/cellH are odd integers (whole-pixel landing); snap handles fractional cases.
   @fn laneStripRows()  @ 274-277

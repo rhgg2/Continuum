@@ -90,8 +90,8 @@ function tp:reloadFromReaper() tm:reloadFromReaper() end
 function tp:bindFromSelection()
   if cm:getAt('project', 'trackerTrack') == nil then
     local idx = arrange().currentTrackIdx()        -- one-time seed from the arrange cursor
-    local tr  = idx and arrange().tracks()[idx + 1]
-    if tr then tv:selectTrack(tr.guid) end
+    local track = idx and arrange().tracks()[idx + 1]
+    if track then tv:selectTrack(track.guid) end
   end
   local target = tv:resolveSelectionTake()
   if wasDormant or target ~= tm:currentTake() then

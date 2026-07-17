@@ -1786,11 +1786,11 @@ local function renderCanvas(w, h)
   -- Tag drag feeds a transient fromOffset (mirroring how node drag mutates pos),
   -- so the one geometry pass below handles both star and bus tooth. mouseup commits.
   if tagDrag then
-    local w = wireViewsList[tagDrag.edgeIdx]
-    local consumer = w and nodesById[w.to]
+    local wire = wireViewsList[tagDrag.edgeIdx]
+    local consumer = wire and nodesById[wire.to]
     if consumer then
-      w.fromOffset = { x = tagDrag.sx0 + (lmx - tagDrag.mx0) - consumer.pos.x,
-                       y = tagDrag.sy0 + (lmy - tagDrag.my0) - consumer.pos.y }
+      wire.fromOffset = { x = tagDrag.sx0 + (lmx - tagDrag.mx0) - consumer.pos.x,
+                          y = tagDrag.sy0 + (lmy - tagDrag.my0) - consumer.pos.y }
     end
   end
   -- Live buss-bar move feeds the in-flight pos + extent into the geometry pass
@@ -2149,12 +2149,12 @@ local function renderCanvas(w, h)
       -- click (no wire start, no body-drag fall-through).
     elseif wireEndHover then
       local seg      = segs[wireEndHover.edgeIdx]
-      local w        = seg.w
+      local wire     = seg.w
       local keptIsTo = (wireEndHover.side == 'from')
-      local keptId   = keptIsTo and w.to or w.from
-      local grabbedId   = keptIsTo and w.from or w.to
-      local grabbedPort = (w.type == 'audio')
-                            and (keptIsTo and w.fromPort or w.toPort) or nil
+      local keptId   = keptIsTo and wire.to or wire.from
+      local grabbedId   = keptIsTo and wire.from or wire.to
+      local grabbedPort = (wire.type == 'audio')
+                            and (keptIsTo and wire.fromPort or wire.toPort) or nil
       -- grabDx/grabDy = gap to the mouse, decayed over travel so the end
       -- doesn't snap to the cursor. Anchor non-body ports at the chip centre,
       -- not the body — a body-centre anchor retargets the redraft to port 1.

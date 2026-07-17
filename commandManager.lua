@@ -77,8 +77,8 @@ end
 ----- Scope
 
 --shape: scope = { keymap={}, registered={}, modal?, passthrough?, springLoaded?, redirect={[name]=fn}?, keepAlive={[name]=true}?, onBail? }
-local function newScope(name)
-  local s = { keymap = {}, registered = {}, name = name }
+local function newScope(scopeName)
+  local s = { keymap = {}, registered = {}, name = scopeName }
 
   -- Module-side register installs a gated entry: invoke fires the fn
   -- only when the scope is reachable. Bookkeeping in `registered` lets

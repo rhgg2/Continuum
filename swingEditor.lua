@@ -364,9 +364,9 @@ local function drawFactorRow(i, f, numColW, n)
     local newPeriod = periodOverPPC(PERIOD_PRESETS[pickedPer].period, ppC)
     local scale     = timing.periodQN(newPeriod) / timing.periodQN(f.period)
     local shift     = (f.shift or 0) * scale
-    local lo, hi    = shiftCap({ atom = f.atom, period = newPeriod }, state.wild)
-    if     shift < lo then shift = lo * 0.999
-    elseif shift > hi then shift = hi * 0.999 end
+    local newLo, newHi = shiftCap({ atom = f.atom, period = newPeriod }, state.wild)
+    if     shift < newLo then shift = newLo * 0.999
+    elseif shift > newHi then shift = newHi * 0.999 end
     patchFactor(i, { period = newPeriod, shift = shift })
     commit()
   end

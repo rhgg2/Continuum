@@ -845,8 +845,8 @@ do
     if evt and evt.evType == 'pa' then
       local host = util.seek(col.events, 'before', evt.ppq, util.isNote)
       if host and host.endppq > evt.ppq then
-        for _, pa in ipairs(notePAEvents(col, host.pitch, evt.ppq, host.endppq)) do
-          edit.delete(pa)
+        for _, paEvt in ipairs(notePAEvents(col, host.pitch, evt.ppq, host.endppq)) do
+          edit.delete(paEvt)
         end
       else
         edit.delete(evt)

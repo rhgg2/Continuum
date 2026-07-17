@@ -1,4 +1,4 @@
-@module editorPage  src=editorPage.lua  loc=45  sha=35e7e9d  mode=chunk  self=ep
+@module editorPage  src=editorPage.lua  loc=43  sha=35e7e9d  mode=chunk  self=ep
 @deps cm, ds, cmgr, chrome, gui, modalHost, facade
 
 # Imports
@@ -7,36 +7,35 @@
       @contract  render delegates to editorRender; close returns to coord's previous page  @ 5
 
 # Constructed sub-instances
-  @construct swingEditor  = util.instantiate('swingEditor')  @ 16
-  @construct temperEditor = util.instantiate('temperEditor')  @ 18
-  @construct er           = util.instantiate('editorRender')  @ 21
+  @construct swingEditor  = util.instantiate('swingEditor')  @ 14
+  @construct temperEditor = util.instantiate('temperEditor')  @ 16
+  @construct er           = util.instantiate('editorRender')  @ 19
 
 # Private state
-  @state ctx = gui.ctx  @ 14
-  @state ep = {}  @ 25
+  @state ep = {}  @ 23
 
 # Public API (ep:*)
   -- Page lifecycle — no take binding; pane state persists across visits
-  @api ep:bind()  @ 36
-  @api ep:unbind()  @ 37
+  @api ep:bind()  @ 34
+  @api ep:unbind()  @ 35
   -- Page interface — render delegates to the renderer
-  @api ep:toolbarSegments()  @ 40
-  @api ep:renderBody(ctx, w, h, dispatch)  @ 41
-  @api ep:renderStatusBar(ctx)  @ 42
-  @api ep:focusState()  @ 43
+  @api ep:toolbarSegments()  @ 38
+  @api ep:renderBody(ctx, w, h, dispatch)  @ 39
+  @api ep:renderStatusBar(ctx)  @ 40
+  @api ep:focusState()  @ 41
 
 # Uses (outbound edges)
-  @use call    er:edit  @ 32
-  @use call    er:focusState  @ focusState:43
-  @use call    er:renderBody  @ renderBody:41
-  @use call    er:renderStatusBar  @ renderStatusBar:42
-  @use call    er:toolbarSegments  @ toolbarSegments:40
-  @use call    er:unbind  @ unbind:37
-  @use call    facade.publish  @ 31
-  @use call    util.instantiate  @ 16,18,21
-  @use require editorRender  @ 21
-  @use require swingEditor  @ 16
-  @use require temperEditor  @ 18
+  @use call    er:edit  @ 30
+  @use call    er:focusState  @ focusState:41
+  @use call    er:renderBody  @ renderBody:39
+  @use call    er:renderStatusBar  @ renderStatusBar:40
+  @use call    er:toolbarSegments  @ toolbarSegments:38
+  @use call    er:unbind  @ unbind:35
+  @use call    facade.publish  @ 29
+  @use call    util.instantiate  @ 14,16,19
+  @use require editorRender  @ 19
+  @use require swingEditor  @ 14
+  @use require temperEditor  @ 16
   @use require util  @ 6
 
 # REAPER API surface
@@ -46,21 +45,21 @@
 # Fields (r read / w write incl. constructor keys)
   @field r ImGui_GetBuiltinPath  @ 8
   @field r chrome  @ 13
-  @field w chrome  @ 17,19,23
+  @field w chrome  @ 15,17,21
   @field r cm  @ 13
-  @field w cm  @ 17,19
+  @field w cm  @ 15,17
   @field r cmgr  @ 13
-  @field w cmgr  @ 23
-  @field r ctx  @ 14
-  @field w ctx  @ 17,19
+  @field w cmgr  @ 21
+  @field r ctx  @ 15,17
+  @field w ctx  @ 15,17
   @field r ds  @ 13
-  @field w ds  @ 17
-  @field w edit  @ 32
+  @field w ds  @ 15
+  @field w edit  @ 30
   @field r facade  @ 13
-  @field w facade  @ 17,19
+  @field w facade  @ 15,17
   @field r gui  @ 13
-  @field w gui  @ 17,19,23
+  @field w gui  @ 15,17,21
   @field r modalHost  @ 13
-  @field w modalHost  @ 17,19,23
-  @field w swingEditor  @ 22
-  @field w temperEditor  @ 22
+  @field w modalHost  @ 15,17,21
+  @field w swingEditor  @ 20
+  @field w temperEditor  @ 20

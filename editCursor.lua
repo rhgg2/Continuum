@@ -643,9 +643,9 @@ do
   end
 
   local function laneWalkable(rect)
-    for off, sel in pairs(rect.streams) do
+    for off, streamSel in pairs(rect.streams) do
       if off ~= 0 then return false end
-      for sid in pairs(sel) do
+      for sid in pairs(streamSel) do
         if not sid:match('^note:') then return false end
       end
     end

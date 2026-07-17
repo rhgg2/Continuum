@@ -11,12 +11,10 @@ end
 
 local cm, ds, cmgr, chrome, gui, modalHost, facade =
   (...).cm, (...).ds, (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).facade
-local ctx = gui.ctx
-
 local swingEditor  = util.instantiate('swingEditor',
-  { cm = cm, ds = ds, chrome = chrome, ctx = ctx, gui = gui, facade = facade, modalHost = modalHost })
+  { cm = cm, ds = ds, chrome = chrome, ctx = gui.ctx, gui = gui, facade = facade, modalHost = modalHost })
 local temperEditor = util.instantiate('temperEditor',
-  { cm = cm, chrome = chrome, ctx = ctx, gui = gui, facade = facade, modalHost = modalHost })
+  { cm = cm, chrome = chrome, ctx = gui.ctx, gui = gui, facade = facade, modalHost = modalHost })
 
 local er = util.instantiate('editorRender',
   { swingEditor = swingEditor, temperEditor = temperEditor,
