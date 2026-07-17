@@ -665,36 +665,47 @@ voices to nudge — is `voicing`'s; see `docs/voicing.md`.
 mm owns the `(ppq, chan, pitch)` invariant and enforces it itself: a
 colliding write is repaired by the backstop at `modify`'s unwind, an
 external collapse by intent-aware load-dedup (`docs/midiManager.md`
-§ Mutation contract). tm's separation sites are therefore not
-load-bearing for take integrity — a missed collision is resolved by mm
-and surfaced via `collisionsResolved` instead of silently eating a
-voice. The sites stay because they keep tm's live clones (column
-events, um entries) coherent with what mm will hold, and because the
-flush scan routes kills and updates through um verbs, carrying
-semantics mm shouldn't own (PA culling, detune-aware resize).
+§ Mutation contract). tm's separation site is therefore not load-bearing
+for take integrity — a missed collision is resolved by mm and surfaced
+via `collisionsResolved` instead of silently eating a voice.
 
 `voicing.nudgeOnsets(records)` is the separation geometry: walk a
 `(raw, ppqL)`-sorted list and bump each colliding successor to
 `prev.ppq + 1` (cascading; `fixed` externals frozen). Pure geometry on
-`evt.ppq`; it returns the moved records so each caller stages its own mm
-write. Three sites separate:
+`evt.ppq`; it returns the moved records so the caller stages its own mm
+write. **One site separates**: the tail walk (`rebuildTails`), where real
+notes and predicted fxNotes walk together — separate before the atomic
+note commit, then clip tails.
 
-- **reseat** (`rebuildInternals`) — a reswing recomputes raw from
-  logical, so two distinct-`ppqL` notes can land on one raw. Separating
-  before the reseat commit keeps the staged clones and mm in step.
-- **flush scan** (`flush`) — an edit moves a note onto a same-pitch
-  peer; consumes `voicing.resolveGroup` for the full kill/nudge
-  verdicts. Separate before the flush commit.
-- **tail walk** (`rebuildTails`) — real notes and predicted fxNotes walk
-  together; separate before the atomic note commit, then clip tails.
+The reseat (`rebuildInternals`) and the flush scan nudged too until
+2026-07-17. Both went for one reason: a nudge they skip is not a lost
+voice but a collision riding one stage further, to a site that separates
+it before anything can read it. The reseat's clones reach the walk via
+`buildRawScratch`, in the same pass and the same `mm:batch` nest, so mm's
+backstop — which resolves at the *outermost* unwind — still finds
+nothing. The flush scan's staged add reaches that same backstop at
+flush's own unwind, ahead of the rebuild it triggers.
 
-**Commit ordering.** mm tokens are keyed by realised ppq, so an occupying
-move (an edit landing on a peer's slot) re-keys onto that peer's token
-before the peer's own nudge applies — the peer's staged write then
-resolves to the wrong note. The flush applies note moves by **descending
-target ppq** so every vacate lands ahead of its occupy. The reseat path
-is immune: reswing moves both notes to fresh raws, away from each other's
-tokens.
+The walk and the backstop are **independently sufficient** for the reseat
+case: disabling either still separates, and it takes disabling both to
+land two voices on one raw (`tm_reseat_collision_spec`, which pins the
+surviving voice and deliberately names no layer). The backstop is a real
+second line here, not a formality — it is simply never reached, because
+the walk gets there first.
+
+What had made both necessary was token addressing: a transient collision
+left two notes sharing a token, so a staged write could resolve to the
+wrong one, and each stage had to clear its own collisions before
+committing. Uuid addressing (2026-07-16) made a collision merely
+transient rather than unnameable — and the two nudges became the pipeline
+separating one collision three times.
+
+**Commit ordering.** Notes are addressed by uuid, but `collisionIdx` is
+keyed by realised ppq: an occupying move (an edit landing on a peer's
+slot) clobbers that peer's slot before the peer vacates it. The flush
+applies note moves by **descending target ppq** so every vacate lands
+ahead of its occupy. The reseat path is immune: reswing moves both notes
+to fresh raws, away from each other's slots.
 
 ## Flush collision scan
 
@@ -707,17 +718,25 @@ Not a per-self peer walk: two notes can collide without either being the
 edited one, and repeated per-self truncation damages peers a later
 same-flush op would resolve.
 
-Each group runs `voicing.resolveGroup`: genuine duplicates killed,
-distinct voices nudged apart (see `docs/voicing.md`). Tails are not
-touched. The scan clipped them until 2026-07-17, and that loop was a
-vestige of the days when this scan *was* the truncation site: the walk's
-bound is strictly stronger and computed against post-walk rather than
-staged geometry, and a rebuild always follows a flush — so every tail the
-loop wrote was overwritten moments later. The verdicts are what the scan
-is for, and they stay: killing genuine duplicates through um's verbs is
-how PA culling and detune-aware resize happen, and none of that is
-truncation. `endppqL` (intent) is never written here — deleting a blocker
-lets the raw tail regrow to it.
+Each group runs `voicing.resolveGroup` for its **kill** verdicts alone
+(see `docs/voicing.md`). Neither tails nor onsets are touched: the scan
+clipped tails and nudged onsets until 2026-07-17, and both were the same
+vestige, from the days when this scan *was* the truncation and separation
+site. The walk's tail bound is strictly stronger — post-walk rather than
+staged geometry — and a rebuild always follows a flush, so every tail the
+loop wrote was overwritten moments later; the onsets it separated the
+walk separates just as surely (§ Same-pitch onset separation).
+
+The kills do not follow them out, and the asymmetry is precisely why:
+`nudgeOnsets` separates but never kills. A duplicate that reaches the
+walk is separated rather than collapsed — and a separated pair is no
+longer a collision, so mm's backstop finds nothing left to dedup either.
+This scan is the only site in the stack that dedups a staged add against
+a committed note, and killing through um's verbs is what carries the
+semantics mm shouldn't own (PA culling, detune-aware resize). It went
+uncovered once already; `tm_flush_collision_scan_spec` now pins it.
+`endppqL` (intent) is never written here — deleting a blocker lets the
+raw tail regrow to it.
 
 ## Length operations
 

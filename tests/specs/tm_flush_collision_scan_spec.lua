@@ -4,11 +4,11 @@
 -- any committed note while the suite passed straight over it.
 --
 -- The dedup case below is the one that pins the scan, and only because of an
--- asymmetry: the walk (voicing.nudgeOnsets) separates but never kills, so it covers
--- the scan's nudge and cannot cover its dedup. Worse, by separating first the walk
--- defeats mm's dedup backstop too -- resolveGroup finds nothing left to collapse at
--- the modify unwind. This scan is the only thing in the stack that dedups a staged
--- add against a committed one. see docs/trackerManager.md § Flush collision scan
+-- asymmetry: the walk (voicing.nudgeOnsets) separates but never kills, so it covered
+-- the scan's nudge -- which is why that nudge could go -- and cannot cover its dedup.
+-- Worse, by separating first the walk defeats mm's dedup backstop too: resolveGroup
+-- finds nothing left to collapse at the unwind. This scan is the only thing in the
+-- stack that dedups a staged add against a committed one. see docs/trackerManager.md
 
 local t = require('support')
 
@@ -26,9 +26,9 @@ end
 
 return {
 
-  -- Jointly held by this scan and the walk: with the scan broken the walk still
-  -- settles the geometry, so this case documents the outcome rather than pinning
-  -- the layer that delivers it. The dedup case below is the discriminating one.
+  -- Not this scan's job any more: its nudge went at 2026-07-17, exactly because the
+  -- walk and mm's backstop deliver this anyway. Kept as the pin on that claim -- the
+  -- separation must survive the removal. The dedup case below is the scan's own.
   {
     name = 'a staged add colliding with a committed note ends up separated',
     run = function(harness)

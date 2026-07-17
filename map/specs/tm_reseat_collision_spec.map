@@ -1,0 +1,37 @@
+@spec tm_reseat_collision_spec  src=tests/specs/tm_reseat_collision_spec.lua  loc=87  sha=untracked  cases=3
+@exercises dataStore (h.ds), midiManager (h.mm)
+@surface   ds:assign, mm:notes
+@harness   mk{seed.notes}
+
+# Intent
+  Pins the voice the reseat's own nudge used to protect, now that the nudge is gone.
+  
+  rebuildInternals recomputes raw from logical for a stale-swing channel, and that
+  recompute can land two distinct-ppqL same-pitch notes on one raw. It separated them
+  itself until 2026-07-17, on the claim that mm's dedup would otherwise eat a voice.
+  It no longer needs to, and these pin the voice it stopped protecting.
+  
+  Two layers below it each separate this collision, and each is sufficient alone:
+  the tail walk (in-pass, same mm:batch nest) and mm's backstop (at the outermost
+  unwind). Disabling either leaves these green; disabling BOTH lands two voices on
+  raw 194 -- which is how the pin was verified, and why no case here names the layer
+  that delivers it. In production the walk goes first and the backstop finds nothing,
+  exactly as its contract promises. see docs/trackerManager.md § Same-pitch onset separation
+
+# Helpers
+  @fn reswungOntoOneRaw(harness)  @ 23-40
+      -- Delay, not swing, is what collides them: swing.fromLogical is injective, so it can never
+      -- map two seats onto one raw by itself. It moves them relative to a delay that stays put --
+      -- c58 sends ppqL 120 -> 139 and 180 -> 194, and the 229 ms-QN delay (= +55 ppq @ res 240)
+      -- carries the first onto the second. Authored under identity they sit apart, at 175 and 180.
+  @fn ppqsOf(mm)  @ 42-47
+
+# Cases
+  @case 'a reseat collapsing two same-pitch voices onto one raw keeps both'  [harness]  @ 52-59
+  @case 'the reseat commits the collision and the pass below it settles the geometry'  [harness]  @ 63-70
+  @case 'the reseat leaves intent alone: only raw moves'  [harness]  @ 74-84
+
+# Uses (outbound edges)
+  @use call ds:assign  @ 38
+  @use call mm:notes  @ 44
+  @use call fm:notes  @ 79

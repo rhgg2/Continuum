@@ -4,6 +4,14 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-17** — tm separates same-pitch collisions at exactly one site, the tail walk; the reseat's
+  and flush scan's nudges go. *Chosen over* keeping them as cheap insurance: the walk and mm's backstop
+  each separate independently — proven by disabling each in turn, where only killing *both* lands two
+  voices on one raw — so the nudges were the third and fourth layers on one collision. The flush scan's
+  *kills* stay: `nudgeOnsets` separates but never kills, so a duplicate reaching the walk is one nothing
+  below will collapse. Corollary for the pins: with two sufficient layers no single-layer break can go
+  red, so the specs assert the surviving voice and name no layer at all.
+
 - **2026-07-17** — um owns a PA by its *logical* seat, not the host's raw window. A PA carries its own
   `ppqL` and the CC walk reswings it from that seat, so it was never slaved to its host's realisation
   — but `forEachAttachedPA` tested `cc.ppq` against `[host.ppq, host.endppq)`, so any realisation-only

@@ -1,4 +1,4 @@
-@spec tm_flush_collision_scan_spec  src=tests/specs/tm_flush_collision_scan_spec.lua  loc=65  sha=untracked  cases=2
+@spec tm_flush_collision_scan_spec  src=tests/specs/tm_flush_collision_scan_spec.lua  loc=65  sha=35eb990  cases=2
 @exercises midiManager (h.mm), trackerManager (h.tm)
 @surface   mm:notes, tm:addEvent, tm:flush
 @harness   mk{seed.notes}
@@ -10,11 +10,11 @@
   any committed note while the suite passed straight over it.
   
   The dedup case below is the one that pins the scan, and only because of an
-  asymmetry: the walk (voicing.nudgeOnsets) separates but never kills, so it covers
-  the scan's nudge and cannot cover its dedup. Worse, by separating first the walk
-  defeats mm's dedup backstop too -- resolveGroup finds nothing left to collapse at
-  the modify unwind. This scan is the only thing in the stack that dedups a staged
-  add against a committed one. see docs/trackerManager.md § Flush collision scan
+  asymmetry: the walk (voicing.nudgeOnsets) separates but never kills, so it covered
+  the scan's nudge -- which is why that nudge could go -- and cannot cover its dedup.
+  Worse, by separating first the walk defeats mm's dedup backstop too: resolveGroup
+  finds nothing left to collapse at the unwind. This scan is the only thing in the
+  stack that dedups a staged add against a committed one. see docs/trackerManager.md
 
 # Helpers
   @fn ppqsOf(mm)  @ 15-20

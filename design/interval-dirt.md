@@ -766,6 +766,34 @@ because a collision is transient within a batch and nothing reads
 it is the one worth pinning: a spec that carries a collision across two
 commits and reads both notes out afterwards.
 
+**Landed 2026-07-17, and the nudges were even less load-bearing than
+this predicted.** Both deletions were spec-neutral (2044 → 2047 green,
+the three new pins aside), and the reason is worth recording, because it
+is not the reason given above. This section says the walk covers the
+reseat and mm's backstop covers the flush scan. In fact **each collision
+is covered twice over**: `tm_reseat_collision_spec` stays green with the
+walk's `nudgeOnsets` disabled *and* stays green with mm's backstop
+disabled — only disabling **both** lands two voices on one raw. The walk
+and the backstop are independently sufficient, so the deleted nudges were
+the third and fourth layers separating one collision, not the first.
+
+That redundancy is also why neither nudge could be deleted on the
+suite's word: no single-layer break can go red, so a spec written against
+the layer you *think* delivers the geometry pins nothing. The pins that
+landed therefore assert the surviving voice and name no layer at all.
+
+Two findings fell out of building them, neither in scope here.
+`swing.fromLogical` is **injective** — scanned over 0..3840 at shifts up
+to 0.30, no two seats share a raw — so a reswing alone can never collide
+two notes; it takes a delay, which the recompute folds in and swing then
+moves the seats around. The reseat's deleted comment ("reswing can
+collapse two distinct-ppqL same-pitch notes onto one raw") was true only
+in that sense. And `vm_reswing_lane_stability_spec` declared its swing
+curve as a bare factor list where the live shape is `{ factors = {...} }`
+(cf. `vm_reswing_cc_spec:7`), so the curve resolved silently to identity
+and the spec had never reswung anything despite its name — corrected
+here, and its assertions hold under a real c58.
+
 **3. The interval walk.** Tails close per the crux row — [prev onset,
 next onset], same-lane ∪ same-pitch, raw order — and the walk **emits**
 that closure for seats and PCs to consume. Closure lives here and only

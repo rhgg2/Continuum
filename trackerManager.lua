@@ -1059,8 +1059,8 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
 
     perf.start('flush')
 
-    -- Single scan over all post-flush notes for same-(chan,pitch) MIDI legality: verdicts + onset
-    -- separation, no tails -- those are the walk's. see docs/trackerManager.md § Flush collision scan
+    -- Single scan over all post-flush notes for same-(chan,pitch) MIDI legality: kill verdicts
+    -- only -- onsets and tails are the walk's. see docs/trackerManager.md § Flush collision scan
     do
       local byKey = {}
       for _, n in pairs(byUuid) do
@@ -1070,24 +1070,13 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
         if o.evt.evType == 'note' then util.bucket(byKey, util.key(o.evt.chan, o.evt.pitch), o.evt) end
       end
 
-      -- Verdicts and onset separation only: the tail bound is the walk's, computed against post-walk
-      -- geometry and strictly stronger. A rebuild always follows a flush. see design/archive/same-pitch-enforcement.md
-      local updates, kills = {}, {}
+      -- Kills only: tm separates once, at the walk. Dedup cannot follow it there -- the walk
+      -- separates a duplicate instead, and nothing below kills what it split.
+      local kills = {}
       for _, group in pairs(byKey) do
-        local groupKills, voiced, onsetOf = voicing.resolveGroup(group)
-        for _, n in ipairs(groupKills) do util.add(kills, n) end
-
-        for _, n in ipairs(voiced) do
-          if onsetOf[n] ~= n.ppq then util.add(updates, { n = n, up = { ppq = onsetOf[n] } }) end
-        end
+        for _, n in ipairs(voicing.resolveGroup(group)) do util.add(kills, n) end
       end
-
       for _, n in ipairs(kills) do deleteNote(n) end
-      for _, u in ipairs(updates) do
-        if u.n.realised then assignNote(u.n, u.up)   -- realised: route PA/detune resize
-        else                 util.assign(u.n, u.up)  -- staged add: geometry only
-        end
-      end
     end
 
     local flushAdds, flushAssigns, flushDeletes = adds, assigns, deletes
@@ -1617,14 +1606,8 @@ local function rebuildInternals()
     util.add(col.events, colNote)
   end
 
-  -- Reswing can collapse two distinct-ppqL same-pitch notes onto one raw. Separate them before
-  -- the commit so mm's reload-dedup never eats a voice -- the tail walk's gate runs far too late.
-  table.sort(reseated, function(a, b)
-    if a.chan ~= b.chan then return a.chan < b.chan end
-    if a.ppq  ~= b.ppq  then return a.ppq  < b.ppq  end
-    return a.ppqL < b.ppqL
-  end)
-  voicing.nudgeOnsets(reseated)
+  -- Reswing can collapse two distinct-ppqL same-pitch notes onto one raw. The collision rides into
+  -- mm and the walk separates it this pass, inside the nest mm's backstop resolves at the end of.
   for _, e in ipairs(reseated) do
     if e.ppq ~= reseatedWas[e] then reseats.assign(e, { ppq = e.ppq }) end
   end

@@ -1,4 +1,4 @@
-@module midiManager  src=midiManager.lua  loc=1403  sha=70ef819  mode=chunk  self=mm
+@module midiManager  src=midiManager.lua  loc=1403  sha=37ed80d  mode=chunk  self=mm
 @deps take, eventMeta
 
 # Invariants & contracts
