@@ -4,6 +4,19 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-17** — The flush's descending `flushAssigns` sort stays, demoted from load-bearing to
+  defensive. `assignNote`'s eviction guard (same day) made *either* commit order leave `collisionIdx`
+  correct, so the sort no longer rescues a peer's slot from an occupier; what it still buys is one
+  fewer transient same-seat collision, and every pending key costs the backstop a full note-array
+  walk at the unwind — measured at ~65µs on glasswork against a ~17.7ms flush. *Chosen over*
+  removing it: one comparison that spares a scan is worth keeping, and the comment was what had gone
+  wrong, not the code. The backstop's own `steady state finds none` contract was left alone because
+  a probe showed it already true — on the flush path mm's commit drives reload→rebuild from inside
+  `flush()`, so the tail walk separates first and the backstop finds nothing; disabling either layer
+  still separates, so the two are redundant rather than jointly required. The reported premise that
+  the walk never runs on that path was wrong, and `docs/trackerManager.md`'s "a rebuild always
+  follows a flush" was right.
+
 - **2026-07-17** — Not every luacheck shadow is a defect. A *protective* shadow stays where a pure
   function must not reach its module's upvalues (trackerView's `projectionEpoch` shadows
   `length`/`timeSigs` by design), as does a local mirroring the field it fills (editCursor's `partAt`

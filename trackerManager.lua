@@ -1089,8 +1089,8 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     adds, assigns, deletes = {}, {}, {}
     perf.count('committed', #flushAdds + #flushAssigns + #flushDeletes)
 
-    -- Same-pitch moves transiently share a content key: an occupier clobbers a peer's collisionIdx
-    -- slot before it vacates. Sort descending so every vacate leads its occupy. see docs/trackerManager.md § Flush collision scan
+    -- Same-pitch moves transiently share a seat key. assignNote's guard keeps the index correct in
+    -- either order; descending only spares the backstop a scan. see docs/trackerManager.md § Commit ordering
     table.sort(flushAssigns, function(a, b)
       return (a.update.ppq or a.evt.ppq or 0) > (b.update.ppq or b.evt.ppq or 0)
     end)
@@ -2700,7 +2700,7 @@ local function rebuildTails(noteLive, deferred, scratch)
     end
     ::nextChan::
   end
-  -- Clamps commit first: separating colliding same-pitch onsets settles mm's content keys before
+  -- Clamps commit first: separating colliding same-pitch onsets settles mm's seat keys before
   -- the clip pass runs. Clips only touch endppq — safe to batch with adds.
   clampWrites.commit()
   -- fxNote del/add + parked restores commit in one mm:modify/MIDI_Sort; canonical

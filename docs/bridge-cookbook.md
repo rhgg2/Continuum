@@ -69,8 +69,9 @@ return out
 ```
 
 `mm:notes()` / `mm:ccs()` yield cloned records; `mm:events()` yields
-`(token, clone)` when you need the **token** to edit or delete.
-`mm:notesRaw()` is the uncloned fast path — read only, never mutate.
+`(uuid, clone)` — the uuid is the handle you edit and delete by.
+`mm:notesRaw()` is the uncloned fast path — read only, never mutate;
+`mm:notesRaw(chan)` narrows it to one channel's slice.
 
 Rendered channel columns (post-rebuild, logical-frame, view-ready):
 
@@ -175,14 +176,14 @@ repeatable without a reload. This is the path interval dirt narrows.
 local perf, util = require('perf'), require('util')
 local tm, mm = page('tracker').tm, page('tracker').mm
 local function firstNote() for _, e in mm:events() do if e.evType == 'note' then return e end end end
-local t = firstNote(); local orig = t.vel; local nv = orig == 100 and 99 or 100
+local t = firstNote(); local orig = t.vel; local nv = orig == 100 and 99 or 100   -- t.uuid addresses it
 collectgarbage('collect')
 local lines, wasOn = {}, perf.on
 local real = util.print; util.print = function(s) lines[#lines+1] = tostring(s) end
 perf.on = true
-tm:assignEvent(t.token, { vel = nv }); tm:flush()               -- MEASURED
+tm:assignEvent(t.uuid, { vel = nv }); tm:flush()                -- MEASURED
 perf.on = wasOn; util.print = real
-local b = firstNote(); tm:assignEvent(b.token, { vel = orig }); tm:flush()  -- revert
+local b = firstNote(); tm:assignEvent(b.uuid, { vel = orig }); tm:flush()   -- revert
 return lines
 ```
 
@@ -235,6 +236,36 @@ return 'injected'
 Clear the take with a terminal-only blob:
 `reaper.MIDI_SetAllEvts(take, string.pack('i4Bs4', 0, 0, '\xB0\x7B\x00'))`.
 
+### Building glasswork — the macro fixture a blob can't carry
+
+`tests/fixtures/glasswork.lua` authors the 32-bar macro/generator torture
+take: all 9 generator kinds, an fx chain, a mirror-group canon, 53EDO
+detune under c58 swing. It authors *events only* — the caller owes it
+temper, swing and length first, which is exactly the generator config a
+raw-MIDI blob cannot carry. REAPER's `package.path` has no `tests/` on it,
+so prepend the repo's.
+
+```lua
+package.path = '/abs/path/to/Continuum/tests/?.lua;' .. package.path
+local gw = require('fixtures.glasswork')
+local p = page('tracker'); local tm, gm = p.tm, p.gm
+
+cm:assign('project', { swings = { c58 = gw.classic58 }, temper = '53EDO' })
+ds:assign('swing', { global = 'c58' })
+tm:setLength(gw.LENGTH)
+gw.build(tm, gm)
+return 'built'
+```
+
+Pass `undo_label='build glasswork'`. It lands 1268 model notes and ~9.7k
+ccs over 16 channels in ~230ms, so give the call a generous `timeout_s`.
+Build into an *empty* take — it adds to whatever is already there.
+
+The bar math assumes 12288 ppq per quarter (`BAR = 49152`); check
+`mm:resolution()` before trusting it on another project. `build` flushes
+twice of its own accord, and the second one is load-bearing: the canon
+subject must earn its uuids before `gm:markGroup` can mark it.
+
 ## Writing — the golden rules
 
 1. **Confirm with the user before any destructive chunk.**
@@ -264,13 +295,13 @@ the two frames coincide.
 
 ### Edit a note
 
-Stage an assign against the live event (it carries `.token`) or its
-token, then flush. Get the event from a channel column or `mm:events()`:
+Stage an assign against the live event (it carries `.uuid`) or its bare
+uuid, then flush. Get the event from a channel column or `mm:events()`:
 
 ```lua
 local p = page('tracker'); local tm, mm = p.tm, p.mm
-local token = select(1, mm:events()())   -- first event's token; or find yours
-tm:assignEvent(token, { vel = 40, pitch = 62 })
+local uuid = select(1, mm:events()())   -- first event's uuid; or find yours
+tm:assignEvent(uuid, { vel = 40, pitch = 62 })
 tm:flush()
 return 'edited'
 ```
@@ -282,8 +313,8 @@ muted, lane`. `muted=false` clears the flag.
 
 ```lua
 local p = page('tracker'); local tm, mm = p.tm, p.mm
-local token = select(1, mm:events()())
-tm:deleteEvent(token)   -- accepts an event table (with .token) or a bare token
+local uuid = select(1, mm:events()())
+tm:deleteEvent(uuid)   -- accepts an event table (with .uuid) or a bare uuid
 tm:flush()
 return 'deleted'
 ```
@@ -297,16 +328,17 @@ writes in `mm:modify` — the required bracket for `add*`/`assign*`/
 ```lua
 local p = page('tracker'); local mm = p.mm
 mm:modify(function()
-  local token = mm:add{ evType='note', chan=1, pitch=60, vel=100, ppq=0, endppq=12288 }
-  mm:assign(token, { vel = 80 })
+  local uuid = mm:add{ evType='note', chan=1, pitch=60, vel=100, ppq=0, endppq=12288 }
+  mm:assign(uuid, { vel = 80 })
 end)
 return 'raw write'
 ```
 
-`mm:add` returns the token; `mm:assign(token, t)` returns the possibly
-re-keyed token (re-capture it if an identity field moved);
-`mm:delete(token)` removes in place. All ppq here is **raw** — convert
-from logical with `tm:fromLogical` first if you're placing by grid row.
+`mm:add` returns the new event's uuid; `mm:assign(uuid, t)` returns it
+unchanged — identity is stable, so nothing to re-capture even when a
+seat field moves; `mm:delete(uuid)` removes in place. All ppq here is
+**raw** — convert from logical with `tm:fromLogical` first if you're
+placing by grid row.
 
 ### Take length
 
@@ -323,10 +355,13 @@ anything undoable goes through `tm`/`mm` instead.
 
 ## Gotchas
 
-- **Tokens are per-rebuild.** A token is content-keyed and re-minted
-  each rebuild; a `loc` is valid only within one rebuild-to-flush
-  window. For a handle that survives rebuilds, use the note's durable
-  `uuid` via `tm:byUuid(uuid)`.
+- **Address by uuid; `loc` is not a handle.** A `loc` indexes mm's
+  arrays and is valid only within one rebuild-to-flush window. The
+  durable handle is the event's `uuid` (`tm:byUuid`, `mm:byUuid`).
+  Tokens are gone — content-keyed addressing was retired on 2026-07-16,
+  and nothing in the stack mints one. The failure is silent: a stale
+  recipe reading `.token` gets `nil`, and `tm:assignEvent(nil, …)`
+  no-ops through the flush without complaint.
 - **`mm:modify` is mandatory for `mm` writes.** Calling `mm:add`
   outside it works in-memory but you lose the single-flush guarantee;
   `tm:flush()` handles this for you on the `tm` path.

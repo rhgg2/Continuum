@@ -721,11 +721,20 @@ transient rather than unnameable — and the two nudges became the pipeline
 separating one collision three times.
 
 **Commit ordering.** Notes are addressed by uuid, but `collisionIdx` is
-keyed by realised ppq: an occupying move (an edit landing on a peer's
-slot) clobbers that peer's slot before the peer vacates it. The flush
-applies note moves by **descending target ppq** so every vacate lands
-ahead of its occupy. The reseat path is immune: reswing moves both notes
-to fresh raws, away from each other's slots.
+keyed by realised ppq, so an occupying move (an edit landing on a peer's
+seat) reaches that seat before the peer vacates it. The flush applies note
+moves by **descending target ppq** so every vacate leads its occupy. The
+reseat path is immune: reswing moves both notes to fresh raws, away from
+each other's seats.
+
+The sort stopped being load-bearing on 2026-07-17, when `assignNote` began
+evicting only the slot it still owns: the occupier's clobber no longer
+strands the peer, and either order now leaves the index correct. What
+descending still buys is silence. An ascending commit records a transient
+same-seat collision, and every pending key costs the backstop a full
+`sparsePairs` walk of the note array at the unwind — measured at ~65µs on
+glasswork, against a ~17.7ms flush. Defensive rather than load-bearing,
+and too cheap to be worth removing.
 
 ## Flush collision scan
 
