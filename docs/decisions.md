@@ -4,6 +4,17 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-17** — `resizeNote` both *decides* and *performs* PA translation in the logical frame; the
+  two raw-frame computations that outlived the ownership move go. Its gate asked whether the raw delta
+  held at both endpoints — true under swing only when the note's logical length is an exact multiple of
+  the swing period, since only then do both endpoints keep their phase. At any other length a whole-note
+  move read as a resize and culled the PAs it should have carried (pinned red first). *Chosen over* a raw
+  gate with an `OPEN` special case: comparing logical **lengths** lets `math.huge` handle itself, as huge
+  minus either seat is huge. The carry moved for a sharper reason — it now realises the moved seat via
+  `fromLogical` instead of adding the host's raw delta, because on a settled channel `rebuildCCs` reads a
+  raw/seat disagreement as an external edit and restamps `ppqL` from the raw, so the fabricated
+  realisation overwrote the intent the carry existed to preserve.
+
 - **2026-07-17** — tm separates same-pitch collisions at exactly one site, the tail walk; the reseat's
   and flush scan's nudges go. *Chosen over* keeping them as cheap insurance: the walk and mm's backstop
   each separate independently — proven by disabling each in turn, where only killing *both* lands two

@@ -76,6 +76,7 @@ local specs = {
   'tm_flush_collision_scan_spec',
   'tm_reseat_collision_spec',
   'tm_pa_attachment_spec',
+  'tm_pa_swung_translation_spec',
   'tm_conform_tail_spec',
   'tm_unified_projection_spec',
   'tm_rescale_conform_spec',

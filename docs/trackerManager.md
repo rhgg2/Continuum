@@ -603,12 +603,32 @@ the tail walk's same-pitch nudge does the same for a tick. A raw-frame
 test calls those PAs detached, and um then declines to move or cull them
 with their host — orphaning them in `mm`.
 
-`resizeNote` follows the same rule: it shifts a PA in **both** frames, so
-raw and intent never drift apart, and it culls on the logical seat. That
-is why it takes the logical span rather than the older `cullEnd`
+`resizeNote` follows the same rule, and has to follow it twice: once to
+decide whether a move is a translation, and again to perform the carry.
+
+The translation test compares **logical lengths** (`L2 - L1 == endL -
+startL`), not raw deltas at the two endpoints. Swing is a periodic warp,
+so a whole-note logical move is a whole-note raw move only when the
+note's length is an exact multiple of the swing period — only then do
+both endpoints keep their phase and shift by the same amount. At any
+other length they warp differently, and a raw-frame test reads the move
+as a resize, culling every PA the new span excludes. That is also why the
+function takes the logical span rather than the older `cullEnd`
 parameter, which existed only to smuggle the logical `OPEN` sentinel into
-a raw-frame test. In the logical frame `OPEN` is just `math.huge`, and an
-open tail needs no special case at all.
+a raw-frame test. In the logical frame `OPEN` is just `math.huge`, and
+since `math.huge` minus either seat is `math.huge`, an open tail that
+stays open satisfies the same equality with no special case.
+
+The carry is logical for the same reason, and for a sharper one. It moves
+the PA's seat by the host's logical shift and realises that seat through
+`fromLogical`, rather than adding the host's raw delta to the PA's raw.
+Under swing those two disagree — and a PA whose raw and seat disagree is
+not merely imprecise. On a settled channel the CC walk reads the
+divergence as an external raw edit and restamps `ppqL` from the raw
+(`rebuildCCs`), so a fabricated realisation silently overwrites the very
+intent the carry set out to preserve. Only a `staleSwing` channel gets
+the reverse treatment, its seat reswung into raw; everywhere else, raw
+wins the disagreement.
 
 ## Muting
 

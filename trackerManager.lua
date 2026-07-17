@@ -776,14 +776,19 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     deleteLowlevel(n)
   end
 
-  -- P1/P2 are the new raw span, the one that reaches mm; L1/L2 the new logical span, the frame
-  -- PA attachment and culling test. An OPEN L2 needs no special case -- it is math.huge.
+  -- P1/P2 are the new raw span, the one that reaches mm; L1/L2 the new logical span -- the frame
+  -- attachment, the translation test and culling all share. see docs/trackerManager.md § PA binding
   local function resizeNote(n, P1, P2, L1, L2)
-    local shift  = P1 - n.ppq
-    local shiftL = L1 - (n.ppqL or n.ppq)
-    if shift ~= 0 and P2 - n.endppq == shift then
+    local startL, endL = n.ppqL or n.ppq, n.endppqL or n.endppq
+    local shiftL = L1 - startL
+    -- Equal logical lengths, not equal raw deltas: swing warps both endpoints alike only when the
+    -- length is a period multiple. An OPEN endL needs no case -- huge minus either seat is huge.
+    if shiftL ~= 0 and L2 - L1 == endL - startL then
       forEachAttachedPA(n, function(evt)
-        assignLowlevel(evt, { ppq = evt.ppq + shift, ppqL = (evt.ppqL or evt.ppq) + shiftL })
+        -- Realise the moved seat, never add the host's raw delta: under swing those disagree, and
+        -- the CC walk restamps ppqL from a divergent raw -- overwriting the intent being carried.
+        local seat = (evt.ppqL or evt.ppq) + shiftL
+        assignLowlevel(evt, { ppq = tm:fromLogical(n.chan, seat), ppqL = seat })
       end)
     else
       local lastPA, lastSeat
