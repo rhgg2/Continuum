@@ -1,4 +1,4 @@
-@module sampleManager  src=sampleManager.lua  loc=439  sha=c7fee67  mode=chunk  self=sm
+@module sampleManager  src=sampleManager.lua  loc=438  sha=ec591ad  mode=chunk  self=sm
 @deps fileOps, cm, ds
 
 # Invariants & contracts
@@ -18,105 +18,103 @@
   @shape  mailboxHeader  = [seq, seq_ack, slot, op, start, end, pathLen, nameLen, <pathBytes...>, <nameBytes...>]   -- gmem words at SLOT_BASE+id*SLOT_STRIDE  @ 15
 
 # Imports
-  @require util = 'util'  @ 16
-  @require fs = 'fs'  @ 17
+  @require fs = 'fs'  @ 16
 
 # Private state
-  @state SAMPLER_FX = 'Continuum Sampler'  @ 19
-  @state GMEM_NS = 'Continuum_sampler'  @ 20
-  @state MAGIC = 1717658484  @ 21   -- 'CTML' as 32-bit ASCII
-  @state MAX_INSTANCES = 128  @ 22
-  @state N_SAMPLES = 64  @ 23
-  @state PATH_MAX = 1019  @ 25
-  @state NAME_MAX = 64  @ 26
-  @state SLOT_STRIDE = 8 + PATH_MAX + NAME_MAX  @ 27   -- 1091
-  @state PREVIEW_BASE = 1024  @ 29
-  @state SLOT_BASE = 561152  @ 32
-  @state BOOT_BASE = SLOT_BASE + MAX_INSTANCES * SLOT_STRIDE  @ 33   -- 700800
-  @state PREVIEW_SLOT_IDX = N_SAMPLES  @ 35
-  @state SLIDER_INSTANCE_ID = 1  @ 36   -- slider2 in JSFX = param index 1 (0-based)
-  @state PEXT_KEY = 'P_EXT:samplerInstanceId'  @ 37
-  @state sm = {}  @ 92
-  @state trackStates = {}  @ 94
-  @state currentPrefix = nil  @ 95
+  @state SAMPLER_FX = 'Continuum Sampler'  @ 18
+  @state GMEM_NS = 'Continuum_sampler'  @ 19
+  @state MAGIC = 1717658484  @ 20   -- 'CTML' as 32-bit ASCII
+  @state MAX_INSTANCES = 128  @ 21
+  @state N_SAMPLES = 64  @ 22
+  @state PATH_MAX = 1019  @ 24
+  @state NAME_MAX = 64  @ 25
+  @state SLOT_STRIDE = 8 + PATH_MAX + NAME_MAX  @ 26   -- 1091
+  @state PREVIEW_BASE = 1024  @ 28
+  @state SLOT_BASE = 561152  @ 31
+  @state BOOT_BASE = SLOT_BASE + MAX_INSTANCES * SLOT_STRIDE  @ 32   -- 700800
+  @state PREVIEW_SLOT_IDX = N_SAMPLES  @ 34
+  @state SLIDER_INSTANCE_ID = 1  @ 35   -- slider2 in JSFX = param index 1 (0-based)
+  @state PEXT_KEY = 'P_EXT:samplerInstanceId'  @ 36
+  @state sm = {}  @ 91
+  @state trackStates = {}  @ 93
+  @state currentPrefix = nil  @ 94
 
 # Private functions
-  @fn writePath(base, path)  @ 40-43
-      @contract  writePath emits NUL-terminated bytes; caller must ensure base+#path is within the addressable string region  @ 39
-  @fn findSamplerFx(track)  @ 45-51
-  @fn forceAnticipativeFxOff(track)  @ 55-60
+  @fn writePath(base, path)  @ 39-42
+      @contract  writePath emits NUL-terminated bytes; caller must ensure base+#path is within the addressable string region  @ 38
+  @fn findSamplerFx(track)  @ 44-50
+  @fn forceAnticipativeFxOff(track)  @ 54-59
       -- Force anticipative FX off (I_PERFFLAGS bit 1): sampler must not render ahead
       -- of the play cursor. Applied once per track; re-applied when its FX GUID changes.
-  @fn readInstanceId(track)  @ 63-68
-      @contract  readInstanceId validates the P_EXT value into [0, MAX_INSTANCES); returns nil for missing/out-of-range/non-numeric  @ 62
-  @fn gatherTakenIds(skipTrack)  @ 71-81
-      @contract  gatherTakenIds skips skipTrack so a re-assignment of the same track doesn't see its own id as taken  @ 70
-  @fn nextFreeId(taken)  @ 83-88
-  @fn absFor(rel)  @ 97-101
-  @fn ensureTrackState(track)  @ 102-111
-  @fn relForSrc(srcBase, hash)  @ 113-119
-  @fn setEntry(idx, fields)  @ 121-126
-  @fn clearEntry(idx)  @ 128-132
-  @fn pushSlot(state, slot, opts)  @ 136-156
-      @contract  pushSlot merges into the existing pendingEntry for slot; op=1 (clear) wipes path/name/start/end; op=0 only overrides explicitly-passed fields  @ 134
-      @contract  byOrder records first-seen slot only (no duplicate enqueue); merges into the existing bySlot entry to preserve drain ordering  @ 135
-  @fn drain(state)  @ 161-191
-      @contract  drain writes header words in order [slot, op, start, end, pathLen, nameLen, body...] then bumps seq last so JSFX only fires once the body is in  @ 158
-      @contract  drain gates on seq == seq_ack at addr/addr+1 — JSFX must have consumed the prior write before the next one can land  @ 159
-      @contract  drain is no-op while instanceId is nil (track lacks the FX) or queue is empty  @ 160
+  @fn readInstanceId(track)  @ 62-67
+      @contract  readInstanceId validates the P_EXT value into [0, MAX_INSTANCES); returns nil for missing/out-of-range/non-numeric  @ 61
+  @fn gatherTakenIds(skipTrack)  @ 70-80
+      @contract  gatherTakenIds skips skipTrack so a re-assignment of the same track doesn't see its own id as taken  @ 69
+  @fn nextFreeId(taken)  @ 82-87
+  @fn absFor(rel)  @ 96-100
+  @fn ensureTrackState(track)  @ 101-110
+  @fn relForSrc(srcBase, hash)  @ 112-118
+  @fn setEntry(idx, fields)  @ 120-125
+  @fn clearEntry(idx)  @ 127-131
+  @fn pushSlot(state, slot, opts)  @ 135-155
+      @contract  pushSlot merges into the existing pendingEntry for slot; op=1 (clear) wipes path/name/start/end; op=0 only overrides explicitly-passed fields  @ 133
+      @contract  byOrder records first-seen slot only (no duplicate enqueue); merges into the existing bySlot entry to preserve drain ordering  @ 134
+  @fn drain(state)  @ 160-190
+      @contract  drain writes header words in order [slot, op, start, end, pathLen, nameLen, body...] then bumps seq last so JSFX only fires once the body is in  @ 157
+      @contract  drain gates on seq == seq_ack at addr/addr+1 — JSFX must have consumed the prior write before the next one can land  @ 158
+      @contract  drain is no-op while instanceId is nil (track lacks the FX) or queue is empty  @ 159
 
 # Public API (sm:*)
-  @api sm:isLive(track)  @ 193-195
-  @api sm:getInstanceId(track)  @ 197-208
-  @api sm:rehydrateTrack(track)  @ 210-224
-  @api sm:syncSlot(track, slot)  @ 226-239
-  @api sm:tick()  @ 244-275
-      @contract  tick is the only caller of gmem_attach for the bundled mailbox path; coordinator must invoke per frame  @ 241
-      @contract  tick reaps trackStates entries for tracks whose sampler FX has been removed (else closed-over state leaks)  @ 242
-      @contract  first-sight FX-GUID binding does NOT reset state (lastBootToken=0 still triggers rehydrate via the boot-token branch)  @ 243
+  @api sm:isLive(track)  @ 192-194
+  @api sm:getInstanceId(track)  @ 196-207
+  @api sm:rehydrateTrack(track)  @ 209-223
+  @api sm:syncSlot(track, slot)  @ 225-238
+  @api sm:tick()  @ 243-274
+      @contract  tick is the only caller of gmem_attach for the bundled mailbox path; coordinator must invoke per frame  @ 240
+      @contract  tick reaps trackStates entries for tracks whose sampler FX has been removed (else closed-over state leaks)  @ 241
+      @contract  first-sight FX-GUID binding does NOT reset state (lastBootToken=0 still triggers rehydrate via the boot-token branch)  @ 242
   -- cm-authoritative slot operations
-  @api sm:assign(track, idx, srcPath)  @ 280-301
-      @contract  assign hashes srcPath, copies into projectPath/Continuum/<stem>-<hash>.<ext> if missing, writes cm rel path, queues mailbox push; returns false if hash or copy fails  @ 279
-  @api sm:loadSlot(track, slot, relPath)  @ 303-308
-  @api sm:clearSlot(track, slot)  @ 310-314
-  @api sm:setTrim(track, slot, startFrames, endFrames)  @ 317-323
-      @contract  setTrim sends start/end without path/name; pathLen=0/nameLen=0 in the wire payload means "leave alone" on the JSFX side  @ 316
-  @api sm:setName(track, slot, name)  @ 325-329
-  @api sm:stageInto(track, idx, srcPath)  @ 331-341
+  @api sm:assign(track, idx, srcPath)  @ 279-300
+      @contract  assign hashes srcPath, copies into projectPath/Continuum/<stem>-<hash>.<ext> if missing, writes cm rel path, queues mailbox push; returns false if hash or copy fails  @ 278
+  @api sm:loadSlot(track, slot, relPath)  @ 302-307
+  @api sm:clearSlot(track, slot)  @ 309-313
+  @api sm:setTrim(track, slot, startFrames, endFrames)  @ 316-322
+      @contract  setTrim sends start/end without path/name; pathLen=0/nameLen=0 in the wire payload means "leave alone" on the JSFX side  @ 315
+  @api sm:setName(track, slot, name)  @ 324-328
+  @api sm:stageInto(track, idx, srcPath)  @ 330-340
   -- Preview + prefix
-  @api sm:setPrefix(prefix)  @ 345-348
-  @api sm:previewSlot(track, slot, bounds)  @ 352-361
-      @contract  preview writes are silently dropped if the magic word at PREVIEW_BASE is non-zero (JSFX hasn't consumed the prior preview command)  @ 350
-      @contract  preview header order: payload words first, magic last — JSFX dispatches on the MAGIC write  @ 351
-  @api sm:stopPreview(track)  @ 364-372
-      @contract  stopPreview encodes "stop" as slot=-1 in the same preview mailbox; same magic-gate as previewSlot  @ 363
-  @api sm:previewPath(track, path)  @ 375-385
-      @contract  previewPath uses the dedicated PREVIEW_SLOT_IDX (=N_SAMPLES) so the JSFX side knows to load from the inline path bytes rather than a slot  @ 374
+  @api sm:setPrefix(prefix)  @ 344-347
+  @api sm:previewSlot(track, slot, bounds)  @ 351-360
+      @contract  preview writes are silently dropped if the magic word at PREVIEW_BASE is non-zero (JSFX hasn't consumed the prior preview command)  @ 349
+      @contract  preview header order: payload words first, magic last — JSFX dispatches on the MAGIC write  @ 350
+  @api sm:stopPreview(track)  @ 363-371
+      @contract  stopPreview encodes "stop" as slot=-1 in the same preview mailbox; same magic-gate as previewSlot  @ 362
+  @api sm:previewPath(track, path)  @ 374-384
+      @contract  previewPath uses the dedicated PREVIEW_SLOT_IDX (=N_SAMPLES) so the JSFX side knows to load from the inline path bytes rather than a slot  @ 373
   -- Track surface
-  @api sm:listTracks()  @ 389-401
-  @api sm:migrate(projectPath, oldProjectPath)  @ 406-423
-      @contract  migrate iterates every sampler track via ds:getAt so non-bound tracks migrate too  @ 403
-      @contract  ds rel paths are preserved across migrate; only file bytes move  @ 404
-      @contract  migrate is a no-op if oldProjectPath is missing or unchanged  @ 405
-  @api sm:watchPath()  @ 428-436
-      @contract  watchPath calls setPrefix every call (idempotent)  @ 425
-      @contract  migrate + cm.lastProjectPath write only on GetProjectPath change  @ 426
-      @contract  cm.lastProjectPath persists at project-tier so close-during-save is caught next open  @ 427
+  @api sm:listTracks()  @ 388-400
+  @api sm:migrate(projectPath, oldProjectPath)  @ 405-422
+      @contract  migrate iterates every sampler track via ds:getAt so non-bound tracks migrate too  @ 402
+      @contract  ds rel paths are preserved across migrate; only file bytes move  @ 403
+      @contract  migrate is a no-op if oldProjectPath is missing or unchanged  @ 404
+  @api sm:watchPath()  @ 427-435
+      @contract  watchPath calls setPrefix every call (idempotent)  @ 424
+      @contract  migrate + cm.lastProjectPath write only on GetProjectPath change  @ 425
+      @contract  cm.lastProjectPath persists at project-tier so close-during-save is caught next open  @ 426
 
 # Uses (outbound edges)
-  @use call    cm:get  @ watchPath:432
-  @use call    cm:set  @ watchPath:435
-  @use call    ds:assign  @ setEntry:125 clearEntry:131 assign:296
-  @use call    ds:get  @ setEntry:122 clearEntry:129 syncSlot:228 assign:292
-  @use call    ds:getAt  @ rehydrateTrack:212 migrate:410
-  @use call    fileOps.copy  @ assign:287 stageInto:338
-  @use call    fileOps.exists  @ assign:287 stageInto:338
-  @use call    fileOps.hash  @ assign:282 stageInto:333
-  @use call    fileOps.mkdir  @ assign:286 stageInto:337 migrate:416
-  @use call    fileOps.move  @ migrate:417
-  @use call    fs.basename  @ assign:284,288 stageInto:335
-  @use require fs  @ 17
-  @use require util  @ 16
+  @use call    cm:get  @ watchPath:431
+  @use call    cm:set  @ watchPath:434
+  @use call    ds:assign  @ setEntry:124 clearEntry:130 assign:295
+  @use call    ds:get  @ setEntry:121 clearEntry:128 syncSlot:227 assign:291
+  @use call    ds:getAt  @ rehydrateTrack:211 migrate:409
+  @use call    fileOps.copy  @ assign:286 stageInto:337
+  @use call    fileOps.exists  @ assign:286 stageInto:337
+  @use call    fileOps.hash  @ assign:281 stageInto:332
+  @use call    fileOps.mkdir  @ assign:285 stageInto:336 migrate:415
+  @use call    fileOps.move  @ migrate:416
+  @use call    fs.basename  @ assign:283,287 stageInto:334
+  @use require fs  @ 16
 
 # REAPER API surface
   @reaper gmem_write, gmem_read, gmem_attach
@@ -130,31 +128,31 @@
   @reaper GetTrackName
 
 # Fields (r read / w write incl. constructor keys)
-  @field r byOrder  @ pushSlot:141 drain:162
-  @field w byOrder  @ ensureTrackState:107 tick:259
-  @field r bySlot  @ pushSlot:137,140 drain:168,169
-  @field w bySlot  @ ensureTrackState:107 tick:259
-  @field r cm  @ 90
-  @field r ds  @ 90
-  @field r fileOps  @ 90
-  @field r fxGuid  @ tick:252,255
-  @field w fxGuid  @ ensureTrackState:105 tick:253,256
-  @field r instanceId  @ drain:163,164 tick:263,264
-  @field w instanceId  @ ensureTrackState:105 tick:262 listTracks:397
-  @field r lastBootToken  @ tick:265
-  @field w lastBootToken  @ ensureTrackState:105 tick:257,266
-  @field r name  @ pushSlot:152 drain:172 rehydrateTrack:218 syncSlot:234
-  @field w name  @ pushSlot:146,152 rehydrateTrack:218 syncSlot:234 assign:294,298 setName:326,327 listTracks:396
-  @field r op  @ pushSlot:143 drain:177
-  @field w op  @ pushSlot:139,144,150 syncSlot:230 clearSlot:312
-  @field r path  @ pushSlot:151 drain:171 rehydrateTrack:215,217 syncSlot:229,233 assign:294 migrate:412,413,414
-  @field w path  @ pushSlot:145,151 rehydrateTrack:217 syncSlot:233 assign:298 loadSlot:305
-  @field r pending  @ pushSlot:137,140,141 drain:162,168,169
-  @field w pending  @ ensureTrackState:107 tick:259
-  @field w slot  @ pushSlot:139
-  @field r slotSeq  @ drain:189,190
-  @field w slotSeq  @ ensureTrackState:106 drain:189 tick:258
-  @field r start  @ pushSlot:153 drain:178 rehydrateTrack:219 syncSlot:235 assign:295
-  @field w start  @ pushSlot:147,153 rehydrateTrack:219 syncSlot:235 assign:298 loadSlot:305 setTrim:318,320
-  @field r track  @ migrate:410
-  @field w track  @ listTracks:395
+  @field r byOrder  @ pushSlot:140 drain:161
+  @field w byOrder  @ ensureTrackState:106 tick:258
+  @field r bySlot  @ pushSlot:136,139 drain:167,168
+  @field w bySlot  @ ensureTrackState:106 tick:258
+  @field r cm  @ 89
+  @field r ds  @ 89
+  @field r fileOps  @ 89
+  @field r fxGuid  @ tick:251,254
+  @field w fxGuid  @ ensureTrackState:104 tick:252,255
+  @field r instanceId  @ drain:162,163 tick:262,263
+  @field w instanceId  @ ensureTrackState:104 tick:261 listTracks:396
+  @field r lastBootToken  @ tick:264
+  @field w lastBootToken  @ ensureTrackState:104 tick:256,265
+  @field r name  @ pushSlot:151 drain:171 rehydrateTrack:217 syncSlot:233
+  @field w name  @ pushSlot:145,151 rehydrateTrack:217 syncSlot:233 assign:293,297 setName:325,326 listTracks:395
+  @field r op  @ pushSlot:142 drain:176
+  @field w op  @ pushSlot:138,143,149 syncSlot:229 clearSlot:311
+  @field r path  @ pushSlot:150 drain:170 rehydrateTrack:214,216 syncSlot:228,232 assign:293 migrate:411,412,413
+  @field w path  @ pushSlot:144,150 rehydrateTrack:216 syncSlot:232 assign:297 loadSlot:304
+  @field r pending  @ pushSlot:136,139,140 drain:161,167,168
+  @field w pending  @ ensureTrackState:106 tick:258
+  @field w slot  @ pushSlot:138
+  @field r slotSeq  @ drain:188,189
+  @field w slotSeq  @ ensureTrackState:105 drain:188 tick:257
+  @field r start  @ pushSlot:152 drain:177 rehydrateTrack:218 syncSlot:234 assign:294
+  @field w start  @ pushSlot:146,152 rehydrateTrack:218 syncSlot:234 assign:297 loadSlot:304 setTrim:317,319
+  @field r track  @ migrate:409
+  @field w track  @ listTracks:394

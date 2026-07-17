@@ -1169,8 +1169,10 @@ local stripPlan do
     rowHighlight(onStage and cur.param == 0 and stripFocus)
     local headX, availW = ImGui.GetCursorPosX(ctx), select(1, ImGui.GetContentRegionAvail(ctx))
     chrome.drawPicker{
+      kind = 'fxSwap_' .. col.index, buttonLabel = col.label, flat = true,
       -- Grow to fit the label, but stop short of the reorder cluster (which sits at availW - VALUE_W).
-      kind = 'fxSwap_' .. col.index, buttonLabel = col.label, flat = true, minWidth = LABEL_W, maxWidth = availW - VALUE_W - LABEL_GAP, items = kindItems(col.kind),
+      minWidth = LABEL_W, maxWidth = availW - VALUE_W - LABEL_GAP,
+      items = kindItems(col.kind),
       onPick = function(kind) tv:replaceFxStage(host, col.index, fxSeed(kind)) end,
     }
     -- No clickToCursor here: picking a kind applies live via onPick without grabbing strip focus (mirrors a value edit).

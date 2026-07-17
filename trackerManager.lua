@@ -561,7 +561,8 @@ end
 
 ---------- UPDATE MANAGER
 
-local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked, flush, reload, idxReconcile, withDeferredSort, clearStaging, absorbReloadDirt do
+local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
+      flush, reload, idxReconcile, withDeferredSort, clearStaging, absorbReloadDirt do
 
   ----- State
 

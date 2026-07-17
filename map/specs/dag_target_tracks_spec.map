@@ -1,4 +1,4 @@
-@spec dag_target_tracks_spec  src=tests/specs/dag_target_tracks_spec.lua  loc=904  sha=8233379  cases=39
+@spec dag_target_tracks_spec  src=tests/specs/dag_target_tracks_spec.lua  loc=906  sha=8233379  cases=39
 @exercises DAG (DAG)
 @surface   DAG.targetTracks, DAG.compile
 
@@ -36,24 +36,24 @@
   @case 'absorb: primary override picks trackKey even with two audio parents'  [pure]  @ 403-418
   @case 'absorb: chain through two hops lands on terminal source trackKey'  [pure]  @ 422-447
   @case 'absorb: gain on now-intra-trackKey wire stays CU (no send to fold onto)'  [pure]  @ 451-466
-  @case 'absorb: master-hosted class never absorbed even with single audio parent'  [pure]  @ 470-490
-  @case 'absorb: source-hosted class is never the absorbee (its trackKey is the source track)'  [pure]  @ 494-506
-  @case 'absorb: send from another non-trackKey class retargets to trackKey classKey'  [pure]  @ 510-533
-  @case 'intraConns: source -> fx is the only intra wire; fx -> master is a parent send'  [pure]  @ 544-560
-  @case 'intraConns: fx -> fx chain conn carries both port indices'  [pure]  @ 564-581
-  @case 'intraConns: fx -> master inside master-hosted class anchors track-output'  [pure]  @ 585-603
-  @case 'intraConns: folded boundary gain CU never appears'  [pure]  @ 607-625
-  @case 'parentFeed: cross-trackKey source-to-master stamps source on sender'  [pure]  @ 632-647
-  @case 'parentFeed: cross-trackKey fx-to-master names the fx producer (post-fold)'  [pure]  @ 651-668
-  @case 'parentFeed: folded gain CU on master-bound wire bypassed to real producer'  [pure]  @ 672-687
-  @case 'parentFeed: midi cross-trackKey to master-hosted does not set parentFeed'  [pure]  @ 692-706
-  @case 'intraConns: un-folded gain CU on intra-trackKey wire is included'  [pure]  @ 710-736
-  @case 'merge: intra gain is a per-consumer merge CU (nPairs=1, audioSum=0)'  [pure]  @ 742-762
-  @case 'merge: two gained wires to master collapse to one audioSum CU (last-wins fix)'  [pure]  @ 765-795
-  @case 'merge: matrix-fed audio fan-in past 16 fans out to a CU cascade'  [pure]  @ 798-825
-  @case 'merge: parent-send audio fan-in past 16 builds a sum-tree of CUs'  [pure]  @ 828-857
-  @case 'merge: distinct consumers get distinct merge CUs (per-consumer identity)'  [pure]  @ 860-877
-  @case 'midi absorption: consumer of a lone source-direct parent co-hosts, no new track'  [pure]  @ 880-902
+  @case 'absorb: master-hosted class never absorbed even with single audio parent'  [pure]  @ 470-492
+  @case 'absorb: source-hosted class is never the absorbee (its trackKey is the source track)'  [pure]  @ 496-508
+  @case 'absorb: send from another non-trackKey class retargets to trackKey classKey'  [pure]  @ 512-535
+  @case 'intraConns: source -> fx is the only intra wire; fx -> master is a parent send'  [pure]  @ 546-562
+  @case 'intraConns: fx -> fx chain conn carries both port indices'  [pure]  @ 566-583
+  @case 'intraConns: fx -> master inside master-hosted class anchors track-output'  [pure]  @ 587-605
+  @case 'intraConns: folded boundary gain CU never appears'  [pure]  @ 609-627
+  @case 'parentFeed: cross-trackKey source-to-master stamps source on sender'  [pure]  @ 634-649
+  @case 'parentFeed: cross-trackKey fx-to-master names the fx producer (post-fold)'  [pure]  @ 653-670
+  @case 'parentFeed: folded gain CU on master-bound wire bypassed to real producer'  [pure]  @ 674-689
+  @case 'parentFeed: midi cross-trackKey to master-hosted does not set parentFeed'  [pure]  @ 694-708
+  @case 'intraConns: un-folded gain CU on intra-trackKey wire is included'  [pure]  @ 712-738
+  @case 'merge: intra gain is a per-consumer merge CU (nPairs=1, audioSum=0)'  [pure]  @ 744-764
+  @case 'merge: two gained wires to master collapse to one audioSum CU (last-wins fix)'  [pure]  @ 767-797
+  @case 'merge: matrix-fed audio fan-in past 16 fans out to a CU cascade'  [pure]  @ 800-827
+  @case 'merge: parent-send audio fan-in past 16 builds a sum-tree of CUs'  [pure]  @ 830-859
+  @case 'merge: distinct consumers get distinct merge CUs (per-consumer identity)'  [pure]  @ 862-879
+  @case 'midi absorption: consumer of a lone source-direct parent co-hosts, no new track'  [pure]  @ 882-904
 
 # Uses (outbound edges)
   @use call DAG.targetTracks  @ 36
@@ -61,117 +61,117 @@
 
 # Fields (r read / w write incl. constructor keys)
   @field w audio  @ 7,16,24
-  @field r audioSum  @ 758,788,819,820,850
+  @field r audioSum  @ 760,790,821,822,852
   @field r display  @ 15
   @field w edges  @ 32
-  @field r from  @ 223,224,249,578,579,580,620,726,731,732,794,856
-  @field r from  @ 900
+  @field r from  @ 223,224,249,580,581,582,622,728,733,734,796,858
+  @field r from  @ 902
   @field w from  @ 99,100,119,120,121,137,138,155,156,157,185,186
   @field w from  @ 187,196,199,214,215,216,217,241,242,243,244,245
   @field w from  @ 265,266,285,286,287,288,289,290,307,308,309,310
   @field w from  @ 317,319,331,332,333,339,351,352,367,368,369,370
   @field w from  @ 391,392,398,410,411,416,432,433,434,435,442,445
-  @field w from  @ 458,460,479,480,481,486,500,501,521,522,523,524
-  @field w from  @ 529,531,552,553,556,559,571,572,573,592,593,594
-  @field w from  @ 599,615,616,617,624,641,642,643,645,646,661,662
-  @field w from  @ 663,664,666,667,680,681,682,683,685,700,701,702
-  @field w from  @ 717,718,719,720,748,749,776,777,778,779,780,781
-  @field w from  @ 806,808,838,839,840,843,867,868,869,870,890,891
-  @field w from  @ 892
-  @field r fromPort  @ 223,224,249,578,579
-  @field w fromPort  @ 196,199,216,217,339,416,442,445,486,531,556,559
-  @field w fromPort  @ 572,573,599,624,645,646,666,667,685,809,843
+  @field w from  @ 458,460,479,480,481,487,502,503,523,524,525,526
+  @field w from  @ 531,533,554,555,558,561,573,574,575,594,595,596
+  @field w from  @ 601,617,618,619,626,643,644,645,647,648,663,664
+  @field w from  @ 665,666,668,669,682,683,684,685,687,702,703,704
+  @field w from  @ 719,720,721,722,750,751,778,779,780,781,782,783
+  @field w from  @ 808,810,840,841,842,845,869,870,871,872,892,893
+  @field w from  @ 894
+  @field r fromPort  @ 223,224,249,580,581
+  @field w fromPort  @ 196,199,216,217,339,416,442,445,487,533,558,561
+  @field w fromPort  @ 574,575,601,626,647,648,668,669,687,811,845
   @field w fxDisplay  @ 15
-  @field r fxIdent  @ 754
+  @field r fxIdent  @ 756
   @field w fxIdent  @ 14
   @field r fxOrder  @ 62,75,88,103,106,124,142,164,191,268,292,315
-  @field r fxOrder  @ 341,356,375,396,414,440,462,488,504,527,894,896
-  @field r fx_a  @ 874,875
-  @field r fx_b  @ 874,876
-  @field w gain  @ 265,333,340,352,369,459,617,681,717,748,779,780
-  @field w gain  @ 809,867,868
-  @field r gains  @ 757,789,875,876
-  @field r id  @ 794,856
+  @field r fxOrder  @ 341,356,375,396,414,440,462,490,506,529,896,898
+  @field r fx_a  @ 876,877
+  @field r fx_b  @ 876,878
+  @field w gain  @ 265,333,340,352,369,459,619,683,719,750,781,782
+  @field w gain  @ 811,869,870
+  @field r gains  @ 759,791,877,878
+  @field r id  @ 796,858
   @field w id  @ 42
   @field r ident  @ 14
-  @field r inputEdges  @ 761,792,823,824,852
+  @field r inputEdges  @ 763,794,825,826,854
   @field r ins  @ 16,24
   @field w ins  @ 7,8,16,18,24,25,116,153,183,212,303,304
-  @field w ins  @ 305,329,389,408,429,430,456,519,569,590,613,639
-  @field w ins  @ 659,678,804,805,835,836
-  @field r intraConns  @ 555,575,598,619,623,725,730
+  @field w ins  @ 305,329,389,408,429,430,456,521,571,592,615,641
+  @field w ins  @ 661,680,806,807,837,838
+  @field r intraConns  @ 557,577,600,621,625,727,732
   @field w kind  @ 5,13,23
-  @field r mainSend  @ 63,76,104,143,166,167,192,354,372,485,487,505
-  @field r mainSend  @ 558,601,602,704
-  @field r mainSendGain  @ 355,373,686
+  @field r mainSend  @ 63,76,104,143,166,167,192,354,372,485,489,507
+  @field r mainSend  @ 560,603,604,706
+  @field r mainSendGain  @ 355,373,688
   @field r master  @ 29
   @field w midi  @ 8,18,25
-  @field r mode  @ 755,786
-  @field r nPairs  @ 756,787,817,818
+  @field r mode  @ 757,788
+  @field r nPairs  @ 758,789,819,820
   @field w name  @ 48,55,69,81,92,110,131,148,173,204,232,257
-  @field w name  @ 275,296,323,345,360,383,403,422,451,470,494,510
-  @field w name  @ 544,564,585,607,632,651,672,692,710,742,765,798
-  @field w name  @ 828,860,880
+  @field w name  @ 275,296,323,345,360,383,403,422,451,470,496,512
+  @field w name  @ 546,566,587,609,634,653,674,694,712,744,767,800
+  @field w name  @ 830,862,882
   @field w nextId  @ 32
-  @field r node  @ 753,785,815,850,851,852,873
+  @field r node  @ 755,787,817,852,853,854,875
   @field w node  @ 42
   @field w nodes  @ 32
-  @field w ops  @ 265,333,352,369,459,617,681,717,748,779,780,809
-  @field w ops  @ 867,868
-  @field r originConsumer  @ 759,790,821,822,851,873
-  @field r originTrackKey  @ 760,791,815
+  @field w ops  @ 265,333,352,369,459,619,683,719,750,781,782,811
+  @field w ops  @ 869,870
+  @field r originConsumer  @ 761,792,823,824,853,875
+  @field r originTrackKey  @ 762,793,817
   @field r outWires  @ 77,126,127,144,168,169,195,198,221,248,316,318
-  @field r outWires  @ 338,397,415,441,444,489,528,530,899,901
+  @field r outWires  @ 338,397,415,441,444,491,530,532,901,903
   @field r outs  @ 17
   @field w outs  @ 7,8,17,18,24,25,211,303,304,305,389,408
-  @field w outs  @ 429,430,456,519,568,569,804,805,835,836
-  @field r params  @ 755,756,757,758,786,787,788,789,817,818,819,820
-  @field r params  @ 850,875,876
-  @field r parentFeed  @ 486,559,645,646,666,667,685,705,794,856
+  @field w outs  @ 429,430,456,521,570,571,806,807,837,838
+  @field r params  @ 757,758,759,760,788,789,790,791,819,820,821,822
+  @field r params  @ 852,877,878
+  @field r parentFeed  @ 486,561,647,648,668,669,687,707,796,858
   @field w ports  @ 7,16,24
   @field w pos  @ 6,13,23
-  @field w primary  @ 410,432,434,458,521
+  @field w primary  @ 410,432,434,458,523
   @field w run  @ 49,56,70,82,93,111,132,149,174,205,233,258
-  @field w run  @ 276,297,324,346,361,384,404,423,452,471,495,511
-  @field w run  @ 545,565,586,608,633,652,673,693,711,743,766,799
-  @field w run  @ 829,861,881
-  @field w sink  @ 486,559,645,646,666,667,685
+  @field w run  @ 276,297,324,346,361,384,404,423,452,471,497,513
+  @field w run  @ 547,567,588,610,635,654,675,695,713,745,768,801
+  @field w run  @ 831,863,883
+  @field w sink  @ 487,561,647,648,668,669,687
   @field r synthNodes  @ 42
-  @field r to  @ 249,580,621,726,731,732,900
+  @field r to  @ 249,582,623,728,733,734,902
   @field w to  @ 99,100,119,120,121,137,138,155,156,157,185,186
   @field w to  @ 187,196,199,214,215,216,217,241,242,243,244,245
   @field w to  @ 265,266,285,286,287,288,289,290,307,308,309,310
   @field w to  @ 317,319,331,332,333,339,351,352,367,368,369,370
   @field w to  @ 391,392,398,410,411,416,432,433,434,435,442,445
-  @field w to  @ 458,460,479,480,481,500,501,521,522,523,524,529
-  @field w to  @ 531,552,553,556,571,572,573,592,593,594,599,615
-  @field w to  @ 616,617,624,641,642,643,661,662,663,664,680,681
-  @field w to  @ 682,683,700,701,702,717,718,719,720,748,749,776
-  @field w to  @ 777,778,779,780,781,806,808,838,839,840,843,867
-  @field w to  @ 868,869,870,890,891,892
+  @field w to  @ 458,460,479,480,481,502,503,523,524,525,526,531
+  @field w to  @ 533,554,555,558,573,574,575,594,595,596,601,617
+  @field w to  @ 618,619,626,643,644,645,663,664,665,666,682,683
+  @field w to  @ 684,685,702,703,704,719,720,721,722,750,751,778
+  @field w to  @ 779,780,781,782,783,808,810,840,841,842,845,869
+  @field w to  @ 870,871,872,892,893,894
   @field r toNode  @ 225,226,250
-  @field w toNode  @ 197,200,317,319,340,398,417,443,446,486,529,532
-  @field w toNode  @ 559,645,646,666,667,685
-  @field r toPort  @ 225,226,250,578,579
+  @field w toNode  @ 197,200,317,319,340,398,417,443,446,487,531,534
+  @field w toNode  @ 561,647,648,668,669,687
+  @field r toPort  @ 225,226,250,580,581
   @field w toPort  @ 119,120,155,156,186,187,197,200,215,216,217,332
   @field w toPort  @ 333,340,410,411,417,432,433,434,435,443,446,458
-  @field w toPort  @ 460,486,521,524,532,556,559,572,573,592,593,599
-  @field w toPort  @ 616,617,624,641,642,645,646,662,663,666,667,681
-  @field w toPort  @ 682,685,809
+  @field w toPort  @ 460,487,523,526,534,558,561,574,575,594,595,601
+  @field w toPort  @ 618,619,626,643,644,647,648,664,665,668,669,683
+  @field w toPort  @ 684,687,811
   @field r trackId  @ 61,141
   @field w trackId  @ 5
-  @field r trackKind  @ 60,74,102,105,140,163,190,313,395,439,503
-  @field r type  @ 250,900
+  @field r trackKind  @ 60,74,102,105,140,163,190,313,395,439,505
+  @field r type  @ 250,902
   @field w type  @ 99,100,119,120,121,137,138,155,156,157,185,186
   @field w type  @ 187,197,200,214,215,216,217,241,242,243,244,245
   @field w type  @ 265,266,285,286,287,288,289,290,307,308,309,310
   @field w type  @ 317,319,331,332,333,340,351,352,367,368,369,370
   @field w type  @ 391,392,398,410,411,417,432,433,434,435,443,446
-  @field w type  @ 458,460,479,480,481,500,501,521,522,523,524,529
-  @field w type  @ 532,552,553,556,571,572,573,592,593,594,599,615
-  @field w type  @ 616,617,624,641,642,643,661,662,663,664,680,681
-  @field w type  @ 682,683,700,701,702,717,718,719,720,748,749,776
-  @field w type  @ 777,778,779,780,781,806,808,838,839,840,843,867
-  @field w type  @ 868,869,870,890,891,892
+  @field w type  @ 458,460,479,480,481,502,503,523,524,525,526,531
+  @field w type  @ 534,554,555,558,573,574,575,594,595,596,601,617
+  @field w type  @ 618,619,626,643,644,645,663,664,665,666,682,683
+  @field w type  @ 684,685,702,703,704,719,720,721,722,750,751,778
+  @field w type  @ 779,780,781,782,783,808,810,840,841,842,845,869
+  @field w type  @ 870,871,872,892,893,894
   @field w x  @ 6,13,23
   @field w y  @ 6,13,23

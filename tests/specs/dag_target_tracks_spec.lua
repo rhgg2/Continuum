@@ -483,7 +483,9 @@ return {
       t.eq(tracks['__master__'], nil, 'FX-less master stays implicit')
       t.eq(tracks['guid-s1|guid-s2'], nil, 'master-hosted vacates merged key for sentinel')
       t.eq(tracks['guid-s1'].mainSend, true)
-      t.deepEq(tracks['guid-s1'].parentFeed, { from = 'A', fromPort = 1, toNode = 'master', toPort = 1, sink = '__master__' }, 'not absorbed: A->master is a parent send')
+      t.deepEq(tracks['guid-s1'].parentFeed,
+               { from = 'A', fromPort = 1, toNode = 'master', toPort = 1, sink = '__master__' },
+               'not absorbed: A->master is a parent send')
       t.eq(tracks['guid-s2'].mainSend, true, 'midi to master-hosted lifts parent send')
       t.deepEq(tracks['guid-s1'].fxOrder, { 'A' })
       t.deepEq(tracks['guid-s2'].outWires, {})

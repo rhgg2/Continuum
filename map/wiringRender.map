@@ -1,5 +1,5 @@
-@module wiringRender  src=wiringRender.lua  loc=2687  sha=217c1f8  mode=chunk  self=wr
-@deps cm, cmgr, chrome, gui, modalHost, wv, facade
+@module wiringRender  src=wiringRender.lua  loc=2687  sha=ec591ad  mode=chunk  self=wr
+@deps cmgr, chrome, gui, modalHost, wv, facade
 
 # Invariants & contracts
   @invariant  render + input only — holds wv only, never wm/rm; all queries/mutations go through wv.  @ 3
@@ -532,7 +532,6 @@
   @field r chrome  @ 20
   @field r claim  @ busSegments:1399,1470,1496
   @field w claim  @ renderCanvas:1769
-  @field r cm  @ 20
   @field r cmgr  @ 20
   @field r ctx  @ 22
   @field r currentLin  @ drawFader:1199,1204 renderCanvas:1833,1834,1863,2045,2058

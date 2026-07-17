@@ -4,6 +4,17 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-17** — luacheck's `.luacheckrc` carries the policy rather than the code bending to the
+  linter: `unused_args = false`, because uniform call-site signatures are the idiom here
+  (generators.lua:6 declares the stage protocol; viewContext.lua:49 documents `chan` as deliberately
+  unused; trackerView.lua:2638 already suppressed the same false positive by hand for
+  lua-language-server), and `max_code_line_length = 150` as a runaway guard, not a style rule, so
+  deliberately aligned tables (timing.lua:133) survive. Comment length stays with
+  comment_hygiene.py, which knows `--shape:` is cap-exempt. *Chosen over* renaming 35 protocol args
+  to `_`-prefix and reflowing 44 lines — both damage readable code to satisfy checks that do not fit
+  the idiom — and over dropping length checking entirely, which leaves nothing to stop a new
+  400-char line.
+
 - **2026-07-17** — The field-access index lives in the `.map` itself (`# Fields`, `@field r|w`, rows
   chunked at 12 sites) rather than a sidecar file: one derived artifact, greppable alongside the
   annotations. Table-constructor keys and `function recv.name(` declarations count as writes so

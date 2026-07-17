@@ -1,5 +1,5 @@
-@module arrangeManager  src=arrangeManager.lua  loc=996  sha=bd03e0c  mode=chunk  self=am
-@deps cm, ds, facade, eventMeta
+@module arrangeManager  src=arrangeManager.lua  loc=996  sha=ec591ad  mode=chunk  self=am
+@deps ds, facade, eventMeta
 
 # Invariants & contracts
   @invariant  project-wide singleton; reads REAPER items + cm directly, owns no take state of its own  @ 4
@@ -253,7 +253,6 @@
   @field w chanByCol  @ buildState:439
   @field r chanMask  @ chanRangeOf:399
   @field w chanMask  @ buildTakeShape:366
-  @field r cm  @ 25
   @field w colourIdx  @ buildTakeShape:368 slotRowsFor:385
   @field r ds  @ 25
   @field r eventMeta  @ 25

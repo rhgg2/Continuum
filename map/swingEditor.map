@@ -1,4 +1,4 @@
-@module swingEditor  src=swingEditor.lua  loc=752  sha=3970445  mode=chunk  self=swingEditor
+@module swingEditor  src=swingEditor.lua  loc=751  sha=ec591ad  mode=chunk  self=swingEditor
 @deps cm, ds, chrome, ctx, gui, facade, modalHost
 
 # Invariants & contracts
@@ -134,26 +134,26 @@
 
 # Public API (swingEditor:*)
   -- Public
-  @api swingEditor:open(name)  @ 720-730
+  @api swingEditor:open(name)  @ 720-729
       @contract  open(name?) selects entry; default prefers chan override → take swing → nil.  @ 718
       @contract  when already open, re-selects resolved target; snapshot captured at selection time.  @ 719
-  @api swingEditor:render(w, h)  @ 732
-  @api swingEditor:renderToolbar()  @ 736-743
+  @api swingEditor:render(w, h)  @ 731
+  @api swingEditor:renderToolbar()  @ 735-742
       -- Tools row (Reset / Rows-per-qn / Wild / Composite-phase) drawn into the page
       -- toolbar band by editorRender. Greys out with no slot selected, like the body.
-  @api swingEditor:libraryDescriptor()  @ 745
-  @api swingEditor:close()  @ 747
-  @api swingEditor:isOpen()  @ 749
+  @api swingEditor:libraryDescriptor()  @ 744
+  @api swingEditor:close()  @ 746
+  @api swingEditor:isOpen()  @ 748
 
 # Uses (outbound edges)
   @use call    ImGui.AlignTextToFramePadding  @ drawFactorRow:315,351,378 565 drawToolsRow:611,630
   @use call    ImGui.BeginChild  @ draw:707
-  @use call    ImGui.BeginDisabled  @ drawEditBody:690 renderToolbar:740
+  @use call    ImGui.BeginDisabled  @ drawEditBody:690 renderToolbar:739
   @use call    ImGui.Button  @ drawFactorRow:399,403,406 575,577 drawEditBody:695
   @use call    ImGui.CalcTextSize  @ gridMetrics:113 drawBandInto:207 drawFactorRow:318 drawEditBody:691
   @use call    ImGui.Dummy  @ drawEditBody:671
   @use call    ImGui.EndChild  @ draw:710
-  @use call    ImGui.EndDisabled  @ drawEditBody:696 renderToolbar:742
+  @use call    ImGui.EndDisabled  @ drawEditBody:696 renderToolbar:741
   @use call    ImGui.GetContentRegionAvail  @ drawEditBody:656
   @use call    ImGui.GetCursorPosX  @ drawFactorRow:317
   @use call    ImGui.GetCursorScreenPos  @ drawEditBody:667,676
@@ -187,7 +187,7 @@
   @use call    chrome.popChromeStyles  @ draw:711
   @use call    chrome.pushChromeStyles  @ draw:706
   @use call    chrome.verticalSeparator  @ drawToolsRow:619,628
-  @use call    cm:get  @ swingRead:237 582 open:727
+  @use call    cm:get  @ swingRead:237 582
   @use call    cm:getAt  @ swingRead:235 projectSwings:415 globalSwings:420
   @use call    cm:seedGlobalFromDefault  @ globalSwings:419
   @use call    cm:set  @ deleteFromTier:442 promote:450 460
@@ -274,11 +274,11 @@
   @field r label  @ periodLabel:72 drawFactorRow:358
   @field w label  @ 32,33,34,35,36,37 buildDescriptor:531
   @field w max  @ drawToolsRow:615
-  @field w mergeTiers  @ swingRead:237 582 open:727
+  @field w mergeTiers  @ swingRead:237 582
   @field w min  @ drawToolsRow:615
   @field r modalHost  @ 43
-  @field r name  @ commit:52 swingRead:236,237 swingWrite:269 buildDescriptor:537,543 drawEditBody:690,696 draw:704 renderToolbar:738
-  @field r name  @ renderToolbar:740,742
+  @field r name  @ commit:52 swingRead:236,237 swingWrite:269 buildDescriptor:537,543 drawEditBody:690,696 draw:704 renderToolbar:737
+  @field r name  @ renderToolbar:739,741
   @field w name  @ switchTo:433 activeEntries:499,504 buildDescriptor:537
   @field r negRange  @ shiftCap:95
   @field w onDelete  @ buildDescriptor:542
@@ -308,7 +308,7 @@
   @field r rows  @ drawSwingStrip:138,154 drawBandInto:200
   @field w rows  @ bandLayout:185 drawBandInto:200
   @field r rpb  @ bandLayout:175 drawToolsRow:614 drawEditBody:662,663
-  @field w rpb  @ drawToolsRow:616 open:728
+  @field w rpb  @ drawToolsRow:616 open:727
   @field w sel  @ buildDescriptor:537
   @field r shift  @ compositesEqual:257 drawFactorRow:326,339,366
   @field w shift  @ addFactor:290 drawFactorRow:329,345,370

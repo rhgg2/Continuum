@@ -1,4 +1,4 @@
-@module gridPane  src=gridPane.lua  loc=1156  sha=b9a99d6  mode=chunk  self=gridPane
+@module gridPane  src=gridPane.lua  loc=1156  sha=ec591ad  mode=chunk  self=gridPane
 @deps cm, cmgr, chrome, gui, tv, inputAllowed, chordEntry
 
 # Invariants & contracts
