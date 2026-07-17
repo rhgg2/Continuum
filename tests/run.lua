@@ -171,7 +171,6 @@ local specs = {
   'pa_crosstrack_spec',
   'tv_param_bind_spec',
   'tv_param_learn_spec',
-  'vm_reswing_lane_stability_spec',
   'vm_quantize_lane_stability_spec',
   'vm_quantize_keep_realised_lane_spec',
   'vm_insert_delete_row_lane_spec',

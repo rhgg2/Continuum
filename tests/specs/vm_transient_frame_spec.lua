@@ -6,8 +6,6 @@
 
 local t = require('support')
 
-local classic = { { atom = 'classic', shift = 0.08, period = 1 } }
-
 return {
   {
     name = 'matchGridToCursor writes the cursor-note rpb to the transient tier',
@@ -19,10 +17,7 @@ return {
               rpb = 8 },
           },
         },
-        config = {
-          project = { swings = { ['c58'] = classic } },
-          take    = { rowPerBeat = 4 },
-        },
+        config = { take = { rowPerBeat = 4 } },
       }
       h.vm:setGridSize(80, 40)
       -- Place cursor on the note (chan 1, lane 1, row 0, stop 1).
@@ -45,10 +40,7 @@ return {
               rpb = 8 },
           },
         },
-        config = {
-          project = { swings = { ['c58'] = classic } },
-          take    = { rowPerBeat = 4 },
-        },
+        config = { take = { rowPerBeat = 4 } },
       }
       h.vm:setGridSize(80, 40)
       h.ec:setPos(0, 1, 1)
@@ -65,11 +57,7 @@ return {
   {
     name = 'a real edit on rowPerBeat while transient is active releases it',
     run = function(harness)
-      local h = harness.mk{
-        config = {
-          project = { swings = { ['c58'] = classic } },
-        },
-      }
+      local h = harness.mk{}
       h.vm:setGridSize(80, 40)
       h.cm:assign('transient', { rowPerBeat = 8 })
       t.eq(h.cm:get('rowPerBeat'), 8, 'transient is in effect')
@@ -89,11 +77,7 @@ return {
       -- If the override path double-rescales (transient.rpb=8 → user n=16
       -- once, then 8→16 again on release), cursor row 4 ends up at 16
       -- instead of 8. Pin the single-rescale invariant.
-      local h = harness.mk{
-        config = {
-          project = { swings = { ['c58'] = classic } },
-        },
-      }
+      local h = harness.mk{}
       h.vm:setGridSize(80, 40)
       h.cm:assign('transient', { rowPerBeat = 8 })
       -- Place cursor at row 4 (in rpb=8). Halving expected to land row 2.
@@ -110,11 +94,7 @@ return {
   {
     name = 'cm:set at the transient tier does NOT trigger self-release',
     run = function(harness)
-      local h = harness.mk{
-        config = {
-          project = { swings = { ['c58'] = classic } },
-        },
-      }
+      local h = harness.mk{}
       h.vm:setGridSize(80, 40)
       h.cm:assign('transient', { rowPerBeat = 8 })
       -- A subsequent transient-level write must survive — only non-transient

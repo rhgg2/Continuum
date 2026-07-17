@@ -1,4 +1,4 @@
-@spec vm_transient_frame_spec  src=tests/specs/vm_transient_frame_spec.lua  loc=126  sha=d415ad4  cases=5
+@spec vm_transient_frame_spec  src=tests/specs/vm_transient_frame_spec.lua  loc=106  sha=d415ad4  cases=5
 @exercises trackerView (h.vm), editCursor (h.ec), commandManager (h.cmgr), configManager (h.cm)
 @surface   vm:setGridSize, ec:setPos, cmgr:invoke, cm:getAt, cm:get, cm:assign, cm:set, ec:row, vm:setRowPerBeat
 @harness   mk{seed.notes}
@@ -11,19 +11,19 @@
   so do not participate in the transient mechanism.
 
 # Cases
-  @case 'matchGridToCursor writes the cursor-note rpb to the transient tier'  [harness]  @ 13-35
-  @case 'matchGridToCursor toggle-off clears the transient rpb'  [harness]  @ 39-62
-  @case 'a real edit on rowPerBeat while transient is active releases it'  [harness]  @ 66-82
-  @case 'vm:setRowPerBeat under an active transient override does not double-rescale ec'  [harness]  @ 86-107
-  @case 'cm:set at the transient tier does NOT trigger self-release'  [harness]  @ 111-124
+  @case 'matchGridToCursor writes the cursor-note rpb to the transient tier'  [harness]  @ 11-30
+  @case 'matchGridToCursor toggle-off clears the transient rpb'  [harness]  @ 34-54
+  @case 'a real edit on rowPerBeat while transient is active releases it'  [harness]  @ 58-70
+  @case 'vm:setRowPerBeat under an active transient override does not double-rescale ec'  [harness]  @ 74-91
+  @case 'cm:set at the transient tier does NOT trigger self-release'  [harness]  @ 95-104
 
 # Uses (outbound edges)
-  @use call vm:setGridSize  @ 27,53,73,97,118
-  @use call ec:setPos  @ 29,54,100
-  @use call cmgr:invoke  @ 31,56,59
-  @use call cm:getAt  @ 33,57,60,80,105,123
-  @use call cm:get  @ 34,61,75,81,104
-  @use call cm:assign  @ 74,98,119
-  @use call cm:set  @ 78,122
-  @use call ec:row  @ 101,106
-  @use call vm:setRowPerBeat  @ 103
+  @use call vm:setGridSize  @ 22,45,61,81,98
+  @use call ec:setPos  @ 24,46,84
+  @use call cmgr:invoke  @ 26,48,51
+  @use call cm:getAt  @ 28,49,52,68,89,103
+  @use call cm:get  @ 29,53,63,69,88
+  @use call cm:assign  @ 62,82,99
+  @use call cm:set  @ 66,102
+  @use call ec:row  @ 85,90
+  @use call vm:setRowPerBeat  @ 87

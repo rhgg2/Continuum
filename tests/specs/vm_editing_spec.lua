@@ -454,7 +454,7 @@ return {
   {
     name = 'PA stamped under swing is reachable and deletable',
     run = function(harness)
-      local c58 = { { atom = 'classic', shift = 0.08, period = 1 } }
+      local c58 = { factors = { { atom = 'classic', shift = 0.08, period = 1 } } }
       local hostFrame = { swing = 'c58', colSwing = nil, rpb = 4 }
       local h = harness.mk{
         seed = {
