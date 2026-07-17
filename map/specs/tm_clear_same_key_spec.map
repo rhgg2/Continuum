@@ -1,7 +1,7 @@
-@spec tm_clear_same_key_spec  src=tests/specs/tm_clear_same_key_spec.lua  loc=88  sha=47931cf  cases=3
+@spec tm_clear_same_key_spec  src=tests/specs/tm_clear_same_key_spec.lua  loc=129  sha=47931cf  cases=4
 @exercises trackerManager (h.tm), midiManager (h.fm)
-@surface   tm:addEvent, tm:flush, fm:dump
-@harness   mk{seed.notes}
+@surface   tm:addEvent, tm:flush, fm:dump, tm:getChannel
+@harness   mk{seed.notes, seed.length}
 
 # Intent
   Same-(chan, pitch) overlap is hard MIDI physics: one voice per
@@ -12,16 +12,27 @@
   delayRange gate still prevents legitimate edits from manufacturing
   these collisions.
   
+  The clip reaches the wire and stops there: same-pitch is a projection
+  artefact, and an overlap across two lanes is perfectly drawable, so the
+  column keeps its lane bound and shows the overlap as authored. Three
+  frames, not two -- endppqL intent, endppqC the lane bound the screen
+  draws, endppq the clipped wire. Same-lane cases cannot tell them apart
+  (the lane bound sits on the peer onset either way); the cross-lane case
+  below is the one that separates them.
+  see design/interval-dirt.md § Same-pitch is a projection artefact
+  
   F3 #3: tm:addEvent must not shift endppq by delay (endppq is intent,
   delay a realisation-level shift on the note-on only). No caller
   passes delay≠0 to addEvent today; this pins it as the contract.
 
 # Cases
-  @case 'F3 #3: tm:addEvent with delay≠0 leaves endppq at caller value'  [harness]  @ 26-43
-  @case 'same-pitch peer clips realised endppq; endppqL (intent) survives'  [harness]  @ 50-66
-  @case 'self clamped by a later same-pitch peer; endppqL (intent) survives'  [harness]  @ 70-86
+  @case 'F3 #3: tm:addEvent with delay≠0 leaves endppq at caller value'  [harness]  @ 35-52
+  @case 'same-pitch peer clips realised endppq; endppqL (intent) survives'  [harness]  @ 59-75
+  @case 'cross-lane same-pitch peer clips the wire only; the column draws the lane bound'  [harness]  @ 81-107
+  @case 'self clamped by a later same-pitch peer; endppqL (intent) survives'  [harness]  @ 111-127
 
 # Uses (outbound edges)
-  @use call tm:addEvent  @ 31,56,76
-  @use call tm:flush  @ 35,58,78
-  @use call fm:dump  @ 37,60,80
+  @use call tm:addEvent  @ 40,65,117
+  @use call tm:flush  @ 44,67,119
+  @use call fm:dump  @ 46,69,94,121
+  @use call tm:getChannel  @ 100

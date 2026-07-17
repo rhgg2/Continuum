@@ -41,7 +41,7 @@ so callers can't skip the ordering the nudge cascade depends on.
 
 The invariant is mm's; enforcement is layered, outermost first:
 
-- **tm separation sites** (reseat, flush pre-clip, tail walk) separate
+- **tm separation sites** (reseat, flush scan, tail walk) separate
   in steady state and keep tm's live clones coherent — see
   `docs/trackerManager.md` § Same-pitch onset separation.
 - **mm write-path backstop** repairs anything a write path missed, at

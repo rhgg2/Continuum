@@ -351,8 +351,10 @@ runs it, with a pointer to its detail where one exists.
   window round-trip. Carried-forward tails clip against on-take note
   bounds the same way the tail walk clips real notes, so a parked tail
   stops at the first successor past its region, not just the next
-  parked member. The note del/adds ride the tail walk's atomic
-  commit. See `design/note-macros-v2.md` § Generator output. Each pass's
+  parked member. Lane bound only, never pitch: a parked cell never
+  reaches mm, so it carries pure intent — the same extent
+  `computeFxWindows` gives an on-take host. The note del/adds ride the
+  tail walk's atomic commit. See `design/note-macros-v2.md` § Generator output. Each pass's
   `scan` builds its `spec` inline at the scan site, where that pass's
   `chan`/`lane`/`cc` are in scope; `reconcilePark`'s optional `onPark`
   callback fires only for specs newly parked this rebuild (e.g. marking
@@ -637,7 +639,7 @@ load-bearing for take integrity — a missed collision is resolved by mm
 and surfaced via `collisionsResolved` instead of silently eating a
 voice. The sites stay because they keep tm's live clones (column
 events, um entries) coherent with what mm will hold, and because the
-pre-clip scan routes kills and updates through um verbs, carrying
+flush scan routes kills and updates through um verbs, carrying
 semantics mm shouldn't own (PA culling, detune-aware resize).
 
 `voicing.nudgeOnsets(records)` is the separation geometry: walk a
@@ -649,7 +651,7 @@ write. Three sites separate:
 - **reseat** (`rebuildInternals`) — a reswing recomputes raw from
   logical, so two distinct-`ppqL` notes can land on one raw. Separating
   before the reseat commit keeps the staged clones and mm in step.
-- **pre-clip scan** (`flush`) — an edit moves a note onto a same-pitch
+- **flush scan** (`flush`) — an edit moves a note onto a same-pitch
   peer; consumes `voicing.resolveGroup` for the full kill/nudge
   verdicts. Separate before the flush commit.
 - **tail walk** (`rebuildTails`) — real notes and predicted fxNotes walk
@@ -663,7 +665,7 @@ target ppq** so every vacate lands ahead of its occupy. The reseat path
 is immune: reswing moves both notes to fresh raws, away from each other's
 tokens.
 
-## Pre-clip collision scan
+## Flush collision scan
 
 Run inside `mm:modify`'s preflush, after `preflush` (propagated peers
 already staged) and before the snapshot (separations/deletes ride this
@@ -675,11 +677,16 @@ edited one, and repeated per-self truncation damages peers a later
 same-flush op would resolve.
 
 Each group runs `voicing.resolveGroup`: genuine duplicates killed,
-distinct voices nudged apart (see `docs/voicing.md`), survivors' tails
-clipped to the next onset. This is the staging pre-clip only; the
-authoritative raw tail is re-derived by rebuild step 4.8. `endppqL`
-(intent) is never written here — deleting a blocker lets the raw tail
-regrow to it.
+distinct voices nudged apart (see `docs/voicing.md`). Tails are not
+touched. The scan clipped them until 2026-07-17, and that loop was a
+vestige of the days when this scan *was* the truncation site: the walk's
+bound is strictly stronger and computed against post-walk rather than
+staged geometry, and a rebuild always follows a flush — so every tail the
+loop wrote was overwritten moments later. The verdicts are what the scan
+is for, and they stay: killing genuine duplicates through um's verbs is
+how PA culling and detune-aware resize happen, and none of that is
+truncation. `endppqL` (intent) is never written here — deleting a blocker
+lets the raw tail regrow to it.
 
 ## Length operations
 
@@ -784,26 +791,54 @@ once the pack settles, alongside the internals `rebuildInternals` seated earlier
 
 ## Rebuild: tail walk
 
-Tail target for each internal note:
+Two tail targets per internal note, and the split is the model — the lane
+bound is intent, the raw bound is realisation:
 
 ```
-max(onset + 1, min(
+laneBound = max(onset + 1, min(
   fromLogical(endppqL),                       -- authored ceiling; math.huge for util.OPEN
   fromLogical(nextSameLane.ppqL) + overlap,   -- same-lane next (INTENT)
-  nextSamePitch.ppq,                          -- same-pitch next (RAW)
   takeLen))
+
+rawBound  = max(onset + 1, min(
+  laneBound,
+  nextSamePitch.ppq))                         -- same-pitch next (RAW)
 ```
+
+The lane bound drives `endppqC`, and so the screen. The raw bound is the
+only value that reaches mm.
 
 Same-lane uses INTENT (`ppqL`) so authored music geometry wins over
 realisation delays. Same-pitch uses RAW because MIDI physics is realised.
 "Next" is strict-greater on raw ppq — a chord-mate at the same onset is
 not following.
 
+Why the split, and why it is not symmetric: a column is monophonic — a
+note ends at the next onset in its own lane — and that would hold if MIDI
+did not exist. It is intent, and two notes overlapping in one lane are
+unrepresentable anyway, the column having nowhere to draw the second. One
+voice per `(chan, pitch)` is a fact about MIDI, not about trackers, and
+two notes overlapping at the same pitch *across* lanes are perfectly
+drawable — the overlap is right there on screen, so the truncation is
+inferable from what is displayed. The rule that decides the boundary:
+clip what the view can't draw; don't clip what it can. Same-pitch is
+therefore realisation, exactly like swing — true on the wire, absent from
+the screen, and no cue, because a cue earns its place only where the cause
+is invisible. See design/interval-dirt.md § Same-pitch is a projection
+artefact.
+
 Collision (current raw `<=` prev same-pitch raw, raw-order with ppqL
 tie-break): the successor is nudged to `prev.ppq + 1`
 (`nudgeSamePitchOnsets`; § Same-pitch onset separation). Authored swap
 survives: when raw order differs from logical order, whoever lands first
 in raw becomes the realised predecessor.
+
+Parked members bound on-take tails' lanes too: a parked cell has already
+left the columns, but its lane geometry still applies to a preceding
+on-take tail sharing that lane. Parked is off-take, so it never bounds
+the wire (pitch), and a region's own tiles never read parked bounds at
+all — they'd already be cut by the members they replaced. Only on-take
+notes read them.
 
 Fixed records (externals, tagged `evt.fixed` by the externals step) keep their frozen
 onset — the same-pitch clamp skips them — but their tails clip like any
@@ -837,12 +872,13 @@ columns in the raw frame, where `rescaleLength` would warp them through
 swing twice. See § Swing for why the anchor is not optional.
 
 `evt.endppq` is the AUTHORED logical ceiling (mm's `endppqL` stamp, or
-`util.OPEN` for a deliberately-unbounded tail). The tail pass already
-folded every blocker into mm's raw endppq; inverting gives `evt.endppqC`,
-the CLIPPED logical ceiling — render-only, plus the sounding extent a
-parked cell hands a generator. An uncached note (no `endppqL` stamp in
-mm) has no authored ceiling, so its authored ceiling equals the realised
-one.
+`util.OPEN` for a deliberately-unbounded tail). `evt.endppqC` is the
+LANE-clipped logical ceiling — render-only, plus the sounding extent a
+parked cell hands a generator. It is not the inversion of mm's raw
+`endppq`: the walk clips the wire further at the next same-pitch onset,
+and that clip never shows (§ Rebuild: tail walk). An uncached note (no
+`endppqL` stamp in mm) has no authored ceiling, so it falls back to
+`endppqC` — the lane bound, not the realised one.
 
 Under interval dirt (§ Interval materialisation) a channel's columns mix carried and freshly-seated
 events: only this pass's own clones — `rebuildInternals`'s internals and `rebuildExternals`'s seated

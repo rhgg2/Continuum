@@ -1070,11 +1070,10 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
 
     perf.start('flush')
 
-    -- Single scan over all post-flush notes for same-(chan,pitch) MIDI legality (staging pre-clip).
-    -- see docs/trackerManager.md § Pre-clip collision scan
+    -- Single scan over all post-flush notes for same-(chan,pitch) MIDI legality: verdicts + onset
+    -- separation, no tails -- those are the walk's. see docs/trackerManager.md § Flush collision scan
     do
-      local takeLen = tm:length()
-      local byKey   = {}
+      local byKey = {}
       for _, n in pairs(byToken) do
         if n.evType == 'note' then util.bucket(byKey, util.key(n.chan, n.pitch), n) end
       end
@@ -1082,19 +1081,15 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
         if o.evt.evType == 'note' then util.bucket(byKey, util.key(o.evt.chan, o.evt.pitch), o.evt) end
       end
 
+      -- Verdicts and onset separation only: the tail bound is the walk's, computed against post-walk
+      -- geometry and strictly stronger. A rebuild always follows a flush. see design/archive/same-pitch-enforcement.md
       local updates, kills = {}, {}
       for _, group in pairs(byKey) do
         local groupKills, voiced, onsetOf = voicing.resolveGroup(group)
         for _, n in ipairs(groupKills) do util.add(kills, n) end
 
-        for i = 1, #voiced do
-          local n      = voiced[i]
-          local nextOn = voiced[i + 1] and onsetOf[voiced[i + 1]] or math.huge
-          local bound  = math.max(onsetOf[n] + 1, math.min(n.endppq, nextOn, takeLen))
-          local up
-          if onsetOf[n] ~= n.ppq then up = { ppq = onsetOf[n] } end
-          if bound < n.endppq    then up = up or {}; up.endppq = bound end
-          if up then util.add(updates, { n = n, up = up }) end
+        for _, n in ipairs(voiced) do
+          if onsetOf[n] ~= n.ppq then util.add(updates, { n = n, up = { ppq = onsetOf[n] } }) end
         end
       end
 
@@ -1111,7 +1106,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     perf.count('committed', #flushAdds + #flushAssigns + #flushDeletes)
 
     -- Same-pitch moves can alias ppq-keyed tokens: occupying move re-keys onto a peer's slot before
-    -- that peer vacates. Sort descending so every vacate lands ahead of its occupy. see docs/trackerManager.md § Pre-clip collision scan
+    -- that peer vacates. Sort descending so every vacate lands ahead of its occupy. see docs/trackerManager.md § Flush collision scan
     table.sort(flushAssigns, function(a, b)
       return (a.update.ppq or a.evt.ppq or 0) > (b.update.ppq or b.evt.ppq or 0)
     end)
@@ -1895,27 +1890,21 @@ end
 
 ----- Rebuild region park
 
--- Clip each parked member's tail to lane/pitch successor onset and take end (logical frame),
--- against bounds (unclipped on-take notes). See docs/trackerManager.md § Region-replace parking.
+-- Clip each parked member's tail to its lane successor onset and take end (logical frame), against
+-- bounds (unclipped on-take notes). Lane only -- see docs/trackerManager.md § Region-replace parking.
 --contract: derives each member's endppqC (the render clip); the authored ceiling on endppq stands
 local function realiseParked(members, takeLenL, bounds)
-  local byLane, byPitch = {}, {}
-  local function seat(evt)
-    util.bucket(byLane,  evt.lane,  evt)
-    util.bucket(byPitch, evt.pitch, evt)
-  end
+  local byLane = {}
+  local function seat(evt) util.bucket(byLane, evt.lane, evt) end
   for _, m in ipairs(members)      do seat(m) end
   for _, b in ipairs(bounds or {}) do seat(b) end
-  for _, g in pairs(byLane)  do sortByPPQ(g) end
-  for _, g in pairs(byPitch) do sortByPPQ(g) end
-  local laneNextOf  = strictNextMap(byLane)
-  local pitchNextOf = strictNextMap(byPitch)
+  for _, g in pairs(byLane) do sortByPPQ(g) end
+  local laneNextOf = strictNextMap(byLane)
   for _, m in ipairs(members) do
     local ceil = (m.endppq == nil or m.endppq == util.OPEN) and takeLenL or m.endppq
-    local laneNext, pitchNext = laneNextOf[m], pitchNextOf[m]
+    local laneNext = laneNextOf[m]
     m.endppqC = math.max(m.ppq + 1, math.min(ceil,
-      laneNext  and laneNext.ppq  or math.huge,
-      pitchNext and pitchNext.ppq or math.huge, takeLenL))
+      laneNext and laneNext.ppq or math.huge, takeLenL))
   end
 end
 
@@ -2672,12 +2661,12 @@ local function rebuildTails(noteLive, deferred, scratch)
     end
     if #notes == 0 then goto nextChan end
 
-    -- Parked members left the columns but still bound a preceding on-take tail at their onset --
+    -- Parked members left the columns but still bound a preceding on-take tail in their lane --
     -- the symmetric partner of realiseParked's on-take bounds. Bound-only: never rewritten below.
     local parkedBounds = {}
     for _, cell in ipairs(channels[chan].parked or {}) do
       util.add(parkedBounds, { ppq = tm:fromLogical(chan, cell.ppq), ppqL = cell.ppq,
-                               lane = cell.lane, pitch = cell.pitch })
+                               lane = cell.lane })
     end
 
     local function rawThenLogical(a, b)
@@ -2714,16 +2703,15 @@ local function rebuildTails(noteLive, deferred, scratch)
     local laneNextOf  = strictNextMap(byLane)
     local pitchNextOf = strictNextMap(byPitch)
 
-    -- On-take tails clip against parked members too (a real onset the columns no longer carry); a
-    -- region's own tiles never do -- they'd be cut by the members they replaced. So only on-take reads these.
-    local laneNextOn, pitchNextOn = laneNextOf, pitchNextOf
+    -- On-take tails clip against parked members' lanes too -- the columns no longer carry the cell,
+    -- but the lane geometry still does. See docs/trackerManager.md § Rebuild: tail walk.
+    local laneNextOn = laneNextOf
     if #parkedBounds > 0 then
-      local byLaneP, byPitchP = {}, {}
-      for _, n in ipairs(notes)        do util.bucket(byLaneP, n.lane, n);  util.bucket(byPitchP, n.pitch, n) end
-      for _, b in ipairs(parkedBounds) do util.bucket(byLaneP, b.lane, b);  util.bucket(byPitchP, b.pitch, b) end
-      for _, g in pairs(byLaneP)  do table.sort(g, rawThenLogical) end
-      for _, g in pairs(byPitchP) do table.sort(g, rawThenLogical) end
-      laneNextOn, pitchNextOn = strictNextMap(byLaneP), strictNextMap(byPitchP)
+      local byLaneP = {}
+      for _, n in ipairs(notes)        do util.bucket(byLaneP, n.lane, n) end
+      for _, b in ipairs(parkedBounds) do util.bucket(byLaneP, b.lane, b) end
+      for _, g in pairs(byLaneP) do table.sort(g, rawThenLogical) end
+      laneNextOn = strictNextMap(byLaneP)
     end
 
     for _, e in ipairs(notes) do
@@ -2731,25 +2719,27 @@ local function rebuildTails(noteLive, deferred, scratch)
       local ceiling   = e.endppqL == util.OPEN and math.huge
                         or e.endppqL and tm:fromLogical(chan, e.endppqL)
                         or math.huge
-      local laneNext  = (onTake and laneNextOn  or laneNextOf)[e]
-      local pitchNext = (onTake and pitchNextOn or pitchNextOf)[e]
+      local laneNext  = (onTake and laneNextOn or laneNextOf)[e]
+      local pitchNext = pitchNextOf[e]
       local laneClip  = laneNext
         and tm:fromLogical(chan, laneNext.ppqL) + (e.overlap or 0)
         or math.huge
       local pitchClip = pitchNext and pitchNext.ppq or math.huge
-      local bound     = math.max(e.ppq + 1,
-                          math.min(ceiling, laneClip, pitchClip, takeLen))
-      local rounded   = util.round(bound)
+      -- Two bounds: the lane bound is intent and drives the column; the raw bound clips it to the next
+      -- same-pitch onset and alone reaches mm. see docs/trackerManager.md § Rebuild: tail walk
+      local laneBound = math.max(e.ppq + 1, math.min(ceiling, laneClip, takeLen))
+      local rawBound  = math.max(e.ppq + 1, math.min(laneBound, pitchClip))
+      local rounded   = util.round(rawBound)
       if rounded ~= e.endppq then
         local backing = e.colEvt or e
         if backing.token then deferred.assign(backing, { endppq = rounded }) end
         e.endppq = rounded
-        if e.colEvt then
-          -- Mirror projectEvent's endppq rule: authored ceiling shows, clipped ceiling rides endppqC.
-          e.colEvt.endppqC = tm:toLogical(chan, rounded)
-          e.colEvt.endppq  = e.endppqL == util.OPEN and util.OPEN
-                             or e.endppqL or e.colEvt.endppqC
-        end
+      end
+      if e.colEvt then
+        -- Mirror projectEvent's endppq rule: authored ceiling shows, lane-clipped ceiling rides endppqC.
+        e.colEvt.endppqC = tm:toLogical(chan, util.round(laneBound))
+        e.colEvt.endppq  = e.endppqL == util.OPEN and util.OPEN
+                           or e.endppqL or e.colEvt.endppqC
       end
     end
     ::nextChan::

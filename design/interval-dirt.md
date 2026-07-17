@@ -729,8 +729,18 @@ red suite says nothing about which idea was wrong.
 computes two bounds, `endppqC` re-homes onto the lane bound,
 `realiseParked` loses its pitch grouping, and the flush pre-clip's
 tail-bound loop goes. This changes what the screen shows and which frame
-owns the constraint, not how dirt works. Not spec-neutral: the
-same-pitch tail specs restate as "displayed unclipped, wire clipped".
+owns the constraint, not how dirt works.
+
+It predicted itself not spec-neutral, and it was wrong: the suite stayed
+green at 2035. Every same-pitch spec that reads a *column* surface authors
+its pair in one lane — `tm_proj_symmetry`, `tm_authoring_forward`,
+`tm_macro`'s "same-pitch note bounds the host" — so the lane bound lands
+on the peer onset and produces the same number the pitch clip did. Their
+names say same-pitch; the mechanism they observe is the lane. The
+cross-lane case, where the two bounds actually differ, had no spec at all,
+which is why nothing went red. `tm_clear_same_key_spec` grew it: a
+same-pitch peer in another lane, asserting the wire clips and `endppqC`
+does not. It fails on the pre-commit code at exactly that assertion.
 
 **2. uuid addressing, and separation lands once.** `mmBatch` names notes
 by uuid, and mm grows a uuid-keyed assign over its existing

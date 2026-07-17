@@ -6,6 +6,15 @@
 -- delayRange gate still prevents legitimate edits from manufacturing
 -- these collisions.
 --
+-- The clip reaches the wire and stops there: same-pitch is a projection
+-- artefact, and an overlap across two lanes is perfectly drawable, so the
+-- column keeps its lane bound and shows the overlap as authored. Three
+-- frames, not two -- endppqL intent, endppqC the lane bound the screen
+-- draws, endppq the clipped wire. Same-lane cases cannot tell them apart
+-- (the lane bound sits on the peer onset either way); the cross-lane case
+-- below is the one that separates them.
+-- see design/interval-dirt.md § Same-pitch is a projection artefact
+--
 -- F3 #3: tm:addEvent must not shift endppq by delay (endppq is intent,
 -- delay a realisation-level shift on the note-on only). No caller
 -- passes delay≠0 to addEvent today; this pins it as the contract.
@@ -63,6 +72,38 @@ return {
       t.truthy(first, 'first note survived')
       t.eq(first.endppq,  240, 'realised tail clipped to the peer onset (MIDI physics)')
       t.eq(first.endppqL, 480, 'endppqL is intent — the realised clip never shortens it')
+    end,
+  },
+
+  -- The peer sits in ANOTHER lane, so A's own lane never bounds it: the
+  -- clip is pure same-pitch, and it must not reach the column.
+  {
+    name = 'cross-lane same-pitch peer clips the wire only; the column draws the lane bound',
+    run = function(harness)
+      local h = harness.mk{
+        seed = { length = 1920, notes = {
+          { ppq = 0,   endppq = 480, ppqL = 0,   endppqL = 480,
+            chan = 1, pitch = 60, vel = 100, uuid = 1, lane = 1 },
+          { ppq = 240, endppq = 480, ppqL = 240, endppqL = 480,
+            chan = 1, pitch = 60, vel = 100, uuid = 2, lane = 2 },
+        } },
+        data = { extraColumns = { [1] = { notes = 2 } } },
+      }
+
+      local wire
+      for _, n in ipairs(h.fm:dump().notes) do if n.ppq == 0 then wire = n end end
+      t.truthy(wire, 'the earlier note survived')
+      t.eq(wire.endppq,  240, 'the wire clips at the peer onset -- one voice per (chan, pitch)')
+      t.eq(wire.endppqL, 480, 'endppqL is intent and never sees the clip')
+
+      local col
+      for _, e in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
+        if e.ppq == 0 then col = e end
+      end
+      t.truthy(col, 'the earlier note holds its column cell')
+      t.eq(col.endppq,  480, 'the column shows the authored ceiling')
+      t.eq(col.endppqC, 480,
+        'endppqC is the LANE bound -- lane 1 has no successor, so the same-pitch clip never reaches the screen')
     end,
   },
 
