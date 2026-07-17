@@ -286,22 +286,6 @@ local function notePreds(excludeEvt)
          function(e) return util.isNote(e) and e ~= excludeEvt and e.pitch == pitch end
 end
 
--- Diff-pitch col-local with `overlapOffset` leniency (matches column allocator).
--- Same-pitch chan-wide with no leniency: MIDI permits one voice per (chan, pitch).
--- Onset-only, like rowBounds: bounds are neighbour ONSETS, never tails --
--- tm clips a tail overrun on the next rebuild.
-local function overlapBounds(col, ppq, excludeEvt, allowOverlap)
-  local lenient = allowOverlap and cm:get('overlapOffset') * resolution or 0
-  local diff, same = notePreds(excludeEvt)
-
-  local prevD, nextD = neighbourEvents({col}, ppq, diff)
-  local prevS, nextS = neighbourEvents(tm:getChannel(col.midiChan).columns.notes, ppq, same)
-
-  local minStart = math.max(prevD and (prevD.ppq - lenient) or 0,      prevS and prevS.ppq or 0)
-  local maxEnd   = math.min(nextD and (nextD.ppq + lenient) or length, nextS and nextS.ppq or length)
-  return minStart, maxEnd
-end
-
 -- Row-space onset band for a moved note: the inclusive [minRow, maxRow]
 -- its onset may occupy without reordering against a neighbour. Bounds
 -- are the *onsets* of the nearest diff-pitch col-local and same-pitch

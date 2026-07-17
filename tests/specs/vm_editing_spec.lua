@@ -256,11 +256,12 @@ return {
     end,
   },
 
-  -- Onset-only neighbour geometry (overlapBounds): a same-pitch
-  -- predecessor with an OPEN authored tail must not bound a duration
-  -- edit by its tail. Pre-fix, overlapBounds read tailEnd(prevS) ==
-  -- util.OPEN and did math.max(number, 'open') -> error. Post-fix it
-  -- bounds by the predecessor's ONSET; tm clips any overrun on rebuild.
+  -- A same-pitch predecessor with an OPEN authored tail must not bound a
+  -- duration edit. adjustDurationCore applies no neighbour bound at all --
+  -- it authors the ceiling, and tm's rebuildTails clips realised back on
+  -- rebuild (docs/trackerManager.md § Rebuild: tail walk). Pre-fix, tv's
+  -- since-deleted overlapBounds bounded the edit here and read
+  -- tailEnd(prevS) == util.OPEN, doing math.max(number, 'open') -> error.
   {
     name = 'growNote past an open-tailed same-pitch predecessor does not throw',
     run = function(harness)
@@ -284,7 +285,7 @@ return {
         elseif n.ppq == 240 then B = n end
       end
       t.truthy(A and B, 'both notes survive the duration edit')
-      t.truthy(B.endppq > 480, 'B grew its tail (overlapBounds did not throw)')
+      t.truthy(B.endppq > 480, 'B grew its tail (the open-tailed predecessor did not throw)')
       t.eq(A.endppq, 240, 'open A still clips to B onset, unbounded by the edit')
     end,
   },

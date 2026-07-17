@@ -1,4 +1,4 @@
-@spec edit_cursor_spec  src=tests/specs/edit_cursor_spec.lua  loc=997  sha=5b72451  cases=35
+@spec edit_cursor_spec  src=tests/specs/edit_cursor_spec.lua  loc=999  sha=5b72451  cases=35
 @exercises trackerView (h.vm), editCursor (h.ec), commandManager (h.cmgr), midiManager (h.fm), trackerManager (h.tm), dataStore (h.ds)
 @surface   vm:setGridSize, ec:extendTo, ec:pos, ec:setPos, cmgr:invoke, fm:dump, ec:region, ec:row, tm:getChannel, ec:eachSelectedCol, vm:showDelay, ds:get, ec:hasSelection, tm:deleteEvent, tm:flush
 @harness   mk{seed.notes, seed.length, seed.ccs}
@@ -39,134 +39,134 @@
   @case 'nudgeForward refuses a cc onto an occupied row'  [harness]  @ 522-543
   @case 'selection nudgeForward refuses when a foreign onset is in the destination span'  [harness]  @ 549-568
   @case 'selection nudgeForward shifts the block when the destination span is clear'  [harness]  @ 574-592
-  @case 'growNote caps endppq at next-note INTENT onset, not realised'  [harness]  @ 602-630
-  @case 'growNote reaches overlap bound on first press under c58 swing'  [harness]  @ 642-682
-  @case 'growNote against same-pitch next clamps at intent onset (no off)'  [harness]  @ 690-715
-  @case 'nudgeForward under c58 swing reaches a row-aligned next-note onset'  [harness]  @ 725-761
-  @case 'nudgeBack into a grown lenient overlap is allowed (diff-pitch)'  [harness]  @ 771-792
-  @case 'nudgeFineUp with no sel on pitch stop raises pitch by 1'  [harness]  @ 798-806
-  @case 'noteOff with no sel truncates the active note to cursor ppq'  [harness]  @ 813-822
-  @case 'eachSelectedCol with no selection yields the cursor col as a 1x1 fallback'  [harness]  @ 828-838
-  @case 'eachSelectedCol yields (col, ci) for each column in the selection'  [harness]  @ 842-863
-  @case 'vm:showDelay enables delay on every note col in the selection'  [harness]  @ 869-887
-  @case 'ec:extendTo with no sel anchors at cursor and grows to target'  [harness]  @ 895-904
-  @case 'ec:extendTo with active sel preserves anchor, moves the loose end'  [harness]  @ 908-917
-  @case 'ec:pos round-trips ec:setPos in (row, col, stop) order'  [harness]  @ 924-932
-  @case 'setSelection / region round-trip preserves part'  [harness]  @ 940-951
-  @case 'growNote on an open note closes it and authors a finite ceiling'  [harness]  @ 961-995
+  @case 'growNote caps endppq at next-note INTENT onset, not realised'  [harness]  @ 604-632
+  @case 'growNote reaches overlap bound on first press under c58 swing'  [harness]  @ 644-684
+  @case 'growNote against same-pitch next clamps at intent onset (no off)'  [harness]  @ 692-717
+  @case 'nudgeForward under c58 swing reaches a row-aligned next-note onset'  [harness]  @ 727-763
+  @case 'nudgeBack into a grown lenient overlap is allowed (diff-pitch)'  [harness]  @ 773-794
+  @case 'nudgeFineUp with no sel on pitch stop raises pitch by 1'  [harness]  @ 800-808
+  @case 'noteOff with no sel truncates the active note to cursor ppq'  [harness]  @ 815-824
+  @case 'eachSelectedCol with no selection yields the cursor col as a 1x1 fallback'  [harness]  @ 830-840
+  @case 'eachSelectedCol yields (col, ci) for each column in the selection'  [harness]  @ 844-865
+  @case 'vm:showDelay enables delay on every note col in the selection'  [harness]  @ 871-889
+  @case 'ec:extendTo with no sel anchors at cursor and grows to target'  [harness]  @ 897-906
+  @case 'ec:extendTo with active sel preserves anchor, moves the loose end'  [harness]  @ 910-919
+  @case 'ec:pos round-trips ec:setPos in (row, col, stop) order'  [harness]  @ 926-934
+  @case 'setSelection / region round-trip preserves part'  [harness]  @ 942-953
+  @case 'growNote on an open note closes it and authors a finite ceiling'  [harness]  @ 963-997
 
 # Uses (outbound edges)
-  @use call vm:setGridSize  @ 22,203,302,341,381,409,431,452,478,501,528,558,580,614,664,701,746,779,851,878,974
-  @use call ec:extendTo  @ 29,343,899,912,913
-  @use call ec:pos  @ 29,928
-  @use call ec:setPos  @ 48,81,114,116,144,146,166,169,172,213,221,237,264,303,342,359,382,410,432,453,479,506,533,621,669,706,751,784,801,816,831,898,911,927,979
-  @use call cmgr:invoke  @ 53,58,86,91,115,117,145,147,167,170,173,214,223,238,266,305,344,360,383,411,433,454,480,507,534,561,583,622,670,707,752,785,802,817,980
-  @use call fm:dump  @ 54,59,87,92,119,150,175,215,224,240,268,309,362,386,414,435,457,483,510,537,564,586,625,673,710,755,788,804,819,977,982,989,992
-  @use call ec:region  @ 346,589,901,914,944
-  @use call ec:row  @ 365,394,438,464,515,542,760,791
-  @use call tm:getChannel  @ 617,666,703,748,781
-  @use call ec:eachSelectedCol  @ 833,855
-  @use call vm:showDelay  @ 881
-  @use call ds:get  @ 882
-  @use call ec:hasSelection  @ 900
-  @use call tm:deleteEvent  @ 989
-  @use call tm:flush  @ 990
+  @use call vm:setGridSize  @ 22,203,302,341,381,409,431,452,478,501,528,558,580,616,666,703,748,781,853,880,976
+  @use call ec:extendTo  @ 29,343,901,914,915
+  @use call ec:pos  @ 29,930
+  @use call ec:setPos  @ 48,81,114,116,144,146,166,169,172,213,221,237,264,303,342,359,382,410,432,453,479,506,533,623,671,708,753,786,803,818,833,900,913,929,981
+  @use call cmgr:invoke  @ 53,58,86,91,115,117,145,147,167,170,173,214,223,238,266,305,344,360,383,411,433,454,480,507,534,561,583,624,672,709,754,787,804,819,982
+  @use call fm:dump  @ 54,59,87,92,119,150,175,215,224,240,268,309,362,386,414,435,457,483,510,537,564,586,627,675,712,757,790,806,821,979,984,991,994
+  @use call ec:region  @ 346,589,903,916,946
+  @use call ec:row  @ 365,394,438,464,515,542,762,793
+  @use call tm:getChannel  @ 619,668,705,750,783
+  @use call ec:eachSelectedCol  @ 835,857
+  @use call vm:showDelay  @ 883
+  @use call ds:get  @ 884
+  @use call ec:hasSelection  @ 902
+  @use call tm:deleteEvent  @ 991
+  @use call tm:flush  @ 992
 
 # Fields (r read / w write incl. constructor keys)
-  @field r OPEN  @ 968,983
-  @field w atom  @ 644,727
-  @field w c58  @ 659,741
+  @field r OPEN  @ 970,985
+  @field w atom  @ 646,729
+  @field w c58  @ 661,743
   @field r cc  @ 511,538
   @field w cc  @ 499,525,526
   @field r ccs  @ 510,537
   @field w ccs  @ 498,524
-  @field r chan  @ 208,861,862
+  @field r chan  @ 208,863,864
   @field w chan  @ 14,196,198,295,297,336,378,379,406,407,429,449
-  @field w chan  @ 450,475,476,499,525,526,554,555,556,577,578,611
-  @field w chan  @ 612,651,654,698,699,733,736,776,777,834,846,847
-  @field w chan  @ 848,856,873,874,875,969,971
-  @field r ci  @ 837,859,860
-  @field w ci  @ 834,856
+  @field w chan  @ 450,475,476,499,525,526,554,555,556,577,578,613
+  @field w chan  @ 614,653,656,700,701,735,738,778,779,836,848,849
+  @field w chan  @ 850,858,875,876,877,971,973
+  @field r ci  @ 839,861,862
+  @field w ci  @ 836,858
   @field r cmgr  @ 53,58,86,91,214,223
-  @field w col1  @ 559,581,852,879,943
-  @field w col2  @ 559,581,852,879,943
+  @field w col1  @ 559,581,854,881,945
+  @field w col2  @ 559,581,854,881,945
   @field r cols  @ 503,530
-  @field r columns  @ 618,619,667,704,749,782
-  @field w config  @ 658,740
-  @field w data  @ 20,662,744
+  @field r columns  @ 620,621,669,706,751,784
+  @field w config  @ 660,742
+  @field w data  @ 20,664,746
   @field r delay  @ 61,62
   @field w delay  @ 15,46,197,199,296,298,337,378,379,406,407,429
-  @field w delay  @ 449,450,475,476,554,555,556,577,578,611,612,651
-  @field w delay  @ 654,698,699,733,736,776,777
+  @field w delay  @ 449,450,475,476,554,555,556,577,578,613,614,653
+  @field w delay  @ 656,700,701,735,738,778,779
   @field w detune  @ 15,197,199,296,298,337,378,379,406,407,429,449
-  @field w detune  @ 450,475,476,554,555,556,577,578,611,612,651,654
-  @field w detune  @ 698,699,733,736,776,777
+  @field w detune  @ 450,475,476,554,555,556,577,578,613,614,653,656
+  @field w detune  @ 700,701,735,738,778,779
   @field r ec  @ 213,221
   @field r endppq  @ 64,96,129,154,364,391,393,416,437,462
-  @field r endppq  @ 488,628,680,713,759,790,821,977,993,994
+  @field r endppq  @ 488,630,682,715,761,792,823,979,995,996
   @field w endppq  @ 14,113,196,198,295,297,336,378,379,406,407,429
-  @field w endppq  @ 449,450,475,476,554,555,556,577,578,611,612,651
-  @field w endppq  @ 654,698,699,733,736,776,777,846,847,848,873,874
-  @field w endppq  @ 875,968,970
-  @field r endppqL  @ 983,984,985
-  @field w endppqL  @ 652,655,734,737,968,970
+  @field w endppq  @ 449,450,475,476,554,555,556,577,578,613,614,653
+  @field w endppq  @ 656,700,701,735,738,778,779,848,849,850,875,876
+  @field w endppq  @ 877,970,972
+  @field r endppqL  @ 985,986,987
+  @field w endppqL  @ 654,657,736,739,970,972
   @field r evType  @ 511,538
   @field w evType  @ 499,525,526
-  @field r events  @ 619
-  @field w factors  @ 644,727
+  @field r events  @ 621
+  @field w factors  @ 646,729
   @field r fm  @ 54,59,87,92,215,224
-  @field w global  @ 662,744
+  @field w global  @ 664,746
   @field r grid  @ 503,530
-  @field w lane  @ 969,971
-  @field w length  @ 334,967
-  @field r midiChan  @ 504,531,834,856
+  @field w lane  @ 971,973
+  @field w length  @ 334,969
+  @field r midiChan  @ 504,531,836,858
   @field w name  @ 40,76,111,138,162,190,234,261,290,330,356,375
-  @field w name  @ 403,426,446,472,496,522,549,574,602,642,690,725
-  @field w name  @ 771,798,813,828,842,869,895,908,924,940,961
+  @field w name  @ 403,426,446,472,496,522,549,574,604,644,692,727
+  @field w name  @ 773,800,815,830,844,871,897,910,926,942,963
   @field w noteDelay  @ 47
   @field r notes  @ 54,59,87,92,119,150,175,208,240,268,309,362
-  @field r notes  @ 386,414,435,457,483,564,586,618,619,625,667,673
-  @field r notes  @ 704,710,749,755,782,788,804,819,977,982,989,992
-  @field w notes  @ 19,195,294,335,377,405,428,448,474,553,576,610
-  @field w notes  @ 650,697,732,775,845,872,967
-  @field w part1  @ 560,582,852,879,943
-  @field w part2  @ 560,582,852,879,943
-  @field w period  @ 644,727
+  @field r notes  @ 386,414,435,457,483,564,586,620,621,627,669,675
+  @field r notes  @ 706,712,751,757,784,790,806,821,979,984,991,994
+  @field w notes  @ 19,195,294,335,377,405,428,448,474,553,576,612
+  @field w notes  @ 652,699,734,777,847,874,969
+  @field w part1  @ 560,582,854,881,945
+  @field w part2  @ 560,582,854,881,945
+  @field w period  @ 646,729
   @field r pitch  @ 66,97,127,181,249,277,319,387,388,414
-  @field r pitch  @ 458,459,484,485,564,586,626,674,756,788,805,964
+  @field r pitch  @ 458,459,484,485,564,586,628,676,758,790,807,966
   @field w pitch  @ 14,196,198,295,297,336,378,379,406,407,429,449
-  @field w pitch  @ 450,475,476,554,555,556,577,578,611,612,651,654
-  @field w pitch  @ 698,699,733,736,776,777,846,847,848,873,874,875
-  @field w pitch  @ 969,971
+  @field w pitch  @ 450,475,476,554,555,556,577,578,613,614,653,656
+  @field w pitch  @ 700,701,735,738,778,779,848,849,850,875,876,877
+  @field w pitch  @ 971,973
   @field r ppq  @ 63,95,122,123,151,178,216,217,225,226
   @field r ppq  @ 244,245,272,273,313,314,363,364,390,392,415,417
-  @field r ppq  @ 436,461,463,487,489,514,538,564,586,711,758,789
-  @field r ppq  @ 820
+  @field r ppq  @ 436,461,463,487,489,514,538,564,586,713,760,791
+  @field r ppq  @ 822
   @field w ppq  @ 14,196,198,295,297,336,378,379,406,407,429,449
-  @field w ppq  @ 450,475,476,499,525,526,554,555,556,577,578,611
-  @field w ppq  @ 612,651,654,698,699,733,736,776,777,846,847,848
-  @field w ppq  @ 873,874,875,968,970
-  @field w ppqL  @ 652,655,734,737,968,970
-  @field w project  @ 659,741
-  @field w row1  @ 559,581,852,879,943
-  @field w row2  @ 559,581,852,879,943
-  @field w rowPerBeat  @ 660,742
-  @field w rpb  @ 653,656,735,738
+  @field w ppq  @ 450,475,476,499,525,526,554,555,556,577,578,613
+  @field w ppq  @ 614,653,656,700,701,735,738,778,779,848,849,850
+  @field w ppq  @ 875,876,877,970,972
+  @field w ppqL  @ 654,657,736,739,970,972
+  @field w project  @ 661,743
+  @field w row1  @ 559,581,854,881,945
+  @field w row2  @ 559,581,854,881,945
+  @field w rowPerBeat  @ 662,744
+  @field w rpb  @ 655,658,737,740
   @field w run  @ 41,77,112,139,163,191,235,262,291,331,357,376
-  @field w run  @ 404,427,447,473,497,523,550,575,603,643,691,726
-  @field w run  @ 772,799,814,829,843,870,896,909,925,941,962
+  @field w run  @ 404,427,447,473,497,523,550,575,605,645,693,728
+  @field w run  @ 774,801,816,831,845,872,898,911,927,943,964
   @field w seed  @ 19,194,293,333,377,405,428,448,474,498,524,553
-  @field w seed  @ 576,610,650,697,732,775,845,872,967
-  @field w shift  @ 644,727
-  @field w swing  @ 662,744
-  @field w swings  @ 659,741
-  @field w take  @ 660,742
+  @field w seed  @ 576,612,652,699,734,777,847,874,969
+  @field w shift  @ 646,729
+  @field w swing  @ 664,746
+  @field w swings  @ 661,743
+  @field w take  @ 662,744
   @field r type  @ 504,531
-  @field w uuid  @ 969,971
+  @field w uuid  @ 971,973
   @field r val  @ 538
   @field w val  @ 499,525,526
   @field r vel  @ 65,94,99,128,250,278,317,318
   @field w vel  @ 14,79,196,198,295,297,336,378,379,406,407,429
-  @field w vel  @ 449,450,475,476,554,555,556,577,578,611,612,651
-  @field w vel  @ 654,698,699,733,736,776,777,846,847,848,873,874
-  @field w vel  @ 875,969,971
+  @field w vel  @ 449,450,475,476,554,555,556,577,578,613,614,653
+  @field w vel  @ 656,700,701,735,738,778,779,848,849,850,875,876
+  @field w vel  @ 877,971,973

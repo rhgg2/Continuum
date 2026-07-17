@@ -592,12 +592,14 @@ return {
     end,
   },
 
-  -- Pin the intent-space invariant for overlapBounds: a delayed-forward
+  -- Pin the intent-space invariant for the tail clip: a delayed-forward
   -- next-note must NOT open up extra room for the previous note's
   -- endppq. Without the fix, growNote on A could push A.endppq past B's
   -- intent onset (since the bound was B's *realised* onset = intent +
   -- delay), creating an intent overlap that next rebuild would split
-  -- into separate lanes.
+  -- into separate lanes. tm's rebuildTails owns the clip now (docs/
+  -- trackerManager.md § Rebuild: tail walk); tv's since-deleted
+  -- overlapBounds owned it when this was written.
   {
     name = 'growNote caps endppq at next-note INTENT onset, not realised',
     run = function(harness)
@@ -683,17 +685,17 @@ return {
   },
 
   -- Same-pitch repeats can't share a (chan, pitch) MIDI voice, so the
-  -- overlapBounds same-pitch next-bound is HARD (no overlapOffset
-  -- leniency) — the previous test pinned the different-pitch case
-  -- where 15 ppq of leniency is allowed.
+  -- same-pitch tail bound is HARD (no leniency) — the previous test
+  -- pinned the different-pitch case where 15 ppq is allowed. tm's
+  -- rebuildTails owns the clip (docs/trackerManager.md § Rebuild: tail walk).
   {
     name = 'growNote against same-pitch next clamps at intent onset (no off)',
     run = function(harness)
       -- A pitch 60 intent 0..240. B pitch 60 intent 240..480. Same
       -- pitch, same channel, intents touching at 240 (no overlap). One
-      -- growNote tries to push A.endppq past row 4. Same-pitch ⇒
-      -- maxEnd = B.intent (240, no off), so the grow clamps at 240
-      -- exactly. (The different-pitch case allowed 240 + 15 = 255.)
+      -- growNote tries to push A.endppq past row 4. Same-pitch ⇒ the
+      -- realised tail clips at B.intent (240, no off) exactly. (The
+      -- different-pitch case allowed 240 + 15 = 255.)
       local h = harness.mk{ seed = { notes = {
         { ppq = 0,   endppq = 240, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0 },
         { ppq = 240, endppq = 480, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0 },
