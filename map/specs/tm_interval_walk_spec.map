@@ -1,0 +1,61 @@
+@spec tm_interval_walk_spec  src=tests/specs/tm_interval_walk_spec.lua  loc=84  sha=untracked  cases=2
+@exercises trackerManager (h.tm), dataStore (h.ds), midiManager (h.fm)
+@surface   tm:addEvent, tm:flush, ds:assign, tm:rebuild, fm:notes
+@harness   mk
+
+# Intent
+  Pins the tail walk's sweep against the escape that has no net below it.
+  
+  The walk visits its whole channel today, so nothing here can escape. Phase 4's
+  interval walk seeds from dirty intervals and sweeps outward instead, and the risk
+  it carries is a nudge that chains past the seeded region onto a note the sweep
+  never reached. These pin the surviving voices, so a sweep that stops short goes red.
+  
+  The cascade must land on a DERIVED note for this to bite. mm's backstop covers an
+  escape between two authored notes -- it nudges them apart at the unwind, exactly as
+  it covered the nudges deleted in commit 2. It cannot cover an fxNote: resolveGroup
+  kills on a derived/authored mismatch (voicing.lua:20) before comparing anything, so
+  an fxNote cascaded onto an authored note is deleted rather than separated, and the
+  voice is gone with no signal. see design/interval-dirt.md § The tails closure is the
+  walk's output, not its input
+
+# Helpers
+  @fn collidingPairBelowTile(harness)  @ 24-40
+      -- Two same-pitch voices on one raw, one tick below the region's first tile. They are not
+      -- redundant -- distinct detune, so voicing separates rather than dedups -- and separating
+      -- them walks the second onto the tile, which is the chain the sweep must follow.
+  @fn pitch60Raws(h)  @ 42-49
+  @fn tileAt(h, ppq)  @ 51-55
+
+# Cases
+  @case 'a same-pitch cascade reaching past the seeded onsets keeps the derived voice'  [harness]  @ 60-69
+  @case 'the cascaded tile survives as a tile, not as a killed duplicate'  [harness]  @ 73-81
+
+# Uses (outbound edges)
+  @use call tm:addEvent  @ 27,34,36
+  @use call tm:flush  @ 29,38
+  @use call ds:assign  @ 30
+  @use call tm:rebuild  @ 32
+  @use call fm:notes  @ 44,52,79
+
+# Fields (r read / w write incl. constructor keys)
+  @field w chan  @ 27,30,34,36
+  @field w delay  @ 28,35,37
+  @field r derived  @ 53,79
+  @field w detune  @ 28,35,37
+  @field w endppq  @ 27,30,34,36
+  @field w evType  @ 27,34,36
+  @field w fx  @ 31
+  @field w kind  @ 19
+  @field w lane  @ 28,35,37
+  @field w name  @ 60,73
+  @field w period  @ 19
+  @field r pitch  @ 45,53
+  @field w pitch  @ 27,34,36
+  @field r ppq  @ 45,53
+  @field w ppq  @ 27,34,36
+  @field w ramp  @ 19
+  @field w run  @ 61,74
+  @field w startppq  @ 30
+  @field w uuid  @ 30
+  @field w vel  @ 28,35,37
