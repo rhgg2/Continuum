@@ -1,4 +1,4 @@
-@spec mm_cc_reconcile_spec  src=tests/specs/mm_cc_reconcile_spec.lua  loc=283  sha=61aa319  cases=8
+@spec mm_cc_reconcile_spec  src=tests/specs/mm_cc_reconcile_spec.lua  loc=283  sha=b5afaeb  cases=8
 @exercises midiManager (h.mm)
 @surface   mm:ccs, mm:subscribe, mm:load, mm:modify, mm:assign
 @harness   fakeReaper:bindTake, reaper:seedMidi, reaper.MIDI_CountEvts, reaper:dumpMidi

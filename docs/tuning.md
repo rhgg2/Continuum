@@ -315,21 +315,21 @@ lane-1 sequence it:
 - Projects the pb column from the final set, with `val=cents` (the
   authored value tv displays) and `hidden` for every derived seat.
 
-Reads pbs directly from mm; the um cache (`chans`, `byToken`) is
+Reads pbs directly from mm; the um cache (`chans`, `byUuid`) is
 rebuilt at the end-of-rebuild `reload()`.
 
 ### Authoring onto a hidden seat
 
-A pb token is position-keyed (`pb\0chan\0ppq`), so two pb events at one
-(chan, ppq) are indistinguishable to every token-keyed op. An anchored or
-detune-seated onset already holds a hidden absorber pb; the projection
-hides it, so the pitchbend cell reads empty. Authoring there must **adopt**
-that seat — `addEvent` assigns the existing pb (new cents, `derived`
-cleared) rather than pushing a rival. Pushing a rival was the "stuck after
-the first digit" bug: the two pbs shared the token, the reconcile's
-token-keyed delete removed the authored one, and the cell snapped back to
-the seat's value. Adopting also reuses the seat's uuid sidecar instead of
-orphaning it.
+Pitchbend is one value per tick, so two pb events at one (chan, ppq) are a
+contradiction on the wire whatever names them. An anchored or detune-seated
+onset already holds a hidden absorber pb; the projection hides it, so the
+pitchbend cell reads empty. Authoring there must **adopt** that seat —
+`addEvent` seeks `chans[chan].pbs` for a pb at that onset and assigns it (new
+cents, `derived` cleared) rather than pushing a rival. Pushing a rival was the
+"stuck after the first digit" bug: back when mm addressed by content key the
+two pbs shared a token, the reconcile's delete removed the authored one, and
+the cell snapped back to the seat's value. Adopting also reuses the seat's uuid
+sidecar instead of orphaning it.
 
 ### Value-aware seats and densification
 

@@ -1,6 +1,6 @@
-@spec mm_collision_backstop_spec  src=tests/specs/mm_collision_backstop_spec.lua  loc=107  sha=4d08384  cases=4
+@spec mm_collision_backstop_spec  src=tests/specs/mm_collision_backstop_spec.lua  loc=107  sha=70ef819  cases=4
 @exercises midiManager (h.mm)
-@surface   mm:notes, mm:subscribe, mm:byToken, mm:modify, mm:assign
+@surface   mm:notes, mm:subscribe, mm:byUuid, mm:modify, mm:assign
 @harness   bareMM
 
 # Intent
@@ -26,6 +26,6 @@
 # Uses (outbound edges)
   @use call mm:notes  @ 12,18
   @use call mm:subscribe  @ 36,62,81,96
-  @use call mm:byToken  @ 38
+  @use call mm:byUuid  @ 38,70
   @use call mm:modify  @ 41,64,83,84,98
   @use call mm:assign  @ 41,64,83,84,99,100

@@ -4,6 +4,17 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-17** — um records carry `realised`; the `token` vocabulary is retired everywhere. Pivoting
+  mm to uuid made most `.token` reads redundant — a clone already carried `uuid` — but not all: three
+  sites read `token`'s *presence* as "this event is in mm, write through to it", and `.uuid` cannot
+  say that (a restored parked note keeps its uuid the whole time it is off-take, and `addParked`
+  mints `fxp-N` uuids for specs mm has never seen). *Chosen over* keeping `.token` as the flag under
+  a name mm no longer uses: the value was always the uuid, so only presence carried information, and
+  tm already calls mm-committed events on-take and parked ones off-take. `realised` names that axis
+  and `REALISATION` already classified `token` as a realisation field, so `parkSpec` strips it for
+  free. mm's `tokenOf`/`byToken` are gone, tm's `byToken`/`byUuid` are one table, `origTok` dissolved
+  into the uuid its clone already held.
+
 - **2026-07-17** — mm addresses by uuid; the content key stays private and detects collisions only.
   Tokens did two jobs: an external handle, and (as `tokenIdx`) the same-pitch detector. Only the
   first is replaceable — key that index by uuid and it can never collide, so `noteCollision` would go

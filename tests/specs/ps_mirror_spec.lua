@@ -242,13 +242,13 @@ return {
       local em = util.instantiate('eventMeta', { ps = ps })
       local path = assert(package.searchpath('midiManager', package.path))
       local mm = assert(loadfile(path))({ take = 'take1', eventMeta = em })
-      local token
+      local uuid
       mm:modify(function()
-        token = mm:add({ evType = 'note', ppq = 0, endppq = 240, ppqL = 0, endppqL = 240,
+        uuid = mm:add({ evType = 'note', ppq = 0, endppq = 240, ppqL = 0, endppqL = 240,
                          chan = 1, pitch = 60, vel = 96, lane = 1, detune = -30, delay = 0 })
       end)
       local snap = snapshot(reaper)
-      mm:modify(function() mm:assign(token, { detune = 0 }) end)
+      mm:modify(function() mm:assign(uuid, { detune = 0 }) end)
       rewindTo(reaper, snap)
       ps:pollUndo()
       local seen = 0

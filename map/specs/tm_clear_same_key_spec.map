@@ -1,4 +1,4 @@
-@spec tm_clear_same_key_spec  src=tests/specs/tm_clear_same_key_spec.lua  loc=129  sha=47931cf  cases=4
+@spec tm_clear_same_key_spec  src=tests/specs/tm_clear_same_key_spec.lua  loc=129  sha=64adf46  cases=4
 @exercises trackerManager (h.tm), midiManager (h.fm)
 @surface   tm:addEvent, tm:flush, fm:dump, tm:getChannel
 @harness   mk{seed.notes, seed.length}

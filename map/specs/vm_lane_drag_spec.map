@@ -1,4 +1,4 @@
-@spec vm_lane_drag_spec  src=tests/specs/vm_lane_drag_spec.lua  loc=526  sha=dee8c7b  cases=18
+@spec vm_lane_drag_spec  src=tests/specs/vm_lane_drag_spec.lua  loc=526  sha=14993a2  cases=18
 @exercises trackerView (h.vm), midiManager (h.fm), trackerManager (h.tm)
 @surface   vm:setGridSize, vm:moveLaneEvent, fm:dump, tm:addEvent, tm:flush, tm:assignEvent, vm:addLaneEvent, vm:deleteLaneEvent, vm:cycleLaneShape, vm:setLaneTension
 @harness   mk{seed.ccs, seed.notes}

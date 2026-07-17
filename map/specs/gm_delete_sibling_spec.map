@@ -1,4 +1,4 @@
-@spec gm_delete_sibling_spec  src=tests/specs/gm_delete_sibling_spec.lua  loc=108  sha=f8aa484  cases=3
+@spec gm_delete_sibling_spec  src=tests/specs/gm_delete_sibling_spec.lua  loc=108  sha=14993a2  cases=3
 @exercises groupManager (gm), trackerManager (h.tm)
 @surface   gm:markGroup, gm:newInstance, tm:flush, gm:deleteEvent, gm:addEvent
 

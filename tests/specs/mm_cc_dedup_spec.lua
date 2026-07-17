@@ -359,7 +359,7 @@ return {
       local mm = loadWithCapture(take)
       mm:modify(function()
         for _, c in mm:ccs() do
-          if c.cc == 7 then mm:assign(c.token, { val = 99 }) end
+          if c.cc == 7 then mm:assign(c.uuid, { val = 99 }) end
         end
       end)
 

@@ -1,4 +1,4 @@
-@spec mm_ppql_roundtrip_spec  src=tests/specs/mm_ppql_roundtrip_spec.lua  loc=126  sha=999f37e  cases=5
+@spec mm_ppql_roundtrip_spec  src=tests/specs/mm_ppql_roundtrip_spec.lua  loc=126  sha=b5afaeb  cases=5
 @exercises midiManager (h.mm)
 @surface   mm:modify
 @harness   fakeReaper:bindTake

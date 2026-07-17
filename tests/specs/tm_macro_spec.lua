@@ -139,7 +139,7 @@ return {
     end,
   },
 
-  -- The restored note re-enters its column token-less; its real mm event lands only with
+  -- The restored note re-enters its column unrealised; its real mm event lands only with
   -- the deferred tail commit. Unless wired to that backing, the cell is inert till rebuild.
   {
     name = 'G2b: an edit through the restored grid cell lands (cell wired to its backing)',
@@ -201,7 +201,7 @@ return {
       -- Bend fxNote 2 (vel 88) behind tm's back, as a foreign script would.
       local tok
       for _, n in h.fm:notes() do
-        if n.derived and n.vel == 88 then tok = h.fm:tokenOf(n) end
+        if n.derived and n.vel == 88 then tok = n.uuid end
       end
       t.truthy(tok, 'fxNote 2 present at vel 88')
       h.fm:modify(function() h.fm:assign(tok, { vel = 17 }) end)

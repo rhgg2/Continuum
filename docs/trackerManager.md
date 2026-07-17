@@ -55,7 +55,7 @@ tm's write side — a staging layer folded into tm's own scope (the source
 banners it `-- UPDATE MANAGER`), not a separate object. All mutations —
 from tv and from tm's own rebuild-time housekeeping — funnel through
 `tm:addEvent` / `tm:assignEvent` / `tm:deleteEvent`, which apply to a
-local cache (`byToken`, `byUuid`, per-channel `chans`) and accumulate
+local cache (`byUuid`, per-channel `chans`) and accumulate
 mm-facing ops in `adds`/`assigns`/`deletes`. `tm:flush()` commits the
 batch in one `mm:modify` call. The cache is maintained incrementally at
 every mm-write site (the verbs, flush, and rebuild's `mmBatch`), so a full
@@ -68,10 +68,10 @@ surface) are the reason several conventions exist.
 
 ### Incremental index reconciliation
 
-`idxReconcile(handle)` rebuilds one event's `byToken`/`byUuid`/`chans` entry
-from mm's canonical clone (`mm:byToken`), producing an entry byte-identical
-to what a full `reload()` would build for it — both funnel through the shared
-`makeEntry` helper. Callers reconcile every touched handle after the whole
+`idxReconcile(uuid)` rebuilds one event's `byUuid`/`chans` entry from mm's
+canonical clone (`mm:byUuid`), producing an entry byte-identical to what a
+full `reload()` would build for it — both funnel through the shared
+`makeEntry` helper. Callers reconcile every touched uuid after the whole
 `mm:modify` batch commits, not op-by-op: reconciling mid-batch would be
 vulnerable to reseat sequences whose intermediate states collide, where an
 op-by-op replay could net a live event out of the index.
@@ -85,12 +85,12 @@ This check was free until 2026-07-17: mm addressed by content token, a ppq move
 re-keyed it, and the remove-and-reinsert path followed automatically. A uuid
 survives the move, so the condition has to be stated.
 
-`idxReconcile` evicts an entry's old `byUuid` mapping only if it still owns it
-(`byUuid[uuid] == prev`). This is now defensive — a handle never changes, so
-`byToken` and `byUuid` key alike. It guarded a reswing, back when every note's
-token re-keyed: the batch's `pairs(touched)` walk visits handles in hash order,
-so a uuid's new-token insert could land before its old-token eviction, and
-evicting unconditionally would delete the just-inserted live entry.
+The eviction used to need a guard (`byUuid[uuid] == prev`): a reswing re-keyed
+every note's token, the batch's `pairs(touched)` walk visits handles in hash
+order, and a uuid's new-token insert could land before its old-token eviction —
+so evicting unconditionally deleted the just-inserted live entry. Addressing by
+uuid there is one key per event and one table, and the guard went with the
+re-key.
 
 Because every mm write maintains the index, it is authoritative and survives
 across rebuilds. A rebuild only full-`reload()`s when mm re-read its entire
@@ -351,7 +351,7 @@ runs it, with a pointer to its detail where one exists.
   hosting its own discrete-replace kind (note-host replace parks the
   host; see `design/note-macros-v2.md` § Note-host replace parks). The
   prior parked set splits into still-covered carry-forward and restores
-  that re-enter their columns token-less, keeping their uuid and fx. A
+  that re-enter their columns unrealised, keeping their uuid and fx. A
   restored cc lands on the exact ppq of the fill seat the wider window
   left on the take; under uuid addressing the two are distinct events, so
   the fill reconcile deletes that seat by its own handle and the authored
@@ -416,7 +416,7 @@ runs it, with a pointer to its detail where one exists.
   the tail walk re-stamps the `delayC`/`endppqC` render cues on the
   notes it moves or clips. → § Rebuild: logical projection.
 
-All projection runs through `projectCC(cc, token, overlay)`: it clones the
+All projection runs through `projectCC(cc, overlay)`: it clones the
 source event, strips only `chan` and `cc`, and applies the caller's
 `overlay` of derived fields. Everything else — including metadata not
 known here — rides through verbatim, so new event fields reach
@@ -543,7 +543,7 @@ Synthesis runs in two places:
   maps delay→ppq before assignNote sees it) all dirty the channel.
 
 Both call sites build a `records` list from their available source
-(lane events for rebuild; `byToken` notes + pending adds for flush) and
+(lane events for rebuild; `byUuid` notes + pending adds for flush) and
 feed it through the same pure `reconcilePCsForChan` helper. Only the
 rebuild path passes a `key` (the lane event itself), so only it receives
 the shadow marking — records lost to lane priority get
@@ -616,10 +616,13 @@ rebuild (see `vmOnlyKeys`).
   toggled per-edit.
 - **`util.REMOVE`** as a value in `assignEvent` deletes the field
   (passed through to mm).
-- **Token lifetime.** A `token` is content-keyed and re-keyed each
-  rebuild, valid only within one rebuild-to-flush window; um's
-  `byToken` / `byUuid` caches are rebuilt fresh each rebuild. Use `uuid`
-  (`tm:byUuid`) for a durable cross-rebuild handle.
+- **Handles and `realised`.** An event's `uuid` is its handle everywhere:
+  durable across rebuilds and reloads, stable under any assign, and what
+  `tm:byUuid` and every mm verb take. What um's records add is `realised` —
+  set on entries built from an mm clone, absent on staged adds and on
+  restored parked cells until their deferred `mm:add` lands. Presence, not
+  the uuid, is what says "this event exists in mm, write through to it";
+  a parked spec keeps its uuid the whole time it is off-take.
 
 ## Staged-update bounds
 
@@ -680,7 +683,7 @@ tokens.
 
 Run inside `mm:modify`'s preflush, after `preflush` (propagated peers
 already staged) and before the snapshot (separations/deletes ride this
-flush). Scans ALL post-flush notes — `byToken` all lanes plus staged
+flush). Scans ALL post-flush notes — `byUuid` all lanes plus staged
 adds — grouped by `(chan, pitch)` in one pass.
 
 Not a per-self peer walk: two notes can collide without either being the

@@ -153,10 +153,10 @@ return {
   },
 
   {
-    name = 'authoring a pb onto an anchor seat adopts it, no token-colliding rival (stuck-digit bug)',
+    name = 'authoring a pb onto an anchor seat adopts it, no rival at the same tick (stuck-digit bug)',
     run = function(harness)
       -- I2a anchor plants a hidden absorber seat at a pb-active onset. Authoring there must
-      -- adopt that seat, not push a token-colliding rival — see docs/tuning.md § Authoring onto a hidden seat.
+      -- adopt that seat, not push a rival onto the same tick — see docs/tuning.md § Authoring onto a hidden seat.
       local h = harness.mk{
         seed = {
           notes = {

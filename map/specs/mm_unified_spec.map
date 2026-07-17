@@ -1,6 +1,6 @@
-@spec mm_unified_spec  src=tests/specs/mm_unified_spec.lua  loc=173  sha=bfdeb03  cases=9
+@spec mm_unified_spec  src=tests/specs/mm_unified_spec.lua  loc=173  sha=70ef819  cases=9
 @exercises midiManager (h.fm)
-@surface   fm:modify, fm:byToken, fm:notes, fm:tokenOf, fm:assign, fm:ccs, fm:delete, fm:events, fm:add
+@surface   fm:modify, fm:byUuid, fm:notes, fm:assign, fm:ccs, fm:delete, fm:events, fm:add
 @harness   mk{seed.notes, seed.ccs}, bareMM
 
 # Intent
@@ -14,21 +14,20 @@
   still exist alongside. These tests exercise the unified surface in isolation.
 
 # Cases
-  @case 'add(note): returns a token that resolves to the new note'  [harness]  @ 14-26
-  @case 'add(cc/pb/pa/at/pc): every evType lands and is byToken-addressable'  [harness]  @ 30-46
-  @case 'assign: metadata-only change preserves the token'  [harness]  @ 50-62
+  @case 'add(note): returns a uuid that resolves to the new note'  [harness]  @ 14-26
+  @case 'add(cc/pb/pa/at/pc): every evType lands and is byUuid-addressable'  [harness]  @ 30-46
+  @case 'assign: metadata-only change preserves the handle'  [harness]  @ 50-62
   @case 'assign: an identity-field change keeps the handle, which resolves to the moved note'  [harness]  @ 66-78
   @case 'assign: a cc identity change (chan or cc#) keeps the handle too'  [harness]  @ 82-92
-  @case 'delete(token): event vanishes from byToken and from the iterators'  [harness]  @ 96-118
-  @case 'delete(unknown token): silent no-op'  [harness]  @ 122-131
-  @case 'events(): yields all live events as (token, evt), notes then ccs'  [harness]  @ 135-158
+  @case 'delete(uuid): event vanishes from byUuid and from the iterators'  [harness]  @ 96-118
+  @case 'delete(unknown uuid): silent no-op'  [harness]  @ 122-131
+  @case 'events(): yields all live events as (uuid, evt), notes then ccs'  [harness]  @ 135-158
   @case 'add(nil) / add{} / assign(nil, t): nil-paths return nil, no crash'  [harness]  @ 162-171
 
 # Uses (outbound edges)
   @use call fm:modify  @ 18,34,58,74,88,108,112,127,165
-  @use call fm:byToken  @ 22,42,60,76,90,109,110,113,151
+  @use call fm:byUuid  @ 22,42,60,76,90,109,110,113,151
   @use call fm:notes  @ 55,71,104
-  @use call fm:tokenOf  @ 56,72,86,106
   @use call fm:assign  @ 58,74,88,168
   @use call fm:ccs  @ 85,105
   @use call fm:delete  @ 108,112,127,169

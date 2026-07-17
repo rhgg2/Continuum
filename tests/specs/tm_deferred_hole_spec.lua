@@ -7,15 +7,15 @@
 
 local t = require('support')
 
-local function tokenOfNote(mm, chan, pitch)
+local function uuidOfNote(mm, chan, pitch)
   for _, n in mm:notes() do
-    if n.chan == chan and n.pitch == pitch then return mm:tokenOf(n) end
+    if n.chan == chan and n.pitch == pitch then return n.uuid end
   end
 end
 
-local function ccTokenAt(mm, chan, evType, ppq)
+local function ccUuidAt(mm, chan, evType, ppq)
   for _, c in mm:ccsRaw() do
-    if c.chan == chan and c.evType == evType and c.ppq == ppq then return mm:tokenOf(c) end
+    if c.chan == chan and c.evType == evType and c.ppq == ppq then return c.uuid end
   end
 end
 
@@ -65,7 +65,7 @@ return {
       }
       -- Delete the lowest-ppq note: reconcile deletes its PC (hole at the first cc
       -- loc), then :2362 rebuilds the pc column from ccsRaw() past that hole.
-      h.tm:deleteEvent(tokenOfNote(h.fm, 1, 60))
+      h.tm:deleteEvent(uuidOfNote(h.fm, 1, 60))
       h.tm:flush()
       t.deepEq(pcCol(h, 1), { { ppq = 240, val = 2 }, { ppq = 480, val = 3 } })
     end,
@@ -83,7 +83,7 @@ return {
           },
         },
       }
-      h.tm:deleteEvent(ccTokenAt(h.fm, 1, 'cc', 10))
+      h.tm:deleteEvent(ccUuidAt(h.fm, 1, 'cc', 10))
       h.tm:flush()
       t.deepEq(pasInCol(h, 1), { 240 }, 'pa projected into pitch 60 column despite the low-loc hole')
     end,
@@ -105,7 +105,7 @@ return {
       -- The initial load seats a hidden absorber pb at ppq 0, so deleting cc7@10 holes
       -- mid-array with both authored pbs past it. rebuildPbs snapshots every pb from
       -- ccsRaw() (:2063) to build the pb column; a truncation at the hole drops them.
-      h.tm:deleteEvent(ccTokenAt(h.fm, 1, 'cc', 10))
+      h.tm:deleteEvent(ccUuidAt(h.fm, 1, 'cc', 10))
       h.tm:flush()
       t.deepEq(authoredPbCol(h, 1), { { ppq = 240, cents = 25 }, { ppq = 480, cents = 50 } },
         'both authored pbs survive the snapshot despite the hole before them')

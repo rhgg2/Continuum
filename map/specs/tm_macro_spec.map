@@ -1,6 +1,6 @@
 @spec tm_macro_spec  src=tests/specs/tm_macro_spec.lua  loc=372  sha=c234626  cases=14
 @exercises trackerManager (h.tm), midiManager (h.fm)
-@surface   tm:addEvent, tm:flush, tm:getChannel, fm:dump, tm:rebuild, tm:byUuid, tm:assignParked, tm:assignEvent, fm:notes, fm:tokenOf, fm:modify, fm:assign
+@surface   tm:addEvent, tm:flush, tm:getChannel, fm:dump, tm:rebuild, tm:byUuid, tm:assignParked, tm:assignEvent, fm:notes, fm:modify, fm:assign
 @harness   mk{seed.length}
 
 # Intent
@@ -47,6 +47,5 @@
   @use call tm:assignParked  @ 127,154
   @use call tm:assignEvent  @ 164
   @use call fm:notes  @ 203
-  @use call fm:tokenOf  @ 204
   @use call fm:modify  @ 207
   @use call fm:assign  @ 207

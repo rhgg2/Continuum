@@ -38,7 +38,7 @@ return {
       end)
 
       local tokByPpq = {}
-      for _, n in mm:notes() do tokByPpq[n.ppq] = mm:tokenOf(n) end
+      for _, n in mm:notes() do tokByPpq[n.ppq] = n.uuid end
 
       -- Delete the first note (cascade shifts the shared notation stream), then
       -- transpose the second in the SAME modify. The transpose is structural, so

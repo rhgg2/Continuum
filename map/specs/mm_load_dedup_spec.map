@@ -1,6 +1,6 @@
-@spec mm_load_dedup_spec  src=tests/specs/mm_load_dedup_spec.lua  loc=116  sha=23e5095  cases=3
+@spec mm_load_dedup_spec  src=tests/specs/mm_load_dedup_spec.lua  loc=116  sha=70ef819  cases=3
 @exercises midiManager (h.mm)
-@surface   mm:subscribe, mm:load, mm:notes, mm:byToken
+@surface   mm:subscribe, mm:load, mm:notes, mm:byUuid
 @harness   fakeReaper:bindTake, reaper:seedMidi
 
 # Intent
@@ -23,4 +23,4 @@
   @use call mm:subscribe  @ 25,26,30
   @use call mm:load  @ 31
   @use call mm:notes  @ 37
-  @use call mm:byToken  @ 65
+  @use call mm:byUuid  @ 65

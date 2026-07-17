@@ -1,6 +1,6 @@
 @spec mm_delete_then_sidecar_write_spec  src=tests/specs/mm_delete_then_sidecar_write_spec.lua  loc=61  sha=bfe20fc  cases=1
 @exercises midiManager (h.mm)
-@surface   mm:modify, mm:notes, mm:tokenOf, mm:delete, mm:assign
+@surface   mm:modify, mm:notes, mm:delete, mm:assign
 @harness   fakeReaper:bindTake
 
 # Intent
@@ -26,6 +26,5 @@
 # Uses (outbound edges)
   @use call mm:modify  @ 34,46
   @use call mm:notes  @ 41,52
-  @use call mm:tokenOf  @ 41
   @use call mm:delete  @ 47
   @use call mm:assign  @ 48

@@ -20,7 +20,7 @@ end
 
 return {
   {
-    name = 'multi-deleteNote in one modify deletes exactly the tokens passed',
+    name = 'multi-deleteNote in one modify deletes exactly the uuids passed',
     run = function()
       local take = freshTake()
       local mm = realMM(take)
@@ -34,7 +34,7 @@ return {
       end)
 
       local tokByPpq = {}
-      for _, n in mm:notes() do tokByPpq[n.ppq] = mm:tokenOf(n) end
+      for _, n in mm:notes() do tokByPpq[n.ppq] = n.uuid end
 
       -- Delete the first A and the first B (rows 1 and 2 of ABAB).
       mm:modify(function()

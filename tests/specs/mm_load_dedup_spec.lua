@@ -62,7 +62,7 @@ return {
       t.eq(captured.deduped, nil, 'nothing eaten')
       t.eq(#captured.collisions, 1)
       t.eq(captured.collisions[1].kind, 'nudged')
-      t.truthy(mm:byToken(captured.collisions[1].uuid), 'the nudged voice resolves by uuid')
+      t.truthy(mm:byUuid(captured.collisions[1].uuid), 'the nudged voice resolves by uuid')
       t.deepEq(order, { 'collisions', 'reload' }, 'collisionsResolved fires before reload')
     end,
   },

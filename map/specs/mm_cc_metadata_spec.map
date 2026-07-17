@@ -1,4 +1,4 @@
-@spec mm_cc_metadata_spec  src=tests/specs/mm_cc_metadata_spec.lua  loc=153  sha=bfdeb03  cases=9
+@spec mm_cc_metadata_spec  src=tests/specs/mm_cc_metadata_spec.lua  loc=153  sha=b5afaeb  cases=9
 @exercises midiManager (h.mm)
 @surface   mm:ccs, fm:assign, fm:modify, fm:delete
 @harness   mk{seed.ccs}, bareMM

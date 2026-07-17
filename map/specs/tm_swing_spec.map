@@ -18,7 +18,7 @@
   @case 'missing slot name falls back to identity'  [harness]  @ 98-107
   @case 'identity composite (empty array) acts as pass-through'  [harness]  @ 111-120
   @case 'cache invalidates across a swing edit'  [harness]  @ 124-132
-  @case 'a swing change keeps every uuid resolvable (reseat re-keys tokens)'  [harness]  @ 136-164
+  @case 'a swing change keeps every uuid resolvable'  [harness]  @ 136-164
 
 # Uses (outbound edges)
   @use call tm:fromLogical  @ 18,34,35,36,38,52,66,68,89,106,119,129,131,154,157

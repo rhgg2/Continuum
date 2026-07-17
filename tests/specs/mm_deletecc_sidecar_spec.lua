@@ -87,9 +87,9 @@ return {
       local mm = realMM(nil)
       mm:load(take)
 
-      -- Find tokens by ppq.
+      -- Find uuids by ppq.
       local tokByppq = {}
-      for _, c in mm:ccs() do tokByppq[c.ppq] = c.token end
+      for _, c in mm:ccs() do tokByppq[c.ppq] = c.uuid end
       local tokA, tokE, tokB = tokByppq[50], tokByppq[75], tokByppq[100]
 
       mm:modify(function()

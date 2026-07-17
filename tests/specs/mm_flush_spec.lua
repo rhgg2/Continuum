@@ -28,7 +28,7 @@ return {
       mm:load(take)
 
       local _, note = mm:notes()()
-      mm:modify(function() mm:assign(note.token, { vel = 90 }) end)
+      mm:modify(function() mm:assign(note.uuid, { vel = 90 }) end)
 
       local dump = rp:dumpMidi(take)
 
@@ -57,7 +57,7 @@ return {
       mm:load(take)   -- mints a uuid + caches the note's notation sidecar
 
       local _, note = mm:notes()()
-      mm:modify(function() mm:assign(note.token, { pitch = 67 }) end)
+      mm:modify(function() mm:assign(note.uuid, { pitch = 67 }) end)
 
       local pitch
       for _, e in ipairs(rp:dumpMidi(take).texts) do

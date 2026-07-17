@@ -1,4 +1,4 @@
-@spec clipboard_spec  src=tests/specs/clipboard_spec.lua  loc=332  sha=a1b74fe  cases=8
+@spec clipboard_spec  src=tests/specs/clipboard_spec.lua  loc=333  sha=14993a2  cases=8
 @exercises trackerView (h.vm), editCursor (h.ec), clipboard (h.clipboard), midiManager (h.fm), trackerManager (h.tm)
 @surface   vm:setGridSize, ec:setPos, ec:extendTo, ec:pos, clipboard:collect, clipboard:trimTop, fm:dump, clipboard:pasteClip, tm:deleteEvent, tm:flush, tm:addEvent, tm:getChannel
 @harness   mk{seed.notes, seed.length, seed.ccs}
@@ -15,21 +15,21 @@
   @case 'clipboard:trimTop drops top rows and re-indexes survivors'  [harness]  @ 55-75
   @case 'copy/paste carries intent ceiling, not the clipped tail'  [harness]  @ 83-113
   @case 'paste fit-clip against a blocker keeps intent; regrows when blocker removed'  [harness]  @ 120-163
-  @case 'copy/paste a retrig host leaves the original host intact'  [harness]  @ 169-209
-  @case 'clipboard:collect multi-col records chanDelta from leftmost col'  [harness]  @ 217-242
-  @case 'arbitrary metadata survives note pitch-mode collect→paste round-trip'  [harness]  @ 253-281
-  @case 'arbitrary metadata survives cc-mode collect→paste round-trip'  [harness]  @ 291-329
+  @case 'copy/paste a retrig host leaves the original host intact'  [harness]  @ 170-210
+  @case 'clipboard:collect multi-col records chanDelta from leftmost col'  [harness]  @ 218-243
+  @case 'arbitrary metadata survives note pitch-mode collect→paste round-trip'  [harness]  @ 254-282
+  @case 'arbitrary metadata survives cc-mode collect→paste round-trip'  [harness]  @ 292-330
 
 # Uses (outbound edges)
-  @use call vm:setGridSize  @ 25,95,133,176,229,261,299
-  @use call ec:setPos  @ 27,98,104,135,144,195,200,270,318
-  @use call ec:extendTo  @ 28,99,136,196
-  @use call ec:pos  @ 28,99,136,196
-  @use call clipboard:collect  @ 30,100,137,197,233,264,313
+  @use call vm:setGridSize  @ 25,95,133,177,230,262,300
+  @use call ec:setPos  @ 27,98,104,135,144,196,201,271,319
+  @use call ec:extendTo  @ 28,99,136,197
+  @use call ec:pos  @ 28,99,136,197
+  @use call clipboard:collect  @ 30,100,137,198,234,265,314
   @use call clipboard:trimTop  @ 66
-  @use call fm:dump  @ 96,108,148,156,186,274,322
-  @use call clipboard:pasteClip  @ 105,145,201,271,319
+  @use call fm:dump  @ 96,108,148,156,187,275,323
+  @use call clipboard:pasteClip  @ 105,145,202,272,320
   @use call tm:deleteEvent  @ 159
-  @use call tm:flush  @ 160,175
-  @use call tm:addEvent  @ 173
-  @use call tm:getChannel  @ 180
+  @use call tm:flush  @ 160,176
+  @use call tm:addEvent  @ 174
+  @use call tm:getChannel  @ 181

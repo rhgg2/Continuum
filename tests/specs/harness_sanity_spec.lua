@@ -41,16 +41,16 @@ return {
     -- If fake mm returned internal references instead of clones, mutating
     -- a returned note would silently corrupt state and half the invariants
     -- we test would be meaningless.
-    name = 'byToken returns a shallow clone — mutation does not leak',
+    name = 'byUuid returns a shallow clone — mutation does not leak',
     run = function(harness)
       local h = harness.mk{
         seed = { notes = { { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100 } } },
       }
-      local tk = (h.fm:dump().notes[1] or {}).token
-      local _, n1 = h.fm:byToken(tk)
+      local tk = (h.fm:dump().notes[1] or {}).uuid
+      local _, n1 = h.fm:byUuid(tk)
       n1.pitch = 999
       n1.detune = 12345
-      local _, n2 = h.fm:byToken(tk)
+      local _, n2 = h.fm:byUuid(tk)
       t.eq(n2.pitch, 60, 'pitch untouched by caller mutation')
       t.truthy(n2.detune ~= 12345, 'detune untouched by caller mutation')
     end,

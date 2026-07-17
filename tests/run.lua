@@ -47,7 +47,7 @@ local specs = {
   'mm_load_dedup_spec',
   'tm_deferred_hole_spec',
   'mm_note_cascade_sidecar_spec',
-  'mm_token_spec',
+  'mm_addressing_spec',
   'mm_unified_spec',
   'mm_wide_cc_spec',
   'mm_take_validity_spec',

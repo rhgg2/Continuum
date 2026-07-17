@@ -28,7 +28,7 @@
 --shape: extraColumns[chan] = { notes=count, [pc], [pb], [at], [ccs={[ccNum]=true}] }
 --shape: lastMuteSet = { [chan] = true }, pushed by tv via tm:setMutedChannels
 --shape: fxParked = one evType-tagged off-take stash for every replace park; each spec is the authored
---shape:   event in the logical frame, minus realisation (delayC/endppqC/loc/token/derived/frame/cents),
+--shape:   event in the logical frame, minus realisation (delayC/endppqC/loc/realised/derived/frame/cents),
 --shape:   so new metadata rides park automatically. Baseline fields per type (raw re-derived on restore):
 --shape:   note { evType='note', chan, lane, uuid, ppq, endppq, pitch, vel, detune, delay, sample, [fx] }
 --shape:   cc { evType='cc', chan, cc, ppq, val, shape }  |  pb { evType='pb', chan, ppq, val (=cents), shape, [tension] }  |  pa { evType='pa', chan, pitch, ppq, vel, [rpb] }
@@ -550,11 +550,13 @@ local function fxKey(spec)
                   spec.pitch, spec.vel, spec.detune or 0, spec.sample or 0)
 end
 
--- onKeep carries the matched note's token + realised end onto the predicted spec, so a
--- kept fxNote is re-clipped through its token by the tail walk rather than re-added.
+-- onKeep carries the matched note's mm handle + realised end onto the predicted spec, so a
+-- kept fxNote is re-clipped in place by the tail walk rather than re-added.
 local function reconcileFx(existing, predicted, sink)
   reconcileDerived{ existing = existing, predicted = predicted, key = fxKey, sink = sink,
-    onKeep = function(spec, have) spec.token, spec.endppq = have.token, have.endppq end }
+    onKeep = function(spec, have)
+      spec.uuid, spec.realised, spec.endppq = have.uuid, have.realised, have.endppq
+    end }
 end
 
 ---------- UPDATE MANAGER
@@ -571,8 +573,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   local parkedEdits = {}
   local parkedUuidSeq = 0
   local chans = {}
-  local byToken = {}
-  local byUuid  = {}
+  local byUuid = {}
   local dirtyPcChans = {}
 
   ----- Accessors
@@ -585,7 +586,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   end
 
   local function forEachAttachedPA(host, fn)
-    for _, cc in pairs(byToken) do
+    for _, cc in pairs(byUuid) do
       if cc.evType == 'pa' and cc.chan == host.chan and cc.pitch == host.pitch
         and cc.ppq >= host.ppq and cc.ppq < host.endppq then
         fn(cc)
@@ -626,62 +627,51 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     deferredSort = prev
   end
 
-  -- Construct the um-frame index entry for one mm clone and file it into byToken/byUuid.
+  -- Construct the um-frame index entry for one mm clone and file it into byUuid.
   -- Shared verbatim by full reload and the incremental verbs so both build identical entries.
-  local function makeEntry(e, tok)
+  local function makeEntry(e)
     local evt
     if e.evType == 'pb' then
       -- val is raw 14-bit converted to cents (um's frame). cents sidecar is authored logical value;
       -- nil for foreign-MIDI/pre-cents pbs — back-derived in rebuild's absorber pass from lane-1 layout.
       evt = util.pick(e, 'ppq ppqL chan shape tension derived frame cents uuid',
-                      { val = rawToCents(e.val), token = tok, evType = 'pb' })
+                      { val = rawToCents(e.val), realised = true, evType = 'pb' })
     else
       evt = e
-      evt.token = tok
+      evt.realised = true
     end
-    byToken[tok] = evt
-    if evt.uuid then byUuid[evt.uuid] = evt end
+    byUuid[evt.uuid] = evt
     return evt
   end
 
   -- Refresh an existing entry from mm's fresh clone in place: prev keeps its ppq-sorted
   -- slot in chans, so a same-slot reconcile skips the chansRemove scan, reinsert and sort.
-  local function refreshEntry(prev, e, tok)
+  local function refreshEntry(prev, e)
     if e.evType == 'pb' then
       prev.ppqL, prev.shape, prev.tension = e.ppqL, e.shape, e.tension
       prev.derived, prev.frame, prev.cents = e.derived, e.frame, e.cents
       prev.val = rawToCents(e.val)
     else
-      local oldUuid = prev.uuid
-      for k in pairs(prev) do if e[k] == nil and k ~= 'token' then prev[k] = nil end end
+      for k in pairs(prev) do if e[k] == nil and k ~= 'realised' then prev[k] = nil end end
       util.assign(prev, e)
-      prev.token = tok
-      if oldUuid ~= prev.uuid then
-        if oldUuid then byUuid[oldUuid] = nil end
-        if prev.uuid then byUuid[prev.uuid] = prev end
-      end
+      prev.realised = true
     end
   end
 
-  -- Incremental index upkeep for one handle. chans lists are ppq-sorted and chansListFor ignores
+  -- Incremental index upkeep for one uuid. chans lists are ppq-sorted and chansListFor ignores
   -- ppq, so refresh in place only at an unchanged ppq. see docs/trackerManager.md § Incremental index reconciliation
-  function idxReconcile(tok)
-    if not tok then return end
-    local prev = byToken[tok]
-    local _, e = mm:byToken(tok)
+  function idxReconcile(uuid)
+    if not uuid then return end
+    local prev = byUuid[uuid]
+    local _, e = mm:byUuid(uuid)
     if e and prev and prev.ppq == e.ppq
        and chansListFor(prev, prev.chan, prev.lane) == chansListFor(e, e.chan, e.lane) then
-      refreshEntry(prev, e, tok)
+      refreshEntry(prev, e)
       return
     end
-    byToken[tok] = nil
-    if prev then
-      -- pairs(touched) order is hash-random: the new token's insert may already
-      -- own this uuid (reseat re-key), so evict only our own mapping.
-      if prev.uuid and byUuid[prev.uuid] == prev then byUuid[prev.uuid] = nil end
-      chansRemove(prev)
-    end
-    if e then chansInsert(makeEntry(e, tok)) end
+    byUuid[uuid] = nil
+    if prev then chansRemove(prev) end
+    if e then chansInsert(makeEntry(e)) end
   end
 
   -- Absorber derivation inputs: any pb, and lane-1 notes' onset/detune geometry.
@@ -715,7 +705,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     util.add(adds, { evt = evt })
   end
 
-  --contract: dedupes by token; in-flight assigns to the same event collapse into one mm write
+  --contract: dedupes by uuid; in-flight assigns to the same event collapse into one mm write
   --invariant: util.REMOVE markers must survive merging
   local function assignLowlevel(evt, update)
     local oldChan, oldLane = evt.chan, evt.lane
@@ -735,15 +725,15 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     elseif update.ppq ~= nil and newList then
       sortByPPQ(newList)
     end
-    if not evt.token then return end
+    if not evt.realised then return end
     for _, e in ipairs(assigns) do
-      if e.token == evt.token then
+      if e.uuid == evt.uuid then
         -- Plain copy, not util.assign: util.assign collapses util.REMOVE → nil-the-key.
         for k, v in pairs(update) do e.update[k] = v end
         return
       end
     end
-    util.add(assigns, { token = evt.token, update = update, evt = evt })
+    util.add(assigns, { uuid = evt.uuid, update = update, evt = evt })
   end
 
   local function deleteLowlevel(evt)
@@ -752,13 +742,10 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     chansRemove(evt)
     if evt.uuid then byUuid[evt.uuid] = nil end
 
-    local token = evt.token
-
-    if token then
-      byToken[token] = nil
-      util.add(deletes, { token = token, evt = evt })
+    if evt.realised then
+      util.add(deletes, { uuid = evt.uuid, evt = evt })
       for j = #assigns, 1, -1 do
-        if assigns[j].token == token then table.remove(assigns, j) end
+        if assigns[j].uuid == evt.uuid then table.remove(assigns, j) end
       end
     else
       for j = #adds, 1, -1 do
@@ -833,7 +820,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
 
   local function reconcilePcs(chan)
     local records = {}
-    for _, n in pairs(byToken) do
+    for _, n in pairs(byUuid) do
       if n.evType == 'note' and n.chan == chan then
         util.add(records, { ppq = n.ppq, ppqL = n.ppqL, lane = n.lane,
                             sample = n.sample or 0 })
@@ -850,10 +837,10 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     reconcilePCsForChan(chan, records, { del = deleteLowlevel, add = addLowlevel })
   end
 
-  local function lookup(evtOrToken)
-    local token = type(evtOrToken) == 'table' and evtOrToken.token or evtOrToken
-    if not token then return end
-    return byToken[token], token
+  local function lookup(evtOrUuid)
+    local uuid = type(evtOrUuid) == 'table' and evtOrUuid.uuid or evtOrUuid
+    if not uuid then return end
+    return byUuid[uuid], uuid
   end
 
   ----- Public interface
@@ -861,8 +848,8 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   -- The live column event for a uuid, valid until the next rebuild.
   function tm:byUuid(uuid) return byUuid[uuid] end
 
-  function deleteEvent(evtOrToken)
-    local evt = lookup(evtOrToken)
+  function deleteEvent(evtOrUuid)
+    local evt = lookup(evtOrUuid)
     if not evt then return end
     if evt.evType == 'note' then deleteNote(evt)
     else                        deleteLowlevel(evt) end
@@ -932,8 +919,8 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     if isNote and evt.endppq ~= nil then stampEndppq(evt, evt.chan) end
   end
 
-  function assignEvent(evtOrToken, update)
-    local evt = lookup(evtOrToken)
+  function assignEvent(evtOrUuid, update)
+    local evt = lookup(evtOrUuid)
     if not evt then return end
     local rawCaller = update.rawTime
     update.rawTime = nil
@@ -1072,7 +1059,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     -- separation, no tails -- those are the walk's. see docs/trackerManager.md § Flush collision scan
     do
       local byKey = {}
-      for _, n in pairs(byToken) do
+      for _, n in pairs(byUuid) do
         if n.evType == 'note' then util.bucket(byKey, util.key(n.chan, n.pitch), n) end
       end
       for _, o in ipairs(adds) do
@@ -1093,8 +1080,8 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
 
       for _, n in ipairs(kills) do deleteNote(n) end
       for _, u in ipairs(updates) do
-        if u.n.token then assignNote(u.n, u.up)   -- committed: route PA/detune resize
-        else            util.assign(u.n, u.up)    -- staged add: geometry only
+        if u.n.realised then assignNote(u.n, u.up)   -- realised: route PA/detune resize
+        else                 util.assign(u.n, u.up)  -- staged add: geometry only
         end
       end
     end
@@ -1103,8 +1090,8 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     adds, assigns, deletes = {}, {}, {}
     perf.count('committed', #flushAdds + #flushAssigns + #flushDeletes)
 
-    -- Same-pitch moves can alias ppq-keyed tokens: occupying move re-keys onto a peer's slot before
-    -- that peer vacates. Sort descending so every vacate lands ahead of its occupy. see docs/trackerManager.md § Flush collision scan
+    -- Same-pitch moves transiently share a content key: an occupier clobbers a peer's collisionIdx
+    -- slot before it vacates. Sort descending so every vacate leads its occupy. see docs/trackerManager.md § Flush collision scan
     table.sort(flushAssigns, function(a, b)
       return (a.update.ppq or a.evt.ppq or 0) > (b.update.ppq or b.evt.ppq or 0)
     end)
@@ -1125,17 +1112,17 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     perf.start('mm')
     mm:modify(function()
       for _, o in ipairs(flushDeletes) do
-        mm:delete(o.token)
-        byToken[o.token] = nil
+        mm:delete(o.uuid)
+        byUuid[o.uuid] = nil
       end
       for _, o in ipairs(flushAssigns) do
-        mm:assign(o.token, o.update)
+        mm:assign(o.uuid, o.update)
       end
       for _, o in ipairs(flushAdds) do
-        local tok = mm:add(o.evt)
+        local uuid = mm:add(o.evt)
         -- addLowlevel already filed the raw staged object into chans; drop it by identity
-        -- and re-file mm's canonical clone so the entry matches reload (cc shape, pb cents/no-uuid).
-        if tok then chansRemove(o.evt); idxReconcile(tok) end
+        -- and re-file mm's canonical clone so the entry matches reload (cc shape, pb cents).
+        if uuid then chansRemove(o.evt); idxReconcile(uuid) end
       end
     end)
     perf.stop('mm')
@@ -1149,11 +1136,10 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   -- re-read) where the incremental index is stale; edit rebuilds keep the live index.
   local function loadIndex()
     mm:reindexIfStale()   -- deferred edits may leave mm sparse/unsorted; events() below needs compact+sorted (item 5)
-    byToken = {}
-    byUuid  = {}
+    byUuid = {}
     for i = 1, 16 do chans[i] = { notes = {}, pbs = {} } end
-    for tok, e in mm:events() do
-      local evt = makeEntry(e, tok)
+    for _, e in mm:events() do
+      local evt = makeEntry(e)
       local tbl = chansListFor(evt, evt.chan, evt.lane)
       if tbl then util.add(tbl, evt) end
     end
@@ -1168,7 +1154,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   end
 
   -- Drop un-flushed staging: a rebuild must not carry command-path ops across
-  -- (tokens may be stale for newly-added events; matches prior "fresh um per rebuild").
+  -- (matches prior "fresh um per rebuild").
   function clearStaging()
     adds, assigns, deletes = {}, {}, {}
     parkedEdits            = {}
@@ -1458,9 +1444,9 @@ end
 
 -- Column events keep chan/cc so each event is self-describing (the leaf-edit
 -- facade resolves an event's column from its own chan + lane/cc; see trackerView).
-local function projectCC(cc, token, overlay)
+local function projectCC(cc, overlay)
   local evt = util.clone(cc)
-  evt.token = token
+  evt.realised = true
   if overlay then util.assign(evt, overlay) end
   return evt
 end
@@ -1520,19 +1506,19 @@ local function mmBatch()
       local touched = {}
       perf.start('batchModify')
       mm:modify(function()
-        for _, e in ipairs(dels) do mm:delete(e.token); touched[e.token] = true end
+        for _, e in ipairs(dels) do mm:delete(e.uuid); touched[e.uuid] = true end
         for _, a in ipairs(assigns) do
-          mm:assign(a.evt.token, a.update)
-          touched[a.evt.token] = true
+          mm:assign(a.evt.uuid, a.update)
+          touched[a.evt.uuid] = true
         end
-        for _, s  in ipairs(adds)     do local t = mm:add(s);    if t then touched[t] = true end end
-        for _, fn in ipairs(lazyAdds) do local t = mm:add(fn()); if t then touched[t] = true end end
+        for _, s  in ipairs(adds)     do local u = mm:add(s);    if u then touched[u] = true end end
+        for _, fn in ipairs(lazyAdds) do local u = mm:add(fn()); if u then touched[u] = true end end
       end)
       perf.stop('batchModify')
       perf.start('batchIdx')
       local n = 0
       withDeferredSort(function()
-        for tok in pairs(touched) do idxReconcile(tok); n = n + 1 end
+        for uuid in pairs(touched) do idxReconcile(uuid); n = n + 1 end
       end)
       perf.count('reconciled', n)
       perf.stop('batchIdx')
@@ -1590,10 +1576,10 @@ local function rebuildInternals()
         -- Derived notes route to fx whole-channel whatever the dirt: a partial noteExisting
         -- reads as mass deletion until the fx reconcile goes interval-native. see design § phase 3
         if raw.derived then
-          local note = util.clone(raw); note.token = mm:tokenOf(raw)
+          local note = util.clone(raw); note.realised = true
           util.add(noteExisting[chan], note)
         elseif dirt == true or intervals.intersects(dirt, raw.ppqL, raw.ppqL) then
-          local note = util.clone(raw); note.token = mm:tokenOf(raw)
+          local note = util.clone(raw); note.realised = true
           if rawDivergesFromLogical(note) then util.add(external, note)
           else util.add(internal, note)
           end
@@ -1684,12 +1670,12 @@ local function rebuildCCs(prevWindows)
   for chan = 1, 16 do
     if not dirtyChans[chan] then goto nextChan end
     for _, cc in mm:ccsRaw(chan) do
-      local token = mm:tokenOf(cc)
+      local uuid = cc.uuid
       -- fx cc event: a markerless seat inside a prev cc window (its authored cc parked), routed out and
       -- reconciled fresh at fx expansion. A removed window's orphans reconcile away there. see § Route-by-window
       if cc.evType == 'cc' and inSpan(fillWin, cc.chan, cc.cc, cc.ppq) then
         util.add(ccExisting[cc.chan],
-          { ppq = cc.ppq, val = cc.val, shape = cc.shape, cc = cc.cc, token = token })
+          { ppq = cc.ppq, val = cc.val, shape = cc.shape, cc = cc.cc, uuid = uuid })
         goto continue
       end
 
@@ -1699,12 +1685,12 @@ local function rebuildCCs(prevWindows)
         if staleSwing[cc.chan] and cc.ppqL ~= nil then
           local newPpq = tm:fromLogical(cc.chan, cc.ppqL)
           if newPpq ~= cc.ppq then
-            ccWrites.assign({ token = token }, { ppq = newPpq })
+            ccWrites.assign({ uuid = uuid }, { ppq = newPpq })
             movedPpq = newPpq
           end
         elseif rawDivergesFromLogical(cc) then
           local newPpqL = tm:toLogical(cc.chan, cc.ppq)
-          ccWrites.assign({ token = token }, { ppqL = newPpqL })
+          ccWrites.assign({ uuid = uuid }, { ppqL = newPpqL })
           movedPpqL = newPpqL
         end
       end
@@ -1712,8 +1698,8 @@ local function rebuildCCs(prevWindows)
       -- pb/pa reconcile-only (no column); cc/at/pc clone into their column carrying the reseat.
       if cc.evType == 'cc' or cc.evType == 'at' or cc.evType == 'pc' then
         local event = util.clone(cc)
-        event.token = token
-        if movedPpq  then event.ppq  = movedPpq; event.token = mm:tokenOf(event) end
+        event.realised = true
+        if movedPpq  then event.ppq  = movedPpq end
         if movedPpqL then event.ppqL = movedPpqL end
         local channel = channels[cc.chan]
         local col
@@ -1897,7 +1883,7 @@ end
 
 -- Park = clone minus the realisation frame, so new authored metadata rides a park/unpark
 -- round-trip untouched; restore mirrors it (clone back, re-derive realisation; pb also cents->raw).
-local REALISATION = { delayC = true, endppqC = true, loc = true, token = true, derived = true, frame = true, cents = true }
+local REALISATION = { delayC = true, endppqC = true, loc = true, realised = true, derived = true, frame = true, cents = true }
 --contract: evt must be logical-frame (a column event); an mm-raw source overrides ppq via `adds`
 local function parkSpec(evt, adds) return util.assign(util.clone(evt, REALISATION), adds) end
 
@@ -1927,7 +1913,7 @@ end
 
 local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows)
   local batch = mmBatch()
-  -- Restored notes re-enter their columns token-less (the real mm event lands with the deferred
+  -- Restored notes re-enter their columns unrealised (the real mm event lands with the deferred
   -- tail commit); their raw scratch recs return so rebuild can wire each cell post-commit.
   local restoredNotes = {}
 
@@ -1990,7 +1976,7 @@ local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows
     local newParked, restores = reconcilePark(scan, priorByType.note or {},
       function(spec) dirtyChan(spec.chan) end)
 
-    -- Restores re-enter their columns now (token-less); the tail walk clips them in place and
+    -- Restores re-enter their columns now (unrealised); the tail walk clips them in place and
     -- the tail walk's commit adds them after the derived deletions.
     for _, spec in ipairs(restores) do
       dirtyChan(spec.chan)   -- restored note re-enters columns; tail walk + absorber pass re-derive it
@@ -2055,7 +2041,7 @@ local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows
       if dirtyChans[chan] then
         for _, cc in mm:ccsRaw(chan) do
           if cc.evType == 'pa' and hostParked(cc.chan, cc.pitch, cc.ppqL or cc.ppq) then
-            batch.del({ token = mm:tokenOf(cc) })
+            batch.del({ uuid = cc.uuid })
             local spec = parkSpec(cc, { ppq = cc.ppqL or cc.ppq })   -- mm-raw source: evType/chan/pitch/vel/rpb ride, ppq flips logical
             spec.uuid = nil                                           -- restore re-mints the rpb sidecar uuid
             util.add(newParked, spec)
@@ -2079,7 +2065,7 @@ local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows
   end
 
   -- CCs: a point event has no tail, so the Pass-A curve stands in on the target lane and
-  -- restores add back immediately, seating a token-less projection for the view.
+  -- restores add back immediately, seating an unrealised projection for the view.
   do
     local scan = {}
     for chan = 1, 16 do
@@ -2102,8 +2088,8 @@ local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows
 
     local newParked, restores = reconcilePark(scan, priorByType.cc or {})
 
-    -- Seat a token-less projection so the view shows the restored cc this frame; next rebuild
-    -- re-reads the real token'd event from the take. The add rides the shared park commit.
+    -- Seat an unrealised projection so the view shows the restored cc this frame; next rebuild
+    -- re-reads the real mm event from the take. The add rides the shared park commit.
     for _, spec in ipairs(restores) do
       local ppq  = tm:fromLogical(spec.chan, spec.ppq)   -- realised onset derived fresh (the stash is logical)
       local cell = ccWrite(spec, ppq)
@@ -2163,7 +2149,7 @@ local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows
           -- falls back to raw-derived cents (best-effort).
           local spec = parkSpec(cc, { ppq = cc.ppqL or cc.ppq,
                                       val = cc.cents or rawToCents(cc.val) })   -- from mm-raw: evType/chan/shape/tension ride; ppq flips logical, cents->val
-          local pb = util.clone(cc); pb.token = mm:tokenOf(cc)
+          local pb = util.clone(cc); pb.realised = true
           util.add(scan, { evt = pb, spec = spec })
         end
       end
@@ -2181,13 +2167,13 @@ local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows
     end
 
     -- Sweep queue (remove): a removed window's seats orphan (no marker names them) -- delete every mm pb
-    -- in the swept raw span. The authored restored above is a token-less add, so delete-first order is safe.
+    -- in the swept raw span. The authored restored above is an unrealised add, so delete-first order is safe.
     for _, win in ipairs(pbRemoved) do
       local sRaw, eRaw = tm:fromLogical(win.chan, win.startppq), tm:fromLogical(win.chan, win.endppq)
       for _, cc in mm:ccsRaw(win.chan) do
         if cc.evType == 'pb' and cc.ppq >= sRaw and cc.ppq <= eRaw then
           dirtyChan(cc.chan)
-          batch.del({ token = mm:tokenOf(cc) })
+          batch.del({ uuid = cc.uuid })
         end
       end
     end
@@ -2276,7 +2262,7 @@ local function rebuildPA(scratch)
         if cc.evType == 'pa' then
           local noteCol, lane = findNoteColumnForPitch(channels[chan], cc.pitch, cc.ppq, scratch[chan])
           if noteCol then
-            local cell = projectCC(cc, mm:tokenOf(cc), { lane = lane })
+            local cell = projectCC(cc, { lane = lane })
             projectEvent(cell, chan)
             util.add(noteCol.events, cell)
             touched[chan] = true
@@ -2287,7 +2273,7 @@ local function rebuildPA(scratch)
   end
 
   -- Parked PAs left the take (off-take, silent) but still ride their host's note column --
-  -- projected token-less into the parked host's lane. see docs/trackerManager.md § PA dispatch
+  -- projected unrealised into the parked host's lane. see docs/trackerManager.md § PA dispatch
   for chan = 1, 16 do
     if dirtyChans[chan] then
       for _, cell in ipairs(channels[chan].parkedPA or {}) do
@@ -2571,7 +2557,7 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
                    fx = region.fx, id = region.uuid, lane = nil, delayPpq = 0 }
     end
 
-    -- Reconcile existence (stamps kept specs with token + realised end); defer writes to the tail walk's atomic commit.
+    -- Reconcile existence (stamps kept specs with the mm handle + realised end); defer writes to the tail walk's atomic commit.
     -- fxOut.noteLive holds the predicted specs; the tail walk clips them in place.
     reconcileFx(noteExisting[chan], predicted, deferred)
     for _, spec in ipairs(predicted) do
@@ -2662,8 +2648,8 @@ local function rebuildTails(noteLive, deferred, scratch)
     end
     sortAll()
 
-    -- Same-pitch onset separation; retro-clip subsumed by tail pass. Token'd events assign;
-    -- a new fxNote (no token yet) mutates in place, riding into mm:add at the atomic commit.
+    -- Same-pitch onset separation; retro-clip subsumed by tail pass. Realised events assign;
+    -- a new fxNote (not yet in mm) mutates in place, riding into mm:add at the atomic commit.
     local moved = voicing.nudgeOnsets(notes)
     for _, n in ipairs(moved) do
       if n.lane == 1 then dirtyChan(chan) end   -- nudged lane-1 onset moves absorber seats (pbs runs after tails)
@@ -2672,7 +2658,7 @@ local function rebuildTails(noteLive, deferred, scratch)
         -- The column stays logical; only the delayC give-way cue carries the raw shift.
         n.colEvt.delayC = util.round(timing.ppqToDelay(n.ppq - tm:fromLogical(chan, n.ppqL), res))
       end
-      if backing.token then clampWrites.assign(backing, { ppq = n.ppq }) end
+      if backing.realised then clampWrites.assign(backing, { ppq = n.ppq }) end
     end
     -- Re-sort only when a nudge actually moved an onset (rare); otherwise ordering stands.
     if #moved > 0 then sortAll() end
@@ -2709,7 +2695,7 @@ local function rebuildTails(noteLive, deferred, scratch)
       local rounded   = util.round(rawBound)
       if rounded ~= e.endppq then
         local backing = e.colEvt or e
-        if backing.token then deferred.assign(backing, { endppq = rounded }) end
+        if backing.realised then deferred.assign(backing, { endppq = rounded }) end
         e.endppq = rounded
       end
       if e.colEvt then
@@ -2721,8 +2707,8 @@ local function rebuildTails(noteLive, deferred, scratch)
     end
     ::nextChan::
   end
-  -- Clamps reindex colliding same-pitch onsets separately: reload separates the shared content-keyed token before the clip pass dereferences it.
-  -- Clips only touch endppq, never re-key — safe to batch with adds.
+  -- Clamps commit first: separating colliding same-pitch onsets settles mm's content keys before
+  -- the clip pass runs. Clips only touch endppq — safe to batch with adds.
   clampWrites.commit()
   -- fxNote del/add + parked restores commit in one mm:modify/MIDI_Sort; canonical
   -- delete-first means no transient same-pitch overlap.
@@ -2771,15 +2757,15 @@ local function rebuildPbs(fxOut, extraColumns, scratch)
     end
   end
 
-  -- Each pb rides its own clone through the pass; origTok is its mm handle, held so a
-  -- mutated clone can still name the event it came from. Only dirty channels clone here.
+  -- Each pb rides its own clone through the pass, carrying mm's uuid so a mutated clone still
+  -- names its source; origShape is held because the pass rewrites shape. Only dirty channels clone.
   local pbsByChan = {}
   for chan = 1, 16 do
     if dirty[chan] then
       for _, cc in mm:ccsRaw(chan) do
         if cc.evType == 'pb' then
           local pb = util.clone(cc)
-          pb.origTok, pb.origShape = mm:tokenOf(cc), cc.shape
+          pb.realised, pb.origShape = true, cc.shape
           util.bucket(pbsByChan, pb.chan, pb)
         end
       end
@@ -2997,7 +2983,7 @@ local function rebuildPbs(fxOut, extraColumns, scratch)
     end
 
     for _, f in ipairs(availAbsorbers) do
-      pbWrites.del({ token = f.origTok })
+      pbWrites.del({ uuid = f.uuid })
       for i, p in ipairs(pbs) do
         if p == f then table.remove(pbs, i); break end
       end
@@ -3011,7 +2997,7 @@ local function rebuildPbs(fxOut, extraColumns, scratch)
     -- Consolidated assign: one entry per existing pb where any of (ppq moved, ppqL
     -- restamped, raw changed, cents back-derived, derived shape changed) needs to land.
     for _, pb in ipairs(pbs) do
-      if pb.origTok then
+      if pb.realised then
         local d         = detuneOf[pb]
         local newRaw    = centsToRaw(pb.cents + d)
         local shapeChanged = pb.derived and pb.shape ~= pb.origShape
@@ -3027,11 +3013,11 @@ local function rebuildPbs(fxOut, extraColumns, scratch)
         end
         if update then
           if pb.derived then update.shape = pb.shape end
-          -- A markerless seat persists native MIDI only; strip the sidecar fields so addCC/assign mint
-          -- no uuid. Its ppq/val/shape still land (a moved seat re-keys by ppq).
+          -- A markerless seat persists native MIDI only; strip the sidecar fields so the assign
+          -- stamps no metadata and the seat stays plain. Its ppq/val/shape still land.
           if markerless then update.cents, update.ppqL = nil, nil end
           pb.val = newRaw
-          pbWrites.assign({ token = pb.origTok }, update)
+          pbWrites.assign({ uuid = pb.uuid }, update)
         end
       end
     end
@@ -3056,7 +3042,7 @@ local function rebuildPbs(fxOut, extraColumns, scratch)
         anyVisible = anyVisible or not hidden
         -- pb is our own working clone, done being read by the assign above -- reuse it as the
         -- column event rather than cloning again.
-        pb.token, pb.val, pb.detune, pb.hidden = pb.origTok, pb.cents, detuneOf[pb], hidden
+        pb.val, pb.detune, pb.hidden = pb.cents, detuneOf[pb], hidden
         projectEvent(pb, chan)
         util.add(pbColEvents, pb)
       end
@@ -3101,7 +3087,7 @@ local function rebuildPCs(noteLive, scratch)
       channels[chan].columns.pc = { events = {} }
       for _, cc in mm:ccsRaw(chan) do
         if cc.evType == 'pc' then
-          local cell = projectCC(cc, mm:tokenOf(cc))
+          local cell = projectCC(cc)
           projectEvent(cell, chan)
           util.add(channels[chan].columns.pc.events, cell)
         end
@@ -3187,11 +3173,10 @@ local function rebuildPipeline(didReload)
 
   perf.start('tails'); rebuildTails(fxOut.noteLive, deferred, rawScratch); perf.stop('tails')  -- unified tail/onset walk + atomic note commit
 
-  -- The deferred commit added each restored note to mm; wire its column cell to that fresh token
-  -- so an immediate edit resolves the backing (else the cell is inert until the next full rebuild).
+  -- The deferred commit added each restored note to mm; mark its column cell realised so an
+  -- immediate edit resolves the backing (else the cell is inert until the next full rebuild).
   for _, rec in ipairs(restoredNotes) do
-    local backed = tm:byUuid(rec.colEvt.uuid)
-    if backed then rec.colEvt.token = backed.token end
+    if tm:byUuid(rec.colEvt.uuid) then rec.colEvt.realised = true end
   end
   perf.start('pbs'); rebuildPbs(fxOut, sources.extraColumns, rawScratch); perf.stop('pbs')  -- absorber reconciliation + pb resynthesis
   perf.start('pcs'); rebuildPCs(fxOut.noteLive, rawScratch); perf.stop('pcs')  -- PC synthesis (trackerMode)

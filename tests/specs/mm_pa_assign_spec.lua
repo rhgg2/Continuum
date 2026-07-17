@@ -36,7 +36,7 @@ return {
       local _, pa = mm:ccs()()
       t.eq(pa.vel, 0x50, 'seed vel')
 
-      mm:modify(function() mm:assign(mm:tokenOf(pa), { vel = 0x70 }) end)
+      mm:modify(function() mm:assign(pa.uuid, { vel = 0x70 }) end)
 
       -- Ground truth: reload fresh from reaper.
       local mm2 = realMM(nil)

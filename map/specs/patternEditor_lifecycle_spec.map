@@ -1,4 +1,4 @@
-@spec patternEditor_lifecycle_spec  src=tests/specs/patternEditor_lifecycle_spec.lua  loc=142  sha=59b23ca  cases=3
+@spec patternEditor_lifecycle_spec  src=tests/specs/patternEditor_lifecycle_spec.lua  loc=142  sha=14993a2  cases=3
 @exercises eventMeta (em), scratch (scratch)
 @surface   em:load, scratch.track
 @harness   mk, reaper.GetMediaItemTake_Track, reaper.MIDI_CountEvts, reaper.GetMediaItemTake_Item, reaper.GetItemStateChunk, reaper.CountTrackMediaItems

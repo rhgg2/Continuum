@@ -1,6 +1,6 @@
-@spec tm_pc_synthesis_spec  src=tests/specs/tm_pc_synthesis_spec.lua  loc=331  sha=652cbb1  cases=13
+@spec tm_pc_synthesis_spec  src=tests/specs/tm_pc_synthesis_spec.lua  loc=331  sha=00e0995  cases=13
 @exercises midiManager (h.mm), trackerManager (h.tm)
-@surface   mm:notes, mm:tokenOf, tm:getChannel, fm:dump, tm:addEvent, tm:flush, tm:assignEvent, tm:deleteEvent
+@surface   mm:notes, tm:getChannel, fm:dump, tm:addEvent, tm:flush, tm:assignEvent, tm:deleteEvent
 @harness   mk{seed.notes, seed.ccs}
 
 # Intent
@@ -11,9 +11,9 @@
 
 # Helpers
   @fn pcsOnChan(dump, chan)  @ 8-17
-  @fn tokenOfNote(mm, chan, pitch)  @ 21-25
-      -- Locate a note by (chan, pitch) and return its addressing token. mm:notes
-      -- still yields (loc, evt); we ignore the loc and ask mm for the token.
+  @fn uuidOfNote(mm, chan, pitch)  @ 21-25
+      -- Locate a note by (chan, pitch) and return its mm handle. mm:notes still
+      -- yields (loc, evt); we ignore the loc and take the event's uuid.
   @fn laneEvent(tm, chan, lane, i)  @ 27-29
 
 # Cases
@@ -33,7 +33,6 @@
 
 # Uses (outbound edges)
   @use call mm:notes  @ 22
-  @use call mm:tokenOf  @ 23
   @use call tm:getChannel  @ 28,271,322
   @use call fm:dump  @ 48,67,88,108,135,136,151,172,174,201,219,242,266,299,320
   @use call tm:addEvent  @ 62,237,239

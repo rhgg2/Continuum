@@ -1,4 +1,4 @@
-@spec sidecar_reconcile_spec  src=tests/specs/sidecar_reconcile_spec.lua  loc=552  sha=999f37e  cases=23
+@spec sidecar_reconcile_spec  src=tests/specs/sidecar_reconcile_spec.lua  loc=552  sha=b5afaeb  cases=23
 @exercises midiManager (h.mm)
 @surface   mm:ccs, mm:subscribe, mm:load
 @harness   fakeReaper:bindTake, reaper:seedMidi

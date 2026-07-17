@@ -133,10 +133,10 @@ return {
   },
 
   {
-    name = 'a swing change keeps every uuid resolvable (reseat re-keys tokens)',
+    name = 'a swing change keeps every uuid resolvable',
     run = function(harness)
-      -- Reswing re-keys every note's token; hash order between old-token
-      -- eviction and new-token insert is a per-note coin flip, so 12 notes pin it (see docs/trackerManager.md § Incremental index reconciliation).
+      -- Reswing moves every note's onset. It re-keyed every token too until mm pivoted to uuid
+      -- addressing, and the eviction/insert hash order was a per-note coin flip -- 12 notes pin it.
       local notes = {}
       for i = 1, 12 do
         local on = (i - 1) * 240 + 60

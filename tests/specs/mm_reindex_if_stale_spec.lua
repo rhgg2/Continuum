@@ -22,8 +22,8 @@ local function pair(harness)
   } }
 end
 
-local function tokenAtPpq(mm, ppq)
-  for _, n in mm:notesRaw() do if n.ppq == ppq then return mm:tokenOf(n) end end
+local function uuidAtPpq(mm, ppq)
+  for _, n in mm:notesRaw() do if n.ppq == ppq then return n.uuid end end
 end
 
 return {
@@ -54,7 +54,7 @@ return {
         { ppq = 480, endppq = 720, chan = 1, pitch = 64, vel = 100 },
       } }
       local midTok
-      for _, n in mm:notes() do if n.ppq == 240 then midTok = mm:tokenOf(n) end end
+      for _, n in mm:notes() do if n.ppq == 240 then midTok = n.uuid end end
       mm:modify(function() mm:delete(midTok) end)   -- rebuild at unwind clears staleness
 
       local after = tokPpqs(mm)
@@ -67,7 +67,7 @@ return {
     name = 'a value-only assign is index-clean: the verb keeps its own index, nothing launders it',
     run = function(harness)
       local mm  = pair(harness)
-      local tok = tokenAtPpq(mm, 0)
+      local tok = uuidAtPpq(mm, 0)
 
       -- Structural (so it takes the locked path) but it moves no ppq: neither flag fires, so
       -- no rebuild runs at the unwind. The verb's own re-key is all that maintains the indices.
@@ -90,7 +90,7 @@ return {
     name = 'a ppq move re-sorts the arrays; it leaves no hole to compact',
     run = function(harness)
       local mm  = pair(harness)
-      local tok = tokenAtPpq(mm, 0)
+      local tok = uuidAtPpq(mm, 0)
       mm:modify(function() mm:assign(tok, { ppq = 480, endppq = 720 }) end)
 
       t.deepEq(noteField(mm, 'ppq'),   { 240, 480 }, 'the moved note re-sorted behind its neighbour')
@@ -109,7 +109,7 @@ return {
       t.deepEq(noteField(mm, 'ppq'), { 0, 120, 240 }, 'the appended note sorted into place')
       t.deepEq(noteField(mm, 'loc'), { 1, 2, 3 },     'loc follows the sorted array')
 
-      mm:modify(function() mm:delete(tokenAtPpq(mm, 120)) end)
+      mm:modify(function() mm:delete(uuidAtPpq(mm, 120)) end)
       t.deepEq(noteField(mm, 'ppq'), { 0, 240 }, 'the delete compacted out')
       t.deepEq(noteField(mm, 'loc'), { 1, 2 },   'and loc closed the hole')
     end,

@@ -1,4 +1,4 @@
-@module clipboard  src=clipboard.lua  loc=490  sha=52a5eef  mode=chunk  self=clipboard
+@module clipboard  src=clipboard.lua  loc=490  sha=14993a2  mode=chunk  self=clipboard
 @deps ec, grid, tm, cm, currentRpb, getCtx, getLength, edit, aliases, fx
 
 # Invariants & contracts

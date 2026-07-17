@@ -22,7 +22,7 @@
   @case 'swing change reseats absorber alongside its host'  [harness]  @ 59-93
   @case 'delay change on host moves absorber to new raw'  [harness]  @ 97-121
   @case 'removing the detune jump drops the absorber (I2 second clause)'  [harness]  @ 125-152
-  @case 'authoring a pb onto an anchor seat adopts it, no token-colliding rival (stuck-digit bug)'  [harness]  @ 156-186
+  @case 'authoring a pb onto an anchor seat adopts it, no rival at the same tick (stuck-digit bug)'  [harness]  @ 156-186
 
 # Uses (outbound edges)
   @use call fm:dump  @ 43,80,86,118,141,151,171,180

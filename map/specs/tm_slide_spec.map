@@ -1,4 +1,4 @@
-@spec tm_slide_spec  src=tests/specs/tm_slide_spec.lua  loc=200  sha=0efbe16  cases=9
+@spec tm_slide_spec  src=tests/specs/tm_slide_spec.lua  loc=200  sha=b5afaeb  cases=9
 @exercises trackerManager (h.tm), midiManager (h.fm), configManager (h.cm)
 @surface   tm:addEvent, tm:flush, fm:dump, cm:assign, tm:rebuild, tm:getChannel
 @harness   mk

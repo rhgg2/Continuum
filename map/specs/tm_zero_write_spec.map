@@ -1,4 +1,4 @@
-@spec tm_zero_write_spec  src=tests/specs/tm_zero_write_spec.lua  loc=117  sha=untracked  cases=2
+@spec tm_zero_write_spec  src=tests/specs/tm_zero_write_spec.lua  loc=117  sha=f31f020  cases=2
 @exercises trackerManager (h.tm), fixtures.glasswork (glasswork), midiManager (h.fm)
 @surface   tm:rebuild, glasswork.build, fm:dump, fm:take, tm:reloadFromReaper
 @harness   mk{seed.resolution, seed.length}, reaper.MIDI_SetAllEvts, reaper.MIDI_Sort

@@ -11,15 +11,15 @@ local t = require('support')
 
 return {
   {
-    name = 'add(note): returns a token that resolves to the new note',
+    name = 'add(note): returns a uuid that resolves to the new note',
     run = function(harness)
       local h = harness.mk{}
       local tok
       h.fm:modify(function()
         tok = h.fm:add{ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100 }
       end)
-      t.truthy(tok, 'add returned a token')
-      local _, n = h.fm:byToken(tok)
+      t.truthy(tok, 'add returned a uuid')
+      local _, n = h.fm:byUuid(tok)
       t.eq(n.pitch, 60)
       t.eq(n.chan,  1)
       t.eq(n.ppq,   0)
@@ -27,7 +27,7 @@ return {
   },
 
   {
-    name = 'add(cc/pb/pa/at/pc): every evType lands and is byToken-addressable',
+    name = 'add(cc/pb/pa/at/pc): every evType lands and is byUuid-addressable',
     run = function(harness)
       local fm = harness.bareMM()
       local toks = {}
@@ -39,25 +39,25 @@ return {
         toks.pc = fm:add{ evType = 'pc', ppq = 180, chan = 7,                    val = 12 }
       end)
       for kind, tok in pairs(toks) do
-        local _, evt = fm:byToken(tok)
-        t.truthy(evt, kind .. ': byToken found the event')
+        local _, evt = fm:byUuid(tok)
+        t.truthy(evt, kind .. ': byUuid found the event')
         t.eq(evt.evType, kind)
       end
     end,
   },
 
   {
-    name = 'assign: metadata-only change preserves the token',
+    name = 'assign: metadata-only change preserves the handle',
     run = function(harness)
       local h = harness.mk{
         seed = { notes = { { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100 } } },
       }
       local _, note = h.fm:notes()()
-      local oldTok = h.fm:tokenOf(note)
+      local oldTok = note.uuid
       local newTok
       h.fm:modify(function() newTok = h.fm:assign(oldTok, { delay = 12 }) end)
-      t.eq(newTok, oldTok, 'metadata-only — token unchanged')
-      local _, n2 = h.fm:byToken(oldTok)
+      t.eq(newTok, oldTok, 'metadata-only — handle unchanged')
+      local _, n2 = h.fm:byUuid(oldTok)
       t.eq(n2.delay, 12)
     end,
   },
@@ -69,11 +69,11 @@ return {
         seed = { notes = { { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100 } } },
       }
       local _, note = h.fm:notes()()
-      local tok = h.fm:tokenOf(note)
+      local tok = note.uuid
       local same
       h.fm:modify(function() same = h.fm:assign(tok, { ppq = 480 }) end)
       t.eq(same, tok, 'the ppq move did not re-key')
-      local _, n2 = h.fm:byToken(tok)
+      local _, n2 = h.fm:byUuid(tok)
       t.eq(n2.ppq, 480)
     end,
   },
@@ -83,17 +83,17 @@ return {
     run = function(harness)
       local fm = harness.bareMM{ ccs = { { ppq = 120, evType = 'cc', chan = 2, cc = 7, val = 64 } } }
       local _, cc = fm:ccs()()
-      local tok = fm:tokenOf(cc)
+      local tok = cc.uuid
       local same
       fm:modify(function() same = fm:assign(tok, { cc = 10 }) end)
       t.eq(same, tok)
-      local _, c2 = fm:byToken(tok)
+      local _, c2 = fm:byUuid(tok)
       t.eq(c2.cc, 10)
     end,
   },
 
   {
-    name = 'delete(token): event vanishes from byToken and from the iterators',
+    name = 'delete(uuid): event vanishes from byUuid and from the iterators',
     run = function(harness)
       local h = harness.mk{
         seed = {
@@ -103,14 +103,14 @@ return {
       }
       local _, note = h.fm:notes()()
       local _, cc   = h.fm:ccs()()
-      local nTok, cTok = h.fm:tokenOf(note), h.fm:tokenOf(cc)
+      local nTok, cTok = note.uuid, cc.uuid
 
       h.fm:modify(function() h.fm:delete(nTok) end)
-      t.eq(h.fm:byToken(nTok), nil, 'note gone')
-      t.truthy(h.fm:byToken(cTok), 'cc still present')
+      t.eq(h.fm:byUuid(nTok), nil, 'note gone')
+      t.truthy(h.fm:byUuid(cTok), 'cc still present')
 
       h.fm:modify(function() h.fm:delete(cTok) end)
-      t.eq(h.fm:byToken(cTok), nil, 'cc gone')
+      t.eq(h.fm:byUuid(cTok), nil, 'cc gone')
 
       local count = 0
       for _ in h.fm:events() do count = count + 1 end
@@ -119,7 +119,7 @@ return {
   },
 
   {
-    name = 'delete(unknown token): silent no-op',
+    name = 'delete(unknown uuid): silent no-op',
     run = function(harness)
       local h = harness.mk{
         seed = { notes = { { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100 } } },
@@ -132,7 +132,7 @@ return {
   },
 
   {
-    name = 'events(): yields all live events as (token, evt), notes then ccs',
+    name = 'events(): yields all live events as (uuid, evt), notes then ccs',
     run = function(harness)
       local fm = harness.bareMM{
         notes = {
@@ -148,8 +148,8 @@ return {
       for tok, evt in fm:events() do
         seen[#seen+1] = tok
         kinds[#kinds+1] = evt.evType
-        local _, fetched = fm:byToken(tok)
-        t.truthy(fetched, 'token from events() resolves via byToken')
+        local _, fetched = fm:byUuid(tok)
+        t.truthy(fetched, 'uuid from events() resolves via byUuid')
       end
       t.eq(#seen, 4, 'four events yielded')
       t.eq(kinds[1], 'note', 'notes come first')

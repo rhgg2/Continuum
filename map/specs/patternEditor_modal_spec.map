@@ -1,4 +1,4 @@
-@spec patternEditor_modal_spec  src=tests/specs/patternEditor_modal_spec.lua  loc=159  sha=b9a99d6  cases=4
+@spec patternEditor_modal_spec  src=tests/specs/patternEditor_modal_spec.lua  loc=159  sha=14993a2  cases=4
 @exercises scratch (scratch)
 @surface   scratch.track
 @harness   mk, reaper.GetMediaItemTake_Track, reaper.CountTrackMediaItems

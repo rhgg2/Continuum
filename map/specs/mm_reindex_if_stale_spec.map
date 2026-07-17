@@ -1,6 +1,6 @@
-@spec mm_reindex_if_stale_spec  src=tests/specs/mm_reindex_if_stale_spec.lua  loc=117  sha=285f562  cases=5
+@spec mm_reindex_if_stale_spec  src=tests/specs/mm_reindex_if_stale_spec.lua  loc=117  sha=70ef819  cases=5
 @exercises midiManager (h.mm)
-@surface   mm:events, mm:notesRaw, mm:tokenOf, mm:reindexIfStale, mm:notes, mm:modify, mm:delete, mm:assign
+@surface   mm:events, mm:notesRaw, mm:reindexIfStale, mm:notes, mm:modify, mm:delete, mm:assign
 @harness   bareMM
 
 # Intent
@@ -11,7 +11,7 @@
   @fn tokPpqs(mm)  @ 6-10
   @fn noteField(mm, field)  @ 12-16
   @fn pair(harness)  @ 18-23
-  @fn tokenAtPpq(mm, ppq)  @ 25-27
+  @fn uuidAtPpq(mm, ppq)  @ 25-27
 
 # Cases
   @case 'reindexIfStale() is a no-op on already-compact state'  [harness]  @ 31-45
@@ -23,7 +23,6 @@
 # Uses (outbound edges)
   @use call mm:events  @ 8
   @use call mm:notesRaw  @ 14,26
-  @use call mm:tokenOf  @ 26,57
   @use call mm:reindexIfStale  @ 43,61
   @use call mm:notes  @ 57
   @use call mm:modify  @ 58,75,79,94,106,112

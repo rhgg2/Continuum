@@ -145,7 +145,7 @@ return {
     run = function()
       local fm = harness.bareMM{ notes = { { ppq = 0, endppq = 240, chan = 3, pitch = 60, vel = 100 } } }
       local _, note = fm:notes()()
-      local tok = fm:tokenOf(note)
+      local tok = note.uuid
       local last
       fm:subscribe('reload', function(data) last = data end)
       fm:modify(function() fm:assign(tok, { chan = 5 }) end)

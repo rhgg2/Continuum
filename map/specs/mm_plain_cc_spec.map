@@ -1,4 +1,4 @@
-@spec mm_plain_cc_spec  src=tests/specs/mm_plain_cc_spec.lua  loc=129  sha=untracked  cases=5
+@spec mm_plain_cc_spec  src=tests/specs/mm_plain_cc_spec.lua  loc=129  sha=b5afaeb  cases=5
 @exercises midiManager (h.mm)
 @surface   mm:ccs, mm:subscribe, mm:load
 @harness   bareMM, fakeReaper:bindTake, fakeReaper:seedMidi

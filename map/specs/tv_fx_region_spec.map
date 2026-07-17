@@ -1,4 +1,4 @@
-@spec tv_fx_region_spec  src=tests/specs/tv_fx_region_spec.lua  loc=924  sha=52a5eef  cases=47
+@spec tv_fx_region_spec  src=tests/specs/tv_fx_region_spec.lua  loc=924  sha=14993a2  cases=47
 @exercises dataStore (h.ds), trackerManager (h.tm), midiManager (h.fm), trackerView (h.vm), editCursor (h.ec), commandManager (h.cmgr), clipboard (h.clipboard)
 @surface   ds:assign, tm:rebuild, ds:get, tm:flush, fm:dump, vm:setGridSize, vm:ppqToRow, ec:setPos, vm:fxHostForEdit, tm:addEvent, vm:noteFx, vm:setNoteFx, vm:removeFxStage, vm:addFxStage, vm:setFxField, vm:rowToPPQ, vm:fxHostAtCursor, cmgr:invoke, tm:getChannel, vm:editEvent, tm:subscribe, ec:row, ec:extendTo, clipboard:collect
 @harness   mk

@@ -1,4 +1,4 @@
-@spec tm_column_order_spec  src=tests/specs/tm_column_order_spec.lua  loc=164  sha=0097742  cases=5
+@spec tm_column_order_spec  src=tests/specs/tm_column_order_spec.lua  loc=164  sha=14993a2  cases=5
 @exercises midiManager (h.fm), trackerManager (h.tm), dataStore (h.ds)
 @surface   fm:dump, tm:addEvent, tm:flush, ds:assign, tm:rebuild, ds:get, tm:getChannel, tm:assignEvent
 @harness   mk{seed.notes, seed.ccs}

@@ -1,6 +1,6 @@
 @spec mm_multi_note_delete_spec  src=tests/specs/mm_multi_note_delete_spec.lua  loc=56  sha=4a6bfb0  cases=1
 @exercises midiManager (h.mm)
-@surface   mm:modify, mm:notes, mm:tokenOf, mm:delete
+@surface   mm:modify, mm:notes, mm:delete
 @harness   fakeReaper:bindTake
 
 # Intent
@@ -17,10 +17,9 @@
   @fn freshTake()  @ 13-19
 
 # Cases
-  @case 'multi-deleteNote in one modify deletes exactly the tokens passed'  [pure]  @ 23-54
+  @case 'multi-deleteNote in one modify deletes exactly the uuids passed'  [pure]  @ 23-54
 
 # Uses (outbound edges)
   @use call mm:modify  @ 29,40
   @use call mm:notes  @ 37,46
-  @use call mm:tokenOf  @ 37
   @use call mm:delete  @ 41,42

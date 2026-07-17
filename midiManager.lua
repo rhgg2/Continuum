@@ -379,7 +379,7 @@ end
 ----- Reindex
 
 -- Compact the sparse note/cc arrays to dense (verbs and dedup leave holes), order by ppq, and
--- recompute loc; rebuild token/uuid/channel indices. metadata (load only) rejoins per-uuid fields.
+-- recompute loc; rebuild collision/uuid/channel indices. metadata (load only) rejoins per-uuid fields.
 local function rebuild(metadata)
   perf.start('rebuild')
   -- Compact and sort run only when their flag fired; the index loop always does -- either moves every loc.
@@ -992,9 +992,7 @@ end
 
 local function cloneOut(evt)
   if not evt then return nil end
-  local c = util.clone(evt)
-  c.token = evt.uuid
-  return c
+  return util.clone(evt)
 end
 
 function mm:notes()
@@ -1202,17 +1200,10 @@ local function addCC(t)
   else msg.plain = true end
 end
 
---contract: the handle mm addresses by -- the event's uuid; nil for a non-event
---contract: durable across reload except on a plain cc, whose uuid is re-minted each load
-function mm:tokenOf(evt)
-  if not evt or not evt.evType then return nil end
-  return evt.uuid
-end
-
 --contract: returns (loc, evt-clone, kind) for the uuid, or nil if absent
 --contract: works on every event -- a plain cc's in-memory uuid resolves like any other
---invariant: byToken's evt-clone carries .token equal to the input
-function mm:byToken(uuid)
+--contract: a uuid is durable across reload, except a plain cc's -- re-minted each load
+function mm:byUuid(uuid)
   local evt = eventsByUuid[uuid]
   if not evt then return nil end
   return evt.loc, cloneOut(evt), (evt.evType == 'note') and 'note' or 'cc'
@@ -1266,7 +1257,7 @@ function mm:delete(uuid)
 end
 
 --contract: yields (uuid, evt-clone) over all live events, notes then ccs
---invariant: events()'s clone carries .token; loc is intentionally absent
+--invariant: events() keys by uuid, unlike notes()/ccs(), which yield (loc, clone)
 function mm:events()
   local noteIt = util.sparsePairs(notes, noteCount)
   local ccIt   = util.sparsePairs(ccs, ccCount)

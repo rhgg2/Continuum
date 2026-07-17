@@ -1,4 +1,4 @@
-@spec gm_realisation_spec  src=tests/specs/gm_realisation_spec.lua  loc=165  sha=f8aa484  cases=5
+@spec gm_realisation_spec  src=tests/specs/gm_realisation_spec.lua  loc=165  sha=14993a2  cases=5
 @exercises groupManager (gm), trackerManager (h.tm)
 @surface   gm:markGroup, gm:newInstance, tm:flush, gm:addEvent, gm:deleteEvent, gm:duplicateInto
 

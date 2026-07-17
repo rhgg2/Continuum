@@ -1,6 +1,6 @@
 @spec mm_pa_assign_spec  src=tests/specs/mm_pa_assign_spec.lua  loc=50  sha=1ac9618  cases=1
 @exercises midiManager (h.mm)
-@surface   mm:load, mm:ccs, mm:modify, mm:assign, mm:tokenOf
+@surface   mm:load, mm:ccs, mm:modify, mm:assign
 @harness   fakeReaper:bindTake, reaper:seedMidi
 
 # Intent
@@ -21,4 +21,3 @@
   @use call mm:ccs  @ 36
   @use call mm:modify  @ 39
   @use call mm:assign  @ 39
-  @use call mm:tokenOf  @ 39

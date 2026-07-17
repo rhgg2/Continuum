@@ -1,0 +1,34 @@
+@spec mm_addressing_spec  src=tests/specs/mm_addressing_spec.lua  loc=143  sha=untracked  cases=7
+@exercises midiManager (h.fm)
+@surface   fm:notes, fm:byUuid, fm:ccs, fm:reload, fm:modify, fm:assign
+@harness   mk{seed.notes}, bareMM
+
+# Intent
+  Pin-tests for how midiManager is addressed. Every event mm hands out carries a
+  uuid, and that uuid is the handle: byUuid, assign and delete all take one.
+  
+  Content keys (evType, chan, ppq, pitch|cc) stay private to mm, where they serve
+  only the same-pitch collision backstop -- see mm_collision_backstop_spec.
+  
+  Identity contract:
+    * Every event has one, minted at add or at load.
+    * Stable under every assign: moving ppq, pitch or chan does not re-key it.
+    * Durable across reload, except a plain cc -- it binds no sidecar, so its uuid
+      is in-memory only and re-minted each load. See mm_plain_cc_spec.
+
+# Cases
+  @case 'note: a fetched event round-trips through byUuid'  [harness]  @ 17-29
+  @case 'cc: a plain cc is addressable like any other'  [harness]  @ 33-42
+  @case 'pb / pa / at / pc: every evType yields a working handle'  [harness]  @ 46-65
+  @case 'a persisted note keeps its handle across reload'  [harness]  @ 69-82
+  @case 'moving an identity field does not re-key: the same handle resolves to the moved note'  [harness]  @ 86-102
+  @case 'distinct events get distinct handles'  [harness]  @ 106-130
+  @case 'byUuid returns nil for an unknown handle'  [harness]  @ 134-141
+
+# Uses (outbound edges)
+  @use call fm:notes  @ 22,74,91,100,121
+  @use call fm:byUuid  @ 24,37,58,79,96,139,140
+  @use call fm:ccs  @ 36,57,122
+  @use call fm:reload  @ 77
+  @use call fm:modify  @ 94
+  @use call fm:assign  @ 94

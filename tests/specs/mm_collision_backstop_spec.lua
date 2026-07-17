@@ -35,10 +35,10 @@ return {
       local fired, handleLive = {}, nil
       mm:subscribe('collisionsResolved', function(info)
         fired[#fired + 1] = info
-        handleLive = mm:byToken(info.events[1].uuid) ~= nil
+        handleLive = mm:byUuid(info.events[1].uuid) ~= nil
       end)
 
-      mm:modify(function() mm:assign(noteAt(mm, 240).token, { ppq = 0 }) end)
+      mm:modify(function() mm:assign(noteAt(mm, 240).uuid, { ppq = 0 }) end)
 
       t.eq(#fired, 1, 'one collisionsResolved')
       local e = fired[1].events[1]
@@ -61,13 +61,13 @@ return {
       local fired = {}
       mm:subscribe('collisionsResolved', function(info) fired[#fired + 1] = info end)
 
-      mm:modify(function() mm:assign(noteAt(mm, 240).token, { ppq = 0 }) end)
+      mm:modify(function() mm:assign(noteAt(mm, 240).uuid, { ppq = 0 }) end)
 
       t.eq(#fired, 1)
       local e = fired[1].events[1]
       t.eq(e.kind, 'killed')
       t.eq(e.uuid, shortUuid, 'the shorter duplicate dies')
-      t.falsy(e.token, 'killed events carry no live token')
+      t.eq(mm:byUuid(shortUuid), nil, 'and its uuid stops resolving')
       t.deepEq(ppqsOf(mm), { 0 }, 'one survivor')
       t.eq(noteAt(mm, 0).endppq, 480, 'longer endppq wins')
     end,
@@ -80,8 +80,8 @@ return {
       local fired = {}
       mm:subscribe('collisionsResolved', function(info) fired[#fired + 1] = info end)
 
-      mm:modify(function() mm:assign(noteAt(mm, 240).token, { ppq = 0 }) end)
-      mm:modify(function() mm:assign(noteAt(mm, 0).token, { vel = 101 }) end)
+      mm:modify(function() mm:assign(noteAt(mm, 240).uuid, { ppq = 0 }) end)
+      mm:modify(function() mm:assign(noteAt(mm, 0).uuid, { vel = 101 }) end)
 
       t.eq(#fired, 1, 'no second firing')
       t.deepEq(ppqsOf(mm), { 0, 1 }, 'geometry stable across the second modify')
@@ -96,7 +96,7 @@ return {
       mm:subscribe('collisionsResolved', function(info) fired[#fired + 1] = info end)
 
       mm:modify(function()
-        local tok = mm:assign(noteAt(mm, 240).token, { ppq = 0 })   -- collides - recorded
+        local tok = mm:assign(noteAt(mm, 240).uuid, { ppq = 0 })   -- collides - recorded
         mm:assign(tok, { ppq = 480 })                               -- moves away before unwind
       end)
 

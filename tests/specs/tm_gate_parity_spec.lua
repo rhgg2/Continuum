@@ -2,7 +2,7 @@
 -- prerequisite for phase B. Exploits I8 (a no-edit rebuild is a fixpoint): after an edit, a gated
 -- rebuild -- which re-READS untouched channels' persisted derivation -- must project byte-identically
 -- to a forced all-16 rebuild that re-DERIVES every channel from mm. Divergence means a gate froze a
--- channel whose persisted state was not a true fixpoint. Volatile identity (token/loc) is stripped;
+-- channel whose persisted state was not a true fixpoint. Volatile identity (loc) is stripped;
 -- everything the view renders is compared. This pins phase A now and guards phase B's retention next.
 
 local t = require('support')
@@ -19,9 +19,9 @@ local function note(chan, ppq, pitch, extra)
   return n
 end
 
--- Volatile per-rebuild identity: re-keyed token, mm-side loc, pb working-clone origin refs, and the
+-- Volatile per-rebuild identity: mm-side loc, the pb working clone's pre-rewrite shape, and the
 -- reconcile skeleton's key. None render; all legitimately differ between a carried and a fresh frame.
-local VOLATILE = { token = true, loc = true, origTok = true, origShape = true, key = true }
+local VOLATILE = { loc = true, origShape = true, key = true }
 
 local function projEvt(e)
   local out = {}
@@ -78,11 +78,11 @@ end
 
 -- The wire-side derived state (carriers, absorber pbs, derived fx notes) is routed out of columns or
 -- hidden, so the projected frame never sees it. mm content is its shadow: a converged take that a full
--- re-derive leaves byte-identical proves those hidden derivations were a fixpoint too. token/loc churn
+-- re-derive leaves byte-identical proves those hidden derivations were a fixpoint too. loc churns
 -- each rebuild; uuid is durable, so a content bag keyed on the rest is the stable comparison.
 local function stripRec(e)
   local out = {}
-  for k, v in pairs(e) do if k ~= 'token' and k ~= 'loc' then out[k] = v end end
+  for k, v in pairs(e) do if k ~= 'loc' then out[k] = v end end
   return out
 end
 

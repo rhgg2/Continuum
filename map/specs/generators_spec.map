@@ -1,4 +1,4 @@
-@spec generators_spec  src=tests/specs/generators_spec.lua  loc=302  sha=a77fea4  cases=19
+@spec generators_spec  src=tests/specs/generators_spec.lua  loc=302  sha=14993a2  cases=19
 
 # Intent
   generators.lua: slide glide-in envelope.

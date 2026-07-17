@@ -1,4 +1,4 @@
-@spec vm_delay_entry_spec  src=tests/specs/vm_delay_entry_spec.lua  loc=306  sha=1d7d136  cases=9
+@spec vm_delay_entry_spec  src=tests/specs/vm_delay_entry_spec.lua  loc=306  sha=14993a2  cases=9
 @exercises trackerView (h.vm), editCursor (h.ec), midiManager (h.fm), trackerManager (h.tm)
 @surface   vm:setGridSize, ec:setPos, vm:editEvent, fm:dump, tm:getChannel
 @harness   mk{seed.notes}

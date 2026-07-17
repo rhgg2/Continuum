@@ -1,11 +1,11 @@
 -- Pin-tests for how midiManager is addressed. Every event mm hands out carries a
--- uuid, and that uuid is the handle: byToken, assign and delete all take one.
+-- uuid, and that uuid is the handle: byUuid, assign and delete all take one.
 --
 -- Content keys (evType, chan, ppq, pitch|cc) stay private to mm, where they serve
 -- only the same-pitch collision backstop -- see mm_collision_backstop_spec.
 --
 -- Identity contract:
---   * Every event has one, minted at add or at load. mm:tokenOf(evt) is evt.uuid.
+--   * Every event has one, minted at add or at load.
 --   * Stable under every assign: moving ppq, pitch or chan does not re-key it.
 --   * Durable across reload, except a plain cc -- it binds no sidecar, so its uuid
 --     is in-memory only and re-minted each load. See mm_plain_cc_spec.
@@ -14,19 +14,18 @@ local t = require('support')
 
 return {
   {
-    name = 'note: tokenOf round-trips through byToken',
+    name = 'note: a fetched event round-trips through byUuid',
     run = function(harness)
       local h = harness.mk{
         seed = { notes = { { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100 } } },
       }
       local _, fetched = h.fm:notes()()
-      local tok = h.fm:tokenOf(fetched)
-      t.truthy(tok, 'tokenOf returned a handle')
-      local loc, byT = h.fm:byToken(tok)
+      t.truthy(fetched.uuid, 'the clone carries a handle')
+      local loc, byU = h.fm:byUuid(fetched.uuid)
       t.eq(loc, fetched.loc)
-      t.eq(byT.pitch, 60)
-      t.eq(byT.chan,  1)
-      t.eq(byT.ppq,   0)
+      t.eq(byU.pitch, 60)
+      t.eq(byU.chan,  1)
+      t.eq(byU.ppq,   0)
     end,
   },
 
@@ -35,7 +34,7 @@ return {
     run = function(harness)
       local fm = harness.bareMM{ ccs = { { ppq = 120, evType = 'cc', chan = 2, cc = 7, val = 64 } } }
       local _, cc = fm:ccs()()
-      local loc, c, kind = fm:byToken(fm:tokenOf(cc))
+      local loc, c, kind = fm:byUuid(cc.uuid)
       t.eq(loc, 1)
       t.eq(kind, 'cc')
       t.eq(c.val, 64)
@@ -56,8 +55,8 @@ return {
                      at = { field = 'val', value = 77 },    pc = { field = 'val', value = 12 } }
       local seen = 0
       for _, cc in fm:ccs() do
-        local _, evt = fm:byToken(fm:tokenOf(cc))
-        t.truthy(evt, cc.evType .. ': byToken returned an event')
+        local _, evt = fm:byUuid(cc.uuid)
+        t.truthy(evt, cc.evType .. ': byUuid returned an event')
         local expected = want[cc.evType]
         t.eq(evt[expected.field], expected.value, cc.evType .. '.' .. expected.field)
         seen = seen + 1
@@ -73,11 +72,11 @@ return {
         seed = { notes = { { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100 } } },
       }
       local _, note = h.fm:notes()()
-      local tok = h.fm:tokenOf(note)
+      local uuid = note.uuid
 
       h.fm:reload()
 
-      local _, n2 = h.fm:byToken(tok)
+      local _, n2 = h.fm:byUuid(uuid)
       t.truthy(n2, 'the note kept its uuid across reload')
       t.eq(n2.pitch, 60)
     end,
@@ -90,16 +89,16 @@ return {
         seed = { notes = { { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100 } } },
       }
       local _, note = h.fm:notes()()
-      local tok = h.fm:tokenOf(note)
+      local uuid = note.uuid
 
-      h.fm:modify(function() h.fm:assign(tok, { ppq = 480, pitch = 64 }) end)
+      h.fm:modify(function() h.fm:assign(uuid, { ppq = 480, pitch = 64 }) end)
 
-      local _, moved = h.fm:byToken(tok)
+      local _, moved = h.fm:byUuid(uuid)
       t.truthy(moved, 'the handle survives a move of both identity fields')
       t.eq(moved.ppq,   480)
       t.eq(moved.pitch, 64)
       local _, only = h.fm:notes()()
-      t.eq(h.fm:tokenOf(only), tok, 'and it is still the one note, not a new one')
+      t.eq(only.uuid, uuid, 'and it is still the one note, not a new one')
     end,
   },
 
@@ -118,36 +117,27 @@ return {
           { ppq = 90, evType = 'at', chan = 3, val = 30 },
         },
       }
-      local toks = {}
-      for _, n in fm:notes() do toks[#toks+1] = fm:tokenOf(n) end
-      for _, c in fm:ccs()   do toks[#toks+1] = fm:tokenOf(c) end
+      local handles = {}
+      for _, n in fm:notes() do handles[#handles+1] = n.uuid end
+      for _, c in fm:ccs()   do handles[#handles+1] = c.uuid end
       local seen = {}
-      for _, tok in ipairs(toks) do
-        t.truthy(tok, 'every event carries a handle')
-        t.falsy(seen[tok], 'duplicate handle: ' .. tostring(tok))
-        seen[tok] = true
+      for _, uuid in ipairs(handles) do
+        t.truthy(uuid, 'every event carries a handle')
+        t.falsy(seen[uuid], 'duplicate handle: ' .. tostring(uuid))
+        seen[uuid] = true
       end
-      t.eq(#toks, 6, 'all six events present')
+      t.eq(#handles, 6, 'all six events present')
     end,
   },
 
   {
-    name = 'tokenOf returns nil for a non-event',
-    run = function(harness)
-      local h = harness.mk{}
-      t.eq(h.fm:tokenOf(nil), nil)
-      t.eq(h.fm:tokenOf({}), nil, 'no evType -- no handle')
-    end,
-  },
-
-  {
-    name = 'byToken returns nil for an unknown handle',
+    name = 'byUuid returns nil for an unknown handle',
     run = function(harness)
       local h = harness.mk{
         seed = { notes = { { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100 } } },
       }
-      t.eq(h.fm:byToken(99999), nil)
-      t.eq(h.fm:byToken(nil), nil)
+      t.eq(h.fm:byUuid(99999), nil)
+      t.eq(h.fm:byUuid(nil), nil)
     end,
   },
 }

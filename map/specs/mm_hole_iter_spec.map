@@ -1,6 +1,6 @@
 @spec mm_hole_iter_spec  src=tests/specs/mm_hole_iter_spec.lua  loc=98  sha=285f562  cases=3
 @exercises midiManager (h.mm)
-@surface   mm:notes, mm:tokenOf, mm:modify, mm:delete, mm:ccs, mm:ccsRaw, mm:events
+@surface   mm:notes, mm:modify, mm:delete, mm:ccs, mm:ccsRaw, mm:events
 @harness   bareMM
 
 # Intent
@@ -22,7 +22,6 @@
 
 # Uses (outbound edges)
   @use call mm:notes  @ 28,33,83
-  @use call mm:tokenOf  @ 28,51,83,84
   @use call mm:modify  @ 31,54,87
   @use call mm:delete  @ 32,55,88,89
   @use call mm:ccs  @ 51,56,84

@@ -1,4 +1,4 @@
-@spec tm_unified_projection_spec  src=tests/specs/tm_unified_projection_spec.lua  loc=95  sha=1d7d136  cases=2
+@spec tm_unified_projection_spec  src=tests/specs/tm_unified_projection_spec.lua  loc=95  sha=14993a2  cases=2
 @exercises dataStore (h.ds), midiManager (h.fm), trackerManager (h.tm)
 @surface   ds:assign, fm:dump, tm:getChannel
 @harness   mk{seed.notes}

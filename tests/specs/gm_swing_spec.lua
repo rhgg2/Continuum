@@ -133,8 +133,8 @@ return {
   {
     name = 'a member edit still propagates after a take swing change',
     run = function()
-      -- Incident 2: reswing's token re-key could drop a byUuid entry, so gm's
-      -- rebuild re-anchor kept a dead table -- see docs/trackerManager.md § Incremental index reconciliation.
+      -- Incident 2: reswing's token re-key could drop a byUuid entry, so gm's rebuild re-anchor
+      -- kept a dead table. Uuid addressing removed the re-key; this pins the property regardless.
       local h = harness.mk{
         config = C55.config,   -- c55 in the library, but no take swing yet
         groups = true,

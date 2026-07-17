@@ -1,6 +1,6 @@
 @spec tm_deferred_hole_spec  src=tests/specs/tm_deferred_hole_spec.lua  loc=114  sha=285f562  cases=3
 @exercises midiManager (h.mm), trackerManager (h.tm)
-@surface   mm:notes, mm:tokenOf, mm:ccsRaw, tm:getChannel, tm:deleteEvent, tm:flush
+@surface   mm:notes, mm:ccsRaw, tm:getChannel, tm:deleteEvent, tm:flush
 @harness   mk{seed.notes, seed.ccs}
 
 # Intent
@@ -12,8 +12,8 @@
   iterators AND Phase D's deferral - revert either and a survivor vanishes.
 
 # Helpers
-  @fn tokenOfNote(mm, chan, pitch)  @ 10-14
-  @fn ccTokenAt(mm, chan, evType, ppq)  @ 16-20
+  @fn uuidOfNote(mm, chan, pitch)  @ 10-14
+  @fn ccUuidAt(mm, chan, evType, ppq)  @ 16-20
   @fn pcCol(h, chan)  @ 22-29
   @fn pasInCol(h, chan)  @ 31-40
   @fn authoredPbCol(h, chan)  @ 43-51
@@ -26,7 +26,6 @@
 
 # Uses (outbound edges)
   @use call mm:notes  @ 11
-  @use call mm:tokenOf  @ 12,18
   @use call mm:ccsRaw  @ 17
   @use call tm:getChannel  @ 24,33,45
   @use call tm:deleteEvent  @ 68,86,108

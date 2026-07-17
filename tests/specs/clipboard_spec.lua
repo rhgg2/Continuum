@@ -41,7 +41,7 @@ return {
       -- identity from the destination column, REAPER bookkeeping mustn't
       -- ride. If any of these leak into the clip, paste will overwrite
       -- destination identity with stale source values.
-      for _, k in ipairs{'ppq','endppq','chan','frame','lane','loc','idx','uuid','uuidIdx','token'} do
+      for _, k in ipairs{'ppq','endppq','chan','frame','lane','loc','idx','uuid','uuidIdx','realised'} do
         t.eq(e[k], nil, k .. ' not carried in clip event')
       end
     end,
@@ -163,8 +163,9 @@ return {
     end,
   },
 
-  -- 2d. Regression: mm tokens are content-keyed by (chan,pitch,ppq); a leaked
-  -- token on paste routes mm:assign to the source seat, relocating the original host.
+  -- 2d. Regression: a leaked mm handle on paste routes mm:assign to the SOURCE event,
+  -- relocating the original host instead of the pasted copy. Uuid addressing is no safer
+  -- here than the content-keyed token this first caught: the strip list is the defence.
   {
     name = 'copy/paste a retrig host leaves the original host intact',
     run = function(harness)
@@ -191,11 +192,11 @@ return {
       t.eq(fxNoteCount(origUuid), 4, 'host spawns 4 fxNotes before the copy')
 
       -- Copy the host, paste one row down -- onto its own fxNote grid, the
-      -- same-pitch collision that exposed the leaked token.
+      -- same-pitch collision that exposed the leaked handle.
       h.ec:setPos(0, 1, 1)
       h.ec:extendTo(h.ec:pos())
       local clip = h.clipboard:collect()
-      t.eq(clip.events[1].token, nil, 'token stripped from the clip event')
+      t.eq(clip.events[1].uuid, nil, 'the mm handle is stripped from the clip event')
 
       h.ec:setPos(1, 1, 1)
       h.clipboard:pasteClip(clip)

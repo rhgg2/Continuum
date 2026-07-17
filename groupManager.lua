@@ -36,7 +36,7 @@ local nextGroupId = 1
 local activeGroup = nil
 
 -- Runtime projection, kept out of `groups` so instances stay pure serialisable data.
--- locByUuid is the sole O(1) reverse lookup; uuid is the durable key (tm's token is internal, re-keyed).
+-- locByUuid is the sole O(1) reverse lookup; uuid is the durable key mm and tm both address by.
 local proj      = {}
 local locByUuid = {}  -- concrete uuid -> { groupId, instId, vuid }
 -- Verbs (addEvent/deleteEvent/assignEvent, newInstance, moveInstance,
@@ -792,7 +792,7 @@ function gm:assignEvent(uuid, update)
   if update.chan or update.lane or update.ppq then
     local rec = projOf(loc.groupId, loc.instId)[vuid]
     if rec and rec.evt then
-      local moved = util.clone(rec.evt, { uuid = true, token = true, loc = true })
+      local moved = util.clone(rec.evt, { uuid = true, realised = true, loc = true })
       util.assign(moved, update)
       local newG, newI = classifyCreate(moved)
       if newG and (newG ~= loc.groupId or newI ~= loc.instId) then

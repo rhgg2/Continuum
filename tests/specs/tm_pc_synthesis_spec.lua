@@ -16,11 +16,11 @@ local function pcsOnChan(dump, chan)
   return out
 end
 
--- Locate a note by (chan, pitch) and return its addressing token. mm:notes
--- still yields (loc, evt); we ignore the loc and ask mm for the token.
-local function tokenOfNote(mm, chan, pitch)
+-- Locate a note by (chan, pitch) and return its mm handle. mm:notes still
+-- yields (loc, evt); we ignore the loc and take the event's uuid.
+local function uuidOfNote(mm, chan, pitch)
   for _, n in mm:notes() do
-    if n.chan == chan and n.pitch == pitch then return mm:tokenOf(n) end
+    if n.chan == chan and n.pitch == pitch then return n.uuid end
   end
 end
 
@@ -82,8 +82,8 @@ return {
         },
         config = { transient = { trackerMode = true } },
       }
-      local tok = tokenOfNote(h.fm, 1, 62)
-      h.tm:assignEvent({ token = tok }, { sample = 9 })
+      local tok = uuidOfNote(h.fm, 1, 62)
+      h.tm:assignEvent({ uuid = tok }, { sample = 9 })
       h.tm:flush()
       t.deepEq(pcsOnChan(h.fm:dump(), 1),
         { { ppq = 0, val = 1 }, { ppq = 240, val = 9 } })
@@ -102,7 +102,7 @@ return {
         },
         config = { transient = { trackerMode = true } },
       }
-      local tok = tokenOfNote(h.fm, 1, 62)
+      local tok = uuidOfNote(h.fm, 1, 62)
       h.tm:deleteEvent(tok)
       h.tm:flush()
       t.deepEq(pcsOnChan(h.fm:dump(), 1), { { ppq = 0, val = 1 } })
@@ -129,8 +129,8 @@ return {
         },
         config = { transient = { trackerMode = true } },
       }
-      local tok = tokenOfNote(h.fm, 1, 60)
-      h.tm:assignEvent({ token = tok }, { sample = 9 })
+      local tok = uuidOfNote(h.fm, 1, 60)
+      h.tm:assignEvent({ uuid = tok }, { sample = 9 })
       h.tm:flush()
       t.deepEq(pcsOnChan(h.fm:dump(), 1), { { ppq = 240, val = 9 } })
       t.deepEq(pcsOnChan(h.fm:dump(), 2), { { ppq = 0,   val = 5 } })
@@ -196,7 +196,7 @@ return {
       -- Both notes share realised ppq 0 → leftmost (lane 1) wins.
       -- Move the lane-2 note off by 100 ppq so it has its own group.
       local lane2evt = laneEvent(h.tm, 1, 2, 1)
-      h.tm:assignEvent({ token = lane2evt.token }, { ppq = 100, endppq = 580 })
+      h.tm:assignEvent({ uuid = lane2evt.uuid }, { ppq = 100, endppq = 580 })
       h.tm:flush()
       local pcs = pcsOnChan(h.fm:dump(), 1)
       -- Two distinct realised onsets: lane-1 at 0, lane-2 at 100.
@@ -260,7 +260,7 @@ return {
         },
         config = { transient = { trackerMode = true } },
       }
-      local shadowerTok = tokenOfNote(h.fm, 1, 60)
+      local shadowerTok = uuidOfNote(h.fm, 1, 60)
       h.tm:deleteEvent(shadowerTok)
       h.tm:flush()
       t.deepEq(pcsOnChan(h.fm:dump(), 1), { { ppq = 0, val = 0xB } })

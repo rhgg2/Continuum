@@ -1108,7 +1108,7 @@ return {
     run = function(harness)
       local h = harness.mk()
       -- the sub-split emits seats at interior cut boundaries (240) the same-window path never produced;
-      -- pin that the reconcile/token layer matches them across a steady-state rebuild (G4 for sub-splits).
+      -- pin that the reconcile/addressing layer matches them across a steady-state rebuild (G4 for sub-splits).
       generators.kinds.capA = {
         expand = function(host) return { notes = {}, delta = {
           { ppq = host.window[1], val = 30, shape = 'step' },

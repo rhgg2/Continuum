@@ -1,4 +1,4 @@
-@spec bridge_spec  src=tests/specs/bridge_spec.lua  loc=194  sha=e6ceed1  cases=14
+@spec bridge_spec  src=tests/specs/bridge_spec.lua  loc=194  sha=df07fd1  cases=14
 @exercises bridge (bridge)
 @surface   bridge:tick
 

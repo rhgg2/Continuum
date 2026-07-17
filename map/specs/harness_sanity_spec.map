@@ -1,6 +1,6 @@
 @spec harness_sanity_spec  src=tests/specs/harness_sanity_spec.lua  loc=192  sha=999f37e  cases=10
 @exercises trackerManager (h.tm), midiManager (h.fm), configManager (h.cm), trackerView (h.vm), editCursor (h.ec)
-@surface   tm:getChannel, fm:modify, fm:dump, fm:byToken, fm:notes, cm:set, cm:get, fm:resolution, tm:resolution, fm:length, tm:length, tm:play, vm:setGridSize, ec:selectChannel, ec:col
+@surface   tm:getChannel, fm:modify, fm:dump, fm:byUuid, fm:notes, cm:set, cm:get, fm:resolution, tm:resolution, fm:length, tm:length, tm:play, vm:setGridSize, ec:selectChannel, ec:col
 @harness   mk{seed.notes, seed.resolution, seed.length}, reaper:clearCalls, r._state.takeExt, r._state.calls
 
 # Intent
@@ -11,7 +11,7 @@
 # Cases
   @case 'writing to mm outside modify() errors'  [harness]  @ 11-19
   @case 'mm fires callbacks after modify() — tm rebuilds'  [harness]  @ 26-37
-  @case 'byToken returns a shallow clone — mutation does not leak'  [harness]  @ 44-56
+  @case 'byUuid returns a shallow clone — mutation does not leak'  [harness]  @ 44-56
   @case 'notes are observed in ppq order regardless of seed order'  [harness]  @ 63-77
   @case 'scenarios are isolated — fresh mk gives a clean mm'  [harness]  @ 84-94
   @case 'cm write → read round-trips through fake reaper ext-state'  [harness]  @ 100-112
@@ -24,7 +24,7 @@
   @use call tm:getChannel  @ 29,36,93
   @use call fm:modify  @ 31
   @use call fm:dump  @ 49,89,92
-  @use call fm:byToken  @ 50,53
+  @use call fm:byUuid  @ 50,53
   @use call fm:notes  @ 75
   @use call cm:set  @ 103
   @use call cm:get  @ 104

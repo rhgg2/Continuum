@@ -1,4 +1,4 @@
-@spec vm_fx_ui_spec  src=tests/specs/vm_fx_ui_spec.lua  loc=353  sha=2e802f5  cases=18
+@spec vm_fx_ui_spec  src=tests/specs/vm_fx_ui_spec.lua  loc=353  sha=14993a2  cases=18
 @exercises trackerManager (h.tm), midiManager (h.fm), trackerView (h.vm), editCursor (h.ec)
 @surface   tm:flush, tm:getChannel, fm:dump, vm:setGridSize, ec:setPos, vm:fxHostAtCursor, vm:setNoteFx, vm:setFxField, vm:noteFx, vm:addFxStage, vm:removeFxStage, vm:moveFxStage, vm:fxHostForEdit, tm:addEvent
 @harness   mk

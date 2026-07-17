@@ -25,7 +25,7 @@ return {
         { ppq = 480, endppq = 720, chan = 1, pitch = 64, vel = 100 },
       } }
       local midTok
-      for _, n in mm:notes() do if n.ppq == 240 then midTok = mm:tokenOf(n) end end
+      for _, n in mm:notes() do if n.ppq == 240 then midTok = n.uuid end end
 
       local seen
       mm:modify(function()
@@ -48,7 +48,7 @@ return {
         { ppq = 240, evType = 'cc', chan = 1, cc = 7, val = 30 },
       } }
       local midTok
-      for _, c in mm:ccs() do if c.ppq == 120 then midTok = mm:tokenOf(c) end end
+      for _, c in mm:ccs() do if c.ppq == 120 then midTok = c.uuid end end
 
       local cloned, raw
       mm:modify(function()
@@ -80,8 +80,8 @@ return {
         },
       }
       local noteMid, ccMid
-      for _, n in mm:notes() do if n.ppq == 240 then noteMid = mm:tokenOf(n) end end
-      for _, c in mm:ccs()   do if c.ppq == 270 then ccMid  = mm:tokenOf(c) end end
+      for _, n in mm:notes() do if n.ppq == 240 then noteMid = n.uuid end end
+      for _, c in mm:ccs()   do if c.ppq == 270 then ccMid  = c.uuid end end
 
       local ppqs
       mm:modify(function()

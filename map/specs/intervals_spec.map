@@ -1,4 +1,4 @@
-@spec intervals_spec  src=tests/specs/intervals_spec.lua  loc=128  sha=2541738  cases=11
+@spec intervals_spec  src=tests/specs/intervals_spec.lua  loc=128  sha=e33b768  cases=11
 @exercises intervals (intervals)
 @surface   intervals.seed, intervals.merge, intervals.intersects, intervals.absorbSeeds
 

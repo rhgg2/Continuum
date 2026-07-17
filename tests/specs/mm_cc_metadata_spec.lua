@@ -28,7 +28,7 @@ return {
     name = 'metadata-only assign on a plain (un-uuid\'d) cc requires the lock',
     run = function(harness)
       local fm = harness.bareMM{ ccs = { { ppq = 0, evType = 'cc', chan = 1, cc = 7, val = 64 } } }
-      local ok, err = pcall(function() fm:assign(ccAt(fm, 1).token, { foo = 1 }) end)
+      local ok, err = pcall(function() fm:assign(ccAt(fm, 1).uuid, { foo = 1 }) end)
       t.falsy(ok, 'expected an assertion')
       t.truthy(tostring(err):find('modify'), 'error mentions modify lock')
     end,
@@ -40,7 +40,7 @@ return {
       local h = harness.mk{
         seed = { ccs = { { ppq = 0, evType = 'cc', chan = 1, cc = 7, val = 64 } } },
       }
-      h.fm:modify(function() h.fm:assign(ccAt(h.fm, 1).token, { foo = 'hello' }) end)
+      h.fm:modify(function() h.fm:assign(ccAt(h.fm, 1).uuid, { foo = 'hello' }) end)
       local cc = ccAt(h.fm, 1)
       t.truthy(cc.uuid, 'uuid present')
       t.eq(cc.plain, nil, 'the stamp bought persistence: a sidecar now rides the take')
@@ -54,9 +54,9 @@ return {
       local h = harness.mk{
         seed = { ccs = { { ppq = 0, evType = 'cc', chan = 1, cc = 7, val = 64 } } },
       }
-      h.fm:modify(function() h.fm:assign(ccAt(h.fm, 1).token, { foo = 1 }) end)
+      h.fm:modify(function() h.fm:assign(ccAt(h.fm, 1).uuid, { foo = 1 }) end)
       -- No modify wrapper this time — must not raise.
-      h.fm:assign(ccAt(h.fm, 1).token, { foo = 2 })
+      h.fm:assign(ccAt(h.fm, 1).uuid, { foo = 2 })
       t.eq(ccAt(h.fm, 1).foo, 2)
     end,
   },
@@ -67,7 +67,7 @@ return {
       local h = harness.mk{
         seed = { ccs = { { ppq = 0, evType = 'cc', chan = 1, cc = 7, val = 64 } } },
       }
-      h.fm:modify(function() h.fm:assign(ccAt(h.fm, 1).token, { val = 100, label = 'tag' }) end)
+      h.fm:modify(function() h.fm:assign(ccAt(h.fm, 1).uuid, { val = 100, label = 'tag' }) end)
       local cc = ccAt(h.fm, 1)
       t.eq(cc.val, 100)
       t.eq(cc.label, 'tag')
@@ -80,7 +80,7 @@ return {
     run = function(harness)
       -- Bare mm (no tm), to keep the cc plain — see header note.
       local fm = harness.bareMM{ ccs = { { ppq = 0, evType = 'cc', chan = 1, cc = 7, val = 64 } } }
-      fm:modify(function() fm:assign(ccAt(fm, 1).token, { val = 100 }) end)
+      fm:modify(function() fm:assign(ccAt(fm, 1).uuid, { val = 100 }) end)
       t.eq(ccAt(fm, 1).plain, true, 'no metadata, no sidecar (sidecar-on-touch)')
     end,
   },
@@ -97,8 +97,8 @@ return {
         },
       }
       h.fm:modify(function()
-        h.fm:assign(ccAt(h.fm, 1).token, { foo = 1 })
-        h.fm:assign(ccAt(h.fm, 2).token, { foo = 2 })
+        h.fm:assign(ccAt(h.fm, 1).uuid, { foo = 1 })
+        h.fm:assign(ccAt(h.fm, 2).uuid, { foo = 2 })
       end)
       local u1, u2 = ccAt(h.fm, 1).uuid, ccAt(h.fm, 2).uuid
       t.truthy(u1 and u2, 'both got uuids')
@@ -118,7 +118,7 @@ return {
       -- carve-out (uuid present, metadata-only) and confirm it isn't re-issued.
       local uuid = ccAt(h.fm, 1).uuid
       t.truthy(uuid, 'stamped cc carries a uuid')
-      h.fm:assign(ccAt(h.fm, 1).token, { foo = 'new' })
+      h.fm:assign(ccAt(h.fm, 1).uuid, { foo = 'new' })
       local cc = ccAt(h.fm, 1)
       t.eq(cc.uuid, uuid, 'uuid retained across the metadata-only assign')
       t.eq(cc.foo, 'new')
@@ -131,9 +131,9 @@ return {
       local h = harness.mk{
         seed = { ccs = { { ppq = 0, evType = 'cc', chan = 1, cc = 7, val = 64 } } },
       }
-      h.fm:modify(function() h.fm:assign(ccAt(h.fm, 1).token, { foo = 'x' }) end)
+      h.fm:modify(function() h.fm:assign(ccAt(h.fm, 1).uuid, { foo = 'x' }) end)
       t.truthy(ccAt(h.fm, 1).uuid)
-      local tk = ccAt(h.fm, 1).token
+      local tk = ccAt(h.fm, 1).uuid
       h.fm:modify(function() h.fm:delete(tk) end)
       t.eq(ccAt(h.fm, 1), nil, 'cc gone')
     end,
@@ -146,7 +146,7 @@ return {
         seed = { ccs = { { ppq = 0, evType = 'cc', chan = 1, cc = 7, val = 64,
                            uuid = 7, foo = 'present' } } },
       }
-      h.fm:assign(ccAt(h.fm, 1).token, { foo = util.REMOVE })
+      h.fm:assign(ccAt(h.fm, 1).uuid, { foo = util.REMOVE })
       t.eq(ccAt(h.fm, 1).foo, nil)
     end,
   },

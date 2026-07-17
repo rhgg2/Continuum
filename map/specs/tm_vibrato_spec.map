@@ -1,4 +1,4 @@
-@spec tm_vibrato_spec  src=tests/specs/tm_vibrato_spec.lua  loc=203  sha=2b7e591  cases=9
+@spec tm_vibrato_spec  src=tests/specs/tm_vibrato_spec.lua  loc=203  sha=b5afaeb  cases=9
 @exercises trackerManager (h.tm), midiManager (h.fm), configManager (h.cm), dataStore (h.ds)
 @surface   tm:addEvent, tm:flush, fm:dump, tm:rebuild, tm:getChannel, tm:assignEvent, cm:assign, fm:load, ds:get
 @harness   mk

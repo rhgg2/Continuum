@@ -73,7 +73,7 @@ return {
 
       -- A structural write dirties the model, so the unwind reprojects the whole take.
       -- If that reprojection emitted a sidecar, the reload below would bind it.
-      first:modify(function() first:assign(before.token, { val = 99 }) end)
+      first:modify(function() first:assign(before.uuid, { val = 99 }) end)
 
       local second = realMM(nil)
       second:load(take)
@@ -94,7 +94,7 @@ return {
       local plain = ccAt(first, 100)
       t.eq(plain.plain, true, 'starts plain')
 
-      first:modify(function() first:assign(plain.token, { foo = 'tagged' }) end)
+      first:modify(function() first:assign(plain.uuid, { foo = 'tagged' }) end)
       local promoted = ccAt(first, 100)
       t.eq(promoted.plain, nil, 'the metadata stamp cleared plain')
 

@@ -93,8 +93,8 @@ return {
     run = function(harness)
       local mm = fixture(harness)
       local noteTok, ccTok
-      for _, n in mm:notesRaw() do if n.ppq == 0   then noteTok = mm:tokenOf(n) end end
-      for _, c in mm:ccsRaw()   do if c.ppq == 120 then ccTok   = mm:tokenOf(c) end end
+      for _, n in mm:notesRaw() do if n.ppq == 0   then noteTok = n.uuid end end
+      for _, c in mm:ccsRaw()   do if c.ppq == 120 then ccTok   = c.uuid end end
 
       mm:modify(function()
         mm:delete(noteTok)
@@ -112,8 +112,8 @@ return {
     run = function(harness)
       local mm = fixture(harness)
       local noteTok, ccTok
-      for _, n in mm:notesRaw() do if n.ppq == 240 then noteTok = mm:tokenOf(n) end end
-      for _, c in mm:ccsRaw()   do if c.ppq == 0   then ccTok   = mm:tokenOf(c) end end
+      for _, n in mm:notesRaw() do if n.ppq == 240 then noteTok = n.uuid end end
+      for _, c in mm:ccsRaw()   do if c.ppq == 0   then ccTok   = c.uuid end end
 
       mm:modify(function()
         mm:assign(noteTok, { chan = 5 })   -- chan 3 -> 5
@@ -133,7 +133,7 @@ return {
     run = function(harness)
       local mm = fixture(harness)
       local tok
-      for _, n in mm:notesRaw() do if n.ppq == 0 then tok = mm:tokenOf(n) end end
+      for _, n in mm:notesRaw() do if n.ppq == 0 then tok = n.uuid end end
       mm:modify(function()
         mm:assign(tok, { detune = 25 })   -- lockless path: no chan, no loc, no membership change
         assertParity(mm, 'mid-modify after a metadata-only assign')
@@ -147,7 +147,7 @@ return {
     run = function(harness)
       local mm = fixture(harness)
       local tok
-      for _, n in mm:notesRaw() do if n.ppq == 240 then tok = mm:tokenOf(n) end end
+      for _, n in mm:notesRaw() do if n.ppq == 240 then tok = n.uuid end end
       -- Structural, so it takes the locked path, but it moves no ppq: neither flag fires and the
       -- unwind skips the reindex. The verbs' own maintenance is all that stands behind the index.
       mm:modify(function()
@@ -165,7 +165,7 @@ return {
       -- Drive chan 1's two notes onto one (chan, pitch, ppq): the loser is killed by
       -- resolveCollisions, which nils notes[loc] directly rather than routing through mm:delete.
       local tok
-      for _, n in mm:notesRaw() do if n.ppq == 480 then tok = mm:tokenOf(n) end end
+      for _, n in mm:notesRaw() do if n.ppq == 480 then tok = n.uuid end end
       mm:modify(function()
         mm:assign(tok, { ppq = 0, endppq = 240, pitch = 60 })
       end)

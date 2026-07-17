@@ -254,7 +254,7 @@ return {
       -- Structural assignCC rewrites the sidecar via cc.uuidIdx. If that
       -- idx is stale (failure to fix up after orphan deletion), this would
       -- mutate some unrelated sysex or fail.
-      mm:modify(function() mm:assign(ccAt(mm, 1).token, { val = 100 }) end)
+      mm:modify(function() mm:assign(ccAt(mm, 1).uuid, { val = 100 }) end)
       local m = reaper:dumpMidi(take)
       t.eq(#m.texts, 1, 'one sidecar survives')
       local decoded = t.decodeSidecar(m.texts[1].msg)
