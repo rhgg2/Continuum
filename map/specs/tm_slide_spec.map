@@ -35,3 +35,53 @@
   @use call cm:assign  @ 102
   @use call tm:rebuild  @ 103,141
   @use call tm:getChannel  @ 153
+
+# Fields (r read / w write incl. constructor keys)
+  @field w atom  @ 7
+  @field r ccs  @ 17,153
+  @field r chan  @ 18
+  @field w chan  @ 32,35,79,82,84,115,132,135,163,167,184,187
+  @field w chan  @ 190
+  @field r columns  @ 153
+  @field w config  @ 129
+  @field w data  @ 130
+  @field w delay  @ 33,36,80,83,85,116,133,136,164,168,185,188
+  @field w delay  @ 191
+  @field w depth  @ 165,186
+  @field w detune  @ 33,36,80,83,85,116,133,136,164,168,185,188
+  @field w detune  @ 191
+  @field w endppq  @ 32,35,79,82,84,115,132,135,163,167,184,187
+  @field w endppq  @ 190
+  @field r evType  @ 18
+  @field w evType  @ 32,35,79,82,84,115,132,135,163,167,184,187
+  @field w evType  @ 190
+  @field w factors  @ 7
+  @field w fx  @ 34,81,117,134,165,186,189
+  @field w global  @ 130
+  @field w kind  @ 34,81,117,134,165,166,186,189
+  @field w lane  @ 33,36,80,83,85,116,133,136,164,168,185,188
+  @field w lane  @ 191
+  @field w name  @ 45,64,75,95,112,126,149,160,181
+  @field w onset  @ 165,186
+  @field w over  @ 34,81,117,134,166,189
+  @field w pbRange  @ 102
+  @field w period  @ 7,165,186
+  @field w pitch  @ 32,35,79,82,84,115,132,135,163,167,184,187
+  @field w pitch  @ 190
+  @field r plain  @ 19,52
+  @field w plain  @ 19
+  @field r ppq  @ 19,22,26,56
+  @field w ppq  @ 19,32,35,79,82,84,115,132,135,163,167,184
+  @field w ppq  @ 187,190
+  @field w project  @ 129
+  @field w run  @ 46,65,76,96,113,127,150,161,182
+  @field r shape  @ 19
+  @field w shape  @ 19
+  @field w shift  @ 7
+  @field w swing  @ 130
+  @field w swings  @ 129
+  @field w target  @ 34,81,117,134,166,189
+  @field r val  @ 19,53,54,57,68,87,99,104,173,174,195
+  @field w val  @ 19
+  @field w vel  @ 32,35,79,82,84,115,132,135,163,167,184,187
+  @field w vel  @ 190

@@ -42,3 +42,25 @@
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB
+
+# Fields (r read / w write incl. constructor keys)
+  @field r ImGui_GetBuiltinPath  @ 8
+  @field r chrome  @ 13
+  @field w chrome  @ 17,19,23
+  @field r cm  @ 13
+  @field w cm  @ 17,19
+  @field r cmgr  @ 13
+  @field w cmgr  @ 23
+  @field r ctx  @ 14
+  @field w ctx  @ 17,19
+  @field r ds  @ 13
+  @field w ds  @ 17
+  @field w edit  @ 32
+  @field r facade  @ 13
+  @field w facade  @ 17,19
+  @field r gui  @ 13
+  @field w gui  @ 17,19,23
+  @field r modalHost  @ 13
+  @field w modalHost  @ 17,19,23
+  @field w swingEditor  @ 22
+  @field w temperEditor  @ 22

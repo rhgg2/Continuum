@@ -27,3 +27,40 @@
   @use call vm:editEvent  @ 30,58,87,118,152,191,223,256,292
   @use call fm:dump  @ 32,60,89,120,154,194,225,258
   @use call tm:getChannel  @ 263,294
+
+# Fields (r read / w write incl. constructor keys)
+  @field r cells  @ 30,58,87,116,150,189,223,256,292
+  @field w chan  @ 20,48,75,77,105,107,136,138,178,180,213,246
+  @field w chan  @ 281,283
+  @field r cols  @ 28,56,85,115,149,188,221,254,290
+  @field r columns  @ 263,294
+  @field w data  @ 24,52,81,111,142,184,217,250,286
+  @field r delay  @ 33,61,90,122,156,197,226,259,266,301,303
+  @field w delay  @ 21,49,76,78,106,108,137,139,179,181,214,247
+  @field w delay  @ 281,283
+  @field r delayC  @ 265,266,302,303
+  @field w detune  @ 21,49,76,78,106,108,137,139,179,181,214,247
+  @field w detune  @ 281,283
+  @field r endppq  @ 63,92,124,157
+  @field w endppq  @ 20,48,75,77,105,107,136,138,178,180,213,245
+  @field w endppq  @ 280,282
+  @field w endppqL  @ 245,280,282
+  @field r events  @ 264,296
+  @field w extraColumns  @ 144
+  @field r grid  @ 28,56,85,115,149,188,221,254,290
+  @field w lane  @ 137,139
+  @field w name  @ 15,43,70,100,131,167,208,236,273
+  @field w noteDelay  @ 24,52,81,111,143,184,217,250,286
+  @field r notes  @ 32,60,89,120,154,194,225,258,263,294
+  @field w notes  @ 19,47,74,104,135,144,177,212,244,279
+  @field r pitch  @ 195
+  @field w pitch  @ 20,48,75,77,105,107,136,138,178,180,213,246
+  @field w pitch  @ 281,283
+  @field r ppq  @ 34,62,91,123,198,227,260,297,298
+  @field w ppq  @ 20,48,75,77,105,107,136,138,178,180,213,245
+  @field w ppq  @ 280,282
+  @field w ppqL  @ 245,280,282
+  @field w run  @ 16,44,71,101,132,168,209,237,274
+  @field w seed  @ 18,46,73,103,134,176,211,243,278
+  @field w vel  @ 20,48,75,77,105,107,136,138,178,180,213,246
+  @field w vel  @ 281,283

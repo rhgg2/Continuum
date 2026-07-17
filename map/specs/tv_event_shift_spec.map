@@ -39,3 +39,53 @@
   @use call cmgr:invoke  @ 50,68,85,105,122,141,170,188,211,235,265,292,314
   @use call ec:region  @ 150
   @use call ec:col  @ 153
+
+# Fields (r read / w write incl. constructor keys)
+  @field r cc  @ 192
+  @field w cc  @ 182
+  @field r ccs  @ 191,214
+  @field w ccs  @ 181,204
+  @field w cents  @ 205
+  @field r chan  @ 25,53,71,88,108,109,124,145,173,174,195,218
+  @field r chan  @ 238,268,295,296,297,316
+  @field w chan  @ 25,44,45,63,80,99,100,117,132,133,134,161
+  @field w chan  @ 162,182,205,229,230,256,258,283,284,285,308,309
+  @field w col1  @ 139,168,290
+  @field w col2  @ 139,168,290
+  @field r cols  @ 11
+  @field r endppq  @ 239,240,261,269,318,319
+  @field w endppq  @ 44,45,63,80,99,100,117,132,133,134,161,162
+  @field w endppq  @ 229,230,255,257,283,284,285,308,309
+  @field w endppqL  @ 255,257
+  @field r evType  @ 192,215
+  @field w evType  @ 182,205
+  @field r grid  @ 11
+  @field r lane  @ 18,25,54,55,72,89,146
+  @field w lane  @ 25,44,45,63,80,99,100,117,132,133,134,161
+  @field w lane  @ 162,229,230,256,258,283,284,285,308,309
+  @field w length  @ 254
+  @field r midiChan  @ 18,186,209
+  @field w name  @ 39,60,77,94,114,129,158,179,200,223,245,275
+  @field w name  @ 302
+  @field r notes  @ 24,31
+  @field w notes  @ 43,62,79,98,116,131,160,228,254,282,307
+  @field w part1  @ 140,169,291
+  @field w part2  @ 140,169,291
+  @field r pitch  @ 25,32
+  @field w pitch  @ 44,45,63,80,99,100,117,132,133,134,161,162
+  @field w pitch  @ 229,230,256,258,283,284,285,308,309
+  @field w ppq  @ 44,45,63,80,99,100,117,132,133,134,161,162
+  @field w ppq  @ 182,205,229,230,255,257,283,284,285,308,309
+  @field w ppqL  @ 255,257
+  @field w row1  @ 139,168,290
+  @field w row2  @ 139,168,290
+  @field w run  @ 40,61,78,95,115,130,159,180,201,224,246,276
+  @field w run  @ 303
+  @field w seed  @ 43,62,79,98,116,131,160,181,204,228,254,282
+  @field w seed  @ 307
+  @field w shape  @ 205
+  @field r type  @ 18,186,209
+  @field w uuid  @ 256,258
+  @field w val  @ 182,205
+  @field w vel  @ 44,45,63,80,99,100,117,132,133,134,161,162
+  @field w vel  @ 229,230,256,258,283,284,285,308,309

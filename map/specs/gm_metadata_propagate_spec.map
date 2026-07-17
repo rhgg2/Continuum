@@ -18,3 +18,31 @@
 # Uses (outbound edges)
   @use call gm:markGroup  @ 26
   @use call gm:newInstance  @ 28
+
+# Fields (r read / w write incl. constructor keys)
+  @field r add  @ 30
+  @field w chan  @ 21,28
+  @field w chanLo  @ 10
+  @field r derived  @ 41
+  @field w derived  @ 24
+  @field w ds  @ 19
+  @field w dur  @ 10
+  @field w endppq  @ 22
+  @field w endppqL  @ 22
+  @field w evType  @ 21
+  @field r foo  @ 37
+  @field w foo  @ 23
+  @field w lane  @ 21
+  @field r loc  @ 38
+  @field w loc  @ 24
+  @field w name  @ 15
+  @field w pitch  @ 22
+  @field w ppq  @ 10,21,28
+  @field r rpb  @ 36
+  @field w rpb  @ 23
+  @field w run  @ 16
+  @field r sampleShadowed  @ 39
+  @field w sampleShadowed  @ 24
+  @field w streams  @ 11
+  @field w tm  @ 19
+  @field w vel  @ 22

@@ -286,7 +286,7 @@ function wm:moveNodes(moves)
     end
   end, 'move')
   if not ok then return false, err end
-  for id, p in pairs(moves) do
+  for id in pairs(moves) do
     local node = userGraph.nodes[id]
     if node and node.kind == 'bus' then rm:assignMeta('bus', id, { pos = node.pos })
     elseif node then persistNodeMeta(node, { pos = node.pos })

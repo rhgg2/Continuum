@@ -37,3 +37,28 @@
   @use call ds:getAt  @ 123
   @use call ds:subscribe  @ 133,144
   @use call ps:pollUndo  @ 147
+
+# Fields (r read / w write incl. constructor keys)
+  @field r REMOVE  @ 84
+  @field r _state  @ 27,28,36,114,115,145,158
+  @field r a  @ 94
+  @field w a  @ 43,48,74,92,95,134,142,145,149,156,158,160
+  @field w d  @ 113
+  @field w fx  @ 102,105
+  @field w g  @ 112
+  @field w invalidate  @ 148
+  @field w kind  @ 46,51
+  @field w n  @ 102,105
+  @field w name  @ 40,56,63,71,80,89,99,109,119,129,135,139
+  @field w name  @ 148,153
+  @field w p  @ 47,52
+  @field w p1  @ 46,51
+  @field r projStateCount  @ 36
+  @field w projStateCount  @ 36
+  @field r projectTracks  @ 27
+  @field w ps  @ 31
+  @field w reaper  @ 25
+  @field w resourcePath  @ 28
+  @field w run  @ 41,57,64,72,81,90,100,110,120,130,140,154
+  @field w scope  @ 135,148
+  @field r takeExt  @ 114,115,145,158

@@ -57,3 +57,30 @@
   @use call tuning.genRank2  @ 281,291,300
   @use call tuning.nextMosSize  @ 309,310,311,312,313
   @use call tuning.mosInfo  @ 314,318
+
+# Fields (r read / w write incl. constructor keys)
+  @field r cellWidth  @ 18,23,42,55,67,78,81
+  @field r cents  @ 120,121,122,131,169,180,181
+  @field w cents  @ 10,66,77,89
+  @field r isMos  @ 315,318
+  @field r large  @ 316
+  @field r name  @ 162
+  @field w name  @ 10,15,29,38,50,61,65,74,76,86,88,97
+  @field w name  @ 115,117,127,138,150,159,174,187,196,212,224,232
+  @field w name  @ 245,261,269,279,289,298,307
+  @field r octaveStep  @ 20,24,41
+  @field r octaveWidth  @ 19,68
+  @field r period  @ 119,133,164
+  @field w period  @ 10,65,76,88
+  @field r periodAsStep  @ 168,202,284
+  @field r periodPitch  @ 132,163,177,201,207,219,240,252,256,273,283,293
+  @field w periodPitch  @ 117
+  @field r pitches  @ 130,165,166,167,178,179,199,200,205,206,239,251
+  @field r pitches  @ 255,272,274,282,292,301,302
+  @field w pitches  @ 118
+  @field r presets  @ 17,22,31,32,129
+  @field w run  @ 16,30,39,51,62,75,87,98,116,128,139,151
+  @field w run  @ 160,175,188,197,213,225,233,246,262,270,280,290
+  @field w run  @ 299,308
+  @field r small  @ 317
+  @field w stepNames  @ 10,66,77,79,89,118

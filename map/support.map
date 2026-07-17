@@ -1,0 +1,110 @@
+@module support  src=tests/support.lua  loc=232  sha=f8aa484  mode=namespace  self=M
+
+# Imports
+  @const util = 'util'  @ 5
+
+# Module-level constants
+  @const M = {}  @ 3
+
+# Private functions
+  @fn repr(v, depth)  @ 11-33
+  @fn deepEq(a, b)  @ 35-41
+  @fn toBase36(n)  @ 112-117
+  @fn newEventMeta()  @ 162-164
+      -- Per-event metadata persists via eventMeta at project scope, keyed by the take's
+      -- POOLEDEVTS pool guid. These helpers seed and read it the way production does, so
+      -- fixtures need not re-derive the guid or the storage shape.
+
+# Public API (M.*)
+  @api M.eq(actual, expected, msg)  @ 43-47
+  @api M.deepEq(actual, expected, msg)  @ 49-53
+  @api M.bagEq(actual, expected, msg)  @ 56-74
+      -- Multiset equality: same values under deepEq, ignoring keys/order.
+  @api M.truthy(v, msg)  @ 76-78
+  @api M.falsy(v, msg)  @ 80-82
+  @api M.eventsMatch(actual, expected, msg)  @ 86-96
+      -- Assert that an event array contains events matching each expected spec,
+      -- in order, matching only the fields present on the spec (subset match).
+  @api M.encodeSidecar(cc)  @ 119-138
+  @api M.decodeSidecar(body)  @ 140-156
+  @api M.poolGuidOf(take)  @ 166-170
+  @api M.seedMeta(take, uuid, fields)  @ 172-174
+  @api M.loadMeta(take)  @ 176-178
+  @api M.fakeDs()  @ 182-199
+      -- Minimal dataStore fake for gm specs: get/assign/subscribe over a flat store.
+      -- _rewind simulates a REAPER undo rewinding a blob (fires dataChanged invalidate=true).
+  @api M.fakeTm(opts)  @ 205-230
+      -- Faithful trackerManager fake for gm specs: records staged intent
+      -- (add/assign/del) and drives the real preflush/applyEdit/postflush path,
+      -- stamping uuids at flush the way REAPER does. opts.length sets the take
+      -- edge (default open); opts.uuidMap backs byUuid for the reload specs.
+
+# Uses (outbound edges)
+  @use call    util.instantiate  @ newEventMeta:163
+  @use require util  @ 5
+
+# REAPER API surface
+  @reaper GetMediaItemTake_Item
+  @reaper GetItemStateChunk
+
+# Fields (r read / w write incl. constructor keys)
+  @field w _rewind  @ fakeDs:194
+  @field r add  @ fakeTm:214,221
+  @field w add  @ fakeTm:209
+  @field r assign  @ fakeTm:215
+  @field w assign  @ fakeDs:186 fakeTm:209
+  @field w at  @ 107
+  @field w bagEq  @ bagEq:56
+  @field r cc  @ encodeSidecar:134
+  @field w cc  @ 107 decodeSidecar:152
+  @field r chan  @ encodeSidecar:133
+  @field w chan  @ decodeSidecar:148
+  @field r dataChanged  @ fakeDs:188,196
+  @field w decodeSidecar  @ decodeSidecar:140
+  @field w deepEq  @ deepEq:49
+  @field w deepEqRaw  @ 99
+  @field r del  @ fakeTm:216
+  @field w del  @ fakeTm:209
+  @field w encodeSidecar  @ encodeSidecar:119
+  @field w eq  @ eq:43
+  @field r evType  @ encodeSidecar:120,123,126 decodeSidecar:146,149,150,152,153
+  @field w evType  @ decodeSidecar:144
+  @field w eventsMatch  @ eventsMatch:86
+  @field w evt  @ fakeTm:215
+  @field w fakeDs  @ fakeDs:182
+  @field w fakeTm  @ fakeTm:205
+  @field w falsy  @ falsy:80
+  @field r flushes  @ fakeTm:219
+  @field w flushes  @ fakeTm:209,219
+  @field w get  @ fakeDs:185
+  @field r huge  @ fakeTm:207
+  @field w invalidate  @ fakeDs:196
+  @field r key  @ 9
+  @field w key  @ 9
+  @field r length  @ fakeTm:207
+  @field w loadMeta  @ loadMeta:176
+  @field w name  @ fakeDs:188,196
+  @field w pa  @ 107
+  @field w pb  @ 107
+  @field w pc  @ 107
+  @field r pitch  @ encodeSidecar:134
+  @field w pitch  @ decodeSidecar:153
+  @field w poolGuidOf  @ poolGuidOf:166
+  @field r postflush  @ fakeTm:224
+  @field r preflush  @ fakeTm:220
+  @field w ps  @ newEventMeta:163
+  @field r rebuild  @ fakeTm:227
+  @field r rebuildRequests  @ fakeTm:213
+  @field w rebuildRequests  @ fakeTm:209,213
+  @field w repr  @ 98
+  @field w seedMeta  @ seedMeta:172
+  @field w subscribe  @ fakeDs:190
+  @field w truthy  @ truthy:76
+  @field w update  @ fakeTm:215
+  @field r uuid  @ encodeSidecar:137 decodeSidecar:146 fakeTm:222
+  @field w uuid  @ decodeSidecar:145 fakeTm:222
+  @field r uuidMap  @ fakeTm:207
+  @field r val  @ encodeSidecar:124,129
+  @field w val  @ decodeSidecar:149,151
+  @field r vel  @ encodeSidecar:127
+  @field w vel  @ decodeSidecar:150

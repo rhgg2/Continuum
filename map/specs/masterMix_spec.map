@@ -11,3 +11,15 @@
 
 # Cases
   @case 'exposes a master toolbar segment with a render fn'  [pure]  @ 19-24
+
+# Fields (r read / w write incl. constructor keys)
+  @field w __index  @ 8
+  @field w chrome  @ 21
+  @field w colour  @ 15
+  @field w ctx  @ 21
+  @field r id  @ 22
+  @field w name  @ 19
+  @field r preload  @ 6
+  @field r render  @ 23
+  @field w run  @ 20
+  @field r segment  @ 22,23

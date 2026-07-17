@@ -35,3 +35,31 @@
   @use call A:eachInstance  @ 129,133
   @use call ds._rewind  @ 131
   @use call A:stateOf  @ 134
+
+# Fields (r read / w write incl. constructor keys)
+  @field r add  @ 60,84
+  @field r assign  @ 105
+  @field w assign  @ 34
+  @field w chan  @ 14,53,82,127
+  @field w chanLo  @ 21
+  @field w ds  @ 50,65,79,90,124
+  @field w dur  @ 21
+  @field w endppq  @ 15
+  @field w evType  @ 14
+  @field r evt  @ 107,108
+  @field w evt  @ 57
+  @field w get  @ 33
+  @field w lane  @ 14
+  @field w name  @ 43,73,118
+  @field r pitch  @ 106,112,113
+  @field w pitch  @ 15,56,80,102
+  @field w ppq  @ 14,21,53,82,127
+  @field w run  @ 44,74,119
+  @field w streams  @ 22
+  @field w subscribe  @ 37
+  @field w tm  @ 50,65,79,90,124
+  @field r update  @ 106,112,113
+  @field r uuid  @ 59,60,69,85,89,95,102,134
+  @field w uuid  @ 15
+  @field w uuidMap  @ 64,89
+  @field w vel  @ 15

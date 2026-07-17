@@ -24,3 +24,21 @@
   @use call gm:activeGroup  @ 27,38,51,65,74
   @use call gm:stamp  @ 36,48,49,63,71
   @use call gm:clearActive  @ 64
+
+# Fields (r read / w write incl. constructor keys)
+  @field r add  @ 28,39,40,54,55
+  @field w chan  @ 14,36,48,49,63,71
+  @field w chanLo  @ 17,69
+  @field w ds  @ 11
+  @field w dur  @ 17,69
+  @field w endppq  @ 15
+  @field w evType  @ 14
+  @field w lane  @ 14
+  @field w name  @ 22,33,45,60
+  @field w pitch  @ 15
+  @field r ppq  @ 40,55
+  @field w ppq  @ 15,17,36,48,49,63,69,71
+  @field w run  @ 23,34,46,61
+  @field w streams  @ 18,70
+  @field w tm  @ 11
+  @field w vel  @ 15

@@ -21,3 +21,25 @@
 
 # Uses (outbound edges)
   @use call mm:modify  @ 25,45,64,83,100
+
+# Fields (r read / w write incl. constructor keys)
+  @field w cc  @ 46,84,103,104
+  @field w chan  @ 26,46,65,84,101,102,103,104
+  @field r endppq  @ 34
+  @field w endppq  @ 26,101,102
+  @field r endppqL  @ 36,114,116
+  @field w endppqL  @ 27,101,102
+  @field r evType  @ 72
+  @field w evType  @ 26,46,65,84,101,102,103,104
+  @field w name  @ 21,41,60,79,96
+  @field w pitch  @ 26,101,102
+  @field r plain  @ 90
+  @field r ppq  @ 33,54,73,111,120
+  @field w ppq  @ 26,46,65,84,101,102,103,104
+  @field r ppqL  @ 35,55,74,91,113,115,122,123
+  @field w ppqL  @ 27,47,66,101,102,103,104
+  @field w reaper  @ 13
+  @field w run  @ 22,42,61,80,97
+  @field r uuid  @ 53
+  @field w val  @ 46,65,84,103,104
+  @field w vel  @ 26,101,102

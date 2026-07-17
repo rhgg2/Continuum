@@ -12,3 +12,13 @@
   @case 'serialise: nan emits the nan literal and parses back as a string'  [pure]  @ 29-36
   @case 'serialise: finite numbers, booleans and strings keep their existing shapes'  [pure]  @ 39-47
   @case 'serialise: control bytes hex-escape so the wire form is NUL-free (REAPER ext-state transport)'  [pure]  @ 50-64
+
+# Fields (r read / w write incl. constructor keys)
+  @field r OPEN  @ 23,24
+  @field r endppqL  @ 24
+  @field w endppqL  @ 23
+  @field r huge  @ 12,13,14,15
+  @field w name  @ 10,19,29,39,50
+  @field r ppqL  @ 25
+  @field w ppqL  @ 23
+  @field w run  @ 11,20,30,40,51

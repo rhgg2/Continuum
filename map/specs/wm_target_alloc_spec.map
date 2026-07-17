@@ -28,3 +28,56 @@
   @use call wm:load  @ 13
   @use call wm:mutate  @ 61,96,124
   @use call wm:targetState  @ 72,108,130
+
+# Fields (r read / w write incl. constructor keys)
+  @field w __label  @ 18
+  @field r _state  @ 19,20
+  @field w a  @ 97
+  @field w audio  @ 26,32
+  @field w b  @ 98
+  @field w c  @ 99
+  @field w cm  @ 12
+  @field r consumer  @ 49
+  @field w d  @ 100
+  @field w ds  @ 11
+  @field w e  @ 101
+  @field r edges  @ 66,67,68,69,70,102,103,104,105,106,127,128
+  @field w f  @ 126
+  @field w from  @ 37
+  @field r fx  @ 42,47
+  @field w fx1  @ 63
+  @field w fx2  @ 64
+  @field w fx3  @ 65
+  @field r fxId  @ 31
+  @field w fxId  @ 31,63,64,65,99,100,101,126
+  @field w fxIdent  @ 31
+  @field r id  @ 43
+  @field r ins  @ 32,111,113
+  @field w ins  @ 26,32,33,63,64,65,79,81,83,85,99
+  @field w ins  @ 100,101,136
+  @field r kind  @ 48
+  @field w kind  @ 25,31
+  @field r mainSend  @ 76,77,133,134
+  @field w midi  @ 26,33
+  @field w name  @ 57,91,120
+  @field r nchan  @ 75,77,114,132,134
+  @field r nodes  @ 62,63,64,65,97,98,99,100,101,125,126
+  @field r origin  @ 48,49
+  @field r outs  @ 32,110,112
+  @field w outs  @ 26,32,33,63,64,65,79,81,83,85,99
+  @field w outs  @ 100,101,136
+  @field r pinMaps  @ 43,49
+  @field w ports  @ 26,32
+  @field w pos  @ 25,31
+  @field r projectTracks  @ 19
+  @field w rm  @ 12
+  @field w run  @ 58,92,121
+  @field w s  @ 62,125
+  @field r tgtOffset  @ 76,133
+  @field w to  @ 37
+  @field r trackGuids  @ 20
+  @field w trackId  @ 25
+  @field r trackKey  @ 49
+  @field w type  @ 37
+  @field w x  @ 25,31
+  @field w y  @ 25,31

@@ -31,3 +31,59 @@
   @use call DAG.compile  @ 66,84,98,110,141,175,204,236,265,300
   @use call DAG.targetTracks  @ 101,111,148,184,213,244
   @use call DAG.allocate  @ 111
+
+# Fields (r read / w write incl. constructor keys)
+  @field w audio  @ 9,17,24,30
+  @field r dstChan  @ 121
+  @field r edges  @ 273,310
+  @field w edges  @ 32
+  @field r fa  @ 282,284,285
+  @field r fb  @ 283,286
+  @field r from  @ 159,186,216,219,274,277,311,312
+  @field w from  @ 36
+  @field w fxDisplay  @ 16
+  @field w fxIdent  @ 16
+  @field r fxOrder  @ 102,114
+  @field r gain  @ 151,152,157,186,248,249,275,282,283,312,316,317
+  @field r gain  @ 318,319
+  @field w gain  @ 37,275,312
+  @field r ins  @ 17
+  @field w ins  @ 9,10,17,19,24,30
+  @field r intraConns  @ 218
+  @field w kind  @ 7,15,23,29
+  @field r mainSendGain  @ 158
+  @field r master  @ 28
+  @field w master  @ 29
+  @field w midi  @ 10,19,24,30
+  @field r nParts  @ 321
+  @field w nParts  @ 313
+  @field w name  @ 64,73,96,107,133,166,194,226,256,290
+  @field r nchan  @ 115
+  @field r nodes  @ 111
+  @field w nodes  @ 32
+  @field r ops  @ 275,312
+  @field w ops  @ 37
+  @field w orient  @ 23
+  @field r outWires  @ 151,152,154,186,215,246
+  @field r outs  @ 18
+  @field w outs  @ 9,10,18,19,24,30
+  @field r parentFeed  @ 159
+  @field r parts  @ 275,278,279,284,285,286,313
+  @field w parts  @ 275
+  @field w ports  @ 9,17,24,30
+  @field w pos  @ 8,15,23,29
+  @field r preFx  @ 127
+  @field w run  @ 65,74,97,108,134,167,195,227,257,291
+  @field r sends  @ 117,124,125
+  @field r splice  @ 275,278,279,313
+  @field r srcChan  @ 120,128
+  @field r synthNodes  @ 161,189
+  @field r to  @ 119,126,155,219,247,275,277,312
+  @field w to  @ 36
+  @field r toNode  @ 216,247
+  @field w trackId  @ 7
+  @field r trackKind  @ 113
+  @field w type  @ 36
+  @field r userGraph  @ 273,310
+  @field w x  @ 8,15,23,29
+  @field w y  @ 8,15,23,29

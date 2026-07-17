@@ -85,3 +85,62 @@
   @use call    util.lcm  @ compositePeriodQN:174
   @use call    util.round  @ delayToPPQ:323
   @use require util  @ 16
+
+# Fields (r read / w write incl. constructor keys)
+  @field r K  @ 129 findRampOn:247 findRampOff:259
+  @field w K  @ 23
+  @field r T  @ tileApply:205,207,209 tileUnapply:214,216,218
+  @field w T  @ resolveFactors:194
+  @field r a  @ eval:291,292 invert:304
+  @field w a  @ identityShape:271 resolveComposite:285
+  @field w applyFactors  @ applyFactors:223
+  @field r atom  @ atomTilePeriod:143 compositePeriodQN:171 resolveFactors:188,192 tileApply:209 tileUnapply:218
+  @field w atom  @ resolveFactors:192
+  @field r atomMeta  @ atomTilePeriod:143 compositePeriodQN:171
+  @field w atomMeta  @ 130
+  @field w atomTilePeriod  @ atomTilePeriod:142
+  @field r atoms  @ resolveFactors:188 tileApply:209 tileUnapply:218
+  @field w atoms  @ 71
+  @field r b  @ eval:293,295 invert:307
+  @field w b  @ identityShape:271 resolveComposite:285
+  @field w classic  @ 83,134
+  @field w compositePeriodQN  @ compositePeriodQN:165
+  @field w delayToPPQ  @ delayToPPQ:322
+  @field w eval  @ eval:289
+  @field r factors  @ isIdentity:149 compositePeriodQN:166 resolveFactors:184,187 eval:297 invert:309
+  @field w factors  @ identityShape:271 resolveComposite:285
+  @field w forward  @ smooth:66 77
+  @field r huge  @ 133
+  @field w id  @ 76,133
+  @field r identity  @ eval:290 invert:302
+  @field w identity  @ identityShape:271
+  @field w inverse  @ smooth:67 78
+  @field w invert  @ invert:301
+  @field w isIdentity  @ isIdentity:147
+  @field r length  @ eval:294 invert:306
+  @field w length  @ identityShape:271 resolveComposite:285
+  @field w lilt  @ 96,136
+  @field w logPerRow  @ logPerRow:315
+  @field w negRange  @ 133,134,135,136,137,138
+  @field r period  @ atomTilePeriod:143 compositePeriodQN:170
+  @field w periodQN  @ periodQN:156
+  @field r phase  @ isIdentity:150 resolveFactors:185,190 tileApply:206,210 tileUnapply:215,219
+  @field r phase  @ tileUnapply:219
+  @field w phase  @ resolveFactors:195
+  @field r pi  @ 35,134,136,137
+  @field w pocket  @ 90,135
+  @field w posRange  @ 133,134,135,136,137,138
+  @field w ppqToDelay  @ ppqToDelay:326
+  @field r pulsesPerCycle  @ atomTilePeriod:143 compositePeriodQN:171
+  @field w pulsesPerCycle  @ 133,134,135,136,137,138
+  @field w resolveComposite  @ resolveComposite:275
+  @field w resolveFactors  @ resolveFactors:183
+  @field r shift  @ resolveFactors:193 tileApply:209 tileUnapply:218
+  @field w shift  @ resolveFactors:193
+  @field w shuffle  @ 102,137
+  @field w tilt  @ 109,138
+  @field w unapplyFactors  @ unapplyFactors:229
+  @field r ya  @ eval:292 invert:303,304
+  @field w ya  @ identityShape:271 resolveComposite:285
+  @field r yb  @ eval:295 invert:305,307
+  @field w yb  @ identityShape:271 resolveComposite:285

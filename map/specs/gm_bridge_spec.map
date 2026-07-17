@@ -23,3 +23,27 @@
   @use call gm:stamp  @ 39,57
   @use call ec:setPos  @ 52
   @use call vm:cursorAnchor  @ 53
+
+# Fields (r read / w write incl. constructor keys)
+  @field r chan  @ 31,54
+  @field w chan  @ 21,43
+  @field w col1  @ 25,47
+  @field w col2  @ 25,47
+  @field r cols  @ 10
+  @field w ds  @ 33,56
+  @field w endppq  @ 21,43
+  @field r grid  @ 10
+  @field r midiChan  @ 11
+  @field w name  @ 17,39
+  @field w notes  @ 20,42
+  @field w part1  @ 26,48
+  @field w part2  @ 26,48
+  @field w pitch  @ 21,43
+  @field w ppq  @ 21,43
+  @field w row1  @ 25,47
+  @field w row2  @ 25,47
+  @field w run  @ 18,40
+  @field w seed  @ 20,42
+  @field w tm  @ 33,56
+  @field r type  @ 11
+  @field w vel  @ 21,43

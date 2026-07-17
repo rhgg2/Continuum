@@ -57,3 +57,57 @@
   @use call    util.round  @ splitWide:34
   @use require perf  @ 18
   @use require util  @ 17
+
+# Fields (r read / w write incl. constructor keys)
+  @field w __mode  @ 146
+  @field w at  @ 27
+  @field r bz  @ chunkOf:204,208
+  @field w bz  @ chunkOf:205
+  @field r cc  @ isWideCC:31 parse:104,107,108 ccDataBytes:128 ccRow:160,163 chunkOf:217,218
+  @field w cc  @ ccValueFields:44 ccRow:163
+  @field r chan  @ parse:104,108 ccWire:134 noteRow:150,152 ccRow:160,163 chunkOf:189,197,215
+  @field r chan  @ serialise:252,255
+  @field w chan  @ parse:68,79 noteRow:152 ccRow:163
+  @field r chunk  @ chunkOf:232
+  @field w chunk  @ chunkOf:228
+  @field r d  @ chunkOf:227,228
+  @field r endppq  @ serialise:259
+  @field w endppq  @ parse:67,76
+  @field r evType  @ isWideCC:31 parse:104,107 ccDataBytes:127,128,129 ccWire:134,136 ccRow:160,163
+  @field w evType  @ parse:67,79 ccRow:163
+  @field r eventtype  @ textRow:172,173 chunkOf:228,230
+  @field w eventtype  @ parse:89,93 textRow:173
+  @field r flags  @ chunkOf:235
+  @field w flags  @ parse:96
+  @field w idx  @ parse:67,79,89,93,118
+  @field r main  @ chunkOf:220,223
+  @field w main  @ chunkOf:217
+  @field r main2  @ chunkOf:223
+  @field w main2  @ chunkOf:218,220
+  @field r mainD  @ chunkOf:210
+  @field w mainD  @ chunkOf:211
+  @field r msg  @ textRow:172,173 chunkOf:229,230,235
+  @field w msg  @ parse:89,93,96 textRow:173
+  @field r muted  @ noteRow:151,152 ccRow:162,164 chunkOf:188,212,217
+  @field w muted  @ parse:68,80 noteRow:152 ccRow:164
+  @field r off  @ chunkOf:199
+  @field w off  @ chunkOf:196
+  @field r offD  @ chunkOf:195,196
+  @field r on  @ chunkOf:191
+  @field w on  @ chunkOf:188
+  @field r onD  @ chunkOf:187,188
+  @field w parse  @ parse:49
+  @field w pc  @ 27
+  @field r pitch  @ ccDataBytes:127 noteRow:150,152 ccRow:161,163 chunkOf:189,197 serialise:252,255
+  @field w pitch  @ ccValueFields:43 parse:68 noteRow:152 ccRow:163
+  @field r ppq  @ parse:104,108 serialise:252,255,258,262,263,265,266
+  @field w ppq  @ parse:67,79,89,93,96
+  @field w serialise  @ serialise:239
+  @field r shape  @ parse:87 ccRow:162,164 chunkOf:212 serialise:263
+  @field w shape  @ parse:80 ccRow:164
+  @field r tension  @ ccRow:162,164 chunkOf:206
+  @field w tension  @ parse:87 ccRow:164
+  @field r val  @ isWideCC:31 parse:110 ccDataBytes:128,129,130 ccRow:161,163 chunkOf:214
+  @field w val  @ ccValueFields:44,45,46 parse:110 ccRow:163
+  @field r vel  @ ccDataBytes:127 noteRow:151,152 ccRow:161,164 chunkOf:189
+  @field w vel  @ ccValueFields:43 parse:68 noteRow:152 ccRow:164

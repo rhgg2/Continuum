@@ -19,3 +19,36 @@
   @case 'rebind to an empty list explicitly unbinds and persists the empty array'  [pure]  @ 94-101
   @case 'loadOverrides re-applies persisted tokens onto a fresh manager'  [pure]  @ 105-118
   @case 'loadOverrides skips malformed tokens, keeps the good ones, tolerates unknown scopes'  [pure]  @ 122-132
+
+# Fields (r read / w write incl. constructor keys)
+  @field r Key_0  @ 19
+  @field r Key_A  @ 19,27,28
+  @field r Key_Comma  @ 64
+  @field w Key_Keypad0  @ 19
+  @field r Key_KeypadEnter  @ 63
+  @field r Key_Space  @ 60
+  @field w Key_Y  @ 28
+  @field r Key_Z  @ 61,62,84,88,109,117
+  @field w Key_Z  @ 27
+  @field w Mod_Alt  @ 18
+  @field r Mod_Ctrl  @ 61,62,84,88,109,117
+  @field w Mod_Ctrl  @ 18
+  @field w Mod_None  @ 18
+  @field r Mod_Shift  @ 62
+  @field w Mod_Shift  @ 18
+  @field w Mod_Super  @ 18
+  @field r _store  @ 89,100
+  @field w _store  @ 43
+  @field w cm  @ 10
+  @field w foo  @ 125
+  @field w get  @ 41
+  @field r global  @ 89,100
+  @field w global  @ 126
+  @field r keyBindings  @ 89,100
+  @field w keyBindings  @ 39
+  @field w name  @ 49,69,80,94,105,122
+  @field w nonsuch  @ 125
+  @field w run  @ 50,70,81,95,106,123
+  @field w set  @ 42
+  @field r undo  @ 89,100
+  @field w undo  @ 126

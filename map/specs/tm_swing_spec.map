@@ -1,4 +1,4 @@
-@spec tm_swing_spec  src=tests/specs/tm_swing_spec.lua  loc=166  sha=d20cba1  cases=9
+@spec tm_swing_spec  src=tests/specs/tm_swing_spec.lua  loc=166  sha=37ed80d  cases=9
 @exercises trackerManager (h.tm), timing (timing), dataStore (h.ds), trackerView (h.vm), midiManager (h.fm)
 @surface   tm:fromLogical, tm:toLogical, tm:resolution, timing.resolveFactors, timing.applyFactors, ds:assign, vm:setSwingSlot, tm:rebuild, fm:dump, tm:byUuid
 @harness   mk{seed.length, seed.resolution, seed.notes}
@@ -31,3 +31,31 @@
   @use call tm:rebuild  @ 151
   @use call fm:dump  @ 156
   @use call tm:byUuid  @ 160
+
+# Fields (r read / w write incl. constructor keys)
+  @field w atom  @ 9,10
+  @field w chan  @ 143
+  @field w config  @ 28,46,61,76,101,114,127,147
+  @field w data  @ 31,49,64,79,104,117
+  @field w endppq  @ 143
+  @field w factors  @ 9,10
+  @field w global  @ 31,49,79,104,117,130
+  @field w lane  @ 143
+  @field w length  @ 148
+  @field w name  @ 14,25,43,58,73,98,111,124,136
+  @field r notes  @ 156
+  @field w notes  @ 148
+  @field w period  @ 9,10
+  @field r pitch  @ 162
+  @field w pitch  @ 144
+  @field r ppq  @ 156
+  @field w ppq  @ 143
+  @field w project  @ 29,47,62,77,102,115,127,147
+  @field w resolution  @ 148
+  @field w run  @ 15,26,44,59,74,99,112,125,137
+  @field w seed  @ 148
+  @field w shift  @ 9,10
+  @field w swing  @ 31,49,64,79,104,117
+  @field w swings  @ 29,47,62,77,102,115,127,147
+  @field w uuid  @ 144
+  @field w vel  @ 144

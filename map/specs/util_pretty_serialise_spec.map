@@ -16,3 +16,19 @@
   @case 'prettySerialise: mixed array + sparse integer keys round-trip'  [pure]  @ 65-69
   @case 'prettyUnserialise: bad chunk returns nil + error, never raises'  [pure]  @ 72-78
   @case 'prettySerialise: output is a `return` chunk'  [pure]  @ 81-84
+
+# Fields (r read / w write incl. constructor keys)
+  @field r OPEN  @ 50,51
+  @field w a  @ 23,24
+  @field w b  @ 23,24
+  @field w c  @ 23,24
+  @field w d  @ 23,24
+  @field r endppqL  @ 51
+  @field w endppqL  @ 50
+  @field r huge  @ 53
+  @field w label  @ 67,68
+  @field w name  @ 10,21,30,39,48,57,65,72,81
+  @field r ppqL  @ 52
+  @field w ppqL  @ 50
+  @field w run  @ 11,22,31,40,49,58,66,73,82
+  @field w x  @ 83

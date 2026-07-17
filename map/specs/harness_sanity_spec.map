@@ -1,4 +1,4 @@
-@spec harness_sanity_spec  src=tests/specs/harness_sanity_spec.lua  loc=192  sha=999f37e  cases=10
+@spec harness_sanity_spec  src=tests/specs/harness_sanity_spec.lua  loc=192  sha=37ed80d  cases=10
 @exercises trackerManager (h.tm), midiManager (h.fm), configManager (h.cm), trackerView (h.vm), editCursor (h.ec)
 @surface   tm:getChannel, fm:modify, fm:dump, fm:byUuid, fm:notes, cm:set, cm:get, fm:resolution, tm:resolution, fm:length, tm:length, tm:play, vm:setGridSize, ec:selectChannel, ec:col
 @harness   mk{seed.notes, seed.resolution, seed.length}, reaper:clearCalls, r._state.takeExt, r._state.calls
@@ -36,3 +36,34 @@
   @use call vm:setGridSize  @ 152
   @use call ec:selectChannel  @ 164,166
   @use call ec:col  @ 165,167
+
+# Fields (r read / w write incl. constructor keys)
+  @field r _state  @ 108,139
+  @field w a  @ 180,185,188
+  @field w b  @ 180,188
+  @field r calls  @ 139
+  @field w chan  @ 15,32,47,68,69,70,87,158,159
+  @field r cmd  @ 142
+  @field r columns  @ 29,36,93
+  @field r detune  @ 55
+  @field w detune  @ 52
+  @field w endppq  @ 15,32,47,68,69,70,87,158,159
+  @field w evType  @ 15,32
+  @field r events  @ 29,36,93
+  @field r fm  @ 89,92
+  @field r fn  @ 141
+  @field w length  @ 122
+  @field w name  @ 11,26,44,63,84,100,119,134,149,177
+  @field r notes  @ 29,36,49,89,92,93
+  @field w notes  @ 47,67,87,157
+  @field r pitch  @ 54
+  @field w pitch  @ 15,32,47,51,68,69,70,87,158,159
+  @field r ppq  @ 75
+  @field w ppq  @ 15,32,47,68,69,70,87,158,159
+  @field w resolution  @ 122
+  @field w run  @ 12,27,45,64,85,101,120,135,150,178
+  @field w seed  @ 47,66,87,122
+  @field r takeExt  @ 108
+  @field r tm  @ 93
+  @field r uuid  @ 49
+  @field w vel  @ 15,32,47,68,69,70,87,158,159

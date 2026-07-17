@@ -112,3 +112,33 @@
   @use call    util.print  @ print:19
   @use require tuning  @ 13
   @use require util  @ 12
+
+# Fields (r read / w write incl. constructor keys)
+  @field r REMOVE  @ assign:539
+  @field w arrange  @ 265
+  @field w atom  @ 73,74,75,76
+  @field w chrome  @ 265
+  @field w conflicted  @ 254
+  @field w factors  @ 73,74,75,76
+  @field r global  @ ensureCache:367
+  @field w global  @ 68,264,311,338,346
+  @field w key  @ set:513 remove:526
+  @field w level  @ set:513 remove:526 assign:544
+  @field r mergeTiers  @ get:474
+  @field w overridden  @ 254
+  @field w period  @ 73,74,75,76
+  @field r presets  @ 79
+  @field w project  @ 312,339,347
+  @field r ps  @ 16
+  @field w sampler  @ 264
+  @field r scope  @ 396
+  @field w scope  @ 393,394
+  @field w shift  @ 73,74,75,76
+  @field w slot  @ 393,394
+  @field w slots  @ 389
+  @field w synced  @ 254
+  @field w take  @ 314,341,354 clearTake:412
+  @field w track  @ 313,340,348 setTrack:425
+  @field w tracker  @ 264
+  @field w transient  @ 315,342,355
+  @field w wiring  @ 265

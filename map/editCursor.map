@@ -209,3 +209,131 @@
   @use call    util.add  @ blockKeys:631 partsFor:844,845,846 decorateCol:875,876,877
   @use call    util.clamp  @ clampPos:55,59,60 shiftSelection:449,450,451 moveBy:582 moveByChan:599
   @use require util  @ 25
+
+# Fields (r read / w write incl. constructor keys)
+  @field r anchor  @ sealMove:508,509,510,512 duplicate:560 moveBy:580 moveByChan:600,601 caretToBlock:657,658 moveByLane:676
+  @field r anchor  @ moveByLane:680,695 hopInstance:783,790,791
+  @field r chan  @ sealMove:509 duplicate:560 moveByChan:600,601 caretToBlock:658 moveByLane:680,695
+  @field w chan  @ sealMove:509 duplicate:560
+  @field r chanDelta  @ sealMove:501,504 moveByChan:598 caretToBlock:658 moveByLane:680
+  @field w chanDelta  @ moveByChan:603 moveByLane:695
+  @field r chanFirstCol  @ selUpdate:116 moveChannel:277 selectChannel:470 noteLanesIn:611
+  @field r chanLastCol  @ selUpdate:116 moveChannel:277 noteLanesIn:611
+  @field w channelLeft  @ 490 registerCommands:817
+  @field w channelRight  @ 490 registerCommands:816
+  @field r clearAt  @ stampAt:545
+  @field r clearMoveGap  @ sealMove:511
+  @field r cm  @ 32
+  @field r cmgr  @ 33
+  @field r col  @ selUpdate:122,123 swapEnds:181 moveUnit:238,239 moveCol:258,265
+  @field w col  @ selStart:88 cycleHBlock:145 cycleVBlock:161 moveStop:207 setSelection:413 selectSpan:464
+  @field r col1  @ region:376 regionStart:385 eachSelectedCol:398 setSelection:411,413 selectionStopSpan:422
+  @field w col1  @ selStart:90 selUpdate:133 setSelection:411
+  @field r col2  @ region:376 eachSelectedCol:401 setSelection:411 selectionStopSpan:427
+  @field w col2  @ selStart:90 selUpdate:133 setSelection:411
+  @field w colLeft  @ 490 registerCommands:815
+  @field w colRight  @ 490 registerCommands:814
+  @field r cols  @ clampPos:58,59,60 partAt:66 firstStopForPart:74 selUpdate:115,119,127 moveStop:214,215,221 moveCol:258
+  @field r cols  @ moveCol:260,264,265,267 moveChannel:276,287,294 eachSelectedCol:390,402 selectionStopSpan:419 selectColumn:475 noteLanesIn:613
+  @field r cols  @ caretToBlock:660 registerCommands:806
+  @field r commit  @ sealMove:515 newFromSelection:538 stampAt:548 dropInstance:571 resizeBy:712 paintCell:719
+  @field w cursorDown  @ 488 registerCommands:799
+  @field w cursorLeft  @ 488 registerCommands:808
+  @field w cursorRight  @ 488 registerCommands:807
+  @field w cursorUp  @ 488 registerCommands:800
+  @field w cycleBlock  @ 492 registerCommands:818
+  @field w cycleVBlock  @ 492 registerCommands:819
+  @field w delay  @ 834
+  @field w delete  @ 751
+  @field w deleteSel  @ 751
+  @field w duplicateDown  @ 750
+  @field r dur  @ duplicate:560
+  @field w endDelta  @ 754,755
+  @field w eventShiftLeft  @ 756
+  @field w eventShiftRight  @ 757
+  @field w fx  @ 837
+  @field r gm  @ gmgr:307
+  @field w goBottom  @ 489 registerCommands:804
+  @field w goLeft  @ 489 registerCommands:805
+  @field w goRight  @ 489 registerCommands:806
+  @field w goTop  @ 489 registerCommands:803
+  @field r grid  @ 31
+  @field r groupBridge  @ 37
+  @field w groupDuplicate  @ 750
+  @field r groupId  @ orderedInstances:315 cursorIndex:324 currentEntry:331 sealMove:512,514 stampAt:545,546
+  @field r groupId  @ duplicate:558 dropInstance:566,569 resizeBy:711 paintCell:717 regionArm:733 hopInstance:781
+  @field w groupId  @ newFromSelection:536 dropInstance:569 regionArm:733
+  @field w groupInstNext  @ registerCommands:822
+  @field w groupInstPrev  @ registerCommands:821
+  @field w groupPaste  @ 749
+  @field w growNote  @ 754
+  @field r instId  @ orderedInstances:316 cursorIndex:325 currentEntry:332 sealMove:514 dropInstance:566,569 resizeBy:711 paintCell:717 regionArm:733
+  @field r instId  @ hopInstance:785
+  @field w instId  @ newFromSelection:536 stampAt:547 dropInstance:569 regionArm:733
+  @field r instanceAt  @ regionArm:731 hopInstance:777
+  @field w keepAlive  @ 746
+  @field r lane  @ noteLanesIn:614 caretToBlock:661
+  @field r laneDelta  @ sealMove:502,510 caretToBlock:657 moveByLane:676,679,682
+  @field w laneDelta  @ sealMove:504,510 moveByLane:682,696
+  @field r logPerRow  @ 35
+  @field r midiChan  @ selUpdate:115 moveChannel:276 caretToBlock:661
+  @field r moveDelta  @ sealMove:500,504 moveBy:581
+  @field w moveDelta  @ moveBy:584
+  @field r moveHook  @ 36
+  @field w nudgeBack  @ 752
+  @field w nudgeForward  @ 753
+  @field r numRows  @ clampPos:54 selUpdate:98 cycleVBlock:159 shiftSelection:448 moveBy:582 registerCommands:804
+  @field w onBail  @ 747
+  @field w pageDown  @ 489 registerCommands:801
+  @field w pageUp  @ 489 registerCommands:802
+  @field r part1  @ region:376 regionStart:385 setSelection:412,413 selectionStopSpan:424
+  @field w part1  @ selStart:90 selUpdate:133 setSelection:412
+  @field r part2  @ region:376 setSelection:412 selectionStopSpan:429
+  @field w part2  @ selStart:90 selUpdate:133 setSelection:412
+  @field r partAt  @ partAt:67 firstStopForPart:76 selectionStopSpan:423,428,429
+  @field w partAt  @ decorateCol:882
+  @field r partStart  @ selUpdate:128
+  @field w partStart  @ decorateCol:883
+  @field r parts  @ moveCol:258,265
+  @field w parts  @ decorateCol:861
+  @field w paste  @ 749
+  @field w pb  @ 835
+  @field r ppq  @ sealMove:508 duplicate:560 moveBy:580 hopInstance:783,790,791
+  @field w ppq  @ sealMove:508 duplicate:560
+  @field r rect  @ moveByChan:595 moveByLane:673 shiftSideways:706
+  @field w redirect  @ 748
+  @field w regionArm  @ 493
+  @field w regionBail  @ 761
+  @field w regionExit  @ 760
+  @field w regionPaintExtend  @ 762
+  @field w regionPaintShrink  @ 763
+  @field r row  @ selUpdate:109 swapEnds:178 anchorRow:372 shiftSelection:451
+  @field w row  @ selStart:88 cycleHBlock:145 cycleVBlock:161 setSelection:413 shiftSelection:451 selectSpan:464
+  @field r row1  @ region:376 setSelection:411,413 shiftSelection:449
+  @field w row1  @ selStart:90 selUpdate:133 setSelection:411 shiftSelection:449
+  @field r row2  @ region:376 setSelection:411 shiftSelection:450
+  @field w row2  @ selStart:90 selUpdate:133 setSelection:411 shiftSelection:450
+  @field r rowPerBar  @ 34
+  @field w sample  @ 832
+  @field w selectClear  @ 491 registerCommands:813
+  @field w selectDown  @ 491 registerCommands:809
+  @field w selectLeft  @ 491 registerCommands:812
+  @field w selectRight  @ 491 registerCommands:811
+  @field w selectUp  @ 491 registerCommands:810
+  @field r showDelay  @ decorateCol:860
+  @field w shrinkNote  @ 755
+  @field w springLoaded  @ 745
+  @field r stop  @ selUpdate:123,128 swapEnds:182
+  @field w stop  @ selStart:88 cycleHBlock:145 cycleVBlock:161 moveStop:208 setSelection:413 selectSpan:464
+  @field r stopPos  @ clampPos:60 moveStop:214,221 moveCol:260,264,267 moveChannel:287 selectionStopSpan:421 selectColumn:476
+  @field w stopPos  @ decorateCol:881
+  @field r stops  @ decorateCol:874
+  @field w stops  @ 832,833,834,835,836,837 decorateCol:863,865
+  @field r streams  @ moveByChan:595 blockKeys:629 laneWalkable:646
+  @field w swapBlockEnds  @ 492 registerCommands:820
+  @field r trackerMode  @ decorateCol:860
+  @field r type  @ moveChannel:294 noteLanesIn:614 caretToBlock:661 decorateCol:860
+  @field w val  @ 836
+  @field w vel  @ 833
+  @field r width  @ decorateCol:879
+  @field w width  @ 832,833,834,835,836,837 decorateCol:863,865,884

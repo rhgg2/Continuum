@@ -25,3 +25,36 @@
   @case 'spring keepAlive command runs and stays armed'  [pure]  @ 237-251
   @case 'spring foreign command bails then dispatches (execute-through)'  [pure]  @ 255-268
   @case 'spring own command does not auto-bail'  [pure]  @ 272-285
+
+# Fields (r read / w write incl. constructor keys)
+  @field r Mod_Ctrl  @ 138,142
+  @field w Mod_Ctrl  @ 8
+  @field w Mod_None  @ 8
+  @field w Mod_Shift  @ 8
+  @field w cm  @ 6
+  @field r commands  @ 33,34,195
+  @field r cursorUp  @ 117,127
+  @field w cursorUp  @ 75,93,110,120,138,244
+  @field r global  @ 197
+  @field r keepAlive  @ 21
+  @field w keepAlive  @ 21,244
+  @field r keymap  @ 196,197
+  @field w modal  @ 12
+  @field w name  @ 28,42,52,67,85,105,134,151,162,174,190,204
+  @field w name  @ 224,237,255,272
+  @field w nudge  @ 229
+  @field r onBail  @ 22
+  @field w onBail  @ 22,213,245,263,279
+  @field w passthrough  @ 13
+  @field r paste  @ 128
+  @field w paste  @ 111,138,212
+  @field r quit  @ 118,129
+  @field r redirect  @ 20
+  @field w redirect  @ 20,212,229
+  @field r regionCommit  @ 126
+  @field w run  @ 29,43,53,68,86,106,135,152,163,175,191,205
+  @field w run  @ 225,238,256,273
+  @field r save  @ 195,196
+  @field r scopes  @ 197
+  @field w springLoaded  @ 19
+  @field r stack  @ 33,34,37,219,250,267,284

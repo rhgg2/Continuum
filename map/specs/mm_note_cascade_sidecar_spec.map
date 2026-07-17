@@ -30,3 +30,21 @@
   @use call mm:modify  @ 40,61
   @use call mm:events  @ 50,69
   @use call mm:delete  @ 62,63,64,65
+
+# Fields (r read / w write incl. constructor keys)
+  @field w chan  @ 41,42,43,44,45,46
+  @field w derived  @ 45,46
+  @field r detune  @ 76,77
+  @field w detune  @ 41,42,43,44
+  @field w endppq  @ 41,42,43,44
+  @field r evType  @ 51,70
+  @field w evType  @ 41,42,43,44,45,46
+  @field w name  @ 30
+  @field w pitch  @ 41,42,43,44
+  @field r ppq  @ 51,70
+  @field w ppq  @ 41,42,43,44,45,46
+  @field w reaper  @ 22
+  @field w run  @ 31
+  @field r uuid  @ 75
+  @field w val  @ 45,46
+  @field w vel  @ 41,42,43,44

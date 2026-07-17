@@ -20,3 +20,11 @@
 
 # Uses (outbound edges)
   @use call timing.compositePeriodQN  @ 14,15
+
+# Fields (r read / w write incl. constructor keys)
+  @field w atom  @ 22,30,38,39,47,48,57,58,67,68,78,79
+  @field w factors  @ 21,29,37,46,56,66,77
+  @field w name  @ 12,19,27,35,44,53,63,73
+  @field w period  @ 22,30,38,39,47,48,57,58,67,68,78,79
+  @field w run  @ 13,20,28,36,45,54,64,74
+  @field w shift  @ 22,30,38,39,47,48,57,58,67,68,78,79

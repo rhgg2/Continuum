@@ -159,3 +159,296 @@
   @use call    util.keys  @ buildCtx:378,379,383,384 allocateOnce:1260
   @use call    util.pick  @ buildCtx:520
   @use require util  @ 39
+
+# Fields (r read / w write incl. constructor keys)
+  @field r N  @ allocateOnce:1435,1503 splitOverCap:1837,1838,1861
+  @field w N  @ allocateOnce:1375,1376
+  @field r absorption  @ buildCtx:372,408,411
+  @field w absorption  @ buildCtx:404
+  @field r adjacency  @ buildCtx:231,238
+  @field w adjacency  @ buildCtx:237
+  @field w allocate  @ allocate:1907
+  @field r assignReg  @ allocStream:1144,1145
+  @field w assignReg  @ allocateOnce:1331,1351,1457
+  @field w at  @ validate:158
+  @field r audio  @ buildCtx:469 buildConns:681,688,689,719,726,727,728,731,739,741 splitOverCap:1837
+  @field w audio  @ 48 buildConns:621
+  @field r audioChildren  @ buildCtx:360
+  @field w audioChildren  @ buildCtx:348
+  @field r audioParents  @ buildCtx:358,378
+  @field w audioParents  @ buildCtx:347
+  @field r audioProfile  @ splitOverCap:1838
+  @field w audioProfile  @ allocateOnce:1375
+  @field w audioSum  @ buildConns:713,771
+  @field r audioUsed  @ splitOverCap:1837
+  @field w audioUsed  @ allocateOnce:1375
+  @field r bracketNodes  @ allocateOnce:1681
+  @field w bracketNodes  @ allocateOnce:1632,1681
+  @field r busAware  @ validate:77 classify:199 allocateOnce:1591
+  @field r busClasses  @ buildCtx:298,306,324
+  @field r busIO  @ buildCtx:246,260
+  @field w busIO  @ buildCtx:258
+  @field r classOf  @ buildCtx:335,338,340
+  @field w classOf  @ buildCtx:336
+  @field r classes  @ buildCtx:297,298,304,310
+  @field w classify  @ classify:171
+  @field r cls  @ nativeGains:588
+  @field w cls  @ buildCtx:499
+  @field w code  @ validate:72,78,81,85,93,158
+  @field w compile  @ compile:1112
+  @field r conduit  @ buildCtx:460,482,484
+  @field w conduit  @ buildCtx:461
+  @field r consumer  @ buildConns:684,703,733,757,773 allocateOnce:1500,1502,1505,1511,1512 hasMergeCrossing:1760 convertCrossing:1769
+  @field r consumer  @ convertCrossing:1769,1771,1772 splitOverCap:1854
+  @field w consumer  @ buildConns:620,648
+  @field r consumers  @ allocateOnce:1447,1484,1512,1525
+  @field w consumers  @ allocateOnce:1477,1509,1525,1526
+  @field w count  @ validate:85
+  @field r cuIn  @ allocateOnce:1419,1420,1561
+  @field w cuIn  @ allocateOnce:1411
+  @field r cuMidi  @ allocateOnce:1569,1663
+  @field w cuMidi  @ allocateOnce:1557
+  @field r cuOut  @ allocateOnce:1446,1569
+  @field w cuOut  @ allocateOnce:1411
+  @field r cursor  @ allocateOnce:1375,1678
+  @field w cursor  @ allocateOnce:1373
+  @field r def  @ allocStream:1158
+  @field w def  @ allocateOnce:1331,1340,1363,1457,1477,1508,1535
+  @field r dir  @ allocStream:1152 audioValueCompare:1182
+  @field w dir  @ allocateOnce:1321,1341,1343,1364
+  @field r dstChan  @ allocateOnce:1642,1649
+  @field w dstChan  @ allocateOnce:1254,1306,1441
+  @field w dup  @ validate:73
+  @field r edge  @ buildCtx:477,482 spliceBusses:1078,1079,1084,1085,1091,1092
+  @field r edge  @ spliceBusses:1092,1105
+  @field w edge  @ validate:93 buildCtx:471 spliceBusses:1073,1090
+  @field r edgeIdx  @ buildConns:711,743
+  @field w edgeIdx  @ buildConns:642,743
+  @field r edges  @ validate:63 classify:172 buildCtx:224 buildConns:596 deriveMasterSplit:941 spliceBusses:1050
+  @field w edges  @ spliceBusses:1107
+  @field r entry  @ allocateOnce:1499
+  @field w entry  @ allocateOnce:1376
+  @field r escape  @ allocateOnce:1319,1338,1345,1479,1486
+  @field w escape  @ allocateOnce:1284,1289,1294
+  @field r familyRoot  @ splitOverCap:1843
+  @field w familyRoot  @ allocateOnce:1545
+  @field r flows  @ allocateOnce:1468
+  @field w flows  @ allocateOnce:1376
+  @field r from  @ validate:95,96,108,130,141 classify:186 buildCtx:234,235,256,353,363
+  @field r from  @ buildCtx:470,480,495 topoIntraTrack:541,544 nativeGains:587 buildConns:631,636,641,644,648
+  @field r from  @ buildConns:668,692,732,742,751,754,772 sortOutWires:790
+  @field r from  @ sortOutWires:790 sortIntraConns:798 routeByTrack:819,827,832,839,849 deriveMasterSplit:996
+  @field r from  @ deriveMasterSplit:997,1018 spliceBusses:1057,1079,1091 allocateOnce:1252,1285,1290,1295
+  @field r from  @ allocateOnce:1339,1341,1475,1476,1506,1507,1508 bisect:1707,1708,1715,1719
+  @field r from  @ toExplicitFeed:1748 convertCrossing:1771 bisectOutOfFamily:1783
+  @field w from  @ buildCtx:502 buildConns:602,636,641,648,742,752,772,773 routeByTrack:827,832,839
+  @field w from  @ routeByTrack:849 spliceBusses:1091 allocateOnce:1285,1290,1295,1607,1609 bisect:1708 toExplicitFeed:1748 convertCrossing:1771
+  @field r fromPort  @ validate:115,118,121,128 buildCtx:479 buildConns:641,669
+  @field r fromPort  @ buildConns:669,732,742,751 sortOutWires:791 sortIntraConns:799
+  @field r fromPort  @ routeByTrack:827,832,839,849 spliceBusses:1091 allocateOnce:1285,1290,1295,1339,1341 bisect:1708 toExplicitFeed:1748
+  @field w fromPort  @ buildConns:602,641,742,752 routeByTrack:827,832,839,849 spliceBusses:1091 allocateOnce:1285,1290,1295
+  @field w fromPort  @ bisect:1708 toExplicitFeed:1748
+  @field r fromSlot  @ allocateOnce:1320,1328,1338,1340,1470
+  @field w fromSlot  @ allocateOnce:1285,1290,1295
+  @field r fwd  @ deriveMasterSplit:943
+  @field w fwd  @ buildCtx:237
+  @field r fxId  @ allocStream:1152 audioValueCompare:1184 allocateOnce:1443,1445,1446
+  @field w fxId  @ allocateOnce:1321,1341,1343,1364,1525,1534
+  @field r fxIdent  @ validate:78 allocateOnce:1578,1590
+  @field w fxIdent  @ buildConns:608 allocateOnce:1615,1625
+  @field r fxInputBus  @ allocateOnce:1443,1449,1491,1554
+  @field w fxInputBus  @ allocateOnce:1411
+  @field r fxMidiBus  @ allocateOnce:1579,1676
+  @field w fxMidiBus  @ allocateOnce:1575,1676
+  @field r fxOrder  @ allocateOnce:1215,1266,1406,1558,1576,1586,1680 bisect:1698 splitOverCap:1832
+  @field w fxOrder  @ assembleTracks:884,907 allocateOnce:1631,1680 bisect:1730,1736
+  @field r fxOutputBus  @ allocateOnce:1445,1554
+  @field w fxOutputBus  @ allocateOnce:1411
+  @field r gain  @ buildCtx:517,518 nativeGains:587,588 buildConns:640,674,710,743 routeByTrack:842 spliceBusses:1084,1085
+  @field r gain  @ allocateOnce:1253
+  @field w gain  @ buildCtx:518 buildConns:603,642,743 routeByTrack:841 spliceBusses:1093 allocateOnce:1253 toExplicitFeed:1750
+  @field r gainHost  @ buildCtx:490
+  @field w gainHost  @ buildCtx:524
+  @field w gains  @ buildConns:713,771
+  @field r gap  @ splitOverCap:1884,1886
+  @field w gap  @ splitOverCap:1838,1868
+  @field w guid  @ validate:72
+  @field r hasBus  @ buildCtx:282,306
+  @field w hasBus  @ buildCtx:225
+  @field r hasMidiOut  @ allocateOnce:1475,1506,1554
+  @field w hasMidiOut  @ allocateOnce:1411
+  @field r hasSplit  @ buildCtx:275,288,305
+  @field w hasSplit  @ buildCtx:225
+  @field w have  @ validate:121,124
+  @field w id  @ validate:78,81,96,97,108,111
+  @field w ident  @ validate:78
+  @field r idx  @ buildCtx:482
+  @field w idx  @ buildCtx:471
+  @field w inBus  @ allocateOnce:1579
+  @field r inMask  @ allocateOnce:1668
+  @field w inMask  @ allocateOnce:1569,1668
+  @field r inc  @ allocateOnce:1320,1361,1365,1366,1367,1471,1473
+  @field w inc  @ allocateOnce:1298
+  @field w inputEdges  @ buildConns:703
+  @field r ins  @ validate:106 buildCtx:261,469 spliceBusses:1058,1064 allocateOnce:1595
+  @field w ins  @ spliceBusses:1053,1058 allocateOnce:1270,1619,1628
+  @field r intraConns  @ routeByTrack:831,848 assembleTracks:881,884,885,904,907,910 allocateOnce:1280 bisect:1705
+  @field w intraConns  @ routeByTrack:813 assembleTracks:880,885,897,910 bisect:1733,1739
+  @field r isParentSend  @ buildConns:684,688,689,723 allocateOnce:1239,1365
+  @field w isParentSend  @ buildConns:620 allocateOnce:1234
+  @field r key  @ buildCtx:512,520 splitOverCap:1899
+  @field w key  @ buildCtx:499,502 splitOverCap:1889
+  @field r kind  @ validate:68,69,77,80,81,108,111 classify:183 buildCtx:250,268,277,308
+  @field r kind  @ buildCtx:363,422,464,469 isChainMember:579 nativeGains:587,588 buildConns:640,656 assembleTracks:893
+  @field r kind  @ assembleTracks:894 deriveMasterSplit:969,972 spliceBusses:1053 allocateOnce:1305,1306,1440,1441,1442,1501,1578,1589
+  @field r kind  @ hasMergeCrossing:1761 convertCrossing:1769
+  @field w kind  @ validate:81,108,111 buildCtx:499,502,518 buildConns:608 allocateOnce:1347,1366,1367,1473,1481
+  @field w kind  @ allocateOnce:1487,1525,1534,1615,1625
+  @field r lastUse  @ allocStream:1154 audioValueCompare:1185 midiValueCompare:1190 allocateOnce:1344,1351
+  @field r lastUse  @ allocateOnce:1483,1490,1503,1511,1518
+  @field w lastUse  @ allocateOnce:1331,1340,1344,1346,1363,1457,1477,1480,1483,1490,1503,1508
+  @field w lastUse  @ allocateOnce:1511,1519,1535
+  @field r mainSend  @ assembleTracks:908 allocateOnce:1231,1256,1293,1328,1386 bisect:1720 toExplicitFeed:1751 bisectOutOfFamily:1780 pickEvictableLeaf:1817
+  @field w mainSend  @ routeByTrack:813,823 assembleTracks:885,897,908 bisect:1731,1737
+  @field r mainSendGain  @ bisect:1731,1737 toExplicitFeed:1750
+  @field w mainSendGain  @ assembleTracks:908 bisect:1731,1737 toExplicitFeed:1751
+  @field r mainSendOffs  @ allocateOnce:1679
+  @field w mainSendOffs  @ allocateOnce:1256,1307,1679
+  @field w master  @ deriveMasterSplit:1033
+  @field r masterTrackClass  @ buildCtx:417
+  @field w masterTrackClass  @ buildCtx:425
+  @field r midi  @ buildConns:681,691,694,763,772 allocateOnce:1594 splitOverCap:1848
+  @field w midi  @ 48 buildConns:621
+  @field r midiChildren  @ buildCtx:364
+  @field w midiChildren  @ buildCtx:348
+  @field r midiOffset  @ splitOverCap:1862
+  @field w midiOffset  @ allocateOnce:1544
+  @field r midiParents  @ buildCtx:362,383
+  @field w midiParents  @ buildCtx:347
+  @field r midiProfile  @ splitOverCap:1863,1864
+  @field w midiProfile  @ allocateOnce:1543
+  @field r midiSourceParents  @ buildCtx:363,384
+  @field w midiSourceParents  @ buildCtx:349
+  @field r midiUsed  @ splitOverCap:1848
+  @field w midiUsed  @ allocateOnce:1542
+  @field r minReg  @ allocStream:1149
+  @field w minReg  @ allocateOnce:1478,1510,1536
+  @field r mode  @ allocateOnce:1415
+  @field w mode  @ buildConns:713,771 allocateOnce:1607,1609
+  @field w nPairs  @ buildConns:713,771
+  @field w nchan  @ allocateOnce:1678
+  @field r nodes  @ validate:63 classify:172,193,211,214 buildCtx:223 buildConns:596 targetTracks:926 deriveMasterSplit:940 spliceBusses:1050
+  @field w nodes  @ classify:192 spliceBusses:1107
+  @field r ops  @ buildCtx:517,518 spliceBusses:1084,1085
+  @field w ops  @ spliceBusses:1093
+  @field r ord  @ audioValueCompare:1186 midiValueCompare:1191
+  @field w ord  @ ordAppend:1203
+  @field w originConsumer  @ buildConns:703
+  @field w originNode  @ allocateOnce:1616,1626
+  @field w originSide  @ allocateOnce:1616,1626
+  @field w originTrackKey  @ buildConns:703
+  @field r outBus  @ allocateOnce:1667
+  @field w outBus  @ allocateOnce:1569,1579,1667
+  @field r outOfFamily  @ splitOverCap:1883
+  @field w outOfFamily  @ splitOverCap:1868
+  @field r outWires  @ routeByTrack:838 assembleTracks:903,910 allocateOnce:1223,1249,1288 bisect:1714 toExplicitFeed:1748 convertCrossing:1771 evictMember:1796 splitOverCap:1897
+  @field w outWires  @ routeByTrack:813 assembleTracks:885,897,910 bisect:1733,1739 evictMember:1795
+  @field r outs  @ validate:105 buildCtx:261 spliceBusses:1059,1064 allocateOnce:1596
+  @field w outs  @ spliceBusses:1053,1059 allocateOnce:1270,1619,1628
+  @field r params  @ allocateOnce:1415,1666,1667,1668
+  @field w params  @ buildConns:608 allocateOnce:1615,1625,1666
+  @field r parent  @ buildCtx:464
+  @field r parentFeed  @ assembleTracks:909 allocateOnce:1230,1292,1385 bisect:1718 toExplicitFeed:1747,1751 isFolderFeed:1755 pickEvictableLeaf:1817
+  @field w parentFeed  @ routeByTrack:827 assembleTracks:909 bisect:1732,1738
+  @field r parentSend  @ routeByTrack:822
+  @field w parentSend  @ buildConns:720,758,764,774
+  @field r parts  @ spliceBusses:1088,1089,1105
+  @field w parts  @ spliceBusses:1073,1090,1107
+  @field r pinMaps  @ allocateOnce:1269,1270,1619,1628,1651,1677
+  @field w pinMaps  @ allocateOnce:1256,1677
+  @field r pins  @ allocStream:1152 audioValueCompare:1181 allocateOnce:1343
+  @field w pins  @ allocateOnce:1331,1341,1364
+  @field r pipeMidi  @ allocateOnce:1499 hasMergeCrossing:1759 bisectOutOfFamily:1782 evictMember:1799 splitOverCap:1853
+  @field w pipeMidi  @ targetTracks:929 bisectOutOfFamily:1787 evictMember:1798
+  @field r port  @ allocStream:1152 audioValueCompare:1183
+  @field w port  @ allocateOnce:1321,1341,1343,1364
+  @field r ports  @ validate:105,106 buildCtx:469 allocateOnce:1594
+  @field r preFx  @ allocateOnce:1642
+  @field w preFx  @ allocateOnce:1254
+  @field r primary  @ buildCtx:359
+  @field r primaryAudioParents  @ buildCtx:359,379
+  @field w primaryAudioParents  @ buildCtx:349
+  @field w prior  @ validate:73,132
+  @field r quotient  @ buildCtx:344,347,356,368
+  @field w quotient  @ buildCtx:345
+  @field w reason  @ classify:199,206
+  @field w retain  @ allocateOnce:1608,1610
+  @field r rev  @ buildCtx:242 deriveMasterSplit:943
+  @field w rev  @ buildCtx:237
+  @field r sendIdx  @ allocateOnce:1241,1305,1306,1347,1367,1440,1441,1473,1481,1487
+  @field w sendIdx  @ allocateOnce:1224,1289,1347,1367,1473,1481,1487
+  @field r senderTrackKey  @ allocateOnce:1240,1366,1367,1473
+  @field w senderTrackKey  @ allocateOnce:1224,1234
+  @field r sends  @ allocateOnce:1305,1306,1440,1441,1641
+  @field w sends  @ allocateOnce:1256,1675
+  @field r set  @ splitOverCap:1899
+  @field w set  @ splitOverCap:1889
+  @field r sink  @ routeByTrack:828 allocateOnce:1232,1386,1387 toExplicitFeed:1748 isFolderFeed:1755 pickEvictableLeaf:1817
+  @field w sink  @ buildConns:720,758 routeByTrack:828
+  @field r slotMap  @ allocateOnce:1508,1511
+  @field w slotMap  @ allocateOnce:1376
+  @field r sourceTrackId  @ buildCtx:308,331
+  @field w sourceTrackId  @ buildCtx:298
+  @field w splice  @ compile:1115
+  @field r split  @ validate:80 buildCtx:273
+  @field r splitClasses  @ buildCtx:298,305,317
+  @field r srcChan  @ allocateOnce:1642,1648
+  @field w srcChan  @ allocateOnce:1254,1305,1440
+  @field r srcSet  @ buildCtx:265,280,290
+  @field w srcSet  @ buildCtx:225
+  @field r state  @ allocateOnce:1552
+  @field w state  @ allocateOnce:1376
+  @field r synthNodes  @ allocateOnce:1414,1660,1662 bisect:1724
+  @field w synthNodes  @ assembleTracks:911 allocateOnce:1673 bisect:1733,1739
+  @field w targetTracks  @ targetTracks:922
+  @field r to  @ validate:95,97,111,130,141 classify:186 buildCtx:234,235,256,353,468
+  @field r to  @ buildCtx:471,482,497 topoIntraTrack:541,542,543,544 nativeGains:587 buildConns:636,642
+  @field r to  @ buildConns:644,648,652,655,656,657 sortOutWires:788 sortIntraConns:800
+  @field r to  @ sortIntraConns:800 routeByTrack:819,828,833,840,850 deriveMasterSplit:996,1018 spliceBusses:1057,1078
+  @field r to  @ spliceBusses:1092 allocateOnce:1224,1253,1281,1286,1321,1343,1362,1364,1472,1484,1491
+  @field r to  @ allocateOnce:1491,1642,1646 bisect:1706,1709 splitOverCap:1898
+  @field w to  @ buildCtx:502 buildConns:603,636,642,772,773 routeByTrack:833,839,850 spliceBusses:1092 allocateOnce:1253,1286
+  @field w to  @ allocateOnce:1298,1608,1610 bisect:1708 toExplicitFeed:1748 convertCrossing:1771 splitOverCap:1899
+  @field r toNode  @ sortOutWires:792 allocateOnce:1233,1298,1299 toExplicitFeed:1749 splitOverCap:1899
+  @field w toNode  @ routeByTrack:828,840 allocateOnce:1233 bisect:1709 toExplicitFeed:1749 convertCrossing:1772
+  @field r toPort  @ validate:115,119,124,129 buildCtx:478 buildConns:642,670,733
+  @field r toPort  @ buildConns:739 sortOutWires:793 sortIntraConns:801 routeByTrack:828,833,840,850 deriveMasterSplit:1000
+  @field r toPort  @ spliceBusses:1092 allocateOnce:1233,1286,1299,1321,1343,1362,1364 bisect:1709 toExplicitFeed:1749
+  @field w toPort  @ buildConns:603,642 routeByTrack:828,833,840,850 spliceBusses:1092 allocateOnce:1233,1286,1299 bisect:1709 toExplicitFeed:1749
+  @field r toSlot  @ allocateOnce:1320,1322,1338,1342,1344,1361,1363,1470,1534,1535
+  @field w toSlot  @ allocateOnce:1286,1299,1472
+  @field r track  @ allocateOnce:1306,1307,1440,1441,1443,1445,1446,1448,1525
+  @field w track  @ allocateOnce:1366,1367,1473,1477,1481,1487,1509,1525,1534
+  @field r trackId  @ validate:69,70,72,75 buildCtx:268,269,308 assembleTracks:893 bisect:1730
+  @field w trackId  @ assembleTracks:883,906 bisect:1730,1736
+  @field r trackKey  @ buildConns:685,692,701,702
+  @field w trackKey  @ buildConns:620
+  @field r trackKind  @ allocateOnce:1588 bisect:1730
+  @field w trackKind  @ assembleTracks:883,906 bisect:1730,1736
+  @field r trackMembers  @ buildCtx:445,449,451,453,454
+  @field w trackMembers  @ buildCtx:446
+  @field r type  @ validate:98,99,105,106,108,111,114,128,129,130 buildCtx:256
+  @field r type  @ buildCtx:357,468,510,517 buildConns:635,646,661 sortOutWires:789 sortIntraConns:802
+  @field r type  @ sortIntraConns:802 routeByTrack:826,833,840,841,850 deriveMasterSplit:996,1018 spliceBusses:1056 allocateOnce:1252,1253,1284
+  @field r type  @ allocateOnce:1284,1289,1298,1318,1338,1361,1469,1642,1647
+  @field r type  @ bisect:1709
+  @field w type  @ validate:99,108,111 buildConns:602,636,641,772,773 routeByTrack:833,840,850 spliceBusses:1091
+  @field w type  @ allocateOnce:1233,1253,1284,1289,1294,1298 bisect:1709 toExplicitFeed:1749 convertCrossing:1772
+  @field r userGraph  @ buildConns:596 targetTracks:926
+  @field w userGraph  @ buildCtx:226
+  @field w validate  @ validate:62
+  @field w want  @ validate:121,124
+  @field r wire  @ allocateOnce:1298,1299
+  @field w wire  @ allocateOnce:1224,1233
+  @field r writes  @ allocStream:1153 allocateOnce:1347,1365,1473,1481,1487,1518,1519,1525,1534,1536
+  @field w writes  @ allocateOnce:1340,1363,1457,1472,1477,1509,1536

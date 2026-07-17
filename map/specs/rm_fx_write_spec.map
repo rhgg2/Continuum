@@ -30,3 +30,22 @@
   @use call rm:addFx  @ 46,61,73,82
   @use call rm:deleteFx  @ 84
   @use call rm:assignFx  @ 98,110,127,130,151,152
+
+# Fields (r read / w write incl. constructor keys)
+  @field r TrackFX_GetParamName  @ 143
+  @field w TrackFX_GetParamName  @ 144
+  @field w ds  @ 10
+  @field r fx  @ 25,33,95,108,125,149,150
+  @field w gain  @ 73,151,152
+  @field r id  @ 25,95,108,125,149,150
+  @field r ident  @ 33,51,63,95
+  @field w ident  @ 44,46,59,61,73,81,82,93
+  @field w ident  @ 106,107,124,139,140
+  @field w index  @ 61,98
+  @field r name  @ 31,52,116
+  @field w name  @ 41,56,67,78,90,103,120,135
+  @field w nope  @ 130
+  @field w params  @ 73,127,130,151,152
+  @field w run  @ 42,57,68,79,91,104,121,136
+  @field w thresh  @ 127
+  @field w track  @ 110

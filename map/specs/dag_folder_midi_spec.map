@@ -25,3 +25,63 @@
   @use call DAG.targetTracks  @ 26,27
   @use call DAG.compile  @ 26,27
   @use call DAG.allocate  @ 27
+
+# Fields (r read / w write incl. constructor keys)
+  @field w arp  @ 46
+  @field w audio  @ 10,17,23
+  @field r cons  @ 113,146,171
+  @field w cons  @ 99,128,159,185
+  @field w consumer  @ 58,81
+  @field w edges  @ 48,72,101,131,161,187
+  @field w eq  @ 70
+  @field w from  @ 49,50,51,52,58,73,74,75,76,81,102,103
+  @field w from  @ 104,105,106,107,108,109,132,133,134,135,136,137
+  @field w from  @ 138,139,140,141,162,163,164,165,166,167,188,189
+  @field w from  @ 190,191,192
+  @field w fxDisplay  @ 16
+  @field w fxIdent  @ 16
+  @field r fxMidiBus  @ 112,113,144,145,146,170,171,195
+  @field r gen  @ 112,145,170,195
+  @field w gen  @ 96,126,157,183
+  @field r ident  @ 16
+  @field w ident  @ 46,70,96,97,99,126,128,129,157,159,183,185
+  @field r inBus  @ 113,144,146,171
+  @field r ins  @ 10,17
+  @field w ins  @ 10,11,17,18,23,45,69,98,127,158,184
+  @field w kind  @ 9,16,22
+  @field r mainSend  @ 56
+  @field w master  @ 47,71,100,130,160,186
+  @field w midi  @ 11,18,23
+  @field r midiIns  @ 11
+  @field w midiIns  @ 45,69,98,127,158
+  @field r mix  @ 144
+  @field w mix  @ 129
+  @field w name  @ 41,65,90,122,153,179
+  @field w nextId  @ 43,67,94,124,155,181
+  @field r nodes  @ 27
+  @field w nodes  @ 43,67,94,124,155,181
+  @field r outBus  @ 112,145,170,195
+  @field r outWires  @ 31
+  @field r outs  @ 17
+  @field w outs  @ 10,11,17,18,23
+  @field w p  @ 45,69,98,127,158,184
+  @field r parent  @ 9
+  @field w parent  @ 9,44,68,95,125,156,182
+  @field r pipeMidi  @ 58,81
+  @field w ports  @ 10,17,23
+  @field w pos  @ 9,16,22
+  @field w run  @ 42,66,91,123,154,180
+  @field w sa  @ 44,68,95,125,156,182
+  @field w tail  @ 97
+  @field w to  @ 49,50,51,52,73,74,75,76,102,103,104,105
+  @field w to  @ 106,107,108,109,132,133,134,135,136,137,138,139
+  @field w to  @ 140,141,162,163,164,165,166,167,188,189,190,191
+  @field w to  @ 192
+  @field w trackId  @ 9
+  @field r type  @ 32
+  @field w type  @ 49,50,51,52,73,74,75,76,102,103,104,105
+  @field w type  @ 106,107,108,109,132,133,134,135,136,137,138,139
+  @field w type  @ 140,141,162,163,164,165,166,167,188,189,190,191
+  @field w type  @ 192
+  @field w x  @ 9,16,22
+  @field w y  @ 9,16,22

@@ -24,3 +24,56 @@
 
 # Uses (outbound edges)
   @use call DAG.allocate  @ 43,67,78,88,122,155,180,204,221,232,233
+
+# Fields (r read / w write incl. constructor keys)
+  @field w audio  @ 177,200
+  @field r bracketNodes  @ 45,69,79,89,123,157,181,205,235
+  @field w busAware  @ 32
+  @field w from  @ 18,23,48,49,62,71,102,107,112,125,128,147
+  @field w from  @ 158,159,171,192,193,206,209
+  @field w fxC1  @ 31,66,118
+  @field r fxC2  @ 34
+  @field w fxC2  @ 32,119
+  @field r fxC2BusAware  @ 32
+  @field w fxC2BusAware  @ 77
+  @field r fxC2NonJsfx  @ 34
+  @field w fxC2NonJsfx  @ 87
+  @field w fxD  @ 120,202
+  @field w fxG  @ 199
+  @field r fxIdent  @ 47
+  @field w fxIdent  @ 31,32,34,66,118,119,120,152,153,176,178,199
+  @field w fxIdent  @ 201,202
+  @field w fxJ  @ 152,176
+  @field r fxMidiBus  @ 160
+  @field w fxN  @ 153,178,201
+  @field r fxOrder  @ 44,68,124,156,234
+  @field w fxOrder  @ 16,21,26,60,100,105,110,114,145,169,190,195
+  @field w inBus  @ 160
+  @field w ins  @ 177,200,223,224,225
+  @field w intraConns  @ 17,22,27,62,101,106,111,115,147,171,192,196
+  @field w kind  @ 31,32,66,118,119,120,152,153,176,178,199,201
+  @field w kind  @ 202
+  @field w mainSend  @ 17,22,27,61,101,106,111,115,146,170,191,196
+  @field w midi  @ 177,200
+  @field w mode  @ 48,49,71,125,128,158,159,206,209
+  @field w name  @ 40,56,75,85,95,140,165,185,218,229
+  @field r originNode  @ 50
+  @field r originSide  @ 51,52
+  @field w outBus  @ 160
+  @field w outWires  @ 18,23,27,63,102,107,112,115,148,172,193,196
+  @field w outs  @ 177,200,223,224,225
+  @field r params  @ 48,49,71,125,126,128,158,159,206,207,209
+  @field r pinMaps  @ 222
+  @field w ports  @ 177,200
+  @field w retain  @ 48,49,71,125,128,158,159,206,209
+  @field w run  @ 41,57,76,86,96,141,166,186,219,230
+  @field r sends  @ 132,211
+  @field r srcChan  @ 136,214
+  @field r to  @ 126,133,207,212
+  @field w to  @ 18,23,48,49,62,71,102,107,112,125,128,147
+  @field w to  @ 158,159,171,192,193,206,209
+  @field w toNode  @ 18,23,102,107,112,193
+  @field w trackId  @ 16,21,60,100,105,145,169,190
+  @field w trackKind  @ 16,21,26,60,100,105,110,114,145,169,190,195
+  @field r type  @ 133,212
+  @field w type  @ 18,23,62,102,107,112,147,171,192,193

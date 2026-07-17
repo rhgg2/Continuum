@@ -20,3 +20,15 @@
 
 # Uses (outbound edges)
   @use call midiBlob.parse  @ 23,35
+
+# Fields (r read / w write incl. constructor keys)
+  @field r blob  @ 23,35
+  @field r ccs  @ 25
+  @field r msg  @ 41
+  @field r name  @ 14,21,24,25,26
+  @field w name  @ 21,32
+  @field r notes  @ 24
+  @field w run  @ 22,33
+  @field r shape  @ 37
+  @field r tension  @ 39
+  @field r texts  @ 26

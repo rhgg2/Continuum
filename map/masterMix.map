@@ -73,3 +73,12 @@
   @reaper Track_GetPeakInfo
   @reaper time_precise
   @reaper GetMediaTrackInfo_Value
+
+# Fields (r read / w write incl. constructor keys)
+  @field r MouseButton_Left  @ render:92
+  @field r chrome  @ 8
+  @field r colour  @ 9
+  @field r ctx  @ 8
+  @field w id  @ 140
+  @field w render  @ 140
+  @field w segment  @ 140

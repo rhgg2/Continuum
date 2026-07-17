@@ -36,3 +36,46 @@
   @use call A:newInstance  @ 161
   @use call ds:get  @ 165
   @use call B:eachInstance  @ 178
+
+# Fields (r read / w write incl. constructor keys)
+  @field r add  @ 40,174
+  @field w assign  @ 19
+  @field r ccs  @ 62,94,102,140,201
+  @field w ccs  @ 57,81,124,191
+  @field r cents  @ 44,172
+  @field w cents  @ 34,58,82,125,159,191
+  @field w chan  @ 33,38,58,82,89,125,131,134,158,161,191,192
+  @field w chan  @ 197
+  @field w chanLo  @ 10,85,128
+  @field w config  @ 188
+  @field w detune  @ 193
+  @field w ds  @ 29,156,176
+  @field w dur  @ 10,85,128
+  @field w endppq  @ 192
+  @field r evType  @ 63,69,95,103,141,167,202,203
+  @field w evType  @ 33,58,82,125,134,158,191
+  @field r events  @ 166
+  @field w get  @ 18
+  @field r groups  @ 165
+  @field w groups  @ 80,123,189
+  @field w lane  @ 192
+  @field w name  @ 26,50,75,118,149,183
+  @field w notes  @ 192
+  @field w pbRange  @ 188
+  @field w pitch  @ 193
+  @field r ppq  @ 95,103,141,202,203
+  @field w ppq  @ 10,33,38,58,82,85,89,125,128,131,134,158
+  @field w ppq  @ 161,191,192,197
+  @field w run  @ 27,51,76,119,150,184
+  @field w seed  @ 57,81,124,190
+  @field w shape  @ 33,58,82,125,135,158,191
+  @field w streams  @ 11,86,129
+  @field w subscribe  @ 20
+  @field w take  @ 188
+  @field w tm  @ 29,156,176
+  @field r uuid  @ 63,70,103,175,202,203
+  @field w uuid  @ 159
+  @field w uuidMap  @ 175
+  @field r val  @ 42,95,171,207,208
+  @field w val  @ 34,58,82,107,125,135,159,191
+  @field w vel  @ 193

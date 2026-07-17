@@ -37,3 +37,40 @@
 # Uses (outbound edges)
   @use call painter.new  @ 53,215,226
   @use call painter.hue  @ 191,192
+
+# Fields (r read / w write incl. constructor keys)
+  @field w CalcTextSize  @ 30
+  @field w ColorConvertDouble4ToU32  @ 37
+  @field w ColorConvertHSVtoRGB  @ 36
+  @field w DrawFlags_Closed  @ 23
+  @field w DrawFlags_None  @ 22
+  @field w GetWindowDrawList  @ 29
+  @field r args  @ 123,173,175,206
+  @field w args  @ 10,31,80,89,99,102,111,121,132,141,161,162
+  @field w args  @ 163,204,208,239,241,243,245
+  @field w colour  @ 50
+  @field r fn  @ 57
+  @field w fn  @ 10,31,79,88,98,101,110,120,131,140,161,162
+  @field w fn  @ 163,204,208,239,241,243,245
+  @field r loaded  @ 43,44
+  @field w name  @ 63,75,84,93,106,115,127,136,146,155,168,179
+  @field w name  @ 189,199,212,223,234
+  @field w new_array  @ 28
+  @field r ox  @ 67,216
+  @field w ox  @ 53,215,226
+  @field r oy  @ 216
+  @field w oy  @ 53,215,226
+  @field r preload  @ 39
+  @field w run  @ 64,76,85,94,107,116,128,137,147,156,169,180
+  @field w run  @ 190,200,213,224,235
+  @field w snap  @ 226
+  @field r sx  @ 67,217
+  @field w sx  @ 53,215,226
+  @field r sy  @ 217
+  @field w sy  @ 53,215,226
+  @field r u32  @ 194,195
+  @field w u32  @ 174
+  @field w x0  @ 78,87,172,174,182,203,205
+  @field w x1  @ 78,87,172,174,182,203,205
+  @field w y0  @ 78,87,172,174,182,203,205
+  @field w y1  @ 78,87,172,174,182,203,205

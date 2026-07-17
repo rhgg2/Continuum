@@ -27,3 +27,31 @@
   @use call coord:setActive  @ 59,74
   @use call coord:returnToArrange  @ 75,90
   @use call coord:reloadAfterExternalMutation  @ 110
+
+# Fields (r read / w write incl. constructor keys)
+  @field w Mod_None  @ 10
+  @field w __index  @ 11
+  @field r _stubs  @ 43,45,122,123,132,133
+  @field r calls  @ 23,24,25,34,88,92
+  @field w calls  @ 22
+  @field w cm  @ 40,126
+  @field w cmgr  @ 40,126
+  @field r coord  @ 129
+  @field w ctx  @ 39,126
+  @field r env  @ 122
+  @field r facade  @ 123
+  @field w fontSize  @ 39,126
+  @field w gui  @ 40,126
+  @field w mm  @ 128
+  @field w name  @ 52,68,83,99,118
+  @field r pollUndo  @ 106
+  @field w pollUndo  @ 107
+  @field r preload  @ 13
+  @field w reloadFromReaper  @ 108
+  @field w run  @ 53,69,84,100,119
+  @field w tick  @ 122
+  @field r tm  @ 130
+  @field w tm  @ 128
+  @field w ui  @ 39,126
+  @field w uiFont  @ 39,126
+  @field w uiFontBold  @ 39,126

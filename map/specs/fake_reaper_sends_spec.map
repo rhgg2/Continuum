@@ -19,3 +19,8 @@
   @case 'receives (category=-1) are derived: count and reads'  [pure]  @ 90-104
   @case 'multiple sends on one track preserve insertion order'  [pure]  @ 107-115
   @case 'send D_VOL defaults to 1.0 and round-trips; I_SENDMODE defaults 0'  [pure]  @ 118-128
+
+# Fields (r read / w write incl. constructor keys)
+  @field w name  @ 13,22,35,43,52,61,72,81,90,107,118
+  @field w run  @ 14,23,36,44,53,62,73,82,91,108,119
+  @field w type  @ 75,84,93,94,121

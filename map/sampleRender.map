@@ -183,3 +183,106 @@
   @reaper GetMediaSourceNumChannels
   @reaper new_array
   @reaper GetProjectPath
+
+# Fields (r read / w write incl. constructor keys)
+  @field r ChildFlags_None  @ renderBody:479,494,512
+  @field r Col_ChildBg  @ renderBody:457
+  @field r Col_Header  @ drawSlots:243
+  @field r Col_HeaderActive  @ drawSlots:245
+  @field r Col_HeaderHovered  @ drawSlots:244
+  @field r ImGui_GetBuiltinPath  @ 15
+  @field r InputTextFlags_AutoSelectAll  @ drawSlots:252
+  @field r InputTextFlags_EnterReturnsTrue  @ drawSlots:251
+  @field r Key_DownArrow  @ drawFiles:197
+  @field r Key_Escape  @ drawSlots:257
+  @field r Key_UpArrow  @ drawFiles:201
+  @field r Mod_None  @ drawFiles:198,202
+  @field r MouseCursor_Arrow  @ renderBody:559
+  @field r MouseCursor_ResizeEW  @ drawStrip:365
+  @field r SelectableFlags_AllowDoubleClick  @ drawFiles:211 drawSlots:273
+  @field r TableColumnFlags_WidthFixed  @ drawSlots:231
+  @field r TableColumnFlags_WidthStretch  @ drawSlots:232
+  @field r WindowFlags_NoNav  @ renderBody:495
+  @field w acceptCmds  @ focusState:581,585
+  @field w allowDouble  @ drawTree:147
+  @field w browserAssign  @ 603
+  @field r browserAtTrigger  @ revertPreviewInPlace:47 renderBody:551
+  @field w browserAtTrigger  @ 40 triggerPreviewInPlace:58
+  @field w browserPreview  @ 594
+  @field w browserUp  @ 593
+  @field r buf  @ drawSlots:250,260
+  @field w buf  @ drawSlots:264 620
+  @field r building  @ peakFor:106
+  @field w building  @ peakFor:102,109
+  @field w buttonLabel  @ 407
+  @field r chrome  @ 22
+  @field r cm  @ 22
+  @field r cmgr  @ 22
+  @field r cols  @ peakFor:83 drawStrip:322,326
+  @field w cols  @ peakFor:100
+  @field r ctx  @ 28
+  @field w current  @ 402
+  @field w depth  @ drawTree:145
+  @field r doubleClicked  @ drawTree:148
+  @field w draw  @ renderBody:534
+  @field r ds  @ 22
+  @field r endF  @ drawStrip:306,361
+  @field w endF  @ 36 drawStrip:356,359,363 closeTransients:576
+  @field r frames  @ drawStrip:303
+  @field w frames  @ peakFor:101
+  @field w fs  @ peakFor:100
+  @field r gui  @ 22
+  @field w h  @ renderBody:532
+  @field r handle  @ drawStrip:304,350,354,362,363 closeTransients:576
+  @field w handle  @ 36 drawStrip:351
+  @field w hasChildren  @ drawTree:146
+  @field w heading  @ 406
+  @field r hi  @ peakFor:87,132 drawStrip:317,323,328
+  @field w id  @ drawTree:145 392,415
+  @field r isFolder  @ drawFiles:192,200,204,213,216
+  @field w isFolder  @ drawFiles:172,175,182
+  @field w items  @ 409
+  @field r justOpened  @ drawSlots:248,259
+  @field w justOpened  @ drawSlots:260 620
+  @field r justTriggered  @ renderBody:549
+  @field w justTriggered  @ 39 revertPreviewInPlace:48 triggerPreviewInPlace:60 renderBody:550
+  @field w key  @ 401
+  @field w kind  @ 405
+  @field w label  @ drawTree:145 400 renderBody:533
+  @field r lenSec  @ peakFor:117
+  @field w lenSec  @ peakFor:101
+  @field r lo  @ drawStrip:324,329
+  @field w lo  @ peakFor:132
+  @field r name  @ drawFiles:210 drawSlots:267 399,400,620 boundTrackName:435 renderStatusBar:567
+  @field w name  @ drawFiles:172,175,182
+  @field r nch  @ peakFor:115
+  @field w nch  @ peakFor:100
+  @field w onPick  @ 410
+  @field w open  @ drawTree:146
+  @field r path  @ 18 drawFiles:189,192,193,200,204,209,213,215,216,217,218
+  @field r path  @ drawSlots:268 drawStrip:293,298
+  @field w path  @ 18 drawFiles:172,176,182
+  @field w render  @ 393,416
+  @field r sample  @ 623
+  @field r selected  @ drawTree:149
+  @field w selected  @ drawTree:147
+  @field r slot  @ revertPreviewInPlace:44,45,46 drawSlots:247 drawStrip:304,363 renderBody:548 closeTransients:576
+  @field w slot  @ 36,39,620 triggerPreviewInPlace:56 drawStrip:352
+  @field r slotAtTrigger  @ renderBody:552
+  @field w slotAtTrigger  @ 40 revertPreviewInPlace:47 triggerPreviewInPlace:59
+  @field w slotNext  @ 607
+  @field w slotPrev  @ 611
+  @field w slotRename  @ 615
+  @field r src  @ peakFor:84,107,108,117,118
+  @field w src  @ peakFor:100,119
+  @field r start  @ drawStrip:305
+  @field r startF  @ drawStrip:305,356,359,361,363 closeTransients:576
+  @field w startF  @ 36
+  @field w suppressKbd  @ focusState:581,584
+  @field r sv  @ 22
+  @field r toggled  @ drawTree:150
+  @field r track  @ revertPreviewInPlace:45 399,401,402 boundTrackName:435
+  @field w track  @ revertPreviewInPlace:46 triggerPreviewInPlace:57
+  @field w width  @ 408
+  @field w x  @ renderBody:532
+  @field w y  @ renderBody:532

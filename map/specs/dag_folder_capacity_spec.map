@@ -27,3 +27,38 @@
   @use call DAG.allocate  @ 77
   @use call DAG.targetTracks  @ 77,90,99
   @use call DAG.compile  @ 77,90,99
+
+# Fields (r read / w write incl. constructor keys)
+  @field w audio  @ 17,23,28
+  @field r edges  @ 42,43,44,45,46,49,60,66,67,68,69,70
+  @field r edges  @ 73
+  @field w edges  @ 35,59
+  @field w from  @ 42,43,44,45,46,49,60,66,67,68,69,70
+  @field w from  @ 73
+  @field w fxDisplay  @ 22
+  @field w fxIdent  @ 22
+  @field r ins  @ 17
+  @field w ins  @ 17,18,23,28,35,56
+  @field w kind  @ 16,22,27
+  @field w master  @ 35,58
+  @field w midi  @ 18,23,28
+  @field r midiIns  @ 18
+  @field w name  @ 87,96,105
+  @field w nextId  @ 35,55
+  @field r nodes  @ 39,40,41,64,65,77
+  @field w nodes  @ 35,55
+  @field w outs  @ 17,18,23,28
+  @field w p  @ 35,56
+  @field r parent  @ 16
+  @field w parent  @ 16,39,57
+  @field w ports  @ 17,23,28
+  @field w pos  @ 16,22,27
+  @field w run  @ 88,97,106
+  @field w sa  @ 57
+  @field w to  @ 42,43,44,45,46,49,60,66,67,68,69,70
+  @field w to  @ 73
+  @field w trackId  @ 16
+  @field w type  @ 42,43,44,45,46,49,60,66,67,68,69,70
+  @field w type  @ 73
+  @field w x  @ 16,22,27
+  @field w y  @ 16,22,27

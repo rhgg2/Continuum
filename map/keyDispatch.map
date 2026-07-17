@@ -40,3 +40,19 @@
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB
+
+# Fields (r read / w write incl. constructor keys)
+  @field r ImGui_GetBuiltinPath  @ 5
+  @field r Key_0  @ handlePrefixCapture:30
+  @field r Key_Escape  @ handlePrefixCapture:37
+  @field r Key_Slash  @ handlePrefixCapture:34
+  @field r Mod_Ctrl  @ isDigitMods:23
+  @field r Mod_Super  @ isDigitMods:23
+  @field r acceptCmds  @ dispatchKeys:49
+  @field w commandHeld  @ dispatchKeys:50,54,76,83
+  @field w consumed  @ dispatchKeys:50,54,76,83
+  @field w dispatchKeys  @ dispatchKeys:48
+  @field r pageSuppressed  @ dispatchKeys:58
+  @field r path  @ 8
+  @field w path  @ 8
+  @field r suppressKbd  @ dispatchKeys:49

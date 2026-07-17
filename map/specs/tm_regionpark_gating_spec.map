@@ -27,3 +27,24 @@
   @use call tm:rebuild  @ 44
   @use call ds:get  @ 46,53,63
   @use call tm:getChannel  @ 48,55,61
+
+# Fields (r read / w write incl. constructor keys)
+  @field r chan  @ 26
+  @field w chan  @ 14,19,41,42
+  @field w delay  @ 15,20
+  @field w detune  @ 15,20
+  @field w dir  @ 11
+  @field w endppq  @ 14,19,41,42
+  @field w evType  @ 14,19
+  @field w fx  @ 41,42
+  @field w kind  @ 11
+  @field w lane  @ 15,20
+  @field w name  @ 33
+  @field r parked  @ 48,55,61
+  @field w period  @ 11
+  @field w pitch  @ 14,19
+  @field w ppq  @ 14,19
+  @field w run  @ 34
+  @field w startppq  @ 41,42
+  @field w uuid  @ 41,42
+  @field w vel  @ 15,20

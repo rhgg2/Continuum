@@ -44,3 +44,35 @@
   @use call cmgr:push  @ 63
   @use call cmgr:invoke  @ 82,84,86,94,95,96,106,107,117,118,119,124,125,126
   @use call gm:activeGroup  @ 83,85,87,120
+
+# Fields (r read / w write incl. constructor keys)
+  @field r add  @ 98,109,121,128
+  @field w chan  @ 20,50
+  @field w chanLo  @ 22
+  @field w cm  @ 72
+  @field w copy  @ 35,43
+  @field w cursorDown  @ 35,41
+  @field w deleteSel  @ 42
+  @field w ds  @ 71
+  @field w dur  @ 22
+  @field w endppq  @ 21
+  @field w evType  @ 20
+  @field r flushes  @ 99,110
+  @field w get  @ 15
+  @field w lane  @ 20
+  @field w mirrorMark  @ 36,44
+  @field w mirrorPaste  @ 36,48
+  @field w name  @ 79,91,103,114
+  @field w pitch  @ 21
+  @field w ppq  @ 21,22,50
+  @field r registered  @ 56
+  @field w run  @ 80,92,104,115
+  @field r sel  @ 38
+  @field w sel  @ 43,70
+  @field w set  @ 16
+  @field w streams  @ 23
+  @field w subscribe  @ 17
+  @field w tm  @ 71
+  @field r v  @ 97,108,122,127
+  @field w v  @ 37,51
+  @field w vel  @ 21

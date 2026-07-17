@@ -29,3 +29,7 @@
   @use call fs.join  @ 55,56,57
   @use call fs.listDirs  @ 65
   @use call fs.listAudioFiles  @ 74,83
+
+# Fields (r read / w write incl. constructor keys)
+  @field w name  @ 17,29,37,45,53,61,69,79
+  @field w run  @ 18,30,38,46,54,62,70,80

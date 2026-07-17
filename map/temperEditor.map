@@ -211,3 +211,138 @@
   @reaper ImGui_GetBuiltinPath
   @reaper MB
   @reaper GetUserFileNameForRead
+
+# Fields (r read / w write incl. constructor keys)
+  @field r Col_Button  @ pillButton:488
+  @field r Col_ButtonHovered  @ pillButton:489
+  @field r ImGui_GetBuiltinPath  @ 7
+  @field r InputTextFlags_EnterReturnsTrue  @ 413
+  @field r Key_Escape  @ 419,457
+  @field r MouseCursor_ResizeNS  @ drawEditBody:733
+  @field r StyleVar_CellPadding  @ drawStepTable:336
+  @field r StyleVar_FramePadding  @ pushUiPadToGrid:283,284 drawStepsTop:703
+  @field r TableColumnFlags_WidthFixed  @ drawStepTable:338,339,340,341
+  @field r TableFlags_ScrollY  @ drawStepTable:337
+  @field r absolute  @ drawEqualFields:540,543 buildGen:619
+  @field w absolute  @ 33 reseedEqual:517 drawEqualFields:538,542
+  @field w active  @ buildDescriptor:228
+  @field r buf  @ tokenBox:253,257 413,453,465
+  @field w buf  @ tokenBox:255 380,393,415,425,447,454
+  @field r c  @ sortSteps:97
+  @field w c  @ sortSteps:95
+  @field w callback  @ 381,394
+  @field r cents  @ addStep:154
+  @field r chord  @ drawChordFields:556 buildGen:659,661
+  @field w chord  @ 36
+  @field r chrome  @ 13
+  @field r cm  @ 13
+  @field w col  @ buildDescriptor:225
+  @field r count  @ drawCpsFields:567 buildGen:638
+  @field w count  @ 37 drawCpsFields:568
+  @field r cps  @ drawCpsFields:564 buildGen:632,638,640,643,644,648
+  @field w cps  @ 37
+  @field r ctx  @ 13
+  @field r desc  @ genDesc:503
+  @field w desc  @ 476,477,478,479,480,481
+  @field w dirty  @ buildDescriptor:240
+  @field r divisions  @ drawEqualFields:523,526
+  @field w divisions  @ 31 reseedEqual:518 drawEqualFields:524,538,544
+  @field r equal  @ drawEqualFields:522 buildGen:619,621,622
+  @field w equal  @ 31
+  @field r equave  @ drawCpsFields:569 buildGen:640,643,644,648
+  @field w equave  @ 37 drawCpsFields:570
+  @field r err  @ 430,470
+  @field w err  @ 423,425,461,463,466
+  @field r factors  @ drawCpsFields:565 buildGen:632
+  @field w factors  @ 37 drawCpsFields:566
+  @field r font  @ pushUiPadToGrid:280 drawStepRow:308
+  @field r fontSize  @ pushUiPadToGrid:280 drawStepRow:308
+  @field r gen  @ 411,412,425
+  @field w gen  @ 411,425
+  @field r generator  @ stepMos:577,578 drawRank2Fields:587,604,606 buildGen:651,657
+  @field w generator  @ 38 drawRank2Fields:588
+  @field w global  @ buildDescriptor:230
+  @field r gui  @ 13
+  @field r h0  @ drawEditBody:729
+  @field w h0  @ drawEditBody:728
+  @field r harm  @ drawGenerators:672
+  @field w harm  @ 34
+  @field r hi  @ drawSeriesFields:551 buildGen:625
+  @field w hi  @ 34,35 drawSeriesFields:552
+  @field r id  @ genKindSelector:498 genDesc:503
+  @field w id  @ 476,477,478,479,480,481
+  @field r interval  @ drawEqualFields:529 buildGen:621,622
+  @field w interval  @ 31 drawEqualFields:530
+  @field r invert  @ drawChordFields:559 buildGen:661
+  @field w invert  @ 36 drawChordFields:560
+  @field r isMos  @ drawRank2Fields:607
+  @field r key  @ tokenBox:253,256
+  @field w key  @ tokenBox:255
+  @field r kind  @ genKindSelector:498 genDesc:503 buildGen:618,623,624,629,630,649 drawGenerators:671,672,673
+  @field r kind  @ drawGenerators:674,675
+  @field w kind  @ 30,380,393 genKindSelector:498
+  @field r label  @ genKindSelector:498
+  @field w label  @ buildDescriptor:227 476,477,478,479,480,481
+  @field r large  @ drawRank2Fields:607
+  @field r lo  @ drawSeriesFields:549 buildGen:625
+  @field w lo  @ 34,35 drawSeriesFields:550
+  @field r members  @ drawChordFields:557 buildGen:659
+  @field w members  @ 36 drawChordFields:558
+  @field w mergeTiers  @ 424,462
+  @field w min  @ drawRank2Fields:594
+  @field r modalHost  @ 13
+  @field r name  @ 438,448,459
+  @field w name  @ buildDescriptor:225,232 383,393,439,448
+  @field r nm  @ sortSteps:100
+  @field w nm  @ sortSteps:95
+  @field w onDelete  @ buildDescriptor:238
+  @field w onDemote  @ buildDescriptor:237
+  @field w onImport  @ buildDescriptor:235
+  @field w onNew  @ buildDescriptor:234
+  @field w onPromote  @ buildDescriptor:236
+  @field w onReset  @ buildDescriptor:239
+  @field w onSelect  @ buildDescriptor:233
+  @field w onStep  @ drawRank2Fields:595
+  @field r path  @ 10
+  @field w path  @ 10
+  @field r period  @ addStep:155 stepMos:577,578 drawRank2Fields:589,604,606 buildGen:652,657
+  @field w period  @ 38 drawRank2Fields:590
+  @field r periodAsStep  @ generateInto:183 drawHeader:266,273 drawStepTable:348
+  @field w periodAsStep  @ setPeriodAsStep:148 generateInto:183
+  @field r periodPitch  @ generateInto:182 drawHeader:270 drawStepTable:357
+  @field w periodPitch  @ setPeriodPitch:142 generateInto:182 383
+  @field r pitches  @ sortSteps:94,99 cloneForEdit:120,122 setStepPitch:130 addStep:155,156 removeStep:161,162 generateInto:181 drawStepRow:300
+  @field r pitches  @ drawStepTable:344
+  @field w pitches  @ cloneForEdit:120 generateInto:181 383
+  @field w project  @ buildDescriptor:229
+  @field r rank2  @ drawRank2Fields:586 buildGen:650
+  @field w rank2  @ 38
+  @field r refocus  @ 404
+  @field w refocus  @ 405,425
+  @field r relative  @ drawEqualFields:534,537
+  @field w relative  @ 32 reseedEqual:516 drawEqualFields:536,544
+  @field w sel  @ buildDescriptor:232
+  @field r size  @ stepMos:576 drawRank2Fields:593,595,603 buildGen:653
+  @field w size  @ 38 stepMos:580 drawRank2Fields:597
+  @field r small  @ drawRank2Fields:607
+  @field r snapMos  @ stepMos:577 drawRank2Fields:600
+  @field w snapMos  @ 38 drawRank2Fields:601
+  @field r splitDrag  @ drawEditBody:728,729
+  @field w splitDrag  @ 30 drawEditBody:728,731
+  @field r stepNames  @ sortSteps:95,100 cloneForEdit:121,122 setStepName:136 addStep:156 removeStep:163 drawStepRow:309
+  @field w stepNames  @ cloneForEdit:121 generateInto:184 383
+  @field r subharm  @ drawGenerators:673
+  @field w subharm  @ 35
+  @field w synthetic  @ buildDescriptor:231
+  @field w tier  @ buildDescriptor:232
+  @field w title  @ 380,393
+  @field r tok  @ sortSteps:99
+  @field w tok  @ sortSteps:95
+  @field r topH  @ drawEditBody:714,716,728
+  @field w topH  @ 30 drawEditBody:714,729
+  @field r ui  @ pushUiPadToGrid:280 drawStepRow:308
+  @field r up  @ stepMos:581 drawRank2Fields:610 buildGen:655
+  @field w up  @ 38 stepMos:582 drawRank2Fields:611
+  @field w width  @ drawRank2Fields:594
+  @field r y0  @ drawEditBody:729
+  @field w y0  @ drawEditBody:728

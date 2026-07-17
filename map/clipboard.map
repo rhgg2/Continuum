@@ -1,4 +1,4 @@
-@module clipboard  src=clipboard.lua  loc=490  sha=14993a2  mode=chunk  self=clipboard
+@module clipboard  src=clipboard.lua  loc=490  sha=37ed80d  mode=chunk  self=clipboard
 @deps ec, grid, tm, cm, currentRpb, getCtx, getLength, edit, aliases, fx
 
 # Invariants & contracts
@@ -83,3 +83,82 @@
 # REAPER API surface
   @reaper SetExtState
   @reaper GetExtState
+
+# Fields (r read / w write incl. constructor keys)
+  @field r aliases  @ 44
+  @field r cc  @ collect:148 pasteSingle:238,310 pasteMulti:342
+  @field w cc  @ 23 refusePaste:177 pasteSingle:310 pasteMulti:430
+  @field r ccCols  @ pasteMulti:342,363
+  @field w ccCols  @ pasteMulti:333
+  @field r ccNum  @ pasteMulti:376,430
+  @field w ccNum  @ pasteMulti:363
+  @field r chan  @ pasteSingle:288,309 pasteMulti:376,382,383,389,426
+  @field w chan  @ 23 refusePaste:176 pasteVelocities:215 pasteMulti:361,363,365
+  @field r chanDelta  @ pasteMulti:354,359
+  @field w chanDelta  @ collect:140
+  @field r chanFirstCol  @ pasteMulti:334
+  @field r chanLastCol  @ pasteMulti:334
+  @field r cm  @ 39
+  @field r col  @ pasteMulti:381
+  @field w col  @ pasteMulti:361,363,365
+  @field r cols  @ collect:97,102 pasteSingle:229 pasteMulti:322,337,374,378 trimTop:466
+  @field w cols  @ collect:165
+  @field w copy  @ registerCommands:481
+  @field r currentRpb  @ 40
+  @field r ec  @ 36
+  @field r edit  @ 43
+  @field r endRow  @ pasteSingle:246,250 pasteMulti:392,396 trimTop:455
+  @field w endRow  @ 30 collect:78 trimTop:455
+  @field r endppq  @ collect:78 pasteVelocities:210
+  @field w endppq  @ 21 pasteSingle:250 pasteMulti:396
+  @field r evType  @ pasteVelocities:189
+  @field w evType  @ 27 refusePaste:177 pasteVelocities:213 pasteSingle:289,311 pasteMulti:432
+  @field r events  @ collect:119,152,154,156 pasteVelocities:184,188,194,209 pasteSingle:241,259,264,274
+  @field r events  @ pasteSingle:303 pasteMulti:387,411,415 trimTop:464,466
+  @field w events  @ collect:126,141
+  @field r fx  @ 45
+  @field r fxRegions  @ pasteClip:443 trimTop:468
+  @field w fxRegions  @ collect:127,166
+  @field r getCtx  @ 41
+  @field r getLength  @ 42
+  @field r grid  @ 37
+  @field w idx  @ 25
+  @field r isNote  @ pasteVelocities:209 pasteMulti:411
+  @field r key  @ pasteMulti:360,363
+  @field w key  @ collect:145,148
+  @field r lane  @ pasteSingle:238,267,288 pasteMulti:351,376,428
+  @field w lane  @ 23 refusePaste:177 pasteMulti:361,428
+  @field w loc  @ 25
+  @field r midiChan  @ collect:97,108,136,140,144,146,151 pasteVelocities:215 pasteSingle:231,288
+  @field r midiChan  @ pasteSingle:309 pasteMulti:354
+  @field r mode  @ pasteClip:441 trimTop:463
+  @field w mode  @ collect:125,164
+  @field r noteCols  @ pasteMulti:340,361
+  @field w noteCols  @ pasteMulti:333
+  @field r numRows  @ pasteSingle:234,237,238 pasteMulti:371,376 trimTop:462
+  @field w numRows  @ collect:125,164 trimTop:462
+  @field r other  @ pasteMulti:344,365
+  @field w other  @ pasteMulti:333
+  @field w paste  @ registerCommands:482
+  @field r pitch  @ pasteVelocities:195,216 pasteSingle:260
+  @field w pitch  @ pasteVelocities:216
+  @field r ppq  @ collect:76,85,92 pasteVelocities:196,209,210,211,214 pasteSingle:255
+  @field r ppq  @ pasteSingle:261,281 pasteMulti:401
+  @field w ppq  @ 21 refusePaste:176 pasteVelocities:214 pasteSingle:245,261 pasteMulti:391
+  @field w realised  @ 25
+  @field r row  @ pasteSingle:242,243 pasteMulti:388,389 trimTop:453,454
+  @field w row  @ 30 collect:76,85,92 trimTop:454
+  @field w rpb  @ 23 pasteVelocities:217 pasteSingle:288,309 pasteMulti:426
+  @field r startType  @ pasteMulti:326
+  @field w startType  @ collect:164
+  @field r tm  @ 38
+  @field r type  @ collect:107,110,112,114,135,139,143,147,153,164 pasteSingle:238,257
+  @field r type  @ pasteSingle:257,296,301,302,310,311 pasteMulti:326,338
+  @field r type  @ pasteMulti:341,344,358,362,365,376,410,427,429,432
+  @field w type  @ 27 collect:125,139 pasteMulti:361,363,365
+  @field w uuid  @ 25
+  @field w uuidIdx  @ 25
+  @field r val  @ pasteVelocities:197,198,216 pasteSingle:282
+  @field w val  @ collect:92 pasteVelocities:216 pasteSingle:261
+  @field r vel  @ collect:92 pasteVelocities:185 pasteSingle:260,261,265,288
+  @field w vel  @ pasteVelocities:202

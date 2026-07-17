@@ -92,3 +92,46 @@
   @reaper MB
   @reaper MIDI_GetHash
   @reaper GetActiveTake
+
+# Fields (r read / w write incl. constructor keys)
+  @field r ImGui_GetBuiltinPath  @ 13
+  @field w ccm  @ 35,108
+  @field r chrome  @ 18
+  @field w chrome  @ 41,44
+  @field r cm  @ 18
+  @field w cm  @ 32,35,36,44
+  @field r cmgr  @ 18
+  @field w cmgr  @ 36,44
+  @field w cursorAnchor  @ 148
+  @field w diveTo  @ 113
+  @field r ds  @ 18
+  @field w ds  @ 32,33,35,36,44
+  @field r eventMeta  @ 18
+  @field w eventMeta  @ 31
+  @field r facade  @ 18
+  @field w facade  @ 35,36,41,45
+  @field r focusName  @ 131
+  @field w focusName  @ 131
+  @field w gm  @ 36,108
+  @field r gui  @ 18
+  @field w gui  @ 41,45
+  @field r guid  @ bindFromSelection:94
+  @field r help  @ 18
+  @field w help  @ 45
+  @field w markSwingStale  @ 139
+  @field w mm  @ 32,108
+  @field r modalHost  @ 18
+  @field w modalHost  @ 41,45
+  @field w openTakeProperties  @ 127
+  @field w pa  @ 36,108
+  @field w pe  @ 45
+  @field w restorePerfFlags  @ 116
+  @field w reswingTakes  @ 135
+  @field w selectNewParkedTake  @ 120
+  @field w setSwingComposite  @ 149
+  @field w take  @ 31
+  @field w timeSig  @ 147
+  @field w tm  @ 33,36,108
+  @field w tr  @ 108
+  @field w trackerMode  @ bind:73 139,143
+  @field w tv  @ 44,108

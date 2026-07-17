@@ -171,3 +171,68 @@
   @use call    wm:viewGraph  @ ensureView:24
   @use require util  @ 8
   @use sub     wm:wiringChanged  @ 420
+
+# Fields (r read / w write incl. constructor keys)
+  @field w activate  @ nodeView:127
+  @field r audio  @ audioPorts:74 sourceCategory:99 nodeCategory:106,107
+  @field w audio  @ nodeView:119,120
+  @field w bus  @ wireViews:391
+  @field w busId  @ busTag:351,352
+  @field w bussedEnd  @ busTag:351,352
+  @field w category  @ nodeView:125
+  @field r cm  @ 10
+  @field r displayName  @ nodeLabel:60
+  @field r edges  @ addWire:211 removeWireAt:218 deleteNode:227 rewireEdgeEnd:237 setEdgeGain:258 setEdgePrimary:279 wiredPorts:304 wireViews:367
+  @field w edges  @ deleteNode:230
+  @field r ext  @ busViews:341
+  @field w ext  @ busViews:341
+  @field r forward  @ descendantsOf:296
+  @field r from  @ setSourceTagPos:201 addWire:206 deleteNode:228 busTag:352 wireViews:370,379,384,389
+  @field w from  @ addWire:206 rewireEdgeEnd:240 wireViews:379
+  @field w fromKind  @ wireViews:387
+  @field w fromLabel  @ wireViews:389
+  @field w fromOffset  @ wireViews:390
+  @field r fromPort  @ addWire:208 wireViews:368
+  @field w fromPort  @ addWire:208 rewireEdgeEnd:241 wireViews:382
+  @field w fromPortName  @ wireViews:384
+  @field r fxDisplay  @ nodeLabel:57
+  @field r fxId  @ activation:113 openFxWindow:167 samplerTrack:174,175
+  @field w gain  @ setEdgeGain:261
+  @field r id  @ rewireEdgeEnd:240,243
+  @field w id  @ nodeView:122 busViews:338
+  @field r ins  @ sourceCategory:99
+  @field w ins  @ nodeView:128
+  @field r kind  @ ensureView:32 nodeLabel:55,56,57,58,64 activation:113 nodeView:125,126 busTag:351,352 wireViews:373
+  @field r kind  @ wireViews:387,388
+  @field w label  @ nodeView:124
+  @field r master  @ masterPos:314
+  @field w matrix  @ busViews:342
+  @field r midi  @ midiPorts:90 nodeCategory:106
+  @field w midi  @ nodeView:119,120
+  @field r nodes  @ ensureView:31 openFxWindow:166 samplerTrack:173 deleteNode:225 masterPos:314 nodeViews:326 busViews:336 wireViews:362,370,377
+  @field r ops  @ setEdgeGain:260,261
+  @field w ops  @ setEdgeGain:260
+  @field r orient  @ nodeView:130 busViews:340
+  @field w orient  @ nodeView:130 busViews:340
+  @field w outs  @ nodeView:129
+  @field r port  @ rewireEdgeEnd:241,244
+  @field r ports  @ audioPorts:74 midiPorts:90 sourceCategory:99
+  @field r pos  @ nodeView:123 masterPos:316 busViews:339
+  @field w pos  @ nodeView:123 busViews:339
+  @field r primary  @ wireViews:386
+  @field w primary  @ setEdgePrimary:281 wireViews:386
+  @field r reverse  @ ancestorsOf:290
+  @field r tagPos  @ wireViews:375,376
+  @field r to  @ addWire:206 deleteNode:228 busTag:351 wireViews:377,380,385
+  @field w to  @ addWire:206 rewireEdgeEnd:243 wireViews:380
+  @field r toPort  @ addWire:209 wireViews:369
+  @field w toPort  @ addWire:209 rewireEdgeEnd:244 wireViews:383
+  @field w toPortName  @ wireViews:385
+  @field r trackId  @ ensureView:32,33 nodeLabel:61
+  @field r type  @ addWire:206,207 rewireEdgeEnd:241,244 setEdgeGain:259 wiredPorts:305 busTag:350 wireViews:381,384,385
+  @field w type  @ addWire:206 wireViews:381
+  @field r wm  @ 11
+  @field r x  @ nodeView:123 masterPos:316 busViews:339
+  @field w x  @ nodeView:123 addBusNode:192 busViews:339
+  @field r y  @ nodeView:123 masterPos:316 busViews:339
+  @field w y  @ nodeView:123 addBusNode:192 busViews:339

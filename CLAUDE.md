@@ -77,17 +77,26 @@ caps above. Model docs to imitate: `docs/timing.md`, `docs/tuning.md`,
   `map/specs/<spec>.map` outlines each `tests/specs/*_spec.lua`
   (intent, cases, harness surface), and `map_query`'s `usedby`
   includes them — ask it "which specs exercise X" before reading
-  spec source.
+  spec source. The harness surface (`tests/*.lua`: harness,
+  fakeReaper, …) maps into `map/` alongside the modules.
 
 - Cross-module navigation: use `mcp__readium_docs__map_query` before
   grepping `map/*.map` — the tool's schema documents filters,
-  wildcards, and return shape. Gotchas worth knowing on top of the
+  query syntax, and return shape. Gotchas worth knowing on top of the
   schema: `uses`/`usedby` resolve receivers through the file's alias
   table, so targets read as `tm:rebuild`, not
   `trackerManager:rebuild`; `forward` edges point to the **source's**
   signal, not the receiver's; method calls on runtime receivers (not
   in the alias table) are dropped, so `usedby` has a real recall gap
-  there.
+  there; `query`/`module` are regex (query substring-matched, module
+  anchored), not glob.
+
+- Field-shaped questions — who reads or writes `.ppqL`, who produces
+  `endppqC` — are `map_query` kind='reads'/'writes' ('fields' for
+  both), not a grep sweep. Every map ends with a `# Fields` index;
+  table-constructor keys and `function recv.name(...)` declarations
+  count as writes, so producer sites are covered. Omit `module` for
+  the repo-wide blast radius, specs included.
 
 - Framework docs (ReaScript / ReaImGui): use
   `mcp__readium_docs__reaper_doc_lookup`, not raw grep over the

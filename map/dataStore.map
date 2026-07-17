@@ -73,3 +73,40 @@
   @use call    util.print  @ print:15
   @use require util  @ 10
   @use sub     ps:contextChanged  @ 112
+
+# Fields (r read / w write incl. constructor keys)
+  @field r REMOVE  @ assign:175,177 delete:186 assignAt:198
+  @field w arrangeColours  @ 35
+  @field w arrangeNaturalLenQN  @ 30
+  @field w arrangeSlots  @ 34
+  @field w busMeta  @ 38
+  @field w columnDisplay  @ 23
+  @field w extraColumns  @ 26
+  @field w fxMeta  @ 37
+  @field w fxParked  @ 28
+  @field w fxPatterns  @ 36
+  @field w fxRegions  @ 27
+  @field r global  @ persist:93
+  @field w global  @ 66
+  @field w groups  @ 21
+  @field w guardedTrack  @ 39,121
+  @field w invalidate  @ 147
+  @field w mutedChannels  @ 31
+  @field r name  @ 145,147
+  @field w name  @ 138,147 assign:183 assignAt:200
+  @field w noteDelay  @ 24
+  @field w paramAutomation  @ 22
+  @field w paramFrecency  @ 40
+  @field w prevWindows  @ 29
+  @field w project  @ 66
+  @field r ps  @ 13
+  @field r scope  @ 144,145,147
+  @field w scope  @ 138,147 assign:183 assignAt:200
+  @field r slot  @ 145
+  @field w slot  @ 138
+  @field w slotEntries  @ 33
+  @field w slots  @ 131
+  @field w soloedChannels  @ 32
+  @field w swing  @ 25
+  @field w take  @ 66,113
+  @field w track  @ 66,114

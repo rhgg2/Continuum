@@ -22,7 +22,7 @@ local util    = require 'util'
 local painter = require 'painter'
 local scratch = require 'scratch'
 
-local cm, ds, facade, eventMeta = (...).cm, (...).ds, (...).facade, (...).eventMeta
+local ds, facade, eventMeta = (...).ds, (...).facade, (...).eventMeta
 
 local am = {}
 

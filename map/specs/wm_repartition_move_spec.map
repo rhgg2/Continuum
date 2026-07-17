@@ -33,3 +33,38 @@
   @use call wm:mutate  @ 49,64
   @use call wm:graph  @ 57,70
   @use call wm:fxTrack  @ 59,72
+
+# Fields (r read / w write incl. constructor keys)
+  @field w __label  @ 18
+  @field r _state  @ 19,20
+  @field w a  @ 50
+  @field w audio  @ 26,35
+  @field r b  @ 57,70
+  @field w b  @ 51
+  @field w c  @ 65
+  @field w cm  @ 12
+  @field w ds  @ 11
+  @field r edges  @ 52,53,66
+  @field w from  @ 38
+  @field r fxId  @ 34,57,70
+  @field w fxId  @ 34
+  @field w fxIdent  @ 34
+  @field r ins  @ 35
+  @field w ins  @ 26,35
+  @field w kind  @ 25,34
+  @field w midi  @ 26,35
+  @field w name  @ 44
+  @field r nodes  @ 50,51,57,65,70
+  @field r outs  @ 35
+  @field w outs  @ 26,35
+  @field w ports  @ 26,35
+  @field w pos  @ 25,34
+  @field r projectTracks  @ 19
+  @field w rm  @ 12
+  @field w run  @ 45
+  @field w to  @ 38
+  @field r trackGuids  @ 20
+  @field w trackId  @ 25
+  @field w type  @ 38
+  @field w x  @ 25,34
+  @field w y  @ 25,34

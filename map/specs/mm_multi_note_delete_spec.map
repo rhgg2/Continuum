@@ -1,4 +1,4 @@
-@spec mm_multi_note_delete_spec  src=tests/specs/mm_multi_note_delete_spec.lua  loc=56  sha=4a6bfb0  cases=1
+@spec mm_multi_note_delete_spec  src=tests/specs/mm_multi_note_delete_spec.lua  loc=56  sha=37ed80d  cases=1
 @exercises midiManager (h.mm)
 @surface   mm:modify, mm:notes, mm:delete
 @harness   fakeReaper:bindTake
@@ -23,3 +23,17 @@
   @use call mm:modify  @ 29,40
   @use call mm:notes  @ 37,46
   @use call mm:delete  @ 41,42
+
+# Fields (r read / w write incl. constructor keys)
+  @field w chan  @ 30,31,32,33
+  @field w endppq  @ 30,31,32,33
+  @field w evType  @ 30,31,32,33
+  @field w name  @ 23
+  @field r pitch  @ 46,51,53
+  @field w pitch  @ 30,31,32,33,46
+  @field r ppq  @ 37,46,49,50,52
+  @field w ppq  @ 30,31,32,33,46
+  @field w reaper  @ 15
+  @field w run  @ 24
+  @field r uuid  @ 37
+  @field w vel  @ 30,31,32,33

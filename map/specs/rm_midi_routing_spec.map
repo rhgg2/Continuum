@@ -30,3 +30,29 @@
   @use call rm:tracks  @ 32,43,51,55,65,69,77,82,99,105,116,127,131,142,149
   @use call rm:assignFx  @ 53,67,80,103,129
   @use call rm:writeChainMidi  @ 144
+
+# Fields (r read / w write incl. constructor keys)
+  @field w ds  @ 12
+  @field w flag  @ 114,126
+  @field r fx  @ 32,43,51,55,65,69,77,82,99,105,116,127
+  @field r fx  @ 131,142,149
+  @field w fxType  @ 96,97
+  @field r id  @ 51,65,78,101,127,145,146
+  @field w id  @ 145,146
+  @field w ident  @ 30,41,50,64,76,96,97,113,125,141
+  @field w ident  @ 141
+  @field r inBus  @ 56,83,85,117,132,150
+  @field w inBus  @ 33,53,80,114,126,129,145,146
+  @field r inDisabled  @ 134
+  @field w inDisabled  @ 33,145,146
+  @field r midi  @ 32,43,55,69,83,84,85,100,105,116,131,150
+  @field r midi  @ 151,152,153
+  @field w midi  @ 53,67,80,103,129,145,146
+  @field w name  @ 27,38,47,61,73,89,110,122,138
+  @field r outBus  @ 57,118,133,152
+  @field w outBus  @ 33,53,114,126,145,146
+  @field r outDisabled  @ 69,105,151,153
+  @field w outDisabled  @ 33,67,103,145,146
+  @field w preset  @ 113,125
+  @field w routingBytes  @ 114,126
+  @field w run  @ 28,39,48,62,74,90,111,123,139

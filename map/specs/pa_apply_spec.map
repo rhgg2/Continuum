@@ -28,3 +28,24 @@
   @use call pa:apply  @ 78
   @use call pa:unautomate  @ 90,112
   @use call ccm:claim  @ 111
+
+# Fields (r read / w write incl. constructor keys)
+  @field r _state  @ 19,20,21,22,45,52,64,79,80,81,92,93
+  @field r _state  @ 97,114,116
+  @field r calls  @ 79
+  @field r dst  @ 66
+  @field r fxByTrack  @ 45,52,80,92,93,114,116
+  @field w fxGuid  @ 33
+  @field w ident  @ 23
+  @field w label  @ 33
+  @field r midiFlags  @ 68
+  @field w name  @ 38,73,86,104
+  @field w param  @ 33
+  @field w projectItems  @ 22
+  @field w projectTracks  @ 19
+  @field w run  @ 39,74,87,105
+  @field r sendsByTrack  @ 64,81,97
+  @field r srcChan  @ 67
+  @field w takes  @ 22
+  @field w trackGuid  @ 33
+  @field r trackGuids  @ 20,21

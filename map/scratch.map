@@ -38,3 +38,8 @@
   @reaper GetSetMediaTrackInfo_String
   @reaper SetProjExtState
   @reaper GetProjExtState
+
+# Fields (r read / w write incl. constructor keys)
+  @field w id  @ id:60
+  @field w peek  @ peek:52
+  @field w track  @ track:66

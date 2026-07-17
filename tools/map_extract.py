@@ -25,6 +25,10 @@ Spec files (tests/specs/*_spec.lua) get a sibling grammar: `@spec` header
 (cases=N), @exercises/@surface/@harness summary lines, # Intent (the file's
 leading comment), # Helpers, # Cases (`@case 'name'  [pure|harness]`), and
 the same # Uses section — so map_query's usedby sees spec coverage.
+
+Both map shapes end with a machine-first `# Fields` section: `@field r|w
+<name>  @ <sites>` rows indexing every `.name` read/write (table-constructor
+keys count as writes), queried via map_query kind='reads'/'writes'.
 """
 
 from __future__ import annotations
@@ -69,6 +73,17 @@ CALL_RE       = re.compile(r"\b([A-Za-z_]\w*)([.:])([A-Za-z_]\w*)\s*\(")
 SUB_RE        = re.compile(r"\b([A-Za-z_]\w*):subscribe\(\s*['\"]([^'\"]+)['\"]")
 FORWARD_RE    = re.compile(
     r"\b[A-Za-z_]\w*:forward\(\s*['\"]([^'\"]+)['\"]\s*,\s*([A-Za-z_]\w*)\s*\)"
+)
+
+# Field accesses (# Fields section). Dot pass: the lookarounds exclude `..`
+# concat; `[A-Za-z_]` excludes the fraction digits of numeric literals.
+FIELD_RE      = re.compile(r"(?<!\.)\.(?!\.)([A-Za-z_]\w*)")
+# Constructor-key pass: brackets, block keywords, and `ident =` candidates
+# (not `==`; dot/colon-prefixed belong to the dot pass).
+FIELD_TOK_RE  = re.compile(
+    r"[{}()\[\]]"
+    r"|\b(?:function|do|then|repeat|elseif|end|until)\b"
+    r"|(?<![.\w:])([A-Za-z_]\w*)\s*=(?!=)"
 )
 
 ATTACH_GAP = 3   # max line gap from annotation to following structural element
@@ -129,6 +144,8 @@ class MapFile:
     # Outbound edges: (kind, target, line, caller). caller is the enclosing fn
     # name or None (top-level). kind ∈ {require, call, sub, forward}.
     uses: list[tuple[str, str, int, str]] = field(default_factory=list)
+    # Field accesses: (kind 'r'|'w', field, line, caller|None).
+    fields: list[tuple[str, str, int, str]] = field(default_factory=list)
 
 
 # ----- Helpers
@@ -479,6 +496,8 @@ def parse(path: Path) -> MapFile:
     for name, lns in cm.signal_lines.items():
         cm.signal_sites[name] = [(caller_at(ln), ln) for ln in lns]
     extract_uses(cm, lines, caller_at)
+    cm.fields = [(kind, name, ln, caller_at(ln))
+                 for kind, name, ln in extract_fields(code_lines)]
     return cm
 
 
@@ -543,6 +562,71 @@ def extract_uses(cm: MapFile, lines: list[str], caller_at) -> None:
                 add('forward', f'{source}:{sig}', line)
 
     cm.uses.sort(key=lambda u: (u[0], u[1], u[2]))
+
+
+def extract_fields(code_lines: list[str], skip_receiver: str = '') -> list[tuple[str, str, int]]:
+    """(kind 'r'|'w', field, line) triples over masked code.
+
+    Dot pass: `.name` followed by `(`/`{` is call sugar (call edges own it);
+    followed by `=` (not `==`) is a write; anything else is a read. Known
+    limitation: multi-assignment (`a.x, a.y = …`) classifies `.x` as a read.
+    `skip_receiver` drops accesses on one receiver name (specs: `h.<member>`
+    is harness plumbing, not a data field).
+
+    Constructor-key pass: `ident =` counts as a write only when the nearest
+    open bracket is `{` recorded at the current function depth — so `local
+    a, b = …` inside a closure inside a table literal never registers. The
+    typed block stack mirrors function_depth_before."""
+    out: list[tuple[str, str, int]] = []
+    fn_def_prefix = re.compile(r'\s*(?:local\s+)?function\s+[A-Za-z_][\w.]*')
+    for i, code in enumerate(code_lines):
+        for m in FIELD_RE.finditer(code):
+            rest = code[m.end():]
+            if re.match(r'\s*[({]', rest):
+                # `function recv.name(` declares (writes) the field; any
+                # other `.name(` is a call and call edges own it.
+                if fn_def_prefix.fullmatch(code[:m.start()]):
+                    out.append(('w', m.group(1), i + 1))
+                continue
+            if skip_receiver:
+                recv = re.search(r'([A-Za-z_]\w*)\s*$', code[:m.start()])
+                if recv and recv.group(1) == skip_receiver:
+                    continue
+            kind = 'w' if re.match(r'\s*=(?!=)', rest) else 'r'
+            out.append((kind, m.group(1), i + 1))
+
+    blocks: list[str] = []       # 'fn' | 'block'
+    brackets: list = []          # ('{', fn_depth) | '(' | '['
+    fn_depth, skip_then = 0, 0
+    for i, code in enumerate(code_lines):
+        for m in FIELD_TOK_RE.finditer(code):
+            tok, key = m.group(0), m.group(1)
+            if key:
+                top = brackets[-1] if brackets else None
+                if isinstance(top, tuple) and top[1] == fn_depth:
+                    out.append(('w', key, i + 1))
+            elif tok == '{':
+                brackets.append(('{', fn_depth))
+            elif tok in '([':
+                brackets.append(tok)
+            elif tok in ')]}':
+                if brackets:
+                    brackets.pop()
+            elif tok == 'function':
+                blocks.append('fn'); fn_depth += 1
+            elif tok in ('do', 'repeat'):
+                blocks.append('block')
+            elif tok == 'then':
+                if skip_then:
+                    skip_then -= 1
+                else:
+                    blocks.append('block')
+            elif tok == 'elseif':
+                skip_then += 1
+            elif blocks:                      # end | until
+                if blocks.pop() == 'fn':
+                    fn_depth -= 1
+    return out
 
 
 def attach_annotations(cm: MapFile) -> None:
@@ -614,6 +698,22 @@ def render_caller_groups(pairs: list[tuple[str, int]]) -> str:
     return ' '.join(segs)
 
 
+FIELD_ROW_CHUNK = 12   # sites per @field row — keeps hot fields' rows short
+
+
+def emit_field_rows(out: list[str], fields: list[tuple[str, str, int, str]]) -> None:
+    """One `@field <kind> <name>` row per FIELD_ROW_CHUNK sites; hot fields
+    repeat the head across rows and the querier accumulates them."""
+    grouped: dict[tuple[str, str], list[tuple[str, int]]] = {}
+    for kind, name, line, caller in fields:
+        grouped.setdefault((name, kind), []).append((caller, line))
+    for name, kind in sorted(grouped):
+        pairs = sorted(grouped[(name, kind)], key=lambda p: p[1])
+        for j in range(0, len(pairs), FIELD_ROW_CHUNK):
+            chunk = render_caller_groups(pairs[j:j + FIELD_ROW_CHUNK])
+            out.append(f"  @field {kind} {name}  @ {chunk}")
+
+
 def fmt_args(args: str) -> str:
     return f"({args})" if args else "()"
 
@@ -672,7 +772,9 @@ def emit(cm: MapFile) -> str:
     add = out.append
     sections = list(cm.sections)        # consumed by emit_items as we walk
 
-    head = f"@module {cm.module}  src={cm.src.name}  loc={cm.loc}  sha={cm.sha}  mode={cm.mode}"
+    src_rel = ('/'.join(cm.src.parts[-2:]) if cm.src.parent.name == 'tests'
+               else cm.src.name)
+    head = f"@module {cm.module}  src={src_rel}  loc={cm.loc}  sha={cm.sha}  mode={cm.mode}"
     if cm.return_target:
         head += f"  self={cm.return_target}"
     add(head)
@@ -804,6 +906,12 @@ def emit(cm: MapFile) -> str:
         for _, names in groups.items():
             add(f"  @reaper {', '.join(names)}")
 
+    if cm.fields:
+        if out[-1].strip():
+            add('')
+        add("# Fields (r read / w write incl. constructor keys)")
+        emit_field_rows(out, cm.fields)
+
     return '\n'.join(out).rstrip() + '\n'
 
 
@@ -851,6 +959,7 @@ class SpecMap:
     surface: list[str] = field(default_factory=list)                # 'pa.frecencyOrder', 'tm:getChannel'
     harness_bits: list[str] = field(default_factory=list)
     uses: list[tuple[str, str, int]] = field(default_factory=list)  # (kind, target, line)
+    fields: list[tuple[str, str, int, str]] = field(default_factory=list)  # (kind 'r'|'w', field, line, None)
 
 
 def spec_intent(lines: list[str]) -> list[str]:
@@ -983,6 +1092,8 @@ def parse_spec(path: Path) -> SpecMap:
     sm.harness_bits += list(fake_calls) + [f'r._state.{f}' for f in state_pokes]
     sm.exercises = list(exercised.items())
     sm.surface = list(surface.values())
+    sm.fields = [(kind, name, ln, None)
+                 for kind, name, ln in extract_fields(code_lines, skip_receiver='h')]
     return sm
 
 
@@ -1031,6 +1142,12 @@ def emit_spec(sm: SpecMap) -> str:
             grouped[key].append((None, line))
         for kind, target in order:
             add(f"  @use {kind} {target}  @ {render_caller_groups(grouped[(kind, target)])}")
+
+    if sm.fields:
+        if out[-1].strip():
+            add('')
+        add("# Fields (r read / w write incl. constructor keys)")
+        emit_field_rows(out, sm.fields)
 
     return '\n'.join(out).rstrip() + '\n'
 

@@ -960,7 +960,7 @@ function gridPane:handleMouse()
   local grid = tv.grid
   local ec = tv:ec()
   local cursorRow, cursorCol, cursorStop = ec:pos()
-  local scrollRow, scrollCol, lastVisCol = tv:scroll()
+  local scrollRow, _, lastVisCol = tv:scroll()
 
   local clicked      = ImGui.IsMouseClicked(ctx, 0)
   local rightClicked = ImGui.IsMouseClicked(ctx, 1)

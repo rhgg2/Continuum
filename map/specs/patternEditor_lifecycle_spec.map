@@ -28,3 +28,41 @@
 # Uses (outbound edges)
   @use call em:load  @ 49
   @use call scratch.track  @ 89,112,125
+
+# Fields (r read / w write incl. constructor keys)
+  @field r ImGui_GetBuiltinPath  @ 14
+  @field w ImGui_GetBuiltinPath  @ 14
+  @field w Mod_None  @ 11
+  @field w __index  @ 12,16
+  @field w chrome  @ 75
+  @field w ctx  @ 17
+  @field w delay  @ 55,56
+  @field w detune  @ 55,56
+  @field w endppq  @ 55,56
+  @field w facade  @ 75
+  @field w font  @ 17
+  @field w fontSize  @ 17
+  @field w get  @ 30
+  @field w gui  @ 75
+  @field w kind  @ 53,61
+  @field w lane  @ 55,56
+  @field w lengthPpq  @ 53,61
+  @field r loaded  @ 23
+  @field w modalHost  @ 75
+  @field w name  @ 81,104,122
+  @field w open  @ 18
+  @field w ownerTrack  @ 32
+  @field w pitch  @ 55,56
+  @field w points  @ 62
+  @field w ppq  @ 55,56,63,64,65
+  @field r preload  @ 21
+  @field w ps  @ 48
+  @field r reaper  @ 14
+  @field w registerKind  @ 18
+  @field w run  @ 82,105,123
+  @field w shape  @ 63,64,65
+  @field w specs  @ 54
+  @field w ui  @ 17
+  @field w uiFont  @ 17
+  @field w val  @ 63,64,65
+  @field w vel  @ 55,56

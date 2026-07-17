@@ -7,7 +7,6 @@
 
 local util = require 'util'
 
-local cm = (...).cm
 local wm = (...).wm
 
 local wv = {}

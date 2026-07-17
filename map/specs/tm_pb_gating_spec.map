@@ -18,3 +18,17 @@
   @use call tm:getChannel  @ 18,19,24,25,35,41
   @use call tm:rebuild  @ 22
   @use call ds:assign  @ 39
+
+# Fields (r read / w write incl. constructor keys)
+  @field w ccs  @ 14,32
+  @field w chan  @ 15,16,33
+  @field r columns  @ 18,19,24,25,35,41
+  @field w evType  @ 15,16,33
+  @field w name  @ 12,30
+  @field w notes  @ 39
+  @field r pb  @ 18,19,24,25,35,41
+  @field w pb  @ 39
+  @field w ppq  @ 15,16,33
+  @field w run  @ 13,31
+  @field w seed  @ 14,32
+  @field w val  @ 15,16,33

@@ -132,3 +132,26 @@
   @reaper GetProjectStateChangeCount
   @reaper GetMediaItemTake_Item
   @reaper GetMediaItemTrack
+
+# Fields (r read / w write incl. constructor keys)
+  @field r GetProjectStateChangeCount  @ snapshotBaseline:303 pollUndo:412
+  @field r REMOVE  @ assign:378 assignAt:386
+  @field r ValidatePtr2  @ ensureScratch:168 dropStale:323,328
+  @field r blobs  @ snapshotBaseline:306 zeroBaselines:316 pollUndo:421
+  @field w blobs  @ watch:401
+  @field r buckets  @ seedMirror:120 writeBucketAndRoot:128 knownSlots:139 remirrorMissing:151,156,162 resyncMirror:224,231
+  @field w buckets  @ seedMirror:115
+  @field r guid  @ ensureScratch:170,176 resyncMirror:210,213
+  @field w guid  @ seedMirror:115
+  @field r manifestHash  @ seedMirror:119 resyncMirror:219,222
+  @field w manifestHash  @ seedMirror:115,118 writeBucketAndRoot:132 resyncMirror:234
+  @field w onDiverge  @ watch:401
+  @field r prefixes  @ declareUndoable:394
+  @field r rootRaw  @ seedMirror:118 writeBucketAndRoot:134 resyncMirror:215
+  @field w rootRaw  @ seedMirror:115,117 writeBucketAndRoot:133 resyncMirror:235
+  @field r scope  @ blobKey:300 snapshotBaseline:307 zeroBaselines:317 watch:403 pollUndo:423
+  @field r slot  @ blobKey:300 snapshotBaseline:307 watch:403 pollUndo:423
+  @field r slots  @ declareUndoable:393
+  @field r strack  @ ensureScratch:168,169,170,171
+  @field w strack  @ seedMirror:115 ensureScratch:173,181
+  @field r unserialise  @ decodeMirror:102 decode:289

@@ -26,3 +26,61 @@
 
 # Uses (outbound edges)
   @use call scratch.track  @ 89
+
+# Fields (r read / w write incl. constructor keys)
+  @field w CalcTextSize  @ 34
+  @field w GetKeyMods  @ 21
+  @field w GetStyleVar  @ 35
+  @field w GetWindowViewport  @ 28
+  @field r ImGui_GetBuiltinPath  @ 18
+  @field w ImGui_GetBuiltinPath  @ 18
+  @field w IsAnyItemActive  @ 27
+  @field w IsKeyDown  @ 23
+  @field w IsKeyPressed  @ 22
+  @field w IsMouseClicked  @ 24
+  @field w IsMouseDown  @ 25
+  @field w IsWindowHovered  @ 26
+  @field r Key_A  @ 131
+  @field r Key_Escape  @ 154
+  @field r Key_Period  @ 116
+  @field r Key_X  @ 112
+  @field r Mod_None  @ 116,135,154
+  @field w Mod_None  @ 15
+  @field r Mod_Shift  @ 142
+  @field r Mod_Super  @ 112
+  @field w PopFont  @ 33
+  @field w PushFont  @ 32
+  @field w Viewport_GetWorkSize  @ 29
+  @field w __index  @ 16,42
+  @field w chrome  @ 80
+  @field r consumed  @ 113,117
+  @field w ctx  @ 43
+  @field w delay  @ 70,71
+  @field w detune  @ 70,71
+  @field w endppq  @ 70,71
+  @field w facade  @ 80
+  @field w font  @ 43
+  @field w fontSize  @ 43
+  @field w get  @ 61
+  @field w gui  @ 80
+  @field r kind  @ 94
+  @field w kind  @ 68
+  @field r kinds  @ 48
+  @field w kinds  @ 47
+  @field w lane  @ 70,71
+  @field r last  @ 94,97
+  @field w last  @ 47,49
+  @field w lengthPpq  @ 68
+  @field r loaded  @ 56
+  @field w modalHost  @ 80
+  @field w name  @ 86,104,122,149
+  @field w ownerTrack  @ 63
+  @field w pitch  @ 70,71
+  @field w ppq  @ 70,71
+  @field r preload  @ 54
+  @field r reaper  @ 18
+  @field w run  @ 87,105,123,150
+  @field w specs  @ 69
+  @field w ui  @ 43
+  @field w uiFont  @ 43
+  @field w vel  @ 70,71

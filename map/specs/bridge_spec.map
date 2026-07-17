@@ -40,3 +40,29 @@
 
 # Uses (outbound edges)
   @use call bridge:tick  @ 49,177,189
+
+# Fields (r read / w write incl. constructor keys)
+  @field w EnumerateFiles  @ 41,170,187
+  @field w Undo_BeginBlock  @ 103
+  @field w Undo_EndBlock2  @ 104
+  @field r began  @ 107
+  @field w began  @ 103
+  @field r env  @ 48
+  @field w env  @ 48,176,188
+  @field r label  @ 108
+  @field w label  @ 104
+  @field w name  @ 56,65,73,82,90,98,112,120,128,136,145,152
+  @field w name  @ 163,183
+  @field r print  @ 86
+  @field w print  @ 30
+  @field r reaper  @ 46,47,168,186
+  @field w reaper  @ 47,50,102,169,178,187,190
+  @field w run  @ 57,66,74,83,91,99,113,121,129,137,146,153
+  @field w run  @ 164,184
+  @field w spoolDir  @ 48,176,188
+  @field r status  @ 59,68,76,93,115,131,139
+  @field w status  @ 28
+  @field w time_precise  @ 44,174,187
+  @field r value  @ 60,69,77,78,85,94,116,123,124,132,140,141
+  @field r value  @ 148,159
+  @field w value  @ 29

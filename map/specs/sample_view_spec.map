@@ -34,3 +34,40 @@
   @use call cm:setContext  @ 154
   @use call ds:assign  @ 177
   @use call cm:get  @ 181,193
+
+# Fields (r read / w write incl. constructor keys)
+  @field r _state  @ 135
+  @field r assign  @ 14,79,91,92,93
+  @field w assign  @ 9,13
+  @field r assignResult  @ 15
+  @field w assignResult  @ 10,100
+  @field r bounds  @ 206
+  @field w bounds  @ 18
+  @field r clearSlot  @ 24
+  @field w clearSlot  @ 9,23
+  @field w cm  @ 33
+  @field w ds  @ 33
+  @field w listTracks  @ 27
+  @field r listTracksCalls  @ 27,166
+  @field w listTracksCalls  @ 10,27
+  @field r name  @ 168
+  @field w name  @ 38,45,53,62,73,83,97,107,117,129,146,158
+  @field w name  @ 162,163,172,185,197
+  @field r path  @ 93,125
+  @field w path  @ 14,21,177
+  @field w pbRange  @ 136
+  @field r previewPath  @ 21,113,124,125
+  @field w previewPath  @ 9,20
+  @field r previewSlot  @ 18,204,205,206
+  @field w previewSlot  @ 9,17
+  @field w run  @ 39,46,54,63,74,84,98,108,118,130,147,159
+  @field w run  @ 173,186,198
+  @field r slot  @ 92,205
+  @field w slot  @ 14,18,24
+  @field w sm  @ 33
+  @field r stopPreview  @ 26
+  @field w stopPreview  @ 10,26
+  @field w track  @ 14,18,21,24,162,163
+  @field r trackExt  @ 135
+  @field r tracks  @ 27
+  @field w tracks  @ 10,162

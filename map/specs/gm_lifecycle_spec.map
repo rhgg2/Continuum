@@ -46,3 +46,41 @@
   @use call gm:activeGroup  @ 101,105
   @use call gm:moveInstance  @ 116,117,128,143,157,169
   @use call gm:stateOf  @ 195,197,198,215,216,228,232
+
+# Fields (r read / w write incl. constructor keys)
+  @field r add  @ 46,59,229,233
+  @field r anchor  @ 129,145,159,210,212,259
+  @field r assign  @ 131
+  @field r chan  @ 145
+  @field w chan  @ 18,43,83,85,116,117,128,143,157,169,225,256
+  @field w chanLo  @ 23
+  @field r del  @ 91,199
+  @field w ds  @ 14
+  @field r dur  @ 200,214,247,263
+  @field w dur  @ 23
+  @field w endDelta  @ 58,184,196,231,245,261
+  @field w endppq  @ 19
+  @field w evType  @ 18
+  @field r evt  @ 131
+  @field w gained  @ 231
+  @field r groupId  @ 30
+  @field r instId  @ 56,89,102,127,142,156,168,183,194,209,226,244
+  @field r instId  @ 259
+  @field w lane  @ 18
+  @field w name  @ 39,52,67,79,97,112,122,138,150,164,177,190
+  @field w name  @ 205,221,239,252
+  @field w pitch  @ 19
+  @field r ppq  @ 129,133,159,210,212,259
+  @field w ppq  @ 18,23,43,83,85,116,117,128,143,157,169,225
+  @field w ppq  @ 256
+  @field r rebuildRequests  @ 47,60
+  @field w rebuildRequests  @ 44,57
+  @field r rect  @ 200,214,247,263
+  @field w run  @ 40,53,68,80,98,113,123,139,151,165,178,191
+  @field w run  @ 206,222,240,253
+  @field w startDelta  @ 211
+  @field w streams  @ 24
+  @field w tm  @ 14,84
+  @field r update  @ 133
+  @field w uuid  @ 19
+  @field w vel  @ 19

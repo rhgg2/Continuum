@@ -19,3 +19,26 @@
   @use call vm:setGridSize  @ 43
   @use call vm:quantizeKeepRealisedAll  @ 44
   @use call fm:dump  @ 46
+
+# Fields (r read / w write incl. constructor keys)
+  @field w chan  @ 32,36
+  @field w config  @ 41
+  @field w delay  @ 32,36
+  @field w detune  @ 32,36
+  @field w endppq  @ 31,35
+  @field w endppqL  @ 31,35
+  @field r lane  @ 49,50
+  @field w lane  @ 33,37
+  @field w name  @ 14
+  @field r notes  @ 46
+  @field w notes  @ 30
+  @field r pitch  @ 47
+  @field w pitch  @ 32,36
+  @field w ppq  @ 31,35
+  @field w ppqL  @ 31,35
+  @field w rowPerBeat  @ 41
+  @field w rpb  @ 34,38
+  @field w run  @ 15
+  @field w seed  @ 29
+  @field w take  @ 41
+  @field w vel  @ 32,36

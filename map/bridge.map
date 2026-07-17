@@ -1,4 +1,4 @@
-@module bridge  src=bridge.lua  loc=211  sha=af57f2a  mode=chunk  self=bridge
+@module bridge  src=bridge.lua  loc=211  sha=df07fd1  mode=chunk  self=bridge
 
 # Invariants & contracts
   @contract  tick() is the only entry; execute/render/scan are internal. Deps: { env, spoolDir? }.  @ 3
@@ -47,3 +47,32 @@
   @reaper time_precise
   @reaper Undo_BeginBlock, Undo_EndBlock2
   @reaper EnumerateFiles
+
+# Fields (r read / w write incl. constructor keys)
+  @field r Undo_BeginBlock  @ execute:145
+  @field r Undo_EndBlock2  @ execute:147
+  @field w __index  @ 15
+  @field r depth  @ render:68
+  @field w depth  @ 63
+  @field r entries  @ render:69
+  @field w entries  @ 63
+  @field r env  @ 12
+  @field r ms  @ formatResponse:165
+  @field w ms  @ execute:157
+  @field r n  @ execute:150,151
+  @field r print  @ formatResponse:167
+  @field w print  @ 26 execute:158
+  @field r source  @ defaultSpoolDir:18
+  @field r spoolDir  @ 21
+  @field r status  @ formatResponse:164
+  @field w status  @ execute:142,152,154
+  @field r str  @ render:70
+  @field w str  @ 63
+  @field r time_precise  @ nowMs:54
+  @field r total  @ render:71
+  @field w total  @ 63
+  @field r traceback  @ execute:146
+  @field r undo  @ execute:144
+  @field w undo  @ parseDirectives:126
+  @field r value  @ formatResponse:166
+  @field w value  @ execute:142,152,154

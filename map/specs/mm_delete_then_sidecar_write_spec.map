@@ -1,4 +1,4 @@
-@spec mm_delete_then_sidecar_write_spec  src=tests/specs/mm_delete_then_sidecar_write_spec.lua  loc=61  sha=bfe20fc  cases=1
+@spec mm_delete_then_sidecar_write_spec  src=tests/specs/mm_delete_then_sidecar_write_spec.lua  loc=61  sha=37ed80d  cases=1
 @exercises midiManager (h.mm)
 @surface   mm:modify, mm:notes, mm:delete, mm:assign
 @harness   fakeReaper:bindTake
@@ -28,3 +28,19 @@
   @use call mm:notes  @ 41,52
   @use call mm:delete  @ 47
   @use call mm:assign  @ 48
+
+# Fields (r read / w write incl. constructor keys)
+  @field w chan  @ 35,36,37
+  @field r detune  @ 56,58
+  @field w detune  @ 35,36,37
+  @field w endppq  @ 35,36,37
+  @field w evType  @ 35,36,37
+  @field w name  @ 27
+  @field r pitch  @ 55,57
+  @field w pitch  @ 35,36,37,48
+  @field r ppq  @ 41,52
+  @field w ppq  @ 35,36,37
+  @field w reaper  @ 19
+  @field w run  @ 28
+  @field r uuid  @ 41
+  @field w vel  @ 35,36,37

@@ -37,3 +37,45 @@
   @use call wm:fastGainCommit  @ 109
   @use call wm:reconcile  @ 112
   @use call wm:syncExternal  @ 125
+
+# Fields (r read / w write incl. constructor keys)
+  @field w __label  @ 15
+  @field r _state  @ 16,17,124
+  @field r assignTrack  @ 110
+  @field w assignTrack  @ 111
+  @field w audio  @ 23,29
+  @field w cm  @ 7
+  @field w ds  @ 6
+  @field r edges  @ 37,38,79,106
+  @field w f  @ 36
+  @field r from  @ 80,107
+  @field w from  @ 37,38
+  @field r fxId  @ 28
+  @field w fxId  @ 28
+  @field w fxIdent  @ 28
+  @field w gain  @ 80
+  @field w ins  @ 23,29
+  @field w kind  @ 22,28
+  @field w midi  @ 23,29
+  @field w name  @ 51,60,71,88,99,117,130
+  @field r nodes  @ 35,36
+  @field w ops  @ 80
+  @field w outs  @ 23,29
+  @field w ports  @ 23,29
+  @field w pos  @ 22,28
+  @field r projStateCount  @ 124
+  @field w projStateCount  @ 124
+  @field r projectTracks  @ 16
+  @field w readJSFXContent  @ 9
+  @field w rm  @ 7
+  @field w run  @ 52,61,72,89,100,118,131
+  @field w s  @ 35
+  @field r to  @ 80,107
+  @field w to  @ 37,38
+  @field r trackGuids  @ 17
+  @field w trackId  @ 22
+  @field r tracks  @ 44
+  @field w tracks  @ 45
+  @field w type  @ 37,38
+  @field w x  @ 22,28
+  @field w y  @ 22,28

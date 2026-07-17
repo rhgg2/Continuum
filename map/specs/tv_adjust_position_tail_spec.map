@@ -23,3 +23,27 @@
   @use call ec:setPos  @ 31,53
   @use call cmgr:invoke  @ 32,33,54
   @use call fm:dump  @ 35,56
+
+# Fields (r read / w write incl. constructor keys)
+  @field r OPEN  @ 48,57
+  @field w chan  @ 27,49
+  @field r cols  @ 12
+  @field r endppq  @ 37
+  @field w endppq  @ 27,48
+  @field r endppqL  @ 57
+  @field w endppqL  @ 48
+  @field r grid  @ 12
+  @field w lane  @ 27,49
+  @field r midiChan  @ 13
+  @field w name  @ 20,42
+  @field r notes  @ 35,56
+  @field w notes  @ 26,47
+  @field w pitch  @ 27,49
+  @field r ppq  @ 36
+  @field w ppq  @ 27,48
+  @field w ppqL  @ 48
+  @field w run  @ 21,43
+  @field w seed  @ 26,47
+  @field r type  @ 13
+  @field w uuid  @ 49
+  @field w vel  @ 27,49

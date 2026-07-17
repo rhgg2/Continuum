@@ -18,3 +18,12 @@
 
 # Uses (outbound edges)
   @use call harness.mk  @ 8
+
+# Fields (r read / w write incl. constructor keys)
+  @field w ds  @ 9
+  @field r folderDepth  @ 18,19,57
+  @field w folderDepth  @ 34,35,36,50
+  @field r id  @ 25
+  @field w name  @ 30,46,53
+  @field r parent  @ 39,40,41,42,55,56
+  @field w run  @ 31,47

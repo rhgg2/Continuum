@@ -33,3 +33,29 @@
   @reaper EnumerateSubdirectories
   @reaper EnumerateFiles
   @reaper RecursiveCreateDirectory
+
+# Fields (r read / w write incl. constructor keys)
+  @field w aif  @ 8
+  @field w aiff  @ 8
+  @field w basename  @ basename:18
+  @field w copy  @ 109
+  @field r exists  @ 117
+  @field w exists  @ exists:49 117
+  @field w fileOps  @ 108
+  @field w flac  @ 8
+  @field w hash  @ 118
+  @field r hashFile  @ 118
+  @field w hashFile  @ hashFile:61
+  @field w isAudio  @ isAudio:12
+  @field w join  @ join:28
+  @field w listAudioFiles  @ listAudioFiles:82
+  @field w listDirs  @ listDirs:37
+  @field w m4a  @ 9
+  @field w mkdir  @ 116
+  @field w move  @ 111
+  @field w mp3  @ 9
+  @field w ogg  @ 9
+  @field w opus  @ 9
+  @field w parent  @ parent:23
+  @field w readText  @ readText:55
+  @field w wav  @ 8

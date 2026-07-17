@@ -366,3 +366,250 @@
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB
+
+# Fields (r read / w write incl. constructor keys)
+  @field r Col_Text  @ renderBody:1424
+  @field r FocusedFlags_AnyWindow  @ renderBody:1448
+  @field r ImGui_GetBuiltinPath  @ 12
+  @field r Key_Backspace  @ handleFxChainKeys:1099
+  @field r Key_Delete  @ handleFxChainKeys:1099
+  @field r Key_DownArrow  @ handlePaletteKeys:394 handleFxChainKeys:1078
+  @field r Key_Enter  @ handlePaletteKeys:422 812,1287 handleFxChainKeys:1080
+  @field r Key_Equal  @ handleFxChainKeys:1097,1098
+  @field r Key_Escape  @ handlePaletteKeys:374 816,1291 handleFxChainKeys:1064
+  @field r Key_KeypadEnter  @ handlePaletteKeys:422 813,1288 handleFxChainKeys:1080
+  @field r Key_L  @ handlePaletteKeys:418
+  @field r Key_LeftArrow  @ handlePaletteKeys:402 handleFxChainKeys:1079
+  @field r Key_Minus  @ handleFxChainKeys:1097
+  @field r Key_PageDown  @ handlePaletteKeys:396
+  @field r Key_PageUp  @ handlePaletteKeys:397
+  @field r Key_R  @ handlePaletteKeys:383 handleFxChainKeys:1066
+  @field r Key_RightArrow  @ handlePaletteKeys:398 handleFxChainKeys:1079
+  @field r Key_Tab  @ handlePaletteKeys:369 handleFxChainKeys:1072
+  @field r Key_UpArrow  @ handlePaletteKeys:395 handleFxChainKeys:1078
+  @field r Key_X  @ handlePaletteKeys:380 handleFxChainKeys:1065
+  @field r Mod_Ctrl  @ adjustRow:944,950
+  @field r Mod_Shift  @ handleFxChainKeys:1073
+  @field r Mod_Super  @ handlePaletteKeys:380,383,418 handleFxChainKeys:1063
+  @field r REMOVE  @ cancelStrip:1054 headerActions:1111
+  @field r SelectableFlags_AllowOverlap  @ drawTreeItem:460
+  @field r StyleVar_FramePadding  @ drawTree:513
+  @field r StyleVar_ItemInnerSpacing  @ fxFieldWidget:962
+  @field r acceptCmds  @ 874
+  @field w acceptCmds  @ focusState:1473,1478
+  @field w activeTab  @ drawParamPalette:581
+  @field w addNoteLane  @ 1327
+  @field w addTypedCol  @ 1328
+  @field w align  @ 136
+  @field w allowDouble  @ drawTreeItem:484
+  @field w anchor  @ 630,634,638,644,648,652,656,670,691,705,712,720
+  @field w anchor  @ 724,730,735
+  @field r base  @ adjustRow:950
+  @field w beats  @ openTakeProperties:1401,1406
+  @field r beatsBuf  @ 765,800,817,1284,1292
+  @field w beatsBuf  @ 768,802,1285 openNewTakeModal:1268 openTakeProperties:1388
+  @field r beatsGen  @ 769,799
+  @field w beatsGen  @ 769 openTakeProperties:1389
+  @field w buttonLabel  @ drawSampleDropdown:76 103,125,148,166,180 drawAddChainStage:1144 drawChainStage:1173
+  @field w callback  @ removeAutomation:215 openPrompt:750 openConfirm:754 openNewTakeModal:1269 openTakeProperties:1392
+  @field r cc  @ paletteActions:227 removeOrHideCol:861
+  @field r cellH  @ renderBody:1445
+  @field r cents  @ centsToSteps:906 adjustRow:944 fxFieldWidget:969
+  @field w chordEntry  @ 873
+  @field r chrome  @ 21
+  @field w chrome  @ 873
+  @field r cm  @ 21
+  @field w cm  @ 873
+  @field w cmd  @ 631,632,635,636,639,640,641,642,645,646,649,650
+  @field w cmd  @ 653,654,657,658,659,660,661,662,663,664,665,666
+  @field w cmd  @ 667,668,671,672,673,674,675,676,677,678,679,680
+  @field w cmd  @ 681,682,683,684,685,686,687,688,689,692,693,694
+  @field w cmd  @ 695,696,697,698,699,700,701,702,703,706,707,708
+  @field w cmd  @ 709,710,713,714,715,716,717,718,721,722,725,726
+  @field w cmd  @ 727,728,731,732,733,736,737,738,739,740,741,742
+  @field w cmd  @ 743
+  @field r cmgr  @ 21
+  @field w cmgr  @ 873
+  @field r coarse  @ adjustRow:950
+  @field r cols  @ 173 paletteActions:226 drawStatusBar:594,608 removeOrHideCol:860 handleFxChainKeys:1069 drawFxChainBody:1220,1226,1229 renderBody:1421
+  @field w cols  @ stripPlan:1034
+  @field w commandHeld  @ renderBody:1455
+  @field r ctx  @ 29
+  @field w current  @ drawSampleDropdown:70 98,121 kindItems:1135
+  @field r defaults  @ fxSeed:884
+  @field r detune  @ hostPitch:901
+  @field r doubleClicked  @ drawTreeItem:486,492
+  @field w draw  @ drawParamPalette:583
+  @field r ds  @ 21
+  @field w duplicateUnpooledBelow  @ 1320
+  @field w editNoteFx  @ 1337
+  @field r entry  @ adjustRow:936,948 handleFxChainKeys:1085 drawChainStage:1195
+  @field w entry  @ stripColumns:1012
+  @field r events  @ removeAutomation:210,214
+  @field r facade  @ 21
+  @field r fd  @ adjustRow:936 handleFxChainKeys:1085 drawChainStage:1192,1195
+  @field w fd  @ stripColumns:1012
+  @field r field  @ launchPattern:929,931 adjustRow:936,939,945,952 fxFieldWidget:959,960,965,972,977
+  @field r fields  @ chainRows:996 stripColumns:1010 paramRange:1022 handleFxChainKeys:1075,1084,1096,1098 drawChainStage:1188
+  @field w fields  @ stripColumns:1016 stripPlan:1033
+  @field w flags  @ drawTreeItem:460
+  @field w flat  @ drawAddChainStage:1144 drawChainStage:1173
+  @field r focusName  @ 790,795 openTakeProperties:1391
+  @field w focusName  @ duplicateUnpooledTake:1299 openTakeProperties:1391
+  @field w focusParamPalette  @ 1338
+  @field r fontSize  @ renderBody:1423
+  @field r fx  @ cancelStrip:1054
+  @field w fx  @ enterStrip:1155 editFx:1245
+  @field r fxGuid  @ buildPlan:314,316,319 navRows:344,346 navIndex:356 selectParam:361 handlePaletteKeys:389,400,404,415
+  @field r fxGuid  @ handlePaletteKeys:420,429 drawTreeItem:454,458,463,466,468,472,474,480
+  @field r fxGuid  @ drawTreeItem:482,487,488 planIndexOfCursor:501,502
+  @field w fxGuid  @ navRows:344,346 selectParam:361 handlePaletteKeys:389,415 drawTreeItem:463,487,488
+  @field r generator  @ buildPlan:311
+  @field r global  @ 163
+  @field r grid  @ 173 paletteActions:226 drawStatusBar:594,608 removeOrHideCol:860 openTakeProperties:1377 renderBody:1421
+  @field w group  @ drawSampleDropdown:69 98,121
+  @field r gui  @ 21
+  @field w gui  @ 873
+  @field w gutter  @ drawTreeItem:451
+  @field w h  @ drawParamPalette:580
+  @field w hasChildren  @ drawTreeItem:459,483
+  @field w heading  @ drawSampleDropdown:75 165,179
+  @field r height  @ renderBody:1445
+  @field r help  @ 21
+  @field w hideExtraCol  @ 1329
+  @field r host  @ cancelStrip:1054 handleFxChainKeys:1085,1088,1096,1098,1100 headerActions:1111 drawFxChainBody:1221,1228,1229
+  @field w host  @ stripPlan:1034 enterStrip:1155 editFx:1245
+  @field w id  @ 87,111,131,141,158,191,196 drawTreeItem:458,482
+  @field w identity  @ 49
+  @field r idx  @ 94,97,98,119,120,121
+  @field w indent  @ drawTreeItem:483
+  @field r index  @ emitParams:281,282 navRows:346 selectParam:362 drawTreeItem:480,482,487,489 planIndexOfCursor:502 adjustRow:939,945
+  @field r index  @ adjustRow:948,952 handleFxChainKeys:1082,1085,1088,1094,1100,1103 drawChainStage:1173,1174,1179
+  @field r index  @ drawChainStage:1183,1186,1193,1195
+  @field w index  @ stripColumns:1012,1015
+  @field w inputAllowed  @ 874
+  @field r isAdd  @ handleFxChainKeys:1082,1087,1094,1100,1101,1103 drawFxChainBody:1228
+  @field w isAdd  @ stripPlan:1033
+  @field r item  @ handlePaletteKeys:400,404,429
+  @field w item  @ navRows:344,346
+  @field w items  @ drawSampleDropdown:78 106,126,150,168,182,630,634,638,644,648,652
+  @field w items  @ 656,670,691,705,712,720,724,730,735 drawAddChainStage:1144 drawChainStage:1173
+  @field w key  @ drawSampleDropdown:68 98,121,543,544 kindItems:1135
+  @field r kind  @ navRows:343,345 drawTreeItem:448,450,452 planIndexOfCursor:501,502 patternSummary:922 launchPattern:929 stripColumns:1010,1015,1016
+  @field r kind  @ drawChainStage:1173
+  @field w kind  @ drawSampleDropdown:74 102,124,147,165,179 emitParams:292,297,299 buildPlan:329,331 fxSeed:884
+  @field w kind  @ emptyBody:916,917 stripColumns:1015 drawAddChainStage:1144 drawChainStage:1173 openNewTakeModal:1265 openTakeProperties:1385
+  @field r kinds  @ fxSeed:884 stripColumns:1010,1016 kindItems:1135
+  @field r l  @ choiceLabels:893 fxFieldWidget:964
+  @field r label  @ drawStatusBar:610 launchPattern:930 stripColumns:1016 kindItems:1135 drawChainStage:1173,1192
+  @field w label  @ drawSampleDropdown:67 97,121,543,544,631,632,635 selectParam:362 drawTreeItem:458,482,489
+  @field w label  @ 636,639,640,641,642,645,646,649,650,653,654,657
+  @field w label  @ 658,659,660,661,662,663,664,665,666,667,668,671
+  @field w label  @ 672,673,674,675,676,677,678,679,680,681,682,683
+  @field w label  @ 684,685,686,687,688,689,692,693,694,695,696,697
+  @field w label  @ 698,699,700,701,702,703,706,707,708,709,710,713
+  @field w label  @ 714,715,716,717,718,721,722,725,726,727,728,731
+  @field w label  @ 732,733,736,737,738,739,740,741,742,743 launchPattern:930 stripColumns:1016
+  @field w label  @ kindItems:1135
+  @field r learn  @ drawTreeItem:456,470
+  @field w learn  @ drawTree:515
+  @field r max  @ adjustRow:951 fxFieldWidget:976
+  @field w max  @ 136 fxFieldWidget:971,976
+  @field w maxWidth  @ drawChainStage:1173
+  @field r midiChan  @ 174 paletteActions:227 removeOrHideCol:861
+  @field r min  @ adjustRow:951 fxFieldWidget:976
+  @field w min  @ 136 fxFieldWidget:971,976
+  @field w minWidth  @ drawChainStage:1173
+  @field r modalHost  @ 21
+  @field r modalOrder  @ 881
+  @field r mode  @ 808,817
+  @field w mode  @ 808 openTakeProperties:1390,1401,1406
+  @field r name  @ drawSampleDropdown:58,67 95,97,119 buildPlan:320 selectParam:362 drawTreeItem:458,482
+  @field r name  @ drawTreeItem:489 drawStatusBar:604
+  @field w name  @ openTakeProperties:1401,1406
+  @field r nameBuf  @ 791,817,1281,1292
+  @field w nameBuf  @ 792,1282 openNewTakeModal:1267 openTakeProperties:1387
+  @field w newTakeBelow  @ 1319
+  @field w nextTake  @ 1325
+  @field w nextTrack  @ 1323
+  @field r numRows  @ openTakeProperties:1377
+  @field w onCancel  @ drawAddChainStage:1148
+  @field w onChord  @ openPrompt:750
+  @field r onClose  @ openTakeProperties:1382,1402,1407
+  @field w onClose  @ openTakeProperties:1410
+  @field w onPick  @ drawSampleDropdown:79 106,126,151,169,183 drawAddChainStage:1146 drawChainStage:1174
+  @field w onTab  @ drawParamPalette:582
+  @field r open  @ handlePaletteKeys:400,404,429 drawTreeItem:459,466
+  @field w open  @ buildPlan:331 drawTreeItem:459
+  @field w openSwingPicker  @ 1335
+  @field w openTemperPicker  @ 1334
+  @field r options  @ choiceIndex:889 choiceLabels:893 adjustRow:938,939 fxFieldWidget:964,965
+  @field r originX  @ renderBody:1445
+  @field r originY  @ renderBody:1445
+  @field w pageSuppressed  @ focusState:1473,1477
+  @field r param  @ navIndex:356 handlePaletteKeys:389,400,404,405,407,415,416,423 drawTreeItem:454,480
+  @field r param  @ planIndexOfCursor:501,502 rowIndexOf:1001 clampCursor:1041 handleFxChainKeys:1081,1084,1092,1093,1096,1098
+  @field r param  @ handleFxChainKeys:1101 drawChainStage:1169,1190 drawFxChainBody:1221
+  @field w param  @ navRows:344,346 selectParam:362 handlePaletteKeys:389,415 drawTreeItem:463,487,489 chainRows:995,996 clampCursor:1038,1041
+  @field w param  @ handleFxChainKeys:1075,1092 enterStrip:1157 editFx:1250,1253
+  @field r path  @ 15 drawSampleDropdown:61
+  @field w path  @ 15
+  @field r pe  @ 21
+  @field r pitch  @ hostPitch:901
+  @field w place  @ 630,634,638,644,648,652,656,670,691,705,712,720
+  @field w place  @ 724,730,735
+  @field r points  @ patternSummary:922
+  @field w points  @ emptyBody:916
+  @field w prevTake  @ 1324
+  @field w prevTrack  @ 1322
+  @field r prm  @ navRows:346,347 selectParam:362 drawTreeItem:480,482,487,489 planIndexOfCursor:502
+  @field w prm  @ emitParams:292,299 navRows:347
+  @field w prompt  @ removeAutomation:213 openPrompt:750 openConfirm:754
+  @field w quantize  @ 1331
+  @field w quantizeKeepRealised  @ 1332
+  @field r refocusBeats  @ 795
+  @field w refocusBeats  @ 770,797
+  @field r region  @ 1348
+  @field w render  @ 88,112,132,142,159,193,197
+  @field w reserve  @ drawTreeItem:460
+  @field w resolve  @ openPrompt:750
+  @field r row  @ navRows:344,346,347 selectParam:361 handlePaletteKeys:419,420 drawTreeItem:453,479 planIndexOfCursor:501,502
+  @field w row  @ emitParams:292,297,299 buildPlan:331 navRows:344,347
+  @field r section  @ emitParams:280,281,282,283 buildPlan:320
+  @field r selected  @ drawTreeItem:462,486
+  @field w selected  @ drawTreeItem:459,483
+  @field w setRPB  @ 1312
+  @field r show  @ drawTreeItem:456,471
+  @field w show  @ drawTree:514
+  @field r specs  @ patternSummary:923
+  @field w specs  @ emptyBody:917
+  @field r stage  @ rowIndexOf:1001 clampCursor:1039,1040 handleFxChainKeys:1071,1074,1075,1088,1092 drawFxChainBody:1221,1228
+  @field r stage  @ drawFxChainBody:1229
+  @field w stage  @ chainRows:995,996 clampCursor:1038,1039 handleFxChainKeys:1074,1088 enterStrip:1157 editFx:1250,1253
+  @field w suppressKbd  @ focusState:1473,1476
+  @field w tabs  @ drawParamPalette:581
+  @field w takeProperties  @ 1318
+  @field r text  @ drawTreeItem:449,451
+  @field w text  @ emitParams:297 buildPlan:329 drawTreeItem:449,451
+  @field w title  @ removeAutomation:212 630,634,638,644,648,652,656,670,691,705,712
+  @field w title  @ 720,724,730,735 openPrompt:750 openConfirm:754 openNewTakeModal:1266 openTakeProperties:1386
+  @field r toggled  @ drawTreeItem:466
+  @field r trackGuid  @ buildPlan:316,319 selectParam:361 drawTreeItem:488
+  @field w trackGuid  @ selectParam:361 drawTreeItem:488
+  @field r tracker  @ 624
+  @field r tv  @ 21
+  @field w tv  @ 873
+  @field r type  @ paletteActions:227 removeOrHideCol:861
+  @field r ui  @ renderBody:1423
+  @field r uiFont  @ 29
+  @field r v  @ choiceIndex:889 adjustRow:939 fxFieldWidget:965
+  @field w visible  @ 192
+  @field r when  @ stripColumns:1011
+  @field r widget  @ adjustRow:937,940,947 fxFieldWidget:963,966,973 handleFxChainKeys:1085
+  @field w width  @ drawSampleDropdown:77 106,126,149,167,181 fxFieldWidget:971,976
+  @field w x  @ drawParamPalette:580
+  @field w x0  @ rowHighlight:1126
+  @field w x1  @ rowHighlight:1127
+  @field w y  @ drawParamPalette:580
+  @field w y0  @ rowHighlight:1126
+  @field w y1  @ rowHighlight:1127

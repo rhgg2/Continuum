@@ -49,3 +49,59 @@
 
 # Uses (outbound edges)
   @use call DAG.validate  @ 43,50,61,74,88,102,114,127,140,154,165,174,187,201,216,231,241,254,264,278,291,301,314,325,340,353,366,378,389,398,409,420
+
+# Fields (r read / w write incl. constructor keys)
+  @field r at  @ 178
+  @field w audio  @ 7,16,24,252
+  @field w busAware  @ 408,419
+  @field r code  @ 53,64,77,91,105,117,130,143,177,191,206,220
+  @field r code  @ 242,255,267,281,304,329,344,357,379,401,410
+  @field r count  @ 243,256
+  @field r display  @ 15
+  @field r edge  @ 330
+  @field w edges  @ 36,254,314
+  @field w from  @ 51,62,75,89,103,115,128,141,155,166,175,188
+  @field w from  @ 189,202,203,204,217,218,232,233,234,265,279,292
+  @field w from  @ 302,315,326,327,341,342,354,355,367,368,399
+  @field w fromPort  @ 103,115
+  @field w fxDisplay  @ 15
+  @field w fxIdent  @ 14
+  @field r guid  @ 380
+  @field r have  @ 118,131,305
+  @field r id  @ 54,65,79,270,411
+  @field r ident  @ 14,412
+  @field w ident  @ 408
+  @field r ins  @ 16,24
+  @field w ins  @ 7,8,16,18,24,25,126,139,153,164,229,252
+  @field w ins  @ 253,312,339,365
+  @field r kind  @ 78,92,144,268,282
+  @field w kind  @ 5,13,23,251
+  @field r master  @ 32
+  @field w master2  @ 251
+  @field w midi  @ 8,18,25,253
+  @field w name  @ 41,47,58,69,83,97,109,122,135,149,160,171
+  @field w name  @ 182,195,210,224,239,247,260,274,287,297,309,320
+  @field w name  @ 335,348,361,373,384,393,405,416
+  @field w nextId  @ 36,254,316
+  @field r noMaster  @ 32
+  @field w noMaster  @ 241
+  @field w nodes  @ 36,254,314
+  @field r outs  @ 17
+  @field w outs  @ 7,8,17,18,24,25,139,230,252,253
+  @field w ports  @ 7,16,24,252
+  @field w pos  @ 6,13,23,251
+  @field r prior  @ 331
+  @field w run  @ 42,48,59,70,84,98,110,123,136,150,161,172
+  @field w run  @ 183,196,211,225,240,248,261,275,288,298,310,321
+  @field w run  @ 336,349,362,374,385,394,406,417
+  @field w to  @ 51,62,75,89,103,115,128,141,155,166,175,188
+  @field w to  @ 189,202,203,204,217,218,232,233,234,265,279,292
+  @field w to  @ 302,315,326,327,341,342,354,355,367,368,399
+  @field w toPort  @ 128,166,232,233,302,315,341,342,355,367,368
+  @field w trackId  @ 5
+  @field r type  @ 93,145,269,283
+  @field w type  @ 51,62,75,89,103,115,128,141,155,166,175,188
+  @field w type  @ 189,202,203,204,217,218,232,233,234,265,279,292
+  @field w type  @ 302,315,326,327,341,342,354,355,367,368,399
+  @field w x  @ 6,13,23,251
+  @field w y  @ 6,13,23,251

@@ -20,3 +20,19 @@
   @use call wm:load  @ 37
   @use call wv:nodeViews  @ 39
   @use call wv:wireViews  @ 44
+
+# Fields (r read / w write incl. constructor keys)
+  @field w __label  @ 16
+  @field r _state  @ 17,18
+  @field r category  @ 40,41
+  @field w cm  @ 10,11
+  @field w ds  @ 9
+  @field r from  @ 44
+  @field r fromKind  @ 44
+  @field r id  @ 24
+  @field w name  @ 30
+  @field r projectTracks  @ 17
+  @field w rm  @ 10
+  @field w run  @ 31
+  @field r trackGuids  @ 18
+  @field w wm  @ 11

@@ -28,3 +28,28 @@
   @use call rm:assignTrack  @ 75
   @use call rm:deleteTrack  @ 92
   @use call rm:transaction  @ 108
+
+# Fields (r read / w write incl. constructor keys)
+  @field r PreventUIRefresh  @ 103
+  @field w PreventUIRefresh  @ 105
+  @field r Undo_BeginBlock  @ 103
+  @field w Undo_BeginBlock  @ 104
+  @field r Undo_EndBlock2  @ 103
+  @field w Undo_EndBlock2  @ 106
+  @field w ds  @ 9
+  @field r fx  @ 45
+  @field r gain  @ 66,81
+  @field w gain  @ 47,60,76
+  @field r id  @ 26,41,49
+  @field r isMaster  @ 44,50
+  @field r mainSend  @ 47,65,66,80,81
+  @field w mainSend  @ 60,76
+  @field r name  @ 42,63,78
+  @field w name  @ 31,54,59,70,75,85,98
+  @field r nchan  @ 21,43,64,79
+  @field w nchan  @ 34,35,47,59,73,75
+  @field r on  @ 65,80
+  @field w on  @ 47,60,76
+  @field w run  @ 32,55,71,86,99
+  @field r sends  @ 46
+  @field w tgtOffset  @ 47

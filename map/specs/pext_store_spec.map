@@ -40,3 +40,27 @@
   @use call ps:getAt  @ 83
   @use call ps:watch  @ 93,110,123,136,151,170
   @use call ps:pollUndo  @ 98,113,126,140,160,176
+
+# Fields (r read / w write incl. constructor keys)
+  @field r ValidatePtr2  @ 153
+  @field w ValidatePtr2  @ 154
+  @field r _state  @ 33,34,40,96,112,173,174
+  @field w from  @ 82,83
+  @field w mark  @ 65,66
+  @field w n  @ 65,66
+  @field w name  @ 44,52,61,72,79,89,106,119,132,146,166,183
+  @field w name  @ 195
+  @field w noteLayout  @ 186,189
+  @field w pbRange  @ 96,112,138,149,173,174,186,189,200
+  @field r projStateCount  @ 40
+  @field w projStateCount  @ 40
+  @field r projectTracks  @ 33
+  @field w reaper  @ 31
+  @field w resourcePath  @ 34
+  @field w run  @ 45,53,62,73,80,90,107,120,133,147,167,184
+  @field w run  @ 196
+  @field r scope  @ 102
+  @field w scope  @ 93,110,123,136,151,170
+  @field w slot  @ 93,110,123,136,151,170
+  @field r takeExt  @ 96,112,173
+  @field r trackExt  @ 174

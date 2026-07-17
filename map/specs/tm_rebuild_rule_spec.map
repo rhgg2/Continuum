@@ -1,4 +1,4 @@
-@spec tm_rebuild_rule_spec  src=tests/specs/tm_rebuild_rule_spec.lua  loc=515  sha=d415ad4  cases=20
+@spec tm_rebuild_rule_spec  src=tests/specs/tm_rebuild_rule_spec.lua  loc=515  sha=37ed80d  cases=20
 @exercises midiManager (h.fm), trackerManager (h.tm), dataStore (h.ds), configManager (h.cm)
 @surface   fm:dump, tm:markSwingStale, fm:notes, fm:modify, fm:assign, fm:ccs, tm:getChannel, tm:assignEvent, tm:flush, tm:rebuild, ds:assign, cm:set
 @harness   mk{seed.notes, seed.ccs}
@@ -50,3 +50,63 @@
   @use call tm:rebuild  @ 225
   @use call ds:assign  @ 274,300,353,384,456,478
   @use call cm:set  @ 325,411,435,509
+
+# Fields (r read / w write incl. constructor keys)
+  @field w atom  @ 10,11
+  @field r cc  @ 18
+  @field w cc  @ 63,159
+  @field r ccs  @ 17,174
+  @field w ccs  @ 62,158
+  @field w chan  @ 30,48,63,79,98,120,159,186,188,215,243,267
+  @field w chan  @ 269,293,295,315,340,342,370,371,396,397,494
+  @field r columns  @ 174
+  @field w config  @ 101,123,162,191,272,298,318,345,373,399,423,447
+  @field w config  @ 467,497
+  @field w data  @ 104,126,165,194,321,348,376,402,426,470,500
+  @field r endppq  @ 85,136
+  @field w endppq  @ 30,48,79,98,120,186,188,215,243,267,269,293
+  @field w endppq  @ 295,315,340,342,370,371,396,397,494
+  @field r endppqL  @ 36,54,87,249
+  @field w endppqL  @ 49,80,99,121,187,189,244,268,270,294,296,316
+  @field w endppqL  @ 341,343,370,371,396,397,495
+  @field r evType  @ 18
+  @field w evType  @ 63,159
+  @field r events  @ 174
+  @field w factors  @ 10,11
+  @field w global  @ 104,126,165,194,274,321,426,456,500
+  @field r markSwingStale  @ 379,405,429,450,473
+  @field w markSwingStale  @ 380,406,430,451,474
+  @field w name  @ 26,41,59,75,92,115,151,182,208,235,260,286
+  @field w name  @ 308,333,366,392,419,443,463,484
+  @field r notes  @ 14
+  @field w notes  @ 29,47,78,97,119,185,211,242,266,292,314,339
+  @field w notes  @ 369,395,493
+  @field w period  @ 10,11
+  @field r pitch  @ 14
+  @field w pitch  @ 30,48,79,98,120,186,188,215,243,267,269,293
+  @field w pitch  @ 295,315,340,342,370,371,396,397,494
+  @field r ppq  @ 84,107,135,144,171,202,203,227,278,280,302,303
+  @field r ppq  @ 323,327,350,351,355,356,505,511
+  @field w ppq  @ 30,48,63,79,98,120,132,142,159,169,186,188
+  @field w ppq  @ 198,215,243,267,269,293,295,315,340,342,370,371
+  @field w ppq  @ 396,397,494,503
+  @field r ppqL  @ 35,53,67,86,108,137,146,222,228,248,279,281
+  @field r ppqL  @ 328,506,512
+  @field w ppqL  @ 49,80,99,121,160,187,189,244,268,270,294,296
+  @field w ppqL  @ 316,341,343,370,371,396,397,495
+  @field w project  @ 102,124,163,192,272,298,319,346,374,400,424,447
+  @field w project  @ 468,498
+  @field w rpb  @ 244
+  @field w run  @ 27,42,60,76,93,116,156,183,209,236,261,287
+  @field w run  @ 309,334,367,393,420,444,464,485
+  @field w seed  @ 29,47,62,78,97,119,158,185,211,242,266,292
+  @field w seed  @ 314,339,369,395,422,446,466,493
+  @field w shift  @ 10,11
+  @field w swing  @ 104,126,165,194,321,348,376,402,426,470,500
+  @field w swings  @ 102,124,163,192,272,298,319,346,374,400,424,447
+  @field w swings  @ 468,498
+  @field r uuid  @ 68,132,142,169,198,503
+  @field r val  @ 177
+  @field w val  @ 63,159,175
+  @field w vel  @ 30,48,79,98,120,186,188,215,243,267,269,293
+  @field w vel  @ 295,315,340,342,370,371,396,397,494

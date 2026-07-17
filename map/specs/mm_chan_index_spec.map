@@ -1,4 +1,4 @@
-@spec mm_chan_index_spec  src=tests/specs/mm_chan_index_spec.lua  loc=175  sha=285f562  cases=7
+@spec mm_chan_index_spec  src=tests/specs/mm_chan_index_spec.lua  loc=175  sha=37ed80d  cases=7
 @exercises midiManager (h.mm)
 @surface   mm:notesRaw, mm:ccsRaw, mm:modify, mm:delete, mm:assign
 @harness   bareMM
@@ -39,3 +39,21 @@
   @use call mm:modify  @ 80,99,118,137,153,169
   @use call mm:delete  @ 100,101
   @use call mm:assign  @ 119,120,138,154,170
+
+# Fields (r read / w write incl. constructor keys)
+  @field w cc  @ 56,58,82
+  @field w ccs  @ 55
+  @field r chan  @ 24
+  @field w chan  @ 50,51,52,53,56,57,58,59,81,82,119,120
+  @field w detune  @ 138
+  @field w endppq  @ 50,51,52,53,81,170
+  @field w evType  @ 56,57,58,59,81,82
+  @field w name  @ 66,77,92,111,132,146,162
+  @field w notes  @ 49
+  @field w pitch  @ 50,51,52,53,59,81,154,170
+  @field r ppq  @ 96,97,115,116,136,150,168
+  @field w ppq  @ 50,51,52,53,56,57,58,59,81,82,170
+  @field w run  @ 67,78,93,112,133,147,163
+  @field r uuid  @ 96,97,115,116,136,150,168
+  @field w val  @ 56,57,58,82
+  @field w vel  @ 50,51,52,53,59,81,154

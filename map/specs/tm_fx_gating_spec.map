@@ -20,3 +20,31 @@
   @use call tm:flush  @ 34,35,42,43
   @use call fm:dump  @ 37,46
   @use call tm:getChannel  @ 45
+
+# Fields (r read / w write incl. constructor keys)
+  @field r ccs  @ 10
+  @field r chan  @ 11
+  @field w chan  @ 20,25
+  @field r columns  @ 45
+  @field w delay  @ 21,26
+  @field w depth  @ 6
+  @field w detune  @ 21,26
+  @field w endppq  @ 20,25
+  @field r evType  @ 11
+  @field w evType  @ 20,25
+  @field w fx  @ 21
+  @field w kind  @ 6
+  @field w lane  @ 21,26
+  @field w name  @ 31
+  @field w onset  @ 6
+  @field r pb  @ 45
+  @field w period  @ 6
+  @field w pitch  @ 20,25
+  @field r ppq  @ 12,15
+  @field w ppq  @ 12,20,25
+  @field w run  @ 32
+  @field r shape  @ 12
+  @field w shape  @ 12
+  @field r val  @ 12
+  @field w val  @ 12
+  @field w vel  @ 21,26

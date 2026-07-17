@@ -30,3 +30,61 @@
   @use call wm:mutate  @ 68,115
   @use call wm:targetState  @ 79,123
   @use call wm.readGraph  @ 81,103,123,144,159
+
+# Fields (r read / w write incl. constructor keys)
+  @field w __label  @ 15
+  @field r _state  @ 16,17
+  @field r audio  @ 83,84
+  @field w audio  @ 23,29,35
+  @field w cm  @ 9
+  @field w ds  @ 8
+  @field r edges  @ 40,73,74,75,76,77,106,119,120,121
+  @field w f  @ 72
+  @field r from  @ 43
+  @field w from  @ 73,74,75,76,77,119,120,121
+  @field r fromPort  @ 43
+  @field r fx  @ 54
+  @field w fx  @ 99,100,140,141,158
+  @field r fxId  @ 28
+  @field w fxId  @ 28,72
+  @field w fxIdent  @ 28
+  @field r gain  @ 41
+  @field w gain  @ 73,75,76,119,121,124,125,145
+  @field w id  @ 55,100,141
+  @field r ins  @ 29,83
+  @field w ins  @ 23,29,30,35,124,145,161
+  @field r kind  @ 82,104,127,149,150
+  @field w kind  @ 22,28,34
+  @field w mainSend  @ 101,142
+  @field w midi  @ 23,30,35
+  @field w name  @ 63,95,110,136,155
+  @field w node  @ 124,125,145,146,160,161
+  @field r nodes  @ 69,70,71,72,82,83,84,104,105,116,117,118
+  @field r nodes  @ 127,149,150
+  @field w on  @ 101,142
+  @field r ops  @ 41
+  @field w ops  @ 73,75,76,119,121
+  @field w orient  @ 34
+  @field r outs  @ 29,84
+  @field w outs  @ 23,29,30,35,125,146,160
+  @field w port  @ 124,125,145,146,160,161
+  @field r ports  @ 83,84
+  @field w ports  @ 23,29,35
+  @field w pos  @ 22,28,34
+  @field r projectTracks  @ 16
+  @field w rm  @ 9
+  @field w run  @ 64,96,111,137,156
+  @field w sa  @ 69,116
+  @field w sb  @ 70,117
+  @field w sends  @ 100,141
+  @field r to  @ 43
+  @field w to  @ 73,74,75,76,77,119,120,121
+  @field r toPort  @ 43
+  @field r trackGuids  @ 17
+  @field w trackId  @ 22,81,103
+  @field r trackKind  @ 54
+  @field w trackKind  @ 99,100,140,141,158
+  @field r type  @ 43
+  @field w type  @ 73,74,75,76,77,119,120,121
+  @field w x  @ 22,28,34
+  @field w y  @ 22,28,34

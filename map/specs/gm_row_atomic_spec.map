@@ -41,3 +41,28 @@
   @use call ec:setPos  @ 63,78,90,121,151,180
   @use call cmgr:invoke  @ 64,79,91,122,152,181
   @use call gm:eachInstance  @ 156,184
+
+# Fields (r read / w write incl. constructor keys)
+  @field r chan  @ 23
+  @field w chan  @ 40,41,50,107,108,137,138,147,167,176
+  @field w col1  @ 45,113,142,171
+  @field w col2  @ 45,113,142,171
+  @field r cols  @ 15
+  @field w endppq  @ 40,41,107,108,137,138,167
+  @field r evType  @ 23
+  @field r grid  @ 15
+  @field w groups  @ 38,105,135,165
+  @field r midiChan  @ 16
+  @field w name  @ 57,74,86,99,129,160
+  @field w notes  @ 39,106,136,166
+  @field w part1  @ 46,114,143,172
+  @field w part2  @ 46,114,143,172
+  @field w pitch  @ 40,41,107,108,137,138,167
+  @field r ppq  @ 23
+  @field w ppq  @ 40,41,50,107,108,137,138,147,167,176
+  @field w row1  @ 45,113,142,171
+  @field w row2  @ 45,113,142,171
+  @field w run  @ 58,75,87,100,130,161
+  @field w seed  @ 39,106,136,166
+  @field r type  @ 16
+  @field w vel  @ 40,41,107,108,137,138,167

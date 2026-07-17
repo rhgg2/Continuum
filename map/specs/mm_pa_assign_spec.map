@@ -1,4 +1,4 @@
-@spec mm_pa_assign_spec  src=tests/specs/mm_pa_assign_spec.lua  loc=50  sha=1ac9618  cases=1
+@spec mm_pa_assign_spec  src=tests/specs/mm_pa_assign_spec.lua  loc=50  sha=37ed80d  cases=1
 @exercises midiManager (h.mm)
 @surface   mm:load, mm:ccs, mm:modify, mm:assign
 @harness   fakeReaper:bindTake, reaper:seedMidi
@@ -21,3 +21,29 @@
   @use call mm:ccs  @ 36
   @use call mm:modify  @ 39
   @use call mm:assign  @ 39
+
+# Fields (r read / w write incl. constructor keys)
+  @field w at  @ 10
+  @field w cc  @ 10
+  @field w ccs  @ 21
+  @field r chan  @ 22
+  @field w chan  @ 22,32
+  @field w chanmsg  @ 22
+  @field r evType  @ 46
+  @field w msg2  @ 23
+  @field w msg3  @ 23
+  @field w name  @ 29
+  @field r pa  @ 22
+  @field w pa  @ 10
+  @field w pb  @ 10
+  @field w pc  @ 10
+  @field r pitch  @ 23
+  @field w pitch  @ 32
+  @field r ppq  @ 22
+  @field w ppq  @ 22,32
+  @field r reaper  @ 32
+  @field w reaper  @ 14
+  @field w run  @ 30
+  @field r uuid  @ 39
+  @field r vel  @ 23,37,47
+  @field w vel  @ 32,39

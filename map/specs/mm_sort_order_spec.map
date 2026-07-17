@@ -22,3 +22,19 @@
   @use call mm:modify  @ 30,42,48,61
   @use call mm:notesRaw  @ 33,70,74
   @use call mm:ccsRaw  @ 52
+
+# Fields (r read / w write incl. constructor keys)
+  @field r cc  @ 52
+  @field w cc  @ 43,44,45,49
+  @field w chan  @ 26,27,28,31,43,44,45,49,64,67,68
+  @field w endppq  @ 26,27,28,31,64,67,68
+  @field w evType  @ 31,43,44,45,49,64,67,68
+  @field w name  @ 23,39,58
+  @field w notes  @ 25
+  @field r pitch  @ 74
+  @field w pitch  @ 26,27,28,31,64,67,68
+  @field r ppq  @ 10,52,74
+  @field w ppq  @ 26,27,28,31,43,44,45,49,64,67,68
+  @field w run  @ 24,40,59
+  @field w val  @ 43,44,45,49
+  @field w vel  @ 26,27,28,31,64,67,68

@@ -1,4 +1,4 @@
-@spec gm_swing_spec  src=tests/specs/gm_swing_spec.lua  loc=247  sha=d20cba1  cases=6
+@spec gm_swing_spec  src=tests/specs/gm_swing_spec.lua  loc=247  sha=37ed80d  cases=6
 @exercises harness (harness), trackerView (h.vm), groupManager (gm), trackerManager (h.tm), midiManager (h.fm)
 @surface   harness.mk, vm:eventsInRect, gm:markGroup, gm:newInstance, tm:flush, fm:dump, tm:fromLogical, gm:resizeGroup, vm:setSwingSlot, tm:rebuild, gm:assignEvent, tm:byUuid, tm:assignEvent
 @harness   mk{seed.length, seed.resolution, seed.notes}
@@ -49,3 +49,48 @@
   @use call gm:assignEvent  @ 158
   @use call tm:byUuid  @ 184,206,215,229,243,244
   @use call tm:assignEvent  @ 186,209,234
+
+# Fields (r read / w write incl. constructor keys)
+  @field r OPEN  @ 209,215
+  @field w atom  @ 25
+  @field w chan  @ 56,59,73,94,104,142,152,181,203,226
+  @field w chanLo  @ 67,100,148
+  @field r config  @ 39,139
+  @field w config  @ 23,39,139
+  @field r data  @ 40
+  @field w data  @ 26,40
+  @field w dur  @ 67,100,148
+  @field r endppq  @ 242
+  @field w endppq  @ 55,58,93,142,180,186,202,209,225,235
+  @field r endppqL  @ 215
+  @field w endppqL  @ 56,59,94,181,186,203,226,235
+  @field w factors  @ 25
+  @field w global  @ 26
+  @field w groups  @ 26,41,140
+  @field w lane  @ 56,59,94,142,181,203,226
+  @field w length  @ 42,141
+  @field w name  @ 50,89,134,176,198,221
+  @field r notes  @ 77,109,162,189,212,238
+  @field w notes  @ 42,141
+  @field w period  @ 25
+  @field r pitch  @ 78,110,166,167
+  @field w pitch  @ 57,60,95,143,158,182,204,227
+  @field r ppq  @ 78,110,111,162,190,192,213,239,240
+  @field w ppq  @ 55,58,67,73,93,100,104,142,148,152,180,186
+  @field w ppq  @ 202,209,225,234
+  @field r ppqL  @ 243
+  @field w ppqL  @ 56,59,94,181,203,226,234
+  @field w project  @ 24
+  @field r rawTime  @ 244
+  @field w rawTime  @ 235
+  @field w resolution  @ 42,141
+  @field w run  @ 51,90,135,177,199,222
+  @field w seed  @ 42,141
+  @field w shift  @ 25
+  @field w startDelta  @ 122
+  @field w streams  @ 68,101,149
+  @field w swing  @ 26
+  @field w swings  @ 24
+  @field r tm  @ 34
+  @field w uuid  @ 57,60,95,143,182,204,227
+  @field w vel  @ 57,60,95,143,182,204,227

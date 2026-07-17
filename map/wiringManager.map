@@ -342,3 +342,269 @@
   @reaper GetResourcePath
   @reaper GetTrackGUID
   @reaper CountTrackMediaItems
+
+# Fields (r read / w write incl. constructor keys)
+  @field r GetAppVersion  @ affectedByPinGrowBug:78
+  @field r GetProjectStateChangeCount  @ markState:69 syncExternal:2031
+  @field r REMOVE  @ 263 stampBusTracks:2060
+  @field r audio  @ projectEntry:976 readGraph:1209,1361
+  @field w audio  @ addFxNode:557,569 addSourceNode:652 addBusNode:690 insertBus:730 readGraph:1042,1225,1250,1260,1303,1312,1347
+  @field w audio  @ readGraph:1381
+  @field r audioSum  @ readCuParams:798 readGraph:1285
+  @field w audioSum  @ readCuParams:798
+  @field r autoSource  @ addFxNode:545
+  @field r bracketNodes  @ projectEntry:955
+  @field r busAware  @ parseJSFXBusAware:139 checkUserAddable:355 snapFx:835 readGraph:1310
+  @field w busAware  @ parseJSFXMidiTraits:126,127,130 addFxNode:555 snapFx:835 readGraph:1310
+  @field w busRoute  @ 805
+  @field r cls  @ gainRouting:1914 pokeGainTarget:1942 setStateGain:1964
+  @field w cls  @ gainRouting:1914
+  @field w code  @ checkUserAddable:356 addFxNode:542
+  @field w components  @ readGraph:1426
+  @field r consumer  @ stampOrigin:1640 originGuid:1653
+  @field w consumer  @ projectEntry:974
+  @field r consumerId  @ pokeGainTarget:1936 setStateGain:1956
+  @field w consumerId  @ gainRouting:1906
+  @field r crossings  @ authoredRouting:1889 pokeEdgeGain:1995
+  @field w crossings  @ authoredRouting:1888
+  @field r ctx  @ gainRouting:1902 stampBusTracks:2057
+  @field w ctx  @ ensureCompiled:118
+  @field w defaults  @ createSourceTrack:516
+  @field r dir  @ insertBus:732
+  @field w displayName  @ addFxNode:568 addSourceNode:651
+  @field r dstBus  @ readGraph:1207
+  @field w dstBus  @ readGraph:1134
+  @field r dstChan  @ ownedSends:862 projectEntry:995 readGraph:1130,1134 sendKey:1471 applyOps:1851
+  @field w dstChan  @ ownedSends:862 projectEntry:995 applyOps:1851
+  @field r dstPair  @ readGraph:1209
+  @field w dstPair  @ readGraph:1130,1142,1146
+  @field r edges  @ adjacencies:104 edgeGain:184 254,306 samplerReachable:430 paramTargets:458,479 addFxNode:572,575 deleteSource:605 deleteBus:626 insertBus:733
+  @field r edges  @ insertBus:743,746 nodeHasMidiOut:765 nodeHasMidiIn:774 fastGainCommit:2010
+  @field w edges  @ deleteSource:608 deleteBus:629 readGraph:1425
+  @field w ext  @ moveBus:276
+  @field r field  @ clearOwner:1681
+  @field w field  @ buildGuidOwners:1663,1664
+  @field w forward  @ adjacencies:108
+  @field r from  @ adjacencies:105,106 255,309,310 samplerReachable:431 paramTargets:459,460,480 deleteSource:606 deleteBus:627 insertBus:737
+  @field r from  @ insertBus:738 nodeHasMidiOut:766 readCuParams:789 readGraph:1082,1163,1165,1205,1374 gainRouting:1916 pokeGainTarget:1947 setStateGain:1967
+  @field w from  @ addFxNode:572,575 insertBus:743,746 readCuParams:789 readGraph:1053,1129,1133,1141,1145,1237,1334
+  @field w from  @ gainRouting:1916
+  @field r fromPort  @ 310 insertBus:737 readGraph:1374
+  @field w fromPort  @ addFxNode:575 insertBus:738,743,746 readGraph:1053
+  @field w fromTrackGuid  @ diff:1558
+  @field w fromTrackKind  @ diff:1558
+  @field r fx  @ stateEntry:879 snapshot:941 readGraph:1104,1305 stampDecoration:1438 pinMapsEq:1503 diff:1547,1552,1570,1573,1585
+  @field r fx  @ diff:1621 applyOps:1827,1837 setStateGain:1959
+  @field w fx  @ stateEntry:879 snapshot:944 projectEntry:1004 readGraph:1358 diff:1573,1585,1623
+  @field r fxDisplay  @ isSamplerNode:419,420 paramTargets:502
+  @field w fxDisplay  @ addFxNode:553 readGraph:1311
+  @field w fxGuid  @ paramTargets:502
+  @field r fxId  @ persistNodeMeta:232 addFxNode:542,548,549,554,572,575,579 projectEntry:961 applyOps:1842
+  @field w fxId  @ instantiateFxOnScratch:364,370 addFxNode:554 readGraph:1310 diff:1557
+  @field r fxIdent  @ paramTargets:502 projectEntry:961,977
+  @field w fxIdent  @ addFxNode:552 readGraph:1310
+  @field r fxMidiBus  @ projectEntry:978
+  @field r fxOrder  @ projectEntry:958
+  @field r gain  @ edgeGain:186 308 ownedSends:861 projectEntry:994 readGraph:1050,1054,1130,1143,1147,1209
+  @field r gain  @ readGraph:1414,1419 sendsEq:1490,1493 diff:1591,1592 applyOps:1813,1850
+  @field w gain  @ 310,311 ownedSends:861 projectEntry:994,1005 readGraph:1050,1054,1130,1143,1147,1414,1419
+  @field w gain  @ diff:1605 applyOps:1813,1850 pokeGainTarget:1944 setStateGain:1965,1969 fastGainCommit:2014
+  @field r gains  @ readGraph:1276
+  @field w gains  @ readCuParams:797
+  @field w generator  @ paramTargets:504
+  @field r graph  @ viewGraph:174
+  @field w graph  @ ensureCompiled:118
+  @field r guid  @ applyOps:1872
+  @field w guid  @ applyOps:1832
+  @field r hasMidiTake  @ stateEntry:877 readGraph:1244,1253
+  @field w hasMidiTake  @ stateEntry:877
+  @field r id  @ trackNames:397 snapFx:827,832 stateEntry:874 keyByGuidFromState:889 snapshot:919,920,921,928,929
+  @field r id  @ snapshot:929,935 readGraph:1201,1223,1224,1248,1249,1309 stampDecoration:1437,1438 fxOrderEq:1478
+  @field r id  @ fxOrderEq:1478 pinMapsEq:1505 diff:1548,1553,1557,1558,1559,1573,1579
+  @field r id  @ diff:1584,1604,1610,1620,1623 stampOrigin:1637,1638 originGuid:1650,1651 reconcileFXChain:1710
+  @field r id  @ reconcileFXChain:1710,1715,1728,1741,1744,1746,1756,1760 applyOps:1828 setStateGain:1960
+  @field w id  @ snapFx:827 stateEntry:874 projectEntry:961,964,969,972,1003 reconcileFXChain:1710,1730,1760 rememberApplied:2045,2046
+  @field r ident  @ addFxNode:536,538,541,542,543,552 snapFx:827,831,834,835 snapFxList:847 readGraph:1105
+  @field r ident  @ readGraph:1109,1306,1310,1313,1328 fxOrderEq:1478 reconcileFXChain:1729
+  @field w ident  @ checkUserAddable:356 instantiateFxOnScratch:363 addFxNode:542 snapFx:827 projectEntry:961 reconcileFXChain:1729
+  @field r inBus  @ projectEntry:979 readGraph:1107,1324
+  @field w inBus  @ projectEntry:979
+  @field r inDisabled  @ readGraph:1108,1325
+  @field w inDisabled  @ projectEntry:980
+  @field r inMask  @ readGraph:1063
+  @field w inMask  @ readCuParams:800
+  @field r inNames  @ instantiateFxOnScratch:371 addFxNode:558
+  @field w inNames  @ instantiateFxOnScratch:364,371 addFxNode:558
+  @field w index  @ reconcileFXChain:1729,1746
+  @field r inputEdges  @ gainRouting:1905
+  @field r ins  @ 310,316 instantiateFxOnScratch:370 addFxNode:544,557,574 snapFx:827,828 projectEntry:976
+  @field r ins  @ readGraph:1275,1312,1316,1394,1413 pinMapsEq:1504
+  @field w ins  @ fxMidiPorts:153,155 304 instantiateFxOnScratch:364,370 addFxNode:557,569,570 addSourceNode:652,653 addBusNode:690
+  @field w ins  @ addBusNode:694 insertBus:730 snapFx:827 readGraph:1042,1225,1250,1260
+  @field w ins  @ readGraph:1273,1312,1315,1381,1395 pinMapsEq:1517,1518 applyOps:1830
+  @field r isMaster  @ trackNames:398 snapshot:928,938
+  @field r kind  @ persistNodeMeta:231,233 moveNodes:291 isSamplerNode:419 paramTargets:499 deleteSource:597 deleteBus:621 rotateBus:705 ownedSends:858,860,861 projectEntry:960
+  @field r kind  @ readGraph:1114,1128,1132 stampDecoration:1442,1448,1449 sendKey:1471 stampOrigin:1637,1638,1639 originGuid:1650,1651
+  @field r kind  @ originGuid:1652 buildGuidOwners:1662 applyOps:1850 gainRouting:1913,1915 pokeGainTarget:1935,1941,1946 setStateGain:1955,1963,1966,1969
+  @field r kind  @ pokeEdgeGain:1989 enableLive:2083,2084
+  @field w kind  @ load:164 mutate:224 addFxNode:550,565 addSourceNode:648 addBusNode:687 insertBus:727 ownedSends:860 projectEntry:968,974,994 readGraph:1041
+  @field w kind  @ readGraph:1224,1249,1259,1310,1380 applyOps:1850 authoredRouting:1888 gainRouting:1906,1914,1916 syncExternal:2036
+  @field r mainSend  @ stateEntry:878 projectEntry:1005,1007 readGraph:1138,1142,1143,1146,1147 diff:1587,1588 setStateGain:1965
+  @field r mainSend  @ setStateGain:1965
+  @field w mainSend  @ stateEntry:878 snapshot:944 projectEntry:1005 applyOps:1818 pokeGainTarget:1944
+  @field r mainSendGain  @ projectEntry:1005
+  @field r mainSendOffs  @ projectEntry:1006
+  @field w master  @ readGraph:1041
+  @field w merge  @ 805
+  @field r mergeGuids  @ projectEntry:972 stampOrigin:1641,1642 originGuid:1654 buildGuidOwners:1666,1667 clearOwner:1678,1679 pokeGainTarget:1937
+  @field r mergeGuids  @ setStateGain:1957
+  @field w mergeGuids  @ stampOrigin:1641 clearOwner:1679
+  @field r mergeKey  @ clearOwner:1677,1678
+  @field w mergeKey  @ buildGuidOwners:1667
+  @field r midi  @ snapFx:837 readGraph:1106,1206,1207,1213,1323 fxOrderEq:1479 reconcileFXChain:1760
+  @field w midi  @ addFxNode:559,570 addSourceNode:653 addBusNode:690 insertBus:730 snapFx:837 projectEntry:979 readGraph:1042,1133,1225,1250,1260
+  @field w midi  @ readGraph:1303,1313,1347,1381 reconcileFXChain:1760
+  @field r midiInBracketGuid  @ projectEntry:965 originGuid:1650 buildGuidOwners:1663
+  @field w midiInBracketGuid  @ stampOrigin:1637
+  @field r midiOutBracketGuid  @ projectEntry:966 originGuid:1651 buildGuidOwners:1664
+  @field w midiOutBracketGuid  @ stampOrigin:1638
+  @field r mode  @ readCuParams:785 readGraph:1294
+  @field w mode  @ readCuParams:788,797 flattenCuParams:816
+  @field r nPairs  @ readCuParams:793
+  @field w nPairs  @ readCuParams:797
+  @field r name  @ trackNames:397,399 createSourceTrack:516 addFxNode:538 addSourceNode:643,651 snapFx:827 readGraph:1311
+  @field w name  @ paramTargets:502 createSourceTrack:516 addFxNode:546 addSourceNode:643 snapFx:827 applyOps:1805
+  @field r nch  @ applyOps:1816
+  @field w nch  @ diff:1605
+  @field r nchan  @ stateEntry:876 snapshot:943 projectEntry:1009 diff:1575,1576,1595,1596
+  @field w nchan  @ stateEntry:876 snapshot:943 projectEntry:1007,1009 applyOps:1816,1822
+  @field r node  @ insertBus:735,737,744,746 readGraph:1050,1053,1237,1334,1387,1398,1414
+  @field r node  @ readGraph:1418,1419 clearOwner:1678,1679,1681
+  @field w node  @ 310,311 readGraph:1050,1231,1244,1252,1253,1265,1338,1342,1414,1419
+  @field w node  @ buildGuidOwners:1663,1664,1667
+  @field r nodes  @ 251,304 moveBus:272 moveNodes:284,290 setSourceTagPos:325,332 samplerReachable:427,437 paramTargets:455,498 addFxNode:549
+  @field r nodes  @ addFxNode:564,579,582 deleteSource:596,603 deleteBus:620,624 addSourceNode:647,657 nextBusId:673 addBusNode:686 rotateBus:704
+  @field r nodes  @ insertBus:726 targetState:1018 stampDecoration:1441 stampOrigin:1636 originGuid:1649 buildGuidOwners:1661 pokeGainTarget:1936 setStateGain:1956 stampBusTracks:2056
+  @field w nodes  @ readGraph:1425
+  @field r number  @ trackNames:398
+  @field r offs  @ applyOps:1815
+  @field w offs  @ diff:1605
+  @field r on  @ readGraph:1138 diff:1589,1590
+  @field w on  @ stateEntry:878 snapshot:944 projectEntry:1005 applyOps:1813
+  @field r op  @ applyOps:1804,1807,1810,1820,1824,1835,1840,1843
+  @field w op  @ diff:1539,1556,1571,1578,1583,1603,1608,1620,1622
+  @field r ops  @ edgeGain:186 308 fastGainCommit:2013,2014
+  @field w ops  @ readGraph:1054 fastGainCommit:2013
+  @field r orient  @ rotateBus:706 insertBus:724,729 stampDecoration:1445
+  @field w orient  @ addBusNode:689,693 rotateBus:707,711 insertBus:724,729 stampDecoration:1445
+  @field r origin  @ reconcileFXChain:1731 applyOps:1828
+  @field w origin  @ projectEntry:968,974
+  @field r originConsumer  @ projectEntry:970,971,974 gainRouting:1906
+  @field r originNode  @ projectEntry:963,969
+  @field r originSide  @ projectEntry:962,964,968
+  @field r originTrackKey  @ projectEntry:972,974 gainRouting:1907
+  @field r outBus  @ readCuParams:799 projectEntry:979 readGraph:1061,1324
+  @field w outBus  @ readCuParams:799 projectEntry:979
+  @field r outDisabled  @ readGraph:1326
+  @field w outDisabled  @ projectEntry:981
+  @field r outNames  @ instantiateFxOnScratch:371 addFxNode:558
+  @field w outNames  @ instantiateFxOnScratch:364,371 addFxNode:558
+  @field r outs  @ 311,316 instantiateFxOnScratch:370 addFxNode:557,574 snapFx:827,828 projectEntry:976 readGraph:1290,1312,1337
+  @field r outs  @ readGraph:1394,1416 pinMapsEq:1504
+  @field w outs  @ fxMidiPorts:153,155 304 instantiateFxOnScratch:364,370 addFxNode:557,569,570 addSourceNode:652,653 addBusNode:690
+  @field w outs  @ addBusNode:694 insertBus:730 snapFx:827 projectEntry:976 readGraph:1042,1225,1250,1260
+  @field w outs  @ readGraph:1260,1273,1312,1315,1381,1395 pinMapsEq:1517,1518 applyOps:1830
+  @field r params  @ projectEntry:967,973 readGraph:1272 fxOrderEq:1480 reconcileFXChain:1756 setStateGain:1960
+  @field w params  @ snapFx:833 projectEntry:967,973 reconcileFXChain:1756 pokeGainTarget:1939 setStateGain:1960
+  @field r parent  @ stateEntry:875 readGraph:1139,1140,1141,1224,1249
+  @field w parent  @ stateEntry:875 readGraph:1224,1249
+  @field r parentSend  @ readGraph:1210
+  @field w parentSend  @ readGraph:1141
+  @field w parseJSFXBusAware  @ 349
+  @field w parseJSFXMidiTraits  @ 350
+  @field r parts  @ gainRouting:1921 pokeEdgeGain:1996
+  @field w parts  @ authoredRouting:1889
+  @field r pinMaps  @ snapFx:828,829 projectEntry:988 readGraph:1273,1315 pinMapsEq:1504,1505 applyOps:1830
+  @field r pinMaps  @ applyOps:1872
+  @field w pinMaps  @ snapFx:829 projectEntry:990 applyOps:1831,1832
+  @field r port  @ insertBus:735,737,744,746 readGraph:1050,1053,1398,1414,1419
+  @field w port  @ 310,311 readGraph:1050,1231,1252,1265,1338,1414,1419
+  @field r ports  @ projectEntry:976
+  @field w ports  @ addFxNode:556,569 addSourceNode:652 addBusNode:690 insertBus:730 readGraph:1042,1225,1250,1260,1312,1381
+  @field r pos  @ moveBus:273 moveNodes:285,291,292 addFxNode:580,583 addSourceNode:646,658 insertBus:723
+  @field r pos  @ insertBus:728 ownedSends:862 readGraph:1131,1135 stampDecoration:1444,1451 sendKey:1471
+  @field r pos  @ applyOps:1851
+  @field w pos  @ moveBus:276 moveNodes:291,292 addFxNode:551,566,580,583 addSourceNode:649,658 addBusNode:688,693 insertBus:723
+  @field w pos  @ insertBus:728 ownedSends:862 projectEntry:996 stampDecoration:1444,1451 applyOps:1851
+  @field r preFx  @ projectEntry:996 readGraph:1205
+  @field w preFx  @ readGraph:1131,1135
+  @field r reach  @ reach:177
+  @field w reach  @ ensureCompiled:118
+  @field w readGraph  @ 1430
+  @field r recv  @ fxMidiPorts:155 readGraph:1109,1330
+  @field w recv  @ parseJSFXMidiTraits:126,127,131 readGraph:1109,1329
+  @field r retain  @ readCuParams:791 readGraph:1087
+  @field w retain  @ readCuParams:791
+  @field w reverse  @ adjacencies:108
+  @field r rm  @ 27
+  @field r routing  @ gainRouting:1901
+  @field w routing  @ gainRouting:1922
+  @field r send  @ fxMidiPorts:155 readGraph:1330
+  @field w send  @ parseJSFXMidiTraits:126,127,133 readGraph:1329
+  @field r sends  @ stateEntry:880 projectEntry:993 readGraph:1113,1127 diff:1607,1610 applyOps:1847 setStateGain:1968
+  @field w sends  @ stateEntry:880 snapshot:944 projectEntry:1008 diff:1610 applyOps:1854
+  @field r slot  @ pokeGainTarget:1939 setStateGain:1960
+  @field w slot  @ gainRouting:1907
+  @field r sourcePos  @ addFxNode:563
+  @field r splice  @ gainRouting:1921
+  @field r srcBus  @ readGraph:1207
+  @field w srcBus  @ readGraph:1134
+  @field r srcChan  @ ownedSends:858,862 projectEntry:995 readGraph:1114,1129,1134 sendKey:1471 applyOps:1851
+  @field w srcChan  @ ownedSends:862 projectEntry:995 applyOps:1851
+  @field r srcPair  @ readGraph:1209
+  @field w srcPair  @ readGraph:1129,1141,1145
+  @field w srcTagKey  @ 246
+  @field r synthNodes  @ projectEntry:954 gainRouting:1904
+  @field r tagPos  @ 252,258,259,262,263 setSourceTagPos:327,328,333 stampDecoration:1452
+  @field w tagPos  @ 262,263 setSourceTagPos:327,333 stampDecoration:1452
+  @field r target  @ pokeEdgeGain:1997,1998
+  @field w target  @ authoredRouting:1889
+  @field r tgtOffset  @ readGraph:1142,1146 diff:1593,1594
+  @field w tgtOffset  @ projectEntry:1006 applyOps:1815
+  @field r to  @ adjacencies:105,106 srcTagKey:244 309,311 samplerReachable:431 paramTargets:459,460,480 deleteSource:606
+  @field r to  @ deleteBus:627 insertBus:735,736 nodeHasMidiIn:775 readCuParams:790 ownedSends:857 projectEntry:994 readGraph:1082,1129,1133,1374 sendKey:1471
+  @field r to  @ applyOps:1848 gainRouting:1916 pokeGainTarget:1947 setStateGain:1969
+  @field w to  @ addFxNode:572,575 insertBus:744,747 readCuParams:790 ownedSends:860 projectEntry:994 readGraph:1053,1237,1334 applyOps:1850 gainRouting:1916
+  @field r toMaster  @ readGraph:1163
+  @field w toMaster  @ readGraph:1145
+  @field r toPort  @ srcTagKey:244 311 insertBus:735 readGraph:1374
+  @field w toPort  @ addFxNode:575 insertBus:736,744,747 readGraph:1053
+  @field r toTrackGuid  @ applyOps:1841
+  @field w toTrackGuid  @ diff:1559
+  @field r toTrackKey  @ applyOps:1841
+  @field w toTrackKey  @ diff:1560
+  @field r toTrackKind  @ applyOps:1841
+  @field w toTrackKind  @ diff:1559
+  @field w track  @ applyOps:1842
+  @field w trackGuid  @ paramTargets:503
+  @field r trackId  @ persistNodeMeta:236,237 deleteSource:598,610,613 projectEntry:999 readGraph:1038 applyOps:1808
+  @field r trackId  @ applyOps:1811,1821,1836,1844 stampBusTracks:2059
+  @field w trackId  @ addFxNode:567 addSourceNode:650 readGraph:1224,1249 diff:1573,1579,1584,1604,1610,1620,1623 stampBusTracks:2060
+  @field r trackKey  @ snapshot:919,920,921 stampOrigin:1642 originGuid:1654 applyOps:1788,1805,1806,1809
+  @field r trackKey  @ applyOps:1811,1821,1823,1832,1836,1844 pokeGainTarget:1937 setStateGain:1957
+  @field w trackKey  @ projectEntry:974 diff:1539,1571,1578,1583,1603,1608,1620,1622 applyOps:1806 gainRouting:1907
+  @field r trackKind  @ projectEntry:999,1000,1002 readGraph:1157,1245 diff:1531,1538,1558,1559
+  @field r trackKind  @ diff:1572,1579,1584,1599,1604,1609,1619,1623 applyOps:1788,1811,1821,1836
+  @field r trackKind  @ applyOps:1844 rememberApplied:2045,2046
+  @field w trackKind  @ stateEntry:873 snapshot:943 projectEntry:1002 readGraph:1358 diff:1539,1572,1579,1584,1604,1609,1623
+  @field r type  @ edgeGain:185 srcTagKey:244 307 samplerReachable:431 paramTargets:460 insertBus:734 nodeHasMidiOut:766 nodeHasMidiIn:775 projectEntry:994 readGraph:1373 fastGainCommit:2011
+  @field w type  @ addFxNode:572,575 insertBus:743,746 readGraph:1053,1237,1334
+  @field r value  @ applyOps:1813,1814,1822
+  @field w value  @ diff:1580,1605
+  @field r x  @ moveBus:273,276 moveNodes:285 addFxNode:566 addSourceNode:649 addBusNode:688,693 insertBus:723,728 stampDecoration:1444
+  @field r x  @ stampDecoration:1451
+  @field w x  @ moveBus:276 addFxNode:551,563,566 addSourceNode:646,649 addBusNode:688,693 insertBus:723,728 stampDecoration:1444
+  @field w x  @ stampDecoration:1451
+  @field r y  @ moveBus:273,276 moveNodes:285 addFxNode:566 addSourceNode:649 addBusNode:688,693 insertBus:723,728 stampDecoration:1444,1451
+  @field w y  @ moveBus:273,276 moveNodes:285 addFxNode:551,563,566 addSourceNode:646,649 addBusNode:688,693 insertBus:723,728
+  @field w y  @ stampDecoration:1444,1451

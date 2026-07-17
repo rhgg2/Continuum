@@ -1,4 +1,4 @@
-@module patternEditor  src=patternEditor.lua  loc=394  sha=b9a99d6  mode=chunk  self=pe
+@module patternEditor  src=patternEditor.lua  loc=394  sha=14993a2  mode=chunk  self=pe
 @deps facade, chrome, gui, modalHost
 
 # Invariants & contracts
@@ -175,3 +175,116 @@
   @reaper CreateNewMIDIItemInProj
   @reaper GetActiveTake
   @reaper DeleteTrackMediaItem
+
+# Fields (r read / w write incl. constructor keys)
+  @field r ImGui_GetBuiltinPath  @ 16
+  @field r Key_Enter  @ handleInput:352
+  @field r Key_Escape  @ handleInput:350
+  @field r Key_KeypadEnter  @ handleInput:353
+  @field r OPEN  @ readbackBody:160
+  @field r StyleVar_FramePadding  @ drawToolbar:279 launch:380
+  @field r StyleVar_WindowPadding  @ launch:379
+  @field r WindowFlags_NoNav  @ launch:389
+  @field w acceptCmds  @ 274 handleInput:346
+  @field w align  @ drawToolbar:283
+  @field w apply  @ 32
+  @field w binding  @ 32
+  @field w bipolar  @ curveDisplay:117
+  @field w cc  @ materialiseCurve:124
+  @field r ccs  @ readbackBody:143
+  @field w ccs  @ curveDisplay:115 open:227
+  @field w chan  @ materialiseNotes:99 materialiseCurve:124,127
+  @field w chordEntry  @ 58
+  @field r chrome  @ 25
+  @field w chrome  @ 58
+  @field w cm  @ 39,41,43,58
+  @field w cmgr  @ 43,58
+  @field r columns  @ readbackBody:139
+  @field w commandHeld  @ handleInput:339,343
+  @field r consumed  @ handleInput:349
+  @field w consumed  @ handleInput:339,343
+  @field r ctx  @ 26
+  @field w defaultNoteCols  @ 39
+  @field r delay  @ materialiseNotes:102 readbackBody:163
+  @field w delay  @ materialiseNotes:102 readbackBody:163
+  @field r detune  @ materialiseNotes:102 readbackBody:149,163
+  @field w detune  @ materialiseNotes:102 readbackBody:163
+  @field r display  @ curveDisplay:115,117 readbackBody:153
+  @field w display  @ readbackBody:153
+  @field r domain  @ curveDisplay:114 materialiseCurve:123 readbackBody:142,153 open:220,226
+  @field w domain  @ readbackBody:153 open:220
+  @field w ds  @ 39,40,43
+  @field w endRow  @ draw:325
+  @field r endppq  @ materialiseNotes:100 readbackBody:160,171
+  @field w endppq  @ materialiseNotes:100 readbackBody:161,171
+  @field r evType  @ readbackBody:159
+  @field w evType  @ materialiseNotes:99 materialiseCurve:124,127
+  @field w eventMeta  @ 38
+  @field r events  @ readbackBody:144,148,158
+  @field r facade  @ 25
+  @field w facade  @ 43
+  @field w flags  @ launch:389
+  @field r fontSize  @ launch:381,382
+  @field w gm  @ 43
+  @field r grid  @ launch:373
+  @field r gui  @ 25
+  @field w gui  @ 58
+  @field w h  @ draw:325
+  @field w inputAllowed  @ 59
+  @field r kind  @ readbackBody:140 open:216,219 draw:312 launch:372,384
+  @field w kind  @ readbackBody:153,173 launch:385
+  @field r label  @ curveDisplay:115,117
+  @field w label  @ curveDisplay:115,117
+  @field r lane  @ materialiseNotes:102
+  @field w lane  @ materialiseNotes:102 readbackBody:161
+  @field r lengthPpq  @ readbackBody:154,160,173 open:212,215,238 draw:325
+  @field w lengthPpq  @ readbackBody:154,173 open:212
+  @field w max  @ drawToolbar:283
+  @field w min  @ drawToolbar:283
+  @field w mm  @ 39
+  @field r modalHost  @ 25
+  @field w normalized  @ curveDisplay:117
+  @field r notes  @ readbackBody:157
+  @field w notes  @ open:227,229,243
+  @field r numRows  @ launch:373
+  @field w onClose  @ launch:390
+  @field w pa  @ 43
+  @field w pageSuppressed  @ 274
+  @field r path  @ 19
+  @field w path  @ 19
+  @field r pb  @ readbackBody:148
+  @field w pb  @ curveDisplay:117 open:229
+  @field r pitch  @ materialiseNotes:101 readbackBody:162
+  @field w pitch  @ materialiseNotes:101 readbackBody:162
+  @field r points  @ materialiseCurve:122 open:234
+  @field w points  @ readbackBody:154 open:237
+  @field r ppq  @ materialiseNotes:100 materialiseCurve:124,127 readbackBody:145,149,161,167,171
+  @field w ppq  @ materialiseNotes:100 materialiseCurve:124,127 readbackBody:145,149,161 open:237,238
+  @field w ps  @ 35,36,37
+  @field r root  @ readbackBody:173
+  @field w root  @ readbackBody:173
+  @field w rpb  @ materialiseNotes:99 materialiseCurve:124,127
+  @field r sample  @ materialiseNotes:103 readbackBody:163
+  @field w sample  @ materialiseNotes:103 readbackBody:163
+  @field r shape  @ materialiseCurve:125,128 readbackBody:145,150
+  @field w shape  @ materialiseCurve:125,128 readbackBody:145,150 open:237,238
+  @field w size  @ launch:386
+  @field w skipGuard  @ open:206 close:257
+  @field r specs  @ open:244
+  @field w specs  @ readbackBody:173
+  @field w suppressKbd  @ 274
+  @field w take  @ 38
+  @field r tension  @ materialiseCurve:125,128 readbackBody:145,150
+  @field w tension  @ materialiseCurve:125,128 readbackBody:145,150
+  @field w title  @ launch:385
+  @field w tm  @ 40,43
+  @field r tracker  @ 80,85
+  @field w tv  @ 58
+  @field r ui  @ launch:381,382
+  @field r val  @ materialiseCurve:125,128 readbackBody:145,149
+  @field w val  @ materialiseCurve:125,128 readbackBody:145,149 open:237,238
+  @field r vel  @ materialiseNotes:101 readbackBody:162
+  @field w vel  @ materialiseNotes:101 readbackBody:162
+  @field w w  @ draw:325
+  @field w x0  @ draw:325
+  @field w yTop  @ draw:325

@@ -23,3 +23,18 @@
   @use call wv:edgeGain  @ 27,36,58,81
   @use call wv:setEdgeGain  @ 35,46,57,66
   @use call wv:graph  @ 37,45,47,59,67,80
+
+# Fields (r read / w write incl. constructor keys)
+  @field w cm  @ 9,10
+  @field w ds  @ 8
+  @field r edges  @ 37,45,47,59,67
+  @field w from  @ 17,56,76
+  @field r gain  @ 37,47
+  @field w ident  @ 4
+  @field w name  @ 4,23,31,41,51,63,71
+  @field r ops  @ 37,45,47,59
+  @field w rm  @ 9
+  @field w run  @ 24,32,42,52,64,72
+  @field w to  @ 17,56,76
+  @field w type  @ 17,56,76
+  @field w wm  @ 10

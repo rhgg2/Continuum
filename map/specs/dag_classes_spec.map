@@ -25,3 +25,39 @@
 
 # Uses (outbound edges)
   @use call DAG.compile  @ 39
+
+# Fields (r read / w write incl. constructor keys)
+  @field w audio  @ 7,16,24
+  @field r display  @ 15
+  @field w edges  @ 32
+  @field w f  @ 84,134
+  @field w from  @ 80,81,96,97,98,115,116,129
+  @field w fxDisplay  @ 15
+  @field w fxIdent  @ 14
+  @field w gain  @ 129
+  @field r ident  @ 14
+  @field r ins  @ 16,24
+  @field w ins  @ 7,8,16,18,24,25,94,113
+  @field w kind  @ 5,13,23
+  @field r master  @ 29
+  @field w master  @ 59,69,85,103
+  @field w midi  @ 8,18,25
+  @field w mix  @ 103
+  @field w name  @ 55,63,74,89,107,123
+  @field w nextId  @ 32
+  @field w nodes  @ 32
+  @field w ops  @ 129
+  @field r outs  @ 17
+  @field w outs  @ 7,8,17,18,24,25
+  @field w ports  @ 7,16,24
+  @field w pos  @ 6,13,23
+  @field w run  @ 56,64,75,90,108,124
+  @field w s  @ 70,84,134
+  @field w s1  @ 101
+  @field w s2  @ 102
+  @field w to  @ 80,81,96,97,98,115,116,129
+  @field w toPort  @ 96,97,115,116
+  @field w trackId  @ 5
+  @field w type  @ 80,81,96,97,98,115,116,129
+  @field w x  @ 6,13,23
+  @field w y  @ 6,13,23

@@ -28,3 +28,28 @@
   @use call fm:dump  @ 44,65,84,124,127,146
   @use call tm:rebuild  @ 125
   @use call tm:flush  @ 126
+
+# Fields (r read / w write incl. constructor keys)
+  @field r ccs  @ 15
+  @field w ccs  @ 38,60,78,118,140
+  @field w cents  @ 39,40,61,79,80,119,120,141,142
+  @field r chan  @ 16
+  @field w chan  @ 25,26,39,40,61,79,80,119,120,138,141,142
+  @field r derived  @ 47,48,49,50,67,68,87,88,93,148
+  @field w detune  @ 25,26,138
+  @field w endppq  @ 25,26,138
+  @field w endppqL  @ 25,26,138
+  @field r evType  @ 16
+  @field w evType  @ 39,40,61,79,80,119,120,141,142
+  @field w name  @ 33,55,73,113,133
+  @field w notes  @ 37,59,77,117,137
+  @field w pitch  @ 25,26,138
+  @field r ppq  @ 18,47,48,49,50,67,68,87,88,94
+  @field w ppq  @ 25,26,39,40,61,79,80,119,120,138,141,142
+  @field w ppqL  @ 25,26,138
+  @field w run  @ 34,56,74,114,134
+  @field w seed  @ 36,58,76,116,136
+  @field w shape  @ 39,40,61,79,80,119,120,141,142
+  @field r val  @ 47,48,49,50,67,68,87,88,103,107
+  @field w val  @ 39,40,61,79,80,119,120,141,142
+  @field w vel  @ 25,26,138

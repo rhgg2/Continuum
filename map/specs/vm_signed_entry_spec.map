@@ -49,3 +49,35 @@
   @use call vm:entrySignAt  @ 88,94,105,119,121,180,197,235,249
   @use call fm:dump  @ 248,251,262
   @use call cmgr:invoke  @ 274,276,286,287
+
+# Fields (r read / w write incl. constructor keys)
+  @field w bipolar  @ 20
+  @field w ccs  @ 19
+  @field r cells  @ 31,36,247,250,261
+  @field w chan  @ 19,47,175,176,192,193,208,219,220
+  @field r cols  @ 9,245,259
+  @field w columnDisplay  @ 20
+  @field w data  @ 20,51
+  @field r delay  @ 248,251,262
+  @field w delay  @ 48
+  @field w detune  @ 48
+  @field w endppq  @ 47
+  @field w evType  @ 19,175,176,192,193,208,219,220
+  @field r grid  @ 9,245,259
+  @field w name  @ 59,69,82,99,113,128,140,151,160,172,189,205
+  @field w name  @ 216,228,242,256,270,281
+  @field w normalized  @ 20,230
+  @field w noteDelay  @ 51
+  @field r notes  @ 248,251,262
+  @field w notes  @ 46
+  @field w pb  @ 20
+  @field w pitch  @ 47
+  @field w ppq  @ 19,47,175,176,192,193,208,219,220
+  @field w run  @ 60,70,83,100,114,129,141,152,161,173,190,206
+  @field w run  @ 217,229,243,257,271,282
+  @field w seed  @ 19,45
+  @field w shape  @ 175,176,192,193,208,219,220
+  @field r type  @ 10
+  @field r val  @ 37
+  @field w val  @ 19,175,176,192,193,208,219,220
+  @field w vel  @ 47

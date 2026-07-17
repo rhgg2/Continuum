@@ -26,3 +26,16 @@
   @use call cm:get  @ 19,27,65
   @use call cm:pollUndo  @ 26,42,62,80,102
   @use call cm:subscribe  @ 37,61,79,101
+
+# Fields (r read / w write incl. constructor keys)
+  @field r ValidatePtr2  @ 94
+  @field w ValidatePtr2  @ 95
+  @field r _state  @ 10,22,39,57
+  @field r key  @ 45
+  @field r level  @ 46
+  @field w name  @ 15,31,50,69,88
+  @field w pbRange  @ 23,40,58
+  @field r projStateCount  @ 10
+  @field w projStateCount  @ 10
+  @field w run  @ 16,32,51,70,89
+  @field r takeExt  @ 22,39,57

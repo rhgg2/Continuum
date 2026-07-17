@@ -30,3 +30,21 @@
   @use call timing.eval  @ 11
   @use call timing.invert  @ 12
   @use call timing.resolveComposite  @ 31,42,51,66,82,108,125,140,157,172,175,185,204
+
+# Fields (r read / w write incl. constructor keys)
+  @field r K  @ 98
+  @field w atom  @ 19,20,21,22,23,67,83,102,103,104,173,177
+  @field w atom  @ 187,201,202
+  @field r delta  @ 162,163
+  @field w delta  @ 151,152,153,154
+  @field w factors  @ 19,20,21,22,23,67,83,102,103,173,177,187
+  @field w factors  @ 200
+  @field r name  @ 157,158,159,163
+  @field w name  @ 28,40,48,60,78,93,122,135,147,151,152,153
+  @field w name  @ 154,169,197
+  @field w period  @ 19,20,21,22,23,67,83,102,103,104,173,177
+  @field w period  @ 187,201,202
+  @field w phase  @ 173,176,186,187
+  @field w run  @ 29,41,49,64,81,97,123,139,148,170,198
+  @field w shift  @ 19,20,21,22,23,67,83,102,103,104,173,177
+  @field w shift  @ 187,201,202

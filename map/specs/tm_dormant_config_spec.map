@@ -21,3 +21,17 @@
   @use call cm:set  @ 28,45
   @use call ds:assign  @ 29,60
   @use call tm:detach  @ 42
+
+# Fields (r read / w write incl. constructor keys)
+  @field w atom  @ 6
+  @field w config  @ 19,38,54
+  @field w data  @ 20
+  @field w factors  @ 6
+  @field w global  @ 20,29,60
+  @field w name  @ 16,35,51
+  @field w period  @ 6
+  @field w project  @ 19,38,54
+  @field w run  @ 17,36,52
+  @field w shift  @ 6
+  @field w swing  @ 20
+  @field w swings  @ 19,38,54

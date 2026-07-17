@@ -69,3 +69,61 @@
   @use call ds:getAt  @ 122,123
   @use call cm:set  @ 194
   @use call cm:get  @ 691,696
+
+# Fields (r read / w write incl. constructor keys)
+  @field r _state  @ 142
+  @field r calls  @ 142
+  @field w cm  @ 9
+  @field r copies  @ 26,222,223,224,225,311
+  @field w copies  @ 22
+  @field w copy  @ 26
+  @field r copyResult  @ 26
+  @field w copyResult  @ 23,252,329
+  @field w ds  @ 9
+  @field r endF  @ 239,391,541
+  @field w endF  @ 69
+  @field w exists  @ 29
+  @field w fileOps  @ 9
+  @field r fn  @ 143
+  @field w hash  @ 30
+  @field w mkdir  @ 28
+  @field r mkdirs  @ 28,220,221
+  @field w mkdirs  @ 22
+  @field w move  @ 27
+  @field r moveResult  @ 27
+  @field w moveResult  @ 24
+  @field r moves  @ 27,637,639,656,673,675,692,697,698,699
+  @field w moves  @ 22
+  @field r name  @ 231,242,407,415
+  @field w name  @ 73,91,101,111,131,151,161,173,186,207,246,263
+  @field w name  @ 279,298,323,338,342,357,371,396,419,424,425,451
+  @field w name  @ 458,477,499,524,529,546,562,585,606,626,647,660
+  @field w name  @ 681
+  @field r nameLen  @ 414
+  @field w nameLen  @ 71
+  @field r op  @ 237,353,539,558
+  @field w op  @ 67
+  @field r paramIdx  @ 146
+  @field r path  @ 97,107,124,125,126,202,203,229,230,240,241,275
+  @field r path  @ 318,384,408,436,443,473,510,519,542,616,622,642
+  @field w path  @ 72,94,96,104,118,120,268,284,342,375,400,424
+  @field w path  @ 425,458,481,503,516,529,631,632,651,667,669,685
+  @field r pathLen  @ 392,413
+  @field w pathLen  @ 70
+  @field w ps  @ 106
+  @field w run  @ 92,102,112,132,152,162,174,187,208,247,264,280
+  @field w run  @ 299,324,339,358,372,397,420,452,478,500,525,547
+  @field w run  @ 563,586,607,627,648,661,682
+  @field r seq  @ 235,259,316,334,351,388,412,434,441,447,471,488
+  @field r seq  @ 491,495,574,576,578,597,599,602
+  @field w seq  @ 64
+  @field w seqAck  @ 65
+  @field r shStart  @ 274,294
+  @field w shStart  @ 268,286
+  @field r slot  @ 236,317,352,389,435,442,472,538,557
+  @field w slot  @ 66
+  @field r start  @ 292,382
+  @field w start  @ 285,529
+  @field r startF  @ 238,390,540
+  @field w startF  @ 68
+  @field r value  @ 147

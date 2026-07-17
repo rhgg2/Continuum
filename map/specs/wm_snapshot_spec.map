@@ -38,3 +38,58 @@
   @use call wm:mutate  @ 18,82,124,289
   @use call wm:load  @ 49,62,78,101,119,143,167,179,190,206,225,236,247,261,275
   @use call wm:snapshot  @ 50,64,92,107,131,154,169,182,195,214,228,239,250,253,264,267,293
+
+# Fields (r read / w write incl. constructor keys)
+  @field w __label  @ 14,28,148
+  @field r _state  @ 15,17,29,31,149,150
+  @field w audio  @ 20,84,86,126,291
+  @field r busAware  @ 93,94
+  @field w cm  @ 7
+  @field r code  @ 130
+  @field w ds  @ 6
+  @field r edges  @ 127,128
+  @field w from  @ 127,128
+  @field r fx  @ 53,69,92,108,110,132,134,294
+  @field w fxId  @ 83,85,125,290
+  @field w fxIdent  @ 83,85,125,290
+  @field r gain  @ 197,198,229
+  @field w gain  @ 127,193
+  @field r id  @ 67,92,110,134,172
+  @field r ident  @ 110,134
+  @field r ins  @ 296,297
+  @field w ins  @ 20,84,86,126,277,291
+  @field r kind  @ 197,198
+  @field w kind  @ 19,83,85,125,290
+  @field r mainSend  @ 54,68,183,229,251,254,265,268
+  @field w midi  @ 20,84,86,126,291
+  @field w midiInBracketGuid  @ 125
+  @field w name  @ 46,59,75,98,116,140,164,176,187,203,222,233
+  @field w name  @ 244,258,272
+  @field r nchan  @ 240,265
+  @field r nodes  @ 19,83,85,125,290
+  @field r on  @ 54,68,183,254,268
+  @field w ops  @ 127
+  @field r outs  @ 298,299
+  @field w outs  @ 20,84,86,126,277,291
+  @field r pinMaps  @ 294
+  @field w ports  @ 20,84,86,126,291
+  @field r pos  @ 215
+  @field w pos  @ 19,84,86,126,291
+  @field r preFader  @ 218
+  @field r preFx  @ 217
+  @field r projectTracks  @ 15,29,149
+  @field w readJSFXContent  @ 88
+  @field w rm  @ 7
+  @field w run  @ 47,60,76,99,117,141,165,177,188,204,223,234
+  @field w run  @ 245,259,273
+  @field r sends  @ 55,70,155,157,196,214
+  @field r tgtOffset  @ 251
+  @field r to  @ 157
+  @field w to  @ 127,128
+  @field r trackGuids  @ 17,31,150
+  @field w trackId  @ 19
+  @field w trackKey  @ 33
+  @field r trackKind  @ 52,66,160,171
+  @field w type  @ 127,128,151,152,153,193,194,209,210
+  @field w x  @ 19,84,86,126,291
+  @field w y  @ 19,84,86,126,291

@@ -33,3 +33,21 @@
 
 # Uses (outbound edges)
   @use call ec:decorateCol  @ 28
+
+# Fields (r read / w write incl. constructor keys)
+  @field w cm  @ 25
+  @field w cols  @ 24
+  @field w get  @ 25
+  @field w grid  @ 24
+  @field w name  @ 35,45,55,65,78,90,102,115,129,142
+  @field w numRows  @ 24
+  @field r partAt  @ 96,105,135,148
+  @field r partStart  @ 97,118,137,151
+  @field r parts  @ 38,48,58,68,81,93,132,145
+  @field w rowPerBar  @ 26
+  @field w run  @ 36,46,56,66,79,91,103,116,130,143
+  @field w showDelay  @ 16
+  @field r stopPos  @ 39,49,59,69,82,94,133,146
+  @field w trackerMode  @ 17
+  @field w type  @ 15,92
+  @field r width  @ 40,50,60,70,83,95,134,147

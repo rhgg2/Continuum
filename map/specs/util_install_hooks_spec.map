@@ -19,3 +19,11 @@
   @case 'installHooks: unsubscribe is signal-scoped'  [pure]  @ 71-83
   @case 'installHooks: forward re-fires source signal on dest with same payload'  [pure]  @ 86-98
   @case 'installHooks: forward does not cross signal kinds'  [pure]  @ 101-115
+
+# Fields (r read / w write incl. constructor keys)
+  @field r n  @ 31,32,34,55,97
+  @field w n  @ 26,27,28,53,96
+  @field w name  @ 19,38,49,60,71,86,101
+  @field w run  @ 20,39,50,61,72,87,102
+  @field r x  @ 56
+  @field w x  @ 54

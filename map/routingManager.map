@@ -244,3 +244,87 @@
   @reaper EnumInstalledFX
   @reaper Undo_BeginBlock, Undo_EndBlock2
   @reaper PreventUIRefresh
+
+# Fields (r read / w write incl. constructor keys)
+  @field r REMOVE  @ setMuted:1019
+  @field w bus  @ 558
+  @field r defaults  @ addTrack:853
+  @field w defaults  @ 545
+  @field r ds  @ 10
+  @field r dst  @ createSend:485
+  @field w dst  @ reconcileSends:517
+  @field r dstChan  @ sendKey:481 createSend:488,490,496 reconcileSends:518
+  @field w dstChan  @ readSend:464 reconcileSends:518
+  @field r folderDepth  @ stampParents:669
+  @field w folderDepth  @ readTrack:650
+  @field r fx  @ pruneMidiCache:154 tracks:792 track:805
+  @field w fx  @ 545,558 readTrack:654
+  @field r fxType  @ readFxChain:403 fx:984
+  @field w fxType  @ readFx:372
+  @field r gain  @ reconcileSends:517,535 writeMainSend:683
+  @field w gain  @ readSend:462 reconcileSends:517 readMainSend:629
+  @field w hasMidiTake  @ 546 readTrack:656
+  @field r hidden  @ writeTrackFields:758
+  @field w hidden  @ 545
+  @field r id  @ pruneMidiCache:154 readFxChain:405,414,417 stampParents:670 tracks:792 track:805 writeChainMidi:949,957,966
+  @field w id  @ readFx:370 544,549 readTrack:647 trackLabels:771
+  @field r ident  @ addFx:892
+  @field w ident  @ readFx:371 549 installedFx:1058
+  @field r inBus  @ setFXMidiRouting:312 midiFromLines:387 writeMidiRouting:740 writeChainMidi:962
+  @field w inBus  @ readFXMidiRouting:327 midiFromLines:386,387 writeMidiRouting:740 writeChainMidi:962
+  @field r inDisabled  @ setFXMidiRouting:310 midiFromLines:388 writeMidiRouting:741 writeChainMidi:963
+  @field w inDisabled  @ readFXMidiRouting:329 midiFromLines:386,388 writeMidiRouting:741 writeChainMidi:963
+  @field w inNames  @ readFx:376 550
+  @field r index  @ addFx:895,896,897 assignFx:911,914,915,916
+  @field w index  @ 551
+  @field r ins  @ writePinMaps:137 divertIfMuted:615 setMuted:1014,1021
+  @field w ins  @ readPinMaps:87 readFx:374 549 applyMuteReport:601 divertIfMuted:614,615 setMuted:1013,1014,1020,1021
+  @field r isMaster  @ stampParents:667
+  @field w isMaster  @ 544 readTrack:651 trackLabels:774
+  @field r kind  @ sendKey:481 createSend:486 reconcileSends:509,517
+  @field w kind  @ readSend:461 reconcileSends:517
+  @field r mainSend  @ writeTrackFields:762
+  @field w mainSend  @ 545 readTrack:653
+  @field r midi  @ readFxChain:414 assignFx:920 writeChainMidi:949,962,963,966 fx:987
+  @field w midi  @ readFxChain:413,417 550 fx:986
+  @field r muteSide  @ applyMuteReport:602 divertIfMuted:612 setMuted:1017
+  @field w muteSide  @ setMuted:1012,1019
+  @field r muteStash  @ applyMuteReport:602 setMuted:1017
+  @field w muteStash  @ divertIfMuted:613 setMuted:1012,1019
+  @field r muted  @ applyMuteReport:600 divertIfMuted:611 setMuted:1008,1016 muted:1028
+  @field w muted  @ setMuted:1012,1019
+  @field r name  @ writeTrackFields:756
+  @field w name  @ readFx:373 544,549 readTrack:648 trackLabels:772 installedFx:1058
+  @field r nchan  @ writeMainSend:685 writeTrackFields:757
+  @field w nchan  @ 544 readMainSend:631 readTrack:652
+  @field w number  @ readTrack:649 trackLabels:773
+  @field r on  @ writeMainSend:682
+  @field w on  @ readMainSend:628
+  @field r outBus  @ setFXMidiRouting:313 midiFromLines:387 writeMidiRouting:740 writeChainMidi:962
+  @field w outBus  @ readFXMidiRouting:328 midiFromLines:386,387 writeMidiRouting:740 writeChainMidi:962
+  @field r outDisabled  @ setFXMidiRouting:311 midiFromLines:388 writeMidiRouting:741 writeChainMidi:963
+  @field w outDisabled  @ readFXMidiRouting:330 midiFromLines:386,388 writeMidiRouting:741 writeChainMidi:963
+  @field w outNames  @ readFx:377 550
+  @field r outs  @ writePinMaps:138 divertIfMuted:614 setMuted:1013,1020
+  @field w outs  @ readPinMaps:87 readFx:375 549 applyMuteReport:601 divertIfMuted:614,615 setMuted:1013,1014,1020,1021
+  @field r params  @ addFx:899 assignFx:918
+  @field w params  @ 551
+  @field w parent  @ stampParents:668
+  @field r pinMaps  @ applyMuteReport:601,602 assignFx:919
+  @field w pinMaps  @ readFx:378 550 applyMuteReport:601
+  @field r pos  @ sendKey:481 createSend:498 reconcileSends:519
+  @field w pos  @ readSend:465 reconcileSends:519
+  @field w postFader  @ 429
+  @field w preFader  @ 429
+  @field w preFx  @ 429
+  @field r sends  @ writeTrackFields:763
+  @field w sends  @ 545 readTrack:655
+  @field r srcChan  @ sendKey:481 createSend:488,490,495 reconcileSends:509,518
+  @field w srcChan  @ readSend:463 reconcileSends:518
+  @field r tgtOffset  @ writeMainSend:684
+  @field w tgtOffset  @ readMainSend:630
+  @field r to  @ sendKey:481 reconcileSends:515,517
+  @field w to  @ readSend:460 reconcileSends:517
+  @field r track  @ assignFx:908,909
+  @field w track  @ 551
+  @field w trackId  @ 551 fx:983

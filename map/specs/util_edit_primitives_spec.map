@@ -33,3 +33,12 @@
 
 # Uses (outbound edges)
   @use call cmgr:noteChars  @ 108,115,123,131,147
+
+# Fields (r read / w write incl. constructor keys)
+  @field w cm  @ 11
+  @field w get  @ 18
+  @field r layouts  @ 139
+  @field w name  @ 26,34,41,50,64,72,84,92,105,112,119,127
+  @field w name  @ 135,144
+  @field w run  @ 27,35,42,51,65,73,85,93,106,113,120,128
+  @field w run  @ 136,145

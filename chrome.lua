@@ -11,7 +11,6 @@ local ImGui   = require 'imgui' '0.10'
 local painter = require 'painter'
 
 local cm, ctx       = (...).cm, (...).ctx
-local uiSize        = (...).uiSize
 
 local cache = {}
 cm:subscribe('configChanged', function() cache = {} end)

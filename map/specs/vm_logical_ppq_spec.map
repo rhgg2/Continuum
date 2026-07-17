@@ -41,3 +41,63 @@
   @use call cmgr:invoke  @ 157,159,193,195,232,258
   @use call tm:markSwingStale  @ 310,374
   @use call tm:rebuild  @ 310,374
+
+# Fields (r read / w write incl. constructor keys)
+  @field w atom  @ 14
+  @field w c58  @ 51,336,368
+  @field r cc  @ 21,84,91
+  @field w cc  @ 75,363
+  @field r ccs  @ 21,90,346
+  @field w ccs  @ 75,361
+  @field r cells  @ 121
+  @field w chan  @ 75,109,146,149,176,178,181,183,224,250,281,303
+  @field w chan  @ 331,363
+  @field w col1  @ 191
+  @field w col2  @ 191
+  @field w colSwing  @ 364
+  @field r cols  @ 36,60,83,87,121,123,343
+  @field w config  @ 31,50,77,114,152,186,228,254,285,307,335,367
+  @field w currentOctave  @ 31,52
+  @field w data  @ 54,115,371
+  @field r delay  @ 128
+  @field w delay  @ 147,150,177,179,182,184,282,333
+  @field w detune  @ 147,150,177,179,182,184,282,333
+  @field r endppq  @ 130,163,199,201,235,261,291
+  @field w endppq  @ 109,146,149,176,178,181,183,224,250,281,303,331
+  @field r endppqL  @ 127,164,200,202,236,262,290,314
+  @field w endppqL  @ 110,225,251,283,304,332
+  @field r evType  @ 347
+  @field w evType  @ 75,363
+  @field w factors  @ 14
+  @field w frame  @ 364
+  @field w global  @ 54,371
+  @field r grid  @ 36,60,83,87,121,123,343
+  @field w name  @ 29,47,71,102,141,171,218,244,277,299,326,357
+  @field w noteDelay  @ 115
+  @field r notes  @ 17
+  @field w notes  @ 108,144,174,223,247,280,302,329
+  @field w part1  @ 192
+  @field w part2  @ 192
+  @field w period  @ 14
+  @field r pitch  @ 17
+  @field w pitch  @ 109,146,149,176,178,181,183,224,250,281,303,331
+  @field r ppq  @ 40,64,65,91,94,129,380
+  @field w ppq  @ 75,109,146,149,176,178,181,183,224,250,281,303
+  @field w ppq  @ 331,362
+  @field r ppqL  @ 41,63,95,126,313,377
+  @field w ppqL  @ 110,225,251,283,304,332,362
+  @field w project  @ 51,336,368
+  @field w row1  @ 191
+  @field w row2  @ 191
+  @field w rowPerBeat  @ 31,52,77,114,152,186,228,254,285,307,337,369
+  @field r rpb  @ 42,66,237,263,315,350
+  @field w rpb  @ 111,226,252,305,333,364
+  @field w run  @ 30,48,72,103,142,172,219,245,278,300,327,358
+  @field w seed  @ 74,107,144,174,223,247,280,302,329,360
+  @field w shift  @ 14
+  @field w swing  @ 54,364,371
+  @field w swings  @ 51,336,368
+  @field w take  @ 31,52,77,114,152,186,228,254,285,307,337,369
+  @field r type  @ 84
+  @field w val  @ 75,363
+  @field w vel  @ 109,146,149,176,178,181,183,224,250,281,303,331

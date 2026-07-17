@@ -25,3 +25,18 @@
   @use call mm:ccs  @ 34
   @use call mm:modify  @ 48,70,90,120,135,139
   @use call mm:delete  @ 139
+
+# Fields (r read / w write incl. constructor keys)
+  @field r cc  @ 28,37,54,58,78,110
+  @field w cc  @ 25,49,71,91,121,136
+  @field w chan  @ 25,49,71,91,121,136
+  @field w evType  @ 49,71,91,121,136
+  @field w name  @ 44,66,85,101,116,130
+  @field r ppq  @ 36,57,61
+  @field w ppq  @ 25,49,71,91,121,136
+  @field w reaper  @ 11
+  @field w run  @ 45,67,86,102,117,131
+  @field r shape  @ 56,60,80
+  @field w shape  @ 25,49,71,136
+  @field r val  @ 55,59,79,96,111,125
+  @field w val  @ 25,49,71,91,121,136

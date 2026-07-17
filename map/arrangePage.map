@@ -60,3 +60,39 @@
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB
+
+# Fields (r read / w write incl. constructor keys)
+  @field r ImGui_GetBuiltinPath  @ 14
+  @field w am  @ 24
+  @field w av  @ 25
+  @field r chrome  @ 19
+  @field w chrome  @ 25
+  @field r cm  @ 19
+  @field w cm  @ 23,24,25
+  @field r cmgr  @ 19
+  @field w cmgr  @ 24,25
+  @field w currentTrackIdx  @ 42
+  @field w dropSlot  @ 53
+  @field r ds  @ 19
+  @field w ds  @ 23
+  @field r eventMeta  @ 19
+  @field w eventMeta  @ 23
+  @field r facade  @ 19
+  @field w facade  @ 23,24
+  @field r gui  @ 19
+  @field w gui  @ 25
+  @field w hasPlacedTakes  @ 54
+  @field w isParkedTake  @ 55
+  @field w keyForSlot  @ 48
+  @field w midiSlots  @ 44
+  @field w mintParkedTake  @ 50
+  @field r modalHost  @ 19
+  @field w modalHost  @ 25
+  @field w nextFreeSlot  @ 49
+  @field w ownerTrack  @ 56
+  @field w reswingAll  @ 57
+  @field w takeForSlot  @ 45
+  @field w takesUsing  @ 58
+  @field w trackHandle  @ 47
+  @field w trackIdxForGuid  @ 46
+  @field w tracks  @ 43

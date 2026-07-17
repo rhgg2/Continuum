@@ -28,3 +28,20 @@
   @use call gm:mark  @ 37,40,50,51
   @use call gm:duplicateInto  @ 60,63,73
   @use call gm:newInstance  @ 76
+
+# Fields (r read / w write incl. constructor keys)
+  @field w chan  @ 18,61,64,74,76
+  @field w chanLo  @ 24
+  @field w ds  @ 12
+  @field w dur  @ 24
+  @field w endppq  @ 19
+  @field w evType  @ 18
+  @field w lane  @ 18
+  @field w name  @ 34,47,57,70
+  @field w pitch  @ 19
+  @field w ppq  @ 19,24,61,64,74,76
+  @field w run  @ 35,48,58,71
+  @field w streams  @ 25
+  @field w tm  @ 12
+  @field w uuid  @ 19
+  @field w vel  @ 19

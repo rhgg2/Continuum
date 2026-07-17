@@ -1,4 +1,4 @@
-@spec vm_insert_delete_row_lane_spec  src=tests/specs/vm_insert_delete_row_lane_spec.lua  loc=106  sha=d415ad4  cases=3
+@spec vm_insert_delete_row_lane_spec  src=tests/specs/vm_insert_delete_row_lane_spec.lua  loc=106  sha=6fb5e8f  cases=3
 @exercises trackerView (h.vm), editCursor (h.ec), commandManager (h.cmgr), trackerManager (h.tm)
 @surface   vm:setGridSize, ec:setPos, cmgr:invoke, tm:getChannel
 @harness   mk{seed.notes}
@@ -18,3 +18,27 @@
   @use call ec:setPos  @ 29,62,92
   @use call cmgr:invoke  @ 30,63,93
   @use call tm:getChannel  @ 33,66,96
+
+# Fields (r read / w write incl. constructor keys)
+  @field r OPEN  @ 21,37,54,70,84,100
+  @field w chan  @ 22,55,85
+  @field r columns  @ 33,66,96
+  @field w delay  @ 22,55,85
+  @field w detune  @ 22,55,85
+  @field r endppq  @ 37,70,100
+  @field w endppq  @ 21,54,84
+  @field w endppqL  @ 21,54,84
+  @field r events  @ 33,66,96
+  @field w lane  @ 23,56,86
+  @field w name  @ 16,49,79
+  @field r notes  @ 33,66,96
+  @field w notes  @ 20,53,83
+  @field r pitch  @ 34,67,97
+  @field w pitch  @ 22,55,85
+  @field r ppq  @ 39,41,72,102
+  @field w ppq  @ 21,54,84
+  @field w ppqL  @ 21,54,84
+  @field w rpb  @ 23,56,86
+  @field w run  @ 17,50,80
+  @field w seed  @ 19,52,82
+  @field w vel  @ 22,55,85

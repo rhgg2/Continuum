@@ -25,3 +25,23 @@
   @use call pa:bumpFrecency  @ 77,78
   @use call ds:get  @ 80
   @use call pa:params  @ 85,103
+
+# Fields (r read / w write incl. constructor keys)
+  @field r _state  @ 71,72,95,96
+  @field w ident  @ 73,97
+  @field r index  @ 61,103
+  @field w index  @ 11,12,13,56,57,58
+  @field r n  @ 81
+  @field w n  @ 36,47,60
+  @field r n0  @ 82
+  @field w n0  @ 36,47,60
+  @field r name  @ 17
+  @field w name  @ 11,12,13,24,31,42,53,56,57,58,66,90
+  @field r params  @ 82,83
+  @field w params  @ 36,47,60
+  @field w projectTracks  @ 71,95
+  @field w run  @ 25,32,43,54,67,91
+  @field r s  @ 83
+  @field w s  @ 36,47,60
+  @field r section  @ 104,105,106
+  @field r trackGuids  @ 72,96

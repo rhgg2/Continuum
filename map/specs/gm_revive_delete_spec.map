@@ -33,3 +33,27 @@
   @use call gm:addEvent  @ 60
   @use call gm:deletedCells  @ 90,101
   @use call gm:revertDelete  @ 96,102
+
+# Fields (r read / w write incl. constructor keys)
+  @field r add  @ 49,67,69,83,98
+  @field w add  @ 51,63,84,95
+  @field w chan  @ 23,47,64,81
+  @field w chanLo  @ 29
+  @field w ds  @ 16
+  @field w dur  @ 29
+  @field w endppq  @ 24
+  @field w evType  @ 23
+  @field r evt  @ 92,93
+  @field w lane  @ 23
+  @field w name  @ 39,75
+  @field r pitch  @ 71,93,100
+  @field w pitch  @ 24
+  @field r ppq  @ 34,92
+  @field w ppq  @ 23,29,47,64,81
+  @field w run  @ 40,76
+  @field w streams  @ 30
+  @field w tm  @ 16
+  @field r uuid  @ 55,87
+  @field w uuid  @ 24
+  @field w vel  @ 24
+  @field r vuid  @ 96,102

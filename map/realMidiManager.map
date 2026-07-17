@@ -1,0 +1,14 @@
+@module realMidiManager  src=tests/realMidiManager.lua  loc=16  sha=3d3c2e3  mode=script
+
+# Imports
+  @const util = 'util'  @ 9
+
+# Uses (outbound edges)
+  @use call    util.instantiate  @ 13
+  @use require util  @ 9
+
+# Fields (r read / w write incl. constructor keys)
+  @field w eventMeta  @ 14
+  @field r path  @ 11
+  @field w ps  @ 13
+  @field w take  @ 14

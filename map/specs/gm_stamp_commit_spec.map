@@ -33,3 +33,36 @@
   @use call gm:stamp  @ 60
   @use call tm:flush  @ 61,71,81
   @use call gm:assignEvent  @ 70,80
+
+# Fields (r read / w write incl. constructor keys)
+  @field w chan  @ 46,60
+  @field w col1  @ 52
+  @field w col2  @ 52
+  @field r cols  @ 19
+  @field r columns  @ 26
+  @field w ds  @ 49
+  @field r dur  @ 60
+  @field w endppq  @ 46
+  @field r evType  @ 27
+  @field r events  @ 26
+  @field r evt  @ 36
+  @field w evt  @ 28
+  @field r grid  @ 19
+  @field r midiChan  @ 20
+  @field w name  @ 42
+  @field r notes  @ 26
+  @field w notes  @ 45
+  @field w part1  @ 53
+  @field w part2  @ 53
+  @field r pitch  @ 28,66,75,85
+  @field w pitch  @ 28,46,70,80
+  @field r ppq  @ 28,36,60
+  @field w ppq  @ 28,46,60
+  @field w row1  @ 52
+  @field w row2  @ 52
+  @field w run  @ 43
+  @field w seed  @ 45
+  @field w tm  @ 49
+  @field r type  @ 20
+  @field r uuid  @ 70,80
+  @field w vel  @ 46

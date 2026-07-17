@@ -20,3 +20,30 @@
   @use call fm:dump  @ 13
   @use call ds:assign  @ 35
   @use call tm:fromLogical  @ 38
+
+# Fields (r read / w write incl. constructor keys)
+  @field w atom  @ 9,10
+  @field w c55  @ 25
+  @field w c58  @ 25
+  @field r cc  @ 13
+  @field w cc  @ 23
+  @field r ccs  @ 13
+  @field w ccs  @ 22
+  @field w chan  @ 23
+  @field w config  @ 25
+  @field w data  @ 26
+  @field w evType  @ 23
+  @field w factors  @ 9,10
+  @field w global  @ 26,35
+  @field w name  @ 18
+  @field w period  @ 9,10
+  @field r ppq  @ 29,38,39
+  @field w ppq  @ 23
+  @field r ppqL  @ 30
+  @field w project  @ 25
+  @field w run  @ 19
+  @field w seed  @ 22
+  @field w shift  @ 9,10
+  @field w swing  @ 26
+  @field w swings  @ 25
+  @field w val  @ 23

@@ -31,3 +31,44 @@
   @use call tm:rebuild  @ 78
   @use call tuning.findTemper  @ 121
   @use call tuning.transposeStep  @ 122
+
+# Fields (r read / w write incl. constructor keys)
+  @field w atom  @ 11
+  @field r ccs  @ 30
+  @field w chan  @ 62,91,117
+  @field w config  @ 57,116
+  @field w data  @ 60
+  @field w delay  @ 63,92,118
+  @field r derived  @ 22,133
+  @field r detune  @ 73,105
+  @field w detune  @ 63,92,118
+  @field w endppq  @ 62,91,117
+  @field r evType  @ 31
+  @field w evType  @ 62,91,117
+  @field w factors  @ 11
+  @field w fx  @ 63,92,118
+  @field w global  @ 60
+  @field w kind  @ 14
+  @field w lane  @ 63,92,118
+  @field w name  @ 54,88,114
+  @field r notes  @ 21,40
+  @field w notes  @ 46
+  @field r parked  @ 68,96
+  @field w pbs  @ 46
+  @field w period  @ 11,14
+  @field r pitch  @ 43,97,101
+  @field w pitch  @ 62,91,117
+  @field r ppq  @ 24,33,42,99
+  @field r ppq  @ 129
+  @field w ppq  @ 62,91,117
+  @field w project  @ 58,116
+  @field w run  @ 55,89,115
+  @field w shift  @ 11
+  @field w step  @ 14
+  @field w swing  @ 60
+  @field w swings  @ 58
+  @field w temper  @ 58,116
+  @field r uuid  @ 44,70,98
+  @field r val  @ 131
+  @field r vel  @ 104
+  @field w vel  @ 63,92,118

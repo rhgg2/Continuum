@@ -1,4 +1,4 @@
-@spec mm_collision_backstop_spec  src=tests/specs/mm_collision_backstop_spec.lua  loc=107  sha=70ef819  cases=4
+@spec mm_collision_backstop_spec  src=tests/specs/mm_collision_backstop_spec.lua  loc=107  sha=37ed80d  cases=4
 @exercises midiManager (h.mm)
 @surface   mm:notes, mm:subscribe, mm:byUuid, mm:modify, mm:assign
 @harness   bareMM
@@ -29,3 +29,19 @@
   @use call mm:byUuid  @ 38,70
   @use call mm:modify  @ 41,64,83,84,98
   @use call mm:assign  @ 41,64,83,84,99,100
+
+# Fields (r read / w write incl. constructor keys)
+  @field w chan  @ 24,25,57,58
+  @field r endppq  @ 72
+  @field w endppq  @ 24,25,57,58
+  @field r events  @ 38,44,67
+  @field r kind  @ 45,68
+  @field w name  @ 31,54,77,92
+  @field w notes  @ 23,56
+  @field w pitch  @ 24,25,57,58
+  @field r ppq  @ 12,18,46
+  @field w ppq  @ 24,25,41,57,58,64,83,99,100
+  @field w ppqL  @ 24,25,57,58
+  @field w run  @ 32,55,78,93
+  @field r uuid  @ 34,38,41,47,60,64,69,83,84,99
+  @field w vel  @ 24,25,57,58,84

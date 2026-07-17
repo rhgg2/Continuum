@@ -101,3 +101,53 @@
       @contract  returns (note, octaveLabel); named ⇒ name, nameless ⇒ degree+'-'; octave+1 at octaveStep  @ 443
   @api tuning.stepToText(temper, step, octave)  @ 452-455
       @contract  name ⇒ name+octave (C-4); blank/absent ⇒ degree-octave (7-4). Octave +1 at octaveStep.  @ 451
+
+# Fields (r read / w write incl. constructor keys)
+  @field w cellWidth  @ derive:82
+  @field r cents  @ computeCellWidth:38 derive:79 stepSpectrum:338,342 genRank2:363 midiToStep:397 stepToMidi:414
+  @field w cents  @ derive:74 stepSpectrum:340 genRank2:361
+  @field r count  @ stepSpectrum:339 mosInfo:373
+  @field w count  @ stepSpectrum:339,340
+  @field w degreesToSpec  @ degreesToSpec:203
+  @field w derive  @ derive:70
+  @field w edoDegrees  @ edoDegrees:182
+  @field w findTemper  @ findTemper:120
+  @field w genCPS  @ genCPS:274
+  @field w genChord  @ genChord:250
+  @field w genEqual  @ genEqual:212
+  @field w genHarmonics  @ genHarmonics:222
+  @field w genRank2  @ genRank2:348
+  @field w genSubharmonics  @ genSubharmonics:229
+  @field w isMos  @ mosInfo:372,373
+  @field w large  @ mosInfo:373
+  @field w midiToStep  @ midiToStep:391
+  @field w mosInfo  @ mosInfo:370
+  @field w name  @ edo:90 scalaToTemper:170
+  @field w nextMosSize  @ nextMosSize:377
+  @field r octaveStep  @ stepToParts:445
+  @field w octaveStep  @ derive:80
+  @field w octaveWidth  @ derive:81
+  @field w parseChord  @ parseChord:237
+  @field w parseScalaFile  @ parseScalaFile:140
+  @field w parseScalaPitches  @ parseScalaPitches:129
+  @field r period  @ octaveFieldWidth:33 derive:77 midiToStep:394 stepToMidi:418
+  @field w period  @ derive:77
+  @field w periodAsStep  @ scalaToTemper:174 genEqual:217 genHarmonics:225 genSubharmonics:232 genChord:256 genCPS:297 genRank2:366
+  @field r periodPitch  @ derive:76,77
+  @field w periodPitch  @ edo:91 scalaToTemper:171 genEqual:217 genHarmonics:225 genSubharmonics:232 genChord:256 genCPS:297 genRank2:366
+  @field r pitches  @ derive:71,73
+  @field w pitches  @ edo:92 scalaToTemper:172 genEqual:217 genHarmonics:225 genSubharmonics:232 genChord:256 genCPS:297 genRank2:366
+  @field r presets  @ findTemper:122
+  @field w presets  @ 97
+  @field w scalaPitch  @ scalaPitch:49
+  @field w scalaToTemper  @ scalaToTemper:158
+  @field w small  @ mosInfo:373
+  @field w snap  @ snap:431
+  @field r stepNames  @ computeCellWidth:38 derive:80 stepToParts:446
+  @field w stepNames  @ edo:93 scalaToTemper:173
+  @field w stepToMidi  @ stepToMidi:413
+  @field w stepToParts  @ stepToParts:444
+  @field w stepToText  @ stepToText:452
+  @field r token  @ genRank2:365
+  @field w token  @ genRank2:361
+  @field w transposeStep  @ transposeStep:436

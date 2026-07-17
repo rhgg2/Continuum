@@ -31,3 +31,43 @@
   @use call wm:targetState  @ 49,141
   @use call wm:snapshot  @ 49,109,141
   @use call wm:mutate  @ 62,78,101,130
+
+# Fields (r read / w write incl. constructor keys)
+  @field w __label  @ 24
+  @field r _state  @ 25,26
+  @field w audio  @ 32,41
+  @field w cm  @ 18
+  @field w ds  @ 17
+  @field r dstChan  @ 119
+  @field r edges  @ 65,82,83,105,106,134,135
+  @field w from  @ 45
+  @field w fxB  @ 64,81,104,133
+  @field r fxId  @ 40
+  @field w fxId  @ 40
+  @field w fxIdent  @ 40
+  @field r ins  @ 41
+  @field w ins  @ 32,41
+  @field r kind  @ 117
+  @field w kind  @ 31,40
+  @field w midi  @ 32,41
+  @field w name  @ 58,73,96,125
+  @field r nodes  @ 63,64,79,80,81,102,103,104,131,132,133
+  @field r op  @ 143,144
+  @field r outs  @ 41
+  @field w outs  @ 32,41
+  @field w ports  @ 32,41
+  @field w pos  @ 31,40
+  @field r projectTracks  @ 25
+  @field w rm  @ 18
+  @field w run  @ 59,74,97,126
+  @field w sA  @ 63,79,102,131
+  @field w sB  @ 80,103,132
+  @field r sends  @ 115,116
+  @field r to  @ 118
+  @field w to  @ 45
+  @field r trackGuids  @ 26
+  @field w trackId  @ 31
+  @field r trackKind  @ 112
+  @field w type  @ 45
+  @field w x  @ 31,40
+  @field w y  @ 31,40

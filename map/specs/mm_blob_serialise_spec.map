@@ -24,3 +24,22 @@
 # Uses (outbound edges)
   @use call midiBlob.parse  @ 18,20,33,36,69
   @use call midiBlob.serialise  @ 19,36,66,78,79,80
+
+# Fields (r read / w write incl. constructor keys)
+  @field r ShowConsoleMsg  @ 62
+  @field w ShowConsoleMsg  @ 63,67
+  @field r blob  @ 18
+  @field r ccs  @ 19,22
+  @field w chan  @ 58,59,77
+  @field w endppq  @ 58,59,77
+  @field w evType  @ 58,59,77
+  @field r msg  @ 35
+  @field r name  @ 16,21,22,23
+  @field w name  @ 16,29,55,75
+  @field r notes  @ 19,21
+  @field w pitch  @ 58,59,77
+  @field w ppq  @ 58,59,77
+  @field r reaper  @ 62,63,67
+  @field w run  @ 17,30,56,76
+  @field r texts  @ 19,23
+  @field w vel  @ 58,59,77

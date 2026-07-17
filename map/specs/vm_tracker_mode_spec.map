@@ -33,3 +33,47 @@
   @use call fm:dump  @ 103,125,160,188,209,317,321,348
   @use call cmgr:invoke  @ 224,233,242,251,346
   @use call cm:get  @ 225,234,243,252,284
+
+# Fields (r read / w write incl. constructor keys)
+  @field r ccs  @ 317,348
+  @field w ccs  @ 18,36,298,332
+  @field r cells  @ 310,315,342
+  @field w chan  @ 17,18,35,36,55,77,113,136,137,265,296,298
+  @field w chan  @ 330,332
+  @field r cols  @ 23,41,61,87,120,145,181,203,275,304,338
+  @field w config  @ 38,57,80,116,140,174,199,223,232,241,250,268
+  @field w config  @ 300,334
+  @field w currentOctave  @ 176,199
+  @field w currentSample  @ 176,199,223,232,241,250,270
+  @field w delay  @ 17,35,55,78,114,136,137,266,297,331
+  @field w detune  @ 17,35,55,78,114,136,137,266,297,331
+  @field w endppq  @ 17,35,55,77,113,136,137,265,296,330
+  @field r evType  @ 311,318,343,349
+  @field w evType  @ 18,36,298,332
+  @field r events  @ 99,101,124,152,155,157,281,283
+  @field r grid  @ 23,41,61,87,120,145,181,203,275,304,338
+  @field r lane  @ 62,88,121,146,182,204,276,305,339
+  @field r midiChan  @ 24,62,88,121,146,182,204,276,305,339
+  @field w name  @ 13,31,51,73,109,130,170,195,221,230,239,248
+  @field w name  @ 261,292,326
+  @field r notes  @ 103,125,160,188,209,321
+  @field w notes  @ 17,35,55,77,113,135,173,198,265,296,330
+  @field r partAt  @ 93,94
+  @field r parts  @ 65
+  @field r pitch  @ 152,161
+  @field w pitch  @ 17,35,55,77,113,136,137,265,296,298,330,332
+  @field r ppq  @ 349
+  @field w ppq  @ 17,18,35,36,55,77,113,136,137,265,296,298
+  @field w ppq  @ 330,332
+  @field w run  @ 14,32,52,74,110,131,171,196,222,231,240,249
+  @field w run  @ 262,293,327
+  @field r sample  @ 103,125,163,190,211,320,321
+  @field w sample  @ 78,114,136,137,266,297,331
+  @field w seed  @ 16,34,54,76,112,134,173,198,264,295,329
+  @field w take  @ 176,199,223,232,241,250,270
+  @field w trackerMode  @ 38,57,80,116,140,175,269,300,334
+  @field w transient  @ 38,57,80,116,140,175,269,300,334
+  @field r type  @ 24,42,62,88,121,146,182,204,276,305,339
+  @field w val  @ 18,36
+  @field w vel  @ 17,35,55,77,113,136,137,265,296,298,330,332
+  @field r width  @ 66

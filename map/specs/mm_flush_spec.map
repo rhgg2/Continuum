@@ -1,4 +1,4 @@
-@spec mm_flush_spec  src=tests/specs/mm_flush_spec.lua  loc=70  sha=b8ec85e  cases=2
+@spec mm_flush_spec  src=tests/specs/mm_flush_spec.lua  loc=70  sha=37ed80d  cases=2
 @exercises midiManager (h.mm)
 @surface   mm:load, mm:notes, mm:modify, mm:assign
 @harness   fakeReaper:bindTake
@@ -20,3 +20,24 @@
   @use call mm:notes  @ 30,59
   @use call mm:modify  @ 31,60
   @use call mm:assign  @ 31,60
+
+# Fields (r read / w write incl. constructor keys)
+  @field w chan  @ 22,53
+  @field w endppq  @ 22,53
+  @field r eventtype  @ 37,64
+  @field w eventtype  @ 23
+  @field w flags  @ 24
+  @field r msg  @ 37,42,64
+  @field w msg  @ 23,24
+  @field w name  @ 18,49
+  @field w notes  @ 22,53
+  @field r passthrough  @ 41,42
+  @field w passthrough  @ 24
+  @field w pitch  @ 22,53,60
+  @field w ppq  @ 22,23,24,53
+  @field w reaper  @ 10
+  @field w run  @ 19,50
+  @field r texts  @ 36,63
+  @field w texts  @ 23
+  @field r uuid  @ 31,60
+  @field w vel  @ 22,31,53

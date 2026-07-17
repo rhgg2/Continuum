@@ -1,4 +1,4 @@
-@spec vm_transient_frame_spec  src=tests/specs/vm_transient_frame_spec.lua  loc=106  sha=d415ad4  cases=5
+@spec vm_transient_frame_spec  src=tests/specs/vm_transient_frame_spec.lua  loc=106  sha=6fb5e8f  cases=5
 @exercises trackerView (h.vm), editCursor (h.ec), commandManager (h.cmgr), configManager (h.cm)
 @surface   vm:setGridSize, ec:setPos, cmgr:invoke, cm:getAt, cm:get, cm:assign, cm:set, ec:row, vm:setRowPerBeat
 @harness   mk{seed.notes}
@@ -27,3 +27,18 @@
   @use call cm:set  @ 66,102
   @use call ec:row  @ 85,90
   @use call vm:setRowPerBeat  @ 87
+
+# Fields (r read / w write incl. constructor keys)
+  @field w chan  @ 16,39
+  @field w config  @ 20,43
+  @field w endppq  @ 16,39
+  @field w name  @ 11,34,58,74,95
+  @field w notes  @ 15,38
+  @field w pitch  @ 16,39
+  @field w ppq  @ 16,39
+  @field w rowPerBeat  @ 20,43,62,82,99
+  @field w rpb  @ 17,40
+  @field w run  @ 12,35,59,75,96
+  @field w seed  @ 14,37
+  @field w take  @ 20,43
+  @field w vel  @ 16,39

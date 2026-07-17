@@ -1,0 +1,65 @@
+@spec tm_pa_swung_translation_spec  src=tests/specs/tm_pa_swung_translation_spec.lua  loc=78  sha=5efc716  cases=2
+@exercises dataStore (h.ds), trackerManager (h.tm), midiManager (h.mm)
+@surface   ds:assign, tm:addEvent, tm:flush, mm:notes, mm:ccsRaw, tm:assignEvent
+@harness   mk
+
+# Intent
+  Pins PA carry across a translation on a SWUNG channel, where raw and logical disagree.
+  
+  resizeNote branches on "is this a translation?": carry the PAs, or cull the ones the new
+  logical span excludes. Swing is a periodic warp, so a logical translation is a raw
+  translation only when the note's logical length is a whole number of swing periods --
+  then both endpoints keep their phase and shift by the same amount. At any other length
+  the endpoints warp differently, and a raw-frame gate reads a whole-note move as a resize
+  and culls PAs the move should have carried. see docs/trackerManager.md § PA binding
+  
+  tm_pa_attachment_spec's move case runs under identity swing at length 480, so it is
+  doubly blind to this: raw == logical there, and 480 is a period multiple regardless.
+
+# Helpers
+  @fn swungHostWithPA(harness, endL)  @ 19-32
+      -- Host at logical 0, PA at logical 120 (raw 139 under c58). endL picks the length, which is
+      -- the whole point: 360 is a period and a half, 480 is two periods exactly.
+  @fn uuidOfNote(mm, chan, pitch)  @ 34-38
+  @fn paSeats(mm)  @ 40-47
+
+# Cases
+  @case 'a swung host whose length is not a period multiple still carries its PA when moved'  [harness]  @ 52-61
+  @case 'a swung host whose length IS a period multiple carries its PA too'  [harness]  @ 65-75
+
+# Uses (outbound edges)
+  @use call ds:assign  @ 26
+  @use call tm:addEvent  @ 27,29
+  @use call tm:flush  @ 30,58,70
+  @use call mm:notes  @ 35
+  @use call mm:ccsRaw  @ 42
+  @use call tm:assignEvent  @ 57,69
+
+# Fields (r read / w write incl. constructor keys)
+  @field w atom  @ 15
+  @field r chan  @ 36
+  @field w chan  @ 27,29
+  @field w config  @ 21
+  @field w delay  @ 28
+  @field w detune  @ 28
+  @field w endppq  @ 27,57,69
+  @field r evType  @ 43
+  @field w evType  @ 27,29
+  @field w factors  @ 15
+  @field w global  @ 26
+  @field w lane  @ 28
+  @field w name  @ 52,65
+  @field w period  @ 15
+  @field r pitch  @ 36
+  @field w pitch  @ 27,29
+  @field r ppq  @ 43
+  @field w ppq  @ 27,29,57,69
+  @field r ppqL  @ 43
+  @field w project  @ 22
+  @field w rowPerBeat  @ 23
+  @field w run  @ 53,66
+  @field w shift  @ 15
+  @field w swings  @ 22
+  @field w take  @ 23
+  @field r uuid  @ 36
+  @field w vel  @ 28,29

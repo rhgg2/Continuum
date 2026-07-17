@@ -81,3 +81,58 @@
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB
+
+# Fields (r read / w write incl. constructor keys)
+  @field r Col_Button  @ 149
+  @field r Col_ButtonHovered  @ 150
+  @field r ImGui_GetBuiltinPath  @ 11
+  @field r Key_Escape  @ renderBody:182
+  @field w acceptCmds  @ focusState:208,213
+  @field r active  @ libraryTree:100
+  @field r chrome  @ 18
+  @field r cmgr  @ 18
+  @field r col  @ libraryTree:101,103
+  @field r ctx  @ 19
+  @field w depth  @ libraryRow:75
+  @field r dirty  @ libraryActions:60
+  @field w draw  @ libraryTree:97
+  @field r fontSize  @ 19
+  @field r global  @ libraryTree:114
+  @field w global  @ 81
+  @field r gui  @ 18
+  @field r h  @ libraryTree:96
+  @field w h  @ libraryTree:96 renderBody:197
+  @field w hasChildren  @ libraryRow:76 libraryFolder:87
+  @field w id  @ libraryRow:75 libraryFolder:87 144,161,166
+  @field r label  @ libraryTree:96
+  @field w label  @ libraryRow:75 libraryFolder:87 libraryTree:96
+  @field r modalHost  @ 18
+  @field r name  @ libraryActions:37,38,45,47,51,53,65,66 libraryRow:74 libraryFolder:86
+  @field r name  @ libraryTree:103,105
+  @field r onImport  @ libraryActions:40
+  @field r onReset  @ libraryActions:59
+  @field w open  @ libraryFolder:88
+  @field w pageSuppressed  @ focusState:208,212
+  @field r path  @ 14
+  @field w path  @ 14
+  @field r project  @ libraryTree:109
+  @field w project  @ 81
+  @field w render  @ 145,163,168
+  @field r renderToolbar  @ 162
+  @field r sel  @ libraryActions:36 libraryRow:74 libraryFolder:86
+  @field r selected  @ libraryRow:77 libraryFolder:90
+  @field w selected  @ libraryRow:76 libraryFolder:88
+  @field w suppressKbd  @ focusState:208,211
+  @field r swingEditor  @ 18
+  @field r synthetic  @ libraryActions:37
+  @field r temperEditor  @ 18
+  @field r tier  @ libraryActions:45,51,65,66 libraryRow:74 libraryFolder:86
+  @field r toggled  @ libraryFolder:89
+  @field r ui  @ 19
+  @field r uiFont  @ 19
+  @field r undeletable  @ libraryActions:38
+  @field w visible  @ 162,167
+  @field r x  @ libraryTree:96 renderBody:197
+  @field w x  @ libraryTree:96
+  @field r y  @ libraryTree:96 renderBody:197
+  @field w y  @ libraryTree:96

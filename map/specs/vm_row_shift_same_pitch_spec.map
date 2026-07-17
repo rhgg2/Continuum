@@ -25,3 +25,20 @@
   @use call ec:setPos  @ 37,61
   @use call cmgr:invoke  @ 38,62
   @use call fm:dump  @ 40,64
+
+# Fields (r read / w write incl. constructor keys)
+  @field w chan  @ 27,29,31,53,55
+  @field w delay  @ 28,30,32,54,56
+  @field w detune  @ 28,30,32,54,56
+  @field r endppq  @ 68
+  @field w endppq  @ 27,29,31,53,55
+  @field w name  @ 22,49
+  @field r notes  @ 40,64
+  @field w notes  @ 26,52
+  @field r pitch  @ 66
+  @field w pitch  @ 27,29,31,53,55
+  @field r ppq  @ 15,42,43,44,67
+  @field w ppq  @ 27,29,31,53,55
+  @field w run  @ 23,50
+  @field w seed  @ 26,52
+  @field w vel  @ 27,29,31,53,55

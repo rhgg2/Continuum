@@ -21,3 +21,18 @@
 # Uses (outbound edges)
   @use call harness.mk  @ 8
   @use call rm:tracks  @ 22
+
+# Fields (r read / w write incl. constructor keys)
+  @field w ds  @ 9
+  @field r fx  @ 40,64,72,85
+  @field r id  @ 43,49
+  @field r ident  @ 44,50,85
+  @field w ident  @ 32,33,61,81
+  @field r ins  @ 46,51
+  @field w ins  @ 35,36
+  @field r name  @ 22,45,64
+  @field w name  @ 27,32,33,56,61,68,76
+  @field r outs  @ 47,52
+  @field w outs  @ 35,36
+  @field w renamed  @ 61
+  @field w run  @ 28,57,69,77

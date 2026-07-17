@@ -36,3 +36,46 @@
   @use call cm:assign  @ 136
   @use call fm:load  @ 168
   @use call ds:get  @ 177
+
+# Fields (r read / w write incl. constructor keys)
+  @field r REMOVE  @ 121
+  @field w atom  @ 7
+  @field r ccs  @ 21,198
+  @field r chan  @ 22
+  @field w chan  @ 35,98,149,151
+  @field r columns  @ 120,170,186,197
+  @field w config  @ 95
+  @field w data  @ 96
+  @field w delay  @ 36,99,150,152
+  @field w depth  @ 11
+  @field w detune  @ 36,99,150,152
+  @field w endppq  @ 35,82,98,149,151,164,171
+  @field r evType  @ 22,178
+  @field w evType  @ 35,98,149,151
+  @field r events  @ 120,170
+  @field w factors  @ 7
+  @field w fx  @ 36,99,121,152
+  @field w global  @ 96
+  @field w kind  @ 11
+  @field w lane  @ 36,99,150,152
+  @field w name  @ 47,65,79,92,114,130,146,161,193
+  @field r notes  @ 120,170
+  @field w onset  @ 11
+  @field r pb  @ 186,199
+  @field w pbRange  @ 136
+  @field w period  @ 7,11
+  @field w pitch  @ 35,98,149,151
+  @field r plain  @ 23,54
+  @field w plain  @ 23
+  @field r ppq  @ 23,26,31,71,84,185
+  @field w ppq  @ 23,35,82,98,149,151
+  @field w project  @ 95
+  @field w run  @ 48,66,80,93,115,131,147,162,194
+  @field r shape  @ 23
+  @field w shape  @ 23
+  @field w shift  @ 7
+  @field w swing  @ 96
+  @field w swings  @ 95
+  @field r val  @ 23,55,56,57,58,72,85,134,138
+  @field w val  @ 23
+  @field w vel  @ 36,99,150,152

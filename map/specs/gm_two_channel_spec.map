@@ -24,3 +24,24 @@
 # Uses (outbound edges)
   @use call gm:duplicateInto  @ 52
   @use call tm:flush  @ 53
+
+# Fields (r read / w write incl. constructor keys)
+  @field r add  @ 34
+  @field r chan  @ 36
+  @field w chan  @ 22,52
+  @field w chanLo  @ 27
+  @field w ds  @ 15
+  @field w dur  @ 27
+  @field w endppq  @ 23
+  @field r evType  @ 35
+  @field w evType  @ 22
+  @field w lane  @ 22
+  @field w name  @ 44
+  @field w pitch  @ 23
+  @field r ppq  @ 35
+  @field w ppq  @ 22,27,52
+  @field w run  @ 45
+  @field w streams  @ 28
+  @field w tm  @ 15
+  @field w uuid  @ 23
+  @field w vel  @ 23

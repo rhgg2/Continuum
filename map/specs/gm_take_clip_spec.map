@@ -30,3 +30,25 @@
   @use call gm:markGroup  @ 46,68
   @use call gm:newInstance  @ 50,70,76
   @use call tm:flush  @ 51,71,77
+
+# Fields (r read / w write incl. constructor keys)
+  @field r add  @ 37,53,78
+  @field w add  @ 72
+  @field w chan  @ 27,50,70,76
+  @field w chanLo  @ 33
+  @field w ds  @ 20
+  @field w dur  @ 33
+  @field w endppq  @ 28
+  @field w endppqL  @ 28
+  @field w evType  @ 27
+  @field w lane  @ 27
+  @field w length  @ 19
+  @field w name  @ 42,64
+  @field w pitch  @ 28
+  @field r ppq  @ 37,54
+  @field w ppq  @ 27,33,50,70,76
+  @field w run  @ 43,65
+  @field w streams  @ 34
+  @field w tm  @ 20
+  @field w uuid  @ 29
+  @field w vel  @ 29

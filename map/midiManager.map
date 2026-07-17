@@ -304,3 +304,101 @@
   @reaper CountTempoTimeSigMarkers
   @reaper GetTempoTimeSigMarker
   @reaper TimeMap_GetTimeSigAtTime
+
+# Fields (r read / w write incl. constructor keys)
+  @field r ValidatePtr2  @ liveTake:19
+  @field w __mode  @ 308,430
+  @field r __ord  @ fullSortByPpq:284
+  @field w __ord  @ fullSortByPpq:281,286
+  @field w at  @ 48
+  @field w bezier  @ 89
+  @field r byLoc  @ seat:338 indexDrop:354 rawInChan:364,368
+  @field w byLoc  @ chanBucket:328
+  @field w candidateppqs  @ load:797
+  @field r cc  @ contentKey:85 idOf:153 cachedContentKey:313,318 rebuild:402 ccSidecarEntry:445,448 load:557 assignCC:1114
+  @field w cc  @ 48,62,219 ccSidecarDecode:205 cachedContentKey:318 rebuild:399 ccSidecarEntry:448 assignCC:1140
+  @field r chan  @ contentKey:83,84,85,86 noteSidecarEncode:156 ccSidecarEncode:185 cachedContentKey:312,317 indexPut:349 indexDrop:353 rebuild:406
+  @field r chan  @ rebuild:413 noteSidecarEntry:434,435 ccSidecarEntry:445,448 load:556,558,616,639 noteCollision:879
+  @field r chan  @ noteCollision:879 resolveCollisions:889,894,896,906 assignNote:1019 addNote:1055 assignCC:1114 addCC:1181 add:1219 assign:1229
+  @field r chan  @ assign:1230,1235 delete:1245
+  @field w chan  @ noteSidecarDecode:162 ccSidecarDecode:201 213,218 cachedContentKey:317 noteSidecarEntry:435 ccSidecarEntry:448 load:639 noteCollision:879 resolveCollisions:894,906
+  @field w chans  @ load:537 modify:970
+  @field w denom  @ timeSigs:1388,1394
+  @field w droppedCount  @ load:632,666
+  @field r endppq  @ assignNote:1019 addNote:1055
+  @field w endppq  @ 213
+  @field r entry  @ noteSidecarEntry:439,440 ccSidecarEntry:453,454
+  @field w entry  @ noteSidecarEntry:436 ccSidecarEntry:450
+  @field r evType  @ contentKey:82 ccSidecarEncode:167,172,175 ccSidecarDecode:199,202,203,205,206 metaFieldsOf:227 touchesMetadata:235 cachedContentKey:312
+  @field r evType  @ cachedContentKey:312,317 slotsFor:332 ccSidecarEntry:445,448 load:558,736,737 assignCC:1114,1128
+  @field r evType  @ assignCC:1140,1141 addCC:1178,1180,1186 byUuid:1209 add:1217,1218 assign:1232 delete:1254
+  @field w evType  @ ccSidecarDecode:197 214,218 cachedContentKey:317 ccSidecarEntry:448 addNote:1061 addCC:1178
+  @field r eventMeta  @ 14
+  @field w events  @ load:832,834,836,838,840 leaveNest:949
+  @field r eventtype  @ load:573,577
+  @field w eventtype  @ noteSidecarEntry:436 ccSidecarEntry:450
+  @field r guids  @ 858
+  @field r keepUuid  @ addNote:1065
+  @field w keepUuid  @ addNote:1066,1070
+  @field r key  @ cachedContentKey:314
+  @field w key  @ cachedContentKey:318
+  @field w kind  @ load:638,714,790,797 resolveCollisions:893,905
+  @field w lastppq  @ load:790
+  @field w linear  @ 89
+  @field r loc  @ seat:337 indexDrop:354 resolveCollisions:897 byUuid:1209 assign:1232,1233 delete:1254
+  @field w loc  @ 213,218 rebuild:404,411 addNote:1077 pushCC:1167
+  @field r locs  @ seat:339 rawInChan:362,366,368
+  @field w locs  @ chanBucket:328 seat:344
+  @field r msg  @ load:574,578
+  @field w msg  @ noteSidecarEntry:436 ccSidecarEntry:450
+  @field r muted  @ assignNote:1019,1039 addNote:1062 assignCC:1115,1139 pushCC:1161
+  @field w muted  @ 214,220 assignNote:1039 addNote:1062 assignCC:1139 pushCC:1161
+  @field r n  @ seat:339
+  @field w n  @ chanBucket:328 seat:341 rawInChan:366
+  @field w newUuid  @ load:685
+  @field w newVal  @ load:737
+  @field r note  @ rebuild:402
+  @field w note  @ 62 rebuild:399
+  @field w num  @ timeSigs:1388,1394
+  @field w offset  @ load:773
+  @field w oldUuid  @ load:685
+  @field w oldVal  @ load:736
+  @field r on  @ flushMetadata:258
+  @field w pa  @ 48
+  @field w pb  @ 48
+  @field w pc  @ 48
+  @field r pi  @ 103
+  @field r pitch  @ contentKey:83,84 idOf:153 noteSidecarEncode:156 cachedContentKey:313,317 noteSidecarEntry:434,435 ccSidecarEntry:446
+  @field r pitch  @ ccSidecarEntry:448 load:556,557,616,639 noteCollision:879 resolveCollisions:889,894,896,906
+  @field r pitch  @ assignNote:1019 addNote:1055 assignCC:1114,1141
+  @field w pitch  @ noteSidecarDecode:162 ccSidecarDecode:206 214,219 cachedContentKey:317 noteSidecarEntry:435 ccSidecarEntry:448 load:639 noteCollision:879 resolveCollisions:894,906
+  @field r plain  @ flushTake:467 assignCC:1120 delete:1256
+  @field w plain  @ 221 load:808 assignCC:1152 addCC:1200
+  @field r ppq  @ contentKey:83,84,85,86 fullSortByPpq:283 stableByPpq:296 cachedContentKey:313
+  @field r ppq  @ cachedContentKey:318 noteSidecarEntry:439 ccSidecarEntry:453 load:556,559,575,579,635,639,752,772
+  @field r ppq  @ load:772,790,796 resolveCollisions:894,896,902,903,906,907 assignNote:1019,1036
+  @field r ppq  @ assignNote:1036 addNote:1055 assignCC:1114,1134 addCC:1181 interpolate:1285,1287
+  @field w ppq  @ 213,218 cachedContentKey:318 noteSidecarEntry:439 ccSidecarEntry:453 load:575,579,637,639 resolveCollisions:894,904,906
+  @field w ppq  @ timeSigs:1388,1394
+  @field w sampleShadowed  @ 215
+  @field r shape  @ assignCC:1115,1142 pushCC:1162,1163 interpolate:1284,1288
+  @field w shape  @ 220 pushCC:1162
+  @field w slow  @ 89
+  @field w step  @ 89
+  @field r take  @ 13
+  @field r tension  @ assignCC:1115 interpolate:1288
+  @field w tension  @ 220 assignCC:1142 pushCC:1163
+  @field r uuid  @ noteSidecarEncode:156 ccSidecarEncode:189 ccSidecarDecode:199 rebuild:407,408,414,415,416 noteSidecarEntry:434,435
+  @field r uuid  @ ccSidecarEntry:447,449 flushTake:464 load:598,601,602,603,628
+  @field r uuid  @ load:638,678,709,710,714,797,808 resolveCollisions:893,896,898,899
+  @field r uuid  @ resolveCollisions:905,907 assignNote:1026,1048 addNote:1065,1067,1068,1073,1084 assignCC:1122
+  @field r uuid  @ assignCC:1153 addCC:1198,1199 add:1220 delete:1255,1256 events:1267
+  @field w uuid  @ noteSidecarDecode:162 ccSidecarDecode:198 214,220 assignNewUUID:272 noteSidecarEntry:435 ccSidecarEntry:449 load:601,638,709,714,797
+  @field w uuid  @ resolveCollisions:893,905 addNote:1073 addCC:1198
+  @field r val  @ ccSidecarEncode:173,180 ccSidecarEntry:446,449 load:560,736,737 assignCC:1115
+  @field w val  @ ccSidecarDecode:202,204 219 ccSidecarEntry:449
+  @field r vel  @ ccSidecarEncode:176 ccSidecarEntry:446,449 load:736,737 assignNote:1019 addNote:1055 assignCC:1115
+  @field w vel  @ ccSidecarDecode:203 214,219 ccSidecarEntry:449 assignCC:1141
+  @field r verb  @ resolveCollisions:896,907
+  @field w verb  @ noteCollision:879
+  @field w wholesale  @ load:537,842 modify:970

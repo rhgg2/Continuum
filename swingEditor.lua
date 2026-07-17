@@ -724,7 +724,6 @@ function swingEditor:open(name)
     if target then switchTo(target) end
     return
   end
-  local lib = cm:get('swings', { mergeTiers = true })
   state = { rpb = 4 }
   switchTo(target)
 end

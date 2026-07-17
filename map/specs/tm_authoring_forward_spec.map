@@ -24,3 +24,41 @@
   @use call fm:dump  @ 29,53,77,101,174
   @use call tm:getChannel  @ 73,97,116,132,148,151,170,178
   @use call tm:assignEvent  @ 74,98,149,171
+
+# Fields (r read / w write incl. constructor keys)
+  @field r OPEN  @ 113,117,126,136,149,152
+  @field w atom  @ 8
+  @field w chan  @ 24,48,70,94,114,127,129,146,168
+  @field r columns  @ 73,97,116,132,148,151,170,178
+  @field w config  @ 17,40,64,87
+  @field w data  @ 20,43,67,90
+  @field w delay  @ 25,49,94,98
+  @field w detune  @ 25,49
+  @field r endppq  @ 56,117,136,152,175
+  @field w endppq  @ 23,47,69,93,113,126,128,145,149,167,171
+  @field r endppqC  @ 118,137,153,179
+  @field r endppqL  @ 176
+  @field w endppqL  @ 69,93,145,167
+  @field w evType  @ 22,46,113,126,128
+  @field r events  @ 73,97,116,132,148,151,170,178
+  @field w factors  @ 8
+  @field w global  @ 20,43,67,90
+  @field w lane  @ 25,49
+  @field w length  @ 112,125,144,166
+  @field w name  @ 13,37,61,84,110,123,142,164
+  @field r notes  @ 29,53,73,77,97,101,116,132,148,151,170,174
+  @field r notes  @ 178
+  @field w notes  @ 68,91,112,125,144,166
+  @field w period  @ 8
+  @field w pitch  @ 24,48,70,94,114,127,129,146,168
+  @field r ppq  @ 31,54,78,103,133
+  @field w ppq  @ 23,47,69,74,93,113,126,128,145,167
+  @field r ppqL  @ 32,55,79
+  @field w ppqL  @ 69,93,145,167
+  @field w project  @ 18,41,65,88
+  @field w run  @ 14,38,62,85,111,124,143,165
+  @field w seed  @ 68,91,112,125,144,166
+  @field w shift  @ 8
+  @field w swing  @ 20,43,67,90
+  @field w swings  @ 18,41,65,88
+  @field w vel  @ 24,48,70,94,114,127,129,146,168

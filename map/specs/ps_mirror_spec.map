@@ -1,4 +1,4 @@
-@spec ps_mirror_spec  src=tests/specs/ps_mirror_spec.lua  loc=262  sha=e2be081  cases=10
+@spec ps_mirror_spec  src=tests/specs/ps_mirror_spec.lua  loc=262  sha=37ed80d  cases=10
 @exercises pextStore (ps), midiManager (h.mm)
 @surface   ps:watch, ps:assign, ps:pollUndo, ps:get, ps:subscribe, mm:modify, mm:add, mm:assign, mm:notes
 @harness   reaper:bindTake, reaper:setResolution, r._state.trackExt, r._state.projStateCount, r._state.projExt, r._state.projectTracks, r._state.trackGuids
@@ -41,3 +41,45 @@
   @use call mm:add  @ 247
   @use call mm:assign  @ 251
   @use call mm:notes  @ 255
+
+# Fields (r read / w write incl. constructor keys)
+  @field r REMOVE  @ 105
+  @field w __track  @ 133
+  @field r _state  @ 19,21,22,91,125,126,127,128,134,135
+  @field r _state  @ 136,137,138,160,161,162,163,166,193,194
+  @field r _state  @ 195,196,200
+  @field w chan  @ 248
+  @field w delay  @ 248
+  @field r detune  @ 257
+  @field w detune  @ 248,251
+  @field w endppq  @ 247
+  @field w endppqL  @ 247
+  @field w evType  @ 247
+  @field w eventMeta  @ 244
+  @field w lane  @ 248
+  @field w name  @ 27,45,62,83,99,117,153,184,216,234
+  @field r path  @ 243
+  @field w pitch  @ 248
+  @field w ppq  @ 247
+  @field w ppqL  @ 247
+  @field w prefixes  @ 65,156,187
+  @field r projExt  @ 125,136,160,193
+  @field r projStateCount  @ 22,91,138,166,200
+  @field w projStateCount  @ 22,91,138,166,200
+  @field r projectTracks  @ 126,128,134,161,163,194,196
+  @field w ps  @ 242
+  @field w reaper  @ 12,237
+  @field w run  @ 28,46,63,84,100,118,154,185,217,235
+  @field w scope  @ 32
+  @field r slot  @ 40
+  @field w slot  @ 32
+  @field w slots  @ 30,48,86,102,120,219,225
+  @field w take  @ 244
+  @field r trackExt  @ 19,137
+  @field w trackExt  @ 21
+  @field r trackGuids  @ 127,135,162,195
+  @field r v  @ 38,56,57,77,78,94,109,141,148,178,179,210
+  @field r v  @ 211,229
+  @field w v  @ 33,35,49,50,52,53,68,69,71,89,103,123
+  @field w v  @ 143,145,157,158,173,175,188,189,207,220,222
+  @field w vel  @ 248

@@ -24,3 +24,38 @@
   @use call wm:load  @ 13
   @use call wm:mutate  @ 53
   @use call wm:paramTargets  @ 66,82
+
+# Fields (r read / w write incl. constructor keys)
+  @field w __label  @ 18
+  @field r _state  @ 19,20
+  @field w audio  @ 26,31
+  @field w cm  @ 12
+  @field w ds  @ 11
+  @field r edges  @ 59,60,61,62,63
+  @field w from  @ 34
+  @field w fxE  @ 57
+  @field r fxGuid  @ 68,72
+  @field w fxIdent  @ 30
+  @field w fxO  @ 58
+  @field w fxS  @ 56
+  @field r generator  @ 69,73
+  @field w ident  @ 45,46
+  @field w ins  @ 26,31
+  @field w kind  @ 25,30
+  @field w midi  @ 26,31
+  @field r name  @ 71
+  @field w name  @ 39,78
+  @field r nodes  @ 54,55,56,57,58
+  @field w outs  @ 26,31
+  @field w ports  @ 26,31
+  @field w pos  @ 25,30
+  @field r projectTracks  @ 19
+  @field w rm  @ 12
+  @field w run  @ 40,79
+  @field w to  @ 34
+  @field r trackGuid  @ 70
+  @field r trackGuids  @ 20
+  @field w trackId  @ 25
+  @field w type  @ 34
+  @field w x  @ 25,30
+  @field w y  @ 25,30

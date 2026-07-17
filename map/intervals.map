@@ -1,4 +1,4 @@
-@module intervals  src=intervals.lua  loc=75  sha=2541738  mode=namespace  self=intervals
+@module intervals  src=intervals.lua  loc=75  sha=e33b768  mode=namespace  self=intervals
 
 # Shapes
   @shape  interval = { loPpq, hiPpq: number; loUuid, hiUuid: string? } -- nil uuid edge = open toward channel start/end  @ 5
@@ -28,3 +28,17 @@
 # Uses (outbound edges)
   @use call    util.add  @ merge:29,41
   @use require util  @ 6
+
+# Fields (r read / w write incl. constructor keys)
+  @field w absorbSeeds  @ absorbSeeds:65
+  @field r hiPpq  @ merge:35,36,37,40 intersects:55
+  @field w hiPpq  @ seed:20 merge:40
+  @field r hiUuid  @ merge:37,40
+  @field w hiUuid  @ seed:20 merge:37,40
+  @field w intersects  @ intersects:52
+  @field r loPpq  @ merge:30,35,40 intersects:55
+  @field w loPpq  @ seed:20 merge:40
+  @field r loUuid  @ merge:40
+  @field w loUuid  @ seed:20 merge:40
+  @field w merge  @ merge:24
+  @field w seed  @ seed:15

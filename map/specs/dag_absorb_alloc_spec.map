@@ -24,3 +24,54 @@
   @use call DAG.compile  @ 43
   @use call DAG.allocate  @ 44
   @use call DAG.targetTracks  @ 44
+
+# Fields (r read / w write incl. constructor keys)
+  @field w audio  @ 15,23,31
+  @field r dstChan  @ 69,88,89,117,163,164,165
+  @field r edges  @ 42
+  @field w edges  @ 37,55,81,103,130,150
+  @field r from  @ 114
+  @field w from  @ 56,57,82,83,84,104,105,106,107,131,132,151
+  @field w from  @ 152,153,154
+  @field w fxDisplay  @ 22
+  @field w fxIdent  @ 22
+  @field r fxOrder  @ 135,156
+  @field r gain  @ 134
+  @field w gain  @ 132
+  @field r ins  @ 23,31,61,86,110,159
+  @field w ins  @ 15,16,23,25,31,32,54,80,102,129,148,149
+  @field w kind  @ 13,21,30
+  @field r mainSend  @ 63,112,119
+  @field r mainSendOffs  @ 113
+  @field r master  @ 36
+  @field w midi  @ 16,25,32
+  @field r mix  @ 61,86,110,111
+  @field r mixA  @ 158
+  @field r mixB  @ 159
+  @field w name  @ 49,74,93,124,139
+  @field r nchan  @ 62,70,87
+  @field w nextId  @ 37
+  @field r nodes  @ 42,44
+  @field w nodes  @ 37,55,81,103,130,150
+  @field w ops  @ 132
+  @field r outs  @ 24,111,158
+  @field w outs  @ 15,16,24,25,31,32,54,80,102,129,148,149
+  @field r parentFeed  @ 114
+  @field r pinMaps  @ 61,86,110,111,158,159
+  @field w ports  @ 15,23,31
+  @field w pos  @ 14,21,30
+  @field w primary  @ 56,82,104,131,151,153
+  @field w run  @ 50,75,94,125,140
+  @field r sends  @ 66,67,68,69,88,89,116,117,120,134,161,162
+  @field r sends  @ 163,164,165
+  @field r srcChan  @ 68
+  @field r to  @ 67,116,161,162
+  @field w to  @ 56,57,82,83,84,104,105,106,107,131,132,151
+  @field w to  @ 152,153,154
+  @field w toPort  @ 56,57,82,83,84,104,105,131,132,151,152,153
+  @field w toPort  @ 154
+  @field w trackId  @ 13
+  @field w type  @ 56,57,82,83,84,104,105,106,107,131,132,151
+  @field w type  @ 152,153,154
+  @field w x  @ 14,21,30
+  @field w y  @ 14,21,30

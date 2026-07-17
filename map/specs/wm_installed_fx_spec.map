@@ -16,3 +16,13 @@
 
 # Uses (outbound edges)
   @use call wm:listInstalledFX  @ 28,47,49,58
+
+# Fields (r read / w write incl. constructor keys)
+  @field w EnumInstalledFX  @ 22,42,57
+  @field w cm  @ 7
+  @field w ds  @ 6
+  @field r ident  @ 31
+  @field r name  @ 30,32,33
+  @field w name  @ 13,38,54
+  @field w rm  @ 7
+  @field w run  @ 14,39,55

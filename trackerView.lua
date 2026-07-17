@@ -1896,7 +1896,6 @@ do
   -- rows whose post-snap distance crosses the lenient threshold),
   -- and the allocator would reject the persisted lane on rebuild.
   local function quantizeScope(groups)
-    local step  = logPerRowFor(currentRpb())
     local plans = {}
     for _, g in ipairs(groups) do
       local col, chan = g.col, g.col.midiChan
@@ -3868,7 +3867,7 @@ function tv:rebuild(takeChanged)
     lastEpochSig = epochSig
 
     perf.start('place')
-    for ci, gridCol in ipairs(grid.cols) do
+    for _, gridCol in ipairs(grid.cols) do
       local carried = prevBuilt[gridCol.events]
       if carried then
         gridCol.cells, gridCol.overflow = carried.cells, carried.overflow

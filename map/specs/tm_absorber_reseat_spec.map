@@ -1,4 +1,4 @@
-@spec tm_absorber_reseat_spec  src=tests/specs/tm_absorber_reseat_spec.lua  loc=188  sha=2710573  cases=5
+@spec tm_absorber_reseat_spec  src=tests/specs/tm_absorber_reseat_spec.lua  loc=188  sha=37ed80d  cases=5
 @exercises midiManager (h.fm), trackerManager (h.tm), dataStore (h.ds)
 @surface   fm:dump, tm:getChannel, ds:delete, tm:assignEvent, tm:flush, tm:addEvent
 @harness   mk{seed.notes, seed.ccs}
@@ -31,3 +31,48 @@
   @use call tm:assignEvent  @ 115,148
   @use call tm:flush  @ 116,149,177
   @use call tm:addEvent  @ 176
+
+# Fields (r read / w write incl. constructor keys)
+  @field w atom  @ 13
+  @field r ccs  @ 18,180
+  @field w ccs  @ 37,69,109,136,166
+  @field r chan  @ 181
+  @field w chan  @ 34,38,39,66,70,71,106,110,131,133,137,163
+  @field w chan  @ 167,176
+  @field r columns  @ 49,114,145
+  @field w config  @ 74
+  @field w data  @ 77
+  @field r delay  @ 54
+  @field w delay  @ 35,67,107,115,132,134,164
+  @field r derived  @ 19,185
+  @field w derived  @ 38,70,110,137
+  @field w detune  @ 35,67,107,132,134,148,164
+  @field w endppq  @ 34,66,106,131,133,163
+  @field w endppqL  @ 35,67,107,132,134,164
+  @field r evType  @ 19,181
+  @field w evType  @ 38,39,70,71,110,137,167,176
+  @field r events  @ 49,114,145
+  @field w factors  @ 13
+  @field w global  @ 77
+  @field r hidden  @ 50
+  @field w name  @ 26,59,97,125,156
+  @field r notes  @ 87,114,119,145
+  @field w notes  @ 33,65,105,130,162
+  @field r pb  @ 49
+  @field w period  @ 13
+  @field r pitch  @ 146
+  @field w pitch  @ 34,66,106,131,133,163
+  @field r ppq  @ 44,53,80,88,92,119,120,173,181
+  @field w ppq  @ 34,38,39,66,70,71,106,110,131,133,137,163
+  @field w ppq  @ 167,176
+  @field r ppqL  @ 45,89
+  @field w ppqL  @ 35,67,107,132,134,164,176
+  @field w project  @ 75
+  @field w run  @ 27,60,98,126,157
+  @field w seed  @ 32,64,104,129,161
+  @field w shift  @ 13
+  @field w swing  @ 77
+  @field w swings  @ 75
+  @field r val  @ 184
+  @field w val  @ 38,39,70,71,110,137,167,176
+  @field w vel  @ 34,66,106,131,133,163

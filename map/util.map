@@ -89,3 +89,54 @@
 # REAPER API surface
   @reaper ShowConsoleMsg
   @reaper Undo_BeginBlock, Undo_EndBlock
+
+# Fields (r read / w write incl. constructor keys)
+  @field w OPEN  @ 43
+  @field r REMOVE  @ assign:49
+  @field w REMOVE  @ 40
+  @field r Undo_BeginBlock  @ atomic:71
+  @field r Undo_EndBlock  @ atomic:73
+  @field r _stubs  @ instantiate:610
+  @field w _stubs  @ 608
+  @field w add  @ add:59
+  @field w assign  @ assign:46
+  @field w atomic  @ atomic:68
+  @field w between  @ between:227
+  @field w bucket  @ bucket:90
+  @field w clamp  @ clamp:240
+  @field w clone  @ clone:166
+  @field w compact  @ compact:124
+  @field w deepClone  @ deepClone:177
+  @field w deepEq  @ deepEq:179
+  @field w dotimes  @ dotimes:345
+  @field r endppq  @ isNote:224
+  @field w fromBase36  @ fromBase36:314
+  @field w fromBase62  @ fromBase62:333
+  @field w gcd  @ gcd:283
+  @field w hash  @ hash:293
+  @field r huge  @ 43 serialise:364,365 unserialise:454,455 luaNumber:532,533 nonFiniteNote:539
+  @field w installHooks  @ installHooks:205
+  @field w instantiate  @ instantiate:609
+  @field w isNote  @ isNote:224
+  @field w key  @ key:101
+  @field w keys  @ keys:117
+  @field w lcm  @ lcm:289
+  @field w nudgedScalar  @ nudgedScalar:263
+  @field w oneOf  @ oneOf:268
+  @field r path  @ instantiate:612
+  @field w pick  @ pick:79
+  @field r ppq  @ seek:143 between:234,235
+  @field w prettySerialise  @ prettySerialise:594
+  @field w prettyUnserialise  @ prettyUnserialise:599
+  @field w print  @ print:7
+  @field w print_r  @ print_r:19
+  @field w round  @ round:275
+  @field w seek  @ seek:142
+  @field w serialise  @ serialise:356
+  @field w setDigit  @ setDigit:250
+  @field w snapTo  @ snapTo:258
+  @field w sparsePairs  @ sparsePairs:131
+  @field w toBase36  @ toBase36:303
+  @field w toBase62  @ toBase62:322
+  @field r traceback  @ atomic:72
+  @field w unserialise  @ unserialise:399

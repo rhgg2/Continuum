@@ -42,3 +42,40 @@
   @use call gm:assignEvent  @ 75,76
   @use call gm:stamp  @ 116
   @use call tm:getChannel  @ 127,133
+
+# Fields (r read / w write incl. constructor keys)
+  @field r OPEN  @ 122,144,146
+  @field r add  @ 67,72
+  @field r assign  @ 80
+  @field w assign  @ 72
+  @field w chan  @ 33,62,116,121
+  @field w chanLo  @ 41,114
+  @field r columns  @ 127,133
+  @field r conform  @ 150
+  @field w ds  @ 27,112
+  @field w dur  @ 41,114
+  @field r endppq  @ 144,146
+  @field w endppq  @ 34,122
+  @field r endppqC  @ 145,148
+  @field w endppqL  @ 122
+  @field r evType  @ 128
+  @field w evType  @ 33,121
+  @field r events  @ 127
+  @field r evt  @ 81
+  @field w lane  @ 33,121
+  @field w length  @ 111
+  @field w name  @ 55,109
+  @field r notes  @ 127,133
+  @field w notes  @ 111
+  @field r pitch  @ 88,90,92,94
+  @field w pitch  @ 34,59,60,75,76,121
+  @field r ppq  @ 68,69,139,140,141
+  @field w ppq  @ 33,41,62,114,116,122
+  @field w run  @ 56,110
+  @field w seed  @ 111
+  @field w streams  @ 42,115
+  @field w tm  @ 27,112
+  @field r update  @ 81
+  @field r uuid  @ 75,76
+  @field w uuid  @ 34
+  @field w vel  @ 34,122

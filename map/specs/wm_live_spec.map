@@ -41,3 +41,49 @@
   @use call wm2:diff  @ 168
   @use call wm2:targetState  @ 168
   @use call wm2:snapshot  @ 168
+
+# Fields (r read / w write incl. constructor keys)
+  @field r Undo_BeginBlock  @ 157
+  @field w Undo_BeginBlock  @ 158
+  @field w __label  @ 13
+  @field r _state  @ 14,15
+  @field w audio  @ 21,30
+  @field w cm  @ 7,163
+  @field w ds  @ 6,162
+  @field r edges  @ 51,52,87,88,108,109,126,127,152,153
+  @field r f  @ 55,129
+  @field w f  @ 50,86,107,125,151
+  @field w from  @ 34
+  @field r fxId  @ 29,55,129
+  @field w fxId  @ 29
+  @field w fxIdent  @ 29
+  @field r ins  @ 30
+  @field w ins  @ 21,30
+  @field r kind  @ 138
+  @field w kind  @ 20,29
+  @field w midi  @ 21,30
+  @field w name  @ 43,61,80,96,118,143
+  @field r nodes  @ 49,50,55,66,76,85,86,106,107,124,125,129
+  @field r nodes  @ 138,150,151
+  @field r outs  @ 30
+  @field w outs  @ 21,30
+  @field w ports  @ 21,30
+  @field r pos  @ 76
+  @field w pos  @ 20,29
+  @field r projectTracks  @ 14
+  @field w readJSFXContent  @ 146,164
+  @field r reconcile  @ 101
+  @field w reconcile  @ 102
+  @field w rm  @ 7,163
+  @field w run  @ 44,62,81,97,119,144
+  @field r s  @ 76
+  @field w s  @ 49,66,74,85,106,124,150
+  @field r targetState  @ 71
+  @field w targetState  @ 72
+  @field w to  @ 34
+  @field r trackGuids  @ 15
+  @field w trackId  @ 20
+  @field w type  @ 34
+  @field r x  @ 76
+  @field w x  @ 20,29,74
+  @field w y  @ 20,29,74

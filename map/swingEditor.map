@@ -212,3 +212,129 @@
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB
+
+# Fields (r read / w write incl. constructor keys)
+  @field r H  @ drawSwingStrip:156,163 drawBandInto:201,209
+  @field w H  @ bandLayout:186 drawBandInto:201
+  @field r ImGui_GetBuiltinPath  @ 18
+  @field r InputTextFlags_EnterReturnsTrue  @ 571
+  @field r Key_Escape  @ 577
+  @field r MouseCursor_ResizeNS  @ drawEditBody:687
+  @field w active  @ buildDescriptor:532
+  @field w align  @ drawToolsRow:615
+  @field r atom  @ shiftCap:91,94 compositesEqual:257 drawFactorRow:322,354,367
+  @field w atom  @ addFactor:290 drawFactorRow:325,329,367
+  @field r atomMeta  @ shiftCap:94 drawFactorRow:354
+  @field r bandW  @ drawBandInto:194
+  @field w bandW  @ bandLayout:186
+  @field r buf  @ 571
+  @field w buf  @ 553,573,583
+  @field w callback  @ 554
+  @field r chan  @ resolvedSlots:481
+  @field r chrome  @ 43
+  @field r classify  @ drawBandInto:201
+  @field w classify  @ bandLayout:184 drawBandInto:201
+  @field r cm  @ 43
+  @field w col  @ activeEntries:499,504
+  @field r contentH  @ drawEditBody:664
+  @field w contentH  @ bandLayout:186
+  @field r ctx  @ 43
+  @field r dQN  @ drawSwingStrip:140,155 drawBandInto:200
+  @field w dQN  @ bandLayout:185 drawBandInto:200
+  @field w dirty  @ buildDescriptor:543
+  @field r ds  @ 43
+  @field r err  @ 588
+  @field w err  @ 581,583
+  @field r facade  @ 43
+  @field r factors  @ readFactors:243 cloneForEdit:276 patchFactor:282,283 addFactor:290 removeFactor:296 moveFactor:306 drawFactorRow:345
+  @field r factors  @ drawFactorRow:345,390,391
+  @field w factors  @ drawBandInto:223 cloneForEdit:276
+  @field r font  @ bandLayout:169 drawBandInto:192
+  @field r fontSize  @ bandLayout:169 drawBandInto:192,206,210
+  @field r gen  @ 569,570,583
+  @field w gen  @ 569,583
+  @field r global  @ resolvedSlots:478 activeEntries:497
+  @field w global  @ buildDescriptor:534
+  @field r grid  @ bandLayout:169 drawBandInto:192
+  @field r gui  @ 43
+  @field r gx  @ drawSwingStrip:135 drawBandInto:199
+  @field w gx  @ bandLayout:184 drawBandInto:199
+  @field r gy  @ drawSwingStrip:135 drawBandInto:199 drawEditBody:657
+  @field w gy  @ bandLayout:184 drawBandInto:199
+  @field r h  @ drawBandInto:196 drawEditBody:671
+  @field w h  @ drawEditBody:668
+  @field r h0  @ drawEditBody:683
+  @field w h0  @ drawEditBody:682
+  @field r heightQN  @ drawSwingStrip:156 drawBandInto:200
+  @field w heightQN  @ bandLayout:185 drawBandInto:200
+  @field r huge  @ nearestRpb:594
+  @field r identity  @ buildDescriptor:529
+  @field w identity  @ 413
+  @field w kind  @ 553
+  @field r label  @ periodLabel:72 drawFactorRow:358
+  @field w label  @ 32,33,34,35,36,37 buildDescriptor:531
+  @field w max  @ drawToolsRow:615
+  @field w mergeTiers  @ swingRead:237 582 open:727
+  @field w min  @ drawToolsRow:615
+  @field r modalHost  @ 43
+  @field r name  @ commit:52 swingRead:236,237 swingWrite:269 buildDescriptor:537,543 drawEditBody:690,696 draw:704 renderToolbar:738
+  @field r name  @ renderToolbar:740,742
+  @field w name  @ switchTo:433 activeEntries:499,504 buildDescriptor:537
+  @field r negRange  @ shiftCap:95
+  @field w onDelete  @ buildDescriptor:542
+  @field w onDemote  @ buildDescriptor:541
+  @field w onNew  @ buildDescriptor:539
+  @field w onPromote  @ buildDescriptor:540
+  @field w onReset  @ buildDescriptor:544
+  @field w onSelect  @ buildDescriptor:538
+  @field w onStep  @ drawToolsRow:615
+  @field r path  @ 21
+  @field w path  @ 21
+  @field r period  @ periodPresetIndex:65 compositesEqual:258 drawFactorRow:325,364,365
+  @field w period  @ 32,33,34,35,36,37 addFactor:290 drawFactorRow:325,367,370
+  @field r periodQN  @ drawBandInto:216
+  @field w periodQN  @ bandLayout:184
+  @field r phase  @ compositesEqual:252,259 drawFactorRow:385 drawToolsRow:635
+  @field w phase  @ drawFactorRow:391 drawToolsRow:641
+  @field r posRange  @ shiftCap:95
+  @field r previewH  @ drawEditBody:668,682
+  @field w previewH  @ drawEditBody:664,683
+  @field r previewRpb  @ drawEditBody:662
+  @field w previewRpb  @ drawEditBody:663
+  @field w project  @ buildDescriptor:533
+  @field r pulsesPerCycle  @ drawFactorRow:354
+  @field r refocus  @ 562
+  @field w refocus  @ 563,583
+  @field r rows  @ drawSwingStrip:138,154 drawBandInto:200
+  @field w rows  @ bandLayout:185 drawBandInto:200
+  @field r rpb  @ bandLayout:175 drawToolsRow:614 drawEditBody:662,663
+  @field w rpb  @ drawToolsRow:616 open:728
+  @field w sel  @ buildDescriptor:537
+  @field r shift  @ compositesEqual:257 drawFactorRow:326,339,366
+  @field w shift  @ addFactor:290 drawFactorRow:329,345,370
+  @field r snapshot  @ resetToSnapshot:521 buildDescriptor:543
+  @field w snapshot  @ switchTo:435
+  @field r splitDrag  @ drawEditBody:682,683
+  @field w splitDrag  @ drawEditBody:682,685
+  @field r stripW  @ drawBandInto:217,225
+  @field w stripW  @ bandLayout:185
+  @field w synthetic  @ buildDescriptor:535
+  @field r tier  @ swingRead:235 swingWrite:269 buildDescriptor:537 551
+  @field w tier  @ switchTo:434 buildDescriptor:537
+  @field w title  @ 553
+  @field r ui  @ drawBandInto:206,210
+  @field r uiFont  @ drawBandInto:206,210
+  @field w undeletable  @ buildDescriptor:536
+  @field r w  @ drawBandInto:194,196 drawEditBody:671
+  @field w w  @ drawEditBody:668
+  @field r wild  @ drawFactorRow:325,334,367 drawToolsRow:622
+  @field w wild  @ drawToolsRow:623
+  @field r x  @ drawSwingStrip:135 drawBandInto:194,195,196
+  @field w x  @ drawBandInto:215,222 drawEditBody:668
+  @field w x0  @ drawSwingStrip:142,144,163 drawBandInto:195
+  @field w x1  @ drawSwingStrip:142,144,163 drawBandInto:196
+  @field r y  @ drawSwingStrip:135 drawBandInto:195,196,199,209
+  @field w y  @ drawBandInto:199 drawEditBody:668
+  @field r y0  @ drawEditBody:683
+  @field w y0  @ drawSwingStrip:142,144,163 drawBandInto:195 drawEditBody:682
+  @field w y1  @ drawSwingStrip:142,144,163 drawBandInto:196

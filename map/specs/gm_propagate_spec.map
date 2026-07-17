@@ -37,3 +37,34 @@
   @use call gm:assignEvent  @ 76,109,174,216
   @use call gm:addEvent  @ 138,158,208
   @use call gm:setLocalMode  @ 173,190,206,213
+
+# Fields (r read / w write incl. constructor keys)
+  @field r add  @ 46,47,50,51,142,144,160,193,210
+  @field w add  @ 74,104,135,156,171,204,211
+  @field r assign  @ 83,113,182
+  @field r chan  @ 50,90
+  @field w chan  @ 24,43,60,72,103,134,155,170,191,203,219
+  @field w chanLo  @ 32
+  @field w ds  @ 17
+  @field w dur  @ 32
+  @field r endppq  @ 120,124
+  @field w endppq  @ 25,109
+  @field r endppqL  @ 121
+  @field w endppqL  @ 101
+  @field r evType  @ 51
+  @field w evType  @ 24
+  @field r evt  @ 85,90,91,115,184
+  @field w lane  @ 24
+  @field w name  @ 38,56,67,98,129,151,165,198
+  @field r pitch  @ 84,89,93,146,183,185,193
+  @field w pitch  @ 25,41,70,76,137,168,174,201,207,216
+  @field r ppq  @ 47,85,114,119,123,144,210
+  @field w ppq  @ 24,32,43,60,72,103,109,134,155,170,191,203
+  @field w ppq  @ 219
+  @field w run  @ 39,57,68,99,130,152,166,199
+  @field w streams  @ 33
+  @field w tm  @ 17
+  @field r update  @ 84,89,93,114,119,120,121,123,124,183,185
+  @field r uuid  @ 76,109,174,216
+  @field w uuid  @ 25
+  @field w vel  @ 25

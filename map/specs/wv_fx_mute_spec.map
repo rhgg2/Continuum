@@ -23,3 +23,15 @@
   @use call wv:setMuted  @ 27,33,47
   @use call wv:bypassed  @ 42,45,48,51
   @use call wv:setBypassed  @ 44,50
+
+# Fields (r read / w write incl. constructor keys)
+  @field w cm  @ 13,14
+  @field w ds  @ 12
+  @field w ident  @ 8
+  @field r ins  @ 30
+  @field w name  @ 8,20,38
+  @field r outs  @ 31
+  @field r pinMaps  @ 24,29
+  @field w rm  @ 13
+  @field w run  @ 21,39
+  @field w wm  @ 14

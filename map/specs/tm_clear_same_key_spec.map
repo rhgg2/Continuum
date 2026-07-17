@@ -36,3 +36,32 @@
   @use call tm:flush  @ 44,67,119
   @use call fm:dump  @ 46,69,94,121
   @use call tm:getChannel  @ 100
+
+# Fields (r read / w write incl. constructor keys)
+  @field w chan  @ 41,63,66,86,88,115,118
+  @field r columns  @ 100
+  @field w data  @ 90
+  @field r delay  @ 48
+  @field w delay  @ 42
+  @field w detune  @ 42
+  @field r endppq  @ 51,73,96,104,125
+  @field w endppq  @ 41,62,65,85,87,114,117
+  @field r endppqC  @ 105
+  @field r endppqL  @ 50,74,97,126
+  @field w endppqL  @ 62,65,85,87,114,117
+  @field w evType  @ 40,65,117
+  @field r events  @ 100
+  @field w extraColumns  @ 90
+  @field w lane  @ 42,63,66,86,88,115,118
+  @field w length  @ 84
+  @field w name  @ 35,59,81,111
+  @field r notes  @ 46,69,94,100,121
+  @field w notes  @ 62,84,90,114
+  @field w pitch  @ 41,63,66,86,88,115,118
+  @field r ppq  @ 49,71,94,101,123
+  @field w ppq  @ 41,62,65,85,87,114,117
+  @field w ppqL  @ 62,65,85,87,114,117
+  @field w run  @ 36,60,82,112
+  @field w seed  @ 62,84,114
+  @field w uuid  @ 63,86,88,115
+  @field w vel  @ 41,63,66,86,88,115,118

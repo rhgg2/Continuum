@@ -69,3 +69,53 @@
   @reaper GetOS
   @reaper new_array
   @reaper ColorToNative
+
+# Fields (r read / w write incl. constructor keys)
+  @field r DrawFlags_Closed  @ new:202
+  @field r DrawFlags_None  @ new:202,233
+  @field w border  @ new:144
+  @field w circle  @ new:190
+  @field r colour  @ new:103
+  @field w fill  @ new:129
+  @field w fromScreen  @ new:117
+  @field r h  @ measureRotated:92 new:255
+  @field w h  @ rasteriseRotated:74
+  @field w hue  @ hue:299
+  @field w hueNative  @ hueNative:305
+  @field r img  @ new:257
+  @field w img  @ rasteriseRotated:74
+  @field w line  @ new:176
+  @field w measure  @ new:239
+  @field w measureRotated  @ measureRotated:89
+  @field w new  @ new:96
+  @field r ox  @ new:99
+  @field w ox  @ new:116
+  @field r oy  @ new:99
+  @field w oy  @ new:116
+  @field w pathArcTo  @ new:227
+  @field w pathClear  @ new:219
+  @field w pathLineTo  @ new:221
+  @field w pathStroke  @ new:232
+  @field r pi  @ oklchToRgb:278
+  @field w polyline  @ new:197
+  @field w popClip  @ new:214
+  @field w pushClip  @ new:208
+  @field w segment  @ new:157
+  @field r snap  @ new:101
+  @field w stroke  @ new:135
+  @field r sx  @ new:100
+  @field w sx  @ new:116
+  @field r sy  @ new:100
+  @field w sy  @ new:116
+  @field w text  @ new:167
+  @field w textUp  @ new:251
+  @field w toScreen  @ new:117
+  @field w tri  @ new:182
+  @field r u32  @ new:125
+  @field w u32  @ hue:301
+  @field r w  @ measureRotated:92 new:255
+  @field w w  @ rasteriseRotated:74
+  @field r x0  @ new:130,136,145,209
+  @field r x1  @ new:131,137,146,210
+  @field r y0  @ new:130,136,145,209
+  @field r y1  @ new:131,137,146,210

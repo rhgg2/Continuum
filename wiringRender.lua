@@ -16,8 +16,8 @@ package.path = reaper.ImGui_GetBuiltinPath() .. '/?.lua;' .. package.path
 local ImGui = require 'imgui' '0.10'
 local painter = require 'painter'
 
-local cm, cmgr, chrome, gui, modalHost, wv, facade =
-  (...).cm, (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).wv, (...).facade
+local cmgr, chrome, gui, modalHost, wv, facade =
+  (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).wv, (...).facade
 
 local ctx      = gui and gui.ctx or nil
 local wireFont = gui and gui.wireFont or nil

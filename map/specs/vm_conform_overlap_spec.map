@@ -27,3 +27,25 @@
   @use call ec:setPos  @ 32,54,78
   @use call cmgr:invoke  @ 33,55,79
   @use call fm:dump  @ 35,37,57,59,81,83
+
+# Fields (r read / w write incl. constructor keys)
+  @field w chan  @ 25,28,48,50,71,74
+  @field w conform  @ 26,72
+  @field w delay  @ 25,28,48,50,71,74
+  @field w detune  @ 25,28,48,50,71,74
+  @field r endppq  @ 60,86
+  @field w endppq  @ 24,27,47,49,70,73
+  @field r endppqL  @ 38,61,82
+  @field w endppqL  @ 24,27,47,49,70,73
+  @field w lane  @ 26,28,48,50,72,74
+  @field w name  @ 20,43,66
+  @field r notes  @ 35,37,57,59,81,83
+  @field w notes  @ 23,46,69
+  @field r pitch  @ 14
+  @field w pitch  @ 25,28,48,50,71,74
+  @field r ppq  @ 36,58,84
+  @field w ppq  @ 24,27,47,49,70,73
+  @field w ppqL  @ 24,27,47,49,70,73
+  @field w run  @ 21,44,67
+  @field w seed  @ 23,46,69
+  @field w vel  @ 25,28,48,50,71,74

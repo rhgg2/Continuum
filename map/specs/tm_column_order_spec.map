@@ -50,3 +50,39 @@
   @use call ds:get  @ 135
   @use call tm:getChannel  @ 152,159
   @use call tm:assignEvent  @ 157
+
+# Fields (r read / w write incl. constructor keys)
+  @field r ccs  @ 38,54
+  @field w ccs  @ 149
+  @field r chan  @ 39,55,136
+  @field w chan  @ 25,32,66,71,128,131,148,149
+  @field r columns  @ 152,159
+  @field w delay  @ 26,33,67,72,129
+  @field w depth  @ 17
+  @field w detune  @ 26,33,67,72,129
+  @field w dir  @ 20
+  @field w endppq  @ 25,32,66,71,128,131,148
+  @field r evType  @ 39,55,136,154,155,160,161
+  @field w evType  @ 25,32,66,71,128,149
+  @field r events  @ 152,159
+  @field w fx  @ 26,68,131
+  @field w kind  @ 17,20,68
+  @field w lane  @ 26,33,67,72,129
+  @field w name  @ 77,89,104,123,144
+  @field r notes  @ 152,159
+  @field w notes  @ 148
+  @field w onset  @ 17
+  @field w over  @ 68
+  @field w period  @ 17,20
+  @field w pitch  @ 25,32,66,71,128,148,149
+  @field r ppq  @ 39,55,56,59
+  @field w ppq  @ 25,32,56,66,71,128,148,149
+  @field w run  @ 78,90,105,124,145
+  @field w seed  @ 147
+  @field w startppq  @ 131
+  @field w target  @ 68
+  @field r tm  @ 107
+  @field w uuid  @ 131
+  @field r val  @ 56
+  @field w val  @ 56
+  @field w vel  @ 26,33,67,72,129,148,149,157

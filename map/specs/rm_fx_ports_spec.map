@@ -34,3 +34,32 @@
   @use call rm:addTrack  @ 100,101,110,124
   @use call rm:reaperTrack  @ 125,127
   @use call rm:deleteTrack  @ 126
+
+# Fields (r read / w write incl. constructor keys)
+  @field w defaults  @ 101
+  @field w ds  @ 9
+  @field r fx  @ 93
+  @field r gain  @ 22
+  @field w gain  @ 78
+  @field r gain1  @ 59
+  @field w gain1  @ 57
+  @field w hidden  @ 110
+  @field r id  @ 39
+  @field w ident  @ 36,55,92
+  @field r inNames  @ 42
+  @field w inPinNames  @ 32
+  @field r ins  @ 40
+  @field w ins  @ 31,52
+  @field r mode  @ 60
+  @field w name  @ 27,49,64,72,86,97,100,101,107,110,121,124
+  @field r outNames  @ 43
+  @field w outPinNames  @ 33
+  @field r outs  @ 41
+  @field w outs  @ 31,52
+  @field r params  @ 45
+  @field w params  @ 57
+  @field w run  @ 28,50,65,73,87,98,108,122
+  @field r sends  @ 22
+  @field r to  @ 22
+  @field r trackId  @ 44
+  @field w type  @ 78

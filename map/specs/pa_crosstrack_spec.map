@@ -15,3 +15,13 @@
 
 # Uses (outbound edges)
   @use call pa:params  @ 24,42
+
+# Fields (r read / w write incl. constructor keys)
+  @field r _state  @ 16,17,18,34,35,36,37,38
+  @field w ident  @ 19,37
+  @field r master  @ 36,37,38
+  @field r name  @ 24,42
+  @field w name  @ 11,30
+  @field w projectTracks  @ 16,34
+  @field w run  @ 12,31
+  @field r trackGuids  @ 17,18,35,36

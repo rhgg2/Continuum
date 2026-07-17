@@ -45,3 +45,36 @@
   @use call gm:addEvent  @ 93
   @use call gm:deleteEvent  @ 123
   @use call gm:duplicateInto  @ 150
+
+# Fields (r read / w write incl. constructor keys)
+  @field r OPEN  @ 33,64,78,99,109
+  @field r add  @ 45,90,121
+  @field r assign  @ 48,90,105,121,131,155
+  @field w chan  @ 32,58,74,89,120,150
+  @field w chanLo  @ 41,148
+  @field r del  @ 126
+  @field w del  @ 90,121
+  @field w ds  @ 21
+  @field r dur  @ 133,160
+  @field w dur  @ 41,148
+  @field r endppq  @ 62,64,78,99,109,158
+  @field w endppq  @ 33
+  @field r endppqL  @ 63,79,133,159
+  @field w evType  @ 32
+  @field r evt  @ 48,106,132,156
+  @field w lane  @ 32
+  @field w length  @ 20
+  @field w name  @ 53,69,84,115,141
+  @field r open  @ 33
+  @field w open  @ 72,92
+  @field r pitch  @ 106,126,132
+  @field w pitch  @ 34
+  @field r ppq  @ 45,157
+  @field w ppq  @ 32,41,58,74,89,120,148,150
+  @field w run  @ 54,70,85,116,142
+  @field w streams  @ 42,149
+  @field w tm  @ 21
+  @field r update  @ 48,106,133,157,158,159,160
+  @field r uuid  @ 123
+  @field w uuid  @ 34
+  @field w vel  @ 34

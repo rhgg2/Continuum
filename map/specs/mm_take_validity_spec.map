@@ -24,3 +24,12 @@
   @use call mm:length  @ 41
   @use call mm:resolution  @ 42
   @use call mm:name  @ 43
+
+# Fields (r read / w write incl. constructor keys)
+  @field r ValidatePtr2  @ 22
+  @field w ValidatePtr2  @ 23
+  @field w ccs  @ 17
+  @field w name  @ 31
+  @field w reaper  @ 14
+  @field w run  @ 32
+  @field w texts  @ 17

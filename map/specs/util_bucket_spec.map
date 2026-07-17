@@ -9,3 +9,10 @@
   @case 'bucket: distinct keys do not interfere'  [pure]  @ 27-35
   @case 'bucket: returns the bucket so callers can keep operating on it'  [pure]  @ 38-45
   @case 'bucket: false is a usable value (not treated as missing)'  [pure]  @ 48-55
+
+# Fields (r read / w write incl. constructor keys)
+  @field r a  @ 10,22,23,33
+  @field r b  @ 34
+  @field r k  @ 53,54
+  @field w name  @ 6,16,27,38,48
+  @field w run  @ 7,17,28,39,49

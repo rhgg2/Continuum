@@ -26,3 +26,33 @@
   @use call wm:load  @ 12
   @use call wm:mutate  @ 43,57,71
   @use call wm:samplerReachable  @ 49,63,79,87
+
+# Fields (r read / w write incl. constructor keys)
+  @field w __label  @ 17
+  @field r _state  @ 18,19
+  @field w audio  @ 25,30
+  @field w cm  @ 11
+  @field w ds  @ 10
+  @field r edges  @ 46,47,60,61,75,76,77
+  @field w from  @ 35
+  @field w fxDisplay  @ 29
+  @field w fxIdent  @ 29
+  @field w ins  @ 25,30
+  @field w kind  @ 24,29
+  @field w midi  @ 25,30
+  @field w name  @ 39,53,67,83
+  @field r nodes  @ 44,45,58,59,72,73,74
+  @field w outs  @ 25,30
+  @field w ports  @ 25,30
+  @field w pos  @ 24,29
+  @field r projectTracks  @ 18
+  @field w rm  @ 11
+  @field w run  @ 40,54,68,84
+  @field w samp  @ 45,59,74
+  @field w thru  @ 73
+  @field w to  @ 35
+  @field r trackGuids  @ 19
+  @field w trackId  @ 24
+  @field w type  @ 35
+  @field w x  @ 24,29
+  @field w y  @ 24,29

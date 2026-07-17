@@ -31,3 +31,38 @@
   @use call wv:deleteNode  @ 114
   @use call wm:busRecords  @ 115,129
   @use call wv:moveNodes  @ 128
+
+# Fields (r read / w write incl. constructor keys)
+  @field r bus  @ 31,32,43,44,54,62,74,75
+  @field w busId  @ 31,32,43,44,54,74,75
+  @field w bussedEnd  @ 31,32,43,44,54,74,75
+  @field r category  @ 102
+  @field r claim  @ 99
+  @field w cm  @ 9,10
+  @field w dir  @ 29,41,84,113,127
+  @field w ds  @ 8
+  @field w from  @ 18,53,71,72
+  @field r id  @ 96,101
+  @field w id  @ 87
+  @field w ident  @ 4
+  @field r ins  @ 118
+  @field r label  @ 104
+  @field r matrix  @ 97
+  @field w matrix  @ 87
+  @field w name  @ 4,24,36,48,58,66,79,91,108,122
+  @field w node  @ 29,41,84,113,127
+  @field r orient  @ 103
+  @field w orient  @ 28,40,83,87,112,126
+  @field r outs  @ 117
+  @field w port  @ 29,41,84,113,127
+  @field r pos  @ 98,129
+  @field w pos  @ 28,40,83,87,112,126
+  @field w rm  @ 9
+  @field w run  @ 25,37,49,59,67,80,92,109,123
+  @field w to  @ 18,53,71,72
+  @field w type  @ 18,53,71,72
+  @field w wm  @ 10
+  @field w x  @ 28,40,51,52,70,83,87,94,98,112,126,128
+  @field w x  @ 129
+  @field w y  @ 28,40,51,52,70,83,87,94,98,112,126,128
+  @field w y  @ 129

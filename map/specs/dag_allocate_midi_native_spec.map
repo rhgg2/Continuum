@@ -12,3 +12,34 @@
 
 # Uses (outbound edges)
   @use call DAG.allocate  @ 36,65,96
+
+# Fields (r read / w write incl. constructor keys)
+  @field r bracketNodes  @ 39
+  @field w cu  @ 91
+  @field w from  @ 20,25,53,54,56,80,85,90
+  @field w fxC  @ 63
+  @field w fxC1  @ 33
+  @field w fxC2  @ 34
+  @field w fxIdent  @ 33,34,62,63,91,95
+  @field r fxMidiBus  @ 37,38,66,97,98
+  @field w fxOrder  @ 18,23,28,50,58,78,83,88
+  @field w fxP  @ 62
+  @field r inBus  @ 69
+  @field w inBus  @ 37,67,68
+  @field w intraConns  @ 19,24,29,52,59,79,84,90
+  @field w kind  @ 33,34,62,63,91,95
+  @field w mainSend  @ 19,24,29,51,59,79,84,89
+  @field w mode  @ 91
+  @field w name  @ 13,45,73
+  @field r outBus  @ 69
+  @field w outBus  @ 37,67,68
+  @field w outWires  @ 20,25,29,56,59,80,85,92
+  @field w params  @ 91
+  @field w run  @ 14,46,74
+  @field w synthNodes  @ 91
+  @field w to  @ 20,25,53,54,56,80,85,90
+  @field w toNode  @ 20,25,56,80,85
+  @field w trackId  @ 18,23,50,78,83
+  @field w trackKind  @ 18,23,28,50,58,78,83,88
+  @field w type  @ 20,25,53,54,56,80,85,90
+  @field w vstFx  @ 95

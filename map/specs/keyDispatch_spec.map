@@ -37,3 +37,57 @@
   @use call cmgr:isPrefixActive  @ 106,123
   @use call cmgr:scope  @ 144
   @use call cmgr:push  @ 147
+
+# Fields (r read / w write incl. constructor keys)
+  @field w GetKeyMods  @ 18
+  @field r ImGui_GetBuiltinPath  @ 29
+  @field w ImGui_GetBuiltinPath  @ 29
+  @field w IsKeyDown  @ 20
+  @field w IsKeyPressed  @ 19
+  @field r Key_5  @ 103,117
+  @field r Key_9  @ 169,171,175,184,186,189
+  @field r Key_A  @ 51,64,68,77,89,92,158,199,201
+  @field w Key_A  @ 14
+  @field r Key_B  @ 52
+  @field w Key_B  @ 14
+  @field r Key_C  @ 53,119
+  @field w Key_C  @ 14
+  @field r Key_D  @ 54,132,135
+  @field w Key_D  @ 14
+  @field r Key_E  @ 146,150,155
+  @field w Key_E  @ 14
+  @field w Key_Escape  @ 13
+  @field w Key_Slash  @ 13
+  @field w Mod_Alt  @ 12
+  @field w Mod_Ctrl  @ 12
+  @field w Mod_None  @ 12
+  @field r Mod_Shift  @ 169,171,184,199
+  @field w Mod_Shift  @ 12
+  @field w Mod_Super  @ 12
+  @field w acceptCmds  @ 65,78,90,104,118,120,133,151,156,159,172,187
+  @field w acceptCmds  @ 200
+  @field w alpha  @ 46
+  @field w arg  @ 44,48
+  @field w beta  @ 47
+  @field w cm  @ 43
+  @field r commandHeld  @ 68,92,135,175,189,201
+  @field r consumed  @ 66,79,91,105,121,134,151,156,173,188
+  @field w counted  @ 48
+  @field w decline  @ 49
+  @field r down  @ 26
+  @field w down  @ 89,199
+  @field r fired  @ 46,47,48,49,67,80,93,107
+  @field r fired  @ 122,136,145,152,160,168,174,183,190
+  @field r fired  @ 202
+  @field w fired  @ 44,154
+  @field w gamma  @ 168,183
+  @field r loaded  @ 35,36
+  @field r mods  @ 24
+  @field w mods  @ 171,199
+  @field w name  @ 60,73,85,98,112,128,141,165,180,195
+  @field w pageSuppressed  @ 156,159
+  @field r preload  @ 34
+  @field r pressed  @ 25
+  @field w pressed  @ 64,77,103,117,119,132,150,155,158,171,186
+  @field r reaper  @ 29
+  @field w run  @ 61,74,86,99,113,129,142,166,181,196

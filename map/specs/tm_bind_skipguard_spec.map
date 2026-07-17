@@ -22,3 +22,9 @@
 # Uses (outbound edges)
   @use call tm:bindTake  @ 21,33,48
   @use call ds:get  @ 35,50
+
+# Fields (r read / w write incl. constructor keys)
+  @field r guid  @ 37,51
+  @field w name  @ 28,44
+  @field w run  @ 29,45
+  @field w skipGuard  @ 33

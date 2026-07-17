@@ -1,4 +1,4 @@
-@module groupManager  src=groupManager.lua  loc=879  sha=14993a2  mode=chunk  self=gm
+@module groupManager  src=groupManager.lua  loc=879  sha=37ed80d  mode=chunk  self=gm
 @deps tm, ds
 
 # Invariants & contracts
@@ -195,3 +195,89 @@
   @use sub     tm:postflush  @ 608
   @use sub     tm:preflush  @ 597
   @use sub     tm:rebuild  @ 623
+
+# Fields (r read / w write incl. constructor keys)
+  @field r OPEN  @ toGroup:117 toInstance:136 updToGroup:162 updToInstance:186
+  @field r REMOVE  @ updToGroup:163 updToInstance:182 diffGroup:202
+  @field w active  @ eachInstance:509
+  @field r adds  @ rehydrate:240 classify:271 absorbSiblingOverrides:308,317,323 localAmend:590 addEvent:733 deleteEvent:752,754,755 assignEvent:806
+  @field w adds  @ freshInstance:252
+  @field r anchor  @ revivableVuid:293 classifyCreate:336,337 regionConflict:374,376,379 eachInstance:507 deletedCells:525 footprintAliases:538 reproject:560,569 localAmend:586
+  @field r anchor  @ localAmend:591 addEvent:731 assignEvent:813 resizeGroup:841,848,865
+  @field w anchor  @ freshInstance:252 eachInstance:507 moveInstance:708
+  @field r assigns  @ absorbSiblingOverrides:310,320,323,324 localAmend:585,587 deleteEvent:756,759 assignEvent:807
+  @field w assigns  @ freshInstance:252
+  @field r cc  @ keyOf:97 updToGroup:161
+  @field w cc  @ 20 toInstance:141 updToInstance:178
+  @field r cents  @ toGroup:123
+  @field w cents  @ toGroup:123
+  @field r chan  @ toGroup:114 toInstance:131 updToGroup:159 updToInstance:176 classifyCreate:337 rectCells:351 regionConflict:376 newInstance:418
+  @field r chan  @ newInstance:418 moveInstance:680,695 assignEvent:792 resizeGroup:841
+  @field w chan  @ 20 toInstance:131 updToInstance:176 markGroup:392,397 moveInstance:695 resizeGroup:841
+  @field r chanDelta  @ toInstance:131 updToInstance:176 sameSlot:286 resizeGroup:853
+  @field w chanDelta  @ 20 toGroup:114 updToGroup:159
+  @field r chanLo  @ markGroup:392,397 resizeGroup:835
+  @field w chanLo  @ resizeGroup:835
+  @field w colour  @ eachInstance:508
+  @field r deletes  @ revivableVuid:294 absorbSiblingOverrides:309,320 deletedCells:523 addEvent:725 deleteEvent:753,760 revertDelete:774,775 assignEvent:808
+  @field w deletes  @ freshInstance:252
+  @field w derived  @ 22
+  @field r ds  @ 15
+  @field r dur  @ toInstance:135,138 updToInstance:182,183,187,188 regionConflict:373,374 resizeGroup:831
+  @field w dur  @ 21 toGroup:119 updToGroup:163,166 resizeGroup:834
+  @field r endDelta  @ resizeGroup:830
+  @field r endppq  @ toGroup:117,118,119 updToGroup:162,164,166 moveInstance:695
+  @field w endppq  @ 21 toInstance:136,138 updToInstance:186,189 moveInstance:695
+  @field r evType  @ keyOf:96,97 toGroup:113,117,123 toInstance:130,133,140 updToInstance:178,180 classifyCreate:338
+  @field w evType  @ 20 toGroup:113 toInstance:130 classifyCreate:338
+  @field r events  @ classify:270 revivableVuid:295 absorbSiblingOverrides:303 newInstance:416 deletedCells:524 localAmend:583 moveInstance:678 addEvent:735 deleteEvent:762 assignEvent:812 resizeGroup:851,858
+  @field r events  @ resizeGroup:868
+  @field w events  @ markGroup:407
+  @field r evt  @ classify:279 reproject:567,572 612,613,629 deleteInstance:655
+  @field r evt  @ moveInstance:692,694,697,698,703,704 assignEvent:794,795
+  @field w evt  @ link:71 classify:279 deletedCells:525 631
+  @field r gained  @ resizeGroup:864
+  @field r groupEvt  @ currentOf:88 reproject:560,564,568,569,570 613
+  @field w groupEvt  @ link:71 currentOf:88 reproject:570
+  @field r groupId  @ classify:268,273,278,280 regionConflict:371 stateOf:492 deleteEvent:748 assignEvent:786,793,798,815
+  @field w groupId  @ 63 link:73 eachInstance:506 moveInstance:682 resizeGroup:842
+  @field r groups  @ 30 rehydrate:227
+  @field w groups  @ persist:220
+  @field w hidden  @ 22
+  @field r instId  @ classify:269,273,278,280 regionConflict:372 stateOf:493 deleteEvent:748 assignEvent:787,793,798
+  @field w instId  @ 63 link:73 eachInstance:506 moveInstance:682 resizeGroup:842
+  @field r instances  @ rehydrate:235 classify:269 absorbSiblingOverrides:305 classifyCreate:334 regionConflict:370 newInstance:424,426 stateOf:493 eachInstance:505 deletedCells:520 footprintAliases:538 reproject:552
+  @field r instances  @ deleteInstance:651,660,661 moveInstance:676 addEvent:721 deleteEvent:750 revertDelete:773 assignEvent:787 resizeGroup:825,840,847,859
+  @field w instances  @ markGroup:408
+  @field r invalidate  @ 640
+  @field r key  @ toInstance:134,141 updToInstance:177,178
+  @field w key  @ 20 toGroup:115 updToGroup:160,161 classifyCreate:338
+  @field r lane  @ keyOf:96 updToGroup:160 moveInstance:692 assignEvent:792
+  @field w lane  @ 20 toInstance:134 updToInstance:178
+  @field r laneDelta  @ toInstance:134 rectCells:355 regionConflict:379
+  @field w loc  @ 22 assignEvent:795
+  @field r name  @ 640
+  @field r nextVuid  @ absorbSiblingOverrides:321 addEvent:727 resizeGroup:866
+  @field w nextVuid  @ absorbSiblingOverrides:322 markGroup:407 addEvent:728 resizeGroup:867
+  @field r op  @ reproject:557,566,571
+  @field r ppq  @ toGroup:116,119 toInstance:132,138 onTake:149 updToGroup:158,165
+  @field r ppq  @ updToGroup:165 updToInstance:175,181,184,187,189 sameSlot:286
+  @field r ppq  @ classifyCreate:336 regionConflict:373,374 markGroup:392,397 footprintAliases:539 moveInstance:695 assignEvent:792 resizeGroup:833,841,848
+  @field r ppq  @ resizeGroup:852,853
+  @field w ppq  @ 21 toGroup:116 toInstance:132 updToGroup:158 updToInstance:175 markGroup:392,397 moveInstance:695 resizeGroup:833,841,848,852
+  @field w realised  @ assignEvent:795
+  @field r rect  @ classifyCreate:335 regionConflict:374,375 newInstance:420 groupRect:450 eachInstance:507 moveInstance:682 resizeGroup:828
+  @field w rect  @ markGroup:407 eachInstance:507 resizeGroup:863
+  @field w sampleShadowed  @ 22
+  @field r startDelta  @ resizeGroup:829
+  @field r streams  @ rectCells:350 regionConflict:375 resizeGroup:836
+  @field w streams  @ resizeGroup:836
+  @field r tm  @ 15
+  @field r uuid  @ unlink:80 currentOf:88 persist:215 classify:264 markGroup:404 reproject:564 612,613,629
+  @field r uuid  @ 629 deleteInstance:656 resizeGroup:870
+  @field w uuid  @ 22,62 link:71 currentOf:88 assignEvent:795
+  @field r uuids  @ 58 rehydrate:231
+  @field w uuids  @ persist:220
+  @field r val  @ toGroup:123
+  @field r vuid  @ classify:270,271,273,278,280 stateOf:494 reproject:556,563,573 deleteEvent:748 assignEvent:788
+  @field w vuid  @ 63 link:73 deletedCells:525

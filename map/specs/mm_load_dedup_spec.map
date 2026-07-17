@@ -1,4 +1,4 @@
-@spec mm_load_dedup_spec  src=tests/specs/mm_load_dedup_spec.lua  loc=116  sha=70ef819  cases=3
+@spec mm_load_dedup_spec  src=tests/specs/mm_load_dedup_spec.lua  loc=116  sha=37ed80d  cases=3
 @exercises midiManager (h.mm)
 @surface   mm:subscribe, mm:load, mm:notes, mm:byUuid
 @harness   fakeReaper:bindTake, reaper:seedMidi
@@ -24,3 +24,30 @@
   @use call mm:load  @ 31
   @use call mm:notes  @ 37
   @use call mm:byUuid  @ 65
+
+# Fields (r read / w write incl. constructor keys)
+  @field w chan  @ 47,48,75,76,86,95,96
+  @field r collisions  @ 63,64,65,85
+  @field w collisions  @ 27
+  @field r deduped  @ 62,86,108
+  @field w deduped  @ 25
+  @field r detune  @ 60,107,110
+  @field w detune  @ 51,52,99,100
+  @field w droppedCount  @ 86
+  @field r endppq  @ 84,106
+  @field w endppq  @ 47,48,75,76,95,96
+  @field r events  @ 25,27
+  @field w eventtype  @ 18
+  @field r kind  @ 64
+  @field w msg  @ 19
+  @field w name  @ 43,71,91
+  @field w notes  @ 47,75,95
+  @field w pitch  @ 47,48,75,76,86,95,96
+  @field r ppq  @ 58
+  @field w ppq  @ 18,47,48,75,76,86,95,96
+  @field w ppqL  @ 51,52,99,100
+  @field w reaper  @ 10
+  @field w run  @ 44,72,92
+  @field w texts  @ 49,77,97
+  @field r uuid  @ 65,110,112
+  @field w vel  @ 47,48,75,76,95,96

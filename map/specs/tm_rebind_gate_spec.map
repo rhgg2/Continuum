@@ -43,3 +43,39 @@
   @use call tm:currentTake  @ 62,80,96,113
   @use call tm:bindTake  @ 67,68,83,85,99,101,116,117
   @use call cm:set  @ 84
+
+# Fields (r read / w write incl. constructor keys)
+  @field w atom  @ 13
+  @field w c58  @ 94
+  @field r ccs  @ 43,50
+  @field r chan  @ 44,51
+  @field w chan  @ 26,111
+  @field r columns  @ 39
+  @field w config  @ 94
+  @field w delay  @ 27,111
+  @field w detune  @ 27,61,79,111
+  @field w endppq  @ 26,111
+  @field r evType  @ 44,51
+  @field w evType  @ 26
+  @field r events  @ 39
+  @field w factors  @ 13
+  @field w global  @ 100
+  @field w lane  @ 27
+  @field w name  @ 58,76,92,108
+  @field r notes  @ 39
+  @field w notes  @ 110
+  @field w period  @ 13
+  @field w pitch  @ 26,111
+  @field r ppq  @ 51,97,103
+  @field w ppq  @ 26,51,111,119
+  @field w project  @ 94
+  @field w ps  @ 20
+  @field w run  @ 59,77,93,109
+  @field w sample  @ 111
+  @field w seed  @ 110
+  @field w shift  @ 13
+  @field w swings  @ 94
+  @field w trackerMode  @ 117
+  @field r val  @ 51,81,87
+  @field w val  @ 51,119
+  @field w vel  @ 27,111

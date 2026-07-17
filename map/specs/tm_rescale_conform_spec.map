@@ -22,3 +22,27 @@
   @use call fm:name  @ 26
   @use call fm:length  @ 28
   @use call fm:dump  @ 30
+
+# Fields (r read / w write incl. constructor keys)
+  @field w beats  @ 26
+  @field w chan  @ 20,22
+  @field w conform  @ 23
+  @field w delay  @ 20,22
+  @field w detune  @ 20,22
+  @field r endppq  @ 36
+  @field w endppq  @ 19,21
+  @field r endppqL  @ 35
+  @field w endppqL  @ 19,21
+  @field w lane  @ 20,23
+  @field w mode  @ 26
+  @field w name  @ 16,26
+  @field r notes  @ 30
+  @field w notes  @ 18
+  @field r pitch  @ 31
+  @field w pitch  @ 20,22
+  @field r ppq  @ 34
+  @field w ppq  @ 19,21
+  @field w ppqL  @ 19,21
+  @field w run  @ 17
+  @field w seed  @ 18
+  @field w vel  @ 20,22

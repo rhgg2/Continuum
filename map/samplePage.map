@@ -58,3 +58,23 @@
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB
+
+# Fields (r read / w write incl. constructor keys)
+  @field r ImGui_GetBuiltinPath  @ 14
+  @field r chrome  @ 19
+  @field w chrome  @ 26
+  @field r cm  @ 19
+  @field w cm  @ 23,24,26
+  @field r cmgr  @ 19
+  @field w cmgr  @ 26
+  @field r ds  @ 19
+  @field w ds  @ 23,24,26
+  @field r facade  @ 19
+  @field r fileOps  @ 23
+  @field w fileOps  @ 23
+  @field r gui  @ 19
+  @field w gui  @ 26
+  @field w setTrack  @ 63
+  @field w sm  @ 24
+  @field w sv  @ 26
+  @field r track  @ bind:41

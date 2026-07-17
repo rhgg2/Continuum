@@ -1,4 +1,4 @@
-@spec tm_reseat_collision_spec  src=tests/specs/tm_reseat_collision_spec.lua  loc=87  sha=untracked  cases=3
+@spec tm_reseat_collision_spec  src=tests/specs/tm_reseat_collision_spec.lua  loc=87  sha=2c031b2  cases=3
 @exercises dataStore (h.ds), midiManager (h.mm)
 @surface   ds:assign, mm:notes
 @harness   mk{seed.notes}
@@ -35,3 +35,31 @@
   @use call ds:assign  @ 38
   @use call mm:notes  @ 44
   @use call fm:notes  @ 79
+
+# Fields (r read / w write incl. constructor keys)
+  @field w atom  @ 17
+  @field w chan  @ 28,30
+  @field w config  @ 33
+  @field w delay  @ 28,30
+  @field w detune  @ 28,30
+  @field w endppq  @ 27,29
+  @field w endppqL  @ 27,29
+  @field w factors  @ 17
+  @field w global  @ 38
+  @field w name  @ 52,63,74
+  @field w notes  @ 26
+  @field w period  @ 17
+  @field w pitch  @ 28,30
+  @field r ppq  @ 44
+  @field w ppq  @ 27,29
+  @field r ppqL  @ 79
+  @field w ppqL  @ 27,29
+  @field w project  @ 34
+  @field w rowPerBeat  @ 35
+  @field w rpb  @ 28,30
+  @field w run  @ 53,64,75
+  @field w seed  @ 25
+  @field w shift  @ 17
+  @field w swings  @ 34
+  @field w take  @ 35
+  @field w vel  @ 28,30

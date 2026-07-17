@@ -22,3 +22,35 @@
   @use call wm:load  @ 31,78,83
   @use call wm:subscribe  @ 45,65,82
   @use call wm:mutate  @ 48,66
+
+# Fields (r read / w write incl. constructor keys)
+  @field w __label  @ 27
+  @field r _state  @ 28,29
+  @field w audio  @ 69
+  @field w cm  @ 7
+  @field r code  @ 53
+  @field w ds  @ 6
+  @field r edges  @ 19,49,56
+  @field w from  @ 49
+  @field r injected  @ 97
+  @field w injected  @ 94
+  @field w ins  @ 69,70
+  @field r kind  @ 18,34,74,85,96
+  @field w kind  @ 67,93,94
+  @field r master  @ 17,18,36,93,96
+  @field w midi  @ 70
+  @field w name  @ 13,23,40,61,78,89
+  @field r nodes  @ 17,18,33,34,35,36,67,93,94,96,97
+  @field w outs  @ 69,70
+  @field w ports  @ 69
+  @field w pos  @ 68
+  @field r projectTracks  @ 28
+  @field w rm  @ 7
+  @field w run  @ 14,24,41,62,79,90
+  @field w to  @ 49
+  @field r trackGuids  @ 29
+  @field r trackId  @ 35
+  @field w trackId  @ 67
+  @field w type  @ 49
+  @field w x  @ 68
+  @field w y  @ 68

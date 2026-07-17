@@ -1,4 +1,4 @@
-@spec mm_plain_cc_spec  src=tests/specs/mm_plain_cc_spec.lua  loc=129  sha=b5afaeb  cases=5
+@spec mm_plain_cc_spec  src=tests/specs/mm_plain_cc_spec.lua  loc=129  sha=37ed80d  cases=5
 @exercises midiManager (h.mm)
 @surface   mm:ccs, mm:subscribe, mm:load
 @harness   bareMM, fakeReaper:bindTake, fakeReaper:seedMidi
@@ -30,3 +30,35 @@
   @use call mm:ccs  @ 36
   @use call mm:subscribe  @ 122
   @use call mm:load  @ 123
+
+# Fields (r read / w write incl. constructor keys)
+  @field w at  @ 14
+  @field r cc  @ 26
+  @field w cc  @ 14,44,55,66,90,116,117
+  @field r ccs  @ 24
+  @field w ccs  @ 31,44,55,66,90,115
+  @field r chan  @ 25
+  @field w chan  @ 25,44,55,66,90,116,117
+  @field w chanmsg  @ 25
+  @field r evType  @ 25
+  @field w evType  @ 44,55,66,90,116,117
+  @field w eventtype  @ 29
+  @field r foo  @ 106
+  @field w foo  @ 55,97
+  @field w msg  @ 29
+  @field w msg2  @ 26
+  @field w msg3  @ 26
+  @field w name  @ 42,52,64,88,111
+  @field w pa  @ 14
+  @field w pb  @ 14
+  @field w pc  @ 14
+  @field r plain  @ 47,59,72,83,95,99,104
+  @field r ppq  @ 25,29,36
+  @field w ppq  @ 25,29,44,55,66,90,116,117
+  @field w reaper  @ 19
+  @field w run  @ 43,53,65,89,112
+  @field r sidecars  @ 28
+  @field w texts  @ 31
+  @field r uuid  @ 46,58,71,76,97,105,125
+  @field r val  @ 26,82
+  @field w val  @ 44,55,66,76,90,116,117

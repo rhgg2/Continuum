@@ -245,3 +245,67 @@
 
 # REAPER API surface
   @reaper GetMediaItemTake_Item
+
+# Fields (r read / w write incl. constructor keys)
+  @field r am  @ 16
+  @field w arrangeClearLoop  @ 642
+  @field w arrangeClearSelection  @ 638
+  @field w arrangeCursorDown  @ 621
+  @field w arrangeCursorLeft  @ 622
+  @field w arrangeCursorRight  @ 623
+  @field w arrangeCursorUp  @ 620
+  @field w arrangeDeleteAdvance  @ 633
+  @field w arrangeDeleteTake  @ 632
+  @field w arrangeDive  @ 634
+  @field w arrangeDuplicateBelow  @ 636
+  @field w arrangeDuplicateUnpooledBelow  @ 637
+  @field w arrangeEnd  @ 627
+  @field w arrangeGrowTake  @ 631
+  @field w arrangeHome  @ 626
+  @field w arrangeNudgeBack  @ 628
+  @field w arrangeNudgeForward  @ 629
+  @field w arrangePageDown  @ 625
+  @field w arrangePageUp  @ 624
+  @field w arrangePlayFromCursor  @ 641
+  @field w arrangeSetLoopEnd  @ 640
+  @field w arrangeSetLoopStart  @ 639
+  @field w arrangeShrinkTake  @ 630
+  @field w arrangeTakeProperties  @ 635
+  @field w arrangeZoomIn  @ 643
+  @field w arrangeZoomOut  @ 644
+  @field r cm  @ 16
+  @field r cmgr  @ 16
+  @field w colHi  @ lassoCandidate:539
+  @field w colLo  @ lassoCandidate:539
+  @field r deltaQN  @ commitGroupDrag:551,557
+  @field w deltaQN  @ groupDragCandidate:477
+  @field r duplicate  @ groupDragCandidate:478 dragCandidate:499 commitGroupDrag:547 commitDrag:567,572
+  @field r facade  @ 16
+  @field w fits  @ groupDragCandidate:478 dragCandidate:502
+  @field w focusName  @ duplicateUnpooledSelectedBelow:254
+  @field r ghosts  @ commitDrag:565
+  @field w ghosts  @ groupDragCandidate:477 dragCandidate:501
+  @field r group  @ dragCandidate:485 commitDrag:563
+  @field r guid  @ diveSelected:226 createSlot:594
+  @field w hiQN  @ gutterLoopCand:513
+  @field r huge  @ groupDragCandidate:469
+  @field r item  @ groupFits:159,164 selectedTakeProperties:233 dragCandidate:499
+  @field r kind  @ midiSlots:147 diveSelected:225 selectedTakeProperties:233
+  @field r lengthQN  @ takeAtCursor:71 advanceCursorPastNewTake:87 resizeSelected:199,206 hitTake:453,455 dragCandidate:488,490 lassoCandidate:532 commitDrag:571
+  @field w lengthQN  @ groupDragCandidate:475 dragCandidate:501 createCandidate:521
+  @field w loQN  @ gutterLoopCand:513
+  @field r mcol  @ lassoCandidate:526
+  @field r mode  @ dragCandidate:489 commitDrag:566,570
+  @field r naturalLenQN  @ groupDragCandidate:475 dragCandidate:497
+  @field r qn  @ groupDragCandidate:467 dragCandidate:490,494 gutterLoopCand:509,510 createCandidate:519,521 lassoCandidate:527
+  @field w qnHi  @ lassoCandidate:539
+  @field w qnLo  @ lassoCandidate:539
+  @field w set  @ lassoCandidate:540
+  @field r slotIdx  @ diveSelected:225
+  @field r startQN  @ takeAtCursor:71,72,74 groupFits:161,164 moveTakesBy:176,177 resizeSelected:206 hitTake:453,454
+  @field r startQN  @ groupDragCandidate:468,470,475 dragCandidate:488,494 lassoCandidate:532 commitGroupDrag:551 commitDrag:573,576
+  @field w startQN  @ groupDragCandidate:475 dragCandidate:501 createCandidate:521
+  @field r take  @ selectionSet:374 groupDragCandidate:468 dragCandidate:486 lassoCandidate:533,534 commitDrag:564
+  @field w take  @ groupDragCandidate:475 dragCandidate:501
+  @field w takes  @ lassoCandidate:540
+  @field r trackIdx  @ groupFits:163 dragCandidate:502

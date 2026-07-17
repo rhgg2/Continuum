@@ -35,3 +35,54 @@
   @use call DAG.compile  @ 68,76,87,94,103,120,162,184,210,235,258
   @use call DAG.targetTracks  @ 94,103,126,194,267
   @use call DAG.validate  @ 135,145
+
+# Fields (r read / w write incl. constructor keys)
+  @field w audio  @ 7,17,25
+  @field r code  @ 135,145
+  @field r display  @ 15
+  @field w edges  @ 33
+  @field r from  @ 54,107
+  @field w from  @ 45,46,47,48,121,122,163,164,165,166,167,185
+  @field w from  @ 186,187,188,189,190,211,212,213,214,215,216,217
+  @field w from  @ 218,236,237,238,239,240,241,242,259,260,261,262
+  @field w from  @ 263
+  @field w fxDisplay  @ 15
+  @field w fxIdent  @ 14
+  @field r fxOrder  @ 126
+  @field r ident  @ 14
+  @field r ins  @ 17,25
+  @field w ins  @ 7,8,17,19,25,26,161,182,207,233,234,257
+  @field r intraConns  @ 106
+  @field w kind  @ 5,13,24
+  @field r mainSend  @ 97
+  @field r master  @ 30,144
+  @field w midi  @ 8,19,26
+  @field w name  @ 66,74,83,92,101,113,130,139,151,173,198,224
+  @field w name  @ 249
+  @field w nextId  @ 33
+  @field r nodes  @ 144
+  @field w nodes  @ 33
+  @field r outWires  @ 53
+  @field r outs  @ 18
+  @field w outs  @ 7,8,18,19,25,26,233
+  @field w ports  @ 7,17,25
+  @field w pos  @ 6,13,24
+  @field w run  @ 67,75,84,93,102,114,131,140,152,174,199,225
+  @field w run  @ 250
+  @field r split  @ 16
+  @field w split  @ 16,43,119,134,144
+  @field r to  @ 54,107
+  @field w to  @ 45,46,47,48,121,122,163,164,165,166,167,185
+  @field w to  @ 186,187,188,189,190,211,212,213,214,215,216,217
+  @field w to  @ 218,236,237,238,239,240,241,242,259,260,261,262
+  @field w to  @ 263
+  @field w toPort  @ 165,166,186,187,188,212,213,214,237,238,239,240
+  @field w toPort  @ 241,261,262
+  @field w trackId  @ 5
+  @field r trackKind  @ 95,194,267
+  @field w type  @ 45,46,47,48,121,122,163,164,165,166,167,185
+  @field w type  @ 186,187,188,189,190,211,212,213,214,215,216,217
+  @field w type  @ 218,236,237,238,239,240,241,242,259,260,261,262
+  @field w type  @ 263
+  @field w x  @ 6,13,24
+  @field w y  @ 6,13,24

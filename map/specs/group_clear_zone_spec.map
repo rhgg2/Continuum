@@ -46,3 +46,61 @@
   @use call vm:clearMoveGap  @ 190
   @use call vm:movePreview  @ 246,249,276,311
   @use call gm:moveInstance  @ 343
+
+# Fields (r read / w write incl. constructor keys)
+  @field r OPEN  @ 79,94
+  @field r chan  @ 282,289,326
+  @field w chan  @ 44,45,46,47,56,80,86,103,104,109,124,125
+  @field w chan  @ 154,155,187,188,192,206,207,239,265,266,300
+  @field w chan  @ 301,334,335,343
+  @field r chanDelta  @ 252,277,313
+  @field w chanLo  @ 55,85,108,158,191,210,242,269,304,337,338
+  @field w col1  @ 129
+  @field w col2  @ 129
+  @field r cols  @ 14,20
+  @field r columns  @ 90
+  @field w delay  @ 80
+  @field r delta  @ 251
+  @field r destSrc  @ 256,278,314
+  @field w detune  @ 80
+  @field w dur  @ 55,85,108,158,191,210,242,269,304,337,338
+  @field r endppq  @ 64,94
+  @field w endppq  @ 44,45,46,47,79,103,104,124,125,154,155,187
+  @field w endppq  @ 188,206,207,239,265,266,300,301,334,335
+  @field w endppqL  @ 79,300,301,334,335
+  @field r events  @ 90
+  @field r grid  @ 14,20
+  @field w groups  @ 43,78,102,123,153,186,205,238,264,299,333
+  @field r lane  @ 21,52,66,290,318,325,346
+  @field w lane  @ 81,300,301,334,335
+  @field r laneDelta  @ 312
+  @field w laneDelta  @ 343
+  @field w length  @ 205
+  @field r midiChan  @ 15,21
+  @field w name  @ 38,76,100,118,149,182,201,236,261,295,331
+  @field r notes  @ 50,59,90,111,135,168,173,194,220,229,280,285
+  @field r notes  @ 316,321,346
+  @field w notes  @ 43,78,102,123,153,186,205,238,264,299,333
+  @field w part1  @ 130
+  @field w part2  @ 130
+  @field r pitch  @ 26,31,91,142
+  @field w pitch  @ 44,45,46,47,80,103,104,124,125,154,155,187
+  @field w pitch  @ 188,206,207,239,265,266,300,301,334,335
+  @field r ppq  @ 65,68,142,170,177,222,231
+  @field w ppq  @ 44,45,46,47,55,56,79,85,86,103,104,108
+  @field w ppq  @ 109,124,125,154,155,158,187,188,191,192,206
+  @field w ppq  @ 207,210,239,242,265,266,269,300,301,304,334,335
+  @field w ppq  @ 337,338,343
+  @field w ppqL  @ 79
+  @field w row1  @ 129
+  @field w row2  @ 129
+  @field w rpb  @ 81
+  @field w run  @ 39,77,101,119,150,183,202,237,262,296,332
+  @field w seed  @ 43,78,102,123,153,186,205,238,264,299,333
+  @field r srcHi  @ 254
+  @field r srcLo  @ 253
+  @field r srcMember  @ 255
+  @field w streams  @ 55,85,108,158,191,210,242,269,304,337,338
+  @field r type  @ 15,21
+  @field w vel  @ 44,45,46,47,80,103,104,124,125,154,155,187
+  @field w vel  @ 188,206,207,239,265,266,300,301,334,335

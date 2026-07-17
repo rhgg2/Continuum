@@ -31,3 +31,39 @@
   @use call wm:deleteSource  @ 51,68,83
   @use call wm:graph  @ 53,54,71,85,94,113
   @use call wm:isScratchTrack  @ 103
+
+# Fields (r read / w write incl. constructor keys)
+  @field w __label  @ 17
+  @field r _state  @ 18,19,37,66,81
+  @field w audio  @ 30
+  @field w autoSource  @ 111
+  @field w cm  @ 11
+  @field r displayName  @ 96
+  @field w ds  @ 10
+  @field r edges  @ 32,54
+  @field r from  @ 55
+  @field w from  @ 32
+  @field w ident  @ 27,111
+  @field w ins  @ 26,30,31,110
+  @field r itemsByTrack  @ 66,81
+  @field r kind  @ 95,114
+  @field w kind  @ 29
+  @field w midi  @ 31
+  @field w name  @ 27,45,61,76,90,93,107,111
+  @field r nodes  @ 29,53,71,85,94,113
+  @field w outs  @ 26,30,31,110
+  @field w ports  @ 30
+  @field w pos  @ 29,93
+  @field r projectTracks  @ 18,37
+  @field w rm  @ 11
+  @field w run  @ 46,62,77,91,108
+  @field r src  @ 53,71,85
+  @field w src  @ 29
+  @field r to  @ 55
+  @field w to  @ 32
+  @field r trackGuids  @ 19
+  @field r trackId  @ 100
+  @field w trackId  @ 29
+  @field w type  @ 32
+  @field w x  @ 29,93
+  @field w y  @ 29,93

@@ -25,3 +25,37 @@
   @use call wm:graph  @ 48,63
   @use call wm:mutate  @ 66,96
   @use call wm:isScratchTrack  @ 77
+
+# Fields (r read / w write incl. constructor keys)
+  @field r TrackFX_AddByName  @ 25
+  @field w TrackFX_AddByName  @ 26
+  @field w __label  @ 17
+  @field r _state  @ 18,19
+  @field w audio  @ 35
+  @field w cm  @ 9
+  @field w ds  @ 8
+  @field r edges  @ 68
+  @field w from  @ 68
+  @field w fromPort  @ 69
+  @field r fxId  @ 49,63
+  @field w ident  @ 45,62,92
+  @field w ins  @ 35,43,57,90
+  @field w kind  @ 34
+  @field w midi  @ 35
+  @field w name  @ 40,45,54,62,87,92
+  @field r nodes  @ 48,63,67,96
+  @field w outs  @ 35,43,57,90
+  @field w ports  @ 35
+  @field w pos  @ 34
+  @field r projectTracks  @ 18
+  @field w readJSFXContent  @ 11
+  @field w rm  @ 9
+  @field w run  @ 41,55,88
+  @field w src  @ 67
+  @field w to  @ 68
+  @field w toPort  @ 69
+  @field r trackGuids  @ 19
+  @field w trackId  @ 34
+  @field w type  @ 68
+  @field w x  @ 34
+  @field w y  @ 34

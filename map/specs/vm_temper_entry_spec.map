@@ -29,3 +29,30 @@
   @use call tuning.midiToStep  @ 61,70
   @use call vm:noteProjection  @ 75
   @use call cmgr:invoke  @ 120,130
+
+# Fields (r read / w write incl. constructor keys)
+  @field w JI  @ 23
+  @field r cells  @ 60,69,91,100,115,122,131
+  @field r cols  @ 31
+  @field w config  @ 21
+  @field w currentOctave  @ 22
+  @field r detune  @ 61,70,92,102,125,126,129,133
+  @field r grid  @ 31
+  @field r lane  @ 32
+  @field r midiChan  @ 32
+  @field w name  @ 13,49,81,107
+  @field w notes  @ 20
+  @field r octaveStep  @ 71
+  @field r partAt  @ 40
+  @field w periodAsStep  @ 15
+  @field w periodPitch  @ 13
+  @field r pitch  @ 61,70,92,101,115,123,124,129,132
+  @field w pitches  @ 14
+  @field w project  @ 23
+  @field w run  @ 50,82,108
+  @field w seed  @ 20
+  @field w stepNames  @ 15
+  @field w take  @ 22
+  @field w temper  @ 23
+  @field w tempers  @ 23
+  @field r type  @ 32

@@ -48,3 +48,62 @@
   @use call wv:wiredPorts  @ 269,270,282,293,294,304,305,316,317
   @use call wv:wireViews  @ 330,349
   @use call wv:setSourceTagPos  @ 354
+
+# Fields (r read / w write incl. constructor keys)
+  @field w EnumInstalledFX  @ 201
+  @field r audio  @ 50,51
+  @field r category  @ 73
+  @field w cm  @ 9,10
+  @field r displayName  @ 67
+  @field w ds  @ 8
+  @field r edges  @ 110,111,112,113,114,115,116
+  @field r from  @ 112,115,330,350
+  @field w from  @ 280,281,292,315,328
+  @field r fromKind  @ 333,337
+  @field r fromLabel  @ 334,338
+  @field r fromOffset  @ 353,355
+  @field w fromPort  @ 280,281,292,315
+  @field r fxDisplay  @ 49
+  @field r fxId  @ 45
+  @field r fxIdent  @ 48
+  @field r ghost  @ 183
+  @field w ghost  @ 178
+  @field r id  @ 70,92,248
+  @field r ident  @ 48,209
+  @field w ident  @ 4,59,81,103,125,244,278,290,302,313,325,346
+  @field r ins  @ 50,251
+  @field w ins  @ 58,80,101,124,243,277,289,301,312,324,345
+  @field r kind  @ 17,31,44,62,141
+  @field r label  @ 72,94
+  @field r master  @ 141
+  @field r midi  @ 250,251
+  @field w n1  @ 217,218,225,234,258,261
+  @field w n2  @ 217,218,225,260
+  @field w n3  @ 226,227
+  @field r name  @ 49,208
+  @field w name  @ 4,37,55,59,77,81,98,103,121,125,133,145
+  @field w name  @ 156,172,187,198,213,222,231,240,244,255,265,274
+  @field w name  @ 278,286,290,298,302,309,313,321,325,342,346
+  @field r nodes  @ 16,30,42,62,65,66,67,83,107,108,109
+  @field r nodes  @ 129,139,141,151,152,166,167
+  @field r nodes  @ 168,181,182,183,194
+  @field r outs  @ 51,250
+  @field w outs  @ 58,80,101,124,243,277,289,301,312,324,345
+  @field r ports  @ 50,51
+  @field r pos  @ 46,47,107,108,109,129,151,152,166
+  @field r pos  @ 167,168,181,182
+  @field w rm  @ 9
+  @field w run  @ 38,56,78,99,122,134,146,157,173,188,199,214
+  @field w run  @ 223,232,241,256,266,275,287,299,310,322,343
+  @field w sourcePos  @ 126
+  @field r to  @ 113,116,330,350
+  @field w to  @ 280,281,292,315,328
+  @field w toPort  @ 280,281,292,315
+  @field r trackId  @ 65,66,83
+  @field r type  @ 111,114
+  @field w type  @ 280,281,292,315,328
+  @field w wm  @ 10
+  @field r x  @ 46,107,108,129,151,166,167,168,181
+  @field w x  @ 126,149,161,162,163,177,178,354,355
+  @field r y  @ 47,107,109,129,152,166,167,168,182
+  @field w y  @ 126,149,161,162,163,177,178,354,355

@@ -222,3 +222,172 @@
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB
+
+# Fields (r read / w write incl. constructor keys)
+  @field r ImGui_GetBuiltinPath  @ 27
+  @field r Key_0  @ 850
+  @field r Key_A  @ 848
+  @field r Key_Apostrophe  @ 858
+  @field r Key_Backspace  @ handleKeys:1113
+  @field r Key_Comma  @ 855
+  @field r Key_Keypad0  @ 851
+  @field r Key_KeypadSubtract  @ 854
+  @field r Key_Minus  @ 853
+  @field r Key_Period  @ 856
+  @field r Key_Semicolon  @ 857
+  @field r Mod_Alt  @ handleMouse:975 handleKeys:1121
+  @field r Mod_None  @ handleKeys:1122
+  @field r Mod_Shift  @ handleMouse:974,1030 handleKeys:1106,1120,1121
+  @field r anchor  @ drawTracker:616,617,618
+  @field w anchor  @ curveEditorFrame:401
+  @field w anchorActive  @ curveEditorFrame:402
+  @field w arp  @ 169
+  @field w at  @ 180,361
+  @field w axis  @ curveEditorFrame:399
+  @field w callbacks  @ curveEditorFrame:404
+  @field r cc  @ drawTracker:551,564
+  @field w cc  @ 178,361
+  @field w cellH  @ geom:883
+  @field r cells  @ drawTracker:634,697,705,756,764,805 handleKeys:1126
+  @field r chan  @ drawTracker:616
+  @field r chanDelta  @ drawTracker:616
+  @field r char  @ handleKeys:1136,1137,1141,1142,1148
+  @field w char  @ add:847
+  @field r charpattern  @ printer:214,242 drawTracker:738
+  @field r chordEntry  @ 35
+  @field r chrome  @ 35
+  @field w chrome  @ 76
+  @field r cm  @ 35
+  @field r cmgr  @ 35
+  @field r col  @ drawTracker:610,611
+  @field r colour  @ drawTracker:623,658
+  @field w colours  @ curveEditorFrame:398
+  @field r cols  @ computeLayout:355 drawLaneStrip:462 drawTracker:532,548,625,634,671,695,704,755,790
+  @field r cols  @ drawTracker:790,799 nearestStop:830 naturalWidth:890 drawCurveEditor:910 handleMouse:998,1013,1045,1051,1056,1057
+  @field r cols  @ handleMouse:1058 handleKeys:1125
+  @field r commandHeld  @ handleKeys:1118
+  @field r ctx  @ 74
+  @field w ctx  @ 76
+  @field r delay  @ renderNote:135,138
+  @field w delay  @ 493
+  @field r delayC  @ renderNote:135
+  @field r delta  @ drawTracker:615,701,705
+  @field r destSrc  @ drawTracker:633,700
+  @field r digit  @ handleKeys:1138
+  @field w digit  @ add:847
+  @field w dragId  @ curveEditorFrame:397
+  @field r dur  @ drawTracker:619
+  @field r endRow  @ drawTracker:674,676 drawCurveEditor:918
+  @field w envelope  @ curveEditorFrame:400
+  @field r evType  @ renderNote:109,119
+  @field w evalCurve  @ curveEditorFrame:391
+  @field r events  @ curveEditorFrame:371
+  @field w events  @ curveEditorFrame:387
+  @field w fill  @ 169
+  @field r font  @ 74
+  @field r fontSize  @ printer:226 vnameSize:293 vname:313 ensureCellSize:332 drawTracker:555 draw:873
+  @field r fx  @ drawTracker:747
+  @field w fx  @ 182
+  @field r ghosts  @ drawTracker:710
+  @field r grid  @ printer:226 ensureCellSize:332 computeLayout:344 drawLaneStrip:429,462 drawTracker:510 nearestStop:827 draw:873 naturalWidth:890 drawCurveEditor:910,918 handleMouse:960
+  @field r grid  @ handleKeys:1125
+  @field r groupId  @ drawTracker:609,613,653 handleMouse:984
+  @field r gui  @ 35
+  @field r h  @ drawCurveEditor:915
+  @field w h  @ drawLaneStrip:465 drawCurveEditor:948
+  @field w height  @ geom:883
+  @field r hidden  @ renderPB:153 curveEditorFrame:372
+  @field w hovered  @ curveEditorFrame:396
+  @field r huge  @ nearestStop:829
+  @field r inputAllowed  @ 35
+  @field r instId  @ drawTracker:609,614,654 handleMouse:984
+  @field r key  @ handleKeys:1129,1130,1131,1132,1147
+  @field w key  @ add:847
+  @field r kind  @ renderFx:172
+  @field r label  @ drawTracker:553,558,561
+  @field w label  @ notePartHeaders:502
+  @field r laneDelta  @ drawTracker:617
+  @field r midiChan  @ layoutColumns:63 curveEditorFrame:369 drawTracker:534,536,551,734 handleMouse:1000,1025
+  @field w note  @ 176
+  @field r numRows  @ drawLaneStrip:429 drawTracker:519 drawCurveEditor:918
+  @field r offGrid  @ drawTracker:720
+  @field w onCycleShape  @ curveEditorFrame:410
+  @field w onDelete  @ curveEditorFrame:408
+  @field w onInsert  @ curveEditorFrame:407
+  @field w onMove  @ curveEditorFrame:405
+  @field w onMoveFree  @ curveEditorFrame:406
+  @field w onTension  @ curveEditorFrame:409
+  @field w originX  @ geom:883
+  @field w originY  @ geom:883
+  @field r overflow  @ drawTracker:718
+  @field w ox  @ printer:207
+  @field w oy  @ printer:207
+  @field w pa  @ 179
+  @field w page  @ 76
+  @field r partAt  @ notePartHeaders:496
+  @field r path  @ 30
+  @field w path  @ 30
+  @field w pb  @ 177,361
+  @field w pc  @ 181
+  @field r pi  @ drawTracker:680,683
+  @field r pitch  @ renderNote:116 drawTracker:765
+  @field w pitch  @ 493
+  @field r ppq  @ curveEditorFrame:388,392 drawTracker:618
+  @field r rect  @ drawTracker:607
+  @field w rect  @ curveEditorFrame:384
+  @field w retrig  @ 169
+  @field r row  @ drawTracker:611
+  @field r sample  @ renderNote:122
+  @field w sample  @ 493
+  @field r sampleShadowed  @ renderNote:128
+  @field r showDelay  @ renderNote:96 drawTracker:744
+  @field w slide  @ 169
+  @field w snap  @ printer:207 curveEditorFrame:395
+  @field r srcHi  @ drawTracker:702,706
+  @field r srcLo  @ drawTracker:701,702,706
+  @field r srcMember  @ drawTracker:706
+  @field r startRow  @ drawTracker:674,675
+  @field r stopPos  @ notePartHeaders:496 drawTracker:793,794,801 nearestStop:832 handleMouse:1051,1056,1058
+  @field r streams  @ drawTracker:628
+  @field w sx  @ printer:207
+  @field w sy  @ printer:207
+  @field w tMax  @ curveEditorFrame:386
+  @field w tMin  @ curveEditorFrame:386
+  @field w tOf  @ curveEditorFrame:388
+  @field r tails  @ drawTracker:672,673
+  @field r trackerMode  @ renderNote:97 delayMarkerOffset:193 fxMarkerOffset:199
+  @field w trill  @ 169
+  @field r tv  @ 35
+  @field r type  @ renderCell:186 curveEditorFrame:376 drawLaneStrip:463 drawTracker:533,551,559,563,747,756 drawCurveEditor:912
+  @field r ui  @ vnameSize:293 vname:313 drawTracker:555
+  @field r uiFont  @ 74
+  @field r uuid  @ drawTracker:638
+  @field w vMax  @ curveEditorFrame:385
+  @field w vMin  @ curveEditorFrame:385
+  @field r val  @ renderPB:153,154,155 renderCC:161,162,163 drawTracker:714
+  @field w val  @ drawTracker:714
+  @field r vel  @ renderNote:121
+  @field w vel  @ 493
+  @field w vibrato  @ 169
+  @field r w  @ drawCurveEditor:915
+  @field w w  @ drawLaneStrip:465 drawCurveEditor:948
+  @field r width  @ layoutColumns:61,68,69 drawTracker:535,536,550,629 naturalWidth:891 handleMouse:999,1014,1045
+  @field r x  @ notePartHeaders:502 drawTracker:533,535,536,549,550,554,555,558,564
+  @field r x  @ drawTracker:626,629,672,677,696,737,745,748,756,757,793
+  @field r x  @ drawTracker:793,794,800,802 nearestStop:831,833 handleMouse:999,1014,1045
+  @field w x  @ layoutColumns:56,62
+  @field r x0  @ drawCurveEditor:914
+  @field w x0  @ printer:267 drawLaneStrip:444,465,470 drawTracker:659 drawCurveEditor:931,948,949
+  @field w x1  @ printer:267 drawLaneStrip:444,470 drawTracker:659 drawCurveEditor:931,949
+  @field r xHi  @ drawLocalScrim:286 drawTracker:545,561
+  @field w xHi  @ notePartHeaders:502 drawTracker:535,536,662
+  @field r xLo  @ drawLocalScrim:285 drawTracker:545,561
+  @field w xLo  @ notePartHeaders:502 drawTracker:536,662
+  @field w y0  @ printer:267 drawLaneStrip:444,470 drawTracker:659 drawCurveEditor:931,949
+  @field w y1  @ printer:267 drawLaneStrip:444,470 drawTracker:659 drawCurveEditor:931,949
+  @field r yHi  @ drawLocalScrim:284,285,286
+  @field w yHi  @ drawTracker:662
+  @field r yLo  @ drawLocalScrim:283,285,286
+  @field w yLo  @ drawTracker:662
+  @field r yTop  @ drawCurveEditor:914
+  @field w yTop  @ drawLaneStrip:465 drawCurveEditor:948

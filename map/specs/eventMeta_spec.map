@@ -32,3 +32,15 @@
   @use call ps:assign  @ 96
   @use call ps:get  @ 122,123,124
   @use call em:dropPool  @ 134
+
+# Fields (r read / w write incl. constructor keys)
+  @field r REMOVE  @ 96
+  @field r delay  @ 26
+  @field w delay  @ 23
+  @field r detune  @ 25,46,58,70,82,84,95,101,111,112,125
+  @field w detune  @ 23,34,45,54,66,67,80,83,94,98
+  @field w detune  @ 109,120,133
+  @field w name  @ 20,31,42,51,63,77,91,106,117,130
+  @field w ps  @ 14
+  @field w reaper  @ 12
+  @field w run  @ 21,32,43,52,64,78,92,107,118,131

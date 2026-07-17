@@ -38,3 +38,32 @@
 
 # REAPER API surface
   @reaper time_precise
+
+# Fields (r read / w write incl. constructor keys)
+  @field r calls  @ start:47 renderNode:82
+  @field w calls  @ newNode:28 start:47
+  @field w closeFrame  @ closeFrame:70
+  @field w count  @ count:60
+  @field w dump  @ dump:104
+  @field r incl  @ stop:55 renderNode:85,88
+  @field w incl  @ newNode:28 stop:55
+  @field r kids  @ start:37,40 renderNode:87 report:96
+  @field w kids  @ newNode:28
+  @field w line  @ line:134
+  @field r marks  @ count:63 marksOf:76 report:96
+  @field w marks  @ newNode:28
+  @field r name  @ stop:56 renderNode:85
+  @field w name  @ newNode:28
+  @field r on  @ start:34 stop:53 count:61 report:95 toggle:124,125 line:134
+  @field w on  @ 22 toggle:124
+  @field w openFrame  @ openFrame:69
+  @field r order  @ start:41 renderNode:87
+  @field w order  @ newNode:28
+  @field r parent  @ stop:57
+  @field w parent  @ newNode:28
+  @field w report  @ report:94
+  @field w start  @ start:33
+  @field w stop  @ stop:52
+  @field r t0  @ stop:54
+  @field w t0  @ start:48
+  @field w toggle  @ toggle:123

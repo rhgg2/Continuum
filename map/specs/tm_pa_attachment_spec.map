@@ -1,4 +1,4 @@
-@spec tm_pa_attachment_spec  src=tests/specs/tm_pa_attachment_spec.lua  loc=70  sha=untracked  cases=2
+@spec tm_pa_attachment_spec  src=tests/specs/tm_pa_attachment_spec.lua  loc=70  sha=35eb990  cases=2
 @exercises midiManager (h.mm), trackerManager (h.tm)
 @surface   mm:notes, mm:ccsRaw, tm:addEvent, tm:flush, tm:deleteEvent, tm:assignEvent
 @harness   mk
@@ -33,3 +33,22 @@
   @use call tm:deleteEvent  @ 47
   @use call tm:assignEvent  @ 60
   @use call fm:ccsRaw  @ 65
+
+# Fields (r read / w write incl. constructor keys)
+  @field r chan  @ 15
+  @field w chan  @ 32,34
+  @field w delay  @ 33
+  @field w detune  @ 33
+  @field w endppq  @ 32,60
+  @field r evType  @ 22,65
+  @field w evType  @ 32,34
+  @field w lane  @ 33
+  @field w name  @ 42,55
+  @field r pitch  @ 15
+  @field w pitch  @ 32,34
+  @field r ppq  @ 22
+  @field w ppq  @ 32,34,60
+  @field r ppqL  @ 66
+  @field w run  @ 43,56
+  @field r uuid  @ 15
+  @field w vel  @ 33,34

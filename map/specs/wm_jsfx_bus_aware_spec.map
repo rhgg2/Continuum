@@ -38,3 +38,39 @@
   @use call wm:load  @ 10
   @use call wm:addFxNode  @ 113,128,140,152,186,187,198,214
   @use call wm:graph  @ 119,130,143,188,189,200,217
+
+# Fields (r read / w write incl. constructor keys)
+  @field r busAware  @ 130,143
+  @field w busAware  @ 164,166,168,170,172,173
+  @field r cm  @ 21,26
+  @field w cm  @ 9,21,26
+  @field r code  @ 115
+  @field w ds  @ 8
+  @field r edges  @ 201,220
+  @field r from  @ 221,222
+  @field w from  @ 201
+  @field w fromPort  @ 201
+  @field r ident  @ 116
+  @field w ident  @ 113,128,140,152,186,187,198,214
+  @field w ins  @ 111,127,139,151,184,185,188,189,197,213
+  @field r kind  @ 204,218
+  @field r midi  @ 188,189
+  @field w name  @ 33,39,45,51,59,65,71,78,92,107,113,123
+  @field w name  @ 128,134,140,147,152,160,177,186,187,193,198,209
+  @field w name  @ 214
+  @field r nodes  @ 119,130,143,188,189,203,218
+  @field w outs  @ 111,127,139,151,184,185,188,189,197,213
+  @field r parseJSFXBusAware  @ 22
+  @field r parseJSFXMidiTraits  @ 27
+  @field r ports  @ 188,189
+  @field w readJSFXContent  @ 17,138,150
+  @field w recv  @ 164,166,168,170,172,173
+  @field w rm  @ 9
+  @field w run  @ 34,40,46,52,60,66,72,79,93,108,124,135
+  @field w run  @ 148,161,178,194,210
+  @field w send  @ 164,166,168,170,172,173
+  @field r to  @ 221,222
+  @field w to  @ 201
+  @field w toPort  @ 201
+  @field r type  @ 221,222
+  @field w type  @ 201

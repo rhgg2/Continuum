@@ -46,3 +46,32 @@
   @use call fm:dump  @ 81,109
   @use call fm:take  @ 104
   @use call tm:reloadFromReaper  @ 107
+
+# Fields (r read / w write incl. constructor keys)
+  @field r LENGTH  @ 73
+  @field r add  @ 41,47
+  @field w add  @ 42
+  @field r assign  @ 41,47
+  @field w assign  @ 43,45,47
+  @field w c58  @ 71
+  @field r ccs  @ 85
+  @field r chan  @ 83,84,111
+  @field r classic58  @ 71
+  @field w config  @ 71
+  @field w data  @ 72
+  @field r delete  @ 41,47
+  @field w delete  @ 44
+  @field r evType  @ 85
+  @field w global  @ 72
+  @field w groups  @ 74
+  @field w length  @ 73,98
+  @field w name  @ 68,95
+  @field r notes  @ 83,111
+  @field w project  @ 71
+  @field w resolution  @ 73,98
+  @field w run  @ 69,96
+  @field w seed  @ 73,98
+  @field r source  @ 27
+  @field w swing  @ 72
+  @field w swings  @ 71
+  @field w temper  @ 71

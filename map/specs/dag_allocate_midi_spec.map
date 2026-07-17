@@ -17,3 +17,32 @@
 
 # Uses (outbound edges)
   @use call DAG.allocate  @ 22,42,65,91,114,138,156,179
+
+# Fields (r read / w write incl. constructor keys)
+  @field r dstChan  @ 26,117,139,140
+  @field w from  @ 17,36,37,54,56,57,83,84,86,103,105,106
+  @field w from  @ 128,133,150,151,170,171,173
+  @field w fxOrder  @ 15,19,34,39,52,60,62,80,88,101,109,111
+  @field w fxOrder  @ 126,131,135,148,153,167,175
+  @field w intraConns  @ 16,20,36,40,54,61,63,82,89,103,110,112
+  @field w intraConns  @ 127,132,136,150,154,169,176
+  @field w mainSend  @ 16,20,35,40,53,61,63,81,89,102,110,112
+  @field w mainSend  @ 127,132,136,149,154,168,176
+  @field w name  @ 11,30,48,76,97,122,144,162
+  @field r nchan  @ 157
+  @field w outWires  @ 17,20,37,40,55,61,63,86,89,104,110,112
+  @field w outWires  @ 128,133,136,151,154,173,176
+  @field r pinMaps  @ 158
+  @field w run  @ 12,31,49,77,98,123,145,163
+  @field r sends  @ 23,24,25,26,44,67,93,115,139,140
+  @field r srcChan  @ 25,44,71,72,93,116
+  @field r to  @ 68,69
+  @field w to  @ 17,36,37,54,56,57,83,84,86,103,105,106
+  @field w to  @ 128,133,150,151,170,171,173
+  @field w toNode  @ 17,37,56,57,86,105,106,128,133,151,173
+  @field w trackId  @ 15,34,52,80,101,126,131,148,167
+  @field w trackKind  @ 15,19,34,39,52,60,62,80,88,101,109,111
+  @field w trackKind  @ 126,131,135,148,153,167,175
+  @field r type  @ 24
+  @field w type  @ 17,36,37,54,56,57,83,84,86,103,105,106
+  @field w type  @ 128,133,150,151,170,171,173

@@ -1,4 +1,4 @@
-@spec mm_cc_metadata_spec  src=tests/specs/mm_cc_metadata_spec.lua  loc=153  sha=b5afaeb  cases=9
+@spec mm_cc_metadata_spec  src=tests/specs/mm_cc_metadata_spec.lua  loc=153  sha=37ed80d  cases=9
 @exercises midiManager (h.mm)
 @surface   mm:ccs, fm:assign, fm:modify, fm:delete
 @harness   mk{seed.ccs}, bareMM
@@ -31,3 +31,24 @@
   @use call fm:assign  @ 31,43,57,59,70,83,100,101,121,134,149
   @use call fm:modify  @ 43,57,70,83,99,134,137
   @use call fm:delete  @ 137
+
+# Fields (r read / w write incl. constructor keys)
+  @field r REMOVE  @ 149
+  @field w cc  @ 30,41,55,68,82,94,95,114,132,146
+  @field w ccs  @ 30,41,55,68,82,93,114,132,146
+  @field w chan  @ 30,41,55,68,82,94,95,114,132,146
+  @field w evType  @ 30,41,55,68,82,94,95,114,132,146
+  @field r foo  @ 47,60,124,150
+  @field w foo  @ 31,43,57,59,100,101,114,121,134,147,149
+  @field r label  @ 73
+  @field w label  @ 70
+  @field w name  @ 28,38,52,65,79,89,110,129,143
+  @field r plain  @ 46,84
+  @field w ppq  @ 30,41,55,68,82,94,95,114,132,146
+  @field w run  @ 29,39,53,66,80,90,111,130,144
+  @field w seed  @ 41,55,68,92,113,132,146
+  @field r uuid  @ 31,43,45,57,59,70,74,83,100,101,103
+  @field r uuid  @ 119,121,123,134,135,136,149
+  @field w uuid  @ 147
+  @field r val  @ 72
+  @field w val  @ 30,41,55,68,70,82,83,94,95,114,132,146

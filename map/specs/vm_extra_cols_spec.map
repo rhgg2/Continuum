@@ -17,3 +17,27 @@
   @use call ec:setPos  @ 28,62,100
   @use call vm:hideExtraCol  @ 29,63,101
   @use call ds:get  @ 31,65,103
+
+# Fields (r read / w write incl. constructor keys)
+  @field w chan  @ 15,54,88
+  @field r cols  @ 24,36,70,96,108
+  @field w data  @ 19,58,92
+  @field w delay  @ 16,55,89
+  @field w detune  @ 16,55,89
+  @field w endppq  @ 15,54,88
+  @field r events  @ 26,42,76,98,115,116
+  @field w extraColumns  @ 19,58,92
+  @field r grid  @ 24,36,70,96,108
+  @field r lane  @ 25,97
+  @field w lane  @ 16,55,89
+  @field r midiChan  @ 37,71,109
+  @field w name  @ 10,47,81
+  @field r notes  @ 32,66,104
+  @field w notes  @ 14,19,53,58,87,92
+  @field r pitch  @ 116
+  @field w pitch  @ 15,54,88
+  @field w ppq  @ 15,54,88
+  @field w run  @ 11,48,82
+  @field w seed  @ 13,52,86
+  @field r type  @ 37,71,109
+  @field w vel  @ 15,54,88

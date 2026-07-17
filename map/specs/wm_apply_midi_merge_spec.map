@@ -35,3 +35,53 @@
   @use call wm:snapshot  @ 50,137
   @use call wm:graph  @ 76,117
   @use call wm:mutate  @ 85,126,149,163
+
+# Fields (r read / w write incl. constructor keys)
+  @field w __label  @ 21
+  @field r _state  @ 22,23,67
+  @field w audio  @ 29,38
+  @field r calls  @ 67
+  @field w cm  @ 15
+  @field w ds  @ 14
+  @field r edges  @ 90,91,92,93,131,132,133,134,154,155,156,157
+  @field r edges  @ 165
+  @field w edges  @ 168
+  @field r fn  @ 68
+  @field r from  @ 166
+  @field w from  @ 46
+  @field r fxC  @ 76,117
+  @field w fxC  @ 89,130,153
+  @field r fxId  @ 37,117
+  @field w fxId  @ 37
+  @field w fxIdent  @ 37
+  @field r fxIdx  @ 68
+  @field w fxP1  @ 87,128,151
+  @field w fxP2  @ 88,129,152
+  @field r ins  @ 38
+  @field w ins  @ 29,38,39,43
+  @field w kind  @ 28,37
+  @field r mergeGuids  @ 76
+  @field r midi  @ 39
+  @field w midi  @ 29,39,89,130,153
+  @field w name  @ 81,121,145
+  @field r nodes  @ 76,86,87,88,89,117,127,128,129,130,150,151
+  @field r nodes  @ 152,153
+  @field r op  @ 139,140
+  @field r outs  @ 38
+  @field w outs  @ 29,38,39,43
+  @field r paramIdx  @ 69
+  @field w ports  @ 29,38
+  @field w pos  @ 28,37
+  @field r projectTracks  @ 22
+  @field w rm  @ 15
+  @field w run  @ 82,122,146
+  @field w sA  @ 86,127,150
+  @field r to  @ 166
+  @field w to  @ 46
+  @field r track  @ 68
+  @field r trackGuids  @ 23
+  @field w trackId  @ 28
+  @field w type  @ 46
+  @field r value  @ 69
+  @field w x  @ 28,37
+  @field w y  @ 28,37

@@ -19,3 +19,18 @@
   @use call wv:nodeViews  @ 13
   @use call wv:addFx  @ 23,32,42
   @use call wv:graph  @ 44
+
+# Fields (r read / w write incl. constructor keys)
+  @field r activate  @ 25,34,45,46
+  @field w cm  @ 7,8
+  @field w ds  @ 6
+  @field r id  @ 14
+  @field w ident  @ 23,32,42
+  @field w ins  @ 41
+  @field r kind  @ 44
+  @field w name  @ 20,23,29,32,38,42
+  @field r nodes  @ 44
+  @field w outs  @ 41
+  @field w rm  @ 7
+  @field w run  @ 21,30,39
+  @field w wm  @ 8

@@ -28,3 +28,47 @@
   @use call vm:rebuild  @ 39
   @use call vm:unautomateParam  @ 91
   @use call vm:hideExtraCol  @ 111
+
+# Fields (r read / w write incl. constructor keys)
+  @field r _state  @ 27,59,60
+  @field r busCode  @ 37,47
+  @field w busCode  @ 12
+  @field r cc  @ 17
+  @field w cc  @ 80,81
+  @field r ccs  @ 38,95
+  @field w ccs  @ 56,63,80,83,104
+  @field w chan  @ 9,63,80,81
+  @field w chanmsg  @ 63
+  @field r cols  @ 16,89
+  @field w data  @ 56,83,104
+  @field w delay  @ 10
+  @field w detune  @ 10
+  @field w endppq  @ 9
+  @field w evType  @ 80,81
+  @field r events  @ 89
+  @field w extraColumns  @ 56,83,104
+  @field w fxGuid  @ 12,30,43,66
+  @field r grid  @ 16,89
+  @field r label  @ 35
+  @field w label  @ 13,30,43,66
+  @field w lane  @ 10
+  @field w msg2  @ 63
+  @field w msg3  @ 63
+  @field w name  @ 24,52,75,100
+  @field w notes  @ 26,55,56,79,83,103,104
+  @field w offset  @ 13
+  @field r param  @ 36
+  @field w param  @ 13,30,43,66
+  @field w paramAutomation  @ 84,105
+  @field w pitch  @ 9
+  @field w ppq  @ 9,63,80,81
+  @field w projectItems  @ 27,59
+  @field w run  @ 25,53,76,101
+  @field w scale  @ 13
+  @field w seed  @ 26,55,78,103
+  @field r takeIsMidi  @ 60
+  @field w takes  @ 27,59
+  @field w trackGuid  @ 12,30,43,66
+  @field r type  @ 17
+  @field w val  @ 80,81
+  @field w vel  @ 9

@@ -1,4 +1,4 @@
-@spec tm_gate_parity_spec  src=tests/specs/tm_gate_parity_spec.lua  loc=159  sha=285f562  cases=1
+@spec tm_gate_parity_spec  src=tests/specs/tm_gate_parity_spec.lua  loc=159  sha=37ed80d  cases=1
 @exercises trackerManager (h.tm), midiManager (h.fm), dataStore (h.ds)
 @surface   tm:getChannel, fm:dump, tm:rebuild, tm:addEvent, tm:flush, ds:assign, tm:fromLogical, tm:assignEvent
 @harness   mk
@@ -44,3 +44,81 @@
   @use call ds:assign  @ 127
   @use call tm:fromLogical  @ 143
   @use call tm:assignEvent  @ 151
+
+# Fields (r read / w write incl. constructor keys)
+  @field r at  @ 50
+  @field w at  @ 50
+  @field w atom  @ 10
+  @field w c58  @ 116
+  @field r cc  @ 72
+  @field w cc  @ 72
+  @field r ccs  @ 49,92,135
+  @field w ccs  @ 47
+  @field r cells  @ 64
+  @field w cells  @ 73
+  @field r chan  @ 136,137
+  @field w chan  @ 16,128
+  @field r cols  @ 62
+  @field r columns  @ 46,150
+  @field w config  @ 116
+  @field w data  @ 117
+  @field w delay  @ 17
+  @field w depth  @ 12
+  @field w detune  @ 17,124
+  @field w dir  @ 13
+  @field w endppq  @ 16,128
+  @field r evType  @ 136,137
+  @field w evType  @ 16
+  @field r events  @ 37,150
+  @field w factors  @ 10
+  @field r fromEvt  @ 69
+  @field w fromEvt  @ 69
+  @field w fx  @ 125,128
+  @field r ghosts  @ 66,68
+  @field w ghosts  @ 74
+  @field w global  @ 117
+  @field r grid  @ 62
+  @field w groups  @ 118
+  @field w key  @ 24
+  @field w kind  @ 12,13
+  @field r lane  @ 72
+  @field w lane  @ 17,72
+  @field w loc  @ 24
+  @field r midiChan  @ 72
+  @field w midiChan  @ 72
+  @field w name  @ 111
+  @field r notes  @ 48,91,150
+  @field w notes  @ 47
+  @field r offGrid  @ 73
+  @field w offGrid  @ 73
+  @field w onset  @ 12
+  @field w origShape  @ 24
+  @field r overflow  @ 73
+  @field w overflow  @ 73
+  @field r parked  @ 51,141
+  @field w parked  @ 51
+  @field r parkedCC  @ 52
+  @field w parkedCC  @ 52
+  @field r pb  @ 50
+  @field w pb  @ 50
+  @field r pc  @ 50
+  @field w pc  @ 50
+  @field w period  @ 10,12,13
+  @field w pitch  @ 16,151
+  @field w ppq  @ 16
+  @field w project  @ 116
+  @field w run  @ 112
+  @field w shift  @ 10
+  @field w startppq  @ 128
+  @field w swing  @ 117
+  @field w swings  @ 116
+  @field r tails  @ 74
+  @field w tails  @ 74
+  @field r toEvt  @ 69
+  @field w toEvt  @ 69
+  @field r type  @ 72
+  @field w type  @ 72
+  @field w uuid  @ 128
+  @field r val  @ 69
+  @field w val  @ 69
+  @field w vel  @ 17

@@ -22,3 +22,25 @@
   @use call gm:newInstance  @ 24
   @use call fm:dump  @ 45
   @use call tm:byUuid  @ 50
+
+# Fields (r read / w write incl. constructor keys)
+  @field r add  @ 26
+  @field r ccs  @ 45
+  @field w ccs  @ 40
+  @field r cents  @ 29
+  @field w chan  @ 20,24,41
+  @field w chanLo  @ 10
+  @field w ds  @ 18
+  @field w dur  @ 10
+  @field r evType  @ 46,52
+  @field w evType  @ 20,41
+  @field w name  @ 15,34
+  @field w ppq  @ 10,20,24,41
+  @field w run  @ 16,35
+  @field w seed  @ 40
+  @field w shape  @ 20,41
+  @field w streams  @ 11
+  @field w tm  @ 18
+  @field r uuid  @ 46,53
+  @field r val  @ 28
+  @field w val  @ 20,41

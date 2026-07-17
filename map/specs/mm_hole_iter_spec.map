@@ -1,4 +1,4 @@
-@spec mm_hole_iter_spec  src=tests/specs/mm_hole_iter_spec.lua  loc=98  sha=285f562  cases=3
+@spec mm_hole_iter_spec  src=tests/specs/mm_hole_iter_spec.lua  loc=98  sha=37ed80d  cases=3
 @exercises midiManager (h.mm)
 @surface   mm:notes, mm:modify, mm:delete, mm:ccs, mm:ccsRaw, mm:events
 @harness   bareMM
@@ -27,3 +27,19 @@
   @use call mm:ccs  @ 51,56,84
   @use call mm:ccsRaw  @ 57
   @use call mm:events  @ 90
+
+# Fields (r read / w write incl. constructor keys)
+  @field w cc  @ 46,47,48,77,78,79
+  @field w ccs  @ 45,76
+  @field w chan  @ 23,24,25,46,47,48,72,73,74,77,78,79
+  @field w endppq  @ 23,24,25,72,73,74
+  @field w evType  @ 46,47,48,77,78,79
+  @field w name  @ 20,43,68
+  @field w notes  @ 22,71
+  @field w pitch  @ 23,24,25,72,73,74
+  @field r ppq  @ 13,28,51,83,84
+  @field w ppq  @ 23,24,25,46,47,48,72,73,74,77,78,79
+  @field w run  @ 21,44,69
+  @field r uuid  @ 28,51,83,84
+  @field w val  @ 46,47,48,77,78,79
+  @field w vel  @ 23,24,25,72,73,74

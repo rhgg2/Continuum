@@ -50,3 +50,40 @@
   @use call vm:rebuild  @ 198
   @use call vm:tick  @ 242
   @use call cmgr:invoke  @ 340
+
+# Fields (r read / w write incl. constructor keys)
+  @field w JI  @ 218
+  @field r _state  @ 32,40
+  @field r b1  @ 33,41
+  @field r calls  @ 32,40
+  @field w chan  @ 89,110,307
+  @field r columns  @ 18
+  @field w config  @ 10,216
+  @field w currentOctave  @ 10,217
+  @field w delay  @ 89,110,307
+  @field w detune  @ 89,110,307
+  @field w endppq  @ 89,110,307
+  @field r events  @ 19
+  @field r fn  @ 33,41
+  @field w name  @ 48,69,86,107,124,155,177,192,205,210,234,252
+  @field w name  @ 271,287,304,320,334
+  @field r notes  @ 18,94,118,170,184,228,313
+  @field w notes  @ 9,215
+  @field w periodAsStep  @ 212
+  @field w periodPitch  @ 210
+  @field r pitch  @ 58,59,60,80,98,116,166,261,262,263,279,280
+  @field r pitch  @ 281,297
+  @field w pitch  @ 89,110,307
+  @field w pitches  @ 211
+  @field r ppq  @ 20
+  @field w ppq  @ 89,110,307
+  @field w project  @ 218
+  @field w run  @ 49,70,87,108,125,156,178,193,206,235,253,272
+  @field w run  @ 288,305,321,335
+  @field w seed  @ 9,215
+  @field w stepNames  @ 212
+  @field w take  @ 10,217
+  @field w temper  @ 218
+  @field w tempers  @ 218
+  @field r vel  @ 95,117,130,132,135,138,140,141,149,314
+  @field w vel  @ 89,110,307

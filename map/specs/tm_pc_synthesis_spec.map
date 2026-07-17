@@ -1,4 +1,4 @@
-@spec tm_pc_synthesis_spec  src=tests/specs/tm_pc_synthesis_spec.lua  loc=331  sha=00e0995  cases=13
+@spec tm_pc_synthesis_spec  src=tests/specs/tm_pc_synthesis_spec.lua  loc=331  sha=37ed80d  cases=13
 @exercises midiManager (h.mm), trackerManager (h.tm)
 @surface   mm:notes, tm:getChannel, fm:dump, tm:addEvent, tm:flush, tm:assignEvent, tm:deleteEvent
 @harness   mk{seed.notes, seed.ccs}
@@ -39,3 +39,55 @@
   @use call tm:flush  @ 66,87,107,134,200,241,265
   @use call tm:assignEvent  @ 86,133,199
   @use call tm:deleteEvent  @ 106,264
+
+# Fields (r read / w write incl. constructor keys)
+  @field r ccs  @ 10
+  @field w ccs  @ 148,168,293,314
+  @field r chan  @ 11,23
+  @field w chan  @ 41,42,43,63,79,80,99,100,126,127,147,148
+  @field w chan  @ 167,168,190,191,213,214,237,239,257,258,291,294
+  @field w chan  @ 311,312,315
+  @field r columns  @ 28,271,322
+  @field w config  @ 46,60,83,103,130,170,194,217,235,261,297,318
+  @field w delay  @ 41,42,43,64,79,80,99,100,126,127,147,167
+  @field w delay  @ 190,191,213,214,238,240,257,258,291,311,312
+  @field w detune  @ 41,42,43,64,79,80,99,100,126,127,147,167
+  @field w detune  @ 190,191,213,214,238,240,257,258,291,311,312
+  @field w endppq  @ 41,42,43,63,79,80,99,100,126,127,147,167
+  @field w endppq  @ 190,191,199,213,214,237,239,257,258,291,311,312
+  @field r evType  @ 11,324
+  @field w evType  @ 62,148,168,237,239,294,315
+  @field r events  @ 28,272,323
+  @field w lane  @ 64,238,240
+  @field w name  @ 36,54,74,94,119,143,163,184,208,228,252,286
+  @field w name  @ 306
+  @field r notes  @ 28,172,271,322
+  @field w notes  @ 40,59,78,98,125,147,167,189,212,234,256,290
+  @field w notes  @ 310
+  @field r pitch  @ 23,273,324
+  @field w pitch  @ 41,42,43,63,79,80,99,100,126,127,147,167
+  @field w pitch  @ 190,191,213,214,237,239,257,258,291,294,311,312
+  @field w pitch  @ 315
+  @field r ppq  @ 12,15,176
+  @field w ppq  @ 12,41,42,43,49,63,67,79,80,89
+  @field w ppq  @ 89,99,100,108,126,127,135,136,147,148,151,167
+  @field w ppq  @ 168,190,191,199,203,213,214,219,237,239,257
+  @field w ppq  @ 258,266,291,294,299,311,312,315,320
+  @field w run  @ 37,55,75,95,120,144,164,185,209,229,253,287
+  @field w run  @ 307
+  @field r sample  @ 173
+  @field w sample  @ 41,42,43,64,79,80,86,99,100,126,127,133
+  @field w sample  @ 190,191,213,214,238,240,257,258,291,311,312
+  @field r sampleShadowed  @ 222,223,246,247,277,328
+  @field w seed  @ 39,59,77,97,124,146,166,188,211,234,255,289
+  @field w seed  @ 309
+  @field w trackerMode  @ 46,60,83,103,130,170,194,217,235,261,297,318
+  @field w transient  @ 46,60,83,103,130,170,194,217,235,261,297,318
+  @field r uuid  @ 23,199
+  @field w uuid  @ 86,133,199
+  @field r val  @ 12,177
+  @field w val  @ 12,49,67,89,108,135,136,148,151
+  @field w val  @ 168,203,219,266,299,320
+  @field w vel  @ 41,42,43,63,79,80,99,100,126,127,147,167
+  @field w vel  @ 190,191,213,214,237,239,257,258,291,294,311,312
+  @field w vel  @ 315

@@ -32,3 +32,29 @@
   @use call vm:editEvent  @ 49,71
   @use call cmgr:invoke  @ 60
   @use call gm:setLocalMode  @ 69,72
+
+# Fields (r read / w write incl. constructor keys)
+  @field r chan  @ 15,22
+  @field w chan  @ 15,31,38
+  @field w col1  @ 34
+  @field w col2  @ 34
+  @field r cols  @ 7,49,71
+  @field w endppq  @ 31
+  @field r evType  @ 15
+  @field r grid  @ 7,49,71
+  @field w groups  @ 30
+  @field r midiChan  @ 8
+  @field w name  @ 45,56,66
+  @field w notes  @ 31
+  @field w part1  @ 34
+  @field w part2  @ 34
+  @field r pitch  @ 15
+  @field w pitch  @ 15,31
+  @field r ppq  @ 15,22
+  @field w ppq  @ 15,31,38
+  @field w row1  @ 34
+  @field w row2  @ 34
+  @field w run  @ 46,57,67
+  @field w seed  @ 31
+  @field r type  @ 8
+  @field w vel  @ 31

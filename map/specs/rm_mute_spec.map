@@ -32,3 +32,18 @@
   @use call harness.mk  @ 11
   @use call rm2:muted  @ 131
   @use call rm2:tracks  @ 132
+
+# Fields (r read / w write incl. constructor keys)
+  @field w ds  @ 12,130
+  @field r fx  @ 22,47,132
+  @field r id  @ 22
+  @field w ident  @ 21
+  @field r ins  @ 61,91,104,117,132
+  @field w ins  @ 29,30,35,36,87,113
+  @field w name  @ 51,67,81,95,108,121
+  @field r outs  @ 63,76
+  @field w outs  @ 29,30,35,36,88,114
+  @field r pinMaps  @ 47,132
+  @field w pinMaps  @ 23,87,113
+  @field w ps  @ 130
+  @field w run  @ 52,68,82,96,109,122

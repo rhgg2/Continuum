@@ -243,3 +243,62 @@
   @reaper SetItemStateChunk
   @reaper GetMediaItem_Track
   @reaper MoveMediaItemToTrack
+
+# Fields (r read / w write incl. constructor keys)
+  @field r OPEN  @ naturalLenOf:146 setNaturalLenOf:150 relayoutTrack:170,177,178,179,181 effectiveNaturalLenQN:195,199
+  @field r REMOVE  @ setNaturalLenOf:150
+  @field w __mode  @ 41
+  @field w chan  @ midiNotesOf:343
+  @field r chanByCol  @ columnChanRange:459
+  @field w chanByCol  @ buildState:439
+  @field r chanMask  @ chanRangeOf:399
+  @field w chanMask  @ buildTakeShape:366
+  @field r cm  @ 25
+  @field w colourIdx  @ buildTakeShape:368 slotRowsFor:385
+  @field r ds  @ 25
+  @field r eventMeta  @ 25
+  @field r facade  @ 25
+  @field r guid  @ trackIdxForGuid:777
+  @field w guid  @ buildState:424
+  @field w hi  @ chanRangeOf:406
+  @field r huge  @ sourceLenQN:137 relayoutTrack:183
+  @field r id  @ ensureSlots:219,220,222,223,225,226 slotRowsFor:384,385,386,387
+  @field r id  @ ownerTrack:577 renameSlot:601,603 deleteSlot:615,620,625,627 takeForSlot:759,760 dropInstance:787,788,811
+  @field w id  @ ensureSlots:236 slotRowsFor:384 createAndDropMidi:731 mintParkedTake:898
+  @field r idx  @ ownerTrack:574 trackIdxForGuid:777
+  @field w idx  @ slotRowsFor:382 buildState:424
+  @field r item  @ relayoutTrack:171,176,186 duplicateTake:828 duplicateUnpooledBelow:859 startIsClear:911 moveTake:920,923,924,925 takeSourceLengthQN:944 deleteTake:954
+  @field r item  @ deleteTake:955,957
+  @field w item  @ relayoutTrack:160 buildTakeShape:358
+  @field r kind  @ slotRowsFor:383 deleteSlot:627 takeForSlot:759 dropInstance:799 duplicateTake:827 duplicateBelow:847 duplicateUnpooledBelow:855 newTakeBelow:869
+  @field w kind  @ ensureSlots:236 buildTakeShape:364 slotRowsFor:383 createAndDropMidi:731 mintParkedTake:898
+  @field r lengthQN  @ visibleTakes:468 duplicateTake:828,832
+  @field w lengthQN  @ buildTakeShape:362
+  @field w lo  @ chanRangeOf:406
+  @field r name  @ duplicateTake:835 duplicateUnpooledBelow:861
+  @field w name  @ buildTakeShape:370 slotRowsFor:386 buildState:424
+  @field w nativeColour  @ buildTakeShape:369
+  @field r naturalLenQN  @ destBelow:843 duplicateUnpooledBelow:859 newTakeBelow:872
+  @field w naturalLenQN  @ buildTakeShape:363
+  @field w notes  @ buildTakeShape:365
+  @field w offE  @ midiNotesOf:342
+  @field w offS  @ midiNotesOf:341
+  @field w parked  @ slotRowsFor:387
+  @field w pitch  @ midiNotesOf:344
+  @field w slotCount  @ buildState:425
+  @field w slotIdx  @ buildTakeShape:367
+  @field r slotsByCol  @ trackSlots:563
+  @field w slotsByCol  @ buildState:439
+  @field r startQN  @ relayoutTrack:162,183,184,186 visibleTakes:468 initialCursor:499 createAndDropMidi:723 dropInstance:795 destBelow:843
+  @field r startQN  @ startIsClear:911
+  @field w startQN  @ relayoutTrack:160 buildTakeShape:361
+  @field r take  @ relayoutTrack:165,167,172,176,178 findTake:489 duplicateTake:830 resizeTake:933 takeSourceLengthQN:940 deleteTake:953
+  @field w take  @ relayoutTrack:160 buildTakeShape:359
+  @field w takeCount  @ buildState:426
+  @field r takesByCol  @ tracksTakes:455 visibleTakes:464 hasPlacedTakes:478 findTake:487
+  @field w takesByCol  @ buildState:439
+  @field w track  @ buildState:424
+  @field r trackIdx  @ initialCursor:499 duplicateTake:824 duplicateBelow:849 duplicateUnpooledBelow:857,858 newTakeBelow:871,872 moveTake:923,926 resizeTake:934 deleteTake:951
+  @field w trackIdx  @ buildTakeShape:360
+  @field r tracks  @ projectTracks:330
+  @field w tracks  @ buildState:439

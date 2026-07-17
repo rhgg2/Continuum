@@ -46,3 +46,31 @@
   @use call ec:pos  @ 94
   @use call vm:digitsBackspace  @ 107,136
   @use call vm:rebuild  @ 172
+
+# Fields (r read / w write incl. constructor keys)
+  @field w bipolar  @ 26
+  @field w ccs  @ 25
+  @field r cells  @ 34,59
+  @field w chan  @ 25,50
+  @field r cols  @ 13,41
+  @field w columnDisplay  @ 26
+  @field w data  @ 26
+  @field w delay  @ 50
+  @field w detune  @ 50
+  @field w endppq  @ 50
+  @field w evType  @ 25
+  @field r grid  @ 13,41
+  @field w name  @ 73,100,115,129,142,154,165
+  @field w normalized  @ 26
+  @field w notes  @ 49
+  @field r partAt  @ 65
+  @field w pb  @ 26
+  @field w pitch  @ 50
+  @field w ppq  @ 25,50
+  @field w run  @ 74,101,116,130,143,155,166
+  @field w seed  @ 25,49
+  @field r type  @ 14,42
+  @field r val  @ 35
+  @field w val  @ 25
+  @field r vel  @ 60
+  @field w vel  @ 50

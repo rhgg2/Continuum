@@ -59,3 +59,35 @@
 
 # REAPER API surface
   @reaper ShowConsoleMsg
+
+# Fields (r read / w write incl. constructor keys)
+  @field r Col_TitleBgActive  @ draw:67
+  @field r Cond_Appearing  @ draw:63,75
+  @field r InputTextFlags_EnterReturnsTrue  @ 143
+  @field r Key_Enter  @ 111,135
+  @field r Key_Escape  @ 113,138,146
+  @field r Key_KeypadEnter  @ 136
+  @field r Key_N  @ 113
+  @field r Key_Y  @ 111
+  @field r StyleVar_FramePadding  @ draw:71,72
+  @field r StyleVar_WindowRounding  @ draw:68
+  @field r WindowFlags_AlwaysAutoResize  @ draw:76
+  @field r buf  @ openPrompt:37 131,142
+  @field w buf  @ openPrompt:37 132,149
+  @field r callback  @ openPrompt:34 openConfirm:46 draw:80
+  @field w callback  @ openPrompt:34 openConfirm:46
+  @field r chrome  @ 10
+  @field r ctx  @ 9
+  @field r flags  @ draw:76
+  @field r kind  @ draw:95,97
+  @field w kind  @ openPrompt:31 openConfirm:43
+  @field r onChord  @ openPrompt:36 124
+  @field w onChord  @ openPrompt:36
+  @field r onClose  @ draw:81
+  @field r prompt  @ openPrompt:33 openConfirm:45 110,121
+  @field w prompt  @ openPrompt:33 openConfirm:45
+  @field r resolve  @ openPrompt:35 128
+  @field w resolve  @ openPrompt:35
+  @field r size  @ draw:75,76
+  @field r title  @ label:18 openPrompt:32 openConfirm:44,45
+  @field w title  @ openPrompt:32 openConfirm:44

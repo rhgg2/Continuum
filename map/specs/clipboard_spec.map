@@ -1,4 +1,4 @@
-@spec clipboard_spec  src=tests/specs/clipboard_spec.lua  loc=333  sha=14993a2  cases=8
+@spec clipboard_spec  src=tests/specs/clipboard_spec.lua  loc=333  sha=37ed80d  cases=8
 @exercises trackerView (h.vm), editCursor (h.ec), clipboard (h.clipboard), midiManager (h.fm), trackerManager (h.tm)
 @surface   vm:setGridSize, ec:setPos, ec:extendTo, ec:pos, clipboard:collect, clipboard:trimTop, fm:dump, clipboard:pasteClip, tm:deleteEvent, tm:flush, tm:addEvent, tm:getChannel
 @harness   mk{seed.notes, seed.length, seed.ccs}
@@ -33,3 +33,73 @@
   @use call tm:flush  @ 160,176
   @use call tm:addEvent  @ 174
   @use call tm:getChannel  @ 181
+
+# Fields (r read / w write incl. constructor keys)
+  @field r cc  @ 305,324
+  @field w cc  @ 296
+  @field r ccs  @ 323
+  @field w ccs  @ 295
+  @field r chan  @ 149
+  @field w chan  @ 21,90,92,126,130,174,222,224,226,258,296
+  @field r chanDelta  @ 238,239,240
+  @field w col1  @ 232,263,311
+  @field w col2  @ 232,263,311
+  @field r cols  @ 141,237,238,239,240,241,242,304
+  @field w delay  @ 22,175,223,225,227,259
+  @field r derived  @ 187
+  @field w detune  @ 22,175,223,225,227,259
+  @field r endRow  @ 37,71,74,101
+  @field w endRow  @ 61,62
+  @field r endppq  @ 96,112,153,162
+  @field w endppq  @ 21,89,91,125,129,174,222,224,226,258
+  @field w endppqL  @ 89,91,125,129
+  @field w evType  @ 174,296
+  @field r events  @ 34,35,69,70,71,72,73,74,101,199,267,268
+  @field r events  @ 315,316
+  @field w events  @ 60
+  @field w fx  @ 175
+  @field r grid  @ 141,304
+  @field r key  @ 242
+  @field w kind  @ 172
+  @field w lane  @ 90,92,126,130,175
+  @field w length  @ 86,123
+  @field r midiChan  @ 142,305
+  @field r mode  @ 31,235
+  @field w mode  @ 59
+  @field r mood  @ 267,279,315,327
+  @field w mood  @ 259,297
+  @field w name  @ 17,55,83,120,170,218,254,292
+  @field r notes  @ 96,108,148,156,187,275
+  @field w notes  @ 20,86,123,221,257
+  @field r numRows  @ 33,68
+  @field w numRows  @ 59
+  @field r parked  @ 181
+  @field w part1  @ 232,263,312
+  @field w part2  @ 232,263,312
+  @field w period  @ 172
+  @field r pitch  @ 38,72,149,157,281
+  @field w pitch  @ 21,61,62,63,90,92,126,130,174,222,224,226
+  @field w pitch  @ 258
+  @field r ppq  @ 109,149,182,276,324
+  @field w ppq  @ 21,89,91,125,129,174,222,224,226,258,296
+  @field w ppqL  @ 89,91,125,129
+  @field w ramp  @ 172
+  @field r row  @ 36,70,73
+  @field w row  @ 61,62,63
+  @field w row1  @ 232,263,311
+  @field w row2  @ 232,263,311
+  @field w run  @ 18,56,84,121,171,219,255,293
+  @field w seed  @ 20,86,123,221,257,295
+  @field w sourceIdx  @ 59
+  @field r startType  @ 236
+  @field r tag  @ 268,280,316,328
+  @field w tag  @ 259,297
+  @field r type  @ 32,142,241,305
+  @field w type  @ 59
+  @field r uuid  @ 191,199,206
+  @field w uuid  @ 90,92,126,130
+  @field r val  @ 329
+  @field w val  @ 296
+  @field r vel  @ 39
+  @field w vel  @ 21,61,62,63,90,92,126,130,175,222,224,226
+  @field w vel  @ 258

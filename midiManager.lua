@@ -86,8 +86,6 @@ local function contentKey(evt)
   return et .. '\0' .. evt.chan .. '\0' .. evt.ppq
 end
 
-local shapeLUT = { step = 0, linear = 1, slow = 2, ['fast-start'] = 3, ['fast-end'] = 4, bezier = 5 }
-
 local curveSample do
   local BEZIER = {
     { 0.2794, 0.4636,    0.4636 },

@@ -21,3 +21,16 @@
   @use call harness.mk  @ 8
   @use call rm:installedFx  @ 30,42,43
   @use call rm:showFx  @ 54,68
+
+# Fields (r read / w write incl. constructor keys)
+  @field r _state  @ 56
+  @field r calls  @ 56
+  @field w ds  @ 9
+  @field r fn  @ 57
+  @field r fxIdx  @ 60
+  @field r ident  @ 32,34
+  @field w ident  @ 27,28,41,51
+  @field r name  @ 33
+  @field w name  @ 23,27,28,38,41,47,65
+  @field w run  @ 24,39,48,66
+  @field r showFlag  @ 61

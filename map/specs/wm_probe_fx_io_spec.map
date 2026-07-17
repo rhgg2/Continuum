@@ -23,3 +23,25 @@
   @use call wm:instantiateFxOnScratch  @ 17,31,41,51,61,62,73,87
   @use call wv:addFx  @ 103
   @use call wv:graph  @ 104
+
+# Fields (r read / w write incl. constructor keys)
+  @field w TrackFX_AddByName  @ 72
+  @field r audio  @ 105,106,107,108
+  @field w cm  @ 7,96,97
+  @field w ds  @ 6,95
+  @field r fxId  @ 43,65,74
+  @field w ident  @ 103
+  @field r inNames  @ 32,77,107
+  @field w inPinNames  @ 28,100
+  @field r ins  @ 18,75,105
+  @field w ins  @ 16,27,40,50,60,85,99
+  @field w name  @ 13,23,37,47,57,69,82,92,103
+  @field r nodes  @ 104
+  @field r outNames  @ 33,78,108
+  @field w outPinNames  @ 29,101
+  @field r outs  @ 19,76,106
+  @field w outs  @ 16,27,40,50,60,85,99
+  @field r ports  @ 105,106,107,108
+  @field w rm  @ 7,96
+  @field w run  @ 14,24,38,48,58,70,83,93
+  @field w wm  @ 97

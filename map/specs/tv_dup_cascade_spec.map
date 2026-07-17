@@ -33,3 +33,19 @@
   @use call ec:selClear  @ 70
   @use call ec:extendTo  @ 86,143
   @use call ec:hasSelection  @ 132,134,136,145
+
+# Fields (r read / w write incl. constructor keys)
+  @field r chan  @ 121
+  @field w chan  @ 12,81,103,105
+  @field w delay  @ 13,82,104,106
+  @field w detune  @ 13,82,104,106
+  @field w endppq  @ 12,81,103,105
+  @field w name  @ 29,38,51,66,78,99,129,140
+  @field r notes  @ 22,120
+  @field w notes  @ 12,81,102
+  @field w pitch  @ 12,81,103,105
+  @field r ppq  @ 22,121
+  @field w ppq  @ 12,81,103,105
+  @field w run  @ 30,39,52,67,79,100,130,141
+  @field w seed  @ 12,81,102
+  @field w vel  @ 13,82,103,105

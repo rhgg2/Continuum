@@ -1,4 +1,4 @@
-@spec vm_editing_spec  src=tests/specs/vm_editing_spec.lua  loc=537  sha=1747f65  cases=15
+@spec vm_editing_spec  src=tests/specs/vm_editing_spec.lua  loc=537  sha=6fb5e8f  cases=15
 @exercises trackerView (h.vm), editCursor (h.ec), commandManager (h.cmgr), midiManager (h.fm), trackerManager (h.tm)
 @surface   vm:setGridSize, ec:setPos, cmgr:invoke, fm:dump, tm:getChannel, vm:editEvent
 @harness   mk{seed.notes, seed.ccs}
@@ -30,3 +30,80 @@
   @use call fm:dump  @ 34,162,210,247,282,313,340,376,407,442,499,508,531
   @use call tm:getChannel  @ 59,87,116
   @use call vm:editEvent  @ 160,207,439,477,486
+
+# Fields (r read / w write incl. constructor keys)
+  @field r OPEN  @ 91,120,237,271
+  @field w atom  @ 457
+  @field w c58  @ 467
+  @field r ccs  @ 343,379,410,442,499,508
+  @field w ccs  @ 303,331,363,396,429
+  @field r cells  @ 436,480,489,490
+  @field w chan  @ 22,50,51,78,79,107,144,145,194,195,196,237
+  @field w chan  @ 238,239,270,272,300,301,304,329,332,361,365,394
+  @field w chan  @ 397,427,430,462,521
+  @field w col1  @ 372,403
+  @field w col2  @ 372,403
+  @field w colSwing  @ 458
+  @field r cols  @ 152,203,435,473,479,486,488
+  @field r columns  @ 59,87,116
+  @field w config  @ 105,148,199,466
+  @field w currentOctave  @ 148,199
+  @field w data  @ 26,470,525
+  @field r delay  @ 35,532
+  @field w delay  @ 23,50,51,78,79,107,144,145,194,195,196,237
+  @field w delay  @ 238,239,271,273,300,301,329,361,394,427,463,522
+  @field w detune  @ 23,50,51,78,79,107,144,145,194,195,196,237
+  @field w detune  @ 238,239,271,273,300,301,329,361,394,427,463,522
+  @field r endppq  @ 37,63,65,91,120,169,214,255,287,288,534
+  @field w endppq  @ 22,50,51,78,79,107,144,145,194,195,196,237
+  @field w endppq  @ 238,239,270,272,300,301,329,361,394,427,462,521
+  @field r endppqC  @ 66
+  @field w endppqL  @ 237,271
+  @field r evType  @ 344,380,411,437,443,481,489,490,500,509
+  @field w evType  @ 304,332,365,397,430
+  @field r events  @ 59,87,116
+  @field w factors  @ 457
+  @field w frame  @ 463
+  @field w global  @ 470
+  @field r grid  @ 152,203,435,473,479,486,488
+  @field r lane  @ 155,204
+  @field w lane  @ 144,145
+  @field r midiChan  @ 154
+  @field w name  @ 14,47,75,102,131,179,223,265,295,324,355,388
+  @field w name  @ 422,455,516
+  @field w noteDelay  @ 26,525
+  @field r notes  @ 34,59,87,116,162,210,247,282,313,341,377,408
+  @field r notes  @ 531
+  @field w notes  @ 21,49,77,106,143,193,236,269,299,328,359,392
+  @field w notes  @ 426,461,520
+  @field r overflow  @ 482,491,492
+  @field w part1  @ 372,403
+  @field w part2  @ 372,403
+  @field w period  @ 457
+  @field r pitch  @ 60,88,117,165,166,211
+  @field w pitch  @ 22,50,51,78,79,107,144,145,194,195,196,237
+  @field w pitch  @ 238,239,270,272,300,301,304,329,332,361,365,394
+  @field w pitch  @ 397,427,430,462,521
+  @field r ppq  @ 36,60,88,117,165,166,211,251,252,283,284,314
+  @field r ppq  @ 344,380,411,533
+  @field w ppq  @ 22,50,51,78,79,107,144,145,194,195,196,237
+  @field w ppq  @ 238,239,270,272,300,301,304,329,332,361,365,394
+  @field w ppq  @ 397,427,430,462,521
+  @field w project  @ 467
+  @field w row1  @ 372,403
+  @field w row2  @ 372,403
+  @field w rowPerBeat  @ 105,468
+  @field w rpb  @ 458
+  @field w run  @ 15,48,76,103,132,180,224,266,296,325,356,389
+  @field w run  @ 423,456,517
+  @field w seed  @ 20,49,77,106,142,192,235,268,298,327,358,391
+  @field w seed  @ 425,460,519
+  @field w shift  @ 457
+  @field w swing  @ 458,470
+  @field w swings  @ 467
+  @field w take  @ 105,148,199,468
+  @field r type  @ 153
+  @field r vel  @ 317,446
+  @field w vel  @ 22,50,51,78,79,107,144,145,194,195,196,237
+  @field w vel  @ 238,239,270,272,300,301,304,329,332,361,365,394
+  @field w vel  @ 397,427,430,462,521

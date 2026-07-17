@@ -58,3 +58,46 @@
   @use call vm:activeTemper  @ 500,505,510,514
   @use call cm:set  @ 504,509,513
   @use call vm:setTemper  @ 512
+
+# Fields (r read / w write incl. constructor keys)
+  @field r cc  @ 401,425,447,465,487
+  @field w cc  @ 394,395,418,419,441,442,460,480,481
+  @field w ccs  @ 393,417,440,459,479
+  @field r cents  @ 270,272,273,274
+  @field w chan  @ 394,395,418,419,441,442,460,480,481
+  @field r cols  @ 400,424,446,464,486
+  @field r denom  @ 342
+  @field w denom  @ 26,324,325,362,363
+  @field w detune  @ 241,243,256,258
+  @field w evType  @ 394,395,418,419,441,442,460,480,481
+  @field r fromEvt  @ 428,429
+  @field r ghosts  @ 404,405,406,407,408,427,448,466,489
+  @field r grid  @ 400,424,446,464,486
+  @field w length  @ 22,43
+  @field r name  @ 502,507,514
+  @field w name  @ 54,65,77,90,107,120,134,153,164,179,196,205
+  @field w name  @ 212,220,227,238,249,264,282,291,301,310,319,338
+  @field w name  @ 347,356,389,413,436,455,473,494
+  @field r num  @ 342,369
+  @field w num  @ 26,324,325,362,363
+  @field w numRows  @ 23,44
+  @field r period  @ 271
+  @field w pitch  @ 222,230,241,243,256,258,268
+  @field r ppq  @ 428,430
+  @field w ppq  @ 26,324,325,362,363,394,395,418,419,441,442,460
+  @field w ppq  @ 480,481
+  @field w ppqPerRow  @ 25,46
+  @field r presets  @ 214,229,240,253,266,512
+  @field w rowPerBeat  @ 24,45
+  @field w run  @ 55,66,78,91,108,121,138,154,168,182,197,206
+  @field w run  @ 213,221,228,239,250,265,283,292,302,311,320,339
+  @field w run  @ 348,357,390,414,437,456,476,498
+  @field w seed  @ 392,416,439,458,478
+  @field w shape  @ 394,418,441,460,480
+  @field w temper  @ 27,215,229,240,255,267
+  @field w tension  @ 480
+  @field w timeSigs  @ 26,323,361
+  @field r toEvt  @ 430,431
+  @field r type  @ 401,425,447,465,487
+  @field r val  @ 405,429,431,489
+  @field w val  @ 394,395,418,419,441,442,460,480,481

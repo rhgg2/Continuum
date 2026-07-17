@@ -35,3 +35,29 @@
   @use call ec:setPos  @ 49,51,64,66,77,80,97,110
   @use call cmgr:invoke  @ 50,52,65,67,78,81,94,98,108,111
   @use call gm:setLocalMode  @ 79
+
+# Fields (r read / w write incl. constructor keys)
+  @field r chan  @ 17,24
+  @field w chan  @ 17,31,39,62,91,105
+  @field w col1  @ 35,93,107
+  @field w col2  @ 35,93,107
+  @field r cols  @ 9
+  @field w endppq  @ 31,62,91,105
+  @field r evType  @ 17
+  @field r grid  @ 9
+  @field w groups  @ 33
+  @field r midiChan  @ 10
+  @field w name  @ 46,59,74,88,103
+  @field w notes  @ 33
+  @field w part1  @ 35,93,107
+  @field w part2  @ 35,93,107
+  @field r pitch  @ 17,69,70,112,113
+  @field w pitch  @ 17,31,62,91,105
+  @field r ppq  @ 17,24
+  @field w ppq  @ 17,31,39,62,91,105
+  @field w row1  @ 35,93,107
+  @field w row2  @ 35,93,107
+  @field w run  @ 47,60,75,89,104
+  @field w seed  @ 33
+  @field r type  @ 10
+  @field w vel  @ 31,62,91,105

@@ -23,3 +23,29 @@
 
 # Uses (outbound edges)
   @use call DAG.allocate  @ 43,55,62,63
+
+# Fields (r read / w write incl. constructor keys)
+  @field w audio  @ 20,22
+  @field w from  @ 24
+  @field w fromPort  @ 24
+  @field w fxIdent  @ 19,21
+  @field r fxOrder  @ 23
+  @field w fxOrder  @ 14,25
+  @field w ins  @ 20,22
+  @field w intraConns  @ 15,26
+  @field w kind  @ 19,21
+  @field w mainSend  @ 15,26
+  @field w midi  @ 20,22
+  @field w name  @ 41,51,60
+  @field r nchan  @ 45
+  @field r outWires  @ 24
+  @field w outWires  @ 15,26
+  @field w outs  @ 20,22
+  @field w ports  @ 20,22
+  @field w run  @ 42,52,61
+  @field w to  @ 24
+  @field w toNode  @ 24
+  @field w toPort  @ 24
+  @field w trackId  @ 14
+  @field w trackKind  @ 14,25
+  @field w type  @ 24

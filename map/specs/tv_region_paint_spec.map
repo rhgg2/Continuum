@@ -27,3 +27,26 @@
   @use call gm:eachInstance  @ 35,41,58,63,79,80,84
   @use call gm:stateOf  @ 38,44,60,65
   @use call vm:paintRegionStream  @ 40,62,82,96
+
+# Fields (r read / w write incl. constructor keys)
+  @field w chan  @ 22,23,73,93
+  @field w chanLo  @ 17,32,54,76
+  @field r cols  @ 11
+  @field w dur  @ 17,32,54,76
+  @field w endppq  @ 22,23,73,93
+  @field r grid  @ 11
+  @field w groups  @ 21,72,92
+  @field r instId  @ 35,58,79
+  @field r midiChan  @ 12
+  @field w name  @ 28,50,70,90
+  @field w notes  @ 21,72,92
+  @field w pitch  @ 22,23,73,93
+  @field w ppq  @ 17,22,23,32,54,73,76,93
+  @field r rect  @ 41,63,80,84
+  @field w run  @ 29,51,71,91
+  @field w seed  @ 21,72,92
+  @field r streams  @ 42,64,80,84
+  @field w streams  @ 18,33,55,77
+  @field r type  @ 12
+  @field r uuid  @ 37,38,44,60,65
+  @field w vel  @ 22,23,73,93

@@ -1,4 +1,4 @@
-@spec tm_flush_collision_scan_spec  src=tests/specs/tm_flush_collision_scan_spec.lua  loc=65  sha=35eb990  cases=2
+@spec tm_flush_collision_scan_spec  src=tests/specs/tm_flush_collision_scan_spec.lua  loc=65  sha=2c031b2  cases=2
 @exercises midiManager (h.mm), trackerManager (h.tm)
 @surface   mm:notes, tm:addEvent, tm:flush
 @harness   mk{seed.notes}
@@ -29,3 +29,21 @@
   @use call mm:notes  @ 17
   @use call tm:addEvent  @ 41,56
   @use call tm:flush  @ 43,58
+
+# Fields (r read / w write incl. constructor keys)
+  @field w chan  @ 38,42,54,57
+  @field w delay  @ 39
+  @field w detune  @ 39
+  @field w endppq  @ 37,41,53,56
+  @field w endppqL  @ 37,53
+  @field w evType  @ 41,56
+  @field w lane  @ 38,42,54,57
+  @field w name  @ 33,50
+  @field w notes  @ 24
+  @field w pitch  @ 38,42,54,57
+  @field r ppq  @ 17
+  @field w ppq  @ 37,41,53,56
+  @field w ppqL  @ 37,53
+  @field w run  @ 34,51
+  @field w seed  @ 24
+  @field w vel  @ 38,42,54,57

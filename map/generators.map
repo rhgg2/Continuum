@@ -1,4 +1,4 @@
-@module generators  src=generators.lua  loc=451  sha=a77fea4  mode=namespace  self=generators
+@module generators  src=generators.lua  loc=451  sha=14993a2  mode=namespace  self=generators
 
 # Invariants & contracts
   @invariant  pure module, no state; a stage is fn(stream, host, params, ctx) -> { notes, delta }  @ 6
@@ -86,3 +86,114 @@
   @use call    util.clamp  @ lfo:258 velPattern:293
   @use call    util.round  @ lfo:258 velPattern:293
   @use require util  @ 19
+
+# Fields (r read / w write incl. constructor keys)
+  @field w arp  @ 331
+  @field w autopan  @ 366
+  @field w base  @ 320,328,351,352,371,388,389
+  @field w cc  @ parkWindows:431
+  @field r ccDefaultRest  @ 397
+  @field w ccDefaultRest  @ 396
+  @field r centre  @ lfo:257
+  @field w centre  @ 383
+  @field r cents  @ slide:193
+  @field w chainDestType  @ chainDestType:417
+  @field r chan  @ parkWindows:431
+  @field w chan  @ parkWindows:431
+  @field w coarse  @ 320,328,351,352,371,388,389
+  @field w defaults  @ 317,325,333,341,348,357,368,376,383
+  @field w delta  @ retrig:34,48 trill:56,72 arp:121 ostinato:129,146 vibrato:171 slide:190,197,212 autopan:230
+  @field w delta  @ lfo:253,275 velPattern:296
+  @field r depth  @ vibrato:155 autopan:220
+  @field w depth  @ 348,368
+  @field r dest  @ parksNotes:410 chainDestType:420 parkWindows:443,444
+  @field w dest  @ 316,324,332,340,347,356,367,375,382
+  @field r detune  @ retrig:44 trill:58,68 playingAt:82 arp:115 ostinato:140 interval:177 velPattern:285,294
+  @field w detune  @ retrig:44 trill:68 arp:115 ostinato:140 velPattern:294
+  @field r dir  @ arp:105
+  @field w dir  @ 333
+  @field w display  @ 384
+  @field w domain  @ 384
+  @field r endppq  @ playingAt:79 ostinato:137 velPattern:292 parkWindows:432
+  @field w endppq  @ retrig:41 trill:65 arp:114 ostinato:139 velPattern:292 parkWindows:432
+  @field w evType  @ parkWindows:431
+  @field w expand  @ 316,324,332,340,347,356,367,375,382
+  @field w field  @ 319,320,327,328,335,336,343,350,351,352,359,360
+  @field w field  @ 362,370,371,378,386,387,388,389
+  @field w fields  @ 318,326,334,342,349,358,369,377,385
+  @field r fx  @ parksNotes:408 parkWindows:438
+  @field r kind  @ parksNotes:409 chainDestType:419 parkWindows:439
+  @field w kind  @ 341,343,384,386
+  @field r kinds  @ parksNotes:409 chainDestType:419 parkWindows:439
+  @field w kinds  @ 314
+  @field w l  @ 305,306,307,308,309,310,311
+  @field w l  @ 312
+  @field w label  @ 316,319,320,324,327,328,332,335,336,340,343,347
+  @field w label  @ 350,351,352,356,359,360,362,367,370,371,375,378
+  @field w label  @ 382,386,387,388,389
+  @field r lengthPpq  @ ostinato:128 lfo:251
+  @field w lfo  @ 381
+  @field w max  @ 320,328,351,352,371,388,389
+  @field w min  @ 320,328,351,352,371,388,389
+  @field w modalOrder  @ 401
+  @field r mode  @ chainDestType:420
+  @field w mode  @ 316,324,332,340,347,356,367,375,382
+  @field r nextSameLaneNote  @ slide:189
+  @field r noteHost  @ parkWindows:437
+  @field r notes  @ retrig:33 trill:55 arp:110 ostinato:138 slide:185 velPattern:282
+  @field w notes  @ retrig:34,48 trill:56,72 arp:121 ostinato:129,146 vibrato:171 slide:190,197,212 autopan:230
+  @field w notes  @ lfo:253,275 velPattern:296
+  @field r onset  @ vibrato:156
+  @field w onset  @ 348
+  @field w options  @ 319,327,335,336,350,359,360,370,378,387
+  @field w ostinato  @ 339
+  @field r over  @ slide:202
+  @field w over  @ 357
+  @field w parkWindows  @ parkWindows:428
+  @field w parksNotes  @ parksNotes:407
+  @field r pattern  @ ostinato:127 lfo:250 velPattern:287
+  @field w pattern  @ 341,376,384
+  @field r pbRangeCents  @ slide:195
+  @field r period  @ retrig:32 trill:54 arp:104 vibrato:154 autopan:219 lfo:255
+  @field w period  @ 317,325,333,348,368,383
+  @field r pitch  @ retrig:42 trill:58,66 playingAt:82 arp:115 ostinato:140 interval:177 velPattern:285,292
+  @field w pitch  @ retrig:42 trill:66 arp:115 ostinato:140 velPattern:292
+  @field r points  @ lfo:252
+  @field w points  @ 384
+  @field r ppq  @ playingAt:79 ostinato:135 curveAt:235,238,239,240 lfo:266,267 velPattern:284
+  @field r ppq  @ velPattern:284,290,292
+  @field w ppq  @ retrig:40 trill:64 arp:114 ostinato:139 vibrato:160,166,170 slide:207 autopan:221,225,229 lfo:262
+  @field w ppq  @ lfo:268,274 velPattern:292
+  @field r ramp  @ retrig:35
+  @field w ramp  @ 317
+  @field r resolution  @ retrig:32 trill:54 arp:104 vibrato:154,156 slide:201,202 autopan:219 lfo:255
+  @field w retrig  @ 315
+  @field r scale  @ lfo:257
+  @field w scale  @ 383
+  @field r shape  @ lfo:262,268
+  @field w shape  @ vibrato:160,166,170 slide:207 autopan:221,225,229 lfo:262,268,274
+  @field w slide  @ 355
+  @field r specs  @ ostinato:134
+  @field w specs  @ 341
+  @field r startppq  @ parkWindows:432
+  @field w startppq  @ parkWindows:432
+  @field r step  @ trill:58
+  @field w step  @ 325
+  @field r target  @ slide:187 363
+  @field w target  @ 357
+  @field r tension  @ lfo:268
+  @field w tension  @ lfo:268
+  @field w trill  @ 323
+  @field w v  @ 305,306,307,308,309,310,311
+  @field w v  @ 312
+  @field r val  @ curveAt:235,240,243 lfo:268
+  @field w val  @ vibrato:160,166,170 slide:207 autopan:221,225,229 lfo:262,268,274
+  @field r vel  @ retrig:43 trill:67 arp:115 ostinato:140 velPattern:293
+  @field w vel  @ retrig:43 trill:67 arp:115 ostinato:140 velPattern:293
+  @field w velPattern  @ 374
+  @field w vibrato  @ 346
+  @field w when  @ 363
+  @field w widget  @ 319,320,327,328,335,336,343,350,351,352,359,360
+  @field w widget  @ 362,370,371,378,386,387,388,389
+  @field r window  @ retrig:31 trill:53 arp:103 ostinato:130 vibrato:153 slide:184
+  @field r window  @ autopan:218 lfo:254

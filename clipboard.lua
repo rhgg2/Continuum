@@ -39,7 +39,6 @@ local tm           = deps.tm
 local cm           = deps.cm
 local currentRpb   = deps.currentRpb
 local getCtx       = deps.getCtx
-local getLength    = deps.getLength
 local edit         = deps.edit       -- leaf-edit facade: routes add/delete/assign to gm or tm by cell kind
 local aliases      = deps.aliases    -- (cells) -> bool: refuse a paste whose footprint aliases one group
 local fx           = deps.fx         -- { gather(r1,r2,c1,c2,anchorChan), paste(list) }: fx regions ride the clip
@@ -234,7 +233,6 @@ local function pasteSingle(clip)
   local endppq = ctx:rowToPPQ(r + clip.numRows, chan)
   local part = ec:cursorPart()
   local logPerRow = ctx:ppqPerRow()
-  local capRow = r + clip.numRows  -- logical row of endppq
   if refusePaste(chan, dstCol.type, dstCol.lane, dstCol.cc, r, clip.numRows) then return end
 
   local events = {}

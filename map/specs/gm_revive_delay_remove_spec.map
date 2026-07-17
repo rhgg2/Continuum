@@ -22,3 +22,29 @@
   @use call tm:flush  @ 34,40,47
   @use call gm:setLocalMode  @ 39,41
   @use call gm:deleteEvent  @ 40
+
+# Fields (r read / w write incl. constructor keys)
+  @field w chan  @ 12,33,45
+  @field w chanLo  @ 17
+  @field w dur  @ 17
+  @field w endppq  @ 11,46
+  @field w endppqL  @ 11
+  @field w evType  @ 45
+  @field w groups  @ 9
+  @field w lane  @ 12,45
+  @field w length  @ 10
+  @field w name  @ 28
+  @field r notes  @ 21
+  @field w notes  @ 10
+  @field r pitch  @ 51
+  @field w pitch  @ 12,46
+  @field r ppq  @ 22
+  @field w ppq  @ 11,17,33,45
+  @field w ppqL  @ 11
+  @field w resolution  @ 10
+  @field w run  @ 29
+  @field w seed  @ 10
+  @field w streams  @ 18
+  @field r uuid  @ 40
+  @field w uuid  @ 12
+  @field w vel  @ 12,46

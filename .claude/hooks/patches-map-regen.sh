@@ -33,4 +33,12 @@ for lua in tests/specs/*.lua; do
   fi
 done
 
+# Harness surface (tests/*.lua, non-spec) maps alongside the modules.
+for lua in tests/*.lua; do
+  map="map/$(basename "$lua" .lua).map"
+  if [ "$lua" -nt "$map" ]; then
+    python3 tools/map_extract.py "$lua" map/ 2>/dev/null
+  fi
+done
+
 exit 0

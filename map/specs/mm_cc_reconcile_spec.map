@@ -1,4 +1,4 @@
-@spec mm_cc_reconcile_spec  src=tests/specs/mm_cc_reconcile_spec.lua  loc=283  sha=b5afaeb  cases=8
+@spec mm_cc_reconcile_spec  src=tests/specs/mm_cc_reconcile_spec.lua  loc=283  sha=37ed80d  cases=8
 @exercises midiManager (h.mm)
 @surface   mm:ccs, mm:subscribe, mm:load, mm:modify, mm:assign
 @harness   fakeReaper:bindTake, reaper:seedMidi, reaper.MIDI_CountEvts, reaper:dumpMidi
@@ -45,3 +45,82 @@
   @use call mm:load  @ 92,279
   @use call mm:modify  @ 257
   @use call mm:assign  @ 257
+
+# Fields (r read / w write incl. constructor keys)
+  @field w at  @ 12
+  @field r candidateppqs  @ 225
+  @field r cc  @ 44,65
+  @field w cc  @ 12,65,102,103,119,120,143,144,145,148,149,150
+  @field w cc  @ 175,197,198,215,216,218,241,243,245,271,272
+  @field r ccs  @ 58
+  @field w ccs  @ 71,102,119,142,174,197,214,241,271
+  @field r ccsReconciled  @ 107,124,125,126,133,154,155,165,179,180,181,202
+  @field r ccsReconciled  @ 203,204,222,223
+  @field w ccsReconciled  @ 91
+  @field r chan  @ 55,60,64
+  @field w chan  @ 55,60,64,102,103,119,120,143,144,145,148,149
+  @field w chan  @ 150,175,197,198,215,216,218,241,243,245,271,272
+  @field w chanmsg  @ 60
+  @field w drop  @ 219
+  @field r endppq  @ 55
+  @field w endppq  @ 55
+  @field r evType  @ 36,39,41,46,64
+  @field w evType  @ 64,102,103,119,120,143,144,145,148,149,150,175
+  @field w evType  @ 197,198,215,216,218,241,243,245,271,272
+  @field r events  @ 89,90,91
+  @field w eventtype  @ 66,69
+  @field r foo  @ 110
+  @field w foo  @ 104,273
+  @field w gone  @ 176,244
+  @field r keep  @ 205
+  @field w keep  @ 199
+  @field r kept  @ 252
+  @field w kept  @ 246
+  @field r kind  @ 127,156,180,203,224
+  @field r label  @ 129
+  @field w label  @ 121
+  @field r lastppq  @ 181
+  @field r metadata  @ 76
+  @field w metadata  @ 104,121,148,149,150,176,199,219,244,246,273
+  @field r msg  @ 69,260
+  @field w msg  @ 66,69
+  @field w msg2  @ 61
+  @field w msg3  @ 61
+  @field r muted  @ 56,61
+  @field w muted  @ 56,61
+  @field w name  @ 98,115,138,170,193,210,233,267
+  @field r newVal  @ 128
+  @field r notations  @ 68
+  @field r notes  @ 54
+  @field w notes  @ 71
+  @field w notesDeduped  @ 89
+  @field r offset  @ 157
+  @field r oldVal  @ 128
+  @field w pa  @ 12
+  @field w pb  @ 12
+  @field w pc  @ 12
+  @field r pitch  @ 40,56,65
+  @field w pitch  @ 56,65
+  @field r plain  @ 226
+  @field r ppq  @ 55,60,66,69,204
+  @field w ppq  @ 55,60,66,69,102,103,119,120,143,144,145,148
+  @field w ppq  @ 149,150,175,197,198,215,216,218,241,243,245,271
+  @field w ppq  @ 272
+  @field w reaper  @ 25
+  @field w reload  @ 85,87
+  @field w run  @ 99,116,139,171,194,211,234,268
+  @field r sidecars  @ 63,75
+  @field w sidecars  @ 103,120,147,175,198,218,242,272
+  @field r tag  @ 160
+  @field w tag  @ 148,149,150
+  @field w takeSwapped  @ 88
+  @field r texts  @ 259,260
+  @field w texts  @ 71
+  @field r uuid  @ 64,76,109,128,251,257,261
+  @field w uuid  @ 64,103,120,148,149,150,175,198,218,243,245,272
+  @field w uuidsReassigned  @ 90
+  @field r val  @ 37,42,44,65,262
+  @field w val  @ 65,102,103,119,120,143,144,145,148,149,150,175
+  @field w val  @ 197,198,215,216,218,241,243,245,257,271,272
+  @field r vel  @ 40,56
+  @field w vel  @ 56

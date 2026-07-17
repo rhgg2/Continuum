@@ -22,3 +22,17 @@
   @use call wv:addFx  @ 30,38,39,50,51,62,63,64,78,79,80,96,97,98
   @use call wv:ancestorsOf  @ 31,42,54,66,84
   @use call wv:descendantsOf  @ 102
+
+# Fields (r read / w write incl. constructor keys)
+  @field w cm  @ 13,14
+  @field w ds  @ 12
+  @field w from  @ 40,41,52,53,65,81,82,83,99,100,101
+  @field w ident  @ 8
+  @field r master  @ 87
+  @field w master  @ 43,55,103
+  @field w name  @ 8,27,35,47,59,75,93
+  @field w rm  @ 13
+  @field w run  @ 28,36,48,60,76,94
+  @field w to  @ 40,41,52,53,65,81,82,83,99,100,101
+  @field w type  @ 40,41,52,53,65,81,82,83,99,100,101
+  @field w wm  @ 14

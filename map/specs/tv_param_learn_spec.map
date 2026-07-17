@@ -32,3 +32,36 @@
   @use call ec:setPos  @ 106
   @use call vm:automateParam  @ 110
   @use call vm:paramBinding  @ 111
+
+# Fields (r read / w write incl. constructor keys)
+  @field r _state  @ 17,18,19,20,29,66,71,108
+  @field r calls  @ 29
+  @field w chan  @ 8
+  @field w delay  @ 9
+  @field w detune  @ 9
+  @field w endppq  @ 8
+  @field r fn  @ 30
+  @field w fxGuid  @ 11
+  @field w fxIdx  @ 66,71,108
+  @field w ident  @ 21
+  @field r label  @ 76
+  @field w lane  @ 9
+  @field w lastTouched  @ 66,71,108
+  @field r n  @ 113
+  @field r name  @ 80
+  @field w name  @ 11,38,51,63,88,102
+  @field w notes  @ 14
+  @field r param  @ 75
+  @field w param  @ 66,71,108
+  @field w pitch  @ 8
+  @field w ppq  @ 8
+  @field w projectItems  @ 20
+  @field w projectTracks  @ 17
+  @field w run  @ 39,52,64,89,103
+  @field w seed  @ 14
+  @field r showFlag  @ 30
+  @field w takes  @ 20
+  @field w track  @ 66,71,108
+  @field w trackGuid  @ 11
+  @field r trackGuids  @ 18,19
+  @field w vel  @ 8

@@ -48,3 +48,38 @@
   @use call    util.clone  @ resolve:20 project:43
   @use call    util.deepEq  @ reconcile:78
   @use require util  @ 14
+
+# Fields (r read / w write incl. constructor keys)
+  @field r adds  @ project:31
+  @field r assigns  @ project:30
+  @field w base  @ deriveAssign:92
+  @field r chanDelta  @ laneId:110
+  @field w conflicted  @ 123
+  @field r deletes  @ project:32
+  @field w deriveAssign  @ deriveAssign:91
+  @field r dur  @ inRect:115
+  @field r evType  @ streamId:97
+  @field r events  @ project:36
+  @field r groupEvt  @ reconcile:78
+  @field w groupEvt  @ reconcile:77,79
+  @field w inRect  @ inRect:114
+  @field r key  @ streamId:97
+  @field w laneId  @ laneId:109
+  @field w op  @ reconcile:77,79,84
+  @field w outlineKey  @ outlineKey:130
+  @field w overridden  @ 122
+  @field r ppq  @ project:58
+  @field w project  @ project:28
+  @field w reconcile  @ reconcile:72
+  @field w regionKey  @ regionKey:127
+  @field r resolve  @ 25
+  @field w resolve  @ resolve:19
+  @field w shiftStream  @ shiftStream:101
+  @field w streamId  @ streamId:96
+  @field r streams  @ inRect:116
+  @field w tintKey  @ tintKey:124
+  @field r uuid  @ reconcile:79,84
+  @field w uuid  @ reconcile:79,84
+  @field r value  @ resolve:22
+  @field w value  @ deriveAssign:92
+  @field w vuid  @ reconcile:77,79,84

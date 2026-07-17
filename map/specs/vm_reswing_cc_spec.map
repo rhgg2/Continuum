@@ -33,3 +33,50 @@
   @use call vm:editEvent  @ 144
   @use call ds:assign  @ 215
   @use call tm:getChannel  @ 244
+
+# Fields (r read / w write incl. constructor keys)
+  @field w atom  @ 7,8
+  @field r cc  @ 132,148
+  @field w cc  @ 28,54,78,106,120,234
+  @field r ccs  @ 11,147,245
+  @field w ccs  @ 26,53,76,120,163,233
+  @field r chan  @ 12
+  @field w chan  @ 28,54,78,106,120,165,203,206,234
+  @field r cols  @ 131,140
+  @field r columns  @ 245
+  @field w config  @ 32,57,82,100,122,169,210,238
+  @field w data  @ 36,61,86,104,126,173,242
+  @field r delay  @ 223
+  @field w delay  @ 203,206
+  @field w detune  @ 203,206
+  @field w endppq  @ 202,205
+  @field w endppqL  @ 202,205
+  @field r evType  @ 12,148
+  @field w evType  @ 28,54,78,106,120,165,234
+  @field r events  @ 246,247
+  @field w factors  @ 7,8
+  @field w global  @ 36,61,86,104,126,173,215,242
+  @field r grid  @ 131,140
+  @field w name  @ 18,48,72,97,115,156,194,229
+  @field r notes  @ 219
+  @field w notes  @ 201
+  @field w period  @ 7,8
+  @field r pitch  @ 220
+  @field w pitch  @ 203,206
+  @field r ppq  @ 43,67,148,181,224
+  @field w ppq  @ 27,54,77,106,120,164,202,205,234
+  @field r ppqL  @ 182
+  @field w ppqL  @ 27,77,164,202,205
+  @field w project  @ 33,58,83,101,123,170,211,239
+  @field w rowPerBeat  @ 34,59,84,102,124,171,212,240
+  @field r rpb  @ 92,110,151,183,247
+  @field w rpb  @ 29,79,166,204,207,235
+  @field w run  @ 19,49,73,98,116,157,195,230
+  @field w seed  @ 25,52,75,118,162,200,232
+  @field w shift  @ 7,8
+  @field w swing  @ 36,61,86,104,126,173,242
+  @field w swings  @ 33,58,83,101,123,170,211,239
+  @field w take  @ 34,59,84,102,124,171,212,240
+  @field r type  @ 132
+  @field w val  @ 28,54,78,106,120,165,234
+  @field w vel  @ 203,206

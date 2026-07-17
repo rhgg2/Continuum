@@ -38,3 +38,28 @@
   @use call cmgr:doBefore  @ 59
   @use call cmgr:push  @ 60
   @use call cmgr:invoke  @ 78,81,82,90,92,94,103,105,107
+
+# Fields (r read / w write incl. constructor keys)
+  @field w chan  @ 26,52
+  @field w chanLo  @ 28,42
+  @field w cm  @ 68
+  @field w cursorDown  @ 34,47
+  @field w deleteSel  @ 49
+  @field w ds  @ 67
+  @field w dur  @ 28,42
+  @field w endppq  @ 27
+  @field w evType  @ 26
+  @field w get  @ 21
+  @field w lane  @ 26
+  @field w mirrorDuplicate  @ 34,50
+  @field w name  @ 75,87,100
+  @field w pitch  @ 27
+  @field w ppq  @ 27,28,42,52
+  @field r registered  @ 56
+  @field w run  @ 76,88,101
+  @field w selectDown  @ 48
+  @field w set  @ 22
+  @field w streams  @ 29,43
+  @field w subscribe  @ 23
+  @field w tm  @ 67
+  @field w vel  @ 27

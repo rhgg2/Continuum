@@ -28,3 +28,25 @@
   @use call ec:setPos  @ 27
   @use call vm:editEvent  @ 28
   @use call fm:dump  @ 32
+
+# Fields (r read / w write incl. constructor keys)
+  @field r cc  @ 10
+  @field w cc  @ 16
+  @field r ccs  @ 32
+  @field w ccs  @ 16,17
+  @field r cells  @ 28
+  @field w chan  @ 16
+  @field r cols  @ 9
+  @field w columnDisplay  @ 17
+  @field w data  @ 17
+  @field w evType  @ 16
+  @field r grid  @ 9
+  @field w name  @ 38,47,56,65
+  @field w ppq  @ 16
+  @field w run  @ 39,48,57,66
+  @field w seed  @ 16
+  @field w shape  @ 16
+  @field r stopPos  @ 42
+  @field r type  @ 10
+  @field r val  @ 33
+  @field w val  @ 16

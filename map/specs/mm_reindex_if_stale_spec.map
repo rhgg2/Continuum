@@ -1,4 +1,4 @@
-@spec mm_reindex_if_stale_spec  src=tests/specs/mm_reindex_if_stale_spec.lua  loc=117  sha=70ef819  cases=5
+@spec mm_reindex_if_stale_spec  src=tests/specs/mm_reindex_if_stale_spec.lua  loc=117  sha=37ed80d  cases=5
 @exercises midiManager (h.mm)
 @surface   mm:events, mm:notesRaw, mm:reindexIfStale, mm:notes, mm:modify, mm:delete, mm:assign
 @harness   bareMM
@@ -28,3 +28,19 @@
   @use call mm:modify  @ 58,75,79,94,106,112
   @use call mm:delete  @ 58,112
   @use call mm:assign  @ 75,79,94
+
+# Fields (r read / w write incl. constructor keys)
+  @field w cc  @ 39
+  @field w ccs  @ 38
+  @field w chan  @ 20,21,35,36,39,52,53,54,107
+  @field w endppq  @ 20,21,35,36,52,53,54,94,107
+  @field w evType  @ 39,107
+  @field w name  @ 31,49,67,90,103
+  @field w notes  @ 19,34,51
+  @field w pitch  @ 20,21,35,36,52,53,54,75,107
+  @field r ppq  @ 8,26,57
+  @field w ppq  @ 20,21,35,36,39,52,53,54,94,107
+  @field w run  @ 32,50,68,91,104
+  @field r uuid  @ 26,57
+  @field w val  @ 39
+  @field w vel  @ 20,21,35,36,52,53,54,75,79,107

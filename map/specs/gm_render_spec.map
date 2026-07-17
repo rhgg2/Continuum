@@ -27,3 +27,25 @@
   @use call gm:newInstance  @ 46
   @use call gm:eachInstance  @ 47,62
   @use call gm:markGroup  @ 61
+
+# Fields (r read / w write incl. constructor keys)
+  @field r active  @ 53,64
+  @field r anchor  @ 51,52
+  @field w chan  @ 16,46
+  @field w chanLo  @ 20
+  @field r colour  @ 54
+  @field w ds  @ 12
+  @field w dur  @ 20
+  @field w endppq  @ 17
+  @field w evType  @ 16
+  @field r instId  @ 49
+  @field w lane  @ 16
+  @field w name  @ 25,33,42,58
+  @field w pitch  @ 17
+  @field r ppq  @ 51,52
+  @field w ppq  @ 16,20,46
+  @field r rect  @ 50
+  @field w run  @ 26,34,43,59
+  @field w streams  @ 21
+  @field w tm  @ 12
+  @field w vel  @ 17

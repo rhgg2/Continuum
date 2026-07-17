@@ -28,3 +28,11 @@
   @use call intervals.merge  @ 36,38,50,62,81
   @use call intervals.intersects  @ 91,92,93
   @use call intervals.absorbSeeds  @ 104,114,124
+
+# Fields (r read / w write incl. constructor keys)
+  @field r hiPpq  @ 18,27,52,54,72,106
+  @field r hiUuid  @ 19,53,72
+  @field r loPpq  @ 18,27,52,54,63,64,125
+  @field r loUuid  @ 19,27,53
+  @field w name  @ 15,24,34,43,59,69,77,88,100,111,121
+  @field w run  @ 16,25,35,44,60,70,78,89,101,112,122

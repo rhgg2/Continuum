@@ -15,3 +15,25 @@
 # Uses (outbound edges)
   @use call vm:scaleSelection  @ 19,40
   @use call fm:dump  @ 21,42
+
+# Fields (r read / w write incl. constructor keys)
+  @field w chan  @ 14,15,35,36
+  @field w col1  @ 17,38
+  @field w col2  @ 17,38
+  @field w delay  @ 14,15,35,36
+  @field w detune  @ 14,15,35,36
+  @field r endppq  @ 26,45
+  @field w endppq  @ 14,15,35,36
+  @field w name  @ 9,31
+  @field r notes  @ 21,42
+  @field w notes  @ 13,34
+  @field w part1  @ 18,39
+  @field w part2  @ 18,39
+  @field w pitch  @ 14,15,35,36
+  @field r ppq  @ 22,24,25,43,44
+  @field w ppq  @ 14,15,35,36
+  @field w row1  @ 17,38
+  @field w row2  @ 17,38
+  @field w run  @ 10,32
+  @field w seed  @ 13,34
+  @field w vel  @ 14,15,35,36

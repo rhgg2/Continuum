@@ -16,3 +16,8 @@
   @use call scratch.peek  @ 12
   @use call scratch.id  @ 21,22,34
   @use call scratch.track  @ 33
+
+# Fields (r read / w write incl. constructor keys)
+  @field w name  @ 8,17,30
+  @field r reaper  @ 10,19,32
+  @field w run  @ 9,18,31

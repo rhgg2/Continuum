@@ -1,4 +1,4 @@
-@spec mm_deletecc_sidecar_spec  src=tests/specs/mm_deletecc_sidecar_spec.lua  loc=124  sha=999f37e  cases=1
+@spec mm_deletecc_sidecar_spec  src=tests/specs/mm_deletecc_sidecar_spec.lua  loc=124  sha=37ed80d  cases=1
 @exercises midiManager (h.mm)
 @surface   mm:load, mm:ccs, mm:modify, mm:assign, mm:delete
 @harness   fakeReaper:bindTake, reaper:seedMidi
@@ -29,3 +29,40 @@
   @use call mm:modify  @ 95
   @use call mm:assign  @ 96,97
   @use call mm:delete  @ 98,99
+
+# Fields (r read / w write incl. constructor keys)
+  @field w at  @ 16
+  @field r cc  @ 23,45
+  @field w cc  @ 16,45,74,75,76,77,78,81,82,83
+  @field r ccs  @ 36
+  @field w ccs  @ 48,73
+  @field r chan  @ 38,44
+  @field w chan  @ 38,44,74,75,76,77,78,81,82,83
+  @field w chanmsg  @ 38
+  @field r evType  @ 19,23,44
+  @field w evType  @ 44,74,75,76,77,78,81,82,83
+  @field w eventtype  @ 43
+  @field w msg  @ 44
+  @field w msg2  @ 39
+  @field w msg3  @ 39
+  @field w name  @ 53
+  @field w pa  @ 16
+  @field r pb  @ 21
+  @field w pb  @ 16
+  @field w pc  @ 16
+  @field r pitch  @ 23,45
+  @field w pitch  @ 45
+  @field r ppq  @ 38,43,92,109,117,118
+  @field w ppq  @ 38,43,74,75,76,77,78,81,82,83
+  @field w reaper  @ 28
+  @field w run  @ 54
+  @field r sidecars  @ 41
+  @field w sidecars  @ 80
+  @field r tag  @ 112
+  @field w tag  @ 96,97
+  @field w texts  @ 48
+  @field r uuid  @ 44,92,120,121
+  @field w uuid  @ 44,81,82,83
+  @field r val  @ 20,23,45
+  @field w val  @ 45,74,75,76,77,78,81,82,83
+  @field r vel  @ 23

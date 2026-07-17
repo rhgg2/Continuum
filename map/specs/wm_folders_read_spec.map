@@ -36,3 +36,63 @@
   @use call wm:load  @ 11
   @use call wm.readGraph  @ 61,83,105,129,151,174,194,220,265,297
   @use call DAG.validate  @ 247
+
+# Fields (r read / w write incl. constructor keys)
+  @field r audio  @ 69
+  @field w audio  @ 236,238,240
+  @field w c  @ 239
+  @field w cm  @ 10
+  @field w ds  @ 9
+  @field w dstChan  @ 166,211
+  @field r edges  @ 17
+  @field w edges  @ 242
+  @field r from  @ 20
+  @field w from  @ 243,244
+  @field r fromPort  @ 20
+  @field w fromPort  @ 243,244
+  @field w fx  @ 35,39,78,100,122,144,168,211,213,257,261,282
+  @field w fx  @ 286
+  @field r gain  @ 18
+  @field w hasMidiTake  @ 103,121,280
+  @field w id  @ 43,47,100,122,144,257,261,282,286,289
+  @field w ident  @ 43,100,122,144,257,261,282,286,289
+  @field w inBus  @ 44,101,123,145,258,262,283,287,290
+  @field w inDisabled  @ 44,101,123,145,258,262,283,287,290
+  @field r ins  @ 69,112
+  @field w ins  @ 43,45,100,102,122,124,144,146,236,238
+  @field w ins  @ 240,257,259,261,263,282,284,286,288,289,291
+  @field r kind  @ 28
+  @field w kind  @ 166,211,236,237,239
+  @field w mainSend  @ 35,39,167,210,212
+  @field w master  @ 63,85,195,236
+  @field r midi  @ 112
+  @field w midi  @ 44,101,123,145,236,238,240,258,262,283,287,290
+  @field w name  @ 53,75,96,118,140,162,186,207,232,253,277
+  @field w nchan  @ 34,39,167,210,212
+  @field r nodes  @ 28,69,112
+  @field w nodes  @ 235
+  @field w on  @ 35,39,167,210,212
+  @field r ops  @ 18
+  @field w outBus  @ 44,101,123,145,258,262,283,287,290
+  @field w outDisabled  @ 44,101,123,145,258,262,283,287,290
+  @field w outs  @ 43,45,100,102,122,124,144,146,236,238
+  @field w outs  @ 240,257,259,261,263,282,284,286,288,289,291
+  @field w p  @ 237
+  @field w parent  @ 34,210
+  @field w pinMaps  @ 45,102,124,146,259,263,284,288,291
+  @field r ports  @ 69,112
+  @field w ports  @ 236,238,240
+  @field w pos  @ 166,211
+  @field w rm  @ 10
+  @field w run  @ 54,76,97,119,141,163,187,208,233,254,278
+  @field w sends  @ 35,39,166,167,211,212
+  @field w srcChan  @ 166,211
+  @field w tgtOffset  @ 35,39,167,212
+  @field r to  @ 20
+  @field w to  @ 166,211,243,244
+  @field r toPort  @ 20
+  @field w toPort  @ 243
+  @field w trackId  @ 237,239
+  @field w trackKind  @ 34,39,167,210,212
+  @field r type  @ 20
+  @field w type  @ 243,244

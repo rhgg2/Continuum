@@ -28,3 +28,30 @@
   @use call tm:flush  @ 44,50,54,66,71,87,89,94
   @use call gm:deleteEvent  @ 50,54,71,94
   @use call gm:addEvent  @ 87
+
+# Fields (r read / w write incl. constructor keys)
+  @field r OPEN  @ 86,104
+  @field r add  @ 27,48,69,92,102
+  @field r assign  @ 48,69,92
+  @field w chan  @ 19,43,65,88,100
+  @field w chanLo  @ 22
+  @field r del  @ 32
+  @field w del  @ 48,52,69,92
+  @field w ds  @ 12
+  @field w dur  @ 22
+  @field r endppq  @ 104
+  @field w endppq  @ 20,86
+  @field w evType  @ 19
+  @field w lane  @ 19
+  @field w length  @ 11
+  @field w name  @ 38,60,79
+  @field r pitch  @ 32,102
+  @field w pitch  @ 20
+  @field r ppq  @ 27
+  @field w ppq  @ 19,22,43,65,88,100
+  @field w run  @ 39,61,80
+  @field w streams  @ 23
+  @field w tm  @ 12
+  @field r uuid  @ 50,54,71,94
+  @field w uuid  @ 20
+  @field w vel  @ 20

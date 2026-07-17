@@ -1,4 +1,4 @@
-@module eventMeta  src=eventMeta.lua  loc=126  sha=3a5925b  mode=chunk  self=eventMeta
+@module eventMeta  src=eventMeta.lua  loc=126  sha=54e469d  mode=chunk  self=eventMeta
 @deps ps
 
 # Invariants & contracts
@@ -52,3 +52,9 @@
   @use require perf  @ 9
   @use require util  @ 8
   @use sub     ps:projectRewound  @ 34
+
+# Fields (r read / w write incl. constructor keys)
+  @field r REMOVE  @ writeKb:24 flush:78 saveAll:99 dropPool:121,123
+  @field w guids  @ 40
+  @field w prefixes  @ 31
+  @field r ps  @ 11

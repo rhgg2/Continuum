@@ -28,3 +28,25 @@
   @use call harness.mk  @ 8
   @use call rm:tracks  @ 22
   @use call rm:assignTrack  @ 80,98,113,127,145,164
+
+# Fields (r read / w write incl. constructor keys)
+  @field w ds  @ 9
+  @field r dstChan  @ 50,70,132
+  @field w dstChan  @ 45,67,81,114,128
+  @field r gain  @ 85,117
+  @field w gain  @ 37,44,80,111,114
+  @field r id  @ 22
+  @field r kind  @ 48,84,130
+  @field w kind  @ 44,80,98,113,127,146,147,148
+  @field r name  @ 166
+  @field w name  @ 31,54,62,74,90,106,121,137,157,164
+  @field r pos  @ 86,133,151,152,153
+  @field w pos  @ 45,81,114,128,146,147,148
+  @field w run  @ 32,55,63,75,91,107,122,138,158
+  @field r sends  @ 26,41,58,100,116,167
+  @field w sends  @ 80,98,113,127,145
+  @field r srcChan  @ 49,69,131
+  @field w srcChan  @ 45,67,81,111,113,127
+  @field r to  @ 26
+  @field w to  @ 44,80,98,113,127,146,147,148
+  @field w type  @ 37,38,67,96,111,162

@@ -1,4 +1,4 @@
-@spec tm_macro_spec  src=tests/specs/tm_macro_spec.lua  loc=372  sha=c234626  cases=14
+@spec tm_macro_spec  src=tests/specs/tm_macro_spec.lua  loc=372  sha=37ed80d  cases=14
 @exercises trackerManager (h.tm), midiManager (h.fm)
 @surface   tm:addEvent, tm:flush, tm:getChannel, fm:dump, tm:rebuild, tm:byUuid, tm:assignParked, tm:assignEvent, fm:notes, fm:modify, fm:assign
 @harness   mk{seed.length}
@@ -49,3 +49,59 @@
   @use call fm:notes  @ 203
   @use call fm:modify  @ 207
   @use call fm:assign  @ 207
+
+# Fields (r read / w write incl. constructor keys)
+  @field r OPEN  @ 275,303
+  @field r REMOVE  @ 127,154
+  @field w atom  @ 7
+  @field r ccs  @ 13
+  @field r chan  @ 14
+  @field w chan  @ 24,68,148,177,179,275,303,325,361
+  @field r columns  @ 158,364
+  @field w config  @ 62,256
+  @field w data  @ 65
+  @field w delay  @ 25,69,149,178,180,276,304,326
+  @field r derived  @ 47,111,134,204,228,283
+  @field w detune  @ 25,69,149,178,180,276,304,326
+  @field r endppq  @ 226,233,335,350
+  @field w endppq  @ 24,68,148,177,179,275,303,325
+  @field r endppqC  @ 312,349
+  @field r evType  @ 14,365
+  @field w evType  @ 24,67,148,177,179,275,303,325,361
+  @field r events  @ 158,364
+  @field w factors  @ 7
+  @field r fx  @ 114,138
+  @field w fx  @ 25,69,127,149,154,180,326
+  @field w global  @ 65
+  @field w kind  @ 9
+  @field r lane  @ 184,188
+  @field w lane  @ 25,69,149,178,180,276,304,326
+  @field w length  @ 324
+  @field w name  @ 80,103,121,145,173,196,220,239,254,267,295,319
+  @field w name  @ 344,357
+  @field r notes  @ 35,46,133,158,227,282,364
+  @field r parked  @ 56,131
+  @field w period  @ 7,9
+  @field r pitch  @ 38,166,283,368
+  @field w pitch  @ 24,68,148,164,177,179,276,304,325,361
+  @field r ppq  @ 15,18,37,49,231
+  @field r ppq  @ 231,283,288,310,334,365
+  @field w ppq  @ 15,24,68,148,177,179,259,275,303
+  @field w ppq  @ 325,361
+  @field w project  @ 63
+  @field w ramp  @ 9
+  @field w run  @ 81,104,122,146,174,197,221,240,255,268,296,320
+  @field w run  @ 345,358
+  @field w sample  @ 257
+  @field w seed  @ 324
+  @field w shift  @ 7
+  @field w swing  @ 65
+  @field w swings  @ 63
+  @field w trackerMode  @ 256
+  @field w transient  @ 256
+  @field r uuid  @ 39,88,108,111,113,125,130,137,151,159
+  @field r uuid  @ 185,204,212,230,245,271,286,299,308,332
+  @field r val  @ 15
+  @field w val  @ 15,259
+  @field r vel  @ 204,212,245
+  @field w vel  @ 25,68,149,178,180,207,242,276,304,326,361

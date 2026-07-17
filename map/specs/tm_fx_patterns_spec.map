@@ -19,3 +19,10 @@
   @use call tm:subscribe  @ 9
   @use call ds:assign  @ 19,30
   @use call tm:bindTake  @ 28
+
+# Fields (r read / w write incl. constructor keys)
+  @field w kind  @ 19,30
+  @field w lengthPpq  @ 19
+  @field w name  @ 15,24
+  @field w ost  @ 19,30
+  @field w run  @ 16,25

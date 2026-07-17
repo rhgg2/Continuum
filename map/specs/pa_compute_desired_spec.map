@@ -12,3 +12,26 @@
   @case 'same-track binding: filter + listen on one spec, no send'  [pure]  @ 21-30
   @case 'cross-track binding fans out by send; pooled duplicates collapse'  [pure]  @ 34-43
   @case 'slots sort by src code / bus code for a stable image'  [pure]  @ 47-56
+
+# Fields (r read / w write incl. constructor keys)
+  @field r DST  @ 41,42,54,55
+  @field r SRC  @ 24,38,39,40,53
+  @field w busCode  @ 11,50,51
+  @field w chan  @ 11,50,51
+  @field r code  @ 54,55
+  @field w code  @ 28
+  @field w dst  @ 26,38,53
+  @field r filter  @ 26,38,42,53
+  @field w fxGuid  @ 12,28
+  @field w label  @ 13
+  @field w lane  @ 11,50,51
+  @field r listen  @ 27,40,41,54,55
+  @field w name  @ 21,34,47
+  @field w offset  @ 13,28
+  @field w param  @ 12,28,50
+  @field w run  @ 22,35,48
+  @field w scale  @ 13,28
+  @field r sends  @ 29,39
+  @field w src  @ 26,38,53
+  @field w srcTrackGuid  @ 11
+  @field w trackGuid  @ 12,23

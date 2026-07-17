@@ -37,3 +37,29 @@
   @use call fm:dump  @ 61,72
   @use call ec:setPos  @ 69
   @use call cmgr:invoke  @ 70
+
+# Fields (r read / w write incl. constructor keys)
+  @field w chan  @ 50,52,56,58
+  @field w chanLo  @ 20
+  @field w dur  @ 20
+  @field r endppq  @ 38,65,75
+  @field w endppq  @ 49,51
+  @field w endppqL  @ 49,51
+  @field w groups  @ 47
+  @field r lane  @ 56
+  @field w lane  @ 50,52,56
+  @field w length  @ 48
+  @field w name  @ 45
+  @field r notes  @ 61,72
+  @field w notes  @ 48
+  @field r pitch  @ 26,38
+  @field w pitch  @ 50,52
+  @field r ppq  @ 26
+  @field w ppq  @ 20,49,51,58
+  @field w ppqL  @ 49,51
+  @field w resolution  @ 48
+  @field w run  @ 46
+  @field w seed  @ 48
+  @field w streams  @ 21
+  @field w uuid  @ 50,52
+  @field w vel  @ 50,52

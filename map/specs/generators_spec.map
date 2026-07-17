@@ -32,3 +32,64 @@
   @case 'lfo tiles the curve at 1/period QN, mapping each val by centre + scale, edges seeded'  [pure]  @ 256-273
   @case 'lfo clamps centre +/- scale to 0..127'  [pure]  @ 277-286
   @case 'lfo with an empty or lengthless curve is inert (no delta)'  [pure]  @ 290-299
+
+# Fields (r read / w write incl. constructor keys)
+  @field w cc  @ 148
+  @field w ccrep  @ 138,145
+  @field w centre  @ 260,280,292
+  @field w cents  @ 69
+  @field w chan  @ 140,141,142,143,147,148,149
+  @field r delta  @ 40,54,62,71,79,87,101,163,184,263,282,284
+  @field r delta  @ 295,298
+  @field w depth  @ 161
+  @field w dest  @ 138
+  @field r detune  @ 108,119,120,249
+  @field w detune  @ 18,39,53,86,99,117,178,179,180,181,197,198
+  @field w detune  @ 213,214,229,242,243
+  @field w domain  @ 24
+  @field r endppq  @ 106
+  @field w endppq  @ 140,141,142,147,148,149,178,179,180,181,197,198
+  @field w endppq  @ 213,214,216,229,231,242,243,245
+  @field w evType  @ 147,148,149
+  @field w fx  @ 129,130,131,140,141,142,143
+  @field w kind  @ 20,24,69,100,118,129,130,140,141,142,161,183
+  @field w kind  @ 200,216,217,231,232,245,246,260,280,292,294,297
+  @field r kinds  @ 9,138,145
+  @field w lengthPpq  @ 24,216,231,245,294
+  @field w mode  @ 138
+  @field w name  @ 36,51,59,67,76,84,94,114,127,136,157,175
+  @field w name  @ 194,210,226,239,256,277,290
+  @field w nextSameLaneNote  @ 15
+  @field r notes  @ 41,103,104,119,120,162,186,188,189,201,202
+  @field r notes  @ 203,218,219,221,233,234,247,248,249,262
+  @field w notes  @ 18,99,117,177,196,212,228,241
+  @field w over  @ 20,69
+  @field w pattern  @ 183,200,217,232,246,260,280,294,297
+  @field w pbRangeCents  @ 14
+  @field w period  @ 100,118,161,260,280,292
+  @field r pitch  @ 107,188,219,248
+  @field w pitch  @ 18,39,53,61,86,99,117,178,179,180,181,197
+  @field w pitch  @ 198,213,214,229,242,243
+  @field w points  @ 24,294,297
+  @field r ppq  @ 42,43,45,46,105,164,165,166,168
+  @field r ppq  @ 201,234,264,265,269
+  @field w ppq  @ 25,26,27,178,179,180,181,197,198,213
+  @field w ppq  @ 214,216,229,231,242,243,245,297
+  @field w resolution  @ 14,97,116,161,261,281,294,297
+  @field w run  @ 37,52,60,68,77,85,95,115,128,137,158,176
+  @field w run  @ 195,211,227,240,257,278,291
+  @field w scale  @ 260,280,292
+  @field r shape  @ 44,167
+  @field w shape  @ 25,26,27
+  @field w specs  @ 216,231,245
+  @field w startppq  @ 140,141,142,147,148,149
+  @field w step  @ 98,100,116,118
+  @field w target  @ 20,69
+  @field r val  @ 42,43,45,46,54,62,71,164,165,166,168,264
+  @field r val  @ 265,268,269,282,284
+  @field w val  @ 25,26,27,297
+  @field r vel  @ 109,186,189,202,203,221
+  @field w vel  @ 18,99,117,178,179,180,181,197,198,213,214,216
+  @field w vel  @ 229,231,242,243,245
+  @field w window  @ 18,99,117,160,177,196,212,228,241,259,279,293
+  @field w window  @ 296

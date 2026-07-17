@@ -116,3 +116,71 @@
   @reaper TakeIsMIDI
   @reaper MIDI_CountEvts, MIDI_GetCC
   @reaper GetTouchedOrFocusedFX
+
+# Fields (r read / w write incl. constructor keys)
+  @field w add  @ applyTrack:213
+  @field r busCode  @ gatherBindings:79 computeDesired:105,107,109 allocBusCode:268
+  @field w busCode  @ gatherBindings:79 automate:336
+  @field r ccm  @ 11
+  @field r ccs  @ usedLanes:244
+  @field r chan  @ computeDesired:103
+  @field w chan  @ gatherBindings:78
+  @field r cm  @ 11
+  @field r code  @ computeDesired:118 writeBanks:163
+  @field w code  @ computeDesired:109
+  @field w computeDesired  @ computeDesired:90
+  @field r count  @ params:373
+  @field w count  @ params:380
+  @field r ds  @ 11
+  @field r dst  @ writeBanks:162
+  @field w dst  @ computeDesired:105
+  @field r facade  @ 11
+  @field r filter  @ computeDesired:105,117 writeBanks:156,160
+  @field w filter  @ computeDesired:93 applyTrack:213
+  @field w frecencyOrder  @ frecencyOrder:291
+  @field r fxGuid  @ gatherBindings:79 computeDesired:109 applyTrack:201,203,204,224 automate:337
+  @field w fxGuid  @ gatherBindings:79 computeDesired:109 automate:337 lastTouched:429
+  @field r gen  @ params:383
+  @field w gen  @ params:384
+  @field r index  @ frecencyOrder:295,301
+  @field w index  @ params:378
+  @field r label  @ gatherBindings:80 automate:338
+  @field w label  @ gatherBindings:80 automate:338
+  @field r lane  @ computeDesired:103
+  @field w lane  @ gatherBindings:78
+  @field r listen  @ computeDesired:108,118 writeBanks:156,160 applyTrack:201,202,222
+  @field w listen  @ computeDesired:93 applyTrack:213
+  @field r mirror  @ apply:321
+  @field w mirror  @ apply:316
+  @field r n  @ frecencyOrder:296 bumpFrecency:398
+  @field w n  @ bumpFrecency:397,402
+  @field r n0  @ frecencyOrder:296 bumpFrecency:401
+  @field w n0  @ bumpFrecency:401
+  @field w name  @ params:378 lastTouched:430
+  @field r offset  @ gatherBindings:80 computeDesired:110 applyTrack:225
+  @field w offset  @ gatherBindings:80 computeDesired:110 automate:338
+  @field r param  @ gatherBindings:80 computeDesired:109 applyTrack:201,203,205,225 automate:337
+  @field w param  @ gatherBindings:80 computeDesired:109 automate:337 lastTouched:430
+  @field r paramTargets  @ targets:363
+  @field r params  @ frecencyOrder:295 params:385 bumpFrecency:399,400
+  @field w params  @ params:380 bumpFrecency:397
+  @field r s  @ frecencyOrder:296 bumpFrecency:401
+  @field w s  @ bumpFrecency:401
+  @field r scale  @ gatherBindings:80 computeDesired:110 applyTrack:225
+  @field w scale  @ gatherBindings:80 computeDesired:110 automate:338
+  @field w section  @ params:378
+  @field r sends  @ computeDesired:113,119 applyTrack:228
+  @field w sends  @ computeDesired:93
+  @field r sorted  @ params:388
+  @field w sorted  @ params:385
+  @field r spec  @ apply:321
+  @field w spec  @ apply:316
+  @field r src  @ computeDesired:117 writeBanks:161
+  @field w src  @ computeDesired:105
+  @field r srcTrackGuid  @ computeDesired:104,105,112,113
+  @field w srcTrackGuid  @ gatherBindings:78
+  @field r track  @ apply:321
+  @field w track  @ apply:316
+  @field r trackGuid  @ gatherBindings:79 computeDesired:107,108,112,113 automate:337
+  @field w trackGuid  @ gatherBindings:79 automate:337 lastTouched:428
+  @field r unserialise  @ readMirror:129

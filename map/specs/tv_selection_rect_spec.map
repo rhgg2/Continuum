@@ -23,3 +23,29 @@
 # Uses (outbound edges)
   @use call vm:selectionAsRect  @ 27,50,73,87
   @use call vm:eventsInRect  @ 74
+
+# Fields (r read / w write incl. constructor keys)
+  @field w chan  @ 21,41,42,64,65,66,85
+  @field r chanLo  @ 31,51
+  @field w col1  @ 24,47,70
+  @field w col2  @ 24,47,70
+  @field r cols  @ 11
+  @field r dur  @ 30,52
+  @field w endppq  @ 21,41,42,64,65,66,85
+  @field r grid  @ 11
+  @field r midiChan  @ 12
+  @field w name  @ 18,37,60,82
+  @field w notes  @ 21,40,63,85
+  @field w part1  @ 25,48,71
+  @field w part2  @ 25,48,71
+  @field r pitch  @ 77
+  @field w pitch  @ 21,41,42,64,65,66,85
+  @field r ppq  @ 29,76
+  @field w ppq  @ 21,41,42,64,65,66,85
+  @field w row1  @ 24,47,70
+  @field w row2  @ 24,47,70
+  @field w run  @ 19,38,61,83
+  @field w seed  @ 21,40,63,85
+  @field r streams  @ 32,53,54,55
+  @field r type  @ 12
+  @field w vel  @ 21,41,42,64,65,66,85

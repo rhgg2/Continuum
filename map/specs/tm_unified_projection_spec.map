@@ -15,3 +15,38 @@
   @use call ds:assign  @ 35,74
   @use call fm:dump  @ 38,77
   @use call tm:getChannel  @ 87
+
+# Fields (r read / w write incl. constructor keys)
+  @field w atom  @ 7
+  @field w chan  @ 22,25,61,64
+  @field r columns  @ 87
+  @field w config  @ 29,68
+  @field r delay  @ 45,82,91
+  @field w delay  @ 23,26,62,65
+  @field r delayC  @ 92
+  @field w detune  @ 23,26,62,65
+  @field r endppq  @ 46,84
+  @field w endppq  @ 21,24,60,63
+  @field w endppqL  @ 21,24,60,63
+  @field r events  @ 87
+  @field w factors  @ 7
+  @field w global  @ 35,74
+  @field w lane  @ 22,25,61,64
+  @field w name  @ 16,55
+  @field r notes  @ 38,77,87
+  @field w notes  @ 20,59
+  @field w period  @ 7
+  @field w pitch  @ 22,25,61,64
+  @field r ppq  @ 43,44,83,88
+  @field w ppq  @ 21,24,60,63
+  @field r ppqL  @ 39,40,78,79
+  @field w ppqL  @ 21,24,60,63
+  @field w project  @ 30,69
+  @field w rowPerBeat  @ 31,70
+  @field w rpb  @ 23,26,62,65
+  @field w run  @ 17,56
+  @field w seed  @ 19,58
+  @field w shift  @ 7
+  @field w swings  @ 30,69
+  @field w take  @ 31,70
+  @field w vel  @ 22,25,61,64

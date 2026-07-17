@@ -37,3 +37,28 @@
   @use call gm:newInstance  @ 51
   @use call tm:flush  @ 52
   @use call cmgr:invoke  @ 66,81
+
+# Fields (r read / w write incl. constructor keys)
+  @field r chan  @ 24,31
+  @field w chan  @ 24,41,42,51
+  @field w col1  @ 46,64,79
+  @field w col2  @ 46,64,79
+  @field r cols  @ 16
+  @field w endppq  @ 41,42
+  @field r evType  @ 24
+  @field r grid  @ 16
+  @field w groups  @ 39
+  @field r midiChan  @ 17
+  @field w name  @ 58,74
+  @field w notes  @ 40
+  @field w part1  @ 47,65,80
+  @field w part2  @ 47,65,80
+  @field w pitch  @ 41,42
+  @field r ppq  @ 24
+  @field w ppq  @ 24,41,42,51
+  @field w row1  @ 46,64,79
+  @field w row2  @ 46,64,79
+  @field w run  @ 59,75
+  @field w seed  @ 40
+  @field r type  @ 17
+  @field w vel  @ 41,42

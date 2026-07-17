@@ -130,3 +130,68 @@
 
 # REAPER API surface
   @reaper GetOS
+
+# Fields (r read / w write incl. constructor keys)
+  @field r Key_0  @ buildKeyNames:366 buildShiftGlyphs:406 buildKeyTokens:477
+  @field r Key_A  @ buildKeyNames:365 buildKeyTokens:476
+  @field r Key_Apostrophe  @ buildKeyNames:386 buildShiftGlyphs:411 buildKeyTokens:500
+  @field r Key_Backslash  @ buildKeyNames:388 buildShiftGlyphs:409 buildKeyTokens:506
+  @field r Key_Backspace  @ buildKeyNames:374,393 buildKeyTokens:485
+  @field r Key_Comma  @ buildKeyNames:381 buildShiftGlyphs:412 buildKeyTokens:496
+  @field r Key_Delete  @ buildKeyNames:375,394 buildKeyTokens:486
+  @field r Key_DownArrow  @ buildKeyNames:368 buildKeyTokens:493
+  @field r Key_End  @ buildKeyNames:376,395 buildKeyTokens:489
+  @field r Key_Enter  @ buildKeyNames:370,391 buildKeyTokens:481
+  @field r Key_Equal  @ buildKeyNames:380 buildKeyTokens:502
+  @field r Key_Escape  @ buildKeyNames:371,392 buildKeyTokens:483
+  @field r Key_GraveAccent  @ buildKeyNames:385 buildShiftGlyphs:415 buildKeyTokens:505
+  @field r Key_Home  @ buildKeyNames:376,395 buildKeyTokens:488
+  @field r Key_Insert  @ buildKeyTokens:487
+  @field r Key_Keypad0  @ buildKeyTokens:478
+  @field r Key_KeypadEnter  @ buildKeyNames:370,391 buildKeyTokens:482
+  @field r Key_KeypadSubtract  @ buildKeyTokens:507
+  @field r Key_LeftArrow  @ buildKeyNames:369 buildKeyTokens:494
+  @field r Key_LeftBracket  @ buildKeyNames:383 buildShiftGlyphs:407 buildKeyTokens:503
+  @field r Key_Minus  @ buildKeyNames:379 buildKeyTokens:501
+  @field r Key_PageDown  @ buildKeyNames:377 buildKeyTokens:491
+  @field r Key_PageUp  @ buildKeyNames:377 buildKeyTokens:490
+  @field r Key_Period  @ buildKeyNames:382 buildShiftGlyphs:413 buildKeyTokens:497
+  @field r Key_RightArrow  @ buildKeyNames:369 buildKeyTokens:495
+  @field r Key_RightBracket  @ buildKeyNames:384 buildShiftGlyphs:408 buildKeyTokens:504
+  @field r Key_Semicolon  @ buildKeyNames:387 buildShiftGlyphs:410 buildKeyTokens:499
+  @field r Key_Slash  @ buildKeyNames:378 buildShiftGlyphs:414 buildKeyTokens:498
+  @field r Key_Space  @ buildKeyNames:373 buildKeyTokens:480
+  @field r Key_Tab  @ buildKeyNames:372 buildKeyTokens:484
+  @field r Key_UpArrow  @ buildKeyNames:368 buildKeyTokens:492
+  @field r Mod_Alt  @ buildModOrder:427,434 buildModTokens:515
+  @field r Mod_Ctrl  @ buildModOrder:429,433 buildModTokens:513
+  @field r Mod_None  @ keySpec:313,314
+  @field r Mod_Shift  @ buildModOrder:428,435 keyLabel:445 buildModTokens:514
+  @field r Mod_Super  @ buildModOrder:426,436 buildModTokens:516
+  @field w azerty  @ 30
+  @field r cm  @ 48
+  @field w colemak  @ 22
+  @field r commands  @ newScope:91 wrap:134,136 invoke:255
+  @field w commands  @ 51
+  @field w dvorak  @ 26
+  @field r gates  @ newScope:92 invoke:263,267 bindingSite:344
+  @field w gates  @ 52
+  @field w global  @ 115
+  @field r keepAlive  @ invoke:263
+  @field r keymap  @ newScope:103,105 117 rootKeymap:127 resolveKeys:283 keychain:295,300 bindingSite:341 loadOverrides:575 rebind:585
+  @field w keymap  @ newScope:81 117
+  @field w layouts  @ 55
+  @field r modal  @ isReachable:72 resolveKeys:285 keychain:296 bindingSite:342
+  @field r name  @ bindingSite:341,344
+  @field w name  @ newScope:81
+  @field r passthrough  @ isReachable:72 resolveKeys:285 keychain:297 bindingSite:342
+  @field w qwerty  @ 18
+  @field r redirect  @ invoke:258
+  @field r registered  @ newScope:90
+  @field w registered  @ newScope:81
+  @field r scopes  @ 115 scope:225,228 asScope:233 loadOverrides:566 rebind:583
+  @field w scopes  @ 53
+  @field r springLoaded  @ invoke:257
+  @field r stack  @ isReachable:66,70,71 116 push:238 pop:245,246 invoke:256
+  @field r stack  @ resolveKeys:281,282 keychain:294,295,296,297,300 bindingSite:339,340
+  @field w stack  @ 54

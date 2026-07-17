@@ -128,3 +128,33 @@
   @reaper GetTrack
   @reaper GetProjectPath
   @reaper GetTrackName
+
+# Fields (r read / w write incl. constructor keys)
+  @field r byOrder  @ pushSlot:141 drain:162
+  @field w byOrder  @ ensureTrackState:107 tick:259
+  @field r bySlot  @ pushSlot:137,140 drain:168,169
+  @field w bySlot  @ ensureTrackState:107 tick:259
+  @field r cm  @ 90
+  @field r ds  @ 90
+  @field r fileOps  @ 90
+  @field r fxGuid  @ tick:252,255
+  @field w fxGuid  @ ensureTrackState:105 tick:253,256
+  @field r instanceId  @ drain:163,164 tick:263,264
+  @field w instanceId  @ ensureTrackState:105 tick:262 listTracks:397
+  @field r lastBootToken  @ tick:265
+  @field w lastBootToken  @ ensureTrackState:105 tick:257,266
+  @field r name  @ pushSlot:152 drain:172 rehydrateTrack:218 syncSlot:234
+  @field w name  @ pushSlot:146,152 rehydrateTrack:218 syncSlot:234 assign:294,298 setName:326,327 listTracks:396
+  @field r op  @ pushSlot:143 drain:177
+  @field w op  @ pushSlot:139,144,150 syncSlot:230 clearSlot:312
+  @field r path  @ pushSlot:151 drain:171 rehydrateTrack:215,217 syncSlot:229,233 assign:294 migrate:412,413,414
+  @field w path  @ pushSlot:145,151 rehydrateTrack:217 syncSlot:233 assign:298 loadSlot:305
+  @field r pending  @ pushSlot:137,140,141 drain:162,168,169
+  @field w pending  @ ensureTrackState:107 tick:259
+  @field w slot  @ pushSlot:139
+  @field r slotSeq  @ drain:189,190
+  @field w slotSeq  @ ensureTrackState:106 drain:189 tick:258
+  @field r start  @ pushSlot:153 drain:178 rehydrateTrack:219 syncSlot:235 assign:295
+  @field w start  @ pushSlot:147,153 rehydrateTrack:219 syncSlot:235 assign:298 loadSlot:305 setTrim:318,320
+  @field r track  @ migrate:410
+  @field w track  @ listTracks:395

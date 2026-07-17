@@ -33,3 +33,34 @@
   @use call cmgr:invoke  @ 64,87
   @use call gm:setLocalMode  @ 81,84
   @use call gm:assignEvent  @ 82
+
+# Fields (r read / w write incl. constructor keys)
+  @field r cells  @ 39
+  @field r chan  @ 19,24,33,68
+  @field w chan  @ 19,47,61,78
+  @field w col1  @ 50
+  @field w col2  @ 50
+  @field r cols  @ 9,39
+  @field w endppq  @ 47
+  @field r evType  @ 18
+  @field r grid  @ 9,39
+  @field w groups  @ 46
+  @field r lane  @ 11,19,26
+  @field w lane  @ 19
+  @field r midiChan  @ 10
+  @field w name  @ 58,75
+  @field w notes  @ 47
+  @field w part1  @ 50
+  @field w part2  @ 50
+  @field r pitch  @ 20,70,96,100,104
+  @field w pitch  @ 20,47,82
+  @field r ppq  @ 19,25,33,40,69
+  @field w ppq  @ 19,47,61,78
+  @field w row1  @ 50
+  @field w row2  @ 50
+  @field w run  @ 59,76
+  @field w seed  @ 47
+  @field r type  @ 10
+  @field r uuid  @ 20
+  @field w uuid  @ 20
+  @field w vel  @ 47

@@ -52,3 +52,34 @@
   @use call gm:assignEvent  @ 71,76,101,125,183,238
   @use call gm:deleteEvent  @ 106,130,158,244
   @use call gm:addEvent  @ 152,177,203,209
+
+# Fields (r read / w write incl. constructor keys)
+  @field r add  @ 51,54,55,75,105,129,154,179,204,214,232
+  @field r add  @ 241,251
+  @field w add  @ 68,98,122,148,155,173,180,198,234
+  @field r assign  @ 81,135
+  @field w assign  @ 75
+  @field w chan  @ 37,52,67,97,121,197,229
+  @field w chanLo  @ 44
+  @field r del  @ 108
+  @field w del  @ 105,129,204,241
+  @field w ds  @ 30
+  @field w dur  @ 44
+  @field w endppq  @ 38
+  @field r evType  @ 55
+  @field w evType  @ 37
+  @field r evt  @ 83,136
+  @field w lane  @ 37
+  @field w name  @ 62,92,116,143,168,192,224
+  @field r pitch  @ 55,82,136,215,252
+  @field w pitch  @ 38,65,71,76,95,101,119,125,151,176,183,195
+  @field w pitch  @ 202,208,227,238
+  @field r ppq  @ 154,179,215,232,252
+  @field w ppq  @ 37,44,52,67,97,121,197,229
+  @field w run  @ 63,93,117,144,169,193,225
+  @field w streams  @ 45
+  @field w tm  @ 30
+  @field r update  @ 82,136
+  @field r uuid  @ 71,76,101,106,125,130,158,183,238,244
+  @field w uuid  @ 38
+  @field w vel  @ 38

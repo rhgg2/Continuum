@@ -23,3 +23,33 @@
   @use call fm:setLength  @ 58
   @use call fm:length  @ 60,80
   @use call tm:setLength  @ 78,86
+
+# Fields (r read / w write incl. constructor keys)
+  @field r OPEN  @ 22,50,52,72,83
+  @field w atom  @ 7
+  @field w c58  @ 27
+  @field w chan  @ 23,25,51,53,73
+  @field w config  @ 27
+  @field r endppq  @ 29,36,62,63,76,82,87
+  @field w endppq  @ 22,24,50,52,72
+  @field r endppqL  @ 83
+  @field w endppqL  @ 22,24,50,52,72
+  @field w factors  @ 7
+  @field w global  @ 34
+  @field w lane  @ 23,25,51,53,73
+  @field w length  @ 21,49,71
+  @field w name  @ 15,44,68
+  @field r notes  @ 29,36,61,76,81,87
+  @field w notes  @ 21,49,71
+  @field w period  @ 7
+  @field r pitch  @ 10
+  @field w pitch  @ 23,25,51,53,73
+  @field w ppq  @ 22,24,50,52,72
+  @field w ppqL  @ 22,24,50,52,72
+  @field w project  @ 27
+  @field w run  @ 16,45,69
+  @field w seed  @ 21,49,71
+  @field w shift  @ 7
+  @field w swings  @ 27
+  @field w uuid  @ 23,25,51,53,73
+  @field w vel  @ 23,25,51,53,73

@@ -30,3 +30,28 @@
   @use call cmgr:invoke  @ 45,53,69,77
   @use call ec:selClear  @ 48,72
   @use call vm:editEvent  @ 49,73
+
+# Fields (r read / w write incl. constructor keys)
+  @field w chan  @ 39,63
+  @field w col1  @ 66
+  @field w col2  @ 66
+  @field r cols  @ 13,49,73
+  @field w endppq  @ 39,63
+  @field r grid  @ 13,49,73
+  @field w groups  @ 62
+  @field r midiChan  @ 14
+  @field w name  @ 35,60
+  @field r notes  @ 20,28
+  @field w notes  @ 38,62
+  @field w part1  @ 67
+  @field w part2  @ 67
+  @field r pitch  @ 21
+  @field w pitch  @ 39,63
+  @field r ppq  @ 21,29
+  @field w ppq  @ 39,63
+  @field w row1  @ 66
+  @field w row2  @ 66
+  @field w run  @ 36,61
+  @field w seed  @ 38,62
+  @field r type  @ 14
+  @field w vel  @ 39,63

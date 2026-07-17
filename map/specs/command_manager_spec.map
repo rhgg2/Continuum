@@ -31,3 +31,20 @@
   @case 'prefix: prefixRational on empty buffer yields (nil, nil)'  [pure]  @ 276-281
   @case 'prefix: beginPrefix-via-invoke leaves the buffer active'  [pure]  @ 285-291
   @case 'keySpec decodes bare key and chord'  [pure]  @ 295-307
+
+# Fields (r read / w write incl. constructor keys)
+  @field r Mod_Ctrl  @ 304
+  @field w Mod_Ctrl  @ 298
+  @field w Mod_None  @ 298
+  @field r Mod_Shift  @ 304
+  @field w Mod_Shift  @ 298
+  @field w a  @ 16
+  @field w b  @ 17
+  @field w c  @ 18
+  @field w cm  @ 9
+  @field r cursorUp  @ 127
+  @field w name  @ 25,36,48,60,74,89,102,114,133,148,160,178
+  @field w name  @ 192,205,219,235,248,261,276,285,295
+  @field r playPause  @ 122,128
+  @field w run  @ 26,37,49,61,75,90,103,115,134,149,161,179
+  @field w run  @ 193,206,220,236,249,262,277,286,296

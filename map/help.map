@@ -132,3 +132,129 @@
   @use call    util.add  @ layoutCluster:84,97 drawTag:135 drawCluster:165 layoutBox:185 drawConflict:266 placePins:282,304 placeFlow:323 buildDismissKeys:332,343 draw:517,519
   @use require imgui  @ 8
   @use require util  @ 9
+
+# Fields (r read / w write incl. constructor keys)
+  @field r Key_0  @ buildDismissKeys:333
+  @field r Key_9  @ buildDismissKeys:333
+  @field r Key_A  @ buildDismissKeys:333
+  @field r Key_Apostrophe  @ buildDismissKeys:341
+  @field r Key_Backslash  @ buildDismissKeys:342
+  @field r Key_Backspace  @ buildDismissKeys:337
+  @field r Key_Comma  @ buildDismissKeys:340
+  @field r Key_Delete  @ buildDismissKeys:337
+  @field r Key_DownArrow  @ buildDismissKeys:338
+  @field r Key_End  @ buildDismissKeys:339
+  @field r Key_Enter  @ buildDismissKeys:336 handleConflict:451
+  @field r Key_Equal  @ buildDismissKeys:340
+  @field r Key_Escape  @ buildDismissKeys:336 pollCapture:425,429 handleConflict:450 draw:533
+  @field r Key_F1  @ buildDismissKeys:334
+  @field r Key_F12  @ buildDismissKeys:334
+  @field r Key_GraveAccent  @ buildDismissKeys:342
+  @field r Key_Home  @ buildDismissKeys:339
+  @field r Key_Insert  @ buildDismissKeys:337
+  @field r Key_Keypad0  @ buildDismissKeys:334
+  @field r Key_Keypad9  @ buildDismissKeys:334
+  @field r Key_KeypadEnter  @ buildDismissKeys:336 handleConflict:452
+  @field r Key_KeypadSubtract  @ buildDismissKeys:340
+  @field r Key_LeftArrow  @ buildDismissKeys:338
+  @field r Key_LeftBracket  @ buildDismissKeys:342
+  @field r Key_Minus  @ buildDismissKeys:340
+  @field r Key_PageDown  @ buildDismissKeys:339
+  @field r Key_PageUp  @ buildDismissKeys:339
+  @field r Key_Period  @ buildDismissKeys:341
+  @field r Key_RightArrow  @ buildDismissKeys:338
+  @field r Key_RightBracket  @ buildDismissKeys:342
+  @field r Key_Semicolon  @ buildDismissKeys:341
+  @field r Key_Slash  @ buildDismissKeys:341
+  @field r Key_Space  @ buildDismissKeys:337
+  @field r Key_Tab  @ buildDismissKeys:336
+  @field r Key_UpArrow  @ buildDismissKeys:338
+  @field r Key_Z  @ buildDismissKeys:333
+  @field r Mod_Alt  @ buildSpec:372
+  @field r Mod_Ctrl  @ buildSpec:372
+  @field r Mod_None  @ buildSpec:370
+  @field r Mod_Shift  @ buildSpec:372
+  @field r Mod_Super  @ buildSpec:372
+  @field r add  @ drawCluster:172
+  @field w add  @ hitAt:438 draw:500
+  @field r anchor  @ placeFlow:314,317 draw:513,517
+  @field w anchor  @ draw:517
+  @field r bg  @ drawBox:197 drawConflict:252
+  @field w bg  @ draw:493
+  @field r border  @ drawBox:198 drawConflict:253 draw:505
+  @field w border  @ draw:494
+  @field r box  @ placePins:281,298,303,304 placeFlow:313
+  @field w box  @ draw:517,519
+  @field r cells  @ drawCluster:159
+  @field w cells  @ layoutCluster:97
+  @field r chip  @ draw:504
+  @field w chip  @ hitAt:438 draw:498
+  @field r chips  @ drawCluster:144
+  @field w chips  @ layoutCluster:101
+  @field r chrome  @ 12
+  @field r cluster  @ drawBox:203
+  @field w cluster  @ layoutBox:185
+  @field r cmd  @ drawCluster:143 layoutBox:182,183,186 drawBox:203 cmdLabel:214 drawConflict:231 commitCapture:403 reassign:417 handleClicks:472,473
+  @field r cmd  @ handleClicks:473,474,475
+  @field w cmd  @ drawCluster:165,167,173 layoutBox:186 commitCapture:407 reassign:420 handleClicks:473,474
+  @field r cmgr  @ 13
+  @field r count  @ placePins:286,287,293
+  @field w count  @ placePins:282,286
+  @field r ctx  @ 11
+  @field r h  @ drawBox:197,198 placePins:304 placeFlow:323,325 insideAnyBox:361 hitAt:441 handleConflict:457 draw:519
+  @field w h  @ anchor:51 drawTag:134 drawCluster:165 layoutBox:193 drawConflict:266 placePins:304 placeFlow:323
+  @field r items  @ layoutBox:181 cmdLabel:213
+  @field r key  @ drawCluster:146,161
+  @field w key  @ draw:496
+  @field r keyW  @ drawBox:204
+  @field w keyW  @ layoutBox:193
+  @field r kind  @ drawConflict:266 hitAt:442 handleConflict:458 handleClicks:472,473
+  @field w kind  @ drawCluster:165,167,173 drawConflict:232,266
+  @field r label  @ layoutBox:185,188 drawBox:204 cmdLabel:214 drawConflict:257
+  @field w label  @ layoutBox:185 draw:497
+  @field r phase  @ drawConflict:227 draw:529
+  @field w phase  @ commitCapture:407 reassign:421
+  @field r place  @ draw:516
+  @field r rect  @ placeFlow:313
+  @field w rect  @ draw:517
+  @field r remove  @ drawCluster:167
+  @field w remove  @ hitAt:438 draw:499
+  @field r replace  @ drawCluster:151,173 commitCapture:403 reassign:417
+  @field w replace  @ commitCapture:407 handleClicks:474
+  @field r rowH  @ placeFlow:320,325
+  @field w rowH  @ placeFlow:316,320,325
+  @field r rows  @ drawBox:202
+  @field w rows  @ layoutBox:193
+  @field r spec  @ drawConflict:226 reassign:417 handleClicks:472,474
+  @field w spec  @ drawCluster:165,167 commitCapture:407 reassign:421
+  @field r specs  @ drawBox:203
+  @field w specs  @ layoutBox:186
+  @field r sum  @ placePins:286,287
+  @field w sum  @ placePins:282
+  @field r tag  @ drawTag:119
+  @field w tag  @ draw:501
+  @field r tagBorder  @ drawTag:120
+  @field w tagBorder  @ draw:502
+  @field r text  @ drawCluster:160,161 drawConflict:242,264,265
+  @field w text  @ layoutCluster:84 drawConflict:232
+  @field r title  @ drawTag:120,121 drawCluster:153,156 layoutBox:190,193 drawBox:200 drawConflict:255,265
+  @field w title  @ layoutBox:193 draw:495
+  @field r top  @ placePins:303,304
+  @field w top  @ draw:519
+  @field r value  @ placePins:283,293
+  @field w value  @ placePins:282,287
+  @field r victim  @ drawConflict:230,234 reassign:417
+  @field w victim  @ commitCapture:407 reassign:421
+  @field r w  @ drawTag:134 drawCluster:150,156,161,162,165 drawBox:197,198 placePins:281,298,304 placeFlow:319
+  @field r w  @ placeFlow:319,323,324 insideAnyBox:360 hitAt:440 handleConflict:456
+  @field w w  @ anchor:51 layoutCluster:84,97 drawCluster:165 layoutBox:193 drawConflict:266 placePins:304 placeFlow:323
+  @field r wantX  @ placePins:275,282
+  @field w wantX  @ draw:519
+  @field r width  @ layoutBox:187
+  @field w width  @ layoutCluster:101
+  @field r x  @ drawTag:134 placeFlow:316,319,320,322,323,324 insideAnyBox:360
+  @field r x  @ insideAnyBox:360 hitAt:440 handleConflict:456 draw:519
+  @field w x  @ anchor:51 drawCluster:165 drawConflict:266 placePins:304 placeFlow:316,323,324
+  @field r y  @ drawTag:134 placeFlow:316,320,322,323 insideAnyBox:361 hitAt:441 handleConflict:457
+  @field r y  @ draw:519
+  @field w y  @ anchor:51 drawCluster:165 drawConflict:266 placePins:304 placeFlow:316,323

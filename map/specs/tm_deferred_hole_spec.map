@@ -1,4 +1,4 @@
-@spec tm_deferred_hole_spec  src=tests/specs/tm_deferred_hole_spec.lua  loc=114  sha=285f562  cases=3
+@spec tm_deferred_hole_spec  src=tests/specs/tm_deferred_hole_spec.lua  loc=114  sha=37ed80d  cases=3
 @exercises midiManager (h.mm), trackerManager (h.tm)
 @surface   mm:notes, mm:ccsRaw, tm:getChannel, tm:deleteEvent, tm:flush
 @harness   mk{seed.notes, seed.ccs}
@@ -30,3 +30,38 @@
   @use call tm:getChannel  @ 24,33,45
   @use call tm:deleteEvent  @ 68,86,108
   @use call tm:flush  @ 69,87,109
+
+# Fields (r read / w write incl. constructor keys)
+  @field w cc  @ 81,99
+  @field w ccs  @ 80,98
+  @field w cents  @ 47,100,101,110
+  @field r chan  @ 12,18
+  @field w chan  @ 60,61,62,79,81,82,97,99,100,101
+  @field r columns  @ 24,33,45
+  @field w config  @ 64
+  @field w delay  @ 60,61,62,79,97
+  @field w detune  @ 60,61,62,79,97
+  @field w endppq  @ 60,61,62,79,97
+  @field r evType  @ 18,35
+  @field w evType  @ 81,82,99,100,101
+  @field r events  @ 24,34,46
+  @field r hidden  @ 47
+  @field w name  @ 56,75,93
+  @field r notes  @ 33
+  @field w notes  @ 59,79,97
+  @field r pb  @ 45
+  @field r pc  @ 24
+  @field r pitch  @ 12
+  @field w pitch  @ 60,61,62,79,82,97
+  @field r ppq  @ 18,25,27,35,47,49
+  @field w ppq  @ 25,47,60,61,62,70,79,81,82,97,99
+  @field w ppq  @ 100,101,110
+  @field w run  @ 57,76,94
+  @field w sample  @ 60,61,62
+  @field w seed  @ 59,78,96
+  @field w trackerMode  @ 64
+  @field w transient  @ 64
+  @field r uuid  @ 12,18
+  @field r val  @ 25,47
+  @field w val  @ 25,70,81,99,100,101
+  @field w vel  @ 60,61,62,79,82,97

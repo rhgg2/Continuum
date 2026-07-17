@@ -4,6 +4,19 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-17** — The field-access index lives in the `.map` itself (`# Fields`, `@field r|w`, rows
+  chunked at 12 sites) rather than a sidecar file: one derived artifact, greppable alongside the
+  annotations. Table-constructor keys and `function recv.name(` declarations count as writes so
+  producer sites are covered. *Chosen over* a sidecar (splits the artifact, needs a second parser
+  path) and dot-writes-only (misses exactly the constructor producer sites the feedback log got
+  burned on).
+
+- **2026-07-17** — `map_query`/`reaper_doc_lookup` queries are regex (query substring-matched,
+  module anchored), not glob: the only consumer is an LLM whose muscle memory is regex, and glob's
+  anchored fullmatch was why every logged query wore wrapping stars. Invalid regex errors loudly
+  with a translation hint; a quantified literal (`rebuild*`) gets an advisory note. *Chosen over*
+  glob + `|` alternation, which patches glob toward regex one metacharacter at a time.
+
 - **2026-07-17** — `resizeNote` both *decides* and *performs* PA translation in the logical frame; the
   two raw-frame computations that outlived the ownership move go. Its gate asked whether the raw delta
   held at both endpoints — true under swing only when the note's logical length is an exact multiple of

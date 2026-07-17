@@ -48,3 +48,18 @@
   @use call    util.round  @ snapRow:63
   @use require tuning  @ 8
   @use require util  @ 7
+
+# Fields (r read / w write incl. constructor keys)
+  @field r cents  @ noteProjection:39
+  @field r detune  @ noteProjection:30
+  @field r huge  @ barBeatSub:103
+  @field r length  @ 12
+  @field r num  @ rowBeatInfo:95 barBeatSub:101
+  @field r numRows  @ 13
+  @field r period  @ noteProjection:39
+  @field r pitch  @ noteProjection:29,31,34
+  @field r ppq  @ timeSigAt:83 tsRow:89
+  @field r ppqPerRow  @ 15
+  @field r rowPerBeat  @ 14
+  @field r temper  @ 17
+  @field r timeSigs  @ 16

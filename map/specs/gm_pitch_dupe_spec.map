@@ -23,3 +23,33 @@
   @use call gm:newInstance  @ 44
   @use call tm:flush  @ 45,52
   @use call gm:assignEvent  @ 51
+
+# Fields (r read / w write incl. constructor keys)
+  @field w chan  @ 31,44
+  @field w col1  @ 37
+  @field w col2  @ 37
+  @field r cols  @ 9
+  @field r columns  @ 17
+  @field w ds  @ 34
+  @field w endppq  @ 31
+  @field r evType  @ 18
+  @field r events  @ 17
+  @field r grid  @ 9
+  @field r midiChan  @ 10
+  @field w name  @ 27
+  @field r notes  @ 17
+  @field w notes  @ 30
+  @field w part1  @ 38
+  @field w part2  @ 38
+  @field r pitch  @ 19,57
+  @field w pitch  @ 19,31,51
+  @field r ppq  @ 19
+  @field w ppq  @ 19,31,44
+  @field w row1  @ 37
+  @field w row2  @ 37
+  @field w run  @ 28
+  @field w seed  @ 30
+  @field w tm  @ 34
+  @field r type  @ 10
+  @field r uuid  @ 51
+  @field w vel  @ 31

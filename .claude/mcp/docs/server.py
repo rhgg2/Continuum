@@ -120,16 +120,17 @@ def _format_imgui_entry(name: str, summary: str, body: str) -> str:
     return "\n".join(out)
 
 
-def _glob_to_regex(pat: str) -> re.Pattern:
-    parts = []
-    for ch in pat:
-        if ch == "*":
-            parts.append(".*")
-        elif ch == "?":
-            parts.append(".")
-        else:
-            parts.append(re.escape(ch))
-    return re.compile("^" + "".join(parts) + "$", re.IGNORECASE)
+# Old glob habits produce valid-but-narrower regex: 'same*pitch' quantifies
+# the literal 'e'. Advise rather than block.
+_LITERAL_QUANT = re.compile(r'(?<!\\)\w\*')
+
+
+def _glob_smell(pat: Optional[str]) -> Optional[str]:
+    m = _LITERAL_QUANT.search(pat) if pat else None
+    if m:
+        return (f"--- note: regex reads {m.group(0)!r} as a quantified "
+                "literal; for a glob-style wildcard use '.*' ---")
+    return None
 
 
 @mcp.tool(structured_output=False)
@@ -145,10 +146,11 @@ def reaper_doc_lookup(
     files (which return ~50 lines of markup per hit).
 
     Args:
-      name: function or constant name. Case-insensitive. Wildcards `*` and
-            `?` are supported — wildcard queries return a one-line index
-            (name + Lua signature) instead of full prose, capped at
-            `max_matches`.
+      name: function or constant name. Case-insensitive. A plain name
+            looks up exactly; a name containing regex metacharacters is
+            a regex (substring-matched — anchor with ^$ as needed) and
+            returns a one-line index (name + Lua signature) instead of
+            full prose, capped at `max_matches`.
       kind: "auto" (default) searches both ReaScript and ReaImGui;
             "reascript" or "imgui" restrict to one. ReaScript names are
             CamelCase like `GetMediaItemTrack`. ReaImGui names omit the
@@ -158,8 +160,14 @@ def reaper_doc_lookup(
     Returns:
       Cleanly-formatted entries (one per match) or an "(no match)" line.
     """
-    is_pattern = "*" in name or "?" in name
-    rx = _glob_to_regex(name) if is_pattern else None
+    is_pattern = re.escape(name) != name
+    rx = None
+    if is_pattern:
+        try:
+            rx = re.compile(name, re.IGNORECASE)
+        except re.error as exc:
+            return (f"--- ERROR: {name!r} is not valid regex ({exc}); "
+                    "a plain name looks up exactly ---")
 
     blocks: list[str] = []
     truncated = False
@@ -171,7 +179,7 @@ def reaper_doc_lookup(
             blocks.append(f"--- ERROR: missing {REASCRIPT_HTML} ---")
         else:
             if is_pattern:
-                hits = [(n, s, e) for (n, s, e) in entries if rx.match(n)]
+                hits = [(n, s, e) for (n, s, e) in entries if rx.search(n)]
                 for n, s, e in hits[:max_matches]:
                     body = text[s:e]
                     sig_m = _RS_LUA_SIG.search(body)
@@ -192,7 +200,7 @@ def reaper_doc_lookup(
         else:
             names = list(im.keys())
             if is_pattern:
-                hits = [n for n in names if rx.match(n)]
+                hits = [n for n in names if rx.search(n)]
                 for n in hits[:max_matches]:
                     summary, body = im[n]
                     sig_m = _IM_LUA_ROW.search(body)
@@ -206,11 +214,15 @@ def reaper_doc_lookup(
                         summary, body = im[n]
                         blocks.append(_format_imgui_entry(n, summary, body))
 
+    note = _glob_smell(name)
     if not blocks:
         suffix = "" if kind == "auto" else f" (kind={kind})"
-        return f"(no match for {name!r}{suffix})"
+        miss = f"(no match for {name!r}{suffix})"
+        return f"{miss}\n{note}" if note else miss
     if truncated:
         blocks.append(f"--- truncated at {max_matches} matches; narrow the pattern ---")
+    if note:
+        blocks.append(note)
     return "\n\n".join(blocks)
 
 
@@ -233,6 +245,11 @@ _ANN = re.compile(
 # Top-level edges (e.g. requires) appear as bare line numbers, no caller.
 _USE = re.compile(
     r'^\s*@use\s+(?P<ukind>\w+)\s+(?P<target>\S+)\s+@\s+(?P<sites>.+?)\s*$'
+)
+# `@field r|w <name>  @ <sites>` — hot fields repeat the head across chunked
+# rows; sites accumulate across rows.
+_FIELD = re.compile(
+    r'^\s*@field\s+(?P<fkind>[rw])\s+(?P<name>\w+)\s+@\s+(?P<sites>.+?)\s*$'
 )
 
 
@@ -282,6 +299,7 @@ def _normalize_kind(k: str) -> str:
         "constructs": "construct",
         "cases": "case",
         "use": "uses", "usedby": "usedby", "used-by": "usedby", "used_by": "usedby",
+        "read": "reads", "write": "writes", "field": "fields",
     }
     return aliases.get(k, k)
 
@@ -299,8 +317,11 @@ _TARGET_RX = re.compile(r'^(\w+)[.:](\w+)$')
 def _selfname_registry() -> dict:
     """Short instance name -> module, from each module map's `self=` header.
     Namespace modules map their name to itself; wiring files without `self=`
-    are absent (they are never receivers, so never usedby targets)."""
+    are absent (they are never receivers, so never usedby targets). Names
+    claimed by more than one module (e.g. two files returning a local `M`)
+    are ambiguous and dropped."""
     reg: dict = {}
+    ambiguous: set = set()
     for mp in sorted(MAP_DIR.glob("*.map")):
         try:
             head = mp.read_text(encoding="utf-8", errors="replace").split("\n", 1)[0]
@@ -308,7 +329,12 @@ def _selfname_registry() -> dict:
             continue
         m = _SELF_RX.match(head)
         if m:
-            reg[m.group("self")] = m.group("mod")
+            name, mod = m.group("self"), m.group("mod")
+            if reg.get(name, mod) != mod:
+                ambiguous.add(name)
+            reg[name] = mod
+    for name in ambiguous:
+        del reg[name]
     return reg
 
 
@@ -330,9 +356,9 @@ def _usedby_selectors(query, module, reg):
     modules = set(reg.values())
 
     def want_module(tok):
-        if ("*" in tok) or ("?" in tok):
-            rx = _glob_to_regex(tok)
-            mod_preds.append(lambda mod, rx=rx: bool(rx.match(mod)))
+        if re.escape(tok) != tok:
+            rx = re.compile(tok, re.IGNORECASE)
+            mod_preds.append(lambda mod, rx=rx: bool(rx.fullmatch(mod)))
         else:
             canon = reg.get(tok, tok)
             mod_preds.append(lambda mod, canon=canon: mod == canon)
@@ -343,17 +369,14 @@ def _usedby_selectors(query, module, reg):
     method = None
     raw_rx = None
     if query:
-        if ("*" in query) or ("?" in query):
-            raw_rx = _glob_to_regex(query)
-        else:
-            m = _TARGET_RX.match(query)
-            if m:                                   # `cm:get`, `configManager.get`
-                want_module(m.group(1))
-                method = m.group(2)
-            elif query in reg or query in modules:  # bare module / self name
-                want_module(query)
-            else:                                   # bare method name
-                raw_rx = re.compile(re.escape(query), re.IGNORECASE)
+        m = _TARGET_RX.match(query)
+        if m:                                       # `cm:get`, `configManager.get`
+            want_module(m.group(1))
+            method = m.group(2)
+        elif query in reg or query in modules:      # bare module / self name
+            want_module(query)
+        else:                                       # regex over raw target text
+            raw_rx = re.compile(query, re.IGNORECASE)
 
     module_pred = (lambda mod: all(p(mod) for p in mod_preds)) if mod_preds else None
     return module_pred, method, raw_rx
@@ -373,28 +396,36 @@ def map_query(
     to the declaration with Read offset/limit.
 
     Args:
-      query: name pattern. Supports `*` and `?` glob wildcards;
-             case-insensitive. Matches bare symbol names for structural
+      query: regex — case-insensitive, substring-matched (anchor with
+             ^$ for exact; alternation works: 'ppqL|endppqL'). NOT
+             glob: plain text already substring-matches, so no
+             wrapping stars. Matches bare symbol names for structural
              entries (`@fn`, `@api`, `@state`, `@const`, `@require`,
-             `@construct`) and full body text for annotations
-             (`@invariant`, `@contract`, `@shape`, `@emits`, `@reaper`).
+             `@construct`), full body text for annotations
+             (`@invariant`, `@contract`, `@shape`, `@emits`, `@reaper`),
+             and field names for reads/writes/fields.
              Omit to return everything matching the other filters.
       kind: filter by entry kind. Accepted (case-insensitive, plurals
             ok): fn, api, state, const, require/import, construct,
             case (spec test cases), invariant, contract, shape,
-            emits/signal, reaper, deps, uses, usedby. `uses` lists a
-            module's own outbound edges (calls / subs / forwards /
-            requires). `usedby` reverses it — scanning every map (specs
-            included, so it also answers "which specs exercise X") for
-            callers of the queried symbol or module, resolving short
-            instance names and `:`/`.` spellings so `cm:get`,
-            `configManager.get`, and module='configManager' all match.
+            emits/signal, reaper, deps, uses, usedby, reads/writes/
+            fields. `uses` lists a module's own outbound edges (calls
+            / subs / forwards / requires). `usedby` reverses it —
+            scanning every map (specs included, so it also answers
+            "which specs exercise X") for callers of the queried
+            symbol or module, resolving short instance names and
+            `:`/`.` spellings so `cm:get`, `configManager.get`, and
+            module='configManager' all match. `reads`/`writes` walk
+            the @field rows — every `.name` read or write site
+            (table-constructor keys count as writes); `fields`
+            returns both. query matches the field name; omit `module`
+            to sweep every module and spec for the blast radius.
             Omit for any.
-      module: restrict to a module by stem (e.g. `trackerManager`) or
-              glob (e.g. `tm_*`, `*Manager`). Matches the .map filename
-              (without extension). Spec maps (map/specs/, one per
+      module: restrict to a module by stem — regex, anchored (it names
+              .map files): `trackerManager`, `tm_.*`, `.*Manager`.
+              Spec maps (map/specs/, one per
               tests/specs/*_spec.lua) join every query; their stems end
-              `_spec`, so module='*_spec' restricts to specs.
+              `_spec`, so module='.*_spec' restricts to specs.
               Exception: under kind='usedby' `module` names the *used*
               target (the module whose callers you want), resolved via
               the self-name registry — so usedby+module='eventMeta'
@@ -405,21 +436,24 @@ def map_query(
       Lines of `<source>.lua:<line>  @kind <head>` for structural entries,
       and `<source>.lua  @kind  <body>` for annotations.
     """
+    for pat in (query, module):
+        if pat:
+            try:
+                re.compile(pat)
+            except re.error as exc:
+                return (f"--- ERROR: {pat!r} is not valid regex ({exc}). Queries "
+                        "are regex, not glob: plain text substring-matches; use "
+                        "'.*' where glob habits reach for '*' ---")
+    out = _map_query(query, kind, module, max_results)
+    notes = [n for n in (_glob_smell(query), _glob_smell(module)) if n]
+    return "\n".join([out, *notes]) if notes else out
+
+
+def _map_query(query, kind, module, max_results) -> str:
     if not MAP_DIR.exists():
         return f"--- ERROR: {MAP_DIR} not found ---"
 
-    query_rx: Optional[re.Pattern] = None
-    if query:
-        if "*" in query or "?" in query:
-            parts = []
-            for ch in query:
-                if ch == "*": parts.append(".*")
-                elif ch == "?": parts.append(".")
-                else: parts.append(re.escape(ch))
-            query_rx = re.compile("^" + "".join(parts) + "$", re.IGNORECASE)
-        else:
-            query_rx = re.compile(re.escape(query), re.IGNORECASE)
-
+    query_rx = re.compile(query, re.IGNORECASE) if query else None
     kind_filter = _normalize_kind(kind) if kind else None
 
     dirs = (MAP_DIR, MAP_DIR / "specs")
@@ -474,10 +508,9 @@ def map_query(
         return "\n".join(results)
 
     if module:
-        if "*" in module or "?" in module:
-            module_files = [p for d in dirs for p in sorted(d.glob(f"{module}.map"))]
-        else:
-            module_files = [p for d in dirs if (p := d / f"{module}.map").exists()]
+        module_rx = re.compile(module, re.IGNORECASE)
+        module_files = [p for d in dirs for p in sorted(d.glob("*.map"))
+                        if module_rx.fullmatch(p.stem)]
     else:
         module_files = [p for d in dirs for p in sorted(d.glob("*.map"))]
 
@@ -513,6 +546,38 @@ def map_query(
 
         if not results:
             return f"(no matches for kind={kind!r}, query={query!r}, module={module!r})"
+        if truncated:
+            results.append(f"--- truncated at {max_results}; narrow the query ---")
+        return "\n".join(results)
+
+    # `reads`/`writes`/`fields` walk @field rows. No module filter means every
+    # map, specs included — field queries are blast-radius questions.
+    if kind_filter in ('reads', 'writes', 'fields'):
+        want = {'reads': 'r', 'writes': 'w', 'fields': None}[kind_filter]
+        for mp in module_files:
+            text = mp.read_text(encoding="utf-8", errors="replace")
+            src = _src_of(mp, text)
+            for raw in text.splitlines():
+                mf = _FIELD.match(raw)
+                if not mf:
+                    continue
+                if want and mf.group("fkind") != want:
+                    continue
+                if query_rx and not query_rx.search(mf.group("name")):
+                    continue
+                for caller, n in _iter_use_sites(mf.group("sites")):
+                    if len(results) >= max_results:
+                        truncated = True
+                        break
+                    where = f"  (in {caller})" if caller else ""
+                    results.append(f"{src}:{n}  @field {mf.group('fkind')} {mf.group('name')}{where}")
+                if truncated:
+                    break
+            if truncated:
+                break
+
+        if not results:
+            return f"(no field matches for kind={kind!r}, query={query!r}, module={module!r})"
         if truncated:
             results.append(f"--- truncated at {max_results}; narrow the query ---")
         return "\n".join(results)

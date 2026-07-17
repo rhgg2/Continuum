@@ -31,3 +31,29 @@
   @use call gm:newInstance  @ 52,77,86
   @use call tm:flush  @ 53,57,78,81,87
   @use call gm:assignEvent  @ 56,80
+
+# Fields (r read / w write incl. constructor keys)
+  @field w chan  @ 25,52,77,86
+  @field w chanLo  @ 31
+  @field w delay  @ 56,80
+  @field w dur  @ 31
+  @field w endppq  @ 24
+  @field w endppqL  @ 24
+  @field w groups  @ 22
+  @field w lane  @ 25
+  @field w length  @ 23
+  @field w name  @ 45,70
+  @field r notes  @ 36
+  @field w notes  @ 23
+  @field r pitch  @ 37
+  @field w pitch  @ 25
+  @field r ppq  @ 39,61,63,91,94
+  @field w ppq  @ 24,31,52,77,86
+  @field w ppqL  @ 24
+  @field w resolution  @ 23
+  @field w run  @ 46,71
+  @field w seed  @ 23
+  @field w streams  @ 32
+  @field r uuid  @ 56,80
+  @field w uuid  @ 25
+  @field w vel  @ 25

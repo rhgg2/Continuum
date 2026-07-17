@@ -205,3 +205,182 @@
   @reaper new_array
   @reaper GetMediaItemInfo_Value
   @reaper time_precise
+
+# Fields (r read / w write incl. constructor keys)
+  @field r ChildFlags_None  @ renderBody:792
+  @field r Col_TableBorderLight  @ pushBodyStyles:66
+  @field r Col_TableBorderStrong  @ pushBodyStyles:67
+  @field r Col_TableHeaderBg  @ pushBodyStyles:63
+  @field r Col_TableRowBg  @ pushBodyStyles:64
+  @field r Col_TableRowBgAlt  @ pushBodyStyles:65
+  @field r Col_Text  @ pushBodyStyles:62
+  @field r ImGui_GetBuiltinPath  @ 9
+  @field r Key_Enter  @ 674
+  @field r Key_Escape  @ 678
+  @field r Key_KeypadEnter  @ 675
+  @field r Mod_Ctrl  @ handleGridMouse:259
+  @field r Mod_Shift  @ handleGridMouse:228,258
+  @field r SelectableFlags_SpanAllColumns  @ renderPaletteList:717
+  @field r TableColumnFlags_WidthFixed  @ renderPaletteList:709,710
+  @field r TableColumnFlags_WidthStretch  @ renderPaletteList:711
+  @field r WindowFlags_NoNav  @ renderBody:793
+  @field r WindowFlags_NoScrollWithMouse  @ renderBody:794
+  @field r WindowFlags_NoScrollbar  @ renderBody:795
+  @field w acceptCmds  @ focusState:822,826
+  @field r add  @ handleGridMouse:298,309
+  @field w add  @ handleGridMouse:266,275
+  @field w align  @ 761
+  @field r arrange  @ 854
+  @field w arrangeSetBeatPerRow  @ 842
+  @field r av  @ 18
+  @field r availH  @ renderGrid:340,495
+  @field w availH  @ gridGeom:203
+  @field r beatsBuf  @ 671,679
+  @field w beatsBuf  @ 653,672
+  @field r bodyBot  @ handleGridMouse:229
+  @field w bodyBot  @ gridGeom:205
+  @field r bodyTop  @ handleGridMouse:229
+  @field w bodyTop  @ gridGeom:204
+  @field w buf  @ openRenameModal:629 846
+  @field r building  @ peaksFor:140
+  @field w building  @ peaksFor:137,143
+  @field w callback  @ openRenameModal:630 openDeleteModal:641 654,847
+  @field r ceil  @ drainWheel:55
+  @field r chan  @ renderGrid:417
+  @field r chrome  @ 18
+  @field r cm  @ 18
+  @field r cmgr  @ 18
+  @field r col  @ handleGridMouse:303,308 renderGrid:479
+  @field w col  @ handleGridMouse:265,271,275
+  @field r colHi  @ renderGrid:491
+  @field r colLo  @ renderGrid:490
+  @field r colourIdx  @ renderGrid:433
+  @field r cols  @ renderGrid:395
+  @field w cols  @ peaksFor:135
+  @field r create  @ handleGridMouse:286,289,300
+  @field w create  @ handleGridMouse:271
+  @field w createSlot  @ 838
+  @field r ctx  @ 20
+  @field w digits  @ 761
+  @field w draw  @ renderBody:805
+  @field r duplicate  @ renderGrid:458
+  @field w duplicate  @ handleGridMouse:267
+  @field r fits  @ handleGridMouse:294 renderGrid:470
+  @field r floor  @ drainWheel:55
+  @field r font  @ 23
+  @field r fontSize  @ 24
+  @field w format  @ 761
+  @field r ghosts  @ renderGrid:459,469
+  @field r gridR  @ renderGrid:328
+  @field w gridR  @ gridGeom:210
+  @field r gridW  @ renderGrid:603
+  @field w gridW  @ gridGeom:211
+  @field w group  @ handleGridMouse:266
+  @field r gui  @ 18
+  @field r gutter  @ handleGridMouse:284,289,304
+  @field w gutter  @ handleGridMouse:251
+  @field r gutterR  @ handleGridMouse:230 renderGrid:568
+  @field w gutterR  @ gridGeom:208
+  @field w h  @ renderBody:803
+  @field r headerH  @ renderGrid:594,603
+  @field w headerH  @ gridGeom:204
+  @field r hi  @ peaksFor:132,164 renderGrid:385,396
+  @field r hiQN  @ handleGridMouse:296 renderGrid:521
+  @field w id  @ 748,755
+  @field r idx  @ focusedSlotEntry:613 paletteTrackLabel:621 openDeleteModal:635,637,641 renderPaletteActions:684,689 renderPaletteList:716,718,722,730
+  @field r idx  @ renderPaletteBody:736
+  @field r item  @ renderGrid:383,459,463
+  @field r kind  @ renderGrid:436,439 renderPaletteList:726
+  @field w kind  @ 650
+  @field w label  @ renderBody:804
+  @field r lastCol  @ renderGrid:329
+  @field w lastCol  @ gridGeom:207
+  @field r lengthQN  @ handleGridMouse:302 renderGrid:464,470,477
+  @field r lo  @ renderGrid:397
+  @field w lo  @ peaksFor:164
+  @field r loQN  @ handleGridMouse:296 renderGrid:521
+  @field w max  @ 761
+  @field w mcol  @ handleGridMouse:275
+  @field w min  @ 761
+  @field r modalHost  @ 18
+  @field w mode  @ handleGridMouse:266
+  @field r moved  @ handleGridMouse:282,284,286,288
+  @field w moved  @ handleGridMouse:251,266,271,275,280
+  @field r name  @ renderGrid:443,445,544,547,590,591 paletteTrackLabel:620 openDeleteModal:636
+  @field r name  @ renderPaletteActions:689 renderPaletteList:729
+  @field w name  @ renderGrid:445
+  @field r nameBuf  @ 668,679
+  @field w nameBuf  @ 652,669
+  @field r naturalLenQN  @ renderGrid:450
+  @field r notes  @ renderGrid:406
+  @field r offE  @ renderGrid:412
+  @field r offS  @ renderGrid:411
+  @field r ox  @ gridGeom:208,210 renderGrid:328
+  @field w ox  @ gridGeom:199,203
+  @field r oy  @ renderGrid:328
+  @field w oy  @ gridGeom:199,203
+  @field r paneLeft  @ handleGridMouse:230 renderGrid:340,495,529
+  @field w paneLeft  @ gridGeom:203
+  @field r paneR  @ renderGrid:491,495
+  @field w paneR  @ gridGeom:209
+  @field r path  @ 12
+  @field w path  @ 12
+  @field r pg  @ handleGridMouse:219 renderGrid:325
+  @field w pg  @ gridGeom:203
+  @field r pi  @ renderGrid:532,535
+  @field w prompt  @ openRenameModal:628 openDeleteModal:640 845
+  @field r qn  @ handleGridMouse:303,306
+  @field w qn  @ handleGridMouse:251,265,271,275
+  @field r qnHi  @ renderGrid:493
+  @field r qnLo  @ renderGrid:492
+  @field w render  @ 749,756
+  @field r row  @ handleGridMouse:308
+  @field w row  @ handleGridMouse:265,275
+  @field r rowH  @ handleGridMouse:256 renderGrid:327
+  @field w rowH  @ gridGeom:204
+  @field r rx0  @ renderGrid:545,546,556,558
+  @field w rx0  @ renderGrid:445,451
+  @field r rx1  @ renderGrid:545,546,556,558
+  @field w rx1  @ renderGrid:445,451
+  @field r ry0  @ renderGrid:546,547
+  @field w ry0  @ renderGrid:445
+  @field r ry1  @ renderGrid:546,557,558
+  @field w ry1  @ renderGrid:445,451
+  @field r sc  @ renderGrid:329
+  @field w sc  @ gridGeom:206
+  @field r set  @ renderGrid:465
+  @field r sig  @ peaksFor:131
+  @field w sig  @ peaksFor:135
+  @field w snap  @ gridGeom:200
+  @field r sr  @ handleGridMouse:254 renderGrid:327
+  @field w sr  @ gridGeom:205
+  @field r srcSec  @ renderGrid:393
+  @field w srcSec  @ peaksFor:135
+  @field r startOffs  @ renderGrid:393
+  @field w startOffs  @ peaksFor:136
+  @field r startQN  @ renderGrid:411,412,464,470,476,477
+  @field w suppressKbd  @ focusState:822,825
+  @field w sx  @ gridGeom:200
+  @field w sy  @ gridGeom:200
+  @field r take  @ handleGridMouse:263,269,282,288,311,314 renderGrid:376,384
+  @field r take  @ renderGrid:459,465,470
+  @field w take  @ handleGridMouse:266
+  @field r takes  @ handleGridMouse:298,299
+  @field w title  @ openRenameModal:627 openDeleteModal:639 651,844
+  @field w toggleFollowPlay  @ 841
+  @field r trackIdx  @ renderGrid:430
+  @field r ui  @ 24
+  @field r visCols  @ handleGridMouse:221
+  @field w visCols  @ gridGeom:206
+  @field r visRows  @ handleGridMouse:221,254 renderGrid:327
+  @field w visRows  @ gridGeom:205
+  @field r winSec  @ renderGrid:394
+  @field w winSec  @ peaksFor:135
+  @field r wrap  @ renderGrid:393
+  @field w wrap  @ peaksFor:136
+  @field w x  @ renderBody:803
+  @field w x0  @ renderGrid:331
+  @field w x1  @ renderGrid:331
+  @field w y  @ renderBody:803
+  @field w y0  @ renderGrid:331
+  @field w y1  @ renderGrid:331

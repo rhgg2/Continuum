@@ -1,4 +1,4 @@
-@spec mm_unified_spec  src=tests/specs/mm_unified_spec.lua  loc=173  sha=70ef819  cases=9
+@spec mm_unified_spec  src=tests/specs/mm_unified_spec.lua  loc=173  sha=37ed80d  cases=9
 @exercises midiManager (h.fm)
 @surface   fm:modify, fm:byUuid, fm:notes, fm:assign, fm:ccs, fm:delete, fm:events, fm:add
 @harness   mk{seed.notes, seed.ccs}, bareMM
@@ -33,3 +33,32 @@
   @use call fm:delete  @ 108,112,127,169
   @use call fm:events  @ 116,129,148
   @use call fm:add  @ 166
+
+# Fields (r read / w write incl. constructor keys)
+  @field w at  @ 38
+  @field r cc  @ 91
+  @field w cc  @ 35,84,88,101,143
+  @field w ccs  @ 84,101,142
+  @field r chan  @ 24
+  @field w chan  @ 19,35,36,37,38,39,53,69,84,100,101,125
+  @field w chan  @ 139,140,143,144
+  @field r delay  @ 61
+  @field w delay  @ 58
+  @field w endppq  @ 19,53,69,100,125,139,140
+  @field r evType  @ 44,150
+  @field w evType  @ 19,35,36,37,38,39,84,101,143,144
+  @field w name  @ 14,30,50,66,82,96,122,135,162
+  @field w notes  @ 53,69,100,125,138
+  @field w pa  @ 37
+  @field w pb  @ 36
+  @field w pc  @ 39
+  @field r pitch  @ 23
+  @field w pitch  @ 19,37,53,69,100,125,139,140
+  @field r ppq  @ 25,77
+  @field w ppq  @ 19,35,36,37,38,39,53,69,74,84,100,101
+  @field w ppq  @ 125,139,140,143,144
+  @field w run  @ 15,31,51,67,83,97,123,136,163
+  @field w seed  @ 53,69,99,125
+  @field r uuid  @ 56,72,86,106
+  @field w val  @ 35,36,38,39,84,101,143,144
+  @field w vel  @ 19,37,53,69,100,125,139,140,168
