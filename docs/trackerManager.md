@@ -103,6 +103,16 @@ calls re-fire `'reload'` and would otherwise clear it. The incremental path
 was validated against a full `reload()` by a perf-gated shadow-compare during
 the migration; that scaffolding is removed now that parity is established.
 
+Note entries also carry `colEvt` — the seat stamp. As the rebuild seats a
+column cell (internals, externals, or a restored parked note once its
+deferred add lands), it files the cell on the note's entry via
+`stampColEvt`. The stamp is how raw consumers reach the pass's live cell
+without a per-pass column scan, and it must outlive reconciliation:
+`refreshEntry`'s sweep spares um's own decoration (`realised`, `colEvt`),
+and the remove-and-reinsert path carries the stamp onto the fresh entry.
+Re-seating overwrites it; a wholesale reload rebuilds entries bare, and the
+same pass's seating restamps them (the head reload runs before any stage).
+
 ### Interval seeds
 
 um's low-level verbs (`addLowlevel`/`assignLowlevel`/`deleteLowlevel`) each drop a point seed
@@ -142,9 +152,9 @@ tm-specific facts:
   and at flush (`centsToRaw`). The cents window is
   `cm:get('pbRange') * 100` per side.
 - **Lane-1 drives detune.** Every note has a `detune` field, but
-  only lane-1 notes feed the pb-realisation logic — `detuneAt` walks
-  only `rawIndex[chan].notes`, which is built from lane-1 entries (see
-  `addLowlevel`). Higher lanes' detune is dead data for realisation
+  only lane-1 notes feed the pb-realisation logic — `detuneAt` seeks
+  `rawIndex[chan].notes` (which holds every lane) through a lane-1
+  filter. Higher lanes' detune is dead data for realisation
   purposes; it survives so display layers and any future
   lane-promotion paths can read it back.
 - **Absorber persistence.** Absorbers carry `derived='absorber'` as
@@ -243,10 +253,10 @@ Semantics:
 - **Lane / chan changes.** Both are accepted by `assignEvent`. A note's
   `lane` is persisted per note and taken verbatim by the next rebuild
   (`pickStampedLane`), so an in-place lane assign reseats the note's
-  column without shedding its identity; `assignLowlevel` migrates the
-  lane-1 detune index when the move crosses the lane-1 boundary. A `chan`
-  change is likewise accepted; rebuild's absorber pass reconciles fakes
-  across both channels.
+  column without shedding its identity (the note index spans all lanes,
+  so nothing migrates). A `chan` change is likewise accepted, migrating
+  the index entry between channel lists; rebuild's absorber pass
+  reconciles fakes across both channels.
 - **Single voice per (chan, pitch) — realised space.** MIDI permits
   one voice per `(chan, pitch)`. tv writes authored logical verbatim;
   distinct voices that collide in realised raw (swing/delay-collapsed,

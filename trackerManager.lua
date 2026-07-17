@@ -87,6 +87,13 @@ local function sortByPPQ(tbl)
   table.sort(tbl, function(a, b) return a.ppq < b.ppq end)
 end
 
+-- Raw order, logical tie-break: co-onset raws keep authored order. A nil ppqL (foreign,
+-- pre-seating) falls back to ppq, leaving equals unordered -- readers filter them anyway.
+local function rawThenLogical(a, b)
+  if a.ppq ~= b.ppq then return a.ppq < b.ppq end
+  return (a.ppqL or a.ppq) < (b.ppqL or b.ppq)
+end
+
 -- Only note columns interleave notes and PAs, which can share an onset: ties order note-before-PA,
 -- then pitch, so an equal-onset seat holds across rebuilds. see design/archive/logical-column-order.md
 local function sortNoteColumn(tbl)
@@ -562,7 +569,8 @@ end
 ---------- UPDATE MANAGER
 
 local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
-      flush, reload, idxReconcile, withDeferredSort, clearStaging, absorbReloadDirt do
+      flush, reload, idxReconcile, withDeferredSort, clearStaging, absorbReloadDirt,
+      stampColEvt do
 
   ----- State
 
@@ -581,8 +589,9 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
 
   -- Prevailing lane-1 detune at-or-before ppq; flush derives wire-raw = cents + detuneAt(seat).
   -- Full absorber reconciliation is rebuild's absorber pass; um just stages the best-effort value.
+  local function laneOne(n) return n.lane == 1 end
   local function detuneAt(chan, P)
-    local n = util.seek(rawIndex[chan].notes, 'at-or-before', P)
+    local n = util.seek(rawIndex[chan].notes, 'at-or-before', P, laneOne)
     return (n and n.detune) or 0
   end
 
@@ -600,23 +609,23 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
 
   ----- Low-level mutation
 
-  -- rawIndex indexes only what detune/seek read: lane-1 notes and pbs. One place to
-  -- resolve the target list, so insert/remove/migrate stay in sync across ops.
-  local function rawIndexListFor(evt, chan, lane)
-    if evt.evType == 'note' and lane == 1 then return rawIndex[chan].notes end
+  -- rawIndex holds every note (all lanes) and every pb per channel, raw-then-logical
+  -- sorted; readers filter at use (detuneAt: lane 1; the walk: on-take non-derived).
+  local function rawIndexListFor(evt, chan)
+    if evt.evType == 'note' then return rawIndex[chan].notes end
     if evt.evType == 'pb' then return rawIndex[chan].pbs end
   end
   -- During a batched reconcile this holds the lists rawIndexInsert touched; the batch
   -- sorts each once at the end instead of re-sorting per insert. nil = sort inline.
   local deferredSort
   local function rawIndexInsert(evt)
-    local tbl = rawIndexListFor(evt, evt.chan, evt.lane)
+    local tbl = rawIndexListFor(evt, evt.chan)
     if not tbl then return end
     util.add(tbl, evt)
-    if deferredSort then deferredSort[tbl] = true else sortByPPQ(tbl) end
+    if deferredSort then deferredSort[tbl] = true else table.sort(tbl, rawThenLogical) end
   end
-  local function rawIndexRemove(evt, chan, lane)
-    local tbl = rawIndexListFor(evt, chan or evt.chan, lane or evt.lane)
+  local function rawIndexRemove(evt, chan)
+    local tbl = rawIndexListFor(evt, chan or evt.chan)
     if not tbl then return end
     for i, item in ipairs(tbl) do if item == evt then table.remove(tbl, i); return end end
   end
@@ -627,7 +636,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     local prev = deferredSort
     deferredSort = {}
     fn()
-    for tbl in pairs(deferredSort) do sortByPPQ(tbl) end
+    for tbl in pairs(deferredSort) do table.sort(tbl, rawThenLogical) end
     deferredSort = prev
   end
 
@@ -650,13 +659,14 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
 
   -- Refresh an existing entry from mm's fresh clone in place: prev keeps its ppq-sorted
   -- slot in rawIndex, so a same-slot reconcile skips the rawIndexRemove scan, reinsert and sort.
+  local umDecor = { realised = true, colEvt = true }   -- um's own fields; mm's clone never carries them
   local function refreshEntry(prev, e)
     if e.evType == 'pb' then
       prev.ppqL, prev.shape, prev.tension = e.ppqL, e.shape, e.tension
       prev.derived, prev.frame, prev.cents = e.derived, e.frame, e.cents
       prev.val = rawToCents(e.val)
     else
-      for k in pairs(prev) do if e[k] == nil and k ~= 'realised' then prev[k] = nil end end
+      for k in pairs(prev) do if e[k] == nil and not umDecor[k] then prev[k] = nil end end
       util.assign(prev, e)
       prev.realised = true
     end
@@ -669,13 +679,25 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     local prev = byUuid[uuid]
     local _, e = mm:byUuid(uuid)
     if e and prev and prev.ppq == e.ppq
-       and rawIndexListFor(prev, prev.chan, prev.lane) == rawIndexListFor(e, e.chan, e.lane) then
+       and rawIndexListFor(prev, prev.chan) == rawIndexListFor(e, e.chan) then
       refreshEntry(prev, e)
       return
     end
     byUuid[uuid] = nil
     if prev then rawIndexRemove(prev) end
-    if e then rawIndexInsert(makeEntry(e)) end
+    if e then
+      local entry = makeEntry(e)
+      entry.colEvt = prev and prev.colEvt   -- the seat stamp outlives reconciliation; only re-seating replaces it
+      rawIndexInsert(entry)
+    end
+  end
+
+  -- Seat stamp: columns file their live cell on the entry as they seat it, giving raw consumers
+  -- the cell without a per-pass column scan. Returns whether the uuid has an entry (mm knows it).
+  function stampColEvt(colNote)
+    local entry = byUuid[colNote.uuid]
+    if entry then entry.colEvt = colNote end
+    return entry ~= nil
   end
 
   -- Absorber derivation inputs: any pb, and lane-1 notes' onset/detune geometry.
@@ -699,8 +721,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   end
   local function seedEvent(evt) seedAt(evt.chan, evt.ppqL or evt.ppq, evt.uuid) end
 
-  --contract: only lane==1 notes index into rawIndex[chan].notes
-  --contract: higher-lane notes get queued for mm but don't feed detune/realisation reads
+  --contract: every staged note (any lane) and pb files into rawIndex; detune reads filter to lane 1
   --contract: caller supplies evt.evType
   local function addLowlevel(evt)
     if pbSource(evt, evt.lane) then dirtyChan(evt.chan) end
@@ -719,15 +740,15 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     -- A move (onset shifts) is delete-at-old + insert-at-new: seed both positions. see design § Intervals are event-anchored
     if update.ppq ~= nil or update.ppqL ~= nil or update.delay ~= nil then seedAt(oldChan, oldPpqL, evt.uuid) end
     seedEvent(evt)
-    -- Keep the lane-1 detune index coherent: a chan OR lane move migrates the
-    -- entry between lists; a ppq move resorts in place (util.seek needs ascending).
-    local oldList = rawIndexListFor(evt, oldChan, oldLane)
-    local newList = rawIndexListFor(evt, evt.chan, evt.lane)
+    -- Keep the index coherent: a chan move migrates the entry between lists; a move in
+    -- either frame resorts in place (util.seek and the walk need ascending order).
+    local oldList = rawIndexListFor(evt, oldChan)
+    local newList = rawIndexListFor(evt, evt.chan)
     if oldList ~= newList then
-      rawIndexRemove(evt, oldChan, oldLane)
+      rawIndexRemove(evt, oldChan)
       rawIndexInsert(evt)
-    elseif update.ppq ~= nil and newList then
-      sortByPPQ(newList)
+    elseif (update.ppq ~= nil or update.ppqL ~= nil) and newList then
+      table.sort(newList, rawThenLogical)
     end
     if not evt.realised then return end
     for _, e in ipairs(assigns) do
@@ -1139,11 +1160,15 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     for i = 1, 16 do rawIndex[i] = { notes = {}, pbs = {} } end
     for _, e in mm:events() do
       local evt = makeEntry(e)
-      local tbl = rawIndexListFor(evt, evt.chan, evt.lane)
+      local tbl = rawIndexListFor(evt, evt.chan)
       if tbl then util.add(tbl, evt) end
     end
-    -- mm:events() yields notes then ccs each already ppq-sorted (mm's stableByPpq);
-    -- the per-channel filter above preserves that order, so no re-sort is needed.
+    -- mm:events() yields each kind ppq-sorted and the per-channel filter preserves that;
+    -- one sort per list settles the logical tie-break the incremental path maintains.
+    for i = 1, 16 do
+      table.sort(rawIndex[i].notes, rawThenLogical)
+      table.sort(rawIndex[i].pbs, rawThenLogical)
+    end
   end
 
   -- Fold this flush's per-verb seeds into dirtyChans as interval dirt: payload chans the seeds cover
@@ -1610,6 +1635,7 @@ local function rebuildInternals()
       util.add(reseated, colNote)
     end
     util.add(col.events, colNote)
+    stampColEvt(colNote)
   end
 
   -- Reswing can collapse two distinct-ppqL same-pitch notes onto one raw. The collision rides into
@@ -1847,6 +1873,7 @@ local function rebuildExternals(external)
     util.assign(colNote, update)
     colNote.fixed = true
     util.add(col.events, colNote)
+    stampColEvt(colNote)
     util.add(seated, colNote)
     extWrites.assign(colNote, update)
   end
@@ -2193,16 +2220,11 @@ local function buildRawScratch(restoredRecs)
   local scratch = {}
   for chan = 1, 16 do
     if dirtyChans[chan] then
-      local colByUuid = {}
-      for _, col in ipairs(channels[chan].columns.notes) do
-        for _, evt in ipairs(col.events) do
-          if evt.uuid then colByUuid[evt.uuid] = evt end
-        end
-      end
       local recs = {}
       for _, raw in mm:notesRaw(chan) do
         if not raw.derived and raw.ppqL ~= nil then
-          local rec = pickScratch(raw, { colEvt = colByUuid[raw.uuid] })
+          local entry = tm:byUuid(raw.uuid)
+          local rec = pickScratch(raw, { colEvt = entry and entry.colEvt })
           rec.detune = rec.detune or 0   -- ingestion defaults it on the column note; mirror that
           util.add(recs, rec)
         end
@@ -2638,10 +2660,6 @@ local function rebuildTails(noteLive, deferred, scratch)
       return nearest
     end
 
-    local function rawThenLogical(a, b)
-      if a.ppq ~= b.ppq then return a.ppq < b.ppq end
-      return a.ppqL < b.ppqL
-    end
     table.sort(notes, rawThenLogical)
 
     -- Same-pitch onset separation, retro-clip subsumed by tail pass: only a disturbed note can
@@ -3211,9 +3229,9 @@ local function rebuildPipeline(didReload)
   perf.start('tails'); rebuildTails(fxOut.noteLive, deferred, rawScratch); perf.stop('tails')  -- unified tail/onset walk + atomic note commit
 
   -- The deferred commit added each restored note to mm; mark its column cell realised so an
-  -- immediate edit resolves the backing (else the cell is inert until the next full rebuild).
+  -- immediate edit resolves the backing, and seat-stamp the fresh entry like any other seat.
   for _, rec in ipairs(restoredNotes) do
-    if tm:byUuid(rec.colEvt.uuid) then rec.colEvt.realised = true end
+    if stampColEvt(rec.colEvt) then rec.colEvt.realised = true end
   end
   perf.start('pbs'); rebuildPbs(fxOut, sources.extraColumns, rawScratch); perf.stop('pbs')  -- absorber reconciliation + pb resynthesis
   perf.start('pcs'); rebuildPCs(fxOut.noteLive, rawScratch); perf.stop('pcs')  -- PC synthesis (trackerMode)

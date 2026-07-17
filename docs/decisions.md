@@ -4,6 +4,11 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-18** — um's `rawIndex` widened to every note (all lanes, raw-then-logical order) with
+  readers filtering at use, and column cells now reach raw consumers via a `colEvt` seat stamp on
+  the index entry — stamped where columns seat, surviving reconciliation — rather than a per-pass
+  column scan. Chosen over caching the scratch: the index is the already-maintained cache. See
+  design/interval-dirt.md § Phase 4.5.
 - **2026-07-17** — `util.picker` (compile a key list once) added beside `util.pick` rather than
   memoizing the parse inside `pick`. `pick` re-parses its key string per call: 9.7ms of pure gmatch
   in `buildRawScratch` alone, more than the whole phase-4 tail-walk commit returned. *Chosen over*
