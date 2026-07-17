@@ -1,40 +1,36 @@
-@spec mm_token_spec  src=tests/specs/mm_token_spec.lua  loc=169  sha=bfdeb03  cases=8
-@exercises midiManager (h.mm)
-@surface   mm:tokenOf, fm:notes, fm:byToken, fm:ccs, fm:reload, fm:modify, fm:assign
-@harness   mk{seed.notes, seed.ccs}, bareMM
+@spec mm_token_spec  src=tests/specs/mm_token_spec.lua  loc=153  sha=b5afaeb  cases=8
+@exercises midiManager (h.fm)
+@surface   fm:notes, fm:tokenOf, fm:byToken, fm:ccs, fm:reload, fm:modify, fm:assign
+@harness   mk{seed.notes}, bareMM
 
 # Intent
-  Pin-tests for opaque content-keyed addressing on midiManager.
+  Pin-tests for how midiManager is addressed. Every event mm hands out carries a
+  uuid, and that uuid is the handle: byToken, assign and delete all take one.
   
-  Token contract:
-    * Built from the event's identity fields (evType, chan, ppq, and
-      pitch|cc as relevant). Opaque to callers; mm:byToken is the inverse.
-    * Stable across reload as long as identity fields don't change.
-    * Exists for every event mm returns — including plain ccs that have
-      no uuid.
+  Content keys (evType, chan, ppq, pitch|cc) stay private to mm, where they serve
+  only the same-pitch collision backstop -- see mm_collision_backstop_spec.
   
-  This spec exercises the read side only. Step 3 will add the unified
-  write surface and exercise round-trips through assign / delete.
-
-# Helpers
-  @fn token(mm, kind, fields)  @ 15-21
+  Identity contract:
+    * Every event has one, minted at add or at load. mm:tokenOf(evt) is evt.uuid.
+    * Stable under every assign: moving ppq, pitch or chan does not re-key it.
+    * Durable across reload, except a plain cc -- it binds no sidecar, so its uuid
+      is in-memory only and re-minted each load. See mm_plain_cc_spec.
 
 # Cases
-  @case 'note: tokenOf round-trips through byToken'  [harness]  @ 25-38
-  @case 'cc: tokenOf round-trips for a plain cc'  [harness]  @ 42-51
-  @case 'pb / pa / at / pc: every evType yields a working token'  [harness]  @ 55-76
-  @case 'tokens are stable across reload'  [harness]  @ 80-100
-  @case 'mutating an identity field retires the old token'  [harness]  @ 104-120
-  @case 'distinct events with overlapping fields get distinct tokens'  [harness]  @ 124-147
-  @case 'tokenOf returns nil for a non-event'  [harness]  @ 151-156
-  @case 'byToken returns nil for an unknown token'  [harness]  @ 160-167
+  @case 'note: tokenOf round-trips through byToken'  [harness]  @ 17-30
+  @case 'cc: a plain cc is addressable like any other'  [harness]  @ 34-43
+  @case 'pb / pa / at / pc: every evType yields a working handle'  [harness]  @ 47-66
+  @case 'a persisted note keeps its handle across reload'  [harness]  @ 70-83
+  @case 'moving an identity field does not re-key: the same handle resolves to the moved note'  [harness]  @ 87-103
+  @case 'distinct events get distinct handles'  [harness]  @ 107-131
+  @case 'tokenOf returns nil for a non-event'  [harness]  @ 135-140
+  @case 'byToken returns nil for an unknown handle'  [harness]  @ 144-151
 
 # Uses (outbound edges)
-  @use call mm:tokenOf  @ 20
-  @use call fm:notes  @ 30,88,109,115,139
-  @use call fm:tokenOf  @ 31,90,110,116,139,140,154,155
-  @use call fm:byToken  @ 33,46,71,94,95,114,118,165,166
-  @use call fm:ccs  @ 89,140
-  @use call fm:reload  @ 92
-  @use call fm:modify  @ 112
-  @use call fm:assign  @ 112
+  @use call fm:notes  @ 22,75,92,101,122
+  @use call fm:tokenOf  @ 23,38,59,76,93,102,122,123,138,139
+  @use call fm:byToken  @ 25,38,59,80,97,149,150
+  @use call fm:ccs  @ 37,58,123
+  @use call fm:reload  @ 78
+  @use call fm:modify  @ 95
+  @use call fm:assign  @ 95

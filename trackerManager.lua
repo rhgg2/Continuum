@@ -663,13 +663,13 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     end
   end
 
-  -- Incremental index upkeep for one token. Same token + same target list => same slot
-  -- (ppq is an identity field): refresh in place, else remove + reinsert. see docs/trackerManager.md § Incremental index reconciliation
+  -- Incremental index upkeep for one handle. chans lists are ppq-sorted and chansListFor ignores
+  -- ppq, so refresh in place only at an unchanged ppq. see docs/trackerManager.md § Incremental index reconciliation
   function idxReconcile(tok)
     if not tok then return end
     local prev = byToken[tok]
     local _, e = mm:byToken(tok)
-    if e and prev
+    if e and prev and prev.ppq == e.ppq
        and chansListFor(prev, prev.chan, prev.lane) == chansListFor(e, e.chan, e.lane) then
       refreshEntry(prev, e, tok)
       return
@@ -859,7 +859,6 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   ----- Public interface
 
   -- The live column event for a uuid, valid until the next rebuild.
-  -- uuid is durable; token is re-keyed each rebuild, so cross-rebuild handles use uuid.
   function tm:byUuid(uuid) return byUuid[uuid] end
 
   function deleteEvent(evtOrToken)
@@ -970,9 +969,9 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
       if not rawCaller then realiseAddPpq(evt, false) end
       if evt.evType == 'pb' then evt.cents, evt.val = evt.val or 0, nil end
       -- pb is one value per tick: adopt a pb already at this slot -- including a hidden
-      -- absorber seat -- so we never push a token-colliding rival. see docs/tuning.md § Absorber reconciliation
-      local seat = evt.evType == 'pb' and byToken[mm:tokenOf(evt)]
-      if seat and seat.evType == 'pb' then
+      -- absorber seat -- so we never push a rival onto it. see docs/tuning.md § Absorber reconciliation
+      local seat = evt.evType == 'pb' and util.seek(chans[evt.chan].pbs, 'at-or-before', evt.ppq)
+      if seat and seat.ppq == evt.ppq then
         assignLowlevel(seat, { cents = evt.cents, shape = evt.shape, derived = util.REMOVE })
       else
         addLowlevel(evt)
@@ -1042,7 +1041,6 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   --contract: no-op if nothing staged
   --contract: commits deletes, then assigns, then adds under one mm:modify
   --contract: pb cents→raw conversion happens here
-  --contract: byToken re-keyed live from mm:assign's returned token when an identity field moved
   --contract: snapshots ops before mm:modify; mm-callback re-entry can't re-emit in-flight ops
   --emits: preflush -- (adds, assigns, deletes)
   --contract: preflush fires before the no-op check so a subscriber can stage peer ops
@@ -1131,12 +1129,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
         byToken[o.token] = nil
       end
       for _, o in ipairs(flushAssigns) do
-        local newTok = mm:assign(o.token, o.update)
-        if newTok and newTok ~= o.token then
-          byToken[o.token] = nil
-          byToken[newTok]  = o.evt
-          o.evt.token      = newTok
-        end
+        mm:assign(o.token, o.update)
       end
       for _, o in ipairs(flushAdds) do
         local tok = mm:add(o.evt)
@@ -1514,7 +1507,6 @@ local function strictNextMap(groups)
 end
 
 -- Accumulate mm ops, commit once in canonical delete -> assign -> add order; no-op if empty.
--- assign re-keys a passed evt's token in place when an identity field moved.
 local function mmBatch()
   local dels, assigns, adds, lazyAdds = {}, {}, {}, {}
   return {
@@ -1530,13 +1522,8 @@ local function mmBatch()
       mm:modify(function()
         for _, e in ipairs(dels) do mm:delete(e.token); touched[e.token] = true end
         for _, a in ipairs(assigns) do
-          local oldTok = a.evt.token
-          local newTok = mm:assign(oldTok, a.update)
-          touched[oldTok] = true
-          if newTok then
-            if newTok ~= oldTok then a.evt.token = newTok end
-            touched[newTok] = true
-          end
+          mm:assign(a.evt.token, a.update)
+          touched[a.evt.token] = true
         end
         for _, s  in ipairs(adds)     do local t = mm:add(s);    if t then touched[t] = true end end
         for _, fn in ipairs(lazyAdds) do local t = mm:add(fn()); if t then touched[t] = true end end
@@ -1921,14 +1908,6 @@ local function unlink(events, evt)
   for i, e in ipairs(events) do if e == evt then table.remove(events, i); break end end
 end
 
--- Drops the stale fill seat from ccExisting so rebuildFx's fill reconcile can't delete a restored
--- cc by its shared ppq-token. see docs/trackerManager.md § Region-replace parking
-local function dropFillSeat(existing, cc, ppq)
-  for i, e in ipairs(existing or {}) do
-    if e.cc == cc and e.ppq == ppq then table.remove(existing, i); return end
-  end
-end
-
 -- Off-take render union: parked specs stay visible in-column as render-ready cells.
 local function renderUnion(field, newParked, toCell)
   for chan = 1, 16 do channels[chan][field] = {} end
@@ -1946,7 +1925,7 @@ end
 -- Region-replace parking: authored events a replace window covers leave the take;
 -- the prior parked set carries still-covered forward, restores the rest. see design/note-macros-v2.md § Generator output
 
-local function rebuildRegionPark(ccExisting, deferred, currentWindows, fxParked, prevWindows)
+local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows)
   local batch = mmBatch()
   -- Restored notes re-enter their columns token-less (the real mm event lands with the deferred
   -- tail commit); their raw scratch recs return so rebuild can wire each cell post-commit.
@@ -2128,11 +2107,9 @@ local function rebuildRegionPark(ccExisting, deferred, currentWindows, fxParked,
     for _, spec in ipairs(restores) do
       local ppq  = tm:fromLogical(spec.chan, spec.ppq)   -- realised onset derived fresh (the stash is logical)
       local cell = ccWrite(spec, ppq)
-      -- Fill collides on the same token; del-before-add (batch order) lands the authored value over
-      -- it, and dropFillSeat keeps the fill reconcile from re-deleting it by that token.
-      batch.del({ token = mm:tokenOf(cell) })
+      -- The fill seat at this ppq stays in ccExisting: rebuildFx's reconcile deletes it by its own
+      -- uuid, so a restore needs no del. see docs/trackerManager.md § Region-replace parking
       batch.add(cell)
-      dropFillSeat(ccExisting[spec.chan], spec.cc, ppq)
       local channel = channels[spec.chan]
       local col = channel.columns.ccs[spec.cc]
       if not col then col = { cc = spec.cc, events = {} }; channel.columns.ccs[spec.cc] = col end
@@ -2223,7 +2200,7 @@ local function rebuildRegionPark(ccExisting, deferred, currentWindows, fxParked,
 
   persistParked('fxParked', allParked, fxParked)
   batch.commit()
-  return ccExisting, restoredNotes
+  return restoredNotes
 end
 
 ----- Raw working set
@@ -2794,8 +2771,8 @@ local function rebuildPbs(fxOut, extraColumns, scratch)
     end
   end
 
-  -- mm uses content-keyed tokens: any pb whose ppq we touch needs its pre-mutation token
-  -- captured up front, on our own clone (origTok set once) -- only dirty channels clone here.
+  -- Each pb rides its own clone through the pass; origTok is its mm handle, held so a
+  -- mutated clone can still name the event it came from. Only dirty channels clone here.
   local pbsByChan = {}
   for chan = 1, 16 do
     if dirty[chan] then
@@ -3199,7 +3176,7 @@ local function rebuildPipeline(didReload)
   local currentWindows = generators.parkWindows(parkRegions)
   perf.stop('parkRegions')
 
-  perf.start('regionPark'); local restoredNotes; ccExisting, restoredNotes = rebuildRegionPark(ccExisting, deferred, currentWindows, sources.fxParked, sources.prevWindows); perf.stop('regionPark')  -- park covered, carry/restore prior
+  perf.start('regionPark'); local restoredNotes = rebuildRegionPark(deferred, currentWindows, sources.fxParked, sources.prevWindows); perf.stop('regionPark')  -- park covered, carry/restore prior
   perf.start('rawScratch'); local rawScratch = buildRawScratch(restoredNotes); perf.stop('rawScratch')  -- the pass's raw note view, from mm now the on-take set is settled
   perf.start('pa'); local paTouched = rebuildPA(rawScratch); perf.stop('pa')  -- project PAs into settled note columns
 
@@ -3345,10 +3322,7 @@ do
   -- mm's backstop repaired a missed same-pitch collision: re-key um surgically. No
   -- tm:rebuild here (re-enters mm:modify mid-unwind); geometry trues up next rebuild.
   mm:subscribe('collisionsResolved', function(info)
-    for _, e in ipairs(info.events) do
-      idxReconcile(e.oldToken)
-      if e.token then idxReconcile(e.token) end
-    end
+    for _, e in ipairs(info.events) do idxReconcile(e.uuid) end
   end)
   mm:subscribe('takeSwapped', function() pendingTakeSwap = true end)
   mm:subscribe('reload', function(info)

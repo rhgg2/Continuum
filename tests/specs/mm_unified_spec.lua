@@ -1,12 +1,11 @@
--- Pin-tests for the unified token-keyed write/iter surface on midiManager:
---   mm:add(t) → token
---   mm:assign(token, t) → token'
---   mm:delete(token)
---   mm:events() → token, evt iterator
+-- Pin-tests for the unified uuid-addressed write/iter surface on midiManager:
+--   mm:add(t) → uuid
+--   mm:assign(uuid, t) → uuid (always the same one: identity never re-keys)
+--   mm:delete(uuid)
+--   mm:events() → uuid, evt iterator
 --
 -- The loc-form methods (addNote/addCC/assignNote/assignCC/deleteNote/deleteCC)
--- still exist alongside in this step; tm migrates in step 4. These tests
--- exercise the unified surface in isolation.
+-- still exist alongside. These tests exercise the unified surface in isolation.
 
 local t = require('support')
 
@@ -64,33 +63,31 @@ return {
   },
 
   {
-    name = 'assign: identity-field change retires the old token, returns the new one',
+    name = 'assign: an identity-field change keeps the handle, which resolves to the moved note',
     run = function(harness)
       local h = harness.mk{
         seed = { notes = { { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100 } } },
       }
       local _, note = h.fm:notes()()
-      local oldTok = h.fm:tokenOf(note)
-      local newTok
-      h.fm:modify(function() newTok = h.fm:assign(oldTok, { ppq = 480 }) end)
-      t.truthy(newTok ~= oldTok, 'token changed')
-      t.eq(h.fm:byToken(oldTok), nil, 'old token retired')
-      local _, n2 = h.fm:byToken(newTok)
+      local tok = h.fm:tokenOf(note)
+      local same
+      h.fm:modify(function() same = h.fm:assign(tok, { ppq = 480 }) end)
+      t.eq(same, tok, 'the ppq move did not re-key')
+      local _, n2 = h.fm:byToken(tok)
       t.eq(n2.ppq, 480)
     end,
   },
 
   {
-    name = 'assign: cc identity change (chan or cc#) re-keys',
+    name = 'assign: a cc identity change (chan or cc#) keeps the handle too',
     run = function(harness)
       local fm = harness.bareMM{ ccs = { { ppq = 120, evType = 'cc', chan = 2, cc = 7, val = 64 } } }
       local _, cc = fm:ccs()()
-      local oldTok = fm:tokenOf(cc)
-      local newTok
-      fm:modify(function() newTok = fm:assign(oldTok, { cc = 10 }) end)
-      t.truthy(newTok ~= oldTok)
-      t.eq(fm:byToken(oldTok), nil)
-      local _, c2 = fm:byToken(newTok)
+      local tok = fm:tokenOf(cc)
+      local same
+      fm:modify(function() same = fm:assign(tok, { cc = 10 }) end)
+      t.eq(same, tok)
+      local _, c2 = fm:byToken(tok)
       t.eq(c2.cc, 10)
     end,
   },

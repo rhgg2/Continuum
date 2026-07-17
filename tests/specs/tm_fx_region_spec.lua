@@ -609,8 +609,8 @@ return {
   },
 
   {
-    -- Restore lands on a ppq the fill already seats; cc's ppq-token key means a naive add collides,
-    -- and the fill reconcile then deletes the restored event by that shared token.
+    -- Restore lands on a ppq the fill already seats. mm addresses by uuid, so the two are distinct
+    -- events: the fill reconcile deletes the seat and the restored authored cc stands.
     name = 'shrinking a cc-replace window restores the authored cc value, not the fill it sat under',
     run = function(harness)
       local h = harness.mk()

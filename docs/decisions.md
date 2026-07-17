@@ -4,6 +4,17 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-17** — mm addresses by uuid; the content key stays private and detects collisions only.
+  Tokens did two jobs: an external handle, and (as `tokenIdx`) the same-pitch detector. Only the
+  first is replaceable — key that index by uuid and it can never collide, so `noteCollision` would go
+  silent. So `tokenOf`/`tokenIdx` became `contentKey`/`collisionIdx`, private; `mm:tokenOf` returns
+  `evt.uuid` and every verb resolves through `eventsByUuid`. *Chosen over* adding uuid verbs beside
+  the token ones and migrating callers: tokens were already opaque, so pivoting what they carry moved
+  every caller at once. Identity now survives an identity-field move, which retires three workarounds
+  for the ambiguity of a shared content key — the cc-restore `dropFillSeat` dance, `mmBatch`'s re-key,
+  and pb `origTok` capture. It also costs one invariant that came free: a ppq move no longer re-keys,
+  so `idxReconcile` must check `ppq` explicitly to keep `chans` ppq-sorted.
+
 - **2026-07-17** — identity is not persistence: every event mm mints now carries a uuid, and a cc with
   no metadata is `plain` — its uuid is in-memory only, re-minted each load, no `}RDM` sidecar, no
   eventMeta bucket. Previously the two were one decision (a cc got a uuid exactly when it got a

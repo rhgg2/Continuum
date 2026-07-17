@@ -1,24 +1,16 @@
--- Pin-tests for opaque content-keyed addressing on midiManager.
+-- Pin-tests for how midiManager is addressed. Every event mm hands out carries a
+-- uuid, and that uuid is the handle: byToken, assign and delete all take one.
 --
--- Token contract:
---   * Built from the event's identity fields (evType, chan, ppq, and
---     pitch|cc as relevant). Opaque to callers; mm:byToken is the inverse.
---   * Stable across reload as long as identity fields don't change.
---   * Exists for every event mm returns — including plain ccs that have
---     no uuid.
+-- Content keys (evType, chan, ppq, pitch|cc) stay private to mm, where they serve
+-- only the same-pitch collision backstop -- see mm_collision_backstop_spec.
 --
--- This spec exercises the read side only. Step 3 will add the unified
--- write surface and exercise round-trips through assign / delete.
+-- Identity contract:
+--   * Every event has one, minted at add or at load. mm:tokenOf(evt) is evt.uuid.
+--   * Stable under every assign: moving ppq, pitch or chan does not re-key it.
+--   * Durable across reload, except a plain cc -- it binds no sidecar, so its uuid
+--     is in-memory only and re-minted each load. See mm_plain_cc_spec.
 
 local t = require('support')
-
-local function token(mm, kind, fields)
-  -- Build a probe event matching the seed shape, ask mm for its token.
-  local evt = { evType = kind, chan = fields.chan, ppq = fields.ppq }
-  if kind == 'note' or kind == 'pa' then evt.pitch = fields.pitch end
-  if kind == 'cc' then evt.cc = fields.cc end
-  return mm:tokenOf(evt)
-end
 
 return {
   {
@@ -29,7 +21,7 @@ return {
       }
       local _, fetched = h.fm:notes()()
       local tok = h.fm:tokenOf(fetched)
-      t.truthy(tok, 'tokenOf returned a token')
+      t.truthy(tok, 'tokenOf returned a handle')
       local loc, byT = h.fm:byToken(tok)
       t.eq(loc, fetched.loc)
       t.eq(byT.pitch, 60)
@@ -39,20 +31,20 @@ return {
   },
 
   {
-    name = 'cc: tokenOf round-trips for a plain cc',
+    name = 'cc: a plain cc is addressable like any other',
     run = function(harness)
       local fm = harness.bareMM{ ccs = { { ppq = 120, evType = 'cc', chan = 2, cc = 7, val = 64 } } }
-      local tok = token(fm, 'cc', { chan = 2, cc = 7, ppq = 120 })
-      local loc, c, kind = fm:byToken(tok)
+      local _, cc = fm:ccs()()
+      local loc, c, kind = fm:byToken(fm:tokenOf(cc))
       t.eq(loc, 1)
       t.eq(kind, 'cc')
       t.eq(c.val, 64)
-      t.eq(c.plain, true, 'plain cc — no sidecar, but still addressable by token')
+      t.eq(c.plain, true, 'plain -- no sidecar, but its in-memory uuid addresses it')
     end,
   },
 
   {
-    name = 'pb / pa / at / pc: every evType yields a working token',
+    name = 'pb / pa / at / pc: every evType yields a working handle',
     run = function(harness)
       local fm = harness.bareMM{ ccs = {
         { ppq = 0,   evType = 'pb', chan = 1,             val = -2048 },
@@ -60,68 +52,59 @@ return {
         { ppq = 120, evType = 'at', chan = 5,             val =  77   },
         { ppq = 180, evType = 'pc', chan = 7,             val =  12   },
       } }
-      local cases = {
-        { kind = 'pb', chan = 1, ppq = 0,   field = 'val', want = -2048 },
-        { kind = 'pa', chan = 3, ppq = 60,  pitch = 64, field = 'vel', want = 90 },
-        { kind = 'at', chan = 5, ppq = 120, field = 'val', want = 77 },
-        { kind = 'pc', chan = 7, ppq = 180, field = 'val', want = 12 },
-      }
-      for _, c in ipairs(cases) do
-        local tok = token(fm, c.kind, c)
-        local _, evt = fm:byToken(tok)
-        t.truthy(evt, c.kind .. ': byToken returned an event')
-        t.eq(evt.evType, c.kind)
-        t.eq(evt[c.field], c.want, c.kind .. '.' .. c.field)
+      local want = { pb = { field = 'val', value = -2048 }, pa = { field = 'vel', value = 90 },
+                     at = { field = 'val', value = 77 },    pc = { field = 'val', value = 12 } }
+      local seen = 0
+      for _, cc in fm:ccs() do
+        local _, evt = fm:byToken(fm:tokenOf(cc))
+        t.truthy(evt, cc.evType .. ': byToken returned an event')
+        local expected = want[cc.evType]
+        t.eq(evt[expected.field], expected.value, cc.evType .. '.' .. expected.field)
+        seen = seen + 1
       end
+      t.eq(seen, 4, 'all four evTypes present')
     end,
   },
 
   {
-    name = 'tokens are stable across reload',
-    run = function(harness)
-      local h = harness.mk{
-        seed = {
-          notes = { { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100 } },
-          ccs   = { { ppq = 120, evType = 'cc', chan = 2, cc = 7, val = 64 } },
-        },
-      }
-      local _, note = h.fm:notes()()
-      local _, cc   = h.fm:ccs()()
-      local nTok, cTok = h.fm:tokenOf(note), h.fm:tokenOf(cc)
-
-      h.fm:reload()
-
-      local _, n2 = h.fm:byToken(nTok)
-      local _, c2 = h.fm:byToken(cTok)
-      t.truthy(n2, 'note token survives reload')
-      t.truthy(c2, 'cc token survives reload')
-      t.eq(n2.pitch, 60)
-      t.eq(c2.val,   64)
-    end,
-  },
-
-  {
-    name = 'mutating an identity field retires the old token',
+    name = 'a persisted note keeps its handle across reload',
     run = function(harness)
       local h = harness.mk{
         seed = { notes = { { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100 } } },
       }
       local _, note = h.fm:notes()()
-      local oldTok = h.fm:tokenOf(note)
+      local tok = h.fm:tokenOf(note)
 
-      h.fm:modify(function() h.fm:assign(oldTok, { ppq = 480 }) end)
+      h.fm:reload()
 
-      t.eq(h.fm:byToken(oldTok), nil, 'old (ppq=0) token no longer resolves')
-      local _, moved = h.fm:notes()()
-      local newTok = h.fm:tokenOf(moved)
-      t.truthy(newTok ~= oldTok, 'new token differs from the retired one')
-      local _, byNew = h.fm:byToken(newTok)
-      t.eq(byNew.ppq, 480)
+      local _, n2 = h.fm:byToken(tok)
+      t.truthy(n2, 'the note kept its uuid across reload')
+      t.eq(n2.pitch, 60)
     end,
   },
 
   {
-    name = 'distinct events with overlapping fields get distinct tokens',
+    name = 'moving an identity field does not re-key: the same handle resolves to the moved note',
+    run = function(harness)
+      local h = harness.mk{
+        seed = { notes = { { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100 } } },
+      }
+      local _, note = h.fm:notes()()
+      local tok = h.fm:tokenOf(note)
+
+      h.fm:modify(function() h.fm:assign(tok, { ppq = 480, pitch = 64 }) end)
+
+      local _, moved = h.fm:byToken(tok)
+      t.truthy(moved, 'the handle survives a move of both identity fields')
+      t.eq(moved.ppq,   480)
+      t.eq(moved.pitch, 64)
+      local _, only = h.fm:notes()()
+      t.eq(h.fm:tokenOf(only), tok, 'and it is still the one note, not a new one')
+    end,
+  },
+
+  {
+    name = 'distinct events get distinct handles',
     run = function(harness)
       -- A note and a pa at the same (chan, pitch, ppq); a cc#7 vs cc#10
       -- at the same (chan, ppq); a pb at the same (chan, ppq) as an at.
@@ -140,7 +123,8 @@ return {
       for _, c in fm:ccs()   do toks[#toks+1] = fm:tokenOf(c) end
       local seen = {}
       for _, tok in ipairs(toks) do
-        t.falsy(seen[tok], 'duplicate token: ' .. tostring(tok))
+        t.truthy(tok, 'every event carries a handle')
+        t.falsy(seen[tok], 'duplicate handle: ' .. tostring(tok))
         seen[tok] = true
       end
       t.eq(#toks, 6, 'all six events present')
@@ -152,18 +136,18 @@ return {
     run = function(harness)
       local h = harness.mk{}
       t.eq(h.fm:tokenOf(nil), nil)
-      t.eq(h.fm:tokenOf({}), nil, 'no evType — no token')
+      t.eq(h.fm:tokenOf({}), nil, 'no evType -- no handle')
     end,
   },
 
   {
-    name = 'byToken returns nil for an unknown token',
+    name = 'byToken returns nil for an unknown handle',
     run = function(harness)
       local h = harness.mk{
         seed = { notes = { { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100 } } },
       }
-      t.eq(h.fm:byToken('note|1|99|0'), nil)
-      t.eq(h.fm:byToken(''), nil)
+      t.eq(h.fm:byToken(99999), nil)
+      t.eq(h.fm:byToken(nil), nil)
     end,
   },
 }

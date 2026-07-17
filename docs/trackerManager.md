@@ -68,19 +68,29 @@ surface) are the reason several conventions exist.
 
 ### Incremental index reconciliation
 
-`idxReconcile(tok)` rebuilds one token's `byToken`/`byUuid`/`chans` entry
+`idxReconcile(handle)` rebuilds one event's `byToken`/`byUuid`/`chans` entry
 from mm's canonical clone (`mm:byToken`), producing an entry byte-identical
-to what a full `reload()` would build for that token — both funnel through
-the shared `makeEntry` helper. Callers reconcile every touched token after
-the whole `mm:modify` batch commits, not op-by-op: reconciling mid-batch
-would be vulnerable to reseat sequences whose intermediate token re-keys
-collide, where an op-by-op replay could net a live token out of the index.
+to what a full `reload()` would build for it — both funnel through the shared
+`makeEntry` helper. Callers reconcile every touched handle after the whole
+`mm:modify` batch commits, not op-by-op: reconciling mid-batch would be
+vulnerable to reseat sequences whose intermediate states collide, where an
+op-by-op replay could net a live event out of the index.
 
-`idxReconcile` evicts a token's old `byUuid` entry only if it still owns it
-(`byUuid[uuid] == prev`). A reswing re-keys every note's token, and the batch's
-`pairs(touched)` walk visits tokens in hash order, so a uuid's new-token insert
-can land before its old-token eviction; evicting unconditionally would then
-delete the just-inserted live entry instead of the stale one.
+An entry refreshes in place only when its `ppq` is unchanged; otherwise it is
+removed and reinserted. `chans[chan].notes`/`.pbs` are ppq-sorted while
+`chansListFor` keys on evType/chan/lane alone, so refreshing in place across a
+moved onset would leave those lists out of order — and `refreshEntry`'s pb
+branch never copies `ppq`, so that entry would keep a stale onset for good.
+This check was free until 2026-07-17: mm addressed by content token, a ppq move
+re-keyed it, and the remove-and-reinsert path followed automatically. A uuid
+survives the move, so the condition has to be stated.
+
+`idxReconcile` evicts an entry's old `byUuid` mapping only if it still owns it
+(`byUuid[uuid] == prev`). This is now defensive — a handle never changes, so
+`byToken` and `byUuid` key alike. It guarded a reswing, back when every note's
+token re-keyed: the batch's `pairs(touched)` walk visits handles in hash order,
+so a uuid's new-token insert could land before its old-token eviction, and
+evicting unconditionally would delete the just-inserted live entry.
 
 Because every mm write maintains the index, it is authoritative and survives
 across rebuilds. A rebuild only full-`reload()`s when mm re-read its entire
@@ -342,13 +352,14 @@ runs it, with a pointer to its detail where one exists.
   host; see `design/note-macros-v2.md` § Note-host replace parks). The
   prior parked set splits into still-covered carry-forward and restores
   that re-enter their columns token-less, keeping their uuid and fx. A
-  restored cc, though, reuses the exact ppq-token (`cc|chan|cc|ppq`) of
-  the fill seat still on the take from the wider window: its restore
-  deletes that seat first (`batch` commits del before add) and drops it
-  from `fx.ccExisting`, or the ppq collision leaves the fill value in
-  place and the fill reconcile then deletes the authored event by the
-  shared token — the value silently drifting to the fill on every
-  window round-trip. Carried-forward tails clip against on-take note
+  restored cc lands on the exact ppq of the fill seat the wider window
+  left on the take; under uuid addressing the two are distinct events, so
+  the fill reconcile deletes that seat by its own handle and the authored
+  value stands. (While mm addressed by content token the two shared a
+  `cc|chan|cc|ppq` key: the restore had to delete the seat itself and hide
+  it from `fx.ccExisting`, or the reconcile deleted the authored event
+  instead and the value drifted to the fill on every window round-trip.)
+  Carried-forward tails clip against on-take note
   bounds the same way the tail walk clips real notes, so a parked tail
   stops at the first successor past its region, not just the next
   parked member. Lane bound only, never pitch: a parked cell never

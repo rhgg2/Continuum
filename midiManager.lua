@@ -57,7 +57,7 @@ local ccs        = {}
 local noteCount  = 0    -- high-water extent of notes/ccs; verbs leave holes, rebuild compacts
 local ccCount    = 0
 local eventsByUuid      = {}
-local tokenIdx   = {}
+local collisionIdx      = {}   -- content-keyed; the same-pitch detector, never an address book
 --invariant: chanIdx[kind][chan].byLoc[loc] = evt; keyed on chan alone, immune to ppq/pitch rewrites
 local chanIdx    = { note = {}, cc = {} }   -- per-channel index; rebuild reconstructs, the verbs maintain
 local maxUUID    = 0
@@ -73,13 +73,12 @@ local carriedPassthrough = {}  -- parsed system messages mm doesn't model; re-em
 --invariant: loadedBlob is the take's bytes as of the model agreeing with them; nil = unknown, never gate
 local loadedBlob            -- converged-rebind gate; see design/archive/incremental-rebuild.md § The take-hash gate
 
--- Opaque, content-keyed addressing. Token is private string built from
--- the event's identity fields; collision-free by construction across the
--- evType space. Rebuilt fresh in mm:load alongside eventsByUuid.
+-- Where an event sits, not which event it is: two events sharing a content key occupy one
+-- MIDI slot, which is exactly what the same-pitch backstop detects. mm addresses by uuid.
+
 -- Chained concat, not util.key: one OP_CONCAT allocates once and coerces the
 -- integer fields inline, vs util.key's per-arg tostring + table + table.concat.
--- Byte-identical (n..'' == tostring(n)), so tokens stay stable across the rewrite.
-local function tokenOf(evt)
+local function contentKey(evt)
   local et = evt.evType
   if et == 'note' then return 'note\0' .. evt.chan .. '\0' .. evt.pitch .. '\0' .. evt.ppq end
   if et == 'pa'   then return 'pa\0'   .. evt.chan .. '\0' .. evt.pitch .. '\0' .. evt.ppq end
@@ -304,20 +303,20 @@ local function stableByPpq(list)
   end
 end
 
--- Reuse each event's token string across rebuilds; recompute only when an
+-- Reuse each event's content key across rebuilds; recompute only when an
 -- identity field changes. Weak keys drop deleted events. Cf. sidecarCache.
-local tokenCache = setmetatable({}, { __mode = 'k' })
+local contentKeyCache = setmetatable({}, { __mode = 'k' })
 
-local function cachedToken(evt)
-  local hit = tokenCache[evt]
+local function cachedContentKey(evt)
+  local hit = contentKeyCache[evt]
   if hit and hit.evType == evt.evType and hit.chan == evt.chan
      and hit.pitch == evt.pitch and hit.cc == evt.cc and hit.ppq == evt.ppq then
-    return hit.token
+    return hit.key
   end
-  local token = tokenOf(evt)
-  tokenCache[evt] = { evType = evt.evType, chan = evt.chan, pitch = evt.pitch,
-                      cc = evt.cc, ppq = evt.ppq, token = token }
-  return token
+  local key = contentKey(evt)
+  contentKeyCache[evt] = { evType = evt.evType, chan = evt.chan, pitch = evt.pitch,
+                           cc = evt.cc, ppq = evt.ppq, key = key }
+  return key
 end
 
 ----- Per-channel index
@@ -395,29 +394,29 @@ local function rebuild(metadata)
     stableByPpq(notes); stableByPpq(ccs)
     perf.stop('sort')
   end
-  perf.start('tokenIdx')
-  tokenIdx, eventsByUuid = {}, {}
+  perf.start('collisionIdx')
+  collisionIdx, eventsByUuid = {}, {}
   chanIdx = { note = {}, cc = {} }
   -- Seat inline rather than via indexPut: this is the one bulk path (every event, every flush), and
   -- the kind is known per loop, so it skips the dispatch the verbs' single-event path needs.
   local noteSlots, ccSlots = chanIdx.note, chanIdx.cc
   for i, n in ipairs(notes) do
     n.loc = i
-    tokenIdx[cachedToken(n)] = n
+    collisionIdx[cachedContentKey(n)] = n
     seat(chanBucket(noteSlots, n.chan), n)
     if n.uuid then eventsByUuid[n.uuid] = n end
     if metadata then util.assign(n, metadata[n.uuid]) end
   end
   for i, c in ipairs(ccs) do
     c.loc = i
-    tokenIdx[cachedToken(c)] = c
+    collisionIdx[cachedContentKey(c)] = c
     seat(chanBucket(ccSlots, c.chan), c)
     if c.uuid then
       eventsByUuid[c.uuid] = c
       if metadata then util.assign(c, metadata[c.uuid]) end
     end
   end
-  perf.stop('tokenIdx')
+  perf.stop('collisionIdx')
   needsSort, needsCompact = false, false
   perf.stop('rebuild')
 end
@@ -508,7 +507,7 @@ end
 --invariant: cc.shape ∈ {step, linear, slow, fast-start, fast-end, bezier}; tension only on bezier
 --shape: noteSidecarPayload = { ppq, chan, pitch, droppedCount }  -- notesDeduped event
 --shape: uuidsReassignedEvent = { ppq, chan, pitch, oldUuid, newUuid }
---shape: collisionEvent = { kind='killed'|'nudged', oldToken, [token], uuid, chan, pitch, ppq }
+--shape: collisionEvent = { kind='killed'|'nudged', uuid, chan, pitch, ppq }
 --shape: ccDedupEvent = { ppq, chan, evType, cc, pitch, droppedCount }  -- ccsDeduped event
 --shape: reconcileEvent base = { kind, uuid, chan, evType, [cc], [pitch], ppq }
 --shape: reconcileEvent.valueRebound = base + { oldVal, newVal }
@@ -544,7 +543,7 @@ function mm:load(newTake)
   local takeSwapped = take ~= newTake
   if takeSwapped then take = newTake; setTakeGuid() end
 
-  notes, ccs, eventsByUuid, tokenIdx, maxUUID, lock = {}, {}, {}, {}, 0, false
+  notes, ccs, eventsByUuid, collisionIdx, maxUUID, lock = {}, {}, {}, {}, 0, false
   carriedTexts, carriedPassthrough, dirty = {}, {}, false
   local ccSidecars, noteSidecars = {}, {}
   local noteDedupEvents, ccDedupEvents, reassignEvents, reconcileEvents = {}, {}, {}, {}
@@ -635,10 +634,9 @@ function mm:load(newTake)
       for _, n in ipairs(voiced) do
         if onsetOf[n] ~= n.ppq then
           dirty = true
-          local oldToken = tokenOf(n)
           n.ppq = onsetOf[n]
-          util.add(collisionEvents, { kind = 'nudged', oldToken = oldToken, token = tokenOf(n),
-                                      uuid = n.uuid, chan = n.chan, pitch = n.pitch, ppq = n.ppq })
+          util.add(collisionEvents, { kind = 'nudged', uuid = n.uuid,
+                                      chan = n.chan, pitch = n.pitch, ppq = n.ppq })
         end
       end
     end
@@ -866,7 +864,7 @@ end)
 --contract: clears mm.take and event tables when take dies; distinct from load(nil) dormant seam
 function mm:unload()
   take, poolGuid, loadedBlob = nil, nil, nil
-  notes, ccs, eventsByUuid, tokenIdx, maxUUID, lock = {}, {}, {}, {}, 0, false
+  notes, ccs, eventsByUuid, collisionIdx, maxUUID, lock = {}, {}, {}, {}, 0, false
   noteCount, ccCount, dirty = 0, 0, false
   carriedTexts, carriedPassthrough = {}, {}
 end
@@ -892,21 +890,21 @@ local function resolveCollisions()
     end
     local kills, voiced, onsetOf = voicing.resolveGroup(group)
     for _, n in ipairs(kills) do
-      util.add(events, { kind = 'killed', oldToken = tokenOf(n), uuid = n.uuid,
+      util.add(events, { kind = 'killed', uuid = n.uuid,
                          chan = n.chan, pitch = n.pitch, ppq = n.ppq })
-      perf.line('backstop killed %s (chan %d pitch %d ppq %d) via %s',
-                tokenOf(n), n.chan, n.pitch, n.ppq, pending.verb)
+      perf.line('backstop killed uuid %s (chan %d pitch %d ppq %d) via %s',
+                n.uuid, n.chan, n.pitch, n.ppq, pending.verb)
       notes[n.loc] = nil
       eventsByUuid[n.uuid] = nil
       deleteMetadatum(n.uuid)
     end
     for _, n in ipairs(voiced) do
       if onsetOf[n] ~= n.ppq then
-        local oldToken = tokenOf(n)
+        local oldPpq = n.ppq
         n.ppq = onsetOf[n]
-        util.add(events, { kind = 'nudged', oldToken = oldToken, token = tokenOf(n), uuid = n.uuid,
+        util.add(events, { kind = 'nudged', uuid = n.uuid,
                            chan = n.chan, pitch = n.pitch, ppq = n.ppq })
-        perf.line('backstop nudged %s -> ppq %d via %s', oldToken, n.ppq, pending.verb)
+        perf.line('backstop nudged uuid %s: ppq %d -> %d via %s', n.uuid, oldPpq, n.ppq, pending.verb)
       end
     end
   end
@@ -995,7 +993,7 @@ end
 local function cloneOut(evt)
   if not evt then return nil end
   local c = util.clone(evt)
-  c.token = tokenOf(evt)
+  c.token = evt.uuid
   return c
 end
 
@@ -1036,17 +1034,17 @@ local function assignNote(loc, t)
   local note = notes[loc]
   if not note then return end
 
-  local oldTok = tokenOf(note)
+  local oldKey = contentKey(note)
   if t.ppq and t.ppq ~= note.ppq then needsSort = true end   -- ppq is the sort key; no other field is
 
   util.assign(note, t)
   if note.muted == false then note.muted = nil end
 
-  local newTok = tokenOf(note)
-  if newTok ~= oldTok then
-    if tokenIdx[newTok] then noteCollision(note, 'assign') end
-    tokenIdx[oldTok] = nil
-    tokenIdx[newTok] = note
+  local newKey = contentKey(note)
+  if newKey ~= oldKey then
+    if collisionIdx[newKey] then noteCollision(note, 'assign') end
+    collisionIdx[oldKey] = nil
+    collisionIdx[newKey] = note
   end
 
   if touchesMetadata(note, t) then saveMetadatum(note.uuid) end
@@ -1081,9 +1079,9 @@ local function addNote(t)
   note.loc = noteCount
   indexPut(note)
   needsSort = true   -- appended past the tail: dense, but no longer in ppq order
-  local tok = tokenOf(note)
-  if tokenIdx[tok] then noteCollision(note, 'add') end
-  tokenIdx[tok] = note
+  local key = contentKey(note)
+  if collisionIdx[key] then noteCollision(note, 'add') end
+  collisionIdx[key] = note
 
   saveMetadatum(note.uuid)
 end
@@ -1134,7 +1132,7 @@ local function assignCC(loc, t)
     return
   end
 
-  local oldTok = tokenOf(msg)
+  local oldKey = contentKey(msg)
   if t.ppq and t.ppq ~= msg.ppq then needsSort = true end   -- ppq is the sort key; no other field is
 
   util.assign(msg, t)
@@ -1146,10 +1144,10 @@ local function assignCC(loc, t)
     if msg.shape ~= 'bezier' then msg.tension = nil end
   end
 
-  local newTok = tokenOf(msg)
-  if newTok ~= oldTok then
-    tokenIdx[oldTok] = nil
-    tokenIdx[newTok] = msg
+  local newKey = contentKey(msg)
+  if newKey ~= oldKey then
+    collisionIdx[oldKey] = nil
+    collisionIdx[newKey] = msg
   end
 
   if hasMetadata then
@@ -1171,7 +1169,7 @@ local function pushCC(t)
   msg.loc = ccCount
   indexPut(msg)
   needsSort = true   -- appended past the tail: dense, but no longer in ppq order
-  tokenIdx[tokenOf(msg)] = msg
+  collisionIdx[contentKey(msg)] = msg
   return msg
 end
 
@@ -1204,39 +1202,38 @@ local function addCC(t)
   else msg.plain = true end
 end
 
---contract: token stable across reload while identity fields don't change
---invariant: token identity fields = evType, chan, ppq, and pitch|cc as relevant
---contract: mutating an identity field retires the old token and issues a new one
+--contract: the handle mm addresses by -- the event's uuid; nil for a non-event
+--contract: durable across reload except on a plain cc, whose uuid is re-minted each load
 function mm:tokenOf(evt)
   if not evt or not evt.evType then return nil end
-  return tokenOf(evt)
+  return evt.uuid
 end
 
---contract: returns (loc, evt-clone, kind) for the token, or nil if absent
---contract: works on every event (including plain ccs with no uuid)
+--contract: returns (loc, evt-clone, kind) for the uuid, or nil if absent
+--contract: works on every event -- a plain cc's in-memory uuid resolves like any other
 --invariant: byToken's evt-clone carries .token equal to the input
-function mm:byToken(token)
-  local evt = tokenIdx[token]
+function mm:byToken(uuid)
+  local evt = eventsByUuid[uuid]
   if not evt then return nil end
   return evt.loc, cloneOut(evt), (evt.evType == 'note') and 'note' or 'cc'
 end
 
------ Unified token-keyed surface
+----- Unified uuid-addressed surface
 
 --contract: t.evType='note' routes to addNote; anything else to addCC
---contract: returns the new token, or nil if t is malformed; inherits inner lock req
+--contract: returns the new event's uuid, or nil if t is malformed; inherits inner lock req
 function mm:add(t)
   if not t or not t.evType then return nil end
   if t.evType == 'note' then addNote(t) else addCC(t) end
   markChan(t.chan)
-  return tokenOf(t)
+  return t.uuid
 end
 
---contract: dispatches on the resolved event's evType
---contract: returns the event's token, == input iff no identity field changed (caller re-keys)
+--contract: dispatches on the resolved event's evType; identity is stable, so no caller re-keys
+--contract: returns the event's uuid (always == input), or nil if absent
 --contract: inherits the inner method's metadata-only lockless carve-out
-function mm:assign(token, t)
-  local evt = tokenIdx[token]
+function mm:assign(uuid, t)
+  local evt = eventsByUuid[uuid]
   if not evt then return nil end
   markChan(evt.chan)                       -- old chan; a chan move dirties both
   local chanMove = t.chan ~= nil and t.chan ~= evt.chan
@@ -1245,34 +1242,30 @@ function mm:assign(token, t)
   else                         assignCC(evt.loc, t) end
   if chanMove then indexPut(evt) end
   markChan(t.chan)                          -- new chan; nil-guarded when the assign leaves chan untouched
-  return tokenOf(evt)
+  return uuid
 end
 
 --contract: removes the event in-memory (a hole until rebuild compacts); flushTake reprojects
---contract: wipes the event's ctm_<uuid> metadata via deleteMetadatum
-function mm:delete(token)
+--contract: wipes the event's ctm_<uuid> metadata via deleteMetadatum; a plain cc stores none
+function mm:delete(uuid)
   if not (take and checkLock()) then return end
-  local evt = tokenIdx[token]
+  local evt = eventsByUuid[uuid]
   if not evt then return end
   markChan(evt.chan)
   indexDrop(evt)
   needsCompact = true   -- the slot below becomes a hole; ppq order is undisturbed
 
-  if evt.evType == 'note' then
-    tokenIdx[token] = nil
-    notes[evt.loc] = nil
-    eventsByUuid[evt.uuid] = nil
-    deleteMetadatum(evt.uuid)
-    return
-  end
+  -- Evict only a slot this event owns: a collision leaves the loser addressable by
+  -- uuid while collisionIdx holds the survivor.
+  local key = contentKey(evt)
+  if collisionIdx[key] == evt then collisionIdx[key] = nil end
 
-  tokenIdx[token] = nil
-  ccs[evt.loc] = nil
+  if evt.evType == 'note' then notes[evt.loc] = nil else ccs[evt.loc] = nil end
   eventsByUuid[evt.uuid] = nil
-  if not evt.plain then deleteMetadatum(evt.uuid) end   -- a plain cc stores none: skip the churn
+  if not evt.plain then deleteMetadatum(evt.uuid) end
 end
 
---contract: yields (token, evt-clone) over all live events, notes then ccs
+--contract: yields (uuid, evt-clone) over all live events, notes then ccs
 --invariant: events()'s clone carries .token; loc is intentionally absent
 function mm:events()
   local noteIt = util.sparsePairs(notes, noteCount)
@@ -1280,7 +1273,7 @@ function mm:events()
   return function()
     local _, e = noteIt()
     if not e then _, e = ccIt() end
-    if e then return tokenOf(e), cloneOut(e) end
+    if e then return e.uuid, cloneOut(e) end
   end
 end
 

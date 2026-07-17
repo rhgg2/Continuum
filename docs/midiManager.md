@@ -255,10 +255,10 @@ the flush deferral is.
 `needsCompact` describe the *arrays*, not the write: an add or a `ppq` move
 leaves them dense but out of order, a delete leaves a hole, and an assign
 touching neither leaves them exactly as they were — so the unwind skips the
-reindex outright. (`pitch` and `chan` are in the token but not the sort key;
-`endppq` is in neither.) The skip makes the verbs' own index maintenance
+reindex outright. (`pitch` and `chan` are in the content key but not the sort
+key; `endppq` is in neither.) The skip makes the verbs' own index maintenance
 load-bearing where a from-scratch `rebuild` used to launder it: `mm:assign`
-re-keys `tokenIdx` in place and brackets a chan move with `indexDrop` /
+re-keys `collisionIdx` in place and brackets a chan move with `indexDrop` /
 `indexPut`. The two mutators that write outside the verbs — `resolveCollisions`
 and load's dedup — set both flags themselves. See
 design/archive/incremental-rebuild.md § 6.
@@ -375,14 +375,14 @@ kind and receive only the payloads of that kind.
 'uuidsReassigned'  data = { events = [{ oldUuid, newUuid, ppq, chan, pitch }, ...] }
 'ccsReconciled'    data = { events = [...] }                 -- omnibus: see below
 'ccsDeduped'       data = { events = [{ ppq, chan, msgType, cc, pitch, droppedCount }, ...] }
-'collisionsResolved' data = { events = [{ kind, oldToken, token, uuid, chan, pitch, ppq }, ...] }
+'collisionsResolved' data = { events = [{ kind, uuid, chan, pitch, ppq }, ...] }
 'reload'           data = { wholesale }                      -- every load; true iff full re-read
 ```
 
-`collisionsResolved` events carry `kind = 'killed' | 'nudged'`; `token`
-(the post-resolution token) is present on nudges only. The signal also
-fires outside load, from `modify`'s outermost unwind, when the same-pitch
-backstop repaired a missed collision (§ Mutation contract).
+`collisionsResolved` events carry `kind = 'killed' | 'nudged'` and name the
+affected voice by `uuid` — a nudge moves the voice but never re-keys it. The
+signal also fires outside load, from `modify`'s outermost unwind, when the
+same-pitch backstop repaired a missed collision (§ Mutation contract).
 
 `ccsReconciled` events come in five kinds. The shared fields are `kind`,
 `uuid`, `chan`, `msgType`, and (per msgType) `cc` or `pitch`. Per-kind extras:

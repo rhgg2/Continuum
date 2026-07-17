@@ -1,11 +1,11 @@
-@spec mm_collision_backstop_spec  src=tests/specs/mm_collision_backstop_spec.lua  loc=106  sha=4d08384  cases=4
+@spec mm_collision_backstop_spec  src=tests/specs/mm_collision_backstop_spec.lua  loc=107  sha=4d08384  cases=4
 @exercises midiManager (h.mm)
 @surface   mm:notes, mm:subscribe, mm:byToken, mm:modify, mm:assign
 @harness   bareMM
 
 # Intent
   Phase 2 pin - design/same-pitch-enforcement.md item 2. mm's write-path
-  backstop: a verb filing over a live tokenIdx slot records (chan, pitch);
+  backstop: a verb filing over a live collisionIdx slot records (chan, pitch);
   the outermost modify unwind resolves the settled model via
   voicing.resolveGroup and fires collisionsResolved. bareMM on purpose:
   with tm wired, its reload rebuild separates the collision first and the
@@ -18,14 +18,14 @@
       -- Two distinct voices (different ppqL) on one (chan, pitch).
 
 # Cases
-  @case 'distinct voices colliding via direct mm:assign are nudged apart'  [harness]  @ 31-49
-  @case 'true duplicates (same ppqL, same detune) collapse to the longer'  [harness]  @ 53-72
-  @case 'resolution is idempotent - the next modify finds nothing'  [harness]  @ 76-87
-  @case 'a transient mid-batch collision resolves to nothing'  [harness]  @ 91-104
+  @case 'distinct voices colliding via direct mm:assign are nudged apart'  [harness]  @ 31-50
+  @case 'true duplicates (same ppqL, same detune) collapse to the longer'  [harness]  @ 54-73
+  @case 'resolution is idempotent - the next modify finds nothing'  [harness]  @ 77-88
+  @case 'a transient mid-batch collision resolves to nothing'  [harness]  @ 92-105
 
 # Uses (outbound edges)
   @use call mm:notes  @ 12,18
-  @use call mm:subscribe  @ 35,61,80,95
-  @use call mm:byToken  @ 37
-  @use call mm:modify  @ 40,63,82,83,97
-  @use call mm:assign  @ 40,63,82,83,98,99
+  @use call mm:subscribe  @ 36,62,81,96
+  @use call mm:byToken  @ 38
+  @use call mm:modify  @ 41,64,83,84,98
+  @use call mm:assign  @ 41,64,83,84,99,100

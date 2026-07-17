@@ -1,37 +1,36 @@
-@spec mm_unified_spec  src=tests/specs/mm_unified_spec.lua  loc=176  sha=bfdeb03  cases=9
+@spec mm_unified_spec  src=tests/specs/mm_unified_spec.lua  loc=173  sha=bfdeb03  cases=9
 @exercises midiManager (h.fm)
 @surface   fm:modify, fm:byToken, fm:notes, fm:tokenOf, fm:assign, fm:ccs, fm:delete, fm:events, fm:add
 @harness   mk{seed.notes, seed.ccs}, bareMM
 
 # Intent
-  Pin-tests for the unified token-keyed write/iter surface on midiManager:
-    mm:add(t) → token
-    mm:assign(token, t) → token'
-    mm:delete(token)
-    mm:events() → token, evt iterator
+  Pin-tests for the unified uuid-addressed write/iter surface on midiManager:
+    mm:add(t) → uuid
+    mm:assign(uuid, t) → uuid (always the same one: identity never re-keys)
+    mm:delete(uuid)
+    mm:events() → uuid, evt iterator
   
   The loc-form methods (addNote/addCC/assignNote/assignCC/deleteNote/deleteCC)
-  still exist alongside in this step; tm migrates in step 4. These tests
-  exercise the unified surface in isolation.
+  still exist alongside. These tests exercise the unified surface in isolation.
 
 # Cases
-  @case 'add(note): returns a token that resolves to the new note'  [harness]  @ 15-27
-  @case 'add(cc/pb/pa/at/pc): every evType lands and is byToken-addressable'  [harness]  @ 31-47
-  @case 'assign: metadata-only change preserves the token'  [harness]  @ 51-63
-  @case 'assign: identity-field change retires the old token, returns the new one'  [harness]  @ 67-80
-  @case 'assign: cc identity change (chan or cc#) re-keys'  [harness]  @ 84-95
-  @case 'delete(token): event vanishes from byToken and from the iterators'  [harness]  @ 99-121
-  @case 'delete(unknown token): silent no-op'  [harness]  @ 125-134
-  @case 'events(): yields all live events as (token, evt), notes then ccs'  [harness]  @ 138-161
-  @case 'add(nil) / add{} / assign(nil, t): nil-paths return nil, no crash'  [harness]  @ 165-174
+  @case 'add(note): returns a token that resolves to the new note'  [harness]  @ 14-26
+  @case 'add(cc/pb/pa/at/pc): every evType lands and is byToken-addressable'  [harness]  @ 30-46
+  @case 'assign: metadata-only change preserves the token'  [harness]  @ 50-62
+  @case 'assign: an identity-field change keeps the handle, which resolves to the moved note'  [harness]  @ 66-78
+  @case 'assign: a cc identity change (chan or cc#) keeps the handle too'  [harness]  @ 82-92
+  @case 'delete(token): event vanishes from byToken and from the iterators'  [harness]  @ 96-118
+  @case 'delete(unknown token): silent no-op'  [harness]  @ 122-131
+  @case 'events(): yields all live events as (token, evt), notes then ccs'  [harness]  @ 135-158
+  @case 'add(nil) / add{} / assign(nil, t): nil-paths return nil, no crash'  [harness]  @ 162-171
 
 # Uses (outbound edges)
-  @use call fm:modify  @ 19,35,59,75,90,111,115,130,168
-  @use call fm:byToken  @ 23,43,61,77,78,92,93,112,113,116,154
-  @use call fm:notes  @ 56,72,107
-  @use call fm:tokenOf  @ 57,73,88,109
-  @use call fm:assign  @ 59,75,90,171
-  @use call fm:ccs  @ 87,108
-  @use call fm:delete  @ 111,115,130,172
-  @use call fm:events  @ 119,132,151
-  @use call fm:add  @ 169
+  @use call fm:modify  @ 18,34,58,74,88,108,112,127,165
+  @use call fm:byToken  @ 22,42,60,76,90,109,110,113,151
+  @use call fm:notes  @ 55,71,104
+  @use call fm:tokenOf  @ 56,72,86,106
+  @use call fm:assign  @ 58,74,88,168
+  @use call fm:ccs  @ 85,105
+  @use call fm:delete  @ 108,112,127,169
+  @use call fm:events  @ 116,129,148
+  @use call fm:add  @ 166

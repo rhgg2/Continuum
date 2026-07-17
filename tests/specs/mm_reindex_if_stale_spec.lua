@@ -64,20 +64,20 @@ return {
   },
 
   {
-    name = 'a value-only assign is index-clean: the verb re-keys, and nothing launders it',
+    name = 'a value-only assign is index-clean: the verb keeps its own index, nothing launders it',
     run = function(harness)
       local mm  = pair(harness)
       local tok = tokenAtPpq(mm, 0)
 
       -- Structural (so it takes the locked path) but it moves no ppq: neither flag fires, so
-      -- no rebuild runs at the unwind. tokenIdx holds only what assignNote itself put there.
-      local newTok
-      mm:modify(function() newTok = mm:assign(tok, { pitch = 65, vel = 90 }) end)
-      t.truthy(newTok ~= tok, 'the pitch change re-keyed the token')
+      -- no rebuild runs at the unwind. The verb's own re-key is all that maintains the indices.
+      local same
+      mm:modify(function() same = mm:assign(tok, { pitch = 65, vel = 90 }) end)
+      t.eq(same, tok, 'identity is stable across a pitch change')
 
       local resolved
-      mm:modify(function() resolved = mm:assign(newTok, { vel = 80 }) end)
-      t.truthy(resolved, 'the re-keyed token resolves with no reindex behind it')
+      mm:modify(function() resolved = mm:assign(tok, { vel = 80 }) end)
+      t.truthy(resolved, 'the handle still resolves with no reindex behind it')
 
       t.deepEq(noteField(mm, 'ppq'),   { 0, 240 }, 'order stands: nothing moved')
       t.deepEq(noteField(mm, 'loc'),   { 1, 2 },   'and loc still matches the array')

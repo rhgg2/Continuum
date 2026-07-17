@@ -1,5 +1,5 @@
 -- Phase 2 pin - design/same-pitch-enforcement.md item 2. mm's write-path
--- backstop: a verb filing over a live tokenIdx slot records (chan, pitch);
+-- backstop: a verb filing over a live collisionIdx slot records (chan, pitch);
 -- the outermost modify unwind resolves the settled model via
 -- voicing.resolveGroup and fires collisionsResolved. bareMM on purpose:
 -- with tm wired, its reload rebuild separates the collision first and the
@@ -31,10 +31,11 @@ return {
     name = 'distinct voices colliding via direct mm:assign are nudged apart',
     run = function(harness)
       local mm = twoVoices(harness)
-      local fired, tokenLive = {}, nil
+      local moved = noteAt(mm, 240).uuid
+      local fired, handleLive = {}, nil
       mm:subscribe('collisionsResolved', function(info)
         fired[#fired + 1] = info
-        tokenLive = mm:byToken(info.events[1].token) ~= nil
+        handleLive = mm:byToken(info.events[1].uuid) ~= nil
       end)
 
       mm:modify(function() mm:assign(noteAt(mm, 240).token, { ppq = 0 }) end)
@@ -43,8 +44,8 @@ return {
       local e = fired[1].events[1]
       t.eq(e.kind, 'nudged')
       t.eq(e.ppq, 1, 'nudged to prev + 1')
-      t.truthy(e.oldToken ~= e.token, 'nudge re-keys the token')
-      t.truthy(tokenLive, 'signal fired after the reindex - the new token resolves')
+      t.eq(e.uuid, moved, 'the nudge moves the voice it names; identity is untouched')
+      t.truthy(handleLive, 'signal fired after the reindex - the uuid resolves')
       t.deepEq(ppqsOf(mm), { 0, 1 }, 'both voices survive, separated')
     end,
   },

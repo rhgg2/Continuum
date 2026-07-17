@@ -16,7 +16,7 @@
 # Cases
   @case 'reindexIfStale() is a no-op on already-compact state'  [harness]  @ 31-45
   @case 'reindexIfStale() stays inert after a compacting modify'  [harness]  @ 49-63
-  @case 'a value-only assign is index-clean: the verb re-keys, and nothing launders it'  [harness]  @ 67-86
+  @case 'a value-only assign is index-clean: the verb keeps its own index, nothing launders it'  [harness]  @ 67-86
   @case 'a ppq move re-sorts the arrays; it leaves no hole to compact'  [harness]  @ 90-99
   @case 'an add sorts into place; a delete compacts around the hole'  [harness]  @ 103-115
 
