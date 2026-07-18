@@ -1,4 +1,4 @@
-@module sampleRender  src=sampleRender.lua  loc=625  sha=217c1f8  mode=chunk  self=sr
+@module sampleRender  src=sampleRender.lua  loc=624  sha=34dd573  mode=chunk  self=sr
 @deps cm, ds, cmgr, chrome, gui, sv
 
 # Invariants & contracts
@@ -12,19 +12,19 @@
   @invariant  sv:syncSlot pushes ds's truth back on revert  @ 10
   @invariant  drag.handle is set on the first active frame (closest of start/end to the mouse wins) and held until the button releases — the choice does not switch mid-drag  @ 11
   @contract  samplePage (the controller) owns the stack (sm/sv) and hands this renderer sv only  @ 12
-  @contract  left=chrome.gridWidth(w): browser row over a strip, both width gridW  @ 445
-  @contract  slots fill chrome.palettePane (full height) on the right  @ 446
-  @contract  1px painter dividers: tree|files, browser|strip  @ 447
-  @contract  verticals stop GAP/2 short of the horizontal rule; strip bottom-pad clears status bar  @ 448
-  @contract  whole body is wrapped in chrome.disabledIf(not isLive) — when the bound track has no live sampler FX the entire interactive surface is greyed and inert  @ 449
-  @contract  pip auto-revert is checked at end of body: justTriggered=true edge consumes the trigger frame, after which any browser/slot-focus change or stray mouse click reverts  @ 450
+  @contract  left=chrome.gridWidth(w): browser row over a strip, both width gridW  @ 444
+  @contract  slots fill chrome.palettePane (full height) on the right  @ 445
+  @contract  1px painter dividers: tree|files, browser|strip  @ 446
+  @contract  verticals stop GAP/2 short of the horizontal rule; strip bottom-pad clears status bar  @ 447
+  @contract  whole body is wrapped in chrome.disabledIf(not isLive) — when the bound track has no live sampler FX the entire interactive surface is greyed and inert  @ 448
+  @contract  pip auto-revert is checked at end of body: justTriggered=true edge consumes the trigger frame, after which any browser/slot-focus change or stray mouse click reverts  @ 449
 
 # Shapes
   @shape  peakCacheEntry = { src?=PCM_Source, cols=int, fs=number, nch=int, frames=int, lenSec=number, building=bool, amps?={number,...} } | false  @ 31
   @shape  durCacheEntry  = number | false  @ 32
   @shape  drag = { handle='start'|'end'|nil, slot=int|nil, startF=int|nil, endF=int|nil }  @ 33
   @shape  pip = { slot=int|nil, track=track|nil, justTriggered=bool, browserAtTrigger=path|nil, slotAtTrigger=int|nil }  @ 38
-  @shape  ToolbarSegment = { id, render = fn(), visible? = fn() -> bool }  @ 388
+  @shape  ToolbarSegment = { id, heading? (presence = collapsible), render = fn(), visible? = fn() -> bool, pickers? }  @ 388
 
 # Imports
   @require fs = 'fs'  @ 13
@@ -41,9 +41,9 @@
   @state drag = { handle = nil, slot = nil, startF = nil, endF = nil }  @ 36
   @state pip = { slot = nil, justTriggered = false,  @ 39
   @state toolbarSegments = {  @ 389
-  @state sr = {}  @ 441
-  @state sampler = cmgr:scope('sample')  @ 590
-      @invariant  sample-scope command bindings: Ctrl+Up=browserUp, Ctrl+Down=browserPreview (descend folder or audition file), Ctrl+Right=browserAssign (load file into current slot), Shift+./Shift+,=slotNext/Prev (clamped to [0, N_SLOTS-1])  @ 589
+  @state sr = {}  @ 440
+  @state sampler = cmgr:scope('sample')  @ 589
+      @invariant  sample-scope command bindings: Ctrl+Up=browserUp, Ctrl+Down=browserPreview (descend folder or audition file), Ctrl+Right=browserAssign (load file into current slot), Shift+./Shift+,=slotNext/Prev (clamped to [0, N_SLOTS-1])  @ 588
 
 # Private functions
   @fn revertPreviewInPlace()  @ 43-49
@@ -74,31 +74,31 @@
       @contract  early-returns when the focused slot is empty or the source can't be read; otherwise every code path through here calls sm:setTrim before frame end if the user changed start/end  @ 285
       @contract  drag handle is held in `drag` across frames keyed by slot — switching to a different slot mid-drag implicitly drops the drag (liveDrag check fails)  @ 286
       @contract  trim invariants enforced at write: 0 <= start <= end-1 and start+1 <= end <= frames-2 (last 2 frames reserved)  @ 287
-  @fn boundTrackName()  @ 431-437
+  @fn boundTrackName()  @ 430-436
       -- Bound sampler track's name, for the status bar.
 
 # Public API (sr:*)
-  @api sr:toolbarSegments()  @ 443
-  @api sr:renderBody(_, w, h, dispatch)  @ 451-560
-  @api sr:renderStatusBar(_)  @ 562-569
-  @api sr:closeTransients()  @ 572-576
-      @contract  clear ephemeral preview/rename/drag state; the controller calls this on unbind  @ 571
-  @api sr:focusState()  @ 579-586
-      @contract  acceptCmds is also blocked by ImGui.IsAnyItemActive (e.g. an InputInt being edited) so trim-field typing doesn't trigger commands  @ 578
+  @api sr:toolbarSegments()  @ 442
+  @api sr:renderBody(_, w, h, dispatch)  @ 450-559
+  @api sr:renderStatusBar(_)  @ 561-568
+  @api sr:closeTransients()  @ 571-575
+      @contract  clear ephemeral preview/rename/drag state; the controller calls this on unbind  @ 570
+  @api sr:focusState()  @ 578-585
+      @contract  acceptCmds is also blocked by ImGui.IsAnyItemActive (e.g. an InputInt being edited) so trim-field typing doesn't trigger commands  @ 577
 
 # Uses (outbound edges)
   @use call    ImGui.AlignTextToFramePadding  @ drawStrip:369,377
-  @use call    ImGui.BeginChild  @ renderBody:477,492,510
+  @use call    ImGui.BeginChild  @ renderBody:476,491,509
   @use call    ImGui.BeginTable  @ drawSlots:229
-  @use call    ImGui.Button  @ drawStrip:385 renderBody:482,497,499,502,535,537,540
+  @use call    ImGui.Button  @ drawStrip:385 renderBody:481,496,498,501,534,536,539
   @use call    ImGui.CalcTextSize  @ drawSlots:237
   @use call    ImGui.DrawList_AddQuadFilled  @ drawStrip:330
   @use call    ImGui.DrawList_AddRectFilled  @ drawStrip:315,337,341,342,343
-  @use call    ImGui.EndChild  @ renderBody:487,506,515
+  @use call    ImGui.EndChild  @ renderBody:486,505,514
   @use call    ImGui.EndTable  @ drawSlots:280
-  @use call    ImGui.GetContentRegionAvail  @ drawSlots:238 renderBody:512
+  @use call    ImGui.GetContentRegionAvail  @ drawSlots:238 renderBody:511
   @use call    ImGui.GetCursorPosX  @ drawSlots:239
-  @use call    ImGui.GetCursorScreenPos  @ drawStrip:308 renderBody:458
+  @use call    ImGui.GetCursorScreenPos  @ drawStrip:308 renderBody:457
   @use call    ImGui.GetKeyMods  @ drawFiles:197,201
   @use call    ImGui.GetMousePos  @ drawStrip:346
   @use call    ImGui.GetStyleColor  @ drawSlots:242
@@ -106,69 +106,69 @@
   @use call    ImGui.InputInt  @ drawStrip:372,380
   @use call    ImGui.InputText  @ drawSlots:249
   @use call    ImGui.InvisibleButton  @ drawStrip:309
-  @use call    ImGui.IsAnyItemActive  @ focusState:584
+  @use call    ImGui.IsAnyItemActive  @ focusState:583
   @use call    ImGui.IsItemActive  @ drawSlots:252 drawStrip:310
   @use call    ImGui.IsItemHovered  @ drawStrip:310
   @use call    ImGui.IsKeyPressed  @ drawFiles:196,200 drawSlots:256
-  @use call    ImGui.IsMouseClicked  @ renderBody:552
+  @use call    ImGui.IsMouseClicked  @ renderBody:551
   @use call    ImGui.IsMouseDoubleClicked  @ drawFiles:213 drawSlots:275
-  @use call    ImGui.PopStyleColor  @ drawSlots:278 renderBody:559
-  @use call    ImGui.PushStyleColor  @ drawSlots:243,244 renderBody:456
-  @use call    ImGui.SameLine  @ drawStrip:370,376,378,384 422 renderBody:489,498,501,536,539
+  @use call    ImGui.PopStyleColor  @ drawSlots:278 renderBody:558
+  @use call    ImGui.PushStyleColor  @ drawSlots:243,244 renderBody:455
+  @use call    ImGui.SameLine  @ drawStrip:370,376,378,384 421 renderBody:488,497,500,535,538
   @use call    ImGui.Selectable  @ drawSlots:271
-  @use call    ImGui.Separator  @ renderBody:484,503,541
+  @use call    ImGui.Separator  @ renderBody:483,502,540
   @use call    ImGui.SetCursorPosX  @ drawSlots:239
-  @use call    ImGui.SetCursorScreenPos  @ renderBody:509
+  @use call    ImGui.SetCursorScreenPos  @ renderBody:508
   @use call    ImGui.SetKeyboardFocusHere  @ drawSlots:247
-  @use call    ImGui.SetMouseCursor  @ drawStrip:364 renderBody:558
+  @use call    ImGui.SetMouseCursor  @ drawStrip:364 renderBody:557
   @use call    ImGui.SetNextItemWidth  @ drawSlots:248 drawStrip:371,379
   @use call    ImGui.SetScrollHereY  @ drawFiles:220
   @use call    ImGui.TableNextRow  @ drawSlots:234
   @use call    ImGui.TableSetColumnIndex  @ drawSlots:235,241
   @use call    ImGui.TableSetupColumn  @ drawSlots:230,231
-  @use call    ImGui.Text  @ drawStrip:370,378 renderStatusBar:567
+  @use call    ImGui.Text  @ drawStrip:370,378 renderStatusBar:566
   @use call    ImGui.TextDisabled  @ drawSlots:240 drawStrip:293,300
-  @use call    chrome.checkbox  @ 416,423
-  @use call    chrome.colour  @ drawStrip:315,332,337,341,342,343 renderBody:456
-  @use call    chrome.disabledIf  @ renderBody:461,481,496,534
-  @use call    chrome.gridWidth  @ renderBody:459
-  @use call    chrome.paletteHeader  @ renderBody:479,495
-  @use call    chrome.pickerIsActive  @ focusState:581
-  @use call    chrome.popChromeStyles  @ renderBody:527
-  @use call    chrome.pushChromeStyles  @ renderBody:464
+  @use call    chrome.checkbox  @ 415,422
+  @use call    chrome.colour  @ drawStrip:315,332,337,341,342,343 renderBody:455
+  @use call    chrome.disabledIf  @ renderBody:460,480,495,533
+  @use call    chrome.gridWidth  @ renderBody:458
+  @use call    chrome.paletteHeader  @ renderBody:478,494
+  @use call    chrome.pickerIsActive  @ focusState:580
+  @use call    chrome.popChromeStyles  @ renderBody:526
+  @use call    chrome.pushChromeStyles  @ renderBody:463
   @use call    chrome.rowSelectable  @ drawFiles:209
-  @use call    cm:get  @ triggerPreviewInPlace:53 drawFiles:216 drawSlots:227 drawStrip:289 417,424,607,611,615 renderBody:474,537,551 renderStatusBar:564
-  @use call    cm:set  @ drawSlots:273 419,425,608,612
-  @use call    cmgr:scope  @ 590
-  @use call    ds:get  @ drawSlots:226 drawStrip:290 renderBody:473 renderStatusBar:565 617
+  @use call    cm:get  @ triggerPreviewInPlace:53 drawFiles:216 drawSlots:227 drawStrip:289 416,423,606,610,614 renderBody:473,536,550 renderStatusBar:563
+  @use call    cm:set  @ drawSlots:273 418,424,607,611
+  @use call    cmgr:scope  @ 589
+  @use call    ds:get  @ drawSlots:226 drawStrip:290 renderBody:472 renderStatusBar:564 616
   @use call    fs.join  @ drawTree:141 drawFiles:176,179
   @use call    fs.listAudioFiles  @ drawFiles:178
   @use call    fs.listDirs  @ drawTree:140,142 drawFiles:174
-  @use call    fs.parent  @ goUp:161 renderBody:480
-  @use call    painter.new  @ renderBody:523
-  @use call    sv:auditionPath  @ drawFiles:217 renderBody:499 599
-  @use call    sv:auditionSlot  @ drawSlots:275 drawStrip:385 renderBody:537
-  @use call    sv:browseRoot  @ goUp:158 renderBody:452
-  @use call    sv:clearCurrentSlot  @ renderBody:535
-  @use call    sv:getBrowserPath  @ triggerPreviewInPlace:58 drawFiles:185,206 renderBody:550 595
-  @use call    sv:getCurrentFolder  @ drawTree:139 goUp:159 renderBody:453
-  @use call    sv:getSelectedFile  @ renderBody:472,499 599
-  @use call    sv:getTrack  @ triggerPreviewInPlace:54 394 boundTrackName:432
-  @use call    sv:isBrowserFolder  @ 594,603
+  @use call    fs.parent  @ goUp:161 renderBody:479
+  @use call    painter.new  @ renderBody:522
+  @use call    sv:auditionPath  @ drawFiles:217 renderBody:498 598
+  @use call    sv:auditionSlot  @ drawSlots:275 drawStrip:385 renderBody:536
+  @use call    sv:browseRoot  @ goUp:158 renderBody:451
+  @use call    sv:clearCurrentSlot  @ renderBody:534
+  @use call    sv:getBrowserPath  @ triggerPreviewInPlace:58 drawFiles:185,206 renderBody:549 594
+  @use call    sv:getCurrentFolder  @ drawTree:139 goUp:159 renderBody:452
+  @use call    sv:getSelectedFile  @ renderBody:471,498 598
+  @use call    sv:getTrack  @ triggerPreviewInPlace:54 394 boundTrackName:431
+  @use call    sv:isBrowserFolder  @ 593,602
   @use call    sv:isFolderExpanded  @ drawTree:143
-  @use call    sv:isLive  @ renderBody:454
-  @use call    sv:listTracks  @ 393 boundTrackName:433
-  @use call    sv:loadSelectedIntoCurrent  @ renderBody:497 604
-  @use call    sv:setBrowseRoot  @ drawTree:148 renderBody:482
+  @use call    sv:isLive  @ renderBody:453
+  @use call    sv:listTracks  @ 393 boundTrackName:432
+  @use call    sv:loadSelectedIntoCurrent  @ renderBody:496 603
+  @use call    sv:setBrowseRoot  @ drawTree:148 renderBody:481
   @use call    sv:setBrowserItem  @ goUp:163 drawFiles:192,199,203,212
-  @use call    sv:setCurrentFolder  @ drawTree:149 goUp:164 drawFiles:215 597
+  @use call    sv:setCurrentFolder  @ drawTree:149 goUp:164 drawFiles:215 596
   @use call    sv:setFolderExpanded  @ drawTree:150
   @use call    sv:setName  @ drawSlots:254
   @use call    sv:setSlotFocus  @ drawSlots:274
-  @use call    sv:setTrack  @ 409
+  @use call    sv:setTrack  @ 408
   @use call    sv:setTrim  @ drawStrip:360,374,382
   @use call    sv:stageInto  @ triggerPreviewInPlace:55
-  @use call    sv:stopAudition  @ renderBody:502,540
+  @use call    sv:stopAudition  @ renderBody:501,539
   @use call    sv:syncSlot  @ revertPreviewInPlace:45
   @use require fs  @ 13
   @use require imgui  @ 19
@@ -185,8 +185,8 @@
   @reaper GetProjectPath
 
 # Fields (r read / w write incl. constructor keys)
-  @field r ChildFlags_None  @ renderBody:478,493,511
-  @field r Col_ChildBg  @ renderBody:456
+  @field r ChildFlags_None  @ renderBody:477,492,510
+  @field r Col_ChildBg  @ renderBody:455
   @field r Col_Header  @ drawSlots:242
   @field r Col_HeaderActive  @ drawSlots:244
   @field r Col_HeaderHovered  @ drawSlots:243
@@ -197,24 +197,24 @@
   @field r Key_Escape  @ drawSlots:256
   @field r Key_UpArrow  @ drawFiles:200
   @field r Mod_None  @ drawFiles:197,201
-  @field r MouseCursor_Arrow  @ renderBody:558
+  @field r MouseCursor_Arrow  @ renderBody:557
   @field r MouseCursor_ResizeEW  @ drawStrip:364
   @field r SelectableFlags_AllowDoubleClick  @ drawFiles:210 drawSlots:272
   @field r TableColumnFlags_WidthFixed  @ drawSlots:230
   @field r TableColumnFlags_WidthStretch  @ drawSlots:231
-  @field r WindowFlags_NoNav  @ renderBody:494
-  @field w acceptCmds  @ focusState:580,584
+  @field r WindowFlags_NoNav  @ renderBody:493
+  @field w acceptCmds  @ focusState:579,583
   @field w allowDouble  @ drawTree:147
-  @field w browserAssign  @ 602
-  @field r browserAtTrigger  @ revertPreviewInPlace:47 renderBody:550
+  @field w browserAssign  @ 601
+  @field r browserAtTrigger  @ revertPreviewInPlace:47 renderBody:549
   @field w browserAtTrigger  @ 40 triggerPreviewInPlace:58
-  @field w browserPreview  @ 593
-  @field w browserUp  @ 592
+  @field w browserPreview  @ 592
+  @field w browserUp  @ 591
   @field r buf  @ drawSlots:249,259
-  @field w buf  @ drawSlots:263 619
+  @field w buf  @ drawSlots:263 618
   @field r building  @ peakFor:106
   @field w building  @ peakFor:102,109
-  @field w buttonLabel  @ 406
+  @field w buttonLabel  @ 405
   @field r chrome  @ 22
   @field r cm  @ 22
   @field r cmgr  @ 22
@@ -224,65 +224,65 @@
   @field w current  @ 401
   @field w depth  @ drawTree:145
   @field r doubleClicked  @ drawTree:148
-  @field w draw  @ renderBody:533
+  @field w draw  @ renderBody:532
   @field r ds  @ 22
   @field r endF  @ drawStrip:305,360
-  @field w endF  @ 36 drawStrip:355,358,362 closeTransients:575
+  @field w endF  @ 36 drawStrip:355,358,362 closeTransients:574
   @field r frames  @ drawStrip:302
   @field w frames  @ peakFor:101
   @field w fs  @ peakFor:100
   @field r gui  @ 22
-  @field w h  @ renderBody:531
-  @field r handle  @ drawStrip:303,349,353,361,362 closeTransients:575
+  @field w h  @ renderBody:530
+  @field r handle  @ drawStrip:303,349,353,361,362 closeTransients:574
   @field w handle  @ 36 drawStrip:350
   @field w hasChildren  @ drawTree:146
-  @field w heading  @ 405
+  @field w heading  @ 391
   @field r hi  @ peakFor:87,132 drawStrip:316,322,327
-  @field w id  @ drawTree:145 391,414
+  @field w id  @ drawTree:145 391,413
   @field r isFolder  @ drawFiles:192,199,203,212,215
   @field w isFolder  @ drawFiles:172,175,182
-  @field w items  @ 408
+  @field w items  @ 407
   @field r justOpened  @ drawSlots:247,258
-  @field w justOpened  @ drawSlots:259 619
-  @field r justTriggered  @ renderBody:548
-  @field w justTriggered  @ 39 revertPreviewInPlace:48 triggerPreviewInPlace:60 renderBody:549
+  @field w justOpened  @ drawSlots:259 618
+  @field r justTriggered  @ renderBody:547
+  @field w justTriggered  @ 39 revertPreviewInPlace:48 triggerPreviewInPlace:60 renderBody:548
   @field w key  @ 400
   @field w kind  @ 404
-  @field w label  @ drawTree:145 399 renderBody:532
+  @field w label  @ drawTree:145 399 renderBody:531
   @field r lenSec  @ peakFor:117
   @field w lenSec  @ peakFor:101
   @field r lo  @ drawStrip:323,328
   @field w lo  @ peakFor:132
-  @field r name  @ drawFiles:209 drawSlots:266 398,399,619 boundTrackName:434 renderStatusBar:566
+  @field r name  @ drawFiles:209 drawSlots:266 398,399,618 boundTrackName:433 renderStatusBar:565
   @field w name  @ drawFiles:172,175,182
   @field r nch  @ peakFor:115
   @field w nch  @ peakFor:100
-  @field w onPick  @ 409
+  @field w onPick  @ 408
   @field w open  @ drawTree:146
   @field r path  @ 18 drawFiles:189,192,199,203,208,212,214,215,216,217 drawSlots:267
   @field r path  @ drawSlots:267 drawStrip:292,297
   @field w path  @ 18 drawFiles:172,176,182
-  @field w render  @ 392,415
-  @field r sample  @ 622
+  @field w render  @ 392,414
+  @field r sample  @ 621
   @field r selected  @ drawTree:149
   @field w selected  @ drawTree:147
-  @field r slot  @ revertPreviewInPlace:44,45,46 drawSlots:246 drawStrip:303,362 renderBody:547 closeTransients:575
-  @field w slot  @ 36,39,619 triggerPreviewInPlace:56 drawStrip:351
-  @field r slotAtTrigger  @ renderBody:551
+  @field r slot  @ revertPreviewInPlace:44,45,46 drawSlots:246 drawStrip:303,362 renderBody:546 closeTransients:574
+  @field w slot  @ 36,39,618 triggerPreviewInPlace:56 drawStrip:351
+  @field r slotAtTrigger  @ renderBody:550
   @field w slotAtTrigger  @ 40 revertPreviewInPlace:47 triggerPreviewInPlace:59
-  @field w slotNext  @ 606
-  @field w slotPrev  @ 610
-  @field w slotRename  @ 614
+  @field w slotNext  @ 605
+  @field w slotPrev  @ 609
+  @field w slotRename  @ 613
   @field r src  @ peakFor:84,107,108,117,118
   @field w src  @ peakFor:100,119
   @field r start  @ drawStrip:304
-  @field r startF  @ drawStrip:304,355,358,360,362 closeTransients:575
+  @field r startF  @ drawStrip:304,355,358,360,362 closeTransients:574
   @field w startF  @ 36
-  @field w suppressKbd  @ focusState:580,583
+  @field w suppressKbd  @ focusState:579,582
   @field r sv  @ 22
   @field r toggled  @ drawTree:150
-  @field r track  @ revertPreviewInPlace:45 398,400,401 boundTrackName:434
+  @field r track  @ revertPreviewInPlace:45 398,400,401 boundTrackName:433
   @field w track  @ revertPreviewInPlace:46 triggerPreviewInPlace:57
-  @field w width  @ 407
-  @field w x  @ renderBody:531
-  @field w y  @ renderBody:531
+  @field w width  @ 406
+  @field w x  @ renderBody:530
+  @field w y  @ renderBody:530

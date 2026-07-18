@@ -33,6 +33,21 @@ jumps the body down on the following frame. Per-segment screen rects are refresh
 each frame into `lastToolbarRects` and read by the help overlay via
 `chrome.toolbarRects()`.
 
+Segments declare their label as `heading` — the toolbar renders it through
+`headingLabel` behind a disclosure triangle, so the label-to-control gap
+is uniform by construction and every headed segment folds to its heading
+alone. Folding to the heading rather than to a value summary is
+deliberate: a summary repeats the control's own text at full width, so it
+reclaims almost nothing — the fold exists to buy back row width. Folded
+ids persist in the `toolbar.collapsed` config key (global tier). The
+width cache needs no special case — a folded segment simply measures
+narrower on its next frame and the row re-wraps.
+
+Type-to-open must survive folding: before layout the toolbar peeks the
+pending `requestPickerOpen` kind and re-expands a collapsed segment that
+lists the kind in `pickers`, so the request still reaches a `drawPicker`
+that can consume it.
+
 ## Vertical separator
 
 `verticalSeparator` draws a filled 1px rect, not `DrawList_AddLine`: axis-aligned

@@ -81,67 +81,73 @@ local function drawSampleDropdown()
 end
 
 -- Each render closure reads cm/tv fresh; segments declared once, reused per frame.
---shape: ToolbarSegment = { id, render = fn(), visible? = fn() -> bool }
+--shape: ToolbarSegment = { id, heading? (presence = collapsible), render = fn(), visible? = fn() -> bool, pickers? }
+
+local function trackLabel(track) return track.name ~= '' and track.name or ('Track ' .. (track.idx + 1)) end
+local function currentTrackLabel()
+  local curIdx = tv:currentTrackIdx()
+  for _, track in ipairs(arrange().tracks()) do
+    if track.idx == curIdx then return trackLabel(track) end
+  end
+  return '\xe2\x80\x94'
+end
+
+local function slotLabel(slot) return slot.name ~= '' and slot.name or arrange().keyForSlot(slot.idx) end
+local function currentSlotLabel()
+  local curSlot = tv:currentSlotIdx()
+  for _, slot in ipairs(arrange().midiSlots(tv:currentTrackIdx())) do
+    if slot.idx == curSlot then return slotLabel(slot) end
+  end
+  return '\xe2\x80\x94'
+end
+
+-- Channel under the edit cursor, for the per-column swing picker.
+local function cursorChan()
+  local cursorCol = tv.grid.cols[tv:ec():col()]
+  return cursorCol and cursorCol.midiChan
+end
+
 local toolbarSegments = {
   {
-    id = 'track',
+    id = 'track', heading = 'Track',
     render = function()
-      chrome.headingLabel('Track')
-      ImGui.SameLine(ctx, 0, 8)
       local curIdx = tv:currentTrackIdx()
-      local items, curName = {}, nil
-      for _, tr in ipairs(arrange().tracks()) do
-        local isCur = tr.idx == curIdx
-        if isCur then curName = tr.name end
-        items[#items + 1] = {
-          label   = tr.name ~= '' and tr.name or ('Track ' .. (tr.idx + 1)),
-          key     = tr.idx, group = 1, current = isCur,
-        }
+      local items = {}
+      for _, track in ipairs(arrange().tracks()) do
+        items[#items + 1] = { label = trackLabel(track), key = track.idx, group = 1, current = track.idx == curIdx }
       end
       chrome.drawPicker {
         kind        = 'track',
-        buttonLabel = (curName and curName ~= '' and curName)
-          or (curIdx and ('Track ' .. (curIdx + 1)))
-          or '\xe2\x80\x94',
-        width       = 160, items = items, onPick = function(idx) tv:pickTrack(idx) end,
+        buttonLabel = currentTrackLabel(),
+        width       = 120, items = items, onPick = function(idx) tv:pickTrack(idx) end,
       }
     end,
   },
   {
-    id = 'take',
+    id = 'take', heading = 'Take',
     render = function()
-      chrome.headingLabel('Take')
-      ImGui.SameLine(ctx, 0, 8)
-      local trackIdx = tv:currentTrackIdx()
-      local curSlot  = tv:currentSlotIdx()
-      local items, curName = {}, nil
-      for _, slot in ipairs(arrange().midiSlots(trackIdx)) do
-        local name = slot.name ~= '' and slot.name or arrange().keyForSlot(slot.idx)
-        if slot.idx == curSlot then curName = name end
-        items[#items + 1] = { label = name, key = slot.idx, group = 1, current = slot.idx == curSlot }
+      local curSlot = tv:currentSlotIdx()
+      local items = {}
+      for _, slot in ipairs(arrange().midiSlots(tv:currentTrackIdx())) do
+        items[#items + 1] = { label = slotLabel(slot), key = slot.idx, group = 1, current = slot.idx == curSlot }
       end
       chrome.drawPicker {
         kind        = 'take',
-        buttonLabel = curName or '\xe2\x80\x94',
-        width       = 160, items = items, onPick = function(idx) tv:pickTake(idx) end,
+        buttonLabel = currentSlotLabel(),
+        width       = 120, items = items, onPick = function(idx) tv:pickTake(idx) end,
       }
     end,
   },
   {
-    id = 'rowsPerBeat',
+    id = 'rowsPerBeat', heading = 'RPB',
     render = function()
-      ImGui.AlignTextToFramePadding(ctx)
-      chrome.headingLabel('RPB')
-      ImGui.SameLine(ctx, 0, 8)
       local changed, n = chrome.numberStepper('rpb', cm:get('rowPerBeat'), { min = 1, max = 32, align = 'center' })
       if changed then tv:setRowPerBeat(n) end
     end,
   },
   {
-    id = 'tuning',
+    id = 'tuning', heading = 'Tuning', pickers = { 'temper' },
     render = function()
-      chrome.headingLabel('Tuning')
-      ImGui.SameLine(ctx, 0, 8)
       local cur = cm:get('temper')
       chrome.drawPicker {
         kind        = 'temper',
@@ -155,31 +161,25 @@ local toolbarSegments = {
     end,
   },
   {
-    id = 'swing',
+    id = 'swing', heading = 'Swing', pickers = { 'swing', 'colSwing' },
     render = function()
-      chrome.headingLabel('Swing')
-      ImGui.SameLine(ctx, 0, 8)
-      do
-        local cur = (ds:get('swing') or {}).global
-        chrome.drawPicker {
-          kind        = 'swing', heading = 'Take',
-          buttonLabel = (not cur or cur == 'identity') and 'Off' or cur,
-          width       = 120,
-          items       = chrome.libPicker('swings', cur, SWING_PRESET_EXCLUDE),
-          onPick      = pickSwing,
-        }
-      end
-      -- Per-column swing in the same segment; channel from cursor's column.
-      local cursorCol = tv.grid.cols[tv:ec():col()]
-      local chan      = cursorCol and cursorCol.midiChan
+      local cur = (ds:get('swing') or {}).global
+      chrome.drawPicker {
+        kind        = 'swing', heading = 'Take',
+        buttonLabel = (not cur or cur == 'identity') and 'Off' or cur,
+        width       = 120,
+        items       = chrome.libPicker('swings', cur, SWING_PRESET_EXCLUDE),
+        onPick      = pickSwing,
+      }
+      local chan = cursorChan()
       ImGui.SameLine(ctx, 0, 8)
       chrome.disabledIf(not chan, function()
-        local cur = chan and (ds:get('swing') or {})[chan] or nil
+        local chanCur = chan and (ds:get('swing') or {})[chan] or nil
         chrome.drawPicker {
           kind        = 'colSwing', heading = 'Ch',
-          buttonLabel = cur or 'Off',
+          buttonLabel = chanCur or 'Off',
           width       = 120,
-          items       = chrome.libPicker('swings', cur, SWING_PRESET_EXCLUDE),
+          items       = chrome.libPicker('swings', chanCur, SWING_PRESET_EXCLUDE),
           onPick      = function(name) pickColSwing(chan, name) end,
         }
       end)
@@ -193,10 +193,8 @@ local toolbarSegments = {
     render  = function() drawSampleDropdown() end,
   },
   {
-    id = 'graph',
+    id = 'graph', heading = 'Graph',
     render = function()
-      chrome.headingLabel('Graph')
-      ImGui.SameLine(ctx, 0, 8)
       local cv, newVis = chrome.checkbox('##', cm:get('laneStrip.visible'))
       if cv then cm:set('global', 'laneStrip.visible', newVis) end
     end,

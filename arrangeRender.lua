@@ -742,7 +742,7 @@ end
 
 ----------- PUBLIC
 
---shape: ToolbarSegment = { id, render = fn() }
+--shape: ToolbarSegment = { id, heading? (presence = collapsible), render = fn(), visible? = fn() -> bool, pickers? }
 local toolbarSegments = {
   {
     id = 'followPlay',
@@ -752,11 +752,8 @@ local toolbarSegments = {
     end,
   },
   {
-    id = 'beatsPerRow',
+    id = 'beatsPerRow', heading = 'BPR',
     render = function()
-      ImGui.AlignTextToFramePadding(ctx)
-      chrome.headingLabel('BPR')
-      ImGui.SameLine(ctx, 0, 8)
       local changed, n = chrome.numberStepper('bpr', av:beatPerRow(),
         { min = 1/4, max = 64, format = '%g', digits = 4, align = 'center' })
       if changed then av:setBeatPerRow(n) end

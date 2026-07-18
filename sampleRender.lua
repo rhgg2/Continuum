@@ -385,10 +385,10 @@ local function drawStrip(stripW, stripH)
   if ImGui.Button(ctx, 'Preview##strip', previewW, 0) then sv:auditionSlot(slot) end
 end
 
---shape: ToolbarSegment = { id, render = fn(), visible? = fn() -> bool }
+--shape: ToolbarSegment = { id, heading? (presence = collapsible), render = fn(), visible? = fn() -> bool, pickers? }
 local toolbarSegments = {
   {
-    id = 'track',
+    id = 'track', heading = 'Track',
     render = function()
       local tracks  = sv:listTracks()
       local current = sv:getTrack()
@@ -402,7 +402,6 @@ local toolbarSegments = {
       end
       chrome.drawPicker {
         kind        = 'sampleTrack',
-        heading     = 'Track',
         buttonLabel = label,
         width       = 240,
         items       = items,

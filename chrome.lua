@@ -267,7 +267,12 @@ local function headingLabel(text)
   ImGui.PopStyleColor(ctx, 1)
 end
 
---shape: toolbarSegment = { id: string, render: fn, visible?: fn() -> bool }
+-- Picker-open request state, hoisted above the toolbar: layout peeks it to
+-- re-expand a collapsed segment hosting the requested kind. Consumed in § Picker.
+local pickerOpenReq  = nil   -- kind name; consumed by next drawPicker(kind)
+local pickerOpenSeed = nil   -- initial filter text for a request-driven open (type-to-open)
+
+--shape: toolbarSegment = { id: string, heading?: string (presence = collapsible), render: fn, visible?: fn() -> bool, pickers?: [kind] }
 -- see docs/chrome.md § Toolbar layout
 local lastToolbarRects = {}
 --invariant: one page draws per frame; cleared at next toolbar() start — no cross-page collision.
@@ -277,19 +282,56 @@ local resetPending  = false
 -- Deferred: the switcher lives in the toolbar, so setActive fires mid-render — clearing
 -- now would unwrap this frame's later segments. Clear at the next toolbar() start instead.
 local function resetToolbar() resetPending = true end
+
+-- A segment with a summary is collapsible; folded ids persist in config.
+local function setCollapsed(id, on)
+  local set = cm:get('toolbar.collapsed') or {}
+  set[id] = on or nil
+  cm:set('global', 'toolbar.collapsed', set)
+end
+
+-- headingLabel that toggles: a leading triangle discloses the folded state.
+-- ▸/▾ advance differently, so the triangle gets a fixed cell — no 1px heading shift.
+local function disclosureHeading(text, collapsed)
+  local collapsedW = ImGui.CalcTextSize(ctx, '\xe2\x96\xb8')
+  local expandedW  = ImGui.CalcTextSize(ctx, '\xe2\x96\xbe')
+  local cellW      = math.max(collapsedW, expandedW)
+  local startX     = ImGui.GetCursorPosX(ctx)
+  ImGui.BeginGroup(ctx)
+  headingLabel(collapsed and '\xe2\x96\xb8' or '\xe2\x96\xbe')
+  ImGui.SameLine(ctx)
+  ImGui.SetCursorPosX(ctx, startX + cellW + 4)
+  headingLabel(text)
+  ImGui.EndGroup(ctx)
+  if ImGui.IsItemHovered(ctx) then ImGui.SetMouseCursor(ctx, ImGui.MouseCursor_Hand) end
+  return ImGui.IsItemClicked(ctx)
+end
+
+local function drawSegment(seg, collapsed)
+  ImGui.BeginGroup(ctx)
+  if seg.heading then
+    if disclosureHeading(seg.heading, collapsed) then setCollapsed(seg.id, not collapsed) end
+    if not collapsed then
+      ImGui.SameLine(ctx, 0, 8)
+      seg.render()
+    end
+  else
+    seg.render()
+  end
+  ImGui.EndGroup(ctx)
+end
+
 local function makeToolbar()
   -- Hidden Alpha-0 pass to pre-populate widths when the cache is cold (post-reset).
   -- Without it the cold row lays out flat and AutoResizeY jumps the body one frame later.
-  local function measureWidths(segments)
+  local function measureWidths(segments, collapsed)
     local x, y = ImGui.GetCursorScreenPos(ctx)
     ImGui.PushStyleVar(ctx, ImGui.StyleVar_Alpha, 0)
     local first = true
     for _, seg in ipairs(segments) do
       if not seg.visible or seg.visible() then
         if not first then ImGui.SameLine(ctx) end
-        ImGui.BeginGroup(ctx)
-        seg.render()
-        ImGui.EndGroup(ctx)
+        drawSegment(seg, collapsed[seg.id])
         local minX = ImGui.GetItemRectMin(ctx)
         local maxX = ImGui.GetItemRectMax(ctx)
         toolbarWidths[seg.id] = maxX - minX
@@ -306,12 +348,27 @@ local function makeToolbar()
     end
     return false
   end
+  -- A pending keyboard picker request must not die against a folded host segment.
+  local function expandPendingHosts(segments, collapsed)
+    for _, seg in ipairs(segments) do
+      if collapsed[seg.id] and seg.pickers then
+        for _, kind in ipairs(seg.pickers) do
+          if kind == pickerOpenReq then
+            collapsed[seg.id] = nil
+            setCollapsed(seg.id, false)
+          end
+        end
+      end
+    end
+  end
   return function(segments)
     if resetPending then
       for k in pairs(toolbarWidths) do toolbarWidths[k] = nil end
       resetPending = false
     end
-    if anyUncached(segments) then measureWidths(segments) end
+    local collapsed = cm:get('toolbar.collapsed') or {}
+    if pickerOpenReq then expandPendingHosts(segments, collapsed) end
+    if anyUncached(segments) then measureWidths(segments, collapsed) end
     for k in pairs(lastToolbarRects) do lastToolbarRects[k] = nil end
     local startX = ImGui.GetCursorScreenPos(ctx)
     local availW = ImGui.GetContentRegionAvail(ctx)
@@ -330,9 +387,7 @@ local function makeToolbar()
             lines = lines + 1   -- segment wrapped to a new row
           end
         end
-        ImGui.BeginGroup(ctx)
-        seg.render()
-        ImGui.EndGroup(ctx)
+        drawSegment(seg, collapsed[seg.id])
         local minX, minY = ImGui.GetItemRectMin(ctx)
         local maxX, maxY = ImGui.GetItemRectMax(ctx)
         toolbarWidths[seg.id] = maxX - minX
@@ -349,8 +404,6 @@ end
 -- Per-kind state; popups close on focus loss so a missing entry just
 -- means "default empty filter / cursor at top".
 local pickerFilter, pickerCursor = {}, {}
-local pickerOpenReq  = nil   -- kind name; consumed by next drawPicker(kind)
-local pickerOpenSeed = nil   -- initial filter text for a request-driven open (type-to-open)
 local pickerActive   = false -- frame-scoped: any picker popup live this frame
 -- EEL callback: drops SetKeyboardFocusHere's select-all so a seeded filter
 -- appends instead of being overwritten by the next keystroke. Attached lazily.

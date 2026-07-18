@@ -1,4 +1,4 @@
-@module arrangeRender  src=arrangeRender.lua  loc=856  sha=217c1f8  mode=chunk  self=ar
+@module arrangeRender  src=arrangeRender.lua  loc=853  sha=34dd573  mode=chunk  self=ar
 @deps cm, cmgr, chrome, gui, modalHost, av
 
 # Invariants & contracts
@@ -9,7 +9,7 @@
 # Shapes
   @shape  body = grid pane (variable width) | fixed-width palette (chrome.palettePane); palette shows slots for the track under av:cursorCol().  @ 5
   @shape  press = { qn, row, col, take, mode = 'move'|'resizeEnd', duplicate, moved, gutter, create } — nil when no button down. Track-col: take/row/col/mode; gutter: qn+gutter=true; dbl-click: qn/col+create=true. moved flips at drag threshold.  @ 41
-  @shape  ToolbarSegment = { id, render = fn() }  @ 745
+  @shape  ToolbarSegment = { id, heading? (presence = collapsible), render = fn(), visible? = fn() -> bool, pickers? }  @ 745
 
 # Imports
   @require util = 'util'  @ 7
@@ -40,8 +40,8 @@
   @state HEADER_PAD = 8  @ 177
   @state HEADER_GAP = 4  @ 178
   @state toolbarSegments = {  @ 746
-  @state arrange = cmgr:scope('arrange')  @ 835
-      @invariant  createSlot (Ctrl+Enter) opens the create modal — the only slot-minting gesture.  @ 833
+  @state arrange = cmgr:scope('arrange')  @ 832
+      @invariant  createSlot (Ctrl+Enter) opens the create modal — the only slot-minting gesture.  @ 830
 
 # Private functions
   @fn drainWheel(accum, wheel, unitsPerNotch)  @ 53-57
@@ -87,31 +87,30 @@
   @fn renderPaletteBody(focusedTrack)  @ 735-741
 
 # Public API (ar:*)
-  @api ar:toolbarSegments()  @ 767
-  @api ar:renderBody(_, w, h, dispatch)  @ 772-810
-      @invariant  grid is hand-drawn (no ImGui table) — tints, gridlines, take rects, cursor on top.  @ 769
-      @contract  pushes parchment body palette (coord popped chrome before); palette tables need it.  @ 770
-      @contract  invokes dispatch at end-of-body so arrange-scope keys reach the dispatcher.  @ 771
-  @api ar:renderStatusBar(_)  @ 812-818
-  @api ar:focusState()  @ 821-830
-      @contract  acceptCmds=false if picker active, any item active, or modal was open at frame start.  @ 820
+  @api ar:toolbarSegments()  @ 764
+  @api ar:renderBody(_, w, h, dispatch)  @ 769-807
+      @invariant  grid is hand-drawn (no ImGui table) — tints, gridlines, take rects, cursor on top.  @ 766
+      @contract  pushes parchment body palette (coord popped chrome before); palette tables need it.  @ 767
+      @contract  invokes dispatch at end-of-body so arrange-scope keys reach the dispatcher.  @ 768
+  @api ar:renderStatusBar(_)  @ 809-815
+  @api ar:focusState()  @ 818-827
+      @contract  acceptCmds=false if picker active, any item active, or modal was open at frame start.  @ 817
 
 # Uses (outbound edges)
-  @use call    ImGui.AlignTextToFramePadding  @ 757
-  @use call    ImGui.BeginChild  @ renderBody:791
+  @use call    ImGui.BeginChild  @ renderBody:788
   @use call    ImGui.BeginTable  @ renderPaletteList:708
   @use call    ImGui.Button  @ 673,677 renderPaletteActions:688,694
   @use call    ImGui.Dummy  @ renderGrid:603
-  @use call    ImGui.EndChild  @ renderBody:799
+  @use call    ImGui.EndChild  @ renderBody:796
   @use call    ImGui.EndTable  @ renderPaletteList:732
   @use call    ImGui.GetContentRegionAvail  @ gridGeom:188
-  @use call    ImGui.GetCursorScreenPos  @ gridGeom:186 renderBody:787
+  @use call    ImGui.GetCursorScreenPos  @ gridGeom:186 renderBody:784
   @use call    ImGui.GetKeyMods  @ handleGridMouse:228,257
   @use call    ImGui.GetMousePos  @ handleGridMouse:224
   @use call    ImGui.GetMouseWheel  @ handleGridMouse:238
   @use call    ImGui.GetTextLineHeightWithSpacing  @ gridGeom:189
   @use call    ImGui.InputText  @ 668,671
-  @use call    ImGui.IsAnyItemActive  @ focusState:827
+  @use call    ImGui.IsAnyItemActive  @ focusState:824
   @use call    ImGui.IsKeyPressed  @ 674,675,678
   @use call    ImGui.IsMouseClicked  @ handleGridMouse:232,249
   @use call    ImGui.IsMouseDoubleClicked  @ handleGridMouse:270
@@ -123,28 +122,28 @@
   @use call    ImGui.PopStyleColor  @ popBodyStyles:69
   @use call    ImGui.PushFont  @ renderPaletteList:721
   @use call    ImGui.PushStyleColor  @ pushBodyStyles:62,63,64,65,66,67
-  @use call    ImGui.SameLine  @ 676,759 renderPaletteActions:692 renderPaletteList:720
+  @use call    ImGui.SameLine  @ 676 renderPaletteActions:692 renderPaletteList:720
   @use call    ImGui.Selectable  @ renderPaletteList:716
   @use call    ImGui.Separator  @ renderPaletteBody:739
   @use call    ImGui.SetKeyboardFocusHere  @ 667
   @use call    ImGui.TableNextRow  @ renderPaletteList:714
   @use call    ImGui.TableSetColumnIndex  @ renderPaletteList:715,725,728
   @use call    ImGui.TableSetupColumn  @ renderPaletteList:709,710,711
-  @use call    ImGui.Text  @ 666,670 renderPaletteList:722,726,729 renderBody:780 renderStatusBar:814
+  @use call    ImGui.Text  @ 666,670 renderPaletteList:722,726,729 renderBody:777 renderStatusBar:811
   @use call    ImGui.TextDisabled  @ renderPaletteList:704
   @use call    av:addToSelection  @ handleGridMouse:298
-  @use call    av:beatPerRow  @ handleGridMouse:226 760,846 renderStatusBar:816
+  @use call    av:beatPerRow  @ handleGridMouse:226 757,843 renderStatusBar:813
   @use call    av:clearLoopRange  @ handleGridMouse:234
   @use call    av:commitDrag  @ handleGridMouse:294
   @use call    av:createCandidate  @ handleGridMouse:287
   @use call    av:createSlot  @ 657
-  @use call    av:cursorCol  @ renderGrid:336 renderBody:801 renderStatusBar:816 839
-  @use call    av:cursorRow  @ renderGrid:336 renderStatusBar:816 839
+  @use call    av:cursorCol  @ renderGrid:336 renderBody:798 renderStatusBar:813 836
+  @use call    av:cursorRow  @ renderGrid:336 renderStatusBar:813 836
   @use call    av:deleteSlot  @ openDeleteModal:641
   @use call    av:dragCandidate  @ handleGridMouse:283
   @use call    av:editCursorQN  @ renderGrid:575
   @use call    av:followPlay  @ handleGridMouse:248
-  @use call    av:followsPlay  @ 750,841
+  @use call    av:followsPlay  @ 750,838
   @use call    av:gutterLoopCand  @ handleGridMouse:285
   @use call    av:hitTake  @ handleGridMouse:256
   @use call    av:isSelected  @ handleGridMouse:263
@@ -154,19 +153,19 @@
   @use call    av:nextFreeSlot  @ 648
   @use call    av:paletteSlot  @ renderPaletteList:707 renderPaletteBody:737
   @use call    av:playPositionQN  @ renderGrid:576
-  @use call    av:projectTracks  @ renderBody:777
+  @use call    av:projectTracks  @ renderBody:774
   @use call    av:qnToRow  @ renderGrid:411,412,427,428,476,477,492,493,526,567
   @use call    av:renameSlot  @ openRenameModal:630
-  @use call    av:rowToQN  @ rowLabel:74 handleGridMouse:227 renderGrid:345,461 839
+  @use call    av:rowToQN  @ rowLabel:74 handleGridMouse:227 renderGrid:345,461 836
   @use call    av:scroll  @ gridGeom:193
   @use call    av:scrollBy  @ handleGridMouse:244
   @use call    av:selectionSet  @ renderGrid:367
-  @use call    av:setBeatPerRow  @ 762,848
+  @use call    av:setBeatPerRow  @ 759,845
   @use call    av:setCursor  @ handleGridMouse:308
   @use call    av:setEditCursorQN  @ handleGridMouse:306
   @use call    av:setFocus  @ handleGridMouse:269,314
-  @use call    av:setFollowPlay  @ 751,841
-  @use call    av:setGridSize  @ handleGridMouse:221 renderBody:781
+  @use call    av:setFollowPlay  @ 751,838
+  @use call    av:setGridSize  @ handleGridMouse:221 renderBody:778
   @use call    av:setLoopRangeQN  @ handleGridMouse:296
   @use call    av:setMaxCol  @ handleGridMouse:222
   @use call    av:setPaletteSlot  @ renderPaletteList:718
@@ -177,15 +176,14 @@
   @use call    chrome.checkbox  @ 750
   @use call    chrome.colour  @ pushBodyStyles:62,63,64,65,66,67
   @use call    chrome.disabledIf  @ renderPaletteActions:687,693
-  @use call    chrome.gridWidth  @ renderBody:788
-  @use call    chrome.headingLabel  @ 758
-  @use call    chrome.numberStepper  @ 760
-  @use call    chrome.pickerIsActive  @ focusState:823
-  @use call    cm:get  @ 653,655 renderStatusBar:817
+  @use call    chrome.gridWidth  @ renderBody:785
+  @use call    chrome.numberStepper  @ 757
+  @use call    chrome.pickerIsActive  @ focusState:820
+  @use call    cm:get  @ 653,655 renderStatusBar:814
   @use call    cm:set  @ 656
-  @use call    cmgr:scope  @ 835
+  @use call    cmgr:scope  @ 832
   @use call    modalHost:registerKind  @ 664
-  @use call    modalHost:wasOpenAtFrameStart  @ focusState:828
+  @use call    modalHost:wasOpenAtFrameStart  @ focusState:825
   @use call    painter.hue  @ slotFill:88,89
   @use call    painter.new  @ gridGeom:198 renderGrid:326
   @use call    util.atomic  @ openRenameModal:630 openDeleteModal:641 654
@@ -207,7 +205,7 @@
   @reaper time_precise
 
 # Fields (r read / w write incl. constructor keys)
-  @field r ChildFlags_None  @ renderBody:792
+  @field r ChildFlags_None  @ renderBody:789
   @field r Col_TableBorderLight  @ pushBodyStyles:66
   @field r Col_TableBorderStrong  @ pushBodyStyles:67
   @field r Col_TableHeaderBg  @ pushBodyStyles:63
@@ -223,15 +221,15 @@
   @field r SelectableFlags_SpanAllColumns  @ renderPaletteList:717
   @field r TableColumnFlags_WidthFixed  @ renderPaletteList:709,710
   @field r TableColumnFlags_WidthStretch  @ renderPaletteList:711
-  @field r WindowFlags_NoNav  @ renderBody:793
-  @field r WindowFlags_NoScrollWithMouse  @ renderBody:794
-  @field r WindowFlags_NoScrollbar  @ renderBody:795
-  @field w acceptCmds  @ focusState:822,826
+  @field r WindowFlags_NoNav  @ renderBody:790
+  @field r WindowFlags_NoScrollWithMouse  @ renderBody:791
+  @field r WindowFlags_NoScrollbar  @ renderBody:792
+  @field w acceptCmds  @ focusState:819,823
   @field r add  @ handleGridMouse:298,309
   @field w add  @ handleGridMouse:266,275
-  @field w align  @ 761
-  @field r arrange  @ 854
-  @field w arrangeSetBeatPerRow  @ 842
+  @field w align  @ 758
+  @field r arrange  @ 851
+  @field w arrangeSetBeatPerRow  @ 839
   @field r av  @ 18
   @field r availH  @ renderGrid:340,495
   @field w availH  @ gridGeom:203
@@ -241,10 +239,10 @@
   @field w bodyBot  @ gridGeom:205
   @field r bodyTop  @ handleGridMouse:229
   @field w bodyTop  @ gridGeom:204
-  @field w buf  @ openRenameModal:629 846
+  @field w buf  @ openRenameModal:629 843
   @field r building  @ peaksFor:140
   @field w building  @ peaksFor:137,143
-  @field w callback  @ openRenameModal:630 openDeleteModal:641 654,847
+  @field w callback  @ openRenameModal:630 openDeleteModal:641 654,844
   @field r ceil  @ drainWheel:55
   @field r chan  @ renderGrid:417
   @field r chrome  @ 18
@@ -259,17 +257,17 @@
   @field w cols  @ peaksFor:135
   @field r create  @ handleGridMouse:286,289,300
   @field w create  @ handleGridMouse:271
-  @field w createSlot  @ 838
+  @field w createSlot  @ 835
   @field r ctx  @ 20
-  @field w digits  @ 761
-  @field w draw  @ renderBody:805
+  @field w digits  @ 758
+  @field w draw  @ renderBody:802
   @field r duplicate  @ renderGrid:458
   @field w duplicate  @ handleGridMouse:267
   @field r fits  @ handleGridMouse:294 renderGrid:470
   @field r floor  @ drainWheel:55
   @field r font  @ 23
   @field r fontSize  @ 24
-  @field w format  @ 761
+  @field w format  @ 758
   @field r ghosts  @ renderGrid:459,469
   @field r gridR  @ renderGrid:328
   @field w gridR  @ gridGeom:210
@@ -281,9 +279,10 @@
   @field w gutter  @ handleGridMouse:251
   @field r gutterR  @ handleGridMouse:230 renderGrid:568
   @field w gutterR  @ gridGeom:208
-  @field w h  @ renderBody:803
+  @field w h  @ renderBody:800
   @field r headerH  @ renderGrid:594,603
   @field w headerH  @ gridGeom:204
+  @field w heading  @ 755
   @field r hi  @ peaksFor:132,164 renderGrid:385,396
   @field r hiQN  @ handleGridMouse:296 renderGrid:521
   @field w id  @ 748,755
@@ -292,16 +291,16 @@
   @field r item  @ renderGrid:383,459,463
   @field r kind  @ renderGrid:436,439 renderPaletteList:726
   @field w kind  @ 650
-  @field w label  @ renderBody:804
+  @field w label  @ renderBody:801
   @field r lastCol  @ renderGrid:329
   @field w lastCol  @ gridGeom:207
   @field r lengthQN  @ handleGridMouse:302 renderGrid:464,470,477
   @field r lo  @ renderGrid:397
   @field w lo  @ peaksFor:164
   @field r loQN  @ handleGridMouse:296 renderGrid:521
-  @field w max  @ 761
+  @field w max  @ 758
   @field w mcol  @ handleGridMouse:275
-  @field w min  @ 761
+  @field w min  @ 758
   @field r modalHost  @ 18
   @field w mode  @ handleGridMouse:266
   @field r moved  @ handleGridMouse:282,284,286,288
@@ -328,7 +327,7 @@
   @field r pg  @ handleGridMouse:219 renderGrid:325
   @field w pg  @ gridGeom:203
   @field r pi  @ renderGrid:532,535
-  @field w prompt  @ openRenameModal:628 openDeleteModal:640 845
+  @field w prompt  @ openRenameModal:628 openDeleteModal:640 842
   @field r qn  @ handleGridMouse:303,306
   @field w qn  @ handleGridMouse:251,265,271,275
   @field r qnHi  @ renderGrid:493
@@ -359,15 +358,15 @@
   @field r startOffs  @ renderGrid:393
   @field w startOffs  @ peaksFor:136
   @field r startQN  @ renderGrid:411,412,464,470,476,477
-  @field w suppressKbd  @ focusState:822,825
+  @field w suppressKbd  @ focusState:819,822
   @field w sx  @ gridGeom:200
   @field w sy  @ gridGeom:200
   @field r take  @ handleGridMouse:263,269,282,288,311,314 renderGrid:376,384
   @field r take  @ renderGrid:459,465,470
   @field w take  @ handleGridMouse:266
   @field r takes  @ handleGridMouse:298,299
-  @field w title  @ openRenameModal:627 openDeleteModal:639 651,844
-  @field w toggleFollowPlay  @ 841
+  @field w title  @ openRenameModal:627 openDeleteModal:639 651,841
+  @field w toggleFollowPlay  @ 838
   @field r trackIdx  @ renderGrid:430
   @field r ui  @ 24
   @field r visCols  @ handleGridMouse:221
@@ -378,9 +377,9 @@
   @field w winSec  @ peaksFor:135
   @field r wrap  @ renderGrid:393
   @field w wrap  @ peaksFor:136
-  @field w x  @ renderBody:803
+  @field w x  @ renderBody:800
   @field w x0  @ renderGrid:331
   @field w x1  @ renderGrid:331
-  @field w y  @ renderBody:803
+  @field w y  @ renderBody:800
   @field w y0  @ renderGrid:331
   @field w y1  @ renderGrid:331

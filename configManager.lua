@@ -64,6 +64,8 @@ local declarations = {
   { 'trackerSlot',       nil },   -- slotIdx
 
   -- table-valued
+  -- Toolbar disclosure state: folded segment ids (id -> true).
+  { 'toolbar.collapsed', {} },
   -- defaultSwing: seed for a take's swing map on first bind; never read at realisation.
   { 'defaultSwing',    { global = 'identity' } },
   -- Default is the system preset library; global (user-saved) and project (local) tiers overlay per-name.
