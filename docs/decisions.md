@@ -4,6 +4,11 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-19** — pb gate widens seed locality with hold-stream reach, over forcing pb edits
+  wholesale. Authored pb/cc bases and lane-1 detune hold forward past window edges, so a seed on a
+  hold source forces live every pb (and augment-cc) window ending after it, cascading through live
+  lane-1 note-emitters — wholesale would have gutted the gate for ordinary lane-1 editing.
+
 - **2026-07-19** — Continuous cc gate keeps by target scope, not kept records. The design's
   `{ window, kept = true }` cc records proved geometrically inert once emission clips to the emit
   scope (a kept window can never intersect it), so the kept side is a per-target merged window set

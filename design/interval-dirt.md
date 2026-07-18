@@ -1310,7 +1310,27 @@ Commits (commit 1, the note half, above), each green alone,
 4. **The pb half.** Kept `pbChains` records, the `replaceWins` split,
    the fences, the prior-column-slice carry. Parity: disjoint vibrato
    hosts; a detune edit outside every window still reseats its
-   absorber; write-count pin.
+   absorber; write-count pin. *Landed 2026-07-19.* Two amendments.
+   *Hold-stream reach*: authored pb/cc bases and lane-1 detune hold
+   forward past window edges, invisible to window-local seeds -- and
+   `absorbReloadDirt` folds `pbSource`'s wholesale bit down to seed
+   dirt, so detune edits genuinely arrive gated. The gate therefore
+   forces live any pb window ending after the earliest hold-source
+   seed (pitch-nil or lane-1), and any augment-cc window ending after
+   the earliest pitch-nil seed (closing commit 3's latent version of
+   the same gap), cascading to fixpoint through live lane-1
+   note-emitters, whose detuned output re-enters the stream. Known
+   blind spot shared with `windowSeeded`: a moved pb/cc whose uuid
+   `tm:byUuid` cannot resolve contributes only its birth row.
+   *Onset-pair ownership*: a ramp onset's dual point rides one tick
+   before it; both seats follow the onset ppq's side of the kept
+   fence, so a kept boundary onset's pair stands verbatim (carried
+   via the prior pb column, keyed on a `ppqRaw` stamp that survives
+   projection, identity refreshed from the fenced wire clone -- a
+   creation-pass projection predates its committed uuid) and a live
+   onset at a kept edge reclaims both. The
+   write pin is a verbatim before/after comparison of the kept
+   range's dumped pb records.
 5. **Measure on glasswork-dense.** A variant of the glasswork builder
    piling the same chains onto one channel, bridge-driven like
    glasswork itself — glasswork's spread over 16 channels makes its

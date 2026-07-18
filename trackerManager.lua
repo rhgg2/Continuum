@@ -180,6 +180,41 @@ local function overlapping(bucket, span)
   return out
 end
 
+-- Half-open span-set tests over the continuous gate's merged scopes (nil scope = empty).
+local function spanSetCovers(spans, ppq)
+  for _, span in ipairs(spans or {}) do
+    if ppq >= span[1] and ppq < span[2] then return true end
+  end
+  return false
+end
+local function spanSetIntersects(spans, window)
+  for _, span in ipairs(spans or {}) do
+    if window[1] < span[2] and window[2] > span[1] then return true end
+  end
+  return false
+end
+local function clipToSpanSet(span, spans)
+  local clipped = {}
+  for _, scope in ipairs(spans or {}) do
+    local lo, hi = math.max(span[1], scope[1]), math.min(span[2], scope[2])
+    if lo < hi then util.add(clipped, { lo, hi }) end
+  end
+  return clipped
+end
+-- Complement of clipToSpanSet within `span` (`spans` sorted and disjoint: mergeWindows output).
+local function subtractSpanSet(span, spans)
+  local rest, cursor = {}, span[1]
+  for _, scope in ipairs(spans or {}) do
+    local lo, hi = math.max(span[1], scope[1]), math.min(span[2], scope[2])
+    if lo < hi then
+      if cursor < lo then util.add(rest, { cursor, lo }) end
+      cursor = hi
+    end
+  end
+  if cursor < span[2] then util.add(rest, { cursor, span[2] }) end
+  return rest
+end
+
 -- Sum a held base curve and N macro curves onto the ccGridStep lattice over span [sL, eL) -- half-open,
 -- so eL is never emitted. Macros anchor 0 at their own edges, so disjoint macros still sum correctly.
 local function firstAfter(list, target)   -- first index with .ppq > target (binary; list ppq-sorted)
@@ -2418,28 +2453,6 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
     return false
   end
 
-  -- Half-open span-set tests over the continuous gate's merged scopes (nil scope = empty).
-  local function spanSetCovers(spans, ppq)
-    for _, span in ipairs(spans or {}) do
-      if ppq >= span[1] and ppq < span[2] then return true end
-    end
-    return false
-  end
-  local function spanSetIntersects(spans, window)
-    for _, span in ipairs(spans or {}) do
-      if window[1] < span[2] and window[2] > span[1] then return true end
-    end
-    return false
-  end
-  local function clipToSpanSet(span, spans)
-    local clipped = {}
-    for _, scope in ipairs(spans or {}) do
-      local lo, hi = math.max(span[1], scope[1]), math.min(span[2], scope[2])
-      if lo < hi then util.add(clipped, { lo, hi }) end
-    end
-    return clipped
-  end
-
   -- Authored pb breakpoints per channel, exposed to the generator as channel input (authored
   -- only, fakes excluded) -- only expandChannel reads it, gated dirty. see design/note-macros-v2.md § A4
   local authoredPbByChan = {}
@@ -2521,8 +2534,9 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
     util.bucket(fxRegionsByChan, region.chan, region)
   end
 
-  -- Producer-owned outputs: post-expansion live notes, per-chain pb curves, authored pb base per chan.
-  local fxOut = { noteLive = emptyChans(), pbChains = emptyChans(), pbBase = emptyChans() }
+  -- Producer-owned outputs: post-expansion live notes, per-chain pb curves, authored pb base, and
+  -- the per-chan pb emit scope (nil = ungated) steering rebuildPbs' live/kept split.
+  local fxOut = { noteLive = emptyChans(), pbChains = emptyChans(), pbBase = emptyChans(), pbScope = {} }
 
   -- Pass A: run every chain as a series -- each stage folds into the stream by mode x dest, and
   -- the final owned channels emit. see design/note-macros-v2.md § The fx chain
@@ -2633,10 +2647,9 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
       dirtyRows = seedRowsFor(dirt)
     end
     -- A clean overlapper still runs (its curve is a fold input inside the overlap) but the narrowed
-    -- emission drops its own remainder; pb-touching chains stay ungated until the pb half lands.
+    -- emission drops its own remainder.
     local function keepable(producer)
       local targets = generators.continuousTargets(producer.fx)
-      if targets.pb then return false end
       for target in pairs(targets) do
         if spanSetIntersects(emitScope[target], producer.window) then return false end
       end
@@ -2646,6 +2659,11 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
       if gated and not seeded[producer] and keepable(producer) then
         for _, kept in ipairs(keptById[producer.id] or {}) do
           util.add(predicted, kept); keptFx[kept] = true
+        end
+        -- A kept pb window still records its geometry: pb seats are markerless downstream, so a
+        -- vanished window would read them as authored pbs. see design/interval-dirt.md § commit 4
+        if generators.continuousTargets(producer.fx).pb then
+          util.add(fxOut.pbChains[chan], { window = { producer.window[1], producer.window[2] }, kept = true })
         end
       else
         runProducer(producer)
@@ -2696,16 +2714,60 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
     -- Per-target scopes: emit scope = merged windows of the seeded producers touching the target;
     -- target scope = merged windows of them all -- its complement is where existing seats keep.
     if gated then
+      -- Hold-stream reach: authored pb/cc breakpoints and lane-1 detune hold forward past window
+      -- edges, invisible to window-local seeds. see design/interval-dirt.md § Implementation plan, commit 4
+      local baseHoldFrom, detuneHoldFrom = math.huge, math.huge
+      for _, s in ipairs(dirt) do
+        if s.pitch == nil or s.lane == 1 then
+          local from = s.ppqL
+          local liveEvt = s.uuid and tm:byUuid(s.uuid)
+          if liveEvt then from = math.min(from, liveEvt.ppqL or liveEvt.ppq) end
+          if s.pitch == nil then baseHoldFrom   = math.min(baseHoldFrom, from) end
+          if s.lane  == 1   then detuneHoldFrom = math.min(detuneHoldFrom, from) end
+        end
+      end
+      local pbHoldFrom = math.min(baseHoldFrom, detuneHoldFrom)
+      local function emitsLane1Notes(producer)
+        if producer.lane ~= nil and producer.lane ~= 1 then return false end
+        return generators.parksNotes(producer)
+      end
+      local function holdSensitive(producer, targets)
+        if targets.pb and producer.window[2] > pbHoldFrom then return true end
+        for target in pairs(targets) do
+          if target ~= 'pb' and producer.window[2] > baseHoldFrom
+             and generators.chainDestType(producer.fx, target) == 'augment' then return true end
+        end
+        return false
+      end
+      local targetsOf = {}
+      for _, producer in ipairs(producers) do
+        targetsOf[producer] = generators.continuousTargets(producer.fx)
+        seeded[producer] = windowSeeded(dirtyRows, producer.window[1], producer.window[2])
+      end
+      -- Fixpoint: a live lane-1 note-emitter re-detunes the stream from its window start, which can
+      -- wake pb windows further right, which may themselves emit lane-1 notes.
+      local changed = true
+      while changed do
+        changed = false
+        for _, producer in ipairs(producers) do
+          if seeded[producer] and emitsLane1Notes(producer) and producer.window[1] < pbHoldFrom then
+            pbHoldFrom = producer.window[1]; changed = true
+          end
+          if not seeded[producer] and holdSensitive(producer, targetsOf[producer]) then
+            seeded[producer] = true; changed = true
+          end
+        end
+      end
       local emitWins, targetWins = {}, {}
       for _, producer in ipairs(producers) do
-        seeded[producer] = windowSeeded(dirtyRows, producer.window[1], producer.window[2])
-        for target in pairs(generators.continuousTargets(producer.fx)) do
+        for target in pairs(targetsOf[producer]) do
           util.bucket(targetWins, target, producer)
           if seeded[producer] then util.bucket(emitWins, target, producer) end
         end
       end
       for target, group in pairs(emitWins)   do emitScope[target]   = mergeWindows(group) end
       for target, group in pairs(targetWins) do targetScope[target] = mergeWindows(group) end
+      fxOut.pbScope[chan] = emitScope.pb or {}
     end
 
     for _, producer in ipairs(producers) do runOrKeep(producer) end
@@ -3190,7 +3252,7 @@ end
 -- Reseat absorber pbs against the post-walk lane-1 layout, recompute their raw vals,
 -- and project the pb column. see docs/tuning.md § Absorber reconciliation
 local function rebuildPbs(fxOut, extraColumns)
-  local noteLive, pbChains, pbBase = fxOut.noteLive, fxOut.pbChains, fxOut.pbBase
+  local noteLive, pbChains, pbBase, pbScope = fxOut.noteLive, fxOut.pbChains, fxOut.pbBase, fxOut.pbScope
   -- Reads only the per-chan .pb keep-flag; rebuildExtraColumns's mid-pipeline write grows
   -- .notes only, so the head snapshot is current for this. see design/rebuild-pipeline.md § The pre-phase
   local extras = extraColumns or {}
@@ -3250,23 +3312,42 @@ local function rebuildPbs(fxOut, extraColumns)
     -- pb chain windows: each chain's curve seats as derived pbs on the base lane (no carrier); overlap
     -- folds onto the authored base (foldChains). Bounds convert to raw once for zero round-trip drift. see docs/tuning.md § Absorber reconciliation
     local lim = pbLim()
+    -- Gate split: live ranges (inside the pb emit scope) fold to bps; kept ranges are recognition-
+    -- only -- their seats stand on wire. see design/interval-dirt.md § Implementation plan, commit 4
+    local emitSpans = pbScope[chan]   -- nil = ungated: every range is live
+    local liveRecs = {}
+    for _, rec in ipairs(pbChains[chan]) do
+      if not rec.kept then util.add(liveRecs, rec) end
+    end
     local replaceWins = {}
+    local function addWin(sub, bps, kept)
+      util.add(replaceWins, { bps = bps, kept = kept,
+                              startRaw = tm:fromLogical(chan, sub[1], 0),
+                              endRaw   = tm:fromLogical(chan, sub[2], 0) })
+    end
     for _, span in ipairs(mergeWindows(pbChains[chan])) do
-      local bps = {}
-      for _, point in ipairs(foldChains(pbChains[chan], span, pbBase[chan], { closed = true })) do
-        util.add(bps, { ppq = tm:fromLogical(chan, point.ppq, 0), ppqL = point.ppq,
-                        cents = util.clamp(point.val, -lim, lim), shape = point.shape, tension = point.tension })
+      for _, sub in ipairs(emitSpans and clipToSpanSet(span, emitSpans) or { span }) do
+        local bps = {}
+        for _, point in ipairs(foldChains(liveRecs, sub, pbBase[chan], { closed = true })) do
+          -- Fold fast paths return whole curves, and an interior closing edge belongs to the kept
+          -- side (chain cuts align with window edges) -- clip half-open except at the span's true end.
+          if point.ppq >= sub[1] and (point.ppq < sub[2] or sub[2] == span[2]) then
+            util.add(bps, { ppq = tm:fromLogical(chan, point.ppq, 0), ppqL = point.ppq,
+                            cents = util.clamp(point.val, -lim, lim), shape = point.shape, tension = point.tension })
+          end
+        end
+        table.sort(bps, function(a, b) return a.ppq < b.ppq end)
+        addWin(sub, bps, nil)
       end
-      table.sort(bps, function(a, b) return a.ppq < b.ppq end)
-      util.add(replaceWins, { bps = bps,
-                              startRaw = tm:fromLogical(chan, span[1], 0),
-                              endRaw   = tm:fromLogical(chan, span[2], 0) })
+      for _, sub in ipairs(emitSpans and subtractSpanSet(span, emitSpans) or {}) do
+        addWin(sub, {}, true)
+      end
     end
 
     -- Which window's curve prevails at a raw ppq (half-open -- the interior stream).
     local function replaceWinAt(ppq)
       for _, win in ipairs(replaceWins) do
-        if ppq >= win.startRaw and ppq < win.endRaw then return win end
+        if not win.kept and ppq >= win.startRaw and ppq < win.endRaw then return win end
       end
     end
     -- Seat recognition: exclusive ownership means everything on-take in a window is a generated seat
@@ -3276,6 +3357,40 @@ local function rebuildPbs(fxOut, extraColumns)
         if ppq >= win.startRaw and ppq <= win.endRaw then return true end
       end
       return false
+    end
+    -- Kept ownership at a shared edge: a live opening edge belongs to the live side, every other
+    -- covered ppq (interior and closing edges) to the kept side. see design § commit 4
+    local function inKeptRange(ppq)
+      local kept = false
+      for _, win in ipairs(replaceWins) do
+        if win.kept then
+          if ppq >= win.startRaw and ppq <= win.endRaw then kept = true end
+        elseif ppq == win.startRaw then
+          return false
+        end
+      end
+      return kept
+    end
+
+    -- Detune onsets: every lane-1 ppq whose detune differs from its predecessor; a note
+    -- without authored detune reads 0, ingestion's default on the cell.
+    local onsets, onsetAt, prev = {}, {}, 0
+    for _, n in ipairs(lane1Events) do
+      local detune = n.detune or 0
+      if detune ~= prev then util.add(onsets, { ppq = n.ppq, ppqL = n.ppqL }); onsetAt[n.ppq] = true end
+      prev = detune
+    end
+    -- A ramp onset's dual point rides one tick before it: both seats follow the onset's ownership,
+    -- so the fence classifies a pb under an onset at ppq+1 by that onset's side.
+    local function fencedPb(ppq)
+      if onsetAt[ppq + 1] then return inKeptRange(ppq + 1) end
+      return inKeptRange(ppq)
+    end
+    -- Fenced pbs leave the pool, the assign, and this pass's projection; they stand on wire and
+    -- the pb column carries the prior slice over them. see design § commit 4
+    local fencedWire = {}   -- raw ppq -> the mm clone standing under the fence (identity refresh)
+    for i = #pbs, 1, -1 do
+      if fencedPb(pbs[i].ppq) then fencedWire[pbs[i].ppq] = pbs[i]; table.remove(pbs, i) end
     end
 
     -- Back-derive cents for any authored pb missing it (foreign-MIDI/pre-cents pbs carry raw only) so the
@@ -3314,21 +3429,13 @@ local function rebuildPbs(fxOut, extraColumns)
       return realPbs[before], realPbs[after]
     end
 
-    -- Detune onsets: every lane-1 ppq whose detune differs from its predecessor; a note
-    -- without authored detune reads 0, ingestion's default on the cell.
-    local onsets, prev = {}, 0
-    for _, n in ipairs(lane1Events) do
-      local detune = n.detune or 0
-      if detune ~= prev then util.add(onsets, { ppq = n.ppq, ppqL = n.ppqL }) end
-      prev = detune
-    end
-
     -- Seats to realise: ppq -> { cents, ppqL, shape }. The consolidated assign turns each
     -- into wire raw = centsToRaw(cents + detune). A flat/held/absent stream needs only a
     -- lone step seat; a value that ramps across the onset rides linearly, so the detune
     -- step splits onto a dual point and a curved segment densifies. see docs/tuning.md
     local seats = {}
     for _, o in ipairs(onsets) do
+      if inKeptRange(o.ppq) then goto nextOnset end   -- kept side: its seats stand from last pass
       local v    = streamValue(o.ppq)
       local A, B = spanAround(o.ppq)
       -- Inside a replace window the curve always ramps; otherwise ramp only across a curved or
@@ -3346,6 +3453,7 @@ local function rebuildPbs(fxOut, extraColumns)
       else
         seats[o.ppq]     = { cents = v, ppqL = o.ppqL, shape = 'step' }
       end
+      ::nextOnset::
     end
 
     -- Densify each curved segment of `list` that contains an onset into a linear polyline on the
@@ -3360,7 +3468,7 @@ local function rebuildPbs(fxOut, extraColumns)
         if isCurved(A.shape) and hasOnset then
           local p = A.ppq + gridStep
           while p < B.ppq do
-            if not seats[p] then
+            if not seats[p] and not inKeptRange(p) then
               seats[p] = { cents = streamValue(p), ppqL = tm:toLogical(chan, p), shape = 'linear' }
             end
             p = p + gridStep
@@ -3384,7 +3492,7 @@ local function rebuildPbs(fxOut, extraColumns)
     -- Anchor a pb-active channel at its first lane-1 onset (I2a):
     -- without it, playback inherits the synth's unknown prior bend.
     local first = lane1Events[1]
-    if first and not seats[first.ppq] then
+    if first and not seats[first.ppq] and not inKeptRange(first.ppq) then
       local hasReal, anchored = false, false
       for _, pb in ipairs(realPbs) do
         hasReal = true
@@ -3491,7 +3599,7 @@ local function rebuildPbs(fxOut, extraColumns)
       end
     end
     perf.stop('assign')
-    return detuneOf
+    return detuneOf, fencedWire
   end
 
   for chan = 1, 16 do
@@ -3501,7 +3609,9 @@ local function rebuildPbs(fxOut, extraColumns)
       local pbs         = pbsByChan[chan] or {}
       table.sort(pbs, function(a, b) return a.ppq < b.ppq end)
 
-      local detuneOf = deriveChan(chan, lane1Events, pbs)
+      local priorPbCol = channels[chan].priorPb
+      channels[chan].priorPb = nil
+      local detuneOf, fencedWire = deriveChan(chan, lane1Events, pbs)
 
       perf.start('project')
       -- Column projection. A derived seat is wire-only -- always hidden.
@@ -3511,10 +3621,23 @@ local function rebuildPbs(fxOut, extraColumns)
         anyVisible = anyVisible or not hidden
         -- pb is our own working clone, done being read by the assign above -- reuse it as the
         -- column event rather than cloning again.
+        pb.ppqRaw = pb.ppq   -- survives projectEvent's logical flip; the kept-range carry keys on it
         pb.val, pb.detune, pb.hidden = pb.cents, detuneOf[pb], hidden
         projectEvent(pb, chan)
         util.add(pbColEvents, pb)
       end
+      -- Kept ranges carry the prior column slice: last pass's fold stamped exact cents on those
+      -- hidden seats; back-deriving from the wire would quantise through centsToRaw. see design § commit 4
+      for _, evt in ipairs(priorPbCol and priorPbCol.events or {}) do
+        local wire = evt.ppqRaw and fencedWire[evt.ppqRaw]
+        if wire then
+          -- Identity refresh: an event carried from its creation pass predates its committed uuid.
+          evt.uuid, evt.realised = wire.uuid, wire.realised
+          anyVisible = anyVisible or not evt.hidden
+          util.add(pbColEvents, evt)
+        end
+      end
+      table.sort(pbColEvents, function(a, b) return a.ppq < b.ppq end)
       local keep = anyVisible or (extras[chan] and extras[chan].pb)
       channels[chan].columns.pb = keep and { events = pbColEvents } or nil
       perf.stop('project')
@@ -3697,8 +3820,9 @@ function tm:rebuild(takeChanged)
       channels[i] = { chan = i, columns = { notes = {}, ccs = {} } }
     elseif dirtyChans[i] then
       -- Interval dirt narrows note materialisation only: every other producer (ccs, park, pb) still
-      -- wants the fresh channel a dirty chan has always handed it. see docs/trackerManager.md § Derivation dirt: the gated spine
-      channels[i] = { chan = i, columns = { notes = prevChannels[i].columns.notes, ccs = {} } }
+      -- wants the fresh channel a dirty chan has always handed it; priorPb feeds the kept-range carry.
+      channels[i] = { chan = i, columns = { notes = prevChannels[i].columns.notes, ccs = {} },
+                      priorPb = prevChannels[i].columns.pb }
     else
       channels[i] = prevChannels[i]
     end

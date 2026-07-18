@@ -223,4 +223,76 @@ return {
       assertParity(h, 'chan-1 fx removal: orphans delete, B keeps == full re-derive')
     end,
   },
+  {
+    name = 'continuous gate: pb half -- kept windows carry, overlap clips, hold seeds re-derive',
+    run = function(harness)
+      local h = harness.mk{
+        config = { project = { swings = { c58 = classic58 } } },
+        data   = { swing = { global = 'c58' } },
+        -- A visible authored pb outside every window keeps chan 1's pb column alive, so the
+        -- kept-range prior-slice carry is actually exercised (an all-hidden column projects nil).
+        seed   = { ccs = {
+          { ppq = 600, chan = 1, evType = 'pb', val = 0, cents = 50, shape = 'step' },
+        } },
+      }
+
+      -- pb records on `chan` within logical [startL, endL], ppq-sorted: the write pin -- a kept
+      -- range must survive an outside edit with identity and values intact. The CC walk anchors a
+      -- fresh markerless seat with a one-time ppqL stamp (rebuildCCs), so the anchor is excluded;
+      -- cents rides so a kept seat mistaken for an authored pb (back-derived cents) still fails.
+      local function pbsIn(chan, startL, endL)
+        local out = {}
+        for _, e in ipairs(h.fm:dump().ccs) do
+          if e.evType == 'pb' and e.chan == chan then
+            local ppqL = h.tm:toLogical(chan, e.ppq)
+            if ppqL >= startL and ppqL <= endL then
+              out[#out + 1] = { ppq = e.ppq, val = e.val, shape = e.shape,
+                                uuid = e.uuid, cents = e.cents, derived = e.derived }
+            end
+          end
+        end
+        table.sort(out, function(a, b) return a.ppq < b.ppq end)
+        return out
+      end
+
+      -- chan 1: disjoint vibrato hosts -- windows [0,240) and [960,1200).
+      h.tm:addEvent(note(1, 0,   60, { endppq = 240,  fx = vib30 })); h.tm:flush()
+      h.tm:addEvent(note(1, 960, 64, { endppq = 1200, fx = vib30 })); h.tm:flush()
+      -- chan 2: overlapping vibrato pair on lanes 1/2 -- windows [0,960) and [480,1920).
+      h.tm:addEvent(note(2, 0,   60, { endppq = 960,  fx = vib30 }));           h.tm:flush()
+      h.tm:addEvent(note(2, 480, 64, { endppq = 1920, fx = vib30, lane = 2 })); h.tm:flush()
+      -- Settle: a creation pass projects fresh seats before their uuids land at commit, so a column
+      -- carried straight from creation lacks them. One full re-derive reaches the steady state every
+      -- later carry preserves (the rich fixture crosses it via its fxRegions all-16 rebuild).
+      h.tm:rebuild(true)
+
+      t.truthy(#pbsIn(1, 0, 240) > 0,    'chan-1 window A has pb seats')
+      t.truthy(#pbsIn(1, 960, 1200) > 0, 'chan-1 window B has pb seats')
+      t.truthy(#pbsIn(2, 960, 1920) > 0, 'chan-2 exclusive overlap remainder has pb seats')
+
+      -- Lane-2 edit inside window A: no hold seed, so B is outside every scope and keeps verbatim.
+      local keptB = pbsIn(1, 960, 1200)
+      h.tm:addEvent(note(1, 120, 62, { lane = 2 })); h.tm:flush()
+      t.deepEq(pbsIn(1, 960, 1200), keptB, 'kept window B: pb seats untouched')
+      assertParity(h, 'chan-1 disjoint vibrato: edit in A, B keeps == full re-derive')
+
+      -- Edit at 240 seeds lane-1's window only: the overlapper folds as input inside [0,960) but
+      -- its exclusive remainder [960,1920) is a kept range and carries verbatim.
+      local keptQ = pbsIn(2, 960, 1920)
+      h.tm:addEvent(note(2, 240, 66, { lane = 3 })); h.tm:flush()
+      t.deepEq(pbsIn(2, 960, 1920), keptQ, 'clean overlapper: exclusive pb range untouched')
+      assertParity(h, 'chan-2 overlap: clipped fold + kept remainder == full re-derive')
+
+      -- Lane-1 detune add between chan-1's windows: a hold seed. A ends before it and still keeps;
+      -- B ends after it and re-derives; the new onset seats its absorber.
+      local keptA = pbsIn(1, 0, 240)
+      h.tm:addEvent(note(1, 480, 62, { detune = 25, endppq = 720 })); h.tm:flush()
+      t.deepEq(pbsIn(1, 0, 240), keptA, 'window A upstream of the hold seed: kept')
+      t.truthy(#pbsIn(1, 480, 480) > 0, 'detune onset reseated its absorber')
+      -- One more gated edit settles the fresh absorber pair (creation-pass projection precedes the
+      -- commit that mints uuids -- same gap as the setup settle) before the parity claim.
+      h.tm:addEvent(note(1, 60, 65, { lane = 2 })); h.tm:flush()
+      assertParity(h, 'chan-1 detune edit: hold reach re-derives B, A keeps == full re-derive')
+    end,
+  },
 }
