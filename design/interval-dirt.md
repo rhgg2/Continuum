@@ -1289,7 +1289,7 @@ Commits (commit 1, the note half, above), each green alone,
    three producer sources (on-take hosts, parked cells, regions) into
    one list before any expand runs; `generators.continuousTargets(fx)`
    lands and `hasContinuous` re-expresses over it. Zero behaviour —
-   the restructure half of the phase discipline.
+   the restructure half of the phase discipline. *Landed 2026-07-19.*
 3. **The cc half.** Per-target dirty-window scopes, kept window-only
    records, fold and emit narrowed to the emit scope, kept seats fed
    verbatim through the reconcile. Parity: a disjoint lfo pair (edit

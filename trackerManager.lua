@@ -2619,12 +2619,16 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
       end
     end
 
+    -- Producer enumeration precedes every run: the continuous gate (commit 3) scopes each
+    -- producer against the full set, so the set must exist first. see design/interval-dirt.md § phase 5
+    local producers = {}
+
     -- Note producers. Only augment hosts (continuous kinds) remain on-take -- a discrete-replace
     -- host was parked at 4.5 and runs from its parked cell below. Derived notes ride the host lane.
     for laneIdx, col in ipairs(channels[chan].columns.notes) do
       for _, host in ipairs(col.events) do
         if host.fx and host.evType ~= 'pa' then
-          runOrKeep(hostProducer(host, fxWindow[host], laneIdx))
+          util.add(producers, hostProducer(host, fxWindow[host], laneIdx))
         end
       end
     end
@@ -2635,7 +2639,7 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
     -- membership, not a host (own-fx suppressed -- the retained gap).
     for _, cell in ipairs(channels[chan].parked or {}) do
       if cell.fx and not noteParkCovered(chan, cell.ppq) then
-        runOrKeep(hostProducer(soundingCell(cell), cell.endppqC, cell.lane))
+        util.add(producers, hostProducer(soundingCell(cell), cell.endppqC, cell.lane))
       end
     end
 
@@ -2652,9 +2656,11 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
       else
         members = membersOf(chan, startL, endL)  -- augment: members still sound
       end
-      runOrKeep{ window = { startL, endL }, notes = members,
-                 fx = region.fx, id = region.uuid, lane = nil, delayPpq = 0 }
+      util.add(producers, { window = { startL, endL }, notes = members,
+                            fx = region.fx, id = region.uuid, lane = nil, delayPpq = 0 })
     end
+
+    for _, producer in ipairs(producers) do runOrKeep(producer) end
 
     -- Reconcile existence (stamps kept specs with the mm handle + realised end); defer writes to the tail walk's atomic commit.
     -- fxOut.noteLive holds the predicted specs; the tail walk clips them in place.

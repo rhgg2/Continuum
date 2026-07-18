@@ -412,14 +412,21 @@ function generators.parksNotes(region)
   return false
 end
 
+-- Continuous targets a chain touches: set keyed 'pb' | <cc number>, empty for a pure-note
+-- chain -- phase 5's per-target scopes key off it. see design/interval-dirt.md § phase 5
+function generators.continuousTargets(fx)
+  local targets = {}
+  for _, params in ipairs(fx or {}) do
+    local meta = generators.kinds[params.kind]
+    if meta and meta.dest ~= 'note' then targets[meta.dest] = true end
+  end
+  return targets
+end
+
 -- Mirror of parksNotes: a chain carries continuous output iff any stage targets pb or a cc. A
 -- pure-note producer (none does) freezes note-for-note under interval dirt. see design/interval-dirt.md § phase 5
 function generators.hasContinuous(fx)
-  for _, params in ipairs(fx or {}) do
-    local meta = generators.kinds[params.kind]
-    if meta and meta.dest ~= 'note' then return true end
-  end
-  return false
+  return next(generators.continuousTargets(fx)) ~= nil
 end
 
 -- The fold mode a chain presents for one continuous target: replace if any stage targeting it
