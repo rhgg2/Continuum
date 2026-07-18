@@ -1,4 +1,4 @@
-@module intervals  src=intervals.lua  loc=75  sha=e33b768  mode=namespace  self=intervals
+@module intervals  src=intervals.lua  loc=60  sha=e33b768  mode=namespace  self=intervals
 
 # Shapes
   @shape  interval = { loPpq, hiPpq: number; loUuid, hiUuid: string? } -- nil uuid edge = open toward channel start/end  @ 5
@@ -19,18 +19,12 @@
   -- Queries
   @api intervals.intersects(set, lo, hi)  @ 52-58
       @contract  edge-inclusive overlap of [lo, hi] against any interval; `true` set always intersects  @ 51
-  -- Reload fold
-  @api intervals.absorbSeeds(dirt, seeds, payloadChans)  @ 65-73
-      -- Reload fold: a seeded chan narrows to the merge of its seeds; an unseeded payload chan
-      -- (mm-internal writes -- dedup, collision backstop) still folds whole. See design/interval-dirt.md § phase 2.
-      @contract  mutates+returns dirt; seeded chan -> merge(seeds[chan]), unseeded payload chan -> true  @ 64
 
 # Uses (outbound edges)
   @use call    util.add  @ merge:29,41
   @use require util  @ 6
 
 # Fields (r read / w write incl. constructor keys)
-  @field w absorbSeeds  @ absorbSeeds:65
   @field r hiPpq  @ merge:35,36,37,40 intersects:55
   @field w hiPpq  @ seed:20 merge:40
   @field r hiUuid  @ merge:37,40

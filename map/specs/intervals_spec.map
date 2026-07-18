@@ -1,14 +1,14 @@
-@spec intervals_spec  src=tests/specs/intervals_spec.lua  loc=128  sha=e33b768  cases=11
+@spec intervals_spec  src=tests/specs/intervals_spec.lua  loc=96  sha=e33b768  cases=8
 @exercises intervals (intervals)
-@surface   intervals.seed, intervals.merge, intervals.intersects, intervals.absorbSeeds
+@surface   intervals.seed, intervals.merge, intervals.intersects
 
 # Intent
   intervals is the pure dirt-interval algebra (design/interval-dirt.md).
   A set is `true` (whole channel) or a ppq-ascending, non-overlapping
   list of { loPpq, hiPpq, loUuid, hiUuid }. seed normalises; merge
   coalesces edge-inclusive and collapses to `true` past the cap;
-  intersects is edge-inclusive; absorbSeeds folds one flush's seeds into
-  the dirt set.
+  intersects is edge-inclusive. (The reload fold moved to trackerManager
+  with the seed model -- see design § The model, inverted.)
 
 # Cases
   @case 'seed normalises reversed bounds, swapping uuids with them'  [pure]  @ 15-20
@@ -19,20 +19,16 @@
   @case 'merge subsumes a fully-contained interval without extending the outer hi'  [pure]  @ 69-73
   @case 'merge collapses to true past the size cap'  [pure]  @ 77-82
   @case 'intersects is edge-inclusive and short-circuits on true'  [pure]  @ 88-94
-  @case 'absorbSeeds narrows a seeded chan to its merged intervals'  [pure]  @ 100-107
-  @case 'absorbSeeds folds an unseeded payload chan whole'  [pure]  @ 111-117
-  @case 'absorbSeeds narrows a seeded chan even absent from the payload, overriding a prior true'  [pure]  @ 121-126
 
 # Uses (outbound edges)
-  @use call intervals.seed  @ 17,26,37,46,47,48,61,71,80,90,103,114,124
+  @use call intervals.seed  @ 17,26,37,46,47,48,61,71,80,90
   @use call intervals.merge  @ 36,38,50,62,81
   @use call intervals.intersects  @ 91,92,93
-  @use call intervals.absorbSeeds  @ 104,114,124
 
 # Fields (r read / w write incl. constructor keys)
-  @field r hiPpq  @ 18,27,52,54,72,106
+  @field r hiPpq  @ 18,27,52,54,72
   @field r hiUuid  @ 19,53,72
-  @field r loPpq  @ 18,27,52,54,63,64,125
+  @field r loPpq  @ 18,27,52,54,63,64
   @field r loUuid  @ 19,27,53
-  @field w name  @ 15,24,34,43,59,69,77,88,100,111,121
-  @field w run  @ 16,25,35,44,60,70,78,89,101,112,122
+  @field w name  @ 15,24,34,43,59,69,77,88
+  @field w run  @ 16,25,35,44,60,70,78,89

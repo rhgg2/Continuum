@@ -2,8 +2,8 @@
 -- A set is `true` (whole channel) or a ppq-ascending, non-overlapping
 -- list of { loPpq, hiPpq, loUuid, hiUuid }. seed normalises; merge
 -- coalesces edge-inclusive and collapses to `true` past the cap;
--- intersects is edge-inclusive; absorbSeeds folds one flush's seeds into
--- the dirt set.
+-- intersects is edge-inclusive. (The reload fold moved to trackerManager
+-- with the seed model -- see design § The model, inverted.)
 
 local t = require('support')
 local intervals = require('intervals')
@@ -91,38 +91,6 @@ return {
       t.eq(intervals.intersects(set, 20, 25), true)   -- touches at the 20 edge
       t.eq(intervals.intersects(set, 25, 35), false)  -- in the gap
       t.eq(intervals.intersects(true, 999, 1000), true)
-    end,
-  },
-
-  ---------- absorbSeeds (reload fold)
-
-  {
-    name = 'absorbSeeds narrows a seeded chan to its merged intervals',
-    run = function()
-      local dirt = {}
-      local seeds = { [3] = { intervals.seed(0, 10, 'a', 'b'), intervals.seed(10, 20, 'b', 'c') } }
-      intervals.absorbSeeds(dirt, seeds, { [3] = true })
-      t.eq(type(dirt[3]), 'table')                      -- interval-valued, not true
-      t.eq(#dirt[3], 1); t.eq(dirt[3][1].hiPpq, 20)    -- the two seeds coalesced
-    end,
-  },
-
-  {
-    name = 'absorbSeeds folds an unseeded payload chan whole',
-    run = function()
-      local dirt = {}
-      intervals.absorbSeeds(dirt, { [3] = { intervals.seed(0, 10) } }, { [3] = true, [5] = true })
-      t.eq(type(dirt[3]), 'table')   -- seeded: narrowed
-      t.eq(dirt[5], true)            -- payload-only (dedup / collision backstop): whole
-    end,
-  },
-
-  {
-    name = 'absorbSeeds narrows a seeded chan even absent from the payload, overriding a prior true',
-    run = function()
-      local dirt = { [3] = true }    -- e.g. a verb-level dirtyChan already fired for this chan
-      intervals.absorbSeeds(dirt, { [3] = { intervals.seed(5, 5, 'p', 'p') } }, {})
-      t.eq(type(dirt[3]), 'table'); t.eq(dirt[3][1].loPpq, 5)   -- narrowed, not left true
     end,
   },
 }

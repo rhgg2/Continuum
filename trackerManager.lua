@@ -61,7 +61,7 @@ local channels    = {}
 local lastMuteSet = {}
 --invariant: staleSwing[chan]=true: resolved swing changed; rebuild rederives raw, clears
 local staleSwing  = {}
---invariant: dirtyChans[chan]: gated stages (ccs/fx/park/tails/pbs/pcs) re-derive it, else freeze
+--invariant: dirtyChans[chan] (seed|true): ccs/fx/park/tails/pbs/pcs re-derive it, else freeze
 local dirtyChans   = {}
 -- Deep clone of derivationInputs() as of the last rebuild: what the current frame was derived under.
 -- bindTake diffs against it, because a rebind can find any of it changed with no signal to hear.
@@ -570,14 +570,14 @@ end
 
 local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
       flush, reload, idxReconcile, withDeferredSort, clearStaging, absorbReloadDirt,
-      stampColEvt, rawNotes, resortRawNotes do
+      stampColEvt, rawNotes, resortRawNotes, spanViewFor do
 
   ----- State
 
   local adds = {}
   local assigns = {}
   local deletes = {}
-  --shape: seeds[chan] = list of intervals.seed objs (pre-merge); folded into dirtyChans at reload. see design § phase 2
+  --shape: seeds[chan] = list of birth-snapshot seeds { uuid, verb, ppq, ppqL, lane, pitch, endppqL }; folded (dedup-by-uuid) into dirtyChans. see design § The model, inverted
   local seeds = {}
   local parkedEdits = {}
   local parkedUuidSeq = 0
@@ -722,18 +722,31 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     return false
   end
 
-  -- Every low-level verb drops a point seed at the event's logical position; flush folds them
-  -- into interval-valued dirt (§ phase 2). A delete seed's dying uuid is safe: see docs/trackerManager.md § Interval seeds.
-  local function seedAt(chan, ppqL, uuid)
-    util.bucket(seeds, chan, intervals.seed(ppqL, ppqL, uuid, uuid))
+  -- Every low-level verb drops a birth-snapshot seed for the event it touched; flush folds them
+  -- into seed-valued dirt (dedup-by-uuid). A dead seed's uuid dangles safely: see docs/trackerManager.md § Interval seeds.
+  local function snapshot(evt, verb)
+    return { uuid = evt.uuid, verb = verb, ppq = evt.ppq, ppqL = evt.ppqL or evt.ppq,
+             lane = evt.lane, pitch = evt.pitch, endppqL = evt.endppqL }
   end
-  local function seedEvent(evt) seedAt(evt.chan, evt.ppqL or evt.ppq, evt.uuid) end
+  local function seedEvent(evt, verb) util.bucket(seeds, evt.chan, snapshot(evt, verb)) end
+
+  -- The span view a consuming stage intersect-tests against: each seed covers its snapshot position
+  -- and, if the event still lives, its current one (a move's both ends). see design § The model, inverted
+  function spanViewFor(seedList)
+    if seedList == true then return true end
+    local ivs = {}
+    for _, s in ipairs(seedList) do
+      local live = s.uuid and byUuid[s.uuid]
+      util.add(ivs, intervals.seed(s.ppqL, live and (live.ppqL or live.ppq) or s.ppqL, s.uuid, s.uuid))
+    end
+    return intervals.merge(ivs)
+  end
 
   --contract: every staged note (any lane) and pb files into rawIndex; detune reads filter to lane 1
   --contract: caller supplies evt.evType
   local function addLowlevel(evt)
     if pbSource(evt, evt.lane) then dirtyChan(evt.chan) end
-    seedEvent(evt)
+    seedEvent(evt, 'add')
     rawIndexInsert(evt)
     util.add(adds, { evt = evt })
   end
@@ -742,12 +755,14 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   --invariant: util.REMOVE markers must survive merging
   local function assignLowlevel(evt, update)
     local oldChan, oldLane = evt.chan, evt.lane
-    local oldPpqL = evt.ppqL or evt.ppq
+    -- A move (onset shifts) is delete-at-old + insert-at-new. Snapshot the vacated slot before the
+    -- assign and seed it as the birth; dedup keeps it, byUuid recovers the new position. see design § The model, inverted
+    local moved = update.ppq ~= nil or update.ppqL ~= nil or update.delay ~= nil
+    local vacated = moved and snapshot(evt, 'assign') or nil
     util.assign(evt, update)
     if assignDirtiesPb(evt, oldLane, update) then dirtyChan(oldChan); dirtyChan(evt.chan) end
-    -- A move (onset shifts) is delete-at-old + insert-at-new: seed both positions. see design § Intervals are event-anchored
-    if update.ppq ~= nil or update.ppqL ~= nil or update.delay ~= nil then seedAt(oldChan, oldPpqL, evt.uuid) end
-    seedEvent(evt)
+    if vacated then util.bucket(seeds, oldChan, vacated) end
+    seedEvent(evt, 'assign')
     -- Keep the index coherent: a chan move migrates the entry between lists; a move in
     -- either frame resorts in place (util.seek and the walk need ascending order).
     local oldList = rawIndexListFor(evt, oldChan)
@@ -771,7 +786,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
 
   local function deleteLowlevel(evt)
     if pbSource(evt, evt.lane) then dirtyChan(evt.chan) end
-    seedEvent(evt)
+    seedEvent(evt, 'delete')
     rawIndexRemove(evt)
     if evt.uuid then byUuid[evt.uuid] = nil end
 
@@ -1179,10 +1194,24 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     end
   end
 
-  -- Fold this flush's per-verb seeds into dirtyChans as interval dirt: payload chans the seeds cover
-  -- stay narrowed, unseeded payload chans (mm-internal writes) fold whole. see design § phase 2
+  -- Fold this flush's per-verb seeds into dirtyChans as seed dirt: dedup-by-uuid (seeded
+  -- chans), fold-whole (unseeded payload chans). see docs/trackerManager.md § Interval seeds
   function absorbReloadDirt(payloadChans)
-    intervals.absorbSeeds(dirtyChans, seeds, payloadChans)
+    for chan, list in pairs(seeds) do
+      local deduped, seen = {}, {}
+      for _, s in ipairs(list) do
+        if s.uuid == nil or not seen[s.uuid] then
+          if s.uuid then seen[s.uuid] = true end
+          util.add(deduped, s)
+        end
+      end
+      -- Past the merge cap the span degenerates to the whole channel; collapse the dirt to match, so
+      -- the fresh-channel alloc (:3275) and the excise-skip agree with the walk. see intervals.merge MAX
+      dirtyChans[chan] = spanViewFor(deduped) == true and true or deduped
+    end
+    for chan in pairs(payloadChans) do
+      if not seeds[chan] then dirtyChans[chan] = true end
+    end
   end
 
   -- Drop un-flushed staging: a rebuild must not carry command-path ops across
@@ -1603,14 +1632,15 @@ local function rebuildInternals()
   for chan = 1, 16 do
     local dirt = dirtyChans[chan]
     if dirt then
-      if dirt ~= true then exciseNotes(chan, dirt) end
+      local span = spanViewFor(dirt)   -- true | merged interval set (snapshot ∪ live per seed)
+      if span ~= true then exciseNotes(chan, span) end
       for _, raw in mm:notesRaw(chan) do
         -- Derived notes route to fx whole-channel whatever the dirt: a partial noteExisting
         -- reads as mass deletion until the fx reconcile goes interval-native. see design § phase 3
         if raw.derived then
           local note = util.clone(raw); note.realised = true
           util.add(noteExisting[chan], note)
-        elseif dirt == true or intervals.intersects(dirt, raw.ppqL, raw.ppqL) then
+        elseif span == true or intervals.intersects(span, raw.ppqL, raw.ppqL) then
           local note = util.clone(raw); note.realised = true
           if rawDivergesFromLogical(note) then util.add(external, note)
           else util.add(internal, note)
@@ -2636,6 +2666,7 @@ local function rebuildTails(noteLive, deferred, restoredNotes)
     -- Clean channels freeze: fx left noteLive empty, real notes converged last rebuild.
     local dirt = dirtyChans[chan]
     if not dirt then goto nextChan end
+    local span = spanViewFor(dirt)
     local extras = {}
     for _, rec in ipairs(restoredByChan[chan] or {}) do util.add(extras, rec) end
     for _, w in ipairs(noteLive[chan]) do util.add(extras, w.evt) end
@@ -2664,7 +2695,7 @@ local function rebuildTails(noteLive, deferred, restoredNotes)
     local disturbed, nudged, lastByPitch = {}, {}, {}
     local anyNudge = false
     for _, e in ipairs(notes) do
-      if e.derived or intervals.intersects(dirt, e.ppqL, e.ppqL) then disturbed[e] = true end
+      if e.derived or intervals.intersects(span, e.ppqL, e.ppqL) then disturbed[e] = true end
       local prev = lastByPitch[e.pitch]
       if disturbed[e] or (prev and disturbed[prev]) then
         local onset = voicing.separateOnset(e, prev)
@@ -2704,8 +2735,8 @@ local function rebuildTails(noteLive, deferred, restoredNotes)
       -- The walk's own dirt: a nudged lane-1 onset seeds every absorber seat up to the next lane-1
       -- onset, for pbs to consume later this pass. see design/interval-dirt.md § The widen and the emission are the same fact
       if nudged[e] and e.lane == 1 then
-        util.add(emitted, intervals.seed(e.ppqL, laneNext and laneNext.ppqL or math.huge,
-                                         e.uuid, laneNext and laneNext.uuid))
+        util.add(emitted, { uuid = e.uuid, verb = 'nudge', ppq = e.ppq, ppqL = e.ppqL,
+                            lane = e.lane, pitch = e.pitch, endppqL = laneNext and laneNext.ppqL })
       end
 
       -- A bound reads e's own onset and ceiling and its two binding neighbours' onsets. Dirt inside
@@ -2713,7 +2744,7 @@ local function rebuildTails(noteLive, deferred, restoredNotes)
       local stale = disturbed[e]
                     or (laneNext  and disturbed[laneNext])
                     or (pitchNext and disturbed[pitchNext])
-                    or intervals.intersects(dirt, e.ppqL, e.endppqL or math.huge)
+                    or intervals.intersects(span, e.ppqL, e.endppqL or math.huge)
       if not stale then goto nextNote end
 
       local onTake  = not e.derived
@@ -2751,8 +2782,8 @@ local function rebuildTails(noteLive, deferred, restoredNotes)
     end
 
     if #emitted > 0 and dirt ~= true then
-      for _, iv in ipairs(dirt) do util.add(emitted, iv) end
-      dirtyChans[chan] = intervals.merge(emitted)
+      for _, s in ipairs(dirt) do util.add(emitted, s) end
+      dirtyChans[chan] = emitted
     end
     ::nextChan::
   end

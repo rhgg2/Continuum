@@ -57,19 +57,4 @@ function intervals.intersects(set, lo, hi)
   return false
 end
 
------ Reload fold
-
--- Reload fold: a seeded chan narrows to the merge of its seeds; an unseeded payload chan
--- (mm-internal writes -- dedup, collision backstop) still folds whole. See design/interval-dirt.md § phase 2.
---contract: mutates+returns dirt; seeded chan -> merge(seeds[chan]), unseeded payload chan -> true
-function intervals.absorbSeeds(dirt, seeds, payloadChans)
-  for chan, list in pairs(seeds) do
-    dirt[chan] = intervals.merge(list)
-  end
-  for chan in pairs(payloadChans) do
-    if not seeds[chan] then dirt[chan] = true end
-  end
-  return dirt
-end
-
 return intervals

@@ -115,16 +115,19 @@ same pass's seating restamps them (the head reload runs before any stage).
 
 ### Interval seeds
 
-um's low-level verbs (`addLowlevel`/`assignLowlevel`/`deleteLowlevel`) each drop a point seed
-(`intervals.seed`) at the event's own uuid and logical position, accumulated in a `seeds[chan]`
-list separate from `adds`/`assigns`/`deletes`. A move (`ppq`/`ppqL`/`delay` change) seeds both the
-old and new position; `flush` folds the merged seeds into `dirtyChans` via `absorbReloadDirt`.
+um's low-level verbs (`addLowlevel`/`assignLowlevel`/`deleteLowlevel`) each drop a *birth
+snapshot* of the event they touched -- its uuid, verb, both-frame position, lane, pitch, and
+authored span -- into a `seeds[chan]` list separate from `adds`/`assigns`/`deletes`. `flush` folds
+the seeds into `dirtyChans` via `absorbReloadDirt`, deduped by uuid (first-wins keeps the birth
+state); an unseeded payload chan (mm-internal writes -- dedup, collision backstop) folds whole.
 
-A delete's seed carries the deleted event's own (dying) uuid rather than hand-anchoring to its
-surviving neighbours, and that uuid is never dereferenced. The seed's *position* is recorded at
-seed time, and that number is what materialisation excises against; the uuid rides along for
-consumers running after the tail walk's own nudges have invalidated numeric edges mid-pass. See
-design/interval-dirt.md § Phase 2 for the seed shapes and the reload fold's flushing guard.
+A move is one seed, not two: its snapshot records the vacated (old) position, while the surviving
+event's current position is recovered live from `byUuid`. The span view a stage intersect-tests
+against (`spanViewFor`) covers both -- snapshot ∪ live -- so a move dirties both ends, an add
+covers its onset, and a delete (uuid gone from `byUuid`) covers only the death position. Position
+goes stale as things move and uuid dangles as things die; each consumer reads whichever the seed
+still answers. See design/interval-dirt.md § The model, inverted for the shape and § Phase 4.75
+for the seek walk the snapshot feeds.
 
 ### Interval materialisation
 
@@ -951,7 +954,7 @@ del/add in one modify.
 ### What the walk visits, and what it emits
 
 The walk reads its whole channel but does work only where the pass has
-news. `dirtyChans[chan]` arrives as interval dirt (§ Interval seeds), and
+news. `dirtyChans[chan]` arrives as seed dirt (§ Interval seeds), and
 a note the dirt does not name kept its raw and its ceiling — last pass
 left it separated and clipped against neighbours that also stood still.
 `disturbed` is that judgement and it is the whole of the sweep: a note is
