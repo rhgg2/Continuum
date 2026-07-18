@@ -2654,6 +2654,206 @@ end
 -- Unified tail/onset walk + atomic commit: real notes, fixed externals, noteLive
 -- walk together (onset clamp then tail clip); host clip + fxNote del/add in one mm:modify. see docs/trackerManager.md § Rebuild: tail walk
 --contract: separates and bounds disturbed notes only; a nudged lane-1 onset emits its seat closure
+-- The per-note settle and bound rules as a factory over ctx: the sweep injects its live batches and
+-- marking tables, the shadow walk its own, so both drive byte-identical rules over isolated state.
+--shape: ctx = { chan, res, takeLen, disturbed, nudged, clampWrites, deferred, parkedBoundFor }
+local function makeTailRules(ctx)
+  local chan, res, takeLen = ctx.chan, ctx.res, ctx.takeLen
+  local disturbed, nudged = ctx.disturbed, ctx.nudged
+  local clampWrites, deferred, parkedBoundFor = ctx.clampWrites, ctx.deferred, ctx.parkedBoundFor
+
+  local function settleOnset(e, prev)
+    local onset = voicing.separateOnset(e, prev)
+    if not onset then return false end
+    -- A nudge is final where it lands -- notes only ever give way forward -- so the cue and
+    -- the clamp write stage here rather than in a second pass over a moved set.
+    e.ppq = onset
+    disturbed[e], nudged[e] = true, true
+    local backing = e.colEvt or e   -- seated entries write through to their column note; fxNotes ride bare
+    if e.colEvt and e.colEvt.delay ~= nil then
+      -- The column stays logical; only the delayC give-way cue carries the raw shift.
+      e.colEvt.delayC = util.round(timing.ppqToDelay(e.ppq - tm:fromLogical(chan, e.ppqL), res))
+    end
+    if backing.realised then clampWrites.assign(backing, { ppq = e.ppq }) end
+    return true
+  end
+
+  local function boundNote(e, laneNext, pitchNext)
+    local onTake  = not e.derived
+    local ceiling = e.endppqL == util.OPEN and math.huge
+                    or e.endppqL and tm:fromLogical(chan, e.endppqL)
+                    or math.huge
+    -- On-take tails clip against parked members' lanes too -- the columns no longer carry the cell,
+    -- but the lane geometry still does. See docs/trackerManager.md § Rebuild: tail walk.
+    local laneAnchor = laneNext
+    if onTake then
+      local parked = parkedBoundFor(e)
+      if parked and (laneAnchor == nil or parked.ppq < laneAnchor.ppq) then laneAnchor = parked end
+    end
+    local laneClip  = laneAnchor
+      and tm:fromLogical(chan, laneAnchor.ppqL) + (e.overlap or 0)
+      or math.huge
+    local pitchClip = pitchNext and pitchNext.ppq or math.huge
+    -- Two bounds: the lane bound is intent and drives the column; the raw bound clips it to the next
+    -- same-pitch onset and alone reaches mm. see docs/trackerManager.md § Rebuild: tail walk
+    local laneBound = math.max(e.ppq + 1, math.min(ceiling, laneClip, takeLen))
+    local rawBound  = math.max(e.ppq + 1, math.min(laneBound, pitchClip))
+    local rounded   = util.round(rawBound)
+    if rounded ~= e.endppq then
+      local backing = e.colEvt or e
+      if backing.realised then deferred.assign(backing, { endppq = rounded }) end
+      e.endppq = rounded
+    end
+    if e.colEvt then
+      -- Mirror projectEvent's endppq rule: authored ceiling shows, lane-clipped ceiling rides endppqC.
+      e.colEvt.endppqC = tm:toLogical(chan, util.round(laneBound))
+      e.colEvt.endppq  = e.endppqL == util.OPEN and util.OPEN
+                         or e.endppqL or e.colEvt.endppqC
+    end
+  end
+
+  return settleOnset, boundNote
+end
+
+-- Seed-driven shadow of the tail sweep, gated on _G.CONTINUUM_SHADOW_TAILS; reads live state
+-- read-only so a bug here cannot perturb the authoritative sweep. see docs/trackerManager.md § Rebuild: tail walk
+local function seekTails(chan, notes, dirt, parkedBoundFor, takeLen, res)
+  local disturbed, nudged = {}, {}
+  local nullBatch = { assign = function() end }
+  local settleOnset, boundNote = makeTailRules{
+    chan = chan, res = res, takeLen = takeLen,
+    disturbed = disturbed, nudged = nudged,
+    clampWrites = nullBatch, deferred = nullBatch, parkedBoundFor = parkedBoundFor,
+  }
+
+  -- Per-record scratch copies, colEvt sharing preserved so a bound write still reaches its cell-mates.
+  -- see docs/trackerManager.md § Rebuild: tail walk
+  local scratchByRec, snotes, colEvtCopies = {}, {}, {}
+  for _, rec in ipairs(notes) do
+    local s = util.clone(rec)
+    if rec.colEvt then
+      colEvtCopies[rec.colEvt] = colEvtCopies[rec.colEvt] or util.clone(rec.colEvt)
+      s.colEvt = colEvtCopies[rec.colEvt]
+    end
+    s.src = rec
+    scratchByRec[rec] = s
+    util.add(snotes, s)
+  end
+
+  -- Disturbed seeded by name: derived membership + survivor seeds (byUuid). Anchors for the bound
+  -- probes are the seed positions (dead seeds included) plus, added below, every disturbed onset.
+  local anchors = {}
+  for _, s in ipairs(snotes) do if s.derived then disturbed[s] = true end end
+  if dirt == true then
+    -- Degenerate pass (load, external change): no seeds, everything stale -- the sweep's span==true.
+    for _, s in ipairs(snotes) do disturbed[s] = true end
+  else
+    -- Fresh adds carry no uuid yet (mm assigns at commit), so resolve the disturbed note by uuid for
+    -- survivors and by logical seat for adds -- ppqL/lane/pitch are stable where realised ppq shifts.
+    local bySeat = {}
+    local function seatKey(ppqL, lane, pitch)
+      return tostring(ppqL) .. ':' .. tostring(lane) .. ':' .. tostring(pitch)
+    end
+    for _, s in ipairs(snotes) do util.bucket(bySeat, seatKey(s.ppqL or s.ppq, s.lane, s.pitch), s) end
+    for _, seed in ipairs(dirt) do
+      util.add(anchors, { pos = seed.ppq, lane = seed.lane, pitch = seed.pitch })
+      local live = seed.uuid and tm:byUuid(seed.uuid)
+      local se = live and scratchByRec[live]
+      if se then disturbed[se] = true
+      else
+        for _, s in ipairs(bySeat[seatKey(seed.ppqL or seed.ppq, seed.lane, seed.pitch)] or {}) do
+          disturbed[s] = true
+        end
+      end
+    end
+  end
+
+  -- Onset settlement — the sweep's forward loop, minus the intersects seeding (done above), on scratch.
+  local anyNudge, lastByPitch = false, {}
+  for _, se in ipairs(snotes) do
+    local prev = lastByPitch[se.pitch]
+    if disturbed[se] or (prev and disturbed[prev]) then
+      if settleOnset(se, prev) then anyNudge = true end
+    end
+    lastByPitch[se.pitch] = se
+  end
+  if anyNudge then table.sort(snotes, rawThenLogical) end
+
+  -- Bound set: every disturbed note (incl nudged), plus the nearest same-lane and same-pitch strict
+  -- predecessor of every anchor -- the seed-driven replacement for the span stale-test. see design § Span-staleness
+  local bound = {}
+  for se in pairs(disturbed) do
+    bound[se] = true
+    util.add(anchors, { pos = se.ppq, lane = se.lane, pitch = se.pitch })
+  end
+  for _, a in ipairs(anchors) do
+    local lanePred  = util.seek(snotes, 'before', a.pos, function(s) return s.lane  == a.lane  end)
+    local pitchPred = util.seek(snotes, 'before', a.pos, function(s) return s.pitch == a.pitch end)
+    if lanePred  then bound[lanePred]  = true end
+    if pitchPred then bound[pitchPred] = true end
+  end
+
+  -- Bounds + nudge emission — the sweep's backward loop, neighbour running-state verbatim, the stale
+  -- test replaced by `bound` membership.
+  local emitted = {}
+  local nearestInLane,  nextAfterLane  = {}, {}
+  local nearestInPitch, nextAfterPitch = {}, {}
+  for i = #snotes, 1, -1 do
+    local se = snotes[i]
+    local laneAbove, pitchAbove = nearestInLane[se.lane], nearestInPitch[se.pitch]
+    local laneNext  = laneAbove  and (laneAbove.ppq  > se.ppq and laneAbove  or nextAfterLane[se.lane])
+    local pitchNext = pitchAbove and (pitchAbove.ppq > se.ppq and pitchAbove or nextAfterPitch[se.pitch])
+    nearestInLane[se.lane],   nextAfterLane[se.lane]   = se, laneNext
+    nearestInPitch[se.pitch], nextAfterPitch[se.pitch] = se, pitchNext
+
+    if nudged[se] and se.lane == 1 then
+      util.add(emitted, { uuid = se.uuid, verb = 'nudge', ppq = se.ppq, ppqL = se.ppqL,
+                          lane = se.lane, pitch = se.pitch, endppqL = laneNext and laneNext.ppqL })
+    end
+    if bound[se] then boundNote(se, laneNext, pitchNext) end
+  end
+
+  return scratchByRec, emitted
+end
+
+-- Diff the walk's scratch results and nudge seeds against the sweep's authoritative live mutation;
+-- raise a channel/record/field-precise error on any divergence. see design/interval-dirt.md § Phase 4.75
+-- Fixed set so the diff compares a field nil on one side but set on the other -- pairs would skip it.
+local TAIL_FIELDS = { 'ppq', 'endppq', 'delayC', 'endppqC', 'colEnd' }
+local function tailFields(rec)
+  local c = rec.colEvt
+  return { ppq = rec.ppq, endppq = rec.endppq,
+           delayC = c and c.delayC, endppqC = c and c.endppqC, colEnd = c and c.endppq }
+end
+local function assertTailsAgree(chan, scratchByRec, walkNudges, sweepNudges)
+  for rec, shadow in pairs(scratchByRec) do
+    local want, got = tailFields(rec), tailFields(shadow)
+    for _, field in ipairs(TAIL_FIELDS) do
+      if got[field] ~= want[field] then
+        error(('shadow tails divergence chan %d uuid %s %s: sweep=%s walk=%s')
+          :format(chan, tostring(rec.uuid), field, tostring(want[field]), tostring(got[field])))
+      end
+    end
+  end
+  -- Nudge seeds compare as a multiset over all fields -- derived nudges carry a nil uuid, so keying
+  -- by uuid alone both collides and indexes nil.
+  local function bag(list)
+    local counts = {}
+    for _, s in ipairs(list) do
+      local k = table.concat({ tostring(s.uuid), s.ppq, s.ppqL, s.lane, s.pitch, tostring(s.endppqL) }, ':')
+      counts[k] = (counts[k] or 0) + 1
+    end
+    return counts
+  end
+  local walkBag, sweepBag = bag(walkNudges), bag(sweepNudges)
+  for k, n in pairs(sweepBag) do
+    if walkBag[k] ~= n then error(('shadow tails nudge divergence chan %d: %s'):format(chan, k)) end
+  end
+  for k, n in pairs(walkBag) do
+    if sweepBag[k] ~= n then error(('shadow tails nudge divergence chan %d: %s'):format(chan, k)) end
+  end
+end
+
 local function rebuildTails(noteLive, deferred, restoredNotes)
   local takeLen = tm:length()
   local res = mm:resolution()
@@ -2690,62 +2890,22 @@ local function rebuildTails(noteLive, deferred, restoredNotes)
       return nearest
     end
 
+    -- Shadow the sweep: run the seed-driven walk on scratch before the sweep mutates `notes`, then
+    -- diff its writes and nudge seeds against the sweep's below. see design/interval-dirt.md § Phase 4.75
+    local shadowScratch, shadowNudges
+    if _G.CONTINUUM_SHADOW_TAILS then
+      shadowScratch, shadowNudges = seekTails(chan, notes, dirt, parkedBoundFor, takeLen, res)
+    end
+
     -- Same-pitch onset separation, retro-clip subsumed by tail pass: only a disturbed note can
     -- collide, onto its same-pitch predecessor; derived notes seed unconditionally. see design/interval-dirt.md § Phase 4
     local disturbed, nudged, lastByPitch = {}, {}, {}
     local anyNudge = false
-
-    -- The per-note settle and bound rules, over (note, neighbours) -- the sweep drives them from its
-    -- running state; the seek walk will drive them from probes. see design/interval-dirt.md § Phase 4.75
-    local function settleOnset(e, prev)
-      local onset = voicing.separateOnset(e, prev)
-      if not onset then return false end
-      -- A nudge is final where it lands -- notes only ever give way forward -- so the cue and
-      -- the clamp write stage here rather than in a second pass over a moved set.
-      e.ppq = onset
-      disturbed[e], nudged[e] = true, true
-      local backing = e.colEvt or e   -- seated entries write through to their column note; fxNotes ride bare
-      if e.colEvt and e.colEvt.delay ~= nil then
-        -- The column stays logical; only the delayC give-way cue carries the raw shift.
-        e.colEvt.delayC = util.round(timing.ppqToDelay(e.ppq - tm:fromLogical(chan, e.ppqL), res))
-      end
-      if backing.realised then clampWrites.assign(backing, { ppq = e.ppq }) end
-      return true
-    end
-
-    local function boundNote(e, laneNext, pitchNext)
-      local onTake  = not e.derived
-      local ceiling = e.endppqL == util.OPEN and math.huge
-                      or e.endppqL and tm:fromLogical(chan, e.endppqL)
-                      or math.huge
-      -- On-take tails clip against parked members' lanes too -- the columns no longer carry the cell,
-      -- but the lane geometry still does. See docs/trackerManager.md § Rebuild: tail walk.
-      local laneAnchor = laneNext
-      if onTake then
-        local parked = parkedBoundFor(e)
-        if parked and (laneAnchor == nil or parked.ppq < laneAnchor.ppq) then laneAnchor = parked end
-      end
-      local laneClip  = laneAnchor
-        and tm:fromLogical(chan, laneAnchor.ppqL) + (e.overlap or 0)
-        or math.huge
-      local pitchClip = pitchNext and pitchNext.ppq or math.huge
-      -- Two bounds: the lane bound is intent and drives the column; the raw bound clips it to the next
-      -- same-pitch onset and alone reaches mm. see docs/trackerManager.md § Rebuild: tail walk
-      local laneBound = math.max(e.ppq + 1, math.min(ceiling, laneClip, takeLen))
-      local rawBound  = math.max(e.ppq + 1, math.min(laneBound, pitchClip))
-      local rounded   = util.round(rawBound)
-      if rounded ~= e.endppq then
-        local backing = e.colEvt or e
-        if backing.realised then deferred.assign(backing, { endppq = rounded }) end
-        e.endppq = rounded
-      end
-      if e.colEvt then
-        -- Mirror projectEvent's endppq rule: authored ceiling shows, lane-clipped ceiling rides endppqC.
-        e.colEvt.endppqC = tm:toLogical(chan, util.round(laneBound))
-        e.colEvt.endppq  = e.endppqL == util.OPEN and util.OPEN
-                           or e.endppqL or e.colEvt.endppqC
-      end
-    end
+    local settleOnset, boundNote = makeTailRules{
+      chan = chan, res = res, takeLen = takeLen,
+      disturbed = disturbed, nudged = nudged,
+      clampWrites = clampWrites, deferred = deferred, parkedBoundFor = parkedBoundFor,
+    }
 
     for _, e in ipairs(notes) do
       if e.derived or intervals.intersects(span, e.ppqL, e.ppqL) then disturbed[e] = true end
@@ -2788,6 +2948,7 @@ local function rebuildTails(noteLive, deferred, restoredNotes)
                     or intervals.intersects(span, e.ppqL, e.endppqL or math.huge)
       if stale then boundNote(e, laneNext, pitchNext) end
     end
+    if shadowScratch then assertTailsAgree(chan, shadowScratch, shadowNudges, emitted) end
 
     if #emitted > 0 and dirt ~= true then
       for _, s in ipairs(dirt) do util.add(emitted, s) end

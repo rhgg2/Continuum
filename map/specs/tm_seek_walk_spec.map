@@ -1,0 +1,61 @@
+@spec tm_seek_walk_spec  src=tests/specs/tm_seek_walk_spec.lua  loc=129  sha=untracked  cases=4
+@exercises midiManager (h.fm), trackerManager (h.tm)
+@surface   fm:notes, tm:addEvent, tm:flush, fm:dump, tm:deleteEvent
+@harness   mk{seed.length, seed.notes}
+
+# Intent
+  Sharp edges for the seed-driven tail walk (design/interval-dirt.md § Phase 4.75).
+  
+  The harness runs the walk as a shadow of the authoritative sweep on every
+  rebuild (_G.CONTINUUM_SHADOW_TAILS), so each flush here also asserts walk ==
+  sweep: a divergence raises inside flush and reddens the case. The explicit
+  assertions pin the production tails, so these stay meaningful after commit 4
+  retires the shadow. Three shapes the rest of the suite never exercises:
+  
+    1. a same-tick pile-up whose separation cascades from a single add seed;
+    2. an open note behind dirt, shielded and unshielded by a same-lane note
+       (the § Span-staleness lane shield: binding the nearest same-lane
+       predecessor of the seed subsumes the old intersects() span term);
+    3. an insertion landing inside another note's overlap margin.
+
+# Helpers
+  @fn noteByPitch(notes, pitch)  @ 18-20
+  @fn pitchRaws(h, pitch)  @ 22-27
+
+# Cases
+  @case 'a single add seed cascades the whole same-tick pile-up apart'  [harness]  @ 32-52
+  @case 'deleting a blocker regrows the open note behind it — no shield'  [harness]  @ 56-75
+  @case 'a same-lane shield leaves the open note untouched when dirt lands beyond it'  [harness]  @ 79-101
+  @case 'an insertion inside the overlap margin re-clips the overlapping tail'  [harness]  @ 105-126
+
+# Uses (outbound edges)
+  @use call fm:notes  @ 24
+  @use call tm:addEvent  @ 39,47,121
+  @use call tm:flush  @ 42,49,69,94,123
+  @use call fm:dump  @ 66,68,73,91,93,99,115,124
+  @use call tm:deleteEvent  @ 68,93
+
+# Fields (r read / w write incl. constructor keys)
+  @field r OPEN  @ 60,83,109
+  @field w chan  @ 39,47,61,63,84,86,88,110,112,121
+  @field w delay  @ 40,48,122
+  @field w detune  @ 40,48,122
+  @field r endppq  @ 66,73,91,99,115,124
+  @field w endppq  @ 39,47,60,62,83,85,87,109,111,121
+  @field w endppqL  @ 60,62,83,85,87,109,111
+  @field w evType  @ 39,47,121
+  @field w lane  @ 40,48,61,63,84,86,88,110,112,122
+  @field w length  @ 34,59,82,108
+  @field w name  @ 32,56,79,105
+  @field r notes  @ 66,68,73,91,93,99,115,124
+  @field w notes  @ 59,82,108
+  @field w overlap  @ 109
+  @field r pitch  @ 19,24
+  @field w pitch  @ 39,47,61,63,84,86,88,110,112,121
+  @field r ppq  @ 24
+  @field w ppq  @ 39,47,60,62,83,85,87,109,111,121
+  @field w ppqL  @ 60,62,83,85,87,109,111
+  @field w run  @ 33,57,80,106
+  @field w seed  @ 34,59,82,108
+  @field w uuid  @ 61,63,84,86,88,110,112
+  @field w vel  @ 40,48,61,63,84,86,88,110,112,122

@@ -991,6 +991,30 @@ the same trigger: being the coarse mechanism it would have written `true`
 over the very set the emission builds. See `design/interval-dirt.md`
 § The widen and the emission are the same fact.
 
+The seed-driven walk that will replace this sweep is being built in its
+shadow. `seekTails` runs the same two passes over scratch copies before
+the sweep runs authoritatively, swapping the span tests above for
+seed-driven predicates: `disturbed` seeded by name from the dirt rather
+than by `intersects`, and the stale bound decided by probing for the
+nearest same-lane and same-pitch predecessor of each seed rather than by
+the authored-span clause. `assertTailsAgree` diffs its scratch tails and
+emitted nudges against the sweep's live writes and raises on any
+divergence. The probe is sufficient for the same reason the span clause
+is: binding the nearest same-lane predecessor of a seed subsumes the old
+span term, because a shield standing between the seed and an open note is
+itself that predecessor and holds the clip. The shadow is gated on
+`_G.CONTINUUM_SHADOW_TAILS` — the harness turns it on so the whole
+rebuild suite validates the walk, production leaves it off at zero cost —
+mirroring the shadow-compare that validated the incremental index
+(§ Incremental index reconciliation). See `design/interval-dirt.md`
+§ Phase 4.75 and § Span-staleness; commit 4 flips the threshold to the
+walk and retires both the sweep and this scaffolding.
+
+`seekTails` copies every source record onto scratch before mutating it, and colEvt copies are keyed
+on the original colEvt so notes sharing one column cell keep sharing one colEvt copy — the same
+sharing the live cell has, so one note's bound write still reaches its cell-mates on scratch exactly
+as it does live.
+
 ## Rebuild: logical projection
 
 Projection is build-time: note columns flip right after the externals
