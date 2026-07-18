@@ -1144,7 +1144,7 @@ frontiers. The two walks share the bound body (ceiling / laneClip /
 pitchClip / write-back, extracted once); the switch is a count
 threshold, not a second implementation of the rules.
 
-Four commits, each green alone — the first is the model flip's
+Five commits, each green alone — the first is the model flip's
 landing, since the seek walk starts from seeds by name and needs
 `dirtyChans` seed-shaped before it exists:
 
@@ -1158,22 +1158,33 @@ landing, since the seek walk starts from seeds by name and needs
 2. **Extract the bound body.** The per-note settle-and-bound rules
    leave the sweep's loop as functions over (note, neighbours); the
    sweep calls them. Zero behaviour.
-3. **The seek walk, shadow-compared.** Build the frontier walk and run
-   it alongside the sweep, diffing staged writes and emitted dirt —
-   the same validation that landed the index (§ phase 4.5). Fixtures
-   the suite lacks and this phase needs: a same-tick nudge cascade, an
-   open note behind dirt with and without a lane shield, an insertion
-   inside the overlap margin.
-4. **Switch, and the module goes.** The threshold picks the walk; the
-   shadow harness dies. `exciseNotes`/`rebuildInternals` convert to
-   seed membership, `intersects` loses its last caller, and
-   `intervals.lua` deletes with its spec (§ Retirement of
-   `intervals`).
+3. **The linear walk, shadow-compared.** Build the whole-channel
+   settle-and-bound walk — seeds by name, predecessor probes for the
+   stale bound — and run it alongside the sweep, diffing staged writes
+   and emitted dirt (the validation that landed the index, § phase
+   4.5). This is the degenerate walk, not yet the frontier one; it
+   earns its place as the permanent fallback. Fixtures the suite lacks
+   and this phase needs: a same-tick nudge cascade, an open note behind
+   dirt with and without a lane shield, an insertion inside the overlap
+   margin.
+4. **Switch, and the module goes.** The linear walk becomes
+   authoritative and the shadow harness dies. `exciseNotes`/
+   `rebuildInternals` convert to seed membership by logical row,
+   `intersects` loses its last caller, and `intervals.lua` deletes with
+   its spec (§ Retirement of `intervals`). No threshold yet — the
+   linear walk is the sole walk until commit 5 adds its faster sibling.
+5. **The frontier probe walk.** The sparse-seed fast path: seek to the
+   dirt, cap the lane and pitch probes, scan same-tick nudges — no
+   whole-channel traversal. A seed-count threshold picks it over the
+   linear walk (§ The degenerate case gates on seed count), and it is
+   shadow-compared against the now-authoritative linear walk before it
+   takes over. This is the commit that turns the ~4ms into sub-ms.
 
 Expected on the dense edit: the tails stage's ~4ms of remaining
-traversal collapses to probes over dozens of entries — sub-ms. The
-O(channel) shapes still standing after this are pbs' and PCs' channel
-folds — phase 6's profile-gated business, ~1.5ms today.
+traversal collapses to probes over dozens of entries — sub-ms, once the
+frontier walk lands (commit 5). The O(channel) shapes still standing
+after this are pbs' and PCs' channel folds — phase 6's profile-gated
+business, ~1.5ms today.
 
 ### Phase 5 — fx producers consume intervals
 

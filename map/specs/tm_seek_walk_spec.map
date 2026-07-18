@@ -1,4 +1,4 @@
-@spec tm_seek_walk_spec  src=tests/specs/tm_seek_walk_spec.lua  loc=129  sha=untracked  cases=4
+@spec tm_seek_walk_spec  src=tests/specs/tm_seek_walk_spec.lua  loc=126  sha=ce2b16d  cases=4
 @exercises midiManager (h.fm), trackerManager (h.tm)
 @surface   fm:notes, tm:addEvent, tm:flush, fm:dump, tm:deleteEvent
 @harness   mk{seed.length, seed.notes}
@@ -6,11 +6,8 @@
 # Intent
   Sharp edges for the seed-driven tail walk (design/interval-dirt.md § Phase 4.75).
   
-  The harness runs the walk as a shadow of the authoritative sweep on every
-  rebuild (_G.CONTINUUM_SHADOW_TAILS), so each flush here also asserts walk ==
-  sweep: a divergence raises inside flush and reddens the case. The explicit
-  assertions pin the production tails, so these stay meaningful after commit 4
-  retires the shadow. Three shapes the rest of the suite never exercises:
+  Each case asserts the production tails directly. Three shapes the rest of the
+  suite never exercises:
   
     1. a same-tick pile-up whose separation cascades from a single add seed;
     2. an open note behind dirt, shielded and unshielded by a same-lane note
@@ -19,43 +16,43 @@
     3. an insertion landing inside another note's overlap margin.
 
 # Helpers
-  @fn noteByPitch(notes, pitch)  @ 18-20
-  @fn pitchRaws(h, pitch)  @ 22-27
+  @fn noteByPitch(notes, pitch)  @ 15-17
+  @fn pitchRaws(h, pitch)  @ 19-24
 
 # Cases
-  @case 'a single add seed cascades the whole same-tick pile-up apart'  [harness]  @ 32-52
-  @case 'deleting a blocker regrows the open note behind it — no shield'  [harness]  @ 56-75
-  @case 'a same-lane shield leaves the open note untouched when dirt lands beyond it'  [harness]  @ 79-101
-  @case 'an insertion inside the overlap margin re-clips the overlapping tail'  [harness]  @ 105-126
+  @case 'a single add seed cascades the whole same-tick pile-up apart'  [harness]  @ 29-49
+  @case 'deleting a blocker regrows the open note behind it — no shield'  [harness]  @ 53-72
+  @case 'a same-lane shield leaves the open note untouched when dirt lands beyond it'  [harness]  @ 76-98
+  @case 'an insertion inside the overlap margin re-clips the overlapping tail'  [harness]  @ 102-123
 
 # Uses (outbound edges)
-  @use call fm:notes  @ 24
-  @use call tm:addEvent  @ 39,47,121
-  @use call tm:flush  @ 42,49,69,94,123
-  @use call fm:dump  @ 66,68,73,91,93,99,115,124
-  @use call tm:deleteEvent  @ 68,93
+  @use call fm:notes  @ 21
+  @use call tm:addEvent  @ 36,44,118
+  @use call tm:flush  @ 39,46,66,91,120
+  @use call fm:dump  @ 63,65,70,88,90,96,112,121
+  @use call tm:deleteEvent  @ 65,90
 
 # Fields (r read / w write incl. constructor keys)
-  @field r OPEN  @ 60,83,109
-  @field w chan  @ 39,47,61,63,84,86,88,110,112,121
-  @field w delay  @ 40,48,122
-  @field w detune  @ 40,48,122
-  @field r endppq  @ 66,73,91,99,115,124
-  @field w endppq  @ 39,47,60,62,83,85,87,109,111,121
-  @field w endppqL  @ 60,62,83,85,87,109,111
-  @field w evType  @ 39,47,121
-  @field w lane  @ 40,48,61,63,84,86,88,110,112,122
-  @field w length  @ 34,59,82,108
-  @field w name  @ 32,56,79,105
-  @field r notes  @ 66,68,73,91,93,99,115,124
-  @field w notes  @ 59,82,108
-  @field w overlap  @ 109
-  @field r pitch  @ 19,24
-  @field w pitch  @ 39,47,61,63,84,86,88,110,112,121
-  @field r ppq  @ 24
-  @field w ppq  @ 39,47,60,62,83,85,87,109,111,121
-  @field w ppqL  @ 60,62,83,85,87,109,111
-  @field w run  @ 33,57,80,106
-  @field w seed  @ 34,59,82,108
-  @field w uuid  @ 61,63,84,86,88,110,112
-  @field w vel  @ 40,48,61,63,84,86,88,110,112,122
+  @field r OPEN  @ 57,80,106
+  @field w chan  @ 36,44,58,60,81,83,85,107,109,118
+  @field w delay  @ 37,45,119
+  @field w detune  @ 37,45,119
+  @field r endppq  @ 63,70,88,96,112,121
+  @field w endppq  @ 36,44,57,59,80,82,84,106,108,118
+  @field w endppqL  @ 57,59,80,82,84,106,108
+  @field w evType  @ 36,44,118
+  @field w lane  @ 37,45,58,60,81,83,85,107,109,119
+  @field w length  @ 31,56,79,105
+  @field w name  @ 29,53,76,102
+  @field r notes  @ 63,65,70,88,90,96,112,121
+  @field w notes  @ 56,79,105
+  @field w overlap  @ 106
+  @field r pitch  @ 16,21
+  @field w pitch  @ 36,44,58,60,81,83,85,107,109,118
+  @field r ppq  @ 21
+  @field w ppq  @ 36,44,57,59,80,82,84,106,108,118
+  @field w ppqL  @ 57,59,80,82,84,106,108
+  @field w run  @ 30,54,77,103
+  @field w seed  @ 31,56,79,105
+  @field w uuid  @ 58,60,81,83,85,107,109
+  @field w vel  @ 37,45,58,60,81,83,85,107,109,119

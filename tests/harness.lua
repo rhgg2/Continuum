@@ -29,10 +29,6 @@ require('tuning')
 local fakeReaper = require('fakeReaper').new()
 _G.reaper = fakeReaper
 
--- Validate the seed-driven tail walk against the authoritative sweep on every rebuild in the suite.
--- Dev/test-only; production leaves this unset. see design/interval-dirt.md § Phase 4.75
-_G.CONTINUUM_SHADOW_TAILS = true
-
 -- Internal util.instantiate('midiManager', …) (e.g. trackerPage) gets the real
 -- mm too, so the whole graph runs one implementation.
 util._stubs['midiManager'] = function(deps) return newRealMM(deps and deps.take) end

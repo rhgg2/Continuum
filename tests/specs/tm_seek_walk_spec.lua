@@ -1,10 +1,7 @@
 -- Sharp edges for the seed-driven tail walk (design/interval-dirt.md § Phase 4.75).
 --
--- The harness runs the walk as a shadow of the authoritative sweep on every
--- rebuild (_G.CONTINUUM_SHADOW_TAILS), so each flush here also asserts walk ==
--- sweep: a divergence raises inside flush and reddens the case. The explicit
--- assertions pin the production tails, so these stay meaningful after commit 4
--- retires the shadow. Three shapes the rest of the suite never exercises:
+-- Each case asserts the production tails directly. Three shapes the rest of the
+-- suite never exercises:
 --
 --   1. a same-tick pile-up whose separation cascades from a single add seed;
 --   2. an open note behind dirt, shielded and unshielded by a same-lane note

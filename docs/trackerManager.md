@@ -122,19 +122,24 @@ the seeds into `dirtyChans` via `absorbReloadDirt`, deduped by uuid (first-wins 
 state); an unseeded payload chan (mm-internal writes -- dedup, collision backstop) folds whole.
 
 A move is one seed, not two: its snapshot records the vacated (old) position, while the surviving
-event's current position is recovered live from `byUuid`. The span view a stage intersect-tests
-against (`spanViewFor`) covers both -- snapshot ∪ live -- so a move dirties both ends, an add
-covers its onset, and a delete (uuid gone from `byUuid`) covers only the death position. Position
-goes stale as things move and uuid dangles as things die; each consumer reads whichever the seed
-still answers. See design/interval-dirt.md § The model, inverted for the shape and § Phase 4.75
-for the seek walk the snapshot feeds.
+event's current position is recovered live from `byUuid`. Membership (`seedCovers`) keys on the
+logical row -- the snapshot `ppqL`, plus a survivor's live `ppqL` recovered from `byUuid` -- so a
+move dirties both rows, an add covers its onset row, and a delete (uuid gone from `byUuid`) covers
+only the death row. Position goes stale as things move and uuid dangles as things die; each consumer
+reads whichever the seed still answers. See design/interval-dirt.md § The model, inverted for the
+shape and § Phase 4.75 for the seek walk the snapshot feeds.
 
 ### Interval materialisation
 
-Materialisation consumes the absorbed seed set directly — there is no closure. `exciseNotes`
-(trackerManager.lua) drops each carried column event a seed covers, and `rebuildInternals`
-re-clones that position from mm: an add finds the new note, a delete finds nothing and the event
-vanishes, a move seeded both ends and gets both.
+Materialisation consumes the absorbed seed set directly — there is no closure. `seedCovers` builds
+the set of dirty logical rows from the seeds (snapshot `ppqL` ∪ each survivor's live `ppqL`);
+`exciseNotes` (trackerManager.lua) drops every carried column event whose row a seed covers, and
+`rebuildInternals` re-clones that row from mm: an add finds the new note, a delete finds nothing and
+the event vanishes, a move seeded both rows and gets both. Membership keys on the row, not the full
+seat, because same-pitch/PC shadowing is a same-`ppqL` cross-lane relation: a deleted shadower must
+re-materialise the survivor sharing its row, and a seat key (ppqL + lane + pitch) would skip it. This
+is the row-keyed successor to the old `intervals.intersects`, which keyed on `ppqL` endpoints for the
+same reason.
 
 Widening a seed to its neighbouring onsets buys nothing *here*. No stage reads a neighbour's
 column event expecting a fresh clone — every raw consumer reads um's raw index, which holds every
@@ -957,24 +962,31 @@ The walk reads its whole channel but does work only where the pass has
 news. `dirtyChans[chan]` arrives as seed dirt (§ Interval seeds), and
 a note the dirt does not name kept its raw and its ceiling — last pass
 left it separated and clipped against neighbours that also stood still.
-`disturbed` is that judgement and it is the whole of the sweep: a note is
-disturbed if the dirt names its seat, if it is derived, or if a nudge
-moved it. Derived notes seed unconditionally because `rebuildFx`
-regenerates `noteLive` wholesale, so a tile's raw is this pass's news
-whatever the dirt says — `design/interval-dirt.md` § phase 5 narrows that.
+`disturbed` is that judgement and it is the whole of the walk: a note is
+disturbed if a seed names it, if it is derived, or if a nudge moved it. A
+seed names by uuid where it still answers one — a survivor, recovered
+live from `byUuid` — and by logical seat otherwise: an add, whose uuid
+lands only at commit, and a delete, whose uuid is already gone. Derived
+notes seed unconditionally because `rebuildFx` regenerates `noteLive`
+wholesale, so a tile's raw is this pass's news whatever the dirt says —
+`design/interval-dirt.md` § phase 5 narrows that.
 
 Separation narrows on the same judgement. Only a disturbed note can
 collide, and only onto its same-pitch predecessor — so a nudge marks its
 own note disturbed and the cascade carries forward under its own power.
-That is what keeps the sweep from fencing a chain: the walk never has to
+That is what keeps the walk from fencing a chain: the walk never has to
 know in advance how far a cascade will run.
 
-A bound is stale if the note itself moved, if either binding neighbour
-moved, or if the dirt reaches inside the note's *authored* span. The last
-clause covers the neighbour that was deleted and so cannot be asked for
-its onset. It is sufficient because `endppqL` is the authored ceiling and
-clipping only ever lowers `endppq`: any successor that could bind the
-note lies inside that span by construction.
+The set of notes to re-bound is seed-driven, not span-tested. A note is
+bound if it is disturbed, or if it is the nearest same-lane or same-pitch
+strict predecessor of an *anchor* — a seed position (dead seeds included)
+or a disturbed onset, found by one `util.seek 'before'` probe per axis.
+Probing the predecessor subsumes the old authored-span stale-test: a
+shield standing between a seed and an open note behind it is itself that
+seed's nearest same-lane predecessor and holds the clip, and a deleted
+neighbour that can no longer be asked for its onset is reached because its
+death position is a seed and the note it bounded is that seed's
+predecessor. See design/interval-dirt.md § Span-staleness.
 
 Successors come from one backward pass carrying, per lane and per pitch,
 the note last seen and that note's strict next — a neighbour sharing the
@@ -991,29 +1003,17 @@ the same trigger: being the coarse mechanism it would have written `true`
 over the very set the emission builds. See `design/interval-dirt.md`
 § The widen and the emission are the same fact.
 
-The seed-driven walk that will replace this sweep is being built in its
-shadow. `seekTails` runs the same two passes over scratch copies before
-the sweep runs authoritatively, swapping the span tests above for
-seed-driven predicates: `disturbed` seeded by name from the dirt rather
-than by `intersects`, and the stale bound decided by probing for the
-nearest same-lane and same-pitch predecessor of each seed rather than by
-the authored-span clause. `assertTailsAgree` diffs its scratch tails and
-emitted nudges against the sweep's live writes and raises on any
-divergence. The probe is sufficient for the same reason the span clause
-is: binding the nearest same-lane predecessor of a seed subsumes the old
-span term, because a shield standing between the seed and an open note is
-itself that predecessor and holds the clip. The shadow is gated on
-`_G.CONTINUUM_SHADOW_TAILS` — the harness turns it on so the whole
-rebuild suite validates the walk, production leaves it off at zero cost —
-mirroring the shadow-compare that validated the incremental index
-(§ Incremental index reconciliation). See `design/interval-dirt.md`
-§ Phase 4.75 and § Span-staleness; commit 4 flips the threshold to the
-walk and retires both the sweep and this scaffolding.
-
-`seekTails` copies every source record onto scratch before mutating it, and colEvt copies are keyed
-on the original colEvt so notes sharing one column cell keep sharing one colEvt copy — the same
-sharing the live cell has, so one note's bound write still reaches its cell-mates on scratch exactly
-as it does live.
+This walk is authoritative and linear: one forward onset pass, one
+predecessor probe per axis to build the bound set, one backward pass to
+clip and emit — over the whole channel. It is the degenerate fallback the
+design keeps for dense dirt (§ Phase 4.75, § The degenerate case gates on
+seed count). Commit 5 puts a frontier probe walk in front of it — seek to
+the dirt, cap the lane and pitch probes — for the common sparse-seed
+channel, chosen over this walk by a seed-count threshold. Until 2026-07-18
+the walk ran as a scratch-copy shadow of an authoritative span-based
+sweep, gated on `_G.CONTINUUM_SHADOW_TAILS`; the sweep, the shadow, and
+`intervals.lua` are retired now that the walk is proven. See
+`design/interval-dirt.md` § Phase 4.75 and § Retirement of intervals.
 
 ## Rebuild: logical projection
 
