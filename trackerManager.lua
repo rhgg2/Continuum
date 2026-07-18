@@ -2418,6 +2418,28 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
     return false
   end
 
+  -- Half-open span-set tests over the continuous gate's merged scopes (nil scope = empty).
+  local function spanSetCovers(spans, ppq)
+    for _, span in ipairs(spans or {}) do
+      if ppq >= span[1] and ppq < span[2] then return true end
+    end
+    return false
+  end
+  local function spanSetIntersects(spans, window)
+    for _, span in ipairs(spans or {}) do
+      if window[1] < span[2] and window[2] > span[1] then return true end
+    end
+    return false
+  end
+  local function clipToSpanSet(span, spans)
+    local clipped = {}
+    for _, scope in ipairs(spans or {}) do
+      local lo, hi = math.max(span[1], scope[1]), math.min(span[2], scope[2])
+      if lo < hi then util.add(clipped, { lo, hi }) end
+    end
+    return clipped
+  end
+
   -- Authored pb breakpoints per channel, exposed to the generator as channel input (authored
   -- only, fakes excluded) -- only expandChannel reads it, gated dirty. see design/note-macros-v2.md § A4
   local authoredPbByChan = {}
@@ -2598,19 +2620,30 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
       end
     end
 
-    -- Producer gate: under interval dirt a pure-note producer whose window no seed touches keeps its
-    -- derived notes verbatim -- reconcileFx self-matches them by fxKey (identity-keep). see design § phase 5
+    -- Producer gate: under interval dirt an unseeded producer outside every emit scope it feeds keeps
+    -- its output verbatim -- notes self-match by fxKey, seats re-feed the reconcile. see design § phase 5
     local dirt = dirtyChans[chan]
+    local gated = dirt ~= true
     local keptById, dirtyRows
     local keptFx = {}   -- identity set: derived specs re-added verbatim, already settled last pass
-    if dirt ~= true then
+    local seeded, emitScope, targetScope = {}, {}, {}
+    if gated then
       keptById = {}
       for _, kept in ipairs(noteExisting[chan]) do util.bucket(keptById, kept.derived, kept) end
       dirtyRows = seedRowsFor(dirt)
     end
+    -- A clean overlapper still runs (its curve is a fold input inside the overlap) but the narrowed
+    -- emission drops its own remainder; pb-touching chains stay ungated until the pb half lands.
+    local function keepable(producer)
+      local targets = generators.continuousTargets(producer.fx)
+      if targets.pb then return false end
+      for target in pairs(targets) do
+        if spanSetIntersects(emitScope[target], producer.window) then return false end
+      end
+      return true
+    end
     local function runOrKeep(producer)
-      if dirt ~= true and not generators.hasContinuous(producer.fx)
-         and not windowSeeded(dirtyRows, producer.window[1], producer.window[2]) then
+      if gated and not seeded[producer] and keepable(producer) then
         for _, kept in ipairs(keptById[producer.id] or {}) do
           util.add(predicted, kept); keptFx[kept] = true
         end
@@ -2619,7 +2652,7 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
       end
     end
 
-    -- Producer enumeration precedes every run: the continuous gate (commit 3) scopes each
+    -- Producer enumeration precedes every run: the continuous-gate scopes below classify each
     -- producer against the full set, so the set must exist first. see design/interval-dirt.md § phase 5
     local producers = {}
 
@@ -2660,6 +2693,21 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
                             fx = region.fx, id = region.uuid, lane = nil, delayPpq = 0 })
     end
 
+    -- Per-target scopes: emit scope = merged windows of the seeded producers touching the target;
+    -- target scope = merged windows of them all -- its complement is where existing seats keep.
+    if gated then
+      local emitWins, targetWins = {}, {}
+      for _, producer in ipairs(producers) do
+        seeded[producer] = windowSeeded(dirtyRows, producer.window[1], producer.window[2])
+        for target in pairs(generators.continuousTargets(producer.fx)) do
+          util.bucket(targetWins, target, producer)
+          if seeded[producer] then util.bucket(emitWins, target, producer) end
+        end
+      end
+      for target, group in pairs(emitWins)   do emitScope[target]   = mergeWindows(group) end
+      for target, group in pairs(targetWins) do targetScope[target] = mergeWindows(group) end
+    end
+
     for _, producer in ipairs(producers) do runOrKeep(producer) end
 
     -- Reconcile existence (stamps kept specs with the mm handle + realised end); defer writes to the tail walk's atomic commit.
@@ -2669,8 +2717,8 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
       util.add(fxOut.noteLive[chan], { evt = spec, lane = spec.lane, kept = keptFx[spec] or nil })
     end
 
-    -- cc emission: per target, merge chain windows and fold (foldChains) into markerless seats on the
-    -- target lane; half-open -- the closing value belongs to the next window. see design/note-macros-v2.md § The fx chain
+    -- cc emission: fold (foldChains) into markerless seats, clipped to the emit scope; half-open --
+    -- the closing value belongs to the kept side. see design/interval-dirt.md § Implementation plan, commit 3
     for cc, recs in pairs(ccChains) do
       local base = ccBases[cc] or {}
       if #base == 0 then
@@ -2679,12 +2727,26 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
         base = { { ppq = minStart, val = rest, shape = 'step' } }
       end
       for _, span in ipairs(mergeWindows(recs)) do
-        for _, point in ipairs(foldChains(recs, span, base, { closed = true })) do
-          if point.ppq < span[2] then
-            util.add(ccLive, { evType = 'cc', chan = chan, cc = cc,
-                               ppq = tm:fromLogical(chan, point.ppq, 0),
-                               val = util.clamp(util.round(point.val), 0, 127), shape = point.shape })
+        for _, emitSpan in ipairs(gated and clipToSpanSet(span, emitScope[cc]) or { span }) do
+          for _, point in ipairs(foldChains(recs, emitSpan, base, { closed = true })) do
+            if point.ppq >= emitSpan[1] and point.ppq < emitSpan[2] then
+              util.add(ccLive, { evType = 'cc', chan = chan, cc = cc,
+                                 ppq = tm:fromLogical(chan, point.ppq, 0),
+                                 val = util.clamp(util.round(point.val), 0, 127), shape = point.shape })
+            end
           end
+        end
+      end
+    end
+
+    -- Kept seats: inside a target's scope but outside its emit scope, re-fed to the reconcile verbatim.
+    -- see design/interval-dirt.md § Implementation plan, commit 3
+    if gated then
+      for _, seat in ipairs(ccExisting[chan]) do
+        local seatL = tm:toLogical(chan, seat.ppq)
+        if spanSetCovers(targetScope[seat.cc], seatL) and not spanSetCovers(emitScope[seat.cc], seatL) then
+          util.add(ccLive, { evType = 'cc', chan = chan, cc = seat.cc, ppq = seat.ppq,
+                             val = seat.val, shape = seat.shape })
         end
       end
     end

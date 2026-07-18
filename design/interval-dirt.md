@@ -1295,7 +1295,18 @@ Commits (commit 1, the note half, above), each green alone,
    verbatim through the reconcile. Parity: a disjoint lfo pair (edit
    one, the other keeps); an overlapping pair (the clean neighbour
    expands, emits nothing); fx removal (orphan seats still delete); a
-   write-count pin (no mm writes outside the edited scope).
+   write-count pin (no mm writes outside the edited scope). *Landed
+   2026-07-19.* One deviation: no kept cc records in `ccChains` --
+   with emission clipped to the emit scope they are geometrically
+   inert (kept windows never intersect it), so the kept side is a
+   per-target **target scope** (all producer windows, merged) computed
+   at classification; existing seats inside it but outside the emit
+   scope re-feed the reconcile verbatim. cc window geometry persists
+   via `computeFxWindows` upstream of the gate, so nothing downstream
+   loses a window. `pbChains` kept records (commit 4) stand. The
+   write-count pin is uuid stability of kept seats (a delete/re-add
+   would re-uuid). `generators.hasContinuous` deleted -- `keepable`'s
+   vacuous target loop subsumes the pure-note test.
 4. **The pb half.** Kept `pbChains` records, the `replaceWins` split,
    the fences, the prior-column-slice carry. Parity: disjoint vibrato
    hosts; a detune edit outside every window still reseats its

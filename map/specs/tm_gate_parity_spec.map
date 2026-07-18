@@ -1,6 +1,6 @@
-@spec tm_gate_parity_spec  src=tests/specs/tm_gate_parity_spec.lua  loc=170  sha=37ed80d  cases=1
+@spec tm_gate_parity_spec  src=tests/specs/tm_gate_parity_spec.lua  loc=226  sha=83df1a4  cases=2
 @exercises trackerManager (h.tm), midiManager (h.fm), dataStore (h.ds)
-@surface   tm:getChannel, fm:dump, tm:rebuild, tm:addEvent, tm:flush, ds:assign, tm:fromLogical, tm:assignEvent
+@surface   tm:getChannel, fm:dump, tm:rebuild, tm:addEvent, tm:flush, ds:assign, tm:fromLogical, tm:assignEvent, tm:toLogical
 @harness   mk
 
 # Intent
@@ -12,113 +12,118 @@
   everything the view renders is compared. This pins phase A now and guards phase B's retention next.
 
 # Helpers
-  @fn note(chan, ppq, pitch, extra)  @ 15-20
-  @fn projEvt(e)  @ 26-30
-  @fn projCol(col)  @ 34-40
+  @fn note(chan, ppq, pitch, extra)  @ 17-22
+  @fn projEvt(e)  @ 28-32
+  @fn projCol(col)  @ 36-42
       -- Canonical, order-independent column projection: strip volatile fields, sort by repr so a
       -- same-ppq tie (Lua's table.sort is unstable) can't spuriously diverge the two frames.
-  @fn projectFrame(tm)  @ 42-56
-  @fn projGrid(vm)  @ 60-77
+  @fn projectFrame(tm)  @ 44-58
+  @fn projGrid(vm)  @ 62-79
       -- The rendered grid: each column's built cells/tails/ghosts. B2 carries a clean channel's built cells
       -- across an edit rebuild; this pins that carry against a forced full re-derive, as the frame is above.
-  @fn stripRec(e)  @ 83-87
+  @fn stripRec(e)  @ 85-89
       -- The wire-side derived state (carriers, absorber pbs, derived fx notes) is routed out of columns or
       -- hidden, so the projected frame never sees it. mm content is its shadow: a converged take that a full
       -- re-derive leaves byte-identical proves those hidden derivations were a fixpoint too. loc churns
       -- each rebuild; uuid is durable, so a content bag keyed on the rest is the stable comparison.
-  @fn mmBag(h)  @ 89-94
-  @fn assertParity(h, msg)  @ 99-107
+  @fn mmBag(h)  @ 91-96
+  @fn assertParity(h, msg)  @ 101-109
       -- Snapshot the gated frame + mm content, then force a full all-16 re-derive. rebuild(true) marks every
       -- channel dirty (the didReload/takeChanged seam) without a take swap, so it re-derives from mm rather
       -- than re-reading. Both the projected frame and the mm content must be the fixpoint the gate assumed.
 
 # Cases
-  @case 'gated rebuild projects identically to a forced full rebuild across a rich frame'  [harness]  @ 111-168
+  @case 'gated rebuild projects identically to a forced full rebuild across a rich frame'  [harness]  @ 113-170
+  @case 'continuous gate: kept, clean-overlapping, and orphaned cc producers reconcile to parity'  [harness]  @ 173-224
 
 # Uses (outbound edges)
-  @use call tm:getChannel  @ 45,156
-  @use call fm:dump  @ 90,141
-  @use call tm:rebuild  @ 103,136
-  @use call tm:addEvent  @ 123,124,125,126,129,130,152,161,166
-  @use call tm:flush  @ 123,124,125,126,129,130,152,157,161,166
-  @use call ds:assign  @ 131
-  @use call tm:fromLogical  @ 149
-  @use call tm:assignEvent  @ 157
+  @use call tm:getChannel  @ 47,158,219
+  @use call fm:dump  @ 92,143,184
+  @use call tm:rebuild  @ 105,138
+  @use call tm:addEvent  @ 125,126,127,128,131,132,154,163,168,194,195,197,198,206,213
+  @use call tm:flush  @ 125,126,127,128,131,132,154,159,163,168,194,195,197,198,206,213,220
+  @use call ds:assign  @ 133
+  @use call tm:fromLogical  @ 151
+  @use call tm:assignEvent  @ 159,220
+  @use call tm:toLogical  @ 186
 
 # Fields (r read / w write incl. constructor keys)
-  @field r at  @ 50
-  @field w at  @ 50
-  @field w atom  @ 10
-  @field w c58  @ 116
-  @field r cc  @ 72
-  @field w cc  @ 72
-  @field r ccs  @ 49,92,141
-  @field w ccs  @ 47
-  @field r cells  @ 64
-  @field w cells  @ 73
-  @field r chan  @ 142,143
-  @field w chan  @ 16,132,133,134
-  @field r cols  @ 62
-  @field r columns  @ 46,156
-  @field w config  @ 116
-  @field w data  @ 117
-  @field w delay  @ 17
-  @field w depth  @ 12
-  @field w detune  @ 17,124
-  @field w dir  @ 13
-  @field w endppq  @ 16,132,133,134
-  @field r evType  @ 142,143
-  @field w evType  @ 16
-  @field r events  @ 37,156
-  @field w factors  @ 10
-  @field r fromEvt  @ 69
-  @field w fromEvt  @ 69
-  @field w fx  @ 125,132,133,134
-  @field r ghosts  @ 66,68
-  @field w ghosts  @ 74
-  @field w global  @ 117
-  @field r grid  @ 62
-  @field w groups  @ 118
-  @field w key  @ 24
-  @field w kind  @ 12,13
-  @field r lane  @ 72
-  @field w lane  @ 17,72,166
-  @field w loc  @ 24
-  @field r midiChan  @ 72
-  @field w midiChan  @ 72
-  @field w name  @ 111
-  @field r notes  @ 48,91,156
-  @field w notes  @ 47
-  @field r offGrid  @ 73
-  @field w offGrid  @ 73
-  @field w onset  @ 12
-  @field w origShape  @ 24
-  @field r overflow  @ 73
-  @field w overflow  @ 73
-  @field r parked  @ 51,147
-  @field w parked  @ 51
-  @field r parkedCC  @ 52
-  @field w parkedCC  @ 52
-  @field r pb  @ 50
-  @field w pb  @ 50
-  @field r pc  @ 50
-  @field w pc  @ 50
-  @field w period  @ 10,12,13
-  @field w pitch  @ 16,157
-  @field w ppq  @ 16
-  @field w project  @ 116
-  @field w run  @ 112
-  @field w shift  @ 10
-  @field w startppq  @ 132,133,134
-  @field w swing  @ 117
-  @field w swings  @ 116
-  @field r tails  @ 74
-  @field w tails  @ 74
-  @field r toEvt  @ 69
-  @field w toEvt  @ 69
-  @field r type  @ 72
-  @field w type  @ 72
-  @field w uuid  @ 132,133,134
-  @field r val  @ 69
-  @field w val  @ 69
-  @field w vel  @ 17
+  @field r REMOVE  @ 220
+  @field r at  @ 52
+  @field w at  @ 52
+  @field w atom  @ 11
+  @field w c58  @ 118,176
+  @field r cc  @ 74,185
+  @field w cc  @ 74
+  @field r ccs  @ 51,94,143,184
+  @field w ccs  @ 49
+  @field r cells  @ 66
+  @field w cells  @ 75
+  @field r chan  @ 144,145,185
+  @field w chan  @ 18,134,135,136
+  @field r cols  @ 64
+  @field r columns  @ 48,158,219
+  @field w config  @ 118,176
+  @field w data  @ 119,177
+  @field w delay  @ 19
+  @field w depth  @ 13,15
+  @field w detune  @ 19,126
+  @field w dir  @ 14
+  @field w endppq  @ 18,134,135,136,194,195,197,198
+  @field r evType  @ 144,145,185
+  @field w evType  @ 18
+  @field r events  @ 39,158,219
+  @field w factors  @ 11
+  @field r fromEvt  @ 71
+  @field w fromEvt  @ 71
+  @field w fx  @ 127,134,135,136,194,195,197,198,220
+  @field r ghosts  @ 68,70
+  @field w ghosts  @ 76
+  @field w global  @ 119,177
+  @field r grid  @ 64
+  @field w groups  @ 120
+  @field w key  @ 26
+  @field w kind  @ 13,14,15
+  @field r lane  @ 74
+  @field w lane  @ 19,74,168,198,206,213
+  @field w loc  @ 26
+  @field r midiChan  @ 74
+  @field w midiChan  @ 74
+  @field w name  @ 113,173
+  @field r notes  @ 50,93,158,219
+  @field w notes  @ 49
+  @field r offGrid  @ 75
+  @field w offGrid  @ 75
+  @field w onset  @ 13
+  @field w origShape  @ 26
+  @field r overflow  @ 75
+  @field w overflow  @ 75
+  @field r parked  @ 53,149
+  @field w parked  @ 53
+  @field r parkedCC  @ 54
+  @field w parkedCC  @ 54
+  @field r pb  @ 52
+  @field w pb  @ 52
+  @field r pc  @ 52
+  @field w pc  @ 52
+  @field w period  @ 11,13,14,15
+  @field w pitch  @ 18,159
+  @field r ppq  @ 186
+  @field w ppq  @ 18
+  @field w project  @ 118,176
+  @field w run  @ 114,174
+  @field w shift  @ 11
+  @field w startppq  @ 134,135,136
+  @field w swing  @ 119,177
+  @field w swings  @ 118,176
+  @field r tails  @ 76
+  @field w tails  @ 76
+  @field r toEvt  @ 71
+  @field w toEvt  @ 71
+  @field r type  @ 74
+  @field w type  @ 74
+  @field r uuid  @ 187
+  @field w uuid  @ 134,135,136
+  @field r val  @ 71
+  @field w val  @ 71
+  @field w vel  @ 19

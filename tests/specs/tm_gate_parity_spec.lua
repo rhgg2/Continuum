@@ -6,11 +6,13 @@
 -- everything the view renders is compared. This pins phase A now and guards phase B's retention next.
 
 local t = require('support')
+local util = require('util')
 
 local classic58 = { factors = { { atom = 'classic', shift = 0.08, period = 1 } } }
 
 local vib30 = { { kind = 'vibrato', period = { 1, 4 }, depth = 30, onset = 0 } }
 local arpUp = { { kind = 'arp',     period = { 1, 4 }, dir = 'up' } }
+local pan   = { { kind = 'autopan', period = { 1, 2 }, depth = 32 } }
 
 local function note(chan, ppq, pitch, extra)
   local n = { evType = 'note', ppq = ppq, endppq = ppq + 240, chan = chan, pitch = pitch,
@@ -165,6 +167,60 @@ return {
       -- gate (pure-note chain, window untouched) and identity-keeps its arp notes.
       h.tm:addEvent(note(5, 0, 64, { lane = 2 })); h.tm:flush()
       assertParity(h, 'chan-5 producer gate: 5a re-derives, 5b identity-keeps == full re-derive')
+    end,
+  },
+  {
+    name = 'continuous gate: kept, clean-overlapping, and orphaned cc producers reconcile to parity',
+    run = function(harness)
+      local h = harness.mk{
+        config = { project = { swings = { c58 = classic58 } } },
+        data   = { swing = { global = 'c58' } },
+      }
+
+      -- cc-seat uuids on chan/cc within logical [startL, endL): the write pin -- a kept window's
+      -- seats must survive an outside edit under their original uuids (no delete/re-add churn).
+      local function seatUuids(chan, cc, startL, endL)
+        local out = {}
+        for _, e in ipairs(h.fm:dump().ccs) do
+          if e.evType == 'cc' and e.chan == chan and e.cc == cc then
+            local ppqL = h.tm:toLogical(chan, e.ppq)
+            if ppqL >= startL and ppqL < endL then out[e.uuid] = true end
+          end
+        end
+        return out
+      end
+
+      -- chan 1: disjoint autopan pair -- windows [0,240) and [960,1200) (authored ends bound them).
+      h.tm:addEvent(note(1, 0,   60, { endppq = 240,  fx = pan })); h.tm:flush()
+      h.tm:addEvent(note(1, 960, 64, { endppq = 1200, fx = pan })); h.tm:flush()
+      -- chan 2: overlapping pair on separate lanes -- windows [0,960) and [480,1920).
+      h.tm:addEvent(note(2, 0,   60, { endppq = 960,  fx = pan }));            h.tm:flush()
+      h.tm:addEvent(note(2, 480, 64, { endppq = 1920, fx = pan, lane = 2 })); h.tm:flush()
+
+      t.truthy(next(seatUuids(1, 10, 0, 240)),     'chan-1 window A has pan seats')
+      t.truthy(next(seatUuids(1, 10, 960, 1200)),  'chan-1 window B has pan seats')
+      t.truthy(next(seatUuids(2, 10, 960, 1920)),  'chan-2 lane-2 exclusive span has seats')
+
+      -- Edit inside window A only: B is outside every scope and identity-keeps its seats.
+      local keptB = seatUuids(1, 10, 960, 1200)
+      h.tm:addEvent(note(1, 120, 62, { lane = 2 })); h.tm:flush()
+      t.deepEq(seatUuids(1, 10, 960, 1200), keptB, 'kept window B: seat uuids untouched')
+      assertParity(h, 'chan-1 disjoint pair: edit in A, B keeps == full re-derive')
+
+      -- Edit at ppq 240 seeds lane-1's window only: the lane-2 overlapper re-expands as a fold
+      -- input but emits nothing of its own -- its exclusive remainder keeps verbatim.
+      local keptQ = seatUuids(2, 10, 960, 1920)
+      h.tm:addEvent(note(2, 240, 66, { lane = 3 })); h.tm:flush()
+      t.deepEq(seatUuids(2, 10, 960, 1920), keptQ, 'clean overlapper: exclusive seats untouched')
+      assertParity(h, 'chan-2 overlap: dirty lane-1 + clean overlapper == full re-derive')
+
+      -- Remove window A's fx outright: its orphan seats are fed by nothing and delete; B still keeps.
+      keptB = seatUuids(1, 10, 960, 1200)
+      local hostA = h.tm:getChannel(1).columns.notes[1].events[1]
+      h.tm:assignEvent(hostA, { fx = util.REMOVE }); h.tm:flush()
+      t.deepEq(seatUuids(1, 10, 0, 960), {}, 'removed producer: orphan seats deleted')
+      t.deepEq(seatUuids(1, 10, 960, 1200), keptB, 'window B still keeps across the removal')
+      assertParity(h, 'chan-1 fx removal: orphans delete, B keeps == full re-derive')
     end,
   },
 }

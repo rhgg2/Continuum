@@ -4,6 +4,12 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-19** — Continuous cc gate keeps by target scope, not kept records. The design's
+  `{ window, kept = true }` cc records proved geometrically inert once emission clips to the emit
+  scope (a kept window can never intersect it), so the kept side is a per-target merged window set
+  computed at classification; existing seats inside it but outside the emit scope re-feed the
+  reconcile verbatim. Kept pbChains records (commit 4) stand — pb seats are markerless downstream.
+
 - **2026-07-19** — The gate verdict now reaches the tail walk. A gate-kept fx spec (verbatim from
   last pass, identity-kept in mm) no longer seeds tail-walk disturbance: it rides `extras` as a bound
   anchor only, and just fresh (re-run producer) derived notes count toward `FRONTIER_SEED_CAP`. The

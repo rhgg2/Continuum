@@ -423,12 +423,6 @@ function generators.continuousTargets(fx)
   return targets
 end
 
--- Mirror of parksNotes: a chain carries continuous output iff any stage targets pb or a cc. A
--- pure-note producer (none does) freezes note-for-note under interval dirt. see design/interval-dirt.md § phase 5
-function generators.hasContinuous(fx)
-  return next(generators.continuousTargets(fx)) ~= nil
-end
-
 -- The fold mode a chain presents for one continuous target: replace if any stage targeting it
 -- replaces, else augment -- drives cross-chain layering (a later replace wins). see design/note-macros-v2.md § The fx chain
 function generators.chainDestType(fx, target)
