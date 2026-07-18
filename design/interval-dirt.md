@@ -15,7 +15,7 @@
 
 | | |
 |---|---|
-| state | landed — phases 1–3; phase 4 2026-07-17; phase 4.5 2026-07-18; phase 4.75 designed, unstarted; model inverted to seed dirt 2026-07-18 (§ The model, inverted) |
+| state | landed — phases 1–3; phase 4 2026-07-17; phases 4.5 + 4.75 2026-07-18; model inverted to seed dirt 2026-07-18 (§ The model, inverted); phase 5 note half 2026-07-18, continuous half planned 2026-07-19 (§ phase 5) |
 | supersedes | `incremental-rebuild` gap 4 (fx dirt signal) |
 | enduring model it changes | `docs/trackerManager.md` § Derivation dirt |
 | the hard part | was forward propagation — closed 2026-07-15 by onset-bounded closures (§ The crux, closed); same-pitch widens the tails closure rather than leaving tm (§ Same-pitch is a projection artefact), and tails *produces* its closure from the neighbour lookup it already does, rather than consuming a fence it could leak past (§ The tails closure is the walk's output, not its input) |
@@ -1210,15 +1210,101 @@ open q4: `noteLive` stays the carrier, no cross-stage dirt plumbing.
 Phases 3's and 4's wholesale residues (derived-note routing, the
 `noteLive` union) narrow to intervals here.
 
-The fiddly half is the continuous side, and it may stay wholesale. A
-skipped producer's cc seats (`fx.ccExisting`, window-recognised) must
-carry rather than reconcile away, and its pb chain feeds
-`rebuildPbs`'s channel-wide fold — so either the continuous stages of a
-skipped chain still run (gating only note expansion), or the fold
-learns to keep window-keyed emitted output. The macro fixture puts this
-at `pbs` 20.8 + `ccs` 9.0 ≈ 30ms of the 78ms no-op (§ phase 0) — large
-enough that leaving it wholesale caps the phase-5 win; note expansion
-first, then the continuous side decides on the measured residual.
+> Commit 1 — the note half — landed 2026-07-18 (`83df1a4`): a
+> pure-note producer (`generators.hasContinuous` false) gates on
+> `windowSeeded` over the seed rows, identity-keeping via
+> `noteExisting` bucketed by producer id. Measured ~0.4ms on
+> glasswork — pure-note producers are cheap; the macro cost is the
+> continuous side below.
+
+The fiddly half is the continuous side, and the measurement resolves
+it (glasswork, `rebuild(true)` ceiling, 2026-07-18). The generative
+half is free: generator `.expand` across every producer is ~0.7ms of
+a 69ms re-derive. The `fx` stage's 31.5ms is `emitCC` 19.2 (the cc
+chain fold, `reconcileDerived`, and the wire commit), `expand` 8.0
+(almost all `channelStreams` slicing and `foldContinuous` — `.expand`
+is ~0.7 of it), `reconcileNotes` 3.5, and `bases` **0.0**; `pbs` is
+20.2, its `seats` 10.8 the `foldChains` fold and `match` 2.2 the seat
+reconcile.
+
+Two candidate mechanisms this kills. A per-producer output **stash**,
+so a changed chain's neighbours re-fold from cached curves instead of
+re-expanding, saves the ~0.7ms of expansion and nothing else — dead.
+**Window-scoping the base scans** (`pbBaseFor`/`ccBasesFor`) saves
+`bases`' 0.0ms — dead; the absolute-curve scan I feared would need
+entering-edge lookback costs nothing, so it stays whole.
+
+What remains is one family — fold, emit, reconcile — so the continuous
+gate is the note gate's point-2 shape applied to **seats**. Three
+scopes, from the dirt out (sharpened 2026-07-19: the first draft's "a
+connected group gates as a unit" overstated the run set — a clean
+window in a dirty window's connected component keeps):
+
+- **Emit scope**, per target: the union of the dirty windows — seeded
+  or spec-dirty — and nothing wider. A dirty member's curve
+  contributes nothing outside its own window, so the fold output in a
+  clean neighbour's remainder is unchanged by construction and its
+  seats carry.
+- **Run set**: producers whose window intersects the emit scope — one
+  step of overlap, not the component. A clean neighbour overlapping a
+  dirty window still *expands* (its curve is a fold input inside the
+  overlap) but emits nothing of its own; a producer overlapping only
+  that neighbour neither expands nor emits. A running clean
+  producer's note output regenerates as a byproduct and reconciles to
+  zero writes.
+- **Keep**: every other producer identity-keeps, notes and seats
+  both. Kept continuous producers still emit window-only records
+  (`{ window, kept = true }`): the window geometry must stay complete
+  downstream, because a markerless pb seat that loses its window
+  reads as an authored pb.
+
+Keep flows **through** the cc reconcile, not around it (amending this
+section's first draft, which had kept output "bypassing
+`reconcileDerived`"): a kept range feeds its existing seats into
+`ccLive` verbatim, they self-match at zero writes, and a *vanished*
+window's orphans — fed by nothing — still fall through to deletion.
+Bypassing would need a separate death-detection mechanism and reopens
+the silent-stale class. The reconcile's `existing` slice never
+narrows; only the fold does.
+
+The pb half has no reconcile to flow through — `deriveChan`'s match
+is an absorber pool — so its kept mechanics are fences plus one
+carry. `replaceWins` splits into live ranges (folded bps) and kept
+ranges (recognition-only, no bps — `inSeatWindow` must keep seeing
+them); in-kept-range pbs leave the absorber pool, the consolidated
+assign, and every seat source (detune onsets, bps seats, densify, the
+I2a anchor); and the pb column carries its **prior slice** over kept
+raw ranges — last pass's fold stamped exact cents on those hidden
+seats, and by I8 the prior slice is what a re-fold would produce,
+where back-deriving cents from the wire quantises through
+`centsToRaw` and breaks exact parity. One boundary detail: folding a
+sub-range of a merged span, the closing value at an interior edge
+belongs to the kept side — chain cuts align with window edges, so the
+fold decomposes there.
+
+Commits (commit 1, the note half, above), each green alone,
+`tm_gate_parity_spec` extending at each:
+
+2. **Enumerate producers, then run.** `expandChannel` gathers its
+   three producer sources (on-take hosts, parked cells, regions) into
+   one list before any expand runs; `generators.continuousTargets(fx)`
+   lands and `hasContinuous` re-expresses over it. Zero behaviour —
+   the restructure half of the phase discipline.
+3. **The cc half.** Per-target dirty-window scopes, kept window-only
+   records, fold and emit narrowed to the emit scope, kept seats fed
+   verbatim through the reconcile. Parity: a disjoint lfo pair (edit
+   one, the other keeps); an overlapping pair (the clean neighbour
+   expands, emits nothing); fx removal (orphan seats still delete); a
+   write-count pin (no mm writes outside the edited scope).
+4. **The pb half.** Kept `pbChains` records, the `replaceWins` split,
+   the fences, the prior-column-slice carry. Parity: disjoint vibrato
+   hosts; a detune edit outside every window still reseats its
+   absorber; write-count pin.
+5. **Measure on glasswork-dense.** A variant of the glasswork builder
+   piling the same chains onto one channel, bridge-driven like
+   glasswork itself — glasswork's spread over 16 channels makes its
+   edit path write-bound (~3ms of re-derive), so the gate's win only
+   shows against a producer-dense channel. Record the numbers here.
 
 Same phase: the all-16 region/parking dirt sources narrow to their own
 members — a region edit knows the exact events it parked and restored
