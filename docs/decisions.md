@@ -4,6 +4,14 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-18** — `rawThenLogical` strengthened from `(ppq, ppqL)` to a total order: authored-
+  before-generated, then lane, then pitch break exact-seat ties. The frontier probe walk reconstructs
+  settlement order from the comparator, but a same-tick same-pitch pile had no defined order under the
+  two-key sort — Lua's unstable sort left it arbitrary, so the shadow disagreed with linear per-record.
+  The tiebreak is meaningful (authored wins) and only pins down what was already undefined. A second
+  discipline followed: settlement gathers each pitch's cascade chain against the pristine index, then
+  settles by position — probing an index being mutated mid-pass unsorts it and the search cycles. See
+  design/interval-dirt.md § Phase 4.75.
 - **2026-07-18** — Dirt model inverted: seeds (event-anchored, verb-born, birth-snapshot-carrying)
   are the stored truth; intervals demoted to a per-consumer derived view, `intervals.lua` retiring
   on phase 4.75's commit schedule. Chosen because every consumer after the seek-walk design wants

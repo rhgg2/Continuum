@@ -90,11 +90,15 @@ local function sortByPPQ(tbl)
   table.sort(tbl, function(a, b) return a.ppq < b.ppq end)
 end
 
--- Raw order, logical tie-break: co-onset raws keep authored order. A nil ppqL (foreign,
--- pre-seating) falls back to ppq, leaving equals unordered -- readers filter them anyway.
+-- Total order for the raw working set: raw tick, then logical seat (ppqL, falling back to raw
+-- pre-seating), authored-before-generated, lane, then pitch. See docs/decisions.md § 2026-07-18.
 local function rawThenLogical(a, b)
   if a.ppq ~= b.ppq then return a.ppq < b.ppq end
-  return (a.ppqL or a.ppq) < (b.ppqL or b.ppq)
+  local aL, bL = a.ppqL or a.ppq, b.ppqL or b.ppq
+  if aL ~= bL then return aL < bL end
+  if (a.derived or false) ~= (b.derived or false) then return not a.derived end
+  if (a.lane or 0) ~= (b.lane or 0) then return (a.lane or 0) < (b.lane or 0) end
+  return (a.pitch or 0) < (b.pitch or 0)
 end
 
 -- Only note columns interleave notes and PAs, which can share an onset: ties order note-before-PA,
@@ -2816,6 +2820,260 @@ local function linearTails(chan, notes, dirt, parkedBoundFor, takeLen, res, clam
   return emitted
 end
 
+----- Frontier probe walk
+
+-- First index into the rawThenLogical-sorted `list` with ppq >= `pos`; #list+1 if none. Every frontier
+-- probe binary-searches here, then scans outward a bounded few rows -- the seek that replaces the sweep.
+local function lowerBound(list, pos)
+  local lo, hi = 1, #list + 1
+  while lo < hi do
+    local mid = (lo + hi) // 2
+    if list[mid].ppq < pos then lo = mid + 1 else hi = mid end
+  end
+  return lo
+end
+-- First index with ppq > `pos`: the far edge of pos's raw cluster.
+local function upperBound(list, pos)
+  local lo, hi = 1, #list + 1
+  while lo < hi do
+    local mid = (lo + hi) // 2
+    if list[mid].ppq <= pos then lo = mid + 1 else hi = mid end
+  end
+  return lo
+end
+
+-- Nearest walkable record strictly on one `side` of `pos` (raw ppq) matching `filter`, over the index
+-- (binary-searched, scanned outward) and the small extras. The strict-ppq bound probe; mirrors util.seek.
+local function nearestNote(indexList, extras, pos, side, filter)
+  local best
+  local anchor = lowerBound(indexList, pos)
+  if side == 'before' then
+    for i = anchor - 1, 1, -1 do
+      local rec = indexList[i]
+      if walkable(rec) and filter(rec) then best = rec; break end
+    end
+  else
+    for i = anchor, #indexList do
+      local rec = indexList[i]
+      if rec.ppq > pos and walkable(rec) and filter(rec) then best = rec; break end
+    end
+  end
+  for _, rec in ipairs(extras) do
+    local onSide = side == 'before' and rec.ppq < pos or side == 'after' and rec.ppq > pos
+    local nearer = best == nil
+                   or (side == 'before' and rawThenLogical(best, rec))
+                   or (side == 'after'  and rawThenLogical(rec, best))
+    if onSide and filter(rec) and nearer then best = rec end
+  end
+  return best
+end
+
+-- Same-pitch record immediately before `node` in the total order, over index + extras -- settlement's
+-- predecessor. A same-tick same-pitch note counts here (unlike the strict bound probes).
+local function prevSamePitch(indexList, extras, node)
+  local best
+  for i = upperBound(indexList, node.ppq) - 1, 1, -1 do
+    local rec = indexList[i]
+    if walkable(rec) and rec ~= node and rec.pitch == node.pitch and rawThenLogical(rec, node) then
+      best = rec; break
+    end
+  end
+  for _, rec in ipairs(extras) do
+    if rec ~= node and rec.pitch == node.pitch and rawThenLogical(rec, node)
+       and (best == nil or rawThenLogical(best, rec)) then best = rec end
+  end
+  return best
+end
+
+-- Same-pitch record immediately after `node` in the total order, keyed on `origPpq` (node's raw before
+-- this pass nudged it) -- settlement's cascade successor. see design § Nudge probes stop at the tick
+local function nextSamePitch(indexList, extras, node, origPpq)
+  local key = { ppq = origPpq, ppqL = node.ppqL, derived = node.derived, lane = node.lane, pitch = node.pitch }
+  local best
+  for i = lowerBound(indexList, origPpq), #indexList do
+    local rec = indexList[i]
+    if walkable(rec) and rec ~= node and rec.pitch == node.pitch and rawThenLogical(key, rec) then
+      best = rec; break
+    end
+  end
+  for _, rec in ipairs(extras) do
+    if rec ~= node and rec.pitch == node.pitch and rawThenLogical(key, rec)
+       and (best == nil or rawThenLogical(rec, best)) then best = rec end
+  end
+  return best
+end
+
+-- On-take records at a seed's logical seat, for adds/deletes carrying no surviving uuid. Scans only the
+-- seed's raw-ppq cluster in the sorted index (plus extras) -- bounded, not a channel sweep.
+local function seatMatches(indexList, extras, seed)
+  local out, key = {}, seed.ppqL or seed.ppq
+  local function match(rec)
+    return (rec.ppqL or rec.ppq) == key and rec.lane == seed.lane and rec.pitch == seed.pitch
+  end
+  for i = lowerBound(indexList, seed.ppq), #indexList do
+    if indexList[i].ppq ~= seed.ppq then break end
+    if match(indexList[i]) then util.add(out, indexList[i]) end
+  end
+  for _, rec in ipairs(extras) do if rec.ppq == seed.ppq and match(rec) then util.add(out, rec) end end
+  return out
+end
+
+-- The frontier probe walk: seek to each seed, probe a bounded few rows for its neighbours, drive the
+-- shared settle/bound rules -- no whole-channel traversal. see design/interval-dirt.md § Phase 4.75
+local function frontierTails(chan, indexList, extras, dirt, parkedBoundFor, takeLen, res,
+                             clampWrites, deferred, resolve)
+  resolve = resolve or function(rec) return rec end
+  local disturbed, nudged = {}, {}
+  local settleOnset, boundNote = makeTailRules{
+    chan = chan, res = res, takeLen = takeLen,
+    disturbed = disturbed, nudged = nudged,
+    clampWrites = clampWrites, deferred = deferred, parkedBoundFor = parkedBoundFor,
+  }
+
+  -- Disturbed seeded by name, no channel scan: derived membership is all of extras; survivors resolve
+  -- through byUuid; adds/deletes name a seat the index tick cluster answers. Anchors = seed positions.
+  local anchors = {}
+  for _, rec in ipairs(extras) do if rec.derived then disturbed[rec] = true end end
+  for _, seed in ipairs(dirt) do
+    util.add(anchors, { pos = seed.ppq, lane = seed.lane, pitch = seed.pitch })
+    local live = seed.uuid and tm:byUuid(seed.uuid)
+    local rec  = live and resolve(live)
+    if rec then disturbed[rec] = true
+    else for _, hit in ipairs(seatMatches(indexList, extras, seed)) do disturbed[hit] = true end end
+  end
+
+  -- Phase 1 -- settle onsets, same-pitch-local (a nudge only collides same-pitch successors). Each
+  -- pitch's cascade chain gathers on the pristine index, then settles by position. See docs/decisions.md § 2026-07-18.
+  local byPitch, chains = {}, {}
+  for e in pairs(disturbed) do util.bucket(byPitch, e.pitch, e) end
+  for _, seeds in pairs(byPitch) do
+    table.sort(seeds, rawThenLogical)
+    local si = 1
+    while si <= #seeds do
+      local head = seeds[si]; si = si + 1
+      local prev = prevSamePitch(indexList, extras, head)
+      local chain = {}
+      if prev then util.add(chain, prev) end
+      util.add(chain, head)
+      -- reach = the running worst-case settled tick; a same-pitch successor cascades only while it can
+      -- still collide (separateOnset gives way by one tick), or when it is itself a pending seed.
+      local reach = (prev and head.ppq <= prev.ppq) and prev.ppq + 1 or head.ppq
+      local node = head
+      while true do
+        local nxt = nextSamePitch(indexList, extras, node, node.ppq)
+        if not nxt then break end
+        local isSeed = nxt == seeds[si]
+        if nxt.ppq > reach and not isSeed then break end
+        util.add(chain, nxt)
+        reach = nxt.ppq <= reach and reach + 1 or nxt.ppq
+        if isSeed then si = si + 1 end
+        node = nxt
+      end
+      util.add(chains, chain)
+    end
+  end
+
+  local anyNudge = false
+  for _, chain in ipairs(chains) do
+    for i, node in ipairs(chain) do
+      local prev = chain[i - 1]
+      if disturbed[node] or (prev and disturbed[prev]) then
+        if settleOnset(node, prev) then anyNudge = true end
+      end
+    end
+  end
+  -- Nudges moved shared entries' ppq in place; re-true both probe sources for phase 2.
+  if anyNudge then table.sort(indexList, rawThenLogical); table.sort(extras, rawThenLogical) end
+
+  -- Phase 2 -- bounds, order-free: every disturbed note plus each anchor's nearest same-lane and same-
+  -- pitch strict predecessor re-bind. Bounds read settled onsets, write only endppq -- no re-disturb.
+  local bound = {}
+  for e in pairs(disturbed) do
+    bound[e] = true
+    util.add(anchors, { pos = e.ppq, lane = e.lane, pitch = e.pitch })
+  end
+  for _, a in ipairs(anchors) do
+    local lanePred  = nearestNote(indexList, extras, a.pos, 'before', function(r) return r.lane  == a.lane  end)
+    local pitchPred = nearestNote(indexList, extras, a.pos, 'before', function(r) return r.pitch == a.pitch end)
+    if lanePred  then bound[lanePred]  = true end
+    if pitchPred then bound[pitchPred] = true end
+  end
+
+  -- A nudged lane-1 seat emits its closure to the next lane-1 onset -- the lane successor the bound
+  -- probe already fetched. see design § The widen and the emission are the same fact
+  local emitted = {}
+  for e in pairs(bound) do
+    local laneNext  = nearestNote(indexList, extras, e.ppq, 'after', function(r) return r.lane  == e.lane  end)
+    local pitchNext = nearestNote(indexList, extras, e.ppq, 'after', function(r) return r.pitch == e.pitch end)
+    if nudged[e] and e.lane == 1 then
+      util.add(emitted, { uuid = e.uuid, verb = 'nudge', ppq = e.ppq, ppqL = e.ppqL,
+                          lane = e.lane, pitch = e.pitch, endppqL = laneNext and laneNext.ppqL })
+    end
+    boundNote(e, laneNext, pitchNext)
+  end
+  return emitted
+end
+
+-- Fixed field set so the diff catches a field nil on one side but set on the other -- pairs would skip it.
+local TAIL_FIELDS = { 'ppq', 'endppq', 'delayC', 'endppqC', 'colEnd' }
+local function tailFields(rec)
+  local c = rec.colEvt
+  return { ppq = rec.ppq, endppq = rec.endppq,
+           delayC = c and c.delayC, endppqC = c and c.endppqC, colEnd = c and c.endppq }
+end
+
+-- Diff the frontier walk's scratch results and nudge seeds against the linear walk's authoritative live
+-- mutation; raise a channel/record/field-precise error on any divergence. see design § Phase 4.75
+local function assertTailsAgree(chan, scratchByRec, frontierNudges, linearNudges)
+  for rec, shadow in pairs(scratchByRec) do
+    local want, got = tailFields(rec), tailFields(shadow)
+    for _, field in ipairs(TAIL_FIELDS) do
+      if got[field] ~= want[field] then
+        error(('shadow frontier divergence chan %d uuid %s %s: linear=%s frontier=%s')
+          :format(chan, tostring(rec.uuid), field, tostring(want[field]), tostring(got[field])))
+      end
+    end
+  end
+  -- Nudge seeds compare as a multiset over all fields -- derived nudges carry a nil uuid.
+  local function bag(list)
+    local counts = {}
+    for _, s in ipairs(list) do
+      local k = table.concat({ tostring(s.uuid), s.ppq, s.ppqL, s.lane, s.pitch, tostring(s.endppqL) }, ':')
+      counts[k] = (counts[k] or 0) + 1
+    end
+    return counts
+  end
+  local frontierBag, linearBag = bag(frontierNudges), bag(linearNudges)
+  for k, n in pairs(linearBag) do
+    if frontierBag[k] ~= n then error(('shadow frontier nudge divergence chan %d: %s'):format(chan, k)) end
+  end
+  for k, n in pairs(frontierBag) do
+    if linearBag[k] ~= n then error(('shadow frontier nudge divergence chan %d: %s'):format(chan, k)) end
+  end
+end
+
+-- Clone the index and extras (colEvt sharing preserved, live->scratch map for byUuid resolve) and run
+-- the frontier walk on the scratch, so a bug here cannot perturb the authoritative linear walk.
+local function shadowFrontier(chan, indexNotes, extras, dirt, parkedBoundFor, takeLen, res)
+  local scratchByRec, colEvtCopies = {}, {}
+  local function clone(rec)
+    local s = util.clone(rec)
+    if rec.colEvt then
+      colEvtCopies[rec.colEvt] = colEvtCopies[rec.colEvt] or util.clone(rec.colEvt)
+      s.colEvt = colEvtCopies[rec.colEvt]
+    end
+    scratchByRec[rec] = s
+    return s
+  end
+  local scratchIndex, scratchExtras = {}, {}
+  for _, rec in ipairs(indexNotes) do util.add(scratchIndex, clone(rec)) end
+  for _, rec in ipairs(extras)     do util.add(scratchExtras, clone(rec)) end
+  local nullBatch = { assign = function() end }
+  local emitted = frontierTails(chan, scratchIndex, scratchExtras, dirt, parkedBoundFor, takeLen, res,
+                                nullBatch, nullBatch, function(live) return scratchByRec[live] end)
+  return scratchByRec, emitted
+end
+
 local function rebuildTails(noteLive, deferred, restoredNotes)
   local takeLen = tm:length()
   local res = mm:resolution()
@@ -2851,7 +3109,16 @@ local function rebuildTails(noteLive, deferred, restoredNotes)
       return nearest
     end
 
+    -- Shadow the linear walk: run the frontier probe walk on scratch before linear mutates the live
+    -- records, then diff its writes and nudge seeds against linear's below. see design § Phase 4.75
+    local shadowScratch, shadowNudges
+    if _G.CONTINUUM_SHADOW_FRONTIER and dirt ~= true then
+      shadowScratch, shadowNudges = shadowFrontier(chan, rawNotes(chan), extras, dirt, parkedBoundFor, takeLen, res)
+    end
+
     local emitted = linearTails(chan, notes, dirt, parkedBoundFor, takeLen, res, clampWrites, deferred)
+
+    if shadowScratch then assertTailsAgree(chan, shadowScratch, shadowNudges, emitted) end
 
     if #emitted > 0 and dirt ~= true then
       for _, s in ipairs(dirt) do util.add(emitted, s) end
