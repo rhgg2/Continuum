@@ -2602,6 +2602,7 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
     -- derived notes verbatim -- reconcileFx self-matches them by fxKey (identity-keep). see design § phase 5
     local dirt = dirtyChans[chan]
     local keptById, dirtyRows
+    local keptFx = {}   -- identity set: derived specs re-added verbatim, already settled last pass
     if dirt ~= true then
       keptById = {}
       for _, kept in ipairs(noteExisting[chan]) do util.bucket(keptById, kept.derived, kept) end
@@ -2610,7 +2611,9 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
     local function runOrKeep(producer)
       if dirt ~= true and not generators.hasContinuous(producer.fx)
          and not windowSeeded(dirtyRows, producer.window[1], producer.window[2]) then
-        for _, kept in ipairs(keptById[producer.id] or {}) do util.add(predicted, kept) end
+        for _, kept in ipairs(keptById[producer.id] or {}) do
+          util.add(predicted, kept); keptFx[kept] = true
+        end
       else
         runProducer(producer)
       end
@@ -2657,7 +2660,7 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
     -- fxOut.noteLive holds the predicted specs; the tail walk clips them in place.
     reconcileFx(noteExisting[chan], predicted, deferred)
     for _, spec in ipairs(predicted) do
-      util.add(fxOut.noteLive[chan], { evt = spec, lane = spec.lane })
+      util.add(fxOut.noteLive[chan], { evt = spec, lane = spec.lane, kept = keptFx[spec] or nil })
     end
 
     -- cc emission: per target, merge chain windows and fold (foldChains) into markerless seats on the
@@ -2768,7 +2771,7 @@ end
 
 -- The seed-driven tail walk over the whole channel: the degenerate fallback for dense and wholesale
 -- dirt, chosen over the frontier by seed count. see docs/trackerManager.md § Rebuild: tail walk
-local function linearTails(chan, notes, dirt, parkedBoundFor, takeLen, res, clampWrites, deferred)
+local function linearTails(chan, notes, dirt, parkedBoundFor, takeLen, res, clampWrites, deferred, keptDerived)
   local disturbed, nudged = {}, {}
   local settleOnset, boundNote = makeTailRules{
     chan = chan, res = res, takeLen = takeLen,
@@ -2780,7 +2783,9 @@ local function linearTails(chan, notes, dirt, parkedBoundFor, takeLen, res, clam
   -- adds by logical seat (an add's uuid lands only at commit). Anchors for the bound probes are the
   -- seed positions (dead seeds included) plus every disturbed onset, added below.
   local anchors = {}
-  for _, e in ipairs(notes) do if e.derived then disturbed[e] = true end end
+  -- A kept fx spec (gate-verbatim, unchanged since last pass) is already settled and clipped: it
+  -- rides as a bound anchor only, never a fresh disturbance. see docs/trackerManager.md § Rebuild: tail walk
+  for _, e in ipairs(notes) do if e.derived and not keptDerived[e] then disturbed[e] = true end end
   if dirt == true then
     for _, e in ipairs(notes) do disturbed[e] = true end   -- degenerate pass: load, external change
   else
@@ -2958,7 +2963,7 @@ end
 -- The frontier probe walk: seek to each seed, probe a bounded few rows for its neighbours, drive the
 -- shared settle/bound rules -- no whole-channel traversal. see design/interval-dirt.md § Phase 4.75
 local function frontierTails(chan, indexList, extras, dirt, parkedBoundFor, takeLen, res,
-                             clampWrites, deferred)
+                             clampWrites, deferred, keptDerived)
   local disturbed, nudged = {}, {}
   local settleOnset, boundNote = makeTailRules{
     chan = chan, res = res, takeLen = takeLen,
@@ -2969,7 +2974,7 @@ local function frontierTails(chan, indexList, extras, dirt, parkedBoundFor, take
   -- Disturbed seeded by name: derived membership is all of extras; adds/deletes name a seat the
   -- index tick cluster answers; byUuid resolve is note-scoped -- see docs/decisions.md § 2026-07-18.
   local anchors = {}
-  for _, rec in ipairs(extras) do if rec.derived then disturbed[rec] = true end end
+  for _, rec in ipairs(extras) do if rec.derived and not keptDerived[rec] then disturbed[rec] = true end end
   for _, seed in ipairs(dirt) do
     util.add(anchors, { pos = seed.ppq, lane = seed.lane, pitch = seed.pitch })
     local rec = seed.uuid and tm:byUuid(seed.uuid)
@@ -3061,9 +3066,14 @@ local function rebuildTails(noteLive, deferred, restoredNotes)
     -- Clean channels freeze: fx left noteLive empty, real notes converged last rebuild.
     local dirt = dirtyChans[chan]
     if not dirt then goto nextChan end
-    local extras = {}
+    -- A kept fx spec is settled from last pass and rides the walk as a bound anchor only; only fresh
+    -- (re-run producer) derived notes seed disturbance and count toward the frontier cap.
+    local extras, keptDerived, freshLive = {}, {}, 0
     for _, rec in ipairs(restoredByChan[chan] or {}) do util.add(extras, rec) end
-    for _, w in ipairs(noteLive[chan]) do util.add(extras, w.evt) end
+    for _, w in ipairs(noteLive[chan]) do
+      util.add(extras, w.evt)
+      if w.kept then keptDerived[w.evt] = true else freshLive = freshLive + 1 end
+    end
 
     -- Parked members left the columns but still bound a preceding on-take tail in their lane --
     -- the symmetric partner of realiseParked's on-take bounds. Bound-only: never rewritten below.
@@ -3085,12 +3095,12 @@ local function rebuildTails(noteLive, deferred, restoredNotes)
     -- Sparse edits seek to their seeds; dense edits and wholesale rebuilds walk the channel once. The
     -- frontier takes the sorted index and extras as separate probe sources -- no O(channel) merge.
     local emitted
-    if dirt ~= true and #dirt + #noteLive[chan] <= FRONTIER_SEED_CAP then
-      emitted = frontierTails(chan, rawNotes(chan), extras, dirt, parkedBoundFor, takeLen, res, clampWrites, deferred)
+    if dirt ~= true and #dirt + freshLive <= FRONTIER_SEED_CAP then
+      emitted = frontierTails(chan, rawNotes(chan), extras, dirt, parkedBoundFor, takeLen, res, clampWrites, deferred, keptDerived)
     else
       local notes = mergeIndexed(rawNotes(chan), walkable, extras)
       if #notes == 0 then goto nextChan end
-      emitted = linearTails(chan, notes, dirt, parkedBoundFor, takeLen, res, clampWrites, deferred)
+      emitted = linearTails(chan, notes, dirt, parkedBoundFor, takeLen, res, clampWrites, deferred, keptDerived)
     end
 
     if #emitted > 0 and dirt ~= true then

@@ -4,6 +4,14 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-19** — The gate verdict now reaches the tail walk. A gate-kept fx spec (verbatim from
+  last pass, identity-kept in mm) no longer seeds tail-walk disturbance: it rides `extras` as a bound
+  anchor only, and just fresh (re-run producer) derived notes count toward `FRONTIER_SEED_CAP`. The
+  2026-07-18 gate killed mm re-writes but left the walk re-clipping every kept note, so on glasswork
+  chan 1 (24 parked `retrig` hosts, 256 derived notes) a one-note edit fell to the linear walk and
+  re-bound all 256. Now it stays on the frontier (tails 13.0->0.4ms); the predecessor-probe and
+  settle-cascade still re-clip kept notes adjacent to a real edit. See docs/trackerManager.md §
+  Rebuild: tail walk.
 - **2026-07-18** — fx producer gate (interval-dirt phase 5, commit 1): under seed-list dirt a
   pure-note producer (`generators.hasContinuous` false) whose window no seed touches is skipped and
   its derived notes identity-kept via `noteExisting` — `reconcileFx` self-matches them by `fxKey`.
