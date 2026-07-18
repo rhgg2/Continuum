@@ -2694,23 +2694,64 @@ local function rebuildTails(noteLive, deferred, restoredNotes)
     -- collide, onto its same-pitch predecessor; derived notes seed unconditionally. see design/interval-dirt.md § Phase 4
     local disturbed, nudged, lastByPitch = {}, {}, {}
     local anyNudge = false
+
+    -- The per-note settle and bound rules, over (note, neighbours) -- the sweep drives them from its
+    -- running state; the seek walk will drive them from probes. see design/interval-dirt.md § Phase 4.75
+    local function settleOnset(e, prev)
+      local onset = voicing.separateOnset(e, prev)
+      if not onset then return false end
+      -- A nudge is final where it lands -- notes only ever give way forward -- so the cue and
+      -- the clamp write stage here rather than in a second pass over a moved set.
+      e.ppq = onset
+      disturbed[e], nudged[e] = true, true
+      local backing = e.colEvt or e   -- seated entries write through to their column note; fxNotes ride bare
+      if e.colEvt and e.colEvt.delay ~= nil then
+        -- The column stays logical; only the delayC give-way cue carries the raw shift.
+        e.colEvt.delayC = util.round(timing.ppqToDelay(e.ppq - tm:fromLogical(chan, e.ppqL), res))
+      end
+      if backing.realised then clampWrites.assign(backing, { ppq = e.ppq }) end
+      return true
+    end
+
+    local function boundNote(e, laneNext, pitchNext)
+      local onTake  = not e.derived
+      local ceiling = e.endppqL == util.OPEN and math.huge
+                      or e.endppqL and tm:fromLogical(chan, e.endppqL)
+                      or math.huge
+      -- On-take tails clip against parked members' lanes too -- the columns no longer carry the cell,
+      -- but the lane geometry still does. See docs/trackerManager.md § Rebuild: tail walk.
+      local laneAnchor = laneNext
+      if onTake then
+        local parked = parkedBoundFor(e)
+        if parked and (laneAnchor == nil or parked.ppq < laneAnchor.ppq) then laneAnchor = parked end
+      end
+      local laneClip  = laneAnchor
+        and tm:fromLogical(chan, laneAnchor.ppqL) + (e.overlap or 0)
+        or math.huge
+      local pitchClip = pitchNext and pitchNext.ppq or math.huge
+      -- Two bounds: the lane bound is intent and drives the column; the raw bound clips it to the next
+      -- same-pitch onset and alone reaches mm. see docs/trackerManager.md § Rebuild: tail walk
+      local laneBound = math.max(e.ppq + 1, math.min(ceiling, laneClip, takeLen))
+      local rawBound  = math.max(e.ppq + 1, math.min(laneBound, pitchClip))
+      local rounded   = util.round(rawBound)
+      if rounded ~= e.endppq then
+        local backing = e.colEvt or e
+        if backing.realised then deferred.assign(backing, { endppq = rounded }) end
+        e.endppq = rounded
+      end
+      if e.colEvt then
+        -- Mirror projectEvent's endppq rule: authored ceiling shows, lane-clipped ceiling rides endppqC.
+        e.colEvt.endppqC = tm:toLogical(chan, util.round(laneBound))
+        e.colEvt.endppq  = e.endppqL == util.OPEN and util.OPEN
+                           or e.endppqL or e.colEvt.endppqC
+      end
+    end
+
     for _, e in ipairs(notes) do
       if e.derived or intervals.intersects(span, e.ppqL, e.ppqL) then disturbed[e] = true end
       local prev = lastByPitch[e.pitch]
       if disturbed[e] or (prev and disturbed[prev]) then
-        local onset = voicing.separateOnset(e, prev)
-        if onset then
-          -- A nudge is final where it lands -- notes only ever give way forward -- so the cue and
-          -- the clamp write stage here rather than in a second pass over a moved set.
-          e.ppq = onset
-          disturbed[e], nudged[e], anyNudge = true, true, true
-          local backing = e.colEvt or e   -- seated entries write through to their column note; fxNotes ride bare
-          if e.colEvt and e.colEvt.delay ~= nil then
-            -- The column stays logical; only the delayC give-way cue carries the raw shift.
-            e.colEvt.delayC = util.round(timing.ppqToDelay(e.ppq - tm:fromLogical(chan, e.ppqL), res))
-          end
-          if backing.realised then clampWrites.assign(backing, { ppq = e.ppq }) end
-        end
+        if settleOnset(e, prev) then anyNudge = true end
       end
       lastByPitch[e.pitch] = e
     end
@@ -2745,40 +2786,7 @@ local function rebuildTails(noteLive, deferred, restoredNotes)
                     or (laneNext  and disturbed[laneNext])
                     or (pitchNext and disturbed[pitchNext])
                     or intervals.intersects(span, e.ppqL, e.endppqL or math.huge)
-      if not stale then goto nextNote end
-
-      local onTake  = not e.derived
-      local ceiling = e.endppqL == util.OPEN and math.huge
-                      or e.endppqL and tm:fromLogical(chan, e.endppqL)
-                      or math.huge
-      -- On-take tails clip against parked members' lanes too -- the columns no longer carry the cell,
-      -- but the lane geometry still does. See docs/trackerManager.md § Rebuild: tail walk.
-      local laneAnchor = laneNext
-      if onTake then
-        local parked = parkedBoundFor(e)
-        if parked and (laneAnchor == nil or parked.ppq < laneAnchor.ppq) then laneAnchor = parked end
-      end
-      local laneClip  = laneAnchor
-        and tm:fromLogical(chan, laneAnchor.ppqL) + (e.overlap or 0)
-        or math.huge
-      local pitchClip = pitchNext and pitchNext.ppq or math.huge
-      -- Two bounds: the lane bound is intent and drives the column; the raw bound clips it to the next
-      -- same-pitch onset and alone reaches mm. see docs/trackerManager.md § Rebuild: tail walk
-      local laneBound = math.max(e.ppq + 1, math.min(ceiling, laneClip, takeLen))
-      local rawBound  = math.max(e.ppq + 1, math.min(laneBound, pitchClip))
-      local rounded   = util.round(rawBound)
-      if rounded ~= e.endppq then
-        local backing = e.colEvt or e
-        if backing.realised then deferred.assign(backing, { endppq = rounded }) end
-        e.endppq = rounded
-      end
-      if e.colEvt then
-        -- Mirror projectEvent's endppq rule: authored ceiling shows, lane-clipped ceiling rides endppqC.
-        e.colEvt.endppqC = tm:toLogical(chan, util.round(laneBound))
-        e.colEvt.endppq  = e.endppqL == util.OPEN and util.OPEN
-                           or e.endppqL or e.colEvt.endppqC
-      end
-      ::nextNote::
+      if stale then boundNote(e, laneNext, pitchNext) end
     end
 
     if #emitted > 0 and dirt ~= true then
