@@ -29,10 +29,6 @@ require('tuning')
 local fakeReaper = require('fakeReaper').new()
 _G.reaper = fakeReaper
 
--- Every harness scenario runs the frontier probe walk in shadow: it walks scratch copies while the
--- linear walk stays authoritative, and rebuildTails diffs the two. Retire the flag once proven.
-_G.CONTINUUM_SHADOW_FRONTIER = true
-
 -- Internal util.instantiate('midiManager', …) (e.g. trackerPage) gets the real
 -- mm too, so the whole graph runs one implementation.
 util._stubs['midiManager'] = function(deps) return newRealMM(deps and deps.take) end

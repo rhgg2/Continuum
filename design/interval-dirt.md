@@ -1174,11 +1174,17 @@ landing, since the seek walk starts from seeds by name and needs
    its spec (§ Retirement of `intervals`). No threshold yet — the
    linear walk is the sole walk until commit 5 adds its faster sibling.
 5. **The frontier probe walk.** The sparse-seed fast path: seek to the
-   dirt, cap the lane and pitch probes, scan same-tick nudges — no
-   whole-channel traversal. A seed-count threshold picks it over the
-   linear walk (§ The degenerate case gates on seed count), and it is
-   shadow-compared against the now-authoritative linear walk before it
-   takes over. This is the commit that turns the ~4ms into sub-ms.
+   dirt, cap the lane and pitch probes — no whole-channel traversal. A
+   seed-count threshold picks it over the linear walk (§ The degenerate
+   case gates on seed count). This is the commit that turns the ~4ms into
+   sub-ms. Landed as two sub-commits: build + shadow-compare against the
+   now-authoritative linear walk (2026-07-18), then the threshold flip
+   that retires the shadow. Three deviations from the sketch above, all
+   in `docs/decisions.md` § 2026-07-18: `rawThenLogical` became a total
+   order (same-tick piles had no defined settlement order); settlement
+   gathers each pitch's cascade against the pristine index before moving
+   anything (a mid-mutation binary search hangs); and `mergeIndexed`
+   survives on the linear path — only the frontier drops it.
 
 Expected on the dense edit: the tails stage's ~4ms of remaining
 traversal collapses to probes over dozens of entries — sub-ms, once the

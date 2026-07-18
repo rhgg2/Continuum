@@ -1003,17 +1003,20 @@ the same trigger: being the coarse mechanism it would have written `true`
 over the very set the emission builds. See `design/interval-dirt.md`
 § The widen and the emission are the same fact.
 
-This walk is authoritative and linear: one forward onset pass, one
-predecessor probe per axis to build the bound set, one backward pass to
-clip and emit — over the whole channel. It is the degenerate fallback the
-design keeps for dense dirt (§ Phase 4.75, § The degenerate case gates on
-seed count). Commit 5 puts a frontier probe walk in front of it — seek to
-the dirt, cap the lane and pitch probes — for the common sparse-seed
-channel, chosen over this walk by a seed-count threshold. Until 2026-07-18
-the walk ran as a scratch-copy shadow of an authoritative span-based
-sweep, gated on `_G.CONTINUUM_SHADOW_TAILS`; the sweep, the shadow, and
-`intervals.lua` are retired now that the walk is proven. See
-`design/interval-dirt.md` § Phase 4.75 and § Retirement of intervals.
+Two walks share these rules; a seed-count threshold picks between them.
+The **linear walk** is authoritative for dense and wholesale dirt: one
+forward onset pass, one predecessor probe per axis to build the bound
+set, one backward pass to clip and emit — over the whole channel. It is
+the degenerate fallback (§ Phase 4.75, § The degenerate case gates on
+seed count). The **frontier probe walk** takes the common sparse-seed
+channel: it seeks to each seed by name and probes a bounded few rows for
+its lane and pitch neighbours, with no whole-channel traversal and no
+`mergeIndexed` — the sorted index and the small extras list stay separate
+probe sources. Both drove identical results under a scratch-copy shadow-
+compare (gated on `_G.CONTINUUM_SHADOW_FRONTIER`) until the frontier went
+live 2026-07-18; that shadow, the earlier span-based sweep it replaced,
+and `intervals.lua` are all retired now. See `design/interval-dirt.md`
+§ Phase 4.75 and § Retirement of intervals.
 
 ## Rebuild: logical projection
 

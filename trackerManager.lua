@@ -47,6 +47,9 @@ local voicing = require 'voicing'
 -- Past this many distinct seeds, whole-channel re-derive beats per-seed bookkeeping; the dirt
 -- collapses to the wholesale sentinel. Was intervals.merge's MAX. see design § Retirement of intervals
 local WHOLESALE_SEED_CAP = 64
+-- Above this many disturbed seeds (dirt + derived fx events) the frontier's per-seed probes cost more
+-- than the linear walk's single channel pass, so the tail rebuild routes to linear. see design § The degenerate case gates on seed count
+local FRONTIER_SEED_CAP = 16
 local generators = require 'generators'
 local perf       = require 'perf'
 
@@ -2668,8 +2671,8 @@ end
 -- Unified tail/onset walk + atomic commit: real notes, fixed externals, noteLive
 -- walk together (onset clamp then tail clip); host clip + fxNote del/add in one mm:modify. see docs/trackerManager.md § Rebuild: tail walk
 --contract: separates and bounds disturbed notes only; a nudged lane-1 onset emits its seat closure
--- The per-note settle and bound rules as a factory over ctx: the linear walk injects its batches and
--- marking tables now; commit 5's frontier walk will drive the same rules over its own state.
+-- The per-note settle and bound rules as a factory over ctx: both the linear and frontier walks inject
+-- their batches and marking tables and drive the same rules over their own state.
 --shape: ctx = { chan, res, takeLen, disturbed, nudged, clampWrites, deferred, parkedBoundFor }
 local function makeTailRules(ctx)
   local chan, res, takeLen = ctx.chan, ctx.res, ctx.takeLen
@@ -2729,8 +2732,8 @@ local function makeTailRules(ctx)
   return settleOnset, boundNote
 end
 
--- The seed-driven tail walk over the whole channel, authoritative. Commit 5 adds a frontier probe
--- walk for sparse channels behind a seed-count threshold. see docs/trackerManager.md § Rebuild: tail walk
+-- The seed-driven tail walk over the whole channel: the degenerate fallback for dense and wholesale
+-- dirt, chosen over the frontier by seed count. see docs/trackerManager.md § Rebuild: tail walk
 local function linearTails(chan, notes, dirt, parkedBoundFor, takeLen, res, clampWrites, deferred)
   local disturbed, nudged = {}, {}
   local settleOnset, boundNote = makeTailRules{
@@ -2921,8 +2924,7 @@ end
 -- The frontier probe walk: seek to each seed, probe a bounded few rows for its neighbours, drive the
 -- shared settle/bound rules -- no whole-channel traversal. see design/interval-dirt.md § Phase 4.75
 local function frontierTails(chan, indexList, extras, dirt, parkedBoundFor, takeLen, res,
-                             clampWrites, deferred, resolve)
-  resolve = resolve or function(rec) return rec end
+                             clampWrites, deferred)
   local disturbed, nudged = {}, {}
   local settleOnset, boundNote = makeTailRules{
     chan = chan, res = res, takeLen = takeLen,
@@ -2930,15 +2932,14 @@ local function frontierTails(chan, indexList, extras, dirt, parkedBoundFor, take
     clampWrites = clampWrites, deferred = deferred, parkedBoundFor = parkedBoundFor,
   }
 
-  -- Disturbed seeded by name, no channel scan: derived membership is all of extras; survivors resolve
-  -- through byUuid; adds/deletes name a seat the index tick cluster answers. Anchors = seed positions.
+  -- Disturbed seeded by name: derived membership is all of extras; adds/deletes name a seat the
+  -- index tick cluster answers; byUuid resolve is note-scoped -- see docs/decisions.md § 2026-07-18.
   local anchors = {}
   for _, rec in ipairs(extras) do if rec.derived then disturbed[rec] = true end end
   for _, seed in ipairs(dirt) do
     util.add(anchors, { pos = seed.ppq, lane = seed.lane, pitch = seed.pitch })
-    local live = seed.uuid and tm:byUuid(seed.uuid)
-    local rec  = live and resolve(live)
-    if rec then disturbed[rec] = true
+    local rec = seed.uuid and tm:byUuid(seed.uuid)
+    if rec and rec.evType == 'note' and rec.chan == chan then disturbed[rec] = true
     else for _, hit in ipairs(seatMatches(indexList, extras, seed)) do disturbed[hit] = true end end
   end
 
@@ -3014,66 +3015,6 @@ local function frontierTails(chan, indexList, extras, dirt, parkedBoundFor, take
   return emitted
 end
 
--- Fixed field set so the diff catches a field nil on one side but set on the other -- pairs would skip it.
-local TAIL_FIELDS = { 'ppq', 'endppq', 'delayC', 'endppqC', 'colEnd' }
-local function tailFields(rec)
-  local c = rec.colEvt
-  return { ppq = rec.ppq, endppq = rec.endppq,
-           delayC = c and c.delayC, endppqC = c and c.endppqC, colEnd = c and c.endppq }
-end
-
--- Diff the frontier walk's scratch results and nudge seeds against the linear walk's authoritative live
--- mutation; raise a channel/record/field-precise error on any divergence. see design § Phase 4.75
-local function assertTailsAgree(chan, scratchByRec, frontierNudges, linearNudges)
-  for rec, shadow in pairs(scratchByRec) do
-    local want, got = tailFields(rec), tailFields(shadow)
-    for _, field in ipairs(TAIL_FIELDS) do
-      if got[field] ~= want[field] then
-        error(('shadow frontier divergence chan %d uuid %s %s: linear=%s frontier=%s')
-          :format(chan, tostring(rec.uuid), field, tostring(want[field]), tostring(got[field])))
-      end
-    end
-  end
-  -- Nudge seeds compare as a multiset over all fields -- derived nudges carry a nil uuid.
-  local function bag(list)
-    local counts = {}
-    for _, s in ipairs(list) do
-      local k = table.concat({ tostring(s.uuid), s.ppq, s.ppqL, s.lane, s.pitch, tostring(s.endppqL) }, ':')
-      counts[k] = (counts[k] or 0) + 1
-    end
-    return counts
-  end
-  local frontierBag, linearBag = bag(frontierNudges), bag(linearNudges)
-  for k, n in pairs(linearBag) do
-    if frontierBag[k] ~= n then error(('shadow frontier nudge divergence chan %d: %s'):format(chan, k)) end
-  end
-  for k, n in pairs(frontierBag) do
-    if linearBag[k] ~= n then error(('shadow frontier nudge divergence chan %d: %s'):format(chan, k)) end
-  end
-end
-
--- Clone the index and extras (colEvt sharing preserved, live->scratch map for byUuid resolve) and run
--- the frontier walk on the scratch, so a bug here cannot perturb the authoritative linear walk.
-local function shadowFrontier(chan, indexNotes, extras, dirt, parkedBoundFor, takeLen, res)
-  local scratchByRec, colEvtCopies = {}, {}
-  local function clone(rec)
-    local s = util.clone(rec)
-    if rec.colEvt then
-      colEvtCopies[rec.colEvt] = colEvtCopies[rec.colEvt] or util.clone(rec.colEvt)
-      s.colEvt = colEvtCopies[rec.colEvt]
-    end
-    scratchByRec[rec] = s
-    return s
-  end
-  local scratchIndex, scratchExtras = {}, {}
-  for _, rec in ipairs(indexNotes) do util.add(scratchIndex, clone(rec)) end
-  for _, rec in ipairs(extras)     do util.add(scratchExtras, clone(rec)) end
-  local nullBatch = { assign = function() end }
-  local emitted = frontierTails(chan, scratchIndex, scratchExtras, dirt, parkedBoundFor, takeLen, res,
-                                nullBatch, nullBatch, function(live) return scratchByRec[live] end)
-  return scratchByRec, emitted
-end
-
 local function rebuildTails(noteLive, deferred, restoredNotes)
   local takeLen = tm:length()
   local res = mm:resolution()
@@ -3089,8 +3030,6 @@ local function rebuildTails(noteLive, deferred, restoredNotes)
     local extras = {}
     for _, rec in ipairs(restoredByChan[chan] or {}) do util.add(extras, rec) end
     for _, w in ipairs(noteLive[chan]) do util.add(extras, w.evt) end
-    local notes = mergeIndexed(rawNotes(chan), walkable, extras)
-    if #notes == 0 then goto nextChan end
 
     -- Parked members left the columns but still bound a preceding on-take tail in their lane --
     -- the symmetric partner of realiseParked's on-take bounds. Bound-only: never rewritten below.
@@ -3109,16 +3048,16 @@ local function rebuildTails(noteLive, deferred, restoredNotes)
       return nearest
     end
 
-    -- Shadow the linear walk: run the frontier probe walk on scratch before linear mutates the live
-    -- records, then diff its writes and nudge seeds against linear's below. see design § Phase 4.75
-    local shadowScratch, shadowNudges
-    if _G.CONTINUUM_SHADOW_FRONTIER and dirt ~= true then
-      shadowScratch, shadowNudges = shadowFrontier(chan, rawNotes(chan), extras, dirt, parkedBoundFor, takeLen, res)
+    -- Sparse edits seek to their seeds; dense edits and wholesale rebuilds walk the channel once. The
+    -- frontier takes the sorted index and extras as separate probe sources -- no O(channel) merge.
+    local emitted
+    if dirt ~= true and #dirt + #noteLive[chan] <= FRONTIER_SEED_CAP then
+      emitted = frontierTails(chan, rawNotes(chan), extras, dirt, parkedBoundFor, takeLen, res, clampWrites, deferred)
+    else
+      local notes = mergeIndexed(rawNotes(chan), walkable, extras)
+      if #notes == 0 then goto nextChan end
+      emitted = linearTails(chan, notes, dirt, parkedBoundFor, takeLen, res, clampWrites, deferred)
     end
-
-    local emitted = linearTails(chan, notes, dirt, parkedBoundFor, takeLen, res, clampWrites, deferred)
-
-    if shadowScratch then assertTailsAgree(chan, shadowScratch, shadowNudges, emitted) end
 
     if #emitted > 0 and dirt ~= true then
       for _, s in ipairs(dirt) do util.add(emitted, s) end

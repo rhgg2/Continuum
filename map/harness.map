@@ -1,4 +1,4 @@
-@module harness  src=tests/harness.lua  loc=149  sha=767d507  mode=namespace  self=harness
+@module harness  src=tests/harness.lua  loc=145  sha=e049414  mode=namespace  self=harness
 
 # Imports
   @const util = 'util'  @ 24
@@ -12,31 +12,31 @@
   @const globalDataStub = os.tmpname()  @ 15
 
 # Private functions
-  @fn seedThrough(mm, payload)  @ 42-56
+  @fn seedThrough(mm, payload)  @ 38-52
       -- Author a seed payload through the production write path. A stamped note
       -- (ppqL set) must carry lane/detune/delay or tm crashes at pickStampedLane.
-  @fn buildMM(opts)  @ 62-89
+  @fn buildMM(opts)  @ 58-85
       -- Fresh fakeReaper + a real mm bound to its take, carrying :seed/:dump shims.
       -- The shared spine of every scenario: harness.mk layers cm/tm/vm on top;
       -- harness.bareMM hands back just this. The fiddly take-binding sequence lives
       -- in one place on purpose — a second copy would drift.
 
 # Public API (harness.*)
-  @api harness.bareMM(seed)  @ 94-98
+  @api harness.bareMM(seed)  @ 90-94
       -- A real mm with NO tm/vm wired. mm_* contract specs pin behaviour on a plain
       -- cc, which a tm rebuild would otherwise stamp (ppqL → uuid) out from under
       -- them. The seed payload doubles as the take surface (resolution/length).
-  @api harness.mk(opts)  @ 102-147
+  @api harness.mk(opts)  @ 98-143
       -- Build a fresh scenario. opts keys: seed (notes/ccs + resolution/length/
       -- timeSigs), config, data, take, groups. See header for the mm model.
 
 # Uses (outbound edges)
-  @use call    fakeReaper.MIDI_GetProjTimeFromPPQPos  @ buildMM:77
-  @use call    fakeReaper:addTimeSigMarker  @ buildMM:77
-  @use call    fakeReaper:bindTake  @ buildMM:74
-  @use call    fakeReaper:setResolution  @ buildMM:75
-  @use call    util.clone  @ seedThrough:45,54
-  @use call    util.instantiate  @ mk:113,114,115,126,127,132,140,141,142
+  @use call    fakeReaper.MIDI_GetProjTimeFromPPQPos  @ buildMM:73
+  @use call    fakeReaper:addTimeSigMarker  @ buildMM:73
+  @use call    fakeReaper:bindTake  @ buildMM:70
+  @use call    fakeReaper:setResolution  @ buildMM:71
+  @use call    util.clone  @ seedThrough:41,50
+  @use call    util.instantiate  @ mk:109,110,111,122,123,128,136,137,138
   @use require fakeReaper  @ 29
   @use require realMidiManager  @ 25
   @use require util  @ 24
@@ -45,53 +45,52 @@
   @reaper GetMediaItemTake_Track
 
 # Fields (r read / w write incl. constructor keys)
-  @field w CONTINUUM_SHADOW_FRONTIER  @ 34
-  @field r _stubs  @ 38
-  @field w bareMM  @ bareMM:94
-  @field w ccm  @ mk:141,145
-  @field r ccs  @ seedThrough:54 mk:124
-  @field w ccs  @ buildMM:86
-  @field w clipboard  @ mk:146
-  @field w cm  @ mk:126,127,141,142,145
-  @field w cmgr  @ mk:142,146
-  @field r config  @ mk:117,118
-  @field r data  @ mk:120,121
-  @field r delay  @ seedThrough:50
-  @field w delay  @ seedThrough:50
-  @field r denom  @ buildMM:77
-  @field r detune  @ seedThrough:49
-  @field w detune  @ seedThrough:49
-  @field w ds  @ mk:126,132,141,142,145
-  @field w dump  @ buildMM:82
-  @field w ec  @ mk:145
-  @field r endppqL  @ seedThrough:46
-  @field w evType  @ seedThrough:45
-  @field w facade  @ mk:141
-  @field w fm  @ mk:145
-  @field w get  @ mk:135
-  @field w gm  @ mk:142,145
-  @field r groups  @ mk:131
-  @field r lane  @ seedThrough:48
-  @field w lane  @ seedThrough:48
-  @field r length  @ buildMM:70
-  @field w mk  @ mk:102
-  @field w mm  @ mk:126
-  @field r notes  @ seedThrough:44 mk:124
-  @field w notes  @ buildMM:86
-  @field r num  @ buildMM:77
+  @field r _stubs  @ 34
+  @field w bareMM  @ bareMM:90
+  @field w ccm  @ mk:137,141
+  @field r ccs  @ seedThrough:50 mk:120
+  @field w ccs  @ buildMM:82
+  @field w clipboard  @ mk:142
+  @field w cm  @ mk:122,123,137,138,141
+  @field w cmgr  @ mk:138,142
+  @field r config  @ mk:113,114
+  @field r data  @ mk:116,117
+  @field r delay  @ seedThrough:46
+  @field w delay  @ seedThrough:46
+  @field r denom  @ buildMM:73
+  @field r detune  @ seedThrough:45
+  @field w detune  @ seedThrough:45
+  @field w ds  @ mk:122,128,137,138,141
+  @field w dump  @ buildMM:78
+  @field w ec  @ mk:141
+  @field r endppqL  @ seedThrough:42
+  @field w evType  @ seedThrough:41
+  @field w facade  @ mk:137
+  @field w fm  @ mk:141
+  @field w get  @ mk:131
+  @field w gm  @ mk:138,141
+  @field r groups  @ mk:127
+  @field r lane  @ seedThrough:44
+  @field w lane  @ seedThrough:44
+  @field r length  @ buildMM:66
+  @field w mk  @ mk:98
+  @field w mm  @ mk:122
+  @field r notes  @ seedThrough:40 mk:120
+  @field w notes  @ buildMM:82
+  @field r num  @ buildMM:73
   @field r open  @ 13
   @field w open  @ 16
-  @field w ownerTrack  @ mk:137
-  @field w pa  @ mk:142,145
-  @field r ppq  @ seedThrough:46 buildMM:77
-  @field r ppqL  @ seedThrough:46,47
-  @field w ppqL  @ seedThrough:46
-  @field w ps  @ mk:114,115,145
-  @field w reaper  @ 30 buildMM:66 mk:146
-  @field r resolution  @ buildMM:69
-  @field r seed  @ buildMM:63 mk:104
-  @field w seed  @ buildMM:81 bareMM:95
-  @field r take  @ 38 buildMM:68
-  @field r timeSigs  @ buildMM:76
-  @field w tm  @ mk:132,142,145
-  @field w vm  @ mk:145
+  @field w ownerTrack  @ mk:133
+  @field w pa  @ mk:138,141
+  @field r ppq  @ seedThrough:42 buildMM:73
+  @field r ppqL  @ seedThrough:42,43
+  @field w ppqL  @ seedThrough:42
+  @field w ps  @ mk:110,111,141
+  @field w reaper  @ 30 buildMM:62 mk:142
+  @field r resolution  @ buildMM:65
+  @field r seed  @ buildMM:59 mk:100
+  @field w seed  @ buildMM:77 bareMM:91
+  @field r take  @ 34 buildMM:64
+  @field r timeSigs  @ buildMM:72
+  @field w tm  @ mk:128,138,141
+  @field w vm  @ mk:141

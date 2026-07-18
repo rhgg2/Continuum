@@ -4,6 +4,13 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-18** — Tail rebuild routes by seed count: sparse dirt (≤ 16 seeds + derived events) takes
+  the frontier probe walk, dense and wholesale keep the linear walk; the shadow-compare retires. The
+  flip unmasked a divergence the shadow had hidden: its `resolve` (live→scratch) returned nil for any
+  record not in the note scratch, silently filtering the pb/cc seeds `tm:byUuid` resolves. The live
+  frontier had no such filter and bucketed on a nil pitch. Fixed by scoping resolution to a note on the
+  channel, matching the linear walk's note working set. Lesson: a shadow harness's own plumbing can mask
+  a bug the real path will hit. See docs/trackerManager.md § Rebuild: tail walk.
 - **2026-07-18** — `rawThenLogical` strengthened from `(ppq, ppqL)` to a total order: authored-
   before-generated, then lane, then pitch break exact-seat ties. The frontier probe walk reconstructs
   settlement order from the comparator, but a same-tick same-pitch pile had no defined order under the
