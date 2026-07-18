@@ -266,6 +266,31 @@ The bar math assumes 12288 ppq per quarter (`BAR = 49152`); check
 twice of its own accord, and the second one is load-bearing: the canon
 subject must earn its uuids before `gm:markGroup` can mark it.
 
+## Screenshotting the UI (macOS)
+
+For look-critique-edit loops: the chunk cannot call ImGui, so window
+geometry comes from the js_ReaScriptAPI extension instead.
+`JS_Window_GetRect` speaks Cocoa coordinates (y grows *upward*, so
+`top > bottom`); flip against the viewport height for `screencapture`,
+which wants top-left origin. This chunk returns the paste-ready shell
+command:
+
+```lua
+local hwnd = reaper.JS_Window_Find('Continuum', true)
+if not hwnd then return 'window not found' end
+local _, left, top, right, bottom = reaper.JS_Window_GetRect(hwnd)
+local _, screenH = reaper.JS_Window_GetViewportFromRect(left, bottom, right, top, false)
+return string.format('screencapture -x -R %d,%d,%d,%d /path/to/out.png',
+  left, screenH - top, right - left, top - bottom)
+```
+
+Run the returned command from a shell, then view the PNG. A **flat grey
+capture** means the capturing terminal lacks Screen Recording permission
+(System Settings → Privacy & Security) — the geometry is fine, macOS
+blanked the pixels. Set up a reproducible view first through the normal
+recipes (page, cursor, selection) so successive captures compare
+like-for-like.
+
 ## Writing — the golden rules
 
 1. **Confirm with the user before any destructive chunk.**
