@@ -6,12 +6,16 @@
 > interval within a channel** rather than the whole channel. It subsumes
 > that programme's one deferred gap — the fx dirt signal — which is why
 > that gap was deliberately left undone rather than patched.
+>
+> 2026-07-18: the model inverted — the unit of dirt is the **seed**
+> (an event, verb-born), and intervals are a derived view
+> (§ The model, inverted: seeds carry the dirt).
 
 ## Status at a glance
 
 | | |
 |---|---|
-| state | landed — phases 1–3; phase 4 2026-07-17; phase 4.5 2026-07-18 |
+| state | landed — phases 1–3; phase 4 2026-07-17; phase 4.5 2026-07-18; phase 4.75 designed, unstarted; model inverted to seed dirt 2026-07-18 (§ The model, inverted) |
 | supersedes | `incremental-rebuild` gap 4 (fx dirt signal) |
 | enduring model it changes | `docs/trackerManager.md` § Derivation dirt |
 | the hard part | was forward propagation — closed 2026-07-15 by onset-bounded closures (§ The crux, closed); same-pitch widens the tails closure rather than leaving tm (§ Same-pitch is a projection artefact), and tails *produces* its closure from the neighbour lookup it already does, rather than consuming a fence it could leak past (§ The tails closure is the walk's output, not its input) |
@@ -52,6 +56,98 @@ The channel model becomes the degenerate case (interval = the whole
 channel), which is what makes the migration tractable: every stage can be
 ported one at a time, and a stage that hasn't been ported yet simply
 widens its interval to the channel and behaves exactly as it does today.
+
+> 2026-07-18: the interval proved to be the migration vehicle, not the
+> model — the section below states what it converged to.
+
+## The model, inverted: seeds carry the dirt
+
+> Added 2026-07-18, out of phase 4.75's design round. Two commits had
+> already voted: `2541738` and `e33b768` store raw seeds and
+> materialise interval views from them per pass. This section makes
+> that the stated model rather than an implementation accident.
+
+**Dirt is a per-channel list of seeds.** A seed is an event reference
+plus its birth snapshot: uuid, verb, and the position/lane/pitch/span
+the event had at the verb. Everything the interval model laundered
+into geometry decomposes back to seeds:
+
+- **The walk starts from seeds by name.** Phase 4.75's binary seek —
+  and its raw-vs-logical delay-slack constant — existed only to
+  rediscover, from a positional range, the events the verb had in
+  hand. Seeds hand them over: `byUuid` for survivors, the snapshot
+  for the dead.
+- **Span-staleness needs no scan.** An interval says "something
+  happened in here" without saying what, forcing a
+  scan-until-every-lane-is-represented. A seed names its lane and
+  pitch, so the candidates are two keyed probes — the nearest
+  same-lane and same-pitch predecessors of the seed position. The
+  lane shield survives as the *proof* those two suffice; the overlap
+  margin dissolves entirely (a keyed probe needs no stop-condition
+  patch).
+- **Region park was never a span.** Its effects are exactly the
+  effects of the members it removed and restored — per-member
+  deletion/insertion seeds. The region extent was the verb
+  summarising, as a rectangle, events it knew individually.
+- **The window gate is a query, not a set.** "A host regenerates iff
+  a seed touches its window": the seed's span (a deleted note's
+  reach, snapshotted) is a per-seed attribute, the window a per-query
+  argument. No merged interval set participates — a sorted seed list
+  and a range check. Dirt is one pass's edits, small by construction;
+  coalescing was an optimisation for a size the set never has.
+- **Dedup is by uuid, the semantically right key.** Interval merge
+  could only coalesce geometrically; repeated edits to one event
+  collapse to one seed.
+
+What survives of "interval" is three shadows: spans as seed
+attributes, spans as query windows (fx hosts, the walk's emitted
+absorber stain — a span that is a fact *about* its anchor event,
+cached on the seed or derived by the consumer), and the `wholesale`
+sentinel, which was always outside the algebra. What that leaves of
+the module itself is small enough to schedule (§ Retirement of
+`intervals`).
+
+**The one discipline seeds demand:** a consumer must not assume the
+anchor still exists. Position goes stale as things move; uuid dangles
+as things die; the seed carries both so each consumer picks the one
+still true. Dirt clears every pass, so the staleness window is one
+pass — unchanged from today.
+
+§ Intervals are event-anchored was this model seen from the wrong
+side: it bolted events onto intervals because naked numbers went
+stale. The inversion completes it — events are primary, geometry is
+derived. Phase 5 is unbuilt, so its gate gets written seed-shaped
+rather than ported later.
+
+### Retirement of `intervals`
+
+The module's entire production surface is seven trackerManager call
+sites; everything else is its own spec. Their fates:
+
+- **Die with phase 4.75's walk**: the sweep's two `intersects` gates
+  (`trackerManager.lua:2667`, `:2716`), and the emitted absorber
+  stain's `seed` + `merge` (`:2707`, `:2755`) — the walk instead
+  emits a seed record (the nudged anchor, span cached from
+  `laneNext`) appended to the channel's seed list.
+- **Convert at the flip** (phase 4.75 commit 1): `seedAt` (`:728`)
+  becomes the birth-snapshot constructor; `absorbReloadDirt`'s
+  `absorbSeeds` fold (`:1185`) becomes dedup-by-uuid plus the
+  wholesale sentinel.
+- **Convert at the switch** (phase 4.75 commit 4): the column
+  materialisation gates `exciseNotes` (`:1587`) and
+  `rebuildInternals` (`:1613`) move to seed membership — uuid for
+  survivors and assigns, snapshot position for the holes deletions
+  leave. `intersects` loses its last caller; `intervals.lua` and
+  `tests/specs/intervals_spec.lua` delete.
+- **Never written**: phase 5's window gate is born seed-shaped — a
+  scan of the small per-channel seed list per host window, no module
+  behind it.
+
+Two conventions outlive the module, relocated rather than retired:
+`dirt == true` was always a `dirtyChans` convention, not interval
+algebra; and `MAX = 64`'s degrade-to-whole-channel role is replaced
+by the seed-count threshold gating the degenerate walk
+(§ Phase 4.75) — the same idea with a better justification.
 
 ## Framing: maintenance, not narrower rebuild
 
@@ -458,6 +554,10 @@ anchor] around each seed. Closure runs after interval merge, never
 before — merging can pull a new anchor into range. Logical-order anchor
 queries fall out of the ppqL-ordered note columns; raw-order queries
 have no persistent index yet (open question 5).
+
+> 2026-07-18: completed by the inversion (§ The model, inverted) —
+> anchoring events to intervals was the half-step; the events are the
+> dirt, and the geometry is the derived view.
 
 ## What this does not buy
 
@@ -940,7 +1040,8 @@ Expected on the dense edit: `rawScratch` ~9.4 → ~0, the walk's sort ~5
 → a sub-ms merge — roughly 14ms → 4.5ms across the two stages. What
 remains O(channel) is the sweep's own traversal (array build, seed
 test, successor bookkeeping); if a profile ever demands more, that is a
-separate narrowing with its own design, not this one.
+separate narrowing with its own design, not this one — now written,
+§ Phase 4.75.
 
 > **Landed 2026-07-18**, four commits. Two corrections to the closed
 > questions above. *The nudge's resort was not already solved*: the
@@ -954,12 +1055,133 @@ separate narrowing with its own design, not this one.
 > containment scan cannot match one — and `rebuildPbs`/`rebuildPCs`
 > run after the deferred commit has filed them into the index.
 
+### Phase 4.75 — the walk seeks, and stops sweeping
+
+> Added 2026-07-18 — the "separate narrowing with its own design"
+> that phase 4.5's closing line deferred, opened early because the
+> design turned out to be small: every question the sweep answers has
+> a positional bound. Probe split of the surviving sweep on the dense
+> take, single-note edit: seed test ~1.1ms, nudge bookkeeping ~0.5ms,
+> successor bookkeeping ~2.0ms, merge ~0.4ms — ~4ms per dirty dense
+> channel, all O(channel), the useful output three notes.
+
+The sweep's linear passes answer four questions. Each has a positional
+bound, so the walk can seek to the dirt and probe outward instead of
+visiting the channel.
+
+**Seeds arrive named.** (Rewritten under § The model, inverted — the
+first draft specified a binary seek with a raw-vs-logical delay
+slack, machinery whose only job was rediscovering the events the verb
+had in hand.) The disturbed set opens with the seeds themselves:
+`byUuid` for survivors, the birth snapshot for events that died at
+the verb. Derived seeds need no lookup either: they are `noteLive`,
+seeded by membership.
+
+**Nudge probes stop at the tick.** The verdict is `e.ppq <= prev.ppq`
+(`voicing.lua:60`) over a ppq-sorted sequence: only a predecessor tied
+at the seed's raw tick — or shoved onto it by a chain of ties, each
+giving way one tick — can collide. The backward probe scans the
+same-tick cluster and stops; forward, the cascade is self-limiting,
+each nudge threatening only a successor within a tick of where it
+landed.
+
+**Lane bound first; the pitch probe is capped by it.** The pitch
+successor enters only through `min(laneBound, pitchClip)` (`:2737`) —
+a same-pitch successor beyond `laneBound` cannot bind. So the probe
+order is: lane bound first (its own probe capped by the authored
+ceiling and `takeLen`), then a pitch probe confined to
+`[ppq, laneBound)` — typically one row. The linear sweep gets both
+successors for free in one backward pass, which is why this ordering
+doesn't exist today; it becomes the cap exactly when probes replace
+the sweep.
+
+**Span-staleness: two keyed probes per seed, by the lane shield.**
+The authored-span test (`:2716`) is the piece with no positional
+bound as written — an `open` note's authored span is infinite, so
+every open note before any dirt recomputes every pass. Under the seed
+model it is replaced outright: each seed names the lane and pitch it
+disturbed — the snapshot carries them even for deletions, so the
+neighbour that left *can* be asked — and the candidates are the
+nearest same-lane and same-pitch predecessors of the seed position.
+Two probes, keys known. The **lane shield** is the sufficiency proof:
+a surviving same-lane note between a note and the seed caps both
+bounds at once. `laneClip` cannot change — an insertion at the seed
+is farther than the intervener, a deletion at the seed was never the
+winner — and any same-pitch change at the seed sits beyond
+`laneBound`, so it never binds in the min. Everything earlier in the
+lane than the nearest predecessor is therefore shielded by it.
+Equivalent to the authored-span test — the search dissolved, the
+staleness rule untouched. Parked cells still participate as lane
+bounds: a lane probe that meets a parked member first stops there —
+shielded, and the parked cell itself is bound-only, never a
+candidate. (The first draft scanned backward until every lane in use
+had a representative, with an `overlap`-margin patch on the stop
+condition — both were the interval model's price for forgetting
+which events the dirt was born from.)
+
+**The frontier keeps the sweep's two-pass structure.** Onset
+settlement first, in ppq order — seeds settle against their same-tick
+predecessors, a landed nudge may enqueue its pitch successor, and the
+ordering preserves the sweep's invariant that a note consults only
+settled predecessors. Then bounds, order-free: the settled set, plus every seed's and
+every disturbed note's nearest lane and pitch predecessors, re-bound
+via the capped probes — bound recomputes read
+settled onsets and write only `endppq`, so they cannot re-disturb —
+and the nudged-lane-1 seat emission (`:2706`) reads the lane successor
+the bound probe already fetched.
+
+**No merged array; extras stay visible to probes.** `mergeIndexed`
+dies with the sweep: probes run against the index and the small extras
+(restores + `noteLive`) side by side, taking the nearer hit. On an
+fx-heavy channel the derived seeds are all of `noteLive` and the
+frontier is as large as the regeneration — inherent, and exactly
+proportional to the work fx created.
+
+**The degenerate case gates on seed count.** `dirt == true` — and any
+interval set whose seeds approach the channel — keeps a linear walk:
+per-note probes without running state go quadratic on full-channel
+frontiers. The two walks share the bound body (ceiling / laneClip /
+pitchClip / write-back, extracted once); the switch is a count
+threshold, not a second implementation of the rules.
+
+Four commits, each green alone — the first is the model flip's
+landing, since the seek walk starts from seeds by name and needs
+`dirtyChans` seed-shaped before it exists:
+
+1. **Dirt carries seeds** (behaviour-neutral). `dirtyChans[chan]`
+   becomes a deduped seed list or `true`; `seedAt` constructs the
+   full birth snapshot (uuid, verb, lane/pitch/span);
+   `absorbReloadDirt`'s fold becomes dedup-by-uuid plus the
+   wholesale sentinel. The four surviving `intersects` sites read a
+   thin span view derived per pass, so the sweep behaves
+   identically.
+2. **Extract the bound body.** The per-note settle-and-bound rules
+   leave the sweep's loop as functions over (note, neighbours); the
+   sweep calls them. Zero behaviour.
+3. **The seek walk, shadow-compared.** Build the frontier walk and run
+   it alongside the sweep, diffing staged writes and emitted dirt —
+   the same validation that landed the index (§ phase 4.5). Fixtures
+   the suite lacks and this phase needs: a same-tick nudge cascade, an
+   open note behind dirt with and without a lane shield, an insertion
+   inside the overlap margin.
+4. **Switch, and the module goes.** The threshold picks the walk; the
+   shadow harness dies. `exciseNotes`/`rebuildInternals` convert to
+   seed membership, `intersects` loses its last caller, and
+   `intervals.lua` deletes with its spec (§ Retirement of
+   `intervals`).
+
+Expected on the dense edit: the tails stage's ~4ms of remaining
+traversal collapses to probes over dozens of entries — sub-ms. The
+O(channel) shapes still standing after this are pbs' and PCs' channel
+folds — phase 6's profile-gated business, ~1.5ms today.
+
 ### Phase 5 — fx producers consume intervals
 
 The macro-take programme, and the same predicate as phase 3's windows
 one level up — window recompute is the geometric half, producer re-run
-the generative half: **a producer runs iff its window intersects dirt
-or its spec is dirty.**
+the generative half: **a producer runs iff a seed touches its window
+or its spec is dirty** — the window a query over the sorted seed
+list, per § The model, inverted.
 
 A skipped producer keeps its output by **identity-keep**: its existing
 derived notes (`fx.noteExisting` — mm clones carrying every `fxKey`
@@ -982,9 +1204,9 @@ enough that leaving it wholesale caps the phase-5 win; note expansion
 first, then the continuous side decides on the measured residual.
 
 Same phase: the all-16 region/parking dirt sources narrow to their own
-spans — a region edit knows its chan and extent
-(`trackerManager.lua:3314`, `flushParked` :1019); seed that interval
-instead of `dirtyChan()`.
+members — a region edit knows the exact events it parked and restored
+(`trackerManager.lua:3314`, `flushParked` :1019); seed those, per
+member, instead of `dirtyChan()`.
 
 ### Phase 6 — seats, PCs, and the sample stamp (profile-gated)
 

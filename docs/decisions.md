@@ -4,6 +4,11 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-18** — Dirt model inverted: seeds (event-anchored, verb-born, birth-snapshot-carrying)
+  are the stored truth; intervals demoted to a per-consumer derived view, `intervals.lua` retiring
+  on phase 4.75's commit schedule. Chosen because every consumer after the seek-walk design wants
+  events, not geometry — the seek's delay slack and the lane-shield scan were both prices of
+  intervals forgetting their birth events. See design/interval-dirt.md § The model, inverted.
 - **2026-07-18** — The tail walk re-trues `rawIndex` itself (`resortRawNotes`, under the existing
   rare `anyNudge` branch) after nudging shared entries' ppq in place. Chosen over teaching
   `idxReconcile` to detect the move: its unchanged-ppq fast path compares against an entry the walk
