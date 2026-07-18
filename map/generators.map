@@ -1,4 +1,4 @@
-@module generators  src=generators.lua  loc=451  sha=14993a2  mode=namespace  self=generators
+@module generators  src=generators.lua  loc=461  sha=14993a2  mode=namespace  self=generators
 
 # Invariants & contracts
   @invariant  pure module, no state; a stage is fn(stream, host, params, ctx) -> { notes, delta }  @ 6
@@ -13,7 +13,7 @@
   @shape  result = { notes = { {ppq,endppq,pitch,vel,detune}, ... }, delta = { {ppq,val,shape,[tension]}, ... } }  @ 12
   @shape  kinds[kind] = { expand, mode='replace'|'augment', dest='note'|'pb'|<cc>, label, defaults, fields }  @ 13
   @shape  fxPatterns (ds project) = { [name] = { kind='notes'|'curve', lengthPpq, root?=midiPitch, specs?={ {lane=1,ppq,endppq,pitch,vel,detune,delay,sample?},.. }, points?={ {ppq,val,shape,tension?},.. } } }  @ 17
-  @shape  parkWindows -> { {evType='note'|'cc'|'pb', chan, cc?, startppq, endppq}, ... } (cc on cc windows only)  @ 425
+  @shape  parkWindows -> { {evType='note'|'cc'|'pb', chan, cc?, startppq, endppq}, ... } (cc on cc windows only)  @ 435
 
 # Imports
   @const util = 'util'  @ 19
@@ -74,15 +74,18 @@
   @api generators.parksNotes(region)  @ 407-413
       -- A region parks its covered chord iff it carries a note-dest kind: the chain's final note stream
       -- stands in for the members (ownership by dest, not mode). A husk (no kinds) parks nothing.
-  @api generators.chainDestType(fx, target)  @ 417-423
+  @api generators.hasContinuous(fx)  @ 417-423
+      -- Mirror of parksNotes: a chain carries continuous output iff any stage targets pb or a cc. A
+      -- pure-note producer (none does) freezes note-for-note under interval dirt. see design/interval-dirt.md § phase 5
+  @api generators.chainDestType(fx, target)  @ 427-433
       -- The fold mode a chain presents for one continuous target: replace if any stage targeting it
       -- replaces, else augment -- drives cross-chain layering (a later replace wins). see design/note-macros-v2.md § The fx chain
-  @api generators.parkWindows(regions)  @ 428-449
+  @api generators.parkWindows(regions)  @ 438-459
       -- The single source for "what 4.5 parks over": a note window for a discrete-replace chord, a cc window
       -- per continuous cc target and a pb window per continuous pb target (both replace or augment).
 
 # Uses (outbound edges)
-  @use call    util.add  @ retrig:39 trill:63 playingAt:79 arp:113 ostinato:139 vibrato:166,170 slide:207 autopan:225,229 velPattern:282,292 parkWindows:431
+  @use call    util.add  @ retrig:39 trill:63 playingAt:79 arp:113 ostinato:139 vibrato:166,170 slide:207 autopan:225,229 velPattern:282,292 parkWindows:441
   @use call    util.clamp  @ lfo:258 velPattern:293
   @use call    util.round  @ lfo:258 velPattern:293
   @use require util  @ 19
@@ -91,22 +94,22 @@
   @field w arp  @ 331
   @field w autopan  @ 366
   @field w base  @ 320,328,351,352,371,388,389
-  @field w cc  @ parkWindows:431
+  @field w cc  @ parkWindows:441
   @field r ccDefaultRest  @ 397
   @field w ccDefaultRest  @ 396
   @field r centre  @ lfo:257
   @field w centre  @ 383
   @field r cents  @ slide:193
-  @field w chainDestType  @ chainDestType:417
-  @field r chan  @ parkWindows:431
-  @field w chan  @ parkWindows:431
+  @field w chainDestType  @ chainDestType:427
+  @field r chan  @ parkWindows:441
+  @field w chan  @ parkWindows:441
   @field w coarse  @ 320,328,351,352,371,388,389
   @field w defaults  @ 317,325,333,341,348,357,368,376,383
   @field w delta  @ retrig:34,48 trill:56,72 arp:121 ostinato:129,146 vibrato:171 slide:190,197,212 autopan:230
   @field w delta  @ lfo:253,275 velPattern:296
   @field r depth  @ vibrato:155 autopan:220
   @field w depth  @ 348,368
-  @field r dest  @ parksNotes:410 chainDestType:420 parkWindows:443,444
+  @field r dest  @ parksNotes:410 hasContinuous:420 chainDestType:430 parkWindows:453,454
   @field w dest  @ 316,324,332,340,347,356,367,375,382
   @field r detune  @ retrig:44 trill:58,68 playingAt:82 arp:115 ostinato:140 interval:177 velPattern:285,294
   @field w detune  @ retrig:44 trill:68 arp:115 ostinato:140 velPattern:294
@@ -114,17 +117,18 @@
   @field w dir  @ 333
   @field w display  @ 384
   @field w domain  @ 384
-  @field r endppq  @ playingAt:79 ostinato:137 velPattern:292 parkWindows:432
-  @field w endppq  @ retrig:41 trill:65 arp:114 ostinato:139 velPattern:292 parkWindows:432
-  @field w evType  @ parkWindows:431
+  @field r endppq  @ playingAt:79 ostinato:137 velPattern:292 parkWindows:442
+  @field w endppq  @ retrig:41 trill:65 arp:114 ostinato:139 velPattern:292 parkWindows:442
+  @field w evType  @ parkWindows:441
   @field w expand  @ 316,324,332,340,347,356,367,375,382
   @field w field  @ 319,320,327,328,335,336,343,350,351,352,359,360
   @field w field  @ 362,370,371,378,386,387,388,389
   @field w fields  @ 318,326,334,342,349,358,369,377,385
-  @field r fx  @ parksNotes:408 parkWindows:438
-  @field r kind  @ parksNotes:409 chainDestType:419 parkWindows:439
+  @field r fx  @ parksNotes:408 parkWindows:448
+  @field w hasContinuous  @ hasContinuous:417
+  @field r kind  @ parksNotes:409 hasContinuous:419 chainDestType:429 parkWindows:449
   @field w kind  @ 341,343,384,386
-  @field r kinds  @ parksNotes:409 chainDestType:419 parkWindows:439
+  @field r kinds  @ parksNotes:409 hasContinuous:419 chainDestType:429 parkWindows:449
   @field w kinds  @ 314
   @field w l  @ 305,306,307,308,309,310,311
   @field w l  @ 312
@@ -136,10 +140,10 @@
   @field w max  @ 320,328,351,352,371,388,389
   @field w min  @ 320,328,351,352,371,388,389
   @field w modalOrder  @ 401
-  @field r mode  @ chainDestType:420
+  @field r mode  @ chainDestType:430
   @field w mode  @ 316,324,332,340,347,356,367,375,382
   @field r nextSameLaneNote  @ slide:189
-  @field r noteHost  @ parkWindows:437
+  @field r noteHost  @ parkWindows:447
   @field r notes  @ retrig:33 trill:55 arp:110 ostinato:138 slide:185 velPattern:282
   @field w notes  @ retrig:34,48 trill:56,72 arp:121 ostinato:129,146 vibrato:171 slide:190,197,212 autopan:230
   @field w notes  @ lfo:253,275 velPattern:296
@@ -149,7 +153,7 @@
   @field w ostinato  @ 339
   @field r over  @ slide:202
   @field w over  @ 357
-  @field w parkWindows  @ parkWindows:428
+  @field w parkWindows  @ parkWindows:438
   @field w parksNotes  @ parksNotes:407
   @field r pattern  @ ostinato:127 lfo:250 velPattern:287
   @field w pattern  @ 341,376,384
@@ -175,8 +179,8 @@
   @field w slide  @ 355
   @field r specs  @ ostinato:134
   @field w specs  @ 341
-  @field r startppq  @ parkWindows:432
-  @field w startppq  @ parkWindows:432
+  @field r startppq  @ parkWindows:442
+  @field w startppq  @ parkWindows:442
   @field r step  @ trill:58
   @field w step  @ 325
   @field r target  @ slide:187 363

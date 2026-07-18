@@ -1624,6 +1624,22 @@ local function seedCovers(seedList)
   return function(note) return rows[note.ppqL or note.ppq] or false end
 end
 
+-- The seeds' dirty logical rows as a flat list (snapshot ppqL ∪ each survivor's live ppqL) -- the fx
+-- producer window query wants a range test where seedCovers wants membership. see design § phase 5
+local function seedRowsFor(seedList)
+  local rows = {}
+  for _, s in ipairs(seedList) do
+    util.add(rows, s.ppqL)
+    local live = s.uuid and tm:byUuid(s.uuid)
+    if live then util.add(rows, live.ppqL or live.ppq) end
+  end
+  return rows
+end
+local function windowSeeded(rows, startL, endL)
+  for _, row in ipairs(rows) do if row >= startL and row <= endL then return true end end
+  return false
+end
+
 -- Drop the carried events this pass's clones will replace. PAs go whatever the dirt says:
 -- rebuildPA re-projects every PA on a dirty chan, so a carried one would double up.
 local function exciseNotes(chan, covers)
@@ -2582,12 +2598,30 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
       end
     end
 
+    -- Producer gate: under interval dirt a pure-note producer whose window no seed touches keeps its
+    -- derived notes verbatim -- reconcileFx self-matches them by fxKey (identity-keep). see design § phase 5
+    local dirt = dirtyChans[chan]
+    local keptById, dirtyRows
+    if dirt ~= true then
+      keptById = {}
+      for _, kept in ipairs(noteExisting[chan]) do util.bucket(keptById, kept.derived, kept) end
+      dirtyRows = seedRowsFor(dirt)
+    end
+    local function runOrKeep(producer)
+      if dirt ~= true and not generators.hasContinuous(producer.fx)
+         and not windowSeeded(dirtyRows, producer.window[1], producer.window[2]) then
+        for _, kept in ipairs(keptById[producer.id] or {}) do util.add(predicted, kept) end
+      else
+        runProducer(producer)
+      end
+    end
+
     -- Note producers. Only augment hosts (continuous kinds) remain on-take -- a discrete-replace
     -- host was parked at 4.5 and runs from its parked cell below. Derived notes ride the host lane.
     for laneIdx, col in ipairs(channels[chan].columns.notes) do
       for _, host in ipairs(col.events) do
         if host.fx and host.evType ~= 'pa' then
-          runProducer(hostProducer(host, fxWindow[host], laneIdx))
+          runOrKeep(hostProducer(host, fxWindow[host], laneIdx))
         end
       end
     end
@@ -2598,7 +2632,7 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
     -- membership, not a host (own-fx suppressed -- the retained gap).
     for _, cell in ipairs(channels[chan].parked or {}) do
       if cell.fx and not noteParkCovered(chan, cell.ppq) then
-        runProducer(hostProducer(soundingCell(cell), cell.endppqC, cell.lane))
+        runOrKeep(hostProducer(soundingCell(cell), cell.endppqC, cell.lane))
       end
     end
 
@@ -2615,8 +2649,8 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
       else
         members = membersOf(chan, startL, endL)  -- augment: members still sound
       end
-      runProducer{ window = { startL, endL }, notes = members,
-                   fx = region.fx, id = region.uuid, lane = nil, delayPpq = 0 }
+      runOrKeep{ window = { startL, endL }, notes = members,
+                 fx = region.fx, id = region.uuid, lane = nil, delayPpq = 0 }
     end
 
     -- Reconcile existence (stamps kept specs with the mm handle + realised end); defer writes to the tail walk's atomic commit.

@@ -124,8 +124,14 @@ return {
       h.tm:addEvent(note(2, 0,   64, { detune = 25 })); h.tm:flush()
       h.tm:addEvent(note(3, 0,   67, { fx = vib30 }));  h.tm:flush()
       h.tm:addEvent(note(4, 0,   72));                 h.tm:flush()
+      -- chan 5: two arp regions in disjoint windows. An edit inside one must freeze the other
+      -- producer-for-producer (phase 5), identity-keeping its derived notes.
+      h.tm:addEvent(note(5, 0,   60));                 h.tm:flush()
+      h.tm:addEvent(note(5, 480, 67));                 h.tm:flush()
       h.ds:assign('fxRegions', {
-        { uuid = 'fxr-4', chan = 4, startppq = 0, endppq = 240, fx = arpUp },
+        { uuid = 'fxr-4',  chan = 4, startppq = 0,   endppq = 240, fx = arpUp },
+        { uuid = 'fxr-5a', chan = 5, startppq = 0,   endppq = 240, fx = arpUp },
+        { uuid = 'fxr-5b', chan = 5, startppq = 480, endppq = 720, fx = arpUp },
       })
       h.tm:rebuild()
 
@@ -154,6 +160,11 @@ return {
       -- Edit inside the arp region window on chan 4: region re-parks/re-derives.
       h.tm:addEvent(note(4, 0, 74)); h.tm:flush()
       assertParity(h, 'chan-4 region edit: re-park + re-derive == full re-derive')
+
+      -- Add a chord member inside region 5a's window: 5a re-derives, 5b is frozen by the producer
+      -- gate (pure-note chain, window untouched) and identity-keeps its arp notes.
+      h.tm:addEvent(note(5, 0, 64, { lane = 2 })); h.tm:flush()
+      assertParity(h, 'chan-5 producer gate: 5a re-derives, 5b identity-keeps == full re-derive')
     end,
   },
 }

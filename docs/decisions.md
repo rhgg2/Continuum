@@ -4,6 +4,13 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-18** — fx producer gate (interval-dirt phase 5, commit 1): under seed-list dirt a
+  pure-note producer (`generators.hasContinuous` false) whose window no seed touches is skipped and
+  its derived notes identity-kept via `noteExisting` — `reconcileFx` self-matches them by `fxKey`.
+  Only pure-note producers gate; continuous chains still run wholesale (the deferred half). Measured
+  on glasswork: the win is ~0.4ms (`fx` 1.6→1.2 skipping all 24 chan-1 parked producers) — pure-note
+  producers are cheap, so the macro cost is the continuous side, not note expansion. See
+  design/interval-dirt.md § Phase 5.
 - **2026-07-18** — Tail rebuild routes by seed count: sparse dirt (≤ 16 seeds + derived events) takes
   the frontier probe walk, dense and wholesale keep the linear walk; the shadow-compare retires. The
   flip unmasked a divergence the shadow had hidden: its `resolve` (live→scratch) returned nil for any
