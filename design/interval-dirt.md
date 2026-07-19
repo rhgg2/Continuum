@@ -1378,6 +1378,67 @@ members — a region edit knows the exact events it parked and restored
 (`trackerManager.lua:3314`, `flushParked` :1019); seed those, per
 member, instead of `dirtyChan()`.
 
+### Phase 5.5 — fx-host discovery is maintained, not scanned
+
+> Added 2026-07-19, out of a live profile: a take with **no fx at all**
+> still pays `fxWindows` ~6ms + `fx` ~2ms on the dense fixture. The
+> phase-5 work profiled the producer *fold* and never questioned the
+> *discovery* under it. `computeFxWindows` is O(all events) — it rescans
+> every column of every channel, every rebuild, to find which notes carry
+> `.fx`, and builds an empty window map when none do. The planner missed
+> this because phase 3 called fx windows "carried state" and assumed the
+> carry landed; it never did — the stage recomputes from a full scan. This
+> is a dense-take floor cost, orthogonal to phase 5's macro-take gate.
+
+Four passes rediscover the same fx hosts each rebuild, all O(channel):
+`computeFxWindows`' inner scan (`trackerManager.lua:2417`, run twice —
+`:3737`, `:3769`); the `parkRegions` builder's `host.fx` scan (`:3741`),
+redundant because `computeFxWindows` already emitted `hostWindows[host]`
+for exactly those hosts; `expandChannel`'s producer enumeration
+(`:2679`); and — a *second* kind of O(channel), separate from discovery —
+`computeFxWindows`' per-dirty-channel column sort (`:2413`).
+
+The rule the whole design turns on: **no part of the fx path is ever
+O(channel).** Discovery is not a per-rebuild question — the set of fx
+hosts changes only when an edit adds, toggles, moves, or deletes one, so
+it is **maintained state**, not derived. A module-level per-channel set
+of on-take fx-note uuids (`fxHosts[chan]`), parallel to `byUuid` and
+persisting across rebuilds, updated at the raw-index turnover
+(`rawIndexInsert`/`rawIndexRemove`, guarded on `evt.fx` notes — this
+catches add / delete / channel-move) plus `assignLowlevel` when
+`update.fx` is present (the pure toggle, which refreshes the index in
+place and so needs its own hook — `setNoteFx` routes here). `loadIndex`
+re-derives the whole set with the one legitimate full scan, on the
+wholesale reload where everything is new anyway. That is what "recompute
+on `rebuild(true)`" means: rediscover the *list* wholesale, never the
+windows by scanning.
+
+`computeFxWindows` then iterates `fxHosts[chan]`: per host, resolve its
+cell (`byUuid[uuid].colEvt`, stamped at materialisation upstream of both
+call sites) and seek the clip bound — first non-`pa` event with
+`ppq > cell.ppq` in the host's lane column. The window arithmetic is
+unchanged (`min(endppqL-or-takeLenL, nextOnset, takeLenL)`) and keyed by
+the same cell object the consumers already use, so the map is
+byte-identical — a fx-free channel contributes nothing whether scanned or
+skipped. Cost O(#hosts · log n), never O(channel). The `parkRegions`
+builder iterates the returned map rather than rescanning; `expandChannel`
+iterates `fxHosts[chan]`.
+
+The sort (`:2413`) is the one open question, because it is load-bearing
+for three downstream stages that read `col.events` in order. `unsortedChans`
+names its own precondition: if materialisation leaves dirty columns
+unsorted the sort must stay (and be narrowed to the seeded splice, not the
+column); if the splice already maintains order it is pure waste and goes.
+Settle that before touching it — it is a distinct commit from the
+discovery work.
+
+Commits, each green alone: (1) `parkRegions` reuses the window map —
+independent, one scan gone; (2) `fxHosts` maintained + wholesale
+re-derive, dead structure, shadow-asserted equal to a full rescan on both
+fixtures; (3) `computeFxWindows` consumes it, parity spec pinning
+byte-identical windows; (4) `expandChannel` consumes it; (5) the sort,
+pending the verification above.
+
 ### Phase 6 — seats, PCs, and the sample stamp (profile-gated)
 
 `pbs` 1.5 and `pcs` 0.0 on the dense take: genuinely small, so the

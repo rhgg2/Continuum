@@ -3738,15 +3738,20 @@ local function rebuildPipeline(didReload)
   perf.start('parkRegions')
   local parkRegions = {}
   for _, r in ipairs(sources.fxRegions or {}) do util.add(parkRegions, r) end
-  for chan = 1, 16 do
-    for _, col in ipairs(channels[chan].columns.notes) do
-      for _, host in ipairs(col.events) do
-        if host.fx and host.evType ~= 'pa' and hostWindows[host] then
-          util.add(parkRegions, { chan = chan, startppq = host.ppq, endppq = hostWindows[host],
-                                  fx = host.fx, noteHost = true })
-        end
-      end
-    end
+  -- computeFxWindows already found every on-take fx host (its map keys are exactly the non-pa
+  -- fx cells); iterate that rather than rescanning the columns. Sort (chan, lane, ppq) to hold the
+  -- emission order the whole-column scan gave -- parkWindows downstream is G4-stable.
+  local noteHosts = {}
+  for host, windowEnd in pairs(hostWindows) do util.add(noteHosts, { host = host, endppq = windowEnd }) end
+  table.sort(noteHosts, function(a, b)
+    local ha, hb = a.host, b.host
+    if ha.chan ~= hb.chan then return ha.chan < hb.chan end
+    if ha.lane ~= hb.lane then return ha.lane < hb.lane end
+    return ha.ppq < hb.ppq
+  end)
+  for _, nh in ipairs(noteHosts) do
+    util.add(parkRegions, { chan = nh.host.chan, startppq = nh.host.ppq, endppq = nh.endppq,
+                            fx = nh.host.fx, noteHost = true })
   end
   -- A self-parked host is off-take but still runs a producer, so its continuous (pb/cc) windows must
   -- register on any surviving fx, not just parksNotes -- see § Route-by-window: mixed-kind un-parking.
