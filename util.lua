@@ -182,6 +182,18 @@ function util.seek(items, mode, key, filter, keyFn)
   return hit
 end
 
+-- Splice item into an already-sorted list at its lower bound (before any element not less than it),
+-- by the same less-than a table.sort(list, less) would use. O(log n) search plus the shift.
+function util.insertSorted(list, item, less)
+  local lo, hi = 1, #list + 1
+  while lo < hi do
+    local mid = (lo + hi) // 2
+    if less(list[mid], item) then lo = mid + 1 else hi = mid end
+  end
+  table.insert(list, lo, item)
+  return lo
+end
+
 --contract: exclude applies only to the outermost table; deep recursion drops the exclude set
 function util.clone(src, exclude, deep)
   if not src then return end

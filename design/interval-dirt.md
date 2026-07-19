@@ -1426,38 +1426,50 @@ already enumerated at `parkRegions` (`:3805`). `fxHosts` is therefore the
 *on-take* host set, not the whole scan — the shadow assert in commit 2
 proves exactly that, excluding cells with no um entry.
 
-So the signature carries the second population explicitly:
-`computeFxWindows(extraHostCells)`. It resolves `fxHosts[chan]` to its
-cells (`byUuid[uuid].colEvt`, stamped at materialisation) and unions the
-caller-supplied `extraHostCells` — empty at the pre-park call, the
-restored/parked fx cells at the post-park call (from `rebuildRegionPark`'s
-output plus `sources.fxParked`, both O(#parked), never a channel scan).
-Per host cell it seeks the clip bound — first non-`pa` event with
-`ppq > cell.ppq` in the host's lane column. The window arithmetic is
-unchanged (`min(endppqL-or-takeLenL, nextOnset, takeLenL)`) and keyed by
-the same cell object the consumers already use, so the map is
-byte-identical. A fx-free take has both inputs empty and pays nothing.
-Cost O((#hosts + #parked) · log n), never O(channel). The `parkRegions`
-builder iterates the returned map rather than rescanning; `expandChannel`
-iterates `fxHosts[chan]` plus the same parked producers (commit 4 inherits
-this two-population shape).
+So the signature carries the second population as a set of channels:
+`computeFxWindows(extraFxChans)`. It walks only fx-active channels —
+those with a non-empty `fxHosts[chan]`, unioned with the caller's extra
+set (empty at the pre-park call; the channels of the fx-note cells an
+unpark restored, at the post-park call). A host-free channel holds no
+`.fx` cell, so it contributes no window key — skipping it is
+byte-identical, and a fx-free take walks nothing. The walk itself is
+unchanged: same chord-mate open/close, same `min(endppqL-or-takeLenL,
+nextOnset, takeLenL)` arithmetic, keyed by the same cell object the
+consumers use. Cost is proportional to the fx-active channels, never the
+whole take.
 
-The sort (`:2413`) is the one open question, because it is load-bearing
-for three downstream stages that read `col.events` in order. `unsortedChans`
-names its own precondition: if materialisation leaves dirty columns
-unsorted the sort must stay (and be narrowed to the seeded splice, not the
-column); if the splice already maintains order it is pure waste and goes.
-Settle that before touching it — it is a distinct commit from the
-discovery work.
+**The sort was not one responsibility but four, and none of them fx.**
+`computeFxWindows`' per-channel `sortNoteColumn` was a consolidated
+backstop for disorder introduced *upstream* by every writer that seats
+into a note column: the staleSwing reseat in `rebuildInternals`, external
+reintroduction in `rebuildExternals`, the raw→logical flip in
+`projectNotes` (`evt.ppq = evt.ppqL`, after the columns were seated in raw
+order), and PA projection in `rebuildPA`. The view depends on that order —
+`trackerView` reads `col.events` through `util.seek`/`util.between`
+throughout — so the sort is load-bearing regardless of fx. And it cannot
+be reconstructed where it stood: `staleSwing` is already cleared and the
+flip has already run by the time `computeFxWindows` is called. So the
+ordering moves to its sources, following the restore path's existing
+self-sort precedent — each writer leaves its own lane ordered.
+`rebuildExternals` and `rebuildPA` splice at the known seat through a new
+`util.insertSorted` (lower-bound binary search), no re-sort; the reseat
+and the flip re-sort only the lanes they actually disordered (the flip
+guarded by an `isSorted` scan, so a no-swing take pays nothing).
+`computeFxWindows` then assumes order and drops the sort entirely — a
+temporary whole-suite assert proved every dirty lane ordered on entry
+before it was removed.
 
 Commits, each green alone: (1) `parkRegions` reuses the window map —
 independent, one scan gone [landed]; (2) `fxHosts` maintained + wholesale
 re-derive, dead structure, shadow-asserted equal to the *on-take* portion
 of the scan on both fixtures — a parked/restored cell has no um entry, so
-it is excluded [landed]; (3) `computeFxWindows(extraHostCells)` consumes
-`fxHosts` and the caller-supplied parked/restored cells, parity spec
-pinning byte-identical windows; (4) `expandChannel` consumes it; (5) the
-sort, pending the verification above.
+it is excluded [landed]; (3) `computeFxWindows(extraFxChans)` walks only
+fx-active channels, and the ordering moves to the four writers via the new
+`util.insertSorted` primitive — the blanket sort and the all-channel walk
+both gone; the fx floor is now zero [landed]; (4) `expandChannel`'s
+producer enumeration still scans every dirty channel for `host.fx` — give
+it the same `fxHosts` + restored-cell inputs; (5) folded into (3): the
+sort question is settled, not deferred.
 
 ### Phase 6 — seats, PCs, and the sample stamp (profile-gated)
 

@@ -1,4 +1,4 @@
-@spec util_edit_primitives_spec  src=tests/specs/util_edit_primitives_spec.lua  loc=150  sha=8a6d0a3  cases=14
+@spec util_edit_primitives_spec  src=tests/specs/util_edit_primitives_spec.lua  loc=199  sha=8a6d0a3  cases=18
 @exercises commandManager (h.cmgr)
 @surface   cmgr:noteChars
 
@@ -24,21 +24,33 @@
   @case 'snapTo: negative dir snaps down; on-boundary values move a full step'  [pure]  @ 72-77
   @case 'nudgedScalar: no interval → unit step, clamped to bounds'  [pure]  @ 84-89
   @case 'nudgedScalar: with interval, snaps and then clamps'  [pure]  @ 92-98
-  @case 'cmgr:noteChars colemak: Z-row maps base octave, semi 0'  [pure]  @ 105-109
-  @case 'cmgr:noteChars colemak: Q-row maps +1 octave'  [pure]  @ 112-116
-  @case 'cmgr:noteChars colemak: semi increments along the row'  [pure]  @ 119-124
-  @case 'cmgr:noteChars azerty: accepts Unicode codepoints as keys'  [pure]  @ 127-132
-  @case 'cmgr.layouts: all four layouts present'  [pure]  @ 135-141
-  @case 'cmgr:noteChars: unbound char returns nil'  [pure]  @ 144-148
+  @case 'insertSorted: keeps a numeric list ordered, returns the index'  [pure]  @ 105-114
+  @case 'insertSorted: empty list places at index 1'  [pure]  @ 117-122
+  @case 'insertSorted: lower bound -- new item precedes existing equals'  [pure]  @ 125-133
+  @case 'insertSorted: multi-key comparator seats a pa after a note at the same onset'  [pure]  @ 136-147
+  @case 'cmgr:noteChars colemak: Z-row maps base octave, semi 0'  [pure]  @ 154-158
+  @case 'cmgr:noteChars colemak: Q-row maps +1 octave'  [pure]  @ 161-165
+  @case 'cmgr:noteChars colemak: semi increments along the row'  [pure]  @ 168-173
+  @case 'cmgr:noteChars azerty: accepts Unicode codepoints as keys'  [pure]  @ 176-181
+  @case 'cmgr.layouts: all four layouts present'  [pure]  @ 184-190
+  @case 'cmgr:noteChars: unbound char returns nil'  [pure]  @ 193-197
 
 # Uses (outbound edges)
-  @use call cmgr:noteChars  @ 108,115,123,131,147
+  @use call cmgr:noteChars  @ 157,164,172,180,196
 
 # Fields (r read / w write incl. constructor keys)
   @field w cm  @ 11
+  @field r evType  @ 140,144
+  @field w evType  @ 142,143
   @field w get  @ 18
-  @field r layouts  @ 139
-  @field w name  @ 26,34,41,50,64,72,84,92,105,112,119,127
-  @field w name  @ 135,144
-  @field w run  @ 27,35,42,51,65,73,85,93,106,113,120,128
-  @field w run  @ 136,145
+  @field r k  @ 128
+  @field w k  @ 129,130
+  @field r layouts  @ 188
+  @field w name  @ 26,34,41,50,64,72,84,92,105,117,125,136
+  @field w name  @ 154,161,168,176,184,193
+  @field r ppq  @ 139,145,146
+  @field w ppq  @ 142,143
+  @field w run  @ 27,35,42,51,65,73,85,93,106,118,126,137
+  @field w run  @ 155,162,169,177,185,194
+  @field r tag  @ 131,132
+  @field w tag  @ 129,130

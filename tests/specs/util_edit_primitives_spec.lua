@@ -99,6 +99,55 @@ return {
   },
 
   --------------------------------------------------------------------
+  -- util.insertSorted
+  --------------------------------------------------------------------
+  {
+    name = 'insertSorted: keeps a numeric list ordered, returns the index',
+    run = function()
+      local less = function(a, b) return a < b end
+      local l = { 1, 3, 5 }
+      t.eq(util.insertSorted(l, 4, less), 3)   -- between 3 and 5
+      t.deepEq(l, { 1, 3, 4, 5 })
+      t.eq(util.insertSorted(l, 0, less), 1)   -- front
+      t.eq(util.insertSorted(l, 9, less), 6)   -- end
+      t.deepEq(l, { 0, 1, 3, 4, 5, 9 })
+    end,
+  },
+  {
+    name = 'insertSorted: empty list places at index 1',
+    run = function()
+      local l = {}
+      t.eq(util.insertSorted(l, 7, function(a, b) return a < b end), 1)
+      t.deepEq(l, { 7 })
+    end,
+  },
+  {
+    name = 'insertSorted: lower bound -- new item precedes existing equals',
+    run = function()
+      -- comparator on .k only; .tag distinguishes identity. A fresh item seats before equal .k.
+      local less = function(a, b) return a.k < b.k end
+      local l = { { k = 1, tag = 'a' }, { k = 2, tag = 'b' }, { k = 2, tag = 'c' } }
+      t.eq(util.insertSorted(l, { k = 2, tag = 'new' }, less), 2)
+      t.eq(l[2].tag, 'new')
+      t.eq(l[3].tag, 'b')
+    end,
+  },
+  {
+    name = 'insertSorted: multi-key comparator seats a pa after a note at the same onset',
+    run = function()
+      local less = function(a, b)
+        if a.ppq ~= b.ppq then return a.ppq < b.ppq end
+        return b.evType == 'pa' and a.evType ~= 'pa'
+      end
+      local l = { { ppq = 0, evType = 'note' }, { ppq = 10, evType = 'note' } }
+      util.insertSorted(l, { ppq = 0, evType = 'pa' }, less)
+      t.eq(l[2].evType, 'pa')
+      t.eq(l[2].ppq, 0)
+      t.eq(l[3].ppq, 10)
+    end,
+  },
+
+  --------------------------------------------------------------------
   -- cmgr:noteChars (absorbed noteInput)
   --------------------------------------------------------------------
   {

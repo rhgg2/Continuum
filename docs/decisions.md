@@ -4,6 +4,12 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-19** — Note-column order is a writer-maintained invariant, over a consolidated sort in
+  `computeFxWindows`. Each writer that seats into a note lane (seating reseat, externals, the
+  raw→logical flip, PA projection) leaves it ppq-ordered — sparse writers splice via
+  `util.insertSorted`, bulk ones re-sort only the lanes they disorder — letting `computeFxWindows`
+  walk only fx-active channels so the no-fx floor pays nothing.
+
 - **2026-07-19** — pb gate widens seed locality with hold-stream reach, over forcing pb edits
   wholesale. Authored pb/cc bases and lane-1 detune hold forward past window edges, so a seed on a
   hold source forces live every pb (and augment-cc) window ending after it, cascading through live

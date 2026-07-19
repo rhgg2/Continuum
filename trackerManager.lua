@@ -106,13 +106,28 @@ end
 
 -- Only note columns interleave notes and PAs, which can share an onset: ties order note-before-PA,
 -- then pitch, so an equal-onset seat holds across rebuilds. see design/archive/logical-column-order.md
-local function sortNoteColumn(tbl)
-  table.sort(tbl, function(a, b)
-    if a.ppq ~= b.ppq then return a.ppq < b.ppq end
-    local aPa, bPa = a.evType == 'pa', b.evType == 'pa'
-    if aPa ~= bPa then return bPa end
-    return (a.pitch or 0) < (b.pitch or 0)
-  end)
+local function noteColumnLess(a, b)
+  if a.ppq ~= b.ppq then return a.ppq < b.ppq end
+  local aPa, bPa = a.evType == 'pa', b.evType == 'pa'
+  if aPa ~= bPa then return bPa end
+  return (a.pitch or 0) < (b.pitch or 0)
+end
+
+local function sortNoteColumn(tbl) table.sort(tbl, noteColumnLess) end
+
+-- A writer that knows an onset splices its cell at the seat, keeping the lane ordered without a blunt
+-- whole-column re-sort downstream. see design/interval-dirt.md § Phase 5.5
+local function insertNoteCell(events, cell)
+  util.insertSorted(events, cell, noteColumnLess)
+end
+
+-- A lane is disordered only when a raw->logical flip crossed two onsets; a cheap scan lets the flip
+-- skip re-sorting the common already-ordered lane. see design/interval-dirt.md § Phase 5.5
+local function isSorted(events)
+  for i = 2, #events do
+    if noteColumnLess(events[i], events[i - 1]) then return false end
+  end
+  return true
 end
 
 -- General derivation-dirt spine: any edit/config change re-derives a channel's gated stages.
@@ -615,7 +630,7 @@ end
 
 local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
       flush, reload, idxReconcile, withDeferredSort, clearStaging, absorbReloadDirt,
-      stampColEvt, rawNotes, resortRawNotes, fxHostsFor, umHasEntry do
+      stampColEvt, rawNotes, resortRawNotes, fxHostsFor do
 
   ----- State
 
@@ -648,9 +663,6 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   -- The maintained fx-host set for a channel (uuids of on-take .fx notes); computeFxWindows reads it
   -- instead of rescanning columns. see design/interval-dirt.md § Phase 5.5
   function fxHostsFor(chan) return fxHosts[chan] end
-
-  -- Does um hold a live entry for this uuid? A parked/restored cell re-enters columns without one.
-  function umHasEntry(uuid) return byUuid[uuid] ~= nil end
 
   -- Ownership is intent, so it is tested logically: a PA carries its own seat and reswings from
   -- it, and a raw-frame test would let a delay or a nudge detach one. see docs/trackerManager.md § PA binding
@@ -1748,9 +1760,10 @@ local function rebuildInternals()
     end
   end
 
-  local reseats     = mmBatch()
-  local reseated    = {}
-  local reseatedWas = {}
+  local reseats      = mmBatch()
+  local reseated     = {}
+  local reseatedWas  = {}
+  local reseatedCols = {}
   for _, note in ipairs(internal) do
     local channel = channels[note.chan]
     local notes = channel.columns.notes
@@ -1769,10 +1782,14 @@ local function rebuildInternals()
       reseatedWas[colNote] = colNote.ppq   -- capture raw before the reseat mutates it (alias, not a copy)
       colNote.ppq = tm:fromLogical(note.chan, colNote.ppqL, delayToPPQ(colNote.delay))
       util.add(reseated, colNote)
+      reseatedCols[col] = true
     end
     util.add(col.events, colNote)
     stampColEvt(colNote)
   end
+  -- The reseat rewrote onsets after placement, disordering these lanes; the view + fx walk read
+  -- columns in ppq order, so re-sort at the source rather than a blanket downstream sort.
+  for col in pairs(reseatedCols) do sortNoteColumn(col.events) end
 
   -- Reswing can collapse two distinct-ppqL same-pitch notes onto one raw. The collision rides into
   -- mm and the walk separates it this pass, inside the nest mm's backstop resolves at the end of.
@@ -2008,7 +2025,7 @@ local function rebuildExternals(external)
     local colNote = util.clone(note)
     util.assign(colNote, update)
     colNote.fixed = true
-    util.add(col.events, colNote)
+    insertNoteCell(col.events, colNote)
     stampColEvt(colNote)
     util.add(seated, colNote)
     extWrites.assign(colNote, update)
@@ -2407,7 +2424,7 @@ local function rebuildPA()
           if noteCol then
             local cell = projectCC(cc, { lane = lane })
             projectEvent(cell, chan)
-            util.add(noteCol.events, cell)
+            insertNoteCell(noteCol.events, cell)
             touched[chan] = true
           end
         end
@@ -2423,7 +2440,7 @@ local function rebuildPA()
         local ppq = tm:fromLogical(chan, cell.ppq)   -- raw: findNoteColumnForPitch is raw geometry
         local noteCol, lane = findNoteColumnForPitch(channels[chan], cell.pitch, ppq)
         if noteCol then
-          util.add(noteCol.events, projectCC(cell, nil, { lane = lane }))   -- the cell is logical-born
+          insertNoteCell(noteCol.events, projectCC(cell, nil, { lane = lane }))   -- the cell is logical-born
           touched[chan] = true
         end
       end
@@ -2434,60 +2451,41 @@ end
 
 ----- Rebuild Fx
 
--- Phase 5.5 commit 2 scaffold: prove the maintained fxHosts equals what the column scan discovers.
--- Removed once computeFxWindows consumes fxHosts directly. see design/interval-dirt.md § Phase 5.5
-local function assertFxHostsMatch(fxWindow)
-  local scanned = {}
-  for cell in pairs(fxWindow) do
-    -- Parked/restored fx cells re-enter columns (post-park pass) without a live um entry; fxHosts tracks
-    -- only on-take note hosts, so exclude them from the comparison. see design/interval-dirt.md § Phase 5.5
-    if umHasEntry(cell.uuid) then
-      scanned[cell.chan] = scanned[cell.chan] or {}
-      scanned[cell.chan][cell.uuid] = true
-    end
-  end
-  for chan = 1, 16 do
-    local want, have = scanned[chan] or {}, fxHostsFor(chan) or {}
-    for uuid in pairs(want) do
-      assert(have[uuid], ('fxHosts missing on-take chan %d uuid %s'):format(chan, tostring(uuid)))
-    end
-    for uuid in pairs(have) do
-      assert(want[uuid], ('fxHosts stale chan %d uuid %s'):format(chan, tostring(uuid)))
-    end
-  end
-end
-
--- fx host voice extents: authored end, take end, or strict next same-lane onset -- soonest wins. A pure,
--- G4-stable scan of all 16 chans (parking + recognition see the whole set), sort gated by unsortedChans. see design/archive/note-macros.md § host contract, design/archive/logical-column-order.md
-local function computeFxWindows(unsortedChans)
+-- fx host voice extents: authored end, take end, or strict next same-lane onset -- soonest wins.
+-- Walks only fx-active chans; columns arrive pre-sorted from writers. see design/interval-dirt.md § Phase 5.5, design/archive/note-macros.md § host contract
+local function computeFxWindows(extraFxChans)
   local fxWindow = {}
   local takeLen = tm:length()
+  local fxChans = {}
   for chan = 1, 16 do
-    if unsortedChans[chan] then
-      for _, col in ipairs(channels[chan].columns.notes) do sortNoteColumn(col.events) end
-    end
-    local takeLenL = tm:toLogical(chan, takeLen)
-    for _, col in ipairs(channels[chan].columns.notes) do
-      -- Chord-mates share an onset and so share a successor: hold each host open until an event with a
-      -- greater ppq arrives, then clip them all against it. col.events is ppq-ordered.
-      local openHosts = {}
-      for _, evt in ipairs(col.events) do
-        if evt.evType ~= 'pa' then
-          if openHosts[1] and evt.ppq > openHosts[1].ppq then
-            for _, host in ipairs(openHosts) do fxWindow[host] = math.min(fxWindow[host], evt.ppq) end
-            openHosts = {}
-          end
-          if evt.fx then
-            -- Take is the world: a tail past take end (paste / overshooting move) can't sound past it.
-            fxWindow[evt] = (evt.endppq == nil or evt.endppq == util.OPEN)
-                            and takeLenL or math.min(evt.endppq, takeLenL)
-            util.add(openHosts, evt)
+    local hosts = fxHostsFor(chan)
+    if hosts and next(hosts) then fxChans[chan] = true end
+  end
+  for chan in pairs(extraFxChans or {}) do fxChans[chan] = true end
+  for chan = 1, 16 do
+    if fxChans[chan] then
+      local takeLenL = tm:toLogical(chan, takeLen)
+      for _, col in ipairs(channels[chan].columns.notes) do
+        -- Chord-mates share an onset and so share a successor: hold each host open until an event with a
+        -- greater ppq arrives, then clip them all against it. col.events is ppq-ordered.
+        local openHosts = {}
+        for _, evt in ipairs(col.events) do
+          if evt.evType ~= 'pa' then
+            if openHosts[1] and evt.ppq > openHosts[1].ppq then
+              for _, host in ipairs(openHosts) do fxWindow[host] = math.min(fxWindow[host], evt.ppq) end
+              openHosts = {}
+            end
+            if evt.fx then
+              -- Take is the world: a tail past take end (paste / overshooting move) can't sound past it.
+              fxWindow[evt] = (evt.endppq == nil or evt.endppq == util.OPEN)
+                              and takeLenL or math.min(evt.endppq, takeLenL)
+              util.add(openHosts, evt)
+            end
           end
         end
       end
     end
   end
-  assertFxHostsMatch(fxWindow)
   return fxWindow
 end
 
@@ -3782,13 +3780,25 @@ local function rebuildPipeline(didReload)
   -- Note columns flip to logical here, not at ingestion: partition, reseat and the externals' lane
   -- packer need the raw frame; the walk covers this pass's clones only. see docs/trackerManager.md § Rebuild: logical projection
   perf.start('projectNotes')
-  for _, evt in ipairs(internal)        do projectEvent(evt, evt.chan) end
-  for _, evt in ipairs(seatedExternals) do projectEvent(evt, evt.chan) end
+  local flippedCols = {}
+  for _, evt in ipairs(internal) do
+    projectEvent(evt, evt.chan)
+    flippedCols[channels[evt.chan].columns.notes[evt.lane]] = true
+  end
+  for _, evt in ipairs(seatedExternals) do
+    projectEvent(evt, evt.chan)
+    flippedCols[channels[evt.chan].columns.notes[evt.lane]] = true
+  end
+  -- The raw->logical flip reorders a lane whose raw and logical onset orders diverge (swing, or an
+  -- authored swap); re-sort just the lanes it actually disordered. see design/interval-dirt.md § Phase 5.5
+  for col in pairs(flippedCols) do
+    if not isSorted(col.events) then sortNoteColumn(col.events) end
+  end
   perf.stop('projectNotes')
 
   -- Park window set: fx-regions plus every on-take note host as a degenerate region (note-is-a-region),
   -- from the settled columns. The producer re-scans post-unpark below. see design/note-macros-v2.md § Offline continuous realisation
-  perf.start('fxWindows'); local hostWindows = computeFxWindows(dirtyChans); perf.stop('fxWindows')
+  perf.start('fxWindows'); local hostWindows = computeFxWindows(); perf.stop('fxWindows')
   perf.start('parkRegions')
   local parkRegions = {}
   for _, r in ipairs(sources.fxRegions or {}) do util.add(parkRegions, r) end
@@ -3821,11 +3831,15 @@ local function rebuildPipeline(didReload)
   perf.stop('parkRegions')
 
   perf.start('regionPark'); local restoredNotes = rebuildRegionPark(deferred, currentWindows, sources.fxParked, sources.prevWindows); perf.stop('regionPark')  -- park covered, carry/restore prior
-  perf.start('pa'); local paTouched = rebuildPA(); perf.stop('pa')  -- project PAs into settled note columns
+  perf.start('pa'); rebuildPA(); perf.stop('pa')  -- project PAs into settled note columns (each spliced in ppq order)
 
-  -- Re-scan windows post park/unpark/PA: the producer reads the final columns, including a host an unpark
-  -- just restored (a replace host that lost its note-producing kind falls back to on-take augment).
-  perf.start('fxWindows'); local fxWindow = computeFxWindows(paTouched); perf.stop('fxWindows')
+  -- Post-park window pass: the maintained on-take hosts plus any fx-note cell an unpark just restored
+  -- into its column (a replace host that lost its note-producing kind falls back to on-take augment).
+  local restoredFxChans = {}
+  for _, rec in ipairs(restoredNotes) do
+    if rec.colEvt.fx then restoredFxChans[rec.colEvt.chan] = true end
+  end
+  perf.start('fxWindows'); local fxWindow = computeFxWindows(restoredFxChans); perf.stop('fxWindows')
   perf.start('fx'); local fxOut = rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWindows, sources.fxRegions); perf.stop('fx')  -- fx expansion: derived notes/CCs
 
   perf.start('tails'); rebuildTails(fxOut.noteLive, deferred, restoredNotes); perf.stop('tails')  -- unified tail/onset walk + atomic note commit
