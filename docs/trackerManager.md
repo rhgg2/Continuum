@@ -457,6 +457,35 @@ linearly per note: a retrig host expands to a long run of same-pitch
 fxNotes, so that scan made the walk O(k²) inside the group and dominated
 rebuild on macro-heavy takes.
 
+### Span-covered fx scans
+
+`coverInto(list, spans, admit, emit)` builds the span cover of a ppq-sorted list: the governing
+entry at-or-before each span's start (so `evalCurve`/`sliceCurve` reads within the span see the
+right precursor), every entry through the span, then the closing entry past its end. `admit`
+filters entries out of governance and emission alike — a skipped entry never governs; spans dedup
+across a call by resuming from the last consumed index rather than rescanning from 1.
+
+`eachWindowNote(chan, startL, endL, fn)` covers rather than scans a lane's onsets: it seeks the
+governing onset at-or-before `startL` (its sounding tail may reach into the window) and walks
+forward through one closing onset past `endL`. Membership is still overlap, not storage —
+authored notes are re-queried each rebuild, one walk feeding both generator events and fixed lane
+occupancy. See `design/note-macros-v2.md` § The anchor generalized.
+
+`pbBaseFor(chan, spans)` / `ccBasesFor(chan, spans)` build the absolute authored base (ppq-keyed,
+logical) covering only the caller's merged producer windows, not the whole channel: every read of
+the base — `channelStreams`' slices, the cc fold, `rebuildPbs`' fold — is itself span-bounded, so
+the cover is exact there and the scan is never O(channel). Parked events are authoritative at
+their ppq (deduped against the cover); the maintained pb index is raw-sorted, and since pbs carry
+no delay and swing is monotone, the raw-frame cover equals the logical-frame cover — spans convert
+via `tm:fromLogical` before the walk. "Authored" means the cents sidecar is present (seats and
+foreign pbs carry none).
+
+`nextSameLaneNote(host)` looks up the strict next same-lane note by seeking directly in the host's
+lane column instead of building a per-channel map up front. A parked host is not the column's own
+cell (it was pulled out of it), so it has no successor in the column — the seat check (walking
+back from the found insertion point to confirm the note itself is still present there) preserves
+that.
+
 ### Derivation dirt: the gated spine
 
 Two axes of dirt drive rebuild. *Materialisation dirt* (the `wholesale`

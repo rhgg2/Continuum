@@ -240,6 +240,14 @@ local function firstAfter(list, target)   -- first index with .ppq > target (bin
   end
   return lo
 end
+local function firstAtOrAfter(list, target)   -- first index with .ppq >= target (binary; list ppq-sorted)
+  local lo, hi = 1, #list + 1
+  while lo < hi do
+    local mid = (lo + hi) // 2
+    if list[mid].ppq < target then lo = mid + 1 else hi = mid end
+  end
+  return lo
+end
 
 -- Curve value at ppq: held both ways (first value before, last after), shape interp within.
 local function evalCurve(curve, ppq)
@@ -437,22 +445,52 @@ local function delayToPPQ(delay) return timing.delayToPPQ(delay, mm:resolution()
 
 ----- Fx expansion helpers
 
--- Membership is overlap, not storage: authored notes re-queried each rebuild; one walk
--- feeds generator events + fixed lane occupancy. see design/note-macros-v2.md § The anchor generalized
+-- Span cover of a sorted list: governing entry at-or-before each span, through its close, admit-filtered.
+-- see docs/trackerManager.md § Span-covered fx scans
+local function coverInto(list, spans, admit, emit)
+  local nextIdx = 1
+  for _, span in ipairs(spans) do
+    local govern = firstAfter(list, span[1]) - 1
+    while govern >= nextIdx and admit and not admit(list[govern]) do govern = govern - 1 end
+    local i = math.max(govern, nextIdx)
+    while i <= #list do
+      local entry = list[i]
+      i = i + 1
+      if not admit or admit(entry) then
+        emit(entry)
+        if entry.ppq > span[2] then break end
+      end
+    end
+    nextIdx = i
+  end
+end
+
+-- Membership is overlap, not storage: one walk feeds generator events + fixed lane occupancy.
+-- Cover, not scan: see docs/trackerManager.md § Span-covered fx scans; design/note-macros-v2.md § The anchor generalized
 local function eachWindowNote(chan, startL, endL, fn)
   for laneIdx, col in ipairs(channels[chan].columns.notes) do
     -- A lane is monophonic + ppq-sorted, so a note's sounding tail ends at the next note's onset
     -- (or the window): mirror rebuildTails' laneClip so an OPEN ceiling never streams a phantom overlap.
-    local onsets = {}
-    for _, evt in ipairs(col.events) do
-      if evt.evType ~= 'pa' then util.add(onsets, evt) end
+    local events = col.events
+    local pending   -- onset awaiting its tail bound (the next onset's ppq, or endL)
+    local function sound(nextOn)
+      local ceil = (pending.endppq == nil or pending.endppq == util.OPEN) and endL or pending.endppq
+      local hi   = math.min(ceil, nextOn)
+      if pending.ppq < endL and hi > startL then fn(laneIdx, pending.ppq, hi, pending) end
     end
-    for i, evt in ipairs(onsets) do
-      local ceil   = (evt.endppq == nil or evt.endppq == util.OPEN) and endL or evt.endppq
-      local nextOn = onsets[i + 1] and onsets[i + 1].ppq or endL
-      local hi     = math.min(ceil, nextOn)
-      if evt.ppq < endL and hi > startL then fn(laneIdx, evt.ppq, hi, evt) end
+    local from = firstAfter(events, startL)
+    for j = from - 1, 1, -1 do
+      if events[j].evType ~= 'pa' then pending = events[j]; break end
     end
+    for j = from, #events do
+      local evt = events[j]
+      if evt.evType ~= 'pa' then
+        if pending then sound(evt.ppq) end
+        if evt.ppq >= endL then pending = nil; break end
+        pending = evt
+      end
+    end
+    if pending then sound(endL) end
   end
 end
 local function membersOf(chan, startL, endL)
@@ -466,21 +504,23 @@ end
 -- from the per-chan bases with entering/closing edges. see design/note-macros-v2.md § The fx chain
 local function channelStreams(chan, startL, endL, pbBase, ccBases)
   local cols = channels[chan].columns
-  local function within(ppq) return ppq >= startL and ppq < endL end
   local pas, ats = {}, {}
   for _, col in ipairs(cols.notes) do
-    for _, evt in ipairs(col.events) do
-      if evt.evType == 'pa' and within(evt.ppq) then
-        util.add(pas, { ppq = evt.ppq, pitch = evt.pitch, vel = evt.vel })
-      end
+    for j = firstAtOrAfter(col.events, startL), #col.events do
+      local evt = col.events[j]
+      if evt.ppq >= endL then break end
+      if evt.evType == 'pa' then util.add(pas, { ppq = evt.ppq, pitch = evt.pitch, vel = evt.vel }) end
     end
   end
-  for _, evt in ipairs(cols.at and cols.at.events or {}) do
-    if within(evt.ppq) then util.add(ats, { ppq = evt.ppq, val = evt.val }) end
+  local atEvents = cols.at and cols.at.events or {}
+  for j = firstAtOrAfter(atEvents, startL), #atEvents do
+    local evt = atEvents[j]
+    if evt.ppq >= endL then break end
+    util.add(ats, { ppq = evt.ppq, val = evt.val })
   end
-  -- Generators read these streams in ppq order (bases pre-sorted, slices preserve order). see design/archive/deferred-reindex.md § Phase A
+  -- Generators read these streams in ppq order (lanes interleave via the sort; ats ride their
+  -- column's order; bases pre-sorted, slices preserve order). see design/archive/deferred-reindex.md § Phase A
   sortByPPQ(pas)
-  sortByPPQ(ats)
   local ccs = {}
   for cc, base in pairs(ccBases) do ccs[cc] = sliceCurve(base, startL, endL) end
   return pas, ccs, ats, sliceCurve(pbBase, startL, endL)
@@ -630,7 +670,7 @@ end
 
 local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
       flush, reload, idxReconcile, withDeferredSort, clearStaging, absorbReloadDirt,
-      stampColEvt, rawNotes, resortRawNotes, fxHostsFor do
+      stampColEvt, rawNotes, rawPbs, resortRawNotes, fxHostsFor do
 
   ----- State
 
@@ -659,6 +699,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   -- The pipeline's raw working set, read in place by the walk and its raw consumers
   -- (filtered at use); entries are live um records. see design/interval-dirt.md § Phase 4.5
   function rawNotes(chan) return rawIndex[chan].notes end
+  function rawPbs(chan) return rawIndex[chan].pbs end
 
   -- The maintained fx-host set for a channel (uuids of on-take .fx notes); computeFxWindows reads it
   -- instead of rescanning columns. see design/interval-dirt.md § Phase 5.5
@@ -2520,39 +2561,31 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
     return false
   end
 
-  -- Authored pb breakpoints per channel, exposed to the generator as channel input (authored
-  -- only, fakes excluded) -- only expandChannel reads it, gated dirty. see design/note-macros-v2.md § A4
-  local authoredPbByChan = {}
-  for chan = 1, 16 do
-    if dirtyChans[chan] then
-      for _, cc in mm:ccsRaw(chan) do
-        if cc.evType == 'pb' and not cc.derived and cc.cents ~= nil then
-          util.bucket(authoredPbByChan, cc.chan,
-                      { ppq = cc.ppqL or cc.ppq, cents = cc.cents, shape = cc.shape, tension = cc.tension })
-        end
-      end
-    end
-  end
-  for _, list in pairs(authoredPbByChan) do sortByPPQ(list) end
-
-  -- Absolute authored bases per channel (ppq-keyed, logical): parked events are authoritative in their
-  -- windows (dedup by ppq), the on-take stream elsewhere. Seeds + the cross-chain fold read them.
-  local function pbBaseFor(chan)
+  -- Absolute authored bases per channel (ppq-keyed, logical), covering only the caller's spans.
+  -- see docs/trackerManager.md § Span-covered fx scans
+  local function pbBaseFor(chan, spans)
     local base, seen = {}, {}
     for _, cell in ipairs(channels[chan].parkedPb or {}) do
       util.add(base, { ppq = cell.ppq, val = cell.cents, shape = cell.shape or 'step', tension = cell.tension })
       seen[cell.ppq] = true
     end
-    for _, point in ipairs(authoredPbByChan[chan] or {}) do
-      if not seen[point.ppq] then
-        util.add(base, { ppq = point.ppq, val = point.cents, shape = point.shape or 'step',
-                         tension = point.tension })
-      end
+    -- The maintained pb index is raw-sorted; pbs carry no delay and swing is monotone, so the raw
+    -- cover is the logical cover. Authored = the cents sidecar (seats and foreign pbs carry none).
+    local rawSpans = {}
+    for _, span in ipairs(spans) do
+      util.add(rawSpans, { tm:fromLogical(chan, span[1]), tm:fromLogical(chan, span[2]) })
     end
+    local function authored(pb) return not pb.derived and pb.cents ~= nil end
+    coverInto(rawPbs(chan), rawSpans, authored, function(pb)
+      local ppq = pb.ppqL or pb.ppq
+      if not seen[ppq] then
+        util.add(base, { ppq = ppq, val = pb.cents, shape = pb.shape or 'step', tension = pb.tension })
+      end
+    end)
     sortByPPQ(base)
     return base
   end
-  local function ccBasesFor(chan)
+  local function ccBasesFor(chan, spans)
     local bases, seen = {}, {}
     for _, cell in ipairs(channels[chan].parkedCC or {}) do
       util.bucket(bases, cell.cc, { ppq = cell.ppq, val = cell.val, shape = cell.shape or 'step',
@@ -2560,12 +2593,12 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
       seen[util.key(cell.cc, cell.ppq)] = true
     end
     for cc, col in pairs(channels[chan].columns.ccs) do
-      for _, evt in ipairs(col.events) do
+      coverInto(col.events, spans, nil, function(evt)
         if not seen[util.key(cc, evt.ppq)] then
           util.bucket(bases, cc, { ppq = evt.ppq, val = evt.val, shape = evt.shape or 'step',
                                    tension = evt.tension })
         end
-      end
+      end)
     end
     for _, base in pairs(bases) do sortByPPQ(base) end
     return bases
@@ -2577,24 +2610,26 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
   local function stepOp(pitch, detune, n)        -- trill: scale steps -> (pitch, detune) via the temper
     return tuning.transposeStep(temper, pitch, detune, n)
   end
-  -- Strict next same-lane note, built per channel on first ask: slide(target='next') is its only
-  -- consumer, so a channel no slide queries never pays for the map. see design/archive/incremental-rebuild.md § 8
-  local laneNextByChan = {}
+  -- Strict next same-lane note, sought directly in the host's lane column (slide's only consumer).
+  -- see docs/trackerManager.md § Span-covered fx scans
   local function nextSameLaneNote(host)
     local note = host.notes[1]
-    if not note then return nil end
-    local laneNextOf = laneNextByChan[note.chan]
-    if not laneNextOf then
-      local byLane = {}
-      for laneIdx, col in ipairs(channels[note.chan].columns.notes) do
-        for _, evt in ipairs(col.events) do
-          if evt.evType ~= 'pa' then util.bucket(byLane, laneIdx, evt) end
-        end
-      end
-      laneNextOf = strictNextMap(byLane)   -- ppq-ordered: computeFxWindows sorted col.events
-      laneNextByChan[note.chan] = laneNextOf
+    local col = note and channels[note.chan].columns.notes[note.lane]
+    if not col then return nil end
+    local events = col.events
+    local from = firstAfter(events, note.ppq)
+    local seated = false
+    for j = from - 1, 1, -1 do
+      if events[j].ppq < note.ppq then break end
+      if events[j] == note then seated = true; break end
     end
-    return laneNextOf[note]
+    local found
+    if seated then
+      for j = from, #events do
+        if events[j].evType ~= 'pa' then found = events[j]; break end
+      end
+    end
+    return found
   end
   local chanCtx = { resolution = res, pbRangeCents = pbRangeCents, step = stepOp,
                     nextSameLaneNote = nextSameLaneNote }
@@ -2613,8 +2648,7 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
   -- the final owned channels emit. see design/note-macros-v2.md § The fx chain
   local function expandChannel(chan)
     local predicted, ccLive = {}, {}
-    local pbBase, ccBases = pbBaseFor(chan), ccBasesFor(chan)
-    fxOut.pbBase[chan] = pbBase
+    local pbBase, ccBases   -- assigned after producer enumeration: bases cover producer windows
     -- Per-chain continuous records: one absolute curve + fold mode per chain per owned cc target;
     -- cross-chain overlap layers at emission by storage order (pb folds in rebuildPbs). see design/note-macros-v2.md § The fx chain
     local ccChains = {}
@@ -2777,6 +2811,11 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
       util.add(producers, { window = { startL, endL }, notes = members,
                             fx = region.fx, id = region.uuid, lane = nil, delayPpq = 0 })
     end
+
+    -- Bases cover the merged producer windows and nothing more: every read below is span-bounded.
+    local spans = mergeWindows(producers)
+    pbBase, ccBases = pbBaseFor(chan, spans), ccBasesFor(chan, spans)
+    fxOut.pbBase[chan] = pbBase
 
     -- Per-target scopes: emit scope = merged windows of the seeded producers touching the target;
     -- target scope = merged windows of them all -- its complement is where existing seats keep.

@@ -1234,6 +1234,12 @@ re-expanding, saves the ~0.7ms of expansion and nothing else — dead.
 `bases`' 0.0ms — dead; the absolute-curve scan I feared would need
 entering-edge lookback costs nothing, so it stays whole.
 
+> Corrected 2026-07-19: the window-scoping verdict above was cost-based
+> (an fx-heavy fixture where `bases` measured 0.0ms) and is superseded by
+> phase 5.5's structural rule — no part of the fx path is ever O(channel).
+> The bases, the window-note walk, and the pa/at/lane-next scans are
+> span-covered in phase 5.5 commit 6.
+
 What remains is one family — fold, emit, reconcile — so the continuous
 gate is the note gate's point-2 shape applied to **seats**. Three
 scopes, from the dirt out (sharpened 2026-07-19: the first draft's "a
@@ -1471,7 +1477,17 @@ note producers from the fx-window map's keys (the on-take + restored fx cells
 `computeFxWindows` already emitted), bucketed per channel and `(lane, ppq)`-sorted —
 the last per-dirty-channel `host.fx` column scan gone, extending commit 1's
 map-reuse precedent [landed]; (5) folded into (3): the sort question is
-settled, not deferred.
+settled, not deferred; (6) the remaining per-channel scans in `rebuildFx`
+are span-covered: producers enumerate first, their windows merge
+(`mergeWindows(producers)`), and `pbBaseFor`/`ccBasesFor` build covers of
+exactly those spans — governing point, interiors, closing point
+(`coverInto` over the maintained pb index via the new `rawPbs` accessor,
+and over the cc columns; parked lists stay whole-walked, O(parked)).
+`eachWindowNote`, `channelStreams`' pa/at scans, and slide's lane-next
+lookup become binary-searched window covers; the `authoredPbByChan`
+pre-loop — the last `mm:ccsRaw` walk in the fx path — is deleted.
+Shadow-asserted equal to the full walks across the whole suite, then
+stripped.
 
 ### Phase 6 — seats, PCs, and the sample stamp (profile-gated)
 
