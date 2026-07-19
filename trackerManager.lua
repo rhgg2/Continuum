@@ -31,9 +31,9 @@
 --shape:   event in the logical frame, minus realisation (delayC/endppqC/loc/realised/derived/frame/cents),
 --shape:   so new metadata rides park automatically. Baseline fields per type (raw re-derived on restore):
 --shape:   note { evType='note', chan, lane, uuid, ppq, endppq, pitch, vel, detune, delay, sample, [fx] }
---shape:   cc { evType='cc', chan, cc, ppq, val, shape }  |  pb { evType='pb', chan, ppq, val (=cents), shape, [tension] }  |  pa { evType='pa', chan, pitch, ppq, vel, [rpb] }
+--shape:   cc { evType='cc', chan, cc, ppq, val, shape, [tension] }  |  pb { evType='pb', chan, ppq, val (=cents), shape, [tension] }  |  pa { evType='pa', chan, pitch, ppq, vel, [rpb] }
 --shape: channels[chan].parked = { { evType='note', chan, uuid, ppq, endppq, endppqC, pitch, vel, detune, sample, delay, lane, [fx] }, ... } -- render-ready off-take replace cells (endppq is the authored ceiling the view edits, endppqC the render clip realiseParked derives)
---shape: channels[chan].parkedCC = { { evType='cc', chan, cc, ppq, val, shape }, ... } -- off-take cc-replace render cells
+--shape: channels[chan].parkedCC = { { evType='cc', chan, cc, ppq, val, shape, [tension] }, ... } -- off-take cc-replace render cells
 --shape: channels[chan].parkedPb = { { evType='pb', chan, ppq, val (=cents), cents, shape, [tension] }, ... } -- off-take pb-replace render cells
 --shape: channels[chan].parkedPA = { { evType='pa', chan, pitch, ppq, vel, [rpb] }, ... } -- off-take PA cells; rebuildPA re-projects them into the host note column
 --contract: a discrete-replace kind parks its host: a region parks its covered chord, a note parks itself
@@ -1847,7 +1847,7 @@ local function rebuildCCs(prevWindows)
       -- reconciled fresh at fx expansion. A removed window's orphans reconcile away there. see § Route-by-window
       if cc.evType == 'cc' and inSpan(fillWin, cc.chan, cc.cc, cc.ppq) then
         util.add(ccExisting[cc.chan],
-          { ppq = cc.ppq, val = cc.val, shape = cc.shape, cc = cc.cc, uuid = uuid })
+          { ppq = cc.ppq, val = cc.val, shape = cc.shape, tension = cc.tension, cc = cc.cc, uuid = uuid })
         goto continue
       end
 
@@ -2527,7 +2527,8 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
     if dirtyChans[chan] then
       for _, cc in mm:ccsRaw(chan) do
         if cc.evType == 'pb' and not cc.derived and cc.cents ~= nil then
-          util.bucket(authoredPbByChan, cc.chan, { ppq = cc.ppqL or cc.ppq, cents = cc.cents, shape = cc.shape })
+          util.bucket(authoredPbByChan, cc.chan,
+                      { ppq = cc.ppqL or cc.ppq, cents = cc.cents, shape = cc.shape, tension = cc.tension })
         end
       end
     end
@@ -2544,7 +2545,8 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
     end
     for _, point in ipairs(authoredPbByChan[chan] or {}) do
       if not seen[point.ppq] then
-        util.add(base, { ppq = point.ppq, val = point.cents, shape = point.shape or 'step' })
+        util.add(base, { ppq = point.ppq, val = point.cents, shape = point.shape or 'step',
+                         tension = point.tension })
       end
     end
     sortByPPQ(base)
@@ -2553,13 +2555,15 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
   local function ccBasesFor(chan)
     local bases, seen = {}, {}
     for _, cell in ipairs(channels[chan].parkedCC or {}) do
-      util.bucket(bases, cell.cc, { ppq = cell.ppq, val = cell.val, shape = cell.shape or 'step' })
+      util.bucket(bases, cell.cc, { ppq = cell.ppq, val = cell.val, shape = cell.shape or 'step',
+                                    tension = cell.tension })
       seen[util.key(cell.cc, cell.ppq)] = true
     end
     for cc, col in pairs(channels[chan].columns.ccs) do
       for _, evt in ipairs(col.events) do
         if not seen[util.key(cc, evt.ppq)] then
-          util.bucket(bases, cc, { ppq = evt.ppq, val = evt.val, shape = evt.shape or 'step' })
+          util.bucket(bases, cc, { ppq = evt.ppq, val = evt.val, shape = evt.shape or 'step',
+                                   tension = evt.tension })
         end
       end
     end
@@ -2857,7 +2861,8 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
             if point.ppq >= emitSpan[1] and point.ppq < emitSpan[2] then
               util.add(ccLive, { evType = 'cc', chan = chan, cc = cc,
                                  ppq = tm:fromLogical(chan, point.ppq, 0),
-                                 val = util.clamp(util.round(point.val), 0, 127), shape = point.shape })
+                                 val = util.clamp(util.round(point.val), 0, 127),
+                                 shape = point.shape, tension = point.tension })
             end
           end
         end
@@ -2871,7 +2876,7 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
         local seatL = tm:toLogical(chan, seat.ppq)
         if spanSetCovers(targetScope[seat.cc], seatL) and not spanSetCovers(emitScope[seat.cc], seatL) then
           util.add(ccLive, { evType = 'cc', chan = chan, cc = seat.cc, ppq = seat.ppq,
-                             val = seat.val, shape = seat.shape })
+                             val = seat.val, shape = seat.shape, tension = seat.tension })
         end
       end
     end
@@ -2882,7 +2887,9 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
     reconcileDerived{
       existing = ccExisting[chan], predicted = ccLive, sink = wires,
       key   = function(x) return util.key(x.cc, x.ppq) end,
-      match = function(have, spec) return have.val == spec.val and have.shape == spec.shape end,
+      match = function(have, spec)
+        return have.val == spec.val and have.shape == spec.shape and have.tension == spec.tension
+      end,
     }
 
     wires.commit()

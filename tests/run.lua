@@ -85,6 +85,7 @@ local specs = {
   'tm_pc_synthesis_spec',
   'tm_macro_spec',
   'tm_vibrato_spec',
+  'tm_fx_tension_spec',
   'tm_fx_region_spec',
   'tm_column_order_spec',
   'tv_fx_region_spec',

@@ -1,0 +1,68 @@
+@spec tm_fx_tension_spec  src=tests/specs/tm_fx_tension_spec.lua  loc=101  sha=untracked  cases=2
+@exercises midiManager (h.fm), trackerManager (h.tm)
+@surface   fm:interpolate, tm:addEvent, tm:flush, fm:dump
+@harness   mk{seed.ccs}
+
+# Intent
+  Bezier tension through fx windows. The continuous bases feeding fx expansion
+  (pbBaseFor/ccBasesFor) must carry authored tension: in-window folds interpolate
+  via mm:interpolate, and a dropped tension silently re-shapes the curve, skewing
+  every derived seat under the window. Depth-0 vibrato / scale-0 lfo make the fx
+  contribution exactly zero, so each seat is a pure sample of the authored base.
+
+# Helpers
+  @fn c2r(c)  @ 11
+      -- Matches tm's centsToRaw at the default pbRange (2 semitones = 200 cents).
+  @fn byPpq(dump, pred)  @ 13-19
+  @fn sliceEdge(fm, govern, target, ppq)  @ 23-26
+      -- The slice edge channelStreams synthesizes: value sampled at the window bound, shape and
+      -- tension carried from the governing point (the curve re-anchors at the edge).
+
+# Cases
+  @case 'authored bezier pb governs an fx window: seats sample the tensioned curve'  [harness]  @ 33-59
+  @case 'authored bezier ccs govern an lfo window: column and parked picks keep tension'  [harness]  @ 65-99
+
+# Uses (outbound edges)
+  @use call fm:interpolate  @ 24,57,95,97
+  @use call tm:addEvent  @ 43,78
+  @use call tm:flush  @ 46,83
+  @use call fm:dump  @ 48,85
+
+# Fields (r read / w write incl. constructor keys)
+  @field r cc  @ 85
+  @field w cc  @ 70,71,72
+  @field r ccs  @ 15
+  @field w ccs  @ 37,69
+  @field w centre  @ 80
+  @field w cents  @ 38,39
+  @field r chan  @ 48,85
+  @field w chan  @ 38,39,43,70,71,72,78
+  @field w delay  @ 44,79
+  @field w depth  @ 45
+  @field w detune  @ 44,79
+  @field w endppq  @ 43,78
+  @field r evType  @ 48,85
+  @field w evType  @ 38,39,43,70,71,72,78
+  @field w fx  @ 45,80
+  @field w kind  @ 45,80,81
+  @field w lane  @ 44,79
+  @field w lengthPpq  @ 81
+  @field w name  @ 33,65
+  @field w onset  @ 45
+  @field w pattern  @ 81
+  @field w period  @ 45,80
+  @field w pitch  @ 43,78
+  @field w points  @ 82
+  @field r ppq  @ 16
+  @field w ppq  @ 24,38,39,43,51,52,70,71,72,78,82,88
+  @field w ppq  @ 89,90
+  @field w run  @ 34,66
+  @field w scale  @ 80
+  @field w seed  @ 36,68
+  @field r shape  @ 25
+  @field w shape  @ 25,38,39,51,70,71,72,82,88,89
+  @field r tension  @ 25,49,86
+  @field w tension  @ 25,38,51,70,71,88,89
+  @field r val  @ 56,57,95,97
+  @field w val  @ 24,38,39,51,52,70,71,72,82,88,89,90
+  @field w vel  @ 43,78

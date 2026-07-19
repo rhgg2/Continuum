@@ -5,7 +5,7 @@
 
 --invariant: pure module, no state; a stage is fn(stream, host, params, ctx) -> { notes, delta }
 --invariant: stream and host share one shape; stages read stream, host is the untouched original
---shape: stream/host = { window={startppq,endppq}, chan, lane, id, notes={ {pitch,vel,detune,ppq,endppq},.. }, pas={ {ppq,pitch,vel},.. }, ccs={ [cc]={ {ppq,val,shape},.. } }, ats={ {ppq,val},.. }, pb={ {ppq,val,shape},.. } }
+--shape: stream/host = { window={startppq,endppq}, chan, lane, id, notes={ {pitch,vel,detune,ppq,endppq},.. }, pas={ {ppq,pitch,vel},.. }, ccs={ [cc]={ {ppq,val,shape,[tension]},.. } }, ats={ {ppq,val},.. }, pb={ {ppq,val,shape,[tension]},.. } }
 --invariant: pb/ccs are absolute curves over the closed window (edge values seeded); pb val is cents
 --invariant: ctx binds resolution, pbRangeCents, nextSameLaneNote(host), step(pitch,detune,n)
 --invariant: periods are QN per the periodQN convention -- scalar or {num,den}
@@ -259,7 +259,8 @@ local function lfo(stream, host, params, ctx)
 
   -- Seed startL (phase 0); tile interior cycles, skipping the ppq==loop endpoint (owned by the next
   -- cycle's phase 0, or by the endL seed) so a loop-closed curve emits no duplicate boundary breakpoint.
-  local delta = { { ppq = startL, val = ccVal(curveAt(points, 0)), shape = points[1].shape } }
+  local delta = { { ppq = startL, val = ccVal(curveAt(points, 0)),
+                    shape = points[1].shape, tension = points[1].tension } }
   local base = startL
   while base < endL do
     for _, p in ipairs(points) do
