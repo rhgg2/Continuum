@@ -1773,7 +1773,7 @@ local function exciseNotes(chan, covers)
 end
 
 -- Partition mm notes stamped/external, lay internal columns, reseat stale-swing.
--- Returns seated internals + external notes + the per-channel derived-note existing set. see docs/trackerManager.md § Rebuild: partition
+-- Returns raw-seated internals (owed the flip) + external notes + the per-channel derived-note existing set. see docs/trackerManager.md § Rebuild: partition
 --contract: interval dirt: non-derived notes carry ppqL -- an external mutation reloads wholesale
 local function rebuildInternals()
   local internal, external = {}, {}
@@ -1805,6 +1805,7 @@ local function rebuildInternals()
   local reseated     = {}
   local reseatedWas  = {}
   local reseatedCols = {}
+  local rawSeated    = {}   -- wholesale/stale-swing seats, still raw; the post-externals flip owes them
   for _, note in ipairs(internal) do
     local channel = channels[note.chan]
     local notes = channel.columns.notes
@@ -1813,19 +1814,28 @@ local function rebuildInternals()
     while #notes < note.lane do pushNoteCol(channel) end
     local col = notes[note.lane]
     -- note is already our own mm:notes() clone -- repurpose it as the column note rather than
-    -- cloning again. mm's stored note is untouched; the post-externals flip rewrites ppq to logical.
+    -- cloning again. mm's stored note is untouched.
     local colNote = note
     -- set detune/delay at ingestion to skip defensive guards downstream
     colNote.detune = colNote.detune or 0
     colNote.delay  = colNote.delay  or 0
-    -- when swing is stale, rederive realised onset from logical; endppq handled by the tail walk.
-    if staleSwing[note.chan] then
-      reseatedWas[colNote] = colNote.ppq   -- capture raw before the reseat mutates it (alias, not a copy)
-      colNote.ppq = tm:fromLogical(note.chan, colNote.ppqL, delayToPPQ(colNote.delay))
-      util.add(reseated, colNote)
-      reseatedCols[col] = true
+    if dirtyChans[note.chan] ~= true and not staleSwing[note.chan] then
+      -- Interval splice: project at the seat, splice into the carried logical lane -- a lane is never
+      -- part-raw, part-logical. see design/rebuild-pipeline.md § The frame law
+      projectEvent(colNote, note.chan)
+      insertNoteCell(col.events, colNote)
+    else
+      -- Wholesale lane: raw until the post-externals flip -- the lane packer packs against it in raw.
+      -- When swing is stale, rederive realised onset from logical; endppq handled by the tail walk.
+      if staleSwing[note.chan] then
+        reseatedWas[colNote] = colNote.ppq   -- capture raw before the reseat mutates it (alias, not a copy)
+        colNote.ppq = tm:fromLogical(note.chan, colNote.ppqL, delayToPPQ(colNote.delay))
+        util.add(reseated, colNote)
+        reseatedCols[col] = true
+      end
+      util.add(col.events, colNote)
+      util.add(rawSeated, colNote)
     end
-    util.add(col.events, colNote)
     stampColEvt(colNote)
   end
   -- The reseat rewrote onsets after placement, disordering these lanes; the view + fx walk read
@@ -1839,7 +1849,7 @@ local function rebuildInternals()
   end
   reseats.commit()
 
-  return internal, external, noteExisting
+  return rawSeated, external, noteExisting
 end
 
 ----- Rebuild CCs
@@ -3828,17 +3838,17 @@ local function rebuildPipeline(didReload)
     extraColumns = ds:get('extraColumns'),
   }
 
-  perf.start('internals'); local internal, external, noteExisting = rebuildInternals(); perf.stop('internals')  -- partition; internal cols; reseat swing notes
+  perf.start('internals'); local rawSeated, external, noteExisting = rebuildInternals(); perf.stop('internals')  -- partition; internal cols; reseat swing notes
   perf.start('ccs'); local ccExisting = rebuildCCs(sources.prevWindows); perf.stop('ccs')  -- CC walk; reseat swing CCs
   staleSwing = {}                               -- swing consumers (partition + CC walk) done; see :53 invariant
   perf.start('extraCols'); rebuildExtraColumns(sources.extraColumns); perf.stop('extraCols')  -- reconcile persisted extra columns
   perf.start('externals'); local seatedExternals = rebuildExternals(external); perf.stop('externals')  -- reintroduce foreign / diverged notes
 
-  -- Note columns flip to logical here, not at ingestion: partition, reseat and the externals' lane
-  -- packer need the raw frame; the walk covers this pass's clones only. see docs/trackerManager.md § Rebuild: logical projection
+  -- Wholesale/stale-swing lanes flip to logical here, not at ingestion: the externals' lane packer
+  -- packs against them in raw. Interval seats spliced logical-born. see docs/trackerManager.md § Rebuild: logical projection
   perf.start('projectNotes')
   local flippedCols = {}
-  for _, evt in ipairs(internal) do
+  for _, evt in ipairs(rawSeated) do
     projectEvent(evt, evt.chan)
     flippedCols[channels[evt.chan].columns.notes[evt.lane]] = true
   end

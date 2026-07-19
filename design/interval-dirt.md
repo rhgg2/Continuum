@@ -15,7 +15,7 @@
 
 | | |
 |---|---|
-| state | landed — phases 1–3; phase 4 2026-07-17; phases 4.5 + 4.75 2026-07-18; model inverted to seed dirt 2026-07-18 (§ The model, inverted); phase 5 landed + measured on glasswork-dense 2026-07-19 (§ phase 5) |
+| state | landed — phases 1–3; phase 4 2026-07-17; phases 4.5 + 4.75 2026-07-18; model inverted to seed dirt 2026-07-18 (§ The model, inverted); phase 5 landed + measured on glasswork-dense 2026-07-19 (§ phase 5); phase 3's note project-before-splice found un-landed, landed 2026-07-19 (§ phase 3) |
 | supersedes | `incremental-rebuild` gap 4 (fx dirt signal) |
 | enduring model it changes | `docs/trackerManager.md` § Derivation dirt |
 | the hard part | was forward propagation — closed 2026-07-15 by onset-bounded closures (§ The crux, closed); same-pitch widens the tails closure rather than leaving tm (§ Same-pitch is a projection artefact), and tails *produces* its closure from the neighbour lookup it already does, rather than consuming a fence it could leak past (§ The tails closure is the walk's output, not its input) |
@@ -770,6 +770,15 @@ The dense take's edit-path `internals` 18.5 + `projLogical` 8.5 +
   I8 touch only the blast radius. `projectLogical` dissolves into
   these two moments. Carried events were logical already, so retention
   is unchanged.
+
+  > 2026-07-19: found un-landed for note columns — this bullet was
+  > marked landed while `rebuildInternals` still appended raw clones
+  > and the post-externals flip re-sorted the whole lane (a one-note
+  > edit on the dense take paid ~3ms in `projectNotes`). Same failure
+  > mode § phase 5.5 caught for fx windows. Landed now: interval seats
+  > project at ingestion and splice via `insertNoteCell`; wholesale and
+  > stale-swing lanes keep the flip (the externals lane packer still
+  > packs against them in raw — its port is the next slice).
 - **The raw working set: scratch-from-mm.** Logical-born columns
   strand every raw consumer — the tail walk's gather, `rebuildPbs`'
   lane-1 list, the PA matcher, `rebuildPCs` — so materialisation's

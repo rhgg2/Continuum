@@ -215,9 +215,10 @@ offset on the raw note-on, not a frame of its own. tm's role:
   sorted by logical ppq; `endppq` leaves as the authored logical
   ceiling (`endppqL`, or `util.OPEN`).
 - **um and rebuild work in realisation** — REAPER's storage frame.
-  Note columns flip to logical right after the externals pass (the
-  partition/reseat/lane-packing stages need raw); cc-family columns
-  flip as they build (`projectEvent`), and the tail walk re-stamps the
+  Interval-dirty note seats project as they splice; wholesale and
+  stale-swing lanes flip right after the externals pass (the lane
+  packer packs against them in raw); cc-family columns flip as they
+  build (`projectEvent`), and the tail walk re-stamps the
   notes it moves or clips. `tm:addEvent` / `tm:assignEvent` translate
   logical to raw (adding delay back) on writes to mm.
 
@@ -429,10 +430,11 @@ runs it, with a pointer to its detail where one exists.
   channel's PC stream from current note state. Runs after externals so a
   foreign-MIDI note inherits its sample from the prevailing PC.
   → § PC synthesis under trackerMode.
-- There is no tail projection pass: note columns flip right after
-  externals, cc-family columns flip as they build (`projectEvent`), and
-  the tail walk re-stamps the `delayC`/`endppqC` render cues on the
-  notes it moves or clips. → § Rebuild: logical projection.
+- There is no tail projection pass: interval note seats project as
+  they splice, wholesale/stale-swing lanes flip right after externals,
+  cc-family columns flip as they build (`projectEvent`), and the tail
+  walk re-stamps the `delayC`/`endppqC` render cues on the notes it
+  moves or clips. → § Rebuild: logical projection.
 
 All projection runs through `projectCC(cc, overlay)`: it clones the
 source event, strips only `chan` and `cc`, and applies the caller's
@@ -1049,11 +1051,14 @@ and `intervals.lua` are all retired now. See `design/interval-dirt.md`
 
 ## Rebuild: logical projection
 
-Projection is build-time: note columns flip right after the externals
-pass (partition, reseat and lane-packing need the raw frame), cc-family
-columns flip as they build (`projectEvent`), and the tail walk
-re-stamps `delayC`/`endppqC` on the notes it moves or clips — there is
-no end-of-pipeline pass. The frame contract is unchanged:
+Projection is build-time: interval-dirty note seats project at
+ingestion and splice into the carried logical lane (the frame law — a
+lane is never part-raw, part-logical); wholesale and stale-swing lanes
+flip right after the externals pass (the lane packer packs against
+them in raw); cc-family columns flip as they build (`projectEvent`);
+and the tail walk re-stamps `delayC`/`endppqC` on the notes it moves
+or clips — there is no end-of-pipeline pass. The frame contract is
+unchanged:
 
 tv surface is logical-only: both onset and tail leave here in the
 authoring frame; raw stays private to tm/mm. `evt.ppq` and `evt.endppq`
