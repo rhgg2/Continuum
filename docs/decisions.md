@@ -4,6 +4,11 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-19** — `expandChannel` reads its note producers from the fx-window map's keys
+  (per-channel, `(lane, ppq)`-sorted), over rescanning every column for `host.fx`. The keys
+  already are the non-pa fx cells (on-take + restored); extends the `parkRegions` map-reuse
+  precedent and removes the last per-dirty-channel O(channel) fx scan.
+
 - **2026-07-19** — Note-column order is a writer-maintained invariant, over a consolidated sort in
   `computeFxWindows`. Each writer that seats into a note lane (seating reseat, externals, the
   raw→logical flip, PA projection) leaves it ppq-ordered — sparse writers splice via

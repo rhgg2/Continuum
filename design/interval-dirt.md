@@ -1466,10 +1466,12 @@ of the scan on both fixtures — a parked/restored cell has no um entry, so
 it is excluded [landed]; (3) `computeFxWindows(extraFxChans)` walks only
 fx-active channels, and the ordering moves to the four writers via the new
 `util.insertSorted` primitive — the blanket sort and the all-channel walk
-both gone; the fx floor is now zero [landed]; (4) `expandChannel`'s
-producer enumeration still scans every dirty channel for `host.fx` — give
-it the same `fxHosts` + restored-cell inputs; (5) folded into (3): the
-sort question is settled, not deferred.
+both gone; the fx floor is now zero [landed]; (4) `expandChannel` reads its
+note producers from the fx-window map's keys (the on-take + restored fx cells
+`computeFxWindows` already emitted), bucketed per channel and `(lane, ppq)`-sorted —
+the last per-dirty-channel `host.fx` column scan gone, extending commit 1's
+map-reuse precedent [landed]; (5) folded into (3): the sort question is
+settled, not deferred.
 
 ### Phase 6 — seats, PCs, and the sample stamp (profile-gated)
 

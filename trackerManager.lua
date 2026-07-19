@@ -2493,7 +2493,22 @@ end
 -- reconcile vs existing, note writes deferred to the tail walk. see design/note-macros-v2.md § Offline continuous realisation
 local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWindows, fxRegions)
   -- Columns must be ppq-ordered here (eachWindowNote / allocateRegionLanes / membersOf read col.events
-  -- directly); the computeFxWindows call immediately upstream sorted them and nothing since reorders.
+  -- directly); the writers seat in order and nothing since reorders. see docs/decisions.md § 2026-07-19
+
+  -- fxWindow's keys are exactly the non-pa fx cells (computeFxWindows emitted them, on-take + restored);
+  -- bucket by channel, (lane, ppq)-sorted, so expandChannel reads producers instead of rescanning columns.
+  local fxHostsByChan = {}
+  for host in pairs(fxWindow) do
+    local bucket = fxHostsByChan[host.chan]
+    if not bucket then bucket = {}; fxHostsByChan[host.chan] = bucket end
+    util.add(bucket, host)
+  end
+  for _, bucket in pairs(fxHostsByChan) do
+    table.sort(bucket, function(a, b)
+      if a.lane ~= b.lane then return a.lane < b.lane end
+      return a.ppq < b.ppq
+    end)
+  end
 
   -- Region note-park windows: a parked cell inside one is region membership, not a note host.
   local function noteParkCovered(chan, ppq)
@@ -2728,12 +2743,8 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
 
     -- Note producers. Only augment hosts (continuous kinds) remain on-take -- a discrete-replace
     -- host was parked at 4.5 and runs from its parked cell below. Derived notes ride the host lane.
-    for laneIdx, col in ipairs(channels[chan].columns.notes) do
-      for _, host in ipairs(col.events) do
-        if host.fx and host.evType ~= 'pa' then
-          util.add(producers, hostProducer(host, fxWindow[host], laneIdx))
-        end
-      end
+    for _, host in ipairs(fxHostsByChan[chan] or {}) do
+      util.add(producers, hostProducer(host, fxWindow[host], host.lane))
     end
 
     -- Parked note hosts: the host left the take (note-host replace parks, like a region), so
