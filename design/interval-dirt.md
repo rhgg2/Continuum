@@ -1391,12 +1391,13 @@ member, instead of `dirtyChan()`.
 > is a dense-take floor cost, orthogonal to phase 5's macro-take gate.
 
 Four passes rediscover the same fx hosts each rebuild, all O(channel):
-`computeFxWindows`' inner scan (`trackerManager.lua:2417`, run twice —
-`:3737`, `:3769`); the `parkRegions` builder's `host.fx` scan (`:3741`),
-redundant because `computeFxWindows` already emitted `hostWindows[host]`
-for exactly those hosts; `expandChannel`'s producer enumeration
-(`:2679`); and — a *second* kind of O(channel), separate from discovery —
-`computeFxWindows`' per-dirty-channel column sort (`:2413`).
+`computeFxWindows`' inner scan (`trackerManager.lua:2417`, run twice — at
+`:3784` pre-park and `:3821` post-park); the `parkRegions` builder's
+`host.fx` scan, redundant because `computeFxWindows` already emitted
+`hostWindows[host]` for exactly those hosts (removed in commit 1);
+`expandChannel`'s producer enumeration (`:2679`); and — a *second* kind of
+O(channel), separate from discovery — `computeFxWindows`' per-dirty-channel
+column sort (`:2413`).
 
 The rule the whole design turns on: **no part of the fx path is ever
 O(channel).** Discovery is not a per-rebuild question — the set of fx
@@ -1413,16 +1414,33 @@ wholesale reload where everything is new anyway. That is what "recompute
 on `rebuild(true)`" means: rediscover the *list* wholesale, never the
 windows by scanning.
 
-`computeFxWindows` then iterates `fxHosts[chan]`: per host, resolve its
-cell (`byUuid[uuid].colEvt`, stamped at materialisation upstream of both
-call sites) and seek the clip bound — first non-`pa` event with
+`computeFxWindows` runs **twice** per rebuild over two different column
+populations, and discovery differs between them. Before parking (`:3784`)
+the columns hold only on-take internals, so the host set is exactly
+`fxHosts[chan]`. After parking (`:3821`) `rebuildRegionPark` has restored
+self-parked and un-parked fx cells back into the columns — the "replace
+host that lost its note-producing kind falls back to on-take augment"
+case; these carry no live um entry (`umHasEntry` is false), so they are
+*not* in `fxHosts` and never can be. They are the `fxParked` population,
+already enumerated at `parkRegions` (`:3805`). `fxHosts` is therefore the
+*on-take* host set, not the whole scan — the shadow assert in commit 2
+proves exactly that, excluding cells with no um entry.
+
+So the signature carries the second population explicitly:
+`computeFxWindows(extraHostCells)`. It resolves `fxHosts[chan]` to its
+cells (`byUuid[uuid].colEvt`, stamped at materialisation) and unions the
+caller-supplied `extraHostCells` — empty at the pre-park call, the
+restored/parked fx cells at the post-park call (from `rebuildRegionPark`'s
+output plus `sources.fxParked`, both O(#parked), never a channel scan).
+Per host cell it seeks the clip bound — first non-`pa` event with
 `ppq > cell.ppq` in the host's lane column. The window arithmetic is
 unchanged (`min(endppqL-or-takeLenL, nextOnset, takeLenL)`) and keyed by
 the same cell object the consumers already use, so the map is
-byte-identical — a fx-free channel contributes nothing whether scanned or
-skipped. Cost O(#hosts · log n), never O(channel). The `parkRegions`
+byte-identical. A fx-free take has both inputs empty and pays nothing.
+Cost O((#hosts + #parked) · log n), never O(channel). The `parkRegions`
 builder iterates the returned map rather than rescanning; `expandChannel`
-iterates `fxHosts[chan]`.
+iterates `fxHosts[chan]` plus the same parked producers (commit 4 inherits
+this two-population shape).
 
 The sort (`:2413`) is the one open question, because it is load-bearing
 for three downstream stages that read `col.events` in order. `unsortedChans`
@@ -1433,11 +1451,13 @@ Settle that before touching it — it is a distinct commit from the
 discovery work.
 
 Commits, each green alone: (1) `parkRegions` reuses the window map —
-independent, one scan gone; (2) `fxHosts` maintained + wholesale
-re-derive, dead structure, shadow-asserted equal to a full rescan on both
-fixtures; (3) `computeFxWindows` consumes it, parity spec pinning
-byte-identical windows; (4) `expandChannel` consumes it; (5) the sort,
-pending the verification above.
+independent, one scan gone [landed]; (2) `fxHosts` maintained + wholesale
+re-derive, dead structure, shadow-asserted equal to the *on-take* portion
+of the scan on both fixtures — a parked/restored cell has no um entry, so
+it is excluded [landed]; (3) `computeFxWindows(extraHostCells)` consumes
+`fxHosts` and the caller-supplied parked/restored cells, parity spec
+pinning byte-identical windows; (4) `expandChannel` consumes it; (5) the
+sort, pending the verification above.
 
 ### Phase 6 — seats, PCs, and the sample stamp (profile-gated)
 

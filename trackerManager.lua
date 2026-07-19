@@ -615,7 +615,7 @@ end
 
 local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
       flush, reload, idxReconcile, withDeferredSort, clearStaging, absorbReloadDirt,
-      stampColEvt, rawNotes, resortRawNotes do
+      stampColEvt, rawNotes, resortRawNotes, fxHostsFor, umHasEntry do
 
   ----- State
 
@@ -628,6 +628,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   local parkedUuidSeq = 0
   local rawIndex = {}
   local byUuid = {}
+  local fxHosts = {}   -- chan -> { uuid = true } for on-take .fx notes; maintained, never rescanned. see design § Phase 5.5
   local dirtyPcChans = {}
 
   ----- Accessors
@@ -643,6 +644,13 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   -- The pipeline's raw working set, read in place by the walk and its raw consumers
   -- (filtered at use); entries are live um records. see design/interval-dirt.md § Phase 4.5
   function rawNotes(chan) return rawIndex[chan].notes end
+
+  -- The maintained fx-host set for a channel (uuids of on-take .fx notes); computeFxWindows reads it
+  -- instead of rescanning columns. see design/interval-dirt.md § Phase 5.5
+  function fxHostsFor(chan) return fxHosts[chan] end
+
+  -- Does um hold a live entry for this uuid? A parked/restored cell re-enters columns without one.
+  function umHasEntry(uuid) return byUuid[uuid] ~= nil end
 
   -- Ownership is intent, so it is tested logically: a PA carries its own seat and reswings from
   -- it, and a raw-frame test would let a delay or a nudge detach one. see docs/trackerManager.md § PA binding
@@ -664,6 +672,24 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     if evt.evType == 'note' then return rawIndex[chan].notes end
     if evt.evType == 'pb' then return rawIndex[chan].pbs end
   end
+  -- fx-host membership rides the index turnover: set on insert of a .fx note, cleared on removal, so
+  -- computeFxWindows never rescans columns to find hosts. see design/interval-dirt.md § Phase 5.5
+  local function setFxHost(evt)
+    if evt.evType ~= 'note' or not evt.uuid then return end
+    if evt.fx then
+      local set = fxHosts[evt.chan]
+      if not set then set = {}; fxHosts[evt.chan] = set end
+      set[evt.uuid] = true
+    else
+      local set = fxHosts[evt.chan]
+      if set then set[evt.uuid] = nil end
+    end
+  end
+  local function clearFxHost(evt, chan)
+    if evt.evType ~= 'note' or not evt.uuid then return end
+    local set = fxHosts[chan or evt.chan]
+    if set then set[evt.uuid] = nil end
+  end
   -- During a batched reconcile this holds the lists rawIndexInsert touched; the batch
   -- sorts each once at the end instead of re-sorting per insert. nil = sort inline.
   local deferredSort
@@ -671,11 +697,13 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     local tbl = rawIndexListFor(evt, evt.chan)
     if not tbl then return end
     util.add(tbl, evt)
+    setFxHost(evt)
     if deferredSort then deferredSort[tbl] = true else table.sort(tbl, rawThenLogical) end
   end
   local function rawIndexRemove(evt, chan)
     local tbl = rawIndexListFor(evt, chan or evt.chan)
     if not tbl then return end
+    clearFxHost(evt, chan)
     for i, item in ipairs(tbl) do if item == evt then table.remove(tbl, i); return end end
   end
 
@@ -806,6 +834,8 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     elseif (update.ppq ~= nil or update.ppqL ~= nil) and newList then
       table.sort(newList, rawThenLogical)
     end
+    -- A pure fx toggle refreshes the entry in place (no list migration), so the turnover hooks miss it.
+    if update.fx ~= nil then setFxHost(evt) end
     if not evt.realised then return end
     for _, e in ipairs(assigns) do
       if e.uuid == evt.uuid then
@@ -1213,11 +1243,11 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   local function loadIndex()
     mm:reindexIfStale()   -- deferred edits may leave mm sparse/unsorted; events() below needs compact+sorted (item 5)
     byUuid = {}
-    for i = 1, 16 do rawIndex[i] = { notes = {}, pbs = {} } end
+    for i = 1, 16 do rawIndex[i] = { notes = {}, pbs = {} }; fxHosts[i] = {} end
     for _, e in mm:events() do
       local evt = makeEntry(e)
       local tbl = rawIndexListFor(evt, evt.chan)
-      if tbl then util.add(tbl, evt) end
+      if tbl then util.add(tbl, evt); setFxHost(evt) end
     end
     -- mm:events() yields each kind ppq-sorted and the per-channel filter preserves that;
     -- one sort per list settles the logical tie-break the incremental path maintains.
@@ -2404,6 +2434,29 @@ end
 
 ----- Rebuild Fx
 
+-- Phase 5.5 commit 2 scaffold: prove the maintained fxHosts equals what the column scan discovers.
+-- Removed once computeFxWindows consumes fxHosts directly. see design/interval-dirt.md § Phase 5.5
+local function assertFxHostsMatch(fxWindow)
+  local scanned = {}
+  for cell in pairs(fxWindow) do
+    -- Parked/restored fx cells re-enter columns (post-park pass) without a live um entry; fxHosts tracks
+    -- only on-take note hosts, so exclude them from the comparison. see design/interval-dirt.md § Phase 5.5
+    if umHasEntry(cell.uuid) then
+      scanned[cell.chan] = scanned[cell.chan] or {}
+      scanned[cell.chan][cell.uuid] = true
+    end
+  end
+  for chan = 1, 16 do
+    local want, have = scanned[chan] or {}, fxHostsFor(chan) or {}
+    for uuid in pairs(want) do
+      assert(have[uuid], ('fxHosts missing on-take chan %d uuid %s'):format(chan, tostring(uuid)))
+    end
+    for uuid in pairs(have) do
+      assert(want[uuid], ('fxHosts stale chan %d uuid %s'):format(chan, tostring(uuid)))
+    end
+  end
+end
+
 -- fx host voice extents: authored end, take end, or strict next same-lane onset -- soonest wins. A pure,
 -- G4-stable scan of all 16 chans (parking + recognition see the whole set), sort gated by unsortedChans. see design/archive/note-macros.md § host contract, design/archive/logical-column-order.md
 local function computeFxWindows(unsortedChans)
@@ -2434,6 +2487,7 @@ local function computeFxWindows(unsortedChans)
       end
     end
   end
+  assertFxHostsMatch(fxWindow)
   return fxWindow
 end
 
