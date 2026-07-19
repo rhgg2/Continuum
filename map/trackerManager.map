@@ -1,4 +1,4 @@
-@module trackerManager  src=trackerManager.lua  loc=4034  sha=a002180  mode=chunk  self=tm
+@module trackerManager  src=trackerManager.lua  loc=4038  sha=f8cac48  mode=chunk  self=tm
 @deps mm, cm, ds, defaultNoteCols
 
 # Invariants & contracts
@@ -52,21 +52,21 @@
   @contract  pick a lane for an external (unstamped) note via accept → sibling → push bump  @ 1935
   @invariant  called up front after internals placed + swing-reseated; tail walk clips tails after  @ 1936
   @contract  separates and bounds disturbed notes only; a nudged lane-1 onset emits its seat closure  @ 2840
-  @contract  reentrancy-guarded; rebuilds channels[] from mm, reloads um cache, fires 'rebuild'  @ 3795
-  @contract  takeChanged forwarded to subscribers via the captured pendingTakeSwap  @ 3796
-  @contract  dead take (mm:take() nil) is a no-op; tv retains its last frame  @ 3797
-  @contract  rebuild fires at end of every rebuild after the um cache is reloaded  @ 3833
-  @invariant  takeChanged is true only when rebuild followed bindTake; signals take-tier reload  @ 3834
-  @invariant  tvOnlyKeys skip the configChanged rebuild; defaultSwing is the sole remaining cm key  @ 3841
-  @invariant  dataChanged 'swing' → global change marks all 16, else only the diffed channels  @ 3844
-  @invariant  configChanged 'swings' → channels resolving to names with diff body vs prevSwings  @ 3845
-  @invariant  prev*-caches refresh after each event and on bindTake  @ 3846
-  @contract  atomic take swap: cm:setContext runs silently; mm:load fires the coherent rebuild  @ 3991
-  @contract  opts.trackerMode (wiring-derived) seeds trackerMode under the same suppression window  @ 3992
-  @contract  opts.markSwingStale=true rebuilds raw from ppqL under new (cm, mm) (seqMgr:reswingAll)  @ 3993
-  @contract  bindTake(nil) is the dormant seam (e.g. samplePage)  @ 3994
-  @contract  opts.skipGuard skips restore/guardTrack; mini stacks never touch the shared guard  @ 3995
-  @invariant  bindTake(nil): cm clears under suppression; mm:load(nil) no-op; tm/tv keep last frame  @ 3996
+  @contract  reentrancy-guarded; rebuilds channels[] from mm, reloads um cache, fires 'rebuild'  @ 3799
+  @contract  takeChanged forwarded to subscribers via the captured pendingTakeSwap  @ 3800
+  @contract  dead take (mm:take() nil) is a no-op; tv retains its last frame  @ 3801
+  @contract  rebuild fires at end of every rebuild after the um cache is reloaded  @ 3837
+  @invariant  takeChanged is true only when rebuild followed bindTake; signals take-tier reload  @ 3838
+  @invariant  tvOnlyKeys skip the configChanged rebuild; defaultSwing is the sole remaining cm key  @ 3845
+  @invariant  dataChanged 'swing' → global change marks all 16, else only the diffed channels  @ 3848
+  @invariant  configChanged 'swings' → channels resolving to names with diff body vs prevSwings  @ 3849
+  @invariant  prev*-caches refresh after each event and on bindTake  @ 3850
+  @contract  atomic take swap: cm:setContext runs silently; mm:load fires the coherent rebuild  @ 3995
+  @contract  opts.trackerMode (wiring-derived) seeds trackerMode under the same suppression window  @ 3996
+  @contract  opts.markSwingStale=true rebuilds raw from ppqL under new (cm, mm) (seqMgr:reswingAll)  @ 3997
+  @contract  bindTake(nil) is the dormant seam (e.g. samplePage)  @ 3998
+  @contract  opts.skipGuard skips restore/guardTrack; mini stacks never touch the shared guard  @ 3999
+  @invariant  bindTake(nil): cm clears under suppression; mm:load(nil) no-op; tm/tv keep last frame  @ 4000
 
 # Shapes
   @shape  channel = { chan, columns = { notes, ccs={[ccNum]=col}, [pc], [pb], [at] } }  @ 19
@@ -117,8 +117,8 @@
   @state EPS = 1  @ 88
   @state pbLimCents  @ 142
   @state REALISATION = { delayC = true, endppqC = true, loc = true, realised = t...  @ 2012
-  @state rebuilding = false  @ 3693
-  @state mmReloaded = false  @ 3696
+  @state rebuilding = false  @ 3697
+  @state mmReloaded = false  @ 3700
 
 # Private functions
   -- STATE
@@ -433,29 +433,29 @@
       -- seed's raw-ppq cluster in the sorted index (plus extras) -- bounded, not a channel sweep.
   @fn rebuildTails(noteLive, deferred, restoredNotes)  @ 3187-3248
   -- Rebuild Pbs
-  @fn rebuildPbs(fxOut, extraColumns)  @ 3254-3646
+  @fn rebuildPbs(fxOut, extraColumns)  @ 3254-3650
       -- Reseat absorber pbs against the post-walk lane-1 layout, recompute their raw vals,
       -- and project the pb column. see docs/tuning.md § Absorber reconciliation
   -- Rebuild PCs
-  @fn rebuildPCs(noteLive)  @ 3652-3689
+  @fn rebuildPCs(noteLive)  @ 3656-3693
       -- PC synthesis (trackerMode only). Runs after externals so a foreign-MIDI note inherits
       -- sample from the prevailing PC.
   -- Rebuild
-  @fn rebuildPipeline(didReload)  @ 3700-3793
-      @contract  the staging pipeline; runs inside tm:rebuild's mm:modify, never called bare  @ 3698
-      @invariant  nine stages stage mm ops; all nest, so reindex/reprojection defer to one unwind  @ 3699
+  @fn rebuildPipeline(didReload)  @ 3704-3797
+      @contract  the staging pipeline; runs inside tm:rebuild's mm:modify, never called bare  @ 3702
+      @invariant  nine stages stage mm ops; all nest, so reindex/reprojection defer to one unwind  @ 3703
   -- Lifecycle
-  @fn readSwings()  @ 3849
+  @fn readSwings()  @ 3853
       -- Merged-tier read: a save at any tier lands in the same merged view, so diff
       -- captures real change to the composite a channel will resolve to.
-  @fn snapshotSwingState()  @ 3853-3856
-  @fn swingChannelDiff(prev, cur)  @ 3858-3865
-  @fn changedSwingNames(prev, cur)  @ 3867-3877
-  @fn channelsResolvingTo(names)  @ 3880-3892
+  @fn snapshotSwingState()  @ 3857-3860
+  @fn swingChannelDiff(prev, cur)  @ 3862-3869
+  @fn changedSwingNames(prev, cur)  @ 3871-3881
+  @fn channelsResolvingTo(names)  @ 3884-3896
       -- Global swing shadows the per-channel slots: a hit on the global name affects all 16.
       · Anticipative-FX guard (see docs/trackerManager.md § Anticipative-FX guard)
-  @fn trackByGuid(guid)  @ 3968-3973
-  @fn guardTrack(track)  @ 3975-3980
+  @fn trackByGuid(guid)  @ 3972-3977
+  @fn guardTrack(track)  @ 3979-3984
 
 # Public API (tm:*)
   @api tm:byUuid(uuid)  @ 936
@@ -503,61 +503,61 @@
       @contract  sweeps only chans with a mute delta or rebuild dirt; assign only when n.muted differs  @ 1506
       @invariant  lastMuteSet also tags later-added notes (add path stamps muted at insert)  @ 1507
       @invariant  PA events ride along in note columns but carry no mute state — skipped  @ 1508
-  @api tm:rebuild(takeChanged)  @ 3799-3836
+  @api tm:rebuild(takeChanged)  @ 3803-3840
       -- see docs/trackerManager.md § Rebuild
-  @api tm:restoreGuarded()  @ 3983-3989
-      @contract  restores the guarded track's prior I_PERFFLAGS, clears the record; no-op if none  @ 3982
-  @api tm:bindTake(take, opts)  @ 3997-4014
-  @api tm:detach()  @ 4017-4023
-      @contract  take died under us — nils mm.take so tm:currentTake reads nil; not bindTake(nil) seam  @ 4016
-  @api tm:currentTake()  @ 4025
-  @api tm:reloadFromReaper()  @ 4029
-      @contract  re-reads the bound take from REAPER; mm:reload fires standard reload→rebuild  @ 4027
-      @invariant  reloadFromReaper does not swap take; for coord's external-mutation watcher  @ 4028
+  @api tm:restoreGuarded()  @ 3987-3993
+      @contract  restores the guarded track's prior I_PERFFLAGS, clears the record; no-op if none  @ 3986
+  @api tm:bindTake(take, opts)  @ 4001-4018
+  @api tm:detach()  @ 4021-4027
+      @contract  take died under us — nils mm.take so tm:currentTake reads nil; not bindTake(nil) seam  @ 4020
+  @api tm:currentTake()  @ 4029
+  @api tm:reloadFromReaper()  @ 4033
+      @contract  re-reads the bound take from REAPER; mm:reload fires standard reload→rebuild  @ 4031
+      @invariant  reloadFromReaper does not swap take; for coord's external-mutation watcher  @ 4032
 
 # Signals emitted (via util.installHooks)
   @emits preflush   -- (adds, assigns, deletes)   @ flush:1124
   @emits postflush   -- nil   @ flush:1139,1206
-  @emits rebuild   -- takeChanged:boolean   @ rebuild:3835
+  @emits rebuild   -- takeChanged:boolean   @ rebuild:3839
 
 # Uses (outbound edges)
-  @use call    cm:boundTake  @ 3921,3941
-  @use call    cm:get  @ derivationInputs:131,132,133 pbLim:144 flush:1125 currentSwing:1306 externalLanePacker:1886 rebuildExternals:1960 rebuildFx:2505 rebuildPCs:3653 readSwings:3849
-  @use call    cm:set  @ bindTake:4002
-  @use call    cm:setContext  @ bindTake:4001 detach:4020
-  @use call    ds:assign  @ flushParked:1109 rebuildExtraColumns:1878 persistParked:2030 rebuildPipeline:3781 guardTrack:3978
-  @use call    ds:delete  @ restoreGuarded:3988
-  @use call    ds:get  @ derivationInputs:134,135,136 flushParked:1093,1109 currentSwing:1312 rebuildPipeline:3712,3713,3714,3715 3851,3943 snapshotSwingState:3855 channelsResolvingTo:3883 restoreGuarded:3984
+  @use call    cm:boundTake  @ 3925,3945
+  @use call    cm:get  @ derivationInputs:131,132,133 pbLim:144 flush:1125 currentSwing:1306 externalLanePacker:1886 rebuildExternals:1960 rebuildFx:2505 rebuildPCs:3657 readSwings:3853
+  @use call    cm:set  @ bindTake:4006
+  @use call    cm:setContext  @ bindTake:4005 detach:4024
+  @use call    ds:assign  @ flushParked:1109 rebuildExtraColumns:1878 persistParked:2030 rebuildPipeline:3785 guardTrack:3982
+  @use call    ds:delete  @ restoreGuarded:3992
+  @use call    ds:get  @ derivationInputs:134,135,136 flushParked:1093,1109 currentSwing:1312 rebuildPipeline:3716,3717,3718,3719 3855,3947 snapshotSwingState:3859 channelsResolvingTo:3887 restoreGuarded:3988
   @use call    generators.chainDestType  @ rebuildFx:2610,2614,2738
   @use call    generators.continuousTargets  @ rebuildFx:2652,2665,2744
-  @use call    generators.parkWindows  @ rebuildPipeline:3757
+  @use call    generators.parkWindows  @ rebuildPipeline:3761
   @use call    generators.parksNotes  @ rebuildRegionPark:2046 rebuildFx:2702,2732
   @use call    mm:add  @ flush:1198 tileLength:1486 mmBatch:1608,1609
   @use call    mm:assign  @ flush:1195 mmBatch:1605
-  @use call    mm:batch  @ rebuild:3829
+  @use call    mm:batch  @ rebuild:3833
   @use call    mm:byUuid  @ idxReconcile:733
   @use call    mm:ccInterp  @ ccGridStep:158
-  @use call    mm:ccsRaw  @ rebuildCCs:1797 rebuildRegionPark:2165,2267,2296 rebuildPA:2374 rebuildFx:2461 rebuildPbs:3294 rebuildPCs:3679
+  @use call    mm:ccsRaw  @ rebuildCCs:1797 rebuildRegionPark:2165,2267,2296 rebuildPA:2374 rebuildFx:2461 rebuildPbs:3294 rebuildPCs:3683
   @use call    mm:delete  @ flush:1191 mmBatch:1603
   @use call    mm:events  @ loadIndex:1217 tileLength:1465
-  @use call    mm:interpolate  @ evalCurve:236 interpolate:1293 rebuildPbs:3420
+  @use call    mm:interpolate  @ evalCurve:236 interpolate:1293 rebuildPbs:3421
   @use call    mm:length  @ length:1288 currentSwing:1305 setLength:1380 rescaleLength:1407 tileLength:1452
-  @use call    mm:load  @ bindTake:4011
+  @use call    mm:load  @ bindTake:4015
   @use call    mm:modify  @ flush:1189 tileLength:1481 mmBatch:1602
   @use call    mm:name  @ name:1290
   @use call    mm:notesRaw  @ rebuildInternals:1705
   @use call    mm:reindexIfStale  @ loadIndex:1214
-  @use call    mm:reload  @ reloadFromReaper:4029
+  @use call    mm:reload  @ reloadFromReaper:4033
   @use call    mm:resolution  @ ccGridStep:158 delayToPPQ:421 resolution:1289 currentSwing:1305 setLength:1400 rescaleLength:1409,1445 tileLength:1467 projectEvent:1557 externalLanePacker:1886 rebuildFx:2503 rebuildTails:3189
   @use call    mm:setLength  @ setLength:1400 rescaleLength:1409,1445 tileLength:1467
   @use call    mm:setName  @ setName:1291
-  @use call    mm:take  @ editCursor:1282,1284 playFrom:1495,1496 rebuildExtraColumns:1878 persistParked:2029 rebuildPipeline:3780 rebuild:3801 currentTake:4025
+  @use call    mm:take  @ editCursor:1282,1284 playFrom:1495,1496 rebuildExtraColumns:1878 persistParked:2029 rebuildPipeline:3784 rebuild:3805 currentTake:4029
   @use call    mm:timeSigs  @ timeSigs:1292
-  @use call    mm:unload  @ detach:4022
+  @use call    mm:unload  @ detach:4026
   @use call    perf.count  @ flush:1167 mmBatch:1617
   @use call    perf.report  @ flush:1205
-  @use call    perf.start  @ flush:1143,1188 mmBatch:1601,1612 rebuildPbs:3265,3311,3506,3572,3615,3643 rebuildPipeline:3703,3718,3719,3721,3722,3726,3733,3734,3760,3761,3765,3766,3768,3775,3776,3779,3787,3790 rebuild:3835
-  @use call    perf.stop  @ flush:1204,1205 mmBatch:1611,1618 rebuildPbs:3303,3504,3569,3600,3639,3645 rebuildPipeline:3703,3718,3719,3721,3722,3729,3733,3758,3760,3761,3765,3766,3768,3775,3776,3783,3787,3792 rebuild:3835
+  @use call    perf.start  @ flush:1143,1188 mmBatch:1601,1612 rebuildPbs:3265,3311,3507,3573,3616,3647 rebuildPipeline:3707,3722,3723,3725,3726,3730,3737,3738,3764,3765,3769,3770,3772,3779,3780,3783,3791,3794 rebuild:3839
+  @use call    perf.stop  @ flush:1204,1205 mmBatch:1611,1618 rebuildPbs:3303,3505,3570,3601,3643,3649 rebuildPipeline:3707,3722,3723,3725,3726,3733,3737,3762,3764,3765,3769,3770,3772,3779,3780,3787,3791,3796 rebuild:3839
   @use call    timing.delayToPPQ  @ delayToPPQ:421
   @use call    timing.eval  @ currentSwing:1322,1323
   @use call    timing.invert  @ currentSwing:1328,1330
@@ -566,13 +566,13 @@
   @use call    timing.resolveComposite  @ currentSwing:1310
   @use call    tuning.findTemper  @ rebuildFx:2505
   @use call    tuning.transposeStep  @ rebuildFx:2507
-  @use call    util.add  @ mergeWindows:165,171 overlapping:178 clipToSpanSet:200 subtractSpanSet:210,214 sumStreams:243,263,280,284,291 negated:304 sliceCurve:324,326 chainCuts:355 foldChains:400,403 eachWindowNote:433 membersOf:446 channelStreams:459,464 reconcilePCsForChan:581 rawIndexInsert:673 addLowlevel:784 assignLowlevel:817 deleteLowlevel:827 reconcilePcs:912,919 addParked:1068 assignParked:1072 deleteParked:1076 flushParked:1098 flush:1160 loadIndex:1220 absorbReloadDirt:1238 setLength:1385,1387 rescaleLength:1429 tileLength:1460 pushNoteCol:1536 mmBatch:1593,1594,1595,1597 seedRowsFor:1667,1669 exciseNotes:1685 rebuildInternals:1710,1713,1714,1741,1743 rawSpanMap:1766 rebuildCCs:1790,1802,1839 rebuildExternals:1981,1983 renderUnion:2024 rebuildRegionPark:2062,2068,2069,2071,2090,2114,2115,2142,2170,2178,2185,2199,2225,2248,2249,2276 mergeIndexed:2329,2331,2334 rebuildPA:2380,2396 computeFxWindows:2431 rebuildFx:2475,2480,2593,2594,2609,2622,2633,2661,2666,2682,2693,2705,2710,2779,2795,2810 linearTails:2928,2960,2986 seatMatches:3087,3089 3109,3126,3127,3137,3142,3163,3179 rebuildTails:3202,3204,3212,3237 rebuildPbs:3283,3320,3324,3335,3380,3408,3515,3543,3547,3626,3633 rebuildPCs:3661,3667,3683 rebuildPipeline:3736,3741,3753
+  @use call    util.add  @ mergeWindows:165,171 overlapping:178 clipToSpanSet:200 subtractSpanSet:210,214 sumStreams:243,263,280,284,291 negated:304 sliceCurve:324,326 chainCuts:355 foldChains:400,403 eachWindowNote:433 membersOf:446 channelStreams:459,464 reconcilePCsForChan:581 rawIndexInsert:673 addLowlevel:784 assignLowlevel:817 deleteLowlevel:827 reconcilePcs:912,919 addParked:1068 assignParked:1072 deleteParked:1076 flushParked:1098 flush:1160 loadIndex:1220 absorbReloadDirt:1238 setLength:1385,1387 rescaleLength:1429 tileLength:1460 pushNoteCol:1536 mmBatch:1593,1594,1595,1597 seedRowsFor:1667,1669 exciseNotes:1685 rebuildInternals:1710,1713,1714,1741,1743 rawSpanMap:1766 rebuildCCs:1790,1802,1839 rebuildExternals:1981,1983 renderUnion:2024 rebuildRegionPark:2062,2068,2069,2071,2090,2114,2115,2142,2170,2178,2185,2199,2225,2248,2249,2276 mergeIndexed:2329,2331,2334 rebuildPA:2380,2396 computeFxWindows:2431 rebuildFx:2475,2480,2593,2594,2609,2622,2633,2661,2666,2682,2693,2705,2710,2779,2795,2810 linearTails:2928,2960,2986 seatMatches:3087,3089 3109,3126,3127,3137,3142,3163,3179 rebuildTails:3202,3204,3212,3237 rebuildPbs:3283,3320,3324,3335,3380,3409,3516,3544,3548,3627,3637 rebuildPCs:3665,3671,3687 rebuildPipeline:3740,3745,3757
   @use call    util.assign  @ foldSub:367 soundingCell:510 refreshEntry:723 assignLowlevel:795 flushParked:1102 projectCC:1544 rebuildExternals:1979 parkSpec:2014 rebuildRegionPark:2119,2131,2181,2209,2287,2306 rebuildFx:2560
   @use call    util.bucket  @ allocateRegionLanes:478,484,496 reconcilePCsForChan:576 seedEvent:776 assignLowlevel:797 flush:1150,1153 realiseParked:1997 rebuildRegionPark:2078,2255 rebuildFx:2463,2489,2495,2520,2534,2612,2646,2764,2765 linearTails:2925 3118 rebuildTails:3194 rebuildPbs:3298
   @use call    util.clamp  @ centsToRaw:149 sumStreams:254 rebuildFx:2797 rebuildPbs:3336
-  @use call    util.clone  @ soundingCell:510 tileLength:1459,1485 setMutedChannels:1511 projectCC:1542 rebuildInternals:1709,1712 rebuildCCs:1825 rebuildExternals:1978 parkSpec:2014 rebuildRegionPark:2108,2119,2131,2181,2209,2225,2234,2275,2287,2306 rebuildPbs:3296,3554
-  @use call    util.deepClone  @ flushParked:1093 rebuildPipeline:3791 3850,3851,3928,3949 snapshotSwingState:3854,3855
-  @use call    util.deepEq  @ flushParked:1109 persistParked:2029 rebuildPipeline:3780 changedSwingNames:3871 bindTake:4010
+  @use call    util.clone  @ soundingCell:510 tileLength:1459,1485 setMutedChannels:1511 projectCC:1542 rebuildInternals:1709,1712 rebuildCCs:1825 rebuildExternals:1978 parkSpec:2014 rebuildRegionPark:2108,2119,2131,2181,2209,2225,2234,2275,2287,2306 rebuildPbs:3296,3555
+  @use call    util.deepClone  @ flushParked:1093 rebuildPipeline:3795 3854,3855,3932,3953 snapshotSwingState:3858,3859
+  @use call    util.deepEq  @ flushParked:1109 persistParked:2029 rebuildPipeline:3784 changedSwingNames:3875 bindTake:4014
   @use call    util.installHooks  @ 62
   @use call    util.key  @ fxKey:601 flush:1150,1153 rebuildRegionPark:2242,2245 rebuildFx:2490,2494,2821
   @use call    util.pick  @ membersOf:446 makeEntry:703 rebuildRegionPark:2111 rebuildFx:2559
@@ -580,20 +580,20 @@
   @use call    util.seek  @ detuneAt:639 addEvent:1047 linearTails:2962,2963 rebuildPbs:3261
   @use call    voicing.resolveGroup  @ flush:1160
   @use call    voicing.separateOnset  @ makeTailRules:2850
-  @use forward mm:notesDeduped  @ 3899
-  @use forward mm:takeSwapped  @ 3901
-  @use forward mm:uuidsReassigned  @ 3900
+  @use forward mm:notesDeduped  @ 3903
+  @use forward mm:takeSwapped  @ 3905
+  @use forward mm:uuidsReassigned  @ 3904
   @use require generators  @ 53
   @use require perf  @ 54
   @use require timing  @ 43
   @use require tuning  @ 44
   @use require util  @ 42
   @use require voicing  @ 45
-  @use sub     cm:configChanged  @ 3920
-  @use sub     ds:dataChanged  @ 3937
-  @use sub     mm:collisionsResolved  @ 3904
-  @use sub     mm:reload  @ 3908
-  @use sub     mm:takeSwapped  @ 3907
+  @use sub     cm:configChanged  @ 3924
+  @use sub     ds:dataChanged  @ 3941
+  @use sub     mm:collisionsResolved  @ 3908
+  @use sub     mm:reload  @ 3912
+  @use sub     mm:takeSwapped  @ 3911
 
 # REAPER API surface
   @reaper GetCursorPosition
@@ -609,15 +609,15 @@
 
 # Fields (r read / w write incl. constructor keys)
   @field r OPEN  @ eachWindowNote:436 stampEndppq:948,949 setLength:1386 projectEvent:1563,1564 realiseParked:2003 rebuildRegionPark:2131 computeFxWindows:2429 makeTailRules:2867,2894
-  @field r OPEN  @ rebuildPipeline:3751
-  @field r REMOVE  @ realiseNoteUpdate:965 addEvent:1049 flushParked:1109 persistParked:2030 rebuildPipeline:3781
+  @field r OPEN  @ rebuildPipeline:3755
+  @field r REMOVE  @ realiseNoteUpdate:965 addEvent:1049 flushParked:1109 persistParked:2030 rebuildPipeline:3785
   @field w add  @ reconcilePcs:924 mmBatch:1595
   @field w addLazy  @ mmBatch:1597
   @field w assign  @ mmBatch:1594
   @field r at  @ channelStreams:463 rebuildExtraColumns:1873
   @field w at  @ rebuildExtraColumns:1873
   @field w ats  @ rebuildFx:2558
-  @field r bps  @ rebuildPbs:3415,3483,3488
+  @field r bps  @ rebuildPbs:3416,3484,3489
   @field w bps  @ rebuildPbs:3324
   @field r cc  @ findParked:1085 rawSpanMap:1765,1766 rebuildCCs:1801,1803,1832,1833 rebuildRegionPark:2048
   @field r cc  @ rebuildRegionPark:2212,2223,2224,2233 rebuildFx:2489,2490,2809,2810
@@ -626,12 +626,12 @@
   @field r ccDefaultRest  @ rebuildFx:2575,2787
   @field r ccs  @ forEachEvent:536 rebuildCCs:1832,1833,1844 rebuildExtraColumns:1874,1875 rebuildRegionPark:2196,2223,2224,2232 rebuildFx:2492
   @field r ccs  @ rebuildFx:2560,2570,2581,2613
-  @field w ccs  @ rebuildFx:2558,2560 rebuild:3816,3820
+  @field w ccs  @ rebuildFx:2558,2560 rebuild:3820,3824
   @field r cents  @ refreshEntry:719 assignEvent:1020 addEvent:1044,1049 flush:1178,1179,1184 rebuildRegionPark:2274 rebuildFx:2462,2463,2475,2480
-  @field r cents  @ rebuildPbs:3399,3419,3444,3485,3526,3542,3545,3548,3578
-  @field r cents  @ rebuildPbs:3584,3586,3588,3594,3624
-  @field w cents  @ refreshEntry:719 addEvent:1049 2012 rebuildRegionPark:2289,2306 rebuildFx:2463 rebuildPbs:3336,3400,3449,3451,3453,3471
-  @field w cents  @ rebuildPbs:3485,3501,3545,3584,3586,3588
+  @field r cents  @ rebuildPbs:3400,3420,3445,3486,3527,3543,3546,3549,3579
+  @field r cents  @ rebuildPbs:3585,3587,3589,3595,3625
+  @field w cents  @ refreshEntry:719 addEvent:1049 2012 rebuildRegionPark:2289,2306 rebuildFx:2463 rebuildPbs:3336,3401,3450,3452,3454,3472
+  @field w cents  @ rebuildPbs:3486,3502,3546,3585,3587,3589
   @field r chan  @ forEachEvent:524 forEachAttachedPA:652 rawIndexInsert:671 rawIndexRemove:677 idxReconcile:735 seedEvent:776 addLowlevel:781 assignLowlevel:790,796,802
   @field r chan  @ deleteLowlevel:821 addNote:846,847 deleteNote:852 resizeNote:869 assignNote:891,892 reconcilePcs:911
   @field r chan  @ reconcilePcs:917 realiseNoteUpdate:979,981,989 realiseAddPpq:1002,1004,1006 assignEvent:1018 addEvent:1047 findParked:1085 flushParked:1096
@@ -640,30 +640,30 @@
   @field r chan  @ rebuildExternals:1969,1971,1972 renderUnion:2024 rebuildRegionPark:2048,2100,2105,2106,2112,2129,2166
   @field r chan  @ rebuildRegionPark:2177,2180,2182,2217,2222,2232,2242,2245,2255,2256,2266
   @field r chan  @ rebuildRegionPark:2266,2267,2269,2270,2286,2288,2295,2296,2298 findNoteColumnForPitch:2345,2355
-  @field r chan  @ findNoteColumnForPitch:2356 rebuildFx:2449,2463,2515,2518,2524,2534 makeTailRules:2845 3111 rebuildTails:3194 rebuildPbs:3298 rebuildPipeline:3727
-  @field r chan  @ rebuildPipeline:3728,3752,3753
-  @field w chan  @ reconcilePCsForChan:592 757,3099 rebuildFx:2557,2623,2795,2810 linearTails:2907 rebuildPbs:3545,3552 rebuildPipeline:3741,3753
-  @field w chan  @ rebuild:3816,3820
-  @field r chans  @ 3912,3913
+  @field r chan  @ findNoteColumnForPitch:2356 rebuildFx:2449,2463,2515,2518,2524,2534 makeTailRules:2845 3111 rebuildTails:3194 rebuildPbs:3298 rebuildPipeline:3731
+  @field r chan  @ rebuildPipeline:3732,3756,3757
+  @field w chan  @ reconcilePCsForChan:592 757,3099 rebuildFx:2557,2623,2795,2810 linearTails:2907 rebuildPbs:3546,3553 rebuildPipeline:3745,3757
+  @field w chan  @ rebuild:3820,3824
+  @field r chans  @ 3916,3917
   @field r clampWrites  @ makeTailRules:2847
   @field w clampWrites  @ linearTails:2909 3101
   @field r clone  @ rebuildRegionPark:2187
   @field r closed  @ sumStreams:291 foldChains:402
   @field w closed  @ foldSub:367 rebuildFx:2578,2793 rebuildPbs:3331
   @field r cm  @ 56
-  @field r colEvt  @ idxReconcile:743 makeTailRules:2856,2857,2859,2887,2891,2893,2894,2895 rebuildPCs:3662 rebuildPipeline:3773
-  @field r colEvt  @ rebuildPipeline:3773
+  @field r colEvt  @ idxReconcile:743 makeTailRules:2856,2857,2859,2887,2891,2893,2894,2895 rebuildPCs:3666 rebuildPipeline:3777
+  @field r colEvt  @ rebuildPipeline:3777
   @field w colEvt  @ 715 idxReconcile:743 stampColEvt:752 rebuildRegionPark:2112
   @field r columns  @ eachWindowNote:428 channelStreams:453 forEachEvent:524 reconcilePCsForChan:573 setMutedChannels:1519 pushNoteCol:1535 exciseNotes:1681 rebuildInternals:1726 rebuildCCs:1832,1833,1835
   @field r columns  @ rebuildCCs:1836,1844,1846 rebuildExtraColumns:1862 externalLanePacker:1938 rebuildRegionPark:2085,2107,2115,2116,2130,2139
-  @field r columns  @ rebuildRegionPark:2196,2223,2224,2232 findNoteColumnForPitch:2341 computeFxWindows:2414,2417 rebuildFx:2492,2518,2679 rebuildPbs:3638 rebuildPCs:3678
-  @field r columns  @ rebuildPCs:3683,3686 rebuildPipeline:3738 rebuild:3820,3821
-  @field w columns  @ rebuild:3816,3820
+  @field r columns  @ rebuildRegionPark:2196,2223,2224,2232 findNoteColumnForPitch:2341 computeFxWindows:2414,2417 rebuildFx:2492,2518,2679 rebuildPbs:3642 rebuildPCs:3682
+  @field r columns  @ rebuildPCs:3687,3690 rebuildPipeline:3742 rebuild:3824,3825
+  @field w columns  @ rebuild:3820,3824
   @field w commit  @ mmBatch:1598
   @field r curve  @ foldWhole:335,338,340 foldSub:371,374,376 foldChains:392
   @field w curve  @ rebuildFx:2609,2613
   @field r defaultNoteCols  @ 59
-  @field w defaultSwing  @ 3842
+  @field w defaultSwing  @ 3846
   @field r deferred  @ makeTailRules:2847
   @field w deferred  @ linearTails:2909 3101
   @field w del  @ reconcilePcs:924 mmBatch:1593
@@ -675,10 +675,10 @@
   @field w delayPpq  @ hostProducer:517 rebuildFx:2711
   @field r delta  @ rebuildFx:2569,2572,2578
   @field r derived  @ rawThenLogical:102 reconcilePCsForChan:590 fxKey:601 refreshEntry:719 rebuildInternals:1708 rebuildCCs:1809 rebuildRegionPark:2268 walkable:2319 rebuildFx:2462
-  @field r derived  @ rebuildFx:2646 makeTailRules:2866 linearTails:2918 nextSamePitch:3063 3107 rebuildPbs:3408,3514,3515,3579,3580,3591,3619
-  @field w derived  @ reconcilePCsForChan:592 addEvent:1049 2012 rebuildFx:2623 nextSamePitch:3063 rebuildPbs:3514,3546
+  @field r derived  @ rebuildFx:2646 makeTailRules:2866 linearTails:2918 nextSamePitch:3063 3107 rebuildPbs:3409,3515,3516,3580,3581,3592,3620
+  @field w derived  @ reconcilePCsForChan:592 addEvent:1049 2012 rebuildFx:2623 nextSamePitch:3063 rebuildPbs:3515,3547
   @field r dest  @ rebuildFx:2567,2588
-  @field r detune  @ mergeDetunes:413 fxKey:602 detuneAt:640 addEvent:1037 rebuildInternals:1735 rebuildExternals:1975 rebuildFx:2624 rebuildPbs:3262,3379,3624
+  @field r detune  @ mergeDetunes:413 fxKey:602 detuneAt:640 addEvent:1037 rebuildInternals:1735 rebuildExternals:1975 rebuildFx:2624 rebuildPbs:3262,3379,3625
   @field w detune  @ 757 addEvent:1037 rebuildInternals:1735 rebuildExternals:1975 rebuildFx:2624
   @field r disturbed  @ makeTailRules:2846
   @field w disturbed  @ linearTails:2908 3100
@@ -691,9 +691,9 @@
   @field r endppq  @ stampEndppq:951 realiseNoteUpdate:976,988,991 realiseAddPpq:1006 setLength:1386 rescaleLength:1423 tileLength:1474,1476
   @field r endppq  @ projectEvent:1561,1562 rawSpanMap:1767 externalLanePacker:1913,1917,1925,1927 rebuildExternals:1967,1972 realiseParked:2003
   @field r endppq  @ rebuildRegionPark:2049,2113,2120,2131,2242,2245,2256,2266,2295 findNoteColumnForPitch:2346,2347 computeFxWindows:2429
-  @field r endppq  @ computeFxWindows:2429,2430 rebuildFx:2449,2626,2628,2700 makeTailRules:2886 rebuildPipeline:3751,3752
+  @field r endppq  @ computeFxWindows:2429,2430 rebuildFx:2449,2626,2628,2700 makeTailRules:2886 rebuildPipeline:3755,3756
   @field w endppq  @ membersOf:446 soundingCell:510 reconcileFx:610 resizeNote:882 stampEndppq:949,951 realiseNoteUpdate:991 setLength:1391 rescaleLength:1434 tileLength:1474 projectEvent:1564,1566
-  @field w endppq  @ projectEvent:1568 rebuildExternals:1967 rebuildRegionPark:2120,2131 rebuildFx:2628 makeTailRules:2888,2889,2894 rebuildPipeline:3741,3753
+  @field w endppq  @ projectEvent:1568 rebuildExternals:1967 rebuildRegionPark:2120,2131 rebuildFx:2628 makeTailRules:2888,2889,2894 rebuildPipeline:3745,3757
   @field r endppqC  @ soundingCell:510 projectEvent:1568 rebuildRegionPark:2156 findNoteColumnForPitch:2356 rebuildFx:2693 makeTailRules:2895
   @field w endppqC  @ projectEvent:1562 realiseParked:2005 2012 rebuildRegionPark:2119 makeTailRules:2893
   @field r endppqL  @ allocateRegionLanes:483,484,495,496 fxKey:601 forEachAttachedPA:650 snapshot:774 resizeNote:860 assignNote:897 stampEndppq:949
@@ -704,50 +704,50 @@
   @field r evType  @ assignDirtiesPb:762 reconcilePcs:911,917 deleteEvent:941 assignEvent:1014,1019 addEvent:1036,1044,1047 addParked:1067 findParked:1081 flush:1150
   @field r evType  @ flush:1153,1178,1183 tileLength:1473 setMutedChannels:1521 rawDivergesFromLogical:1628 exciseNotes:1684 rebuildCCs:1790,1801,1824
   @field r evType  @ rebuildCCs:1831,1835,1836 rebuildRegionPark:2048,2078,2089,2141,2166,2242,2245,2268
-  @field r evType  @ rebuildRegionPark:2297 rebuildPA:2375 computeFxWindows:2422 rebuildFx:2449,2462,2520,2681 3111 rebuildPbs:3295 rebuildPCs:3680 rebuildPipeline:3740,3750
-  @field w evType  @ reconcilePCsForChan:592 makeEntry:704 rebuildFx:2623,2795,2810 rebuildPbs:3546,3552
+  @field r evType  @ rebuildRegionPark:2297 rebuildPA:2375 computeFxWindows:2422 rebuildFx:2449,2462,2520,2681 3111 rebuildPbs:3295 rebuildPCs:3684 rebuildPipeline:3744,3754
+  @field w evType  @ reconcilePCsForChan:592 makeEntry:704 rebuildFx:2623,2795,2810 rebuildPbs:3547,3553
   @field r events  @ eachWindowNote:432 channelStreams:457,463 forEachEvent:526,533,537 reconcilePCsForChan:573 setMutedChannels:1520 exciseNotes:1683 rebuildInternals:1743 rebuildCCs:1839,1844
   @field r events  @ rebuildCCs:1846 externalLanePacker:1910 rebuildExternals:1981 rebuildRegionPark:2064,2086,2090,2115,2116,2140,2197,2199
-  @field r events  @ rebuildRegionPark:2225,2226 findNoteColumnForPitch:2362 rebuildPA:2380,2396 computeFxWindows:2414,2421 rebuildFx:2493,2519,2680 rebuildPbs:3630 rebuildPCs:3683
-  @field r events  @ rebuildPCs:3686 rebuildPipeline:3739 3905
+  @field r events  @ rebuildRegionPark:2225,2226 findNoteColumnForPitch:2362 rebuildPA:2380,2396 computeFxWindows:2414,2421 rebuildFx:2493,2519,2680 rebuildPbs:3631 rebuildPCs:3687
+  @field r events  @ rebuildPCs:3690 rebuildPipeline:3743 3909
   @field w events  @ pushNoteCol:1536 exciseNotes:1688 rebuildCCs:1832,1835 rebuildExtraColumns:1871,1872,1873,1875 rebuildRegionPark:2090,2199,2224,2233
-  @field w events  @ rebuildPbs:3638 rebuildPCs:3678
+  @field w events  @ rebuildPbs:3642 rebuildPCs:3682
   @field r evt  @ deleteLowlevel:833 reconcilePcs:917,918 flushParked:1095 flush:1153,1172,1178
   @field r evt  @ flush:1179,1183,1184,1198,1201 rescaleLength:1432 mmBatch:1605,1606
-  @field r evt  @ rebuildRegionPark:2063,2064 rebuildTails:3204,3205 rebuildPbs:3283 rebuildPCs:3666
+  @field r evt  @ rebuildRegionPark:2063,2064 rebuildTails:3204,3205 rebuildPbs:3283 rebuildPCs:3670
   @field w evt  @ addLowlevel:784 assignLowlevel:817 deleteLowlevel:827 assignParked:1072 deleteParked:1076 rescaleLength:1419 mmBatch:1594 rebuildRegionPark:2090,2199,2276 rebuildFx:2779
   @field r existing  @ reconcileDerived:549,559
   @field w existing  @ reconcilePCsForChan:588 reconcileFx:608 rebuildFx:2820
-  @field r extraColumns  @ rebuildPipeline:3721,3775
-  @field w extraColumns  @ derivationInputs:135 rebuildPipeline:3715
+  @field r extraColumns  @ rebuildPipeline:3725,3779
+  @field w extraColumns  @ derivationInputs:135 rebuildPipeline:3719
   @field w fixed  @ rebuildExternals:1980
-  @field r flags  @ restoreGuarded:3987
-  @field w flags  @ guardTrack:3978
+  @field r flags  @ restoreGuarded:3991
+  @field w flags  @ guardTrack:3982
   @field r frame  @ refreshEntry:719
   @field w frame  @ 2012
   @field w fromLogical  @ currentSwing:1319
   @field r fx  @ hostProducer:515 rebuildRegionPark:2046 computeFxWindows:2427 rebuildFx:2575,2584,2610,2614,2652,2665,2681,2692
-  @field r fx  @ rebuildFx:2711,2738,2744 rebuildPipeline:3740,3742,3750,3754
-  @field w fx  @ hostProducer:515 rebuildFx:2711 rebuildPipeline:3742,3754
-  @field r fxParked  @ rebuildPipeline:3749,3760
-  @field w fxParked  @ derivationInputs:135 rebuildPipeline:3713
+  @field r fx  @ rebuildFx:2711,2738,2744 rebuildPipeline:3744,3746,3754,3758
+  @field w fx  @ hostProducer:515 rebuildFx:2711 rebuildPipeline:3746,3758
+  @field r fxParked  @ rebuildPipeline:3753,3764
+  @field w fxParked  @ derivationInputs:135 rebuildPipeline:3717
   @field w fxPatterns  @ derivationInputs:136
-  @field r fxRegions  @ rebuildPipeline:3736,3766
-  @field w fxRegions  @ derivationInputs:134 rebuildPipeline:3712
-  @field r global  @ currentSwing:1313 channelsResolvingTo:3884 3944
-  @field r guid  @ restoreGuarded:3986
-  @field w guid  @ guardTrack:3978
+  @field r fxRegions  @ rebuildPipeline:3740,3770
+  @field w fxRegions  @ derivationInputs:134 rebuildPipeline:3716
+  @field r global  @ currentSwing:1313 channelsResolvingTo:3888 3948
+  @field r guid  @ restoreGuarded:3990
+  @field w guid  @ guardTrack:3982
   @field r hi  @ sumStreams:254
-  @field r hidden  @ rebuildPbs:3632
-  @field w hidden  @ rebuildPbs:3624
+  @field r hidden  @ rebuildPbs:3636
+  @field w hidden  @ rebuildPbs:3625
   @field r huge  @ firstRestOverride:501 realiseParked:2006 rebuildFx:2719,2787 makeTailRules:2867,2869,2879,2880
   @field r id  @ rebuildFx:2557,2623,2660
   @field w id  @ hostProducer:516 rebuildFx:2557,2711
   @field w keepUuid  @ rebuildRegionPark:2120
   @field r kept  @ rebuildTails:3205 rebuildPbs:3320,3350,3366
   @field w kept  @ rebuildFx:2666,2779 rebuildPbs:3324
-  @field r key  @ reconcilePCsForChan:583 3922
-  @field w key  @ reconcilePCsForChan:589 reconcileFx:608 rebuildFx:2821 rebuildPCs:3662,3667
+  @field r key  @ reconcilePCsForChan:583 3926
+  @field w key  @ reconcilePCsForChan:589 reconcileFx:608 rebuildFx:2821 rebuildPCs:3666,3671
   @field r kind  @ rebuildFx:2585
   @field r kinds  @ rebuildFx:2585
   @field r lane  @ rawThenLogical:103 allocateRegionLanes:484 reconcilePCsForChan:580 laneOne:637 assignDirtiesPb:763 snapshot:774 addLowlevel:781 assignLowlevel:790
@@ -756,24 +756,24 @@
   @field r lane  @ rebuildFx:2557,2620,2623,2693,2721,2726,2731,2779 linearTails:2925,2928,2932
   @field r lane  @ linearTails:2960,2962,2976,2978,2980,2985,2987 nextSamePitch:3063 seatMatches:3083
   @field r lane  @ 3109,3163,3166,3176,3178,3180 rebuildTails:3213,3219 rebuildPbs:3275
-  @field r lane  @ rebuildPbs:3283 rebuildPCs:3661,3667
+  @field r lane  @ rebuildPbs:3283 rebuildPCs:3665,3671
   @field w lane  @ allocateRegionLanes:497 hostProducer:516 757 snapshot:774 reconcilePcs:912,919 addEvent:1039 rebuildExternals:1968,1974 rebuildRegionPark:2091 rebuildPA:2378,2396
   @field w lane  @ rebuildFx:2557,2623,2711,2779 linearTails:2928,2960,2987 nextSamePitch:3063 3109,3163,3180 rebuildTails:3213
-  @field w lane  @ rebuildPCs:3661,3667
+  @field w lane  @ rebuildPCs:3665,3671
   @field r lo  @ sumStreams:254
   @field w loc  @ 2012
   @field r make  @ reconcileDerived:556
   @field w make  @ reconcilePCsForChan:591
-  @field r markSwingStale  @ bindTake:4004
+  @field r markSwingStale  @ bindTake:4008
   @field r match  @ reconcileDerived:552
   @field w match  @ reconcilePCsForChan:590 rebuildFx:2822
-  @field w mergeTiers  @ derivationInputs:131 currentSwing:1306 readSwings:3849
+  @field w mergeTiers  @ derivationInputs:131 currentSwing:1306 readSwings:3853
   @field r mm  @ 56
   @field r mode  @ foldWhole:337 foldSub:373 rebuildFx:2571,2590
   @field w mode  @ rebuildFx:2610,2614
   @field r muted  @ setMutedChannels:1521
   @field w muted  @ addNote:847 setMutedChannels:1522
-  @field r name  @ 3942,3951,3954,3957,3960
+  @field r name  @ 3946,3955,3958,3961,3964
   @field r newDelay  @ rescaleLength:1435
   @field w newDelay  @ rescaleLength:1426
   @field r newEndppq  @ rescaleLength:1434
@@ -786,20 +786,20 @@
   @field w newPpqL  @ rescaleLength:1420
   @field w nextSameLaneNote  @ rebuildFx:2529
   @field r note  @ rebuildRegionPark:2099
-  @field w noteHost  @ rebuildPipeline:3742,3754
-  @field r noteLive  @ rebuildFx:2779 rebuildPbs:3255 rebuildPipeline:3768,3776
+  @field w noteHost  @ rebuildPipeline:3746,3758
+  @field r noteLive  @ rebuildFx:2779 rebuildPbs:3255 rebuildPipeline:3772,3780
   @field w noteLive  @ rebuildFx:2539
   @field r notes  @ eachWindowNote:428 channelStreams:456 forEachEvent:525 detuneAt:639 rawNotes:645 rawIndexListFor:664 resortRawNotes:694 loadIndex:1225 setMutedChannels:1519 pushNoteCol:1535 exciseNotes:1681 rebuildInternals:1726
   @field r notes  @ rebuildExtraColumns:1864,1865,1870 externalLanePacker:1938 rebuildRegionPark:2085,2107,2115,2116,2130,2139 findNoteColumnForPitch:2341
-  @field r notes  @ computeFxWindows:2414,2417 rebuildFx:2513,2518,2558,2590,2593,2594,2621,2679 rebuildPipeline:3738 rebuild:3820
-  @field w notes  @ hostProducer:515 loadIndex:1216 rebuildExtraColumns:1863,1866 rebuildFx:2558,2590,2595,2710 rebuild:3816,3820
+  @field r notes  @ computeFxWindows:2414,2417 rebuildFx:2513,2518,2558,2590,2593,2594,2621,2679 rebuildPipeline:3742 rebuild:3824
+  @field w notes  @ hostProducer:515 loadIndex:1216 rebuildExtraColumns:1863,1866 rebuildFx:2558,2590,2595,2710 rebuild:3820,3824
   @field r nudged  @ makeTailRules:2846
   @field w nudged  @ linearTails:2908 3100
   @field r onKeep  @ reconcileDerived:554
   @field w onKeep  @ reconcileFx:609
   @field r op  @ flushParked:1097,1102
   @field w op  @ addParked:1068 assignParked:1072 deleteParked:1076
-  @field r origShape  @ rebuildPbs:3579
+  @field r origShape  @ rebuildPbs:3580
   @field w origShape  @ rebuildPbs:3297
   @field r overlap  @ makeTailRules:2878
   @field w overlapOffset  @ derivationInputs:133
@@ -811,8 +811,8 @@
   @field r parkedPA  @ rebuildPA:2392
   @field r parkedPb  @ rebuildFx:2474
   @field w pas  @ rebuildFx:2558
-  @field r pb  @ rebuildExtraColumns:1872 rebuildRegionPark:2281 rebuildFx:2570,2607,2665,2735,2770 rebuildPbs:3637 rebuild:3821
-  @field w pb  @ rebuildExtraColumns:1872 rebuildFx:2558,2581 rebuildPbs:3638
+  @field r pb  @ rebuildExtraColumns:1872 rebuildRegionPark:2281 rebuildFx:2570,2607,2665,2735,2770 rebuildPbs:3641 rebuild:3825
+  @field w pb  @ rebuildExtraColumns:1872 rebuildFx:2558,2581 rebuildPbs:3642
   @field r pbBase  @ rebuildFx:2546 rebuildPbs:3255
   @field w pbBase  @ rebuildFx:2539
   @field r pbChains  @ rebuildFx:2609,2666 rebuildPbs:3255
@@ -823,8 +823,8 @@
   @field w pbScope  @ rebuildFx:2539
   @field r pbs  @ rawIndexListFor:665 addEvent:1047 loadIndex:1226
   @field w pbs  @ loadIndex:1216
-  @field r pc  @ reconcilePCsForChan:573 rebuildExtraColumns:1871 rebuildPCs:3683,3686
-  @field w pc  @ rebuildExtraColumns:1871 rebuildPCs:3678
+  @field r pc  @ reconcilePCsForChan:573 rebuildExtraColumns:1871 rebuildPCs:3687,3690
+  @field w pc  @ rebuildExtraColumns:1871 rebuildPCs:3682
   @field r pitch  @ rawThenLogical:104 sortNoteColumn:114 channelStreams:459 fxKey:602 forEachAttachedPA:652 snapshot:774 assignNote:900,901 flush:1150
   @field r pitch  @ flush:1153 externalLanePacker:1926 rebuildExternals:1968 rebuildRegionPark:2156,2166,2177 findNoteColumnForPitch:2346,2355,2363 rebuildPA:2376,2394
   @field r pitch  @ rebuildFx:2624,2721,2725 linearTails:2925,2928,2932,2943,2947,2960,2963,2976
@@ -850,40 +850,40 @@
   @field r ppq  @ linearTails:2978,2979,2986 lowerBound:3003 upperBound:3012 nearestNote:3030,3034 prevSamePitch:3047 seatMatches:3081,3083
   @field r ppq  @ seatMatches:3085,3086,3089 3109,3130,3133,3136
   @field r ppq  @ 3138,3163,3176,3177,3179 rebuildTails:3212,3219,3220
-  @field r ppq  @ rebuildPbs:3334,3335,3339,3380,3392,3399,3400,3408
-  @field r ppq  @ rebuildPbs:3427,3437,3438,3439,3442,3448,3449,3451,3453,3465
-  @field r ppq  @ rebuildPbs:3465,3468,3469,3484,3485,3494,3498,3501
-  @field r ppq  @ rebuildPbs:3514,3516,3524,3530,3532,3542,3568,3580,3583,3609
-  @field r ppq  @ rebuildPbs:3623,3636 rebuildPCs:3661,3667 rebuildPipeline:3741,3753
+  @field r ppq  @ rebuildPbs:3334,3335,3339,3380,3393,3400,3401
+  @field r ppq  @ rebuildPbs:3409,3428,3438,3439,3440,3443,3449,3450,3452,3454,3466
+  @field r ppq  @ rebuildPbs:3466,3469,3470,3485,3486,3495,3499,3502
+  @field r ppq  @ rebuildPbs:3502,3515,3517,3525,3531,3533,3543,3569,3581,3584,3610
+  @field r ppq  @ rebuildPbs:3610,3624,3640 rebuildPCs:3665,3671 rebuildPipeline:3745,3757
   @field w ppq  @ sumStreams:280,284,291 negated:304 sliceCurve:319 membersOf:446 channelStreams:459,464 reconcilePCsForChan:591 757 snapshot:773 resizeNote:869
   @field w ppq  @ resizeNote:882 reconcilePcs:912,919 realiseNoteUpdate:970,972,979,981,983,987 realiseNonNoteUpdate:998 realiseAddPpq:1004 rescaleLength:1433
   @field w ppq  @ tileLength:1470 projectEvent:1559 rebuildInternals:1740,1750 rebuildCCs:1803,1813,1827 rebuildExternals:1967 rebuildRegionPark:2112,2120,2168,2182
   @field w ppq  @ rebuildRegionPark:2209,2273,2288 rebuildFx:2463,2475,2480,2489,2495,2576,2627,2789,2796
-  @field w ppq  @ rebuildFx:2810 makeTailRules:2854,2861 linearTails:2986 nextSamePitch:3063 3179 rebuildTails:3212 rebuildPbs:3335,3380,3545,3552,3583
-  @field w ppq  @ rebuildPCs:3661,3667
+  @field w ppq  @ rebuildFx:2810 makeTailRules:2854,2861 linearTails:2986 nextSamePitch:3063 3179 rebuildTails:3212 rebuildPbs:3335,3380,3546,3553,3584
+  @field w ppq  @ rebuildPCs:3665,3671
   @field r ppqL  @ rawThenLogical:100 allocateRegionLanes:483,484,495,496 reconcilePCsForChan:591 forEachAttachedPA:650,653 refreshEntry:718 snapshot:773
   @field r ppqL  @ assignLowlevel:793,806 resizeNote:860,868,874 assignNote:896,898 reconcilePcs:912,919 realiseNoteUpdate:979
   @field r ppqL  @ realiseNoteUpdate:980,981 realiseNonNoteUpdate:998 realiseAddPpq:1004 tileLength:1471 projectEvent:1552,1556,1559,1573 rawDivergesFromLogical:1626,1629
   @field r ppqL  @ seedCovers:1655,1657,1659 seedRowsFor:1667,1669 rebuildInternals:1740 rebuildCCs:1810,1811 rebuildRegionPark:2121,2166,2168,2273
   @field r ppqL  @ walkable:2319 rebuildFx:2463,2722,2724 makeTailRules:2859,2878 linearTails:2925,2932,2986,2987 nextSamePitch:3063 seatMatches:3081
-  @field r ppqL  @ seatMatches:3083 3179,3180 rebuildPbs:3380,3451,3453,3485,3501,3527,3528,3530
-  @field r ppqL  @ rebuildPbs:3542,3545,3583 rebuildPCs:3661,3667
+  @field r ppqL  @ seatMatches:3083 3179,3180 rebuildPbs:3380,3452,3454,3486,3502,3528,3529,3531
+  @field r ppqL  @ rebuildPbs:3543,3546,3584 rebuildPCs:3665,3671
   @field w ppqL  @ reconcilePCsForChan:591 757 snapshot:773 resizeNote:869,882 reconcilePcs:912,919 realiseNoteUpdate:978 realiseNonNoteUpdate:997 realiseAddPpq:1003 rescaleLength:1436 tileLength:1471
   @field w ppqL  @ rebuildCCs:1818,1828 rebuildExternals:1971 rebuildRegionPark:2113,2121,2182,2209,2288 rebuildFx:2626 linearTails:2986 nextSamePitch:3063 3179
-  @field w ppqL  @ rebuildTails:3212 rebuildPbs:3335,3380,3449,3451,3453,3471,3485,3501,3528,3545,3583
-  @field w ppqL  @ rebuildPbs:3586,3594 rebuildPCs:3661,3667
-  @field r ppqRaw  @ rebuildPbs:3631
-  @field w ppqRaw  @ rebuildPbs:3623
+  @field w ppqL  @ rebuildTails:3212 rebuildPbs:3335,3380,3450,3452,3454,3472,3486,3502,3529,3546,3584
+  @field w ppqL  @ rebuildPbs:3587,3595 rebuildPCs:3665,3671
+  @field r ppqRaw  @ rebuildPbs:3632
+  @field w ppqRaw  @ rebuildPbs:3624
   @field r predicted  @ reconcileDerived:550
   @field w predicted  @ reconcilePCsForChan:588 reconcileFx:608 rebuildFx:2820
-  @field r prevWindows  @ rebuildPipeline:3719,3760,3780
-  @field w prevWindows  @ derivationInputs:136 rebuildPipeline:3714
-  @field r priorPb  @ rebuildPbs:3611
-  @field w priorPb  @ rebuildPbs:3612 rebuild:3821
+  @field r prevWindows  @ rebuildPipeline:3723,3764,3784
+  @field w prevWindows  @ derivationInputs:136 rebuildPipeline:3718
+  @field r priorPb  @ rebuildPbs:3612
+  @field w priorPb  @ rebuildPbs:3613 rebuild:3825
   @field r rawTime  @ assignEvent:1012 addEvent:1034
   @field w rawTime  @ assignEvent:1013 addEvent:1035 rescaleLength:1438
-  @field r realised  @ reconcileFx:610 assignLowlevel:809 deleteLowlevel:826 makeTailRules:2861,2888 rebuildPbs:3297,3576
-  @field w realised  @ makeEntry:704,707 715,2012 refreshEntry:724 projectCC:1543 rebuildInternals:1709,1712 rebuildCCs:1826 rebuildRegionPark:2275 rebuildPipeline:3773
+  @field r realised  @ reconcileFx:610 assignLowlevel:809 deleteLowlevel:826 makeTailRules:2861,2888 rebuildPbs:3297,3577,3635
+  @field w realised  @ makeEntry:704,707 715,2012 refreshEntry:724 projectCC:1543 rebuildInternals:1709,1712 rebuildCCs:1826 rebuildRegionPark:2275 rebuildPbs:3635 rebuildPipeline:3777
   @field r res  @ makeTailRules:2845
   @field w res  @ linearTails:2907 3099
   @field w resolution  @ rebuildFx:2528
@@ -892,24 +892,24 @@
   @field r round  @ sumStreams:253
   @field r sRaw  @ inSpan:1775
   @field w sRaw  @ rawSpanMap:1766
-  @field r sample  @ hostProducer:517 reconcilePCsForChan:590,591 fxKey:602 assignNote:891 reconcilePcs:913,920 rebuildExternals:1977 rebuildFx:2625 rebuildPCs:3662,3667
-  @field w sample  @ hostProducer:517 reconcilePcs:913,920 rebuildExternals:1977 rebuildFx:2625 rebuildPCs:3662,3667
+  @field r sample  @ hostProducer:517 reconcilePCsForChan:590,591 fxKey:602 assignNote:891 reconcilePcs:913,920 rebuildExternals:1977 rebuildFx:2625 rebuildPCs:3666,3671
+  @field w sample  @ hostProducer:517 reconcilePcs:913,920 rebuildExternals:1977 rebuildFx:2625 rebuildPCs:3666,3671
   @field w sampleShadowed  @ reconcilePCsForChan:583
   @field r shape  @ sumStreams:248 negated:304 sliceCurve:320 refreshEntry:718 addEvent:1049 rebuildCCs:1803 rebuildFx:2463,2475,2480,2489,2495
-  @field r shape  @ rebuildFx:2797,2811,2822 rebuildPbs:3297,3336,3443,3444,3467,3485,3526
-  @field r shape  @ rebuildPbs:3542,3546,3552,3579,3591
+  @field r shape  @ rebuildFx:2797,2811,2822 rebuildPbs:3297,3336,3444,3445,3468,3486,3527
+  @field r shape  @ rebuildPbs:3543,3547,3553,3580,3592
   @field w shape  @ sumStreams:280,284,291 negated:304 sliceCurve:320 addEvent:1049 rebuildCCs:1803 rebuildFx:2463,2475,2480,2489,2495
-  @field w shape  @ rebuildFx:2576,2789,2797,2811 rebuildPbs:3336,3449,3451,3453,3471,3485,3501,3526
-  @field w shape  @ rebuildPbs:3542,3546,3552,3591
+  @field w shape  @ rebuildFx:2576,2789,2797,2811 rebuildPbs:3336,3450,3452,3454,3472,3486,3502,3527
+  @field w shape  @ rebuildPbs:3543,3547,3553,3592
   @field r sink  @ reconcileDerived:556,560
   @field w sink  @ reconcilePCsForChan:588 reconcileFx:608 rebuildFx:2820
-  @field r skipGuard  @ bindTake:3998
+  @field r skipGuard  @ bindTake:4002
   @field r spec  @ flushParked:1095,1098 rebuildRegionPark:2060,2061,2062
   @field w spec  @ addParked:1068 rebuildRegionPark:2091,2200,2276
   @field r startRaw  @ rebuildPbs:3350,3357,3367,3368
   @field w startRaw  @ rebuildPbs:3325
   @field r startppq  @ rawSpanMap:1766 rebuildRegionPark:2049,2242,2245,2256,2266,2295 rebuildFx:2449,2700
-  @field w startppq  @ rebuildPipeline:3741,3753
+  @field w startppq  @ rebuildPipeline:3745,3757
   @field w step  @ rebuildFx:2528
   @field w swing  @ derivationInputs:134
   @field w swings  @ derivationInputs:131
@@ -919,27 +919,27 @@
   @field r tension  @ negated:304 sliceCurve:320 refreshEntry:718 rebuildFx:2475 rebuildPbs:3336
   @field w tension  @ negated:304 sliceCurve:320 refreshEntry:718 rebuildFx:2475 rebuildPbs:3336
   @field w toLogical  @ currentSwing:1326
-  @field r trackerMode  @ bindTake:4002
+  @field r trackerMode  @ bindTake:4006
   @field w trackerMode  @ derivationInputs:131
   @field r update  @ assignLowlevel:813 flushParked:1102 flush:1172,1178,1179,1195 mmBatch:1605
   @field w update  @ assignLowlevel:817 assignParked:1072 mmBatch:1594
   @field r uuid  @ hostProducer:516 reconcileFx:610 makeEntry:709 stampColEvt:751 snapshot:773 assignLowlevel:811,817 deleteLowlevel:824,827
   @field r uuid  @ deleteLowlevel:829 lookup:928 addParked:1067 findParked:1082 flush:1191,1192,1195 absorbReloadDirt:1236,1237
   @field r uuid  @ absorbReloadDirt:1237 mmBatch:1603,1605,1606 seedCovers:1656 seedRowsFor:1668 rebuildCCs:1798 rebuildRegionPark:2167,2299
-  @field r uuid  @ rebuildFx:2711,2723 linearTails:2924,2929,2986 3110,3179 rebuildPbs:3562
-  @field r uuid  @ rebuildPbs:3596 3905
+  @field r uuid  @ rebuildFx:2711,2723 linearTails:2924,2929,2986 3110,3179 rebuildPbs:3563
+  @field r uuid  @ rebuildPbs:3597,3635 3909
   @field w uuid  @ snapshot:773 assignLowlevel:817 deleteLowlevel:827 addParked:1067 tileLength:1459 rebuildCCs:1803,1813,1818 rebuildRegionPark:2167,2169,2299 linearTails:2986
-  @field w uuid  @ 3179 rebuildPbs:3562,3596
+  @field w uuid  @ 3179 rebuildPbs:3563,3597
   @field r val  @ evalCurve:234,235 negated:304 anyNonZero:309 channelStreams:464 reconcilePCsForChan:590 makeEntry:704 refreshEntry:720 assignEvent:1019,1020 addEvent:1044 rebuildCCs:1803
-  @field r val  @ rebuildRegionPark:2274,2289,2306 rebuildFx:2489,2495,2797,2811,2822 rebuildPbs:3336,3400
-  @field r val  @ rebuildPbs:3587,3624
+  @field r val  @ rebuildRegionPark:2274,2289,2306 rebuildFx:2489,2495,2797,2811,2822 rebuildPbs:3336,3401
+  @field r val  @ rebuildPbs:3588,3625
   @field w val  @ sumStreams:280,284,291 negated:304 sliceCurve:319 channelStreams:464 reconcilePCsForChan:591 makeEntry:704 refreshEntry:720 assignEvent:1020 addEvent:1044 flush:1179
   @field w val  @ flush:1184 rebuildCCs:1803 rebuildRegionPark:2274,2289 rebuildFx:2475,2480,2489,2495,2576,2789,2797,2811
-  @field w val  @ rebuildPbs:3552,3555,3584,3586,3588,3595
+  @field w val  @ rebuildPbs:3553,3556,3585,3587,3589,3596
   @field r vel  @ channelStreams:459 fxKey:602 resizeNote:880 rebuildFx:2624
   @field w vel  @ channelStreams:459 resizeNote:880 rebuildFx:2624
   @field w verb  @ snapshot:773 linearTails:2986 3179
-  @field r wholesale  @ 3909
+  @field r wholesale  @ 3913
   @field r window  @ mergeWindows:165 overlapping:178 chainCuts:353 foldChains:400 firstRestOverride:503 rebuildFx:2553
   @field r window  @ rebuildFx:2654,2666,2735,2737,2745,2753,2754,2788
   @field w window  @ hostProducer:515 rebuildFx:2557,2609,2613,2666,2710

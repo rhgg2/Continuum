@@ -1,0 +1,55 @@
+@module glasswork_dense  src=glasswork_dense.lua  loc=53  sha=untracked  mode=chunk
+
+# Imports
+  @require gw = 'fixtures.glasswork'  @ 16
+
+# Private state
+  @state e53, BAR, LENGTH, classic58 = gw.e53, gw.BAR, gw.LENGTH, gw.classic58  @ 17
+  @state Q, C2 = 12288, 36  @ 18
+  @state root = { 53, 39, 22, 31 }  @ 21
+  @state ostPat = { kind='notes', lengthPpq=Q,  @ 23
+  @state lfoCurve = { kind='curve', lengthPpq=1000,  @ 25
+  @state lanes = {  @ 31
+
+# Private functions
+  @fn build(tm, gm)  @ 41-51
+
+# Uses (outbound edges)
+  @use require fixtures.glasswork  @ 16
+
+# Fields (r read / w write incl. constructor keys)
+  @field r BAR  @ 17
+  @field r LENGTH  @ 17
+  @field w LENGTH  @ 53
+  @field w build  @ 53
+  @field w centre  @ 34
+  @field w chan  @ build:46
+  @field r classic58  @ 17
+  @field w classic58  @ 53
+  @field w depth  @ 32,35
+  @field w detune  @ build:46
+  @field r e53  @ 17
+  @field w endppq  @ 24 build:47
+  @field w evType  @ build:46
+  @field r fx  @ build:47
+  @field w fx  @ 32,33,34,35,36,38 build:47
+  @field w kind  @ 23,25,32,33,34,35,36,37,38
+  @field w lane  @ build:47
+  @field w lanes  @ 53
+  @field w lengthPpq  @ 23,25
+  @field r off  @ build:45
+  @field w off  @ 32,33,34,35,36,38
+  @field w onset  @ 32
+  @field w over  @ 33
+  @field w pattern  @ 34,37,38
+  @field w period  @ 32,34,35,36
+  @field w pitch  @ build:46
+  @field w points  @ 26
+  @field w ppq  @ 24,26 build:47
+  @field w ramp  @ 36
+  @field w scale  @ 34
+  @field w shape  @ 26
+  @field w specs  @ 24
+  @field w target  @ 33
+  @field w val  @ 26
+  @field w vel  @ 24 build:46

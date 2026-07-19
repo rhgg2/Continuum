@@ -15,7 +15,7 @@
 
 | | |
 |---|---|
-| state | landed — phases 1–3; phase 4 2026-07-17; phases 4.5 + 4.75 2026-07-18; model inverted to seed dirt 2026-07-18 (§ The model, inverted); phase 5 note half 2026-07-18, continuous half planned 2026-07-19 (§ phase 5) |
+| state | landed — phases 1–3; phase 4 2026-07-17; phases 4.5 + 4.75 2026-07-18; model inverted to seed dirt 2026-07-18 (§ The model, inverted); phase 5 landed + measured on glasswork-dense 2026-07-19 (§ phase 5) |
 | supersedes | `incremental-rebuild` gap 4 (fx dirt signal) |
 | enduring model it changes | `docs/trackerManager.md` § Derivation dirt |
 | the hard part | was forward propagation — closed 2026-07-15 by onset-bounded closures (§ The crux, closed); same-pitch widens the tails closure rather than leaving tm (§ Same-pitch is a projection artefact), and tails *produces* its closure from the neighbour lookup it already does, rather than consuming a fence it could leak past (§ The tails closure is the walk's output, not its input) |
@@ -1332,10 +1332,46 @@ Commits (commit 1, the note half, above), each green alone,
    write pin is a verbatim before/after comparison of the kept
    range's dumped pb records.
 5. **Measure on glasswork-dense.** A variant of the glasswork builder
-   piling the same chains onto one channel, bridge-driven like
-   glasswork itself — glasswork's spread over 16 channels makes its
-   edit path write-bound (~3ms of re-derive), so the gate's win only
-   shows against a producer-dense channel. Record the numbers here.
+   piling the same chains onto one channel, bridge-driven like glasswork
+   itself — glasswork's spread over 16 channels makes its edit path write-bound
+   (~3ms of re-derive), so the gate's win only shows against a producer-dense
+   channel. *Measured 2026-07-19* (`tests/fixtures/glasswork_dense.lua`: chan 1
+   only, six lanes of back-to-back one-bar hosts over 32 bars — vibrato and
+   slide → pb, lfo → cc1, autopan → cc10, plus a retrig→velPattern and an
+   ostinato note lane — 192 hosts, 14069 raw events, 53EDO/c58). The no-op
+   ceiling is producer-bound, `fx` + `pbs` + `ccs` = 102 of 109ms, and piling
+   onto one channel concentrates the pb fold that glasswork's spread hid
+   (`pbs` 20.8 → 51.7). A one-note vel edit on a mid-take lane-2 pb host:
+
+   | span (ms, warm) | no-op (`rebuild(true)`) | edit (one note) |
+   |---|---|---|
+   | total | 109.3 | 92.3 flush / 59.6 reload |
+   | `fx` | 41.4 | 24.4 |
+   | `pbs` | 51.7 (`seats` 25.2, `gather` 16.3) | 15.1 (`seats` 7.3, `gather` 5.4) |
+   | `ccs` | 8.8 | 9.2 |
+   | `tails` | 2.2 | 5.4 |
+   | `regionPark` / `internals` | 1.4 / 1.2 | 1.6 / 1.0 |
+   | `serialise` / `setEvts` / `sidecars` | — | 11.6 / 17.2 / 1.7 |
+
+   The **pb half is the clean win**: it has no reconcile to flow through, so
+   its fences (a kept range leaves the absorber pool and carries the prior
+   column slice, no fold) take `pbs` 51.7 → 15.1, ~36ms off a one-note edit.
+   The **cc and note gates show in `fx`** — where the producer folds live
+   (`rebuildFx`) — dropping it 41.4 → ~23 as every producer outside the edited
+   window keeps; editing a cc host (lfo) rather than a pb host holds `fx` at
+   23.0 with `ccs`/`pbs` unmoved, which is the proof the cc keep fires. `fx`
+   floors there rather than falling further because keep flows *through* the
+   channel-wide reconciles (`reconcileDerived` for cc, `reconcileNotes`), whose
+   `existing` slice never narrows — only the fold does, exactly the asymmetry
+   commit 3 designed.
+
+   Watch the stage names: the `ccs` line (8.8 → 9.2) is **not** the gate's
+   target. It is `rebuildCCs` — the channel-wide swing-reseat of the existing
+   cc events, run *before* `fx` — which phase 5 leaves whole. Its flatness is a
+   materialisation residual (a phase-3/6 narrowing, not phase 5's), not a
+   cc-gate limitation; the cc gate's own effect is folded into the `fx` number
+   above. On this fixture the edit is re-derive-bound (`reload` ~57–60), not
+   write-bound like glasswork proper, which is what lets the gate show at all.
 
 Same phase: the all-16 region/parking dirt sources narrow to their own
 members — a region edit knows the exact events it parked and restored

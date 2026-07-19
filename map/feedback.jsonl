@@ -58,3 +58,4 @@
 {"date":"2026-07-19","score":4,"used":["map_query","multiread"],"comment":"query expandChannel found nothing — it is a local nested inside rebuildFx, below map granularity; had to query the fx stage fns and read the whole range"}
 {"date":"2026-07-19","score":4,"used":["map_query","multiread"],"comment":"fields query for ccExisting/noteExisting (locals passed as params) found nothing -- param flows are below map granularity; a plain grep answered in one call"}
 {"date":"2026-07-19","score":3,"used":["grep","read"],"comment":"bypassed maps: targets were known from the design doc + prior session, so grep_window windows beat map lookups; nothing the index could have answered faster this time"}
+{"date":"2026-07-19","score":3,"used":["grep","read"],"comment":"needed the stage a perf.start('ccs')/'fx' literal wraps -- string-literal span sites are a grep job, not a map query; worked first try, no defect"}
