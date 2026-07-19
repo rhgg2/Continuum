@@ -86,9 +86,11 @@ caps above. Model docs to imitate: `docs/timing.md`, `docs/tuning.md`,
   schema: `uses`/`usedby` resolve receivers through the file's alias
   table, so targets read as `tm:rebuild`, not
   `trackerManager:rebuild`; `forward` edges point to the **source's**
-  signal, not the receiver's; method calls on runtime receivers (not
-  in the alias table) are dropped, so `usedby` has a real recall gap
-  there; `query`/`module` are regex (query substring-matched, module
+  signal, not the receiver's — kind='flow' follows the whole
+  chain for you; method calls on receivers outside the
+  alias table are dropped, but the self-naming convention makes these
+  rare (measured 2026-07-19: the tail is spec locals and viewContext,
+  not manager edges) — trust `usedby` for blast radius; `query`/`module` are regex (query substring-matched, module
   anchored), not glob.
 
 - Field-shaped questions — who reads or writes `.ppqL`, who produces

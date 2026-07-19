@@ -382,6 +382,54 @@ def _usedby_selectors(query, module, reg):
     return module_pred, method, raw_rx
 
 
+# `flow` walks the signal rows already in the maps: `@emits` (owner = the
+# map's module, fire-sites in the tail), `@use sub owner:signal`, and
+# `@use forward source:signal` (the forwarder re-fires under its own name).
+_EMITS_ROW = re.compile(r'^\s*@\??emits\s+(?P<name>\S+)\s*(?P<rest>.*?)\s*$')
+
+
+def _signal_graph(reg):
+    """One scan over every map. Returns (emits, subs, forwards): emits maps
+    (module, signal) -> (payload, fire-sites, src); subs and forwards map
+    (owner module, signal) -> site lists. Owner short names resolve through
+    the registry; a literal `self` owner is the map's own module."""
+    emits, subs, forwards = {}, {}, {}
+    for d in (MAP_DIR, MAP_DIR / "specs"):
+        for mp in sorted(d.glob("*.map")):
+            try:
+                text = mp.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            src = _src_of(mp, text)
+            for raw in text.splitlines():
+                me = _EMITS_ROW.match(raw)
+                if me:
+                    rest = me.group("rest")
+                    if " @ " in rest:
+                        payload, sites = rest.rsplit(" @ ", 1)
+                    elif rest.startswith("@ "):
+                        payload, sites = "", rest[2:]
+                    else:
+                        payload, sites = rest, ""
+                    payload = payload.strip().removeprefix("--").strip()
+                    emits[(mp.stem, me.group("name"))] = (payload, sites, src)
+                    continue
+                mu = _USE.match(raw)
+                if not mu or mu.group("ukind") not in ("sub", "forward"):
+                    continue
+                owner, signal = _canon_target(mu.group("target"), reg)
+                if signal is None:
+                    continue
+                if owner == "self":
+                    owner = mp.stem
+                for caller, n in _iter_use_sites(mu.group("sites")):
+                    if mu.group("ukind") == "sub":
+                        subs.setdefault((owner, signal), []).append((src, n, caller))
+                    else:
+                        forwards.setdefault((owner, signal), []).append((mp.stem, src, n))
+    return emits, subs, forwards
+
+
 @mcp.tool(structured_output=False)
 def map_query(
     query: Optional[str] = None,
@@ -408,14 +456,18 @@ def map_query(
       kind: filter by entry kind. Accepted (case-insensitive, plurals
             ok): fn, api, state, const, require/import, construct,
             case (spec test cases), invariant, contract, shape,
-            emits/signal, reaper, deps, uses, usedby, reads/writes/
-            fields. `uses` lists a module's own outbound edges (calls
+            emits/signal, reaper, deps, uses, usedby, flow, reads/
+            writes/fields. `uses` lists a module's own outbound edges (calls
             / subs / forwards / requires). `usedby` reverses it —
             scanning every map (specs included, so it also answers
             "which specs exercise X") for callers of the queried
             symbol or module, resolving short instance names and
             `:`/`.` spellings so `cm:get`, `configManager.get`, and
-            module='configManager' all match. `reads`/`writes` walk
+            module='configManager' all match. `flow` traces a signal
+            end-to-end — emitters (`@emits` payload + fire-sites),
+            subscribers, and forward hops followed transitively;
+            query names the signal, `module` optionally pins the
+            origin emitter. `reads`/`writes` walk
             the @field rows — every `.name` read or write site
             (table-constructor keys count as writes); `fields`
             returns both. query matches the field name; omit `module`
@@ -430,6 +482,8 @@ def map_query(
               target (the module whose callers you want), resolved via
               the self-name registry — so usedby+module='eventMeta'
               answers "who uses eventMeta", not eventMeta's own edges.
+              Under kind='flow' it pins the origin emitter, same
+              resolution.
       max_results: cap (default 60).
 
     Returns:
@@ -506,6 +560,73 @@ def _map_query(query, kind, module, max_results) -> str:
             results.append(f"--- truncated at {max_results}; narrow the query ---")
         results.append("--- note: calls on runtime receivers (not import/construct/dep aliases) are dropped — recall is incomplete for those ---")
         return "\n".join(results)
+
+    # `flow` also scans every map (subscribers live anywhere): emitters first,
+    # then subscribers and forward hops followed transitively, then any
+    # sub/forward rows on a matching signal no emitter reaches (doc gaps).
+    if kind_filter == 'flow':
+        if not query_rx:
+            return ("(flow needs query= naming the signal, e.g. "
+                    "query='takeSwapped')")
+        reg = _selfname_registry()
+        emits, subs, forwards = _signal_graph(reg)
+        selfof = {mod: name for name, mod in reg.items()}
+
+        def owner_ok(mod):
+            if not module:
+                return True
+            return mod == reg.get(module, module) or bool(
+                re.fullmatch(module, mod, re.IGNORECASE))
+
+        def short(mod):
+            return selfof.get(mod, mod)
+
+        lines_out: list = []
+        visited: set = set()
+
+        def walk(mod, sig, depth):
+            visited.add((mod, sig))
+            pad = '  ' * depth
+            for src, n, caller in subs.get((mod, sig), ()):
+                where = f"  (in {caller})" if caller else ""
+                lines_out.append(f"{pad}  sub      {src}:{n}{where}")
+            for fmod, fsrc, fn in forwards.get((mod, sig), ()):
+                lines_out.append(f"{pad}  forward  {fsrc}:{fn}  → {short(fmod)}:{sig}")
+                if (fmod, sig) not in visited:
+                    walk(fmod, sig, depth + 1)
+
+        for mod, sig in sorted(k for k in emits
+                               if query_rx.search(k[1]) and owner_ok(k[0])):
+            payload, sites, src = emits[(mod, sig)]
+            if lines_out:
+                lines_out.append("")
+            head = f"{short(mod)} emits {sig}"
+            lines_out.append(head + (f"  -- {payload}" if payload else ""))
+            for caller, n in _iter_use_sites(sites):
+                where = f"  (in {caller})" if caller else ""
+                lines_out.append(f"  fires    {src}:{n}{where}")
+            walk(mod, sig, 0)
+
+        def unreached():
+            return sorted(k for k in {*subs, *forwards}
+                          if query_rx.search(k[1]) and k not in visited
+                          and owner_ok(k[0]))
+
+        pending = unreached()
+        while pending:
+            mod, sig = pending[0]
+            if lines_out:
+                lines_out.append("")
+            lines_out.append(f"{short(mod)}:{sig}  (no @emits row)")
+            walk(mod, sig, 0)
+            pending = unreached()
+
+        if not lines_out:
+            return f"(no signal matching query={query!r}, module={module!r})"
+        if len(lines_out) > max_results:
+            lines_out = lines_out[:max_results]
+            lines_out.append(f"--- truncated at {max_results}; narrow the query ---")
+        return "\n".join(lines_out)
 
     if module:
         module_rx = re.compile(module, re.IGNORECASE)
