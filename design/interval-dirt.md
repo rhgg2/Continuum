@@ -777,8 +777,10 @@ The dense take's edit-path `internals` 18.5 + `projLogical` 8.5 +
   > edit on the dense take paid ~3ms in `projectNotes`). Same failure
   > mode § phase 5.5 caught for fx windows. Landed now: interval seats
   > project at ingestion and splice via `insertNoteCell`; wholesale and
-  > stale-swing lanes keep the flip (the externals lane packer still
-  > packs against them in raw — its port is the next slice).
+  > stale-swing lanes kept the flip one commit longer, until the packer
+  > port (same day) moved overlap occupancy to um's raw index plus the
+  > pass's own placed probes — every seat now projects at ingestion and
+  > the `projectNotes` pass is deleted.
 - **The raw working set: scratch-from-mm.** Logical-born columns
   strand every raw consumer — the tail walk's gather, `rebuildPbs`'
   lane-1 list, the PA matcher, `rebuildPCs` — so materialisation's

@@ -1772,8 +1772,8 @@ local function exciseNotes(chan, covers)
   end
 end
 
--- Partition mm notes stamped/external, lay internal columns, reseat stale-swing.
--- Returns raw-seated internals (owed the flip) + external notes + the per-channel derived-note existing set. see docs/trackerManager.md § Rebuild: partition
+-- Partition mm notes stamped/external, lay internal columns logical-born, reseat stale-swing.
+-- Returns external notes + the per-channel derived-note existing set. see docs/trackerManager.md § Rebuild: partition
 --contract: interval dirt: non-derived notes carry ppqL -- an external mutation reloads wholesale
 local function rebuildInternals()
   local internal, external = {}, {}
@@ -1801,11 +1801,8 @@ local function rebuildInternals()
     end
   end
 
-  local reseats      = mmBatch()
-  local reseated     = {}
-  local reseatedWas  = {}
-  local reseatedCols = {}
-  local rawSeated    = {}   -- wholesale/stale-swing seats, still raw; the post-externals flip owes them
+  local reseats   = mmBatch()
+  local builtCols = {}   -- lanes built by append this pass; ordered once at loop end, splices stay ordered
   for _, note in ipairs(internal) do
     local channel = channels[note.chan]
     local notes = channel.columns.notes
@@ -1819,37 +1816,31 @@ local function rebuildInternals()
     -- set detune/delay at ingestion to skip defensive guards downstream
     colNote.detune = colNote.detune or 0
     colNote.delay  = colNote.delay  or 0
+    if staleSwing[note.chan] then
+      -- Rederive realised onset from logical; endppq is the tail walk's. Reswing can collapse two
+      -- distinct-ppqL same-pitch notes onto one raw -- staged to mm; the walk separates it this pass.
+      local reswungPpq = tm:fromLogical(note.chan, colNote.ppqL, delayToPPQ(colNote.delay))
+      if reswungPpq ~= colNote.ppq then reseats.assign(colNote, { ppq = reswungPpq }) end
+      colNote.ppq = reswungPpq
+    end
+    -- Columns are logical-born: every seat projects at ingestion. see design/rebuild-pipeline.md § The frame law
+    projectEvent(colNote, note.chan)
     if dirtyChans[note.chan] ~= true and not staleSwing[note.chan] then
-      -- Interval splice: project at the seat, splice into the carried logical lane -- a lane is never
-      -- part-raw, part-logical. see design/rebuild-pipeline.md § The frame law
-      projectEvent(colNote, note.chan)
-      insertNoteCell(col.events, colNote)
+      insertNoteCell(col.events, colNote)   -- splice into the carried logical lane; stays ordered
     else
-      -- Wholesale lane: raw until the post-externals flip -- the lane packer packs against it in raw.
-      -- When swing is stale, rederive realised onset from logical; endppq handled by the tail walk.
-      if staleSwing[note.chan] then
-        reseatedWas[colNote] = colNote.ppq   -- capture raw before the reseat mutates it (alias, not a copy)
-        colNote.ppq = tm:fromLogical(note.chan, colNote.ppqL, delayToPPQ(colNote.delay))
-        util.add(reseated, colNote)
-        reseatedCols[col] = true
-      end
-      util.add(col.events, colNote)
-      util.add(rawSeated, colNote)
+      util.add(col.events, colNote)         -- fresh lane: append in mm raw order, order once below
+      builtCols[col] = true
     end
     stampColEvt(colNote)
   end
-  -- The reseat rewrote onsets after placement, disordering these lanes; the view + fx walk read
-  -- columns in ppq order, so re-sort at the source rather than a blanket downstream sort.
-  for col in pairs(reseatedCols) do sortNoteColumn(col.events) end
-
-  -- Reswing can collapse two distinct-ppqL same-pitch notes onto one raw. The collision rides into
-  -- mm and the walk separates it this pass, inside the nest mm's backstop resolves at the end of.
-  for _, e in ipairs(reseated) do
-    if e.ppq ~= reseatedWas[e] then reseats.assign(e, { ppq = e.ppq }) end
+  -- Raw and logical onset order diverge under swing or an authored swap; re-sort just the appended
+  -- lanes that landed disordered. see design/interval-dirt.md § Phase 5.5
+  for col in pairs(builtCols) do
+    if not isSorted(col.events) then sortNoteColumn(col.events) end
   end
   reseats.commit()
 
-  return rawSeated, external, noteExisting
+  return external, noteExisting
 end
 
 ----- Rebuild CCs
@@ -1978,18 +1969,40 @@ end
 
 ----- Rebuild externals
 
--- Lane packing for one externals pass. The overlap threshold and each event's intent onset are
--- invariant across the probe walk; a per-column head retires what the sweep has passed. see docs/trackerManager.md § Rebuild: externals
+-- Lane packing for one externals pass. Overlap tests are realised-time, but columns are logical by
+-- now -- so occupancy is um's raw index plus this pass's placements. see docs/trackerManager.md § Rebuild: externals
 local function externalLanePacker(external)
   local lenient = cm:get('overlapOffset') * mm:resolution()
   local onsetI  = {}   -- [evt] = intent-frame onset; an event's never moves while the pass runs
-  local head    = {}   -- [col] = first live index; everything below it ends too early to ever overlap
+  local head    = {}   -- [laneList] = first live index; everything below ends too early to ever overlap
 
   -- Probes arrive in raw-ppq order but test in the intent frame, so the retirement floor trails the
   -- sweep by the pass's largest delay: monotone without reordering the pack. Diverged notes carry one.
   local maxDelayPpq = 0
+  local isExternal  = {}
   for _, note in ipairs(external) do
     maxDelayPpq = math.max(maxDelayPpq, delayToPPQ(note.delay or 0))
+    isExternal[note.uuid] = true
+  end
+
+  -- Raw occupancy per lane: index entries for the seated internals (reseats committed, onsets current),
+  -- joined by placed probes -- externals' staged lanes reach the index only at extWrites.commit().
+  local occupancy = {}
+  local function laneList(chan, lane)
+    local lanes = occupancy[chan]
+    if not lanes then
+      lanes = {}
+      for _, entry in ipairs(rawNotes(chan)) do
+        if not entry.derived and not isExternal[entry.uuid] then
+          lanes[entry.lane] = lanes[entry.lane] or {}
+          util.add(lanes[entry.lane], entry)
+        end
+      end
+      occupancy[chan] = lanes
+    end
+    local list = lanes[lane]
+    if not list then list = {}; lanes[lane] = list end
+    return list
   end
 
   local function onsetOf(evt)
@@ -2001,15 +2014,16 @@ local function externalLanePacker(external)
     return ppqI
   end
 
-  --contract: true iff note fits col: no over-threshold overlap, coincident onset always refuses
+  local function byRawOnset(a, b) return a.ppq < b.ppq end
+
+  --contract: true iff note fits lane: no over-threshold overlap, coincident onset always refuses
   --invariant: overlap threshold: same-pitch 0, cross-pitch lenient; dominated-by≥2 refuses
-  --contract: consulted only for unstamped raw notes; stamped notes never reach it
-  local function columnAccepts(col, note)
-    local events  = col.events
+  --contract: consulted only for unstamped raw probes; stamped notes never reach it
+  local function laneAccepts(events, note)
     local floorPpq = note.ppq - maxDelayPpq
-    local live     = head[col] or 1
+    local live     = head[events] or 1
     while live <= #events and events[live].endppq <= floorPpq do live = live + 1 end
-    head[col] = live
+    head[events] = live
 
     local noteppqI    = onsetOf(note)
     local noteEndppqI = note.endppq
@@ -2030,39 +2044,43 @@ local function externalLanePacker(external)
     return dominated < 2
   end
 
-  --contract: pick a lane for an external (unstamped) note via accept → sibling → push bump
+  --contract: pick a lane for an external (unstamped) probe via accept → sibling → push bump
   --invariant: called up front after internals placed + swing-reseated; tail walk clips tails after
   return function(channel, note)
+    -- A mid-list insert can shift a retired entry back past head; harmless -- its end sits below the floor.
+    local function claim(col, lane)
+      util.insertSorted(laneList(note.chan, lane), note, byRawOnset)
+      return col, lane
+    end
     local notes = channel.columns.notes
     if note.lane then
       local col = notes[note.lane]
-      if col and columnAccepts(col, note) then return col, note.lane end
+      if col and laneAccepts(laneList(note.chan, note.lane), note) then return claim(col, note.lane) end
       if not col then
         while #notes < note.lane do pushNoteCol(channel) end
-        return notes[note.lane], note.lane
+        return claim(notes[note.lane], note.lane)
       end
     end
     for i, col in ipairs(notes) do
-      if columnAccepts(col, note) then return col, i end
+      if laneAccepts(laneList(note.chan, i), note) then return claim(col, i) end
     end
-    return pushNoteCol(channel)
+    return claim(pushNoteCol(channel))
   end
 end
 
--- Reintroduce externals: pack lane, stamp ppqL/endppqL, backfill metadata, tag `fixed`; block window
--- + tail passes. Returns the seated notes, still raw, for projectNotes. see docs/trackerManager.md § Rebuild: externals
+-- Reintroduce externals: pack lane, stamp ppqL/endppqL, backfill metadata, project, tag `fixed`;
+-- block window + tail passes. see docs/trackerManager.md § Rebuild: externals
 local function rebuildExternals(external)
-  if #external == 0 then return {} end
+  if #external == 0 then return end
 
-  table.sort(external, function(a, b) return a.ppq < b.ppq end)
+  sortByPPQ(external)
   local trackerMode = cm:get('trackerMode')
   local packLane    = externalLanePacker(external)
   local extWrites   = mmBatch()
-  local seated      = {}
   for _, note in ipairs(external) do
     local delay     = note.delay or 0
     local d         = delayToPPQ(delay)
-    local probe     = { ppq = note.ppq, endppq = note.endppq,
+    local probe     = { chan = note.chan, ppq = note.ppq, endppq = note.endppq,
                         pitch = note.pitch, delay = delay, lane = note.lane }
     local col, lane = packLane(channels[note.chan], probe)
     local update    = {
@@ -2076,13 +2094,12 @@ local function rebuildExternals(external)
     local colNote = util.clone(note)
     util.assign(colNote, update)
     colNote.fixed = true
+    projectEvent(colNote, note.chan)
     insertNoteCell(col.events, colNote)
     stampColEvt(colNote)
-    util.add(seated, colNote)
     extWrites.assign(colNote, update)
   end
   extWrites.commit()
-  return seated
 end
 
 ----- Rebuild region park
@@ -3838,30 +3855,11 @@ local function rebuildPipeline(didReload)
     extraColumns = ds:get('extraColumns'),
   }
 
-  perf.start('internals'); local rawSeated, external, noteExisting = rebuildInternals(); perf.stop('internals')  -- partition; internal cols; reseat swing notes
+  perf.start('internals'); local external, noteExisting = rebuildInternals(); perf.stop('internals')  -- partition; internal cols (logical-born); reseat swing notes
   perf.start('ccs'); local ccExisting = rebuildCCs(sources.prevWindows); perf.stop('ccs')  -- CC walk; reseat swing CCs
   staleSwing = {}                               -- swing consumers (partition + CC walk) done; see :53 invariant
   perf.start('extraCols'); rebuildExtraColumns(sources.extraColumns); perf.stop('extraCols')  -- reconcile persisted extra columns
-  perf.start('externals'); local seatedExternals = rebuildExternals(external); perf.stop('externals')  -- reintroduce foreign / diverged notes
-
-  -- Wholesale/stale-swing lanes flip to logical here, not at ingestion: the externals' lane packer
-  -- packs against them in raw. Interval seats spliced logical-born. see docs/trackerManager.md § Rebuild: logical projection
-  perf.start('projectNotes')
-  local flippedCols = {}
-  for _, evt in ipairs(rawSeated) do
-    projectEvent(evt, evt.chan)
-    flippedCols[channels[evt.chan].columns.notes[evt.lane]] = true
-  end
-  for _, evt in ipairs(seatedExternals) do
-    projectEvent(evt, evt.chan)
-    flippedCols[channels[evt.chan].columns.notes[evt.lane]] = true
-  end
-  -- The raw->logical flip reorders a lane whose raw and logical onset orders diverge (swing, or an
-  -- authored swap); re-sort just the lanes it actually disordered. see design/interval-dirt.md § Phase 5.5
-  for col in pairs(flippedCols) do
-    if not isSorted(col.events) then sortNoteColumn(col.events) end
-  end
-  perf.stop('projectNotes')
+  perf.start('externals'); rebuildExternals(external); perf.stop('externals')  -- reintroduce foreign / diverged notes
 
   -- Park window set: fx-regions plus every on-take note host as a degenerate region (note-is-a-region),
   -- from the settled columns. The producer re-scans post-unpark below. see design/note-macros-v2.md § Offline continuous realisation

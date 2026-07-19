@@ -215,12 +215,12 @@ offset on the raw note-on, not a frame of its own. tm's role:
   sorted by logical ppq; `endppq` leaves as the authored logical
   ceiling (`endppqL`, or `util.OPEN`).
 - **um and rebuild work in realisation** — REAPER's storage frame.
-  Interval-dirty note seats project as they splice; wholesale and
-  stale-swing lanes flip right after the externals pass (the lane
-  packer packs against them in raw); cc-family columns flip as they
-  build (`projectEvent`), and the tail walk re-stamps the
-  notes it moves or clips. `tm:addEvent` / `tm:assignEvent` translate
-  logical to raw (adding delay back) on writes to mm.
+  Every note seat projects at ingestion (the externals lane packer
+  tests overlap against um's raw index, not the columns); cc-family
+  columns flip as they build (`projectEvent`), and the tail walk
+  re-stamps the notes it moves or clips. `tm:addEvent` /
+  `tm:assignEvent` translate logical to raw (adding delay back) on
+  writes to mm.
 
 A delay change with no ppq update pins the logical onset and shifts the
 realised onset by the delta (`realiseNoteUpdate`).
@@ -430,11 +430,12 @@ runs it, with a pointer to its detail where one exists.
   channel's PC stream from current note state. Runs after externals so a
   foreign-MIDI note inherits its sample from the prevailing PC.
   → § PC synthesis under trackerMode.
-- There is no tail projection pass: interval note seats project as
-  they splice, wholesale/stale-swing lanes flip right after externals,
-  cc-family columns flip as they build (`projectEvent`), and the tail
-  walk re-stamps the `delayC`/`endppqC` render cues on the notes it
-  moves or clips. → § Rebuild: logical projection.
+- There is no tail projection pass: every note seat projects as it
+  lands (interval seats splice into the carried lane; wholesale lanes
+  append and order once at build end), cc-family columns flip as they
+  build (`projectEvent`), and the tail walk re-stamps the
+  `delayC`/`endppqC` render cues on the notes it moves or clips.
+  → § Rebuild: logical projection.
 
 All projection runs through `projectCC(cc, overlay)`: it clones the
 source event, strips only `chan` and `cc`, and applies the caller's
@@ -915,18 +916,17 @@ final reconciled absorbers and recomputed raw vals.
 ## Rebuild: externals
 
 Reintroduced up front (after the stale-swing reseat, before the window pass),
-so externals bound fx windows and walk alongside everything else. Per
-external in raw-ppq order: pack a lane against the placed internals plus
-any earlier externals (`noteColumnAccepts` sees raw tails; the walk clips
-later); stamp `ppqL`/`endppqL` from raw; backfill missing metadata
-(foreign-MIDI lacks all; stale-stamped notes arrive with authored
-detune/delay intact). Column event inserted in lockstep so each subsequent
-external's pack sees prior ones. Tagged `evt.fixed = true`: the tail walk
-freezes its onset (the same-pitch clamp skips it) but clips its tail like
-any other note, and it blocks neighbours' tails as a 'next' lookup.
-
-Returns the seated column notes, still raw: `rebuildPipeline`'s `projectNotes` step projects them
-once the pack settles, alongside the internals `rebuildInternals` seated earlier in the pass.
+so externals bound fx windows and walk alongside everything else. Overlap
+testing is realised-time by design, but columns are logical by now — so the
+packer's occupancy is um's raw index (the seated internals' entries, reseats
+already committed) plus the probes it has placed this pass, whose staged lane
+assignments reach the index only at the batch commit. Per external in raw-ppq
+order: pack a lane (`laneAccepts` sees raw tails; the walk clips later); stamp
+`ppqL`/`endppqL` from raw; backfill missing metadata (foreign-MIDI lacks all;
+stale-stamped notes arrive with authored detune/delay intact); project and
+splice the column clone. Tagged `evt.fixed = true`: the tail walk freezes its
+onset (the same-pitch clamp skips it) but clips its tail like any other note,
+and it blocks neighbours' tails as a 'next' lookup.
 
 ## Rebuild: tail walk
 
@@ -1051,14 +1051,14 @@ and `intervals.lua` are all retired now. See `design/interval-dirt.md`
 
 ## Rebuild: logical projection
 
-Projection is build-time: interval-dirty note seats project at
-ingestion and splice into the carried logical lane (the frame law — a
-lane is never part-raw, part-logical); wholesale and stale-swing lanes
-flip right after the externals pass (the lane packer packs against
-them in raw); cc-family columns flip as they build (`projectEvent`);
+Projection is build-time: every note seat projects at ingestion (the
+frame law — a lane is never part-raw, part-logical; interval seats
+splice into the carried lane, wholesale lanes append and order once at
+build end); cc-family columns flip as they build (`projectEvent`);
 and the tail walk re-stamps `delayC`/`endppqC` on the notes it moves
-or clips — there is no end-of-pipeline pass. The frame contract is
-unchanged:
+or clips — there is no note flip pass and no end-of-pipeline pass.
+The raw frame the externals packer needs lives in um's index, not the
+columns. The frame contract is unchanged:
 
 tv surface is logical-only: both onset and tail leave here in the
 authoring frame; raw stays private to tm/mm. `evt.ppq` and `evt.endppq`
@@ -1084,9 +1084,5 @@ and that clip never shows (§ Rebuild: tail walk). An uncached note (no
 `endppqL` stamp in mm) has no authored ceiling, so it falls back to
 `endppqC` — the lane bound, not the realised one.
 
-Under interval dirt (§ Interval materialisation) a channel's columns mix carried and freshly-seated
-events: only this pass's own clones — `rebuildInternals`'s internals and `rebuildExternals`'s seated
-externals — are raw. Carried events already flipped to logical when their own pass seated them, so
-`projectNotes` walks those two materialised sets directly rather than re-scanning the channel's
-columns; re-projecting a carried event would corrupt `delayC` the same way projecting a clean
-channel's column would.
+Every seat projects exactly once, at ingestion; carried events were projected by the pass that
+seated them, and nothing walks a column to re-project — a second projection would corrupt `delayC`.
