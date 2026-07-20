@@ -683,14 +683,28 @@ end
 
 ----- PC synthesis reconciliation (grouping + lane-winner pre-pass, then the skeleton)
 
+-- Half-open span membership, frame-matched: projected column cells always test logical --
+-- projectEvent flips their ppq to ppqL and drops the sidecar; mm-frame records test raw.
+local function pcInSpans(spans, ppq, logical)
+  for _, s in ipairs(spans) do
+    local lo, hi = logical and s.sL or s.sRaw, logical and s.eL or s.eRaw
+    if ppq >= lo and ppq < hi then return true end
+  end
+  return false
+end
+
 --contract: synthesised PCs carry derived='pc'; ppqL inherited from winning host-note record
 --contract: an existing derived PC matching (ppq, val) is kept, preserving mm-side loc
 --contract: appends removals/adds to the sink {del(event), add(spec)}
 --contract: if record.key set, marks key.sampleShadowed=true on records lost to lane priority
+--contract: spans (from pcSeedSpans) narrow existing to in-span cells; nil = whole channel
 --invariant: shadow marking is rebuild-only; flush callers omit key (rebuild reclones lane events)
---invariant: c.pc.events not written here; rebuild's CC walk refreshes it from mm after commit
-local function reconcilePCsForChan(chan, records, sink)
-  local existing = (channels[chan].columns.pc and channels[chan].columns.pc.events) or {}
+--invariant: c.pc.events not written here; rebuildPCs splices it from mm after commit
+local function reconcilePCsForChan(chan, records, sink, spans)
+  local existing = {}
+  for _, e in ipairs((channels[chan].columns.pc and channels[chan].columns.pc.events) or {}) do
+    if not spans or pcInSpans(spans, e.ppq, true) then util.add(existing, e) end
+  end
 
   local groups = {}
   for _, r in ipairs(records) do util.bucket(groups, r.ppq, r) end
@@ -4083,44 +4097,84 @@ end
 
 ----- Rebuild PCs
 
--- PC synthesis (trackerMode only). Runs after the sample stamp, so every walkable note
--- bears a sample and the record read needs no fallback.
+-- Seed closure for PC synthesis: each seed onset's [onset, next onset) span, both frames.
+-- nil = wholesale (also forced by fresh derived output). see design/interval-dirt-closing.md § 2
+local function pcSeedSpans(chan, dirt, noteLive)
+  if dirt == true then return nil end
+  for _, w in ipairs(noteLive) do
+    if not w.kept then return nil end
+  end
+  local points = {}
+  local function addPoint(ppq, ppqL)
+    if ppq ~= nil then util.add(points, { ppq = ppq, ppqL = ppqL or ppq }) end
+  end
+  for _, s in ipairs(dirt) do
+    addPoint(s.ppq, s.ppqL)
+    local live = s.uuid and tm:byUuid(s.uuid)
+    if live then addPoint(live.ppq, live.ppqL) end
+  end
+  local spans = {}
+  for _, point in ipairs(points) do
+    local nextRaw, nextL = math.huge, math.huge
+    for _, n in ipairs(rawNotes(chan)) do
+      if walkable(n) and n.ppq > point.ppq then nextRaw, nextL = n.ppq, n.ppqL; break end
+    end
+    util.add(spans, { sRaw = point.ppq, eRaw = nextRaw, sL = point.ppqL, eL = nextL })
+  end
+  return spans
+end
+
+-- PC synthesis (trackerMode only), after the sample stamp. Seed-list dirt closes to spans;
+-- see design/interval-dirt-closing.md § 2 for the filter chain and out-of-span guarantee.
 local function rebuildPCs(noteLive)
   if not cm:get('trackerMode') then return end
   local pcWrites = mmBatch()
+  local spansByChan = {}
   for chan = 1, 16 do
     -- Clean channels freeze: their PCs stand in mm and their pc column is carried forward.
-    if not dirtyChans[chan] then goto nextChan end
+    local dirt = dirtyChans[chan]
+    if not dirt then goto nextChan end
+    local spans = pcSeedSpans(chan, dirt, noteLive[chan])
+    spansByChan[chan] = spans
     local records = {}
     for _, entry in ipairs(rawNotes(chan)) do
-      if walkable(entry) then
+      if walkable(entry) and (not spans or pcInSpans(spans, entry.ppq, false)) then
         util.add(records, { ppq = entry.ppq, ppqL = entry.ppqL, lane = entry.lane,
                             sample = entry.sample, key = entry.colEvt })
       end
     end
     for _, w in ipairs(noteLive[chan]) do
       local n = w.evt
-      -- region-derived notes ride no note host: no sample to inherit, regenerated each pass
-      util.add(records, { ppq = n.ppq, ppqL = n.ppqL, lane = w.lane, sample = n.sample or 0, key = n })
+      if not spans or pcInSpans(spans, n.ppq, false) then
+        -- region-derived notes ride no note host: no sample to inherit, regenerated each pass
+        util.add(records, { ppq = n.ppq, ppqL = n.ppqL, lane = w.lane, sample = n.sample or 0, key = n })
+      end
     end
-    reconcilePCsForChan(chan, records, pcWrites)
+    reconcilePCsForChan(chan, records, pcWrites, spans)
     ::nextChan::
   end
   pcWrites.commit()
 
-  -- Refresh every pc column from mm (frozen channels' PCs stand). reconcilePCsForChan leaves
-  -- c.pc.events unwritten (its invariant), so rebuild it here from the committed stream.
+  -- pc column splice: out-of-span cells carry; in-span (or wholesale) cells re-read from the
+  -- committed stream. Always a fresh events table -- tv's cell carry keys on table identity.
   for chan = 1, 16 do
     if dirtyChans[chan] then
-      channels[chan].columns.pc = { events = {} }
-      for _, cc in mm:ccsRaw(chan) do
-        if cc.evType == 'pc' then
-          local cell = projectCC(cc)
-          projectEvent(cell, chan)
-          util.add(channels[chan].columns.pc.events, cell)
+      local spans = spansByChan[chan]
+      local events = {}
+      if spans then
+        for _, e in ipairs((channels[chan].columns.pc and channels[chan].columns.pc.events) or {}) do
+          if not pcInSpans(spans, e.ppq, true) then util.add(events, e) end
         end
       end
-      sortByPPQ(channels[chan].columns.pc.events)
+      for _, cc in mm:ccsRaw(chan) do
+        if cc.evType == 'pc' and (not spans or pcInSpans(spans, cc.ppq, false)) then
+          local cell = projectCC(cc)
+          projectEvent(cell, chan)
+          util.add(events, cell)
+        end
+      end
+      sortByPPQ(events)
+      channels[chan].columns.pc = { events = events }
     end
   end
 end

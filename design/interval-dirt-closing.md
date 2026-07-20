@@ -84,6 +84,15 @@ profile ever complaining. Landing it now is a coherence choice (no
 O(channel) stage left standing), not a measured one; the stamp's UX
 change should be judged on its own.
 
+*Closure landed 2026-07-21* — `pcSeedSpans` closes seed-list dirt to
+[onset, next onset) spans (snapshot ∪ byUuid-resolved live position,
+carried in both frames: projected column cells are logical, mm records
+raw). Records, the reconcile's existing set, and the pc-column splice
+all filter on them, so out-of-span PCs stand untouched in mm and in
+the carried column. A channel with fresh derived output goes ungated,
+mirroring the pbs deviation — a deleted fxNote's onset carries no
+seed. The flush-hook reconcile (`reconcilePcs`) stays wholesale.
+
 ## 3. The end state — rebuild(∅) does literally nothing
 
 Not landed: `tm:rebuild` (trackerManager.lua:4136) runs the full nest

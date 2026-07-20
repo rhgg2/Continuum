@@ -198,6 +198,30 @@ return {
     end,
   },
 
+  ----- Seed-scoped closure (interval dirt)
+
+  {
+    name = 'seed closure: moving a note relocates its PC and leaves neighbours alone',
+    run = function(harness)
+      local h = harness.mk{
+        seed = {
+          notes = {
+            { ppq = 0,   endppq = 240, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0, sample = 1 },
+            { ppq = 240, endppq = 480, chan = 1, pitch = 62, vel = 100, detune = 0, delay = 0, sample = 2 },
+            { ppq = 480, endppq = 720, chan = 1, pitch = 64, vel = 100, detune = 0, delay = 0, sample = 3 },
+          },
+        },
+        config = { transient = { trackerMode = true } },
+      }
+      -- The move's snapshot (240) and live (720) positions fall in different closure spans:
+      -- the old PC must go, the new one appear, and the untouched neighbour's PC stand.
+      h.tm:assignEvent({ uuid = uuidOfNote(h.fm, 1, 62) }, { ppq = 720, endppq = 960 })
+      h.tm:flush()
+      t.deepEq(pcsOnChan(h.fm:dump(), 1),
+        { { ppq = 0, val = 1 }, { ppq = 480, val = 3 }, { ppq = 720, val = 2 } })
+    end,
+  },
+
   ----- All-lanes participate (no lane gating)
 
   {

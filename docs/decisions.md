@@ -4,6 +4,12 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-21** — PC closure lands (crux row 3, second half): `pcSeedSpans` closes seed-list dirt to
+  [onset, next onset) spans, snapshot ∪ `byUuid` live position, and records, existing set and pc-column
+  splice all filter on them. Spans carry both frames — projected cells are logical (`projectEvent` drops
+  `ppqL`, so cells always test logical), mm records raw. Fresh derived output ungates the channel,
+  mirroring `seatScope`'s deviation; the flush-hook reconcile stays wholesale.
+
 - **2026-07-21** — The bearing rule (crux row 3, decided as UX): under trackerMode every note bears a
   stamped sample — `stampSamples` (post-externals) stamps bare notes from the PC prevailing at their onset;
   inheritance freezes at stamp time, reversing the old "external gets sample=0, no PC inheritance" guard.
