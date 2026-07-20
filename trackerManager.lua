@@ -307,6 +307,17 @@ local function firstAtOrAfter(list, target)   -- first index with .ppq >= target
   end
   return lo
 end
+-- Onset-membership cover of a ppq-sorted list against disjoint ascending spans: emit each event whose
+-- onset falls in [lo, hi). The fx-path rule -- visit window extents, never the whole channel.
+local function coverOnsets(events, spans, emit)
+  for _, span in ipairs(spans or {}) do
+    for i = firstAtOrAfter(events, span[1]), #events do
+      local evt = events[i]
+      if evt.ppq >= span[2] then break end
+      emit(evt)
+    end
+  end
+end
 
 -- Curve value at ppq: held both ways (first value before, last after), shape interp within.
 local function evalCurve(curve, ppq)
@@ -2220,7 +2231,7 @@ end
 -- Region-replace parking: authored events a replace window covers leave the take;
 -- the prior parked set carries still-covered forward, restores the rest. see design/note-macros-v2.md § Generator output
 
-local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows)
+local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows, hostWindows)
   local batch = mmBatch()
   -- Restored notes re-enter their columns unrealised (the real mm event lands with the deferred
   -- tail commit); their raw scratch recs return so rebuild can wire each cell post-commit.
@@ -2263,21 +2274,41 @@ local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows
   local priorByType = {}
   for _, spec in ipairs(fxParked or {}) do util.bucket(priorByType, spec.evType, spec) end
 
-  -- Notes: can't mute (note-on/off + CC matching), so a covered authored note leaves the take.
+  -- Window extents per target: the fresh note/cc scans visit only these, never the whole channel --
+  -- see docs/trackerManager.md § Span-covered fx scans for why the extents are the complete cover set.
+  local noteSpans, ccSpans = {}, {}
   do
-    local scan = {}
-    for chan = 1, 16 do
-      if dirtyChans[chan] then   -- clean chan holds no on-take candidate a window could newly cover
+    local noteWins, ccWins = {}, {}
+    for _, w in ipairs(currentWindows) do
+      local box = { window = { w.startppq, w.endppq } }
+      if     w.evType == 'note' then util.bucket(noteWins, w.chan, box)
+      elseif w.evType == 'cc'   then util.bucket(ccWins, util.key(w.chan, w.cc), box) end
+    end
+    for chan, wins in pairs(noteWins) do noteSpans[chan] = mergeWindows(wins) end
+    for key,  wins in pairs(ccWins)   do ccSpans[key]   = mergeWindows(wins) end
+  end
+
+  -- Notes: can't mute (note-on/off + CC matching), so a covered authored note leaves the take, fed
+  -- by two bounded sources -- see docs/trackerManager.md § Span-covered fx scans for the note-host split.
+  do
+    local scan, seen = {}, {}
+    local function candidate(evt, laneIdx, events)
+      if seen[evt] then return end   -- a host under its own region would arrive from both sources
+      seen[evt] = true
+      util.add(scan, { evt = evt, events = events, spec = parkSpec(evt, { lane = laneIdx }) })
+    end
+    for chan, spans in pairs(noteSpans) do
+      if dirtyChans[chan] then
         for laneIdx, col in ipairs(channels[chan].columns.notes) do
-          for _, evt in ipairs(col.events) do
-            -- Gate the clone on coverage: a no-fx take covers nothing, so the scan stays empty and the
-            -- 8438-note column never spawns a throwaway parkSpec. covered(evt) == covered(its parkSpec).
-            if evt.evType ~= 'pa' and covered(evt) then
-              util.add(scan, { evt = evt, events = col.events,
-                spec = parkSpec(evt, { lane = laneIdx }) })   -- evType/chan ride the event; lane pins the column index
-            end
-          end
+          coverOnsets(col.events, spans, function(evt)
+            if evt.evType ~= 'pa' then candidate(evt, laneIdx, col.events) end
+          end)
         end
+      end
+    end
+    for host in pairs(hostWindows or {}) do
+      if dirtyChans[host.chan] and generators.parksNotes(host) then
+        candidate(host, host.lane, channels[host.chan].columns.notes[host.lane].events)
       end
     end
 
@@ -2380,12 +2411,10 @@ local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows
     for chan = 1, 16 do
       if dirtyChans[chan] then
         for cc, col in pairs(channels[chan].columns.ccs) do
-          for _, evt in ipairs(col.events) do
-            if covered(evt) then   -- pre-filter (see the note pass): only covered ccs pay a parkSpec clone
-              util.add(scan, { evt = evt, events = col.events,
-                spec = parkSpec(evt, { cc = cc }) })   -- cc pins the column key; evType/chan/ppq ride the event
-            end
-          end
+          coverOnsets(col.events, ccSpans[util.key(chan, cc)], function(evt)
+            util.add(scan, { evt = evt, events = col.events,
+              spec = parkSpec(evt, { cc = cc }) })   -- cc pins the column key; evType/chan/ppq ride the event
+          end)
         end
       end
     end
@@ -3966,7 +3995,7 @@ local function rebuildPipeline(didReload)
   local currentWindows = generators.parkWindows(parkRegions)
   perf.stop('parkRegions')
 
-  perf.start('regionPark'); local restoredNotes = rebuildRegionPark(deferred, currentWindows, sources.fxParked, sources.prevWindows); perf.stop('regionPark')  -- park covered, carry/restore prior
+  perf.start('regionPark'); local restoredNotes = rebuildRegionPark(deferred, currentWindows, sources.fxParked, sources.prevWindows, hostWindows); perf.stop('regionPark')  -- park covered, carry/restore prior
   perf.start('pa'); rebuildPA(); perf.stop('pa')  -- project PAs into settled note columns (each spliced in ppq order)
 
   -- Post-park window pass: the maintained on-take hosts plus any fx-note cell an unpark just restored

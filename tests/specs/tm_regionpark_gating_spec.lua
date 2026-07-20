@@ -30,6 +30,27 @@ end
 
 return {
   {
+    -- Mechanism-independent pin for the span-covered scan: a self-parking note host carries no window
+    -- (parkWindows suppresses the note arm for note-hosts), so a correct cover must find it from the
+    -- fx-host set, never by walking the column. A far plain note shares the channel to make a
+    -- whole-column scan and a host-set lookup observably different in reach.
+    name = 'a self-parking note host parks off-take via the fx-host set, not a column scan',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent{ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
+                     vel = 100, detune = 0, delay = 0, lane = 1, fx = arpUp }
+      h.tm:addEvent(plainNote(1, 4800))   -- far from the host window
+      h.tm:flush()
+
+      local hosts = 0
+      for _, s in ipairs(parkedOn(h.ds:get('fxParked'), 1)) do
+        if s.evType == 'note' and s.fx then hosts = hosts + 1 end
+      end
+      t.eq(hosts, 1, 'the arp note-host parked itself off-take')
+      t.truthy(#h.tm:getChannel(1).parked > 0, 'and left a parked render cell for the grid')
+    end,
+  },
+  {
     name = 'a chan-1 edit freezes chan 2 regionPark and keeps its parked spec + render cell',
     run = function(harness)
       local h = harness.mk()

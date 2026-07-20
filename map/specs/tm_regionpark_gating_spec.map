@@ -1,6 +1,6 @@
-@spec tm_regionpark_gating_spec  src=tests/specs/tm_regionpark_gating_spec.lua  loc=67  sha=285f562  cases=1
+@spec tm_regionpark_gating_spec  src=tests/specs/tm_regionpark_gating_spec.lua  loc=88  sha=285f562  cases=2
 @exercises trackerManager (h.tm), dataStore (h.ds)
-@surface   tm:addEvent, tm:flush, ds:assign, tm:rebuild, ds:get, tm:getChannel
+@surface   tm:addEvent, tm:flush, ds:get, tm:getChannel, ds:assign, tm:rebuild
 @harness   mk
 
 # Intent
@@ -18,33 +18,36 @@
   @fn parkedOn(list, chan)  @ 23-29
 
 # Cases
-  @case 'a chan-1 edit freezes chan 2 regionPark and keeps its parked spec + render cell'  [harness]  @ 33-65
+  @case 'a self-parking note host parks off-take via the fx-host set, not a column scan'  [harness]  @ 37-51
+  @case 'a chan-1 edit freezes chan 2 regionPark and keeps its parked spec + render cell'  [harness]  @ 54-86
 
 # Uses (outbound edges)
-  @use call tm:addEvent  @ 36,37,52,60
-  @use call tm:flush  @ 36,37,52,60
-  @use call ds:assign  @ 40
-  @use call tm:rebuild  @ 44
-  @use call ds:get  @ 46,53,63
-  @use call tm:getChannel  @ 48,55,61
+  @use call tm:addEvent  @ 42,57,58,73,81
+  @use call tm:flush  @ 43,57,58,73,81
+  @use call ds:get  @ 46,67,74,84
+  @use call tm:getChannel  @ 50,69,76,82
+  @use call ds:assign  @ 61
+  @use call tm:rebuild  @ 65
 
 # Fields (r read / w write incl. constructor keys)
   @field r chan  @ 26
-  @field w chan  @ 14,19,41,42
-  @field w delay  @ 15,20
-  @field w detune  @ 15,20
+  @field w chan  @ 14,19,40,62,63
+  @field w delay  @ 15,20,41
+  @field w detune  @ 15,20,41
   @field w dir  @ 11
-  @field w endppq  @ 14,19,41,42
-  @field w evType  @ 14,19
-  @field w fx  @ 41,42
+  @field w endppq  @ 14,19,40,62,63
+  @field r evType  @ 47
+  @field w evType  @ 14,19,40
+  @field r fx  @ 47
+  @field w fx  @ 41,62,63
   @field w kind  @ 11
-  @field w lane  @ 15,20
-  @field w name  @ 33
-  @field r parked  @ 48,55,61
+  @field w lane  @ 15,20,41
+  @field w name  @ 37,54
+  @field r parked  @ 50,69,76,82
   @field w period  @ 11
-  @field w pitch  @ 14,19
-  @field w ppq  @ 14,19
-  @field w run  @ 34
-  @field w startppq  @ 41,42
-  @field w uuid  @ 41,42
-  @field w vel  @ 15,20
+  @field w pitch  @ 14,19,40
+  @field w ppq  @ 14,19,40
+  @field w run  @ 38,55
+  @field w startppq  @ 62,63
+  @field w uuid  @ 62,63
+  @field w vel  @ 15,20,41

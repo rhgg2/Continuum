@@ -489,6 +489,14 @@ cell (it was pulled out of it), so it has no successor in the column — the sea
 back from the found insertion point to confirm the note itself is still present there) preserves
 that.
 
+`rebuildRegionPark`'s note/cc scans are span-covered the same way: `coverOnsets` walks each
+channel's window extents (merged per-channel for notes, per `(chan, cc)` for ccs) rather than the
+whole column, since a covered event sits inside a current window by definition — the extents are
+the complete cover set. Self-parking fx hosts are the one exception: `parkWindows` suppresses their
+own note-arm window, so they carry none, and the note pass sources them separately from the
+fx-host set (`hostWindows`), gated by `generators.parksNotes` and deduped against the
+window-driven scan by event identity.
+
 ### Derivation dirt: the gated spine
 
 Two axes of dirt drive rebuild. *Materialisation dirt* (the `wholesale`

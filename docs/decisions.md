@@ -4,6 +4,12 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-20** — `rebuildRegionPark`'s fresh note/cc scans are span-covered over the current
+  window extents (per § Phase 5.5's no-O(channel) rule), over a whole-dirty-channel walk gated only
+  by `covered()` — a no-fx take paid ~2ms visiting 8437 notes to park nothing. Self-parking note
+  hosts carry no window (`parkWindows` suppresses their note arm), so they are sourced from the
+  pre-park fx-host map (`hostWindows` keys) filtered by `parksNotes`, not rediscovered by scanning.
+
 - **2026-07-19** — `expandChannel` reads its note producers from the fx-window map's keys
   (per-channel, `(lane, ppq)`-sorted), over rescanning every column for `host.fx`. The keys
   already are the non-pa fx cells (on-take + restored); extends the `parkRegions` map-reuse
