@@ -302,4 +302,58 @@ return {
       assertParity(h, 'chan-1 detune edit: hold reach re-derives B, A keeps == full re-derive')
     end,
   },
+  {
+    name = 'seat gate: detune closure keeps out-of-closure absorbers; a cascade nudge reseats via the walk emission',
+    run = function(harness)
+      local h = harness.mk{}   -- no swing: raw == logical + delay
+
+      local function pbAt(chan, ppq)
+        for _, e in ipairs(h.fm:dump().ccs) do
+          if e.evType == 'pb' and e.chan == chan and e.ppq == ppq then return e end
+        end
+      end
+      local function pbBag(chan)
+        local out = {}
+        for _, e in ipairs(h.fm:dump().ccs) do
+          if e.evType == 'pb' and e.chan == chan then
+            out[#out + 1] = { ppq = e.ppq, val = e.val, uuid = e.uuid }
+          end
+        end
+        table.sort(out, function(a, b) return a.ppq < b.ppq end)
+        return out
+      end
+
+      -- chan 1: detune steps at 0 / 480 / 1440 -> three step absorbers (960 repeats 480's detune,
+      -- so it seats nothing). chan 2: same-pitch pair for the cascade below.
+      h.tm:addEvent(note(1, 0,    60, { detune = 10 })); h.tm:flush()
+      h.tm:addEvent(note(1, 480,  62, { detune = 30 })); h.tm:flush()
+      h.tm:addEvent(note(1, 960,  64, { detune = 30 })); h.tm:flush()
+      h.tm:addEvent(note(1, 1440, 65, { detune = 50 })); h.tm:flush()
+      h.tm:addEvent(note(2, 0,   60)); h.tm:flush()
+      h.tm:addEvent(note(2, 480, 60, { detune = 30 })); h.tm:flush()
+      -- Settle creation-pass identity (same seam as the pb-half fixture above).
+      h.tm:rebuild(true)
+
+      t.truthy(pbAt(1, 0) and pbAt(1, 480) and pbAt(1, 1440), 'absorbers seated at each detune onset')
+
+      -- Detune edit at 480: the closure is [480, next lane-1 onset 960] inclusive. The absorbers
+      -- at 0 and 1440 sit outside it and must stand verbatim, uuid included.
+      local before = pbBag(1)
+      local n480 = h.tm:getChannel(1).columns.notes[1].events[2]
+      h.tm:assignEvent(n480, { detune = 45 }); h.tm:flush()
+      local after = pbBag(1)
+      t.deepEq(after[1], before[1], 'absorber at 0: outside the closure, verbatim')
+      t.deepEq(after[#after], before[#before], 'absorber at 1440: outside the closure, verbatim')
+      t.truthy(pbAt(1, 480).val ~= before[2].val, 'edited onset reseated to the new detune')
+      assertParity(h, 'detune closure: out-of-closure seats keep == full re-derive')
+
+      -- A lane-2 add lands raw-coincident with chan 2's same-pitch lane-1 onset at 480; the walk
+      -- nudges the lane-1 note to 481 and emits its seat closure -- the only dirt covering the
+      -- absorber, since the add itself is lane-2. see design § The widen and the emission
+      h.tm:addEvent(note(2, 470, 60, { lane = 2, delay = 42 })); h.tm:flush()   -- delay is milli-QN; 42 = +10 ticks at res 240
+      t.truthy(pbAt(2, 481), 'nudged lane-1 onset reseated its absorber at the new raw')
+      t.truthy(not pbAt(2, 480), 'no stale absorber left at the old raw')
+      assertParity(h, 'cascade nudge: emission-covered seat == full re-derive')
+    end,
+  },
 }

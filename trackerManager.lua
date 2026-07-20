@@ -155,6 +155,7 @@ local function parkSeed(spec, verb)
 end
 local function rawSeed(evt, verb)
   return { uuid = evt.uuid, verb = verb, ppq = evt.ppq, ppqL = evt.ppqL or evt.ppq,
+           evType = evt.evType, cc = evt.cc,
            lane = evt.lane, pitch = evt.pitch, endppqL = evt.endppqL }
 end
 
@@ -937,6 +938,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     -- A move (onset shifts) is delete-at-old + insert-at-new. Snapshot the vacated slot before the
     -- assign and seed it as the birth; dedup keeps it, byUuid recovers the new position. see design § The model, inverted
     local moved = update.ppq ~= nil or update.ppqL ~= nil or update.delay ~= nil
+                  or update.lane ~= nil
     local vacated = moved and snapshot(evt, 'assign') or nil
     util.assign(evt, update)
     if assignDirtiesPb(evt, oldLane, update) then dirtyChan(oldChan); dirtyChan(evt.chan) end
@@ -3604,14 +3606,17 @@ local function rebuildPbs(fxOut, extraColumns)
   -- Per-chan lane-1 view, consumed only by deriveChan: built for dirty channels alone. Clean
   -- channels reuse their carried pb column and never read it.
   local function lane1Note(entry) return entry.lane == 1 and walkable(entry) end
-  local lane1ByChan = {}
+  local lane1ByChan, freshLane1 = {}, {}
   for chan = 1, 16 do
     if dirty[chan] then
       -- Derived lane-1 fxNotes are routed out of columns; union them so the absorber pass seats
       -- their detune jumps.
       local liveLane1 = {}
       for _, w in ipairs(noteLive[chan]) do
-        if w.lane == 1 then util.add(liveLane1, w.evt) end
+        if w.lane == 1 then
+          util.add(liveLane1, w.evt)
+          freshLane1[chan] = freshLane1[chan] or not w.kept
+        end
       end
       lane1ByChan[chan] = mergeIndexed(rawNotes(chan), lane1Note, liveLane1)
     end
@@ -3635,6 +3640,52 @@ local function rebuildPbs(fxOut, extraColumns)
 
   local pbWrites = mmBatch()
   local gridStep = ccGridStep()
+
+  -- Closes seeds to raw spans that gate onsets/densify/anchor/absorber-pool below; nil = ungated.
+  -- see design/interval-dirt-closing.md § 1
+  local function seatScope(chan, dirt, lane1Events, realPbs, replaceWins)
+    if dirt == true then return nil end
+    local spans = {}
+    local function nextLane1After(ppq)
+      for _, n in ipairs(lane1Events) do
+        if n.ppq > ppq then return n.ppq end
+      end
+      return math.huge
+    end
+    local function lane1Span(ppq) util.add(spans, { ppq - 1, nextLane1After(ppq) }) end
+    local function bpSpan(ppq)
+      local prevBp, nextBp = 0, math.huge
+      for _, pb in ipairs(realPbs) do
+        if pb.ppq < ppq then prevBp = pb.ppq
+        elseif pb.ppq > ppq then nextBp = pb.ppq; break end
+      end
+      util.add(spans, { prevBp, nextBp })
+    end
+    for _, seed in ipairs(dirt) do
+      -- Dedup keeps a move's vacated snapshot; the survivor's live position comes from byUuid
+      -- (the frontier walk's convention, see § Seeds arrive named) and spans separately.
+      local live = seed.uuid and tm:byUuid(seed.uuid)
+      if not (live and live.chan == chan) then live = nil end
+      if seed.lane == 1 or (live and live.lane == 1) then
+        if seed.lane == 1 then lane1Span(seed.ppq) end
+        if live and live.lane == 1 and live.ppq ~= seed.ppq then lane1Span(live.ppq) end
+      elseif seed.evType == 'pb' then
+        bpSpan(seed.ppq)
+        if live and live.ppq ~= seed.ppq then bpSpan(live.ppq) end
+      elseif not (seed.lane or seed.verb == 'region' or seed.evType == 'cc'
+                  or seed.evType == 'at' or seed.evType == 'pc') then
+        return nil
+      end
+    end
+    for _, win in ipairs(replaceWins) do
+      if not win.kept then util.add(spans, { win.startRaw - 1, win.endRaw }) end
+    end
+    -- The I2a anchor at the first lane-1 onset is channel-global: any pass may need to seat,
+    -- refresh, or retire it, so its point is always in scope.
+    local first = lane1Events[1]
+    if first then util.add(spans, { first.ppq - 1, first.ppq }) end
+    return spans
+  end
 
   -- Seat the lane-1 detune stream, match absorbers, stage the consolidated assign; returns
   -- detuneOf. Clean chans skip it wholesale -- I8: rebuild is a fixpoint. see design/incremental-pbs.md
@@ -3740,6 +3791,26 @@ local function rebuildPbs(fxOut, extraColumns)
       if not pb.derived and not inSeatWindow(pb.ppq) then util.add(realPbs, pb) end
     end
 
+    -- Which seats this pass may touch; fresh (non-kept) derived lane-1 output ungates the channel.
+    -- see design/interval-dirt-closing.md § 1
+    local seatSpans = not freshLane1[chan]
+                      and seatScope(chan, dirty[chan], lane1Events, realPbs, replaceWins) or nil
+    local function inSeatScope(ppq)
+      if not seatSpans then return true end
+      for _, s in ipairs(seatSpans) do
+        if ppq >= s[1] and ppq <= s[2] then return true end
+      end
+      return false
+    end
+    -- The unfiltered jump count feeds the anchor decision below: scope-filtered onsets must not
+    -- hide a globally required anchor.
+    local anyJump = #onsets > 0
+    if seatSpans then
+      for i = #onsets, 1, -1 do
+        if not inSeatScope(onsets[i].ppq) then table.remove(onsets, i) end
+      end
+    end
+
     -- Prevailing cents at any ppq: the replace curve inside a window, else the authored
     -- breakpoints. Interpolate the bounding pair, hold the last past the end, 0 before the first.
     local function streamValue(ppq)
@@ -3799,7 +3870,7 @@ local function rebuildPbs(fxOut, extraColumns)
         if isCurved(A.shape) and hasOnset then
           local p = A.ppq + gridStep
           while p < B.ppq do
-            if not seats[p] and not inKeptRange(p) then
+            if not seats[p] and not inKeptRange(p) and inSeatScope(p) then
               seats[p] = { cents = streamValue(p), ppqL = tm:toLogical(chan, p), shape = 'linear' }
             end
             p = p + gridStep
@@ -3823,13 +3894,13 @@ local function rebuildPbs(fxOut, extraColumns)
     -- Anchor a pb-active channel at its first lane-1 onset (I2a):
     -- without it, playback inherits the synth's unknown prior bend.
     local first = lane1Events[1]
-    if first and not seats[first.ppq] and not inKeptRange(first.ppq) then
+    if first and not seats[first.ppq] and not inKeptRange(first.ppq) and inSeatScope(first.ppq) then
       local hasReal, anchored = false, false
       for _, pb in ipairs(realPbs) do
         hasReal = true
         if pb.ppq <= first.ppq then anchored = true break end
       end
-      if (next(seats) ~= nil or hasReal) and not anchored then
+      if (next(seats) ~= nil or hasReal or (seatSpans ~= nil and anyJump)) and not anchored then
         seats[first.ppq] = { cents = streamValue(first.ppq), ppqL = first.ppqL, shape = 'step' }
       end
     end
@@ -3844,7 +3915,10 @@ local function rebuildPbs(fxOut, extraColumns)
       -- A markerless in-window pb is a generated seat (recognized by window, no marker); tag it in RAM
       -- so projection hides it and the fungible-absorber machinery below reseats it.
       if not pb.derived and inSeatWindow(pb.ppq) then pb.derived = 'absorber' end
-      if pb.derived then util.add(availAbsorbers, pb)
+      if pb.derived then
+        -- Pool = in-scope absorbers plus any absorber standing at a computed seat, so a seat can
+        -- never miss its standing absorber and mint a duplicate.
+        if inSeatScope(pb.ppq) or seats[pb.ppq] then util.add(availAbsorbers, pb) end
       else realAt[pb.ppq] = pb end
     end
     for ppq in pairs(seats) do

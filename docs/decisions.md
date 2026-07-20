@@ -4,6 +4,13 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-21** — `rebuildPbs` gates seats to the seed closure (`seatScope`, crux row 2): onsets, densify,
+  anchor and pool filter on spans from lane-1/pb seeds (snapshot + `byUuid` live position, since dedup keeps
+  the vacated one). The pool also admits any absorber standing at a computed seat — duplicates structurally
+  impossible; the delta-gated assign stays whole as backstop. Fresh derived lane-1 output ungates the channel
+  (fx-born onsets have no verb seed); the I2a anchor point is always in scope (channel-global fact); `moved`
+  gained `update.lane` so lane changes vacate a snapshot.
+
 - **2026-07-21** — `ccExisting` now covers only the **seed-touched** prev cc windows (edge-inclusive
   `windowSeeded`), and `expandChannel`'s kept-seat re-feed + `targetScope` are deleted. A clean cc
   window is absent from both `existing` (now dirty-only) and `predicted` (emit-scope fold), and the
