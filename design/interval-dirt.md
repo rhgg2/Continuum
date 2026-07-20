@@ -15,7 +15,7 @@
 
 | | |
 |---|---|
-| state | landed — phases 1–3; phase 4 2026-07-17; phases 4.5 + 4.75 2026-07-18; model inverted to seed dirt 2026-07-18 (§ The model, inverted); phase 5 landed + measured on glasswork-dense 2026-07-19 (§ phase 5); phase 3's note project-before-splice found un-landed, landed 2026-07-19 (§ phase 3) |
+| state | landed — phases 1–3; phase 4 2026-07-17; phases 4.5 + 4.75 2026-07-18; model inverted to seed dirt 2026-07-18 (§ The model, inverted); phase 5 landed + measured on glasswork-dense 2026-07-19 (§ phase 5); phase 3's note project-before-splice found un-landed, landed 2026-07-19 (§ phase 3); cc walk narrowed to O(dirt) 2026-07-20..21 -- seeds carry evType/cc, seed-resolved `spliceChannelCCs`, `ccExisting` scoped to seeded windows + kept-seat re-feed dropped (`docs/decisions.md`) |
 | supersedes | `incremental-rebuild` gap 4 (fx dirt signal) |
 | enduring model it changes | `docs/trackerManager.md` § Derivation dirt |
 | the hard part | was forward propagation — closed 2026-07-15 by onset-bounded closures (§ The crux, closed); same-pitch widens the tails closure rather than leaving tm (§ Same-pitch is a projection artefact), and tails *produces* its closure from the neighbour lookup it already does, rather than consuming a fence it could leak past (§ The tails closure is the walk's output, not its input) |
@@ -1328,6 +1328,14 @@ Commits (commit 1, the note half, above), each green alone,
    write-count pin is uuid stability of kept seats (a delete/re-add
    would re-uuid). `generators.hasContinuous` deleted -- `keepable`'s
    vacuous target loop subsumes the pure-note test.
+
+   *Superseded 2026-07-21* (`docs/decisions.md` § 2026-07-20/21): the cc walk
+   itself went O(dirt), retiring the kept-side machinery here -- seeds carry
+   `evType`/`cc`, `spliceChannelCCs` excises and re-clones each cc/at/pc seat
+   per-uuid, and `ccExisting` is scoped to the seed-touched prev cc windows
+   (edge-inclusive `windowSeeded`). A clean window is then absent from both
+   `existing` and `predicted`, so the reconcile never touches it; the
+   **target scope**, `spanSetCovers`, and the verbatim re-feed are deleted.
 4. **The pb half.** Kept `pbChains` records, the `replaceWins` split,
    the fences, the prior-column-slice carry. Parity: disjoint vibrato
    hosts; a detune edit outside every window still reseats its
@@ -1393,6 +1401,11 @@ Commits (commit 1, the note half, above), each green alone,
    cc-gate limitation; the cc gate's own effect is folded into the `fx` number
    above. On this fixture the edit is re-derive-bound (`reload` ~57–60), not
    write-bound like glasswork proper, which is what lets the gate show at all.
+
+   *Narrowed 2026-07-21:* that phase-3/6 residual has since landed -- the cc
+   walk is now O(dirt) (§ commit 3's superseded note; `docs/decisions.md`
+   § 2026-07-20/21). On this same fixture a one-host edit's `ccs` drops to
+   0.4 (from ~9) and `fx` to 7.2, every clean window unwalked.
 
 Same phase: the all-16 region/parking dirt sources narrow to their own
 members — a region edit knows the exact events it parked and restored

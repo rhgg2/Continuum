@@ -207,6 +207,13 @@ return {
       t.deepEq(seatUuids(1, 10, 960, 1200), keptB, 'kept window B: seat uuids untouched')
       assertParity(h, 'chan-1 disjoint pair: edit in A, B keeps == full re-derive')
 
+      -- Edit exactly on window A's end edge (ppq 240): windowSeeded is edge-inclusive, so window A's
+      -- prev seats surface in ccExisting and match rather than duplicate. Half-open would miss them.
+      local edgeA = seatUuids(1, 10, 0, 240)
+      h.tm:addEvent(note(1, 240, 65, { lane = 3 })); h.tm:flush()
+      t.deepEq(seatUuids(1, 10, 0, 240), edgeA, 'edge-inclusive edit: window A seats keep, no duplicate')
+      assertParity(h, 'chan-1 edge edit: window A reconciles without churn == full re-derive')
+
       -- Edit at ppq 240 seeds lane-1's window only: the lane-2 overlapper re-expands as a fold
       -- input but emits nothing of its own -- its exclusive remainder keeps verbatim.
       local keptQ = seatUuids(2, 10, 960, 1920)

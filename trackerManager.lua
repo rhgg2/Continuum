@@ -254,13 +254,7 @@ local function overlapping(bucket, span)
   return out
 end
 
--- Half-open span-set tests over the continuous gate's merged scopes (nil scope = empty).
-local function spanSetCovers(spans, ppq)
-  for _, span in ipairs(spans or {}) do
-    if ppq >= span[1] and ppq < span[2] then return true end
-  end
-  return false
-end
+-- Half-open span-set intersection over the continuous gate's merged scopes (nil scope = empty).
 local function spanSetIntersects(spans, window)
   for _, span in ipairs(spans or {}) do
     if window[1] < span[2] and window[2] > span[1] then return true end
@@ -1928,7 +1922,8 @@ local function rawSpanMap(wins)
     map[w.chan]      = map[w.chan] or {}
     map[w.chan][key] = map[w.chan][key] or {}
     util.add(map[w.chan][key], { sRaw = tm:fromLogical(w.chan, w.startppq),
-                                 eRaw = tm:fromLogical(w.chan, w.endppq) })
+                                 eRaw = tm:fromLogical(w.chan, w.endppq),
+                                 sL   = w.startppq, eL = w.endppq })
   end
   return map
 end
@@ -1973,19 +1968,21 @@ local function spliceCcCell(live, ccWrites)
   return col
 end
 
--- ccExisting from the prev cc windows only: range-query each window's raw span and keep its own-cc
--- seats. The wholesale path's full-channel scan is O(channel); this is O(seats in windows).
-local function buildCcExistingInWindows(chan, fillWin, ccExisting)
+-- ccExisting from the seed-touched prev cc windows only: each window a seed edge-inclusively hits is
+-- range-queried for its own-cc seats. A clean window never enters existing, so its seats keep untouched.
+local function buildCcExistingInWindows(chan, fillWin, ccExisting, seedRows)
   local byCc = fillWin[chan]
   if not byCc then return end
   local seen = {}
   for ccNum, spans in pairs(byCc) do
     for _, span in ipairs(spans) do
-      for _, evt in mm:ccsRawBetween(chan, span.sRaw, span.eRaw) do
-        if evt.evType == 'cc' and evt.cc == ccNum and not seen[evt.uuid] then
-          seen[evt.uuid] = true
-          util.add(ccExisting[chan],
-            { ppq = evt.ppq, val = evt.val, shape = evt.shape, tension = evt.tension, cc = evt.cc, uuid = evt.uuid })
+      if windowSeeded(seedRows, span.sL, span.eL) then
+        for _, evt in mm:ccsRawBetween(chan, span.sRaw, span.eRaw) do
+          if evt.evType == 'cc' and evt.cc == ccNum and not seen[evt.uuid] then
+            seen[evt.uuid] = true
+            util.add(ccExisting[chan],
+              { ppq = evt.ppq, val = evt.val, shape = evt.shape, tension = evt.tension, cc = evt.cc, uuid = evt.uuid })
+          end
         end
       end
     end
@@ -2038,7 +2035,7 @@ local function spliceChannelCCs(chan, seedList, fillWin, ccWrites, ccExisting)
   -- tv's cell carry keys on events-table identity (same table => reuse built cells), so a spliced
   -- column must shed its carried table -- exciseNotes' `col.events = kept` is the note-path twin.
   for col in pairs(touched) do col.events = util.clone(col.events) end
-  buildCcExistingInWindows(chan, fillWin, ccExisting)
+  buildCcExistingInWindows(chan, fillWin, ccExisting, seedRowsFor(seedList))
 end
 
 -- Wholesale / stale-swing path: re-derive a channel's whole cc/at/pc stream from mm. Verbatim from the
@@ -2984,7 +2981,7 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
     local gated = dirt ~= true
     local keptById, dirtyRows
     local keptFx = {}   -- identity set: derived specs re-added verbatim, already settled last pass
-    local seeded, emitScope, targetScope = {}, {}, {}
+    local seeded, emitScope = {}, {}
     if gated then
       keptById = {}
       for _, kept in ipairs(noteExisting[chan]) do util.bucket(keptById, kept.derived, kept) end
@@ -3056,8 +3053,8 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
     pbBase, ccBases = pbBaseFor(chan, spans), ccBasesFor(chan, spans)
     fxOut.pbBase[chan] = pbBase
 
-    -- Per-target scopes: emit scope = merged windows of the seeded producers touching the target;
-    -- target scope = merged windows of them all -- its complement is where existing seats keep.
+    -- Emit scope per target = merged windows of the seeded producers touching it; the cc fold and
+    -- reconcile clip to it. Clean windows never enter ccExisting, so their seats keep untouched.
     if gated then
       -- Hold-stream reach: authored pb/cc breakpoints and lane-1 detune hold forward past window
       -- edges, invisible to window-local seeds. see design/interval-dirt.md § Implementation plan, commit 4
@@ -3103,15 +3100,13 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
           end
         end
       end
-      local emitWins, targetWins = {}, {}
+      local emitWins = {}
       for _, producer in ipairs(producers) do
-        for target in pairs(targetsOf[producer]) do
-          util.bucket(targetWins, target, producer)
-          if seeded[producer] then util.bucket(emitWins, target, producer) end
+        if seeded[producer] then
+          for target in pairs(targetsOf[producer]) do util.bucket(emitWins, target, producer) end
         end
       end
-      for target, group in pairs(emitWins)   do emitScope[target]   = mergeWindows(group) end
-      for target, group in pairs(targetWins) do targetScope[target] = mergeWindows(group) end
+      for target, group in pairs(emitWins) do emitScope[target] = mergeWindows(group) end
       fxOut.pbScope[chan] = emitScope.pb or {}
     end
 
@@ -3143,18 +3138,6 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
                                  shape = point.shape, tension = point.tension })
             end
           end
-        end
-      end
-    end
-
-    -- Kept seats: inside a target's scope but outside its emit scope, re-fed to the reconcile verbatim.
-    -- see design/interval-dirt.md § Implementation plan, commit 3
-    if gated then
-      for _, seat in ipairs(ccExisting[chan]) do
-        local seatL = tm:toLogical(chan, seat.ppq)
-        if spanSetCovers(targetScope[seat.cc], seatL) and not spanSetCovers(emitScope[seat.cc], seatL) then
-          util.add(ccLive, { evType = 'cc', chan = chan, cc = seat.cc, ppq = seat.ppq,
-                             val = seat.val, shape = seat.shape, tension = seat.tension })
         end
       end
     end

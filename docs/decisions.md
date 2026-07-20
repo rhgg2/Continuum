@@ -4,6 +4,15 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-21** — `ccExisting` now covers only the **seed-touched** prev cc windows (edge-inclusive
+  `windowSeeded`), and `expandChannel`'s kept-seat re-feed + `targetScope` are deleted. A clean cc
+  window is absent from both `existing` (now dirty-only) and `predicted` (emit-scope fold), and the
+  reconcile deletes from `existing` only — so it is never touched, and the re-feed that protected
+  clean-window seats against a whole-channel `existing` is redundant. Edge-inclusive is load-bearing:
+  deleting a window's bounding onset seeds exactly its end edge, so `row <= end` keeps that window's
+  prev seats in `existing` to match rather than duplicate. Live glasswork_dense one-host edit: `ccs`
+  10.5→0.4ms, `fx` 41.9→7.2ms — the 127 clean windows go unwalked.
+
 - **2026-07-20** — The interval cc splice is now **seed-resolved**, superseding the row-keyed scan
   below: each cc/at/pc seed excises its own carried cell (exact-row seek + uuid match) and re-clones
   its survivor from `mm:byUuid` — O(seeds), both O(channel) passes gone. The nil-uuid add hole closes
