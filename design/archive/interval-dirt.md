@@ -1,7 +1,13 @@
 # interval dirt — dirty ppq ranges, not dirty channels
 
-> Working design doc, **in flight**. Successor to the
-> `incremental-rebuild` programme (`design/archive/incremental-rebuild.md`,
+> **Closed 2026-07-21.** The programme landed — phases 1–5.5 plus the
+> seed-model inversion — and the residue is a three-item punch list:
+> `design/interval-dirt-closing.md`. This file is the full history:
+> closed cruxes, superseded drafts, per-phase corrections. The enduring
+> model lives in `docs/trackerManager.md` § Derivation dirt.
+>
+> Was: working design doc, successor to the `incremental-rebuild`
+> programme (`design/archive/incremental-rebuild.md`,
 > closed 2026-07-15). One idea: make the unit of derivation dirt a **ppq
 > interval within a channel** rather than the whole channel. It subsumes
 > that programme's one deferred gap — the fx dirt signal — which is why
