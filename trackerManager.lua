@@ -922,7 +922,8 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   -- into seed-valued dirt (dedup-by-uuid). A dead seed's uuid dangles safely: see docs/trackerManager.md § Interval seeds.
   local function snapshot(evt, verb)
     return { uuid = evt.uuid, verb = verb, ppq = evt.ppq, ppqL = evt.ppqL or evt.ppq,
-             lane = evt.lane, pitch = evt.pitch, endppqL = evt.endppqL }
+             lane = evt.lane, pitch = evt.pitch, endppqL = evt.endppqL,
+             evType = evt.evType, cc = evt.cc }
   end
   local function seedEvent(evt, verb) util.bucket(seeds, evt.chan, snapshot(evt, verb)) end
 
