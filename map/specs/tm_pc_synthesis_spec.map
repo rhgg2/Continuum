@@ -1,4 +1,4 @@
-@spec tm_pc_synthesis_spec  src=tests/specs/tm_pc_synthesis_spec.lua  loc=331  sha=37ed80d  cases=13
+@spec tm_pc_synthesis_spec  src=tests/specs/tm_pc_synthesis_spec.lua  loc=351  sha=37ed80d  cases=14
 @exercises midiManager (h.mm), trackerManager (h.tm)
 @surface   mm:notes, tm:getChannel, fm:dump, tm:addEvent, tm:flush, tm:assignEvent, tm:deleteEvent
 @harness   mk{seed.notes, seed.ccs}
@@ -23,71 +23,79 @@
   @case 'deleting the only note at a realised ppq drops its PC'  [harness]  @ 94-109
   @case 'cross-channel: editing one chan does not clobber another chan\'s PC'  [harness]  @ 119-137
   @case 'trackerMode off: user-authored PCs are not touched'  [harness]  @ 143-152
-  @case 'external note enters trackerMode with sample=0 (no PC inheritance)'  [harness]  @ 163-178
-  @case 'lane-2 note alone (no simultaneous lane-1) emits its own PC'  [harness]  @ 184-204
-  @case 'simultaneous lane-1 and lane-2: leftmost wins, loser is shadowed'  [harness]  @ 208-224
-  @case 'splitting realised ppqs (delay) un-collides chord into two PCs'  [harness]  @ 228-248
-  @case 'deleting the shadower un-shadows the survivor and PC val flips'  [harness]  @ 252-278
-  @case 'a PA mid-note synthesises no PC of its own'  [harness]  @ 286-300
-  @case 'a lane-1 PA does not outrank a lane-2 note at the same ppq'  [harness]  @ 306-329
+  @case 'external note enters trackerMode stamped from the prevailing PC'  [harness]  @ 162-177
+  @case 'inheritance freezes at stamp time: editing one sample recolours only itself'  [harness]  @ 181-198
+  @case 'lane-2 note alone (no simultaneous lane-1) emits its own PC'  [harness]  @ 204-224
+  @case 'simultaneous lane-1 and lane-2: leftmost wins, loser is shadowed'  [harness]  @ 228-244
+  @case 'splitting realised ppqs (delay) un-collides chord into two PCs'  [harness]  @ 248-268
+  @case 'deleting the shadower un-shadows the survivor and PC val flips'  [harness]  @ 272-298
+  @case 'a PA mid-note synthesises no PC of its own'  [harness]  @ 306-320
+  @case 'a lane-1 PA does not outrank a lane-2 note at the same ppq'  [harness]  @ 326-349
 
 # Uses (outbound edges)
   @use call mm:notes  @ 22
-  @use call tm:getChannel  @ 28,271,322
-  @use call fm:dump  @ 48,67,88,108,135,136,151,172,174,201,219,242,266,299,320
-  @use call tm:addEvent  @ 62,237,239
-  @use call tm:flush  @ 66,87,107,134,200,241,265
-  @use call tm:assignEvent  @ 86,133,199
-  @use call tm:deleteEvent  @ 106,264
+  @use call tm:getChannel  @ 28,291,342
+  @use call fm:dump  @ 48,67,88,108,135,136,151,171,173,196,221,239,262,286,319,340
+  @use call tm:addEvent  @ 62,257,259
+  @use call tm:flush  @ 66,87,107,134,195,220,261,285
+  @use call tm:assignEvent  @ 86,133,194,219
+  @use call tm:deleteEvent  @ 106,284
 
 # Fields (r read / w write incl. constructor keys)
   @field r ccs  @ 10
-  @field w ccs  @ 148,168,293,314
+  @field w ccs  @ 148,167,189,313,334
   @field r chan  @ 11,23
   @field w chan  @ 41,42,43,63,79,80,99,100,126,127,147,148
-  @field w chan  @ 167,168,190,191,213,214,237,239,257,258,291,294
-  @field w chan  @ 311,312,315
-  @field r columns  @ 28,271,322
-  @field w config  @ 46,60,83,103,130,170,194,217,235,261,297,318
-  @field w delay  @ 41,42,43,64,79,80,99,100,126,127,147,167
-  @field w delay  @ 190,191,213,214,238,240,257,258,291,311,312
-  @field w detune  @ 41,42,43,64,79,80,99,100,126,127,147,167
-  @field w detune  @ 190,191,213,214,238,240,257,258,291,311,312
-  @field w endppq  @ 41,42,43,63,79,80,99,100,126,127,147,167
-  @field w endppq  @ 190,191,199,213,214,237,239,257,258,291,311,312
-  @field r evType  @ 11,324
-  @field w evType  @ 62,148,168,237,239,294,315
-  @field r events  @ 28,272,323
-  @field w lane  @ 64,238,240
-  @field w name  @ 36,54,74,94,119,143,163,184,208,228,252,286
-  @field w name  @ 306
-  @field r notes  @ 28,172,271,322
-  @field w notes  @ 40,59,78,98,125,147,167,189,212,234,256,290
-  @field w notes  @ 310
-  @field r pitch  @ 23,273,324
-  @field w pitch  @ 41,42,43,63,79,80,99,100,126,127,147,167
-  @field w pitch  @ 190,191,213,214,237,239,257,258,291,294,311,312
-  @field w pitch  @ 315
-  @field r ppq  @ 12,15,176
+  @field w chan  @ 166,167,186,187,189,210,211,233,234,257,259,277
+  @field w chan  @ 278,311,314,331,332,335
+  @field r columns  @ 28,291,342
+  @field w config  @ 46,60,83,103,130,169,191,214,237,255,281,317
+  @field w config  @ 338
+  @field w delay  @ 41,42,43,64,79,80,99,100,126,127,147,166
+  @field w delay  @ 186,187,210,211,233,234,258,260,277,278,311,331
+  @field w delay  @ 332
+  @field w detune  @ 41,42,43,64,79,80,99,100,126,127,147,166
+  @field w detune  @ 186,187,210,211,233,234,258,260,277,278,311,331
+  @field w detune  @ 332
+  @field w endppq  @ 41,42,43,63,79,80,99,100,126,127,147,166
+  @field w endppq  @ 186,187,210,211,219,233,234,257,259,277,278,311
+  @field w endppq  @ 331,332
+  @field r evType  @ 11,344
+  @field w evType  @ 62,148,167,189,257,259,314,335
+  @field r events  @ 28,292,343
+  @field w lane  @ 64,258,260
+  @field w name  @ 36,54,74,94,119,143,162,181,204,228,248,272
+  @field w name  @ 306,326
+  @field r notes  @ 28,171,291,342
+  @field w notes  @ 40,59,78,98,125,147,166,185,209,232,254,276
+  @field w notes  @ 310,330
+  @field r pitch  @ 23,293,344
+  @field w pitch  @ 41,42,43,63,79,80,99,100,126,127,147,166
+  @field w pitch  @ 186,187,210,211,233,234,257,259,277,278,311,314
+  @field w pitch  @ 331,332,335
+  @field r ppq  @ 12,15,175
   @field w ppq  @ 12,41,42,43,49,63,67,79,80,89
-  @field w ppq  @ 89,99,100,108,126,127,135,136,147,148,151,167
-  @field w ppq  @ 168,190,191,199,203,213,214,219,237,239,257
-  @field w ppq  @ 258,266,291,294,299,311,312,315,320
-  @field w run  @ 37,55,75,95,120,144,164,185,209,229,253,287
-  @field w run  @ 307
-  @field r sample  @ 173
+  @field w ppq  @ 89,99,100,108,126,127,135,136,147,148,151,166
+  @field w ppq  @ 167,186,187,189,197,210,211,219,223,233
+  @field w ppq  @ 234,239,257,259,277,278,286,311,314,319,331,332
+  @field w ppq  @ 335,340
+  @field w run  @ 37,55,75,95,120,144,163,182,205,229,249,273
+  @field w run  @ 307,327
+  @field r sample  @ 172
   @field w sample  @ 41,42,43,64,79,80,86,99,100,126,127,133
-  @field w sample  @ 190,191,213,214,238,240,257,258,291,311,312
-  @field r sampleShadowed  @ 222,223,246,247,277,328
-  @field w seed  @ 39,59,77,97,124,146,166,188,211,234,255,289
-  @field w seed  @ 309
-  @field w trackerMode  @ 46,60,83,103,130,170,194,217,235,261,297,318
-  @field w transient  @ 46,60,83,103,130,170,194,217,235,261,297,318
-  @field r uuid  @ 23,199
-  @field w uuid  @ 86,133,199
-  @field r val  @ 12,177
+  @field w sample  @ 194,210,211,233,234,258,260,277,278,311,331,332
+  @field r sampleShadowed  @ 242,243,266,267,297,348
+  @field w seed  @ 39,59,77,97,124,146,165,184,208,231,254,275
+  @field w seed  @ 309,329
+  @field w trackerMode  @ 46,60,83,103,130,169,191,214,237,255,281,317
+  @field w trackerMode  @ 338
+  @field w transient  @ 46,60,83,103,130,169,191,214,237,255,281,317
+  @field w transient  @ 338
+  @field r uuid  @ 23,219
+  @field w uuid  @ 86,133,194,219
+  @field r val  @ 12,176
   @field w val  @ 12,49,67,89,108,135,136,148,151
-  @field w val  @ 168,203,219,266,299,320
-  @field w vel  @ 41,42,43,63,79,80,99,100,126,127,147,167
-  @field w vel  @ 190,191,213,214,237,239,257,258,291,294,311,312
-  @field w vel  @ 315
+  @field w val  @ 167,189,197,223,239,286,319,340
+  @field w vel  @ 41,42,43,63,79,80,99,100,126,127,147,166
+  @field w vel  @ 186,187,210,211,233,234,257,259,277,278,311,314
+  @field w vel  @ 331,332,335

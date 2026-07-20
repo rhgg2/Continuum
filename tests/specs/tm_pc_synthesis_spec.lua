@@ -152,15 +152,14 @@ return {
     end,
   },
 
-  ----- External notes do NOT inherit sample from the prevailing PC
+  ----- The bearing rule: bare notes stamp from the prevailing PC, then freeze
 
-  -- Foreign MIDI (no ppqL/lane stamp) gets sample=0 at the externals step, not the
-  -- prevailing-PC value. External MIDI doesn't carry tracker semantics,
-  -- so an arbitrary PC predating the note isn't a meaningful sample
-  -- assignment for it. Regression guard against re-adding PC-lookup
-  -- backfill.
+  -- Every note bears a sample under trackerMode: a bare note (external or
+  -- pre-trackerMode) is stamped from the PC prevailing at its onset at first
+  -- rebuild. Inheritance freezes at stamp time — later PC/sample edits
+  -- upstream do not re-colour it. see design/interval-dirt-closing.md § 2
   {
-    name = 'external note enters trackerMode with sample=0 (no PC inheritance)',
+    name = 'external note enters trackerMode stamped from the prevailing PC',
     run = function(harness)
       local h = harness.mk{
         seed = {
@@ -170,11 +169,32 @@ return {
         config = { transient = { trackerMode = true } },
       }
       local n = h.fm:dump().notes[1]
-      t.eq(n.sample, 0, 'external note seeded with sample=0, not the prevailing PC value')
+      t.eq(n.sample, 11, 'bare note stamped with the prevailing PC value')
       local pcs = pcsOnChan(h.fm:dump(), 1)
       local atNoteOnset
       for _, p in ipairs(pcs) do if p.ppq == 240 then atNoteOnset = p end end
-      t.eq(atNoteOnset and atNoteOnset.val, 0, 'synthesised PC at note onset reads the note sample (0)')
+      t.eq(atNoteOnset and atNoteOnset.val, 11, 'synthesised PC at note onset reads the stamped sample')
+    end,
+  },
+
+  {
+    name = 'inheritance freezes at stamp time: editing one sample recolours only itself',
+    run = function(harness)
+      local h = harness.mk{
+        seed = {
+          notes = {
+            { ppq = 0,   endppq = 240, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0 },
+            { ppq = 480, endppq = 720, chan = 1, pitch = 62, vel = 100, detune = 0, delay = 0 },
+          },
+          ccs   = { { ppq = 0, evType = 'pc', chan = 1, val = 7 } },
+        },
+        config = { transient = { trackerMode = true } },
+      }
+      -- Both notes stamped 7 at first rebuild; recolouring the first must not touch the second.
+      h.tm:assignEvent({ uuid = uuidOfNote(h.fm, 1, 60) }, { sample = 3 })
+      h.tm:flush()
+      t.deepEq(pcsOnChan(h.fm:dump(), 1),
+        { { ppq = 0, val = 3 }, { ppq = 480, val = 7 } })
     end,
   },
 

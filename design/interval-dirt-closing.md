@@ -65,6 +65,14 @@ colours only itself, no longer re-colouring downstream inheriting
 notes. `rebuildPCs` currently reads `entry.sample or 0` with live
 inheritance; the stamp replaces that.
 
+*Stamp landed 2026-07-21* — one `stampSamples` pass after externals:
+bare walkable notes on dirty channels stamp from the last PC at or
+before their onset (else 0), written to mm and the column cell.
+`rebuildExternals`' special-case `sample = 0` dissolved into it, and
+the old "no PC inheritance" spec guard was reversed per this rule.
+Derived region notes stay unstamped (`or 0` at the noteLive read) —
+they ride no note host and regenerate each pass.
+
 **The closure** then drops to [onset, next onset], channel notes, raw
 order — not zero, because with dedup whether the successor *emits* a
 PC depends on this note's value. Without the stamp the closure is

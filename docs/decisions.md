@@ -4,6 +4,11 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-21** — The bearing rule (crux row 3, decided as UX): under trackerMode every note bears a
+  stamped sample — `stampSamples` (post-externals) stamps bare notes from the PC prevailing at their onset;
+  inheritance freezes at stamp time, reversing the old "external gets sample=0, no PC inheritance" guard.
+  Chosen to bound the coming PC closure at [onset, next onset]; the sample=0 special case dissolved.
+
 - **2026-07-21** — `rebuildPbs` gates seats to the seed closure (`seatScope`, crux row 2): onsets, densify,
   anchor and pool filter on spans from lane-1/pb seeds (snapshot + `byUuid` live position, since dedup keeps
   the vacated one). The pool also admits any absorber standing at a computed seat — duplicates structurally

@@ -2261,7 +2261,6 @@ local function rebuildExternals(external)
   if #external == 0 then return end
 
   sortByPPQ(external)
-  local trackerMode = cm:get('trackerMode')
   local packLane    = externalLanePacker(external)
   local extWrites   = mmBatch()
   for _, note in ipairs(external) do
@@ -2277,7 +2276,6 @@ local function rebuildExternals(external)
     if note.lane   ~= lane then update.lane   = lane   end
     if note.detune == nil  then update.detune = 0      end
     if note.delay  == nil  then update.delay  = 0      end
-    if trackerMode and note.sample == nil then update.sample = 0 end
     local colNote = util.clone(note)
     util.assign(colNote, update)
     colNote.fixed = true
@@ -4054,10 +4052,39 @@ local function rebuildPbs(fxOut, extraColumns)
   perf.stop('commit')
 end
 
+----- Rebuild sample stamp
+
+-- The bearing rule: under trackerMode every note bears a sample, stamped once from the PC
+-- prevailing at its onset; inheritance freezes at stamp time. see design/interval-dirt-closing.md § 2
+local function stampSamples()
+  if not cm:get('trackerMode') then return end
+  local stampWrites = mmBatch()
+  for chan = 1, 16 do
+    if dirtyChans[chan] then
+      local pcs
+      for _, entry in ipairs(rawNotes(chan)) do
+        if walkable(entry) and entry.sample == nil then
+          if not pcs then
+            pcs = {}
+            for _, cc in mm:ccsRaw(chan) do
+              if cc.evType == 'pc' then util.add(pcs, cc) end
+            end
+          end
+          local prevailing = util.seek(pcs, 'at-or-before', entry.ppq)
+          local sample = prevailing and prevailing.val or 0
+          entry.sample, entry.colEvt.sample = sample, sample
+          stampWrites.assign(entry, { sample = sample })
+        end
+      end
+    end
+  end
+  stampWrites.commit()
+end
+
 ----- Rebuild PCs
 
--- PC synthesis (trackerMode only). Runs after externals so a foreign-MIDI note inherits
--- sample from the prevailing PC.
+-- PC synthesis (trackerMode only). Runs after the sample stamp, so every walkable note
+-- bears a sample and the record read needs no fallback.
 local function rebuildPCs(noteLive)
   if not cm:get('trackerMode') then return end
   local pcWrites = mmBatch()
@@ -4068,11 +4095,12 @@ local function rebuildPCs(noteLive)
     for _, entry in ipairs(rawNotes(chan)) do
       if walkable(entry) then
         util.add(records, { ppq = entry.ppq, ppqL = entry.ppqL, lane = entry.lane,
-                            sample = entry.sample or 0, key = entry.colEvt })
+                            sample = entry.sample, key = entry.colEvt })
       end
     end
     for _, w in ipairs(noteLive[chan]) do
       local n = w.evt
+      -- region-derived notes ride no note host: no sample to inherit, regenerated each pass
       util.add(records, { ppq = n.ppq, ppqL = n.ppqL, lane = w.lane, sample = n.sample or 0, key = n })
     end
     reconcilePCsForChan(chan, records, pcWrites)
@@ -4129,6 +4157,7 @@ local function rebuildPipeline(didReload)
   staleSwing = {}                               -- swing consumers (partition + CC walk) done; see :53 invariant
   perf.start('extraCols'); rebuildExtraColumns(sources.extraColumns); perf.stop('extraCols')  -- reconcile persisted extra columns
   perf.start('externals'); rebuildExternals(external); perf.stop('externals')  -- reintroduce foreign / diverged notes
+  perf.start('samples'); stampSamples(); perf.stop('samples')  -- bearing rule: stamp bare notes from the prevailing PC
 
   -- Park window set: fx-regions plus every on-take note host as a degenerate region (note-is-a-region),
   -- from the settled columns. The producer re-scans post-unpark below. see design/note-macros-v2.md § Offline continuous realisation
