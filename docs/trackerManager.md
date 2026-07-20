@@ -497,6 +497,14 @@ own note-arm window, so they carry none, and the note pass sources them separate
 fx-host set (`hostWindows`), gated by `generators.parksNotes` and deduped against the
 window-driven scan by event identity.
 
+The PA scan closes the rule from the mm side: a PA rides its host note, so a newly parked host's PAs
+are exactly those in the host's logical span. `mm:ccsRawBetween(chan, loPpq, hiPpq)` binary-searches
+the maintained cc index (raw-sorted, hole-free right after the pipeline's last reindex — every
+committed stage ends in one) for that channel's slice; each parked member's span converts to raw via
+`tm:fromLogical` before the query, and since PAs carry no delay the raw bound equals the logical
+span. The exact `hostParked` pitch/logical filter still gates each candidate — the bound only
+replaces the per-channel `mm:ccsRaw` walk, so work scales with parked members, not channel cc count.
+
 ### Derivation dirt: the gated spine
 
 Two axes of dirt drive rebuild. *Materialisation dirt* (the `wholesale`

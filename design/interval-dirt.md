@@ -815,7 +815,11 @@ The dense take's edit-path `internals` 18.5 + `projLogical` 8.5 +
   a window, and coverage changes only where events changed or windows
   changed: the scan set is dirty intervals ∪ recomputed-window extents,
   the two-source rule again. `reconcilePark` already partitions the
-  prior parked set, so carry needs nothing new.
+  prior parked set, so carry needs nothing new. *Landed (2026-07-20):*
+  the note/cc scans span-cover the current window extents
+  (`coverOnsets`); the pa scan binds to parked-member spans via
+  `mm:ccsRawBetween`, dropping the last per-channel `mm:ccsRaw` walk.
+  See docs/trackerManager.md § Span-covered fx scans.
 - **PA dispatch is part of the splice.** A spliced interval's PAs
   re-attach to their host columns; carried events keep their
   attachments (`rebuildPA`'s per-chan touched set already exists to

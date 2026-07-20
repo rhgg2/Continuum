@@ -2375,16 +2375,22 @@ local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows
       return false
     end
 
-    local newParked = {}
-    -- Fresh: an on-take PA whose host just parked leaves the take and stashes.
+    local newParked, seen = {}, {}
+    -- Fresh: an on-take PA whose host just parked leaves the take and stashes. Bounded by each parked
+    -- member's raw span (its own PAs), not the channel's cc count. see docs/trackerManager.md § Span-covered fx scans
     for chan = 1, 16 do
       if dirtyChans[chan] then
-        for _, cc in mm:ccsRaw(chan) do
-          if cc.evType == 'pa' and hostParked(cc.chan, cc.pitch, cc.ppqL or cc.ppq) then
-            batch.del({ uuid = cc.uuid })
-            local spec = parkSpec(cc, { ppq = cc.ppqL or cc.ppq })   -- mm-raw source: evType/chan/pitch/vel/rpb ride, ppq flips logical
-            spec.uuid = nil                                           -- restore re-mints the rpb sidecar uuid
-            util.add(newParked, spec)
+        for _, cell in ipairs(channels[chan].parked or {}) do
+          for _, cc in mm:ccsRawBetween(chan, tm:fromLogical(chan, cell.ppq),
+                                             tm:fromLogical(chan, cell.endppqC)) do
+            if cc.evType == 'pa' and not seen[cc]
+               and hostParked(cc.chan, cc.pitch, cc.ppqL or cc.ppq) then
+              seen[cc] = true
+              batch.del({ uuid = cc.uuid })
+              local spec = parkSpec(cc, { ppq = cc.ppqL or cc.ppq })   -- mm-raw source: evType/chan/pitch/vel/rpb ride, ppq flips logical
+              spec.uuid = nil                                           -- restore re-mints the rpb sidecar uuid
+              util.add(newParked, spec)
+            end
           end
         end
       end

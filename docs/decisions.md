@@ -4,6 +4,13 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-20** — `rebuildRegionPark`'s fresh PA scan binds to each parked member's span via a new
+  `mm:ccsRawBetween(chan, loPpq, hiPpq)` (binary search over the channel's ppq-sorted `locs`), over
+  the per-dirty-channel `mm:ccsRaw` walk — completing § Phase 5.5's no-O(channel) rule for region
+  park. Sound because every committed pipeline stage unwinds `mm:modify` through a full reindex, so
+  `locs` is dense and ppq-monotonic at scan time; the exact `hostParked` filter is re-applied, so PA
+  acceptance is unchanged.
+
 - **2026-07-20** — `rebuildRegionPark`'s fresh note/cc scans are span-covered over the current
   window extents (per § Phase 5.5's no-O(channel) rule), over a whole-dirty-channel walk gated only
   by `covered()` — a no-fx take paid ~2ms visiting 8437 notes to park nothing. Self-parking note
