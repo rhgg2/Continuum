@@ -2,7 +2,7 @@
 
 > **Closed 2026-07-21.** The programme landed — phases 1–5.5 plus the
 > seed-model inversion — and the residue is a three-item punch list:
-> `design/interval-dirt-closing.md`. This file is the full history:
+> `design/archive/interval-dirt-closing.md`. This file is the full history:
 > closed cruxes, superseded drafts, per-phase corrections. The enduring
 > model lives in `docs/trackerManager.md` § Derivation dirt.
 >

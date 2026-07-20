@@ -356,4 +356,27 @@ return {
       assertParity(h, 'cascade nudge: emission-covered seat == full re-derive')
     end,
   },
+
+  {
+    name = 'rebuild(∅) short-circuits: no fire without dirt; requestRebuild and takeChanged force it',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent(note(1, 0, 60)); h.tm:flush()
+
+      local fires = 0
+      h.tm:subscribe('rebuild', function() fires = fires + 1 end)
+
+      h.tm:rebuild(false)
+      t.deepEq(fires, 0, 'empty-dirt rebuild fires nothing')
+
+      h.tm:requestRebuild()
+      h.tm:rebuild(false)
+      t.deepEq(fires, 1, 'requestRebuild forces one rebuild')
+      h.tm:rebuild(false)
+      t.deepEq(fires, 1, 'the force is consumed, not sticky')
+
+      h.tm:rebuild(true)
+      t.deepEq(fires, 2, 'takeChanged always rebuilds and fires')
+    end,
+  },
 }

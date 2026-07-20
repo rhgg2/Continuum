@@ -4,6 +4,12 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-21** — rebuild(∅) short-circuits (punch-list § 3, terminal invariant): the gate sits first in
+  `tm:rebuild` — no takeChanged/reload/dirt/staleSwing/force → return before clearSwing, the nest and the
+  fire. `rebuildRequested` repurposed as the force flag (consumed by rebuild, not flush); noteDelay sets it.
+  Fallout fix: fxRegions storage order is derivation input (lane precedence), so `seedRegionEdit` now
+  triggers on index change too — a pure lane swap previously relied on the unconditional fire.
+
 - **2026-07-21** — PC closure lands (crux row 3, second half): `pcSeedSpans` closes seed-list dirt to
   [onset, next onset) spans, snapshot ∪ `byUuid` live position, and records, existing set and pc-column
   splice all filter on them. Spans carry both frames — projected cells are logical (`projectEvent` drops

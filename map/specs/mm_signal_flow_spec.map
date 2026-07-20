@@ -1,4 +1,4 @@
-@spec mm_signal_flow_spec  src=tests/specs/mm_signal_flow_spec.lua  loc=217  sha=37ed80d  cases=12
+@spec mm_signal_flow_spec  src=tests/specs/mm_signal_flow_spec.lua  loc=218  sha=37ed80d  cases=12
 @exercises harness (harness), midiManager (h.fm), trackerManager (h.tm)
 @surface   harness.mk, fm:load, fm:take, fm:subscribe, fm:modify, tm:subscribe, harness.bareMM, fm:notes, fm:assign
 @harness   mk, bareMM, reaper.MIDI_InsertNote, reaper:seedMidi
@@ -24,41 +24,41 @@
 
 # Cases
   @case 'mm:load with a different take fires mm.takeSwapped before mm.reload'  [pure]  @ 29-41
-  @case 'mm:load with the same take fires reload only'  [pure]  @ 45-55
-  @case 'takeSwapped is one-shot: next same-take reload sees takeChanged=false'  [pure]  @ 59-75
-  @case 'mm.reload carries wholesale: true from load, false from modify'  [pure]  @ 81-99
-  @case 'tm.rebuild forwards takeChanged (so gm can reload take-tier state)'  [pure]  @ 103-111
-  @case 'multiple subscribers on the same signal both fire'  [pure]  @ 115-124
-  @case 'mm.reload chans: an add marks only the touched channel'  [pure]  @ 130-140
-  @case 'mm.reload chans: an assign changing chan marks both old and new'  [pure]  @ 144-153
-  @case 'mm.reload chans: a wholesale load carries no chans (nil = all 16)'  [pure]  @ 157-166
-  @case 'mm.reload: a load finding the take converged gates — not wholesale, no dirty chans'  [pure]  @ 173-181
-  @case 'mm.flushed fires after reload on a structural modify, not on a clean one'  [pure]  @ 188-199
-  @case 'mm.flushed fires on a load that reprojected the take, silent on the clean re-load'  [pure]  @ 203-215
+  @case 'mm:load with the same take fires reload only'  [pure]  @ 45-56
+  @case 'takeSwapped is one-shot: next same-take reload sees takeChanged=false'  [pure]  @ 60-76
+  @case 'mm.reload carries wholesale: true from load, false from modify'  [pure]  @ 82-100
+  @case 'tm.rebuild forwards takeChanged (so gm can reload take-tier state)'  [pure]  @ 104-112
+  @case 'multiple subscribers on the same signal both fire'  [pure]  @ 116-125
+  @case 'mm.reload chans: an add marks only the touched channel'  [pure]  @ 131-141
+  @case 'mm.reload chans: an assign changing chan marks both old and new'  [pure]  @ 145-154
+  @case 'mm.reload chans: a wholesale load carries no chans (nil = all 16)'  [pure]  @ 158-167
+  @case 'mm.reload: a load finding the take converged gates — not wholesale, no dirty chans'  [pure]  @ 174-182
+  @case 'mm.flushed fires after reload on a structural modify, not on a clean one'  [pure]  @ 189-200
+  @case 'mm.flushed fires on a load that reprojected the take, silent on the clean re-load'  [pure]  @ 204-216
 
 # Uses (outbound edges)
-  @use call harness.mk  @ 31,47,61,105,117,205
-  @use call fm:load  @ 35,51,70,71,92,108,121,163,178,211,213
-  @use call fm:take  @ 51,91,92,121,162,163,178,207,211,213
-  @use call fm:subscribe  @ 87,119,120,134,150,161,177,210
-  @use call fm:modify  @ 96,135,151,192,194
-  @use call tm:subscribe  @ 107
-  @use call harness.bareMM  @ 132,159,190
-  @use call fm:notes  @ 147
-  @use call fm:assign  @ 151
+  @use call harness.mk  @ 31,47,62,106,118,206
+  @use call fm:load  @ 35,51,71,72,93,109,122,164,179,212,214
+  @use call fm:take  @ 51,92,93,122,163,164,179,208,212,214
+  @use call fm:subscribe  @ 88,120,121,135,151,162,178,211
+  @use call fm:modify  @ 97,136,152,193,195
+  @use call tm:subscribe  @ 108
+  @use call harness.bareMM  @ 133,160,191
+  @use call fm:notes  @ 148
+  @use call fm:assign  @ 152
 
 # Fields (r read / w write incl. constructor keys)
-  @field w chan  @ 85,136,146,151,175,195,208
-  @field r chans  @ 139,152,165,180
-  @field w endppq  @ 85,136,146,175,195,208
-  @field w evType  @ 136,195
-  @field w name  @ 29,45,59,81,103,115,130,144,157,173,188,203
-  @field w notes  @ 85,146,175,208
-  @field w pitch  @ 85,136,146,175,195,208
-  @field w ppq  @ 85,136,146,175,195,208
-  @field r rebuild  @ 64
-  @field w rebuild  @ 65
-  @field w run  @ 30,46,60,82,104,116,131,145,158,174,189,204
-  @field r uuid  @ 148
-  @field w vel  @ 85,136,146,175,195,208
-  @field r wholesale  @ 94,98,138,164,179
+  @field w chan  @ 86,137,147,152,176,196,209
+  @field r chans  @ 140,153,166,181
+  @field w endppq  @ 86,137,147,176,196,209
+  @field w evType  @ 137,196
+  @field w name  @ 29,45,60,82,104,116,131,145,158,174,189,204
+  @field w notes  @ 86,147,176,209
+  @field w pitch  @ 86,137,147,176,196,209
+  @field w ppq  @ 86,137,147,176,196,209
+  @field r rebuild  @ 65
+  @field w rebuild  @ 66
+  @field w run  @ 30,46,61,83,105,117,132,146,159,175,190,205
+  @field r uuid  @ 149
+  @field w vel  @ 86,137,147,176,196,209
+  @field r wholesale  @ 95,99,139,165,180

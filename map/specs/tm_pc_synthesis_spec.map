@@ -1,4 +1,4 @@
-@spec tm_pc_synthesis_spec  src=tests/specs/tm_pc_synthesis_spec.lua  loc=375  sha=612cf88  cases=15
+@spec tm_pc_synthesis_spec  src=tests/specs/tm_pc_synthesis_spec.lua  loc=375  sha=abecbf0  cases=15
 @exercises midiManager (h.mm), trackerManager (h.tm)
 @surface   mm:notes, tm:getChannel, fm:dump, tm:addEvent, tm:flush, tm:assignEvent, tm:deleteEvent
 @harness   mk{seed.notes, seed.ccs}

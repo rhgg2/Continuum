@@ -77,8 +77,8 @@ local muteConform  = {}
 -- True only while flush writes the parked stash; suppresses the inline dataChanged
 -- rebuild so flush drives the single rebuild (B3 staging, see design/note-macros-v2.md).
 local flushingParked = false
--- Set via tm:requestRebuild by a preflush subscriber whose geometry-only change stages no
--- mm ops but still needs the grid (cellKind region tags) rebuilt. Consumed + cleared by flush.
+-- Set via tm:requestRebuild for geometry-only changes staging no mm ops: forces the flush
+-- past its no-op return AND the rebuild past the rebuild(∅) gate, which consumes it.
 local rebuildRequested = false
 -- Held only across tm:setLength's shrink flush: derivation (tail clip, fx windows, parked
 -- realisation) must see the new take end before mm:setLength moves the EOT. see § Length
@@ -170,16 +170,21 @@ local function seedRegionEdit(newRegions)
                         ppq = tm:fromLogical(r.chan, r.startppq) })
   end
   local old, seen = {}, {}
-  for _, r in ipairs(derivedInputs.fxRegions or {}) do old[key(r)] = r end
-  for _, r in ipairs(newRegions or {}) do
+  for i, r in ipairs(derivedInputs.fxRegions or {}) do old[key(r)] = { region = r, index = i } end
+  for i, r in ipairs(newRegions or {}) do
     local k = key(r); seen[k] = true
     local o = old[k]
     if not o then trigger(r)
-    elseif o.startppq ~= r.startppq or o.endppq ~= r.endppq or not util.deepEq(o.fx, r.fx) then
-      trigger(o); trigger(r)
+    elseif o.region.startppq ~= r.startppq or o.region.endppq ~= r.endppq
+        or not util.deepEq(o.region.fx, r.fx) then
+      trigger(o.region); trigger(r)
+    elseif o.index ~= i then
+      -- Storage order is derivation input -- lane precedence among overlapping regions follows
+      -- the array -- so a pure reorder (lane swap) must dirty too, or rebuild(∅) swallows it.
+      trigger(r)
     end
   end
-  for k, o in pairs(old) do if not seen[k] then trigger(o) end end
+  for k, o in pairs(old) do if not seen[k] then trigger(o.region) end end
 end
 
 -- An external/undo fxParked change (not tm's own flush -- that stash write is converged output): seed
@@ -1294,7 +1299,6 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     end
     if #adds == 0 and #assigns == 0 and #deletes == 0 and #parkedEdits == 0
        and not rebuildRequested then return end
-    rebuildRequested = false
 
     -- Parked edits stage alongside mm ops. Write the stash first (guarded), then let the mm
     -- commit's reload->rebuild pick it up; with no mm ops, drive the one rebuild explicitly.
@@ -1524,7 +1528,7 @@ function tm:markSwingStale(chan)
 end
 
 -- A geometry-only change (a gm region edit staging no mm ops) still needs the grid rebuilt
--- so tv re-tags cellKind. Forces the next flush past its no-op early-return.
+-- so tv re-tags cellKind. Forces the next flush and rebuild past their no-op gates.
 function tm:requestRebuild() rebuildRequested = true end
 
 ----- Mutation
@@ -3654,7 +3658,7 @@ local function rebuildPbs(fxOut, extraColumns)
   local gridStep = ccGridStep()
 
   -- Closes seeds to raw spans that gate onsets/densify/anchor/absorber-pool below; nil = ungated.
-  -- see design/interval-dirt-closing.md § 1
+  -- see design/archive/interval-dirt-closing.md § 1
   local function seatScope(chan, dirt, lane1Events, realPbs, replaceWins)
     if dirt == true then return nil end
     local spans = {}
@@ -3804,7 +3808,7 @@ local function rebuildPbs(fxOut, extraColumns)
     end
 
     -- Which seats this pass may touch; fresh (non-kept) derived lane-1 output ungates the channel.
-    -- see design/interval-dirt-closing.md § 1
+    -- see design/archive/interval-dirt-closing.md § 1
     local seatSpans = not freshLane1[chan]
                       and seatScope(chan, dirty[chan], lane1Events, realPbs, replaceWins) or nil
     local function inSeatScope(ppq)
@@ -4069,7 +4073,7 @@ end
 ----- Rebuild sample stamp
 
 -- The bearing rule: under trackerMode every note bears a sample, stamped once from the PC
--- prevailing at its onset; inheritance freezes at stamp time. see design/interval-dirt-closing.md § 2
+-- prevailing at its onset; inheritance freezes at stamp time. see design/archive/interval-dirt-closing.md § 2
 local function stampSamples()
   if not cm:get('trackerMode') then return end
   local stampWrites = mmBatch()
@@ -4098,7 +4102,7 @@ end
 ----- Rebuild PCs
 
 -- Seed closure for PC synthesis: each seed onset's [onset, next onset) span, both frames.
--- nil = wholesale (also forced by fresh derived output). see design/interval-dirt-closing.md § 2
+-- nil = wholesale (also forced by fresh derived output). see design/archive/interval-dirt-closing.md § 2
 local function pcSeedSpans(chan, dirt, noteLive)
   if dirt == true then return nil end
   for _, w in ipairs(noteLive) do
@@ -4125,7 +4129,7 @@ local function pcSeedSpans(chan, dirt, noteLive)
 end
 
 -- PC synthesis (trackerMode only), after the sample stamp. Seed-list dirt closes to spans;
--- see design/interval-dirt-closing.md § 2 for the filter chain and out-of-span guarantee.
+-- see design/archive/interval-dirt-closing.md § 2 for the filter chain and out-of-span guarantee.
 local function rebuildPCs(noteLive)
   if not cm:get('trackerMode') then return end
   local pcWrites = mmBatch()
@@ -4289,12 +4293,18 @@ end
 --contract: reentrancy-guarded; rebuilds channels[] from mm, reloads um cache, fires 'rebuild'
 --contract: takeChanged forwarded to subscribers via the captured pendingTakeSwap
 --contract: dead take (mm:take() nil) is a no-op; tv retains its last frame
+--invariant: rebuild(∅) (no dirt/staleSwing/reload/takeChanged/request) short-circuits pre-nest
 -- see docs/trackerManager.md § Rebuild
 function tm:rebuild(takeChanged)
   if rebuilding then return end
   if not mm:take() then return end
-  rebuilding = true
   takeChanged = takeChanged or false
+  -- rebuild(∅) does literally nothing: with no dirt, clean swing, no wholesale re-read, no
+  -- take swap and no force, every stage would converge to the carried frame -- skip it all.
+  if not (takeChanged or mmReloaded or rebuildRequested
+          or next(dirtyChans) ~= nil or next(staleSwing) ~= nil) then return end
+  rebuildRequested = false
+  rebuilding = true
   -- Capture before the pipeline's nested mm:modify calls re-fire 'reload' and clear it.
   local didReload = mmReloaded; mmReloaded = false
   if didReload or takeChanged then dirtyChan() end   -- wholesale re-read / take swap: prevWindows (dataStore) carries the recognition baseline
@@ -4326,7 +4336,7 @@ function tm:rebuild(takeChanged)
   rebuilding = false
 
   --emits: rebuild -- takeChanged:boolean
-  --contract: rebuild fires at end of every rebuild after the um cache is reloaded
+  --contract: rebuild fires at end of every non-degenerate rebuild after the um cache is reloaded
   --invariant: takeChanged is true only when rebuild followed bindTake; signals take-tier reload
   perf.start('fire'); fire('rebuild', takeChanged); perf.stop('fire')
 end
@@ -4454,8 +4464,9 @@ do
       -- extraColumns is grow-only/merge-safe, not parking -- a whole re-derive stays. see design § phase 3
       if not flushingParked then dirtyChan(); tm:rebuild(false) end
     elseif change.name == 'noteDelay' then
-      -- noteDelay is a display offset -- nothing in the tm pipeline reads it; reproject only.
-      if not flushingParked then tm:rebuild(false) end
+      -- noteDelay is a display offset -- nothing in the tm pipeline reads it; reproject only,
+      -- forced past the rebuild(∅) gate since it seeds no dirt.
+      if not flushingParked then tm:requestRebuild(); tm:rebuild(false) end
     elseif change.name == 'fxPatterns' then
       -- Shared pattern-library edit (P3 write-through): re-realise every consumer. v1 dirties
       -- all 16; pattern->consumer targeting is P4. see design/fx-patterns.md § The checkout model

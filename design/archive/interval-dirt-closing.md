@@ -1,5 +1,8 @@
 # interval dirt — closing punch list
 
+> **Closed 2026-07-21** — all three items landed; see the *Landed*
+> notes inline. Only the named successors below remain open.
+
 > The residue of the `interval-dirt` programme
 > (`design/archive/interval-dirt.md`, closed 2026-07-21). Everything
 > else landed: seeds carry the dirt (an event reference plus its birth
@@ -106,6 +109,15 @@ frame). Empty dirt implies no staged ops, so the skipped
 `takeChanged`: a converged rebind carries no dirt but tv still needs
 the bind signal. `fire` on a rebuild that *did* derive something stays
 whole — that is the delta-signal successor, not this list.
+
+*Landed 2026-07-21.* The gate sits first in `tm:rebuild`: no take
+swap, no wholesale reload, no dirt, no stale swing, no force — return
+before `clearSwing`, the nest, and the fire. `rebuildRequested` is the
+force flag, consumed by the rebuild itself rather than cleared at
+flush, so gm's geometry-only reproject and the `noteDelay`
+reproject-only path (which now sets it) still fire. `takeChanged`
+passes the gate by construction, so a converged rebind keeps its bind
+signal.
 
 ## Out of scope — named successors
 

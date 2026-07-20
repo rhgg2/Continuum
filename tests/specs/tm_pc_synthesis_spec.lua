@@ -157,7 +157,7 @@ return {
   -- Every note bears a sample under trackerMode: a bare note (external or
   -- pre-trackerMode) is stamped from the PC prevailing at its onset at first
   -- rebuild. Inheritance freezes at stamp time — later PC/sample edits
-  -- upstream do not re-colour it. see design/interval-dirt-closing.md § 2
+  -- upstream do not re-colour it. see design/archive/interval-dirt-closing.md § 2
   {
     name = 'external note enters trackerMode stamped from the prevailing PC',
     run = function(harness)

@@ -51,7 +51,8 @@ return {
       h.fm:load(h.fm:take())
 
       t.eq(table.concat(mmStream, ','), 'reload', 'no takeSwapped on same-take reload')
-      t.eq(table.concat(tmStream, ','), 'rebuild', 'tm forwards reload→rebuild only')
+      -- A converged reload carries no dirt and no take swap: rebuild(∅) short-circuits, no fire.
+      t.eq(table.concat(tmStream, ','), '', 'tm skips the degenerate rebuild entirely')
     end,
   },
 
