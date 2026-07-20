@@ -1944,6 +1944,152 @@ local function inSpan(map, chan, cc, ppq, inclusiveEnd)
   return false
 end
 
+local function ppqLess(a, b) return a.ppq < b.ppq end
+
+-- Clone one covered cc-family event into its column with the CC walk's reconcile + projection, then
+-- splice it in ppq-order. Mirror of the walk's per-event body, driven by spliceChannelCCs' row scan.
+local function spliceCcCell(live, ccWrites)
+  local chan = live.chan
+  -- stale-swing implies wholesale, so only the raw-diverges reconcile can fire on the interval path.
+  local movedPpqL
+  if not live.derived and rawDivergesFromLogical(live) then
+    movedPpqL = tm:toLogical(chan, live.ppq)
+    ccWrites.assign({ uuid = live.uuid }, { ppqL = movedPpqL })
+  end
+  local event = util.clone(live)
+  event.realised = true
+  if movedPpqL then event.ppqL = movedPpqL end
+  local channel = channels[chan]
+  local col
+  if live.evType == 'cc' then
+    col = channel.columns.ccs[live.cc] or { cc = live.cc, events = {} }
+    channel.columns.ccs[live.cc] = col
+  else
+    col = channel.columns[live.evType] or { events = {} }
+    channel.columns[live.evType] = col
+  end
+  projectEvent(event, chan)
+  util.insertSorted(col.events, event, ppqLess)
+end
+
+-- ccExisting from the prev cc windows only: range-query each window's raw span and keep its own-cc
+-- seats. The wholesale path's full-channel scan is O(channel); this is O(seats in windows).
+local function buildCcExistingInWindows(chan, fillWin, ccExisting)
+  local byCc = fillWin[chan]
+  if not byCc then return end
+  local seen = {}
+  for ccNum, spans in pairs(byCc) do
+    for _, span in ipairs(spans) do
+      for _, evt in mm:ccsRawBetween(chan, span.sRaw, span.eRaw) do
+        if evt.evType == 'cc' and evt.cc == ccNum and not seen[evt.uuid] then
+          seen[evt.uuid] = true
+          util.add(ccExisting[chan],
+            { ppq = evt.ppq, val = evt.val, shape = evt.shape, tension = evt.tension, cc = evt.cc, uuid = evt.uuid })
+        end
+      end
+    end
+  end
+end
+
+-- Covered logical rows from the cc-family seeds (snapshot ppqL, plus a survivor's live ppqL byUuid).
+-- Row-keyed, not uuid: an add's birth-seed has no uuid yet (mm stamps it at commit). Mirror of seedCovers.
+local function ccSeedCovers(seedList)
+  local rows = {}
+  for _, s in ipairs(seedList) do
+    if s.evType == 'cc' or s.evType == 'at' or s.evType == 'pc' then
+      rows[s.ppqL] = true
+      local live = s.uuid and tm:byUuid(s.uuid)
+      if live then rows[live.ppqL or live.ppq] = true end
+    end
+  end
+  return function(evt) return rows[evt.ppqL or evt.ppq] or false end
+end
+
+-- Drop the carried cc/at/pc cells this pass's clones will replace (covered rows only; the rest stand).
+local function exciseCcCells(chan, covers)
+  local cols = channels[chan].columns
+  local function scrub(col)
+    if not col then return end
+    local kept = {}
+    for _, e in ipairs(col.events) do if not covers(e) then util.add(kept, e) end end
+    col.events = kept
+  end
+  for _, col in pairs(cols.ccs) do scrub(col) end
+  scrub(cols.at); scrub(cols.pc)
+end
+
+-- Interval-dirt cc path: excise the seeded cc/at/pc rows from the carried columns and re-clone just
+-- those rows from mm. Row-keyed so a fresh add (no uuid) still lands; the rest carries. see design § phase 3
+local function spliceChannelCCs(chan, seedList, fillWin, ccWrites, ccExisting)
+  local covers = ccSeedCovers(seedList)
+  exciseCcCells(chan, covers)
+  for _, cc in mm:ccsRaw(chan) do
+    if (cc.evType == 'cc' or cc.evType == 'at' or cc.evType == 'pc') and covers(cc)
+       and not (cc.evType == 'cc' and inSpan(fillWin, chan, cc.cc, cc.ppq)) then
+      spliceCcCell(cc, ccWrites)
+    end
+  end
+  buildCcExistingInWindows(chan, fillWin, ccExisting)
+end
+
+-- Wholesale / stale-swing path: re-derive a channel's whole cc/at/pc stream from mm. Verbatim from the
+-- pre-splice CC walk; interval dirt takes spliceChannelCCs. see docs/trackerManager.md § Rebuild: CC walk
+local function fullRebuildChannelCCs(chan, fillWin, pbFillWin, ccWrites, ccExisting)
+  for _, cc in mm:ccsRaw(chan) do
+    local uuid = cc.uuid
+    -- fx cc event: a markerless seat inside a prev cc window (its authored cc parked), routed out and
+    -- reconciled fresh at fx expansion. A removed window's orphans reconcile away there. see § Route-by-window
+    if cc.evType == 'cc' and inSpan(fillWin, cc.chan, cc.cc, cc.ppq) then
+      util.add(ccExisting[cc.chan],
+        { ppq = cc.ppq, val = cc.val, shape = cc.shape, tension = cc.tension, cc = cc.cc, uuid = uuid })
+      goto continue
+    end
+
+    -- Timing reconcile on the raw (read-only) record; capture what moved for the column clone.
+    -- Markerless pb seats in a prior window skip it (inclusive end). see docs/trackerManager.md § Rebuild: CC walk
+    local pbSeat = cc.evType == 'pb' and cc.ppqL == nil and inSpan(pbFillWin, cc.chan, nil, cc.ppq, true)
+    local movedPpq, movedPpqL
+    if not cc.derived and not pbSeat then
+      if staleSwing[cc.chan] and cc.ppqL ~= nil then
+        local newPpq = tm:fromLogical(cc.chan, cc.ppqL)
+        if newPpq ~= cc.ppq then
+          ccWrites.assign({ uuid = uuid }, { ppq = newPpq })
+          movedPpq = newPpq
+        end
+      elseif rawDivergesFromLogical(cc) then
+        local newPpqL = tm:toLogical(cc.chan, cc.ppq)
+        ccWrites.assign({ uuid = uuid }, { ppqL = newPpqL })
+        movedPpqL = newPpqL
+      end
+    end
+
+    -- pb/pa reconcile-only (no column); cc/at/pc clone into their column carrying the reseat.
+    if cc.evType == 'cc' or cc.evType == 'at' or cc.evType == 'pc' then
+      local event = util.clone(cc)
+      event.realised = true
+      if movedPpq  then event.ppq  = movedPpq end
+      if movedPpqL then event.ppqL = movedPpqL end
+      local channel = channels[cc.chan]
+      local col
+      if cc.evType == 'cc' then
+        col = channel.columns.ccs[cc.cc] or { cc = cc.cc, events = {} }
+        channel.columns.ccs[cc.cc] = col
+      else
+        col = channel.columns[cc.evType] or { events = {} }
+        channel.columns[cc.evType] = col
+      end
+      projectEvent(event, cc.chan)
+      util.add(col.events, event)
+    end
+    ::continue::
+  end
+  -- mm's cc stream is insertion-ordered mid-session (fresh adds append); columns sort by ppq.
+  for _, col in pairs(channels[chan].columns.ccs) do sortByPPQ(col.events) end
+  for _, key in ipairs{ 'at', 'pc' } do
+    if channels[chan].columns[key] then sortByPPQ(channels[chan].columns[key].events) end
+  end
+end
+
 -- CC walk: build the carrier routing map, reconcile (raw,ppqL), project CCs.
 -- Returns a carrier-map persister; run after fx expansion. see docs/trackerManager.md § Rebuild: CC walk
 local function rebuildCCs(prevWindows)
@@ -1959,65 +2105,15 @@ local function rebuildCCs(prevWindows)
   end
   local fillWin, pbFillWin = rawSpanMap(ccWins), rawSpanMap(pbWins)
 
-  -- Clean channels carry their cc/at/pc columns whole: never visited.
+  -- Clean channels carry their cc/at/pc columns whole: never visited. Interval-dirty ones splice just
+  -- the seeded cells (spliceChannelCCs); wholesale/stale-swing chans re-derive the whole stream.
   for chan = 1, 16 do
-    if not dirtyChans[chan] then goto nextChan end
-    for _, cc in mm:ccsRaw(chan) do
-      local uuid = cc.uuid
-      -- fx cc event: a markerless seat inside a prev cc window (its authored cc parked), routed out and
-      -- reconciled fresh at fx expansion. A removed window's orphans reconcile away there. see § Route-by-window
-      if cc.evType == 'cc' and inSpan(fillWin, cc.chan, cc.cc, cc.ppq) then
-        util.add(ccExisting[cc.chan],
-          { ppq = cc.ppq, val = cc.val, shape = cc.shape, tension = cc.tension, cc = cc.cc, uuid = uuid })
-        goto continue
+    local dirt = dirtyChans[chan]
+    if dirt then
+      if dirt == true then fullRebuildChannelCCs(chan, fillWin, pbFillWin, ccWrites, ccExisting)
+      else                 spliceChannelCCs(chan, dirt, fillWin, ccWrites, ccExisting)
       end
-
-      -- Timing reconcile on the raw (read-only) record; capture what moved for the column clone.
-      -- A markerless pb seat (nil ppqL) inside a prev pb window is a generated seat deriveChan owns, not
-      -- foreign MIDI -- leave it markerless; a user's in-window pb is indistinguishable, absorbed too. see § Route-by-window
-      -- Inclusive end: pb windows carry a terminal re-centre seat at endRaw (mirrors inSeatWindow).
-      local pbSeat = cc.evType == 'pb' and cc.ppqL == nil and inSpan(pbFillWin, cc.chan, nil, cc.ppq, true)
-      local movedPpq, movedPpqL
-      if not cc.derived and not pbSeat then
-        if staleSwing[cc.chan] and cc.ppqL ~= nil then
-          local newPpq = tm:fromLogical(cc.chan, cc.ppqL)
-          if newPpq ~= cc.ppq then
-            ccWrites.assign({ uuid = uuid }, { ppq = newPpq })
-            movedPpq = newPpq
-          end
-        elseif rawDivergesFromLogical(cc) then
-          local newPpqL = tm:toLogical(cc.chan, cc.ppq)
-          ccWrites.assign({ uuid = uuid }, { ppqL = newPpqL })
-          movedPpqL = newPpqL
-        end
-      end
-
-      -- pb/pa reconcile-only (no column); cc/at/pc clone into their column carrying the reseat.
-      if cc.evType == 'cc' or cc.evType == 'at' or cc.evType == 'pc' then
-        local event = util.clone(cc)
-        event.realised = true
-        if movedPpq  then event.ppq  = movedPpq end
-        if movedPpqL then event.ppqL = movedPpqL end
-        local channel = channels[cc.chan]
-        local col
-        if cc.evType == 'cc' then
-          col = channel.columns.ccs[cc.cc] or { cc = cc.cc, events = {} }
-          channel.columns.ccs[cc.cc] = col
-        else
-          col = channel.columns[cc.evType] or { events = {} }
-          channel.columns[cc.evType] = col
-        end
-        projectEvent(event, cc.chan)
-        util.add(col.events, event)
-      end
-      ::continue::
     end
-    -- mm's cc stream is insertion-ordered mid-session (fresh adds append); columns sort by ppq.
-    for _, col in pairs(channels[chan].columns.ccs) do sortByPPQ(col.events) end
-    for _, key in ipairs{ 'at', 'pc' } do
-      if channels[chan].columns[key] then sortByPPQ(channels[chan].columns[key].events) end
-    end
-    ::nextChan::
   end
   ccWrites.commit()
   return ccExisting
@@ -4064,10 +4160,12 @@ function tm:rebuild(takeChanged)
     if dirtyChans[i] == true then
       channels[i] = { chan = i, columns = { notes = {}, ccs = {} } }
     elseif dirtyChans[i] then
-      -- Interval dirt narrows note materialisation only: every other producer (ccs, park, pb) still
-      -- wants the fresh channel a dirty chan has always handed it; priorPb feeds the kept-range carry.
-      channels[i] = { chan = i, columns = { notes = prevChannels[i].columns.notes, ccs = {} },
-                      priorPb = prevChannels[i].columns.pb }
+      -- Interval dirt carries note AND cc/at/pc columns; both splice just their seeded cells. Park and
+      -- pb still want the fresh channel; priorPb feeds the kept-range carry. see design § phase 3
+      local prevCols = prevChannels[i].columns
+      channels[i] = { chan = i, columns = { notes = prevCols.notes, ccs = prevCols.ccs,
+                                            at = prevCols.at, pc = prevCols.pc },
+                      priorPb = prevCols.pb }
     else
       channels[i] = prevChannels[i]
     end

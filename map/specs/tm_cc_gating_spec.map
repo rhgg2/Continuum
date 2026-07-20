@@ -1,6 +1,6 @@
-@spec tm_cc_gating_spec  src=tests/specs/tm_cc_gating_spec.lua  loc=42  sha=285f562  cases=1
+@spec tm_cc_gating_spec  src=tests/specs/tm_cc_gating_spec.lua  loc=93  sha=285f562  cases=2
 @exercises midiManager (h.fm), dataStore (h.ds), trackerManager (h.tm)
-@surface   fm:dump, ds:assign, tm:fromLogical
+@surface   fm:dump, ds:assign, tm:fromLogical, tm:addEvent, tm:flush, tm:getChannel
 @harness   mk{seed.ccs}
 
 # Intent
@@ -12,38 +12,54 @@
 
 # Helpers
   @fn ccRaw(h)  @ 12-14
+  @fn note(chan, ppq, pitch)  @ 16-19
+  @fn ccMmBag(h)  @ 22-32
+      -- cc/at/pc mm records minus the volatile per-rebuild loc: a reseat assign churns this bag.
 
 # Cases
-  @case 'swing change reseats a CC through the dirtyChans gate'  [harness]  @ 18-40
+  @case 'swing change reseats a CC through the dirtyChans gate'  [harness]  @ 36-58
+  @case 'a note edit carries the cc columns untouched and stages no cc mm write'  [harness]  @ 61-91
 
 # Uses (outbound edges)
-  @use call fm:dump  @ 13
-  @use call ds:assign  @ 35
-  @use call tm:fromLogical  @ 38
+  @use call fm:dump  @ 13,24
+  @use call ds:assign  @ 53
+  @use call tm:fromLogical  @ 56
+  @use call tm:addEvent  @ 73,83
+  @use call tm:flush  @ 73,83
+  @use call tm:getChannel  @ 76,85
 
 # Fields (r read / w write incl. constructor keys)
   @field w atom  @ 9,10
-  @field w c55  @ 25
-  @field w c58  @ 25
+  @field w c55  @ 43
+  @field w c58  @ 43
   @field r cc  @ 13
-  @field w cc  @ 23
-  @field r ccs  @ 13
-  @field w ccs  @ 22
-  @field w chan  @ 23
-  @field w config  @ 25
-  @field w data  @ 26
-  @field w evType  @ 23
+  @field w cc  @ 41,68,69,70
+  @field r ccs  @ 13,24,76,85
+  @field w ccs  @ 40,67
+  @field w chan  @ 17,41,68,69,70
+  @field r columns  @ 76,85
+  @field w config  @ 43
+  @field w data  @ 44
+  @field w delay  @ 18
+  @field w detune  @ 18
+  @field w endppq  @ 17
+  @field r evType  @ 25
+  @field w evType  @ 17,41,68,69,70
+  @field r events  @ 76,85
   @field w factors  @ 9,10
-  @field w global  @ 26,35
-  @field w name  @ 18
+  @field w global  @ 44,53
+  @field w lane  @ 18
+  @field w name  @ 36,61
   @field w period  @ 9,10
-  @field r ppq  @ 29,38,39
-  @field w ppq  @ 23
-  @field r ppqL  @ 30
-  @field w project  @ 25
-  @field w run  @ 19
-  @field w seed  @ 22
+  @field w pitch  @ 17
+  @field r ppq  @ 47,56,57
+  @field w ppq  @ 17,41,68,69,70
+  @field r ppqL  @ 48
+  @field w project  @ 43
+  @field w run  @ 37,62
+  @field w seed  @ 40,67
   @field w shift  @ 9,10
-  @field w swing  @ 26
-  @field w swings  @ 25
-  @field w val  @ 23
+  @field w swing  @ 44
+  @field w swings  @ 43
+  @field w val  @ 41,68,69,70
+  @field w vel  @ 18

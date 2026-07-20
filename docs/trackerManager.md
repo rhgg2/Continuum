@@ -924,6 +924,13 @@ Reconcile updates are mutated into the live cc record so the subsequent
 column-event clone sees up-to-date values; `mm:assign` propagates them at
 the end of the walk.
 
+A markerless pb seat (nil `ppqL`) inside a previous pb window skips this
+reconcile: it's a generated seat `deriveChan` owns, not foreign MIDI, so it
+stays markerless — and a genuine in-window pb from the user is
+indistinguishable, so it's absorbed the same way (design/note-macros-v2.md §
+Route-by-window). The window test is inclusive at the end, since pb windows
+carry a terminal re-centre seat at `endRaw` (mirrors `inSeatWindow`).
+
 Derived events are handled separately: absorber pbs by the absorber pass
 (against the post-walk lane-1 layout); synthesised PCs by PC synthesis.
 Pb column projection is deferred to the absorber pass so it sees the

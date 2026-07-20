@@ -4,6 +4,13 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-20** — The interval-dirt cc splice (`spliceChannelCCs`) is **row-keyed** off the seeds'
+  `ppqL`, over uuid-keyed. Add-seeds carry `uuid=nil` — `addLowlevel` snapshots the event before mm
+  stamps its uuid at commit — so a uuid-keyed excise/re-clone silently no-ops for a fresh add, which
+  the wholesale reconcile then re-adds as a duplicate (PC doubling). Row keying mirrors the note
+  splice (`seedCovers`): excise covered rows from the carried columns, re-clone them from `mm:ccsRaw`,
+  uuid used only as a survivor hint. The residual `mm:ccsRaw` scan is option A, removed in a follow-up.
+
 - **2026-07-20** — `rebuildRegionPark`'s fresh PA scan binds to each parked member's span via a new
   `mm:ccsRawBetween(chan, loPpq, hiPpq)` (binary search over the channel's ppq-sorted `locs`), over
   the per-dirty-channel `mm:ccsRaw` walk — completing § Phase 5.5's no-O(channel) rule for region
