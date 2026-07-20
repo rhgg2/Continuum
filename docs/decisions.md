@@ -4,6 +4,16 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-20** — The interval cc splice is now **seed-resolved**, superseding the row-keyed scan
+  below: each cc/at/pc seed excises its own carried cell (exact-row seek + uuid match) and re-clones
+  its survivor from `mm:byUuid` — O(seeds), both O(channel) passes gone. The nil-uuid add hole closes
+  by late-binding: a seed holds the snapshotted record itself (`s.evt`), and mm stamps the uuid on
+  that table at commit. `byUuid` over a positional query because the rebuild runs inside `mm:modify`
+  pre-reindex — fresh adds/moves are invisible to binary search there. Corollary: tv's cell carry
+  keys on events-table identity, so a spliced column sheds its table (`exciseNotes`' `col.events =
+  kept` is the note-path twin). Known edge for the next commit: `buildCcExistingInWindows` still
+  positional-queries mid-pipeline, so a cc authored into a prev window in the same flush can be missed.
+
 - **2026-07-20** — The interval-dirt cc splice (`spliceChannelCCs`) is **row-keyed** off the seeds'
   `ppqL`, over uuid-keyed. Add-seeds carry `uuid=nil` — `addLowlevel` snapshots the event before mm
   stamps its uuid at commit — so a uuid-keyed excise/re-clone silently no-ops for a fresh add, which

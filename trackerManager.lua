@@ -747,7 +747,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   local adds = {}
   local assigns = {}
   local deletes = {}
-  --shape: seeds[chan] = list of birth-snapshot seeds { uuid, verb, ppq, ppqL, lane, pitch, endppqL }; folded (dedup-by-uuid) into dirtyChans. see design § The model, inverted
+  --shape: seeds[chan] = list of birth-snapshot seeds { uuid, verb, ppq, ppqL, lane, pitch, endppqL, evType, cc, evt }; evt = the snapshotted record itself -- an add's uuid is stamped on it at mm commit, so it late-binds. folded (dedup-by-uuid) into dirtyChans. see design § The model, inverted
   local seeds = {}
   local parkedEdits = {}
   local parkedUuidSeq = 0
@@ -923,7 +923,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   local function snapshot(evt, verb)
     return { uuid = evt.uuid, verb = verb, ppq = evt.ppq, ppqL = evt.ppqL or evt.ppq,
              lane = evt.lane, pitch = evt.pitch, endppqL = evt.endppqL,
-             evType = evt.evType, cc = evt.cc }
+             evType = evt.evType, cc = evt.cc, evt = evt }
   end
   local function seedEvent(evt, verb) util.bucket(seeds, evt.chan, snapshot(evt, verb)) end
 
@@ -1970,6 +1970,7 @@ local function spliceCcCell(live, ccWrites)
   end
   projectEvent(event, chan)
   util.insertSorted(col.events, event, ppqLess)
+  return col
 end
 
 -- ccExisting from the prev cc windows only: range-query each window's raw span and keep its own-cc
@@ -1991,44 +1992,52 @@ local function buildCcExistingInWindows(chan, fillWin, ccExisting)
   end
 end
 
--- Covered logical rows from the cc-family seeds (snapshot ppqL, plus a survivor's live ppqL byUuid).
--- Row-keyed, not uuid: an add's birth-seed has no uuid yet (mm stamps it at commit). Mirror of seedCovers.
-local function ccSeedCovers(seedList)
-  local rows = {}
-  for _, s in ipairs(seedList) do
-    if s.evType == 'cc' or s.evType == 'at' or s.evType == 'pc' then
-      rows[s.ppqL] = true
-      local live = s.uuid and tm:byUuid(s.uuid)
-      if live then rows[live.ppqL or live.ppq] = true end
-    end
-  end
-  return function(evt) return rows[evt.ppqL or evt.ppq] or false end
-end
-
--- Drop the carried cc/at/pc cells this pass's clones will replace (covered rows only; the rest stand).
-local function exciseCcCells(chan, covers)
+-- The carried column an (evType, cc) pair names, or nil when nothing is carried there.
+local function ccColumnFor(chan, evType, ccNum)
   local cols = channels[chan].columns
-  local function scrub(col)
-    if not col then return end
-    local kept = {}
-    for _, e in ipairs(col.events) do if not covers(e) then util.add(kept, e) end end
-    col.events = kept
-  end
-  for _, col in pairs(cols.ccs) do scrub(col) end
-  scrub(cols.at); scrub(cols.pc)
+  if evType == 'cc' then return cols.ccs[ccNum] end
+  return cols[evType]
 end
 
--- Interval-dirt cc path: excise the seeded cc/at/pc rows from the carried columns and re-clone just
--- those rows from mm. Row-keyed so a fresh add (no uuid) still lands; the rest carries. see design § phase 3
+-- Excise one event's carried cell: exact-row binary seek (projection makes cell ppq == ppqL),
+-- then uuid-match within the row cluster, so a co-row tenant's cell stands.
+local function removeCellFor(col, row, uuid)
+  local events = col.events
+  local lo, hi = 1, #events + 1
+  while lo < hi do
+    local mid = (lo + hi) // 2
+    if events[mid].ppq < row then lo = mid + 1 else hi = mid end
+  end
+  while events[lo] and events[lo].ppq == row do
+    if events[lo].uuid == uuid then table.remove(events, lo)
+    else lo = lo + 1 end
+  end
+end
+
+-- Interval-dirt cc path: each cc-family seed excises its own cell and re-clones its survivor --
+-- O(seeds), no channel scan. see docs/decisions.md § 2026-07-20
 local function spliceChannelCCs(chan, seedList, fillWin, ccWrites, ccExisting)
-  local covers = ccSeedCovers(seedList)
-  exciseCcCells(chan, covers)
-  for _, cc in mm:ccsRaw(chan) do
-    if (cc.evType == 'cc' or cc.evType == 'at' or cc.evType == 'pc') and covers(cc)
-       and not (cc.evType == 'cc' and inSpan(fillWin, chan, cc.cc, cc.ppq)) then
-      spliceCcCell(cc, ccWrites)
+  local seen, touched = {}, {}
+  for _, s in ipairs(seedList) do
+    local family = s.evType == 'cc' or s.evType == 'at' or s.evType == 'pc'
+    local uuid = family and (s.uuid or (s.evt and s.evt.uuid)) or nil
+    if uuid and not seen[uuid] then
+      seen[uuid] = true
+      local seedCol = ccColumnFor(chan, s.evType, s.cc)
+      if seedCol then touched[seedCol] = true; removeCellFor(seedCol, s.ppqL, uuid) end
+      local _, live = mm:byUuid(uuid)
+      if live and live.chan == chan then
+        local liveCol = ccColumnFor(chan, live.evType, live.cc)
+        if liveCol then touched[liveCol] = true; removeCellFor(liveCol, live.ppqL or live.ppq, uuid) end
+        if not (live.evType == 'cc' and inSpan(fillWin, chan, live.cc, live.ppq)) then
+          touched[spliceCcCell(live, ccWrites)] = true
+        end
+      end
     end
   end
+  -- tv's cell carry keys on events-table identity (same table => reuse built cells), so a spliced
+  -- column must shed its carried table -- exciseNotes' `col.events = kept` is the note-path twin.
+  for col in pairs(touched) do col.events = util.clone(col.events) end
   buildCcExistingInWindows(chan, fillWin, ccExisting)
 end
 
