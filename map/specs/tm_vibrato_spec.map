@@ -1,4 +1,4 @@
-@spec tm_vibrato_spec  src=tests/specs/tm_vibrato_spec.lua  loc=203  sha=b5afaeb  cases=9
+@spec tm_vibrato_spec  src=tests/specs/tm_vibrato_spec.lua  loc=229  sha=b5afaeb  cases=10
 @exercises trackerManager (h.tm), midiManager (h.fm), configManager (h.cm), dataStore (h.ds)
 @surface   tm:addEvent, tm:flush, fm:dump, tm:rebuild, tm:getChannel, tm:assignEvent, cm:assign, fm:load, ds:get
 @harness   mk
@@ -20,62 +20,63 @@
   @case 'vibrato re-centres the channel at the window end (no residual bend)'  [harness]  @ 65-73
   @case 'seats are confined to the host window; the window opens at centre'  [harness]  @ 79-86
   @case 'G4: vibrato pb seat stream is byte-identical across flush -> rebuild -> flush (swing + delay)'  [harness]  @ 92-108
-  @case 'G2: fx present yields pb seats; fx removed leaves none after reconcile'  [harness]  @ 114-124
-  @case 'regeneration: a pbRange change rescales pb seat values (cents -> raw at flush)'  [harness]  @ 130-140
-  @case 'vibrato on a higher lane seats a channel pb stream (lane-blind gesture)'  [harness]  @ 146-155
-  @case 'noteOff shrink after reload neither parks seats nor restores them as authored pbs'  [harness]  @ 161-187
-  @case 'vibrato seats never surface as a visible cc or pb column'  [harness]  @ 193-200
+  @case 're-deriving the channel keeps its markerless seats markerless (route-by-window fixpoint)'  [harness]  @ 114-134
+  @case 'G2: fx present yields pb seats; fx removed leaves none after reconcile'  [harness]  @ 140-150
+  @case 'regeneration: a pbRange change rescales pb seat values (cents -> raw at flush)'  [harness]  @ 156-166
+  @case 'vibrato on a higher lane seats a channel pb stream (lane-blind gesture)'  [harness]  @ 172-181
+  @case 'noteOff shrink after reload neither parks seats nor restores them as authored pbs'  [harness]  @ 187-213
+  @case 'vibrato seats never surface as a visible cc or pb column'  [harness]  @ 219-226
 
 # Uses (outbound edges)
-  @use call tm:addEvent  @ 38,98,149,151
-  @use call tm:flush  @ 39,100,105,122,153,172
-  @use call fm:dump  @ 51,69,83,102,106,118,123,134,138,154,183
-  @use call tm:rebuild  @ 104,137,168
-  @use call tm:getChannel  @ 120,170,186,197
-  @use call tm:assignEvent  @ 121,171
-  @use call cm:assign  @ 136
-  @use call fm:load  @ 168
-  @use call ds:get  @ 177
+  @use call tm:addEvent  @ 38,98,175,177
+  @use call tm:flush  @ 39,100,105,148,179,198
+  @use call fm:dump  @ 51,69,83,102,106,121,129,144,149,160,164,180,209
+  @use call tm:rebuild  @ 104,127,163,194
+  @use call tm:getChannel  @ 146,196,212,223
+  @use call tm:assignEvent  @ 147,197
+  @use call cm:assign  @ 162
+  @use call fm:load  @ 194
+  @use call ds:get  @ 203
 
 # Fields (r read / w write incl. constructor keys)
-  @field r REMOVE  @ 121
+  @field r REMOVE  @ 147
   @field w atom  @ 7
-  @field r ccs  @ 21,198
+  @field r ccs  @ 21,224
   @field r chan  @ 22
-  @field w chan  @ 35,98,149,151
-  @field r columns  @ 120,170,186,197
-  @field w config  @ 95
-  @field w data  @ 96
-  @field w delay  @ 36,99,150,152
+  @field w chan  @ 35,98,175,177
+  @field r columns  @ 146,196,212,223
+  @field w config  @ 95,117
+  @field w data  @ 96,118
+  @field w delay  @ 36,99,176,178
   @field w depth  @ 11
-  @field w detune  @ 36,99,150,152
-  @field w endppq  @ 35,82,98,149,151,164,171
-  @field r evType  @ 22,178
-  @field w evType  @ 35,98,149,151
-  @field r events  @ 120,170
+  @field w detune  @ 36,99,176,178
+  @field w endppq  @ 35,82,98,175,177,190,197
+  @field r evType  @ 22,204
+  @field w evType  @ 35,98,175,177
+  @field r events  @ 146,196
   @field w factors  @ 7
-  @field w fx  @ 36,99,121,152
-  @field w global  @ 96
+  @field w fx  @ 36,99,147,178
+  @field w global  @ 96,118
   @field w kind  @ 11
-  @field w lane  @ 36,99,150,152
-  @field w name  @ 47,65,79,92,114,130,146,161,193
-  @field r notes  @ 120,170
+  @field w lane  @ 36,99,176,178
+  @field w name  @ 47,65,79,92,114,140,156,172,187,219
+  @field r notes  @ 146,196
   @field w onset  @ 11
-  @field r pb  @ 186,199
-  @field w pbRange  @ 136
+  @field r pb  @ 212,225
+  @field w pbRange  @ 162
   @field w period  @ 7,11
-  @field w pitch  @ 35,98,149,151
-  @field r plain  @ 23,54
+  @field w pitch  @ 35,98,175,177
+  @field r plain  @ 23,54,123,131
   @field w plain  @ 23
-  @field r ppq  @ 23,26,31,71,84,185
-  @field w ppq  @ 23,35,82,98,149,151
-  @field w project  @ 95
-  @field w run  @ 48,66,80,93,115,131,147,162,194
+  @field r ppq  @ 23,26,31,71,84,211
+  @field w ppq  @ 23,35,82,98,175,177
+  @field w project  @ 95,117
+  @field w run  @ 48,66,80,93,115,141,157,173,188,220
   @field r shape  @ 23
   @field w shape  @ 23
   @field w shift  @ 7
-  @field w swing  @ 96
-  @field w swings  @ 95
-  @field r val  @ 23,55,56,57,58,72,85,134,138
+  @field w swing  @ 96,118
+  @field w swings  @ 95,117
+  @field r val  @ 23,55,56,57,58,72,85,160,164
   @field w val  @ 23
-  @field w vel  @ 36,99,150,152
+  @field w vel  @ 36,99,176,178

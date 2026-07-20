@@ -137,6 +137,65 @@ local function dirtyChan(chan)
   for i = 1, 16 do dirtyChans[i] = true end
 end
 
+-- Mid-pass seed append: the region/park reconcile's per-member dirt, after the flush already set the
+-- channel. No-op once wholesale; collapses past the cap. see design/interval-dirt.md § phase 5
+local function seedDirty(chan, seed)
+  local dirt = dirtyChans[chan]
+  if dirt == true then return end
+  if dirt == nil then dirtyChans[chan] = { seed }; return end
+  util.add(dirt, seed)
+  if #dirt > WHOLESALE_SEED_CAP then dirtyChans[chan] = true end
+end
+
+-- A birth-snapshot seed for a park member, so its dirt reads like verb dirt downstream: parkSeed from a
+-- logical park spec (raw derived), rawSeed from an mm-raw event (raw in hand). Mirror um's snapshot.
+local function parkSeed(spec, verb)
+  return { uuid = spec.uuid, verb = verb, ppq = tm:fromLogical(spec.chan, spec.ppq),
+           ppqL = spec.ppq, lane = spec.lane, pitch = spec.pitch, endppqL = spec.endppq }
+end
+local function rawSeed(evt, verb)
+  return { uuid = evt.uuid, verb = verb, ppq = evt.ppq, ppqL = evt.ppqL or evt.ppq,
+           lane = evt.lane, pitch = evt.pitch, endppqL = evt.endppqL }
+end
+
+-- A region edit's real dirt is its members, discovered later by the park reconcile; here we seed one
+-- trigger point per changed region so its channel's park scan runs and its fx producer wakes. Diff by
+-- uuid against the last rebuild's set (create/remove/move/fx-change). see design/interval-dirt.md § phase 5
+local function seedRegionEdit(newRegions)
+  if not derivedInputs then dirtyChan(); return end
+  local function key(r) return r.uuid or util.key(r.chan, r.startppq, r.endppq) end
+  local function trigger(r)
+    seedDirty(r.chan, { verb = 'region', ppqL = r.startppq,
+                        ppq = tm:fromLogical(r.chan, r.startppq) })
+  end
+  local old, seen = {}, {}
+  for _, r in ipairs(derivedInputs.fxRegions or {}) do old[key(r)] = r end
+  for _, r in ipairs(newRegions or {}) do
+    local k = key(r); seen[k] = true
+    local o = old[k]
+    if not o then trigger(r)
+    elseif o.startppq ~= r.startppq or o.endppq ~= r.endppq or not util.deepEq(o.fx, r.fx) then
+      trigger(o); trigger(r)
+    end
+  end
+  for k, o in pairs(old) do if not seen[k] then trigger(o) end end
+end
+
+-- An external/undo fxParked change (not tm's own flush -- that stash write is converged output): seed
+-- each added member (newly parked) and removed member (restored). see design/interval-dirt.md § phase 5
+local function seedParkedEdit(newParked)
+  if not derivedInputs then dirtyChan(); return end
+  local function key(m)
+    if m.evType == 'note' then return 'note\0' .. tostring(m.uuid) end
+    return util.key(m.evType, m.chan, m.cc or 0, m.ppq)
+  end
+  local old, new = {}, {}
+  for _, m in ipairs(derivedInputs.fxParked or {}) do old[key(m)] = m end
+  for _, m in ipairs(newParked or {}) do new[key(m)] = m end
+  for k, m in pairs(new) do if not old[k] then seedDirty(m.chan, parkSeed(m, 'park')) end end
+  for k, m in pairs(old) do if not new[k] then seedDirty(m.chan, parkSeed(m, 'restore')) end end
+end
+
 -- Everything the pipeline derives from beyond the take itself. A dormant tracker hears nothing when
 -- this changes: an undo rewinds take-scoped ds/cm storage while ps watches only the bound take's
 -- slots, and the caches simply refill at the next setContext. So the rebind diffs it instead.
@@ -1176,7 +1235,9 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     local parked = util.deepClone(ds:get('fxParked') or {})
     for _, e in ipairs(parkedEdits) do
       local ref  = e.spec or e.evt
-      dirtyChan(ref.chan)   -- parked specs feed the producer: an edit re-derives the channel
+      -- flushParked runs before the fold, so feed the seed table (absorbReloadDirt folds it, or the
+      -- parked-only path below does); a mid-pass seedDirty here would be overwritten by that fold.
+      util.bucket(seeds, ref.chan, parkSeed(ref, e.op))
       if e.op == 'add' then
         util.add(parked, e.spec)
       else
@@ -1218,6 +1279,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     local hadMmOps = #adds > 0 or #assigns > 0 or #deletes > 0
     if #parkedEdits > 0 then flushParked() end
     if not hadMmOps then
+      absorbReloadDirt({})   -- no mm reload to fold flushParked's seeds; fold them here
       tm:rebuild(false)
       fire('postflush')
       return
@@ -1850,18 +1912,22 @@ end
 local function rawSpanMap(wins)
   local map = {}
   for _, w in ipairs(wins) do
-    map[w.chan]       = map[w.chan] or {}
-    map[w.chan][w.cc] = map[w.chan][w.cc] or {}
-    util.add(map[w.chan][w.cc], { sRaw = tm:fromLogical(w.chan, w.startppq),
-                                  eRaw = tm:fromLogical(w.chan, w.endppq) })
+    local key = w.cc or false   -- pb windows carry no cc; a single false slot holds them
+    map[w.chan]      = map[w.chan] or {}
+    map[w.chan][key] = map[w.chan][key] or {}
+    util.add(map[w.chan][key], { sRaw = tm:fromLogical(w.chan, w.startppq),
+                                 eRaw = tm:fromLogical(w.chan, w.endppq) })
   end
   return map
 end
 
-local function inSpan(map, chan, cc, ppq)
-  local spans = map[chan] and map[chan][cc]
+local function inSpan(map, chan, cc, ppq, inclusiveEnd)
+  local spans = map[chan] and map[chan][cc or false]
   if spans then
-    for _, s in ipairs(spans) do if ppq >= s.sRaw and ppq < s.eRaw then return true end end
+    for _, s in ipairs(spans) do
+      local withinEnd = ppq < s.eRaw or (inclusiveEnd and ppq == s.eRaw)
+      if ppq >= s.sRaw and withinEnd then return true end
+    end
   end
   return false
 end
@@ -1874,11 +1940,12 @@ local function rebuildCCs(prevWindows)
 
   -- Seats are recognized against last rebuild's persisted windows: an on-take cc inside a prev cc window is a
   -- seat; a just-created window's cc still parks, a removed one's orphans reconcile away. see design/note-macros-v2.md § Route-by-window
-  local ccWins = {}
+  local ccWins, pbWins = {}, {}
   for _, w in ipairs(prevWindows or {}) do
-    if w.evType == 'cc' then util.add(ccWins, w) end
+    if w.evType == 'cc'     then util.add(ccWins, w)
+    elseif w.evType == 'pb' then util.add(pbWins, w) end
   end
-  local fillWin = rawSpanMap(ccWins)
+  local fillWin, pbFillWin = rawSpanMap(ccWins), rawSpanMap(pbWins)
 
   -- Clean channels carry their cc/at/pc columns whole: never visited.
   for chan = 1, 16 do
@@ -1894,8 +1961,12 @@ local function rebuildCCs(prevWindows)
       end
 
       -- Timing reconcile on the raw (read-only) record; capture what moved for the column clone.
+      -- A markerless pb seat (nil ppqL) inside a prev pb window is a generated seat deriveChan owns, not
+      -- foreign MIDI -- leave it markerless; a user's in-window pb is indistinguishable, absorbed too. see § Route-by-window
+      -- Inclusive end: pb windows carry a terminal re-centre seat at endRaw (mirrors inSeatWindow).
+      local pbSeat = cc.evType == 'pb' and cc.ppqL == nil and inSpan(pbFillWin, cc.chan, nil, cc.ppq, true)
       local movedPpq, movedPpqL
-      if not cc.derived then
+      if not cc.derived and not pbSeat then
         if staleSwing[cc.chan] and cc.ppqL ~= nil then
           local newPpq = tm:fromLogical(cc.chan, cc.ppqL)
           if newPpq ~= cc.ppq then
@@ -2212,12 +2283,12 @@ local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows
 
     -- Park removes a blocker; same-lane/pitch neighbours' tails regrow.
     local newParked, restores = reconcilePark(scan, priorByType.note or {},
-      function(spec) dirtyChan(spec.chan) end)
+      function(spec) seedDirty(spec.chan, parkSeed(spec, 'park')) end)
 
     -- Restores re-enter their columns now (unrealised); the tail walk clips them in place and
     -- the tail walk's commit adds them after the derived deletions.
     for _, spec in ipairs(restores) do
-      dirtyChan(spec.chan)   -- restored note re-enters columns; tail walk + absorber pass re-derive it
+      seedDirty(spec.chan, parkSeed(spec, 'restore'))   -- restored note re-enters columns; the tail walk re-derives it
       local channel = channels[spec.chan]
       while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
       local note = util.clone(spec)   -- the cell is the spec: both are logical (keeps the parked uuid too)
@@ -2292,7 +2363,7 @@ local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows
       if hostParked(spec.chan, spec.pitch, spec.ppq) then
         util.add(newParked, spec)
       else
-        dirtyChan(spec.chan)
+        seedDirty(spec.chan, parkSeed(spec, 'restore'))
         batch.add(util.assign(util.clone(spec),   -- back to mm: raw onset, logical sidecar
           { ppq = tm:fromLogical(spec.chan, spec.ppq), ppqL = spec.ppq }))
       end
@@ -2382,7 +2453,7 @@ local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows
       for _, cc in mm:ccsRaw(win.chan) do
         if cc.evType == 'pb' and not cc.derived
            and cc.ppq >= sRaw and cc.ppq <= eRaw and not seatByRegion(cc.chan, cc.ppq) then
-          dirtyChan(cc.chan)
+          seedDirty(cc.chan, rawSeed(cc, 'park'))
           -- val: logical cents from mm's cents sidecar (restore maps back); a foreign pre-cents pb
           -- falls back to raw-derived cents (best-effort).
           local spec = parkSpec(cc, { ppq = cc.ppqL or cc.ppq,
@@ -2398,7 +2469,7 @@ local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows
     -- Restore re-adds to the take; the absorber (later this rebuild) refines the wire raw with
     -- detune and re-shows it. The seed val is detune-free -- the absorber's assign corrects it.
     for _, spec in ipairs(restores) do
-      dirtyChan(spec.chan)
+      seedDirty(spec.chan, parkSeed(spec, 'restore'))
       batch.add(util.assign(util.clone(spec),
         { ppq = tm:fromLogical(spec.chan, spec.ppq), ppqL = spec.ppq,
           cents = spec.val, val = centsToRaw(spec.val) }))   -- spec.val is cents; the wire wants raw + a cents sidecar
@@ -2410,7 +2481,7 @@ local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows
       local sRaw, eRaw = tm:fromLogical(win.chan, win.startppq), tm:fromLogical(win.chan, win.endppq)
       for _, cc in mm:ccsRaw(win.chan) do
         if cc.evType == 'pb' and cc.ppq >= sRaw and cc.ppq <= eRaw then
-          dirtyChan(cc.chan)
+          seedDirty(cc.chan, rawSeed(cc, 'delete'))
           batch.del({ uuid = cc.uuid })
         end
       end
@@ -4091,10 +4162,13 @@ do
       prevSwing = util.deepClone(cur)
       tm:rebuild(false)
     elseif change.name == 'fxRegions' then
-      -- Region edits re-derive; the rebuild diffs current vs persisted windows for park/sweep. see § Route-by-window
-      if not flushingParked then dirtyChan(); tm:rebuild(false) end
-    elseif change.name == 'extraColumns' or change.name == 'fxParked' then
-      -- parking/extraColumns drive fx expansion + the pb keep-decision (inside the gated passes) -- re-derive.
+      -- Region edits seed only the changed regions' channels; unchanged channels freeze. see § Route-by-window
+      if not flushingParked then seedRegionEdit(ds:get('fxRegions')); tm:rebuild(false) end
+    elseif change.name == 'fxParked' then
+      -- parking drives fx expansion + the pb keep-decision; seed only the changed members.
+      if not flushingParked then seedParkedEdit(ds:get('fxParked')); tm:rebuild(false) end
+    elseif change.name == 'extraColumns' then
+      -- extraColumns is grow-only/merge-safe, not parking -- a whole re-derive stays. see design § phase 3
       if not flushingParked then dirtyChan(); tm:rebuild(false) end
     elseif change.name == 'noteDelay' then
       -- noteDelay is a display offset -- nothing in the tm pipeline reads it; reproject only.

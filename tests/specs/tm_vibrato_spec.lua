@@ -108,6 +108,32 @@ return {
     end,
   },
 
+  ----- Re-derivation fixpoint — a markerless seat re-derived must not promote to a marked one
+
+  {
+    name = 're-deriving the channel keeps its markerless seats markerless (route-by-window fixpoint)',
+    run = function(harness)
+      local h = harness.mk{
+        config = { project = { swings = { ['c58'] = classic58 } } },
+        data   = { swing = { global = 'c58' } },
+      }
+      addVibHost(h)
+      local before = pbSeatsOf(h.fm:dump(), 1)
+      t.truthy(#before > 0, 'seats present (non-vacuous)')
+      for _, s in ipairs(before) do t.eq(s.plain, true, 'first-derive seats are markerless') end
+
+      -- Force a full re-derive from the channel's own markerless seats: rebuildCCs recognises them by their
+      -- prev pb window and leaves them markerless (a bare rebuild() freezes chan 1, never exercising it).
+      h.tm:rebuild(true)
+
+      local after = pbSeatsOf(h.fm:dump(), 1)
+      for _, s in ipairs(after) do
+        t.eq(s.plain, true, 're-derived seat stays markerless -- not promoted to a marked seat')
+      end
+      t.deepEq(after, before, 're-derive is a fixpoint: no seat churn, no ppqL sidecar stamped')
+    end,
+  },
+
   ----- G2 — both directions
 
   {

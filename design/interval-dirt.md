@@ -1393,7 +1393,33 @@ Commits (commit 1, the note half, above), each green alone,
 Same phase: the all-16 region/parking dirt sources narrow to their own
 members — a region edit knows the exact events it parked and restored
 (`trackerManager.lua:3314`, `flushParked` :1019); seed those, per
-member, instead of `dirtyChan()`.
+member, instead of `dirtyChan()`. *Landed 2026-07-20.* The six mid-pass
+park/restore/pb widens become `seedDirty(chan, parkSeed/rawSeed(...))`;
+`flushParked` feeds the `seeds` table (folded by `absorbReloadDirt`,
+with a `absorbReloadDirt({})` added on the parked-only flush that runs
+no mm reload); the two all-16 `dataChanged` triggers diff old-vs-new
+against `derivedInputs` — `seedRegionEdit` seeds a trigger point per
+changed region's channel, `seedParkedEdit` seeds park/restore per
+added/removed member. `extraColumns` stays all-16 (deliberately).
+
+One deviation, load-bearing: narrowing the region edit off chan 3 (its
+vibrato is a note-fx, not a region) froze its markerless pb seats in
+first-derive state, and `tm_gate_parity_spec` went red — un-masking a
+pre-existing non-fixpoint the old all-16 region dirt had always papered
+over. A markerless pb seat carries no `ppqL` by design, so `rebuildCCs`'
+timing reconcile read it as foreign MIDI (`rawDivergesFromLogical` returns
+true on nil `ppqL`) and stamped a logical seat, promoting it to marked on
+every re-derive of its channel — the seat was never a re-derive fixpoint.
+Fixed by routing markerless pb seats out of that reconcile the same way cc
+seats already route (§ Route-by-window): recognized against the prev pb
+window (`parkWindows` emits one per continuous-pb target, note-hosts
+included), inclusive of the terminal re-centre seat at `endRaw` (mirrors
+`inSeatWindow`). `rawSpanMap`/`inSpan` generalised to a nil-`cc` slot to
+carry pb windows alongside cc. The accepted collision is the same one cc
+lives with: a user's own pb dropped inside an fx window is indistinguishable
+from a generated seat and gets absorbed. Pinned by
+`tm_vibrato_spec`'s re-derivation-fixpoint case (a bare `rebuild()` freezes
+the channel and never exercises it; the pin forces `rebuild(true)`).
 
 ### Phase 5.5 — fx-host discovery is maintained, not scanned
 
