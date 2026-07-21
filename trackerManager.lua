@@ -875,10 +875,10 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   local function makeEntry(e)
     local evt
     if e.evType == 'pb' then
-      -- val is raw 14-bit converted to cents (um's frame). cents sidecar is authored logical value;
-      -- nil for foreign-MIDI/pre-cents pbs — back-derived in rebuild's absorber pass from lane-1 layout.
-      evt = util.pick(e, 'ppq ppqL chan shape tension derived frame cents uuid',
-                      { val = rawToCents(e.val), realised = true, evType = 'pb' })
+      -- Clone (not pick) so arbitrary metadata survives; val reframes raw->cents (um's frame), raw keeps
+      -- the wire value for rebuildPbs' delta-gate. cents sidecar is authored logical -- nil for foreign pbs.
+      evt = util.clone(e)
+      evt.val, evt.raw, evt.realised = rawToCents(e.val), e.val, true
     else
       evt = e
       evt.realised = true
@@ -891,15 +891,11 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   -- slot in rawIndex, so a same-slot reconcile skips the rawIndexRemove scan, reinsert and sort.
   local umDecor = { realised = true, colEvt = true }   -- um's own fields; mm's clone never carries them
   local function refreshEntry(prev, e)
-    if e.evType == 'pb' then
-      prev.ppqL, prev.shape, prev.tension = e.ppqL, e.shape, e.tension
-      prev.derived, prev.frame, prev.cents = e.derived, e.frame, e.cents
-      prev.val = rawToCents(e.val)
-    else
-      for k in pairs(prev) do if e[k] == nil and not umDecor[k] then prev[k] = nil end end
-      util.assign(prev, e)
-      prev.realised = true
-    end
+    for k in pairs(prev) do if e[k] == nil and not umDecor[k] then prev[k] = nil end end
+    util.assign(prev, e)
+    prev.realised = true
+    -- pb reframes val raw->cents and mirrors the wire in raw, matching makeEntry so both doors agree.
+    if e.evType == 'pb' then prev.val, prev.raw = rawToCents(e.val), e.val end
   end
 
   -- Incremental index upkeep for one uuid. rawIndex lists are ppq-sorted and rawIndexListFor ignores
@@ -2351,7 +2347,7 @@ end
 
 -- Park = clone minus the realisation frame, so new authored metadata rides a park/unpark
 -- round-trip untouched; restore mirrors it (clone back, re-derive realisation; pb also cents->raw).
-local REALISATION = { delayC = true, endppqC = true, loc = true, realised = true, derived = true, frame = true, cents = true }
+local REALISATION = { delayC = true, endppqC = true, loc = true, realised = true, derived = true, frame = true, cents = true, colEvt = true }
 --contract: evt must be logical-frame (a column event); an mm-raw source overrides ppq via `adds`
 local function parkSpec(evt, adds) return util.assign(util.clone(evt, REALISATION), adds) end
 
@@ -2632,16 +2628,17 @@ local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows
     local scan = {}
     for _, win in ipairs(pbCreated) do
       local sRaw, eRaw = tm:fromLogical(win.chan, win.startppq), tm:fromLogical(win.chan, win.endppq)
-      for _, cc in mm:ccsRaw(win.chan) do
-        if cc.evType == 'pb' and not cc.derived
-           and cc.ppq >= sRaw and cc.ppq <= eRaw and not seatByRegion(cc.chan, cc.ppq) then
+      local pbs = rawPbs(win.chan)
+      for i = firstAtOrAfter(pbs, sRaw), #pbs do
+        local cc = pbs[i]
+        if cc.ppq > eRaw then break end   -- inclusive upper, as the mm walk was
+        if not cc.derived and not seatByRegion(cc.chan, cc.ppq) then
           seedDirty(cc.chan, rawSeed(cc, 'park'))
-          -- val: logical cents from mm's cents sidecar (restore maps back); a foreign pre-cents pb
-          -- falls back to raw-derived cents (best-effort).
+          -- val: logical cents from the cents sidecar (restore maps back); entry.val is already the
+          -- raw-derived cents, the best-effort fallback for a foreign pre-cents pb.
           local spec = parkSpec(cc, { ppq = cc.ppqL or cc.ppq,
-                                      val = cc.cents or rawToCents(cc.val) })   -- from mm-raw: evType/chan/shape/tension ride; ppq flips logical, cents->val
-          local pb = util.clone(cc); pb.realised = true
-          util.add(scan, { evt = pb, spec = spec })
+                                      val = cc.cents or cc.val })   -- index entry: evType/chan/shape/tension ride; ppq flips logical, cents->val
+          util.add(scan, { evt = util.clone(cc, { colEvt = true }), spec = spec })
         end
       end
     end
@@ -2657,15 +2654,16 @@ local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows
           cents = spec.val, val = centsToRaw(spec.val) }))   -- spec.val is cents; the wire wants raw + a cents sidecar
     end
 
-    -- Sweep queue (remove): a removed window's seats orphan (no marker names them) -- delete every mm pb
+    -- Sweep queue (remove): a removed window's seats orphan (no marker names them) -- delete every pb
     -- in the swept raw span. The authored restored above is an unrealised add, so delete-first order is safe.
     for _, win in ipairs(pbRemoved) do
       local sRaw, eRaw = tm:fromLogical(win.chan, win.startppq), tm:fromLogical(win.chan, win.endppq)
-      for _, cc in mm:ccsRaw(win.chan) do
-        if cc.evType == 'pb' and cc.ppq >= sRaw and cc.ppq <= eRaw then
-          seedDirty(cc.chan, rawSeed(cc, 'delete'))
-          batch.del({ uuid = cc.uuid })
-        end
+      local pbs = rawPbs(win.chan)
+      for i = firstAtOrAfter(pbs, sRaw), #pbs do
+        local cc = pbs[i]
+        if cc.ppq > eRaw then break end   -- inclusive upper, as the mm walk was
+        seedDirty(cc.chan, rawSeed(cc, 'delete'))
+        batch.del({ uuid = cc.uuid })
       end
     end
 
@@ -3662,17 +3660,15 @@ local function rebuildPbs(fxOut, extraColumns)
     end
   end
 
-  -- Each pb rides its own clone through the pass, carrying mm's uuid so a mutated clone still
-  -- names its source; origShape is held because the pass rewrites shape. Only dirty channels clone.
+  -- Each pb rides its own clone through the pass, carrying the index entry's uuid so a mutated clone
+  -- still names its source; origShape is held because the pass rewrites shape. Only dirty channels clone.
   local pbsByChan = {}
   for chan = 1, 16 do
     if dirty[chan] then
-      for _, cc in mm:ccsRaw(chan) do
-        if cc.evType == 'pb' then
-          local pb = util.clone(cc)
-          pb.realised, pb.origShape = true, cc.shape
-          util.bucket(pbsByChan, pb.chan, pb)
-        end
+      for _, entry in ipairs(rawPbs(chan)) do
+        local pb = util.clone(entry, { colEvt = true })
+        pb.origShape = entry.shape
+        util.bucket(pbsByChan, pb.chan, pb)
       end
     end
   end
@@ -3820,7 +3816,7 @@ local function rebuildPbs(fxOut, extraColumns)
     local persistCents = {}
     for _, pb in ipairs(pbs) do
       if pb.cents == nil and not inSeatWindow(pb.ppq) then
-        pb.cents = rawToCents(pb.val) - detuneAt(lane1Events, pb.ppq)
+        pb.cents = rawToCents(pb.raw) - detuneAt(lane1Events, pb.ppq)
         persistCents[pb] = true
       end
     end
@@ -4030,7 +4026,7 @@ local function rebuildPbs(fxOut, extraColumns)
                      cents = pb.cents, val = newRaw }
         elseif restampPpqL[pb] then
           update = { ppqL = restampPpqL[pb], cents = pb.cents, val = newRaw }
-        elseif pb.val ~= newRaw or persistCents[pb] or shapeChanged then
+        elseif pb.raw ~= newRaw or persistCents[pb] or shapeChanged then
           update = { cents = pb.cents, val = newRaw }
         end
         if update then
@@ -4038,7 +4034,7 @@ local function rebuildPbs(fxOut, extraColumns)
           -- A markerless seat persists native MIDI only; strip the sidecar fields so the assign
           -- stamps no metadata and the seat stays plain. Its ppq/val/shape still land.
           if markerless then update.cents, update.ppqL = nil, nil end
-          pb.val = newRaw
+          pb.raw = newRaw
           pbWrites.assign({ uuid = pb.uuid }, update)
         end
       end
@@ -4068,6 +4064,7 @@ local function rebuildPbs(fxOut, extraColumns)
         -- column event rather than cloning again.
         pb.ppqRaw = pb.ppq   -- survives projectEvent's logical flip; the kept-range carry keys on it
         pb.val, pb.detune, pb.hidden = pb.cents, detuneOf[pb], hidden
+        pb.raw = nil   -- derive-only wire mirror for the delta-gate; never rides into the cents-framed column
         projectEvent(pb, chan)
         util.add(pbColEvents, pb)
       end

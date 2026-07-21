@@ -4,6 +4,15 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-21** — pb read-sites (`rebuildPbs` gather, region-park create-scan + sweep) now seek the um
+  raw index. Frame decision: the pb entry carries the wire `raw` alongside its cents-framed `val`, so
+  `rebuildPbs`' delta-gate (`pb.raw ~= newRaw`) stays byte-exact — chosen over reframing the gate to cents,
+  which is lossy for foreign/sub-cent pbs (raw carries ~41x the resolution of cents). The conversion exposed
+  two latent bugs: (a) `makeEntry`'s pb branch `pick`'d an allowlist, silently dropping arbitrary metadata —
+  now a full clone + reframe, matching how non-pb entries alias the whole mm record (`refreshEntry` unified
+  to agree); (b) the `raw` mirror leaked into the cents-framed pb column, exposing a fresh-vs-moved seat
+  difference under gate-parity — now stripped at projection. Both caught by existing specs, not new ones.
+
 - **2026-07-21** — pa/pc read-sites (`rebuildPA`, region-park PA stash, `stampSamples`, `rebuildPCs`
   splice) now seek the um raw index; `mm:ccsRawBetween` retires (last caller gone). The `rebuildPCs`
   conversion exposed a latent index-integrity bug: `rawIndexRemove` matches by object identity, but the
