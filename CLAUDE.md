@@ -63,6 +63,17 @@ boundary rules, section-divider grammar, and the rationale behind the
 caps above. Model docs to imitate: `docs/timing.md`, `docs/tuning.md`,
 `docs/configManager.md`.
 
+## Programme plans
+
+Big programmes compile their next steps out of `design/<doc>.md` into
+`plan/<programme>.md`; `plan/CURRENT` names the live one. For
+implementation work on the programme, read the plan file first — it
+carries what just landed and a self-contained brief for what's next,
+so you rarely need the design doc. `/plan-next` promotes the next
+queued item into that brief; the commit skill's pre-agent steps handle
+landing bookkeeping. Design docs stay pure model: no checkboxes or
+status boards, just dated notes where a landing settled something.
+
 ## How to work
 
 - **MCP tool schemas — load before calling.** The global rule applies

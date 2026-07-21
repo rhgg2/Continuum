@@ -19,7 +19,8 @@ One pass. No iterative refinement.
    {"date":"2026-07-14","score":3,"used":["map_query","map"],"comment":"usedby missed trackerPage's call — runtime receiver, not in the alias table; had to grep"}
    ```
 4. Decision log: if the change embodies a non-trivial design decision — a chosen trade-off, a rejected alternative, a new convention — append a dated one/two-line entry at the top of `docs/decisions.md` now, so it rides the same commit. Most commits don't; skip silently.
-5. Spawn one subagent — Agent tool, `subagent_type: general-purpose`, `model: sonnet` — and hand it the headline. It owns everything else and does **not** spawn further subagents. Prompt it with:
+5. Landing bookkeeping: if `plan/CURRENT` exists and this commit completes the live plan's Now entry (wholly, or its final piece), update `plan/<name>` now so it rides the commit — move the entry to Landed as one line (`- <date> <headline> (§ ref)`), prune Landed below ~4, clear Now, and if the landing settled something design-relevant add the dated note to the design doc. Commits unrelated to the plan: skip silently.
+6. Spawn one subagent — Agent tool, `subagent_type: general-purpose`, `model: sonnet` — and hand it the headline. It owns everything else and does **not** spawn further subagents. Prompt it with:
 
 > You are finishing a commit. Do these in order, then stop — do not spawn any subagent:
 > 1. `git status` and `git diff` to see what's landing.
@@ -32,4 +33,4 @@ One pass. No iterative refinement.
 >
 >    If the user sent you instructions directly while you were working (a message mid-run, or hunk `feedback:` returned by `apply_patches`), say so explicitly in the report (call them "the user", not "you"): quote or paraphrase what they asked and what you did about it. The parent agent cannot see your conversation and will otherwise read the change as yours.
 
-6. When it returns, eyeball its summary — don't re-audit.
+7. When it returns, eyeball its summary — don't re-audit.
