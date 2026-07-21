@@ -4,6 +4,15 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-21** — `buildCcExistingInWindows` now seeks the um raw index (extended this commit to all
+  six event types, `rawIndexFor` accessor), retiring one `ccsRawBetween` caller — uniformity, **not** a
+  bugfix. The 2026-07-20 "known edge" is real in mechanism (rebuild runs pre-reindex: `mm:modify` fires
+  `reload` before `leaveNest`'s reindex, so a flush cc add leaves `locs` non-monotonic during the nested
+  rebuild) but unreachable in effect — the only cc the scan can miss is one added onto the grid inside a
+  live window this flush, which `reconcileDerived` deletes anyway; a correctly-authored in-window cc
+  goes to the parked stash (off mm, base via `ccBasesFor`), and prior derived seats were reindexed in an
+  earlier flush.
+
 - **2026-07-21** — rebuild(∅) short-circuits (punch-list § 3, terminal invariant): the gate sits first in
   `tm:rebuild` — no takeChanged/reload/dirt/staleSwing/force → return before clearSwing, the nest and the
   fire. `rebuildRequested` repurposed as the force flag (consumed by rebuild, not flush); noteDelay sets it.

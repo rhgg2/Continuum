@@ -754,7 +754,7 @@ end
 
 local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
       flush, reload, idxReconcile, withDeferredSort, clearStaging, absorbReloadDirt,
-      stampColEvt, rawNotes, rawPbs, resortRawNotes, fxHostsFor do
+      stampColEvt, rawNotes, rawPbs, rawIndexFor, resortRawNotes, fxHostsFor do
 
   ----- State
 
@@ -784,6 +784,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   -- (filtered at use); entries are live um records. see design/interval-dirt.md § Phase 4.5
   function rawNotes(chan) return rawIndex[chan].notes end
   function rawPbs(chan) return rawIndex[chan].pbs end
+  function rawIndexFor(chan) return rawIndex[chan] end   -- the channel's { notes, pbs, pcs, pas, ats, ccs } record; ccs is a { [ccNum] = list } map
 
   -- The maintained fx-host set for a channel (uuids of on-take .fx notes); computeFxWindows reads it
   -- instead of rescanning columns. see design/interval-dirt.md § Phase 5.5
@@ -803,11 +804,22 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
 
   ----- Low-level mutation
 
-  -- rawIndex holds every note (all lanes) and every pb per channel, raw-then-logical
-  -- sorted; readers filter at use (detuneAt: lane 1; the walk: on-take non-derived).
+  -- rawIndex holds every event per channel, one list per type: notes and pbs flat (all lanes),
+  -- pcs/pas/ats flat, ccs bucketed by cc number. Each raw-then-logical sorted; readers filter at use.
   local function rawIndexListFor(evt, chan)
-    if evt.evType == 'note' then return rawIndex[chan].notes end
-    if evt.evType == 'pb' then return rawIndex[chan].pbs end
+    local ri = rawIndex[chan]
+    local t = evt.evType
+    if t == 'note' then return ri.notes end
+    if t == 'pb' then return ri.pbs end
+    if t == 'pc' then return ri.pcs end
+    if t == 'pa' then return ri.pas end
+    if t == 'at' then return ri.ats end
+    if t == 'cc' then
+      -- Created on demand so idxReconcile's fast path compares two tables, never nil vs table.
+      local bucket = ri.ccs[evt.cc]
+      if not bucket then bucket = {}; ri.ccs[evt.cc] = bucket end
+      return bucket
+    end
   end
   -- fx-host membership rides the index turnover: set on insert of a .fx note, cleared on removal, so
   -- computeFxWindows never rescans columns to find hosts. see design/interval-dirt.md § Phase 5.5
@@ -1384,7 +1396,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   local function loadIndex()
     mm:reindexIfStale()   -- deferred edits may leave mm sparse/unsorted; events() below needs compact+sorted (item 5)
     byUuid = {}
-    for i = 1, 16 do rawIndex[i] = { notes = {}, pbs = {} }; fxHosts[i] = {} end
+    for i = 1, 16 do rawIndex[i] = { notes = {}, pbs = {}, pcs = {}, pas = {}, ats = {}, ccs = {} }; fxHosts[i] = {} end
     for _, e in mm:events() do
       local evt = makeEntry(e)
       local tbl = rawIndexListFor(evt, evt.chan)
@@ -1393,8 +1405,13 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     -- mm:events() yields each kind ppq-sorted and the per-channel filter preserves that;
     -- one sort per list settles the logical tie-break the incremental path maintains.
     for i = 1, 16 do
-      table.sort(rawIndex[i].notes, rawThenLogical)
-      table.sort(rawIndex[i].pbs, rawThenLogical)
+      local ri = rawIndex[i]
+      table.sort(ri.notes, rawThenLogical)
+      table.sort(ri.pbs, rawThenLogical)
+      table.sort(ri.pcs, rawThenLogical)
+      table.sort(ri.pas, rawThenLogical)
+      table.sort(ri.ats, rawThenLogical)
+      for _, bucket in pairs(ri.ccs) do table.sort(bucket, rawThenLogical) end
     end
   end
 
@@ -1987,20 +2004,26 @@ local function spliceCcCell(live, ccWrites)
   return col
 end
 
--- ccExisting from the seed-touched prev cc windows only: each window a seed edge-inclusively hits is
--- range-queried for its own-cc seats. A clean window never enters existing, so its seats keep untouched.
+-- ccExisting scopes to the seed-touched prev cc windows only (edge-inclusive); clean windows keep their seats untouched, and cc-family carries merge rather than replace.
+-- Seeks the maintained um index (current mid-pipeline), not mm. See design/interval-dirt-v2.md § 1, docs/decisions.md § 2026-07-21.
 local function buildCcExistingInWindows(chan, fillWin, ccExisting, seedRows)
   local byCc = fillWin[chan]
   if not byCc then return end
+  local ccBuckets = rawIndexFor(chan).ccs
   local seen = {}
   for ccNum, spans in pairs(byCc) do
-    for _, span in ipairs(spans) do
-      if windowSeeded(seedRows, span.sL, span.eL) then
-        for _, evt in mm:ccsRawBetween(chan, span.sRaw, span.eRaw) do
-          if evt.evType == 'cc' and evt.cc == ccNum and not seen[evt.uuid] then
-            seen[evt.uuid] = true
-            util.add(ccExisting[chan],
-              { ppq = evt.ppq, val = evt.val, shape = evt.shape, tension = evt.tension, cc = evt.cc, uuid = evt.uuid })
+    local list = ccBuckets[ccNum]
+    if list then
+      for _, span in ipairs(spans) do
+        if windowSeeded(seedRows, span.sL, span.eL) then
+          for i = firstAtOrAfter(list, span.sRaw), #list do
+            local evt = list[i]
+            if evt.ppq >= span.eRaw then break end
+            if not seen[evt.uuid] then
+              seen[evt.uuid] = true
+              util.add(ccExisting[chan],
+                { ppq = evt.ppq, val = evt.val, shape = evt.shape, tension = evt.tension, cc = evt.cc, uuid = evt.uuid })
+            end
           end
         end
       end
