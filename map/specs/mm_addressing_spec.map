@@ -1,4 +1,4 @@
-@spec mm_addressing_spec  src=tests/specs/mm_addressing_spec.lua  loc=143  sha=37ed80d  cases=7
+@spec mm_addressing_spec  src=tests/specs/mm_addressing_spec.lua  loc=144  sha=37ed80d  cases=7
 @exercises midiManager (h.fm)
 @surface   fm:notes, fm:byUuid, fm:ccs, fm:reload, fm:modify, fm:assign
 @harness   mk{seed.notes}, bareMM
@@ -17,51 +17,51 @@
       is in-memory only and re-minted each load. See mm_plain_cc_spec.
 
 # Cases
-  @case 'note: a fetched event round-trips through byUuid'  [harness]  @ 17-29
-  @case 'cc: a plain cc is addressable like any other'  [harness]  @ 33-42
-  @case 'pb / pa / at / pc: every evType yields a working handle'  [harness]  @ 46-65
-  @case 'a persisted note keeps its handle across reload'  [harness]  @ 69-82
-  @case 'moving an identity field does not re-key: the same handle resolves to the moved note'  [harness]  @ 86-102
-  @case 'distinct events get distinct handles'  [harness]  @ 106-130
-  @case 'byUuid returns nil for an unknown handle'  [harness]  @ 134-141
+  @case 'note: a fetched event round-trips through byUuid'  [harness]  @ 17-30
+  @case 'cc: a plain cc is addressable like any other'  [harness]  @ 34-43
+  @case 'pb / pa / at / pc: every evType yields a working handle'  [harness]  @ 47-66
+  @case 'a persisted note keeps its handle across reload'  [harness]  @ 70-83
+  @case 'moving an identity field does not re-key: the same handle resolves to the moved note'  [harness]  @ 87-103
+  @case 'distinct events get distinct handles'  [harness]  @ 107-131
+  @case 'byUuid returns nil for an unknown handle'  [harness]  @ 135-142
 
 # Uses (outbound edges)
-  @use call fm:notes  @ 22,74,91,100,121
-  @use call fm:byUuid  @ 24,37,58,79,96,139,140
-  @use call fm:ccs  @ 36,57,122
-  @use call fm:reload  @ 77
-  @use call fm:modify  @ 94
-  @use call fm:assign  @ 94
+  @use call fm:notes  @ 22,75,92,101,122
+  @use call fm:byUuid  @ 24,38,59,80,97,140,141
+  @use call fm:ccs  @ 37,58,123
+  @use call fm:reload  @ 78
+  @use call fm:modify  @ 95
+  @use call fm:assign  @ 95
 
 # Fields (r read / w write incl. constructor keys)
-  @field w at  @ 55
-  @field w cc  @ 35,114,115
-  @field w ccs  @ 35,48,112
-  @field r chan  @ 27
-  @field w chan  @ 20,35,49,50,51,52,72,89,111,113,114,115
-  @field w chan  @ 116,117,137
-  @field w endppq  @ 20,72,89,111,137
-  @field r evType  @ 59,60,61
-  @field w evType  @ 35,49,50,51,52,113,114,115,116,117
-  @field r field  @ 61
-  @field w field  @ 54,55
+  @field w at  @ 56
+  @field w cc  @ 36,115,116
+  @field w ccs  @ 36,49,113
+  @field r chan  @ 28
+  @field w chan  @ 20,36,50,51,52,53,73,90,112,114,115,116
+  @field w chan  @ 117,118,138
+  @field w endppq  @ 20,73,90,112,138
+  @field r evType  @ 60,61,62
+  @field w evType  @ 36,50,51,52,53,114,115,116,117,118
+  @field r field  @ 62
+  @field w field  @ 55,56
   @field r loc  @ 25
-  @field w name  @ 17,33,46,69,86,106,134
-  @field w notes  @ 20,72,89,111,137
-  @field w pa  @ 54
-  @field w pb  @ 54
-  @field w pc  @ 55
-  @field r pitch  @ 26,81,99
-  @field w pitch  @ 20,50,72,89,94,111,113,137
-  @field r plain  @ 41
-  @field r ppq  @ 28,98
-  @field w ppq  @ 20,35,49,50,51,52,72,89,94,111,113,114
-  @field w ppq  @ 115,116,117,137
-  @field w run  @ 18,34,47,70,87,107,135
-  @field w seed  @ 20,72,89,137
-  @field r uuid  @ 23,24,37,58,75,92,101,121,122
-  @field r val  @ 40
-  @field w val  @ 35,49,51,52,114,115,116,117
-  @field r value  @ 61
-  @field w value  @ 54,55
-  @field w vel  @ 20,50,72,89,111,113,137
+  @field w name  @ 17,34,47,70,87,107,135
+  @field w notes  @ 20,73,90,112,138
+  @field w pa  @ 55
+  @field w pb  @ 55
+  @field w pc  @ 56
+  @field r pitch  @ 27,82,100
+  @field w pitch  @ 20,51,73,90,95,112,114,138
+  @field r plain  @ 42
+  @field r ppq  @ 29,99
+  @field w ppq  @ 20,36,50,51,52,53,73,90,95,112,114,115
+  @field w ppq  @ 116,117,118,138
+  @field w run  @ 18,35,48,71,88,108,136
+  @field w seed  @ 20,73,90,138
+  @field r uuid  @ 23,24,38,59,76,93,102,122,123
+  @field r val  @ 41
+  @field w val  @ 36,50,52,53,115,116,117,118
+  @field r value  @ 62
+  @field w value  @ 55,56
+  @field w vel  @ 20,51,73,90,112,114,138

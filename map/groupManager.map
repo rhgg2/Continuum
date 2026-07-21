@@ -1,4 +1,4 @@
-@module groupManager  src=groupManager.lua  loc=857  sha=37ed80d  mode=chunk  self=gm
+@module groupManager  src=groupManager.lua  loc=857  sha=34dd573  mode=chunk  self=gm
 @deps tm, ds
 
 # Invariants & contracts
@@ -251,7 +251,6 @@
   @field r lane  @ keyOf:96 updToGroup:160 moveInstance:670 assignEvent:770
   @field w lane  @ 20 toInstance:134 updToInstance:178
   @field r laneDelta  @ toInstance:134 rectCells:333 regionConflict:357
-  @field w loc  @ 22 assignEvent:773
   @field r name  @ 618
   @field r nextVuid  @ absorbSiblingOverrides:299 addEvent:705 resizeGroup:844
   @field w nextVuid  @ absorbSiblingOverrides:300 markGroup:385 addEvent:706 resizeGroup:845

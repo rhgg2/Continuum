@@ -984,7 +984,7 @@ end
 
 local function cloneOut(evt)
   if not evt then return nil end
-  return util.clone(evt)
+  return util.clone(evt, { loc = true })
 end
 
 function mm:notes()

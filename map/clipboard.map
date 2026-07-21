@@ -126,7 +126,6 @@
   @field w key  @ collect:144,147
   @field r lane  @ pasteSingle:236,265,286 pasteMulti:349,374,426
   @field w lane  @ 23 refusePaste:176 pasteMulti:359,426
-  @field w loc  @ 25
   @field r midiChan  @ collect:96,107,135,139,143,145,150 pasteVelocities:214 pasteSingle:230,286
   @field r midiChan  @ pasteSingle:307 pasteMulti:352
   @field r mode  @ pasteClip:439 trimTop:461

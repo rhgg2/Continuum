@@ -1,4 +1,4 @@
-@module midiManager  src=midiManager.lua  loc=1387  sha=925c726  mode=chunk  self=mm
+@module midiManager  src=midiManager.lua  loc=1387  sha=ad9aee6  mode=chunk  self=mm
 @deps take, eventMeta
 
 # Invariants & contracts
@@ -344,7 +344,7 @@
   @field w kind  @ load:630,706,782,789 resolveCollisions:885,897
   @field w lastppq  @ load:782
   @field r loc  @ seat:330 indexDrop:347 resolveCollisions:889 byUuid:1193 assign:1216,1217 delete:1238
-  @field w loc  @ 208,213 rebuild:397,404 addNote:1069 pushCC:1152
+  @field w loc  @ 208,213 rebuild:397,404 cloneOut:987 addNote:1069 pushCC:1152
   @field r locs  @ seat:332 rawInChan:355,359,361
   @field w locs  @ chanBucket:321 seat:337
   @field r msg  @ load:566,570

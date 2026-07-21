@@ -1041,7 +1041,6 @@
   @field w laneDelta  @ planInstanceMoves:2151 movePreview:3223
   @field w length  @ rebuild:3834
   @field r level  @ isFrameChange:441
-  @field w loc  @ 67,75,82
   @field r locs  @ adjustDuration:1743 adjustPositionMulti:1773 quantizeScope:1882 quantizeKeepRealisedScope:1911 scaleScope:1957 nudge:2301,2311 deleteSelection:2689
   @field w locs  @ eventsByCol:412 allGroups:1868
   @field w logPerRow  @ 4018

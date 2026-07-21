@@ -64,7 +64,7 @@ local backing = {
     add    = function(evt)         tm:addEvent(evt) end,
     assign = function(evt, update) tm:assignEvent(evt, update) end,
     delete = function(evt)         tm:deleteEvent(evt) end,
-    relocateDrop = { realised = true, loc = true },
+    relocateDrop = { realised = true },
   },
   member = {
     add    = function(evt)         if not gm:addEvent(evt)                 then tm:addEvent(evt)         end end,
@@ -72,14 +72,14 @@ local backing = {
     delete = function(evt)         if not gm:deleteEvent(evt.uuid)         then tm:deleteEvent(evt)      end end,
     -- a relocated copy sheds the source kind's identity: a member needs a fresh
     -- uuid, else reproject's del of the vanished member kills the standalone.
-    relocateDrop = { realised = true, loc = true, uuid = true },
+    relocateDrop = { realised = true, uuid = true },
   },
   parked = {
     add    = function(evt)         tm:addParked(toParkedSpec(evt))   end,
     assign = function(evt, update) tm:assignParked(evt, toParkedUpdate(update)) end,
     delete = function(evt)         tm:deleteParked(evt)              end,
     -- move-out sheds the stash key so mm:add mints a fresh take uuid (§ B3 decisions).
-    relocateDrop = { realised = true, loc = true, uuid = true },
+    relocateDrop = { realised = true, uuid = true },
   },
 }
 

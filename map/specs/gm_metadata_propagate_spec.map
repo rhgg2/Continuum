@@ -1,4 +1,4 @@
-@spec gm_metadata_propagate_spec  src=tests/specs/gm_metadata_propagate_spec.lua  loc=44  sha=f8aa484  cases=1
+@spec gm_metadata_propagate_spec  src=tests/specs/gm_metadata_propagate_spec.lua  loc=43  sha=f8aa484  cases=1
 @exercises groupManager (gm)
 @surface   gm:markGroup, gm:newInstance
 
@@ -6,14 +6,14 @@
   The group<->instance duals copy the event's full payload, not a
   closed allowlist: any persisted metadata field (rpb, and arbitrary
   unknown keys mm round-trips) survives a duplicate. The mirror image:
-  regenerated/derived keys (loc, sampleShadowed, fake) must NOT enter
+  regenerated/derived keys (sampleShadowed, derived) must NOT enter
   the shared group template, or they leak into every sibling.
 
 # Helpers
   @fn rect()  @ 10-11
 
 # Cases
-  @case 'a duplicated note carries rpb and arbitrary metadata; derived keys do not leak'  [pure]  @ 15-42
+  @case 'a duplicated note carries rpb and arbitrary metadata; derived keys do not leak'  [pure]  @ 15-41
 
 # Uses (outbound edges)
   @use call gm:markGroup  @ 26
@@ -23,7 +23,7 @@
   @field r add  @ 30
   @field w chan  @ 21,28
   @field w chanLo  @ 10
-  @field r derived  @ 41
+  @field r derived  @ 40
   @field w derived  @ 24
   @field w ds  @ 19
   @field w dur  @ 10
@@ -33,15 +33,13 @@
   @field r foo  @ 37
   @field w foo  @ 23
   @field w lane  @ 21
-  @field r loc  @ 38
-  @field w loc  @ 24
   @field w name  @ 15
   @field w pitch  @ 22
   @field w ppq  @ 10,21,28
   @field r rpb  @ 36
   @field w rpb  @ 23
   @field w run  @ 16
-  @field r sampleShadowed  @ 39
+  @field r sampleShadowed  @ 38
   @field w sampleShadowed  @ 24
   @field w streams  @ 11
   @field w tm  @ 19

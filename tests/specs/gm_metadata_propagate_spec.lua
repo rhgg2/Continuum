@@ -1,7 +1,7 @@
 -- The group<->instance duals copy the event's full payload, not a
 -- closed allowlist: any persisted metadata field (rpb, and arbitrary
 -- unknown keys mm round-trips) survives a duplicate. The mirror image:
--- regenerated/derived keys (loc, sampleShadowed, fake) must NOT enter
+-- regenerated/derived keys (sampleShadowed, derived) must NOT enter
 -- the shared group template, or they leak into every sibling.
 
 local t    = require('support')
@@ -21,7 +21,7 @@ return {
       local seed = { evType = 'note', chan = 1, lane = 1, ppq = 0,
                      endppq = 240, endppqL = 240, pitch = 60, vel = 100,
                      rpb = 8, foo = 'bar',
-                     loc = 99, sampleShadowed = true, derived = 'absorber' }
+                     sampleShadowed = true, derived = 'absorber' }
 
       local gid = gm:markGroup({ seed }, rect())
       t.truthy(gid, 'group seeded')
@@ -35,7 +35,6 @@ return {
       -- denied the derived keys; toInstance carried it back.
       t.eq(copy.rpb, 8, 'rpb survives the duplicate')
       t.eq(copy.foo, 'bar', 'an arbitrary metadata key survives')
-      t.eq(copy.loc, nil, 'loc (rebuild-regenerated) did not leak')
       t.eq(copy.sampleShadowed, nil,
            'sampleShadowed (rebuild-only) did not leak')
       t.eq(copy.derived, nil, 'fake (absorber synth) did not leak')

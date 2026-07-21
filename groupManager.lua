@@ -19,7 +19,7 @@ local tm, ds = deps.tm, deps.ds
 local DERIVED = {
   evType=true, chan=true, chanDelta=true, lane=true, key=true, cc=true,
   ppq=true, endppq=true, dur=true,
-  loc=true, sampleShadowed=true, derived=true, hidden=true, uuid=true,
+  sampleShadowed=true, derived=true, hidden=true, uuid=true,
 }
 
 local gm = {}
@@ -770,7 +770,7 @@ function gm:assignEvent(uuid, update)
   if update.chan or update.lane or update.ppq then
     local rec = projOf(loc.groupId, loc.instId)[vuid]
     if rec and rec.evt then
-      local moved = util.clone(rec.evt, { uuid = true, realised = true, loc = true })
+      local moved = util.clone(rec.evt, { uuid = true, realised = true })
       util.assign(moved, update)
       local newG, newI = classifyCreate(moved)
       if newG and (newG ~= loc.groupId or newI ~= loc.instId) then

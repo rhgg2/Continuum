@@ -10,25 +10,23 @@
 --invariant: pb.derived=='absorber' marks an absorber (cc sidecar) or in-window seat (RAM-only)
 --invariant: replace-window seats are markerless; recognized by window, not a derived-tag on wire
 --invariant: pa stores aftertouch value in mm cc.vel; cc-routing fields stripped on projection
---invariant: loc values valid only within one rebuild-to-flush window
---invariant: um's notesByLoc/ccsByLoc rebuild fresh each rebuild
 --invariant: col events sort by logical ppq
 --invariant: endppq carries no delay; delay shifts only the note-on
 --invariant: 16 channels always present; channels[i] non-nil for i in 1..16 after rebuild
 
 --shape: channel = { chan, columns = { notes, ccs={[ccNum]=col}, [pc], [pb], [at] } }
 --shape: column = { events=[evt,...], [cc=ccNum] }  -- events sorted by logical ppq
---shape: noteEvent core = { ppq, endppq, pitch, vel, lane, detune, delay, loc }
+--shape: noteEvent core = { ppq, endppq, pitch, vel, lane, detune, delay }
 --invariant: noteEvent optional: muted, sample, sampleShadowed, <metadata...>
---shape: pbEventCol = { ppq, val=cents-minus-detune, detune, hidden, loc, ... }
+--shape: pbEventCol = { ppq, val=cents-minus-detune, detune, hidden, ... }
 --invariant: pbEventCol optional: delay, shape, tension
 --invariant: pbEventCol is the col projection; um cache holds raw cents in val
---shape: paEventCol = { evType='pa', ppq, pitch, vel, loc, ... }
+--shape: paEventCol = { evType='pa', ppq, pitch, vel, ... }
 --invariant: paEventCol mixes into note column events
 --shape: extraColumns[chan] = { notes=count, [pc], [pb], [at], [ccs={[ccNum]=true}] }
 --shape: lastMuteSet = { [chan] = true }, pushed by tv via tm:setMutedChannels
 --shape: fxParked = one evType-tagged off-take stash for every replace park; each spec is the authored
---shape:   event in the logical frame, minus realisation (delayC/endppqC/loc/realised/derived/frame/cents),
+--shape:   event in the logical frame, minus realisation (delayC/endppqC/realised/derived/frame/cents),
 --shape:   so new metadata rides park automatically. Baseline fields per type (raw re-derived on restore):
 --shape:   note { evType='note', chan, lane, uuid, ppq, endppq, pitch, vel, detune, delay, sample, [fx] }
 --shape:   cc { evType='cc', chan, cc, ppq, val, shape, [tension] }  |  pb { evType='pb', chan, ppq, val (=cents), shape, [tension] }  |  pa { evType='pa', chan, pitch, ppq, vel, [rpb] }
@@ -1897,10 +1895,10 @@ local function rebuildInternals()
         -- Derived notes route to fx whole-channel whatever the dirt: a partial noteExisting
         -- reads as mass deletion until the fx reconcile goes interval-native. see design § phase 3
         if raw.derived then
-          local note = util.clone(raw); note.realised = true
+          local note = util.clone(raw, { loc = true }); note.realised = true
           util.add(noteExisting[chan], note)
         elseif covers(raw) then
-          local note = util.clone(raw); note.realised = true
+          local note = util.clone(raw, { loc = true }); note.realised = true
           if rawDivergesFromLogical(note) then util.add(external, note)
           else util.add(internal, note)
           end
@@ -2116,7 +2114,7 @@ local function fullRebuildChannelCCs(chan, fillWin, pbFillWin, ccWrites, ccExist
 
     -- pb/pa reconcile-only (no column); cc/at/pc clone into their column carrying the reseat.
     if cc.evType == 'cc' or cc.evType == 'at' or cc.evType == 'pc' then
-      local event = util.clone(cc)
+      local event = util.clone(cc, { loc = true })
       event.realised = true
       if movedPpq  then event.ppq  = movedPpq end
       if movedPpqL then event.ppqL = movedPpqL end
@@ -2352,7 +2350,7 @@ end
 
 -- Park = clone minus the realisation frame, so new authored metadata rides a park/unpark
 -- round-trip untouched; restore mirrors it (clone back, re-derive realisation; pb also cents->raw).
-local REALISATION = { delayC = true, endppqC = true, loc = true, realised = true, derived = true, frame = true, cents = true, colEvt = true }
+local REALISATION = { delayC = true, endppqC = true, realised = true, derived = true, frame = true, cents = true, colEvt = true }
 --contract: evt must be logical-frame (a column event); an mm-raw source overrides ppq via `adds`
 local function parkSpec(evt, adds) return util.assign(util.clone(evt, REALISATION), adds) end
 

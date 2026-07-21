@@ -4,6 +4,14 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-22** — `loc` (mm's array-slot index behind the uuid dictionary) is now mm-private: `cloneOut` and
+  the three `notesRaw`/`ccsRaw` fast-path clones in tm's rebuild strip it, so no tm-side event — column
+  cell or `rawIndex` entry — carries it. Chosen over the prior scheme of five downstream strip-guards
+  (`REALISATION`, `CLIP_RESERVED`, gm `DERIVED`, gm's relocate clone, tv `relocateDrop`), each re-shedding
+  a passenger the projection needlessly copied up: seal the two ingestion doors once, don't guard N
+  consumers. mm keeps `loc` internally — delete, chan-move, and the per-channel raw index need the slot —
+  and `mm:byUuid` still returns it; only the outward leak is closed.
+
 - **2026-07-21** — `computeFxWindows` caches each note-host's window end per uuid (`fxHostWin`), recomputing
   a host only when its own uuid seeds the dirt or a neighbour onset seeds a ppq inside its cached span;
   the reseek is walk-free via the `byUuid.colEvt` seat stamp. Notably *no* length guard: an earlier draft
