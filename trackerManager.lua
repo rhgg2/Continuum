@@ -1001,7 +1001,9 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   local function deleteLowlevel(evt)
     if pbSource(evt, evt.lane) then dirtyChan(evt.chan) end
     seedEvent(evt, 'delete')
-    rawIndexRemove(evt)
+    -- rawIndexRemove matches by object identity; the PC mutation hook deletes projected column
+    -- cells, so resolve the raw record via byUuid first or the index entry strands.
+    rawIndexRemove(evt.uuid and byUuid[evt.uuid] or evt)
     if evt.uuid then byUuid[evt.uuid] = nil end
 
     if evt.realised then
@@ -2523,14 +2525,16 @@ local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows
     -- member's raw span (its own PAs), not the channel's cc count. see docs/trackerManager.md § Span-covered fx scans
     for chan = 1, 16 do
       if dirtyChans[chan] then
+        local pas = rawIndexFor(chan).pas
         for _, cell in ipairs(channels[chan].parked or {}) do
-          for _, cc in mm:ccsRawBetween(chan, tm:fromLogical(chan, cell.ppq),
-                                             tm:fromLogical(chan, cell.endppqC)) do
-            if cc.evType == 'pa' and not seen[cc]
-               and hostParked(cc.chan, cc.pitch, cc.ppqL or cc.ppq) then
+          local sRaw, eRaw = tm:fromLogical(chan, cell.ppq), tm:fromLogical(chan, cell.endppqC)
+          for i = firstAtOrAfter(pas, sRaw), #pas do
+            local cc = pas[i]
+            if cc.ppq >= eRaw then break end
+            if not seen[cc] and hostParked(cc.chan, cc.pitch, cc.ppqL or cc.ppq) then
               seen[cc] = true
               batch.del({ uuid = cc.uuid })
-              local spec = parkSpec(cc, { ppq = cc.ppqL or cc.ppq })   -- mm-raw source: evType/chan/pitch/vel/rpb ride, ppq flips logical
+              local spec = parkSpec(cc, { ppq = cc.ppqL or cc.ppq })   -- um index source: evType/chan/pitch/vel/rpb ride, ppq flips logical
               spec.uuid = nil                                           -- restore re-mints the rpb sidecar uuid
               util.add(newParked, spec)
             end
@@ -2735,15 +2739,13 @@ local function rebuildPA()
   local touched = {}
   for chan = 1, 16 do
     if dirtyChans[chan] then   -- clean: PA already sits in the carried note column
-      for _, cc in mm:ccsRaw(chan) do
-        if cc.evType == 'pa' then
-          local noteCol, lane = findNoteColumnForPitch(channels[chan], cc.pitch, cc.ppq)
-          if noteCol then
-            local cell = projectCC(cc, { lane = lane })
-            projectEvent(cell, chan)
-            insertNoteCell(noteCol.events, cell)
-            touched[chan] = true
-          end
+      for _, cc in ipairs(rawIndexFor(chan).pas) do
+        local noteCol, lane = findNoteColumnForPitch(channels[chan], cc.pitch, cc.ppq)
+        if noteCol then
+          local cell = projectCC(cc, { lane = lane })
+          projectEvent(cell, chan)
+          insertNoteCell(noteCol.events, cell)
+          touched[chan] = true
         end
       end
     end
@@ -2755,9 +2757,9 @@ local function rebuildPA()
     if dirtyChans[chan] then
       for _, cell in ipairs(channels[chan].parkedPA or {}) do
         local ppq = tm:fromLogical(chan, cell.ppq)   -- raw: findNoteColumnForPitch is raw geometry
-        local noteCol = findNoteColumnForPitch(channels[chan], cell.pitch, ppq)
+        local noteCol, lane = findNoteColumnForPitch(channels[chan], cell.pitch, ppq)
         if noteCol then
-          insertNoteCell(noteCol.events, projectCC(cell, nil))   -- the cell is logical-born
+          insertNoteCell(noteCol.events, projectCC(cell, {lane = lane}))   -- the cell is logical-born
           touched[chan] = true
         end
       end
@@ -4101,15 +4103,9 @@ local function stampSamples()
   local stampWrites = mmBatch()
   for chan = 1, 16 do
     if dirtyChans[chan] then
-      local pcs
+      local pcs = rawIndexFor(chan).pcs
       for _, entry in ipairs(rawNotes(chan)) do
         if walkable(entry) and entry.sample == nil then
-          if not pcs then
-            pcs = {}
-            for _, cc in mm:ccsRaw(chan) do
-              if cc.evType == 'pc' then util.add(pcs, cc) end
-            end
-          end
           local prevailing = util.seek(pcs, 'at-or-before', entry.ppq)
           local sample = prevailing and prevailing.val or 0
           entry.sample, entry.colEvt.sample = sample, sample
@@ -4192,8 +4188,8 @@ local function rebuildPCs(noteLive)
           if not pcInSpans(spans, e.ppq, true) then util.add(events, e) end
         end
       end
-      for _, cc in mm:ccsRaw(chan) do
-        if cc.evType == 'pc' and (not spans or pcInSpans(spans, cc.ppq, false)) then
+      for _, cc in ipairs(rawIndexFor(chan).pcs) do
+        if not spans or pcInSpans(spans, cc.ppq, false) then
           local cell = projectCC(cc)
           projectEvent(cell, chan)
           util.add(events, cell)

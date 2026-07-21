@@ -4,6 +4,15 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-21** — pa/pc read-sites (`rebuildPA`, region-park PA stash, `stampSamples`, `rebuildPCs`
+  splice) now seek the um raw index; `mm:ccsRawBetween` retires (last caller gone). The `rebuildPCs`
+  conversion exposed a latent index-integrity bug: `rawIndexRemove` matches by object identity, but the
+  trackerMode PC mutation hook (`reconcilePcs`, at flush pre-rebuild) hands it *projected column cells*,
+  not raw records — so the raw `.pcs` entry stranded (invisible under `mm:ccsRaw`'s uuid-holing, exposed
+  the moment the splice reads the index). Fix: `deleteLowlevel` resolves `byUuid` before removal. Rule:
+  index maintenance is identity-based — hand the verbs canonical records. Guarded by tm_deferred_hole_spec
+  test 1.
+
 - **2026-07-21** — `buildCcExistingInWindows` now seeks the um raw index (extended this commit to all
   six event types, `rawIndexFor` accessor), retiring one `ccsRawBetween` caller — uniformity, **not** a
   bugfix. The 2026-07-20 "known edge" is real in mechanism (rebuild runs pre-reindex: `mm:modify` fires
