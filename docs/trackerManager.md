@@ -505,6 +505,37 @@ committed stage ends in one) for that channel's slice; each parked member's span
 span. The exact `hostParked` pitch/logical filter still gates each candidate — the bound only
 replaces the per-channel `mm:ccsRaw` walk, so work scales with parked members, not channel cc count.
 
+### Fx window cache
+
+An fx note-host's window is `[onset, windowEnd)`, where `windowEnd` is the authored (or take-end)
+ceiling clipped to the host's strict-next same-lane onset — the span a vibrato or tension producer
+seats across. `computeFxWindows` once rebuilt this for every note-column event of every fx-active
+channel, twice per rebuild, with no dirt gate (`design/interval-dirt-v2.md` § 2). It now caches each
+host's `windowEnd` per uuid (`fxHostWin`) and recomputes one only when the dirt reaches it: the
+host's own uuid seeded (its move or length mutation), or a seed ppq fell inside the host's cached
+span (a neighbour onset that becomes the new clip). Everything else rides the cached end.
+
+The reseek is walk-free. `byUuid[uuid].colEvt` (the seat stamp, § Incremental index reconciliation)
+back-links a host uuid to its live column cell, so a dirty host reclips by seeking its own lane
+column through `colEvtFor(uuid)` rather than the old per-channel walk that built every column's
+successor map up front. `hostWindowEnd(cell, takeLenL)` does the clip against `nextLaneOnset`.
+
+Two paths still walk the channel. A wholesale-dirty channel carries no seed positions to test a
+span against, and a restored fx host (unparked this rebuild) is not yet stamped onto `byUuid` when
+the post-park call runs — both fall to `walkChannel`, which recomputes every host on the channel and
+refreshes the cache. `perHost` returns false (forcing the walk) the moment it meets an indexed host
+with no live cell, so an unstamped host is never silently skipped.
+
+A take-length change reclips every OPEN window, yet needs no separate guard. Length moves only
+through `mm:setLength`, which fires a `wholesale=true` reload; that dirties all 16 channels, so
+`computeFxWindows` walks every fx channel at the new `takeLen` and overwrites the cache. An earlier
+draft carried an `fxWinLen` stamp to wipe the cache on a length change — dead code, since the
+wholesale reload beats it to the recompute every time.
+
+The two calls per rebuild (pre-park `hostWindows` feeding region parking, post-park `fxWindow`
+feeding `rebuildFx`) share the one `fxHostWin`. Park and restore seed the channels they touch, so
+the post-park call recomputes exactly those and reuses the rest.
+
 ### Derivation dirt: the gated spine
 
 Two axes of dirt drive rebuild. *Materialisation dirt* (the `wholesale`

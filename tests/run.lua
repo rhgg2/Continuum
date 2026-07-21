@@ -87,6 +87,7 @@ local specs = {
   'tm_vibrato_spec',
   'tm_fx_tension_spec',
   'tm_fx_region_spec',
+  'tm_fx_window_cache_spec',
   'tm_column_order_spec',
   'tv_fx_region_spec',
   'tm_slide_spec',

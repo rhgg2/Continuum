@@ -754,7 +754,8 @@ end
 
 local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
       flush, reload, idxReconcile, withDeferredSort, clearStaging, absorbReloadDirt,
-      stampColEvt, rawNotes, rawPbs, rawIndexFor, resortRawNotes, fxHostsFor do
+      stampColEvt, rawNotes, rawPbs, rawIndexFor, resortRawNotes, fxHostsFor,
+      colEvtFor do
 
   ----- State
 
@@ -789,6 +790,10 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   -- The maintained fx-host set for a channel (uuids of on-take .fx notes); computeFxWindows reads it
   -- instead of rescanning columns. see design/interval-dirt.md § Phase 5.5
   function fxHostsFor(chan) return fxHosts[chan] end
+
+  -- Resolve a uuid to its live column cell via the seat stamp (byUuid.colEvt), so the fx-window cache
+  -- reseeks a dirty host without a column walk. see docs/trackerManager.md § Fx window cache
+  function colEvtFor(uuid) local e = byUuid[uuid]; return e and e.colEvt end
 
   -- Ownership is intent, so it is tested logically: a PA carries its own seat and reswings from
   -- it, and a raw-frame test would let a delay or a nudge detach one. see docs/trackerManager.md § PA binding
@@ -2768,38 +2773,88 @@ end
 
 ----- Rebuild Fx
 
--- fx host voice extents: authored end, take end, or strict next same-lane onset -- soonest wins.
--- Walks only fx-active chans; columns arrive pre-sorted from writers. see design/interval-dirt.md § Phase 5.5, design/archive/note-macros.md § host contract
+-- Note-host fx windows: authored/take ceiling clipped to strict-next same-lane onset, cached per
+-- uuid (fxHostWin), dirt-gated. see docs/trackerManager.md § Fx window cache
+local fxHostWin = {}   -- uuid -> windowEndL (logical); a take-length change arrives as a wholesale reload
+                       -- (mm:setLength), which walkChannel recomputes -- no separate length guard needed
+
+-- Strict-next non-pa onset after ppq in a lane column (logical); nil past the last. Mirrors openHosts' clip.
+local function nextLaneOnset(events, ppq)
+  local i = firstAfter(events, ppq)
+  while events[i] and events[i].evType == 'pa' do i = i + 1 end
+  return events[i] and events[i].ppq
+end
+
+-- One host cell's window end: authored (or take-end) ceiling, clipped to its strict-next lane onset.
+local function hostWindowEnd(cell, takeLenL)
+  local ceil = (cell.endppq == nil or cell.endppq == util.OPEN) and takeLenL or math.min(cell.endppq, takeLenL)
+  local succ = nextLaneOnset(channels[cell.chan].columns.notes[cell.lane].events, cell.ppq)
+  return succ and math.min(ceil, succ) or ceil
+end
+
 local function computeFxWindows(extraFxChans)
-  local fxWindow = {}
   local takeLen = tm:length()
-  local fxChans = {}
-  for chan = 1, 16 do
-    local hosts = fxHostsFor(chan)
-    if hosts and next(hosts) then fxChans[chan] = true end
-  end
-  for chan in pairs(extraFxChans or {}) do fxChans[chan] = true end
-  for chan = 1, 16 do
-    if fxChans[chan] then
-      local takeLenL = tm:toLogical(chan, takeLen)
-      for _, col in ipairs(channels[chan].columns.notes) do
-        -- Chord-mates share an onset and so share a successor: hold each host open until an event with a
-        -- greater ppq arrives, then clip them all against it. col.events is ppq-ordered.
-        local openHosts = {}
-        for _, evt in ipairs(col.events) do
-          if evt.evType ~= 'pa' then
-            if openHosts[1] and evt.ppq > openHosts[1].ppq then
-              for _, host in ipairs(openHosts) do fxWindow[host] = math.min(fxWindow[host], evt.ppq) end
-              openHosts = {}
-            end
-            if evt.fx then
-              -- Take is the world: a tail past take end (paste / overshooting move) can't sound past it.
-              fxWindow[evt] = (evt.endppq == nil or evt.endppq == util.OPEN)
-                              and takeLenL or math.min(evt.endppq, takeLenL)
-              util.add(openHosts, evt)
-            end
+  local fxWindow = {}
+
+  -- Column walk: full recompute for wholesale-dirty channels and restored (not-yet-stamped) hosts.
+  -- Take-length changes land here too via mm:setLength's wholesale reload. see docs/trackerManager.md
+  local function walkChannel(chan, takeLenL)
+    local hosts = {}
+    for _, col in ipairs(channels[chan].columns.notes) do
+      -- Chord-mates share an onset and a successor: hold each host open until a later onset, then clip all.
+      local openHosts = {}
+      for _, evt in ipairs(col.events) do
+        if evt.evType ~= 'pa' then
+          if openHosts[1] and evt.ppq > openHosts[1].ppq then
+            for _, h in ipairs(openHosts) do fxWindow[h] = math.min(fxWindow[h], evt.ppq) end
+            openHosts = {}
+          end
+          if evt.fx then
+            fxWindow[evt] = (evt.endppq == nil or evt.endppq == util.OPEN) and takeLenL or math.min(evt.endppq, takeLenL)
+            util.add(openHosts, evt); util.add(hosts, evt)
           end
         end
+      end
+    end
+    for _, h in ipairs(hosts) do fxHostWin[h.uuid] = fxWindow[h] end
+  end
+
+  -- Per-host reuse/reseek: recomputes a host only when its own uuid seeded or a seed ppq fell in its
+  -- cached span; else the cached end rides. Returns false on an unstamped host to fall to walkChannel.
+  local function perHost(chan, takeLenL, dirt)
+    local seededUuid, seededPpq = {}, {}
+    for _, s in ipairs(dirt or {}) do
+      if s.uuid then seededUuid[s.uuid] = true end
+      if s.ppqL then util.add(seededPpq, s.ppqL) end
+    end
+    for uuid in pairs(fxHostsFor(chan)) do
+      local cell = colEvtFor(uuid)
+      if not cell then return false end
+      local cached = fxHostWin[uuid]
+      local dirty = cached == nil or seededUuid[uuid]
+      if not dirty then
+        for _, p in ipairs(seededPpq) do
+          if p >= cell.ppq and p <= cached then dirty = true; break end
+        end
+      end
+      local windowEnd = dirty and hostWindowEnd(cell, takeLenL) or cached
+      fxHostWin[uuid] = windowEnd
+      fxWindow[cell]  = windowEnd
+    end
+    return true
+  end
+
+  for chan = 1, 16 do
+    local takeLenL = tm:toLogical(chan, takeLen)
+    local hosts    = fxHostsFor(chan)
+    local hasHosts = hosts and next(hosts)
+    local dirt     = dirtyChans[chan]
+    local isExtra  = extraFxChans and extraFxChans[chan]
+    if isExtra or dirt == true then
+      if hasHosts or isExtra then walkChannel(chan, takeLenL) end
+    elseif hasHosts then
+      if not perHost(chan, takeLenL, type(dirt) == 'table' and dirt or nil) then
+        walkChannel(chan, takeLenL)
       end
     end
   end

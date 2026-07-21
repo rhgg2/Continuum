@@ -1,0 +1,53 @@
+@spec tm_fx_window_cache_spec  src=tests/specs/tm_fx_window_cache_spec.lua  loc=83  sha=untracked  cases=3
+@exercises trackerManager (h.tm), midiManager (h.fm)
+@surface   tm:addEvent, tm:flush, fm:dump, tm:setLength
+@harness   mk
+
+# Intent
+  Fx note-host window cache: a host's window (authored/take ceiling clipped to its strict-next
+  same-lane onset) is cached per uuid across rebuilds and recomputed only when the host's own uuid
+  seeds the dirt, a neighbour onset seeds a ppq inside its span, or the take length changes (which
+  arrives as a wholesale reload, so the column walk reclips every window). A depth-30 vibrato host
+  seats a pb stream across exactly its window, so the max pb-seat ppq tracks the window end -- the
+  observable these cases lean on. see design/interval-dirt-v2.md § 2
+
+# Helpers
+  @fn addVibHost(h)  @ 14-18
+      -- Author an OPEN-ended vibrato note-host on ch1 lane1; its pb seats fill [0, windowEnd).
+  @fn addNote(h, chan, lane, ppq)  @ 20-24
+  @fn maxPbPpq(h, chan)  @ 27-33
+      -- The last pb seat ppq on a channel -- the far edge of the seated vibrato stream, i.e. the window end.
+
+# Cases
+  @case 'neighbour onset inside a host window reseeks and clips it on the next rebuild'  [harness]  @ 40-49
+  @case 'an edit on another channel leaves a clean host window untouched (reuse path)'  [harness]  @ 55-63
+  @case 'growing the take extends a clean OPEN host window (the grow reloads wholesale)'  [harness]  @ 70-80
+
+# Uses (outbound edges)
+  @use call tm:addEvent  @ 15,21
+  @use call tm:flush  @ 17,23
+  @use call fm:dump  @ 29
+  @use call tm:setLength  @ 76
+
+# Fields (r read / w write incl. constructor keys)
+  @field r OPEN  @ 15
+  @field r ccs  @ 29
+  @field r chan  @ 30
+  @field w chan  @ 15,21
+  @field w delay  @ 16,22
+  @field w depth  @ 11
+  @field w detune  @ 16,22
+  @field w endppq  @ 15,21
+  @field r evType  @ 30
+  @field w evType  @ 15,21
+  @field w fx  @ 16
+  @field w kind  @ 11
+  @field w lane  @ 16,22
+  @field w name  @ 40,55,70
+  @field w onset  @ 11
+  @field w period  @ 11
+  @field w pitch  @ 15,21
+  @field r ppq  @ 30
+  @field w ppq  @ 15,21
+  @field w run  @ 41,56,71
+  @field w vel  @ 15,21

@@ -72,13 +72,17 @@ below are their own items.
 
 ## 2. Ungated — runs regardless of dirt
 
-- **`computeFxWindows`** (:2751) walks every note-column event of
+- ~~**`computeFxWindows`** (:2751) walks every note-column event of
   every fx-active channel, and runs **twice** per rebuild (:4222,
-  :4263). No dirt check anywhere in it. Fix direction: gate on dirt +
-  carry the prior windows for clean channels (the fxHosts set is
-  already maintained incrementally; the windows can be too), and
-  collapse the two calls — the second differs only by restored
-  channels.
+  :4263). No dirt check anywhere in it.~~ **Done (2026-07-21).**
+  Note-hosts now cache `windowEnd` per uuid (`fxHostWin`); a host
+  recomputes only when its own uuid seeds the dirt or a neighbour
+  onset seeds a ppq inside its cached span, reseeking walk-free via
+  the `byUuid.colEvt` seat stamp. Wholesale/restored channels fall to
+  the old column walk. Length changes need no guard: they ride the
+  `mm:setLength` wholesale reload, which reclips every window. The two
+  calls share the one cache. See `docs/trackerManager.md` § Fx window
+  cache. Region-fx window caching deferred.
 - **`realiseParked` bounds** (:2471-2486): any channel with parked
   cells collects *every* note event in every lane as clip bounds,
   every rebuild, no dirt gate. Fix direction: dirt-gate the re-clip;

@@ -4,6 +4,14 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-21** — `computeFxWindows` caches each note-host's window end per uuid (`fxHostWin`), recomputing
+  a host only when its own uuid seeds the dirt or a neighbour onset seeds a ppq inside its cached span;
+  the reseek is walk-free via the `byUuid.colEvt` seat stamp. Notably *no* length guard: an earlier draft
+  stamped the take length (`fxWinLen`) to wipe the cache on resize, but length moves only through
+  `mm:setLength`, which fires a `wholesale=true` reload that dirties all 16 channels — the wholesale column
+  walk reclips every OPEN window before any cached read, so the stamp was dead code. Region-fx window
+  caching deferred; note-hosts only.
+
 - **2026-07-21** — pb read-sites (`rebuildPbs` gather, region-park create-scan + sweep) now seek the um
   raw index. Frame decision: the pb entry carries the wire `raw` alongside its cents-framed `val`, so
   `rebuildPbs`' delta-gate (`pb.raw ~= newRaw`) stays byte-exact — chosen over reframing the gate to cents,
