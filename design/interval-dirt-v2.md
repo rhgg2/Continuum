@@ -53,7 +53,7 @@ Decisions to settle at implementation:
 - **pb frame**: `makeEntry` converts pb val raw→cents and drops the
   wire value, but `rebuildPbs`' consolidated assign delta-gates on
   wire raw (`pb.val ~= newRaw`). Entries carry the raw value alongside
-  (`rawVal`), or the assign reframes to cents — one coherent choice.
+  (`raw`), or the assign reframes to cents — one coherent choice.
 - **Clone discipline** (restated, not new): entries are live um
   records read in place; a pass that mutates its working set clones
   what it touches, as `rebuildPbs` does today.

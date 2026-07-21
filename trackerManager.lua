@@ -1891,6 +1891,8 @@ local function rebuildInternals()
 
   local reseats   = mmBatch()
   local builtCols = {}   -- lanes built by append this pass; ordered once at loop end, splices stay ordered
+  -- note is already our own mm:notes() clone -- repurpose it as the column note rather than
+  -- cloning again. mm's stored note is untouched.
   for _, note in ipairs(internal) do
     local channel = channels[note.chan]
     local notes = channel.columns.notes
@@ -1898,28 +1900,25 @@ local function rebuildInternals()
     -- the tail walk clips tails afterward, so overlap here is never a concern.
     while #notes < note.lane do pushNoteCol(channel) end
     local col = notes[note.lane]
-    -- note is already our own mm:notes() clone -- repurpose it as the column note rather than
-    -- cloning again. mm's stored note is untouched.
-    local colNote = note
     -- set detune/delay at ingestion to skip defensive guards downstream
-    colNote.detune = colNote.detune or 0
-    colNote.delay  = colNote.delay  or 0
+    note.detune = note.detune or 0
+    note.delay  = note.delay  or 0
     if staleSwing[note.chan] then
       -- Rederive realised onset from logical; endppq is the tail walk's. Reswing can collapse two
       -- distinct-ppqL same-pitch notes onto one raw -- staged to mm; the walk separates it this pass.
-      local reswungPpq = tm:fromLogical(note.chan, colNote.ppqL, delayToPPQ(colNote.delay))
-      if reswungPpq ~= colNote.ppq then reseats.assign(colNote, { ppq = reswungPpq }) end
-      colNote.ppq = reswungPpq
+      local reswungPpq = tm:fromLogical(note.chan, note.ppqL, delayToPPQ(note.delay))
+      if reswungPpq ~= note.ppq then reseats.assign(note, { ppq = reswungPpq }) end
+      note.ppq = reswungPpq
     end
     -- Columns are logical-born: every seat projects at ingestion. see design/rebuild-pipeline.md § The frame law
-    projectEvent(colNote, note.chan)
+    projectEvent(note, note.chan)
     if dirtyChans[note.chan] ~= true and not staleSwing[note.chan] then
-      insertNoteCell(col.events, colNote)   -- splice into the carried logical lane; stays ordered
+      insertNoteCell(col.events, note)   -- splice into the carried logical lane; stays ordered
     else
-      util.add(col.events, colNote)         -- fresh lane: append in mm raw order, order once below
+      util.add(col.events, note)         -- fresh lane: append in mm raw order, order once below
       builtCols[col] = true
     end
-    stampColEvt(colNote)
+    stampColEvt(note)
   end
   -- Raw and logical onset order diverge under swing or an authored swap; re-sort just the appended
   -- lanes that landed disordered. see design/interval-dirt.md § Phase 5.5
@@ -2733,9 +2732,9 @@ local function rebuildPA()
     if dirtyChans[chan] then
       for _, cell in ipairs(channels[chan].parkedPA or {}) do
         local ppq = tm:fromLogical(chan, cell.ppq)   -- raw: findNoteColumnForPitch is raw geometry
-        local noteCol, lane = findNoteColumnForPitch(channels[chan], cell.pitch, ppq)
+        local noteCol = findNoteColumnForPitch(channels[chan], cell.pitch, ppq)
         if noteCol then
-          insertNoteCell(noteCol.events, projectCC(cell, nil, { lane = lane }))   -- the cell is logical-born
+          insertNoteCell(noteCol.events, projectCC(cell, nil))   -- the cell is logical-born
           touched[chan] = true
         end
       end
