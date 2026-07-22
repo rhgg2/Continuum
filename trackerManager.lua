@@ -305,6 +305,12 @@ local function firstAtOrAfter(list, target)   -- first index with .ppq >= target
   end
   return lo
 end
+-- Strict-next non-pa onset after ppq in a ppq-sorted lane column (logical); nil past the last.
+local function nextLaneOnset(events, ppq)
+  local i = firstAfter(events, ppq)
+  while events[i] and events[i].evType == 'pa' do i = i + 1 end
+  return events[i] and events[i].ppq
+end
 -- Onset-membership cover of a ppq-sorted list against disjoint ascending spans: emit each event whose
 -- onset falls in [lo, hi). The fx-path rule -- visit window extents, never the whole channel.
 local function coverOnsets(events, spans, emit)
@@ -2330,21 +2336,41 @@ end
 
 ----- Rebuild region park
 
--- Clip each parked member's tail to its lane successor onset and take end (logical frame), against
--- bounds (unclipped on-take notes). Lane only -- see docs/trackerManager.md § Region-replace parking.
+local parkedClipEnd = {}   -- uuid -> endppqC (logical); a take-length change arrives as a wholesale
+                           -- reload, recomputed there -- no separate length guard (mirrors fxHostWin)
+
+-- Clip each parked member's tail to its render end (ceiling, on-take lane onset, parked-neighbour
+-- onset), cached per uuid and dirt-gated -- see docs/trackerManager.md § Region-replace parking
 --contract: derives each member's endppqC (the render clip); the authored ceiling on endppq stands
-local function realiseParked(members, takeLenL, bounds)
+local function realiseParked(chan, members, takeLenL, dirt)
+  local seededUuid, seededPpq = {}, {}
+  for _, s in ipairs(type(dirt) == 'table' and dirt or {}) do
+    if s.uuid then seededUuid[s.uuid] = true end
+    if s.ppqL then util.add(seededPpq, s.ppqL) end
+  end
+  -- member-next map: a parked member bounds another on its lane (both off-take, neither in the column)
   local byLane = {}
-  local function seat(evt) util.bucket(byLane, evt.lane, evt) end
-  for _, m in ipairs(members)      do seat(m) end
-  for _, b in ipairs(bounds or {}) do seat(b) end
+  for _, m in ipairs(members) do util.bucket(byLane, m.lane, m) end
   for _, g in pairs(byLane) do sortByPPQ(g) end
-  local laneNextOf = strictNextMap(byLane)
+  local memberNextOf = strictNextMap(byLane)
   for _, m in ipairs(members) do
-    local ceil = (m.endppq == nil or m.endppq == util.OPEN) and takeLenL or m.endppq
-    local laneNext = laneNextOf[m]
-    m.endppqC = math.max(m.ppq + 1, math.min(ceil,
-      laneNext and laneNext.ppq or math.huge, takeLenL))
+    local cached = parkedClipEnd[m.uuid]
+    local dirty  = dirt == true or cached == nil or seededUuid[m.uuid]
+    if not dirty then
+      for _, p in ipairs(seededPpq) do
+        if p >= m.ppq and p <= cached then dirty = true; break end
+      end
+    end
+    if dirty then
+      local ceil       = (m.endppq == nil or m.endppq == util.OPEN) and takeLenL or m.endppq
+      local onTake     = nextLaneOnset(channels[chan].columns.notes[m.lane].events, m.ppq)
+      local memberNext = memberNextOf[m]
+      m.endppqC = math.max(m.ppq + 1, math.min(ceil,
+        onTake or math.huge, memberNext and memberNext.ppq or math.huge, takeLenL))
+    else
+      m.endppqC = cached
+    end
+    parkedClipEnd[m.uuid] = m.endppqC
   end
 end
 
@@ -2494,17 +2520,9 @@ local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows
     for chan = 1, 16 do
       local members = channels[chan].parked
       if #members > 0 then
-        -- On-take survivors bound a parked tail on its own lane/pitch (rebuildTails' model), so a
-        -- member clips to the first note after the region, not just the next parked member.
-        local bounds = {}
-        for _, col in ipairs(channels[chan].columns.notes) do
-          for _, evt in ipairs(col.events) do
-            if evt.evType ~= 'pa' then
-              util.add(bounds, evt)
-            end
-          end
-        end
-        realiseParked(members, tm:toLogical(chan, takeLen), bounds)
+        -- On-take survivors bound a parked tail on its own lane (rebuildTails' model): the per-member
+        -- column seek finds the first note after the region, not just the next parked member.
+        realiseParked(chan, members, tm:toLogical(chan, takeLen), dirtyChans[chan])
       end
     end
   end
@@ -2775,13 +2793,6 @@ end
 -- uuid (fxHostWin), dirt-gated. see docs/trackerManager.md § Fx window cache
 local fxHostWin = {}   -- uuid -> windowEndL (logical); a take-length change arrives as a wholesale reload
                        -- (mm:setLength), which walkChannel recomputes -- no separate length guard needed
-
--- Strict-next non-pa onset after ppq in a lane column (logical); nil past the last. Mirrors openHosts' clip.
-local function nextLaneOnset(events, ppq)
-  local i = firstAfter(events, ppq)
-  while events[i] and events[i].evType == 'pa' do i = i + 1 end
-  return events[i] and events[i].ppq
-end
 
 -- One host cell's window end: authored (or take-end) ceiling, clipped to its strict-next lane onset.
 local function hostWindowEnd(cell, takeLenL)

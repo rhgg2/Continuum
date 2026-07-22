@@ -381,7 +381,17 @@ runs it, with a pointer to its detail where one exists.
   Carried-forward tails clip against on-take note
   bounds the same way the tail walk clips real notes, so a parked tail
   stops at the first successor past its region, not just the next
-  parked member. Lane bound only, never pitch: a parked cell never
+  parked member. `realiseParked` caches each member's render clip
+  (`endppqC`) per uuid in `parkedClipEnd`, dirt-gated exactly as the
+  fx-window cache (§ Fx window cache): a member reseeks only when its
+  channel is wholesale-dirty, it is uncached, its own uuid is seeded, or
+  a seed ppq falls inside its cached span; else the cached end rides. The
+  reseek is a binary seek into the member's sorted lane column
+  (`nextLaneOnset`, shared with `hostWindowEnd`) plus a small member-only
+  strict-next map for parked neighbours — the old whole-channel `bounds`
+  materialisation is gone. A take-length change needs no guard: it
+  arrives as `mm:setLength`'s wholesale reload, which recomputes every
+  member (mirrors `fxHostWin`). Lane bound only, never pitch: a parked cell never
   reaches mm, so it carries pure intent — the same extent
   `computeFxWindows` gives an on-take host. The note del/adds ride the
   tail walk's atomic commit. See `design/note-macros-v2.md` § Generator output. Each pass's

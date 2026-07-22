@@ -17,8 +17,9 @@ prompts for an entry at commit time.
   the reseek is walk-free via the `byUuid.colEvt` seat stamp. Notably *no* length guard: an earlier draft
   stamped the take length (`fxWinLen`) to wipe the cache on resize, but length moves only through
   `mm:setLength`, which fires a `wholesale=true` reload that dirties all 16 channels — the wholesale column
-  walk reclips every OPEN window before any cached read, so the stamp was dead code. Region-fx window
-  caching deferred; note-hosts only.
+  walk reclips every OPEN window before any cached read, so the stamp was dead code. Note-hosts only, and
+  by design: a region carries its own authored span, so it has no derived window to cache — the cache
+  exists to hold the note-host's clip-to-successor result, which regions don't compute.
 
 - **2026-07-21** — pb read-sites (`rebuildPbs` gather, region-park create-scan + sweep) now seek the um
   raw index. Frame decision: the pb entry carries the wire `raw` alongside its cents-framed `val`, so

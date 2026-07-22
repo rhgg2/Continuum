@@ -82,7 +82,10 @@ below are their own items.
   the old column walk. Length changes need no guard: they ride the
   `mm:setLength` wholesale reload, which reclips every window. The two
   calls share the one cache. See `docs/trackerManager.md` § Fx window
-  cache. Region-fx window caching deferred.
+  cache. No region-fx counterpart is needed: a region carries its own
+  authored span (`startppq`/`endppq`), so there is no derived window to
+  cache — the earlier "deferred" note presupposed a computation that
+  doesn't exist.
 - **`realiseParked` bounds** (:2471-2486): any channel with parked
   cells collects *every* note event in every lane as clip bounds,
   every rebuild, no dirt gate. Fix direction: dirt-gate the re-clip;
