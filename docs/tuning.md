@@ -318,6 +318,15 @@ lane-1 sequence it:
 Reads pbs directly from mm; the um cache (`chans`, `byUuid`) is
 rebuilt at the end-of-rebuild `reload()`.
 
+### Seat-span-scoped onset walk
+
+Under interval dirt (`design/interval-dirt-v2.md` § 3) the detune-onset walk is scoped to
+disjoint seat spans rather than the whole channel: each span seeds its running `prev` from the
+detune carried in from just before it (`detuneAt` at `span[1] - 1`), so a jump entering a span
+from outside is still caught without re-walking the untouched lane-1 ahead of it. A note without
+authored detune reads 0 — ingestion's default on the cell. An ungated call (`seatSpans == nil`,
+dirty-wholesale channels) walks `{0, math.huge}` — the whole channel, same as before scoping.
+
 ### Authoring onto a hidden seat
 
 Pitchbend is one value per tick, so two pb events at one (chan, ppq) are a

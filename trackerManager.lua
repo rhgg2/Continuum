@@ -502,19 +502,6 @@ local function foldChains(recs, span, base, opts)
   return out
 end
 
--- detune-at-ppq for every pb in one linear merge (pbs and lane1Events both ppq-sorted).
-local function mergeDetunes(pbs, lane1Events)
-  local detuneOf, di, dcur = {}, 1, 0
-  for _, pb in ipairs(pbs) do
-    while di <= #lane1Events and lane1Events[di].ppq <= pb.ppq do
-      dcur = lane1Events[di].detune or 0
-      di = di + 1
-    end
-    detuneOf[pb] = dcur
-  end
-  return detuneOf
-end
-
 local function delayToPPQ(delay) return timing.delayToPPQ(delay, mm:resolution()) end
 
 ----- Fx expansion helpers
@@ -3692,11 +3679,6 @@ local function rebuildPbs(fxOut, extraColumns)
   -- .notes only, so the head snapshot is current for this. see design/rebuild-pipeline.md § The pre-phase
   local extras = extraColumns or {}
 
-  local function detuneAt(events, P)
-    local n = util.seek(events, 'at-or-before', P)
-    return (n and n.detune) or 0
-  end
-
   perf.start('gather')
   -- Dirty gate on the shared spine, hoisted ahead of lane-1 sort and clone (both skip clean chans).
   -- Frozen fx channels are not dirty: their derived output stands in mm, absorber seats carried.
@@ -3705,10 +3687,10 @@ local function rebuildPbs(fxOut, extraColumns)
     dirty[chan] = dirtyChans[chan] or nil
   end
 
-  -- Per-chan lane-1 view, consumed only by deriveChan: built for dirty channels alone. Clean
-  -- channels reuse their carried pb column and never read it.
+  -- Per-chan derived lane-1 stream, unioned with the raw index by the seeks below. Built for dirty
+  -- channels alone; clean channels reuse their carried pb column and never read it.
   local function lane1Note(entry) return entry.lane == 1 and walkable(entry) end
-  local lane1ByChan, freshLane1, liveLane1ByChan = {}, {}, {}
+  local freshLane1, liveLane1ByChan = {}, {}
   for chan = 1, 16 do
     if dirty[chan] then
       -- Derived lane-1 fxNotes are routed out of columns; union them so the absorber pass seats
@@ -3720,11 +3702,78 @@ local function rebuildPbs(fxOut, extraColumns)
           freshLane1[chan] = freshLane1[chan] or not w.kept
         end
       end
-      lane1ByChan[chan] = mergeIndexed(rawNotes(chan), lane1Note, liveLane1)
-      -- Stashed sorted (mergeIndexed sorts extras in place) for seatScope's onset seeks: the derived
-      -- lane-1 stream lives off-take in noteLive, so a raw-only seek would miss a parked-host onset.
+      -- Sorted for the seeks below: seatScope and the value/onset queries walk it assuming ppq order,
+      -- and the derived stream lives off-take in noteLive, so a raw-only seek would miss a parked host.
+      table.sort(liveLane1, rawThenLogical)
       liveLane1ByChan[chan] = liveLane1
     end
+  end
+
+  -- Lane-1 detune queries over rawNotes union liveLane1, by binary seek -- the materialised whole-
+  -- channel view is gone; each query hits the index and the derived stream direct. see design/interval-dirt-v2.md § 3
+  local function detuneAt(chan, P)
+    local notes = rawNotes(chan)
+    local i = firstAfter(notes, P) - 1        -- last index with ppq <= P
+    while i >= 1 and not lane1Note(notes[i]) do i = i - 1 end
+    local authored = i >= 1 and notes[i] or nil
+    local derived  = liveLane1ByChan[chan]
+    local d = derived and derived[firstAfter(derived, P) - 1] or nil
+    if authored and d then return ((authored.ppq >= d.ppq) and authored or d).detune or 0 end
+    return (authored and authored.detune) or (d and d.detune) or 0
+  end
+
+  -- Authored (walkable lane-1) union derived lane-1 with ppq in [lo, hi], in rawThenLogical order --
+  -- the onset walk's per-span slice, replacing the whole-channel scan.
+  local function lane1Between(chan, lo, hi)
+    local notes, derived = rawNotes(chan), liveLane1ByChan[chan] or {}
+    local i, j, out = firstAtOrAfter(notes, lo), firstAtOrAfter(derived, lo), {}
+    while true do
+      while notes[i] and not lane1Note(notes[i]) do i = i + 1 end
+      local authored = notes[i]; if authored and authored.ppq > hi then authored = nil end
+      local d = derived[j];      if d and d.ppq > hi then d = nil end
+      if not authored and not d then break end
+      if d and (not authored or rawThenLogical(d, authored)) then util.add(out, d); j = j + 1
+      else util.add(out, authored); i = i + 1 end
+    end
+    return out
+  end
+
+  -- The first lane-1 onset (authored or derived), the I2a anchor's point; nearer wins on a tie.
+  local function firstLane1(chan)
+    local notes, i = rawNotes(chan), 1
+    while notes[i] and not lane1Note(notes[i]) do i = i + 1 end
+    local authored = notes[i]
+    local d = liveLane1ByChan[chan] and liveLane1ByChan[chan][1]
+    if authored and d then return rawThenLogical(authored, d) and authored or d end
+    return authored or d
+  end
+
+  -- Whether any lane-1 note (authored or derived) carries a non-zero detune. With prev seeded 0 an
+  -- onset exists iff some detune is non-zero, so this early-exit scan is the whole-channel jump count.
+  local function anyDetune(chan)
+    for _, n in ipairs(rawNotes(chan)) do
+      if lane1Note(n) and (n.detune or 0) ~= 0 then return true end
+    end
+    for _, n in ipairs(liveLane1ByChan[chan] or {}) do
+      if (n.detune or 0) ~= 0 then return true end
+    end
+    return false
+  end
+
+  -- Sort + coalesce overlapping seat spans into disjoint ascending, so the onset walk visits each ppq
+  -- once and in order (its dual-point overwrite is order-sensitive). nil (ungated) stays nil.
+  local function disjointSpans(spans)
+    if not spans then return nil end
+    local sorted = {}
+    for _, s in ipairs(spans) do util.add(sorted, { s[1], s[2] }) end
+    table.sort(sorted, function(a, b) return a[1] < b[1] end)
+    local merged = {}
+    for _, s in ipairs(sorted) do
+      local last = merged[#merged]
+      if last and s[1] <= last[2] then last[2] = math.max(last[2], s[2])
+      else util.add(merged, { s[1], s[2] }) end
+    end
+    return merged
   end
 
   -- Replace windows for a channel: each pb chain's fold curve -- live spans folded to derived-seat
@@ -3800,8 +3849,8 @@ local function rebuildPbs(fxOut, extraColumns)
   local function seatScope(chan, dirt, rw, derivedLane1)
     if dirt == true then return nil end
     local spans = {}
-    -- The lane-1 onset stream is authored notes (raw index) plus the off-take derived stream, exactly
-    -- lane1Events' union; seek both and take the nearer.
+    -- The lane-1 onset stream is authored notes (raw index) plus the off-take derived stream, the
+    -- same union lane1Between/detuneAt seek; seek both here and take the nearer.
     local function nextLane1After(ppq)
       local authored = util.seek(rawNotes(chan), 'after', ppq, lane1Note)
       local derived  = util.seek(derivedLane1, 'after', ppq)
@@ -3886,18 +3935,23 @@ local function rebuildPbs(fxOut, extraColumns)
 
   -- Seat the lane-1 detune stream, match absorbers, stage the consolidated assign; returns
   -- detuneOf. Clean chans skip it wholesale -- I8: rebuild is a fixpoint. see design/incremental-pbs.md
-  local function deriveChan(chan, lane1Events, pbs, rw, seatSpans)
+  local function deriveChan(chan, pbs, rw, seatSpans)
     perf.start('seats')
     local replaceWins = rw.wins
     local replaceWinAt, inSeatWindow, inKeptRange = rw.winAt, rw.inSeatWindow, rw.inKeptRange
 
-    -- Detune onsets: every lane-1 ppq whose detune differs from its predecessor; a note
-    -- without authored detune reads 0, ingestion's default on the cell.
-    local onsets, onsetAt, prev = {}, {}, 0
-    for _, n in ipairs(lane1Events) do
-      local detune = n.detune or 0
-      if detune ~= prev then util.add(onsets, { ppq = n.ppq, ppqL = n.ppqL }); onsetAt[n.ppq] = true end
-      prev = detune
+    -- Detune onsets: every lane-1 ppq whose detune differs from its predecessor, walked per seat
+    -- span, seeded by the carried-in detune. see docs/tuning.md § Seat-span-scoped onset walk
+    local onsets, onsetAt = {}, {}
+    for _, span in ipairs(disjointSpans(seatSpans) or { { 0, math.huge } }) do
+      local prev = detuneAt(chan, span[1] - 1)
+      for _, n in ipairs(lane1Between(chan, span[1], span[2])) do
+        local detune = n.detune or 0
+        if detune ~= prev and not onsetAt[n.ppq] then
+          util.add(onsets, { ppq = n.ppq, ppqL = n.ppqL }); onsetAt[n.ppq] = true
+        end
+        prev = detune
+      end
     end
     -- A ramp onset's dual point rides one tick before it: both seats follow the onset's ownership,
     -- so the fence classifies a pb under an onset at ppq+1 by that onset's side.
@@ -3917,7 +3971,7 @@ local function rebuildPbs(fxOut, extraColumns)
     local persistCents = {}
     for _, pb in ipairs(pbs) do
       if pb.cents == nil and not inSeatWindow(pb.ppq) then
-        pb.cents = rawToCents(pb.raw) - detuneAt(lane1Events, pb.ppq)
+        pb.cents = rawToCents(pb.raw) - detuneAt(chan, pb.ppq)
         persistCents[pb] = true
       end
     end
@@ -3928,20 +3982,15 @@ local function rebuildPbs(fxOut, extraColumns)
     for _, entry in ipairs(rawPbs(chan)) do
       pbEntryByRaw[entry.ppq] = entry
       if not entry.derived and not inSeatWindow(entry.ppq) then
-        local cents = entry.cents or (rawToCents(entry.raw) - detuneAt(lane1Events, entry.ppq))
+        local cents = entry.cents or (rawToCents(entry.raw) - detuneAt(chan, entry.ppq))
         util.add(realPbs, { ppq = entry.ppq, cents = cents, shape = entry.shape, tension = entry.tension })
       end
     end
 
     local function inSeatScope(ppq) return inSpans(seatSpans, ppq) end
-    -- The unfiltered jump count feeds the anchor decision below: scope-filtered onsets must not
-    -- hide a globally required anchor.
-    local anyJump = #onsets > 0
-    if seatSpans then
-      for i = #onsets, 1, -1 do
-        if not inSeatScope(onsets[i].ppq) then table.remove(onsets, i) end
-      end
-    end
+    -- The onset walk is already span-bounded, so onsets need no scope filter. anyJump keeps the
+    -- whole-channel jump count the anchor decision below needs (bounded onsets could hide it).
+    local anyJump = anyDetune(chan)
 
     -- Prevailing cents at any ppq: the replace curve inside a window, else the authored
     -- breakpoints. Interpolate the bounding pair, hold the last past the end, 0 before the first.
@@ -4025,7 +4074,7 @@ local function rebuildPbs(fxOut, extraColumns)
 
     -- Anchor a pb-active channel at its first lane-1 onset (I2a):
     -- without it, playback inherits the synth's unknown prior bend.
-    local first = lane1Events[1]
+    local first = firstLane1(chan)
     if first and not seats[first.ppq] and not inKeptRange(first.ppq) and inSeatScope(first.ppq) then
       local hasReal, anchored = false, false
       for _, pb in ipairs(realPbs) do
@@ -4083,7 +4132,7 @@ local function rebuildPbs(fxOut, extraColumns)
         local fresh = { chan = chan, ppq = ppq, cents = seat.cents, ppqL = seat.ppqL,
                         shape = seat.shape, derived = 'absorber', evType = 'pb' }
         util.add(pbs, fresh)
-        local raw = centsToRaw(fresh.cents + detuneAt(lane1Events, ppq))
+        local raw = centsToRaw(fresh.cents + detuneAt(chan, ppq))
         if inSeatWindow(ppq) then
           -- Markerless seat: native MIDI only ({ppq,val,shape}) -> addCC mints no uuid, no eventMeta
           -- sidecar; recognized next rebuild by its window. see § Route-by-window
@@ -4106,7 +4155,8 @@ local function rebuildPbs(fxOut, extraColumns)
     table.sort(pbs, function(a, b) return a.ppq < b.ppq end)
     perf.stop('match')
 
-    local detuneOf = mergeDetunes(pbs, lane1Events)
+    local detuneOf = {}
+    for _, pb in ipairs(pbs) do detuneOf[pb] = detuneAt(chan, pb.ppq) end
     perf.start('assign')
     -- Consolidated assign: one entry per existing pb where any of (ppq moved, ppqL
     -- restamped, raw changed, cents back-derived, derived shape changed) needs to land.
@@ -4142,14 +4192,13 @@ local function rebuildPbs(fxOut, extraColumns)
   for chan = 1, 16 do
     -- Clean channels are skipped wholesale -- their carried pb column stands (set at rebuild entry).
     if dirty[chan] then
-      local lane1Events = lane1ByChan[chan]
-      local pbs         = pbsByChan[chan] or {}
+      local pbs = pbsByChan[chan] or {}
       table.sort(pbs, function(a, b) return a.ppq < b.ppq end)
 
       local priorPbCol = channels[chan].priorPb
       channels[chan].priorPb = nil
       local seatSpans = seatSpansByChan[chan]
-      local detuneOf, pbEntryByRaw, fenced = deriveChan(chan, lane1Events, pbs, winsByChan[chan], seatSpans)
+      local detuneOf, pbEntryByRaw, fenced = deriveChan(chan, pbs, winsByChan[chan], seatSpans)
 
       perf.start('project')
       -- Column projection. A derived seat is wire-only -- always hidden. This projects the in-scope

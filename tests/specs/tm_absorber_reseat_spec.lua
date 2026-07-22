@@ -153,6 +153,50 @@ return {
   },
 
   {
+    name = 'mid-run dirty span mints no spurious seat: predecessor detune carries into the span (I8)',
+    run = function(harness)
+      -- A constant non-zero detune run (three lane-1 notes, all 50c). The 0->50 onset seats a lone
+      -- absorber at note 1; notes 2-3 carry the same detune, so no jump, no seat. A sparse edit inside
+      -- the run must seed the onset walk from the carried-in detune (50), not 0 -- else the edited note
+      -- reads 50 != 0 and a spurious seat is minted at it. Behaviour-preserving pin (I8 fixpoint).
+      local h = harness.mk{
+        seed = {
+          notes = {
+            { ppq = 0,   endppq = 240, chan = 1, pitch = 60, vel = 100,
+              detune = 50, delay = 0, lane = 1, ppqL = 0,   endppqL = 240 },
+            { ppq = 240, endppq = 480, chan = 1, pitch = 62, vel = 100,
+              detune = 50, delay = 0, lane = 1, ppqL = 240, endppqL = 480 },
+            { ppq = 480, endppq = 720, chan = 1, pitch = 64, vel = 100,
+              detune = 50, delay = 0, lane = 1, ppqL = 480, endppqL = 720 },
+          },
+          ccs = {
+            { ppq = 0, chan = 1, evType = 'pb', val = rawFor50, derived = 'absorber' },
+          },
+        },
+      }
+      local function seatAt(ppq)
+        for _, c in ipairs(h.fm:dump().ccs) do
+          if c.evType == 'pb' and c.chan == 1 and c.ppq == ppq then return c end
+        end
+      end
+      t.truthy(seatAt(0),  'the 0->50 onset seats an absorber at note 1')
+      t.falsy(seatAt(240), 'no seat mid-run before the edit (constant detune)')
+
+      -- Sparse edit inside the run: bump note 2's velocity. Its dirty span sits on a note whose
+      -- detune (50) equals the detune carried in from note 1.
+      local second
+      for _, n in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
+        if n.pitch == 62 then second = n end
+      end
+      h.tm:assignEvent(second, { vel = 90 })
+      h.tm:flush()
+
+      t.truthy(seatAt(0),  'note 1 anchor seat carries across the edit')
+      t.falsy(seatAt(240), 'no spurious seat at the edited note: predecessor 50 carries, no jump')
+    end,
+  },
+
+  {
     name = 'authoring a pb onto an anchor seat adopts it, no rival at the same tick (stuck-digit bug)',
     run = function(harness)
       -- I2a anchor plants a hidden absorber seat at a pb-active onset. Authoring there must
