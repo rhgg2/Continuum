@@ -4,6 +4,13 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-22** — Commit-time bookkeeping (map-feedback, decision-log, plan-landing) now flows
+  through one manifest applied by `tools/bookkeep.py` rather than hand-formatted `apply_patches`
+  hunks: the commit skill authors the content, the script owns the JSON escaping, the decision-log
+  wrap, and the Landed move + prune. Chosen to cut the per-commit API round-trips; the three
+  low-stakes log files are written directly with no Emacs review gate, since they surface in the
+  pre-commit `git diff`.
+
 - **2026-07-22** — `loc` (mm's array-slot index behind the uuid dictionary) is now mm-private: `cloneOut` and
   the three `notesRaw`/`ccsRaw` fast-path clones in tm's rebuild strip it, so no tm-side event — column
   cell or `rawIndex` entry — carries it. Chosen over the prior scheme of five downstream strip-guards
