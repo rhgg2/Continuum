@@ -120,6 +120,25 @@ replace windows; extend the same mechanism to the whole out-of-scope
 remainder. The lane-1 view and onset diff bound to the spans by binary
 seek.
 
+Landed 2026-07-22 (commit 1/4 — the span hoist): `seatScope` moved
+ahead of the gather, sourcing extents by seek into the raw index. One
+correction to the seek plan — the lane-1 onset seek must union the
+*derived* lane-1 stream (`liveLane1`, from `noteLive`), not just
+`rawNotes`. When a note-host parks off-take its `ppqL` goes nil, so
+`walkable` drops it and the first *sounding* lane-1 onset is a derived
+arp note; the I2a anchor needs it. `liveLane1` stays unbounded (small,
+`fxOut`-derived), so commit 3 may bound only the `rawNotes` side of the
+lane-1 view without starving the spans.
+
+`replaceWindows` stands on the same footing: built from `pbChains`/
+`pbScope` (`fxOut`-derived) alone, independent of the gathered pbs, so
+it too precedes the gather. `seatScope`'s bp-span seek reads the
+authored value stream straight off `rawPbs` (non-derived, outside
+every seat window); its lane-1 seek unions `rawNotes` with the derived
+`liveLane1` stream. Both extents are fed by nothing the gather
+materialises, so the whole seat-span computation — replace windows and
+seatScope together — now precedes `pbsByChan`'s clone loop.
+
 ## 4. Scan-to-filter — index converts the walk, seeds can then gate
 
 - **`rebuildPA`** (:2712) consumes no seeds at all: full cc-stream

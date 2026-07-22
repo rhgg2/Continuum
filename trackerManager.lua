@@ -3708,7 +3708,7 @@ local function rebuildPbs(fxOut, extraColumns)
   -- Per-chan lane-1 view, consumed only by deriveChan: built for dirty channels alone. Clean
   -- channels reuse their carried pb column and never read it.
   local function lane1Note(entry) return entry.lane == 1 and walkable(entry) end
-  local lane1ByChan, freshLane1 = {}, {}
+  local lane1ByChan, freshLane1, liveLane1ByChan = {}, {}, {}
   for chan = 1, 16 do
     if dirty[chan] then
       -- Derived lane-1 fxNotes are routed out of columns; union them so the absorber pass seats
@@ -3721,78 +3721,15 @@ local function rebuildPbs(fxOut, extraColumns)
         end
       end
       lane1ByChan[chan] = mergeIndexed(rawNotes(chan), lane1Note, liveLane1)
+      -- Stashed sorted (mergeIndexed sorts extras in place) for seatScope's onset seeks: the derived
+      -- lane-1 stream lives off-take in noteLive, so a raw-only seek would miss a parked-host onset.
+      liveLane1ByChan[chan] = liveLane1
     end
   end
 
-  -- Each pb rides its own clone through the pass, carrying the index entry's uuid so a mutated clone
-  -- still names its source; origShape is held because the pass rewrites shape. Only dirty channels clone.
-  local pbsByChan = {}
-  for chan = 1, 16 do
-    if dirty[chan] then
-      for _, entry in ipairs(rawPbs(chan)) do
-        local pb = util.clone(entry, { colEvt = true })
-        pb.origShape = entry.shape
-        util.bucket(pbsByChan, pb.chan, pb)
-      end
-    end
-  end
-  perf.stop('gather')
-
-  local pbWrites = mmBatch()
-  local gridStep = ccGridStep()
-
-  -- Closes seeds to raw spans that gate onsets/densify/anchor/absorber-pool below; nil = ungated.
-  -- see design/archive/interval-dirt-closing.md § 1
-  local function seatScope(chan, dirt, lane1Events, realPbs, replaceWins)
-    if dirt == true then return nil end
-    local spans = {}
-    local function nextLane1After(ppq)
-      for _, n in ipairs(lane1Events) do
-        if n.ppq > ppq then return n.ppq end
-      end
-      return math.huge
-    end
-    local function lane1Span(ppq) util.add(spans, { ppq - 1, nextLane1After(ppq) }) end
-    local function bpSpan(ppq)
-      local prevBp, nextBp = 0, math.huge
-      for _, pb in ipairs(realPbs) do
-        if pb.ppq < ppq then prevBp = pb.ppq
-        elseif pb.ppq > ppq then nextBp = pb.ppq; break end
-      end
-      util.add(spans, { prevBp, nextBp })
-    end
-    for _, seed in ipairs(dirt) do
-      -- Dedup keeps a move's vacated snapshot; the survivor's live position comes from byUuid
-      -- (the frontier walk's convention, see § Seeds arrive named) and spans separately.
-      local live = seed.uuid and tm:byUuid(seed.uuid)
-      if not (live and live.chan == chan) then live = nil end
-      if seed.lane == 1 or (live and live.lane == 1) then
-        if seed.lane == 1 then lane1Span(seed.ppq) end
-        if live and live.lane == 1 and live.ppq ~= seed.ppq then lane1Span(live.ppq) end
-      elseif seed.evType == 'pb' then
-        bpSpan(seed.ppq)
-        if live and live.ppq ~= seed.ppq then bpSpan(live.ppq) end
-      elseif not (seed.lane or seed.verb == 'region' or seed.evType == 'cc'
-                  or seed.evType == 'at' or seed.evType == 'pc') then
-        return nil
-      end
-    end
-    for _, win in ipairs(replaceWins) do
-      if not win.kept then util.add(spans, { win.startRaw - 1, win.endRaw }) end
-    end
-    -- The I2a anchor at the first lane-1 onset is channel-global: any pass may need to seat,
-    -- refresh, or retire it, so its point is always in scope.
-    local first = lane1Events[1]
-    if first then util.add(spans, { first.ppq - 1, first.ppq }) end
-    return spans
-  end
-
-  -- Seat the lane-1 detune stream, match absorbers, stage the consolidated assign; returns
-  -- detuneOf. Clean chans skip it wholesale -- I8: rebuild is a fixpoint. see design/incremental-pbs.md
-  local function deriveChan(chan, lane1Events, pbs)
-    perf.start('seats')
-    -- pb chain windows: each chain's curve seats as derived pbs on the base lane (no carrier); overlap
-    -- folds onto the authored base (foldChains). Bounds convert to raw once for zero round-trip drift. see docs/tuning.md § Absorber reconciliation
+  -- Replace windows for a channel: each pb chain's fold curve -- live spans folded to derived-seat
+  -- bps (no carrier), kept spans recognition-only. see docs/tuning.md § Absorber reconciliation
+  local function replaceWindows(chan)
     local lim = pbLim()
     -- Gate split: live ranges (inside the pb emit scope) fold to bps; kept ranges are recognition-
     -- only -- their seats stand on wire. see design/interval-dirt.md § Implementation plan, commit 4
@@ -3801,11 +3738,12 @@ local function rebuildPbs(fxOut, extraColumns)
     for _, rec in ipairs(pbChains[chan]) do
       if not rec.kept then util.add(liveRecs, rec) end
     end
-    local replaceWins = {}
+    local wins = {}
+    -- Bounds convert to raw once for zero round-trip drift.
     local function addWin(sub, bps, kept)
-      util.add(replaceWins, { bps = bps, kept = kept,
-                              startRaw = tm:fromLogical(chan, sub[1], 0),
-                              endRaw   = tm:fromLogical(chan, sub[2], 0) })
+      util.add(wins, { bps = bps, kept = kept,
+                       startRaw = tm:fromLogical(chan, sub[1], 0),
+                       endRaw   = tm:fromLogical(chan, sub[2], 0) })
     end
     for _, span in ipairs(mergeWindows(pbChains[chan])) do
       for _, sub in ipairs(emitSpans and clipToSpanSet(span, emitSpans) or { span }) do
@@ -3828,14 +3766,14 @@ local function rebuildPbs(fxOut, extraColumns)
 
     -- Which window's curve prevails at a raw ppq (half-open -- the interior stream).
     local function replaceWinAt(ppq)
-      for _, win in ipairs(replaceWins) do
+      for _, win in ipairs(wins) do
         if not win.kept and ppq >= win.startRaw and ppq < win.endRaw then return win end
       end
     end
     -- Seat recognition: exclusive ownership means everything on-take in a window is a generated seat
     -- (authored pbs park off-take). Inclusive of endRaw to catch the terminal re-centre seat.
     local function inSeatWindow(ppq)
-      for _, win in ipairs(replaceWins) do
+      for _, win in ipairs(wins) do
         if ppq >= win.startRaw and ppq <= win.endRaw then return true end
       end
       return false
@@ -3844,7 +3782,7 @@ local function rebuildPbs(fxOut, extraColumns)
     -- covered ppq (interior and closing edges) to the kept side. see design § commit 4
     local function inKeptRange(ppq)
       local kept = false
-      for _, win in ipairs(replaceWins) do
+      for _, win in ipairs(wins) do
         if win.kept then
           if ppq >= win.startRaw and ppq <= win.endRaw then kept = true end
         elseif ppq == win.startRaw then
@@ -3853,6 +3791,92 @@ local function rebuildPbs(fxOut, extraColumns)
       end
       return kept
     end
+
+    return { wins = wins, winAt = replaceWinAt, inSeatWindow = inSeatWindow, inKeptRange = inKeptRange }
+  end
+
+  -- Closes seeds to raw spans that gate onsets/densify/anchor/absorber-pool below; nil = ungated.
+  -- Extents come by seek, ahead of the gather. see design/interval-dirt-v2.md § 3
+  local function seatScope(chan, dirt, rw, derivedLane1)
+    if dirt == true then return nil end
+    local spans = {}
+    -- The lane-1 onset stream is authored notes (raw index) plus the off-take derived stream, exactly
+    -- lane1Events' union; seek both and take the nearer.
+    local function nextLane1After(ppq)
+      local authored = util.seek(rawNotes(chan), 'after', ppq, lane1Note)
+      local derived  = util.seek(derivedLane1, 'after', ppq)
+      return math.min(authored and authored.ppq or math.huge, derived and derived.ppq or math.huge)
+    end
+    local function lane1Span(ppq) util.add(spans, { ppq - 1, nextLane1After(ppq) }) end
+    local function bpSpan(ppq)
+      -- The authored value stream: non-derived pbs outside every seat window (realPbs' membership).
+      local function authored(pb) return not pb.derived and not rw.inSeatWindow(pb.ppq) end
+      local prevBp = util.seek(rawPbs(chan), 'before', ppq, authored)
+      local nextBp = util.seek(rawPbs(chan), 'after',  ppq, authored)
+      util.add(spans, { prevBp and prevBp.ppq or 0, nextBp and nextBp.ppq or math.huge })
+    end
+    for _, seed in ipairs(dirt) do
+      -- Dedup keeps a move's vacated snapshot; the survivor's live position comes from byUuid
+      -- (the frontier walk's convention, see § Seeds arrive named) and spans separately.
+      local live = seed.uuid and tm:byUuid(seed.uuid)
+      if not (live and live.chan == chan) then live = nil end
+      if seed.lane == 1 or (live and live.lane == 1) then
+        if seed.lane == 1 then lane1Span(seed.ppq) end
+        if live and live.lane == 1 and live.ppq ~= seed.ppq then lane1Span(live.ppq) end
+      elseif seed.evType == 'pb' then
+        bpSpan(seed.ppq)
+        if live and live.ppq ~= seed.ppq then bpSpan(live.ppq) end
+      elseif not (seed.lane or seed.verb == 'region' or seed.evType == 'cc'
+                  or seed.evType == 'at' or seed.evType == 'pc') then
+        return nil
+      end
+    end
+    for _, win in ipairs(rw.wins) do
+      if not win.kept then util.add(spans, { win.startRaw - 1, win.endRaw }) end
+    end
+    -- The I2a anchor at the first lane-1 onset (authored or derived) is channel-global: any pass may
+    -- need to seat, refresh, or retire it, so its point is always in scope.
+    local authoredFirst = util.seek(rawNotes(chan), 'at-or-after', 0, lane1Note)
+    local firstPpq = math.min(authoredFirst and authoredFirst.ppq or math.huge,
+                              derivedLane1[1] and derivedLane1[1].ppq or math.huge)
+    if firstPpq ~= math.huge then util.add(spans, { firstPpq - 1, firstPpq }) end
+    return spans
+  end
+
+  -- Replace windows + seat spans per dirty chan, computed ahead of the gather. Fresh (non-kept)
+  -- derived lane-1 output ungates the channel (seatSpans nil). see design/archive/interval-dirt-closing.md § 1
+  local winsByChan, seatSpansByChan = {}, {}
+  for chan = 1, 16 do
+    if dirty[chan] then
+      local rw = replaceWindows(chan)
+      winsByChan[chan] = rw
+      seatSpansByChan[chan] = not freshLane1[chan] and seatScope(chan, dirty[chan], rw, liveLane1ByChan[chan]) or nil
+    end
+  end
+
+  -- Each pb rides its own clone through the pass, carrying the index entry's uuid so a mutated clone
+  -- still names its source; origShape is held because the pass rewrites shape. Only dirty channels clone.
+  local pbsByChan = {}
+  for chan = 1, 16 do
+    if dirty[chan] then
+      for _, entry in ipairs(rawPbs(chan)) do
+        local pb = util.clone(entry, { colEvt = true })
+        pb.origShape = entry.shape
+        util.bucket(pbsByChan, pb.chan, pb)
+      end
+    end
+  end
+  perf.stop('gather')
+
+  local pbWrites = mmBatch()
+  local gridStep = ccGridStep()
+
+  -- Seat the lane-1 detune stream, match absorbers, stage the consolidated assign; returns
+  -- detuneOf. Clean chans skip it wholesale -- I8: rebuild is a fixpoint. see design/incremental-pbs.md
+  local function deriveChan(chan, lane1Events, pbs, rw, seatSpans)
+    perf.start('seats')
+    local replaceWins = rw.wins
+    local replaceWinAt, inSeatWindow, inKeptRange = rw.winAt, rw.inSeatWindow, rw.inKeptRange
 
     -- Detune onsets: every lane-1 ppq whose detune differs from its predecessor; a note
     -- without authored detune reads 0, ingestion's default on the cell.
@@ -3891,10 +3915,6 @@ local function rebuildPbs(fxOut, extraColumns)
       if not pb.derived and not inSeatWindow(pb.ppq) then util.add(realPbs, pb) end
     end
 
-    -- Which seats this pass may touch; fresh (non-kept) derived lane-1 output ungates the channel.
-    -- see design/archive/interval-dirt-closing.md § 1
-    local seatSpans = not freshLane1[chan]
-                      and seatScope(chan, dirty[chan], lane1Events, realPbs, replaceWins) or nil
     local function inSeatScope(ppq)
       if not seatSpans then return true end
       for _, s in ipairs(seatSpans) do
@@ -4116,7 +4136,7 @@ local function rebuildPbs(fxOut, extraColumns)
 
       local priorPbCol = channels[chan].priorPb
       channels[chan].priorPb = nil
-      local detuneOf, fencedWire = deriveChan(chan, lane1Events, pbs)
+      local detuneOf, fencedWire = deriveChan(chan, lane1Events, pbs, winsByChan[chan], seatSpansByChan[chan])
 
       perf.start('project')
       -- Column projection. A derived seat is wire-only -- always hidden.
