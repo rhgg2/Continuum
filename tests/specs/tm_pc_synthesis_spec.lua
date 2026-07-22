@@ -178,6 +178,37 @@ return {
   },
 
   {
+    name = 'seed-dirty add: a bare mid-session note is reached and stamped',
+    run = function(harness)
+      -- A pre-stamped note establishes derivedInputs, so the initial rebuild is
+      -- wholesale; the mid-session add then lands as a single seed and keeps the
+      -- channel seed-dirty -- the branch stampSamples must still reach and stamp.
+      -- The stamped value is 0, not the seed pc's 9: authored PCs do not survive
+      -- synthesis (only the wholesale pass stamps from them), and by the seed pass
+      -- the added note's own lockstep derived PC (val 0) sits at its onset and wins
+      -- the at-or-before seek. What this pins is reachability -- an unstamped seed
+      -- note bears a sample rather than staying nil.
+      local h = harness.mk{
+        seed = {
+          notes = { { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0, sample = 5 } },
+          ccs   = { { ppq = 240, evType = 'pc', chan = 1, val = 9 } },
+        },
+        config = { transient = { trackerMode = true } },
+      }
+      h.tm:addEvent({ evType = 'note',
+        ppq = 480, endppq = 720, chan = 1, pitch = 62, vel = 100,
+        detune = 0, delay = 0, lane = 1,
+      })
+      h.tm:flush()
+      local added
+      for _, n in ipairs(h.fm:dump().notes) do
+        if n.pitch == 62 then added = n end
+      end
+      t.eq(added and added.sample, 0, 'bare seed-add note is reached by stampSamples and bears a sample')
+    end,
+  },
+
+  {
     name = 'inheritance freezes at stamp time: editing one sample recolours only itself',
     run = function(harness)
       local h = harness.mk{

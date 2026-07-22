@@ -18,19 +18,17 @@
 
 ## Landed (newest first; prune below ~4)
 
+- 2026-07-23 tm: gate stampSamples' sample scan on seed-dirty channels (§ 4)
 - 2026-07-23 tm: seek-bound rebuildPCs's three residual raw walks (§ 4)
 - 2026-07-23 tm: de-materialise rebuildPbs lane-1 view — seeks + bounded walk (§ 3)
 - 2026-07-22 tm: bound rebuildPbs clone to seat scope, realPbs whole from index (§ 3)
-- 2026-07-22 tm: hoist rebuildPbs seat-span computation ahead of the gather (§ 3)
 
 ## Now
 
-(empty — rebuildPCs's three walks now seek/coverOnsets; run /plan-next to promote the next § 4 item — stampSamples gate or rebuildPA seed-gate)
+(empty -- stampSamples seed-gated and landed; run /plan-next to promote the rebuildPA seed-gate from Queued)
 
 ## Queued (current phase; one-liners)
 
-- stampSamples: gate the `sample == nil` scan on add/import seeds — a
-  steady-state no-op walk of every note on every dirty channel today (§ 4)
 - rebuildPA: seed-gate the PA re-projection — coupled to `exciseNotes`
   (:1862), which drops *all* PA cells because rebuildPA refills all;
   settle the out-of-scope PA carry at promotion (§ 4)

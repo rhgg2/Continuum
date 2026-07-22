@@ -4,6 +4,12 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-23** — tm's stampSamples now gates on seeds -- a seed-dirty channel stamps only its
+  resolved seed entries, a wholesale channel keeps the full scan. Found in passing: authored PCs do
+  not survive PC synthesis (only the wholesale pass stamps from them), so a bare mid-session
+  seed-add stamps 0 from its own lockstep derived PC; the pin guards reachability, and seed-path
+  prevailing-colour inheritance stays an open question.
+
 - **2026-07-22** — Commit-time bookkeeping (map-feedback, decision-log, plan-landing) now flows
   through one manifest applied by `tools/bookkeep.py` rather than hand-formatted `apply_patches`
   hunks: the commit skill authors the content, the script owns the JSON escaping, the decision-log

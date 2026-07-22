@@ -4240,21 +4240,28 @@ end
 
 ----- Rebuild sample stamp
 
--- The bearing rule: under trackerMode every note bears a sample, stamped once from the PC
--- prevailing at its onset; inheritance freezes at stamp time. see design/archive/interval-dirt-closing.md § 2
+-- The bearing rule: under trackerMode every note bears a sample, stamped once from the onset PC;
+-- inheritance freezes at stamp time. Gated on dirtyChans (seed|true, see :68). See design/archive/interval-dirt-closing.md § 2
 local function stampSamples()
   if not cm:get('trackerMode') then return end
   local stampWrites = mmBatch()
+  local function stamp(entry)
+    if entry.evType == 'note' and walkable(entry) and entry.sample == nil then
+      local prevailing = util.seek(rawIndexFor(entry.chan).pcs, 'at-or-before', entry.ppq)
+      local sample = prevailing and prevailing.val or 0
+      entry.sample, entry.colEvt.sample = sample, sample
+      stampWrites.assign(entry, { sample = sample })
+    end
+  end
   for chan = 1, 16 do
-    if dirtyChans[chan] then
-      local pcs = rawIndexFor(chan).pcs
-      for _, entry in ipairs(rawNotes(chan)) do
-        if walkable(entry) and entry.sample == nil then
-          local prevailing = util.seek(pcs, 'at-or-before', entry.ppq)
-          local sample = prevailing and prevailing.val or 0
-          entry.sample, entry.colEvt.sample = sample, sample
-          stampWrites.assign(entry, { sample = sample })
-        end
+    local dirt = dirtyChans[chan]
+    if dirt == true then
+      for _, entry in ipairs(rawNotes(chan)) do stamp(entry) end
+    elseif dirt then
+      for _, s in ipairs(dirt) do
+        local uuid = s.uuid or (s.evt and s.evt.uuid)
+        local entry = uuid and tm:byUuid(uuid)
+        if entry then stamp(entry) end
       end
     end
   end
