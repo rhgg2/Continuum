@@ -356,6 +356,49 @@ return {
       assertParity(h, 'cascade nudge: emission-covered seat == full re-derive')
     end,
   },
+  {
+    name = 'seat gate: a reseated onset samples the whole authored ramp, not just in-scope pbs',
+    run = function(harness)
+      -- Sparse authored pbs bracket a wide linear ramp; a lane-1 detune onset sits between them, far
+      -- from either. Reseating that onset gates to a span excluding both authored pbs, so a realPbs
+      -- truncated to the clone scope would sample 0 instead of the ramp's interpolated value. The
+      -- whole-from-index realPbs samples it correctly. see design/interval-dirt-v2.md § 3
+      local h = harness.mk{
+        seed = { ccs = {
+          { ppq = 400,  chan = 1, evType = 'pb', val = 0,   cents = 0,   shape = 'linear' },
+          { ppq = 1600, chan = 1, evType = 'pb', val = 100, cents = 120, shape = 'step' },
+        } },
+      }
+
+      local function pbAt(chan, ppq)
+        for _, e in ipairs(h.fm:dump().ccs) do
+          if e.evType == 'pb' and e.chan == chan and e.ppq == ppq then return e end
+        end
+      end
+
+      -- Lane-1 notes: first at 800 (no jump), a detune jump at 1000 (the ramp onset), and one at 1300
+      -- capping the onset's seat span short of the authored pb at 1600.
+      h.tm:addEvent(note(1, 800,  60, { detune = 0  })); h.tm:flush()
+      h.tm:addEvent(note(1, 1000, 62, { detune = 20 })); h.tm:flush()
+      h.tm:addEvent(note(1, 1300, 64, { detune = 20 })); h.tm:flush()
+      h.tm:rebuild(true)   -- settle creation-pass identity
+
+      -- The onset ramps (authored span is linear, cents 0->120): its seat samples streamValue(1000)
+      -- = 0 + (1000-400)/(1600-400)*120 = 60. Both the dual point and the onset carry that value.
+      t.truthy(pbAt(1, 1000), 'absorber seated at the detune onset')
+      t.eq(pbAt(1, 1000).cents, 60, 'onset seat sampled the authored ramp')
+
+      -- Reseat the onset with a detune edit -- a lane-1 seed whose span is {999, 1300}, excluding both
+      -- authored pbs. cents stays 60 (the value stream is detune-independent); only the wire moves.
+      local onsetNote = h.tm:getChannel(1).columns.notes[1].events[2]
+      h.tm:assignEvent(onsetNote, { detune = 40 }); h.tm:flush()
+      t.eq(pbAt(1, 1000).cents, 60, 'reseated onset still samples the ramp, not a truncated 0')
+      -- The reseat turns 1300 into a fresh onset (40->20 step) whose absorbers project before commit
+      -- mints their uuids -- same creation seam as the fixtures above. One gated edit settles it.
+      h.tm:addEvent(note(1, 60, 65, { lane = 2 })); h.tm:flush()
+      assertParity(h, 'reseated onset samples the whole authored ramp == full re-derive')
+    end,
+  },
 
   {
     name = 'rebuild(∅) short-circuits: no fire without dirt; requestRebuild and takeChanged force it',

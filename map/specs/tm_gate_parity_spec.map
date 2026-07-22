@@ -1,4 +1,4 @@
-@spec tm_gate_parity_spec  src=tests/specs/tm_gate_parity_spec.lua  loc=382  sha=19a2c38  cases=5
+@spec tm_gate_parity_spec  src=tests/specs/tm_gate_parity_spec.lua  loc=425  sha=9412af2  cases=6
 @exercises trackerManager (h.tm), midiManager (h.fm), dataStore (h.ds)
 @surface   tm:getChannel, fm:dump, tm:rebuild, tm:addEvent, tm:flush, ds:assign, tm:fromLogical, tm:assignEvent, tm:toLogical, tm:subscribe, tm:requestRebuild
 @harness   mk{seed.ccs}
@@ -37,20 +37,21 @@
   @case 'continuous gate: kept, clean-overlapping, and orphaned cc producers reconcile to parity'  [harness]  @ 173-231
   @case 'continuous gate: pb half -- kept windows carry, overlap clips, hold seeds re-derive'  [harness]  @ 234-303
   @case 'seat gate: detune closure keeps out-of-closure absorbers; a cascade nudge reseats via the walk emission'  [harness]  @ 306-357
-  @case 'rebuild(∅) short-circuits: no fire without dirt; requestRebuild and takeChanged force it'  [harness]  @ 361-380
+  @case 'seat gate: a reseated onset samples the whole authored ramp, not just in-scope pbs'  [harness]  @ 360-400
+  @case 'rebuild(∅) short-circuits: no fire without dirt; requestRebuild and takeChanged force it'  [harness]  @ 404-423
 
 # Uses (outbound edges)
-  @use call tm:getChannel  @ 47,158,226,342
-  @use call fm:dump  @ 92,143,184,252,311,317
-  @use call tm:rebuild  @ 105,138,274,335,369,373,375,378
-  @use call tm:addEvent  @ 125,126,127,128,131,132,154,163,168,194,195,197,198,206,213,220,266,267,269,270,282,289,296,301,328,329,330,331,332,333,353,364
-  @use call tm:flush  @ 125,126,127,128,131,132,154,159,163,168,194,195,197,198,206,213,220,227,266,267,269,270,282,289,296,301,328,329,330,331,332,333,343,353,364
+  @use call tm:getChannel  @ 47,158,226,342,393
+  @use call fm:dump  @ 92,143,184,252,311,317,374
+  @use call tm:rebuild  @ 105,138,274,335,384,412,416,418,421
+  @use call tm:addEvent  @ 125,126,127,128,131,132,154,163,168,194,195,197,198,206,213,220,266,267,269,270,282,289,296,301,328,329,330,331,332,333,353,381,382,383,398,407
+  @use call tm:flush  @ 125,126,127,128,131,132,154,159,163,168,194,195,197,198,206,213,220,227,266,267,269,270,282,289,296,301,328,329,330,331,332,333,343,353,381,382,383,394,398,407
   @use call ds:assign  @ 133
   @use call tm:fromLogical  @ 151
-  @use call tm:assignEvent  @ 159,227,343
+  @use call tm:assignEvent  @ 159,227,343,394
   @use call tm:toLogical  @ 186,254
-  @use call tm:subscribe  @ 367
-  @use call tm:requestRebuild  @ 372
+  @use call tm:subscribe  @ 410
+  @use call tm:requestRebuild  @ 415
 
 # Fields (r read / w write incl. constructor keys)
   @field r REMOVE  @ 227
@@ -60,29 +61,30 @@
   @field w c58  @ 118,176,237
   @field r cc  @ 74,185
   @field w cc  @ 74
-  @field r ccs  @ 51,94,143,184,252,311,317
-  @field w ccs  @ 49,241
+  @field r ccs  @ 51,94,143,184,252,311,317,374
+  @field w ccs  @ 49,241,367
   @field r cells  @ 66
   @field w cells  @ 75
-  @field r cents  @ 257
-  @field w cents  @ 242,257
-  @field r chan  @ 144,145,185,253,312,318
-  @field w chan  @ 18,134,135,136,242
+  @field r cents  @ 257,389,395
+  @field w cents  @ 242,257,368,369
+  @field r chan  @ 144,145,185,253,312,318,375
+  @field w chan  @ 18,134,135,136,242,368,369
   @field r cols  @ 64
-  @field r columns  @ 48,158,226,342
+  @field r columns  @ 48,158,226,342,393
   @field w config  @ 118,176,237
   @field w data  @ 119,177,238
   @field w delay  @ 19,353
   @field w depth  @ 13,15
   @field r derived  @ 257
   @field w derived  @ 257
-  @field w detune  @ 19,126,296,328,329,330,331,333,343
+  @field w detune  @ 19,126,296,328,329,330,331,333,343,381,382,383
+  @field w detune  @ 394
   @field w dir  @ 14
   @field w endppq  @ 18,134,135,136,194,195,197,198,266,267,269,270
   @field w endppq  @ 296
-  @field r evType  @ 144,145,185,253,312,318
-  @field w evType  @ 18,242
-  @field r events  @ 39,158,226,342
+  @field r evType  @ 144,145,185,253,312,318,375
+  @field w evType  @ 18,242,368,369
+  @field r events  @ 39,158,226,342,393
   @field w factors  @ 11
   @field r fromEvt  @ 71
   @field w fromEvt  @ 71
@@ -97,11 +99,12 @@
   @field w kind  @ 13,14,15
   @field r lane  @ 74
   @field w lane  @ 19,74,168,198,206,213,220,270,282,289,301,353
+  @field w lane  @ 398
   @field w loc  @ 26
   @field r midiChan  @ 74
   @field w midiChan  @ 74
-  @field w name  @ 113,173,234,306,361
-  @field r notes  @ 50,93,158,226,342
+  @field w name  @ 113,173,234,306,360,404
+  @field r notes  @ 50,93,158,226,342,393
   @field w notes  @ 49
   @field r offGrid  @ 75
   @field w offGrid  @ 75
@@ -119,13 +122,13 @@
   @field w pc  @ 52
   @field w period  @ 11,13,14,15
   @field w pitch  @ 18,159
-  @field r ppq  @ 186,254,256,261,312,319,322
-  @field w ppq  @ 18,242,256,319
+  @field r ppq  @ 186,254,256,261,312,319,322,375
+  @field w ppq  @ 18,242,256,319,368,369
   @field w project  @ 118,176,237
-  @field w run  @ 114,174,235,307,362
-  @field w seed  @ 241
+  @field w run  @ 114,174,235,307,361,405
+  @field w seed  @ 241,367
   @field r shape  @ 256
-  @field w shape  @ 242,256
+  @field w shape  @ 242,256,368,369
   @field w shift  @ 11
   @field w startppq  @ 134,135,136
   @field w swing  @ 119,177,238
@@ -139,5 +142,5 @@
   @field r uuid  @ 187,257,319
   @field w uuid  @ 134,135,136,257,319
   @field r val  @ 71,256,319,347
-  @field w val  @ 71,242,256,319
+  @field w val  @ 71,242,256,319,368,369
   @field w vel  @ 19

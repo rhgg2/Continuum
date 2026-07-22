@@ -3854,15 +3854,28 @@ local function rebuildPbs(fxOut, extraColumns)
     end
   end
 
-  -- Each pb rides its own clone through the pass, carrying the index entry's uuid so a mutated clone
-  -- still names its source; origShape is held because the pass rewrites shape. Only dirty channels clone.
+  -- A ppq's membership in a channel's seat scope; nil spans (ungated) puts everything in scope. The
+  -- clone/carry partition: the gather clones only in-scope pbs, projection carries the rest verbatim.
+  local function inSpans(spans, ppq)
+    if not spans then return true end
+    for _, s in ipairs(spans) do
+      if ppq >= s[1] and ppq <= s[2] then return true end
+    end
+    return false
+  end
+
+  -- Each pb rides its own clone through the pass, carrying the index entry's uuid so a mutated clone still
+  -- names its source; origShape is held because the pass rewrites shape. see design/interval-dirt-v2.md § 3
   local pbsByChan = {}
   for chan = 1, 16 do
     if dirty[chan] then
+      local spans = seatSpansByChan[chan]
       for _, entry in ipairs(rawPbs(chan)) do
-        local pb = util.clone(entry, { colEvt = true })
-        pb.origShape = entry.shape
-        util.bucket(pbsByChan, pb.chan, pb)
+        if inSpans(spans, entry.ppq) then
+          local pb = util.clone(entry, { colEvt = true })
+          pb.origShape = entry.shape
+          util.bucket(pbsByChan, pb.chan, pb)
+        end
       end
     end
   end
@@ -3892,11 +3905,11 @@ local function rebuildPbs(fxOut, extraColumns)
       if onsetAt[ppq + 1] then return inKeptRange(ppq + 1) end
       return inKeptRange(ppq)
     end
-    -- Fenced pbs leave the pool, the assign, and this pass's projection; they stand on wire and
-    -- the pb column carries the prior slice over them. see design § commit 4
-    local fencedWire = {}   -- raw ppq -> the mm clone standing under the fence (identity refresh)
+    -- A replace window's clipped endRaw is kept-owned yet falls inside the window's seat span and
+    -- generates no seat here; those kept-boundary seats carry from the prior column. see design/interval-dirt-v2.md § 3
+    local fenced = {}   -- raw ppq -> true: carried (identity refresh via pbEntryByRaw), not projected fresh
     for i = #pbs, 1, -1 do
-      if fencedPb(pbs[i].ppq) then fencedWire[pbs[i].ppq] = pbs[i]; table.remove(pbs, i) end
+      if fencedPb(pbs[i].ppq) then fenced[pbs[i].ppq] = true; table.remove(pbs, i) end
     end
 
     -- Back-derive cents for any authored pb missing it (foreign-MIDI/pre-cents pbs carry raw only) so the
@@ -3909,19 +3922,18 @@ local function rebuildPbs(fxOut, extraColumns)
       end
     end
 
-    -- Authored (non-derived, out-of-window) pbs in ppq order: the value stream the seats sample.
-    local realPbs = {}
-    for _, pb in ipairs(pbs) do
-      if not pb.derived and not inSeatWindow(pb.ppq) then util.add(realPbs, pb) end
+    -- The authored value stream, whole and read-only, straight from the raw index -- decoupled from the
+    -- bounded clone set. cents from the sidecar, else back-derived for foreign pbs. see design/interval-dirt-v2.md § 3
+    local realPbs, pbEntryByRaw = {}, {}
+    for _, entry in ipairs(rawPbs(chan)) do
+      pbEntryByRaw[entry.ppq] = entry
+      if not entry.derived and not inSeatWindow(entry.ppq) then
+        local cents = entry.cents or (rawToCents(entry.raw) - detuneAt(lane1Events, entry.ppq))
+        util.add(realPbs, { ppq = entry.ppq, cents = cents, shape = entry.shape, tension = entry.tension })
+      end
     end
 
-    local function inSeatScope(ppq)
-      if not seatSpans then return true end
-      for _, s in ipairs(seatSpans) do
-        if ppq >= s[1] and ppq <= s[2] then return true end
-      end
-      return false
-    end
+    local function inSeatScope(ppq) return inSpans(seatSpans, ppq) end
     -- The unfiltered jump count feeds the anchor decision below: scope-filtered onsets must not
     -- hide a globally required anchor.
     local anyJump = #onsets > 0
@@ -4124,7 +4136,7 @@ local function rebuildPbs(fxOut, extraColumns)
       end
     end
     perf.stop('assign')
-    return detuneOf, fencedWire
+    return detuneOf, pbEntryByRaw, fenced
   end
 
   for chan = 1, 16 do
@@ -4136,29 +4148,31 @@ local function rebuildPbs(fxOut, extraColumns)
 
       local priorPbCol = channels[chan].priorPb
       channels[chan].priorPb = nil
-      local detuneOf, fencedWire = deriveChan(chan, lane1Events, pbs, winsByChan[chan], seatSpansByChan[chan])
+      local seatSpans = seatSpansByChan[chan]
+      local detuneOf, pbEntryByRaw, fenced = deriveChan(chan, lane1Events, pbs, winsByChan[chan], seatSpans)
 
       perf.start('project')
-      -- Column projection. A derived seat is wire-only -- always hidden.
+      -- Column projection. A derived seat is wire-only -- always hidden. This projects the in-scope
+      -- clones fresh; the out-of-scope remainder carries below.
       local anyVisible, pbColEvents = false, {}
       for _, pb in ipairs(pbs) do
         local hidden = pb.derived ~= nil
         anyVisible = anyVisible or not hidden
         -- pb is our own working clone, done being read by the assign above -- reuse it as the
         -- column event rather than cloning again.
-        pb.ppqRaw = pb.ppq   -- survives projectEvent's logical flip; the kept-range carry keys on it
+        pb.ppqRaw = pb.ppq   -- survives projectEvent's logical flip; the carry partition keys on it
         pb.val, pb.detune, pb.hidden = pb.cents, detuneOf[pb], hidden
         pb.raw = nil   -- derive-only wire mirror for the delta-gate; never rides into the cents-framed column
         projectEvent(pb, chan)
         util.add(pbColEvents, pb)
       end
-      -- Kept ranges carry the prior column slice: last pass's fold stamped exact cents on those
-      -- hidden seats; back-deriving from the wire would quantise through centsToRaw. see design § commit 4
+      -- Carry the whole out-of-scope remainder verbatim -- re-deriving from the wire would quantise through
+      -- centsToRaw. Each refreshes uuid/realised since a carried event predates its committed uuid. see design/interval-dirt-v2.md § 3
       for _, evt in ipairs(priorPbCol and priorPbCol.events or {}) do
-        local wire = evt.ppqRaw and fencedWire[evt.ppqRaw]
-        if wire then
-          -- Identity refresh: an event carried from its creation pass predates its committed uuid.
-          evt.uuid, evt.realised = wire.uuid, wire.realised
+        local carry = evt.ppqRaw and (not inSpans(seatSpans, evt.ppqRaw) or fenced[evt.ppqRaw])
+        local entry = carry and pbEntryByRaw[evt.ppqRaw]
+        if entry then
+          evt.uuid, evt.realised = entry.uuid, entry.realised
           anyVisible = anyVisible or not evt.hidden
           util.add(pbColEvents, evt)
         end

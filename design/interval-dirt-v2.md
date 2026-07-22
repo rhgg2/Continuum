@@ -130,6 +130,19 @@ arp note; the I2a anchor needs it. `liveLane1` stays unbounded (small,
 `fxOut`-derived), so commit 3 may bound only the `rawNotes` side of the
 lane-1 view without starving the spans.
 
+Settled 2026-07-22 (commit 2 compile; fence claim corrected at landing):
+the clone bounds to `inSeatScope`, but `realPbs` does not — it rebuilds
+whole from the raw index each dirty pass, since a lane-1 seed's span reaches
+only its next onset, never the authored pbs that value its onsets.
+`fencedWire` retires, but `fencedPb` does not: a replace window's clipped
+`endRaw` is kept-owned (generates no seat there) yet falls *inside* the
+window's seat span, so plain `inSeatScope` bounding would clone it and then
+delete it as a leftover. The fence stays as an in-scope refinement — inside
+`deriveChan` it pulls those kept-boundary seats out of the working set into
+a `fenced` ppq-set. Projection carries the prior column minus in-scope ppqs
+*plus* any `fenced` ppq, refreshing each carried event's identity from the
+index entry at its ppq; in-scope non-fenced clones splice in fresh.
+
 `replaceWindows` stands on the same footing: built from `pbChains`/
 `pbScope` (`fxOut`-derived) alone, independent of the gathered pbs, so
 it too precedes the gather. `seatScope`'s bp-span seek reads the

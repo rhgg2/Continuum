@@ -18,21 +18,17 @@
 
 ## Landed (newest first; prune below ~4)
 
+- 2026-07-22 tm: bound rebuildPbs clone to seat scope, realPbs whole from index (§ 3)
 - 2026-07-22 tm: hoist rebuildPbs seat-span computation ahead of the gather (§ 3)
 - 2026-07-22 tm: cache parked render clips per uuid, dirt-gate the reseek (§ 2)
 - 2026-07-21 tm: cache note-host fx windows per uuid, gate on span dirt (§ 2)
-- 2026-07-21 tm: pb read-sites onto the raw index; wire raw rides the entry (§ 1)
 
 ## Now
 
-(empty — Commit 1 of 4 landed 2026-07-22: `seatScope` now computes spans
-from the raw index ahead of the gather. Run `/plan-next` to promote commit
-2 — bound the gather/clone to the seat spans, the 5.4ms win — from Queued.)
+(empty — run `/plan-next` to promote the next queued item into a brief)
 
 ## Queued (current phase; one-liners)
 
-- tm: bound rebuildPbs gather/clone to the seat spans; carry the prior pb
-  column at projection for out-of-span pbs (§ 3, commit 2 — the 5.4ms win)
 - tm: bound rebuildPbs lane-1 view to the seat spans by binary seek,
   dropping the whole-channel `mergeIndexed` on `rawNotes` (§ 3, commit 3)
 - tm: bound rebuildPbs detune-onset diff to the seat spans by binary seek
