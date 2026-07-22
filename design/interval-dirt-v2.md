@@ -158,6 +158,16 @@ seatScope together — now precedes `pbsByChan`'s clone loop.
   walk per dirty channel, re-projecting every PA. Index gives the pas
   list; the follow-up is seed-gating the projection like every other
   pass.
+
+  Noted 2026-07-23: the index conversion landed in phase 1 (rebuildPA
+  now reads `rawIndexFor(chan).pas`), so "seed-gate like every other
+  pass" understates the residual. PA cells ride the *note* column, which
+  `exciseNotes` rebuilds each dirty pass — and it drops *all* PA cells
+  deliberately (`:1862`), because rebuildPA refills all of them. So the
+  real work is not a projection filter: it is teaching `exciseNotes` to
+  carry out-of-scope PA cells, gating rebuildPA's re-projection on the
+  same seed rows, and covering region/parked PAs (`parkedPA`, logical-
+  born). Settle that carry before promoting the item.
 - **`rebuildPCs`** (:4133): `pcSeedSpans` finds each seed's next onset
   by scanning `rawNotes` from index 1 (:4123); the records build walks
   all notes filtering by span (:4144); the splice walks the cc stream

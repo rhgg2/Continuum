@@ -4279,15 +4279,23 @@ local function pcSeedSpans(chan, dirt, noteLive)
     local live = s.uuid and tm:byUuid(s.uuid)
     if live then addPoint(live.ppq, live.ppqL) end
   end
-  local spans = {}
+  local spans, notes = {}, rawNotes(chan)
   for _, point in ipairs(points) do
-    local nextRaw, nextL = math.huge, math.huge
-    for _, n in ipairs(rawNotes(chan)) do
-      if walkable(n) and n.ppq > point.ppq then nextRaw, nextL = n.ppq, n.ppqL; break end
-    end
-    util.add(spans, { sRaw = point.ppq, eRaw = nextRaw, sL = point.ppqL, eL = nextL })
+    local i = firstAfter(notes, point.ppq)
+    while notes[i] and not walkable(notes[i]) do i = i + 1 end
+    local nextNote = notes[i]
+    util.add(spans, { sRaw = point.ppq, eRaw = nextNote and nextNote.ppq or math.huge,
+                      sL = point.ppqL, eL = nextNote and nextNote.ppqL or math.huge })
   end
   return spans
+end
+
+-- pcSeedSpans' raw extents overlap routinely (two points per seed, shared next-onsets); merge to
+-- disjoint ascending so coverOnsets emits each in-span event exactly once. see interval-dirt v2 § 4
+local function rawCoverSpans(spans)
+  local wins = {}
+  for _, s in ipairs(spans) do util.add(wins, { window = { s.sRaw, s.eRaw } }) end
+  return mergeWindows(wins)
 end
 
 -- PC synthesis (trackerMode only), after the sample stamp. Seed-list dirt closes to spans;
@@ -4295,19 +4303,25 @@ end
 local function rebuildPCs(noteLive)
   if not cm:get('trackerMode') then return end
   local pcWrites = mmBatch()
-  local spansByChan = {}
+  local spansByChan, rawSpansByChan = {}, {}
   for chan = 1, 16 do
     -- Clean channels freeze: their PCs stand in mm and their pc column is carried forward.
     local dirt = dirtyChans[chan]
     if not dirt then goto nextChan end
     local spans = pcSeedSpans(chan, dirt, noteLive[chan])
-    spansByChan[chan] = spans
+    local rawSpans = spans and rawCoverSpans(spans)
+    spansByChan[chan], rawSpansByChan[chan] = spans, rawSpans
     local records = {}
-    for _, entry in ipairs(rawNotes(chan)) do
-      if walkable(entry) and (not spans or pcInSpans(spans, entry.ppq, false)) then
+    local function recordNote(entry)
+      if walkable(entry) then
         util.add(records, { ppq = entry.ppq, ppqL = entry.ppqL, lane = entry.lane,
                             sample = entry.sample, key = entry.colEvt })
       end
+    end
+    if rawSpans then
+      coverOnsets(rawNotes(chan), rawSpans, recordNote)
+    else
+      for _, entry in ipairs(rawNotes(chan)) do recordNote(entry) end
     end
     for _, w in ipairs(noteLive[chan]) do
       local n = w.evt
@@ -4332,12 +4346,15 @@ local function rebuildPCs(noteLive)
           if not pcInSpans(spans, e.ppq, true) then util.add(events, e) end
         end
       end
-      for _, cc in ipairs(rawIndexFor(chan).pcs) do
-        if not spans or pcInSpans(spans, cc.ppq, false) then
-          local cell = projectCC(cc)
-          projectEvent(cell, chan)
-          util.add(events, cell)
-        end
+      local function projectPc(cc)
+        local cell = projectCC(cc)
+        projectEvent(cell, chan)
+        util.add(events, cell)
+      end
+      if spans then
+        coverOnsets(rawIndexFor(chan).pcs, rawSpansByChan[chan], projectPc)
+      else
+        for _, cc in ipairs(rawIndexFor(chan).pcs) do projectPc(cc) end
       end
       sortByPPQ(events)
       channels[chan].columns.pc = { events = events }
