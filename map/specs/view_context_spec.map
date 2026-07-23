@@ -1,6 +1,6 @@
 @spec view_context_spec  src=tests/specs/view_context_spec.lua  loc=517  sha=fdb66b0  cases=32
 @exercises tuning (tuning), trackerView (h.vm), configManager (h.cm)
-@surface   tuning.stepToMidi, vm:activeTemper, cm:set, vm:setTemper
+@surface   tuning.stepToMidi, vm:activeTemper, cm:set
 @harness   mk{seed.ccs}
 
 # Intent
@@ -56,8 +56,7 @@
 # Uses (outbound edges)
   @use call tuning.stepToMidi  @ 254
   @use call vm:activeTemper  @ 500,505,510,514
-  @use call cm:set  @ 504,509,513
-  @use call vm:setTemper  @ 512
+  @use call cm:set  @ 504,509,512,513
 
 # Fields (r read / w write incl. constructor keys)
   @field r cc  @ 401,425,447,465,487
@@ -74,6 +73,7 @@
   @field r ghosts  @ 404,405,406,407,408,427,448,466,489
   @field r grid  @ 400,424,446,464,486
   @field w length  @ 22,43
+  @field w myCustom  @ 512
   @field r name  @ 502,507,514
   @field w name  @ 54,65,77,90,107,120,134,153,164,179,196,205
   @field w name  @ 212,220,227,238,249,264,282,291,301,310,319,338

@@ -509,7 +509,7 @@ return {
       h.cm:set('take', 'temper', 'NotARealTemperName')
       t.eq(h.vm:activeTemper(), nil, 'unknown name resolves to nil')
 
-      h.vm:setTemper('myCustom', tuning.presets['19EDO'])
+      h.cm:set('project', 'tempers', { myCustom = tuning.presets['19EDO'] })
       h.cm:set('take', 'temper', 'myCustom')
       t.eq(h.vm:activeTemper().name, '19EDO', 'user-seeded temper resolves')
     end,

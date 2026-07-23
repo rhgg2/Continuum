@@ -24,21 +24,17 @@
 
 ## Landed (newest first; prune below ~4)
 
+- 2026-07-24 temperEditor: fork writes to the project tier (§ 4)
 - 2026-07-23 swingEditor: fork writes to the project tier (§ 4)
 - 2026-07-23 chrome: badge modified project rows in the library picker (§ 3)
 - 2026-07-23 library: thread lib into production, unify localize (§ 3)
-- 2026-07-23 cm: drop library seeding from the factory catalogue (§ 2)
 
 ## Now
 
-(empty — swing fork-to-project landed; next queued is temperEditor's matching fork. Run /plan-next to promote it.)
+(empty — Phase 4's fork-on-write now covers both editors; run /plan-next to promote the publish/revert dedup — settle QO1 first: confirm modal on divergent library overwrite, or silent?)
 
 ## Queued (current phase; one-liners)
 
-- temperEditor: writes fork to project — `temperWrite` forks a
-  non-project selection via `lib.forkToProject('tempers', selected)` and
-  retargets `selTier`; New/Import modals create at project; `tv:setTemper`
-  drops its `tier` param (§ 4)
 - Editors: `promote`→`lib.publish`, `demote`→`lib.revert` (both editors,
   a mechanical dedup against library.lua); settle QO1 first — confirm
   modal on divergent library overwrite, or silent? (§ 4)

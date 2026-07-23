@@ -583,14 +583,6 @@ function tv:setSwingComposite(name, composite)
   cm:set('project', 'swings', map)
 end
 
-function tv:setTemper(name, temper, tier)
-  if not name or name == '' then return end
-  tier = tier or 'project'
-  local map = cm:getAt(tier, 'tempers') or {}
-  map[name] = temper
-  cm:set(tier, 'tempers', map)
-end
-
 ----- Mute / solo
 
 local pushMute do

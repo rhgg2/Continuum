@@ -1,4 +1,4 @@
-@module editorPage  src=editorPage.lua  loc=43  sha=d1e5be1  mode=chunk  self=ep
+@module editorPage  src=editorPage.lua  loc=43  sha=7ef043d  mode=chunk  self=ep
 @deps cm, ds, cmgr, chrome, gui, modalHost, facade, lib
 
 # Imports
@@ -60,7 +60,7 @@
   @field r gui  @ 13
   @field w gui  @ 15,17,21
   @field r lib  @ 13
-  @field w lib  @ 15
+  @field w lib  @ 15,17
   @field r modalHost  @ 13
   @field w modalHost  @ 15,17,21
   @field w swingEditor  @ 20

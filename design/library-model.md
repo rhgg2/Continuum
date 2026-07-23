@@ -151,7 +151,10 @@ by the same call.
 ### 4. Editors: writes always land at project
 
 - `tv:setSwingComposite` / `tv:setTemper` lose their `tier` params —
-  they always write project.
+  they always write project. (2026-07-24: `tv:setTemper` turned out to
+  have no production caller — the temper editor writes cm directly — so
+  it is deleted rather than tier-stripped; its one spec caller reseats to
+  a direct `cm:set`.)
 - `swingWrite` / `temperWrite` (the sole write paths) call
   `lib.forkToProject` when the current selection is a library/factory
   row, retarget the selection to the project copy, then write. The fork

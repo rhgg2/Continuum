@@ -10,7 +10,7 @@ end
 package.path = reaper.ImGui_GetBuiltinPath() .. '/?.lua;' .. package.path
 local ImGui = require 'imgui' '0.10'
 
-local cm, chrome, ctx, gui, modalHost = (...).cm, (...).chrome, (...).ctx, (...).gui, (...).modalHost
+local cm, chrome, ctx, gui, modalHost, lib = (...).cm, (...).chrome, (...).ctx, (...).gui, (...).modalHost, (...).lib
 
 local SYNTHETIC  = { ['12EDO'] = true }
 
@@ -97,14 +97,22 @@ local function sortSteps(temper)
   end
 end
 
--- Sole write path. normalize sorts the steps (after a cents edit crosses a
--- neighbour); tuning.derive restamps octaveStep + cellWidth either way.
+-- Fork the selected non-project row into project so the edit lands there,
+-- not on the library/factory source. Atomic: shares the gesture's undo point.
+local forkToProject = util.atomic('Fork temper', function()
+  lib.forkToProject('tempers', selected)   -- deep-clones the source into project
+  selTier = 'project'
+end)
+
+-- Sole write path; forks non-project rows to project first. normalize sorts steps
+-- after a cents edit crosses a neighbour; tuning.derive restamps octaveStep/cellWidth.
 local function temperWrite(temper, normalize)
+  if selTier ~= 'project' and not SYNTHETIC[selected] then forkToProject() end
   if normalize then sortSteps(temper) end
   tuning.derive(temper)
-  local lib = cm:getAt(selTier, 'tempers') or {}
-  lib[selected] = temper
-  cm:set(selTier, 'tempers', lib)
+  local map = cm:getAt(selTier, 'tempers') or {}
+  map[selected] = temper
+  cm:set(selTier, 'tempers', map)
 end
 
 -- Editable clone with pitches/stepNames densified to a common length ('' for
@@ -201,10 +209,10 @@ local demote = util.atomic('Demote temper', function(name)
 end)
 
 local deleteSel = util.atomic('Delete temper', function(tier, name)
-  local lib = tier == 'global' and globalTempers() or projectTempers()
-  if lib[name] ~= nil then
-    lib[name] = nil
-    cm:set(tier, 'tempers', lib)
+  local map = tier == 'global' and globalTempers() or projectTempers()
+  if map[name] ~= nil then
+    map[name] = nil
+    cm:set(tier, 'tempers', map)
   end
   if projectTempers()[name] or globalTempers()[name] then
     selectTemper(name)
@@ -368,30 +376,28 @@ local function drawStepTable(temper)
   ImGui.PopStyleVar(ctx)
 end
 
--- New + Import modals, hosted by modalHost (kinds registered below). The opener
--- captures the target tier; the render keeps the popup open on a name clash.
+-- New + Import modals, hosted by modalHost (kinds registered below). Creates at
+-- the project tier; the render keeps the popup open on a name clash.
 openNewModal = function()
-  local tier = selTier or 'project'
   modalHost:open{
     kind = 'temperNew', title = 'New tuning', buf = '',
     callback = function(name)
-      local p = tier == 'global' and globalTempers() or projectTempers()
+      local p = projectTempers()
       p[name] = tuning.derive{ name = name, periodPitch = '2/1', pitches = { '1/1' }, stepNames = {} }
-      cm:set(tier, 'tempers', p)
-      selectTemper(name, tier)
+      cm:set('project', 'tempers', p)
+      selectTemper(name, 'project')
     end,
   }
 end
 
 openImportModal = function()
-  local tier = selTier or 'project'
   modalHost:open{
     kind = 'temperImport', title = 'Import tuning', buf = '', name = '',
     callback = function(name, temper)
-      local p = tier == 'global' and globalTempers() or projectTempers()
+      local p = projectTempers()
       p[name] = temper
-      cm:set(tier, 'tempers', p)
-      selectTemper(name, tier)
+      cm:set('project', 'tempers', p)
+      selectTemper(name, 'project')
     end,
   }
 end
