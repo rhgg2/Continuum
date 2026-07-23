@@ -1,4 +1,4 @@
-@spec tm_gate_parity_spec  src=tests/specs/tm_gate_parity_spec.lua  loc=425  sha=9412af2  cases=6
+@spec tm_gate_parity_spec  src=tests/specs/tm_gate_parity_spec.lua  loc=425  sha=c849ef5  cases=6
 @exercises trackerManager (h.tm), midiManager (h.fm), dataStore (h.ds)
 @surface   tm:getChannel, fm:dump, tm:rebuild, tm:addEvent, tm:flush, ds:assign, tm:fromLogical, tm:assignEvent, tm:toLogical, tm:subscribe, tm:requestRebuild
 @harness   mk{seed.ccs}

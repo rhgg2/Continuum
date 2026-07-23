@@ -1,5 +1,30 @@
 # rebuild as a pipeline — the target dataflow
 
+> **Closed 2026-07-23.** Written as the review standard for the
+> restructure half of interval-dirt phases 3–5; the programmes (v1 closed
+> 2026-07-21, v2 closed 2026-07-23) landed nearly all of it: the `fx`
+> blackboard is explicit stage returns, the ds reads are one head
+> snapshot, zero-write convergence is pinned (`tm_zero_write_spec`), the
+> frame law holds (columns born logical; `projectLogical` is gone),
+> `rebuildPCs` reads the raw record set, and `regionPark`'s `ccExisting`
+> mutation dissolved (the fill seat stays; fx's reconcile deletes it by
+> uuid). The derive-DAG reasons live on in `docs/trackerManager.md`
+> § Rebuild's stage list. Two items closed without landing:
+>
+> - **The `deferred` commit-node restructure — declined.** The atomic
+>   tails commit pins the commit point (one `MIDI_Sort`, delete-first),
+>   so ops staged by `regionPark`/`fx` must cross stages regardless; the
+>   token read-back hazard that motivated the row was resolved by
+>   explicit returns (`restoredNotes`) instead. If the tail walk is ever
+>   opened for behavioural work, the shape change rides along then.
+> - **The placement fixpoint — the owed argument was written, and the
+>   answer is no.** The pass does not converge in-pass for the continuous
+>   domains: a same-pass note park can widen a surviving host's cc/pb
+>   window past the membership set. `docs/trackerManager.md` § The
+>   placement fixpoint carries the per-domain deferral bounds and the
+>   identified one-step fix (continuous membership after note
+>   settlement).
+
 > Companion to `design/interval-dirt.md`: that plan narrows *what* a
 > rebuild re-derives; this one fixes the *shape* the derivation
 > converges to as those phases land. It is the review standard for the

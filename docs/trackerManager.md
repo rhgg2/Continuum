@@ -546,6 +546,45 @@ The two calls per rebuild (pre-park `hostWindows` feeding region parking, post-p
 feeding `rebuildFx`) share the one `fxHostWin`. Park and restore seed the channels they touch, so
 the post-park call recomputes exactly those and reuses the rest.
 
+### The placement fixpoint
+
+Parking is realisation→intent feedback inside one pass: windows decide park
+membership, parking moves note onsets, and note onsets clip windows
+(`hostWindowEnd`'s strict-next-lane-onset bound). The pass runs the loop
+once — membership is evaluated against the head window set, and the
+post-park recompute feeds fx expansion only — so convergence is a
+per-domain fact, not a general one:
+
+- **Notes: exact.** Note windows come only from authored `fxRegions`
+  (`parkWindows` suppresses the note arm on note-host regions) and a note
+  host parks itself by predicate, so note membership reads nothing the
+  pass moves.
+- **pb: defers one rebuild.** A same-pass note park can widen a surviving
+  host's pb window past the head set. The pb pass diffs current windows
+  against the `prevWindows` baseline ungated by channel dirt, so the
+  widened window arrives as a created key at the next non-degenerate
+  rebuild and its authored pbs park then.
+- **cc: defers until same-channel dirt.** The cc scan reads the head
+  `ccSpans` and is gated on `dirtyChans`, so an authored cc newly covered
+  by a same-pass widening stays on take until its channel is next dirty —
+  while fx expansion, reading the post-park windows, realises its stream
+  over the widened span with the authored cc still on the wire.
+
+The over-approximation arm is bounded everywhere: restores narrow
+windows, so at worst the head set parks or carries a member the settled
+layout no longer covers, and the prior-set partition — ungated — restores
+it at the next rebuild.
+
+The exact fix is known and one-step by construction: evaluate continuous
+membership after note settlement, against the post-park windows. cc/pb
+parks remove no note onsets, so continuous parking moves no window — a
+second continuous membership pass can create no new coverage and the
+fixpoint closes in one iteration. Not landed: the escape needs a host
+window clipped by a same-lane successor that parks the same pass, with an
+authored cc/pb in the exposed span — recorded here so the deferral is a
+known bound rather than silence (the question was posed by
+`design/archive/rebuild-pipeline.md` § The placement fixpoint).
+
 ### Derivation dirt: the gated spine
 
 Two axes of dirt drive rebuild. *Materialisation dirt* (the `wholesale`
@@ -584,17 +623,18 @@ clean channel's parked spec carries through untouched by construction — the
 gate skips only the scan that hunts new parks. (`extraColumns` is grow-only,
 so it is merge-safe too.)
 
-`projectLogical` gates with the rest: a carried column is already projected,
-and re-projecting it would corrupt `delayC` (recomputing `evt.ppq - baseline`
-from an already-logical `ppq`). Only dirty channels, freshly materialised,
-reach it.
+Projection gates by construction: columns are born logical — internals
+projects at ingestion, splices carry only logical events — so a carried
+column is logical by invariant, and the re-projection that would corrupt
+`delayC` (recomputing `evt.ppq - baseline` from an already-logical `ppq`)
+has no stage left to run in.
 
-Interval dirt (design/interval-dirt.md) narrows this freeze one producer at a time: a channel whose
-only dirt is note-column edits still carries its CC/park/pb state forward like a clean channel would,
-but hands `rebuildInternals` a live channel to excise and re-clone the closed note span into (§
-Interval materialisation). Every other producer — `ccs`, `regionPark`, `pbs` — doesn't yet
-distinguish interval dirt from wholesale dirt, so it still replaces the whole channel; folding them
-in is the rest of phase 3.
+Interval dirt (design/archive/interval-dirt.md, closed with its v2 successor 2026-07-23) narrowed
+the freeze below channel grain: a channel whose only dirt is note-column edits carries its
+CC/park/pb state forward like a clean channel and splices just the closed spans —
+`rebuildInternals` excises and re-clones the note span (§ Interval materialisation), `rebuildCCs`
+splices the seed-touched windows, `rebuildPbs` gathers span-bounded. Wholesale dirt
+(`dirtyChans[chan] == true`) still replaces the whole channel.
 
 ### Dormant guard
 

@@ -4,6 +4,13 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-23** — rebuild-pipeline.md closed to archive with two negative results recorded rather
+  than landed: the deferred commit-node restructure declined (the atomic tails commit pins the
+  commit point; explicit restoredNotes returns already resolved the read-back hazard), and the
+  placement fixpoint disproven — a same-pass note park can widen a surviving host's cc/pb window
+  past the membership set, cc escapes until same-channel dirt. Bounds + the provably one-step fix
+  (continuous membership after note settlement) in docs/trackerManager.md § The placement fixpoint.
+
 - **2026-07-23** — Interval-gating rebuildPA's PA re-projection exposed a fresh-park double-up:
   exciseNotes carries an out-of-scope PA cell but runs before the park scan seeds the parking PA's
   row, so its stale on-take cell survives and the gated parked loop projects a second cell at the
@@ -456,7 +463,7 @@ prompts for an entry at commit time.
   matches the target through the registry accepting all four spellings, and `module=` names the *used*
   target, not a file to read — fixing the twice-logged back-to-front.
 
-- **2026-07-16** — rebuild's target dataflow fixed (`design/rebuild-pipeline.md`): round-trip through
+- **2026-07-16** — rebuild's target dataflow fixed (`design/archive/rebuild-pipeline.md`): round-trip through
   intent space with ordered, declared commits — over a single terminal commit (three commit groups are
   genuinely ordered and tokens mint at commit) and over the status-quo blackboard. Frame law adopted:
   no event list is ever part-raw, part-realised; columns go logical-only, raw confined to stage-local
