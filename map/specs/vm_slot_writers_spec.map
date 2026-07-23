@@ -1,6 +1,6 @@
-@spec vm_slot_writers_spec  src=tests/specs/vm_slot_writers_spec.lua  loc=198  sha=2e28b65  cases=17
+@spec vm_slot_writers_spec  src=tests/specs/vm_slot_writers_spec.lua  loc=207  sha=f5042ce  cases=18
 @exercises trackerView (h.vm), configManager (h.cm), dataStore (h.ds)
-@surface   vm:setTemperSlot, cm:getAt, vm:setSwingSlot, ds:get, vm:setColSwingSlot, vm:seedSharedSlots, cm:set
+@surface   vm:setTemperSlot, cm:getAt, vm:setSwingSlot, ds:get, vm:setSwingComposite, vm:setColSwingSlot, vm:seedSharedSlots, cm:set
 @harness   mk
 
 # Intent
@@ -16,46 +16,50 @@
   @case 'setSwingSlot writes the take map global slot and seeds defaultSwing at project + track'  [harness]  @ 63-72
   @case 'setSwingSlot localizes a catalogue preset into the project library'  [harness]  @ 75-82
   @case 'setSwingSlot(nil) never localizes the identity floor'  [harness]  @ 85-90
-  @case 'setColSwingSlot localizes a catalogue preset into the project library'  [harness]  @ 93-98
-  @case 'setSwingSlot(nil) writes the identity sentinel into the take map and seed'  [harness]  @ 101-107
-  @case 'setColSwingSlot writes the channel into the take map and the track seed only'  [harness]  @ 113-122
-  @case 'setColSwingSlot preserves entries on other channels'  [harness]  @ 125-136
-  @case 'setColSwingSlot(chan, nil) removes only that channel'  [harness]  @ 139-150
-  @case 'seedSharedSlots copies defaultSwing into a fresh take\'s swing map'  [harness]  @ 156-164
-  @case 'seedSharedSlots does not overwrite a take that already has a swing map'  [harness]  @ 167-175
-  @case 'seedSharedSlots materialises the identity floor when no seed tier is set'  [harness]  @ 178-183
-  @case 'seedSharedSlots: a take left at Off is not re-seeded after the default changes'  [harness]  @ 188-196
+  @case 'setSwingComposite always writes project (no global escape hatch)'  [harness]  @ 93-99
+  @case 'setColSwingSlot localizes a catalogue preset into the project library'  [harness]  @ 102-107
+  @case 'setSwingSlot(nil) writes the identity sentinel into the take map and seed'  [harness]  @ 110-116
+  @case 'setColSwingSlot writes the channel into the take map and the track seed only'  [harness]  @ 122-131
+  @case 'setColSwingSlot preserves entries on other channels'  [harness]  @ 134-145
+  @case 'setColSwingSlot(chan, nil) removes only that channel'  [harness]  @ 148-159
+  @case 'seedSharedSlots copies defaultSwing into a fresh take\'s swing map'  [harness]  @ 165-173
+  @case 'seedSharedSlots does not overwrite a take that already has a swing map'  [harness]  @ 176-184
+  @case 'seedSharedSlots materialises the identity floor when no seed tier is set'  [harness]  @ 187-192
+  @case 'seedSharedSlots: a take left at Off is not re-seeded after the default changes'  [harness]  @ 197-205
 
 # Uses (outbound edges)
   @use call vm:setTemperSlot  @ 18,28,37,47,55
-  @use call cm:getAt  @ 19,20,21,29,30,38,39,46,48,56,70,71,78,80,89,97,106,120,121
-  @use call vm:setSwingSlot  @ 68,79,88,104
-  @use call ds:get  @ 69,105,119,132,146,163,174,182,195
-  @use call vm:setColSwingSlot  @ 96,118,131,145
-  @use call vm:seedSharedSlots  @ 162,173,181,191,194
-  @use call cm:set  @ 192,193
+  @use call cm:getAt  @ 19,20,21,29,30,38,39,46,48,56,70,71,78,80,89,97,98,106,115,129,130
+  @use call vm:setSwingSlot  @ 68,79,88,113
+  @use call ds:get  @ 69,114,128,141,155,172,183,191,204
+  @use call vm:setSwingComposite  @ 96
+  @use call vm:setColSwingSlot  @ 105,127,140,154
+  @use call vm:seedSharedSlots  @ 171,182,190,200,203
+  @use call cm:set  @ 201,202
 
 # Fields (r read / w write incl. constructor keys)
   @field w atom  @ 7,8
-  @field w c58  @ 66,116,128,142,160
-  @field w c67  @ 128,142
-  @field w config  @ 16,27,36,66,116,128,142,159,170
-  @field w data  @ 103,129,143,171
-  @field w defaultSwing  @ 159,170
+  @field w c58  @ 66,125,137,151,169
+  @field w c67  @ 137,151
+  @field w config  @ 16,27,36,66,95,125,137,151,168,179
+  @field w data  @ 112,138,152,180
+  @field w defaultSwing  @ 168,179
   @field r factors  @ 81
   @field w factors  @ 7,8
-  @field r global  @ 69,70,71,105,106,163,174,182,195
-  @field w global  @ 103,159,170,171,192,193
-  @field w name  @ 13,25,34,43,52,63,75,85,93,101,113,125
-  @field w name  @ 139,156,167,178,188
+  @field r global  @ 69,70,71,114,115,172,183,191,204
+  @field w global  @ 95,112,168,179,180,201,202
+  @field w name  @ 13,25,34,43,52,63,75,85,93,102,110,122
+  @field w name  @ 134,148,165,176,187,197
   @field w period  @ 7,8
   @field r presets  @ 16
-  @field w project  @ 16,66,116,128,142,159,170
-  @field w run  @ 14,26,35,44,53,64,76,86,94,102,114,126
-  @field w run  @ 140,157,168,179,189
+  @field w project  @ 16,66,125,137,151,168,179
+  @field w run  @ 14,26,35,44,53,64,76,86,94,103,111,123
+  @field w run  @ 135,149,166,177,188,198
+  @field r shared  @ 97,98
+  @field w shared  @ 95
   @field w shift  @ 7,8
-  @field w swing  @ 103,129,143,171
-  @field w swings  @ 66,116,128,142,160
+  @field w swing  @ 112,138,152,180
+  @field w swings  @ 66,95,125,137,151,169
   @field w take  @ 27,36
   @field w temper  @ 27,36
   @field w tempers  @ 16

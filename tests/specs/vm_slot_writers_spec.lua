@@ -90,6 +90,15 @@ return {
     end,
   },
   {
+    name = 'setSwingComposite always writes project (no global escape hatch)',
+    run = function(harness)
+      local h = harness.mk{ config = { global = { swings = { shared = classic58 } } } }
+      h.vm:setSwingComposite('shared', classic67, 'global')  -- old 3-arg form: tier now ignored
+      t.deepEq((h.cm:getAt('project', 'swings') or {}).shared, classic67, 'edit lands in project')
+      t.deepEq(h.cm:getAt('global', 'swings').shared, classic58, 'global copy untouched')
+    end,
+  },
+  {
     name = 'setColSwingSlot localizes a catalogue preset into the project library',
     run = function(harness)
       local h = harness.mk()

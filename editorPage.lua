@@ -9,10 +9,10 @@ if not reaper.ImGui_GetBuiltinPath then
   return reaper.MB('ReaImGui is not installed or too old.', 'My script', 0)
 end
 
-local cm, ds, cmgr, chrome, gui, modalHost, facade =
-  (...).cm, (...).ds, (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).facade
+local cm, ds, cmgr, chrome, gui, modalHost, facade, lib =
+  (...).cm, (...).ds, (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).facade, (...).lib
 local swingEditor  = util.instantiate('swingEditor',
-  { cm = cm, ds = ds, chrome = chrome, ctx = gui.ctx, gui = gui, facade = facade, modalHost = modalHost })
+  { cm = cm, ds = ds, chrome = chrome, ctx = gui.ctx, gui = gui, facade = facade, modalHost = modalHost, lib = lib })
 local temperEditor = util.instantiate('temperEditor',
   { cm = cm, chrome = chrome, ctx = gui.ctx, gui = gui, facade = facade, modalHost = modalHost })
 
@@ -27,7 +27,7 @@ local ep = {}
 -- Fast path: editTuning/editSwing set pane + selection via the renderer, then
 -- switch the page (they hold coord). Mirrors samplePage's diveToSampler.
 facade.publish('editor', {
-  edit = function(lib, name) er:edit(lib, name) end,
+  edit = function(pane, name) er:edit(pane, name) end,
 })
 
 ----- Page lifecycle — no take binding; pane state persists across visits

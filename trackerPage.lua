@@ -146,7 +146,7 @@ facade.publish('tracker', {
   -- Take-context + tier-spanning slot writes for the off-stack editor page.
   timeSig           = function()        return tv:timeSig()      end,
   cursorAnchor      = function()        return tv:cursorAnchor() end,
-  setSwingComposite = function(name, c, tier) tv:setSwingComposite(name, c, tier) end,
+  setSwingComposite = function(name, c) tv:setSwingComposite(name, c) end,
 })
 
 ----- Page interface — render delegates to the renderer; the watcher brackets the frame

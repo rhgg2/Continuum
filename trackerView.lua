@@ -576,12 +576,11 @@ function tv:seedSharedSlots()
   end
 end
 
-function tv:setSwingComposite(name, composite, tier)
+function tv:setSwingComposite(name, composite)
   if not name or name == '' then return end
-  tier = tier or 'project'
-  local map = cm:getAt(tier, 'swings') or {}
+  local map = cm:getAt('project', 'swings') or {}
   map[name] = composite
-  cm:set(tier, 'swings', map)
+  cm:set('project', 'swings', map)
 end
 
 function tv:setTemper(name, temper, tier)

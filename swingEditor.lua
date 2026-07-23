@@ -39,8 +39,11 @@ local PERIOD_PRESETS = {
 
 local SWING_SOFT_QN = 0.15
 
-local cm, ds, chrome, ctx, gui, facade, modalHost =
-  (...).cm, (...).ds, (...).chrome, (...).ctx, (...).gui, (...).facade, (...).modalHost
+-- Names whose row has no forkable source: the synthetic 'identity' floor.
+local SYNTHETIC = { identity = true }
+
+local cm, ds, chrome, ctx, gui, facade, modalHost, lib =
+  (...).cm, (...).ds, (...).chrome, (...).ctx, (...).gui, (...).facade, (...).modalHost, (...).lib
 
 local function arrange() return facade.get('arrange') end
 local function tracker() return facade.get('tracker') end
@@ -263,10 +266,18 @@ local function compositesEqual(a, b)
   return true
 end
 
---contract: sole write path; idempotent on equal composites; refresh via setSwingComposite
+-- Fork the selected non-project row into project so the edit lands there,
+-- not on the library/factory source. Atomic: shares the gesture's undo point.
+local forkToProject = util.atomic('Fork swing', function()
+  lib.forkToProject('swings', state.name)   -- deep-clones the source into project
+  state.tier = 'project'
+end)
+
+--contract: sole write path; forks non-project rows to project first; idempotent on equal composites
 local function swingWrite(composite)
   if compositesEqual(swingRead() or {}, composite) then return end
-  tracker().setSwingComposite(state.name, composite, state.tier)
+  if state.tier ~= 'project' and not SYNTHETIC[state.name] then forkToProject() end
+  tracker().setSwingComposite(state.name, composite)
 end
 
 -- Editable clone with a guaranteed factors[] array, so write paths can
@@ -410,8 +421,6 @@ end
 
 ----- Tier-aware library writes
 
-local SYNTHETIC = { identity = true }
-
 local function projectSwings() return cm:getAt('project', 'swings') or {} end
 -- Reads the library (global) tier directly; the Factory catalogue is not merged in here.
 local function globalSwings() return cm:getAt('global', 'swings') or {} end
@@ -541,15 +550,14 @@ local function buildDescriptor()
   }
 end
 
--- New-swing modal, hosted by modalHost (kind registered below). Opener captures
--- the target tier; the render keeps the popup open on a name clash.
+-- New-swing modal, hosted by modalHost (kind registered below). Creates at the
+-- project tier; the render keeps the popup open on a name clash.
 openNewModal = function()
-  local tier = state.tier or 'project'
   modalHost:open{
     kind = 'swingNew', title = 'New swing', buf = '',
     callback = function(name)
-      tracker().setSwingComposite(name, {}, tier)
-      switchTo(name, tier)
+      tracker().setSwingComposite(name, {})
+      switchTo(name, 'project')
     end,
   }
 end
