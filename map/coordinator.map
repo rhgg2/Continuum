@@ -1,4 +1,4 @@
-@module coordinator  src=coordinator.lua  loc=367  sha=e2be081  mode=chunk  self=coord
+@module coordinator  src=coordinator.lua  loc=367  sha=f5042ce  mode=chunk  self=coord
 @deps cm, ds, eventMeta, cmgr, gui
 
 # Invariants & contracts
@@ -208,7 +208,7 @@
   @field w help  @ 47
   @field w id  @ 100
   @field w identity  @ 22
-  @field w lib  @ 47
+  @field w lib  @ 25,47
   @field w modalHost  @ 47
   @field w page  @ 364
   @field w pageSuppressed  @ dispatch:106

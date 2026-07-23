@@ -22,7 +22,7 @@ local lib = util.instantiate('library',
   { cm = cm, synthetic = { swings = { identity = true }, tempers = { ['12EDO'] = true } } })
 
 local chrome = util.instantiate('chrome',
-  { cm = cm, ctx = ctx, uiSize = uiSize })
+  { cm = cm, ctx = ctx, uiSize = uiSize, lib = lib })
 local toolbar = chrome.makeToolbar()   -- one shared toolbar; renders the active page's row
 local modalHost = util.instantiate('modalHost', { ctx = ctx, chrome = chrome })
 local help      = util.instantiate('help', { ctx = ctx, chrome = chrome, cmgr = cmgr })

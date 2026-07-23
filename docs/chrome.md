@@ -67,3 +67,5 @@ The -/+ symbols are drawn as crisp axis-aligned filled rects on the window draw 
 ## Picker
 
 The generic typeahead picker (`drawPicker`) is shared across pages to avoid duplicating the popup/filter/keyboard logic. Each picker is identified by a `kind` string; filter text and cursor position are stored per kind so switching pages and back restores state. The `pickerActive` flag is frame-scoped: pages check it before consuming Enter so the picker's own Enter handler wins.
+
+`libPicker` builds the item list for a library-shaped cm key (`swings`, `tempers`) in three groups, in order: Off (nil key); project entries (`cm.project[key]`, plain label, with a trailing ` •` badge when `lib.modified` reports the entry has diverged from its library/factory source); and other entries present in the merged view but not yet localized to project (`+` prefix). `excludeOthers` filters names out of the third group only — used to hide `id` from the swing picker, which is already covered by Off.

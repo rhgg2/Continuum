@@ -1,0 +1,45 @@
+@spec libpicker_badge_spec  src=tests/specs/libpicker_badge_spec.lua  loc=65  sha=untracked  cases=1
+@harness   mk
+
+# Intent
+  Pin-test for chrome.libPicker's modified badge: project rows whose entry has
+  diverged from its library/factory source carry a trailing bullet; pristine
+  project rows and `+`others rows stay bare. Instantiated over a harness cm
+  with a lib service (mirrors the coordinator wiring).
+
+# Helpers
+  @fn mkChrome(h)  @ 27-33
+  @fn itemByKey(items, key)  @ 35-37
+
+# Cases
+  @case 'libPicker badges the divergent project row, leaves the pristine one bare'  [harness]  @ 41-63
+
+# Fields (r read / w write incl. constructor keys)
+  @field w ImGui_GetBuiltinPath  @ 21
+  @field w Mod_None  @ 11
+  @field w PopFont  @ 12
+  @field w PopStyleColor  @ 13
+  @field w PushFont  @ 12
+  @field w PushStyleColor  @ 13
+  @field w __index  @ 14
+  @field w alpha  @ 45,49
+  @field w beta  @ 46,50
+  @field w cm  @ 29,32
+  @field w config  @ 43
+  @field w ctx  @ 32
+  @field w factors  @ 45,46,49,50
+  @field w global  @ 48
+  @field w identity  @ 30
+  @field r key  @ 36
+  @field r label  @ 61,62
+  @field w lib  @ 32
+  @field r loaded  @ 20
+  @field w name  @ 41
+  @field r preload  @ 17
+  @field w project  @ 44
+  @field r reaper  @ 21
+  @field w run  @ 42
+  @field w swings  @ 30,44,48
+  @field w synthetic  @ 30
+  @field w tempers  @ 30
+  @field w uiSize  @ 32

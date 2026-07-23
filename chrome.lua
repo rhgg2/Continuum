@@ -10,7 +10,7 @@
 local ImGui   = require 'imgui' '0.10'
 local painter = require 'painter'
 
-local cm, ctx       = (...).cm, (...).ctx
+local cm, ctx, lib  = (...).cm, (...).ctx, (...).lib
 
 local cache = {}
 cm:subscribe('configChanged', function() cache = {} end)
@@ -414,13 +414,7 @@ local function pickerIsActive()        return pickerActive end
 local function resetPickerActive()     pickerActive = false end
 
 -- Build the picker-item list for a library-shaped cm key (e.g. 'swings',
--- 'tempers'). Three groups, in order:
---   1. Off    — nil key.
---   2. Project entries (cm.project[key]) — plain label.
---   3. Other entries (anything in the merged view but not in project) —
---      `+` prefix, marking "available but not yet localized to project".
--- excludeOthers is a set of names to filter out of group 3 only — used
--- to hide `id` from the swing picker (already covered by Off).
+-- 'tempers'); groups, modified badge, excludeOthers — see docs/chrome.md § Picker.
 local function libPicker(key, current, excludeOthers)
   excludeOthers = excludeOthers or {}
   local proj   = cm:getAt('project', key) or {}
@@ -432,7 +426,8 @@ local function libPicker(key, current, excludeOthers)
   for k in pairs(proj) do projNames[#projNames+1] = k end
   table.sort(projNames)
   for _, name in ipairs(projNames) do
-    items[#items+1] = { label = name, key = name, group = 2, current = current == name }
+    local label = lib.modified(key, name) and (name .. ' \xe2\x80\xa2') or name
+    items[#items+1] = { label = label, key = name, group = 2, current = current == name }
   end
 
   local otherNames = {}
