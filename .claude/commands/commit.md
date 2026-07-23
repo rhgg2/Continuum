@@ -4,16 +4,16 @@ description: Write the commit headline here, then a subagent runs hygiene + add 
 
 One pass. No iterative refinement.
 
-1. `git status --porcelain`. Empty → clean tree; say so and stop. Don't spawn.
-2. Decide the headline yourself — you have the change's intent from this conversation, a cold subagent wouldn't. `<scope>: <headline>`, imperative, ≤70 chars, scoped to the affected area (eg `tm: fix off-by-one in selection rect`). Glance at `git diff --stat` if you need to confirm scope; don't read the full diff.
+1. `git status --porcelain`. Empty → clean tree; say so and stop. Don't spawn. If this was an `/implement-next` session, there will probably be changes you didn't make to the current design document and plan: that's from the previous session's `/plan-next` so nothing to worry about.
+2. Decide the headline yourself: you have the change's intent from this conversation. The format is `<scope>: <headline>`, imperative, ≤70 chars, scoped to the affected area (eg `tm: fix off-by-one in selection rect`). Glance at `git diff --stat` if you need to confirm scope; don't read the full diff.
 
-Steps 3–5 decide *what* bookkeeping this commit carries — the judgment is yours, and a cold subagent can't make it (it never touched the map tools, can't see the session's decisions). Step 6 applies it: you assemble one manifest and `tools/bookkeep.py` does the mechanical part — JSON escaping, the decision-log wrap, the Landed move + prune, the Now swap. Author here; apply there.
+Steps 3–5 decide *what* bookkeeping this commit carries — the judgment is yours, and a cold subagent can't make it. Step 6 applies it: you assemble one manifest and `tools/bookkeep.py` does the mechanical part. Author here; apply there.
 
-3. Map-tooling satisfaction survey — the `feedback` key. Rate the tooling **this session**, honestly; it is a defect log, not a compliment. If you bypassed the maps entirely, say so and say why.
+3. Map-tooling survey — the `feedback` key. Rate the tooling **this session**, honestly; it is a defect log, not a compliment. If you bypassed the maps entirely, say so and say why.
 
    - `score` — 1-5, how helpful the map tooling was this session. Rate the tooling, not the session's outcome. Use `null` when the session never exercised it (a config or docs task with no Lua in it) — a neutral 3 would be a lie that poisons the average.
-   - `used` — array of what you actually reached for: `"map_query"`, `"map"` (read a `.map` directly), `"grep"` / `"read"` (you went around the map tooling), `[]` (never needed it).
-   - `comment` — optional, and the point of the exercise. What would have made the tooling more useful *on this task*: a query you couldn't express, an edge the index missed, a lookup that took three calls and should have taken one. Omit rather than pad; a bare score is a fine entry when nothing stood out.
+   - `used` — array of what you actually used: `"map_query"`, `"map"` (read a `.map` directly), `"grep"` / `"read"` (you went around the map tooling), `[]` (never needed it).
+   - `comment` — the point of the exercise. What would have made the tooling more useful for you *on this task*: a query you couldn't express, an edge the index missed, a lookup that took three calls and should have taken one. A bare score is a fine entry when nothing stood out.
 4. Decision log — the `decision` key. If the change embodies a non-trivial design decision (a chosen trade-off, a rejected alternative, a new convention), write the one/two-line entry as plain prose; the script dates it, wraps it, and prepends it to `docs/decisions.md`. Most commits don't — omit the key.
 5. Landing bookkeeping — the `land` key. If `plan/CURRENT` exists and this commit completes the live plan's Now entry (wholly, or its final piece), include `land: {headline, ref, now}`: the script prepends `- <date> <headline> (<ref>)` to Landed, prunes it below ~4, and replaces the Now body with your `now` note. The design-doc revision is **not** the script's job — if the landing settled something design-relevant, revise the design doc by hand in this same pass (dated note, WHY only; don't write "Landed 2026/07/10"). Commits unrelated to the plan: omit the key.
 6. Apply the bookkeeping. Assemble the manifest from whichever of 3-5 produced a key (all keys optional; `date` defaults to today), write it to your scratchpad, and run `python3 tools/bookkeep.py <path>`. It writes the files directly — no review gate, so eyeball them in the subagent's `git diff`. Skip this step when none of 3-5 fired.
