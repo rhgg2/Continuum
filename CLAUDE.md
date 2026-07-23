@@ -2,13 +2,12 @@
 
 Continuum is a Lua 5.4 tracker-style MIDI editor for REAPER.
 
-These notes are for your orientation, not a test. Most of them are
-conventions, and worth following because consistency is valued here,
-but not worth agonising over. The few things that do real work are
-marked as such and carry their reason, so you can tell a constraint
-from a preference. If a rule here fights the work in front of you, say
-so and back your judgement: that's a useful signal about the rule, not
-a transgression.
+These notes are for your orientation. Most are conventions, and worth
+following because consistency is valued here, but don't agonise over
+theem. The things that do real work are marked, carry their reason, so
+you can tell a constraint from a preference. If a rule fights the work
+in front of you, say so and back your judgement: that's a signal about
+the rule, not a transgression.
 
 ## Architecture
 
@@ -60,34 +59,30 @@ Four places carry information about a module:
    concern that spans files. It doesn't restate API surface or repeat
    a `--KIND:` annotation, because the reader already has those.
 
-**Length caps.** Annotations earn their place by being scannable — a
-reader should get a file's contract off the top of the screen without
-unfolding paragraphs. So `--invariant:` / `--contract:` / `--emits:` /
-`--reaper:` are one line, ≤100 chars (aim 90), and inline comments run
-to two. `--shape:` is exempt from the line cap for *describing the
-shape*: field names, types, nesting.
+**Length caps.** Annotations earn their place by being scannable. So
+`--invariant:` / `--contract:` / `--emits:` / `--reaper:` are one
+line, ≤100 chars (aim 90), and inline comments run to two. `--shape:`
+is exempt from the line cap for *describing the shape*: field names,
+types, nesting.
 
-If something won't fit, that's information rather than a problem. It
-means you're holding rationale, history or an example, and those live
-in `docs/<file>.md`. Leave a one-line pointer at the site (`-- see
-docs/<file>.md § <section>`) and write it properly there.
+If something won't fit, it means you're holding rationale, history or
+an example, and those live in `docs/<file>.md`. Leave a one-line
+pointer at the site (`-- see docs/<file>.md § <section>`).
 
-`docs/CONVENTIONS.md` is worth reading before you author annotations,
-comments or docs — it carries the contract/annotation/doc boundary
-rules, section-divider grammar, and the reasoning behind the caps.
-`docs/timing.md`, `docs/tuning.md` and `docs/configManager.md` are the
-ones to imitate.
+`docs/CONVENTIONS.md` carries the contract/annotation/doc boundary
+guidelines, section-divider grammar, and the reasoning behind the
+caps. `docs/timing.md`, `docs/tuning.md` and `docs/configManager.md`
+are good models.
 
 ## Programme plans
 
 Big programmes compile their next steps out of `design/<doc>.md` into
 `plan/<programme>.md`; `plan/CURRENT` names the live one. For
-implementation work on the programme, read the plan file first — it
-carries what just landed and a self-contained brief for what's next,
-so you rarely need the design doc. `/plan-next` promotes the next
-queued item into that brief; the commit skill's pre-agent steps handle
-landing bookkeeping. Design docs stay pure model: no checkboxes or
-status boards, just dated notes where a landing settled something.
+implementation work, read the plan file first — it carries what just
+landed and a self-contained brief for what's next, so you rarely need
+the design doc. `/plan-next` promotes the next queued item into that
+brief; the commit skill's pre-agent steps handle landing bookkeeping.
+Design docs stay pure model.
 
 ## How to work
 

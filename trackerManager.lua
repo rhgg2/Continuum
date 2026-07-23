@@ -3093,10 +3093,15 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
     local keptById, dirtyRows
     local keptFx = {}   -- identity set: derived specs re-added verbatim, already settled last pass
     local seeded, emitScope = {}, {}
-    if gated then
-      keptById = {}
-      for _, kept in ipairs(noteExisting[chan]) do util.bucket(keptById, kept.derived, kept) end
-      dirtyRows = seedRowsFor(dirt)
+    if gated then dirtyRows = seedRowsFor(dirt) end
+    -- keptById feeds only runOrKeep's keep branch; an all-run channel never reads it, so defer the
+    -- noteExisting walk to the first keep. see design/interval-dirt-v2.md § 5
+    local function keptFor()
+      if not keptById then
+        keptById = {}
+        for _, kept in ipairs(noteExisting[chan]) do util.bucket(keptById, kept.derived, kept) end
+      end
+      return keptById
     end
     -- A clean overlapper still runs (its curve is a fold input inside the overlap) but the narrowed
     -- emission drops its own remainder.
@@ -3109,7 +3114,7 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
     end
     local function runOrKeep(producer)
       if gated and not seeded[producer] and keepable(producer) then
-        for _, kept in ipairs(keptById[producer.id] or {}) do
+        for _, kept in ipairs(keptFor()[producer.id] or {}) do
           util.add(predicted, kept); keptFx[kept] = true
         end
         -- A kept pb window still records its geometry: pb seats are markerless downstream, so a
