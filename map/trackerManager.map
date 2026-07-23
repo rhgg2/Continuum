@@ -1,4 +1,4 @@
-@module trackerManager  src=trackerManager.lua  loc=4760  sha=e2a4cf1  mode=chunk  self=tm
+@module trackerManager  src=trackerManager.lua  loc=4760  sha=a89505b  mode=chunk  self=tm
 @deps mm, cm, ds, defaultNoteCols
 
 # Invariants & contracts
@@ -409,7 +409,7 @@
       -- splice it in ppq-order. Mirror of the walk's per-event body, driven by spliceChannelCCs' row scan.
   @fn buildCcExistingInWindows(chan, fillWin, ccExisting, seedRows)  @ 2001-2024
       -- ccExisting scopes to the seed-touched prev cc windows only (edge-inclusive); clean windows keep their seats untouched, and cc-family carries merge rather than replace.
-      -- Seeks the maintained um index (current mid-pipeline), not mm. See design/interval-dirt-v2.md § 1, docs/decisions.md § 2026-07-21.
+      -- Seeks the maintained um index (current mid-pipeline), not mm. See design/archive/interval-dirt-v2.md § 1, docs/decisions.md § 2026-07-21.
   @fn ccColumnFor(chan, evType, ccNum)  @ 2027-2031
       -- The carried column an (evType, cc) pair names, or nil when nothing is carried there.
   @fn removeCellFor(col, row, uuid)  @ 2035-2046

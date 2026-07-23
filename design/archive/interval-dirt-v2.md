@@ -1,6 +1,15 @@
 # interval dirt v2 — the raw record set, and what is still O(channel)
 
-> Successor to `design/archive/interval-dirt.md` (closed 2026-07-21).
+> **Closed 2026-07-23.** The programme landed — all five phases: the raw
+> record set (§ 1), the two ungated passes (§ 2), the rebuildPbs skeleton
+> (§ 3), the scan-to-filter passes (§ 4), and the rebuildFx soft spots
+> (§ 5). § 6 was by-design non-targets throughout. The enduring model
+> lives in `docs/trackerManager.md`; per-landing deviations in
+> `docs/decisions.md`. This file is the full history: the shared-fix
+> design and the per-phase corrections settled at landing.
+>
+> Was: working design doc, successor to `design/archive/interval-dirt.md`
+> (closed 2026-07-21).
 > v1 ended with every *derivation* gated on seeds; this list is what an
 > audit the same day found still walking whole channels. Item 1 is the
 > shared fix — a constantly-maintained raw record set — and the anchor

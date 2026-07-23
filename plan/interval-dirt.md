@@ -1,6 +1,6 @@
 # interval-dirt v2 — plan
 
-> source: `design/interval-dirt-v2.md` — synthesis (`/plan-next`) compiles
+> source: `design/archive/interval-dirt-v2.md` — synthesis (`/plan-next`) compiles
 > from there; don't design here.
 
 ## Phases

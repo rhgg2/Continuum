@@ -3,7 +3,7 @@
 -- seeds the dirt, a neighbour onset seeds a ppq inside its span, or the take length changes (which
 -- arrives as a wholesale reload, so the column walk reclips every window). A depth-30 vibrato host
 -- seats a pb stream across exactly its window, so the max pb-seat ppq tracks the window end -- the
--- observable these cases lean on. see design/interval-dirt-v2.md § 2
+-- observable these cases lean on. see design/archive/interval-dirt-v2.md § 2
 
 local t    = require('support')
 local util = require('util')

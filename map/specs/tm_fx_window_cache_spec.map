@@ -1,4 +1,4 @@
-@spec tm_fx_window_cache_spec  src=tests/specs/tm_fx_window_cache_spec.lua  loc=83  sha=untracked  cases=3
+@spec tm_fx_window_cache_spec  src=tests/specs/tm_fx_window_cache_spec.lua  loc=83  sha=7e3df59  cases=3
 @exercises trackerManager (h.tm), midiManager (h.fm)
 @surface   tm:addEvent, tm:flush, fm:dump, tm:setLength
 @harness   mk
@@ -9,7 +9,7 @@
   seeds the dirt, a neighbour onset seeds a ppq inside its span, or the take length changes (which
   arrives as a wholesale reload, so the column walk reclips every window). A depth-30 vibrato host
   seats a pb stream across exactly its window, so the max pb-seat ppq tracks the window end -- the
-  observable these cases lean on. see design/interval-dirt-v2.md § 2
+  observable these cases lean on. see design/archive/interval-dirt-v2.md § 2
 
 # Helpers
   @fn addVibHost(h)  @ 14-18

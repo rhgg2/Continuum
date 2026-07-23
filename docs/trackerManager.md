@@ -520,7 +520,7 @@ replaces the per-channel `mm:ccsRaw` walk, so work scales with parked members, n
 An fx note-host's window is `[onset, windowEnd)`, where `windowEnd` is the authored (or take-end)
 ceiling clipped to the host's strict-next same-lane onset — the span a vibrato or tension producer
 seats across. `computeFxWindows` once rebuilt this for every note-column event of every fx-active
-channel, twice per rebuild, with no dirt gate (`design/interval-dirt-v2.md` § 2). It now caches each
+channel, twice per rebuild, with no dirt gate (`design/archive/interval-dirt-v2.md` § 2). It now caches each
 host's `windowEnd` per uuid (`fxHostWin`) and recomputes one only when the dirt reaches it: the
 host's own uuid seeded (its move or length mutation), or a seed ppq fell inside the host's cached
 span (a neighbour onset that becomes the new clip). Everything else rides the cached end.

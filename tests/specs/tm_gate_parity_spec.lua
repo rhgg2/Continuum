@@ -362,7 +362,7 @@ return {
       -- Sparse authored pbs bracket a wide linear ramp; a lane-1 detune onset sits between them, far
       -- from either. Reseating that onset gates to a span excluding both authored pbs, so a realPbs
       -- truncated to the clone scope would sample 0 instead of the ramp's interpolated value. The
-      -- whole-from-index realPbs samples it correctly. see design/interval-dirt-v2.md § 3
+      -- whole-from-index realPbs samples it correctly. see design/archive/interval-dirt-v2.md § 3
       local h = harness.mk{
         seed = { ccs = {
           { ppq = 400,  chan = 1, evType = 'pb', val = 0,   cents = 0,   shape = 'linear' },

@@ -1997,7 +1997,7 @@ local function spliceCcCell(live, ccWrites)
 end
 
 -- ccExisting scopes to the seed-touched prev cc windows only (edge-inclusive); clean windows keep their seats untouched, and cc-family carries merge rather than replace.
--- Seeks the maintained um index (current mid-pipeline), not mm. See design/interval-dirt-v2.md § 1, docs/decisions.md § 2026-07-21.
+-- Seeks the maintained um index (current mid-pipeline), not mm. See design/archive/interval-dirt-v2.md § 1, docs/decisions.md § 2026-07-21.
 local function buildCcExistingInWindows(chan, fillWin, ccExisting, seedRows)
   local byCc = fillWin[chan]
   if not byCc then return end
@@ -3095,7 +3095,7 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
     local seeded, emitScope = {}, {}
     if gated then dirtyRows = seedRowsFor(dirt) end
     -- keptById feeds only runOrKeep's keep branch; an all-run channel never reads it, so defer the
-    -- noteExisting walk to the first keep. see design/interval-dirt-v2.md § 5
+    -- noteExisting walk to the first keep. see design/archive/interval-dirt-v2.md § 5
     local function keptFor()
       if not keptById then
         keptById = {}
@@ -3740,7 +3740,7 @@ local function rebuildPbs(fxOut, extraColumns)
   end
 
   -- Lane-1 detune queries over rawNotes union liveLane1, by binary seek -- the materialised whole-
-  -- channel view is gone; each query hits the index and the derived stream direct. see design/interval-dirt-v2.md § 3
+  -- channel view is gone; each query hits the index and the derived stream direct. see design/archive/interval-dirt-v2.md § 3
   local function detuneAt(chan, P)
     local notes = rawNotes(chan)
     local i = firstAfter(notes, P) - 1        -- last index with ppq <= P
@@ -3875,7 +3875,7 @@ local function rebuildPbs(fxOut, extraColumns)
   end
 
   -- Closes seeds to raw spans that gate onsets/densify/anchor/absorber-pool below; nil = ungated.
-  -- Extents come by seek, ahead of the gather. see design/interval-dirt-v2.md § 3
+  -- Extents come by seek, ahead of the gather. see design/archive/interval-dirt-v2.md § 3
   local function seatScope(chan, dirt, rw, derivedLane1)
     if dirt == true then return nil end
     local spans = {}
@@ -3944,7 +3944,7 @@ local function rebuildPbs(fxOut, extraColumns)
   end
 
   -- Each pb rides its own clone through the pass, carrying the index entry's uuid so a mutated clone still
-  -- names its source; origShape is held because the pass rewrites shape. see design/interval-dirt-v2.md § 3
+  -- names its source; origShape is held because the pass rewrites shape. see design/archive/interval-dirt-v2.md § 3
   local pbsByChan = {}
   for chan = 1, 16 do
     if dirty[chan] then
@@ -3990,7 +3990,7 @@ local function rebuildPbs(fxOut, extraColumns)
       return inKeptRange(ppq)
     end
     -- A replace window's clipped endRaw is kept-owned yet falls inside the window's seat span and
-    -- generates no seat here; those kept-boundary seats carry from the prior column. see design/interval-dirt-v2.md § 3
+    -- generates no seat here; those kept-boundary seats carry from the prior column. see design/archive/interval-dirt-v2.md § 3
     local fenced = {}   -- raw ppq -> true: carried (identity refresh via pbEntryByRaw), not projected fresh
     for i = #pbs, 1, -1 do
       if fencedPb(pbs[i].ppq) then fenced[pbs[i].ppq] = true; table.remove(pbs, i) end
@@ -4007,7 +4007,7 @@ local function rebuildPbs(fxOut, extraColumns)
     end
 
     -- The authored value stream, whole and read-only, straight from the raw index -- decoupled from the
-    -- bounded clone set. cents from the sidecar, else back-derived for foreign pbs. see design/interval-dirt-v2.md § 3
+    -- bounded clone set. cents from the sidecar, else back-derived for foreign pbs. see design/archive/interval-dirt-v2.md § 3
     local realPbs, pbEntryByRaw = {}, {}
     for _, entry in ipairs(rawPbs(chan)) do
       pbEntryByRaw[entry.ppq] = entry
@@ -4246,7 +4246,7 @@ local function rebuildPbs(fxOut, extraColumns)
         util.add(pbColEvents, pb)
       end
       -- Carry the whole out-of-scope remainder verbatim -- re-deriving from the wire would quantise through
-      -- centsToRaw. Each refreshes uuid/realised since a carried event predates its committed uuid. see design/interval-dirt-v2.md § 3
+      -- centsToRaw. Each refreshes uuid/realised since a carried event predates its committed uuid. see design/archive/interval-dirt-v2.md § 3
       for _, evt in ipairs(priorPbCol and priorPbCol.events or {}) do
         local carry = evt.ppqRaw and (not inSpans(seatSpans, evt.ppqRaw) or fenced[evt.ppqRaw])
         local entry = carry and pbEntryByRaw[evt.ppqRaw]
