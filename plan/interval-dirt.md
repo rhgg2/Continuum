@@ -18,23 +18,19 @@
 
 ## Landed (newest first; prune below ~4)
 
+- 2026-07-23 tm: narrow rebuildFx bases to the running producers (§ 5)
 - 2026-07-23 tm: build rebuildFx's keptById lazily on first keep (§ 5)
 - 2026-07-23 tm: seed-gate rebuildPA's PA re-projection (§ 4)
 - 2026-07-23 tm: gate stampSamples' sample scan on seed-dirty channels (§ 4)
-- 2026-07-23 tm: seek-bound rebuildPCs's three residual raw walks (§ 4)
 
 ## Now
 
-(empty — phase 5's keptById defer landed; run /plan-next to promote the queued 'bases cover running producers' windows only' item into a Now brief)
+(empty — interval-dirt-v2 complete: phases 1-5 all landed, the rebuildFx base narrowing was the last item. Run /plan-next to promote the next programme's first brief.)
 
 ## Queued (current phase; one-liners)
 
-- rebuildFx: bases cover running producers' windows only — hoist the
-  `seeded`/gate classification (:3169-3222) above `pbBaseFor`/`ccBasesFor`
-  (:3162-3165) so `spans` merges the seeded producers, not all of them.
-  Downstream reads confirm the narrowing is safe: `channelStreams` runs
-  only for running producers, and `rebuildPbs`' fold (:3820) reads
-  `pbBase[chan]` over live spans (`emitScope`) only. (§ 5, second bullet)
+(empty — phase 5's last item is in Now; landing it closes phases 1–5 and the
+interval-dirt-v2 programme.)
 
 (§ 6 lists the by-design non-targets: `rebuildCCs`' seed/wholesale
 split, the tail walk's 16-seed linear fallback, the

@@ -3164,11 +3164,6 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
                             fx = region.fx, id = region.uuid, lane = nil, delayPpq = 0 })
     end
 
-    -- Bases cover the merged producer windows and nothing more: every read below is span-bounded.
-    local spans = mergeWindows(producers)
-    pbBase, ccBases = pbBaseFor(chan, spans), ccBasesFor(chan, spans)
-    fxOut.pbBase[chan] = pbBase
-
     -- Emit scope per target = merged windows of the seeded producers touching it; the cc fold and
     -- reconcile clip to it. Clean windows never enter ccExisting, so their seats keep untouched.
     if gated then
@@ -3225,6 +3220,16 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
       for target, group in pairs(emitWins) do emitScope[target] = mergeWindows(group) end
       fxOut.pbScope[chan] = emitScope.pb or {}
     end
+
+    -- Bases cover only the producers runOrKeep will actually run: a kept producer reads no base (its
+    -- output re-adds verbatim); every running producer's window feeds channelStreams. see design § 5
+    local running = {}
+    for _, producer in ipairs(producers) do
+      if not gated or seeded[producer] or not keepable(producer) then util.add(running, producer) end
+    end
+    local spans = mergeWindows(running)
+    pbBase, ccBases = pbBaseFor(chan, spans), ccBasesFor(chan, spans)
+    fxOut.pbBase[chan] = pbBase
 
     for _, producer in ipairs(producers) do runOrKeep(producer) end
 
