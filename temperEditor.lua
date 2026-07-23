@@ -191,20 +191,13 @@ end
 
 ----- Tier-aware library writes
 
-local function promote(name)
-  if not name then return end
-  local g = globalTempers()
-  g[name] = util.deepClone(temperFor(name))
-  cm:set('global', 'tempers', g)
-end
+local function promote(name) if name then lib.publish('tempers', name) end end
 
 -- Wrapped: a project-tier write is undoable but mints no undo point of its
 -- own (projext); atomic gives it one so it doesn't rewind as a passenger.
 local demote = util.atomic('Demote temper', function(name)
   if not name then return end
-  local p = projectTempers()
-  p[name] = util.deepClone(globalTempers()[name] or temperFor(name))
-  cm:set('project', 'tempers', p)
+  lib.revert('tempers', name)
   selectTemper(name, 'project')
 end)
 

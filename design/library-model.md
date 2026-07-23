@@ -164,8 +164,9 @@ by the same call.
   highlight); it no longer picks a write target.
 - New/Import modals always create at project (drop the
   `selTier or 'project'` tier capture).
-- `promote` → `lib.publish` behind a confirm-on-divergent-overwrite
-  modal (modalHost). `demote` disappears as a user verb; its body
+- `promote` → `lib.publish` (silent — QO1 settled 2026-07-24: no
+  overwrite confirm; the modal, if wanted, moves to § 5's action bar,
+  not the write plumbing). `demote` disappears as a user verb; its body
   becomes `lib.revert`.
 
 ### 5. editorRender: tree + action bar
@@ -188,10 +189,13 @@ by the same call.
 
 ## Open questions
 
-1. **Publish overwrite confirm** — worth a modal in v1, or is silent
+1. **Publish overwrite confirm** — ~~worth a modal in v1, or is silent
    overwrite acceptable given the library row can be re-derived from
    any project that used it? Leaning modal: it's the one remaining
-   destructive-to-library gesture.
+   destructive-to-library gesture.~~ Resolved 2026-07-24: **silent**.
+   Pre-beta and a re-derivable library row make silent overwrite
+   acceptable; the confirm modal, if it earns its place, belongs to
+   § 5's action-bar rework, not Phase 4's write plumbing.
 2. **Tidy for tempers** — reference scan needs a `takesUsing` analogue
    over take/track-tier `temper` values. If that's awkward, v1 ships
    tidy for swings only and tempers keep manual delete.

@@ -16,25 +16,27 @@
    for swing/temper symmetry — landed
 4. **Editors write to project** (§ 4) — `setSwingComposite`/`setTemper` lose
    `tier`; `swingWrite`/`temperWrite` fork-on-write; `promote`→`publish`,
-   `demote`→`revert`; New/Import modals create at project ← in-flight
+   `demote`→`revert`; New/Import modals create at project — landed
 5. **editorRender tree + action bar** (§ 5) — Active/Project/Library/Factory
-   sections; `publish`/`revert`/`tidy` verbs; modified badge on project rows
+   sections; `publish`/`revert`/`tidy` verbs; modified badge on project rows;
+   the publish-overwrite confirm modal lands here (QO1, deferred 2026-07-24) ← in-flight
 6. **Docs** (§ 6) — `swingEditor.md` + `configManager.md` rewrites; new
    `docs/library.md`; archive the design doc
 
 ## Landed (newest first; prune below ~4)
 
+- 2026-07-24 editors: delegate promote/demote to lib.publish/revert (§ 4)
 - 2026-07-24 temperEditor: fork writes to the project tier (§ 4)
 - 2026-07-23 swingEditor: fork writes to the project tier (§ 4)
 - 2026-07-23 chrome: badge modified project rows in the library picker (§ 3)
-- 2026-07-23 library: thread lib into production, unify localize (§ 3)
 
 ## Now
 
-(empty — Phase 4's fork-on-write now covers both editors; run /plan-next to promote the publish/revert dedup — settle QO1 first: confirm modal on divergent library overwrite, or silent?)
+(empty — Phase 4 landed; run /plan-next to promote Phase 5's first item, editorRender tree + action bar, into a brief)
 
 ## Queued (current phase; one-liners)
 
-- Editors: `promote`→`lib.publish`, `demote`→`lib.revert` (both editors,
-  a mechanical dedup against library.lua); settle QO1 first — confirm
-  modal on divergent library overwrite, or silent? (§ 4)
+- editorRender: Active/Project/Library/Factory tree sections replacing the flat list
+- action bar: `publish`/`revert`/`tidy` verbs wired to the selected row's tier
+- modified badge on project rows in the editor tree (mirrors the picker badge)
+- publish-overwrite confirm modal (QO1, deferred from Phase 4) — build modalHost wiring here
