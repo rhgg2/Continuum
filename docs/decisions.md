@@ -4,6 +4,12 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-23** — Placement fixpoint closed one pass later than its disproof: continuous (cc/pb)
+  park membership now reads post-settlement windows via a settleWindows thunk rebuildRegionPark
+  calls between its note/PA and cc/pb passes; note membership stays on the head set (exact by
+  construction). One settlement step suffices because cc/pb parks move no note onset. Supersedes the
+  'closed without landing' note in design/archive/rebuild-pipeline.md's closure header.
+
 - **2026-07-23** — rebuild-pipeline.md closed to archive with two negative results recorded rather
   than landed: the deferred commit-node restructure declined (the atomic tails commit pins the
   commit point; explicit restoredNotes returns already resolved the read-back hazard), and the

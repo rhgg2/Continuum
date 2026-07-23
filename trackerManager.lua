@@ -2386,7 +2386,7 @@ end
 -- Region-replace parking: authored events a replace window covers leave the take;
 -- the prior parked set carries still-covered forward, restores the rest. see design/note-macros-v2.md § Generator output
 
-local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows, hostWindows)
+local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows, hostWindows, settleWindows)
   local batch = mmBatch()
   -- Restored notes re-enter their columns unrealised (the real mm event lands with the deferred
   -- tail commit); their raw scratch recs return so rebuild can wire each cell post-commit.
@@ -2429,22 +2429,22 @@ local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows
   local priorByType = {}
   for _, spec in ipairs(fxParked or {}) do util.bucket(priorByType, spec.evType, spec) end
 
-  -- Window extents per target: the fresh note/cc scans visit only these, never the whole channel --
-  -- see docs/trackerManager.md § Span-covered fx scans for why the extents are the complete cover set.
-  local noteSpans, ccSpans = {}, {}
+  -- Window extents per target: the fresh note/cc scans visit only these, never the whole channel;
+  -- cc extents come from the settled set below. see docs/trackerManager.md § Span-covered fx scans
+  local noteSpans = {}
   do
-    local noteWins, ccWins = {}, {}
+    local noteWins = {}
     for _, w in ipairs(currentWindows) do
-      local box = { window = { w.startppq, w.endppq } }
-      if     w.evType == 'note' then util.bucket(noteWins, w.chan, box)
-      elseif w.evType == 'cc'   then util.bucket(ccWins, util.key(w.chan, w.cc), box) end
+      if w.evType == 'note' then
+        util.bucket(noteWins, w.chan, { window = { w.startppq, w.endppq } })
+      end
     end
     for chan, wins in pairs(noteWins) do noteSpans[chan] = mergeWindows(wins) end
-    for key,  wins in pairs(ccWins)   do ccSpans[key]   = mergeWindows(wins) end
   end
 
   -- Notes: can't mute (note-on/off + CC matching), so a covered authored note leaves the take, fed
   -- by two bounded sources -- see docs/trackerManager.md § Span-covered fx scans for the note-host split.
+  local noteParked
   do
     local scan, seen = {}, {}
     local function candidate(evt, laneIdx, events)
@@ -2468,7 +2468,8 @@ local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows
     end
 
     -- Park removes a blocker; same-lane/pitch neighbours' tails regrow.
-    local newParked, restores = reconcilePark(scan, priorByType.note or {},
+    local restores
+    noteParked, restores = reconcilePark(scan, priorByType.note or {},
       function(spec) seedDirty(spec.chan, parkSeed(spec, 'park')) end)
 
     -- Restores re-enter their columns now (unrealised); the tail walk clips them in place and
@@ -2497,7 +2498,7 @@ local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows
     -- Off-take membership for the generator + grid: each is a render-ready logical cell
     -- (ppq/endppqC like a projected note); an emptied lane re-extends to keep a column home.
     local takeLen = tm:length()
-    renderUnion('parked', newParked, function(spec)
+    renderUnion('parked', noteParked, function(spec)
       local channel = channels[spec.chan]
       while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
       return util.assign(util.clone(spec), { endppq = spec.endppq or util.OPEN })
@@ -2575,9 +2576,22 @@ local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows
     renderUnion('parkedPA', newParked, util.clone)
   end
 
+  -- Notes are settled (parks unlinked onsets, restores re-entered); re-derive continuous windows
+  -- before cc/pb membership so a same-pass widened host parks now. see docs/trackerManager.md § The placement fixpoint
+  currentWindows = settleWindows(restoredNotes, noteParked)
+
   -- CCs: a point event has no tail, so the Pass-A curve stands in on the target lane and
   -- restores add back immediately, seating an unrealised projection for the view.
   do
+    -- cc extents from the settled set, so the scan visits any span a note park just exposed.
+    local ccSpans, ccWins = {}, {}
+    for _, w in ipairs(currentWindows) do
+      if w.evType == 'cc' then
+        util.bucket(ccWins, util.key(w.chan, w.cc), { window = { w.startppq, w.endppq } })
+      end
+    end
+    for key, wins in pairs(ccWins) do ccSpans[key] = mergeWindows(wins) end
+
     local scan = {}
     for chan = 1, 16 do
       if dirtyChans[chan] then
@@ -4433,51 +4447,60 @@ local function rebuildPipeline(didReload)
   perf.start('externals'); rebuildExternals(external); perf.stop('externals')  -- reintroduce foreign / diverged notes
   perf.start('samples'); stampSamples(); perf.stop('samples')  -- bearing rule: stamp bare notes from the prevailing PC
 
-  -- Park window set: fx-regions plus every on-take note host as a degenerate region (note-is-a-region),
-  -- from the settled columns. The producer re-scans post-unpark below. see design/note-macros-v2.md § Offline continuous realisation
+  -- Park window set: fx-regions plus every on-take or still-producing parked note host, as a degenerate
+  -- region (note-is-a-region); assembled twice -- head set for notes, settled set for cc/pb + fx. see design/note-macros-v2.md § Offline continuous realisation
+  local function assembleParkWindows(hostWins, parkedNoteSpecs)
+    local parkRegions = {}
+    for _, r in ipairs(sources.fxRegions or {}) do util.add(parkRegions, r) end
+    -- computeFxWindows already found every on-take fx host (its map keys are exactly the non-pa fx
+    -- cells); sort (chan, lane, ppq) to hold the whole-column scan's emission order -- parkWindows downstream is G4-stable.
+    local noteHosts = {}
+    for host, windowEnd in pairs(hostWins) do util.add(noteHosts, { host = host, endppq = windowEnd }) end
+    table.sort(noteHosts, function(a, b)
+      local ha, hb = a.host, b.host
+      if ha.chan ~= hb.chan then return ha.chan < hb.chan end
+      if ha.lane ~= hb.lane then return ha.lane < hb.lane end
+      return ha.ppq < hb.ppq
+    end)
+    for _, nh in ipairs(noteHosts) do
+      util.add(parkRegions, { chan = nh.host.chan, startppq = nh.host.ppq, endppq = nh.endppq,
+                              fx = nh.host.fx, noteHost = true })
+    end
+    -- A self-parked host is off-take but still runs a producer, so its continuous (pb/cc) windows must
+    -- register on any surviving fx, not just parksNotes -- see § Route-by-window: mixed-kind un-parking.
+    for _, spec in ipairs(parkedNoteSpecs) do
+      if spec.evType == 'note' and spec.fx then
+        local endL = (spec.endppq == nil or spec.endppq == util.OPEN)
+                     and tm:toLogical(spec.chan, tm:length()) or spec.endppq
+        util.add(parkRegions, { chan = spec.chan, startppq = spec.ppq, endppq = endL,
+                                fx = spec.fx, noteHost = true })
+      end
+    end
+    return generators.parkWindows(parkRegions)
+  end
+
   perf.start('fxWindows'); local hostWindows = computeFxWindows(); perf.stop('fxWindows')
   perf.start('parkRegions')
-  local parkRegions = {}
-  for _, r in ipairs(sources.fxRegions or {}) do util.add(parkRegions, r) end
-  -- computeFxWindows already found every on-take fx host (its map keys are exactly the non-pa
-  -- fx cells); iterate that rather than rescanning the columns. Sort (chan, lane, ppq) to hold the
-  -- emission order the whole-column scan gave -- parkWindows downstream is G4-stable.
-  local noteHosts = {}
-  for host, windowEnd in pairs(hostWindows) do util.add(noteHosts, { host = host, endppq = windowEnd }) end
-  table.sort(noteHosts, function(a, b)
-    local ha, hb = a.host, b.host
-    if ha.chan ~= hb.chan then return ha.chan < hb.chan end
-    if ha.lane ~= hb.lane then return ha.lane < hb.lane end
-    return ha.ppq < hb.ppq
-  end)
-  for _, nh in ipairs(noteHosts) do
-    util.add(parkRegions, { chan = nh.host.chan, startppq = nh.host.ppq, endppq = nh.endppq,
-                            fx = nh.host.fx, noteHost = true })
-  end
-  -- A self-parked host is off-take but still runs a producer, so its continuous (pb/cc) windows must
-  -- register on any surviving fx, not just parksNotes -- see § Route-by-window: mixed-kind un-parking.
-  for _, spec in ipairs(sources.fxParked or {}) do
-    if spec.evType == 'note' and spec.fx then
-      local endL = (spec.endppq == nil or spec.endppq == util.OPEN)
-                   and tm:toLogical(spec.chan, tm:length()) or spec.endppq
-      util.add(parkRegions, { chan = spec.chan, startppq = spec.ppq, endppq = endL,
-                              fx = spec.fx, noteHost = true })
-    end
-  end
-  local currentWindows = generators.parkWindows(parkRegions)
+  local currentWindows = assembleParkWindows(hostWindows, sources.fxParked or {})
   perf.stop('parkRegions')
 
-  perf.start('regionPark'); local restoredNotes = rebuildRegionPark(deferred, currentWindows, sources.fxParked, sources.prevWindows, hostWindows); perf.stop('regionPark')  -- park covered, carry/restore prior
+  -- Post-settlement window pass, called by rebuildRegionPark between its note and cc/pb passes: fxWindow
+  -- feeds fx expansion's host set, settledWindows the continuous membership + persisted window set.
+  local fxWindow, settledWindows
+  local function settleWindows(restoredNotes, noteParked)
+    local restoredFxChans = {}
+    for _, rec in ipairs(restoredNotes) do
+      if rec.colEvt.fx then restoredFxChans[rec.colEvt.chan] = true end
+    end
+    fxWindow = computeFxWindows(restoredFxChans)
+    settledWindows = assembleParkWindows(fxWindow, noteParked)
+    return settledWindows
+  end
+
+  perf.start('regionPark'); local restoredNotes = rebuildRegionPark(deferred, currentWindows, sources.fxParked, sources.prevWindows, hostWindows, settleWindows); perf.stop('regionPark')  -- park covered, carry/restore prior
   perf.start('pa'); rebuildPA(); perf.stop('pa')  -- project PAs into settled note columns (each spliced in ppq order)
 
-  -- Post-park window pass: the maintained on-take hosts plus any fx-note cell an unpark just restored
-  -- into its column (a replace host that lost its note-producing kind falls back to on-take augment).
-  local restoredFxChans = {}
-  for _, rec in ipairs(restoredNotes) do
-    if rec.colEvt.fx then restoredFxChans[rec.colEvt.chan] = true end
-  end
-  perf.start('fxWindows'); local fxWindow = computeFxWindows(restoredFxChans); perf.stop('fxWindows')
-  perf.start('fx'); local fxOut = rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWindows, sources.fxRegions); perf.stop('fx')  -- fx expansion: derived notes/CCs
+  perf.start('fx'); local fxOut = rebuildFx(noteExisting, ccExisting, deferred, fxWindow, settledWindows, sources.fxRegions); perf.stop('fx')  -- fx expansion: derived notes/CCs
 
   perf.start('tails'); rebuildTails(fxOut.noteLive, deferred, restoredNotes); perf.stop('tails')  -- unified tail/onset walk + atomic note commit
 
@@ -4491,8 +4514,8 @@ local function rebuildPipeline(didReload)
 
   -- Persist this rebuild's window set: next rebuild recognizes seats against it (prev-keyed). see § Route-by-window
   perf.start('prevWindows')
-  if mm:take() and not util.deepEq(sources.prevWindows or {}, currentWindows) then
-    ds:assign('prevWindows', #currentWindows > 0 and currentWindows or util.REMOVE)
+  if mm:take() and not util.deepEq(sources.prevWindows or {}, settledWindows) then
+    ds:assign('prevWindows', #settledWindows > 0 and settledWindows or util.REMOVE)
   end
   perf.stop('prevWindows')
 

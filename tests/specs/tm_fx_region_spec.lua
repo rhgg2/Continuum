@@ -1691,4 +1691,39 @@ return {
     end,
   },
 
+  {
+    -- The placement fixpoint's one-step closure: continuous membership reads post-settlement windows,
+    -- so a window widened by a same-pass note park parks its exposed cc now, not after the next
+    -- same-channel dirt. see docs/trackerManager.md § The placement fixpoint
+    name = 'a same-pass note park widens a surviving host window and parks the exposed authored cc',
+    run = function(harness)
+      local h = harness.mk()
+      -- Plain successor on the host's lane: it clips the host's autopan window to [0, 240).
+      addNote(h, { ppq = 240, endppq = 480, pitch = 64 })
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 960, chan = 1, pitch = 60, vel = 100,
+                      detune = 0, delay = 0, lane = 1,
+                      fx = { { kind = 'autopan', period = { 1, 4 }, depth = 32 } } })
+      h.tm:flush()
+      -- Authored cc10 in the span the successor hides: outside [0, 240), inside [0, 960).
+      -- Identified by uuid, since the augment's fill seats fold the authored base val back in.
+      h.tm:addEvent({ evType = 'cc', ppq = 480, chan = 1, cc = 10, val = 3 }); h.tm:flush()
+      local authoredUuid
+      for _, c in ipairs(h.fm:dump().ccs) do
+        if c.evType == 'cc' and c.cc == 10 and c.ppq == 480 then authoredUuid = c.uuid end
+      end
+      t.truthy(authoredUuid, 'the authored cc landed on the take')
+      t.eq(#stashOfType(h, 'cc'), 0, 'the clipped window reaches no authored cc')
+
+      -- The region parks the successor; with its onset gone the host window widens to its
+      -- authored ceiling in the same pass, so the exposed cc must park in this rebuild.
+      injectArp(h, { startppq = 240, endppq = 480 })
+      local stash = stashOfType(h, 'cc')
+      t.eq(#stash, 1, 'the exposed authored cc parks in the same pass')
+      t.eq(stash[1].ppq, 480, 'the parked spec is the exposed cc')
+      for _, c in ipairs(h.fm:dump().ccs) do
+        t.truthy(c.uuid ~= authoredUuid, 'the authored cc left the take; only fill seats remain')
+      end
+    end,
+  },
+
 }

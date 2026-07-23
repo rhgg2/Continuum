@@ -542,48 +542,45 @@ through `mm:setLength`, which fires a `wholesale=true` reload; that dirties all 
 draft carried an `fxWinLen` stamp to wipe the cache on a length change — dead code, since the
 wholesale reload beats it to the recompute every time.
 
-The two calls per rebuild (pre-park `hostWindows` feeding region parking, post-park `fxWindow`
-feeding `rebuildFx`) share the one `fxHostWin`. Park and restore seed the channels they touch, so
-the post-park call recomputes exactly those and reuses the rest.
+The two calls per rebuild (head `hostWindows` feeding the note pass, post-settlement `fxWindow` —
+computed by `settleWindows` from within the park stage — feeding cc/pb membership and `rebuildFx`)
+share the one `fxHostWin`. Park and restore seed the channels they touch, so the settlement call
+recomputes exactly those and reuses the rest.
 
 ### The placement fixpoint
 
 Parking is realisation→intent feedback inside one pass: windows decide park
 membership, parking moves note onsets, and note onsets clip windows
-(`hostWindowEnd`'s strict-next-lane-onset bound). The pass runs the loop
-once — membership is evaluated against the head window set, and the
-post-park recompute feeds fx expansion only — so convergence is a
-per-domain fact, not a general one:
+(`hostWindowEnd`'s strict-next-lane-onset bound). The pass closes the loop
+by splitting membership across the settlement point.
 
-- **Notes: exact.** Note windows come only from authored `fxRegions`
-  (`parkWindows` suppresses the note arm on note-host regions) and a note
-  host parks itself by predicate, so note membership reads nothing the
-  pass moves.
-- **pb: defers one rebuild.** A same-pass note park can widen a surviving
-  host's pb window past the head set. The pb pass diffs current windows
-  against the `prevWindows` baseline ungated by channel dirt, so the
-  widened window arrives as a created key at the next non-degenerate
-  rebuild and its authored pbs park then.
-- **cc: defers until same-channel dirt.** The cc scan reads the head
-  `ccSpans` and is gated on `dirtyChans`, so an authored cc newly covered
-  by a same-pass widening stays on take until its channel is next dirty —
-  while fx expansion, reading the post-park windows, realises its stream
-  over the widened span with the authored cc still on the wire.
+Note membership reads the head window set, and is exact there: note
+windows come only from authored `fxRegions` (`parkWindows` suppresses the
+note arm on note-host regions) and a note host parks itself by predicate,
+so note membership reads nothing the pass moves.
 
-The over-approximation arm is bounded everywhere: restores narrow
-windows, so at worst the head set parks or carries a member the settled
-layout no longer covers, and the prior-set partition — ungated — restores
-it at the next rebuild.
+Continuous (cc/pb) membership reads the settled set: after the note and
+PA passes, `rebuildRegionPark` calls the pipeline's `settleWindows` to
+recompute host windows from the settled columns and reassemble the window
+set — the same call feeds fx expansion, so there is no extra window pass.
+One settlement step suffices by construction: cc/pb parks remove no note
+onsets, so continuous parking moves no window, and a second continuous
+pass could create no new coverage.
 
-The exact fix is known and one-step by construction: evaluate continuous
-membership after note settlement, against the post-park windows. cc/pb
-parks remove no note onsets, so continuous parking moves no window — a
-second continuous membership pass can create no new coverage and the
-fixpoint closes in one iteration. Not landed: the escape needs a host
-window clipped by a same-lane successor that parks the same pass, with an
-authored cc/pb in the exposed span — recorded here so the deferral is a
-known bound rather than silence (the question was posed by
-`design/archive/rebuild-pipeline.md` § The placement fixpoint).
+Without the split the fixpoint escaped: a same-pass note park widened a
+surviving host's cc/pb window past the head membership set, deferring the
+exposed pb one rebuild and the exposed cc until its channel's next dirt —
+while fx expansion, reading post-park windows, realised its stream with
+the authored cc still on the wire. The dirt gates stay sound under the
+split: a note park only moves windows on its own channel, and the note
+and cc scans share the same per-channel gate, so any channel whose
+windows can move mid-pass is already dirty when the cc scan runs.
+
+The over-approximation arm needs no such care: restores narrow windows,
+so at worst the settled set carries a member the layout no longer covers,
+and the prior-set partition — ungated — restores it at the next rebuild.
+(The question was posed by `design/archive/rebuild-pipeline.md` § The
+placement fixpoint.)
 
 ### Derivation dirt: the gated spine
 
