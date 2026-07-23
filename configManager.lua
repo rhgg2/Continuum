@@ -489,6 +489,12 @@ function cm:getAt(level, key)
   return util.deepClone(tbl)
 end
 
+--contract: deep-copy of the schema default for key (no tiers, no merge); raises on unknown key
+function cm:defaultFor(key)
+  checkKey(key)
+  return copy(defaults[key])
+end
+
 --contract: seeds global tier for key from its default catalogue when empty; excluded names omitted
 function cm:seedGlobalFromDefault(key, exclude)
   checkKey(key)

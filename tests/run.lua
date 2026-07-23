@@ -20,6 +20,7 @@ local specs = {
   'cmgr_stack_spec',
   'cmgr_overrides_spec',
   'config_schema_spec',
+  'library_spec',
   'cm_poll_undo_spec',
   'pext_store_spec',
   'ps_mirror_spec',
