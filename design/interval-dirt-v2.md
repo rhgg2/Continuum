@@ -168,6 +168,35 @@ seatScope together — now precedes `pbsByChan`'s clone loop.
   carry out-of-scope PA cells, gating rebuildPA's re-projection on the
   same seed rows, and covering region/parked PAs (`parkedPA`, logical-
   born). Settle that carry before promoting the item.
+
+  Settled 2026-07-23 (compiled to plan): the predicate is the existing
+  `seedCovers` closure, applied uniformly at three sites — `exciseNotes`
+  carries a PA cell where `not covers`, and both rebuildPA loops (index PAs,
+  `parkedPA`) re-project where `covers`. It is symmetric and complete because
+  every PA that must re-project seeds its own row: a direct edit seeds it; a
+  host move/resize/pitch re-authors each attached PA through `assignLowlevel`
+  (resizeNote, pitch branch), seeding it; delete culls+seeds; and `seedCovers`
+  unions snapshot∪live ppqL, so a moved PA's old and new rows are both in
+  scope. The parked loop's uniform gate is safe because a park window owns its
+  span: trackerView routes any edit there through `addParked`, so no live note
+  can land over a parked PA to steal it via `findNoteColumnForPitch`'s
+  live-covering branch — a parked PA re-homes only on its own park/restore.
+  The one gap the gate exposes: the fresh-park PA scan (`:2538`) deletes the
+  raw PA via `batch.del` but never seeds its row (the pb park at `:2644` seeds
+  explicitly; `mmBatch.del` does not). Refill-all hid this; the gate drops the
+  freshly-parked cell unless the scan adds `seedDirty(cc.chan, rawSeed(cc,
+  'park'))`.
+
+  Corrected 2026-07-23 (implementation): the fresh-park gap is a *double-up*,
+  not a drop, and the seed alone does not close it. `exciseNotes` runs in
+  `rebuildInternals`, before the park scan seeds the PA's row, so the new
+  carry-untouched `exciseNotes` leaves the parking PA's stale on-take cell in
+  the column; the seed then makes rebuildPA's parked loop project a second cell
+  at the same row. The seed is still required (the parked loop is gated), but
+  the park scan must additionally drop the freshly-parked PAs' on-take cells
+  from their note columns — where the PA leaves the take is where its on-take
+  rendering must go. Only fresh parks need this: a carrying parked PA's row is
+  covered iff seeded, so `exciseNotes` and the gated loop already agree on it.
 - **`rebuildPCs`** (:4133): `pcSeedSpans` finds each seed's next onset
   by scanning `rawNotes` from index 1 (:4123); the records build walks
   all notes filtering by span (:4144); the splice walks the cc stream

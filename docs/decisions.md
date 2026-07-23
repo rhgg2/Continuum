@@ -4,6 +4,13 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-23** — Interval-gating rebuildPA's PA re-projection exposed a fresh-park double-up:
+  exciseNotes carries an out-of-scope PA cell but runs before the park scan seeds the parking PA's
+  row, so its stale on-take cell survives and the gated parked loop projects a second cell at the
+  same row. Fixed by dropping freshly-parked PAs' on-take cells at the park scan (where the PA
+  leaves the take), not by a redundant second column scan in rebuildPA — only fresh parks strand a
+  cell.
+
 - **2026-07-23** — tm's stampSamples now gates on seeds -- a seed-dirty channel stamps only its
   resolved seed entries, a wholesale channel keeps the full scan. Found in passing: authored PCs do
   not survive PC synthesis (only the wholesale pass stamps from them), so a bare mid-session

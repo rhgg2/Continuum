@@ -1,6 +1,6 @@
-@spec tm_rebuild_spec  src=tests/specs/tm_rebuild_spec.lua  loc=396  sha=1747f65  cases=18
+@spec tm_rebuild_spec  src=tests/specs/tm_rebuild_spec.lua  loc=470  sha=1747f65  cases=20
 @exercises trackerManager (h.tm), midiManager (h.fm), configManager (h.cm)
-@surface   tm:getChannel, fm:dump, tm:rebuild, tm:addEvent, tm:flush, tm:deleteEvent, fm:unload, tm:currentTake, cm:set, tm:assignEvent
+@surface   tm:getChannel, fm:dump, tm:rebuild, tm:addEvent, tm:flush, tm:deleteEvent, fm:unload, tm:currentTake, cm:set, tm:assignEvent, fm:notes
 @harness   mk{seed.notes, seed.ccs}
 
 # Intent
@@ -25,29 +25,35 @@
   @case 'delete-then-add in a single flush leaves one note at new ppq'  [harness]  @ 326-341
   @case 'dormant tracker (dead take) ignores a foreign configChanged instead of rebuilding'  [harness]  @ 347-368
   @case 'opening a note tail (util.OPEN) keeps its attached PAs'  [harness]  @ 372-394
+  @case 'editing one PA re-projects only its row -- siblings carry by identity'  [harness]  @ 401-434
+  @case 'moving a PA to a new row shows it there and not at the old row'  [harness]  @ 441-468
 
 # Uses (outbound edges)
-  @use call tm:getChannel  @ 11,27,118,147,191,204,227,249,281,320,333,355,366,385
+  @use call tm:getChannel  @ 11,27,118,147,191,204,227,249,281,320,333,355,366,385,415,451
   @use call fm:dump  @ 44,61,78,95,173,316,338,390
   @use call tm:rebuild  @ 94
   @use call tm:addEvent  @ 313,335
-  @use call tm:flush  @ 314,336,387
+  @use call tm:flush  @ 314,336,387,424,465
   @use call tm:deleteEvent  @ 334
   @use call fm:unload  @ 359
   @use call tm:currentTake  @ 360
   @use call cm:set  @ 364
-  @use call tm:assignEvent  @ 386
+  @use call tm:assignEvent  @ 386,423,464
+  @use call fm:notes  @ 460
 
 # Fields (r read / w write incl. constructor keys)
   @field r OPEN  @ 386
   @field w cc  @ 272
   @field r ccs  @ 283,390
-  @field w ccs  @ 112,140,201,271,378
+  @field w ccs  @ 112,140,201,271,378,406,446
+  @field r chan  @ 461
   @field w chan  @ 24,41,56,73,89,109,113,137,141,143,168,169
   @field w chan  @ 186,187,201,222,223,244,245,268,272,274,276,313
-  @field w chan  @ 330,335,351,377,379,380,381
+  @field w chan  @ 330,335,351,377,379,380,381,405,407,408,409,445
+  @field w chan  @ 446
   @field r columns  @ 13,14,28,29,119,121,148,151,153,192,205,207
   @field r columns  @ 228,250,252,283,287,291,300,321,333,355,366,385
+  @field r columns  @ 415,451
   @field r delay  @ 46,63,80,97,158
   @field w delay  @ 57,110,138,222,223,244,245,269,313,335,352
   @field w derived  @ 113,141
@@ -56,39 +62,44 @@
   @field r endppq  @ 176
   @field w endppq  @ 24,32,41,56,73,89,109,137,168,169,186,187
   @field w endppq  @ 222,223,244,245,268,313,318,330,335,340,351,377
-  @field w endppq  @ 386
+  @field w endppq  @ 386,405,445,464
   @field w endppqL  @ 138,352
-  @field r evType  @ 301,391
+  @field r evType  @ 301,391,416,452
   @field w evType  @ 113,141,143,201,272,274,276,313,335,379,380,381
+  @field w evType  @ 407,408,409,446
   @field r events  @ 14,32,121,148,153,207,252,283,291,300,321,333
-  @field r events  @ 355,366,385
+  @field r events  @ 355,366,385,415,451
   @field r hidden  @ 154,292
   @field w lane  @ 313,335
   @field r mood  @ 284,295,304
   @field w mood  @ 273,275,277
   @field w name  @ 7,20,37,51,68,85,102,126,163,181,197,215
-  @field w name  @ 237,263,310,326,347,372
+  @field w name  @ 237,263,310,326,347,372,401,441
   @field r notes  @ 13,14,28,29,44,61,78,95,121,148,173,192
   @field r notes  @ 228,250,252,300,317,318,321,333,339,340,355,366
-  @field r notes  @ 385
+  @field r notes  @ 385,415,451
   @field w notes  @ 24,41,55,72,89,108,136,167,185,221,243,267
-  @field w notes  @ 330,351,377
+  @field w notes  @ 330,351,377,405,445
   @field r pb  @ 119,151,153,205,207,287,291
+  @field r pitch  @ 461
   @field w pitch  @ 24,32,41,56,73,89,109,137,168,169,186,187
   @field w pitch  @ 222,223,244,245,268,276,313,318,330,335,340,351
-  @field w pitch  @ 377,379,380,381
-  @field r ppq  @ 148,157,175
+  @field w pitch  @ 377,379,380,381,405,407,408,409,445,446
+  @field r ppq  @ 148,157,175,416,452
   @field w ppq  @ 24,32,41,56,73,89,109,113,137,141,143,168
   @field w ppq  @ 169,186,187,201,207,222,223,244,245,268,272,274
-  @field w ppq  @ 276,313,318,330,335,340,351,377,379,380,381
+  @field w ppq  @ 276,313,318,330,335,340,351,377,379,380,381,405
+  @field w ppq  @ 407,408,409,445,446,464
   @field w ppqL  @ 138,352
   @field w run  @ 8,21,38,52,69,86,103,127,164,182,198,216
-  @field w run  @ 238,264,311,327,348,373
+  @field w run  @ 238,264,311,327,348,373,402,442
   @field w seed  @ 23,40,54,71,88,107,135,166,184,200,220,242
-  @field w seed  @ 266,329,350,376
+  @field w seed  @ 266,329,350,376,404,444
   @field r tag  @ 285,296,305
   @field w tag  @ 273,275,277
+  @field r uuid  @ 423,461
   @field w val  @ 113,141,143,201,207,272,274
+  @field r vel  @ 427,428,429
   @field w vel  @ 24,32,41,56,73,89,109,137,168,169,186,187
   @field w vel  @ 222,223,244,245,268,276,313,318,330,335,340,351
-  @field w vel  @ 377,379,380,381
+  @field w vel  @ 377,379,380,381,405,407,408,409,423,445,446

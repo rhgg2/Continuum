@@ -393,4 +393,78 @@ return {
       t.eq(pas, 3, 'all three PAs survive the open-tail edit')
     end,
   },
+
+  {
+    -- Interval dirt gates rebuildPA per seeded row: editing one PA re-projects only its own row,
+    -- carrying its siblings untouched. Correctness (no drop, no double-up) plus a table-identity
+    -- check that the gate actually skipped the untouched cells rather than re-cloning them.
+    name = 'editing one PA re-projects only its row -- siblings carry by identity',
+    run = function(harness)
+      local h = harness.mk{
+        seed = {
+          notes = { { ppq = 0, endppq = 480, chan = 1, pitch = 60, vel = 100 } },
+          ccs = {
+            { ppq = 100, chan = 1, evType = 'pa', pitch = 60, vel = 90 },
+            { ppq = 200, chan = 1, evType = 'pa', pitch = 60, vel = 80 },
+            { ppq = 300, chan = 1, evType = 'pa', pitch = 60, vel = 70 },
+          },
+        },
+      }
+      local function paByRow()
+        local out = {}
+        for _, e in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
+          if e.evType == 'pa' then out[e.ppq] = e end
+        end
+        return out
+      end
+      local before = paByRow()
+      t.truthy(before[100] and before[200] and before[300], 'three PAs projected, one per row')
+
+      h.tm:assignEvent(before[200].uuid, { vel = 55 })
+      h.tm:flush()
+
+      local after = paByRow()
+      t.eq(after[200].vel, 55, 'the edited PA carries its new vel')
+      t.eq(after[100].vel, 90, 'row-100 PA unchanged')
+      t.eq(after[300].vel, 70, 'row-300 PA unchanged')
+      t.truthy(after[100] and after[200] and after[300] and not after[400],
+        'still exactly three PAs -- no drop, no double-up')
+      t.eq(after[100], before[100], 'untouched row-100 cell carried by identity -- gate skipped it')
+      t.eq(after[300], before[300], 'untouched row-300 cell carried by identity -- gate skipped it')
+    end,
+  },
+
+  {
+    -- A host move by a period multiple carries its attached PA to the new logical row. seedCovers
+    -- unions the vacated (old) and live (new) rows, so excise drops the old cell and rebuildPA
+    -- re-projects at the new -- the PA shows at B, not A.
+    name = 'moving a PA to a new row shows it there and not at the old row',
+    run = function(harness)
+      local h = harness.mk{
+        seed = {
+          notes = { { ppq = 0, endppq = 480, chan = 1, pitch = 60, vel = 100 } },
+          ccs = { { ppq = 120, chan = 1, evType = 'pa', pitch = 60, vel = 90 } },
+        },
+      }
+      local function paRows()
+        local rows = {}
+        for _, e in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
+          if e.evType == 'pa' then rows[#rows + 1] = e.ppq end
+        end
+        table.sort(rows)
+        return rows
+      end
+      t.deepEq(paRows(), { 120 }, 'PA at its authored row 120')
+
+      local noteUuid
+      for _, n in h.fm:notes() do
+        if n.chan == 1 and n.pitch == 60 then noteUuid = n.uuid end
+      end
+      -- Logical 0 -> 480, length preserved (period multiple): the PA rides, row 120 -> 600.
+      h.tm:assignEvent(noteUuid, { ppq = 480, endppq = 960 })
+      h.tm:flush()
+
+      t.deepEq(paRows(), { 600 }, 'PA re-projected at the new row 600, gone from 120')
+    end,
+  },
 }

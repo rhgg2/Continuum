@@ -134,4 +134,26 @@ return {
       t.eq(member().endppqC, 960, 'reseek on removal: clip regrows to the next surviving onset')
     end,
   },
+  {
+    -- rebuildPA's parked loop is now seed-gated per dirty channel. A region parks its host and
+    -- carries the host's on-take PA off-take, but the region edit seeds only its startppq -- not
+    -- the PA's own row. So the fresh-park scan must seed the parked PA's row, or the gated loop
+    -- drops its off-take cell. PA sits at row 120, region trigger at row 0: red without the reseed.
+    name = 'a freshly-parked PA still renders once in the host lane under an arp region',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent(hostNote(1))
+      h.tm:addEvent({ evType = 'pa', ppq = 120, chan = 1, pitch = 60, vel = 70 })
+      h.tm:flush()
+
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = arpUp } })
+      h.tm:rebuild()
+
+      local pas = 0
+      for _, e in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
+        if e.evType == 'pa' and e.pitch == 60 then pas = pas + 1 end
+      end
+      t.eq(pas, 1, 'the parked PA renders exactly once in the host lane')
+    end,
+  },
 }

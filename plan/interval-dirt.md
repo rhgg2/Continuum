@@ -18,20 +18,20 @@
 
 ## Landed (newest first; prune below ~4)
 
+- 2026-07-23 tm: seed-gate rebuildPA's PA re-projection (§ 4)
 - 2026-07-23 tm: gate stampSamples' sample scan on seed-dirty channels (§ 4)
 - 2026-07-23 tm: seek-bound rebuildPCs's three residual raw walks (§ 4)
 - 2026-07-23 tm: de-materialise rebuildPbs lane-1 view — seeks + bounded walk (§ 3)
-- 2026-07-22 tm: bound rebuildPbs clone to seat scope, realPbs whole from index (§ 3)
 
 ## Now
 
-(empty -- stampSamples seed-gated and landed; run /plan-next to promote the rebuildPA seed-gate from Queued)
+(empty -- rebuildPA seed-gate landed; it was the last § 4 item, so phase 4 is complete. Run /plan-next to mark phase 4 landed and seed Queued from § 5.)
 
 ## Queued (current phase; one-liners)
 
-- rebuildPA: seed-gate the PA re-projection — coupled to `exciseNotes`
-  (:1862), which drops *all* PA cells because rebuildPA refills all;
-  settle the out-of-scope PA carry at promotion (§ 4)
+(empty -- rebuildPA promoted to Now. It is the last § 4 item, so its landing
+completes phase 4; the next /plan-next marks phase 4 landed and seeds Queued
+from § 5.)
 
 (The § 3 tails — `seatScope`'s per-seed `nextLane1After`/`bpSpan`,
 `inSeatWindow`/`inKeptRange` linear-in-window-count — are by-design

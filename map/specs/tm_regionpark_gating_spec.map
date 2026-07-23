@@ -1,4 +1,4 @@
-@spec tm_regionpark_gating_spec  src=tests/specs/tm_regionpark_gating_spec.lua  loc=137  sha=6ba114e  cases=3
+@spec tm_regionpark_gating_spec  src=tests/specs/tm_regionpark_gating_spec.lua  loc=159  sha=b2382a0  cases=4
 @exercises trackerManager (h.tm), dataStore (h.ds)
 @surface   tm:addEvent, tm:flush, ds:get, tm:getChannel, ds:assign, tm:rebuild, tm:deleteEvent
 @harness   mk
@@ -21,41 +21,42 @@
   @case 'a self-parking note host parks off-take via the fx-host set, not a column scan'  [harness]  @ 37-51
   @case 'a chan-1 edit freezes chan 2 regionPark and keeps its parked spec + render cell'  [harness]  @ 54-86
   @case 'a parked member render clip reseeks only when dirt reaches its span'  [harness]  @ 93-135
+  @case 'a freshly-parked PA still renders once in the host lane under an arp region'  [harness]  @ 142-157
 
 # Uses (outbound edges)
-  @use call tm:addEvent  @ 42,57,58,73,81
-  @use call tm:flush  @ 43,57,58,73,81,102,117,124,133
+  @use call tm:addEvent  @ 42,57,58,73,81,145,146
+  @use call tm:flush  @ 43,57,58,73,81,102,117,124,133,147
   @use call ds:get  @ 46,67,74,84
-  @use call tm:getChannel  @ 50,69,76,82,107,129
-  @use call ds:assign  @ 61,103
-  @use call tm:rebuild  @ 65,104
+  @use call tm:getChannel  @ 50,69,76,82,107,129,153
+  @use call ds:assign  @ 61,103,149
+  @use call tm:rebuild  @ 65,104,150
   @use call tm:deleteEvent  @ 133
 
 # Fields (r read / w write incl. constructor keys)
   @field r chan  @ 26
-  @field w chan  @ 14,19,40,62,63,98,100,103,115,122
-  @field r columns  @ 129
+  @field w chan  @ 14,19,40,62,63,98,100,103,115,122,146,149
+  @field r columns  @ 129,153
   @field w delay  @ 15,20,41,99,101,116,123
   @field w detune  @ 15,20,41,99,101,116,123
   @field w dir  @ 11
-  @field w endppq  @ 14,19,40,62,63,98,100,103,115,122
+  @field w endppq  @ 14,19,40,62,63,98,100,103,115,122,149
   @field r endppqC  @ 112,118,125,134
-  @field r evType  @ 47
-  @field w evType  @ 14,19,40,98,100,115,122
-  @field r events  @ 129
+  @field r evType  @ 47,154
+  @field w evType  @ 14,19,40,98,100,115,122,146
+  @field r events  @ 129,153
   @field r fx  @ 47
-  @field w fx  @ 41,62,63,103
+  @field w fx  @ 41,62,63,103,149
   @field w kind  @ 11
   @field w lane  @ 15,20,41,99,101,116,123
-  @field w name  @ 37,54,93
-  @field r notes  @ 129
+  @field w name  @ 37,54,93,142
+  @field r notes  @ 129,153
   @field r parked  @ 50,69,76,82,107
   @field w period  @ 11
-  @field r pitch  @ 108,130
-  @field w pitch  @ 14,19,40,98,100,115,122
+  @field r pitch  @ 108,130,154
+  @field w pitch  @ 14,19,40,98,100,115,122,146
   @field r ppq  @ 108,130
-  @field w ppq  @ 14,19,40,98,100,115,122
-  @field w run  @ 38,55,94
-  @field w startppq  @ 62,63,103
-  @field w uuid  @ 62,63,103
-  @field w vel  @ 15,20,41,99,101,116,123
+  @field w ppq  @ 14,19,40,98,100,115,122,146
+  @field w run  @ 38,55,94,143
+  @field w startppq  @ 62,63,103,149
+  @field w uuid  @ 62,63,103,149
+  @field w vel  @ 15,20,41,99,101,116,123,146

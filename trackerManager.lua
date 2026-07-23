@@ -1857,15 +1857,13 @@ local function windowSeeded(rows, startL, endL)
   return false
 end
 
--- Drop the carried events this pass's clones will replace. PAs go whatever the dirt says:
--- rebuildPA re-projects every PA on a dirty chan, so a carried one would double up.
+-- Drop the carried events this pass's clones will replace: notes and PAs alike gate on `covers`,
+-- so an out-of-scope PA carries untouched while rebuildPA re-projects only the seeded rows.
 local function exciseNotes(chan, covers)
   for _, col in ipairs(channels[chan].columns.notes) do
     local kept = {}
     for _, evt in ipairs(col.events) do
-      if evt.evType ~= 'pa' and not covers(evt) then
-        util.add(kept, evt)
-      end
+      if not covers(evt) then util.add(kept, evt) end
     end
     col.events = kept
   end
@@ -2524,7 +2522,7 @@ local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows
       return false
     end
 
-    local newParked, seen = {}, {}
+    local newParked, seen, freshCells = {}, {}, {}
     -- Fresh: an on-take PA whose host just parked leaves the take and stashes. Bounded by each parked
     -- member's raw span (its own PAs), not the channel's cc count. see docs/trackerManager.md § Span-covered fx scans
     for chan = 1, 16 do
@@ -2537,13 +2535,29 @@ local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows
             if cc.ppq >= eRaw then break end
             if not seen[cc] and hostParked(cc.chan, cc.pitch, cc.ppqL or cc.ppq) then
               seen[cc] = true
+              -- Seed the PA's row so rebuildPA's gated parked loop re-projects it: mmBatch.del
+              -- accumulates raw ops but seeds no interval dirt, exactly as the pb park seeds its own.
+              seedDirty(cc.chan, rawSeed(cc, 'park'))
               batch.del({ uuid = cc.uuid })
+              freshCells[cc.chan] = freshCells[cc.chan] or {}
+              freshCells[cc.chan][cc.uuid] = true
               local spec = parkSpec(cc, { ppq = cc.ppqL or cc.ppq })   -- um index source: evType/chan/pitch/vel/rpb ride, ppq flips logical
               spec.uuid = nil                                           -- restore re-mints the rpb sidecar uuid
               util.add(newParked, spec)
             end
           end
         end
+      end
+    end
+    -- The parking PA's on-take column cell rode past exciseNotes untouched -- its row seeds only here,
+    -- after that pass ran -- so drop it now, or rebuildPA's parked projection doubles the carried cell.
+    for chan, uuids in pairs(freshCells) do
+      for _, col in ipairs(channels[chan].columns.notes) do
+        local kept = {}
+        for _, e in ipairs(col.events) do
+          if not (e.evType == 'pa' and uuids[e.uuid]) then util.add(kept, e) end
+        end
+        col.events = kept
       end
     end
     -- Prior parked PAs: host still parked -> carry; host returned on-take -> restore to the take.
@@ -2745,13 +2759,16 @@ local function rebuildPA()
   local touched = {}
   for chan = 1, 16 do
     if dirtyChans[chan] then   -- clean: PA already sits in the carried note column
+      local covers = seedCovers(dirtyChans[chan])   -- wholesale: always-true; interval: seeded rows only
       for _, cc in ipairs(rawIndexFor(chan).pas) do
-        local noteCol, lane = findNoteColumnForPitch(channels[chan], cc.pitch, cc.ppq)
-        if noteCol then
-          local cell = projectCC(cc, { lane = lane })
-          projectEvent(cell, chan)
-          insertNoteCell(noteCol.events, cell)
-          touched[chan] = true
+        if covers(cc) then
+          local noteCol, lane = findNoteColumnForPitch(channels[chan], cc.pitch, cc.ppq)
+          if noteCol then
+            local cell = projectCC(cc, { lane = lane })
+            projectEvent(cell, chan)
+            insertNoteCell(noteCol.events, cell)
+            touched[chan] = true
+          end
         end
       end
     end
@@ -2761,12 +2778,15 @@ local function rebuildPA()
   -- projected unrealised into the parked host's lane. see docs/trackerManager.md § PA dispatch
   for chan = 1, 16 do
     if dirtyChans[chan] then
+      local covers = seedCovers(dirtyChans[chan])
       for _, cell in ipairs(channels[chan].parkedPA or {}) do
-        local ppq = tm:fromLogical(chan, cell.ppq)   -- raw: findNoteColumnForPitch is raw geometry
-        local noteCol, lane = findNoteColumnForPitch(channels[chan], cell.pitch, ppq)
-        if noteCol then
-          insertNoteCell(noteCol.events, projectCC(cell, {lane = lane}))   -- the cell is logical-born
-          touched[chan] = true
+        if covers(cell) then
+          local ppq = tm:fromLogical(chan, cell.ppq)   -- raw: findNoteColumnForPitch is raw geometry
+          local noteCol, lane = findNoteColumnForPitch(channels[chan], cell.pitch, ppq)
+          if noteCol then
+            insertNoteCell(noteCol.events, projectCC(cell, {lane = lane}))   -- the cell is logical-born
+            touched[chan] = true
+          end
         end
       end
     end
