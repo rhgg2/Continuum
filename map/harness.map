@@ -1,4 +1,4 @@
-@module harness  src=tests/harness.lua  loc=145  sha=e049414  mode=namespace  self=harness
+@module harness  src=tests/harness.lua  loc=147  sha=547ec2f  mode=namespace  self=harness
 
 # Imports
   @const util = 'util'  @ 24
@@ -26,7 +26,7 @@
       -- A real mm with NO tm/vm wired. mm_* contract specs pin behaviour on a plain
       -- cc, which a tm rebuild would otherwise stamp (ppqL → uuid) out from under
       -- them. The seed payload doubles as the take surface (resolution/length).
-  @api harness.mk(opts)  @ 98-143
+  @api harness.mk(opts)  @ 98-145
       -- Build a fresh scenario. opts keys: seed (notes/ccs + resolution/length/
       -- timeSigs), config, data, take, groups. See header for the mm model.
 
@@ -36,7 +36,7 @@
   @use call    fakeReaper:bindTake  @ buildMM:70
   @use call    fakeReaper:setResolution  @ buildMM:71
   @use call    util.clone  @ seedThrough:41,50
-  @use call    util.instantiate  @ mk:109,110,111,122,123,128,136,137,138
+  @use call    util.instantiate  @ mk:109,110,111,122,123,128,136,137,138,140
   @use require fakeReaper  @ 29
   @use require realMidiManager  @ 25
   @use require util  @ 24
@@ -47,12 +47,12 @@
 # Fields (r read / w write incl. constructor keys)
   @field r _stubs  @ 34
   @field w bareMM  @ bareMM:90
-  @field w ccm  @ mk:137,141
+  @field w ccm  @ mk:137,143
   @field r ccs  @ seedThrough:50 mk:120
   @field w ccs  @ buildMM:82
-  @field w clipboard  @ mk:142
-  @field w cm  @ mk:122,123,137,138,141
-  @field w cmgr  @ mk:138,142
+  @field w clipboard  @ mk:144
+  @field w cm  @ mk:122,123,137,139,140,143
+  @field w cmgr  @ mk:140,144
   @field r config  @ mk:113,114
   @field r data  @ mk:116,117
   @field r delay  @ seedThrough:46
@@ -60,19 +60,21 @@
   @field r denom  @ buildMM:73
   @field r detune  @ seedThrough:45
   @field w detune  @ seedThrough:45
-  @field w ds  @ mk:122,128,137,138,141
+  @field w ds  @ mk:122,128,137,140,143
   @field w dump  @ buildMM:78
-  @field w ec  @ mk:141
+  @field w ec  @ mk:143
   @field r endppqL  @ seedThrough:42
   @field w evType  @ seedThrough:41
   @field w facade  @ mk:137
-  @field w fm  @ mk:141
+  @field w fm  @ mk:143
   @field w get  @ mk:131
-  @field w gm  @ mk:138,141
+  @field w gm  @ mk:140,143
   @field r groups  @ mk:127
+  @field w identity  @ mk:139
   @field r lane  @ seedThrough:44
   @field w lane  @ seedThrough:44
   @field r length  @ buildMM:66
+  @field w lib  @ mk:140
   @field w mk  @ mk:98
   @field w mm  @ mk:122
   @field r notes  @ seedThrough:40 mk:120
@@ -81,16 +83,19 @@
   @field r open  @ 13
   @field w open  @ 16
   @field w ownerTrack  @ mk:133
-  @field w pa  @ mk:138,141
+  @field w pa  @ mk:140,143
   @field r ppq  @ seedThrough:42 buildMM:73
   @field r ppqL  @ seedThrough:42,43
   @field w ppqL  @ seedThrough:42
-  @field w ps  @ mk:110,111,141
-  @field w reaper  @ 30 buildMM:62 mk:142
+  @field w ps  @ mk:110,111,143
+  @field w reaper  @ 30 buildMM:62 mk:144
   @field r resolution  @ buildMM:65
   @field r seed  @ buildMM:59 mk:100
   @field w seed  @ buildMM:77 bareMM:91
+  @field w swings  @ mk:139
+  @field w synthetic  @ mk:139
   @field r take  @ 34 buildMM:64
+  @field w tempers  @ mk:139
   @field r timeSigs  @ buildMM:72
-  @field w tm  @ mk:128,138,141
-  @field w vm  @ mk:141
+  @field w tm  @ mk:128,140,143
+  @field w vm  @ mk:143

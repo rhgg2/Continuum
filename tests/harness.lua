@@ -135,7 +135,9 @@ function harness.mk(opts)
   end }
   local ccm = util.instantiate('ccManager')
   local pa = util.instantiate('paramAutomation', { cm = cm, ds = ds, facade = paFacade, ccm = ccm })
-  local vm = util.instantiate('trackerView', { tm = tm, cm = cm, ds = ds, cmgr = cmgr, gm = gm, pa = pa })
+  local lib = util.instantiate('library',
+    { cm = cm, synthetic = { swings = { identity = true }, tempers = { ['12EDO'] = true } } })
+  local vm = util.instantiate('trackerView', { tm = tm, cm = cm, ds = ds, cmgr = cmgr, gm = gm, pa = pa, lib = lib })
   cmgr:push('tracker')
 
   return { fm = mm, cm = cm, ds = ds, ps = ps, tm = tm, vm = vm, ec = vm:ec(), gm = gm, pa = pa, ccm = ccm,

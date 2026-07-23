@@ -32,15 +32,7 @@ local ctx, uiFont = gui.ctx, gui.uiFont
 -- pure render/UI). The 'region' overlay keymap and the
 -- tv:wireGroupLifetime call stay here.
 
--- Localize the picked temper into the project library if absent, so the project
--- carries every temper it references (mirrors swing's setSwingSlot).
-local pickTemper = util.atomic('Set temper', function(name)
-  if name and not (cm:getAt('project', 'tempers') or {})[name] then
-    tv:setTemper(name, tuning.findTemper(name, cm:get('tempers')))
-  end
-  tv:setTemperSlot(name)
-end)
-
+local pickTemper   = util.atomic('Set temper',       function(name)       tv:setTemperSlot(name)         end)
 local pickSwing    = util.atomic('Set swing',        function(name)       tv:setSwingSlot(name)          end)
 local pickColSwing = util.atomic('Set column swing', function(chan, name) tv:setColSwingSlot(chan, name) end)
 

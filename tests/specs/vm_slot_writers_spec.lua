@@ -39,6 +39,23 @@ return {
       t.eq(h.cm:getAt('track', 'temper'), '12EDO', 'track -> 12EDO')
     end,
   },
+  {
+    name = 'setTemperSlot localizes a catalogue temper into the project library',
+    run = function(harness)
+      local h = harness.mk()   -- 19EDO lives in the factory catalogue, not in project
+      t.eq((h.cm:getAt('project', 'tempers') or {})['19EDO'], nil, 'absent from project to start')
+      h.vm:setTemperSlot('19EDO')
+      t.truthy(h.cm:getAt('project', 'tempers')['19EDO'], 'the resolved temper is copied into project')
+    end,
+  },
+  {
+    name = 'setTemperSlot(nil) never localizes the 12EDO floor',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setTemperSlot(nil)
+      t.eq((h.cm:getAt('project', 'tempers') or {})['12EDO'], nil, '12EDO stays synthetic')
+    end,
+  },
 
   ----------------------------------------------------------------
   -- swing: take map 'global' slot + defaultSwing seed at project & track

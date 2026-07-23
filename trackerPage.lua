@@ -14,8 +14,8 @@ if not reaper.ImGui_GetBuiltinPath then
   return reaper.MB('ReaImGui is not installed or too old.', 'My script', 0)
 end
 
-local cm, ds, cmgr, chrome, gui, modalHost, facade, help, eventMeta =
-  (...).cm, (...).ds, (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).facade, (...).help, (...).eventMeta
+local cm, ds, cmgr, chrome, gui, modalHost, facade, help, eventMeta, lib =
+  (...).cm, (...).ds, (...).cmgr, (...).chrome, (...).gui, (...).modalHost, (...).facade, (...).help, (...).eventMeta, (...).lib
 
 local function arrange() return facade.get('arrange') end
 
@@ -33,7 +33,7 @@ local tm = util.instantiate('trackerManager', { mm = mm, cm = cm, ds = ds })
 local gm = util.instantiate('groupManager',   { tm = tm, ds = ds })
 local ccm = util.instantiate('ccManager')
 local pa = util.instantiate('paramAutomation', { cm = cm, ds = ds, facade = facade, ccm = ccm })
-local tv = util.instantiate('trackerView',    { tm = tm, cm = cm, ds = ds, cmgr = cmgr, gm = gm, pa = pa, facade = facade })
+local tv = util.instantiate('trackerView',    { tm = tm, cm = cm, ds = ds, cmgr = cmgr, gm = gm, pa = pa, facade = facade, lib = lib })
 
 -- The fx-pattern checkout editor: a self-contained mini tracker stack + modal.
 -- trackerRender gets the handle so an fx-strip pattern field can launch it in place.

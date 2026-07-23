@@ -18,6 +18,9 @@ local cm, ds, eventMeta, cmgr, gui = (...).cm, (...).ds, (...).eventMeta, (...).
 local ctx, uiFont   = gui.ctx, gui.uiFont
 local uiSize        = gui.fontSize.ui
 
+local lib = util.instantiate('library',
+  { cm = cm, synthetic = { swings = { identity = true }, tempers = { ['12EDO'] = true } } })
+
 local chrome = util.instantiate('chrome',
   { cm = cm, ctx = ctx, uiSize = uiSize })
 local toolbar = chrome.makeToolbar()   -- one shared toolbar; renders the active page's row
@@ -40,7 +43,8 @@ local facade  = {
   -- Raw page stack for the reaper bridge ONLY — diagnostics, not a production surface. See docs/bridge.md § The eval environment.
   publishDebug = function(name, stack) debugHandles[name] = stack end,
 }
-local STD = { cm = cm, ds = ds, eventMeta = eventMeta, cmgr = cmgr, chrome = chrome, gui = gui, modalHost = modalHost, help = help, facade = facade }
+local STD = { cm = cm, ds = ds, eventMeta = eventMeta, cmgr = cmgr, chrome = chrome, gui = gui,
+              modalHost = modalHost, help = help, facade = facade, lib = lib }
 
 local CHROME_PAD_X, CHROME_PAD_Y = 8, 4
 

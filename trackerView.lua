@@ -28,8 +28,8 @@ local tuning     = require 'tuning'
 local groupsCore = require 'groups'
 local perf       = require 'perf'
 
-local tm, cm, ds, cmgr, gm, pa, facade =
-  (...).tm, (...).cm, (...).ds, (...).cmgr, (...).gm, (...).pa, (...).facade
+local tm, cm, ds, cmgr, gm, pa, facade, lib =
+  (...).tm, (...).cm, (...).ds, (...).cmgr, (...).gm, (...).pa, (...).facade, (...).lib
 
 local function arrange() return facade.get('arrange') end
 
@@ -543,23 +543,10 @@ local function setDefaultSwing(tier, slot, value)
   cm:set(tier, 'defaultSwing', map)
 end
 
--- Picking a library swing copies its composite into the project tier if absent,
--- so the project is self-contained. See docs/swingEditor.md § Library tiers.
-local function localizeSwing(name)
-  if not name or name == '' or name == 'identity' then return end
-  local proj = cm:getAt('project', 'swings') or {}
-  if proj[name] ~= nil then return end
-  local composite = cm:get('swings', { mergeTiers = true })[name]
-  if composite ~= nil then
-    proj[name] = composite
-    cm:set('project', 'swings', proj)
-  end
-end
-
 -- Take-wide swing: the take map's 'global' slot + project & track seed.
 function tv:setSwingSlot(name)
   if name == nil or name == '' then name = 'identity' end
-  localizeSwing(name)
+  lib.localize('swings', name)
   setTakeSwing('global', name)
   setDefaultSwing('project', 'global', name)
   setDefaultSwing('track',   'global', name)
@@ -569,13 +556,14 @@ end
 -- (the project tier carries 'global' alone, never per-channel).
 function tv:setColSwingSlot(chan, name)
   local value = (name ~= '' and name) or nil
-  if value then localizeSwing(value) end
+  if value then lib.localize('swings', value) end
   setTakeSwing(chan, value)
   setDefaultSwing('track', chan, value)
 end
 
 function tv:setTemperSlot(name)
   if name == nil or name == '' then name = '12EDO' end
+  lib.localize('tempers', name)
   cm:set('take',    'temper', name)
   cm:set('track',   'temper', name)
   cm:set('project', 'temper', name)
@@ -591,17 +579,17 @@ end
 function tv:setSwingComposite(name, composite, tier)
   if not name or name == '' then return end
   tier = tier or 'project'
-  local lib = cm:getAt(tier, 'swings') or {}
-  lib[name] = composite
-  cm:set(tier, 'swings', lib)
+  local map = cm:getAt(tier, 'swings') or {}
+  map[name] = composite
+  cm:set(tier, 'swings', map)
 end
 
 function tv:setTemper(name, temper, tier)
   if not name or name == '' then return end
   tier = tier or 'project'
-  local lib = cm:getAt(tier, 'tempers') or {}
-  lib[name] = temper
-  cm:set(tier, 'tempers', lib)
+  local map = cm:getAt(tier, 'tempers') or {}
+  map[name] = temper
+  cm:set(tier, 'tempers', map)
 end
 
 ----- Mute / solo
