@@ -495,17 +495,6 @@ function cm:defaultFor(key)
   return copy(defaults[key])
 end
 
---contract: seeds global tier for key from its default catalogue when empty; excluded names omitted
-function cm:seedGlobalFromDefault(key, exclude)
-  checkKey(key)
-  ensureCache()
-  if next(cm:getAt('global', key) or {}) ~= nil then return end
-  local seed = copy(defaults[key]) or {}
-  if exclude then for name in pairs(exclude) do seed[name] = nil end end
-  if next(seed) == nil then return end
-  cm:set('global', key, seed)
-end
-
 ----- Writing
 
 --contract: deep-copies value into tier cache, persists, fires targeted configChanged

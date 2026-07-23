@@ -132,10 +132,11 @@ Synthetic-name sets passed at instantiation per key. New spec
 - Delete `cm:seedGlobalFromDefault` (+ its `config_schema_spec` cases).
 - Add `cm:defaultFor(key)` — deep-copy of the schema default, so
   `library.lua` can list/compare factory without a merged read.
-- One-off cleanup of already-seeded machines: on first library read,
+- ~~One-off cleanup of already-seeded machines: on first library read,
   purge global entries deep-equal to their factory default (the seeding
-  in reverse). Small, self-contained, removable post-beta. Pre-beta
-  rules apply — no compat shims beyond this.
+  in reverse).~~ Dropped 2026-07-23: pre-beta means no config worth
+  migrating, so there is nothing to shed and no reason to carry the
+  purge — the seeding deletion stands on its own.
 
 ### 3. Pickers
 

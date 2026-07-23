@@ -1,0 +1,65 @@
+@module library  src=library.lua  loc=140  sha=be5d40d  mode=namespace  self=lib
+
+# Imports
+  @const util = 'util'  @ 7
+
+# Module-level constants
+  @const lib = {}  @ 12
+
+# Private functions
+  -- Tier reads
+  @fn synth(key)  @ 16
+  @fn projectTier(key)  @ 17
+  @fn libraryTier(key)  @ 18
+  @fn factoryTier(key)  @ 19
+  @fn sourceOf(key, name)  @ 22-26
+      -- Publishable source for a name: library over factory, never the project copy.
+  -- Tier writes
+  @fn writeTier(level, key, name, value)  @ 31-35
+      -- Read-modify-write a whole tier through one cm:set; cm deep-copies the value in.
+  -- Names
+  @fn sortedNames(tier, drop)  @ 39-46
+
+# Public API (lib.*)
+  @api lib.names(key)  @ 49-56
+      @contract  { project, library, factory } sorted names; synthetic floor dropped, no cross-dedup  @ 48
+  -- Reads
+  @api lib.get(key, name)  @ 61-67
+      @contract  resolved deep copy, project over library over factory; nil if no tier has the name  @ 60
+  @api lib.modified(key, name)  @ 70-76
+      @contract  true iff a project copy and a same-named source both exist and differ (util.deepEq)  @ 69
+  -- Localize / fork
+  @api lib.localize(key, name)  @ 81-86
+      @contract  copy the resolved source into project; no-op if synthetic or a project copy exists  @ 80
+  @api lib.forkToProject(key, name)  @ 89-92
+      @contract  localize then return the editable project copy  @ 88
+  -- Publish / revert
+  @api lib.publish(key, name)  @ 97-100
+      @contract  project copy -> library tier (deepClone via cm:set); no-op when there is no project copy  @ 96
+  @api lib.revert(key, name)  @ 103-106
+      @contract  source (library/factory) -> project, discarding drift; no-op if no source exists  @ 102
+  -- Tidy / delete
+  @api lib.tidy(key, inUse)  @ 111-126
+      @contract  drop project entries deepEq their source and not in inUse; single cm:set; returns removed  @ 110
+  @api lib.delete(key, level, name)  @ 129-138
+      @contract  remove name from tier level (project|global); synthetic never; factory not deletable  @ 128
+
+# Uses (outbound edges)
+  @use call    util.deepEq  @ modified:75 tidy:117
+  @use require util  @ 7
+
+# Fields (r read / w write incl. constructor keys)
+  @field r cm  @ 9
+  @field w delete  @ delete:129
+  @field w factory  @ names:54
+  @field w forkToProject  @ forkToProject:89
+  @field w get  @ get:61
+  @field w library  @ names:53
+  @field w localize  @ localize:81
+  @field w modified  @ modified:70
+  @field w names  @ names:49
+  @field w project  @ names:52
+  @field w publish  @ publish:97
+  @field w revert  @ revert:103
+  @field r synthetic  @ 10
+  @field w tidy  @ tidy:111

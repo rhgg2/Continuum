@@ -41,12 +41,8 @@ local genState = {
 local function viewedName() return selected or cm:get('temper') end
 
 local function projectTempers() return cm:getAt('project', 'tempers') or {} end
--- Reading the global library lazily seeds it from the EDO catalogue (minus the
--- synthetic 12EDO floor) the first time. Mirrors swingEditor's globalSwings.
-local function globalTempers()
-  cm:seedGlobalFromDefault('tempers', SYNTHETIC)
-  return cm:getAt('global', 'tempers') or {}
-end
+-- Reads the library (global) tier directly; the EDO catalogue is not merged in here.
+local function globalTempers() return cm:getAt('global', 'tempers') or {} end
 
 -- A name's editable home: project copy if present, else global (covers the
 -- synthetic '12EDO' floor too).

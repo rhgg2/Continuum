@@ -1,4 +1,4 @@
-@module configManager  src=configManager.lua  loc=550  sha=fe11d27  mode=chunk  self=cm
+@module configManager  src=configManager.lua  loc=545  sha=be5d40d  mode=chunk  self=cm
 @deps ps
 
 # Invariants & contracts
@@ -83,18 +83,18 @@
       @contract  opts.mergeTiers=true → per-subkey union across defaults+tiers; table-valued keys only  @ 473
   @api cm:getAt(level, key)  @ 481-490
       @contract  reads single tier only (no merge, no defaults); key nil → whole-cache clone  @ 480
-  @api cm:seedGlobalFromDefault(key, exclude)  @ 493-501
-      @contract  seeds global tier for key from its default catalogue when empty; excluded names omitted  @ 492
+  @api cm:defaultFor(key)  @ 493-496
+      @contract  deep-copy of the schema default for key (no tiers, no merge); raises on unknown key  @ 492
   -- Writing
-  @api cm:set(level, key, value)  @ 506-516
-      @contract  deep-copies value into tier cache, persists, fires targeted configChanged  @ 505
-  @api cm:remove(level, key)  @ 519-530
-      @contract  removes key from named tier; no-op (no signal) if that tier's cache is unloaded  @ 518
-  @api cm:assign(level, updates)  @ 533-547
-      @contract  validates all keys before any write (all-or-nothing); REMOVE deletes; fires signal  @ 532
+  @api cm:set(level, key, value)  @ 501-511
+      @contract  deep-copies value into tier cache, persists, fires targeted configChanged  @ 500
+  @api cm:remove(level, key)  @ 514-525
+      @contract  removes key from named tier; no-op (no signal) if that tier's cache is unloaded  @ 513
+  @api cm:assign(level, updates)  @ 528-542
+      @contract  validates all keys before any write (all-or-nothing); REMOVE deletes; fires signal  @ 527
 
 # Signals emitted (via util.installHooks)
-  @emits configChanged   -- configChangedPayload.bulk   @ 400 setContext:409 clearTake:416 setTrack:429 set:515 remove:528 assign:546
+  @emits configChanged   -- configChangedPayload.bulk   @ 400 setContext:409 clearTake:416 setTrack:429 set:510 remove:523 assign:541
 
 # Uses (outbound edges)
   @use call    ps:assign  @ 348,349,352,356
@@ -114,7 +114,7 @@
   @use require util  @ 12
 
 # Fields (r read / w write incl. constructor keys)
-  @field r REMOVE  @ assign:541
+  @field r REMOVE  @ assign:536
   @field w arrange  @ 267
   @field w atom  @ 75,76,77,78
   @field w chrome  @ 267
@@ -122,8 +122,8 @@
   @field w factors  @ 75,76,77,78
   @field r global  @ ensureCache:369
   @field w global  @ 70,266,313,340,348
-  @field w key  @ set:515 remove:528
-  @field w level  @ set:515 remove:528 assign:546
+  @field w key  @ set:510 remove:523
+  @field w level  @ set:510 remove:523 assign:541
   @field r mergeTiers  @ get:476
   @field w overridden  @ 256
   @field w period  @ 75,76,77,78

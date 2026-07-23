@@ -1,6 +1,6 @@
-@spec config_schema_spec  src=tests/specs/config_schema_spec.lua  loc=474  sha=fe11d27  cases=31
+@spec config_schema_spec  src=tests/specs/config_schema_spec.lua  loc=440  sha=fe11d27  cases=28
 @exercises configManager (h.cm)
-@surface   cm:get, cm:set, cm:setContext, cm:remove, cm:assign, cm:getAt, cm:clearTake, cm:setTrack, cm:subscribe, cm:seedGlobalFromDefault
+@surface   cm:get, cm:set, cm:setContext, cm:remove, cm:assign, cm:getAt, cm:clearTake, cm:setTrack, cm:subscribe
 @harness   mk, r._state.takeExt, r._state.trackExt
 
 # Intent
@@ -37,26 +37,22 @@
   @case 'mergeTiers with no tier contributions returns the schema default'  [harness]  @ 387-397
   @case 'mergeTiers default + tier writes union per sub-key'  [harness]  @ 400-408
   @case 'mergeTiers: tier write on a default-named key wins'  [harness]  @ 411-421
-  @case 'cm:seedGlobalFromDefault seeds the global library from the catalogue when empty'  [harness]  @ 427-435
-  @case 'cm:seedGlobalFromDefault is a no-op once the global library exists'  [harness]  @ 438-445
-  @case 'cm:seedGlobalFromDefault seeds tempers from the EDO catalogue'  [harness]  @ 448-455
-  @case 'cm fires changes with their level on the broadcast'  [harness]  @ 459-472
+  @case 'cm fires changes with their level on the broadcast'  [harness]  @ 425-438
 
 # Uses (outbound edges)
   @use call cm:get  @ 17,64,99,112,157,160,169,171,183,201,215,216,219,232,234,250,252,262,284,286,357,363,378,381,394,405,416
-  @use call cm:set  @ 26,38,180,218,261,464
+  @use call cm:set  @ 26,38,180,218,261,430
   @use call cm:setContext  @ 34
-  @use call cm:remove  @ 51,110,231,233,251,465
-  @use call cm:assign  @ 60,466
-  @use call cm:getAt  @ 71,81,287,288,289,303,305,315,430,432,442,452
+  @use call cm:remove  @ 51,110,231,233,251,431
+  @use call cm:assign  @ 60,432
+  @use call cm:getAt  @ 71,81,287,288,289,303,305,315
   @use call cm2:setContext  @ 137,266
   @use call cm2:get  @ 138,139,267
   @use call cm2:set  @ 142
   @use call cm2:getAt  @ 268
   @use call cm:clearTake  @ 285,324
   @use call cm:setTrack  @ 304,314,325
-  @use call cm:subscribe  @ 323,463
-  @use call cm:seedGlobalFromDefault  @ 431,441,451
+  @use call cm:subscribe  @ 323,429
 
 # Fields (r read / w write incl. constructor keys)
   @field r _state  @ 133,143,300
@@ -67,24 +63,21 @@
   @field r c  @ 360,366
   @field w c  @ 353
   @field w config  @ 79,155,196,210,226,245,259,278,296,312,351,373
-  @field w config  @ 403,414,440
-  @field w factors  @ 440
-  @field w global  @ 211,440
-  @field w identity  @ 431,441
-  @field r key  @ 327,329,468,471
+  @field w config  @ 403,414
+  @field w global  @ 211
+  @field r key  @ 327,329,434,437
   @field w legacyKey  @ 131
-  @field r level  @ 328,330,467,469,470
+  @field r level  @ 328,330,433,435,436
   @field w mergeTiers  @ 363,378,381,394,405,416
-  @field w mine  @ 440
   @field w name  @ 14,23,31,48,56,68,76,96,103,126,152,166
   @field w name  @ 176,193,207,223,242,256,275,293,309,319,348,370
-  @field w name  @ 387,400,411,427,438,448,459
+  @field w name  @ 387,400,411,425
   @field w nonsense  @ 60
   @field r notes  @ 161,184
   @field w notes  @ 155,158,159,170,179,181,182
   @field r pbRange  @ 82
   @field w pbRange  @ 60,79,131,197,198,227,228,246,247,259,279,280
-  @field w pbRange  @ 281,296,301,312,466
+  @field w pbRange  @ 281,296,301,312,432
   @field w polyAftertouch  @ 211,212
   @field r print  @ 36
   @field w print  @ 37,39
@@ -92,8 +85,8 @@
   @field w ps  @ 136,265
   @field w run  @ 15,24,32,49,57,69,77,97,104,127,153,167
   @field w run  @ 177,194,208,224,243,257,276,294,310,320,349,371
-  @field w run  @ 392,401,412,428,439,449,460
-  @field w swings  @ 352,353,374,375,403,414,440
+  @field w run  @ 392,401,412,426
+  @field w swings  @ 352,353,374,375,403,414
   @field r tag  @ 359,360,364,365,366,382,407,417
   @field w tag  @ 352,353,374,375,379,380,403,414
   @field w take  @ 79,155,198,228,246,259,281,312,353,375

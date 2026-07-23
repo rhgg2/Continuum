@@ -423,7 +423,6 @@ local function resetPickerActive()     pickerActive = false end
 -- to hide `id` from the swing picker (already covered by Off).
 local function libPicker(key, current, excludeOthers)
   excludeOthers = excludeOthers or {}
-  cm:seedGlobalFromDefault(key, excludeOthers)
   local proj   = cm:getAt('project', key) or {}
   local merged = cm:get(key, { mergeTiers = true }) or {}
 
