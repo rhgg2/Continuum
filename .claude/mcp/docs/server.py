@@ -460,7 +460,8 @@ def map_query(
             writes/fields. `uses` lists a module's own outbound edges (calls
             / subs / forwards / requires). `usedby` reverses it —
             scanning every map (specs included, so it also answers
-            "which specs exercise X") for callers of the queried
+            "which specs exercise X"; spec callers collapse to one
+            summary row per spec file) for callers of the queried
             symbol or module, resolving short instance names and
             `:`/`.` spellings so `cm:get`, `configManager.get`, and
             module='configManager' all match. `flow` traces a signal
@@ -470,7 +471,8 @@ def map_query(
             origin emitter. `reads`/`writes` walk
             the @field rows — every `.name` read or write site
             (table-constructor keys count as writes); `fields`
-            returns both. query matches the field name; omit `module`
+            returns both. query substring-matches the field name
+            (anchor `^name$` for one exact field); omit `module`
             to sweep every module and spec for the blast radius.
             Omit for any.
       module: restrict to a module by stem — regex, anchored (it names
@@ -529,6 +531,8 @@ def _map_query(query, kind, module, max_results) -> str:
             for mp in sorted(d.glob("*.map")):
                 text = mp.read_text(encoding="utf-8", errors="replace")
                 src = _src_of(mp, text)
+                site_rows: list[str] = []
+                targets: set[str] = set()
                 for raw in text.splitlines():
                     mu = _USE.match(raw)
                     if not mu:
@@ -542,14 +546,21 @@ def _map_query(query, kind, module, max_results) -> str:
                     if raw_rx and not raw_rx.search(target):
                         continue
                     ukind = mu.group("ukind")
+                    targets.add(f"{ukind} {target}")
                     for caller, n in _iter_use_sites(mu.group("sites")):
-                        if len(results) >= max_results:
-                            truncated = True
-                            break
                         where = f"  (in {caller})" if caller else ""
-                        results.append(f"{src}:{n}  @use {ukind} {target}{where}")
-                    if truncated:
+                        site_rows.append(f"{src}:{n}  @use {ukind} {target}{where}")
+                # Spec callers collapse to one row per spec file — the file list
+                # answers "which specs exercise X"; per-site rows drown production.
+                if site_rows and mp.parent.name == "specs":
+                    plural = "s" if len(site_rows) != 1 else ""
+                    site_rows = [f"{src}: {len(site_rows)} site{plural}"
+                                 f"  @use {', '.join(sorted(targets))}"]
+                for row in site_rows:
+                    if len(results) >= max_results:
+                        truncated = True
                         break
+                    results.append(row)
                 if truncated:
                     break
             if truncated:
@@ -636,7 +647,9 @@ def _map_query(query, kind, module, max_results) -> str:
         module_files = [p for d in dirs for p in sorted(d.glob("*.map"))]
 
     if not module_files:
-        return f"(no .map files matched module={module!r})"
+        hint = ("; spec maps are stems ending _spec — try module='.*_spec'"
+                if module and re.match(r"(tests/)?specs?(/|$)", module) else "")
+        return f"(no .map files matched module={module!r}{hint})"
 
     results: list[str] = []
     truncated = False
