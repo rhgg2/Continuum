@@ -38,7 +38,7 @@ local tv = util.instantiate('trackerView',    { tm = tm, cm = cm, ds = ds, cmgr 
 -- The fx-pattern checkout editor: a self-contained mini tracker stack + modal.
 -- trackerRender gets the handle so an fx-strip pattern field can launch it in place.
 local pe = util.instantiate('patternEditor',
-  { facade = facade, chrome = chrome, gui = gui, modalHost = modalHost })
+  { facade = facade, chrome = chrome, gui = gui, modalHost = modalHost, hostDs = ds })
 
 local tr = util.instantiate('trackerRender',
   { tv = tv, cm = cm, ds = ds, cmgr = cmgr, chrome = chrome,

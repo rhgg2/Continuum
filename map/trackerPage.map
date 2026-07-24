@@ -1,4 +1,4 @@
-@module trackerPage  src=trackerPage.lua  loc=165  sha=f5042ce  mode=chunk  self=tp
+@module trackerPage  src=trackerPage.lua  loc=165  sha=7ef043d  mode=chunk  self=tp
 @deps cm, ds, cmgr, chrome, gui, modalHost, facade, help, eventMeta, lib
 
 # Imports
@@ -118,6 +118,7 @@
   @field r guid  @ bindFromSelection:94
   @field r help  @ 18
   @field w help  @ 45
+  @field w hostDs  @ 41
   @field r lib  @ 18
   @field w lib  @ 36
   @field w markSwingStale  @ 139

@@ -1,0 +1,124 @@
+@spec patternEditor_shelf_spec  src=tests/specs/patternEditor_shelf_spec.lua  loc=238  sha=untracked  cases=5
+@exercises patternEditor (pe), dataStore (h.ds)
+@surface   pe:open, pe:draw, pe:handleInput, ds:get, ds:assign
+@harness   mk, reaper.GetMediaItemTake_Track
+
+# Intent
+  design/fx-patterns.md P4: the library copy shelf -- Save/Load in the pattern-editor toolbar.
+  Drives the real drawToolbar (Save popup) and drawLoad (picker) against a fake imgui; gridPane is
+  swapped for an inert stub via util._stubs so pe:draw's toolbar runs without the grid render.
+
+# Helpers
+  @fn keyId(name)  @ 11-20
+  @fn setKeys(keys, mods)  @ 62-65
+  @fn loadPE(deps)  @ 82-91
+  @fn notesBody()  @ 93-101
+  @fn curveBody()  @ 103-108
+  @fn withEditor(harness, body)  @ 112-119
+      -- Open the editor on `body`, capturing each write-through commit; get() reads the latest. hostDs is
+      -- the harness ds (project scope), standing in for trackerPage's shared ds.
+  @fn frame(pe, o)  @ 122-127
+      -- One draw frame: queue a button press / injected input text / held keys, then draw.
+  @fn input(pe, keys)  @ 129-132
+
+# Cases
+  @case 'Save stores a whitelisted copy on the host ds under the name'  [harness]  @ 136-147
+  @case 'Save over a divergent name confirms; n leaves the shelf, y overwrites'  [harness]  @ 151-170
+  @case 'Load rematerialises the picked body; the param tracks it'  [harness]  @ 174-190
+  @case 'the picker offers only matching kind, and matching domain for curves'  [harness]  @ 194-217
+  @case 'Esc after a Load restores the modal-open snapshot, not the loaded body'  [harness]  @ 221-236
+
+# Uses (outbound edges)
+  @use call pe:open  @ 117
+  @use call pe:draw  @ 126
+  @use call pe:handleInput  @ 131
+  @use call ds:get  @ 142,161,164,169
+  @use call ds:assign  @ 154,177,197,208,224
+
+# Fields (r read / w write incl. constructor keys)
+  @field w BeginPopup  @ 51
+  @field w Button  @ 53
+  @field w CloseCurrentPopup  @ 52
+  @field w GetContentRegionAvail  @ 42
+  @field w GetCursorScreenPos  @ 41
+  @field w GetKeyMods  @ 27
+  @field w GetWindowDrawList  @ 44
+  @field w GetWindowSize  @ 43
+  @field r ImGui_GetBuiltinPath  @ 24
+  @field w ImGui_GetBuiltinPath  @ 24
+  @field w InputText  @ 57
+  @field w IsAnyItemActive  @ 33
+  @field w IsKeyDown  @ 29
+  @field w IsKeyPressed  @ 28
+  @field w IsMouseClicked  @ 30
+  @field w IsMouseDown  @ 31
+  @field w IsWindowAppearing  @ 45
+  @field w IsWindowHovered  @ 32
+  @field r Key_Enter  @ 140,160,167
+  @field r Key_Escape  @ 234
+  @field r Key_N  @ 163
+  @field r Key_Y  @ 168
+  @field w Mod_None  @ 21
+  @field w OpenPopup  @ 50
+  @field w __index  @ 22,70,80
+  @field r _stubs  @ 87,89
+  @field r button  @ 124
+  @field w button  @ 139,159,166
+  @field r cc  @ 216
+  @field w cc  @ 210
+  @field r chan  @ 146
+  @field w chrome  @ 115
+  @field w ctx  @ 71
+  @field w delay  @ 97,98,156,179,226
+  @field w detune  @ 97,98,156,179,226
+  @field w domain  @ 210
+  @field w drawPicker  @ 69
+  @field r ds  @ 208
+  @field w endppq  @ 97,98,156,179,226
+  @field w facade  @ 115
+  @field w font  @ 71
+  @field w fontSize  @ 71
+  @field w get  @ 73
+  @field w gridPane  @ 87,89
+  @field w gui  @ 115
+  @field w hostDs  @ 116
+  @field r items  @ 203,214
+  @field r key  @ 203,214
+  @field r keys  @ 125
+  @field w keys  @ 140,160,163,167,168
+  @field r kind  @ 144
+  @field w kind  @ 95,105,155,178,198,199,209,210,225
+  @field w lane  @ 97,98,156,179,226
+  @field r lead  @ 142,161,164,169
+  @field w lead  @ 154
+  @field w lengthPpq  @ 95,105,155,178,198,199,209,210,225
+  @field r loaded  @ 85
+  @field w modalHost  @ 116
+  @field w name  @ 136,151,174,194,221
+  @field r norm  @ 215
+  @field w norm  @ 209
+  @field w open  @ 72
+  @field w ownerTrack  @ 75
+  @field r pitch  @ 161,164,189
+  @field w pitch  @ 97,98,156,179,226
+  @field w points  @ 106,199,209,210
+  @field w ppq  @ 97,98,106,156,179,226
+  @field r preload  @ 83
+  @field r reaper  @ 24
+  @field w registerKind  @ 72
+  @field w root  @ 95,155,178,225
+  @field w run  @ 137,152,175,195,222
+  @field w shape  @ 106
+  @field w small  @ 177,224
+  @field r someCurve  @ 205
+  @field w someCurve  @ 199
+  @field r someNotes  @ 204
+  @field w someNotes  @ 198
+  @field r specs  @ 145,146,161,164,169,188,189,232,235
+  @field w specs  @ 96,156,179,198,226
+  @field r text  @ 124
+  @field w text  @ 139,159,166
+  @field w ui  @ 71
+  @field w uiFont  @ 71
+  @field w val  @ 106
+  @field w vel  @ 97,98,156,179,226

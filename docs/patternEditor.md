@@ -55,6 +55,35 @@ which owns no `close` handle, so it only flags `pendingAction`; `handleInput`
 (which does hold `close`) drains the flag on the same frame and routes it to the
 same close/cancel path the keys use.
 
+## The copy shelf
+
+Save and Load put a named copy shelf on the toolbar. The shelf is the
+`fxPatterns` project key, read and written through the *host* `ds` (threaded in
+as `hostDs`) — not the mini stack's own `ds`, which never writes a project tier.
+It is a copy shelf, not live sharing: both directions deep-copy, and a shelf edit
+re-realises nothing. (The P2 design gave `fxPatterns` a `dataChanged` arm that
+rebuilt every consumer; the P3.5 inline pivot made params store their own body,
+so that arm and its `derivationInputs` entry are gone.)
+
+Save writes `readbackBody()` — the same whitelisted shape write-through commits —
+so a later edit `deepEq`s clean against a saved copy. Saving over a name whose
+stored copy has diverged confirms first (y/n), the one gesture that destroys
+shelf content; a fresh or identical name saves silently.
+
+Both widgets stay *inside* the editor modal: `modalHost` holds one state slot, so
+opening its prompt/confirm from within the editor would replace the editor
+itself. Save rolls its own in-modal popup; Load uses `chrome.drawPicker`, whose
+items are the shelf names this editor can materialise — filtered by `kind`, and
+for curves by `domain` too, since the generator is coded against the domain and a
+`normalized` param must never be handed a `cc` body.
+
+Load reopens the checkout on the picked body in place, so `open` re-runs the
+loop-length, column and `pbRange` setup. This forces the snapshot split: `open`
+records the modal-open body as `openSnapshot` (Esc's restore target) separately
+from `editBody` (live metadata readback reads off), and a Load replaces
+`editBody` while preserving `openSnapshot` — so Esc after a Load still restores
+what the modal opened on, not the loaded body.
+
 ## Ownership
 
 Owns `ps`/`cm`/`ds`/`eventMeta` plus the full `mm`/`tm`/`tv`/`cmgr`/`ccm`/`pa`

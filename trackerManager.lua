@@ -211,7 +211,7 @@ local function derivationInputs()
     overlapOffset= cm:get('overlapOffset'),
     swing        = ds:get('swing'),            fxRegions    = ds:get('fxRegions'),
     extraColumns = ds:get('extraColumns'),     fxParked     = ds:get('fxParked'),
-    prevWindows  = ds:get('prevWindows'),      fxPatterns   = ds:get('fxPatterns'),
+    prevWindows  = ds:get('prevWindows'),
   }
 end
 
@@ -4706,10 +4706,6 @@ do
       -- noteDelay is a display offset -- nothing in the tm pipeline reads it; reproject only,
       -- forced past the rebuild(∅) gate since it seeds no dirt.
       if not flushingParked then tm:requestRebuild(); tm:rebuild(false) end
-    elseif change.name == 'fxPatterns' then
-      -- Shared pattern-library edit (P3 write-through): re-realise every consumer. v1 dirties
-      -- all 16; pattern->consumer targeting is P4. see design/fx-patterns.md § The checkout model
-      dirtyChan(); tm:rebuild(false)
     end
   end)
 

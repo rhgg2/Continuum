@@ -9,6 +9,7 @@
 --contract: mini cmgr binds only the pattern-editing keymap subset; rest stay inert
 --contract: edits write through on every mini rebuild -- readback strips to the whitelist, deepEq-guarded via the commit callback
 --contract: Esc/Cancel restore the open snapshot; Enter/Commit close on the current store
+--contract: Save/Load run a named copy shelf on host ds; a Load reopens the checkout in place
 --contract: `armed` gates out the open/close rebuilds
 local util    = require 'util'
 local scratch = require 'scratch'
@@ -21,8 +22,8 @@ local ImGui        = require 'imgui' '0.10'
 local keyDispatch  = require 'keyDispatch'
 local pageBindings = require 'pageBindings'
 
-local facade, chrome, gui, modalHost =
-  (...).facade, (...).chrome, (...).gui, (...).modalHost
+local facade, chrome, gui, modalHost, hostDs =
+  (...).facade, (...).chrome, (...).gui, (...).modalHost, (...).hostDs
 local ctx = gui.ctx
 
 ----- Own stack -- the harness `mk` shape, wired to the real shared facade
@@ -44,15 +45,20 @@ local tv        = util.instantiate('trackerView',
 
 local pe = {}
 local item, poolGuid           -- set between open and close; nil while dormant
-local editBody, commitFn       -- open-snapshot body + write-back closure; nil while dormant
+local editBody, commitFn       -- live body metadata + write-back closure; nil while dormant
+local openSnapshot             -- body as opened; Esc/Cancel restore it. A Load replaces editBody, never this
 local lastWritten              -- last body committed; deepEq-compared to skip a no-op write-through
 local armed = false            -- gate write-through to genuine edits, not open/close rebuilds
 local swallowInput = false     -- one-shot: drop the keystroke that launched the modal, so its press-edge (Enter=commit, ←→) isn't re-read here
-local pendingAction            -- 'commit'|'cancel' set by a toolbar button in draw; handleInput drains it next
+local pendingAction            -- 'commit'|'cancel'|{load=name} set by a toolbar widget in draw; handleInput drains it next
+local savePopupOpen = false    -- Save's in-modal popup is up this frame; pauses grid dispatch + the Esc/Enter fallback
 
 -- Note entry and command dispatch both self-suppress while a toolbar widget holds focus, mirroring
 -- the main grid (trackerRender: inputAllowed folds focusState.acceptCmds). item==nil means dormant.
-local function acceptInput() return item ~= nil and not ImGui.IsAnyItemActive(ctx) end
+local function acceptInput()
+  return item ~= nil and not ImGui.IsAnyItemActive(ctx)
+     and not chrome.pickerIsActive() and not savePopupOpen
+end
 
 local gridPane = util.instantiate('gridPane', {
   cm = cm, cmgr = cmgr, chrome = chrome, gui = gui, tv = tv, chordEntry = false,
@@ -189,7 +195,7 @@ tm:subscribe('rebuild', writeThrough)
 -- snapshot with one guarded write. Enter needs no counterpart -- the param is already current.
 local function cancel(close)
   armed = false
-  if not util.deepEq(lastWritten, editBody) then commitFn(editBody) end
+  if not util.deepEq(lastWritten, openSnapshot) then commitFn(openSnapshot) end
   close(false)
 end
 
@@ -215,7 +221,7 @@ function pe:open(body, commit)
   local loopPpq = body.lengthPpq
   if body.kind == 'curve' then loopPpq = loopPpq + 1  end
   mm:setLength(loopPpq / resolution)
-  editBody, commitFn, lastWritten = body, commit, body
+  editBody, commitFn, lastWritten, openSnapshot = body, commit, body, body
   if body.kind == 'curve' then
     body.domain = body.domain or 'normalized'
     -- pe:draw renders its own full-size curve editor; suppress gridPane's auto lane strip so the
@@ -256,11 +262,96 @@ function pe:close()
   eventMeta:dropPool(poolGuid)
   tm:bindTake(nil, { skipGuard = true })
   reaper.DeleteTrackMediaItem(scratch.track(), item)
-  item, poolGuid, editBody, commitFn, lastWritten = nil, nil, nil, nil, nil
+  item, poolGuid, editBody, commitFn, lastWritten, openSnapshot = nil, nil, nil, nil, nil, nil
 end
 
 function pe:isOpen()      return item ~= nil      end
 function pe:currentTake() return tm:currentTake() end
+
+----- Library copy shelf -- named bodies on the host ds; Save/Load only
+
+-- The shelf lives on the HOST ds (project scope): the mini stack never writes a project tier, and a
+-- shelf edit re-realises nothing (a copy shelf, not live sharing). see docs/patternEditor.md § The copy shelf
+local function shelf() return hostDs:get('fxPatterns') or {} end
+
+local function saveShelf(name)
+  local s = shelf()
+  s[name] = readbackBody()   -- the whitelisted shape, so a later write-through deepEqs clean against it
+  hostDs:assign('fxPatterns', s)
+end
+
+-- Load offers only bodies this editor can materialise: same kind, and for curves the same domain --
+-- the generator is coded against domain, so a normalized param is never handed a cc body.
+local function shelfMatches(body)
+  if body.kind ~= editBody.kind then return false end
+  if editBody.kind == 'curve' then return (body.domain or 'normalized') == editBody.domain end
+  return true
+end
+
+-- Rematerialise a shelf body in place: reopen the checkout on it, keep the modal-open snapshot as
+-- the cancel target, then push the loaded body at the param by hand. see docs/patternEditor.md § The copy shelf
+local function loadShelf(name)
+  local body = shelf()[name]
+  if not body then return end
+  local commit, snapshot = commitFn, openSnapshot
+  pe:close()
+  pe:open(body, commit)
+  openSnapshot = snapshot
+  lastWritten  = readbackBody()
+  commitFn(lastWritten)
+end
+
+-- modalHost is single-slot, so Save rolls its own in-modal popup (fxPicker precedent) rather than
+-- nesting modalHost's prompt inside the editor modal. see docs/patternEditor.md § The copy shelf
+local SAVE_POPUP = '##peSave'
+local saveConfirming = false
+local saveName = ''
+
+local function drawSave()
+  if ImGui.Button(ctx, 'Save' .. SAVE_POPUP) then
+    saveName, saveConfirming = '', false
+    ImGui.OpenPopup(ctx, SAVE_POPUP)
+  end
+  if not ImGui.BeginPopup(ctx, SAVE_POPUP, ImGui.WindowFlags_NoNav) then savePopupOpen = false; return end
+  savePopupOpen = true
+  if saveConfirming then
+    ImGui.Text(ctx, ("Overwrite '%s'? (y/n)"):format(saveName))
+    if ImGui.IsKeyPressed(ctx, ImGui.Key_Y) or ImGui.IsKeyPressed(ctx, ImGui.Key_Enter) then
+      saveShelf(saveName); ImGui.CloseCurrentPopup(ctx)
+    elseif ImGui.IsKeyPressed(ctx, ImGui.Key_N) or ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
+      ImGui.CloseCurrentPopup(ctx)
+    end
+  else
+    if ImGui.IsWindowAppearing(ctx) then ImGui.SetKeyboardFocusHere(ctx) end
+    ImGui.SetNextItemWidth(ctx, 180)
+    local _, name = ImGui.InputText(ctx, '##peSaveName', saveName)
+    saveName = name
+    -- A live InputText swallows Esc to deactivate, not to close; watch the keys ourselves
+    -- (reaimgui-gotchas: Esc + InputText). Divergence guards a destructive overwrite.
+    if ImGui.IsKeyPressed(ctx, ImGui.Key_Enter) or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadEnter) then
+      if saveName ~= '' then
+        local existing = shelf()[saveName]
+        if existing ~= nil and not util.deepEq(existing, readbackBody()) then saveConfirming = true
+        else saveShelf(saveName); ImGui.CloseCurrentPopup(ctx) end
+      end
+    elseif ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
+      ImGui.CloseCurrentPopup(ctx)
+    end
+  end
+  ImGui.EndPopup(ctx)
+end
+
+local function drawLoad()
+  local names = {}
+  for name, body in pairs(shelf()) do
+    if shelfMatches(body) then names[#names + 1] = name end
+  end
+  table.sort(names)
+  local items = {}
+  for _, name in ipairs(names) do items[#items + 1] = { label = name, key = name } end
+  chrome.drawPicker{ kind = 'peShelf', buttonLabel = 'Load', items = items,
+                     onPick = function(name) pendingAction = { load = name } end }
+end
 
 ----- Modal editing surface
 
@@ -286,6 +377,10 @@ local function drawToolbar()
   if ImGui.Button(ctx, 'Commit##peCommit') then pendingAction = 'commit' end
   ImGui.SameLine(ctx, 0, 6)
   if ImGui.Button(ctx, 'Cancel##peCancel') then pendingAction = 'cancel' end
+  ImGui.SameLine(ctx, 0, 12); chrome.verticalSeparator(); ImGui.SameLine(ctx, 0, 12)
+  drawSave()
+  ImGui.SameLine(ctx, 0, 6)
+  drawLoad()
   ImGui.PopStyleVar(ctx, 1)
 end
 
@@ -339,14 +434,18 @@ function pe:handleInput(close)
   if swallowInput then swallowInput = false; return { consumed = true, commandHeld = {} } end
   if pendingAction then
     local action = pendingAction; pendingAction = nil
-    if action == 'commit' then close(false) else cancel(close) end
+    if     action == 'commit' then close(false)
+    elseif action == 'cancel' then cancel(close)
+    else   loadShelf(action.load) end
     return { consumed = true, commandHeld = {} }
   end
   gridPane:handleMouse()
   miniFocus.acceptCmds = acceptInput()   -- pause command dispatch while a toolbar widget holds focus
   local kr = keyDispatch.dispatchKeys(miniFocus, cmgr, ctx)
   gridPane:handleKeys(kr)
-  if not kr.consumed then
+  -- A picker/Save popup consumes its own Esc/Enter, but IsKeyPressed can't see that (two input
+  -- streams); gate the fallback on the same pair acceptInput folds, so the key can't double-fire.
+  if not kr.consumed and not chrome.pickerIsActive() and not savePopupOpen then
     if ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
       cancel(close)
     elseif ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)

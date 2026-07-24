@@ -244,6 +244,13 @@ take's tier and dies with it. Store it in the body (soft, like
 `display`): open seeds the toolbar ticker from it, readback carries it
 through the whitelist.
 
+Two settlements from the 2026-07-24 shelf promotion: curve loads
+filter on **domain** as well as kind — the generator is coded against
+the domain, so a `normalized` param is never offered a `cc` body. And
+Esc keeps restoring the **modal-open** snapshot even after a Load: a
+load replaces the working body, not the cancel target, so cancel
+still means "as if never opened".
+
 (Isolated preview, once listed here, is dropped: write-through already
 auditions the pattern in host context, and there is nowhere sensible
 to hear it alone.)

@@ -101,6 +101,7 @@ local specs = {
   'patternEditor_lifecycle_spec',
   'patternEditor_modal_spec',
   'patternEditor_writethrough_spec',
+  'patternEditor_shelf_spec',
   'groups_core_spec',
   'gm_propagate_spec',
   'gm_realisation_spec',
