@@ -3,6 +3,7 @@
 local t = require('support')
 local util = require('util')
 local generators = require('generators')
+local tuning = require('tuning')
 
 -- Kinds run alone here, so the chain state equals the original: stream == host (the chain head).
 local function expand(kind, hostRec, params, ctx)
@@ -247,6 +248,99 @@ return {
       t.eq(#out.notes, 2, 'both voices gate at the onset')
       t.deepEq({ out.notes[1].pitch, out.notes[2].pitch }, { 60, 64 }, 'ascending by pitch')
       t.eq(out.notes[2].detune, 25, 'detune rides the voice, not the pattern')
+    end,
+  },
+
+  ----- chord-stamp: stamp a poly note pattern onto every member, rebased by temper steps
+
+  {
+    name = 'chord-stamp rebases the pattern chord onto each member; lane-1 note lands on the trigger',
+    run = function()
+      local temper = tuning.findTemper('12EDO')
+      local ctx = {
+        step = function(p, d, n) return tuning.transposeStep(temper, p, d, n) end,
+        stepsBetween = function(a, b)
+          return tuning.stepsBetween(temper, a.pitch, a.detune or 0, b.pitch, b.detune or 0)
+        end,
+      }
+      local chord = { kind = 'notes', specs = {
+        { lane = 1, ppq = 0, endppq = 240, pitch = 60, vel = 100 },   -- root C
+        { lane = 2, ppq = 0, endppq = 240, pitch = 64, vel = 100 },   -- E
+        { lane = 3, ppq = 0, endppq = 240, pitch = 67, vel = 100 },   -- G
+      } }
+      local host = { window = { 0, 240 }, notes = {
+        { pitch = 62, vel = 90, detune = 0, ppq = 0, endppq = 240 },  -- trigger: D
+      } }
+      local out = expand('chordStamp', host, { kind = 'chordStamp', pattern = chord }, ctx)
+      t.eq(#out.notes, 3, 'one derived note per chord voice')
+      t.deepEq({ out.notes[1].pitch, out.notes[2].pitch, out.notes[3].pitch }, { 62, 66, 69 },
+        'C-E-G rooted on C, rebased so the root lands on D -> D-F#-A')
+      t.eq(out.notes[1].vel, 90, 'every voice takes the trigger velocity, not the pattern vel')
+      t.eq(out.notes[1].ppq, 0);  t.eq(out.notes[1].endppq, 240)   -- vertical stamp: the trigger's window
+    end,
+  },
+
+  {
+    name = 'chord-stamp transposes by whole temper steps through ctx, not by raw pitch',
+    run = function()
+      -- Toy step-space: input steps are 2 semitones apart, output moves 3 semitones per step and tags
+      -- detune with the step count -- so a raw pitch-diff transposition gives visibly different numbers.
+      local ctx = {
+        stepsBetween = function(a, b) return (b.pitch - a.pitch) // 2 end,
+        step = function(p, d, n) return p + 3 * n, (d or 0) + n end,
+      }
+      local chord = { kind = 'notes', specs = {
+        { lane = 1, ppq = 0, endppq = 240, pitch = 60, vel = 80 },
+        { lane = 2, ppq = 0, endppq = 240, pitch = 64, vel = 80 },
+      } }
+      local host = { window = { 0, 240 }, notes = {
+        { pitch = 64, vel = 100, detune = 0, ppq = 0, endppq = 240 },
+      } }
+      local out = expand('chordStamp', host, { kind = 'chordStamp', pattern = chord }, ctx)
+      t.eq(out.notes[1].pitch, 66, 'root moved by ctx.step(stepsBetween=2) = +6 semitones, not the raw +4')
+      t.eq(out.notes[1].detune, 2, 'the move routed through ctx.step -- detune tags the step count')
+      t.eq(out.notes[2].pitch, 70, 'the upper voice moves by the same step count')
+    end,
+  },
+
+  {
+    name = 'chord-stamp fires a chord on every region member (all lanes are triggers)',
+    run = function()
+      local temper = tuning.findTemper('12EDO')
+      local ctx = {
+        step = function(p, d, n) return tuning.transposeStep(temper, p, d, n) end,
+        stepsBetween = function(a, b)
+          return tuning.stepsBetween(temper, a.pitch, a.detune or 0, b.pitch, b.detune or 0)
+        end,
+      }
+      local chord = { kind = 'notes', specs = {
+        { lane = 1, ppq = 0, endppq = 240, pitch = 60, vel = 100 },
+        { lane = 2, ppq = 0, endppq = 240, pitch = 67, vel = 100 },   -- a fifth above the root
+      } }
+      local host = { window = { 0, 480 }, notes = {
+        { pitch = 60, vel = 100, detune = 0, ppq = 0,   endppq = 240 },
+        { pitch = 62, vel = 100, detune = 0, ppq = 240, endppq = 480 },
+      } }
+      local out = expand('chordStamp', host, { kind = 'chordStamp', pattern = chord }, ctx)
+      t.eq(#out.notes, 4, 'two voices stamped on each of two members')
+      t.deepEq({ out.notes[1].ppq, out.notes[3].ppq }, { 0, 240 }, 'each chord sits at its trigger onset')
+      t.deepEq({ out.notes[1].pitch, out.notes[2].pitch }, { 60, 67 }, 'first chord rooted on C')
+      t.deepEq({ out.notes[3].pitch, out.notes[4].pitch }, { 62, 69 }, 'second chord rooted on D')
+    end,
+  },
+
+  {
+    name = 'chord-stamp with no lane-1 note in the pattern is inert (no root to rebase from)',
+    run = function()
+      local chord = { kind = 'notes', specs = {
+        { lane = 2, ppq = 0, endppq = 240, pitch = 64, vel = 80 },
+      } }
+      local host = { window = { 0, 240 }, notes = {
+        { pitch = 62, vel = 90, detune = 0, ppq = 0, endppq = 240 },
+      } }
+      local out = expand('chordStamp', host, { kind = 'chordStamp', pattern = chord },
+        { step = function() end, stepsBetween = function() return 0 end })
+      t.eq(#out.notes, 0, 'no lane-1 reference -> nothing stamped')
     end,
   },
 

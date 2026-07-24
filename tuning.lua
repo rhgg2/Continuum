@@ -438,6 +438,13 @@ function tuning.transposeStep(temper, midi, detune, n)
   return tuning.stepToMidi(temper, step + n, oct)
 end
 
+--contract: signed count of whole temper steps from note a to note b, each snapped to nearest step
+function tuning.stepsBetween(temper, aMidi, aDetune, bMidi, bDetune)
+  local aStep, aOct = tuning.midiToStep(temper, aMidi, aDetune)
+  local bStep, bOct = tuning.midiToStep(temper, bMidi, bDetune)
+  return (bOct - aOct) * #temper.cents + (bStep - aStep)
+end
+
 ----- Display
 
 --contract: returns (note, octaveLabel); named ⇒ name, nameless ⇒ degree+'-'; octave+1 at octaveStep

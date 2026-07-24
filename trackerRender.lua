@@ -891,9 +891,7 @@ local function hostPitch(uuid)
   return (n and n.pitch) or 60, (n and n.detune) or 0
 end
 local function centsToSteps(temper, midi, detune, cents)
-  local hStep, hOct = tuning.midiToStep(temper, midi, detune)
-  local tStep, tOct = tuning.midiToStep(temper, 0, midi * 100 + detune + (cents or 0))
-  return (tOct - hOct) * #temper.cents + (tStep - hStep)
+  return tuning.stepsBetween(temper, midi, detune, 0, midi * 100 + detune + (cents or 0))
 end
 local function stepsToCents(temper, midi, detune, n)
   local tMidi, tDetune = tuning.transposeStep(temper, midi, detune, n)

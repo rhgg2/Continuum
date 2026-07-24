@@ -1,4 +1,4 @@
-@module tuning  src=tuning.lua  loc=457  sha=d013d39  mode=namespace  self=tuning
+@module tuning  src=tuning.lua  loc=464  sha=d013d39  mode=namespace  self=tuning
 
 # Invariants & contracts
   @invariant  pure coordinate-system module: no module state, no take state, no pb / detune realisation logic  @ 4
@@ -96,15 +96,17 @@
   @api tuning.snap(temper, midi, detune)  @ 431-433
   @api tuning.transposeStep(temper, midi, detune, n)  @ 436-439
       @contract  moves by n scale steps under temper, carrying the octave; n may be negative  @ 435
+  @api tuning.stepsBetween(temper, aMidi, aDetune, bMidi, bDetune)  @ 442-446
+      @contract  signed count of whole temper steps from note a to note b, each snapped to nearest step  @ 441
   -- Display
-  @api tuning.stepToParts(temper, step, octave)  @ 444-449
-      @contract  returns (note, octaveLabel); named ⇒ name, nameless ⇒ degree+'-'; octave+1 at octaveStep  @ 443
-  @api tuning.stepToText(temper, step, octave)  @ 452-455
-      @contract  name ⇒ name+octave (C-4); blank/absent ⇒ degree-octave (7-4). Octave +1 at octaveStep.  @ 451
+  @api tuning.stepToParts(temper, step, octave)  @ 451-456
+      @contract  returns (note, octaveLabel); named ⇒ name, nameless ⇒ degree+'-'; octave+1 at octaveStep  @ 450
+  @api tuning.stepToText(temper, step, octave)  @ 459-462
+      @contract  name ⇒ name+octave (C-4); blank/absent ⇒ degree-octave (7-4). Octave +1 at octaveStep.  @ 458
 
 # Fields (r read / w write incl. constructor keys)
   @field w cellWidth  @ derive:82
-  @field r cents  @ computeCellWidth:38 derive:79 stepSpectrum:338,342 genRank2:363 midiToStep:397 stepToMidi:414
+  @field r cents  @ computeCellWidth:38 derive:79 stepSpectrum:338,342 genRank2:363 midiToStep:397 stepToMidi:414 stepsBetween:445
   @field w cents  @ derive:74 stepSpectrum:340 genRank2:361
   @field r count  @ stepSpectrum:339 mosInfo:373
   @field w count  @ stepSpectrum:339,340
@@ -124,7 +126,7 @@
   @field w mosInfo  @ mosInfo:370
   @field w name  @ edo:90 scalaToTemper:170
   @field w nextMosSize  @ nextMosSize:377
-  @field r octaveStep  @ stepToParts:445
+  @field r octaveStep  @ stepToParts:452
   @field w octaveStep  @ derive:80
   @field w octaveWidth  @ derive:81
   @field w parseChord  @ parseChord:237
@@ -143,11 +145,12 @@
   @field w scalaToTemper  @ scalaToTemper:158
   @field w small  @ mosInfo:373
   @field w snap  @ snap:431
-  @field r stepNames  @ computeCellWidth:38 derive:80 stepToParts:446
+  @field r stepNames  @ computeCellWidth:38 derive:80 stepToParts:453
   @field w stepNames  @ edo:93 scalaToTemper:173
   @field w stepToMidi  @ stepToMidi:413
-  @field w stepToParts  @ stepToParts:444
-  @field w stepToText  @ stepToText:452
+  @field w stepToParts  @ stepToParts:451
+  @field w stepToText  @ stepToText:459
+  @field w stepsBetween  @ stepsBetween:442
   @field r token  @ genRank2:365
   @field w token  @ genRank2:361
   @field w transposeStep  @ transposeStep:436

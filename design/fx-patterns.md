@@ -240,9 +240,10 @@ launch/open parameter, not a body field: it rides the descriptor
 body. Mono is today's behaviour: one visible lane, readback pins
 `lane = 1`. Poly binds the lane add/remove commands (`addNoteLane`,
 `hideExtraCol`) in the mini editor and readback keeps each spec's
-authored lane. No shipped kind declares poly yet — ostinato stays
-mono; the flag exists so a chord-painting or convolve-with-pattern fx
-can declare it.
+authored lane. `chordStamp` is the first poly kind — it stamps a poly
+note pattern (the chord) onto every region member, rebased by whole
+temper steps so the pattern's lane-1 note lands on each trigger;
+ostinato stays mono. A convolve-with-pattern fx could declare it next.
 
 Save/Load across the poly boundary (settled 2026-07-24): Save is
 lane-agnostic (`readbackBody` carries whatever lanes exist; the shelf

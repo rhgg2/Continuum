@@ -7,7 +7,7 @@
 --invariant: stream and host share one shape; stages read stream, host is the untouched original
 --shape: stream/host = { window={startppq,endppq}, chan, lane, id, notes={ {pitch,vel,detune,ppq,endppq},.. }, pas={ {ppq,pitch,vel},.. }, ccs={ [cc]={ {ppq,val,shape,[tension]},.. } }, ats={ {ppq,val},.. }, pb={ {ppq,val,shape,[tension]},.. } }
 --invariant: pb/ccs are absolute curves over the closed window (edge values seeded); pb val is cents
---invariant: ctx binds resolution, pbRangeCents, nextSameLaneNote(host), step(pitch,detune,n)
+--invariant: ctx binds resolution, pbRangeCents, nextSameLaneNote, step(p,d,n), stepsBetween(a,b)
 --invariant: periods are QN per the periodQN convention -- scalar or {num,den}
 --shape: result = { notes = { {ppq,endppq,pitch,vel,detune}, ... }, delta = { {ppq,val,shape,[tension]}, ... } }
 --shape: kinds[kind] = { expand, mode='replace'|'augment', dest='note'|'pb'|<cc>, label, defaults, fields }
@@ -16,7 +16,7 @@
 -- only. Params store bodies inline (§ P3.5); nothing references the shelf by name.
 --shape: fxPatterns (ds project) = { [name] = { kind='notes'|'curve', lengthPpq, root?=midiPitch, specs?={ {lane,ppq,endppq,pitch,vel,detune,delay,sample?},.. }, points?={ {ppq,val,shape,tension?},.. } } }
 -- A pattern field descriptor may carry poly=true (per-kind, not per-body) to let a note editor author
--- overlapping lanes; absent/false pins every spec to lane 1. No shipped kind sets it.
+-- overlapping lanes; absent/false pins every spec to lane 1. chordStamp sets it (a chord's voices).
 
 local util = require 'util'
 
@@ -144,6 +144,31 @@ local function ostinato(stream, host, params, ctx)
       end
     end
     base = base + loop
+  end
+  return { notes = notes, delta = {} }
+end
+
+--contract: chord-stamp stamps a poly pattern on each region member; lane-1 is the pattern's root
+--contract: rebase whole temper steps via ctx.stepsBetween+ctx.step; voice keeps trigger vel/window
+--contract: no lane-1 note in the pattern -> inert (empty result)
+-- Voices carry true temper-step detune (intent); on one channel only lane 1's detune realises via pb, so a
+-- microtonal chord sounds faithfully only in 12-ET -- the hand-authored-chord limit. see docs/tuning.md
+local function chordStamp(stream, host, params, ctx)
+  local specs = params.pattern and params.pattern.specs
+  if not (specs and #specs > 0) then return { notes = {}, delta = {} } end
+  local ref                                    -- the chord's root: the pattern's lane-1 note (earliest if several)
+  for _, spec in ipairs(specs) do
+    if (spec.lane or 1) == 1 and (not ref or spec.ppq < ref.ppq) then ref = spec end
+  end
+  if not ref then return { notes = {}, delta = {} } end
+  local notes = {}
+  for _, trig in ipairs(stream.notes) do
+    local steps = ctx.stepsBetween(ref, trig)  -- root -> trigger, in whole temper steps
+    for _, spec in ipairs(specs) do
+      local pitch, detune = ctx.step(spec.pitch, spec.detune or 0, steps)
+      util.add(notes, { ppq = trig.ppq, endppq = trig.endppq,
+                        pitch = pitch, detune = detune, vel = trig.vel })
+    end
   end
   return { notes = notes, delta = {} }
 end
@@ -346,6 +371,13 @@ generators.kinds = {
       { field = 'pattern', label = 'Pattern', widget = 'pattern', kind = 'notes' },
     },
   },
+  chordStamp = {
+    expand = chordStamp, mode = 'replace', dest = 'note', label = 'Chord',
+    defaults = { pattern = { kind = 'notes', specs = {} } },
+    fields = {
+      { field = 'pattern', label = 'Chord', widget = 'pattern', kind = 'notes', poly = true },
+    },
+  },
   vibrato = {
     expand = vibrato, mode = 'augment', dest = 'pb', label = 'Vibrato',
     defaults = { period = { 1, 2 }, depth = 30, onset = 1 },
@@ -401,7 +433,7 @@ for cc = 71, 79 do generators.ccDefaultRest[cc] = 64 end
 
 -- Which kinds the fxEdit modal offers, in order. Every kind works on either host: a region
 -- arpeggiates its covered chord, a single note degenerates cleanly (arp -> retrig, one voice).
-generators.modalOrder = { 'retrig', 'trill', 'arp', 'ostinato', 'velPattern', 'vibrato', 'slide', 'autopan', 'lfo' }
+generators.modalOrder = { 'retrig', 'trill', 'arp', 'ostinato', 'chordStamp', 'velPattern', 'vibrato', 'slide', 'autopan', 'lfo' }
 
 ----- Region park predicate + windows
 

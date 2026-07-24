@@ -2971,6 +2971,9 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
   local function stepOp(pitch, detune, n)        -- trill: scale steps -> (pitch, detune) via the temper
     return tuning.transposeStep(temper, pitch, detune, n)
   end
+  local function stepsBetween(a, b)              -- chord-stamp: whole temper steps between two notes
+    return tuning.stepsBetween(temper, a.pitch, a.detune or 0, b.pitch, b.detune or 0)
+  end
   -- Strict next same-lane note, sought directly in the host's lane column (slide's only consumer).
   -- see docs/trackerManager.md § Span-covered fx scans
   local function nextSameLaneNote(host)
@@ -2993,7 +2996,7 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
     return found
   end
   local chanCtx = { resolution = res, pbRangeCents = pbRangeCents, step = stepOp,
-                    nextSameLaneNote = nextSameLaneNote }
+                    stepsBetween = stepsBetween, nextSameLaneNote = nextSameLaneNote }
   -- Explicit fx-regions (channel x ppq span + fx, no host note), re-queried each
   -- rebuild and bucketed by channel. see design/note-macros-v2.md § The anchor generalized
   local fxRegionsByChan = {}
