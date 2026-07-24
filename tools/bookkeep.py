@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Apply commit-time bookkeeping from one manifest.
 
-The commit skill authors the content (feedback score+comment, decision prose,
-plan-landing note) — this script owns only the mechanical application: JSON
+The commit skill authors the content (decision prose, plan-landing note) —
+this script owns only the mechanical application: JSON
 escaping, hanging-indent wrapping, section splicing, Landed prune. Every
 manifest key is optional; contents are computed for all present keys before
 any file is written, so a bad manifest or a missing plan file errors before
@@ -13,7 +13,6 @@ Usage: python3 tools/bookkeep.py <manifest.json>
 Manifest:
   {
     "date": "2026-07-22",                       # optional; defaults to today
-    "feedback": {"score": 4|null, "used": [...], "comment": "..."},  # comment optional
     "decision": "one-or-two-line decision prose",
     "land": {"headline": "...", "ref": "§ 3", "now": "replacement Now body"}
   }
@@ -27,7 +26,6 @@ import textwrap
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-FEEDBACK = REPO / "map" / "feedback.jsonl"
 DECISIONS = REPO / "docs" / "decisions.md"
 PLAN_CURRENT = REPO / "plan" / "CURRENT"
 
@@ -37,23 +35,6 @@ LANDED_KEEP = 4
 
 def die(msg):
     sys.exit(f"bookkeep: {msg}")
-
-
-# ----- feedback
-
-def apply_feedback(date, spec):
-    """Append one JSONL line: date, score, used, comment (comment omitted when absent)."""
-    if "score" not in spec:
-        die("feedback needs a score (int 1-5 or null)")
-    entry = {"date": date, "score": spec["score"], "used": spec.get("used", [])}
-    if spec.get("comment"):
-        entry["comment"] = spec["comment"]
-    line = json.dumps(entry, ensure_ascii=False, separators=(",", ":"))
-
-    existing = FEEDBACK.read_text() if FEEDBACK.exists() else ""
-    if existing and not existing.endswith("\n"):
-        existing += "\n"
-    return FEEDBACK, existing + line + "\n"
 
 
 # ----- decision
@@ -139,14 +120,12 @@ def main():
         die(f"date must be YYYY-MM-DD, got {date!r}")
 
     writes = []
-    if "feedback" in manifest:
-        writes.append(apply_feedback(date, manifest["feedback"]))
     if "decision" in manifest:
         writes.append(apply_decision(date, manifest["decision"]))
     if "land" in manifest:
         writes.append(apply_land(date, manifest["land"]))
     if not writes:
-        die("manifest had none of: feedback, decision, land")
+        die("manifest had none of: decision, land")
 
     for path, content in writes:
         path.write_text(content)
