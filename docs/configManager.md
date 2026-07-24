@@ -26,6 +26,12 @@ Enforcement is split:
   state are silently pruned on load, so a renamed key in a stale project
   file doesn't error.
 
+`cm:defaultFor(key)` returns a deep copy of the schema default alone — no
+tier walk, no merge — raising on an unknown key like every other in-code
+entry point. `library.lua` reads the factory catalogue through it: the
+shipped swing/temper presets live as schema defaults, and the library seeds
+from (and re-imports) them without touching the live tiers.
+
 ## Colour
 
 **Atoms** are the only RGB values, all under `palette.*`: two tonal ramps

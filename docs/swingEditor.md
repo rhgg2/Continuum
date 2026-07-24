@@ -94,25 +94,24 @@ grey out.
 change (capped to keep the factor list visible); a manual drag
 overrides until rows/qn changes again.
 
-## Library tiers & seeding
+## Library tiers
 
-Swings resolve across three cm tiers, plus a synthetic floor:
+Swings live across two cm tiers — `project` and `global` (the shared
+library) — with the factory catalogue behind them as a seed source, not a
+resolution tier. The mechanics are the general library model: project-over-
+library resolution, factory-as-seed, the edit-at-project invariant, and the
+shared publish / revert / tidy / import verbs all live in `library.lua`; see
+`docs/library.md`. What's swing-specific:
 
-- **defaults** — the built-in preset catalogue (`classic-*`, `delay-*`)
-  and `identity`, the unstored, undeletable floor (a bare `{}` ≡ no swing).
-- **global** — the user's personal library. Lazily seeded from the
-  catalogue (minus `identity`) the first time it is *read* — by the
-  editor's tree palette or a tracker picker (`cm:seedGlobalFromDefault`).
-  No startup seeding, no flag; an empty global library is the only signal.
-- **project** — every swing the project actually references. A project
-  is self-contained: realisation resolves names here (plus the identity
-  floor) and never leans on the global library or the catalogue.
-
-Project self-containment is held by **copy-on-assign**: picking a swing
-for a take or channel (`setSwingSlot` / `setColSwingSlot` → `localizeSwing`)
-copies its composite into the project tier if absent, before writing the
-name into the take map. `identity` is never localized. `temperEditor`
-mirrors this for tempers (`pickTemper`, with `12EDO` as the floor).
+- The synthetic floor is `identity` — the unstored, undeletable `{}` ≡ no
+  swing (`12EDO` plays the same role for tempers).
+- Copy-on-use runs through `lib.localize`: picking a swing for a take or
+  channel (`setSwingSlot` / `setColSwingSlot`) copies its composite into the
+  project tier if absent, before the name is written into the take map, so a
+  project stays self-contained. `temperEditor` mirrors this for tempers.
+- Every editing gesture forks a library selection to project before writing
+  (`swingWrite` → `lib.forkToProject`), so browsing a library swing and
+  nudging a slider never mutates the library.
 
 ## Bind-time seeding
 

@@ -18,6 +18,46 @@ from it once, at startup; `reloadFactory` (via `reloadPlan`) re-imports it on
 demand, so a fresh project never resolves against factory directly and a
 stale library copy only picks up factory changes when asked.
 
+## Editing invariant
+
+Every editing write lands at the project tier. Selecting a library row and
+touching anything forks it to project first — `forkToProject` is `localize`
+plus a handle on the fresh project copy — inside the edit's own undo point,
+then writes there. Accidental library edits are structurally impossible
+rather than merely discouraged: the library changes only through the explicit
+publish / import / delete verbs.
+
+## Verbs
+
+One vocabulary across every named library, so the swing and temper editors
+share it:
+
+- **localize** (`localize`, `forkToProject`) — copy-on-use: picking an entry
+  for a take or channel copies it into project if absent. A synthetic name or
+  an existing project copy is a no-op.
+- **publish** (`publish`) — project copy → library. `publishOverwrites`
+  reports when it would clobber a *divergent* library copy so the editor can
+  confirm first; a fresh name or an identical copy publishes silently.
+- **revert** (`revert`) — library copy → project, discarding project drift.
+  No-op when there is no library copy to fall back to.
+- **tidy** (`tidy`) — drop project entries that deep-equal their library
+  source and aren't in the passed `inUse` set, in one undo entry; returns the
+  names removed.
+- **delete** (`delete`) — remove a name from the `project` or `global`
+  (library) tier. Synthetic names never delete.
+- **import** (`importFactory`, `reloadPlan`, `factoryOverwrites`) — copy
+  factory entries into the *library*, never straight to project. `reloadPlan`
+  splits the catalogue into `add` (missing) and `overwrite` (present but
+  divergent) so the editor lands the additions silently and confirms each
+  overwrite.
+
+## Modified badge
+
+`modified` is true when a project copy exists, shadows a same-named library
+source, and differs from it (`util.deepEq`). Both copies are local, so it is
+computed on demand — no provenance metadata, no hashes. The tree and pickers
+render it as a dirty marker on the project row.
+
 ## Synthetic floor
 
 `synthetic` names a per-key floor (e.g. `{ identity = true }` for swings,

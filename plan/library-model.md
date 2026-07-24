@@ -1,7 +1,7 @@
 # library model — plan
 
-> source: `design/library-model.md` — synthesis (`/plan-next`) compiles
-> from there; don't design here.
+> source: `design/archive/library-model.md` (archived; programme complete)
+> — synthesis compiled from there; don't design here.
 
 ## Phases
 
@@ -21,21 +21,19 @@
    sections; `publish`/`revert`/`tidy` verbs; modified badge on project rows;
    the publish-overwrite confirm modal lands here (QO1, deferred 2026-07-24) ← in-flight
 6. **Docs** (§ 6) — `swingEditor.md` + `configManager.md` rewrites; new
-   `docs/library.md`; archive the design doc
+   `docs/library.md`; archive the design doc — landed
 
 ## Landed (newest first; prune below ~4)
 
+- 2026-07-24 docs: land library-model prose; archive the design doc (§ 6)
 - 2026-07-24 editors: tier-scoped action-bar sets with up/down verb labels (§ 5)
 - 2026-07-24 editors: confirm before publishing over a divergent library copy (§ Open questions 1)
 - 2026-07-24 editors: modified badge on editor tree project rows (§ 5)
-- 2026-07-24 editors: temper tidy — reference scan + tidy button (§ Open Q2 (V2 fix))
 
 ## Now
 
-(empty — action-bar refinement landed; run /plan-next to promote Phase 6 Docs)
+(empty — library-model programme complete: all six phases landed. Run /plan-next to pick the next programme.)
 
 ## Queued (current phase; one-liners)
 
-- Phase 6 (Docs) — `swingEditor.md` + `configManager.md` rewrites, new
-  `docs/library.md`, archive the design doc. Run /plan-next to promote once the
-  action-bar refinement lands.
+(none — all six phases landed)
