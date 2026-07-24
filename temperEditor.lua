@@ -185,11 +185,11 @@ end
 
 ----- Tier-aware library writes
 
-local function promote(name) if name then lib.publish('tempers', name) end end
+local function publish(name) if name then lib.publish('tempers', name) end end
 
--- Wrapped: a project-tier write is undoable but mints no undo point of its
--- own (projext); atomic gives it one so it doesn't rewind as a passenger.
-local demote = util.atomic('Demote temper', function(name)
+-- Discard a project row's drift, restoring the library/factory source, and edit that copy.
+-- Wrapped: a project-tier write is undoable but mints no undo point of its own (projext); atomic gives it one so it doesn't rewind as a passenger.
+local revert = util.atomic('Revert temper', function(name)
   if not name then return end
   lib.revert('tempers', name)
   selectTemper(name, 'project')
@@ -224,8 +224,8 @@ local function buildDescriptor()
     onSelect  = function(tier, name) selectTemper(name, tier) end,
     onNew     = openNewModal,
     onImport  = openImportModal,
-    onPromote = promote,
-    onDemote  = demote,
+    onPublish = publish,
+    onRevert  = revert,
     onDelete  = deleteSel,
     onReset   = resetToSnapshot,
     dirty     = dirty(),

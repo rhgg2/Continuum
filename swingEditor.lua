@@ -448,12 +448,11 @@ local function deleteFromTier(level, name)
   cm:set(level, 'swings', key)
 end
 
-local function promote(name) if name then lib.publish('swings', name) end end
+local function publish(name) if name then lib.publish('swings', name) end end
 
--- Fork a global entry down into the project tier and edit that copy.
--- Wrapped: a project-tier write is undoable but creates no undo point of
--- its own (projext); atomic mints one so it doesn't rewind as a passenger.
-local demote = util.atomic('Demote swing', function(name)
+-- Discard a project row's drift, restoring the library/factory source, and edit that copy.
+-- Wrapped: a project-tier write is undoable but mints no undo point of its own (projext); atomic mints one so it doesn't rewind as a passenger.
+local revert = util.atomic('Revert swing', function(name)
   if not name then return end
   lib.revert('swings', name)
   switchTo(name, 'project')
@@ -507,6 +506,12 @@ local function inUseNames()
   return used
 end
 
+-- Drop project copies that match their source and no take references, in one
+-- undo entry (a bulk project-tier write; see revert).
+local tidy = util.atomic('Tidy swings', function()
+  lib.tidy('swings', inUseNames())
+end)
+
 -- Revert the edited composite to the open()/switch snapshot, then reswing.
 local function resetToSnapshot()
   swingWrite(util.deepClone(state.snapshot) or {})
@@ -528,8 +533,9 @@ local function buildDescriptor()
     sel         = { tier = state.tier, name = state.name },
     onSelect    = function(tier, name) switchTo(name, tier) end,
     onNew       = openNewModal,
-    onPromote   = promote,
-    onDemote    = demote,
+    onPublish   = publish,
+    onRevert    = revert,
+    onTidy      = tidy,
     onDelete    = deleteSel,
     dirty       = state.name ~= nil and not compositesEqual(swingRead() or {}, state.snapshot),
     onReset     = resetToSnapshot,

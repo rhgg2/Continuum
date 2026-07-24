@@ -1,4 +1,4 @@
-@module temperEditor  src=temperEditor.lua  loc=749  sha=cd7b7ed  mode=chunk  self=temperEditor
+@module temperEditor  src=temperEditor.lua  loc=749  sha=fbe92c0  mode=chunk  self=temperEditor
 @deps cm, chrome, ctx, gui, modalHost, lib
 
 # Imports
@@ -19,7 +19,7 @@
   @state MIN_TOP_AREA = 88  @ 25   -- px kept above it for the step table
   @state genState = {  @ 29
   @state forkToProject = util.atomic('Fork temper', function()  @ 96
-  @state demote = util.atomic('Demote temper', function(name)  @ 192
+  @state revert = util.atomic('Revert temper', function(name)  @ 192
   @state deleteSel = util.atomic('Delete temper', function(tier, name)  @ 198
   @state STEP_W, CENTS_W, NAME_W, DEL_W = 30, 72, 48, 44  @ 238
   @state COL_LABELS = { 'step', 'pitch', 'name', '' }  @ 239
@@ -69,7 +69,7 @@
       -- Replace the selected temper's scale wholesale from a generator result
       -- ({pitches, periodPitch, periodAsStep}); names clear, tokens arrive ascending.
   -- Tier-aware library writes
-  @fn promote(name)  @ 188
+  @fn publish(name)  @ 188
   @fn buildDescriptor()  @ 211-233
   -- Draw
   @fn tokenBox(idStr, key, current, commit)  @ 243-251
@@ -181,7 +181,7 @@
   @use call    fs.readText  @ 433
   @use call    lib.forkToProject  @ 97
   @use call    lib.names  @ buildDescriptor:212
-  @use call    lib.publish  @ promote:188
+  @use call    lib.publish  @ publish:188
   @use call    lib.revert  @ 194
   @use call    modalHost:registerKind  @ 392,422
   @use call    tuning.degreesToSpec  @ reseedEqual:505,506 drawEqualFields:527,533
@@ -302,11 +302,11 @@
   @field r nm  @ sortSteps:90
   @field w nm  @ sortSteps:85
   @field w onDelete  @ buildDescriptor:229
-  @field w onDemote  @ buildDescriptor:228
   @field w onImport  @ buildDescriptor:226
   @field w onNew  @ buildDescriptor:225
-  @field w onPromote  @ buildDescriptor:227
+  @field w onPublish  @ buildDescriptor:227
   @field w onReset  @ buildDescriptor:230
+  @field w onRevert  @ buildDescriptor:228
   @field w onSelect  @ buildDescriptor:224
   @field w onStep  @ drawRank2Fields:584
   @field r path  @ 10

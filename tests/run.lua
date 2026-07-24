@@ -258,6 +258,7 @@ local specs = {
   'painter_spec',
   'curveEditor_spec',
   'temperEditor_tree_spec',
+  'editor_verbs_spec',
 }
 
 local pass, fail, pending, failures = 0, 0, 0, {}

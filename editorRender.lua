@@ -28,40 +28,59 @@ local function onClose() cmgr:invoke('closeEditor') end
 
 ----- Library tree palette (Active / Project / Library / Factory tiers; one per pane)
 
---shape: libraryTreeSpec = { x, y, h, label, active={{col,name}}, project={name}, library={name}, factory={name}, synthetic={[name]=true}, undeletable={[name]=true}, sel={tier,name}, dirty?:bool, onSelect(tier,name), onNew(), onImport?(), onPromote(name), onDemote(name), onReset?(), onDelete(tier,name) }
+--shape: libraryTreeSpec = { x, y, h, label, active={{col,name}}, project={name}, library={name}, factory={name}, synthetic={[name]=true}, undeletable={[name]=true}, sel={tier,name}, dirty?:bool, onSelect(tier,name), onNew(), onImport?(), onPublish(name), onRevert(name), onTidy?(), onReset?(), onDelete(tier,name) }
 
--- sel.tier scopes the action bar: a folder selection (name=nil) scopes add/import,
--- a leaf arms dup/del. Active's 'select' button resolves an entry to its home tier.
+local function has(list, name)
+  for _, n in ipairs(list or {}) do if n == name then return true end end
+  return false
+end
+
+-- A project leaf shadows a source when the same name lives in the library or
+-- factory tier; only then can revert restore something.
+local function shadowsSource(spec, name)
+  return has(spec.library, name) or has(spec.factory, name)
+end
+
+-- sel.tier scopes the action bar: a folder selection (name=nil) scopes add/import
+-- (and tidy on Project); a leaf arms publish/revert/reset/del — edits auto-fork, no edit button.
 local function libraryActions(spec)
   local sel         = spec.sel or {}
   local synthetic   = sel.name and spec.synthetic and spec.synthetic[sel.name]
   local undeletable = synthetic or (sel.name and spec.undeletable and spec.undeletable[sel.name])
+  local projectLeaf = sel.tier == 'project' and sel.name
   if ImGui.Button(ctx, 'add') then spec.onNew() end
   if spec.onImport then
     ImGui.SameLine(ctx, 0, 4)
     if ImGui.Button(ctx, 'import') then spec.onImport() end
   end
-  ImGui.SameLine(ctx, 0, 4)
-  if sel.tier == 'project' and sel.name then
---  chrome.disabledIf(sel.tier ~= 'project', function()
-    if ImGui.Button(ctx, 'dup global') then spec.onPromote(sel.name) end   -- ↑G : promote
-    --  end)
+  -- publish: lift a project copy into the shared library.
+  if projectLeaf and not synthetic then
+    ImGui.SameLine(ctx, 0, 4)
+    if ImGui.Button(ctx, 'publish') then spec.onPublish(sel.name) end
   end
-  ImGui.SameLine(ctx, 0, 4)
-  if sel.tier == 'global' and sel.name and not synthetic then
---  chrome.disabledIf(sel.tier ~= 'global' or synthetic, function()
-    if ImGui.Button(ctx, 'dup project') then spec.onDemote(sel.name) end   -- ↓P : demote
-    --  end)
+  -- revert: discard project drift back to its source; greyed on a
+  -- project-only name, where there is no source to fall back to.
+  if projectLeaf then
+    ImGui.SameLine(ctx, 0, 4)
+    chrome.disabledIf(not shadowsSource(spec, sel.name), function()
+      if ImGui.Button(ctx, 'revert') then spec.onRevert(sel.name) end
+    end)
   end
-  ImGui.SameLine(ctx, 0, 4)
   -- reset reverts the selected entry's unsaved edits; only panes that supply
   -- onReset (swing) show it, greyed until the composite differs from snapshot.
   if spec.onReset then
+    ImGui.SameLine(ctx, 0, 4)
     chrome.disabledIf(not spec.dirty, function()
       if ImGui.Button(ctx, 'reset') then spec.onReset() end
     end)
-    ImGui.SameLine(ctx, 0, 4)
   end
+  -- tidy: drop pristine unreferenced project copies (swing only), armed on
+  -- the Project folder header (name=nil).
+  if spec.onTidy and sel.tier == 'project' and sel.name == nil then
+    ImGui.SameLine(ctx, 0, 4)
+    if ImGui.Button(ctx, 'tidy') then spec.onTidy() end
+  end
+  ImGui.SameLine(ctx, 0, 4)
   chrome.disabledIf(not sel.name or not (sel.tier == 'project' or sel.tier == 'global') or undeletable, function()
     if ImGui.Button(ctx, 'del') then spec.onDelete(sel.tier, sel.name) end   -- × : delete
   end)

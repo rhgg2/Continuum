@@ -198,7 +198,21 @@ by the same call.
    § 5's action-bar rework, not Phase 4's write plumbing.
 2. **Tidy for tempers** — reference scan needs a `takesUsing` analogue
    over take/track-tier `temper` values. If that's awkward, v1 ships
-   tidy for swings only and tempers keep manual delete.
+   tidy for swings only and tempers keep manual delete. Resolved
+   2026-07-24: **swing-only for v1.** Swing tidy reuses
+   `inUseNames` / `am:takesUsing`; temper references live as a cm value
+   across takes/tracks with no scan, so the temper scan + button are
+   deferred to a later item.
+
+   *V2 fix.* "In use" is meaningful for tempers — a take/track/project
+   persistently names its temper via `cm:get('temper')`, which
+   `derivationInputs` feeds into pitch realisation — so the entry is a
+   real reference, not view chrome. The scan is the `am:takesUsing`
+   analogue over cm rather than ds: walk each project MIDI take (and
+   the track tier), read `cm:getAt(take, 'temper')`, collect the named
+   tempers into an `inUse` set, and hand it to `lib.tidy('tempers',
+   inUse)`. The temper editor then gains the `tidy` button on the same
+   Project-folder gating as swing.
 3. **Picker grouping** — one `+` group vs split Library/Factory groups.
 4. **`reset` (snapshot revert)** — with REAPER undo now covering editor
    gestures, does the session snapshot still earn its button, or does
