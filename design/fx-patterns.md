@@ -2,26 +2,21 @@
 
 > Working design doc. Companion to `design/note-macros-v2.md` (the chain
 > surface): generator params whose **value is a note pattern or a curve**
-> — an ostinato source, an arbitrary-shape LFO — reusable across fx
-> instances, edited in a modal hosting a **second tracker stack**. The
+> — an ostinato source, an arbitrary-shape LFO — reusable by copy
+> through a project library, edited in a modal hosting a **second
+> tracker stack**. The
 > guiding rule throughout: **slim the surface, never the engine**. The
 > mini stack is a full mm/tm/tv; scoping lives in bindings, column
 > visibility, and a commit whitelist.
 
-## Status at a glance
 
-**Open**
-- [x] P1 — gridPane extraction: grid core + lane strip out of trackerRender; binding table becomes shared data
-- [x] P2 — pattern store: `fxPatterns` ds key (project scope), tm `dataChanged` arm (v1 dirties all 16), `fxPatterns` shape annotated in `generators.lua`. Generator param *types* land with their consumer at P3 — no executable orphan in P2.
-- [x] P3 — patternEditor: checkout stack + modal, both kinds, live preview
-- [ ] P4 — polish: pattern management, isolated preview, mini undo, targeted dirtying, polyphony
 
 ## The idea
 
 A generator kind can declare a param of type `pattern` (notes) or
-`curve`. The param's stored value is a **name** into a project-scoped
-pattern library — the same reference model swings use, so many fx
-instances share one body. Editing opens a modal that binds a second,
+`curve`. The param's stored value is the **body itself**, inline on
+the fx entry (§ P3.5); a project-scoped library shelf lets bodies be
+copied out for reuse and back (§ P4). Editing opens a modal that binds a second,
 fully real tracker stack to a **checkout take** on the scratch track:
 the take is an editing surface only, an interface to the persistence
 medium. The persisted form is a slimmed authored-intent record; commit
@@ -33,28 +28,31 @@ surface for free — grid cells plus the lane strip's curve editor.
 
 ## Data model
 
-New project-scoped ds registry key:
+The body lives inline on the fx entry; the project-scoped `fxPatterns`
+ds key shelves named copies of the same shape (§ P4):
 
 ```lua
-fxPatterns = { [name] = {
+body = {
   kind      = 'notes' | 'curve',
   lengthPpq = number,            -- loop length, logical frame
   -- notes:
   root      = midiPitch,         -- reference; realisation transposes host − root
-  specs     = { { lane=1, ppqL, endppqL, pitch, vel, detune, delay, sample? }, ... },
+  specs     = { { lane=1, ppq, endppq, pitch, vel, detune, delay, sample? }, ... },
   -- curve:
   domain    = 'normalized' | 'cc',                 -- baked: the value space the generator sees
   display   = 'bipolar'|'unipolar' | 'cc7'|'cc14', -- soft: within-domain entry variant
   points    = { { ppq, val, shape, tension? }, ... },   -- val per domain: −1..+1 or 0..127
-} }
+}
+
+fxPatterns = { [name] = body }   -- ds, project scope: the copy shelf
 ```
 
 Notes specs are **park-shaped** — the `REALISATION` strip
 (`trackerManager.lua` § fxParked) already defines authored-minus-realised,
 and new metadata rides along automatically. Whitelisted at commit: no
-`fx` field (patterns don't nest generators), no `chan`, `lane` fixed 1
-(monophonic v1; polyphony is purely additive later since the shape
-already carries `lane`).
+`fx` field (patterns don't nest generators), no `chan`, `lane` pinned
+to 1 for mono kinds (the shape already carries `lane`; the per-kind
+`lanes` declaration that unpins it is § P4).
 
 Decisions taken:
 
@@ -112,15 +110,10 @@ notes must carry lane/detune/delay or `pickStampedLane` crashes), then
 `tm:bindTake`.
 
 Live preview is write-through: on each mini-tm `rebuild`, strip to the
-whitelist and `ds:assign('fxPatterns', …)` **through the main ds** —
-host tm's `dataChanged` re-realises every consumer. Two prerequisites
-found in review:
-
-- tm's `dataChanged` handler dispatches on an explicit name list with no
-  else branch; it needs an `fxPatterns` arm (v1 dirties all 16 channels;
-  pattern→consumer targeted dirtying is P4).
-- `ds:assign` fires even for identical values — the write site guards
-  with `deepEq` (precedent: `persistParked`).
+whitelist and hand the body to the commit callback taken at open — in
+production `tv:setFxField`, so the host re-realises the owning channel
+and nothing else. A `deepEq` against the last-written body guards the
+no-op rebuilds (precedent: `persistParked`).
 
 Cancel: write-through means Esc lands after the store was already
 written, so the editor **snapshots the body at open** and Esc restores
@@ -143,8 +136,8 @@ canonical parallel-stack shape:
   reads are uncached.
 - **Hard rule: the mini stack never writes project/global tiers.**
   Per-instance project/global caches are never cross-invalidated; a mini
-  write desyncs the host silently. The one project write (`fxPatterns`)
-  goes through the *main* ds. Corollary: `tm:bindTake` gains a
+  write desyncs the host silently. The one project write (`fxPatterns`,
+  the § P4 shelf) goes through the *main* ds. Corollary: `tm:bindTake` gains a
   skip-guard opt — unconditional `restoreGuarded`/`guardTrack` would
   un-guard the host's playing track and stamp the scratch track guarded.
 - gm is optional; tv's `pa` dep (and its ccm/facade needs) instantiate
@@ -197,20 +190,72 @@ per-frame dispatch result. The tracker binding table moves out to
 `pageBindings.tracker`. trackerRender constructs one gridPane and delegates; existing
 specs pin behaviour.
 
+## P3.5 — the inline pivot
+
+P3 landed with a model change the sections above reflect: the param's
+stored value is the **body itself**, not a name into a shared store.
+`launchPattern` (trackerRender) deep-clones the entry's body into the
+editor; the commit callback writes it back through `tv:setFxField`, so
+write-through re-realises exactly the owning channel — targeted
+dirtying by construction, and the P2 "dirty all 16" tm arm never fires.
+
+Why inline won: a live name-reference aliases every consumer to every
+keystroke and drags in a lifecycle the fx strip has no room for —
+rename, delete-while-referenced, dangling names. Inline keeps each fx
+instance self-contained (fork-on-write, the library-model precedent);
+sharing returns in § P4 as **explicit copies** through the shelf.
+
+## P4 — polish
+
+Decisions taken 2026-07-24; the queue is compiled in
+`plan/fx-patterns.md`.
+
+**Library as a copy shelf.** `fxPatterns` (the P2 store) goes live as
+a named shelf of bodies, written through the *main* ds. **Save** and
+**Load** sit in the editor toolbar: Save prompts for a name and copies
+the current body up, confirming before overwriting a divergent copy
+(the library-model publish precedent); Load picks a name — kind-
+filtered, so a curve param only offers curves — and copies the body
+down onto the checkout, whereupon write-through makes the param track
+it. Both directions are copies: no live sharing, a shelf edit
+re-realises nothing, and tm's `fxPatterns` `dataChanged` arm plus its
+`derivationInputs` entry are deleted rather than extended. Management
+stays inside the Load picker (rename, delete).
+
+**Mini undo.** Undo/redo are root-scope registrations on the *main*
+cmgr, unreachable from the modal, and the mini ps never runs
+`pollUndo`. Wire: register fenced undo/redo on the mini cmgr —
+`continuum.lua`'s `undoFence` pattern, fenced at open so undo cannot
+cross into pre-open host edits — and poll the mini ps while the modal
+is up so a rewound P_EXT can't desync the mini ds. A REAPER undo
+rewrites the checkout take; the mini tm's rebuild then write-throughs
+the rewound state, so the param follows automatically.
+
+**Polyphony is infrastructure, per-kind.** The pattern field
+descriptor gains `lanes = 'mono' | 'poly'` (default mono). Mono is
+today's behaviour: one visible lane, readback pins `lane = 1`. Poly
+binds the lane add/remove commands in the mini editor and readback
+keeps each spec's authored lane. No shipped kind declares poly yet —
+ostinato stays mono; the flag exists so a chord-painting or
+convolve-with-pattern fx can declare it.
+
+**rpb rides the body.** rowPerBeat currently persists on the checkout
+take's tier and dies with it. Store it in the body (soft, like
+`display`): open seeds the toolbar ticker from it, readback carries it
+through the whitelist.
+
+(Isolated preview, once listed here, is dropped: write-through already
+auditions the pattern in host context, and there is nowhere sensible
+to hear it alone.)
+
 ## Risks & accepted quirks
 
 - **Undo interleaving.** Mini edits mint labelled REAPER undo blocks in
-  the host's history; after cancel they reference a deleted take.
-  Accepted v1.
+  the host's history; after cancel they reference a deleted take. The
+  § P4 fence stops mini undo crossing the open boundary, but the
+  host-history interleaving itself stays. Accepted.
 - **Orphan checkout.** A crash mid-edit leaves the checkout take on the
   scratch track. Accepted v1 (cheap to sweep at next open).
 - **Rebuild chattiness.** Write-through triggers a host rebuild per
-  keystroke — same cost as direct host editing; `deepEq` guard trims
-  no-ops, targeted dirtying is P4.
-
-## Open details
-
-- If tracker selection turns out to be region-overlay-only, the overlay
-  wiring joins P3 as a measured add.
-- rowPerBeat zoom persists on the checkout take's tier and dies with it;
-  per-pattern persistence (in the body) is a P4 nicety.
+  keystroke — same cost as direct host editing, and `setFxField` scopes
+  it to the owning channel; the `deepEq` guard trims no-ops.

@@ -19,7 +19,7 @@
    `demote`→`revert`; New/Import modals create at project — landed
 5. **editorRender tree + action bar** (§ 5) — Active/Project/Library/Factory
    sections; `publish`/`revert`/`tidy` verbs; modified badge on project rows;
-   the publish-overwrite confirm modal lands here (QO1, deferred 2026-07-24) ← in-flight
+   the publish-overwrite confirm modal lands here (QO1, deferred 2026-07-24) — landed
 6. **Docs** (§ 6) — `swingEditor.md` + `configManager.md` rewrites; new
    `docs/library.md`; archive the design doc — landed
 

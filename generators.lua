@@ -12,8 +12,8 @@
 --shape: result = { notes = { {ppq,endppq,pitch,vel,detune}, ... }, delta = { {ppq,val,shape,[tension]}, ... } }
 --shape: kinds[kind] = { expand, mode='replace'|'augment', dest='note'|'pb'|<cc>, label, defaults, fields }
 --invariant: mode is the stream fold -- replace overwrites the dest channel, augment adds to it
--- P2 store (design/fx-patterns.md § Data model): the project pattern library a `pattern`/`curve`
--- generator param names into. No consumer yet; re-homes to patternStore at P3.
+-- The copy shelf (design/fx-patterns.md § P4): named copies of pattern-param bodies, Save/Load
+-- only. Params store bodies inline (§ P3.5); nothing references the shelf by name.
 --shape: fxPatterns (ds project) = { [name] = { kind='notes'|'curve', lengthPpq, root?=midiPitch, specs?={ {lane=1,ppq,endppq,pitch,vel,detune,delay,sample?},.. }, points?={ {ppq,val,shape,tension?},.. } } }
 
 local util = require 'util'
