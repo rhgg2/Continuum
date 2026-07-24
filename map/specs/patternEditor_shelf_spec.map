@@ -1,4 +1,4 @@
-@spec patternEditor_shelf_spec  src=tests/specs/patternEditor_shelf_spec.lua  loc=234  sha=ad39535  cases=5
+@spec patternEditor_shelf_spec  src=tests/specs/patternEditor_shelf_spec.lua  loc=266  sha=29bee49  cases=6
 @exercises patternEditor (pe), dataStore (h.ds)
 @surface   pe:open, pe:draw, pe:handleInput, ds:get, ds:assign
 @harness   mk, reaper.GetMediaItemTake_Track
@@ -14,7 +14,7 @@
   @fn loadPE(deps)  @ 74-83
   @fn notesBody()  @ 85-93
   @fn curveBody()  @ 95-100
-  @fn withEditor(harness, body)  @ 104-111
+  @fn withEditor(harness, body, poly)  @ 104-111
       -- Open the editor on `body`, capturing each write-through commit; get() reads the latest. hostDs is
       -- the harness ds (project scope), standing in for trackerPage's shared ds.
   @fn frame(pe, o)  @ 114-119
@@ -27,13 +27,14 @@
   @case 'Load rematerialises the picked body; the param tracks it'  [harness]  @ 163-179
   @case 'both pickers offer only matching kind, and matching domain for curves'  [harness]  @ 183-213
   @case 'Esc after a Load restores the modal-open snapshot, not the loaded body'  [harness]  @ 217-232
+  @case 'a mono note param offers only single-lane bodies; a poly param offers multi-lane too'  [harness]  @ 236-264
 
 # Uses (outbound edges)
   @use call pe:open  @ 109
   @use call pe:draw  @ 118
   @use call pe:handleInput  @ 123
   @use call ds:get  @ 135,156
-  @use call ds:assign  @ 147,166,192,205,220
+  @use call ds:assign  @ 147,166,192,205,220,252,259
 
 # Fields (r read / w write incl. constructor keys)
   @field w Button  @ 49
@@ -61,12 +62,12 @@
   @field r chan  @ 139
   @field w chrome  @ 107
   @field w ctx  @ 63
-  @field w delay  @ 89,90,149,168,222
-  @field w detune  @ 89,90,149,168,222
+  @field w delay  @ 89,90,149,168,222,245,247,248
+  @field w detune  @ 89,90,149,168,222,245,247,248
   @field w domain  @ 207
   @field w drawPicker  @ 61
-  @field r ds  @ 205
-  @field w endppq  @ 89,90,149,168,222
+  @field r ds  @ 205,259
+  @field w endppq  @ 89,90,149,168,222,245,247,248
   @field w facade  @ 107
   @field w font  @ 63
   @field w fontSize  @ 63
@@ -74,33 +75,35 @@
   @field w gridPane  @ 79,81
   @field w gui  @ 107
   @field w hostDs  @ 108
-  @field r items  @ 187
-  @field r key  @ 187
+  @field r items  @ 187,240
+  @field r key  @ 187,240
   @field r keys  @ 117
   @field r kind  @ 61,137
-  @field w kind  @ 87,97,148,167,193,194,206,207,221
-  @field w lane  @ 89,90,149,168,222
+  @field w kind  @ 87,97,148,167,193,194,206,207,221,244,246
+  @field w lane  @ 89,90,149,168,222,245,247,248
   @field r lead  @ 135,156
   @field w lead  @ 147
-  @field w lengthPpq  @ 87,97,148,167,193,194,206,207,221
+  @field w lengthPpq  @ 87,97,148,167,193,194,206,207,221,244,246
   @field r loaded  @ 77
   @field w modalHost  @ 108
-  @field w name  @ 128,144,163,183,217
+  @field w name  @ 128,144,163,183,217,236
   @field r norm  @ 211
   @field w norm  @ 206
+  @field r oneLane  @ 255,262
+  @field w oneLane  @ 244
   @field w open  @ 64
   @field w ownerTrack  @ 67
   @field r peSave  @ 132,153,200
-  @field r peShelf  @ 172,173,197,210,226
+  @field r peShelf  @ 172,173,197,210,226,254,261
   @field r pitch  @ 158,178
-  @field w pitch  @ 89,90,149,168,222
+  @field w pitch  @ 89,90,149,168,222,245,247,248
   @field w points  @ 98,194,206,207
-  @field w ppq  @ 89,90,98,149,168,222
+  @field w ppq  @ 89,90,98,149,168,222,245,247,248
   @field r preload  @ 75
   @field r reaper  @ 24
   @field w registerKind  @ 64
   @field w root  @ 87,148,167,221
-  @field w run  @ 129,145,164,184,218
+  @field w run  @ 129,145,164,184,218,237
   @field w shape  @ 98
   @field w small  @ 166,220
   @field r someCurve  @ 199,202
@@ -108,8 +111,10 @@
   @field r someNotes  @ 198,201
   @field w someNotes  @ 193
   @field r specs  @ 138,139,157,158,177,178,228,231
-  @field w specs  @ 88,149,168,193,222
+  @field w specs  @ 88,149,168,193,222,244,246
+  @field r twoLanes  @ 256,263
+  @field w twoLanes  @ 246
   @field w ui  @ 63
   @field w uiFont  @ 63
   @field w val  @ 98
-  @field w vel  @ 89,90,149,168,222
+  @field w vel  @ 89,90,149,168,222,245,247,248

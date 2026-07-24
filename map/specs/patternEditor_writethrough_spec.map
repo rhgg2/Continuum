@@ -1,4 +1,4 @@
-@spec patternEditor_writethrough_spec  src=tests/specs/patternEditor_writethrough_spec.lua  loc=228  sha=14993a2  cases=7
+@spec patternEditor_writethrough_spec  src=tests/specs/patternEditor_writethrough_spec.lua  loc=271  sha=5c74b87  cases=9
 @harness   mk, reaper.GetMediaItemTake_Track
 
 # Intent
@@ -12,23 +12,29 @@
   @fn notesBody()  @ 60-68
   @fn openNotesBody()  @ 71-79
       -- An OPEN first note followed by a finite one: readback must clip the open tail to the successor.
-  @fn curveBody()  @ 81-90
-  @fn ccCurveBody()  @ 93-102
+  @fn polyNotesBody()  @ 83-91
+      -- Two overlapping notes on distinct lanes: a poly open keeps them apart; a mono open crushes them
+      -- onto lane 1, where the readback clip serialises them as a monophonic run.
+  @fn curveBody()  @ 93-102
+  @fn ccCurveBody()  @ 105-114
       -- cc-domain curve: points ride a fixed scratch cc verbatim (0..127), no normalisation.
-  @fn withEditor(harness, body)  @ 105-111
+  @fn withEditor(harness, body, poly)  @ 118-124
       -- Open the editor on `body`, capturing each write-through commit; get() reads the latest.
-  @fn pressDelete(pe)  @ 114-117
+      -- `poly` rides into pe:open: true authors overlapping lanes, absent/false pins everything to lane 1.
+  @fn pressDelete(pe)  @ 127-130
       -- Delete the event under the (default row-0) cursor via the real dispatch path.
-  @fn approx(a, b)  @ 119
+  @fn approx(a, b)  @ 132
 
 # Cases
-  @case 'a checkout edit writes through the commit callback, stripped to the whitelist'  [harness]  @ 123-137
-  @case 'readback clips an OPEN note to its successor onset, not the loop length'  [harness]  @ 141-152
-  @case 'a curve edit persists as normalised bipolar points, not raw thousandths'  [harness]  @ 156-171
-  @case 'a cc-domain curve persists its points verbatim, echoing the domain'  [harness]  @ 175-191
-  @case 'Enter commits: the edit stays in the store'  [harness]  @ 195-202
-  @case 'Esc cancels: the store is restored to the open snapshot'  [harness]  @ 206-215
-  @case 'close does not clobber the committed body via the unbind rebuild'  [harness]  @ 219-226
+  @case 'a checkout edit writes through the commit callback, stripped to the whitelist'  [harness]  @ 136-150
+  @case 'readback clips an OPEN note to its successor onset, not the loop length'  [harness]  @ 154-165
+  @case 'a curve edit persists as normalised bipolar points, not raw thousandths'  [harness]  @ 169-184
+  @case 'a cc-domain curve persists its points verbatim, echoing the domain'  [harness]  @ 188-204
+  @case 'Enter commits: the edit stays in the store'  [harness]  @ 208-215
+  @case 'Esc cancels: the store is restored to the open snapshot'  [harness]  @ 219-228
+  @case 'close does not clobber the committed body via the unbind rebuild'  [harness]  @ 232-239
+  @case 'a poly open keeps each authored lane through readback'  [harness]  @ 243-256
+  @case 'the same body opened mono flattens every note onto lane 1'  [harness]  @ 260-269
 
 # Fields (r read / w write incl. constructor keys)
   @field w GetKeyMods  @ 29
@@ -40,57 +46,57 @@
   @field w IsMouseClicked  @ 32
   @field w IsMouseDown  @ 33
   @field w IsWindowHovered  @ 34
-  @field r Key_Enter  @ 199
-  @field r Key_Equal  @ 145
-  @field r Key_Escape  @ 212
-  @field r Key_Period  @ 115
-  @field r Mod_Ctrl  @ 145
-  @field r Mod_None  @ 115,199,212
+  @field r Key_Enter  @ 212
+  @field r Key_Equal  @ 158,247,263
+  @field r Key_Escape  @ 225
+  @field r Key_Period  @ 128
+  @field r Mod_Ctrl  @ 158,247,263
+  @field r Mod_None  @ 128,212,225
   @field w Mod_None  @ 23
   @field r OPEN  @ 75
   @field w __index  @ 24,42
-  @field r chan  @ 134
-  @field w chrome  @ 108
+  @field r chan  @ 147
+  @field w chrome  @ 121
   @field w ctx  @ 43
-  @field w delay  @ 64,65,75,76
-  @field w detune  @ 64,65,75,76
-  @field w display  @ 95
-  @field r domain  @ 181
-  @field w domain  @ 95
-  @field r endppq  @ 150,151
-  @field w endppq  @ 64,65,75,76
-  @field w facade  @ 108
+  @field w delay  @ 64,65,75,76,87,88
+  @field w detune  @ 64,65,75,76,87,88
+  @field w display  @ 107
+  @field r domain  @ 194
+  @field w domain  @ 107
+  @field r endppq  @ 163,164
+  @field w endppq  @ 64,65,75,76,87,88
+  @field w facade  @ 121
   @field w font  @ 43
   @field w fontSize  @ 43
-  @field r fx  @ 133
+  @field r fx  @ 146
   @field w get  @ 54
-  @field w gui  @ 108
-  @field w kind  @ 62,73,83,95
-  @field r lane  @ 132
-  @field w lane  @ 64,65,75,76
-  @field r lengthPpq  @ 135
-  @field w lengthPpq  @ 62,73,83,95
+  @field w gui  @ 121
+  @field w kind  @ 62,73,85,95,107
+  @field r lane  @ 145,253,268
+  @field w lane  @ 64,65,75,76,87,88
+  @field r lengthPpq  @ 148
+  @field w lengthPpq  @ 62,73,85,95,107
   @field r loaded  @ 49
-  @field w modalHost  @ 108
-  @field w name  @ 123,141,156,175,195,206,219
+  @field w modalHost  @ 121
+  @field w name  @ 136,154,169,188,208,219,232,243,260
   @field w open  @ 44
   @field w ownerTrack  @ 56
-  @field w pitch  @ 64,65,75,76
-  @field r points  @ 161,182
-  @field w points  @ 84,96
-  @field r ppq  @ 131
-  @field w ppq  @ 64,65,75,76,85,86,87,97,98,99
+  @field w pitch  @ 64,65,75,76,87,88
+  @field r points  @ 174,195
+  @field w points  @ 96,108
+  @field r ppq  @ 144
+  @field w ppq  @ 64,65,75,76,87,88,97,98,99,109,110,111
   @field r preload  @ 47
   @field r reaper  @ 26
   @field w registerKind  @ 44
-  @field r root  @ 136
-  @field w root  @ 62,73
-  @field w run  @ 124,142,157,176,196,207,220
-  @field w shape  @ 85,86,87,97,98,99
-  @field r specs  @ 129,130,148,201,210,214,225
-  @field w specs  @ 63,74
+  @field r root  @ 149
+  @field w root  @ 62,73,85
+  @field w run  @ 137,155,170,189,209,220,233,244,261
+  @field w shape  @ 97,98,99,109,110,111
+  @field r specs  @ 142,143,161,214,223,227,238,250,266
+  @field w specs  @ 63,74,86
   @field w ui  @ 43
   @field w uiFont  @ 43
-  @field r val  @ 165,166,167,186,187
-  @field w val  @ 85,86,87,97,98,99
-  @field w vel  @ 64,65,75,76
+  @field r val  @ 178,179,180,199,200
+  @field w val  @ 97,98,99,109,110,111
+  @field w vel  @ 64,65,75,76,87,88

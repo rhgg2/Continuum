@@ -47,6 +47,7 @@ local pe = {}
 local item, poolGuid           -- set between open and close; nil while dormant
 local editBody, commitFn       -- live body metadata + write-back closure; nil while dormant
 local openSnapshot             -- body as opened; Esc/Cancel restore it. A Load replaces editBody, never this
+local editPoly = false         -- kind opt-in: poly authors overlapping note lanes, mono pins everything to lane 1
 local lastWritten              -- last body committed; deepEq-compared to skip a no-op write-through
 local armed = false            -- gate write-through to genuine edits, not open/close rebuilds
 local swallowInput = false     -- one-shot: drop the keystroke that launched the modal, so its press-edge (Enter=commit, ←→) isn't re-read here
@@ -92,6 +93,18 @@ end
 cmgr:loadOverrides(ImGui)   -- user rebinds (global tier) apply to the mini editor too
 cmgr:push(miniScope)        -- single-purpose cmgr: the tracker scope stays active for its life
 
+-- Add/remove note lane: not inherited from tv's registerAll (those bodies live on the page cmgr),
+-- so register locally. See docs/patternEditor.md § Lane commands for why hideExtraCol, not removeOrHideCol.
+miniScope:register('addNoteLane',  function() tv:addExtraCol('note') end)
+miniScope:register('hideExtraCol', function() tv:hideExtraCol() end)
+
+-- Lane editing is poly-only: bind the two commands' keys (Ctrl+Right/Ctrl+Left) while a poly note
+-- editor is open, clear them otherwise, so a mono editor's arrows never add or drop a lane.
+local function setLaneCommands(on)
+  miniScope:bind('addNoteLane',  on and pageBindings.tracker.addNoteLane  or nil)
+  miniScope:bind('hideExtraCol', on and pageBindings.tracker.hideExtraCol or nil)
+end
+
 ----- Materialise the stored body onto the bound checkout take
 
 -- Specs are park-shaped (logical-only). Route through the authoring add -- the same
@@ -104,7 +117,7 @@ local function materialiseNotes(specs)
     tm:addEvent{ evType = 'note', chan = 1, rpb = rpb,
                  ppq = s.ppq, endppq = s.endppq,
                  pitch = s.pitch, vel = s.vel,
-                 lane = s.lane or 1, detune = s.detune or 0, delay = s.delay or 0,
+                 lane = editPoly and (s.lane or 1) or 1, detune = s.detune or 0, delay = s.delay or 0,
                  sample = s.sample }
   end
 end
@@ -159,22 +172,29 @@ local function readbackBody()
              lengthPpq = editBody.lengthPpq, points = points }
   end
   local specs = {}
-  for _, col in ipairs(cols.notes or {}) do
+  for laneIdx, col in ipairs(cols.notes or {}) do
+    local colSpecs = {}
     for _, e in ipairs(col.events) do
       if e.evType ~= 'pa' then
         local endppq = (e.endppq == nil or e.endppq == util.OPEN) and editBody.lengthPpq or e.endppq
-        util.add(specs, { lane = 1, ppq = e.ppq, endppq = endppq,
-                          pitch = e.pitch, vel = e.vel,
-                          detune = e.detune or 0, delay = e.delay or 0, sample = e.sample })
+        util.add(colSpecs, { lane = editPoly and laneIdx or 1, ppq = e.ppq, endppq = endppq,
+                             pitch = e.pitch, vel = e.vel,
+                             detune = e.detune or 0, delay = e.delay or 0, sample = e.sample })
       end
     end
+    -- A lane is monophonic, so within its own column a note's tail ends at the next onset: clip so an
+    -- OPEN/over-long ceiling never serialises as an overlap. The trailing note keeps its lengthPpq cap.
+    table.sort(colSpecs, function(a, b) return a.ppq < b.ppq end)
+    for i = 1, #colSpecs - 1 do
+      colSpecs[i].endppq = math.min(colSpecs[i].endppq, colSpecs[i + 1].ppq)
+    end
+    for _, s in ipairs(colSpecs) do util.add(specs, s) end
   end
-  table.sort(specs, function(a, b) return a.ppq < b.ppq end)   -- stable order -> deepEq no-op on reopen
-  -- Lane 1 is the only lane, so a note's tail ends at the next onset: clip so an OPEN/over-long
-  -- ceiling never serialises as an overlap. The trailing note keeps its lengthPpq cap.
-  for i = 1, #specs - 1 do
-    specs[i].endppq = math.min(specs[i].endppq, specs[i + 1].ppq)
-  end
+  -- Stable (lane, ppq) order -> deepEq no-op on reopen. Mono has one column, so this is a ppq sort.
+  table.sort(specs, function(a, b)
+    if a.lane ~= b.lane then return a.lane < b.lane end
+    return a.ppq < b.ppq
+  end)
   return { kind = 'notes', lengthPpq = editBody.lengthPpq, root = editBody.root, specs = specs }
 end
 
@@ -203,8 +223,9 @@ end
 --contract: mint a checkout take on scratch, materialise `body`, bind the mini tm; `commit(newBody)` is the write-back
 --contract: snapshots the body and arms write-through once materialised (open/close rebuilds stay silent)
 --contract: an empty body (no lengthPpq) defaults its loop to one bar of the checkout take
-function pe:open(body, commit)
+function pe:open(body, commit, poly)
   if item then return end
+  editPoly = poly or false
 
   item = reaper.CreateNewMIDIItemInProj(scratch.track(), 0, 1, true)
   local take = reaper.GetActiveTake(item)
@@ -245,7 +266,14 @@ function pe:open(body, commit)
     materialiseCurve(body)
   else
     cm:set('take', 'laneStrip.visible', false)   -- note editor is grid-only; no curve pane
-    ds:assign('extraColumns', { [1] = { notes = 1 } })   -- force a note column so an empty pattern is typeable
+    -- A poly editor opens with as many note columns as the body's deepest authored lane (>=1); a mono
+    -- editor forces exactly one, so a multi-lane body flattens onto lane 1. Empty stays typeable.
+    local noteCols = 1
+    if editPoly then
+      for _, s in ipairs(body.specs or {}) do noteCols = math.max(noteCols, s.lane or 1) end
+    end
+    ds:assign('extraColumns', { [1] = { notes = noteCols } })
+    setLaneCommands(editPoly)
     materialiseNotes(body.specs)
   end
   tm:flush()   -- authoring stages into tm; flush drives the one mm:modify + rebuild
@@ -258,10 +286,12 @@ end
 function pe:close()
   if not item then return end
   armed = false   -- before the unbind rebuild, else it writes an empty body over the store
+  setLaneCommands(false)
   eventMeta:dropPool(poolGuid)
   tm:bindTake(nil, { skipGuard = true })
   reaper.DeleteTrackMediaItem(scratch.track(), item)
   item, poolGuid, editBody, commitFn, lastWritten, openSnapshot = nil, nil, nil, nil, nil, nil
+  editPoly = false
 end
 
 function pe:isOpen()      return item ~= nil      end
@@ -279,11 +309,18 @@ local function saveShelf(name)
   hostDs:assign('fxPatterns', s)
 end
 
--- Load offers only bodies this editor can materialise: same kind, and for curves the same domain --
--- the generator is coded against domain, so a normalized param is never handed a cc body.
+local function maxLane(body)
+  local m = 1
+  for _, s in ipairs(body.specs or {}) do m = math.max(m, s.lane or 1) end
+  return m
+end
+
+-- Load offers only bodies this editor can materialise: matching kind, curve domain, and (mono) single-lane.
+-- See design/fx-patterns.md § P4 -- polish for the poly-Load gate rationale.
 local function shelfMatches(body)
   if body.kind ~= editBody.kind then return false end
   if editBody.kind == 'curve' then return (body.domain or 'normalized') == editBody.domain end
+  if not editPoly then return maxLane(body) == 1 end
   return true
 end
 
@@ -292,9 +329,9 @@ end
 local function loadShelf(name)
   local body = shelf()[name]
   if not body then return end
-  local commit, snapshot = commitFn, openSnapshot
+  local commit, snapshot, poly = commitFn, openSnapshot, editPoly
   pe:close()
-  pe:open(body, commit)
+  pe:open(body, commit, poly)
   openSnapshot = snapshot
   lastWritten  = readbackBody()
   commitFn(lastWritten)
@@ -435,8 +472,8 @@ modalHost:registerKind('patternEditor', function(_, close)
 end)
 
 --contract: production entry -- mint the checkout on `body` and raise the editing modal; onClose sweeps it
-function pe:launch(body, commit)
-  if self:open(body, commit) then
+function pe:launch(body, commit, poly)
+  if self:open(body, commit, poly) then
     swallowInput = true   -- the launching key (Enter/←→) still has a live press-edge; skip the modal's first input pass so it isn't re-read as commit/nav
     local vw = ImGui.Viewport_GetWorkSize(ImGui.GetWindowViewport(ctx))
     -- Height fits the whole grid capped at 32 content rows (curve mode adds the endL terminal

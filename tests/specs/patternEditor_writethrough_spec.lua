@@ -78,6 +78,18 @@ local function openNotesBody()
   }
 end
 
+-- Two overlapping notes on distinct lanes: a poly open keeps them apart; a mono open crushes them
+-- onto lane 1, where the readback clip serialises them as a monophonic run.
+local function polyNotesBody()
+  return {
+    kind = 'notes', lengthPpq = 960, root = 60,
+    specs = {
+      { lane = 1, ppq = 0,   endppq = 480, pitch = 60, vel = 100, detune = 0, delay = 0 },
+      { lane = 2, ppq = 240, endppq = 720, pitch = 67, vel = 100, detune = 0, delay = 0 },
+    },
+  }
+end
+
 local function curveBody()
   return {
     kind = 'curve', lengthPpq = 960,
@@ -102,11 +114,12 @@ local function ccCurveBody()
 end
 
 -- Open the editor on `body`, capturing each write-through commit; get() reads the latest.
-local function withEditor(harness, body)
+-- `poly` rides into pe:open: true authors overlapping lanes, absent/false pins everything to lane 1.
+local function withEditor(harness, body, poly)
   local h  = harness.mk()
   local committed = body
   local pe = loadPE{ facade = fakeFacade, chrome = fakeChrome, gui = fakeGui, modalHost = fakeModalHost }
-  pe:open(body, function(b) committed = b end)
+  pe:open(body, function(b) committed = b end, poly)
   return h, pe, function() return committed end
 end
 
@@ -223,6 +236,36 @@ return {
       pe:close()
 
       t.eq(#get().specs, 1, 'the unbind rebuild (armed=false) left the committed edit intact')
+    end,
+  },
+
+  {
+    name = 'a poly open keeps each authored lane through readback',
+    run = function(harness)
+      local _, pe, get = withEditor(harness, polyNotesBody(), true)
+      -- Ctrl+= nudges the row-0 (lane 1) note's pitch: keeps both notes but fires a write-through.
+      setKeys({ fakeImGui.Key_Equal }, fakeImGui.Mod_Ctrl)
+      pe:handleInput(function() end)
+
+      local specs = get().specs
+      t.eq(#specs, 2, 'both authored notes survive')
+      local lanes = {}
+      for _, s in ipairs(specs) do lanes[s.lane] = true end
+      t.truthy(lanes[1], 'the lane-1 note stays on lane 1')
+      t.truthy(lanes[2], 'the lane-2 note stays on lane 2')
+    end,
+  },
+
+  {
+    name = 'the same body opened mono flattens every note onto lane 1',
+    run = function(harness)
+      local _, pe, get = withEditor(harness, polyNotesBody(), false)
+      setKeys({ fakeImGui.Key_Equal }, fakeImGui.Mod_Ctrl)
+      pe:handleInput(function() end)
+
+      local specs = get().specs
+      t.truthy(#specs >= 1, 'the notes survive the mono flatten')
+      for _, s in ipairs(specs) do t.eq(s.lane, 1, 'every note collapses to lane 1') end
     end,
   },
 }

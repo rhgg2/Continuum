@@ -55,6 +55,18 @@ which owns no `close` handle, so it only flags `pendingAction`; `handleInput`
 (which does hold `close`) drains the flag on the same frame and routes it to the
 same close/cancel path the keys use.
 
+## Lane commands
+
+`addNoteLane` and `hideExtraCol` add/remove a note lane for a poly editor
+(§ P4 in `design/fx-patterns.md`). Both live on the *page* cmgr in the main
+tracker, not on `tv`'s `registerAll`, so the mini cmgr never inherits them
+and registers its own copies locally. `hideExtraCol`, not
+`removeOrHideCol`, is bound to the remove side: `removeOrHideCol`'s
+automation-column path can't fire in a note-only mini editor, so it would
+never actually drop the lane. `setLaneCommands` binds both commands' keys
+only while a poly note editor is open, so a mono editor's arrows never add
+or drop a lane.
+
 ## The copy shelf
 
 Save and Load put a named copy shelf on the toolbar. The shelf is the

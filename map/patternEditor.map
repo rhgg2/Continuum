@@ -1,4 +1,4 @@
-@module patternEditor  src=patternEditor.lua  loc=466  sha=ad39535  mode=chunk  self=pe
+@module patternEditor  src=patternEditor.lua  loc=503  sha=29bee49  mode=chunk  self=pe
 @deps facade, chrome, gui, modalHost, hostDs
 
 # Invariants & contracts
@@ -31,7 +31,7 @@
   @construct gm        = util.instantiate('groupManager')  @ 41
   @construct cmgr      = util.instantiate('commandManager')  @ 42
   @construct tv        = util.instantiate('trackerView')  @ 43
-  @construct gridPane  = util.instantiate('gridPane')  @ 62
+  @construct gridPane  = util.instantiate('gridPane')  @ 63
 
 # Private state
   @state ctx = gui.ctx  @ 27
@@ -40,145 +40,152 @@
   @state item, poolGuid  @ 47   -- set between open and close; nil while dormant
   @state editBody, commitFn  @ 48   -- live body metadata + write-back closure; nil while dormant
   @state openSnapshot  @ 49   -- body as opened; Esc/Cancel restore it. A Load replaces editBody, never this
-  @state lastWritten  @ 50   -- last body committed; deepEq-compared to skip a no-op write-through
-  @state armed = false  @ 51   -- gate write-through to genuine edits, not open/close rebuilds
-  @state swallowInput = false  @ 52   -- one-shot: drop the keystroke that launched the modal, so its press-edge (Enter=commit, ←→) isn't re-read here
-  @state pendingAction  @ 53   -- 'commit'|'cancel'|{save=name}|{load=name} set by a toolbar widget in draw; handleInput drains it next
-  @state EDIT_COMMANDS = {  @ 71
-  @state miniScope = cmgr:scope('tracker')  @ 83
-  @state CURVE_CC = 1  @ 114
-  @state modalChrome  @ 331
-  @state launchRows  @ 333
-  @state miniFocus = { acceptCmds = true, suppressKbd = false, pageSuppressed ...  @ 337
+  @state editPoly = false  @ 50   -- kind opt-in: poly authors overlapping note lanes, mono pins everything to lane 1
+  @state lastWritten  @ 51   -- last body committed; deepEq-compared to skip a no-op write-through
+  @state armed = false  @ 52   -- gate write-through to genuine edits, not open/close rebuilds
+  @state swallowInput = false  @ 53   -- one-shot: drop the keystroke that launched the modal, so its press-edge (Enter=commit, ←→) isn't re-read here
+  @state pendingAction  @ 54   -- 'commit'|'cancel'|{save=name}|{load=name} set by a toolbar widget in draw; handleInput drains it next
+  @state EDIT_COMMANDS = {  @ 72
+  @state miniScope = cmgr:scope('tracker')  @ 84
+  @state CURVE_CC = 1  @ 127
+  @state modalChrome  @ 368
+  @state launchRows  @ 370
+  @state miniFocus = { acceptCmds = true, suppressKbd = false, pageSuppressed ...  @ 374
 
 # Private functions
   -- Own stack -- the harness `mk` shape, wired to the real shared facade
-  @fn acceptInput()  @ 57-60
+  @fn acceptInput()  @ 58-61
       -- Note entry and command dispatch both self-suppress while a toolbar widget holds focus, mirroring
       -- the main grid (trackerRender: inputAllowed folds focusState.acceptCmds). item==nil means dormant.
   -- Editing surface -- bind the pattern-editing subset of the tracker keymap
+  @fn setLaneCommands(on)  @ 103-106
+      -- Lane editing is poly-only: bind the two commands' keys (Ctrl+Right/Ctrl+Left) while a poly note
+      -- editor is open, clear them otherwise, so a mono editor's arrows never add or drop a lane.
   -- Materialise the stored body onto the bound checkout take
-  @fn materialiseNotes(specs)  @ 101-110
+  @fn materialiseNotes(specs)  @ 114-123
       -- Specs are park-shaped (logical-only). Route through the authoring add -- the same
       -- tm:addEvent tv's edit.add reaches -- so materialised notes are editable exactly like
       -- typed ones: addEvent takes logical ppq, stamps ppqL/endppqL, files a uuid. rpb rides
       -- like an authored note (tv stamps currentRpb); flush commits. see design/fx-patterns.md § Editing surface
-  @fn curveDisplay(body)  @ 118-123
+  @fn curveDisplay(body)  @ 131-136
       -- columnDisplay flags for the curve column, from the body's domain + display hint:
       -- normalized -> pb thousandths (bipolar unless 'unipolar'); cc -> 14-bit unless 'cc7'.
-  @fn materialiseCurve(body)  @ 125-136
+  @fn materialiseCurve(body)  @ 138-149
   -- Write-through commit -- persist checkout edits back to the shared store
-  @fn readbackBody()  @ 143-179
+  @fn readbackBody()  @ 156-199
       -- Read channel 1 back through tm and rebuild the whitelisted body: notes drop fx/chan and fix
       -- lane 1, a curve normalises the pb column's cents to bipolar. lengthPpq/root ride the open
       -- snapshot (no bound command edits them). The field pick IS the whitelist. see design/fx-patterns.md § checkout model
-  @fn writeThrough()  @ 183-190
+  @fn writeThrough()  @ 203-210
       -- Fires on every mini rebuild; `armed` gates out the open/close rebuilds (bindTake, the
       -- materialise flush, the unbind) whose take is not yet/no longer the edited body.
-  @fn cancel(close)  @ 195-199
+  @fn cancel(close)  @ 215-219
       -- Esc discards: write-through already made the param track the edits, so restore the open
       -- snapshot with one guarded write. Enter needs no counterpart -- the param is already current.
   -- Library copy shelf -- named bodies on the host ds; Save/Load only
-  @fn shelf()  @ 274
+  @fn shelf()  @ 304
       -- The shelf lives on the HOST ds (project scope): the mini stack never writes a project tier, and a
       -- shelf edit re-realises nothing (a copy shelf, not live sharing). see docs/patternEditor.md § The copy shelf
-  @fn saveShelf(name)  @ 276-280
-  @fn shelfMatches(body)  @ 284-288
-      -- Load offers only bodies this editor can materialise: same kind, and for curves the same domain --
-      -- the generator is coded against domain, so a normalized param is never handed a cc body.
-  @fn loadShelf(name)  @ 292-301
+  @fn saveShelf(name)  @ 306-310
+  @fn maxLane(body)  @ 312-316
+  @fn shelfMatches(body)  @ 320-325
+      -- Load offers only bodies this editor can materialise: matching kind, curve domain, and (mono) single-lane.
+      -- See design/fx-patterns.md § P4 -- polish for the poly-Load gate rationale.
+  @fn loadShelf(name)  @ 329-338
       -- Rematerialise a shelf body in place: reopen the checkout on it, keep the modal-open snapshot as
       -- the cancel target, then push the loaded body at the param by hand. see docs/patternEditor.md § The copy shelf
-  @fn shelfItems()  @ 304-313
+  @fn shelfItems()  @ 341-350
       -- Sorted matching-kind shelf names as picker items; shared by Save and Load.
-  @fn drawSave()  @ 317-321
+  @fn drawSave()  @ 354-358
       -- Save and Load are both drawPickers over the matching-kind shelf names; no confirm needed since an
       -- explicit pick/typed-name is itself the confirmation. see docs/patternEditor.md § The copy shelf
-  @fn drawLoad()  @ 323-326
+  @fn drawLoad()  @ 360-363
   -- Modal editing surface
-  @fn drawToolbar()  @ 341-357
+  @fn drawToolbar()  @ 378-394
       -- Mini toolbar: a copy of the tracker RPB ticker plus Commit/Cancel.
       -- see docs/patternEditor.md § Write-through commit for the button/pendingAction handoff.
 
 # Public API (pe:*)
-  @api pe:open(body, commit)  @ 206-254
-      @contract  mint a checkout take on scratch, materialise `body`, bind the mini tm; `commit(newBody)` is the write-back  @ 203
-      @contract  snapshots the body and arms write-through once materialised (open/close rebuilds stay silent)  @ 204
-      @contract  an empty body (no lengthPpq) defaults its loop to one bar of the checkout take  @ 205
-  @api pe:close()  @ 258-265
-      @contract  sweep the pool metadata (write-through, so leaks without this)  @ 256
-      @contract  unbind the mini tm, delete the checkout item  @ 257
-  @api pe:isOpen()  @ 267
-  @api pe:currentTake()  @ 268
-  @api pe:draw()  @ 360-401
-      @contract  draw pass -- toolbar row, grid fills the region below; popup sizes to fit  @ 359
-  @api pe:handleInput(close)  @ 405-430
-      @contract  input pass -- mouse, dispatch against mini cmgr, note entry; unconsumed Esc cancels, Enter commits  @ 403
-      @contract  returns the dispatch result kr = { consumed, commandHeld }  @ 404
-  @api pe:launch(body, commit)  @ 438-464
-      @contract  production entry -- mint the checkout on `body` and raise the editing modal; onClose sweeps it  @ 437
+  @api pe:open(body, commit, poly)  @ 226-282
+      @contract  mint a checkout take on scratch, materialise `body`, bind the mini tm; `commit(newBody)` is the write-back  @ 223
+      @contract  snapshots the body and arms write-through once materialised (open/close rebuilds stay silent)  @ 224
+      @contract  an empty body (no lengthPpq) defaults its loop to one bar of the checkout take  @ 225
+  @api pe:close()  @ 286-295
+      @contract  sweep the pool metadata (write-through, so leaks without this)  @ 284
+      @contract  unbind the mini tm, delete the checkout item  @ 285
+  @api pe:isOpen()  @ 297
+  @api pe:currentTake()  @ 298
+  @api pe:draw()  @ 397-438
+      @contract  draw pass -- toolbar row, grid fills the region below; popup sizes to fit  @ 396
+  @api pe:handleInput(close)  @ 442-467
+      @contract  input pass -- mouse, dispatch against mini cmgr, note entry; unconsumed Esc cancels, Enter commits  @ 440
+      @contract  returns the dispatch result kr = { consumed, commandHeld }  @ 441
+  @api pe:launch(body, commit, poly)  @ 475-501
+      @contract  production entry -- mint the checkout on `body` and raise the editing modal; onClose sweeps it  @ 474
 
 # Uses (outbound edges)
-  @use call    ImGui.AlignTextToFramePadding  @ drawToolbar:343
-  @use call    ImGui.Button  @ drawToolbar:349,351
-  @use call    ImGui.DrawList_AddRectFilled  @ draw:377
-  @use call    ImGui.Dummy  @ draw:362,400
-  @use call    ImGui.GetContentRegionAvail  @ draw:365
-  @use call    ImGui.GetCursorScreenPos  @ draw:364
-  @use call    ImGui.GetStyleVar  @ launch:451,452
-  @use call    ImGui.GetWindowDrawList  @ draw:377
-  @use call    ImGui.GetWindowSize  @ draw:371
-  @use call    ImGui.GetWindowViewport  @ launch:441
-  @use call    ImGui.IsAnyItemActive  @ acceptInput:58
-  @use call    ImGui.IsKeyPressed  @ handleInput:422,424,425
-  @use call    ImGui.PopStyleVar  @ drawToolbar:356
-  @use call    ImGui.PushStyleVar  @ drawToolbar:342
-  @use call    ImGui.SameLine  @ drawToolbar:345,348,350,352,354
-  @use call    ImGui.SetCursorScreenPos  @ draw:390,399
-  @use call    ImGui.SetWindowSize  @ draw:373
-  @use call    ImGui.Viewport_GetWorkSize  @ launch:441
-  @use call    chrome.colour  @ draw:377
-  @use call    chrome.headingLabel  @ drawToolbar:344
-  @use call    chrome.numberStepper  @ drawToolbar:346
-  @use call    chrome.pickerIsActive  @ acceptInput:59 handleInput:421
-  @use call    chrome.verticalSeparator  @ drawToolbar:348,352
-  @use call    cm:get  @ materialiseNotes:102 materialiseCurve:126 drawToolbar:346
-  @use call    cm:set  @ open:212,228,235,247
-  @use call    cmgr:loadOverrides  @ 92
-  @use call    cmgr:push  @ 93
-  @use call    cmgr:scope  @ 83
-  @use call    ds:assign  @ open:237,238,248
-  @use call    eventMeta:dropPool  @ close:261
-  @use call    gridPane:cellHeight  @ launch:453
-  @use call    gridPane:cellWidth  @ draw:385
-  @use call    gridPane:draw  @ draw:391,394
-  @use call    gridPane:handleKeys  @ handleInput:418
-  @use call    gridPane:handleMouse  @ handleInput:415
-  @use call    gridPane:heightForRows  @ draw:373 launch:458
-  @use call    gridPane:naturalWidth  @ draw:386
-  @use call    hostDs:assign  @ saveShelf:279
-  @use call    hostDs:get  @ shelf:274
-  @use call    keyDispatch.dispatchKeys  @ handleInput:417
-  @use call    mm:poolGuid  @ open:213
-  @use call    mm:resolution  @ open:214
-  @use call    mm:setLength  @ open:222
-  @use call    modalHost:registerKind  @ 432
-  @use call    scratch.track  @ open:209 close:263
-  @use call    tm:bindTake  @ open:211 close:262
-  @use call    tm:currentTake  @ currentTake:268
-  @use call    tm:flush  @ open:251
-  @use call    tm:getChannel  @ readbackBody:144
-  @use call    tv:ppqToRow  @ draw:392
-  @use call    tv:setRowPerBeat  @ drawToolbar:347
-  @use call    util.add  @ readbackBody:150,154,166
-  @use call    util.deepClone  @ open:216
-  @use call    util.deepEq  @ writeThrough:186 cancel:197
-  @use call    util.instantiate  @ 35,36,37,38,39,40,41,42,43,62
+  @use call    ImGui.AlignTextToFramePadding  @ drawToolbar:380
+  @use call    ImGui.Button  @ drawToolbar:386,388
+  @use call    ImGui.DrawList_AddRectFilled  @ draw:414
+  @use call    ImGui.Dummy  @ draw:399,437
+  @use call    ImGui.GetContentRegionAvail  @ draw:402
+  @use call    ImGui.GetCursorScreenPos  @ draw:401
+  @use call    ImGui.GetStyleVar  @ launch:488,489
+  @use call    ImGui.GetWindowDrawList  @ draw:414
+  @use call    ImGui.GetWindowSize  @ draw:408
+  @use call    ImGui.GetWindowViewport  @ launch:478
+  @use call    ImGui.IsAnyItemActive  @ acceptInput:59
+  @use call    ImGui.IsKeyPressed  @ handleInput:459,461,462
+  @use call    ImGui.PopStyleVar  @ drawToolbar:393
+  @use call    ImGui.PushStyleVar  @ drawToolbar:379
+  @use call    ImGui.SameLine  @ drawToolbar:382,385,387,389,391
+  @use call    ImGui.SetCursorScreenPos  @ draw:427,436
+  @use call    ImGui.SetWindowSize  @ draw:410
+  @use call    ImGui.Viewport_GetWorkSize  @ launch:478
+  @use call    chrome.colour  @ draw:414
+  @use call    chrome.headingLabel  @ drawToolbar:381
+  @use call    chrome.numberStepper  @ drawToolbar:383
+  @use call    chrome.pickerIsActive  @ acceptInput:60 handleInput:458
+  @use call    chrome.verticalSeparator  @ drawToolbar:385,389
+  @use call    cm:get  @ materialiseNotes:115 materialiseCurve:139 drawToolbar:383
+  @use call    cm:set  @ open:233,249,256,268
+  @use call    cmgr:loadOverrides  @ 93
+  @use call    cmgr:push  @ 94
+  @use call    cmgr:scope  @ 84
+  @use call    ds:assign  @ open:258,259,275
+  @use call    eventMeta:dropPool  @ close:290
+  @use call    gridPane:cellHeight  @ launch:490
+  @use call    gridPane:cellWidth  @ draw:422
+  @use call    gridPane:draw  @ draw:428,431
+  @use call    gridPane:handleKeys  @ handleInput:455
+  @use call    gridPane:handleMouse  @ handleInput:452
+  @use call    gridPane:heightForRows  @ draw:410 launch:495
+  @use call    gridPane:naturalWidth  @ draw:423
+  @use call    hostDs:assign  @ saveShelf:309
+  @use call    hostDs:get  @ shelf:304
+  @use call    keyDispatch.dispatchKeys  @ handleInput:454
+  @use call    mm:poolGuid  @ open:234
+  @use call    mm:resolution  @ open:235
+  @use call    mm:setLength  @ open:243
+  @use call    modalHost:registerKind  @ 469
+  @use call    scratch.track  @ open:230 close:292
+  @use call    tm:bindTake  @ open:232 close:291
+  @use call    tm:currentTake  @ currentTake:298
+  @use call    tm:flush  @ open:279
+  @use call    tm:getChannel  @ readbackBody:157
+  @use call    tv:addExtraCol  @ 98
+  @use call    tv:hideExtraCol  @ 99
+  @use call    tv:ppqToRow  @ draw:429
+  @use call    tv:setRowPerBeat  @ drawToolbar:384
+  @use call    util.add  @ readbackBody:163,167,180,191
+  @use call    util.deepClone  @ open:237
+  @use call    util.deepEq  @ writeThrough:206 cancel:217
+  @use call    util.instantiate  @ 35,36,37,38,39,40,41,42,43,63
   @use require commandManager  @ 42
   @use require configManager  @ 36
   @use require dataStore  @ 37
   @use require eventMeta  @ 38
-  @use require gridPane  @ 62
+  @use require gridPane  @ 63
   @use require groupManager  @ 41
   @use require imgui  @ 21
   @use require keyDispatch  @ 22
@@ -189,7 +196,7 @@
   @use require trackerManager  @ 40
   @use require trackerView  @ 43
   @use require util  @ 14
-  @use sub     tm:rebuild  @ 191
+  @use sub     tm:rebuild  @ 211
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
@@ -200,123 +207,125 @@
 
 # Fields (r read / w write incl. constructor keys)
   @field r ImGui_GetBuiltinPath  @ 17
-  @field r Key_Enter  @ handleInput:424
-  @field r Key_Escape  @ handleInput:422
-  @field r Key_KeypadEnter  @ handleInput:425
-  @field r OPEN  @ readbackBody:165
-  @field r StyleVar_FramePadding  @ drawToolbar:342 launch:452
-  @field r StyleVar_WindowPadding  @ launch:451
-  @field r WindowFlags_NoNav  @ launch:461
-  @field w acceptCmds  @ 337 handleInput:416
-  @field w align  @ drawToolbar:346
+  @field r Key_Enter  @ handleInput:461
+  @field r Key_Escape  @ handleInput:459
+  @field r Key_KeypadEnter  @ handleInput:462
+  @field r OPEN  @ readbackBody:179
+  @field r StyleVar_FramePadding  @ drawToolbar:379 launch:489
+  @field r StyleVar_WindowPadding  @ launch:488
+  @field r WindowFlags_NoNav  @ launch:498
+  @field w acceptCmds  @ 374 handleInput:453
+  @field r addNoteLane  @ setLaneCommands:104
+  @field w align  @ drawToolbar:383
   @field w apply  @ 33
   @field w binding  @ 33
-  @field w bipolar  @ curveDisplay:122
-  @field w buttonLabel  @ drawSave:318 drawLoad:324
-  @field w cc  @ materialiseCurve:129
-  @field r ccs  @ readbackBody:148
-  @field w ccs  @ curveDisplay:120 open:232
-  @field w chan  @ materialiseNotes:104 materialiseCurve:129,132
-  @field w chordEntry  @ 63
+  @field w bipolar  @ curveDisplay:135
+  @field w buttonLabel  @ drawSave:355 drawLoad:361
+  @field w cc  @ materialiseCurve:142
+  @field r ccs  @ readbackBody:161
+  @field w ccs  @ curveDisplay:133 open:253
+  @field w chan  @ materialiseNotes:117 materialiseCurve:142,145
+  @field w chordEntry  @ 64
   @field r chrome  @ 26
-  @field w chrome  @ 63
-  @field w cm  @ 40,42,44,63
-  @field w cmgr  @ 44,63
-  @field r columns  @ readbackBody:144
-  @field w commandHeld  @ handleInput:406,413
-  @field r consumed  @ handleInput:421
-  @field w consumed  @ handleInput:406,413
+  @field w chrome  @ 64
+  @field w cm  @ 40,42,44,64
+  @field w cmgr  @ 44,64
+  @field r columns  @ readbackBody:157
+  @field w commandHeld  @ handleInput:443,450
+  @field r consumed  @ handleInput:458
+  @field w consumed  @ handleInput:443,450
   @field r ctx  @ 27
   @field w defaultNoteCols  @ 40
-  @field r delay  @ materialiseNotes:107 readbackBody:168
-  @field w delay  @ materialiseNotes:107 readbackBody:168
-  @field r detune  @ materialiseNotes:107 readbackBody:154,168
-  @field w detune  @ materialiseNotes:107 readbackBody:168
-  @field r display  @ curveDisplay:120,122 readbackBody:158
-  @field w display  @ readbackBody:158
-  @field r domain  @ curveDisplay:119 materialiseCurve:128 readbackBody:147,158 open:225,231 shelfMatches:286
-  @field w domain  @ readbackBody:158 open:225
+  @field r delay  @ materialiseNotes:120 readbackBody:182
+  @field w delay  @ materialiseNotes:120 readbackBody:182
+  @field r detune  @ materialiseNotes:120 readbackBody:167,182
+  @field w detune  @ materialiseNotes:120 readbackBody:182
+  @field r display  @ curveDisplay:133,135 readbackBody:171
+  @field w display  @ readbackBody:171
+  @field r domain  @ curveDisplay:132 materialiseCurve:141 readbackBody:160,171 open:246,252 shelfMatches:322
+  @field w domain  @ readbackBody:171 open:246
   @field w ds  @ 40,41,44
-  @field w endRow  @ draw:392
-  @field r endppq  @ materialiseNotes:105 readbackBody:165,176
-  @field w endppq  @ materialiseNotes:105 readbackBody:166,176
-  @field r evType  @ readbackBody:164
-  @field w evType  @ materialiseNotes:104 materialiseCurve:129,132
+  @field w endRow  @ draw:429
+  @field r endppq  @ materialiseNotes:118 readbackBody:179,189
+  @field w endppq  @ materialiseNotes:118 readbackBody:180,189
+  @field r evType  @ readbackBody:178
+  @field w evType  @ materialiseNotes:117 materialiseCurve:142,145
   @field w eventMeta  @ 39
-  @field r events  @ readbackBody:149,153,163
+  @field r events  @ readbackBody:162,166,177
   @field r facade  @ 26
   @field w facade  @ 44
-  @field w flags  @ launch:461
-  @field r fontSize  @ launch:453,454
+  @field w flags  @ launch:498
+  @field r fontSize  @ launch:490,491
   @field w gm  @ 44
-  @field r grid  @ launch:445
+  @field r grid  @ launch:482
   @field r gui  @ 26
-  @field w gui  @ 63
-  @field w h  @ draw:392
+  @field w gui  @ 64
+  @field w h  @ draw:429
+  @field r hideExtraCol  @ setLaneCommands:105
   @field r hostDs  @ 26
-  @field w inputAllowed  @ 64
-  @field w items  @ drawSave:318 drawLoad:324
-  @field w key  @ shelfItems:311
-  @field r kind  @ readbackBody:145 open:221,224 shelfMatches:285,286 draw:379 launch:444,456
-  @field w kind  @ readbackBody:158,178 drawSave:318 drawLoad:324 launch:457
-  @field r label  @ curveDisplay:120,122
-  @field w label  @ curveDisplay:120,122 shelfItems:311
-  @field r lane  @ materialiseNotes:107
-  @field w lane  @ materialiseNotes:107 readbackBody:166
-  @field r lengthPpq  @ readbackBody:159,165,178 open:217,220,243 draw:392
-  @field w lengthPpq  @ readbackBody:159,178 open:217
-  @field r load  @ handleInput:412
-  @field w load  @ drawLoad:325
-  @field w max  @ drawToolbar:346
-  @field w min  @ drawToolbar:346
+  @field w inputAllowed  @ 65
+  @field w items  @ drawSave:355 drawLoad:361
+  @field w key  @ shelfItems:348
+  @field r kind  @ readbackBody:158 open:242,245 shelfMatches:321,322 draw:416 launch:481,493
+  @field w kind  @ readbackBody:171,198 drawSave:355 drawLoad:361 launch:494
+  @field r label  @ curveDisplay:133,135
+  @field w label  @ curveDisplay:133,135 shelfItems:348
+  @field r lane  @ materialiseNotes:120 readbackBody:195 open:273 maxLane:314
+  @field w lane  @ materialiseNotes:120 readbackBody:180
+  @field r lengthPpq  @ readbackBody:172,179,198 open:238,241,264 draw:429
+  @field w lengthPpq  @ readbackBody:172,198 open:238
+  @field r load  @ handleInput:449
+  @field w load  @ drawLoad:362
+  @field w max  @ drawToolbar:383
+  @field w min  @ drawToolbar:383
   @field w mm  @ 40
   @field r modalHost  @ 26
-  @field w normalized  @ curveDisplay:122
-  @field r notes  @ readbackBody:162
-  @field w notes  @ open:232,234,248
-  @field r numRows  @ launch:445
-  @field w onClose  @ launch:462
-  @field w onCreate  @ drawSave:320
-  @field w onPick  @ drawSave:319 drawLoad:325
+  @field w normalized  @ curveDisplay:135
+  @field r notes  @ readbackBody:175
+  @field w notes  @ open:253,255,275
+  @field r numRows  @ launch:482
+  @field w onClose  @ launch:499
+  @field w onCreate  @ drawSave:357
+  @field w onPick  @ drawSave:356 drawLoad:362
   @field w pa  @ 44
-  @field w pageSuppressed  @ 337
+  @field w pageSuppressed  @ 374
   @field r path  @ 20
   @field w path  @ 20
-  @field r pb  @ readbackBody:153
-  @field w pb  @ curveDisplay:122 open:234
-  @field r pitch  @ materialiseNotes:106 readbackBody:167
-  @field w pitch  @ materialiseNotes:106 readbackBody:167
-  @field r points  @ materialiseCurve:127 open:239
-  @field w points  @ readbackBody:159 open:242
-  @field r ppq  @ materialiseNotes:105 materialiseCurve:129,132 readbackBody:150,154,166,172,176
-  @field w ppq  @ materialiseNotes:105 materialiseCurve:129,132 readbackBody:150,154,166 open:242,243
+  @field r pb  @ readbackBody:166
+  @field w pb  @ curveDisplay:135 open:255
+  @field r pitch  @ materialiseNotes:119 readbackBody:181
+  @field w pitch  @ materialiseNotes:119 readbackBody:181
+  @field r points  @ materialiseCurve:140 open:260
+  @field w points  @ readbackBody:172 open:263
+  @field r ppq  @ materialiseNotes:118 materialiseCurve:142,145 readbackBody:163,167,180,187,189,196
+  @field w ppq  @ materialiseNotes:118 materialiseCurve:142,145 readbackBody:163,167,180 open:263,264
   @field w ps  @ 36,37,38
-  @field r root  @ readbackBody:178
-  @field w root  @ readbackBody:178
-  @field w rpb  @ materialiseNotes:104 materialiseCurve:129,132
-  @field r sample  @ materialiseNotes:108 readbackBody:168
-  @field w sample  @ materialiseNotes:108 readbackBody:168
-  @field r save  @ handleInput:411
-  @field w save  @ drawSave:319,320
-  @field r shape  @ materialiseCurve:130,133 readbackBody:150,155
-  @field w shape  @ materialiseCurve:130,133 readbackBody:150,155 open:242,243
-  @field w size  @ launch:458
-  @field w skipGuard  @ open:211 close:262
-  @field r specs  @ open:249
-  @field w specs  @ readbackBody:178
-  @field w suppressKbd  @ 337
+  @field r root  @ readbackBody:198
+  @field w root  @ readbackBody:198
+  @field w rpb  @ materialiseNotes:117 materialiseCurve:142,145
+  @field r sample  @ materialiseNotes:121 readbackBody:182
+  @field w sample  @ materialiseNotes:121 readbackBody:182
+  @field r save  @ handleInput:448
+  @field w save  @ drawSave:356,357
+  @field r shape  @ materialiseCurve:143,146 readbackBody:163,168
+  @field w shape  @ materialiseCurve:143,146 readbackBody:163,168 open:263,264
+  @field w size  @ launch:495
+  @field w skipGuard  @ open:232 close:291
+  @field r specs  @ open:273,277 maxLane:314
+  @field w specs  @ readbackBody:198
+  @field w suppressKbd  @ 374
   @field w take  @ 39
-  @field r tension  @ materialiseCurve:130,133 readbackBody:150,155
-  @field w tension  @ materialiseCurve:130,133 readbackBody:150,155
-  @field w title  @ launch:457
+  @field r tension  @ materialiseCurve:143,146 readbackBody:163,168
+  @field w tension  @ materialiseCurve:143,146 readbackBody:163,168
+  @field w title  @ launch:494
   @field w tm  @ 41,44
-  @field r tracker  @ 85,90
-  @field w tv  @ 63
-  @field r ui  @ launch:453,454
-  @field r val  @ materialiseCurve:130,133 readbackBody:150,154
-  @field w val  @ materialiseCurve:130,133 readbackBody:150,154 open:242,243
-  @field r vel  @ materialiseNotes:106 readbackBody:167
-  @field w vel  @ materialiseNotes:106 readbackBody:167
-  @field w w  @ draw:392
-  @field w x0  @ draw:392
-  @field w yTop  @ draw:392
+  @field r tracker  @ 86,91 setLaneCommands:104,105
+  @field w tv  @ 64
+  @field r ui  @ launch:490,491
+  @field r val  @ materialiseCurve:143,146 readbackBody:163,167
+  @field w val  @ materialiseCurve:143,146 readbackBody:163,167 open:263,264
+  @field r vel  @ materialiseNotes:119 readbackBody:181
+  @field w vel  @ materialiseNotes:119 readbackBody:181
+  @field w w  @ draw:429
+  @field w x0  @ draw:429
+  @field w yTop  @ draw:429

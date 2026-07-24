@@ -233,12 +233,24 @@ rewrites the checkout take; the mini tm's rebuild then write-throughs
 the rewound state, so the param follows automatically.
 
 **Polyphony is infrastructure, per-kind.** The pattern field
-descriptor gains `lanes = 'mono' | 'poly'` (default mono). Mono is
-today's behaviour: one visible lane, readback pins `lane = 1`. Poly
-binds the lane add/remove commands in the mini editor and readback
-keeps each spec's authored lane. No shipped kind declares poly yet —
-ostinato stays mono; the flag exists so a chord-painting or
-convolve-with-pattern fx can declare it.
+descriptor gains a boolean `poly` (default false/mono; settled
+2026-07-24 — a plain flag, not a `'mono'|'poly'` enum). It is a
+launch/open parameter, not a body field: it rides the descriptor
+(per-kind) and would be lost across a shelf Load if stamped on the
+body. Mono is today's behaviour: one visible lane, readback pins
+`lane = 1`. Poly binds the lane add/remove commands (`addNoteLane`,
+`hideExtraCol`) in the mini editor and readback keeps each spec's
+authored lane. No shipped kind declares poly yet — ostinato stays
+mono; the flag exists so a chord-painting or convolve-with-pattern fx
+can declare it.
+
+Save/Load across the poly boundary (settled 2026-07-24): Save is
+lane-agnostic (`readbackBody` carries whatever lanes exist; the shelf
+stores them verbatim). Load gates like the curve **domain** filter — a
+mono param offers only single-lane bodies (`max spec.lane == 1`), so
+lanes 2..N are never silently crushed onto lane 1; a poly param offers
+every matching-kind body (mono is the lane-1 subset). The gate reads
+the body's content, not its editor of origin.
 
 **rpb rides the body.** rowPerBeat currently persists on the checkout
 take's tier and dies with it. Store it in the body (soft, like

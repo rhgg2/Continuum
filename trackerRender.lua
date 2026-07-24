@@ -918,7 +918,7 @@ local function launchPattern(host, index, fd, entry)
   -- persists); deepClone keeps the stored body + its points array unmutated.
   local body = util.deepClone(entry[fd.field] or emptyBody(fd.kind))
   body.label = fd.label
-  pe:launch(body, function(newBody) tv:setFxField(host, index, fd.field, newBody) end)
+  pe:launch(body, function(newBody) tv:setFxField(host, index, fd.field, newBody) end, fd.poly)
 end
 
 -- Adjust rw's field one step: right increments, Ctrl coarse. The generic write both editors drive.

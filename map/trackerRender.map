@@ -1,4 +1,4 @@
-@module trackerRender  src=trackerRender.lua  loc=1475  sha=28d59fa  mode=chunk  self=tr
+@module trackerRender  src=trackerRender.lua  loc=1475  sha=f5042ce  mode=chunk  self=tr
 @deps cm, ds, cmgr, chrome, gui, modalHost, facade, tv, help, pe
 
 # Invariants & contracts
@@ -564,6 +564,7 @@
   @field w place  @ 714,720,725
   @field r points  @ patternSummary:912
   @field w points  @ emptyBody:906
+  @field r poly  @ launchPattern:921
   @field w prevTake  @ 1316
   @field w prevTrack  @ 1314
   @field r prm  @ navRows:336,337 selectParam:352 drawTreeItem:470,472,477,479 planIndexOfCursor:492

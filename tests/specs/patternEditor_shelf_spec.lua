@@ -101,12 +101,12 @@ end
 
 -- Open the editor on `body`, capturing each write-through commit; get() reads the latest. hostDs is
 -- the harness ds (project scope), standing in for trackerPage's shared ds.
-local function withEditor(harness, body)
+local function withEditor(harness, body, poly)
   local h = harness.mk()
   local committed = body
   local pe = loadPE{ facade = fakeFacade, chrome = fakeChrome, gui = fakeGui,
                      modalHost = fakeModalHost, hostDs = h.ds }
-  pe:open(body, function(b) committed = b end)
+  pe:open(body, function(b) committed = b end, poly)
   return h, pe, function() return committed end
 end
 
@@ -229,6 +229,38 @@ return {
 
       input(pe, { fakeImGui.Key_Escape })
       t.eq(#get().specs, 2, 'Esc restored the modal-open snapshot, not the loaded body')
+    end,
+  },
+
+  {
+    name = 'a mono note param offers only single-lane bodies; a poly param offers multi-lane too',
+    run = function(harness)
+      local function offeredKeys(picker)
+        local offered = {}
+        for _, it in ipairs(picker.items) do offered[it.key] = true end
+        return offered
+      end
+      local shelfBodies = {
+        oneLane  = { kind = 'notes', lengthPpq = 480, specs = {
+          { lane = 1, ppq = 0, endppq = 240, pitch = 60, vel = 100, detune = 0, delay = 0 } } },
+        twoLanes = { kind = 'notes', lengthPpq = 480, specs = {
+          { lane = 1, ppq = 0,   endppq = 240, pitch = 60, vel = 100, detune = 0, delay = 0 },
+          { lane = 2, ppq = 120, endppq = 360, pitch = 67, vel = 100, detune = 0, delay = 0 } } },
+      }
+
+      local h, monoPe = withEditor(harness, notesBody(), false)
+      h.ds:assign('fxPatterns', shelfBodies)
+      frame(monoPe)
+      local monoOffered = offeredKeys(capturedPickers.peShelf)
+      t.truthy(monoOffered.oneLane, 'a single-lane body is offered to a mono param')
+      t.truthy(not monoOffered.twoLanes, 'a multi-lane body is withheld from a mono param')
+
+      local h2, polyPe = withEditor(harness, notesBody(), true)
+      h2.ds:assign('fxPatterns', shelfBodies)
+      frame(polyPe)
+      local polyOffered = offeredKeys(capturedPickers.peShelf)
+      t.truthy(polyOffered.oneLane,  'a poly param still offers single-lane bodies')
+      t.truthy(polyOffered.twoLanes, 'a poly param also offers multi-lane bodies')
     end,
   },
 }

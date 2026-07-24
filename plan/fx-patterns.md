@@ -18,22 +18,20 @@
 
 ## Landed (newest first; prune below ~4)
 
+- 2026-07-24 pe: add per-kind poly flag for note-pattern lanes (§ P4)
 - 2026-07-24 pe: Save becomes a picker; drawPicker gains onCreate (§ P4)
 - 2026-07-24 pe: library copy shelf — Save/Load in the toolbar (§ P4)
 - 2026-07-24 plan extracted from the design doc; P4 decisions taken
-- 2026-07-11 pe: mini toolbar — RPB ticker, commit/cancel, focus fix
 
 ## Now
 
-(empty — Save-as-picker landed; run /plan-next to promote the next P4 item)
+(empty — polyphony infrastructure landed; run /plan-next to promote the next commit)
 
 ## Queued (current phase; one-liners)
 
 - shelf management: rename + delete rows inside the Load picker
-- mini undo: register fenced undo/redo on the mini cmgr; poll the mini
-  ps while the modal is open
-- polyphony infra: `lanes='mono'|'poly'` on pattern field descriptors;
-  poly readback keeps authored lanes, binds lane add/remove; shipped
-  kinds all stay mono
 - rpb in body: persist rowPerBeat through the whitelist; open seeds the
   toolbar ticker from it
+
+(Mini undo — design § P4 — deprioritised 2026-07-24: value unclear;
+not dropped from the design doc, just off the queue.)
