@@ -36,28 +36,40 @@ local function facadeStub()
   end }
 end
 
+-- modalHost stub: no-op registerKind, plus capture the last openConfirm args so
+-- the confirm-gated publish path is observable.
+local function mkModalHost(captured)
+  return {
+    registerKind = function() end,
+    openConfirm  = function(_, args) captured.last = args end,
+  }
+end
+
 local function mkSwing(h)
   for _, m in ipairs({ 'imgui', 'swingEditor' }) do package.loaded[m] = nil end
   _G.reaper.ImGui_GetBuiltinPath = function() return '/stub' end
+  local captured = {}
   local se = util.instantiate('swingEditor', {
     cm = h.cm, ds = h.ds, chrome = {}, ctx = {},
     gui = { fontSize = { ui = 12 } }, facade = facadeStub(),
-    modalHost = { registerKind = function() end }, lib = mkLib(h),
+    modalHost = mkModalHost(captured), lib = mkLib(h),
   })
   se:open()   -- establish state so libraryDescriptor's sel read is live
-  return se
+  return se, captured
 end
 
 local function mkTemper(h, inUse)
   for _, m in ipairs({ 'imgui', 'temperEditor' }) do package.loaded[m] = nil end
   _G.reaper.ImGui_GetBuiltinPath = function() return '/stub' end
-  return util.instantiate('temperEditor', {
+  local captured = {}
+  local te = util.instantiate('temperEditor', {
     cm = h.cm, chrome = {}, ctx = {}, gui = { fontSize = { ui = 12 } },
-    modalHost = { registerKind = function() end }, lib = mkLib(h),
+    modalHost = mkModalHost(captured), lib = mkLib(h),
     facade = { get = function(name)
       if name == 'arrange' then return { tempersInUse = function() return inUse or {} end } end
     end },
   })
+  return te, captured
 end
 
 return {
@@ -67,12 +79,66 @@ return {
       local h = harness.mk{ config = {
         project = { swings = { mine = { factors = { 'M' } } } },
       } }
-      local se = mkSwing(h)
+      local se, captured = mkSwing(h)
 
       se:libraryDescriptor().onPublish('mine')
 
       t.deepEq(h.cm:getAt('global', 'swings').mine, { factors = { 'M' } },
                'the project copy now lives in the library tier')
+      t.eq(captured.last, nil, 'a fresh name publishes with no confirm')
+    end,
+  },
+  {
+    name = 'swing onPublish confirms before overwriting a divergent library copy',
+    run = function(harness)
+      local h = harness.mk{ config = {
+        global  = { swings = { shared = { factors = { 'A' } } } },
+        project = { swings = { shared = { factors = { 'B' } } } },
+      } }
+      local se, captured = mkSwing(h)
+
+      se:libraryDescriptor().onPublish('shared')
+
+      t.deepEq(h.cm:getAt('global', 'swings').shared, { factors = { 'A' } },
+               'the library copy is untouched until the confirm resolves')
+      t.truthy(captured.last, 'a confirm modal was raised')
+      captured.last.callback()
+      t.deepEq(h.cm:getAt('global', 'swings').shared, { factors = { 'B' } },
+               'resolving the confirm lands the project copy')
+    end,
+  },
+  {
+    name = 'temper onPublish lifts a fresh project copy without confirming',
+    run = function(harness)
+      local h = harness.mk{ config = {
+        project = { tempers = { mine = { steps = { 'M' } } } },
+      } }
+      local te, captured = mkTemper(h)
+
+      te:libraryDescriptor().onPublish('mine')
+
+      t.deepEq(h.cm:getAt('global', 'tempers').mine, { steps = { 'M' } },
+               'the project copy now lives in the library tier')
+      t.eq(captured.last, nil, 'a fresh name publishes with no confirm')
+    end,
+  },
+  {
+    name = 'temper onPublish confirms before overwriting a divergent library copy',
+    run = function(harness)
+      local h = harness.mk{ config = {
+        global  = { tempers = { shared = { steps = { 'A' } } } },
+        project = { tempers = { shared = { steps = { 'B' } } } },
+      } }
+      local te, captured = mkTemper(h)
+
+      te:libraryDescriptor().onPublish('shared')
+
+      t.deepEq(h.cm:getAt('global', 'tempers').shared, { steps = { 'A' } },
+               'the library copy is untouched until the confirm resolves')
+      t.truthy(captured.last, 'a confirm modal was raised')
+      captured.last.callback()
+      t.deepEq(h.cm:getAt('global', 'tempers').shared, { steps = { 'B' } },
+               'resolving the confirm lands the project copy')
     end,
   },
   {

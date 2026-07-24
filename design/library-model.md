@@ -195,7 +195,13 @@ by the same call.
    destructive-to-library gesture.~~ Resolved 2026-07-24: **silent**.
    Pre-beta and a re-derivable library row make silent overwrite
    acceptable; the confirm modal, if it earns its place, belongs to
-   § 5's action-bar rework, not Phase 4's write plumbing.
+   § 5's action-bar rework, not Phase 4's write plumbing. Reversed
+   2026-07-24 (**build**): the modal earns its place — publish over a
+   divergent library copy is the last library-destructive gesture and
+   `modalHost:openConfirm` makes the guard cheap. New
+   `lib.publishOverwrites(key, name)` fires it only when a *library*
+   copy exists and differs from the project copy; fresh names, identical
+   copies, and factory-only shadows publish silently.
 2. **Tidy for tempers** — reference scan needs a `takesUsing` analogue
    over take/track-tier `temper` values. If that's awkward, v1 ships
    tidy for swings only and tempers keep manual delete. Resolved

@@ -190,7 +190,20 @@ end
 local function inUseNames() return facade.get('arrange').tempersInUse() end
 local tidy = util.atomic('Tidy tempers', function() lib.tidy('tempers', inUseNames()) end)
 
-local function publish(name) if name then lib.publish('tempers', name) end end
+-- Publishing over a divergent library copy is the one gesture that destroys
+-- library content; guard it with a confirm. Fresh/identical names publish silently.
+local function publish(name)
+  if not name then return end
+  if lib.publishOverwrites('tempers', name) then
+    modalHost:openConfirm{
+      title    = 'Publish tuning',
+      prompt   = ("Overwrite the library copy of '%s'? (y/n)"):format(name),
+      callback = function() lib.publish('tempers', name) end,
+    }
+  else
+    lib.publish('tempers', name)
+  end
+end
 
 -- Discard a project row's drift, restoring the library/factory source, and edit that copy.
 -- Wrapped: a project-tier write is undoable but mints no undo point of its own (projext); atomic gives it one so it doesn't rewind as a passenger.

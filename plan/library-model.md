@@ -25,15 +25,15 @@
 
 ## Landed (newest first; prune below ~4)
 
+- 2026-07-24 editors: confirm before publishing over a divergent library copy (§ Open questions 1)
 - 2026-07-24 editors: modified badge on editor tree project rows (§ 5)
 - 2026-07-24 editors: temper tidy — reference scan + tidy button (§ Open Q2 (V2 fix))
 - 2026-07-24 editors: action bar publish/revert/tidy verbs (§ 5)
-- 2026-07-24 editors: Factory tree section over lib.names (§ 5, first bullet)
 
 ## Now
 
-(empty — Phase 5 badge landed; publish-overwrite confirm modal (QO1) is the last queued item. Run /plan-next to promote it.)
+(empty — QO1 lands, completing Phase 5; run /plan-next to promote Phase 6 (Docs).)
 
 ## Queued (current phase; one-liners)
 
-- publish-overwrite confirm modal (QO1, deferred from Phase 4) — build modalHost wiring here
+(empty — QO1 is Phase 5's last item, now promoted to Now.)

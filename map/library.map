@@ -1,4 +1,4 @@
-@module library  src=library.lua  loc=140  sha=be5d40d  mode=namespace  self=lib
+@module library  src=library.lua  loc=149  sha=be5d40d  mode=namespace  self=lib
 
 # Imports
   @const util = 'util'  @ 7
@@ -36,21 +36,23 @@
   -- Publish / revert
   @api lib.publish(key, name)  @ 97-100
       @contract  project copy -> library tier (deepClone via cm:set); no-op when there is no project copy  @ 96
-  @api lib.revert(key, name)  @ 103-106
-      @contract  source (library/factory) -> project, discarding drift; no-op if no source exists  @ 102
+  @api lib.publishOverwrites(key, name)  @ 103-109
+      @contract  true iff publish would overwrite a divergent library copy (both tiers exist and differ)  @ 102
+  @api lib.revert(key, name)  @ 112-115
+      @contract  source (library/factory) -> project, discarding drift; no-op if no source exists  @ 111
   -- Tidy / delete
-  @api lib.tidy(key, inUse)  @ 111-126
-      @contract  drop project entries deepEq their source and not in inUse; single cm:set; returns removed  @ 110
-  @api lib.delete(key, level, name)  @ 129-138
-      @contract  remove name from tier level (project|global); synthetic never; factory not deletable  @ 128
+  @api lib.tidy(key, inUse)  @ 120-135
+      @contract  drop project entries deepEq their source and not in inUse; single cm:set; returns removed  @ 119
+  @api lib.delete(key, level, name)  @ 138-147
+      @contract  remove name from tier level (project|global); synthetic never; factory not deletable  @ 137
 
 # Uses (outbound edges)
-  @use call    util.deepEq  @ modified:75 tidy:117
+  @use call    util.deepEq  @ modified:75 publishOverwrites:108 tidy:126
   @use require util  @ 7
 
 # Fields (r read / w write incl. constructor keys)
   @field r cm  @ 9
-  @field w delete  @ delete:129
+  @field w delete  @ delete:138
   @field w factory  @ names:54
   @field w forkToProject  @ forkToProject:89
   @field w get  @ get:61
@@ -60,6 +62,7 @@
   @field w names  @ names:49
   @field w project  @ names:52
   @field w publish  @ publish:97
-  @field w revert  @ revert:103
+  @field w publishOverwrites  @ publishOverwrites:103
+  @field w revert  @ revert:112
   @field r synthetic  @ 10
-  @field w tidy  @ tidy:111
+  @field w tidy  @ tidy:120

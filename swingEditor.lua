@@ -448,7 +448,20 @@ local function deleteFromTier(level, name)
   cm:set(level, 'swings', key)
 end
 
-local function publish(name) if name then lib.publish('swings', name) end end
+-- Publishing over a divergent library copy is the one gesture that destroys
+-- library content; guard it with a confirm. Fresh/identical names publish silently.
+local function publish(name)
+  if not name then return end
+  if lib.publishOverwrites('swings', name) then
+    modalHost:openConfirm{
+      title    = 'Publish swing',
+      prompt   = ("Overwrite the library copy of '%s'? (y/n)"):format(name),
+      callback = function() lib.publish('swings', name) end,
+    }
+  else
+    lib.publish('swings', name)
+  end
+end
 
 -- Discard a project row's drift, restoring the library/factory source, and edit that copy.
 -- Wrapped: a project-tier write is undoable but mints no undo point of its own (projext); atomic mints one so it doesn't rewind as a passenger.

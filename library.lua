@@ -99,6 +99,15 @@ function lib.publish(key, name)
   if p ~= nil then writeTier('global', key, name, p) end
 end
 
+--contract: true iff publish would overwrite a divergent library copy (both tiers exist and differ)
+function lib.publishOverwrites(key, name)
+  -- Library tier directly, not sourceOf: a factory-only shadow mints a new row, not an overwrite.
+  local p = projectTier(key)[name]
+  local g = libraryTier(key)[name]
+  if p == nil or g == nil then return false end
+  return not util.deepEq(p, g)
+end
+
 --contract: source (library/factory) -> project, discarding drift; no-op if no source exists
 function lib.revert(key, name)
   local src = sourceOf(key, name)

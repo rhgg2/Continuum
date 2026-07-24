@@ -1,4 +1,4 @@
-@spec library_spec  src=tests/specs/library_spec.lua  loc=164  sha=be5d40d  cases=11
+@spec library_spec  src=tests/specs/library_spec.lua  loc=187  sha=be5d40d  cases=12
 @exercises configManager (h.cm)
 @surface   cm:getAt, cm:set, cm:defaultFor
 @harness   mk
@@ -20,32 +20,36 @@
   @case 'forkToProject localizes then returns the project copy'  [harness]  @ 70-77
   @case 'publish copies the project entry to the library tier'  [harness]  @ 80-88
   @case 'publish no-ops without a project copy'  [harness]  @ 91-97
-  @case 'revert overwrites the project copy from its source'  [harness]  @ 100-109
-  @case 'modified: false pristine, true divergent, false for a source-less entry'  [harness]  @ 112-126
-  @case 'tidy drops pristine unreferenced entries, keeps inUse and divergent ones'  [harness]  @ 129-146
-  @case 'delete removes from the named tier and refuses synthetic names'  [harness]  @ 149-162
+  @case 'publishOverwrites is true only for a divergent library copy'  [harness]  @ 100-120
+  @case 'revert overwrites the project copy from its source'  [harness]  @ 123-132
+  @case 'modified: false pristine, true divergent, false for a source-less entry'  [harness]  @ 135-149
+  @case 'tidy drops pristine unreferenced entries, keeps inUse and divergent ones'  [harness]  @ 152-169
+  @case 'delete removes from the named tier and refuses synthetic names'  [harness]  @ 172-185
 
 # Uses (outbound edges)
-  @use call cm:getAt  @ 51,53,56,66,76,87,96,107,141,157,159,161
-  @use call cm:set  @ 54,120,133
-  @use call cm:defaultFor  @ 107,134,135
+  @use call cm:getAt  @ 51,53,56,66,76,87,96,130,164,180,182,184
+  @use call cm:set  @ 54,143,156
+  @use call cm:defaultFor  @ 130,157,158
 
 # Fields (r read / w write incl. constructor keys)
   @field w cm  @ 11
-  @field w config  @ 20,35,82,102,114,151
+  @field w config  @ 20,35,82,102,125,137,174
+  @field w drift  @ 106,111
   @field r factors  @ 40,41,56,87
-  @field w factors  @ 21,22,36,37,54,83,103,115,121,122,136,137
-  @field w factors  @ 152,153
+  @field w factors  @ 21,22,36,37,54,83,104,105,106,107,110,111
+  @field w factors  @ 126,138,144,145,159,160,175,176
   @field r factory  @ 28
-  @field w global  @ 22,37,153
-  @field w identity  @ 12,152
+  @field w fresh  @ 104
+  @field w global  @ 22,37,109,176
+  @field w identity  @ 12,175
   @field r library  @ 27
-  @field w mine  @ 21,83,115,121,137,152
-  @field w name  @ 18,33,47,61,70,80,91,100,112,129,149
+  @field w mine  @ 21,83,138,144,160,175
+  @field w name  @ 18,33,47,61,70,80,91,100,123,135,152,172
   @field r project  @ 26
-  @field w project  @ 21,36,83,103,115,152
-  @field w run  @ 19,34,48,62,71,81,92,101,113,130,150
-  @field w shared  @ 22,153
-  @field w swings  @ 12,21,22,36,37,83,103,115,152,153
+  @field w project  @ 21,36,83,103,126,138,175
+  @field w run  @ 19,34,48,62,71,81,92,101,124,136,153,173
+  @field w same  @ 105,110
+  @field w shared  @ 22,176
+  @field w swings  @ 12,21,22,36,37,83,103,109,126,138,175,176
   @field w synthetic  @ 12
   @field w tempers  @ 12

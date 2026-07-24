@@ -97,6 +97,29 @@ return {
     end,
   },
   {
+    name = 'publishOverwrites is true only for a divergent library copy',
+    run = function(harness)
+      local h = harness.mk{ config = {
+        project = { swings = {
+          fresh          = { factors = { 'F' } },        -- project-only, no library copy
+          same           = { factors = { 'S' } },        -- identical library copy
+          drift          = { factors = { 'B' } },        -- divergent library copy
+          ['classic-58'] = { factors = { 'edited' } },   -- shadows a factory-only name
+        } },
+        global = { swings = {
+          same  = { factors = { 'S' } },
+          drift = { factors = { 'A' } },
+        } },
+      } }
+      local L = mkLib(h)
+      t.falsy(L.publishOverwrites('swings', 'fresh'), 'no library copy: nothing to overwrite')
+      t.falsy(L.publishOverwrites('swings', 'same'),  'identical library copy: no overwrite')
+      t.falsy(L.publishOverwrites('swings', 'classic-58'),
+              'a factory-only shadow mints a new library row, not an overwrite')
+      t.truthy(L.publishOverwrites('swings', 'drift'), 'divergent library copy: overwrite')
+    end,
+  },
+  {
     name = 'revert overwrites the project copy from its source',
     run = function(harness)
       local h = harness.mk{ config = {
