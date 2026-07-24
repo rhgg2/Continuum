@@ -1,4 +1,4 @@
-@module swingEditor  src=swingEditor.lua  loc=765  sha=3a958aa  mode=chunk  self=swingEditor
+@module swingEditor  src=swingEditor.lua  loc=786  sha=36fee5b  mode=chunk  self=swingEditor
 @deps cm, ds, chrome, ctx, gui, facade, modalHost, lib
 
 # Invariants & contracts
@@ -32,12 +32,12 @@
   @state GLYPH_BOX = 36  @ 109   -- px reserved for each =/∘ separator between strips
   @state DIVIDER_GRAB = 7  @ 110   -- px hit-height of the draggable preview/factor splitter
   @state MIN_FACTOR_AREA = 80  @ 111   -- px kept below the splitter for the factor list
-  @state forkToProject = util.atomic('Fork swing', function()  @ 272
-  @state revert = util.atomic('Revert swing', function(name)  @ 468
-  @state deleteSel = util.atomic('Delete swing', function(tier, name)  @ 476
-  @state tidy = util.atomic('Tidy swings', function()  @ 524
-  @state openNewModal  @ 534   -- forward decl; defined with its modalHost kind below
-  @state swingEditor = {}  @ 730
+  @state forkToProject = util.atomic('Fork swing', function()  @ 271
+  @state revert = util.atomic('Revert swing', function(name)  @ 467
+  @state deleteSel = util.atomic('Delete swing', function(tier, name)  @ 475
+  @state tidy = util.atomic('Tidy swings', function()  @ 523
+  @state openNewModal  @ 555   -- forward decl; defined with its modalHost kind below
+  @state swingEditor = {}  @ 751
 
 # Private functions
   @fn arrange()  @ 48
@@ -74,143 +74,147 @@
   @fn drawBandInto(layout, composite, factors, region)  @ 194-235
       -- Preview band: composite strip left, then (when compound) '=' + factor strips fn∘…∘f1 right.
       -- f1 applied first so sits rightmost; strips centred horizontally, top-aligned, clipped to region.
-  @fn swingRead()  @ 237-242
-  @fn readFactors(composite)  @ 246-248
+  @fn swingRead()  @ 237-241
+  @fn readFactors(composite)  @ 245-247
       -- Tolerant accessor: bare {} and {factors={}} both mean identity. Read-only;
       -- write paths deepClone, then mutate factors[].
-  @fn phaseQN(p)  @ 251
+  @fn phaseQN(p)  @ 250
       -- QN value of an optional period-shaped slot (scalar, {n,d}, or nil).
-  @fn compositesEqual(a, b)  @ 254-268
-      @contract  compares composite phase, per-factor phase, period, atom and shift — phase fields normalise to QN before comparing, so {1,2} and {2,4} count equal  @ 253
-  @fn swingWrite(composite)  @ 278-282
-      @contract  sole write path; forks non-project rows to project first; idempotent on equal composites  @ 277
-  @fn cloneForEdit()  @ 286-290
+  @fn compositesEqual(a, b)  @ 253-267
+      @contract  compares composite phase, per-factor phase, period, atom and shift — phase fields normalise to QN before comparing, so {1,2} and {2,4} count equal  @ 252
+  @fn swingWrite(composite)  @ 277-281
+      @contract  sole write path; forks non-project rows to project first; idempotent on equal composites  @ 276
+  @fn cloneForEdit()  @ 285-289
       -- Editable clone with a guaranteed factors[] array, so write paths can
       -- index it without re-checking. Phase is preserved as-is.
-  @fn patchFactor(i, patch)  @ 292-297
-  @fn addFactor()  @ 300-304
-      @contract  default new factor is identity (atom='id', shift=0, period=1) — visually inert until edited  @ 299
-  @fn removeFactor(i)  @ 306-310
-  @fn moveFactor(i, dir)  @ 312-320
-  @fn drawFactorRow(i, f, numColW, n)  @ 322-421
+  @fn patchFactor(i, patch)  @ 291-296
+  @fn addFactor()  @ 299-303
+      @contract  default new factor is identity (atom='id', shift=0, period=1) — visually inert until edited  @ 298
+  @fn removeFactor(i)  @ 305-309
+  @fn moveFactor(i, dir)  @ 311-319
+  @fn drawFactorRow(i, f, numColW, n)  @ 321-420
   -- Tier-aware library writes
-  @fn projectSwings()  @ 425
-  @fn globalSwings()  @ 427
+  @fn projectSwings()  @ 424
+  @fn globalSwings()  @ 426
       -- Reads the library (global) tier directly; the Factory catalogue is not merged in here.
-  @fn homeTier(name)  @ 431-434
+  @fn homeTier(name)  @ 430-433
       -- A name's editable home: the project copy if one exists, else global (which
       -- also covers the synthetic 'identity' floor and unseeded default presets).
-  @fn switchTo(name, tier)  @ 438-442
+  @fn switchTo(name, tier)  @ 437-441
       -- Switch the edited swing without closing the editor. Re-captures the
       -- snapshot so Reset/dirty-check stay coherent; tier defaults to the home tier.
-  @fn deleteFromTier(level, name)  @ 444-449
-  @fn publish(name)  @ 453-464
+  @fn deleteFromTier(level, name)  @ 443-448
+  @fn publish(name)  @ 452-463
       -- Publishing over a divergent library copy is the one gesture that destroys
       -- library content; guard it with a confirm. Fresh/identical names publish silently.
-  @fn resolvedSlots()  @ 486-493
+  @fn resolvedSlots()  @ 485-492
       -- Resolved take and channel slots for the open-default and the
       -- library-row shortcut buttons. 'identity' at the take tier is treated
       -- as no-slot (matches open()'s bail); at the channel tier nil means
       -- 'no override, fall through to take'.
-  @fn activeEntries()  @ 497-510
+  @fn activeEntries()  @ 496-509
       -- In-force entries for the Active folder: take swing + every channel
       -- override, read straight from ds (no cursor) so all columns show.
-  @fn inUseNames()  @ 514-520
+  @fn inUseNames()  @ 513-519
       -- Project entries a take references can't be deleted (it would orphan the
       -- reference); the shell greys Delete for these.
-  @fn resetToSnapshot()  @ 529-532
+  @fn reloadFactory()  @ 529-547
+      -- Re-import the factory catalogue into the shared library: new names land
+      -- silently, each divergent library copy prompts before being overwritten.
+  @fn resetToSnapshot()  @ 550-553
       -- Revert the edited composite to the open()/switch snapshot, then reswing.
-  @fn buildDescriptor()  @ 536-561
-  @fn nearestRpb(v)  @ 607-614
+  @fn buildDescriptor()  @ 557-582
+  @fn nearestRpb(v)  @ 628-635
       -- Rows/qn is a fixed ladder of valid divisions; the stepper walks adjacent rungs
       -- and snaps a typed value to the nearest. See RPB_CHOICES.
-  @fn stepRpb(v, dir)  @ 615-620
-  @fn drawToolsRow(composite, n)  @ 624-660
+  @fn stepRpb(v, dir)  @ 636-641
+  @fn drawToolsRow(composite, n)  @ 645-681
       -- Toolbar tools: Rows-per-qn / Wild / Composite-phase, drawn in the page toolbar
       -- band (ui font + FramePadding already set). Vertical separators per group.
-  @fn drawEditBody(composite)  @ 662-711
-  @fn draw(w, h)  @ 715-726
+  @fn drawEditBody(composite)  @ 683-732
+  @fn draw(w, h)  @ 736-747
       -- Body-region draw inside a child window; chrome palette (editor.bg + toolbar colours)
       -- takes the tracker grid's place (Col_ChildBg instead of Col_WindowBg).
 
 # Public API (swingEditor:*)
   -- Public
-  @api swingEditor:open(name)  @ 734-743
-      @contract  open(name?) selects entry; default prefers chan override → take swing → nil.  @ 732
-      @contract  when already open, re-selects resolved target; snapshot captured at selection time.  @ 733
-  @api swingEditor:render(w, h)  @ 745
-  @api swingEditor:renderToolbar()  @ 749-756
+  @api swingEditor:open(name)  @ 755-764
+      @contract  open(name?) selects entry; default prefers chan override → take swing → nil.  @ 753
+      @contract  when already open, re-selects resolved target; snapshot captured at selection time.  @ 754
+  @api swingEditor:render(w, h)  @ 766
+  @api swingEditor:renderToolbar()  @ 770-777
       -- Tools row (Reset / Rows-per-qn / Wild / Composite-phase) drawn into the page
       -- toolbar band by editorRender. Greys out with no slot selected, like the body.
-  @api swingEditor:libraryDescriptor()  @ 758
-  @api swingEditor:close()  @ 760
-  @api swingEditor:isOpen()  @ 762
+  @api swingEditor:libraryDescriptor()  @ 779
+  @api swingEditor:close()  @ 781
+  @api swingEditor:isOpen()  @ 783
 
 # Uses (outbound edges)
-  @use call    ImGui.AlignTextToFramePadding  @ drawFactorRow:327,363,390 579 drawToolsRow:625,644
-  @use call    ImGui.BeginChild  @ draw:721
-  @use call    ImGui.BeginDisabled  @ drawEditBody:704 renderToolbar:753
-  @use call    ImGui.Button  @ drawFactorRow:411,415,418 589,591 drawEditBody:709
-  @use call    ImGui.CalcTextSize  @ gridMetrics:116 drawBandInto:210 drawFactorRow:330 drawEditBody:705
-  @use call    ImGui.Dummy  @ drawEditBody:685
-  @use call    ImGui.EndChild  @ draw:724
-  @use call    ImGui.EndDisabled  @ drawEditBody:710 renderToolbar:755
-  @use call    ImGui.GetContentRegionAvail  @ drawEditBody:670
-  @use call    ImGui.GetCursorPosX  @ drawFactorRow:329
-  @use call    ImGui.GetCursorScreenPos  @ drawEditBody:681,690
-  @use call    ImGui.GetMousePos  @ drawEditBody:695
-  @use call    ImGui.InputText  @ 585
-  @use call    ImGui.InvisibleButton  @ drawEditBody:692
-  @use call    ImGui.IsItemActive  @ drawEditBody:693
-  @use call    ImGui.IsItemDeactivatedAfterEdit  @ drawFactorRow:359,407 drawToolsRow:658
-  @use call    ImGui.IsItemHovered  @ drawEditBody:693
-  @use call    ImGui.IsKeyPressed  @ 591
-  @use call    ImGui.IsWindowAppearing  @ 576
+  @use call    ImGui.AlignTextToFramePadding  @ drawFactorRow:326,362,389 600 drawToolsRow:646,665
+  @use call    ImGui.BeginChild  @ draw:742
+  @use call    ImGui.BeginDisabled  @ drawEditBody:725 renderToolbar:774
+  @use call    ImGui.Button  @ drawFactorRow:410,414,417 610,612 drawEditBody:730
+  @use call    ImGui.CalcTextSize  @ gridMetrics:116 drawBandInto:210 drawFactorRow:329 drawEditBody:726
+  @use call    ImGui.Dummy  @ drawEditBody:706
+  @use call    ImGui.EndChild  @ draw:745
+  @use call    ImGui.EndDisabled  @ drawEditBody:731 renderToolbar:776
+  @use call    ImGui.GetContentRegionAvail  @ drawEditBody:691
+  @use call    ImGui.GetCursorPosX  @ drawFactorRow:328
+  @use call    ImGui.GetCursorScreenPos  @ drawEditBody:702,711
+  @use call    ImGui.GetMousePos  @ drawEditBody:716
+  @use call    ImGui.InputText  @ 606
+  @use call    ImGui.InvisibleButton  @ drawEditBody:713
+  @use call    ImGui.IsItemActive  @ drawEditBody:714
+  @use call    ImGui.IsItemDeactivatedAfterEdit  @ drawFactorRow:358,406 drawToolsRow:679
+  @use call    ImGui.IsItemHovered  @ drawEditBody:714
+  @use call    ImGui.IsKeyPressed  @ 612
+  @use call    ImGui.IsWindowAppearing  @ 597
   @use call    ImGui.PopFont  @ bandLayout:181 drawBandInto:211,234
-  @use call    ImGui.PopID  @ drawFactorRow:420 586
+  @use call    ImGui.PopID  @ drawFactorRow:419 607
   @use call    ImGui.PushFont  @ bandLayout:172 drawBandInto:195,209
-  @use call    ImGui.PushID  @ drawFactorRow:323 584
-  @use call    ImGui.SameLine  @ drawFactorRow:332,345,362,365,389,392,394,409,413,417 581,588,590 drawToolsRow:627,632,634,641,643,646
-  @use call    ImGui.SetCursorPosX  @ drawFactorRow:330
-  @use call    ImGui.SetCursorScreenPos  @ drawEditBody:691,702
-  @use call    ImGui.SetKeyboardFocusHere  @ 577
-  @use call    ImGui.SetMouseCursor  @ drawEditBody:701
-  @use call    ImGui.SetNextItemWidth  @ drawFactorRow:349,395 582 drawToolsRow:650
-  @use call    ImGui.SliderDouble  @ drawFactorRow:351,398 drawToolsRow:651
-  @use call    ImGui.Text  @ drawFactorRow:331,364,391,393 580 drawToolsRow:626,645
-  @use call    ImGui.TextColored  @ 602
-  @use call    chrome.checkbox  @ drawToolsRow:636
-  @use call    chrome.colour  @ 602
-  @use call    chrome.disabledIf  @ drawFactorRow:348,410,414 drawToolsRow:647
-  @use call    chrome.dropdown  @ drawFactorRow:334,372
-  @use call    chrome.numberStepper  @ drawToolsRow:628
-  @use call    chrome.paletteHeader  @ drawEditBody:667,689
-  @use call    chrome.popChromeStyles  @ draw:725
-  @use call    chrome.pushChromeStyles  @ draw:720
-  @use call    chrome.verticalSeparator  @ drawToolsRow:633,642
-  @use call    cm:defaultFor  @ swingRead:238
-  @use call    cm:get  @ swingRead:241 596
-  @use call    cm:getAt  @ swingRead:239 projectSwings:425 globalSwings:427
-  @use call    cm:set  @ deleteFromTier:448
-  @use call    ds:get  @ resolvedSlots:487 activeEntries:498
+  @use call    ImGui.PushID  @ drawFactorRow:322 605
+  @use call    ImGui.SameLine  @ drawFactorRow:331,344,361,364,388,391,393,408,412,416 602,609,611 drawToolsRow:648,653,655,662,664,667
+  @use call    ImGui.SetCursorPosX  @ drawFactorRow:329
+  @use call    ImGui.SetCursorScreenPos  @ drawEditBody:712,723
+  @use call    ImGui.SetKeyboardFocusHere  @ 598
+  @use call    ImGui.SetMouseCursor  @ drawEditBody:722
+  @use call    ImGui.SetNextItemWidth  @ drawFactorRow:348,394 603 drawToolsRow:671
+  @use call    ImGui.SliderDouble  @ drawFactorRow:350,397 drawToolsRow:672
+  @use call    ImGui.Text  @ drawFactorRow:330,363,390,392 601 drawToolsRow:647,666
+  @use call    ImGui.TextColored  @ 623
+  @use call    chrome.checkbox  @ drawToolsRow:657
+  @use call    chrome.colour  @ 623
+  @use call    chrome.disabledIf  @ drawFactorRow:347,409,413 drawToolsRow:668
+  @use call    chrome.dropdown  @ drawFactorRow:333,371
+  @use call    chrome.numberStepper  @ drawToolsRow:649
+  @use call    chrome.paletteHeader  @ drawEditBody:688,710
+  @use call    chrome.popChromeStyles  @ draw:746
+  @use call    chrome.pushChromeStyles  @ draw:741
+  @use call    chrome.verticalSeparator  @ drawToolsRow:654,663
+  @use call    cm:get  @ swingRead:240 617
+  @use call    cm:getAt  @ swingRead:238 projectSwings:424 globalSwings:426
+  @use call    cm:set  @ deleteFromTier:447
+  @use call    ds:get  @ resolvedSlots:486 activeEntries:497
   @use call    facade.get  @ arrange:48 tracker:49
-  @use call    lib.forkToProject  @ 273
-  @use call    lib.modified  @ buildDescriptor:540
-  @use call    lib.names  @ buildDescriptor:537
-  @use call    lib.publish  @ publish:459,462
-  @use call    lib.publishOverwrites  @ publish:455
-  @use call    lib.revert  @ 470
-  @use call    lib.tidy  @ 525
-  @use call    modalHost:registerKind  @ 575
+  @use call    lib.forkToProject  @ 272
+  @use call    lib.importFactory  @ reloadFactory:531,541
+  @use call    lib.modified  @ buildDescriptor:561
+  @use call    lib.names  @ buildDescriptor:558
+  @use call    lib.publish  @ publish:458,461
+  @use call    lib.publishOverwrites  @ publish:454
+  @use call    lib.reloadPlan  @ reloadFactory:530
+  @use call    lib.revert  @ 469
+  @use call    lib.tidy  @ 524
+  @use call    modalHost:registerKind  @ 596
   @use call    painter.new  @ drawBandInto:196
   @use call    timing.applyFactors  @ drawSwingStrip:159
-  @use call    timing.atomTilePeriod  @ shiftCap:92 drawFactorRow:367
-  @use call    timing.compositePeriodQN  @ bandLayout:175 drawBandInto:227 drawToolsRow:648
-  @use call    timing.periodQN  @ periodPresetIndex:68 phaseQN:251 compositesEqual:262 drawFactorRow:377,397 drawToolsRow:649
+  @use call    timing.atomTilePeriod  @ shiftCap:92 drawFactorRow:366
+  @use call    timing.compositePeriodQN  @ bandLayout:175 drawBandInto:227 drawToolsRow:669
+  @use call    timing.periodQN  @ periodPresetIndex:68 phaseQN:250 compositesEqual:261 drawFactorRow:376,396 drawToolsRow:670
   @use call    timing.resolveFactors  @ materialise:106
-  @use call    util.assign  @ patchFactor:295
-  @use call    util.atomic  @ 272,468,476,524
-  @use call    util.deepClone  @ cloneForEdit:287 resetToSnapshot:530
+  @use call    util.assign  @ patchFactor:294
+  @use call    util.atomic  @ 271,467,475,523
+  @use call    util.deepClone  @ cloneForEdit:286 resetToSnapshot:551
   @use call    util.round  @ meterClassifier:124 bandLayout:179
   @use require imgui  @ 22
   @use require painter  @ 16
@@ -225,131 +229,132 @@
   @field r H  @ drawSwingStrip:159,166 drawBandInto:204,212
   @field w H  @ bandLayout:189 drawBandInto:204
   @field r ImGui_GetBuiltinPath  @ 18
-  @field r InputTextFlags_EnterReturnsTrue  @ 585
-  @field r Key_Escape  @ 591
-  @field r MouseCursor_ResizeNS  @ drawEditBody:701
-  @field w active  @ buildDescriptor:544
-  @field w align  @ drawToolsRow:629
-  @field r atom  @ shiftCap:94,97 compositesEqual:261 drawFactorRow:334,366,379
-  @field w atom  @ addFactor:302 drawFactorRow:337,341,379
-  @field r atomMeta  @ shiftCap:97 drawFactorRow:366
+  @field r InputTextFlags_EnterReturnsTrue  @ 606
+  @field r Key_Escape  @ 612
+  @field r MouseCursor_ResizeNS  @ drawEditBody:722
+  @field w active  @ buildDescriptor:565
+  @field r add  @ reloadFactory:531
+  @field w align  @ drawToolsRow:650
+  @field r atom  @ shiftCap:94,97 compositesEqual:260 drawFactorRow:333,365,378
+  @field w atom  @ addFactor:301 drawFactorRow:336,340,378
+  @field r atomMeta  @ shiftCap:97 drawFactorRow:365
   @field r bandW  @ drawBandInto:197
   @field w bandW  @ bandLayout:189
-  @field r buf  @ 585
-  @field w buf  @ 567,587,597
-  @field w callback  @ publish:459 568
-  @field r chan  @ resolvedSlots:491
+  @field r buf  @ 606
+  @field w buf  @ 588,608,618
+  @field w callback  @ publish:458 reloadFactory:540 589
+  @field r chan  @ resolvedSlots:490
   @field r chrome  @ 46
   @field r classify  @ drawBandInto:204
   @field w classify  @ bandLayout:187 drawBandInto:204
   @field r cm  @ 46
-  @field w col  @ activeEntries:502,507
-  @field r contentH  @ drawEditBody:678
+  @field w col  @ activeEntries:501,506
+  @field r contentH  @ drawEditBody:699
   @field w contentH  @ bandLayout:189
   @field r ctx  @ 46
   @field r dQN  @ drawSwingStrip:143,158 drawBandInto:203
   @field w dQN  @ bandLayout:188 drawBandInto:203
-  @field w dirty  @ buildDescriptor:558
+  @field w dirty  @ buildDescriptor:579
   @field r ds  @ 46
-  @field r err  @ 602
-  @field w err  @ 595,597
+  @field r err  @ 623
+  @field w err  @ 616,618
   @field r facade  @ 46
-  @field r factors  @ readFactors:247 cloneForEdit:288 patchFactor:294,295 addFactor:302 removeFactor:308 moveFactor:318 drawFactorRow:357
-  @field r factors  @ drawFactorRow:357,402,403
-  @field w factors  @ drawBandInto:226 cloneForEdit:288
-  @field r factory  @ buildDescriptor:547
-  @field w factory  @ buildDescriptor:547
+  @field r factors  @ readFactors:246 cloneForEdit:287 patchFactor:293,294 addFactor:301 removeFactor:307 moveFactor:317 drawFactorRow:356
+  @field r factors  @ drawFactorRow:356,401,402
+  @field w factors  @ drawBandInto:226 cloneForEdit:287
   @field r font  @ bandLayout:172 drawBandInto:195
   @field r fontSize  @ bandLayout:172 drawBandInto:195,209,213
-  @field r gen  @ 583,584,597
-  @field w gen  @ 583,597
-  @field r global  @ resolvedSlots:488 activeEntries:500
+  @field r gen  @ 604,605,618
+  @field w gen  @ 604,618
+  @field r global  @ resolvedSlots:487 activeEntries:499
   @field r grid  @ bandLayout:172 drawBandInto:195
   @field r gui  @ 46
   @field r gx  @ drawSwingStrip:138 drawBandInto:202
   @field w gx  @ bandLayout:187 drawBandInto:202
-  @field r gy  @ drawSwingStrip:138 drawBandInto:202 drawEditBody:671
+  @field r gy  @ drawSwingStrip:138 drawBandInto:202 drawEditBody:692
   @field w gy  @ bandLayout:187 drawBandInto:202
-  @field r h  @ drawBandInto:199 drawEditBody:685
-  @field w h  @ drawEditBody:682
-  @field r h0  @ drawEditBody:697
-  @field w h0  @ drawEditBody:696
+  @field r h  @ drawBandInto:199 drawEditBody:706
+  @field w h  @ drawEditBody:703
+  @field r h0  @ drawEditBody:718
+  @field w h0  @ drawEditBody:717
   @field r heightQN  @ drawSwingStrip:159 drawBandInto:203
   @field w heightQN  @ bandLayout:188 drawBandInto:203
-  @field r huge  @ nearestRpb:608
+  @field r huge  @ nearestRpb:629
   @field w identity  @ 43
-  @field w kind  @ 567
-  @field r label  @ periodLabel:75 drawFactorRow:370
-  @field w label  @ 32,33,34,35,36,37 buildDescriptor:543
+  @field w kind  @ 588
+  @field r label  @ periodLabel:75 drawFactorRow:369
+  @field w label  @ 32,33,34,35,36,37 buildDescriptor:564
   @field r lib  @ 46
-  @field r library  @ buildDescriptor:546
-  @field w library  @ buildDescriptor:546
-  @field w max  @ drawToolsRow:629
-  @field w mergeTiers  @ swingRead:241 596
-  @field w min  @ drawToolsRow:629
+  @field r library  @ buildDescriptor:567
+  @field w library  @ buildDescriptor:567
+  @field w max  @ drawToolsRow:650
+  @field w mergeTiers  @ swingRead:240 617
+  @field w min  @ drawToolsRow:650
   @field r modalHost  @ 46
-  @field w modified  @ buildDescriptor:550
-  @field r name  @ commit:55 swingRead:238,240,241 273 swingWrite:280,281 buildDescriptor:551,558 drawEditBody:704
-  @field r name  @ drawEditBody:710 draw:718 renderToolbar:751,753,755
-  @field w name  @ switchTo:439 activeEntries:502,507 buildDescriptor:551
+  @field w modified  @ buildDescriptor:570
+  @field r name  @ commit:55 swingRead:239,240 272 swingWrite:279,280 buildDescriptor:571,579 drawEditBody:725,731
+  @field r name  @ draw:739 renderToolbar:772,774,776
+  @field w name  @ switchTo:438 activeEntries:501,506 buildDescriptor:571
   @field r negRange  @ shiftCap:98
-  @field w onDelete  @ buildDescriptor:557
-  @field w onNew  @ buildDescriptor:553
-  @field w onPublish  @ buildDescriptor:554
-  @field w onReset  @ buildDescriptor:559
-  @field w onRevert  @ buildDescriptor:555
-  @field w onSelect  @ buildDescriptor:552
-  @field w onStep  @ drawToolsRow:629
-  @field w onTidy  @ buildDescriptor:556
+  @field w onDelete  @ buildDescriptor:578
+  @field w onNew  @ buildDescriptor:573
+  @field w onPublish  @ buildDescriptor:574
+  @field w onReloadFactory  @ buildDescriptor:577
+  @field w onReset  @ buildDescriptor:580
+  @field w onRevert  @ buildDescriptor:575
+  @field w onSelect  @ buildDescriptor:572
+  @field w onStep  @ drawToolsRow:650
+  @field w onTidy  @ buildDescriptor:576
+  @field r overwrite  @ reloadFactory:535
   @field r path  @ 21
   @field w path  @ 21
-  @field r period  @ periodPresetIndex:68 compositesEqual:262 drawFactorRow:337,376,377
-  @field w period  @ 32,33,34,35,36,37 addFactor:302 drawFactorRow:337,379,382
+  @field r period  @ periodPresetIndex:68 compositesEqual:261 drawFactorRow:336,375,376
+  @field w period  @ 32,33,34,35,36,37 addFactor:301 drawFactorRow:336,378,381
   @field r periodQN  @ drawBandInto:219
   @field w periodQN  @ bandLayout:187
-  @field r phase  @ compositesEqual:256,263 drawFactorRow:397 drawToolsRow:649
-  @field w phase  @ drawFactorRow:403 drawToolsRow:655
+  @field r phase  @ compositesEqual:255,262 drawFactorRow:396 drawToolsRow:670
+  @field w phase  @ drawFactorRow:402 drawToolsRow:676
   @field r posRange  @ shiftCap:98
-  @field r previewH  @ drawEditBody:682,696
-  @field w previewH  @ drawEditBody:678,697
-  @field r previewRpb  @ drawEditBody:676
-  @field w previewRpb  @ drawEditBody:677
-  @field r project  @ buildDescriptor:539,545
-  @field w project  @ buildDescriptor:545
-  @field w prompt  @ publish:458
-  @field r pulsesPerCycle  @ drawFactorRow:366
-  @field r refocus  @ 576
-  @field w refocus  @ 577,597
+  @field r previewH  @ drawEditBody:703,717
+  @field w previewH  @ drawEditBody:699,718
+  @field r previewRpb  @ drawEditBody:697
+  @field w previewRpb  @ drawEditBody:698
+  @field r project  @ buildDescriptor:560,566
+  @field w project  @ buildDescriptor:566
+  @field w prompt  @ publish:457 reloadFactory:539
+  @field r pulsesPerCycle  @ drawFactorRow:365
+  @field r refocus  @ 597
+  @field w refocus  @ 598,618
   @field r rows  @ drawSwingStrip:141,157 drawBandInto:203
   @field w rows  @ bandLayout:188 drawBandInto:203
-  @field r rpb  @ bandLayout:178 drawToolsRow:628 drawEditBody:676,677
-  @field w rpb  @ drawToolsRow:630 open:741
-  @field w sel  @ buildDescriptor:551
-  @field r shift  @ compositesEqual:261 drawFactorRow:338,351,378
-  @field w shift  @ addFactor:302 drawFactorRow:341,357,382
-  @field r snapshot  @ resetToSnapshot:530 buildDescriptor:558
-  @field w snapshot  @ switchTo:441
-  @field r splitDrag  @ drawEditBody:696,697
-  @field w splitDrag  @ drawEditBody:696,699
+  @field r rpb  @ bandLayout:178 drawToolsRow:649 drawEditBody:697,698
+  @field w rpb  @ drawToolsRow:651 open:762
+  @field w sel  @ buildDescriptor:571
+  @field r shift  @ compositesEqual:260 drawFactorRow:337,350,377
+  @field w shift  @ addFactor:301 drawFactorRow:340,356,381
+  @field r snapshot  @ resetToSnapshot:551 buildDescriptor:579
+  @field w snapshot  @ switchTo:440
+  @field r splitDrag  @ drawEditBody:717,718
+  @field w splitDrag  @ drawEditBody:717,720
   @field r stripW  @ drawBandInto:220,228
   @field w stripW  @ bandLayout:188
-  @field w synthetic  @ buildDescriptor:548
-  @field r tier  @ swingRead:238,239 swingWrite:280 buildDescriptor:551
-  @field w tier  @ 274 switchTo:440 buildDescriptor:551
-  @field w title  @ publish:457 567
+  @field w synthetic  @ buildDescriptor:568
+  @field r tier  @ swingRead:238 swingWrite:279 buildDescriptor:571
+  @field w tier  @ 273 switchTo:439 buildDescriptor:571
+  @field w title  @ publish:456 reloadFactory:538 588
   @field r ui  @ drawBandInto:209,213
   @field r uiFont  @ drawBandInto:209,213
-  @field w undeletable  @ buildDescriptor:549
-  @field r w  @ drawBandInto:197,199 drawEditBody:685
-  @field w w  @ drawEditBody:682
-  @field r wild  @ drawFactorRow:337,346,379 drawToolsRow:636
-  @field w wild  @ drawToolsRow:637
+  @field w undeletable  @ buildDescriptor:569
+  @field r w  @ drawBandInto:197,199 drawEditBody:706
+  @field w w  @ drawEditBody:703
+  @field r wild  @ drawFactorRow:336,345,378 drawToolsRow:657
+  @field w wild  @ drawToolsRow:658
   @field r x  @ drawSwingStrip:138 drawBandInto:197,198,199
-  @field w x  @ drawBandInto:218,225 drawEditBody:682
+  @field w x  @ drawBandInto:218,225 drawEditBody:703
   @field w x0  @ drawSwingStrip:145,147,166 drawBandInto:198
   @field w x1  @ drawSwingStrip:145,147,166 drawBandInto:199
   @field r y  @ drawSwingStrip:138 drawBandInto:198,199,202,212
-  @field w y  @ drawBandInto:202 drawEditBody:682
-  @field r y0  @ drawEditBody:697
-  @field w y0  @ drawSwingStrip:145,147,166 drawBandInto:198 drawEditBody:696
+  @field w y  @ drawBandInto:202 drawEditBody:703
+  @field r y0  @ drawEditBody:718
+  @field w y0  @ drawSwingStrip:145,147,166 drawBandInto:198 drawEditBody:717
   @field w y1  @ drawSwingStrip:145,147,166 drawBandInto:199

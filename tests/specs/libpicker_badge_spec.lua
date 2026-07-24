@@ -1,5 +1,5 @@
 -- Pin-test for chrome.libPicker's modified badge: project rows whose entry has
--- diverged from its library/factory source carry a trailing bullet; pristine
+-- diverged from its library source carry a trailing bullet; pristine
 -- project rows and `+`others rows stay bare. Instantiated over a harness cm
 -- with a lib service (mirrors the coordinator wiring).
 

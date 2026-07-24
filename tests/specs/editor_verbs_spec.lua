@@ -1,7 +1,8 @@
 -- Verb descriptors on the swing/temper editors under the library model:
 -- `publish` lifts a project copy into the shared library, `revert` discards
--- project drift back to its source, and `tidy` (swing only) drops pristine
--- unreferenced project copies. Instantiated over a harness cm/ds with a lib
+-- project drift back to its source, `tidy` (swing only) drops pristine
+-- unreferenced project copies, and `reloadFactory` re-imports the shipped
+-- catalogue (silent adds, a confirm per divergent copy). Instantiated over a harness cm/ds with a lib
 -- service; imgui stubbed via package.preload. Recipe lifted from
 -- temperEditor_tree_spec.
 local t = require('support')
@@ -102,9 +103,39 @@ return {
       t.deepEq(h.cm:getAt('global', 'swings').shared, { factors = { 'A' } },
                'the library copy is untouched until the confirm resolves')
       t.truthy(captured.last, 'a confirm modal was raised')
-      captured.last.callback()
+      captured.last.callback(false)
+      t.deepEq(h.cm:getAt('global', 'swings').shared, { factors = { 'A' } },
+               'declining the confirm leaves the library copy')
+      captured.last.callback(true)
       t.deepEq(h.cm:getAt('global', 'swings').shared, { factors = { 'B' } },
-               'resolving the confirm lands the project copy')
+               'confirming lands the project copy')
+    end,
+  },
+  {
+    name = 'swing onReloadFactory imports absent names silently and confirms per divergent copy',
+    run = function(harness)
+      local h = harness.mk{ config = {
+        global = { swings = {
+          ['classic-58'] = { factors = { 'DRIFT' } },   -- diverges from factory -> confirms
+          keep           = { factors = { 'K' } },       -- user entry -> left alone
+        } },
+      } }
+      local se, captured = mkSwing(h)
+
+      se:libraryDescriptor().onReloadFactory()
+
+      local g = h.cm:getAt('global', 'swings')
+      t.truthy(g['classic-55'], 'a factory name absent from the library is imported silently')
+      t.truthy(g['keep'],       'a user library entry is left alone')
+      t.deepEq(g['classic-58'].factors, { 'DRIFT' },
+               'a divergent copy is untouched until its confirm resolves')
+      t.truthy(captured.last, 'the divergent copy raises a confirm')
+      captured.last.callback(false)
+      t.deepEq(h.cm:getAt('global', 'swings')['classic-58'].factors, { 'DRIFT' },
+               'declining keeps the library copy')
+      captured.last.callback(true)
+      t.deepEq(h.cm:getAt('global', 'swings')['classic-58'], h.cm:defaultFor('swings')['classic-58'],
+               'confirming overwrites with the factory copy')
     end,
   },
   {
@@ -136,9 +167,12 @@ return {
       t.deepEq(h.cm:getAt('global', 'tempers').shared, { steps = { 'A' } },
                'the library copy is untouched until the confirm resolves')
       t.truthy(captured.last, 'a confirm modal was raised')
-      captured.last.callback()
+      captured.last.callback(false)
+      t.deepEq(h.cm:getAt('global', 'tempers').shared, { steps = { 'A' } },
+               'declining the confirm leaves the library copy')
+      captured.last.callback(true)
       t.deepEq(h.cm:getAt('global', 'tempers').shared, { steps = { 'B' } },
-               'resolving the confirm lands the project copy')
+               'confirming lands the project copy')
     end,
   },
   {

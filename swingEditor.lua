@@ -235,7 +235,6 @@ local function drawBandInto(layout, composite, factors, region)
 end
 
 local function swingRead()
-  if state.tier == 'factory' then return cm:defaultFor('swings')[state.name] end
   local tierLib = state.tier and cm:getAt(state.tier, 'swings') or {}
   if tierLib[state.name] ~= nil then return tierLib[state.name] end
   return cm:get('swings', { mergeTiers = true })[state.name]   -- synthetic / default floor
@@ -268,7 +267,7 @@ local function compositesEqual(a, b)
 end
 
 -- Fork the selected non-project row into project so the edit lands there,
--- not on the library/factory source. Atomic: shares the gesture's undo point.
+-- not on the library source. Atomic: shares the gesture's undo point.
 local forkToProject = util.atomic('Fork swing', function()
   lib.forkToProject('swings', state.name)   -- deep-clones the source into project
   state.tier = 'project'
@@ -456,14 +455,14 @@ local function publish(name)
     modalHost:openConfirm{
       title    = 'Publish swing',
       prompt   = ("Overwrite the library copy of '%s'? (y/n)"):format(name),
-      callback = function() lib.publish('swings', name) end,
+      callback = function(yes) if yes then lib.publish('swings', name) end end,
     }
   else
     lib.publish('swings', name)
   end
 end
 
--- Discard a project row's drift, restoring the library/factory source, and edit that copy.
+-- Discard a project row's drift, restoring the library source, and edit that copy.
 -- Wrapped: a project-tier write is undoable but mints no undo point of its own (projext); atomic mints one so it doesn't rewind as a passenger.
 local revert = util.atomic('Revert swing', function(name)
   if not name then return end
@@ -525,6 +524,28 @@ local tidy = util.atomic('Tidy swings', function()
   lib.tidy('swings', inUseNames())
 end)
 
+-- Re-import the factory catalogue into the shared library: new names land
+-- silently, each divergent library copy prompts before being overwritten.
+local function reloadFactory()
+  local plan = lib.reloadPlan('swings')
+  for _, name in ipairs(plan.add) do lib.importFactory('swings', name) end
+  local i = 0
+  local function nextOverwrite()
+    i = i + 1
+    local name = plan.overwrite[i]
+    if not name then return end
+    modalHost:openConfirm{
+      title    = 'Reload factory',
+      prompt   = ("Overwrite the library copy of '%s'? (y/n)"):format(name),
+      callback = function(yes)
+        if yes then lib.importFactory('swings', name) end
+        nextOverwrite()
+      end,
+    }
+  end
+  nextOverwrite()
+end
+
 -- Revert the edited composite to the open()/switch snapshot, then reswing.
 local function resetToSnapshot()
   swingWrite(util.deepClone(state.snapshot) or {})
@@ -544,7 +565,6 @@ local function buildDescriptor()
     active      = activeEntries(),
     project     = names.project,
     library     = names.library,
-    factory     = names.factory,
     synthetic   = SYNTHETIC,
     undeletable = inUseNames(),
     modified    = modified,
@@ -554,6 +574,7 @@ local function buildDescriptor()
     onPublish   = publish,
     onRevert    = revert,
     onTidy      = tidy,
+    onReloadFactory = reloadFactory,
     onDelete    = deleteSel,
     dirty       = state.name ~= nil and not compositesEqual(swingRead() or {}, state.snapshot),
     onReset     = resetToSnapshot,

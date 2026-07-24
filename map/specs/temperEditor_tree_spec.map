@@ -1,48 +1,54 @@
-@spec temperEditor_tree_spec  src=tests/specs/temperEditor_tree_spec.lua  loc=68  sha=fbe92c0  cases=2
+@spec temperEditor_tree_spec  src=tests/specs/temperEditor_tree_spec.lua  loc=70  sha=3eaf95c  cases=2
+@exercises library (lib)
+@surface   lib.seedIfEmpty
 @harness   mk
 
 # Intent
-  Pin-test for temperEditor's Factory tree section. Phase 2 killed cm seeding,
-  so the built-in EDO catalogue now lives only in schema defaults (cm:defaultFor
-  → lib.names().factory). The descriptor must surface it under a Factory folder,
-  and selecting a factory row must preview (not raise) so the first edit can fork
-  to project. Instantiated over a harness cm with a lib service.
+  Pin-test for temperEditor's library tree. The built-in EDO catalogue is a
+  seed source (cm:defaultFor); seedIfEmpty stocks the library tier from it, so
+  the descriptor surfaces the catalogue under the Library folder (no Factory
+  section). Selecting a library row must preview (not raise) so the first edit
+  can fork to project. Instantiated over a harness cm with a lib service.
 
 # Helpers
   @fn has(list, val)  @ 24-27
-  @fn mkEditor(h)  @ 29-39
+  @fn mkEditor(h)  @ 29-40
 
 # Cases
-  @case 'descriptor lists the factory EDO catalogue and drops the synthetic floor'  [harness]  @ 43-52
-  @case 'selecting a factory row previews it without raising'  [harness]  @ 55-66
+  @case 'descriptor lists the seeded library catalogue and drops the synthetic floor'  [harness]  @ 44-54
+  @case 'selecting a library row previews it without raising'  [harness]  @ 57-68
+
+# Uses (outbound edges)
+  @use call lib.seedIfEmpty  @ 34
 
 # Fields (r read / w write incl. constructor keys)
   @field w ImGui_GetBuiltinPath  @ 20
   @field w Mod_None  @ 12
   @field w __index  @ 13
-  @field w chrome  @ 35
-  @field w cm  @ 31,35
-  @field w ctx  @ 35
-  @field r dirty  @ 65
-  @field w facade  @ 37
-  @field r factory  @ 50,51
-  @field w fontSize  @ 35
-  @field w get  @ 37
-  @field w gui  @ 35
+  @field w chrome  @ 36
+  @field w cm  @ 31,36
+  @field w ctx  @ 36
+  @field r dirty  @ 67
+  @field w facade  @ 38
+  @field r factory  @ 53
+  @field w fontSize  @ 36
+  @field w get  @ 38
+  @field w gui  @ 36
   @field w identity  @ 32
-  @field w lib  @ 36
+  @field w lib  @ 37
+  @field r library  @ 51,52
   @field r loaded  @ 19
-  @field w modalHost  @ 36
-  @field r name  @ 64
-  @field w name  @ 43,55
+  @field w modalHost  @ 37
+  @field r name  @ 66
+  @field w name  @ 44,57
   @field r preload  @ 16
   @field r reaper  @ 20
-  @field w registerKind  @ 36
-  @field w run  @ 44,56
-  @field r sel  @ 63,64
+  @field w registerKind  @ 37
+  @field w run  @ 45,58
+  @field r sel  @ 65,66
   @field w swings  @ 32
   @field w synthetic  @ 32
   @field w tempers  @ 32
-  @field w tempersInUse  @ 37
-  @field r tier  @ 63
-  @field w ui  @ 35
+  @field w tempersInUse  @ 38
+  @field r tier  @ 65
+  @field w ui  @ 36

@@ -1,68 +1,80 @@
-@module library  src=library.lua  loc=149  sha=be5d40d  mode=namespace  self=lib
+@module library  src=library.lua  loc=180  sha=36fee5b  mode=namespace  self=lib
 
 # Imports
-  @const util = 'util'  @ 7
+  @const util = 'util'  @ 4
 
 # Module-level constants
-  @const lib = {}  @ 12
+  @const lib = {}  @ 9
 
 # Private functions
   -- Tier reads
-  @fn synth(key)  @ 16
-  @fn projectTier(key)  @ 17
-  @fn libraryTier(key)  @ 18
-  @fn factoryTier(key)  @ 19
-  @fn sourceOf(key, name)  @ 22-26
-      -- Publishable source for a name: library over factory, never the project copy.
+  @fn synth(key)  @ 13
+  @fn projectTier(key)  @ 14
+  @fn libraryTier(key)  @ 15
+  @fn factoryTier(key)  @ 16
+  @fn sourceOf(key, name)  @ 20-22
+      -- Publishable/revertable source for a name: the library copy, never the
+      -- project copy. (The factory catalogue is a seed source, not a live source.)
   -- Tier writes
-  @fn writeTier(level, key, name, value)  @ 31-35
+  @fn writeTier(level, key, name, value)  @ 27-31
       -- Read-modify-write a whole tier through one cm:set; cm deep-copies the value in.
   -- Names
-  @fn sortedNames(tier, drop)  @ 39-46
+  @fn sortedNames(tier, drop)  @ 35-42
 
 # Public API (lib.*)
-  @api lib.names(key)  @ 49-56
-      @contract  { project, library, factory } sorted names; synthetic floor dropped, no cross-dedup  @ 48
+  @api lib.names(key)  @ 45-51
+      @contract  { project, library } sorted names; synthetic floor dropped, no cross-dedup  @ 44
   -- Reads
-  @api lib.get(key, name)  @ 61-67
-      @contract  resolved deep copy, project over library over factory; nil if no tier has the name  @ 60
-  @api lib.modified(key, name)  @ 70-76
-      @contract  true iff a project copy and a same-named source both exist and differ (util.deepEq)  @ 69
+  @api lib.get(key, name)  @ 56-60
+      @contract  resolved deep copy, project over library; nil if neither tier has the name  @ 55
+  @api lib.modified(key, name)  @ 63-69
+      @contract  true iff a project copy and a same-named source both exist and differ (util.deepEq)  @ 62
   -- Localize / fork
-  @api lib.localize(key, name)  @ 81-86
-      @contract  copy the resolved source into project; no-op if synthetic or a project copy exists  @ 80
-  @api lib.forkToProject(key, name)  @ 89-92
-      @contract  localize then return the editable project copy  @ 88
+  @api lib.localize(key, name)  @ 74-81
+      @contract  copy resolvable entry (library|factory floor) into project; no-op if synthetic/proj copy  @ 73
+  @api lib.forkToProject(key, name)  @ 84-87
+      @contract  localize then return the editable project copy  @ 83
   -- Publish / revert
-  @api lib.publish(key, name)  @ 97-100
-      @contract  project copy -> library tier (deepClone via cm:set); no-op when there is no project copy  @ 96
-  @api lib.publishOverwrites(key, name)  @ 103-109
-      @contract  true iff publish would overwrite a divergent library copy (both tiers exist and differ)  @ 102
-  @api lib.revert(key, name)  @ 112-115
-      @contract  source (library/factory) -> project, discarding drift; no-op if no source exists  @ 111
+  @api lib.publish(key, name)  @ 92-95
+      @contract  project copy -> library tier (deepClone via cm:set); no-op when there is no project copy  @ 91
+  @api lib.publishOverwrites(key, name)  @ 98-104
+      @contract  true iff publish would overwrite a divergent library copy (both tiers exist and differ)  @ 97
+  @api lib.revert(key, name)  @ 107-110
+      @contract  library source -> project, discarding drift; no-op if no library copy exists  @ 106
+  -- Factory seed / reload
+  @api lib.seedIfEmpty(key)  @ 115-123
+      @contract  stock an empty library tier from the factory catalogue; no-op once it holds anything  @ 114
+  @api lib.reloadPlan(key)  @ 126-139
+      @contract  { add = names in factory not library, overwrite = present but divergent }; both sorted  @ 125
+  @api lib.importFactory(key, name)  @ 142-146
+      @contract  copy one factory entry into the library tier (deep-clone via cm:set); synthetic never  @ 141
   -- Tidy / delete
-  @api lib.tidy(key, inUse)  @ 120-135
-      @contract  drop project entries deepEq their source and not in inUse; single cm:set; returns removed  @ 119
-  @api lib.delete(key, level, name)  @ 138-147
-      @contract  remove name from tier level (project|global); synthetic never; factory not deletable  @ 137
+  @api lib.tidy(key, inUse)  @ 151-166
+      @contract  drop project entries deepEq their source and not in inUse; single cm:set; returns removed  @ 150
+  @api lib.delete(key, level, name)  @ 169-178
+      @contract  remove name from tier level (project|global); synthetic names never  @ 168
 
 # Uses (outbound edges)
-  @use call    util.deepEq  @ modified:75 publishOverwrites:108 tidy:126
-  @use require util  @ 7
+  @use call    util.deepEq  @ modified:68 publishOverwrites:103 reloadPlan:134 tidy:157
+  @use require util  @ 4
 
 # Fields (r read / w write incl. constructor keys)
-  @field r cm  @ 9
-  @field w delete  @ delete:138
-  @field w factory  @ names:54
-  @field w forkToProject  @ forkToProject:89
-  @field w get  @ get:61
-  @field w library  @ names:53
-  @field w localize  @ localize:81
-  @field w modified  @ modified:70
-  @field w names  @ names:49
-  @field w project  @ names:52
-  @field w publish  @ publish:97
-  @field w publishOverwrites  @ publishOverwrites:103
-  @field w revert  @ revert:112
-  @field r synthetic  @ 10
-  @field w tidy  @ tidy:120
+  @field w add  @ reloadPlan:138
+  @field r cm  @ 6
+  @field w delete  @ delete:169
+  @field w forkToProject  @ forkToProject:84
+  @field w get  @ get:56
+  @field w importFactory  @ importFactory:142
+  @field w library  @ names:49
+  @field w localize  @ localize:74
+  @field w modified  @ modified:63
+  @field w names  @ names:45
+  @field w overwrite  @ reloadPlan:138
+  @field w project  @ names:48
+  @field w publish  @ publish:92
+  @field w publishOverwrites  @ publishOverwrites:98
+  @field w reloadPlan  @ reloadPlan:126
+  @field w revert  @ revert:107
+  @field w seedIfEmpty  @ seedIfEmpty:115
+  @field r synthetic  @ 7
+  @field w tidy  @ tidy:151

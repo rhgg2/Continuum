@@ -1,8 +1,8 @@
--- Pin-test for temperEditor's Factory tree section. Phase 2 killed cm seeding,
--- so the built-in EDO catalogue now lives only in schema defaults (cm:defaultFor
--- → lib.names().factory). The descriptor must surface it under a Factory folder,
--- and selecting a factory row must preview (not raise) so the first edit can fork
--- to project. Instantiated over a harness cm with a lib service.
+-- Pin-test for temperEditor's library tree. The built-in EDO catalogue is a
+-- seed source (cm:defaultFor); seedIfEmpty stocks the library tier from it, so
+-- the descriptor surfaces the catalogue under the Library folder (no Factory
+-- section). Selecting a library row must preview (not raise) so the first edit
+-- can fork to project. Instantiated over a harness cm with a lib service.
 
 -- temperEditor requires ImGui at module scope; stub imgui via package.preload
 -- before the first require so it loads in the pure-Lua harness. Recipe lifted
@@ -31,6 +31,7 @@ local function mkEditor(h)
     cm = h.cm,
     synthetic = { swings = { identity = true }, tempers = { ['12EDO'] = true } },
   })
+  lib.seedIfEmpty('tempers')   -- production seeds at startup; mirror it here
   return util.instantiate('temperEditor', {
     cm = h.cm, chrome = {}, ctx = {}, gui = { fontSize = { ui = 12 } },
     modalHost = { registerKind = function() end }, lib = lib,
@@ -40,29 +41,30 @@ end
 
 return {
   {
-    name = 'descriptor lists the factory EDO catalogue and drops the synthetic floor',
+    name = 'descriptor lists the seeded library catalogue and drops the synthetic floor',
     run = function(harness)
       local h = harness.mk{}
       local temperEditor = mkEditor(h)
 
       local desc = temperEditor:libraryDescriptor()
 
-      t.truthy(has(desc.factory, '19EDO'), 'factory folder lists a catalogue EDO')
-      t.truthy(not has(desc.factory, '12EDO'), 'synthetic 12EDO floor is excluded')
+      t.truthy(has(desc.library, '19EDO'), 'library folder lists a seeded catalogue EDO')
+      t.truthy(not has(desc.library, '12EDO'), 'synthetic 12EDO floor is excluded')
+      t.eq(desc.factory, nil, 'no factory section in the descriptor')
     end,
   },
   {
-    name = 'selecting a factory row previews it without raising',
+    name = 'selecting a library row previews it without raising',
     run = function(harness)
       local h = harness.mk{}
       local temperEditor = mkEditor(h)
 
-      temperEditor:libraryDescriptor().onSelect('factory', '19EDO')
+      temperEditor:libraryDescriptor().onSelect('global', '19EDO')
       local desc = temperEditor:libraryDescriptor()
 
-      t.eq(desc.sel.tier, 'factory', 'selection tier is factory')
+      t.eq(desc.sel.tier, 'global', 'selection tier is the library')
       t.eq(desc.sel.name, '19EDO', 'selection name is the chosen row')
-      t.truthy(not desc.dirty, 'a fresh factory selection is not dirty')
+      t.truthy(not desc.dirty, 'a fresh library selection is not dirty')
     end,
   },
 }

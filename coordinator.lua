@@ -20,6 +20,8 @@ local uiSize        = gui.fontSize.ui
 
 local lib = util.instantiate('library',
   { cm = cm, synthetic = { swings = { identity = true }, tempers = { ['12EDO'] = true } } })
+-- Seed each user library from the factory catalogue on first run (empty tier).
+for _, key in ipairs{ 'swings', 'tempers' } do lib.seedIfEmpty(key) end
 
 local chrome = util.instantiate('chrome',
   { cm = cm, ctx = ctx, uiSize = uiSize, lib = lib })

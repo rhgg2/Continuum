@@ -16,7 +16,7 @@ local cm, chrome, ctx, gui, modalHost, lib, facade =
 local SYNTHETIC  = { ['12EDO'] = true }
 
 local selected = nil   -- explicitly-selected entry; nil follows the active slot
-local selTier  = nil   -- tier of the selection ('project' | 'global' | 'factory')
+local selTier  = nil   -- tier of the selection ('project' | 'global')
 local snapshot = nil   -- selection-time copy, for dirty-check + Reset
 local openNewModal, openImportModal   -- New/Import modals, hosted by modalHost (defined below)
 local editing  = nil   -- { key, buf } in-flight pitch token; commits on deactivate
@@ -64,7 +64,6 @@ end
 -- The selected entry's own tier copy. nil when nothing is selected or the
 -- selection is a merge-floor with no tier copy — editing needs a dup first.
 local function editedTemper()
-  if selTier == 'factory' then return nil end   -- read-only catalogue; no tier copy to edit
   return selected and (cm:getAt(selTier, 'tempers') or {})[selected] or nil
 end
 
@@ -93,7 +92,7 @@ local function sortSteps(temper)
 end
 
 -- Fork the selected non-project row into project so the edit lands there,
--- not on the library/factory source. Atomic: shares the gesture's undo point.
+-- not on the library source. Atomic: shares the gesture's undo point.
 local forkToProject = util.atomic('Fork temper', function()
   lib.forkToProject('tempers', selected)   -- deep-clones the source into project
   selTier = 'project'
@@ -113,7 +112,7 @@ end
 -- Editable clone with pitches/stepNames densified to a common length ('' for
 -- unnamed) so sort and table.remove stay array operations.
 local function cloneForEdit()
-  local t = editedTemper() or (selected and temperFor(selected))   -- factory/merge-floor rows clone from the resolved source
+  local t = editedTemper() or (selected and temperFor(selected))   -- merge-floor rows clone from the resolved source
   if not t then return nil end
   t = util.deepClone(t)
   t.pitches   = t.pitches or {}
@@ -190,6 +189,28 @@ end
 local function inUseNames() return facade.get('arrange').tempersInUse() end
 local tidy = util.atomic('Tidy tempers', function() lib.tidy('tempers', inUseNames()) end)
 
+-- Re-import the factory catalogue into the shared library: new names land
+-- silently, each divergent library copy prompts before being overwritten.
+local function reloadFactory()
+  local plan = lib.reloadPlan('tempers')
+  for _, name in ipairs(plan.add) do lib.importFactory('tempers', name) end
+  local i = 0
+  local function nextOverwrite()
+    i = i + 1
+    local name = plan.overwrite[i]
+    if not name then return end
+    modalHost:openConfirm{
+      title    = 'Reload factory',
+      prompt   = ("Overwrite the library copy of '%s'? (y/n)"):format(name),
+      callback = function(yes)
+        if yes then lib.importFactory('tempers', name) end
+        nextOverwrite()
+      end,
+    }
+  end
+  nextOverwrite()
+end
+
 -- Publishing over a divergent library copy is the one gesture that destroys
 -- library content; guard it with a confirm. Fresh/identical names publish silently.
 local function publish(name)
@@ -198,14 +219,14 @@ local function publish(name)
     modalHost:openConfirm{
       title    = 'Publish tuning',
       prompt   = ("Overwrite the library copy of '%s'? (y/n)"):format(name),
-      callback = function() lib.publish('tempers', name) end,
+      callback = function(yes) if yes then lib.publish('tempers', name) end end,
     }
   else
     lib.publish('tempers', name)
   end
 end
 
--- Discard a project row's drift, restoring the library/factory source, and edit that copy.
+-- Discard a project row's drift, restoring the library source, and edit that copy.
 -- Wrapped: a project-tier write is undoable but mints no undo point of its own (projext); atomic gives it one so it doesn't rewind as a passenger.
 local revert = util.atomic('Revert temper', function(name)
   if not name then return end
@@ -240,7 +261,6 @@ local function buildDescriptor()
     active    = active,
     project   = names.project,
     library   = names.library,
-    factory   = names.factory,
     synthetic = SYNTHETIC,
     modified  = modified,
     sel       = { tier = selTier, name = selected },
@@ -252,6 +272,7 @@ local function buildDescriptor()
     onDelete  = deleteSel,
     onReset   = resetToSnapshot,
     onTidy    = tidy,
+    onReloadFactory = reloadFactory,
     undeletable = inUseNames(),
     dirty     = dirty(),
   }

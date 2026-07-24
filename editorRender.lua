@@ -26,19 +26,19 @@ local function activePane() return pane == 'temper' and temperEditor or swingEdi
 
 local function onClose() cmgr:invoke('closeEditor') end
 
------ Library tree palette (Active / Project / Library / Factory tiers; one per pane)
+----- Library tree palette (Active / Project / Library tiers; one per pane)
 
---shape: libraryTreeSpec = { x, y, h, label, active={{col,name}}, project={name}, library={name}, factory={name}, synthetic={[name]=true}, undeletable={[name]=true}, modified={[name]=true}, sel={tier,name}, dirty?:bool, onSelect(tier,name), onNew(), onImport?(), onPublish(name), onRevert(name), onTidy?(), onReset?(), onDelete(tier,name) }
+--shape: libraryTreeSpec = { x, y, h, label, active={{col,name}}, project={name}, library={name}, synthetic={[name]=true}, undeletable={[name]=true}, modified={[name]=true}, sel={tier,name}, dirty?:bool, onSelect(tier,name), onNew(), onImport?(), onPublish(name), onRevert(name), onTidy?(), onReloadFactory?(), onReset?(), onDelete(tier,name) }
 
 local function has(list, name)
   for _, n in ipairs(list or {}) do if n == name then return true end end
   return false
 end
 
--- A project leaf shadows a source when the same name lives in the library or
--- factory tier; only then can revert restore something.
+-- A project leaf shadows a source when the same name lives in the library
+-- tier; only then can revert restore something.
 local function shadowsSource(spec, name)
-  return has(spec.library, name) or has(spec.factory, name)
+  return has(spec.library, name)
 end
 
 -- sel.tier scopes the action bar: a folder selection (name=nil) scopes add/import
@@ -80,6 +80,12 @@ local function libraryActions(spec)
     ImGui.SameLine(ctx, 0, 4)
     if ImGui.Button(ctx, 'tidy') then spec.onTidy() end
   end
+  -- reload factory: re-import the shipped catalogue, armed on the Library
+  -- folder header (name=nil). Prompts per divergent copy; see the editors.
+  if spec.onReloadFactory and sel.tier == 'global' and sel.name == nil then
+    ImGui.SameLine(ctx, 0, 4)
+    if ImGui.Button(ctx, 'reload factory') then spec.onReloadFactory() end
+  end
   ImGui.SameLine(ctx, 0, 4)
   chrome.disabledIf(not sel.name or not (sel.tier == 'project' or sel.tier == 'global') or undeletable, function()
     if ImGui.Button(ctx, 'del') then spec.onDelete(sel.tier, sel.name) end   -- × : delete
@@ -97,7 +103,7 @@ local function libraryRow(spec, tier, name, label)
   ImGui.PopID(ctx)
 end
 
-local treeOpen = { project = true, global = true, factory = true }
+local treeOpen = { project = true, global = true }
 
 -- Disclosure chip toggles the folder; the title row selects the tier (name=nil)
 -- so add/import scope to it, and now also toggles. Mirrors the sampler tree.
@@ -134,11 +140,6 @@ local function libraryTree(spec)
       libraryFolder(spec, 'global', 'Library', function()
         for _, name in ipairs(spec.library or {}) do
           libraryRow(spec, 'global', name, name)
-        end
-      end)
-      libraryFolder(spec, 'factory', 'Factory', function()
-        for _, name in ipairs(spec.factory or {}) do
-          libraryRow(spec, 'factory', name, name)
         end
       end)
     end,

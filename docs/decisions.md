@@ -4,6 +4,12 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-24** — Library tiers: reversed the earlier 'kill seeding / Factory as a live read-only
+  resolution tier' model. Factory is now a seed source only — the library seeds from the shipped
+  catalogue when empty at startup, and a 'reload factory' button (confirm per divergent copy)
+  re-imports on demand. Resolution is project -> library; realisation still floors on schema
+  defaults via mergeTiers.
+
 - **2026-07-23** — Placement fixpoint closed one pass later than its disproof: continuous (cc/pb)
   park membership now reads post-settlement windows via a settleWindows thunk rebuildRegionPark
   calls between its note/PA and cc/pb passes; note membership stays on the head set (exact by
