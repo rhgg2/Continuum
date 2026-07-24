@@ -212,10 +212,11 @@ Decisions taken 2026-07-24; the queue is compiled in
 
 **Library as a copy shelf.** `fxPatterns` (the P2 store) goes live as
 a named shelf of bodies, written through the *main* ds. **Save** and
-**Load** sit in the editor toolbar: Save prompts for a name and copies
-the current body up, confirming before overwriting a divergent copy
-(the library-model publish precedent); Load picks a name — kind-
-filtered, so a curve param only offers curves — and copies the body
+**Load** sit in the editor toolbar, both `chrome.drawPicker`s over the
+matching-kind shelf names: Save offers the existing presets for an
+explicit overwrite and creates a fresh name through the picker's
+`onCreate` hook; Load picks a name — kind-filtered, so a curve param
+only offers curves — and copies the body
 down onto the checkout, whereupon write-through makes the param track
 it. Both directions are copies: no live sharing, a shelf edit
 re-realises nothing, and tm's `fxPatterns` `dataChanged` arm plus its
@@ -250,6 +251,14 @@ the domain, so a `normalized` param is never offered a `cc` body. And
 Esc keeps restoring the **modal-open** snapshot even after a Load: a
 load replaces the working body, not the cancel target, so cancel
 still means "as if never opened".
+
+A further settlement (2026-07-24, Save as picker): Save is a
+`chrome.drawPicker` like Load, its items the existing matching-kind
+shelf names, so an overwrite is an **explicit pick** from a visible list
+and a fresh name is created through a new `onCreate` hook on the picker.
+The divergence confirm is **dropped** — it guarded a blind typed
+collision that the visible list removes — reversing the "confirm before
+overwriting a divergent copy" decision above.
 
 (Isolated preview, once listed here, is dropped: write-through already
 auditions the pattern in host context, and there is nowhere sensible

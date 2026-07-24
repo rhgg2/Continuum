@@ -3,7 +3,7 @@
 --shape: chrome = { colour(name, scope?)->u32, pushChromeStyles(), popChromeStyles(), pushChromeWindow(), popChromeWindow(), verticalSeparator(), disabledIf(cond,fn), row(h?,fn), checkbox(label,v), radio(label,active), headingLabel(text), screenPainter()->painter}
 --shape: chrome (pickers) = { makeToolbar()->fn(segments), drawPicker(d), libPicker(key, current, excludeOthers?)->items, pickerIsActive()->bool, resetPickerActive(), requestPickerOpen(kind) }
 --shape: chrome (shared row primitives) = { fitLabel(text,maxW)->text, rowSelectable(label,sel,flags?)->clicked, treeRow(opts)->{toggled,selected,doubleClicked}, numberStepper(id,value,opts)->changed,value }
---shape: pickerSpec = { kind: string, heading: string?, buttonLabel: string, items: [{label, key, group?=int, current?=bool}], onPick: fn(key), onCancel?: fn(), placement?: 'above', width?, minWidth?, maxWidth?, flat?: bool }
+--shape: pickerSpec = { kind: string, heading: string?, buttonLabel: string, items: [{label, key, group?=int, current?=bool}], onPick: fn(key), onCancel?: fn(), onCreate?: fn(text), placement?: 'above', width?, minWidth?, maxWidth?, flat?: bool }
 --shape: palettePaneSpec = { x, y, h, label | {tabs=[{key,label}], activeTab, onTab}, draw = fn(childFocused) }
 --contract: one chrome instance per coordinator; threaded into every page
 --invariant: colour cache lives on the chrome instance and is invalidated on cm:configChanged
@@ -413,6 +413,9 @@ local function requestPickerOpen(kind, seed) pickerOpenReq, pickerOpenSeed = kin
 local function pickerIsActive()        return pickerActive end
 local function resetPickerActive()     pickerActive = false end
 
+-- Sentinel key for drawPicker's synthetic '+ new' row (see onCreate handling below).
+local CREATE = {}
+
 -- Build the picker-item list for a library-shaped cm key (e.g. 'swings',
 -- 'tempers'); groups, modified badge, excludeOthers — see docs/chrome.md § Picker.
 local function libPicker(key, current, excludeOthers)
@@ -528,6 +531,19 @@ local function drawPicker(d)
     end
   end
 
+  -- onCreate: a non-empty filter with no exact item match earns a synthetic '+ new' row so Enter
+  -- creates instead of overwrites. see docs/chrome.md § Picker
+  if d.onCreate and filter ~= '' then
+    local exact = false
+    for _, it in ipairs(matches) do
+      if it.label:lower() == lf then exact = true; break end
+    end
+    if not exact then
+      table.insert(matches, 1, { label = '+ new: ' .. filter, key = CREATE })
+      if currentMatch then currentMatch = currentMatch + 1 end
+    end
+  end
+
   -- On open or filter-change, highlight the current pick if it survived; else top.
   if ImGui.IsWindowAppearing(ctx) or filter ~= prevFilter then
     pickerCursor[d.kind] = currentMatch or 1
@@ -544,11 +560,15 @@ local function drawPicker(d)
   cursor = math.min(math.max(cursor, 1), math.max(n, 1))
   pickerCursor[d.kind] = cursor
 
+  local function choose(it)
+    if it.key == CREATE then d.onCreate(filter) else d.onPick(it.key) end
+  end
+
   if ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
     if d.onCancel then d.onCancel() end
     ImGui.CloseCurrentPopup(ctx)
   elseif entered then
-    if matches[cursor] then d.onPick(matches[cursor].key) end
+    if matches[cursor] then choose(matches[cursor]) end
     ImGui.CloseCurrentPopup(ctx)
   else
     local lastGroup
@@ -556,7 +576,7 @@ local function drawPicker(d)
       if filter == '' and lastGroup and lastGroup ~= (it.group or 1) then
         ImGui.Separator(ctx)
       end
-      if ImGui.Selectable(ctx, it.label, i == cursor) then d.onPick(it.key) end
+      if ImGui.Selectable(ctx, it.label, i == cursor) then choose(it) end
       lastGroup = it.group or 1
     end
   end

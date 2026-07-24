@@ -50,14 +50,13 @@ local openSnapshot             -- body as opened; Esc/Cancel restore it. A Load 
 local lastWritten              -- last body committed; deepEq-compared to skip a no-op write-through
 local armed = false            -- gate write-through to genuine edits, not open/close rebuilds
 local swallowInput = false     -- one-shot: drop the keystroke that launched the modal, so its press-edge (Enter=commit, ←→) isn't re-read here
-local pendingAction            -- 'commit'|'cancel'|{load=name} set by a toolbar widget in draw; handleInput drains it next
-local savePopupOpen = false    -- Save's in-modal popup is up this frame; pauses grid dispatch + the Esc/Enter fallback
+local pendingAction            -- 'commit'|'cancel'|{save=name}|{load=name} set by a toolbar widget in draw; handleInput drains it next
 
 -- Note entry and command dispatch both self-suppress while a toolbar widget holds focus, mirroring
 -- the main grid (trackerRender: inputAllowed folds focusState.acceptCmds). item==nil means dormant.
 local function acceptInput()
   return item ~= nil and not ImGui.IsAnyItemActive(ctx)
-     and not chrome.pickerIsActive() and not savePopupOpen
+     and not chrome.pickerIsActive()
 end
 
 local gridPane = util.instantiate('gridPane', {
@@ -301,47 +300,8 @@ local function loadShelf(name)
   commitFn(lastWritten)
 end
 
--- modalHost is single-slot, so Save rolls its own in-modal popup (fxPicker precedent) rather than
--- nesting modalHost's prompt inside the editor modal. see docs/patternEditor.md § The copy shelf
-local SAVE_POPUP = '##peSave'
-local saveConfirming = false
-local saveName = ''
-
-local function drawSave()
-  if ImGui.Button(ctx, 'Save' .. SAVE_POPUP) then
-    saveName, saveConfirming = '', false
-    ImGui.OpenPopup(ctx, SAVE_POPUP)
-  end
-  if not ImGui.BeginPopup(ctx, SAVE_POPUP, ImGui.WindowFlags_NoNav) then savePopupOpen = false; return end
-  savePopupOpen = true
-  if saveConfirming then
-    ImGui.Text(ctx, ("Overwrite '%s'? (y/n)"):format(saveName))
-    if ImGui.IsKeyPressed(ctx, ImGui.Key_Y) or ImGui.IsKeyPressed(ctx, ImGui.Key_Enter) then
-      saveShelf(saveName); ImGui.CloseCurrentPopup(ctx)
-    elseif ImGui.IsKeyPressed(ctx, ImGui.Key_N) or ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
-      ImGui.CloseCurrentPopup(ctx)
-    end
-  else
-    if ImGui.IsWindowAppearing(ctx) then ImGui.SetKeyboardFocusHere(ctx) end
-    ImGui.SetNextItemWidth(ctx, 180)
-    local _, name = ImGui.InputText(ctx, '##peSaveName', saveName)
-    saveName = name
-    -- A live InputText swallows Esc to deactivate, not to close; watch the keys ourselves
-    -- (reaimgui-gotchas: Esc + InputText). Divergence guards a destructive overwrite.
-    if ImGui.IsKeyPressed(ctx, ImGui.Key_Enter) or ImGui.IsKeyPressed(ctx, ImGui.Key_KeypadEnter) then
-      if saveName ~= '' then
-        local existing = shelf()[saveName]
-        if existing ~= nil and not util.deepEq(existing, readbackBody()) then saveConfirming = true
-        else saveShelf(saveName); ImGui.CloseCurrentPopup(ctx) end
-      end
-    elseif ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
-      ImGui.CloseCurrentPopup(ctx)
-    end
-  end
-  ImGui.EndPopup(ctx)
-end
-
-local function drawLoad()
+-- Sorted matching-kind shelf names as picker items; shared by Save and Load.
+local function shelfItems()
   local names = {}
   for name, body in pairs(shelf()) do
     if shelfMatches(body) then names[#names + 1] = name end
@@ -349,7 +309,19 @@ local function drawLoad()
   table.sort(names)
   local items = {}
   for _, name in ipairs(names) do items[#items + 1] = { label = name, key = name } end
-  chrome.drawPicker{ kind = 'peShelf', buttonLabel = 'Load', items = items,
+  return items
+end
+
+-- Save and Load are both drawPickers over the matching-kind shelf names; no confirm needed since an
+-- explicit pick/typed-name is itself the confirmation. see docs/patternEditor.md § The copy shelf
+local function drawSave()
+  chrome.drawPicker{ kind = 'peSave', buttonLabel = 'Save', items = shelfItems(),
+                     onPick   = function(name) pendingAction = { save = name } end,
+                     onCreate = function(name) pendingAction = { save = name } end }
+end
+
+local function drawLoad()
+  chrome.drawPicker{ kind = 'peShelf', buttonLabel = 'Load', items = shelfItems(),
                      onPick = function(name) pendingAction = { load = name } end }
 end
 
@@ -436,6 +408,7 @@ function pe:handleInput(close)
     local action = pendingAction; pendingAction = nil
     if     action == 'commit' then close(false)
     elseif action == 'cancel' then cancel(close)
+    elseif action.save then saveShelf(action.save)
     else   loadShelf(action.load) end
     return { consumed = true, commandHeld = {} }
   end
@@ -443,9 +416,9 @@ function pe:handleInput(close)
   miniFocus.acceptCmds = acceptInput()   -- pause command dispatch while a toolbar widget holds focus
   local kr = keyDispatch.dispatchKeys(miniFocus, cmgr, ctx)
   gridPane:handleKeys(kr)
-  -- A picker/Save popup consumes its own Esc/Enter, but IsKeyPressed can't see that (two input
-  -- streams); gate the fallback on the same pair acceptInput folds, so the key can't double-fire.
-  if not kr.consumed and not chrome.pickerIsActive() and not savePopupOpen then
+  -- A picker popup consumes its own Esc/Enter, but IsKeyPressed can't see that (two input streams);
+  -- gate the fallback on the same pickerIsActive acceptInput folds, so the key can't double-fire.
+  if not kr.consumed and not chrome.pickerIsActive() then
     if ImGui.IsKeyPressed(ctx, ImGui.Key_Escape) then
       cancel(close)
     elseif ImGui.IsKeyPressed(ctx, ImGui.Key_Enter)

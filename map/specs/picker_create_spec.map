@@ -1,0 +1,49 @@
+@spec picker_create_spec  src=tests/specs/picker_create_spec.lua  loc=72  sha=untracked  cases=2
+@harness   mk
+
+# Intent
+  Chrome-level pin for drawPicker's onCreate hook (fx-patterns P4). Real chrome over a fake imgui:
+  a non-empty filter with no exact item match prepends a create row whose Enter fires onCreate; a
+  filter equal to an existing item label suppresses that row so Enter overwrites via onPick. Recipe
+  from libpicker_badge_spec, extended with InputText/IsKeyPressed/Selectable.
+
+# Helpers
+  @fn mkChrome(h)  @ 36-39
+  @fn drawWith(chrome, text)  @ 44-52
+      -- Draw one Save picker frame with filter `text` and Enter pressed; return the fired callback name.
+
+# Cases
+  @case 'a non-exact filter prepends a create row; Enter fires onCreate with the filter'  [harness]  @ 56-61
+  @case 'a filter equal to an existing label suppresses the create row; Enter overwrites via onPick'  [harness]  @ 65-70
+
+# Fields (r read / w write incl. constructor keys)
+  @field w BeginPopup  @ 23
+  @field w Button  @ 20
+  @field w CreateFunctionFromEEL  @ 25
+  @field w GetItemRectMax  @ 22
+  @field w GetItemRectMin  @ 21
+  @field w ImGui_GetBuiltinPath  @ 32
+  @field w InputText  @ 26
+  @field w IsKeyPressed  @ 27
+  @field w IsWindowAppearing  @ 24
+  @field r Key_Enter  @ 46
+  @field w Mod_None  @ 9
+  @field w Selectable  @ 28
+  @field w __index  @ 10
+  @field w buttonLabel  @ 48
+  @field w cm  @ 37,38
+  @field w ctx  @ 38
+  @field w items  @ 48
+  @field w key  @ 41
+  @field w kind  @ 48
+  @field w label  @ 41
+  @field w lib  @ 38
+  @field r loaded  @ 31
+  @field w name  @ 56,65
+  @field w onCreate  @ 50
+  @field w onPick  @ 49
+  @field r preload  @ 30
+  @field r reaper  @ 32
+  @field w run  @ 57,66
+  @field w synthetic  @ 37
+  @field w uiSize  @ 38

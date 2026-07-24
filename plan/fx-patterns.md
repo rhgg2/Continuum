@@ -18,14 +18,14 @@
 
 ## Landed (newest first; prune below ~4)
 
+- 2026-07-24 pe: Save becomes a picker; drawPicker gains onCreate (§ P4)
 - 2026-07-24 pe: library copy shelf — Save/Load in the toolbar (§ P4)
 - 2026-07-24 plan extracted from the design doc; P4 decisions taken
 - 2026-07-11 pe: mini toolbar — RPB ticker, commit/cancel, focus fix
-- 2026-07-10 pe: endL editable in grid, exact modal sizing, rpb resets to 4
 
 ## Now
 
-(empty — Library shelf Save/Load landed; run /plan-next to promote the next queued item, shelf management: rename/delete rows inside the Load picker)
+(empty — Save-as-picker landed; run /plan-next to promote the next P4 item)
 
 ## Queued (current phase; one-liners)
 

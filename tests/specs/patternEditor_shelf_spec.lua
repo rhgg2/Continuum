@@ -1,6 +1,6 @@
 -- design/fx-patterns.md P4: the library copy shelf -- Save/Load in the pattern-editor toolbar.
--- Drives the real drawToolbar (Save popup) and drawLoad (picker) against a fake imgui; gridPane is
--- swapped for an inert stub via util._stubs so pe:draw's toolbar runs without the grid render.
+-- Save and Load are both chrome.drawPicker widgets, captured by kind through a fake chrome; gridPane
+-- is swapped for an inert stub via util._stubs so pe:draw's toolbar runs without the grid render.
 
 local t    = require('support')
 local util = require('util')
@@ -44,19 +44,11 @@ fakeImGui.GetWindowSize         = function() return 200, 260 end
 fakeImGui.GetWindowDrawList     = function() return {} end
 fakeImGui.IsWindowAppearing     = function() return false end
 
--- Popup model: one open id at a time (enough for the single Save popup). Button/InputText read
--- per-frame queues the spec sets through frame().
-local openPopupId, queuedButton, nextInputText
-fakeImGui.OpenPopup         = function(_, id) openPopupId = id end
-fakeImGui.BeginPopup        = function(_, id) return openPopupId == id end
-fakeImGui.CloseCurrentPopup = function() openPopupId = nil end
+-- Button reads a per-frame queue the spec sets through frame() (Commit/Cancel are plain buttons).
+local queuedButton
 fakeImGui.Button = function(_, label)
   if label == queuedButton then queuedButton = nil; return true end
   return false
-end
-fakeImGui.InputText = function(_, _, buf)
-  local v = nextInputText; nextInputText = nil
-  return true, v ~= nil and v or buf
 end
 
 local function setKeys(keys, mods)
@@ -64,9 +56,9 @@ local function setKeys(keys, mods)
   for _, k in ipairs(keys or {}) do pressed[k] = true; down[k] = true end
 end
 
-local capturedPicker
+local capturedPickers = {}
 local fakeChrome = setmetatable(
-  { drawPicker = function(d) capturedPicker = d end },
+  { drawPicker = function(d) capturedPickers[d.kind] = d end },
   { __index = function() return function() end end })
 local fakeGui       = { ctx = {}, font = 'grid', uiFont = 'ui', fontSize = { ui = 13 } }
 local fakeModalHost = { registerKind = function() end, open = function() end }
@@ -121,7 +113,7 @@ end
 -- One draw frame: queue a button press / injected input text / held keys, then draw.
 local function frame(pe, o)
   o = o or {}
-  queuedButton, nextInputText = o.button, o.text
+  queuedButton = o.button
   setKeys(o.keys or {})
   pe:draw()
 end
@@ -133,11 +125,12 @@ end
 
 return {
   {
-    name = 'Save stores a whitelisted copy on the host ds under the name',
+    name = 'Save stores a whitelisted copy on the host ds under a typed new name',
     run = function(harness)
       local h, pe = withEditor(harness, notesBody())
-      frame(pe, { button = 'Save##peSave', text = 'lead' })   -- open popup, type the name
-      frame(pe, { keys = { fakeImGui.Key_Enter } })           -- fresh name -> save + close
+      frame(pe)                                  -- draw captures the save picker
+      capturedPickers.peSave.onCreate('lead')    -- type a fresh name -> onCreate
+      input(pe)                                  -- drain -> saveShelf
 
       local stored = (h.ds:get('fxPatterns') or {}).lead
       t.truthy(stored, 'the body landed under its name')
@@ -148,7 +141,7 @@ return {
   },
 
   {
-    name = 'Save over a divergent name confirms; n leaves the shelf, y overwrites',
+    name = 'Save over an existing name overwrites immediately, no confirm',
     run = function(harness)
       local h, pe = withEditor(harness, notesBody())
       h.ds:assign('fxPatterns', { lead = {
@@ -156,17 +149,13 @@ return {
         specs = { { lane = 1, ppq = 0, endppq = 240, pitch = 99, vel = 100, detune = 0, delay = 0 } },
       } })
 
-      frame(pe, { button = 'Save##peSave', text = 'lead' })
-      frame(pe, { keys = { fakeImGui.Key_Enter } })           -- divergent -> confirm, no write yet
-      t.eq((h.ds:get('fxPatterns').lead.specs)[1].pitch, 99, 'divergent save waits on confirm')
+      frame(pe)                                -- draw captures the save picker
+      capturedPickers.peSave.onPick('lead')    -- pick the existing name -> pendingAction
+      input(pe)                                -- drain -> saveShelf, no confirm frame
 
-      frame(pe, { keys = { fakeImGui.Key_N } })               -- n: leave the shelf copy
-      t.eq((h.ds:get('fxPatterns').lead.specs)[1].pitch, 99, 'n left the stored copy intact')
-
-      frame(pe, { button = 'Save##peSave', text = 'lead' })
-      frame(pe, { keys = { fakeImGui.Key_Enter } })           -- divergent again -> confirm
-      frame(pe, { keys = { fakeImGui.Key_Y } })               -- y: overwrite
-      t.eq(#h.ds:get('fxPatterns').lead.specs, 2, 'y overwrote with the editor body')
+      local stored = h.ds:get('fxPatterns').lead
+      t.eq(#stored.specs, 2, 'the editor body overwrote the divergent copy')
+      t.eq(stored.specs[2].pitch, 64, 'it is the editor body, not the stored one')
     end,
   },
 
@@ -179,9 +168,9 @@ return {
         specs = { { lane = 1, ppq = 0, endppq = 240, pitch = 72, vel = 90, detune = 0, delay = 0 } },
       } })
 
-      frame(pe)                        -- draw captures the load picker
-      t.truthy(capturedPicker, 'the load picker was drawn')
-      capturedPicker.onPick('small')   -- pick -> pendingAction
+      frame(pe)                                    -- draw captures the load picker
+      t.truthy(capturedPickers.peShelf, 'the load picker was drawn')
+      capturedPickers.peShelf.onPick('small')      -- pick -> pendingAction
       input(pe)                        -- drain -> loadShelf
 
       local body = get()
@@ -191,18 +180,26 @@ return {
   },
 
   {
-    name = 'the picker offers only matching kind, and matching domain for curves',
+    name = 'both pickers offer only matching kind, and matching domain for curves',
     run = function(harness)
+      local function offeredKeys(picker)
+        local offered = {}
+        for _, it in ipairs(picker.items) do offered[it.key] = true end
+        return offered
+      end
+
       local h, notePe = withEditor(harness, notesBody())
       h.ds:assign('fxPatterns', {
         someNotes = { kind = 'notes', lengthPpq = 480, specs = {} },
         someCurve = { kind = 'curve', lengthPpq = 480, points = {} },
       })
       frame(notePe)
-      local offered = {}
-      for _, it in ipairs(capturedPicker.items) do offered[it.key] = true end
-      t.truthy(offered.someNotes, 'a notes body is offered to a notes editor')
-      t.truthy(not offered.someCurve, 'a curve body is filtered out by kind')
+      local loadOffered = offeredKeys(capturedPickers.peShelf)
+      t.truthy(loadOffered.someNotes, 'a notes body is offered to a notes editor')
+      t.truthy(not loadOffered.someCurve, 'a curve body is filtered out by kind')
+      local saveOffered = offeredKeys(capturedPickers.peSave)
+      t.truthy(saveOffered.someNotes, 'Save offers the same matching-kind set as Load')
+      t.truthy(not saveOffered.someCurve, 'Save filters the wrong kind out too')
 
       local h2, curvePe = withEditor(harness, curveBody())   -- domain defaults to normalized
       h2.ds:assign('fxPatterns', {
@@ -210,10 +207,9 @@ return {
         cc   = { kind = 'curve', domain = 'cc', lengthPpq = 480, points = {} },
       })
       frame(curvePe)
-      offered = {}
-      for _, it in ipairs(capturedPicker.items) do offered[it.key] = true end
-      t.truthy(offered.norm, 'a normalized curve is offered to a normalized editor')
-      t.truthy(not offered.cc, 'a cc curve is filtered out by domain')
+      local curveOffered = offeredKeys(capturedPickers.peShelf)
+      t.truthy(curveOffered.norm, 'a normalized curve is offered to a normalized editor')
+      t.truthy(not curveOffered.cc, 'a cc curve is filtered out by domain')
     end,
   },
 
@@ -227,7 +223,7 @@ return {
       } })
 
       frame(pe)
-      capturedPicker.onPick('small')
+      capturedPickers.peShelf.onPick('small')
       input(pe)
       t.eq(#get().specs, 1, 'the load took effect')
 

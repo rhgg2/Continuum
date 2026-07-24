@@ -66,16 +66,19 @@ rebuilt every consumer; the P3.5 inline pivot made params store their own body,
 so that arm and its `derivationInputs` entry are gone.)
 
 Save writes `readbackBody()` — the same whitelisted shape write-through commits —
-so a later edit `deepEq`s clean against a saved copy. Saving over a name whose
-stored copy has diverged confirms first (y/n), the one gesture that destroys
-shelf content; a fresh or identical name saves silently.
+so a later edit `deepEq`s clean against a saved copy. Save is a `chrome.drawPicker`
+like Load: its items are the existing matching-kind shelf names, so overwriting one
+is an explicit pick from a visible list, and typing a fresh name fires the picker's
+`onCreate` hook. There is no y/n confirm — picking from the list *is* the
+confirmation, and a typed name only reaches `onCreate` when it collides with
+nothing.
 
 Both widgets stay *inside* the editor modal: `modalHost` holds one state slot, so
-opening its prompt/confirm from within the editor would replace the editor
-itself. Save rolls its own in-modal popup; Load uses `chrome.drawPicker`, whose
-items are the shelf names this editor can materialise — filtered by `kind`, and
-for curves by `domain` too, since the generator is coded against the domain and a
-`normalized` param must never be handed a `cc` body.
+opening its prompt from within the editor would replace the editor itself. Both
+are `chrome.drawPicker` popups, whose items are the shelf names this editor can
+materialise — filtered by `kind`, and for curves by `domain` too, since the
+generator is coded against the domain and a `normalized` param must never be
+handed a `cc` body.
 
 Load reopens the checkout on the picked body in place, so `open` re-runs the
 loop-length, column and `pbRange` setup. This forces the snapshot split: `open`
