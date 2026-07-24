@@ -22,7 +22,7 @@ local util    = require 'util'
 local painter = require 'painter'
 local scratch = require 'scratch'
 
-local ds, facade, eventMeta = (...).ds, (...).facade, (...).eventMeta
+local cm, ds, facade, eventMeta = (...).cm, (...).ds, (...).facade, (...).eventMeta
 
 local am = {}
 
@@ -986,6 +986,19 @@ function am:takesUsing(name)
     end
   end
   return hits
+end
+
+--contract: temper names referenced by any project take/track tier or project scalar, minus 12EDO
+function am:tempersInUse()
+  local inUse = {}
+  local function note(name) if name and name ~= '12EDO' then inUse[name] = true end end
+  note(cm:getAt('project', 'temper'))
+  for _, take in ipairs(projectMidiTakes()) do note(cm:valueFor(take, 'take', 'temper')) end
+  for ti = 0, reaper.CountTracks(0) - 1 do
+    local track = reaper.GetTrack(0, ti)
+    if isVisibleTrack(track) then note(cm:valueFor(track, 'track', 'temper')) end
+  end
+  return inUse
 end
 
 --contract: hands takesUsing(name) to the 'tracker' facade; transient-rebinds each and restores

@@ -48,12 +48,15 @@ local function mkSwing(h)
   return se
 end
 
-local function mkTemper(h)
+local function mkTemper(h, inUse)
   for _, m in ipairs({ 'imgui', 'temperEditor' }) do package.loaded[m] = nil end
   _G.reaper.ImGui_GetBuiltinPath = function() return '/stub' end
   return util.instantiate('temperEditor', {
     cm = h.cm, chrome = {}, ctx = {}, gui = { fontSize = { ui = 12 } },
     modalHost = { registerKind = function() end }, lib = mkLib(h),
+    facade = { get = function(name)
+      if name == 'arrange' then return { tempersInUse = function() return inUse or {} end } end
+    end },
   })
 end
 
@@ -89,14 +92,14 @@ return {
     end,
   },
   {
-    name = 'swing descriptor exposes onTidy; temper omits it',
+    name = 'swing and temper descriptors both expose onTidy',
     run = function(harness)
       local h = harness.mk{}
       local se = mkSwing(h)
       local te = mkTemper(h)
 
       t.eq(type(se:libraryDescriptor().onTidy), 'function', 'swing supplies onTidy')
-      t.eq(te:libraryDescriptor().onTidy, nil, 'temper omits onTidy')
+      t.eq(type(te:libraryDescriptor().onTidy), 'function', 'temper supplies onTidy')
     end,
   },
   {
@@ -112,6 +115,22 @@ return {
 
       t.eq(h.cm:getAt('project', 'swings').drop, nil, 'pristine unreferenced copy is dropped')
       t.deepEq(h.cm:getAt('project', 'swings').keep, { factors = { 'DIFF' } },
+               'divergent copy is kept')
+    end,
+  },
+  {
+    name = 'temper onTidy drops a pristine unreferenced copy, keeps a divergent one',
+    run = function(harness)
+      local h = harness.mk{ config = {
+        global  = { tempers = { keep = { steps = { 'S' } }, drop = { steps = { 'S' } } } },
+        project = { tempers = { keep = { steps = { 'DIFF' } }, drop = { steps = { 'S' } } } },
+      } }
+      local te = mkTemper(h)
+
+      te:libraryDescriptor().onTidy()
+
+      t.eq(h.cm:getAt('project', 'tempers').drop, nil, 'pristine unreferenced copy is dropped')
+      t.deepEq(h.cm:getAt('project', 'tempers').keep, { steps = { 'DIFF' } },
                'divergent copy is kept')
     end,
   },

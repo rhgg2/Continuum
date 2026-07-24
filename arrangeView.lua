@@ -435,6 +435,7 @@ function av:playPositionQN()      return am:playPositionQN() end
 function av:loopRangeQN()         return am:loopRangeQN() end
 function av:takesUsing(name)      return am:takesUsing(name) end
 function av:reswingAll(name)      return am:reswingAll(name) end
+function av:tempersInUse()        return am:tempersInUse() end
 
 function av:midiSlots(trackIdx) return midiSlots(trackIdx) end
 

@@ -34,6 +34,7 @@ local function mkEditor(h)
   return util.instantiate('temperEditor', {
     cm = h.cm, chrome = {}, ctx = {}, gui = { fontSize = { ui = 12 } },
     modalHost = { registerKind = function() end }, lib = lib,
+    facade = { get = function() return { tempersInUse = function() return {} end } end },
   })
 end
 

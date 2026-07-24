@@ -213,6 +213,13 @@ by the same call.
    tempers into an `inUse` set, and hand it to `lib.tidy('tempers',
    inUse)`. The temper editor then gains the `tidy` button on the same
    Project-folder gating as swing.
+
+   Settled 2026-07-24 (Option A): the scan is `am:tempersInUse()` returning a
+   name set (am already receives `cm`), reading each foreign take/track via a
+   new `cm:valueFor(handle, scope, key)`; the union spans take + track tiers
+   and the project scalar, minus `12EDO`. The button also seeds the temper
+   descriptor's `undeletable` so an in-use temper can't be deleted, matching
+   swing.
 3. **Picker grouping** — one `+` group vs split Library/Factory groups.
 4. **`reset` (snapshot revert)** — with REAPER undo now covering editor
    gestures, does the session snapshot still earn its button, or does

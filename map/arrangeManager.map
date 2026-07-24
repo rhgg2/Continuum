@@ -1,5 +1,5 @@
-@module arrangeManager  src=arrangeManager.lua  loc=996  sha=ec591ad  mode=chunk  self=am
-@deps ds, facade, eventMeta
+@module arrangeManager  src=arrangeManager.lua  loc=1009  sha=d1e5be1  mode=chunk  self=am
+@deps cm, ds, facade, eventMeta
 
 # Invariants & contracts
   @invariant  project-wide singleton; reads REAPER items + cm directly, owns no take state of its own  @ 4
@@ -183,17 +183,21 @@
       -- the pool + slot alive) rather than GC-ing it. See docs § Parking.
   @api am:takesUsing(name)  @ 978-989
       @contract  scans each take's swing map (ds) for the named swing; no mm/cm context disturbance  @ 977
-  @api am:reswingAll(name)  @ 992-994
-      @contract  hands takesUsing(name) to the 'tracker' facade; transient-rebinds each and restores  @ 991
+  @api am:tempersInUse()  @ 992-1002
+      @contract  temper names referenced by any project take/track tier or project scalar, minus 12EDO  @ 991
+  @api am:reswingAll(name)  @ 1005-1007
+      @contract  hands takesUsing(name) to the 'tracker' facade; transient-rebinds each and restores  @ 1004
 
 # Uses (outbound edges)
+  @use call    cm:getAt  @ tempersInUse:995
+  @use call    cm:valueFor  @ tempersInUse:996,999
   @use call    ds:assign  @ writeColours:249
   @use call    ds:assignAt  @ writeSlots:92 setNaturalLenOf:150,151
   @use call    ds:get  @ readColours:248
   @use call    ds:getAt  @ readSlots:88 naturalLenOf:145 takesUsing:981
   @use call    eventMeta:copyPool  @ cloneMidiItem:693 mintParkedTake:894
   @use call    eventMeta:dropPool  @ deleteSlot:627
-  @use call    facade.get  @ isVisibleTrack:302 reswingAll:993
+  @use call    facade.get  @ isVisibleTrack:302 reswingAll:1006
   @use call    painter.hueNative  @ stampColour:284
   @use call    scratch.peek  @ parkedItemFor:118 isVisibleTrack:300 deleteSlot:626 isParkedTake:769
   @use call    scratch.track  @ mintParkedTake:888 deleteTake:955
@@ -253,6 +257,7 @@
   @field w chanByCol  @ buildState:439
   @field r chanMask  @ chanRangeOf:399
   @field w chanMask  @ buildTakeShape:366
+  @field r cm  @ 25
   @field w colourIdx  @ buildTakeShape:368 slotRowsFor:385
   @field r ds  @ 25
   @field r eventMeta  @ 25

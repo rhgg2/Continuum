@@ -25,16 +25,17 @@
 
 ## Landed (newest first; prune below ~4)
 
+- 2026-07-24 editors: temper tidy — reference scan + tidy button (§ Open Q2 (V2 fix))
 - 2026-07-24 editors: action bar publish/revert/tidy verbs (§ 5)
 - 2026-07-24 editors: Factory tree section over lib.names (§ 5, first bullet)
 - 2026-07-24 editors: delegate promote/demote to lib.publish/revert (§ 4)
-- 2026-07-24 temperEditor: fork writes to the project tier (§ 4)
 
 ## Now
 
-(Action-bar verbs landed. Phase 5 continues — next queued: modified badge on project rows, then the publish-overwrite confirm modal. Run /plan-next to promote the next commit.)
+(empty — temper tidy landed; run /plan-next to promote the next queued item: modified badge on project rows, or the publish-overwrite confirm modal)
 
 ## Queued (current phase; one-liners)
 
+- temper tidy — `am:tempersInUse` scan + `cm:valueFor` + temper `tidy` button (Open Q2 "V2 fix") — **in Now**
 - modified badge on project rows in the editor tree (mirrors the picker badge)
 - publish-overwrite confirm modal (QO1, deferred from Phase 4) — build modalHost wiring here

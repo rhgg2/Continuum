@@ -10,7 +10,8 @@ end
 package.path = reaper.ImGui_GetBuiltinPath() .. '/?.lua;' .. package.path
 local ImGui = require 'imgui' '0.10'
 
-local cm, chrome, ctx, gui, modalHost, lib = (...).cm, (...).chrome, (...).ctx, (...).gui, (...).modalHost, (...).lib
+local cm, chrome, ctx, gui, modalHost, lib, facade =
+  (...).cm, (...).chrome, (...).ctx, (...).gui, (...).modalHost, (...).lib, (...).facade
 
 local SYNTHETIC  = { ['12EDO'] = true }
 
@@ -185,6 +186,10 @@ end
 
 ----- Tier-aware library writes
 
+-- Project tempers a live take/track references can't be deleted or tidied away.
+local function inUseNames() return facade.get('arrange').tempersInUse() end
+local tidy = util.atomic('Tidy tempers', function() lib.tidy('tempers', inUseNames()) end)
+
 local function publish(name) if name then lib.publish('tempers', name) end end
 
 -- Discard a project row's drift, restoring the library/factory source, and edit that copy.
@@ -228,6 +233,8 @@ local function buildDescriptor()
     onRevert  = revert,
     onDelete  = deleteSel,
     onReset   = resetToSnapshot,
+    onTidy    = tidy,
+    undeletable = inUseNames(),
     dirty     = dirty(),
   }
 end

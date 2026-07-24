@@ -56,6 +56,7 @@ facade.publish('arrange', {
   ownerTrack      = function(take) return av:ownerTrack(take) end,
   reswingAll             = function(name) av:reswingAll(name) end,
   takesUsing             = function(name) return av:takesUsing(name) end,
+  tempersInUse           = function()     return av:tempersInUse()  end,
 })
 
 ----- Page interface — render delegates to the renderer

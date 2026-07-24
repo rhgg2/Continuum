@@ -74,8 +74,8 @@ local function libraryActions(spec)
       if ImGui.Button(ctx, 'reset') then spec.onReset() end
     end)
   end
-  -- tidy: drop pristine unreferenced project copies (swing only), armed on
-  -- the Project folder header (name=nil).
+  -- tidy: drop pristine unreferenced project copies, armed on the Project
+  -- folder header (name=nil).
   if spec.onTidy and sel.tier == 'project' and sel.name == nil then
     ImGui.SameLine(ctx, 0, 4)
     if ImGui.Button(ctx, 'tidy') then spec.onTidy() end

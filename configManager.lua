@@ -489,6 +489,16 @@ function cm:getAt(level, key)
   return util.deepClone(tbl)
 end
 
+--contract: single-tier value for a foreign take/track handle (ps:getAt); no merge or defaults
+function cm:valueFor(handle, scope, key)
+  if scope ~= 'take' and scope ~= 'track' then
+    error('cm:valueFor: foreign read is take/track only: ' .. tostring(scope), 2)
+  end
+  checkKey(key)
+  local blob = ps:getAt(handle, scope, 'ctm_config') or {}
+  return copy(blob[key])
+end
+
 --contract: deep-copy of the schema default for key (no tiers, no merge); raises on unknown key
 function cm:defaultFor(key)
   checkKey(key)

@@ -446,6 +446,23 @@ return {
       t.eq(#miss, 0)
     end,
   },
+  {
+    name = 'tempersInUse unions take/project temper names, minus the 12EDO floor',
+    run = function(harness)
+      local h, am = mkAm(harness)
+      local boundTake = 'take1'
+      h.reaper:addItem('tr1', {
+        take = boundTake, isMidi = true, pos = 0, len = 1, poolGuid = '{harn}',
+      })
+      h.reaper:setProjectTracks{ 'tr1' }
+      h.cm:set('take', 'temper', 'meantone')
+      h.cm:set('project', 'temper', 'meantone')
+
+      local inUse = am:tempersInUse()
+      t.truthy(inUse['meantone'], 'a take/project temper is reported in use')
+      t.eq(inUse['12EDO'], nil, 'the 12EDO floor is excluded')
+    end,
+  },
 
   --------------------------------------------------------------------
   -- Per-take edits

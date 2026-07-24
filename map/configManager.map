@@ -1,4 +1,4 @@
-@module configManager  src=configManager.lua  loc=545  sha=be5d40d  mode=chunk  self=cm
+@module configManager  src=configManager.lua  loc=555  sha=24831f6  mode=chunk  self=cm
 @deps ps
 
 # Invariants & contracts
@@ -83,18 +83,20 @@
       @contract  opts.mergeTiers=true → per-subkey union across defaults+tiers; table-valued keys only  @ 473
   @api cm:getAt(level, key)  @ 481-490
       @contract  reads single tier only (no merge, no defaults); key nil → whole-cache clone  @ 480
-  @api cm:defaultFor(key)  @ 493-496
-      @contract  deep-copy of the schema default for key (no tiers, no merge); raises on unknown key  @ 492
+  @api cm:valueFor(handle, scope, key)  @ 493-500
+      @contract  single-tier value for a foreign take/track handle (ps:getAt); no merge or defaults  @ 492
+  @api cm:defaultFor(key)  @ 503-506
+      @contract  deep-copy of the schema default for key (no tiers, no merge); raises on unknown key  @ 502
   -- Writing
-  @api cm:set(level, key, value)  @ 501-511
-      @contract  deep-copies value into tier cache, persists, fires targeted configChanged  @ 500
-  @api cm:remove(level, key)  @ 514-525
-      @contract  removes key from named tier; no-op (no signal) if that tier's cache is unloaded  @ 513
-  @api cm:assign(level, updates)  @ 528-542
-      @contract  validates all keys before any write (all-or-nothing); REMOVE deletes; fires signal  @ 527
+  @api cm:set(level, key, value)  @ 511-521
+      @contract  deep-copies value into tier cache, persists, fires targeted configChanged  @ 510
+  @api cm:remove(level, key)  @ 524-535
+      @contract  removes key from named tier; no-op (no signal) if that tier's cache is unloaded  @ 523
+  @api cm:assign(level, updates)  @ 538-552
+      @contract  validates all keys before any write (all-or-nothing); REMOVE deletes; fires signal  @ 537
 
 # Signals emitted (via util.installHooks)
-  @emits configChanged   -- configChangedPayload.bulk   @ 400 setContext:409 clearTake:416 setTrack:429 set:510 remove:523 assign:541
+  @emits configChanged   -- configChangedPayload.bulk   @ 400 setContext:409 clearTake:416 setTrack:429 set:520 remove:533 assign:551
 
 # Uses (outbound edges)
   @use call    ps:assign  @ 348,349,352,356
@@ -102,6 +104,7 @@
   @use call    ps:boundTrack  @ 351 boundTrack:423
   @use call    ps:clearTake  @ clearTake:413
   @use call    ps:get  @ 340,341,342,343
+  @use call    ps:getAt  @ valueFor:498
   @use call    ps:pollUndo  @ pollUndo:433
   @use call    ps:setTake  @ setContext:406
   @use call    ps:setTrack  @ setTrack:426
@@ -114,7 +117,7 @@
   @use require util  @ 12
 
 # Fields (r read / w write incl. constructor keys)
-  @field r REMOVE  @ assign:536
+  @field r REMOVE  @ assign:546
   @field w arrange  @ 267
   @field w atom  @ 75,76,77,78
   @field w chrome  @ 267
@@ -122,8 +125,8 @@
   @field w factors  @ 75,76,77,78
   @field r global  @ ensureCache:369
   @field w global  @ 70,266,313,340,348
-  @field w key  @ set:510 remove:523
-  @field w level  @ set:510 remove:523 assign:541
+  @field w key  @ set:520 remove:533
+  @field w level  @ set:520 remove:533 assign:551
   @field r mergeTiers  @ get:476
   @field w overridden  @ 256
   @field w period  @ 75,76,77,78

@@ -1,4 +1,4 @@
-@spec temperEditor_tree_spec  src=tests/specs/temperEditor_tree_spec.lua  loc=67  sha=untracked  cases=2
+@spec temperEditor_tree_spec  src=tests/specs/temperEditor_tree_spec.lua  loc=68  sha=fbe92c0  cases=2
 @harness   mk
 
 # Intent
@@ -10,11 +10,11 @@
 
 # Helpers
   @fn has(list, val)  @ 24-27
-  @fn mkEditor(h)  @ 29-38
+  @fn mkEditor(h)  @ 29-39
 
 # Cases
-  @case 'descriptor lists the factory EDO catalogue and drops the synthetic floor'  [harness]  @ 42-51
-  @case 'selecting a factory row previews it without raising'  [harness]  @ 54-65
+  @case 'descriptor lists the factory EDO catalogue and drops the synthetic floor'  [harness]  @ 43-52
+  @case 'selecting a factory row previews it without raising'  [harness]  @ 55-66
 
 # Fields (r read / w write incl. constructor keys)
   @field w ImGui_GetBuiltinPath  @ 20
@@ -23,23 +23,26 @@
   @field w chrome  @ 35
   @field w cm  @ 31,35
   @field w ctx  @ 35
-  @field r dirty  @ 64
-  @field r factory  @ 49,50
+  @field r dirty  @ 65
+  @field w facade  @ 37
+  @field r factory  @ 50,51
   @field w fontSize  @ 35
+  @field w get  @ 37
   @field w gui  @ 35
   @field w identity  @ 32
   @field w lib  @ 36
   @field r loaded  @ 19
   @field w modalHost  @ 36
-  @field r name  @ 63
-  @field w name  @ 42,54
+  @field r name  @ 64
+  @field w name  @ 43,55
   @field r preload  @ 16
   @field r reaper  @ 20
   @field w registerKind  @ 36
-  @field w run  @ 43,55
-  @field r sel  @ 62,63
+  @field w run  @ 44,56
+  @field r sel  @ 63,64
   @field w swings  @ 32
   @field w synthetic  @ 32
   @field w tempers  @ 32
-  @field r tier  @ 62
+  @field w tempersInUse  @ 37
+  @field r tier  @ 63
   @field w ui  @ 35
