@@ -1,4 +1,4 @@
-@module editorRender  src=editorRender.lua  loc=241  sha=dbc90b4  mode=chunk  self=er
+@module editorRender  src=editorRender.lua  loc=243  sha=3eaf95c  mode=chunk  self=er
 @deps swingEditor, temperEditor, cmgr, chrome, gui, modalHost
 
 # Invariants & contracts
@@ -6,9 +6,9 @@
   @contract  body editor — focusState always page-suppresses (root globals stay live, page bindings off)  @ 10
 
 # Shapes
-  @shape  libraryTreeSpec = { x, y, h, label, active={{col,name}}, project={name}, library={name}, factory={name}, synthetic={[name]=true}, undeletable={[name]=true}, sel={tier,name}, dirty?:bool, onSelect(tier,name), onNew(), onImport?(), onPublish(name), onRevert(name), onTidy?(), onReset?(), onDelete(tier,name) }  @ 31
-  @shape  ToolbarSegment = { id, render = fn(), visible? = fn() -> bool }  @ 165
-  @shape  focusState = { suppressKbd:bool, pageSuppressed:bool, acceptCmds:bool }  @ 230
+  @shape  libraryTreeSpec = { x, y, h, label, active={{col,name}}, project={name}, library={name}, factory={name}, synthetic={[name]=true}, undeletable={[name]=true}, modified={[name]=true}, sel={tier,name}, dirty?:bool, onSelect(tier,name), onNew(), onImport?(), onPublish(name), onRevert(name), onTidy?(), onReset?(), onDelete(tier,name) }  @ 31
+  @shape  ToolbarSegment = { id, render = fn(), visible? = fn() -> bool }  @ 167
+  @shape  focusState = { suppressKbd:bool, pageSuppressed:bool, acceptCmds:bool }  @ 232
 
 # Imports
   @require ImGui = 'imgui'  @ 15
@@ -18,8 +18,8 @@
   @state pane = 'swing'  @ 21
   @state droppedIn = false  @ 24
   @state treeOpen = { project = true, global = true, factory = true }  @ 100
-  @state er = {}  @ 146
-  @state toolbarSegments = {  @ 166
+  @state er = {}  @ 148
+  @state toolbarSegments = {  @ 168
 
 # Private functions
   @fn activePane()  @ 25
@@ -38,48 +38,48 @@
   @fn libraryFolder(spec, tier, title, drawChildren)  @ 104-111
       -- Disclosure chip toggles the folder; the title row selects the tier (name=nil)
       -- so add/import scope to it, and now also toggles. Mirrors the sampler tree.
-  @fn libraryTree(spec)  @ 113-144
+  @fn libraryTree(spec)  @ 113-146
 
 # Public API (er:*)
-  @api er:edit(lib, name)  @ 152-159
+  @api er:edit(lib, name)  @ 154-161
       -- Fast path: set the pane + selection; the editTuning/editSwing commands
       -- (which hold coord) switch the page. Mirrors samplePage's diveToSampler.
-  @api er:unbind()  @ 163
+  @api er:unbind()  @ 165
       -- Page unbind (leaving the editor) ends the drop-in: the next entry must
       -- re-earn the Close affordance by coming through edit() again.
-  @api er:toolbarSegments()  @ 196
-  @api er:renderBody(_, w, h, dispatch)  @ 198-223
-  @api er:renderStatusBar(_)  @ 225-228
-  @api er:focusState()  @ 231-239
+  @api er:toolbarSegments()  @ 198
+  @api er:renderBody(_, w, h, dispatch)  @ 200-225
+  @api er:renderStatusBar(_)  @ 227-230
+  @api er:focusState()  @ 233-241
 
 # Uses (outbound edges)
   @use call    ImGui.AlignTextToFramePadding  @ libraryTree:121
-  @use call    ImGui.Button  @ libraryActions:51,54,59,66,74,81,85 176,192
-  @use call    ImGui.GetCursorScreenPos  @ renderBody:214
-  @use call    ImGui.IsAnyItemActive  @ renderBody:205 focusState:237
-  @use call    ImGui.IsKeyPressed  @ renderBody:206
-  @use call    ImGui.PopFont  @ renderBody:218
+  @use call    ImGui.Button  @ libraryActions:51,54,59,66,74,81,85 178,194
+  @use call    ImGui.GetCursorScreenPos  @ renderBody:216
+  @use call    ImGui.IsAnyItemActive  @ renderBody:207 focusState:239
+  @use call    ImGui.IsKeyPressed  @ renderBody:208
+  @use call    ImGui.PopFont  @ renderBody:220
   @use call    ImGui.PopID  @ libraryRow:97 libraryTree:125
-  @use call    ImGui.PopStyleColor  @ 177
-  @use call    ImGui.PushFont  @ renderBody:216
+  @use call    ImGui.PopStyleColor  @ 179
+  @use call    ImGui.PushFont  @ renderBody:218
   @use call    ImGui.PushID  @ libraryRow:92 libraryTree:120
-  @use call    ImGui.PushStyleColor  @ 173,174
-  @use call    ImGui.SameLine  @ libraryActions:53,58,64,72,80,83 libraryTree:123 180
+  @use call    ImGui.PushStyleColor  @ 175,176
+  @use call    ImGui.SameLine  @ libraryActions:53,58,64,72,80,83 libraryTree:123 182
   @use call    ImGui.Separator  @ libraryTree:118
   @use call    ImGui.SmallButton  @ libraryTree:124
-  @use call    ImGui.Text  @ renderStatusBar:227
+  @use call    ImGui.Text  @ renderStatusBar:229
   @use call    ImGui.TextDisabled  @ libraryTree:122
-  @use call    chrome.colour  @ 173,174
+  @use call    chrome.colour  @ 175,176
   @use call    chrome.disabledIf  @ libraryActions:65,73,84
-  @use call    chrome.gridWidth  @ renderBody:215
-  @use call    chrome.pickerIsActive  @ focusState:233
+  @use call    chrome.gridWidth  @ renderBody:217
+  @use call    chrome.pickerIsActive  @ focusState:235
   @use call    chrome.row  @ libraryTree:117
   @use call    cmgr:invoke  @ onClose:27
-  @use call    modalHost:isOpen  @ renderBody:205 focusState:233
-  @use call    swingEditor:isOpen  @ renderBody:209
-  @use call    swingEditor:open  @ edit:157 renderBody:209
-  @use call    temperEditor:hasSelection  @ renderBody:210
-  @use call    temperEditor:open  @ edit:155 renderBody:210
+  @use call    modalHost:isOpen  @ renderBody:207 focusState:235
+  @use call    swingEditor:isOpen  @ renderBody:211
+  @use call    swingEditor:open  @ edit:159 renderBody:211
+  @use call    temperEditor:hasSelection  @ renderBody:212
+  @use call    temperEditor:open  @ edit:157 renderBody:212
   @use require imgui  @ 15
 
 # REAPER API surface
@@ -87,11 +87,11 @@
   @reaper MB
 
 # Fields (r read / w write incl. constructor keys)
-  @field r Col_Button  @ 173
-  @field r Col_ButtonHovered  @ 174
+  @field r Col_Button  @ 175
+  @field r Col_ButtonHovered  @ 176
   @field r ImGui_GetBuiltinPath  @ 11
-  @field r Key_Escape  @ renderBody:206
-  @field w acceptCmds  @ focusState:232,237
+  @field r Key_Escape  @ renderBody:208
+  @field w acceptCmds  @ focusState:234,239
   @field r active  @ libraryTree:119
   @field r chrome  @ 18
   @field r cmgr  @ 18
@@ -100,36 +100,37 @@
   @field w depth  @ libraryRow:94
   @field r dirty  @ libraryActions:73
   @field w draw  @ libraryTree:116
-  @field r factory  @ shadowsSource:41 libraryTree:138
+  @field r factory  @ shadowsSource:41 libraryTree:140
   @field w factory  @ 100
   @field r fontSize  @ 19
   @field w global  @ 100
   @field r gui  @ 18
   @field r h  @ libraryTree:115
-  @field w h  @ libraryTree:115 renderBody:221
+  @field w h  @ libraryTree:115 renderBody:223
   @field w hasChildren  @ libraryRow:95 libraryFolder:106
-  @field w id  @ libraryRow:94 libraryFolder:106 168,185,190
+  @field w id  @ libraryRow:94 libraryFolder:106 170,187,192
   @field r label  @ libraryTree:115
   @field w label  @ libraryRow:94 libraryFolder:106 libraryTree:115
-  @field r library  @ shadowsSource:41 libraryTree:133
+  @field r library  @ shadowsSource:41 libraryTree:135
   @field r modalHost  @ 18
+  @field r modified  @ libraryTree:129
   @field r name  @ libraryActions:48,49,50,59,65,66,79,84,85 libraryRow:93
   @field r name  @ libraryFolder:105 libraryTree:122,124
   @field r onImport  @ libraryActions:52
   @field r onReset  @ libraryActions:71
   @field r onTidy  @ libraryActions:79
   @field w open  @ libraryFolder:107
-  @field w pageSuppressed  @ focusState:232,236
+  @field w pageSuppressed  @ focusState:234,238
   @field r path  @ 14
   @field w path  @ 14
   @field r project  @ libraryTree:128
   @field w project  @ 100
-  @field w render  @ 169,187,192
-  @field r renderToolbar  @ 186
+  @field w render  @ 171,189,194
+  @field r renderToolbar  @ 188
   @field r sel  @ libraryActions:47 libraryRow:93 libraryFolder:105
   @field r selected  @ libraryRow:96 libraryFolder:109
   @field w selected  @ libraryRow:95 libraryFolder:107
-  @field w suppressKbd  @ focusState:232,235
+  @field w suppressKbd  @ focusState:234,237
   @field r swingEditor  @ 18
   @field r synthetic  @ libraryActions:48
   @field r temperEditor  @ 18
@@ -138,8 +139,8 @@
   @field r ui  @ 19
   @field r uiFont  @ 19
   @field r undeletable  @ libraryActions:49
-  @field w visible  @ 186,191
-  @field r x  @ libraryTree:115 renderBody:221
+  @field w visible  @ 188,193
+  @field r x  @ libraryTree:115 renderBody:223
   @field w x  @ libraryTree:115
-  @field r y  @ libraryTree:115 renderBody:221
+  @field r y  @ libraryTree:115 renderBody:223
   @field w y  @ libraryTree:115

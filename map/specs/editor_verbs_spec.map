@@ -1,4 +1,4 @@
-@spec editor_verbs_spec  src=tests/specs/editor_verbs_spec.lua  loc=137  sha=dbc90b4  cases=5
+@spec editor_verbs_spec  src=tests/specs/editor_verbs_spec.lua  loc=165  sha=3eaf95c  cases=7
 @exercises swingEditor (se), configManager (h.cm)
 @surface   se:open, se:libraryDescriptor, cm:getAt
 @harness   mk
@@ -22,14 +22,16 @@
 # Cases
   @case 'swing onPublish lifts a project copy into the library tier'  [harness]  @ 65-76
   @case 'swing onRevert restores a divergent project copy from its source'  [harness]  @ 79-92
-  @case 'swing and temper descriptors both expose onTidy'  [harness]  @ 95-103
-  @case 'swing onTidy drops a pristine unreferenced copy, keeps a divergent one'  [harness]  @ 106-119
-  @case 'temper onTidy drops a pristine unreferenced copy, keeps a divergent one'  [harness]  @ 122-135
+  @case 'swing descriptor flags a divergent project row as modified'  [harness]  @ 95-106
+  @case 'temper descriptor flags a divergent project row as modified'  [harness]  @ 109-120
+  @case 'swing and temper descriptors both expose onTidy'  [harness]  @ 123-131
+  @case 'swing onTidy drops a pristine unreferenced copy, keeps a divergent one'  [harness]  @ 134-147
+  @case 'temper onTidy drops a pristine unreferenced copy, keeps a divergent one'  [harness]  @ 150-163
 
 # Uses (outbound edges)
   @use call se:open  @ 47
-  @use call se:libraryDescriptor  @ 72,89,101,114
-  @use call cm:getAt  @ 74,116,117,132,133
+  @use call se:libraryDescriptor  @ 72,89,129,142
+  @use call cm:getAt  @ 74,144,145,160,161
 
 # Fields (r read / w write incl. constructor keys)
   @field w ImGui_GetBuiltinPath  @ 41,53
@@ -37,40 +39,45 @@
   @field w __index  @ 10
   @field w chrome  @ 43,55
   @field w cm  @ 21,43,55
-  @field w config  @ 67,81,108,124
+  @field w config  @ 67,81,97,111,136,152
   @field w ctx  @ 43,55
   @field w cursorAnchor  @ 34
-  @field r drop  @ 116,132
-  @field w drop  @ 109,110,125,126
+  @field r drop  @ 144,160
+  @field w drop  @ 137,138,153,154
   @field w ds  @ 43
   @field w facade  @ 44,57
-  @field w factors  @ 68,74,82,83,109,110,117
+  @field w factors  @ 68,74,82,83,98,99,100,101,137,138
+  @field w factors  @ 138,145
   @field w fontSize  @ 44,55
   @field w get  @ 29,57
-  @field w global  @ 82,109,125
+  @field w global  @ 82,98,112,137,153
   @field w gui  @ 44,55
   @field w identity  @ 22
-  @field r keep  @ 117,133
-  @field w keep  @ 109,110,125,126
+  @field r keep  @ 145,161
+  @field w keep  @ 137,138,153,154
   @field w lib  @ 45,56
   @field r loaded  @ 40,52
-  @field r mine  @ 74
-  @field w mine  @ 68
+  @field r mine  @ 74,105,119
+  @field w mine  @ 68,101,115
   @field w modalHost  @ 45,56
-  @field w name  @ 65,79,95,106,122
-  @field r onTidy  @ 101,102
+  @field r modified  @ 102,116
+  @field w name  @ 65,79,95,109,123,134,150
+  @field r onTidy  @ 129,130
   @field r preload  @ 13
-  @field w project  @ 68,83,110,126
+  @field w project  @ 68,83,99,113,138,154
   @field r reaper  @ 41,53
   @field w registerKind  @ 45,56
   @field w reswingAll  @ 31
-  @field w run  @ 66,80,96,107,123
+  @field w run  @ 66,80,96,110,124,135,151
+  @field r same  @ 104,118
+  @field w same  @ 98,100,112,114
   @field w setSwingComposite  @ 34
-  @field w shared  @ 82,83
-  @field w steps  @ 125,126,133
-  @field w swings  @ 22,68,82,83,109,110
+  @field r shared  @ 103,117
+  @field w shared  @ 82,83,98,99,112,113
+  @field w steps  @ 112,113,114,115,153,154,161
+  @field w swings  @ 22,68,82,83,98,99,137,138
   @field w synthetic  @ 22
   @field w takesUsing  @ 31
-  @field w tempers  @ 22,125,126
+  @field w tempers  @ 22,112,113,153,154
   @field w tempersInUse  @ 58
   @field w ui  @ 44,55

@@ -92,6 +92,34 @@ return {
     end,
   },
   {
+    name = 'swing descriptor flags a divergent project row as modified',
+    run = function(harness)
+      local h = harness.mk{ config = {
+        global  = { swings = { shared = { factors = { 'A' } }, same = { factors = { 'X' } } } },
+        project = { swings = { shared = { factors = { 'B' } },   -- drift
+                              same   = { factors = { 'X' } },   -- pristine shadow
+                              mine   = { factors = { 'M' } } } } } } -- project-only
+      local mod = mkSwing(h):libraryDescriptor().modified
+      t.truthy(mod and mod.shared, 'a drifted shadow is flagged')
+      t.truthy(not (mod and mod.same), 'a pristine shadow is not flagged')
+      t.truthy(not (mod and mod.mine), 'a project-only row is not flagged')
+    end,
+  },
+  {
+    name = 'temper descriptor flags a divergent project row as modified',
+    run = function(harness)
+      local h = harness.mk{ config = {
+        global  = { tempers = { shared = { steps = { 'A' } }, same = { steps = { 'X' } } } },
+        project = { tempers = { shared = { steps = { 'B' } },   -- drift
+                               same   = { steps = { 'X' } },   -- pristine shadow
+                               mine   = { steps = { 'M' } } } } } } -- project-only
+      local mod = mkTemper(h):libraryDescriptor().modified
+      t.truthy(mod and mod.shared, 'a drifted shadow is flagged')
+      t.truthy(not (mod and mod.same), 'a pristine shadow is not flagged')
+      t.truthy(not (mod and mod.mine), 'a project-only row is not flagged')
+    end,
+  },
+  {
     name = 'swing and temper descriptors both expose onTidy',
     run = function(harness)
       local h = harness.mk{}

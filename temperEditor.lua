@@ -218,6 +218,10 @@ local function buildDescriptor()
   local active = {}
   local cur    = cm:get('temper')
   if cur then active[1] = { col = 'take', name = cur } end
+  local modified = {}
+  for _, name in ipairs(names.project) do
+    if lib.modified('tempers', name) then modified[name] = true end
+  end
   return {
     label     = 'tuning',
     active    = active,
@@ -225,6 +229,7 @@ local function buildDescriptor()
     library   = names.library,
     factory   = names.factory,
     synthetic = SYNTHETIC,
+    modified  = modified,
     sel       = { tier = selTier, name = selected },
     onSelect  = function(tier, name) selectTemper(name, tier) end,
     onNew     = openNewModal,

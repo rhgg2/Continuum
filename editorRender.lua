@@ -28,7 +28,7 @@ local function onClose() cmgr:invoke('closeEditor') end
 
 ----- Library tree palette (Active / Project / Library / Factory tiers; one per pane)
 
---shape: libraryTreeSpec = { x, y, h, label, active={{col,name}}, project={name}, library={name}, factory={name}, synthetic={[name]=true}, undeletable={[name]=true}, sel={tier,name}, dirty?:bool, onSelect(tier,name), onNew(), onImport?(), onPublish(name), onRevert(name), onTidy?(), onReset?(), onDelete(tier,name) }
+--shape: libraryTreeSpec = { x, y, h, label, active={{col,name}}, project={name}, library={name}, factory={name}, synthetic={[name]=true}, undeletable={[name]=true}, modified={[name]=true}, sel={tier,name}, dirty?:bool, onSelect(tier,name), onNew(), onImport?(), onPublish(name), onRevert(name), onTidy?(), onReset?(), onDelete(tier,name) }
 
 local function has(list, name)
   for _, n in ipairs(list or {}) do if n == name then return true end end
@@ -126,7 +126,9 @@ local function libraryTree(spec)
       end
       libraryFolder(spec, 'project', 'Project', function()
         for _, name in ipairs(spec.project or {}) do
-          libraryRow(spec, 'project', name, name)
+          local label = spec.modified and spec.modified[name]
+                          and (name .. ' \xe2\x80\xa2') or name
+          libraryRow(spec, 'project', name, label)
         end
       end)
       libraryFolder(spec, 'global', 'Library', function()

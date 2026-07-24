@@ -522,6 +522,10 @@ local openNewModal   -- forward decl; defined with its modalHost kind below
 
 local function buildDescriptor()
   local names = lib.names('swings')
+  local modified = {}
+  for _, name in ipairs(names.project) do
+    if lib.modified('swings', name) then modified[name] = true end
+  end
   return {
     label       = 'swing',
     active      = activeEntries(),
@@ -530,6 +534,7 @@ local function buildDescriptor()
     factory     = names.factory,
     synthetic   = SYNTHETIC,
     undeletable = inUseNames(),
+    modified    = modified,
     sel         = { tier = state.tier, name = state.name },
     onSelect    = function(tier, name) switchTo(name, tier) end,
     onNew       = openNewModal,
