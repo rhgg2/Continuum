@@ -138,6 +138,14 @@ function lib.reloadPlan(key)
   return { add = add, overwrite = overwrite }
 end
 
+--contract: true iff a factory import would overwrite a divergent library copy (both exist, differ)
+function lib.factoryOverwrites(key, name)
+  local f = factoryTier(key)[name]
+  local g = libraryTier(key)[name]
+  if f == nil or g == nil then return false end
+  return not util.deepEq(f, g)
+end
+
 --contract: copy one factory entry into the library tier (deep-clone via cm:set); synthetic never
 function lib.importFactory(key, name)
   if synth(key)[name] then return end

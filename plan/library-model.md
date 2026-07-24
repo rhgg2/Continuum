@@ -25,15 +25,17 @@
 
 ## Landed (newest first; prune below ~4)
 
+- 2026-07-24 editors: tier-scoped action-bar sets with up/down verb labels (§ 5)
 - 2026-07-24 editors: confirm before publishing over a divergent library copy (§ Open questions 1)
 - 2026-07-24 editors: modified badge on editor tree project rows (§ 5)
 - 2026-07-24 editors: temper tidy — reference scan + tidy button (§ Open Q2 (V2 fix))
-- 2026-07-24 editors: action bar publish/revert/tidy verbs (§ 5)
 
 ## Now
 
-(empty — QO1 lands, completing Phase 5; run /plan-next to promote Phase 6 (Docs).)
+(empty — action-bar refinement landed; run /plan-next to promote Phase 6 Docs)
 
 ## Queued (current phase; one-liners)
 
-(empty — QO1 is Phase 5's last item, now promoted to Now.)
+- Phase 6 (Docs) — `swingEditor.md` + `configManager.md` rewrites, new
+  `docs/library.md`, archive the design doc. Run /plan-next to promote once the
+  action-bar refinement lands.

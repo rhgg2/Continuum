@@ -2,7 +2,9 @@
 -- `publish` lifts a project copy into the shared library, `revert` discards
 -- project drift back to its source, `tidy` (swing only) drops pristine
 -- unreferenced project copies, and `reloadFactory` re-imports the shipped
--- catalogue (silent adds, a confirm per divergent copy). Instantiated over a harness cm/ds with a lib
+-- catalogue (silent adds, a confirm per divergent copy), and `importFactory`
+-- re-imports one entry (silent when non-divergent, a confirm when it diverges).
+-- Instantiated over a harness cm/ds with a lib
 -- service; imgui stubbed via package.preload. Recipe lifted from
 -- temperEditor_tree_spec.
 local t = require('support')
@@ -135,6 +137,55 @@ return {
                'declining keeps the library copy')
       captured.last.callback(true)
       t.deepEq(h.cm:getAt('global', 'swings')['classic-58'], h.cm:defaultFor('swings')['classic-58'],
+               'confirming overwrites with the factory copy')
+    end,
+  },
+  {
+    name = 'swing onImportFactory imports a non-divergent copy silently and confirms on divergence',
+    run = function(harness)
+      local h = harness.mk{ config = {
+        global = { swings = { ['classic-58'] = { factors = { 'DRIFT' } } } },   -- diverges from factory
+      } }
+      local se, captured = mkSwing(h)
+      local factory = h.cm:defaultFor('swings')
+
+      se:libraryDescriptor().onImportFactory('classic-55')   -- absent from library -> silent import
+      t.deepEq(h.cm:getAt('global', 'swings')['classic-55'], factory['classic-55'],
+               'an absent factory name imports silently')
+      t.eq(captured.last, nil, 'no confirm for a non-divergent import')
+
+      se:libraryDescriptor().onImportFactory('classic-55')   -- now identical -> still silent
+      t.eq(captured.last, nil, 're-importing an identical copy stays silent')
+
+      se:libraryDescriptor().onImportFactory('classic-58')   -- divergent -> confirm
+      t.deepEq(h.cm:getAt('global', 'swings')['classic-58'].factors, { 'DRIFT' },
+               'the divergent copy is untouched until the confirm resolves')
+      t.truthy(captured.last, 'a divergent import raises a confirm')
+      captured.last.callback(true)
+      t.deepEq(h.cm:getAt('global', 'swings')['classic-58'], factory['classic-58'],
+               'confirming overwrites with the factory copy')
+    end,
+  },
+  {
+    name = 'temper onImportFactory imports a non-divergent copy silently and confirms on divergence',
+    run = function(harness)
+      local h = harness.mk{ config = {
+        global = { tempers = { ['31EDO'] = { steps = { 'DRIFT' } } } },   -- diverges from factory
+      } }
+      local te, captured = mkTemper(h)
+      local factory = h.cm:defaultFor('tempers')
+
+      te:libraryDescriptor().onImportFactory('19EDO')   -- absent from library -> silent import
+      t.deepEq(h.cm:getAt('global', 'tempers')['19EDO'], factory['19EDO'],
+               'an absent factory name imports silently')
+      t.eq(captured.last, nil, 'no confirm for a non-divergent import')
+
+      te:libraryDescriptor().onImportFactory('31EDO')   -- divergent -> confirm
+      t.deepEq(h.cm:getAt('global', 'tempers')['31EDO'].steps, { 'DRIFT' },
+               'the divergent copy is untouched until the confirm resolves')
+      t.truthy(captured.last, 'a divergent import raises a confirm')
+      captured.last.callback(true)
+      t.deepEq(h.cm:getAt('global', 'tempers')['31EDO'], factory['31EDO'],
                'confirming overwrites with the factory copy')
     end,
   },

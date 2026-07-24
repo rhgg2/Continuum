@@ -211,6 +211,21 @@ local function reloadFactory()
   nextOverwrite()
 end
 
+-- Reimport one factory entry into the library, guarding a divergent library copy
+-- with a confirm (mirrors publish; a fresh or identical name imports silently).
+local function importFactory(name)
+  if not name then return end
+  if lib.factoryOverwrites('tempers', name) then
+    modalHost:openConfirm{
+      title    = 'Import factory',
+      prompt   = ("Overwrite the library copy of '%s'? (y/n)"):format(name),
+      callback = function(yes) if yes then lib.importFactory('tempers', name) end end,
+    }
+  else
+    lib.importFactory('tempers', name)
+  end
+end
+
 -- Publishing over a divergent library copy is the one gesture that destroys
 -- library content; guard it with a confirm. Fresh/identical names publish silently.
 local function publish(name)
@@ -273,6 +288,7 @@ local function buildDescriptor()
     onReset   = resetToSnapshot,
     onTidy    = tidy,
     onReloadFactory = reloadFactory,
+    onImportFactory = importFactory,
     undeletable = inUseNames(),
     dirty     = dirty(),
   }

@@ -28,7 +28,11 @@ local function onClose() cmgr:invoke('closeEditor') end
 
 ----- Library tree palette (Active / Project / Library tiers; one per pane)
 
---shape: libraryTreeSpec = { x, y, h, label, active={{col,name}}, project={name}, library={name}, synthetic={[name]=true}, undeletable={[name]=true}, modified={[name]=true}, sel={tier,name}, dirty?:bool, onSelect(tier,name), onNew(), onImport?(), onPublish(name), onRevert(name), onTidy?(), onReloadFactory?(), onReset?(), onDelete(tier,name) }
+--shape: libraryTreeSpec = { x, y, h, label, active={{col,name}}, project={name}, library={name}, synthetic={[name]=true}, undeletable={[name]=true}, modified={[name]=true}, sel={tier,name}, dirty?:bool, onSelect(tier,name), onNew(), onImport?(), onPublish(name), onRevert(name), onImportFactory(name), onTidy?(), onReloadFactory?(), onReset?(), onDelete(tier,name) }
+
+-- ↑/↓ name the far tier and point the way a copy moves through the vertical
+-- Active/Project/Library/Factory stack: ↓ sends down, ↑ pulls up.
+local ARROW_UP, ARROW_DOWN = '\xe2\x86\x91', '\xe2\x86\x93'
 
 local function has(list, name)
   for _, n in ipairs(list or {}) do if n == name then return true end end
@@ -41,55 +45,62 @@ local function shadowsSource(spec, name)
   return has(spec.library, name)
 end
 
--- sel.tier scopes the action bar: a folder selection (name=nil) scopes add/import
--- (and tidy on Project); a leaf arms publish/revert/reset/del — edits auto-fork, no edit button.
+-- Action-bar button emitter: first flush, the rest spaced; `enabled` both gates
+-- the click and greys the button, so each verb reads as a single call.
+local function actionBar()
+  local first = true
+  return function(label, enabled, onClick)
+    if not first then ImGui.SameLine(ctx, 0, 4) end
+    first = false
+    chrome.disabledIf(not enabled, function()
+      if ImGui.Button(ctx, label) then onClick() end
+    end)
+  end
+end
+
+-- Project-tier action bar: new · del · reset · ↓library(publish) · ↑library(revert)
+-- · tidy · import; no edit button since edits auto-fork, leaf verbs grey when they can't act.
+local function projectActions(spec)
+  local sel  = spec.sel or {}
+  local name = sel.name
+  local synthetic   = name and spec.synthetic and spec.synthetic[name]
+  local undeletable = synthetic or (name and spec.undeletable and spec.undeletable[name])
+  local btn = actionBar()
+  btn('new', true, spec.onNew)
+  btn('del', name ~= nil and not undeletable, function() spec.onDelete('project', name) end)
+  if spec.onReset then btn('reset', spec.dirty, spec.onReset) end
+  if name and not synthetic then
+    btn(ARROW_DOWN .. ' library', true, function() spec.onPublish(name) end)
+  end
+  if name then
+    btn(ARROW_UP .. ' library', shadowsSource(spec, name), function() spec.onRevert(name) end)
+  end
+  if spec.onTidy and sel.tier == 'project' and name == nil then
+    btn('tidy', true, spec.onTidy)
+  end
+  if spec.onImport then btn('import', true, spec.onImport) end
+end
+
+-- Library-tier action bar: new · del · ↑project(revert) · ↑factory. Shown on the
+-- folder header and every leaf; the leaf verbs grey on the header (name=nil).
 local function libraryActions(spec)
-  local sel         = spec.sel or {}
-  local synthetic   = sel.name and spec.synthetic and spec.synthetic[sel.name]
-  local undeletable = synthetic or (sel.name and spec.undeletable and spec.undeletable[sel.name])
-  local projectLeaf = sel.tier == 'project' and sel.name
-  if ImGui.Button(ctx, 'add') then spec.onNew() end
-  if spec.onImport then
-    ImGui.SameLine(ctx, 0, 4)
-    if ImGui.Button(ctx, 'import') then spec.onImport() end
+  local sel  = spec.sel or {}
+  local name = sel.name
+  local undeletable = (name and spec.synthetic and spec.synthetic[name])
+                        or (name and spec.undeletable and spec.undeletable[name])
+  local btn = actionBar()
+  btn('new', true, spec.onNew)
+  btn('del', name ~= nil and not undeletable, function() spec.onDelete('global', name) end)
+  -- ↑ project reuses revert: library source -> project is the same move as the
+  -- project-tier ↑ library, offered from the library side.
+  btn(ARROW_UP .. ' project', name ~= nil, function() spec.onRevert(name) end)
+  -- ↑ factory: a leaf reimports that one entry (confirm on a divergent copy); the
+  -- folder header runs the bulk reload (per-overwrite confirm).
+  if name then
+    btn(ARROW_UP .. ' factory', true, function() spec.onImportFactory(name) end)
+  else
+    btn(ARROW_UP .. ' factory', true, spec.onReloadFactory)
   end
-  -- publish: lift a project copy into the shared library.
-  if projectLeaf and not synthetic then
-    ImGui.SameLine(ctx, 0, 4)
-    if ImGui.Button(ctx, 'publish') then spec.onPublish(sel.name) end
-  end
-  -- revert: discard project drift back to its source; greyed on a
-  -- project-only name, where there is no source to fall back to.
-  if projectLeaf then
-    ImGui.SameLine(ctx, 0, 4)
-    chrome.disabledIf(not shadowsSource(spec, sel.name), function()
-      if ImGui.Button(ctx, 'revert') then spec.onRevert(sel.name) end
-    end)
-  end
-  -- reset reverts the selected entry's unsaved edits; only panes that supply
-  -- onReset (swing) show it, greyed until the composite differs from snapshot.
-  if spec.onReset then
-    ImGui.SameLine(ctx, 0, 4)
-    chrome.disabledIf(not spec.dirty, function()
-      if ImGui.Button(ctx, 'reset') then spec.onReset() end
-    end)
-  end
-  -- tidy: drop pristine unreferenced project copies, armed on the Project
-  -- folder header (name=nil).
-  if spec.onTidy and sel.tier == 'project' and sel.name == nil then
-    ImGui.SameLine(ctx, 0, 4)
-    if ImGui.Button(ctx, 'tidy') then spec.onTidy() end
-  end
-  -- reload factory: re-import the shipped catalogue, armed on the Library
-  -- folder header (name=nil). Prompts per divergent copy; see the editors.
-  if spec.onReloadFactory and sel.tier == 'global' and sel.name == nil then
-    ImGui.SameLine(ctx, 0, 4)
-    if ImGui.Button(ctx, 'reload factory') then spec.onReloadFactory() end
-  end
-  ImGui.SameLine(ctx, 0, 4)
-  chrome.disabledIf(not sel.name or not (sel.tier == 'project' or sel.tier == 'global') or undeletable, function()
-    if ImGui.Button(ctx, 'del') then spec.onDelete(sel.tier, sel.name) end   -- × : delete
-  end)
 end
 
 -- PushID(tier) scopes the row's ImGui id: a promoted entry appears in both
@@ -120,7 +131,10 @@ local function libraryTree(spec)
   chrome.palettePane{
     x = spec.x, y = spec.y, h = spec.h, label = spec.label,
     draw = function()
-      chrome.row(function() libraryActions(spec) end)
+      chrome.row(function()
+        if (spec.sel or {}).tier == 'global' then libraryActions(spec)
+        else projectActions(spec) end
+      end)
       ImGui.Separator(ctx)
       for _, a in ipairs(spec.active or {}) do
         ImGui.PushID(ctx, a.col)

@@ -546,6 +546,21 @@ local function reloadFactory()
   nextOverwrite()
 end
 
+-- Reimport one factory entry into the library, guarding a divergent library copy
+-- with a confirm (mirrors publish; a fresh or identical name imports silently).
+local function importFactory(name)
+  if not name then return end
+  if lib.factoryOverwrites('swings', name) then
+    modalHost:openConfirm{
+      title    = 'Import factory',
+      prompt   = ("Overwrite the library copy of '%s'? (y/n)"):format(name),
+      callback = function(yes) if yes then lib.importFactory('swings', name) end end,
+    }
+  else
+    lib.importFactory('swings', name)
+  end
+end
+
 -- Revert the edited composite to the open()/switch snapshot, then reswing.
 local function resetToSnapshot()
   swingWrite(util.deepClone(state.snapshot) or {})
@@ -575,6 +590,7 @@ local function buildDescriptor()
     onRevert    = revert,
     onTidy      = tidy,
     onReloadFactory = reloadFactory,
+    onImportFactory = importFactory,
     onDelete    = deleteSel,
     dirty       = state.name ~= nil and not compositesEqual(swingRead() or {}, state.snapshot),
     onReset     = resetToSnapshot,

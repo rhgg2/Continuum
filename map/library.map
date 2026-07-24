@@ -1,4 +1,4 @@
-@module library  src=library.lua  loc=180  sha=36fee5b  mode=namespace  self=lib
+@module library  src=library.lua  loc=188  sha=18e9e47  mode=namespace  self=lib
 
 # Imports
   @const util = 'util'  @ 4
@@ -46,25 +46,28 @@
       @contract  stock an empty library tier from the factory catalogue; no-op once it holds anything  @ 114
   @api lib.reloadPlan(key)  @ 126-139
       @contract  { add = names in factory not library, overwrite = present but divergent }; both sorted  @ 125
-  @api lib.importFactory(key, name)  @ 142-146
-      @contract  copy one factory entry into the library tier (deep-clone via cm:set); synthetic never  @ 141
+  @api lib.factoryOverwrites(key, name)  @ 142-147
+      @contract  true iff a factory import would overwrite a divergent library copy (both exist, differ)  @ 141
+  @api lib.importFactory(key, name)  @ 150-154
+      @contract  copy one factory entry into the library tier (deep-clone via cm:set); synthetic never  @ 149
   -- Tidy / delete
-  @api lib.tidy(key, inUse)  @ 151-166
-      @contract  drop project entries deepEq their source and not in inUse; single cm:set; returns removed  @ 150
-  @api lib.delete(key, level, name)  @ 169-178
-      @contract  remove name from tier level (project|global); synthetic names never  @ 168
+  @api lib.tidy(key, inUse)  @ 159-174
+      @contract  drop project entries deepEq their source and not in inUse; single cm:set; returns removed  @ 158
+  @api lib.delete(key, level, name)  @ 177-186
+      @contract  remove name from tier level (project|global); synthetic names never  @ 176
 
 # Uses (outbound edges)
-  @use call    util.deepEq  @ modified:68 publishOverwrites:103 reloadPlan:134 tidy:157
+  @use call    util.deepEq  @ modified:68 publishOverwrites:103 reloadPlan:134 factoryOverwrites:146 tidy:165
   @use require util  @ 4
 
 # Fields (r read / w write incl. constructor keys)
   @field w add  @ reloadPlan:138
   @field r cm  @ 6
-  @field w delete  @ delete:169
+  @field w delete  @ delete:177
+  @field w factoryOverwrites  @ factoryOverwrites:142
   @field w forkToProject  @ forkToProject:84
   @field w get  @ get:56
-  @field w importFactory  @ importFactory:142
+  @field w importFactory  @ importFactory:150
   @field w library  @ names:49
   @field w localize  @ localize:74
   @field w modified  @ modified:63
@@ -77,4 +80,4 @@
   @field w revert  @ revert:107
   @field w seedIfEmpty  @ seedIfEmpty:115
   @field r synthetic  @ 7
-  @field w tidy  @ tidy:151
+  @field w tidy  @ tidy:159
