@@ -26,9 +26,9 @@ local function activePane() return pane == 'temper' and temperEditor or swingEdi
 
 local function onClose() cmgr:invoke('closeEditor') end
 
------ Library tree palette (Active / Project / Global tiers; one per pane)
+----- Library tree palette (Active / Project / Library / Factory tiers; one per pane)
 
---shape: libraryTreeSpec = { x, y, h, label, active={{col,name}}, project={name}, global={name}, synthetic={[name]=true}, undeletable={[name]=true}, sel={tier,name}, dirty?:bool, onSelect(tier,name), onNew(), onImport?(), onPromote(name), onDemote(name), onReset?(), onDelete(tier,name) }
+--shape: libraryTreeSpec = { x, y, h, label, active={{col,name}}, project={name}, library={name}, factory={name}, synthetic={[name]=true}, undeletable={[name]=true}, sel={tier,name}, dirty?:bool, onSelect(tier,name), onNew(), onImport?(), onPromote(name), onDemote(name), onReset?(), onDelete(tier,name) }
 
 -- sel.tier scopes the action bar: a folder selection (name=nil) scopes add/import,
 -- a leaf arms dup/del. Active's 'select' button resolves an entry to its home tier.
@@ -78,7 +78,7 @@ local function libraryRow(spec, tier, name, label)
   ImGui.PopID(ctx)
 end
 
-local treeOpen = { project = true, global = true }
+local treeOpen = { project = true, global = true, factory = true }
 
 -- Disclosure chip toggles the folder; the title row selects the tier (name=nil)
 -- so add/import scope to it, and now also toggles. Mirrors the sampler tree.
@@ -110,9 +110,14 @@ local function libraryTree(spec)
           libraryRow(spec, 'project', name, name)
         end
       end)
-      libraryFolder(spec, 'global', 'Global', function()
-        for _, name in ipairs(spec.global or {}) do
+      libraryFolder(spec, 'global', 'Library', function()
+        for _, name in ipairs(spec.library or {}) do
           libraryRow(spec, 'global', name, name)
+        end
+      end)
+      libraryFolder(spec, 'factory', 'Factory', function()
+        for _, name in ipairs(spec.factory or {}) do
+          libraryRow(spec, 'factory', name, name)
         end
       end)
     end,

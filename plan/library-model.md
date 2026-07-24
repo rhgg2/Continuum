@@ -25,18 +25,17 @@
 
 ## Landed (newest first; prune below ~4)
 
+- 2026-07-24 editors: Factory tree section over lib.names (§ 5, first bullet)
 - 2026-07-24 editors: delegate promote/demote to lib.publish/revert (§ 4)
 - 2026-07-24 temperEditor: fork writes to the project tier (§ 4)
 - 2026-07-23 swingEditor: fork writes to the project tier (§ 4)
-- 2026-07-23 chrome: badge modified project rows in the library picker (§ 3)
 
 ## Now
 
-(empty — Phase 4 landed; run /plan-next to promote Phase 5's first item, editorRender tree + action bar, into a brief)
+(Factory tree sections landed in both editors, sourced from lib.names. Next queued: action bar publish/revert/tidy verbs wired to the selected row's tier — run /plan-next to promote it.)
 
 ## Queued (current phase; one-liners)
 
-- editorRender: Active/Project/Library/Factory tree sections replacing the flat list
 - action bar: `publish`/`revert`/`tidy` verbs wired to the selected row's tier
 - modified badge on project rows in the editor tree (mirrors the picker badge)
 - publish-overwrite confirm modal (QO1, deferred from Phase 4) — build modalHost wiring here

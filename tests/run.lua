@@ -257,6 +257,7 @@ local specs = {
   'wp_smoke_spec',
   'painter_spec',
   'curveEditor_spec',
+  'temperEditor_tree_spec',
 }
 
 local pass, fail, pending, failures = 0, 0, 0, {}

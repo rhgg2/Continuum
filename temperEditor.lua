@@ -15,7 +15,7 @@ local cm, chrome, ctx, gui, modalHost, lib = (...).cm, (...).chrome, (...).ctx, 
 local SYNTHETIC  = { ['12EDO'] = true }
 
 local selected = nil   -- explicitly-selected entry; nil follows the active slot
-local selTier  = nil   -- tier of the selection ('project' | 'global')
+local selTier  = nil   -- tier of the selection ('project' | 'global' | 'factory')
 local snapshot = nil   -- selection-time copy, for dirty-check + Reset
 local openNewModal, openImportModal   -- New/Import modals, hosted by modalHost (defined below)
 local editing  = nil   -- { key, buf } in-flight pitch token; commits on deactivate
@@ -51,13 +51,6 @@ local function homeTier(name)
   return 'global'
 end
 
-local function sortedNames(tbl)
-  local out = {}
-  for k in pairs(tbl) do out[#out + 1] = k end
-  table.sort(out)
-  return out
-end
-
 local function temperFor(name) return tuning.findTemper(name, cm:get('tempers')) end
 
 -- The take's effective tuning as a library name. 12EDO is the neutral floor
@@ -70,6 +63,7 @@ end
 -- The selected entry's own tier copy. nil when nothing is selected or the
 -- selection is a merge-floor with no tier copy — editing needs a dup first.
 local function editedTemper()
+  if selTier == 'factory' then return nil end   -- read-only catalogue; no tier copy to edit
   return selected and (cm:getAt(selTier, 'tempers') or {})[selected] or nil
 end
 
@@ -118,7 +112,7 @@ end
 -- Editable clone with pitches/stepNames densified to a common length ('' for
 -- unnamed) so sort and table.remove stay array operations.
 local function cloneForEdit()
-  local t = editedTemper()
+  local t = editedTemper() or (selected and temperFor(selected))   -- factory/merge-floor rows clone from the resolved source
   if not t then return nil end
   t = util.deepClone(t)
   t.pitches   = t.pitches or {}
@@ -215,16 +209,16 @@ local deleteSel = util.atomic('Delete temper', function(tier, name)
 end)
 
 local function buildDescriptor()
-  local globalNames = sortedNames(globalTempers())
-  if not globalTempers()['12EDO'] then table.insert(globalNames, 1, '12EDO') end
+  local names  = lib.names('tempers')
   local active = {}
   local cur    = cm:get('temper')
   if cur then active[1] = { col = 'take', name = cur } end
   return {
     label     = 'tuning',
     active    = active,
-    project   = sortedNames(projectTempers()),
-    global    = globalNames,
+    project   = names.project,
+    library   = names.library,
+    factory   = names.factory,
     synthetic = SYNTHETIC,
     sel       = { tier = selTier, name = selected },
     onSelect  = function(tier, name) selectTemper(name, tier) end,

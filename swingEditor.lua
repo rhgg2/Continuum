@@ -235,6 +235,7 @@ local function drawBandInto(layout, composite, factors, region)
 end
 
 local function swingRead()
+  if state.tier == 'factory' then return cm:defaultFor('swings')[state.name] end
   local tierLib = state.tier and cm:getAt(state.tier, 'swings') or {}
   if tierLib[state.name] ~= nil then return tierLib[state.name] end
   return cm:get('swings', { mergeTiers = true })[state.name]   -- synthetic / default floor
@@ -479,13 +480,6 @@ local function resolvedSlots()
   return takeName, chanName
 end
 
-local function sortedNames(tbl)
-  local out = {}
-  for k in pairs(tbl) do out[#out + 1] = k end
-  table.sort(out)
-  return out
-end
-
 -- In-force entries for the Active folder: take swing + every channel
 -- override, read straight from ds (no cursor) so all columns show.
 local function activeEntries()
@@ -522,13 +516,13 @@ end
 local openNewModal   -- forward decl; defined with its modalHost kind below
 
 local function buildDescriptor()
-  local globalNames = sortedNames(globalSwings())
-  if not globalSwings().identity then table.insert(globalNames, 1, 'identity') end
+  local names = lib.names('swings')
   return {
     label       = 'swing',
     active      = activeEntries(),
-    project     = sortedNames(projectSwings()),
-    global      = globalNames,
+    project     = names.project,
+    library     = names.library,
+    factory     = names.factory,
     synthetic   = SYNTHETIC,
     undeletable = inUseNames(),
     sel         = { tier = state.tier, name = state.name },
