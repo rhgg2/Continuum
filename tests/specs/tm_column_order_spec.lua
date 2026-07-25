@@ -6,15 +6,15 @@
 -- successor: computeFxWindows' host clip, eachWindowNote's onsets[i+1], nextSameLaneNote's
 -- strictNextMap.
 --
--- Pins the host clip. A vibrato host's window ends at the strict next same-lane onset; that onset is
+-- Pins the host clip. A sine host's window ends at the strict next same-lane onset; that onset is
 -- a grid fact, so pulling the successor *earlier in raw* with a negative delay must not change it.
 -- The successor carries the delay (not the host) so the host's own seats stay undelayed and the
 -- assertion isolates the ordering effect.
 
 local t = require('support')
 
--- depth 30c, period 1/4 QN; at res 240 one cycle = 60 ticks. see tm_vibrato_spec
-local vib30 = { { kind = 'vibrato', period = { 1, 4 }, depth = 30, onset = 0 } }
+-- depth 30c, period 1/4 QN; at res 240 one cycle = 60 ticks. see tm_sine_spec
+local sine30 = { { kind = 'sine', period = { 1, 4 }, depth = 30, onset = 0 } }
 
 -- Note-dest kind: an arp region parks the chord it covers (parksNotes true). see tm_regionpark_gating_spec
 local arpUp = { { kind = 'arp', period = { 1, 4 }, dir = 'up' } }
@@ -23,7 +23,7 @@ local arpUp = { { kind = 'arp', period = { 1, 4 }, dir = 'up' } }
 -- own tail, so the clip is what the seat stream reveals.
 local function host()
   return { evType = 'note', ppq = 60, endppq = 240, chan = 1, pitch = 60,
-           vel = 100, detune = 0, delay = 0, lane = 1, fx = vib30 }
+           vel = 100, detune = 0, delay = 0, lane = 1, fx = sine30 }
 end
 
 -- Same lane, one row past the host's authored end is irrelevant -- it sits inside it, so it is the

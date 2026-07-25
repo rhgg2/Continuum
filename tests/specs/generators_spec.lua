@@ -128,7 +128,7 @@ return {
     name = 'parksNotes is true for any note-dest kind, false for a continuous kind / husk',
     run = function()
       t.eq(generators.parksNotes{ fx = { { kind = 'retrig' } } }, true,  'retrig replaces notes')
-      t.eq(generators.parksNotes{ fx = { { kind = 'vibrato' } } }, false, 'vibrato augments pb')
+      t.eq(generators.parksNotes{ fx = { { kind = 'sine' } } }, false, 'sine augments pb')
       t.eq(generators.parksNotes{ fx = {} }, false, 'a husk parks nothing')
     end,
   },
@@ -140,7 +140,7 @@ return {
       local windows = generators.parkWindows{
         { chan = 1, startppq = 0,  endppq = 240, fx = { { kind = 'arp' } } },     -- discrete replace -> note window
         { chan = 3, startppq = 60, endppq = 120, fx = { { kind = 'ccrep' } } },   -- cc target (replace) -> cc window
-        { chan = 5, startppq = 0,  endppq = 240, fx = { { kind = 'vibrato' } } }, -- pb augment -> pb window
+        { chan = 5, startppq = 0,  endppq = 240, fx = { { kind = 'sine' } } },    -- pb augment -> pb window
         { chan = 7, fx = {} },                                                    -- husk -> neither
       }
       generators.kinds.ccrep = nil
@@ -157,8 +157,8 @@ return {
   {
     name = 'destOf falls back to the registry dest; a dest param overrides it',
     run = function()
-      t.eq(generators.destOf{ kind = 'vibrato' }, 'pb', 'no param: the kind seeds the dest')
-      t.eq(generators.destOf{ kind = 'vibrato', dest = 74 }, 74, 'the param wins')
+      t.eq(generators.destOf{ kind = 'sine' }, 'pb', 'no param: the kind seeds the dest')
+      t.eq(generators.destOf{ kind = 'sine', dest = 74 }, 74, 'the param wins')
       t.eq(generators.destOf{ kind = 'retrig' }, 'note', 'note kinds resolve through the same door')
     end,
   },
@@ -166,10 +166,10 @@ return {
   {
     name = 'fieldsFor prepends a Dest row only where the kind can serve more than one target',
     run = function()
-      local pan = generators.fieldsFor{ kind = 'autopan' }
-      t.eq(pan[1].field, 'dest', "a cc kind's 128 targets earn a Dest row")
-      t.eq(pan[1].widget, 'dest', 'drawn by the dest picker, not a stepper')
-      t.eq(#pan, #generators.kinds.autopan.fields + 1, "the kind's own fields follow it")
+      local wave = generators.fieldsFor{ kind = 'sine' }
+      t.eq(wave[1].field, 'dest', "an any-dest kind's 129 targets earn a Dest row")
+      t.eq(wave[1].widget, 'dest', 'drawn by the dest picker, not a stepper')
+      t.eq(#wave, #generators.kinds.sine.fields + 1, "the kind's own fields follow it")
       t.eq(generators.fieldsFor{ kind = 'retrig' }[1].field, 'period', 'a note kind declares no dests -- no row')
       t.eq(generators.fieldsFor{ kind = 'slide' }[1].field, 'over', 'pb-bound: one option is no choice')
     end,
@@ -178,7 +178,7 @@ return {
   {
     name = 'retarget between dests of equal reference leaves the magnitudes alone',
     run = function()
-      local out = generators.retarget({ kind = 'autopan', period = { 1, 2 }, depth = 32, dest = 10 }, 8)
+      local out = generators.retarget({ kind = 'sine', period = { 1, 2 }, depth = 32, dest = 10 }, 8)
       t.eq(out.dest, 8, 'the entry points at the new controller')
       t.eq(out.depth, 32, 'pan and balance both rest at 64 -- the same 63-step swing, nothing to rescale')
     end,
@@ -187,9 +187,9 @@ return {
   {
     name = 'retarget rescales magnitudes by proportion of the dest reference',
     run = function()
-      local toPan = generators.retarget({ kind = 'vibrato', period = { 1, 2 }, depth = 30, onset = 1 }, 10)
+      local toPan = generators.retarget({ kind = 'sine', period = { 1, 2 }, depth = 30, onset = 1 }, 10)
       t.eq(toPan.depth, 9, '30 of pb\'s 200-cent reference -> 9 of pan\'s 63 steps')
-      local toMod = generators.retarget({ kind = 'autopan', period = { 1, 2 }, depth = 32, dest = 10 }, 1)
+      local toMod = generators.retarget({ kind = 'sine', period = { 1, 2 }, depth = 32, dest = 10 }, 1)
       t.eq(toMod.depth, 65, 'the mod wheel rests at a rail: 32 of 63 -> 65 of its whole 127 run')
     end,
   },
@@ -198,21 +198,22 @@ return {
     name = 'parkWindows follows the dest param, not the registry (a retargeted pb kind parks cc)',
     run = function()
       local windows = generators.parkWindows{
-        { chan = 1, startppq = 0, endppq = 240, fx = { { kind = 'vibrato', dest = 74 } } },
+        { chan = 1, startppq = 0, endppq = 240, fx = { { kind = 'sine', dest = 74 } } },
       }
       t.deepEq(windows, { { evType = 'cc', chan = 1, cc = 74, startppq = 0, endppq = 240 } },
                "the entry's dest decides the window type")
     end,
   },
 
-  ----- autopan: a cc-dest sine LFO (vibrato's shape, cc steps not cents)
+  ----- sine: one gesture, either domain -- cents on pb, cc steps on a controller
 
   {
-    name = 'autopan tiles the window with sine extrema in cc steps, anchored 0 at both ends',
+    name = 'sine on a cc dest tiles the window with extrema in cc steps, anchored 0 at both ends',
     run = function()
       -- res 240, period 1/2 QN -> cycle 120 ticks; extrema at period/4 = 30, then every 60.
-      local out = expand('autopan', { window = { 0, 240 } },
-                         { kind = 'autopan', period = { 1, 2 }, depth = 32 }, { resolution = 240 })
+      -- The body never learns which dest it serves: depth arrives already in the target's units.
+      local out = expand('sine', { window = { 0, 240 } },
+                         { kind = 'sine', period = { 1, 2 }, depth = 32, dest = 10 }, { resolution = 240 })
       t.eq(#out.notes, 0, 'continuous: no structural notes')
       local d = out.delta
       t.eq(d[1].ppq, 0);    t.eq(d[1].val, 0,   'anchored at centre (0) at the window start')

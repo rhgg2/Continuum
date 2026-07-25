@@ -3,7 +3,7 @@
 
 local t    = require('support')
 
-local vib30 = { { kind = 'vibrato', period = { 1, 4 }, depth = 30, onset = 0 } }
+local sine30 = { { kind = 'sine', period = { 1, 4 }, depth = 30, onset = 0 } }
 
 local function pbSeatsOf(dump, chan)
   local out = {}
@@ -18,7 +18,7 @@ end
 
 local function vibHost(chan)
   return { evType = 'note', ppq = 0, endppq = 240, chan = chan, pitch = 60,
-           vel = 100, detune = 0, delay = 0, lane = 1, fx = vib30 }
+           vel = 100, detune = 0, delay = 0, lane = 1, fx = sine30 }
 end
 
 local function plainNote(chan, ppq)
@@ -35,7 +35,7 @@ return {
       h.tm:addEvent(vibHost(2)); h.tm:flush()
 
       local before = pbSeatsOf(h.fm:dump(), 2)
-      t.truthy(#before >= 8, 'chan 2 seats a vibrato pb stream')
+      t.truthy(#before >= 8, 'chan 2 seats a sine pb stream')
 
       -- Two chan-1 edits: chan 2 is derivation-clean and freezes both times. Its seats stand in mm,
       -- carried whole -- the generators never re-run.

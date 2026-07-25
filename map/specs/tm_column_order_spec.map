@@ -12,7 +12,7 @@
   successor: computeFxWindows' host clip, eachWindowNote's onsets[i+1], nextSameLaneNote's
   strictNextMap.
   
-  Pins the host clip. A vibrato host's window ends at the strict next same-lane onset; that onset is
+  Pins the host clip. A sine host's window ends at the strict next same-lane onset; that onset is
   a grid fact, so pulling the successor *earlier in raw* with a negative delay must not change it.
   The successor carries the delay (not the host) so the host's own seats stay undelayed and the
   assertion isolates the ordering effect.

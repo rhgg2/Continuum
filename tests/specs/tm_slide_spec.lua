@@ -154,15 +154,15 @@ return {
     end,
   },
 
-  ----- N-stream overlap — vibrato and slide on one host sum into one pb stream
+  ----- N-stream overlap — sine and slide on one host sum into one pb stream
 
   {
-    name = 'vibrato and slide on one host sum into a single pb seat stream (N-stream overlap)',
+    name = 'sine and slide on one host sum into a single pb seat stream (N-stream overlap)',
     run = function(harness)
       local h = harness.mk()
       h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
                       detune = 0, delay = 0, lane = 1,
-                      fx = { { kind = 'vibrato', period = { 1, 4 }, depth = 30, onset = 0 },
+                      fx = { { kind = 'sine', period = { 1, 4 }, depth = 30, onset = 0 },
                              { kind = 'slide', over = { 1, 2 }, target = 'next' } } })
       h.tm:addEvent({ evType = 'note', ppq = 240, endppq = 480, chan = 1, pitch = 61, vel = 100,
                       detune = 0, delay = 0, lane = 1 })
@@ -170,20 +170,20 @@ return {
 
       local dump = h.fm:dump()
       t.truthy(#pbSeatsOf(dump, 1) > 0, 'one summed seat stream, not two carriers')
-      t.eq(pbSeatAt(dump, 1, 15).val,  centsToRaw(30), 'at the vibrato extremum the slide is still 0 -> +30')
-      t.eq(pbSeatAt(dump, 1, 225).val, centsToRaw(70), 'slide +100 and vibrato -30 sum to +70 at the arrival')
+      t.eq(pbSeatAt(dump, 1, 15).val,  centsToRaw(30), 'at the sine extremum the slide is still 0 -> +30')
+      t.eq(pbSeatAt(dump, 1, 225).val, centsToRaw(70), 'slide +100 and sine -30 sum to +70 at the arrival')
     end,
   },
 
   ----- Disjoint windows each seat their own pb span
 
   {
-    name = 'disjoint vibrato and slide windows each seat their own pb span',
+    name = 'disjoint sine and slide windows each seat their own pb span',
     run = function(harness)
       local h = harness.mk()
       h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
                       detune = 0, delay = 0, lane = 1,
-                      fx = { { kind = 'vibrato', period = { 1, 4 }, depth = 30, onset = 0 } } })
+                      fx = { { kind = 'sine', period = { 1, 4 }, depth = 30, onset = 0 } } })
       h.tm:addEvent({ evType = 'note', ppq = 240, endppq = 480, chan = 1, pitch = 62, vel = 100,
                       detune = 0, delay = 0, lane = 1,
                       fx = { { kind = 'slide', over = { 1, 2 }, target = 'next' } } })
@@ -192,7 +192,7 @@ return {
       h.tm:flush()
 
       local dump = h.fm:dump()
-      t.eq(pbSeatAt(dump, 1, 15).val, centsToRaw(30), 'the vibrato window seats +30 at its extremum')
+      t.eq(pbSeatAt(dump, 1, 15).val, centsToRaw(30), 'the sine window seats +30 at its extremum')
       t.truthy(pbSeatAt(dump, 1, 465),                'the slide window seats its arrival at ppq 465')
     end,
   },

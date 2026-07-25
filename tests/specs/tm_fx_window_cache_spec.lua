@@ -1,19 +1,19 @@
 -- Fx note-host window cache: a host's window (authored/take ceiling clipped to its strict-next
 -- same-lane onset) is cached per uuid across rebuilds and recomputed only when the host's own uuid
 -- seeds the dirt, a neighbour onset seeds a ppq inside its span, or the take length changes (which
--- arrives as a wholesale reload, so the column walk reclips every window). A depth-30 vibrato host
+-- arrives as a wholesale reload, so the column walk reclips every window). A depth-30 sine host
 -- seats a pb stream across exactly its window, so the max pb-seat ppq tracks the window end -- the
 -- observable these cases lean on. see design/archive/interval-dirt-v2.md § 2
 
 local t    = require('support')
 local util = require('util')
 
-local VIB = { { kind = 'vibrato', period = { 1, 4 }, depth = 30, onset = 0 } }
+local SINE = { { kind = 'sine', period = { 1, 4 }, depth = 30, onset = 0 } }
 
--- Author an OPEN-ended vibrato note-host on ch1 lane1; its pb seats fill [0, windowEnd).
+-- Author an OPEN-ended sine note-host on ch1 lane1; its pb seats fill [0, windowEnd).
 local function addVibHost(h)
   h.tm:addEvent({ evType = 'note', ppq = 0, endppq = util.OPEN, chan = 1, pitch = 60, vel = 100,
-                  detune = 0, delay = 0, lane = 1, fx = VIB })
+                  detune = 0, delay = 0, lane = 1, fx = SINE })
   h.tm:flush()
 end
 
@@ -23,7 +23,7 @@ local function addNote(h, chan, lane, ppq)
   h.tm:flush()
 end
 
--- The last pb seat ppq on a channel -- the far edge of the seated vibrato stream, i.e. the window end.
+-- The last pb seat ppq on a channel -- the far edge of the seated sine stream, i.e. the window end.
 local function maxPbPpq(h, chan)
   local hi
   for _, c in ipairs(h.fm:dump().ccs) do

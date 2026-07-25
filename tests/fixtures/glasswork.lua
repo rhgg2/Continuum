@@ -2,8 +2,8 @@
 --
 -- 32 bars, 53EDO, classic58 swing (raw != logical everywhere). Cmaj7 - Am7 -
 -- Fmaj7 - G7 in just intonation. Exercises every wild tracker feature:
---   * all 9 generator kinds  (retrig ostinato arp velPattern trill | vibrato
---     slide autopan lfo)
+--   * all 8 generator kinds  (retrig ostinato arp velPattern trill | sine
+--     slide lfo)
 --   * fx chains              (ch5: retrig -> velPattern)
 --   * mirror-group canon     (ch15/16: one subject, three staggered instances)
 --   * cc11 + channel-AT + poly-AT controllers
@@ -52,8 +52,8 @@ local function build(tm, gm)
     note(tm, { evType='note', chan=12, pitch=sp2, detune=sd2, vel=48, ppq=at+H, endppq=at+BAR, lane=1 })
   end
 
-  ----- Pads: autopan (ch8 -> cc10) and lfo (ch9 -> cc1), bars 0-23
-  local autopan  = {{ kind='autopan', period={2,1}, depth=48 }}
+  ----- Pads: sine -> cc10 (ch8) and lfo -> cc1 (ch9), bars 0-23
+  local pan      = {{ kind='sine', period={2,1}, depth=48, dest=10 }}
   local lfoCurve = { kind='curve', lengthPpq=1000,
                      points={ {ppq=0,val=-1,shape='slow'}, {ppq=500,val=1,shape='slow'} } }
   local lfo = {{ kind='lfo', period={4,1}, centre=60, scale=52, pattern=lfoCurve }}
@@ -62,7 +62,7 @@ local function build(tm, gm)
     local rp, rd = e53(C2, root[ci] + 53)
     note(tm, { evType='note', chan=9, pitch=rp, detune=rd, vel=40, ppq=at, endppq=at+BAR, lane=1, fx=lfo })
     local fp, fd = e53(C2, root[ci] + 53 + 31)
-    note(tm, { evType='note', chan=8, pitch=fp, detune=fd, vel=38, ppq=at, endppq=at+BAR, lane=1, fx=autopan })
+    note(tm, { evType='note', chan=8, pitch=fp, detune=fd, vel=38, ppq=at, endppq=at+BAR, lane=1, fx=pan })
   end
 
   ----- Groove engine: retrig pulse (ch1) + ostinato bass (ch4), bars 8-31
@@ -97,8 +97,8 @@ local function build(tm, gm)
     note(tm, { evType='note', chan=5, pitch=pit, detune=det, vel=100, ppq=at, endppq=at+BAR, lane=1, fx=accent })
   end
 
-  ----- Melody: vibrato lead (ch6), slide counter (ch7), trill ornament (ch2)
-  local vibrato = {{ kind='vibrato', period={1,3}, depth=40, onset=1 }}
+  ----- Melody: sine-on-pb lead (ch6), slide counter (ch7), trill ornament (ch2)
+  local vibrato = {{ kind='sine',  period={1,3}, depth=40, onset=1 }}
   local slide   = {{ kind='slide',   over={1,2}, target='next' }}
   local trill   = {{ kind='trill',   period={1,4}, step=9 }}
   local phrase6 = { 159,176, 168,159, 145,159, 154,168 }   -- vibrato lead arch

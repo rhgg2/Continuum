@@ -1,4 +1,4 @@
-@spec tm_fx_window_cache_spec  src=tests/specs/tm_fx_window_cache_spec.lua  loc=83  sha=7e3df59  cases=3
+@spec tm_fx_window_cache_spec  src=tests/specs/tm_fx_window_cache_spec.lua  loc=83  sha=c849ef5  cases=3
 @exercises trackerManager (h.tm), midiManager (h.fm)
 @surface   tm:addEvent, tm:flush, fm:dump, tm:setLength
 @harness   mk
@@ -7,16 +7,16 @@
   Fx note-host window cache: a host's window (authored/take ceiling clipped to its strict-next
   same-lane onset) is cached per uuid across rebuilds and recomputed only when the host's own uuid
   seeds the dirt, a neighbour onset seeds a ppq inside its span, or the take length changes (which
-  arrives as a wholesale reload, so the column walk reclips every window). A depth-30 vibrato host
+  arrives as a wholesale reload, so the column walk reclips every window). A depth-30 sine host
   seats a pb stream across exactly its window, so the max pb-seat ppq tracks the window end -- the
   observable these cases lean on. see design/archive/interval-dirt-v2.md § 2
 
 # Helpers
   @fn addVibHost(h)  @ 14-18
-      -- Author an OPEN-ended vibrato note-host on ch1 lane1; its pb seats fill [0, windowEnd).
+      -- Author an OPEN-ended sine note-host on ch1 lane1; its pb seats fill [0, windowEnd).
   @fn addNote(h, chan, lane, ppq)  @ 20-24
   @fn maxPbPpq(h, chan)  @ 27-33
-      -- The last pb seat ppq on a channel -- the far edge of the seated vibrato stream, i.e. the window end.
+      -- The last pb seat ppq on a channel -- the far edge of the seated sine stream, i.e. the window end.
 
 # Cases
   @case 'neighbour onset inside a host window reseeks and clips it on the next rebuild'  [harness]  @ 40-49

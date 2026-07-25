@@ -1,4 +1,4 @@
-@spec tm_fx_tension_spec  src=tests/specs/tm_fx_tension_spec.lua  loc=101  sha=untracked  cases=2
+@spec tm_fx_tension_spec  src=tests/specs/tm_fx_tension_spec.lua  loc=101  sha=6c2fb10  cases=2
 @exercises midiManager (h.fm), trackerManager (h.tm)
 @surface   fm:interpolate, tm:addEvent, tm:flush, fm:dump
 @harness   mk{seed.ccs}
@@ -7,7 +7,7 @@
   Bezier tension through fx windows. The continuous bases feeding fx expansion
   (pbBaseFor/ccBasesFor) must carry authored tension: in-window folds interpolate
   via mm:interpolate, and a dropped tension silently re-shapes the curve, skewing
-  every derived seat under the window. Depth-0 vibrato / scale-0 lfo make the fx
+  every derived seat under the window. Depth-0 sine / scale-0 lfo make the fx
   contribution exactly zero, so each seat is a pure sample of the authored base.
 
 # Helpers

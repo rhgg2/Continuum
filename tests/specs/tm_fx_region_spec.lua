@@ -1,4 +1,4 @@
--- Note macros v2: region hosts. The N=0 vibrato pb seat stream proves the generator-side substrate
+-- Note macros v2: region hosts. The N=0 sine pb seat stream proves the generator-side substrate
 -- (ds, 4.6 producer split, reconcile, G4 round-trip). see design/note-macros-v2.md
 local t          = require('support')
 local util       = require('util')
@@ -6,7 +6,7 @@ local generators = require('generators')
 
 -- depth 30c, period 1/4 QN: at res 240 one cycle = 60 ticks; sine extrema at
 -- ppq 15 (peak) / 45 (trough); stream anchored 0 at both window ends.
-local vib30 = { { kind = 'vibrato', period = { 1, 4 }, depth = 30, onset = 0 } }
+local sine30 = { { kind = 'sine', period = { 1, 4 }, depth = 30, onset = 0 } }
 
 local function centsToRaw(cents, pbRange)
   return util.round(cents * 8192 / ((pbRange or 2) * 100))
@@ -95,7 +95,7 @@ end
 
 -- A region is channel x ppq span + fx; no host note. Inject via ds, then rebuild.
 local function injectRegion(h, over)
-  local region = { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = vib30 }
+  local region = { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = sine30 }
   for k, v in pairs(over or {}) do region[k] = v end
   h.ds:assign('fxRegions', { region })
   h.tm:rebuild()
@@ -160,7 +160,7 @@ return {
   ----- N=0 -- a region with no host note still seats the channel pb stream
 
   {
-    name = 'fx region (N=0): vibrato over a span seats a free-LFO pb stream with no host note',
+    name = 'fx region (N=0): sine over a span seats a free-LFO pb stream with no host note',
     run = function(harness)
       local h = harness.mk()
       injectRegion(h)
@@ -761,13 +761,13 @@ return {
   ----- Augment by kind: a continuous region leaves its members sounding (no parking)
 
   {
-    name = 'augment by kind: a continuous (vibrato) region leaves its covered notes sounding',
+    name = 'augment by kind: a continuous (sine) region leaves its covered notes sounding',
     run = function(harness)
       local h = harness.mk()
       addNote(h, { pitch = 60, ppq = 0, endppq = 240, lane = 1 })
-      injectRegion(h)   -- vibrato over [0,240) covers the note -- augment, so it is not parked
+      injectRegion(h)   -- sine over [0,240) covers the note -- augment, so it is not parked
       t.deepEq(authoredPitches(h), { 60 }, 'the covered note keeps sounding -- a continuous kind augments')
-      t.truthy(#derivedPbs(h, 1) > 0, 'and the vibrato pb seats are present over the span')
+      t.truthy(#derivedPbs(h, 1) > 0, 'and the sine pb seats are present over the span')
     end,
   },
 
@@ -1610,7 +1610,7 @@ return {
         end
         return out
       end
-      local pan = { kind = 'autopan', period = { 1, 2 }, depth = 32, dest = 10 }
+      local pan = { kind = 'sine', period = { 1, 2 }, depth = 32, dest = 10 }
       h.tm:addEvent({ evType = 'cc', ppq = 60, chan = 1, cc = 10, val = 30 }); h.tm:flush()
       h.tm:addEvent({ evType = 'cc', ppq = 60, chan = 1, cc = 1,  val = 20 }); h.tm:flush()
 
@@ -1709,15 +1709,15 @@ return {
   ----- Parked-host continuous windows: deleting a self-parked fx host sweeps its seats
 
   {
-    name = 'deleting a self-parked [trill, vibrato] host leaves no orphaned pb seats',
+    name = 'deleting a self-parked [trill, sine] host leaves no orphaned pb seats',
     run = function(harness)
       local h = harness.mk()
-      -- trill (note-replace) self-parks the host; vibrato (pb-augment) seats a pb stream over the
+      -- trill (note-replace) self-parks the host; sine (pb-augment) seats a pb stream over the
       -- parked window. The chain is on the note's own fx, so it parks with no take round-trip.
       h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
                       vel = 100, detune = 0, delay = 0, lane = 1,
                       fx = { { kind = 'trill', period = { 1, 4 }, step = 2 },
-                             { kind = 'vibrato', period = { 1, 4 }, depth = 30, onset = 0 } } })
+                             { kind = 'sine', period = { 1, 4 }, depth = 30, onset = 0 } } })
       h.tm:flush()
       local function allPbs()
         local out = {}
@@ -1726,35 +1726,35 @@ return {
         end
         return out
       end
-      t.truthy(#allPbs() > 0, 'the parked host seats a vibrato pb stream')
+      t.truthy(#allPbs() > 0, 'the parked host seats a sine pb stream')
       t.eq(#h.tm:getChannel(1).parked, 1, 'the trill host is parked off-take')
 
       h.tm:rebuild()   -- settle: parked host is now off-take when the window set is recomputed
 
       h.tm:deleteParked(h.tm:getChannel(1).parked[1]); h.tm:flush()
       t.falsy(h.ds:get('fxParked'), 'the parked host is gone from the stash')
-      t.eq(#allPbs(), 0, 'no vibrato seat orphans as an authored pb after the host is deleted')
+      t.eq(#allPbs(), 0, 'no sine seat orphans as an authored pb after the host is deleted')
     end,
   },
 
   {
     -- Removing the last note-dest kind un-parks the host, but a surviving continuous kind still governs
     -- its cc target and must persist its window. see design/note-macros-v2.md § Route-by-window
-    name = 'removing the note kind from a self-parked [autopan, trill] host keeps its authored cc parked',
+    name = 'removing the note kind from a self-parked [sine, trill] host keeps its authored cc parked',
     run = function(harness)
       local h = harness.mk()
-      -- Authored cc10 the augment parks; values distinct from the autopan output so a stray restore shows.
+      -- Authored cc10 the augment parks; values distinct from the sine output so a stray restore shows.
       h.tm:addEvent({ evType = 'cc', ppq = 60,  chan = 1, cc = 10, val = 20 });  h.tm:flush()
       h.tm:addEvent({ evType = 'cc', ppq = 180, chan = 1, cc = 10, val = 100 }); h.tm:flush()
 
-      -- Note-host: autopan (cc10-augment) parks the authored cc and seats a derived stream over the window.
+      -- Note-host: sine (cc10-augment) parks the authored cc and seats a derived stream over the window.
       h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
                       detune = 0, delay = 0, lane = 1,
-                      fx = { { kind = 'autopan', period = { 1, 4 }, depth = 32 } } })
+                      fx = { { kind = 'sine', period = { 1, 4 }, depth = 32, dest = 10 } } })
       h.tm:flush()
       local uuid = h.tm:getChannel(1).columns.notes[1].events[1].uuid
       t.truthy(uuid, 'the on-take host carries a uuid')
-      t.eq(#stashOfType(h, 'cc'), 2, 'autopan parks both authored cc off-take')
+      t.eq(#stashOfType(h, 'cc'), 2, 'sine parks both authored cc off-take')
 
       -- The realised cc10 (on-take derived seats) + the parked authored stash, as an order-stable
       -- fingerprint. Add-then-remove trill is a round-trip: this must return to its pre-trill value.
@@ -1777,12 +1777,12 @@ return {
       local baseline = ccFingerprint()
       t.eq(#baseline.parked, 2, 'both authored cc parked in the baseline')
 
-      -- Add trill: the host now self-parks as a note; the autopan cc window must persist.
+      -- Add trill: the host now self-parks as a note; the sine cc window must persist.
       h.vm:addFxStage(uuid, { kind = 'trill', period = { 1, 4 }, step = 2 })
       t.eq(#h.tm:getChannel(1).parked, 1, 'the host self-parks once a note-replace kind joins the chain')
-      t.eq(#stashOfType(h, 'cc'), 2, 'the authored cc stay parked under the persisting autopan window')
+      t.eq(#stashOfType(h, 'cc'), 2, 'the authored cc stay parked under the persisting sine window')
 
-      -- Remove trill: the host un-parks as a note; autopan still governs cc10, so its window must
+      -- Remove trill: the host un-parks as a note; sine still governs cc10, so its window must
       -- persist -- the authored cc carry forward parked, not restore onto the take under the seats.
       local fx = h.vm:noteFx(uuid); local trillIdx
       for i, e in ipairs(fx) do if e.kind == 'trill' then trillIdx = i end end
@@ -1799,11 +1799,11 @@ return {
     name = 'a same-pass note park widens a surviving host window and parks the exposed authored cc',
     run = function(harness)
       local h = harness.mk()
-      -- Plain successor on the host's lane: it clips the host's autopan window to [0, 240).
+      -- Plain successor on the host's lane: it clips the host's sine window to [0, 240).
       addNote(h, { ppq = 240, endppq = 480, pitch = 64 })
       h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 960, chan = 1, pitch = 60, vel = 100,
                       detune = 0, delay = 0, lane = 1,
-                      fx = { { kind = 'autopan', period = { 1, 4 }, depth = 32 } } })
+                      fx = { { kind = 'sine', period = { 1, 4 }, depth = 32, dest = 10 } } })
       h.tm:flush()
       -- Authored cc10 in the span the successor hides: outside [0, 240), inside [0, 960).
       -- Identified by uuid, since the augment's fill seats fold the authored base val back in.

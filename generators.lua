@@ -174,10 +174,10 @@ local function chordStamp(stream, host, params, ctx)
   return { notes = notes, delta = {} }
 end
 
---contract: vibrato -> lane-1 pb-delta breakpoints in cents; sine of depth cents at 1/period QN
+--contract: sine -> delta breakpoints in the dest's own units; depth at 1/period QN, unit-naive
 --contract: breakpoints at sine extrema, 'slow'-shaped; linear ramp-in over onset QN
---contract: returns to 0 (centre) at window end -- no residual bend on the channel
-local function vibrato(stream, host, params, ctx)
+--contract: returns to 0 (the delta's rest) at window end -- no residual offset on the channel
+local function sine(stream, host, params, ctx)
   local startL, endL = stream.window[1], stream.window[2]
   local period = periodTicks(params.period, ctx.resolution)   -- ticks per cycle
   local depth  = params.depth or 0
@@ -237,24 +237,6 @@ local function slide(stream, host, params, ctx)
   if glideStart > startL then bp(glideStart, 0, 'slow') end   -- slur begins (half-cosine ease)
   bp(arrive, target, 'step')                                -- arrived; hold to the handoff
   bp(endL, 0, 'step')                                       -- re-centre: next note sounds true
-  return { notes = {}, delta = delta }
-end
-
---contract: auto-pan -> cc-delta breakpoints in cc steps; sine of depth steps at 1/period QN
---contract: extrema-only, 'slow'-shaped; anchored 0 at both ends so the channel re-centres
-local function autopan(stream, host, params, ctx)
-  local startL, endL = stream.window[1], stream.window[2]
-  local period = periodTicks(params.period, ctx.resolution)
-  local depth  = params.depth or 0
-  local delta  = { { ppq = startL, val = 0, shape = 'slow' } }
-  local k, at = 0, startL + period / 4
-  while at < endL do
-    local sign = k % 2 == 0 and 1 or -1
-    util.add(delta, { ppq = at, val = sign * depth, shape = 'slow' })
-    k  = k + 1
-    at = startL + period / 4 + k * period / 2
-  end
-  util.add(delta, { ppq = endL, val = 0, shape = 'slow' })
   return { notes = {}, delta = delta }
 end
 
@@ -379,13 +361,13 @@ generators.kinds = {
       { field = 'pattern', label = 'Chord', widget = 'pattern', kind = 'notes', poly = true },
     },
   },
-  vibrato = {
-    expand = vibrato, mode = 'augment', dest = 'pb', dests = 'pb', label = 'Vibrato',
+  sine = {
+    expand = sine, mode = 'augment', dest = 'pb', dests = 'any', label = 'Sine',
     defaults = { period = { 1, 2 }, onset = 1 },
     fields = {
       { field = 'period', label = 'Period', widget = 'choice', options = PERIODS },
       { field = 'depth',  label = 'Depth',  widget = 'int', base = 1, coarse = 10,
-        quantity = 'magnitude', frac = 0.15 },   -- 30 cents on pb
+        quantity = 'magnitude', frac = 0.15 },   -- 30 cents on pb, 9 steps on a bipolar cc
       { field = 'onset',  label = 'Onset',  widget = 'int', base = 1, coarse = 4,  min = 0, max = 16 },   -- QN ramp-in
     },
   },
@@ -400,15 +382,6 @@ generators.kinds = {
         when = function(e) return e.target == 'fixed' end },
     },
   },
-  autopan = {
-    expand = autopan, mode = 'augment', dest = 10, dests = 'cc', label = 'Auto-pan',
-    defaults = { period = { 1, 2 } },
-    fields = {
-      { field = 'period', label = 'Period', widget = 'choice', options = PERIODS },
-      { field = 'depth',  label = 'Depth',  widget = 'int', base = 1, coarse = 10,
-        quantity = 'magnitude', frac = 0.5 },   -- 32 steps of pan's 63-step swing
-    },
-  },
   velPattern = {
     expand = velPattern, mode = 'replace', dest = 'note', label = 'Vel Pattern',
     defaults = { pattern = { 100, 55 } },
@@ -417,7 +390,7 @@ generators.kinds = {
     },
   },
   lfo = {
-    expand = lfo, mode = 'augment', dest = 1, dests = 'cc', label = 'LFO',
+    expand = lfo, mode = 'augment', dest = 1, dests = 'cc', label = 'Curve LFO',
     defaults = { period = { 1, 4 }, centre = 64, scale = 63,
                  pattern = { kind = 'curve', domain = 'normalized', display = 'bipolar', points = {} } },
     fields = {
@@ -436,7 +409,7 @@ for cc = 71, 79 do generators.ccDefaultRest[cc] = 64 end
 
 -- Which kinds the fxEdit modal offers, in order. Every kind works on either host: a region
 -- arpeggiates its covered chord, a single note degenerates cleanly (arp -> retrig, one voice).
-generators.modalOrder = { 'retrig', 'trill', 'arp', 'ostinato', 'chordStamp', 'velPattern', 'vibrato', 'slide', 'autopan', 'lfo' }
+generators.modalOrder = { 'retrig', 'trill', 'arp', 'ostinato', 'chordStamp', 'velPattern', 'sine', 'slide', 'lfo' }
 
 ----- Dest: a per-entry target, and what each target's numbers mean
 

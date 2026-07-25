@@ -4,7 +4,7 @@
 @harness   mk
 
 # Intent
-  UI wiring for the note-FX editor (retrig + vibrato + slide). Pins fxHostAtCursor ->
+  UI wiring for the note-FX editor (retrig + sine + slide). Pins fxHostAtCursor ->
   setNoteFx / setFxKindActive / setFxField. Continuous kinds coexist -- both sum offline into pb seats.
 
 # Helpers
@@ -27,10 +27,10 @@
   @case 'removeFxStage drops one stage; last removal clears fx'  [harness]  @ 154-166
   @case 'moveFxStage swaps adjacent stages, reordering the series'  [harness]  @ 170-181
   @case 'addFxStage appends a second stage of an existing kind (duplicates allowed)'  [harness]  @ 185-194
-  @case 'addFxStage seeds slide alongside vibrato (continuous kinds coexist)'  [harness]  @ 198-209
+  @case 'addFxStage seeds slide alongside sine (continuous kinds coexist)'  [harness]  @ 198-209
   @case 'slide target='fixed' bends by its cents demand; 'next' needs a following note'  [harness]  @ 213-228
-  @case 'setFxField writes vibrato depth and onset'  [harness]  @ 232-242
-  @case 'a vibrato entry on a lane-1 host seats a pb stream'  [harness]  @ 246-257
+  @case 'setFxField writes sine depth and onset'  [harness]  @ 232-242
+  @case 'a sine entry on a lane-1 host seats a pb stream'  [harness]  @ 246-257
   @case 'authoring fx reconciles the CC node (pa:apply on every setNoteFx)'  [harness]  @ 261-274
   @case 'a parked host cell routes to the parked backing at its onset row only'  [harness]  @ 278-292
   @case 'note-host augment: cc cells under the window tag parked (route to the off-take base)'  [harness]  @ 296-322
@@ -116,6 +116,7 @@
   @field w run  @ 43,65,81,95,109,127,142,155,171,186,199,214
   @field w run  @ 233,247,262,279,297,329
   @field w shape  @ 301,302,303
+  @field r sine  @ 148,149,205
   @field r slide  @ 205,206
   @field r startRow  @ 51
   @field r tails  @ 50,73
@@ -126,5 +127,4 @@
   @field w val  @ 301,302,303,307
   @field r vel  @ 118
   @field w vel  @ 10,46,68,69
-  @field r vibrato  @ 148,149,205
   @field r window  @ 301,303

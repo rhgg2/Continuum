@@ -1,4 +1,4 @@
-@module run  src=tests/run.lua  loc=302  sha=29bee49  mode=script
+@module run  src=tests/run.lua  loc=302  sha=9dbbe25  mode=script
 
 # Imports
   @const harness = 'harness'  @ 12

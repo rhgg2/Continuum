@@ -1,4 +1,4 @@
--- UI wiring for the note-FX editor (retrig + vibrato + slide). Pins fxHostAtCursor ->
+-- UI wiring for the note-FX editor (retrig + sine + slide). Pins fxHostAtCursor ->
 -- setNoteFx / setFxKindActive / setFxField. Continuous kinds coexist -- both sum offline into pb seats.
 
 local t          = require('support')
@@ -143,10 +143,10 @@ return {
       local h = harness.mk()
       addHost(h, { { kind = 'retrig', period = { 1, 4 }, ramp = 0 } })
       local uuid = hostUuid(h)
-      h.vm:addFxStage(uuid, { kind = 'vibrato', period = { 1, 2 }, depth = 30, onset = 1 })
+      h.vm:addFxStage(uuid, { kind = 'sine', period = { 1, 2 }, depth = 30, onset = 1 })
       local k = byKind(h.vm:noteFx(uuid))
-      t.truthy(k.retrig and k.vibrato, 'retrig and vibrato co-resident')
-      t.eq(k.vibrato.depth, 30, 'vibrato seeded from its default')
+      t.truthy(k.retrig and k.sine, 'retrig and sine co-resident')
+      t.eq(k.sine.depth, 30, 'sine seeded from its default')
     end,
   },
 
@@ -155,12 +155,12 @@ return {
     run = function(harness)
       local h = harness.mk()
       addHost(h, { { kind = 'retrig',  period = { 1, 4 }, ramp = 0 },
-                   { kind = 'vibrato', period = { 1, 2 }, depth = 30, onset = 1 } })
+                   { kind = 'sine', period = { 1, 2 }, depth = 30, onset = 1 } })
       local uuid = hostUuid(h)
       h.vm:removeFxStage(uuid, 1)
       local fx = h.vm:noteFx(uuid)
-      t.eq(#fx, 1, 'retrig removed, vibrato kept')
-      t.eq(fx[1].kind, 'vibrato', 'the survivor is vibrato')
+      t.eq(#fx, 1, 'retrig removed, sine kept')
+      t.eq(fx[1].kind, 'sine', 'the survivor is sine')
       h.vm:removeFxStage(uuid, 1)
       t.falsy(h.vm:noteFx(uuid), 'emptying clears fx entirely (no empty list)')
     end,
@@ -195,14 +195,14 @@ return {
   },
 
   {
-    name = 'addFxStage seeds slide alongside vibrato (continuous kinds coexist)',
+    name = 'addFxStage seeds slide alongside sine (continuous kinds coexist)',
     run = function(harness)
       local h = harness.mk()
-      addHost(h, { { kind = 'vibrato', period = { 1, 2 }, depth = 30, onset = 1 } })
+      addHost(h, { { kind = 'sine', period = { 1, 2 }, depth = 30, onset = 1 } })
       local uuid = hostUuid(h)
       h.vm:addFxStage(uuid, { kind = 'slide', over = { 1, 2 }, target = 'next' })
       local k = byKind(h.vm:noteFx(uuid))
-      t.truthy(k.vibrato and k.slide, 'vibrato and slide co-resident -- both sum offline into pb seats')
+      t.truthy(k.sine and k.slide, 'sine and slide co-resident -- both sum offline into pb seats')
       t.eq(k.slide.target, 'next', 'slide seeded with target=next')
       h.vm:setFxField(uuid, 2, 'over', { 1, 4 })
       t.eq(h.vm:noteFx(uuid)[2].over[2], 4, 'over cycled via the generic field writer')
@@ -229,10 +229,10 @@ return {
   },
 
   {
-    name = 'setFxField writes vibrato depth and onset',
+    name = 'setFxField writes sine depth and onset',
     run = function(harness)
       local h = harness.mk()
-      addHost(h, { { kind = 'vibrato', period = { 1, 2 }, depth = 30, onset = 1 } })
+      addHost(h, { { kind = 'sine', period = { 1, 2 }, depth = 30, onset = 1 } })
       local uuid = hostUuid(h)
       h.vm:setFxField(uuid, 1, 'depth', 55)
       h.vm:setFxField(uuid, 1, 'onset', 2)
@@ -243,17 +243,17 @@ return {
   },
 
   {
-    name = 'a vibrato entry on a lane-1 host seats a pb stream',
+    name = 'a sine entry on a lane-1 host seats a pb stream',
     run = function(harness)
       local h = harness.mk()
       addHost(h, nil, 1)
       local uuid = hostUuid(h)
-      h.vm:setNoteFx(uuid, { { kind = 'vibrato', period = { 1, 2 }, depth = 30, onset = 0 } })
+      h.vm:setNoteFx(uuid, { { kind = 'sine', period = { 1, 2 }, depth = 30, onset = 0 } })
       local n = 0
       for _, c in ipairs(h.fm:dump().ccs) do
         if c.evType == 'pb' then n = n + 1 end
       end
-      t.truthy(n >= 4, 'the view path realises vibrato as a densified pb seat stream')
+      t.truthy(n >= 4, 'the view path realises sine as a densified pb seat stream')
     end,
   },
 
@@ -265,7 +265,7 @@ return {
       local uuid = hostUuid(h)
       local calls = 0
       h.pa.apply = function() calls = calls + 1 end   -- spy at the boundary
-      h.vm:setNoteFx(uuid, { { kind = 'vibrato', period = { 1, 2 }, depth = 30, onset = 1 } })
+      h.vm:setNoteFx(uuid, { { kind = 'sine', period = { 1, 2 }, depth = 30, onset = 1 } })
       t.eq(calls, 1, 'authoring a carrier triggers a node reconcile')
       h.vm:setFxField(uuid, 1, 'depth', 40)
       t.eq(calls, 2, 'a field edit routes through setNoteFx -> reconcile')

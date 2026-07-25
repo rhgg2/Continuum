@@ -1,7 +1,7 @@
 -- Bezier tension through fx windows. The continuous bases feeding fx expansion
 -- (pbBaseFor/ccBasesFor) must carry authored tension: in-window folds interpolate
 -- via mm:interpolate, and a dropped tension silently re-shapes the curve, skewing
--- every derived seat under the window. Depth-0 vibrato / scale-0 lfo make the fx
+-- every derived seat under the window. Depth-0 sine / scale-0 lfo make the fx
 -- contribution exactly zero, so each seat is a pure sample of the authored base.
 
 local t    = require('support')
@@ -42,7 +42,7 @@ return {
       }
       h.tm:addEvent({ evType = 'note', ppq = 120, endppq = 360, chan = 1, pitch = 60, vel = 100,
                       detune = 0, delay = 0, lane = 1,
-                      fx = { { kind = 'vibrato', period = { 1, 4 }, depth = 0, onset = 0 } } })
+                      fx = { { kind = 'sine', period = { 1, 4 }, depth = 0, onset = 0 } } })
       h.tm:flush()
 
       local pbs = byPpq(h.fm:dump(), function(c) return c.evType == 'pb' and c.chan == 1 end)
@@ -52,7 +52,7 @@ return {
       local target = { ppq = 480, val = 100 }
       local e120 = sliceEdge(h.fm, govern, target, 120)
       local e360 = sliceEdge(h.fm, govern, target, 360)
-      t.truthy(pbs[120] and pbs[135], 'seats at the window start and the first vibrato extremum')
+      t.truthy(pbs[120] and pbs[135], 'seats at the window start and the first sine extremum')
       t.eq(pbs[120].val, c2r(e120.val), 'window-start seat samples the tensioned curve')
       t.eq(pbs[135].val, c2r(h.fm:interpolate(e120, e360, 135, 'val')),
         'in-window seat interpolates with the tension riding the slice edge')

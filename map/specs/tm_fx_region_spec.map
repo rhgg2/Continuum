@@ -1,10 +1,10 @@
-@spec tm_fx_region_spec  src=tests/specs/tm_fx_region_spec.lua  loc=1830  sha=b84e501  cases=65
+@spec tm_fx_region_spec  src=tests/specs/tm_fx_region_spec.lua  loc=1830  sha=872ec71  cases=65
 @exercises dataStore (h.ds), midiManager (h.fm), trackerManager (h.tm), generators (generators), trackerView (h.vm)
 @surface   ds:get, fm:dump, ds:assign, tm:rebuild, tm:getChannel, tm:addEvent, tm:flush, tm:assignParked, tm:deleteParked, tm:addParked, tm:subscribe, generators.retarget, vm:addFxStage, vm:noteFx, vm:removeFxStage
 @harness   mk
 
 # Intent
-  Note macros v2: region hosts. The N=0 vibrato pb seat stream proves the generator-side substrate
+  Note macros v2: region hosts. The N=0 sine pb seat stream proves the generator-side substrate
   (ds, 4.6 producer split, reconcile, G4 round-trip). see design/note-macros-v2.md
 
 # Helpers
@@ -46,7 +46,7 @@
       -- replace region has parked the whole chord off-take.
 
 # Cases
-  @case 'fx region (N=0): vibrato over a span seats a free-LFO pb stream with no host note'  [harness]  @ 163-173
+  @case 'fx region (N=0): sine over a span seats a free-LFO pb stream with no host note'  [harness]  @ 163-173
   @case 'fx region: pb seats re-centre the channel at the region window end'  [harness]  @ 179-188
   @case 'G4: region pb seat stream is byte-identical across rebuild -> flush'  [harness]  @ 194-208
   @case 'G2: removing the region leaves no pb seat after reconcile'  [harness]  @ 214-228
@@ -76,7 +76,7 @@
   @case 'one flush, one rebuild: a parked edit + a normal note land together (the multi-select guard)'  [harness]  @ 717-731
   @case 'parked-only flush drives exactly one rebuild (no mm round-trip)'  [harness]  @ 735-745
   @case 'fxParked dataChanged (undo rewind) rebuilds the grid'  [harness]  @ 749-758
-  @case 'augment by kind: a continuous (vibrato) region leaves its covered notes sounding'  [harness]  @ 764-771
+  @case 'augment by kind: a continuous (sine) region leaves its covered notes sounding'  [harness]  @ 764-771
   @case 'arp over a span with no sounding notes emits nothing'  [harness]  @ 777-782
   @case 'fx region: the producer hands the generator notes/pas/ccs/ats input streams'  [harness]  @ 788-818
   @case 'fx region: an OPEN member clips to the next same-lane onset, not the window end'  [harness]  @ 822-845
@@ -108,8 +108,8 @@
   @case 'note-host augment (cc): a sounding note drives summed seats like a degenerate region'  [harness]  @ 1635-1664
   @case 'replace: a preceding on-take tail clips at the parked chord onset, not past it'  [harness]  @ 1670-1686
   @case 'replace: a derived tile is not truncated by a parked member it replaced'  [harness]  @ 1690-1706
-  @case 'deleting a self-parked [trill, vibrato] host leaves no orphaned pb seats'  [harness]  @ 1712-1737
-  @case 'removing the note kind from a self-parked [autopan, trill] host keeps its authored cc parked'  [harness]  @ 1743-1792
+  @case 'deleting a self-parked [trill, sine] host leaves no orphaned pb seats'  [harness]  @ 1712-1737
+  @case 'removing the note kind from a self-parked [sine, trill] host keeps its authored cc parked'  [harness]  @ 1743-1792
   @case 'a same-pass note park widens a surviving host window and parks the exposed authored cc'  [harness]  @ 1799-1827
 
 # Uses (outbound edges)
@@ -179,7 +179,7 @@
   @field w dest  @ 508,586,615,689,803,833,861,895,926,950,958,982
   @field w dest  @ 989,1013,1020,1044,1051,1077,1084,1109,1116,1142,1150,1176
   @field w dest  @ 1183,1227,1253,1286,1326,1356,1394,1419,1449,1480,1506,1533
-  @field w dest  @ 1556,1564,1588,1613,1644
+  @field w dest  @ 1556,1564,1588,1613,1644,1753,1806
   @field w detune  @ 117,560,726,1218,1276,1718,1752,1805
   @field w dir  @ 113,343,359
   @field r endppq  @ 19,59,478,843,844,1705

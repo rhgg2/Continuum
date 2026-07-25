@@ -10,9 +10,9 @@ local util = require('util')
 
 local classic58 = { factors = { { atom = 'classic', shift = 0.08, period = 1 } } }
 
-local vib30 = { { kind = 'vibrato', period = { 1, 4 }, depth = 30, onset = 0 } }
+local sine30 = { { kind = 'sine', period = { 1, 4 }, depth = 30, onset = 0 } }
 local arpUp = { { kind = 'arp',     period = { 1, 4 }, dir = 'up' } }
-local pan   = { { kind = 'autopan', period = { 1, 2 }, depth = 32 } }
+local pan   = { { kind = 'sine', period = { 1, 2 }, depth = 32, dest = 10 } }
 
 local function note(chan, ppq, pitch, extra)
   local n = { evType = 'note', ppq = ppq, endppq = ppq + 240, chan = chan, pitch = pitch,
@@ -121,10 +121,10 @@ return {
       }
 
       -- chan 1: plain edit target.  chan 2: detuned lane-1 -> absorber pb stream.
-      -- chan 3: vibrato host -> pb seats.  chan 4: arp region -> parked host + derived notes.
+      -- chan 3: sine host -> pb seats.  chan 4: arp region -> parked host + derived notes.
       h.tm:addEvent(note(1, 0,   60));                 h.tm:flush()
       h.tm:addEvent(note(2, 0,   64, { detune = 25 })); h.tm:flush()
-      h.tm:addEvent(note(3, 0,   67, { fx = vib30 }));  h.tm:flush()
+      h.tm:addEvent(note(3, 0,   67, { fx = sine30 }));  h.tm:flush()
       h.tm:addEvent(note(4, 0,   72));                 h.tm:flush()
       -- chan 5: two arp regions in disjoint windows. An edit inside one must freeze the other
       -- producer-for-producer (phase 5), identity-keeping its derived notes.
@@ -138,13 +138,13 @@ return {
       h.tm:rebuild()
 
       -- The fixture is live across all three axes, so parity is a real fixpoint claim, not two empty
-      -- frames agreeing. Vibrato pb seats + absorber pbs are wire-only (mm), the parked chord is frame-visible.
+      -- frames agreeing. Sine pb seats + absorber pbs are wire-only (mm), the parked chord is frame-visible.
       local nSeat3, nPb2 = 0, 0
       for _, c in ipairs(h.fm:dump().ccs) do
         if c.evType == 'pb' and c.chan == 3 then nSeat3 = nSeat3 + 1 end
         if c.evType == 'pb' and c.chan == 2 then nPb2   = nPb2   + 1 end
       end
-      t.truthy(nSeat3 > 0, 'vibrato pb seats present on chan 3 (fx ran)')
+      t.truthy(nSeat3 > 0, 'sine pb seats present on chan 3 (fx ran)')
       t.truthy(nPb2 > 0,   'absorber pbs present on chan 2 (tuning ran)')
       t.truthy(projectFrame(h.tm)[4].parked and #projectFrame(h.tm)[4].parked > 0,
         'chan 4 has an off-take parked chord (region ran)')
@@ -154,7 +154,7 @@ return {
       h.tm:addEvent(note(1, 480, 62)); h.tm:flush()
       assertParity(h, 'chan-1 edit: frozen 2/3/4 re-read == full re-derive')
 
-      -- Edit the vibrato host itself: chan 3 re-derives (dirty path), 2/4 stay frozen.
+      -- Edit the sine host itself: chan 3 re-derives (dirty path), 2/4 stay frozen.
       local vibNote = h.tm:getChannel(3).columns.notes[1].events[1]
       h.tm:assignEvent(vibNote, { pitch = 69 }); h.tm:flush()
       assertParity(h, 'chan-3 fx edit: dirty re-derive + frozen 2/4 == full re-derive')
@@ -190,7 +190,7 @@ return {
         return out
       end
 
-      -- chan 1: disjoint autopan pair -- windows [0,240) and [960,1200) (authored ends bound them).
+      -- chan 1: disjoint sine pair -- windows [0,240) and [960,1200) (authored ends bound them).
       h.tm:addEvent(note(1, 0,   60, { endppq = 240,  fx = pan })); h.tm:flush()
       h.tm:addEvent(note(1, 960, 64, { endppq = 1200, fx = pan })); h.tm:flush()
       -- chan 2: overlapping pair on separate lanes -- windows [0,960) and [480,1920).
@@ -262,12 +262,12 @@ return {
         return out
       end
 
-      -- chan 1: disjoint vibrato hosts -- windows [0,240) and [960,1200).
-      h.tm:addEvent(note(1, 0,   60, { endppq = 240,  fx = vib30 })); h.tm:flush()
-      h.tm:addEvent(note(1, 960, 64, { endppq = 1200, fx = vib30 })); h.tm:flush()
-      -- chan 2: overlapping vibrato pair on lanes 1/2 -- windows [0,960) and [480,1920).
-      h.tm:addEvent(note(2, 0,   60, { endppq = 960,  fx = vib30 }));           h.tm:flush()
-      h.tm:addEvent(note(2, 480, 64, { endppq = 1920, fx = vib30, lane = 2 })); h.tm:flush()
+      -- chan 1: disjoint sine hosts -- windows [0,240) and [960,1200).
+      h.tm:addEvent(note(1, 0,   60, { endppq = 240,  fx = sine30 })); h.tm:flush()
+      h.tm:addEvent(note(1, 960, 64, { endppq = 1200, fx = sine30 })); h.tm:flush()
+      -- chan 2: overlapping sine pair on lanes 1/2 -- windows [0,960) and [480,1920).
+      h.tm:addEvent(note(2, 0,   60, { endppq = 960,  fx = sine30 }));           h.tm:flush()
+      h.tm:addEvent(note(2, 480, 64, { endppq = 1920, fx = sine30, lane = 2 })); h.tm:flush()
       -- Settle: a creation pass projects fresh seats before their uuids land at commit, so a column
       -- carried straight from creation lacks them. One full re-derive reaches the steady state every
       -- later carry preserves (the rich fixture crosses it via its fxRegions all-16 rebuild).
@@ -281,7 +281,7 @@ return {
       local keptB = pbsIn(1, 960, 1200)
       h.tm:addEvent(note(1, 120, 62, { lane = 2 })); h.tm:flush()
       t.deepEq(pbsIn(1, 960, 1200), keptB, 'kept window B: pb seats untouched')
-      assertParity(h, 'chan-1 disjoint vibrato: edit in A, B keeps == full re-derive')
+      assertParity(h, 'chan-1 disjoint sine: edit in A, B keeps == full re-derive')
 
       -- Edit at 240 seeds lane-1's window only: the overlapper folds as input inside [0,960) but
       -- its exclusive remainder [960,1920) is a kept range and carries verbatim.

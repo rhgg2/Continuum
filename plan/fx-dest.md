@@ -68,6 +68,13 @@ Auto-pan becomes "Sine → CC 10" and gains a ramp-in for free. Delete
 (key stays `lfo`). Pre-beta, so no compat guard — but existing
 `kind='autopan'` entries in live projects stop resolving.
 
+One merged kind carries one `frac`, and it is vibrato's `0.15`:
+auto-pan's old `0.5` would read as 100 cents on the merged kind's own
+dest. So a sine retargeted to CC 10 defaults to 9 steps, not 32 —
+seeding at a dest and retargeting to it now agree, which is the point
+of D7, and the cost is that auto-pan's out-of-the-box motion is a
+quarter of what it was.
+
 **D6 — dest profiles are first-class, and generator bodies stay
 unit-naive.** *(revised 2026-07-25: the table was per-domain and is
 now per-dest — see D11 for why. `range` and `fullScale` are gone;
@@ -197,9 +204,12 @@ Three riders:
 
 ## Landed
 
+- 2026-07-25 gen: merge vibrato and autopan into one dest-blind sine
+  kind (commit 1b). Next up is commit 2, `lfo` onto pb — no new brief
+  needed, the Commits entry above is self-contained, and `lfo.centre`
+  is where the `level` quantity D6 deferred comes due.
 - 2026-07-25 gen: dest becomes a per-entry param with domain profiles
-  (commit 1a, brief below). Next up is 1b, the vibrato/autopan merge —
-  it needs no new brief: the Commits entry above is self-contained.
+  (commit 1a, brief below).
 
 ## Commit 1a: dest becomes a param (landed)
 

@@ -88,7 +88,7 @@ local specs = {
   'tm_rescale_conform_spec',
   'tm_pc_synthesis_spec',
   'tm_macro_spec',
-  'tm_vibrato_spec',
+  'tm_sine_spec',
   'tm_fx_tension_spec',
   'tm_fx_region_spec',
   'tm_fx_window_cache_spec',

@@ -25,8 +25,8 @@
   @case 'a lone slide host with no following note emits no pb seats'  [harness]  @ 112-120
   @case 'G4: slide pb seat stream is byte-identical across flush -> rebuild -> flush (swing + delay)'  [harness]  @ 126-143
   @case 'slide seats never surface as a visible cc column'  [harness]  @ 149-154
-  @case 'vibrato and slide on one host sum into a single pb seat stream (N-stream overlap)'  [harness]  @ 160-175
-  @case 'disjoint vibrato and slide windows each seat their own pb span'  [harness]  @ 181-197
+  @case 'sine and slide on one host sum into a single pb seat stream (N-stream overlap)'  [harness]  @ 160-175
+  @case 'disjoint sine and slide windows each seat their own pb span'  [harness]  @ 181-197
 
 # Uses (outbound edges)
   @use call tm:addEvent  @ 32,35,79,82,84,115,132,135,163,167,184,187,190

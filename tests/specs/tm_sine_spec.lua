@@ -1,4 +1,4 @@
--- Note macros: vibrato (continuous pb-augment). Offline park-and-seat: the macro sums onto the
+-- Note macros: sine (continuous pb-augment). Offline park-and-seat: the macro sums onto the
 -- authored pb base and seats a markerless pb stream on the base lane (no carrier). see design/note-macros-v2.md § Continuous pb
 
 local t    = require('support')
@@ -8,7 +8,7 @@ local classic58 = { factors = { { atom = 'classic', shift = 0.08, period = 1 } }
 
 -- depth 30c, period 1/4 QN: at res 240 one cycle = 60 ticks; sine extrema => peak at ppqL 15,
 -- trough at 45; the summed stream anchors 0 at both window ends (closed span re-centres).
-local vib30 = { { kind = 'vibrato', period = { 1, 4 }, depth = 30, onset = 0 } }
+local sine30 = { { kind = 'sine', period = { 1, 4 }, depth = 30, onset = 0 } }
 
 local function centsToRaw(cents, pbRange)
   return util.round(cents * 8192 / ((pbRange or 2) * 100))
@@ -33,7 +33,7 @@ end
 
 local function addVibHost(h, over)
   local note = { evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
-                 vel = 100, detune = 0, delay = 0, lane = 1, fx = vib30 }
+                 vel = 100, detune = 0, delay = 0, lane = 1, fx = sine30 }
   for k, v in pairs(over or {}) do note[k] = v end
   h.tm:addEvent(note)
   h.tm:flush()
@@ -44,7 +44,7 @@ return {
   ----- Emission: summed cents -> raw pb seats at the extrema
 
   {
-    name = 'vibrato seats a summed pb stream: rest 0 + depth at the extrema, markerless',
+    name = 'sine seats a summed pb stream: rest 0 + depth at the extrema, markerless',
     run = function(harness)
       local h = harness.mk()
       addVibHost(h)
@@ -62,7 +62,7 @@ return {
   ----- Window end re-centres the channel (no residual bend)
 
   {
-    name = 'vibrato re-centres the channel at the window end (no residual bend)',
+    name = 'sine re-centres the channel at the window end (no residual bend)',
     run = function(harness)
       local h = harness.mk()
       addVibHost(h)
@@ -89,14 +89,14 @@ return {
   ----- G4 — round-trip stability (FIRST: frame/rounding tripwire)
 
   {
-    name = 'G4: vibrato pb seat stream is byte-identical across flush -> rebuild -> flush (swing + delay)',
+    name = 'G4: sine pb seat stream is byte-identical across flush -> rebuild -> flush (swing + delay)',
     run = function(harness)
       local h = harness.mk{
         config = { project = { swings = { ['c58'] = classic58 } } },
         data   = { swing = { global = 'c58' } },
       }
       h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
-                      vel = 100, detune = 0, delay = 500, lane = 1, fx = vib30 })
+                      vel = 100, detune = 0, delay = 500, lane = 1, fx = sine30 })
       h.tm:flush()
 
       local before = pbSeatsOf(h.fm:dump(), 1)
@@ -169,15 +169,15 @@ return {
   ----- Any lane — a continuous gesture bends the channel pb regardless of host lane
 
   {
-    name = 'vibrato on a higher lane seats a channel pb stream (lane-blind gesture)',
+    name = 'sine on a higher lane seats a channel pb stream (lane-blind gesture)',
     run = function(harness)
       local h = harness.mk()
       h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
                       vel = 100, detune = 0, delay = 0, lane = 1 })
       h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 67,
-                      vel = 100, detune = 0, delay = 0, lane = 2, fx = vib30 })
+                      vel = 100, detune = 0, delay = 0, lane = 2, fx = sine30 })
       h.tm:flush()
-      t.truthy(#pbSeatsOf(h.fm:dump(), 1) > 0, 'a higher-lane vibrato still bends the channel pb')
+      t.truthy(#pbSeatsOf(h.fm:dump(), 1) > 0, 'a higher-lane sine still bends the channel pb')
     end,
   },
 
@@ -216,7 +216,7 @@ return {
   ----- Projection — the derived seats never surface as an editable column
 
   {
-    name = 'vibrato seats never surface as a visible cc or pb column',
+    name = 'sine seats never surface as a visible cc or pb column',
     run = function(harness)
       local h = harness.mk()
       addVibHost(h)

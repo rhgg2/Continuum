@@ -1,4 +1,4 @@
-@module gridPane  src=gridPane.lua  loc=1153  sha=d1e5be1  mode=chunk  self=gridPane
+@module gridPane  src=gridPane.lua  loc=1153  sha=34dd573  mode=chunk  self=gridPane
 @deps cm, cmgr, chrome, gui, tv, inputAllowed, chordEntry
 
 # Invariants & contracts
@@ -45,7 +45,7 @@
   @state dragging = false  @ 72   -- tracker-grid selection drag: click → held → release
   @state laneConsumed = false  @ 74
   @state paintLast = nil  @ 76   -- region-paint per-cell debounce
-  @state FX_GLYPH = { retrig = 'R', trill = 'T', vibrato = 'V', slide = 'S', ...  @ 166
+  @state FX_GLYPH = { retrig = 'R', trill = 'T', sine = '∿', slide = 'S', arp...  @ 166
   @state renderFns = {  @ 172
   @state VNAME_MAX = 14  @ 288
   @state laneRenderable = { cc = true, pb = true, at = true }  @ 358
@@ -341,6 +341,7 @@
   @field w sample  @ 490
   @field r sampleShadowed  @ renderNote:125
   @field r showDelay  @ renderNote:93 drawTracker:741
+  @field w sine  @ 166
   @field w slide  @ 166
   @field w snap  @ printer:204 curveEditorFrame:392
   @field r srcHi  @ drawTracker:699,703
@@ -368,7 +369,6 @@
   @field w val  @ drawTracker:711
   @field r vel  @ renderNote:118
   @field w vel  @ 490
-  @field w vibrato  @ 166
   @field r w  @ drawCurveEditor:912
   @field w w  @ drawLaneStrip:462 drawCurveEditor:945
   @field r width  @ layoutColumns:61,65,66 drawTracker:532,533,547,626 naturalWidth:888 handleMouse:996,1011,1042
