@@ -137,9 +137,11 @@ local function ccWire(c)
   return string.char(status, b2, b3)
 end
 
---shape: serialise(notes, ccs, texts, passthrough, endPpq?) -> blob   -- notes/ccs keyed by slot (a dense array is the case slot==index); endPpq places the tail
+--shape: wire = { keys = { [i] = ppq*1e6 + rank*1e5 + seq2 }, chunks = { [i] = packed bytes for keys[i] } }  -- keys ascending and dense 1..n, chunks index-parallel
+--shape: buildWire(notes, ccs, texts, passthrough) -> wire   -- notes/ccs keyed by slot (a dense array is the case slot==index)
+--shape: render(wire, endPpq?) -> blob   -- concat plus the EOT tail; endPpq places the tail
 --invariant: a note/cc slot stays under 5e4: seq2 = slot*2 shares the key's 1e5 digit band with rank
---invariant: parse(serialise(x))==x; coincident events may reorder, per-type record lists preserved
+--invariant: parse(render(buildWire(x)))==x; coincident events may reorder, per-type lists intact
 --invariant: note onsets unique per (ppq,chan,pitch); collision is upstream bug, warn+write
 --reaper: matches MIDI_SetAllEvts format; tail at max(endPpq, last-event ppq) (default: last event)
 -- Packed-chunk cache: identity fields validate the row, the neighbour-coupled
@@ -237,7 +239,9 @@ local function chunkOf(kv, dppq, notes, ccs, texts, passthrough)
   end
 end
 
-function midiBlob.serialise(notes, ccs, texts, passthrough, endPpq)
+-- Keys, sorts and packs the model into wire state the caller holds across flushes,
+-- so an edit can replace the chunks it touched instead of rebuilding all of them.
+function midiBlob.buildWire(notes, ccs, texts, passthrough)
   passthrough = passthrough or {}
   -- key = ppq*1e6 + rank*1e5 + seq2, seq2 = slot*2 (+1 for a bezier tail); dense
   -- streams use index*2 in place of slot. See docs/midiBlob.md.
@@ -254,7 +258,7 @@ function midiBlob.serialise(notes, ccs, texts, passthrough, endPpq)
   for slot, n in pairs(notes) do
     local onset = n.ppq * 2048 + (n.chan - 1) * 128 + n.pitch
     if seenOnset[onset] then
-      util.print(('midiBlob.serialise: same-pitch onset collision ppq=%d chan=%d pitch=%d -- upstream bug, writing anyway')
+      util.print(('midiBlob.buildWire: same-pitch onset collision ppq=%d chan=%d pitch=%d -- upstream bug, writing anyway')
         :format(n.ppq, n.chan, n.pitch))
     end
     seenOnset[onset] = true
@@ -273,21 +277,33 @@ function midiBlob.serialise(notes, ccs, texts, passthrough, endPpq)
   table.sort(keys)
   perf.stop('sort')
 
+  -- A chunk's delta comes from its predecessor key, so packing is inherently a walk
+  -- over the sorted keys -- which is why it lives here and not in render.
   perf.start('pack')
-  local out, prev = {}, 0
-  for k = 1, count do
-    local kv = keys[k]
+  local chunks, prevPpq = {}, 0
+  for i = 1, count do
+    local kv  = keys[i]
     local ppq = kv // 1000000
-    local chunk, chunk2 = chunkOf(kv, ppq - prev, notes, ccs, texts, passthrough)
-    util.add(out, chunk)
-    if chunk2 then util.add(out, chunk2) end   -- wide LSB rides first, MSB at offset 0
-    prev = ppq
+    local chunk, chunk2 = chunkOf(kv, ppq - prevPpq, notes, ccs, texts, passthrough)
+    chunks[i] = chunk2 and (chunk .. chunk2) or chunk   -- wide LSB rides first, MSB at offset 0
+    prevPpq = ppq
   end
-  local tailPpq = math.max(endPpq or prev, prev)   -- never shrink past the last event
-  util.add(out, string.pack('i4Bs4', tailPpq - prev, 0, '\xB0\x7B\x00'))   -- all-notes-off tail
   perf.stop('pack')
+
+  return { keys = keys, chunks = chunks }
+end
+
+-- The tail goes on as a transient last element and comes straight back off:
+-- table.concat(chunks) .. tail would copy the whole blob to add twelve bytes.
+function midiBlob.render(wire, endPpq)
   perf.start('concat')
-  local blob = table.concat(out)
+  local keys, chunks = wire.keys, wire.chunks
+  local last    = #keys
+  local lastPpq = last > 0 and keys[last] // 1000000 or 0
+  local tailPpq = math.max(endPpq or lastPpq, lastPpq)   -- never shrink past the last event
+  chunks[last + 1] = string.pack('i4Bs4', tailPpq - lastPpq, 0, '\xB0\x7B\x00')   -- all-notes-off tail
+  local blob = table.concat(chunks)
+  chunks[last + 1] = nil
   perf.stop('concat')
   return blob
 end

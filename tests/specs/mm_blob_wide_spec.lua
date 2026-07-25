@@ -28,11 +28,15 @@ local function ccOf(extra)
     extra or {})
 end
 
+local function ser(notes, ccs, texts, passthrough)
+  return midiBlob.render(midiBlob.buildWire(notes, ccs, texts, passthrough))
+end
+
 return {
   {
     name = 'fractional cc in 0..31 serialises to an MSB(shaped)/LSB(step) wire pair',
     run = function()
-      local blob = midiBlob.serialise({}, { ccOf() }, {}, {})
+      local blob = ser({}, { ccOf() }, {}, {})
       local wire = wireCCs(blob)
       t.eq(#wire, 2, 'one logical wide CC becomes two wire events')
       t.eq(wire[1].cc, 20, 'MSB on the code');       t.eq(wire[1].val, 100, 'MSB = floor(val)')
@@ -47,7 +51,7 @@ return {
     name = 'the wire pair coalesces back to one fractional record (round-trip)',
     run = function()
       local x = ccOf()
-      local _, ccs = midiBlob.parse(midiBlob.serialise({}, { x }, {}, {}))
+      local _, ccs = midiBlob.parse(ser({}, { x }, {}, {}))
       t.eq(#ccs, 1, 'the LSB lane is hidden; one record surfaces')
       t.deepEq(ccs[1], x, 'record reconstructed exactly, idx contiguous')
     end,
@@ -57,7 +61,7 @@ return {
     name = 'carrier-style value (14-bit around 8192) round-trips exactly',
     run = function()
       local x = ccOf({ val = (8192 + 100) / 128, shape = 'slow' })
-      local _, ccs = midiBlob.parse(midiBlob.serialise({}, { x }, {}, {}))
+      local _, ccs = midiBlob.parse(ser({}, { x }, {}, {}))
       t.eq(#ccs, 1)
       t.eq(ccs[1].val * 128 - 8192, 100, '14-bit reconstructs the pb-delta exactly')
     end,
@@ -67,7 +71,7 @@ return {
     name = 'integer cc in 0..31 stays a plain 7-bit CC: one wire event',
     run = function()
       local x = ccOf({ val = 64, shape = 'step' })
-      local blob = midiBlob.serialise({}, { x }, {}, {})
+      local blob = ser({}, { x }, {}, {})
       t.eq(#wireCCs(blob), 1, 'no LSB companion for an integer value')
       local _, ccs = midiBlob.parse(blob)
       t.eq(#ccs, 1); t.eq(ccs[1].val, 64)
@@ -78,7 +82,7 @@ return {
     name = 'a lone LSB-range code (>= 32) with no MSB partner stays independent',
     run = function()
       local x = ccOf({ cc = 52, val = 40, shape = 'step' })
-      local _, ccs = midiBlob.parse(midiBlob.serialise({}, { x }, {}, {}))
+      local _, ccs = midiBlob.parse(ser({}, { x }, {}, {}))
       t.eq(#ccs, 1); t.eq(ccs[1].cc, 52, 'unpaired code survives untouched')
       t.eq(ccs[1].val, 40)
     end,
@@ -88,7 +92,7 @@ return {
     name = 'bezier wide cc keeps its tension on the MSB across the round-trip',
     run = function()
       local x = ccOf({ shape = 'bezier', tension = 0.5 })
-      local _, ccs = midiBlob.parse(midiBlob.serialise({}, { x }, {}, {}))
+      local _, ccs = midiBlob.parse(ser({}, { x }, {}, {}))
       t.eq(#ccs, 1); t.eq(ccs[1].shape, 'bezier')
       t.eq(ccs[1].tension, 0.5, 'tension folded onto the coalesced MSB, not the LSB')
     end,

@@ -16,25 +16,27 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-07-26 mm: serialise splits into buildWire + render (Phase 2b) (§ incremental serialise)
 - 2026-07-26 mm: the wire key becomes the slot (Phase 2a) (§ incremental serialise)
 - 2026-07-25 mm: chanIdx becomes one order array per channel (Phase 1c) (§ chanIdx)
 - 2026-07-25 mm: loc becomes a stable slot; verbs splice the order arrays (Phase 1b)
-- 2026-07-25 mm: ppq-ordered reads go through an order injection (Phase 1a)
 
 ## Now
 
-(empty — 2a landed: serialise keys on the slot and mm hands it the live sparse tables. Next is 2b, the persistent wire state object; run /plan-next to promote it.)
+(empty — 2b landed: midiBlob is `buildWire` + `render`, and mm holds the
+wire across flushes with nothing reading it back yet. 2c is next, but its
+order against 2d wants settling first — rank-3 text keys churn on every flush
+while the texts array is rebuilt per flush. Run /plan-next to promote it.)
 
 ## Queued (current phase; one-liners)
 
-1. *(in Now)* 2a — the wire key becomes the slot; `denseByOrder` goes.
-2. 2b — mm holds a `wire` state object (keys + packed chunks) across
-   flushes; midiBlob gains build/render over it. Pure restructure, rebuilt
-   whole each flush, blob byte-identical — the plumbing 2c splices.
-3. 2c — the three verb sites (`mm:add`, `mm:assign`, `mm:delete`) report key
+1. *(in Now)* 2b — mm holds a `wire` state object (keys + packed chunks) across
+   flushes; midiBlob gains build/render over it.
+2. 2c — the three verb sites (`mm:add`, `mm:assign`, `mm:delete`) report key
    dirt beside `markChan`; splices maintain the key array and re-pack only
    the touched chunk and its successor; slot-cap guard falls back to full
    regen. Blob-equality pin: incremental vs full regen after gesture storms
-   on both rebuild fixtures.
-4. 2d — sidecar texts key on their owner's slot, so the texts array stops
+   on both rebuild fixtures. Settle the order against 2d first: rank-3 text
+   keys churn on every flush while the texts array is rebuilt per flush.
+3. 2d — sidecar texts key on their owner's slot, so the texts array stops
    being rebuilt every flush (`sidecars` 2.1ms → ~0).

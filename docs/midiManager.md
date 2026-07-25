@@ -339,7 +339,7 @@ is provably unchanged by the sort. This replaced an earlier per-event
 cut held notes short); the sort fixes stranded offs and dropped ons alike, at
 any play position, with no per-event write.
 
-The sort is therefore a *playback* repair, not an ordering one: `midiBlob.serialise`
+The sort is therefore a *playback* repair, not an ordering one: `midiBlob.buildWire`
 emits the blob in canonical (ppq, rank, seq) order already, so a take written
 while the transport is stopped is correctly ordered whether or not REAPER sorts
 it. That matters because the call is not cheap — measured at ~8.6ms on a dense
@@ -509,7 +509,7 @@ invisible above the wire — **the value's type is the whole signal**. mm
 stores one record with a possibly-fractional `val`; the split/coalesce lives
 entirely in the wire codec (`midiBlob`):
 
-- **serialise** — a `cc` in 0..31 with a fractional `val` emits two wire
+- **buildWire** — a `cc` in 0..31 with a fractional `val` emits two wire
   events: MSB `floor(val)` on the code (carrying the authored shape/tension),
   LSB `round(frac*128)` on `code+32` (always `step`). An integer `val` stays
   one plain 7-bit event.

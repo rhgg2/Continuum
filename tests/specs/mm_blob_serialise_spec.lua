@@ -1,13 +1,20 @@
--- Round-trip pin for midiBlob.serialise (inverse of parse).
+-- Round-trip pin for the write-path codec (inverse of parse).
 --
--- serialise is the write-path codec: mm-shape records -> a MIDI_SetAllEvts blob.
--- The contract is parse(serialise(x)) == x -- byte layout may reorder events that
--- share a ppq, but the per-type record lists round-trip identically. Passthrough
--- carries events parse doesn't model so a whole-take rewrite stays lossless.
+-- buildWire + render turn mm-shape records into a MIDI_SetAllEvts blob. The
+-- contract is parse(render(buildWire(x))) == x -- byte layout may reorder events
+-- that share a ppq, but the per-type record lists round-trip identically.
+-- Passthrough carries events parse doesn't model so a whole-take rewrite stays
+-- lossless.
 
 local t = require('support')
 local midiBlob = require('midiBlob')
 local fixtures = require('fixtures.midi_blobs')
+
+-- Most cases want bytes out of records, not the wire state in between; name the
+-- composition once so each case reads as the round trip it is testing.
+local function ser(notes, ccs, texts, passthrough, endPpq)
+  return midiBlob.render(midiBlob.buildWire(notes, ccs, texts, passthrough), endPpq)
+end
 
 local tests = {}
 
@@ -16,7 +23,7 @@ for _, f in ipairs(fixtures) do
     name = 'records survive serialise -> parse: ' .. f.name,
     run = function()
       local _, _, _, passthrough = midiBlob.parse(f.blob)
-      local blob = midiBlob.serialise(f.notes, f.ccs, f.texts, passthrough)
+      local blob = ser(f.notes, f.ccs, f.texts, passthrough)
       local notes, ccs, texts = midiBlob.parse(blob)
       t.deepEq(notes, f.notes, f.name .. ' notes')
       t.deepEq(ccs,   f.ccs,   f.name .. ' ccs')
@@ -33,7 +40,7 @@ tests[#tests + 1] = {
     local notes, ccs, texts, passthrough = midiBlob.parse(blob)
     t.eq(#passthrough, 1, 'F2 captured as passthrough')
     t.eq(passthrough[1].msg, '\xF2\x01\x02', 'raw bytes preserved')
-    local _, _, _, pt2 = midiBlob.parse(midiBlob.serialise(notes, ccs, texts, passthrough))
+    local _, _, _, pt2 = midiBlob.parse(ser(notes, ccs, texts, passthrough))
     t.deepEq(pt2, passthrough, 'passthrough survives the round-trip')
   end,
 }
@@ -63,9 +70,9 @@ tests[#tests + 1] = {
     _G.reaper.ShowConsoleMsg = function(m)
       if m:find('same-pitch onset collision', 1, true) then warned = true end
     end
-    local blob = midiBlob.serialise(notes, {}, {}, {})
+    local blob = ser(notes, {}, {}, {})
     _G.reaper.ShowConsoleMsg = origShow
-    t.eq(warned, true, 'serialise reports the collision')
+    t.eq(warned, true, 'the codec reports the collision')
     local parsed = midiBlob.parse(blob)
     t.eq(#parsed, 2, 'warn-and-write: both notes still in the blob')
   end,
@@ -75,9 +82,21 @@ tests[#tests + 1] = {
   name = 'endPpq positions the EOT tail; never shrinks past the last event',
   run = function()
     local notes = { { evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100 } }
-    t.eq(tailPpq(midiBlob.serialise(notes, {}, {}, {}, 960)), 960, 'tail honours endPpq beyond the last event')
-    t.eq(tailPpq(midiBlob.serialise(notes, {}, {}, {}, 100)), 240, 'endPpq below the last event is clamped up')
-    t.eq(tailPpq(midiBlob.serialise(notes, {}, {}, {})),      240, 'no endPpq: tail sits at the last event')
+    t.eq(tailPpq(ser(notes, {}, {}, {}, 960)), 960, 'tail honours endPpq beyond the last event')
+    t.eq(tailPpq(ser(notes, {}, {}, {}, 100)), 240, 'endPpq below the last event is clamped up')
+    t.eq(tailPpq(ser(notes, {}, {}, {})),      240, 'no endPpq: tail sits at the last event')
+  end,
+}
+
+-- The wire outlives the render that consumed it, so render must leave the chunks
+-- it was handed exactly as it found them -- the transient tail element included.
+tests[#tests + 1] = {
+  name = 'render twice over one wire yields identical bytes',
+  run = function()
+    local f = fixtures[1]
+    local _, _, _, passthrough = midiBlob.parse(f.blob)
+    local wire = midiBlob.buildWire(f.notes, f.ccs, f.texts, passthrough)
+    t.eq(midiBlob.render(wire, 960), midiBlob.render(wire, 960), 'held wire state survives a render')
   end,
 }
 

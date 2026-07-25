@@ -77,6 +77,7 @@ local carriedTexts       = {}  -- parsed text/meta events mm doesn't model; re-e
 local carriedPassthrough = {}  -- parsed system messages mm doesn't model; re-emitted verbatim on flush
 --invariant: loadedBlob is the take's bytes as of the model agreeing with them; nil = unknown, never gate
 local loadedBlob            -- converged-rebind gate; see design/archive/incremental-rebuild.md § The take-hash gate
+local wire                  -- last flush's midiBlob wire state; nil = nothing built yet
 
 -- Where a note sits, not which note it is: two notes sharing a seat occupy one MIDI slot,
 -- which is exactly what the same-pitch backstop detects. mm addresses by uuid.
@@ -498,8 +499,9 @@ local function flushTake()
   local endPpq   = math.floor(reaper.GetMediaSourceLength(source) * ppqPerQN + 0.5)
 
   perf.start('serialise')
-  -- The live tables, unsnapshotted: serialise keys on the slot, so it reads them sparse.
-  local blob = midiBlob.serialise(notes, ccs, texts, carriedPassthrough, endPpq)
+  -- The live tables, unsnapshotted: buildWire keys on the slot, so it reads them sparse.
+  wire = midiBlob.buildWire(notes, ccs, texts, carriedPassthrough)
+  local blob = midiBlob.render(wire, endPpq)
   perf.stop('serialise')
 
   perf.start('setEvts')
@@ -889,7 +891,7 @@ end)
 
 --contract: clears mm.take and event tables when take dies; distinct from load(nil) dormant seam
 function mm:unload()
-  take, poolGuid, loadedBlob = nil, nil, nil
+  take, poolGuid, loadedBlob, wire = nil, nil, nil, nil
   notes, ccs, eventsByUuid, collisionIdx, maxUUID, lock = {}, {}, {}, {}, 0, false
   noteOrder, ccOrder = {}, {}
   noteFree, ccFree   = {}, {}

@@ -57,6 +57,6 @@ The invariant is mm's; enforcement is layered, outermost first:
   contract. In steady state it finds nothing.
 - **mm load-dedup** applies the verdicts to whatever arrives from the
   take, so an external collapse nudges instead of eating a voice.
-- **midiBlob.serialise** asserts, warn-and-write: a collision reaching
+- **midiBlob.buildWire** asserts, warn-and-write: a collision reaching
   the codec is an upstream bug reported loudly, never edited silently —
   the codec stays a pure bijection.
