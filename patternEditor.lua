@@ -152,7 +152,8 @@ end
 
 -- Read channel 1 back through tm and rebuild the whitelisted body: notes drop fx/chan and fix
 -- lane 1, a curve normalises the pb column's cents to bipolar. lengthPpq/root ride the open
--- snapshot (no bound command edits them). The field pick IS the whitelist. see design/fx-patterns.md § checkout model
+-- snapshot (no bound command edits them); rpb reads live, so a toolbar change persists with the
+-- body rather than dying with the checkout take. The field pick IS the whitelist. see design/fx-patterns.md § checkout model
 local function readbackBody()
   local cols = (tm:getChannel(1) or {}).columns or {}
   if editBody.kind == 'curve' then
@@ -169,7 +170,7 @@ local function readbackBody()
       end
     end
     return { kind = 'curve', domain = editBody.domain, display = editBody.display,
-             lengthPpq = editBody.lengthPpq, points = points }
+             lengthPpq = editBody.lengthPpq, rpb = cm:get('rowPerBeat'), points = points }
   end
   local specs = {}
   for laneIdx, col in ipairs(cols.notes or {}) do
@@ -195,7 +196,8 @@ local function readbackBody()
     if a.lane ~= b.lane then return a.lane < b.lane end
     return a.ppq < b.ppq
   end)
-  return { kind = 'notes', lengthPpq = editBody.lengthPpq, root = editBody.root, specs = specs }
+  return { kind = 'notes', lengthPpq = editBody.lengthPpq, root = editBody.root,
+           rpb = cm:get('rowPerBeat'), specs = specs }
 end
 
 -- Fires on every mini rebuild; `armed` gates out the open/close rebuilds (bindTake, the
@@ -230,12 +232,15 @@ function pe:open(body, commit, poly)
   item = reaper.CreateNewMIDIItemInProj(scratch.track(), 0, 1, true)
   local take = reaper.GetActiveTake(item)
   tm:bindTake(take, { skipGuard = true })   -- bindTake keys cm to the take; no separate setContext
-  cm:set('track', 'rowPerBeat', 4)          -- reset to 4 rpb on open; track tier (as tv:setRowPerBeat writes) so a later change isn't shadowed
   poolGuid = mm:poolGuid()
   local resolution = mm:resolution()
 
   body = util.deepClone(body)
   body.lengthPpq = body.lengthPpq or 4 * resolution
+  body.rpb = body.rpb or 4
+  -- Seed the ticker from the body, before materialise stamps each event's rpb. Track tier (as
+  -- tv:setRowPerBeat writes) so a later toolbar change isn't shadowed by a more specific tier.
+  cm:set('track', 'rowPerBeat', body.rpb)
   -- Curve bodies extend the live loop by one row so the endL anchor at ppq=lengthPpq is a reachable
   -- interior row, not the boundary ctx:ppqToRow clamps to phantom numRows. see docs/patternEditor.md
   local loopPpq = body.lengthPpq

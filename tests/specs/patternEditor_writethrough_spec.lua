@@ -268,4 +268,29 @@ return {
       for _, s in ipairs(specs) do t.eq(s.lane, 1, 'every note collapses to lane 1') end
     end,
   },
+
+  {
+    -- At 8 rpb (resolution 960 -> 120 ppq rows) the ppq 0/240 specs sit on rows 0 and 2, so the
+    -- row-0 cursor still deletes the first note: a surviving spec proves the seed took, not luck.
+    name = 'the body rpb seeds the editor and rides readback',
+    run = function(harness)
+      local body = notesBody()
+      body.rpb = 8
+      local _, pe, get = withEditor(harness, body)
+      pressDelete(pe)
+
+      t.eq(get().rpb, 8, 'the authored rpb rides the committed body')
+      t.eq(#get().specs, 1, 'the deleted note is gone from the committed body')
+    end,
+  },
+
+  {
+    name = 'a body with no rpb commits the default 4',
+    run = function(harness)
+      local _, pe, get = withEditor(harness, notesBody())
+      pressDelete(pe)
+
+      t.eq(get().rpb, 4, 'an unauthored rpb defaults to 4')
+    end,
+  },
 }

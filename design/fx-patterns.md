@@ -35,6 +35,7 @@ ds key shelves named copies of the same shape (§ P4):
 body = {
   kind      = 'notes' | 'curve',
   lengthPpq = number,            -- loop length, logical frame
+  rpb       = number,            -- soft: rows per beat the body is authored at; default 4
   -- notes:
   root      = midiPitch,         -- reference; realisation transposes host − root
   specs     = { { lane=1, ppq, endppq, pitch, vel, detune, delay, sample? }, ... },
@@ -256,7 +257,9 @@ the body's content, not its editor of origin.
 **rpb rides the body.** rowPerBeat currently persists on the checkout
 take's tier and dies with it. Store it in the body (soft, like
 `display`): open seeds the toolbar ticker from it, readback carries it
-through the whitelist.
+through the whitelist. The field is named `rpb` (2026-07-25), matching
+the `tm:addEvent` spec field and the RPB commands rather than the cm
+key `rowPerBeat`.
 
 Two settlements from the 2026-07-24 shelf promotion: curve loads
 filter on **domain** as well as kind — the generator is coded against

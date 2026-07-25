@@ -1,4 +1,4 @@
-@spec patternEditor_writethrough_spec  src=tests/specs/patternEditor_writethrough_spec.lua  loc=271  sha=5c74b87  cases=9
+@spec patternEditor_writethrough_spec  src=tests/specs/patternEditor_writethrough_spec.lua  loc=296  sha=4602222  cases=11
 @harness   mk, reaper.GetMediaItemTake_Track
 
 # Intent
@@ -35,6 +35,8 @@
   @case 'close does not clobber the committed body via the unbind rebuild'  [harness]  @ 232-239
   @case 'a poly open keeps each authored lane through readback'  [harness]  @ 243-256
   @case 'the same body opened mono flattens every note onto lane 1'  [harness]  @ 260-269
+  @case 'the body rpb seeds the editor and rides readback'  [harness]  @ 275-284
+  @case 'a body with no rpb commits the default 4'  [harness]  @ 288-294
 
 # Fields (r read / w write incl. constructor keys)
   @field w GetKeyMods  @ 29
@@ -78,7 +80,7 @@
   @field w lengthPpq  @ 62,73,85,95,107
   @field r loaded  @ 49
   @field w modalHost  @ 121
-  @field w name  @ 136,154,169,188,208,219,232,243,260
+  @field w name  @ 136,154,169,188,208,219,232,243,260,275,288
   @field w open  @ 44
   @field w ownerTrack  @ 56
   @field w pitch  @ 64,65,75,76,87,88
@@ -91,9 +93,11 @@
   @field w registerKind  @ 44
   @field r root  @ 149
   @field w root  @ 62,73,85
-  @field w run  @ 137,155,170,189,209,220,233,244,261
+  @field r rpb  @ 282,293
+  @field w rpb  @ 278
+  @field w run  @ 137,155,170,189,209,220,233,244,261,276,289
   @field w shape  @ 97,98,99,109,110,111
-  @field r specs  @ 142,143,161,214,223,227,238,250,266
+  @field r specs  @ 142,143,161,214,223,227,238,250,266,283
   @field w specs  @ 63,74,86
   @field w ui  @ 43
   @field w uiFont  @ 43

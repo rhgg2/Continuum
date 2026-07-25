@@ -37,6 +37,11 @@ callback taken at open — in production `tv:setFxField`, which writes the
 body back onto the owning fx entry. The field pick *is* the whitelist:
 nothing that leaks onto the checkout take survives readback.
 
+`rpb` is part of that whitelist, and `open` reseeds the toolbar ticker from
+it (defaulting to 4), so the grid a pattern was authored on outlives the
+checkout take the setting was made on — and rides a shelf Save/Load, since
+`saveShelf` shelves the same readback shape.
+
 `armed` gates the subscriber. Three rebuilds fire around a genuine edit whose
 take isn't the body — `bindTake`, the materialise flush at open, and the
 unbind at close — and each must stay silent, or open would clobber the param
