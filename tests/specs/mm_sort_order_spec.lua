@@ -2,8 +2,9 @@
 -- ppq-sorted, and a newly added event sits behind everything already at its
 -- ppq. Exercises both sort paths: the near-sorted insertion pass and the
 -- shift-budget fallback that a bulk reverse-order add trips.
--- A ppq move's placement among its new equals is deliberately unpinned --
--- see design/stable-slots.md § Equal-ppq order.
+-- A ppq move lands among its new equals by the same rule as an add: one splice
+-- serves both, so the mechanism settles what design/stable-slots.md § Equal-ppq
+-- order left open for phase 1.
 
 local t = require('support')
 local midiBlob = require('midiBlob')
@@ -97,6 +98,42 @@ return {
       end)
       t.deepEq(fieldAt(mm:notesRaw(), 240, 'pitch'), { 60, 62 },
         'the added note sits behind its equal')
+    end,
+  },
+
+  {
+    -- The consequence of one splice serving both verbs: the add rule decides the
+    -- move as well. Under the dense-loc reindex the moved note stayed put instead.
+    name = 'a note moved onto an occupied ppq lands behind the note already there',
+    run = function(harness)
+      local mm = harness.bareMM{ notes = {
+        { ppq =   0, endppq = 240, chan = 1, pitch = 60, vel = 100 },
+        { ppq = 240, endppq = 480, chan = 1, pitch = 62, vel = 100 },
+      } }
+      local moved
+      for _, n in mm:notesRaw() do if n.ppq == 0 then moved = n.uuid end end
+      mm:modify(function() mm:assign(moved, { ppq = 240, endppq = 480 }) end)
+
+      t.deepEq(fieldAt(mm:notesRaw(), 240, 'pitch'), { 62, 60 },
+        'the moved note sits behind the note already at 240')
+    end,
+  },
+
+  {
+    name = 'a backwards ppq move lands behind its new equals too',
+    run = function(harness)
+      local mm = harness.bareMM{ notes = {
+        { ppq =   0, endppq = 120, chan = 1, pitch = 60, vel = 100 },
+        { ppq = 120, endppq = 240, chan = 1, pitch = 62, vel = 100 },
+        { ppq = 240, endppq = 480, chan = 1, pitch = 64, vel = 100 },
+      } }
+      local moved
+      for _, n in mm:notesRaw() do if n.ppq == 240 then moved = n.uuid end end
+      mm:modify(function() mm:assign(moved, { ppq = 0, endppq = 120 }) end)
+
+      t.deepEq(orderedPpqs(mm:notesRaw()), { 0, 0, 120 }, 'the move re-sorted downwards')
+      t.deepEq(fieldAt(mm:notesRaw(), 0, 'pitch'), { 60, 64 },
+        'and it landed behind the note already at 0')
     end,
   },
 

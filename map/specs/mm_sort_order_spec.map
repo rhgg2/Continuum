@@ -1,6 +1,6 @@
-@spec mm_sort_order_spec  src=tests/specs/mm_sort_order_spec.lua  loc=126  sha=3081312  cases=5
+@spec mm_sort_order_spec  src=tests/specs/mm_sort_order_spec.lua  loc=163  sha=48917dd  cases=7
 @exercises midiManager (h.mm), midiBlob (midiBlob)
-@surface   mm:modify, mm:notesRaw, mm:ccsRaw, midiBlob.parse
+@surface   mm:modify, mm:notesRaw, mm:ccsRaw, mm:assign, midiBlob.parse
 @harness   bareMM
 
 # Intent
@@ -8,44 +8,52 @@
   ppq-sorted, and a newly added event sits behind everything already at its
   ppq. Exercises both sort paths: the near-sorted insertion pass and the
   shift-budget fallback that a bulk reverse-order add trips.
-  A ppq move's placement among its new equals is deliberately unpinned --
-  see design/stable-slots.md § Equal-ppq order.
+  A ppq move lands among its new equals by the same rule as an add: one splice
+  serves both, so the mechanism settles what design/stable-slots.md § Equal-ppq
+  order left open for phase 1.
 
 # Helpers
-  @fn orderedPpqs(iter)  @ 11-15
-  @fn sortedCopy(list)  @ 17-22
-  @fn fieldAt(iter, ppq, field)  @ 26-30
+  @fn orderedPpqs(iter)  @ 12-16
+  @fn sortedCopy(list)  @ 18-23
+  @fn fieldAt(iter, ppq, field)  @ 27-31
       -- One field of everything sitting at one ppq, in walk order: exactly what the
       -- equal-ppq rule constrains, and nothing else.
 
 # Cases
-  @case 'a scattered add lands in ppq order (near-sorted fast path)'  [harness]  @ 34-46
-  @case 'equal-ppq ccs keep insertion order across rebuilds'  [harness]  @ 50-63
-  @case 'bulk reverse-order add trips the shift budget and still lands sorted, stably'  [harness]  @ 67-84
-  @case 'a note added at an occupied ppq lands behind the note already there'  [harness]  @ 90-100
-  @case 'equal-ppq array order reaches the wire'  [harness]  @ 107-124
+  @case 'a scattered add lands in ppq order (near-sorted fast path)'  [harness]  @ 35-47
+  @case 'equal-ppq ccs keep insertion order across rebuilds'  [harness]  @ 51-64
+  @case 'bulk reverse-order add trips the shift budget and still lands sorted, stably'  [harness]  @ 68-85
+  @case 'a note added at an occupied ppq lands behind the note already there'  [harness]  @ 91-101
+  @case 'a note moved onto an occupied ppq lands behind the note already there'  [harness]  @ 107-119
+  @case 'a backwards ppq move lands behind its new equals too'  [harness]  @ 123-137
+  @case 'equal-ppq array order reaches the wire'  [harness]  @ 144-161
 
 # Uses (outbound edges)
-  @use call mm:modify  @ 41,53,59,70,95,115
-  @use call mm:notesRaw  @ 44,79,82,98
-  @use call mm:ccsRaw  @ 62
-  @use call midiBlob.parse  @ 120
+  @use call mm:modify  @ 42,54,60,71,96,115,132,152
+  @use call mm:notesRaw  @ 45,80,83,99,114,117,131,134,135
+  @use call mm:ccsRaw  @ 63
+  @use call mm:assign  @ 115,132
+  @use call midiBlob.parse  @ 157
 
 # Fields (r read / w write incl. constructor keys)
-  @field r MIDI_SetAllEvts  @ 113
-  @field w MIDI_SetAllEvts  @ 114
-  @field w cc  @ 54,55,56,60
-  @field w chan  @ 37,38,39,42,54,55,56,60,73,76,77,93
-  @field w chan  @ 96,110,116
-  @field w endppq  @ 37,38,39,42,73,76,77,93,96,110,116
-  @field w evType  @ 42,54,55,56,60,73,76,77,96,116
-  @field w name  @ 34,50,67,90,107
-  @field w notes  @ 36,92,109
-  @field r pitch  @ 121
-  @field w pitch  @ 37,38,39,42,73,76,77,93,96,110,116
-  @field r ppq  @ 13,28,121
-  @field w ppq  @ 37,38,39,42,54,55,56,60,73,76,77,93
-  @field w ppq  @ 96,110,116
-  @field w run  @ 35,51,68,91,108
-  @field w val  @ 54,55,56,60
-  @field w vel  @ 37,38,39,42,73,76,77,93,96,110,116
+  @field r MIDI_SetAllEvts  @ 150
+  @field w MIDI_SetAllEvts  @ 151
+  @field w cc  @ 55,56,57,61
+  @field w chan  @ 38,39,40,43,55,56,57,61,74,77,78,94
+  @field w chan  @ 97,110,111,126,127,128,147,153
+  @field w endppq  @ 38,39,40,43,74,77,78,94,97,110,111,115
+  @field w endppq  @ 126,127,128,132,147,153
+  @field w evType  @ 43,55,56,57,61,74,77,78,97,153
+  @field w name  @ 35,51,68,91,107,123,144
+  @field w notes  @ 37,93,109,125,146
+  @field r pitch  @ 158
+  @field w pitch  @ 38,39,40,43,74,77,78,94,97,110,111,126
+  @field w pitch  @ 127,128,147,153
+  @field r ppq  @ 14,29,114,131,158
+  @field w ppq  @ 38,39,40,43,55,56,57,61,74,77,78,94
+  @field w ppq  @ 97,110,111,115,126,127,128,132,147,153
+  @field w run  @ 36,52,69,92,108,124,145
+  @field r uuid  @ 114,131
+  @field w val  @ 55,56,57,61
+  @field w vel  @ 38,39,40,43,74,77,78,94,97,110,111,126
+  @field w vel  @ 127,128,147,153

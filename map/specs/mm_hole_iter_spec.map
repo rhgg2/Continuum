@@ -4,13 +4,13 @@
 @harness   bareMM
 
 # Intent
-  Phase B pin - design/archive/deferred-reindex.md item 2. mm's four iterators skip
-  the holes a delete leaves in the sparse note/cc arrays and keep yielding
-  survivors past the hole, up to the noteCount/ccCount high-water mark.
+  mm's four iterators must keep yielding every survivor of a delete taken mid-modify:
+  the ones ahead of it and - the original bug - the ones behind it.
   
-  The holes only exist mid-modify today (mm:modify compacts at unwind), so
-  the spec observes them from inside the modify closure - the exact state
-  the deferred-reindex flip (Phase D) makes the whole pipeline run against.
+  Stable slots retired the hole this was first written against: mm:delete now splices the
+  slot out of the order array, so a walk started after the delete never sees it at all.
+  Each case takes a fresh iterator after the delete for that reason - splicing under a
+  live one raises (docs/midiManager.md § Mutation contract).
 
 # Helpers
   @fn ppqsOf(iter)  @ 11-16

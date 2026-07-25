@@ -4,6 +4,11 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-25** — mm's reindex gate (needsSort/needsCompact, 2026-07-14) retires: loc is now a
+  stable slot id, so the verbs splice the ppq order arrays directly and only load reindexes. One
+  splice serving both add and move pins a moved event behind its new equals, and a splice under a
+  live walk asserts on an order epoch rather than silently skipping a neighbour.
+
 - **2026-07-25** — mm's equal-ppq order specifies the add only: a new event seats behind everything
   already at its ppq, while a ppq move's placement among its new equals is unspecified — which is
   REAPER's own position, since MIDI_Sort is stable and coincident order is prior order rather than a

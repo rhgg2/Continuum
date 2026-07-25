@@ -243,25 +243,30 @@ same way: `metaDirty`/`metaDeleted` reset only at the outermost entry, so nested
 modifies accumulate into them and the flush runs once at the unwind — safe
 because nothing reads project ext-state mid-modify.
 
-**Reindex deferral.** `rebuild` used to run inline on every dirty `modify`,
-including the nested reseat pass. That reindex is deferred the same way as the
-flush: only `modifyDepth == 0` pays for the one reindex, after the nested
-reseat's writes have landed. Callers inside a nested `modify` — the reseat pass
-included — see sparse/unsorted arrays until that unwind; nothing in the pipeline
-reads position-dependent state mid-modify, so this is safe for the same reason
-the flush deferral is.
+**Stable slots.** A `loc` is a slot id, not a position: minted from a free list
+on add, handed back to it on delete, and carried unchanged for as long as the
+event lives. Ppq order lives beside the events instead, in `noteOrder` /
+`ccOrder` — dense `[1..n]` arrays of slot ids that the verbs splice
+(`orderInsert` / `orderRemove`: a binary search plus a shift). Every read that
+has to be in ppq order walks one of them, and array position means nothing.
 
-**The reindex gate.** Dirty is not the same as stale. `needsSort` and
-`needsCompact` describe the *arrays*, not the write: an add or a `ppq` move
-leaves them dense but out of order, a delete leaves a hole, and an assign
-touching neither leaves them exactly as they were — so the unwind skips the
-reindex outright. (`pitch` and `chan` are in a note's seat key but not the
-sort key; `endppq` is in neither.) The skip makes the verbs' own index maintenance
-load-bearing where a from-scratch `rebuild` used to launder it: `mm:assign`
-re-keys `collisionIdx` in place and brackets a chan move with `indexDrop` /
-`indexPut`. The two mutators that write outside the verbs — `resolveCollisions`
-and load's dedup — set both flags themselves. See
-design/archive/incremental-rebuild.md § 6.
+What that bought is a pass that no longer exists, rather than a faster one.
+`rebuild` recomputed every `loc`, and so every index keyed on one, which is why
+it had to run after any add, delete or `ppq` move — ~8ms per such gesture on a
+10k-event take, with a `needsSort`/`needsCompact` gate whose whole job was to
+name the writes that had moved a loc. With slots stable there is nothing to
+recompute: the splice is O(log n), the indices key on something that never
+moves, and `rebuild` survives as load's own pass, where it compacts the dedup
+holes and mints the initial dense slots 1..n. The verbs' index maintenance is
+load-bearing in exchange — `mm:assign` re-keys `collisionIdx` in place and
+brackets a chan move with `indexDrop`/`indexPut`, and `resolveCollisions`
+splices its own kills and nudges. See design/stable-slots.md.
+
+**Collect first, then mutate.** A splice under a live iterator drops a
+neighbour out of the walk silently, and that is the one failure mode worth a
+tripwire: `ordered` captures an `orderEpoch` and asserts it on every step, so a
+mid-walk mutation raises rather than quietly skipping an event. (A mid-walk
+*add* stays invisible as it always did — the walk captures its length up front.)
 
 **Same-pitch backstop.** `tm`'s separation sites uphold the `(ppq, chan,
 pitch)` invariant in steady state; `resolveCollisions` catches any write path
@@ -458,15 +463,17 @@ Firing rules:
 - **`muted` is true-or-absent**, never stored as `false`. Callers pass
   `muted=false` to clear; `util.REMOVE` is not supported (REAPER-native flag,
   not metadata).
-- **Locations are not stable across reloads.** They're 1-indexed snapshots of
-  REAPER event order at load time. Don't cache a loc across a `modify`.
-- **Ppq-ordered reads go through `noteOrder`/`ccOrder`**, not array position --
-  the injection point that will decouple `loc` from position once locs go
-  stable (stable-slots Phase 1). `parse` and `rebuild` are the only producers,
-  both handing back a dense in-order array, so today the map is the identity.
+- **A `loc` is a slot, stable for as long as the event lives** — but only within
+  one load: `rebuild` mints fresh slots off the take's own order every time, so
+  nothing may cache a loc across a reload. Address by uuid.
+- **Ppq-ordered reads go through `noteOrder`/`ccOrder`**, not array position.
+  The verbs splice those arrays, so slot order and ppq order coincide only just
+  after `rebuild`: a moved or added event walks in its ppq place while keeping
+  whatever slot it already held.
 - **Accessors return shallow clones** with `idx`/`uuidIdx` stripped
   (`INTERNALS`). Mutating the returned table has no effect — write via
-  `assign*`. Never interleave iterators with mutations; collect first.
+  `assign*`. Never interleave iterators with mutations; collect first —
+  `ordered`'s epoch check raises if you don't.
 
 ## CC encoding
 

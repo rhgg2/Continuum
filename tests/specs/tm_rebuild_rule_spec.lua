@@ -165,8 +165,10 @@ return {
         data = { swing = { global = 'c58' } },
       }
       h.tm:markSwingStale(1)
+      local ccToks = {}
+      for _, c in h.fm:ccs() do ccToks[#ccToks + 1] = c.uuid end
       h.fm:modify(function()
-        for _, c in h.fm:ccs() do h.fm:assign(c.uuid, { ppq = 100 }) end
+        for _, tok in ipairs(ccToks) do h.fm:assign(tok, { ppq = 100 }) end
       end)
       t.eq(ccByCC(h.fm:dump(), 7).ppq, 139, 'cc raw reseated from ppqL')
 
@@ -194,8 +196,11 @@ return {
         data = { swing = { global = 'c58' } },
       }
       h.tm:markSwingStale(nil)
+      -- Collected first: a ppq move splices mm's order array, which a live walk forbids.
+      local noteToks = {}
+      for _, n in h.fm:notes() do noteToks[#noteToks + 1] = n.uuid end
       h.fm:modify(function()
-        for _, n in h.fm:notes() do h.fm:assign(n.uuid, { ppq = 100 }) end
+        for _, tok in ipairs(noteToks) do h.fm:assign(tok, { ppq = 100 }) end
       end)
 
       local dump = h.fm:dump()

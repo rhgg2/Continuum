@@ -1,6 +1,7 @@
 # stable slots — the write side stops paying O(take) per keystroke
 
-> Working design doc, **not started**. Sibling to `interval-dirt`, which
+> Working design doc, **phase 1 in flight** — 0, 1a and 1b landed
+> 2026-07-25. Sibling to `interval-dirt`, which
 > attacked the derivation half of a flush (`reload`) and closed 2026-07-21
 > (`design/archive/interval-dirt-closing.md`); this one attacks the write
 > half (`rebuild` + `serialise`). Phase 2 here depends on phase 1 here.
@@ -90,18 +91,22 @@ Verb maintenance replaces the reindex:
 - **ppq move** — splice out of the order array, splice back in at the new
   position. Everything keyed by slot (chanIdx `byLoc`, the event itself,
   phase 2's wire keys) is untouched.
-- **delete** — two candidate shapes, phase 1 decides:
-  1. splice out of the order array immediately;
-  2. tombstone — nil `notes[slot]`, leave the order entry, sweep once at
-     flush.
-  The deciding constraint is today's mid-iteration contract: the raw walks
-  are hole-tolerant of a delete landing mid-walk, and an immediate splice
-  shifts positions under a live iterator where a tombstone does not.
+- **delete** — splice out of the order array immediately; the slot goes to
+  the free list. Decided 2026-07-25: the mid-iteration contract was the only
+  argument for tombstoning, and the audit found nothing exercising it —
+  production holds four mm iterator sites, all in tm, and every mutator call
+  sits inside a collect-then-mutate loop. A tombstone would also owe a
+  per-flush sweep, which is the O(take) walk this programme exists to
+  remove. Because a splice under a live iterator skips a neighbour silently
+  rather than failing, `ordered` carries a splice-epoch backstop that
+  asserts instead.
 
-`needsSort`, `needsCompact`, `stableByPpq`, `fullSortByPpq`,
-`util.compact` and the tokenIdx loop all dissolve. `rebuild(metadata)`
-survives only as the wholesale path `load` needs — building the order
-arrays from scratch, which is exactly today's code.
+`needsSort`, `needsCompact`, `indexStale` and `mm:reindexIfStale` dissolve:
+nothing is stale after a verb, so nothing needs a deferred reindex.
+`rebuild(metadata)` survives as the wholesale path `load` needs — a blob
+arrives in take order with dedup holes, so `util.compact`, `stableByPpq` /
+`fullSortByPpq` and the loop that mints slots 1..n all survive *inside* it.
+What goes is every other caller: after phase 1 only `load` reindexes.
 
 ### Equal-ppq order: the add is specified, the move is not
 
@@ -197,14 +202,42 @@ Constraints and wrinkles:
 | sidecars | 2.1 | ~0 (touched rows only; the texts array stops being rebuilt) |
 | **flush**, property edit | **53.7** | **~35** |
 
-A ppq-moving gesture sheds the `rebuild` row on top of that. Its current
-total has not been traced, so the after-figure is deliberately absent
-rather than guessed.
+A ppq-moving gesture sheds the `rebuild` row on top of that.
 
-Untouched: reload (13.2, `place` 8.1 the crux), setEvts (9.1 — REAPER's
-floor), meta (0.9 — done), and the 11.0ms of flush sitting outside `mm`,
-which has never been broken down. That remainder is the next thing worth a
-profile after this programme, not before it.
+### Measured after phase 1b: an add note (2026-07-25)
+
+The gesture is named because it has to be — **add one note** on
+HAMMERKLAVIER, which is where the reindex used to land. Persistent across
+edits rather than a single trace.
+
+| span | before | after | |
+|---|---|---|---|
+| rebuild | ~8 | — | no gate and no span: `rebuild` runs from `load` alone |
+| serialise | 16.3 | 15.2 | untouched by 1b; phase 2's target |
+| reload | 13.2 | 11.9 | tm's half — interval-dirt's residue |
+| setEvts | 9.1 | 3.3 | the surprise; see below |
+| sidecars | 2.1 | 2.3 | unchanged |
+| meta | 0.9 | 0.7 | unchanged |
+| **flush** | **~62** | **44.3** | before = the 53.7 property-edit trace + the ~8ms reindex |
+
+No add-note trace was taken before the flip, so that `before` column is the
+property-edit trace plus the estimated reindex: the per-span deltas outside
+`rebuild` are indicative, not measured pairs.
+
+`setEvts` is the surprise. It is one `MIDI_SetAllEvts` call, 1b changes
+nothing about the bytes handed to it, and yet 5.8ms of it went away and
+stayed away. The leading candidate is GC attribution: the old reindex
+allocated two compacted arrays, two identity order arrays and a whole fresh
+`chanIdx` per qualifying gesture — some 30k table slots of garbage per
+keystroke — and Lua's incremental collector charges that at later allocation
+sites, of which the blob string is the biggest going. Untested; a
+`collectgarbage('count')` delta across a flush would settle it. If it holds,
+phase 2's allocation cuts may hand back more than their own span.
+
+Untouched by this programme: reload (11.9, `place` 7.3 the crux), meta (0.7
+— done), and the ~9.7ms of flush sitting outside `mm`, which has never been
+broken down. That remainder is the next thing worth a profile after this
+programme, not before it.
 
 ## Implementation plan
 
@@ -244,10 +277,16 @@ fixture. Going lower is interval-dirt's job (reload) and REAPER's
 
 ## Open questions
 
-- Delete shape: immediate splice vs tombstone-and-sweep (§ The idea) — the
-  mid-iteration contract decides.
-- chanIdx option 1 vs 2 — measure bucket-walk cost per dirty channel
-  before choosing.
-- Do any callers splice *during* a raw walk (inserts mid-iteration, not
-  just deletes)? tm batches through `batchModify`, which suggests no, but
-  phase 1 audits before relying on it.
+- chanIdx option 1 vs 2 — measure bucket-walk cost per dirty channel before
+  choosing. Phase 1b lands option 2 (filter the global order array) as the
+  correct-by-construction baseline, so 1c measures option 1 against working
+  code rather than against today's.
+
+Settled 2026-07-25, both by the phase-1 audit: the delete shape (immediate
+splice, § The idea), and mid-walk mutation — no caller adds, deletes or
+moves a ppq during a raw walk. Production's four iterator sites are all in
+tm and all collect-then-mutate; the ppq assigns that read as mid-walk inside
+`fullRebuildChannelCCs` are deferred through `mmBatch` and only reach mm
+after the channel loop closes. The whole repo's genuine mid-walk mutations
+are two ppq assigns in `tm_rebuild_rule_spec` (setup noise, rewritten in 1b)
+and one value-only assign in `mm_cc_dedup_spec`, which reorders nothing.

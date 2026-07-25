@@ -1,6 +1,6 @@
 -- See docs/midiManager.md for the model.
 --invariant: channels are 1..16 internally; +1 applied on read from REAPER, -1 on write
---invariant: loc is 1-indexed REAPER event-order; not stable across reloads
+--invariant: loc is a slot id, stable while the event lives; slots are re-minted on every load
 --invariant: mm holds realisation frame; delay baked into note-on ppq (docs/timing.md)
 --invariant: mm holds raw pb; cents/detune + absorber pb live in tm (docs/tuning.md)
 --invariant: muted is true-or-absent; false coerces to nil at write; pass false to clear
@@ -52,13 +52,17 @@ for k, v in pairs(chanMsgLUT) do chanMsgEvTypes[v] = k end
 
 ---------- PRIVATE
 
-local notes      = {}
-local ccs        = {}
-local noteCount  = 0    -- high-water extent of notes/ccs; verbs leave holes, rebuild compacts
-local ccCount    = 0
---invariant: noteOrder/ccOrder map walk position -> loc in ppq order; the identity until Phase 1b
-local noteOrder  = {}
-local ccOrder    = {}
+--invariant: notes/ccs are sparse, keyed by slot; a slot is one event's loc for as long as it lives
+local notes       = {}
+local ccs         = {}
+local noteMaxSlot = 0     -- high-water mark: a mint comes from here when the free list is empty
+local ccMaxSlot   = 0
+local noteFree    = {}    -- slots a delete handed back, LIFO; reused before minting
+local ccFree      = {}
+--invariant: noteOrder/ccOrder are dense [1..n] slot ids, ascending ppq; only load leaves dead ones
+local noteOrder   = {}
+local ccOrder     = {}
+local orderEpoch  = 0     -- bumped by every splice; ordered() asserts on it to catch a mid-walk mutation
 local eventsByUuid      = {}
 --invariant: on a collision collisionIdx holds the survivor; the loser stays uuid-addressable
 local collisionIdx      = {}   -- note seats only; the same-pitch detector, never an address book
@@ -69,9 +73,6 @@ local lock       = false
 local dirty      = false  -- a structural write happened; the take needs reprojecting via flushTake
 local modifyDepth  = 0      -- reload can re-enter modify; only the outermost flushes
 local flushPending = false  -- a dirty modify happened somewhere in the nest; flush once on unwind
---invariant: adds/ppq-moves unsort the arrays; deletes hole them; neither fired = no reindex needed
-local needsSort    = false  -- an add or a ppq move left the arrays out of ppq order; cleared by rebuild
-local needsCompact = false  -- a delete left a hole in the arrays; cleared by rebuild
 local carriedTexts       = {}  -- parsed text/meta events mm doesn't model; re-emitted verbatim on flush
 local carriedPassthrough = {}  -- parsed system messages mm doesn't model; re-emitted verbatim on flush
 --invariant: loadedBlob is the take's bytes as of the model agreeing with them; nil = unknown, never gate
@@ -304,22 +305,23 @@ end
 ----- Ppq-ordered walk
 
 -- Ppq-ordered reads go through the order arrays, not array position -- what lets loc
--- stop meaning position. See docs/midiManager.md § Conventions.
+-- name a slot instead. See docs/midiManager.md § Conventions.
 local function identityOrder(n)
   local order = {}
   for i = 1, n do order[i] = i end
   return order
 end
 
--- Walk one kind in ppq order, skipping slots a mid-walk delete emptied. The length is
--- captured, not re-read, so a mid-walk add stays unseen -- the mid-iteration contract.
+-- Walk one kind in ppq order. The length is captured up front, so a mid-walk add stays unseen
+-- -- the mid-iteration contract. A live-walk splice raises instead; see docs/midiManager.md § Collect first, then mutate.
 local function ordered(list, order)   -- yields (loc, evt)
-  local i, n = 0, #order
+  local i, n, epoch = 0, #order, orderEpoch
   return function()
+    assert(epoch == orderEpoch, 'mm: order array spliced under a live walk')
     while i < n do
       i = i + 1
       local evt = list[order[i]]
-      if evt then return order[i], evt end
+      if evt then return order[i], evt end   -- load's dedup holes the arrays until rebuild compacts
     end
   end
 end
@@ -332,6 +334,41 @@ local function denseByOrder(list, order)
     if evt then out[#out + 1] = evt end
   end
   return out
+end
+
+----- Order splices
+
+-- util.insertSorted lands at the lower bound, so a non-strict comparator carries the new slot past
+-- everything already at its ppq -- the pinned add rule, and a move obeys it for free.
+local function orderInsert(list, order, slot)
+  orderEpoch = orderEpoch + 1
+  util.insertSorted(order, slot, function(a, b) return list[a].ppq <= list[b].ppq end)
+end
+
+-- Must run while the event is still in `list` under its OLD ppq: that ppq is the search key.
+-- Binary-search to the head of its run of equals, then scan the run for the slot itself.
+local function orderRemove(list, order, slot)
+  local ppq    = list[slot].ppq
+  local lo, hi = 1, #order + 1
+  while lo < hi do
+    local mid = (lo + hi) // 2
+    if list[order[mid]].ppq < ppq then lo = mid + 1 else hi = mid end
+  end
+  for i = lo, #order do
+    if order[i] == slot then
+      orderEpoch = orderEpoch + 1
+      table.remove(order, i)
+      return
+    end
+  end
+  error('mm: slot ' .. tostring(slot) .. ' is missing from its order array')
+end
+
+-- Retire a slot: out of the order array, out of the list, onto the free list.
+local function freeSlot(list, order, free, slot)
+  orderRemove(list, order, slot)
+  list[slot] = nil
+  free[#free + 1] = slot
 end
 
 
@@ -357,106 +394,75 @@ end
 -- walk every event to find it. see design/archive/incremental-rebuild.md § The traversal floor
 local function chanBucket(slots, chan)
   local bucket = slots[chan]
-  if not bucket then bucket = { byLoc = {}, locs = {}, n = 0 }; slots[chan] = bucket end
+  if not bucket then bucket = { byLoc = {} }; slots[chan] = bucket end
   return bucket
 end
 
 local function slotsFor(evt) return chanIdx[evt.evType == 'note' and 'note' or 'cc'] end
 
--- locs stays ascending by appending, never sorting: an add takes the highest loc and the reindex
--- seats in loc order, so both hit the fast path. Only a chan move can arrive out of order.
-local function seat(bucket, evt)
-  local loc = evt.loc
-  bucket.byLoc[loc] = evt
-  local locs, n = bucket.locs, bucket.n
-  if locs and (n == 0 or locs[n] < loc) then
-    bucket.n = n + 1
-    locs[n + 1] = loc
-  else
-    bucket.locs = nil   -- out of order: the next walk re-derives it
-  end
-end
-
 local function indexPut(evt)
-  seat(chanBucket(slotsFor(evt), evt.chan), evt)
+  chanBucket(slotsFor(evt), evt.chan).byLoc[evt.loc] = evt
 end
 
 local function indexDrop(evt)
-  local bucket = chanBucket(slotsFor(evt), evt.chan)
-  bucket.byLoc[evt.loc] = nil   -- locs keeps the key; the walk is hole-tolerant and skips it
+  chanBucket(slotsFor(evt), evt.chan).byLoc[evt.loc] = nil
 end
 
--- Ascending loc, hole-tolerant: one channel's slice of exactly what a whole-array ordered walk
--- yields, in the same order, with the same tolerance of a delete landing mid-iteration.
+-- One channel's slice of exactly what a whole-array ordered walk yields, in the same order: that
+-- walk, filtered on bucket membership. O(total) per channel; see design/stable-slots.md § chanIdx.
 local function rawInChan(kind, chan)
   local bucket = chanIdx[kind][chan]
   if not bucket then return function() end end
-  if not bucket.locs then
-    local locs = {}
-    for loc in pairs(bucket.byLoc) do locs[#locs + 1] = loc end
-    table.sort(locs)
-    bucket.locs, bucket.n = locs, #locs
-  end
-  local locs, byLoc, i = bucket.locs, bucket.byLoc, 0
+  local byLoc = bucket.byLoc
+  local walk  = (kind == 'note') and ordered(notes, noteOrder) or ordered(ccs, ccOrder)
   return function()
-    while true do
-      i = i + 1
-      local loc = locs[i]
-      if not loc then return nil end
-      if byLoc[loc] then return loc, byLoc[loc] end
+    for loc, evt in walk do
+      if byLoc[loc] then return loc, evt end
     end
   end
 end
 
 ----- Reindex
 
--- Compact the sparse note/cc arrays to dense (verbs and dedup leave holes), order by ppq, and
--- recompute loc; rebuild collision/uuid/channel indices. metadata (load only) rejoins per-uuid fields.
+-- Load's own pass, and load's alone: verbs don't need this, since slots don't move under them.
+-- Compacts the dedup holes, orders by ppq, and mints slots 1..n; rebuilds every index. See docs/midiManager.md § Stable slots.
 local function rebuild(metadata)
   perf.start('rebuild')
-  -- Compact and sort run only when their flag fired; the index loop always does -- either moves every loc.
-  if needsCompact then
-    perf.start('compact')
-    notes = util.compact(notes, noteCount); noteCount = #notes
-    ccs   = util.compact(ccs,   ccCount);   ccCount   = #ccs
-    perf.stop('compact')
-  end
-  if needsSort then
-    perf.start('sort')
-    stableByPpq(notes); stableByPpq(ccs)
-    perf.stop('sort')
-  end
+  perf.start('compact')
+  notes = util.compact(notes, noteMaxSlot); noteMaxSlot = #notes
+  ccs   = util.compact(ccs,   ccMaxSlot);   ccMaxSlot   = #ccs
+  perf.stop('compact')
+  perf.start('sort')
+  stableByPpq(notes); stableByPpq(ccs)   -- a foreign blob's order isn't ours to trust
+  perf.stop('sort')
   perf.start('collisionIdx')
   collisionIdx, eventsByUuid = {}, {}
   chanIdx = { note = {}, cc = {} }
-  -- Compacted and sorted by here, so walk position and loc coincide again.
-  noteOrder, ccOrder = identityOrder(noteCount), identityOrder(ccCount)
-  -- Seat inline rather than via indexPut: this is the one bulk path (every event, every flush), and
+  noteFree, ccFree = {}, {}
+  orderEpoch = orderEpoch + 1
+  -- Compacted and sorted by here, so slot order and ppq order coincide: the order arrays are identities.
+  noteOrder, ccOrder = identityOrder(noteMaxSlot), identityOrder(ccMaxSlot)
+  -- Seat inline rather than via indexPut: this is the one bulk path (every event, every load), and
   -- the kind is known per loop, so it skips the dispatch the verbs' single-event path needs.
   local noteSlots, ccSlots = chanIdx.note, chanIdx.cc
   for i, n in ipairs(notes) do
     n.loc = i
     collisionIdx[cachedSeatKey(n)] = n
-    seat(chanBucket(noteSlots, n.chan), n)
+    chanBucket(noteSlots, n.chan).byLoc[i] = n
     if n.uuid then eventsByUuid[n.uuid] = n end
     if metadata then util.assign(n, metadata[n.uuid]) end
   end
   for i, c in ipairs(ccs) do
     c.loc = i
-    seat(chanBucket(ccSlots, c.chan), c)
+    chanBucket(ccSlots, c.chan).byLoc[i] = c
     if c.uuid then
       eventsByUuid[c.uuid] = c
       if metadata then util.assign(c, metadata[c.uuid]) end
     end
   end
   perf.stop('collisionIdx')
-  needsSort, needsCompact = false, false
   perf.stop('rebuild')
 end
-
--- An assign that moves no ppq leaves the arrays dense and ordered: nothing for the reindex
--- to do, and the verbs have already maintained every index. see design/archive/incremental-rebuild.md § 6
-local function indexStale() return needsSort or needsCompact end
 
 -- Reuse each uuid'd event's sidecar record across flushes; recompute only when a
 -- field feeding its body changes. Weak keys drop a deleted event's row. See docs.
@@ -601,9 +607,9 @@ function mm:load(newTake)
   notes, ccs, texts, passthrough = midiBlob.parse(blob)
   perf.stop('read')
   carriedPassthrough = passthrough
-  noteCount, ccCount = #notes, #ccs
+  noteMaxSlot, ccMaxSlot = #notes, #ccs
   -- Parse order, which is the take's order; rebuild reseats both arrays into ppq order below.
-  noteOrder, ccOrder = identityOrder(noteCount), identityOrder(ccCount)
+  noteOrder, ccOrder = identityOrder(noteMaxSlot), identityOrder(ccMaxSlot)
   -- Sidecars (notation type 15, cc type -1) are consumed for uuid binding and
   -- regenerated on flush; anything that doesn't decode is carried through verbatim.
   for _, t in ipairs(texts) do
@@ -846,7 +852,6 @@ function mm:load(newTake)
   end
 
   ----- Rebuild dense indices, reproject the normalised model, persist metadata
-  needsSort, needsCompact = true, true   -- dedup holes the arrays; a foreign blob's order isn't ours to trust
   rebuild(metadata)
   local wroteTake = dirty
   if wroteTake then flushTake()      -- restashes loadedBlob off the reprojected take
@@ -880,7 +885,7 @@ function mm:load(newTake)
   --emits: flushed -- nil; flushTake reprojected the take (self-write, not an external mutation)
   if wroteTake then fire('flushed') end
 
-  perf.count('events', noteCount + ccCount)
+  perf.count('events', #noteOrder + #ccOrder)
   perf.stop('load')
 end
 
@@ -903,7 +908,8 @@ function mm:unload()
   take, poolGuid, loadedBlob = nil, nil, nil
   notes, ccs, eventsByUuid, collisionIdx, maxUUID, lock = {}, {}, {}, {}, 0, false
   noteOrder, ccOrder = {}, {}
-  noteCount, ccCount, dirty = 0, 0, false
+  noteFree, ccFree   = {}, {}
+  noteMaxSlot, ccMaxSlot, dirty = 0, 0, false
   carriedTexts, carriedPassthrough = {}, {}
 end
 
@@ -932,14 +938,16 @@ local function resolveCollisions()
                          chan = n.chan, pitch = n.pitch, ppq = n.ppq })
       perf.line('backstop killed uuid %s (chan %d pitch %d ppq %d) via %s',
                 n.uuid, n.chan, n.pitch, n.ppq, pending.verb)
-      notes[n.loc] = nil
+      freeSlot(notes, noteOrder, noteFree, n.loc)
       eventsByUuid[n.uuid] = nil
       deleteMetadatum(n.uuid)
     end
     for _, n in ipairs(voiced) do
       if onsetOf[n] ~= n.ppq then
         local oldPpq = n.ppq
+        orderRemove(notes, noteOrder, n.loc)
         n.ppq = onsetOf[n]
+        orderInsert(notes, noteOrder, n.loc)
         util.add(events, { kind = 'nudged', uuid = n.uuid,
                            chan = n.chan, pitch = n.pitch, ppq = n.ppq })
         perf.line('backstop nudged uuid %s: ppq %d -> %d via %s', n.uuid, oldPpq, n.ppq, pending.verb)
@@ -948,7 +956,7 @@ local function resolveCollisions()
   end
   pendingCollisions = {}
   if #events == 0 then return nil end
-  needsSort, needsCompact, flushPending = true, true, true   -- kills hole the arrays, nudges unsort them
+  flushPending = true
   return events
 end
 
@@ -982,7 +990,6 @@ local function leaveNest()
   modifyDepth = modifyDepth - 1
   if modifyDepth > 0 then return end
   local resolved = resolveCollisions()
-  if indexStale() then rebuild(nil) end         -- pay one reindex, after every nested pipeline write
   --emits: collisionsResolved -- { events = [collisionEvent, ...] }; repaired a missed collision
   if resolved then fire('collisionsResolved', { events = resolved }) end
   perf.start('meta'); flushMetadata(); perf.stop('meta')
@@ -1021,11 +1028,6 @@ function mm:batch(fn)
   if not ok then error(err, 0) end
 end
 
---contract: run the deferred reindex when a modify left arrays stale (sparse/unsorted); else no-op
-function mm:reindexIfStale()
-  if indexStale() then rebuild(nil) end
-end
-
 ----- Notes
 
 local function cloneOut(evt)
@@ -1042,7 +1044,7 @@ function mm:notes()
 end
 
 --contract: yields mm-internal note records uncloned; do not mutate (read-only fast path)
---contract: notesRaw(chan) yields just that channel's, ascending loc -- same slice, same order
+--contract: notesRaw(chan) yields just that channel's, in ppq order -- same slice, same order
 function mm:notesRaw(chan)
   if chan then return rawInChan('note', chan) end
   return ordered(notes, noteOrder)
@@ -1071,10 +1073,14 @@ local function assignNote(loc, t)
   if not note then return end
 
   local oldKey = seatKey(note)
-  if t.ppq and t.ppq ~= note.ppq then needsSort = true end   -- ppq is the sort key; no other field is
+  -- ppq is the sort key and no other field is, so only a move re-splices -- and the remove has to
+  -- see the old ppq. Hence the sequence: remove, assign, insert.
+  local movesPpq = t.ppq ~= nil and t.ppq ~= note.ppq
+  if movesPpq then orderRemove(notes, noteOrder, note.loc) end
 
   util.assign(note, t)
   if note.muted == false then note.muted = nil end
+  if movesPpq then orderInsert(notes, noteOrder, note.loc) end
 
   local newKey = seatKey(note)
   if newKey ~= oldKey then
@@ -1110,12 +1116,12 @@ local function addNote(t)
   end
   t.uuid = note.uuid
 
-  noteCount = noteCount + 1
-  notes[noteCount] = note
-  note.loc = noteCount
-  noteOrder[#noteOrder + 1] = noteCount
+  local slot = table.remove(noteFree)
+  if not slot then noteMaxSlot = noteMaxSlot + 1; slot = noteMaxSlot end
+  notes[slot] = note
+  note.loc    = slot
+  orderInsert(notes, noteOrder, slot)
   indexPut(note)
-  needsSort = true   -- appended past the tail: dense, but no longer in ppq order
   local key = seatKey(note)
   if collisionIdx[key] then noteCollision(note, 'add') end
   collisionIdx[key] = note
@@ -1135,7 +1141,7 @@ function mm:ccs()
 end
 
 --contract: yields mm-internal cc records uncloned; consumers must NOT mutate them (read-only fast path)
---contract: ccsRaw(chan) yields just that channel's, ascending loc -- same slice, same order
+--contract: ccsRaw(chan) yields just that channel's, in ppq order -- same slice, same order
 function mm:ccsRaw(chan)
   if chan then return rawInChan('cc', chan) end
   return ordered(ccs, ccOrder)
@@ -1169,9 +1175,11 @@ local function assignCC(loc, t)
     return
   end
 
-  if t.ppq and t.ppq ~= msg.ppq then needsSort = true end   -- ppq is the sort key; no other field is
+  local movesPpq = t.ppq ~= nil and t.ppq ~= msg.ppq   -- ppq is the sort key; no other field is
+  if movesPpq then orderRemove(ccs, ccOrder, msg.loc) end
 
   util.assign(msg, t)
+  if movesPpq then orderInsert(ccs, ccOrder, msg.loc) end
 
   if hasStructural then
     if msg.muted == false then msg.muted = nil end
@@ -1194,12 +1202,12 @@ local function pushCC(t)
   msg.shape = msg.shape or 'step'   -- wire default; parse used to supply it on read-back
   if msg.shape ~= 'bezier' then msg.tension = nil end
 
-  ccCount = ccCount + 1
-  ccs[ccCount] = msg
-  msg.loc = ccCount
-  ccOrder[#ccOrder + 1] = ccCount
+  local slot = table.remove(ccFree)
+  if not slot then ccMaxSlot = ccMaxSlot + 1; slot = ccMaxSlot end
+  ccs[slot] = msg
+  msg.loc   = slot
+  orderInsert(ccs, ccOrder, slot)
   indexPut(msg)
-  needsSort = true   -- appended past the tail: dense, but no longer in ppq order
   return msg
 end
 
@@ -1268,7 +1276,7 @@ function mm:assign(uuid, t)
   return uuid
 end
 
---contract: removes the event in-memory (a hole until rebuild compacts); flushTake reprojects
+--contract: deletes the event, returns its slot to the free list; flushTake reprojects
 --contract: wipes the event's ctm_<uuid> metadata via deleteMetadatum; a plain cc stores none
 function mm:delete(uuid)
   if not (take and checkLock()) then return end
@@ -1276,14 +1284,14 @@ function mm:delete(uuid)
   if not evt then return end
   markChan(evt.chan)
   indexDrop(evt)
-  needsCompact = true   -- the slot below becomes a hole; its order entry stands and walks skip it
 
   if evt.evType == 'note' then
     local key = seatKey(evt)
-    if collisionIdx[key] == evt then collisionIdx[key] = nil end   -- only the slot it owns
+    if collisionIdx[key] == evt then collisionIdx[key] = nil end   -- only the seat it owns
+    freeSlot(notes, noteOrder, noteFree, evt.loc)
+  else
+    freeSlot(ccs, ccOrder, ccFree, evt.loc)
   end
-
-  if evt.evType == 'note' then notes[evt.loc] = nil else ccs[evt.loc] = nil end
   eventsByUuid[evt.uuid] = nil
   if not evt.plain then deleteMetadatum(evt.uuid) end
 end

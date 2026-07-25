@@ -46,7 +46,7 @@ local specs = {
   'mm_hole_iter_spec',
   'mm_chan_index_spec',
   'mm_sort_order_spec',
-  'mm_reindex_if_stale_spec',
+  'mm_stable_slot_spec',
   'mm_collision_backstop_spec',
   'mm_load_dedup_spec',
   'tm_deferred_hole_spec',

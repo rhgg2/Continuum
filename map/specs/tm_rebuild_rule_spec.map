@@ -1,4 +1,4 @@
-@spec tm_rebuild_rule_spec  src=tests/specs/tm_rebuild_rule_spec.lua  loc=515  sha=37ed80d  cases=20
+@spec tm_rebuild_rule_spec  src=tests/specs/tm_rebuild_rule_spec.lua  loc=520  sha=37ed80d  cases=20
 @exercises midiManager (h.fm), trackerManager (h.tm), dataStore (h.ds), configManager (h.cm)
 @surface   fm:dump, tm:markSwingStale, fm:notes, fm:modify, fm:assign, fm:ccs, tm:getChannel, tm:assignEvent, tm:flush, tm:rebuild, ds:assign, cm:set
 @harness   mk{seed.notes, seed.ccs}
@@ -22,91 +22,91 @@
   @case 'note with matching ppqL is left alone'  [harness]  @ 75-88
   @case 'matching ppqL under c58 is steady-state (predicted=raw within ε)'  [harness]  @ 92-109
   @case 'markSwingStale rebuilds raw from ppqL on next rebuild and clears the flag'  [harness]  @ 115-147
-  @case 'markSwingStale restamps cc-event loc so column writes route correctly'  [harness]  @ 151-178
-  @case 'markSwingStale(nil) marks all 16 channels'  [harness]  @ 182-204
-  @case 'stale on event without ppqL falls through to disagreement (ppqL written, raw untouched)'  [harness]  @ 208-229
-  @case 'rpb-stamped event with stale ppqL: predicted-check rederives from raw'  [harness]  @ 235-250
-  @case 'global swing change reseats raw across all channels (ppqL preserved)'  [harness]  @ 260-282
-  @case 'per-column swing change moves only the named channel'  [harness]  @ 286-304
-  @case 'editing a referenced library entry reseats channels using it'  [harness]  @ 308-329
-  @case 'reassigning a column slot to a different library entry reseats that channel'  [harness]  @ 333-357
-  @case 'colSwing change marks only altered channels'  [harness]  @ 366-388
-  @case 'swings library edit marks only channels using changed names'  [harness]  @ 392-415
-  @case 'swings library edit of the global-swing name marks all 16'  [harness]  @ 419-439
-  @case 'global swing change emits a single nil mark (covers all 16)'  [harness]  @ 443-459
-  @case 'colSwing set to identical value emits no marks'  [harness]  @ 463-480
-  @case 'non-swing config change does not flip stale (preserves externally-edited raw)'  [harness]  @ 484-513
+  @case 'markSwingStale restamps cc-event loc so column writes route correctly'  [harness]  @ 151-180
+  @case 'markSwingStale(nil) marks all 16 channels'  [harness]  @ 184-209
+  @case 'stale on event without ppqL falls through to disagreement (ppqL written, raw untouched)'  [harness]  @ 213-234
+  @case 'rpb-stamped event with stale ppqL: predicted-check rederives from raw'  [harness]  @ 240-255
+  @case 'global swing change reseats raw across all channels (ppqL preserved)'  [harness]  @ 265-287
+  @case 'per-column swing change moves only the named channel'  [harness]  @ 291-309
+  @case 'editing a referenced library entry reseats channels using it'  [harness]  @ 313-334
+  @case 'reassigning a column slot to a different library entry reseats that channel'  [harness]  @ 338-362
+  @case 'colSwing change marks only altered channels'  [harness]  @ 371-393
+  @case 'swings library edit marks only channels using changed names'  [harness]  @ 397-420
+  @case 'swings library edit of the global-swing name marks all 16'  [harness]  @ 424-444
+  @case 'global swing change emits a single nil mark (covers all 16)'  [harness]  @ 448-464
+  @case 'colSwing set to identical value emits no marks'  [harness]  @ 468-485
+  @case 'non-swing config change does not flip stale (preserves externally-edited raw)'  [harness]  @ 489-518
 
 # Uses (outbound edges)
-  @use call fm:dump  @ 33,52,66,83,106,134,143,171,177,201,221,226,247,275,301,323,326,350,351,354,504,510
-  @use call tm:markSwingStale  @ 130,167,196,224
-  @use call fm:notes  @ 131,141,198,502
-  @use call fm:modify  @ 132,142,168,197,503
-  @use call fm:assign  @ 132,142,169,198,503
+  @use call fm:dump  @ 33,52,66,83,106,134,143,173,179,206,226,231,252,280,306,328,331,355,356,359,509,515
+  @use call tm:markSwingStale  @ 130,167,198,229
+  @use call fm:notes  @ 131,141,201,507
+  @use call fm:modify  @ 132,142,170,202,508
+  @use call fm:assign  @ 132,142,171,203,508
   @use call fm:ccs  @ 169
-  @use call tm:getChannel  @ 174
-  @use call tm:assignEvent  @ 175
-  @use call tm:flush  @ 176
-  @use call tm:rebuild  @ 225
-  @use call ds:assign  @ 274,300,353,384,456,478
-  @use call cm:set  @ 325,411,435,509
+  @use call tm:getChannel  @ 176
+  @use call tm:assignEvent  @ 177
+  @use call tm:flush  @ 178
+  @use call tm:rebuild  @ 230
+  @use call ds:assign  @ 279,305,358,389,461,483
+  @use call cm:set  @ 330,416,440,514
 
 # Fields (r read / w write incl. constructor keys)
   @field w atom  @ 10,11
   @field r cc  @ 18
   @field w cc  @ 63,159
-  @field r ccs  @ 17,174
+  @field r ccs  @ 17,176
   @field w ccs  @ 62,158
-  @field w chan  @ 30,48,63,79,98,120,159,186,188,215,243,267
-  @field w chan  @ 269,293,295,315,340,342,370,371,396,397,494
-  @field r columns  @ 174
-  @field w config  @ 101,123,162,191,272,298,318,345,373,399,423,447
-  @field w config  @ 467,497
-  @field w data  @ 104,126,165,194,321,348,376,402,426,470,500
+  @field w chan  @ 30,48,63,79,98,120,159,188,190,220,248,272
+  @field w chan  @ 274,298,300,320,345,347,375,376,401,402,499
+  @field r columns  @ 176
+  @field w config  @ 101,123,162,193,277,303,323,350,378,404,428,452
+  @field w config  @ 472,502
+  @field w data  @ 104,126,165,196,326,353,381,407,431,475,505
   @field r endppq  @ 85,136
-  @field w endppq  @ 30,48,79,98,120,186,188,215,243,267,269,293
-  @field w endppq  @ 295,315,340,342,370,371,396,397,494
-  @field r endppqL  @ 36,54,87,249
-  @field w endppqL  @ 49,80,99,121,187,189,244,268,270,294,296,316
-  @field w endppqL  @ 341,343,370,371,396,397,495
+  @field w endppq  @ 30,48,79,98,120,188,190,220,248,272,274,298
+  @field w endppq  @ 300,320,345,347,375,376,401,402,499
+  @field r endppqL  @ 36,54,87,254
+  @field w endppqL  @ 49,80,99,121,189,191,249,273,275,299,301,321
+  @field w endppqL  @ 346,348,375,376,401,402,500
   @field r evType  @ 18
   @field w evType  @ 63,159
-  @field r events  @ 174
+  @field r events  @ 176
   @field w factors  @ 10,11
-  @field w global  @ 104,126,165,194,274,321,426,456,500
-  @field r markSwingStale  @ 379,405,429,450,473
-  @field w markSwingStale  @ 380,406,430,451,474
-  @field w name  @ 26,41,59,75,92,115,151,182,208,235,260,286
-  @field w name  @ 308,333,366,392,419,443,463,484
+  @field w global  @ 104,126,165,196,279,326,431,461,505
+  @field r markSwingStale  @ 384,410,434,455,478
+  @field w markSwingStale  @ 385,411,435,456,479
+  @field w name  @ 26,41,59,75,92,115,151,184,213,240,265,291
+  @field w name  @ 313,338,371,397,424,448,468,489
   @field r notes  @ 14
-  @field w notes  @ 29,47,78,97,119,185,211,242,266,292,314,339
-  @field w notes  @ 369,395,493
+  @field w notes  @ 29,47,78,97,119,187,216,247,271,297,319,344
+  @field w notes  @ 374,400,498
   @field w period  @ 10,11
   @field r pitch  @ 14
-  @field w pitch  @ 30,48,79,98,120,186,188,215,243,267,269,293
-  @field w pitch  @ 295,315,340,342,370,371,396,397,494
-  @field r ppq  @ 84,107,135,144,171,202,203,227,278,280,302,303
-  @field r ppq  @ 323,327,350,351,355,356,505,511
-  @field w ppq  @ 30,48,63,79,98,120,132,142,159,169,186,188
-  @field w ppq  @ 198,215,243,267,269,293,295,315,340,342,370,371
-  @field w ppq  @ 396,397,494,503
-  @field r ppqL  @ 35,53,67,86,108,137,146,222,228,248,279,281
-  @field r ppqL  @ 328,506,512
-  @field w ppqL  @ 49,80,99,121,160,187,189,244,268,270,294,296
-  @field w ppqL  @ 316,341,343,370,371,396,397,495
-  @field w project  @ 102,124,163,192,272,298,319,346,374,400,424,447
-  @field w project  @ 468,498
-  @field w rpb  @ 244
-  @field w run  @ 27,42,60,76,93,116,156,183,209,236,261,287
-  @field w run  @ 309,334,367,393,420,444,464,485
-  @field w seed  @ 29,47,62,78,97,119,158,185,211,242,266,292
-  @field w seed  @ 314,339,369,395,422,446,466,493
+  @field w pitch  @ 30,48,79,98,120,188,190,220,248,272,274,298
+  @field w pitch  @ 300,320,345,347,375,376,401,402,499
+  @field r ppq  @ 84,107,135,144,173,207,208,232,283,285,307,308
+  @field r ppq  @ 328,332,355,356,360,361,510,516
+  @field w ppq  @ 30,48,63,79,98,120,132,142,159,171,188,190
+  @field w ppq  @ 203,220,248,272,274,298,300,320,345,347,375,376
+  @field w ppq  @ 401,402,499,508
+  @field r ppqL  @ 35,53,67,86,108,137,146,227,233,253,284,286
+  @field r ppqL  @ 333,511,517
+  @field w ppqL  @ 49,80,99,121,160,189,191,249,273,275,299,301
+  @field w ppqL  @ 321,346,348,375,376,401,402,500
+  @field w project  @ 102,124,163,194,277,303,324,351,379,405,429,452
+  @field w project  @ 473,503
+  @field w rpb  @ 249
+  @field w run  @ 27,42,60,76,93,116,156,185,214,241,266,292
+  @field w run  @ 314,339,372,398,425,449,469,490
+  @field w seed  @ 29,47,62,78,97,119,158,187,216,247,271,297
+  @field w seed  @ 319,344,374,400,427,451,471,498
   @field w shift  @ 10,11
-  @field w swing  @ 104,126,165,194,321,348,376,402,426,470,500
-  @field w swings  @ 102,124,163,192,272,298,319,346,374,400,424,447
-  @field w swings  @ 468,498
-  @field r uuid  @ 68,132,142,169,198,503
-  @field r val  @ 177
-  @field w val  @ 63,159,175
-  @field w vel  @ 30,48,79,98,120,186,188,215,243,267,269,293
-  @field w vel  @ 295,315,340,342,370,371,396,397,494
+  @field w swing  @ 104,126,165,196,326,353,381,407,431,475,505
+  @field w swings  @ 102,124,163,194,277,303,324,351,379,405,429,452
+  @field w swings  @ 473,503
+  @field r uuid  @ 68,132,142,169,201,508
+  @field r val  @ 179
+  @field w val  @ 63,159,177
+  @field w vel  @ 30,48,79,98,120,188,190,220,248,272,274,298
+  @field w vel  @ 300,320,345,347,375,376,401,402,499

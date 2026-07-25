@@ -1,0 +1,41 @@
+@spec mm_stable_slot_spec  src=tests/specs/mm_stable_slot_spec.lua  loc=94  sha=untracked  cases=3
+@exercises midiManager (h.mm)
+@surface   mm:notesRaw, mm:modify, mm:assign, mm:delete
+@harness   bareMM
+
+# Intent
+  Pins the stable-slot model: a loc is a slot id that lives as long as its event, so a value
+  assign, a ppq move and an add all leave every existing event's slot exactly where it was.
+  Walk order is ppq order (the order arrays), which after a move is no longer slot order.
+  A delete hands its slot back, and the next add reuses it before minting a fresh one.
+
+# Helpers
+  @fn noteField(mm, field)  @ 8-12
+  @fn slotByUuid(mm)  @ 15-19
+      -- uuid -> slot for every live note: the mapping stable slots promise not to churn.
+  @fn pair(harness)  @ 21-26
+  @fn uuidAtPpq(mm, ppq)  @ 28-30
+
+# Cases
+  @case 'a value-only assign leaves every slot where it was'  [harness]  @ 34-52
+  @case 'a ppq move re-splices the walk order and keeps both slots'  [harness]  @ 56-67
+  @case 'an add mints past the high-water mark; a delete hands the slot back for reuse'  [harness]  @ 71-92
+
+# Uses (outbound edges)
+  @use call mm:notesRaw  @ 10,17,29
+  @use call mm:modify  @ 41,45,61,75,84,88
+  @use call mm:assign  @ 41,45,61
+  @use call mm:delete  @ 84
+
+# Fields (r read / w write incl. constructor keys)
+  @field w chan  @ 23,24,76,89
+  @field w endppq  @ 23,24,61,76,89
+  @field w evType  @ 76,89
+  @field w name  @ 34,56,71
+  @field w notes  @ 22
+  @field w pitch  @ 23,24,41,76,89
+  @field r ppq  @ 29
+  @field w ppq  @ 23,24,61,76,89
+  @field w run  @ 35,57,72
+  @field r uuid  @ 17,29
+  @field w vel  @ 23,24,41,45,76,89
