@@ -150,8 +150,35 @@ the re-derive key must become order-position, not slot value. Options:
    verbs already visit `indexPut`/`indexDrop` per event);
 2. re-derive on demand by one filtered walk of the global order array.
 
-Option 1 is the likely answer — the verbs are already at the site — but
-phase 1 measures rather than guesses.
+**Settled 2026-07-25: option 1**, measured against 1b's landed option 2 in the
+live instance. HAMMERKLAVIER cannot discriminate on its own — all 8437 notes and
+1685 ccs sit on channel 1, so the filter drops nothing — but it prices the
+constant factor: `mm:notesRaw(1)` drains in 0.85ms against 0.47ms for the same
+`ordered` walk without the per-event `byLoc` test (ccs 0.14 against 0.09). The
+asymptotic case is a synthetic take of the same size spread over 16 channels,
+walked through the same iterator shapes: one dirty channel costs 0.69ms filtered
+against 0.035ms over a bucket order array, and all 16 dirty — a wholesale rebuild
+— 10.7ms against 0.54ms. Twentyfold, for two extra binary searches per verb.
+
+The audit that came with the measurement found one gap in today's maintenance:
+`resolveCollisions`' kill never calls `indexDrop`, so the bucket keeps the dead
+record. Invisible under option 2 until the freed slot is reused by another
+channel's add — and no longer laundered by a rebuild, since 1b left `rebuild` to
+`load` alone. Option 1 closes it structurally rather than by vigilance: a kill
+is a drop like any other, so the bucket splice sits where every other drop's
+does, and `mm_chan_index_spec` pins the reused-slot case that made it visible.
+
+### Measured after 1c: the per-channel walk (2026-07-25)
+
+HAMMERKLAVIER prices the constant factor it was
+chosen for: the chan-1 note walk goes 0.85ms → 0.496, the cc walk 0.14 → 0.097.
+Both land on the whole-array walk's own cost to three figures (0.496 / 0.096),
+which is the floor for a single-channel take — the filter's per-event test is
+gone and a bucket walk costs exactly what any `ordered` walk of that length
+costs. The asymptotic win stays where it was measured, in the synthetic
+16-channel model. Measure warm and after a `collectgarbage('collect')`: the
+first timed loop in a bridge chunk reads ~50% high on GC attribution, which is
+what made the raw re-probe say 0.77.
 
 ## Phase 2: incremental serialise
 
@@ -277,10 +304,10 @@ fixture. Going lower is interval-dirt's job (reload) and REAPER's
 
 ## Open questions
 
-- chanIdx option 1 vs 2 — measure bucket-walk cost per dirty channel before
-  choosing. Phase 1b lands option 2 (filter the global order array) as the
-  correct-by-construction baseline, so 1c measures option 1 against working
-  code rather than against today's.
+None outstanding.
+
+Settled 2026-07-25 by measurement: chanIdx takes option 1, per-bucket order
+arrays maintained by the verbs (§ chanIdx).
 
 Settled 2026-07-25, both by the phase-1 audit: the delete shape (immediate
 splice, § The idea), and mid-walk mutation — no caller adds, deletes or

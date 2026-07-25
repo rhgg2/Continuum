@@ -1,4 +1,4 @@
-@spec mm_chan_index_spec  src=tests/specs/mm_chan_index_spec.lua  loc=175  sha=37ed80d  cases=7
+@spec mm_chan_index_spec  src=tests/specs/mm_chan_index_spec.lua  loc=236  sha=37ed80d  cases=10
 @exercises midiManager (h.mm)
 @surface   mm:notesRaw, mm:ccsRaw, mm:modify, mm:delete, mm:assign
 @harness   bareMM
@@ -31,29 +31,37 @@
   @case 'a chan move leaves the old bucket and joins the new one'  [harness]  @ 111-128
   @case 'a non-structural assign does not disturb the index'  [harness]  @ 132-142
   @case 'a value-only assign keeps the index right with no reindex behind it'  [harness]  @ 146-158
-  @case 'the collision backstop kills a note outside mm:delete; the reindex launders it'  [harness]  @ 162-173
+  @case 'the collision backstop kills a note outside mm:delete; its own indexDrop launders it'  [harness]  @ 162-173
+  @case 'a backstop kill frees its slot; the next add must not surface in the dead note\'s channel'  [harness]  @ 177-195
+  @case 'a ppq move re-seats the event inside its channel walk'  [harness]  @ 199-213
+  @case 'a backstop nudge keeps the channel walk in ppq order'  [harness]  @ 217-234
 
 # Uses (outbound edges)
-  @use call mm:notesRaw  @ 33,70,71,84,96,103,115,122,123,136,150,168
+  @use call mm:notesRaw  @ 33,70,71,84,96,103,115,122,123,136,150,168,181,193,194,203,211,227,232
   @use call mm:ccsRaw  @ 39,72,85,97,104,116,124,125
-  @use call mm:modify  @ 80,99,118,137,153,169
+  @use call mm:modify  @ 80,99,118,137,153,169,182,188,205,229
   @use call mm:delete  @ 100,101
-  @use call mm:assign  @ 119,120,138,154,170
+  @use call mm:assign  @ 119,120,138,154,170,183,206,229
 
 # Fields (r read / w write incl. constructor keys)
   @field w cc  @ 56,58,82
   @field w ccs  @ 55
   @field r chan  @ 24
   @field w chan  @ 50,51,52,53,56,57,58,59,81,82,119,120
+  @field w chan  @ 189,222,223,224
   @field w detune  @ 138
-  @field w endppq  @ 50,51,52,53,81,170
-  @field w evType  @ 56,57,58,59,81,82
-  @field w name  @ 66,77,92,111,132,146,162
-  @field w notes  @ 49
-  @field w pitch  @ 50,51,52,53,59,81,154,170
-  @field r ppq  @ 96,97,115,116,136,150,168
-  @field w ppq  @ 50,51,52,53,56,57,58,59,81,82,170
-  @field w run  @ 67,78,93,112,133,147,163
-  @field r uuid  @ 96,97,115,116,136,150,168
+  @field w endppq  @ 50,51,52,53,81,170,183,189,206,222,223,224
+  @field w evType  @ 56,57,58,59,81,82,189
+  @field w name  @ 66,77,92,111,132,146,162,177,199,217
+  @field w notes  @ 49,221
+  @field w pitch  @ 50,51,52,53,59,81,154,170,183,189,222,223
+  @field w pitch  @ 224
+  @field r ppq  @ 96,97,115,116,136,150,168,181,203,212,227
+  @field r ppq  @ 233
+  @field w ppq  @ 50,51,52,53,56,57,58,59,81,82,170,183
+  @field w ppq  @ 189,206,222,223,224,229
+  @field w ppqL  @ 222,223,224
+  @field w run  @ 67,78,93,112,133,147,163,178,200,218
+  @field r uuid  @ 96,97,115,116,136,150,168,181,203,227
   @field w val  @ 56,57,58,82
-  @field w vel  @ 50,51,52,53,59,81,154
+  @field w vel  @ 50,51,52,53,59,81,154,189,222,223,224

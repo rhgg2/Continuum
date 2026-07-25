@@ -66,7 +66,7 @@ local orderEpoch  = 0     -- bumped by every splice; ordered() asserts on it to 
 local eventsByUuid      = {}
 --invariant: on a collision collisionIdx holds the survivor; the loser stays uuid-addressable
 local collisionIdx      = {}   -- note seats only; the same-pitch detector, never an address book
---invariant: chanIdx[kind][chan].byLoc[loc] = evt; keyed on chan alone, immune to ppq/pitch rewrites
+--invariant: chanIdx[kind][chan] = dense ppq-ordered slots, that channel's slice of the global one
 local chanIdx    = { note = {}, cc = {} }   -- per-channel index; rebuild reconstructs, the verbs maintain
 local maxUUID    = 0
 local lock       = false
@@ -392,34 +392,28 @@ end
 
 -- Backs notesRaw(chan) / ccsRaw(chan). tm's gated stages re-derive one channel and would otherwise
 -- walk every event to find it. see design/archive/incremental-rebuild.md § The traversal floor
-local function chanBucket(slots, chan)
-  local bucket = slots[chan]
-  if not bucket then bucket = { byLoc = {} }; slots[chan] = bucket end
-  return bucket
+local function bucketOrder(slots, chan)
+  local order = slots[chan]
+  if not order then order = {}; slots[chan] = order end
+  return order
 end
 
-local function slotsFor(evt) return chanIdx[evt.evType == 'note' and 'note' or 'cc'] end
-
-local function indexPut(evt)
-  chanBucket(slotsFor(evt), evt.chan).byLoc[evt.loc] = evt
+local function listOf(evt) return evt.evType == 'note' and notes or ccs end
+local function chanOrder(evt)
+  return bucketOrder(chanIdx[evt.evType == 'note' and 'note' or 'cc'], evt.chan)
 end
 
-local function indexDrop(evt)
-  chanBucket(slotsFor(evt), evt.chan).byLoc[evt.loc] = nil
-end
+-- The global order array's own splice helpers, so each bucket inherits the pinned equal-ppq add
+-- rule -- and, with it, the standing constraint: drop while evt is still listed at its OLD ppq.
+local function indexPut(evt)  orderInsert(listOf(evt), chanOrder(evt), evt.loc) end
+local function indexDrop(evt) orderRemove(listOf(evt), chanOrder(evt), evt.loc) end
 
--- One channel's slice of exactly what a whole-array ordered walk yields, in the same order: that
--- walk, filtered on bucket membership. O(total) per channel; see design/stable-slots.md § chanIdx.
+-- One channel's slice of exactly what a whole-array ordered walk yields, in the same order --
+-- being the same kind of walk over that channel's own order array.
 local function rawInChan(kind, chan)
-  local bucket = chanIdx[kind][chan]
-  if not bucket then return function() end end
-  local byLoc = bucket.byLoc
-  local walk  = (kind == 'note') and ordered(notes, noteOrder) or ordered(ccs, ccOrder)
-  return function()
-    for loc, evt in walk do
-      if byLoc[loc] then return loc, evt end
-    end
-  end
+  local order = chanIdx[kind][chan]
+  if not order then return function() end end
+  return ordered(kind == 'note' and notes or ccs, order)
 end
 
 ----- Reindex
@@ -442,19 +436,19 @@ local function rebuild(metadata)
   orderEpoch = orderEpoch + 1
   -- Compacted and sorted by here, so slot order and ppq order coincide: the order arrays are identities.
   noteOrder, ccOrder = identityOrder(noteMaxSlot), identityOrder(ccMaxSlot)
-  -- Seat inline rather than via indexPut: this is the one bulk path (every event, every load), and
-  -- the kind is known per loop, so it skips the dispatch the verbs' single-event path needs.
+  -- Seat inline rather than via indexPut: this is the one bulk path (every event, every load), the
+  -- kind is known per loop, and the ppq order lets each bucket be appended to rather than spliced.
   local noteSlots, ccSlots = chanIdx.note, chanIdx.cc
   for i, n in ipairs(notes) do
     n.loc = i
     collisionIdx[cachedSeatKey(n)] = n
-    chanBucket(noteSlots, n.chan).byLoc[i] = n
+    util.add(bucketOrder(noteSlots, n.chan), i)
     if n.uuid then eventsByUuid[n.uuid] = n end
     if metadata then util.assign(n, metadata[n.uuid]) end
   end
   for i, c in ipairs(ccs) do
     c.loc = i
-    chanBucket(ccSlots, c.chan).byLoc[i] = c
+    util.add(bucketOrder(ccSlots, c.chan), i)
     if c.uuid then
       eventsByUuid[c.uuid] = c
       if metadata then util.assign(c, metadata[c.uuid]) end
@@ -938,6 +932,7 @@ local function resolveCollisions()
                          chan = n.chan, pitch = n.pitch, ppq = n.ppq })
       perf.line('backstop killed uuid %s (chan %d pitch %d ppq %d) via %s',
                 n.uuid, n.chan, n.pitch, n.ppq, pending.verb)
+      indexDrop(n)
       freeSlot(notes, noteOrder, noteFree, n.loc)
       eventsByUuid[n.uuid] = nil
       deleteMetadatum(n.uuid)
@@ -945,9 +940,9 @@ local function resolveCollisions()
     for _, n in ipairs(voiced) do
       if onsetOf[n] ~= n.ppq then
         local oldPpq = n.ppq
-        orderRemove(notes, noteOrder, n.loc)
+        orderRemove(notes, noteOrder, n.loc); indexDrop(n)
         n.ppq = onsetOf[n]
-        orderInsert(notes, noteOrder, n.loc)
+        orderInsert(notes, noteOrder, n.loc); indexPut(n)
         util.add(events, { kind = 'nudged', uuid = n.uuid,
                            chan = n.chan, pitch = n.pitch, ppq = n.ppq })
         perf.line('backstop nudged uuid %s: ppq %d -> %d via %s', n.uuid, oldPpq, n.ppq, pending.verb)
@@ -1267,11 +1262,13 @@ function mm:assign(uuid, t)
   local evt = eventsByUuid[uuid]
   if not evt then return nil end
   markChan(evt.chan)                       -- old chan; a chan move dirties both
-  local chanMove = t.chan ~= nil and t.chan ~= evt.chan
-  if chanMove then indexDrop(evt) end      -- drop from the old bucket while evt.chan still names it
+  -- A chan move changes which bucket holds the event; a ppq move changes where it sits inside
+  -- one. Both computed once, before the mutation overwrites the values indexDrop still needs.
+  local reseats = (t.chan ~= nil and t.chan ~= evt.chan) or (t.ppq ~= nil and t.ppq ~= evt.ppq)
+  if reseats then indexDrop(evt) end
   if evt.evType == 'note' then assignNote(evt.loc, t)
   else                         assignCC(evt.loc, t) end
-  if chanMove then indexPut(evt) end
+  if reseats then indexPut(evt) end
   markChan(t.chan)                          -- new chan; nil-guarded when the assign leaves chan untouched
   return uuid
 end

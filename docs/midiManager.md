@@ -259,8 +259,17 @@ recompute: the splice is O(log n), the indices key on something that never
 moves, and `rebuild` survives as load's own pass, where it compacts the dedup
 holes and mints the initial dense slots 1..n. The verbs' index maintenance is
 load-bearing in exchange — `mm:assign` re-keys `collisionIdx` in place and
-brackets a chan move with `indexDrop`/`indexPut`, and `resolveCollisions`
-splices its own kills and nudges. See design/stable-slots.md.
+brackets a chan **or** ppq move with `indexDrop`/`indexPut`, and
+`resolveCollisions` splices its own kills and nudges.
+
+The per-channel index rides the same mechanism. `chanIdx[kind][chan]` is one
+order array per channel — that channel's slice of the global one, spliced by
+the same `orderInsert`/`orderRemove` — so `notesRaw(chan)` is a plain `ordered`
+walk over it rather than a whole-take walk filtered on membership. That widens
+what counts as maintenance: a ppq move re-seats the event inside its own
+channel too, which is why the `mm:assign` bracket covers both moves and why
+`resolveCollisions`' nudge splices the bucket alongside the global array. See
+design/stable-slots.md.
 
 **Collect first, then mutate.** A splice under a live iterator drops a
 neighbour out of the walk silently, and that is the one failure mode worth a

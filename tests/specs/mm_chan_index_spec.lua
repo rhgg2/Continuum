@@ -159,7 +159,7 @@ return {
   },
 
   {
-    name = 'the collision backstop kills a note outside mm:delete; the reindex launders it',
+    name = 'the collision backstop kills a note outside mm:delete; its own indexDrop launders it',
     run = function(harness)
       local mm = fixture(harness)
       -- Drive chan 1's two notes onto one (chan, pitch, ppq): the loser is killed by
@@ -170,6 +170,67 @@ return {
         mm:assign(tok, { ppq = 0, endppq = 240, pitch = 60 })
       end)
       assertParity(mm, 'after the backstop resolved the collision')
+    end,
+  },
+
+  {
+    name = 'a backstop kill frees its slot; the next add must not surface in the dead note\'s channel',
+    run = function(harness)
+      local mm = fixture(harness)
+      local tok
+      for _, n in mm:notesRaw() do if n.ppq == 480 then tok = n.uuid end end
+      mm:modify(function()
+        mm:assign(tok, { ppq = 0, endppq = 240, pitch = 60 })
+      end)
+
+      -- The kill handed its slot back to noteFree and nothing reindexes behind it, so a stale
+      -- entry for that slot stays invisible until another channel's add takes the slot over.
+      mm:modify(function()
+        mm:add{ evType = 'note', ppq = 960, endppq = 1200, chan = 3, pitch = 72, vel = 100 }
+      end)
+
+      assertParity(mm, 'after another channel reused the killed note\'s slot')
+      t.eq(#collect(mm:notesRaw(1)), 1, 'chan 1 holds only the collision survivor')
+      t.eq(#collect(mm:notesRaw(3)), 3, 'chan 3 holds its two notes plus the new one')
+    end,
+  },
+
+  {
+    name = 'a ppq move re-seats the event inside its channel walk',
+    run = function(harness)
+      local mm = fixture(harness)
+      local tok
+      for _, n in mm:notesRaw() do if n.ppq == 0 then tok = n.uuid end end
+      -- Past its chan-1 neighbour at 480, so the channel walk has to re-order, not just re-file.
+      mm:modify(function()
+        mm:assign(tok, { ppq = 600, endppq = 840 })
+        assertParity(mm, 'mid-modify after a ppq move')
+      end)
+      assertParity(mm, 'after the ppq move unwound')
+
+      local chan1 = collect(mm:notesRaw(1))
+      t.deepEq({ chan1[1].ppq, chan1[2].ppq }, { 480, 600 }, 'the moved note re-seated after its neighbour')
+    end,
+  },
+
+  {
+    name = 'a backstop nudge keeps the channel walk in ppq order',
+    run = function(harness)
+      -- Distinct voices (different ppqL) driven onto one ppq: resolveGroup nudges the loser to
+      -- prev + 1 outside any verb, so the nudge site owns its own index maintenance.
+      local mm = harness.bareMM{ notes = {
+        { ppq =   0, endppq = 240, chan = 1, pitch = 60, vel = 100, ppqL = 0 },
+        { ppq = 240, endppq = 480, chan = 1, pitch = 60, vel = 100, ppqL = 240 },
+        { ppq = 120, endppq = 360, chan = 3, pitch = 67, vel = 100, ppqL = 120 },
+      } }
+      local tok
+      for _, n in mm:notesRaw() do if n.ppq == 240 then tok = n.uuid end end
+
+      mm:modify(function() mm:assign(tok, { ppq = 0 }) end)
+
+      assertParity(mm, 'after the backstop nudged')
+      local chan1 = collect(mm:notesRaw(1))
+      t.deepEq({ chan1[1].ppq, chan1[2].ppq }, { 0, 1 }, 'the nudged voice sits after the one it collided with')
     end,
   },
 }
