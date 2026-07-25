@@ -2,9 +2,11 @@
 description: Implement the plan's Now brief — red spec first, brief kept current, suite green.
 ---
 
-1. Read `plan/CURRENT` → the live `plan/___.md`. Don't follow the
-   `source:` link to the design doc. If it's empty, say so, point at
-   `/plan-next`, stop.
+1. The live plan arrives injected by the `UserPromptExpansion` hook —
+   work from that rather than re-reading it. (A plan over the 10k
+   context cap arrives as a file path and a preview; read the path.)
+   Don't follow the `source:` link to the design doc. If the Now brief
+   is empty, say so, point at `/plan-next`, stop.
 2. Work from the brief: open the anchors it names (maps first), write
    the red spec first when it calls for one, implement, suite green
    via `lua_test_run`.

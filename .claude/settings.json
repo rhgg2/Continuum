@@ -10,6 +10,18 @@
         ]
       }
     ],
+    "UserPromptExpansion": [
+      {
+        "matcher": "plan-next|implement-next|commit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/prompt-expansion.sh\"",
+            "statusMessage": "Gathering command context..."
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Edit|Write",

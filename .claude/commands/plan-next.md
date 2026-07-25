@@ -5,8 +5,10 @@ description: Promote the next queued plan item into a self-contained, commit-siz
 Synthesis step: compile the next stretch of work from the design doc
 into the plan, so implementation sessions read the plan alone.
 
-1. Read `plan/CURRENT` → the live plan file `plan/<name>`. The plan
-   file is a working buffer. Phases is the human's map; it changes
+1. The live plan arrives injected by the `UserPromptExpansion` hook —
+   work from that rather than re-reading it. (A plan over the 10k
+   context cap arrives as a file path and a preview; read the path.)
+   The plan file is a working buffer. Phases is the human's map; it changes
    only when the roadmap does. Queued holds the incomplete items of
    the current phase only. Now is the next item to implement. Landed
    prunes below ~4 entries — git and the design doc's dated notes are

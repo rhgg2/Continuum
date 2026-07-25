@@ -8,7 +8,7 @@ manifest key is optional; contents are computed for all present keys before
 any file is written, so a bad manifest or a missing plan file errors before
 touching anything.
 
-Usage: python3 tools/bookkeep.py <manifest.json>
+Usage: python3 tools/bookkeep.py [manifest.json]   # reads stdin when no path
 
 Manifest:
   {
@@ -109,27 +109,46 @@ def apply_land(date, spec):
     return plan_path, "\n".join(lines) + "\n"
 
 
+def landing_digest(content):
+    """Echo back the two sections the splice rewrote.
+
+    The land write has no review gate, so this is the caller's only chance to
+    see where the new bullet and Now body actually landed.
+    """
+    lines = content.splitlines()
+    landed_start, _ = section_bounds(lines, "Landed")
+    _, now_end = section_bounds(lines, "Now")
+    return "\n".join(lines[landed_start - 1:now_end])
+
+
 # ----------- MAIN
 
 def main():
-    if len(sys.argv) != 2:
-        die("usage: bookkeep.py <manifest.json>")
-    manifest = json.loads(Path(sys.argv[1]).read_text())
+    if len(sys.argv) > 2:
+        die("usage: bookkeep.py [manifest.json]   (or pipe the JSON on stdin)")
+    source = Path(sys.argv[1]).read_text() if len(sys.argv) == 2 else sys.stdin.read()
+    manifest = json.loads(source)
     date = manifest.get("date") or datetime.date.today().isoformat()
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
         die(f"date must be YYYY-MM-DD, got {date!r}")
 
     writes = []
+    landed_content = None
     if "decision" in manifest:
         writes.append(apply_decision(date, manifest["decision"]))
     if "land" in manifest:
-        writes.append(apply_land(date, manifest["land"]))
+        plan_path, landed_content = apply_land(date, manifest["land"])
+        writes.append((plan_path, landed_content))
     if not writes:
         die("manifest had none of: decision, land")
 
     for path, content in writes:
         path.write_text(content)
         print(f"wrote {path.relative_to(REPO)}")
+
+    if landed_content:
+        print()
+        print(landing_digest(landed_content))
 
 
 if __name__ == "__main__":
