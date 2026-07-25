@@ -138,26 +138,34 @@ return {
   },
 
   {
-    -- serialise keys on (ppq, rank, array index), so the array order the sort settles is
-    -- what REAPER receives. Pinned at the wire because Phase 2 maintains that key list
-    -- incrementally. see plan/stable-slots.md
-    name = 'equal-ppq array order reaches the wire',
+    -- serialise keys on (ppq, rank, slot), so among equal-ppq siblings the wire follows
+    -- slot order -- and free-list reuse can hand a new event a slot below one already
+    -- there. Model and wire diverge here on purpose. see plan/stable-slots.md
+    name = 'equal-ppq wire order follows slot, not model order',
     run = function(harness)
       local mm = harness.bareMM{ notes = {
-        { ppq = 240, endppq = 480, chan = 1, pitch = 60, vel = 100 },
+        { ppq =   0, endppq = 240, chan = 1, pitch = 60, vel = 100 },   -- slot 1
+        { ppq = 240, endppq = 480, chan = 1, pitch = 62, vel = 100 },   -- slot 2
       } }
+      local doomed
+      for _, n in mm:notesRaw() do if n.ppq == 0 then doomed = n.uuid end end
+
       local blob
       local realSetAllEvts = reaper.MIDI_SetAllEvts
       reaper.MIDI_SetAllEvts = function(take, evts) blob = evts; return realSetAllEvts(take, evts) end
       mm:modify(function()
-        mm:add{ evType = 'note', ppq = 240, endppq = 480, chan = 1, pitch = 62, vel = 100 }
+        mm:delete(doomed)   -- slot 1 onto the LIFO free list; the add takes it straight back
+        mm:add{ evType = 'note', ppq = 240, endppq = 480, chan = 1, pitch = 64, vel = 100 }
       end)
+      reaper.MIDI_SetAllEvts = realSetAllEvts
 
       local wirePitches = {}
       for _, n in ipairs(midiBlob.parse(blob)) do
         if n.ppq == 240 then wirePitches[#wirePitches + 1] = n.pitch end
       end
-      t.deepEq(wirePitches, { 60, 62 }, 'note-ons at one ppq reach the wire in array order')
+      t.deepEq(wirePitches, { 64, 62 }, 'the reused low slot puts the new note first on the wire')
+      t.deepEq(fieldAt(mm:notesRaw(), 240, 'pitch'), { 62, 64 },
+        'while the model still obeys the add-after-equals rule')
     end,
   },
 }

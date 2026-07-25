@@ -326,16 +326,6 @@ local function ordered(list, order)   -- yields (loc, evt)
   end
 end
 
--- Dense ppq-ordered snapshot: what midiBlob.serialise's array-position wire key needs.
-local function denseByOrder(list, order)
-  local out = {}
-  for i = 1, #order do
-    local evt = list[order[i]]
-    if evt then out[#out + 1] = evt end
-  end
-  return out
-end
-
 ----- Order splices
 
 -- util.insertSorted lands at the lower bound, so a non-strict comparator carries the new slot past
@@ -508,8 +498,8 @@ local function flushTake()
   local endPpq   = math.floor(reaper.GetMediaSourceLength(source) * ppqPerQN + 0.5)
 
   perf.start('serialise')
-  local orderedNotes, orderedCcs = denseByOrder(notes, noteOrder), denseByOrder(ccs, ccOrder)
-  local blob = midiBlob.serialise(orderedNotes, orderedCcs, texts, carriedPassthrough, endPpq)
+  -- The live tables, unsnapshotted: serialise keys on the slot, so it reads them sparse.
+  local blob = midiBlob.serialise(notes, ccs, texts, carriedPassthrough, endPpq)
   perf.stop('serialise')
 
   perf.start('setEvts')
@@ -523,7 +513,7 @@ local function flushTake()
   reaper.MarkTrackItemsDirty(reaper.GetMediaItemTrack(item), item)
   perf.stop('setEvts')
 
-  perf.count('notes', #orderedNotes); perf.count('ccs', #orderedCcs); perf.count('texts', #texts)
+  perf.count('notes', #noteOrder); perf.count('ccs', #ccOrder); perf.count('texts', #texts)
   dirty = false
   -- Stash REAPER's canonical bytes (post-Sort), not the ones we handed it: the gate in load
   -- compares the take against these, and a re-encode would read as an external mutation.

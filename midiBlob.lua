@@ -137,7 +137,8 @@ local function ccWire(c)
   return string.char(status, b2, b3)
 end
 
---shape: serialise(notes, ccs, texts, passthrough, endPpq?) -> blob   -- inverse of parse; endPpq places the tail
+--shape: serialise(notes, ccs, texts, passthrough, endPpq?) -> blob   -- notes/ccs keyed by slot (a dense array is the case slot==index); endPpq places the tail
+--invariant: a note/cc slot stays under 5e4: seq2 = slot*2 shares the key's 1e5 digit band with rank
 --invariant: parse(serialise(x))==x; coincident events may reorder, per-type record lists preserved
 --invariant: note onsets unique per (ppq,chan,pitch); collision is upstream bug, warn+write
 --reaper: matches MIDI_SetAllEvts format; tail at max(endPpq, last-event ppq) (default: last event)
@@ -177,7 +178,7 @@ local function textRow(x)
 end
 
 -- Decodes a packed sort key to its wire chunk(s): rank digit picks the stream, seq//2
--- the record index, an odd seq a cc's bezier CCBZ rider. Mirrors midiBlob.parse.
+-- the event's slot, an odd seq a cc's bezier CCBZ rider. Mirrors midiBlob.parse.
 local function chunkOf(kv, dppq, notes, ccs, texts, passthrough)
   local rank = (kv // 100000) % 10
   local i    = (kv % 100000) // 2
@@ -238,8 +239,8 @@ end
 
 function midiBlob.serialise(notes, ccs, texts, passthrough, endPpq)
   passthrough = passthrough or {}
-  -- key = ppq*1e6 + rank*1e5 + seq2; ppq < 2^31 (i4 offset bounds it) keeps it
-  -- exact under 2^53. seq2 = index*2, +1 for a bezier tail. See docs/midiBlob.md.
+  -- key = ppq*1e6 + rank*1e5 + seq2, seq2 = slot*2 (+1 for a bezier tail); dense
+  -- streams use index*2 in place of slot. See docs/midiBlob.md.
   local keys, count = {}, 0
   local function key(ppq, rank, seq2)
     count = count + 1
@@ -248,19 +249,21 @@ function midiBlob.serialise(notes, ccs, texts, passthrough, endPpq)
 
   perf.start('keys')
   local seenOnset = {}   -- (ppq,chan,pitch) occupancy; 2048 = 16 chans x 128 pitches per ppq
-  for i, n in ipairs(notes) do
+  -- pairs, not ipairs: slots are sparse. Enumeration order can't reach the blob -- slots are
+  -- unique per stream, so the keys are a set and the sort settles emission order.
+  for slot, n in pairs(notes) do
     local onset = n.ppq * 2048 + (n.chan - 1) * 128 + n.pitch
     if seenOnset[onset] then
       util.print(('midiBlob.serialise: same-pitch onset collision ppq=%d chan=%d pitch=%d -- upstream bug, writing anyway')
         :format(n.ppq, n.chan, n.pitch))
     end
     seenOnset[onset] = true
-    key(n.ppq, 1, i * 2)      -- note-on
-    key(n.endppq, 0, i * 2)   -- note-off
+    key(n.ppq, 1, slot * 2)      -- note-on
+    key(n.endppq, 0, slot * 2)   -- note-off
   end
-  for i, c in ipairs(ccs) do
-    key(c.ppq, 2, i * 2)
-    if c.shape == 'bezier' then key(c.ppq, 2, i * 2 + 1) end
+  for slot, c in pairs(ccs) do
+    key(c.ppq, 2, slot * 2)
+    if c.shape == 'bezier' then key(c.ppq, 2, slot * 2 + 1) end
   end
   for i, x in ipairs(texts) do key(x.ppq, 3, i * 2) end
   for i, p in ipairs(passthrough) do key(p.ppq, 4, i * 2) end

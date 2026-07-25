@@ -1,19 +1,20 @@
-@module midiBlob  src=midiBlob.lua  loc=292  sha=15a343d  mode=namespace  self=midiBlob
+@module midiBlob  src=midiBlob.lua  loc=295  sha=15a343d  mode=namespace  self=midiBlob
 
 # Invariants & contracts
   @invariant  idx is the 0-based REAPER per-type index; note idx counts note-ons, text idx skips CCBZ  @ 13
   @reaper  blob = repeat(i4 offset, B flags, s4 msg) + trailing 12-byte all-notes-off tail (excluded)  @ 14
   @reaper  flags bit1=muted; bits4-6=cc shape; status byte classifies; CCBZ rides FF-0F after its cc  @ 15
-  @invariant  parse(serialise(x))==x; coincident events may reorder, per-type record lists preserved  @ 141
-  @invariant  note onsets unique per (ppq,chan,pitch); collision is upstream bug, warn+write  @ 142
-  @reaper  matches MIDI_SetAllEvts format; tail at max(endPpq, last-event ppq) (default: last event)  @ 143
+  @invariant  a note/cc slot stays under 5e4: seq2 = slot*2 shares the key's 1e5 digit band with rank  @ 141
+  @invariant  parse(serialise(x))==x; coincident events may reorder, per-type record lists preserved  @ 142
+  @invariant  note onsets unique per (ppq,chan,pitch); collision is upstream bug, warn+write  @ 143
+  @reaper  matches MIDI_SetAllEvts format; tail at max(endPpq, last-event ppq) (default: last event)  @ 144
 
 # Shapes
   @shape  parse(blob) -> notes, ccs, texts, passthrough  @ 9
   @shape  note = { idx, evType='note', ppq, endppq, chan(1..16), pitch, vel, [muted] }  @ 10
   @shape  cc = { idx, ppq, evType, chan(1..16), [cc|pitch], [val|vel], shape, [tension], [muted] }  @ 11
   @shape  text = { idx, ppq, eventtype, msg }  -- 15=notation, -1=sysex; CCBZ tension folds onto its cc  @ 12
-  @shape  serialise(notes, ccs, texts, passthrough, endPpq?) -> blob   -- inverse of parse; endPpq places the tail  @ 140
+  @shape  serialise(notes, ccs, texts, passthrough, endPpq?) -> blob   -- notes/ccs keyed by slot (a dense array is the case slot==index); endPpq places the tail  @ 140
 
 # Imports
   @const util = 'util'  @ 17
@@ -25,7 +26,7 @@
   @const shapeCodes, hiByEvType = {}, {}  @ 24
   @const oneDataByte = { pc = true, at = true }  @ 27   -- status + a single 7-bit data byte
   @const midiBlob = {}  @ 39
-  @const chunkCache = setmetatable({}, { __mode = 'k' })  @ 146
+  @const chunkCache = setmetatable({}, { __mode = 'k' })  @ 147
 
 # Private functions
   @fn isWideCC(c)  @ 31
@@ -37,77 +38,77 @@
   @fn ccDataBytes(c)  @ 126-131
       -- Value bytes for a cc-family record (inverse of ccValueFields).
   @fn ccWire(c)  @ 133-138
-  @fn noteRow(n)  @ 148-156
-  @fn ccRow(c)  @ 158-168
-  @fn textRow(x)  @ 170-177
-  @fn chunkOf(kv, dppq, notes, ccs, texts, passthrough)  @ 181-237
+  @fn noteRow(n)  @ 149-157
+  @fn ccRow(c)  @ 159-169
+  @fn textRow(x)  @ 171-178
+  @fn chunkOf(kv, dppq, notes, ccs, texts, passthrough)  @ 182-238
       -- Decodes a packed sort key to its wire chunk(s): rank digit picks the stream, seq//2
-      -- the record index, an odd seq a cc's bezier CCBZ rider. Mirrors midiBlob.parse.
+      -- the event's slot, an odd seq a cc's bezier CCBZ rider. Mirrors midiBlob.parse.
 
 # Public API (midiBlob.*)
   @api midiBlob.parse(blob)  @ 49-123
-  @api midiBlob.serialise(notes, ccs, texts, passthrough, endPpq)  @ 239-290
+  @api midiBlob.serialise(notes, ccs, texts, passthrough, endPpq)  @ 240-293
 
 # Uses (outbound edges)
-  @use call    perf.start  @ serialise:249,269,273,286
-  @use call    perf.stop  @ serialise:267,271,285,288
-  @use call    util.add  @ parse:70,83,89,93,96,117 serialise:279,280,284
+  @use call    perf.start  @ serialise:250,272,276,289
+  @use call    perf.stop  @ serialise:270,274,288,291
+  @use call    util.add  @ parse:70,83,89,93,96,117 serialise:282,283,287
   @use call    util.clamp  @ splitWide:36
-  @use call    util.print  @ serialise:254
+  @use call    util.print  @ serialise:257
   @use call    util.round  @ splitWide:34
   @use require perf  @ 18
   @use require util  @ 17
 
 # Fields (r read / w write incl. constructor keys)
-  @field w __mode  @ 146
+  @field w __mode  @ 147
   @field w at  @ 27
-  @field r bz  @ chunkOf:204,208
-  @field w bz  @ chunkOf:205
-  @field r cc  @ isWideCC:31 parse:104,107,108 ccDataBytes:128 ccRow:160,163 chunkOf:217,218
-  @field w cc  @ ccValueFields:44 ccRow:163
-  @field r chan  @ parse:104,108 ccWire:134 noteRow:150,152 ccRow:160,163 chunkOf:189,197,215
-  @field r chan  @ serialise:252,255
-  @field w chan  @ parse:68,79 noteRow:152 ccRow:163
-  @field r chunk  @ chunkOf:232
-  @field w chunk  @ chunkOf:228
-  @field r d  @ chunkOf:227,228
-  @field r endppq  @ serialise:259
+  @field r bz  @ chunkOf:205,209
+  @field w bz  @ chunkOf:206
+  @field r cc  @ isWideCC:31 parse:104,107,108 ccDataBytes:128 ccRow:161,164 chunkOf:218,219
+  @field w cc  @ ccValueFields:44 ccRow:164
+  @field r chan  @ parse:104,108 ccWire:134 noteRow:151,153 ccRow:161,164 chunkOf:190,198,216
+  @field r chan  @ serialise:255,258
+  @field w chan  @ parse:68,79 noteRow:153 ccRow:164
+  @field r chunk  @ chunkOf:233
+  @field w chunk  @ chunkOf:229
+  @field r d  @ chunkOf:228,229
+  @field r endppq  @ serialise:262
   @field w endppq  @ parse:67,76
-  @field r evType  @ isWideCC:31 parse:104,107 ccDataBytes:127,128,129 ccWire:134,136 ccRow:160,163
-  @field w evType  @ parse:67,79 ccRow:163
-  @field r eventtype  @ textRow:172,173 chunkOf:228,230
-  @field w eventtype  @ parse:89,93 textRow:173
-  @field r flags  @ chunkOf:235
+  @field r evType  @ isWideCC:31 parse:104,107 ccDataBytes:127,128,129 ccWire:134,136 ccRow:161,164
+  @field w evType  @ parse:67,79 ccRow:164
+  @field r eventtype  @ textRow:173,174 chunkOf:229,231
+  @field w eventtype  @ parse:89,93 textRow:174
+  @field r flags  @ chunkOf:236
   @field w flags  @ parse:96
   @field w idx  @ parse:67,79,89,93,118
-  @field r main  @ chunkOf:220,223
-  @field w main  @ chunkOf:217
-  @field r main2  @ chunkOf:223
-  @field w main2  @ chunkOf:218,220
-  @field r mainD  @ chunkOf:210
-  @field w mainD  @ chunkOf:211
-  @field r msg  @ textRow:172,173 chunkOf:229,230,235
-  @field w msg  @ parse:89,93,96 textRow:173
-  @field r muted  @ noteRow:151,152 ccRow:162,164 chunkOf:188,212,217
-  @field w muted  @ parse:68,80 noteRow:152 ccRow:164
-  @field r off  @ chunkOf:199
-  @field w off  @ chunkOf:196
-  @field r offD  @ chunkOf:195,196
-  @field r on  @ chunkOf:191
-  @field w on  @ chunkOf:188
-  @field r onD  @ chunkOf:187,188
+  @field r main  @ chunkOf:221,224
+  @field w main  @ chunkOf:218
+  @field r main2  @ chunkOf:224
+  @field w main2  @ chunkOf:219,221
+  @field r mainD  @ chunkOf:211
+  @field w mainD  @ chunkOf:212
+  @field r msg  @ textRow:173,174 chunkOf:230,231,236
+  @field w msg  @ parse:89,93,96 textRow:174
+  @field r muted  @ noteRow:152,153 ccRow:163,165 chunkOf:189,213,218
+  @field w muted  @ parse:68,80 noteRow:153 ccRow:165
+  @field r off  @ chunkOf:200
+  @field w off  @ chunkOf:197
+  @field r offD  @ chunkOf:196,197
+  @field r on  @ chunkOf:192
+  @field w on  @ chunkOf:189
+  @field r onD  @ chunkOf:188,189
   @field w parse  @ parse:49
   @field w pc  @ 27
-  @field r pitch  @ ccDataBytes:127 noteRow:150,152 ccRow:161,163 chunkOf:189,197 serialise:252,255
-  @field w pitch  @ ccValueFields:43 parse:68 noteRow:152 ccRow:163
-  @field r ppq  @ parse:104,108 serialise:252,255,258,262,263,265,266
+  @field r pitch  @ ccDataBytes:127 noteRow:151,153 ccRow:162,164 chunkOf:190,198 serialise:255,258
+  @field w pitch  @ ccValueFields:43 parse:68 noteRow:153 ccRow:164
+  @field r ppq  @ parse:104,108 serialise:255,258,261,265,266,268,269
   @field w ppq  @ parse:67,79,89,93,96
-  @field w serialise  @ serialise:239
-  @field r shape  @ parse:87 ccRow:162,164 chunkOf:212 serialise:263
-  @field w shape  @ parse:80 ccRow:164
-  @field r tension  @ ccRow:162,164 chunkOf:206
-  @field w tension  @ parse:87 ccRow:164
-  @field r val  @ isWideCC:31 parse:110 ccDataBytes:128,129,130 ccRow:161,163 chunkOf:214
-  @field w val  @ ccValueFields:44,45,46 parse:110 ccRow:163
-  @field r vel  @ ccDataBytes:127 noteRow:151,152 ccRow:161,164 chunkOf:189
-  @field w vel  @ ccValueFields:43 parse:68 noteRow:152 ccRow:164
+  @field w serialise  @ serialise:240
+  @field r shape  @ parse:87 ccRow:163,165 chunkOf:213 serialise:266
+  @field w shape  @ parse:80 ccRow:165
+  @field r tension  @ ccRow:163,165 chunkOf:207
+  @field w tension  @ parse:87 ccRow:165
+  @field r val  @ isWideCC:31 parse:110 ccDataBytes:128,129,130 ccRow:162,164 chunkOf:215
+  @field w val  @ ccValueFields:44,45,46 parse:110 ccRow:164
+  @field r vel  @ ccDataBytes:127 noteRow:152,153 ccRow:162,165 chunkOf:190
+  @field w vel  @ ccValueFields:43 parse:68 noteRow:153 ccRow:165
