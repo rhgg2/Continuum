@@ -1598,6 +1598,40 @@ return {
   },
 
   {
+    -- The window diff is what has to notice: the old target's window vanishes and a new one appears
+    -- in the same rebuild, so restore and park have to both land off one reconcile.
+    name = 'fx region (cc): retargeting a stage restores the old controller and parks the new one',
+    run = function(harness)
+      local h = harness.mk()
+      local function ccsOn(cc)
+        local out = {}
+        for _, c in ipairs(h.fm:dump().ccs) do
+          if c.evType == 'cc' and c.chan == 1 and c.cc == cc then out[#out + 1] = c end
+        end
+        return out
+      end
+      local pan = { kind = 'autopan', period = { 1, 2 }, depth = 32, dest = 10 }
+      h.tm:addEvent({ evType = 'cc', ppq = 60, chan = 1, cc = 10, val = 30 }); h.tm:flush()
+      h.tm:addEvent({ evType = 'cc', ppq = 60, chan = 1, cc = 1,  val = 20 }); h.tm:flush()
+
+      injectRegion(h, { fx = { pan } })
+      local parked = stashOfType(h, 'cc')
+      t.eq(#parked, 1, 'the covered cc10 parks off-take')
+      t.eq(parked[1].cc, 10, 'and it is the pan controller that parked')
+      t.eq(#ccsOn(1), 1, 'the mod wheel is untouched -- no window covers it')
+
+      injectRegion(h, { fx = { generators.retarget(pan, 1) } })
+      local swapped = stashOfType(h, 'cc')
+      t.eq(#swapped, 1, 'exactly one cc is parked after the swap')
+      t.eq(swapped[1].cc, 1, "cc1 parks in cc10's place")
+      local restored = ccsOn(10)
+      t.eq(#restored, 1, 'cc10 carries only its authored event again -- its seats are gone')
+      t.eq(restored[1].val, 30, 'and it comes back with the value it was authored at')
+      t.truthy(#ccsOn(1) > 1, 'while the pan curve now seats on the mod wheel')
+    end,
+  },
+
+  {
     name = 'note-host augment (cc): a sounding note drives summed seats like a degenerate region',
     run = function(harness)
       local h = harness.mk()

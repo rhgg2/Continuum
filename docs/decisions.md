@@ -4,6 +4,11 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-25** — An fx stage's dest is a per-entry param, not kind metadata: every read goes
+  through generators.destOf, and the registry dest is only its seed plus the note-vs-continuous
+  marker. What a target's numbers mean lives in one destProfile per dest, whose polarity derives
+  from the controller's default rest and never from an fx.rest override.
+
 - **2026-07-25** — A parked cell's identity key leads with `evType` and discriminates on `pitch`,
   over keying on `lane`: one flat `fxParked` holding every type made the old `(chan, cc, ppq)` key
   ambiguous across types — a pb authored at a parked note's onset resolved to the note, so edits

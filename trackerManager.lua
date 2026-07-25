@@ -3034,16 +3034,15 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
 
       -- Fold a continuous stage into its stream channel: replace overwrites, augment sums its delta on
       -- (exact breakpoint-union; closed, so the curve stays absolute over the whole window).
-      local function foldContinuous(meta, out)
-        local target = meta.dest
+      local function foldContinuous(target, mode, out)
         if owned[target] == nil then owned[target] = false end
         if #out.delta == 0 then return end
         local cur = target == 'pb' and stream.pb or stream.ccs[target] or {}
-        if meta.mode == 'replace' then
+        if mode == 'replace' then
           cur = out.delta
         else
           if #cur == 0 and target ~= 'pb' then
-            local rest = producer.fx.rest or generators.ccDefaultRest[target] or 0
+            local rest = generators.restFor(target, producer.fx.rest)
             cur = { { ppq = startL, val = rest, shape = 'step' } }
           end
           cur = sumStreams(cur, { out.delta }, { startL, endL }, { closed = true })
@@ -3055,8 +3054,9 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
       for _, params in ipairs(producer.fx) do
         local meta = generators.kinds[params.kind]
         if meta then
+          local dest = generators.destOf(params)
           local out = meta.expand(stream, host, params, chanCtx)
-          if meta.dest == 'note' then
+          if dest == 'note' then
             ownsNotes = true
             if meta.mode == 'replace' then stream.notes = out.notes
             else
@@ -3066,7 +3066,7 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
               stream.notes = merged
             end
           else
-            foldContinuous(meta, out)
+            foldContinuous(dest, meta.mode, out)
           end
         end
       end
@@ -3264,7 +3264,7 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
     for cc, recs in pairs(ccChains) do
       local base = ccBases[cc] or {}
       if #base == 0 then
-        local rest, minStart = firstRestOverride(recs) or generators.ccDefaultRest[cc] or 0, math.huge
+        local rest, minStart = generators.restFor(cc, firstRestOverride(recs)), math.huge
         for _, rec in ipairs(recs) do minStart = math.min(minStart, rec.window[1]) end
         base = { { ppq = minStart, val = rest, shape = 'step' } }
       end

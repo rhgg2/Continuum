@@ -10,7 +10,8 @@
 --invariant: ctx binds resolution, pbRangeCents, nextSameLaneNote, step(p,d,n), stepsBetween(a,b)
 --invariant: periods are QN per the periodQN convention -- scalar or {num,den}
 --shape: result = { notes = { {ppq,endppq,pitch,vel,detune}, ... }, delta = { {ppq,val,shape,[tension]}, ... } }
---shape: kinds[kind] = { expand, mode='replace'|'augment', dest='note'|'pb'|<cc>, label, defaults, fields }
+--shape: kinds[kind] = { expand, mode='replace'|'augment', dest='note'|'pb'|<cc>, dests?='any'|'pb'|'cc', label, defaults, fields }
+--shape: field = { field, label, widget, base?, coarse?, min?, max?, options?, when?, kind?, poly?, quantity?='magnitude', frac? }
 --invariant: mode is the stream fold -- replace overwrites the dest channel, augment adds to it
 -- The copy shelf (design/fx-patterns.md § P4): named copies of pattern-param bodies, Save/Load
 -- only. Params store bodies inline (§ P3.5); nothing references the shelf by name.
@@ -379,16 +380,17 @@ generators.kinds = {
     },
   },
   vibrato = {
-    expand = vibrato, mode = 'augment', dest = 'pb', label = 'Vibrato',
-    defaults = { period = { 1, 2 }, depth = 30, onset = 1 },
+    expand = vibrato, mode = 'augment', dest = 'pb', dests = 'pb', label = 'Vibrato',
+    defaults = { period = { 1, 2 }, onset = 1 },
     fields = {
       { field = 'period', label = 'Period', widget = 'choice', options = PERIODS },
-      { field = 'depth',  label = 'Depth',  widget = 'int', base = 1, coarse = 10, min = 0, max = 200 },  -- cents
+      { field = 'depth',  label = 'Depth',  widget = 'int', base = 1, coarse = 10,
+        quantity = 'magnitude', frac = 0.15 },   -- 30 cents on pb
       { field = 'onset',  label = 'Onset',  widget = 'int', base = 1, coarse = 4,  min = 0, max = 16 },   -- QN ramp-in
     },
   },
   slide = {
-    expand = slide, mode = 'augment', dest = 'pb', label = 'Slide',
+    expand = slide, mode = 'augment', dest = 'pb', dests = 'pb', label = 'Slide',
     defaults = { over = { 1, 2 }, target = 'next' },
     fields = {
       { field = 'over',   label = 'Glide',    widget = 'choice', options = PERIODS },
@@ -399,11 +401,12 @@ generators.kinds = {
     },
   },
   autopan = {
-    expand = autopan, mode = 'augment', dest = 10, label = 'Auto-pan',
-    defaults = { period = { 1, 2 }, depth = 32 },
+    expand = autopan, mode = 'augment', dest = 10, dests = 'cc', label = 'Auto-pan',
+    defaults = { period = { 1, 2 } },
     fields = {
       { field = 'period', label = 'Period', widget = 'choice', options = PERIODS },
-      { field = 'depth',  label = 'Depth',  widget = 'int', base = 1, coarse = 10, min = 0, max = 63 },  -- cc steps from centre
+      { field = 'depth',  label = 'Depth',  widget = 'int', base = 1, coarse = 10,
+        quantity = 'magnitude', frac = 0.5 },   -- 32 steps of pan's 63-step swing
     },
   },
   velPattern = {
@@ -414,7 +417,7 @@ generators.kinds = {
     },
   },
   lfo = {
-    expand = lfo, mode = 'augment', dest = 1, label = 'LFO',
+    expand = lfo, mode = 'augment', dest = 1, dests = 'cc', label = 'LFO',
     defaults = { period = { 1, 4 }, centre = 64, scale = 63,
                  pattern = { kind = 'curve', domain = 'normalized', display = 'bipolar', points = {} } },
     fields = {
@@ -435,14 +438,100 @@ for cc = 71, 79 do generators.ccDefaultRest[cc] = 64 end
 -- arpeggiates its covered chord, a single note degenerates cleanly (arp -> retrig, one voice).
 generators.modalOrder = { 'retrig', 'trill', 'arp', 'ostinato', 'chordStamp', 'velPattern', 'vibrato', 'slide', 'autopan', 'lfo' }
 
+----- Dest: a per-entry target, and what each target's numbers mean
+
+--contract: dest is a per-entry param; registry dest is only its seed + note-vs-continuous marker
+--shape: destProfile = { unit, rest, bipolar, magScale } -- continuous dests only ('pb' | cc number)
+
+-- A fixed musical reference for pb magnitudes: a whole tone, deliberately not the take's bend range.
+-- Scaling to the range would make one stage sound different in two takes.
+local PB_REFERENCE = 200
+
+function generators.destOf(params)
+  local meta = generators.kinds[params.kind]
+  return params.dest or (meta and meta.dest)
+end
+
+-- Polarity is the controller's own, and its default rest says it: one resting mid-scale swings
+-- both ways, one at a rail only runs inward. An fx.rest override steers the fold seed, never this.
+function generators.destProfile(dest)
+  if dest == 'pb' then return { unit = 'cents', rest = 0, bipolar = true, magScale = PB_REFERENCE } end
+  if type(dest) ~= 'number' then return nil end
+  local rest    = generators.ccDefaultRest[dest] or 0
+  local bipolar = rest > 0 and rest < 127
+  return { unit = 'steps', rest = rest, bipolar = bipolar,
+           magScale = bipolar and math.min(rest, 127 - rest) or math.max(rest, 127 - rest) }
+end
+
+-- The resting base a continuous augment sums onto: an authored override wins, else the dest's rest.
+function generators.restFor(dest, override)
+  return override or generators.destProfile(dest).rest
+end
+
+-- Every dest a kind can serve. Fewer than two is no choice at all, and earns no Dest row.
+function generators.destsFor(kind)
+  local declared = generators.kinds[kind] and generators.kinds[kind].dests
+  if not declared then return {} end
+  local dests = {}
+  if declared ~= 'cc' then dests[1] = 'pb' end
+  if declared ~= 'pb' then for cc = 0, 127 do dests[#dests + 1] = cc end end
+  return dests
+end
+
+-- A field's bounds in the target's own units: a magnitude spans rest outwards as far as the dest
+-- swings; anything else is fixed-unit and carries its bounds on the descriptor.
+function generators.fieldRange(fd, dest)
+  if fd.quantity == 'magnitude' then return 0, generators.destProfile(dest).magScale end
+  return fd.min, fd.max
+end
+
+local DEST_FIELD = { field = 'dest', label = 'Dest', widget = 'dest' }
+
+-- The rows a stage shows: a synthesised Dest row where the kind can serve more than one target,
+-- then the kind's own fields. Synthesised once here rather than repeated per registry entry.
+function generators.fieldsFor(entry)
+  local fields = generators.kinds[entry.kind].fields
+  if #generators.destsFor(entry.kind) < 2 then return fields end
+  local rows = { DEST_FIELD }
+  for _, fd in ipairs(fields) do rows[#rows + 1] = fd end
+  return rows
+end
+
+-- A kind's default entry: the dest it seeds from, its fixed-unit defaults, and every quantity field
+-- resolved against that dest -- so one `frac` declaration reads correctly wherever it lands.
+function generators.seed(kind)
+  local meta  = generators.kinds[kind]
+  local entry = util.assign({ kind = kind, dest = meta.dest }, meta.defaults)
+  for _, fd in ipairs(meta.fields) do
+    if fd.frac then
+      local _, fullScale = generators.fieldRange(fd, meta.dest)
+      entry[fd.field] = util.round(fd.frac * fullScale)
+    end
+  end
+  return entry
+end
+
+-- Point an entry at another dest, carrying its magnitudes over as the same proportion of the new
+-- target's swing. Equal references (CC 10 -> CC 8, both resting at 64) leave every value untouched.
+function generators.retarget(entry, dest)
+  local from = generators.destProfile(generators.destOf(entry)).magScale
+  local to   = generators.destProfile(dest).magScale
+  local out  = util.assign({}, entry)
+  out.dest = dest
+  if from == to then return out end
+  for _, fd in ipairs(generators.kinds[entry.kind].fields) do
+    if fd.quantity == 'magnitude' then out[fd.field] = util.round((entry[fd.field] or 0) * to / from) end
+  end
+  return out
+end
+
 ----- Region park predicate + windows
 
 -- A region parks its covered chord iff it carries a note-dest kind: the chain's final note stream
 -- stands in for the members (ownership by dest, not mode). A husk (no kinds) parks nothing.
 function generators.parksNotes(region)
   for _, params in ipairs(region.fx or {}) do
-    local meta = generators.kinds[params.kind]
-    if meta and meta.dest == 'note' then return true end
+    if generators.kinds[params.kind] and generators.destOf(params) == 'note' then return true end
   end
   return false
 end
@@ -452,8 +541,8 @@ end
 function generators.continuousTargets(fx)
   local targets = {}
   for _, params in ipairs(fx or {}) do
-    local meta = generators.kinds[params.kind]
-    if meta and meta.dest ~= 'note' then targets[meta.dest] = true end
+    local dest = generators.kinds[params.kind] and generators.destOf(params)
+    if dest and dest ~= 'note' then targets[dest] = true end
   end
   return targets
 end
@@ -463,7 +552,7 @@ end
 function generators.chainDestType(fx, target)
   for _, params in ipairs(fx or {}) do
     local meta = generators.kinds[params.kind]
-    if meta and meta.dest == target and meta.mode == 'replace' then return 'replace' end
+    if meta and generators.destOf(params) == target and meta.mode == 'replace' then return 'replace' end
   end
   return 'augment'
 end
@@ -482,13 +571,11 @@ function generators.parkWindows(regions)
     -- so a note host's region form only contributes continuous (cc/pb) windows.
     if generators.parksNotes(region) and not region.noteHost then window('note', region) end
     for _, params in ipairs(region.fx or {}) do
-      local meta = generators.kinds[params.kind]
-      if meta then
-        -- cc and pb both park for replace and augment: the summed base + macros seat on the target
-        -- lane (cc) or base lane (pb). see design/note-macros-v2.md § Continuous cc / § Continuous pb
-        if type(meta.dest) == 'number' then window('cc', region, meta.dest)
-        elseif meta.dest == 'pb' then window('pb', region) end
-      end
+      local dest = generators.kinds[params.kind] and generators.destOf(params)
+      -- cc and pb both park for replace and augment: the summed base + macros seat on the target
+      -- lane (cc) or base lane (pb). see design/note-macros-v2.md § Continuous cc / § Continuous pb
+      if type(dest) == 'number' then window('cc', region, dest)
+      elseif dest == 'pb' then window('pb', region) end
     end
   end
   return windows

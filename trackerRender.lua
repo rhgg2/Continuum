@@ -870,9 +870,6 @@ local gridPane = util.instantiate('gridPane', {
 -- reorderable/duplicable by position. see design/note-macros-v2.md § The fx chain, § Build progress C4
 local FX_KINDS = generators.modalOrder
 
--- A kind's default fx entry: its registry params stamped with the kind tag downstream reads.
-local function fxSeed(kind) return util.assign({ kind = kind }, generators.kinds[kind].defaults) end
-
 ----- FX field descriptors (used by the fx strip)
 
 local function choiceIndex(fd, value)
@@ -919,10 +916,24 @@ local function launchPattern(host, index, fd, entry)
   pe:launch(body, function(newBody) tv:setFxField(host, index, fd.field, newBody) end, fd.poly)
 end
 
+-- The Dest row's picker: bare `CC 74` labels -- there is no controller-name table in the repo,
+-- and pitch bend heads its own group so it reads as the one non-cc target.
+local function destLabel(dest) return dest == 'pb' and 'Pitch Bend' or ('CC ' .. dest) end
+local function destItems(entry)
+  local current, items = generators.destOf(entry), {}
+  for _, dest in ipairs(generators.destsFor(entry.kind)) do
+    items[#items + 1] = { label = destLabel(dest), key = dest,
+                          group = dest == 'pb' and 1 or 2, current = dest == current }
+  end
+  return items
+end
+
 -- Adjust rw's field one step: right increments, Ctrl coarse. The generic write both editors drive.
 local function adjustRow(uuid, rw, right, mods)
   local fd, value = rw.fd, rw.entry[rw.fd.field]
-  if fd.widget == 'choice' then
+  if fd.widget == 'dest' then          -- no scalar to nudge; arrowing opens the picker
+    chrome.requestPickerOpen('fxDest_' .. rw.index)
+  elseif fd.widget == 'choice' then
     local i = util.clamp(choiceIndex(fd, value) + (right and 1 or -1), 1, #fd.options)
     tv:setFxField(uuid, rw.index, fd.field, fd.options[i].v)
   elseif fd.widget == 'stepInterval' then
@@ -936,7 +947,8 @@ local function adjustRow(uuid, rw, right, mods)
     launchPattern(uuid, rw.index, fd, rw.entry)
   else
     local step = (mods & ImGui.Mod_Ctrl) ~= 0 and fd.coarse or fd.base
-    local n = util.clamp((value or 0) + (right and 1 or -1) * step, fd.min, fd.max)
+    local min, max = generators.fieldRange(fd, generators.destOf(rw.entry))
+    local n = util.clamp((value or 0) + (right and 1 or -1) * step, min, max)
     tv:setFxField(uuid, rw.index, fd.field, n)
   end
 end
@@ -948,7 +960,14 @@ local function fxFieldWidget(host, index, fd, entry, width)
   local id      = 'fx_' .. index .. '_' .. fd.field
   -- numberStepper's width sizes its input box only; its -/+ buttons add 2×(innerSpacing + frameH).
   local stepBoxW = width - 2 * (ImGui.GetStyleVar(ctx, ImGui.StyleVar_ItemInnerSpacing) + ImGui.GetFrameHeight(ctx))
-  if fd.widget == 'choice' then
+  if fd.widget == 'dest' then
+    -- A swap is a stage rewrite, not a field write: retarget carries the magnitudes across with it.
+    chrome.drawPicker{
+      kind = 'fxDest_' .. index, buttonLabel = destLabel(generators.destOf(entry)), width = width,
+      items = destItems(entry),
+      onPick = function(dest) tv:replaceFxStage(host, index, generators.retarget(entry, dest)) end,
+    }
+  elseif fd.widget == 'choice' then
     local pick = chrome.dropdown(id, fd.options[choiceIndex(fd, value)].l, choiceLabels(fd))
     if pick then tv:setFxField(host, index, fd.field, fd.options[pick].v) end
   elseif fd.widget == 'stepInterval' then
@@ -961,7 +980,8 @@ local function fxFieldWidget(host, index, fd, entry, width)
   elseif fd.widget == 'pattern' then
     if ImGui.Button(ctx, patternSummary(value) .. '##' .. id, width) then launchPattern(host, index, fd, entry) end
   else
-    local rv, n = chrome.numberStepper(id, value or 0, { width = stepBoxW, min = fd.min, max = fd.max })
+    local min, max = generators.fieldRange(fd, generators.destOf(entry))
+    local rv, n = chrome.numberStepper(id, value or 0, { width = stepBoxW, min = min, max = max })
     if rv then tv:setFxField(host, index, fd.field, n) end
   end
 end
@@ -995,7 +1015,7 @@ local stripPlan do
     local cols = {}
     for i, entry in ipairs(fx) do
       local fields = {}
-      for _, fd in ipairs(generators.kinds[entry.kind].fields) do
+      for _, fd in ipairs(generators.fieldsFor(entry)) do
         if not fd.when or fd.when(entry) then
           fields[#fields + 1] = { fd = fd, entry = entry, index = i }
         end
@@ -1131,7 +1151,7 @@ local stripPlan do
     chrome.drawPicker{
       kind = 'fxAdd', buttonLabel = 'add', flat = true, items = kindItems(),
       -- Lazy mint: the host under the caret wins; absent one (a bare selection), materialise its region now.
-      onPick   = function(kind) local h = host or tv:fxHostForEdit(); if h then tv:addFxStage(h, fxSeed(kind)) end end,
+      onPick   = function(kind) local h = host or tv:fxHostForEdit(); if h then tv:addFxStage(h, generators.seed(kind)) end end,
       -- Esc aborts a still-empty keyboard gesture (prunes the eager-minted husk); the mouse path minted nothing.
       onCancel = function() if stripFocus and #(tv:noteFx(host) or {}) == 0 then cancelStrip() end end,
     }
@@ -1161,7 +1181,7 @@ local stripPlan do
       -- Grow to fit the label, but stop short of the reorder cluster (which sits at availW - VALUE_W).
       minWidth = LABEL_W, maxWidth = availW - VALUE_W - LABEL_GAP,
       items = kindItems(col.kind),
-      onPick = function(kind) tv:replaceFxStage(host, col.index, fxSeed(kind)) end,
+      onPick = function(kind) tv:replaceFxStage(host, col.index, generators.seed(kind)) end,
     }
     -- No clickToCursor here: picking a kind applies live via onPick without grabbing strip focus (mirrors a value edit).
     ImGui.SameLine(ctx); ImGui.SetCursorPosX(ctx, headX + availW - VALUE_W)   -- ↑/↓/del left-align with the value column

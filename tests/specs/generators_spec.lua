@@ -152,6 +152,59 @@ return {
     end,
   },
 
+  ----- dest: a per-entry target, and what each target's numbers mean
+
+  {
+    name = 'destOf falls back to the registry dest; a dest param overrides it',
+    run = function()
+      t.eq(generators.destOf{ kind = 'vibrato' }, 'pb', 'no param: the kind seeds the dest')
+      t.eq(generators.destOf{ kind = 'vibrato', dest = 74 }, 74, 'the param wins')
+      t.eq(generators.destOf{ kind = 'retrig' }, 'note', 'note kinds resolve through the same door')
+    end,
+  },
+
+  {
+    name = 'fieldsFor prepends a Dest row only where the kind can serve more than one target',
+    run = function()
+      local pan = generators.fieldsFor{ kind = 'autopan' }
+      t.eq(pan[1].field, 'dest', "a cc kind's 128 targets earn a Dest row")
+      t.eq(pan[1].widget, 'dest', 'drawn by the dest picker, not a stepper')
+      t.eq(#pan, #generators.kinds.autopan.fields + 1, "the kind's own fields follow it")
+      t.eq(generators.fieldsFor{ kind = 'retrig' }[1].field, 'period', 'a note kind declares no dests -- no row')
+      t.eq(generators.fieldsFor{ kind = 'slide' }[1].field, 'over', 'pb-bound: one option is no choice')
+    end,
+  },
+
+  {
+    name = 'retarget between dests of equal reference leaves the magnitudes alone',
+    run = function()
+      local out = generators.retarget({ kind = 'autopan', period = { 1, 2 }, depth = 32, dest = 10 }, 8)
+      t.eq(out.dest, 8, 'the entry points at the new controller')
+      t.eq(out.depth, 32, 'pan and balance both rest at 64 -- the same 63-step swing, nothing to rescale')
+    end,
+  },
+
+  {
+    name = 'retarget rescales magnitudes by proportion of the dest reference',
+    run = function()
+      local toPan = generators.retarget({ kind = 'vibrato', period = { 1, 2 }, depth = 30, onset = 1 }, 10)
+      t.eq(toPan.depth, 9, '30 of pb\'s 200-cent reference -> 9 of pan\'s 63 steps')
+      local toMod = generators.retarget({ kind = 'autopan', period = { 1, 2 }, depth = 32, dest = 10 }, 1)
+      t.eq(toMod.depth, 65, 'the mod wheel rests at a rail: 32 of 63 -> 65 of its whole 127 run')
+    end,
+  },
+
+  {
+    name = 'parkWindows follows the dest param, not the registry (a retargeted pb kind parks cc)',
+    run = function()
+      local windows = generators.parkWindows{
+        { chan = 1, startppq = 0, endppq = 240, fx = { { kind = 'vibrato', dest = 74 } } },
+      }
+      t.deepEq(windows, { { evType = 'cc', chan = 1, cc = 74, startppq = 0, endppq = 240 } },
+               "the entry's dest decides the window type")
+    end,
+  },
+
   ----- autopan: a cc-dest sine LFO (vibrato's shape, cc steps not cents)
 
   {
