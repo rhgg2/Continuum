@@ -309,6 +309,12 @@ local function saveShelf(name)
   hostDs:assign('fxPatterns', s)
 end
 
+local function deleteShelf(name)
+  local s = shelf()
+  s[name] = nil
+  hostDs:assign('fxPatterns', s)
+end
+
 local function maxLane(body)
   local m = 1
   for _, s in ipairs(body.specs or {}) do m = math.max(m, s.lane or 1) end
@@ -357,9 +363,12 @@ local function drawSave()
                      onCreate = function(name) pendingAction = { save = name } end }
 end
 
+-- Only Load manages the shelf: its rows carry the two-press delete, Save's stay plain.
+-- see docs/patternEditor.md § The copy shelf
 local function drawLoad()
   chrome.drawPicker{ kind = 'peShelf', buttonLabel = 'Load', items = shelfItems(),
-                     onPick = function(name) pendingAction = { load = name } end }
+                     onPick   = function(name) pendingAction = { load = name } end,
+                     onDelete = function(name) pendingAction = { delete = name } end }
 end
 
 ----- Modal editing surface
@@ -445,7 +454,8 @@ function pe:handleInput(close)
     local action = pendingAction; pendingAction = nil
     if     action == 'commit' then close(false)
     elseif action == 'cancel' then cancel(close)
-    elseif action.save then saveShelf(action.save)
+    elseif action.save   then saveShelf(action.save)
+    elseif action.delete then deleteShelf(action.delete)
     else   loadShelf(action.load) end
     return { consumed = true, commandHeld = {} }
   end

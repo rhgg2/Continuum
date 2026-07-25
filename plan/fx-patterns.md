@@ -18,18 +18,17 @@
 
 ## Landed (newest first; prune below ~4)
 
+- 2026-07-25 pe: shelf delete via a per-row × in the Load picker (§ P4)
+- 2026-07-24 gen: chord-stamp kind — a poly chord rebased onto members (§ P4)
 - 2026-07-24 pe: add per-kind poly flag for note-pattern lanes (§ P4)
 - 2026-07-24 pe: Save becomes a picker; drawPicker gains onCreate (§ P4)
-- 2026-07-24 pe: library copy shelf — Save/Load in the toolbar (§ P4)
-- 2026-07-24 plan extracted from the design doc; P4 decisions taken
 
 ## Now
 
-(empty — polyphony infrastructure landed; run /plan-next to promote the next commit)
+(empty — shelf delete landed; run /plan-next to promote the queued 'rpb in body' item)
 
 ## Queued (current phase; one-liners)
 
-- shelf management: rename + delete rows inside the Load picker
 - rpb in body: persist rowPerBeat through the whitelist; open seeds the
   toolbar ticker from it
 

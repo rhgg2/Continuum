@@ -85,6 +85,15 @@ is an explicit pick from a visible list, and typing a fresh name fires the picke
 confirmation, and a typed name only reaches `onCreate` when it collides with
 nothing.
 
+Pruning the shelf is Load's job, not Save's: Load passes the picker an `onDelete`,
+so each of its rows carries a `×`, while Save's rows — the same names — stay plain,
+since Save is there to overwrite rather than to manage. Delete is the one shelf
+action with no way back, so it arms on the first click and only fires on the second
+(see `docs/chrome.md` § Picker). It drops the name from `fxPatterns` and, like every
+other shelf write, re-realises nothing — the open editor's own body is untouched.
+Rename was considered and dropped: it needs a second entry mode inside a widget nine
+callers share, for a name Save can recreate.
+
 Both widgets stay *inside* the editor modal: `modalHost` holds one state slot, so
 opening its prompt from within the editor would replace the editor itself. Both
 are `chrome.drawPicker` popups, whose items are the shelf names this editor can

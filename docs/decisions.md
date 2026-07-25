@@ -4,6 +4,11 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-25** — A destructive action on a shared picker row arms on the first click and fires
+  only on the second, where a non-destructive pick (Save's overwrite) confirms nothing: a pick is an
+  explicit choice from a visible list, whereas the row button sits beside the thing you click to
+  load and a delete has no undo path back.
+
 - **2026-07-24** — Library tiers: reversed the earlier 'kill seeding / Factory as a live read-only
   resolution tier' model. Factory is now a seed source only — the library seeds from the shipped
   catalogue when empty at startup, and a 'reload factory' button (confirm per divergent copy)

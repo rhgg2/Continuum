@@ -1,0 +1,66 @@
+@spec picker_delete_spec  src=tests/specs/picker_delete_spec.lua  loc=119  sha=untracked  cases=4
+@harness   mk
+
+# Intent
+  Chrome-level pin for drawPicker's onDelete hook (fx-patterns P4). Real chrome over a fake imgui:
+  a keyed row grows a trailing × whose first click only arms the row (red, with a trailing '?'), and
+  only a second click on that same row fires onDelete. Recipe from picker_create_spec, with an
+  InvisibleButton that recognises a queued row and a draw list that records what the × was drawn in.
+
+# Helpers
+  @fn mkChrome(h)  @ 60-63
+  @fn frame(chrome, click, noDelete)  @ 69-76
+      -- One Load picker frame, clicking the trailing × on row `click` (nil: click nothing).
+      -- Returns the key onDelete fired with, and the buttons drawn this frame.
+
+# Cases
+  @case 'the first click arms the row: no delete, and its × changes ink'  [harness]  @ 80-90
+  @case 'a second click on the armed row fires onDelete with its key'  [harness]  @ 94-99
+  @case 'arming a different row disarms the first'  [harness]  @ 103-109
+  @case 'a picker without onDelete draws no buttons at all'  [harness]  @ 113-117
+
+# Fields (r read / w write incl. constructor keys)
+  @field w BeginPopup  @ 30
+  @field w Button  @ 21
+  @field w CalcTextSize  @ 26
+  @field w ColorConvertDouble4ToU32  @ 37
+  @field w CreateFunctionFromEEL  @ 33
+  @field w DrawList_AddLine  @ 46
+  @field w DrawList_AddText  @ 50
+  @field w GetContentRegionAvail  @ 24
+  @field w GetCursorScreenPos  @ 28
+  @field w GetItemRectMax  @ 23
+  @field w GetItemRectMin  @ 22
+  @field w GetTextLineHeight  @ 25
+  @field w GetWindowDrawList  @ 29
+  @field w GetWindowPos  @ 27
+  @field w ImGui_GetBuiltinPath  @ 56
+  @field w InputText  @ 34
+  @field w InvisibleButton  @ 40
+  @field w IsItemHovered  @ 32
+  @field w IsKeyPressed  @ 35
+  @field w IsWindowAppearing  @ 31
+  @field w Mod_None  @ 9
+  @field w Selectable  @ 36
+  @field w __index  @ 10
+  @field w buttonLabel  @ 72
+  @field w cm  @ 61,62
+  @field w ctx  @ 62
+  @field r ink  @ 48,87
+  @field w ink  @ 48
+  @field w items  @ 72
+  @field w key  @ 65
+  @field w kind  @ 72
+  @field w label  @ 41,65
+  @field w lib  @ 62
+  @field r loaded  @ 55
+  @field w name  @ 80,94,103,113
+  @field w onDelete  @ 73
+  @field w onPick  @ 72
+  @field r preload  @ 54
+  @field r reaper  @ 56
+  @field w run  @ 81,95,104,114
+  @field w synthetic  @ 61
+  @field r text  @ 88,89
+  @field w text  @ 51
+  @field w uiSize  @ 62

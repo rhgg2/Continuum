@@ -240,6 +240,9 @@ local declarations = {
   -- Pane-selector pills on the editor body: editor.button a zone below toolbar.button.
   { 'colour.chrome.editor.button',        'base.zone9' },
   { 'colour.chrome.editor.buttonActive',  'base.zone7' },
+  { 'colour.chrome.picker.remove',      'base.zone5' },  -- picker row-delete × at rest (muted)
+  { 'colour.chrome.picker.removeArmed', 'red'        },  -- armed: the next click deletes
+
   { 'colour.chrome.scrollHandle', 'colour.global.text' },
   { 'colour.chrome.scrollBg',     'colour.global.bg'   },
   { 'colour.chrome.palette.tabInactive', 'base.zone5' },  -- inactive palette tab label (muted against the text-ink active)

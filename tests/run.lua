@@ -23,6 +23,7 @@ local specs = {
   'library_spec',
   'libpicker_badge_spec',
   'picker_create_spec',
+  'picker_delete_spec',
   'cm_poll_undo_spec',
   'pext_store_spec',
   'ps_mirror_spec',

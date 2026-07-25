@@ -263,4 +263,25 @@ return {
       t.truthy(polyOffered.twoLanes, 'a poly param also offers multi-lane bodies')
     end,
   },
+
+  {
+    name = 'Load offers a per-row delete that drops just that name; Save offers none',
+    run = function(harness)
+      local h, pe = withEditor(harness, notesBody())
+      local function oneSpecBody(pitch)
+        return { kind = 'notes', lengthPpq = 480, root = 60, specs = {
+          { lane = 1, ppq = 0, endppq = 240, pitch = pitch, vel = 90, detune = 0, delay = 0 } } }
+      end
+      h.ds:assign('fxPatterns', { small = oneSpecBody(72), keep = oneSpecBody(65) })
+
+      frame(pe)                                     -- draw captures both pickers
+      t.eq(capturedPickers.peSave.onDelete, nil, 'Save manages nothing; it only overwrites')
+      capturedPickers.peShelf.onDelete('small')     -- confirmed delete -> pendingAction
+      input(pe)                                     -- drain -> deleteShelf
+
+      local stored = h.ds:get('fxPatterns')
+      t.eq(stored.small, nil, 'the deleted name is gone from the shelf')
+      t.truthy(stored.keep, 'its sibling survives')
+    end,
+  },
 }

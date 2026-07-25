@@ -3,7 +3,7 @@
 --shape: chrome = { colour(name, scope?)->u32, pushChromeStyles(), popChromeStyles(), pushChromeWindow(), popChromeWindow(), verticalSeparator(), disabledIf(cond,fn), row(h?,fn), checkbox(label,v), radio(label,active), headingLabel(text), screenPainter()->painter}
 --shape: chrome (pickers) = { makeToolbar()->fn(segments), drawPicker(d), libPicker(key, current, excludeOthers?)->items, pickerIsActive()->bool, resetPickerActive(), requestPickerOpen(kind) }
 --shape: chrome (shared row primitives) = { fitLabel(text,maxW)->text, rowSelectable(label,sel,flags?)->clicked, treeRow(opts)->{toggled,selected,doubleClicked}, numberStepper(id,value,opts)->changed,value }
---shape: pickerSpec = { kind: string, heading: string?, buttonLabel: string, items: [{label, key, group?=int, current?=bool}], onPick: fn(key), onCancel?: fn(), onCreate?: fn(text), placement?: 'above', width?, minWidth?, maxWidth?, flat?: bool }
+--shape: pickerSpec = { kind: string, heading: string?, buttonLabel: string, items: [{label, key, group?=int, current?=bool}], onPick: fn(key), onCancel?: fn(), onCreate?: fn(text), onDelete?: fn(key), placement?: 'above', width?, minWidth?, maxWidth?, flat?: bool }
 --shape: palettePaneSpec = { x, y, h, label | {tabs=[{key,label}], activeTab, onTab}, draw = fn(childFocused) }
 --contract: one chrome instance per coordinator; threaded into every page
 --invariant: colour cache lives on the chrome instance and is invalidated on cm:configChanged
@@ -404,6 +404,7 @@ end
 -- Per-kind state; popups close on focus loss so a missing entry just
 -- means "default empty filter / cursor at top".
 local pickerFilter, pickerCursor = {}, {}
+local pickerDeleting = {}    -- per kind: the row key whose delete button has been clicked once
 local pickerActive   = false -- frame-scoped: any picker popup live this frame
 -- EEL callback: drops SetKeyboardFocusHere's select-all so a seeded filter
 -- appends instead of being overwritten by the next keystroke. Attached lazily.
@@ -444,6 +445,42 @@ local function libPicker(key, current, excludeOthers)
     items[#items+1] = { label = '+ ' .. name, key = name, group = 3, current = false }
   end
   return items
+end
+
+-- Two-press row delete: first click arms (turns the × red, no undo past this point), second
+-- fires. See docs/chrome.md § Picker for the full rationale and the glyph/hit-box mechanics.
+local DEL_GLYPH = 9   -- px across the drawn ×
+
+-- The '?' slot is always reserved, so arming never shifts the ×. Placement has two gotchas
+-- (SameLine's offset base, the Selectable's extended rect) -- see docs/chrome.md § Picker.
+local function deleteRowButton(kind, key, id, rowLeft, rowW)
+  local armed = pickerDeleting[kind] == key
+  local side  = math.max(DEL_GLYPH + 4, ImGui.GetTextLineHeight(ctx))
+  local boxW  = side + ImGui.CalcTextSize(ctx, '?')
+  local winX  = ImGui.GetWindowPos(ctx)
+
+  ImGui.SameLine(ctx, rowLeft - winX + rowW - boxW)
+  local clicked = ImGui.InvisibleButton(ctx, '##del' .. id, boxW, side)
+
+  local x0, y0 = ImGui.GetItemRectMin(ctx)
+  local _,  y1 = ImGui.GetItemRectMax(ctx)
+  local cx, cy = math.floor(x0 + side / 2), math.floor((y0 + y1) / 2)
+  local r      = DEL_GLYPH // 2
+  local ink    = 'picker.remove'
+  if armed then ink = 'picker.removeArmed'
+  elseif ImGui.IsItemHovered(ctx) then ink = 'text' end
+  local p = screenPainter()
+  p.line(cx - r, cy - r, cx + r, cy + r, ink, 1)
+  p.line(cx - r, cy + r, cx + r, cy - r, ink, 1)
+  -- The '?' rides the row font, so it need not match the hand-sized × exactly. Its ink sits high in
+  -- the text box (no descender), so centring the box leaves it above the ×'s middle: nudge it down.
+  if armed then
+    p.text(x0 + side, math.floor(cy - ImGui.GetTextLineHeight(ctx) / 2) + 1, ink, '?')
+  end
+
+  if not clicked then return false end
+  pickerDeleting[kind] = (not armed) and key or nil
+  return armed
 end
 
 -- Generic typeahead picker. Enter picks the highlighted match; group
@@ -544,9 +581,11 @@ local function drawPicker(d)
     end
   end
 
-  -- On open or filter-change, highlight the current pick if it survived; else top.
+  -- On open or filter-change, highlight the current pick if it survived; else top, and disarm any
+  -- delete: everything but a second click on the same row counts as a change of mind.
   if ImGui.IsWindowAppearing(ctx) or filter ~= prevFilter then
-    pickerCursor[d.kind] = currentMatch or 1
+    pickerCursor[d.kind]   = currentMatch or 1
+    pickerDeleting[d.kind] = nil
   end
   local cursor = pickerCursor[d.kind] or 1
   local n = #matches
@@ -572,11 +611,19 @@ local function drawPicker(d)
     ImGui.CloseCurrentPopup(ctx)
   else
     local lastGroup
+    -- Content left and full row width, for placing a trailing delete button; constant down the list.
+    local rowLeft = ImGui.GetCursorScreenPos(ctx)
+    local rowW    = ImGui.GetContentRegionAvail(ctx)
     for i, it in ipairs(matches) do
       if filter == '' and lastGroup and lastGroup ~= (it.group or 1) then
         ImGui.Separator(ctx)
       end
-      if ImGui.Selectable(ctx, it.label, i == cursor) then choose(it) end
+      local deletable = d.onDelete and it.key ~= nil and it.key ~= CREATE
+      -- Without AllowOverlap the full-width Selectable swallows the clicks aimed at the delete
+      -- button drawn over it: the later item only gets hover priority once the earlier one yields.
+      local flags = deletable and ImGui.SelectableFlags_AllowOverlap or nil
+      if ImGui.Selectable(ctx, it.label, i == cursor, flags) then choose(it) end
+      if deletable and deleteRowButton(d.kind, it.key, i, rowLeft, rowW) then d.onDelete(it.key) end
       lastGroup = it.group or 1
     end
   end

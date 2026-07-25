@@ -221,7 +221,7 @@ down onto the checkout, whereupon write-through makes the param track
 it. Both directions are copies: no live sharing, a shelf edit
 re-realises nothing, and tm's `fxPatterns` `dataChanged` arm plus its
 `derivationInputs` entry are deleted rather than extended. Management
-stays inside the Load picker (rename, delete).
+stays inside the Load picker (delete only — see below).
 
 **Mini undo.** Undo/redo are root-scope registrations on the *main*
 cmgr, unreachable from the modal, and the mini ps never runs
@@ -264,6 +264,15 @@ the domain, so a `normalized` param is never offered a `cc` body. And
 Esc keeps restoring the **modal-open** snapshot even after a Load: a
 load replaces the working body, not the cancel target, so cancel
 still means "as if never opened".
+
+Shelf management (settled 2026-07-25) is **delete only** — rename is
+dropped, since it needs a second entry mode inside a widget nine
+callers share, for a name Save can recreate. Delete is a per-row `×`
+on the Load picker's rows, fired through a new optional `onDelete`
+hook on `chrome.drawPicker`, and it **arms on the first click**, showing
+a confirm state, rather than acting at once: unlike an overwrite, which is an
+explicit pick from a visible list, the button sits beside the row you
+click to load and there is no undo path back to a deleted body.
 
 A further settlement (2026-07-24, Save as picker): Save is a
 `chrome.drawPicker` like Load, its items the existing matching-kind
