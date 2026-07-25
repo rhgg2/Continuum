@@ -1251,15 +1251,17 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     util.add(parkedEdits, { op = 'delete', evt = evt })
   end
 
-  --contract: notes key by uuid (fxp-N for a window-authored add), other types by (chan, cc, ppq)
+  -- One flat stash holds every type, so evType leads the key and cc/pitch discriminate within it --
+  -- the wire's own identity, lane deliberately absent. see docs/trackerManager.md § Park identity
+  --contract: note specs key by uuid; every other type by (evType, chan, cc, pitch, ppq)
   local function findParked(list, ref)
-    if ref.evType == 'note' then
-      for i, s in ipairs(list) do if s.uuid == ref.uuid then return i end end
-    else
-      for i, s in ipairs(list) do
-        if s.chan == ref.chan and s.cc == ref.cc and s.ppq == ref.ppq then return i end
-      end
+    local function matches(spec)
+      if spec.evType ~= ref.evType then return false end
+      if ref.evType == 'note' then return spec.uuid == ref.uuid end
+      return spec.chan == ref.chan and spec.cc == ref.cc
+         and spec.pitch == ref.pitch and spec.ppq == ref.ppq
     end
+    for i, spec in ipairs(list) do if matches(spec) then return i end end
   end
 
   -- Apply staged edits to cloned stashes, then write back under flushingParked so the inline

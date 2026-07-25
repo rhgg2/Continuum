@@ -776,6 +776,18 @@ intent the carry set out to preserve. Only a `staleSwing` channel gets
 the reverse treatment, its seat reswung into raw; everywhere else, raw
 wins the disagreement.
 
+## Park identity
+
+`fxParked` is one flat list holding every parked type, and `findParked`
+is what an edit to a parked cell resolves through. Notes key by `uuid`;
+everything else by `(evType, chan, cc, pitch, ppq)`.
+
+`pitch` is there for PAs, which are the only type that can put two
+cells on one `(chan, ppq)` — one per host note. It is `pitch` and not
+`lane` because lane is a display attribute, and keying on it would
+mint a distinction the take cannot hold: two parked PAs differing only
+by lane would collapse into one the moment they were restored.
+
 ## Muting
 
 tv owns the effective mute set (persistent mute ∪ solo-implied mute)

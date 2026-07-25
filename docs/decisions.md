@@ -4,6 +4,12 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-25** — A parked cell's identity key leads with `evType` and discriminates on `pitch`,
+  over keying on `lane`: one flat `fxParked` holding every type made the old `(chan, cc, ppq)` key
+  ambiguous across types — a pb authored at a parked note's onset resolved to the note, so edits
+  rewrote the note and the first delete ate it. Lane is display-only, and mm dedupes PAs on
+  chan+pitch, so two parked PAs differing only by lane could not survive a restore to the take.
+
 - **2026-07-25** — A destructive action on a shared picker row arms on the first click and fires
   only on the second, where a non-destructive pick (Save's overwrite) confirms nothing: a pick is an
   explicit choice from a visible list, whereas the row button sits beside the thing you click to

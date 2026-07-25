@@ -601,6 +601,73 @@ return {
   },
 
   {
+    -- The stash is one flat evType-tagged list, so a (chan, cc, ppq) key alone reaches across types:
+    -- a pb edit at a note's onset resolved to the note, and its delete ate the note instead.
+    name = 'parked pb sharing a ppq with a parked note edits and deletes independently of it',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { pitch = 60, lane = 1 })                                          -- ppq 0
+      h.tm:addEvent({ evType = 'pb', ppq = 0, chan = 1, val = 40 }); h.tm:flush()   -- same ppq
+      generators.kinds.pbRep = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppq = host.window[1], val = 50, shape = 'step' },
+        } } end,
+        mode = 'replace', dest = 'pb', label = 'PbRep', defaults = {}, fields = {},
+      }
+      injectArp(h, { fx = { arpUp[1], { kind = 'pbRep' } } })
+      t.eq(#stashOfType(h, 'note'), 1, 'the note parked')
+      t.eq(#stashOfType(h, 'pb'), 1, 'and the coincident pb parked alongside it')
+
+      h.tm:assignParked(h.tm:getChannel(1).parkedPb[1], { val = -40 }); h.tm:flush()
+      t.eq(stashOfType(h, 'pb')[1].val, -40, 'the edit landed on the pb')
+      t.eq(stashOfType(h, 'note')[1].pitch, 60, 'the note at the same ppq is untouched')
+      t.falsy(stashOfType(h, 'note')[1].val, 'and did not absorb the pb-shaped update')
+
+      h.tm:deleteParked(h.tm:getChannel(1).parkedPb[1]); h.tm:flush()
+      generators.kinds.pbRep = nil
+      t.eq(#stashOfType(h, 'pb'), 0, 'the pb left the stash')
+      t.eq(#stashOfType(h, 'note'), 1, 'the note at the same ppq stayed parked')
+    end,
+  },
+
+  {
+    -- Two hosts in different lanes, each with a PA at the same onset. A PA's identity is (chan, pitch,
+    -- ppq) all the way down -- mm keys its dedupe on pitch and has no lane -- so the park key needs
+    -- pitch to tell these apart. Lane would invent a distinction the take cannot hold.
+    name = 'parked PAs sharing a ppq across lanes are addressed by pitch, not by onset alone',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { pitch = 60, lane = 1 })
+      addNote(h, { pitch = 67, lane = 2 })
+      h.tm:addEvent{ evType = 'pa', ppq = 120, chan = 1, pitch = 60, vel = 64, lane = 1, rpb = 2 }
+      h.tm:addEvent{ evType = 'pa', ppq = 120, chan = 1, pitch = 67, vel = 90, lane = 2, rpb = 2 }
+      h.tm:flush()
+      injectArp(h)
+
+      local function stashPA(pitch)
+        for _, spec in ipairs(stashOfType(h, 'pa')) do if spec.pitch == pitch then return spec end end
+      end
+      local function parkedCell(pitch)
+        for _, cell in ipairs(h.tm:getChannel(1).parkedPA) do if cell.pitch == pitch then return cell end end
+      end
+      t.eq(#stashOfType(h, 'pa'), 2, 'both PAs parked with their hosts')
+
+      -- Edit both, so the case bites whichever way the stash happens to be ordered.
+      h.tm:assignParked(parkedCell(60), { vel = 100 }); h.tm:flush()
+      t.eq(stashPA(60).vel, 100, 'the edit landed on the pitch-60 PA')
+      t.eq(stashPA(67).vel, 90,  'its same-onset neighbour in the other lane is untouched')
+
+      h.tm:assignParked(parkedCell(67), { vel = 111 }); h.tm:flush()
+      t.eq(stashPA(67).vel, 111, 'the other lane edits independently')
+      t.eq(stashPA(60).vel, 100, 'leaving the first PA where it was')
+
+      h.tm:deleteParked(parkedCell(67)); h.tm:flush()
+      t.eq(#stashOfType(h, 'pa'), 1, 'one PA left the stash')
+      t.eq(stashPA(60) and stashPA(60).vel, 100, 'and the survivor is the other lane\'s, intact')
+    end,
+  },
+
+  {
     -- Restore lands on a ppq the fill already seats. mm addresses by uuid, so the two are distinct
     -- events: the fill reconcile deletes the seat and the restored authored cc stands.
     name = 'shrinking a cc-replace window restores the authored cc value, not the fill it sat under',
