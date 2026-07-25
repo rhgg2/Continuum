@@ -1,34 +1,47 @@
 # stable slots — the write side stops paying O(take) per keystroke
 
-> Working design doc, **not started**. Sibling to `design/interval-dirt.md`:
-> that programme attacks the derivation half of a flush (`reload`); this one
-> attacks the write half (`rebuild` + `serialise`). The two are independent —
-> neither blocks the other — but phase 2 here depends on phase 1 here.
+> Working design doc, **not started**. Sibling to `interval-dirt`, which
+> attacked the derivation half of a flush (`reload`) and closed 2026-07-21
+> (`design/archive/interval-dirt-closing.md`); this one attacks the write
+> half (`rebuild` + `serialise`). Phase 2 here depends on phase 1 here.
+> Plan: `plan/stable-slots.md`.
 
 ## Status at a glance
 
 | | |
 |---|---|
-| state | designed, unstarted |
-| sibling | `design/interval-dirt.md` (derivation side; independent) |
+| state | designed, unstarted; measurements refreshed 2026-07-25 |
+| sibling | `interval-dirt` — derivation side, closed 2026-07-21, archived |
 | enduring model it changes | `docs/midiManager.md` § reindex gate; `docs/midiBlob.md` |
 | the hard part | equal-ppq order becomes an explicitly maintained thing instead of a sort by-product |
 
 ## The problem
 
-Every one-note edit pays O(take) in flush. Glasswork macro fixture (1268
-notes, 9689 ccs, 1906 texts), one-note gestures, 2026-07-16, post
-`BUCKET=64`:
+Every one-note edit pays O(take) in flush. HAMMERKLAVIER (8438 notes, 1685
+ccs, 10174 texts), one-note **property** edit, 2026-07-25:
 
 | span | ms | O(take) because |
 |---|---|---|
-| serialise | ~7 | regenerates every key, sorts all ~14k, re-validates every chunk |
-| reload | ~7 | derivation — interval-dirt's territory |
-| setEvts | ~4 | whole-blob API — REAPER's floor |
-| rebuild | ~4 | the tokenIdx loop re-seats every event |
-| meta | 1.4 | no longer O(take) — fixed 2026-07-16 (`BUCKET` 256 → 64) |
-| sidecars | ~0.7 | O(take) but cached rows keep it cheap |
-| **flush** | **~24** | |
+| serialise | 16.3 | rebuilds every key (2.2, of which 0.75 is the `seenOnset` backstop), sorts all 28.7k (6.0), re-validates every chunk (5.8), concat (0.8) |
+| reload | 13.2 | derivation — `place` 8.1 dominates; interval-dirt's residue, not this programme's |
+| setEvts | 9.1 | whole-blob API — REAPER's floor |
+| sidecars | 2.1 | rebuilds the whole texts array every flush; cached rows keep the per-row cost down |
+| meta | 0.9 | no longer O(take) — fixed 2026-07-16 (`BUCKET` 256 → 64) |
+| rebuild | 0 | **did not run** — see below |
+| **flush** | **53.7** | 11.0 of it sits outside `mm`, untraced |
+
+`rebuild` is gesture-conditional: `indexStale()` gates it on `needsSort or
+needsCompact`, so a property edit (velocity, detune) skips it entirely and
+only an add, delete or ppq move pays. On this take that cost is ~8ms — a
+1.8ms reindex loop plus a 6.1ms `stableByPpq` over both arrays (estimated
+read-only, 2026-07-25).
+
+That is the trap for anyone profiling this programme: **the two halves
+surface on different gestures**, so a trace that does not say which gesture
+it profiled cannot price either half. The model below was derived on the
+glasswork macro fixture (1268 notes, 9689 ccs, 1906 texts, flush ~24ms,
+2026-07-16) and is unchanged by the refresh; the numbers are simply denser
+here.
 
 Two of those spans are self-inflicted, and both trace to one fact.
 
@@ -73,7 +86,8 @@ Verb maintenance replaces the reindex:
 
 - **add** — slot from the free list, else `maxSlot+1`. Binary-search the
   order array for the ppq position, `table.insert` — a C-level memmove of
-  ~10k pointers, sub-0.1ms, not a Lua loop.
+  ~10k pointers, sub-0.1ms, not a Lua loop. `util.insertSorted` (added
+  2026-07-25) is that primitive.
 - **ppq move** — splice out of the order array, splice back in at the new
   position. Everything keyed by slot (chanIdx `byLoc`, the event itself,
   phase 2's wire keys) is untouched.
@@ -125,6 +139,13 @@ persist across flushes:
 - The verbs record per-event key dirt: old key value out (binary search),
   new key value in. A note's off-key rides the same slot at rank 0 with
   `endppq`, so a length edit dirties only the off key.
+- The reporting spine already exists at channel granularity.
+  `dirtyChans`/`markChan` (`midiManager.lua:912-915`) is reset in
+  `enterNest` beside `metaDirty`/`metaDeleted` and seeded from exactly three
+  sites — `mm:add`, `mm:assign`, `mm:delete` — each already holding the
+  record. Key dirt lands at those same three sites and inherits the same
+  completeness argument: `dirtyChans` is load-bearing for tm's gating, so a
+  lossy set would already be showing as visible bugs.
 - Delta coupling is local: a spliced key re-packs only its own chunk and
   its successor's (their `dppq` changed). The chunkCache covers the rest —
   and the per-flush cache *validation* scan (most of pack's 3.3ms)
@@ -151,13 +172,19 @@ Constraints and wrinkles:
 
 | span | now | after |
 |---|---|---|
-| rebuild | ~4 | ~0.1 (splices) |
-| serialise | ~7 | ~1 (splice + neighbourhood re-pack + concat) |
-| **flush** | **~24** | **~13–14** |
+| rebuild (ppq-moving gestures only) | ~8 | ~0.1 (splices) |
+| serialise | 16.3 | ~1 (splice + neighbourhood re-pack + concat) |
+| sidecars | 2.1 | ~0 (touched rows only; the texts array stops being rebuilt) |
+| **flush**, property edit | **53.7** | **~35** |
 
-Untouched: reload (~7 — interval-dirt), setEvts (~4 — REAPER), meta (1.4 —
-done), sidecars (~0.7). The two programmes together point a keystroke edit
-at ~8–9ms.
+A ppq-moving gesture sheds the `rebuild` row on top of that. Its current
+total has not been traced, so the after-figure is deliberately absent
+rather than guessed.
+
+Untouched: reload (13.2, `place` 8.1 the crux), setEvts (9.1 — REAPER's
+floor), meta (0.9 — done), and the 11.0ms of flush sitting outside `mm`,
+which has never been broken down. That remainder is the next thing worth a
+profile after this programme, not before it.
 
 ## Implementation plan
 
