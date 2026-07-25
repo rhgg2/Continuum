@@ -841,9 +841,15 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   local function rawIndexInsert(evt)
     local tbl = rawIndexListFor(evt, evt.chan)
     if not tbl then return end
-    util.add(tbl, evt)
     setFxHost(evt)
-    if deferredSort then deferredSort[tbl] = true else table.sort(tbl, rawThenLogical) end
+    -- A lone insert seeks its seat rather than re-sorting the already-ordered list whole.
+    -- See docs/trackerManager.md § Incremental index reconciliation.
+    if deferredSort then
+      util.add(tbl, evt)
+      deferredSort[tbl] = true
+    else
+      util.insertSorted(tbl, evt, rawThenLogical)
+    end
   end
   local function rawIndexRemove(evt, chan)
     local tbl = rawIndexListFor(evt, chan or evt.chan)
@@ -967,15 +973,15 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     if assignDirtiesPb(evt, oldLane, update) then dirtyChan(oldChan); dirtyChan(evt.chan) end
     if vacated then util.bucket(seeds, oldChan, vacated) end
     seedEvent(evt, 'assign')
-    -- Keep the index coherent: a chan move migrates the entry between lists; a move in
-    -- either frame resorts in place (util.seek and the walk need ascending order).
-    local oldList = rawIndexListFor(evt, oldChan)
-    local newList = rawIndexListFor(evt, evt.chan)
-    if oldList ~= newList then
+    -- Keep the index coherent (util.seek and the walk need ascending order): a chan move or an
+    -- onset move both reseat via remove-then-place. See docs/trackerManager.md § Incremental index reconciliation.
+    local oldList  = rawIndexListFor(evt, oldChan)
+    local newList  = rawIndexListFor(evt, evt.chan)
+    local migrated = oldList ~= newList
+    local reseated = newList ~= nil and (update.ppq ~= nil or update.ppqL ~= nil)
+    if migrated or reseated then
       rawIndexRemove(evt, oldChan)
       rawIndexInsert(evt)
-    elseif (update.ppq ~= nil or update.ppqL ~= nil) and newList then
-      table.sort(newList, rawThenLogical)
     end
     -- A pure fx toggle refreshes the entry in place (no list migration), so the turnover hooks miss it.
     if update.fx ~= nil then setFxHost(evt) end

@@ -471,9 +471,9 @@ local function flushTake()
 
   perf.start('setEvts')
   reaper.MIDI_SetAllEvts(take, blob)
-  -- SetAllEvts swaps the data but leaves REAPER's play cursor indexing the old event
-  -- layout; mid-play it swallows the boundary events. See docs/midiManager.md § Live-edit note release.
-  reaper.MIDI_Sort(take)
+  -- MIDI_Sort reseats the play cursor SetAllEvts strands, not the order -- serialise already emits
+  -- canonical order -- so a stopped transport skips it. See docs/midiManager.md § Live-edit note release.
+  if reaper.GetPlayState() ~= 0 then reaper.MIDI_Sort(take) end
   -- MIDI API writes bump no undo dirty-counter: without this mark the blob never
   -- enters undo capture, so undo is a no-op on the MIDI (pooled takes can't rewind).
   local item = reaper.GetMediaItemTake_Item(take)

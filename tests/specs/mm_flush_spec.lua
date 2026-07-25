@@ -67,4 +67,56 @@ return {
       t.eq(pitch, 67, 'transposed note re-encodes its notation sidecar')
     end,
   },
+
+  {
+    -- MIDI_Sort after the write exists only to reseat REAPER's play cursor, which SetAllEvts
+    -- strands on the old event layout. It is not what orders the take -- serialise is -- so the
+    -- editing case can skip a call that costs ~9ms on a dense take.
+    name = 'a stopped-transport flush skips MIDI_Sort and still writes an ordered take',
+    run = function()
+      local take, rp = freshTake()
+      rp:seedMidi(take, {
+        notes = { { ppq = 480, endppq = 720, chan = 1, pitch = 64, vel = 100 } },
+      })
+
+      local mm = realMM(nil)
+      mm:load(take)
+
+      local sorts, realSort = 0, rp.MIDI_Sort
+      rp.MIDI_Sort = function(tk) sorts = sorts + 1; return realSort(tk) end
+
+      -- Added behind the seeded note, so only the serialiser's ordering puts it first.
+      mm:modify(function()
+        mm:add({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100 })
+      end)
+
+      t.eq(sorts, 0, 'transport stopped: the write skips MIDI_Sort')
+
+      local ppqs = {}
+      for _, n in ipairs(rp:dumpMidi(take).notes) do ppqs[#ppqs + 1] = n.ppq end
+      t.deepEq(ppqs, { 0, 480 }, 'the take is in ppq order anyway -- REAPER never sorted it')
+    end,
+  },
+
+  {
+    name = 'a flush during playback still sorts, to reseat the strandable play cursor',
+    run = function()
+      local take, rp = freshTake()
+      rp:seedMidi(take, {
+        notes = { { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100 } },
+      })
+
+      local mm = realMM(nil)
+      mm:load(take)
+
+      local sorts, realSort = 0, rp.MIDI_Sort
+      rp.MIDI_Sort = function(tk) sorts = sorts + 1; return realSort(tk) end
+      rp:setPlay(true)
+
+      local _, note = mm:notes()()
+      mm:modify(function() mm:assign(note.uuid, { vel = 90 }) end)
+
+      t.truthy(sorts > 0, 'transport running: the write sorts so the cursor re-indexes')
+    end,
+  },
 }

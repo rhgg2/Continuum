@@ -325,6 +325,23 @@ is provably unchanged by the sort. This replaced an earlier per-event
 cut held notes short); the sort fixes stranded offs and dropped ons alike, at
 any play position, with no per-event write.
 
+The sort is therefore a *playback* repair, not an ordering one: `midiBlob.serialise`
+emits the blob in canonical (ppq, rank, seq) order already, so a take written
+while the transport is stopped is correctly ordered whether or not REAPER sorts
+it. That matters because the call is not cheap — measured at ~8.6ms on a dense
+take (8.4k notes, 28.7k events), which was essentially the whole of the
+`setEvts` span; `MIDI_SetAllEvts` itself is well under a millisecond. Gating it
+on `GetPlayState() ~= 0` keeps the repair exactly where the hazard is and takes
+the cost off every edit made with the transport stopped, which is most of them.
+The gate is deliberately conservative about *paused* and *recording* — anything
+but fully stopped still sorts, because the stranding hazard is about the engine
+holding a cursor at all, not about audible playback.
+
+What this gives up: the sort was also an unstated backstop, silently repairing
+any mis-ordering the serialiser might emit. `mm_flush_spec` now pins the take's
+ppq order across a stopped-transport write so that guarantee is checked rather
+than inherited.
+
 tm still clears anticipative FX (`I_PERFFLAGS &2`) on the bound track while
 editing, restoring the prior on unbind/quit (see docs/trackerManager.md §
 Anticipative-FX guard). The old frontier rationale is gone, but the guard stays

@@ -1,0 +1,53 @@
+@spec tm_raw_index_order_spec  src=tests/specs/tm_raw_index_order_spec.lua  loc=76  sha=untracked  cases=2
+@exercises midiManager (h.mm), trackerManager (h.tm)
+@surface   mm:notes, fm:dump, tm:addEvent, tm:flush, tm:assignEvent
+@harness   mk{seed.notes}
+
+# Intent
+  tm's rawIndex holds one rawThenLogical-sorted list per channel per type, and the tail walk reads
+  those lists in order to find each note's same-pitch successor -- so a misplaced entry mis-clips a
+  tail. The index is maintained two ways: built in bulk at load (sort per list), patched per-event by
+  the add/assign verbs. Only the bulk path is self-evidently ordered. These cases pin the two against
+  each other -- whatever tm derives from a freshly-loaded index, the patched index must derive
+  identically -- so the verbs stay free to reseat by any means that preserves the order.
+
+# Helpers
+  @fn longNote(ppq)  @ 14-17
+  @fn uuidAtOnset(mm, ppq)  @ 19-23
+  @fn clips(h)  @ 26-33
+      -- (onset, clipped end) per chan-1 note, onset-ordered: the walk's verdict, and order-sensitive.
+  @fn seeded(harness, onsets)  @ 36-40
+      -- The bulk control: seeded straight through mm, so tm builds the whole index at load.
+
+# Cases
+  @case 'notes added out of onset order clip as if the index were built in bulk'  [harness]  @ 44-59
+  @case 'a note moved across its neighbours clips as if the index were built in bulk'  [harness]  @ 63-74
+
+# Uses (outbound edges)
+  @use call mm:notes  @ 20
+  @use call fm:dump  @ 28
+  @use call tm:addEvent  @ 55
+  @use call tm:flush  @ 55,71
+  @use call tm:assignEvent  @ 70
+
+# Fields (r read / w write incl. constructor keys)
+  @field r chan  @ 21,29
+  @field w chan  @ 15
+  @field w delay  @ 16
+  @field w detune  @ 16
+  @field r endppq  @ 29,48
+  @field w endppq  @ 15,29,70
+  @field w evType  @ 15
+  @field w lane  @ 16
+  @field w name  @ 44,63
+  @field r notes  @ 28
+  @field w notes  @ 39
+  @field w pitch  @ 15
+  @field r ppq  @ 21,29,31
+  @field w ppq  @ 15,29,70
+  @field w ppqL  @ 70
+  @field w run  @ 45,64
+  @field w seed  @ 39
+  @field r uuid  @ 21
+  @field w uuid  @ 70
+  @field w vel  @ 16

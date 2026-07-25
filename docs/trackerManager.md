@@ -92,6 +92,22 @@ so evicting unconditionally deleted the just-inserted live entry. Addressing by
 uuid there is one key per event and one table, and the guard went with the
 re-key.
 
+Reseating is a splice, not a re-sort. The list an entry moves within is ordered
+everywhere except at that one entry, so `rawIndexInsert` binary-searches its
+seat (`util.insertSorted`) and `assignLowlevel` reseats a moved entry by
+removing and reinserting it — the same path a channel migration already took,
+which is why the two collapsed into one branch. Re-sorting the whole list
+instead is O(n log n) Lua comparator calls to place a single event: ~8ms per
+added note on a dense single-channel take (8.4k notes all on channel 1), where
+the identity scan and shift it replaces cost ~0.2ms. Bulk paths keep the sort —
+`withDeferredSort` appends and sorts each touched list once at the end, because
+N splices into one list would beat N sorts only for small N.
+
+`tm_raw_index_order_spec` pins both mechanics against the bulk-built index: the
+tail walk reads these lists in order to find each note's same-pitch successor,
+so a misplaced entry surfaces as a mis-clipped tail rather than as anything
+visibly index-shaped.
+
 Because every mm write maintains the index, it is authoritative and survives
 across rebuilds. A rebuild only full-`reload()`s when mm re-read its entire
 event set from REAPER; ordinary edit rebuilds keep the live index and just

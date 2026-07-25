@@ -93,6 +93,7 @@ local specs = {
   'tm_fx_region_spec',
   'tm_fx_window_cache_spec',
   'tm_column_order_spec',
+  'tm_raw_index_order_spec',
   'tv_fx_region_spec',
   'tm_slide_spec',
   'tm_trill_spec',

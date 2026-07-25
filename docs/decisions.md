@@ -4,6 +4,11 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-25** — MIDI_Sort after MIDI_SetAllEvts is a playback repair, not an ordering one --
+  serialise already emits canonical order -- so it now runs only when the transport is not stopped.
+  This gives up an unstated backstop against a mis-ordering serialiser, pinned by spec instead, and
+  takes ~8.6ms off every stopped-transport edit on a dense take.
+
 - **2026-07-25** — An fx stage's dest is a per-entry param, not kind metadata: every read goes
   through generators.destOf, and the registry dest is only its seed plus the note-vs-continuous
   marker. What a target's numbers mean lives in one destProfile per dest, whose polarity derives

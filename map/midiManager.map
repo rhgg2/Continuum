@@ -1,4 +1,4 @@
-@module midiManager  src=midiManager.lua  loc=1387  sha=ad9aee6  mode=chunk  self=mm
+@module midiManager  src=midiManager.lua  loc=1387  sha=e9d4b6c  mode=chunk  self=mm
 @deps take, eventMeta
 
 # Invariants & contracts
@@ -296,6 +296,7 @@
   @reaper GetItemStateChunk
   @reaper MIDI_GetPPQPosFromProjQN, MIDI_SetAllEvts, MIDI_Sort, MIDI_GetAllEvts, MIDI_SetItemExtents, MIDI_GetPPQPosFromProjTime
   @reaper GetMediaSourceLength
+  @reaper GetPlayState
   @reaper MarkTrackItemsDirty
   @reaper GetMediaItemTrack
   @reaper GetSetMediaItemTakeInfo_String
