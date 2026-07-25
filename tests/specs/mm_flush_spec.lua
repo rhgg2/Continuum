@@ -99,6 +99,49 @@ return {
   },
 
   {
+    -- Phase 2 of stable-slots makes serialise incremental, and its safety argument is
+    -- "the incremental blob matches the full one" -- which needs the full path to be
+    -- deterministic in the first place. see plan/stable-slots.md
+    name = 'reflushing an unchanged model writes byte-identical bytes',
+    run = function()
+      local take, rp = freshTake()
+      rp:seedMidi(take, {
+        notes = {
+          { ppq =   0, endppq = 240, chan = 1, pitch = 60, vel = 100 },
+          { ppq =   0, endppq = 480, chan = 1, pitch = 64, vel =  90 },
+          { ppq = 240, endppq = 480, chan = 2, pitch = 67, vel =  80 },
+        },
+        ccs = {
+          { ppq =   0, chanmsg = 0xB0, chan = 1, msg2 =  7, msg3 = 100,
+            shape = 5, tension = 0.5 },   -- 5 = bezier, REAPER's shape code
+          { ppq =   0, chanmsg = 0xB0, chan = 1, msg2 = 11, msg3 =  64 },
+          { ppq = 120, chanmsg = 0xE0, chan = 1, msg2 =  0, msg3 =  64 },
+        },
+        texts = { { ppq = 0, eventtype = 3, msg = 'trackname' } },
+      })
+
+      local mm = realMM(nil)
+      mm:load(take)
+
+      local blobs, realSetAllEvts = {}, rp.MIDI_SetAllEvts
+      rp.MIDI_SetAllEvts = function(tk, evts)
+        blobs[#blobs + 1] = evts
+        return realSetAllEvts(tk, evts)
+      end
+
+      -- Each assign rewrites vel to the value the note already holds: enough to dirty
+      -- the take and reach the wire, not enough to change what is serialised.
+      local _, note = mm:notes()()
+      for _ = 1, 2 do
+        mm:modify(function() mm:assign(note.uuid, { vel = note.vel }) end)
+      end
+
+      t.eq(#blobs, 2, 'both flushes reached the wire')
+      t.truthy(blobs[1] == blobs[2], 'an unchanged model reserialises to the same bytes')
+    end,
+  },
+
+  {
     name = 'a flush during playback still sorts, to reseat the strandable play cursor',
     run = function()
       local take, rp = freshTake()

@@ -4,6 +4,12 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-25** — mm's equal-ppq order specifies the add only: a new event seats behind everything
+  already at its ppq, while a ppq move's placement among its new equals is unspecified — which is
+  REAPER's own position, since MIDI_Sort is stable and coincident order is prior order rather than a
+  property of the last gesture. Pinning the move would have cost array surgery that stable-slots
+  Phase 1's splice gives away free.
+
 - **2026-07-25** — MIDI_Sort after MIDI_SetAllEvts is a playback repair, not an ordering one --
   serialise already emits canonical order -- so it now runs only when the transport is not stopped.
   This gives up an unstated backstop against a mis-ordering serialiser, pinned by spec instead, and

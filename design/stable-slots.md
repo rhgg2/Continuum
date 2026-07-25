@@ -10,7 +10,6 @@
 
 | | |
 |---|---|
-| state | designed, unstarted; measurements refreshed 2026-07-25 |
 | sibling | `interval-dirt` — derivation side, closed 2026-07-21, archived |
 | enduring model it changes | `docs/midiManager.md` § reindex gate; `docs/midiBlob.md` |
 | the hard part | equal-ppq order becomes an explicitly maintained thing instead of a sort by-product |
@@ -104,14 +103,35 @@ Verb maintenance replaces the reindex:
 survives only as the wholesale path `load` needs — building the order
 arrays from scratch, which is exactly today's code.
 
-### Equal-ppq order must be pinned first
+### Equal-ppq order: the add is specified, the move is not
 
 Today equal-ppq order is a by-product: `stableByPpq` preserves array order
 among equals, and array order encodes insertion history. Under splice, the
-order among equals is wherever the binary search lands. Pin the rule —
-**a new or ppq-moved event inserts after all existing events at that ppq**
-— as a spec before phase 1 starts, so the migration converges on a stated
-behaviour rather than mimicking an accident.
+order among equals is wherever the binary search lands. So the rule is pinned
+as a spec (`mm_sort_order_spec`, 2026-07-25) before phase 1 starts, and it
+reads:
+
+> **A newly added event inserts after all existing events at that ppq.**
+
+Measured against today's code, that already holds — notes, ccs, and through
+serialise to the wire. It does not hold for a **ppq move**, and could not
+without new machinery: array order *is* ppq order, so an event arriving from
+an earlier ppq already sits before its new equals, and `stableByPpq`'s strict
+`>` never relocates an event past an equal. A move down onto an occupied ppq
+lands after the events there; a move up onto one lands before them.
+
+The rule therefore covers the add only, and **a ppq move's placement among
+its new equals is unspecified.** That is REAPER's own position: `MIDI_Sort` is
+stable, so order among coincident events is whatever relative order they
+already had rather than a property of the last gesture. Nothing downstream can
+see the difference either — equal-ppq siblings always differ in pitch (same
+pitch at one ppq is a collision), so tm's same-pitch tail walk is blind to it,
+the view lays out by lane and pitch, and which of two pitches at one ppq goes
+first on the wire is nothing to REAPER.
+
+Phase 1 gets the uniform behaviour for free: one splice serves add and move
+alike, so both land after the equals. It may pin the move then — as a
+consequence of the mechanism it chose, not as a debt it inherited.
 
 ### chanIdx: the per-channel walk order needs its own answer
 

@@ -1,9 +1,12 @@
 -- Pins rebuild's ordering contract: after a modify, notes/ccs come back
--- ppq-sorted with equal-ppq events in insertion order. Exercises both sort
--- paths: the near-sorted insertion pass and the shift-budget fallback that a
--- bulk reverse-order add trips.
+-- ppq-sorted, and a newly added event sits behind everything already at its
+-- ppq. Exercises both sort paths: the near-sorted insertion pass and the
+-- shift-budget fallback that a bulk reverse-order add trips.
+-- A ppq move's placement among its new equals is deliberately unpinned --
+-- see design/stable-slots.md § Equal-ppq order.
 
 local t = require('support')
+local midiBlob = require('midiBlob')
 
 local function orderedPpqs(iter)
   local out = {}
@@ -15,6 +18,14 @@ local function sortedCopy(list)
   local out = {}
   for i, v in ipairs(list) do out[i] = v end
   table.sort(out)
+  return out
+end
+
+-- One field of everything sitting at one ppq, in walk order: exactly what the
+-- equal-ppq rule constrains, and nothing else.
+local function fieldAt(iter, ppq, field)
+  local out = {}
+  for _, e in iter do if e.ppq == ppq then out[#out + 1] = e[field] end end
   return out
 end
 
@@ -48,9 +59,7 @@ return {
       mm:modify(function()
         mm:add{ evType = 'cc', ppq = 200, chan = 1, cc = 9, val = 4 }
       end)
-      local ccNums = {}
-      for _, c in mm:ccsRaw() do if c.ppq == 100 then ccNums[#ccNums + 1] = c.cc end end
-      t.deepEq(ccNums, { 7, 1 }, 'coincident ccs stay in insertion order')
+      t.deepEq(fieldAt(mm:ccsRaw(), 100, 'cc'), { 7, 1 }, 'coincident ccs stay in insertion order')
     end,
   },
 
@@ -70,9 +79,48 @@ return {
       local ppqs = orderedPpqs(mm:notesRaw())
       t.eq(#ppqs, 66, 'all notes survive the fallback sort')
       t.deepEq(ppqs, sortedCopy(ppqs), 'fallback leaves the array ppq-sorted')
-      local pitchesAt5 = {}
-      for _, n in mm:notesRaw() do if n.ppq == 5 then pitchesAt5[#pitchesAt5 + 1] = n.pitch end end
-      t.deepEq(pitchesAt5, { 60, 61 }, 'equal-ppq pair keeps insertion order through the fallback')
+      t.deepEq(fieldAt(mm:notesRaw(), 5, 'pitch'), { 60, 61 },
+        'equal-ppq pair keeps insertion order through the fallback')
+    end,
+  },
+
+  {
+    -- The rule Phase 1's binary search has to target: an added event inserts
+    -- after everything already at that ppq. see design/stable-slots.md
+    name = 'a note added at an occupied ppq lands behind the note already there',
+    run = function(harness)
+      local mm = harness.bareMM{ notes = {
+        { ppq = 240, endppq = 480, chan = 1, pitch = 60, vel = 100 },
+      } }
+      mm:modify(function()
+        mm:add{ evType = 'note', ppq = 240, endppq = 480, chan = 1, pitch = 62, vel = 100 }
+      end)
+      t.deepEq(fieldAt(mm:notesRaw(), 240, 'pitch'), { 60, 62 },
+        'the added note sits behind its equal')
+    end,
+  },
+
+  {
+    -- serialise keys on (ppq, rank, array index), so the array order the sort settles is
+    -- what REAPER receives. Pinned at the wire because Phase 2 maintains that key list
+    -- incrementally. see plan/stable-slots.md
+    name = 'equal-ppq array order reaches the wire',
+    run = function(harness)
+      local mm = harness.bareMM{ notes = {
+        { ppq = 240, endppq = 480, chan = 1, pitch = 60, vel = 100 },
+      } }
+      local blob
+      local realSetAllEvts = reaper.MIDI_SetAllEvts
+      reaper.MIDI_SetAllEvts = function(take, evts) blob = evts; return realSetAllEvts(take, evts) end
+      mm:modify(function()
+        mm:add{ evType = 'note', ppq = 240, endppq = 480, chan = 1, pitch = 62, vel = 100 }
+      end)
+
+      local wirePitches = {}
+      for _, n in ipairs(midiBlob.parse(blob)) do
+        if n.ppq == 240 then wirePitches[#wirePitches + 1] = n.pitch end
+      end
+      t.deepEq(wirePitches, { 60, 62 }, 'note-ons at one ppq reach the wire in array order')
     end,
   },
 }
