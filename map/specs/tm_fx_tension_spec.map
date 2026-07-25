@@ -1,4 +1,4 @@
-@spec tm_fx_tension_spec  src=tests/specs/tm_fx_tension_spec.lua  loc=101  sha=6c2fb10  cases=2
+@spec tm_fx_tension_spec  src=tests/specs/tm_fx_tension_spec.lua  loc=101  sha=a17676d  cases=2
 @exercises midiManager (h.fm), trackerManager (h.tm)
 @surface   fm:interpolate, tm:addEvent, tm:flush, fm:dump
 @harness   mk{seed.ccs}
@@ -33,12 +33,12 @@
   @field w cc  @ 70,71,72
   @field r ccs  @ 15
   @field w ccs  @ 37,69
-  @field w centre  @ 80
   @field w cents  @ 38,39
   @field r chan  @ 48,85
   @field w chan  @ 38,39,43,70,71,72,78
   @field w delay  @ 44,79
   @field w depth  @ 45
+  @field w dest  @ 80
   @field w detune  @ 44,79
   @field w endppq  @ 43,78
   @field r evType  @ 48,85
@@ -48,6 +48,7 @@
   @field w lane  @ 44,79
   @field w lengthPpq  @ 81
   @field w name  @ 33,65
+  @field w offset  @ 80
   @field w onset  @ 45
   @field w pattern  @ 81
   @field w period  @ 45,80

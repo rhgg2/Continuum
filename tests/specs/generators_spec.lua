@@ -195,6 +195,26 @@ return {
   },
 
   {
+    name = 'fieldRange spans both ways for a signed magnitude, one way for an unsigned one',
+    run = function()
+      local lo, hi = generators.fieldRange({ quantity = 'magnitude', signed = true }, 10)
+      t.eq(lo, -63, 'signed: as far below rest as above')
+      t.eq(hi, 63,  'and no further either way than the dest swings')
+      t.eq(generators.fieldRange({ quantity = 'magnitude' }, 10), 0, 'unsigned: a span, starting at nothing')
+    end,
+  },
+
+  {
+    name = 'retarget carries a signed magnitude across with its sign intact',
+    run = function()
+      local toPan = generators.retarget({ kind = 'lfo', scale = 100 }, 10)
+      t.eq(toPan.scale, 32, "100 of pb's 200-cent reference -> 32 of pan's 63 steps")
+      local mirrored = generators.retarget({ kind = 'lfo', scale = -100 }, 10)
+      t.eq(mirrored.scale, -31, 'a mirrored curve stays mirrored (round-half-up puts the exact half at -31)')
+    end,
+  },
+
+  {
     name = 'parkWindows follows the dest param, not the registry (a retargeted pb kind parks cc)',
     run = function()
       local windows = generators.parkWindows{
@@ -398,46 +418,59 @@ return {
     end,
   },
 
-  ----- lfo: tile a normalized curve onto an absolute cc via centre + scale
+  ----- lfo: tile a normalized curve, displaced from the dest's rest by offset + scale
 
   {
-    name = 'lfo tiles the curve at 1/period QN, mapping each val by centre + scale, edges seeded',
+    name = 'lfo tiles the curve at 1/period QN, mapping each val by offset + scale, edges seeded',
     run = function()
       -- res 240, period 1 QN -> 240-tick cycle == lengthPpq (stretch 1); window is two cycles.
       local out = expand('lfo', { window = { 0, 480 } },
-        { kind = 'lfo', period = { 1, 1 }, centre = 64, scale = 63, pattern = triangle() },
+        { kind = 'lfo', period = { 1, 1 }, offset = 64, scale = 63, pattern = triangle() },
         { resolution = 240 })
       t.eq(#out.notes, 0, 'continuous: no structural notes')
       local d = out.delta
-      t.eq(d[1].ppq, 0);      t.eq(d[1].val, 1,   'start seed maps norm -1 -> centre-scale (1)')
+      t.eq(d[1].ppq, 0);      t.eq(d[1].val, 1,   'start seed maps norm -1 -> offset-scale (1)')
       t.eq(d[#d].ppq, 480);   t.eq(d[#d].val, 1,  'end seed closes the loop back to the start value')
       local peaks, mid = 0, {}
       for _, bp in ipairs(d) do
-        if bp.val == 127 then peaks = peaks + 1 end   -- norm +1 -> centre+scale, at ppq 120 & 360
+        if bp.val == 127 then peaks = peaks + 1 end   -- norm +1 -> offset+scale, at ppq 120 & 360
         if bp.val == 64  then mid[#mid + 1] = bp.ppq end
       end
       t.eq(peaks, 2, 'the +1 apex recurs once per tiled cycle')
-      t.truthy(#mid >= 2, 'the norm-0 midpoints land on centre (64)')
+      t.truthy(#mid >= 2, 'the norm-0 midpoints land on offset (64)')
     end,
   },
 
   {
-    name = 'lfo clamps centre +/- scale to 0..127',
+    name = 'lfo maps norm in whatever units the dest counts in -- cents on pb',
     run = function()
       local out = expand('lfo', { window = { 0, 240 } },
-        { kind = 'lfo', period = { 1, 1 }, centre = 64, scale = 100, pattern = triangle() },
+        { kind = 'lfo', period = { 1, 1 }, offset = 0, scale = 100, pattern = triangle() },
         { resolution = 240 })
-      t.eq(out.delta[1].val, 0, 'centre 64 - scale 100 clamps up to 0')
+      t.eq(out.delta[1].val, -100, 'norm -1 -> 100 cents below rest; the body knows nothing of 0..127')
+      local peak
+      for _, bp in ipairs(out.delta) do if bp.ppq == 120 then peak = bp.val end end
+      t.eq(peak, 100, 'norm +1 -> 100 cents above rest')
+    end,
+  },
+
+  {
+    name = 'lfo does not clamp -- the body holds no dest knowledge, and the cc seat clamps',
+    run = function()
+      local out = expand('lfo', { window = { 0, 240 } },
+        { kind = 'lfo', period = { 1, 1 }, offset = 64, scale = 100, pattern = triangle() },
+        { resolution = 240 })
+      t.eq(out.delta[1].val, -36, 'offset 64 - scale 100 runs below a cc floor, and is emitted as it is')
       local sawHi = false
-      for _, bp in ipairs(out.delta) do if bp.val == 127 then sawHi = true end end
-      t.truthy(sawHi, 'centre 64 + scale 100 clamps down to 127')
+      for _, bp in ipairs(out.delta) do if bp.val == 164 then sawHi = true end end
+      t.truthy(sawHi, 'offset 64 + scale 100 runs above the ceiling, likewise')
     end,
   },
 
   {
     name = 'lfo with an empty or lengthless curve is inert (no delta)',
     run = function()
-      local base = { kind = 'lfo', period = { 1, 1 }, centre = 64, scale = 63 }
+      local base = { kind = 'lfo', period = { 1, 1 }, offset = 64, scale = 63 }
       local empty = expand('lfo', { window = { 0, 240 } },
         util.assign({}, base, { pattern = { kind = 'curve', lengthPpq = 240, points = {} } }), { resolution = 240 })
       t.eq(#empty.delta, 0, 'no points -> nothing to emit')

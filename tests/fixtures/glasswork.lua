@@ -56,7 +56,7 @@ local function build(tm, gm)
   local pan      = {{ kind='sine', period={2,1}, depth=48, dest=10 }}
   local lfoCurve = { kind='curve', lengthPpq=1000,
                      points={ {ppq=0,val=-1,shape='slow'}, {ppq=500,val=1,shape='slow'} } }
-  local lfo = {{ kind='lfo', period={4,1}, centre=60, scale=52, pattern=lfoCurve }}
+  local lfo = {{ kind='lfo', period={4,1}, dest=1, offset=60, scale=52, pattern=lfoCurve }}
   for i = 0, 23 do
     local ci, at = (i % 4) + 1, i * BAR
     local rp, rd = e53(C2, root[ci] + 53)

@@ -77,7 +77,7 @@ return {
       -- [240,360) the parked pick.
       h.tm:addEvent({ evType = 'note', ppq = 120, endppq = 360, chan = 1, pitch = 60, vel = 100,
                       detune = 0, delay = 0, lane = 1,
-                      fx = { { kind = 'lfo', period = { 1, 4 }, centre = 0, scale = 0,
+                      fx = { { kind = 'lfo', period = { 1, 4 }, dest = 1, offset = 0, scale = 0,
                                pattern = { kind = 'curve', lengthPpq = 60,
                                            points = { { ppq = 0, val = 0, shape = 'linear' } } } } } })
       h.tm:flush()

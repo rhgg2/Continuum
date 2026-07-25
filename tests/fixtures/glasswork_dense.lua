@@ -31,7 +31,7 @@ local lfoCurve = { kind='curve', lengthPpq=1000,
 local lanes = {
   { off = 53, fx = {{ kind='sine',    period={1,3}, depth=40, onset=1 }} },           -- pb
   { off = 60, fx = {{ kind='slide',   over={1,2}, target='next' }} },                 -- pb
-  { off = 67, fx = {{ kind='lfo', period={4,1}, centre=60, scale=52, pattern=lfoCurve }} }, -- cc1
+  { off = 67, fx = {{ kind='lfo', period={4,1}, dest=1, offset=60, scale=52, pattern=lfoCurve }} }, -- cc1
   { off = 74, fx = {{ kind='sine',    period={2,1}, depth=48, dest=10 }} },           -- cc10
   { off = 81, fx = {{ kind='retrig', period={1,4}, ramp=0 },
                     { kind='velPattern', pattern={100,55,70,55} }} },                 -- note chain

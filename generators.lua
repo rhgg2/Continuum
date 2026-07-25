@@ -11,7 +11,7 @@
 --invariant: periods are QN per the periodQN convention -- scalar or {num,den}
 --shape: result = { notes = { {ppq,endppq,pitch,vel,detune}, ... }, delta = { {ppq,val,shape,[tension]}, ... } }
 --shape: kinds[kind] = { expand, mode='replace'|'augment', dest='note'|'pb'|<cc>, dests?='any'|'pb'|'cc', label, defaults, fields }
---shape: field = { field, label, widget, base?, coarse?, min?, max?, options?, when?, kind?, poly?, quantity?='magnitude', frac? }
+--shape: field = { field, label, widget, base?, coarse?, min?, max?, options?, when?, kind?, poly?, quantity?='magnitude', signed?, frac? }
 --invariant: mode is the stream fold -- replace overwrites the dest channel, augment adds to it
 -- The copy shelf (design/fx-patterns.md § P4): named copies of pattern-param bodies, Save/Load
 -- only. Params store bodies inline (§ P3.5); nothing references the shelf by name.
@@ -253,8 +253,8 @@ local function curveAt(points, a)
   return points[#points].val
 end
 
---contract: lfo tiles a normalized curve at 1/period QN, mapping each val by centre + scale
---contract: emits absolute cc breakpoints (augment onto rest), clamped 0..127; dest cc1, no UI yet
+--contract: lfo tiles a normalized curve at 1/period QN, offset + scale map each val, unit-naive
+--contract: breakpoints are a displacement from the dest's rest, which the augment fold lays them on
 --contract: each cycle stretches the body lengthPpq -> period ticks; both window edges seeded
 local function lfo(stream, host, params, ctx)
   local body   = params.pattern
@@ -264,25 +264,25 @@ local function lfo(stream, host, params, ctx)
   local startL, endL = stream.window[1], stream.window[2]
   local period  = periodTicks(params.period, ctx.resolution)
   local stretch = period / loop
-  local centre, amp = params.centre or 64, params.scale or 0
-  local function ccVal(norm) return util.clamp(util.round(centre + amp * norm), 0, 127) end
+  local offset, amp = params.offset or 0, params.scale or 0
+  local function val(norm) return util.round(offset + amp * norm) end
 
   -- Seed startL (phase 0); tile interior cycles, skipping the ppq==loop endpoint (owned by the next
   -- cycle's phase 0, or by the endL seed) so a loop-closed curve emits no duplicate boundary breakpoint.
-  local delta = { { ppq = startL, val = ccVal(curveAt(points, 0)),
+  local delta = { { ppq = startL, val = val(curveAt(points, 0)),
                     shape = points[1].shape, tension = points[1].tension } }
   local base = startL
   while base < endL do
     for _, p in ipairs(points) do
       local at = base + p.ppq * stretch
       if at > startL and at < endL and p.ppq < loop then
-        delta[#delta + 1] = { ppq = at, val = ccVal(p.val), shape = p.shape, tension = p.tension }
+        delta[#delta + 1] = { ppq = at, val = val(p.val), shape = p.shape, tension = p.tension }
       end
     end
     base = base + period
   end
   local phaseEnd = ((endL - startL) % period) / stretch   -- authored ppq at the window's trailing edge
-  delta[#delta + 1] = { ppq = endL, val = ccVal(curveAt(points, phaseEnd)), shape = 'linear' }
+  delta[#delta + 1] = { ppq = endL, val = val(curveAt(points, phaseEnd)), shape = 'linear' }
   return { notes = {}, delta = delta }
 end
 
@@ -390,14 +390,16 @@ generators.kinds = {
     },
   },
   lfo = {
-    expand = lfo, mode = 'augment', dest = 1, dests = 'cc', label = 'Curve LFO',
-    defaults = { period = { 1, 4 }, centre = 64, scale = 63,
+    expand = lfo, mode = 'augment', dest = 'pb', dests = 'any', label = 'Curve LFO',
+    defaults = { period = { 1, 4 },
                  pattern = { kind = 'curve', domain = 'normalized', display = 'bipolar', points = {} } },
     fields = {
       { field = 'pattern', label = 'Curve',  widget = 'pattern', kind = 'curve' },
       { field = 'period',  label = 'Period', widget = 'choice', options = PERIODS },
-      { field = 'centre',  label = 'Centre', widget = 'int', base = 1, coarse = 8, min = 0,    max = 127 },
-      { field = 'scale',   label = 'Scale',  widget = 'int', base = 1, coarse = 8, min = -127, max = 127 },  -- amplitude, cc steps
+      { field = 'offset',  label = 'Offset', widget = 'int', base = 1, coarse = 8,
+        quantity = 'magnitude', signed = true, frac = 0 },     -- the whole cycle's displacement from rest
+      { field = 'scale',   label = 'Scale',  widget = 'int', base = 1, coarse = 8,
+        quantity = 'magnitude', signed = true, frac = 0.5 },   -- amplitude; a negative mirrors the curve
     },
   },
 }
@@ -452,9 +454,12 @@ function generators.destsFor(kind)
 end
 
 -- A field's bounds in the target's own units: a magnitude spans rest outwards as far as the dest
--- swings; anything else is fixed-unit and carries its bounds on the descriptor.
+-- swings -- both ways if signed; anything else is fixed-unit and carries its bounds on the descriptor.
 function generators.fieldRange(fd, dest)
-  if fd.quantity == 'magnitude' then return 0, generators.destProfile(dest).magScale end
+  if fd.quantity == 'magnitude' then
+    local mag = generators.destProfile(dest).magScale
+    return fd.signed and -mag or 0, mag
+  end
   return fd.min, fd.max
 end
 

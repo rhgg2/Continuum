@@ -77,9 +77,8 @@ quarter of what it was.
 
 **D6 — dest profiles are first-class, and generator bodies stay
 unit-naive.** *(revised 2026-07-25: the table was per-domain and is
-now per-dest — see D11 for why. `range` and `fullScale` are gone;
-whatever `level` needs arrives with commit 2, where `lfo.centre`
-forces the question.)*
+now per-dest — see D11 for why. `range` and `fullScale` are gone, and
+`level` never arrives at all — see D13.)*
 
 ```lua
 --shape: destProfile = { unit, rest, bipolar, magScale }
@@ -103,11 +102,13 @@ in the target's units by the time the body sees it.
 **D7 — fields declare a quantity, not hard numbers.**
 
 - `quantity = 'magnitude'` — a span away from rest (`sine.depth`,
-  `lfo.scale`)
-- `quantity = 'level'` — an absolute position in the domain
-  (`lfo.centre` → 64 on cc, 0 on pb)
+  `lfo.scale`, `lfo.offset`), optionally `signed` (D13)
 - no `quantity` — fixed-unit, behaves exactly as today
   (`slide.cents`, everything note-dest)
+
+*(revised 2026-07-25: there was a third, `quantity = 'level'` — an
+absolute position in the domain, `lfo.centre` → 64 on cc, 0 on pb.
+D13 removes it, and with it the second per-dest reference it needed.)*
 
 Defaults arrive as a fraction of full scale (`frac = 0.15` → 30 cents
 on pb, ~9 steps on cc), so one declaration reads correctly on every
@@ -184,6 +185,48 @@ Three riders:
   and the emission site (which holds `firstRestOverride(recs)`) read
   identically.
 
+**D13 — there is no `level` quantity; `lfo.centre` becomes `offset`, a
+signed magnitude from rest (settled 2026-07-25).** The fold has two
+contracts, not one: `replace` takes a stage's curve as the channel's
+absolute position, `augment` lays down the dest's rest and sums the
+delta onto it (`trackerManager.lua:3041-3048`). So mode and quantity
+are the same question at two scales — `replace` states a position,
+`augment` states a displacement — and a kind's fields should agree with
+its mode. `lfo` is `augment` carrying a positional `centre`, and that
+disagreement *is* the CC-10 bug: rest 64 + centre 64 pins the curve to
+the top rail. It has been reachable since 1a opened the Dest row.
+
+Flipping `lfo` to `replace` fixes the arithmetic and costs too much: a
+replace stage on pb flattens detune inside its window, a coexistence
+`tm_fx_region_spec` pins at "curve 30c + detune 25c". So the mode
+stays and the positional param goes instead. `offset` is a signed
+magnitude, default 0, meaning "displace the whole cycle this far from
+rest" — an affordance so a baseline needn't be authored as a single CC
+value by hand. What follows:
+
+- `level` never gets built, so D7 drops to two quantities.
+- `destProfile` stays exactly as 1a shipped it. A level would have
+  needed a *second* per-dest reference — the 0..127 rails, distinct
+  from swing, since pan's swing is 63 while its travel spans 127 — and
+  that reference now goes undefined.
+- A magnitude may be `signed`, which `offset` and `scale` both are;
+  bounds become `-magScale .. magScale`. A negative scale mirrors the
+  curve, which was already `lfo.scale`'s `min = -127`.
+- A dest resting at a rail clips half the cycle at offset 0. That is
+  D11's third rider, already accepted for `sine`.
+
+**D14 — the curve editor's polarity belongs to the kind, not the dest
+(settled 2026-07-25).** A curve is drawn around its own zero, and for
+`lfo` that zero sits at `rest + offset` — wherever the user put it. A
+mod-wheel LFO with offset 64 needs a pen that goes below the line even
+though CC 1 is unipolar, and `generators_spec` pins exactly that (norm
+−1 → the low value). So `destProfile(...).bipolar` answers only "how
+far can this controller move from rest, and symmetrically?", never
+"may the authored shape go negative". `curveDisplay`'s unipolar branch
+stays unreached; it would be earned by a kind whose curve is an
+envelope *from* rest, and no such kind exists. `generators.lua:395`'s
+hardcoded `display = 'bipolar'` stands.
+
 ## Commits
 
 1a. **dest becomes a param** — the mechanism, production-only. See
@@ -195,21 +238,106 @@ Three riders:
    files (plus `tm_vibrato_spec` → `tm_sine_spec` and its
    `tests/run.lua` entry). Split from 1a so a bisect over a mechanical
    rename doesn't drag the design change with it.
-2. **`lfo` onto pb.** `centre`/`scale` converted to `level`/
-   `magnitude`, `lfo.dests` opened to `'any'`. Costs nothing in the
-   pattern editor — the normalized body substrate is already
-   dest-blind. Also where `display` stops being stored on the curve
-   body and derives from `destProfile(destOf(entry)).bipolar`, making
-   `curveDisplay`'s unipolar branch reachable for the first time.
+2. **`lfo` off CC 1.** `centre` → `offset` (signed magnitude),
+   `scale` gains `quantity = 'magnitude'` + `signed`, `lfo.dests`
+   opens to `'any'`, and the body's `0..127` clamp goes. Costs nothing
+   in the pattern editor — the normalized body substrate is already
+   dest-blind — and nothing on CC 1 either, where rest 0 makes the old
+   absolute reading and the new displacement reading coincide.
 
 ## Landed
 
+- 2026-07-25 gen: lfo takes any dest, centre becoming a signed offset
+  (commit 2, brief below). The programme's three commits are all in;
+  `plan/CURRENT` names no live plan, so there is nothing queued behind
+  this one.
 - 2026-07-25 gen: merge vibrato and autopan into one dest-blind sine
-  kind (commit 1b). Next up is commit 2, `lfo` onto pb — no new brief
-  needed, the Commits entry above is self-contained, and `lfo.centre`
-  is where the `level` quantity D6 deferred comes due.
+  kind (commit 1b). Commit 2 then reopened D6/D7 in conversation before
+  any of it was written: `level` is gone (D13), and the curve's
+  polarity turns out not to be the dest's (D14). Brief below.
 - 2026-07-25 gen: dest becomes a per-entry param with domain profiles
   (commit 1a, brief below).
+
+## Commit 2: `lfo` off CC 1 (landed)
+
+**What and why.** `lfo` is the last kind whose numbers only make sense
+on one dest: `centre` reads as an absolute cc position, and the augment
+fold then sums it onto the dest's rest, which is coherent only because
+CC 1 rests at 0. `centre` becomes `offset`, a signed displacement from
+rest (D13), and `dests` opens to `'any'`. On CC 1 nothing changes
+numerically, so the commit is a rename plus the removal of a clamp,
+with pb and the bipolar CCs arriving as the observable.
+
+**Registry (`generators.lua:392-401`).** `mode` and `label` unchanged.
+
+- `dests = 'any'`.
+- `defaults` keeps `period` and `pattern`, loses `centre` and `scale`.
+- `offset` — `quantity = 'magnitude'`, `signed = true`, `frac = 0`,
+  label `Offset`. Zero needs no reference, so `frac = 0` resolves to 0
+  on every dest while keeping the declaration next to `quantity`
+  (`seed`'s `if fd.frac` is Lua-truthy on 0).
+- `scale` — `quantity = 'magnitude'`, `signed = true`, `frac = 0.5`:
+  64 on CC 1 (today's 63, within a rounding step), 100 cents on pb,
+  32 on CC 10.
+
+**Body (`generators.lua:259-287`).** `offset` and `amp` replace
+`centre` and `amp`; `ccVal` becomes a dest-blind
+`val(norm) -> util.round(offset + amp * norm)`. The `0..127` clamp
+goes — it is dest knowledge inside a body that holds none, and the cc
+seat already clamps (`trackerManager.lua:3277`). Both `--contract:`
+lines above it get rewritten: they name cc, centre and the clamp.
+
+**`generators.fieldRange` (`:456`).** A signed magnitude spans both
+ways — `local mag = destProfile(dest).magScale; return fd.signed and
+-mag or 0, mag`. `seed` and `retarget` need no change: `seed` reads the
+second return, and `retarget` already rescales every magnitude field,
+carrying sign through unharmed.
+
+**`--shape: field` (`:14`)** gains `signed?`.
+
+**Fixtures — a key rename, same values.** `glasswork.lua:59` and
+`glasswork_dense.lua:34` carry `centre=60, scale=52` on CC 1; both
+become `offset=60, scale=52` and emit 8..112 exactly as now.
+`tm_fx_tension_spec.lua:80`'s `centre = 0, scale = 0` becomes
+`offset = 0`, still a contribution of exactly zero (its header comment
+at `:4` says "scale-0 lfo", which stays true).
+
+**Red first,** all in `tests/specs/generators_spec.lua` (`:401-443`):
+
+1. `lfo` on pb emits cents: offset 0, scale 100, triangle → ±100 at
+   the extrema. Red today — the body clamps to 0..127.
+2. The clamp case at `:425` inverts: offset 64, scale 100 emits −36 at
+   norm −1 instead of clamping to 0. Retitled to pin that the body
+   does *not* clamp.
+3. `fieldRange` on a signed magnitude returns `-magScale, magScale`.
+4. `retarget` carries `scale` pb → CC 10 as 100 → 32, and sign
+   survives: −100 → −32.
+
+The existing tiling case at `:404` isn't red; under the rename it
+keeps its 1..127 and stands as the proof that CC 1 is unaffected.
+
+**Done looks like.** Suite green. In REAPER a Curve LFO's strip reads
+Dest / Curve / Period / Offset / Scale; retargeted to CC 10 the pan
+wobbles symmetrically about 64 instead of pinning at the top rail, and
+retargeted to pb it gives curve-shaped pitch modulation that coexists
+with detune.
+
+**The open choice, settled `'pb'`.** A fresh `lfo` now starts bipolar at
+rest with nothing clipped. Three sites needed an explicit `dest = 1`,
+not two: both glasswork fixtures and `tm_fx_tension_spec.lua:80`, which
+leaned on the registry fallback to reach CC 1 and is *about* cc-base
+tension, so it has to name the dest it means.
+
+**One rounding artefact.** `util.round` is floor-half-up, so a signed
+magnitude landing on an exact half rescales asymmetrically: scale 100
+pb → CC 10 gives 32, but −100 gives −31. Pinned as −31 rather than
+teaching `retarget` to round by absolute value — it is half a cc step,
+and a symmetric-rounding helper would be a repo-wide call, not a local
+one.
+
+**Not in 2.** No mode change (D13 rules `replace` out on pb's
+account). No `level` quantity, no domain rails, no `destProfile`
+change. No `display` derivation (D14).
 
 ## Commit 1a: dest becomes a param (landed)
 
@@ -371,5 +499,9 @@ Supporting facts:
 - Fully normalized params with display-time conversion — rejected
   alternative C: it forces every body through the domain and makes the
   UI say "depth 15%".
+- A `level` quantity, and the domain rails it would have needed as a
+  second per-dest reference (D13).
+- Driving `curveDisplay`'s unipolar branch from the dest (D14); it
+  waits on a kind whose curve is an envelope from rest.
 - `plan/CURRENT` still names `fx-patterns`; switching it is a separate
   call.
