@@ -460,6 +460,10 @@ Firing rules:
   not metadata).
 - **Locations are not stable across reloads.** They're 1-indexed snapshots of
   REAPER event order at load time. Don't cache a loc across a `modify`.
+- **Ppq-ordered reads go through `noteOrder`/`ccOrder`**, not array position --
+  the injection point that will decouple `loc` from position once locs go
+  stable (stable-slots Phase 1). `parse` and `rebuild` are the only producers,
+  both handing back a dense in-order array, so today the map is the identity.
 - **Accessors return shallow clones** with `idx`/`uuidIdx` stripped
   (`INTERNALS`). Mutating the returned table has no effect — write via
   `assign*`. Never interleave iterators with mutations; collect first.

@@ -915,7 +915,7 @@ evicting only the slot it still owns: the occupier's clobber no longer
 strands the peer, and either order now leaves the index correct. What
 descending still buys is silence. An ascending commit records a transient
 same-seat collision, and every pending key costs the backstop a full
-`sparsePairs` walk of the note array at the unwind — measured at ~65µs on
+walk of the note array at the unwind — measured at ~65µs on
 glasswork, against a ~17.7ms flush. Defensive rather than load-bearing,
 and too cheap to be worth removing.
 

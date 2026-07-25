@@ -56,6 +56,9 @@ local notes      = {}
 local ccs        = {}
 local noteCount  = 0    -- high-water extent of notes/ccs; verbs leave holes, rebuild compacts
 local ccCount    = 0
+--invariant: noteOrder/ccOrder map walk position -> loc in ppq order; the identity until Phase 1b
+local noteOrder  = {}
+local ccOrder    = {}
 local eventsByUuid      = {}
 --invariant: on a collision collisionIdx holds the survivor; the loser stays uuid-addressable
 local collisionIdx      = {}   -- note seats only; the same-pitch detector, never an address book
@@ -298,6 +301,42 @@ local function stableByPpq(list)
   end
 end
 
+----- Ppq-ordered walk
+
+-- Ppq-ordered reads go through the order arrays, not array position -- what lets loc
+-- stop meaning position. See docs/midiManager.md § Conventions.
+local function identityOrder(n)
+  local order = {}
+  for i = 1, n do order[i] = i end
+  return order
+end
+
+-- Walk one kind in ppq order, skipping slots a mid-walk delete emptied. The length is
+-- captured, not re-read, so a mid-walk add stays unseen -- the mid-iteration contract.
+local function ordered(list, order)   -- yields (loc, evt)
+  local i, n = 0, #order
+  return function()
+    while i < n do
+      i = i + 1
+      local evt = list[order[i]]
+      if evt then return order[i], evt end
+    end
+  end
+end
+
+-- Dense ppq-ordered snapshot: what midiBlob.serialise's array-position wire key needs.
+local function denseByOrder(list, order)
+  local out = {}
+  for i = 1, #order do
+    local evt = list[order[i]]
+    if evt then out[#out + 1] = evt end
+  end
+  return out
+end
+
+
+----- Seat keys
+
 -- Reuse each note's seat key across rebuilds; recompute only when a seat
 -- field changes. Weak keys drop deleted notes. Cf. sidecarCache.
 local seatKeyCache = setmetatable({}, { __mode = 'k' })
@@ -347,7 +386,7 @@ local function indexDrop(evt)
   bucket.byLoc[evt.loc] = nil   -- locs keeps the key; the walk is hole-tolerant and skips it
 end
 
--- Ascending loc, hole-tolerant: one channel's slice of exactly what a whole-array sparsePairs walk
+-- Ascending loc, hole-tolerant: one channel's slice of exactly what a whole-array ordered walk
 -- yields, in the same order, with the same tolerance of a delete landing mid-iteration.
 local function rawInChan(kind, chan)
   local bucket = chanIdx[kind][chan]
@@ -390,6 +429,8 @@ local function rebuild(metadata)
   perf.start('collisionIdx')
   collisionIdx, eventsByUuid = {}, {}
   chanIdx = { note = {}, cc = {} }
+  -- Compacted and sorted by here, so walk position and loc coincide again.
+  noteOrder, ccOrder = identityOrder(noteCount), identityOrder(ccCount)
   -- Seat inline rather than via indexPut: this is the one bulk path (every event, every flush), and
   -- the kind is known per loop, so it skips the dispatch the verbs' single-event path needs.
   local noteSlots, ccSlots = chanIdx.note, chanIdx.cc
@@ -452,10 +493,11 @@ local function flushTake()
   if not take then return end
   perf.start('sidecars')
   local texts = {}
-  for _, note in ipairs(notes) do
+  -- ppq order, not array order: a sidecar's array position is part of its wire key.
+  for _, note in ordered(notes, noteOrder) do
     if note.uuid then util.add(texts, noteSidecarEntry(note)) end
   end
-  for _, cc in ipairs(ccs) do
+  for _, cc in ordered(ccs, ccOrder) do
     if not cc.plain then util.add(texts, ccSidecarEntry(cc)) end
   end
   for _, carried in ipairs(carriedTexts) do util.add(texts, carried) end
@@ -466,7 +508,8 @@ local function flushTake()
   local endPpq   = math.floor(reaper.GetMediaSourceLength(source) * ppqPerQN + 0.5)
 
   perf.start('serialise')
-  local blob = midiBlob.serialise(notes, ccs, texts, carriedPassthrough, endPpq)
+  local orderedNotes, orderedCcs = denseByOrder(notes, noteOrder), denseByOrder(ccs, ccOrder)
+  local blob = midiBlob.serialise(orderedNotes, orderedCcs, texts, carriedPassthrough, endPpq)
   perf.stop('serialise')
 
   perf.start('setEvts')
@@ -480,7 +523,7 @@ local function flushTake()
   reaper.MarkTrackItemsDirty(reaper.GetMediaItemTrack(item), item)
   perf.stop('setEvts')
 
-  perf.count('notes', #notes); perf.count('ccs', #ccs); perf.count('texts', #texts)
+  perf.count('notes', #orderedNotes); perf.count('ccs', #orderedCcs); perf.count('texts', #texts)
   dirty = false
   -- Stash REAPER's canonical bytes (post-Sort), not the ones we handed it: the gate in load
   -- compares the take against these, and a re-encode would read as an external mutation.
@@ -559,6 +602,8 @@ function mm:load(newTake)
   perf.stop('read')
   carriedPassthrough = passthrough
   noteCount, ccCount = #notes, #ccs
+  -- Parse order, which is the take's order; rebuild reseats both arrays into ppq order below.
+  noteOrder, ccOrder = identityOrder(noteCount), identityOrder(ccCount)
   -- Sidecars (notation type 15, cc type -1) are consumed for uuid binding and
   -- regenerated on flush; anything that doesn't decode is carried through verbatim.
   for _, t in ipairs(texts) do
@@ -666,7 +711,7 @@ function mm:load(newTake)
   ----- UUID unification (reassign duplicated uuids, mint for unbound survivors;
   ----- flushTake regenerates the sidecars)
 
-  for _, note in util.sparsePairs(notes, noteCount) do
+  for _, note in ordered(notes, noteOrder) do
     local uuid = note.uuid
     if uuid and uuidCount[uuid] > 1 then
       local newUUID = assignNewUUID(note)
@@ -796,7 +841,7 @@ function mm:load(newTake)
 
   -- Every hand-out is uuid-addressable: a plain cc mints its uuid here, in memory only.
   -- Runs after persisted uuids are known, so it can't collide. See docs/midiManager.md § Plain ccs.
-  for _, cc in util.sparsePairs(ccs, ccCount) do
+  for _, cc in ordered(ccs, ccOrder) do
     if not cc.uuid then cc.plain = true; assignNewUUID(cc) end
   end
 
@@ -857,6 +902,7 @@ end)
 function mm:unload()
   take, poolGuid, loadedBlob = nil, nil, nil
   notes, ccs, eventsByUuid, collisionIdx, maxUUID, lock = {}, {}, {}, {}, 0, false
+  noteOrder, ccOrder = {}, {}
   noteCount, ccCount, dirty = 0, 0, false
   carriedTexts, carriedPassthrough = {}, {}
 end
@@ -877,7 +923,7 @@ local function resolveCollisions()
   local events = {}
   for _, pending in pairs(pendingCollisions) do
     local group = {}
-    for _, n in util.sparsePairs(notes, noteCount) do
+    for _, n in ordered(notes, noteOrder) do
       if n.chan == pending.chan and n.pitch == pending.pitch then util.add(group, n) end
     end
     local kills, voiced, onsetOf = voicing.resolveGroup(group)
@@ -988,7 +1034,7 @@ local function cloneOut(evt)
 end
 
 function mm:notes()
-  local it = util.sparsePairs(notes, noteCount)
+  local it = ordered(notes, noteOrder)
   return function()
     local i, note = it()
     if note then return i, cloneOut(note) end
@@ -999,7 +1045,7 @@ end
 --contract: notesRaw(chan) yields just that channel's, ascending loc -- same slice, same order
 function mm:notesRaw(chan)
   if chan then return rawInChan('note', chan) end
-  return util.sparsePairs(notes, noteCount)
+  return ordered(notes, noteOrder)
 end
 
 --contract: assignNote: lockless write when t touches no structural field
@@ -1067,6 +1113,7 @@ local function addNote(t)
   noteCount = noteCount + 1
   notes[noteCount] = note
   note.loc = noteCount
+  noteOrder[#noteOrder + 1] = noteCount
   indexPut(note)
   needsSort = true   -- appended past the tail: dense, but no longer in ppq order
   local key = seatKey(note)
@@ -1080,7 +1127,7 @@ end
 
 --invariant: a cc in 0..31 with fractional val is 14-bit; MSB/LSB split lives in midiBlob
 function mm:ccs()
-  local it = util.sparsePairs(ccs, ccCount)
+  local it = ordered(ccs, ccOrder)
   return function()
     local i, msg = it()
     if msg then return i, cloneOut(msg) end
@@ -1091,7 +1138,7 @@ end
 --contract: ccsRaw(chan) yields just that channel's, ascending loc -- same slice, same order
 function mm:ccsRaw(chan)
   if chan then return rawInChan('cc', chan) end
-  return util.sparsePairs(ccs, ccCount)
+  return ordered(ccs, ccOrder)
 end
 
 --contract: assignCC: lockless iff t touches no structural field and doesn't promote a plain cc
@@ -1150,6 +1197,7 @@ local function pushCC(t)
   ccCount = ccCount + 1
   ccs[ccCount] = msg
   msg.loc = ccCount
+  ccOrder[#ccOrder + 1] = ccCount
   indexPut(msg)
   needsSort = true   -- appended past the tail: dense, but no longer in ppq order
   return msg
@@ -1228,7 +1276,7 @@ function mm:delete(uuid)
   if not evt then return end
   markChan(evt.chan)
   indexDrop(evt)
-  needsCompact = true   -- the slot below becomes a hole; ppq order is undisturbed
+  needsCompact = true   -- the slot below becomes a hole; its order entry stands and walks skip it
 
   if evt.evType == 'note' then
     local key = seatKey(evt)
@@ -1243,8 +1291,8 @@ end
 --contract: yields (uuid, evt-clone) over all live events, notes then ccs
 --invariant: events() keys by uuid, unlike notes()/ccs(), which yield (loc, clone)
 function mm:events()
-  local noteIt = util.sparsePairs(notes, noteCount)
-  local ccIt   = util.sparsePairs(ccs, ccCount)
+  local noteIt = ordered(notes, noteOrder)
+  local ccIt   = ordered(ccs, ccOrder)
   return function()
     local _, e = noteIt()
     if not e then _, e = ccIt() end

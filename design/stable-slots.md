@@ -223,6 +223,11 @@ profile after this programme, not before it.
 - chanIdx walk-order decision (option 1 vs 2, measured).
 - Suite and pins green; profile target: rebuild span ~4ms → ~0.1ms.
 
+Decided 2026-07-25: `midiBlob.serialise` keeps its dense-array signature
+through phase 1 — mm gathers a dense ppq-ordered snapshot from the order
+arrays and hands it over, so `seq2 = i*2` stays valid and the wire key is
+phase 2's business alone. The gather is ~10k pointer copies per flush.
+
 ### Phase 2 — incremental serialise in midiBlob
 
 - Persistent wire state; verb-reported key dirt; slot-cap guard with
