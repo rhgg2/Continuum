@@ -62,6 +62,15 @@ caller-remembered repair for exactly the stain D2 makes structural;
 keeping both would leave two ways to be correct. The `anyNudge` flag
 goes with it.
 
+*Amended 2026-07-26:* `anyNudge` survives, narrowed. It gated two
+repairs, not one — um's index list *and* the walk's own scratch list —
+and only the first becomes structural. `linearTails`'s merged `notes`
+and `frontierTails`'s `extras` belong to the walk, not to um, so
+nothing can flag them; dropping the gate would put an unconditional
+whole-channel sort on the dense path every pass, which is the cost the
+flag exists to avoid. What goes is its role as the index repair's
+trigger, and the `resortRawNotes` call it guarded.
+
 **D4 — no runtime enforcement; a spec is the backstop.** A metatable
 proxy was considered and rejected on three grounds: `__newindex` does
 not fire for keys that already exist, so it would miss the exact write
@@ -109,22 +118,20 @@ was previously arbitrary.
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-07-26 tm: sort-key writes on an index entry go through setRaw (D2, D3)
 - 2026-07-26 tm: PA attachment and PC reconciliation read the raw index (D7)
 
 ## Now
 
-(empty — D7's index reads have landed; run /plan-next to promote queued item 1, setRaw + withDeferredSort covering in-place moves)
+(empty — the mediated write landed; queued item 1, the D4 sortedness/agreement spec extending tm_raw_index_order_spec, is next. Run /plan-next to promote it.)
 
 ## Queued (one-liners)
 
-1. `setRaw` + `withDeferredSort` covering in-place moves; the three
-   rebuild write sites route through it; `resortRawNotes` and
-   `anyNudge` retired.
-2. Sortedness/agreement spec extending `tm_raw_index_order_spec` (D4).
-3. Split the block in two — index and stager — with the dependency
+1. Sortedness/agreement spec extending `tm_raw_index_order_spec` (D4).
+2. Split the block in two — index and stager — with the dependency
    arrow one way and the internal banners renamed to match.
-4. `reconcilePcs` and the collision scan move to the pipeline; `flush`
+3. `reconcilePcs` and the collision scan move to the pipeline; `flush`
    stops driving `tm:rebuild` and loses its second exit.
-5. Collapse `rawNotes`/`rawPbs`/`rawIndexFor` into one accessor.
-6. Docs: `docs/trackerManager.md § Update manager` describes the index
+4. Collapse `rawNotes`/`rawPbs`/`rawIndexFor` into one accessor.
+5. Docs: `docs/trackerManager.md § Update manager` describes the index
    as the primary structure and states the mutation contract.

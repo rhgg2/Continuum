@@ -4,6 +4,12 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-26** — Field writes on a rawIndex entry go through `setRaw`, which flags the containing
+  list when the value moves a sort key so `withDeferredSort` re-trues it — inserts and in-place moves
+  restored at one door. Retires the caller-remembered `resortRawNotes` repair (the 2026-07-18 entry
+  below records what it replaces): keeping both would leave two ways to be correct, and the mediated
+  write is the mechanism `setCell` already is for column cells.
+
 - **2026-07-26** — forEachAttachedPA and reconcilePcs read the per-channel rawIndex lists rather
   than scanning byUuid. The widening is wanted, not incidental: rawIndex holds staged adds as well
   as realised events, so a PA added and not yet flushed now follows its host's resize and delete — a

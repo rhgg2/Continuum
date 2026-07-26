@@ -775,7 +775,7 @@ end
 
 local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
       flush, reload, idxReconcile, withDeferredSort, clearStaging, absorbReloadDirt,
-      stampColEvt, rawNotes, rawPbs, rawIndexFor, resortRawNotes, fxHostsFor,
+      stampColEvt, rawNotes, rawPbs, rawIndexFor, setRaw, fxHostsFor,
       colEvtFor do
 
   ----- State
@@ -890,8 +890,8 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     for i, item in ipairs(tbl) do if item == evt then table.remove(tbl, i); return end end
   end
 
-  -- The batching door: rawIndex is um's, so um owns the deferral. Inserts inside fn flag their list;
-  -- each is sorted once here. A caller reaching for the flag directly gets a nil it cannot see.
+  -- The batching door: rawIndex is um's, so um owns the deferral. Inserts and sort-key moves inside
+  -- fn flag their list; each is sorted once here. A caller reaching for the flag gets a nil it can't see.
   function withDeferredSort(fn)
     local prev = deferredSort
     deferredSort = {}
@@ -900,9 +900,20 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     deferredSort = prev
   end
 
-  -- The tail walk nudges shared entries' ppq in place -- invisible to idxReconcile's
-  -- unchanged-ppq fast path -- and re-trues the lists it stained through this.
-  function resortRawNotes(chan) table.sort(rawIndex[chan].notes, rawThenLogical) end
+  -- rawThenLogical's keys: a write that moves one leaves the containing list out of order.
+  local SORT_KEYS = { ppq = true, ppqL = true, lane = true, pitch = true, derived = true }
+
+  -- Field write on an index entry, mirroring setCell for column cells: skip the no-op, and where the
+  -- value moves a sort key, re-true the containing list -- deferred to the open block if there is one.
+  function setRaw(entry, field, value)
+    if entry[field] == value then return end
+    -- Non-member records (fx specs, restores) flag their channel's list spuriously: one redundant sort
+    -- of a list the same walk is about to stain anyway, against an O(n) membership scan per write.
+    local tbl = SORT_KEYS[field] and rawIndexListFor(entry, entry.chan)
+    entry[field] = value
+    if not tbl then return end
+    if deferredSort then deferredSort[tbl] = true else table.sort(tbl, rawThenLogical) end
+  end
 
   -- Construct the um-frame index entry for one mm clone and file it into byUuid.
   -- Shared verbatim by full reload and the incremental verbs so both build identical entries.
@@ -3360,7 +3371,7 @@ local function makeTailRules(ctx)
     if not onset then return false end
     -- A nudge is final where it lands -- notes only ever give way forward -- so the cue and
     -- the clamp write stage here rather than in a second pass over a moved set.
-    e.ppq = onset
+    setRaw(e, 'ppq', onset)
     disturbed[e], nudged[e] = true, true
     local backing = e.colEvt or e   -- seated entries write through to their column note; fxNotes ride bare
     if e.colEvt and e.colEvt.delay ~= nil then
@@ -3396,7 +3407,7 @@ local function makeTailRules(ctx)
     if rounded ~= e.endppq then
       local backing = e.colEvt or e
       if backing.realised then deferred.assign(backing, { endppq = rounded }) end
-      e.endppq = rounded
+      setRaw(e, 'endppq', rounded)
     end
     if e.colEvt then
       -- Mirror projectEvent's endppq rule: authored ceiling shows, lane-clipped ceiling rides endppqC.
@@ -3449,16 +3460,18 @@ local function linearTails(chan, notes, dirt, parkedBoundFor, takeLen, res, clam
   -- Onset settlement: only a disturbed note collides, onto its same-pitch predecessor; a landed nudge
   -- marks itself disturbed so the cascade carries forward. see design/interval-dirt.md § Phase 4
   local anyNudge, lastByPitch = false, {}
-  for _, e in ipairs(notes) do
-    local prev = lastByPitch[e.pitch]
-    if disturbed[e] or (prev and disturbed[prev]) then
-      if settleOnset(e, prev) then anyNudge = true end
+  withDeferredSort(function()
+    for _, e in ipairs(notes) do
+      local prev = lastByPitch[e.pitch]
+      if disturbed[e] or (prev and disturbed[prev]) then
+        if settleOnset(e, prev) then anyNudge = true end
+      end
+      lastByPitch[e.pitch] = e
     end
-    lastByPitch[e.pitch] = e
-  end
-  -- A nudge moved shared index entries in place -- invisible to idxReconcile's unchanged-ppq fast
-  -- path -- so re-true both the local list and um's.
-  if anyNudge then table.sort(notes, rawThenLogical); resortRawNotes(chan) end
+  end)
+  -- um re-trued its own list at the block's close; this pass's merge shares those records, so it
+  -- carries the same stain and re-trues here.
+  if anyNudge then table.sort(notes, rawThenLogical) end
 
   -- Bound set: every disturbed note, plus the nearest same-lane and same-pitch strict predecessor of
   -- every anchor -- the seed-driven replacement for the span stale-test. see design § Span-staleness
@@ -3653,17 +3666,21 @@ local function frontierTails(chan, indexList, extras, dirt, parkedBoundFor, take
     end
   end
 
+  -- The block wraps settlement alone: the chains above gathered against the pristine index, and phase
+  -- 2's bound probes below need it true again, so a block around the whole walk would be too late.
   local anyNudge = false
-  for _, chain in ipairs(chains) do
-    for i, node in ipairs(chain) do
-      local prev = chain[i - 1]
-      if disturbed[node] or (prev and disturbed[prev]) then
-        if settleOnset(node, prev) then anyNudge = true end
+  withDeferredSort(function()
+    for _, chain in ipairs(chains) do
+      for i, node in ipairs(chain) do
+        local prev = chain[i - 1]
+        if disturbed[node] or (prev and disturbed[prev]) then
+          if settleOnset(node, prev) then anyNudge = true end
+        end
       end
     end
-  end
-  -- Nudges moved shared entries' ppq in place; re-true both probe sources for phase 2.
-  if anyNudge then table.sort(indexList, rawThenLogical); table.sort(extras, rawThenLogical) end
+  end)
+  -- indexList is um's own and the block's close re-trued it; extras belongs to this walk.
+  if anyNudge then table.sort(extras, rawThenLogical) end
 
   -- Phase 2 -- bounds, order-free: every disturbed note plus each anchor's nearest same-lane and same-
   -- pitch strict predecessor re-bind. Bounds read settled onsets, write only endppq -- no re-disturb.
@@ -4342,7 +4359,7 @@ local function stampSamples()
     if entry.evType == 'note' and walkable(entry) and entry.sample == nil then
       local prevailing = util.seek(rawIndexFor(entry.chan).pcs, 'at-or-before', entry.ppq)
       local sample = prevailing and prevailing.val or 0
-      entry.sample = sample
+      setRaw(entry, 'sample', sample)
       setCell(entry.colEvt, 'sample', sample)
       stampWrites.assign(entry, { sample = sample })
     end
