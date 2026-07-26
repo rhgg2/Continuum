@@ -157,27 +157,35 @@ executing. If A underdelivers, inlining the arithmetic inside `placeRow`
 (keeping both clamps, and legitimate there because `viewContext` owns the
 threshold) is the next lever.
 
+**T1 measured (2026-07-26): `collide` ~4ms, i.e. the table's ~3-4, not the
+Done paragraph's "under ~1ms" — those two never agreed and the table was
+right.** A live read-only probe splits the residue: ~0.83ms to bucket
+8437 notes by pitch and ~1.62ms inside `resolveSorted`, over 73
+multi-note buckets yielding 0 kills. So what is left is not overhead
+around the work, it *is* the work — one linear pass per note plus a
+`voiced`/`onsetOf` pair per group — and no amount of tightening this
+shape removes it, because the shape still asks every note in the take
+about an edit that touched one. That is exactly T3's case (localise to
+touched (chan,pitch) clusters), and it stays parked pending its design
+doc: the `onsetOf[prev] + 1` cascade means a verdict can depend on notes
+further out than the same onset.
+
 ## Landed  (newest first; prune below ~4)
 
+- 2026-07-26 tm: the flush collision scan walks rawIndex (T1)
 - 2026-07-26 tv: collapse the place loop's projection calls into ctx:placeRow (C)
 
 ## Now
 
-(empty — C landed; `place` measured 7.8 → 4.5ms, recorded in Targets. Run /plan-next to promote T1, the collision scan over `rawIndex`.)
+(empty — T1 landed and measured at ~4ms, the table's estimate; run /plan-next to promote A, the note path shedding per lane)
 
 ## Queued (one-liners)
-1. **T1 — the collision scan walks `rawIndex`.** Replace the `byUuid` +
-   `adds` double pass with a walk of `rawNotes(chan)` for 1..16,
-   bucketing by pitch as it goes; add `voicing.resolveSorted` (D3) and
-   make `resolveGroup` sort-then-delegate. Spec pins the D2 equivalence
-   and kill-parity with the old scan across the four verdict classes
-   (kill-duplicate, nudge-distinct, derived-loses, no-collision).
-2. **A — the note path sheds per lane.** Thread `touched[col]` through
+1. **A — the note path sheds per lane.** Thread `touched[col]` through
    every in-place mutator of a note lane's `events` (D6) so a lane's
    table identity changes iff its contents changed, mirroring
    `spliceChannelCCs`. Spec pins both directions: a clean lane's events
    table survives a rebuild, a touched lane's does not. May split at
    `/plan-next` if the mutator inventory is larger than D6 lists.
-3. **Exit measurement.** Re-profile the same one-note edit on the dense
+2. **Exit measurement.** Re-profile the same one-note edit on the dense
    take, record against the target table, and note what the new
    dominant span is.

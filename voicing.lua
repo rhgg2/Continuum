@@ -23,12 +23,19 @@ end
 
 ----- Separation
 
---contract: sorts group (ppq, ppqL) in place; returns kills, voiced, onsetOf (separated onsets)
+--contract: sorts group (ppq, ppqL) in place, then delegates to resolveSorted
 function voicing.resolveGroup(group)
   table.sort(group, function(a, b)
     if a.ppq ~= b.ppq then return a.ppq < b.ppq end
     return (a.ppqL or 0) < (b.ppqL or 0)
   end)
+  return voicing.resolveSorted(group)
+end
+
+-- The sorted door, for a caller whose group arrives already ordered (tm's flush scan
+-- buckets the raw index, which is sorted already). see docs/voicing.md
+--contract: caller guarantees (ppq, ppqL) order; returns kills, voiced, onsetOf (separated onsets)
+function voicing.resolveSorted(group)
   -- Walk the sorted voice: dedup true duplicates, nudge distinct collisions apart.
   -- onsetOf carries each survivor's post-separation raw onset.
   local kills, voiced, onsetOf = {}, {}, {}

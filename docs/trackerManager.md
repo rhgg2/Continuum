@@ -923,14 +923,34 @@ and too cheap to be worth removing.
 
 Run inside `mm:modify`'s preflush, after `preflush` (propagated peers
 already staged) and before the snapshot (separations/deletes ride this
-flush). Scans ALL post-flush notes — `byUuid` all lanes plus staged
-adds — grouped by `(chan, pitch)` in one pass.
+flush). Walks `rawIndex[chan].notes` for each of the 16 channels,
+bucketing by pitch, and reports as the `collide` span.
+
+That list is exactly the post-flush note set the scan used to assemble
+by sweeping `byUuid` and then `adds`, because every site that files a
+note into one files it into the other: `makeEntry` is `byUuid`'s only
+writer and its only callers (`idxReconcile`, `loadIndex`) file into
+`rawIndex` too, `addLowlevel` files a staged add into `rawIndex` and
+`adds` together, and `deleteLowlevel` removes from both. Parked edits
+are in neither. It is also already sorted, by `rawThenLogical`, which
+is a strict *refinement* of the `(ppq, ppqL)` order the scan used to
+impose: every pair that comparator ordered, this one orders the same
+way, and it only settles ties `table.sort` left arbitrary. In those
+ties the verdict is order-symmetric anyway — `supersedes` kills the
+derived note from either side, and with derived-ness equal the longer
+`endppqL` wins from either side.
+
+So the scan sorts nothing and hashes nothing: one array walk per
+channel, singleton buckets skipped because a lone note cannot collide.
+The cost it sheds was real — on a dense take the old shape ran 8438
+hash iterations, 8438 string keys, ~60k sort comparisons and 8438
+`onsetOf` writes for a one-note edit that yields no kills at all.
 
 Not a per-self peer walk: two notes can collide without either being the
 edited one, and repeated per-self truncation damages peers a later
 same-flush op would resolve.
 
-Each group runs `voicing.resolveGroup` for its **kill** verdicts alone
+Each group runs `voicing.resolveSorted` for its **kill** verdicts alone
 (see `docs/voicing.md`). Neither tails nor onsets are touched: the scan
 clipped tails and nudged onsets until 2026-07-17, and both were the same
 vestige, from the days when this scan *was* the truncation and separation

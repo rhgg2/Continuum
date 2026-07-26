@@ -4,6 +4,10 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-26** — voicing gained resolveSorted as a sibling entry point rather than a presorted
+  flag on resolveGroup: a flag lets any caller assert its way past the ordering the nudge cascade
+  depends on, where a second door names the guarantee in its own contract, at one seam.
+
 - **2026-07-26** — midiBlob's wire key widened to ppq*1e9 + rank*1e8 + slot*2 rather than guarding
   the old 5e4 slot cap: a guard buys nothing, because the full-regeneration fallback composes the
   same colliding key. Written as integer literals — 1e9 is a float in Lua 5.4, and a float key

@@ -42,7 +42,16 @@ whole group. The module exported the whole-channel walk too until
 it any more (`docs/trackerManager.md` § Rebuild: tail walk).
 
 `resolveGroup` sorts its group `(ppq, ppqL)` in place before walking,
-so callers can't skip the ordering the nudge cascade depends on.
+so callers can't skip the ordering the nudge cascade depends on. A
+caller that already holds the group in that order — tm's flush scan,
+bucketing the raw index's `rawThenLogical` walk by pitch — enters
+through `resolveSorted`, which is the same walk without the sort.
+
+Deliberately a sibling entry point and not a `presorted` flag on
+`resolveGroup`: a flag would let any caller assert its way past the
+ordering, which is the one thing the in-place sort exists to prevent.
+The second door still names the ordering it requires, in its contract,
+so the guarantee is made once at a seam that has a name.
 
 ## Enforcement layers
 

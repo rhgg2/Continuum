@@ -1330,21 +1330,21 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     -- Single scan over all post-flush notes for same-(chan,pitch) MIDI legality: kill verdicts
     -- only -- onsets and tails are the walk's. see docs/trackerManager.md § Flush collision scan
     do
-      local byKey = {}
-      for _, n in pairs(byUuid) do
-        if n.evType == 'note' then util.bucket(byKey, util.key(n.chan, n.pitch), n) end
-      end
-      for _, o in ipairs(adds) do
-        if o.evt.evType == 'note' then util.bucket(byKey, util.key(o.evt.chan, o.evt.pitch), o.evt) end
-      end
-
+      perf.start('collide')
       -- Kills only: tm separates once, at the walk. Dedup cannot follow it there -- the walk
       -- separates a duplicate instead, and nothing below kills what it split.
       local kills = {}
-      for _, group in pairs(byKey) do
-        for _, n in ipairs(voicing.resolveGroup(group)) do util.add(kills, n) end
+      for chan = 1, 16 do
+        local byPitch = {}
+        for _, n in ipairs(rawNotes(chan)) do util.bucket(byPitch, n.pitch, n) end
+        for _, group in pairs(byPitch) do
+          if #group > 1 then   -- a lone note has nothing to collide with
+            for _, n in ipairs(voicing.resolveSorted(group)) do util.add(kills, n) end
+          end
+        end
       end
       for _, n in ipairs(kills) do deleteNote(n) end
+      perf.stop('collide')
     end
 
     local flushAdds, flushAssigns, flushDeletes = adds, assigns, deletes
