@@ -311,6 +311,8 @@ lane-1 sequence it:
 - Anchors a pb-active channel at its first lane-1 onset (even detune 0)
   unless a real pb already pins it at-or-before (I2a).
 - Drops fakes whose seat is no longer needed.
+- Skips frozen fx channels entirely: freezing already wrote their derived output into mm with
+  absorber seats carried, so the dirty gate reads them clean and this pass never runs for them.
 - Writes wire raw = `centsToRaw(cents + carrying lane-1 detune)`.
 - Projects the pb column from the final set, with `val=cents` (the
   authored value tv displays) and `hidden` for every derived seat.
@@ -322,10 +324,14 @@ rebuilt at the end-of-rebuild `reload()`.
 
 Under interval dirt (`design/archive/interval-dirt-v2.md` § 3) the detune-onset walk is scoped to
 disjoint seat spans rather than the whole channel: each span seeds its running `prev` from the
-detune carried in from just before it (`detuneAt` at `span[1] - 1`), so a jump entering a span
+detune carried in from just before it (`lane1DetuneAt` at `span[1] - 1`), so a jump entering a span
 from outside is still caught without re-walking the untouched lane-1 ahead of it. A note without
 authored detune reads 0 — ingestion's default on the cell. An ungated call (`seatSpans == nil`,
 dirty-wholesale channels) walks `{0, math.huge}` — the whole channel, same as before scoping.
+
+Spans are coalesced to disjoint ascending order first (`mergeSpans`) because the walk's dual-point
+overwrite is order-sensitive — a later span visited before an earlier overlapping one could stamp
+the wrong seat last.
 
 ### Authoring onto a hidden seat
 

@@ -259,19 +259,26 @@ local function ccGridStep()
   return math.max(1, util.round((mm:resolution() or 960) / mm:ccInterp()))
 end
 
--- Merge macro windows into maximal covered spans (overlap/adjacency joins, gaps split); and pick the
--- macros covering a span. Shared by cc- and pb-augment summation.
-local function mergeWindows(bucket)
-  local wins = {}
-  for _, m in ipairs(bucket) do util.add(wins, { m.window[1], m.window[2] }) end
-  table.sort(wins, function(a, b) return a[1] < b[1] end)
+-- Coalesce { lo, hi } spans into maximal disjoint ascending ones: overlap and adjacency join, gaps
+-- split. Copies as it goes, so no input span is aliased into the result.
+local function mergeSpans(spans)
+  local sorted = {}
+  for _, s in ipairs(spans) do util.add(sorted, { s[1], s[2] }) end
+  table.sort(sorted, function(a, b) return a[1] < b[1] end)
   local merged = {}
-  for _, w in ipairs(wins) do
+  for _, s in ipairs(sorted) do
     local last = merged[#merged]
-    if last and w[1] <= last[2] then last[2] = math.max(last[2], w[2])
-    else util.add(merged, { w[1], w[2] }) end
+    if last and s[1] <= last[2] then last[2] = math.max(last[2], s[2])
+    else util.add(merged, { s[1], s[2] }) end
   end
   return merged
+end
+-- Merge macro windows into maximal covered spans; and pick the macros covering a span.
+-- Shared by cc- and pb-augment summation.
+local function mergeWindows(bucket)
+  local wins = {}
+  for _, m in ipairs(bucket) do util.add(wins, m.window) end
+  return mergeSpans(wins)
 end
 local function overlapping(bucket, span)
   local out = {}
@@ -3758,6 +3765,10 @@ end
 
 ----- Rebuild Pbs
 
+-- A ramp onset's dual point rides one tick before the onset (see docs/tuning.md § Value-aware
+-- seats), so every span that must contain an onset's seats reaches one tick back.
+local DUAL_POINT_TICK = 1
+
 -- Reseat absorber pbs against the post-walk lane-1 layout, recompute their raw vals,
 -- and project the pb column. see docs/tuning.md § Absorber reconciliation
 local function rebuildPbs(fxOut, extraColumns)
@@ -3767,26 +3778,19 @@ local function rebuildPbs(fxOut, extraColumns)
   local extras = extraColumns or {}
 
   perf.start('gather')
-  -- Dirty gate on the shared spine, hoisted ahead of lane-1 sort and clone (both skip clean chans).
-  -- Frozen fx channels are not dirty: their derived output stands in mm, absorber seats carried.
-  local dirty = {}
-  for chan = 1, 16 do
-    dirty[chan] = dirtyChans[chan] or nil
-  end
-
   -- Per-chan derived lane-1 stream, unioned with the raw index by the seeks below. Built for dirty
-  -- channels alone; clean channels reuse their carried pb column and never read it.
+  -- channels alone; clean ones reuse their carried pb column. see docs/tuning.md § Absorber reconciliation
   local function lane1Note(entry) return entry.lane == 1 and walkable(entry) end
   local freshLane1, liveLane1ByChan = {}, {}
   for chan = 1, 16 do
-    if dirty[chan] then
+    if dirtyChans[chan] then
       -- Derived lane-1 fxNotes are routed out of columns; union them so the absorber pass seats
       -- their detune jumps.
       local liveLane1 = {}
-      for _, w in ipairs(noteLive[chan]) do
-        if w.lane == 1 then
-          util.add(liveLane1, w.evt)
-          freshLane1[chan] = freshLane1[chan] or not w.kept
+      for _, live in ipairs(noteLive[chan]) do
+        if live.lane == 1 then
+          util.add(liveLane1, live.evt)
+          freshLane1[chan] = freshLane1[chan] or not live.kept
         end
       end
       -- Sorted for the seeks below: seatScope and the value/onset queries walk it assuming ppq order,
@@ -3798,29 +3802,34 @@ local function rebuildPbs(fxOut, extraColumns)
 
   -- Lane-1 detune queries over rawNotes union liveLane1, by binary seek -- the materialised whole-
   -- channel view is gone; each query hits the index and the derived stream direct. see design/archive/interval-dirt-v2.md § 3
-  local function detuneAt(chan, P)
+  local function lane1DetuneAt(chan, ppq)
     local notes = rawNotes(chan)
-    local i = firstAfter(notes, P) - 1        -- last index with ppq <= P
+    local i = firstAfter(notes, ppq) - 1        -- last index at or before ppq
     while i >= 1 and not lane1Note(notes[i]) do i = i - 1 end
     local authored = i >= 1 and notes[i] or nil
-    local derived  = liveLane1ByChan[chan]
-    local d = derived and derived[firstAfter(derived, P) - 1] or nil
-    if authored and d then return ((authored.ppq >= d.ppq) and authored or d).detune or 0 end
-    return (authored and authored.detune) or (d and d.detune) or 0
+    local derivedNotes = liveLane1ByChan[chan]
+    local derived = derivedNotes and derivedNotes[firstAfter(derivedNotes, ppq) - 1] or nil
+    if authored and derived then
+      return ((authored.ppq >= derived.ppq) and authored or derived).detune or 0
+    end
+    return (authored and authored.detune) or (derived and derived.detune) or 0
   end
 
   -- Authored (walkable lane-1) union derived lane-1 with ppq in [lo, hi], in rawThenLogical order --
   -- the onset walk's per-span slice, replacing the whole-channel scan.
   local function lane1Between(chan, lo, hi)
-    local notes, derived = rawNotes(chan), liveLane1ByChan[chan] or {}
-    local i, j, out = firstAtOrAfter(notes, lo), firstAtOrAfter(derived, lo), {}
+    local notes, derivedNotes = rawNotes(chan), liveLane1ByChan[chan] or {}
+    local i, j, out = firstAtOrAfter(notes, lo), firstAtOrAfter(derivedNotes, lo), {}
     while true do
       while notes[i] and not lane1Note(notes[i]) do i = i + 1 end
-      local authored = notes[i]; if authored and authored.ppq > hi then authored = nil end
-      local d = derived[j];      if d and d.ppq > hi then d = nil end
-      if not authored and not d then break end
-      if d and (not authored or rawThenLogical(d, authored)) then util.add(out, d); j = j + 1
-      else util.add(out, authored); i = i + 1 end
+      local authored = notes[i];      if authored and authored.ppq > hi then authored = nil end
+      local derived  = derivedNotes[j]; if derived and derived.ppq > hi then derived = nil end
+      if not authored and not derived then break end
+      if derived and (not authored or rawThenLogical(derived, authored)) then
+        util.add(out, derived); j = j + 1
+      else
+        util.add(out, authored); i = i + 1
+      end
     end
     return out
   end
@@ -3830,37 +3839,23 @@ local function rebuildPbs(fxOut, extraColumns)
     local notes, i = rawNotes(chan), 1
     while notes[i] and not lane1Note(notes[i]) do i = i + 1 end
     local authored = notes[i]
-    local d = liveLane1ByChan[chan] and liveLane1ByChan[chan][1]
-    if authored and d then return rawThenLogical(authored, d) and authored or d end
-    return authored or d
+    local derived = liveLane1ByChan[chan] and liveLane1ByChan[chan][1]
+    if authored and derived then
+      return rawThenLogical(authored, derived) and authored or derived
+    end
+    return authored or derived
   end
 
   -- Whether any lane-1 note (authored or derived) carries a non-zero detune. With prev seeded 0 an
   -- onset exists iff some detune is non-zero, so this early-exit scan is the whole-channel jump count.
-  local function anyDetune(chan)
-    for _, n in ipairs(rawNotes(chan)) do
-      if lane1Note(n) and (n.detune or 0) ~= 0 then return true end
+  local function anyDetuneJump(chan)
+    for _, note in ipairs(rawNotes(chan)) do
+      if lane1Note(note) and (note.detune or 0) ~= 0 then return true end
     end
-    for _, n in ipairs(liveLane1ByChan[chan] or {}) do
-      if (n.detune or 0) ~= 0 then return true end
+    for _, note in ipairs(liveLane1ByChan[chan] or {}) do
+      if (note.detune or 0) ~= 0 then return true end
     end
     return false
-  end
-
-  -- Sort + coalesce overlapping seat spans into disjoint ascending, so the onset walk visits each ppq
-  -- once and in order (its dual-point overwrite is order-sensitive). nil (ungated) stays nil.
-  local function disjointSpans(spans)
-    if not spans then return nil end
-    local sorted = {}
-    for _, s in ipairs(spans) do util.add(sorted, { s[1], s[2] }) end
-    table.sort(sorted, function(a, b) return a[1] < b[1] end)
-    local merged = {}
-    for _, s in ipairs(sorted) do
-      local last = merged[#merged]
-      if last and s[1] <= last[2] then last[2] = math.max(last[2], s[2])
-      else util.add(merged, { s[1], s[2] }) end
-    end
-    return merged
   end
 
   -- Replace windows for a channel: each pb chain's fold curve -- live spans folded to derived-seat
@@ -3875,6 +3870,7 @@ local function rebuildPbs(fxOut, extraColumns)
       if not rec.kept then util.add(liveRecs, rec) end
     end
     local wins = {}
+    --shape: replaceWin = { bps = [{ ppq, ppqL, cents, shape, tension }], kept, startRaw, endRaw }
     -- Bounds convert to raw once for zero round-trip drift.
     local function addWin(sub, bps, kept)
       util.add(wins, { bps = bps, kept = kept,
@@ -3892,7 +3888,7 @@ local function rebuildPbs(fxOut, extraColumns)
                             cents = util.clamp(point.val, -lim, lim), shape = point.shape, tension = point.tension })
           end
         end
-        table.sort(bps, function(a, b) return a.ppq < b.ppq end)
+        sortByPPQ(bps)
         addWin(sub, bps, nil)
       end
       for _, sub in ipairs(emitSpans and subtractSpanSet(span, emitSpans) or {}) do
@@ -3928,28 +3924,35 @@ local function rebuildPbs(fxOut, extraColumns)
       return kept
     end
 
-    return { wins = wins, winAt = replaceWinAt, inSeatWindow = inSeatWindow, inKeptRange = inKeptRange }
+    return { wins = wins, replaceWinAt = replaceWinAt,
+             inSeatWindow = inSeatWindow, inKeptRange = inKeptRange }
   end
 
   -- Closes seeds to raw spans that gate onsets/densify/anchor/absorber-pool below; nil = ungated.
   -- Extents come by seek, ahead of the gather. see design/archive/interval-dirt-v2.md § 3
-  local function seatScope(chan, dirt, rw, derivedLane1)
+  local function seatScope(chan, dirt, replaceWins, derivedLane1)
     if dirt == true then return nil end
     local spans = {}
     -- The lane-1 onset stream is authored notes (raw index) plus the off-take derived stream, the
-    -- same union lane1Between/detuneAt seek; seek both here and take the nearer.
+    -- same union lane1Between/lane1DetuneAt seek; seek both here and take the nearer.
     local function nextLane1After(ppq)
       local authored = util.seek(rawNotes(chan), 'after', ppq, lane1Note)
       local derived  = util.seek(derivedLane1, 'after', ppq)
       return math.min(authored and authored.ppq or math.huge, derived and derived.ppq or math.huge)
     end
-    local function lane1Span(ppq) util.add(spans, { ppq - 1, nextLane1After(ppq) }) end
+    local function lane1Span(ppq) util.add(spans, { ppq - DUAL_POINT_TICK, nextLane1After(ppq) }) end
     local function bpSpan(ppq)
       -- The authored value stream: non-derived pbs outside every seat window (realPbs' membership).
-      local function authored(pb) return not pb.derived and not rw.inSeatWindow(pb.ppq) end
+      local function authored(pb) return not pb.derived and not replaceWins.inSeatWindow(pb.ppq) end
       local prevBp = util.seek(rawPbs(chan), 'before', ppq, authored)
       local nextBp = util.seek(rawPbs(chan), 'after',  ppq, authored)
       util.add(spans, { prevBp and prevBp.ppq or 0, nextBp and nextBp.ppq or math.huge })
+    end
+    -- A seed the branches below can't close to a span. Notes on other lanes, region verbs and the
+    -- cc/at/pc families move no pb seat, so only an unrecognised kind ungates the channel.
+    local function unboundedSeed(seed)
+      return not (seed.lane or seed.verb == 'region' or seed.evType == 'cc'
+                  or seed.evType == 'at' or seed.evType == 'pc')
     end
     for _, seed in ipairs(dirt) do
       -- Dedup keeps a move's vacated snapshot; the survivor's live position comes from byUuid
@@ -3962,20 +3965,19 @@ local function rebuildPbs(fxOut, extraColumns)
       elseif seed.evType == 'pb' then
         bpSpan(seed.ppq)
         if live and live.ppq ~= seed.ppq then bpSpan(live.ppq) end
-      elseif not (seed.lane or seed.verb == 'region' or seed.evType == 'cc'
-                  or seed.evType == 'at' or seed.evType == 'pc') then
+      elseif unboundedSeed(seed) then
         return nil
       end
     end
-    for _, win in ipairs(rw.wins) do
-      if not win.kept then util.add(spans, { win.startRaw - 1, win.endRaw }) end
+    for _, win in ipairs(replaceWins.wins) do
+      if not win.kept then util.add(spans, { win.startRaw - DUAL_POINT_TICK, win.endRaw }) end
     end
     -- The I2a anchor at the first lane-1 onset (authored or derived) is channel-global: any pass may
     -- need to seat, refresh, or retire it, so its point is always in scope.
     local authoredFirst = util.seek(rawNotes(chan), 'at-or-after', 0, lane1Note)
     local firstPpq = math.min(authoredFirst and authoredFirst.ppq or math.huge,
                               derivedLane1[1] and derivedLane1[1].ppq or math.huge)
-    if firstPpq ~= math.huge then util.add(spans, { firstPpq - 1, firstPpq }) end
+    if firstPpq ~= math.huge then util.add(spans, { firstPpq - DUAL_POINT_TICK, firstPpq }) end
     return spans
   end
 
@@ -3983,10 +3985,13 @@ local function rebuildPbs(fxOut, extraColumns)
   -- derived lane-1 output ungates the channel (seatSpans nil). see design/archive/interval-dirt-closing.md § 1
   local winsByChan, seatSpansByChan = {}, {}
   for chan = 1, 16 do
-    if dirty[chan] then
-      local rw = replaceWindows(chan)
-      winsByChan[chan] = rw
-      seatSpansByChan[chan] = not freshLane1[chan] and seatScope(chan, dirty[chan], rw, liveLane1ByChan[chan]) or nil
+    local dirt = dirtyChans[chan]
+    if dirt then
+      local replaceWins = replaceWindows(chan)
+      winsByChan[chan] = replaceWins
+      if not freshLane1[chan] then
+        seatSpansByChan[chan] = seatScope(chan, dirt, replaceWins, liveLane1ByChan[chan])
+      end
     end
   end
 
@@ -4004,7 +4009,7 @@ local function rebuildPbs(fxOut, extraColumns)
   -- names its source; origShape is held because the pass rewrites shape. see design/archive/interval-dirt-v2.md § 3
   local pbsByChan = {}
   for chan = 1, 16 do
-    if dirty[chan] then
+    if dirtyChans[chan] then
       local spans = seatSpansByChan[chan]
       for _, entry in ipairs(rawPbs(chan)) do
         if inSpans(spans, entry.ppq) then
@@ -4020,30 +4025,30 @@ local function rebuildPbs(fxOut, extraColumns)
   local pbWrites = mmBatch()
   local gridStep = ccGridStep()
 
-  -- Seat the lane-1 detune stream, match absorbers, stage the consolidated assign; returns
-  -- detuneOf. Clean chans skip it wholesale -- I8: rebuild is a fixpoint. see design/incremental-pbs.md
-  local function deriveChan(chan, pbs, rw, seatSpans)
+  -- Seat the lane-1 detune stream, match absorbers, and stage the consolidated assign feeding the
+  -- projection below. Clean chans skip it wholesale -- I8: rebuild is a fixpoint. see design/incremental-pbs.md
+  local function deriveChan(chan, pbs, replaceWins, seatSpans)
     perf.start('seats')
-    local replaceWins = rw.wins
-    local replaceWinAt, inSeatWindow, inKeptRange = rw.winAt, rw.inSeatWindow, rw.inKeptRange
+    local replaceWinAt, inSeatWindow, inKeptRange =
+      replaceWins.replaceWinAt, replaceWins.inSeatWindow, replaceWins.inKeptRange
 
-    -- Detune onsets: every lane-1 ppq whose detune differs from its predecessor, walked per seat
-    -- span, seeded by the carried-in detune. see docs/tuning.md § Seat-span-scoped onset walk
+    -- Detune onsets: every lane-1 ppq whose detune differs from its predecessor, seeded by the
+    -- carried-in detune and walked per coalesced seat span. see docs/tuning.md § Seat-span-scoped onset walk
     local onsets, onsetAt = {}, {}
-    for _, span in ipairs(disjointSpans(seatSpans) or { { 0, math.huge } }) do
-      local prev = detuneAt(chan, span[1] - 1)
-      for _, n in ipairs(lane1Between(chan, span[1], span[2])) do
-        local detune = n.detune or 0
-        if detune ~= prev and not onsetAt[n.ppq] then
-          util.add(onsets, { ppq = n.ppq, ppqL = n.ppqL }); onsetAt[n.ppq] = true
+    for _, span in ipairs(seatSpans and mergeSpans(seatSpans) or { { 0, math.huge } }) do
+      local prev = lane1DetuneAt(chan, span[1] - 1)
+      for _, note in ipairs(lane1Between(chan, span[1], span[2])) do
+        local detune = note.detune or 0
+        if detune ~= prev and not onsetAt[note.ppq] then
+          util.add(onsets, { ppq = note.ppq, ppqL = note.ppqL }); onsetAt[note.ppq] = true
         end
         prev = detune
       end
     end
-    -- A ramp onset's dual point rides one tick before it: both seats follow the onset's ownership,
-    -- so the fence classifies a pb under an onset at ppq+1 by that onset's side.
+    -- Both of a dual point's seats follow the onset's ownership, so a pb sitting one tick under an
+    -- onset is classified by that onset's side.
     local function fencedPb(ppq)
-      if onsetAt[ppq + 1] then return inKeptRange(ppq + 1) end
+      if onsetAt[ppq + DUAL_POINT_TICK] then return inKeptRange(ppq + DUAL_POINT_TICK) end
       return inKeptRange(ppq)
     end
     -- A replace window's clipped endRaw is kept-owned yet falls inside the window's seat span and
@@ -4058,7 +4063,7 @@ local function rebuildPbs(fxOut, extraColumns)
     local persistCents = {}
     for _, pb in ipairs(pbs) do
       if pb.cents == nil and not inSeatWindow(pb.ppq) then
-        pb.cents = rawToCents(pb.raw) - detuneAt(chan, pb.ppq)
+        pb.cents = rawToCents(pb.raw) - lane1DetuneAt(chan, pb.ppq)
         persistCents[pb] = true
       end
     end
@@ -4069,15 +4074,12 @@ local function rebuildPbs(fxOut, extraColumns)
     for _, entry in ipairs(rawPbs(chan)) do
       pbEntryByRaw[entry.ppq] = entry
       if not entry.derived and not inSeatWindow(entry.ppq) then
-        local cents = entry.cents or (rawToCents(entry.raw) - detuneAt(chan, entry.ppq))
+        local cents = entry.cents or (rawToCents(entry.raw) - lane1DetuneAt(chan, entry.ppq))
         util.add(realPbs, { ppq = entry.ppq, cents = cents, shape = entry.shape, tension = entry.tension })
       end
     end
 
     local function inSeatScope(ppq) return inSpans(seatSpans, ppq) end
-    -- The onset walk is already span-bounded, so onsets need no scope filter. anyJump keeps the
-    -- whole-channel jump count the anchor decision below needs (bounded onsets could hide it).
-    local anyJump = anyDetune(chan)
 
     -- Prevailing cents at any ppq: the replace curve inside a window, else the authored
     -- breakpoints. Interpolate the bounding pair, hold the last past the end, 0 before the first.
@@ -4104,24 +4106,25 @@ local function rebuildPbs(fxOut, extraColumns)
     -- lone step seat; a value that ramps across the onset rides linearly, so the detune
     -- step splits onto a dual point and a curved segment densifies. see docs/tuning.md
     local seats = {}
-    for _, o in ipairs(onsets) do
-      if inKeptRange(o.ppq) then goto nextOnset end   -- kept side: its seats stand from last pass
-      local v    = streamValue(o.ppq)
-      local A, B = spanAround(o.ppq)
+    for _, onset in ipairs(onsets) do
+      if inKeptRange(onset.ppq) then goto nextOnset end   -- kept side: its seats stand from last pass
+      local cents = streamValue(onset.ppq)
+      local A, B  = spanAround(onset.ppq)
       -- Inside a replace window the curve always ramps; otherwise ramp only across a curved or
       -- value-changing authored span.
-      local ramps = replaceWinAt(o.ppq)
+      local ramps = replaceWinAt(onset.ppq)
                     or (A and B and A.shape and A.shape ~= 'step'
                         and (isCurved(A.shape) or A.cents ~= B.cents))
       if ramps then
         -- Dual point (see docs/tuning.md § Value-aware seats): before/at carry old/new detune, both
         -- linear so the curve rides through; a window-start onset (ppq 0) has no prior cell.
-        if o.ppq > 0 then
-          seats[o.ppq - 1] = { cents = v, ppqL = tm:toLogical(chan, o.ppq - 1), shape = 'linear' }
+        if onset.ppq > 0 then
+          local dual = onset.ppq - DUAL_POINT_TICK
+          seats[dual] = { cents = cents, ppqL = tm:toLogical(chan, dual), shape = 'linear' }
         end
-        seats[o.ppq]     = { cents = v, ppqL = o.ppqL, shape = 'linear' }
+        seats[onset.ppq] = { cents = cents, ppqL = onset.ppqL, shape = 'linear' }
       else
-        seats[o.ppq]     = { cents = v, ppqL = o.ppqL, shape = 'step' }
+        seats[onset.ppq] = { cents = cents, ppqL = onset.ppqL, shape = 'step' }
       end
       ::nextOnset::
     end
@@ -4132,8 +4135,8 @@ local function rebuildPbs(fxOut, extraColumns)
       for i = 1, #list - 1 do
         local A, B = list[i], list[i + 1]
         local hasOnset = false
-        for _, o in ipairs(onsets) do
-          if o.ppq > A.ppq and o.ppq < B.ppq then hasOnset = true break end
+        for _, onset in ipairs(onsets) do
+          if onset.ppq > A.ppq and onset.ppq < B.ppq then hasOnset = true break end
         end
         if isCurved(A.shape) and hasOnset then
           local p = A.ppq + gridStep
@@ -4150,7 +4153,7 @@ local function rebuildPbs(fxOut, extraColumns)
 
     -- Seat each replace curve as derived (hidden) seats carrying its shape; see docs/tuning.md §
     -- Value-aware seats and densification for the rule. Onset seats above take priority.
-    for _, win in ipairs(replaceWins) do
+    for _, win in ipairs(replaceWins.wins) do
       for _, bp in ipairs(win.bps) do
         if not seats[bp.ppq] then
           seats[bp.ppq] = { cents = bp.cents, ppqL = bp.ppqL, shape = bp.shape }
@@ -4163,21 +4166,21 @@ local function rebuildPbs(fxOut, extraColumns)
     -- without it, playback inherits the synth's unknown prior bend.
     local first = firstLane1(chan)
     if first and not seats[first.ppq] and not inKeptRange(first.ppq) and inSeatScope(first.ppq) then
-      local hasReal, anchored = false, false
-      for _, pb in ipairs(realPbs) do
-        hasReal = true
-        if pb.ppq <= first.ppq then anchored = true break end
-      end
-      if (next(seats) ~= nil or hasReal or (seatSpans ~= nil and anyJump)) and not anchored then
+      -- realPbs is ppq-ascending, so its head settles both questions. The jump test is whole-channel:
+      -- the span-bounded onset walk above could hide the only jump the channel has.
+      local firstReal = realPbs[1]
+      local anchored  = firstReal ~= nil and firstReal.ppq <= first.ppq
+      local pbActive  = next(seats) ~= nil or firstReal ~= nil
+                        or (seatSpans ~= nil and anyDetuneJump(chan))
+      if pbActive and not anchored then
         seats[first.ppq] = { cents = streamValue(first.ppq), ppqL = first.ppqL, shape = 'step' }
       end
     end
     perf.stop('seats')
 
     perf.start('match')
-    -- Match existing pbs to seats. A real pb at a seat covers it (it steps detune itself);
-    -- fakes consume any already at a seat, move remaining fakes to fill the rest, delete the
-    -- leftovers.
+    -- Match existing pbs to seats. A real pb at a seat covers it (it steps detune itself); absorbers
+    -- consume any already at a seat, move the remaining ones to fill the rest, delete the leftovers.
     local realAt, availAbsorbers = {}, {}
     for _, pb in ipairs(pbs) do
       -- A markerless in-window pb is a generated seat (recognized by window, no marker); tag it in RAM
@@ -4193,33 +4196,34 @@ local function rebuildPbs(fxOut, extraColumns)
       if realAt[ppq] then seats[ppq] = nil end
     end
 
-    local restampPpqL = {}  -- pb -> newPpqL (existing fake at a seat with stale ppqL)
+    local restampPpqL = {}  -- pb -> newPpqL (existing absorber at a seat with stale ppqL)
     for i = #availAbsorbers, 1, -1 do
-      local f, seat = availAbsorbers[i], seats[availAbsorbers[i].ppq]
+      local absorber, seat = availAbsorbers[i], seats[availAbsorbers[i].ppq]
       if seat then
-        f.cents, f.shape = seat.cents, seat.shape
-        if f.ppqL ~= seat.ppqL then
-          f.ppqL = seat.ppqL   -- mirror into the clone so the logical projection sees it
+        absorber.cents, absorber.shape = seat.cents, seat.shape
+        if absorber.ppqL ~= seat.ppqL then
+          absorber.ppqL = seat.ppqL   -- mirror into the clone so the logical projection sees it
           -- A seat's ppqL is raw-only (never persisted), so this nil->seat mirror is not a sidecar write.
-          if not inSeatWindow(f.ppq) then restampPpqL[f] = seat.ppqL end
+          if not inSeatWindow(absorber.ppq) then restampPpqL[absorber] = seat.ppqL end
         end
-        seats[f.ppq] = nil
+        seats[absorber.ppq] = nil
         table.remove(availAbsorbers, i)
       end
     end
 
     local moved = {}  -- pb -> newPpq
     for ppq, seat in pairs(seats) do
-      local f = table.remove(availAbsorbers)
-      if f then
-        moved[f] = ppq
-        f.ppq, f.cents, f.ppqL, f.shape = ppq, seat.cents, seat.ppqL, seat.shape
-        util.add(pbs, f)
+      local absorber = table.remove(availAbsorbers)
+      if absorber then
+        moved[absorber] = ppq
+        absorber.ppq, absorber.cents = ppq, seat.cents
+        absorber.ppqL, absorber.shape = seat.ppqL, seat.shape
+        util.add(pbs, absorber)
       else
         local fresh = { chan = chan, ppq = ppq, cents = seat.cents, ppqL = seat.ppqL,
                         shape = seat.shape, derived = 'absorber', evType = 'pb' }
         util.add(pbs, fresh)
-        local raw = centsToRaw(fresh.cents + detuneAt(chan, ppq))
+        local raw = centsToRaw(fresh.cents + lane1DetuneAt(chan, ppq))
         if inSeatWindow(ppq) then
           -- Markerless seat: native MIDI only ({ppq,val,shape}) -> addCC mints no uuid, no eventMeta
           -- sidecar; recognized next rebuild by its window. see § Route-by-window
@@ -4232,18 +4236,26 @@ local function rebuildPbs(fxOut, extraColumns)
       end
     end
 
-    for _, f in ipairs(availAbsorbers) do
-      pbWrites.del({ uuid = f.uuid })
-      for i, p in ipairs(pbs) do
-        if p == f then table.remove(pbs, i); break end
+    -- Absorbers still unclaimed have no seat left to fill: delete them from the take, then compact
+    -- the working set once rather than rescanning it per absorber.
+    local dropped = {}
+    for _, absorber in ipairs(availAbsorbers) do
+      pbWrites.del({ uuid = absorber.uuid })
+      dropped[absorber] = true
+    end
+    if next(dropped) then
+      local kept = 0
+      for i = 1, #pbs do
+        if not dropped[pbs[i]] then kept = kept + 1; pbs[kept] = pbs[i] end
       end
+      for i = #pbs, kept + 1, -1 do pbs[i] = nil end
     end
 
-    table.sort(pbs, function(a, b) return a.ppq < b.ppq end)
+    sortByPPQ(pbs)
     perf.stop('match')
 
     local detuneOf = {}
-    for _, pb in ipairs(pbs) do detuneOf[pb] = detuneAt(chan, pb.ppq) end
+    for _, pb in ipairs(pbs) do detuneOf[pb] = lane1DetuneAt(chan, pb.ppq) end
     perf.start('assign')
     -- Consolidated assign: one entry per existing pb where any of (ppq moved, ppqL
     -- restamped, raw changed, cents back-derived, derived shape changed) needs to land.
@@ -4278,9 +4290,9 @@ local function rebuildPbs(fxOut, extraColumns)
 
   for chan = 1, 16 do
     -- Clean channels are skipped wholesale -- their carried pb column stands (set at rebuild entry).
-    if dirty[chan] then
+    if dirtyChans[chan] then
       local pbs = pbsByChan[chan] or {}
-      table.sort(pbs, function(a, b) return a.ppq < b.ppq end)
+      sortByPPQ(pbs)
 
       local priorPbCol = channels[chan].priorPb
       channels[chan].priorPb = nil
@@ -4313,7 +4325,7 @@ local function rebuildPbs(fxOut, extraColumns)
           util.add(pbColEvents, evt)
         end
       end
-      table.sort(pbColEvents, function(a, b) return a.ppq < b.ppq end)
+      sortByPPQ(pbColEvents)
       local keep = anyVisible or (extras[chan] and extras[chan].pb)
       channels[chan].columns.pb = keep and { events = pbColEvents } or nil
       perf.stop('project')
@@ -4388,9 +4400,9 @@ end
 -- pcSeedSpans' raw extents overlap routinely (two points per seed, shared next-onsets); merge to
 -- disjoint ascending so coverOnsets emits each in-span event exactly once. see interval-dirt v2 § 4
 local function rawCoverSpans(spans)
-  local wins = {}
-  for _, s in ipairs(spans) do util.add(wins, { window = { s.sRaw, s.eRaw } }) end
-  return mergeWindows(wins)
+  local raw = {}
+  for _, s in ipairs(spans) do util.add(raw, { s.sRaw, s.eRaw }) end
+  return mergeSpans(raw)
 end
 
 -- PC synthesis (trackerMode only), after the sample stamp. Seed-list dirt closes to spans;
