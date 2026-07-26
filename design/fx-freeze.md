@@ -1,7 +1,8 @@
 # fx freeze — committing generator output
 
 > Working design doc, split from `design/note-macros-v2.md` § Freeze
-> after the 2026-07-11 design round. That section's framing — freeze as
+> after the 2026-07-11 design round (that section has since been
+> removed there; this doc is the whole record). That section's framing — freeze as
 > the invertibility axis, unfreeze restoring the fx region — is
 > superseded: **freeze is one-way in both directions**. The generator
 > is discarded by both verbs; there is no unfreeze and no dormant

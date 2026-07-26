@@ -461,7 +461,7 @@ return {
     end,
   },
 
-  ----- B3 step 2: parked specs are logical-only and carry the identity the backing addresses by
+  ----- Parked specs are logical-only and carry the identity the backing addresses by
 
   {
     name = 'park identity (note): render cell carries chan+uuid; the fxParked stash is logical-only',
@@ -520,7 +520,7 @@ return {
     end,
   },
 
-  ----- B3 step 3: parked edits stage on tm and ride flush (no inline ds write)
+  ----- Parked edits stage on tm and ride flush (no inline ds write)
 
   {
     name = 'assignParked (note): edit a parked pitch -> stash updated, still parked, renders the new pitch',

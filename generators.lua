@@ -409,7 +409,7 @@ generators.kinds = {
 generators.ccDefaultRest = { [8] = 64, [10] = 64, [11] = 127 }
 for cc = 71, 79 do generators.ccDefaultRest[cc] = 64 end
 
--- Which kinds the fxEdit modal offers, in order. Every kind works on either host: a region
+-- Which kinds the fx palette offers, in order. Every kind works on either host: a region
 -- arpeggiates its covered chord, a single note degenerates cleanly (arp -> retrig, one voice).
 generators.modalOrder = { 'retrig', 'trill', 'arp', 'ostinato', 'chordStamp', 'velPattern', 'sine', 'slide', 'lfo' }
 

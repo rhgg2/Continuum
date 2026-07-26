@@ -867,7 +867,7 @@ local gridPane = util.instantiate('gridPane', {
 ----- Note FX -- generator descriptors shared by the fx chain tab
 
 -- A thin renderer over the generator registry: the fx list is an ordered series (C1), stages
--- reorderable/duplicable by position. see design/note-macros-v2.md § The fx chain, § Build progress C4
+-- reorderable/duplicable by position. see design/note-macros-v2.md § The fx chain
 local FX_KINDS = generators.modalOrder
 
 ----- FX field descriptors (used by the fx strip)

@@ -73,7 +73,7 @@ local derivedInputs
 -- Rebuilt chans re-read the wire, so muted flags need re-conforming; setMutedChannels consumes.
 local muteConform  = {}
 -- True only while flush writes the parked stash; suppresses the inline dataChanged
--- rebuild so flush drives the single rebuild (B3 staging, see design/note-macros-v2.md).
+-- rebuild so flush drives the single rebuild. see design/note-macros-v2.md § Parked editing
 local flushingParked = false
 -- Set via tm:requestRebuild for geometry-only changes staging no mm ops: forces the flush
 -- past its no-op return AND the rebuild past the rebuild(∅) gate, which consumes it.
@@ -1257,7 +1257,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     end
   end
 
-  ----- Parked staging (B3): logical-only edits to the fx replace off-take.
+  ----- Parked staging: logical-only edits to the fx replace off-take.
 
   -- Edits stage here and ride flush: a parked edit that wrote ds inline would rebuild mid-batch and
   -- discard still-staged mm ops. rebuildRegionPark derives realisation from the spec each pass.

@@ -1,4 +1,4 @@
-@spec tm_fx_region_spec  src=tests/specs/tm_fx_region_spec.lua  loc=1830  sha=872ec71  cases=65
+@spec tm_fx_region_spec  src=tests/specs/tm_fx_region_spec.lua  loc=1830  sha=a17676d  cases=65
 @exercises dataStore (h.ds), midiManager (h.fm), trackerManager (h.tm), generators (generators), trackerView (h.vm)
 @surface   ds:get, fm:dump, ds:assign, tm:rebuild, tm:getChannel, tm:addEvent, tm:flush, tm:assignParked, tm:deleteParked, tm:addParked, tm:subscribe, generators.retarget, vm:addFxStage, vm:noteFx, vm:removeFxStage
 @harness   mk

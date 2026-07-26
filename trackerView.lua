@@ -45,7 +45,7 @@ local function kindOf(evt) return kindAt(colFor(evt), evt.ppq) end
 local localBlocked
 
 -- A parked event edits the fx replace off-take. The stash is logical, and authoring ppq is already
--- logical at this layer (cursorppq = row·logPerRow), so it rides. see design/note-macros-v2.md § B3
+-- logical at this layer (cursorppq = row·logPerRow), so it rides. see design/note-macros-v2.md § Parked editing
 local function toParkedSpec(evt)
   if evt.evType == 'cc' then
     return util.pick(evt, "evType chan cc ppq val shape")
@@ -78,7 +78,7 @@ local backing = {
     add    = function(evt)         tm:addParked(toParkedSpec(evt))   end,
     assign = function(evt, update) tm:assignParked(evt, toParkedUpdate(update)) end,
     delete = function(evt)         tm:deleteParked(evt)              end,
-    -- move-out sheds the stash key so mm:add mints a fresh take uuid (§ B3 decisions).
+    -- move-out sheds the stash key so mm:add mints a fresh take uuid (§ Parked editing).
     relocateDrop = { realised = true, uuid = true },
   },
 }

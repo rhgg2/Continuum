@@ -1,4 +1,4 @@
-@module trackerManager  src=trackerManager.lua  loc=4826  sha=3f8d2ae  mode=chunk  self=tm
+@module trackerManager  src=trackerManager.lua  loc=4826  sha=6695861  mode=chunk  self=tm
 @deps mm, cm, ds, defaultNoteCols
 
 # Invariants & contracts
@@ -336,7 +336,7 @@
   @fn realiseAddPpq(evt, isNote)  @ 1205-1211
   @fn assignEvent(evtOrUuid, update)  @ 1213-1228
   @fn addEvent(evt)  @ 1237-1258
-      · Parked staging (B3): logical-only edits to the fx replace off-take.
+      · Parked staging: logical-only edits to the fx replace off-take.
   @fn mintParkedUuid()  @ 1265-1268
   @fn addParked(spec)  @ 1270-1273
   @fn assignParked(evt, update)  @ 1275-1277

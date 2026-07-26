@@ -375,7 +375,7 @@ The fx list is an ordered series (C1); the editor addresses stages by position, 
 duplicate kinds are expressible. `addFxStage` appends a seeded stage, `removeFxStage` drops the
 stage at `index`, `moveFxStage` swaps it with its neighbour (`dir` -1 earlier / +1 later, no-op
 past an edge). All three write the whole list through `setNoteFx`, which persists per host and
-collapses an empty list to none. See `design/note-macros-v2.md` § The fx chain, § Build progress C4.
+collapses an empty list to none. See `design/note-macros-v2.md` § The fx chain.
 
 ## Commands & wrappers
 

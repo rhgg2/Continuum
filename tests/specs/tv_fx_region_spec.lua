@@ -319,7 +319,7 @@ return {
     end,
   },
 
-  ----- B3 step 4: parked events are editable off-take through the leaf-edit facade
+  ----- Parked events are editable off-take through the leaf-edit facade
 
   {
     name = 'parked note: a pitch nudge edits the off-take stash and re-renders, still parked',

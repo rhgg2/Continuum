@@ -1,4 +1,4 @@
-@module trackerView  src=trackerView.lua  loc=4112  sha=9c29f58  mode=chunk  self=tv
+@module trackerView  src=trackerView.lua  loc=4112  sha=e2e9177  mode=chunk  self=tv
 @deps tm, cm, ds, cmgr, gm, pa, facade, lib
 
 # Invariants & contracts
@@ -114,7 +114,7 @@
   @fn kindOf(evt)  @ 42
   @fn toParkedSpec(evt)  @ 49-56
       -- A parked event edits the fx replace off-take. The stash is logical, and authoring ppq is already
-      -- logical at this layer (cursorppq = row·logPerRow), so it rides. see design/note-macros-v2.md § B3
+      -- logical at this layer (cursorppq = row·logPerRow), so it rides. see design/note-macros-v2.md § Parked editing
   @fn toParkedUpdate(update)  @ 60
       -- Same view->stash normalisation for an assign update: the time verbs ride an rpb rebase the
       -- logical stash has no use for. Everything else -- ppq/endppq included -- passes through.
