@@ -142,7 +142,10 @@ end
 --shape: buildWire(notes, ccs, texts, passthrough) -> wire   -- notes/ccs keyed by slot; texts = { noteSidecars = [noteSlot], ccSidecars = [ccSlot], carried = [i] }
 --shape: render(wire, endPpq?) -> blob   -- concat plus the EOT tail; endPpq places the tail
 --shape: putKey/dropKey/repackKey(wire, kv) -> ok   -- splice one key; the model they pack from rides the wire
+--shape: slotState(wire, stream, slot) -> { ppq, endppq, shape, sidePpq }   -- stream = 'note'|'cc'
+--shape: syncSlots(wire, dirt) -> ok   -- dirt = { note = { [slot] = slotState }, cc = { ... } }
 --contract: a splice helper returns false and mutates nothing when kv is already present / absent
+--contract: syncSlots returns false when wire and dirt disagree; the caller must full-regen
 --invariant: a note/cc slot stays under 5e4: seq2 = slot*2 shares the key's 1e5 digit band with rank
 --invariant: parse(render(buildWire(x)))==x; coincident events may reorder, per-type lists intact
 --invariant: note onsets unique per (ppq,chan,pitch); collision is upstream bug, warn+write
@@ -249,16 +252,18 @@ local function chunkOf(kv, dppq, notes, ccs, texts, passthrough)
   end
 end
 
+-- key = ppq*1e6 + rank*1e5 + seq2, seq2 = slot*2 (+1 for a bezier tail); dense
+-- streams use index*2 in place of slot. See docs/midiBlob.md.
+local function packKey(ppq, rank, seq2) return ppq * 1000000 + rank * 100000 + seq2 end
+
 -- Keys, sorts and packs the model into wire state the caller holds across flushes,
 -- so an edit can replace the chunks it touched instead of rebuilding all of them.
 function midiBlob.buildWire(notes, ccs, texts, passthrough)
   passthrough = passthrough or {}
-  -- key = ppq*1e6 + rank*1e5 + seq2, seq2 = slot*2 (+1 for a bezier tail); dense
-  -- streams use index*2 in place of slot. See docs/midiBlob.md.
   local keys, count = {}, 0
   local function key(ppq, rank, seq2)
     count = count + 1
-    keys[count] = ppq * 1000000 + rank * 100000 + seq2
+    keys[count] = packKey(ppq, rank, seq2)
   end
 
   perf.start('keys')
@@ -353,6 +358,64 @@ function midiBlob.repackKey(wire, kv)
   local i = lowerBound(wire.keys, kv)
   if wire.keys[i] ~= kv then return false end
   wire.chunks[i] = chunkAt(wire, i)
+  return true
+end
+
+-- The keys one slot contributes, off a before-snapshot or off the live model alike --
+-- deriving both sides of a sync through one helper is what keeps them honest.
+local function keysOfSlot(stream, slot, st)
+  local keys, seq2 = {}, slot * 2
+  if st.ppq == nil then return keys end             -- the slot held nothing
+  if stream == 'note' then
+    keys[1] = packKey(st.ppq, 1, seq2)              -- note-on
+    keys[2] = packKey(st.endppq, 0, seq2)           -- note-off
+    if st.sidePpq then keys[3] = packKey(st.sidePpq, 3, seq2) end
+  else
+    keys[1] = packKey(st.ppq, 2, seq2)
+    if st.shape == 'bezier' then keys[2] = packKey(st.ppq, 2, seq2 + 1) end   -- CCBZ rider
+    if st.sidePpq then keys[#keys + 1] = packKey(st.sidePpq, 4, seq2) end
+  end
+  return keys
+end
+
+local function holds(keys, kv)
+  for i = 1, #keys do if keys[i] == kv then return true end end
+  return false
+end
+
+-- The sidecar key comes off the row's own ppq, not its owner's: the row is what chunkOf
+-- packs, so a stale row surfaces as a wrong key instead of being papered over.
+function midiBlob.slotState(wire, stream, slot)
+  local model  = wire.model
+  local isNote = stream == 'note'
+  local evt    = (isNote and model.notes or model.ccs)[slot]
+  local row    = (isNote and model.texts.noteSidecars or model.texts.ccSidecars)[slot]
+  return { ppq = evt and evt.ppq, endppq = evt and evt.endppq,
+           shape = evt and evt.shape, sidePpq = row and row.ppq }
+end
+
+-- Carry every dirty slot's keys from the caller's before-snapshots to what the model now
+-- says, phased so chunkOf never packs a dead key -- see docs/midiBlob.md § Splicing a held wire.
+function midiBlob.syncSlots(wire, dirt)
+  local drops, puts, repacks = {}, {}, {}
+  for stream, group in pairs(dirt) do
+    for slot, before in pairs(group) do
+      local old = keysOfSlot(stream, slot, before)
+      local new = keysOfSlot(stream, slot, midiBlob.slotState(wire, stream, slot))
+      for i = 1, #old do
+        if not holds(new, old[i]) then drops[#drops + 1] = old[i] end
+      end
+      for i = 1, #new do
+        local landing = holds(old, new[i]) and repacks or puts
+        landing[#landing + 1] = new[i]
+      end
+    end
+  end
+
+  table.sort(drops, function(a, b) return a > b end)
+  for i = 1, #drops   do if not midiBlob.dropKey(wire, drops[i])     then return false end end
+  for i = 1, #puts    do if not midiBlob.putKey(wire, puts[i])       then return false end end
+  for i = 1, #repacks do if not midiBlob.repackKey(wire, repacks[i]) then return false end end
   return true
 end
 

@@ -1,0 +1,79 @@
+@spec mm_wire_splice_spec  src=tests/specs/mm_wire_splice_spec.lua  loc=201  sha=untracked  cases=3
+@exercises midiManager (h.mm)
+@surface   mm:notes, mm:ccs, mm:load, mm:modify, mm:assign
+@harness   fakeReaper:bindTake
+
+# Intent
+  Phase 2f of stable-slots: the verbs record per-slot key dirt and flushTake splices the
+  wire it already holds instead of rebuilding it. Two things need pinning. That the splice
+  path is taken at all -- a steady-state edit must reach the take with zero buildWire calls,
+  which is what goes red today. And that it stays honest: a gesture storm must still
+  serialise to exactly the bytes a wholesale load of the same take produces, a lost or
+  stale key being a silent, byte-level failure.
+
+# Helpers
+  @fn freshTake()  @ 12-18
+  @fn captureBlobs(rp)  @ 22-29
+      -- Every blob that reaches the take, in order: the storm's flush and the wholesale
+      -- instance's flush are the two the equivalence pin compares.
+  @fn buildsDuring(fn)  @ 33-40
+      -- Full regenerations for the duration of fn: mm reaches buildWire through the module
+      -- table, so the field is the seam a count can sit on.
+  @fn noteOfPitch(mm, pitch)  @ 42-44
+  @fn noteAtPpq(mm, ppq)  @ 46-48
+  @fn ccAtPpq(mm, ppq)  @ 50-52
+  @fn velOfPitch(rp, take, pitch)  @ 54-56
+  @fn rdmRows(rp, take)  @ 58-64
+  @fn notationRows(rp, take)  @ 68-75
+      -- The notation rows as the take holds them, in wire order: { ppq, pitch } is enough to
+      -- tell a dropped row from a lingering one and a moved row from a stale one.
+
+# Cases
+  @case 'a property edit after the first flush splices the held wire'  [pure]  @ 79-97
+  @case 'a gesture storm splices to the bytes a wholesale rebuild produces'  [pure]  @ 104-170
+  @case 'a load regenerates wholesale, and so does a backstop repair'  [pure]  @ 174-199
+
+# Uses (outbound edges)
+  @use call mm:notes  @ 43,47
+  @use call mm:ccs  @ 51
+  @use call mm:load  @ 88,183
+  @use call mm:modify  @ 92,190,193
+  @use call mm:assign  @ 92,190,193
+
+# Fields (r read / w write incl. constructor keys)
+  @field r MIDI_SetAllEvts  @ 23
+  @field w MIDI_SetAllEvts  @ 24
+  @field r buildWire  @ 34
+  @field w buildWire  @ 35,37
+  @field w cc  @ 135,136,137
+  @field w ccs  @ 114
+  @field w chan  @ 83,84,109,110,111,112,115,116,131,135,136,137
+  @field w chan  @ 140,178,179
+  @field w chanmsg  @ 115,116
+  @field w endppq  @ 83,84,109,110,111,112,131,133,140,178,179
+  @field w evType  @ 131,135,136,137,140
+  @field r eventtype  @ 61,71
+  @field w foo  @ 134,135,138
+  @field r msg  @ 61,71
+  @field w msg2  @ 115,116
+  @field w msg3  @ 115,116
+  @field w name  @ 79,104,174
+  @field r notes  @ 55
+  @field w notes  @ 82,108,177
+  @field r pitch  @ 43,55
+  @field w pitch  @ 72,83,84,109,110,111,112,131,132,140,167
+  @field w pitch  @ 168,178,179,197
+  @field r ppq  @ 47,51,72
+  @field w ppq  @ 72,83,84,109,110,111,112,115,116,131,133,135
+  @field w ppq  @ 136,137,140,146,167,168,178,179,193,197
+  @field w ppq  @ 197
+  @field w ppqL  @ 190
+  @field w reaper  @ 14
+  @field w run  @ 80,105,175
+  @field w shape  @ 138
+  @field w tension  @ 138
+  @field r texts  @ 60,70
+  @field r uuid  @ 92,132,133,134,139,141,146,158,190,193
+  @field w val  @ 135,136,137
+  @field r vel  @ 55,158
+  @field w vel  @ 83,84,92,109,110,111,112,131,140,158,178,179

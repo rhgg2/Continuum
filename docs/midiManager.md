@@ -396,6 +396,38 @@ events fall away with them.
 `sidecarCount` rides alongside the two groups for `perf.count('texts')` alone: a
 sparse table has no `#`.
 
+### Wire dirt
+
+`flushTake` used to rebuild midiBlob's wire on every flush — re-key every event,
+sort every key, re-pack every chunk — to move, typically, two of them. It holds
+the wire across flushes instead, and the verbs tell it what to splice.
+
+The dirt is a per-**slot** before-snapshot rather than a log of what happened.
+`markWire` captures `midiBlob.slotState` for the slot a verb is about to touch,
+first touch in the nest winning; at the flush, `syncSlots` reconciles the whole
+nest's snapshots against whatever the model now says. That shape buys three things a log doesn't:
+the key format stays inside midiBlob; repeated gestures on one slot in one nest
+coalesce by construction; and a delete followed by an add reusing the slot is a
+single before/after pair rather than two entries that have to be read in order. An
+add takes the shared `NO_KEYS` sentinel instead of a snapshot, because the wire
+holds nothing for a freshly minted slot — and for one off the free list, either a
+previous flush already dropped its keys or this nest's delete has recorded them.
+
+Ordering at the verb sites is load-bearing. `markWire` runs *before* `indexDrop`
+and before `sidecarDrop`, because `slotState` reads the live sidecar row: a late
+mark makes the old sidecar key invisible and the row lingers on the wire.
+
+Two paths regenerate wholesale rather than splice. `rebuild` replaces `notes`,
+`ccs` and both sidecar groups, so every held key is meaningless after it; and the
+same-pitch backstop mutates at the outermost unwind, after the verbs have had
+their say, and fires ~never — a full regeneration there beats maintaining a fifth
+dirt site. `syncSlots` returning false falls back the same way, loudly.
+
+The grouped `texts` table `buildWire` keys on is mm state for the same reason: the
+wire holds a reference to it, so composing a fresh one per flush would eventually
+hand the splice helpers a model the keys weren't built from. `rebuild` regroups
+it — the one place all three groups are replaced.
+
 ## Sidecar index maintenance
 
 Notation sidecars (type 15) and cc/pb sidecars (type -1) share one

@@ -16,24 +16,22 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-07-26 mm: verbs report key dirt; flushTake splices the wire (Phase 2f) (§ incremental serialise)
 - 2026-07-26 mm: midiBlob gains the wire splice helpers (Phase 2e) (§ incremental serialise)
 - 2026-07-26 mm: sidecar rows become state the verbs maintain (Phase 2d) (§ incremental serialise)
 - 2026-07-26 mm: sidecar texts key on their owner's slot (Phase 2c) (§ incremental serialise)
-- 2026-07-26 mm: serialise splits into buildWire + render (Phase 2b) (§ incremental serialise)
 
 ## Now
 
-(empty — 2e landed: midiBlob can put, drop and re-pack a key on a held wire, pinned chunk-for-chunk against a full regen. 2f is next — the verb sites report key dirt and flushTake splices instead of rebuilding, which is where serialise actually drops. Run /plan-next to promote it.)
+(empty — 2f landed, closing the incremental-serialise loop: flushTake now splices the wire it holds instead of rebuilding it. 2g (widen the wire key to lift the 5e4 slot cap) leads Queued; run /plan-next to promote it.)
 
 ## Queued (current phase; one-liners)
 
-1. *(in Now)* 2e — midiBlob gains the wire splice helpers: drop a key, put a
-   key, re-pack a key in place; each fixes up the one neighbour whose `dppq`
-   moved. Pure, and pinned chunk-for-chunk against a full `buildWire` regen.
-2. 2f — the three verb sites (`mm:add`, `mm:assign`, `mm:delete`) report key
-   dirt beside `markChan`, for notes, ccs **and** their sidecars under one
-   discipline; `flushTake` applies the dirt to the persistent `wire` instead of
-   rebuilding it; slot-cap guard falls back to full regen. Blob-equality pin:
-   incremental vs full regen after gesture storms on both rebuild fixtures —
-   with 2d's caveat, that a cc row never written reloads as a legitimately plain
-   cc, so a missed seat reproduces itself and needs a direct row count beside it.
+1. *(in Now)* 2f — the verb sites report per-slot key dirt beside `markChan` and
+   `flushTake` splices the held wire instead of rebuilding it.
+2. 2g — widen the wire key to `ppq*1e9 + rank*1e8 + slot*2` behind named constants in
+   midiBlob, lifting the slot cap from 5e4 to 5e7 and deleting the guard the design doc
+   wanted: ppqs reach mm integer-**typed** (`util.round` → `math.floor`,
+   `string.unpack('i4')`), so keys are int64 with 4× headroom. Touches midiBlob's key
+   sites plus `mm_blob_serialise_spec`'s two helpers; verify nothing (`voicing`'s onsets
+   the one unread path) hands mm a float ppq, since that drops the bound back to 2^53.

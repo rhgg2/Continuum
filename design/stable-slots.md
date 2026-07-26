@@ -1,7 +1,7 @@
 # stable slots — the write side stops paying O(take) per keystroke
 
-> Working design doc, **phase 1 in flight** — 0, 1a and 1b landed
-> 2026-07-25. Sibling to `interval-dirt`, which
+> Working design doc, **phase 2 in flight** — 0 and 1 landed 2026-07-25,
+> 2b–2e 2026-07-26. Sibling to `interval-dirt`, which
 > attacked the derivation half of a flush (`reload`) and closed 2026-07-21
 > (`design/archive/interval-dirt-closing.md`); this one attacks the write
 > half (`rebuild` + `serialise`). Phase 2 here depends on phase 1 here.
@@ -188,9 +188,10 @@ persist across flushes:
 
 - mm owns a `wire` state object (keys, chunks) alongside `loadedBlob`;
   midiBlob stays pure — full-regen constructs it, splice helpers mutate it.
-- The verbs record per-event key dirt: old key value out (binary search),
-  new key value in. A note's off-key rides the same slot at rank 0 with
-  `endppq`, so a length edit dirties only the off key.
+- The verbs record key dirt per **slot**: the keyed state that slot held before
+  the nest's first touch, reconciled against the live model at flush. A note's
+  off-key rides the same slot at rank 0 with `endppq`, so its length lives in the
+  snapshot beside its onset.
 - The reporting spine already exists at channel granularity.
   `dirtyChans`/`markChan` (`midiManager.lua:912-915`) is reset in
   `enterNest` beside `metaDirty`/`metaDeleted` and seeded from exactly three
@@ -207,10 +208,12 @@ persist across flushes:
 
 Constraints and wrinkles:
 
-- **slot < 5e4** — `seq2` must stay under the key's 1e5 rank field.
-  Free-list reuse bounds slots by the live high-water mark (macro fixture
-  peaks ~9.7k ccs; 5× headroom). A guard falls back to full regeneration
-  beyond the cap.
+- **the slot cap** — `seq2` must stay under the key's rank field, and at the
+  landed 1e6/1e5 scaling that caps a slot at 5e4. Reachable: `rebuildPbs` writes
+  at `ccInterp` per QN, so ~115k ccs in one stream over a 30-minute take. A
+  fallback to full regeneration does not help, because `buildWire` composes the
+  same key — beyond the cap two events collide on one key and one chunk
+  overwrites the other. Settled 2026-07-26 by widening instead; see below.
 - **texts.** `flushTake` rebuilds the texts array fresh each flush, so
   text indices are never stable — and the key is that array's index, so any
   add, delete or ppq move shifts every downstream text key. Sidecar rows are
@@ -225,6 +228,15 @@ Constraints and wrinkles:
 - **The full-regen path stays.** Today's serialise remains the
   load/bulk/guard path; the incremental path must produce a byte-identical
   blob. The `seenOnset` collision backstop runs only on the full path.
+- **the splice is phased, not per-slot.** Settled 2026-07-26: applying one
+  slot's dirt to completion before starting the next is unsound. A deleted
+  event is nil in the model from the moment the verb ran, while its keys sit
+  on the wire until something drops them — and since every put and drop
+  re-packs its neighbour, splicing one slot can ask the packer for another
+  slot's dead key. So the nest's dirt applies in three phases: drops first, in
+  **descending** key order, so each removal's successor is still live; then
+  puts, whose successors are live by then; then repacks, last, because a
+  chunk's delta is only final once every insertion before it has landed.
 
 ## What this buys, what it doesn't
 
@@ -296,8 +308,8 @@ phase 2's business alone. The gather is ~10k pointer copies per flush.
 
 ### Phase 2 — incremental serialise in midiBlob
 
-- Persistent wire state; verb-reported key dirt; slot-cap guard with
-  full-regen fallback.
+- Persistent wire state; verb-reported per-slot key dirt.
+- The key widens so the slot cap stops being reachable, and no guard is owed.
 - Blob-equality pin: incremental vs full regen after gesture storms on
   both rebuild fixtures.
 - Profile target: serialise span ~7ms → ~1ms.
@@ -311,6 +323,27 @@ fixture. Going lower is interval-dirt's job (reload) and REAPER's
 ## Open questions
 
 None outstanding.
+
+Settled 2026-07-26: key dirt is a per-slot before-snapshot reconciled against the
+live model at flush, not an ordered out/in log recorded by the verbs. The log put
+the key format in mm, spread the case analysis (note on/off/row, cc value/rider/row,
+plain vs promoted) over every site, and needed ordering to compose two gestures on
+one slot. The snapshot keeps the format in midiBlob behind `slotState` + `syncSlot`,
+coalesces by construction (first touch wins), and makes delete-then-add reusing a
+slot one before/after pair. It costs a few redundant re-packs per edit. The
+same-pitch backstop stays out of the spine: it mutates at unwind, after the verbs,
+and fires ~never, so `leaveNest` schedules a full regen when it repairs anything.
+
+Settled 2026-07-26: the slot cap closes by widening the key to `ppq*1e9 +
+rank*1e8 + slot*2`, not by a guard. Every ppq reaching mm is integer-**typed** —
+`tm:fromLogical` ends in `util.round` → `math.floor`, `parse` in
+`string.unpack('i4')` — so a composed key is a true 64-bit integer and the real
+ceiling is 9.2e18, not the 2^53 that `docs/midiBlob.md` argues from. Max key
+`2^31 * 1e9 ≈ 2.1e18` leaves 4× headroom, the cap becomes 5e7, and the guard is
+owed to nobody. (Integer-valuedness alone would not have carried this: a float
+`480.0` still loses exactness above 2^53, so it is the typedness doing the work.
+If a float ppq ever did reach mm the bound drops back to 2^53, which under the
+wider scaling still leaves ppq < 9e6 — ~2.6 hours at 960/QN, 120bpm.)
 
 Settled 2026-07-26: the wire carries its model. `buildWire` stashes the four
 tables it was handed on the wire it returns (`wire.model`), so the splice

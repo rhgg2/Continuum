@@ -79,9 +79,16 @@ local carriedPassthrough = {}  -- parsed system messages mm doesn't model; re-em
 local noteSidecars = {}   -- [noteSlot] = { eventtype = 15, ppq, msg }; every note carries one
 local ccSidecars   = {}   -- [ccSlot]   = { eventtype = -1, ppq, msg }; a plain cc carries none
 local sidecarCount = 0    -- for perf.count('texts') alone; a sparse table has no #
+-- The grouped view buildWire keys on: state, not a per-flush composition, because the wire
+-- holds a reference to it. rebuild regroups -- the one place all three are replaced.
+local sidecarTexts = { noteSidecars = noteSidecars, ccSidecars = ccSidecars, carried = carriedTexts }
 --invariant: loadedBlob is the take's bytes as of the model agreeing with them; nil = unknown, never gate
 local loadedBlob            -- converged-rebind gate; see design/archive/incremental-rebuild.md § The take-hash gate
 local wire                  -- last flush's midiBlob wire state; nil = nothing built yet
+--invariant: wireDirt[stream][slot] is that slot's state before the nest's first touch of it
+local wireDirt = { note = {}, cc = {} }
+local wireFull = true       -- nothing held, or the model moved wholesale: regenerate, don't splice
+local NO_KEYS  = {}         -- an add's slot held nothing; shared, never mutated
 
 -- Where a note sits, not which note it is: two notes sharing a seat occupy one MIDI slot,
 -- which is exactly what the same-pitch backstop detects. mm addresses by uuid.
@@ -501,19 +508,17 @@ local function rebuild(metadata)
     end
     if not c.plain then ccSidecars[i] = ccSidecarEntry(c); sidecarCount = sidecarCount + 1 end
   end
+  -- Every table a held wire points at has just been replaced, so every held key is meaningless.
+  sidecarTexts = { noteSidecars = noteSidecars, ccSidecars = ccSidecars, carried = carriedTexts }
+  wireFull = true
   perf.stop('collisionIdx')
   perf.stop('rebuild')
 end
 
--- Project the model onto the take as one whole-take blob: reproject each uuid'd
--- event's sidecar (cached), carry unmodelled events, preserve the EOT. Sole writer.
+-- Project the model onto the take as one whole-take blob: splice the wire the last flush
+-- left (or rebuild it), carry unmodelled events, preserve the EOT. Sole writer.
 local function flushTake()
   if not take then return end
-  perf.start('sidecars')
-  -- Both groups are maintained state, seated and dropped by the verbs: nothing to walk
-  -- here. See docs/midiManager.md § Sidecar rows.
-  local texts = { noteSidecars = noteSidecars, ccSidecars = ccSidecars, carried = carriedTexts }
-  perf.stop('sidecars')
 
   local source   = reaper.GetMediaItemTake_Source(take)
   local ppqPerQN = reaper.MIDI_GetPPQPosFromProjQN(take, 1) - reaper.MIDI_GetPPQPosFromProjQN(take, 0)
@@ -522,7 +527,18 @@ local function flushTake()
   perf.start('serialise')
   -- The live tables, unsnapshotted: buildWire keys on the slot, so it reads notes, ccs
   -- and both sidecar groups sparse.
-  wire = midiBlob.buildWire(notes, ccs, texts, carriedPassthrough)
+  if wireFull or not wire then
+    wire, wireFull = midiBlob.buildWire(notes, ccs, sidecarTexts, carriedPassthrough), false
+  else
+    perf.start('splice')
+    if not midiBlob.syncSlots(wire, wireDirt) then
+      -- A disagreement means the dirt has lost track of the wire: no further splice would
+      -- be trustworthy, and a lost key is silent at the byte level.
+      print('flushTake: wire splice disagreed with the held wire; regenerating')
+      wire = midiBlob.buildWire(notes, ccs, sidecarTexts, carriedPassthrough)
+    end
+    perf.stop('splice')
+  end
   local blob = midiBlob.render(wire, endPpq)
   perf.stop('serialise')
 
@@ -540,6 +556,7 @@ local function flushTake()
   perf.count('notes', #noteOrder); perf.count('ccs', #ccOrder)
   perf.count('texts', sidecarCount + #carriedTexts)
   dirty = false
+  wireDirt = { note = {}, cc = {} }   -- spent: the wire agrees with the model again
   -- Stash REAPER's canonical bytes (post-Sort), not the ones we handed it: the gate in load
   -- compares the take against these, and a re-encode would read as an external mutation.
   local _, canonical = reaper.MIDI_GetAllEvts(take)
@@ -981,6 +998,21 @@ end
 local dirtyChans = {}
 local function markChan(chan) if chan then dirtyChans[chan] = true end end
 
+-- The wire's own dirt: one before-snapshot per slot, first touch in the nest winning, which is
+-- what makes repeated gestures on a slot coalesce. See docs/midiManager.md § Wire dirt.
+local function markWire(evt, before)
+  if wireFull or not wire or not evt then return end
+  local stream = evt.evType == 'note' and 'note' or 'cc'
+  local group  = wireDirt[stream]
+  if group[evt.loc] == nil then
+    group[evt.loc] = before or midiBlob.slotState(wire, stream, evt.loc)
+  end
+end
+
+-- A freshly seated slot holds no keys: it was either just minted, or came off the free list,
+-- where a previous flush dropped its keys or this nest's delete has already snapshotted them.
+local function markWireAdded(evt) markWire(evt, NO_KEYS) end
+
 
 ----- Locking
 
@@ -994,7 +1026,10 @@ end
 
 local function enterNest()
   modifyDepth = modifyDepth + 1
-  if modifyDepth == 1 then metaDirty, metaDeleted, pendingCollisions, dirtyChans = {}, {}, {}, {} end   -- reset once; nested modifies accumulate
+  if modifyDepth == 1 then   -- reset once; nested modifies accumulate
+    metaDirty, metaDeleted, pendingCollisions, dirtyChans = {}, {}, {}, {}
+    wireDirt = { note = {}, cc = {} }
+  end
 end
 
 -- The outermost unwind, and the whole point of the nest: one reindex, one metadata round-trip,
@@ -1004,7 +1039,9 @@ local function leaveNest()
   if modifyDepth > 0 then return end
   local resolved = resolveCollisions()
   --emits: collisionsResolved -- { events = [collisionEvent, ...] }; repaired a missed collision
-  if resolved then fire('collisionsResolved', { events = resolved }) end
+  -- The backstop mutates after the verbs have had their say, and fires ~never: regenerating
+  -- the wire here beats maintaining a fifth dirt site.
+  if resolved then fire('collisionsResolved', { events = resolved }); wireFull = true end
   perf.start('meta'); flushMetadata(); perf.stop('meta')
   if flushPending then
     flushPending = false
@@ -1272,6 +1309,7 @@ function mm:add(t)
   if not t or not t.evType then return nil end
   if t.evType == 'note' then addNote(t) else addCC(t) end
   markChan(t.chan)
+  markWireAdded(eventsByUuid[t.uuid])   -- nil when the add was malformed and bailed
   return t.uuid
 end
 
@@ -1282,6 +1320,7 @@ function mm:assign(uuid, t)
   local evt = eventsByUuid[uuid]
   if not evt then return nil end
   markChan(evt.chan)                       -- old chan; a chan move dirties both
+  markWire(evt)                            -- before indexDrop and sidecarPut: snapshot the OLD keys
   -- A chan move changes which bucket holds the event; a ppq move changes where it sits inside
   -- one. Both computed once, before the mutation overwrites the values indexDrop still needs.
   local reseats = (t.chan ~= nil and t.chan ~= evt.chan) or (t.ppq ~= nil and t.ppq ~= evt.ppq)
@@ -1303,6 +1342,7 @@ function mm:delete(uuid)
   local evt = eventsByUuid[uuid]
   if not evt then return end
   markChan(evt.chan)
+  markWire(evt)      -- before sidecarDrop nils the row the snapshot has to see
   indexDrop(evt)
   sidecarDrop(evt)   -- else a reused slot inherits the dead event's row
 

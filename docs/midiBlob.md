@@ -91,3 +91,30 @@ A helper returns `false` when the wire and the caller's dirt disagree — a key 
 twice, or dropped when it was never there. Nothing is mutated, and the caller's
 guard falls back to a full `buildWire`, because a disagreement means the dirt
 record has lost track of the wire and no further splice can be trusted.
+
+`slotState` and `syncSlots` sit one level up, where a caller thinks in slots rather
+than keys. `slotState` reads the wire's own model for the four fields that decide a
+slot's key set — `ppq`, `endppq`, `shape`, and the sidecar row's `sidePpq` — so the
+key format never leaves this file. `syncSlots` takes a before-snapshot of that same
+shape per dirty slot, derives each slot's two key sets through one private helper,
+and drops, puts or repacks accordingly; deriving both sides the same way is what
+keeps them honest. A slot's key set is at most three, so membership is a linear
+scan, and a velocity edit repacks three keys where one would do — microseconds
+against the full re-key it replaces.
+
+It takes the whole nest's dirt in one call, and that isn't convenience: sequencing
+across slots is load-bearing. Mid-splice the wire transiently holds keys whose model
+row is already gone — a deleted note's slot is nil in `notes` from the moment the
+verb ran — and every put and drop re-packs its neighbour, so splicing one slot can
+ask `chunkOf` to pack another slot's dead key and index a nil. Hence three phases.
+Drops go first, in **descending** key order, so that when a key is removed every
+dead key above it has already gone and the successor being re-packed is live. Then
+puts, each of which re-packs a successor that is now certainly live. Then repacks,
+last because a repacked chunk's delta is only final once every insertion before it
+has landed. A failure at any phase returns immediately rather than pressing on: the
+caller is going to regenerate anyway, and continuing would walk into the dead key
+the failed drop left behind.
+
+The sidecar key comes off the *row's* ppq rather than its owner's, even though the
+caller keeps the two equal: the row is what `chunkOf` packs, so a row left stale has
+to surface as a wrong key instead of being papered over by its owner's.
