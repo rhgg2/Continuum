@@ -4,6 +4,12 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-26** — A note lane's `events` table changes identity iff its contents changed. tv's cell
+  carry keys on that identity, so every mutator of a seated lane owns its shed: membership writes
+  call `shedLane`, in-place field writes go through `setCell`, which sheds only when the value
+  actually moves. Rejected an explicit `col.version` stamp — the more honest protocol, but it moves
+  the tm/tv boundary to fix one path while the cc path is already precise under the identity one.
+
 - **2026-07-26** — voicing gained resolveSorted as a sibling entry point rather than a presorted
   flag on resolveGroup: a flag lets any caller assert its way past the ordering the nudge cascade
   depends on, where a second door names the guarantee in its own contract, at one seam.

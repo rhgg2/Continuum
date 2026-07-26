@@ -649,6 +649,49 @@ CC/park/pb state forward like a clean channel and splices just the closed spans 
 splices the seed-touched windows, `rebuildPbs` gathers span-bounded. Wholesale dirt
 (`dirtyChans[chan] == true`) still replaces the whole channel.
 
+### The note-lane shed
+
+tv's cell carry keys on a column's `events` **table identity**: the same
+table coming back means reuse the built cells and ghosts. That makes the
+identity a protocol — a lane's `events` table must change identity exactly
+when something a renderer can see about that lane changed. `exciseNotes`
+originally wrote `col.events = kept` for every lane of an interval-dirty
+channel whether or not it dropped anything, so a one-note edit shed all of
+chan 1's lanes and tv re-placed the whole take (7.8ms of `place` on a dense
+one).
+
+The shed is now precise, and every mutator of a seated lane owns it:
+
+- **membership** — `exciseNotes` assigns only when it actually dropped a
+  cell; the splices (`rebuildInternals`, `rebuildExternals`, `rebuildPA`,
+  the park restore) and the park unlink call `shedLane(chan, lane)` first.
+  Its predicate generalised from a row-`covers` test to any `drop(evt)`, so
+  the parking PA sweep reuses it (matching PA type + uuid) instead of
+  hand-rolling a second filtered copy.
+- **content** — an in-place field write on an already-seated cell goes
+  through `setCell(cell, field, value)`, which sheds only when the value
+  moves. Writing unconditionally would shed every bounded lane on every
+  pass, because the tail walk restamps `endppqC` for each note it binds.
+
+The failure is asymmetric — too pessimistic costs a re-place, too
+optimistic silently renders a stale cell — which is why the enumeration,
+not the conditional, is the work. The tail walk is the reach to watch:
+`settleOnset`'s `delayC` and `boundNote`'s `endppqC`/`endppq` land on notes
+no seed covered, in lanes otherwise carried whole.
+
+Two things need no shed. Wholesale and stale-swing channels get a
+brand-new `columns.notes`, so their identity is fresh by construction. And
+a local bound to `col.events` that outlives a shed operates on the dead
+table — the read-only walks (`eachWindowNote`, `channelStreams`,
+`coverOnsets`) do not care, but the park scan did, which is why a note
+carry stores its lane index and resolves the table at unlink time.
+
+`col.version`, bumped by tm and keyed on by tv, was the rejected
+alternative. It is the more honest protocol — today the cache key is an
+accident of who happened to allocate a table — but it moves the tm/tv
+boundary to fix one path, and the cc path (`spliceChannelCCs`) is already
+precise under the existing one.
+
 ### Dormant guard
 
 When the tracker page is not active, `bindTake(nil)` clears cm's take context

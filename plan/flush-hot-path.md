@@ -170,22 +170,33 @@ touched (chan,pitch) clusters), and it stays parked pending its design
 doc: the `onsetOf[prev] + 1` cascade means a verdict can depend on notes
 further out than the same onset.
 
+**A measured (2026-07-26): `place` 4.4 -> 1.7, `flush` 21.0 -> 17.2.** Warm
+one-note edit, measured either side of a script reload in one session, so the
+two are comparable to each other but not to the table's 29.0 baseline (a colder
+earlier session -- the pre-A warm flush read 21.0 where the C+T1 row predicted
+~17). `place` lands just above the revised 1.2-1.6 band, which is the shed
+working as designed: lane 1 holds 2809 of the 8438 notes and still sheds, so tv
+re-places it and carries the other nine lanes. Post-A there is no dominant term
+left: `mm 13.4` splits into `reload 6.8` (`fire 2.9` > `place 1.7`, `internals
+2.8`, `pbs 0.8`), `setEvts 4.3` (REAPER's) and `serialise 1.0`, with `collide
+3.8` alongside. That answers the queued exit measurement; the next levers are T3
+(`collide`, parked pending its design doc) and sub-lane carry.
+
+One measuring trap found on the way: the *first* flush after a script reload
+pays `serialise 38.8` (`pack 22.3`), stable-slots building the persistent wire
+from scratch. "Discard run 1" now has a second reason beyond GC.
+
 ## Landed  (newest first; prune below ~4)
 
+- 2026-07-26 tm: the note path sheds a lane only when its contents change (A)
 - 2026-07-26 tm: the flush collision scan walks rawIndex (T1)
 - 2026-07-26 tv: collapse the place loop's projection calls into ctx:placeRow (C)
 
 ## Now
 
-(empty — T1 landed and measured at ~4ms, the table's estimate; run /plan-next to promote A, the note path shedding per lane)
+(empty — A landed; the exit measurement its queued successor asks for is already recorded under Targets, so /plan-next may close that item rather than promote it)
 
 ## Queued (one-liners)
-1. **A — the note path sheds per lane.** Thread `touched[col]` through
-   every in-place mutator of a note lane's `events` (D6) so a lane's
-   table identity changes iff its contents changed, mirroring
-   `spliceChannelCCs`. Spec pins both directions: a clean lane's events
-   table survives a rebuild, a touched lane's does not. May split at
-   `/plan-next` if the mutator inventory is larger than D6 lists.
-2. **Exit measurement.** Re-profile the same one-note edit on the dense
+1. **Exit measurement.** Re-profile the same one-note edit on the dense
    take, record against the target table, and note what the new
    dominant span is.

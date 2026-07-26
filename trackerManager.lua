@@ -119,6 +119,29 @@ local function insertNoteCell(events, cell)
   util.insertSorted(events, cell, noteColumnLess)
 end
 
+local shedLanes = {}   -- col -> already shed this pass; reset at the rebuild head
+
+-- tv's cell carry keys on a note lane's `events` table identity, so a change to the lane's membership
+-- or to a seated cell's rendered fields must swap that table out. see docs/trackerManager.md § The note-lane shed
+--invariant: a note lane's events table changes identity iff its contents changed (tv's carry key)
+local function shedLane(chan, lane)
+  local channel = channels[chan]
+  local col = channel and channel.columns.notes[lane]
+  if col and not shedLanes[col] then
+    shedLanes[col] = true
+    col.events = util.clone(col.events)
+  end
+  return col
+end
+
+-- Field write on a seated cell: shed only where the value actually moves, or the tail walk's
+-- restamp sheds every bounded lane every pass. Cells are self-describing, so (chan, lane) is here.
+local function setCell(cell, field, value)
+  if cell[field] == value then return end
+  shedLane(cell.chan, cell.lane)
+  cell[field] = value
+end
+
 -- A lane is disordered only when a raw->logical flip crossed two onsets; a cheap scan lets the flip
 -- skip re-sorting the common already-ordered lane. see design/interval-dirt.md § Phase 5.5
 local function isSorted(events)
@@ -694,7 +717,7 @@ end
 --contract: appends removals/adds to the sink {del(event), add(spec)}
 --contract: if record.key set, marks key.sampleShadowed=true on records lost to lane priority
 --contract: spans (from pcSeedSpans) narrow existing to in-span cells; nil = whole channel
---invariant: shadow marking is rebuild-only; flush callers omit key (rebuild reclones lane events)
+--invariant: shadow marking is rebuild-only; flush callers omit key (a marked cell sheds its lane)
 --invariant: c.pc.events not written here; rebuildPCs splices it from mm after commit
 local function reconcilePCsForChan(chan, records, sink, spans)
   local existing = {}
@@ -710,7 +733,7 @@ local function reconcilePCsForChan(chan, records, sink, spans)
     table.sort(g, function(a, b) return a.lane < b.lane end)
     util.add(winners, g[1])
     for i = 2, #g do
-      if g[i].key then g[i].key.sampleShadowed = true end
+      if g[i].key then setCell(g[i].key, 'sampleShadowed', true) end
     end
   end
 
@@ -1864,15 +1887,18 @@ local function windowSeeded(rows, startL, endL)
   return false
 end
 
--- Drop the carried events this pass's clones will replace: notes and PAs alike gate on `covers`,
--- so an out-of-scope PA carries untouched while rebuildPA re-projects only the seeded rows.
-local function exciseNotes(chan, covers)
+-- Drop every cell a predicate claims from a channel's note lanes: the interval-dirt excise gates
+-- notes and PAs alike on `covers`. see docs/trackerManager.md § The note-lane shed
+local function exciseNotes(chan, drop)
   for _, col in ipairs(channels[chan].columns.notes) do
-    local kept = {}
+    local kept, dropped = {}, false
     for _, evt in ipairs(col.events) do
-      if not covers(evt) then util.add(kept, evt) end
+      if drop(evt) then dropped = true else util.add(kept, evt) end
     end
-    col.events = kept
+    if dropped then
+      col.events = kept   -- kept is a fresh table: this assignment is the shed
+      shedLanes[col] = true
+    end
   end
 end
 
@@ -1929,6 +1955,7 @@ local function rebuildInternals()
     -- Columns are logical-born: every seat projects at ingestion. see design/rebuild-pipeline.md § The frame law
     projectEvent(note, note.chan)
     if dirtyChans[note.chan] ~= true and not staleSwing[note.chan] then
+      shedLane(note.chan, note.lane)
       insertNoteCell(col.events, note)   -- splice into the carried logical lane; stays ordered
     else
       util.add(col.events, note)         -- fresh lane: append in mm raw order, order once below
@@ -2319,6 +2346,7 @@ local function rebuildExternals(external)
     util.assign(colNote, update)
     colNote.fixed = true
     projectEvent(colNote, note.chan)
+    shedLane(note.chan, lane)
     insertNoteCell(col.events, colNote)
     stampColEvt(colNote)
     extWrites.assign(colNote, update)
@@ -2420,7 +2448,13 @@ local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows
         if onPark then onPark(carry.spec) end
         util.add(newParked, carry.spec)
         batch.del(carry.evt)
-        if carry.events then unlink(carry.events, carry.evt) end
+        -- A note carry names its lane, not the lane's events table: shedLane swaps that table
+        -- between the scan and here, and the pre-shed one is no longer the lane tv will read.
+        if carry.lane then
+          unlink(shedLane(carry.chan, carry.lane).events, carry.evt)
+        elseif carry.events then
+          unlink(carry.events, carry.evt)
+        end
       end
     end
     for _, spec in ipairs(prior) do
@@ -2454,23 +2488,24 @@ local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows
   local noteParked
   do
     local scan, seen = {}, {}
-    local function candidate(evt, laneIdx, events)
+    local function candidate(evt, laneIdx)
       if seen[evt] then return end   -- a host under its own region would arrive from both sources
       seen[evt] = true
-      util.add(scan, { evt = evt, events = events, spec = parkSpec(evt, { lane = laneIdx }) })
+      util.add(scan, { evt = evt, chan = evt.chan, lane = laneIdx,
+                       spec = parkSpec(evt, { lane = laneIdx }) })
     end
     for chan, spans in pairs(noteSpans) do
       if dirtyChans[chan] then
         for laneIdx, col in ipairs(channels[chan].columns.notes) do
           coverOnsets(col.events, spans, function(evt)
-            if evt.evType ~= 'pa' then candidate(evt, laneIdx, col.events) end
+            if evt.evType ~= 'pa' then candidate(evt, laneIdx) end
           end)
         end
       end
     end
     for host in pairs(hostWindows or {}) do
       if dirtyChans[host.chan] and generators.parksNotes(host) then
-        candidate(host, host.lane, channels[host.chan].columns.notes[host.lane].events)
+        candidate(host, host.lane)
       end
     end
 
@@ -2492,8 +2527,9 @@ local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows
                             { colEvt = note, ppq = tm:fromLogical(spec.chan, note.ppq),
                               ppqL = note.ppq, endppqL = note.endppq })
       util.add(restoredNotes, rec)
-      util.add(channel.columns.notes[spec.lane].events, note)
-      sortNoteColumn(channel.columns.notes[spec.lane].events)
+      local col = shedLane(spec.chan, spec.lane)
+      util.add(col.events, note)
+      sortNoteColumn(col.events)
       -- Lazy: reshaped at commit so it reads the rec's raw ppq/endppq after the tail-walk clip.
       deferred.addLazy(function()
         return util.assign(util.clone(note, { delayC = true, endppqC = true }),
@@ -2560,13 +2596,7 @@ local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows
     -- The parking PA's on-take column cell rode past exciseNotes untouched -- its row seeds only here,
     -- after that pass ran -- so drop it now, or rebuildPA's parked projection doubles the carried cell.
     for chan, uuids in pairs(freshCells) do
-      for _, col in ipairs(channels[chan].columns.notes) do
-        local kept = {}
-        for _, e in ipairs(col.events) do
-          if not (e.evType == 'pa' and uuids[e.uuid]) then util.add(kept, e) end
-        end
-        col.events = kept
-      end
+      exciseNotes(chan, function(e) return e.evType == 'pa' and uuids[e.uuid] end)
     end
     -- Prior parked PAs: host still parked -> carry; host returned on-take -> restore to the take.
     for _, spec in ipairs(priorByType.pa or {}) do
@@ -2787,6 +2817,7 @@ local function rebuildPA()
           if noteCol then
             local cell = projectCC(cc, { lane = lane })
             projectEvent(cell, chan)
+            shedLane(chan, lane)
             insertNoteCell(noteCol.events, cell)
             touched[chan] = true
           end
@@ -2805,6 +2836,7 @@ local function rebuildPA()
           local ppq = tm:fromLogical(chan, cell.ppq)   -- raw: findNoteColumnForPitch is raw geometry
           local noteCol, lane = findNoteColumnForPitch(channels[chan], cell.pitch, ppq)
           if noteCol then
+            shedLane(chan, lane)
             insertNoteCell(noteCol.events, projectCC(cell, {lane = lane}))   -- the cell is logical-born
             touched[chan] = true
           end
@@ -3332,7 +3364,8 @@ local function makeTailRules(ctx)
     local backing = e.colEvt or e   -- seated entries write through to their column note; fxNotes ride bare
     if e.colEvt and e.colEvt.delay ~= nil then
       -- The column stays logical; only the delayC give-way cue carries the raw shift.
-      e.colEvt.delayC = util.round(timing.ppqToDelay(e.ppq - tm:fromLogical(chan, e.ppqL), res))
+      local shift = e.ppq - tm:fromLogical(chan, e.ppqL)
+      setCell(e.colEvt, 'delayC', util.round(timing.ppqToDelay(shift, res)))
     end
     if backing.realised then clampWrites.assign(backing, { ppq = e.ppq }) end
     return true
@@ -3366,9 +3399,9 @@ local function makeTailRules(ctx)
     end
     if e.colEvt then
       -- Mirror projectEvent's endppq rule: authored ceiling shows, lane-clipped ceiling rides endppqC.
-      e.colEvt.endppqC = tm:toLogical(chan, util.round(laneBound))
-      e.colEvt.endppq  = e.endppqL == util.OPEN and util.OPEN
-                         or e.endppqL or e.colEvt.endppqC
+      local endppqC = tm:toLogical(chan, util.round(laneBound))
+      setCell(e.colEvt, 'endppqC', endppqC)
+      setCell(e.colEvt, 'endppq', e.endppqL == util.OPEN and util.OPEN or e.endppqL or endppqC)
     end
   end
 
@@ -4303,7 +4336,8 @@ local function stampSamples()
     if entry.evType == 'note' and walkable(entry) and entry.sample == nil then
       local prevailing = util.seek(rawIndexFor(entry.chan).pcs, 'at-or-before', entry.ppq)
       local sample = prevailing and prevailing.val or 0
-      entry.sample, entry.colEvt.sample = sample, sample
+      entry.sample = sample
+      setCell(entry.colEvt, 'sample', sample)
       stampWrites.assign(entry, { sample = sample })
     end
   end
@@ -4517,6 +4551,8 @@ local function rebuildPipeline(didReload)
   -- The deferred commit added each restored note to mm; mark its column cell realised so an
   -- immediate edit resolves the backing, and seat-stamp the fresh entry like any other seat.
   for _, rec in ipairs(restoredNotes) do
+    -- Bare write, no setCell: `realised` is bookkeeping no renderer reads, and the park restore
+    -- that seated this cell already shed its lane.
     if stampColEvt(rec.colEvt) then rec.colEvt.realised = true end
   end
   perf.start('pbs'); rebuildPbs(fxOut, sources.extraColumns); perf.stop('pbs')  -- absorber reconciliation + pb resynthesis
@@ -4564,6 +4600,7 @@ function tm:rebuild(takeChanged)
   -- gated stage below skips clean chans so the carried columns stand. see design/archive/dirty-channels.md § Phase B
   local prevChannels = channels
   channels = {}
+  shedLanes = {}   -- per-pass memo: a lane shed on the last pass must shed again on this one
   for i = 1, 16 do
     if dirtyChans[i] == true then
       channels[i] = { chan = i, columns = { notes = {}, ccs = {} } }

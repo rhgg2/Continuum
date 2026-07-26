@@ -69,6 +69,7 @@ local specs = {
   'tm_absorber_reseat_spec',
   'tm_pb_gating_spec',
   'tm_cc_gating_spec',
+  'tm_note_lane_carry_spec',
   'tm_tail_gating_spec',
   'tm_fx_gating_spec',
   'tm_regionpark_gating_spec',
