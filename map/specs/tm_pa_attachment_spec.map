@@ -1,4 +1,4 @@
-@spec tm_pa_attachment_spec  src=tests/specs/tm_pa_attachment_spec.lua  loc=70  sha=35eb990  cases=2
+@spec tm_pa_attachment_spec  src=tests/specs/tm_pa_attachment_spec.lua  loc=96  sha=35eb990  cases=3
 @exercises midiManager (h.mm), trackerManager (h.tm)
 @surface   mm:notes, mm:ccsRaw, tm:addEvent, tm:flush, tm:deleteEvent, tm:assignEvent
 @harness   mk
@@ -20,35 +20,38 @@
   @fn delayedHostWithPA(harness)  @ 30-37
       -- Host authored at logical 0 but delayed a full row (delayToPPQ(1000, 240) = 240), so it
       -- sounds at raw 240 -- past the PA it owns. Raw-frame attachment cannot see the pair.
+  @fn hostWithTwoPAs(harness)  @ 40-48
+      -- Two PAs under one undelayed host, so a resize strands both at once.
 
 # Cases
-  @case 'a delayed host still owns the PA at its logical seat: deleting it culls the PA'  [harness]  @ 42-51
-  @case 'moving a delayed host carries its PA, in both frames'  [harness]  @ 55-67
+  @case 'a delayed host still owns the PA at its logical seat: deleting it culls the PA'  [harness]  @ 53-62
+  @case 'moving a delayed host carries its PA, in both frames'  [harness]  @ 66-78
+  @case 'shrinking a host culls every PA it strands, not just the first'  [harness]  @ 84-93
 
 # Uses (outbound edges)
   @use call mm:notes  @ 14
   @use call mm:ccsRaw  @ 21
-  @use call tm:addEvent  @ 32,34
-  @use call tm:flush  @ 35,48,61
-  @use call tm:deleteEvent  @ 47
-  @use call tm:assignEvent  @ 60
-  @use call fm:ccsRaw  @ 65
+  @use call tm:addEvent  @ 32,34,42,44,45
+  @use call tm:flush  @ 35,46,59,72,90
+  @use call tm:deleteEvent  @ 58
+  @use call tm:assignEvent  @ 71,89
+  @use call fm:ccsRaw  @ 76
 
 # Fields (r read / w write incl. constructor keys)
   @field r chan  @ 15
-  @field w chan  @ 32,34
+  @field w chan  @ 32,34,42,44,45
   @field w delay  @ 33
-  @field w detune  @ 33
-  @field w endppq  @ 32,60
-  @field r evType  @ 22,65
-  @field w evType  @ 32,34
-  @field w lane  @ 33
-  @field w name  @ 42,55
+  @field w detune  @ 33,43
+  @field w endppq  @ 32,42,71,89
+  @field r evType  @ 22,76
+  @field w evType  @ 32,34,42,44,45
+  @field w lane  @ 33,43
+  @field w name  @ 53,66,84
   @field r pitch  @ 15
-  @field w pitch  @ 32,34
+  @field w pitch  @ 32,34,42,44,45
   @field r ppq  @ 22
-  @field w ppq  @ 32,34,60
-  @field r ppqL  @ 66
-  @field w run  @ 43,56
+  @field w ppq  @ 32,34,42,44,45,71
+  @field r ppqL  @ 77
+  @field w run  @ 54,67,85
   @field r uuid  @ 15
-  @field w vel  @ 33,34
+  @field w vel  @ 33,34,43,44,45

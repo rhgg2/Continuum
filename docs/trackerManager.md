@@ -808,6 +808,11 @@ the tail walk's same-pitch nudge does the same for a tick. A raw-frame
 test calls those PAs detached, and um then declines to move or cull them
 with their host — orphaning them in `mm`.
 
+`forEachAttachedPA` gathers its matches into a list before invoking `fn` on each, rather than
+calling `fn` inline mid-walk. `fn` is `deleteLowlevel` or `assignLowlevel`, and both remove from
+and reinsert into the very `pas` list being walked — a `table.remove` mid-`ipairs` shifts the next
+entry into the removed slot, so an inline call would skip it.
+
 `resizeNote` follows the same rule, and has to follow it twice: once to
 decide whether a move is a translation, and again to perform the carry.
 

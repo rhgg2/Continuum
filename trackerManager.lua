@@ -816,16 +816,18 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   -- reseeks a dirty host without a column walk. see docs/trackerManager.md § Fx window cache
   function colEvtFor(uuid) local e = byUuid[uuid]; return e and e.colEvt end
 
-  -- Ownership is intent, so it is tested logically: a PA carries its own seat and reswings from
-  -- it, and a raw-frame test would let a delay or a nudge detach one. see docs/trackerManager.md § PA binding
+  -- Ownership is tested logically (a raw delay or nudge can't detach a PA from its own seat), and
+  -- this gathers before applying since fn mutates the very pas list it walks. see docs/trackerManager.md § PA binding
   local function forEachAttachedPA(host, fn)
     local from, to = host.ppqL or host.ppq, host.endppqL or host.endppq
-    for _, cc in pairs(byUuid) do
-      if cc.evType == 'pa' and cc.chan == host.chan and cc.pitch == host.pitch then
+    local attached = {}
+    for _, cc in ipairs(rawIndex[host.chan].pas) do
+      if cc.pitch == host.pitch then
         local seat = cc.ppqL or cc.ppq
-        if seat >= from and seat < to then fn(cc) end
+        if seat >= from and seat < to then util.add(attached, cc) end
       end
     end
+    for _, cc in ipairs(attached) do fn(cc) end
   end
 
   ----- Low-level mutation
@@ -1116,22 +1118,14 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
 
   ----- PC reconciliation (trackerMode mutation hook)
 
+  -- rawIndex holds realised events *and* staged adds, so one walk is the union byUuid needed a
+  -- second loop over adds to approximate. The sink mutates .pcs, never .notes, so no gather.
   local function reconcilePcs(chan)
     local records = {}
-    for _, n in pairs(byUuid) do
-      if n.evType == 'note' and n.chan == chan then
-        util.add(records, { ppq = n.ppq, ppqL = n.ppqL, lane = n.lane,
-                            sample = n.sample or 0 })
-      end
+    for _, n in ipairs(rawIndex[chan].notes) do
+      util.add(records, { ppq = n.ppq, ppqL = n.ppqL, lane = n.lane,
+                          sample = n.sample or 0 })
     end
-    for _, a in ipairs(adds) do
-      if a.evt.evType == 'note' and a.evt.chan == chan then
-        local n = a.evt
-        util.add(records, { ppq = n.ppq, ppqL = n.ppqL, lane = n.lane,
-                            sample = n.sample or 0 })
-      end
-    end
-
     reconcilePCsForChan(chan, records, { del = deleteLowlevel, add = addLowlevel })
   end
 

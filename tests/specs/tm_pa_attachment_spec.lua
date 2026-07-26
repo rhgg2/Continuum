@@ -36,6 +36,17 @@ local function delayedHostWithPA(harness)
   return h
 end
 
+-- Two PAs under one undelayed host, so a resize strands both at once.
+local function hostWithTwoPAs(harness)
+  local h = harness.mk()
+  h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 480, chan = 1, pitch = 60,
+                  vel = 100, detune = 0, lane = 1 })
+  h.tm:addEvent({ evType = 'pa', ppq = 120, chan = 1, pitch = 60, vel = 70 })
+  h.tm:addEvent({ evType = 'pa', ppq = 240, chan = 1, pitch = 60, vel = 80 })
+  h.tm:flush()
+  return h
+end
+
 return {
 
   {
@@ -64,6 +75,21 @@ return {
       local pa
       for _, c in h.fm:ccsRaw() do if c.evType == 'pa' then pa = c end end
       t.eq(pa.ppqL, 360, "the PA's logical seat moved too -- raw and intent stay in step")
+    end,
+  },
+
+  -- The cull deletes each PA as it walks, and deleting reaches into the same collection the
+  -- walk reads. Two PAs is the smallest case where a walk that skips its successor shows.
+  {
+    name = 'shrinking a host culls every PA it strands, not just the first',
+    run = function(harness)
+      local h = hostWithTwoPAs(harness)
+      t.deepEq(pasOf(h.fm), { 120, 240 }, 'both PAs are on the take to begin with')
+
+      h.tm:assignEvent(uuidOfNote(h.fm, 1, 60), { endppq = 100 })
+      h.tm:flush()
+
+      t.deepEq(pasOf(h.fm), {}, 'both PAs died with the shrink, neither was skipped')
     end,
   },
 

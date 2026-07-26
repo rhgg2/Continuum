@@ -4,6 +4,11 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-26** — forEachAttachedPA and reconcilePcs read the per-channel rawIndex lists rather
+  than scanning byUuid. The widening is wanted, not incidental: rawIndex holds staged adds as well
+  as realised events, so a PA added and not yet flushed now follows its host's resize and delete — a
+  staged PA is attached, and the old blindness was an artefact of scanning the wrong table.
+
 - **2026-07-26** — A note lane's `events` table changes identity iff its contents changed. tv's cell
   carry keys on that identity, so every mutator of a seated lane owns its shed: membership writes
   call `shedLane`, in-place field writes go through `setCell`, which sheds only when the value
