@@ -362,19 +362,39 @@ Anticipative-FX guard). The old frontier rationale is gone, but the guard stays
 deliberately: REAPER's own MIDI editor disables anticipative FX while open, so
 this keeps tracker editing consistent with the native editor.
 
-### Sidecar regeneration cache
+### Sidecar rows
 
-`flushTake` rewrites the whole take (`MIDI_SetAllEvts`) on every mutation, so it
-regenerates the sidecar text stream from scratch each flush. Encoding every
-notation/cc sidecar and allocating a record per event is O(all events) — the bulk
-of a large take's flush cost. But an event's encoded sidecar only changes when a
-field feeding its body changes (note: chan/pitch/uuid; cc: evType/chan/id/value/
-uuid), which a gesture rarely touches across the whole take. So each uuid'd event
-caches its sidecar record, keyed weakly on the event object: a hit reuses the
-record (only `ppq`, which places but doesn't encode the sidecar, is refreshed); a
-miss re-encodes. `rebuild` reuses event objects in place, so the cache survives a
-modify; `load` mints fresh objects, so it self-resets, and the weak keys let rows
-for deleted events fall away with them.
+Every note and every metadata'd cc needs a row in the take's text stream: a
+notation event (type 15) or a `}RDM` sysex (type -1). Those rows used to be
+regenerated per flush — `flushTake` walked both order arrays and rebuilt the two
+groups from scratch, O(all events) on every mutation. They are mm state now:
+`noteSidecars` and `ccSidecars`, sparse and keyed by their owner's slot, seated
+and dropped at exactly the sites that maintain the order arrays (`sidecarPut`
+beside `indexPut`, `sidecarDrop` beside `indexDrop`), with `rebuild` seating both
+wholesale on load. `flushTake` hands the two tables to `buildWire` without
+walking them.
+
+That is only sound because a sidecar's wire key is a pure function of its owner's
+slot and ppq: nothing else moving in the take moves the row. `sidecarPut`
+refreshes rather than reseats — the entry's `ppq` places the row and its body
+encodes it, so any structural assign re-derives both, cheaply, through the cache
+below. A plain cc has no row, so its `sidecarPut` seats nil; the first metadata
+stamp promotes it and the same call seats a row, with no reload. The one
+consequence to hold on to is that a delete *must* drop, or a later add reusing
+that slot inherits a dead event's row.
+
+An event's encoded sidecar only changes when a field feeding its body changes
+(note: chan/pitch/uuid; cc: evType/chan/id/value/uuid), which a gesture rarely
+touches. So each uuid'd event caches its sidecar record, keyed weakly on the
+event object: a hit reuses the record (only `ppq`, which places but doesn't
+encode the sidecar, is refreshed); a miss re-encodes. Reusing the record also
+keeps midiBlob's chunk cache warm, since that keys on the entry's identity.
+`rebuild` reuses event objects in place, so the cache survives a modify; `load`
+mints fresh objects, so it self-resets, and the weak keys let records for deleted
+events fall away with them.
+
+`sidecarCount` rides alongside the two groups for `perf.count('texts')` alone: a
+sparse table has no `#`.
 
 ## Sidecar index maintenance
 

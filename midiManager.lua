@@ -75,6 +75,10 @@ local modifyDepth  = 0      -- reload can re-enter modify; only the outermost fl
 local flushPending = false  -- a dirty modify happened somewhere in the nest; flush once on unwind
 local carriedTexts       = {}  -- parsed text/meta events mm doesn't model; re-emitted verbatim on flush
 local carriedPassthrough = {}  -- parsed system messages mm doesn't model; re-emitted verbatim on flush
+--invariant: noteSidecars/ccSidecars are sparse, keyed by owner's slot; the verbs maintain them
+local noteSidecars = {}   -- [noteSlot] = { eventtype = 15, ppq, msg }; every note carries one
+local ccSidecars   = {}   -- [ccSlot]   = { eventtype = -1, ppq, msg }; a plain cc carries none
+local sidecarCount = 0    -- for perf.count('texts') alone; a sparse table has no #
 --invariant: loadedBlob is the take's bytes as of the model agreeing with them; nil = unknown, never gate
 local loadedBlob            -- converged-rebind gate; see design/archive/incremental-rebuild.md § The take-hash gate
 local wire                  -- last flush's midiBlob wire state; nil = nothing built yet
@@ -407,47 +411,7 @@ local function rawInChan(kind, chan)
   return ordered(kind == 'note' and notes or ccs, order)
 end
 
------ Reindex
-
--- Load's own pass, and load's alone: verbs don't need this, since slots don't move under them.
--- Compacts the dedup holes, orders by ppq, and mints slots 1..n; rebuilds every index. See docs/midiManager.md § Stable slots.
-local function rebuild(metadata)
-  perf.start('rebuild')
-  perf.start('compact')
-  notes = util.compact(notes, noteMaxSlot); noteMaxSlot = #notes
-  ccs   = util.compact(ccs,   ccMaxSlot);   ccMaxSlot   = #ccs
-  perf.stop('compact')
-  perf.start('sort')
-  stableByPpq(notes); stableByPpq(ccs)   -- a foreign blob's order isn't ours to trust
-  perf.stop('sort')
-  perf.start('collisionIdx')
-  collisionIdx, eventsByUuid = {}, {}
-  chanIdx = { note = {}, cc = {} }
-  noteFree, ccFree = {}, {}
-  orderEpoch = orderEpoch + 1
-  -- Compacted and sorted by here, so slot order and ppq order coincide: the order arrays are identities.
-  noteOrder, ccOrder = identityOrder(noteMaxSlot), identityOrder(ccMaxSlot)
-  -- Seat inline rather than via indexPut: this is the one bulk path (every event, every load), the
-  -- kind is known per loop, and the ppq order lets each bucket be appended to rather than spliced.
-  local noteSlots, ccSlots = chanIdx.note, chanIdx.cc
-  for i, n in ipairs(notes) do
-    n.loc = i
-    collisionIdx[cachedSeatKey(n)] = n
-    util.add(bucketOrder(noteSlots, n.chan), i)
-    if n.uuid then eventsByUuid[n.uuid] = n end
-    if metadata then util.assign(n, metadata[n.uuid]) end
-  end
-  for i, c in ipairs(ccs) do
-    c.loc = i
-    util.add(bucketOrder(ccSlots, c.chan), i)
-    if c.uuid then
-      eventsByUuid[c.uuid] = c
-      if metadata then util.assign(c, metadata[c.uuid]) end
-    end
-  end
-  perf.stop('collisionIdx')
-  perf.stop('rebuild')
-end
+----- Sidecar rows
 
 -- Reuse each uuid'd event's sidecar record across flushes; recompute only when a
 -- field feeding its body changes. Weak keys drop a deleted event's row. See docs.
@@ -460,7 +424,7 @@ local function noteSidecarEntry(note)
             entry = { eventtype = 15, msg = noteSidecarEncode(note) } }
     sidecarCache[note] = hit
   end
-  hit.entry.ppq = note.ppq   -- ppq places the sidecar but isn't in its body; refresh every flush
+  hit.entry.ppq = note.ppq   -- ppq places the sidecar but isn't in its body; refresh on every seat
   return hit.entry
 end
 
@@ -478,26 +442,76 @@ local function ccSidecarEntry(cc)
   return hit.entry
 end
 
+local function seatSidecar(group, slot, entry)
+  if (group[slot] == nil) ~= (entry == nil) then sidecarCount = sidecarCount + (entry and 1 or -1) end
+  group[slot] = entry
+end
+
+-- A refresh, not a reseat: the entry's ppq places the row and its body encodes it, so any
+-- structural assign re-derives both through sidecarCache -- a few field compares on a hit.
+local function sidecarPut(evt)
+  if evt.evType == 'note' then seatSidecar(noteSidecars, evt.loc, noteSidecarEntry(evt))
+  else seatSidecar(ccSidecars, evt.loc, (not evt.plain) and ccSidecarEntry(evt) or nil) end
+end
+
+local function sidecarDrop(evt)
+  seatSidecar(evt.evType == 'note' and noteSidecars or ccSidecars, evt.loc, nil)
+end
+
+----- Reindex
+
+-- Load's own pass, and load's alone: verbs don't need this, since slots don't move under them.
+-- Compacts the dedup holes, orders by ppq, and mints slots 1..n; rebuilds every index. See docs/midiManager.md § Stable slots.
+local function rebuild(metadata)
+  perf.start('rebuild')
+  perf.start('compact')
+  notes = util.compact(notes, noteMaxSlot); noteMaxSlot = #notes
+  ccs   = util.compact(ccs,   ccMaxSlot);   ccMaxSlot   = #ccs
+  perf.stop('compact')
+  perf.start('sort')
+  stableByPpq(notes); stableByPpq(ccs)   -- a foreign blob's order isn't ours to trust
+  perf.stop('sort')
+  perf.start('collisionIdx')
+  collisionIdx, eventsByUuid = {}, {}
+  chanIdx = { note = {}, cc = {} }
+  noteFree, ccFree = {}, {}
+  noteSidecars, ccSidecars, sidecarCount = {}, {}, 0
+  orderEpoch = orderEpoch + 1
+  -- Compacted and sorted by here, so slot order and ppq order coincide: the order arrays are identities.
+  noteOrder, ccOrder = identityOrder(noteMaxSlot), identityOrder(ccMaxSlot)
+  -- Seat inline rather than via indexPut: this is the one bulk path (every event, every load), the
+  -- kind is known per loop, and the ppq order lets each bucket be appended to rather than spliced.
+  local noteSlots, ccSlots = chanIdx.note, chanIdx.cc
+  for i, n in ipairs(notes) do
+    n.loc = i
+    collisionIdx[cachedSeatKey(n)] = n
+    util.add(bucketOrder(noteSlots, n.chan), i)
+    if n.uuid then
+      eventsByUuid[n.uuid] = n
+      noteSidecars[i] = noteSidecarEntry(n); sidecarCount = sidecarCount + 1
+    end
+    if metadata then util.assign(n, metadata[n.uuid]) end
+  end
+  for i, c in ipairs(ccs) do
+    c.loc = i
+    util.add(bucketOrder(ccSlots, c.chan), i)
+    if c.uuid then
+      eventsByUuid[c.uuid] = c
+      if metadata then util.assign(c, metadata[c.uuid]) end
+    end
+    if not c.plain then ccSidecars[i] = ccSidecarEntry(c); sidecarCount = sidecarCount + 1 end
+  end
+  perf.stop('collisionIdx')
+  perf.stop('rebuild')
+end
+
 -- Project the model onto the take as one whole-take blob: reproject each uuid'd
 -- event's sidecar (cached), carry unmodelled events, preserve the EOT. Sole writer.
 local function flushTake()
   if not take then return end
   perf.start('sidecars')
-  -- Keyed by the owner's slot, so these two tables are sparse and a sidecar's wire key
-  -- no longer moves when something else in the take does.
-  local noteSidecars, ccSidecars, sidecarCount = {}, {}, 0
-  for slot, note in ordered(notes, noteOrder) do
-    if note.uuid then
-      noteSidecars[slot] = noteSidecarEntry(note)
-      sidecarCount = sidecarCount + 1
-    end
-  end
-  for slot, cc in ordered(ccs, ccOrder) do
-    if not cc.plain then
-      ccSidecars[slot] = ccSidecarEntry(cc)
-      sidecarCount = sidecarCount + 1
-    end
-  end
+  -- Both groups are maintained state, seated and dropped by the verbs: nothing to walk
+  -- here. See docs/midiManager.md § Sidecar rows.
   local texts = { noteSidecars = noteSidecars, ccSidecars = ccSidecars, carried = carriedTexts }
   perf.stop('sidecars')
 
@@ -581,7 +595,7 @@ function mm:load(newTake)
 
   notes, ccs, eventsByUuid, collisionIdx, maxUUID, lock = {}, {}, {}, {}, 0, false
   carriedTexts, carriedPassthrough, dirty = {}, {}, false
-  local ccSidecars, noteSidecars = {}, {}
+  local parsedCcSidecars, parsedNoteSidecars = {}, {}   -- decoded off the take; consumed for binding
   local noteDedupEvents, ccDedupEvents, reassignEvents, reconcileEvents = {}, {}, {}, {}
   local metaWrites = {}   -- the only metadata load authors: the clones minted by uuid reassignment
 
@@ -610,18 +624,18 @@ function mm:load(newTake)
   for _, t in ipairs(texts) do
     if t.eventtype == 15 then
       local sc = noteSidecarDecode(t.msg)
-      if sc then util.add(noteSidecars, util.assign(sc, { ppq = t.ppq }))
+      if sc then util.add(parsedNoteSidecars, util.assign(sc, { ppq = t.ppq }))
       else util.add(carriedTexts, t) end
     elseif t.eventtype == -1 then
       local sc = ccSidecarDecode(t.msg)
-      if sc then util.add(ccSidecars, util.assign(sc, { ppq = t.ppq }))
+      if sc then util.add(parsedCcSidecars, util.assign(sc, { ppq = t.ppq }))
       else util.add(carriedTexts, t) end
     else
       util.add(carriedTexts, t)
     end
   end
 
-  ----- UUID binding (notes ↔ noteSidecars) + metadata join. Ahead of dedup so
+  ----- UUID binding (notes ↔ the parsed note sidecars) + metadata join. Ahead of dedup so
   ----- the voicing verdicts see intent (ppqL, detune, derived).
 
   local uuidCount = {}
@@ -630,7 +644,7 @@ function mm:load(newTake)
     for _, n in ipairs(notes) do util.bucket(buckets, noteKey(n), n) end
     -- Colliding notes and sidecars pair off in parse order: arbitrary but
     -- deterministic (design/same-pitch-enforcement.md Phase 3).
-    for _, ns in ipairs(noteSidecars) do
+    for _, ns in ipairs(parsedNoteSidecars) do
       local unbound
       for _, note in ipairs(buckets[noteKey(ns)] or {}) do
         if not note.uuid then unbound = note; break end
@@ -684,7 +698,7 @@ function mm:load(newTake)
 
   do
     local stageOneHit = {}
-    for _, s in ipairs(ccSidecars) do
+    for _, s in ipairs(parsedCcSidecars) do
       stageOneHit[ccFullKey(s)] = true
     end
 
@@ -727,11 +741,11 @@ function mm:load(newTake)
     end
   end
 
-  ----- Sidecar reconcile (ccs ↔ ccSidecars)
-  if next(ccSidecars) then
+  ----- Sidecar reconcile (ccs ↔ the parsed cc sidecars)
+  if next(parsedCcSidecars) then
     --contract: stage-3 consensus: winning offset needs ≥ max(2, ceil(0.5·n)) votes, unique
     local THRESHOLD_FRAC, THRESHOLD_MIN = 0.5, 2
-    local scsWorking, ccsWorking = util.clone(ccSidecars), util.clone(ccs)
+    local scsWorking, ccsWorking = util.clone(parsedCcSidecars), util.clone(ccs)
     local scBuckets, ccBuckets
 
     local function bucketBy(keyFn)
@@ -906,6 +920,7 @@ function mm:unload()
   noteFree, ccFree   = {}, {}
   noteMaxSlot, ccMaxSlot, dirty = 0, 0, false
   carriedTexts, carriedPassthrough = {}, {}
+  noteSidecars, ccSidecars, sidecarCount = {}, {}, 0
 end
 
 
@@ -934,6 +949,7 @@ local function resolveCollisions()
       perf.line('backstop killed uuid %s (chan %d pitch %d ppq %d) via %s',
                 n.uuid, n.chan, n.pitch, n.ppq, pending.verb)
       indexDrop(n)
+      sidecarDrop(n)
       freeSlot(notes, noteOrder, noteFree, n.loc)
       eventsByUuid[n.uuid] = nil
       deleteMetadatum(n.uuid)
@@ -944,6 +960,7 @@ local function resolveCollisions()
         orderRemove(notes, noteOrder, n.loc); indexDrop(n)
         n.ppq = onsetOf[n]
         orderInsert(notes, noteOrder, n.loc); indexPut(n)
+        sidecarPut(n)   -- the nudge moved the ppq that places its row
         util.add(events, { kind = 'nudged', uuid = n.uuid,
                            chan = n.chan, pitch = n.pitch, ppq = n.ppq })
         perf.line('backstop nudged uuid %s: ppq %d -> %d via %s', n.uuid, oldPpq, n.ppq, pending.verb)
@@ -1118,6 +1135,7 @@ local function addNote(t)
   note.loc    = slot
   orderInsert(notes, noteOrder, slot)
   indexPut(note)
+  sidecarPut(note)
   local key = seatKey(note)
   if collisionIdx[key] then noteCollision(note, 'add') end
   collisionIdx[key] = note
@@ -1234,6 +1252,7 @@ local function addCC(t)
   t.uuid = msg.uuid
   if hasMetadata then saveMetadatum(msg.uuid)
   else msg.plain = true end
+  sidecarPut(msg)   -- here and not in pushCC: the plain decision above is what decides the row
 end
 
 --contract: returns (loc, evt-clone, kind) for the uuid, or nil if absent
@@ -1270,6 +1289,9 @@ function mm:assign(uuid, t)
   if evt.evType == 'note' then assignNote(evt.loc, t)
   else                         assignCC(evt.loc, t) end
   if reseats then indexPut(evt) end
+  -- Ungated: a pitch/chan/value edit rewrites the row's body, a ppq edit moves it, and
+  -- assignCC's promotion seats a first one -- all three land here rather than each at its own site.
+  sidecarPut(evt)
   markChan(t.chan)                          -- new chan; nil-guarded when the assign leaves chan untouched
   return uuid
 end
@@ -1282,6 +1304,7 @@ function mm:delete(uuid)
   if not evt then return end
   markChan(evt.chan)
   indexDrop(evt)
+  sidecarDrop(evt)   -- else a reused slot inherits the dead event's row
 
   if evt.evType == 'note' then
     local key = seatKey(evt)

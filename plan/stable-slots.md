@@ -16,23 +16,26 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-07-26 mm: sidecar rows become state the verbs maintain (Phase 2d) (§ incremental serialise)
 - 2026-07-26 mm: sidecar texts key on their owner's slot (Phase 2c) (§ incremental serialise)
 - 2026-07-26 mm: serialise splits into buildWire + render (Phase 2b) (§ incremental serialise)
 - 2026-07-26 mm: the wire key becomes the slot (Phase 2a) (§ incremental serialise)
-- 2026-07-25 mm: chanIdx becomes one order array per channel (Phase 1c) (§ chanIdx)
 
 ## Now
 
-(empty — 2c landed: rank 3 split into 3/4/5 with passthrough at 6, and a sidecar's key is now a pure function of its owner's slot and ppq. Next up is 2d, the verb-reported key dirt; run /plan-next to promote it.)
+(empty — 2d landed: the two sidecar groups are mm state now, seated and dropped at the six sites that maintain the order arrays, and flushTake walks nothing. Its bridge probe on HAMMERKLAVIER was not run, so the ~0 `sidecars` span is argued from the code rather than measured; the span itself was kept, now bracketing a lone table constructor, and is a fair candidate for deletion at 2f. 2e — midiBlob's wire splice helpers — is next in Queued; run /plan-next to promote it.)
 
 ## Queued (current phase; one-liners)
 
-1. *(in Now)* 2c — sidecar texts key on their owner's slot; rank 3 splits into
-   3/4/5 with passthrough at 6; `buildWire` takes grouped texts.
-2. 2d — the three verb sites (`mm:add`, `mm:assign`, `mm:delete`) report key
-   dirt beside `markChan`, for notes, ccs **and** their sidecar texts under one
-   discipline; splices maintain the key array and re-pack only the touched
-   chunk and its successor; slot-cap guard falls back to full regen. The texts
-   groups become mm state the verbs maintain, so `sidecars` 2.1ms → ~0 lands
-   here too. Blob-equality pin: incremental vs full regen after gesture storms
-   on both rebuild fixtures.
+1. *(in Now)* 2d — the sidecar groups become persistent slot-keyed mm state,
+   seated beside `indexPut`/`indexDrop`; `flushTake` stops walking.
+2. 2e — midiBlob gains the wire splice helpers: drop a key, insert a key,
+   re-pack the touched chunk and its successor (their `dppq` moved). Pure, and
+   pinned key-for-key against a full `buildWire` regen.
+3. 2f — the three verb sites (`mm:add`, `mm:assign`, `mm:delete`) report key
+   dirt beside `markChan`, for notes, ccs **and** their sidecars under one
+   discipline; `flushTake` applies the dirt to the persistent `wire` instead of
+   rebuilding it; slot-cap guard falls back to full regen. Blob-equality pin:
+   incremental vs full regen after gesture storms on both rebuild fixtures —
+   with 2d's caveat, that a cc row never written reloads as a legitimately plain
+   cc, so a missed seat reproduces itself and needs a direct row count beside it.
