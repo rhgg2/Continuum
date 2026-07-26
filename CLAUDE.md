@@ -77,12 +77,20 @@ are good models.
 ## Programme plans
 
 Big programmes compile their next steps out of `design/<doc>.md` into
-`plan/<programme>.md`; `plan/CURRENT` names the live one. For
-implementation work, read the plan file first — it carries what just
-landed and a self-contained brief for what's next, so you rarely need
-the design doc. `/plan-next` promotes the next queued item into that
-brief; the commit skill's pre-agent steps handle landing bookkeeping.
-Design docs stay pure model.
+`plan/<programme>.md`. Work too big for a couple of commits but too
+small for a design doc gets the same plan file with no Phases section,
+compiled from conversation and standing as its own record.
+`plan/CURRENT` is a stack, newest first — the top line is live and the
+rest are parked, so a one-off can push in front of a running programme
+and pop back off when it closes.
+
+For implementation work, read the plan file first — it carries what
+just landed and a self-contained brief for what's next, so you rarely
+need the design doc. One command per granularity: `/plan-new` opens a
+plan, `/plan-phase` splits the in-flight phase into commit-sized queued
+items, `/plan-next` promotes the top one into the brief, `/plan-close`
+archives and pops. The commit skill's pre-agent steps handle landing
+bookkeeping. Design docs stay pure model.
 
 ## How to work
 

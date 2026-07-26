@@ -8,19 +8,19 @@ into the plan, so implementation sessions read the plan alone.
 1. The live plan arrives injected by the `UserPromptExpansion` hook —
    work from that rather than re-reading it. (A plan over the 10k
    context cap arrives as a file path and a preview; read the path.)
-   The plan file is a working buffer. Phases is the human's map; it changes
-   only when the roadmap does. Queued holds the incomplete items of
-   the current phase only. Now is the next item to implement. Landed
-   prunes below ~4 entries — git and the design doc's dated notes are
-   the permanent record.
-2. First, some housekeeping on the Queued section. This is a partial
-   buffer of the in-flight phase, so an empty queue means one of two
-   things:
-   - the phase still has unqueued work: so refill Queued with
-     commit-sized one-liners from that phase's design-doc section;
-   - the phase is complete with its last item landed: so mark the
-     phase landed in Phases, move the ← in-flight marker to the next
-     phase, and seed Queued from its section.
+   The plan file is a working buffer. Phases, where the plan has one,
+   is the human's map; it changes only when the roadmap does. Queued
+   holds the incomplete items of the in-flight phase, or in a phaseless
+   one-off the remainder of the job. Now is the next item to implement.
+   Landed prunes below ~4 entries — git and the design doc's dated
+   notes are the permanent record.
+2. Queued is filled by `/plan-phase` (programme) or by `/plan-new`
+   (one-off); this command never refills it, because sizing a whole
+   phase and compiling one brief are different kinds of reading. So an
+   empty Queued means the level above needs to run: point at
+   `/plan-phase` if the plan has Phases, or at `/plan-close` if it
+   doesn't — a phaseless plan with an empty queue is finished work.
+   Either way, say so and stop.
 3. With Queued non-empty, the goal is to promote its top entry to the
    Now section. Size check — two duties, before promoting:
    - **Commit-sized**: one landable change, spec included. An item

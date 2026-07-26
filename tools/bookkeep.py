@@ -93,7 +93,10 @@ def apply_land(date, spec):
             die(f"land needs '{key}'")
     if not PLAN_CURRENT.exists():
         die("plan/CURRENT missing — no live plan to land against")
-    name = PLAN_CURRENT.read_text().strip()
+    # CURRENT is a stack, newest first; the top non-blank line is the live plan.
+    name = next((ln.strip() for ln in PLAN_CURRENT.read_text().splitlines() if ln.strip()), "")
+    if not name:
+        die("plan/CURRENT is empty — no live plan to land against")
     plan_path = REPO / "plan" / name
     if not plan_path.exists():
         die(f"plan/CURRENT points at {name!r}, which does not exist")

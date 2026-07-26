@@ -13,10 +13,14 @@ repo="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"
 
 commandName=$(jq -r '.command_name // empty' 2>/dev/null)
 
+# plan/CURRENT is a stack, newest first: the top line is the live plan and the
+# lines under it are parked, waiting for a /plan-close to pop back to them.
+liveplanName() { grep -m1 -v '^[[:space:]]*$' plan/CURRENT 2>/dev/null | tr -d '[:space:]'; }
+
 emitLivePlan() {
   local name planPath
   [[ -f plan/CURRENT ]] || { echo "plan/CURRENT is missing — there is no live plan."; return; }
-  name=$(tr -d '[:space:]' < plan/CURRENT)
+  name=$(liveplanName)
   [[ -n $name ]] || { echo "plan/CURRENT is empty — there is no live plan."; return; }
   planPath="plan/$name"
   [[ -f $planPath ]] || { echo "plan/CURRENT names $name, which does not exist."; return; }
@@ -24,6 +28,16 @@ emitLivePlan() {
   echo "The live plan ($planPath), injected by hook — it is current, so don't re-read it:"
   echo
   cat "$planPath"
+}
+
+emitPlanShelf() {
+  echo "Plan shelf, injected by hook — it is current, so don't re-list these:"
+  echo
+  echo '$ cat plan/CURRENT   (stack, newest first; the top line is live)'
+  [[ -f plan/CURRENT ]] && cat plan/CURRENT || echo '(missing)'
+  echo
+  echo '$ ls -1 plan plan/archive design'
+  ls -1 plan plan/archive design 2>/dev/null
 }
 
 emitTreeState() {
@@ -37,8 +51,10 @@ emitTreeState() {
 }
 
 case "$commandName" in
-  plan-next|implement-next) emitLivePlan ;;
-  commit)                   emitTreeState ;;
+  plan-next|implement-next|plan-phase) emitLivePlan ;;
+  plan-new)                            emitPlanShelf ;;
+  plan-close)                          emitLivePlan; echo; emitPlanShelf ;;
+  commit)                              emitTreeState ;;
 esac
 
 exit 0
