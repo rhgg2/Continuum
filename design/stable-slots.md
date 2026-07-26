@@ -212,10 +212,16 @@ Constraints and wrinkles:
   peaks ~9.7k ccs; 5× headroom). A guard falls back to full regeneration
   beyond the cap.
 - **texts.** `flushTake` rebuilds the texts array fresh each flush, so
-  text indices are never stable. Sidecar rows are already cached per event
-  (`sidecarCache`); key sidecar texts by their **owner's slot** — streams
-  are rank-disjoint, so ids may repeat across ranks. `carriedTexts` and
-  passthrough are static between loads.
+  text indices are never stable — and the key is that array's index, so any
+  add, delete or ppq move shifts every downstream text key. Sidecar rows are
+  already cached per event (`sidecarCache`); key sidecar texts by their
+  **owner's slot**. One rank can't hold them all once they are slot-keyed,
+  because rank 3 mixes note sidecars, cc sidecars and carried texts and the
+  two streams' slots collide. So rank 3 splits four ways: 3 note sidecars
+  (note slot), 4 cc sidecars (cc slot), 5 carried texts (array index, static
+  between loads), 6 passthrough (likewise static). That reproduces today's
+  coincident ordering, the flat array having laid the four groups out in that
+  same sequence.
 - **The full-regen path stays.** Today's serialise remains the
   load/bulk/guard path; the incremental path must produce a byte-identical
   blob. The `seenOnset` collision backstop runs only on the full path.
@@ -305,6 +311,13 @@ fixture. Going lower is interval-dirt's job (reload) and REAPER's
 ## Open questions
 
 None outstanding.
+
+Settled 2026-07-26: phase 2's last two items swap. Stable text keys land
+before verb-reported key dirt, because rank-3 keys are indices into an array
+rebuilt per flush, so the dirt spine would fall back to full regeneration on
+exactly the add/delete/move gestures it exists to make cheap. The same
+settlement takes the rank split and the grouped `texts` argument to
+`buildWire` (§ Phase 2, texts).
 
 Settled 2026-07-25 by measurement: chanIdx takes option 1, per-bucket order
 arrays maintained by the verbs (§ chanIdx).

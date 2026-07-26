@@ -1,4 +1,4 @@
-@spec mm_blob_wide_spec  src=tests/specs/mm_blob_wide_spec.lua  loc=100  sha=8cc9255  cases=6
+@spec mm_blob_wide_spec  src=tests/specs/mm_blob_wide_spec.lua  loc=101  sha=6566d9f  cases=6
 @exercises midiBlob (midiBlob)
 @surface   midiBlob.render, midiBlob.buildWire, midiBlob.parse
 
@@ -12,34 +12,37 @@
   @fn wireCCs(blob)  @ 11-23
       -- Raw channel-voice CC events straight off the blob, no coalescing.
   @fn ccOf(extra)  @ 25-29
-  @fn ser(notes, ccs, texts, passthrough)  @ 31-33
+  @fn ser(notes, ccs, texts, passthrough)  @ 31-34
 
 # Cases
-  @case 'fractional cc in 0..31 serialises to an MSB(shaped)/LSB(step) wire pair'  [pure]  @ 37-47
-  @case 'the wire pair coalesces back to one fractional record (round-trip)'  [pure]  @ 51-57
-  @case 'carrier-style value (14-bit around 8192) round-trips exactly'  [pure]  @ 61-67
-  @case 'integer cc in 0..31 stays a plain 7-bit CC: one wire event'  [pure]  @ 71-78
-  @case 'a lone LSB-range code (>= 32) with no MSB partner stays independent'  [pure]  @ 82-88
-  @case 'bezier wide cc keeps its tension on the MSB across the round-trip'  [pure]  @ 92-98
+  @case 'fractional cc in 0..31 serialises to an MSB(shaped)/LSB(step) wire pair'  [pure]  @ 38-48
+  @case 'the wire pair coalesces back to one fractional record (round-trip)'  [pure]  @ 52-58
+  @case 'carrier-style value (14-bit around 8192) round-trips exactly'  [pure]  @ 62-68
+  @case 'integer cc in 0..31 stays a plain 7-bit CC: one wire event'  [pure]  @ 72-79
+  @case 'a lone LSB-range code (>= 32) with no MSB partner stays independent'  [pure]  @ 83-89
+  @case 'bezier wide cc keeps its tension on the MSB across the round-trip'  [pure]  @ 93-99
 
 # Uses (outbound edges)
-  @use call midiBlob.render  @ 32
-  @use call midiBlob.buildWire  @ 32
-  @use call midiBlob.parse  @ 54,64,76,85,95
+  @use call midiBlob.render  @ 33
+  @use call midiBlob.buildWire  @ 33
+  @use call midiBlob.parse  @ 55,65,77,86,96
 
 # Fields (r read / w write incl. constructor keys)
-  @field r cc  @ 21,42,44,86
-  @field w cc  @ 18,27,84
+  @field w carried  @ 32
+  @field r cc  @ 21,43,45,87
+  @field w cc  @ 18,27,85
+  @field w ccSidecars  @ 32
   @field w chan  @ 27
   @field w evType  @ 27
   @field w idx  @ 27
-  @field w name  @ 37,51,61,71,82,92
-  @field r ppq  @ 21,46
+  @field w name  @ 38,52,62,72,83,93
+  @field w noteSidecars  @ 32
+  @field r ppq  @ 21,47
   @field w ppq  @ 18,27
-  @field w run  @ 38,52,62,72,83,93
-  @field r shape  @ 43,45,96
-  @field w shape  @ 18,27,63,73,84,94
-  @field r tension  @ 97
-  @field w tension  @ 94
-  @field r val  @ 42,44,66,77,87
-  @field w val  @ 18,27,63,73,84
+  @field w run  @ 39,53,63,73,84,94
+  @field r shape  @ 44,46,97
+  @field w shape  @ 18,27,64,74,85,95
+  @field r tension  @ 98
+  @field w tension  @ 95
+  @field r val  @ 43,45,67,78,88
+  @field w val  @ 18,27,64,74,85

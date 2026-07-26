@@ -483,15 +483,22 @@ end
 local function flushTake()
   if not take then return end
   perf.start('sidecars')
-  local texts = {}
-  -- ppq order, not array order: a sidecar's array position is part of its wire key.
-  for _, note in ordered(notes, noteOrder) do
-    if note.uuid then util.add(texts, noteSidecarEntry(note)) end
+  -- Keyed by the owner's slot, so these two tables are sparse and a sidecar's wire key
+  -- no longer moves when something else in the take does.
+  local noteSidecars, ccSidecars, sidecarCount = {}, {}, 0
+  for slot, note in ordered(notes, noteOrder) do
+    if note.uuid then
+      noteSidecars[slot] = noteSidecarEntry(note)
+      sidecarCount = sidecarCount + 1
+    end
   end
-  for _, cc in ordered(ccs, ccOrder) do
-    if not cc.plain then util.add(texts, ccSidecarEntry(cc)) end
+  for slot, cc in ordered(ccs, ccOrder) do
+    if not cc.plain then
+      ccSidecars[slot] = ccSidecarEntry(cc)
+      sidecarCount = sidecarCount + 1
+    end
   end
-  for _, carried in ipairs(carriedTexts) do util.add(texts, carried) end
+  local texts = { noteSidecars = noteSidecars, ccSidecars = ccSidecars, carried = carriedTexts }
   perf.stop('sidecars')
 
   local source   = reaper.GetMediaItemTake_Source(take)
@@ -499,7 +506,8 @@ local function flushTake()
   local endPpq   = math.floor(reaper.GetMediaSourceLength(source) * ppqPerQN + 0.5)
 
   perf.start('serialise')
-  -- The live tables, unsnapshotted: buildWire keys on the slot, so it reads them sparse.
+  -- The live tables, unsnapshotted: buildWire keys on the slot, so it reads notes, ccs
+  -- and both sidecar groups sparse.
   wire = midiBlob.buildWire(notes, ccs, texts, carriedPassthrough)
   local blob = midiBlob.render(wire, endPpq)
   perf.stop('serialise')
@@ -515,7 +523,8 @@ local function flushTake()
   reaper.MarkTrackItemsDirty(reaper.GetMediaItemTrack(item), item)
   perf.stop('setEvts')
 
-  perf.count('notes', #noteOrder); perf.count('ccs', #ccOrder); perf.count('texts', #texts)
+  perf.count('notes', #noteOrder); perf.count('ccs', #ccOrder)
+  perf.count('texts', sidecarCount + #carriedTexts)
   dirty = false
   -- Stash REAPER's canonical bytes (post-Sort), not the ones we handed it: the gate in load
   -- compares the take against these, and a re-encode would read as an external mutation.

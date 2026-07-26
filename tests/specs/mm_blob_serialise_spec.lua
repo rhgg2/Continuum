@@ -10,10 +10,16 @@ local t = require('support')
 local midiBlob = require('midiBlob')
 local fixtures = require('fixtures.midi_blobs')
 
+-- buildWire wants texts grouped by rank; a fixture's texts are one flat list, and
+-- a parsed blob's sidecars come back indistinguishable from carried ones.
+local function grouped(texts)
+  return { noteSidecars = {}, ccSidecars = {}, carried = texts or {} }
+end
+
 -- Most cases want bytes out of records, not the wire state in between; name the
 -- composition once so each case reads as the round trip it is testing.
 local function ser(notes, ccs, texts, passthrough, endPpq)
-  return midiBlob.render(midiBlob.buildWire(notes, ccs, texts, passthrough), endPpq)
+  return midiBlob.render(midiBlob.buildWire(notes, ccs, grouped(texts), passthrough), endPpq)
 end
 
 local tests = {}
@@ -95,8 +101,45 @@ tests[#tests + 1] = {
   run = function()
     local f = fixtures[1]
     local _, _, _, passthrough = midiBlob.parse(f.blob)
-    local wire = midiBlob.buildWire(f.notes, f.ccs, f.texts, passthrough)
+    local wire = midiBlob.buildWire(f.notes, f.ccs, grouped(f.texts), passthrough)
     t.eq(midiBlob.render(wire, 960), midiBlob.render(wire, 960), 'held wire state survives a render')
+  end,
+}
+
+-- A sidecar's key is a pure function of its owner's slot and ppq, which is what
+-- lets an incremental flush splice one in. Under the old dense text array an
+-- insert anywhere earlier renumbered every sidecar after it.
+local function keysOfRank(wire, rank)
+  local out = {}
+  for _, kv in ipairs(wire.keys) do
+    if (kv // 100000) % 10 == rank then out[#out + 1] = kv end
+  end
+  return out
+end
+
+tests[#tests + 1] = {
+  name = 'note sidecar keys survive an insert at an earlier ppq',
+  run = function()
+    local function noteAt(ppq)
+      return { evType = 'note', ppq = ppq, endppq = ppq + 120, chan = 1, pitch = 60, vel = 100 }
+    end
+    local function sidecarAt(ppq) return { eventtype = 15, ppq = ppq, msg = 'NOTE uuid' } end
+
+    local notes = { noteAt(480), noteAt(960) }
+    local texts = grouped()
+    texts.noteSidecars = { sidecarAt(480), sidecarAt(960) }
+    local before = midiBlob.buildWire(notes, {}, texts, {})
+
+    notes[3], texts.noteSidecars[3] = noteAt(0), sidecarAt(0)
+    local after = midiBlob.buildWire(notes, {}, texts, {})
+
+    local kBefore, kAfter = keysOfRank(before, 3), keysOfRank(after, 3)
+    t.eq(#kAfter, #kBefore + 1, 'the added sidecar contributes exactly one rank-3 key')
+    local present = {}
+    for _, kv in ipairs(kAfter) do present[kv] = true end
+    for i, kv in ipairs(kBefore) do
+      t.eq(present[kv], true, ('sidecar %d keeps its key across the earlier insert'):format(i))
+    end
   end,
 }
 

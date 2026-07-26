@@ -138,7 +138,8 @@ local function ccWire(c)
 end
 
 --shape: wire = { keys = { [i] = ppq*1e6 + rank*1e5 + seq2 }, chunks = { [i] = packed bytes for keys[i] } }  -- keys ascending and dense 1..n, chunks index-parallel
---shape: buildWire(notes, ccs, texts, passthrough) -> wire   -- notes/ccs keyed by slot (a dense array is the case slot==index)
+--shape: rank = 0 note-off | 1 note-on | 2 cc (odd seq2 = its CCBZ rider) | 3 note sidecar | 4 cc sidecar | 5 carried text | 6 passthrough
+--shape: buildWire(notes, ccs, texts, passthrough) -> wire   -- notes/ccs keyed by slot; texts = { noteSidecars = [noteSlot], ccSidecars = [ccSlot], carried = [i] }
 --shape: render(wire, endPpq?) -> blob   -- concat plus the EOT tail; endPpq places the tail
 --invariant: a note/cc slot stays under 5e4: seq2 = slot*2 shares the key's 1e5 digit band with rank
 --invariant: parse(render(buildWire(x)))==x; coincident events may reorder, per-type lists intact
@@ -177,6 +178,16 @@ local function textRow(x)
     chunkCache[x] = row
   end
   return row
+end
+
+local function textChunk(x, dppq)
+  local row = textRow(x)
+  if row.d ~= dppq then
+    row.d, row.chunk = dppq, string.pack('i4Bs4', dppq, 0, x.eventtype == -1
+      and ('\xF0' .. x.msg .. '\xF7')
+      or  ('\xFF' .. string.char(x.eventtype) .. x.msg))
+  end
+  return row.chunk
 end
 
 -- Decodes a packed sort key to its wire chunk(s): rank digit picks the stream, seq//2
@@ -225,15 +236,12 @@ local function chunkOf(kv, dppq, notes, ccs, texts, passthrough)
     end
     return row.main, row.main2
   elseif rank == 3 then
-    local x   = texts[i]
-    local row = textRow(x)
-    if row.d ~= dppq then
-      row.d, row.chunk = dppq, string.pack('i4Bs4', dppq, 0, x.eventtype == -1
-        and ('\xF0' .. x.msg .. '\xF7')
-        or  ('\xFF' .. string.char(x.eventtype) .. x.msg))
-    end
-    return row.chunk
-  else
+    return textChunk(texts.noteSidecars[i], dppq)
+  elseif rank == 4 then
+    return textChunk(texts.ccSidecars[i], dppq)
+  elseif rank == 5 then
+    return textChunk(texts.carried[i], dppq)
+  elseif rank == 6 then
     local p = passthrough[i]
     return string.pack('i4Bs4', dppq, p.flags, p.msg)
   end
@@ -269,8 +277,12 @@ function midiBlob.buildWire(notes, ccs, texts, passthrough)
     key(c.ppq, 2, slot * 2)
     if c.shape == 'bezier' then key(c.ppq, 2, slot * 2 + 1) end
   end
-  for i, x in ipairs(texts) do key(x.ppq, 3, i * 2) end
-  for i, p in ipairs(passthrough) do key(p.ppq, 4, i * 2) end
+  -- A sidecar rides its owner's slot, so the two groups need ranks of their own: note
+  -- slot 5 and cc slot 5 are different events and would otherwise share a key.
+  for slot, x in pairs(texts.noteSidecars) do key(x.ppq, 3, slot * 2) end
+  for slot, x in pairs(texts.ccSidecars)   do key(x.ppq, 4, slot * 2) end
+  for i, x in ipairs(texts.carried)        do key(x.ppq, 5, i * 2) end
+  for i, p in ipairs(passthrough)          do key(p.ppq, 6, i * 2) end
   perf.stop('keys')
 
   perf.start('sort')

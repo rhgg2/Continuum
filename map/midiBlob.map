@@ -1,13 +1,13 @@
-@module midiBlob  src=midiBlob.lua  loc=311  sha=3137af5  mode=namespace  self=midiBlob
+@module midiBlob  src=midiBlob.lua  loc=323  sha=6566d9f  mode=namespace  self=midiBlob
 
 # Invariants & contracts
   @invariant  idx is the 0-based REAPER per-type index; note idx counts note-ons, text idx skips CCBZ  @ 13
   @reaper  blob = repeat(i4 offset, B flags, s4 msg) + trailing 12-byte all-notes-off tail (excluded)  @ 14
   @reaper  flags bit1=muted; bits4-6=cc shape; status byte classifies; CCBZ rides FF-0F after its cc  @ 15
-  @invariant  a note/cc slot stays under 5e4: seq2 = slot*2 shares the key's 1e5 digit band with rank  @ 143
-  @invariant  parse(render(buildWire(x)))==x; coincident events may reorder, per-type lists intact  @ 144
-  @invariant  note onsets unique per (ppq,chan,pitch); collision is upstream bug, warn+write  @ 145
-  @reaper  matches MIDI_SetAllEvts format; tail at max(endPpq, last-event ppq) (default: last event)  @ 146
+  @invariant  a note/cc slot stays under 5e4: seq2 = slot*2 shares the key's 1e5 digit band with rank  @ 144
+  @invariant  parse(render(buildWire(x)))==x; coincident events may reorder, per-type lists intact  @ 145
+  @invariant  note onsets unique per (ppq,chan,pitch); collision is upstream bug, warn+write  @ 146
+  @reaper  matches MIDI_SetAllEvts format; tail at max(endPpq, last-event ppq) (default: last event)  @ 147
 
 # Shapes
   @shape  parse(blob) -> notes, ccs, texts, passthrough  @ 9
@@ -15,8 +15,9 @@
   @shape  cc = { idx, ppq, evType, chan(1..16), [cc|pitch], [val|vel], shape, [tension], [muted] }  @ 11
   @shape  text = { idx, ppq, eventtype, msg }  -- 15=notation, -1=sysex; CCBZ tension folds onto its cc  @ 12
   @shape  wire = { keys = { [i] = ppq*1e6 + rank*1e5 + seq2 }, chunks = { [i] = packed bytes for keys[i] } }  -- keys ascending and dense 1..n, chunks index-parallel  @ 140
-  @shape  buildWire(notes, ccs, texts, passthrough) -> wire   -- notes/ccs keyed by slot (a dense array is the case slot==index)  @ 141
-  @shape  render(wire, endPpq?) -> blob   -- concat plus the EOT tail; endPpq places the tail  @ 142
+  @shape  rank = 0 note-off | 1 note-on | 2 cc (odd seq2 = its CCBZ rider) | 3 note sidecar | 4 cc sidecar | 5 carried text | 6 passthrough  @ 141
+  @shape  buildWire(notes, ccs, texts, passthrough) -> wire   -- notes/ccs keyed by slot; texts = { noteSidecars = [noteSlot], ccSidecars = [ccSlot], carried = [i] }  @ 142
+  @shape  render(wire, endPpq?) -> blob   -- concat plus the EOT tail; endPpq places the tail  @ 143
 
 # Imports
   @const util = 'util'  @ 17
@@ -28,7 +29,7 @@
   @const shapeCodes, hiByEvType = {}, {}  @ 24
   @const oneDataByte = { pc = true, at = true }  @ 27   -- status + a single 7-bit data byte
   @const midiBlob = {}  @ 39
-  @const chunkCache = setmetatable({}, { __mode = 'k' })  @ 149
+  @const chunkCache = setmetatable({}, { __mode = 'k' })  @ 150
 
 # Private functions
   @fn isWideCC(c)  @ 31
@@ -40,87 +41,91 @@
   @fn ccDataBytes(c)  @ 126-131
       -- Value bytes for a cc-family record (inverse of ccValueFields).
   @fn ccWire(c)  @ 133-138
-  @fn noteRow(n)  @ 151-159
-  @fn ccRow(c)  @ 161-171
-  @fn textRow(x)  @ 173-180
-  @fn chunkOf(kv, dppq, notes, ccs, texts, passthrough)  @ 184-240
+  @fn noteRow(n)  @ 152-160
+  @fn ccRow(c)  @ 162-172
+  @fn textRow(x)  @ 174-181
+  @fn textChunk(x, dppq)  @ 183-191
+  @fn chunkOf(kv, dppq, notes, ccs, texts, passthrough)  @ 195-248
       -- Decodes a packed sort key to its wire chunk(s): rank digit picks the stream, seq//2
       -- the event's slot, an odd seq a cc's bezier CCBZ rider. Mirrors midiBlob.parse.
 
 # Public API (midiBlob.*)
   @api midiBlob.parse(blob)  @ 49-123
-  @api midiBlob.buildWire(notes, ccs, texts, passthrough)  @ 244-294
+  @api midiBlob.buildWire(notes, ccs, texts, passthrough)  @ 252-306
       -- Keys, sorts and packs the model into wire state the caller holds across flushes,
       -- so an edit can replace the chunks it touched instead of rebuilding all of them.
-  @api midiBlob.render(wire, endPpq)  @ 298-309
+  @api midiBlob.render(wire, endPpq)  @ 310-321
       -- The tail goes on as a transient last element and comes straight back off:
       -- table.concat(chunks) .. tail would copy the whole blob to add twelve bytes.
 
 # Uses (outbound edges)
-  @use call    perf.start  @ buildWire:254,276,282 render:299
-  @use call    perf.stop  @ buildWire:274,278,291 render:307
+  @use call    perf.start  @ buildWire:262,288,294 render:311
+  @use call    perf.stop  @ buildWire:286,290,303 render:319
   @use call    util.add  @ parse:70,83,89,93,96,117
   @use call    util.clamp  @ splitWide:36
-  @use call    util.print  @ buildWire:261
+  @use call    util.print  @ buildWire:269
   @use call    util.round  @ splitWide:34
   @use require perf  @ 18
   @use require util  @ 17
 
 # Fields (r read / w write incl. constructor keys)
-  @field w __mode  @ 149
+  @field w __mode  @ 150
   @field w at  @ 27
-  @field w buildWire  @ buildWire:244
-  @field r bz  @ chunkOf:207,211
-  @field w bz  @ chunkOf:208
-  @field r cc  @ isWideCC:31 parse:104,107,108 ccDataBytes:128 ccRow:163,166 chunkOf:220,221
-  @field w cc  @ ccValueFields:44 ccRow:166
-  @field r chan  @ parse:104,108 ccWire:134 noteRow:153,155 ccRow:163,166 chunkOf:192,200,218
-  @field r chan  @ buildWire:259,262
-  @field w chan  @ parse:68,79 noteRow:155 ccRow:166
-  @field r chunk  @ chunkOf:235
-  @field w chunk  @ chunkOf:231
-  @field r chunks  @ render:300
-  @field w chunks  @ buildWire:293
-  @field r d  @ chunkOf:230,231
-  @field r endppq  @ buildWire:266
+  @field w buildWire  @ buildWire:252
+  @field r bz  @ chunkOf:218,222
+  @field w bz  @ chunkOf:219
+  @field r carried  @ chunkOf:243 buildWire:284
+  @field r cc  @ isWideCC:31 parse:104,107,108 ccDataBytes:128 ccRow:164,167 chunkOf:231,232
+  @field w cc  @ ccValueFields:44 ccRow:167
+  @field r ccSidecars  @ chunkOf:241 buildWire:283
+  @field r chan  @ parse:104,108 ccWire:134 noteRow:154,156 ccRow:164,167 chunkOf:203,211,229
+  @field r chan  @ buildWire:267,270
+  @field w chan  @ parse:68,79 noteRow:156 ccRow:167
+  @field r chunk  @ textChunk:190
+  @field w chunk  @ textChunk:186
+  @field r chunks  @ render:312
+  @field w chunks  @ buildWire:305
+  @field r d  @ textChunk:185,186
+  @field r endppq  @ buildWire:274
   @field w endppq  @ parse:67,76
-  @field r evType  @ isWideCC:31 parse:104,107 ccDataBytes:127,128,129 ccWire:134,136 ccRow:163,166
-  @field w evType  @ parse:67,79 ccRow:166
-  @field r eventtype  @ textRow:175,176 chunkOf:231,233
-  @field w eventtype  @ parse:89,93 textRow:176
-  @field r flags  @ chunkOf:238
+  @field r evType  @ isWideCC:31 parse:104,107 ccDataBytes:127,128,129 ccWire:134,136 ccRow:164,167
+  @field w evType  @ parse:67,79 ccRow:167
+  @field r eventtype  @ textRow:176,177 textChunk:186,188
+  @field w eventtype  @ parse:89,93 textRow:177
+  @field r flags  @ chunkOf:246
   @field w flags  @ parse:96
   @field w idx  @ parse:67,79,89,93,118
-  @field r keys  @ render:300
-  @field w keys  @ buildWire:293
-  @field r main  @ chunkOf:223,226
-  @field w main  @ chunkOf:220
-  @field r main2  @ chunkOf:226
-  @field w main2  @ chunkOf:221,223
-  @field r mainD  @ chunkOf:213
-  @field w mainD  @ chunkOf:214
-  @field r msg  @ textRow:175,176 chunkOf:232,233,238
-  @field w msg  @ parse:89,93,96 textRow:176
-  @field r muted  @ noteRow:154,155 ccRow:165,167 chunkOf:191,215,220
-  @field w muted  @ parse:68,80 noteRow:155 ccRow:167
-  @field r off  @ chunkOf:202
-  @field w off  @ chunkOf:199
-  @field r offD  @ chunkOf:198,199
-  @field r on  @ chunkOf:194
-  @field w on  @ chunkOf:191
-  @field r onD  @ chunkOf:190,191
+  @field r keys  @ render:312
+  @field w keys  @ buildWire:305
+  @field r main  @ chunkOf:234,237
+  @field w main  @ chunkOf:231
+  @field r main2  @ chunkOf:237
+  @field w main2  @ chunkOf:232,234
+  @field r mainD  @ chunkOf:224
+  @field w mainD  @ chunkOf:225
+  @field r msg  @ textRow:176,177 textChunk:187,188 chunkOf:246
+  @field w msg  @ parse:89,93,96 textRow:177
+  @field r muted  @ noteRow:155,156 ccRow:166,168 chunkOf:202,226,231
+  @field w muted  @ parse:68,80 noteRow:156 ccRow:168
+  @field r noteSidecars  @ chunkOf:239 buildWire:282
+  @field r off  @ chunkOf:213
+  @field w off  @ chunkOf:210
+  @field r offD  @ chunkOf:209,210
+  @field r on  @ chunkOf:205
+  @field w on  @ chunkOf:202
+  @field r onD  @ chunkOf:201,202
   @field w parse  @ parse:49
   @field w pc  @ 27
-  @field r pitch  @ ccDataBytes:127 noteRow:153,155 ccRow:164,166 chunkOf:192,200 buildWire:259,262
-  @field w pitch  @ ccValueFields:43 parse:68 noteRow:155 ccRow:166
-  @field r ppq  @ parse:104,108 buildWire:259,262,265,269,270,272,273
+  @field r pitch  @ ccDataBytes:127 noteRow:154,156 ccRow:165,167 chunkOf:203,211 buildWire:267,270
+  @field w pitch  @ ccValueFields:43 parse:68 noteRow:156 ccRow:167
+  @field r ppq  @ parse:104,108 buildWire:267,270,273,277,278,282,283,284,285
   @field w ppq  @ parse:67,79,89,93,96
-  @field w render  @ render:298
-  @field r shape  @ parse:87 ccRow:165,167 chunkOf:215 buildWire:270
-  @field w shape  @ parse:80 ccRow:167
-  @field r tension  @ ccRow:165,167 chunkOf:209
-  @field w tension  @ parse:87 ccRow:167
-  @field r val  @ isWideCC:31 parse:110 ccDataBytes:128,129,130 ccRow:164,166 chunkOf:217
-  @field w val  @ ccValueFields:44,45,46 parse:110 ccRow:166
-  @field r vel  @ ccDataBytes:127 noteRow:154,155 ccRow:164,167 chunkOf:192
-  @field w vel  @ ccValueFields:43 parse:68 noteRow:155 ccRow:167
+  @field w render  @ render:310
+  @field r shape  @ parse:87 ccRow:166,168 chunkOf:226 buildWire:278
+  @field w shape  @ parse:80 ccRow:168
+  @field r tension  @ ccRow:166,168 chunkOf:220
+  @field w tension  @ parse:87 ccRow:168
+  @field r val  @ isWideCC:31 parse:110 ccDataBytes:128,129,130 ccRow:165,167 chunkOf:228
+  @field w val  @ ccValueFields:44,45,46 parse:110 ccRow:167
+  @field r vel  @ ccDataBytes:127 noteRow:155,156 ccRow:165,168 chunkOf:203
+  @field w vel  @ ccValueFields:43 parse:68 noteRow:156 ccRow:168

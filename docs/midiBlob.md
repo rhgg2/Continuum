@@ -23,8 +23,12 @@ The key packs as `ppq*1e6 + rank*1e5 + seq2`. `ppq` is bounded below 2^31 by the
 reserved for a bezier tail so its CCBZ rider sorts immediately after its parent
 cc at the same ppq/rank. `chunkOf` inverts the packing: `rank = (kv // 1e5) % 10`
 selects the stream, `(kv % 1e5) // 2` the slot, and an odd `seq2` marks the rider.
-Texts (rank 3) and passthrough (rank 4) are still dense arrays rebuilt per flush,
-so for those two the slot is just the array index.
+Ranks separate the streams and settle the order of events sharing a ppq: 0
+note-off, 1 note-on, 2 cc (an odd `seq2` marking its CCBZ rider), 3 note sidecar,
+4 cc sidecar, 5 carried text, 6 passthrough. The sidecars take a rank each
+because each keys on its *owner's* slot, and note slot 5 is not cc slot 5 — one
+shared text rank would collide. Carried texts and passthrough are still dense
+arrays rebuilt per flush, so for those two the slot is just the array index.
 
 The split into two functions is what lets the wire state outlive the flush: mm
 holds the `keys` and `chunks` arrays, so an edit can splice both and re-pack only
@@ -43,6 +47,13 @@ A slot names one event for as long as it lives (see `docs/midiManager.md` §
 Stable slots), so a slot key survives a flush — the precondition for holding the
 key array across flushes and splicing only what an edit touched. It also lets mm
 hand `buildWire` its live sparse tables directly; `buildWire` never mutates them.
+
+A sidecar text rides its owner's slot for the same reason, and this is where the
+argument bites hardest: a sidecar's own array position never was stable, because
+`flushTake` rebuilds the list every flush. Under a dense text key one note added
+anywhere renumbered every sidecar after it — up to ~10k of them on a dense take —
+so the incremental path would have fallen back to full regeneration on exactly
+the add/delete/move gestures it exists to make cheap.
 
 Two consequences worth knowing. The key's digit banding puts a hard bound on the
 slot: `seq2 = slot*2` shares the 1e5 band with `rank`, so a slot must stay under

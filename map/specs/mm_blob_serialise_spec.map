@@ -1,4 +1,4 @@
-@spec mm_blob_serialise_spec  src=tests/specs/mm_blob_serialise_spec.lua  loc=103  sha=c1de112  cases=5
+@spec mm_blob_serialise_spec  src=tests/specs/mm_blob_serialise_spec.lua  loc=146  sha=6566d9f  cases=6
 @exercises midiBlob (midiBlob)
 @surface   midiBlob.render, midiBlob.buildWire, midiBlob.parse
 
@@ -12,40 +12,55 @@
   lossless.
 
 # Helpers
-  @fn ser(notes, ccs, texts, passthrough, endPpq)  @ 15-17
+  @fn grouped(texts)  @ 15-17
+      -- buildWire wants texts grouped by rank; a fixture's texts are one flat list, and
+      -- a parsed blob's sidecars come back indistinguishable from carried ones.
+  @fn ser(notes, ccs, texts, passthrough, endPpq)  @ 21-23
       -- Most cases want bytes out of records, not the wire state in between; name the
       -- composition once so each case reads as the round trip it is testing.
-  @fn tailPpq(blob)  @ 50-57
+  @fn tailPpq(blob)  @ 56-63
       -- The trailing all-notes-off marker carries the take length (EOT); endPpq
       -- places it past the last event so a whole-take rewrite never shrinks the take.
+  @fn keysOfRank(wire, rank)  @ 112-118
+      -- A sidecar's key is a pure function of its owner's slot and ppq, which is what
+      -- lets an incremental flush splice one in. Under the old dense text array an
+      -- insert anywhere earlier renumbered every sidecar after it.
 
 # Cases
-  @case 'records survive serialise -> parse:  ..'  [pure]  @ 23-31
-  @case 'unmodelled events round-trip through passthrough'  [pure]  @ 36-45
-  @case 'colliding note onsets warn loudly and still serialise'  [pure]  @ 62-78
-  @case 'endPpq positions the EOT tail; never shrinks past the last event'  [pure]  @ 82-88
-  @case 'render twice over one wire yields identical bytes'  [pure]  @ 94-100
+  @case 'records survive serialise -> parse:  ..'  [pure]  @ 29-37
+  @case 'unmodelled events round-trip through passthrough'  [pure]  @ 42-51
+  @case 'colliding note onsets warn loudly and still serialise'  [pure]  @ 68-84
+  @case 'endPpq positions the EOT tail; never shrinks past the last event'  [pure]  @ 88-94
+  @case 'render twice over one wire yields identical bytes'  [pure]  @ 100-106
+  @case 'note sidecar keys survive an insert at an earlier ppq'  [pure]  @ 121-143
 
 # Uses (outbound edges)
-  @use call midiBlob.render  @ 16,99
-  @use call midiBlob.buildWire  @ 16,98
-  @use call midiBlob.parse  @ 25,27,40,43,76,97
+  @use call midiBlob.render  @ 22,105
+  @use call midiBlob.buildWire  @ 22,104,131,134
+  @use call midiBlob.parse  @ 31,33,46,49,82,103
 
 # Fields (r read / w write incl. constructor keys)
-  @field r ShowConsoleMsg  @ 69
-  @field w ShowConsoleMsg  @ 70,74
-  @field r blob  @ 25,97
-  @field r ccs  @ 26,29,98
-  @field w chan  @ 65,66,84
-  @field w endppq  @ 65,66,84
-  @field w evType  @ 65,66,84
-  @field r msg  @ 42
-  @field r name  @ 23,28,29,30
-  @field w name  @ 23,36,62,82,94
-  @field r notes  @ 26,28,98
-  @field w pitch  @ 65,66,84
-  @field w ppq  @ 65,66,84
-  @field r reaper  @ 69,70,74
-  @field w run  @ 24,37,63,83,95
-  @field r texts  @ 26,30,98
-  @field w vel  @ 65,66,84
+  @field r ShowConsoleMsg  @ 75
+  @field w ShowConsoleMsg  @ 76,80
+  @field r blob  @ 31,103
+  @field w carried  @ 16
+  @field w ccSidecars  @ 16
+  @field r ccs  @ 32,35,104
+  @field w chan  @ 71,72,90,124
+  @field w endppq  @ 71,72,90,124
+  @field w evType  @ 71,72,90,124
+  @field w eventtype  @ 126
+  @field r keys  @ 114
+  @field r msg  @ 48
+  @field w msg  @ 126
+  @field r name  @ 29,34,35,36
+  @field w name  @ 29,42,68,88,100,121
+  @field r noteSidecars  @ 133
+  @field w noteSidecars  @ 16,130
+  @field r notes  @ 32,34,104
+  @field w pitch  @ 71,72,90,124
+  @field w ppq  @ 71,72,90,124,126
+  @field r reaper  @ 75,76,80
+  @field w run  @ 30,43,69,89,101,122
+  @field r texts  @ 32,36,104
+  @field w vel  @ 71,72,90,124

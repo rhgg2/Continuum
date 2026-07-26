@@ -29,7 +29,8 @@ local function ccOf(extra)
 end
 
 local function ser(notes, ccs, texts, passthrough)
-  return midiBlob.render(midiBlob.buildWire(notes, ccs, texts, passthrough))
+  local grouped = { noteSidecars = {}, ccSidecars = {}, carried = texts or {} }
+  return midiBlob.render(midiBlob.buildWire(notes, ccs, grouped, passthrough))
 end
 
 return {
