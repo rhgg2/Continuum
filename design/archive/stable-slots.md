@@ -1,11 +1,11 @@
 # stable slots — the write side stops paying O(take) per keystroke
 
-> Working design doc, **phase 2 in flight** — 0 and 1 landed 2026-07-25,
-> 2b–2g 2026-07-26, exit measurement taken (§ Measured after phase 2). Sibling to `interval-dirt`, which
+> **Complete, archived 2026-07-26** — phases 0 and 1 landed 2026-07-25, 2b–2g
+> 2026-07-26, exit measurement taken (§ Measured after phase 2). Sibling to `interval-dirt`, which
 > attacked the derivation half of a flush (`reload`) and closed 2026-07-21
 > (`design/archive/interval-dirt-closing.md`); this one attacks the write
 > half (`rebuild` + `serialise`). Phase 2 here depends on phase 1 here.
-> Plan: `plan/stable-slots.md`.
+> Plan: `plan/archive/stable-slots.md`.
 
 ## Status at a glance
 

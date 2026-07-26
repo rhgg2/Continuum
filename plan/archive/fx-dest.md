@@ -3,6 +3,7 @@
 > No design doc: this programme was designed in conversation
 > (2026-07-25) and this file is the record. Decisions below are
 > settled; if one needs reopening, do it here and say so.
+> Complete, closed 2026-07-26 — all three commits landed 2026-07-25.
 
 ## The problem
 
@@ -230,7 +231,7 @@ hardcoded `display = 'bipolar'` stands.
 ## Commits
 
 1a. **dest becomes a param** — the mechanism, production-only. See
-   Now.
+   § Commit 1a.
 1b. **The merge.** `sine` = vibrato ∪ autopan (`dests = 'any'`,
    fields `dest, period, depth, onset`), `autopan` deleted, `lfo`
    relabelled `Curve LFO`, `gridPane`'s `FX_GLYPH` key, and the
@@ -503,5 +504,3 @@ Supporting facts:
   second per-dest reference (D13).
 - Driving `curveDisplay`'s unipolar branch from the dest (D14); it
   waits on a kind whose curve is an envelope from rest.
-- `plan/CURRENT` still names `fx-patterns`; switching it is a separate
-  call.
