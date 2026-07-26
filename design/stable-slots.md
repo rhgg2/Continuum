@@ -1,7 +1,7 @@
 # stable slots — the write side stops paying O(take) per keystroke
 
 > Working design doc, **phase 2 in flight** — 0 and 1 landed 2026-07-25,
-> 2b–2e 2026-07-26. Sibling to `interval-dirt`, which
+> 2b–2g 2026-07-26, exit measurement taken (§ Measured after phase 2). Sibling to `interval-dirt`, which
 > attacked the derivation half of a flush (`reload`) and closed 2026-07-21
 > (`design/archive/interval-dirt-closing.md`); this one attacks the write
 > half (`rebuild` + `serialise`). Phase 2 here depends on phase 1 here.
@@ -284,6 +284,54 @@ Untouched by this programme: reload (11.9, `place` 7.3 the crux), meta (0.7
 broken down. That remainder is the next thing worth a profile after this
 programme, not before it.
 
+### Measured after phase 2: a property edit (2026-07-26)
+
+The gesture again, because it has to be: **one-note velocity edit** on
+HAMMERKLAVIER (8438 notes, 1685 ccs, 10174 texts) — the same trace the
+§ The problem table was taken from, so the columns are a true pair. Two warm
+toggles, `collectgarbage('collect')`, then three measured flushes; the spread
+across the three was 0.1ms on every span.
+
+| span | 2026-07-25 | now | |
+|---|---|---|---|
+| serialise | 16.3 | **0.8** | all of it `concat`; `splice` reads 0.0 |
+| sidecars | 2.1 | **—** | the span no longer exists — rows are state the verbs maintain |
+| reload | 13.2 | 9.3 | tm's half, untouched by this programme |
+| setEvts | 9.1 | 3.3 | the 1b drop, held |
+| meta | 0.9 | 0.0 | |
+| **flush** | **53.7** | **21.2** | 14.6 inside `mm`, 6.6 outside it |
+
+Serialise beat the ~1ms target and flush beat the ~35 prediction, because the
+prediction only credited this programme's own two spans — `setEvts` and `reload`
+fell as well. What is left of serialise is the whole-blob `concat` that
+`MIDI_SetAllEvts` demands, which was named as the floor and is now the entirety
+of the span: the keying, sorting and cache-validation the old path did per flush
+are gone rather than reduced. `splice` reading 0.0 is the phase's claim, stated
+as a number — a one-note edit moves two keys.
+
+One caveat on the reading: the first measured flush of a fresh bridge chunk read
+40.3ms with serialise at 1.0, against 21.2/0.8 once warm. That is the known
+first-loop inflation, not variance.
+
+The macro fixture, same day and same protocol — glasswork rebuilt from
+`tests/fixtures/glasswork.lua` into a fresh take (9689 ccs, matching the § The
+problem header exactly; 2036 notes and 2673 texts by `notesRaw`/`ccsRaw` count,
+which counts generator output rather than the 1268 *model* notes the fixture doc
+quotes):
+
+| span | ms | |
+|---|---|---|
+| serialise | **0.3** | `concat` 0.3, `splice` 0.0 |
+| setEvts | 5.4 | REAPER's floor, and now the largest span in the flush |
+| reload | 2.8 | |
+| **flush** | **11.5** | 9.2 of it inside `mm` |
+
+The ~7ms serialise the phase-2 target was set against came off this fixture, so
+0.3 clears it by an order of magnitude, and flush is down from the ~24ms of the
+2026-07-16 trace. § The ceiling, stated predicted that after both phases the
+floor here would be reload + setEvts ≈ 11ms; it measures 8.2, with the entire
+flush at 11.5. The programme has arrived where it said it would, slightly early.
+
 ## Implementation plan
 
 ### Phase 0 — pins
@@ -312,7 +360,8 @@ phase 2's business alone. The gather is ~10k pointer copies per flush.
 - The key widens so the slot cap stops being reachable, and no guard is owed.
 - Blob-equality pin: incremental vs full regen after gesture storms on
   both rebuild fixtures.
-- Profile target: serialise span ~7ms → ~1ms.
+- Profile target: serialise span ~7ms → ~1ms. Met 2026-07-26: 0.3ms on
+  glasswork, 0.8ms on HAMMERKLAVIER where the span was 16.3.
 
 ### The ceiling, stated
 

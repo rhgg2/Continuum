@@ -4,6 +4,12 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-26** — midiBlob's wire key widened to ppq*1e9 + rank*1e8 + slot*2 rather than guarding
+  the old 5e4 slot cap: a guard buys nothing, because the full-regeneration fallback composes the
+  same colliding key. Written as integer literals — 1e9 is a float in Lua 5.4, and a float key
+  forfeits exactness above 2^53 where an int64 one runs to 9.2e18, so it is the ppq's integer
+  *typing* that carries the headroom, not the magnitude.
+
 - **2026-07-25** — mm's reindex gate (needsSort/needsCompact, 2026-07-14) retires: loc is now a
   stable slot id, so the verbs splice the ppq order arrays directly and only load reindexes. One
   splice serving both add and move pins a moved event behind its new equals, and a splice under a

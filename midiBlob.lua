@@ -137,7 +137,7 @@ local function ccWire(c)
   return string.char(status, b2, b3)
 end
 
---shape: wire = { keys = { [i] = ppq*1e6 + rank*1e5 + seq2 }, chunks = { [i] = packed bytes for keys[i] }, model = { notes, ccs, texts, passthrough } }  -- keys ascending and dense 1..n, chunks index-parallel
+--shape: wire = { keys = { [i] = ppq*1e9 + rank*1e8 + seq2 }, chunks = { [i] = packed bytes for keys[i] }, model = { notes, ccs, texts, passthrough } }  -- keys ascending and dense 1..n, chunks index-parallel
 --shape: rank = 0 note-off | 1 note-on | 2 cc (odd seq2 = its CCBZ rider) | 3 note sidecar | 4 cc sidecar | 5 carried text | 6 passthrough
 --shape: buildWire(notes, ccs, texts, passthrough) -> wire   -- notes/ccs keyed by slot; texts = { noteSidecars = [noteSlot], ccSidecars = [ccSlot], carried = [i] }
 --shape: render(wire, endPpq?) -> blob   -- concat plus the EOT tail; endPpq places the tail
@@ -146,7 +146,7 @@ end
 --shape: syncSlots(wire, dirt) -> ok   -- dirt = { note = { [slot] = slotState }, cc = { ... } }
 --contract: a splice helper returns false and mutates nothing when kv is already present / absent
 --contract: syncSlots returns false when wire and dirt disagree; the caller must full-regen
---invariant: a note/cc slot stays under 5e4: seq2 = slot*2 shares the key's 1e5 digit band with rank
+--invariant: slot < 5e7: seq2 = slot*2 shares the key's 1e8 band with rank; keys stay int64
 --invariant: parse(render(buildWire(x)))==x; coincident events may reorder, per-type lists intact
 --invariant: note onsets unique per (ppq,chan,pitch); collision is upstream bug, warn+write
 --reaper: matches MIDI_SetAllEvts format; tail at max(endPpq, last-event ppq) (default: last event)
@@ -195,11 +195,18 @@ local function textChunk(x, dppq)
   return row.chunk
 end
 
+-- key = ppq*PPQ_STRIDE + rank*RANK_STRIDE + seq2, seq2 = slot*2 (+1 bezier tail);
+-- dense streams use index*2 in place of slot; integer literals, not 1e9 -- see docs/midiBlob.md.
+local RANK_STRIDE = 100000000    -- the band seq2 lives under, so a slot stays below 5e7
+local PPQ_STRIDE  = 1000000000   -- rank's single digit sits between the two
+
+local function packKey(ppq, rank, seq2) return ppq * PPQ_STRIDE + rank * RANK_STRIDE + seq2 end
+
 -- Decodes a packed sort key to its wire chunk(s): rank digit picks the stream, seq//2
 -- the event's slot, an odd seq a cc's bezier CCBZ rider. Mirrors midiBlob.parse.
 local function chunkOf(kv, dppq, notes, ccs, texts, passthrough)
-  local rank = (kv // 100000) % 10
-  local i    = (kv % 100000) // 2
+  local rank = (kv // RANK_STRIDE) % 10
+  local i    = (kv % RANK_STRIDE) // 2
   if rank == 1 then
     local n   = notes[i]
     local row = noteRow(n)
@@ -252,10 +259,6 @@ local function chunkOf(kv, dppq, notes, ccs, texts, passthrough)
   end
 end
 
--- key = ppq*1e6 + rank*1e5 + seq2, seq2 = slot*2 (+1 for a bezier tail); dense
--- streams use index*2 in place of slot. See docs/midiBlob.md.
-local function packKey(ppq, rank, seq2) return ppq * 1000000 + rank * 100000 + seq2 end
-
 -- Keys, sorts and packs the model into wire state the caller holds across flushes,
 -- so an edit can replace the chunks it touched instead of rebuilding all of them.
 function midiBlob.buildWire(notes, ccs, texts, passthrough)
@@ -302,7 +305,7 @@ function midiBlob.buildWire(notes, ccs, texts, passthrough)
   local chunks, prevPpq = {}, 0
   for i = 1, count do
     local kv  = keys[i]
-    local ppq = kv // 1000000
+    local ppq = kv // PPQ_STRIDE
     local chunk, chunk2 = chunkOf(kv, ppq - prevPpq, notes, ccs, texts, passthrough)
     chunks[i] = chunk2 and (chunk .. chunk2) or chunk   -- wide LSB rides first, MSB at offset 0
     prevPpq = ppq
@@ -327,8 +330,8 @@ end
 -- walk to carry it from, which is why buildWire keeps its own loop.
 local function chunkAt(wire, i)
   local keys, m = wire.keys, wire.model
-  local ppq  = keys[i] // 1000000
-  local prev = i > 1 and keys[i - 1] // 1000000 or 0
+  local ppq  = keys[i] // PPQ_STRIDE
+  local prev = i > 1 and keys[i - 1] // PPQ_STRIDE or 0
   local chunk, chunk2 = chunkOf(keys[i], ppq - prev, m.notes, m.ccs, m.texts, m.passthrough)
   return chunk2 and (chunk .. chunk2) or chunk   -- wide LSB rides first, MSB at offset 0
 end
@@ -425,7 +428,7 @@ function midiBlob.render(wire, endPpq)
   perf.start('concat')
   local keys, chunks = wire.keys, wire.chunks
   local last    = #keys
-  local lastPpq = last > 0 and keys[last] // 1000000 or 0
+  local lastPpq = last > 0 and keys[last] // PPQ_STRIDE or 0
   local tailPpq = math.max(endPpq or lastPpq, lastPpq)   -- never shrink past the last event
   chunks[last + 1] = string.pack('i4Bs4', tailPpq - lastPpq, 0, '\xB0\x7B\x00')   -- all-notes-off tail
   local blob = table.concat(chunks)

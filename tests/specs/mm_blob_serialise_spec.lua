@@ -109,10 +109,12 @@ tests[#tests + 1] = {
 -- A sidecar's key is a pure function of its owner's slot and ppq, which is what
 -- lets an incremental flush splice one in. Under the old dense text array an
 -- insert anywhere earlier renumbered every sidecar after it.
+local function rankOf(kv) return (kv // 100000000) % 10 end
+
 local function keysOfRank(wire, rank)
   local out = {}
   for _, kv in ipairs(wire.keys) do
-    if (kv // 100000) % 10 == rank then out[#out + 1] = kv end
+    if rankOf(kv) == rank then out[#out + 1] = kv end
   end
   return out
 end
@@ -149,7 +151,7 @@ tests[#tests + 1] = {
 -- indistinguishable from the wire a full buildWire over the same mutated model
 -- would have produced? Each case mutates the model, splices, and pins.
 
-local function key(ppq, rank, seq2) return ppq * 1000000 + rank * 100000 + seq2 end
+local function key(ppq, rank, seq2) return ppq * 1000000000 + rank * 100000000 + seq2 end
 
 local function modelOf(notes, ccs, texts, passthrough)
   return { notes = notes or {}, ccs = ccs or {},
@@ -182,6 +184,25 @@ end
 local function indexOf(wire, kv)
   for i, k in ipairs(wire.keys) do if k == kv then return i end end
 end
+
+-- The slot cap is the key's digit banding, and a long take reaches it: rebuildPbs
+-- writes a cc per QN. A slot past the band carries seq2 into the rank digit, and the
+-- note decodes as another stream's event -- silently, on the wire bytes.
+tests[#tests + 1] = {
+  name = 'a slot far above the old band still keys and decodes as a note',
+  run = function()
+    local m = modelOf({ noteAt(0) })
+    local wire = build(m)
+    m.notes[60000] = noteAt(480)
+    local on, off = noteKeys(m.notes, 60000)
+    t.eq(rankOf(on),  1, 'the note-on of a five-digit slot still decodes as rank 1')
+    t.eq(rankOf(off), 0, 'the note-off still decodes as rank 0')
+    t.eq(math.type(on), 'integer', 'the composed key is an int64, not a float')
+    t.eq(midiBlob.putKey(wire, on),  true, 'note-on key was absent')
+    t.eq(midiBlob.putKey(wire, off), true, 'note-off key was absent')
+    matchesRegen(wire, m, 'note at a slot above the old band')
+  end,
+}
 
 tests[#tests + 1] = {
   name = 'putKey splices a note in, chunk for chunk with a full rebuild',

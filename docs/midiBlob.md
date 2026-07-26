@@ -17,12 +17,21 @@ on bare integers:
   comparator (C), avoiding a Lua comparator closure invoked ~40ns/call over the
   ~180k compares a dense take produces.
 
-The key packs as `ppq*1e6 + rank*1e5 + seq2`. `ppq` is bounded below 2^31 by the
-`i4` delta field it is packed into, so the composed key stays exact under 2^53
-(the double-integer range). `seq2` is the event's mm slot doubled, with `+1`
-reserved for a bezier tail so its CCBZ rider sorts immediately after its parent
-cc at the same ppq/rank. `chunkOf` inverts the packing: `rank = (kv // 1e5) % 10`
-selects the stream, `(kv % 1e5) // 2` the slot, and an odd `seq2` marks the rider.
+The key packs as `ppq*1e9 + rank*1e8 + seq2`, written in the source as integer
+literals — `1000000000`, not `1e9`, which is a *float* in Lua 5.4 and would make
+the whole composed key a float. That distinction is what the headroom rests on.
+Every ppq reaching the wire is integer-**typed** (`tm:fromLogical` ends in
+`util.round` → `math.floor`; `parse` unpacks an `i4`), so a key is a true int64
+and its ceiling is 9.2e18 rather than the 2^53 a double would impose. `ppq` is
+bounded below 2^31 by the `i4` delta field it is packed into, putting the largest
+key near 2.1e18 — four times the headroom. A float `480.0` ppq would lose
+exactness above 2^53 whatever the strides, which is why the typing matters and
+not merely the magnitude.
+
+`seq2` is the event's mm slot doubled, with `+1` reserved for a bezier tail so its
+CCBZ rider sorts immediately after its parent cc at the same ppq/rank. `chunkOf`
+inverts the packing: `rank = (kv // 1e8) % 10` selects the stream, `(kv % 1e8) //
+2` the slot, and an odd `seq2` marks the rider.
 Ranks separate the streams and settle the order of events sharing a ppq: 0
 note-off, 1 note-on, 2 cc (an odd `seq2` marking its CCBZ rider), 3 note sidecar,
 4 cc sidecar, 5 carried text, 6 passthrough. The sidecars take a rank each
@@ -56,9 +65,15 @@ so the incremental path would have fallen back to full regeneration on exactly
 the add/delete/move gestures it exists to make cheap.
 
 Two consequences worth knowing. The key's digit banding puts a hard bound on the
-slot: `seq2 = slot*2` shares the 1e5 band with `rank`, so a slot must stay under
-49999. Free-list reuse bounds slots by peak live event count, which is the same
-bound the old dense index carried. And among events at one ppq the wire order is
+slot: `seq2 = slot*2` shares the 1e8 band with `rank`, so a slot must stay under
+5e7. Free-list reuse bounds slots by peak live event count, which is the same
+bound the old dense index carried — and 5e7 is far past any of it. The first
+scaling banded at 1e5, capping a slot at 5e4, which *was* reachable: `rebuildPbs`
+writes a cc per QN, ~115k ccs in one stream over a thirty-minute take. Past the
+cap two events compose the same key and one chunk silently overwrites the other,
+so the fix had to be a wider key rather than a guard — falling back to full
+regeneration rescues nothing when `buildWire` composes the same colliding key.
+And among events at one ppq the wire order is
 now slot order, which after free-list reuse need not match the model's array
 order — deliberately, per `design/stable-slots.md` § Equal-ppq order. Which of
 two coincident events REAPER receives first is nothing to REAPER; the model side
