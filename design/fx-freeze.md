@@ -2,45 +2,20 @@
 
 > Working design doc, split from `design/note-macros-v2.md` § Freeze
 > after the 2026-07-11 design round (that section has since been
-> removed there; this doc is the whole record). That section's framing — freeze as
-> the invertibility axis, unfreeze restoring the fx region — is
-> superseded: **freeze is one-way in both directions**. The generator
+> removed there; this doc is the whole record). That section's framing —
+> freeze as the invertibility axis, unfreeze restoring the fx region —
+> is superseded: **freeze is one-way in both directions**. The generator
 > is discarded by both verbs; there is no unfreeze and no dormant
 > record. The want unfreeze was carrying ("instance the vibrato, keep
 > tweaking it") is a different feature — **fx on groups** — pinned at
 > the end, not built here.
-
-## Status at a glance
-
-**Open**
-- [ ] F2a — projext undo (gates F2's undo-wholeness only): pextStore
-      mirrors project scope to scratch so undo reverts it — split to
-      design/archive/projext-undo.md
-- [ ] F2 — the freeze pair: freeze-to-raw, freeze-to-group, and the
-      curve thinner freeze-to-group needs; plan reviewed + pinned
-      (§ Implementation notes)
-
-**Done**
-- [x] F1 — pb/at as first-class gm members: audited and pinned
-      (`gm_pb_member_spec` ×6, `gm_at_member_spec` ×2). Every seam
-      rides generically; the only production change was `toGroup`
-      sourcing pb intent from `evt.cents` + `makeEntry` carrying the
-      pb `uuid` (see docs/decisions.md 2026-07-11).
-
-**Pinned (design later, not gating)**
-- [ ] fx on groups — group events are the *host material*, the fx
-      chain rides the group record, realisation is derived per
-      instance (§ Pinned)
-- [ ] the split verb — freeze the discrete stages, transport the
-      continuous stages onto the group as live fx; a composition of
-      F2 + fx-on-groups (§ Pinned)
 
 ## The model
 
 Three mechanisms, three points on the generator spectrum
 (note-macros-v2 § The generator spectrum):
 
-- **live fx region** — lossy macro, regenerated each rebuild. Shipped.
+- **live fx region** — lossy macro, regenerated each rebuild.
 - **freeze** — a one-way projection *out of the derived lifecycle*.
   To **raw**: output becomes plain authored MIDI. To a **group**:
   output becomes the authored template of an ordinary gm mirror
@@ -70,15 +45,14 @@ nothing downstream knows freezing ever happened. The corollary: the
 conversion must be **total in one flush**, or the third state appears
 anyway, unlabelled — see § Atomicity.
 
-## F1 — pb/at as first-class gm members
+## pb/at as first-class gm members
 
-Live testing shows pb/at members half-work already: `keyOf` falls
-through to `0` for anything not note/cc (`groupManager.lua:97`),
-`copyScalars` is opt-out, and `streamId`/`laneId` are generic — so a
-pb/at event rides the duals with stream identity `'pb:0'`/`'at:0'`
-and its payload crossing as scalars. "Neither implemented nor not":
-the type-specific seams were never built. F1 is the audit +
-completion, pinned by specs.
+pb/at members half-work by construction: `keyOf` falls through to `0`
+for anything not note/cc (`groupManager.lua:97`), `copyScalars` is
+opt-out, and `streamId`/`laneId` are generic — so a pb/at event rides
+the duals with stream identity `'pb:0'`/`'at:0'` and its payload
+crossing as scalars. Neither implemented nor not: the type-specific
+seams were never built, and most of them turn out not to be needed.
 
 **The one design decision — the group frame stores pb intent under
 `val`.** `makeEntry` builds the um entry's `val` as `rawToCents(wire)`
@@ -91,36 +65,34 @@ at the single intent-ingress chokepoint (`toGroup`) beat renaming the
 field to `cents` at every boundary. `makeEntry`'s pb pick also carries
 `uuid`, without which gm's per-rebuild re-anchor (`tm:byUuid`) loses
 the member and no-ops every later edit. at and cc `val` *are* the
-intent and cross generically. (Landed 2026-07-11 — docs/decisions.md.)
+intent and cross generically. (See docs/decisions.md 2026-07-11.)
 
-**Audit surface** (each either works generically — pin it — or gets
-its arm):
+**How each seam behaves:**
 
-- ✓ region collection → `rect.streams`: generic — the pb propagation
-  spec marks a group off a `pb:0` stream via `eventsInRect`. A mixed
-  pb+at+note rect stays unpinned.
-- ✓ facade routing: a member pb value edit reaches `gm:assignEvent`
-  and propagates to siblings (`gm_pb_member_spec`). No dedicated
-  `updToGroup` pb arm — the group frame tolerates the `val`
-  passthrough (verified red-first: only dropping `val` breaks it).
-- ✓ `classifyCreate` adoption: a fresh in-region pb is adopted and
-  propagates (`gm_pb_member_spec`); generic `keyOf`/`streamId`, no type
-  arm. Its add-target is the member backing's `add` (trackerView.lua:85).
-- ✓ `moveInstance` sideways dispatch: `laneWalkable`'s positive
-  `^note:` allowlist (`editCursor.lua:648`) fails `pb:0`/`at:0`,
-  routing them to channel-move. Verified by reading; no spec yet.
-- ⏳ `revivableVuid` stream+onset matching (generic streamId — likely
-  fine) — unpinned.
-- ✓ persistence/undo: the `groups` blob carries pb intent under `val`
-  (no cents sidecar — the landed design's whole point), survives
-  serialise, and rehydrates live (`gm_pb_member_spec`). Undo is the
-  same rehydrate off a ds-invalidate (`gm_persist_reload_spec`).
+- region collection → `rect.streams`: generic — a group marks off a
+  `pb:0` stream via `eventsInRect`. A mixed pb+at+note rect is
+  unverified.
+- facade routing: a member pb value edit reaches `gm:assignEvent` and
+  propagates to siblings. No dedicated `updToGroup` pb arm — the group
+  frame tolerates the `val` passthrough, and dropping `val` is what
+  breaks it.
+- `classifyCreate` adoption: a fresh in-region pb is adopted and
+  propagates off generic `keyOf`/`streamId`, no type arm. Its
+  add-target is the member backing's `add` (trackerView.lua:85).
+- `moveInstance` sideways dispatch: `laneWalkable`'s positive `^note:`
+  allowlist (`editCursor.lua:648`) fails `pb:0`/`at:0`, routing them
+  to channel-move.
+- `revivableVuid` stream+onset matching rides the generic streamId,
+  which is likely enough; unverified.
+- persistence/undo: the `groups` blob carries pb intent under `val`
+  (no cents sidecar — the design's whole point), survives serialise,
+  and rehydrates live. Undo is the same rehydrate off a ds-invalidate.
 
 **pa stays out.** `keyOf` would collapse every pa lane onto `'pa:0'`,
 and pa is note-column resident — it needs a lane-aware key arm and
 has no consumer. Deferred with this note.
 
-## F2 — freeze to raw
+## Freeze to raw
 
 Output becomes plain authored MIDI; the region and its authored
 membership are gone.
@@ -140,7 +112,7 @@ membership are gone.
   an occupied lane clips on the first post-freeze rebuild. That is
   what authored notes do; name it, don't fight it.
 
-## F2 — freeze to group
+## Freeze to group
 
 Everything above, except the output lands as a stock gm group instead
 of loose events:
@@ -148,9 +120,9 @@ of loose events:
 - **Mint** via `gm:markGroup(events, rect)` (`groupManager.lua:429`)
   — the clipboard ingestion seam, reused verbatim. Members: the
   derived notes (uuids already minted) + the **thinned** continuous
-  curves (pb members need F1). rect from the output footprint (note
-  lanes used + curve streams × the region window); instance 1
-  anchored at the region origin.
+  curves. rect from the output footprint (note lanes used + curve
+  streams × the region window); instance 1 anchored at the region
+  origin.
 - **Curves are re-seated sparse.** The dense seats are deleted and
   the thinned breakpoints written as authored events (uuids + cents
   sidecars, gm links by uuid) in the same flush.
@@ -209,11 +181,9 @@ undo block:
   next rebuild restores the chord on top of the output. The entries
   leave the stash.
 - **Observer baselines resync, never sweep.** The observer is the
-  `prevWindows` route-by-window baseline — no enqueue stage exists
-  (this section previously named `enqueuePbTransitions` /
-  `enqueueCcTransitions`, which were never built). Rebuild diffs
-  current windows against last rebuild's persisted set: a removed
-  window sweeps its seats (`pbRemoved`; cc recognition in
+  `prevWindows` route-by-window baseline — no enqueue stage exists.
+  Rebuild diffs current windows against last rebuild's persisted set:
+  a removed window sweeps its seats (`pbRemoved`; cc recognition in
   `rebuildCCs` is prevWindows-keyed too). Resync = drop the frozen
   windows from `prevWindows` in the same flush; the next rebuild
   sees the window on neither side of the diff and the seats stand
@@ -228,24 +198,21 @@ undo block:
   back-fills member uuids and persists) — the clipboard idiom.
   Flush-then-mint pushes the `groups` write to the *next* flush,
   outside the block.
-- **The derived-clear rides eventMeta — project scope — which undo
-  does not rewind natively.** Without F2a, undo restores
-  region/stash/baseline/MIDI over notes that lost their tags: the
-  next rebuild re-emits a fresh derived set and parks the untagged
-  originals as bogus authored members. F2a
-  (design/archive/projext-undo.md) closes this; it gates the
-  one-undo-reverts-wholly spec, nothing else in F2.
+- **The derived-clear rides eventMeta — project scope, which undo
+  rewinds only through the pextStore mirror**
+  (`design/archive/projext-undo.md`). Were the mirror absent, undo
+  would restore region/stash/baseline/MIDI over notes still missing
+  their tags: the next rebuild re-emits a fresh derived set and parks
+  the untagged originals as bogus authored members. The mirror is
+  what makes the take write and the tag clear rewind together.
 
-## F2 — implementation notes (2026-07-12 round)
-
-Plan audited against source by an independent review; corrections
-pinned:
+## Implementation notes
 
 - **The primitive is producer-shaped, not region-shaped.**
   `tm:freezeRegion(uuid)` handles both hosts — a region record, or a
   note host (self-parked: its fxParked spec IS the destroyed parked
   member; on-take augment host: clear its `fx` chain instead). One
-  seam, per § Eligibility's "both hosts freeze".
+  seam, per § Eligibility gates' "both hosts freeze".
 - **Conversion order**, all before one rebuild, ds writes under the
   `flushingParked` suppression (which needs an error-path reset —
   today an error while the flag is up leaves every later region
@@ -258,26 +225,23 @@ pinned:
   (take-semantic); only the gm rect-conflict gate rides the tv verb
   — forced, tm has no gm reference. Compute the mint rect once,
   pre-freeze; reuse it for gate and mint.
-- **Freeze-to-group choreography** — the § Atomicity VERIFY,
-  resolved there. Members passed to `markGroup` must be um-live
-  staged events (gm re-anchors via `tm:byUuid`; detached clones
-  make later mirror edits silently no-op).
+- **Freeze-to-group choreography** is resolved in § Atomicity.
+  Members passed to `markGroup` must be um-live staged events (gm
+  re-anchors via `tm:byUuid`; detached clones make later mirror
+  edits silently no-op).
 - **Thinner input.** Post-freeze the standing seats already ARE the
   densified polyline — thin those. tm's densify is a
   deriveChan-local closure, not reachable machinery; nothing to
   reuse.
 - **`util.atomic` wraps the post-confirm continuation**, not the
   verb — the modal resolves on a later frame.
-- **Extra specs:** note-host freeze; a post-freeze take round-trip
-  pinning that the cents-carrying seat assign mints uuid + sidecar
-  durably.
-- Verified sound by the audit: prevWindows resync suffices (pb
-  absorber tags are per-rebuild clone marks off *current* windows;
-  cc recognition is prevWindows-keyed; note reconcile keys on
-  `derived`); lane stability (promoted notes carry persisted
-  `lane`; `allocateRegionLanes` assigns lanes only to derived
-  specs); the `derived` clear is metadata-only and takes mm's
-  lockless path.
+- **Three things need no extra work.** prevWindows resync suffices:
+  pb absorber tags are per-rebuild clone marks off *current*
+  windows, cc recognition is prevWindows-keyed, and note reconcile
+  keys on `derived`. Lane stability holds: promoted notes carry
+  persisted `lane`, and `allocateRegionLanes` assigns lanes only to
+  derived specs. And the `derived` clear is metadata-only, so it
+  takes mm's lockless path.
 
 ## Pinned — fx on groups, and the split verb
 
@@ -296,30 +260,28 @@ design round.
 
 **The split verb.** Freeze the discrete stages into the template;
 attach the surviving continuous stages to the group as live fx. A
-composition of F2 + fx-on-groups. Gate: the partition must be
-semantics-preserving — true for today's kinds (no discrete kind reads
-a continuous channel; continuous kinds read window/params/`host`
-only, and relative continuous order is preserved) **except** the
-`host` rebind: a kind reading `host` (slide's next-note lookup) sees
-the frozen template where it saw the original chord. Refuse or warn
-on host-reading kinds; re-check the gate when any new kind lands.
+composition of freeze-to-group + fx-on-groups. Gate: the partition
+must be semantics-preserving — true for today's kinds (no discrete
+kind reads a continuous channel; continuous kinds read
+window/params/`host` only, and relative continuous order is
+preserved) **except** the `host` rebind: a kind reading `host`
+(slide's next-note lookup) sees the frozen template where it saw the
+original chord. Refuse or warn on host-reading kinds; re-check the
+gate when any new kind lands.
 
-## Tests
+## What the specs must pin
 
-F1 (`gm_pb_member_spec`, `gm_at_member_spec`): ✓ pb intent frame (`val`
-is intent, not the realised wire); pb+at uuid survives the rebuild so
-gm re-anchors via `tm:byUuid`; pb value edit propagates to a sibling;
-a fresh in-region pb create is adopted (`classifyCreate`); at `val`
-crosses verbatim (no cents leak); the persisted blob carries intent and
-rehydrates live; a sibling under a different governing detune
-re-derives its own wire (`50 + seatDetune`, not a baked origin value) —
-the core intent-vs-realisation payoff. Sideways channel-move dispatch
-is verified by reading (`editCursor.lua:648`), not separately specced.
+`tm_fx_region_spec` / `tv_fx_region_spec`.
 
-F2 (`tm_fx_region_spec` / `tv_fx_region_spec`): freeze-to-raw — arp
-authored + audible, chord gone, seats stand, *no restore on the next
-rebuild* (the standing-reconcile regression), tails clip
-cross-window, one undo reverts wholly; freeze-to-group — group minted
-with note + thinned-curve members, instance 2 replays both, mirror
-edit propagates, ds+take undo atomicity, each refusal gate; thinner —
-tolerance bound holds, idempotent on already-sparse curves.
+Freeze-to-raw: arp authored + audible, chord gone, seats stand, *no
+restore on the next rebuild* (the standing-reconcile regression),
+tails clip cross-window, one undo reverts wholly, and a note host
+freezes by the same seam.
+
+Freeze-to-group: group minted with note + thinned-curve members,
+instance 2 replays both, mirror edit propagates, ds+take undo
+atomicity, each refusal gate, and a post-freeze take round-trip
+pinning that the cents-carrying seat assign mints uuid + sidecar
+durably.
+
+Thinner: tolerance bound holds, idempotent on already-sparse curves.

@@ -194,9 +194,12 @@ from scratch. "Discard run 1" now has a second reason beyond GC.
 
 ## Now
 
-(empty — A landed; the exit measurement its queued successor asks for is already recorded under Targets, so /plan-next may close that item rather than promote it)
+(closed 2026-07-26 — C, T1 and A all landed and measured.)
 
 ## Queued (one-liners)
-1. **Exit measurement.** Re-profile the same one-note edit on the dense
-   take, record against the target table, and note what the new
-   dominant span is.
+
+(empty — **Exit measurement** was discharged in place rather than promoted:
+the "A measured" paragraph under Targets carries the re-profile, the
+comparison against the target table, and the verdict that no dominant span
+remains. The two levers it names — T3, parked pending its own design doc, and
+sub-lane carry — are outside this plan.)
