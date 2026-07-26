@@ -47,6 +47,25 @@ local function mkCtxRpb(rpb, ppqPerQN)
   }
 end
 
+-- The three-call form ctx:placeRow replaces: ppqToRow (the tail's start
+-- row), trackerView's ppqRowOf (snap when on-grid, else floor) and
+-- isOnGrid. Recomposed here so the cases compare definitions rather
+-- than hard-coded numbers.
+local function threeCallForm(ctx, ppq, chan)
+  local onGrid  = ctx:isOnGrid(ppq, chan)
+  local cellRow = onGrid and ctx:snapRow(ppq, chan)
+                          or math.floor(ctx:ppqToRow(ppq, chan))
+  return ctx:ppqToRow(ppq, chan), cellRow, onGrid
+end
+
+local function eqThreeCallForm(ctx, ppq, label)
+  local wantRow, wantCellRow, wantOnGrid = threeCallForm(ctx, ppq, 1)
+  local row, cellRow, onGrid             = ctx:placeRow(ppq, 1)
+  t.eq(row,     wantRow,     label .. ' row')
+  t.eq(cellRow, wantCellRow, label .. ' cellRow')
+  t.eq(onGrid,  wantOnGrid,  label .. ' onGrid')
+end
+
 return {
   ---------- PPQ ↔ ROW
 
@@ -186,6 +205,59 @@ return {
         local drift = p + 1e-12
         t.truthy(ctx:isOnGrid(drift, 1),
           'rpb=7 r=' .. r .. ' p+ulp on-grid')
+      end
+    end,
+  },
+
+  ---------- PLACE ROW
+
+  {
+    name = 'placeRow agrees with the three-call form on grid, drift, off-grid and both clamps',
+    run = function()
+      local ctx = mkCtx()    -- ppqPerRow 60, length 3840, numRows 64
+      for _, r in ipairs{ 0, 1, 16, 63 } do
+        local p = ctx:rowToPPQ(r, 1)
+        eqThreeCallForm(ctx, p, 'exact row ' .. r)
+      end
+      eqThreeCallForm(ctx, 60 + 0.49, 'drift inside eps')
+      eqThreeCallForm(ctx, 60 - 0.49, 'drift inside eps (below)')
+      eqThreeCallForm(ctx, 60 + 0.5,  'the strict cutoff')
+      eqThreeCallForm(ctx, 75,        'mid-row')
+      eqThreeCallForm(ctx, -100,      'below 0')
+      eqThreeCallForm(ctx, 0,         'at 0')
+      eqThreeCallForm(ctx, 3840,      'at length')
+      eqThreeCallForm(ctx, 99999,     'past length')
+    end,
+  },
+
+  {
+    name = 'placeRow: the three views are the row, its cell row and the on-grid verdict',
+    -- Anchors the recomposition above against concrete numbers, so both
+    -- sides drifting together still fails.
+    run = function()
+      local ctx = mkCtx()
+      local row, cellRow, onGrid = ctx:placeRow(75, 1)
+      t.eq(row, 1.25);      t.eq(cellRow, 1); t.eq(onGrid, false)
+
+      row, cellRow, onGrid = ctx:placeRow(60 + 0.49, 1)
+      t.eq(cellRow, 1);     t.eq(onGrid, true)
+
+      row, cellRow, onGrid = ctx:placeRow(99999, 1)
+      t.eq(row, 64);        t.eq(cellRow, 64); t.eq(onGrid, false)
+    end,
+  },
+
+  {
+    name = 'placeRow agrees with the three-call form under non-divisor rpb',
+    -- rpb=7 makes ppqPerRow fractional, so inverted row ppqs carry float
+    -- drift — the case where a re-derived row and a reused one could part.
+    run = function()
+      local ctx = mkCtxRpb(7)
+      for r = 0, 27 do
+        local p = ctx:rowToPPQ(r, 1)
+        eqThreeCallForm(ctx, p,                     'rpb=7 exact r=' .. r)
+        eqThreeCallForm(ctx, p + 1e-12,             'rpb=7 r=' .. r .. ' +ulp')
+        eqThreeCallForm(ctx, p + ctx:ppqPerRow()/2, 'rpb=7 r=' .. r .. ' mid-row')
       end
     end,
   },

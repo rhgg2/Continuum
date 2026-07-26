@@ -1,4 +1,4 @@
-@module viewContext  src=viewContext.lua  loc=117  sha=fdb66b0  mode=chunk  self=ctx
+@module viewContext  src=viewContext.lua  loc=127  sha=fdb66b0  mode=chunk  self=ctx
 @deps length, numRows, rowPerBeat, ppqPerRow, timeSigs, temper
 
 # Shapes
@@ -24,8 +24,8 @@
 # Private functions
   -- Temperament
   -- Timing
-  @fn timeSigAt(ppq)  @ 80-87
-  @fn tsRow(ts)  @ 89
+  @fn timeSigAt(ppq)  @ 90-97
+  @fn tsRow(ts)  @ 99
 
 # Public API (ctx:*)
   @api ctx:activeTemper()  @ 22
@@ -38,27 +38,31 @@
   @api ctx:ppqPerRow()  @ 65
   @api ctx:isOnGrid(ppqI, chan)  @ 74-77
       @contract  true iff ppqI lies within PPQ_GRID_EPS ppq of the nearest row's ppq under this ctx. The sole owner of the on-grid threshold; callers must not re-implement it from rowToPPQ.  @ 73
-  @api ctx:rowBeatInfo(row)  @ 91-96
-  @api ctx:barBeatSub(row)  @ 98-114
+  @api ctx:placeRow(ppqI, chan)  @ 82-87
+      -- The place loop asks all three of these questions of every event; asking
+      -- them separately re-derives the same row ~16 method calls deep.
+      @contract  one row computation; returns (row, cellRow, onGrid) ≡ (ppqToRow, ppqRowOf, isOnGrid)  @ 81
+  @api ctx:rowBeatInfo(row)  @ 101-106
+  @api ctx:barBeatSub(row)  @ 108-124
 
 # Uses (outbound edges)
   @use call    tuning.midiToStep  @ noteProjection:31
   @use call    tuning.stepToMidi  @ noteProjection:33
   @use call    tuning.stepToParts  @ noteProjection:32
-  @use call    util.round  @ snapRow:63
+  @use call    util.round  @ snapRow:63 placeRow:84
   @use require tuning  @ 8
   @use require util  @ 7
 
 # Fields (r read / w write incl. constructor keys)
   @field r cents  @ noteProjection:39
   @field r detune  @ noteProjection:30
-  @field r huge  @ barBeatSub:103
+  @field r huge  @ barBeatSub:113
   @field r length  @ 12
-  @field r num  @ rowBeatInfo:95 barBeatSub:101
+  @field r num  @ rowBeatInfo:105 barBeatSub:111
   @field r numRows  @ 13
   @field r period  @ noteProjection:39
   @field r pitch  @ noteProjection:29,31,34
-  @field r ppq  @ timeSigAt:83 tsRow:89
+  @field r ppq  @ timeSigAt:93 tsRow:99
   @field r ppqPerRow  @ 15
   @field r rowPerBeat  @ 14
   @field r temper  @ 17

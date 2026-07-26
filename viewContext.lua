@@ -76,6 +76,16 @@ function ctx:isOnGrid(ppqI, chan)
   return math.abs(ppqI - snapped) < PPQ_GRID_EPS
 end
 
+-- The place loop asks all three of these questions of every event; asking
+-- them separately re-derives the same row ~16 method calls deep.
+--contract: one row computation; returns (row, cellRow, onGrid) ≡ (ppqToRow, ppqRowOf, isOnGrid)
+function ctx:placeRow(ppqI, chan)
+  local row     = self:ppqToRow(ppqI, chan)
+  local snapped = util.round(row)
+  local onGrid  = math.abs(ppqI - self:rowToPPQ(snapped, chan)) < PPQ_GRID_EPS
+  return row, onGrid and snapped or math.floor(row), onGrid
+end
+
 do -- exports ctx:rowBeatInfo, ctx:barBeatSub
   local function timeSigAt(ppq)
     local active = timeSigs[1]

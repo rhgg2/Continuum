@@ -2698,14 +2698,12 @@ end
 --invariant: tails (either direction) clipped by tm's tail pass; never block
 local PART_FOR = { note = 'pitch', pb = 'pb', cc = 'val', pc = 'val', at = 'val' }
 
--- Grid row for ppq: on-grid onset near a row boundary snaps (not floors); off-grid
--- floors. Shared by build, region-tag pass, and move dispatch for consistent resolution.
+-- Grid row for ppq: an on-grid onset near a boundary snaps; an off-grid one floors.
+-- Shared by the region-tag pass, kindAt, deletedCells and move dispatch, so they agree.
 local function ppqRowOf(ppq, chan)
-  ppq = ppq or 0
-  if ctx:isOnGrid(ppq, chan) then return ctx:snapRow(ppq, chan) end
-  return math.floor(ctx:ppqToRow(ppq, chan))
+  local _, cellRow = ctx:placeRow(ppq or 0, chan)
+  return cellRow
 end
-local function cellRowOf(evt, chan) return ppqRowOf(evt.ppq, chan) end
 
 -- The grid column an event lives in, from its own chan + lane (notes/PA) or
 -- cc-number (cc). nil if off-grid (e.g. a fresh clone) -- kindAt reads that plain.
@@ -3837,9 +3835,7 @@ function tv:rebuild(takeChanged)
       local chan = gridCol.midiChan
       for _, evt in ipairs(gridCol.events) do
         if evt.hidden then goto continue end  -- derived absorber seats are wire-only
-        local startRow = ctx:ppqToRow(evt.ppq or 0, chan)
-        local onGrid   = ctx:isOnGrid(evt.ppq or 0, chan)
-        local y        = cellRowOf(evt, chan)
+        local startRow, y, onGrid = ctx:placeRow(evt.ppq or 0, chan)
         if y >= 0 and y < numRows then
           if gridCol.cells[y] then
             gridCol.overflow[y] = true
