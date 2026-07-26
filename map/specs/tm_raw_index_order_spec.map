@@ -1,6 +1,6 @@
-@spec tm_raw_index_order_spec  src=tests/specs/tm_raw_index_order_spec.lua  loc=76  sha=untracked  cases=2
+@spec tm_raw_index_order_spec  src=tests/specs/tm_raw_index_order_spec.lua  loc=159  sha=fbb26e9  cases=4
 @exercises midiManager (h.mm), trackerManager (h.tm)
-@surface   mm:notes, fm:dump, tm:addEvent, tm:flush, tm:assignEvent
+@surface   mm:notes, fm:dump, tm:assignEvent, tm:flush, tm:addEvent, tm:byUuid
 @harness   mk{seed.notes}
 
 # Intent
@@ -10,44 +10,60 @@
   the add/assign verbs. Only the bulk path is self-evidently ordered. These cases pin the two against
   each other -- whatever tm derives from a freshly-loaded index, the patched index must derive
   identically -- so the verbs stay free to reseat by any means that preserves the order.
+  
+  The index is written during a rebuild too, not just by the verbs: the tail walk's settleOnset
+  nudges a colliding note forward through setRaw, which re-trues the containing list because ppq is
+  a sort key. Nothing enforces that at runtime, so the last two cases are the backstop -- one catches
+  a binary-seek reader answering from the stale order, one pins every entry's ppq against mm's.
 
 # Helpers
-  @fn longNote(ppq)  @ 14-17
-  @fn uuidAtOnset(mm, ppq)  @ 19-23
-  @fn clips(h)  @ 26-33
+  @fn longNote(ppq)  @ 19-22
+  @fn uuidAtOnset(mm, ppq)  @ 24-28
+  @fn clips(h)  @ 31-38
       -- (onset, clipped end) per chan-1 note, onset-ordered: the walk's verdict, and order-sensitive.
-  @fn seeded(harness, onsets)  @ 36-40
+  @fn seeded(harness, onsets)  @ 41-45
       -- The bulk control: seeded straight through mm, so tm builds the whole index at load.
+  @fn cents2raw(c)  @ 48
+      -- pbRange default = 2 semitones = 200 cents total.
+  @fn pbsAt(dump, ppq)  @ 50-56
+  @fn nudgedOntoNeighbour(harness)  @ 70-87
 
 # Cases
-  @case 'notes added out of onset order clip as if the index were built in bulk'  [harness]  @ 44-59
-  @case 'a note moved across its neighbours clips as if the index were built in bulk'  [harness]  @ 63-74
+  @case 'notes added out of onset order clip as if the index were built in bulk'  [harness]  @ 91-106
+  @case 'a note moved across its neighbours clips as if the index were built in bulk'  [harness]  @ 110-121
+  @case 'a nudged note re-trues its list: the detune seek answers it, not the note it passed'  [harness]  @ 125-138
+  @case 'every index entry agrees with mm on ppq after a nudging rebuild'  [harness]  @ 142-157
 
 # Uses (outbound edges)
-  @use call mm:notes  @ 20
-  @use call fm:dump  @ 28
-  @use call tm:addEvent  @ 55
-  @use call tm:flush  @ 55,71
-  @use call tm:assignEvent  @ 70
+  @use call mm:notes  @ 25
+  @use call fm:dump  @ 33,135,148
+  @use call tm:assignEvent  @ 84,117
+  @use call tm:flush  @ 85,102,118
+  @use call tm:addEvent  @ 102
+  @use call tm:byUuid  @ 129,149
 
 # Fields (r read / w write incl. constructor keys)
-  @field r chan  @ 21,29
-  @field w chan  @ 15
-  @field w delay  @ 16
-  @field w detune  @ 16
-  @field r endppq  @ 29,48
-  @field w endppq  @ 15,29,70
-  @field w evType  @ 15
-  @field w lane  @ 16
-  @field w name  @ 44,63
-  @field r notes  @ 28
-  @field w notes  @ 39
-  @field w pitch  @ 15
-  @field r ppq  @ 21,29,31
-  @field w ppq  @ 15,29,70
-  @field w ppqL  @ 70
-  @field w run  @ 45,64
-  @field w seed  @ 39
-  @field r uuid  @ 21
-  @field w uuid  @ 70
-  @field w vel  @ 16
+  @field r ccs  @ 52
+  @field r chan  @ 26,34
+  @field w chan  @ 20,73
+  @field w delay  @ 21,73,84
+  @field w detune  @ 21,73
+  @field r endppq  @ 34,95
+  @field w endppq  @ 20,34,72,117
+  @field w endppqL  @ 72
+  @field r evType  @ 53
+  @field w evType  @ 20,72
+  @field w lane  @ 21,73
+  @field w name  @ 91,110,125,142
+  @field r notes  @ 33,148
+  @field w notes  @ 44,75
+  @field w pitch  @ 20,73
+  @field r ppq  @ 26,34,36,53,129,151,152
+  @field w ppq  @ 20,34,72,117
+  @field w ppqL  @ 72,117
+  @field w run  @ 92,111,126,143
+  @field w seed  @ 44,75
+  @field r uuid  @ 26,149,150,151,152
+  @field w uuid  @ 84,117
+  @field r val  @ 137
+  @field w vel  @ 21,73

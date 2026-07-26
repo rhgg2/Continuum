@@ -83,6 +83,20 @@ full rebuild that every `rawIndex` list is sorted under
 mechanics. The contract is declared and checked, not enforced; say so
 plainly in the docs.
 
+*Amended 2026-07-26:* the literal form — "every rawIndex list is
+sorted" — is not reachable from a spec. `rawNotes`/`rawPbs`/
+`rawIndexFor` are file-local upvalues with no caller outside
+`trackerManager.lua`, and the harness has no introspection door, so
+asserting list order directly would mean publishing a read accessor
+whose only caller is a spec — and publishing it would make the
+record-sharing contract public, which is exactly what D1 deferred. So
+the sortedness half is checked *through a consumer*: stain the index
+with a real nudge and catch a binary-seek reader answering from the
+stale order. The agreement half stays literal, since `tm:byUuid` is
+public and returns the live entry. Narrower than the exhaustive check,
+and it carries a vacuity risk — paid off by proving the case red with
+`setRaw`'s re-true removed.
+
 **D5 — `reconcilePcs` and the flush collision scan move out to the
 pipeline.** Both are derivation logic that happens to run at flush
 time; neither is staging. With them gone, `flush` also stops calling
@@ -118,20 +132,20 @@ was previously arbitrary.
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-07-26 tm: pin the walk's index re-true with two specs (D4)
 - 2026-07-26 tm: sort-key writes on an index entry go through setRaw (D2, D3)
 - 2026-07-26 tm: PA attachment and PC reconciliation read the raw index (D7)
 
 ## Now
 
-(empty — the mediated write landed; queued item 1, the D4 sortedness/agreement spec extending tm_raw_index_order_spec, is next. Run /plan-next to promote it.)
+(empty — the mutation contract is declared and now checked; run /plan-next to promote the block split.)
 
 ## Queued (one-liners)
 
-1. Sortedness/agreement spec extending `tm_raw_index_order_spec` (D4).
-2. Split the block in two — index and stager — with the dependency
+1. Split the block in two — index and stager — with the dependency
    arrow one way and the internal banners renamed to match.
-3. `reconcilePcs` and the collision scan move to the pipeline; `flush`
+2. `reconcilePcs` and the collision scan move to the pipeline; `flush`
    stops driving `tm:rebuild` and loses its second exit.
-4. Collapse `rawNotes`/`rawPbs`/`rawIndexFor` into one accessor.
-5. Docs: `docs/trackerManager.md § Update manager` describes the index
+3. Collapse `rawNotes`/`rawPbs`/`rawIndexFor` into one accessor.
+4. Docs: `docs/trackerManager.md § Update manager` describes the index
    as the primary structure and states the mutation contract.

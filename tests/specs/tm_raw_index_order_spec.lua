@@ -4,6 +4,11 @@
 -- the add/assign verbs. Only the bulk path is self-evidently ordered. These cases pin the two against
 -- each other -- whatever tm derives from a freshly-loaded index, the patched index must derive
 -- identically -- so the verbs stay free to reseat by any means that preserves the order.
+--
+-- The index is written during a rebuild too, not just by the verbs: the tail walk's settleOnset
+-- nudges a colliding note forward through setRaw, which re-trues the containing list because ppq is
+-- a sort key. Nothing enforces that at runtime, so the last two cases are the backstop -- one catches
+-- a binary-seek reader answering from the stale order, one pins every entry's ppq against mm's.
 
 local t = require('support')
 
@@ -39,6 +44,48 @@ local function seeded(harness, onsets)
   return harness.mk{ seed = { notes = notes } }
 end
 
+-- pbRange default = 2 semitones = 200 cents total.
+local function cents2raw(c) return math.floor(c * 8192 / 200 + 0.5) end
+
+local function pbsAt(dump, ppq)
+  local out = {}
+  for _, c in ipairs(dump.ccs) do
+    if c.evType == 'pb' and c.ppq == ppq then out[#out + 1] = c end
+  end
+  return out
+end
+
+-- The nudge fixture. Three lane-1 notes on chan 1: the mover is edited onto the blocker's raw, they
+-- share a pitch and differ in ppqL (so voicing separates rather than dedupes), and the walk gives the
+-- mover way by one tick -- onto the neighbour's raw, where its later ppqL puts it last in
+-- rawThenLogical order. It moves in value without moving in slot, which is the whole stain.
+--
+-- Built by edit, not by seed: mm's load dedup runs voicing itself, so a seeded same-raw pair arrives
+-- already separated and the walk never nudges (tests/specs/mm_load_dedup_spec.lua).
+local BLOCKER_PPQ, NEIGHBOUR_PPQ, MOVER_PPQ = 300, 301, 360
+local MOVER_DETUNE, NEIGHBOUR_DETUNE = 40, -30
+-- Signed milli-QN: -250 is -60 ppq at res 240, carrying the mover's raw back onto the blocker.
+local MOVER_DELAY = -250
+
+local function nudgedOntoNeighbour(harness)
+  local function laneOneNote(ppq, endppq, pitch, detune)
+    return { evType = 'note', ppq = ppq, endppq = endppq, ppqL = ppq, endppqL = endppq,
+             chan = 1, pitch = pitch, vel = 100, detune = detune, delay = 0, lane = 1 }
+  end
+  local h = harness.mk{ seed = { notes = {
+    laneOneNote(BLOCKER_PPQ,   320, 60, 0),
+    laneOneNote(NEIGHBOUR_PPQ, 320, 72, NEIGHBOUR_DETUNE),
+    laneOneNote(MOVER_PPQ,     380, 60, MOVER_DETUNE),
+  } } }
+
+  -- A delay edit, not a ppq edit: assignEvent's ppq arrives logical and restamps ppqL with it, which
+  -- would move the mover onto the blocker's seat as well as its raw. Delay moves the raw alone.
+  local moverUuid = uuidAtOnset(h.fm, MOVER_PPQ)
+  h.tm:assignEvent({ uuid = moverUuid }, { delay = MOVER_DELAY })
+  h.tm:flush()
+  return h, moverUuid
+end
+
 return {
   {
     name = 'notes added out of onset order clip as if the index were built in bulk',
@@ -71,6 +118,42 @@ return {
       h.tm:flush()
 
       t.deepEq(clips(h), expected, 'the moved entry reseats where a full re-sort would put it')
+    end,
+  },
+
+  {
+    name = 'a nudged note re-trues its list: the detune seek answers it, not the note it passed',
+    run = function(harness)
+      local h, moverUuid = nudgedOntoNeighbour(harness)
+
+      t.eq(h.tm:byUuid(moverUuid).ppq, NEIGHBOUR_PPQ,
+        'the walk nudged the mover off the blocker -- nothing else stains the list')
+
+      -- At raw 301 the mover sorts last (ppqL 360 against the neighbour's 301), so it is the
+      -- prevailing lane-1 detune there. A list left stale by the nudge still reads the mover in its
+      -- old slot, ahead of 301, and the seek answers the neighbour instead.
+      local seats = pbsAt(h.fm:dump(), NEIGHBOUR_PPQ)
+      t.eq(#seats, 1, 'one absorber seat at the nudged onset')
+      t.eq(seats[1].val, cents2raw(MOVER_DETUNE), 'the seat absorbs the mover\'s detune')
+    end,
+  },
+
+  {
+    name = 'every index entry agrees with mm on ppq after a nudging rebuild',
+    run = function(harness)
+      local h, moverUuid = nudgedOntoNeighbour(harness)
+
+      -- settleOnset stages its own mm write beside the setRaw, so the two frames must not drift.
+      local moverPpq
+      for _, n in ipairs(h.fm:dump().notes) do
+        local entry = h.tm:byUuid(n.uuid)
+        t.truthy(entry, 'mm note ' .. n.uuid .. ' has an index entry')
+        t.eq(entry.ppq, n.ppq, 'index and mm agree on the raw onset of note ' .. n.uuid)
+        if n.uuid == moverUuid then moverPpq = n.ppq end
+      end
+
+      t.eq(moverPpq, NEIGHBOUR_PPQ,
+        'a note actually moved -- the agreement above holds vacuously otherwise')
     end,
   },
 }
