@@ -48,6 +48,17 @@ was considered and rejected for now — it would make the
 record-sharing contract public before it is sound. Revisit only after
 D2 has settled who may mutate an entry.
 
+*Amended 2026-07-26:* the arrow costs seven new index exports —
+`rawIndexInsert`, `rawIndexRemove`, `rawIndexRefile`, `forgetUuid`,
+`loadIndex`, `detuneAt`, `forEachAttachedPA` — and moves one piece of
+logic rather than only re-nesting: `assignLowlevel`'s index upkeep
+(the migrated/reseated test, the remove-then-place, the fx-toggle
+refresh) becomes `rawIndexRefile`. The alternative was exporting
+`rawIndexListFor` and leaving that body in the stager, which keeps the
+diff purely mechanical but publishes the type→list mapping to the
+half that shouldn't know it. Refile wins because the shape stays
+inside.
+
 **D2 — mediated writes: `setRaw(entry, field, value)`, mirroring
 `setCell`.** `setCell` (trackerManager.lua:139) is already this pattern
 for column cells: skip the no-op, maintain the derived invariant when
@@ -132,20 +143,19 @@ was previously arbitrary.
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-07-26 tm: split the update manager into raw index and stager (D1)
 - 2026-07-26 tm: pin the walk's index re-true with two specs (D4)
 - 2026-07-26 tm: sort-key writes on an index entry go through setRaw (D2, D3)
 - 2026-07-26 tm: PA attachment and PC reconciliation read the raw index (D7)
 
 ## Now
 
-(empty — the mutation contract is declared and now checked; run /plan-next to promote the block split.)
+(empty — the split has landed; run /plan-next to promote the next commit)
 
 ## Queued (one-liners)
 
-1. Split the block in two — index and stager — with the dependency
-   arrow one way and the internal banners renamed to match.
-2. `reconcilePcs` and the collision scan move to the pipeline; `flush`
+1. `reconcilePcs` and the collision scan move to the pipeline; `flush`
    stops driving `tm:rebuild` and loses its second exit.
-3. Collapse `rawNotes`/`rawPbs`/`rawIndexFor` into one accessor.
-4. Docs: `docs/trackerManager.md § Update manager` describes the index
+2. Collapse `rawNotes`/`rawPbs`/`rawIndexFor` into one accessor.
+3. Docs: `docs/trackerManager.md § Update manager` describes the index
    as the primary structure and states the mutation contract.

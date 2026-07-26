@@ -4,6 +4,11 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-26** — um's raw index and stager split into two do-blocks inside trackerManager.lua
+  rather than a new eventIndex.lua: index entries are live records the rebuild mutates in place, so
+  a module boundary would publish that sharing contract rather than close it. Revisit extraction
+  once the mutation contract is sound.
+
 - **2026-07-26** — Field writes on a rawIndex entry go through `setRaw`, which flags the containing
   list when the value moves a sort key so `withDeferredSort` re-trues it — inserts and in-place moves
   restored at one door. Retires the caller-remembered `resortRawNotes` repair (the 2026-07-18 entry

@@ -771,33 +771,26 @@ local function reconcileFx(existing, predicted, sink)
     end }
 end
 
----------- UPDATE MANAGER
+---------- RAW INDEX
 
-local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
-      flush, reload, idxReconcile, withDeferredSort, clearStaging, absorbReloadDirt,
-      stampColEvt, rawNotes, rawPbs, rawIndexFor, setRaw, fxHostsFor,
-      colEvtFor do
+-- Owns rawIndex/byUuid/fxHosts and the upkeep that keeps them true; knows nothing of staging.
+local rawNotes, rawPbs, rawIndexFor, fxHostsFor, colEvtFor, stampColEvt,
+      idxReconcile, withDeferredSort, setRaw, detuneAt, forEachAttachedPA,
+      rawIndexInsert, rawIndexRemove, rawIndexRefile, forgetUuid, loadIndex do
 
   ----- State
 
-  local adds = {}
-  local assigns = {}
-  local deletes = {}
-  --shape: seeds[chan] = list of birth-snapshot seeds { uuid, verb, ppq, ppqL, lane, pitch, endppqL, evType, cc, evt }; evt = the snapshotted record itself -- an add's uuid is stamped on it at mm commit, so it late-binds. folded (dedup-by-uuid) into dirtyChans. see design § The model, inverted
-  local seeds = {}
-  local parkedEdits = {}
-  local parkedUuidSeq = 0
+  --shape: rawIndex[chan] = { notes, pbs, pcs, pas, ats, ccs = { [ccNum] = list } }; every event on the channel, one list per type -- notes and pbs flat across all lanes, pcs/pas/ats flat, ccs bucketed by cc number. Each list raw-then-logical sorted; readers filter at use.
   local rawIndex = {}
   local byUuid = {}
   local fxHosts = {}   -- chan -> { uuid = true } for on-take .fx notes; maintained, never rescanned. see design § Phase 5.5
-  local dirtyPcChans = {}
 
-  ----- Accessors
+  ----- Read surface
 
   -- Prevailing lane-1 detune at-or-before ppq; flush derives wire-raw = cents + detuneAt(seat).
   -- Full absorber reconciliation is rebuild's absorber pass; um just stages the best-effort value.
   local function laneOne(n) return n.lane == 1 end
-  local function detuneAt(chan, P)
+  function detuneAt(chan, P)
     local n = util.seek(rawIndex[chan].notes, 'at-or-before', P, laneOne)
     return (n and n.detune) or 0
   end
@@ -806,7 +799,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   -- (filtered at use); entries are live um records. see design/interval-dirt.md § Phase 4.5
   function rawNotes(chan) return rawIndex[chan].notes end
   function rawPbs(chan) return rawIndex[chan].pbs end
-  function rawIndexFor(chan) return rawIndex[chan] end   -- the channel's { notes, pbs, pcs, pas, ats, ccs } record; ccs is a { [ccNum] = list } map
+  function rawIndexFor(chan) return rawIndex[chan] end
 
   -- The maintained fx-host set for a channel (uuids of on-take .fx notes); computeFxWindows reads it
   -- instead of rescanning columns. see design/interval-dirt.md § Phase 5.5
@@ -816,9 +809,12 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   -- reseeks a dirty host without a column walk. see docs/trackerManager.md § Fx window cache
   function colEvtFor(uuid) local e = byUuid[uuid]; return e and e.colEvt end
 
+  -- The live column event for a uuid, valid until the next rebuild.
+  function tm:byUuid(uuid) return byUuid[uuid] end
+
   -- Ownership is tested logically (a raw delay or nudge can't detach a PA from its own seat), and
   -- this gathers before applying since fn mutates the very pas list it walks. see docs/trackerManager.md § PA binding
-  local function forEachAttachedPA(host, fn)
+  function forEachAttachedPA(host, fn)
     local from, to = host.ppqL or host.ppq, host.endppqL or host.endppq
     local attached = {}
     for _, cc in ipairs(rawIndex[host.chan].pas) do
@@ -830,10 +826,8 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     for _, cc in ipairs(attached) do fn(cc) end
   end
 
-  ----- Low-level mutation
+  ----- List placement
 
-  -- rawIndex holds every event per channel, one list per type: notes and pbs flat (all lanes),
-  -- pcs/pas/ats flat, ccs bucketed by cc number. Each raw-then-logical sorted; readers filter at use.
   local function rawIndexListFor(evt, chan)
     local ri = rawIndex[chan]
     local t = evt.evType
@@ -870,7 +864,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   -- During a batched reconcile this holds the lists rawIndexInsert touched; the batch
   -- sorts each once at the end instead of re-sorting per insert. nil = sort inline.
   local deferredSort
-  local function rawIndexInsert(evt)
+  function rawIndexInsert(evt)
     local tbl = rawIndexListFor(evt, evt.chan)
     if not tbl then return end
     setFxHost(evt)
@@ -883,11 +877,26 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
       util.insertSorted(tbl, evt, rawThenLogical)
     end
   end
-  local function rawIndexRemove(evt, chan)
+  function rawIndexRemove(evt, chan)
     local tbl = rawIndexListFor(evt, chan or evt.chan)
     if not tbl then return end
     clearFxHost(evt, chan)
     for i, item in ipairs(tbl) do if item == evt then table.remove(tbl, i); return end end
+  end
+
+  -- Keep the index coherent (util.seek and the walk need ascending order): a chan move or an onset
+  -- move both reseat via remove-then-place. See docs/trackerManager.md § Incremental index reconciliation.
+  function rawIndexRefile(evt, oldChan, update)
+    local oldList  = rawIndexListFor(evt, oldChan)
+    local newList  = rawIndexListFor(evt, evt.chan)
+    local migrated = oldList ~= newList
+    local reseated = newList ~= nil and (update.ppq ~= nil or update.ppqL ~= nil)
+    if migrated or reseated then
+      rawIndexRemove(evt, oldChan)
+      rawIndexInsert(evt)
+    end
+    -- A pure fx toggle refreshes the entry in place (no list migration), so the turnover hooks miss it.
+    if update.fx ~= nil then setFxHost(evt) end
   end
 
   -- The batching door: rawIndex is um's, so um owns the deferral. Inserts and sort-key moves inside
@@ -914,6 +923,8 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     if not tbl then return end
     if deferredSort then deferredSort[tbl] = true else table.sort(tbl, rawThenLogical) end
   end
+
+  ----- Entry lifecycle
 
   -- Construct the um-frame index entry for one mm clone and file it into byUuid.
   -- Shared verbatim by full reload and the incremental verbs so both build identical entries.
@@ -971,6 +982,55 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     return entry ~= nil
   end
 
+  function forgetUuid(uuid) byUuid[uuid] = nil end
+
+  ----- Load
+
+  -- Rebuild the whole index from mm. Only for genuine loads (init, take swap, external
+  -- re-read) where the incremental index is stale; edit rebuilds keep the live index.
+  function loadIndex()
+    byUuid = {}
+    for i = 1, 16 do rawIndex[i] = { notes = {}, pbs = {}, pcs = {}, pas = {}, ats = {}, ccs = {} }; fxHosts[i] = {} end
+    for _, e in mm:events() do
+      local evt = makeEntry(e)
+      local tbl = rawIndexListFor(evt, evt.chan)
+      if tbl then util.add(tbl, evt); setFxHost(evt) end
+    end
+    -- mm:events() yields each kind ppq-sorted and the per-channel filter preserves that;
+    -- one sort per list settles the logical tie-break the incremental path maintains.
+    for i = 1, 16 do
+      local ri = rawIndex[i]
+      table.sort(ri.notes, rawThenLogical)
+      table.sort(ri.pbs, rawThenLogical)
+      table.sort(ri.pcs, rawThenLogical)
+      table.sort(ri.pas, rawThenLogical)
+      table.sort(ri.ats, rawThenLogical)
+      for _, bucket in pairs(ri.ccs) do table.sort(bucket, rawThenLogical) end
+    end
+  end
+
+  loadIndex()
+end
+
+---------- STAGER
+
+-- Stages mm-facing ops, commits them in one mm:modify; reaches the index above only via its doors.
+local addEvent, assignEvent, deleteEvent, addParked, assignParked,
+      deleteParked, flush, reload, clearStaging, absorbReloadDirt do
+
+  ----- State
+
+  local adds = {}
+  local assigns = {}
+  local deletes = {}
+  --shape: seeds[chan] = list of birth-snapshot seeds { uuid, verb, ppq, ppqL, lane, pitch, endppqL, evType, cc, evt }; evt = the snapshotted record itself -- an add's uuid is stamped on it at mm commit, so it late-binds. folded (dedup-by-uuid) into dirtyChans. see design § The model, inverted
+  local seeds = {}
+  local parkedEdits = {}
+  local parkedUuidSeq = 0
+  local dirtyPcChans = {}
+
+  ----- Low-level verbs
+
   -- Absorber derivation inputs: any pb, and lane-1 notes' onset/detune geometry.
   local PB_GEOMETRY = { detune = true, ppq = true, ppqL = true, delay = true, chan = true, lane = true }
   local function pbSource(evt, lane)
@@ -1016,18 +1076,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     if assignDirtiesPb(evt, oldLane, update) then dirtyChan(oldChan); dirtyChan(evt.chan) end
     if vacated then util.bucket(seeds, oldChan, vacated) end
     seedEvent(evt, 'assign')
-    -- Keep the index coherent (util.seek and the walk need ascending order): a chan move or an
-    -- onset move both reseat via remove-then-place. See docs/trackerManager.md § Incremental index reconciliation.
-    local oldList  = rawIndexListFor(evt, oldChan)
-    local newList  = rawIndexListFor(evt, evt.chan)
-    local migrated = oldList ~= newList
-    local reseated = newList ~= nil and (update.ppq ~= nil or update.ppqL ~= nil)
-    if migrated or reseated then
-      rawIndexRemove(evt, oldChan)
-      rawIndexInsert(evt)
-    end
-    -- A pure fx toggle refreshes the entry in place (no list migration), so the turnover hooks miss it.
-    if update.fx ~= nil then setFxHost(evt) end
+    rawIndexRefile(evt, oldChan, update)
     if not evt.realised then return end
     for _, e in ipairs(assigns) do
       if e.uuid == evt.uuid then
@@ -1044,8 +1093,8 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     seedEvent(evt, 'delete')
     -- rawIndexRemove matches by object identity; the PC mutation hook deletes projected column
     -- cells, so resolve the raw record via byUuid first or the index entry strands.
-    rawIndexRemove(evt.uuid and byUuid[evt.uuid] or evt)
-    if evt.uuid then byUuid[evt.uuid] = nil end
+    rawIndexRemove(evt.uuid and tm:byUuid(evt.uuid) or evt)
+    if evt.uuid then forgetUuid(evt.uuid) end
 
     if evt.realised then
       util.add(deletes, { uuid = evt.uuid, evt = evt })
@@ -1133,7 +1182,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   -- second loop over adds to approximate. The sink mutates .pcs, never .notes, so no gather.
   local function reconcilePcs(chan)
     local records = {}
-    for _, n in ipairs(rawIndex[chan].notes) do
+    for _, n in ipairs(rawNotes(chan)) do
       util.add(records, { ppq = n.ppq, ppqL = n.ppqL, lane = n.lane,
                           sample = n.sample or 0 })
     end
@@ -1143,13 +1192,10 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   local function lookup(evtOrUuid)
     local uuid = type(evtOrUuid) == 'table' and evtOrUuid.uuid or evtOrUuid
     if not uuid then return end
-    return byUuid[uuid], uuid
+    return tm:byUuid(uuid), uuid
   end
 
   ----- Public interface
-
-  -- The live column event for a uuid, valid until the next rebuild.
-  function tm:byUuid(uuid) return byUuid[uuid] end
 
   function deleteEvent(evtOrUuid)
     local evt = lookup(evtOrUuid)
@@ -1260,7 +1306,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
       if evt.evType == 'pb' then evt.cents, evt.val = evt.val or 0, nil end
       -- pb is one value per tick: adopt a pb already at this slot -- including a hidden
       -- absorber seat -- so we never push a rival onto it. see docs/tuning.md § Absorber reconciliation
-      local seat = evt.evType == 'pb' and util.seek(rawIndex[evt.chan].pbs, 'at-or-before', evt.ppq)
+      local seat = evt.evType == 'pb' and util.seek(rawPbs(evt.chan), 'at-or-before', evt.ppq)
       if seat and seat.ppq == evt.ppq then
         assignLowlevel(seat, { cents = evt.cents, shape = evt.shape, derived = util.REMOVE })
       else
@@ -1409,7 +1455,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     mm:modify(function()
       for _, o in ipairs(flushDeletes) do
         mm:delete(o.uuid)
-        byUuid[o.uuid] = nil
+        forgetUuid(o.uuid)
       end
       for _, o in ipairs(flushAssigns) do
         mm:assign(o.uuid, o.update)
@@ -1426,30 +1472,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
     fire('postflush')
   end
 
-  ----- Init / reload: (re)load local cache from mm.
-
-  -- Rebuild the whole index from mm. Only for genuine loads (init, take swap, external
-  -- re-read) where the incremental index is stale; edit rebuilds keep the live index.
-  local function loadIndex()
-    byUuid = {}
-    for i = 1, 16 do rawIndex[i] = { notes = {}, pbs = {}, pcs = {}, pas = {}, ats = {}, ccs = {} }; fxHosts[i] = {} end
-    for _, e in mm:events() do
-      local evt = makeEntry(e)
-      local tbl = rawIndexListFor(evt, evt.chan)
-      if tbl then util.add(tbl, evt); setFxHost(evt) end
-    end
-    -- mm:events() yields each kind ppq-sorted and the per-channel filter preserves that;
-    -- one sort per list settles the logical tie-break the incremental path maintains.
-    for i = 1, 16 do
-      local ri = rawIndex[i]
-      table.sort(ri.notes, rawThenLogical)
-      table.sort(ri.pbs, rawThenLogical)
-      table.sort(ri.pcs, rawThenLogical)
-      table.sort(ri.pas, rawThenLogical)
-      table.sort(ri.ats, rawThenLogical)
-      for _, bucket in pairs(ri.ccs) do table.sort(bucket, rawThenLogical) end
-    end
-  end
+  ----- Reload / clear
 
   -- Fold this flush's per-verb seeds into dirtyChans as seed dirt: dedup-by-uuid (seeded
   -- chans), fold-whole (unseeded payload chans). see docs/trackerManager.md § Interval seeds
@@ -1481,8 +1504,6 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked, deleteParked,
   end
 
   function reload() clearStaging(); loadIndex() end
-
-  reload()
 end
 
 ---------- PUBLIC
