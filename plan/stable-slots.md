@@ -16,23 +16,21 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-07-26 mm: midiBlob gains the wire splice helpers (Phase 2e) (§ incremental serialise)
 - 2026-07-26 mm: sidecar rows become state the verbs maintain (Phase 2d) (§ incremental serialise)
 - 2026-07-26 mm: sidecar texts key on their owner's slot (Phase 2c) (§ incremental serialise)
 - 2026-07-26 mm: serialise splits into buildWire + render (Phase 2b) (§ incremental serialise)
-- 2026-07-26 mm: the wire key becomes the slot (Phase 2a) (§ incremental serialise)
 
 ## Now
 
-(empty — 2d landed: the two sidecar groups are mm state now, seated and dropped at the six sites that maintain the order arrays, and flushTake walks nothing. Its bridge probe on HAMMERKLAVIER was not run, so the ~0 `sidecars` span is argued from the code rather than measured; the span itself was kept, now bracketing a lone table constructor, and is a fair candidate for deletion at 2f. 2e — midiBlob's wire splice helpers — is next in Queued; run /plan-next to promote it.)
+(empty — 2e landed: midiBlob can put, drop and re-pack a key on a held wire, pinned chunk-for-chunk against a full regen. 2f is next — the verb sites report key dirt and flushTake splices instead of rebuilding, which is where serialise actually drops. Run /plan-next to promote it.)
 
 ## Queued (current phase; one-liners)
 
-1. *(in Now)* 2d — the sidecar groups become persistent slot-keyed mm state,
-   seated beside `indexPut`/`indexDrop`; `flushTake` stops walking.
-2. 2e — midiBlob gains the wire splice helpers: drop a key, insert a key,
-   re-pack the touched chunk and its successor (their `dppq` moved). Pure, and
-   pinned key-for-key against a full `buildWire` regen.
-3. 2f — the three verb sites (`mm:add`, `mm:assign`, `mm:delete`) report key
+1. *(in Now)* 2e — midiBlob gains the wire splice helpers: drop a key, put a
+   key, re-pack a key in place; each fixes up the one neighbour whose `dppq`
+   moved. Pure, and pinned chunk-for-chunk against a full `buildWire` regen.
+2. 2f — the three verb sites (`mm:add`, `mm:assign`, `mm:delete`) report key
    dirt beside `markChan`, for notes, ccs **and** their sidecars under one
    discipline; `flushTake` applies the dirt to the persistent `wire` instead of
    rebuilding it; slot-cap guard falls back to full regen. Blob-equality pin:

@@ -137,10 +137,12 @@ local function ccWire(c)
   return string.char(status, b2, b3)
 end
 
---shape: wire = { keys = { [i] = ppq*1e6 + rank*1e5 + seq2 }, chunks = { [i] = packed bytes for keys[i] } }  -- keys ascending and dense 1..n, chunks index-parallel
+--shape: wire = { keys = { [i] = ppq*1e6 + rank*1e5 + seq2 }, chunks = { [i] = packed bytes for keys[i] }, model = { notes, ccs, texts, passthrough } }  -- keys ascending and dense 1..n, chunks index-parallel
 --shape: rank = 0 note-off | 1 note-on | 2 cc (odd seq2 = its CCBZ rider) | 3 note sidecar | 4 cc sidecar | 5 carried text | 6 passthrough
 --shape: buildWire(notes, ccs, texts, passthrough) -> wire   -- notes/ccs keyed by slot; texts = { noteSidecars = [noteSlot], ccSidecars = [ccSlot], carried = [i] }
 --shape: render(wire, endPpq?) -> blob   -- concat plus the EOT tail; endPpq places the tail
+--shape: putKey/dropKey/repackKey(wire, kv) -> ok   -- splice one key; the model they pack from rides the wire
+--contract: a splice helper returns false and mutates nothing when kv is already present / absent
 --invariant: a note/cc slot stays under 5e4: seq2 = slot*2 shares the key's 1e5 digit band with rank
 --invariant: parse(render(buildWire(x)))==x; coincident events may reorder, per-type lists intact
 --invariant: note onsets unique per (ppq,chan,pitch); collision is upstream bug, warn+write
@@ -302,7 +304,56 @@ function midiBlob.buildWire(notes, ccs, texts, passthrough)
   end
   perf.stop('pack')
 
-  return { keys = keys, chunks = chunks }
+  return { keys = keys, chunks = chunks,
+           model = { notes = notes, ccs = ccs, texts = texts, passthrough = passthrough } }
+end
+
+-- First index whose key is >= kv, over the ascending key array.
+local function lowerBound(keys, kv)
+  local lo, hi = 1, #keys + 1
+  while lo < hi do
+    local mid = (lo + hi) // 2
+    if keys[mid] < kv then lo = mid + 1 else hi = mid end
+  end
+  return lo
+end
+
+-- Re-derives the predecessor's ppq rather than carrying it forward: a splice has no
+-- walk to carry it from, which is why buildWire keeps its own loop.
+local function chunkAt(wire, i)
+  local keys, m = wire.keys, wire.model
+  local ppq  = keys[i] // 1000000
+  local prev = i > 1 and keys[i - 1] // 1000000 or 0
+  local chunk, chunk2 = chunkOf(keys[i], ppq - prev, m.notes, m.ccs, m.texts, m.passthrough)
+  return chunk2 and (chunk .. chunk2) or chunk   -- wide LSB rides first, MSB at offset 0
+end
+
+-- A chunk's delta comes from its predecessor's ppq, so a splice moves only its
+-- own delta and its successor's. See docs/midiBlob.md § Splicing a held wire.
+function midiBlob.putKey(wire, kv)
+  local i = lowerBound(wire.keys, kv)
+  if wire.keys[i] == kv then return false end
+  table.insert(wire.keys, i, kv)
+  table.insert(wire.chunks, i, chunkAt(wire, i))
+  if wire.keys[i + 1] then wire.chunks[i + 1] = chunkAt(wire, i + 1) end
+  return true
+end
+
+function midiBlob.dropKey(wire, kv)
+  local i = lowerBound(wire.keys, kv)
+  if wire.keys[i] ~= kv then return false end
+  table.remove(wire.keys, i)
+  table.remove(wire.chunks, i)
+  if wire.keys[i] then wire.chunks[i] = chunkAt(wire, i) end
+  return true
+end
+
+-- The property edit: the key does not move, only the bytes under it.
+function midiBlob.repackKey(wire, kv)
+  local i = lowerBound(wire.keys, kv)
+  if wire.keys[i] ~= kv then return false end
+  wire.chunks[i] = chunkAt(wire, i)
+  return true
 end
 
 -- The tail goes on as a transient last element and comes straight back off:

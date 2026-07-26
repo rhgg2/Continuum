@@ -1,6 +1,6 @@
-@spec mm_blob_serialise_spec  src=tests/specs/mm_blob_serialise_spec.lua  loc=146  sha=6566d9f  cases=6
+@spec mm_blob_serialise_spec  src=tests/specs/mm_blob_serialise_spec.lua  loc=382  sha=6a1c94a  cases=17
 @exercises midiBlob (midiBlob)
-@surface   midiBlob.render, midiBlob.buildWire, midiBlob.parse
+@surface   midiBlob.render, midiBlob.buildWire, midiBlob.parse, midiBlob.putKey, midiBlob.dropKey, midiBlob.repackKey
 
 # Intent
   Round-trip pin for the write-path codec (inverse of parse).
@@ -25,6 +25,15 @@
       -- A sidecar's key is a pure function of its owner's slot and ppq, which is what
       -- lets an incremental flush splice one in. Under the old dense text array an
       -- insert anywhere earlier renumbered every sidecar after it.
+  @fn key(ppq, rank, seq2)  @ 152
+  @fn modelOf(notes, ccs, texts, passthrough)  @ 154-157
+  @fn build(m)  @ 159
+  @fn matchesRegen(wire, m, what)  @ 161-166
+  @fn noteAt(ppq, pitch, vel)  @ 168-171
+  @fn ccAt(ppq, code, val, shape)  @ 172-174
+  @fn sidecarAt(ppq)  @ 175
+  @fn noteKeys(notes, slot)  @ 177-180
+  @fn indexOf(wire, kv)  @ 182-184
 
 # Cases
   @case 'records survive serialise -> parse:  ..'  [pure]  @ 29-37
@@ -33,34 +42,66 @@
   @case 'endPpq positions the EOT tail; never shrinks past the last event'  [pure]  @ 88-94
   @case 'render twice over one wire yields identical bytes'  [pure]  @ 100-106
   @case 'note sidecar keys survive an insert at an earlier ppq'  [pure]  @ 121-143
+  @case 'putKey splices a note in, chunk for chunk with a full rebuild'  [pure]  @ 187-196
+  @case 'a splice before the first key re-packs the successor delta'  [pure]  @ 200-212
+  @case 'dropKey removes a note, the last key of the array included'  [pure]  @ 216-226
+  @case 'a ppq move is a drop of both keys and a put of both'  [pure]  @ 230-242
+  @case 'a length edit moves only the note-off key'  [pure]  @ 246-255
+  @case 'repackKey rewrites the bytes under a key that has not moved'  [pure]  @ 259-267
+  @case 'a bezier cc splices with its rider and loses it alone on a shape change'  [pure]  @ 271-286
+  @case 'a wide cc splices as one chunks entry holding two events'  [pure]  @ 290-299
+  @case 'a sidecar splices beside its owner on the owner\'s slot'  [pure]  @ 303-314
+  @case 'the splice helpers refuse a kv the wire disagrees about, untouched'  [pure]  @ 320-333
+  @case 'a storm of gestures splices to the same bytes as a full rebuild'  [pure]  @ 339-379
 
 # Uses (outbound edges)
-  @use call midiBlob.render  @ 22,105
-  @use call midiBlob.buildWire  @ 22,104,131,134
-  @use call midiBlob.parse  @ 31,33,46,49,82,103
+  @use call midiBlob.render  @ 22,105,165,378
+  @use call midiBlob.buildWire  @ 22,104,131,134,159
+  @use call midiBlob.parse  @ 31,33,46,49,82,103,342
+  @use call midiBlob.putKey  @ 193,194,207,208,239,240,253,278,279,296,310,311,312,328,347,348,360,361,375
+  @use call midiBlob.dropKey  @ 223,224,235,236,251,283,329,353,357,358,370,371
+  @use call midiBlob.repackKey  @ 265,284,330,365
 
 # Fields (r read / w write incl. constructor keys)
   @field r ShowConsoleMsg  @ 75
   @field w ShowConsoleMsg  @ 76,80
-  @field r blob  @ 31,103
+  @field r blob  @ 31,103,342
   @field w carried  @ 16
+  @field w cc  @ 173
   @field w ccSidecars  @ 16
-  @field r ccs  @ 32,35,104
-  @field w chan  @ 71,72,90,124
-  @field w endppq  @ 71,72,90,124
-  @field w evType  @ 71,72,90,124
-  @field w eventtype  @ 126
-  @field r keys  @ 114
+  @field r ccs  @ 32,35,104,159,275,276,282,294,351,352,364
+  @field r ccs  @ 365,374
+  @field w ccs  @ 155
+  @field w chan  @ 71,72,90,124,170,173
+  @field r chunks  @ 164,204,210,297,325,332
+  @field r endppq  @ 179,358,371
+  @field w endppq  @ 71,72,90,124,169,238,252,359
+  @field w evType  @ 71,72,90,124,169,173
+  @field w eventtype  @ 126,175
+  @field r keys  @ 114,163,183,209,221,324,331
   @field r msg  @ 48
-  @field w msg  @ 126
+  @field w msg  @ 126,175
   @field r name  @ 29,34,35,36
-  @field w name  @ 29,42,68,88,100,121
-  @field r noteSidecars  @ 133
-  @field w noteSidecars  @ 16,130
-  @field r notes  @ 32,34,104
-  @field w pitch  @ 71,72,90,124
-  @field w ppq  @ 71,72,90,124,126
+  @field w name  @ 29,42,68,88,100,121,187,200,216,230,246,259
+  @field w name  @ 271,290,303,320,339
+  @field r noteSidecars  @ 133,308
+  @field w noteSidecars  @ 16,130,306
+  @field r notes  @ 32,34,104,159,191,192,205,206,220,222,234,237
+  @field r notes  @ 239,240,250,252,253,263,264,308,309,326,346,356
+  @field r notes  @ 368,369
+  @field w notes  @ 155
+  @field r passthrough  @ 159
+  @field w passthrough  @ 156
+  @field w pitch  @ 71,72,90,124,170
+  @field r ppq  @ 179,238,353,357,359,365,370
+  @field w ppq  @ 71,72,90,124,126,169,173,175
   @field r reaper  @ 75,76,80
-  @field w run  @ 30,43,69,89,101,122
-  @field r texts  @ 32,36,104
-  @field w vel  @ 71,72,90,124
+  @field w run  @ 30,43,69,89,101,122,188,201,217,231,247,260
+  @field w run  @ 272,291,304,321,340
+  @field r shape  @ 282
+  @field w shape  @ 173
+  @field w tension  @ 276,282
+  @field r texts  @ 32,36,104,159,306,308
+  @field w texts  @ 156
+  @field w val  @ 173,364
+  @field w vel  @ 71,72,90,124,170,264

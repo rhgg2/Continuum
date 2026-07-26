@@ -63,3 +63,31 @@ now slot order, which after free-list reuse need not match the model's array
 order — deliberately, per `design/stable-slots.md` § Equal-ppq order. Which of
 two coincident events REAPER receives first is nothing to REAPER; the model side
 still obeys the add-after-equals rule.
+
+## Splicing a held wire
+
+`putKey`, `dropKey` and `repackKey` are what a held wire is for: they maintain the
+ascending `keys` array and its index-parallel `chunks` in place, so a flush pays
+for the events an edit touched instead of re-keying and re-packing the take.
+
+Each splice re-packs at most two chunks — its own and its successor's. A chunk's
+delta is the gap from its *predecessor's* ppq, so inserting or removing a key
+changes the delta of the key that now follows it and of nothing else. `repackKey`
+re-packs one, because the key has not moved: it is the property edit (velocity,
+value, mute), the commonest gesture there is, and drop-then-put of the same key
+would reach the same bytes at the cost of two memmoves.
+
+A bezier cc's CCBZ rider is inseparable from its cc by construction rather than by
+rule: the rider's key is its cc's key `+1`, so no key can ever sort between them,
+which is what keeps the rider's hard-coded zero delta valid under any splice.
+
+The wire carries its own model. `buildWire` stashes the four tables it was handed
+on the wire it returns, so a helper takes `(wire, kv)` and cannot be handed a model
+the keys were not built from — the failure mode this rules out is silent and
+byte-level. The cost falls on the caller, which must keep one grouped `texts` table
+alive between full rebuilds rather than composing a fresh one per flush.
+
+A helper returns `false` when the wire and the caller's dirt disagree — a key put
+twice, or dropped when it was never there. Nothing is mutated, and the caller's
+guard falls back to a full `buildWire`, because a disagreement means the dirt
+record has lost track of the wire and no further splice can be trusted.

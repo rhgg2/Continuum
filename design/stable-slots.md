@@ -312,6 +312,13 @@ fixture. Going lower is interval-dirt's job (reload) and REAPER's
 
 None outstanding.
 
+Settled 2026-07-26: the wire carries its model. `buildWire` stashes the four
+tables it was handed on the wire it returns (`wire.model`), so the splice
+helpers take `(wire, key)` and cannot be handed a model the keys were not built
+from. In exchange mm keeps one grouped `texts` table alive between full regens
+instead of constructing a fresh one per flush — which it can, since only
+`rebuild` replaces the sidecar tables.
+
 Settled 2026-07-26: phase 2's last two items swap. Stable text keys land
 before verb-reported key dirt, because rank-3 keys are indices into an array
 rebuilt per flush, so the dirt spine would fall back to full regeneration on
