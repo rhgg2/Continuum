@@ -1,5 +1,7 @@
 # note macros v2 — region hosts and the generator spectrum
 
+> opened: 2026-06-26 · status: parked — `plan/chain-surface.md`
+>
 > Working design doc. Supersedes the forward-looking half of
 > `design/archive/note-macros.md`, now the **frozen record of v1** — the
 > shipped proving pair (retrig + vibrato), plus slide and trill, the

@@ -1,8 +1,10 @@
 # Design — Meta-sequencer (performance as composition)
 
-Status: vague, pre-design. A vision note, not a plan. Captured because
-every prerequisite is already being poured for other reasons, and the
-idea is obvious in the moment and gone by Friday.
+> opened: 2026-07-02 · status: vague, pre-design
+
+A vision note, not a plan. Captured because every prerequisite is
+already being poured for other reasons, and the idea is obvious in the
+moment and gone by Friday.
 
 The one-line pitch: **record the live edits you make while a pattern
 loops, and replay them as a sequenced, editable track — a sequencer

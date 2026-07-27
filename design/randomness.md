@@ -1,6 +1,8 @@
 # Design — Randomness (displacement only)
 
-Status: vague, pre-design. Direction settled; mechanism deliberately open.
+> opened: 2026-05-21 · status: vague, pre-design — direction settled,
+> mechanism deliberately open
+
 Scope: **displacement noise only.** Random *generation* (Poisson events,
 dropout, density) is explicitly out — see "Excluded" below.
 

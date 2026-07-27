@@ -34,7 +34,7 @@ end
 
 return {
   ----- rebuild seam: a geometry-only verb stages no mm ops but must still force a
-  --   rebuild — see docs/decisions.md § 2026-07-11 (tm:requestRebuild).
+  --   rebuild — see design/decisions.md § 2026-07-11 (tm:requestRebuild).
   {
     name = 'empty-group newInstance forces a rebuild though it stages no concretes',
     run = function()

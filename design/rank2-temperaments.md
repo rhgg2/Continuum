@@ -1,5 +1,7 @@
 # Rank-2 temperaments, MOS scales, and the keyboard seam
 
+> opened: 2026-06-19 · status: design note; not started
+
 Design note for the rank-2 generator and the keyboard-input direction it
 opens up. WHY and decisions; the generator's API surface lives in
 `tuning.lua` annotations once built.

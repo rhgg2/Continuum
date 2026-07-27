@@ -1,10 +1,8 @@
 # status bar — declarative fixed-width segments
 
-> Working design doc. Approved in principle 2026-07-08; not yet started.
-
-## Status
-
-Proposed. No code yet.
+> opened: 2026-07-08 · status: approved in principle; not started
+>
+> Working design doc.
 
 ## Problem
 

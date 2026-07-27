@@ -5,7 +5,7 @@
 > (§ 3), the scan-to-filter passes (§ 4), and the rebuildFx soft spots
 > (§ 5). § 6 was by-design non-targets throughout. The enduring model
 > lives in `docs/trackerManager.md`; per-landing deviations in
-> `docs/decisions.md`. This file is the full history: the shared-fix
+> `design/decisions.md`. This file is the full history: the shared-fix
 > design and the per-phase corrections settled at landing.
 >
 > Was: working design doc, successor to `design/archive/interval-dirt.md`
@@ -71,7 +71,7 @@ Read-site conversions: the five walks above plus
 `buildCcExistingInWindows` (:2000). That last one is a live defect,
 not just cost — it positional-queries mm mid-pipeline, so a cc
 authored into a prev window in the same flush is missed
-(`docs/decisions.md` § 2026-07-20). The um index is current
+(`design/decisions.md` § 2026-07-20). The um index is current
 mid-pipeline because the staging verbs maintain it. **Red spec for
 that edge lands first.**
 

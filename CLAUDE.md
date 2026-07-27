@@ -65,13 +65,21 @@ guidelines, section-divider grammar, and reasoning behind the caps.
 
 ## Programme plans
 
-Ongoing work compiles its steps out of `design/<doc>.md` into
-`plan/<programme>.md`. Work too big for a couple of commits but too
-small for a design doc gets the same plan file with no Phases section,
-compiled from conversation and standing as its own record.
-`plan/CURRENT` is a stack, newest first — the top line is live and the
-rest are parked, so a one-off can push in front of a running programme
-and pop back off when it closes.
+Every piece of ongoing work has a design doc in `design/` and a plan in
+`plan/`. The doc holds the model and the decisions; the plan holds only
+the machinery — phases, what landed, what's next — compiled out of the
+doc and never designed in. Work too small for a design round still gets
+a doc: `/plan-new` writes a short one from the conversation, and the
+plan simply has no Phases section. `plan/CURRENT` is a stack, newest
+first — the top line is live and the rest are parked, so a small job can
+push in front of a running programme and pop back off when it closes.
+
+`design/` is the durable home for design rationale, and it is closed: a
+decision belonging to a live doc is written in that doc, and one with no
+doc to belong to goes in `design/decisions.md`, the dated ledger. Every
+doc opens with an `opened:` creation date, so the directory can be read
+in order as the project's reasoning end to end. It is intent, though,
+not current state — `docs/<file>.md` is what is true now.
 
 For implementation work, read the plan file first — it carries what
 just landed and a self-contained brief for what's next, so you rarely
@@ -79,7 +87,8 @@ need the design doc. One command per granularity: `/plan-new` opens a
 plan, `/plan-phase` splits the in-flight phase into commit-sized queued
 items, `/plan-next` promotes the top one into the brief, `/plan-close`
 archives and pops. The commit skill's pre-agent steps handle landing
-bookkeeping. Design docs stay pure model.
+bookkeeping. Design docs carry the model and the decisions; plans carry
+neither.
 
 ## How to work - production
 

@@ -1,5 +1,7 @@
 # cv-2 (working design — the unification)
 
+> opened: 2026-06-20 · status: working design; not started
+>
 > Working design doc. Supersedes the model in `cv.md`, which planned
 > modulation as a *separate page* with its own graph and compiler sharing
 > only wiring's realizer. This doc records the revision that came out of

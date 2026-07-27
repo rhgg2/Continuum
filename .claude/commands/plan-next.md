@@ -11,11 +11,11 @@ into the plan, so implementation sessions read the plan alone.
    The plan file is a working buffer. Phases, where the plan has one,
    is the human's map; it changes only when the roadmap does. Queued
    holds the incomplete items of the in-flight phase, or in a phaseless
-   one-off the remainder of the job. Now is the next item to implement.
+   plan the remainder of the job. Now is the next item to implement.
    Landed prunes below ~4 entries — git and the design doc's dated
    notes are the permanent record.
-2. Queued is filled by `/plan-phase` (programme) or by `/plan-new`
-   (one-off); this command never refills it, because sizing a whole
+2. Queued is filled by `/plan-phase` (phased) or by `/plan-new`
+   (phaseless); this command never refills it, because sizing a whole
    phase and compiling one brief are different kinds of reading. So an
    empty Queued means the level above needs to run: point at
    `/plan-phase` if the plan has Phases, or at `/plan-close` if it

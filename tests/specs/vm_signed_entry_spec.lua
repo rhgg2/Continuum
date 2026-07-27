@@ -1,5 +1,5 @@
 -- Signed-decimal grid entry: '-' is an in-place sign flip; empty cells inherit
--- sign from the ghost or prior breakpoint. See docs/decisions.md § 2026-07-10.
+-- sign from the ghost or prior breakpoint. See design/decisions.md § 2026-07-10.
 
 local t = require('support')
 

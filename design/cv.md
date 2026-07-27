@@ -1,5 +1,8 @@
 # cv (working design)
 
+> opened: 2026-06-04 · status: superseded by `cv-2.md`; kept for its
+> spike results and the landed simple layer
+>
 > Working design doc, not yet built. Tracks the modulation/CV page as
 > the form develops; will be split into `docs/` once stable. Sibling of
 > `design/archive/wiring.md` — read that first; this doc leans on its

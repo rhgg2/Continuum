@@ -1,10 +1,12 @@
 # Design — Adaptive just intonation (tune the realisation, not the intent)
 
-Status: pre-design. A vision note with a concrete v1 algorithm, not a
-plan. Captured because it falls almost free out of the intent /
-realisation split already in `docs/tuning.md`, and because the core
-question — *what does "in tune" mean for a whole chord* — has a clean
-answer worth writing down before it evaporates.
+> opened: 2026-07-04 · status: pre-design
+
+A vision note with a concrete v1 algorithm, not a plan. Captured
+because it falls almost free out of the intent / realisation split
+already in `docs/tuning.md`, and because the core question — *what does
+"in tune" mean for a whole chord* — has a clean answer worth writing
+down before it evaporates.
 
 The one-line pitch: **solve the whole take offline for a single detune
 per note that makes every sounding chord fuse to the strongest possible

@@ -1,5 +1,7 @@
 # pipe dreams — designs we are deliberately not building
 
+> opened: 2026-07-26 · status: standing collection; nothing here is queued
+>
 > A home for ideas settled enough to be worth writing down and
 > deliberately not on any plan. Nothing here is queued, and nothing here
 > should be started because it looks ready.

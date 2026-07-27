@@ -10,7 +10,7 @@ programme's files live. This is the only command that archives.
 2. Establish which of two things this is, and say so before doing
    anything:
    - **Close** — the work is finished: every phase marked landed
-     (programme), or Queued and Now both empty (one-off). Files move
+     (phased), or Queued and Now both empty (phaseless). Files move
      to the archives.
    - **Park** — the work is unfinished and attention is moving
      elsewhere. The plan stays in `plan/`, nothing is archived, and
@@ -22,11 +22,13 @@ programme's files live. This is the only command that archives.
 3. Close only: `git mv plan/<name> plan/archive/<name>`, and tidy the
    file as it goes — clear any leftover `← in flight` marker, leave
    Landed as the record rather than pruning it.
-4. Close only, the design doc: if the programme is complete and the doc
-   describes nothing beyond it, `git mv design/<doc>.md design/archive/`
-   and update the plan's `> source:` line to the new path, noting the
-   programme is complete. A doc that still carries live intent stays
-   where it is — say which you did and why.
+4. Close only, the design doc — every plan has one. If the work is
+   complete and the doc describes nothing beyond it,
+   `git mv design/<doc>.md design/archive/`, update its `status:` line
+   to say so, and point the plan's `> source:` line at the new path. A
+   doc that still carries live intent stays where it is — say which you
+   did and why. Either way the decisions in it stay readable and stay
+   cited: `design/archive/` is the shelf below `design/`, not a bin.
 5. Pop `plan/CURRENT`: remove the top line. Whatever sat under it is
    live again, so read it and report what I'm back to — its name, its
    in-flight phase, and whether Now holds a brief or is empty. An empty

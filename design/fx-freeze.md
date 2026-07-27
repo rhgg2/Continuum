@@ -1,5 +1,7 @@
 # fx freeze — committing generator output
 
+> opened: 2026-07-11 · status: parked — `plan/fx-freeze.md`
+>
 > Working design doc, split from `design/note-macros-v2.md` § Freeze
 > after the 2026-07-11 design round (that section has since been
 > removed there; this doc is the whole record). That section's framing —
@@ -65,7 +67,7 @@ at the single intent-ingress chokepoint (`toGroup`) beat renaming the
 field to `cents` at every boundary. `makeEntry`'s pb pick also carries
 `uuid`, without which gm's per-rebuild re-anchor (`tm:byUuid`) loses
 the member and no-ops every later edit. at and cc `val` *are* the
-intent and cross generically. (See docs/decisions.md 2026-07-11.)
+intent and cross generically. (See design/decisions.md 2026-07-11.)
 
 **How each seam behaves:**
 

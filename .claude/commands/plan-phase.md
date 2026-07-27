@@ -11,7 +11,7 @@ the point of this command existing — run it and stop.
 1. The live plan arrives injected by the `UserPromptExpansion` hook —
    work from that rather than re-reading it. (A plan over the 10k
    context cap arrives as a file path and a preview; read the path.)
-2. No Phases section means a phaseless one-off, whose Queued was seeded
+2. No Phases section means a phaseless plan, whose Queued was seeded
    whole at creation. There is nothing to split: say so and point at
    `/plan-next`, or at `/plan-close` if Queued and Now are both empty
    and the work is finished. Stop.

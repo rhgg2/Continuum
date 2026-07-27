@@ -13,7 +13,7 @@ Usage: python3 tools/bookkeep.py [manifest.json]   # reads stdin when no path
 Manifest:
   {
     "date": "2026-07-22",                       # optional; defaults to today
-    "decision": "one-or-two-line decision prose",
+    "decision": "one-or-two-line prose; only for a decision with no design doc",
     "land": {"headline": "...", "ref": "§ 3", "now": "replacement Now body"}
   }
 """
@@ -26,7 +26,7 @@ import textwrap
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-DECISIONS = REPO / "docs" / "decisions.md"
+DECISIONS = REPO / "design" / "decisions.md"
 PLAN_CURRENT = REPO / "plan" / "CURRENT"
 
 DECISION_WIDTH = 100

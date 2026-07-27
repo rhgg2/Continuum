@@ -1,5 +1,7 @@
 # fx patterns — note/curve params via a checkout tracker
 
+> opened: 2026-07-08 · status: working design; not started
+>
 > Working design doc. Companion to `design/note-macros-v2.md` (the chain
 > surface): generator params whose **value is a note pattern or a curve**
 > — an ostinato source, an arbitrary-shape LFO — reusable by copy

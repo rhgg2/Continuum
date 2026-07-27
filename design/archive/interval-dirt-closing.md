@@ -9,7 +9,7 @@
 > snapshot — uuid, verb, position/lane/pitch/span), every stage from
 > materialisation through fx/cc/pb consumes them, and geometry is a
 > derived view. Model: `docs/trackerManager.md` § Derivation dirt;
-> per-landing deviations: `docs/decisions.md`.
+> per-landing deviations: `design/decisions.md`.
 
 Three items. The first two are the mop-up round; the third is the
 terminal invariant and can land with or after them.

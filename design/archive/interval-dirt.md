@@ -21,7 +21,7 @@
 
 | | |
 |---|---|
-| state | landed — phases 1–3; phase 4 2026-07-17; phases 4.5 + 4.75 2026-07-18; model inverted to seed dirt 2026-07-18 (§ The model, inverted); phase 5 landed + measured on glasswork-dense 2026-07-19 (§ phase 5); phase 3's note project-before-splice found un-landed, landed 2026-07-19 (§ phase 3); cc walk narrowed to O(dirt) 2026-07-20..21 -- seeds carry evType/cc, seed-resolved `spliceChannelCCs`, `ccExisting` scoped to seeded windows + kept-seat re-feed dropped (`docs/decisions.md`) |
+| state | landed — phases 1–3; phase 4 2026-07-17; phases 4.5 + 4.75 2026-07-18; model inverted to seed dirt 2026-07-18 (§ The model, inverted); phase 5 landed + measured on glasswork-dense 2026-07-19 (§ phase 5); phase 3's note project-before-splice found un-landed, landed 2026-07-19 (§ phase 3); cc walk narrowed to O(dirt) 2026-07-20..21 -- seeds carry evType/cc, seed-resolved `spliceChannelCCs`, `ccExisting` scoped to seeded windows + kept-seat re-feed dropped (`design/decisions.md`) |
 | supersedes | `incremental-rebuild` gap 4 (fx dirt signal) |
 | enduring model it changes | `docs/trackerManager.md` § Derivation dirt |
 | the hard part | was forward propagation — closed 2026-07-15 by onset-bounded closures (§ The crux, closed); same-pitch widens the tails closure rather than leaving tm (§ Same-pitch is a projection artefact), and tails *produces* its closure from the neighbour lookup it already does, rather than consuming a fence it could leak past (§ The tails closure is the walk's output, not its input) |
@@ -1201,7 +1201,7 @@ landing, since the seek walk starts from seeds by name and needs
    sub-ms. Landed as two sub-commits: build + shadow-compare against the
    now-authoritative linear walk (2026-07-18), then the threshold flip
    that retires the shadow. Three deviations from the sketch above, all
-   in `docs/decisions.md` § 2026-07-18: `rawThenLogical` became a total
+   in `design/decisions.md` § 2026-07-18: `rawThenLogical` became a total
    order (same-tick piles had no defined settlement order); settlement
    gathers each pitch's cascade against the pristine index before moving
    anything (a mid-mutation binary search hangs); and `mergeIndexed`
@@ -1335,7 +1335,7 @@ Commits (commit 1, the note half, above), each green alone,
    would re-uuid). `generators.hasContinuous` deleted -- `keepable`'s
    vacuous target loop subsumes the pure-note test.
 
-   *Superseded 2026-07-21* (`docs/decisions.md` § 2026-07-20/21): the cc walk
+   *Superseded 2026-07-21* (`design/decisions.md` § 2026-07-20/21): the cc walk
    itself went O(dirt), retiring the kept-side machinery here -- seeds carry
    `evType`/`cc`, `spliceChannelCCs` excises and re-clones each cc/at/pc seat
    per-uuid, and `ccExisting` is scoped to the seed-touched prev cc windows
@@ -1409,7 +1409,7 @@ Commits (commit 1, the note half, above), each green alone,
    write-bound like glasswork proper, which is what lets the gate show at all.
 
    *Narrowed 2026-07-21:* that phase-3/6 residual has since landed -- the cc
-   walk is now O(dirt) (§ commit 3's superseded note; `docs/decisions.md`
+   walk is now O(dirt) (§ commit 3's superseded note; `design/decisions.md`
    § 2026-07-20/21). On this same fixture a one-host edit's `ccs` drops to
    0.4 (from ~9) and `fx` to 7.2, every clean window unwalked.
 
