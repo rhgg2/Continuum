@@ -92,7 +92,7 @@ local function sortByPPQ(tbl)
 end
 
 -- Total order for the raw working set: raw tick, then logical seat (ppqL, falling back to raw
--- pre-seating), authored-before-generated, lane, then pitch. See docs/decisions.md § 2026-07-18.
+-- pre-seating), authored-before-generated, lane, then pitch. See design/decisions.md § 2026-07-18.
 local function rawThenLogical(a, b)
   if a.ppq ~= b.ppq then return a.ppq < b.ppq end
   local aL, bL = a.ppqL or a.ppq, b.ppqL or b.ppq
@@ -1012,6 +1012,26 @@ local rawNotes, rawPbs, rawIndexFor, fxHostsFor, colEvtFor, stampColEvt,
   loadIndex()
 end
 
+---------- FLUSH DERIVATION
+
+-- Same-(chan,pitch) MIDI legality over the post-flush note set: kill verdicts only -- onsets and
+-- tails are the walk's. see docs/trackerManager.md § Flush collision scan
+local function collisionKills()
+  -- Kills only: tm separates once, at the walk. Dedup cannot follow it there -- the walk
+  -- separates a duplicate instead, and nothing below kills what it split.
+  local kills = {}
+  for chan = 1, 16 do
+    local byPitch = {}
+    for _, n in ipairs(rawNotes(chan)) do util.bucket(byPitch, n.pitch, n) end
+    for _, group in pairs(byPitch) do
+      if #group > 1 then   -- a lone note has nothing to collide with
+        for _, n in ipairs(voicing.resolveSorted(group)) do util.add(kills, n) end
+      end
+    end
+  end
+  return kills
+end
+
 ---------- STAGER
 
 -- Stages mm-facing ops, commits them in one mm:modify; reaches the index above only via its doors.
@@ -1381,25 +1401,9 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
 
     perf.start('flush')
 
-    -- Single scan over all post-flush notes for same-(chan,pitch) MIDI legality: kill verdicts
-    -- only -- onsets and tails are the walk's. see docs/trackerManager.md § Flush collision scan
-    do
-      perf.start('collide')
-      -- Kills only: tm separates once, at the walk. Dedup cannot follow it there -- the walk
-      -- separates a duplicate instead, and nothing below kills what it split.
-      local kills = {}
-      for chan = 1, 16 do
-        local byPitch = {}
-        for _, n in ipairs(rawNotes(chan)) do util.bucket(byPitch, n.pitch, n) end
-        for _, group in pairs(byPitch) do
-          if #group > 1 then   -- a lone note has nothing to collide with
-            for _, n in ipairs(voicing.resolveSorted(group)) do util.add(kills, n) end
-          end
-        end
-      end
-      for _, n in ipairs(kills) do deleteNote(n) end
-      perf.stop('collide')
-    end
+    perf.start('collide')
+    for _, n in ipairs(collisionKills()) do deleteNote(n) end
+    perf.stop('collide')
 
     local flushAdds, flushAssigns, flushDeletes = adds, assigns, deletes
     adds, assigns, deletes = {}, {}, {}
@@ -2036,7 +2040,7 @@ local function spliceCcCell(live, ccWrites)
 end
 
 -- ccExisting scopes to the seed-touched prev cc windows only (edge-inclusive); clean windows keep their seats untouched, and cc-family carries merge rather than replace.
--- Seeks the maintained um index (current mid-pipeline), not mm. See design/archive/interval-dirt-v2.md § 1, docs/decisions.md § 2026-07-21.
+-- Seeks the maintained um index (current mid-pipeline), not mm. See design/archive/interval-dirt-v2.md § 1, design/decisions.md § 2026-07-21.
 local function buildCcExistingInWindows(chan, fillWin, ccExisting, seedRows)
   local byCc = fillWin[chan]
   if not byCc then return end
@@ -2085,7 +2089,7 @@ local function removeCellFor(col, row, uuid)
 end
 
 -- Interval-dirt cc path: each cc-family seed excises its own cell and re-clones its survivor --
--- O(seeds), no channel scan. see docs/decisions.md § 2026-07-20
+-- O(seeds), no channel scan. see design/decisions.md § 2026-07-20
 local function spliceChannelCCs(chan, seedList, fillWin, ccWrites, ccExisting)
   local seen, touched = {}, {}
   for _, s in ipairs(seedList) do
@@ -2939,7 +2943,7 @@ end
 -- reconcile vs existing, note writes deferred to the tail walk. see design/note-macros-v2.md § Offline continuous realisation
 local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWindows, fxRegions)
   -- Columns must be ppq-ordered here (eachWindowNote / allocateRegionLanes / membersOf read col.events
-  -- directly); the writers seat in order and nothing since reorders. see docs/decisions.md § 2026-07-19
+  -- directly); the writers seat in order and nothing since reorders. see design/decisions.md § 2026-07-19
 
   -- fxWindow's keys are exactly the non-pa fx cells (computeFxWindows emitted them, on-take + restored);
   -- bucket by channel, (lane, ppq)-sorted, so expandChannel reads producers instead of rescanning columns.
@@ -3618,7 +3622,7 @@ local function frontierTails(chan, indexList, extras, dirt, parkedBoundFor, take
   }
 
   -- Disturbed seeded by name: derived membership is all of extras; adds/deletes name a seat the
-  -- index tick cluster answers; byUuid resolve is note-scoped -- see docs/decisions.md § 2026-07-18.
+  -- index tick cluster answers; byUuid resolve is note-scoped -- see design/decisions.md § 2026-07-18.
   local anchors = {}
   for _, rec in ipairs(extras) do if rec.derived and not keptDerived[rec] then disturbed[rec] = true end end
   for _, seed in ipairs(dirt) do
@@ -3629,7 +3633,7 @@ local function frontierTails(chan, indexList, extras, dirt, parkedBoundFor, take
   end
 
   -- Phase 1 -- settle onsets, same-pitch-local (a nudge only collides same-pitch successors). Each
-  -- pitch's cascade chain gathers on the pristine index, then settles by position. See docs/decisions.md § 2026-07-18.
+  -- pitch's cascade chain gathers on the pristine index, then settles by position. See design/decisions.md § 2026-07-18.
   local byPitch, chains = {}, {}
   for e in pairs(disturbed) do util.bucket(byPitch, e.pitch, e) end
   for _, seeds in pairs(byPitch) do

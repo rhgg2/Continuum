@@ -973,6 +973,15 @@ already staged) and before the snapshot (separations/deletes ride this
 flush). Walks `rawIndex[chan].notes` for each of the 16 channels,
 bucketing by pitch, and reports as the `collide` span.
 
+`collisionKills` sits at file scope, not in the stager: it reads the raw
+index and returns verdicts, holding no staging state of its own, and the
+stager applies them because `deleteNote` is the stager's. It cannot move
+into the rebuild either. Running pre-commit is what lands tm's kill
+verdicts before mm ever sees a same-pitch collision, which is why mm's own
+backstop (`midiManager.lua:1040`) fires ~never; after the commit, mm's
+`resolveGroup` would always pre-empt `voicing.resolveSorted` and the
+verdict would be mm's rather than tm's.
+
 That list is exactly the post-flush note set the scan used to assemble
 by sweeping `byUuid` and then `adds`, because every site that files a
 note into one files it into the other: `makeEntry` is `byUuid`'s only
