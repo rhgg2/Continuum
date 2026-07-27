@@ -140,9 +140,18 @@ Three rules, applied hard:
 ## Workflow
 
 1. Source change first. Update or add `--KIND:` annotations alongside.
-2. The `.map` file regenerates via the post-edit hook.
+2. The `.map` file regenerates via the post-edit hook — for the edited
+   `.lua` only. After a change to the generator (`tools/map_extract.py`),
+   regenerate every map by hand:
+   `for f in *.lua; do python3 tools/map_extract.py "$f" map/; done`.
 3. If the change touches anything `docs/<file>.md` describes, update the
    doc in the same pass.
+
+`.map` files carry Unicode (`·↔→≥¢`), so git classifies them as **binary**:
+`git diff map/` reports "Binary files differ" and `--stat` shows
+`Bin nnnn -> nnnn`, hiding every line change. Review them with
+`git diff --text map/…`, or grep the working file against
+`git show HEAD:map/<f>.map`.
 
 ## Keeping docs in sync
 

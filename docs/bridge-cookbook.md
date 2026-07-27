@@ -95,6 +95,20 @@ redirected `print` — so you must swap that sink to capture it; and GC
 `tm:rebuild` runs the pipeline *outside* any span, scattering its stages
 as throwaway roots; wrap it in your own root span.
 
+The same artefact bites hand-rolled timing loops: the **first** timed loop
+in a chunk absorbs GC cost from whatever allocated before it and can read
+~50% high. Measured 2026-07-25 — a `mm:notesRaw(1)` drain timed first read
+0.77ms; the same drain after a warm-up and an explicit collect read 0.496ms
+across three passes, which is the whole-array walk's own cost. Warm,
+collect, then report *every* pass: a single number gives you nothing to
+disbelieve.
+
+```lua
+drain(a, 5); drain(b, 5)      -- warm
+collectgarbage('collect')
+for pass = 1, 3 do ... end    -- report every pass, not one number
+```
+
 There are **three baselines** — distinct pipeline paths that do not move
 together. Measure all three; each `[perf] <indented stage> <ms>` tree is
 sorted within itself by cost.

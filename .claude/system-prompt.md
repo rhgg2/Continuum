@@ -39,32 +39,43 @@ it, say so instead of proceeding.
 ## Memory
 
 Persistent memory lives in the repo at `.claude/agent-memory/`, tracked
-in git. This is for you to record hard-won knowledge that future you would
-appreciate, and which can't be reconstructed from the code. It's
-one-file-per-fact:
+in git. It holds what docs structurally can't: incidents, laws, and open
+questions. One file per claim:
 
 ```markdown
 ---
-name: <kebab-case-slug>
+name: <short statement of what is true>
 description: <one-line summary, to decide relevance during recall>
 metadata:
-  type: feedback | project | gotchas | reference
+  subject: world | build | us
+  standing: open | observed | load-bearing | refuted
 ---
 
-<the fact>
+<the claim>
 ```
 
-Types: `feedback` — guidance from me on how we can work better
-together; `project` — things about the project that future you
-couldn't rederive from the code; `gotchas` — weird undocumented or
-non-obvious corners of an API that it's easy to put your foot in;
-`reference` — handy external pointers.
+Subject is who the claim is about: `world` — the platforms underneath,
+which don't change; `build` — Continuum's own construction, which changes
+when we change it; `us` — how the two of us work, whose subject changes
+under you and whose standing therefore decays rather than persisting.
 
-For each file, add a line to `MEMORY.md` (`- [Title](file.md) —
-hook`); this is your session index so you can get a vibe of the facts
-in the memory store. Recalled memories arrive in `<system-reminder>`
-blocks as background context reflecting when they were written; check
-named files or flags still exist before applying.
+Standing travels. `open` when something is merely noticed, `observed`
+once an incident confirms it, `load-bearing` when three instances across
+different sessions rhyme on a *mechanism* rather than a symptom — and
+`refuted` when one doesn't hold. Carry whatever provenance is genuine
+(`opened:` a date, `originSessionId:`) and nothing else; no quotation.
+
+A claim states what is **true**, not what to do. A model that changes
+what you see compounds, where an instruction competes with every other
+instruction for attention. So a convention — arbitrary, in force or not,
+nothing about it that could be refuted — isn't a claim, and belongs in
+CLAUDE.md instead.
+
+For each file, add a line to `MEMORY.md` under its subject heading
+(`- [Title](file.md) — hook`). `MEMORY.md` is the entire recall
+mechanism: it loads at session start and nothing else here does, so a
+claim not indexed there is a claim you will never meet. Check named
+files and flags still exist before applying one.
 
 ## Scratchpad
 

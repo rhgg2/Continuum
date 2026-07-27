@@ -18,9 +18,12 @@ different pictures of the same state. Thus, go through the public API
 of the adjacent layer rather than reaching past it.
 
 `continuum.lua` wires everything; `coordinator` owns the UI frame and
-switches between pages. Each page sits at the top of a `page → view →
+switches between pages. Each page *coordinates* a `page → view →
 manager → ...` stack (currently tracker, sampler, wiring, arrange,
-editor). There are also many cross-cutting services including
+editor) rather than sitting atop it: it builds the substack and drives
+lifecycle on the layer that owns it. So the adjacent-layer rule above
+governs calls *within* the chain, not the page's reach into it. There
+are also many cross-cutting services including
 chrome/painter helpers; for the live module set and how they connect,
 use `mcp__readium_docs__map_query`.
 

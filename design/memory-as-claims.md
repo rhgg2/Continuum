@@ -96,6 +96,29 @@ nowhere else. Almost nothing was being *stored*; it was being duplicated.
 rather than staying a singleton, on D4's test — nothing about it could be
 refuted, only followed or not.
 
+*2026-07-27, on the fold itself.* The store lands at ten files, as predicted,
+but not the ten predicted. `gotchas_reaimgui_api` was slated for absorption
+into duplicate-state and could not be: that law takes two of its seven
+sections, and the other five — `EnterReturnsTrue` not committing `buf`,
+`BeginPopup` not inheriting `NoNav`, `OpenPopup` anchoring to the mouse, `Esc`
+not bubbling, the `SameLine`/`Selectable` overlap pair — share no mechanism
+with each other beyond *the signature is right and the runtime isn't*. That is
+itself a claim, so the file stays as `world_reaimgui_behaviour` at `observed`,
+and D6's "folded / kept / to docs / to CLAUDE.md" gains no fifth destination.
+Four other files carried a **remedy** the law had abstracted away — the law
+says what is true, and D3 is right that this is the more useful form, but the
+fix is not recoverable from it. Three went to the claim that generalises them
+(`bash -n`, `python3` for hook date maths) and two to docs (`git diff --text`
+and regen-all-maps to CONVENTIONS, the warm/collect/report-every-pass recipe to
+the bridge cookbook). The lesson for a future fold is that the delta check has
+two halves, not one: does the mechanism survive, *and* does the fix.
+
+One consequence not anticipated: every keeper's git creation date reads
+2026-07-27, because that is when the store was committed into the repo. The
+bulk-import claim, folded into vantage an hour earlier, describes exactly this
+artefact — so the keepers carry `originSessionId` and no `opened:` rather than
+a date that isn't theirs.
+
 One find sharpens the problem statement above. Its index line asserted that cmgr
 scopes "don't stack (one active at a time)", which contradicts both cmgr and the
 file it indexed. So the store is worse than inert: an always-loaded line had been
