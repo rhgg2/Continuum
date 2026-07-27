@@ -127,6 +127,16 @@ After the commit, mm's `resolveGroup` would always pre-empt
 `voicing.resolveSorted`. So the scan hoists to file scope as derivation
 the stager calls, and stays where it runs.
 
+*Amended 2026-07-27 (ordering):* moving the drive up to `tm:flush` puts
+the `postflush` fire *before* the rebuild on the no-mm-ops path, where
+it used to follow it. Inert in fact: that path commits no adds, so gm's
+postflush link loop has nothing to stamp, and its `persist()` writes ds
+`groups`, which tm's `dataChanged` handler does not act on
+(`trackerManager.lua:4749-4776`). Hoisting `fire('postflush')` up
+alongside the drive would preserve the order exactly, and is rejected:
+it splits the preflush/postflush pair across the stager boundary to
+keep an ordering nothing reads.
+
 `reconcilePcs` goes the other way: the pipeline already *has* that
 stage, so the move is a deletion. Measured 2026-07-27 — short-circuiting
 the flush-time pass leaves the suite at 2179/2180, and the one failure

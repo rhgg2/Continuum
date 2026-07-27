@@ -737,10 +737,12 @@ return {
       local h = harness.mk()
       addNote(h, { pitch = 60, lane = 1 })
       injectArp(h)
-      local rebuilds = 0
+      local rebuilds, postflushes = 0, 0
       h.tm:subscribe('rebuild', function() rebuilds = rebuilds + 1 end)
+      h.tm:subscribe('postflush', function() postflushes = postflushes + 1 end)
       h.tm:assignParked(h.tm:getChannel(1).parked[1], { pitch = 67 }); h.tm:flush()
       t.eq(rebuilds, 1, 'a parked-only flush still rebuilds exactly once')
+      t.eq(postflushes, 1, 'flush has one exit, so postflush fires exactly once')
       t.eq(h.tm:getChannel(1).parked[1].pitch, 67, 'the edit is visible after the rebuild')
     end,
   },

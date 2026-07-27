@@ -73,7 +73,7 @@ local derivedInputs
 -- Rebuilt chans re-read the wire, so muted flags need re-conforming; setMutedChannels consumes.
 local muteConform  = {}
 -- True only while flush writes the parked stash; suppresses the inline dataChanged
--- rebuild so flush drives the single rebuild. see design/note-macros-v2.md § Parked editing
+-- rebuild so tm:flush drives the single rebuild. see design/note-macros-v2.md § Parked editing
 local flushingParked = false
 -- Set via tm:requestRebuild for geometry-only changes staging no mm ops: forces the flush
 -- past its no-op return AND the rebuild past the rebuild(∅) gate, which consumes it.
@@ -1349,7 +1349,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
   end
 
   -- Apply staged edits to cloned stashes, then write back under flushingParked so the inline
-  -- dataChanged rebuild is suppressed (flush drives the one rebuild).
+  -- dataChanged rebuild is suppressed (tm:flush drives the one rebuild).
   local function flushParked()
     local parked = util.deepClone(ds:get('fxParked') or {})
     for _, e in ipairs(parkedEdits) do
@@ -1379,74 +1379,75 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
   --contract: commits deletes, then assigns, then adds under one mm:modify
   --contract: pb cents→raw conversion happens here
   --contract: snapshots ops before mm:modify; mm-callback re-entry can't re-emit in-flight ops
+  --contract: returns true when nothing reached mm, so the caller drives the rebuild
   --emits: preflush -- (adds, assigns, deletes)
   --contract: preflush fires before the no-op check so a subscriber can stage peer ops
   --emits: postflush -- nil
-  --contract: postflush fires after mm:modify; subscribers read mm-stamped uuids on staged adds
+  --contract: postflush fires after the commit; subscribers read mm-stamped uuids on staged adds
   function flush()
     fire('preflush', adds, assigns, deletes)
     if #adds == 0 and #assigns == 0 and #deletes == 0 and #parkedEdits == 0
        and not rebuildRequested then return end
 
     -- Parked edits stage alongside mm ops. Write the stash first (guarded), then let the mm
-    -- commit's reload->rebuild pick it up; with no mm ops, drive the one rebuild explicitly.
+    -- commit's reload->rebuild pick it up; with no mm ops, the caller drives the one rebuild.
     local hadMmOps = #adds > 0 or #assigns > 0 or #deletes > 0
     if #parkedEdits > 0 then flushParked() end
-    if not hadMmOps then
+
+    if hadMmOps then
+      perf.start('flush')
+
+      perf.start('collide')
+      for _, n in ipairs(collisionKills()) do deleteNote(n) end
+      perf.stop('collide')
+
+      local flushAdds, flushAssigns, flushDeletes = adds, assigns, deletes
+      adds, assigns, deletes = {}, {}, {}
+      perf.count('committed', #flushAdds + #flushAssigns + #flushDeletes)
+
+      -- Same-pitch moves transiently share a seat key. assignNote's guard keeps the index correct in
+      -- either order; descending only spares the backstop a scan. see docs/trackerManager.md § Commit ordering
+      table.sort(flushAssigns, function(a, b)
+        return (a.update.ppq or a.evt.ppq or 0) > (b.update.ppq or b.evt.ppq or 0)
+      end)
+
+      -- pb wire conversion at flush: raw = centsToRaw(cents + detuneAt(seat)).
+      -- Rebuild's absorber pass refines with the post-walk layout; this is best-effort for the interim.
+      for _, e in ipairs(flushAssigns) do
+        if e.evt.evType == 'pb' and e.update.cents ~= nil then
+          e.update.val = centsToRaw(e.update.cents + detuneAt(e.evt.chan, e.evt.ppq))
+        end
+      end
+      for _, a in ipairs(flushAdds) do
+        if a.evt.evType == 'pb' then
+          a.evt.val = centsToRaw((a.evt.cents or 0) + detuneAt(a.evt.chan, a.evt.ppq))
+        end
+      end
+
+      perf.start('mm')
+      mm:modify(function()
+        for _, o in ipairs(flushDeletes) do
+          mm:delete(o.uuid)
+          forgetUuid(o.uuid)
+        end
+        for _, o in ipairs(flushAssigns) do
+          mm:assign(o.uuid, o.update)
+        end
+        for _, o in ipairs(flushAdds) do
+          local uuid = mm:add(o.evt)
+          -- addLowlevel already filed the raw staged object into rawIndex; drop it by identity
+          -- and re-file mm's canonical clone so the entry matches reload (cc shape, pb cents).
+          if uuid then rawIndexRemove(o.evt); idxReconcile(uuid) end
+        end
+      end)
+      perf.stop('mm')
+      perf.stop('flush'); perf.report()
+    else
       absorbReloadDirt({})   -- no mm reload to fold flushParked's seeds; fold them here
-      tm:rebuild(false)
-      fire('postflush')
-      return
     end
 
-    perf.start('flush')
-
-    perf.start('collide')
-    for _, n in ipairs(collisionKills()) do deleteNote(n) end
-    perf.stop('collide')
-
-    local flushAdds, flushAssigns, flushDeletes = adds, assigns, deletes
-    adds, assigns, deletes = {}, {}, {}
-    perf.count('committed', #flushAdds + #flushAssigns + #flushDeletes)
-
-    -- Same-pitch moves transiently share a seat key. assignNote's guard keeps the index correct in
-    -- either order; descending only spares the backstop a scan. see docs/trackerManager.md § Commit ordering
-    table.sort(flushAssigns, function(a, b)
-      return (a.update.ppq or a.evt.ppq or 0) > (b.update.ppq or b.evt.ppq or 0)
-    end)
-
-    -- pb wire conversion at flush: raw = centsToRaw(cents + detuneAt(seat)).
-    -- Rebuild's absorber pass refines with the post-walk layout; this is best-effort for the interim.
-    for _, e in ipairs(flushAssigns) do
-      if e.evt.evType == 'pb' and e.update.cents ~= nil then
-        e.update.val = centsToRaw(e.update.cents + detuneAt(e.evt.chan, e.evt.ppq))
-      end
-    end
-    for _, a in ipairs(flushAdds) do
-      if a.evt.evType == 'pb' then
-        a.evt.val = centsToRaw((a.evt.cents or 0) + detuneAt(a.evt.chan, a.evt.ppq))
-      end
-    end
-
-    perf.start('mm')
-    mm:modify(function()
-      for _, o in ipairs(flushDeletes) do
-        mm:delete(o.uuid)
-        forgetUuid(o.uuid)
-      end
-      for _, o in ipairs(flushAssigns) do
-        mm:assign(o.uuid, o.update)
-      end
-      for _, o in ipairs(flushAdds) do
-        local uuid = mm:add(o.evt)
-        -- addLowlevel already filed the raw staged object into rawIndex; drop it by identity
-        -- and re-file mm's canonical clone so the entry matches reload (cc shape, pb cents).
-        if uuid then rawIndexRemove(o.evt); idxReconcile(uuid) end
-      end
-    end)
-    perf.stop('mm')
-    perf.stop('flush'); perf.report()
     fire('postflush')
+    return not hadMmOps
   end
 
   ----- Reload / clear
@@ -1589,7 +1590,8 @@ function tm:assignEvent(evt, update) assignEvent(evt, update) end
 function tm:addParked(spec)           addParked(spec)           end
 function tm:assignParked(evt, update) assignParked(evt, update) end
 function tm:deleteParked(evt)         deleteParked(evt)         end
-function tm:flush() flush() end
+-- With no mm ops there is no reload->rebuild to ride, so the one rebuild is driven here.
+function tm:flush() if flush() then tm:rebuild(false) end end
 
 ----- Length
 
@@ -1615,7 +1617,7 @@ function tm:setLength(newPpq)
     pendingLen = newPpq
     dirtyChan()
     tm:requestRebuild()   -- an OPEN-only shrink stages no mm ops; flush must rebuild regardless
-    flush()
+    tm:flush()
     pendingLen = nil
   end
   if newPpq ~= oldPpq then mm:setLength(newPpq / mm:resolution()) end
@@ -1659,7 +1661,7 @@ function tm:rescaleLength(newPpq)
         rawTime  = true,
       })
     end
-    flush()
+    tm:flush()
   end
 
   applyTimeMap(function(t) return f * t end, function() return f end)
@@ -1745,7 +1747,7 @@ function tm:setMutedChannels(set)
       end
     end
   end
-  flush()
+  tm:flush()
 end
 
 ---------- REBUILD
