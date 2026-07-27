@@ -249,6 +249,16 @@ operates the store, because the two readings are different: a session that is
 *recalling* wants the claims and not the scheme, and a session that is *filing*
 has invoked the workflow and has the scheme in front of it already.
 
+*2026-07-27, on how much of the loop the always-loaded surface carries.* The
+system prompt takes only the verb an ordinary session performs — jot — with
+the permission it grants and a pointer to the pass; MEMORY.md's preamble goes
+entirely. Chase, crystallise and decay are the pass's own, stated in its
+`SKILL.md`, and restating them in always-loaded budget would re-make one
+surface up the mistake D6 found on the one below. So the workflow of D14 is
+written across two surfaces rather than one, split by the same reading test
+this decision turns on: the surface a session already has open when it needs
+the rule.
+
 **D13 — Open claims graduate by a rising-sea pass, not a tally.** Curiosities
 accumulate in `open.md` until a pass over them finds that several are one thing
 in different clothes; the crystal becomes an `observed` claim in its own file

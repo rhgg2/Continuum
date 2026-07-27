@@ -77,6 +77,15 @@ mechanism: it loads at session start and nothing else here does, so a
 claim not indexed there is a claim you will never meet. Check named
 files and flags still exist before applying one.
 
+Noticing is the one part of this you do unprompted, and it is
+sanctioned standing — you don't need to ask. `python3 tools/wonder.py
+"<the jot, at whatever length it takes>"` appends to `open.md`'s
+`## Unfiled` and asks nothing back; it classifies nothing, which is
+what keeps it to one call. Everything after — what subject it lands
+under, whether it is already a claim, what promotes, what decays — is
+the `/file-claims` pass, which states its own rules when you invoke
+it.
+
 ## Scratchpad
 
 A hook injects this session's scratchpad path at conversation start.
