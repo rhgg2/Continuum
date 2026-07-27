@@ -85,6 +85,24 @@ CLAUDE.md** where it is a convention (D4). A few files evidence two laws —
 cited by both rather than absorbed by either. The store lands at roughly ten
 files.
 
+*2026-07-27, on carrying out the retirements.* "Misfiled documentation" was the
+right reading, and cheaper than expected: `project_config_schema` retired to
+`docs/configManager.md` with **no doc edit at all** — unknown-keys-raise,
+tolerant pruning, deep-clone-at-boundary and the dataStore split were all
+already there — and `reference_commandmanager_limits` needed only its
+prefix-capture limits carried across, the one sentence in either file that lived
+nowhere else. Almost nothing was being *stored*; it was being duplicated.
+`feedback_command_table_tidy` went to CLAUDE.md alongside `commit_scope_config`
+rather than staying a singleton, on D4's test — nothing about it could be
+refuted, only followed or not.
+
+One find sharpens the problem statement above. Its index line asserted that cmgr
+scopes "don't stack (one active at a time)", which contradicts both cmgr and the
+file it indexed. So the store is worse than inert: an always-loaded line had been
+quietly wrong for some time, and being unfalsifiable in practice is not the same
+as being right. That is an argument for standing — a claim that can be refuted is
+a claim someone eventually checks.
+
 **D7 — `wonder` folds in as the `open` end.** Curiosities are the raw material
 of insight, and isolation is what killed the ledger — seven entries, one
 resolved in eight days, and that one a test entry. But an `open` claim carries

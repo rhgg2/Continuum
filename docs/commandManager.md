@@ -138,6 +138,16 @@ exposes the underlying domain verbs (e.g. `vm:reswingSelection`,
 Commands invoked by name outside the keymap path (mouse wheel,
 swing-editor buttons) ignore the return value and just run for effect.
 
+## Prefix capture
+
+Prefix-argument entry is digit-only and gated. The dispatcher feeds
+`'0'..'9'` and `'/'` into `appendPrefix` only while `isPrefixActive()`
+is true, and the sole `beginPrefix` binding is Super+U (continuum.lua).
+Bare digit keys therefore stay free for ordinary commands in any scope;
+they collide with prefix entry only just after Super-U. There is no
+letter-chord support — vim-style two-key entry (`gr`, `gg`) would need
+new machinery.
+
 ## Wrapping
 
 `wrap(name, wrapper)` replaces `commands[name]` with

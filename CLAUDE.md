@@ -149,6 +149,17 @@ neither.
   wiring, so stub ImGui and REAPER at the surface and leave the
   behaviour under test alone.
   
+## Commits
+
+- **Headline only.** `git commit -m "<headline>"` and nothing else: no
+  body, no `Co-Authored-By`, no generated-with tagline. This overrides
+  the global default, which asks for the trailer.
+- **`config:` is the scope for Claude Code's own machinery** — skills,
+  hooks, settings, agents, and tools whose only consumer is a skill
+  (e.g. `tools/comment_hygiene.py`). They belong to no product
+  subsystem, so a subsystem scope misreads. When a change also touches
+  product code, scope by the product and mention the config knock-on.
+
 ## Coding style
 
 The items below are the house dialect rather than rules with teeth;
@@ -163,6 +174,10 @@ matching them keeps the codebase reading as one voice.
   `pitchWidth` rather than `x1/x2/hW`. Bare coordinate names are for
   tight local math, where the role is visible a line away.
 - Scope tightly: wrap private helpers in `local fn do ... end`.
+- Registry tables stay one line per entry. The `registerAll{...}`
+  command table is a scannable verb → `{fn, undoDesc}` map, so extract a
+  multi-line body to a named `local function` rather than inlining a
+  closure that breaks the alignment.
 - Section banners: `----- Name`. Major: `----------- PUBLIC`.
 - Comments carry the code's state, not the session's; no in-progress
   work context.
