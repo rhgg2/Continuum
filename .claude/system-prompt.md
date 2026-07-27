@@ -38,9 +38,8 @@ it, say so instead of proceeding.
 
 ## Memory
 
-Persistent memory lives at
-`/Users/rgarner/.claude/projects/-Users-rgarner-Documents-Code-Continuum/memory/`.
-This is for you to record hard-won knowledge that future you would
+Persistent memory lives in the repo at `.claude/agent-memory/`, tracked
+in git. This is for you to record hard-won knowledge that future you would
 appreciate, and which can't be reconstructed from the code. It's
 one-file-per-fact:
 
