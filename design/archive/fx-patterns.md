@@ -1,8 +1,9 @@
 # fx patterns — note/curve params via a checkout tracker
 
-> opened: 2026-07-08 · status: working design; not started
+> opened: 2026-07-08 · closed: 2026-07-27 · status: built; P1–P4 landed,
+> Mini undo dropped. What is true now is `docs/patternEditor.md`.
 >
-> Working design doc. Companion to `design/note-macros-v2.md` (the chain
+> Closed design doc. Companion to `design/note-macros-v2.md` (the chain
 > surface): generator params whose **value is a note pattern or a curve**
 > — an ostinato source, an arbitrary-shape LFO — reusable by copy
 > through a project library, edited in a modal hosting a **second
@@ -211,7 +212,7 @@ sharing returns in § P4 as **explicit copies** through the shelf.
 ## P4 — polish
 
 Decisions taken 2026-07-24; the queue is compiled in
-`plan/fx-patterns.md`.
+`plan/archive/fx-patterns.md`.
 
 **Library as a copy shelf.** `fxPatterns` (the P2 store) goes live as
 a named shelf of bodies, written through the *main* ds. **Save** and
@@ -226,14 +227,18 @@ re-realises nothing, and tm's `fxPatterns` `dataChanged` arm plus its
 `derivationInputs` entry are deleted rather than extended. Management
 stays inside the Load picker (delete only — see below).
 
-**Mini undo.** Undo/redo are root-scope registrations on the *main*
-cmgr, unreachable from the modal, and the mini ps never runs
-`pollUndo`. Wire: register fenced undo/redo on the mini cmgr —
-`continuum.lua`'s `undoFence` pattern, fenced at open so undo cannot
-cross into pre-open host edits — and poll the mini ps while the modal
-is up so a rewound P_EXT can't desync the mini ds. A REAPER undo
-rewrites the checkout take; the mini tm's rebuild then write-throughs
-the rewound state, so the param follows automatically.
+**Mini undo — dropped** (deprioritised 2026-07-24, dropped at close
+2026-07-27). Undo/redo are root-scope registrations on the *main* cmgr,
+unreachable from the modal, and the mini ps never runs `pollUndo`; the
+modal shipped that way. Its value never came clear against Esc, which
+restores the modal-open snapshot wholesale and so already covers "undo
+the edit I just started". The wire, should it ever be wanted: register
+fenced undo/redo on the mini cmgr — `continuum.lua`'s `undoFence`
+pattern, fenced at open so undo cannot cross into pre-open host edits —
+and poll the mini ps while the modal is up so a rewound P_EXT can't
+desync the mini ds. A REAPER undo rewrites the checkout take; the mini
+tm's rebuild then write-throughs the rewound state, so the param follows
+automatically.
 
 **Polyphony is infrastructure, per-kind.** The pattern field
 descriptor gains a boolean `poly` (default false/mono; settled
@@ -294,9 +299,10 @@ to hear it alone.)
 ## Risks & accepted quirks
 
 - **Undo interleaving.** Mini edits mint labelled REAPER undo blocks in
-  the host's history; after cancel they reference a deleted take. The
-  § P4 fence stops mini undo crossing the open boundary, but the
-  host-history interleaving itself stays. Accepted.
+  the host's history; after cancel they reference a deleted take. With
+  § P4's mini undo dropped there is no fence, and none is needed — undo
+  stays unreachable from the modal. The host-history interleaving itself
+  stays. Accepted.
 - **Orphan checkout.** A crash mid-edit leaves the checkout take on the
   scratch track. Accepted v1 (cheap to sweep at next open).
 - **Rebuild chattiness.** Write-through triggers a host rebuild per

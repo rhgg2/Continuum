@@ -18,7 +18,7 @@
 > and converging macros, aliases, and group-mirror onto one generator
 > spectrum over one regions substrate (R7).
 >
-> **Companions.** `design/fx-patterns.md` — generator params whose value
+> **Companions.** `design/archive/fx-patterns.md` — generator params whose value
 > is a note pattern or a curve. `design/fx-freeze.md` — committing
 > generator output. `design/pipe-dreams.md` — param modulation and the
 > stepped feed, the gleam this doc used to carry. What remains to build
@@ -885,7 +885,7 @@ surfacing to the view as non-editable cells sharing the ghost styling.
 
 **Patches.** A patch is a *named chain* — an ordered `{kind, params}`
 list, pure data, no code — saved to a library and instantiated **by copy**
-onto a region or note. `design/fx-patterns.md` has since proved the
+onto a region or note. `design/archive/fx-patterns.md` has since proved the
 machinery one level down: a scoped ds shelf with Save/Load through
 `chrome.drawPicker`, create and delete hooks, and load filtering on
 compatibility. A chain patch is the same idiom over `fx` lists, with the
@@ -939,7 +939,7 @@ rebuild fault.
 
 ## Owned elsewhere — not this doc's work
 
-- **Params whose value is a pattern or a curve** → `design/fx-patterns.md`.
+- **Params whose value is a pattern or a curve** → `design/archive/fx-patterns.md`.
 - **Freeze** → `design/fx-freeze.md`; one-way in both directions.
 - **Param modulation and the stepped feed** → `design/pipe-dreams.md`.
   The obligation those leave on today's work is a writing discipline

@@ -1,7 +1,7 @@
 # fx patterns — plan
 
-> source: `design/fx-patterns.md` — synthesis compiled from there;
-> don't design here.
+> source: `design/archive/fx-patterns.md` — synthesis compiled from
+> there; don't design here.
 
 ## Phases
 
@@ -14,7 +14,7 @@
    checkout stack + modal, both kinds, live preview — landed
 4. **P3.5 — inline bodies** (§ P3.5) — param stores the body, commit
    via `setFxField`; shared library re-scoped to a copy shelf — landed
-5. **P4 — polish** (§ P4) — queue below ← in flight
+5. **P4 — polish** (§ P4) — landed (Mini undo dropped at close)
 
 ## Landed (newest first; prune below ~4)
 
@@ -25,7 +25,9 @@
 
 ## Now
 
-(empty — P4's queue is clear. Its only remaining design item is Mini undo, deprioritised 2026-07-24 (value unclear; off the queue but not dropped from the design doc), so the next /plan-next decides whether P4 closes or the programme moves on.)
+(empty — closed 2026-07-27. P4's queue ran dry; Mini undo, deprioritised
+2026-07-24, was dropped outright at close and is recorded as dropped in
+the design doc's § P4.)
 
 ## Queued (current phase; one-liners)
 

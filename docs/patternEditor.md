@@ -63,7 +63,7 @@ same close/cancel path the keys use.
 ## Lane commands
 
 `addNoteLane` and `hideExtraCol` add/remove a note lane for a poly editor
-(§ P4 in `design/fx-patterns.md`). Both live on the *page* cmgr in the main
+(§ P4 in `design/archive/fx-patterns.md`). Both live on the *page* cmgr in the main
 tracker, not on `tv`'s `registerAll`, so the mini cmgr never inherits them
 and registers its own copies locally. `hideExtraCol`, not
 `removeOrHideCol`, is bound to the remove side: `removeOrHideCol`'s
@@ -121,5 +121,5 @@ project/global config tier — its only outward channel is the `commit`
 callback taken at open. `bind`/`unbind` pass `skipGuard` so the checkout
 on scratch never touches the host's guarded track.
 
-See `design/fx-patterns.md` § The checkout model / § The mini stack for the
+See `design/archive/fx-patterns.md` § The checkout model / § The mini stack for the
 fuller design and the alternatives considered.
