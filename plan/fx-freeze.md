@@ -18,19 +18,35 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-07-27 tm: restore flushingParked on the error path (§ Implementation notes)
 - **F1 — pb/at as first-class gm members** (2026-07-11) — every seam
-  rides generically; the only production change was `toGroup` sourcing pb
-  intent from `evt.cents` plus `makeEntry` carrying the pb `uuid`. Pinned
-  by `gm_pb_member_spec` ×6 and `gm_at_member_spec` ×2.
 - **F2a — projext undo** (2026-07-12..14, own record in
-  `design/archive/projext-undo.md`) — pextStore mirrors undoable project
-  slots to scratch P_EXT, so the `derived` clear rides REAPER undo. This
-  was fx-freeze's only gate on "one undo reverts wholly".
 
 ## Now
 
-(empty — new plan; run /plan-phase to split phase 1 into Queued.)
+(empty — the flushingParked error-path reset landed, so the suppression window is safe for freezeRegion's four ds writes; run /plan-next to promote the freezeRegion raw core)
 
 ## Queued (current phase; one-liners)
 
-(empty)
+1. `tm:freezeRegion(uuid)` raw core, region host — conversion order
+   under the suppression, all before one rebuild in one undo block:
+   clear `derived` (mm metadata assign; notes keep uuid/lane/detune) →
+   drop covered fxParked entries → drop the region → drop its windows
+   from `prevWindows` → dirtyChan + flush. `tm_fx_region_spec` pins:
+   arp authored + audible, chord gone with *no restore on next rebuild*
+   (standing-reconcile regression), seats stand as authored, tails clip
+   cross-window, one undo reverts wholly (rides pextStore).
+2. Note-host arm — `freezeRegion` handles a self-parked note host (its
+   fxParked spec IS the destroyed parked member) and an on-take augment
+   host (clear its `fx` chain instead); spec pins a note host freezing
+   by the same seam.
+3. tm eligibility gates — refuse before any mutation on note-window
+   overlap with another live region (merged `parkWindows` union) and on
+   same-target continuous overlap (painter-fold seats not separable);
+   spec pins each refusal. (Group-only fx-carrying-host-note gate
+   deferred to phase 3 with the group verb it gates.)
+4. tv freeze-to-raw verb — command wiring + confirm modal for the
+   parked-member destruction, `util.atomic` wrapping the post-confirm
+   continuation (modal resolves on a later frame), gate refusals
+   surfaced to the user; `tv_fx_region_spec` pins verb, confirm, and
+   refusal surfacing.

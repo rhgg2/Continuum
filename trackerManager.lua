@@ -72,8 +72,8 @@ local dirtyChans   = {}
 local derivedInputs
 -- Rebuilt chans re-read the wire, so muted flags need re-conforming; setMutedChannels consumes.
 local muteConform  = {}
--- True only while flush writes the parked stash; suppresses the inline dataChanged
--- rebuild so tm:flush drives the single rebuild. see design/note-macros-v2.md § Parked editing
+-- True while a tm-internal driver (parked flush, region freeze) writes ds; only suppressingRebuild
+-- may set it, suppressing the inline dataChanged rebuild. see design/note-macros-v2.md § Parked editing
 local flushingParked = false
 -- Set via tm:requestRebuild for geometry-only changes staging no mm ops: forces the flush
 -- past its no-op return AND the rebuild past the rebuild(∅) gate, which consumes it.
@@ -86,6 +86,14 @@ local pendingLen
 local EPS         = 1
 
 ---------- SHARED HELPERS
+
+--invariant: flushingParked is restored on every exit; an escaping error must not freeze rebuilds
+local function suppressingRebuild(fn)
+  flushingParked = true
+  local ok, err = xpcall(fn, debug.traceback)
+  flushingParked = false
+  if not ok then error(err, 0) end
+end
 
 local function sortByPPQ(tbl)
   table.sort(tbl, function(a, b) return a.ppq < b.ppq end)
@@ -1346,7 +1354,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
     for i, spec in ipairs(list) do if matches(spec) then return i end end
   end
 
-  -- Apply staged edits to cloned stashes, then write back under flushingParked so the inline
+  -- Apply staged edits to cloned stashes, then write back under suppressingRebuild so the inline
   -- dataChanged rebuild is suppressed (tm:flush drives the one rebuild).
   local function flushParked()
     local parked = util.deepClone(ds:get('fxParked') or {})
@@ -1366,9 +1374,11 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
       end
     end
     parkedEdits = {}
-    flushingParked = true
-    if not util.deepEq(ds:get('fxParked') or {}, parked) then ds:assign('fxParked', #parked > 0 and parked or util.REMOVE) end
-    flushingParked = false
+    suppressingRebuild(function()
+      if not util.deepEq(ds:get('fxParked') or {}, parked) then
+        ds:assign('fxParked', #parked > 0 and parked or util.REMOVE)
+      end
+    end)
   end
 
   ----- Flush: commit accumulated ops to mm.

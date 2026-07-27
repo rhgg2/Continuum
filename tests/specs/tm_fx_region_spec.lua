@@ -760,6 +760,25 @@ return {
     end,
   },
 
+  {
+    name = 'an error escaping the parked flush leaves later ds changes still rebuilding',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { pitch = 60, lane = 1 })
+      injectArp(h)
+      local boom = function(change) if change.name == 'fxParked' then error('subscriber blew up') end end
+      h.ds:subscribe('dataChanged', boom)
+      h.tm:assignParked(h.tm:getChannel(1).parked[1], { pitch = 67 })
+      local ok = pcall(function() h.tm:flush() end)
+      t.falsy(ok, 'the subscriber error propagates out of flush')
+      h.ds:unsubscribe('dataChanged', boom)
+      local rebuilds = 0
+      h.tm:subscribe('rebuild', function() rebuilds = rebuilds + 1 end)
+      h.ds:assign('fxParked', {})
+      t.eq(rebuilds, 1, 'the suppression came back down, so a later ds change still rebuilds')
+    end,
+  },
+
   ----- Augment by kind: a continuous region leaves its members sounding (no parking)
 
   {
