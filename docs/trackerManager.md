@@ -51,20 +51,92 @@ extraColumns[chan] = {
 
 ## Update manager (um)
 
-tm's write side — a staging layer folded into tm's own scope (the source
-banners it `-- UPDATE MANAGER`), not a separate object. All mutations —
-from tv and from tm's own rebuild-time housekeeping — funnel through
-`tm:addEvent` / `tm:assignEvent` / `tm:deleteEvent`, which apply to a
-local cache (`byUuid`, per-channel `rawIndex`) and accumulate
-mm-facing ops in `adds`/`assigns`/`deletes`. `tm:flush()` commits the
-batch in one `mm:modify` call. The cache is maintained incrementally at
-every mm-write site (the verbs, flush, and rebuild's `mmBatch`), so a full
-`reload()` from `mm:events()` runs only when mm re-reads its whole event
-set — module init and wholesale reloads (§ Incremental index reconciliation).
+Two `do ... end` blocks folded into tm's own scope, not separate objects:
+the source banners them `-- RAW INDEX` and `-- STAGER`. The index owns
+`rawIndex`/`byUuid`/`fxHosts` and the upkeep that keeps them true; the
+stager accumulates mm-facing ops and commits them. The arrow runs one
+way — staging reaches the index through its doors (`rawIndexInsert`,
+`rawIndexRemove`, `rawIndexRefile`, `idxReconcile`, `forgetUuid`,
+`loadIndex`) and never the reverse — so the type→list mapping
+(`rawIndexListFor`) stays inside the index.
+
+The index is the primary structure and the stager is one of its clients,
+which is the opposite of how the name reads. `rawIndex[chan]` holds every
+event on the channel, one `rawThenLogical`-sorted list per type; the whole
+rebuild pipeline reads it in place, ~40 sites of it, against ~10 callers
+for the write verbs — nearly all of those tm's own forwarders. The index
+lives inside um because um is what keeps it true, not because staging owns
+it. `rawIndexFor(chan)` is the single read door: it covers all six lists,
+and the typed `rawNotes`/`rawPbs` spellings that used to sit beside it are
+gone.
+
+Staging proper: all mutations — from tv and from tm's own rebuild-time
+housekeeping — funnel through `tm:addEvent` / `tm:assignEvent` /
+`tm:deleteEvent`, which apply to the index and accumulate mm-facing ops in
+`adds`/`assigns`/`deletes`. `tm:flush()` commits the batch in one
+`mm:modify` call and drives the follow-on rebuild; the stager's own `flush`
+only reports whether the caller still owes one, because a stager that calls
+`tm:rebuild` is the layering inversion in miniature. The index is
+maintained at every mm-write site (the verbs, flush, and rebuild's
+`mmBatch`), so a full `reload()` from `mm:events()` runs only when mm
+re-reads its whole event set — module init and wholesale reloads
+(§ Incremental index reconciliation).
+
+Derivation that happens to run at flush time is not staging, and sits
+outside both blocks: `collisionKills` (§ Flush collision scan) is at file
+scope, called by `flush` before the commit because tm's kill verdicts have
+to land before mm ever sees a same-pitch collision. The flush-time PC
+reconcile that used to sit beside it is gone — the rebuild pipeline already
+has that stage.
 
 The sections below reference um by name because its frame and encoding
 choices (cents not raw; realisation toward mm, logical at the public
 surface) are the reason several conventions exist.
+
+### The entry mutation contract
+
+Index entries are live shared records — the rebuild reads them in place
+rather than copying, which is why the index is two blocks in tm rather than
+a module with a published interface. Three stages write to an entry, and
+that is the whole set:
+
+- `settleOnset` writes `ppq` — the +1 same-pitch nudge.
+- `boundNote` writes `endppq` — the clipped tail.
+- `stampSamples` writes `sample` — the prevailing PC's sample.
+
+Things that look like entry mutation and aren't: `rebuildPbs` clones at the
+boundary, `rebuildInternals` writes mm's own column clones, and
+`colEvt`/`realised` are um's own decoration, set through `stampColEvt` and
+the entry lifecycle.
+
+All three go through `setRaw(entry, field, value)`, the entry-side twin of
+`setCell` for column cells (§ The note-lane shed): skip the no-op, and
+where the field is one of `rawThenLogical`'s keys, re-true the containing
+list — inline, or flagged for the open `withDeferredSort` block to sort
+once at its close. Only `ppq` of the three actually stains a sort key, but
+the door is the same for all of them so the rule lives in one place instead
+of at the call site. This is what retired `resortRawNotes`, a whole-channel
+re-sort the walk had to remember to call: with the repair structural,
+keeping the manual one would leave two ways to be correct.
+
+`anyNudge` survived that retirement, narrowed. It gated two repairs and
+only um's list became structural — `linearTails`'s merged `notes` and
+`frontierTails`'s `extras` are the walk's own scratch lists sharing the same
+records, so nothing can flag them, and dropping the gate would put an
+unconditional whole-channel sort on the dense path every pass.
+
+Nothing enforces any of this at runtime, deliberately. A metatable proxy
+would miss the exact write that matters — `__newindex` does not fire for a
+key that already exists — and catching it would need shadow storage with
+`__index` on every read, taxing the hot path the sharing exists to protect.
+`tm_raw_index_order_spec` is the backstop instead: it stains the index with
+a real nudge and catches a binary-seek reader answering from the stale
+order, and it pins every entry's `ppq` against mm's. The order half is
+checked through a consumer rather than literally, because asserting on the
+lists themselves would mean publishing a read accessor whose only caller is
+a spec. So the contract is declared and checked, not enforced: a new stage
+writing `entry.ppq` directly is a live bug, and the spec sees it only where
+a reader downstream is looking at the stale order.
 
 ### Incremental index reconciliation
 
@@ -260,6 +332,10 @@ flags channels whose resolved swing changed so the next rebuild
 rederives their raw ppqs from `ppqL`.
 
 ## Mutation contract
+
+This is the *edit* contract — how a caller gets a change into tm. The
+separate contract governing in-place writes to a live index entry is
+§ The entry mutation contract.
 
 Edits enter tm through the four methods below, which delegate to `um`.
 Never reach around them to mm directly. Because `um` is rebuilt each

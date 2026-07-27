@@ -1,6 +1,7 @@
 # um: index vs stager — splitting the update manager
 
-> opened: 2026-07-26 · status: in flight — `plan/um-index-stager.md`
+> opened: 2026-07-26 · status: complete 2026-07-27 —
+> `plan/archive/um-index-stager.md`
 >
 > Designed in conversation rather than in a design round; this doc is
 > the record. The decisions below are settled — if one needs reopening,
