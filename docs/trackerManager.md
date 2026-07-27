@@ -737,24 +737,23 @@ tier inside the bind's suppression window. So the mode tracks the
 *bound* take, never lagging on the arrange cursor mid-navigation (the
 bug that leaked synthetic PCs onto a non-tracker take's note-ons).
 
-Synthesis runs in two places:
+Synthesis runs in one place: **rebuild step 4.5** re-derives every
+dirty channel's PC stream from current note state and writes the delta
+to mm. Its `records` list comes from the channel's raw-index notes plus
+the fx-derived live ones, each carrying its column cell as `key`, and
+feeds through the pure `reconcilePCsForChan` helper; records lost to
+lane priority get `sampleShadowed = true` for renderer dimming.
 
-- **Rebuild step 4.5** does the full sweep: re-derives every channel's
-  PC stream from current note state and writes the delta to mm.
-- **Flush-time reconcile** (in `flush()`, gated on `dirtyPcChans`)
-  does the same per-channel for any channel whose notes mutated since
-  the last flush. `addNote`, `deleteNote`, and `assignNote` updates
-  to `sample` / `ppq` (where ppq covers delay too — `realiseNoteUpdate`
-  maps delay→ppq before assignNote sees it) all dirty the channel.
-
-Both call sites build a `records` list from their available source
-(lane events for rebuild; `byUuid` notes + pending adds for flush) and
-feed it through the same pure `reconcilePCsForChan` helper. Only the
-rebuild path passes a `key` (the lane event itself), so only it receives
-the shadow marking — records lost to lane priority get
-`sampleShadowed = true` for renderer dimming. The flush path builds
-keyless records: it refreshes the PC stream but marks no shadows (the
-next rebuild re-derives them).
+A second, flush-time pass ran the same derivation one mm commit
+earlier, over any channel whose notes had just mutated. It was deleted
+(2026-07-27). Every channel it dirtied was already dirty by the time
+the rebuild ran — the low-level verbs seed, and `mm:modify`'s reload
+folds those seeds in — so it only ever repeated the sweep with less
+information: no seed spans, no `noteLive` records, no shadow marking.
+It also inverted the bearing rule, because it synthesised from
+`n.sample or 0`: an unstamped note got a placeholder-zero PC parked at
+its own onset, which the next `stampSamples` then found and stamped
+back as 0, instead of the sample actually prevailing there.
 
 Group membership is by **realised** ppq, not logical — same-channel
 simultaneity is a MIDI-realisation constraint (one PC stream per

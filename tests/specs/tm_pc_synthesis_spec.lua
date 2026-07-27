@@ -183,11 +183,10 @@ return {
       -- A pre-stamped note establishes derivedInputs, so the initial rebuild is
       -- wholesale; the mid-session add then lands as a single seed and keeps the
       -- channel seed-dirty -- the branch stampSamples must still reach and stamp.
-      -- The stamped value is 0, not the seed pc's 9: authored PCs do not survive
-      -- synthesis (only the wholesale pass stamps from them), and by the seed pass
-      -- the added note's own lockstep derived PC (val 0) sits at its onset and wins
-      -- the at-or-before seek. What this pins is reachability -- an unstamped seed
-      -- note bears a sample rather than staying nil.
+      -- The stamped value is 5, not the seed pc's authored 9: authored PCs do not
+      -- survive synthesis, so what the at-or-before seek finds is the derived PC the
+      -- seed note's own sample 5 produced. What this pins is reachability -- an
+      -- unstamped seed note bears a sample rather than staying nil.
       local h = harness.mk{
         seed = {
           notes = { { ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100, detune = 0, delay = 0, sample = 5 } },
@@ -204,7 +203,7 @@ return {
       for _, n in ipairs(h.fm:dump().notes) do
         if n.pitch == 62 then added = n end
       end
-      t.eq(added and added.sample, 0, 'bare seed-add note is reached by stampSamples and bears a sample')
+      t.eq(added and added.sample, 5, 'bare seed-add note is reached by stampSamples and bears a sample')
     end,
   },
 

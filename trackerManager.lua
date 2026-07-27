@@ -724,7 +724,7 @@ end
 --contract: appends removals/adds to the sink {del(event), add(spec)}
 --contract: if record.key set, marks key.sampleShadowed=true on records lost to lane priority
 --contract: spans (from pcSeedSpans) narrow existing to in-span cells; nil = whole channel
---invariant: shadow marking is rebuild-only; flush callers omit key (a marked cell sheds its lane)
+--invariant: shadow marking needs the seat: a record with no colEvt sheds its lane silently
 --invariant: c.pc.events not written here; rebuildPCs splices it from mm after commit
 local function reconcilePCsForChan(chan, records, sink, spans)
   local existing = {}
@@ -1027,7 +1027,6 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
   local seeds = {}
   local parkedEdits = {}
   local parkedUuidSeq = 0
-  local dirtyPcChans = {}
 
   ----- Low-level verbs
 
@@ -1113,16 +1112,12 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
   -- um is a stager: pb authoring writes cents; wire raw is derived at flush (cents + detuneAt seat).
   -- Absorber seating/reseating happens in rebuild's absorber pass from the final note layout.
 
-  local function dirtyPc(chan) dirtyPcChans[chan] = true end
-
   local function addNote(n)
-    dirtyPc(n.chan)
     if lastMuteSet[n.chan] then n.muted = true end
     addLowlevel(n)
   end
 
   local function deleteNote(n, keepPAs)
-    dirtyPc(n.chan)
     if not keepPAs then forEachAttachedPA(n, function(evt) deleteLowlevel(evt) end) end
     deleteLowlevel(n)
   end
@@ -1159,11 +1154,6 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
   --contract: chan change: rebuild's absorber pass reconciles fakes across both channels
   --contract: ppq/endppq route through resizeNote
   local function assignNote(n, update)
-    -- lane/sample/ppq dirty PC priority; update.ppq covers direct + delay edits
-    -- (realiseNoteUpdate maps delay→ppq); endppq alone doesn't move the onset, so no dirty.
-    if update.sample ~= nil or update.ppq ~= nil or update.lane ~= nil then dirtyPc(n.chan) end
-    if update.chan and update.chan ~= n.chan then dirtyPc(n.chan); dirtyPc(update.chan) end
-
     if update.ppq ~= nil or update.endppq ~= nil then
       resizeNote(n, update.ppq or n.ppq, update.endppq or n.endppq,
                     update.ppqL    ~= nil and update.ppqL    or (n.ppqL    or n.ppq),
@@ -1174,19 +1164,6 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
       forEachAttachedPA(n, function(e) assignLowlevel(e, { pitch = update.pitch }) end)
     end
     if next(update) then assignLowlevel(n, update) end
-  end
-
-  ----- PC reconciliation (trackerMode mutation hook)
-
-  -- rawIndex holds realised events *and* staged adds, so one walk is the union byUuid needed a
-  -- second loop over adds to approximate. The sink mutates .pcs, never .notes, so no gather.
-  local function reconcilePcs(chan)
-    local records = {}
-    for _, n in ipairs(rawNotes(chan)) do
-      util.add(records, { ppq = n.ppq, ppqL = n.ppqL, lane = n.lane,
-                          sample = n.sample or 0 })
-    end
-    reconcilePCsForChan(chan, records, { del = deleteLowlevel, add = addLowlevel })
   end
 
   local function lookup(evtOrUuid)
@@ -1388,10 +1365,6 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
   --contract: postflush fires after mm:modify; subscribers read mm-stamped uuids on staged adds
   function flush()
     fire('preflush', adds, assigns, deletes)
-    if cm:get('trackerMode') and next(dirtyPcChans) then
-      for chan in pairs(dirtyPcChans) do reconcilePcs(chan) end
-      dirtyPcChans = {}
-    end
     if #adds == 0 and #assigns == 0 and #deletes == 0 and #parkedEdits == 0
        and not rebuildRequested then return end
 
@@ -1499,7 +1472,6 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
   function clearStaging()
     adds, assigns, deletes = {}, {}, {}
     parkedEdits            = {}
-    dirtyPcChans           = {}
     seeds                  = {}
   end
 

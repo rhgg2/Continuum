@@ -4,6 +4,16 @@ One dated entry per non-trivial design decision: what was chosen, over
 what, and why — one or two lines. Newest first. The commit skill
 prompts for an entry at commit time.
 
+- **2026-07-27** — The trackerMode PC synthesis hook at flush time is deleted; rebuild step 4.5 is
+  the single synthesis site. Every channel the hook dirtied was already dirty by the time the
+  rebuild ran (low-level verbs seed, mm:modify's reload folds them in), so it only repeated the
+  sweep with less information — no seed spans, no noteLive records, no shadow marking. It also
+  inverted the bearing rule: synthesising from `n.sample or 0` parked a placeholder-zero PC at an
+  unstamped note's own onset, which the next stampSamples found and stamped back as 0 instead of the
+  sample actually prevailing there. That value change is the suite's one expectation edit
+  (tm_pc_synthesis_spec), and it retires the stale-loc bug class whose victim was the flush-time
+  reconcile itself.
+
 - **2026-07-26** — um's raw index and stager split into two do-blocks inside trackerManager.lua
   rather than a new eventIndex.lua: index entries are live records the rebuild mutates in place, so
   a module boundary would publish that sharing contract rather than close it. Revisit extraction

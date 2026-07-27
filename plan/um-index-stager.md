@@ -115,6 +115,25 @@ time; neither is staging. With them gone, `flush` also stops calling
 the layering inversion in miniature, and it currently forces a second
 exit that duplicates the `postflush` fire.
 
+*Amended 2026-07-27:* "the pipeline" means **out of the stager**, not
+into `rebuildPipeline`, and the two tenants part company. The collision
+scan cannot move into the rebuild: it runs pre-commit precisely so tm's
+kill verdicts land before mm ever sees a same-pitch collision, which is
+why the backstop "fires ~never" (`midiManager.lua:1040`) and why docs §
+Separation can say tm's site is not load-bearing for take integrity.
+After the commit, mm's `resolveGroup` would always pre-empt
+`voicing.resolveSorted`. So the scan hoists to file scope as derivation
+the stager calls, and stays where it runs.
+
+`reconcilePcs` goes the other way: the pipeline already *has* that
+stage, so the move is a deletion. Measured 2026-07-27 — short-circuiting
+the flush-time pass leaves the suite at 2179/2180, and the one failure
+is a value change the target case's own comment calls incidental, in
+the direction of the documented bearing rule. It also retires the
+stale-loc bug class pinned at `tm_pc_synthesis_spec.lua:112`, whose
+victim was the flush-time reconcile itself. D5 is therefore three
+commits, deletion first.
+
 **D6 — the three read accessors collapse to one.** `rawNotes(chan)`
 and `rawPbs(chan)` are `rawIndexFor(chan).notes`/`.pbs` spelled
 differently, while `.pcs`/`.pas`/`.ccs` have no typed accessor at all;
@@ -143,19 +162,24 @@ was previously arbitrary.
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-07-27 tm: delete the flush-time PC reconcile (D5)
 - 2026-07-26 tm: split the update manager into raw index and stager (D1)
 - 2026-07-26 tm: pin the walk's index re-true with two specs (D4)
 - 2026-07-26 tm: sort-key writes on an index entry go through setRaw (D2, D3)
-- 2026-07-26 tm: PA attachment and PC reconciliation read the raw index (D7)
 
 ## Now
 
-(empty — the split has landed; run /plan-next to promote the next commit)
+(empty — D5's first of three has landed; next is hoisting the flush collision scan out of the stager. Run /plan-next to promote it.)
 
 ## Queued (one-liners)
 
-1. `reconcilePcs` and the collision scan move to the pipeline; `flush`
-   stops driving `tm:rebuild` and loses its second exit.
-2. Collapse `rawNotes`/`rawPbs`/`rawIndexFor` into one accessor.
-3. Docs: `docs/trackerManager.md § Update manager` describes the index
+1. Hoist the flush collision scan out of the stager into a derivation
+   section between RAW INDEX and STAGER, called by `flush` — pre-commit
+   placement unchanged (D5, second of three).
+2. `flush` gets one exit and stops driving `tm:rebuild` on the
+   parked-only path; the drive moves up to `tm:flush`. Ordering risk:
+   `postflush` currently fires *after* that rebuild, and
+   `groupManager.lua:586` subscribes (D5, third of three).
+3. Collapse `rawNotes`/`rawPbs`/`rawIndexFor` into one accessor (D6).
+4. Docs: `docs/trackerManager.md § Update manager` describes the index
    as the primary structure and states the mutation contract.
