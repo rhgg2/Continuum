@@ -1,7 +1,7 @@
 # memory-as-claims — plan
 
-> source: `design/memory-as-claims.md` — synthesis compiled from there;
-> don't design here.
+> source: `design/archive/memory-as-claims.md` — synthesis compiled from
+> there; don't design here.
 
 ## Landed  (newest first; prune below ~4)
 
@@ -12,8 +12,8 @@
 
 ## Now
 
-(empty — D16 closes the loop: capture spools untracked, the session triages fate at commit, the pass judges form. Run /plan-close to archive it and pop CURRENT.)
+(closed 2026-07-28 — D16 closed the loop: capture spools untracked, the session triages fate at commit, the pass judges form.)
 
 ## Queued (one-liners)
 
-*(empty — `/plan-close` once D16 lands)*
+*(empty)*

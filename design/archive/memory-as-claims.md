@@ -1,6 +1,6 @@
 # memory-as-claims — the auto-memory store as revisable claims, not a fact list
 
-> opened: 2026-07-27 · status: in flight — `plan/memory-as-claims.md`
+> opened: 2026-07-27 · status: complete — `plan/archive/memory-as-claims.md`
 >
 > Designed in conversation rather than in a design round; this doc is the
 > record. The decisions below are settled — if one needs reopening, it
