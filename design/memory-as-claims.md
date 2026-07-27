@@ -174,6 +174,21 @@ while EEL2 does not. So standing on the `us` axis decays where standing on the
 toward `open` rather than sit at `load-bearing` forever. The corpus was mined
 once and deleted, miners included.
 
+*2026-07-27, on making the decay rule operable.* The corollary states that `us`
+standing decays but not by what measure, and "counts and dates" needs a count.
+Settled: decay is evaluated **only at a filing pass**, never continuously,
+because that pass is the store's only regular read of the whole store; each pass
+appends one dated line to the claim recording whether it fired since the last,
+and two consecutive quiet passes drop it a rung, any firing cancelling the
+accumulated quiet. Two passes rather than a month-count — the cadence isn't
+fixed, so an interval would be false precision, where two passes at least means
+the store was read twice. A claim that falls to `open` keeps its file: it has a
+body, which is exactly what an `open.md` bullet lacks. Scope stays `us`, because
+silence is not evidence against a `world` or `build` claim, whose subjects don't
+change under us and whose refutation is available by looking. The rule is
+written into MEMORY.md's preamble beside the standing line, and travels to the
+workflow surface with the rest of the narrative when D12 lands.
+
 *2026-07-27, later the same day.* The stages after the fold, settled in
 conversation. D1–D10 describe the store; D11–D14 describe the loop that keeps
 it alive, and D14 is why any of it exists.
@@ -189,6 +204,19 @@ into the repo writing `open.md`. D7 named isolation as what killed the ledger,
 and living beside the claims it feeds is the fix. The order is content first,
 machinery second, deletion of `~/.claude/wonder/` last, so nothing is stranded
 by a half-done move.
+
+*2026-07-27, on building the seeder.* Narrowed to one verb, and written in
+Python. `pick` does not come across: surfacing a curiosity still required the
+deliberate act of running it, which is the same act as invoking the filing pass
+and buys nothing the pass doesn't already do — and reading a thirty-line file
+needs no tool at all. `done` has nowhere to land, because `open.md` has no
+resolved section, and giving it one would have added a third non-subject heading
+for the pass to drain; promotion and pruning are the pass's judgement to make,
+not a verb's. What the tool is for is **writing**: appending a dated bullet
+without a read-modify-write round trip and without disturbing the file around
+it, which is exactly the friction D14 exists to clear. Python rather than Lua,
+to match `tools/`' three existing scripts. So the repurposing this decision
+imagined keeps `wonder`'s name and its intent, and none of its code.
 
 **D12 — MEMORY.md carries claims; the narrative moves to the workflow.** The
 preamble explaining subject and standing is how-the-store-works documentation
