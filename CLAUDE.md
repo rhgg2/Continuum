@@ -53,18 +53,13 @@ Four places carry information about a module:
    concern that spans files. It doesn't restate API surface or repeat
    a `--KIND:` annotation, because the reader already has those.
 
-**Length caps.** Annotations earn their place by being scannable. So
-`--invariant:` / `--contract:` / `--emits:` / `--reaper:` are one
-line, ≤100 chars (aim 90), and inline comments run to two. `--shape:`
-is exempt from the line cap for *describing the shape*: field names,
-types, nesting.
-
-If something won't fit, it means you're holding rationale, history or
-an example, and those live in `docs/<file>.md`. Leave a one-line
-pointer at the site (`-- see docs/<file>.md § <section>`).
-
-`docs/CONVENTIONS.md` carries the contract/annotation/doc boundary
-guidelines, section-divider grammar, and reasoning behind the caps.
+Annotations are one-liners, and (except for --shape) capped short so
+they stay scannable. If it won't fit in a line, that means you're
+holding rationale, history or an example, and those live in
+`docs/<file>.md`, with a one-line pointer at the site (`-- see
+docs/<file>.md § <section>`). See `docs/CONVENTIONS.md` for the caps
+themselves, the contract/annotation/doc boundary, and section-divider
+grammar.
 
 ## Programme plans
 
@@ -86,12 +81,9 @@ not current state — `docs/<file>.md` is what is true now.
 
 For implementation work, read the plan file first — it carries what
 just landed and a self-contained brief for what's next, so you rarely
-need the design doc. One command per granularity: `/plan-new` opens a
-plan, `/plan-phase` splits the in-flight phase into commit-sized queued
-items, `/plan-next` promotes the top one into the brief, `/plan-close`
-archives and pops. The commit skill's pre-agent steps handle landing
-bookkeeping. Design docs carry the model and the decisions; plans carry
-neither.
+need the design doc. There is one `/plan-*` command per granularity —
+open, split, promote, close — each carrying its own description. The
+commit skill's pre-agent steps handle landing bookkeeping.
 
 ## How to work - production
 
