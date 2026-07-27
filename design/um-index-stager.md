@@ -153,6 +153,12 @@ callers use both spellings. One door. This churns ~30 call sites, so
 it lands as its own mechanical commit rather than riding inside the
 split.
 
+*Amended 2026-07-27:* the survivor is `rawIndexFor`, the general
+spelling — it already covers all six lists, so the collapse is a
+deletion of the two typed doors rather than a new name. Write-side
+`rawIndexListFor` stays file-local: publishing it would leak the
+type→list mapping D1 keeps inside the index.
+
 **D7 — the two `pairs(byUuid)` full scans are fixed first.**
 `forEachAttachedPA` scans every event in the take to find one
 channel's PAs at one pitch, and `reconcilePcs` scans it again to

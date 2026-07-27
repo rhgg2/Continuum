@@ -774,7 +774,7 @@ end
 ---------- RAW INDEX
 
 -- Owns rawIndex/byUuid/fxHosts and the upkeep that keeps them true; knows nothing of staging.
-local rawNotes, rawPbs, rawIndexFor, fxHostsFor, colEvtFor, stampColEvt,
+local rawIndexFor, fxHostsFor, colEvtFor, stampColEvt,
       idxReconcile, withDeferredSort, setRaw, detuneAt, forEachAttachedPA,
       rawIndexInsert, rawIndexRemove, rawIndexRefile, forgetUuid, loadIndex do
 
@@ -797,8 +797,6 @@ local rawNotes, rawPbs, rawIndexFor, fxHostsFor, colEvtFor, stampColEvt,
 
   -- The pipeline's raw working set, read in place by the walk and its raw consumers
   -- (filtered at use); entries are live um records. see design/interval-dirt.md § Phase 4.5
-  function rawNotes(chan) return rawIndex[chan].notes end
-  function rawPbs(chan) return rawIndex[chan].pbs end
   function rawIndexFor(chan) return rawIndex[chan] end
 
   -- The maintained fx-host set for a channel (uuids of on-take .fx notes); computeFxWindows reads it
@@ -1022,7 +1020,7 @@ local function collisionKills()
   local kills = {}
   for chan = 1, 16 do
     local byPitch = {}
-    for _, n in ipairs(rawNotes(chan)) do util.bucket(byPitch, n.pitch, n) end
+    for _, n in ipairs(rawIndexFor(chan).notes) do util.bucket(byPitch, n.pitch, n) end
     for _, group in pairs(byPitch) do
       if #group > 1 then   -- a lone note has nothing to collide with
         for _, n in ipairs(voicing.resolveSorted(group)) do util.add(kills, n) end
@@ -1303,7 +1301,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
       if evt.evType == 'pb' then evt.cents, evt.val = evt.val or 0, nil end
       -- pb is one value per tick: adopt a pb already at this slot -- including a hidden
       -- absorber seat -- so we never push a rival onto it. see docs/tuning.md § Absorber reconciliation
-      local seat = evt.evType == 'pb' and util.seek(rawPbs(evt.chan), 'at-or-before', evt.ppq)
+      local seat = evt.evType == 'pb' and util.seek(rawIndexFor(evt.chan).pbs, 'at-or-before', evt.ppq)
       if seat and seat.ppq == evt.ppq then
         assignLowlevel(seat, { cents = evt.cents, shape = evt.shape, derived = util.REMOVE })
       else
@@ -2256,7 +2254,7 @@ local function externalLanePacker(external)
     local lanes = occupancy[chan]
     if not lanes then
       lanes = {}
-      for _, entry in ipairs(rawNotes(chan)) do
+      for _, entry in ipairs(rawIndexFor(chan).notes) do
         if not entry.derived and not isExternal[entry.uuid] then
           lanes[entry.lane] = lanes[entry.lane] or {}
           util.add(lanes[entry.lane], entry)
@@ -2712,7 +2710,7 @@ local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows
     local scan = {}
     for _, win in ipairs(pbCreated) do
       local sRaw, eRaw = tm:fromLogical(win.chan, win.startppq), tm:fromLogical(win.chan, win.endppq)
-      local pbs = rawPbs(win.chan)
+      local pbs = rawIndexFor(win.chan).pbs
       for i = firstAtOrAfter(pbs, sRaw), #pbs do
         local cc = pbs[i]
         if cc.ppq > eRaw then break end   -- inclusive upper, as the mm walk was
@@ -2742,7 +2740,7 @@ local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows
     -- in the swept raw span. The authored restored above is an unrealised add, so delete-first order is safe.
     for _, win in ipairs(pbRemoved) do
       local sRaw, eRaw = tm:fromLogical(win.chan, win.startppq), tm:fromLogical(win.chan, win.endppq)
-      local pbs = rawPbs(win.chan)
+      local pbs = rawIndexFor(win.chan).pbs
       for i = firstAtOrAfter(pbs, sRaw), #pbs do
         local cc = pbs[i]
         if cc.ppq > eRaw then break end   -- inclusive upper, as the mm walk was
@@ -2792,7 +2790,7 @@ local function findNoteColumnForPitch(channel, pitch, ppq_pos)
   -- Containment is raw geometry: scan the index; lowest lane wins, matching column order.
   -- Pre-commit restores can't match -- their endppq is nil until the walk derives it.
   local coveringLane
-  for _, rec in ipairs(rawNotes(channel.chan)) do
+  for _, rec in ipairs(rawIndexFor(channel.chan).notes) do
     if walkable(rec) and rec.endppq and rec.pitch == pitch and rec.ppq <= ppq_pos
        and rec.endppq > ppq_pos and (coveringLane == nil or rec.lane < coveringLane) then
       coveringLane = rec.lane
@@ -2987,7 +2985,7 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
       util.add(rawSpans, { tm:fromLogical(chan, span[1]), tm:fromLogical(chan, span[2]) })
     end
     local function authored(pb) return not pb.derived and pb.cents ~= nil end
-    coverInto(rawPbs(chan), rawSpans, authored, function(pb)
+    coverInto(rawIndexFor(chan).pbs, rawSpans, authored, function(pb)
       local ppq = pb.ppqL or pb.ppq
       if not seen[ppq] then
         util.add(base, { ppq = ppq, val = pb.cents, shape = pb.shape or 'step', tension = pb.tension })
@@ -3750,11 +3748,12 @@ local function rebuildTails(noteLive, deferred, restoredNotes)
 
     -- Sparse edits seek to their seeds; dense edits and wholesale rebuilds walk the channel once. The
     -- frontier takes the sorted index and extras as separate probe sources -- no O(channel) merge.
+    local indexedNotes = rawIndexFor(chan).notes
     local emitted
     if dirt ~= true and #dirt + freshLive <= FRONTIER_SEED_CAP then
-      emitted = frontierTails(chan, rawNotes(chan), extras, dirt, parkedBoundFor, takeLen, res, clampWrites, deferred, keptDerived)
+      emitted = frontierTails(chan, indexedNotes, extras, dirt, parkedBoundFor, takeLen, res, clampWrites, deferred, keptDerived)
     else
-      local notes = mergeIndexed(rawNotes(chan), walkable, extras)
+      local notes = mergeIndexed(indexedNotes, walkable, extras)
       if #notes == 0 then goto nextChan end
       emitted = linearTails(chan, notes, dirt, parkedBoundFor, takeLen, res, clampWrites, deferred, keptDerived)
     end
@@ -3810,10 +3809,10 @@ local function rebuildPbs(fxOut, extraColumns)
     end
   end
 
-  -- Lane-1 detune queries over rawNotes union liveLane1, by binary seek -- the materialised whole-
-  -- channel view is gone; each query hits the index and the derived stream direct. see design/archive/interval-dirt-v2.md § 3
+  -- Lane-1 detune queries over the note index union liveLane1, by binary seek -- the whole-channel
+  -- view is gone; each query hits the index and the derived stream direct. see design/archive/interval-dirt-v2.md § 3
   local function lane1DetuneAt(chan, ppq)
-    local notes = rawNotes(chan)
+    local notes = rawIndexFor(chan).notes
     local i = firstAfter(notes, ppq) - 1        -- last index at or before ppq
     while i >= 1 and not lane1Note(notes[i]) do i = i - 1 end
     local authored = i >= 1 and notes[i] or nil
@@ -3828,7 +3827,7 @@ local function rebuildPbs(fxOut, extraColumns)
   -- Authored (walkable lane-1) union derived lane-1 with ppq in [lo, hi], in rawThenLogical order --
   -- the onset walk's per-span slice, replacing the whole-channel scan.
   local function lane1Between(chan, lo, hi)
-    local notes, derivedNotes = rawNotes(chan), liveLane1ByChan[chan] or {}
+    local notes, derivedNotes = rawIndexFor(chan).notes, liveLane1ByChan[chan] or {}
     local i, j, out = firstAtOrAfter(notes, lo), firstAtOrAfter(derivedNotes, lo), {}
     while true do
       while notes[i] and not lane1Note(notes[i]) do i = i + 1 end
@@ -3846,7 +3845,7 @@ local function rebuildPbs(fxOut, extraColumns)
 
   -- The first lane-1 onset (authored or derived), the I2a anchor's point; nearer wins on a tie.
   local function firstLane1(chan)
-    local notes, i = rawNotes(chan), 1
+    local notes, i = rawIndexFor(chan).notes, 1
     while notes[i] and not lane1Note(notes[i]) do i = i + 1 end
     local authored = notes[i]
     local derived = liveLane1ByChan[chan] and liveLane1ByChan[chan][1]
@@ -3859,7 +3858,7 @@ local function rebuildPbs(fxOut, extraColumns)
   -- Whether any lane-1 note (authored or derived) carries a non-zero detune. With prev seeded 0 an
   -- onset exists iff some detune is non-zero, so this early-exit scan is the whole-channel jump count.
   local function anyDetuneJump(chan)
-    for _, note in ipairs(rawNotes(chan)) do
+    for _, note in ipairs(rawIndexFor(chan).notes) do
       if lane1Note(note) and (note.detune or 0) ~= 0 then return true end
     end
     for _, note in ipairs(liveLane1ByChan[chan] or {}) do
@@ -3946,7 +3945,7 @@ local function rebuildPbs(fxOut, extraColumns)
     -- The lane-1 onset stream is authored notes (raw index) plus the off-take derived stream, the
     -- same union lane1Between/lane1DetuneAt seek; seek both here and take the nearer.
     local function nextLane1After(ppq)
-      local authored = util.seek(rawNotes(chan), 'after', ppq, lane1Note)
+      local authored = util.seek(rawIndexFor(chan).notes, 'after', ppq, lane1Note)
       local derived  = util.seek(derivedLane1, 'after', ppq)
       return math.min(authored and authored.ppq or math.huge, derived and derived.ppq or math.huge)
     end
@@ -3954,8 +3953,8 @@ local function rebuildPbs(fxOut, extraColumns)
     local function bpSpan(ppq)
       -- The authored value stream: non-derived pbs outside every seat window (realPbs' membership).
       local function authored(pb) return not pb.derived and not replaceWins.inSeatWindow(pb.ppq) end
-      local prevBp = util.seek(rawPbs(chan), 'before', ppq, authored)
-      local nextBp = util.seek(rawPbs(chan), 'after',  ppq, authored)
+      local prevBp = util.seek(rawIndexFor(chan).pbs, 'before', ppq, authored)
+      local nextBp = util.seek(rawIndexFor(chan).pbs, 'after',  ppq, authored)
       util.add(spans, { prevBp and prevBp.ppq or 0, nextBp and nextBp.ppq or math.huge })
     end
     -- A seed the branches below can't close to a span. Notes on other lanes, region verbs and the
@@ -3984,7 +3983,7 @@ local function rebuildPbs(fxOut, extraColumns)
     end
     -- The I2a anchor at the first lane-1 onset (authored or derived) is channel-global: any pass may
     -- need to seat, refresh, or retire it, so its point is always in scope.
-    local authoredFirst = util.seek(rawNotes(chan), 'at-or-after', 0, lane1Note)
+    local authoredFirst = util.seek(rawIndexFor(chan).notes, 'at-or-after', 0, lane1Note)
     local firstPpq = math.min(authoredFirst and authoredFirst.ppq or math.huge,
                               derivedLane1[1] and derivedLane1[1].ppq or math.huge)
     if firstPpq ~= math.huge then util.add(spans, { firstPpq - DUAL_POINT_TICK, firstPpq }) end
@@ -4021,7 +4020,7 @@ local function rebuildPbs(fxOut, extraColumns)
   for chan = 1, 16 do
     if dirtyChans[chan] then
       local spans = seatSpansByChan[chan]
-      for _, entry in ipairs(rawPbs(chan)) do
+      for _, entry in ipairs(rawIndexFor(chan).pbs) do
         if inSpans(spans, entry.ppq) then
           local pb = util.clone(entry, { colEvt = true })
           pb.origShape = entry.shape
@@ -4081,7 +4080,7 @@ local function rebuildPbs(fxOut, extraColumns)
     -- The authored value stream, whole and read-only, straight from the raw index -- decoupled from the
     -- bounded clone set. cents from the sidecar, else back-derived for foreign pbs. see design/archive/interval-dirt-v2.md § 3
     local realPbs, pbEntryByRaw = {}, {}
-    for _, entry in ipairs(rawPbs(chan)) do
+    for _, entry in ipairs(rawIndexFor(chan).pbs) do
       pbEntryByRaw[entry.ppq] = entry
       if not entry.derived and not inSeatWindow(entry.ppq) then
         local cents = entry.cents or (rawToCents(entry.raw) - lane1DetuneAt(chan, entry.ppq))
@@ -4366,7 +4365,7 @@ local function stampSamples()
   for chan = 1, 16 do
     local dirt = dirtyChans[chan]
     if dirt == true then
-      for _, entry in ipairs(rawNotes(chan)) do stamp(entry) end
+      for _, entry in ipairs(rawIndexFor(chan).notes) do stamp(entry) end
     elseif dirt then
       for _, s in ipairs(dirt) do
         local uuid = s.uuid or (s.evt and s.evt.uuid)
@@ -4396,7 +4395,7 @@ local function pcSeedSpans(chan, dirt, noteLive)
     local live = s.uuid and tm:byUuid(s.uuid)
     if live then addPoint(live.ppq, live.ppqL) end
   end
-  local spans, notes = {}, rawNotes(chan)
+  local spans, notes = {}, rawIndexFor(chan).notes
   for _, point in ipairs(points) do
     local i = firstAfter(notes, point.ppq)
     while notes[i] and not walkable(notes[i]) do i = i + 1 end
@@ -4436,9 +4435,9 @@ local function rebuildPCs(noteLive)
       end
     end
     if rawSpans then
-      coverOnsets(rawNotes(chan), rawSpans, recordNote)
+      coverOnsets(rawIndexFor(chan).notes, rawSpans, recordNote)
     else
-      for _, entry in ipairs(rawNotes(chan)) do recordNote(entry) end
+      for _, entry in ipairs(rawIndexFor(chan).notes) do recordNote(entry) end
     end
     for _, w in ipairs(noteLive[chan]) do
       local n = w.evt
