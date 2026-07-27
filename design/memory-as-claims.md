@@ -189,6 +189,30 @@ change under us and whose refutation is available by looking. The rule is
 written into MEMORY.md's preamble beside the standing line, and travels to the
 workflow surface with the rest of the narrative when D12 lands.
 
+*2026-07-27, on where "fired" comes from.* The rule says a pass records whether
+a claim fired since the last, but a pass cannot see the sessions it wasn't
+present for, and re-mining transcripts is exactly what this decision closed off.
+So firing is recorded **when noticed** rather than recalled at the pass: a jot
+lands in `## Unfiled` and the pass routes it onto the claim as an instance. The
+pass therefore tallies rather than remembers, and silence reads `quiet` honestly.
+The error is cheap in the right direction — a missed jot costs one wrong quiet
+line, and since any firing cancels accumulated quiet, a rung survives a lapse in
+recording but not a real absence.
+
+*2026-07-27, from the first pass.* Running the pass minutes after
+`us_reconstruction_vs_retrieval` was written exposed a missing qualifier on "two
+consecutive quiet passes": that pass recorded nothing, and shouldn't have. A
+`quiet` line asserts that an opportunity to fire went by unfired, and a pass with
+no interval behind it offers no such opportunity — `quiet` under a same-day
+`fired` would contradict itself, and a second `fired` would double-count one
+incident. So the rung-counter counts **elapsed opportunity**, and a pass is a
+decay event only when some has elapsed since the claim's last line. This does not
+reinstate the interval measure rejected above: the count of passes stays the
+metric, and what is added is a floor on what qualifies as a pass for this
+purpose. It also constrains D13's open cadence question from the other end —
+passes bunched together decay nothing, so the pass cannot be purely
+opportunistic.
+
 *2026-07-27, later the same day.* The stages after the fold, settled in
 conversation. D1–D10 describe the store; D11–D14 describe the loop that keeps
 it alive, and D14 is why any of it exists.
@@ -238,6 +262,24 @@ three-instances-across-sessions bar continues to govern the step after,
 `observed` → `load-bearing`. The skill is itself an orphan — skill frontmatter,
 loose in `~/.claude/`, registered nowhere — and comes into `.claude/skills/`
 alongside the seeder.
+
+*2026-07-27, on registering it.* One skill directory,
+`.claude/skills/file-claims/`, holding the pass as its `SKILL.md` and the method
+verbatim beside it as `rising-sea.md`. The pass is what gets invoked; the method
+is what it reads at its crystallisation step. The cost accepted: the method is
+no longer separately invocable over a backlog or a slice map, which is what its
+own description advertises — if that use arises, the same file registers again
+as its own skill.
+
+*2026-07-27, on the pass stating its own rules.* `SKILL.md` carries the standing
+bar, the falsifier, D3's wording test and D10's decay rule in its own words, and
+names its anchors (`## Unfiled`, the placeholder line, `**Decay log.**`, the
+first subject heading) rather than citing line ranges. Two reasons, and both are
+about the pass editing the very thing it would be reading from: line numbers in
+the store go stale by the pass's own action, and MEMORY.md's preamble — which is
+precisely the instructions the pass needs — leaves for the workflow surface
+under D12. A pass that borrowed its rules from the store it rewrites would break
+itself on its first successful run.
 
 **D14 — The workflow is the point, and what it grants is permission.**
 Everything above is machinery for one thing: that noticing something future-me
