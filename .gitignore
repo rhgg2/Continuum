@@ -4,3 +4,4 @@
 /.claude/mcp/*/__pycache__/
 /.claude/mcp/reaper/spool/
 /.claude/precedent.json
+/.claude/test-baseline.json

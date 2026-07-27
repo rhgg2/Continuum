@@ -6,6 +6,11 @@
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-env.sh\""
+          },
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/test-baseline.py\"",
+            "statusMessage": "Reading test baseline..."
           }
         ]
       }
@@ -13,6 +18,18 @@
     "UserPromptExpansion": [
       {
         "matcher": "plan-next|implement-next|commit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/prompt-expansion.sh\"",
+            "statusMessage": "Gathering command context..."
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Skill",
         "hooks": [
           {
             "type": "command",

@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# UserPromptExpansion: front-load the reads a command opens with, so the skill
-# starts thinking instead of spending turns fetching what it always fetches.
+# UserPromptExpansion / PreToolUse(Skill): front-load the reads a command opens
+# with, so the skill starts thinking instead of spending turns fetching what it
+# always fetches.
 #
-# stdout becomes additionalContext. Claude Code caps that at 10k chars and
+# The text becomes additionalContext. Claude Code caps that at 10k chars and
 # spills the overflow to a file, so only ever emit digests here — a full
 # `git diff` blows the cap and buys nothing.
 
@@ -11,7 +12,14 @@ set -uo pipefail
 repo="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"
 [[ -d $repo ]] && cd "$repo" || exit 0
 
-commandName=$(jq -r '.command_name // empty' 2>/dev/null)
+# Two events reach this script: UserPromptExpansion when the command is typed as
+# a slash command, and PreToolUse when Claude invokes the same skill himself.
+# They name the skill in different fields and want the result in different
+# formats; everything between is common, so read stdin once and branch at the
+# ends.
+payload=$(cat)
+eventName=$(jq -r '.hook_event_name // empty' <<<"$payload" 2>/dev/null)
+commandName=$(jq -r '.command_name // .tool_input.skill // empty' <<<"$payload" 2>/dev/null)
 
 # plan/CURRENT is a stack, newest first: the top line is the live plan and the
 # lines under it are parked, waiting for a /plan-close to pop back to them.
@@ -50,11 +58,27 @@ emitTreeState() {
   git diff --stat HEAD
 }
 
-case "$commandName" in
-  plan-next|implement-next|plan-phase) emitLivePlan ;;
-  plan-new)                            emitPlanShelf ;;
-  plan-close)                          emitLivePlan; echo; emitPlanShelf ;;
-  commit)                              emitTreeState ;;
-esac
+# Kept a function rather than inlined into the $( ) below: macOS ships bash 3.2,
+# whose parser reads a case pattern's `)` as closing the command substitution.
+emitContext() {
+  case "$commandName" in
+    plan-next|implement-next|plan-phase) emitLivePlan ;;
+    plan-new)                            emitPlanShelf ;;
+    plan-close)                          emitLivePlan; echo; emitPlanShelf ;;
+    commit)                              emitTreeState ;;
+  esac
+}
+
+context=$(emitContext)
+[[ -n $context ]] || exit 0
+
+# UserPromptExpansion takes plain stdout as context; PreToolUse ignores plain
+# stdout and reads JSON only.
+if [[ $eventName == PreToolUse ]]; then
+  jq -n --arg ctx "$context" \
+    '{hookSpecificOutput: {hookEventName: "PreToolUse", additionalContext: $ctx}}'
+else
+  printf '%s\n' "$context"
+fi
 
 exit 0

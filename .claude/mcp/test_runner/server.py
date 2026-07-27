@@ -6,7 +6,9 @@
 """Readium test-runner MCP server.
 
 One tool: lua_test_run. Wraps `lua tests/run.lua` and returns a focused
-failures-only report with file:line jumps.
+failures-only report with file:line jumps. Unfiltered runs also record
+.claude/test-baseline.json, which the SessionStart hook reports so a green
+suite need not be re-run to be known.
 
 Split off from the original single-server `readium`. Sister server:
 readium_docs (reaper_doc_lookup, map_query). Batched writes are
@@ -15,9 +17,11 @@ handled by the global `patches` server (mcp__patches__apply_patches).
 
 from __future__ import annotations
 
+import json
 import re
 import shutil
 import subprocess
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -29,6 +33,7 @@ from pydantic import ConfigDict
 ArgModelBase.model_config = ConfigDict(arbitrary_types_allowed=True, extra='forbid')
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
+BASELINE_PATH = PROJECT_ROOT / ".claude" / "test-baseline.json"
 
 mcp = FastMCP("readium_tests")
 
@@ -71,6 +76,38 @@ def _parse_failures(stdout: str) -> list[dict]:
     return failures
 
 
+def _write_baseline(started: float, n_pass: int, n_fail: int, failures: list[str]) -> None:
+    """Record an unfiltered run for the SessionStart hook to read.
+
+    Stamped with the run's *start* time, not its end: a file edited during the
+    ~20s the suite takes must read as newer than the baseline, or the next
+    session would be told a green result covers an edit it never saw.
+    """
+    try:
+        head = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=str(PROJECT_ROOT),
+            capture_output=True,
+            text=True,
+            timeout=5,
+        ).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        head = ""
+
+    payload = {
+        "ts": int(started),
+        "commit": head,
+        "passed": n_pass,
+        "failed": n_fail,
+        "failures": failures,
+        "seconds": round(time.time() - started, 1),
+    }
+    try:
+        BASELINE_PATH.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+    except OSError:
+        pass
+
+
 @mcp.tool(structured_output=False)
 def lua_test_run(
     filter: Optional[str] = None,
@@ -94,6 +131,10 @@ def lua_test_run(
       show_passing: include the names of passing tests (default false).
       timeout: kill the run after this many seconds (default 60).
 
+    An unfiltered run also records .claude/test-baseline.json, which the
+    SessionStart hook reports next session. Filtered runs never do — a green
+    subset must not be able to claim the suite is green.
+
     Returns:
       Header `N passed, M failed` plus per-failure blocks containing:
         - test name
@@ -108,6 +149,7 @@ def lua_test_run(
     if filter:
         cmd.append(filter)
 
+    started = time.time()
     try:
         proc = subprocess.run(
             cmd,
@@ -129,6 +171,9 @@ def lua_test_run(
 
     n_pass = int(summary_m.group(1))
     n_fail = int(summary_m.group(2))
+
+    if filter is None:
+        _write_baseline(started, n_pass, n_fail, _FAIL_LINE.findall(out))
 
     if filter and n_pass + n_fail == 0:
         return f"(filter {filter!r} matched no tests)"

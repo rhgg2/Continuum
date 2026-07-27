@@ -129,6 +129,13 @@ neither.
 - **The basics** — `mcp__readium_tests__lua_test_run`. Test specs live
   in `tests/specs/` and register in `tests/run.lua`. Bugfixes go
   red-first; refactors pin the invariant.
+
+- **The green baseline** — a SessionStart hook reports the last
+  unfiltered run. The suite is deterministic and takes ~20s, so when
+  the hook says nothing the suite reads has changed since, that is a
+  live fact about the tree in front of you: take the baseline and skip
+  the run. When it says STALE, your edits are uncovered and only a run
+  will tell you.
   
 - **Test maps** — tests are mapped too — `map/specs/<spec>.map`
   outlines each `tests/specs/*_spec.lua` (intent, cases, harness
