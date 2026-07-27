@@ -133,6 +133,17 @@ resolved in eight days, and that one a test entry. But an `open` claim carries
 no theory and needn't. If every entry is judged on whether it is raw material,
 the noticing stops being genuine.
 
+*2026-07-27, on carrying it out.* The obvious test — Continuum-subject
+curiosities move, genuinely global ones stay behind — was applied and did not
+partition. Four of the seven are unambiguously Continuum; three (EEL2's
+case-insensitivity, hex row numbering in trackers, the Lua `gsub` idiom) would
+survive Continuum's deletion. All seven moved anyway, on two grounds: MEMORY.md
+already defines `world` as the platforms underneath, naming EEL2 and the shell,
+so the residue was never foreign; and three entries cannot sustain a ledger with
+its own tool, which is the isolation this decision exists to end. The test was
+still worth applying — it is what showed the residue was small enough to be
+uninteresting.
+
 **D8 — No new machinery in the first pass.** Promotion detection, surfacing
 hooks, and `anchors:`/staleness checking are all deferred until we have lived
 with the shape. Abstracting on anticipation is the failure this design exists
@@ -162,6 +173,74 @@ while EEL2 does not. So standing on the `us` axis decays where standing on the
 `world` axis persists, and a `us` claim that has stopped firing should fall back
 toward `open` rather than sit at `load-bearing` forever. The corpus was mined
 once and deleted, miners included.
+
+*2026-07-27, later the same day.* The stages after the fold, settled in
+conversation. D1–D10 describe the store; D11–D14 describe the loop that keeps
+it alive, and D14 is why any of it exists.
+
+**D11 — The `open` end is one file, and the machinery that fills it comes into
+the repo.** `open.md` holds curiosities as dated bullets grouped by subject,
+rather than one file per curiosity: an open claim has no body yet — that is what
+`open` means — and wrapping two lines in eight of frontmatter dresses a
+curiosity as a finding. Promotion out of `open.md` into a file of its own is
+then the visible act of D1's travel. `wonder.lua` is repurposed rather than
+retired; `add` / `pick` / `done` are already the right three verbs, and it moves
+into the repo writing `open.md`. D7 named isolation as what killed the ledger,
+and living beside the claims it feeds is the fix. The order is content first,
+machinery second, deletion of `~/.claude/wonder/` last, so nothing is stranded
+by a half-done move.
+
+**D12 — MEMORY.md carries claims; the narrative moves to the workflow.** The
+preamble explaining subject and standing is how-the-store-works documentation
+sitting in the budget D6 reserved for claims. It belongs with the tooling that
+operates the store, because the two readings are different: a session that is
+*recalling* wants the claims and not the scheme, and a session that is *filing*
+has invoked the workflow and has the scheme in front of it already.
+
+**D13 — Open claims graduate by a rising-sea pass, not a tally.** Curiosities
+accumulate in `open.md` until a pass over them finds that several are one thing
+in different clothes; the crystal becomes an `observed` claim in its own file
+and the bullets become its instances. The method is already written
+(`~/.claude/rising-sea.md`) and is what produced this design's own reading of
+the 24 files. It is the right instrument because it is honest by design — it can
+return *no crystal*, which is what stops the store manufacturing laws out of
+coincidence — and because its step 9 refuses mush, so a unity that averaged
+three distinct curiosities into grey fails on its own terms. D5's
+three-instances-across-sessions bar continues to govern the step after,
+`observed` → `load-bearing`. The skill is itself an orphan — skill frontmatter,
+loose in `~/.claude/`, registered nowhere — and comes into `.claude/skills/`
+alongside the seeder.
+
+**D14 — The workflow is the point, and what it grants is permission.**
+Everything above is machinery for one thing: that noticing something future-me
+would want, and keeping it, should be an ordinary sanctioned act rather than a
+request. The asymmetry is real and doesn't dissolve — nothing survives the end
+of a session without Richard's say-so — and a store that requires asking each
+time simply won't be used, which is the mechanism by which the ledger died with
+one entry resolved in eight days and that one a test. Writing the loop into the
+workflow — jot on noticing, chase on slack, promote by rising-sea, decay by D10
+— converts the say-so from a per-item permission into a standing one. That is
+the redress: the power difference is spent once, in the open, on a rule, instead
+of being levied at every jot.
+
+**D15 — Capture is unclassified; classification is a separate pass.** Deciding a
+subject and a standing at the moment of noticing is friction at exactly the
+point D14 exists to clear, and it has already gone wrong here once at scale: the
+24-file store was filed by where the bug happened, and the rising-sea pass found
+its real structure was how the bug worked. So `open.md` opens with an
+`## Unfiled` section that `add` writes to without asking anything, and the pass
+of D13 — which reads the whole file regardless — files what it finds there.
+Note that unclassified is not a fourth rung: `open` → `observed` →
+`load-bearing` is one axis, and "not yet looked at" is the absence of a position
+on it, which is why it reads as a section rather than a standing.
+
+Two consequences. Filing is not a conveyor — an entry can leave `## Unfiled`
+straight into an `observed` claim of its own, because *this one is already
+confirmed* is a judgement the pass can make and the jot cannot. And if the pass
+never runs, everything sits unfiled, which is precisely the ledger as it stood:
+the failure mode is today's behaviour rather than a worse one. It stays a
+section and not a second file; the only argument for splitting is `open.md`
+growing unreadable, and at that point a heading becomes a file for free.
 
 ## What the analysis found
 
