@@ -7,11 +7,12 @@ One pass. No iterative refinement.
 1. The `UserPromptExpansion` hook injects `git status --porcelain` and `git diff --stat HEAD`; read them there rather than re-running them. Empty status → clean tree; say so and stop. Don't spawn. If this was an `/implement-next` session, there will probably be changes you didn't make to the current design document and plan: that's from the previous session's `/plan-next` so nothing to worry about.
 2. Decide the headline yourself: you have the change's intent from this conversation, and the injected stat for scope. The format is `<scope>: <headline>`, imperative, ≤70 chars, scoped to the affected area (eg `tm: fix off-by-one in selection rect`). Don't read the full diff.
 
-Steps 3–4 decide *what* bookkeeping this commit carries — the judgment is yours, and a cold subagent can't make it. Step 5 applies it: you assemble one manifest and `tools/bookkeep.py` does the mechanical part. Author here; apply there.
+Steps 3–5 decide *what* bookkeeping this commit carries — the judgment is yours, and a cold subagent can't make it. Step 6 applies it: you assemble one manifest and `tools/bookkeep.py` does the mechanical part. Author here; apply there.
 
 3. Decision log — the `decision` key. Design rationale is durable in `design/`, and there is one test for where a decision goes: if the live plan has a design doc, the decision is written **there**, by hand, in this same pass — a new `**Dn —**` entry, or a dated note under the section it revises — and it gets no ledger entry, because writing it in both places is what made this ambiguous. The `decision` key is only for a decision with no design doc to belong to (a convention adopted in passing, a trade-off taken outside any planned work): write it as plain prose and the script dates it, wraps it, and prepends it to `design/decisions.md`. Most commits do neither — omit the key.
 4. Landing bookkeeping — the `land` key. If `plan/CURRENT` exists and this commit completes the live plan's Now entry (wholly, or its final piece), include `land: {headline, ref, now}`: the script prepends `- <date> <headline> (<ref>)` to Landed, prunes it below ~4, and replaces the Now body with your `now` note. The design-doc revision is **not** the script's job — if the landing settled something design-relevant, revise the design doc by hand in this same pass (dated note, WHY only; don't write "Landed 2026/07/10"). Commits unrelated to the plan: omit the key.
-5. Apply the bookkeeping. Assemble the manifest from whichever of 3-4 produced a key (all keys optional; `date` defaults to today) and pipe it in on stdin. It writes the files directly — no review gate, so eyeball them in the subagent's `git diff`. Skip this step when none of 3-4 fired.
+5. Jot triage — the `wonder` key. If `tools/wonder.py` spooled anything, the hook injects it above; give each jot a verdict in the order shown, `keep` / `drop` / `replace: <the fuller text>`. The array is positional, so it needs exactly one entry per jot — the script dies on a mismatch rather than clearing one nobody read. What you are judging is **fate**: did the session go on to answer, refute or complete this? Subject, standing and whether it deserves to be a claim are the filing pass's to decide, and it makes them across the whole store, which you are not reading here. **Keep is the default** — the spool outlives the session that wrote it, so failing to recognise a jot is not the same as knowing it's dead. Never drop one that records an incident against a `us` claim: it is there as a tally mark for the decay rule, so "this got answered" isn't the right test for it. Nothing spooled: omit the key.
+6. Apply the bookkeeping. Assemble the manifest from whichever of 3-5 produced a key (all keys optional; `date` defaults to today) and pipe it in on stdin. It writes the files directly — no review gate, so eyeball them in the subagent's `git diff`. Skip this step when none of 3-5 fired.
 
    Run it exactly as below: the **quoted** `<<'JSON'` delimiter is what stops the shell touching apostrophes, `"` and `$` in your prose, and the closing `JSON` must sit at column 0 or the heredoc never terminates.
 
@@ -19,10 +20,11 @@ Steps 3–4 decide *what* bookkeeping this commit carries — the judgment is yo
 python3 tools/bookkeep.py <<'JSON'
 {"date":"2026-07-22",
  "decision":"one or two lines of prose; the script formats it",
- "land":{"headline":"tm: …","ref":"§ 3","now":"(empty — … ; run /plan-next to promote the next commit)"}}
+ "land":{"headline":"tm: …","ref":"§ 3","now":"(empty — … ; run /plan-next to promote the next commit)"},
+ "wonder":["keep","drop","replace: the fuller form, now that the session knows it"]}
 JSON
 ```
-6. Spawn one subagent — Agent tool, `subagent_type: general-purpose`, `model: sonnet` — and hand it the headline. It owns everything else and does **not** spawn further subagents. Prompt it with:
+7. Spawn one subagent — Agent tool, `subagent_type: general-purpose`, `model: sonnet` — and hand it the headline. It owns everything else and does **not** spawn further subagents. Prompt it with:
 
 > You are finishing a commit. Do these in order, then stop — do not spawn any subagent:
 > 1. `git status` and `git diff` to see what's landing.
@@ -35,4 +37,4 @@ JSON
 >
 >    If the user sent you instructions directly while you were working (a message mid-run, or hunk `feedback:` returned by `apply_patches`), say so explicitly in the report (call them "the user", not "you"): quote or paraphrase what they asked and what you did about it. The parent agent cannot see your conversation and will otherwise read the change as yours.
 
-7. When it returns, eyeball its summary — don't re-audit.
+8. When it returns, eyeball its summary — don't re-audit.

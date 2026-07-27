@@ -79,12 +79,14 @@ files and flags still exist before applying one.
 
 Noticing is the one part of this you do unprompted, and it is
 sanctioned standing — you don't need to ask. `python3 tools/wonder.py
-"<the jot, at whatever length it takes>"` appends to `open.md`'s
-`## Unfiled` and asks nothing back; it classifies nothing, which is
-what keeps it to one call. Everything after — what subject it lands
-under, whether it is already a claim, what promotes, what decays — is
-the `/file-claims` pass, which states its own rules when you invoke
-it.
+"<the jot, at whatever length it takes>"` appends to an untracked spool
+and asks nothing back; it classifies nothing, which is what keeps it to
+one call. A jot therefore costs nothing to be wrong about: the commit
+skill asks you which ones the session went on to answer, and anything
+that turns out to be nothing stops there. Everything after that — what
+subject one lands under, whether it is already a claim, what promotes,
+what decays — is the `/file-claims` pass, which states its own rules
+when you invoke it.
 
 ## Scratchpad
 

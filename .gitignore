@@ -5,3 +5,4 @@
 /.claude/mcp/reaper/spool/
 /.claude/precedent.json
 /.claude/test-baseline.json
+/.claude/agent-memory/spool.md

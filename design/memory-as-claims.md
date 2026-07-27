@@ -322,6 +322,71 @@ the failure mode is today's behaviour rather than a worse one. It stays a
 section and not a second file; the only argument for splitting is `open.md`
 growing unreadable, and at that point a heading becomes a file for free.
 
+**D16 — Capture spools untracked, and the session judges fate at commit.**
+`wonder.py` appends to `.claude/agent-memory/spool.md`, gitignored; the commit
+skill's hook injects it, the session returns one verdict per jot — `keep`,
+`drop`, or `replace: <text>` — and `bookkeep.py` splices the survivors into
+`## Unfiled` and truncates the spool. The reason is already written in D10's
+note on where "fired" comes from: a pass cannot see the sessions it wasn't
+present for, and that argument does not stop at firing. Whether a jot is still
+live is the same kind of fact. A question asked at 10:00 and answered at 10:30
+currently sits in `open.md` forever, because the only party who knows it is
+dead is never asked, and the party that could ask is by construction the one
+without the context to answer.
+
+The loop gains a stage but not a mechanism, because each stage is a different
+judgement by a differently-placed party: the spool judges nothing (D15), the
+commit triage judges **fate** and can only be the session, `## Unfiled` rests,
+and the pass judges **form, place and standing** and can only be someone
+without the session. The triage is therefore forbidden subject and standing —
+one that classified would have eaten the pass, and D15 with it.
+
+*Repo-local, not session-local.* Sessions and commits don't nest: a session
+that ended without a commit would lose its jots silently, and it is not
+established that a subagent's jot shares its parent's session id. One untracked
+file in the store is drained by whichever session commits next, at the cost
+that the draining session may not recognise what it is triaging — paid off by
+making **keep the default**, so an unrecognised jot is kept and the floor never
+falls below present behaviour. `drop` asserts positive knowledge that a note is
+dead.
+
+*A verdict per jot, not a list of survivors.* Re-emitting kept text invites
+drift — an indent lost, a line reflowed — and D11's seeder exists precisely
+because a rambling jot's structure is often the finding. `keep` moves the bytes
+untouched. The array being positional against the spool then buys an integrity
+check for free: a length mismatch means a jot arrived between injection and
+drain, and `bookkeep.py` dies before writing anything, which is the contract it
+already holds for a bad manifest. A survivors list would have swallowed that
+jot silently. `replace` keeps the original bullet's date and swaps the body,
+because `open.md` dates when noticed and replacing completes a thought rather
+than starting one.
+
+*Two things the triage must not do.* A jot recording a `us` firing is never
+dropped as resolved: under D10 its value is as a tally mark, not as an open
+question, so "this got answered" is the wrong test for it entirely. And the
+step must not read as a quality bar — worded as *is this worth keeping* it
+chills D14 and D7's noticing, where worded as *the session learned things after
+these were written, so say which are stale* it does not.
+
+*2026-07-28, on carrying it out.* The concurrency case fired before the code for
+it did. A jot written straight to `open.md` by a parallel session was sitting in
+the tracked store during the round-trip test, and the obvious way to undo that
+test — `git checkout` on the file — would have destroyed it. So the hazard is not
+only the one this decision argues from: the risk isn't just that a stale jot is
+mis-triaged by a session that doesn't recognise it, it is that restoring state is
+itself a write, and anything reverting a file to undo its own work takes a
+concurrent writer's with it. Keep-as-default makes the first survivable; nothing
+makes the second survivable but looking first. No migration was needed, though —
+jots already in `## Unfiled` belong to the filing pass, and only new ones route
+through the spool.
+
+The change also priced D12's split. Moving the store write from one script to
+another falsified three prose surfaces the plan brief had not named: the pass's
+own `SKILL.md` in two places, and the always-loaded system prompt. A loop written
+across surfaces costs a sweep of all of them whenever the mechanism underneath
+moves — the price D12 accepted for the reading test it turns on rather than an
+argument against it, but a recurring one, and worth expecting next time.
+
 ## What the analysis found
 
 The claims live in the store; these one-liners are here so the derivation is

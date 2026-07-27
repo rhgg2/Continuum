@@ -1,17 +1,23 @@
 #!/usr/bin/env python3
-"""Jot into the open end of the memory store.
+"""Jot into the spool, the untracked end of the memory store.
 
 Noticing something future-you would want should cost nothing and ask nothing,
 so this appends and stops: no subject, no standing, no prompt. Deciding those
 at the moment of noticing is friction exactly where there should be none, and
-it is also the wrong moment to decide — which is why every jot lands in
-`## Unfiled` whatever it is about, and the filing pass classifies later.
+it is also the wrong moment to decide.
+
+The spool is untracked and outlives the session, because a jot's fate is
+settled downstream by two differently-placed parties: the commit skill's
+triage knows whether the session went on to answer it, and the filing pass —
+which has no session context at all — knows what it is and where it belongs.
+Neither judgement can be made here, so nothing reaches the tracked store until
+the first of them has run.
 
 Length is not rationed and structure survives — line breaks, code and worked
 examples come through, indented into the bullet. A jot may be a one-line
-curiosity or a finding entire, because compressing it belongs to the filing
-pass: that pass is the party without the session's context, so it is the only
-one that can tell whether the compression worked.
+curiosity or a finding entire, because compressing it belongs downstream too:
+the party without the session's context is the only one that can tell whether
+the compression worked.
 
 Usage: python3 tools/wonder.py "the jot, at whatever length it takes"
 """
@@ -21,24 +27,11 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-OPEN_CLAIMS = REPO / ".claude" / "agent-memory" / "open.md"
-UNFILED = "## Unfiled"
-PLACEHOLDER = "(nothing unfiled)"
+SPOOL = REPO / ".claude" / "agent-memory" / "spool.md"
 
 
 def die(msg):
     sys.exit(f"wonder: {msg}")
-
-
-def unfiled_body(lines):
-    """Line numbers of the ## Unfiled section's non-blank lines, in order."""
-    if UNFILED not in lines:
-        die(f"no {UNFILED!r} heading in {OPEN_CLAIMS}")
-    start = lines.index(UNFILED) + 1
-    end = start
-    while end < len(lines) and not lines[end].startswith("## "):
-        end += 1
-    return [n for n in range(start, end) if lines[n].strip()], start
 
 
 def as_bullet(text, today):
@@ -47,6 +40,10 @@ def as_bullet(text, today):
     Only trailing whitespace goes. A rich finding often *is* its structure —
     index expressions, a worked example — and collapsing whitespace destroys
     that while leaving every word of it in place.
+
+    This layout is the spool's grammar: bookkeep.py finds where one jot ends and
+    the next begins by the unindented `- [date]` opener, so a continuation line
+    that lost its indent would read as a second jot.
     """
     lines = [line.rstrip() for line in text.strip().split("\n")]
     bullet = [f"- [{today}] {lines[0]}"]
@@ -60,17 +57,10 @@ def main():
     if len(sys.argv) != 2 or not sys.argv[1].strip():
         die('usage: wonder.py "the jot, at whatever length it takes"')
 
-    bullet = as_bullet(sys.argv[1], datetime.date.today().isoformat())
-
-    lines = OPEN_CLAIMS.read_text().split("\n")
-    body, start = unfiled_body(lines)
-    if len(body) == 1 and lines[body[0]].strip() == PLACEHOLDER:
-        lines[body[0] : body[0] + 1] = bullet
-    else:
-        at = body[-1] + 1 if body else start
-        lines[at:at] = bullet
-    OPEN_CLAIMS.write_text("\n".join(lines))
-    print("\n".join(bullet))
+    bullet = "\n".join(as_bullet(sys.argv[1], datetime.date.today().isoformat()))
+    with SPOOL.open("a") as spool:
+        spool.write(bullet + "\n")
+    print(bullet)
 
 
 if __name__ == "__main__":

@@ -5,10 +5,12 @@ description: "Run a filing pass over the memory store in .claude/agent-memory/: 
 
 # The filing pass
 
-Jotting is meant to cost nothing, so `tools/wonder.py` appends to `## Unfiled`
-and stops. This is the pass that pays for it: the one moment anything is
-classified, anything is promoted, and the decay rule is evaluated at all. If the
-pass doesn't run, nothing in the store moves.
+Jotting is meant to cost nothing, so `tools/wonder.py` appends to an untracked
+spool and stops, and the commit skill's triage moves what outlived the session
+into `## Unfiled`. That triage judges only whether a jot is still live — this is
+the pass that pays for the rest: the one moment anything is classified, anything
+is promoted, and the decay rule is evaluated at all. If the pass doesn't run,
+nothing in the store moves.
 
 Filing is not a conveyor. Every entry has somewhere it belongs, and one of those
 places is the bin; another is straight out into a claim, because *this one is
@@ -28,8 +30,8 @@ already confirmed* is a judgement the pass can make and a jot cannot.
    - dropped, said out loud with why.
 
    If the section empties, restore the `(nothing unfiled)` placeholder line.
-   `tools/wonder.py` appends after the section's last non-blank line, so without
-   it the next jot lands flush against the heading.
+   `tools/bookkeep.py` splices after the section's last non-blank line, so
+   without it the next drain lands flush against the heading.
 
 3. **Crystallise.** Follow `rising-sea.md` in this directory over the subject
    sections of `open.md`, with the bullets themselves as raw material — its step

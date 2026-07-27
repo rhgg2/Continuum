@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Apply commit-time bookkeeping from one manifest.
 
-The commit skill authors the content (decision prose, plan-landing note) —
-this script owns only the mechanical application: JSON
-escaping, hanging-indent wrapping, section splicing, Landed prune. Every
+The commit skill authors the content (decision prose, plan-landing note, jot
+verdicts) — this script owns only the mechanical application: JSON escaping,
+hanging-indent wrapping, section splicing, Landed prune, spool drain. Every
 manifest key is optional; contents are computed for all present keys before
 any file is written, so a bad manifest or a missing plan file errors before
 touching anything.
@@ -14,7 +14,8 @@ Manifest:
   {
     "date": "2026-07-22",                       # optional; defaults to today
     "decision": "one-or-two-line prose; only for a decision with no design doc",
-    "land": {"headline": "...", "ref": "§ 3", "now": "replacement Now body"}
+    "land": {"headline": "...", "ref": "§ 3", "now": "replacement Now body"},
+    "wonder": ["keep", "drop", "replace: fuller text, under the jot's own date"]
   }
 """
 
@@ -28,9 +29,16 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 DECISIONS = REPO / "design" / "decisions.md"
 PLAN_CURRENT = REPO / "plan" / "CURRENT"
+OPEN_CLAIMS = REPO / ".claude" / "agent-memory" / "open.md"
+SPOOL = REPO / ".claude" / "agent-memory" / "spool.md"
 
 DECISION_WIDTH = 100
 LANDED_KEEP = 4
+PLACEHOLDER = "(nothing unfiled)"
+REPLACE = "replace:"
+# wonder.py's output format, and what makes a jot's extent unambiguous: the
+# opener sits at column 0 where every continuation line is indented under it.
+BULLET = re.compile(r"- \[(\d{4}-\d{2}-\d{2})\] ")
 
 
 def die(msg):
@@ -60,7 +68,7 @@ def apply_decision(date, text):
 
 # ----- plan landing
 
-def section_bounds(lines, prefix):
+def section_bounds(lines, prefix, where):
     """[start, end) line indices of a `## <prefix>` section body (header excluded)."""
     start = None
     for i, line in enumerate(lines):
@@ -68,7 +76,7 @@ def section_bounds(lines, prefix):
             start = i + 1
             break
     if start is None:
-        die(f"plan file has no `## {prefix}` section")
+        die(f"{where} has no `## {prefix}` section")
     end = start
     while end < len(lines) and not lines[end].startswith("## "):
         end += 1
@@ -102,11 +110,11 @@ def apply_land(date, spec):
         die(f"plan/CURRENT points at {name!r}, which does not exist")
     lines = plan_path.read_text().splitlines()
 
-    l_start, l_end = section_bounds(lines, "Landed")
+    l_start, l_end = section_bounds(lines, "Landed", name)
     bullet = f"- {date} {spec['headline']} ({spec['ref']})"
     lines = lines[:l_start] + splice_landed(bullet, lines[l_start:l_end]) + lines[l_end:]
 
-    n_start, n_end = section_bounds(lines, "Now")
+    n_start, n_end = section_bounds(lines, "Now", name)
     lines = lines[:n_start] + ["", spec["now"].rstrip("\n"), ""] + lines[n_end:]
 
     return plan_path, "\n".join(lines) + "\n"
@@ -119,9 +127,92 @@ def landing_digest(content):
     see where the new bullet and Now body actually landed.
     """
     lines = content.splitlines()
-    landed_start, _ = section_bounds(lines, "Landed")
-    _, now_end = section_bounds(lines, "Now")
+    landed_start, _ = section_bounds(lines, "Landed", "the plan")
+    _, now_end = section_bounds(lines, "Now", "the plan")
     return "\n".join(lines[landed_start - 1:now_end])
+
+
+# ----- jot triage
+
+def spool_blocks():
+    """The spooled jots, one list of lines each, in the order they were written.
+
+    A block opens on an unindented bullet and runs to the next one, so a jot's
+    own blank lines and worked examples stay inside it rather than splitting it.
+    """
+    if not SPOOL.exists():
+        return []
+    blocks = []
+    for line in SPOOL.read_text().splitlines():
+        if BULLET.match(line):
+            blocks.append([line])
+        elif blocks:
+            blocks[-1].append(line)
+        elif line.strip():
+            die(f"spool has text before its first jot: {line!r}")
+    return blocks
+
+
+def unfiled_body(lines, start, end):
+    """The section's existing jots, outer blanks and the placeholder removed.
+
+    Inner blank lines stay: a jot may run to several paragraphs, and carrying
+    its structure intact to the filing pass is the whole point of the spool.
+    """
+    body = lines[start:end]
+    while body and not body[0].strip():
+        body.pop(0)
+    while body and not body[-1].strip():
+        body.pop()
+    return [] if len(body) == 1 and body[0].strip() == PLACEHOLDER else body
+
+
+def rebodied(block, text):
+    """The replacement text under the jot's original bullet date.
+
+    open.md dates when noticed, and a replacement completes the thought the jot
+    opened rather than starting a new one.
+    """
+    if not text.strip():
+        die("a 'replace:' verdict needs text after the colon")
+    date = BULLET.match(block[0]).group(1)
+    lines = [line.rstrip() for line in text.strip().split("\n")]
+    return [f"- [{date}] {lines[0]}"] + [f"  {line}" if line else "" for line in lines[1:]]
+
+
+def apply_wonder(verdicts):
+    """Triage survivors into `## Unfiled`, and clear the spool behind them.
+
+    The array is positional against the spool, so a length mismatch means a jot
+    arrived between the commit skill reading the spool and this running. Dying
+    is the point: the alternative clears that jot without anyone having read it.
+    """
+    blocks = spool_blocks()
+    if len(verdicts) != len(blocks):
+        die(f"{len(verdicts)} verdicts for {len(blocks)} spooled jots — re-read the "
+            "spool and send one verdict per jot, in order; nothing was written")
+
+    kept = []
+    for verdict, block in zip(verdicts, blocks):
+        if verdict == "keep":
+            kept.extend(block)
+        elif verdict.startswith(REPLACE):
+            kept.extend(rebodied(block, verdict[len(REPLACE):]))
+        elif verdict != "drop":
+            die(f"verdict must be 'keep', 'drop' or 'replace: <text>', got {verdict!r}")
+
+    lines = OPEN_CLAIMS.read_text().splitlines()
+    start, end = section_bounds(lines, "Unfiled", OPEN_CLAIMS.name)
+    body = (unfiled_body(lines, start, end) + kept) or [PLACEHOLDER]
+    merged = lines[:start] + ["", *body, ""] + lines[end:]
+    return (OPEN_CLAIMS, "\n".join(merged) + "\n"), (SPOOL, "")
+
+
+def unfiled_digest(content):
+    """Echo the section the splice rewrote, for landing_digest's reason."""
+    lines = content.splitlines()
+    start, end = section_bounds(lines, "Unfiled", OPEN_CLAIMS.name)
+    return "\n".join(lines[start - 1:end])
 
 
 # ----------- MAIN
@@ -135,23 +226,27 @@ def main():
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
         die(f"date must be YYYY-MM-DD, got {date!r}")
 
-    writes = []
-    landed_content = None
+    writes, digests = [], []
     if "decision" in manifest:
         writes.append(apply_decision(date, manifest["decision"]))
     if "land" in manifest:
-        plan_path, landed_content = apply_land(date, manifest["land"])
-        writes.append((plan_path, landed_content))
+        plan_path, content = apply_land(date, manifest["land"])
+        writes.append((plan_path, content))
+        digests.append(landing_digest(content))
+    if "wonder" in manifest:
+        unfiled, spool = apply_wonder(manifest["wonder"])
+        writes += [unfiled, spool]
+        digests.append(unfiled_digest(unfiled[1]))
     if not writes:
-        die("manifest had none of: decision, land")
+        die("manifest had none of: decision, land, wonder")
 
     for path, content in writes:
         path.write_text(content)
         print(f"wrote {path.relative_to(REPO)}")
 
-    if landed_content:
+    for digest in digests:
         print()
-        print(landing_digest(landed_content))
+        print(digest)
 
 
 if __name__ == "__main__":

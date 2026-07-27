@@ -58,6 +58,28 @@ emitTreeState() {
   git diff --stat HEAD
 }
 
+# Where tools/wonder.py leaves jots for the commit skill to triage into the
+# tracked store. Injecting the contents saves a read, but additionalContext caps
+# at 10k and emitTreeState is already spending some of it, so past a point the
+# spool gets a pointer instead of itself.
+spoolPath=.claude/agent-memory/spool.md
+spoolMaxChars=4000
+
+emitSpool() {
+  local size
+  [[ -s $spoolPath ]] || return 0
+  size=$(wc -c < "$spoolPath" | tr -d ' ')
+  echo
+  echo "Jots spooled since the last drain, injected by hook — give each one a"
+  echo "verdict in the commit's bookkeeping ('wonder'), in this order:"
+  echo
+  if [[ $size -gt $spoolMaxChars ]]; then
+    echo "($spoolPath is $size chars, too long to inject — read it yourself)"
+  else
+    cat "$spoolPath"
+  fi
+}
+
 # Kept a function rather than inlined into the $( ) below: macOS ships bash 3.2,
 # whose parser reads a case pattern's `)` as closing the command substitution.
 emitContext() {
@@ -65,7 +87,7 @@ emitContext() {
     plan-next|implement-next|plan-phase) emitLivePlan ;;
     plan-new)                            emitPlanShelf ;;
     plan-close)                          emitLivePlan; echo; emitPlanShelf ;;
-    commit)                              emitTreeState ;;
+    commit)                              emitTreeState; emitSpool ;;
   esac
 }
 
