@@ -18,34 +18,27 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-07-28 tm: freezeRegion -- the raw core, region host (§ Freeze to raw)
 - 2026-07-27 tm: restore flushingParked on the error path (§ Implementation notes)
 - **F1 — pb/at as first-class gm members** (2026-07-11) — every seam
 - **F2a — projext undo** (2026-07-12..14, own record in
 
 ## Now
 
-(empty — the flushingParked error-path reset landed, so the suppression window is safe for freezeRegion's four ds writes; run /plan-next to promote the freezeRegion raw core)
+(empty — phase 1's raw core has landed; queued items 1-3 still stand in this phase. Run /plan-next to promote the next commit.)
 
 ## Queued (current phase; one-liners)
 
-1. `tm:freezeRegion(uuid)` raw core, region host — conversion order
-   under the suppression, all before one rebuild in one undo block:
-   clear `derived` (mm metadata assign; notes keep uuid/lane/detune) →
-   drop covered fxParked entries → drop the region → drop its windows
-   from `prevWindows` → dirtyChan + flush. `tm_fx_region_spec` pins:
-   arp authored + audible, chord gone with *no restore on next rebuild*
-   (standing-reconcile regression), seats stand as authored, tails clip
-   cross-window, one undo reverts wholly (rides pextStore).
-2. Note-host arm — `freezeRegion` handles a self-parked note host (its
+1. Note-host arm — `freezeRegion` handles a self-parked note host (its
    fxParked spec IS the destroyed parked member) and an on-take augment
    host (clear its `fx` chain instead); spec pins a note host freezing
    by the same seam.
-3. tm eligibility gates — refuse before any mutation on note-window
+2. tm eligibility gates — refuse before any mutation on note-window
    overlap with another live region (merged `parkWindows` union) and on
    same-target continuous overlap (painter-fold seats not separable);
    spec pins each refusal. (Group-only fx-carrying-host-note gate
    deferred to phase 3 with the group verb it gates.)
-4. tv freeze-to-raw verb — command wiring + confirm modal for the
+3. tv freeze-to-raw verb — command wiring + confirm modal for the
    parked-member destruction, `util.atomic` wrapping the post-confirm
    continuation (modal resolves on a later frame), gate refusals
    surfaced to the user; `tv_fx_region_spec` pins verb, confirm, and

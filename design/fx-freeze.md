@@ -106,13 +106,28 @@ membership are gone.
   recognised only by the live region's window (note-macros-v2 §
   Route-by-window); with the region gone they simply *are* authored
   automation. Baked verbatim — raw is the fidelity end; no thinning.
+  Verbatim on the wire, that is, but not in the authored frame
+  (2026-07-28): a live seat carries no cents sidecar, cents being
+  RAM-only for a seat, so freezing a pb curve is the moment it
+  acquires authored cents, rounded from the raw. Every breakpoint off
+  an integer cent shifts by up to half a cent. Inaudible at usable
+  depths, and the reason a freeze cannot round-trip exact.
 - **Parked members are destroyed** (both verbs). The chord you see
   vanishes; the arp you've been hearing appears. The one genuinely
   destructive step — the single place a confirm gate earns its place.
-- **Tails**: promoted notes join the unified tail walk (derived
-  region notes were exempt), so a frozen note whose tail crosses onto
-  an occupied lane clips on the first post-freeze rebuild. That is
-  what authored notes do; name it, don't fight it.
+- **Tails**: nothing to do (2026-07-28). This read "promoted notes
+  join the unified tail walk, derived region notes having been exempt
+  from it" — and they were never exempt. `walkable` filters the raw
+  index only; derived notes reach the walk by the extras door
+  (`noteLive`), where fresh ones are marked disturbed. Promotion swaps
+  which door a note enters by, not whether it is clipped, so a frozen
+  note's tail already is what an authored note's tail would be.
+- **Parked PAs go with their host** (2026-07-28). A parked `pa` spec
+  is anchored to a parked *note* spec (`hostParked`), not to a window,
+  so dropping by window coverage alone strands it — and the next
+  rebuild reads its host as unparked and restores it to the take, an
+  orphan aftertouch on a pitch that no longer sounds. Freeze drops the
+  pa entries riding a dropped note spec in the same pass.
 
 ## Freeze to group
 
@@ -279,6 +294,13 @@ Freeze-to-raw: arp authored + audible, chord gone, seats stand, *no
 restore on the next rebuild* (the standing-reconcile regression),
 tails clip cross-window, one undo reverts wholly, and a note host
 freezes by the same seam.
+
+(2026-07-28) "One undo reverts wholly" is not pinnable in a unit spec:
+the harness stubs `Undo_BeginBlock`/`EndBlock` to no-ops
+(`tests/fakeReaper.lua`). What a tm spec can pin is the atomicity tm
+itself owns — one flush, one rebuild, and the `derived` clear reaching
+mm as a metadata assign; the pextStore mirror that makes that rewind
+with the take is `pext_store_spec`'s subject.
 
 Freeze-to-group: group minted with note + thinned-curve members,
 instance 2 replays both, mirror edit propagates, ds+take undo

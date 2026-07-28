@@ -1575,6 +1575,83 @@ end
 -- so tv re-tags cellKind. Forces the next flush and rebuild past their no-op gates.
 function tm:requestRebuild() rebuildRequested = true end
 
+-- Freeze: a one-way projection out of the derived lifecycle -- notes, parked members, seats and
+-- windows all convert to authored form in one flush. see design/fx-freeze.md § Atomicity
+local function freezeRegion(uuid)
+  local regions, keptRegions = ds:get('fxRegions') or {}, {}
+  local region
+  for _, r in ipairs(regions) do
+    if r.uuid == uuid then region = r else util.add(keptRegions, r) end
+  end
+  if not region then return end
+
+  -- The same producer that built prevWindows, so entries compare field-for-field below.
+  local windows = generators.parkWindows({ region })
+  -- Window membership only, never rebuildRegionPark's covered(): its first clause answers "does this
+  -- spec park itself", true of every self-parked note host on the channel, and would take theirs too.
+  local function covered(spec)
+    for _, w in ipairs(windows) do
+      if w.evType == spec.evType and w.chan == spec.chan and w.cc == spec.cc
+         and spec.ppq >= w.startppq and spec.ppq < w.endppq then return true end
+    end
+    return false
+  end
+
+  -- Gathered before staging: the assigns write the very index list this walks. `derived` is
+  -- metadata, so each rides mm's lockless path; the note keeps its uuid, lane and detune.
+  local promoted = {}
+  for _, note in ipairs(rawIndexFor(region.chan).notes) do
+    if note.derived == uuid then util.add(promoted, note) end
+  end
+  for _, note in ipairs(promoted) do assignEvent(note, { derived = util.REMOVE }) end
+
+  local stash, keptParked = ds:get('fxParked') or {}, {}
+  local droppedHosts = {}
+  for _, spec in ipairs(stash) do
+    if spec.evType == 'note' and covered(spec) then droppedHosts[spec.uuid] = true end
+  end
+  -- A pa spec is anchored to a note spec, not to a window, so window coverage alone leaves it
+  -- behind. Host resolution is hostParked's, over live render cells. see design/fx-freeze.md § Freeze to raw
+  local function hostDropped(pa)
+    for _, cell in ipairs(channels[pa.chan].parked or {}) do
+      if cell.pitch == pa.pitch and pa.ppq >= cell.ppq and pa.ppq < cell.endppqC then
+        return droppedHosts[cell.uuid] == true
+      end
+    end
+    return false
+  end
+  for _, spec in ipairs(stash) do
+    local drop = spec.evType == 'pa' and hostDropped(spec) or covered(spec)
+    if not drop then util.add(keptParked, spec) end
+  end
+
+  local prevWindows, keptWindows = ds:get('prevWindows') or {}, {}
+  for _, w in ipairs(prevWindows) do
+    local frozen = false
+    for _, fw in ipairs(windows) do frozen = frozen or util.deepEq(w, fw) end
+    if not frozen then util.add(keptWindows, w) end
+  end
+
+  -- ds:get hands back a copy of its cache slot, so an emptied array reads back as a truthy {}:
+  -- only the sentinel actually clears the key.
+  local function replace(key, kept, prior)
+    if util.deepEq(prior, kept) then return end
+    ds:assign(key, next(kept) and kept or util.REMOVE)
+  end
+  suppressingRebuild(function()
+    replace('fxParked',    keptParked,  stash)
+    replace('fxRegions',   keptRegions, regions)
+    replace('prevWindows', keptWindows, prevWindows)
+  end)
+
+  dirtyChan(region.chan)   -- freeze is rare and drastic: whole-channel dirt over per-member seeds
+  -- A continuous-only or husk region stages no mm ops at all, and flush's no-op gate would swallow
+  -- the pass; the request carries it past that and past rebuild(∅). Harmless when assigns staged.
+  tm:requestRebuild()
+  tm:flush()
+  return true
+end
+
 ----- Mutation
 
 function tm:deleteEvent(evt)         deleteEvent(evt)         end
@@ -1583,6 +1660,10 @@ function tm:assignEvent(evt, update) assignEvent(evt, update) end
 function tm:addParked(spec)           addParked(spec)           end
 function tm:assignParked(evt, update) assignParked(evt, update) end
 function tm:deleteParked(evt)         deleteParked(evt)         end
+--contract: one-way; the region, its parked members and its windows are gone after the call
+--contract: returns true on success, nil when no live region carries the uuid
+--contract: ungated -- overlap with a neighbouring region is the caller's to refuse
+function tm:freezeRegion(uuid)        return freezeRegion(uuid)  end
 -- With no mm ops there is no reload->rebuild to ride, so the one rebuild is driven here.
 function tm:flush() if flush() then tm:rebuild(false) end end
 

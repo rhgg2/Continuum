@@ -12,6 +12,10 @@ local function centsToRaw(cents, pbRange)
   return util.round(cents * 8192 / ((pbRange or 2) * 100))
 end
 
+local function rawToCents(raw, pbRange)
+  return util.round(raw * (pbRange or 2) * 100 / 8192)
+end
+
 -- A seat is recognized purely by region membership: any pb inside a live region's span (bounds
 -- inclusive of endppq, so the terminal re-centre seat counts). see design/note-macros-v2.md § Route-by-window
 local function inPbWindow(h, chan, ppq)
@@ -143,6 +147,19 @@ local function derivedNotes(h)
 end
 
 local function field(ns, k) local v = {} for i, n in ipairs(ns) do v[i] = n[k] end return v end
+
+-- The note pitches standing in a channel's note columns -- what the grid shows, as against
+-- fm:dump()'s wire content. Note columns also carry re-projected pa cells, so filter on evType.
+local function columnPitches(h, chan)
+  local out = {}
+  for _, col in ipairs(h.tm:getChannel(chan).columns.notes or {}) do
+    for _, e in ipairs(col.events) do
+      if e.evType == 'note' then out[#out + 1] = e.pitch end
+    end
+  end
+  table.sort(out)
+  return out
+end
 
 -- Authored (non-derived) note pitches still sounding in the take, sorted. Empty when a
 -- replace region has parked the whole chord off-take.
@@ -1845,6 +1862,154 @@ return {
       for _, c in ipairs(h.fm:dump().ccs) do
         t.truthy(c.uuid ~= authoredUuid, 'the authored cc left the take; only fill seats remain')
       end
+    end,
+  },
+
+  ----- Freeze to raw: the region's output becomes plain authored MIDI and the region goes
+
+  {
+    name = 'freeze: the derived chord is promoted to authored, and region + stash go with it',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { pitch = 60, lane = 1 })
+      addNote(h, { pitch = 64, lane = 2 })
+      addNote(h, { pitch = 67, lane = 3 })
+      injectArp(h)
+      t.eq(#derivedNotes(h), 4, 'the arp seats four steps over the parked triad')
+      t.deepEq(authoredPitches(h), {}, 'and the triad itself is off the take')
+
+      t.truthy(h.tm:freezeRegion('fxr-1'), 'the freeze reports success')
+
+      t.deepEq(authoredPitches(h), { 60, 60, 64, 67 }, 'the derived steps are authored MIDI now')
+      t.eq(#derivedNotes(h), 0, 'nothing on the take still carries the region tag')
+      t.deepEq(columnPitches(h, 1), { 60, 60, 64, 67 },
+        'and they are in the grid, not merely on the wire')
+      t.falsy(h.ds:get('fxRegions'),  'the region is gone -- nil, not an empty array')
+      t.falsy(h.ds:get('fxParked'),   'its parked members are destroyed with it')
+      t.falsy(h.ds:get('prevWindows'),'and its windows leave the recognition baseline')
+    end,
+  },
+
+  {
+    name = 'freeze: the standing reconcile does not restore the destroyed members',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { pitch = 60, lane = 1 })
+      addNote(h, { pitch = 64, lane = 2 })
+      injectArp(h)
+      t.truthy(h.tm:freezeRegion('fxr-1'))
+
+      h.tm:rebuild(true)   -- takeChanged: a whole re-derive, where rebuild(nil) would short-circuit
+      t.deepEq(authoredPitches(h), { 60, 60, 64, 64 }, 'the promoted notes stand')
+      t.eq(#derivedNotes(h), 0, 'nothing re-derives -- there is no region left to produce it')
+      t.falsy(h.ds:get('fxParked'), 'and the park reconcile has nothing to restore')
+    end,
+  },
+
+  {
+    name = 'freeze: the seated pb curve stands as authored automation',
+    run = function(harness)
+      local h = harness.mk()
+      injectRegion(h)
+      local function byPpq(a, b) return a.ppq < b.ppq end
+      local function wireSeats()
+        local out = {}
+        for _, c in ipairs(h.fm:dump().ccs) do
+          if c.evType == 'pb' and c.chan == 1 then out[#out + 1] = c.ppq end
+        end
+        table.sort(out)
+        return out
+      end
+      -- A live seat is raw-only on the wire -- markerless, no cents sidecar (it is RAM-only, lost on
+      -- a take round-trip). Freeze hands it to the pb pass, which authors the cents from that raw.
+      local before, beforeSeats = {}, wireSeats()
+      for _, c in ipairs(derivedPbs(h, 1)) do
+        before[#before + 1] = { ppq = c.ppq, val = rawToCents(c.val) }
+      end
+      table.sort(before, byPpq)
+      t.truthy(#before > 0, 'the region seated a pb curve')
+      t.falsy(h.tm:getChannel(1).columns.pb, 'live, the seats are wire-only -- off screen')
+
+      t.truthy(h.tm:freezeRegion('fxr-1'))
+
+      -- The seat helpers at the head of this file recognise a seat by live window membership, and
+      -- freeze removes the window -- so this reads the column and the wire directly.
+      local col = h.tm:getChannel(1).columns.pb
+      t.truthy(col, 'frozen, the curve comes on screen as authored automation')
+      local after = {}
+      for _, e in ipairs(col.events) do after[#after + 1] = { ppq = e.ppq, val = e.val } end
+      table.sort(after, byPpq)
+      t.deepEq(after, before, 'every breakpoint stands unchanged, in the cents it was authored in')
+      t.deepEq(wireSeats(), beforeSeats, 'and the same breakpoints still sound')
+    end,
+  },
+
+  {
+    name = 'freeze: a promoted note keeps the tail the walk clipped for it',
+    run = function(harness)
+      local h = harness.mk()
+      -- A stage may emit past its own window (chordStamp does, off the trigger's ceiling), so this
+      -- one runs onto a lane an authored note occupies after the region.
+      generators.kinds.overrun = {
+        expand = function(stream) return { notes = {
+          { ppq = stream.window[1], endppq = 480, pitch = 60, vel = 100, detune = 0 },
+        }, delta = {} } end,
+        mode = 'replace', dest = 'note', label = 'Overrun', defaults = {}, fields = {},
+      }
+      addNote(h, { pitch = 60, ppq = 0,   endppq = 120, lane = 2 })   -- the region's member
+      addNote(h, { pitch = 62, ppq = 240, endppq = 480, lane = 1 })   -- past the window, on lane 1
+      injectArp(h, { endppq = 120, fx = { { kind = 'overrun' } } })
+
+      local function pitch60()
+        for _, n in ipairs(h.fm:dump().notes) do if n.pitch == 60 then return n end end
+      end
+      t.eq(pitch60().endppq, 240, 'derived, it reaches the walk as an extra and clips at lane 1')
+
+      t.truthy(h.tm:freezeRegion('fxr-1'))
+      generators.kinds.overrun = nil
+      -- Promotion swaps which door the note enters the tail walk by -- extras, to the raw index
+      -- under walkable(). A promoted note that lost its ppqL would read as foreign MIDI and be
+      -- walked by neither, and its tail would spring back to the authored 480.
+      t.eq(pitch60().endppq, 240, 'promoted, it enters by the index instead and the clip stands')
+    end,
+  },
+
+  {
+    name = 'freeze: the whole projection rides one flush and one rebuild',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { pitch = 60, lane = 1 })
+      injectArp(h)
+      local rebuilds = 0
+      h.tm:subscribe('rebuild', function() rebuilds = rebuilds + 1 end)
+      h.tm:freezeRegion('fxr-1')
+      t.eq(rebuilds, 1, 'one rebuild -- a half-frozen region would be a third event lifecycle')
+    end,
+  },
+
+  {
+    name = 'freeze (mixed chain): the arp is authored and the cc seats keep their column',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { pitch = 60, lane = 1 })
+      addNote(h, { pitch = 64, lane = 2 })
+      generators.kinds.ccRep = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppq = host.window[1], val = 100, shape = 'step' },
+        } } end,
+        mode = 'replace', dest = 74, label = 'CcRep', defaults = {}, fields = {},
+      }
+      injectArp(h, { fx = { arpUp[1], { kind = 'ccRep' } } })
+      t.falsy(h.tm:getChannel(1).columns.ccs[74], 'live, the seat is routed out of columns')
+
+      -- The stub stays registered across the call: freeze recomputes the windows to drop, and
+      -- parkWindows skips a stage whose kind is nil -- the cc window would outlive its region.
+      t.truthy(h.tm:freezeRegion('fxr-1'))
+      generators.kinds.ccRep = nil
+
+      t.deepEq(authoredPitches(h), { 60, 60, 64, 64 }, 'the arp output is authored')
+      local col = h.tm:getChannel(1).columns.ccs[74]
+      t.truthy(col and #col.events > 0, 'and the cc seats stand in the column, not just on the take')
     end,
   },
 

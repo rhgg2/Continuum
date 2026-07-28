@@ -47,7 +47,7 @@ Four places carry information about a module:
    attachment rules, and the `?`-prefix-for-inferred convention.
 3. **`.map`** (`map/<file>.map`) — derived semantic outline, one per
    `.lua`. Read it first: it answers "where does X live" in one
-   screen. These are generated, not hand-edited.
+   screen. They are regenerated automatically on any edit.
 4. **`docs/<file>.md`** — prose, and the only layer with room for WHY:
    the model, the history, the incident that motivated a shape, the
    concern that spans files. It doesn't restate API surface or repeat
@@ -63,31 +63,25 @@ grammar.
 
 ## Programme plans
 
-Every piece of ongoing work has a design doc in `design/` and a plan in
-`plan/`. The doc holds the model and the decisions; the plan holds only
-the machinery — phases, what landed, what's next — compiled out of the
-doc and never designed in. Work too small for a design round still gets
-a doc: `/plan-new` writes a short one from the conversation, and the
-plan simply has no Phases section. `plan/CURRENT` is a stack, newest
-first — the top line is live and the rest are parked, so a small job can
-push in front of a running programme and pop back off when it closes.
+Every piece of ongoing work larger than a couple of commits has a
+design doc in `design/` and a plan in `plan/`. The design doc holds
+the model and the decisions; the plan holds the machinery — phases,
+what landed, what's next — compiled out of the design doc.
 
-`design/` is the durable home for design rationale, and it is closed: a
-decision belonging to a live doc is written in that doc, and one with no
-doc to belong to goes in `design/decisions.md`, the dated ledger. Every
-doc opens with an `opened:` creation date, so the directory can be read
-in order as the project's reasoning end to end. It is intent, though,
-not current state — `docs/<file>.md` is what is true now.
+`design/` is the durable home for design rationale. Fresh decisions
+pertaining to a live doc go in the doc, and one with no doc to belong
+to goes in `design/decisions.md`, the dated ledger. It is intent,
+though, not current state — `docs/<file>.md` is what is true now.
 
-For implementation work, read the plan file first — it carries what
-just landed and a self-contained brief for what's next, so you rarely
-need the design doc. There is one `/plan-*` command per granularity —
-open, split, promote, close — each carrying its own description. The
-commit skill's pre-agent steps handle landing bookkeeping.
+`plan/` is controlled via `plan/CURRENT` a newest-first stack: the top
+line is the live programme and the rest are parked. For implementation
+work, read the plan file first — it carries what just landed and a
+self-contained brief for what's next, so you rarely need the design
+doc.
 
 ## How to work - production
 
-- **Maps before source.** `map/<file>.map` is cheap, current, and
+- **Maps make things easier.** `map/<file>.map` is cheap, current, and
   answers "where does X live" in one screen, which is why it's worth
   opening even for a file you know well; `docs/<file>.md` for the WHY.
 
@@ -126,11 +120,9 @@ commit skill's pre-agent steps handle landing bookkeeping.
   red-first; refactors pin the invariant.
 
 - **The green baseline** — a SessionStart hook reports the last
-  unfiltered run. The suite is deterministic and takes ~20s, so when
-  the hook says nothing the suite reads has changed since, that is a
-  live fact about the tree in front of you: take the baseline and skip
-  the run. When it says STALE, your edits are uncovered and only a run
-  will tell you.
+  unfiltered run. The suite is deterministic, so when the hook reports
+  a green run with no changes since, you can trust that this is the
+  case.
   
 - **Test maps** — tests are mapped too — `map/specs/<spec>.map`
   outlines each `tests/specs/*_spec.lua` (intent, cases, harness
@@ -151,8 +143,7 @@ commit skill's pre-agent steps handle landing bookkeeping.
   the global default, which asks for the trailer.
 - **`config:` is the scope for Claude Code's own machinery** — skills,
   hooks, settings, agents, and tools whose only consumer is a skill
-  (e.g. `tools/comment_hygiene.py`). They belong to no product
-  subsystem, so a subsystem scope misreads. When a change also touches
+  (e.g. `tools/comment_hygiene.py`). When a change also touches
   product code, scope by the product and mention the config knock-on.
 
 ## Coding style
