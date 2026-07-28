@@ -2,31 +2,34 @@
 description: Implement the plan's Now brief — red spec first, brief kept current, suite green.
 ---
 
-1. The live plan arrives injected by the `UserPromptExpansion` hook —
-   work from that rather than re-reading it. (A plan over the 10k
-   context cap arrives as a file path and a preview; read the path.)
-   Don't follow the `source:` link to the design doc. If the Now brief
-   is empty, say so, point at `/plan-next`, stop.
-2. Work from the brief: open the anchors it names (maps first), write
-   the red spec first when it calls for one, implement, suite green
-   via `lua_test_run`.
-3. The design doc stays closed — the brief was compiled to be
-   sufficient. When it isn't, escalate by the size of the gap:
-   - **Mechanical** — anchors drifted, a local renamed, a range moved:
-     reconcile against the code and carry on. No ceremony.
-   - **Tactical** — the brief needs a decision it didn't settle, but
-     the design intent is clear enough to settle locally: propose the
-     settlement to the user and if approved, continue. Write it back as
-     a dated note in the design doc named in the plan's `> source:`
-     line, the way `/plan-next` does. This is the rung that actually
-     fires, and the brief it lands in gets pruned — without the
-     write-back the decision survives only in a commit message.
-   - **Design** — the code contradicts the design doc's model, or the
-     item dissolves or splits on contact: stop implementing. Surface
-     it; the fix is a design-doc conversation and a `/plan-next`
-     re-run, not an implementation detour. Demote the brief back to
-     Queued with a one-line note of what broke.
-4. Done is the brief's own definition plus a green suite: remind to
-   commit, once (`/commit` carries the landing bookkeeping). If you
-   stop short of done, leave the brief amended to reflect actual
-   state, including any tactical escalations, before ending.
+The live plan arrives injected by the `UserPromptExpansion` hook, so
+work from that rather than re-reading it (a plan over the 10k cap
+arrives as a path plus preview — read the path). If the Now brief is
+empty, say so and point at `/plan-next`.
+
+The brief was compiled to be sufficient on its own — that's why it
+exists — so the design doc named in `> source:` isn't part of the
+loop. Open the anchors the brief names, write the red spec first when
+it calls for one, implement, and get the suite green via
+`lua_test_run`.
+
+When the brief turns out not to be sufficient, the response scales
+with the size of the gap:
+
+- **Mechanical** — anchors drifted, a local renamed, a range moved:
+  reconcile against the code and carry on.
+- **Tactical** — the brief needs a decision it didn't settle, but the
+  design intent is clear enough to settle it locally: propose the
+  settlement, and on approval write it back as a dated note in the
+  design doc (the way `/plan-next` does) and prune the brief. This is
+  the rung that actually fires; without the write-back the decision
+  survives only in a commit message.
+- **Design** — the code contradicts the design doc's model, or the
+  item dissolves or splits on contact: stop implementing and surface
+  it. The fix is a design-doc conversation and a `/plan-next` re-run.
+  Demote the brief back to Queued with a one-line note of what broke.
+
+Done is the brief's own definition plus a green suite; remind to
+commit (`/commit` carries the landing bookkeeping). Stopping short of
+done is fine — just leave the brief amended to actual state, tactical
+escalations included, so the next session inherits the truth.
