@@ -681,12 +681,17 @@ placement fixpoint.)
 ### Park window census
 
 `assembleParkWindows` builds the park window set from three sources — authored `fxRegions`, on-take
-note hosts (`hostWins`, from `computeFxWindows`), and parked fx hosts (`parkedNoteSpecs`) — and a
-host mid-park at `settleWindows` time can appear in both of the latter two: parking defers to the
-tail-walk's atomic commit, so its cell is still in `columns` (hence `hostWins`) while its spec is
-already in the parked stash. `rebuildRegionPark` guards the identical collision with `seen[evt]`;
-here the parked arm wins instead, since the host stays off-take and this pass's window then agrees
-with the next rebuild's.
+note hosts (`hostWins`, from `computeFxWindows`), and parked fx hosts (`parkedNoteSpecs`) — and the
+latter two are disjoint only because `settleWindows` declares the pass's parks to `computeFxWindows`.
+The fx-host index turns over a rebuild late: `reconcilePark` unlinks a parked host's cell at once,
+but its mm delete waits for the tail-walk's atomic commit and index membership rides that commit, so
+in between the index still names a host that has left the take. `perHost` resolves uuids straight out
+of it, so undeclared, a self-parking host would land in both arms.
+
+The census was not the reader that mattered, though — it caught the duplicate with a uuid dedupe, and
+fx expansion, whose producer bucket is `fxWindow`'s keys plus `channels[chan].parked`, has none. It
+ran such a host's chain twice and `foldChains` summed the two pb curves into one of twice the
+authored depth. That is why the declaration sits at the writer and the dedupe is gone.
 
 `freezeRegion`'s resync drops the frozen producer's windows from `prevWindows` (the
 seat-recognition baseline) by matching them against the newly computed set. The match has to be

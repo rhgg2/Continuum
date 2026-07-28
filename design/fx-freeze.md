@@ -271,6 +271,25 @@ every subsequent rebuild will use — so preferring it makes the parking
 pass's window agree with the next pass's, which is the whole property
 the baseline diff rests on.
 
+**The double-count is index lag, and the census was not its only
+victim** (2026-07-29, correcting the mechanism above by measurement).
+The reading that a self-parking host is "still in `columns.notes`" is
+wrong: `reconcilePark` unlinks its cell from the lane at once, and only
+the mm delete is deferred. What survives the park is the **fx-host
+index** — membership turns over when that delete commits at the tail
+walk, and `computeFxWindows`' per-host path resolves uuids through it.
+So the stale entry is a reader's view of an index, not of a column, and
+`assembleParkWindows`' dedupe was a reconciliation at the reader. Fx
+expansion reads the same index-derived set with no dedupe, and
+enumerates a mid-park host twice — once from `fxWindow`'s keys, once
+from the parked cells — so the chain runs twice and its two pb chains
+sum: a self-parking host carrying `sine depth=30` bends 60 cents. The
+whole suite is green either way. The fix is notification instead of
+reconciliation: the settle pass hands `computeFxWindows` the parked set
+it already holds, the index's lag stops being observable anywhere, and
+the census dedupe is deleted rather than lifted. Recorded here because
+the census the gates rest on is only trustworthy downstream of it.
+
 **Identity reaches the baseline as a stamped `id`** (2026-07-28). The
 census names owners, but the baseline's entries don't carry the name,
 so census-vs-baseline subtraction still bottoms out in value matching.

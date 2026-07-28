@@ -2622,7 +2622,7 @@ local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows
 
   -- Notes: can't mute (note-on/off + CC matching), so a covered authored note leaves the take, fed
   -- by two bounded sources -- see docs/trackerManager.md § Span-covered fx scans for the note-host split.
-  local noteParked
+  local parkedNotes
   do
     local scan, seen = {}, {}
     local function candidate(evt, laneIdx)
@@ -2648,7 +2648,7 @@ local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows
 
     -- Park removes a blocker; same-lane/pitch neighbours' tails regrow.
     local restores
-    noteParked, restores = reconcilePark(scan, priorByType.note or {},
+    parkedNotes, restores = reconcilePark(scan, priorByType.note or {},
       function(spec) seedDirty(spec.chan, parkSeed(spec, 'park')) end)
 
     -- Restores re-enter their columns now (unrealised); the tail walk clips them in place and
@@ -2678,7 +2678,7 @@ local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows
     -- Off-take membership for the generator + grid: each is a render-ready logical cell
     -- (ppq/endppqC like a projected note); an emptied lane re-extends to keep a column home.
     local takeLen = tm:length()
-    renderUnion('parked', noteParked, function(spec)
+    renderUnion('parked', parkedNotes, function(spec)
       local channel = channels[spec.chan]
       while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
       return util.assign(util.clone(spec), { endppq = spec.endppq or util.OPEN })
@@ -2752,7 +2752,7 @@ local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows
 
   -- Notes are settled (parks unlinked onsets, restores re-entered); re-derive continuous windows
   -- before cc/pb membership so a same-pass widened host parks now. see docs/trackerManager.md § The placement fixpoint
-  currentWindows = settleWindows(restoredNotes, noteParked)
+  currentWindows = settleWindows(restoredNotes, parkedNotes)
 
   -- CCs: a point event has no tail, so the Pass-A curve stands in on the target lane and
   -- restores add back immediately, seating an unrealised projection for the view.
@@ -2991,9 +2991,13 @@ end
 local fxHostWin = {}   -- uuid -> windowEndL (logical); a take-length change arrives as a wholesale reload
                        -- (mm:setLength), which walkChannel recomputes -- no separate length guard needed
 
-local function computeFxWindows(extraFxChans)
+local function computeFxWindows(extraFxChans, parkedNotes)
   local takeLen = tm:length()
   local fxWindow = {}
+  -- The stash is the authority on parkedness: the fx-host index lags a park until the tail-walk
+  -- commit. see docs/trackerManager.md § Park window census
+  local parked = {}
+  for _, spec in ipairs(parkedNotes or {}) do parked[spec.uuid] = true end
 
   -- Column walk: full recompute for wholesale-dirty channels and restored (not-yet-stamped) hosts.
   -- Take-length changes land here too via mm:setLength's wholesale reload. see docs/trackerManager.md
@@ -3027,18 +3031,20 @@ local function computeFxWindows(extraFxChans)
       if s.ppqL then util.add(seededPpq, s.ppqL) end
     end
     for uuid in pairs(fxHostsFor(chan)) do
-      local cell = colEvtFor(uuid)
-      if not cell then return false end
-      local cached = fxHostWin[uuid]
-      local dirty = cached == nil or seededUuid[uuid]
-      if not dirty then
-        for _, p in ipairs(seededPpq) do
-          if p >= cell.ppq and p <= cached then dirty = true; break end
+      if not parked[uuid] then
+        local cell = colEvtFor(uuid)
+        if not cell then return false end
+        local cached = fxHostWin[uuid]
+        local dirty = cached == nil or seededUuid[uuid]
+        if not dirty then
+          for _, p in ipairs(seededPpq) do
+            if p >= cell.ppq and p <= cached then dirty = true; break end
+          end
         end
+        local windowEnd = dirty and hostWindowEnd(cell, takeLenL) or cached
+        fxHostWin[uuid] = windowEnd
+        fxWindow[cell]  = windowEnd
       end
-      local windowEnd = dirty and hostWindowEnd(cell, takeLenL) or cached
-      fxHostWin[uuid] = windowEnd
-      fxWindow[cell]  = windowEnd
     end
     return true
   end
@@ -4638,18 +4644,10 @@ local function rebuildPipeline(didReload)
   local function assembleParkWindows(hostWins, parkedNoteSpecs)
     local parkRegions = {}
     for _, r in ipairs(sources.fxRegions or {}) do util.add(parkRegions, r) end
-    -- A host parked this pass sits in both arms: parking defers to the tail-walk commit, so this pass's
-    -- window agrees with the next only if the parked arm wins. See docs/trackerManager.md § Park window census.
-    local parkedHost = {}
-    for _, spec in ipairs(parkedNoteSpecs) do
-      if spec.evType == 'note' and spec.fx then parkedHost[spec.uuid] = true end
-    end
-    -- computeFxWindows already found every on-take fx host (its map keys are exactly the non-pa fx
-    -- cells); sort (chan, lane, ppq) to hold the whole-column scan's emission order -- parkWindows downstream is G4-stable.
+    -- computeFxWindows already found every on-take fx host, parked hosts declared out -- no re-filter.
+    -- Sort (chan, lane, ppq): the whole-column scan's emission order, so parkWindows stays G4-stable.
     local noteHosts = {}
-    for host, windowEnd in pairs(hostWins) do
-      if not parkedHost[host.uuid] then util.add(noteHosts, { host = host, endppq = windowEnd }) end
-    end
+    for host, windowEnd in pairs(hostWins) do util.add(noteHosts, { host = host, endppq = windowEnd }) end
     table.sort(noteHosts, function(a, b)
       local ha, hb = a.host, b.host
       if ha.chan ~= hb.chan then return ha.chan < hb.chan end
@@ -4683,13 +4681,13 @@ local function rebuildPipeline(didReload)
   -- Post-settlement window pass, called by rebuildRegionPark between its note and cc/pb passes: fxWindow
   -- feeds fx expansion's host set, settledWindows the continuous membership + persisted window set.
   local fxWindow, settledWindows
-  local function settleWindows(restoredNotes, noteParked)
+  local function settleWindows(restoredNotes, parkedNotes)
     local restoredFxChans = {}
     for _, rec in ipairs(restoredNotes) do
       if rec.colEvt.fx then restoredFxChans[rec.colEvt.chan] = true end
     end
-    fxWindow = computeFxWindows(restoredFxChans)
-    settledWindows = assembleParkWindows(fxWindow, noteParked)
+    fxWindow = computeFxWindows(restoredFxChans, parkedNotes)
+    settledWindows = assembleParkWindows(fxWindow, parkedNotes)
     return settledWindows
   end
 

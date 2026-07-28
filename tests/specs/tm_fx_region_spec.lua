@@ -2132,8 +2132,8 @@ return {
     name = 'park windows: a self-parking note host contributes one window, not two',
     run = function(harness)
       local h = harness.mk()
-      -- trill (note-replace) self-parks the host, so both arms of the window assembly see it at once:
-      -- its cell is still in columns this pass, and its spec is already in the parked stash.
+      -- trill (note-replace) self-parks the host: its cell leaves columns at once, but the fx-host
+      -- index names it until the tail-walk commit, so the census has to be told about the park.
       h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
                       vel = 100, detune = 0, delay = 0, lane = 1,
                       fx = { { kind = 'trill', period = { 1, 4 }, step = 2 },
@@ -2145,6 +2145,29 @@ return {
       local windows = h.ds:get('prevWindows') or {}
       t.eq(#windows, 1, 'one producer, one entry')
       t.eq(windows[1] and windows[1].evType, 'pb', 'the sine arm -- a note host seats no note window')
+    end,
+  },
+
+  {
+    -- The same stale fact the census guarded against, at a reader that doesn't: fx expansion enumerates
+    -- a self-parking host twice, and foldChains sums the two pb curves (`sine` folds as augment).
+    name = 'park windows: a self-parking note host runs its chain once, not twice',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
+                      vel = 100, detune = 0, delay = 0, lane = 1,
+                      fx = { { kind = 'trill', period = { 1, 4 }, step = 2 },
+                             { kind = 'sine', period = { 1, 4 }, depth = 30, onset = 0 } } })
+      h.tm:flush()
+      h.tm:rebuild()
+
+      -- Every pb on the wire is a chain seat: the trill parks the host, so nothing authored survives
+      -- to be read as one, and a note host's seats sit in no fxRegion for derivedPbs to find.
+      local peak = 0
+      for _, c in ipairs(h.fm:dump().ccs) do
+        if c.evType == 'pb' and c.chan == 1 then peak = math.max(peak, math.abs(c.val)) end
+      end
+      t.eq(peak, centsToRaw(30), 'the chain runs once: the sine peaks at its authored depth')
     end,
   },
 
