@@ -671,6 +671,13 @@ local function hostProducer(host, windowEnd, lane)
            sample = host.sample, delayPpq = delayToPPQ(host.delay) }
 end
 
+-- One host cell's window end: authored (or take-end) ceiling, clipped to its strict-next lane onset.
+local function hostWindowEnd(cell, takeLenL)
+  local ceil = (cell.endppq == nil or cell.endppq == util.OPEN) and takeLenL or math.min(cell.endppq, takeLenL)
+  local succ = nextLaneOnset(channels[cell.chan].columns.notes[cell.lane].events, cell.ppq)
+  return succ and math.min(ceil, succ) or ceil
+end
+
 local function forEachEvent(fn)
   for i=1,16 do
     local channel = channels[i]
@@ -1583,10 +1590,41 @@ local function freezeRegion(uuid)
   for _, r in ipairs(regions) do
     if r.uuid == uuid then region = r else util.add(keptRegions, r) end
   end
-  if not region then return end
+  local stash, keptParked = ds:get('fxParked') or {}, {}
+
+  -- The other producer shape: a note carrying its own chain, parked or still on the take. Both resolve
+  -- to the same degenerate region form assembleParkWindows builds, and the windows below must match the
+  -- persisted prevWindows field-for-field or the next rebuild sweeps the seats.
+  local hostSpec, onTakeHost, hostRegion
+  if not region then
+    for _, spec in ipairs(stash) do
+      if spec.evType == 'note' and spec.uuid == uuid and spec.fx then hostSpec = spec end
+    end
+    if hostSpec then
+      local endL = (hostSpec.endppq == nil or hostSpec.endppq == util.OPEN)
+                   and tm:toLogical(hostSpec.chan, tm:length()) or hostSpec.endppq   -- off-take: no lane clip
+      hostRegion = { chan = hostSpec.chan, startppq = hostSpec.ppq, endppq = endL,
+                     fx = hostSpec.fx, noteHost = true }
+    else
+      -- byUuid is the raw-frame index entry and .colEvt its stamped logical cell, so the window comes
+      -- off the cell and the assign off the entry. An unstamped (just-restored) host declines.
+      local cell = colEvtFor(uuid)
+      if cell and cell.fx then
+        onTakeHost = tm:byUuid(uuid)
+        hostRegion = { chan = cell.chan, startppq = cell.ppq, fx = cell.fx, noteHost = true,
+                       endppq = hostWindowEnd(cell, tm:toLogical(cell.chan, tm:length())) }
+      end
+    end
+  end
+  -- One region-shaped record from here down: nothing below knows which host shape it froze.
+  local frozen = region or hostRegion
+  if not frozen then return end
+  -- Ownership by dest, not mode: a note-dest kind's output stands in for the host note, so freezing
+  -- destroys it. A continuous-only chain leaves the note where it is.
+  local destroysHost = hostRegion and generators.parksNotes(hostRegion)
 
   -- The same producer that built prevWindows, so entries compare field-for-field below.
-  local windows = generators.parkWindows({ region })
+  local windows = generators.parkWindows({ frozen })
   -- Window membership only, never rebuildRegionPark's covered(): its first clause answers "does this
   -- spec park itself", true of every self-parked note host on the channel, and would take theirs too.
   local function covered(spec)
@@ -1600,16 +1638,22 @@ local function freezeRegion(uuid)
   -- Gathered before staging: the assigns write the very index list this walks. `derived` is
   -- metadata, so each rides mm's lockless path; the note keeps its uuid, lane and detune.
   local promoted = {}
-  for _, note in ipairs(rawIndexFor(region.chan).notes) do
+  for _, note in ipairs(rawIndexFor(frozen.chan).notes) do
     if note.derived == uuid then util.add(promoted, note) end
   end
   for _, note in ipairs(promoted) do assignEvent(note, { derived = util.REMOVE }) end
+  -- The chain goes with the region form it stood for. No predicate: a note-dest chain would have
+  -- parked its host into the stash arm, so an on-take host's is continuous-only. rawIndexRefile picks
+  -- the change up and de-registers the host, so nothing regenerates.
+  if onTakeHost then assignEvent(onTakeHost, { fx = util.REMOVE }) end
 
-  local stash, keptParked = ds:get('fxParked') or {}, {}
   local droppedHosts = {}
   for _, spec in ipairs(stash) do
     if spec.evType == 'note' and covered(spec) then droppedHosts[spec.uuid] = true end
   end
+  -- The noteHost flag suppresses the host's own note window, so window coverage cannot reach it:
+  -- seeding it here is what carries its parked PAs along through hostDropped below.
+  if hostSpec and destroysHost then droppedHosts[uuid] = true end
   -- A pa spec is anchored to a note spec, not to a window, so window coverage alone leaves it
   -- behind. Host resolution is hostParked's, over live render cells. see design/fx-freeze.md § Freeze to raw
   local function hostDropped(pa)
@@ -1622,7 +1666,11 @@ local function freezeRegion(uuid)
   end
   for _, spec in ipairs(stash) do
     local drop = spec.evType == 'pa' and hostDropped(spec) or covered(spec)
-    if not drop then util.add(keptParked, spec) end
+    if hostSpec and spec.uuid == uuid then
+      -- Freeze takes the chain, not the note: a host parked by another live region's note window stays
+      -- parked, stripped, so assembleParkWindows stops running its producer over the frozen curve.
+      if not destroysHost then util.add(keptParked, util.clone(spec, { fx = true })) end
+    elseif not drop then util.add(keptParked, spec) end
   end
 
   local prevWindows, keptWindows = ds:get('prevWindows') or {}, {}
@@ -1644,7 +1692,7 @@ local function freezeRegion(uuid)
     replace('prevWindows', keptWindows, prevWindows)
   end)
 
-  dirtyChan(region.chan)   -- freeze is rare and drastic: whole-channel dirt over per-member seeds
+  dirtyChan(frozen.chan)   -- freeze is rare and drastic: whole-channel dirt over per-member seeds
   -- A continuous-only or husk region stages no mm ops at all, and flush's no-op gate would swallow
   -- the pass; the request carries it past that and past rebuild(∅). Harmless when assigns staged.
   tm:requestRebuild()
@@ -1660,8 +1708,8 @@ function tm:assignEvent(evt, update) assignEvent(evt, update) end
 function tm:addParked(spec)           addParked(spec)           end
 function tm:assignParked(evt, update) assignParked(evt, update) end
 function tm:deleteParked(evt)         deleteParked(evt)         end
---contract: one-way; the region, its parked members and its windows are gone after the call
---contract: returns true on success, nil when no live region carries the uuid
+--contract: one-way; the host's chain, its parked members and its windows are gone after the call
+--contract: host = a live region, or a note (parked or on-take) carrying fx; any other uuid returns nil
 --contract: ungated -- overlap with a neighbouring region is the caller's to refuse
 function tm:freezeRegion(uuid)        return freezeRegion(uuid)  end
 -- With no mm ops there is no reload->rebuild to ride, so the one rebuild is driven here.
@@ -2938,13 +2986,6 @@ end
 -- uuid (fxHostWin), dirt-gated. see docs/trackerManager.md § Fx window cache
 local fxHostWin = {}   -- uuid -> windowEndL (logical); a take-length change arrives as a wholesale reload
                        -- (mm:setLength), which walkChannel recomputes -- no separate length guard needed
-
--- One host cell's window end: authored (or take-end) ceiling, clipped to its strict-next lane onset.
-local function hostWindowEnd(cell, takeLenL)
-  local ceil = (cell.endppq == nil or cell.endppq == util.OPEN) and takeLenL or math.min(cell.endppq, takeLenL)
-  local succ = nextLaneOnset(channels[cell.chan].columns.notes[cell.lane].events, cell.ppq)
-  return succ and math.min(ceil, succ) or ceil
-end
 
 local function computeFxWindows(extraFxChans)
   local takeLen = tm:length()
@@ -4603,6 +4644,8 @@ local function rebuildPipeline(didReload)
       if ha.lane ~= hb.lane then return ha.lane < hb.lane end
       return ha.ppq < hb.ppq
     end)
+    -- freezeRegion builds this same literal for the single host it freezes, recomputing the on-take end
+    -- rather than reading hostWins; the two must agree or a frozen window fails to match prevWindows.
     for _, nh in ipairs(noteHosts) do
       util.add(parkRegions, { chan = nh.host.chan, startppq = nh.host.ppq, endppq = nh.endppq,
                               fx = nh.host.fx, noteHost = true })

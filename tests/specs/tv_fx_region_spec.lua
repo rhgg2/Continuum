@@ -941,7 +941,23 @@ return {
   },
 
   {
-    name = 'fx freeze declines on a note host (tm freezes regions only)',
+    name = 'fx freeze converts an fx-carrying note at the caret',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      h.tm:addEvent{ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
+                     vel = 100, detune = 0, delay = 0, lane = 1, fx = sine30 }
+      h.tm:flush()
+      local uuid = authoredUuid(h)
+      h.ec:setPos(0, noteColIdx(h, 1), 1)                 -- caret on the host note
+      h.cmgr:invoke('freezeFxRegion')
+      t.falsy(h.vm:noteFx(uuid), 'the chain is gone from the host note')
+      t.deepEq(authoredPitches(h), { 60 }, 'the note itself stays -- a pb chain destroys nothing')
+    end,
+  },
+
+  {
+    name = 'fx freeze declines on a plain note (no chain to freeze)',
     run = function(harness)
       local h = harness.mk()
       h.vm:setGridSize(80, 40)

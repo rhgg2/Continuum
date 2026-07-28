@@ -1,4 +1,4 @@
-@module trackerRender  src=trackerRender.lua  loc=1502  sha=d2d9d10  mode=chunk  self=tr
+@module trackerRender  src=trackerRender.lua  loc=1502  sha=a94b175  mode=chunk  self=tr
 @deps cm, ds, cmgr, chrome, gui, modalHost, facade, tv, help, pe
 
 # Invariants & contracts
@@ -329,7 +329,7 @@
   @use call    tv:moveFxStage  @ handleFxChainKeys:1096 drawChainStage:1198,1202
   @use call    tv:newParkedTake  @ openNewTakeModal:1291
   @use call    tv:noteByUuid  @ hostPitch:887
-  @use call    tv:noteFx  @ stripPlan:1037 drawAddChainStage:1165 enterStrip:1172 editFx:1262
+  @use call    tv:noteFx  @ stripPlan:1037 headerActions:1121 drawAddChainStage:1165 enterStrip:1172 editFx:1262
   @use call    tv:overrideTab  @ drawParamPalette:572 handleFxChainKeys:1075 focusParams:1325
   @use call    tv:paletteCursor  @ handlePaletteKeys:378 drawTree:502
   @use call    tv:paletteExpanded  @ buildPlan:304
@@ -342,7 +342,6 @@
   @use call    tv:pickTrack  @ 114
   @use call    tv:pollLearn  @ renderBody:1467
   @use call    tv:pruneEmptyRegion  @ renderBody:1454,1477
-  @use call    tv:regionByUuid  @ headerActions:1121
   @use call    tv:removeFxStage  @ handleFxChainKeys:1108 drawChainStage:1205
   @use call    tv:replaceFxStage  @ fxFieldWidget:968 drawChainStage:1193
   @use call    tv:setColSwingSlot  @ 37

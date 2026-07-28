@@ -136,6 +136,15 @@ membership are gone.
   rebuild reads its host as unparked and restores it to the take, an
   orphan aftertouch on a pitch that no longer sounds. Freeze drops the
   pa entries riding a dropped note spec in the same pass.
+- **Addressing declines at the view** (2026-07-28). `tm:freezeRegion`
+  returns nil for a uuid that is neither a live region nor an
+  fx-carrying note, so the tv verb could have leant on that alone: one
+  refusal, in the layer that owns the projection. It doesn't — the
+  keystroke path and the fx tab's button both test `tv:noteFx(uuid)`
+  first. The button needs the *disabled* state rather than a refusal,
+  and that has to be answerable without invoking the verb; testing the
+  same fact on the keystroke keeps the two entry points agreeing about
+  what counts as a freezable host.
 
 ## Freeze to group
 
@@ -235,9 +244,26 @@ undo block:
 
 - **The primitive is producer-shaped, not region-shaped.**
   `tm:freezeRegion(uuid)` handles both hosts — a region record, or a
-  note host (self-parked: its fxParked spec IS the destroyed parked
-  member; on-take augment host: clear its `fx` chain instead). One
-  seam, per § Eligibility gates' "both hosts freeze".
+  note host, on the take or parked. One seam, per § Eligibility gates'
+  "both hosts freeze".
+- **What destroys a note host is `parksNotes`, not where it was
+  found** (2026-07-28). An earlier reading had the parked host
+  destroyed on the grounds that a parked host is a self-parked one. It
+  needn't be: a note carrying a continuous-only chain that sits under
+  another live region's note window is parked by *that region* and
+  still runs its producer — `assembleParkWindows` walks every parked
+  note spec carrying `fx`, not only self-parking ones. So destroy the
+  host iff its own chain carries a **note-dest** kind, which is what
+  parked it — ownership by dest, not mode. A note-dest *augment* kind
+  parks its host as squarely as a replace one; what augment buys is a
+  fold that merges the host's own notes back into the emitted stream
+  (`trackerManager.lua:3181-3189`), so the base note sounds as derived
+  output. Either way the chain is already re-emitting whatever should
+  sound and the parked host is redundant. Otherwise the host survives
+  minus its chain, still parked by whatever parks it. The on-take arm
+  needs no such test: an on-take host's chain has no note-dest stage at
+  all, and its continuous stages may perfectly well be replace — a
+  pb-replace host parks the authored curve, not itself.
 - **Conversion order**, all before one rebuild, ds writes under the
   `flushingParked` suppression (which needs an error-path reset —
   today an error while the flag is up leaves every later region

@@ -1,4 +1,4 @@
-@spec tv_fx_region_spec  src=tests/specs/tv_fx_region_spec.lua  loc=956  sha=d2d9d10  cases=49
+@spec tv_fx_region_spec  src=tests/specs/tv_fx_region_spec.lua  loc=972  sha=a94b175  cases=50
 @exercises dataStore (h.ds), trackerManager (h.tm), midiManager (h.fm), trackerView (h.vm), editCursor (h.ec), commandManager (h.cmgr), clipboard (h.clipboard)
 @surface   ds:assign, tm:rebuild, ds:get, tm:flush, fm:dump, vm:setGridSize, vm:ppqToRow, ec:setPos, vm:fxHostForEdit, tm:addEvent, vm:noteFx, vm:setNoteFx, vm:removeFxStage, vm:addFxStage, vm:setFxField, vm:rowToPPQ, vm:fxHostAtCursor, cmgr:invoke, tm:getChannel, vm:editEvent, tm:subscribe, ec:row, ec:extendTo, clipboard:collect
 @harness   mk
@@ -68,27 +68,28 @@
   @case 'fx delete removes the region under the caret'  [harness]  @ 892-901
   @case 'fx deleteSel drops every region the rectangle catches (onset in band), sparing the rest'  [harness]  @ 905-922
   @case 'fx freeze promotes the region output to authored notes and drops the region'  [harness]  @ 928-940
-  @case 'fx freeze declines on a note host (tm freezes regions only)'  [harness]  @ 944-954
+  @case 'fx freeze converts an fx-carrying note at the caret'  [harness]  @ 944-956
+  @case 'fx freeze declines on a plain note (no chain to freeze)'  [harness]  @ 960-970
 
 # Uses (outbound edges)
   @use call ds:assign  @ 14,104,136,516,607,633,656,680,717,745,780,909
   @use call tm:rebuild  @ 15,82,108,140,178,266,284,405,442,520,611,637,660,685,721,749,784,914
   @use call ds:get  @ 25,209,219,229,230,232,243,270,287,334,351,366,388,415,423,455,463,489,616,644,690,729,753,769,789,806,823,879,900,920,938
-  @use call tm:flush  @ 39,170,382,397,433,477
+  @use call tm:flush  @ 39,170,382,397,433,477,950
   @use call fm:dump  @ 43,50
-  @use call vm:setGridSize  @ 65,81,91,103,135,153,169,253,265,283,295,312,328,346,361,379,396,432,472,499,515,533,546,561,575,590,606,632,655,679,699,716,744,763,779,800,817,836,858,871,895,908,931,947
+  @use call vm:setGridSize  @ 65,81,91,103,135,153,169,253,265,283,295,312,328,346,361,379,396,432,472,499,515,533,546,561,575,590,606,632,655,679,699,716,744,763,779,800,817,836,858,871,895,908,931,947,963
   @use call vm:ppqToRow  @ 73
-  @use call ec:setPos  @ 124,126,256,299,301,303,315,317,332,349,364,385,412,419,452,459,502,522,536,549,564,578,593,613,642,665,687,702,727,751,766,786,804,821,839,861,874,877,898,916,936,950
+  @use call ec:setPos  @ 124,126,256,299,301,303,315,317,332,349,364,385,412,419,452,459,502,522,536,549,564,578,593,613,642,665,687,702,727,751,766,786,804,821,839,861,874,877,898,916,936,952,966
   @use call vm:fxHostForEdit  @ 125,127,257,268,316,318,624,647,671,736
   @use call tm:addEvent  @ 170,397,433
-  @use call vm:noteFx  @ 199,233
+  @use call vm:noteFx  @ 199,233,954
   @use call vm:setNoteFx  @ 208,218
   @use call vm:removeFxStage  @ 228
   @use call vm:addFxStage  @ 231
   @use call vm:setFxField  @ 242
   @use call vm:rowToPPQ  @ 273,274,566,885,886
   @use call vm:fxHostAtCursor  @ 286,300,302,304
-  @use call cmgr:invoke  @ 333,350,386,413,420,460,486,503,523,537,550,565,579,581,594,614,615,643,666,667,688,703,728,752,767,768,787,805,822,876,878,899,918,937,951
+  @use call cmgr:invoke  @ 333,350,386,413,420,460,486,503,523,537,550,565,579,581,594,614,615,643,666,667,688,703,728,752,767,768,787,805,822,876,878,899,918,937,953,967
   @use call tm:getChannel  @ 338
   @use call vm:editEvent  @ 365,453
   @use call tm:subscribe  @ 482
@@ -105,7 +106,7 @@
   @field r chan  @ 272,732,733
   @field w chan  @ 12,37,105,106,137,138,170,380,397,433,473,475
   @field w chan  @ 517,518,608,609,634,635,657,658,681,682,683,718
-  @field w chan  @ 719,746,747,781,782,910,911,912
+  @field w chan  @ 719,746,747,781,782,910,911,912,948
   @field r chanDelta  @ 847
   @field w col1  @ 267,285,484
   @field w col2  @ 267,285,484
@@ -114,13 +115,13 @@
   @field w config  @ 360
   @field w currentOctave  @ 360
   @field w defaults  @ 175,402,439
-  @field w delay  @ 38,381,474,476
+  @field w delay  @ 38,381,474,476,949
   @field w delta  @ 172,399,435
   @field r depth  @ 243
   @field w depth  @ 8
   @field r derived  @ 43,51
   @field w dest  @ 175,402,439
-  @field w detune  @ 38,381,474,476
+  @field w detune  @ 38,381,474,476,949
   @field w dir  @ 9,208,231
   @field r endRow  @ 73,301,303,846
   @field r endppq  @ 274,507,524,525,538,553,566,580,582,597,706,808
@@ -128,9 +129,9 @@
   @field w endppq  @ 12,37,105,106,137,138,296,352,380,383,473,475
   @field w endppq  @ 478,517,518,534,591,608,609,634,635,657,658,681
   @field w endppq  @ 682,683,718,719,746,747,781,782,837,859,910,911
-  @field w endppq  @ 912
+  @field w endppq  @ 912,948
   @field r evType  @ 415,423,455,463
-  @field w evType  @ 37,170,380,397,433,473,475
+  @field w evType  @ 37,170,380,397,433,473,475,948
   @field r events  @ 451
   @field w expand  @ 172,399,435
   @field w fields  @ 175,402,439
@@ -138,7 +139,7 @@
   @field w fx  @ 12,92,105,106,137,138,155,177,330,348,352,362
   @field w fx  @ 383,404,441,478,517,518,608,609,634,635,657,658
   @field w fx  @ 681,682,683,718,719,746,747,781,782,802,819,910
-  @field w fx  @ 911,912,933
+  @field w fx  @ 911,912,933,949
   @field r fxRegions  @ 842,843,844
   @field r grid  @ 19,31,111,115,142,159,182,298,365,408,445,449
   @field r grid  @ 566,620,639,662,669,724,725
@@ -147,14 +148,14 @@
   @field r kinds  @ 171,179,398,421,434,461
   @field w label  @ 175,402,439
   @field r lane  @ 32
-  @field w lane  @ 38,381,474,476
+  @field w lane  @ 38,381,474,476,949
   @field r midiChan  @ 20,32,111,142,183,409,446,621,640,663,669
   @field w mode  @ 175,402,439
   @field w name  @ 62,78,88,100,132,150,166,195,204,214,224,238
   @field w name  @ 250,262,280,292,309,325,343,358,376,393,429,469
   @field w name  @ 496,512,530,543,558,572,587,603,629,652,676,696
   @field w name  @ 713,741,760,776,797,814,833,855,868,892,905,928
-  @field w name  @ 944
+  @field w name  @ 944,960
   @field r notes  @ 43,50
   @field w notes  @ 172,399,435
   @field r numRows  @ 566
@@ -165,9 +166,9 @@
   @field w pbRep  @ 434,461
   @field w period  @ 8,9,208,231
   @field r pitch  @ 51,161,336,338,368,489
-  @field w pitch  @ 37,380,473,475
+  @field w pitch  @ 37,380,473,475,948
   @field r ppq  @ 369,451,825
-  @field w ppq  @ 37,170,173,380,397,400,433,436,437,473,475
+  @field w ppq  @ 37,170,173,380,397,400,433,436,437,473,475,948
   @field r row  @ 845
   @field w row1  @ 267,285,484
   @field w row2  @ 267,285,484
@@ -175,7 +176,7 @@
   @field w run  @ 251,263,281,293,310,326,344,359,377,394,430,470
   @field w run  @ 497,513,531,544,559,573,588,604,630,653,677,697
   @field w run  @ 714,742,761,777,798,815,834,856,869,893,906,929
-  @field w run  @ 945
+  @field w run  @ 945,961
   @field w shape  @ 173,400,436,437
   @field r startRow  @ 299
   @field r startppq  @ 273,506,596,705,881,885
@@ -193,5 +194,5 @@
   @field w uuid  @ 912
   @field r val  @ 188,417,457
   @field w val  @ 170,173,397,400,433,436,437
-  @field w vel  @ 38,381,474,476
+  @field w vel  @ 38,381,474,476,949
   @field r window  @ 173,400,436,437

@@ -1118,7 +1118,7 @@ local stripPlan do
   local function headerActions(plan)
     if ImGui.Button(ctx, 'clear') and plan.host then tv:setNoteFx(plan.host, util.REMOVE) end
     ImGui.SameLine(ctx, 0, 4)
-    chrome.disabledIf(not (plan.host and tv:regionByUuid(plan.host)), function()
+    chrome.disabledIf(not (plan.host and tv:noteFx(plan.host)), function()
       if ImGui.Button(ctx, 'freeze') then
         tv:freezeRegion(plan.host)
         -- The pinned host is gone, and stripPlan keeps a pinned session alive on a dead uuid

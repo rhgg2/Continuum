@@ -2441,10 +2441,11 @@ local function deleteFxRegionsInRect(r1, r2, c1, c2)
 end
 
 -- Addresses the host the caret's row brackets (the fx tab's rule), not delete's greatest-onset-before:
--- a one-way conversion should act on what's visible. A note host declines -- tm's core is region-shaped.
+-- a one-way conversion should act on what's visible. Region or note host alike; a note with no chain
+-- is nothing to freeze, so it declines here rather than making the round trip to tm.
 local function freezeRegionAtCursor()
   local uuid = tv:fxHostAtCursor()
-  if uuid and regionByUuid(uuid) then tv:freezeRegion(uuid) end
+  if uuid and tv:noteFx(uuid) then tv:freezeRegion(uuid) end
 end
 
 function tv:noteFx(uuid)
@@ -2484,10 +2485,6 @@ end
 -- The host note behind a uuid; the stepInterval editor reads its pitch/detune to
 -- convert a slide's cents demand to/from temper steps.
 function tv:noteByUuid(uuid) return tm:byUuid(uuid) or parkedByUuid(uuid) end
-
--- The region record behind a uuid, or nil. The fx tab reads it to tell a region host from a note
--- host without knowing the 'fxr-N' uuid grammar.
-function tv:regionByUuid(uuid) return regionByUuid(uuid) end
 
 -- Write or clear (util.REMOVE) a note's fx list, then flush so the rebuild
 -- re-derives its fxNotes. uuid, not the event, is the durable handle.
@@ -2576,7 +2573,7 @@ function tv:replaceFxStage(uuid, index, entry)
   self:setNoteFx(uuid, list)
 end
 
---contract: region hosts only; a note-host uuid is a silent no-op (tm has no note arm yet)
+--contract: a region or fx-carrying note host; any other uuid is a silent no-op
 function tv:freezeRegion(uuid) return tm:freezeRegion(uuid) end
 
 -- One undo block per chain verb: fx writes are undoable but mint no point of their own, so

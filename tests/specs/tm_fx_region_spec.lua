@@ -2013,4 +2013,115 @@ return {
     end,
   },
 
+  ----- Freeze to raw: a note host freezes through the same core, parked or on the take
+
+  {
+    name = 'freeze (parked host): the trill output is authored and the host leaves the stash',
+    run = function(harness)
+      local h = harness.mk()
+      -- trill (note-replace) self-parks the host; sine (pb-augment) seats a pb stream over the parked
+      -- window, so one freeze must convert both arms of the chain.
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
+                      vel = 100, detune = 0, delay = 0, lane = 1,
+                      fx = { { kind = 'trill', period = { 1, 4 }, step = 2 },
+                             { kind = 'sine', period = { 1, 4 }, depth = 30, onset = 0 } } })
+      h.tm:flush()
+      h.tm:rebuild()   -- settle: the host is off-take when the window set is recomputed
+      -- No region here, so the seat helpers at the head of this file cannot see these seats: live they
+      -- are wire-only, and coming on screen is exactly what freezing them means.
+      local function pbSeats()
+        local out = {}
+        for _, c in ipairs(h.fm:dump().ccs) do
+          if c.evType == 'pb' and c.chan == 1 then out[#out + 1] = c.ppq end
+        end
+        table.sort(out)
+        return out
+      end
+      local before = pbSeats()
+      t.truthy(#before > 0, 'the parked host seats a sine pb stream')
+      t.falsy(h.tm:getChannel(1).columns.pb, 'live, the seats are wire-only -- off screen')
+
+      local uuid = h.tm:getChannel(1).parked[1].uuid
+      t.truthy(h.tm:freezeRegion(uuid), 'the freeze reports success')
+
+      t.truthy(#authoredPitches(h) > 0, 'the trill output stands as authored notes')
+      t.falsy(h.ds:get('fxParked'), 'the host leaves the stash -- nil, not an empty array')
+      t.eq(#h.tm:getChannel(1).parked, 0, 'and nothing is parked off-take any more')
+      t.truthy(h.tm:getChannel(1).columns.pb, 'the pb curve comes on screen as authored automation')
+      t.deepEq(pbSeats(), before, 'and the same breakpoints still sound')
+
+      h.tm:rebuild(true)   -- takeChanged: a whole re-derive, where rebuild(nil) would short-circuit
+      t.truthy(#authoredPitches(h) > 0, 'the promoted notes stand')
+      t.falsy(h.ds:get('fxParked'), 'and the standing reconcile has nothing to restore')
+    end,
+  },
+
+  {
+    name = 'freeze (on-take host): the cc curve is authored and the host keeps its note',
+    run = function(harness)
+      local h = harness.mk()
+      -- Authored cc10 the sine augment parks; values distinct from its output so a stray restore shows.
+      h.tm:addEvent({ evType = 'cc', ppq = 60,  chan = 1, cc = 10, val = 20 });  h.tm:flush()
+      h.tm:addEvent({ evType = 'cc', ppq = 180, chan = 1, cc = 10, val = 100 }); h.tm:flush()
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
+                      detune = 0, delay = 0, lane = 1,
+                      fx = { { kind = 'sine', period = { 1, 4 }, depth = 32, dest = 10 } } })
+      h.tm:flush()
+      local uuid = h.tm:getChannel(1).columns.notes[1].events[1].uuid
+      t.eq(#stashOfType(h, 'cc'), 2, 'sine parks both authored cc off-take')
+      -- The authored cc parked out of it, so the column shell stands empty rather than vanishing.
+      local live = h.tm:getChannel(1).columns.ccs[10]
+      t.eq(#(live and live.events or {}), 0, 'live, nothing on cc10 is on screen -- seats and authored both off')
+
+      t.truthy(h.tm:freezeRegion(uuid), 'the freeze reports success')
+
+      t.deepEq(authoredPitches(h), { 60 }, 'a continuous-only host keeps its note on the take')
+      local rec = h.tm:byUuid(uuid)
+      t.truthy(rec, 'the host is still indexed')
+      t.falsy(rec.fx, 'but carries no chain -- freeze took it')
+      t.falsy(h.ds:get('fxParked'), 'the authored cc it parked are destroyed with the window')
+      t.falsy(h.ds:get('prevWindows'), 'and its window leaves the recognition baseline')
+      local col = h.tm:getChannel(1).columns.ccs[10]
+      t.truthy(col and #col.events > 0, 'the cc seats stand in the column as authored automation')
+    end,
+  },
+
+  {
+    -- assembleParkWindows runs every parked note spec carrying fx, so a continuous-only host parked by
+    -- *another* live region still produces. see design/fx-freeze.md § Freeze to raw
+    name = 'freeze (host parked by a region): the chain goes, the note stays parked',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
+                      detune = 0, delay = 0, lane = 1, fx = sine30 })
+      h.tm:flush()
+      injectArp(h)   -- note-replace over the same span: the region parks the sine host
+      t.eq(#h.tm:getChannel(1).parked, 1, 'the region parks the host off-take')
+      local uuid = h.tm:getChannel(1).parked[1].uuid
+
+      t.truthy(h.tm:freezeRegion(uuid), 'the freeze reports success')
+
+      local specs = stashOfType(h, 'note')
+      t.eq(#specs, 1, 'the host is still parked -- the region that parks it is untouched')
+      t.eq(specs[1].uuid, uuid, 'and it is the same note spec')
+      t.falsy(specs[1].fx, 'stripped of the chain freeze took')
+      t.eq(#(h.ds:get('fxRegions') or {}), 1, 'the region survives the freeze')
+      t.truthy(#derivedNotes(h) > 0, 'and still produces its arp output')
+      t.truthy(h.tm:getChannel(1).columns.pb, 'the sine curve is authored automation now')
+    end,
+  },
+
+  {
+    name = 'freeze declines on a plain note and changes nothing',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h)
+      injectRegion(h)   -- a live region over the same span must not be swept by a miss
+      local uuid = h.tm:getChannel(1).columns.notes[1].events[1].uuid
+      t.falsy(h.tm:freezeRegion(uuid), 'a note carrying no chain is not a host')
+      t.deepEq(authoredPitches(h), { 60 }, 'the note stands')
+      t.eq(#(h.ds:get('fxRegions') or {}), 1, 'and so does the region')
+    end,
+  },
+
 }
