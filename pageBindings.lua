@@ -90,6 +90,7 @@ pageBindings.tracker = {
   quantize               = { {ImGui.Key_K, ImGui.Mod_Ctrl} },
   quantizeKeepRealised   = { {ImGui.Key_K, ImGui.Mod_Ctrl, ImGui.Mod_Shift} },
   editNoteFx             = { {ImGui.Key_X, ImGui.Mod_Super} },
+  freezeFxRegion         = { {ImGui.Key_E, ImGui.Mod_Ctrl} },
   focusParamPalette      = { {ImGui.Key_R, ImGui.Mod_Super} },
 }
 -- Universal-argument digit prefixes: Ctrl+0..9 arm advBy0..advBy9.

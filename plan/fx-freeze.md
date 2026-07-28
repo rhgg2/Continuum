@@ -18,14 +18,14 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-07-28 tv: bind freeze -- Ctrl-E and the fx tab's action row (§ Freeze to raw)
 - 2026-07-28 tm: freezeRegion -- the raw core, region host (§ Freeze to raw)
 - 2026-07-27 tm: restore flushingParked on the error path (§ Implementation notes)
 - **F1 — pb/at as first-class gm members** (2026-07-11) — every seam
-- **F2a — projext undo** (2026-07-12..14, own record in
 
 ## Now
 
-(empty — phase 1's raw core has landed; queued items 1-3 still stand in this phase. Run /plan-next to promote the next commit.)
+(empty — queued item 3 landed early so the core can be driven by hand in REAPER; items 1-2 (note-host arm, tm eligibility gates) still stand in this phase. Run /plan-next to promote the next commit.)
 
 ## Queued (current phase; one-liners)
 
@@ -38,8 +38,11 @@
    same-target continuous overlap (painter-fold seats not separable);
    spec pins each refusal. (Group-only fx-carrying-host-note gate
    deferred to phase 3 with the group verb it gates.)
-3. tv freeze-to-raw verb — command wiring + confirm modal for the
-   parked-member destruction, `util.atomic` wrapping the post-confirm
-   continuation (modal resolves on a later frame), gate refusals
-   surfaced to the user; `tv_fx_region_spec` pins verb, confirm, and
-   refusal surfacing.
+3. ~~tv freeze-to-raw verb~~ — landed 2026-07-28 ahead of items 1-2, to
+   drive the core by hand in REAPER. `freezeFxRegion` on Ctrl-E plus a
+   `freeze` button on the fx tab, both through `tv:freezeRegion`
+   (`util.atomic`); region hosts only, note hosts and every ungated
+   overlap decline silently. **No confirm** — see § Freeze to raw.
+   Refusal surfacing is deferred to item 2, which is what creates a
+   refusal to surface; the codebase has no toast/alert facility, so
+   that is a mechanism decision, not wiring.

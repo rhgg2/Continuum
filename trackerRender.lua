@@ -1113,10 +1113,19 @@ local stripPlan do
     tv:setStripCursor(cur)
   end
 
-  -- clear wipes the chain (always live). commit/cancel end the keyboard session, so they gate
-  -- on strip focus (mouse parity for Super+X/Esc) — there's no session to end when unfocused.
+  -- clear and freeze need no keyboard session, so both stay live regardless of focus; commit/cancel end
+  -- the session, so they gate on strip focus (mouse parity for Super+X/Esc) — nothing to end unfocused.
   local function headerActions(plan)
     if ImGui.Button(ctx, 'clear') and plan.host then tv:setNoteFx(plan.host, util.REMOVE) end
+    ImGui.SameLine(ctx, 0, 4)
+    chrome.disabledIf(not (plan.host and tv:regionByUuid(plan.host)), function()
+      if ImGui.Button(ctx, 'freeze') then
+        tv:freezeRegion(plan.host)
+        -- The pinned host is gone, and stripPlan keeps a pinned session alive on a dead uuid
+        -- (fx falls back to {}), so the vanished-host tidy at the sink never fires. Exit here.
+        if stripHost == plan.host then stripExitReq = true end
+      end
+    end)
     ImGui.SameLine(ctx, 0, 4)
     chrome.disabledIf(not stripFocus, function()
       if ImGui.Button(ctx, 'commit') then stripExitReq = true end

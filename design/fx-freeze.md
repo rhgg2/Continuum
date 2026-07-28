@@ -114,7 +114,15 @@ membership are gone.
   depths, and the reason a freeze cannot round-trip exact.
 - **Parked members are destroyed** (both verbs). The chord you see
   vanishes; the arp you've been hearing appears. The one genuinely
-  destructive step — the single place a confirm gate earns its place.
+  destructive step — and still ungated (2026-07-28). An earlier draft
+  put the sole confirm gate here, on the reading that only a
+  discrete-replace chain destroys anything. It doesn't: `parkWindows`
+  opens a cc/pb window per continuous dest for **augment as well as
+  replace**, so any chain over authored material parks something, and
+  the gate would fire on nearly every freeze. A confirm that always
+  fires is a keystroke tax, not an interlock. What dies is on screen
+  (parked cells render) and the conversion is one undo block, which is
+  where every other destructive verb here leaves it.
 - **Tails**: nothing to do (2026-07-28). This read "promoted notes
   join the unified tail walk, derived region notes having been exempt
   from it" — and they were never exempt. `walkable` filters the raw

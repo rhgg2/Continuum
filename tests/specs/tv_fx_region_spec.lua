@@ -921,4 +921,36 @@ return {
       t.deepEq(left, { 'fxr-3' }, 'only the out-of-band region survives')
     end,
   },
+
+  ----- Freeze (the tv seam; tm_fx_region_spec pins the conversion itself)
+
+  {
+    name = 'fx freeze promotes the region output to authored notes and drops the region',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      addNote(h)                                          -- the chord the arp replaces
+      injectRegion(h, { fx = arpUp })
+      t.deepEq(authoredPitches(h), {}, 'the covered chord is parked while the region lives')
+      local _, ci = fxColFor(h, 1)
+      h.ec:setPos(2, ci, 1)                               -- mid-window
+      h.cmgr:invoke('freezeFxRegion')
+      t.eq(#(h.ds:get('fxRegions') or {}), 0, 'the region is gone')
+      t.truthy(#authoredPitches(h) > 0, 'the arp output stands as authored notes')
+    end,
+  },
+
+  {
+    name = 'fx freeze declines on a note host (tm freezes regions only)',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      addNote(h)
+      injectRegion(h)                                     -- sine: pb-augment, the note stays authored
+      h.ec:setPos(0, noteColIdx(h, 1), 1)                 -- caret on the note, not the fx column
+      h.cmgr:invoke('freezeFxRegion')
+      t.truthy(region(h, 'fxr-1'), 'the region is untouched')
+      t.deepEq(authoredPitches(h), { 60 }, 'so is the note')
+    end,
+  },
 }
