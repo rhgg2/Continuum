@@ -12,6 +12,19 @@ lines. Newest first. `/commit` prompts for one at commit time.
 Entries below 2026-07-27 predate that split, so some of them also
 appear in their design docs.
 
+- **2026-07-28** — The plan workflow's artefacts stay totally-specified; the human stops being
+  their reader. A brief earns its cost three ways — it discards the *search* (finding an 80-line
+  seam in a 5,000-line module costs far more than stating where it is), it forces resolution
+  (vagueness survives a conversation, not a written-down shape), and it gives adversarial review a
+  proposition to attack, which a transcript isn't. None of the three requires a human to read it,
+  and the escalation record says the compression holds: occasional tactical escalations, no design
+  ones. So `/plan-next` settles the item in chat *before* writing, leaving the review buffer as
+  confirmation of a discussion just held rather than a specification arriving cold; and the tactical
+  rung of `/implement-next` writes its settlement back to the design doc, since it is the rung that
+  fires and the brief it lands in gets pruned. Rejected: replacing the brief with conversation
+  residue (loses all three), and merging `/plan-next` into `/implement-next` (loses the context
+  partition that discarding the search pays for).
+
 - **2026-07-28** — tm's derivation dirt is a lattice — nil < seed list < true — and every writer
   joins rather than assigns: a pass may discover more dirt, never less. absorbReloadDirt's seed fold
   was assigning, so it demoted standing wholesale dirt (setLength's OPEN-tail widen, markSwingStale)

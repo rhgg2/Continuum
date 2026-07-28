@@ -16,7 +16,11 @@ description: Implement the plan's Now brief — red spec first, brief kept curre
      reconcile against the code and carry on. No ceremony.
    - **Tactical** — the brief needs a decision it didn't settle, but
      the design intent is clear enough to settle locally: propose the
-     settlement to the user and if approved, continue.
+     settlement to the user and if approved, continue. Write it back as
+     a dated note in the design doc named in the plan's `> source:`
+     line, the way `/plan-next` does. This is the rung that actually
+     fires, and the brief it lands in gets pruned — without the
+     write-back the decision survives only in a commit message.
    - **Design** — the code contradicts the design doc's model, or the
      item dissolves or splits on contact: stop implementing. Surface
      it; the fix is a design-doc conversation and a `/plan-next`

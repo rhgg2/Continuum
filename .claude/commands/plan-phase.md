@@ -33,6 +33,11 @@ the point of this command existing — run it and stop.
    the next item needs to exist already. Prefer the split that makes
    each line separately reviewable over the one that makes them equal
    in size.
+
+   Write them in plain sentences, not the compressed register the
+   briefs use. Queued is what a cold session and the human both read to
+   see what is coming, and the compression buys about a third of the
+   length at several times the cost in readability.
 6. If the split exposes a decision the design doc leaves open, settle
    it with me before writing the queue. The Queued line records the
    settlement in passing; the design doc gets the dated note.

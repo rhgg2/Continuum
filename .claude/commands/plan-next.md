@@ -1,9 +1,10 @@
 ---
-description: Promote the next queued plan item into a self-contained, commit-sized Now brief.
+description: Settle the next queued plan item in chat, then compile it into a self-contained, commit-sized Now brief.
 ---
 
 Synthesis step: compile the next stretch of work from the design doc
-into the plan, so implementation sessions read the plan alone.
+into the plan, so implementation sessions read the plan alone. The
+compiling is yours; the settling happens in chat with me first.
 
 1. The live plan arrives injected by the `UserPromptExpansion` hook —
    work from that rather than re-reading it. (A plan over the 10k
@@ -29,10 +30,25 @@ into the plan, so implementation sessions read the plan alone.
    - **≤150k context**: the brief must name tight file/line ranges so
      an implementation session works from the brief plus those ranges
      alone. If it can't, split further.
-4. Write the self-contained Now brief. Study the relevant sections in
-   the design-doc name in the `> source:` line, plus the relevant code
-   (maps first), until you could implement it without the doc. That's
-   the brief. Self-contained means:
+4. Study before proposing anything: the relevant sections of the design
+   doc named in the `> source:` line, plus the relevant code (maps
+   first), until you could implement the item without the doc. The
+   search is the expensive part — finding an 80-line seam in a
+   5,000-line module costs an order of magnitude more than stating
+   where it is — and the brief is its memo.
+5. Bring the search to chat and settle the item there, before writing
+   any of it down: what the item turns out to involve, the forks the
+   search exposed, what you'd do, what you're unsure of. Anything the
+   design doc left open is settled here too — the brief records the
+   settlement, the design doc gets the dated note.
+
+   This ordering is the point of the command. A brief is written to be
+   sufficient for a reader with no conversation behind them, which is
+   what makes it slow going for the one person who has one; arriving
+   instead as the write-up of a discussion just held, it can be skimmed
+   and accepted, which is the only way its review gate is dischargeable
+   at all.
+6. Write the settlement up as the Now brief. Self-contained means:
    - what and why, two or three sentences;
    - target shapes (data structures, fields) copied in, not pointed at;
    - decisions already settled, restated with their dates;
@@ -42,8 +58,8 @@ into the plan, so implementation sessions read the plan alone.
      the target spec file and fixture;
    - what done looks like: suite green, plus the item's own evidence
      (which walks are gone, what a probe should show).
-5. If the design doc leaves open a decision the brief needs, settle it
-   with the user before promoting. The brief records the settlement;
-   the design doc gets the dated note.
-6. Stage the whole plan-file update as one `apply_patches` call — the
-   user reviews the compiled brief hunk by hunk.
+
+   Copying shapes in rather than pointing at them is a forcing
+   function, not documentation: vagueness survives a conversation and
+   does not survive having to write the shape down.
+7. Stage the whole plan-file update as one `apply_patches` call.
