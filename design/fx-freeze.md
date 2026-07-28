@@ -189,9 +189,16 @@ verb (pinned). Refuse when:
 - a **same-target continuous overlap** exists — the painter fold's
   seats belong to the fold, not to either chain; one chain's
   contribution is not separable;
-- (group verb) the window **covers an fx-carrying host note** — an
-  independent producer that would keep regenerating inside the new gm
-  rect, behind gm's shadow;
+- the window **covers an fx-carrying host note** — for the group verb
+  an independent producer that would keep regenerating inside the new
+  gm rect, behind gm's shadow; for raw, a producer destroyed with the
+  chord, losing either its seats or its whole output (2026-07-28,
+  below);
+- the frozen producer is a **note host whose span meets another
+  producer's note window** — it emits no park window of its own, so a
+  window-vs-window test has nothing to refuse on, and its promoted
+  output would land inside that window and be parked straight back
+  off-take (2026-07-28, below);
 - (group verb) the footprint **collides with a live gm group**
   (markGroup's own check).
 
@@ -199,6 +206,108 @@ A neighbouring (non-overlapping) region B on the channel may
 reshuffle its lanes once after A freezes — promoted notes become
 authored occupancy seeds for `allocateRegionLanes`. One reshuffle,
 then stable; churn, not corruption.
+
+**The host-note gate is both verbs', not the group verb's**
+(2026-07-28). It was group-only on the reading that only gm's shadow
+makes a swallowed producer harmful. Raw has its own version: a covered
+note carrying its own chain is destroyed with the chord. What that
+costs depends on the chain — a continuous-only host leaves its windows
+standing in the baseline, so the next rebuild diffs them as removed
+and sweeps seats nothing produces any more; a note-dest host has no
+windows to strand and loses its entire derived output instead. The
+overlap gates reach neither, because a note host's own note window is
+suppressed (`noteHost`) and a continuous-only chain shares no target
+key with a note-dest region. The recourse is to freeze the host first
+and the region second, which gives the right answer.
+
+**A note host's own freeze needs the inverse gate** (2026-07-28). A
+note-dest chain on a note emits no park window at all, so the frozen
+producer can present nothing for a window-vs-window test to refuse.
+Freeze a host whose span runs under a live region's note window and
+its promoted output lands inside that window, is parked off-take as a
+covered chord member, and the region's output stands in its place —
+the conversion swallowed inside its own call. The test is the host's
+span against other producers' note windows, which needs the producer,
+not its (empty) window set.
+
+**The gates read a producer census, not `prevWindows`** (2026-07-28,
+correcting an earlier reading the same day). `prevWindows` looked like
+the census — `assembleParkWindows` builds it from regions + on-take
+hosts + parked fx hosts — but it is not one, in both directions. It
+**double-counts**: parking is deferred to the tail-walk commit, so at
+`settleWindows` time a self-parking host is still in `columns.notes`
+*and* already in `noteParked`, and both arms add it. It is the same
+collision `rebuildRegionPark` guards with `seen[evt]`, one level down
+and unguarded. And it **under-counts**, by the note-dest host above.
+Multiset accounting over such a table refuses every note-host freeze,
+and no accounting recovers a producer that never appears at all.
+
+So the census is a list of **producers** — the body of
+`assembleParkWindows`, lifted to a named function returning
+`{ uuid, chan, startppq, endppq, fx, noteHost }` records. Freeze drops
+the frozen uuid and gates against the rest by owner identity rather
+than by window value, which is what lets it tell "my second stage"
+from "your identical window". It also collapses the three hand-kept
+copies of the note-is-a-region literal to one — the agreement
+`trackerManager.lua:4647` warns about. `prevWindows` goes back to
+being only what it is good at: the set-semantics recognition baseline,
+which is still what freeze's resync drops its own windows from.
+
+**But the resync's own subtraction is one-for-one** (2026-07-28). The
+baseline has set semantics downstream — the pb create/remove diff keys
+windows by (chan, start, end) — and that is exactly why freeze must not
+subtract with them: the entries carry no owner, so consuming every
+`deepEq` match takes an identical-window neighbour's entry with it, the
+next rebuild reads the survivor's window as newly created, and parks
+the freshly authored curve straight back off-take as though it were
+someone's authored base. Claiming one baseline entry per frozen window
+is the fix in place. It is a multiset patch over an identity-less
+table, and the census above is what dissolves it. The double-count is
+fixed at its source in the same pass: a host present in both arms of
+`assembleParkWindows` is taken from the parked arm, not the `hostWins`
+one. Those two arms disagree where a lane clip bites (the parked arm
+takes `endppq` from the spec unclipped), and the parked arm is the one
+every subsequent rebuild will use — so preferring it makes the parking
+pass's window agree with the next pass's, which is the whole property
+the baseline diff rests on.
+
+**Identity reaches the baseline as a stamped `id`** (2026-07-28). The
+census names owners, but the baseline's entries don't carry the name,
+so census-vs-baseline subtraction still bottoms out in value matching.
+The missing half is one field: `generators.parkWindows` stamps every
+window it emits with `id = <producer uuid>` (census records carry it),
+`prevWindows` persists the field, and the resync becomes "drop the
+windows whose `id` is the frozen uuid" — a chain's two identical
+windows drop together because they are the same producer's, which is
+what the one-for-one accounting was approximating. `id` is inert
+downstream on purpose: the pb create/remove diff and `rebuildCCs`'
+recognition stay span-keyed, because seat recognition is spatial — a
+markerless seat belongs to whatever window covers it, and an
+owner-keyed diff would sweep-and-repark on an ownership handoff whose
+coverage never changed. Identity for subtraction, spans for
+recognition. The other route — resync by recomputing the surviving
+producers' windows and overwriting the baseline wholesale — was
+rejected: freeze runs outside the rebuild's settle machinery, so every
+window it recomputes differently from the last rebuild becomes a
+phantom transition next rebuild, the field-for-field agreement problem
+again for all producers at once. `freezeRegion` still computes
+`windows` for its own `covered()`; nothing matches them against the
+baseline any more. The persisted-shape change is free pre-beta.
+
+**pb windows are closed at `endppq`, cc's are not.** Seat recognition
+is inclusive there, so two abutting pb windows share their boundary
+seat and a half-open overlap test reads them as disjoint — the gate's
+predicate has to be inclusive for pb. The consequence (whether the
+neighbour's fold actually re-derives that seat out of a frozen curve)
+is unconfirmed; the phase's pb fixtures are where to settle it.
+
+**Refusals never surface** (2026-07-28). Freeze declines silently, at
+tm and at the verb alike. There is no toast or alert facility and
+building one for this is out of keeping with the house style. Note
+that same-target continuous overlap is a **mutual** refusal — either
+producer names the other — so a locked pair has no freeze-one-first
+recourse, and editing or deleting a chain is the way out. Accepted
+with that cost.
 
 Both hosts freeze. A note host rides the same seam (membership
 `{self}`, parked host destroyed, tiles promoted); nothing
@@ -218,10 +327,10 @@ undo block:
   `prevWindows` route-by-window baseline — no enqueue stage exists.
   Rebuild diffs current windows against last rebuild's persisted set:
   a removed window sweeps its seats (`pbRemoved`; cc recognition in
-  `rebuildCCs` is prevWindows-keyed too). Resync = drop the frozen
-  windows from `prevWindows` in the same flush; the next rebuild
-  sees the window on neither side of the diff and the seats stand
-  as authored.
+  `rebuildCCs` is prevWindows-keyed too). Resync = drop the windows
+  stamped with the frozen producer's `id` from `prevWindows` in the
+  same flush (§ Eligibility gates); the next rebuild sees the window
+  on neither side of the diff and the seats stand as authored.
 - **Marker strip + region delete together.** A rebuild between them
   regenerates the full output while `reconcileDerived` can no longer
   match the now-markerless notes — a complete duplicate set.
@@ -270,7 +379,7 @@ undo block:
   edit silently not rebuilding — and a widened comment): clear
   `derived` (mm metadata assign; notes keep uuid/lane/detune) →
   drop covered fxParked entries → drop the region → drop its
-  windows from `prevWindows` → dirtyChan + rebuild.
+  `id`-stamped windows from `prevWindows` → dirtyChan + rebuild.
 - **Gate placement.** Note-window overlap, continuous-target
   overlap, and the fx-carrying-host-note gate all live in tm
   (take-semantic); only the gm rect-conflict gate rides the tv verb
@@ -327,7 +436,12 @@ gate when any new kind lands.
 Freeze-to-raw: arp authored + audible, chord gone, seats stand, *no
 restore on the next rebuild* (the standing-reconcile regression),
 tails clip cross-window, one undo reverts wholly, and a note host
-freezes by the same seam.
+freezes by the same seam. Each refusal declines before any mutation,
+and a disjoint neighbour on the same channel still freezes. Under
+those, the census itself: one producer, one entry, however many arms
+of the assembly find it — and subtraction by identity: freezing one of
+two identical-window producers leaves the other's window and curve
+standing.
 
 (2026-07-28) "One undo reverts wholly" is not pinnable in a unit spec:
 the harness stubs `Undo_BeginBlock`/`EndBlock` to no-ops

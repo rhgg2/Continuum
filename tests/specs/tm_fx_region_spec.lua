@@ -2124,4 +2124,56 @@ return {
     end,
   },
 
+  ----- The producer census: prevWindows carries one entry per producer
+
+  {
+    -- The persisted window set is the seat-recognition baseline and the freeze gates' census both, so a
+    -- producer counted twice keeps an entry alive after its own freeze. see design/fx-freeze.md
+    name = 'park windows: a self-parking note host contributes one window, not two',
+    run = function(harness)
+      local h = harness.mk()
+      -- trill (note-replace) self-parks the host, so both arms of the window assembly see it at once:
+      -- its cell is still in columns this pass, and its spec is already in the parked stash.
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
+                      vel = 100, detune = 0, delay = 0, lane = 1,
+                      fx = { { kind = 'trill', period = { 1, 4 }, step = 2 },
+                             { kind = 'sine', period = { 1, 4 }, depth = 30, onset = 0 } } })
+      h.tm:flush()
+      h.tm:rebuild()   -- settle: the host is off-take when the window set is recomputed
+      t.eq(#h.tm:getChannel(1).parked, 1, 'the trill parks its own host')
+
+      local windows = h.ds:get('prevWindows') or {}
+      t.eq(#windows, 1, 'one producer, one entry')
+      t.eq(windows[1] and windows[1].evType, 'pb', 'the sine arm -- a note host seats no note window')
+    end,
+  },
+
+  {
+    -- Freeze drops the frozen producer's own windows from the baseline, matched one for one: an
+    -- identical window that belongs to someone else stays. see design/fx-freeze.md
+    name = 'freeze (identical-window neighbour): the survivor keeps its window and its curve',
+    run = function(harness)
+      local h = harness.mk()
+      for lane, pitch in ipairs({ 60, 67 }) do
+        h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = pitch,
+                        vel = 100, detune = 0, delay = 0, lane = lane, fx = sine30 })
+        h.tm:flush()
+      end
+      t.eq(#(h.ds:get('prevWindows') or {}), 2, 'two on-take hosts, two identical pb windows')
+      local uuid = h.tm:getChannel(1).columns.notes[1].events[1].uuid
+
+      t.truthy(h.tm:freezeRegion(uuid), 'the freeze reports success')
+
+      t.eq(#(h.ds:get('prevWindows') or {}), 1, "only the frozen host's window leaves the baseline")
+      t.falsy(h.ds:get('fxParked'), "the survivor's window is not newly created, so it sweeps nothing")
+      local survivor = h.tm:getChannel(1).columns.notes[2].events[1]
+      t.truthy(survivor and survivor.fx, 'the neighbour keeps its chain')
+      local pbs = 0
+      for _, c in ipairs(h.fm:dump().ccs) do
+        if c.evType == 'pb' and c.chan == 1 then pbs = pbs + 1 end
+      end
+      t.truthy(pbs > 0, 'and its curve still sounds')
+    end,
+  },
+
 }

@@ -678,6 +678,24 @@ and the prior-set partition — ungated — restores it at the next rebuild.
 (The question was posed by `design/archive/rebuild-pipeline.md` § The
 placement fixpoint.)
 
+### Park window census
+
+`assembleParkWindows` builds the park window set from three sources — authored `fxRegions`, on-take
+note hosts (`hostWins`, from `computeFxWindows`), and parked fx hosts (`parkedNoteSpecs`) — and a
+host mid-park at `settleWindows` time can appear in both of the latter two: parking defers to the
+tail-walk's atomic commit, so its cell is still in `columns` (hence `hostWins`) while its spec is
+already in the parked stash. `rebuildRegionPark` guards the identical collision with `seen[evt]`;
+here the parked arm wins instead, since the host stays off-take and this pass's window then agrees
+with the next rebuild's.
+
+`freezeRegion`'s resync drops the frozen producer's windows from `prevWindows` (the
+seat-recognition baseline) by matching them against the newly computed set. The match has to be
+one-for-one, not set-membership: `prevWindows` carries no producer identity, so two producers that
+happen to emit identical windows (a same-target overlap, or two on-take hosts riding the same fx)
+are indistinguishable by value, and consuming every match on a shared value would take a surviving
+neighbour's entry too — the next rebuild would then read that entry as newly created and park its
+seats off-take as though they were freshly authored rather than carried forward.
+
 ### Derivation dirt: the gated spine
 
 Two axes of dirt drive rebuild. *Materialisation dirt* (the `wholesale`

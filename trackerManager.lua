@@ -1673,11 +1673,15 @@ local function freezeRegion(uuid)
     elseif not drop then util.add(keptParked, spec) end
   end
 
-  local prevWindows, keptWindows = ds:get('prevWindows') or {}, {}
+  -- One for one, not by value: a neighbouring producer can hold a window identical to the frozen
+  -- one, and consuming every match would strand its entry. See docs/trackerManager.md § Park window census.
+  local prevWindows, keptWindows, claimed = ds:get('prevWindows') or {}, {}, {}
   for _, w in ipairs(prevWindows) do
-    local frozen = false
-    for _, fw in ipairs(windows) do frozen = frozen or util.deepEq(w, fw) end
-    if not frozen then util.add(keptWindows, w) end
+    local mine
+    for i, fw in ipairs(windows) do
+      if not claimed[i] and util.deepEq(w, fw) then mine = i; break end
+    end
+    if mine then claimed[mine] = true else util.add(keptWindows, w) end
   end
 
   -- ds:get hands back a copy of its cache slot, so an emptied array reads back as a truthy {}:
@@ -4634,10 +4638,18 @@ local function rebuildPipeline(didReload)
   local function assembleParkWindows(hostWins, parkedNoteSpecs)
     local parkRegions = {}
     for _, r in ipairs(sources.fxRegions or {}) do util.add(parkRegions, r) end
+    -- A host parked this pass sits in both arms: parking defers to the tail-walk commit, so this pass's
+    -- window agrees with the next only if the parked arm wins. See docs/trackerManager.md § Park window census.
+    local parkedHost = {}
+    for _, spec in ipairs(parkedNoteSpecs) do
+      if spec.evType == 'note' and spec.fx then parkedHost[spec.uuid] = true end
+    end
     -- computeFxWindows already found every on-take fx host (its map keys are exactly the non-pa fx
     -- cells); sort (chan, lane, ppq) to hold the whole-column scan's emission order -- parkWindows downstream is G4-stable.
     local noteHosts = {}
-    for host, windowEnd in pairs(hostWins) do util.add(noteHosts, { host = host, endppq = windowEnd }) end
+    for host, windowEnd in pairs(hostWins) do
+      if not parkedHost[host.uuid] then util.add(noteHosts, { host = host, endppq = windowEnd }) end
+    end
     table.sort(noteHosts, function(a, b)
       local ha, hb = a.host, b.host
       if ha.chan ~= hb.chan then return ha.chan < hb.chan end
