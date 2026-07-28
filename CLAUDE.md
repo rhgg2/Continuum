@@ -79,6 +79,15 @@ work, read the plan file first — it carries what just landed and a
 self-contained brief for what's next, so you rarely need the design
 doc.
 
+Before design or planning commits to a model, a hypothesis about that
+model can be tested instead of assumed. The session-start hook creates
+a spike worktree in the scratchpad, detached at HEAD, and `lua
+tests/run.lua` from there tests that tree. Spike code never graduates:
+the artefact is a paragraph in `design/` or `plan/`, and the tree is
+discarded with the scratchpad. Implementation stays in the main
+checkout, since that's the only one the `.map` and lint hooks and the
+running REAPER can see.
+
 ## How to work - production
 
 - **Maps make things easier.** `map/<file>.map` is cheap, current, and

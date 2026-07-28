@@ -29,5 +29,24 @@ elif [ -d "$default_dir" ]; then
 AGENT MEMORY SPLIT: the default store at $default_dir exists again, which means autoMemoryDirectory is not being applied and memory writes are landing there, untracked, instead of in .claude/agent-memory/."
 fi
 
+# A spike worktree, created eagerly rather than on request: the moment a
+# hypothesis is worth checking is the moment it feels obvious enough to skip,
+# so the tree has to already be a fact about the session rather than a step to
+# remember. Detached at HEAD, inside the scratchpad so it is swept along with
+# everything else. Prune first, because a swept scratchpad leaves the admin
+# data behind in .git/worktrees.
+spike="$scratchpad/spike"
+git -C "$project" worktree prune 2>/dev/null
+if [ -d "$spike" ] || git -C "$project" worktree add --detach "$spike" HEAD >/dev/null 2>&1; then
+  ctx="$ctx
+
+Spike worktree for this session, detached at HEAD — for testing a hypothesis empirically before writing it into a design doc: $spike
+It does not carry uncommitted changes from the main tree. \`lua tests/run.lua\` works there; REAPER and the .map/lint hooks do not. Spike only, never implementation — see CLAUDE.md § Programme plans."
+else
+  ctx="$ctx
+
+SPIKE WORKTREE UNAVAILABLE: git worktree add failed for $spike. Nothing is broken, but the surface for checking a hypothesis is missing this session — say so rather than letting an unchecked hypothesis read as a checked one."
+fi
+
 jq -n --arg ctx "$ctx" \
   '{hookSpecificOutput: {hookEventName: "SessionStart", additionalContext: $ctx}}'
