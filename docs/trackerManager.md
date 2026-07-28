@@ -217,6 +217,10 @@ only the death row. Position goes stale as things move and uuid dangles as thing
 reads whichever the seed still answers. See design/interval-dirt.md § The model, inverted for the
 shape and § Phase 4.75 for the seek walk the snapshot feeds.
 
+A chan reassign counts as a move too: the vacated slot lands in the *old* channel's dirt, which no
+other seed for this pass would otherwise reach, so `assignLowlevel` snapshots it exactly like an
+onset shift (see design/decisions.md § 2026-07-28).
+
 ### Interval materialisation
 
 Materialisation consumes the absorbed seed set directly — there is no closure. `seedCovers` builds
@@ -724,6 +728,22 @@ CC/park/pb state forward like a clean channel and splices just the closed spans 
 `rebuildInternals` excises and re-clones the note span (§ Interval materialisation), `rebuildCCs`
 splices the seed-touched windows, `rebuildPbs` gathers span-bounded. Wholesale dirt
 (`dirtyChans[chan] == true`) still replaces the whole channel.
+
+Dirt is a lattice — `nil` < seed list < `true` — and every writer **joins**, never
+assigns: a pass may discover more dirt, never less. `seedDirty` no-ops once
+wholesale, the tail walk's emission checks `dirt ~= true`, and `absorbReloadDirt`
+folds under the same guard. The guard was missing from the seed fold until
+2026-07-28, where it demoted a standing `true` to whatever that flush happened to
+seed. The dirt that survives no restatement is what this protects: `setLength`
+marks all 16 wholesale for OPEN tails spanning the new end, and an OPEN tail
+stages no mm op, so it leaves no seed to be rediscovered from. A shrink that also
+killed one event on a channel demoted that channel to the kill's seed and left the
+OPEN tail uncut. Pinned in `tm_tail_gating_spec`.
+
+Past the cap the dirt collapses to the whole channel, so the fresh-channel alloc
+(`trackerManager.lua:3275`) and excise-skip agree with the tail walk; commit 5
+(design/archive/interval-dirt.md) moves the cap to the walk's degenerate threshold instead of
+pinning it here.
 
 ### The note-lane shed
 

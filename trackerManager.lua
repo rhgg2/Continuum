@@ -1056,20 +1056,6 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
 
   ----- Low-level verbs
 
-  -- Absorber derivation inputs: any pb, and lane-1 notes' onset/detune geometry.
-  local PB_GEOMETRY = { detune = true, ppq = true, ppqL = true, delay = true, chan = true, lane = true }
-  local function pbSource(evt, lane)
-    return evt.evType == 'pb' or (evt.evType == 'note' and lane == 1)
-  end
-  local function assignDirtiesPb(evt, oldLane, update)
-    if evt.evType == 'pb' then return true end
-    if not pbSource(evt, oldLane) and not pbSource(evt, evt.lane) then return false end
-    for key in pairs(update) do
-      if PB_GEOMETRY[key] then return true end
-    end
-    return false
-  end
-
   -- Every low-level verb drops a birth-snapshot seed for the event it touched; flush folds them
   -- into seed-valued dirt (dedup-by-uuid). A dead seed's uuid dangles safely: see docs/trackerManager.md § Interval seeds.
   local function snapshot(evt, verb)
@@ -1082,7 +1068,6 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
   --contract: every staged note (any lane) and pb files into rawIndex; detune reads filter to lane 1
   --contract: caller supplies evt.evType
   local function addLowlevel(evt)
-    if pbSource(evt, evt.lane) then dirtyChan(evt.chan) end
     seedEvent(evt, 'add')
     rawIndexInsert(evt)
     util.add(adds, { evt = evt })
@@ -1091,14 +1076,13 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
   --contract: dedupes by uuid; in-flight assigns to the same event collapse into one mm write
   --invariant: util.REMOVE markers must survive merging
   local function assignLowlevel(evt, update)
-    local oldChan, oldLane = evt.chan, evt.lane
-    -- A move (onset shifts) is delete-at-old + insert-at-new. Snapshot the vacated slot before the
-    -- assign and seed it as the birth; dedup keeps it, byUuid recovers the new position. see design § The model, inverted
+    local oldChan = evt.chan
+    -- A move (onset shifts, or now chan) is delete-at-old + insert-at-new; snapshot the vacated slot
+    -- before the assign. See docs/trackerManager.md § Interval seeds for the shape and the chan case.
     local moved = update.ppq ~= nil or update.ppqL ~= nil or update.delay ~= nil
-                  or update.lane ~= nil
+                  or update.lane ~= nil or update.chan ~= nil
     local vacated = moved and snapshot(evt, 'assign') or nil
     util.assign(evt, update)
-    if assignDirtiesPb(evt, oldLane, update) then dirtyChan(oldChan); dirtyChan(evt.chan) end
     if vacated then util.bucket(seeds, oldChan, vacated) end
     seedEvent(evt, 'assign')
     rawIndexRefile(evt, oldChan, update)
@@ -1114,7 +1098,6 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
   end
 
   local function deleteLowlevel(evt)
-    if pbSource(evt, evt.lane) then dirtyChan(evt.chan) end
     seedEvent(evt, 'delete')
     -- rawIndexRemove matches by object identity; the PC mutation hook deletes projected column
     -- cells, so resolve the raw record via byUuid first or the index entry strands.
@@ -1471,9 +1454,11 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
           util.add(deduped, s)
         end
       end
-      -- Past the cap the dirt collapses to the whole channel, so the fresh-channel alloc (:3275) and
-      -- excise-skip agree with the walk; commit 5 moves the cap to the walk's degenerate threshold.
-      dirtyChans[chan] = #deduped > WHOLESALE_SEED_CAP and true or deduped
+      -- Past the cap the dirt collapses to the whole channel (see docs/trackerManager.md § Derivation
+      -- dirt: the gated spine); join, never assign, so this cannot restate wholesale already standing.
+      if dirtyChans[chan] ~= true then
+        dirtyChans[chan] = #deduped > WHOLESALE_SEED_CAP and true or deduped
+      end
     end
     for chan in pairs(payloadChans) do
       if not seeds[chan] then dirtyChans[chan] = true end

@@ -12,6 +12,16 @@ lines. Newest first. `/commit` prompts for one at commit time.
 Entries below 2026-07-27 predate that split, so some of them also
 appear in their design docs.
 
+- **2026-07-28** — tm's derivation dirt is a lattice — nil < seed list < true — and every writer
+  joins rather than assigns: a pass may discover more dirt, never less. absorbReloadDirt's seed fold
+  was assigning, so it demoted standing wholesale dirt (setLength's OPEN-tail widen, markSwingStale)
+  to whatever that flush happened to seed; a shrink that also killed one event on a channel left its
+  OPEN tail uncut. Fixing the fold resurrected the pb widen in um's low-level verbs, inert since
+  seatScope closed pb seeds to absorber spans on 2026-07-21 — each bug had been masking the other.
+  The widen is retired rather than reinstated, and the one case it genuinely covered (a chan
+  reassign, whose vacated slot lands in another channel's dirt) moves onto the seed path via
+  `moved`.
+
 - **2026-07-27** — The trackerMode PC synthesis hook at flush time is
   deleted; rebuild step 4.5 is the single synthesis site. Every
   channel the hook dirtied was already dirty by the time the rebuild

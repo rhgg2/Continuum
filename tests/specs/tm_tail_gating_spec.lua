@@ -87,4 +87,33 @@ return {
       t.eq(noteByPitch(h.fm:dump().notes, 60).endppq, 3840, 'tail regrows to the restored end')
     end,
   },
+
+  {
+    name = 'a shrink that also kills an event still clips the OPEN tail on that channel',
+    run = function(harness)
+      -- setLength marks all 16 wholesale because an OPEN tail spanning the new end is carried by
+      -- pendingLen, not by any seed. The kill the same shrink stages seeds chan 1, so this pins
+      -- that the seed does not displace the wholesale mark the OPEN tail depends on.
+      local h = harness.mk{
+        seed = { length = 3840,
+          notes = {
+            { ppq = 0, endppq = 3840, ppqL = 0, endppqL = util.OPEN,
+              chan = 1, pitch = 60, vel = 100, lane = 1, uuid = 1 },
+          },
+          -- Past the new end, so the shrink kills it; a cc participates in no tail logic, which
+          -- keeps the only thing under test the dirt its deletion seeds.
+          ccs = {
+            { ppq = 2400, chan = 1, evType = 'cc', cc = 7, val = 64 },
+          } },
+      }
+      t.eq(noteByPitch(h.fm:dump().notes, 60).endppq, 3840, 'open tail fills the take')
+
+      h.tm:setLength(1920)
+
+      t.eq(h.fm:length(), 1920, 'take shrank')
+      t.eq(#h.fm:dump().ccs, 0, 'the cc past the new end was killed')
+      t.eq(noteByPitch(h.fm:dump().notes, 60).endppq, 1920,
+        'realised tail clipped to the new end despite the kill seeding the channel')
+    end,
+  },
 }

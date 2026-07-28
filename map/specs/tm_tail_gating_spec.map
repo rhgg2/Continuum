@@ -1,7 +1,7 @@
-@spec tm_tail_gating_spec  src=tests/specs/tm_tail_gating_spec.lua  loc=90  sha=285f562  cases=3
+@spec tm_tail_gating_spec  src=tests/specs/tm_tail_gating_spec.lua  loc=119  sha=285f562  cases=4
 @exercises midiManager (h.fm), dataStore (h.ds), trackerManager (h.tm)
 @surface   fm:dump, ds:assign, tm:fromLogical, tm:rebuild, fm:setLength, fm:length, tm:setLength
-@harness   mk{seed.length, seed.notes}
+@harness   mk{seed.length, seed.notes, seed.ccs}
 
 # Intent
   Pins the tail-clip gate (design/archive/dirty-channels.md § Scheme) against its two dirt sources:
@@ -14,42 +14,48 @@
   @case 'swing change reseats an open tail through the dirtyChans gate'  [harness]  @ 15-40
   @case 'external take-length grow re-derives tails on channels with no edits'  [harness]  @ 44-64
   @case 'setLength shrink clips an OPEN tail without concreting its endppqL'  [harness]  @ 68-88
+  @case 'a shrink that also kills an event still clips the OPEN tail on that channel'  [harness]  @ 92-117
 
 # Uses (outbound edges)
-  @use call fm:dump  @ 29,36,61,76,81,87
+  @use call fm:dump  @ 29,36,61,76,81,87,109,114,115
   @use call ds:assign  @ 34
   @use call tm:fromLogical  @ 37
   @use call tm:rebuild  @ 56
   @use call fm:setLength  @ 58
-  @use call fm:length  @ 60,80
-  @use call tm:setLength  @ 78,86
+  @use call fm:length  @ 60,80,113
+  @use call tm:setLength  @ 78,86,111
 
 # Fields (r read / w write incl. constructor keys)
-  @field r OPEN  @ 22,50,52,72,83
+  @field r OPEN  @ 22,50,52,72,83,100
   @field w atom  @ 7
   @field w c58  @ 27
-  @field w chan  @ 23,25,51,53,73
+  @field w cc  @ 106
+  @field r ccs  @ 114
+  @field w ccs  @ 105
+  @field w chan  @ 23,25,51,53,73,101,106
   @field w config  @ 27
-  @field r endppq  @ 29,36,62,63,76,82,87
-  @field w endppq  @ 22,24,50,52,72
+  @field r endppq  @ 29,36,62,63,76,82,87,109,115
+  @field w endppq  @ 22,24,50,52,72,100
   @field r endppqL  @ 83
-  @field w endppqL  @ 22,24,50,52,72
+  @field w endppqL  @ 22,24,50,52,72,100
+  @field w evType  @ 106
   @field w factors  @ 7
   @field w global  @ 34
-  @field w lane  @ 23,25,51,53,73
-  @field w length  @ 21,49,71
-  @field w name  @ 15,44,68
-  @field r notes  @ 29,36,61,76,81,87
-  @field w notes  @ 21,49,71
+  @field w lane  @ 23,25,51,53,73,101
+  @field w length  @ 21,49,71,98
+  @field w name  @ 15,44,68,92
+  @field r notes  @ 29,36,61,76,81,87,109,115
+  @field w notes  @ 21,49,71,99
   @field w period  @ 7
   @field r pitch  @ 10
-  @field w pitch  @ 23,25,51,53,73
-  @field w ppq  @ 22,24,50,52,72
-  @field w ppqL  @ 22,24,50,52,72
+  @field w pitch  @ 23,25,51,53,73,101
+  @field w ppq  @ 22,24,50,52,72,100,106
+  @field w ppqL  @ 22,24,50,52,72,100
   @field w project  @ 27
-  @field w run  @ 16,45,69
-  @field w seed  @ 21,49,71
+  @field w run  @ 16,45,69,93
+  @field w seed  @ 21,49,71,98
   @field w shift  @ 7
   @field w swings  @ 27
-  @field w uuid  @ 23,25,51,53,73
-  @field w vel  @ 23,25,51,53,73
+  @field w uuid  @ 23,25,51,53,73,101
+  @field w val  @ 106
+  @field w vel  @ 23,25,51,53,73,101
