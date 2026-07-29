@@ -1,20 +1,20 @@
 ---
-description: Write the commit headline here, then a subagent runs hygiene + add + commit mechanically.
+description: Complete the commit bookkeeping, write a headline here, then spawn a subagent for the purely mechanical steps.
 ---
 
-One pass. No iterative refinement.
+## Preliminaries
 
-1. The `UserPromptExpansion` hook injects `git status --porcelain` and `git diff --stat HEAD`; read them there rather than re-running them. Empty status → clean tree; say so and stop. Don't spawn. If this was an `/implement-next` session, there will probably be changes you didn't make to the current design document and plan: that's from the previous session's `/plan-next` so nothing to worry about.
-2. Decide the headline yourself: you have the change's intent from this conversation, and the injected stat for scope. The format is `<scope>: <headline>`, imperative, ≤70 chars, scoped to the affected area (eg `tm: fix off-by-one in selection rect`). Don't read the full diff.
+1. Size up the commit from `git status --porcelain` and `git diff --stat HEAD`, injected for you by a hook. Empty status means clean tree, so stop. Otherwise, check for the changes you expect; for an `/implement-next` pass, these include changes to the design document and plan from the previous session's `/plan-next`. Scope your commit to the expected files, and nothing more: there may be parallel work happening in the tree.
+2. Decide the headline; you have the intent from the session, and the injected stat for scope. The format is `<scope>: <headline>`, imperative, ≤70 chars, scoped to the affected area (eg `tm: fix off-by-one in selection rect`).
 
-Steps 3–5 decide *what* bookkeeping this commit carries — the judgment is yours, and a cold subagent can't make it. Step 6 applies it: you assemble one manifest and `tools/bookkeep.py` does the mechanical part. Author here; apply there.
+## Commit bookkeeping
 
-3. Decision log — the `decision` key. Design rationale is durable in `design/`, and there is one test for where a decision goes: if the live plan has a design doc, the decision is written **there**, by hand, in this same pass — a new `**Dn —**` entry, or a dated note under the section it revises — and it gets no ledger entry, because writing it in both places is what made this ambiguous. The `decision` key is only for a decision with no design doc to belong to (a convention adopted in passing, a trade-off taken outside any planned work): write it as plain prose and the script dates it, wraps it, and prepends it to `design/decisions.md`. Most commits do neither — omit the key.
-4. Landing bookkeeping — the `land` key. If `plan/CURRENT` exists and this commit completes the live plan's Now entry (wholly, or its final piece), include `land: {headline, ref, now}`: the script prepends `- <date> <headline> (<ref>)` to Landed, prunes it below ~4, and replaces the Now body with your `now` note. The design-doc revision is **not** the script's job — if the landing settled something design-relevant, revise the design doc by hand in this same pass (dated note, WHY only; don't write "Landed 2026/07/10"). Commits unrelated to the plan: omit the key.
-5. Jot triage — the `wonder` key. If `tools/wonder.py` spooled anything, the hook injects it above; give each jot a verdict in the order shown, `keep` / `drop` / `replace: <the fuller text>`. The array is positional, so it needs exactly one entry per jot — the script dies on a mismatch rather than clearing one nobody read. What you are judging is **fate**: did the session go on to answer, refute or complete this? Subject, standing and whether it deserves to be a claim are the filing pass's to decide, and it makes them across the whole store, which you are not reading here. **Keep is the default** — the spool outlives the session that wrote it, so failing to recognise a jot is not the same as knowing it's dead. Never drop one that records an incident against a `us` claim: it is there as a tally mark for the decay rule, so "this got answered" isn't the right test for it. Nothing spooled: omit the key.
-6. Apply the bookkeeping. Assemble the manifest from whichever of 3-5 produced a key (all keys optional; `date` defaults to today) and pipe it in on stdin. It writes the files directly — no review gate, so eyeball them in the subagent's `git diff`. Skip this step when none of 3-5 fired.
+The next steps assemble a commit bookkeeping JSON manifest (steps 3-5) and apply it via `tools/bookkeep.py` (step 6).
 
-   Run it exactly as below: the **quoted** `<<'JSON'` delimiter is what stops the shell touching apostrophes, `"` and `$` in your prose, and the closing `JSON` must sit at column 0 or the heredoc never terminates.
+3. Decision log (`decision` key). Any design decision needs recording. If the live task has a design doc, write a dated note **there**, by hand. If there is no design doc, write the decision as plain prose and place in the manifest's `decision` key; the script dates it, wraps it, and prepends it to `design/decisions.md`. If a commit makes no design decision, omit the key.
+4. Plan (`land` key). If `plan/CURRENT` exists and this commit completes the live plan's Now entry, include `land: {headline, ref, now}`: the script prepends `- <date> <headline> (<ref>)` to Landed, prunes it below ~4, and replaces the Now body with your `now` note. Commits unrelated to the live plan omit the key.
+5. Jot triage (`wonder` key). If `tools/wonder.py` spooled anything, the hook injects it; give each jot a verdict in the order shown, `keep` / `drop` / `replace: <the fuller text>`. The default is **keep**, unless the session went on to answer, refute or refine the thought. The array needs exactly one entry per jot, and a mismatch throws an error. For entries you didn't jot yourself (the spool is shared across sessions), **keep**. Jots that records an incident against a `us` claim signal its continuing relevance, so don't drop these. Nothing spooled: omit the key.
+6. If any of 3-5 fired, apply the bookkeeping. The manifest comprises whichever keys 3-5 produced: pipe it in on stdin as below and it writes the files directly. The **quoted** `<<'JSON'` delimiter is what stops the shell touching apostrophes, `"` and `$` in your prose, and the closing `JSON` must sit at column 0 or the heredoc never terminates.
 
 ```sh
 python3 tools/bookkeep.py <<'JSON'
@@ -24,17 +24,18 @@ python3 tools/bookkeep.py <<'JSON'
  "wonder":["keep","drop","replace: the fuller form, now that the session knows it"]}
 JSON
 ```
-7. Spawn one subagent — Agent tool, `subagent_type: general-purpose`, `model: sonnet` — and hand it the headline. It owns everything else and does **not** spawn further subagents. Prompt it with:
 
-> You are finishing a commit. Do these in order, then stop — do not spawn any subagent:
+## The commit
+
+7. Spawn one subagent — Agent tool, `subagent_type: general-purpose`, `model: sonnet` — and hand it the headline. It owns everything else and does **not** spawn further subagents. Prompt it as follows. If the scope from step 1 is narrower than "all dirty files", amend the `git add -A` line correspondingly.
+
+> You are finishing a commit. Do these in order, then stop.
 > 1. `git status` and `git diff` to see what's landing.
-> 2. Comment-hygiene pass (diff mode): run `tools/comment_hygiene.py` from the repo root. It flags `--invariant:`/`--contract:`/`--emits:`/`--reaper:` lines >100 chars, `--shape:` lines >400 chars, and contiguous WHY-comment runs >2 lines. Fix every violation it names — trim to load-bearing content, or move a longer WHY to `docs/<file>.md` with a one-line pointer at the site. NEVER revert the comment to a prior state or delete the WHY wholesale; the content must survive in compliant form. Touch only comments the script flags. Re-run until clean.
->
->    Apply the fixes with `mcp__patches__apply_patches` — the user is at the keyboard and reviews each hunk. Run `ToolSearch select:mcp__patches__apply_patches` first to load the schema; never call it from memory. Stage every fix from one hygiene run in a single call (`edits[]` spans files); call again only for what the next re-run turns up. A lone one-hunk fix may use the built-in `Edit`.
+> 2. Comment-hygiene pass. If there are any `.lua` files dirty in the tree, run `tools/comment_hygiene.py` from the repo root. It flags `--invariant:`/`--contract:`/`--emits:`/`--reaper:` lines >100 chars, `--shape:` lines >400 chars, and contiguous WHY-comment runs >2 lines. Fix every violation it names; trim to load-bearing content, or move a longer WHY to `docs/<file>.md` with a one-line pointer at the site. Don't revert the comment or delete the WHY wholesale; the content must survive in compliant form. Touch only comments the script flags. Re-run until clean, then apply the fixes with `mcp__patches__apply_patches` (the only write tool available in this environment). Stage every fix from one hygiene run in a single call (`edits[]` spans files); call again only for what the next re-run turns up.
 > 3. `git add -A`.
-> 4. `git commit -m "<HEADLINE>"` — exactly the headline given, no body, no `Co-Authored-By`, no Claude tagline.
+> 4. `git commit -m "<HEADLINE>"`, no commit body.
 > 5. Report the hygiene fixes (one line each) and the commit hash. Don't push, don't offer to.
 >
 >    If the user sent you instructions directly while you were working (a message mid-run, or hunk `feedback:` returned by `apply_patches`), say so explicitly in the report (call them "the user", not "you"): quote or paraphrase what they asked and what you did about it. The parent agent cannot see your conversation and will otherwise read the change as yours.
 
-8. When it returns, eyeball its summary — don't re-audit.
+8. When it returns, eyeball its summary; no need to re-audit.

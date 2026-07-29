@@ -1,9 +1,9 @@
 # rebuild commit cadence — mm:batch made deferral cheap; is it still earning it?
 
-> opened: 2026-07-29 · status: findings recorded; spike not run
+> opened: 2026-07-29 · status: in flight — `plan/rebuild-commit-cadence.md`
 >
-> One-off working doc. No plan/ entry; the phases below are small
-> enough to drive from here.
+> Findings under § Findings are from reading. § Spike results are
+> measured, and they retire most of § Plan — read them first.
 
 ## Problem
 
@@ -105,7 +105,97 @@ Both are claims about the code, not measurements of it. Untested:
   walk; that is one site, not a pattern.
 - **H3** — the magnitude of sort churn. Unmeasured.
 
+## Spike results
+
+Run 2026-07-29 in the session spike worktree, detached at `84f92a0`.
+Baseline 2198 passed / 0 failed.
+
+### Nine of the ten already commit at their own stage boundary
+
+`reseats` (2071→2108), `ccWrites` (2307→2329), `extWrites`
+(2468→2491), region-park `batch` (2562→2887), `wires` (3458→3469),
+`clampWrites` (3841→3896), `pbWrites` (4161→4472), `stampWrites`
+(4482→4504), `pcWrites` (4548→4579) each commit at the end of the
+function that populates them. There is nothing to move. Only
+`deferred` — created at 4624 in `rebuildPipeline`, committed at 3899
+inside `rebuildTails` — crosses a stage boundary. H1 has one subject,
+not ten.
+
+### `deferred` can move; the lazy closure is removable
+
+`:2671`'s `addLazy` defers the restore's add so the closure can read
+`rec.ppq`/`rec.endppq` after the tail walk. `rec.ppq` is in fact known
+eagerly (set at `:2664`); only `rec.endppq` is not.
+
+Adding eagerly against the region-park `batch` — provisional raw end
+from the logical ceiling, `realised` set at seat time — lets the walk's
+existing write-through (`:3533`, `deferred.assign(backing, { endppq =
+rounded })`) correct it, since `boundNote` already assigns whenever
+`rounded ~= e.endppq`. Measured identical to HEAD, mm and column both.
+
+So step 3 is not refuted. The restores *can* precede the walk; the
+second commit fixes up what the first could not know.
+
+### But the parallel threading is about the cell backref, not the end
+
+`:3842` says "cell backref included" and that is the whole of it.
+With the restores eagerly added, dropping the `restoredByChan` seeding
+leaves the walk reading index entries, which carry no `colEvt` — mm's
+clone never carries um's fields (`midiManager.lua:961`). `:3536`'s
+`setCell` is then skipped and the cell's `endppqC` stays `nil` where
+HEAD sets `240`. mm is right and the column is wrong.
+
+Untested candidate: thread a `uuid → colEvt` map instead of the parallel
+extras list, so the walk reads one index and still resolves the
+backref. That is the shape the payoff would have to take.
+
+### The suite does not discriminate any of this
+
+All four variants ran **2198 passed, 0 failed**:
+
+| # | change | mm end | cell `endppqC` |
+|---|---|---|---|
+| E3 | `deferred.commit()` before `clampWrites.commit()` | 240 | 240 |
+| E1 | restores commit at regionPark, closure unchanged | 240 | 240 |
+| E4 | eager add + provisional end, walk fixes up | 240 | 240 |
+| E4b | E4, parallel threading dropped | 240 | **nil** |
+
+E4b is a real silent regression. E3 inverts the ordering rule `:3894`
+asserts and nothing notices. E1 is genuinely behaviour-identical — but
+only because these fixtures put logical and raw in the same frame
+(`ppq=0`, no swing) and never clip a restored note short of its
+authored ceiling, so the deferred read has nothing to read differently.
+
+Nine restores across five specs execute the path — `tm_macro_spec` G2
+and G2b, `tm_fx_region_spec` "removing the region restores the parked
+chord to the take" and "park round-trip carries arbitrary authored
+metadata", `vm_fx_ui_spec` removeFxStage, proven by raising from inside
+the closure and watching exactly those five go red. None asserts the
+restored note's end, and none puts a restore in a swung channel or
+under a clipping neighbour.
+
+So H1 cannot be converted by pass/fail here: "nothing broke" and
+"nothing was looking" read the same. Every result above was obtained by
+instrumenting the value, not the verdict.
+
+## Decisions
+
+**D1 — coverage before cadence (2026-07-29).** No change to this
+pipeline's commit cadence lands before a park-restore fixture that can
+tell cadences apart, and that fixture's acceptance criterion is that it
+goes **red** under § Spike results' known-bad variants — not that it
+goes green. HEAD is already correct here, so a passing fixture is
+consistent with having no teeth at all; four variants including a real
+silent regression all passed the standing suite. This rules out
+treating that suite's green as a baseline for anything below, and it is
+why the fixture is a phase rather than a task inside one.
+
 ## Plan
+
+> Superseded in part by § Spike results: step 0 has run; step 3 stands
+> but changes shape (eager add, backref threaded by uuid); step 2 has
+> no green baseline to lean on until a discriminating restore fixture
+> exists.
 
 0. **Spike, before deciding anything.** In the spike worktree, move
    each `mmBatch` commit to its natural stage boundary — one batch at
