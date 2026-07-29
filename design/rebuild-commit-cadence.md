@@ -222,6 +222,22 @@ assertions; a second spec would restate the first. The cost is that the
 rule is pinned by a case whose name is about ends rather than ordering,
 so the case says which rule it holds down.
 
+**D2 revised — the clipped case cannot carry E3 (2026-07-29).** The
+second half of D2 is wrong. `clampWrites` fills only from
+`settleOnset` (`:3506`), which fires only when `voicing.separateOnset`
+finds a same-pitch onset collision. A neighbour that clips a restored
+tail is at a different pitch and a later seat, so the clamp batch is
+empty for that channel and swapping its commit with `deferred`'s is a
+no-op by construction — green because there was nothing to order, not
+because the order held. Manufacturing the collision would need an
+on-take note the walk nudges off the seat the restore is taking, and a
+nudge is final where it lands, so a park/restore round trip does not
+recreate one. So `trackerManager.lua:3894`'s ordering rule stays
+unpinned. Accepted rather than chased: nothing on this programme
+inverts it — the merged eager-add phase does not change commit order,
+and the comment phase changes no behaviour. A case whose *name* is
+about ordering is the way to pin it if that changes.
+
 ## Plan
 
 > Superseded in part by § Spike results: step 0 has run; step 3 stands

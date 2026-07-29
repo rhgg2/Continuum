@@ -1,4 +1,4 @@
-@spec tm_park_restore_end_spec  src=tests/specs/tm_park_restore_end_spec.lua  loc=59  sha=untracked  cases=1
+@spec tm_park_restore_end_spec  src=tests/specs/tm_park_restore_end_spec.lua  loc=110  sha=e90a976  cases=2
 @exercises trackerManager (h.tm), midiManager (h.fm), dataStore (h.ds)
 @surface   tm:addEvent, tm:flush, fm:dump, ds:assign, tm:rebuild, tm:getChannel
 @harness   mk
@@ -9,53 +9,61 @@
   are the same number, so an end taken from the wrong frame reads as correct. Here
   logical 360 restores as raw 379 while the cell's ceiling stays logical, so a frame
   confusion in either direction fails, and a dropped cell ceiling cannot pass.
+  
+  Case 1 holds the restore's authored ceiling and its actual bound at the same number,
+  so it cannot see an end that is written once and never corrected. Case 2 separates
+  them with a clipping lane neighbour: ceiling raw 619, bound raw 379.
   see design/rebuild-commit-cadence.md § The suite does not discriminate any of this
 
+# Helpers
+  @fn findBy(list, key, value)  @ 18-20
+
 # Cases
-  @case 'restore under swing: the mm end is raw, the cell ceiling stays logical'  [harness]  @ 17-56
+  @case 'restore under swing: the mm end is raw, the cell ceiling stays logical'  [harness]  @ 25-63
+  @case 'restore clipped by a lane neighbour: the end is the clip, not the ceiling'  [harness]  @ 67-107
 
 # Uses (outbound edges)
-  @use call tm:addEvent  @ 25
-  @use call tm:flush  @ 27
-  @use call fm:dump  @ 29,43
-  @use call ds:assign  @ 34,39
-  @use call tm:rebuild  @ 36,40
-  @use call tm:getChannel  @ 37,49
+  @use call tm:addEvent  @ 33,74,79
+  @use call tm:flush  @ 35,81
+  @use call fm:dump  @ 37,50,83,96
+  @use call ds:assign  @ 42,47,88,93
+  @use call tm:rebuild  @ 44,48,90,94
+  @use call tm:getChannel  @ 45,56,91,102
 
 # Fields (r read / w write incl. constructor keys)
-  @field w atom  @ 11
-  @field w c58  @ 20
-  @field w chan  @ 25,35
-  @field r columns  @ 49
-  @field w config  @ 20
-  @field w data  @ 21
-  @field w delay  @ 26
-  @field w detune  @ 26
-  @field w dir  @ 12
-  @field r endppq  @ 31,46
-  @field w endppq  @ 25,35
-  @field r endppqC  @ 51,54
-  @field r endppqL  @ 47
-  @field w evType  @ 25
-  @field r events  @ 49
-  @field w factors  @ 11
-  @field w fx  @ 35
-  @field w global  @ 21
-  @field w kind  @ 12
-  @field w lane  @ 26
-  @field w name  @ 17
-  @field r notes  @ 29,43,49
-  @field r parked  @ 37
-  @field w period  @ 11,12
-  @field w pitch  @ 26
-  @field r ppq  @ 30,45
-  @field w ppq  @ 25
-  @field w project  @ 20
-  @field w run  @ 18
-  @field w shift  @ 11
-  @field w startppq  @ 35
-  @field w swing  @ 21
-  @field w swings  @ 20
-  @field r uuid  @ 32,43,50
-  @field w uuid  @ 35
-  @field w vel  @ 26
+  @field w atom  @ 15
+  @field w c58  @ 28,70
+  @field w chan  @ 33,43,74,79,89
+  @field r columns  @ 56,102
+  @field w config  @ 28,70
+  @field w data  @ 29,71
+  @field w delay  @ 34,75,80
+  @field w detune  @ 34,75,80
+  @field w dir  @ 16
+  @field r endppq  @ 39,53,84,99,106
+  @field w endppq  @ 33,43,74,79,89
+  @field r endppqC  @ 58,61,104
+  @field r endppqL  @ 54,85,100
+  @field w evType  @ 33,74,79
+  @field r events  @ 56,102
+  @field w factors  @ 15
+  @field w fx  @ 43,89
+  @field w global  @ 29,71
+  @field w kind  @ 16
+  @field w lane  @ 34,75,80
+  @field w name  @ 25,67
+  @field r notes  @ 37,50,56,83,96,102
+  @field r parked  @ 45,91
+  @field w period  @ 15,16
+  @field w pitch  @ 34,75,80
+  @field r ppq  @ 38,52,98
+  @field w ppq  @ 33,74,79
+  @field w project  @ 28,70
+  @field w run  @ 26,68
+  @field w shift  @ 15
+  @field w startppq  @ 43,89
+  @field w swing  @ 29,71
+  @field w swings  @ 28,70
+  @field r uuid  @ 40,57,86
+  @field w uuid  @ 43,89
+  @field w vel  @ 34,75,80
