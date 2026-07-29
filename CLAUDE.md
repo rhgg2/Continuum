@@ -1,10 +1,9 @@
 # CLAUDE.md
 
 Hi Claude! This is Continuum, a Lua 5.4 tracker-style MIDI editor for
-REAPER. These notes are for your orientation, and are convention-only,
-so don't agonise over them. If the guidance fights the work in front
-of you, trust your judgement, but let me know: maybe the guidance
-needs updating.
+REAPER. These notes are for your orientation, and are conventions, not
+restrictions. If the guidance fights the work in front of you, I'm
+happy for you to trust your judgement.
 
 ## Architecture
 
@@ -14,8 +13,8 @@ installed with `util.installHooks`.
 
 The callback protocol keeps the layers agreeing about what's true; so
 reaching through skips the propagation and leaves them holding
-different pictures of the same state. Thus, go through the public API
-of the adjacent layer rather than reaching past it.
+different pictures of the same state. That's why calls go through the
+public API of the adjacent layer rather than reaching past it.
 
 `continuum.lua` wires everything; `coordinator` owns the UI frame and
 switches between pages. Each page *coordinates* a `page → view →
@@ -23,9 +22,8 @@ manager → ...` stack (currently tracker, sampler, wiring, arrange,
 editor) rather than sitting atop it: it builds the substack and drives
 lifecycle on the layer that owns it. So the adjacent-layer rule above
 governs calls *within* the chain, not the page's reach into it. There
-are also many cross-cutting services including
-chrome/painter helpers; for the live module set and how they connect,
-use `mcp__readium_docs__map_query`.
+are also many cross-cutting services; the live module set and how
+they connect can be found using `mcp__readium_docs__map_query`.
 
 Two critical concepts in the tracker stack:
 
@@ -38,61 +36,37 @@ Two critical concepts in the tracker stack:
 
 ## Documentation layers
 
-Four places carry information about a module:
+`--KIND:` annotations in source carry single-line invariants,
+contracts, shapes, emitted signals and REAPER touchpoints. They are
+one-liners, capped short (except `--shape`); `docs/CONVENTIONS.md` has
+the kind list, attachment rules, the `?`-prefix-for-inferred
+convention, the caps themselves, the contract/annotation/doc boundary
+and section-divider grammar.
 
-1. **Source** (`<file>.lua`) — WHAT.
-2. **`--KIND:` annotations** embedded in source — single-line
-   invariants, contracts, shapes, emitted signals, REAPER
-   touchpoints. See `docs/CONVENTIONS.md` for the kind list,
-   attachment rules, and the `?`-prefix-for-inferred convention.
-3. **`.map`** (`map/<file>.map`) — derived semantic outline, one per
-   `.lua`. Read it first: it answers "where does X live" in one
-   screen. They are regenerated automatically on any edit.
-4. **`docs/<file>.md`** — prose, and the only layer with room for WHY:
-   the model, the history, the incident that motivated a shape, the
-   concern that spans files. It doesn't restate API surface or repeat
-   a `--KIND:` annotation, because the reader already has those.
-
-Annotations are one-liners, and (except for --shape) capped short so
-they stay scannable. If it won't fit in a line, that means you're
-holding rationale, history or an example, and those live in
-`docs/<file>.md`, with a one-line pointer at the site (`-- see
-docs/<file>.md § <section>`). See `docs/CONVENTIONS.md` for the caps
-themselves, the contract/annotation/doc boundary, and section-divider
-grammar.
+Anything that doesn't fit in a line is rationale, history or an
+example, and belongs in `docs/<file>.md` with a one-line pointer at the
+site (`-- see docs/<file>.md § <section>`). That file is the only layer
+with room for WHY — the model, the history, the incident that motivated
+a shape, the concern that spans files — and it doesn't restate API
+surface or repeat an annotation, because the reader already has those.
 
 ## Programme plans
 
 Every piece of ongoing work larger than a couple of commits has a
-design doc in `design/` and a plan in `plan/`. The design doc holds
-the model and the decisions; the plan holds the machinery — phases,
-what landed, what's next — compiled out of the design doc.
+design doc in `design/` and a plan in `plan/`: the design doc holds the
+model and the decisions, the plan holds the machinery — phases, what
+landed, what's next. `plan/CURRENT` is a stack, newest first: the top
+line is live and the rest are parked.
 
-`design/` is the durable home for design rationale. Fresh decisions
-pertaining to a live doc go in the doc, and one with no doc to belong
-to goes in `design/decisions.md`, the dated ledger. It is intent,
-though, not current state — `docs/<file>.md` is what is true now.
+`design/` is intent, not current state — `docs/<file>.md` is what is
+true now.
 
-`plan/` is controlled via `plan/CURRENT` a newest-first stack: the top
-line is the live programme and the rest are parked. For implementation
-work, read the plan file first — it carries what just landed and a
-self-contained brief for what's next, so you rarely need the design
-doc.
+## Navigating the code
 
-Before design or planning commits to a model, a hypothesis about that
-model can be tested instead of assumed. The session-start hook creates
-a spike worktree in the scratchpad, detached at HEAD, and `lua
-tests/run.lua` from there tests that tree. Spike code never graduates:
-the artefact is a paragraph in `design/` or `plan/`, and the tree is
-discarded with the scratchpad. Implementation stays in the main
-checkout, since that's the only one the `.map` and lint hooks and the
-running REAPER can see.
-
-## How to work - production
-
-- **Maps make things easier.** `map/<file>.map` is cheap, current, and
-  answers "where does X live" in one screen, which is why it's worth
-  opening even for a file you know well; `docs/<file>.md` for the WHY.
+- **Maps make things easier.** `map/<file>.map` answers "where does X
+  live" in one screen and is regenerated on every edit, so it's
+  current even for a file you opened weeks ago; `docs/<file>.md` for
+  the WHY.
 
 - **Cross-module navigation — `mcp__readium_docs__map_query`.** Faster
   and more complete than grepping `map/*.map`; its schema documents
@@ -106,54 +80,42 @@ running REAPER can see.
 
 - **Field-shaped questions** — who reads or writes `.ppqL`, who
   produces `endppqC` — are what kind='reads'/'writes' ('fields' for
-  both) is for, and they beat a grep sweep: table-constructor keys and
-  `function recv.name(...)` declarations count as writes, so producer
-  sites are covered. Every map ends with a `# Fields` index. Omit
-  `module` for the repo-wide blast radius, specs included.
+  both) is for: table-constructor keys and `function recv.name(...)`
+  declarations count as writes, so producer sites are covered.
+  Omitting `module` gives the repo-wide blast radius, specs included.
 
 - **Framework docs** — `mcp__readium_docs__reaper_doc_lookup` reads
   the parsed ReaScript/ReaImGui entries. Falling back to grep over the
   bundled HTML is fine when a name is missing from them.
 
-- **Live REAPER — `mcp__reaper__reaper_eval`.** This runs a Lua chunk
-  inside the running Continuum instance. Confirm with me before
-  anything destructive, and route undoable edits through mm/tm with an
-  `undo_label`. It needs Continuum open in REAPER or it times out.
-  `docs/bridge-cookbook.md` has the recipes (read state,
-  add/edit/delete notes, units) and `docs/bridge.md` the model.
+- **Live REAPER — `mcp__reaper__reaper_eval`** runs a Lua chunk inside
+  the running Continuum instance, and needs it open in REAPER or it
+  times out. Confirm with me before anything destructive; undoable
+  edits route through mm/tm with an `undo_label`.
+  `docs/bridge-cookbook.md` has the recipes, `docs/bridge.md` the
+  model.
 
-## How to work - tests
+## Tests
 
 - **The basics** — `mcp__readium_tests__lua_test_run`. Test specs live
   in `tests/specs/` and register in `tests/run.lua`. Bugfixes go
   red-first; refactors pin the invariant.
 
-- **The green baseline** — a SessionStart hook reports the last
-  unfiltered run. The suite is deterministic, so when the hook reports
-  a green run with no changes since, you can trust that this is the
-  case.
-  
-- **Test maps** — tests are mapped too — `map/specs/<spec>.map`
-  outlines each `tests/specs/*_spec.lua` (intent, cases, harness
-  surface) and `map_query`'s `usedby` includes them, so "which specs
-  exercise X" is a question you can ask before reading spec source.
-  The harness surface (`tests/*.lua`: harness, fakeReaper, …) maps
-  alongside the modules.
+- **Test maps** — `map/specs/<spec>.map` outlines each spec (intent,
+  cases, harness surface) and `map_query`'s `usedby` includes them, so
+  "which specs exercise X" is askable before reading spec source.
 
 - **Wired-behaviour specs** — commands, hooks, lifetime, the UI path —
   only earn their keep if they exercise the **real** production
-  wiring, so stub ImGui and REAPER at the surface and leave the
-  behaviour under test alone.
-  
+  wiring, so the tests stub ImGui and REAPER at the surface and leave
+  the behaviour under test alone.
+
 ## Commits
 
-- **Headline only.** `git commit -m "<headline>"` and nothing else: no
-  body, no `Co-Authored-By`, no generated-with tagline. This overrides
-  the global default, which asks for the trailer.
 - **`config:` is the scope for Claude Code's own machinery** — skills,
   hooks, settings, agents, and tools whose only consumer is a skill
-  (e.g. `tools/comment_hygiene.py`). When a change also touches
-  product code, scope by the product and mention the config knock-on.
+  (e.g. `tools/comment_hygiene.py`). Changes that also touch product
+  code take on the product's scope.
 
 ## Coding style
 
@@ -168,11 +130,10 @@ matching them keeps the codebase reading as one voice.
   geometry, results — get role-named fields: `xLo/xHi`, `chanLeft`,
   `pitchWidth` rather than `x1/x2/hW`. Bare coordinate names are for
   tight local math, where the role is visible a line away.
-- Scope tightly: wrap private helpers in `local fn do ... end`.
-- Registry tables stay one line per entry. The `registerAll{...}`
-  command table is a scannable verb → `{fn, undoDesc}` map, so extract a
-  multi-line body to a named `local function` rather than inlining a
-  closure that breaks the alignment.
+- Things are scoped tightly, with private helpers wrapped in `local fn
+  do ... end`.
+- Registry tables are one line per entry. The `registerAll{...}`
+  command table is a scannable verb → `{fn, undoDesc}` map, so
+  multi-line bodies are extracted to a named `local function` rather
+  than inlining a closure that breaks the alignment.
 - Section banners: `----- Name`. Major: `----------- PUBLIC`.
-- Comments carry the code's state, not the session's; no in-progress
-  work context.

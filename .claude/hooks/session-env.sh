@@ -41,7 +41,8 @@ if [ -d "$spike" ] || git -C "$project" worktree add --detach "$spike" HEAD >/de
   ctx="$ctx
 
 Spike worktree for this session, detached at HEAD — for testing a hypothesis empirically before writing it into a design doc: $spike
-It does not carry uncommitted changes from the main tree. \`lua tests/run.lua\` works there; REAPER and the .map/lint hooks do not. Spike only, never implementation — see CLAUDE.md § Programme plans."
+It does not carry uncommitted changes from the main tree. REAPER and the .map/lint hooks do not work; \`lua tests/run.lua\` does, and a <filter> argument does a 
+match against <spec> :: <test>. Spike only, never implementation: the code is discarded with the scratchpad, and the artefact that survives is a paragraph in design/ or plan/. I don't need to review edits in this worktree so use whatever tools are most efficient for you."
 else
   ctx="$ctx
 
