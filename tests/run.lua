@@ -94,6 +94,7 @@ local specs = {
   'tm_sine_spec',
   'tm_fx_tension_spec',
   'tm_fx_region_spec',
+  'tm_park_restore_end_spec',
   'tm_fx_window_cache_spec',
   'tm_column_order_spec',
   'tm_raw_index_order_spec',

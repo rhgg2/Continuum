@@ -136,6 +136,20 @@ rounded })`) correct it, since `boundNote` already assigns whenever
 So step 3 is not refuted. The restores *can* precede the walk; the
 second commit fixes up what the first could not know.
 
+2026-07-29 — but "identical" does not survive a fixture that looks.
+Reconstructed from this description and run against
+`tm_park_restore_end_spec`, the eager add loses `endppqC` on its own,
+with the `restoredByChan` threading still in place. `frontierTails`
+resolves a restore seed by uuid before falling back to a seat scan
+(`:3757`): once the restore is in mm ahead of the walk, `tm:byUuid`
+returns the index entry, which carries no `colEvt`, and the extras rec
+never enters `disturbed`. At HEAD that lookup misses and `seatMatches`
+finds the rec, which is the only reason the threading works at all.
+
+So the eager add subsumes E4b rather than sitting orthogonal to it, and
+phase 2 cannot land before the backref is resolvable by uuid. Phases 2
+and 4 are one change.
+
 ### But the parallel threading is about the cell backref, not the end
 
 `:3842` says "cell backref included" and that is the whole of it.
@@ -178,6 +192,15 @@ So H1 cannot be converted by pass/fail here: "nothing broke" and
 "nothing was looking" read the same. Every result above was obtained by
 instrumenting the value, not the verdict.
 
+2026-07-29: it discriminates E4b now. `tm_park_restore_end_spec` puts a
+restore in a c58 channel — logical onset 120 bows to raw 139, ceiling
+360 to raw 379 — and asserts the restored note's mm `endppq` (379) and
+its cell's `endppqC` (logical 360) in one case, so the two frames carry
+different numbers and neither a swap nor a `nil` can pass. Reconstructed
+E4b in the spike goes red on `endppqC` alone with mm still green — the
+table's shape, now a verdict rather than an instrumented value — and it
+is the only red in the suite.
+
 ## Decisions
 
 **D1 — coverage before cadence (2026-07-29).** No change to this
@@ -189,6 +212,15 @@ consistent with having no teeth at all; four variants including a real
 silent regression all passed the standing suite. This rules out
 treating that suite's green as a baseline for anything below, and it is
 why the fixture is a phase rather than a task inside one.
+
+**D2 — one fixture carries all three variants (2026-07-29).** The
+ordering rule at `trackerManager.lua:3894` is pinned by the clipped
+case of the phase 1 fixture, not by a spec of its own. Clipping is the
+pass whose seat keys the rule exists to let settle, so an inverted
+commit order (E3) and an uncorrected restored end fail at the same
+assertions; a second spec would restate the first. The cost is that the
+rule is pinned by a case whose name is about ends rather than ordering,
+so the case says which rule it holds down.
 
 ## Plan
 

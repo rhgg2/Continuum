@@ -1,0 +1,61 @@
+@spec tm_park_restore_end_spec  src=tests/specs/tm_park_restore_end_spec.lua  loc=59  sha=untracked  cases=1
+@exercises trackerManager (h.tm), midiManager (h.fm), dataStore (h.ds)
+@surface   tm:addEvent, tm:flush, fm:dump, ds:assign, tm:rebuild, tm:getChannel
+@harness   mk
+
+# Intent
+  Park-restore in a swung channel: the one place the restored end's frame shows.
+  Every other park-restore fixture runs under identity swing, where logical and raw
+  are the same number, so an end taken from the wrong frame reads as correct. Here
+  logical 360 restores as raw 379 while the cell's ceiling stays logical, so a frame
+  confusion in either direction fails, and a dropped cell ceiling cannot pass.
+  see design/rebuild-commit-cadence.md § The suite does not discriminate any of this
+
+# Cases
+  @case 'restore under swing: the mm end is raw, the cell ceiling stays logical'  [harness]  @ 17-56
+
+# Uses (outbound edges)
+  @use call tm:addEvent  @ 25
+  @use call tm:flush  @ 27
+  @use call fm:dump  @ 29,43
+  @use call ds:assign  @ 34,39
+  @use call tm:rebuild  @ 36,40
+  @use call tm:getChannel  @ 37,49
+
+# Fields (r read / w write incl. constructor keys)
+  @field w atom  @ 11
+  @field w c58  @ 20
+  @field w chan  @ 25,35
+  @field r columns  @ 49
+  @field w config  @ 20
+  @field w data  @ 21
+  @field w delay  @ 26
+  @field w detune  @ 26
+  @field w dir  @ 12
+  @field r endppq  @ 31,46
+  @field w endppq  @ 25,35
+  @field r endppqC  @ 51,54
+  @field r endppqL  @ 47
+  @field w evType  @ 25
+  @field r events  @ 49
+  @field w factors  @ 11
+  @field w fx  @ 35
+  @field w global  @ 21
+  @field w kind  @ 12
+  @field w lane  @ 26
+  @field w name  @ 17
+  @field r notes  @ 29,43,49
+  @field r parked  @ 37
+  @field w period  @ 11,12
+  @field w pitch  @ 26
+  @field r ppq  @ 30,45
+  @field w ppq  @ 25
+  @field w project  @ 20
+  @field w run  @ 18
+  @field w shift  @ 11
+  @field w startppq  @ 35
+  @field w swing  @ 21
+  @field w swings  @ 20
+  @field r uuid  @ 32,43,50
+  @field w uuid  @ 35
+  @field w vel  @ 26
