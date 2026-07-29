@@ -1,6 +1,6 @@
 ---
 name: file-claims
-description: "Run a filing pass over the memory store in .claude/agent-memory/: drain the unfiled jots onto claims or into the open end, test the open end for a crystal with the bundled rising-sea method, apply the standing promotions and the us-claim decay rule, and rewrite MEMORY.md to match the files. Produces one reviewable batch, or an honest 'no crystal, nothing decayed'."
+description: "Run a filing pass over the memory store in .claude/agent-memory/: drain the unfiled jots onto claims or into the open end, test the open end for a crystal with the bundled rising-sea method, apply the standing promotions and the us-claim decay rule, and rewrite MEMORY.md's two delivery registers (priors stated in full; lexically anchored facts). Produces one reviewable batch, or an honest 'no crystal, nothing decayed'."
 ---
 
 # The filing pass
@@ -55,11 +55,28 @@ already confirmed* is a judgement the pass can make and a jot cannot.
    following it down. Silence is not evidence against a `world` or `build`
    claim: those fall only by refutation.
 
-6. **Rewrite the `MEMORY.md` index to match the files** — `- [Title](file.md) —
-   hook`, one line per claim, grouped by subject heading and then by standing.
-   The index is derived from the store, so it is rewritten rather than patched.
-   Rewrite from the first subject heading down; whatever prose sits above it is
-   not the pass's to touch.
+6. **Rewrite the `MEMORY.md` registers to match the files** — the index is
+   what a session actually meets at start; the files behind it are provenance
+   and evidence, opened by this pass and rarely otherwise. So a claim enters
+   the index only by passing one of two delivery tests, and lands in the
+   matching register:
+   - **Priors** — abstract claims. The line must carry the whole model,
+     self-contained: a reader holding nothing else could apply it. Write it
+     from the claim body, never from the previous hook — compressing a
+     compression loses the codebook. Session-local vocabulary fails the test;
+     so does a pointer-shaped tail ("five shapes it takes here").
+   - **Facts** — concrete claims. The line must contain an anchor that
+     resolves in the repo or a platform namespace (a symbol, an API name), so
+     retrieval is lexical: the moment names itself and the file gets opened.
+   A claim that passes neither test keeps its file, frontmatter and standing
+   and is simply not indexed — delivery and standing are orthogonal axes, and
+   the whole-store read in step 1 still meets it every pass. Subject and
+   standing live in frontmatter only; the registers do not group by them.
+   `open.md` is not indexed: its consumers are this pass and the commit
+   skill's triage, and a gnomic hook delivers nothing at session start.
+   The index is derived from the store, so it is rewritten rather than
+   patched. Rewrite from the first register heading down; whatever prose sits
+   above it is not the pass's to touch.
 
 7. **Stage the whole pass as one `apply_patches` batch** — the user reviews the
    pass as a pass, hunk by hunk.
