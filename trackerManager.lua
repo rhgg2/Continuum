@@ -2558,11 +2558,11 @@ end
 -- Region-replace parking: authored events a replace window covers leave the take;
 -- the prior parked set carries still-covered forward, restores the rest. see design/note-macros-v2.md § Generator output
 
-local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows, hostWindows, settleWindows)
+local function rebuildRegionPark(currentWindows, fxParked, prevWindows, hostWindows, settleWindows)
   local batch = mmBatch()
-  -- Restored notes re-enter their columns unrealised (the real mm event lands with the deferred
-  -- tail commit); their raw scratch recs return so rebuild can wire each cell post-commit.
-  local restoredNotes = {}
+  -- Restored notes re-enter their columns unrealised; this stage's own commit lands them in mm and
+  -- seat-stamps each cell, so the tail walk meets an ordinary seated entry.
+  local restoredCells = {}
 
   -- One predicate for all passes: spec.fx (note specs only) parks itself; otherwise membership
   -- matches a currentWindows entry. see docs/trackerManager.md § Region-replace parking
@@ -2651,33 +2651,31 @@ local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows
     parkedNotes, restores = reconcilePark(scan, priorByType.note or {},
       function(spec) seedDirty(spec.chan, parkSeed(spec, 'park')) end)
 
-    -- Restores re-enter their columns now (unrealised); the tail walk clips them in place and
-    -- the tail walk's commit adds them after the derived deletions.
+    -- Restores re-enter their columns now (unrealised) and land in mm with this stage's commit;
+    -- the tail walk then meets each as an ordinary seated entry and clips it in place.
+    local takeLen = tm:length()
     for _, spec in ipairs(restores) do
-      seedDirty(spec.chan, parkSeed(spec, 'restore'))   -- restored note re-enters columns; the tail walk re-derives it
+      seedDirty(spec.chan, parkSeed(spec, 'restore'))
       local channel = channels[spec.chan]
       while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
       local note = util.clone(spec)   -- the cell is the spec: both are logical (keeps the parked uuid too)
-      -- The rec holds the walk's raw frame: endppq stays unset because only the walk can derive it
-      -- (the spec's ceiling is logical, landing on endppqL), then rides back to the cell via colEvt.
-      local rec = util.pick(note, 'uuid chan pitch lane evType detune sample overlap fixed',
-                            { colEvt = note, ppq = tm:fromLogical(spec.chan, note.ppq),
-                              ppqL = note.ppq, endppqL = note.endppq })
-      util.add(restoredNotes, rec)
+      util.add(restoredCells, note)
       local col = shedLane(spec.chan, spec.lane)
       util.add(col.events, note)
       sortNoteColumn(col.events)
-      -- Lazy: reshaped at commit so it reads the rec's raw ppq/endppq after the tail-walk clip.
-      deferred.addLazy(function()
-        return util.assign(util.clone(note, { delayC = true, endppqC = true }),
-                           { keepUuid = true, ppq = rec.ppq, endppq = rec.endppq,
-                             ppqL = rec.ppqL, endppqL = rec.endppqL })
-      end)
+      -- Provisional raw end: the authored ceiling is all that is known here, since the lane clip is
+      -- the tail walk's to find -- boundNote's write-through corrects this in place.
+      local ppq = tm:fromLogical(spec.chan, note.ppq)
+      local ceiling = note.endppq == util.OPEN and math.huge
+                      or note.endppq and tm:fromLogical(spec.chan, note.endppq)
+                      or math.huge
+      batch.add(util.assign(util.clone(note, { delayC = true, endppqC = true }),
+        { keepUuid = true, ppq = ppq, ppqL = note.ppq, endppqL = note.endppq,
+          endppq = util.round(math.max(ppq + 1, math.min(ceiling, takeLen))) }))
     end
 
     -- Off-take membership for the generator + grid: each is a render-ready logical cell
     -- (ppq/endppqC like a projected note); an emptied lane re-extends to keep a column home.
-    local takeLen = tm:length()
     renderUnion('parked', parkedNotes, function(spec)
       local channel = channels[spec.chan]
       while #channel.columns.notes < spec.lane do pushNoteCol(channel) end
@@ -2752,7 +2750,7 @@ local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows
 
   -- Notes are settled (parks unlinked onsets, restores re-entered); re-derive continuous windows
   -- before cc/pb membership so a same-pass widened host parks now. see docs/trackerManager.md § The placement fixpoint
-  currentWindows = settleWindows(restoredNotes, parkedNotes)
+  currentWindows = settleWindows(restoredCells, parkedNotes)
 
   -- CCs: a point event has no tail, so the Pass-A curve stands in on the target lane and
   -- restores add back immediately, seating an unrealised projection for the view.
@@ -2885,7 +2883,11 @@ local function rebuildRegionPark(deferred, currentWindows, fxParked, prevWindows
 
   persistParked('fxParked', allParked, fxParked)
   batch.commit()
-  return restoredNotes
+  -- Seat-stamp each restored cell like any other seat, now the commit lands it in mm; bare write,
+  -- no setCell -- see docs/trackerManager.md § Note entries also carry colEvt.
+  for _, cell in ipairs(restoredCells) do
+    if stampColEvt(cell) then cell.realised = true end
+  end
 end
 
 ----- Raw working set
@@ -3835,14 +3837,10 @@ local function frontierTails(chan, indexList, extras, dirt, parkedBoundFor, take
   return emitted
 end
 
-local function rebuildTails(noteLive, deferred, restoredNotes)
+local function rebuildTails(noteLive, deferred)
   local takeLen = tm:length()
   local res = mm:resolution()
   local clampWrites = mmBatch()
-  -- Restores are column-only until this walk's deferred commit lands them in mm; until then
-  -- they walk as extra inputs alongside the index, cell backref included.
-  local restoredByChan = {}
-  for _, rec in ipairs(restoredNotes) do util.bucket(restoredByChan, rec.chan, rec) end
   for chan = 1, 16 do
     -- Clean channels freeze: fx left noteLive empty, real notes converged last rebuild.
     local dirt = dirtyChans[chan]
@@ -3850,7 +3848,6 @@ local function rebuildTails(noteLive, deferred, restoredNotes)
     -- A kept fx spec is settled from last pass and rides the walk as a bound anchor only; only fresh
     -- (re-run producer) derived notes seed disturbance and count toward the frontier cap.
     local extras, keptDerived, freshLive = {}, {}, 0
-    for _, rec in ipairs(restoredByChan[chan] or {}) do util.add(extras, rec) end
     for _, w in ipairs(noteLive[chan]) do
       util.add(extras, w.evt)
       if w.kept then keptDerived[w.evt] = true else freshLive = freshLive + 1 end
@@ -3894,7 +3891,7 @@ local function rebuildTails(noteLive, deferred, restoredNotes)
   -- Clamps commit first: separating colliding same-pitch onsets settles mm's seat keys before
   -- the clip pass runs. Clips only touch endppq — safe to batch with adds.
   clampWrites.commit()
-  -- fxNote del/add + parked restores commit in one mm:modify/MIDI_Sort; canonical
+  -- fxNote del/add commit in one mm:modify/MIDI_Sort; canonical
   -- delete-first means no transient same-pitch overlap.
   deferred.commit()
 end
@@ -4619,8 +4616,8 @@ local function rebuildPipeline(didReload)
   -- the pipeline's own commits maintain it from here. see docs § Incremental index reconciliation
   if didReload then perf.start('reload'); reload(); perf.stop('reload') end
 
-  -- fxNote add/del + parked-member restores, deferred from fx expansion / region parking into the tail
-  -- walk's atomic note commit: host clip + these inserts in one mm:modify (one MIDI_Sort, canonical delete-first).
+  -- fxNote add/del, deferred from fx expansion into the tail walk's atomic note commit:
+  -- host clip + these inserts in one mm:modify (one MIDI_Sort, canonical delete-first).
   local deferred = mmBatch()
 
   -- One head snapshot of the ds intent keys the pipeline reads; stages take these as params.
@@ -4681,30 +4678,22 @@ local function rebuildPipeline(didReload)
   -- Post-settlement window pass, called by rebuildRegionPark between its note and cc/pb passes: fxWindow
   -- feeds fx expansion's host set, settledWindows the continuous membership + persisted window set.
   local fxWindow, settledWindows
-  local function settleWindows(restoredNotes, parkedNotes)
+  local function settleWindows(restoredCells, parkedNotes)
     local restoredFxChans = {}
-    for _, rec in ipairs(restoredNotes) do
-      if rec.colEvt.fx then restoredFxChans[rec.colEvt.chan] = true end
+    for _, cell in ipairs(restoredCells) do
+      if cell.fx then restoredFxChans[cell.chan] = true end
     end
     fxWindow = computeFxWindows(restoredFxChans, parkedNotes)
     settledWindows = assembleParkWindows(fxWindow, parkedNotes)
     return settledWindows
   end
 
-  perf.start('regionPark'); local restoredNotes = rebuildRegionPark(deferred, currentWindows, sources.fxParked, sources.prevWindows, hostWindows, settleWindows); perf.stop('regionPark')  -- park covered, carry/restore prior
+  perf.start('regionPark'); rebuildRegionPark(currentWindows, sources.fxParked, sources.prevWindows, hostWindows, settleWindows); perf.stop('regionPark')  -- park covered, carry/restore prior
   perf.start('pa'); rebuildPA(); perf.stop('pa')  -- project PAs into settled note columns (each spliced in ppq order)
 
   perf.start('fx'); local fxOut = rebuildFx(noteExisting, ccExisting, deferred, fxWindow, settledWindows, sources.fxRegions); perf.stop('fx')  -- fx expansion: derived notes/CCs
 
-  perf.start('tails'); rebuildTails(fxOut.noteLive, deferred, restoredNotes); perf.stop('tails')  -- unified tail/onset walk + atomic note commit
-
-  -- The deferred commit added each restored note to mm; mark its column cell realised so an
-  -- immediate edit resolves the backing, and seat-stamp the fresh entry like any other seat.
-  for _, rec in ipairs(restoredNotes) do
-    -- Bare write, no setCell: `realised` is bookkeeping no renderer reads, and the park restore
-    -- that seated this cell already shed its lane.
-    if stampColEvt(rec.colEvt) then rec.colEvt.realised = true end
-  end
+  perf.start('tails'); rebuildTails(fxOut.noteLive, deferred); perf.stop('tails')  -- unified tail/onset walk + atomic note commit
   perf.start('pbs'); rebuildPbs(fxOut, sources.extraColumns); perf.stop('pbs')  -- absorber reconciliation + pb resynthesis
   perf.start('pcs'); rebuildPCs(fxOut.noteLive); perf.stop('pcs')  -- PC synthesis (trackerMode)
 

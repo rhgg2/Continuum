@@ -163,6 +163,9 @@ Untested candidate: thread a `uuid → colEvt` map instead of the parallel
 extras list, so the walk reads one index and still resolves the
 backref. That is the shape the payoff would have to take.
 
+2026-07-29 — superseded by D3: the map exists already and is called
+`stampColEvt`. No new conduit is needed.
+
 ### The suite does not discriminate any of this
 
 All four variants ran **2198 passed, 0 failed**:
@@ -221,6 +224,38 @@ commit order (E3) and an uncorrected restored end fail at the same
 assertions; a second spec would restate the first. The cost is that the
 rule is pinned by a case whose name is about ends rather than ordering,
 so the case says which rule it holds down.
+
+**D3 — the backref conduit already exists (2026-07-29).** § But the
+parallel threading names a `uuid → colEvt` map as the shape the payoff
+would take. It is not needed: `trackerManager.lua:990`'s `stampColEvt`
+*is* that map — columns file their live cell onto the index entry as
+they seat it — and `:4703` already stamps exactly these restores, one
+stage after the walk that wants them. Moving the add to the region-park
+batch moves the stamp to just after `:2887`'s commit, and the walk then
+meets a restore as an ordinary seated entry carrying `colEvt` and
+`realised`, so `:3533`'s write-through and `:3536`'s `setCell` both fire
+unchanged. The pb restore at `:2860` has worked this way all along, one
+screen above the note restore that defers; § Spike results reasoned
+about the note path without the sibling in view.
+
+Spiked 2026-07-29 at `8150247`: **2200 passed, 0 failed**, net −10 lines
+in one file. Two controls establish that the green is watched rather
+than quiet, each the only red it produces:
+
+| control | red |
+|---|---|
+| seat stamped, `realised` withheld | restored end 619, expected 379 — case 2 alone |
+| `realised` set, stamp withheld | `endppqC` nil in **both** cases — the E4b signature |
+
+So each half of the mechanism is load-bearing and the phase-1 fixture
+sees both. Consequences: phase 2 is one commit rather than a threading
+rewrite, and `mmBatch.addLazy` (`:1946`) loses its last caller.
+
+2026-07-30 — and `rebuildRegionPark`'s `deferred` parameter goes with
+it: `addLazy` was that function's only use of the batch. Its return
+value goes too, since the post-commit stamp moves inside the function
+and the pipeline needs nothing back. Compiled into the plan's phase-2
+item 1 brief.
 
 **D2 revised — the clipped case cannot carry E3 (2026-07-29).** The
 second half of D2 is wrong. `clampWrites` fills only from

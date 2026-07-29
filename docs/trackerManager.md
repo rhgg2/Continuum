@@ -192,14 +192,17 @@ was validated against a full `reload()` by a perf-gated shadow-compare during
 the migration; that scaffolding is removed now that parity is established.
 
 Note entries also carry `colEvt` — the seat stamp. As the rebuild seats a
-column cell (internals, externals, or a restored parked note once its
-deferred add lands), it files the cell on the note's entry via
+column cell (internals, externals, or a restored parked note as the park
+stage's own commit lands it), it files the cell on the note's entry via
 `stampColEvt`. The stamp is how raw consumers reach the pass's live cell
 without a per-pass column scan, and it must outlive reconciliation:
 `refreshEntry`'s sweep spares um's own decoration (`realised`, `colEvt`),
 and the remove-and-reinsert path carries the stamp onto the fresh entry.
 Re-seating overwrites it; a wholesale reload rebuilds entries bare, and the
 same pass's seating restamps them (the head reload runs before any stage).
+A restored park cell's stamp is likewise a bare write rather than a `setCell`:
+`realised` is bookkeeping no renderer reads, and the restore already shed its
+lane when it re-entered the column.
 
 ### Interval seeds
 
@@ -466,7 +469,8 @@ runs it, with a pointer to its detail where one exists.
   hosting its own discrete-replace kind (note-host replace parks the
   host; see `design/note-macros-v2.md` § Note-host replace parks). The
   prior parked set splits into still-covered carry-forward and restores
-  that re-enter their columns unrealised, keeping their uuid and fx. A
+  that re-enter their columns unrealised until the same stage's commit
+  lands them, keeping their uuid and fx. A
   restored cc lands on the exact ppq of the fill seat the wider window
   left on the take; under uuid addressing the two are distinct events, so
   the fill reconcile deletes that seat by its own handle and the authored
@@ -528,7 +532,7 @@ runs it, with a pointer to its detail where one exists.
   predicted fxNotes walk together: clamp same-pitch onset collisions
   (fixed onsets frozen), then clip each realised note-off against its
   same-lane and same-pitch successors. The clips commit WITH the fxNote
-  del/add and parked restores in one `mm:modify`. → § Rebuild: tail walk.
+  del/add in one `mm:modify`. → § Rebuild: tail walk.
 - **Absorber reconciliation** (`rebuildPbs`). Reseat absorber pbs against
   the post-walk lane-1 layout, recompute their raw vals, and project the
   pb column. See `docs/tuning.md` § Absorber reconciliation.
@@ -997,7 +1001,7 @@ rebuild (see `vmOnlyKeys`).
   durable across rebuilds and reloads, stable under any assign, and what
   `tm:byUuid` and every mm verb take. What um's records add is `realised` —
   set on entries built from an mm clone, absent on staged adds and on
-  restored parked cells until their deferred `mm:add` lands. Presence, not
+  restored parked cells until the park stage's `mm:add` lands. Presence, not
   the uuid, is what says "this event exists in mm, write through to it";
   a parked spec keeps its uuid the whole time it is off-take.
 
