@@ -3065,9 +3065,9 @@ local function computeFxWindows(extraFxChans, parkedNotes)
   return fxWindow
 end
 
--- Fx expansion: fx-carrying notes / fx-regions -> derived notes, CCs;
--- reconcile vs existing, note writes deferred to the tail walk. see design/note-macros-v2.md § Offline continuous realisation
-local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWindows, fxRegions)
+-- Fx expansion: fx-carrying notes / fx-regions -> derived notes, CCs; reconcile vs existing,
+-- note existence ops leave as data on fxOut.noteOps. see design/note-macros-v2.md § Offline continuous realisation
+local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxRegions)
   -- Columns must be ppq-ordered here (eachWindowNote / allocateRegionLanes / membersOf read col.events
   -- directly); the writers seat in order and nothing since reorders. see design/decisions.md § 2026-07-19
 
@@ -3178,9 +3178,16 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
     util.bucket(fxRegionsByChan, region.chan, region)
   end
 
-  -- Producer-owned outputs: post-expansion live notes, per-chain pb curves, authored pb base, and
-  -- the per-chan pb emit scope (nil = ungated) steering rebuildPbs' live/kept split.
-  local fxOut = { noteLive = emptyChans(), pbChains = emptyChans(), pbBase = emptyChans(), pbScope = {} }
+  -- Producer-owned outputs: live notes, existence ops (dels/adds) awaiting the walk, per-chain pb curves, authored
+  -- pb base, and the per-chan pb emit scope (nil = ungated) steering rebuildPbs' live/kept split.
+  local fxOut = { noteLive = emptyChans(), noteOps = { dels = {}, adds = {} },
+                  pbChains = emptyChans(), pbBase = emptyChans(), pbScope = {} }
+
+  -- reconcileFx's sink: ops cross to the tail walk as inspectable data, not staged batch state --
+  -- the walk seats them in its own batch. see design/archive/rebuild-commit-cadence.md § D4
+  local noteOps = fxOut.noteOps
+  local noteOpsSink = { del = function(e)    util.add(noteOps.dels, e)    end,
+                        add = function(spec) util.add(noteOps.adds, spec) end }
 
   -- Pass A: run every chain as a series -- each stage folds into the stream by mode x dest, and
   -- the final owned channels emit. see design/note-macros-v2.md § The fx chain
@@ -3424,9 +3431,9 @@ local function rebuildFx(noteExisting, ccExisting, deferred, fxWindow, currentWi
 
     for _, producer in ipairs(producers) do runOrKeep(producer) end
 
-    -- Reconcile existence (stamps kept specs with the mm handle + realised end); defer writes to the tail walk's atomic commit.
-    -- fxOut.noteLive holds the predicted specs; the tail walk clips them in place.
-    reconcileFx(noteExisting[chan], predicted, deferred)
+    -- Reconcile existence (stamps kept specs with the mm handle + realised end); ops land on
+    -- fxOut.noteOps. fxOut.noteLive holds the predicted specs; the tail walk clips them in place.
+    reconcileFx(noteExisting[chan], predicted, noteOpsSink)
     for _, spec in ipairs(predicted) do
       util.add(fxOut.noteLive[chan], { evt = spec, lane = spec.lane, kept = keptFx[spec] or nil })
     end
@@ -3483,11 +3490,11 @@ end
 --contract: separates and bounds disturbed notes only; a nudged lane-1 onset emits its seat closure
 -- The per-note settle and bound rules as a factory over ctx: both the linear and frontier walks inject
 -- their batches and marking tables and drive the same rules over their own state.
---shape: ctx = { chan, res, takeLen, disturbed, nudged, clampWrites, deferred, parkedBoundFor }
+--shape: ctx = { chan, res, takeLen, disturbed, nudged, clampWrites, tailWrites, parkedBoundFor }
 local function makeTailRules(ctx)
   local chan, res, takeLen = ctx.chan, ctx.res, ctx.takeLen
   local disturbed, nudged = ctx.disturbed, ctx.nudged
-  local clampWrites, deferred, parkedBoundFor = ctx.clampWrites, ctx.deferred, ctx.parkedBoundFor
+  local clampWrites, tailWrites, parkedBoundFor = ctx.clampWrites, ctx.tailWrites, ctx.parkedBoundFor
 
   local function settleOnset(e, prev)
     local onset = voicing.separateOnset(e, prev)
@@ -3529,7 +3536,7 @@ local function makeTailRules(ctx)
     local rounded   = util.round(rawBound)
     if rounded ~= e.endppq then
       local backing = e.colEvt or e
-      if backing.realised then deferred.assign(backing, { endppq = rounded }) end
+      if backing.realised then tailWrites.assign(backing, { endppq = rounded }) end
       setRaw(e, 'endppq', rounded)
     end
     if e.colEvt then
@@ -3545,12 +3552,12 @@ end
 
 -- The seed-driven tail walk over the whole channel: the degenerate fallback for dense and wholesale
 -- dirt, chosen over the frontier by seed count. see docs/trackerManager.md § Rebuild: tail walk
-local function linearTails(chan, notes, dirt, parkedBoundFor, takeLen, res, clampWrites, deferred, keptDerived)
+local function linearTails(chan, notes, dirt, parkedBoundFor, takeLen, res, clampWrites, tailWrites, keptDerived)
   local disturbed, nudged = {}, {}
   local settleOnset, boundNote = makeTailRules{
     chan = chan, res = res, takeLen = takeLen,
     disturbed = disturbed, nudged = nudged,
-    clampWrites = clampWrites, deferred = deferred, parkedBoundFor = parkedBoundFor,
+    clampWrites = clampWrites, tailWrites = tailWrites, parkedBoundFor = parkedBoundFor,
   }
 
   -- Disturbed seeded by name: derived membership + the seeds themselves -- survivors resolved by uuid,
@@ -3739,12 +3746,12 @@ end
 -- The frontier probe walk: seek to each seed, probe a bounded few rows for its neighbours, drive the
 -- shared settle/bound rules -- no whole-channel traversal. see design/interval-dirt.md § Phase 4.75
 local function frontierTails(chan, indexList, extras, dirt, parkedBoundFor, takeLen, res,
-                             clampWrites, deferred, keptDerived)
+                             clampWrites, tailWrites, keptDerived)
   local disturbed, nudged = {}, {}
   local settleOnset, boundNote = makeTailRules{
     chan = chan, res = res, takeLen = takeLen,
     disturbed = disturbed, nudged = nudged,
-    clampWrites = clampWrites, deferred = deferred, parkedBoundFor = parkedBoundFor,
+    clampWrites = clampWrites, tailWrites = tailWrites, parkedBoundFor = parkedBoundFor,
   }
 
   -- Disturbed seeded by name: derived membership is all of extras; adds/deletes name a seat the
@@ -3834,10 +3841,15 @@ local function frontierTails(chan, indexList, extras, dirt, parkedBoundFor, take
   return emitted
 end
 
-local function rebuildTails(noteLive, deferred)
+local function rebuildTails(noteLive, noteOps)
   local takeLen = tm:length()
   local res = mm:resolution()
   local clampWrites = mmBatch()
+  -- The walk's own batch, seeded from fx expansion's existence ops -- a fresh spec is unrealised during the walk, so the
+  -- clip mutates it in place, reaching mm once already clipped. see design/archive/rebuild-commit-cadence.md § D4
+  local tailWrites = mmBatch()
+  for _, e in ipairs(noteOps.dels) do tailWrites.del(e) end
+  for _, spec in ipairs(noteOps.adds) do tailWrites.add(spec) end
   for chan = 1, 16 do
     -- Clean channels freeze: fx left noteLive empty, real notes converged last rebuild.
     local dirt = dirtyChans[chan]
@@ -3872,11 +3884,11 @@ local function rebuildTails(noteLive, deferred)
     local indexedNotes = rawIndexFor(chan).notes
     local emitted
     if dirt ~= true and #dirt + freshLive <= FRONTIER_SEED_CAP then
-      emitted = frontierTails(chan, indexedNotes, extras, dirt, parkedBoundFor, takeLen, res, clampWrites, deferred, keptDerived)
+      emitted = frontierTails(chan, indexedNotes, extras, dirt, parkedBoundFor, takeLen, res, clampWrites, tailWrites, keptDerived)
     else
       local notes = mergeIndexed(indexedNotes, walkable, extras)
       if #notes == 0 then goto nextChan end
-      emitted = linearTails(chan, notes, dirt, parkedBoundFor, takeLen, res, clampWrites, deferred, keptDerived)
+      emitted = linearTails(chan, notes, dirt, parkedBoundFor, takeLen, res, clampWrites, tailWrites, keptDerived)
     end
 
     if #emitted > 0 and dirt ~= true then
@@ -3888,9 +3900,8 @@ local function rebuildTails(noteLive, deferred)
   -- Clamps commit first: separating colliding same-pitch onsets settles mm's seat keys before
   -- the clip pass runs. Clips only touch endppq — safe to batch with adds.
   clampWrites.commit()
-  -- Deferred to here so a fresh fx spec reaches mm once, already clipped, staging no assign --
-  -- delete-first still holds. See design/archive/rebuild-commit-cadence.md § D4.
-  deferred.commit()
+  -- Delete-first still holds: the fx dels precede the adds within the one batch.
+  tailWrites.commit()
 end
 
 ----- Rebuild Pbs
@@ -4613,10 +4624,6 @@ local function rebuildPipeline(didReload)
   -- the pipeline's own commits maintain it from here. see docs § Incremental index reconciliation
   if didReload then perf.start('reload'); reload(); perf.stop('reload') end
 
-  -- fxNote add/del, deferred from fx expansion into the tail walk's atomic note commit:
-  -- host clip + these inserts in one mm:modify (one MIDI_Sort, canonical delete-first).
-  local deferred = mmBatch()
-
   -- One head snapshot of the ds intent keys the pipeline reads; stages take these as params.
   -- Every key is read before any same-pass write, so a head read equals each old use-site value.
   local sources = {
@@ -4688,9 +4695,9 @@ local function rebuildPipeline(didReload)
   perf.start('regionPark'); rebuildRegionPark(currentWindows, sources.fxParked, sources.prevWindows, hostWindows, settleWindows); perf.stop('regionPark')  -- park covered, carry/restore prior
   perf.start('pa'); rebuildPA(); perf.stop('pa')  -- project PAs into settled note columns (each spliced in ppq order)
 
-  perf.start('fx'); local fxOut = rebuildFx(noteExisting, ccExisting, deferred, fxWindow, settledWindows, sources.fxRegions); perf.stop('fx')  -- fx expansion: derived notes/CCs
+  perf.start('fx'); local fxOut = rebuildFx(noteExisting, ccExisting, fxWindow, settledWindows, sources.fxRegions); perf.stop('fx')  -- fx expansion: derived notes/CCs
 
-  perf.start('tails'); rebuildTails(fxOut.noteLive, deferred); perf.stop('tails')  -- unified tail/onset walk + atomic note commit
+  perf.start('tails'); rebuildTails(fxOut.noteLive, fxOut.noteOps); perf.stop('tails')  -- unified tail/onset walk + atomic note commit
   perf.start('pbs'); rebuildPbs(fxOut, sources.extraColumns); perf.stop('pbs')  -- absorber reconciliation + pb resynthesis
   perf.start('pcs'); rebuildPCs(fxOut.noteLive); perf.stop('pcs')  -- PC synthesis (trackerMode)
 

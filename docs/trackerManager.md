@@ -525,8 +525,9 @@ runs it, with a pointer to its detail where one exists.
   realised parked extent), and fx regions; the derived fxNotes reconcile
   against the partition's set (`reconcileFx`), and continuous streams seat
   offline — cc-augment sums per target into markerless cc seats, pb defers
-  to the absorber pass. The note add/del is **deferred** to the tail walk's
-  atomic commit; `fxLive` (the predicted set) feeds the tail walk and PC
+  to the absorber pass. The note add/del leaves `rebuildFx` as data
+  (`fxOut.noteOps`); the tail walk seeds its own batch with it and commits
+  atomically. `fxLive` (the predicted set) feeds the tail walk and PC
   synthesis. See `design/note-macros-v2.md` § Offline continuous realisation.
 - **Tail walk** (`rebuildTails`). Real notes, fixed externals, and the
   predicted fxNotes walk together: clamp same-pitch onset collisions

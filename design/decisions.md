@@ -12,6 +12,14 @@ lines. Newest first. `/commit` prompts for one at commit time.
 Entries below 2026-07-27 predate that split, so some of them also
 appear in their design docs.
 
+- **2026-07-30** — The deferred mmBatch is gone as a shape, not a cadence: what decided it is that a
+  table shared along the pipeline is inspectable data, while a closure shared along the pipeline is
+  an opaque capability — upvalue arrays no reader can consult, commit authority far from the staging
+  sites. fx note existence ops now cross rebuildFx → rebuildTails as data (fxOut.noteOps); the walk
+  owns and commits its own tailWrites batch. D4's one-op property survives by table identity (the
+  add specs are noteLive's spec tables, clipped in place before commit), and batch content and
+  commit order are unchanged by construction. No mmBatch escapes its creating function anywhere now.
+
 - **2026-07-28** — The plan workflow's artefacts stay totally-specified; the human stops being
   their reader. A brief earns its cost three ways — it discards the *search* (finding an 80-line
   seam in a 5,000-line module costs far more than stating where it is), it forces resolution
