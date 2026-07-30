@@ -27,6 +27,6 @@ JSON
 
 ## The commit
 
-7. Spawn one subagent — Agent tool, `subagent_type: commit-finisher` — and hand it the headline. The procedure lives in its definition (`.claude/agents/commit-finisher.md`), so the prompt needs only the headline, plus which paths to stage if the scope from step 1 is narrower than "all dirty files".
+7. If you changed no `.lua` files, you may as well commit yourself: `git add <scope> && git commit -m "<headline>"`, no commit body.
 
-8. When it returns, eyeball its summary; no need to re-audit.
+8. Otherwise, spawn a subagent — Agent tool, `subagent_type: commit-finisher` — and hand it the headline. The agent runs a comment hygiene pass then commits; its procedure lives in its definition (`.claude/agents/commit-finisher.md`), so the prompt needs only the headline, plus which paths to stage if the scope from step 1 is narrower than "all dirty files". When it returns, eyeball its summary; no need to re-audit.
