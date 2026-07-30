@@ -678,6 +678,46 @@ local function hostWindowEnd(cell, takeLenL)
   return succ and math.min(ceil, succ) or ceil
 end
 
+-- A note host (on-take or parked) as its degenerate region form (note-is-a-region).
+local function noteHostRegion(host, endppq)
+  return { uuid = host.uuid, chan = host.chan, startppq = host.ppq,
+           endppq = endppq, fx = host.fx, noteHost = true }
+end
+
+-- A parked spec's window end: authored endppq unclipped by lanes; OPEN falls to take length.
+local function offTakeEnd(spec)
+  return (spec.endppq == nil or spec.endppq == util.OPEN)
+         and tm:toLogical(spec.chan, tm:length()) or spec.endppq
+end
+
+--shape: producerCensus -> { { uuid, chan, startppq, endppq, fx, noteHost? }, ... }
+local function producerCensus(fxRegions, hostWins, parkedNoteSpecs)
+  local producers = {}
+  for _, r in ipairs(fxRegions or {}) do
+    util.add(producers, { uuid = r.uuid, chan = r.chan, startppq = r.startppq,
+                          endppq = r.endppq, fx = r.fx })
+  end
+  -- computeFxWindows already found every on-take fx host, parked hosts declared out -- no re-filter.
+  -- Sort (chan, lane, ppq): the whole-column scan's emission order, so parkWindows stays G4-stable.
+  local noteHosts = {}
+  for host, windowEnd in pairs(hostWins) do util.add(noteHosts, { host = host, endppq = windowEnd }) end
+  table.sort(noteHosts, function(a, b)
+    local ha, hb = a.host, b.host
+    if ha.chan ~= hb.chan then return ha.chan < hb.chan end
+    if ha.lane ~= hb.lane then return ha.lane < hb.lane end
+    return ha.ppq < hb.ppq
+  end)
+  for _, nh in ipairs(noteHosts) do util.add(producers, noteHostRegion(nh.host, nh.endppq)) end
+  -- A self-parked host is off-take but still runs a producer, so its continuous (pb/cc) windows must
+  -- register on any surviving fx, not just parksNotes -- see § Route-by-window: mixed-kind un-parking.
+  for _, spec in ipairs(parkedNoteSpecs) do
+    if spec.evType == 'note' and spec.fx then
+      util.add(producers, noteHostRegion(spec, offTakeEnd(spec)))
+    end
+  end
+  return producers
+end
+
 local function forEachEvent(fn)
   for i=1,16 do
     local channel = channels[i]
@@ -1592,27 +1632,22 @@ local function freezeRegion(uuid)
   end
   local stash, keptParked = ds:get('fxParked') or {}, {}
 
-  -- The other producer shape: a note carrying its own chain, parked or still on the take. Both resolve
-  -- to the same degenerate region form assembleParkWindows builds, and the windows below must match the
-  -- persisted prevWindows field-for-field or the next rebuild sweeps the seats.
+  -- The other producer shape: a note carrying its own chain, parked or still on the take, resolves
+  -- through noteHostRegion, producerCensus's own builder -- so windows match prevWindows field-for-field, or the next rebuild sweeps the seats.
   local hostSpec, onTakeHost, hostRegion
   if not region then
     for _, spec in ipairs(stash) do
       if spec.evType == 'note' and spec.uuid == uuid and spec.fx then hostSpec = spec end
     end
     if hostSpec then
-      local endL = (hostSpec.endppq == nil or hostSpec.endppq == util.OPEN)
-                   and tm:toLogical(hostSpec.chan, tm:length()) or hostSpec.endppq   -- off-take: no lane clip
-      hostRegion = { chan = hostSpec.chan, startppq = hostSpec.ppq, endppq = endL,
-                     fx = hostSpec.fx, noteHost = true }
+      hostRegion = noteHostRegion(hostSpec, offTakeEnd(hostSpec))
     else
       -- byUuid is the raw-frame index entry and .colEvt its stamped logical cell, so the window comes
       -- off the cell and the assign off the entry. An unstamped (just-restored) host declines.
       local cell = colEvtFor(uuid)
       if cell and cell.fx then
         onTakeHost = tm:byUuid(uuid)
-        hostRegion = { chan = cell.chan, startppq = cell.ppq, fx = cell.fx, noteHost = true,
-                       endppq = hostWindowEnd(cell, tm:toLogical(cell.chan, tm:length())) }
+        hostRegion = noteHostRegion(cell, hostWindowEnd(cell, tm:toLogical(cell.chan, tm:length())))
       end
     end
   end
@@ -4643,35 +4678,7 @@ local function rebuildPipeline(didReload)
   -- Park window set: fx-regions plus every on-take or still-producing parked note host, as a degenerate
   -- region (note-is-a-region); assembled twice -- head set for notes, settled set for cc/pb + fx. see design/note-macros-v2.md § Offline continuous realisation
   local function assembleParkWindows(hostWins, parkedNoteSpecs)
-    local parkRegions = {}
-    for _, r in ipairs(sources.fxRegions or {}) do util.add(parkRegions, r) end
-    -- computeFxWindows already found every on-take fx host, parked hosts declared out -- no re-filter.
-    -- Sort (chan, lane, ppq): the whole-column scan's emission order, so parkWindows stays G4-stable.
-    local noteHosts = {}
-    for host, windowEnd in pairs(hostWins) do util.add(noteHosts, { host = host, endppq = windowEnd }) end
-    table.sort(noteHosts, function(a, b)
-      local ha, hb = a.host, b.host
-      if ha.chan ~= hb.chan then return ha.chan < hb.chan end
-      if ha.lane ~= hb.lane then return ha.lane < hb.lane end
-      return ha.ppq < hb.ppq
-    end)
-    -- freezeRegion builds this same literal for the single host it freezes, recomputing the on-take end
-    -- rather than reading hostWins; the two must agree or a frozen window fails to match prevWindows.
-    for _, nh in ipairs(noteHosts) do
-      util.add(parkRegions, { chan = nh.host.chan, startppq = nh.host.ppq, endppq = nh.endppq,
-                              fx = nh.host.fx, noteHost = true })
-    end
-    -- A self-parked host is off-take but still runs a producer, so its continuous (pb/cc) windows must
-    -- register on any surviving fx, not just parksNotes -- see § Route-by-window: mixed-kind un-parking.
-    for _, spec in ipairs(parkedNoteSpecs) do
-      if spec.evType == 'note' and spec.fx then
-        local endL = (spec.endppq == nil or spec.endppq == util.OPEN)
-                     and tm:toLogical(spec.chan, tm:length()) or spec.endppq
-        util.add(parkRegions, { chan = spec.chan, startppq = spec.ppq, endppq = endL,
-                                fx = spec.fx, noteHost = true })
-      end
-    end
-    return generators.parkWindows(parkRegions)
+    return generators.parkWindows(producerCensus(sources.fxRegions, hostWins, parkedNoteSpecs))
   end
 
   perf.start('fxWindows'); local hostWindows = computeFxWindows(); perf.stop('fxWindows')
