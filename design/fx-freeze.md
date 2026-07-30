@@ -167,15 +167,72 @@ of loose events:
   delete it. No frozen-ness survives.
 
 **The thinner.** A tolerance-bounded simplification (Douglas-Peucker
-over the piecewise-linear rendering; curved shapes pre-sampled by the
-existing densification; tolerance in cents for pb, steps for cc),
-emitting linear breakpoints. Pure function, home beside the other
-pure fx logic in `generators` (or a `curves` module if import wants
-it too — it is also the thinner imported param automation has been
-waiting for). Thinning is freeze-to-group's alone: it turns a dense
-carried curve into sparse, genuinely hand-editable group material —
-the point of choosing the group target. Freeze is already the lossy
-projection; a bounded thin is honest.
+over the piecewise-linear runs; tolerance in the dest's own unit, which
+`generators.destProfile` already spells cents for pb and steps for cc —
+so the function needs no dest branch at all). Pure function, home
+beside the other pure fx logic in `generators`; a `curves` module was
+the alternative "if import wants it too", but `paramAutomation` turns
+out to be the JSFX param-binding applier with no curve import in it, so
+there is one consumer today and `generators` already hosts non-stage
+pure helpers (`parkWindows`, `curveAt`, `destProfile`) (2026-07-30).
+Thinning is freeze-to-group's alone: it turns a dense carried curve into
+sparse, genuinely hand-editable group material — the point of choosing
+the group target. Freeze is already the lossy projection; a bounded thin
+is honest.
+
+**Curved shapes survive verbatim** (2026-07-30). An earlier draft had
+the thinner emit linear breakpoints throughout, on the reading that the
+standing seats are already a densified polyline. They are not. A replace
+stage assigns its delta verbatim (`trackerManager.lua:3311`) and
+`foldChains` short-circuits a lone covering record, so a lone pb-replace
+sine seats four `'slow'` extrema per cycle, tension and all. Only an
+augment fold or overlapping chains densify — `sumStreams` samples a
+feature-point pair only where a constituent is curved, and emits
+linear/step — plus the detune-onset `densify`. So one rule covers every
+non-linear shape: a point whose shape is not linear is a hard keep,
+carried with its tension, and the recursion runs only inside maximal
+runs of linear points. `'step'` because it means
+held-then-jump and DP across it would ramp a stepped LFO; curved
+because a `'slow'` pair is already two points and already exact.
+Freezing a lone continuous macro is therefore *exact*, and its output is
+better hand-editable material than a thinned polyline would be; the
+bounded thin bites only where something genuinely dense exists. Two
+things this rules out, so a later reader doesn't read the omission as an
+oversight: flattening a curved segment when tolerance would allow it
+(no saving — it is already two points — and pure loss), and refitting a
+dense linear run back into a curved segment, which is curve fitting and
+a much bigger animal.
+
+**A non-linear point pins its successor too** (2026-07-30). The keep
+rule above is half the story on its own. A shape governs the segment to
+its *right* (`curveSample(shape, tension, t)`, `midiManager.lua:143`),
+so dropping point *k* re-spans **`points[k-1].shape`** over the wider
+gap: after a `'step'` the hold extends and the jump moves, after a
+`'slow'` the half-cosine stretches — and in both the chord error term is
+measuring a curve that will not be drawn. A point is removable only
+when it *and* its predecessor ride linearly, which is what "the
+recursion runs inside maximal runs of linear points" has to mean: a
+run's closing endpoint is the non-linear point itself, its opening
+endpoint that point's successor.
+
+**A nil shape counts as non-linear** (2026-07-30). An earlier draft
+read nil as linear. The repo is split on the default — the wire one is
+step (`midiManager.lua:1253`, and the pb/cc base builders all read
+`shape or 'step'`) while `sumStreams`' `governingShape` alone reads `or
+'linear'` — but the seats the thinner is handed always carry an explicit
+shape, so the choice only decides which way to be wrong. Nil-as-keep
+under-thins, which is visible and harmless; nil-as-linear silently ramps
+a stepped curve. So the predicate is `p.shape == 'linear'`, nothing
+more.
+
+**The error term is vertical, not perpendicular** (2026-07-30).
+Textbook Douglas-Peucker measures perpendicular distance to the chord,
+but one axis is ticks and the other cents: perpendicular distance
+depends on an arbitrary ticks-per-cent aspect ratio, and "tolerance in
+cents" would mean nothing under it. Same recursion, error
+`|val(t) − chordAt(t)|`. And because DP *selects* input points rather
+than inventing them, output values stay the exact authored integers —
+no rounding question arises.
 
 ## Eligibility gates (both verbs)
 
@@ -465,10 +522,12 @@ undo block:
   Members passed to `markGroup` must be um-live staged events (gm
   re-anchors via `tm:byUuid`; detached clones make later mirror
   edits silently no-op).
-- **Thinner input.** Post-freeze the standing seats already ARE the
-  densified polyline — thin those. tm's densify is a
-  deriveChan-local closure, not reachable machinery; nothing to
-  reuse.
+- **Thinner input.** Post-freeze the standing seats are the curve to
+  thin — but not a densified polyline (2026-07-30, § Freeze to
+  group): they carry whatever shapes the fold left them, curved ones
+  included. tm's densify is a deriveChan-local closure, not reachable
+  machinery, and nothing needs it: the thinner keeps curved points
+  verbatim rather than sampling them.
 - **`util.atomic` wraps the post-confirm continuation**, not the
   verb — the modal resolves on a later frame.
 - **Three things need no extra work.** prevWindows resync suffices:
@@ -525,6 +584,11 @@ the harness stubs `Undo_BeginBlock`/`EndBlock` to no-ops
 itself owns — one flush, one rebuild, and the `derived` clear reaching
 mm as a metadata assign; the pextStore mirror that makes that rewind
 with the take is `pext_store_spec`'s subject.
+
+The thinner is pure, so its cases live with the other pure fx logic in
+`generators_spec`: endpoints kept, a collinear run collapsing, a spike
+just inside and just outside tolerance, a step run and a tension-carrying
+curved segment surviving intact, and output being a subsequence of input.
 
 Freeze-to-group: group minted with note + thinned-curve members,
 instance 2 replays both, mirror edit propagates, ds+take undo

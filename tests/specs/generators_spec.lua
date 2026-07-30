@@ -29,6 +29,16 @@ local function triangle()
   } }
 end
 
+-- Curve points positionally: {ppq, val, shape?, tension?}; shape defaults to linear, the one kind
+-- thinCurve is allowed to drop.
+local function pts(rows)
+  local out = {}
+  for i, r in ipairs(rows) do
+    out[i] = { ppq = r[1], val = r[2], shape = r[3] or 'linear', tension = r[4] }
+  end
+  return out
+end
+
 return {
 
   ----- slide: glide-in envelope
@@ -477,6 +487,98 @@ return {
       local lengthless = expand('lfo', { window = { 0, 240 } },
         util.assign({}, base, { pattern = { kind = 'curve', points = { { ppq = 0, val = 0 } } } }), { resolution = 240 })
       t.eq(#lengthless.delta, 0, 'no lengthPpq -> no cycle to tile')
+    end,
+  },
+
+  ----- thinCurve: bounded Douglas-Peucker over the linear runs
+
+  {
+    name = 'thinCurve returns a degenerate curve verbatim -- endpoints are never candidates',
+    run = function()
+      t.eq(#generators.thinCurve({}, 1e9), 0, 'nothing in, nothing out')
+      local one = pts{ {0,5} }
+      local outOne = generators.thinCurve(one, 1e9)
+      t.eq(#outOne, 1); t.eq(outOne[1], one[1], 'the lone point is an endpoint, so it is kept')
+      t.eq(#generators.thinCurve(pts{ {0,0}, {240,40} }, 1e9), 2, 'both endpoints survive any tolerance')
+    end,
+  },
+
+  {
+    name = 'thinCurve collapses a collinear linear run to its endpoints',
+    run = function()
+      local points = pts{ {0,0}, {120,10}, {240,20}, {360,30}, {480,40} }
+      local out = generators.thinCurve(points, 0)
+      t.eq(#out, 2, 'every interior point sits exactly on the chord')
+      t.eq(out[1], points[1], 'the result selects the input tables themselves, not copies of them')
+      t.eq(out[2], points[5])
+    end,
+  },
+
+  {
+    name = 'thinCurve drops a spike whose vertical error only meets the tolerance',
+    run = function()
+      -- Chord at ppq 120 is 10, so the spike is off by exactly 2.
+      t.eq(#generators.thinCurve(pts{ {0,0}, {120,12}, {240,20} }, 2), 2, 'err == tol collapses')
+    end,
+  },
+
+  {
+    name = 'thinCurve keeps a spike whose vertical error exceeds the tolerance',
+    run = function()
+      t.eq(#generators.thinCurve(pts{ {0,0}, {120,13}, {240,20} }, 2), 3, 'err 3 > tol 2 is real detail')
+    end,
+  },
+
+  {
+    name = 'thinCurve keeps a stepped run whole, collinear though its points are',
+    run = function()
+      local points = pts{ {0,0,'step'}, {120,10,'step'}, {240,20,'step'} }
+      t.eq(#generators.thinCurve(points, 100), 3, 'dropping 120 would move the jump, not just the chord')
+    end,
+  },
+
+  {
+    name = 'thinCurve rides a curved point through with its tension intact',
+    run = function()
+      local points = pts{ {0,0}, {120,10,'bezier',0.5}, {240,20} }
+      local out = generators.thinCurve(points, 100)
+      t.eq(#out, 3)
+      t.eq(out[2].tension, 0.5, 'no field copy -- the point table itself is what rides through')
+    end,
+  },
+
+  {
+    name = 'thinCurve lets a non-linear point pin its successor as well as itself',
+    run = function()
+      local points = pts{ {0,0,'bezier',0.5}, {120,10}, {240,20} }
+      t.eq(#generators.thinCurve(points, 100), 3,
+        'the middle point sits on the chord, but it closes the bezier segment')
+    end,
+  },
+
+  {
+    name = 'thinCurve treats a missing shape as non-linear -- under-thin over silently ramping',
+    run = function()
+      local points = { { ppq = 0, val = 0 }, { ppq = 120, val = 10 }, { ppq = 240, val = 20 } }
+      t.eq(#generators.thinCurve(points, 100), 3, 'the wire default is step, so nil is a hard keep')
+    end,
+  },
+
+  {
+    name = 'thinCurve keeps a stack of coincident points -- a zero-width span has no chord',
+    run = function()
+      local points = pts{ {0,0}, {0,50}, {0,100} }
+      t.eq(#generators.thinCurve(points, 1e9), 3, 'nothing to measure against, so nothing may go')
+    end,
+  },
+
+  {
+    name = 'thinCurve gives a dual-point pair no special protection',
+    run = function()
+      -- The pair sits one tick apart, per tm's DUAL_POINT_TICK (a tm local, not exported).
+      local points = pts{ {0,0}, {119,50}, {120,50}, {240,100} }
+      t.eq(#generators.thinCurve(points, 0), 4, 'off the chord by 0.42, so tol 0 keeps the pair')
+      t.eq(#generators.thinCurve(points, 1), 2, 'tol 1 swallows it -- a vertical jump is not a shape')
     end,
   },
 

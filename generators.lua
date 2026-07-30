@@ -560,4 +560,56 @@ function generators.parkWindows(regions)
   return windows
 end
 
+----- Curve thinning (freeze to group)
+
+-- A shape governs the segment to its *right*, so a point is safe to lose only if it and its
+-- predecessor both ride linearly; a missing shape counts as non-linear. see design/fx-freeze.md § Freeze to group
+local function ridesLinear(p) return p.shape == 'linear' end
+
+-- Douglas-Peucker, measuring vertical deviation rather than perpendicular distance: perpendicular
+-- would need a ticks-per-cent aspect ratio, under which "tolerance in cents" means nothing.
+--contract: returns a new array of the input point tables themselves -- selects, never invents
+--contract: tol bounds vertical error in the curve's own value unit; > tol keeps, == tol collapses
+function generators.thinCurve(points, tol)
+  local n, keep = #points, {}
+  keep[1], keep[n] = true, true
+  for i = 2, n - 1 do
+    if not (ridesLinear(points[i]) and ridesLinear(points[i - 1])) then keep[i] = true end
+  end
+
+  -- Gather every run before recursing into any of them: the walk that reads `keep` must not also
+  -- be the walk writing it.
+  local runs, open = {}, 1
+  for i = 2, n do
+    if keep[i] then
+      if i > open + 1 then util.add(runs, { first = open, last = i }) end
+      open = i
+    end
+  end
+
+  local function split(first, last)
+    local a, b = points[first], points[last]
+    local span = b.ppq - a.ppq
+    local worst, worstErr = nil, tol   -- a point must beat the tolerance outright to earn its place
+    for i = first + 1, last - 1 do
+      -- A zero-width span has no chord to measure against, so nothing inside it may be dropped.
+      local err = span > 0
+        and math.abs(points[i].val - (a.val + (b.val - a.val) * (points[i].ppq - a.ppq) / span))
+        or math.huge
+      if err > worstErr then worst, worstErr = i, err end
+    end
+    if not worst then return end
+    keep[worst] = true
+    split(first, worst)
+    split(worst, last)
+  end
+  for _, run in ipairs(runs) do split(run.first, run.last) end
+
+  local out = {}
+  for i = 1, n do
+    if keep[i] then util.add(out, points[i]) end
+  end
+  return out
+end
+
 return generators
