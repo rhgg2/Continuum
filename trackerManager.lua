@@ -1937,15 +1937,13 @@ end
 
 -- Accumulate mm ops, commit once in canonical delete -> assign -> add order; no-op if empty.
 local function mmBatch()
-  local dels, assigns, adds, lazyAdds = {}, {}, {}, {}
+  local dels, assigns, adds = {}, {}, {}
   return {
     del     = function(evt)                util.add(dels, evt) end,
     assign  = function(evt, update)        util.add(assigns, { evt = evt, update = update }) end,
     add     = function(spec)               util.add(adds, spec) end,
-    -- addLazy: fn produces its spec at commit, after any post-accumulation mutation it must read.
-    addLazy = function(fn)                 util.add(lazyAdds, fn) end,
     commit  = function()
-      if #dels + #assigns + #adds + #lazyAdds == 0 then return end
+      if #dels + #assigns + #adds == 0 then return end
       local touched = {}
       perf.start('batchModify')
       mm:modify(function()
@@ -1954,8 +1952,7 @@ local function mmBatch()
           mm:assign(a.evt.uuid, a.update)
           touched[a.evt.uuid] = true
         end
-        for _, s  in ipairs(adds)     do local u = mm:add(s);    if u then touched[u] = true end end
-        for _, fn in ipairs(lazyAdds) do local u = mm:add(fn()); if u then touched[u] = true end end
+        for _, s in ipairs(adds) do local u = mm:add(s); if u then touched[u] = true end end
       end)
       perf.stop('batchModify')
       perf.start('batchIdx')
@@ -3891,8 +3888,8 @@ local function rebuildTails(noteLive, deferred)
   -- Clamps commit first: separating colliding same-pitch onsets settles mm's seat keys before
   -- the clip pass runs. Clips only touch endppq — safe to batch with adds.
   clampWrites.commit()
-  -- fxNote del/add commit in one mm:modify/MIDI_Sort; canonical
-  -- delete-first means no transient same-pitch overlap.
+  -- Deferred to here so a fresh fx spec reaches mm once, already clipped, staging no assign --
+  -- delete-first still holds. See design/rebuild-commit-cadence.md § D4.
   deferred.commit()
 end
 

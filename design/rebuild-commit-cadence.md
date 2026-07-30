@@ -273,6 +273,19 @@ inverts it — the merged eager-add phase does not change commit order,
 and the comment phase changes no behaviour. A case whose *name* is
 about ordering is the way to pin it if that changes.
 
+**D4 — phase 2 consumed the backref constraint (2026-07-30).** § But
+the parallel threading named the cell backref as what the `deferred`
+batch was really paying for, and phase 2 removed it: with the restores
+added eagerly and seat-stamped, `deferred` carries only `reconcileFx`'s
+fxNote del/add and `boundNote`'s `endppq` assigns, and an fxNote rides
+bare — there is no `colEvt` left to resolve. What the deferral buys now
+is one op instead of two: a fresh spec is unrealised during the walk, so
+the clip at `trackerManager.lua:3530` mutates the spec table in place
+and stages no assign, where an add at the end of `rebuildFx` would land
+it unclipped and need one to correct it. Delete-first still holds (no
+transient same-pitch overlap). The `MIDI_Sort` the old comment cited was
+never the reason — the nest absorbs it. Compiled into phase 3.
+
 ## Plan
 
 > Superseded in part by § Spike results: step 0 has run; step 3 stands
