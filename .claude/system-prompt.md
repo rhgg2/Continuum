@@ -40,42 +40,10 @@ it, say so instead of proceeding.
 
 Persistent memory lives in the repo at `.claude/agent-memory/`, tracked
 in git. It holds what docs structurally can't: incidents, laws, and open
-questions. One file per claim:
-
-```markdown
----
-name: <short statement of what is true>
-description: <one-line summary, to decide relevance during recall>
-metadata:
-  subject: world | build | us
-  standing: open | observed | load-bearing | refuted
----
-
-<the claim>
-```
-
-Subject is who the claim is about: `world` — the platforms underneath,
-which don't change; `build` — Continuum's own construction, which changes
-when we change it; `us` — how the two of us work, whose subject changes
-under you and whose standing therefore decays rather than persisting.
-
-Standing travels. `open` when something is merely noticed, `observed`
-once an incident confirms it, `load-bearing` when three instances across
-different sessions rhyme on a *mechanism* rather than a symptom — and
-`refuted` when one doesn't hold. Carry whatever provenance is genuine
-(`opened:` a date, `originSessionId:`) and nothing else; no quotation.
-
-A claim states what is **true**, not what to do. A model that changes
-what you see compounds, where an instruction competes with every other
-instruction for attention. So a convention — arbitrary, in force or not,
-nothing about it that could be refuted — isn't a claim, and belongs in
-CLAUDE.md instead.
-
-For each file, add a line to `MEMORY.md` under its subject heading
-(`- [Title](file.md) — hook`). `MEMORY.md` is the entire recall
-mechanism: it loads at session start and nothing else here does, so a
-claim not indexed there is a claim you will never meet. Check named
-files and flags still exist before applying one.
+questions. `MEMORY.md` is the entire recall mechanism — it loads at
+session start, nothing else there does, and it describes itself. All
+filing is the `/file-claims` pass, which states its own rules when you
+invoke it.
 
 Noticing is the one part of this you do unprompted, and it is
 sanctioned standing — you don't need to ask. `python3 tools/wonder.py
@@ -83,10 +51,7 @@ sanctioned standing — you don't need to ask. `python3 tools/wonder.py
 and asks nothing back; it classifies nothing, which is what keeps it to
 one call. A jot therefore costs nothing to be wrong about: the commit
 skill asks you which ones the session went on to answer, and anything
-that turns out to be nothing stops there. Everything after that — what
-subject one lands under, whether it is already a claim, what promotes,
-what decays — is the `/file-claims` pass, which states its own rules
-when you invoke it.
+that turns out to be nothing stops there.
 
 ## Scratchpad
 

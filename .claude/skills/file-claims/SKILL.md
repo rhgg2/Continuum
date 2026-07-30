@@ -16,6 +16,21 @@ Filing is not a conveyor. Every entry has somewhere it belongs, and one of those
 places is the bin; another is straight out into a claim, because *this one is
 already confirmed* is a judgement the pass can make and a jot cannot.
 
+Three definitions the steps lean on:
+
+- **Subject** — who a claim is about: `world`, the platforms
+  underneath, which don't change; `build`, Continuum's own
+  construction, which changes when we change it; `us`, how the two of
+  us work — whose subject changes under Claude, which is why step 5
+  decays `us` standing rather than letting it persist.
+- **Provenance** — whatever is genuine (`opened:` a date, an
+  `originSessionId:`) and nothing else; no quotation.
+- **A convention is not a claim.** A claim states what is true, so an
+  incident could refute it; a convention is arbitrary, in force or
+  not, with nothing to refute. Conventions belong in CLAUDE.md, and
+  "this is a convention" is a reason a drained entry is dropped here
+  and re-homed there.
+
 1. **Gather the whole store in one `multi_read`** — `MEMORY.md`, `open.md`, and
    every claim file, each entire, decay logs included. This pass is the store's
    only regular whole-store read, and reading part of it defeats it: standing,
@@ -53,7 +68,8 @@ already confirmed* is a judgement the pass can make and a jot cannot.
    drop the claim a rung; any firing cancels accumulated quiet. A claim that
    falls to `open` keeps its file and its body, with the frontmatter `standing:`
    following it down. Silence is not evidence against a `world` or `build`
-   claim: those fall only by refutation.
+   claim: those fall only by refutation — an incident that
+   contradicts one sets `standing: refuted`, and the file stays.
 
 6. **Rewrite the `MEMORY.md` registers to match the files** — the index is
    what a session actually meets at start; the files behind it are provenance
