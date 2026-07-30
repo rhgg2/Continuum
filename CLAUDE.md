@@ -61,6 +61,25 @@ line is live and the rest are parked.
 `design/` is intent, not current state — `docs/<file>.md` is what is
 true now.
 
+## Thoughts on design narration
+
+Design docs typically adopt the impersonal present tense, with no
+hedges and no speaker. This is fine for conveying where a design
+stands today, but founders when revisions are needed; it is hard to
+honour the intent of the design, as this is often not reconstructible
+from the visible edifice.
+
+A shape I find more honest and more useful is a plausible
+re-narration: a viable path to the design, possibly not the path
+actually taken, but which conveys the principles behind it and
+empowers the reader to act in sympathy with the original goals.
+
+Along the way, there will be various traps; motivating cases that
+don't generalise, tempting choices that look right and aren't. A
+superficially tidy exposition that omits these tempts the reader to
+fall into the same traps again. Putting them back in helps the reader
+immensely; it's often also the thing a red spec can pin.
+
 ## Navigating the code
 
 - **Maps make things easier.** `map/<file>.map` answers "where does X
