@@ -320,6 +320,16 @@ predicate has to be inclusive for pb. The consequence (whether the
 neighbour's fold actually re-derives that seat out of a frozen curve)
 is unconfirmed; the phase's pb fixtures are where to settle it.
 
+*Settled by the recognition rule, not a fixture* (2026-07-30). Whether
+the neighbour's fold re-derives the shared seat turns out not to
+matter. Freeze leaves that seat standing as authored, and the
+neighbour's window still recognises it — recognition is inclusive at
+`endppq` — so the next rebuild reads a frozen breakpoint as one of its
+own seats whatever it then does with it. That holds whichever side
+freezes, so the predicate is inclusive at both ends and abutting pb
+producers refuse each other mutually. `tm_fx_region_spec`'s abutting
+pair pins it against the half-open cc contrast.
+
 **Refusals never surface** (2026-07-28). Freeze declines silently, at
 tm and at the verb alike. There is no toast or alert facility and
 building one for this is out of keeping with the house style. Note
@@ -327,6 +337,53 @@ that same-target continuous overlap is a **mutual** refusal — either
 producer names the other — so a locked pair has no freeze-one-first
 recourse, and editing or deleting a chain is the way out. Accepted
 with that cost.
+
+*The ordinary instance is a chord* (2026-07-30). That mutual lock is
+not an exotic case: two chord-mates each carrying the same continuous
+chain hold identical windows, which is simply what authoring a chord
+with one macro produces, and neither member can be frozen while the
+other's chain stands. A spec asserted the opposite until this phase —
+freeze the first, survivor keeps its curve — and passed only because it
+checked the survivor alone, never whether the frozen member's curve
+survived as authored. It does not: the survivor's window still covers
+those seats and its fold re-derives them.
+
+**Freeze settles the take before it reads the census** (2026-07-30).
+The census's three arms all answer "what is committed" — `fxRegions`,
+the maintained fx-host index, the stash — while `freezeRegion`'s own
+closing flush commits whatever was staged. A host staged and not yet
+flushed is therefore invisible to the gate and then minted by the
+freeze, landing a live window over the seats it has just frozen:
+markerless, inside a window, re-derived by the very producer the gate
+would have refused — delivered with success reported. Freeze flushes
+first rather than documenting a settled-tm precondition, because the
+precondition's failure mode is silent. The costs are one empty
+`preflush` per freeze (`flush` fires it ahead of its no-op check) and,
+where ops genuinely were pending, their landing inside freeze's undo
+block.
+
+**Open: a refused freeze still opens an undo block** (2026-07-30).
+`tv:freezeRegion` is wrapped in `util.atomic`, which begins and ends
+the block unconditionally, so a refusal leaves a labelled entry that
+changed nothing — and per this section's silence, that entry is the
+user's only signal that anything happened. Whether REAPER materialises
+an empty block is unconfirmed. The fix is not tm's: it belongs with the
+disabled-state predicate § Addressing declines at the view already
+requires for the fx tab's button, which eligibility is now a second
+input to. Phase 3's tv verb is where it lands.
+
+**Freeze calls rebuild machinery from a mutation entry point**
+(2026-07-30, accepted risk). The pre-gate `computeFxWindows` warms
+`fxHostWin` for every on-take host from outside a rebuild. The
+argument for safety is that freeze clears no dirt, so the seeds a
+later rebuild re-derives on still stand, and with the leading flush
+the columns it reads are settled ones. No test backs that argument:
+`perHost`'s incremental path has no coverage anywhere in the repo
+(docs/trackerManager.md § Fx window cache). A spec written for it in
+phase 1 was removed rather than kept — it asserted an invariant it
+could not reach, passing because `rebuild(true)` wholesales the
+channel, and a green test read as coverage is worse than a recorded
+gap. The fixture that would close it is later work.
 
 Both hosts freeze. A note host rides the same seam (membership
 `{self}`, parked host destroyed, tiles promoted); nothing

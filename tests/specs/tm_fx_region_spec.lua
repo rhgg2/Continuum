@@ -2173,10 +2173,36 @@ return {
     end,
   },
 
+  ----- Freeze gates: refusals computed over the producer census, by owner identity
+
   {
-    -- Freeze drops the frozen producer's own baseline entries by their stamped id: an identical
-    -- window that belongs to someone else stays. see design/fx-freeze.md
-    name = 'freeze (identical-window neighbour): the survivor keeps its window and its curve',
+    -- Same target, overlapping windows: freezing either would leave the other's producer standing
+    -- over raw output it did not make. Refusal is silent. see design/fx-freeze.md § Eligibility gates
+    name = 'freeze gate (overlapping regions): neither freezes, and nothing changes',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h)   -- a member both arps park, so each region has real output at stake
+      h.ds:assign('fxRegions', {
+        { uuid = 'fxr-1', chan = 1, startppq = 0,   endppq = 240, fx = arpUp },
+        { uuid = 'fxr-2', chan = 1, startppq = 120, endppq = 360, fx = arpUp },
+      })
+      h.tm:rebuild()
+      local regions, windows, parked =
+        h.ds:get('fxRegions'), h.ds:get('prevWindows'), h.ds:get('fxParked')
+
+      t.falsy(h.tm:freezeRegion('fxr-1'), 'the earlier region is refused')
+      t.falsy(h.tm:freezeRegion('fxr-2'), 'and so is the later one')
+
+      t.deepEq(h.ds:get('fxRegions'), regions, 'both regions stand')
+      t.deepEq(h.ds:get('prevWindows'), windows, 'the recognition baseline is untouched')
+      t.deepEq(h.ds:get('fxParked'), parked, 'and nothing left the stash')
+    end,
+  },
+
+  {
+    -- Two chord-mates carrying the same pb chain hold identical windows, so each sits inside the
+    -- other's: the fold is mutual, and neither can go first.
+    name = 'freeze gate (identical-window neighbour): mutual same-target overlap refuses both',
     run = function(harness)
       local h = harness.mk()
       for lane, pitch in ipairs({ 60, 67 }) do
@@ -2184,23 +2210,138 @@ return {
                         vel = 100, detune = 0, delay = 0, lane = lane, fx = sine30 })
         h.tm:flush()
       end
+      local lanes = h.tm:getChannel(1).columns.notes
       t.eq(#(h.ds:get('prevWindows') or {}), 2, 'two on-take hosts, two identical pb windows')
-      local uuid = h.tm:getChannel(1).columns.notes[1].events[1].uuid
 
-      t.truthy(h.tm:freezeRegion(uuid), 'the freeze reports success')
+      t.falsy(h.tm:freezeRegion(lanes[1].events[1].uuid), 'the first host is refused')
+      t.falsy(h.tm:freezeRegion(lanes[2].events[1].uuid), 'and so is its chord-mate')
+
+      t.eq(#(h.ds:get('prevWindows') or {}), 2, 'both baseline entries stand')
+      for lane = 1, 2 do
+        t.truthy(h.tm:getChannel(1).columns.notes[lane].events[1].fx, 'each host keeps its chain')
+      end
+    end,
+  },
+
+  {
+    -- pb seat recognition is endppq-inclusive, so abutting pb windows share their boundary seat and
+    -- the gate treats them as overlapping; cc coverage is half-open, so abutting cc windows are free.
+    name = 'freeze gate (abutting windows): pb refuses on the shared boundary, cc does not',
+    run = function(harness)
+      local h = harness.mk()
+      h.ds:assign('fxRegions', {
+        { uuid = 'fxr-1', chan = 1, startppq = 0,   endppq = 240, fx = sine30 },
+        { uuid = 'fxr-2', chan = 1, startppq = 240, endppq = 480, fx = sine30 },
+      })
+      h.tm:rebuild()
+      t.falsy(h.tm:freezeRegion('fxr-1'), 'the earlier pb region is refused')
+      t.falsy(h.tm:freezeRegion('fxr-2'), 'and so is the later -- the boundary seat is shared')
+
+      local sineCc = { { kind = 'sine', period = { 1, 4 }, depth = 32, dest = 10 } }
+      local h2 = harness.mk()
+      h2.ds:assign('fxRegions', {
+        { uuid = 'fxr-1', chan = 1, startppq = 0,   endppq = 240, fx = sineCc },
+        { uuid = 'fxr-2', chan = 1, startppq = 240, endppq = 480, fx = sineCc },
+      })
+      h2.tm:rebuild()
+      t.truthy(h2.tm:freezeRegion('fxr-1'), 'abutting cc windows are disjoint, so the freeze runs')
+    end,
+  },
+
+  {
+    -- The region's note window covers the host's onset, so freezing the region would leave the
+    -- host's producer running over raw arp notes. Freezing the host first is the recourse.
+    name = 'freeze gate (covered fx host): the region waits for the host it parks',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
+                      detune = 0, delay = 0, lane = 1, fx = sine30 })
+      h.tm:flush()
+      injectArp(h)   -- note-replace over the same span: the region parks the sine host
+      local uuid = h.tm:getChannel(1).parked[1].uuid
+
+      t.falsy(h.tm:freezeRegion('fxr-1'), 'refused while it covers a producing host')
+
+      t.truthy(h.tm:freezeRegion(uuid), "the host freezes -- its own pb window overlaps nobody's")
+      t.falsy(stashOfType(h, 'note')[1].fx, 'and stays parked, stripped of the chain')
+      t.truthy(h.tm:freezeRegion('fxr-1'), 'with no producer left under it, the region freezes')
+    end,
+  },
+
+  {
+    -- A note-dest host presents no window of its own (its note arm is suppressed), so no other
+    -- producer can refuse it: the inverse gate asks whether a neighbour's note window covers it.
+    name = 'freeze gate (inverse): a note-dest host under a region note window is refused',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
+                      detune = 0, delay = 0, lane = 1,
+                      fx = { { kind = 'trill', period = { 1, 4 }, step = 2 } } })
+      h.tm:flush()
+      h.tm:rebuild()   -- settle: the trill parks its own host
+      local uuid = h.tm:getChannel(1).parked[1].uuid
+      injectArp(h, { startppq = 120, endppq = 360 })
+
+      t.falsy(h.tm:freezeRegion(uuid), 'the trill host is refused')
+      t.truthy(stashOfType(h, 'note')[1].fx, 'and keeps its chain, still parked')
+    end,
+  },
+
+  {
+    -- Freeze drops the frozen producer's own baseline entries by their stamped id: a same-target
+    -- neighbour whose window is disjoint keeps its entry and its curve. see design/fx-freeze.md
+    name = 'freeze (disjoint same-target neighbour): the survivor keeps its window and its curve',
+    run = function(harness)
+      local h = harness.mk()
+      h.ds:assign('fxRegions', {
+        { uuid = 'fxr-1', chan = 1, startppq = 0,   endppq = 240, fx = sine30 },
+        { uuid = 'fxr-2', chan = 1, startppq = 480, endppq = 720, fx = sine30 },
+      })
+      h.tm:rebuild()
+      t.eq(#(h.ds:get('prevWindows') or {}), 2, 'two producers, two pb windows on the same target')
+
+      t.truthy(h.tm:freezeRegion('fxr-1'), 'the freeze reports success')
 
       local baseline = h.ds:get('prevWindows') or {}
-      t.eq(#baseline, 1, "only the frozen host's window leaves the baseline")
-      t.falsy(h.ds:get('fxParked'), "the survivor's window is not newly created, so it sweeps nothing")
-      local survivor = h.tm:getChannel(1).columns.notes[2].events[1]
-      t.truthy(survivor and survivor.fx, 'the neighbour keeps its chain')
-      t.eq(baseline[1] and baseline[1].id, survivor and survivor.uuid,
+      t.eq(#baseline, 1, "only the frozen producer's window leaves the baseline")
+      t.eq(baseline[1] and baseline[1].id, 'fxr-2',
            "the surviving entry carries the neighbour's identity, not just its value")
-      local pbs = 0
-      for _, c in ipairs(h.fm:dump().ccs) do
-        if c.evType == 'pb' and c.chan == 1 then pbs = pbs + 1 end
-      end
-      t.truthy(pbs > 0, 'and its curve still sounds')
+      t.falsy(h.ds:get('fxParked'), "the survivor's window is not newly created, so it sweeps nothing")
+      t.truthy(#derivedPbs(h, 1) > 0, 'and its curve still sounds')
+    end,
+  },
+
+  {
+    -- The partition is by producer, not by window value: a chain's own two pb windows are both
+    -- `mine`, and mine is never held against itself.
+    name = 'freeze gate (two stages, one target): a chain does not refuse itself',
+    run = function(harness)
+      local h = harness.mk()
+      injectRegion(h, { fx = { sine30[1],
+                               { kind = 'sine', period = { 1, 2 }, depth = 20, onset = 0 } } })
+      t.eq(#(h.ds:get('prevWindows') or {}), 2, 'one producer, two pb windows')
+      t.truthy(h.tm:freezeRegion('fxr-1'), 'its own windows are not a neighbour')
+    end,
+  },
+
+  {
+    -- The census's three arms all answer "what is committed", while freeze's own closing flush commits
+    -- whatever was staged: an unflushed host is invisible to the gate and then minted by the freeze,
+    -- landing a live window over the seats just frozen. Freeze settles first.
+    -- see design/fx-freeze.md § Eligibility gates
+    name = 'freeze gate (staged host pending): freeze settles the take before reading the census',
+    run = function(harness)
+      local h = harness.mk()
+      injectRegion(h)   -- pb region [0,240) on chan 1
+      -- Staged and deliberately not flushed: a chord-mate carrying the same chain, so once it is
+      -- committed the two hold identical pb windows and refuse each other.
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 67, vel = 100,
+                      detune = 0, delay = 0, lane = 2, fx = sine30 })
+
+      t.falsy(h.tm:freezeRegion('fxr-1'), 'the pending host is a same-target neighbour: refused')
+
+      t.eq(#(h.ds:get('fxRegions') or {}), 1, 'the region stands')
+      t.eq(#h.tm:getChannel(1).columns.notes[2].events, 1, 'and the staged host is on the take')
     end,
   },
 

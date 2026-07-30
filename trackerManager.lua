@@ -718,6 +718,49 @@ local function producerCensus(fxRegions, hostWins, parkedNoteSpecs)
   return producers
 end
 
+-- Freeze eligibility over the census: a refusal means some other producer would be left standing
+-- over the raw output this freeze creates. see docs/trackerManager.md § Park window census
+local function freezeRefused(frozen, census)
+  local mine, others = {}, {}
+  for _, w in ipairs(generators.parkWindows(census)) do
+    util.add(w.id == frozen.uuid and mine or others, w)
+  end
+
+  local function sameTarget(a, b)
+    return a.evType == b.evType and a.chan == b.chan and a.cc == b.cc
+  end
+  -- pb seat recognition is inclusive at endppq, so abutting pb windows share their boundary seat;
+  -- note and cc coverage is half-open, where abutting is genuinely disjoint.
+  local function overlaps(a, b)
+    if a.evType == 'pb' then return a.startppq <= b.endppq and b.startppq <= a.endppq end
+    return a.startppq < b.endppq and b.startppq < a.endppq
+  end
+
+  for _, a in ipairs(mine) do
+    for _, b in ipairs(others) do
+      if sameTarget(a, b) and overlaps(a, b) then return true end
+    end
+    -- Onset-in-window, as parking decides it: a host the frozen note window covers is destroyed with
+    -- the chord it parks, taking its seats or its whole output with it.
+    if a.evType == 'note' then
+      for _, p in ipairs(census) do
+        if p.noteHost and p.uuid ~= frozen.uuid and p.chan == a.chan
+           and p.startppq >= a.startppq and p.startppq < a.endppq then return true end
+      end
+    end
+  end
+
+  -- The inverse: a note-dest host emits no park window at all, so nothing above can refuse it -- its
+  -- own span is the test. Continuous-only hosts do present curve windows, which the overlap arm has.
+  if frozen.noteHost and generators.parksNotes(frozen) then
+    for _, b in ipairs(others) do
+      if b.evType == 'note' and b.chan == frozen.chan
+         and frozen.startppq < b.endppq and b.startppq < frozen.endppq then return true end
+    end
+  end
+  return false
+end
+
 local function forEachEvent(fn)
   for i=1,16 do
     local channel = channels[i]
@@ -1622,9 +1665,16 @@ end
 -- so tv re-tags cellKind. Forces the next flush and rebuild past their no-op gates.
 function tm:requestRebuild() rebuildRequested = true end
 
+-- Defined with Rebuild Fx below; freeze's eligibility census needs the on-take host windows here.
+local computeFxWindows
+
 -- Freeze: a one-way projection out of the derived lifecycle -- notes, parked members, seats and
 -- windows all convert to authored form in one flush. see design/fx-freeze.md § Atomicity
 local function freezeRegion(uuid)
+  -- Settle first: the census reads committed state, so a staged producer would be invisible to it
+  -- and then committed by our own flush. see docs/trackerManager.md § Park window census
+  tm:flush()
+
   local regions, keptRegions = ds:get('fxRegions') or {}, {}
   local region
   for _, r in ipairs(regions) do
@@ -1653,10 +1703,17 @@ local function freezeRegion(uuid)
   end
   -- One region-shaped record from here down: nothing below knows which host shape it froze.
   local frozen = region or hostRegion
-  if not frozen then return end
+  if not frozen then return false end
   -- Ownership by dest, not mode: a note-dest kind's output stands in for the host note, so freezing
   -- destroys it. A continuous-only chain leaves the note where it is.
   local destroysHost = hostRegion and generators.parksNotes(hostRegion)
+
+  -- computeFxWindows is rebuild machinery and warms its per-host cache as a side effect: safe to call
+  -- from out here because freeze clears no dirt, so the seeds the next rebuild re-derives on stand.
+  local census = producerCensus(regions, computeFxWindows(nil, stash), stash)
+  -- Gated before anything is gathered, so a refusal leaves the pass having staged nothing. `regions`
+  -- carries the frozen one and `stash` serves both arms; identity does the partitioning.
+  if freezeRefused(frozen, census) then return false end
 
   -- Recomputed for coverage only: covered() below is the sole reader.
   local windows = generators.parkWindows({ frozen })
@@ -1744,8 +1801,11 @@ function tm:addParked(spec)           addParked(spec)           end
 function tm:assignParked(evt, update) assignParked(evt, update) end
 function tm:deleteParked(evt)         deleteParked(evt)         end
 --contract: one-way; the host's chain, its parked members and its windows are gone after the call
---contract: host = a live region, or a note (parked or on-take) carrying fx; any other uuid returns nil
---contract: ungated -- overlap with a neighbouring region is the caller's to refuse
+--contract: host = a live region, or a note (parked or on-take) carrying fx; else false
+--contract: flushes any staged ops first, so the eligibility census reads a settled take
+--contract: any refusal is silent: returns false, stages nothing of its own, raises nothing
+--contract: refuses same-target overlap with a neighbour; abutting counts for pb, not cc/note
+--contract: refuses a covered fx host, or a note-dest host under another producer's note window
 function tm:freezeRegion(uuid)        return freezeRegion(uuid)  end
 -- With no mm ops there is no reload->rebuild to ride, so the one rebuild is driven here.
 function tm:flush() if flush() then tm:rebuild(false) end end
@@ -3021,7 +3081,7 @@ end
 local fxHostWin = {}   -- uuid -> windowEndL (logical); a take-length change arrives as a wholesale reload
                        -- (mm:setLength), which walkChannel recomputes -- no separate length guard needed
 
-local function computeFxWindows(extraFxChans, parkedNotes)
+function computeFxWindows(extraFxChans, parkedNotes)
   local takeLen = tm:length()
   local fxWindow = {}
   -- The stash is the authority on parkedness: the fx-host index lags a park until the tail-walk

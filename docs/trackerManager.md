@@ -648,6 +648,16 @@ computed by `settleWindows` from within the park stage — feeding cc/pb members
 share the one `fxHostWin`. Park and restore seed the channels they touch, so the settlement call
 recomputes exactly those and reuses the rest.
 
+**The reuse arm is unexercised by the suite.** Removing `perHost`'s seed-driven invalidation outright
+(`local dirty = cached == nil`, dropping `seededUuid[uuid]`) leaves every one of the 2208 specs green,
+so nothing anywhere distinguishes a host riding a stale cached window from one that recomputes. The
+arm's correctness rests on reading it, not on coverage. *Why* it goes unreached is not settled:
+`rebuild(takeChanged)` wholesales the channel and a wholesale channel goes to `walkChannel`, which
+explains any fixture passing `true`, but `absorbReloadDirt` does fold a flush's per-verb seeds into
+interval dirt and the carry arm reads it, so an ordinary edit looks like it ought to arrive here. A
+fixture needs all three of a warm cache, seeded rather than wholesale dirt naming the host, and a
+window value that actually moves. Until one exists, treat any change to this cache as unguarded.
+
 ### The placement fixpoint
 
 Parking is realisation→intent feedback inside one pass: windows decide park
@@ -707,6 +717,26 @@ are indistinguishable by value, and taking a surviving neighbour's entry would m
 read its seats as freshly authored and park them off-take. The `id` drop also holds where value
 matching frayed: a persisted window that no longer recomputes field-for-field (a kind deregistered,
 a clipping context changed) still leaves with its producer.
+
+The same census answers freeze eligibility. `freezeRefused` partitions the windows `parkWindows`
+emits by their stamped `id` — the frozen producer's on one side, every other producer's on the other
+— and refuses if the two sides meet on a target. Two further arms exist because window-vs-window
+cannot see everything: an fx-carrying host *inside* the frozen producer's note window emits no note
+window to be caught by — `noteHost` suppresses a note-dest host's, and a continuous-only chain has no
+note arm to suppress in the first place — and a note-dest host emits no window at all, so it is
+tested the other way round — its own span against the neighbours' note windows. The overlap
+predicate is half-open for note and cc but inclusive for pb, because pb seat recognition is
+inclusive at `endppq`: two abutting pb windows share their boundary seat, and a half-open test would
+read them as disjoint and let one side freeze out from under the other. Refusal is silent and total
+— false, computed before any gather, so nothing of freeze's own is staged.
+
+All three arms answer *what is committed* — `fxRegions`, the maintained fx-host index, the stash — so
+`freezeRegion` flushes before it asks. A host staged and not yet flushed is absent from the index and
+invisible to the gate, and freeze's own closing flush would then commit it: a live window over the
+seats just frozen, which are markerless, so its producer re-derives them. That is the outcome the
+gate exists to prevent, and it arrived with success reported. The leading flush is a no-op when
+nothing is staged, at the price of one empty `preflush` (which `flush` fires ahead of its no-op
+check).
 
 ### Derivation dirt: the gated spine
 
