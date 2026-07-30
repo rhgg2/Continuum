@@ -210,7 +210,7 @@ per-instance *base* (`anchor.chan + chanDelta`); lane is a per-instance
 because `key` doubles as the stream identity `rect.streams` is keyed by —
 it cannot move without breaking membership. Lane membership is reseated by
 rebuild, so `moveInstance` realises a lane change by **del+add** to re-stamp
-it cleanly; `pickStampedLane` then honours the authored
+it cleanly; `rebuildInternals` then honours the authored
 lane verbatim and materialises the column if missing, so the move holds
 through rebuild and a member never renders invisible. Conflict stays
 lane-accurate by shifting each instance's `streams` keys through

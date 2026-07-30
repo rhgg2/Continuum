@@ -1249,7 +1249,7 @@ local addEvent, assignEvent, deleteEvent, addParked, assignParked,
     assignLowlevel(n, { ppq = P1, endppq = P2, ppqL = L1, endppqL = L2 })
   end
 
-  --contract: lane/chan changes accepted; rebuild reseats columns via pickStampedLane
+  --contract: lane/chan changes accepted; rebuild reseats columns from the note's authored lane
   --contract: chan change: rebuild's absorber pass reconciles fakes across both channels
   --contract: ppq/endppq route through resizeNote
   local function assignNote(n, update)
@@ -3034,7 +3034,6 @@ end
 -- Late PA projection: mixes into note columns once lanes are settled, so the view (and rebuildFx's
 -- channelStreams) read it inline. see docs/trackerManager.md § PA dispatch
 local function rebuildPA()
-  local touched = {}
   for chan = 1, 16 do
     if dirtyChans[chan] then   -- clean: PA already sits in the carried note column
       local covers = seedCovers(dirtyChans[chan])   -- wholesale: always-true; interval: seeded rows only
@@ -3046,7 +3045,6 @@ local function rebuildPA()
             projectEvent(cell, chan)
             shedLane(chan, lane)
             insertNoteCell(noteCol.events, cell)
-            touched[chan] = true
           end
         end
       end
@@ -3065,13 +3063,11 @@ local function rebuildPA()
           if noteCol then
             shedLane(chan, lane)
             insertNoteCell(noteCol.events, projectCC(cell, {lane = lane}))   -- the cell is logical-born
-            touched[chan] = true
           end
         end
       end
     end
   end
-  return touched
 end
 
 ----- Rebuild Fx
@@ -4709,7 +4705,7 @@ local rebuilding = false
 local mmReloaded = false
 
 --contract: the staging pipeline; runs inside tm:rebuild's mm:modify, never called bare
---invariant: nine stages stage mm ops; all nest, so reindex/reprojection defer to one unwind
+--invariant: every mm-staging stage nests, so reindex/reprojection defer to one unwind
 local function rebuildPipeline(didReload)
   -- A wholesale mm re-read strands the incremental index: reload before any stage reads it;
   -- the pipeline's own commits maintain it from here. see docs § Incremental index reconciliation
@@ -4822,7 +4818,7 @@ function tm:rebuild(takeChanged)
     end
   end
 
-  -- One nest for all nine staging stages, so the reindex and the take reprojection land once each
+  -- One nest for every staging stage, so the reindex and the take reprojection land once each
   -- rather than once per stage. rebuilding must outlive it: each stage's commit re-enters via 'reload'.
   mm:batch(function() rebuildPipeline(didReload) end)
   rebuilding = false

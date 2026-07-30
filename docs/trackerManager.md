@@ -333,8 +333,8 @@ semantics — what a slot *is*, how factors compose, how
 logical↔realisation works — live in `docs/timing.md`.
 
 tm exposes the resolved transforms as `tm:fromLogical(chan, ppqL, off)`
-and `tm:toLogical(chan, ppq)`, cached per `(cm, mm)` in `swingSnap` and
-cleared at the head of each rebuild (`clearSwing`). `tm:markSwingStale`
+and `tm:toLogical(chan, ppq)`, cached per `(cm, mm)` in a file-local
+`swing` snapshot and cleared at the head of each rebuild (`clearSwing`). `tm:markSwingStale`
 flags channels whose resolved swing changed so the next rebuild
 rederives their raw ppqs from `ppqL`.
 
@@ -360,7 +360,8 @@ Semantics:
 
 - **Lane / chan changes.** Both are accepted by `assignEvent`. A note's
   `lane` is persisted per note and taken verbatim by the next rebuild
-  (`pickStampedLane`), so an in-place lane assign reseats the note's
+  (`rebuildInternals` seats each note at its own `note.lane`), so an
+  in-place lane assign reseats the note's
   column without shedding its identity (the note index spans all lanes,
   so nothing migrates). A `chan` change is likewise accepted, migrating
   the index entry between channel lists; rebuild's absorber pass
@@ -420,14 +421,16 @@ one, so it can't latch.
 ## Rebuild
 
 Triggered by:
-- mm `'reload'` signal — always rebuilds. Its `wholesale` payload bit says
+- mm `'reload'` signal. Its `wholesale` payload bit says
   whether mm re-read its whole event set (`load`/`reload`) or mutated in
   place (`modify`); the former drives a full index reload (§ Incremental
   index reconciliation). The take-swap flag travels via the separate mm
   `'takeSwapped'` signal, captured into a transient flag and consumed by
   the next reload (mm guarantees the firing order);
-- cm `'configChanged'` signal, except for `vmOnlyKeys` (`mutedChannels`,
-  `soloedChannels`) which do not touch tm's structural view.
+- cm `'configChanged'` signal, except for `tvOnlyKeys` — `defaultSwing` is
+  its sole member — which tv consumes without a structural rebuild;
+- ds `'dataChanged'` on the project data tm derives from: `swing`,
+  `fxRegions`, `fxParked`, `extraColumns` and `noteDelay`.
 
 tm also forwards the reconciliation signals it receives from mm
 (`takeSwapped`, `notesDeduped`, `uuidsReassigned`) to its own subscribers,
@@ -439,15 +442,23 @@ retaining tv's last rendered frame. This is the same liveTake guard every
 other mm consumer applies; without it a foreign-track `configChanged` fired
 during arrange's take-delete sequence would crash on a nil resolution.
 
+A third gate makes an idle trigger free. `rebuild(∅)` — no dirt, no stale
+swing, no wholesale re-read, no take swap, no `requestRebuild` — returns
+before the channel carry, because every stage would converge on the frame
+already held. So a trigger is not a rebuild: mm's converged rebind fires
+`reload{wholesale=false, chans={}}` precisely so that dirt marked while tm
+was dormant gets consumed, and when there is none this gate stops the pass.
+
 The pipeline runs in this order; each step is named for the helper that
 runs it, with a pointer to its detail where one exists.
 
 - **Partition & internal lanes** (`rebuildInternals`). Split mm notes
   into stamped-and-consistent *internals*, foreign-or-diverged
   *externals*, and derived fxNotes. Each internal clones into its
-  authored lane via `pickStampedLane` (the tail walk clips its note-off,
-  so it can never overlap); stale-swing internals rederive `raw` from
-  `ppqL` under the new swing here (see `docs/timing.md` §"Rebuild rule").
+  authored lane, extending the channel's note columns to reach it (the
+  tail walk clips its note-off, so it can never overlap); stale-swing
+  internals rederive `raw` from `ppqL` under the new swing here (see
+  `docs/timing.md` §"Rebuild rule").
   Externals are deferred to their own step. → § Rebuild: partition.
 - **CC walk** (`rebuildCCs`). Route markerless cc seats (a cc inside a
   prior cc window) out of columns for fresh reconciliation, reconcile each
@@ -464,6 +475,20 @@ runs it, with a pointer to its detail where one exists.
   `evt.fixed` so the tail walk freezes its onset but clips its tail like
   any note. Placed up front — before fx expansion — so externals bound fx
   windows and walk alongside everything else. → § Rebuild: externals.
+- **Sample stamp** (`stampSamples`, trackerMode only). Every note bears a
+  sample, stamped once from the PC prevailing at its onset; inheritance
+  freezes at stamp time. Only a note with no sample is stamped, and the
+  sweep is dirt-gated — a wholesale channel walks every note, interval dirt
+  visits just the seeded uuids. → § PC synthesis under trackerMode.
+- **Fx and park windows** (`computeFxWindows`, `generators.parkWindows`).
+  Walk each channel's note columns in the logical frame, so every fx host's
+  window is its voice extent — the next same-lane onset, floored by the
+  authored end or the take length, with chord-mates held open to a common
+  clip. The park window set is those windows plus the fx regions, each
+  parked or still-producing host entering as a degenerate one-note region.
+  Assembled twice: a head set for the note pass, and a settled set
+  (`settleWindows`, called from inside the park stage) for cc/pb membership
+  and `rebuildFx`. → § Fx window cache.
 - **Region-replace parking** (`rebuildRegionPark`). Authored notes and
   ccs a replace-region covers leave the take — and so does any note
   hosting its own discrete-replace kind (note-host replace parks the
@@ -513,22 +538,20 @@ runs it, with a pointer to its detail where one exists.
   expansion read PAs inline, and after externals so foreign-MIDI PAs find
   their host. A parked PA is gone from `mm`, so it is re-projected from
   `channels[chan].parkedPA` into its parked host's lane — visible
-  off-take, riding the note column as an on-take PA would. Returns the
-  per-chan touched set — the columns whose onset order it broke — so
-  `computeFxWindows`' second sort gates on it instead of resorting every
-  dirty chan.
-- **Fx expansion** (`rebuildFx`). First the read-only **window** pass:
-  walk each channel's same-lane successor map in the logical frame, so
-  each fx host's window is its voice extent (the next same-lane onset's
-  `ppq`, floored by the authored end). Then every producer runs —
-  on-take fx notes (augment hosts), parked note hosts (window = the
-  realised parked extent), and fx regions; the derived fxNotes reconcile
+  off-take, riding the note column as an on-take PA would. Both passes
+  splice in order (`insertNoteCell`), so nothing downstream re-sorts; the
+  per-chan touched set the function still returns has no consumer.
+- **Fx expansion** (`rebuildFx`). Receives the settled windows as a
+  parameter — the window pass is its own earlier stage, not a phase of
+  this one. Every producer runs — on-take fx notes (augment hosts), parked
+  note hosts (window = the realised parked extent), and fx regions; the
+  derived fxNotes reconcile
   against the partition's set (`reconcileFx`), and continuous streams seat
   offline — cc-augment sums per target into markerless cc seats, pb defers
   to the absorber pass. The note add/del leaves `rebuildFx` as data
   (`fxOut.noteOps`); the tail walk seeds its own batch with it and commits
-  atomically. `fxLive` (the predicted set) feeds the tail walk and PC
-  synthesis. See `design/note-macros-v2.md` § Offline continuous realisation.
+  atomically. `fxOut.noteLive` (the predicted set) feeds the tail walk and
+  PC synthesis. See `design/note-macros-v2.md` § Offline continuous realisation.
 - **Tail walk** (`rebuildTails`). Real notes, fixed externals, and the
   predicted fxNotes walk together: clamp same-pitch onset collisions
   (fixed onsets frozen), then clip each realised note-off against its
@@ -554,8 +577,13 @@ source event, strips only `chan` and `cc`, and applies the caller's
 known here — rides through verbatim, so new event fields reach
 `col.events` without a change to this layer.
 
-Then `clearStaging()` drops un-flushed ops. The index itself needs no tail
-step: on a wholesale reload it was fully `reload()`ed at the pipeline head,
+The pipeline then persists its own window set: `settledWindows` goes to
+`ds:assign('prevWindows', …)` when it differs from the set this pass read,
+so the next rebuild recognises seats against it. `clearStaging()` drops
+un-flushed ops, the pass's `dirtyChans` fold into `muteConform` and clear,
+and `derivedInputs` re-snapshots once the pipeline's own ds writes have
+settled. The index itself needs no tail step: on a wholesale reload it
+was fully `reload()`ed at the pipeline head,
 before any stage read it, and the pipeline's own commits maintained it from
 there; edit rebuilds kept the live index throughout (§ Incremental index
 reconciliation). tm fires the `'rebuild'` signal carrying the `takeChanged`
@@ -1017,7 +1045,8 @@ and pushes it via `tm:setMutedChannels(set)`. tm:
   through `um:assignEvent`, then flushes.
 
 Mute state is a tv-side concern — it **does not** trigger a structural
-rebuild (see `vmOnlyKeys`).
+rebuild. `mutedChannels`/`soloedChannels` live in `ds`, not `cm`, and are
+not among the `dataChanged` keys tm rebuilds on (§ Rebuild).
 
 ## Conventions
 
@@ -1343,7 +1372,7 @@ notes read them.
 Fixed records (externals, tagged `evt.fixed` by the externals step) keep their frozen
 onset — the same-pitch clamp skips them — but their tails clip like any
 other note, and their onsets appear as 'next' lookups so neighbours clip
-against them. The predicted fxNotes (`fxLive`) walk here too; a record
+against them. The predicted fxNotes (`fxOut.noteLive`) walk here too; a record
 with no token (a new fxNote) carries its clipped geometry into its
 `mm:add` rather than a tail assign, and the clips commit with the fxNote
 del/add in one modify.

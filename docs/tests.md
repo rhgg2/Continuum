@@ -59,7 +59,7 @@ Isolation between scenarios:
 
 Seeding: payload notes get `evType = 'note'`; a stamped note (ppqL
 present) is defaulted `lane = 1, detune = 0, delay = 0` because tm
-crashes at pickStampedLane otherwise; `ppqL` falls back to `ppq`
+crashes in `rebuildInternals` otherwise; `ppqL` falls back to `ppq`
 when only `endppqL` was given. `mm.seed`/`mm.dump` are harness-only
 shims on the handle — production mm has no such surface.
 

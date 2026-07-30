@@ -34,7 +34,7 @@ _G.reaper = fakeReaper
 util._stubs['midiManager'] = function(deps) return newRealMM(deps and deps.take) end
 
 -- Author a seed payload through the production write path. A stamped note
--- (ppqL set) must carry lane/detune/delay or tm crashes at pickStampedLane.
+-- (ppqL set) must carry lane/detune/delay or tm crashes in rebuildInternals.
 local function seedThrough(mm, payload)
   mm:modify(function()
     for _, n in ipairs(payload.notes or {}) do

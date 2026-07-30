@@ -1,4 +1,4 @@
-@module harness  src=tests/harness.lua  loc=147  sha=547ec2f  mode=namespace  self=harness
+@module harness  src=tests/harness.lua  loc=147  sha=f5042ce  mode=namespace  self=harness
 
 # Imports
   @const util = 'util'  @ 24
@@ -14,7 +14,7 @@
 # Private functions
   @fn seedThrough(mm, payload)  @ 38-52
       -- Author a seed payload through the production write path. A stamped note
-      -- (ppqL set) must carry lane/detune/delay or tm crashes at pickStampedLane.
+      -- (ppqL set) must carry lane/detune/delay or tm crashes in rebuildInternals.
   @fn buildMM(opts)  @ 58-85
       -- Fresh fakeReaper + a real mm bound to its take, carrying :seed/:dump shims.
       -- The shared spine of every scenario: harness.mk layers cm/tm/vm on top;

@@ -12,6 +12,15 @@ lines. Newest first. `/commit` prompts for one at commit time.
 Entries below 2026-07-27 predate that split, so some of them also
 appear in their design docs.
 
+- **2026-07-31** — docs/rebuild-ste.md is a deliberate second register for the rebuild pipeline: a
+  plain-language ASD-STE100 overview that duplicates docs/trackerManager.md Rebuild by design, with
+  that section named in its header as the authority and itself as the layer that goes stale. Kept
+  because a controlled-language pass is a readability instrument, not a second source of truth.
+  Separately, and learned the hard way in the same session: annotations do not carry hand-maintained
+  counts. The nine stages invariant on rebuildPipeline had drifted to eleven helpers with nobody
+  noticing, and now reads every mm-staging stage nests. A count maintained by hand is a claim that
+  goes stale silently, which is the failure mode the annotation layer exists to avoid.
+
 - **2026-07-31** — Spec tooth-testing gets its own machinery: spec_perturb applies hand-authored
   breakages to throwaway copies of the working tree and reports which ones a spec noticed, with four
   verdicts rather than two so that did-not-apply and broken can never be read as survivals.
