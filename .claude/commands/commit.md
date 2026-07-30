@@ -27,15 +27,6 @@ JSON
 
 ## The commit
 
-7. Spawn one subagent — Agent tool, `subagent_type: general-purpose`, `model: sonnet` — and hand it the headline. It owns everything else and does **not** spawn further subagents. Prompt it as follows. If the scope from step 1 is narrower than "all dirty files", amend the `git add -A` line correspondingly.
-
-> You are finishing a commit. Do these in order, then stop.
-> 1. `git status` and `git diff` to see what's landing.
-> 2. Comment-hygiene pass. If there are any `.lua` files dirty in the tree, run `tools/comment_hygiene.py` from the repo root. It flags `--invariant:`/`--contract:`/`--emits:`/`--reaper:` lines >100 chars, `--shape:` lines >400 chars, and contiguous WHY-comment runs >2 lines. Fix every violation it names; trim to load-bearing content, or move a longer WHY to `docs/<file>.md` with a one-line pointer at the site. Don't revert the comment or delete the WHY wholesale; the content must survive in compliant form. Touch only comments the script flags. Re-run until clean, then apply the fixes with `mcp__patches__apply_patches` (the only write tool available in this environment). Stage every fix from one hygiene run in a single call (`edits[]` spans files); call again only for what the next re-run turns up.
-> 3. `git add -A`.
-> 4. `git commit -m "<HEADLINE>"`, no commit body.
-> 5. Report the hygiene fixes (one line each) and the commit hash. Don't push, don't offer to.
->
->    If the user sent you instructions directly while you were working (a message mid-run, or hunk `feedback:` returned by `apply_patches`), say so explicitly in the report (call them "the user", not "you"): quote or paraphrase what they asked and what you did about it. The parent agent cannot see your conversation and will otherwise read the change as yours.
+7. Spawn one subagent — Agent tool, `subagent_type: commit-finisher` — and hand it the headline. The procedure lives in its definition (`.claude/agents/commit-finisher.md`), so the prompt needs only the headline, plus which paths to stage if the scope from step 1 is narrower than "all dirty files".
 
 8. When it returns, eyeball its summary; no need to re-audit.

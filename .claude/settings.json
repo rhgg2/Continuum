@@ -41,6 +41,15 @@
             "statusMessage": "Gathering command context..."
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/commit-agent-allow.py\""
+          }
+        ]
       }
     ],
     "PostToolUse": [

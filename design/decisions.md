@@ -12,6 +12,17 @@ lines. Newest first. `/commit` prompts for one at commit time.
 Entries below 2026-07-27 predate that split, so some of them also
 appear in their design docs.
 
+- **2026-07-31** — The /commit subagent's Bash commands are auto-approved by a PreToolUse hook keyed
+  on agent_id and agent_type, rather than by permissionMode: bypassPermissions on the agent
+  definition. A prefix allow-list in settings.json cannot do it: the agent varies the shape it
+  sends, and `python3 tools/comment_hygiene.py || echo done` matches no `Bash(python3 *)` rule. So
+  the hook parses the command and every segment of a compound must be recognised for the whole to be
+  allowed. bypassPermissions was the alternative and was rejected because the commit agent runs when
+  the tree is at its dirtiest, where an unchecked `git reset --hard` or `git checkout --` discards
+  work that may not be ours. Keeping the prompt for the unanticipated command is the whole point, so
+  the hook stays silent on anything it cannot fully parse — that costs one prompt, where an allow it
+  did not understand would cost the boundary.
+
 - **2026-07-31** — docs/rebuild-ste.md is a deliberate second register for the rebuild pipeline: a
   plain-language ASD-STE100 overview that duplicates docs/trackerManager.md Rebuild by design, with
   that section named in its header as the authority and itself as the layer that goes stale. Kept
