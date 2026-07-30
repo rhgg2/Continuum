@@ -12,6 +12,14 @@ lines. Newest first. `/commit` prompts for one at commit time.
 Entries below 2026-07-27 predate that split, so some of them also
 appear in their design docs.
 
+- **2026-07-31** — Spec tooth-testing gets its own machinery: spec_perturb applies hand-authored
+  breakages to throwaway copies of the working tree and reports which ones a spec noticed, with four
+  verdicts rather than two so that did-not-apply and broken can never be read as survivals.
+  Perturbations are authored rather than generated and no score is emitted -- a site's annotations
+  already name their own mutations, where a generated matrix would buy equivalent-mutant noise and a
+  number that becomes the target. It lives in a non-always-loaded MCP server, since the check is
+  occasional and the always-loaded tool list is charged to every session.
+
 - **2026-07-30** — The deferred mmBatch is gone as a shape, not a cadence: what decided it is that a
   table shared along the pipeline is inspectable data, while a closure shared along the pipeline is
   an opaque capability — upvalue arrays no reader can consult, commit authority far from the staging

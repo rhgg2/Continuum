@@ -152,6 +152,55 @@ A spec file returns an array of
 (`pending = 'reason'` parks one) and must be listed in `run.lua`'s
 spec table or it never runs.
 
+## Perturbation
+
+`mcp__continuum_perturb__spec_perturb` tooth-tests a spec: it takes a
+batch of hand-authored breakages, applies each to its own throwaway
+copy of the working tree, and reports whether the spec noticed. Green
+means the spec is toothless, so the report is phrased in kills and
+survivals rather than passes and failures.
+
+It exists because a verdict is evidence about the run, not the
+mechanism. A spec can be green because the case never filled the
+batch, because an earlier assertion stopped the run, or because the
+named mechanism was never entered — and reading the spec cannot tell
+you which. Breaking the mechanism and watching the verdict move can.
+
+Four verdicts, and the two that are neither kill nor survival exist so
+that a green run can never be read as a finding:
+
+- **did-not-apply** — the `old` string wasn't found exactly once, so
+  nothing was perturbed. Without this verdict a typo'd search string
+  runs a pristine tree, passes, and reads as "your spec has no teeth".
+- **broken** — the perturbed tree doesn't load, so the run never
+  reached the tests. `run.lua` requires its specs outside the per-test
+  `xpcall`, so this arrives as no summary line at all rather than as
+  failures.
+
+The batch pre-flights the filter against an unperturbed copy and
+aborts if it matches no tests or is already red, because a kill can't
+be attributed to a perturbation in either case. A survival escalates
+to the whole suite, which separates "nothing anywhere catches this"
+from "the teeth are in some other spec".
+
+Perturbations are authored, never generated: each is a hypothesis
+about what the spec claims to pin, and the annotations at the site are
+usually the menu — `--contract: > tol keeps, == tol collapses` names
+its own mutation. Generating mutants instead would buy
+equivalent-mutant noise and a score that becomes the target.
+
+Teeth are directional, so a stub is a choice of direction rather than
+a neutral null. Stubbing `generators.thinCurve` to return its input
+untouched kills 3 of its 10 tests; stubbing it to keep only the
+endpoints kills 8. The seven that survive the first are not weak
+tests — they assert *preservation* ("keeps a spike whose vertical
+error exceeds the tolerance"), which an identity function satisfies
+honestly. A spec can be fully toothed against over-thinning and blind
+to under-thinning, and no single stub vets it. This is also why
+red-first proves so little on a new feature: the nil call aborts each
+test before any assertion runs, so all ten go red for a reason
+unrelated to what they check.
+
 ## Gotchas
 
 - **One live scenario at a time.** `mk()` swaps `_G.reaper`; an

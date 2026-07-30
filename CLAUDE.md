@@ -63,11 +63,11 @@ true now.
 
 ## Thoughts on design narration
 
-Design docs typically adopt the impersonal present tense, with no
-hedges and no speaker. This is fine for conveying where a design
-stands today, but founders when revisions are needed; it is hard to
-honour the intent of the design, as this is often not reconstructible
-from the visible edifice.
+Most design docs adopt the impersonal present tense, with no hedges
+and no speaker. This is fine for conveying where a design stands
+today, but founders when revisions are needed; it is hard to honour
+the intent of the design, as this is often not reconstructible from
+the visible edifice.
 
 A shape I find more honest and more useful is a plausible
 re-narration: a viable path to the design, possibly not the path
@@ -116,9 +116,16 @@ immensely; it's often also the thing a red spec can pin.
 
 ## Tests
 
-- **The basics** — `mcp__continuum_tests__lua_test_run`. Test specs live
-  in `tests/specs/` and register in `tests/run.lua`. Bugfixes go
-  red-first; refactors pin the invariant.
+- **The basics** — `mcp__continuum_tests__lua_test_run`. Test specs
+  live in `tests/specs/` and register in `tests/run.lua`. Bugfixes go
+  red-first; refactors pin the invariant. For new features, an
+  effective red-first stubs the function, so the red comes from an
+  assertion rather than a nil call.
+
+- **Tooth-testing a green spec** — `mcp__continuum_perturb__spec_perturb`
+  applies authored breakages to throwaway copies of the tree and
+  reports which ones the spec noticed. Good for the tests a blunt
+  red-first can't prove effective.
 
 - **Test maps** — `map/specs/<spec>.map` outlines each spec (intent,
   cases, harness surface) and `map_query`'s `usedby` includes them, so

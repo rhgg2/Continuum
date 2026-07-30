@@ -37,6 +37,15 @@
         "--script",
         ".claude/mcp/reaper/server.py"
       ]
+    },
+    "continuum_perturb": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--quiet",
+        "--script",
+        ".claude/mcp/perturb/server.py"
+      ]
     }
   }
 }
