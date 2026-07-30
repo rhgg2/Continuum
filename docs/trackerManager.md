@@ -698,13 +698,15 @@ fx expansion, whose producer bucket is `fxWindow`'s keys plus `channels[chan].pa
 ran such a host's chain twice and `foldChains` summed the two pb curves into one of twice the
 authored depth. That is why the declaration sits at the writer and the dedupe is gone.
 
-`freezeRegion`'s resync drops the frozen producer's windows from `prevWindows` (the
-seat-recognition baseline) by matching them against the newly computed set. The match has to be
-one-for-one, not set-membership: `prevWindows` carries no producer identity, so two producers that
+`freezeRegion`'s resync drops the frozen producer's entries from `prevWindows` (the
+seat-recognition baseline) by their stamped `id`: every window `parkWindows` emits carries its
+producer's uuid. The stamp is identity for subtraction only — seat recognition still matches on
+spans, so nothing downstream reads it. Matching by value could not do this job: two producers that
 happen to emit identical windows (a same-target overlap, or two on-take hosts riding the same fx)
-are indistinguishable by value, and consuming every match on a shared value would take a surviving
-neighbour's entry too — the next rebuild would then read that entry as newly created and park its
-seats off-take as though they were freshly authored rather than carried forward.
+are indistinguishable by value, and taking a surviving neighbour's entry would make the next rebuild
+read its seats as freshly authored and park them off-take. The `id` drop also holds where value
+matching frayed: a persisted window that no longer recomputes field-for-field (a kind deregistered,
+a clipping context changed) still leaves with its producer.
 
 ### Derivation dirt: the gated spine
 

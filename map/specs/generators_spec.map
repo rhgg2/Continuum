@@ -1,4 +1,4 @@
-@spec generators_spec  src=tests/specs/generators_spec.lua  loc=483  sha=a17676d  cases=31
+@spec generators_spec  src=tests/specs/generators_spec.lua  loc=483  sha=a7ce190  cases=31
 @exercises generators (generators), tuning (tuning)
 @surface   generators.retarget, generators.fieldRange, tuning.findTemper, tuning.transposeStep, tuning.stepsBetween
 
@@ -77,6 +77,7 @@
   @field r field  @ 170,173,174
   @field r fields  @ 172
   @field w fx  @ 130,131,132,141,142,143,144,221
+  @field w id  @ 148,149,150
   @field w kind  @ 21,25,70,101,119,130,131,141,142,143,160,161
   @field w kind  @ 162,169,173,174,181,190,192,210,212,221,236,258
   @field w kind  @ 275,291,292,306,307,320,321,340,348,366,373,390
@@ -128,6 +129,7 @@
   @field w step  @ 99,101,117,119,335,364,385,416
   @field w stepsBetween  @ 336,363,386,416
   @field w target  @ 21,70
+  @field w uuid  @ 141,142,143
   @field r val  @ 43,44,46,47,55,63,72,239,240,241,243,432
   @field r val  @ 433,436,437,450,452,463,465
   @field w val  @ 26,27,28,478

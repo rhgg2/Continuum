@@ -138,16 +138,16 @@ return {
     run = function()
       generators.kinds.ccrep = { mode = 'replace', dest = 10 }   -- fixture: no built-in cc-replace kind
       local windows = generators.parkWindows{
-        { chan = 1, startppq = 0,  endppq = 240, fx = { { kind = 'arp' } } },     -- discrete replace -> note window
-        { chan = 3, startppq = 60, endppq = 120, fx = { { kind = 'ccrep' } } },   -- cc target (replace) -> cc window
-        { chan = 5, startppq = 0,  endppq = 240, fx = { { kind = 'sine' } } },    -- pb augment -> pb window
-        { chan = 7, fx = {} },                                                    -- husk -> neither
+        { chan = 1, startppq = 0,  endppq = 240, uuid = 'chord', fx = { { kind = 'arp' } } },   -- discrete replace -> note window
+        { chan = 3, startppq = 60, endppq = 120, uuid = 'rep',   fx = { { kind = 'ccrep' } } }, -- cc target (replace) -> cc window
+        { chan = 5, startppq = 0,  endppq = 240, uuid = 'wave',  fx = { { kind = 'sine' } } },  -- pb augment -> pb window
+        { chan = 7, fx = {} },                                                                  -- husk -> neither
       }
       generators.kinds.ccrep = nil
       t.deepEq(windows, {
-        { evType = 'note', chan = 1, startppq = 0, endppq = 240 },
-        { evType = 'cc', chan = 3, cc = 10, startppq = 60, endppq = 120 },
-        { evType = 'pb', chan = 5, startppq = 0, endppq = 240 },
+        { evType = 'note', chan = 1, id = 'chord', startppq = 0, endppq = 240 },
+        { evType = 'cc', chan = 3, cc = 10, id = 'rep', startppq = 60, endppq = 120 },
+        { evType = 'pb', chan = 5, id = 'wave', startppq = 0, endppq = 240 },
       }, 'note for the discrete chord, cc for the cc target, pb for the augment gesture')
     end,
   },

@@ -2145,6 +2145,8 @@ return {
       local windows = h.ds:get('prevWindows') or {}
       t.eq(#windows, 1, 'one producer, one entry')
       t.eq(windows[1] and windows[1].evType, 'pb', 'the sine arm -- a note host seats no note window')
+      t.eq(windows[1] and windows[1].id, h.tm:getChannel(1).parked[1].uuid,
+           "stamped with its producer's identity")
     end,
   },
 
@@ -2172,8 +2174,8 @@ return {
   },
 
   {
-    -- Freeze drops the frozen producer's own windows from the baseline, matched one for one: an
-    -- identical window that belongs to someone else stays. see design/fx-freeze.md
+    -- Freeze drops the frozen producer's own baseline entries by their stamped id: an identical
+    -- window that belongs to someone else stays. see design/fx-freeze.md
     name = 'freeze (identical-window neighbour): the survivor keeps its window and its curve',
     run = function(harness)
       local h = harness.mk()
@@ -2187,10 +2189,13 @@ return {
 
       t.truthy(h.tm:freezeRegion(uuid), 'the freeze reports success')
 
-      t.eq(#(h.ds:get('prevWindows') or {}), 1, "only the frozen host's window leaves the baseline")
+      local baseline = h.ds:get('prevWindows') or {}
+      t.eq(#baseline, 1, "only the frozen host's window leaves the baseline")
       t.falsy(h.ds:get('fxParked'), "the survivor's window is not newly created, so it sweeps nothing")
       local survivor = h.tm:getChannel(1).columns.notes[2].events[1]
       t.truthy(survivor and survivor.fx, 'the neighbour keeps its chain')
+      t.eq(baseline[1] and baseline[1].id, survivor and survivor.uuid,
+           "the surviving entry carries the neighbour's identity, not just its value")
       local pbs = 0
       for _, c in ipairs(h.fm:dump().ccs) do
         if c.evType == 'pb' and c.chan == 1 then pbs = pbs + 1 end

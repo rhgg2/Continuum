@@ -1,4 +1,4 @@
-@module generators  src=generators.lua  loc=562  sha=a7ce190  mode=namespace  self=generators
+@module generators  src=generators.lua  loc=563  sha=d2d9d10  mode=namespace  self=generators
 
 # Invariants & contracts
   @invariant  pure module, no state; a stage is fn(stream, host, params, ctx) -> { notes, delta }  @ 6
@@ -19,7 +19,7 @@
   @shape  field = { field, label, widget, base?, coarse?, min?, max?, options?, when?, kind?, poly?, quantity?='magnitude', signed?, frac? }  @ 14
   @shape  fxPatterns (ds project) = { [name] = { kind='notes'|'curve', lengthPpq, rpb=rowsPerBeat, root?=midiPitch, specs?={ {lane,ppq,endppq,pitch,vel,detune,delay,sample?},.. }, points?={ {ppq,val,shape,tension?},.. } } }  @ 18
   @shape  destProfile = { unit, rest, bipolar, magScale } -- continuous dests only ('pb' | cc number)  @ 419
-  @shape  parkWindows -> { {evType='note'|'cc'|'pb', chan, cc?, startppq, endppq}, ... } (cc on cc windows only)  @ 538
+  @shape  parkWindows -> { {evType='note'|'cc'|'pb', chan, cc?, id, startppq, endppq}, ... } (cc on cc windows only)  @ 538
 
 # Imports
   @const util = 'util'  @ 22
@@ -109,7 +109,7 @@
   @api generators.chainDestType(fx, target)  @ 530-536
       -- The fold mode a chain presents for one continuous target: replace if any stage targeting it
       -- replaces, else augment -- drives cross-chain layering (a later replace wins). see design/note-macros-v2.md § The fx chain
-  @api generators.parkWindows(regions)  @ 541-560
+  @api generators.parkWindows(regions)  @ 541-561
       -- The single source for "what 4.5 parks over": a note window for a discrete-replace chord, a cc window
       -- per continuous cc target and a pb window per continuous pb target (both replace or augment).
 
@@ -153,8 +153,8 @@
   @field w dir  @ 344
   @field w display  @ 395
   @field w domain  @ 395
-  @field r endppq  @ playingAt:82 ostinato:140 chordStamp:170 velPattern:303 parkWindows:545
-  @field w endppq  @ retrig:44 trill:68 arp:117 ostinato:142 chordStamp:170 velPattern:303 parkWindows:545
+  @field r endppq  @ playingAt:82 ostinato:140 chordStamp:170 velPattern:303 parkWindows:546
+  @field w endppq  @ retrig:44 trill:68 arp:117 ostinato:142 chordStamp:170 velPattern:303 parkWindows:546
   @field w evType  @ parkWindows:544
   @field w expand  @ 327,335,343,351,358,365,375,386,393
   @field r field  @ seed:486 retarget:501
@@ -166,10 +166,11 @@
   @field w fieldsFor  @ fieldsFor:470
   @field r frac  @ seed:484,486
   @field w frac  @ 370,400,402
-  @field r fx  @ parksNotes:511 parkWindows:551
-  @field r kind  @ destOf:426 fieldsFor:471,472 retarget:500 parksNotes:512 continuousTargets:522 chainDestType:532 parkWindows:552
+  @field r fx  @ parksNotes:511 parkWindows:552
+  @field w id  @ parkWindows:545
+  @field r kind  @ destOf:426 fieldsFor:471,472 retarget:500 parksNotes:512 continuousTargets:522 chainDestType:532 parkWindows:553
   @field w kind  @ 352,354,359,361,395,397 seed:482
-  @field r kinds  @ destOf:426 destsFor:448 fieldsFor:471 seed:481 retarget:500 parksNotes:512 continuousTargets:522 chainDestType:532 parkWindows:552
+  @field r kinds  @ destOf:426 destsFor:448 fieldsFor:471 seed:481 retarget:500 parksNotes:512 continuousTargets:522 chainDestType:532 parkWindows:553
   @field w kinds  @ 325
   @field w l  @ 316,317,318,319,320,321,322
   @field w l  @ 323
@@ -189,7 +190,7 @@
   @field r mode  @ chainDestType:533
   @field w mode  @ 327,335,343,351,358,365,375,386,393
   @field r nextSameLaneNote  @ slide:217
-  @field r noteHost  @ parkWindows:550
+  @field r noteHost  @ parkWindows:551
   @field r notes  @ retrig:36 trill:58 arp:113 ostinato:141 chordStamp:166 slide:213 velPattern:293
   @field w notes  @ retrig:37,51 trill:59,75 arp:124 ostinato:132,149 chordStamp:159,164,174 sine:199 slide:218
   @field w notes  @ slide:225,240 lfo:263,286 velPattern:307
@@ -237,8 +238,8 @@
   @field w slide  @ 374
   @field r specs  @ ostinato:137 chordStamp:158
   @field w specs  @ 352,359
-  @field r startppq  @ parkWindows:545
-  @field w startppq  @ parkWindows:545
+  @field r startppq  @ parkWindows:546
+  @field w startppq  @ parkWindows:546
   @field r step  @ trill:61
   @field w step  @ 336
   @field r target  @ slide:215 382
@@ -247,6 +248,7 @@
   @field w tension  @ lfo:273,279
   @field w trill  @ 334
   @field w unit  @ destProfile:433,437
+  @field r uuid  @ parkWindows:545
   @field w v  @ 316,317,318,319,320,321,322
   @field w v  @ 323
   @field r val  @ curveAt:245,250,253 lfo:279

@@ -535,13 +535,14 @@ function generators.chainDestType(fx, target)
   return 'augment'
 end
 
---shape: parkWindows -> { {evType='note'|'cc'|'pb', chan, cc?, startppq, endppq}, ... } (cc on cc windows only)
+--shape: parkWindows -> { {evType='note'|'cc'|'pb', chan, cc?, id, startppq, endppq}, ... } (cc on cc windows only)
 -- The single source for "what 4.5 parks over": a note window for a discrete-replace chord, a cc window
 -- per continuous cc target and a pb window per continuous pb target (both replace or augment).
 function generators.parkWindows(regions)
   local windows = {}
   local function window(evType, region, cc)
     util.add(windows, { evType = evType, chan = region.chan, cc = cc,
+                        id = region.uuid,
                         startppq = region.startppq, endppq = region.endppq })
   end
   for _, region in ipairs(regions) do

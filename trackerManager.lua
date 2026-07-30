@@ -1633,7 +1633,7 @@ local function freezeRegion(uuid)
   local stash, keptParked = ds:get('fxParked') or {}, {}
 
   -- The other producer shape: a note carrying its own chain, parked or still on the take, resolves
-  -- through noteHostRegion, producerCensus's own builder -- so windows match prevWindows field-for-field, or the next rebuild sweeps the seats.
+  -- through noteHostRegion, producerCensus's own builder.
   local hostSpec, onTakeHost, hostRegion
   if not region then
     for _, spec in ipairs(stash) do
@@ -1658,7 +1658,7 @@ local function freezeRegion(uuid)
   -- destroys it. A continuous-only chain leaves the note where it is.
   local destroysHost = hostRegion and generators.parksNotes(hostRegion)
 
-  -- The same producer that built prevWindows, so entries compare field-for-field below.
+  -- Recomputed for coverage only: covered() below is the sole reader.
   local windows = generators.parkWindows({ frozen })
   -- Window membership only, never rebuildRegionPark's covered(): its first clause answers "does this
   -- spec park itself", true of every self-parked note host on the channel, and would take theirs too.
@@ -1708,15 +1708,11 @@ local function freezeRegion(uuid)
     elseif not drop then util.add(keptParked, spec) end
   end
 
-  -- One for one, not by value: a neighbouring producer can hold a window identical to the frozen
-  -- one, and consuming every match would strand its entry. See docs/trackerManager.md § Park window census.
-  local prevWindows, keptWindows, claimed = ds:get('prevWindows') or {}, {}, {}
+  -- By stamped id, not window value: a neighbouring producer can hold a window identical to the
+  -- frozen one, and identity keeps them apart. See docs/trackerManager.md § Park window census.
+  local prevWindows, keptWindows = ds:get('prevWindows') or {}, {}
   for _, w in ipairs(prevWindows) do
-    local mine
-    for i, fw in ipairs(windows) do
-      if not claimed[i] and util.deepEq(w, fw) then mine = i; break end
-    end
-    if mine then claimed[mine] = true else util.add(keptWindows, w) end
+    if w.id ~= uuid then util.add(keptWindows, w) end
   end
 
   -- ds:get hands back a copy of its cache slot, so an emptied array reads back as a truthy {}:
