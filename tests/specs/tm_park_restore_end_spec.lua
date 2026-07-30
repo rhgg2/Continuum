@@ -7,7 +7,7 @@
 -- Case 1 holds the restore's authored ceiling and its actual bound at the same number,
 -- so it cannot see an end that is written once and never corrected. Case 2 separates
 -- them with a clipping lane neighbour: ceiling raw 619, bound raw 379.
--- see design/rebuild-commit-cadence.md § The suite does not discriminate any of this
+-- see design/archive/rebuild-commit-cadence.md § The suite does not discriminate any of this
 
 local t    = require('support')
 local util = require('util')

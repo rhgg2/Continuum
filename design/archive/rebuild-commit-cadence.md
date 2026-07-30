@@ -1,6 +1,7 @@
 # rebuild commit cadence — mm:batch made deferral cheap; is it still earning it?
 
-> opened: 2026-07-29 · status: in flight — `plan/rebuild-commit-cadence.md`
+> opened: 2026-07-29 · closed: 2026-07-30 · status: landed in full —
+> `plan/archive/rebuild-commit-cadence.md`
 >
 > Findings under § Findings are from reading. § Spike results are
 > measured, and they retire most of § Plan — read them first.

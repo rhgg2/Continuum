@@ -3889,7 +3889,7 @@ local function rebuildTails(noteLive, deferred)
   -- the clip pass runs. Clips only touch endppq — safe to batch with adds.
   clampWrites.commit()
   -- Deferred to here so a fresh fx spec reaches mm once, already clipped, staging no assign --
-  -- delete-first still holds. See design/rebuild-commit-cadence.md § D4.
+  -- delete-first still holds. See design/archive/rebuild-commit-cadence.md § D4.
   deferred.commit()
 end
 

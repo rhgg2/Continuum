@@ -1,7 +1,7 @@
 # rebuild commit cadence — plan
 
-> source: `design/rebuild-commit-cadence.md` — synthesis compiled from
-> there; don't design here.
+> source: `design/archive/rebuild-commit-cadence.md` — synthesis compiled
+> from there; don't design here.
 
 ## Phases
 

@@ -1,4 +1,4 @@
-@spec tm_park_restore_end_spec  src=tests/specs/tm_park_restore_end_spec.lua  loc=110  sha=e90a976  cases=2
+@spec tm_park_restore_end_spec  src=tests/specs/tm_park_restore_end_spec.lua  loc=110  sha=8150247  cases=2
 @exercises trackerManager (h.tm), midiManager (h.fm), dataStore (h.ds)
 @surface   tm:addEvent, tm:flush, fm:dump, ds:assign, tm:rebuild, tm:getChannel
 @harness   mk
@@ -13,7 +13,7 @@
   Case 1 holds the restore's authored ceiling and its actual bound at the same number,
   so it cannot see an end that is written once and never corrected. Case 2 separates
   them with a clipping lane neighbour: ceiling raw 619, bound raw 379.
-  see design/rebuild-commit-cadence.md § The suite does not discriminate any of this
+  see design/archive/rebuild-commit-cadence.md § The suite does not discriminate any of this
 
 # Helpers
   @fn findBy(list, key, value)  @ 18-20
