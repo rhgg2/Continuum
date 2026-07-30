@@ -1,7 +1,7 @@
 #!/usr/bin/env -S uv run --quiet --script
 # /// script
 # requires-python = ">=3.10"
-# dependencies = ["mcp>=1.2"]
+# dependencies = ["mcp>=1.2,<2"]
 # ///
 """Reaper eval bridge MCP server.
 
@@ -11,7 +11,7 @@ returns the rendered result. This closes the fake/real gap for REAPER-specific
 behaviour (playback stranding, take round-trips, API layout quirks) that
 harness tests can't observe. See docs/bridge.md for the model.
 
-Sister servers: readium_docs, readium_tests. Same uv-script idiom.
+Sister servers: continuum_map, reaper_docs, continuum_tests. Same uv-script idiom.
 """
 
 from __future__ import annotations

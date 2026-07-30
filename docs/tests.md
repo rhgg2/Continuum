@@ -146,7 +146,7 @@ stamping uuids at flush the way REAPER does.
 ## Running and registering
 
 `lua tests/run.lua [filter]` (plain substring match on
-`spec :: test name`); in-session, `mcp__readium_tests__lua_test_run`.
+`spec :: test name`); in-session, `mcp__continuum_tests__lua_test_run`.
 A spec file returns an array of
 `{ name, run = function(harness) … end }` entries
 (`pending = 'reason'` parks one) and must be listed in `run.lua`'s

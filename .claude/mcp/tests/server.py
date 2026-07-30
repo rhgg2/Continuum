@@ -1,18 +1,18 @@
 #!/usr/bin/env -S uv run --quiet --script
 # /// script
 # requires-python = ">=3.10"
-# dependencies = ["mcp>=1.2"]
+# dependencies = ["mcp>=1.2,<2"]
 # ///
-"""Readium test-runner MCP server.
+"""Continuum test-runner MCP server.
 
 One tool: lua_test_run. Wraps `lua tests/run.lua` and returns a focused
 failures-only report with file:line jumps. Unfiltered runs also record
 .claude/test-baseline.json, which the SessionStart hook reports so a green
 suite need not be re-run to be known.
 
-Split off from the original single-server `readium`. Sister server:
-readium_docs (reaper_doc_lookup, map_query). Batched writes are
-handled by the global `patches` server (mcp__patches__apply_patches).
+Sister servers: continuum_map (map_query), reaper_docs (reaper_doc_lookup),
+reaper (reaper_eval). Batched writes are handled by the global `patches`
+server (mcp__patches__apply_patches).
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ ArgModelBase.model_config = ConfigDict(arbitrary_types_allowed=True, extra='forb
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 BASELINE_PATH = PROJECT_ROOT / ".claude" / "test-baseline.json"
 
-mcp = FastMCP("readium_tests")
+mcp = FastMCP("continuum_tests")
 
 
 _SUMMARY = re.compile(r"^(\d+) passed, (\d+) failed", re.MULTILINE)

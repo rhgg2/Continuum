@@ -1,6 +1,16 @@
 {
   "mcpServers": {
-    "readium_docs": {
+    "continuum_map": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--quiet",
+        "--script",
+        ".claude/mcp/map/server.py"
+      ],
+      "alwaysLoad": true
+    },
+    "reaper_docs": {
       "command": "uv",
       "args": [
         "run",
@@ -9,14 +19,15 @@
         ".claude/mcp/docs/server.py"
       ]
     },
-    "readium_tests": {
+    "continuum_tests": {
       "command": "uv",
       "args": [
         "run",
         "--quiet",
         "--script",
-        ".claude/mcp/test_runner/server.py"
-      ]
+        ".claude/mcp/tests/server.py"
+      ],
+      "alwaysLoad": true
     },
     "reaper": {
       "command": "uv",

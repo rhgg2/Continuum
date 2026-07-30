@@ -3,7 +3,7 @@
 
 The suite is deterministic and takes ~20s, so a session opening on an untouched
 tree can take the previous run's result instead of re-running to learn the same
-thing. The record is written by the readium_tests MCP server, unfiltered runs only.
+thing. The record is written by the continuum_tests MCP server, unfiltered runs only.
 
 The staleness check is the whole job. The baseline holds exactly when no file the
 suite reads has been touched since the run *started*, so anything that stops that

@@ -31,7 +31,7 @@ Two structural complaints, one file:
   flag the niceness as a comment in your final report, not in code.
 - No spec covers this file (only `gm_wiring_spec` exists, which is
   groupManager's). Verification = full suite green after every stage
-  (`mcp__readium_tests__lua_test_run` — catches syntax/load breakage)
+  (`mcp__continuum_tests__lua_test_run` — catches syntax/load breakage)
   plus Richard manually exercising the page (checklist at the bottom).
   Do not write renderer specs as part of this work.
 - Three stages, each independently landable. Stop after each stage,

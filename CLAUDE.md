@@ -23,7 +23,7 @@ editor) rather than sitting atop it: it builds the substack and drives
 lifecycle on the layer that owns it. So the adjacent-layer rule above
 governs calls *within* the chain, not the page's reach into it. There
 are also many cross-cutting services; the live module set and how
-they connect can be found using `mcp__readium_docs__map_query`.
+they connect can be found using `mcp__continuum_map__map_query`.
 
 Two critical concepts in the tracker stack:
 
@@ -68,7 +68,7 @@ true now.
   current even for a file you opened weeks ago; `docs/<file>.md` for
   the WHY.
 
-- **Cross-module navigation — `mcp__readium_docs__map_query`.** Faster
+- **Cross-module navigation — `mcp__continuum_map__map_query`.** Faster
   and more complete than grepping `map/*.map`; its schema documents
   the filters, query syntax and return shape. Gotchas on top of the
   schema: `uses`/`usedby` resolve receivers through the file's alias
@@ -84,7 +84,7 @@ true now.
   declarations count as writes, so producer sites are covered.
   Omitting `module` gives the repo-wide blast radius, specs included.
 
-- **Framework docs** — `mcp__readium_docs__reaper_doc_lookup` reads
+- **Framework docs** — `mcp__reaper_docs__reaper_doc_lookup` reads
   the parsed ReaScript/ReaImGui entries. Falling back to grep over the
   bundled HTML is fine when a name is missing from them.
 
@@ -97,7 +97,7 @@ true now.
 
 ## Tests
 
-- **The basics** — `mcp__readium_tests__lua_test_run`. Test specs live
+- **The basics** — `mcp__continuum_tests__lua_test_run`. Test specs live
   in `tests/specs/` and register in `tests/run.lua`. Bugfixes go
   red-first; refactors pin the invariant.
 
