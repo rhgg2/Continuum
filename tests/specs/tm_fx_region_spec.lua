@@ -1878,6 +1878,7 @@ return {
       t.eq(#derivedNotes(h), 4, 'the arp seats four steps over the parked triad')
       t.deepEq(authoredPitches(h), {}, 'and the triad itself is off the take')
 
+      t.truthy(h.tm:freezeEligible('fxr-1'), 'the eligibility map agrees nothing refuses this')
       t.truthy(h.tm:freezeRegion('fxr-1'), 'the freeze reports success')
 
       t.deepEq(authoredPitches(h), { 60, 60, 64, 67 }, 'the derived steps are authored MIDI now')
@@ -2118,6 +2119,7 @@ return {
       addNote(h)
       injectRegion(h)   -- a live region over the same span must not be swept by a miss
       local uuid = h.tm:getChannel(1).columns.notes[1].events[1].uuid
+      t.falsy(h.tm:freezeEligible(uuid), 'no chain: absent from the producer census, absent from the map')
       t.falsy(h.tm:freezeRegion(uuid), 'a note carrying no chain is not a host')
       t.deepEq(authoredPitches(h), { 60 }, 'the note stands')
       t.eq(#(h.ds:get('fxRegions') or {}), 1, 'and so does the region')
@@ -2190,6 +2192,8 @@ return {
       local regions, windows, parked =
         h.ds:get('fxRegions'), h.ds:get('prevWindows'), h.ds:get('fxParked')
 
+      t.falsy(h.tm:freezeEligible('fxr-1'), 'the map refuses the earlier region')
+      t.falsy(h.tm:freezeEligible('fxr-2'), 'and the later')
       t.falsy(h.tm:freezeRegion('fxr-1'), 'the earlier region is refused')
       t.falsy(h.tm:freezeRegion('fxr-2'), 'and so is the later one')
 
@@ -2213,6 +2217,8 @@ return {
       local lanes = h.tm:getChannel(1).columns.notes
       t.eq(#(h.ds:get('prevWindows') or {}), 2, 'two on-take hosts, two identical pb windows')
 
+      t.falsy(h.tm:freezeEligible(lanes[1].events[1].uuid), 'the map refuses the first host')
+      t.falsy(h.tm:freezeEligible(lanes[2].events[1].uuid), 'and its chord-mate')
       t.falsy(h.tm:freezeRegion(lanes[1].events[1].uuid), 'the first host is refused')
       t.falsy(h.tm:freezeRegion(lanes[2].events[1].uuid), 'and so is its chord-mate')
 
@@ -2234,6 +2240,8 @@ return {
         { uuid = 'fxr-2', chan = 1, startppq = 240, endppq = 480, fx = sine30 },
       })
       h.tm:rebuild()
+      t.falsy(h.tm:freezeEligible('fxr-1'), 'the map refuses the earlier pb region')
+      t.falsy(h.tm:freezeEligible('fxr-2'), 'and the later -- the boundary seat is shared')
       t.falsy(h.tm:freezeRegion('fxr-1'), 'the earlier pb region is refused')
       t.falsy(h.tm:freezeRegion('fxr-2'), 'and so is the later -- the boundary seat is shared')
 
@@ -2244,6 +2252,8 @@ return {
         { uuid = 'fxr-2', chan = 1, startppq = 240, endppq = 480, fx = sineCc },
       })
       h2.tm:rebuild()
+      t.truthy(h2.tm:freezeEligible('fxr-1'), 'the map clears both abutting cc regions')
+      t.truthy(h2.tm:freezeEligible('fxr-2'), 'cc coverage is half-open, so neither refuses')
       t.truthy(h2.tm:freezeRegion('fxr-1'), 'abutting cc windows are disjoint, so the freeze runs')
     end,
   },
@@ -2260,10 +2270,13 @@ return {
       injectArp(h)   -- note-replace over the same span: the region parks the sine host
       local uuid = h.tm:getChannel(1).parked[1].uuid
 
+      t.falsy(h.tm:freezeEligible('fxr-1'), 'the map refuses the covering region')
+      t.truthy(h.tm:freezeEligible(uuid), 'but clears the covered host itself')
       t.falsy(h.tm:freezeRegion('fxr-1'), 'refused while it covers a producing host')
 
       t.truthy(h.tm:freezeRegion(uuid), "the host freezes -- its own pb window overlaps nobody's")
       t.falsy(stashOfType(h, 'note')[1].fx, 'and stays parked, stripped of the chain')
+      t.truthy(h.tm:freezeEligible('fxr-1'), "the host's freeze-rebuild moved the map")
       t.truthy(h.tm:freezeRegion('fxr-1'), 'with no producer left under it, the region freezes')
     end,
   },
@@ -2282,6 +2295,7 @@ return {
       local uuid = h.tm:getChannel(1).parked[1].uuid
       injectArp(h, { startppq = 120, endppq = 360 })
 
+      t.falsy(h.tm:freezeEligible(uuid), 'the map refuses the note-dest host under the note window')
       t.falsy(h.tm:freezeRegion(uuid), 'the trill host is refused')
       t.truthy(stashOfType(h, 'note')[1].fx, 'and keeps its chain, still parked')
     end,
@@ -2300,6 +2314,7 @@ return {
       h.tm:rebuild()
       t.eq(#(h.ds:get('prevWindows') or {}), 2, 'two producers, two pb windows on the same target')
 
+      t.truthy(h.tm:freezeEligible('fxr-1'), 'disjoint windows: the map clears the freeze')
       t.truthy(h.tm:freezeRegion('fxr-1'), 'the freeze reports success')
 
       local baseline = h.ds:get('prevWindows') or {}
@@ -2320,6 +2335,7 @@ return {
       injectRegion(h, { fx = { sine30[1],
                                { kind = 'sine', period = { 1, 2 }, depth = 20, onset = 0 } } })
       t.eq(#(h.ds:get('prevWindows') or {}), 2, 'one producer, two pb windows')
+      t.truthy(h.tm:freezeEligible('fxr-1'), 'mine is never held against itself in the map either')
       t.truthy(h.tm:freezeRegion('fxr-1'), 'its own windows are not a neighbour')
     end,
   },
@@ -2338,10 +2354,36 @@ return {
       h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 67, vel = 100,
                       detune = 0, delay = 0, lane = 2, fx = sine30 })
 
+      -- Pinned seam, not an aspiration: the map reads the last rebuild's census, where the staged
+      -- host does not exist, while the verb settles first and sees it. In exactly this divergence the
+      -- verb's flush lands the pending op inside its undo block, so the block is non-empty anyway.
+      t.truthy(h.tm:freezeEligible('fxr-1'), 'the staged neighbour is invisible to the map')
       t.falsy(h.tm:freezeRegion('fxr-1'), 'the pending host is a same-target neighbour: refused')
 
       t.eq(#(h.ds:get('fxRegions') or {}), 1, 'the region stands')
       t.eq(#h.tm:getChannel(1).columns.notes[2].events, 1, 'and the staged host is on the take')
+    end,
+  },
+
+  {
+    -- Rebuild output, not a cache with invalidation: the map is replaced wholesale at each rebuild's
+    -- coherence point, so it moves exactly when the census can. see design/fx-freeze.md § Eligibility gates
+    name = 'freeze eligibility: the map moves with rebuild',
+    run = function(harness)
+      local h = harness.mk()
+      h.ds:assign('fxRegions', {
+        { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = sine30 },
+        { uuid = 'fxr-2', chan = 1, startppq = 0, endppq = 240, fx = sine30 },
+      })
+      h.tm:rebuild()
+      t.falsy(h.tm:freezeEligible('fxr-1'), 'identical windows refuse mutually')
+      t.falsy(h.tm:freezeEligible('fxr-2'), 'in both directions')
+
+      h.ds:assign('fxRegions', {
+        { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = sine30 },
+      })
+      h.tm:rebuild()
+      t.truthy(h.tm:freezeEligible('fxr-1'), "the survivor's map entry flips on the next rebuild")
     end,
   },
 

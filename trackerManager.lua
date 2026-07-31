@@ -720,9 +720,9 @@ end
 
 -- Freeze eligibility over the census: a refusal means some other producer would be left standing
 -- over the raw output this freeze creates. see docs/trackerManager.md § Park window census
-local function freezeRefused(frozen, census)
+local function freezeRefused(frozen, census, windows)
   local mine, others = {}, {}
-  for _, w in ipairs(generators.parkWindows(census)) do
+  for _, w in ipairs(windows) do
     util.add(w.id == frozen.uuid and mine or others, w)
   end
 
@@ -1668,6 +1668,10 @@ function tm:requestRebuild() rebuildRequested = true end
 -- Defined with Rebuild Fx below; freeze's eligibility census needs the on-take host windows here.
 local computeFxWindows
 
+-- Rebuild output, not a cache: settleWindows replaces it wholesale each rebuild from the settled
+-- census; absence = not a producer. see design/fx-freeze.md § Eligibility gates
+local freezeEligibleByUuid = {}
+
 -- Freeze: a one-way projection out of the derived lifecycle -- notes, parked members, seats and
 -- windows all convert to authored form in one flush. see design/fx-freeze.md § Atomicity
 local function freezeRegion(uuid)
@@ -1713,7 +1717,7 @@ local function freezeRegion(uuid)
   local census = producerCensus(regions, computeFxWindows(nil, stash), stash)
   -- Gated before anything is gathered, so a refusal leaves the pass having staged nothing. `regions`
   -- carries the frozen one and `stash` serves both arms; identity does the partitioning.
-  if freezeRefused(frozen, census) then return false end
+  if freezeRefused(frozen, census, generators.parkWindows(census)) then return false end
 
   -- Recomputed for coverage only: covered() below is the sole reader.
   local windows = generators.parkWindows({ frozen })
@@ -1807,6 +1811,9 @@ function tm:deleteParked(evt)         deleteParked(evt)         end
 --contract: refuses same-target overlap with a neighbour; abutting counts for pb, not cc/note
 --contract: refuses a covered fx host, or a note-dest host under another producer's note window
 function tm:freezeRegion(uuid)        return freezeRegion(uuid)  end
+--contract: reads the last rebuild's settled census; staged-not-flushed producers are invisible
+--contract: false for any uuid that is not a live producer; never computes, never stages
+function tm:freezeEligible(uuid)      return freezeEligibleByUuid[uuid] == true end
 -- With no mm ops there is no reload->rebuild to ride, so the one rebuild is driven here.
 function tm:flush() if flush() then tm:rebuild(false) end end
 
@@ -4730,7 +4737,8 @@ local function rebuildPipeline(didReload)
   -- Park window set: fx-regions plus every on-take or still-producing parked note host, as a degenerate
   -- region (note-is-a-region); assembled twice -- head set for notes, settled set for cc/pb + fx. see design/note-macros-v2.md § Offline continuous realisation
   local function assembleParkWindows(hostWins, parkedNoteSpecs)
-    return generators.parkWindows(producerCensus(sources.fxRegions, hostWins, parkedNoteSpecs))
+    local census = producerCensus(sources.fxRegions, hostWins, parkedNoteSpecs)
+    return generators.parkWindows(census), census
   end
 
   perf.start('fxWindows'); local hostWindows = computeFxWindows(); perf.stop('fxWindows')
@@ -4747,7 +4755,13 @@ local function rebuildPipeline(didReload)
       if cell.fx then restoredFxChans[cell.chan] = true end
     end
     fxWindow = computeFxWindows(restoredFxChans, parkedNotes)
-    settledWindows = assembleParkWindows(fxWindow, parkedNotes)
+    local census
+    settledWindows, census = assembleParkWindows(fxWindow, parkedNotes)
+    local eligible = {}
+    for _, p in ipairs(census) do
+      eligible[p.uuid] = not freezeRefused(p, census, settledWindows)
+    end
+    freezeEligibleByUuid = eligible
     return settledWindows
   end
 

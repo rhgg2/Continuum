@@ -1,4 +1,4 @@
-@module trackerRender  src=trackerRender.lua  loc=1502  sha=a94b175  mode=chunk  self=tr
+@module trackerRender  src=trackerRender.lua  loc=1502  sha=5ecbe78  mode=chunk  self=tr
 @deps cm, ds, cmgr, chrome, gui, modalHost, facade, tv, help, pe
 
 # Invariants & contracts
@@ -318,6 +318,7 @@
   @use call    tv:currentTrackIdx  @ currentTrackLabel:80 currentSlotLabel:90 106,123 openNewTakeModal:1281
   @use call    tv:duplicateBoundUnpooled  @ duplicateUnpooledTake:1318
   @use call    tv:ec  @ cursorChan:98 paletteActions:216 caretKeyNow:245 drawStatusBar:585 scopedAction:815 removeOrHideCol:850 1361
+  @use call    tv:freezeEligible  @ headerActions:1121
   @use call    tv:freezeRegion  @ headerActions:1123
   @use call    tv:fxHostAtCursor  @ stripPlan:1035
   @use call    tv:fxHostForEdit  @ drawAddChainStage:1163 editFx:1260
@@ -329,7 +330,7 @@
   @use call    tv:moveFxStage  @ handleFxChainKeys:1096 drawChainStage:1198,1202
   @use call    tv:newParkedTake  @ openNewTakeModal:1291
   @use call    tv:noteByUuid  @ hostPitch:887
-  @use call    tv:noteFx  @ stripPlan:1037 headerActions:1121 drawAddChainStage:1165 enterStrip:1172 editFx:1262
+  @use call    tv:noteFx  @ stripPlan:1037 drawAddChainStage:1165 enterStrip:1172 editFx:1262
   @use call    tv:overrideTab  @ drawParamPalette:572 handleFxChainKeys:1075 focusParams:1325
   @use call    tv:paletteCursor  @ handlePaletteKeys:378 drawTree:502
   @use call    tv:paletteExpanded  @ buildPlan:304

@@ -2441,11 +2441,10 @@ local function deleteFxRegionsInRect(r1, r2, c1, c2)
 end
 
 -- Addresses the host the caret's row brackets (the fx tab's rule), not delete's greatest-onset-before:
--- a one-way conversion should act on what's visible. Region or note host alike; a note with no chain
--- is nothing to freeze, so it declines here rather than making the round trip to tm.
+-- a one-way conversion should act on what's visible. Runs before the util.atomic wrap, so a refusal opens no undo block; see design/fx-freeze.md § Eligibility gates.
 local function freezeRegionAtCursor()
   local uuid = tv:fxHostAtCursor()
-  if uuid and tv:noteFx(uuid) then tv:freezeRegion(uuid) end
+  if uuid and tv:freezeEligible(uuid) then tv:freezeRegion(uuid) end
 end
 
 function tv:noteFx(uuid)
@@ -2575,6 +2574,9 @@ end
 
 --contract: a region or fx-carrying note host; any other uuid is a silent no-op
 function tv:freezeRegion(uuid) return tm:freezeRegion(uuid) end
+
+-- Not atomic: the whole point is a decline that opens no undo block.
+function tv:freezeEligible(uuid) return tm:freezeEligible(uuid) end
 
 -- One undo block per chain verb: fx writes are undoable but mint no point of their own, so
 -- unwrapped they rewind with the next edit. Inner blocks (setNoteFx, pa:apply) collapse in.

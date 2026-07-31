@@ -180,6 +180,11 @@ sparse, genuinely hand-editable group material — the point of choosing
 the group target. Freeze is already the lossy projection; a bounded thin
 is honest.
 
+**Tolerance is config, not a constant** (2026-07-31). The value comes
+from a cm entry with a shipped default, in the dest's own unit as
+above — chosen over a constant so it becomes user-tweakable from the
+config editor when that lands. Exact key shape is implementation's.
+
 **Curved shapes survive verbatim** (2026-07-30). An earlier draft had
 the thinner emit linear breakpoints throughout, on the reading that the
 standing seats are already a densified polyline. They are not. A replace
@@ -419,15 +424,37 @@ precondition's failure mode is silent. The costs are one empty
 where ops genuinely were pending, their landing inside freeze's undo
 block.
 
-**Open: a refused freeze still opens an undo block** (2026-07-30).
-`tv:freezeRegion` is wrapped in `util.atomic`, which begins and ends
-the block unconditionally, so a refusal leaves a labelled entry that
-changed nothing — and per this section's silence, that entry is the
-user's only signal that anything happened. Whether REAPER materialises
-an empty block is unconfirmed. The fix is not tm's: it belongs with the
-disabled-state predicate § Addressing declines at the view already
-requires for the fx tab's button, which eligibility is now a second
-input to. Phase 3's tv verb is where it lands.
+**A refused freeze still opens an undo block** (2026-07-30, closed
+2026-07-31). `tv:freezeRegion` is wrapped in `util.atomic`, which
+begins and ends the block unconditionally, so a refusal leaves a
+labelled entry that changed nothing — and per this section's silence,
+that entry is the user's only signal that anything happened. Whether
+REAPER materialises an empty block is unconfirmed. The fix is not
+tm's: it belongs with the disabled-state predicate § Addressing
+declines at the view already requires for the fx tab's button, which
+eligibility is now a second input to.
+
+**The close: eligibility as per-rebuild stored state** (2026-07-31,
+landed ahead of phase 3's tv verb rather than with it).
+`tm:freezeEligible(uuid)` — forwarded by tv, deliberately outside
+`util.atomic` — reads a uuid→bool map that `settleWindows` republishes
+wholesale each rebuild from the settled census: the parked set the
+rebuild commits, not the head set. It is rebuild output, not a cache
+with an invalidation story — every input to eligibility (regions, fx
+hosts, stash, take length) changes only through paths that land a
+rebuild, and every rebuild that enters the pipeline reaches
+`settleWindows` exactly once — so the lookup touches nothing, where a
+live query would have re-entered `computeFxWindows` per rendered frame
+(the cache-warming risk the note below accepts for the verb alone).
+Both view entry points, the keystroke and the fx tab's button, consult
+the map before the undo block opens, so a refusal now leaves no entry
+at all; the verb keeps its inline settle-first gate unchanged as the
+backstop, correct even when its opening flush no-ops. The one
+divergence is deliberate and pinned in tm_fx_region_spec: the map
+reads the last rebuild's census, so a staged-not-flushed producer is
+invisible to the predicate while the verb (which settles first)
+refuses — and in exactly that path the block the verb opens is
+non-empty anyway, because its flush lands the pending ops inside it.
 
 **Freeze calls rebuild machinery from a mutation entry point**
 (2026-07-30, accepted risk). The pre-gate `computeFxWindows` warms
@@ -528,8 +555,12 @@ undo block:
   included. tm's densify is a deriveChan-local closure, not reachable
   machinery, and nothing needs it: the thinner keeps curved points
   verbatim rather than sampling them.
-- **`util.atomic` wraps the post-confirm continuation**, not the
-  verb — the modal resolves on a later frame.
+- **Two verbs, no modal** (2026-07-31). Raw and group are parallel
+  commands — group on Ctrl-Shift-E, mirroring Ctrl-Shift-D's
+  duplicate-to-group — each with its own fx tab button. The earlier
+  note here ("`util.atomic` wraps the post-confirm continuation")
+  dated from the dropped destructive confirm; with no modal anywhere,
+  `util.atomic` wraps the verb itself, as freeze-to-raw already does.
 - **Three things need no extra work.** prevWindows resync suffices:
   pb absorber tags are per-rebuild clone marks off *current*
   windows, cc recognition is prevWindows-keyed, and note reconcile

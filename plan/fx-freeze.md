@@ -16,18 +16,43 @@
 3. **Phase 3 — freeze to group** (§ Freeze to group) — re-seat the
    curves sparse, mint a stock gm group via `markGroup` on um-live staged
    events inside the same flush, gm rect-conflict gate on the tv verb.
+   ← in flight
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-07-31 tm: store freeze eligibility per rebuild; views decline before undo (§ Eligibility gates)
 - 2026-07-31 gen: add thinCurve, a bounded Douglas-Peucker over linear runs (§ Freeze to group)
 - 2026-07-30 tm: freeze eligibility gates, computed over the producer census (§ Eligibility gates)
 - 2026-07-30 tm: identity-stamp park windows; freeze resync drops by id (§ Eligibility gates)
-- 2026-07-30 tm: lift the producer census out of assembleParkWindows (§ Eligibility gates)
 
 ## Now
 
-(empty — phase 2 is landed; run `/plan-phase` to split phase 3 into commit-sized items.)
+(empty — phase 3's queue holds the group conversion next; run /plan-next to promote it)
 
 ## Queued (current phase; one-liners)
 
-(empty — refilled by `/plan-phase` when phase 3 opens.)
+1. tm: the group-shaped conversion — a group arm on the freeze
+   primitive that runs the raw conversion, deletes the dense
+   continuous seats, and stages the thinned breakpoints
+   (`generators.thinCurve`, tolerance from a new cm entry in the
+   dest's own unit) as authored events with fresh uuids and cents
+   sidecars, leaving everything staged so the caller can mint the
+   group before the single closing flush. Spec: seats re-seat sparse,
+   a post-freeze take round-trip keeps uuid and sidecar, and nothing
+   flushes until the caller says so.
+2. tm: the mint rect — compute the output footprint (note lanes used
+   plus curve streams, crossed with the region window; instance 1
+   anchored at the region origin) once, pre-freeze, exposed so the tv
+   gate and the mint reuse the same rect. Spec: the footprint of a
+   mixed note-and-curve output.
+3. tv: the freeze-to-group verb — a second command and fx-tab button
+   (Ctrl-Shift-E, mirroring Ctrl-Shift-D's duplicate-to-group; no
+   modal), gating on gm's `regionConflict` against the mint rect
+   before any mutation, then conversion, `gm:markGroup` over the
+   um-live staged events, and one flush inside the undo block; the
+   eligibility predicate gains the rect-conflict input. Spec: group
+   minted with note and thinned-curve members, each refusal declines
+   before any mutation, one flush and one rebuild.
+4. spec: the minted group is ordinary — instance 2 replays both note
+   and curve members, a mirror edit propagates, and deleting the
+   group works; pins "no frozen-ness survives the mint".

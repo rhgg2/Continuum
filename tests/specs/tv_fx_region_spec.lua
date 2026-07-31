@@ -969,4 +969,48 @@ return {
       t.deepEq(authoredPitches(h), { 60 }, 'so is the note')
     end,
   },
+
+  {
+    -- The keystroke consults tm's eligibility map before tv:freezeRegion's util.atomic wrap runs:
+    -- refusals are silent, so a labelled empty undo entry would be the user's only signal that
+    -- anything happened. see design/fx-freeze.md § Eligibility gates
+    name = 'fx freeze: a refused freeze opens no undo block; an eligible one opens exactly one',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      h.ds:assign('fxRegions', {   -- same-target overlap: each refuses the other
+        { uuid = 'fxr-1', chan = 1, startppq = 0,   endppq = 240, fx = sine30 },
+        { uuid = 'fxr-2', chan = 1, startppq = 120, endppq = 360, fx = sine30 },
+      })
+      h.tm:rebuild()
+      local _, ci = fxColFor(h, 1)
+      h.ec:setPos(0, ci, 1)
+
+      -- util.atomic checks reaper.Undo_BeginBlock presence at call time, so a fixture stub installed
+      -- after the wrap still counts. Outermost blocks only: inner blocks collapse into the verb's.
+      local depth, blocks = 0, 0
+      local realBegin, realEnd = h.reaper.Undo_BeginBlock, h.reaper.Undo_EndBlock
+      h.reaper.Undo_BeginBlock = function()
+        if depth == 0 then blocks = blocks + 1 end
+        depth = depth + 1
+      end
+      h.reaper.Undo_EndBlock = function() depth = depth - 1 end
+
+      local before = h.ds:get('fxRegions')
+      h.cmgr:invoke('freezeFxRegion')
+      t.eq(blocks, 0, 'the refusal declines before any undo block opens')
+      t.deepEq(h.ds:get('fxRegions'), before, 'and both regions stand')
+
+      h.ds:assign('fxRegions', {
+        { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = sine30 },
+      })
+      h.tm:rebuild()
+      local _, soleCi = fxColFor(h, 1)
+      h.ec:setPos(0, soleCi, 1)
+      h.cmgr:invoke('freezeFxRegion')
+      h.reaper.Undo_BeginBlock, h.reaper.Undo_EndBlock = realBegin, realEnd
+      t.eq(blocks, 1, 'an eligible freeze opens exactly one block')
+      t.eq(#(h.ds:get('fxRegions') or {}), 0, 'and it ran: the region is gone')
+    end,
+  },
 }
