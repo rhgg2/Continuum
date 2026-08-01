@@ -157,9 +157,37 @@ of loose events:
   curves. rect from the output footprint (note lanes used + curve
   streams × the region window); instance 1 anchored at the region
   origin.
-- **Curves are re-seated sparse.** The dense seats are deleted and
-  the thinned breakpoints written as authored events (uuids + cents
-  sidecars, gm links by uuid) in the same flush.
+- **Curves are re-seated sparse — by subtraction** (2026-07-31). The
+  thin runs inside the raw conversion's own staging block: the doomed
+  breakpoints are deleted along with everything else the conversion
+  drops, and the survivors are simply the seats that were already
+  standing. Nothing is written. An earlier reading here had the dense
+  seats deleted and the thinned breakpoints authored fresh, uuids and
+  cents sidecars and all — a flush's worth of work to arrive at the
+  events that were already there — and it does not survive two facts.
+  A seat is native MIDI with a RAM-only uuid
+  (`trackerManager.lua:4462`), so it cannot be a member as it stands;
+  but the closing rebuild's pb pass back-derives its cents and
+  persists them the moment its window is gone
+  (`trackerManager.lua:4296`), and that is exactly what stamps the
+  sidecar and makes the uuid durable. The pass that authors the curve
+  is one freeze-to-raw already performs. The group arm's whole job is
+  to decide, before that flush, which points do not get to be
+  authored.
+- **Members are column events, not staged ones** (2026-07-31). gm's
+  group frame is the authored one: `toGroup` reads `evt.ppq` as the
+  logical onset, and `copyScalars` is opt-out over a `DERIVED` set
+  that does not list `ppqL` (`groupManager.lua:19`) — which is why
+  `projectEvent` strips the raw sidecar rather than let it "ride out
+  through park / clipboard / gm" (`trackerManager.lua:2018`). A staged
+  um event is the opposite of that: `realiseAddPpq` has put raw in
+  `ppq` and logical in `ppqL`, so minting off staged tables computes
+  the group offset in raw ticks against a logical anchor and carries
+  the sidecar into the group frame. Cloning to fix the frame breaks
+  the postflush uuid back-fill, which works by table identity. With
+  the thin subtractive there is nothing staged to mint from anyway —
+  the members are the promoted notes' and surviving breakpoints'
+  column cells, exactly what `tv:eventsInRect` hands `gm:mark`.
 - **Validate first.** `markGroup` refuses a footprint colliding with
   a live group — its `regionConflict` check must pass before any
   mm/ds mutation, or freeze half-applies.
@@ -184,6 +212,25 @@ is honest.
 from a cm entry with a shipped default, in the dest's own unit as
 above — chosen over a constant so it becomes user-tweakable from the
 config editor when that lands. Exact key shape is implementation's.
+
+**What the thinner is allowed to see** (2026-08-01). Not everything
+standing inside the window is curve material. An absorber seated around
+a detune onset went into the thin as an ordinary breakpoint, and being
+at the window edge it was a hard keep — which quietly distorted the
+chord Douglas-Peucker measures deviation against; had it fallen
+mid-run instead, the thin would have deleted it outright. It is not
+freeze's to touch either way: an absorber carries a persisted `derived
+= 'absorber'` tag because it is realisation the pb pass owns and
+**re-derives after the freeze**, around whatever detune onsets survive
+it. So the raw gather skips any entry with `derived` set.
+
+Worth seeing that this is the same partition `groupMembers` applies one
+frame along as `not e.hidden` — the column projection draws `hidden` as
+`pb.derived ~= nil`, so the two tests are one question asked in two
+frames: is this a point the author put here, or a point the
+realisation put here? Freeze only ever gets to speak about the first
+kind. A future reader tempted to widen either test should expect the
+other to need widening in step.
 
 **Curved shapes survive verbatim** (2026-07-30). An earlier draft had
 the thinner emit linear breakpoints throughout, on the reading that the
@@ -495,11 +542,15 @@ undo block:
   regenerates the full output while `reconcileDerived` can no longer
   match the now-markerless notes — a complete duplicate set.
 - **(group verb) ds `groups` write + take write revert as one.** gm
-  persists on `postflush`, so the mint must precede the one flush:
-  stage the thinned events, `markGroup` with the staged um events,
-  then a single `tm:flush` inside the undo block (postflush
-  back-fills member uuids and persists) — the clipboard idiom.
-  Flush-then-mint pushes the `groups` write to the *next* flush,
+  persists on `postflush`, so the mint must precede a flush. The take
+  conversion — thinning included — is the one flush above; the mint
+  then rides a *second* flush carrying no mm ops at all, present only
+  so `postflush` fires inside the undo block (`tm:requestRebuild`
+  carries it past `flush`'s no-op gate). Revised 2026-07-31: this read
+  "stage the thinned events, `markGroup` with the staged um events,
+  then a single `tm:flush`" — the clipboard idiom — which the frame
+  note in § Freeze to group retires. What must still not happen is
+  flush-then-mint: that pushes the `groups` write to the *next* flush,
   outside the block.
 - **The derived-clear rides eventMeta — project scope, which undo
   rewinds only through the pextStore mirror**
@@ -549,10 +600,17 @@ undo block:
   Members passed to `markGroup` must be um-live staged events (gm
   re-anchors via `tm:byUuid`; detached clones make later mirror
   edits silently no-op).
-- **Thinner input.** Post-freeze the standing seats are the curve to
-  thin — but not a densified polyline (2026-07-30, § Freeze to
-  group): they carry whatever shapes the fold left them, curved ones
-  included. tm's densify is a deriveChan-local closure, not reachable
+- **Thinner input** is the standing seats in the **raw** frame
+  (2026-07-31): the um index entries inside the producer's continuous
+  windows, valued `entry.val - detuneAt(...)` for pb — the entry's own
+  `val` is realisation, detune included, and without the subtraction a
+  mid-window detune step reads as a feature of the curve — and
+  `entry.val` for cc, which is intent already. The raw tick axis needs
+  no apology: it is the time the curve sounds, and since the thin only
+  decides which points die, no value and no onset is ever re-authored,
+  so no round trip through the logical frame arises. The seats are not
+  a densified polyline (2026-07-30, § Freeze to group): they carry
+  whatever shapes the fold left them, curved ones included. tm's densify is a deriveChan-local closure, not reachable
   machinery, and nothing needs it: the thinner keeps curved points
   verbatim rather than sampling them.
 - **Two verbs, no modal** (2026-07-31). Raw and group are parallel

@@ -172,6 +172,38 @@ local function authoredPitches(h)
   return out
 end
 
+-- Every pb standing on the wire in a ppq span, in cents, sorted. Read straight off the dump: the
+-- seat helpers above key on a live window, and freeze is the verb that takes the window away.
+local function wirePbs(h, chan, fromPpq, toPpq)
+  local out = {}
+  for _, c in ipairs(h.fm:dump().ccs) do
+    if c.evType == 'pb' and c.chan == chan and c.ppq >= fromPpq and c.ppq <= toPpq then
+      out[#out + 1] = { ppq = c.ppq, cents = rawToCents(c.val) }
+    end
+  end
+  table.sort(out, function(a, b) return a.ppq < b.ppq end)
+  return out
+end
+
+-- A pb-replace stage seating a crowded collinear ramp: RAMP_N breakpoints 4 cents apart, every one
+-- 'linear', so a tolerance of 3 cents may drop the whole interior. sine30 offers the thinner nothing
+-- -- its 'slow' extrema are hard keeps. Registers the kind; the caller clears it after the freeze.
+local RAMP_N = 25
+local function denseRamp()
+  generators.kinds.denseRamp = {
+    expand = function(stream)
+      local startL, endL, delta = stream.window[1], stream.window[2], {}
+      for i = 0, RAMP_N - 1 do
+        util.add(delta, { ppq = startL + (endL - startL) * i / (RAMP_N - 1),
+                          val = i * 4, shape = 'linear' })
+      end
+      return { notes = {}, delta = delta }
+    end,
+    mode = 'replace', dest = 'pb', label = 'Dense Ramp', defaults = {}, fields = {},
+  }
+  return { { kind = 'denseRamp' } }
+end
+
 return {
 
   ----- N=0 -- a region with no host note still seats the channel pb stream
@@ -2384,6 +2416,120 @@ return {
       })
       h.tm:rebuild()
       t.truthy(h.tm:freezeEligible('fxr-1'), "the survivor's map entry flips on the next rebuild")
+    end,
+  },
+
+  ----- Freeze to group: the conversion thins its curves, then hands back the mint material
+
+  {
+    -- The thin runs inside freeze's own staging block, so what it drops is never authored at all and
+    -- the closing rebuild back-derives cents on the survivors alone. see design/fx-freeze.md § Freeze to group
+    name = 'freeze to group: the dense curve re-seats sparse in one flush',
+    run = function(harness)
+      local h = harness.mk()
+      injectRegion(h, { fx = denseRamp() })
+      local before = wirePbs(h, 1, 0, 240)
+      t.eq(#before, RAMP_N, 'the ramp seats a breakpoint every 10 ticks')
+
+      local rebuilds = 0
+      h.tm:subscribe('rebuild', function() rebuilds = rebuilds + 1 end)
+      t.truthy(h.tm:freezeToGroup('fxr-1'), 'the freeze reports its members')
+      generators.kinds.denseRamp = nil
+
+      t.eq(rebuilds, 1, 'one rebuild -- the thin rides the conversion rather than a pass of its own')
+      t.deepEq(wirePbs(h, 1, 0, 240), { before[1], before[RAMP_N] },
+        'a collinear run inside tolerance comes back as its two endpoints, values intact')
+    end,
+  },
+
+  {
+    -- gm mints from column events: authored frame, no raw sidecar. A member carrying ppqL would put
+    -- the group's offsets in raw ticks against a logical anchor. see design/fx-freeze.md § Freeze to group
+    name = 'freeze to group: the members come back in the authored frame',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { pitch = 60, lane = 1 })
+      addNote(h, { pitch = 64, lane = 2 })
+      -- Lane-1 detune landing on the window's closing edge: the absorber it seats is realisation,
+      -- hidden from the column, and must not cross into the group.
+      addNote(h, { pitch = 67, lane = 1, ppq = 240, endppq = 480, detune = 25 })
+      injectArp(h, { fx = { arpUp[1], denseRamp()[1] } })
+
+      local members = h.tm:freezeToGroup('fxr-1')
+      generators.kinds.denseRamp = nil
+      t.truthy(members, 'the freeze hands back its members')
+
+      local notes, curve = {}, {}
+      for _, m in ipairs(members) do
+        t.falsy(m.ppqL, 'no member carries the raw sidecar')
+        if m.pitch then notes[#notes + 1] = m else curve[#curve + 1] = m end
+      end
+      local pitches = {}
+      for _, n in ipairs(notes) do pitches[#pitches + 1] = n.pitch end
+      t.deepEq(pitches, { 60, 64, 60, 64 }, 'the promoted arp notes are members')
+
+      local col = h.tm:getChannel(1).columns.pb
+      local live, hiddenInWindow = {}, 0
+      for _, e in ipairs(col.events) do
+        live[e] = true
+        if e.hidden and e.ppq >= 0 and e.ppq <= 240 then hiddenInWindow = hiddenInWindow + 1 end
+      end
+      t.truthy(hiddenInWindow > 0, 'the detune seats an absorber inside the window bounds')
+      t.eq(#curve, 2, 'and the curve members are the two survivors alone')
+      for _, m in ipairs(curve) do t.truthy(live[m], 'each member is the live column event itself') end
+    end,
+  },
+
+  {
+    -- The discriminator between a durable member and a seat: a seat reaches the take as markerless
+    -- native MIDI, and mm re-mints its uuid in RAM on every load. see design/fx-freeze.md § Freeze to group
+    name = 'freeze to group: a surviving breakpoint keeps its identity across a take reload',
+    run = function(harness)
+      local h = harness.mk()
+      injectRegion(h, { fx = denseRamp() })
+      local members = h.tm:freezeToGroup('fxr-1')
+      generators.kinds.denseRamp = nil
+      t.truthy(members and members[1], 'the freeze hands back its members')
+      local uuid  = members[1].uuid
+      local cents = h.tm:byUuid(uuid).cents
+
+      h.tm:reloadFromReaper()
+
+      local entry = h.tm:byUuid(uuid)
+      t.truthy(entry, 'the member uuid resolves against the reloaded take')
+      t.eq(entry.cents, cents, 'and still carries the cents the freeze authored')
+    end,
+  },
+
+  {
+    -- The bounded thin bites only where something genuinely dense stands: a curved point governs a
+    -- segment no chord can stand in for, so it is a hard keep.
+    name = 'freeze to group: a curved macro freezes exact',
+    run = function(harness)
+      local h = harness.mk()
+      injectRegion(h)   -- sine30: 'slow' extrema, every one of them a hard keep
+      local before = wirePbs(h, 1, 0, 240)
+      local members = h.tm:freezeToGroup('fxr-1')
+      t.truthy(members, 'the freeze reports its members')
+      t.deepEq(wirePbs(h, 1, 0, 240), before, 'a curved stream has nothing the thinner may drop')
+      t.eq(#members, #before, 'and every breakpoint comes back as a member')
+      local shapes = {}
+      for _, m in ipairs(members) do shapes[m.shape] = (shapes[m.shape] or 0) + 1 end
+      t.eq(shapes.slow, #members - 1, 'each keeps the curve shape it was authored with')
+      t.eq(shapes.step, 1, 'bar the closed window\'s terminal re-centre, which is a step by construction')
+    end,
+  },
+
+  {
+    name = 'freeze to group declines on a plain note and changes nothing',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h)
+      injectRegion(h)   -- a live region over the same span must not be swept by a miss
+      local uuid = h.tm:getChannel(1).columns.notes[1].events[1].uuid
+      t.falsy(h.tm:freezeToGroup(uuid), 'a note carrying no chain is not a host')
+      t.deepEq(authoredPitches(h), { 60 }, 'the note stands')
+      t.eq(#(h.ds:get('fxRegions') or {}), 1, 'and so does the region')
     end,
   },
 

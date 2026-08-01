@@ -41,6 +41,10 @@ local declarations = {
   -- New-take dialog length (beats); persisted at project tier, shared by tracker + arrange.
   { 'newTakeBeats',      4    },
   { 'laneStrip.rows',      4    },
+  -- Freeze-to-group thinning: the vertical error the thinner may absorb, in the dest's own
+  -- unit (generators.destProfile). see design/fx-freeze.md § Freeze to group
+  { 'freezeThin.cents',  3     },
+  { 'freezeThin.steps',  1     },
   -- boolean
   { 'polyAftertouch',   true  },
   { 'trackerMode',      false },

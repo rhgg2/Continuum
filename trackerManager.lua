@@ -1695,9 +1695,71 @@ local computeFxWindows
 -- census; absence = not a producer. see design/fx-freeze.md § Eligibility gates
 local freezeEligibleByUuid = {}
 
+-- pb's seat window closes inclusive (the terminal re-centre sits on its end) where cc's is half-open:
+-- rebuildPbs' inSeatWindow and rebuildCCs' rawSpanMap. Bounds arrive in the caller's own frame.
+local function inFreezeWindow(w, ppq, startAt, endAt)
+  if ppq < startAt then return false end
+  if w.evType == 'pb' then return ppq <= endAt end
+  return ppq < endAt
+end
+
+-- Subtract the breakpoints a bounded thin can spare, raw frame, before freeze's own flush: this decides
+-- which points get authored at all, rather than cutting a curve back. see design/fx-freeze.md § Freeze to group
+local function thinSeats(chan, windows)
+  local index = rawIndexFor(chan)
+  for _, w in ipairs(windows) do
+    if w.evType ~= 'note' then
+      local isPb     = w.evType == 'pb'
+      local tol      = cm:get('freezeThin.' .. generators.destProfile(isPb and 'pb' or w.cc).unit)
+      local startRaw = tm:fromLogical(chan, w.startppq, 0)
+      local endRaw   = tm:fromLogical(chan, w.endppq, 0)
+      local points   = {}
+      for _, e in ipairs((isPb and index.pbs or index.ccs[w.cc]) or {}) do
+        -- An absorber is realisation the pb pass owns and re-derives after the freeze: not curve material,
+        -- and not freeze's to delete. groupMembers' `hidden` is this partition. see design/fx-freeze.md § Freeze to group
+        if not e.derived and inFreezeWindow(w, e.ppq, startRaw, endRaw) then
+          -- A pb index entry's val is realisation, detune included, so the subtraction is what stops a
+          -- mid-window detune step reading as a feature of the curve. A cc's val is the intent already.
+          util.add(points, { ppq = e.ppq, shape = e.shape, tension = e.tension, evt = e,
+                             val = isPb and (e.val - detuneAt(chan, e.ppq)) or e.val })
+        end
+      end
+      local kept = {}
+      for _, p in ipairs(generators.thinCurve(points, tol)) do kept[p] = true end
+      -- By identity, not value: two breakpoints can carry the same number, and it is this one that
+      -- lost its place.
+      for _, p in ipairs(points) do
+        if not kept[p] then deleteEvent(p.evt) end
+      end
+    end
+  end
+end
+
+-- The material a caller mints a stock group from, gathered once the closing rebuild has settled it:
+-- live column events, logical frame, no raw sidecar. see design/fx-freeze.md § Freeze to group
+local function groupMembers(frozen, windows, promotedUuids)
+  local members = {}
+  for _, uuid in ipairs(promotedUuids) do
+    -- A promoted note the collision walk killed on the way through has no cell left to mint from.
+    local cell = colEvtFor(uuid)
+    if cell then util.add(members, cell) end
+  end
+  local columns = channels[frozen.chan].columns
+  for _, w in ipairs(windows) do
+    if w.evType ~= 'note' then
+      local col = w.evType == 'pb' and columns.pb or (columns.ccs or {})[w.cc]
+      for _, e in ipairs(col and col.events or {}) do
+        -- An absorber seated around a detune onset is hidden realisation, not group material.
+        if not e.hidden and inFreezeWindow(w, e.ppq, w.startppq, w.endppq) then util.add(members, e) end
+      end
+    end
+  end
+  return members
+end
+
 -- Freeze: a one-way projection out of the derived lifecycle -- notes, parked members, seats and
 -- windows all convert to authored form in one flush. see design/fx-freeze.md § Atomicity
-local function freezeRegion(uuid)
+local function freezeRegion(uuid, toGroup)
   -- Settle first: the census reads committed state, so a staged producer would be invisible to it
   -- and then committed by our own flush. see docs/trackerManager.md § Park window census
   tm:flush()
@@ -1742,7 +1804,8 @@ local function freezeRegion(uuid)
   -- carries the frozen one and `stash` serves both arms; identity does the partitioning.
   if freezeRefused(frozen, census, generators.parkWindows(census)) then return false end
 
-  -- Recomputed for coverage only: covered() below is the sole reader.
+  -- Recomputed from the frozen producer alone: covered() below reads it, and so do the group arm's
+  -- two passes -- the thin in the raw frame, the member gather in the logical one.
   local windows = generators.parkWindows({ frozen })
   -- Window membership only, never rebuildRegionPark's covered(): its first clause answers "does this
   -- spec park itself", true of every self-parked note host on the channel, and would take theirs too.
@@ -1761,6 +1824,10 @@ local function freezeRegion(uuid)
     if note.derived == uuid then util.add(promoted, note) end
   end
   for _, note in ipairs(promoted) do assignEvent(note, { derived = util.REMOVE }) end
+  -- Captured before the flush: the rebuild that follows refiles these entries, and the uuid is what
+  -- crosses it -- colEvtFor is the door back to the settled cell.
+  local promotedUuids = {}
+  for _, note in ipairs(promoted) do util.add(promotedUuids, note.uuid) end
   -- The chain goes with the region form it stood for. No predicate: a note-dest chain would have
   -- parked its host into the stash arm, so an on-take host's is continuous-only. rawIndexRefile picks
   -- the change up and de-registers the host, so nothing regenerates.
@@ -1811,12 +1878,16 @@ local function freezeRegion(uuid)
     replace('prevWindows', keptWindows, prevWindows)
   end)
 
+  -- Inside this same staging block, so the closing rebuild back-derives cents on the survivors alone.
+  if toGroup then thinSeats(frozen.chan, windows) end
+
   dirtyChan(frozen.chan)   -- freeze is rare and drastic: whole-channel dirt over per-member seeds
   -- A continuous-only or husk region stages no mm ops at all, and flush's no-op gate would swallow
   -- the pass; the request carries it past that and past rebuild(∅). Harmless when assigns staged.
   tm:requestRebuild()
   tm:flush()
-  return true
+  if not toGroup then return true end
+  return groupMembers(frozen, windows, promotedUuids)
 end
 
 ----- Mutation
@@ -1834,6 +1905,10 @@ function tm:deleteParked(evt)         deleteParked(evt)         end
 --contract: refuses same-target overlap with a neighbour; abutting counts for pb, not cc/note
 --contract: refuses a covered fx host, or a note-dest host under another producer's note window
 function tm:freezeRegion(uuid)        return freezeRegion(uuid)  end
+--contract: freezeRegion's conversion plus a bounded thin of each continuous stream, one flush
+--contract: members are column events (authored frame, no ppqL) for gm:markGroup, else false
+--contract: the take is settled on return; no part of the conversion is left for the caller's flush
+function tm:freezeToGroup(uuid)       return freezeRegion(uuid, true) end
 --contract: reads the last rebuild's settled census; staged-not-flushed producers are invisible
 --contract: false for any uuid that is not a live producer; never computes, never stages
 function tm:freezeEligible(uuid)      return freezeEligibleByUuid[uuid] == true end
