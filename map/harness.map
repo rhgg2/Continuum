@@ -41,6 +41,10 @@
   @use require realMidiManager  @ 25
   @use require util  @ 24
 
+# Calls (intra-file)
+  @call buildMM  @ mk:102
+  @call seedThrough  @ buildMM:77 mk:120
+
 # REAPER API surface
   @reaper GetMediaItemTake_Track
 

@@ -336,6 +336,51 @@
   @use sub     self:wiringChanged  @ enableLive:2082
 
 # Calls (intra-file)
+  @call adjacencies  @ ensureCompiled:117
+  @call affectedByPinGrowBug  @ applyOps:1874
+  @call authoredRouting  @ gainRouting:1921
+  @call buildGuidOwners  @ applyOps:1780
+  @call clearOwner  @ reconcileFXChain:1720
+  @call crossingGain  @ pokeEdgeGain:1996
+  @call ensureCompiled  @ viewGraph:174 reach:177 gainRouting:1900 stampBusTracks:2057
+  @call ensureLoaded  @ ensureCompiled:113 load:163 graph:169 edgeGain:183 mutate:214 addFxNode:535 deleteSource:595 deleteBus:619 addSourceNode:639 addBusNode:680 insertBus:718 targetState:1016
+  @call ensureLoaded  @ applyOps:1774 fastGainCommit:2009
+  @call flattenCuParams  @ snapFx:833 projectEntry:967,973
+  @call fxMidiPorts  @ addFxNode:543 readGraph:1313
+  @call fxOrderEq  @ diff:1570
+  @call gainRouting  @ pokeEdgeGain:1987
+  @call idForKey  @ pokeGainTarget:1942,1947
+  @call isJS  @ fxMidiPorts:153 snapFx:834 projectEntry:977 readGraph:1109,1328
+  @call jsfxTraits  @ fxMidiPorts:154 checkUserAddable:355 snapFx:835 readGraph:1109,1328
+  @call keyByGuidFromState  @ 900
+  @call markState  @ schedulePinCorrection:95 instantiateFxOnScratch:365 createSourceTrack:517 deleteSource:612 deleteBus:633 applyOps:1866 pokeEdgeGain:1991,2003 fastGainCommit:2018
+  @call nextBusId  @ addBusNode:685 insertBus:719
+  @call nodeHasMidiIn  @ projectEntry:980
+  @call nodeHasMidiOut  @ projectEntry:981
+  @call originGuid  @ applyOps:1828
+  @call ownedSends  @ stateEntry:880
+  @call parseJSFXMidiTraits  @ parseJSFXBusAware:139 jsfxTraits:146
+  @call persistNodeMeta  @ 263 moveNodes:292 setSourceTagPos:333 addFxNode:580,583 addSourceNode:658
+  @call pinMapsEq  @ diff:1582
+  @call pokeGainTarget  @ pokeEdgeGain:1990,1997
+  @call projectEntry  @ targetState:1023
+  @call readCuParams  @ snapFx:833 readGraph:1272
+  @call readGraph  @ read:1465
+  @call reconcileFXChain  @ applyOps:1837
+  @call rememberApplied  @ reconcile:2073
+  @call schedulePinCorrection  @ applyOps:1874
+  @call sendKey  @ sendsEq:1490,1492
+  @call sendsEq  @ diff:1607
+  @call setGraph  @ ensureLoaded:61 load:162 mutate:219 applyOps:1861 syncExternal:2034
+  @call setStateGain  @ pokeEdgeGain:1991,1998
+  @call shortFxName  @ addFxNode:538 readGraph:1311
+  @call snapFx  @ snapFxList:847
+  @call snapFxList  @ stateEntry:879 snapshot:941
+  @call srcTagKey  @ 255
+  @call stampBusTracks  @ reconcile:2072
+  @call stampDecoration  @ read:1466
+  @call stampOrigin  @ reconcileFXChain:1731
+  @call stateEntry  @ 900 snapshot:937
   @call wm:applyOps  @ reconcile:2071
   @call wm:checkUserAddable  @ addFxNode:536
   @call wm:diff  @ reconcile:2070

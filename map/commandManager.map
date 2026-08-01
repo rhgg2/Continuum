@@ -129,6 +129,13 @@
   @use require util  @ 15
 
 # Calls (intra-file)
+  @call asScope  @ pop:244
+  @call buildKeyNames  @ keyLabel:441
+  @call buildKeyTokens  @ ensureTokenTables:522
+  @call buildModOrder  @ keyLabel:443
+  @call buildModTokens  @ ensureTokenTables:522
+  @call buildShiftGlyphs  @ keyLabel:442
+  @call clearPrefixState  @ cancelPrefix:193 invoke:271
   @call cmgr:doAfter  @ doAfter:154
   @call cmgr:doBefore  @ doBefore:144
   @call cmgr:keyLabel  @ keyLabelList:459
@@ -141,6 +148,10 @@
   @call cmgr:specForToken  @ loadOverrides:571
   @call cmgr:tokenForSpec  @ rebind:589
   @call cmgr:wrap  @ doBefore:147 doAfter:157
+  @call ensureTokenTables  @ tokenForSpec:530 specForToken:544
+  @call isReachable  @ invoke:268
+  @call newScope  @ 114 scope:227
+  @call resolveKeys  @ keysFor:289
 
 # REAPER API surface
   @reaper GetOS

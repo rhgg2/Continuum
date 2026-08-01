@@ -66,6 +66,22 @@
   @use call    ImGui.IsMouseDoubleClicked  @ render:92
   @use require imgui  @ 6
 
+# Calls (intra-file)
+  @call ampToDb  @ loudnessDb:29 drawBar:54 render:109,110
+  @call box  @ render:125,126,135
+  @call chip  @ drawBar:63
+  @call clamp01  @ dbFrac:25 volToFrac:34 render:97
+  @call dbFrac  @ drawBar:54,63 render:104
+  @call dbToVol  @ render:99
+  @call drawBar  @ render:111,112
+  @call fracToDb  @ render:97
+  @call holdPeak  @ render:109,110
+  @call hrule  @ box:46 render:116
+  @call loudnessDb  @ render:103
+  @call px  @ hrule:42 vrule:43 chip:44 render:85,118,133
+  @call volToFrac  @ render:117,118
+  @call vrule  @ box:47 drawBar:62 render:117
+
 # REAPER API surface
   @reaper DB2SLIDER
   @reaper GetMasterTrack

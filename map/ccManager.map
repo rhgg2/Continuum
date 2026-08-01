@@ -23,6 +23,9 @@
   @api ccm:claim(producer, track)  @ 27-40
   @api ccm:release(producer, track)  @ 42-50
 
+# Calls (intra-file)
+  @call nodeIndex  @ claim:30 release:46,48
+
 # REAPER API surface
   @reaper TrackFX_GetCount, TrackFX_GetNamedConfigParm, TrackFX_AddByName, TrackFX_CopyToTrack, TrackFX_Delete
   @reaper GetTrackGUID

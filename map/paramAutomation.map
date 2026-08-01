@@ -98,9 +98,28 @@
   @use require util  @ 10
 
 # Calls (intra-file)
+  @call allocBusCode  @ automate:331
+  @call allocLane  @ automate:329
+  @call applyTrack  @ apply:321
+  @call arrange  @ ownerTrack:16
+  @call boundTrack  @ automate:327 targets:361
+  @call clearPlink  @ applyTrack:205
+  @call eachTake  @ gatherBindings:71 usedLanes:239 allocBusCode:265
+  @call fxIdentAt  @ params:386 bumpFrecency:394
+  @call fxIndexByGuid  @ resolveFx:49 applyTrack:204,224
+  @call gatherBindings  @ apply:310
+  @call ownerTrack  @ boundTrack:64 gatherBindings:74 usedLanes:240
   @call pa.computeDesired  @ apply:310
   @call pa.frecencyOrder  @ params:385
   @call pa:apply  @ automate:341 unautomate:351
+  @call readMirror  @ apply:314
+  @call reconcileAutoSends  @ applyTrack:214,228
+  @call resolveFx  @ params:369 bumpFrecency:393 floatFx:410 unfloatFx:417
+  @call setPlink  @ applyTrack:225
+  @call trackByGuid  @ resolveFx:48 reconcileAutoSends:187
+  @call usedLanes  @ allocLane:257
+  @call writeBanks  @ applyTrack:213,220
+  @call writeMirror  @ applyTrack:215,229
 
 # REAPER API surface
   @reaper GetMasterTrack

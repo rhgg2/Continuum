@@ -217,6 +217,48 @@
   @call am:startIsClear  @ duplicateBelow:849 duplicateUnpooledBelow:857 newTakeBelow:871 moveTake:923
   @call am:takesUsing  @ reswingAll:1006
   @call am:tracksTakes  @ createAndDropMidi:722 dropInstance:794 startIsClear:910
+  @call buildState  @ 448
+  @call buildTakeShape  @ buildState:432
+  @call chanRangeOf  @ buildState:435
+  @call chunkFreshGuids  @ cloneMidiItem:696
+  @call chunkSetPool  @ cloneMidiItem:692
+  @call cloneMidiItem  @ dropInstance:808 duplicateTake:828 duplicateUnpooledBelow:859
+  @call colOfTrack  @ initialCursor:503
+  @call copyMidiEvents  @ cloneMidiItem:708 mintParkedTake:893
+  @call destBelow  @ duplicateBelow:848 duplicateUnpooledBelow:856 newTakeBelow:870
+  @call effectiveNaturalLenQN  @ buildTakeShape:363 mintParkedTake:886
+  @call ensureColours  @ stampForTake:290 buildState:412
+  @call ensureSlots  @ buildState:419 deleteSlot:628
+  @call forEachActiveTake  @ parkedItemFor:120 isLastInstanceOnTrack:127 relayoutTrack:158 ensureSlots:207 ensureColours:255 buildState:429 projectEndQN:552 renameSlot:602 siblingInstance:745 projectMidiTakes:969
+  @call harvestPoolGuid  @ cloneMidiItem:690,693 createAndDropMidi:728 mintParkedTake:890
+  @call invalidate  @ relayoutTrack:188 renameSlot:607 deleteSlot:629 mintParkedTake:902
+  @call isLastInstanceOnTrack  @ deleteTake:954
+  @call isVisibleTrack  @ visibleTrackOfCol:311 colOfTrack:323 buildState:416 projectEndQN:551 projectMidiTakes:968 tempersInUse:999
+  @call itemQNRange  @ relayoutTrack:159,171 effectiveNaturalLenQN:195 buildState:430 projectEndQN:553 siblingInstance:750 moveTake:920,924
+  @call midiNotesOf  @ buildTakeShape:356
+  @call naturalLenOf  @ relayoutTrack:165 effectiveNaturalLenQN:193
+  @call nextFreeSlot  @ ensureSlots:234 nextFreeSlot:592 createAndDropMidi:717 mintParkedTake:881
+  @call parkedItemFor  @ ensureSlots:223 deleteSlot:625 siblingInstance:747 deleteTake:954
+  @call placeAudio  @ dropInstance:811 duplicateTake:832
+  @call projectMidiTakes  @ takesUsing:980 tempersInUse:996
+  @call readColours  @ ensureColours:260
+  @call readSlots  @ ensureSlots:205 ownerTrack:576 nextFreeSlot:592 renameSlot:600 deleteSlot:614 createAndDropMidi:716 takeForSlot:758 dropInstance:786 mintParkedTake:880
+  @call relayoutTrack  @ buildState:417 createAndDropMidi:738 dropInstance:818 duplicateTake:837 duplicateUnpooledBelow:863 moveTake:927 resizeTake:935 deleteTake:959
+  @call setItemQNRange  @ relayoutTrack:186 placeAudio:671 cloneMidiItem:698 dropInstance:805 moveTake:925
+  @call setNaturalLenOf  @ relayoutTrack:172,178 resizeTake:933
+  @call setTakeName  @ dropInstance:814 duplicateTake:835 duplicateUnpooledBelow:861 mintParkedTake:900
+  @call siblingInstance  @ takeForSlot:760 dropInstance:788
+  @call slotRowsFor  @ buildState:436
+  @call sourceLenQN  @ relayoutTrack:176 effectiveNaturalLenQN:198
+  @call stampColour  @ stampForTake:290
+  @call stampForTake  @ createAndDropMidi:737 dropInstance:817 duplicateTake:836 duplicateUnpooledBelow:862 mintParkedTake:901
+  @call takeIdOf  @ parkedItemFor:121 isLastInstanceOnTrack:128 ensureSlots:208 ensureColours:256 stampForTake:288 buildTakeShape:353 ownerTrack:571 renameSlot:603 deleteSlot:620 siblingInstance:746 duplicateTake:830 mintParkedTake:894
+  @call takeIdOf  @ deleteTake:953
+  @call takeKind  @ relayoutTrack:167 effectiveNaturalLenQN:194 ensureSlots:212 buildTakeShape:354
+  @call visibleTrackOfCol  @ ownerTrack:574 nextFreeSlot:590 renameSlot:598 deleteSlot:612 createAndDropMidi:715 takeForSlot:756 trackHandle:764 dropInstance:784 duplicateTake:824 duplicateUnpooledBelow:858 mintParkedTake:879 moveTake:926
+  @call visibleTrackOfCol  @ resizeTake:934 deleteTake:951
+  @call writeColours  @ ensureColours:275
+  @call writeSlots  @ ensureSlots:242 createAndDropMidi:732 mintParkedTake:899
 
 # REAPER API surface
   @reaper TakeIsMIDI

@@ -376,7 +376,65 @@
   @use require util  @ 8
 
 # Calls (intra-file)
+  @call adjustRow  @ handleFxChainKeys:1104,1106
+  @call arrange  @ currentTrackLabel:81 slotLabel:87 currentSlotLabel:90 108,123 openNewTakeModal:1282
+  @call buildPlan  @ drawParamsBody:549
+  @call cancelStrip  @ handleFxChainKeys:1072 headerActions:1133 drawAddChainStage:1165
+  @call caretKeyNow  @ handleFxChainKeys:1075 focusParams:1324,1325 renderBody:1451,1466
+  @call centsToSteps  @ adjustRow:942 fxFieldWidget:977
+  @call chainRows  @ handleFxChainKeys:1098
+  @call choiceIndex  @ adjustRow:937 fxFieldWidget:971
+  @call choiceLabels  @ fxFieldWidget:971
+  @call clampCursor  @ handleFxChainKeys:1078 drawFxChainBody:1239
+  @call clickToCursor  @ drawChainStage:1212
+  @call currentSlotLabel  @ 128
+  @call currentTrackLabel  @ 113
+  @call cursorChan  @ 166
+  @call destItems  @ fxFieldWidget:967
+  @call destLabel  @ destItems:925 fxFieldWidget:966
+  @call drawAddChainStage  @ drawFxChainBody:1247
+  @call drawChainStage  @ drawFxChainBody:1248
+  @call drawFlowMarker  @ drawFxChainBody:1246
+  @call drawFxChainBody  @ drawParamPalette:574
+  @call drawParamPalette  @ renderBody:1466
+  @call drawParamsBody  @ drawParamPalette:575
+  @call drawSampleDropdown  @ 185
+  @call drawStatusBar  @ renderStatusBar:1485
+  @call drawTree  @ drawParamsBody:551
+  @call drawTreeItem  @ drawTree:522
+  @call emitParams  @ buildPlan:322
+  @call emptyBody  @ launchPattern:914
+  @call enterStrip  @ clickToCursor:1178 drawFxChainBody:1240
+  @call fxFieldWidget  @ drawChainStage:1214
+  @call handleFxChainKeys  @ drawFxChainBody:1252
+  @call handlePaletteKeys  @ drawParamsBody:550
+  @call headerActions  @ drawFxChainBody:1241
+  @call hostPitch  @ adjustRow:941 fxFieldWidget:975
+  @call kindItems  @ drawAddChainStage:1161 drawChainStage:1192
+  @call launchPattern  @ adjustRow:947 fxFieldWidget:981 handleFxChainKeys:1093
+  @call navIndex  @ handlePaletteKeys:378
+  @call navRows  @ drawParamsBody:550
+  @call openConfirm  @ scopedAction:816 openTakeProperties:1418
+  @call openPrompt  @ addColumn:835 1332
+  @call paletteActions  @ drawParamsBody:538
+  @call paletteFindBox  @ drawParamsBody:539
+  @call paramRange  @ clampCursor:1048
+  @call patternSummary  @ fxFieldWidget:981
+  @call planIndexOfCursor  @ drawTree:516
+  @call removeAutomation  @ paletteActions:223 removeOrHideCol:852
+  @call rowHighlight  @ drawAddChainStage:1159 drawChainStage:1186,1209
+  @call rowIndexOf  @ handleFxChainKeys:1099
+  @call scopedAction  @ 1350,1351
+  @call scrollFollow  @ drawTreeItem:451,475
+  @call selectParam  @ handlePaletteKeys:406,415
+  @call slideTemper  @ adjustRow:940 fxFieldWidget:974
+  @call slotLabel  @ currentSlotLabel:91 124
+  @call stepsToCents  @ adjustRow:945 fxFieldWidget:979
+  @call stripColumns  @ stripPlan:1040
+  @call stripPlan  @ renderBody:1452
   @call tr:focusState  @ 864 renderBody:1441,1474
+  @call trackLabel  @ currentTrackLabel:82 109
+  @call typedChar  @ handleFxChainKeys:1110
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath

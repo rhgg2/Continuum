@@ -37,7 +37,10 @@
   @use require util  @ 21
 
 # Calls (intra-file)
+  @call marksOf  @ renderNode:85
+  @call newNode  @ start:39,44
   @call perf.dump  @ toggle:130
+  @call renderNode  @ renderNode:89 report:98
 
 # REAPER API surface
   @reaper time_precise

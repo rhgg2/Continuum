@@ -30,6 +30,7 @@
   @api fs.listAudioFiles(path)  @ 82-92
 
 # Calls (intra-file)
+  @call copyFile  @ 113
   @call fs.isAudio  @ listAudioFiles:87
 
 # REAPER API surface

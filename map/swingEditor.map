@@ -225,6 +225,46 @@
   @use require timing  @ 15
   @use require util  @ 14
 
+# Calls (intra-file)
+  @call activeEntries  @ buildDescriptor:580
+  @call addFactor  @ drawEditBody:746
+  @call arrange  @ commit:55 inUseNames:516
+  @call bandLayout  @ drawEditBody:706
+  @call buildDescriptor  @ libraryDescriptor:795
+  @call cloneForEdit  @ patchFactor:292 addFactor:300 removeFactor:306 moveFactor:316 drawFactorRow:355,400 drawToolsRow:691
+  @call commit  @ drawFactorRow:341,358,382,406 resetToSnapshot:567 drawToolsRow:695
+  @call compositesEqual  @ swingWrite:278 buildDescriptor:595
+  @call deleteFromTier  @ 476
+  @call draw  @ render:782
+  @call drawBandInto  @ drawEditBody:721
+  @call drawEditBody  @ draw:759
+  @call drawFactorRow  @ drawEditBody:744
+  @call drawSwingStrip  @ drawBandInto:219,227
+  @call drawToolsRow  @ renderToolbar:791
+  @call globalSwings  @ deleteFromTier:444 477
+  @call gridMetrics  @ bandLayout:173
+  @call homeTier  @ switchTo:439
+  @call inUseNames  @ 524 buildDescriptor:584
+  @call materialise  @ drawBandInto:219,227
+  @call meterClassifier  @ bandLayout:174
+  @call meterQN  @ meterClassifier:123
+  @call moveFactor  @ drawFactorRow:410,414
+  @call nearestRpb  @ stepRpb:656 drawToolsRow:667
+  @call patchFactor  @ drawFactorRow:340,381
+  @call periodLabel  @ drawFactorRow:370,371
+  @call periodOverPPC  @ drawFactorRow:375
+  @call periodPresetIndex  @ periodLabel:74 drawFactorRow:367
+  @call phaseQN  @ compositesEqual:255,262
+  @call projectSwings  @ homeTier:431 deleteFromTier:444 477 inUseNames:515
+  @call readFactors  @ compositesEqual:256 moveFactor:313 drawEditBody:700 renderToolbar:789
+  @call removeFactor  @ drawFactorRow:417
+  @call resolvedSlots  @ open:772
+  @call shiftCap  @ drawFactorRow:336,345,378
+  @call swingRead  @ swingWrite:278 cloneForEdit:286 moveFactor:312 switchTo:440 buildDescriptor:595 draw:755 renderToolbar:788
+  @call swingWrite  @ patchFactor:295 addFactor:302 removeFactor:308 moveFactor:318 drawFactorRow:356,403 resetToSnapshot:566 drawToolsRow:693
+  @call switchTo  @ 470,477,478,607 buildDescriptor:587 open:775,779
+  @call tracker  @ meterQN:59 swingWrite:280 resolvedSlots:489 606
+
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB

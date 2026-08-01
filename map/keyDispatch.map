@@ -37,6 +37,10 @@
   @use call    ImGui.IsKeyPressed  @ handlePrefixCapture:30,34,37 dispatchKeys:67
   @use require imgui  @ 9
 
+# Calls (intra-file)
+  @call handlePrefixCapture  @ dispatchKeys:52
+  @call isDigitMods  @ handlePrefixCapture:30,34
+
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB

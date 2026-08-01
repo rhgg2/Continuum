@@ -61,7 +61,14 @@
   @use require util  @ 4
 
 # Calls (intra-file)
+  @call factoryTier  @ localize:79 seedIfEmpty:119 reloadPlan:130 factoryOverwrites:143 importFactory:152
   @call lib.localize  @ forkToProject:85
+  @call libraryTier  @ sourceOf:21 names:49 get:59 localize:79 publishOverwrites:101 seedIfEmpty:116 reloadPlan:127 factoryOverwrites:144
+  @call projectTier  @ names:48 get:57 modified:64 localize:76 forkToProject:86 publish:93 publishOverwrites:100
+  @call sortedNames  @ names:48,49
+  @call sourceOf  @ modified:66 revert:108 tidy:164
+  @call synth  @ names:46 localize:75 seedIfEmpty:117 reloadPlan:128 importFactory:151 delete:181
+  @call writeTier  @ localize:80 publish:94 revert:109 importFactory:153
 
 # Fields (r read / w write incl. constructor keys)
   @field w add  @ reloadPlan:138

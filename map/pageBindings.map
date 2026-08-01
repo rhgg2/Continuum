@@ -26,6 +26,9 @@
   @use require imgui  @ 10
   @use require util  @ 11
 
+# Calls (intra-file)
+  @call placeKey  @ 173
+
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB

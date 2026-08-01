@@ -87,6 +87,13 @@
   @use require util  @ 16
 
 # Calls (intra-file)
+  @call findRampOff  @ resolveComposite:280
+  @call findRampOn  @ resolveComposite:279
+  @call identityShape  @ resolveComposite:276,284
+  @call newton  @ smooth:67
+  @call smooth  @ 83,90,96,102,109
+  @call tileApply  @ applyFactors:224
+  @call tileUnapply  @ unapplyFactors:230
   @call timing.applyFactors  @ findRampOn:251,255 findRampOff:263,267 eval:297
   @call timing.atomTilePeriod  @ resolveFactors:189
   @call timing.isIdentity  @ resolveComposite:276

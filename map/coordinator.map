@@ -146,8 +146,12 @@
   @use require util  @ 7
 
 # Calls (intra-file)
+  @call anyFxFloating  @ frame:150
   @call coord:getFacade  @ 365
   @call coord:setActive  @ register:297 returnToArrange:321 togglePage:338
+  @call frame  @ run:358
+  @call pollExternalCommands  @ frame:146
+  @call tick  @ frame:154
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath

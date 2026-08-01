@@ -193,6 +193,24 @@
 
 # Calls (intra-file)
   @call ar:focusState  @ renderBody:780,806
+  @call drainWheel  @ handleGridMouse:241,242
+  @call floorTo  @ handleGridMouse:271,306
+  @call focusedSlotEntry  @ renderPaletteBody:737
+  @call gridGeom  @ handleGridMouse:218 renderGrid:324
+  @call handleGridMouse  @ renderBody:793
+  @call openDeleteModal  @ renderPaletteActions:695
+  @call openRenameModal  @ renderPaletteActions:689
+  @call paletteTrackLabel  @ renderBody:801
+  @call peaksFor  @ renderGrid:384
+  @call popBodyStyles  @ renderBody:779,805
+  @call pushBodyStyles  @ renderBody:772
+  @call renderGrid  @ renderBody:794
+  @call renderPaletteActions  @ renderPaletteBody:738
+  @call renderPaletteBody  @ renderBody:802
+  @call renderPaletteList  @ renderPaletteBody:740
+  @call rowLabel  @ renderGrid:580
+  @call slotFill  @ renderGrid:433
+  @call takeWindowSec  @ peaksFor:118 renderGrid:376
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath

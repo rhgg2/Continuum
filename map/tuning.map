@@ -105,6 +105,17 @@
       @contract  name ⇒ name+octave (C-4); blank/absent ⇒ degree-octave (7-4). Octave +1 at octaveStep.  @ 458
 
 # Calls (intra-file)
+  @call asRatio  @ genRank2:351,352
+  @call combinations  @ genCPS:280
+  @call computeCellWidth  @ derive:82
+  @call computeOctaveStep  @ derive:80
+  @call edo  @ 98,101,105,110
+  @call gcd  @ genCPS:292 stackRatio:324
+  @call octaveFieldWidth  @ computeCellWidth:45 derive:81
+  @call octaveLabel  @ octaveFieldWidth:33 stepToParts:455
+  @call reduceCents  @ stepSpectrum:332 genRank2:358
+  @call stackRatio  @ genRank2:357
+  @call stepSpectrum  @ mosInfo:371 nextMosSize:381
   @call tuning.midiToStep  @ snap:432 transposeStep:437 stepsBetween:443,444
   @call tuning.scalaPitch  @ scalaPitch:57 derive:73,77 scalaToTemper:161,166 genCPS:296 genRank2:353 mosInfo:371 nextMosSize:378
   @call tuning.stepToMidi  @ snap:432 transposeStep:438

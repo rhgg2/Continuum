@@ -160,6 +160,35 @@
   @use call    util.pick  @ buildCtx:520
   @use require util  @ 39
 
+# Calls (intra-file)
+  @call allocStream  @ allocateOnce:1373,1540
+  @call allocateOnce  @ allocate:1909,1913
+  @call assembleTracks  @ targetTracks:926
+  @call bisect  @ bisectOutOfFamily:1778 splitOverCap:1886
+  @call bisectOutOfFamily  @ splitOverCap:1884
+  @call buildConns  @ targetTracks:924
+  @call buildCtx  @ deriveMasterSplit:942 compile:1114
+  @call cmpOpt  @ sortOutWires:791,793 sortIntraConns:799,801
+  @call convertCrossing  @ bisectOutOfFamily:1783,1785 evictMember:1799
+  @call deriveMasterSplit  @ compile:1114
+  @call evictMember  @ splitOverCap:1891
+  @call hasMergeCrossing  @ pickEvictableLeaf:1821
+  @call isChainMember  @ assembleTracks:867
+  @call isFolderFeed  @ bisectOutOfFamily:1779,1780 evictMember:1797
+  @call minCrossingGap  @ splitOverCap:1838
+  @call nativeGains  @ targetTracks:923
+  @call neqOpt  @ sortOutWires:791 sortIntraConns:799,801
+  @call ordAppend  @ allocateOnce:1311,1455
+  @call orderedGroup  @ allocateOnce:1339,1362,1401,1472,1476,1507
+  @call pickEvictableLeaf  @ splitOverCap:1870
+  @call routeByTrack  @ targetTracks:925
+  @call sortIntraConns  @ assembleTracks:881,904
+  @call sortOutWires  @ assembleTracks:903
+  @call spliceBusses  @ compile:1113
+  @call splitOverCap  @ allocate:1910,1914
+  @call toExplicitFeed  @ bisectOutOfFamily:1779 evictMember:1797
+  @call topoIntraTrack  @ assembleTracks:884,907
+
 # Fields (r read / w write incl. constructor keys)
   @field r N  @ allocateOnce:1435,1503 splitOverCap:1837,1838,1861
   @field w N  @ allocateOnce:1375,1376

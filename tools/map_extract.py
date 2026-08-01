@@ -501,18 +501,24 @@ def parse(path: Path) -> MapFile:
     attach_annotations(cm)
     for name, lns in cm.signal_lines.items():
         cm.signal_sites[name] = [(caller_at(ln), ln) for ln in lns]
-    extract_uses(cm, lines, caller_at)
+    extract_uses(cm, lines, code_lines, caller_at)
     cm.fields = [(kind, name, ln, caller_at(ln))
                  for kind, name, ln in extract_fields(code_lines)]
     return cm
 
 
-def extract_uses(cm: MapFile, lines: list[str], caller_at) -> None:
-    """Walk lines collecting outbound edges. Stores each receiver verbatim
-    (source-faithful: `cm:get`, `util.deepClone`); the alias table is
-    consulted only to drop unresolved receivers and skip intra-module calls.
-    The querier resolves the short name to a module via the self-name
-    registry (unique per module, from each map's `self=` marker)."""
+def extract_uses(cm: MapFile, lines: list[str], code_lines: list[str],
+                 caller_at) -> None:
+    """Walk lines collecting outbound edges, and this file's own intra-file
+    call graph alongside them -- the receiver-qualified sites the outbound
+    pass skips as intra-module, plus a bare-name pass over module-private
+    helpers.
+
+    Outbound edges store each receiver verbatim (source-faithful: `cm:get`,
+    `util.deepClone`); the alias table is consulted only to drop unresolved
+    receivers and skip intra-module calls. The querier resolves the short
+    name to a module via the self-name registry (unique per module, from
+    each map's `self=` marker)."""
     aliases: dict[str, str] = {}
     for d in cm.imports:    aliases[d.name] = d.init   # name → module
     for d in cm.constructs: aliases[d.name] = d.init
@@ -580,6 +586,20 @@ def extract_uses(cm: MapFile, lines: list[str], caller_at) -> None:
             mod = aliases.get(source)
             if mod:
                 add('forward', f'{source}:{sig}', line)
+
+    # A module-private helper is called with no receiver at all, so the
+    # qualified pass above cannot see it. Masked code, not the `--`-stripped
+    # raw lines: a helper name inside a string literal is not a call site.
+    for name in sorted({b.name for b in cm.private_fns}):
+        # The lookbehind rather than `\b`, which matches after `.` and `:`:
+        # `tm:rawIndexFor(` would otherwise satisfy the bare pattern too and
+        # emit a second edge keyed `rawIndexFor` for a site already keyed
+        # `tm:rawIndexFor`, collapsing the private-fn/method distinction.
+        rx = re.compile(rf"(?<![.:\w]){re.escape(name)}\s*\(")
+        for i, code in enumerate(code_lines):
+            for m in rx.finditer(code):
+                if not FN_DECL_PREFIX.fullmatch(code[:m.start()]):
+                    add_call(name, i + 1)
 
     cm.uses.sort(key=lambda u: (u[0], u[1], u[2]))
     cm.calls.sort(key=lambda c: (c[0], c[2]))

@@ -43,6 +43,20 @@
 # Public API (bridge:*)
   @api bridge:tick()  @ 201-209
 
+# Calls (intra-file)
+  @call defaultSpoolDir  @ 21
+  @call dirExists  @ tick:205
+  @call execute  @ scanOnce:192
+  @call firstReq  @ scanOnce:187
+  @call formatResponse  @ scanOnce:192
+  @call join  @ scanOnce:190,191,192
+  @call nowMs  @ execute:138,157
+  @call parseDirectives  @ execute:137
+  @call readAll  @ scanOnce:190
+  @call render  @ execute:152
+  @call scanOnce  @ tick:208
+  @call writeAtomic  @ scanOnce:192
+
 # REAPER API surface
   @reaper time_precise
   @reaper Undo_BeginBlock, Undo_EndBlock2

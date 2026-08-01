@@ -211,8 +211,48 @@
   @use require util  @ 25
 
 # Calls (intra-file)
+  @call blockFits  @ moveByLane:681,694
+  @call blockKeys  @ moveByLane:673
+  @call caretToBlock  @ moveByLane:698
+  @call clampPos  @ swapEnds:184 moveRow:196 moveStop:226 setPos:351 clampPos:354 shiftSelection:453 moveBy:586 caretToBlock:665 hopInstance:792
+  @call currentEntry  @ sealMove:505 duplicate:557 moveBy:577 moveByChan:592 moveByLane:671 shiftSideways:705
+  @call cursorIndex  @ dropInstance:565
+  @call cursorPart  @ selStart:89 selUpdate:123 cursorPart:369 region:378
+  @call cycleHBlock  @ registerCommands:818
+  @call cycleVBlock  @ registerCommands:819
   @call ec:regionExit  @ 760
   @call ec:setPos  @ extendTo:441
+  @call enterArmed  @ regionArm:728,734
+  @call exitMode  @ regionExit:739 761
+  @call firstStopForPart  @ regionStart:385 setSelection:413
+  @call gmgr  @ orderedInstances:312 sealMove:514 newFromSelection:534 stampAt:546 duplicate:558 dropInstance:566 resizeBy:711 hopInstance:776
+  @call hopInstance  @ registerCommands:821,822
+  @call isSticky  @ cycleHBlock:144 cycleVBlock:160 moveRow:192,197 moveStop:203,227 moveUnit:232,236,250 moveCol:258,265 moveChannel:291
+  @call isSticky  @ isSticky:371
+  @call laneWalkable  @ shiftSideways:706
+  @call moveBy  @ 752,753
+  @call moveByChan  @ shiftSideways:706
+  @call moveByLane  @ shiftSideways:706
+  @call moveChannel  @ moveByChan:604 registerCommands:816,817
+  @call moveCol  @ registerCommands:805,806,814,815
+  @call moveRow  @ advance:459 registerCommands:799,800,801,802,803,804,809,810
+  @call moveStop  @ moveUnit:240,241,245,246 moveCol:259,266 registerCommands:807,808,811,812
+  @call moveUnit  @ moveCol:255 moveChannel:279
+  @call newFromSelection  @ regionArm:727
+  @call noteLanesIn  @ topLaneIn:621 blockFits:638
+  @call orderedInstances  @ currentEntry:330 dropInstance:565,567
+  @call paintCell  @ 762,763
+  @call partAt  @ cursorPart:70 selUpdate:123
+  @call partsFor  @ decorateCol:860
+  @call sealMove  @ exitMode:519 newInstance:551 duplicate:556 regionArm:725
+  @call selClear  @ moveRow:194 moveStop:205 moveUnit:232 reset:363 selClear:435 newFromSelection:537 761 registerCommands:813
+  @call selStart  @ moveRow:193 moveStop:204 extendTo:440
+  @call selUpdate  @ cycleHBlock:154 cycleVBlock:170 swapEnds:185 moveRow:197 moveStop:227 moveUnit:250 extendTo:442 selectSpan:466
+  @call selectSpan  @ selectChannel:471 selectColumn:476
+  @call shiftSideways  @ 756,757
+  @call stampAt  @ newInstance:551 duplicate:560
+  @call swapEnds  @ registerCommands:820
+  @call topLaneIn  @ moveByLane:690
 
 # Fields (r read / w write incl. constructor keys)
   @field r anchor  @ sealMove:508,509,510,512 duplicate:560 moveBy:580 moveByChan:600,601 caretToBlock:657,658 moveByLane:676

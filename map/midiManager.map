@@ -330,9 +330,62 @@
   @use sub     eventMeta:poolsRewound  @ 925
 
 # Calls (intra-file)
+  @call addCC  @ add:1310
+  @call addNote  @ add:1310
+  @call assignCC  @ assign:1329
+  @call assignNewUUID  @ load:749,756,877 addNote:1165 addCC:1288
+  @call assignNote  @ assign:1328
+  @call bezierSample  @ curveSample:155
+  @call bucketOrder  @ chanOrder:405 rebuild:495,504
+  @call cachedSeatKey  @ rebuild:494
+  @call ccSidecarDecode  @ load:647
+  @call ccSidecarEncode  @ ccSidecarEntry:445
+  @call ccSidecarEntry  @ sidecarPut:461 rebuild:509
+  @call chanOrder  @ indexPut:410 indexDrop:411
+  @call checkLock  @ assignNote:1120 addNote:1147 assignCC:1222 addCC:1267 delete:1341
+  @call cloneOut  @ notes:1092 ccs:1190 byUuid:1301 events:1368
+  @call curveSample  @ interpolate:1389
+  @call deleteMetadatum  @ resolveCollisions:972 delete:1357
+  @call enterNest  @ modify:1058 batch:1075
+  @call flushMetadata  @ leaveNest:1045
+  @call flushTake  @ load:883 leaveNest:1048
+  @call freeSlot  @ resolveCollisions:970 delete:1352,1354
+  @call fullSortByPpq  @ stableByPpq:311
+  @call idOf  @ ccSidecarEncode:197 load:625
+  @call identityOrder  @ rebuild:488 load:638
+  @call indexDrop  @ resolveCollisions:968,977 assign:1327 delete:1346
+  @call indexPut  @ resolveCollisions:979 addNote:1174 pushCC:1261 assign:1330
+  @call leaveNest  @ modify:1066 batch:1077
+  @call listOf  @ indexPut:410 indexDrop:411
+  @call liveTake  @ reload:919 modify:1057 take:1375 resolution:1397 length:1403 name:1410 setName:1416 setLength:1448 timeSigs:1463
+  @call markChan  @ add:1311 assign:1322,1334 delete:1344
+  @call markWire  @ markWireAdded:1014 assign:1323 delete:1345
+  @call markWireAdded  @ add:1312
+  @call metaFieldsOf  @ saveMetadatum:258
   @call mm:load  @ reload:920 1502
   @call mm:reload  @ 928 setLength:1459
   @call mm:resolution  @ length:1406 setLength:1454
+  @call noteCollision  @ assignNote:1137 addNote:1177
+  @call noteSidecarDecode  @ load:643
+  @call noteSidecarEncode  @ noteSidecarEntry:431
+  @call noteSidecarEntry  @ sidecarPut:460 rebuild:498
+  @call orderInsert  @ indexPut:410 resolveCollisions:979 assignNote:1133 addNote:1173 assignCC:1233 pushCC:1260
+  @call orderRemove  @ freeSlot:371 indexDrop:411 resolveCollisions:977 assignNote:1129 assignCC:1230
+  @call ordered  @ rawInChan:418 load:746,876 resolveCollisions:959 notes:1089 notesRaw:1100 ccs:1187 ccsRaw:1198 events:1363,1364
+  @call print  @ saveMetadatum:257 flushTake:537 modify:1067 addNote:1150 assignCC:1225 addCC:1273,1278
+  @call pushCC  @ addCC:1282
+  @call rawInChan  @ notesRaw:1099 ccsRaw:1197
+  @call rebuild  @ load:881
+  @call resolveCollisions  @ leaveNest:1040
+  @call saveMetadatum  @ assignNote:1116,1142 addNote:1180 assignCC:1218,1244 addCC:1290
+  @call seatKey  @ cachedSeatKey:388 assignNote:1125,1135 addNote:1176 delete:1350
+  @call seatSidecar  @ sidecarPut:460,461 sidecarDrop:465
+  @call setEot  @ setLength:1454
+  @call setTakeGuid  @ load:611 1502
+  @call sidecarDrop  @ resolveCollisions:969 delete:1347
+  @call sidecarPut  @ resolveCollisions:980 addNote:1175 addCC:1292 assign:1333
+  @call stableByPpq  @ rebuild:479
+  @call touchesMetadata  @ assignNote:1116,1142 assignCC:1212
 
 # REAPER API surface
   @reaper ValidatePtr2

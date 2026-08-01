@@ -446,7 +446,99 @@
   @use require util  @ 10
 
 # Calls (intra-file)
+  @call arrowMidHit  @ renderCanvas:1843
+  @call atomise  @ wrapLabel:214
+  @call badgeHit  @ renderCanvas:2073,2105
+  @call badgeRects  @ drawNodeBadges:365 badgeHit:373
+  @call boxRect  @ drawSlot:310 layoutPortRow:508 slotHit:547 rowHit:557 onChevron:578 drawPortRow:782
+  @call busBarAt  @ renderCanvas:2202,2308
+  @call busBarHit  @ renderCanvas:1885
+  @call busBarSource  @ renderCanvas:1887
+  @call busDragApply  @ renderCanvas:1799
+  @call busDragPos  @ renderCanvas:1800,2275
+  @call busSegments  @ renderCanvas:1810
+  @call bussablePorts  @ renderCanvas:2368
+  @call camelSplit  @ atomise:192
+  @call closestPointOnSegment  @ pointToSegmentDist:1048 busBarSource:1578
+  @call commitFx  @ 2668,2673
+  @call computeDraftEnd  @ renderCanvas:1875
+  @call dbFromP  @ pixelYToLin:1189
+  @call dbToLin  @ pixelYToLin:1189 renderCanvas:2048
+  @call defaultSlot  @ pickHovered:592 stickyHoverHit:686
+  @call deleteSourceGuarded  @ renderPaletteActions:2469
+  @call draftSourceHoverHit  @ renderCanvas:1883
+  @call drawBadge  @ drawNodeBadges:366,367
+  @call drawBodyOutline  @ renderCanvas:1960
+  @call drawBusBar  @ renderCanvas:1923
+  @call drawBusPass  @ renderCanvas:1918
+  @call drawDraftWire  @ renderCanvas:1926
+  @call drawFader  @ renderCanvas:1952
+  @call drawHandle  @ drawPortRow:776
+  @call drawKeyboardIcon  @ drawSlot:312 drawPortRow:783
+  @call drawList  @ renderCanvas:1963
+  @call drawNode  @ renderCanvas:1929
+  @call drawNodeBadges  @ renderCanvas:1930
+  @call drawPortRow  @ renderCanvas:1962
+  @call drawPortRowBg  @ renderCanvas:1925
+  @call drawSlot  @ drawPortRow:785
+  @call drawSourceTag  @ renderCanvas:1915
+  @call drawTagAt  @ renderCanvas:1937
+  @call drawWireArrow  @ drawWiresPass:1101 drawDraftWire:1226 drawBusPass:1513
+  @call drawWireEndHighlight  @ renderCanvas:1942
+  @call drawWireEndLabel  @ drawWiresPass:1110,1115 drawBusPass:1520
+  @call drawWiresPass  @ renderCanvas:1910
+  @call dropEligible  @ renderCanvas:2224
+  @call dropTargetHit  @ renderCanvas:1882
+  @call endRegion  @ wireEndHit:1063 drawWireEndHighlight:1129
+  @call engagedHover  @ shiftHoverHit:665 dropTargetHit:732
+  @call faderRectAt  @ renderCanvas:1984
+  @call findLayoutSlot  @ draftSourceHoverHit:719 renderCanvas:2122,2169
+  @call inRect  @ badgeHit:374,375 slotHit:547 rowHit:557 onChevron:578 pickHovered:584 stillEngaged:602 engagedHover:622 draftSourceHoverHit:710,711 sourceTagHit:1657 nodeUnderMouse:1668
+  @call inRect  @ nodeAtPoint:1678 renderCanvas:1853,2017,2027,2043
+  @call layoutList  @ layoutPortRow:519
+  @call layoutPortRow  @ engagedHover:634,648 shiftHoverHit:661 stickyHoverHit:685 draftSourceHoverHit:708 renderCanvas:2120,2166
+  @call leastOccupiedDir  @ sourceSegments:1311
+  @call linToDb  @ drawFader:1199,1204 renderCanvas:2001,2045
+  @call makeBusDrag  @ renderCanvas:2204
+  @call nodeAtPoint  @ renderCanvas:2246
+  @call nodeBox  @ drawNode:256 drawBodyOutline:340 badgeRects:349 layoutPortRow:416 engagedHover:622 draftSourceHoverHit:711 nodeUnderMouse:1668 nodeAtPoint:1678 nodesInBand:1691
+  @call nodeEdgePoint  @ busSegments:1469
+  @call nodeHasFx  @ badgeHit:372 renderCanvas:1930
+  @call nodeUnderMouse  @ renderCanvas:2070,2104,2201,2307
+  @call nodesInBand  @ renderCanvas:1741,2291
+  @call onChevron  @ pickHovered:589 stillEngaged:601 draftSourceHoverHit:713
+  @call openAddSourceModal  @ renderPaletteActions:2465
+  @call pFromDb  @ drawFader:1197,1199 renderCanvas:2001
+  @call pickHovered  @ engagedHover:639,649
+  @call pixelYToLin  @ renderCanvas:1829,2029
+  @call pointToSegmentDist  @ wireEndHit:1065 busBarHit:1567 busBarSource:1577 busBarAt:1588
+  @call popBodyStyles  @ renderBody:2553
+  @call pushBodyStyles  @ renderBody:2534
+  @call rect  @ boxRect:141 nodeBox:155 strokeNodeRect:166 drawKeyboardIcon:284,289 badgeRects:353,354 layoutList:406,408,409 layoutPortRow:521,535
+  @call rect  @ layoutPortRow:537 drawList:755 drawPortRow:791 drawWireEndLabel:960 drawFader:1202,1203 drawSourceTag:1252 drawBusBar:1533 sourceTagHit:1657 renderCanvas:1709,1989,1990
+  @call rect  @ renderCanvas:2421,2422
+  @call renderCanvas  @ renderBody:2543
+  @call renderPaletteActions  @ renderPaletteBody:2515
+  @call renderPaletteList  @ renderPaletteBody:2517
+  @call rowHit  @ engagedHover:637
+  @call shiftHoverHit  @ renderCanvas:1888
+  @call slotHit  @ pickHovered:585 draftSourceHoverHit:712
+  @call sourcePosFor  @ 2600
+  @call sourceSegments  @ renderCanvas:1808
+  @call sourceTagHit  @ renderCanvas:1823
+  @call sourceTagLayout  @ drawSourceTag:1251 sourceSegments:1316 busSegments:1435 sourceTagHit:1656
+  @call stickyHoverHit  @ renderCanvas:1891
+  @call stillEngaged  @ engagedHover:635
+  @call strokeNodeRect  @ drawNode:259 drawBodyOutline:340
+  @call unionRect  @ layoutPortRow:509,525
+  @call wireEndHit  @ renderCanvas:1822
+  @call wireExits  @ wireMid:873 endRegion:1024 drawWiresPass:1103
+  @call wireGroups  @ wireSegments:990
+  @call wireMid  @ renderCanvas:1815
+  @call wireOffset  @ wireSegments:1003 sourceSegments:1328
+  @call wireSegments  @ renderCanvas:1807
   @call wr:focusState  @ renderBody:2554
+  @call wrapLabel  @ drawNode:264 sourceTagLayout:1239
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath

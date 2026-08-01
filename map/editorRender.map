@@ -90,7 +90,17 @@
   @use require imgui  @ 15
 
 # Calls (intra-file)
+  @call actionBar  @ projectActions:68 libraryActions:91
+  @call activePane  @ 203,204 renderBody:219
   @call er:focusState  @ renderBody:218
+  @call has  @ shadowsSource:45
+  @call libraryActions  @ libraryTree:135
+  @call libraryFolder  @ libraryTree:147,154
+  @call libraryRow  @ libraryTree:151,156
+  @call libraryTree  @ renderBody:239
+  @call onClose  @ 209 renderBody:224
+  @call projectActions  @ libraryTree:136
+  @call shadowsSource  @ projectActions:76
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath

@@ -18,6 +18,11 @@ post-edit hooks drive this rather than map_extract directly.
                          the same, skipping sources no newer than their map:
                          what the post-edit hooks run, ~25ms against 1.6s
 
+Reviewing what a --write did takes `git diff --text -- map/`. .gitattributes
+carries `map/*.map -diff`, so a plain diff renders each changed map as
+"Bin nnn -> nnn bytes" -- and a grep over that for removed lines comes back
+empty whatever changed, which reads exactly like a clean additive diff.
+
 An orphan is a .map whose source no longer exists. It is reported in both
 modes and deleted in neither: a delete is not a regeneration.
 """
@@ -127,6 +132,11 @@ def main() -> int:
     elif not problems:
         headline += " -- all current"
     print(headline)
+    # Said at the point of need, because the diff that suppresses itself is
+    # indistinguishable from the diff that had nothing to show. Not on the
+    # --stale-only path: that is the post-edit hook, which nobody reviews.
+    if args.write and written and not args.stale_only:
+        print("  review with: git diff --text -- map/")
     for kind, detail in problems:
         print(f"  {kind:<8} {detail}")
 

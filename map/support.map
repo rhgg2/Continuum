@@ -46,6 +46,10 @@
 # Calls (intra-file)
   @call M.eq  @ eventsMatch:87
   @call M.poolGuidOf  @ seedMeta:173 loadMeta:177
+  @call deepEq  @ deepEq:38,50 bagEq:66 eventsMatch:90
+  @call newEventMeta  @ seedMeta:173 loadMeta:177
+  @call repr  @ repr:23,30 eq:45 deepEq:51 bagEq:72 truthy:77 falsy:81 eventsMatch:92
+  @call toBase36  @ encodeSidecar:137
 
 # REAPER API surface
   @reaper GetMediaItemTake_Item

@@ -826,6 +826,115 @@
   @use sub     tm:takeSwapped  @ 3957
 
 # Calls (intra-file)
+  @call adjustDuration  @ 3574,3575
+  @call adjustDurationCore  @ adjustDuration:1723,1731
+  @call adjustPosition  @ 3576,3577
+  @call adjustPositionMulti  @ adjustPosition:1796
+  @call allGroups  @ quantizeAll:1916 quantizeKeepRealisedAll:1918 scaleAll:1998
+  @call applyNoteOff  @ noteOff:1677,1696
+  @call applyNudge  @ nudge:2292,2304
+  @call applyRegionWindow  @ regionNoteOff:1572,1576 regionAdjustDuration:1586 regionAdjustPosition:1597
+  @call arrange  @ selectedTrackIdx:166 effectiveSlot:170 resolveSelectionTake:186,189,192 retargetTrackTier:199,201 selectTrack:207,210,212 gotoTrack:222 gotoTake:230
+  @call arrange  @ pickTrack:239 newParkedTake:247 duplicateBoundUnpooled:256
+  @call assignNoteMove  @ adjustPositionMulti:1776 adjustPosition:1819
+  @call assignStamp  @ adjustPositionMulti:1778 adjustPosition:1831
+  @call assignTail  @ applyNoteOff:1653 adjustDurationCore:1714 insertRowCore:2051 deleteRowCore:2071
+  @call audition  @ editEvent:887 nudgePitch:2225 nudgeVel:2232
+  @call auditionAdd  @ audition:667 chordStrike:1143,1162 chordNudgeVel:1191
+  @call auditionRelease  @ chordStrike:1120 chordBackspace:1175 chordNudgeVel:1190
+  @call chordCell  @ chordStrike:1116,1156 chordBackspace:1171 chordNudgeVel:1183
+  @call colInInstance  @ planInstanceMoves:2113
+  @call colTypeOf  @ 2730
+  @call colsForAnchor  @ selectRegionAt:2921 duplicate:2948
+  @call conformOverlaps  @ quantizeScope:1880 quantizeKeepRealisedScope:1899 scaleScope:1950 insertRowCore:2037 deleteRowCore:2084
+  @call currentRpb  @ assignStamp:462 assignTail:475 assignNoteMove:484 521 inheritedSign:839 editEvent:866,1001 chordStrike:1106 moveLaneEvent:1327 addLaneEvent:1341 applyNoteOff:1649 scaleScope:1981
+  @call currentRpb  @ insertRowCore:2022 deleteRowCore:2058 planInstanceMoves:2101 cursorRect:2886 selectRegionAt:2923 duplicate:2950 logPerRow:2975 selectionAsRect:3057 cursorAnchor:3123 instanceAtCursor:3139 movePreview:3193 4009
+  @call cursorNoteBefore  @ adjustDuration:1730 adjustPosition:1805
+  @call cursorRegionBefore  @ regionNoteOff:1566 regionAdjustDuration:1580 regionAdjustPosition:1591 shiftFxLane:1614,1620 deleteFxRegionAtCursor:2426
+  @call cursorRowEvent  @ nudge:2302
+  @call cycleShape  @ cycleLaneShape:1403 interpolate:1423,1437
+  @call deleteEvent  @ deleteOrBackspace:2692
+  @call deleteFxRegionAtCursor  @ deleteEvent:2649
+  @call deleteFxRegionsInRect  @ deleteSelection:2685
+  @call deleteRow  @ 3594
+  @call deleteRowCol  @ 3596
+  @call deleteSelection  @ deleteOrBackspace:2691 3563,3566
+  @call digitPartAt  @ digitsStrike:1238
+  @call eachFxRegionInRect  @ gatherFxRegions:2386 deleteFxRegionsInRect:2433
+  @call eachMemberEvent  @ eventsInRect:3075 clearRegionAt:3099 clearMoveGap:3110
+  @call effectiveSlot  @ currentSlotIdx:176 gotoTake:231
+  @call eventsByCol  @ adjustDuration:1720 adjustPositionMulti:1749 quantizeSelection:1915 quantizeKeepRealisedSelection:1917 scaleSelection:1997 nudge:2275 deleteSelection:2681
+  @call findCol  @ shiftEvents:2821,2852
+  @call followViewport  @ rebuild:3934
+  @call forEachRowOp  @ insertRow:2170 deleteRow:2171 insertRowCol:2172 deleteRowCol:2173
+  @call fxColAtLane  @ shiftFxLane:1618
+  @call fxLaneOf  @ applyRegionWindow:1525 shiftFxLane:1616
+  @call hoistTouch  @ pollLearn:3464
+  @call inheritedSign  @ entrySignAt:856
+  @call insertRow  @ 3593
+  @call insertRowCol  @ 3595
+  @call interpolate  @ 3565
+  @call interpolateValues  @ rebuild:3929
+  @call isFrameChange  @ 3967
+  @call killAudition  @ audition:666 tick:675 editEvent:886 chordAbandon:1206
+  @call kindOf  @ 102,103,106,111
+  @call lastVisibleFrom  @ followViewport:713,716 scroll:722
+  @call logPerRowFor  @ assignStamp:463 assignNoteMove:485 inheritedSign:839 editEvent:867 chordStrike:1107 insertRowCore:2022 deleteRowCore:2058 planInstanceMoves:2101 cursorRect:2886 selectRegionAt:2923 duplicate:2950 logPerRow:2975
+  @call logPerRowFor  @ selectionAsRect:3057 cursorAnchor:3123 instanceAtCursor:3139 movePreview:3193 4009
+  @call maxFxRegionN  @ mintRegionUuid:2341 pasteFxRegions:2405
+  @call mintRegionForSelection  @ fxHostForEdit:2480
+  @call mintRegionUuid  @ mintRegionForSelection:2351
+  @call neighbourEvents  @ rowBounds:302,303
+  @call nextShape  @ cycleShape:1393
+  @call notHidden  @ interpolate:1417
+  @call notePAEvents  @ strikePitch:807
+  @call notePreds  @ rowBounds:300
+  @call nudge  @ 3597,3598,3603,3607
+  @call nudgeDelay  @ applyNudge:2255
+  @call nudgePitch  @ applyNudge:2256
+  @call nudgeValue  @ applyNudge:2253
+  @call nudgeVel  @ applyNudge:2254
+  @call parkedByUuid  @ noteFx:2453 noteByUuid:2486 setNoteFx:2503
+  @call pitchFromKey  @ editEvent:903 chordStrike:1111
+  @call pitchStep  @ nudgePitch:2212
+  @call placeNewNote  @ strikePitch:818
+  @call planInstanceMoves  @ forEachRowOp:2152
+  @call ppqRowOf  @ 2743 deletedCells:3174 rebuild:3892,3893,3908,3920
+  @call projectionEpoch  @ rebuild:3836
+  @call pushMute  @ rebuild:3936 3972
+  @call quantizeKeepRealisedScope  @ quantizeKeepRealisedSelection:1917 quantizeKeepRealisedAll:1918
+  @call quantizeScope  @ quantizeSelection:1915 quantizeAll:1916
+  @call recentreOnRegion  @ applyRegionWindow:1560 shiftFxLane:1632
+  @call recoverSlot  @ effectiveSlot:170 resolveSelectionTake:189 selectTrack:212
+  @call regionAdjustDuration  @ adjustDuration:1729
+  @call regionAdjustPosition  @ adjustPosition:1800
+  @call regionByUuid  @ eachFxRegionInRect:2373 noteFx:2455
+  @call regionNoteOff  @ noteOff:1684
+  @call releaseTransientFrame  @ matchGridToCursor:493 setRowPerBeat:512 scaleScope:1988 3967
+  @call relocate  @ 109
+  @call repinToRow  @ strikePitch:799 editEvent:890
+  @call rewriteRegion  @ deleteFxRegionAtCursor:2427 setNoteFx:2514
+  @call rowBounds  @ adjustPosition:1808
+  @call scaleScope  @ scaleSelection:1997 scaleAll:1998
+  @call scaledScalar  @ nudgeVel:2229 nudgeDelay:2239 nudgeValue:2246
+  @call selectRegionAt  @ duplicateCascade:3027
+  @call selectedTrackIdx  @ currentTrackIdx:173 currentSlotIdx:175 resolveSelectionTake:182 retargetTrackTier:200 gotoTrack:221 gotoTake:228 newParkedTake:246 duplicateBoundUnpooled:254
+  @call sendBend  @ killAudition:640 auditionAdd:648 auditionRelease:659
+  @call setDefaultSwing  @ setSwingSlot:551,552 setColSwingSlot:561
+  @call setTakeSwing  @ setSwingSlot:550 setColSwingSlot:560
+  @call settleTypedEdit  @ chordStrike:1119,1161 chordBackspace:1174 chordNudgeVel:1189 digitsBackspace:1268
+  @call shiftEvents  @ 3609,3610
+  @call shiftFxLane  @ shiftEvents:2748
+  @call shiftPlan  @ insertRowCore:2029 deleteRowCore:2080
+  @call stepSample  @ 3571,3572
+  @call stopForPart  @ duplicate:2951
+  @call streamIdOf  @ colInInstance:2093 cursorRect:2888 colsForAnchor:2899 selectionAsRect:3053 eachMemberEvent:3067 clearMoveGap:3112 streamRefAt:3131
+  @call strikePitch  @ editEvent:904 chordStrike:1157
+  @call takeHoist  @ hoistTouch:3370 listParams:3408
+  @call toParkedSpec  @ 78
+  @call toParkedUpdate  @ 79
+  @call toggleChannelFlag  @ toggleChannelMute:616 toggleChannelSolo:617
+  @call toggleSignFlip  @ editEvent:952,1028
   @call tv:cancelLearn  @ armLearn:3428 pollLearn:3453 automateParam:3474
   @call tv:chordAbandon  @ chordCommit:1198 rebuild:3670 dropGrid:3942
   @call tv:chordActive  @ tick:673 3571,3572,3581,3588,3602,3606
@@ -858,6 +967,11 @@
   @call tv:setRowPerBeat  @ 3616,3617,3618,3619
   @call tv:streamRefAt  @ instanceAtCursor:3142 movePreview:3200,3208 paintRegionStream:3228 rebuild:3890
   @call tv:tabOverride  @ paletteTab:3399
+  @call validDigit  @ digitsStrike:1239
+  @call valueBounds  @ nudgeValue:2245
+  @call valueInterval  @ nudgeValue:2246
+  @call visibleAt  @ deleteLaneEvent:1362 setLaneTension:1372 cycleLaneShape:1401
+  @call writePlans  @ quantizeScope:1881 quantizeKeepRealisedScope:1911 scaleScope:1951 insertRowCore:2039 deleteRowCore:2086
 
 # REAPER API surface
   @reaper time_precise

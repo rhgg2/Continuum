@@ -88,6 +88,9 @@
   @use sub     mm:flushed  @ 62
 
 # Calls (intra-file)
+  @call arrange  @ samplerMode:25 bindFromSelection:92,93
+  @call samplerMode  @ bind:73 139,143
+  @call takeHash  @ 62 bindFromSelection:102 renderBody:162
   @call tp:bind  @ bindFromSelection:99 130
   @call tp:bindFromSelection  @ bind:72 renderBody:160
   @call tp:currentTake  @ 130

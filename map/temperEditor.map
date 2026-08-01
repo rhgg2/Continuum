@@ -227,6 +227,50 @@
   @use require tuning  @ 4
   @use require util  @ 3
 
+# Calls (intra-file)
+  @call activeTemper  @ open:805
+  @call addStep  @ drawStepTable:420
+  @call buildDescriptor  @ libraryDescriptor:810
+  @call buildGen  @ drawGenerators:729
+  @call cloneForEdit  @ setStepPitch:127 setStepName:133 setPeriodPitch:139 setPeriodAsStep:145 addStep:151 removeStep:159 generateInto:178
+  @call dirty  @ buildDescriptor:293
+  @call draw  @ render:809
+  @call drawChordFields  @ drawGenerators:727
+  @call drawColumnLabels  @ drawStepTable:395
+  @call drawCpsFields  @ drawGenerators:725
+  @call drawEditBody  @ draw:795
+  @call drawEqualFields  @ drawGenerators:722
+  @call drawGenerators  @ drawEditBody:787
+  @call drawHeader  @ drawStepsTop:750
+  @call drawRank2Fields  @ drawGenerators:726
+  @call drawSeriesFields  @ drawGenerators:723,724
+  @call drawStepRow  @ drawStepTable:397
+  @call drawStepTable  @ drawStepsTop:755
+  @call drawStepsTop  @ drawEditBody:768
+  @call editedTemper  @ selectTemper:75 cloneForEdit:115 dirty:166,167 drawGenerators:716 drawStepsTop:743,744
+  @call genDesc  @ drawGenerators:720
+  @call generateInto  @ drawGenerators:732
+  @call globalTempers  @ 253,258
+  @call homeTier  @ selectTemper:74
+  @call inUseNames  @ 190 buildDescriptor:292
+  @call labeledInput  @ drawEqualFields:574,580,585,591 drawSeriesFields:600,602 drawChordFields:608 drawCpsFields:616,618,620 drawRank2Fields:638,640
+  @call labeledInput  @ drawRank2Fields:661
+  @call pillButton  @ genKindSelector:549
+  @call projectTempers  @ homeTier:51 253,258,434,446
+  @call pushUiPadToGrid  @ drawStepRow:351,368 drawStepTable:409,419
+  @call removeStep  @ drawStepRow:369
+  @call reseedEqual  @ drawEqualFields:578
+  @call selectTemper  @ 249,259,261,437,449 buildDescriptor:282 open:806
+  @call setPeriodAsStep  @ drawHeader:327
+  @call setStepName  @ drawStepRow:364
+  @call setStepPitch  @ drawStepRow:353
+  @call sortSteps  @ temperWrite:105
+  @call stepMos  @ drawRank2Fields:646
+  @call temperFor  @ selectTemper:75 cloneForEdit:115 drawStepsTop:743
+  @call temperWrite  @ setStepPitch:129 setStepName:135 setPeriodPitch:141 setPeriodAsStep:147 addStep:155 removeStep:162 resetToSnapshot:172 generateInto:183
+  @call tokenBox  @ drawHeader:323 drawStepRow:353 drawStepTable:410
+  @call viewedName  @ drawStepsTop:743
+
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB

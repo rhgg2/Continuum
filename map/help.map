@@ -133,6 +133,34 @@
   @use require imgui  @ 8
   @use require util  @ 9
 
+# Calls (intra-file)
+  @call anyKeyPressed  @ draw:537
+  @call buildDismissKeys  @ anyKeyPressed:351 pollCapture:426
+  @call buildSpec  @ pollCapture:430
+  @call cmdLabel  @ drawConflict:230,231,234
+  @call commitCapture  @ pollCapture:430
+  @call crispBorder  @ drawTag:120
+  @call drawBox  @ placePins:303 placeFlow:322
+  @call drawCluster  @ drawBox:203
+  @call drawConflict  @ draw:525
+  @call drawTag  @ drawCluster:167,172
+  @call dropChord  @ reassign:418
+  @call handleClicks  @ draw:536
+  @call handleConflict  @ draw:530
+  @call hitAt  @ handleClicks:470
+  @call insideAnyBox  @ handleClicks:476
+  @call layoutBox  @ draw:515
+  @call layoutCluster  @ layoutBox:184
+  @call placeFlow  @ draw:524
+  @call placePins  @ draw:523
+  @call pollCapture  @ draw:532
+  @call reassign  @ handleConflict:463
+  @call rebindWithout  @ commitCapture:409 reassign:419 handleClicks:472
+  @call rectFor  @ draw:513
+  @call resetEdit  @ setPage:35 close:37 toggle:43 handleClicks:477
+  @call tagSide  @ layoutCluster:100 drawTag:116 drawCluster:172
+  @call withAlpha  @ draw:504,505
+
 # Fields (r read / w write incl. constructor keys)
   @field r Key_0  @ buildDismissKeys:333
   @field r Key_9  @ buildDismissKeys:333

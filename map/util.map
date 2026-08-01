@@ -92,6 +92,12 @@
       @contract  executes the named module file as a fresh chunk, passing `deps` as its `...` argument. Used for factory modules whose file body IS the constructor (vs. stateless `require`d tables). Test seam: a function in util._stubs[name] takes precedence and is called with deps — so harnesses can swap a fake without altering the production graph.  @ 628
 
 # Calls (intra-file)
+  @call bareKey  @ emitTable:597
+  @call emitTable  @ 610
+  @call escape_string  @ serialise:393
+  @call luaNumber  @ 607
+  @call nonFiniteNote  @ emitTable:594,599
+  @call print  @ print_r:37
   @call util.assign  @ picker:93 pick:105
   @call util.clamp  @ nudgedScalar:286
   @call util.clone  @ clone:192 deepClone:198

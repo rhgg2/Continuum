@@ -173,6 +173,16 @@
   @use sub     wm:wiringChanged  @ 419
 
 # Calls (intra-file)
+  @call activation  @ nodeView:126
+  @call audioPorts  @ nodeView:118,119 wireViews:363
+  @call busTag  @ wireViews:376
+  @call ensureView  @ openFxWindow:165 samplerTrack:172 ancestorsOf:288 descendantsOf:294 wiredPorts:303 masterPos:313 nodeViews:323 busViews:332 wireViews:358
+  @call midiPorts  @ nodeView:118,119
+  @call nodeCategory  @ nodeView:125
+  @call nodeLabel  @ nodeView:123 wireViews:388
+  @call nodeView  @ nodeViews:325
+  @call reachSet  @ ancestorsOf:289 descendantsOf:295
+  @call sourceCategory  @ nodeView:124 wireViews:373,387
   @call wv:rebuild  @ 419
 
 # Fields (r read / w write incl. constructor keys)

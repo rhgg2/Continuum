@@ -216,6 +216,69 @@ regression — but it is a second class phase 3's oracle will report, and
 it is the one that bites the forward-tail item: a continuation row has no
 declaration row to hang under when the caller was never captured.
 
+**The bare pattern needs a lookbehind** (2026-08-01). Written above as
+`\b(name)\s*\(`, which is wrong: `\b` matches after `.` and `:`, so
+`tm:rawIndexFor(` satisfies it too and emits a second edge keyed
+`rawIndexFor` for a site already keyed `tm:rawIndexFor` — the
+private-fn/method distinction the decl-head keying bought, undone by the
+pass it was bought for. `(?<![.:\w])`.
+
+**The bare half is seven times the qualified one** (2026-08-01,
+measured). 2833 sites, 1150 callee keys, 1169 rows, 53 modules, against
+item 1's 418 / 171 / 38 — +7.7% on the 15,214-line module-map corpus and
++14.8% on `trackerManager.map`. So in the big maps the reverse index is a
+section you scroll past rather than one you notice. Accepted: it is
+additive line-wise, it sits low in the file, and the alternative is not
+having the index. But a design about read cost should say the number out
+loud rather than meet it later.
+
+**Those numbers were each a step off** (2026-08-01, landed). 2833 is the
+pre-dedupe *match* count, and 31 of the matches are one helper called
+twice on one line, which `call_seen` folds — so the pass emits **2802
+edges** and **1168 rows**. Nor is the pass touching 53 files the corpus
+having 53 sections: three of item 1's 38 sectioned modules (`groups`,
+`samplePage`, `sampleView`) take no bare site at all, so 18 modules gain
+the section and the total lands on **56**. Read cost is +7.9%; the
++14.8% on `trackerManager.map` was exact. Both slips are the same one —
+a count taken one step upstream of the thing it was quoted as, matches
+before dedupe and files touched before sections gained. Worth naming
+because the reflex when a predicted count misses by one is to call it
+rounding, and neither of these was.
+
+**Shadowing is a rounding error** (2026-08-01, measured). Four nested
+`local <name>` shadows of a module-level helper exist corpus-wide, and
+two produce a false edge — `midiManager:625 idOf`, `trackerManager:2010
+snapshot`, 0.07% of sites. The measure looks only at `local`
+declarations, leaving nested-closure parameters and `for` variables
+unchecked, so phase 3's oracle keeps its job; but the guess from house
+style holds, and the cheap pass is not on trial.
+
+**A by-name binding is not a call, and stays out** (2026-08-01). 100 of
+1250 private fns have no call site at all — they are reached by
+reference: command tables (`arrangeDive = diveSelected`), namespace
+export tables (`chrome` returning `row = row`), callback arguments
+(`allocStream(…, audioValueCompare, …)`). For those the reverse index
+answers "nobody calls this" where the honest answer names the entry point
+that explains why the helper exists, which is worse than silence. Still
+not folded in: phase 3's oracle counts `CALL`, a by-name reference is
+`GETUPVAL` without one, and mixing them fills the disagreement rate with
+noise — blunting the one check that has a direction to it. Own row kind,
+own item.
+
+**Bare line numbers: three classes, not two** (2026-08-01, measured). The
+note above splits them into file scope and unparsed declaration. The
+commonest is neither: 83 of the 204 unattributed sites sit at function
+depth ≥ 1 inside an anonymous closure that has no name to attribute to —
+a `tm:subscribe('postflush', function() … persist() … end)` body
+(`groupManager:591`), a table-value function (`fs.fileOps.move`,
+`configManager`'s `savers.track`). Naming those wants vocabulary the map
+hasn't got. The unparsed-declaration class is meanwhile smaller and
+sharper than `frontierTails` suggested: nine file-scope `function foo(`
+assignments to a `local` forward-decl, missed only because
+`NESTED_FN_RE` requires indentation while the `do function foo() … end
+end` spelling of the same idiom is captured. None of the nine is a
+global.
+
 ### Vocabulary — unsettled
 
 The 197 kind-less consecutive `map_query` pairs say the agent frequently

@@ -130,11 +130,17 @@
   @use require util  @ 22
 
 # Calls (intra-file)
+  @call arpIndex  @ arp:115
+  @call curveAt  @ lfo:272,285
   @call generators.destOf  @ retarget:495 parksNotes:512 continuousTargets:522 chainDestType:533 parkWindows:553
   @call generators.destProfile  @ restFor:443 fieldRange:460 retarget:495,496
   @call generators.destsFor  @ fieldsFor:472
   @call generators.fieldRange  @ seed:485
   @call generators.parksNotes  @ parkWindows:551
+  @call interval  @ slide:219
+  @call periodTicks  @ retrig:35 trill:57 arp:107 sine:182 slide:230 lfo:265
+  @call playingAt  @ arp:113 ostinato:141
+  @call ridesLinear  @ thinCurve:577
 
 # Fields (r read / w write incl. constructor keys)
   @field w arp  @ 342

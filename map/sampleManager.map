@@ -117,12 +117,25 @@
   @use require fs  @ 16
 
 # Calls (intra-file)
+  @call absFor  @ rehydrateTrack:216 syncSlot:232 assign:297 loadSlot:304
+  @call clearEntry  @ clearSlot:310
+  @call drain  @ tick:268
+  @call ensureTrackState  @ rehydrateTrack:210 syncSlot:226 tick:249 assign:296 loadSlot:303 clearSlot:311 setTrim:318 setName:326
+  @call findSamplerFx  @ gatherTakenIds:74 isLive:193 getInstanceId:197 tick:247 listTracks:392
+  @call forceAnticipativeFxOff  @ tick:253,259
+  @call gatherTakenIds  @ getInstanceId:201
+  @call nextFreeId  @ getInstanceId:201
+  @call pushSlot  @ rehydrateTrack:215 syncSlot:229,231 assign:296 loadSlot:303 clearSlot:311 setTrim:318 setName:326
+  @call readInstanceId  @ gatherTakenIds:75 getInstanceId:199
+  @call relForSrc  @ assign:283 stageInto:334
+  @call setEntry  @ setTrim:317 setName:325
   @call sm:getInstanceId  @ tick:261 previewSlot:352 stopPreview:364 previewPath:375 listTracks:396
   @call sm:listTracks  @ migrate:408
   @call sm:loadSlot  @ stageInto:338
   @call sm:migrate  @ watchPath:433
   @call sm:rehydrateTrack  @ tick:266
   @call sm:setPrefix  @ watchPath:430
+  @call writePath  @ previewPath:378
 
 # REAPER API surface
   @reaper gmem_write, gmem_read, gmem_attach

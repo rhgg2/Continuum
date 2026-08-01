@@ -28,6 +28,10 @@
   @use require perf  @ 18
   @use require util  @ 16
 
+# Calls (intra-file)
+  @call createImGui  @ Main:69
+  @call run  @ 195
+
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB

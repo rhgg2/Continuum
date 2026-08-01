@@ -79,6 +79,17 @@
   @use call    util.unserialise  @ load:53
   @use require util  @ 11
 
+# Calls (intra-file)
+  @call collect  @ collect:472 copy:473 registerCommands:479
+  @call load  @ registerCommands:482
+  @call pasteClip  @ pasteClip:474 registerCommands:482
+  @call pasteMulti  @ pasteClip:440
+  @call pasteSingle  @ pasteClip:439
+  @call pasteVelocities  @ pasteSingle:295
+  @call refusePaste  @ pasteSingle:236 pasteMulti:374
+  @call save  @ copy:473 registerCommands:479
+  @call trimTop  @ trimTop:475
+
 # REAPER API surface
   @reaper SetExtState
   @reaper GetExtState

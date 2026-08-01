@@ -98,10 +98,25 @@
   @use require util  @ 17
 
 # Calls (intra-file)
+  @call ccDataBytes  @ ccWire:135
+  @call ccRow  @ chunkOf:228
+  @call ccValueFields  @ parse:81
+  @call ccWire  @ chunkOf:246
+  @call chunkAt  @ putKey:345,346 dropKey:355 repackKey:363
+  @call chunkOf  @ buildWire:309 chunkAt:335
+  @call holds  @ syncSlots:409,412
+  @call isWideCC  @ chunkOf:239
+  @call keysOfSlot  @ syncSlots:406,407
+  @call lowerBound  @ putKey:342 dropKey:351 repackKey:361
   @call midiBlob.dropKey  @ syncSlots:419
   @call midiBlob.putKey  @ syncSlots:420
   @call midiBlob.repackKey  @ syncSlots:421
   @call midiBlob.slotState  @ syncSlots:407
+  @call noteRow  @ chunkOf:212,220
+  @call packKey  @ buildWire:269 keysOfSlot:373,374,375,377,378,379
+  @call splitWide  @ chunkOf:240
+  @call textChunk  @ chunkOf:251,253,255
+  @call textRow  @ textChunk:189
 
 # Fields (r read / w write incl. constructor keys)
   @field w __mode  @ 155

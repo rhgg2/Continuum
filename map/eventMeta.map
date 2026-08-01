@@ -54,8 +54,13 @@
   @use sub     ps:projectRewound  @ 34
 
 # Calls (intra-file)
+  @call bucketSlot  @ readBucket:21 flush:75,78 saveAll:99,103 dropPool:121
   @call eventMeta:load  @ copyPool:114
   @call eventMeta:saveAll  @ copyPool:114
+  @call kbSlot  @ readKb:20 writeKb:24 dropPool:123
+  @call readBucket  @ load:48 flush:72
+  @call readKb  @ load:47 flush:69 saveAll:98 dropPool:120
+  @call writeKb  @ flush:82 saveAll:106
 
 # Fields (r read / w write incl. constructor keys)
   @field r REMOVE  @ writeKb:24 flush:78 saveAll:99 dropPool:121,123

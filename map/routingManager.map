@@ -219,6 +219,62 @@
   @use call    util.unserialise  @ decodeBlob:561
   @use require util  @ 7
 
+# Calls (intra-file)
+  @call applyMuteReport  @ tracks:792 track:805 fx:989
+  @call b64decode  @ mutateByteInBase64Line:255 fxBlockStream:272 patchStreamByte:285
+  @call b64encode  @ mutateByteInBase64Line:260
+  @call createSend  @ reconcileSends:531
+  @call decodeBlob  @ readTrackMeta:566
+  @call decodePairList  @ readPinMaps:82
+  @call divertIfMuted  @ assignFx:919 rewritePins:929
+  @call findFxBlock  @ setFXMidiRouting:300 readFXMidiRouting:321
+  @call fxBlockStream  @ setFXMidiRouting:302 readFXMidiRouting:323
+  @call fxIdentAt  @ readFx:371 fxIds:818
+  @call fxName  @ readFx:373
+  @call fxTypeAt  @ readFx:366 routingIdxOf:729,732 fxIds:818
+  @call isRoutingFx  @ readFxChain:403 routingIdxOf:729,732 fx:984
+  @call joinChunkLines  @ setFXMidiRouting:315
+  @call locateFx  @ fxTrack:830 assignFx:906,912 rewritePins:928 writeChainMidi:957 deleteFx:974 fx:980 params:996 setMuted:1004 setBypassed:1033 bypassed:1039 showFx:1045
+  @call locateTrack  @ reconcileSends:515 track:801 fxIds:812 reaperTrack:825 assignTrack:862 deleteTrack:870 setSendGain:877 addFx:890 assignFx:909 writeChainMidi:952
+  @call midiFromLines  @ readMidiRouting:393 readFxChain:413
+  @call midiUnchanged  @ writeMidiRouting:744 writeChainMidi:949
+  @call mutateByteInBase64Line  @ patchStreamByte:287
+  @call paramsByName  @ writeParams:709 readParams:720
+  @call patchStreamByte  @ setFXMidiRouting:307,308,312,313
+  @call pinMaskFor  @ writePinMaps:132
+  @call pinName  @ portNames:100,101
+  @call portNames  @ readFx:376,377
+  @call pruneMidiCache  @ tracks:795
+  @call readFXMidiRouting  @ midiFromLines:385
+  @call readFx  @ readFxChain:402 fx:982
+  @call readFxChain  @ readTrack:654
+  @call readMainSend  @ readTrack:653
+  @call readMeta  @ writeMeta:583 divertIfMuted:610 tracks:790 track:804 meta:934 fx:989 setMuted:1006 muted:1027
+  @call readMidiRouting  @ fx:986
+  @call readParams  @ params:997
+  @call readPinMaps  @ readFx:378 setMuted:1011,1018
+  @call readSend  @ readSends:474 reconcileSends:506,534
+  @call readSendChans  @ readSend:458
+  @call readSends  @ readTrack:655
+  @call readTrack  @ tracks:786,789 track:803
+  @call readTrackMeta  @ writeTrackMeta:572 readTrack:658
+  @call reconcileSends  @ writeTrackFields:763
+  @call routingIdxOf  @ writeMidiRouting:738 writeChainMidi:958 fx:986
+  @call sendKey  @ reconcileSends:510,520,534
+  @call sendKind  @ readSend:457 setSendGain:881
+  @call setFXMidiRouting  @ writeMidiRouting:749 writeChainMidi:961
+  @call splitChunkLines  @ setFXMidiRouting:299 readMidiRouting:392 readFxChain:411
+  @call stampParents  @ tracks:794
+  @call trackHasMidiTake  @ readTrack:656
+  @call trackName  @ readTrack:648 trackLabels:772
+  @call writeMainSend  @ writeTrackFields:762
+  @call writeMeta  @ divertIfMuted:613 addFx:901 assignFx:922 assignMeta:941 setMuted:1012,1019
+  @call writeMidiRouting  @ assignFx:920
+  @call writeParams  @ addFx:899 assignFx:918
+  @call writePinMaps  @ assignFx:919 rewritePins:929 setMuted:1013,1020
+  @call writeTrackFields  @ addTrack:855 assignTrack:864
+  @call writeTrackMeta  @ addTrack:857 assignTrack:866
+
 # REAPER API surface
   @reaper GetMasterTrack
   @reaper GetTrackGUID

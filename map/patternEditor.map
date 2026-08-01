@@ -203,10 +203,27 @@
   @use sub     tm:rebuild  @ 213
 
 # Calls (intra-file)
+  @call acceptInput  @ handleInput:468
+  @call cancel  @ handleInput:461,475
+  @call curveDisplay  @ open:264
+  @call deleteShelf  @ handleInput:463
+  @call drawLoad  @ drawToolbar:406
+  @call drawSave  @ drawToolbar:404
+  @call drawToolbar  @ draw:412
+  @call loadShelf  @ handleInput:464
+  @call materialiseCurve  @ open:271
+  @call materialiseNotes  @ open:282
+  @call maxLane  @ shelfMatches:334
   @call pe:close  @ loadShelf:344 launch:514
   @call pe:draw  @ 485
   @call pe:handleInput  @ 486
   @call pe:open  @ loadShelf:345 launch:491
+  @call readbackBody  @ writeThrough:207 saveShelf:313 loadShelf:347
+  @call saveShelf  @ handleInput:462
+  @call setLaneCommands  @ open:281 close:294
+  @call shelf  @ saveShelf:312 deleteShelf:318 loadShelf:341 shelfItems:354
+  @call shelfItems  @ drawSave:366 drawLoad:374
+  @call shelfMatches  @ shelfItems:355
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath

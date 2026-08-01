@@ -194,10 +194,35 @@
   @use sub     tm:rebuild  @ 601
 
 # Calls (intra-file)
+  @call absorbSiblingOverrides  @ addEvent:714 deleteEvent:739
+  @call classifyCreate  @ instanceOf:476 footprintAliases:514 addEvent:696 assignEvent:775
+  @call copyScalars  @ toGroup:113 toInstance:130 updToGroup:155 updToInstance:174
+  @call currentOf  @ reproject:533
+  @call diffGroup  @ reproject:546
+  @call freshInstance  @ markGroup:386 newInstance:403
   @call gm:addEvent  @ assignEvent:778
   @call gm:deleteEvent  @ assignEvent:777
   @call gm:markGroup  @ mark:434 stamp:447 duplicateInto:456
   @call gm:newInstance  @ stamp:445,450 duplicateInto:460
+  @call keyOf  @ toGroup:115 classifyCreate:316
+  @call link  @ rehydrate:242 markGroup:382 newInstance:411 reproject:541 591 moveInstance:679 resizeGroup:847
+  @call localAmend  @ assignEvent:788
+  @call nextKey  @ newInstance:402
+  @call onTake  @ newInstance:409 reproject:539 moveInstance:669
+  @call persist  @ 596 deleteInstance:643 moveInstance:687 resizeGroup:852
+  @call projOf  @ 60 rehydrate:237 markGroup:377 newInstance:405 reproject:532 deleteInstance:631 moveInstance:664 assignEvent:771 resizeGroup:838,847
+  @call rectCells  @ regionConflict:346
+  @call regionConflict  @ markGroup:370 newInstance:398 moveInstance:660 resizeGroup:820
+  @call rehydrate  @ 602,618
+  @call reproject  @ 578 resizeGroup:851
+  @call revivableVuid  @ addEvent:701
+  @call sameSlot  @ revivableVuid:274 absorbSiblingOverrides:287
+  @call spansOverlap  @ regionConflict:351
+  @call toGroup  @ revivableVuid:271 markGroup:380 footprintAliases:516 addEvent:709 resizeGroup:843
+  @call toInstance  @ newInstance:395,408 deletedCells:503 reproject:538 moveInstance:657,668
+  @call unlink  @ reproject:551 moveInstance:676,683 resizeGroup:838
+  @call updToGroup  @ localAmend:564,569 assignEvent:791
+  @call updToInstance  @ reproject:546
 
 # Fields (r read / w write incl. constructor keys)
   @field r OPEN  @ toGroup:117 toInstance:136 updToGroup:162 updToInstance:186

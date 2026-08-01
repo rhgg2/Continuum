@@ -200,6 +200,27 @@
   @use require painter  @ 11
   @use sub     cm:configChanged  @ 16
 
+# Calls (intra-file)
+  @call colour  @ pushChromeStyles:74,75,78,79,80,83,84,85,86,87,88,89
+  @call colour  @ pushChromeStyles:92,95,98,99,100 pushChromeWindow:112,113,114,115,116,117 verticalSeparator:132
+  @call colour  @ headingLabel:262 treeRow:753
+  @call compactControl  @ checkbox:167 radio:171
+  @call deleteRowButton  @ drawPicker:626
+  @call disclosureHeading  @ drawSegment:313
+  @call drawSegment  @ makeToolbar:334,390
+  @call fitLabel  @ treeRow:760
+  @call headingLabel  @ disclosureHeading:301,304
+  @call paletteHeader  @ palettePane:704
+  @call paletteTabsHeader  @ palettePane:703
+  @call popChromeStyles  @ popChromeWindow:123 palettePane:706
+  @call pushChromeStyles  @ pushChromeWindow:110 palettePane:702
+  @call resolve  @ colour:54
+  @call rowSelectable  @ treeRow:761
+  @call scopedKey  @ colour:52
+  @call screenPainter  @ deleteRowButton:472 paletteHeader:647 paletteTabsHeader:667 palettePane:694
+  @call setCollapsed  @ drawSegment:313 makeToolbar:358
+  @call verticalSeparator  @ makeToolbar:384
+
 # Fields (r read / w write incl. constructor keys)
   @field r ChildFlags_None  @ palettePane:700
   @field r Col_Border  @ pushChromeStyles:89

@@ -175,7 +175,17 @@
   @use require painter  @ 20
 
 # Calls (intra-file)
+  @call boundTrackName  @ renderStatusBar:562
+  @call drawFiles  @ renderBody:503
+  @call drawSlots  @ renderBody:541
+  @call drawStrip  @ renderBody:512
+  @call drawTree  @ drawTree:152 renderBody:484
+  @call durFor  @ drawFiles:180 drawSlots:267
+  @call goUp  @ drawFiles:214 595
+  @call peakFor  @ drawStrip:299
+  @call revertPreviewInPlace  @ 419 renderBody:552 closeTransients:572
   @call sr:focusState  @ renderBody:556
+  @call triggerPreviewInPlace  @ drawFiles:216
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath

@@ -116,6 +116,22 @@
   @use require tuning  @ 13
   @use require util  @ 12
 
+# Calls (intra-file)
+  @call asTable  @ 347,348,349,350
+  @call checkKey  @ get:482 getAt:493 valueFor:504 defaultFor:511 set:520 remove:533 assign:548
+  @call checkLevel  @ getAt:489 set:519 remove:532 assign:547
+  @call copy  @ get:483,484 getAt:494 valueFor:506 defaultFor:512 set:524 assign:554
+  @call ensureCache  @ resolveKey:448 mergedKey:462 getAt:490 set:521 remove:534 assign:549
+  @call expandRef  @ 285,287
+  @call hex  @ 93,94,95,96,97,98,99,100,101,102,103,104
+  @call hex  @ 105,106,107,108,109,110,111,112,113,114,117,118
+  @call hex  @ 119,120,121,122,123,124,125
+  @call mergedKey  @ get:483
+  @call print  @ 358
+  @call pruneUnknown  @ 347,348,349,350
+  @call refreshCache  @ ensureCache:376 setContext:414
+  @call resolveKey  @ get:484
+
 # Fields (r read / w write incl. constructor keys)
   @field r REMOVE  @ assign:553
   @field w arrange  @ 274
