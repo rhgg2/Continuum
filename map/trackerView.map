@@ -73,6 +73,11 @@
   @require groupsCore = 'groups'  @ 28
   @require perf = 'perf'  @ 29
 
+# Constructed sub-instances
+  @construct ctx       = util.instantiate('viewContext')  @ 3826
+  @construct ec        = util.instantiate('editCursor')  @ 4004
+  @construct clipboard = util.instantiate('clipboard')  @ 4014
+
 # Private state
   @state backing = {  @ 62
   @state edit = {  @ 101
@@ -86,7 +91,6 @@
   @state gridHeight = 0  @ 135
   @state grid = {  @ 137
   @state tv = {}  @ 144
-  @state ec, clipboard, ctx  @ 262
   @state PART_FOR = { note = 'pitch', pb = 'pb', cc = 'val', pc = 'val', at =...  @ 2713
   @state dupeState = nil  @ 2872
   @state groupSrc, groupDupState  @ 2876
@@ -722,6 +726,10 @@
       -- mutation the keep-set sweeps cannot see (it never reaches cmgr).
 
 # Uses (outbound edges)
+  @use call    clipboard:collect  @ duplicate:2942
+  @use call    clipboard:copy  @ deleteRow:2171 deleteRowCol:2173 3563
+  @use call    clipboard:pasteClip  @ duplicate:2952
+  @use call    clipboard:registerCommands  @ 4030
   @use call    cm:assign  @ releaseTransientFrame:450 matchGridToCursor:502
   @use call    cm:boundTake  @ takeHoist:3365
   @use call    cm:boundTrack  @ resolveSelectionTake:187
@@ -735,8 +743,40 @@
   @use call    cmgr:noteChars  @ editEvent:902 chordStrike:1100
   @use call    cmgr:prefixRational  @ 3582,3589
   @use call    cmgr:scope  @ 3560
+  @use call    ctx:activeTemper  @ pitchFromKey:784 editEvent:919 pitchStep:2181 nudgePitch:2213 activeTemper:2967 cellWidth:2968 octaveWidth:2969
+  @use call    ctx:barBeatSub  @ barBeatSub:2972
+  @use call    ctx:noteProjection  @ noteProjection:2970
+  @use call    ctx:placeRow  @ ppqRowOf:2718 rebuild:3854
+  @use call    ctx:ppqPerRow  @ rowBounds:299 522 adjustDurationCore:1707
+  @use call    ctx:ppqToRow  @ interpolateValues:1452,1453 regionAdjustDuration:1583,1584 regionAdjustPosition:1594,1595 adjustPositionMulti:1757,1776,1778 quantizeScope:1862,1867 gatherFxRegions:2389,2390 shiftEvents:2829,2836 ppqToRow:2973 rebuild:3869
+  @use call    ctx:rowBeatInfo  @ rowBeatInfo:2971
+  @use call    ctx:rowToPPQ  @ eventsByCol:403 moveLaneEvent:1322 interpolate:1413,1414,1435 interpolateValues:1456 cursorRegionBefore:1485 regionNoteOff:1572,1574 regionAdjustDuration:1585 regionAdjustPosition:1597 cursorNoteBefore:1638 noteOff:1664,1665,1691,1692 adjustDurationCore:1711,1712 quantizeScope:1864,1868 quantizeKeepRealisedScope:1892 scaleScope:1935 insertRowCore:2023 deleteRowCore:2059,2060 cursorRowEvent:2263 eachFxRegionInRect:2370,2371 pasteFxRegions:2413,2414 fxHostAtCursor:2464,2465 shiftEvents:2767,2768,2786 rowToPPQ:2974 3614
+  @use call    ctx:snapRow  @ regionNoteOff:1571 noteOff:1674,1696 adjustDurationCore:1711 adjustPosition:1807,1814,1829 quantizeKeepRealisedScope:1891
   @use call    ds:assign  @ setTakeSwing:537 seedSharedSlots:575 toggleChannelFlag:594 rewriteRegion:1478 applyRegionWindow:1558 shiftFxLane:1630 mintRegionForSelection:2357 pasteFxRegions:2419 deleteFxRegionsInRect:2439 addExtraCol:3280 hideExtraCol:3300,3339 automateParam:3481 showDelay:3508
   @use call    ds:get  @ setTakeSwing:535 seedSharedSlots:574 toggleChannelFlag:592 pushMute:601,602 isChannelMuted:613 isChannelSoloed:614 rewriteRegion:1470 applyRegionWindow:1526 shiftFxLane:1623 regionByUuid:2326 mintRegionUuid:2341 mintRegionForSelection:2355 pasteFxRegions:2404 deleteFxRegionsInRect:2436 addExtraCol:3259 hideExtraCol:3295,3310 automateParam:3475 showDelay:3496 rebuild:3696,3697,3738,3904
+  @use call    ec:advance  @ editEvent:885 chordCommit:1199 digitsCommit:1277 noteOff:1698 deleteOrBackspace:2692
+  @use call    ec:anchorRow  @ scaleScope:1930,1963
+  @use call    ec:clampPos  @ rebuild:3934
+  @use call    ec:col  @ matchGridToCursor:495 followViewport:700 interpolate:1429 cursorNoteBefore:1636 adjustDuration:1728 adjustPosition:1798 curCol:2166 nudge:2301 pasteFxRegions:2400 fxHostAtCursor:2462 deleteEvent:2647,2659 shiftEvents:2747,2771 hideExtraCol:3287 automateParam:3469 unautomateParam:3486 3613
+  @use call    ec:cursorPart  @ noteOff:1686 nudge:2304 deleteEvent:2675 inputOctaveUp:3556
+  @use call    ec:decorateCol  @ rebuild:3728
+  @use call    ec:eachSelectedCol  @ interpolate:1411 noteOff:1661 forEachRowOp:2146 addExtraCol:3261 showDelay:3498
+  @use call    ec:hasSelection  @ interpolate:1408 noteOff:1658 adjustDuration:1719 adjustPosition:1796 scaleScope:1957 forEachRowOp:2141 nudge:2274 fxHostForEdit:2480 shiftEvents:2760 selectionAsRect:3038 3581,3588
+  @use call    ec:isSticky  @ deleteOrBackspace:2691
+  @use call    ec:pos  @ toggleSignFlip:826 entrySignAt:846 editEvent:874 chordStrike:1102 digitsStrike:1237 noteOff:1682 cursorRect:2883 cursorAnchor:3120 instanceAtCursor:3137 inputOctaveUp:3554
+  @use call    ec:region  @ eventsByCol:394 interpolate:1409 noteOff:1659 adjustPositionMulti:1744 scaleScope:1962 forEachRowOp:2143 mintRegionForSelection:2347 deleteSelection:2685 shiftEvents:2761 selectionAsRect:3039
+  @use call    ec:regionArm  @ 3624
+  @use call    ec:regionCursor  @ movePreview:3183
+  @use call    ec:regionStart  @ duplicate:2944
+  @use call    ec:registerCommands  @ 4029
+  @use call    ec:rescaleRow  @ releaseTransientFrame:453 matchGridToCursor:501 setRowPerBeat:513 scaleScope:1989
+  @use call    ec:reset  @ rebuild:3669
+  @use call    ec:row  @ matchGridToCursor:496 followViewport:700 editEvent:868 interpolate:1431 cursorRegionBefore:1485 recentreOnRegion:1516 regionNoteOff:1571,1574 cursorNoteBefore:1638 noteOff:1690 adjustPosition:1802,1825 scaleScope:1930 forEachRowOp:2148 cursorRowEvent:2262 pasteFxRegions:2402 fxHostAtCursor:2464,2465 deleteEvent:2650 shiftEvents:2772,2859 cursorRect:2887 cursorAnchor:3123 instanceAtCursor:3139 3614
+  @use call    ec:selClear  @ deleteSelection:2686 deleteOrBackspace:2692 duplicateCascade:3027 4039
+  @use call    ec:setPos  @ digitsStrike:1251 digitsBackspace:1267 digitsCommit:1275 recentreOnRegion:1516 adjustPosition:1821,1833 shiftEvents:2859 selectRegionAt:2930 duplicate:2950
+  @use call    ec:setSelection  @ scaleScope:1974 shiftEvents:2856 selectRegionAt:2931
+  @use call    ec:shiftSelection  @ adjustPositionMulti:1783
+  @use call    ec:unstick  @ 4037
   @use call    facade.get  @ arrange:34
   @use call    gm:addEvent  @ 70
   @use call    gm:assignEvent  @ 71
@@ -819,11 +859,14 @@
   @use call    util.round  @ sendBend:631 interpolateValues:1454,1457 adjustDurationCore:1710 quantizeScope:1863,1867 scaleScope:1937,1940
   @use call    util.seek  @ neighbourEvents:275,276 placeNewNote:752 strikePitch:805 inheritedSign:839 editEvent:993,1065 addLaneEvent:1336 interpolate:1435 cursorNoteBefore:1639 noteOff:1666,1694 insertRowCore:2048 deleteRowCore:2068 cursorRowEvent:2265
   @use call    util.setDigit  @ editEvent:937,960,964,979,1017,1021,1037,1041
+  @use require clipboard  @ 4014
+  @use require editCursor  @ 4004
   @use require groups  @ 28
   @use require perf  @ 29
   @use require timing  @ 26
   @use require tuning  @ 27
   @use require util  @ 25
+  @use require viewContext  @ rebuild:3826
   @use sub     cm:configChanged  @ 3966
   @use sub     ds:dataChanged  @ 3971
   @use sub     tm:rebuild  @ 3958

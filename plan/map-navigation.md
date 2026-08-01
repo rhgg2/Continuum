@@ -31,10 +31,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-01 **The alias table was blind in two places, not one.** The plan item named the forward-decl fill — `local ec, clipboard, ctx` at `trackerView:262`, filled 3700 lines later — and the search for it turned up a second idiom with the same cause: the declaration scan saw only a column-0 `local X = <init>` complete on one line, so an instance bound inside a function was as invisible as one bound in two steps. The second is what fixes `map/continuum.map`, the wiring file's map, which carried five outbound rows and no edge to anything it builds; `Main` now resolves `coord:register` ×5, `coord:setActive` ×10, `cmgr:registerAll` and the rest to their declarations, and `usedby ec:row` goes 9 cross-module sites to 34. The regen gate cannot fail for a no-op, so the directional signal is the check-mode run between the code edit and the write: exactly the five expected maps, no sixth. +102/−2 across them — 20 `@construct` rows, 78 `@use` rows, 243 sites — and the only two removals in the whole diff are the forward-decl shells the construct rows replace. The scope handles stayed out, and the reason generalises past them: the extractor emits receivers verbatim and the querier re-resolves them by name, so the general form of the rule would land `local ps = painter.new(…)` in `arrangeRender` as 43 cross-module edges to pextStore. A wrong alias does not drop, it lies. `gridPane`'s 24 `ec:` sites stay dropped for want of a safe rule, for phase 3's oracle to report. (design § Intra-file call edges)
 - 2026-08-01 **Both call passes take `[({]`.** A call whose one argument is a table literal drops the parens, and neither pass could see it. 86 maps move — 21 module, 65 spec — for a net +44 and +67 lines; every removal in that diff is a row re-emitted with more sites in it, so nothing is lost anywhere. 11 `@call` rows arrive, among them the three helpers the corpus said nothing reached: `editCursor resizeBy`, `trackerManager makeTailRules` and `reconcileDerived`. With those in, 84 private functions with no call site becomes 81 and all 81 are named by a `@bind`, so the reverse index no longer says "nobody reaches this" about anything. `pa_compute_desired_spec` had named nothing it exercised, every call in it being `pa.computeDesired{…}`; it now names it. The directional signal was the check-mode run between the code edit and the write — exactly the 21 expected module maps, no twenty-second. String sugar stays out: the corpus has no qualified `recv.fn'…'` site at all, and widening to a quote matches 1013 string literals holding a dot. (design § Intra-file call edges)
 - 2026-08-01 **Fifteen file-scope declarations, in two spellings.** The plan item named nine `function foo(` fills of a `local` forward-decl; the search found six `foo = function(` siblings, the same idiom in the spelling a syntax search could not see. Both land together: 15 `@fn` rows, 34 `@call` rows and 4 `@bind` rows arrive, 11 forward-decl shell rows leave, and every site inside the fifteen bodies stops rendering as a bare line number — `@field r nodes @ 251,304` becomes `pruneSourceTags:251 mirrorBusTaps:304`. Two regexes rather than one, because column 0 is what separates a declaration from a table-constructor value. The regen gate cannot fail for a no-op, so the directional signal is the run between the code change and the write: exactly the nine expected maps, no tenth. Probed after, `usedby='ensureState'` returns the seven intra-file callers it answered `(no callers found)` for before. (design § Intra-file call edges)
 - 2026-08-01 Give a by-name binding its own row (§ Intra-file call edges)
-- 2026-08-01 **`uses` answers the forward question, declaration-resolved.** The caller field of the `@call` and `@use` rows was carried by the corpus and read by nothing; `uses` now groups by matching declaration and resolves each callee to *its own*, so the answer is jump-ready — 2931 declarations render across the corpus for 5028 callee rows, 84.5% resolved and the rest `(external)` with no map to resolve against. The span test that places a site in its caller is load-bearing and total: all 6478 caller-attributed sites resolve to exactly one declaration, which is what lets `collect` in `clipboard` come back as two groups rather than one merged. Cross targets prefer the `@api` declaration by construction — a cross-module call cannot reach a module-private `@fn` — which clears all 174 ambiguous sites. `query` naming a module is a pointer at `module=` under both kinds, retiring `usedby`'s documented exception. (design § Intra-file call edges)
 
 ## Now
 
@@ -42,15 +42,4 @@
 
 ## Queued (current phase; one-liners)
 
-1. Teach the alias table the receivers it cannot see (found while
-   measuring the brace item). 2760 qualified sites drop for an
-   unresolved receiver; most of that is right — `reaper` 607, `math`
-   583, `table` 212, and the parameters and locals — but 147 are `ec`,
-   which `trackerView` forward-declares at file scope (`local ec,
-   clipboard, ctx`, :262) and fills 3700 lines later with
-   `util.instantiate('editCursor', …)` (:4004), and 13 are the scope
-   handles command registration runs on (`local trackerScope =
-   cmgr:scope('tracker')`, `continuum.lua:185`) — which is why
-   `registerAll{…}` stays missing after the brace item lands. The same
-   file-scope forward-decl idiom the declaration pass has just been
-   taught, arriving in the alias table.
+(empty — run /plan-phase when this lands.)

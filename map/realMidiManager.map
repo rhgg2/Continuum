@@ -3,8 +3,12 @@
 # Imports
   @const util = 'util'  @ 9
 
+# Constructed sub-instances
+  @construct eventMeta = util.instantiate('eventMeta')  @ 13
+
 # Uses (outbound edges)
   @use call    util.instantiate  @ 13
+  @use require eventMeta  @ 13
   @use require util  @ 9
 
 # Fields (r read / w write incl. constructor keys)

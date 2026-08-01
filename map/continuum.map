@@ -9,6 +9,14 @@
   @require ImGui = 'imgui'  @ 17
   @require perf = 'perf'  @ 18
 
+# Constructed sub-instances
+  @construct ps        = util.instantiate('pextStore')  @ 70
+  @construct cm        = util.instantiate('configManager')  @ 71
+  @construct ds        = util.instantiate('dataStore')  @ 72
+  @construct eventMeta = util.instantiate('eventMeta')  @ 73
+  @construct cmgr      = util.instantiate('commandManager')  @ 74
+  @construct coord     = util.instantiate('coordinator')  @ 75
+
 # Private functions
   @fn err_handler(err)  @ 22-26
   @fn run(fn)  @ 28-31
@@ -22,10 +30,31 @@
   @use call    ImGui.CreateContext  @ createImGui:34
   @use call    ImGui.CreateFont  @ createImGui:39,46,48
   @use call    ImGui.SetConfigVar  @ createImGui:35,36
+  @use call    cmgr:beginPrefix  @ Main:157
+  @use call    cmgr:bindAll  @ Main:161
+  @use call    cmgr:loadOverrides  @ Main:190
+  @use call    cmgr:registerAll  @ Main:136
+  @use call    cmgr:scope  @ Main:185
+  @use call    coord:getFacade  @ Main:151,152,154,156
+  @use call    coord:onExternalCommand  @ Main:180
+  @use call    coord:previousPage  @ Main:153
+  @use call    coord:quit  @ Main:156
+  @use call    coord:register  @ Main:79,80,81,82,83
+  @use call    coord:reloadAfterExternalMutation  @ Main:142,144
+  @use call    coord:returnToArrange  @ Main:186
+  @use call    coord:run  @ Main:192
+  @use call    coord:setActive  @ Main:145,146,147,148,149,150,151,152,153,154
+  @use call    coord:togglePage  @ Main:155
   @use call    perf.toggle  @ Main:159
   @use call    util.instantiate  @ Main:70,71,72,73,74,75
+  @use require commandManager  @ Main:74
+  @use require configManager  @ Main:71
+  @use require coordinator  @ Main:75
+  @use require dataStore  @ Main:72
+  @use require eventMeta  @ Main:73
   @use require imgui  @ 17
   @use require perf  @ 18
+  @use require pextStore  @ Main:70
   @use require util  @ 16
 
 # Calls (intra-file)

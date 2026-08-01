@@ -5,6 +5,17 @@
   @const newRealMM = 'realMidiManager'  @ 25
   @const fakeReaper = 'fakeReaper'  @ 29
 
+# Constructed sub-instances
+  @construct ps   = util.instantiate('pextStore')  @ 109
+  @construct cm   = util.instantiate('configManager')  @ 110
+  @construct ds   = util.instantiate('dataStore')  @ 111
+  @construct tm   = util.instantiate('trackerManager')  @ 122
+  @construct cmgr = util.instantiate('commandManager')  @ 123
+  @construct ccm  = util.instantiate('ccManager')  @ 136
+  @construct pa   = util.instantiate('paramAutomation')  @ 137
+  @construct lib  = util.instantiate('library')  @ 138
+  @construct vm   = util.instantiate('trackerView')  @ 140
+
 # Module-level constants
   @const harness = {}  @ 9
   @const realOpen = io.open  @ 13
@@ -31,14 +42,29 @@
       -- timeSigs), config, data, take, groups. See header for the mm model.
 
 # Uses (outbound edges)
+  @use call    cm:assign  @ mk:114
+  @use call    cm:setContext  @ mk:112
+  @use call    cmgr:push  @ mk:141
+  @use call    ds:assign  @ mk:117
   @use call    fakeReaper.MIDI_GetProjTimeFromPPQPos  @ buildMM:73
   @use call    fakeReaper:addTimeSigMarker  @ buildMM:73
   @use call    fakeReaper:bindTake  @ buildMM:70
   @use call    fakeReaper:setResolution  @ buildMM:71
   @use call    util.clone  @ seedThrough:41,50
   @use call    util.instantiate  @ mk:109,110,111,122,123,128,136,137,138,140
+  @use call    vm:clipboard  @ mk:144
+  @use call    vm:ec  @ mk:143
+  @use require ccManager  @ mk:136
+  @use require commandManager  @ mk:123
+  @use require configManager  @ mk:110
+  @use require dataStore  @ mk:111
   @use require fakeReaper  @ 29
+  @use require library  @ mk:138
+  @use require paramAutomation  @ mk:137
+  @use require pextStore  @ mk:109
   @use require realMidiManager  @ 25
+  @use require trackerManager  @ mk:122
+  @use require trackerView  @ mk:140
   @use require util  @ 24
 
 # Calls (intra-file)

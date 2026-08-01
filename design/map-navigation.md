@@ -495,6 +495,48 @@ than being a gap in it: column 0 is what separates a declaration from a
 table-constructor value, and `growNote = function(p) resizeBy{…} end` is
 the latter by construction.
 
+**The alias table was blind in two places, not one** (2026-08-01,
+landed). The item was opened on the forward-decl fill the note above
+names — `local ec, clipboard, ctx` at `trackerView:262`, filled 3700
+lines later — and the search for it turned up a second idiom sharing its
+cause. The declaration scan saw only a column-0 `local X = <init>`
+complete on one line, so it missed an instance bound inside a function as
+surely as one bound in two steps. `continuum.lua` wires the entire stack
+from inside `Main()`, and `map/continuum.map` — the wiring file's map —
+carried five outbound rows, not one of which reached a manager it builds.
+The fills are worth 205 sites and the function-scope instances 38, and
+each is one filter widened: an assignment anywhere to a name an init-less
+column-0 `local` declares, and a `local` at any indent whose init is
+`util.instantiate`. Landed as +102 / −2 lines over five maps — 20
+`@construct` rows, 78 `@use` rows, 243 sites — the two removals being the
+forward-decl shells the construct rows replace.
+
+**A wrong alias does not drop, it lies** (2026-08-01). The 13
+`local trackerScope = cmgr:scope('tracker')` handles stayed out, and the
+reason generalises well past them. Widening to "a local whose init is a
+call on a resolved alias" would also match `local ps = painter.new(ctx,
+chrome, {}, 'arrange')` in `arrangeRender`, where `ps` is *pextStore*'s
+self-name: the extractor emits receivers verbatim and the querier
+re-resolves them by name, so those 43 painter calls would enter the
+corpus as cross-module edges to pextStore. A dropped site is a known gap;
+a mis-resolved one is a confident wrong answer, and nothing downstream
+can tell the two apart. The same argument kills the blunter shortcut of
+emitting any site whose receiver happens to be a corpus self-name — 360
+sites, of which some 52 are false: the 43 `ps`, seven `DAG.ctx` naming a
+local `{ userGraph = … }` table, two `wiringManager.ctx` naming a
+`DAG.compile` result. The handles carry two smaller strikes besides.
+`trackerScope` is nobody's `self=` name, so the row would read
+`trackerScope:registerAll` and resolve to nothing; and the callee is
+absent from every map anyway, `function s:registerAll` being declared
+indented inside `newScope` (`commandManager.lua:96`), where an indented
+`function X:y` with `X ≠ return_target` is deliberately uncaptured.
+
+**The `ec:` sites left standing** (2026-08-01). `gridPane` calls `ec:` 24
+times and `trackerRender` twice, all genuinely editCursor, all bound by
+`local ec = tv:ec()` inside a function. Only the dangerous rule above
+reaches them, so they stay dropped — true edges the corpus does not
+carry, and phase 3's `luac` oracle should report every one.
+
 ### Vocabulary — unsettled
 
 The 197 kind-less consecutive `map_query` pairs say the agent frequently

@@ -20,12 +20,12 @@
   @construct modalHost = util.instantiate('modalHost')  @ 29
   @construct help      = util.instantiate('help')  @ 30
   @construct masterMix = util.instantiate('masterMix')  @ 31
+  @construct bridge    = util.instantiate('bridge')  @ 362
 
 # Private state
   @state ctx, uiFont = gui.ctx, gui.uiFont  @ 18
   @state uiSize = gui.fontSize.ui  @ 19
   @state toolbar = chrome.makeToolbar()  @ 28   -- one shared toolbar; renders the active page's row
-  @state bridge  @ 33
   @state facades, debugHandles = {}, {}  @ 41
   @state facade = {  @ 42
   @state STD = { cm = cm, ds = ds, eventMeta = eventMeta, cmgr = cmgr, c...  @ 48
@@ -111,6 +111,7 @@
   @use call    ImGui.SetScrollX  @ frame:181
   @use call    ImGui.SetScrollY  @ frame:181
   @use call    ImGui.Unindent  @ frame:259
+  @use call    bridge:tick  @ tick:73
   @use call    chrome.colour  @ drawSwitcher:81,82 frame:159,160,161,162,163,233,264,265
   @use call    chrome.makeToolbar  @ 28
   @use call    chrome.popChromeStyles  @ frame:205
@@ -136,6 +137,7 @@
   @use call    modalHost:tick  @ tick:70
   @use call    util.assign  @ register:295
   @use call    util.instantiate  @ 21,26,29,30,31,362 register:295
+  @use require bridge  @ 362
   @use require chrome  @ 26
   @use require help  @ 30
   @use require imgui  @ 14

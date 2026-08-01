@@ -76,6 +76,11 @@ LOCAL_DECL_RE = re.compile(
 )
 REQUIRE_RE    = re.compile(r"""require\s*\(?\s*['"]([^'"]+)['"]""")
 INSTANTIATE_RE = re.compile(r"""util\.instantiate\s*\(\s*['"]([^'"]+)['"]""")
+# A file-scope forward decl filled further down: `local ec, clipboard, ctx`
+# and, 3700 lines later, `ec = util.instantiate('editCursor', {`. Any indent --
+# trackerView builds its viewContext inside rebuild() -- because the init-less
+# shell decl, not the column, is what confines the match.
+FILL_RE       = re.compile(r"^\s*([A-Za-z_]\w*)\s*=\s*(.+)$")
 RETURN_RE     = re.compile(r"^return\s+(\w+)\s*$")
 RETURN_TBL_RE = re.compile(r"^return\s*\{")
 DEP_DEREF_RE  = re.compile(r"\(\s*\.\.\.\s*\)\s*\.(\w+)")
@@ -485,38 +490,42 @@ def parse(path: Path) -> MapFile:
             if n not in cm.reaper_calls:
                 cm.reaper_calls.append(n)
 
-        # module-level local declarations
-        if not raw.startswith((' ', '\t')):
-            decl = LOCAL_DECL_RE.match(raw)
-            if decl and not LOCAL_FN_RE.match(raw):
-                names = [n.strip() for n in decl.group(1).split(',')]
-                init = (decl.group(2) or '').strip()
-                inline_doc = ''
-                if '--' in raw and (not init or not init.startswith("'")):
-                    tail = raw.split('--', 1)[1].strip()
-                    if tail and (not init or not init.endswith(tail)):
-                        inline_doc = tail
-                # Classify the declaration.
-                if '(...)' in init or init == '...' or DEPS_TABLE_RE.match(raw):
-                    # `local x, y = (...).x, (...).y`  or  `local args = ...`
-                    continue   # captured under cm.deps
-                req = REQUIRE_RE.search(init)
-                inst = INSTANTIATE_RE.search(init)
-                short = init if len(init) <= 60 else init[:57] + '...'
-                if req:
-                    cm.imports.append(Decl(name=names[0], init=req.group(1),
-                                           line=i + 1, inline_doc=inline_doc))
-                elif inst:
-                    cm.constructs.append(Decl(name=names[0], init=inst.group(1),
-                                              line=i + 1, inline_doc=inline_doc))
-                else:
-                    # Multi-name decls share one init expression; collapse the
-                    # name list into a single entry rather than repeating the
-                    # init across each name.
-                    name = ', '.join(names)
-                    bucket = cm.state if cm.mode == 'chunk' else cm.consts
-                    bucket.append(Decl(name=name, init=short, line=i + 1,
-                                       inline_doc=inline_doc))
+        # Module-level local declarations -- and, at function scope, the ones
+        # that name a module instance. continuum wires the whole stack from
+        # inside Main(), so a column-0 guard leaves the wiring file's map with
+        # no edge to anything it builds; a function-local instance is an alias
+        # like any other, it just is not module state.
+        indented = raw.startswith((' ', '\t'))
+        decl = LOCAL_DECL_RE.match(raw.lstrip() if indented else raw)
+        if decl and not LOCAL_FN_RE.match(raw):
+            names = [n.strip() for n in decl.group(1).split(',')]
+            init = (decl.group(2) or '').strip()
+            inline_doc = ''
+            if '--' in raw and (not init or not init.startswith("'")):
+                tail = raw.split('--', 1)[1].strip()
+                if tail and (not init or not init.endswith(tail)):
+                    inline_doc = tail
+            # Classify the declaration.
+            if '(...)' in init or init == '...' or DEPS_TABLE_RE.match(raw.strip()):
+                # `local x, y = (...).x, (...).y`  or  `local args = ...`
+                continue   # captured under cm.deps
+            req = REQUIRE_RE.search(init)
+            inst = INSTANTIATE_RE.search(init)
+            short = init if len(init) <= 60 else init[:57] + '...'
+            if req:
+                cm.imports.append(Decl(name=names[0], init=req.group(1),
+                                       line=i + 1, inline_doc=inline_doc))
+            elif inst:
+                cm.constructs.append(Decl(name=names[0], init=inst.group(1),
+                                          line=i + 1, inline_doc=inline_doc))
+            elif not indented:
+                # Multi-name decls share one init expression; collapse the
+                # name list into a single entry rather than repeating the
+                # init across each name.
+                name = ', '.join(names)
+                bucket = cm.state if cm.mode == 'chunk' else cm.consts
+                bucket.append(Decl(name=name, init=short, line=i + 1,
+                                   inline_doc=inline_doc))
 
         # `for k,v in pairs(Y) do X[v]=k end` — rewrite empty-table init
         mi = INVERSE_RE.search(raw)
@@ -526,6 +535,42 @@ def parse(path: Path) -> MapFile:
                 if d.name == dst_tbl and d.init == '{}':
                     d.init = f'-- inverse of {src_tbl}'
                     break
+
+    # A file-scope forward decl filled further down is a construct, not state:
+    # `local ec, clipboard, ctx` (262) with `ec = util.instantiate(...)` at 4004.
+    # Only an init-less decl can be filled, which is what keeps the whole-file
+    # scan from claiming a table-constructor key that happens to share a name.
+    fills: dict[str, tuple[list[Decl], str, int]] = {}
+    for i, raw in enumerate(lines):
+        mf = FILL_RE.match(raw)
+        if not mf:
+            continue
+        req = REQUIRE_RE.search(mf.group(2))
+        inst = INSTANTIATE_RE.search(mf.group(2))
+        if req:
+            fills.setdefault(mf.group(1), (cm.imports, req.group(1), i + 1))
+        elif inst:
+            fills.setdefault(mf.group(1), (cm.constructs, inst.group(1), i + 1))
+
+    for bucket in (cm.state, cm.consts):
+        for d in list(bucket):
+            if d.init:
+                continue
+            names = [n.strip() for n in d.name.split(',')]
+            keep = [n for n in names if n not in fills]
+            if keep == names:
+                continue
+            for n in names:
+                if n in fills:
+                    target, module, line = fills[n]
+                    target.append(Decl(name=n, init=module, line=line,
+                                       inline_doc=d.inline_doc))
+            if keep:
+                d.name = ', '.join(keep)
+            else:
+                bucket.remove(d)
+    cm.imports.sort(key=lambda d: d.line)
+    cm.constructs.sort(key=lambda d: d.line)
 
     # Drop forward-decl shells like `local moveCol` that exist only to be filled
     # in below. A shared list (`local colFor, kindAt`) drops only when every name
