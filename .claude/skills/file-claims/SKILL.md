@@ -52,8 +52,13 @@ Three definitions the steps lean on:
    sections of `open.md`, with the bullets themselves as raw material — its step
    1 wants the text, not a summary of it. *Ripe* → a new `observed` claim file
    whose instances are those bullets, which then leave `open.md`. *Not yet* or
-   *no crystal* → change nothing and say so. An open claim carries no obligation
-   to be promoted; some entries feed a theory and some are only interesting.
+   *no crystal* → change nothing else, say so, and append a `[<date>, filing:
+   ...]` note to the entry the test was run over, carrying the verdict and — for
+   a *not yet* — the specific thing that would ripen it. The note is where a
+   negative run survives: spoken only to the user it dies with the transcript,
+   and the next pass meets an entry that still looks untested and re-runs the
+   whole procedure blind. An open claim carries no obligation to be promoted;
+   some entries feed a theory and some are only interesting.
 
 4. **Promote `observed` → `load-bearing`** on the bar of three instances across
    *different sessions*, rhyming on a mechanism. The falsifier is "does it yield
