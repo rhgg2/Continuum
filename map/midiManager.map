@@ -329,6 +329,11 @@
   @use require voicing  @ 10
   @use sub     eventMeta:poolsRewound  @ 925
 
+# Calls (intra-file)
+  @call mm:load  @ reload:920 1502
+  @call mm:reload  @ 928 setLength:1459
+  @call mm:resolution  @ length:1406 setLength:1454
+
 # REAPER API surface
   @reaper ValidatePtr2
   @reaper GetMediaItemTake_Item, GetMediaItemTake_Source

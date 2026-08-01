@@ -43,6 +43,10 @@
   @use call    util.instantiate  @ newEventMeta:163
   @use require util  @ 5
 
+# Calls (intra-file)
+  @call M.eq  @ eventsMatch:87
+  @call M.poolGuidOf  @ seedMeta:173 loadMeta:177
+
 # REAPER API surface
   @reaper GetMediaItemTake_Item
   @reaper GetItemStateChunk

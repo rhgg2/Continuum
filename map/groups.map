@@ -49,6 +49,11 @@
   @use call    util.deepEq  @ reconcile:78
   @use require util  @ 14
 
+# Calls (intra-file)
+  @call groups.laneId  @ project:58
+  @call groups.regionKey  @ outlineKey:132
+  @call groups.streamId  @ laneId:110 inRect:117
+
 # Fields (r read / w write incl. constructor keys)
   @field r adds  @ project:31
   @field r assigns  @ project:30

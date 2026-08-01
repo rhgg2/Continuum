@@ -825,6 +825,40 @@
   @use sub     tm:rebuild  @ 3958
   @use sub     tm:takeSwapped  @ 3957
 
+# Calls (intra-file)
+  @call tv:cancelLearn  @ armLearn:3428 pollLearn:3453 automateParam:3474
+  @call tv:chordAbandon  @ chordCommit:1198 rebuild:3670 dropGrid:3942
+  @call tv:chordActive  @ tick:673 3571,3572,3581,3588,3602,3606
+  @call tv:chordNudgeVel  @ 3602,3606
+  @call tv:clearMoveGap  @ 3997
+  @call tv:clearRegionAt  @ groupDuplicate:3523 groupPaste:3539 3991
+  @call tv:cursorAnchor  @ duplicateCascade:3014,3031 groupPaste:3535 3984
+  @call tv:deletedCells  @ deleteEvent:2658
+  @call tv:digitsAbandon  @ rebuild:3671 dropGrid:3943
+  @call tv:duplicateCascade  @ duplicate:2940 groupDuplicate:3520
+  @call tv:editEvent  @ digitsStrike:1248
+  @call tv:endAllCascades  @ editEvent:883 settleTypedEdit:1089
+  @call tv:entrySignAt  @ editEvent:874
+  @call tv:eventsInRect  @ groupDuplicate:3522 groupPaste:3538 3982
+  @call tv:freezeEligible  @ freezeRegionAtCursor:2447
+  @call tv:freezeRegion  @ freezeRegionAtCursor:2447
+  @call tv:fxHostAtCursor  @ freezeRegionAtCursor:2446 fxHostForEdit:2481
+  @call tv:hideExtraCol  @ unautomateParam:3492
+  @call tv:instanceAtCursor  @ deleteEvent:2656 3156,3985
+  @call tv:localMode  @ deleteEvent:2655 3155
+  @call tv:noteFx  @ setFxField:2523 addFxStage:2535 removeFxStage:2541 pruneEmptyRegion:2551 moveFxStage:2556 replaceFxStage:2567
+  @call tv:paintRegionStream  @ 3986
+  @call tv:rebuild  @ releaseTransientFrame:454 hideExtraCol:3301,3340 unautomateParam:3491 3959,4126
+  @call tv:rowToPPQ  @ mintRegionForSelection:2352,2353
+  @call tv:scaleSelection  @ 3583,3584,3590,3591
+  @call tv:selectSlot  @ gotoTake:235 pickTake:242 newParkedTake:248 duplicateBoundUnpooled:258
+  @call tv:selectTrack  @ gotoTrack:223 pickTrack:240
+  @call tv:selectionAsRect  @ duplicateCascade:3000 3983 wireGroupLifetime:4104
+  @call tv:setNoteFx  @ setFxField:2528 addFxStage:2537 removeFxStage:2545 pruneEmptyRegion:2552 moveFxStage:2562 replaceFxStage:2572
+  @call tv:setRowPerBeat  @ 3616,3617,3618,3619
+  @call tv:streamRefAt  @ instanceAtCursor:3142 movePreview:3200,3208 paintRegionStream:3228 rebuild:3890
+  @call tv:tabOverride  @ paletteTab:3399
+
 # REAPER API surface
   @reaper time_precise
   @reaper StuffMIDIMessage

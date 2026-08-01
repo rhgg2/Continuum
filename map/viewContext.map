@@ -53,6 +53,11 @@
   @use require tuning  @ 8
   @use require util  @ 7
 
+# Calls (intra-file)
+  @call ctx:ppqToRow  @ snapRow:63 placeRow:83 tsRow:99
+  @call ctx:rowToPPQ  @ isOnGrid:75 placeRow:85 rowBeatInfo:102
+  @call ctx:snapRow  @ isOnGrid:75
+
 # Fields (r read / w write incl. constructor keys)
   @field r cents  @ noteProjection:39
   @field r detune  @ noteProjection:30

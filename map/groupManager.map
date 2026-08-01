@@ -193,6 +193,12 @@
   @use sub     tm:preflush  @ 575
   @use sub     tm:rebuild  @ 601
 
+# Calls (intra-file)
+  @call gm:addEvent  @ assignEvent:778
+  @call gm:deleteEvent  @ assignEvent:777
+  @call gm:markGroup  @ mark:434 stamp:447 duplicateInto:456
+  @call gm:newInstance  @ stamp:445,450 duplicateInto:460
+
 # Fields (r read / w write incl. constructor keys)
   @field r OPEN  @ toGroup:117 toInstance:136 updToGroup:162 updToInstance:186
   @field r REMOVE  @ updToGroup:163 updToInstance:182 diffGroup:202

@@ -145,6 +145,10 @@
   @use require modalHost  @ 29
   @use require util  @ 7
 
+# Calls (intra-file)
+  @call coord:getFacade  @ 365
+  @call coord:setActive  @ register:297 returnToArrange:321 togglePage:338
+
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB

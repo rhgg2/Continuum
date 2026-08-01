@@ -29,6 +29,9 @@
       @contract  FNV-1a over (size, first 4KB, last 4KB); 8-char hex; non-cryptographic; see docs/fs.md  @ 60
   @api fs.listAudioFiles(path)  @ 82-92
 
+# Calls (intra-file)
+  @call fs.isAudio  @ listAudioFiles:87
+
 # REAPER API surface
   @reaper EnumerateSubdirectories
   @reaper EnumerateFiles

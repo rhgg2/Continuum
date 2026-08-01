@@ -89,6 +89,9 @@
   @use call    temperEditor:open  @ edit:172 renderBody:227
   @use require imgui  @ 15
 
+# Calls (intra-file)
+  @call er:focusState  @ renderBody:218
+
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB

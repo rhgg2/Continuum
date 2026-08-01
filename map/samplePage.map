@@ -55,6 +55,9 @@
   @use require sampleView  @ 24
   @use require util  @ 12
 
+# Calls (intra-file)
+  @call sp:setTrack  @ 63
+
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB

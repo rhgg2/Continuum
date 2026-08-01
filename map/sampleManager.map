@@ -116,6 +116,14 @@
   @use call    fs.basename  @ assign:283,287 stageInto:334
   @use require fs  @ 16
 
+# Calls (intra-file)
+  @call sm:getInstanceId  @ tick:261 previewSlot:352 stopPreview:364 previewPath:375 listTracks:396
+  @call sm:listTracks  @ migrate:408
+  @call sm:loadSlot  @ stageInto:338
+  @call sm:migrate  @ watchPath:433
+  @call sm:rehydrateTrack  @ tick:266
+  @call sm:setPrefix  @ watchPath:430
+
 # REAPER API surface
   @reaper gmem_write, gmem_read, gmem_attach
   @reaper TrackFX_GetCount, TrackFX_GetFXName, TrackFX_SetParam, TrackFX_GetFXGUID

@@ -87,6 +87,10 @@
   @use call sm:stopPreview  @ stopAudition:114
   @use call sm:syncSlot  @ syncSlot:139
 
+# Calls (intra-file)
+  @call sv:auditionPath  @ auditionCurrent:71
+  @call sv:auditionSlot  @ auditionCurrent:69
+
 # Fields (r read / w write incl. constructor keys)
   @field r cm  @ 13
   @field r ds  @ 13

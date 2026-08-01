@@ -53,6 +53,10 @@
   @use require util  @ 8
   @use sub     ps:projectRewound  @ 34
 
+# Calls (intra-file)
+  @call eventMeta:load  @ copyPool:114
+  @call eventMeta:saveAll  @ copyPool:114
+
 # Fields (r read / w write incl. constructor keys)
   @field r REMOVE  @ writeKb:24 flush:78 saveAll:99 dropPool:121,123
   @field w guids  @ 40

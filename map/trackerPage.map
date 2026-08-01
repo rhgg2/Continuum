@@ -87,6 +87,12 @@
   @use require util  @ 11
   @use sub     mm:flushed  @ 62
 
+# Calls (intra-file)
+  @call tp:bind  @ bindFromSelection:99 130
+  @call tp:bindFromSelection  @ bind:72 renderBody:160
+  @call tp:currentTake  @ 130
+  @call tp:dropTake  @ bindFromSelection:99
+
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB

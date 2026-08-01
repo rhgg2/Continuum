@@ -28,6 +28,9 @@
   @api scratch.track()  @ 66-70
       @contract  the scratch track handle; mints on first use.  @ 65
 
+# Calls (intra-file)
+  @call scratch.peek  @ id:61 track:67
+
 # REAPER API surface
   @reaper CountTracks
   @reaper GetTrack

@@ -91,6 +91,16 @@
   @api util.instantiate(name, deps)  @ 630-636
       @contract  executes the named module file as a fresh chunk, passing `deps` as its `...` argument. Used for factory modules whose file body IS the constructor (vs. stateless `require`d tables). Test seam: a function in util._stubs[name] takes precedence and is called with deps — so harnesses can swap a fake without altering the production graph.  @ 628
 
+# Calls (intra-file)
+  @call util.assign  @ picker:93 pick:105
+  @call util.clamp  @ nudgedScalar:286
+  @call util.clone  @ clone:192 deepClone:198
+  @call util.deepEq  @ deepEq:203
+  @call util.gcd  @ lcm:310
+  @call util.print  @ print:16
+  @call util.serialise  @ serialise:405,406
+  @call util.snapTo  @ nudgedScalar:285
+
 # REAPER API surface
   @reaper ShowConsoleMsg
   @reaper Undo_BeginBlock, Undo_EndBlock

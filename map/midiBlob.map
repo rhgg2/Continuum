@@ -97,6 +97,12 @@
   @use require perf  @ 18
   @use require util  @ 17
 
+# Calls (intra-file)
+  @call midiBlob.dropKey  @ syncSlots:419
+  @call midiBlob.putKey  @ syncSlots:420
+  @call midiBlob.repackKey  @ syncSlots:421
+  @call midiBlob.slotState  @ syncSlots:407
+
 # Fields (r read / w write incl. constructor keys)
   @field w __mode  @ 155
   @field w at  @ 27

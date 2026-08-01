@@ -31,6 +31,9 @@
   @use call    util.add  @ resolveSorted:47,49,53,57
   @use require util  @ 5
 
+# Calls (intra-file)
+  @call voicing.resolveSorted  @ resolveGroup:32
+
 # Fields (r read / w write incl. constructor keys)
   @field r derived  @ supersedes:14 redundant:20
   @field r detune  @ redundant:21

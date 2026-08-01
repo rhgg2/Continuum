@@ -149,6 +149,73 @@ callers of a symbol, so every internal helper call would pollute
 cross-module caller queries unless the kind were filtered at every call
 site. The direction differs, so the row should differ.
 
+**Both directions have to reach `map_query`** (2026-08-01). The section
+above describes two renderings and says nothing about the querier, which
+reads as though the file were the surface. It isn't. `map_query`
+reconstructs every structural result from the `@fn`/`@api` head
+(`server.py:566`) and silently drops any line matching neither `_DECL`
+nor `_ANN`, so a `->` continuation row would sit in the corpus and never
+appear in an answer. That is the diagnosed failure over again: the agent
+arrives through the querier, and a rendering it cannot see buys nothing.
+So each direction gets a query surface — a kind over the `@call` rows,
+and the forward tail carried onto structural results.
+
+**Spec maps are out of scope** (2026-08-01). `map/specs/*.map` render
+through their own path, and spec sources are flat: helpers called from
+cases, not a graph anyone traces. The edges are for module maps.
+
+**The oracle is the spec** (2026-08-01). The repo has no Python test
+framework and this phase does not add one. Each item's evidence is the
+phase-1 gate — a regen diff that must be purely additive, with the new
+rows hand-audited on a few modules — and phase 3's `luac` diff is the
+check with a direction to it. A fixture suite written against our own
+parser would pin what the parser does, which is what the corpus diff
+already shows; it could not tell us the parser is right.
+
+**What the corpus actually holds** (2026-08-01). Both counts above were
+wrong, in opposite directions. `self:foo()` is the rare spelling (138
+sites); the module's own self-name — `tm:foo()` inside
+`trackerManager.lua` — is dropped by the same skip and is 1182 more. But
+880 of that 1320 are `function tm:foo(` *declaration* heads: `CALL_RE`
+matches the declaration and the intra skip has been quietly eating it,
+so the pass needs the declaration-prefix guard `extract_fields` already
+carries. Real edges: 418 sites, 171 rows, 38 module maps — small enough
+to read, but only because the item carries a filter this section didn't
+know it needed.
+
+**The callee is keyed by its declaration head** (2026-08-01) — `@call
+tm:byUuid` for a method, `@call util.print` for a namespace dotfn, bare
+`@call sortByPPQ` for a private fn. The bare name sketched above
+collides: seven modules give one name to both a private fn and a public
+method (`trackerManager` does it eight times, `tm:addEvent` over
+`addEvent`), so a bare key merges two functions into one row the moment
+the bare-call pass lands. Keying by the head splits them by receiver
+form — a qualified site is the table member, a bare site the private fn
+— and buys the invariant that every `@call` target is a row in the same
+map. Callers stay bare names either way: `render_caller_groups`
+partitions sites on `:`, so `tm:freezeRegion:1765` would misparse.
+
+**A callee the map doesn't carry is dropped** (2026-08-01). `DAG.lua`'s
+indented `function ctx:…` members are deliberately uncaptured, so its 12
+`self:trackKeyOf()`-style sites resolve to nothing and emit nothing.
+Phase 3's oracle will report them as a disagreement; this is why.
+
+**A caller the map doesn't carry mis-attributes** (2026-08-01, from the
+hand-audit). The sibling case, and the worse one, because it emits.
+`frontierTails` (`trackerManager.lua:3940`) wraps its parameter list onto
+a second line and `LOCAL_FN_RE` wants the closing paren on the
+declaration line, so the function is never captured; no span contains its
+body, and `caller_at` returns None for every site inside it. Those sites
+still render — as bare line numbers, which is also how genuine file-scope
+code renders. So "top-level" in the map's vocabulary currently means
+either *at file scope* or *inside a declaration the extractor could not
+parse*, and nothing distinguishes them. This predates `@call` and is
+shared by `@use`, `@field` and `@emits` (`map/trackerManager.map` already
+carried bare `3954,3971,3972…` from that same body), so it is not a
+regression — but it is a second class phase 3's oracle will report, and
+it is the one that bites the forward-tail item: a continuation row has no
+declaration row to hang under when the caller was never captured.
+
 ### Vocabulary — unsettled
 
 The 197 kind-less consecutive `map_query` pairs say the agent frequently

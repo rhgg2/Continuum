@@ -86,6 +86,14 @@
   @use call    util.round  @ delayToPPQ:323
   @use require util  @ 16
 
+# Calls (intra-file)
+  @call timing.applyFactors  @ findRampOn:251,255 findRampOff:263,267 eval:297
+  @call timing.atomTilePeriod  @ resolveFactors:189
+  @call timing.isIdentity  @ resolveComposite:276
+  @call timing.periodQN  @ atomTilePeriod:143 resolveFactors:185,190
+  @call timing.resolveFactors  @ resolveComposite:277
+  @call timing.unapplyFactors  @ invert:309
+
 # Fields (r read / w write incl. constructor keys)
   @field r K  @ 129 findRampOn:247 findRampOff:259
   @field w K  @ 23

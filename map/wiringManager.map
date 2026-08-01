@@ -335,6 +335,24 @@
   @use require util  @ 22
   @use sub     self:wiringChanged  @ enableLive:2082
 
+# Calls (intra-file)
+  @call wm:applyOps  @ reconcile:2071
+  @call wm:checkUserAddable  @ addFxNode:536
+  @call wm:diff  @ reconcile:2070
+  @call wm:edgeGain  @ crossingGain:1979
+  @call wm:fxTrack  @ paramTargets:500
+  @call wm:instantiateFxOnScratch  @ addFxNode:541
+  @call wm:isSamplerNode  @ samplerReachable:437
+  @call wm:isScratchTrack  @ isWiringOwnedTrack:382
+  @call wm:mutate  @ moveBus:271 moveNodes:282 setSourceTagPos:324 addFxNode:547 deleteSource:602 deleteBus:623 addSourceNode:644 addBusNode:684 rotateBus:703 insertBus:725
+  @call wm:pokeEdgeGain  @ fastGainCommit:2016
+  @call wm:read  @ ensureLoaded:60
+  @call wm:readJSFXContent  @ jsfxTraits:146
+  @call wm:reconcile  @ paramTargets:452 enableLive:2084,2086
+  @call wm:snapshot  @ read:1463 reconcile:2069
+  @call wm:targetState  @ rememberApplied:2042 reconcile:2068
+  @call wm:viewGraph  @ samplerReachable:426 paramTargets:454
+
 # REAPER API surface
   @reaper defer
   @reaper GetProjectStateChangeCount

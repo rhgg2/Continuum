@@ -104,6 +104,12 @@
   @api tuning.stepToText(temper, step, octave)  @ 459-462
       @contract  name ⇒ name+octave (C-4); blank/absent ⇒ degree-octave (7-4). Octave +1 at octaveStep.  @ 458
 
+# Calls (intra-file)
+  @call tuning.midiToStep  @ snap:432 transposeStep:437 stepsBetween:443,444
+  @call tuning.scalaPitch  @ scalaPitch:57 derive:73,77 scalaToTemper:161,166 genCPS:296 genRank2:353 mosInfo:371 nextMosSize:378
+  @call tuning.stepToMidi  @ snap:432 transposeStep:438
+  @call tuning.stepToParts  @ stepToText:460
+
 # Fields (r read / w write incl. constructor keys)
   @field w cellWidth  @ derive:82
   @field r cents  @ computeCellWidth:38 derive:79 stepSpectrum:338,342 genRank2:363 midiToStep:397 stepToMidi:414 stepsBetween:445

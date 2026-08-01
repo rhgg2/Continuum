@@ -97,6 +97,11 @@
   @use call    util.serialise  @ writeMirror:134
   @use require util  @ 10
 
+# Calls (intra-file)
+  @call pa.computeDesired  @ apply:310
+  @call pa.frecencyOrder  @ params:385
+  @call pa:apply  @ automate:341 unautomate:351
+
 # REAPER API surface
   @reaper GetMasterTrack
   @reaper GetTrackGUID

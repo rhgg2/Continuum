@@ -57,6 +57,9 @@
   @use call    chrome.pushChromeWindow  @ draw:65
   @use require imgui  @ 7
 
+# Calls (intra-file)
+  @call modalHost:registerKind  @ 109,118
+
 # REAPER API surface
   @reaper ShowConsoleMsg
 

@@ -129,6 +129,13 @@
   @use call    util.round  @ lfo:268 velPattern:304 seed:486 retarget:501
   @use require util  @ 22
 
+# Calls (intra-file)
+  @call generators.destOf  @ retarget:495 parksNotes:512 continuousTargets:522 chainDestType:533 parkWindows:553
+  @call generators.destProfile  @ restFor:443 fieldRange:460 retarget:495,496
+  @call generators.destsFor  @ fieldsFor:472
+  @call generators.fieldRange  @ seed:485
+  @call generators.parksNotes  @ parkWindows:551
+
 # Fields (r read / w write incl. constructor keys)
   @field w arp  @ 342
   @field w base  @ 331,339,369,371,399,401

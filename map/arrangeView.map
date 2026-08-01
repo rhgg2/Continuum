@@ -245,6 +245,15 @@
   @use call    util.clamp  @ followViewport:46,50 setBeatPerRow:390
   @use require util  @ 14
 
+# Calls (intra-file)
+  @call av:beatPerRow  @ takeAtCursor:66 advanceCursorPastNewTake:87 nudgeSelected:186 resizeSelected:196 qnToRow:397 rowToQN:398 groupDragCandidate:467 dragCandidate:488 gutterLoopCand:510 createCandidate:520 645,646
+  @call av:qnToRow  @ followPlay:338 createSlot:594 seedCursor:612 629
+  @call av:rowToQN  @ takeAtCursor:65 dropAt:263 setLoopStartHere:278 setLoopEndHere:285 playFromCursor:292
+  @call av:setBeatPerRow  @ 645,646
+  @call av:setCursor  @ advanceCursorPastNewTake:88 moveCursorBy:140 createSlot:594 seedCursor:612 628,629
+  @call av:setFocus  @ duplicateSelectedBelow:242 duplicateUnpooledSelectedBelow:252
+  @call av:setPaletteSlot  @ createSlot:593 deleteSlot:604
+
 # REAPER API surface
   @reaper GetMediaItemTake_Item
 

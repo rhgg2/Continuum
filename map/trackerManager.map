@@ -732,6 +732,21 @@
   @use sub     mm:reload  @ 5014
   @use sub     mm:takeSwapped  @ 5013
 
+# Calls (intra-file)
+  @call tm:byUuid  @ deleteLowlevel:1217 lookup:1294 freezeRegion:1788 seedCovers:2198 seedRowsFor:2210 rebuildFx:3566 3955 rebuildPbs:4293 stampSamples:4696 pcSeedSpans:4719
+  @call tm:flush  @ freezeRegion:1765,1888 setLength:1942 rescaleLength:1986 setMutedChannels:2072
+  @call tm:fromLogical  @ parkSeed:182 seedRegionEdit:199 resizeNote:1259 stampEndppq:1312 realiseNoteUpdate:1340,1342 realiseNonNoteUpdate:1359 realiseAddPpq:1365 thinSeats:1714,1715 rescaleLength:1966,1969
+  @call tm:fromLogical  @ projectEvent:2101 rawDivergesFromLogical:2171 rebuildInternals:2281 rawSpanMap:2316,2317 fullRebuildChannelCCs:2458 rebuildRegionPark:2861,2863,2904,2936,2982,3021
+  @call tm:fromLogical  @ rebuildRegionPark:3031,3054,3061 findNoteColumnForPitch:3126,3127 rebuildPA:3166 rebuildFx:3303,3469,3470,3647 makeTailRules:3701,3711
+  @call tm:fromLogical  @ makeTailRules:3721 rebuildTails:4061 rebuildPbs:4210,4211,4220
+  @call tm:length  @ offTakeEnd:713 realiseNoteUpdate:1351 freezeRegion:1789 rebuildRegionPark:2849 3186 rebuildTails:4037
+  @call tm:markSwingStale  @ 5032,5051,5053 bindTake:5116
+  @call tm:rebuild  @ flush:1916 5021,5038,5056,5059,5062,5065,5069,5139
+  @call tm:requestRebuild  @ freezeRegion:1887 setLength:1941 5069
+  @call tm:restoreGuarded  @ bindTake:5105 detach:5124 5138
+  @call tm:setLength  @ tileLength:1998
+  @call tm:toLogical  @ offTakeEnd:713 freezeRegion:1789 projectEvent:2107 spliceCcCell:2343 fullRebuildChannelCCs:2464 rebuildExternals:2669,2670 rebuildRegionPark:2882 3244 makeTailRules:3736 rebuildPbs:4456,4478
+
 # REAPER API surface
   @reaper GetCursorPosition
   @reaper MIDI_GetPPQPosFromProjTime, MIDI_GetProjTimeFromPPQPos

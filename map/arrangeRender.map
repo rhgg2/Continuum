@@ -191,6 +191,9 @@
   @use require painter  @ 14
   @use require util  @ 7
 
+# Calls (intra-file)
+  @call ar:focusState  @ renderBody:780,806
+
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB

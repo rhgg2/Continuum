@@ -14,7 +14,8 @@
    `(caller, callee, line)` list per file, from the `self:` edges
    currently extracted and discarded plus a new bare-`foo(...)` pass
    over masked code; rendered twice, forward on the `@fn` row and
-   reverse as a `# Calls (intra-file)` index.  ← in flight
+   reverse as a `# Calls (intra-file)` index, both reachable from
+   `map_query`.  ← in flight
 3. **Phase 3 — the luac oracle** (§ Mechanism: park the rewrite) — diff
    phase 2's edges against `luac -p -l -l` across all 66 modules; the
    disagreement rate is what decides whether the cheap pass gets
@@ -30,34 +31,47 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-01 **`@call` rows — the intra-file reverse index.** 171 rows across 38 module maps, from the receiver-qualified sites `extract_uses` was discarding at its intra-module skip. Callees keyed by their declaration head, declaration heads guarded out with a prefix fullmatch, and `decl_head` now the one spelling of how a declaration reads — used by the new rows and by `emit_items`, which the regen gate proves changed no output. (design § Intra-file call edges)
 - **one definition of the source set** (design § Mechanism). Both PostToolUse map
-  hooks collapsed into a single entry over `.claude/hooks/map-regen.sh`
-  (renamed from `patches-map-regen.sh`, which no longer described it),
-  running `map_regen.py --write --stale-only` — 0.04s against 1.56s blanket,
-  the measurement that settled the flag. The 400-character inline `jq`/`bash`
-  dispatch in `settings.json` and the top-level-only `for f in *.lua` recipe
-  in `docs/CONVENTIONS.md` are gone, and neither call site swallows stderr
-  any more. `--check --stale-only` is refused rather than supported: it would
-  pass without reading what it was asked about.
 - **`1b569a2` — `tools/map_regen.py`, the regeneration gate.** `SOURCE_SETS`
-  is the single definition of the corpus, and `map_regen` drives
-  `map_extract` in-process over it: `--check` diffs a fresh regen against
-  disk, `--write` rewrites only what changed. Three orphan maps deleted.
 - **`c346a69` — `sha=` out of the `.map` header.** It made byte-identity
-  unreachable: 125 of 317 maps disagreed with a fresh regen on that field
-  alone, by construction and forever. 318 maps regenerated, header lines
-  only. Full regen 12s → 1.7s. See design § Mechanism for the reasoning
-  and for the content-hash trap.
 
 ## Now
 
-(empty — phase 1 is complete. The gate exists, the corpus is byte-identical
-to a fresh regen, and one definition of the source set now drives the hooks,
-the gate and the documented recipe alike.)
-
-Phase 2, intra-file call edges, is next and has not been split: `/plan-phase`
-for commit-sized items, then `/plan-next`.
+(empty — phase 2 item 1 landed; run `/plan-next` to promote the bare-`foo(...)` pass, the queued half that widens where the edges come from.)
 
 ## Queued (current phase; one-liners)
 
-(empty — phase 2 has not been split yet.)
+1. Widen where the edges come from with the bare-`foo(...)` pass — for
+   each name in the file's private-function set, match it over the
+   already-masked code and attribute the site with `caller_at(line)`.
+   Same edge list and same section as the item before, so this one is
+   purely about the new source; its callees are the bare-name half of
+   the key convention item 1 settled, and it inherits item 1's
+   declaration-line guard. (Checked while measuring item 1: the raw
+   `--`-stripped scan `extract_uses` runs and `strip_code`'s masked
+   lines disagree on none of the receiver-qualified sites, so the two
+   halves reading different text costs nothing today.) It lands
+   separately because this is the half where a shadowing local can
+   invent an edge that was never called, and it is exactly what phase
+   3's `luac` oracle is aimed at.
+
+2. Teach `map_query` the reverse index, so "who calls this helper" is
+   askable without opening the map file. The name wants deciding against
+   the existing vocabulary: `uses`/`usedby` are the cross-module pair and
+   these rows are deliberately not those, so a name that reads as their
+   synonym would undo the separation the `@call` row exists to keep.
+
+3. Render the same edges forward, as a continuation row under the
+   caller's declaration: `-> sortByPPQ:4812  dirtyChan:4830,4841`. The
+   design writes this as the `@fn` row, but it has to be every
+   declaration row that can hold a body — fn, method, dotfn, api — or
+   chunk modules, whose callers are nearly all methods, lose most of the
+   graph.
+
+4. Make the forward tail reach a `map_query` result. The server rebuilds
+   each structural result from the `@fn`/`@api` head rather than echoing
+   the file, so the continuation row is invisible to a query until it is
+   carried deliberately. The open choice is whether the tail rides every
+   structural result or only when asked for: it would land on `kind='fn'`
+   output everywhere, so it wants weighing against the noise.

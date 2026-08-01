@@ -202,6 +202,12 @@
   @use require util  @ 14
   @use sub     tm:rebuild  @ 213
 
+# Calls (intra-file)
+  @call pe:close  @ loadShelf:344 launch:514
+  @call pe:draw  @ 485
+  @call pe:handleInput  @ 486
+  @call pe:open  @ loadShelf:345 launch:491
+
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB

@@ -29,6 +29,12 @@ the same # Uses section — so map_query's usedby sees spec coverage.
 Both map shapes end with a machine-first `# Fields` section: `@field r|w
 <name>  @ <sites>` rows indexing every `.name` read/write (table-constructor
 keys count as writes), queried via map_query kind='reads'/'writes'.
+
+Module maps also carry `# Calls (intra-file)`: `@call <callee>  @ <sites>`
+rows reversing the file's own `self:foo()` / `tm:foo()` edges, so "who calls
+this method" reads off the map. The callee is spelled as its declaration head
+(`tm:byUuid`, `util.print`, bare name for a private fn) and always names a
+row in the same map; a `function tm:foo(` head is a declaration, not a site.
 """
 
 from __future__ import annotations
@@ -69,6 +75,9 @@ EMITS_BODY_RE = re.compile(r"^(\w+)\s*(?:--\s*(.*))?$")
 # Outbound edges (Uses pass). Resolved against a per-file alias table built
 # from imports/constructs/self; unresolvable receivers drop.
 CALL_RE       = re.compile(r"\b([A-Za-z_]\w*)([.:])([A-Za-z_]\w*)\s*\(")
+# A declaration head (`function tm:foo(`) matches CALL_RE too. Fullmatch this
+# against the text before the match to tell a declaration from a call site.
+FN_DECL_PREFIX = re.compile(r'\s*(?:local\s+)?function\s+')
 SUB_RE        = re.compile(r"\b([A-Za-z_]\w*):subscribe\(\s*['\"]([^'\"]+)['\"]")
 FORWARD_RE    = re.compile(
     r"\b[A-Za-z_]\w*:forward\(\s*['\"]([^'\"]+)['\"]\s*,\s*([A-Za-z_]\w*)\s*\)"
@@ -113,6 +122,14 @@ class Decl:
     annotations: list[Annotation] = field(default_factory=list)
 
 
+def decl_head(blk: Block) -> str:
+    """How a declaration reads in the map and in the source:
+    `tm:byUuid`, `util.print`, or a bare module-local name."""
+    if not blk.owner:
+        return blk.name
+    return f"{blk.owner}{':' if blk.kind == 'method' else '.'}{blk.name}"
+
+
 @dataclass
 class MapFile:
     module: str
@@ -142,6 +159,10 @@ class MapFile:
     # Outbound edges: (kind, target, line, caller). caller is the enclosing fn
     # name or None (top-level). kind ∈ {require, call, sub, forward}.
     uses: list[tuple[str, str, int, str]] = field(default_factory=list)
+    # Intra-file call edges: (callee, caller, line). callee is the
+    # declaration head (`tm:byUuid`, `util.print`); caller is the
+    # enclosing fn name or None (top-level).
+    calls: list[tuple[str, str, int]] = field(default_factory=list)
     # Field accesses: (kind 'r'|'w', field, line, caller|None).
     fields: list[tuple[str, str, int, str]] = field(default_factory=list)
 
@@ -517,6 +538,17 @@ def extract_uses(cm: MapFile, lines: list[str], caller_at) -> None:
     for d in cm.constructs:
         add('require', d.init, d.line)
 
+    # The intra-module calls the loop below skips as non-outbound are this
+    # file's own call graph; keep them, keyed by the callee's declaration head
+    # so a private fn and a like-named method stay distinct rows.
+    members = {b.name: decl_head(b) for b in cm.methods + cm.dotfns + cm.api}
+    call_seen: set[tuple[str, int]] = set()
+    def add_call(callee: str, line: int) -> None:
+        key = (callee, line)
+        if key not in call_seen:
+            call_seen.add(key)
+            cm.calls.append((callee, caller_at(line), line))
+
     for i, raw in enumerate(lines):
         line = i + 1
         # Strip line-comments to avoid harvesting calls quoted in prose.
@@ -528,6 +560,9 @@ def extract_uses(cm: MapFile, lines: list[str], caller_at) -> None:
             if not mod or fn in ('subscribe', 'forward', 'unsubscribe'):
                 continue  # sub/forward are their own edge kinds
             if mod == cm.module and (recv == 'self' or recv == cm.return_target):
+                callee = members.get(fn)
+                if callee and not FN_DECL_PREFIX.fullmatch(code[:m.start()]):
+                    add_call(callee, line)
                 continue  # intra-module call, not an outbound edge
             add('call', f'{recv}{sep}{fn}', line)
 
@@ -547,6 +582,7 @@ def extract_uses(cm: MapFile, lines: list[str], caller_at) -> None:
                 add('forward', f'{source}:{sig}', line)
 
     cm.uses.sort(key=lambda u: (u[0], u[1], u[2]))
+    cm.calls.sort(key=lambda c: (c[0], c[2]))
 
 
 def extract_fields(code_lines: list[str], skip_receiver: str = '') -> list[tuple[str, str, int]]:
@@ -683,19 +719,21 @@ def render_caller_groups(pairs: list[tuple[str, int]]) -> str:
     return ' '.join(segs)
 
 
-FIELD_ROW_CHUNK = 12   # sites per @field row — keeps hot fields' rows short
+# Sites per @field / @call row — keeps a hot field's or a hot callee's rows
+# short. Both heads repeat across their chunks and the querier accumulates.
+SITE_ROW_CHUNK = 12
 
 
 def emit_field_rows(out: list[str], fields: list[tuple[str, str, int, str]]) -> None:
-    """One `@field <kind> <name>` row per FIELD_ROW_CHUNK sites; hot fields
+    """One `@field <kind> <name>` row per SITE_ROW_CHUNK sites; hot fields
     repeat the head across rows and the querier accumulates them."""
     grouped: dict[tuple[str, str], list[tuple[str, int]]] = {}
     for kind, name, line, caller in fields:
         grouped.setdefault((name, kind), []).append((caller, line))
     for name, kind in sorted(grouped):
         pairs = sorted(grouped[(name, kind)], key=lambda p: p[1])
-        for j in range(0, len(pairs), FIELD_ROW_CHUNK):
-            chunk = render_caller_groups(pairs[j:j + FIELD_ROW_CHUNK])
+        for j in range(0, len(pairs), SITE_ROW_CHUNK):
+            chunk = render_caller_groups(pairs[j:j + SITE_ROW_CHUNK])
             out.append(f"  @field {kind} {name}  @ {chunk}")
 
 
@@ -715,7 +753,7 @@ def emit_anns(out: list[str], anns: list[Annotation], indent: str) -> None:
 
 
 def emit_items(out: list[str], sections: list, items: list,
-               label_prefix: str, owner_join: str = '') -> None:
+               label_prefix: str) -> None:
     """Render `items` (already line-sorted) interleaving section banners
     that precede them. `sections` is a shared mutable cursor: each banner
     is consumed by the first call whose item-range covers it. Banners
@@ -738,11 +776,7 @@ def emit_items(out: list[str], sections: list, items: list,
         for sec in pre:
             if sec[2] not in skip:
                 out.append(f"  -- {sec[2]}")
-        if m.owner:
-            join = owner_join or (':' if m.kind == 'method' else '.')
-            head = f"  {label_prefix}{m.owner}{join}{m.name}"
-        else:
-            head = f"  {label_prefix}{m.name}"
+        head = f"  {label_prefix}{decl_head(m)}"
         loc = f"{m.line}-{m.end_line}" if m.end_line > m.line else f"{m.line}"
         out.append(f"{head}{fmt_args(m.args)}  @ {loc}")
         for d in m.doc:
@@ -838,7 +872,7 @@ def emit(cm: MapFile) -> str:
     if cm.api:
         owners = sorted({a.owner for a in cm.api})
         add(f"# Public API ({' / '.join(owners)}.*)")
-        emit_items(out, sections, cm.api, '@api ', owner_join='.')
+        emit_items(out, sections, cm.api, '@api ')
         add('')
 
     if cm.methods or cm.dotfns:
@@ -880,6 +914,21 @@ def emit(cm: MapFile) -> str:
         for kind, target in order:
             sites = render_caller_groups(grouped[(kind, target)])
             add(f"  @use {kind:<{width}} {target}  @ {sites}")
+        add('')
+
+    if cm.calls:
+        add("# Calls (intra-file)")
+        # Reverse index: one row per callee, sites grouped under the calling
+        # function — "who calls this", which the forward tail on each @fn row
+        # cannot answer without reading the whole map.
+        by_callee: dict[str, list[tuple[str, int]]] = {}
+        for callee, caller, line in cm.calls:
+            by_callee.setdefault(callee, []).append((caller, line))
+        for callee in sorted(by_callee):
+            pairs = sorted(by_callee[callee], key=lambda p: p[1])
+            for j in range(0, len(pairs), SITE_ROW_CHUNK):
+                chunk = render_caller_groups(pairs[j:j + SITE_ROW_CHUNK])
+                add(f"  @call {callee}  @ {chunk}")
         add('')
 
     if cm.reaper_calls:

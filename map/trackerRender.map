@@ -375,6 +375,9 @@
   @use require tuning  @ 9
   @use require util  @ 8
 
+# Calls (intra-file)
+  @call tr:focusState  @ 864 renderBody:1441,1474
+
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB

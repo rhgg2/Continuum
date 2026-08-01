@@ -206,6 +206,18 @@
   @use require scratch  @ 23
   @use require util  @ 21
 
+# Calls (intra-file)
+  @call am:createAndDropMidi  @ newTakeBelow:872
+  @call am:deleteTake  @ createAndDropMidi:736 dropInstance:816
+  @call am:duplicateTake  @ duplicateBelow:850
+  @call am:findTake  @ initialCursor:498
+  @call am:isParkedTake  @ ownerTrack:570
+  @call am:projectTracks  @ ownerTrack:573 trackIdxForGuid:776
+  @call am:setEditCursorQN  @ playFromQN:536
+  @call am:startIsClear  @ duplicateBelow:849 duplicateUnpooledBelow:857 newTakeBelow:871 moveTake:923
+  @call am:takesUsing  @ reswingAll:1006
+  @call am:tracksTakes  @ createAndDropMidi:722 dropInstance:794 startIsClear:910
+
 # REAPER API surface
   @reaper TakeIsMIDI
   @reaper GetMediaItemTake_Item, GetMediaItemTake_Source, GetMediaItemTake_Track

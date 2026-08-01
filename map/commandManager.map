@@ -128,6 +128,20 @@
   @use call    util.print  @ loadOverrides:573
   @use require util  @ 15
 
+# Calls (intra-file)
+  @call cmgr:doAfter  @ doAfter:154
+  @call cmgr:doBefore  @ doBefore:144
+  @call cmgr:keyLabel  @ keyLabelList:459
+  @call cmgr:keyLabelList  @ keyLabels:465
+  @call cmgr:keySpec  @ commandAtKey:324,329 keyLabel:444 tokenForSpec:531
+  @call cmgr:keychain  @ commandAtKey:325
+  @call cmgr:keysFor  @ keyLabelList:456
+  @call cmgr:register  @ newScope:98,99
+  @call cmgr:scope  @ push:237
+  @call cmgr:specForToken  @ loadOverrides:571
+  @call cmgr:tokenForSpec  @ rebind:589
+  @call cmgr:wrap  @ doBefore:147 doAfter:157
+
 # REAPER API surface
   @reaper GetOS
 
