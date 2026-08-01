@@ -31,8 +31,9 @@ Both map shapes end with a machine-first `# Fields` section: `@field r|w
 keys count as writes), queried via map_query kind='reads'/'writes'.
 
 Module maps also carry `# Calls (intra-file)`: `@call <callee>  @ <sites>`
-rows reversing the file's own `self:foo()` / `tm:foo()` edges, so "who calls
-this method" reads off the map. The callee is spelled as its declaration head
+rows reversing the file's own `self:foo()` / `tm:foo()` edges, queried via
+map_query kind='usedby' alongside the cross-module edges, so "who calls this
+method" reads off one query. The callee is spelled as its declaration head
 (`tm:byUuid`, `util.print`, bare name for a private fn) and always names a
 row in the same map; a `function tm:foo(` head is a declaration, not a site.
 """

@@ -164,6 +164,24 @@ and the forward tail carried onto structural results.
 through their own path, and spec sources are flat: helpers called from
 cases, not a graph anyone traces. The edges are for module maps.
 
+**A bare `@call` callee belongs to its file** (2026-08-01). `usedby` filters
+a row's target module through `_canon_target`, which reads the receiver out
+of the spelling — right for `tm:byUuid`, and empty for the bare names that
+are most of the intra index, where it hands back the callee's own name as
+its module. So `query='centsToRaw'` finds five callers and
+`query='centsToRaw' module='trackerManager'` finds none: the narrowing that
+should have been free drops the very half the query was for, and the
+both-empty line asserts both indexes were searched, so the wrong answer
+arrives with a warrant. A bare callee needs no resolution — the extractor
+spells a method qualified and a private function bare, so a bare row is by
+construction a call on a function of the file the row lives in, and its
+module is the map's stem. Deliberately not extended to the *name*
+(`t_fn = callee`, which would let `query='tm:centsToRaw'` reach a private
+`centsToRaw`): two maps declare a bare and a qualified name that collide —
+`trackerManager` has `flush` and `tm:flush`, `util` has `print` and
+`util.print` — so buying that spelling would cost a conflation of two
+genuinely different functions.
+
 **The oracle is the spec** (2026-08-01). The repo has no Python test
 framework and this phase does not add one. Each item's evidence is the
 phase-1 gate — a regen diff that must be purely additive, with the new

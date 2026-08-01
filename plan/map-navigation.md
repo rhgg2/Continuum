@@ -31,14 +31,14 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-01 **`usedby` answers in two labelled sections.** The 1339 `@call` rows were unreachable through the querier — matching neither `_DECL` nor `_ANN`, so `query='centsToRaw'` returned `(no callers found)` while five callers sat in `map/trackerManager.map`. Both halves gather uncapped and split an even budget, each donating what it can't use, since neither may starve the other; `calls`/`calledby` land as aliases, and a module-level target has no intra half. Settled on contact: a bare callee's module is the map's own stem rather than the resolver's guess at its spelling — without which a `module=` narrowing dropped the intra half, and the new both-empty line asserted it had searched both. (design § Intra-file call edges)
 - 2026-08-01 **The bare-name half of the `@call` index.** 1168 rows across 53 files, from every module-private helper called with no receiver; the lookbehind `(?<![.:\w])` rather than `\b` keeps a `tm:foo(` site out of the bare key. Corpus 171 → 1339 rows, 38 → 56 sections. The gate itself needed fixing: `.gitattributes` carries `map/*.map -diff`, so the brief's `git diff -U0` check was binary and could not fail — `map_regen.py` now prints the `--text` form after a full write. (design § Intra-file call edges)
 - 2026-08-01 **`@call` rows — the intra-file reverse index.** 171 rows across 38 module maps, from the receiver-qualified sites `extract_uses` was discarding at its intra-module skip. Callees keyed by their declaration head, declaration heads guarded out with a prefix fullmatch, and `decl_head` now the one spelling of how a declaration reads — used by the new rows and by `emit_items`, which the regen gate proves changed no output. (design § Intra-file call edges)
 - **one definition of the source set** (design § Mechanism). Both PostToolUse map
-- **`1b569a2` — `tools/map_regen.py`, the regeneration gate.** `SOURCE_SETS`
 
 ## Now
 
-**Teach `usedby` the intra-file `@call` index** — brief in `plan/IMPL.md`. (design § Intra-file call edges)
+(empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
 

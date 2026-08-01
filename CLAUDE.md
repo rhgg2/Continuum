@@ -90,12 +90,15 @@ immensely; it's often also the thing a red spec can pin.
   current even for a file you opened weeks ago; `docs/<file>.md` for
   the WHY.
 
-- **Cross-module navigation — `mcp__continuum_map__map_query`.** Faster
+- **Symbol navigation — `mcp__continuum_map__map_query`.** Faster
   and more complete than grepping `map/*.map`; its schema documents
   the filters, query syntax and return shape. Gotchas on top of the
   schema: `uses`/`usedby` resolve receivers through the file's alias
   table, so targets read as `tm:rebuild`, not
-  `trackerManager:rebuild`; `forward` edges point at the **source's**
+  `trackerManager:rebuild`; `usedby` answers in two labelled sections,
+  cross-module `@use` edges and the file's own intra-module `@call`
+  rows, so "who calls this private helper" is the same one query;
+  `forward` edges point at the **source's**
   signal, not the receiver's, and kind='flow' follows the whole chain
   for you. `query` and `module` are regex, not glob — `query`
   substring-matched, `module` anchored.

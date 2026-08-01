@@ -71,6 +71,11 @@ _USE = re.compile(
 _FIELD = re.compile(
     r'^\s*@field\s+(?P<fkind>[rw])\s+(?P<name>\w+)\s+@\s+(?P<sites>.+?)\s*$'
 )
+# `@call <callee>  @ <sites>` — the intra-file reverse index. Sites carry the
+# same grammar as @use, so _iter_use_sites parses them unchanged.
+_CALL = re.compile(
+    r'^\s*@call\s+(?P<callee>\S+)\s+@\s+(?P<sites>.+?)\s*$'
+)
 
 
 def _iter_use_sites(sites: str):
@@ -118,7 +123,9 @@ def _normalize_kind(k: str) -> str:
         "requires": "require", "import": "require", "imports": "require",
         "constructs": "construct",
         "cases": "case",
-        "use": "uses", "usedby": "usedby", "used-by": "usedby", "used_by": "usedby",
+        "use": "uses", "calls": "uses",
+        "usedby": "usedby", "used-by": "usedby", "used_by": "usedby",
+        "calledby": "usedby", "called-by": "usedby", "called_by": "usedby",
         "read": "reads", "write": "writes", "field": "fields",
     }
     return aliases.get(k, k)
@@ -202,6 +209,84 @@ def _usedby_selectors(query, module, reg):
     return module_pred, method, raw_rx
 
 
+# Both halves of usedby gather without capping: the budget can't be split
+# until both totals are known, so neither may break out early.
+def _usedby_cross(module_pred, q_fn, raw_rx, reg, dirs) -> list[str]:
+    """Cross-module half: every map's @use edges aimed at the selected target."""
+    rows: list[str] = []
+    for d in dirs:
+        for mp in sorted(d.glob("*.map")):
+            text = mp.read_text(encoding="utf-8", errors="replace")
+            src = _src_of(mp, text)
+            site_rows: list[str] = []
+            targets: set[str] = set()
+            for raw in text.splitlines():
+                mu = _USE.match(raw)
+                if not mu:
+                    continue
+                target = mu.group("target")
+                t_module, t_fn = _canon_target(target, reg)
+                if module_pred and not module_pred(t_module):
+                    continue
+                if q_fn is not None and t_fn != q_fn:
+                    continue
+                if raw_rx and not raw_rx.search(target):
+                    continue
+                ukind = mu.group("ukind")
+                targets.add(f"{ukind} {target}")
+                for caller, n in _iter_use_sites(mu.group("sites")):
+                    where = f"  (in {caller})" if caller else ""
+                    site_rows.append(f"{src}:{n}  @use {ukind} {target}{where}")
+            # Spec callers collapse to one row per spec file — the file list
+            # answers "which specs exercise X"; per-site rows drown production.
+            if site_rows and mp.parent.name == "specs":
+                plural = "s" if len(site_rows) != 1 else ""
+                site_rows = [f"{src}: {len(site_rows)} site{plural}"
+                             f"  @use {', '.join(sorted(targets))}"]
+            rows.extend(site_rows)
+    return rows
+
+
+def _usedby_intra(module_pred, q_fn, raw_rx, reg) -> list[str]:
+    """Intra-module half: each module map's own @call rows. MAP_DIR only —
+    spec maps carry no @call rows, and a spec's private helpers are out of
+    scope for "who calls this" anyway."""
+    rows: list[str] = []
+    for mp in sorted(MAP_DIR.glob("*.map")):
+        text = mp.read_text(encoding="utf-8", errors="replace")
+        src = _src_of(mp, text)
+        for raw in text.splitlines():
+            mc = _CALL.match(raw)
+            if not mc:
+                continue
+            callee = mc.group("callee")
+            t_module, t_fn = _canon_target(callee, reg)
+            # A bare callee needs no resolution: the extractor spells methods
+            # qualified, so a bare row is a call on a function of this very
+            # file. See design/map-navigation.md § Intra-file call edges.
+            if t_fn is None:
+                t_module = mp.stem
+            if module_pred and not module_pred(t_module):
+                continue
+            if q_fn is not None and t_fn != q_fn:
+                continue
+            if raw_rx and not raw_rx.search(callee):
+                continue
+            for caller, n in _iter_use_sites(mc.group("sites")):
+                where = f"  (in {caller})" if caller else ""
+                rows.append(f"{src}:{n}  @call {callee}{where}")
+    return rows
+
+
+def _section(name, shown, total, na=None) -> str:
+    if na:
+        return f"{name}  {na}"
+    if total == 0:
+        return f"{name}  (none)"
+    return (f"{name}  ({total})" if shown == total
+            else f"{name}  (showing {shown} of {total})")
+
+
 # `flow` walks the signal rows already in the maps: `@emits` (owner = the
 # map's module, fire-sites in the tail), `@use sub owner:signal`, and
 # `@use forward source:signal` (the forwarder re-fires under its own name).
@@ -276,15 +361,20 @@ def map_query(
       kind: filter by entry kind. Accepted (case-insensitive, plurals
             ok): fn, api, state, const, require/import, construct,
             case (spec test cases), invariant, contract, shape,
-            emits/signal, reaper, deps, uses, usedby, flow, reads/
-            writes/fields. `uses` lists a module's own outbound edges (calls
-            / subs / forwards / requires). `usedby` reverses it —
-            scanning every map (specs included, so it also answers
-            "which specs exercise X"; spec callers collapse to one
-            summary row per spec file) for callers of the queried
-            symbol or module, resolving short instance names and
-            `:`/`.` spellings so `cm:get`, `configManager.get`, and
-            module='configManager' all match. `flow` traces a signal
+            emits/signal, reaper, deps, uses/calls, usedby/calledby,
+            flow, reads/writes/fields. `uses` lists a module's own
+            outbound edges (calls / subs / forwards / requires).
+            `usedby` reverses it, answering in two labelled sections:
+            cross-module `@use` edges, scanning every map (specs
+            included, so it also answers "which specs exercise X";
+            spec callers collapse to one summary row per spec file),
+            and the declaring file's own intra-module `@call` rows, so
+            a private helper's callers come back from the same query.
+            Both halves resolve short instance names and `:`/`.`
+            spellings so `cm:get`, `configManager.get`, and
+            module='configManager' all match; a module-level target has
+            no intra half, since `@call` keys on functions.
+            `flow` traces a signal
             end-to-end — emitters (`@emits` payload + fire-sites),
             subscribers, and forward hops followed transitively;
             query names the signal, `module` optionally pins the
@@ -345,50 +435,35 @@ def _map_query(query, kind, module, max_results) -> str:
             return ("(usedby needs a target: pass query= or module= naming "
                     "the used symbol or module, e.g. query='cm:get' or "
                     "module='configManager')")
-        results: list = []
-        truncated = False
-        for d in dirs:
-            for mp in sorted(d.glob("*.map")):
-                text = mp.read_text(encoding="utf-8", errors="replace")
-                src = _src_of(mp, text)
-                site_rows: list[str] = []
-                targets: set[str] = set()
-                for raw in text.splitlines():
-                    mu = _USE.match(raw)
-                    if not mu:
-                        continue
-                    target = mu.group("target")
-                    t_module, t_fn = _canon_target(target, reg)
-                    if module_pred and not module_pred(t_module):
-                        continue
-                    if q_fn is not None and t_fn != q_fn:
-                        continue
-                    if raw_rx and not raw_rx.search(target):
-                        continue
-                    ukind = mu.group("ukind")
-                    targets.add(f"{ukind} {target}")
-                    for caller, n in _iter_use_sites(mu.group("sites")):
-                        where = f"  (in {caller})" if caller else ""
-                        site_rows.append(f"{src}:{n}  @use {ukind} {target}{where}")
-                # Spec callers collapse to one row per spec file — the file list
-                # answers "which specs exercise X"; per-site rows drown production.
-                if site_rows and mp.parent.name == "specs":
-                    plural = "s" if len(site_rows) != 1 else ""
-                    site_rows = [f"{src}: {len(site_rows)} site{plural}"
-                                 f"  @use {', '.join(sorted(targets))}"]
-                for row in site_rows:
-                    if len(results) >= max_results:
-                        truncated = True
-                        break
-                    results.append(row)
-                if truncated:
-                    break
-            if truncated:
-                break
-        if not results:
-            return f"(no callers found for query={query!r}, module={module!r})"
-        if truncated:
-            results.append(f"--- truncated at {max_results}; narrow the query ---")
+        cross = _usedby_cross(module_pred, q_fn, raw_rx, reg, dirs)
+        # @call keys on functions, so a module-level target has no intra half:
+        # trackerManager calling itself is not an answer to "who uses it".
+        intra = (None if q_fn is None and raw_rx is None
+                 else _usedby_intra(module_pred, q_fn, raw_rx, reg))
+        if not cross and intra is not None and not intra:
+            return (f"(no callers found for query={query!r}, module={module!r}; "
+                    "both the cross-module and intra-module indexes were searched)")
+
+        n_intra = 0 if intra is None else len(intra)
+        if len(cross) + n_intra <= max_results:
+            keep_cross, keep_intra = len(cross), n_intra
+        else:                # even split, each half donating what it can't use
+            keep_cross = min(len(cross), max_results // 2)
+            keep_intra = min(n_intra, max_results // 2)
+            keep_cross += min(len(cross) - keep_cross,
+                              max_results - keep_cross - keep_intra)
+            keep_intra += min(n_intra - keep_intra,
+                              max_results - keep_cross - keep_intra)
+
+        # Rows keep their @use/@call token under the header, so a row copied
+        # out of context still says which index it came from.
+        results = [_section("Cross-module", keep_cross, len(cross))]
+        results += [f"  {r}" for r in cross[:keep_cross]]
+        results.append(_section(
+            "Intra-module", keep_intra, n_intra,
+            na=("(n/a — module-level target; the intra index keys on functions)"
+                if intra is None else None)))
+        results += [f"  {r}" for r in (intra or [])[:keep_intra]]
         results.append("--- note: calls on runtime receivers (not import/construct/dep aliases) are dropped — recall is incomplete for those ---")
         return "\n".join(results)
 
@@ -475,6 +550,9 @@ def _map_query(query, kind, module, max_results) -> str:
     truncated = False
 
     # `uses` walks a module's own outbound @use lines. (`usedby` handled above.)
+    # It does not read the @call index: that index's *caller* side would answer
+    # "what does this function call", which is a different field of the same
+    # rows and a different query — see design/map-navigation.md.
     if kind_filter == 'uses':
         for mp in module_files:
             text = mp.read_text(encoding="utf-8", errors="replace")
