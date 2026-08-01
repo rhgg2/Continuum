@@ -12,6 +12,15 @@ lines. Newest first. `/commit` prompts for one at commit time.
 Entries below 2026-07-27 predate that split, so some of them also
 appear in their design docs.
 
+- **2026-08-01** — The implementation brief moves out of the plan file into an untracked
+  plan/IMPL.md: /plan-next writes it, /implement-next works from it and gets nothing else injected,
+  the landing bookkeeping deletes it, and Now keeps a one-line pointer so the tracked plan can still
+  answer what is in flight. Editing a 150-200 line brief inside the tracked plan meant exact-text
+  anchors for every write and pushed the injected plan past the hook's 10k cap; untracked costs
+  nothing, because the arc is always plan-next to implement-next to commit and a brief never
+  survived its own commit anyway, while the Landed bullet and the design doc's dated notes are the
+  record that does.
+
 - **2026-07-31** — The /commit subagent's Bash commands are auto-approved by a PreToolUse hook keyed
   on agent_id and agent_type, rather than by permissionMode: bypassPermissions on the agent
   definition. A prefix allow-list in settings.json cannot do it: the agent varies the shape it

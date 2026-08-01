@@ -19,8 +19,11 @@ the point of this command existing — run it and stop.
    and waiting. Say so, point at `/plan-next`, stop — refilling
    mid-phase would re-decide items already sized, and the later ones
    are the ones the earlier ones' landings inform.
-4. An empty Queued is a phase boundary. Do the Phases bookkeeping
-   first, since it decides which section you're about to split:
+4. An empty Queued is a phase boundary — unless the hook reports a
+   brief in flight, which means the phase's last item was compiled and
+   hasn't landed yet. Then say so, point at `/implement-next`, stop.
+   Otherwise do the Phases bookkeeping first, since it decides which
+   section you're about to split:
    - the in-flight phase's last item has landed, so mark that phase
      landed in Phases (dated, with the commit count if it took
      several) and move the `← in flight` marker to the next phase;

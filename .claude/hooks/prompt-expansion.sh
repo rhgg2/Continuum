@@ -38,6 +38,32 @@ emitLivePlan() {
   cat "$planPath"
 }
 
+# The in-flight implementation brief: untracked, one item, written by /plan-next
+# and deleted by the landing bookkeeping — so its existence is the signal that an
+# item has been compiled and hasn't landed.
+briefPath=plan/IMPL.md
+
+emitBrief() {
+  local name
+  [[ -f $briefPath ]] || { echo "$briefPath is missing — no brief has been compiled."; return; }
+  name=$(liveplanName)
+  echo "The implementation brief ($briefPath), injected by hook — it is current, so"
+  echo "don't re-read it. The live plan is plan/${name:-(none)}; the brief's own"
+  echo "\`plan:\` line should agree, and a disagreement is worth stopping over."
+  echo
+  cat "$briefPath"
+}
+
+emitBriefState() {
+  echo
+  if [[ -f $briefPath ]]; then
+    echo "$briefPath exists — an item is in flight and has not landed:"
+    grep -m1 '^# ' "$briefPath" || echo "(no title line)"
+  else
+    echo "$briefPath does not exist — no item in flight."
+  fi
+}
+
 emitPlanShelf() {
   echo "Plan shelf, injected by hook — it is current, so don't re-list these:"
   echo
@@ -84,10 +110,11 @@ emitSpool() {
 # whose parser reads a case pattern's `)` as closing the command substitution.
 emitContext() {
   case "$commandName" in
-    plan-next|implement-next|plan-phase) emitLivePlan ;;
-    plan-new)                            emitPlanShelf ;;
-    plan-close)                          emitLivePlan; echo; emitPlanShelf ;;
-    commit)                              emitTreeState; emitSpool ;;
+    plan-next|plan-phase) emitLivePlan; emitBriefState ;;
+    implement-next)       emitBrief ;;
+    plan-new)             emitPlanShelf ;;
+    plan-close)           emitLivePlan; emitBriefState; echo; emitPlanShelf ;;
+    commit)               emitTreeState; emitSpool ;;
   esac
 }
 

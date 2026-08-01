@@ -38,31 +38,30 @@
 
 ## Now
 
-(empty — the bare pass landed, closing phase 2's second item. Next in the queue is teaching `map_query` the reverse index, whose name wants deciding against `uses`/`usedby` before anything is built; run /plan-next to promote it.)
+**Teach `usedby` the intra-file `@call` index** — brief in `plan/IMPL.md`. (design § Intra-file call edges)
 
 ## Queued (current phase; one-liners)
 
-1. Teach `map_query` the reverse index, so "who calls this helper" is
-   askable without opening the map file. The name wants deciding against
-   the existing vocabulary: `uses`/`usedby` are the cross-module pair and
-   these rows are deliberately not those, so a name that reads as their
-   synonym would undo the separation the `@call` row exists to keep.
-
-2. Render the same edges forward, as a continuation row under the
+1. Render the same edges forward, as a continuation row under the
    caller's declaration: `-> sortByPPQ:4812  dirtyChan:4830,4841`. The
    design writes this as the `@fn` row, but it has to be every
    declaration row that can hold a body — fn, method, dotfn, api — or
    chunk modules, whose callers are nearly all methods, lose most of the
    graph.
 
-3. Make the forward tail reach a `map_query` result. The server rebuilds
+2. Make the forward tail reach a `map_query` result. The server rebuilds
    each structural result from the `@fn`/`@api` head rather than echoing
    the file, so the continuation row is invisible to a query until it is
    carried deliberately. The open choice is whether the tail rides every
    structural result or only when asked for: it would land on `kind='fn'`
-   output everywhere, so it wants weighing against the noise.
+   output everywhere, so it wants weighing against the noise. A cheaper
+   alternative surfaced while briefing the `usedby` item: `uses` could
+   match the *caller* side of the `@call` rows directly, answering the
+   forward question at query time with no continuation row involved —
+   which would leave item 1 a file-rendering change for the human reader
+   only. Decide between them before building either.
 
-4. Give a by-name binding its own row (found while sizing the bare
+3. Give a by-name binding its own row (found while sizing the bare
    pass). 100 of 1250 private fns have no call site at all and are
    reached only by reference — command tables (`arrangeDive =
    diveSelected`), namespace export tables (`chrome` returning `row =
@@ -74,7 +73,7 @@
    export-table binding is the same kind of thing as a command-table
    one.
 
-5. Close the file-scope declaration-capture gap. Nine `function foo(`
+4. Close the file-scope declaration-capture gap. Nine `function foo(`
    assignments to a `local` forward-decl (`arrangeManager:444
    ensureState`, `trackerView:2729 colFor`) are invisible to
    `NESTED_FN_RE`, which requires indentation — though the `do function

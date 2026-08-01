@@ -56,7 +56,10 @@ Every piece of ongoing work larger than a couple of commits has a
 design doc in `design/` and a plan in `plan/`: the design doc holds the
 model and the decisions, the plan holds the machinery — phases, what
 landed, what's next. `plan/CURRENT` is a stack, newest first: the top
-line is live and the rest are parked.
+line is live and the rest are parked. The in-flight item's
+implementation brief is `plan/IMPL.md` — untracked and short-lived:
+`/plan-next` writes it, `/implement-next` works from it, the landing
+bookkeeping deletes it.
 
 `design/` is intent, not current state — `docs/<file>.md` is what is
 true now.

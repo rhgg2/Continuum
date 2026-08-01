@@ -14,7 +14,7 @@ Manifest:
   {
     "date": "2026-07-22",                       # optional; defaults to today
     "decision": "one-or-two-line prose; only for a decision with no design doc",
-    "land": {"headline": "...", "ref": "§ 3", "now": "replacement Now body"},
+    "land": {"headline": "...", "ref": "§ 3", "now": "optional; overrides the empty Now"},
     "wonder": ["keep", "drop", "replace: fuller text, under the jot's own date"]
   }
 """
@@ -29,12 +29,14 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 DECISIONS = REPO / "design" / "decisions.md"
 PLAN_CURRENT = REPO / "plan" / "CURRENT"
+BRIEF = REPO / "plan" / "IMPL.md"
 OPEN_CLAIMS = REPO / ".claude" / "agent-memory" / "open.md"
 SPOOL = REPO / ".claude" / "agent-memory" / "spool.md"
 
 DECISION_WIDTH = 100
 LANDED_KEEP = 4
 PLACEHOLDER = "(nothing unfiled)"
+NOW_EMPTY = "(empty — run /plan-next to compile the next brief.)"
 REPLACE = "replace:"
 # wonder.py's output format, and what makes a jot's extent unambiguous: the
 # opener sits at column 0 where every continuation line is indented under it.
@@ -96,7 +98,7 @@ def splice_landed(new_bullet, body_lines):
 
 
 def apply_land(date, spec):
-    for key in ("headline", "ref", "now"):
+    for key in ("headline", "ref"):
         if key not in spec:
             die(f"land needs '{key}'")
     if not PLAN_CURRENT.exists():
@@ -115,7 +117,8 @@ def apply_land(date, spec):
     lines = lines[:l_start] + splice_landed(bullet, lines[l_start:l_end]) + lines[l_end:]
 
     n_start, n_end = section_bounds(lines, "Now", name)
-    lines = lines[:n_start] + ["", spec["now"].rstrip("\n"), ""] + lines[n_end:]
+    now = spec.get("now", "").strip() or NOW_EMPTY
+    lines = lines[:n_start] + ["", now, ""] + lines[n_end:]
 
     return plan_path, "\n".join(lines) + "\n"
 
@@ -130,6 +133,18 @@ def landing_digest(content):
     landed_start, _ = section_bounds(lines, "Landed", "the plan")
     _, now_end = section_bounds(lines, "Now", "the plan")
     return "\n".join(lines[landed_start - 1:now_end])
+
+
+def retire_brief():
+    """What deleting the in-flight brief would drop, or None if there isn't one.
+
+    The brief is untracked and holds a single item, so it has no history to fall
+    back on — the landing says what it removed rather than removing it silently.
+    """
+    if not BRIEF.exists():
+        return None
+    title = next((ln for ln in BRIEF.read_text().splitlines() if ln.startswith("# ")), None)
+    return f"deleted {BRIEF.relative_to(REPO)} — {title[2:].strip() if title else 'untitled'}"
 
 
 # ----- jot triage
@@ -226,13 +241,14 @@ def main():
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
         die(f"date must be YYYY-MM-DD, got {date!r}")
 
-    writes, digests = [], []
+    writes, digests, retired = [], [], None
     if "decision" in manifest:
         writes.append(apply_decision(date, manifest["decision"]))
     if "land" in manifest:
         plan_path, content = apply_land(date, manifest["land"])
         writes.append((plan_path, content))
         digests.append(landing_digest(content))
+        retired = retire_brief()
     if "wonder" in manifest:
         unfiled, spool = apply_wonder(manifest["wonder"])
         writes += [unfiled, spool]
@@ -243,6 +259,10 @@ def main():
     for path, content in writes:
         path.write_text(content)
         print(f"wrote {path.relative_to(REPO)}")
+
+    if retired:
+        BRIEF.unlink()
+        print(retired)
 
     for digest in digests:
         print()

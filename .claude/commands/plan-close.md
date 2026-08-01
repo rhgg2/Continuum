@@ -15,7 +15,12 @@ programme's files live. This is the only command that archives.
    - **Park** — the work is unfinished and attention is moving
      elsewhere. The plan stays in `plan/`, nothing is archived, and
      only the CURRENT line goes. Note in Now what's left, since a
-     parked plan comes back cold.
+     parked plan comes back cold. If the hook reports a brief in
+     flight, that note absorbs whatever of it still matters and
+     `plan/IMPL.md` goes in the same batch: it holds one item for
+     whichever plan is live, so leaving it would let the next plan's
+     `/plan-next` overwrite it unseen — and it would be stale by the
+     time you came back regardless.
    If the plan looks finished but you're inferring it from a Now note
    rather than the phase markers, ask me. Archiving mid-programme is
    how a phase gets lost.
@@ -35,6 +40,6 @@ programme's files live. This is the only command that archives.
    CURRENT means no live plan; leave the file in place and empty, since
    the hook reads it.
 6. Do the `git mv`s first (patches works on paths, not renames), then
-   stage the content edits and the CURRENT pop as one `apply_patches`
-   call. Don't commit — that's `/commit`, and this one carries no
+   stage the content edits, the CURRENT pop and the brief's deletion if
+   you're parking as one `apply_patches` call. Don't commit — that's `/commit`, and this one carries no
    landing bookkeeping.
