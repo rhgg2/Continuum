@@ -12,6 +12,21 @@ lines. Newest first. `/commit` prompts for one at commit time.
 Entries below 2026-07-27 predate that split, so some of them also
 appear in their design docs.
 
+- **2026-08-01** — The prose register moved out of docs/CONVENTIONS.md into a new docs/STYLE.md,
+  taking CLAUDE.md's design-narration section with it. CONVENTIONS governs the documentation layers;
+  STYLE governs the sentences, across docs/, design/, the decisions log and a plan's Queued lines.
+  Two things forced the split: the register already governed more than CONVENTIONS' title admitted,
+  and narration and register were one subject stated in two files that pointed at each other.
+  STYLE.md now names its lineage — Anglo-American analytic philosophy, with a touch of Wittgenstein
+  and of late Eliot — which does what a list of prohibitions cannot, in saying what to reach for.
+  Three rulings settled on the way. Paragraph numbering is register rather than costume: flat
+  per-section numbers pace the prose, numbered theses like tuning.md's I1-I5 are addresses, and
+  hierarchical decimals stay out. The register expands rather than compresses, so only the
+  state-a-criterion-as-a-criterion habit hands anything down to the annotation layer. And design
+  narration is no longer stated separately, being absorbed by name-the-wrong-view-first; its residue
+  — that the narrated path need not be the one actually taken — moved to /plan-new, where design
+  docs get written.
+
 - **2026-08-01** — Adopted a stated prose register for docs/, recorded as docs/CONVENTIONS.md §
   Register: ask the question before giving the answer, name the wrong view first, one claim per
   sentence, state a criterion as a criterion. Scoped per section rather than per file — a section

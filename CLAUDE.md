@@ -64,24 +64,12 @@ bookkeeping deletes it.
 `design/` is intent, not current state — `docs/<file>.md` is what is
 true now.
 
-## Thoughts on design narration
+## Writing prose
 
-Most design docs adopt the impersonal present tense, with no hedges
-and no speaker. This is fine for conveying where a design stands
-today, but founders when revisions are needed; it is hard to honour
-the intent of the design, as this is often not reconstructible from
-the visible edifice.
-
-A shape I find more honest and more useful is a plausible
-re-narration: a viable path to the design, possibly not the path
-actually taken, but which conveys the principles behind it and
-empowers the reader to act in sympathy with the original goals.
-
-Along the way, there will be various traps; motivating cases that
-don't generalise, tempting choices that look right and aren't. A
-superficially tidy exposition that omits these tempts the reader to
-fall into the same traps again. Putting them back in helps the reader
-immensely; it's often also the thing a red spec can pin.
+Docs, design docs and the decisions log share a stated register:
+`docs/STYLE.md` — the tone it is pitched at, how a section is ordered,
+and what counts as ornament rather than claim. Worth reading before
+writing any of the three.
 
 ## Navigating the code
 

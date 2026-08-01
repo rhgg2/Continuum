@@ -37,8 +37,8 @@ the point of this command existing — run it and stop.
    each line separately reviewable over the one that makes them equal
    in size.
 
-   Write them in plain sentences, not the compressed register the
-   briefs use. Queued is what a cold session and the human both read to
+   Write them in plain sentences — the prose register of
+   `docs/STYLE.md`, not the compressed register the briefs use. Queued is what a cold session and the human both read to
    see what is coming, and the compression buys about a third of the
    length at several times the cost in readability.
 6. If the split exposes a decision the design doc leaves open, settle

@@ -50,7 +50,9 @@ write-up, and we only start it when we're both happy to proceed.
 6. Bring the search to chat: what the item turns out to involve, the
    forks the search exposed, what you'd do, what you're unsure of.
    Anything the design doc left open is settled here too — the brief
-   records the settlement, the design doc gets the dated note.
+   records the settlement, the design doc gets the dated note. That note
+   is prose and follows `docs/STYLE.md`; the brief is not, because it is
+   executed rather than read.
 
    So that we can both be happy with the shape we've come up with,
    we'll only continue to step 7 once your concerns are settled, and

@@ -20,7 +20,11 @@ holds only the machinery.
    - **No argument** — write it now, from the conversation. It will be
      short, and it is the only record this work will ever have, so
      settle anything still open with me before writing it, and don't
-     invent decisions we didn't take.
+     invent decisions we didn't take. Write it in the register
+     (`docs/STYLE.md`), and narrate a plausible path to the design
+     rather than presenting the finished thing: the path need not be
+     the one we actually took, but the wrong turns we walked past are
+     half of what makes the doc worth having.
 
      ```markdown
      # <slug> — <one-line subject>
