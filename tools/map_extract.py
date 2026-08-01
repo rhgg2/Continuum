@@ -62,9 +62,15 @@ SECTION_RE    = re.compile(r"^(\s*)-{5,}\s+(\S.*?)\s*$")
 LOCAL_FN_RE   = re.compile(r"^(\s*)local\s+function\s+(\w+)\s*\(([^)]*)\)")
 METHOD_RE     = re.compile(r"^(\s*)function\s+(\w+):(\w+)\s*\(([^)]*)\)")
 DOT_FN_RE     = re.compile(r"^(\s*)function\s+(\w+)\.(\w+)\s*\(([^)]*)\)")
-# Bare `function name(args)` indented inside a `do` block — assignment to a
-# forward-declared upvalue (idiom: `local moveCol  do function moveCol(n) ... end end`).
-NESTED_FN_RE  = re.compile(r"^(\s+)function\s+([a-z]\w*)\s*\(([^)]*)\)")
+# Bare `function name(args)` filling a forward-declared local: indented inside
+# a `do` block (`local moveCol  do function moveCol(n) ... end end`) or at file
+# scope (`local ensureState` ... `function ensureState()`). No global reaches
+# here -- luacheck's globals allowlist is reaper/gfx only.
+NESTED_FN_RE  = re.compile(r"^(\s*)function\s+([a-z]\w*)\s*\(([^)]*)\)")
+# The same fill written as an assignment. Anchored at column 0: indented, this
+# spelling is a table-constructor value (`add = function(evt)`, the whole
+# registerAll{...} idiom), not a declaration.
+ASSIGN_FN_RE  = re.compile(r"^([a-z]\w*)\s*=\s*function\s*\(([^)]*)\)")
 LOCAL_DECL_RE = re.compile(
     r"^local\s+(\w+(?:\s*,\s*\w+)*)\s*(?:=\s*(.+?))?\s*(?:--.*)?$"
 )
@@ -445,11 +451,20 @@ def parse(path: Path) -> MapFile:
             cm.private_fns.append(blk)
             continue
 
-        # bare `function name(args)` inside a `do` block — assignment to a
-        # forward-declared upvalue. Module scope only, same as local helpers.
+        # bare `function name(args)` filling a forward-declared local, inside a
+        # `do` block or at file scope. Module scope only, same as local helpers.
         mn = NESTED_FN_RE.match(raw)
         if mn and fn_depth[i] == 0:
             blk = Block(name=mn.group(2), args=mn.group(3).strip(),
+                        line=i + 1, kind='fn',
+                        doc=collect_doc(lines, i))
+            cm.private_fns.append(blk)
+            continue
+
+        # the same fill written as an assignment.
+        ma = ASSIGN_FN_RE.match(raw)
+        if ma and fn_depth[i] == 0:
+            blk = Block(name=ma.group(1), args=ma.group(2).strip(),
                         line=i + 1, kind='fn',
                         doc=collect_doc(lines, i))
             cm.private_fns.append(blk)
@@ -511,11 +526,14 @@ def parse(path: Path) -> MapFile:
                     d.init = f'-- inverse of {src_tbl}'
                     break
 
-    # Drop forward-decl shells like `local moveCol` that exist only to be
-    # filled in by a `do function moveCol(...) end end` block.
+    # Drop forward-decl shells like `local moveCol` that exist only to be filled
+    # in below. A shared list (`local colFor, kindAt`) drops only when every name
+    # in it was captured; no partial list exists, so none is split.
     fn_names = {b.name for b in cm.private_fns}
-    cm.state = [d for d in cm.state if not (not d.init and d.name in fn_names)]
-    cm.consts = [d for d in cm.consts if not (not d.init and d.name in fn_names)]
+    def is_shell(d: Decl) -> bool:
+        return not d.init and all(n.strip() in fn_names for n in d.name.split(','))
+    cm.state = [d for d in cm.state if not is_shell(d)]
+    cm.consts = [d for d in cm.consts if not is_shell(d)]
 
     fn_blocks = cm.private_fns + cm.methods + cm.dotfns + cm.api
     for blk in fn_blocks:

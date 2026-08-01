@@ -25,7 +25,6 @@
   @state GUTTER_PAD = 14  @ 31
   @state LOOP_PAD = 7  @ 34
   @state SLOT_KEY_W, SLOT_KIND_W = 18, 16  @ 36
-  @state openCreateModal  @ 39
   @state press = nil  @ 45
       @invariant  drag relocates via am:startIsClear; cursor moves only on clean (no-drag) release.  @ 42
       @invariant  gutter press drives REAPER transport — release sets edit cursor, drag sets loop range.  @ 43
@@ -80,6 +79,9 @@
   @fn paletteTrackLabel(focusedTrack)  @ 618-623
   @fn openRenameModal(trackIdx, slotIdx, currentName)  @ 625-632
   @fn openDeleteModal(trackIdx, slot)  @ 634-643
+  @fn openCreateModal(trackIdx, qnPos, beats)  @ 647-660
+      -- Length seeds from a drag-sweep when given, else the project-tier newTakeBeats
+      -- config; the committed length persists back to it.
   @fn renderPaletteActions(focusedTrack, focusedSlot)  @ 683-698
   @fn renderPaletteList(slots)  @ 702-733
       -- Three columns: key (monospace — hotkey), kind glyph, name (UI font).
@@ -136,7 +138,7 @@
   @use call    av:clearLoopRange  @ handleGridMouse:234
   @use call    av:commitDrag  @ handleGridMouse:294
   @use call    av:createCandidate  @ handleGridMouse:287
-  @use call    av:createSlot  @ 657
+  @use call    av:createSlot  @ openCreateModal:657
   @use call    av:cursorCol  @ renderGrid:336 renderBody:798 renderStatusBar:813 836
   @use call    av:cursorRow  @ renderGrid:336 renderStatusBar:813 836
   @use call    av:deleteSlot  @ openDeleteModal:641
@@ -150,7 +152,7 @@
   @use call    av:keyForSlot  @ openDeleteModal:635 renderPaletteList:722
   @use call    av:lassoCandidate  @ handleGridMouse:290
   @use call    av:loopRangeQN  @ renderGrid:523
-  @use call    av:nextFreeSlot  @ 648
+  @use call    av:nextFreeSlot  @ openCreateModal:648
   @use call    av:paletteSlot  @ renderPaletteList:707 renderPaletteBody:737
   @use call    av:playPositionQN  @ renderGrid:576
   @use call    av:projectTracks  @ renderBody:774
@@ -179,14 +181,14 @@
   @use call    chrome.gridWidth  @ renderBody:785
   @use call    chrome.numberStepper  @ 757
   @use call    chrome.pickerIsActive  @ focusState:820
-  @use call    cm:get  @ 653,655 renderStatusBar:814
-  @use call    cm:set  @ 656
+  @use call    cm:get  @ openCreateModal:653,655 renderStatusBar:814
+  @use call    cm:set  @ openCreateModal:656
   @use call    cmgr:scope  @ 832
   @use call    modalHost:registerKind  @ 664
   @use call    modalHost:wasOpenAtFrameStart  @ focusState:825
   @use call    painter.hue  @ slotFill:88,89
   @use call    painter.new  @ gridGeom:198 renderGrid:326
-  @use call    util.atomic  @ openRenameModal:630 openDeleteModal:641 654
+  @use call    util.atomic  @ openRenameModal:630 openDeleteModal:641 openCreateModal:654
   @use require imgui  @ 13
   @use require painter  @ 14
   @use require util  @ 7
@@ -198,6 +200,7 @@
   @call focusedSlotEntry  @ renderPaletteBody:737
   @call gridGeom  @ handleGridMouse:218 renderGrid:324
   @call handleGridMouse  @ renderBody:793
+  @call openCreateModal  @ handleGridMouse:303 836
   @call openDeleteModal  @ renderPaletteActions:695
   @call openRenameModal  @ renderPaletteActions:689
   @call paletteTrackLabel  @ renderBody:801
@@ -255,7 +258,7 @@
   @field r availH  @ renderGrid:340,495
   @field w availH  @ gridGeom:203
   @field r beatsBuf  @ 671,679
-  @field w beatsBuf  @ 653,672
+  @field w beatsBuf  @ openCreateModal:653 672
   @field r bodyBot  @ handleGridMouse:229
   @field w bodyBot  @ gridGeom:205
   @field r bodyTop  @ handleGridMouse:229
@@ -263,7 +266,7 @@
   @field w buf  @ openRenameModal:629 843
   @field r building  @ peaksFor:140
   @field w building  @ peaksFor:137,143
-  @field w callback  @ openRenameModal:630 openDeleteModal:641 654,844
+  @field w callback  @ openRenameModal:630 openDeleteModal:641 openCreateModal:654 844
   @field r ceil  @ drainWheel:55
   @field r chan  @ renderGrid:417
   @field r chrome  @ 18
@@ -311,7 +314,7 @@
   @field r idx  @ renderPaletteBody:736
   @field r item  @ renderGrid:383,459,463
   @field r kind  @ renderGrid:436,439 renderPaletteList:726
-  @field w kind  @ 650
+  @field w kind  @ openCreateModal:650
   @field w label  @ renderBody:801
   @field r lastCol  @ renderGrid:329
   @field w lastCol  @ gridGeom:207
@@ -330,7 +333,7 @@
   @field r name  @ renderPaletteActions:689 renderPaletteList:729
   @field w name  @ renderGrid:445
   @field r nameBuf  @ 668,679
-  @field w nameBuf  @ 652,669
+  @field w nameBuf  @ openCreateModal:652 669
   @field r naturalLenQN  @ renderGrid:450
   @field r notes  @ renderGrid:406
   @field r offE  @ renderGrid:412
@@ -386,7 +389,7 @@
   @field r take  @ renderGrid:459,465,470
   @field w take  @ handleGridMouse:266
   @field r takes  @ handleGridMouse:298,299
-  @field w title  @ openRenameModal:627 openDeleteModal:639 651,841
+  @field w title  @ openRenameModal:627 openDeleteModal:639 openCreateModal:651 841
   @field w toggleFollowPlay  @ 838
   @field r trackIdx  @ renderGrid:430
   @field r ui  @ 24

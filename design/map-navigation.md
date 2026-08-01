@@ -423,6 +423,32 @@ remaining three — `editCursor resizeBy`, `trackerManager makeTailRules`
 and `reconcileDerived` — are called with brace sugar, so they wait on
 the item above rather than on this one.
 
+**Nine was one spelling of fifteen** (2026-08-01). The note above counts
+the unparsed-declaration class as nine `function foo(` fills of a `local`
+forward-decl. That is a count of a syntax, and the class is an idiom. The
+same declaration is written `foo = function(...)` six more times, in four
+files the note does not name — searching for what the gap looked like
+rather than for what it was is what hid them. The fix is two regexes, and
+they cannot be unified. Indented, `name = function(` is a
+table-constructor value: `add = function(evt)` in trackerView's `edit`
+table, the whole `registerAll{…}` command table, coordinator's facades.
+None of those is a declaration. So column 0 is the criterion for the
+assignment spelling, and it is load-bearing.
+
+**The shells took their annotations with them** (2026-08-01, measured).
+Eleven forward-decl rows leave the corpus with the fifteen declarations,
+and each carried a hand-written inline doc: `prettyEmit`'s `-- forward
+decl (mutual recursion with emitTable)`, `refreshStateTrack`'s `-- used
+by createSourceTrack/instantiateFxOnScratch (defined late)`. Every one
+states in prose a structural fact the extractor could not compute. The
+author was annotating around the blind spot. Closing it makes the prose
+redundant — the mutual recursion is now two `@call` rows pointing both
+ways — and the regeneration deletes it without asking. Here every fact
+survived, checked one by one; the point is that nothing in the mechanism
+required it to. `map ≡ regen` is an equality, so it cannot distinguish a
+row that has become redundant from the only place a fact was written
+down. Removals are the half of the generated diff that has to be read.
+
 ### Vocabulary — unsettled
 
 The 197 kind-less consecutive `map_query` pairs say the agent frequently

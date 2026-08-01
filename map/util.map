@@ -10,7 +10,6 @@
   @const BASE36 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'  @ 322
   @const BASE62 = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRST...  @ 341
   @const LUA_KEYWORDS = {}  @ 540
-  @const prettyEmit  @ 565   -- forward decl (mutual recursion with emitTable)
 
 # Private functions
   @fn print(...)  @ 15-17
@@ -22,6 +21,7 @@
   @fn nonFiniteNote(v)  @ 559-563
       -- Inline note so a hand-editor recognises the arithmetic non-finite forms.
   @fn emitTable(tbl, indent, seen)  @ 567-603
+  @fn prettyEmit(value, indent, seen)  @ 605-612
 
 # Public API (util.*)
   @api util.print(...)  @ 7-13
@@ -93,10 +93,11 @@
 
 # Calls (intra-file)
   @call bareKey  @ emitTable:597
-  @call emitTable  @ 610
+  @call emitTable  @ prettyEmit:610
   @call escape_string  @ serialise:393
-  @call luaNumber  @ 607
+  @call luaNumber  @ prettyEmit:607
   @call nonFiniteNote  @ emitTable:594,599
+  @call prettyEmit  @ emitTable:587,594,597,599 prettySerialise:616
   @call print  @ print_r:37
   @call util.assign  @ picker:93 pick:105
   @call util.clamp  @ nudgedScalar:286

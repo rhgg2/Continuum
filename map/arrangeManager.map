@@ -28,7 +28,6 @@
   @state am = {}  @ 27
   @state SLOT_MAX = 61  @ 29   -- inclusive: 62 slots, base62 0..9 + a..z + A..Z
   @state state, dirty, lastTick = nil, true, -1  @ 33
-  @state ensureState  @ 34   -- assigned below buildTakeShape
   @state takeIdCache = setmetatable({}, { __mode = 'k' })  @ 41
 
 # Private functions
@@ -87,6 +86,9 @@
   @fn buildState()  @ 411-440
       -- One walk: track rows, per-column take-shapes + slot rows; ensureColours/ensureSlots once.
       -- relayoutTrack per track re-derives D_LENGTH so a source-length edit outside am reflects.
+  @fn ensureState()  @ 444-452
+      -- Rebuild when our own edits flag dirty, or REAPER's state-count moves (external
+      -- edit). Re-reading the count after the build absorbs the build's own ext writes.
   -- Transport — project edit cursor, loop range, play head, project end
   -- Slot mutation
   -- Placement
@@ -217,7 +219,7 @@
   @call am:startIsClear  @ duplicateBelow:849 duplicateUnpooledBelow:857 newTakeBelow:871 moveTake:923
   @call am:takesUsing  @ reswingAll:1006
   @call am:tracksTakes  @ createAndDropMidi:722 dropInstance:794 startIsClear:910
-  @call buildState  @ 448
+  @call buildState  @ ensureState:448
   @call buildTakeShape  @ buildState:432
   @call chanRangeOf  @ buildState:435
   @call chunkFreshGuids  @ cloneMidiItem:696
@@ -229,6 +231,7 @@
   @call effectiveNaturalLenQN  @ buildTakeShape:363 mintParkedTake:886
   @call ensureColours  @ stampForTake:290 buildState:412
   @call ensureSlots  @ buildState:419 deleteSlot:628
+  @call ensureState  @ projectTracks:330 tracksTakes:455 columnChanRange:459 visibleTakes:464 hasPlacedTakes:478 findTake:487 trackSlots:563
   @call forEachActiveTake  @ parkedItemFor:120 isLastInstanceOnTrack:127 relayoutTrack:158 ensureSlots:207 ensureColours:255 buildState:429 projectEndQN:552 renameSlot:602 siblingInstance:745 projectMidiTakes:969
   @call harvestPoolGuid  @ cloneMidiItem:690,693 createAndDropMidi:728 mintParkedTake:890
   @call invalidate  @ relayoutTrack:188 renameSlot:607 deleteSlot:629 mintParkedTake:902

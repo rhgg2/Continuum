@@ -12,7 +12,6 @@
   @state selected = nil  @ 18   -- explicitly-selected entry; nil follows the active slot
   @state selTier = nil  @ 19   -- tier of the selection ('project' | 'global')
   @state snapshot = nil  @ 20   -- selection-time copy, for dirty-check + Reset
-  @state openNewModal, openImportModal  @ 21   -- New/Import modals, hosted by modalHost (defined below)
   @state editing = nil  @ 22   -- { key, buf } in-flight pitch token; commits on deactivate
   @state DIVIDER_GRAB = 7  @ 24   -- px hit-height of the steps / generators splitter
   @state MIN_GEN_AREA = 175  @ 25   -- px kept below the splitter for the generators pane
@@ -97,6 +96,10 @@
       -- Plain dimmed labels rather than TableHeadersRow, whose filled background
       -- clashes with the flat chrome.
   @fn drawStepTable(temper)  @ 386-426
+  @fn openNewModal()  @ 430-440
+      -- New + Import modals, hosted by modalHost (kinds registered below). Creates at
+      -- the project tier; the render keeps the popup open on a name clash.
+  @fn openImportModal()  @ 442-452
   -- Generators pane
   @fn pillButton(label, active)  @ 537-544
       -- Pane-selector pill. Pushes the editor-zone button colours (one zone below the
@@ -187,7 +190,7 @@
   @use call    chrome.row  @ drawGenerators:718 drawStepsTop:750
   @use call    cm:get  @ viewedName:42 temperFor:55 activeTemper:60 buildDescriptor:268 475,513
   @use call    cm:getAt  @ projectTempers:44 globalTempers:46 editedTemper:67 temperWrite:107
-  @use call    cm:set  @ temperWrite:109 256,436,448
+  @use call    cm:set  @ temperWrite:109 256 openNewModal:436 openImportModal:448
   @use call    facade.get  @ inUseNames:189
   @use call    fs.basename  @ 499
   @use call    fs.readText  @ 495
@@ -256,11 +259,11 @@
   @call labeledInput  @ drawEqualFields:574,580,585,591 drawSeriesFields:600,602 drawChordFields:608 drawCpsFields:616,618,620 drawRank2Fields:638,640
   @call labeledInput  @ drawRank2Fields:661
   @call pillButton  @ genKindSelector:549
-  @call projectTempers  @ homeTier:51 253,258,434,446
+  @call projectTempers  @ homeTier:51 253,258 openNewModal:434 openImportModal:446
   @call pushUiPadToGrid  @ drawStepRow:351,368 drawStepTable:409,419
   @call removeStep  @ drawStepRow:369
   @call reseedEqual  @ drawEqualFields:578
-  @call selectTemper  @ 249,259,261,437,449 buildDescriptor:282 open:806
+  @call selectTemper  @ 249,259,261 buildDescriptor:282 openNewModal:437 openImportModal:449 open:806
   @call setPeriodAsStep  @ drawHeader:327
   @call setStepName  @ drawStepRow:364
   @call setStepPitch  @ drawStepRow:353
@@ -274,6 +277,8 @@
 # Bindings (by name)
   @bind genKindSelector  @ drawGenerators:718
   @bind importFactory  @ buildDescriptor:291
+  @bind openImportModal  @ buildDescriptor:284
+  @bind openNewModal  @ buildDescriptor:283
   @bind publish  @ buildDescriptor:285
   @bind reloadFactory  @ buildDescriptor:290
   @bind resetToSnapshot  @ buildDescriptor:288
@@ -300,10 +305,10 @@
   @field w active  @ buildDescriptor:276
   @field r add  @ reloadFactory:196
   @field r buf  @ tokenBox:306,310 464,504,516
-  @field w buf  @ tokenBox:308 432,444,466,476,498,505
+  @field w buf  @ tokenBox:308 openNewModal:432 openImportModal:444 466,476,498,505
   @field r c  @ sortSteps:87
   @field w c  @ sortSteps:85
-  @field w callback  @ reloadFactory:205 importFactory:222 publish:237 433,445
+  @field w callback  @ reloadFactory:205 importFactory:222 publish:237 openNewModal:433 openImportModal:445
   @field r cents  @ addStep:152
   @field r chord  @ drawChordFields:607 buildGen:710,712
   @field w chord  @ 37
@@ -353,7 +358,7 @@
   @field w key  @ tokenBox:308
   @field r kind  @ genKindSelector:549 genDesc:554 buildGen:669,674,675,680,681,700 drawGenerators:722,723,724
   @field r kind  @ drawGenerators:725,726
-  @field w kind  @ 31,432,444 genKindSelector:549
+  @field w kind  @ 31 openNewModal:432 openImportModal:444 genKindSelector:549
   @field r label  @ genKindSelector:549
   @field w label  @ buildDescriptor:275 527,528,529,530,531,532
   @field r large  @ drawRank2Fields:658
@@ -369,7 +374,7 @@
   @field r modalHost  @ 14
   @field w modified  @ buildDescriptor:280
   @field r name  @ 489,499,510
-  @field w name  @ buildDescriptor:269,281 435,444,490,499
+  @field w name  @ buildDescriptor:269,281 openNewModal:435 openImportModal:444 490,499
   @field r nm  @ sortSteps:90
   @field w nm  @ sortSteps:85
   @field w onDelete  @ buildDescriptor:287
@@ -391,10 +396,10 @@
   @field r periodAsStep  @ generateInto:181 drawHeader:319,326 drawStepTable:401
   @field w periodAsStep  @ setPeriodAsStep:146 generateInto:181
   @field r periodPitch  @ generateInto:180 drawHeader:323 drawStepTable:410
-  @field w periodPitch  @ setPeriodPitch:140 generateInto:180 435
+  @field w periodPitch  @ setPeriodPitch:140 generateInto:180 openNewModal:435
   @field r pitches  @ sortSteps:84,89 cloneForEdit:118,120 setStepPitch:128 addStep:153,154 removeStep:159,160 generateInto:179 drawStepRow:353
   @field r pitches  @ drawStepTable:397
-  @field w pitches  @ cloneForEdit:118 generateInto:179 435
+  @field w pitches  @ cloneForEdit:118 generateInto:179 openNewModal:435
   @field r project  @ buildDescriptor:271,277
   @field w project  @ buildDescriptor:277
   @field w prompt  @ reloadFactory:204 importFactory:221 publish:236
@@ -413,12 +418,12 @@
   @field r splitDrag  @ drawEditBody:779,780
   @field w splitDrag  @ 31 drawEditBody:779,782
   @field r stepNames  @ sortSteps:85,90 cloneForEdit:119,120 setStepName:134 addStep:154 removeStep:161 drawStepRow:362
-  @field w stepNames  @ cloneForEdit:119 generateInto:182 435
+  @field w stepNames  @ cloneForEdit:119 generateInto:182 openNewModal:435
   @field r subharm  @ drawGenerators:724
   @field w subharm  @ 36
   @field w synthetic  @ buildDescriptor:279
   @field w tier  @ buildDescriptor:281
-  @field w title  @ reloadFactory:203 importFactory:220 publish:235 432,444
+  @field w title  @ reloadFactory:203 importFactory:220 publish:235 openNewModal:432 openImportModal:444
   @field r tok  @ sortSteps:89
   @field w tok  @ sortSteps:85
   @field r topH  @ drawEditBody:765,767,779

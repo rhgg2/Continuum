@@ -104,7 +104,6 @@
   @state paletteSource = nil  @ 119   -- nodeId the palette del button acts on; cleared when the row vanishes
   @state fxPicker = nil  @ 120   -- { x, y, sx, sy, anchorSX?, anchorSY?, buf, cursor, items } — RMB/N-key add-FX popup; cleared when BeginPopup returns false
   @state canvasOrigin = { ox = 0, oy = 0 }  @ 125
-  @state openFxPicker, renderFxPicker  @ 129
   @state SELECTED_INFLATE = 0  @ 160   -- outline traces the body edge tightly; >0 leaves a moat where the popup bg bleeds through
   @state SELECTED_STROKE = 2  @ 161
   @state SOURCE_PAD = 24  @ 2580
@@ -331,9 +330,12 @@
   @fn renderPaletteBody()  @ 2504-2518
   -- Wiring scope
   @fn sourcePosFor(genX, genY)  @ 2581-2592
+  @fn openFxPicker(x, y, anchor)  @ 2595-2611
+      -- anchor (optional) = { x, y } screen coords for the popup; nil → viewport-centred.
   @fn commitFx(pck, fx)  @ 2615-2634
       -- Defer the gesture so the picker's close paints before the live
       -- recompile/reconcile stall — wm:addFxNode keeps its single Undo block.
+  @fn renderFxPicker(pck)  @ 2636-2678
 
 # Public API (wr:*)
   @api wr:toolbarSegments()  @ 2522
@@ -346,38 +348,38 @@
       @contract  acceptCmds=false if any picker active, any item active, or modal open at frame start.  @ 2562
 
 # Uses (outbound edges)
-  @use call    ImGui.BeginChild  @ renderBody:2538 2670
+  @use call    ImGui.BeginChild  @ renderBody:2538 renderFxPicker:2670
   @use call    ImGui.BeginPopup  @ renderCanvas:2326,2354,2406
   @use call    ImGui.BeginTooltip  @ drawSlot:330 drawWireEndLabel:974
   @use call    ImGui.Button  @ renderPaletteActions:2465,2468
   @use call    ImGui.CalcTextSize  @ wrapLabel:205 drawNode:265,269 layoutList:385,389
-  @use call    ImGui.CloseCurrentPopup  @ renderCanvas:2336,2360,2364,2373,2383 commitFx:2616 2665
+  @use call    ImGui.CloseCurrentPopup  @ renderCanvas:2336,2360,2364,2373,2383 commitFx:2616 renderFxPicker:2665
   @use call    ImGui.Dummy  @ renderCanvas:2428
-  @use call    ImGui.EndChild  @ renderBody:2545 2676
+  @use call    ImGui.EndChild  @ renderBody:2545 renderFxPicker:2676
   @use call    ImGui.EndPopup  @ renderCanvas:2339,2386,2408
   @use call    ImGui.EndTooltip  @ drawSlot:332 drawWireEndLabel:976
   @use call    ImGui.GetCursorScreenPos  @ renderCanvas:1703 renderBody:2536
   @use call    ImGui.GetKeyMods  @ renderCanvas:1716
-  @use call    ImGui.GetMousePos  @ renderCanvas:1711 2597
+  @use call    ImGui.GetMousePos  @ renderCanvas:1711 openFxPicker:2597
   @use call    ImGui.GetMouseWheel  @ renderCanvas:2042
   @use call    ImGui.GetStyleVar  @ renderPaletteList:2477
   @use call    ImGui.GetWindowPos  @ renderCanvas:2333,2380
   @use call    ImGui.GetWindowSize  @ renderCanvas:2334,2381
   @use call    ImGui.GetWindowViewport  @ renderCanvas:2401
   @use call    ImGui.Indent  @ renderPaletteList:2478
-  @use call    ImGui.InputText  @ 2640
+  @use call    ImGui.InputText  @ renderFxPicker:2640
   @use call    ImGui.InvisibleButton  @ drawSlot:319 drawWireEndLabel:968
   @use call    ImGui.IsAnyItemActive  @ focusState:2569
   @use call    ImGui.IsItemActive  @ renderPaletteList:2490
   @use call    ImGui.IsItemHovered  @ drawSlot:324 drawWireEndLabel:969
-  @use call    ImGui.IsKeyPressed  @ renderCanvas:1971,1974 2642,2643,2657,2658,2664
+  @use call    ImGui.IsKeyPressed  @ renderCanvas:1971,1974 renderFxPicker:2642,2643,2657,2658,2664
   @use call    ImGui.IsMouseClicked  @ renderCanvas:1728,1981,2026,2085,2098,2301
   @use call    ImGui.IsMouseDoubleClicked  @ renderCanvas:2016,2069
   @use call    ImGui.IsMouseDown  @ renderCanvas:1832,2219,2262,2272,2279,2287
   @use call    ImGui.IsMouseDragging  @ renderPaletteList:2491
-  @use call    ImGui.IsWindowAppearing  @ renderCanvas:2332,2379 2637,2653
+  @use call    ImGui.IsWindowAppearing  @ renderCanvas:2332,2379 renderFxPicker:2637,2653
   @use call    ImGui.IsWindowHovered  @ renderCanvas:1715
-  @use call    ImGui.OpenPopup  @ renderCanvas:2305,2312 2610
+  @use call    ImGui.OpenPopup  @ renderCanvas:2305,2312 openFxPicker:2610
   @use call    ImGui.PopFont  @ drawNode:273 layoutList:392
   @use call    ImGui.PopStyleColor  @ drawSlot:335 drawWireEndLabel:979 renderCanvas:2343,2390,2412 popBodyStyles:2434
   @use call    ImGui.PopStyleVar  @ drawSlot:334 drawWireEndLabel:978
@@ -385,11 +387,11 @@
   @use call    ImGui.PushStyleColor  @ drawSlot:328 drawWireEndLabel:972 renderCanvas:2325,2353,2405 pushBodyStyles:2432
   @use call    ImGui.PushStyleVar  @ drawSlot:329 drawWireEndLabel:973
   @use call    ImGui.SameLine  @ renderPaletteActions:2466
-  @use call    ImGui.Selectable  @ renderCanvas:2357,2362,2371 renderPaletteList:2485 2673
-  @use call    ImGui.Separator  @ renderPaletteBody:2516 2644
+  @use call    ImGui.Selectable  @ renderCanvas:2357,2362,2371 renderPaletteList:2485 renderFxPicker:2673
+  @use call    ImGui.Separator  @ renderPaletteBody:2516 renderFxPicker:2644
   @use call    ImGui.SetCursorScreenPos  @ drawSlot:318 drawWireEndLabel:967 renderCanvas:2427
-  @use call    ImGui.SetKeyboardFocusHere  @ 2637
-  @use call    ImGui.SetNextItemWidth  @ 2638
+  @use call    ImGui.SetKeyboardFocusHere  @ renderFxPicker:2637
+  @use call    ImGui.SetNextItemWidth  @ renderFxPicker:2638
   @use call    ImGui.SetNextWindowPos  @ drawSlot:325 drawWireEndLabel:970 renderCanvas:2323,2351,2398,2402
   @use call    ImGui.Text  @ drawSlot:331 drawWireEndLabel:975 renderStatusBar:2559
   @use call    ImGui.TextDisabled  @ renderPaletteList:2480
@@ -407,7 +409,7 @@
   @use call    facade.get  @ commitFx:2625,2626
   @use call    modalHost:wasOpenAtFrameStart  @ focusState:2571
   @use call    painter.new  @ renderCanvas:1706
-  @use call    util.add  @ leastOccupiedDir:1266 sourceSegments:1301,1302 busSegments:1363,1389,1491 bussablePorts:1555 renderCanvas:1734,1768 renderPaletteBody:2508 2604
+  @use call    util.add  @ leastOccupiedDir:1266 sourceSegments:1301,1302 busSegments:1363,1389,1491 bussablePorts:1555 renderCanvas:1734,1768 renderPaletteBody:2508 openFxPicker:2604
   @use call    util.key  @ wireGroups:808
   @use call    wv:addBusNode  @ commitFx:2620
   @use call    wv:addFx  @ commitFx:2622
@@ -419,7 +421,7 @@
   @use call    wv:deleteSource  @ deleteSourceGuarded:2454,2460
   @use call    wv:descendantsOf  @ renderCanvas:2184
   @use call    wv:edgeGain  @ renderCanvas:1859,1986,2030
-  @use call    wv:listInstalledFX  @ 2604
+  @use call    wv:listInstalledFX  @ openFxPicker:2604
   @use call    wv:masterPos  @ sourceSegments:1305 sourcePosFor:2582
   @use call    wv:moveBus  @ renderCanvas:2276
   @use call    wv:moveNodes  @ renderCanvas:2284
@@ -460,7 +462,7 @@
   @call bussablePorts  @ renderCanvas:2368
   @call camelSplit  @ atomise:192
   @call closestPointOnSegment  @ pointToSegmentDist:1048 busBarSource:1578
-  @call commitFx  @ 2668,2673
+  @call commitFx  @ renderFxPicker:2668,2673
   @call computeDraftEnd  @ renderCanvas:1875
   @call dbFromP  @ pixelYToLin:1189
   @call dbToLin  @ pixelYToLin:1189 renderCanvas:2048
@@ -508,6 +510,7 @@
   @call nodesInBand  @ renderCanvas:1741,2291
   @call onChevron  @ pickHovered:589 stillEngaged:601 draftSourceHoverHit:713
   @call openAddSourceModal  @ renderPaletteActions:2465
+  @call openFxPicker  @ renderCanvas:2314
   @call pFromDb  @ drawFader:1197,1199 renderCanvas:2001
   @call pickHovered  @ engagedHover:639,649
   @call pixelYToLin  @ renderCanvas:1829,2029
@@ -518,12 +521,13 @@
   @call rect  @ layoutPortRow:537 drawList:755 drawPortRow:791 drawWireEndLabel:960 drawFader:1202,1203 drawSourceTag:1252 drawBusBar:1533 sourceTagHit:1657 renderCanvas:1709,1989,1990
   @call rect  @ renderCanvas:2421,2422
   @call renderCanvas  @ renderBody:2543
+  @call renderFxPicker  @ renderCanvas:2407
   @call renderPaletteActions  @ renderPaletteBody:2515
   @call renderPaletteList  @ renderPaletteBody:2517
   @call rowHit  @ engagedHover:637
   @call shiftHoverHit  @ renderCanvas:1888
   @call slotHit  @ pickHovered:585 draftSourceHoverHit:712
-  @call sourcePosFor  @ 2600
+  @call sourcePosFor  @ openFxPicker:2600
   @call sourceSegments  @ renderCanvas:1808
   @call sourceTagHit  @ renderCanvas:1823
   @call sourceTagLayout  @ drawSourceTag:1251 sourceSegments:1316 busSegments:1435 sourceTagHit:1656
@@ -541,6 +545,7 @@
   @call wrapLabel  @ drawNode:264 sourceTagLayout:1239
 
 # Bindings (by name)
+  @bind openFxPicker  @ 2682
   @bind renderPaletteBody  @ renderBody:2550
 
 # REAPER API surface
@@ -552,7 +557,7 @@
   @reaper defer
 
 # Fields (r read / w write incl. constructor keys)
-  @field r ChildFlags_None  @ renderBody:2539 2671
+  @field r ChildFlags_None  @ renderBody:2539 renderFxPicker:2671
   @field r Col_Border  @ renderCanvas:2325,2353,2405
   @field r Col_PopupBg  @ drawSlot:328 drawWireEndLabel:972
   @field r Col_Text  @ pushBodyStyles:2432
@@ -563,17 +568,17 @@
   @field r HoveredFlags_ForTooltip  @ drawSlot:322 drawWireEndLabel:969
   @field r ImGui_GetBuiltinPath  @ 12
   @field r JS_Mouse_SetPosition  @ renderCanvas:2000
-  @field r Key_DownArrow  @ 2657
-  @field r Key_Enter  @ 2642
-  @field r Key_Escape  @ renderCanvas:1971,1974 2664
-  @field r Key_KeypadEnter  @ 2643
-  @field r Key_UpArrow  @ 2658
+  @field r Key_DownArrow  @ renderFxPicker:2657
+  @field r Key_Enter  @ renderFxPicker:2642
+  @field r Key_Escape  @ renderCanvas:1971,1974 renderFxPicker:2664
+  @field r Key_KeypadEnter  @ renderFxPicker:2643
+  @field r Key_UpArrow  @ renderFxPicker:2658
   @field r Mod_Shift  @ renderCanvas:1716
   @field r StyleVar_FramePadding  @ renderPaletteList:2477
   @field r StyleVar_WindowPadding  @ drawSlot:329 drawWireEndLabel:973
   @field r V  @ busSegments:1381,1404 makeBusDrag:1597
   @field w V  @ 95
-  @field r WindowFlags_NoNav  @ renderCanvas:2406 renderBody:2540 2671
+  @field r WindowFlags_NoNav  @ renderCanvas:2406 renderBody:2540 renderFxPicker:2671
   @field r WindowFlags_NoScrollWithMouse  @ renderBody:2542
   @field r WindowFlags_NoScrollbar  @ renderBody:2541
   @field r aHi  @ busDragApply:1629,1632 busDragPos:1648
@@ -591,9 +596,9 @@
   @field r anchor  @ renderCanvas:2129,2130
   @field w anchor  @ busBarSource:1580
   @field r anchorSX  @ renderCanvas:2397,2398
-  @field w anchorSX  @ 2607
+  @field w anchorSX  @ openFxPicker:2607
   @field r anchorSY  @ renderCanvas:2398
-  @field w anchorSY  @ 2607
+  @field w anchorSY  @ openFxPicker:2607
   @field r anchorX  @ renderCanvas:2322,2350
   @field w anchorX  @ renderCanvas:2304,2311
   @field r anchorY  @ renderCanvas:2322,2350
@@ -611,11 +616,11 @@
   @field r bar  @ busBarSource:1577,1578,1579 busBarAt:1588 makeBusDrag:1599
   @field r bar  @ makeBusDrag:1600
   @field w bar  @ busSegments:1492
-  @field r buf  @ 2639
-  @field w buf  @ openAddSourceModal:2444 2608,2641
+  @field r buf  @ renderFxPicker:2639
+  @field w buf  @ openAddSourceModal:2444 openFxPicker:2608 renderFxPicker:2641
   @field r bus  @ wireSegments:1002 drawWiresPass:1109,1114 sourceSegments:1299 busSegments:1360,1361,1362,1376,1377,1379
   @field r bus  @ busSegments:1421,1427,1455 bussablePorts:1547,1550 renderCanvas:1773 commitFx:2619
-  @field w bus  @ renderCanvas:1778 2602,2603
+  @field w bus  @ renderCanvas:1778 openFxPicker:2602,2603
   @field r busId  @ busSegments:1361,1362,1379 drawBusPass:1521 makeBusDrag:1608 renderCanvas:1801,1804,1812,2276,2309
   @field w busId  @ busSegments:1495 makeBusDrag:1608 renderCanvas:1778
   @field r bussedEnd  @ drawWiresPass:1109,1114 busSegments:1377,1421,1427,1455 bussablePorts:1547,1550
@@ -634,8 +639,8 @@
   @field r ctx  @ 22
   @field r currentLin  @ drawFader:1199,1204 renderCanvas:1833,1834,1863,2045,2058
   @field w currentLin  @ renderCanvas:1830,1859,1991,2019,2031,2049
-  @field r cursor  @ 2655
-  @field w cursor  @ 2608,2653,2662
+  @field r cursor  @ renderFxPicker:2655
+  @field w cursor  @ openFxPicker:2608 renderFxPicker:2653,2662
   @field r cursorEnd  @ dropTargetHit:733 drawDraftWire:1220 busBarHit:1564 renderCanvas:2235
   @field w cursorEnd  @ renderCanvas:2133,2178 renderPaletteList:2493
   @field r cx  @ drawWireEndLabel:945,951 drawWiresPass:1101 arrowMidHit:1172 renderCanvas:1815,1984,2304
@@ -717,8 +722,8 @@
   @field r inBody  @ layoutPortRow:512 drawPortRow:779
   @field w inBody  @ layoutPortRow:495
   @field r ins  @ layoutPortRow:418,419 defaultSlot:566,567 drawBusPass:1517
-  @field r items  @ 2648
-  @field w items  @ 2608
+  @field r items  @ renderFxPicker:2648
+  @field w items  @ openFxPicker:2608
   @field r keep  @ engagedHover:609
   @field w keep  @ shiftHoverHit:666 dropTargetHit:734
   @field r keptAnchor  @ drawDraftWire:1213 renderCanvas:2182
@@ -753,8 +758,8 @@
   @field w mx0  @ makeBusDrag:1613 renderCanvas:2138,2186,2197,2214,2216
   @field r my0  @ computeDraftEnd:1139 renderCanvas:1741,1749,1793,2222,2266,2274,2280,2288,2292,2418
   @field w my0  @ makeBusDrag:1613 renderCanvas:2138,2186,2197,2214,2216
-  @field r name  @ drawSlot:324,331 drawList:759 commitFx:2622 2649,2673
-  @field w name  @ layoutList:402 layoutPortRow:484,495 defaultSlot:569,572 openAddSourceModal:2446 2602,2603 commitFx:2622
+  @field r name  @ drawSlot:324,331 drawList:759 commitFx:2622 renderFxPicker:2649,2673
+  @field w name  @ layoutList:402 layoutPortRow:484,495 defaultSlot:569,572 openAddSourceModal:2446 openFxPicker:2602,2603 commitFx:2622
   @field r node  @ busSegments:1399 drawBusPass:1517 busBarHit:1566,1568 busBarSource:1577,1579 makeBusDrag:1597,1598
   @field w node  @ busSegments:1495 renderCanvas:1769,2090
   @field r nodeId  @ shiftHoverHit:673 stickyHoverHit:683 renderCanvas:1766,1769,1775,1776,2088,2090,2355,2358,2359,2363
@@ -774,7 +779,7 @@
   @field r onConsume  @ engagedHover:613
   @field w onConsume  @ shiftHoverHit:672
   @field r orient  @ busSegments:1381,1386,1404 makeBusDrag:1597 renderCanvas:1768,2089 commitFx:2620
-  @field w orient  @ renderCanvas:1768,2089,2372 2602,2603
+  @field w orient  @ renderCanvas:1768,2089,2372 openFxPicker:2602,2603
   @field r originalPort  @ renderCanvas:2230
   @field w originalPort  @ renderCanvas:2193
   @field r originalTargetId  @ renderCanvas:2228
@@ -782,9 +787,9 @@
   @field r outs  @ layoutPortRow:418,419 defaultSlot:566,567 shiftHoverHit:669 stickyHoverHit:684 drawBusPass:1517
   @field r ov  @ busDragApply:1619 busDragPos:1645
   @field w ov  @ makeBusDrag:1608
-  @field r ox  @ renderCanvas:1705 2598
+  @field r ox  @ renderCanvas:1705 openFxPicker:2598
   @field w ox  @ 125 renderCanvas:1706
-  @field r oy  @ 2598
+  @field r oy  @ openFxPicker:2598
   @field w oy  @ 125 renderCanvas:1705,1706
   @field r path  @ 15
   @field w path  @ 15
@@ -829,12 +834,12 @@
   @field w suppressKbd  @ focusState:2564,2567
   @field r sx  @ wireExits:845 wireMid:874,876 endRegion:1029,1031,1034 wireEndHit:1072 drawWiresPass:1094 drawBusPass:1512,1513
   @field r sx  @ drawBusPass:1518,1519 sourceTagHit:1657 renderCanvas:1915,2161,2197,2269 commitFx:2623
-  @field w sx  @ wireSegments:1008 sourceSegments:1334 busSegments:1456,1459,1471,1473 2606
+  @field w sx  @ wireSegments:1008 sourceSegments:1334 busSegments:1456,1459,1471,1473 openFxPicker:2606
   @field r sx0  @ renderCanvas:1792
   @field w sx0  @ renderCanvas:2197
   @field r sy  @ wireExits:845 wireMid:874,876 endRegion:1029,1031,1034 wireEndHit:1072 drawWiresPass:1094 drawBusPass:1512,1513
   @field r sy  @ drawBusPass:1518,1519 sourceTagHit:1657 renderCanvas:1915,2162,2197,2269 commitFx:2623
-  @field w sy  @ wireSegments:1008 sourceSegments:1334 busSegments:1456,1459,1471,1473 2606
+  @field w sy  @ wireSegments:1008 sourceSegments:1334 busSegments:1456,1459,1471,1473 openFxPicker:2606
   @field r sy0  @ renderCanvas:1793
   @field w sy0  @ renderCanvas:2197
   @field r tapHi  @ makeBusDrag:1612 busDragApply:1637
@@ -882,9 +887,9 @@
   @field r x  @ drawList:758 drawPortRow:783,791,792 wireSegments:995,1008,1009 drawDraftWire:1217 leastOccupiedDir:1272
   @field r x  @ leastOccupiedDir:1274,1278 sourceSegments:1320,1329,1335 nodeEdgePoint:1346,1351 busSegments:1383,1385,1407
   @field r x  @ busSegments:1408,1413,1432,1439 makeBusDrag:1598 renderCanvas:1723,1752,1792,1802,1959
-  @field r x  @ renderCanvas:2127,2128,2170,2171,2209,2212,2269,2283 2607 commitFx:2620,2622
+  @field r x  @ renderCanvas:2127,2128,2170,2171,2209,2212,2269,2283 openFxPicker:2607 commitFx:2620,2622
   @field w x  @ layoutList:403 layoutPortRow:462,485,496 wireEndHit:1071,1072 busBarSource:1580 renderCanvas:1768,1792,2089,2128,2209
-  @field w x  @ renderCanvas:2212,2251,2269,2276,2283,2314 renderBody:2548 2606 commitFx:2623
+  @field w x  @ renderCanvas:2212,2251,2269,2276,2283,2314 renderBody:2548 openFxPicker:2606 commitFx:2623
   @field r x0  @ inRect:137 unionRect:144 strokeNodeRect:166 drawNode:270 badgeRects:351 drawBadge:360 layoutList:408,409 layoutPortRow:417 drawFader:1198
   @field r x0  @ drawFader:1202,1203 drawBusPass:1510 drawBusBar:1530,1533,1534 busBarHit:1567 busBarSource:1577,1578 busBarAt:1588 makeBusDrag:1599 nodesInBand:1692
   @field r x0  @ renderCanvas:1945,1949
@@ -897,9 +902,9 @@
   @field r y  @ drawPortRow:783,791,792 wireSegments:995,1008,1009 drawDraftWire:1218 leastOccupiedDir:1272,1274
   @field r y  @ leastOccupiedDir:1278 sourceSegments:1321,1330,1335 nodeEdgePoint:1346,1351 busSegments:1384,1385,1407,1408
   @field r y  @ busSegments:1413,1433,1440 makeBusDrag:1598 renderCanvas:1723,1752,1793,2128,2172,2209,2212
-  @field r y  @ renderCanvas:2269,2283 2607 commitFx:2620,2622
+  @field r y  @ renderCanvas:2269,2283 openFxPicker:2607 commitFx:2620,2622
   @field w y  @ layoutList:403 layoutPortRow:437,497 wireEndHit:1071,1072 busBarSource:1580 renderCanvas:1752,1768,1793,1802,2089,2128
-  @field w y  @ renderCanvas:2209,2212,2251,2269,2276,2283,2314 renderBody:2548 2606 commitFx:2623
+  @field w y  @ renderCanvas:2209,2212,2251,2269,2276,2283,2314 renderBody:2548 openFxPicker:2606 commitFx:2623
   @field r y0  @ inRect:137 unionRect:145 strokeNodeRect:166 drawNode:267 badgeRects:350 drawBadge:360 layoutList:408,409 layoutPortRow:417,537
   @field r y0  @ drawFader:1197,1200 drawBusPass:1510 drawBusBar:1530,1533,1534 busBarHit:1567 busBarSource:1577,1578 busBarAt:1588 makeBusDrag:1599 nodesInBand:1692
   @field r y0  @ renderCanvas:1829,1945,1949,2029

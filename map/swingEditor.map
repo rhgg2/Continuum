@@ -36,7 +36,6 @@
   @state revert = util.atomic('Revert swing', function(name)  @ 467
   @state deleteSel = util.atomic('Delete swing', function(tier, name)  @ 475
   @state tidy = util.atomic('Tidy swings', function()  @ 523
-  @state openNewModal  @ 570   -- forward decl; defined with its modalHost kind below
   @state swingEditor = {}  @ 767
 
 # Private functions
@@ -127,6 +126,9 @@
   @fn resetToSnapshot()  @ 565-568
       -- Revert the edited composite to the open()/switch snapshot, then reswing.
   @fn buildDescriptor()  @ 572-598
+  @fn openNewModal()  @ 602-610
+      -- New-swing modal, hosted by modalHost (kind registered below). Creates at the
+      -- project tier; the render keeps the popup open on a name clash.
   @fn nearestRpb(v)  @ 644-651
       -- Rows/qn is a fixed ladder of valid divisions; the stepper walks adjacent rungs
       -- and snaps a typed value to the nearest. See RPB_CHOICES.
@@ -262,11 +264,12 @@
   @call shiftCap  @ drawFactorRow:336,345,378
   @call swingRead  @ swingWrite:278 cloneForEdit:286 moveFactor:312 switchTo:440 buildDescriptor:595 draw:755 renderToolbar:788
   @call swingWrite  @ patchFactor:295 addFactor:302 removeFactor:308 moveFactor:318 drawFactorRow:356,403 resetToSnapshot:566 drawToolsRow:693
-  @call switchTo  @ 470,477,478,607 buildDescriptor:587 open:775,779
-  @call tracker  @ meterQN:59 swingWrite:280 resolvedSlots:489 606
+  @call switchTo  @ 470,477,478 buildDescriptor:587 openNewModal:607 open:775,779
+  @call tracker  @ meterQN:59 swingWrite:280 resolvedSlots:489 openNewModal:606
 
 # Bindings (by name)
   @bind importFactory  @ buildDescriptor:593
+  @bind openNewModal  @ buildDescriptor:588
   @bind publish  @ buildDescriptor:589
   @bind reloadFactory  @ buildDescriptor:592
   @bind resetToSnapshot  @ buildDescriptor:596
@@ -292,8 +295,8 @@
   @field r bandW  @ drawBandInto:197
   @field w bandW  @ bandLayout:189
   @field r buf  @ 622
-  @field w buf  @ 604,624,634
-  @field w callback  @ publish:458 reloadFactory:540 importFactory:557 605
+  @field w buf  @ openNewModal:604 624,634
+  @field w callback  @ publish:458 reloadFactory:540 importFactory:557 openNewModal:605
   @field r chan  @ resolvedSlots:490
   @field r chrome  @ 46
   @field r classify  @ drawBandInto:204
@@ -332,7 +335,7 @@
   @field w heightQN  @ bandLayout:188 drawBandInto:203
   @field r huge  @ nearestRpb:645
   @field w identity  @ 43
-  @field w kind  @ 604
+  @field w kind  @ openNewModal:604
   @field r label  @ periodLabel:75 drawFactorRow:369
   @field w label  @ 32,33,34,35,36,37 buildDescriptor:579
   @field r lib  @ 46
@@ -393,7 +396,7 @@
   @field w synthetic  @ buildDescriptor:583
   @field r tier  @ swingRead:238 swingWrite:279 buildDescriptor:586
   @field w tier  @ 273 switchTo:439 buildDescriptor:586
-  @field w title  @ publish:456 reloadFactory:538 importFactory:555 604
+  @field w title  @ publish:456 reloadFactory:538 importFactory:555 openNewModal:604
   @field r ui  @ drawBandInto:209,213
   @field r uiFont  @ drawBandInto:209,213
   @field w undeletable  @ buildDescriptor:584
