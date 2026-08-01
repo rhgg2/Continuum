@@ -47,6 +47,14 @@ write-up, and we only start it when we're both happy to proceed.
    search is the expensive part — finding an 80-line seam in a
    5,000-line module costs an order of magnitude more than stating
    where it is — and the brief is its memo.
+
+   The scratchpad and spike worktree settle *design* questions here —
+   a fork you can name before writing the code, whose answer changes
+   what the brief says. Writing the implementation there to make the
+   brief certain is the expensive way round: the code is discarded
+   with the scratchpad and `/implement-next` writes it all again. The
+   brief's anchors and shapes come from reading; certainty beyond
+   that is the implementation session's to earn.
 6. Bring the search to chat: what the item turns out to involve, the
    forks the search exposed, what you'd do, what you're unsure of.
    Anything the design doc left open is settled here too — the brief
