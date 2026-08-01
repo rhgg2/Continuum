@@ -12,6 +12,15 @@ lines. Newest first. `/commit` prompts for one at commit time.
 Entries below 2026-07-27 predate that split, so some of them also
 appear in their design docs.
 
+- **2026-08-01** — chrome and masterMix were the only two modules ending in a bare `return {...}`
+  literal, which put the public/private boundary several hundred lines away from the declarations
+  that constitute it. Both now name the module table at the top and declare publics as `function
+  chrome.x`, leaving helpers `local` — so visibility reads off the declaration, and the map indexes
+  the surface as @api rather than @fn. fitLabel, which had no caller outside chrome, became private;
+  radio keeps its export against near-term use. The regenerated .map files are deliberately not in
+  this commit: map_extract.py is mid-rewrite in the tree, and under it a named module table
+  reclassifies these two away from mode=chunk and drops their @deps line.
+
 - **2026-08-01** — The prose register moved out of docs/CONVENTIONS.md into a new docs/STYLE.md,
   taking CLAUDE.md's design-narration section with it. CONVENTIONS governs the documentation layers;
   STYLE governs the sentences, across docs/, design/, the decisions log and a plan's Queued lines.

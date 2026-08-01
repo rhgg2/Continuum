@@ -2,7 +2,7 @@
 
 --shape: chrome = { colour(name, scope?)->u32, pushChromeStyles(), popChromeStyles(), pushChromeWindow(), popChromeWindow(), verticalSeparator(), disabledIf(cond,fn), row(h?,fn), checkbox(label,v), radio(label,active), headingLabel(text), screenPainter()->painter}
 --shape: chrome (pickers) = { makeToolbar()->fn(segments), drawPicker(d), libPicker(key, current, excludeOthers?)->items, pickerIsActive()->bool, resetPickerActive(), requestPickerOpen(kind) }
---shape: chrome (shared row primitives) = { fitLabel(text,maxW)->text, rowSelectable(label,sel,flags?)->clicked, treeRow(opts)->{toggled,selected,doubleClicked}, numberStepper(id,value,opts)->changed,value }
+--shape: chrome (shared row primitives) = { rowSelectable(label,sel,flags?)->clicked, treeRow(opts)->{toggled,selected,doubleClicked}, numberStepper(id,value,opts)->changed,value }
 --shape: pickerSpec = { kind: string, heading: string?, buttonLabel: string, items: [{label, key, group?=int, current?=bool}], onPick: fn(key), onCancel?: fn(), onCreate?: fn(text), onDelete?: fn(key), placement?: 'above', width?, minWidth?, maxWidth?, flat?: bool }
 --shape: palettePaneSpec = { x, y, h, label | {tabs=[{key,label}], activeTab, onTab}, draw = fn(childFocused) }
 --contract: one chrome instance per coordinator; threaded into every page
@@ -11,6 +11,8 @@ local ImGui   = require 'imgui' '0.10'
 local painter = require 'painter'
 
 local cm, ctx, lib  = (...).cm, (...).ctx, (...).lib
+
+local chrome = {}
 
 local cache = {}
 cm:subscribe('configChanged', function() cache = {} end)
@@ -48,7 +50,7 @@ local function scopedKey(name, scope)
   return 'colour.global.' .. name
 end
 
-local function colour(name, scope)
+function chrome.colour(name, scope)
   local key = scopedKey(name or 'text', scope or 'chrome')
   if not cache[key] then
     local r, g, b, a = resolve(key)
@@ -58,84 +60,84 @@ local function colour(name, scope)
 end
 
 -- painter binds colour names through chrome; it touches only colour().
-local paintBinder = { colour = colour }
+local paintBinder = { colour = chrome.colour }
 
 -- Identity-transform painter over the current window's draw list: screen coords, chrome's
 -- palette. Build one per draw fn — the draw list is captured now, so call it in the target window.
-local function screenPainter() return painter.new(ctx, paintBinder, {}) end
+function chrome.screenPainter() return painter.new(ctx, paintBinder, {}) end
 
-local function pushChromeStyles()
+function chrome.pushChromeStyles()
   ImGui.PushStyleVar(ctx, ImGui.StyleVar_FrameBorderSize, 0)
   ImGui.PushStyleVar(ctx, ImGui.StyleVar_FrameRounding, 1)
   -- With the border gone the fill bleeds into the 1px ring it used to occupy;
   -- trim a px per axis so framed widgets keep their old footprint.
   local fpx, fpy = ImGui.GetStyleVar(ctx, ImGui.StyleVar_FramePadding)
   ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, fpx - 1, fpy - 1)
-  ImGui.PushStyleColor(ctx, ImGui.Col_Text,           colour('toolbar.text'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_Button,         colour('toolbar.button'))
+  ImGui.PushStyleColor(ctx, ImGui.Col_Text,           chrome.colour('toolbar.text'))
+  ImGui.PushStyleColor(ctx, ImGui.Col_Button,         chrome.colour('toolbar.button'))
   -- Hover holds the resting fill for buttons and frame bgs; active toggle buttons
   -- re-flatten at each site, while a button press still darkens via ButtonActive.
-  ImGui.PushStyleColor(ctx, ImGui.Col_ButtonHovered,  colour('toolbar.button'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_ButtonActive,   colour('toolbar.buttonActive'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_FrameBg,        colour('toolbar.button'))
+  ImGui.PushStyleColor(ctx, ImGui.Col_ButtonHovered,  chrome.colour('toolbar.button'))
+  ImGui.PushStyleColor(ctx, ImGui.Col_ButtonActive,   chrome.colour('toolbar.buttonActive'))
+  ImGui.PushStyleColor(ctx, ImGui.Col_FrameBg,        chrome.colour('toolbar.button'))
   -- Frame bg flat on hover AND press — slider tracks/inputs never highlight;
   -- a slider's only feedback is the grab (Col_SliderGrab / SliderGrabActive).
-  ImGui.PushStyleColor(ctx, ImGui.Col_FrameBgHovered, colour('toolbar.button'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_FrameBgActive,  colour('toolbar.button'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_CheckMark,      colour('toolbar.checkMark'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_SliderGrab,       colour('toolbar.sliderGrab'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_SliderGrabActive, colour('toolbar.sliderGrabActive'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_PopupBg,        colour('toolbar.popupBg'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_Border,         colour('toolbar.buttonBorder'))
+  ImGui.PushStyleColor(ctx, ImGui.Col_FrameBgHovered, chrome.colour('toolbar.button'))
+  ImGui.PushStyleColor(ctx, ImGui.Col_FrameBgActive,  chrome.colour('toolbar.button'))
+  ImGui.PushStyleColor(ctx, ImGui.Col_CheckMark,      chrome.colour('toolbar.checkMark'))
+  ImGui.PushStyleColor(ctx, ImGui.Col_SliderGrab,       chrome.colour('toolbar.sliderGrab'))
+  ImGui.PushStyleColor(ctx, ImGui.Col_SliderGrabActive, chrome.colour('toolbar.sliderGrabActive'))
+  ImGui.PushStyleColor(ctx, ImGui.Col_PopupBg,        chrome.colour('toolbar.popupBg'))
+  ImGui.PushStyleColor(ctx, ImGui.Col_Border,         chrome.colour('toolbar.buttonBorder'))
   -- Col_InputTextCursor has its own slot; default is invisible against
   -- chrome-styled frame backgrounds, so InputText shows focused but caretless.
-  ImGui.PushStyleColor(ctx, ImGui.Col_InputTextCursor, colour('toolbar.text'))
+  ImGui.PushStyleColor(ctx, ImGui.Col_InputTextCursor, chrome.colour('toolbar.text'))
   -- ImGui's stock Col_TextSelectedBg is a bright blue that clashes with the
   -- parchment chrome; ride the cool-blue alt ramp instead.
-  ImGui.PushStyleColor(ctx, ImGui.Col_TextSelectedBg, colour('toolbar.textSelection'))
+  ImGui.PushStyleColor(ctx, ImGui.Col_TextSelectedBg, chrome.colour('toolbar.textSelection'))
   -- Selectable / list-row highlight (Col_Header family) also defaults to stock
   -- blue; ride the same alt ramp so every chrome selection reads as one blue.
-  ImGui.PushStyleColor(ctx, ImGui.Col_Header,        colour('toolbar.selectedRow'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_HeaderHovered, colour('toolbar.selectedRow'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_HeaderActive,  colour('toolbar.selectedRow'))
+  ImGui.PushStyleColor(ctx, ImGui.Col_Header,        chrome.colour('toolbar.selectedRow'))
+  ImGui.PushStyleColor(ctx, ImGui.Col_HeaderHovered, chrome.colour('toolbar.selectedRow'))
+  ImGui.PushStyleColor(ctx, ImGui.Col_HeaderActive,  chrome.colour('toolbar.selectedRow'))
 end
 
-local function popChromeStyles()
+function chrome.popChromeStyles()
   ImGui.PopStyleColor(ctx, 17)
   ImGui.PopStyleVar(ctx, 3)
 end
 
 -- Floating surfaces fill with editor.bg (opaque); toolbar.bg is 0.5 alpha and would bleed the grid through.
-local function pushChromeWindow()
-  pushChromeStyles()
+function chrome.pushChromeWindow()
+  chrome.pushChromeStyles()
   ImGui.PushStyleVar(ctx, ImGui.StyleVar_WindowBorderSize, 1)
-  ImGui.PushStyleColor(ctx, ImGui.Col_WindowBg,         colour('editor.bg'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_PopupBg,          colour('editor.bg'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_TitleBg,          colour('editor.bg'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_TitleBgActive,    colour('editor.bg'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_TitleBgCollapsed, colour('editor.bg'))
-  ImGui.PushStyleColor(ctx, ImGui.Col_Separator,        colour('toolbar.buttonBorder'))
+  ImGui.PushStyleColor(ctx, ImGui.Col_WindowBg,         chrome.colour('editor.bg'))
+  ImGui.PushStyleColor(ctx, ImGui.Col_PopupBg,          chrome.colour('editor.bg'))
+  ImGui.PushStyleColor(ctx, ImGui.Col_TitleBg,          chrome.colour('editor.bg'))
+  ImGui.PushStyleColor(ctx, ImGui.Col_TitleBgActive,    chrome.colour('editor.bg'))
+  ImGui.PushStyleColor(ctx, ImGui.Col_TitleBgCollapsed, chrome.colour('editor.bg'))
+  ImGui.PushStyleColor(ctx, ImGui.Col_Separator,        chrome.colour('toolbar.buttonBorder'))
 end
 
-local function popChromeWindow()
+function chrome.popChromeWindow()
   ImGui.PopStyleColor(ctx, 6)
   ImGui.PopStyleVar(ctx, 1)
-  popChromeStyles()
+  chrome.popChromeStyles()
 end
 
 -- reaper-imgui has no Separator(Vertical); draw a 1px vertical rule via the window draw
 -- list and reserve a Dummy slot so SameLine works. see docs/chrome.md § Vertical separator
-local function verticalSeparator()
+function chrome.verticalSeparator()
   local x, y = ImGui.GetCursorScreenPos(ctx)
   local h    = ImGui.GetFrameHeight(ctx)
   ImGui.DrawList_AddRectFilled(ImGui.GetWindowDrawList(ctx),
-    x, y, x + 1, y + h, colour('separator'))
+    x, y, x + 1, y + h, chrome.colour('separator'))
   ImGui.Dummy(ctx, 1, h)
 end
 
 -- RAII wrapper for ImGui.BeginDisabled / EndDisabled: dropping the
 -- bracket-match removes a class of mismatched-pop bugs on early return.
-local function disabledIf(cond, fn)
+function chrome.disabledIf(cond, fn)
   if cond then ImGui.BeginDisabled(ctx) end
   fn()
   if cond then ImGui.EndDisabled(ctx) end
@@ -143,7 +145,7 @@ end
 
 -- Fixed-height row: run `fn`, then snap the cursor to exactly `h` below the row's
 -- top so subsequent rows land at a deterministic Y regardless of widget heights.
-local function row(h, fn)
+function chrome.row(h, fn)
   if type(h) == 'function' then h, fn = nil, h end
   local gapY   = select(2, ImGui.GetStyleVar(ctx, ImGui.StyleVar_ItemSpacing))
   h = h or (ImGui.GetFrameHeight(ctx) + gapY)
@@ -163,18 +165,18 @@ local function compactControl(draw)
   return a, b
 end
 
-local function checkbox(label, value)
+function chrome.checkbox(label, value)
   return compactControl(function() return ImGui.Checkbox(ctx, label, value) end)
 end
 
-local function radio(label, active)
+function chrome.radio(label, active)
   return compactControl(function() return ImGui.RadioButton(ctx, label, active) end)
 end
 
 -- InputInt/-Double flanked by hold-repeat -/+ buttons; -/+ drawn as rects not glyphs. See docs/chrome.md § numberStepper.
 --   opts = { min?, max?, step?=1, onStep?=fn(value,dir)->value, width?, digits?=2, format?, align? }
 local BOX_PAD = 3
-local function numberStepper(id, value, opts)
+function chrome.numberStepper(id, value, opts)
   opts = opts or {}
   local digits = opts.digits or 2
   local fmt    = opts.format
@@ -229,7 +231,7 @@ end
 -- House-style dropdown: button + popup of `items`. Width fits the widest entry
 -- so columns stay aligned across rows. Returns the picked 1-based index, else nil.
 local DROP_ARROW = ' \xe2\x96\xbe'   -- ' ▾'
-local function dropdown(id, current, items)
+function chrome.dropdown(id, current, items)
   local widest = 0
   for _, it in ipairs(items) do
     local tw = ImGui.CalcTextSize(ctx, it .. DROP_ARROW)
@@ -258,8 +260,8 @@ end
 
 -- Section label for toolbar segments: bold + uppercase + dimmed so it
 -- reads as a heading and not a control. Caller follows with SameLine.
-local function headingLabel(text)
-  local r, g, b, a = ImGui.ColorConvertU32ToDouble4(colour('toolbar.text'))
+function chrome.headingLabel(text)
+  local r, g, b, a = ImGui.ColorConvertU32ToDouble4(chrome.colour('toolbar.text'))
   local dim = ImGui.ColorConvertDouble4ToU32(r, g, b, a * 0.55)
   ImGui.PushStyleColor(ctx, ImGui.Col_Text, dim)
   ImGui.AlignTextToFramePadding(ctx)
@@ -281,7 +283,10 @@ local toolbarLines  = 1   -- wrapped-row count from the last toolbar() draw
 local resetPending  = false
 -- Deferred: the switcher lives in the toolbar, so setActive fires mid-render — clearing
 -- now would unwrap this frame's later segments. Clear at the next toolbar() start instead.
-local function resetToolbar() resetPending = true end
+function chrome.resetToolbar() resetPending = true end
+
+function chrome.toolbarRects()     return lastToolbarRects end
+function chrome.toolbarLineCount() return toolbarLines end
 
 -- A segment with a summary is collapsible; folded ids persist in config.
 local function setCollapsed(id, on)
@@ -298,10 +303,10 @@ local function disclosureHeading(text, collapsed)
   local cellW      = math.max(collapsedW, expandedW)
   local startX     = ImGui.GetCursorPosX(ctx)
   ImGui.BeginGroup(ctx)
-  headingLabel(collapsed and '\xe2\x96\xb8' or '\xe2\x96\xbe')
+  chrome.headingLabel(collapsed and '\xe2\x96\xb8' or '\xe2\x96\xbe')
   ImGui.SameLine(ctx)
   ImGui.SetCursorPosX(ctx, startX + cellW + 4)
-  headingLabel(text)
+  chrome.headingLabel(text)
   ImGui.EndGroup(ctx)
   if ImGui.IsItemHovered(ctx) then ImGui.SetMouseCursor(ctx, ImGui.MouseCursor_Hand) end
   return ImGui.IsItemClicked(ctx)
@@ -321,7 +326,7 @@ local function drawSegment(seg, collapsed)
   ImGui.EndGroup(ctx)
 end
 
-local function makeToolbar()
+function chrome.makeToolbar()
   -- Hidden Alpha-0 pass to pre-populate widths when the cache is cold (post-reset).
   -- Without it the cold row lays out flat and AutoResizeY jumps the body one frame later.
   local function measureWidths(segments, collapsed)
@@ -381,7 +386,7 @@ local function makeToolbar()
           local sepW = 12 + 1 + 12
           if lastEndX + sepW + cachedW <= rightX then
             ImGui.SameLine(ctx, 0, 12)
-            verticalSeparator()
+            chrome.verticalSeparator()
             ImGui.SameLine(ctx, 0, 12)
           else
             lines = lines + 1   -- segment wrapped to a new row
@@ -410,16 +415,16 @@ local pickerActive   = false -- frame-scoped: any picker popup live this frame
 -- appends instead of being overwritten by the next keystroke. Attached lazily.
 local clearSelCb     = nil
 
-local function requestPickerOpen(kind, seed) pickerOpenReq, pickerOpenSeed = kind, seed end
-local function pickerIsActive()        return pickerActive end
-local function resetPickerActive()     pickerActive = false end
+function chrome.requestPickerOpen(kind, seed) pickerOpenReq, pickerOpenSeed = kind, seed end
+function chrome.pickerIsActive()        return pickerActive end
+function chrome.resetPickerActive()     pickerActive = false end
 
 -- Sentinel key for drawPicker's synthetic '+ new' row (see onCreate handling below).
 local CREATE = {}
 
 -- Build the picker-item list for a library-shaped cm key (e.g. 'swings',
 -- 'tempers'); groups, modified badge, excludeOthers — see docs/chrome.md § Picker.
-local function libPicker(key, current, excludeOthers)
+function chrome.libPicker(key, current, excludeOthers)
   excludeOthers = excludeOthers or {}
   local proj   = cm:getAt('project', key) or {}
   local merged = cm:get(key, { mergeTiers = true }) or {}
@@ -469,7 +474,7 @@ local function deleteRowButton(kind, key, id, rowLeft, rowW)
   local ink    = 'picker.remove'
   if armed then ink = 'picker.removeArmed'
   elseif ImGui.IsItemHovered(ctx) then ink = 'text' end
-  local p = screenPainter()
+  local p = chrome.screenPainter()
   p.line(cx - r, cy - r, cx + r, cy + r, ink, 1)
   p.line(cx - r, cy + r, cx + r, cy - r, ink, 1)
   -- The '?' rides the row font, so it need not match the hand-sized × exactly. Its ink sits high in
@@ -485,7 +490,7 @@ end
 
 -- Generic typeahead picker. Enter picks the highlighted match; group
 -- separators show only when filter is empty.
-local function drawPicker(d)
+function chrome.drawPicker(d)
   local popupId = '##picker_' .. d.kind
 
   -- Heading inherits the toolbar's outer Col_Text push; no inner push.
@@ -639,12 +644,12 @@ local PALETTE_W, PANE_GAP    = 200, 11
 local HEADER_PAD, HEADER_GAP = 8, 4
 
 --contract: width of the main pane left of the palette; floors at 120.
-local function gridWidth(w) return math.max(120, w - PALETTE_W - PANE_GAP) end
+function chrome.gridWidth(w) return math.max(120, w - PALETTE_W - PANE_GAP) end
 
 -- Hand-drawn header: centred label + 1px divider at headerH; shares HEADER_PAD/HEADER_GAP
 -- with the flanking grid header so dividers align across PANE_GAP. Returns divider screen-y.
-local function paletteHeader(label)
-  local p       = screenPainter()
+function chrome.paletteHeader(label)
+  local p       = chrome.screenPainter()
   local ox, oy  = ImGui.GetCursorScreenPos(ctx)
   -- Centre against the FULL pane width: GetContentRegionAvail shrinks by the
   -- scrollbar when the list overflows, which would drift the heading left.
@@ -664,7 +669,7 @@ end
 -- Tabbed header: equal-width cells, active in text ink, rest dimmed (palette.tabInactive).
 -- Dividers run the full header height with a bottom gap; a click fires onTab(key).
 local function paletteTabsHeader(tabs, activeKey, onTab)
-  local p       = screenPainter()
+  local p       = chrome.screenPainter()
   local ox, oy  = ImGui.GetCursorScreenPos(ctx)
   local avail   = select(1, ImGui.GetContentRegionAvail(ctx))
   local sbw     = ImGui.GetScrollMaxY(ctx) > 0
@@ -689,9 +694,9 @@ local function paletteTabsHeader(tabs, activeKey, onTab)
 end
 
 --contract: x/y/h are body-window screen coords at the gap's left edge; draw paints the body.
-local function palettePane(spec)
+function chrome.palettePane(spec)
   -- vrule on the BODY draw list — it sits in the gap, outside the child.
-  local p     = screenPainter()
+  local p     = chrome.screenPainter()
   local lineX = spec.x + math.floor(PANE_GAP / 2)
   p.segment(lineX, spec.y, lineX, spec.y + spec.h, 'text', 1)
 
@@ -699,16 +704,17 @@ local function palettePane(spec)
   if ImGui.BeginChild(ctx, '##palettePane', PALETTE_W, spec.h,
                       ImGui.ChildFlags_None, ImGui.WindowFlags_NoNav) then
     local childFocused = ImGui.IsWindowFocused(ctx)
-    pushChromeStyles()
+    chrome.pushChromeStyles()
     if spec.tabs then paletteTabsHeader(spec.tabs, spec.activeTab, spec.onTab)
-    else              paletteHeader(spec.label) end
+    else              chrome.paletteHeader(spec.label) end
     spec.draw(childFocused)
-    popChromeStyles()
+    chrome.popChromeStyles()
   end
   ImGui.EndChild(ctx)
 end
 
--- Ellipsis-fit to a fixed pane width; no horizontal scroll exists.
+-- Ellipsis-fit to a fixed pane width; no horizontal scroll exists. Private: the
+-- trees fit their own labels, and no caller outside chrome has wanted it.
 local function fitLabel(text, maxW)
   if ImGui.CalcTextSize(ctx, text) <= maxW then return text end
   local keep = #text
@@ -722,7 +728,7 @@ end
 
 -- Selectable with hover/active highlight suppressed: only the selected row shows
 -- the Col_Header fill. Shared by the tracker palette and the sampler browser/tree.
-local function rowSelectable(label, selected, flags)
+function chrome.rowSelectable(label, selected, flags)
   local hi = selected and ImGui.GetStyleColor(ctx, ImGui.Col_Header) or 0x00000000
   ImGui.PushStyleColor(ctx, ImGui.Col_HeaderHovered, hi)
   ImGui.PushStyleColor(ctx, ImGui.Col_HeaderActive,  hi)
@@ -741,7 +747,7 @@ local CHIP_OPEN, CHIP_SHUT = '\xe2\x96\xbe', '\xe2\x96\xb8'   -- ▾ / ▸
 --contract: chip toggles; body click selects and toggles a parent; allowDouble suppresses both
 --contract: childless rows show blank gutter so labels align across depths
 --contract: nesting indent = opts.indent (px) if set, else depth × TREE_INDENT
-local function treeRow(opts)
+function chrome.treeRow(opts)
   local indent = opts.indent or (opts.depth or 0) * TREE_INDENT
   if indent > 0 then ImGui.Indent(ctx, indent) end
 
@@ -750,7 +756,7 @@ local function treeRow(opts)
   local x, y    = ImGui.GetCursorScreenPos(ctx)
   local chipHit = ImGui.InvisibleButton(ctx, '##chip' .. opts.id, ARROW_GUTTER, rowH)
   if opts.hasChildren then
-    ImGui.DrawList_AddText(ImGui.GetWindowDrawList(ctx), x + 2, y, colour('text'),
+    ImGui.DrawList_AddText(ImGui.GetWindowDrawList(ctx), x + 2, y, chrome.colour('text'),
                            opts.open and CHIP_OPEN or CHIP_SHUT)
   end
   ImGui.SameLine(ctx, 0, 0)
@@ -758,7 +764,7 @@ local function treeRow(opts)
   local flags = opts.flags or 0
   if opts.allowDouble then flags = flags | ImGui.SelectableFlags_AllowDoubleClick end
   local label   = fitLabel(opts.label, availW - ARROW_GUTTER - (opts.reserve or 8))
-  local clicked = rowSelectable(label .. '###tr' .. opts.id, opts.selected, flags)
+  local clicked = chrome.rowSelectable(label .. '###tr' .. opts.id, opts.selected, flags)
   local double  = clicked and opts.allowDouble and ImGui.IsMouseDoubleClicked(ctx, 0) or false
   local bodySel = clicked and not double
 
@@ -772,43 +778,12 @@ end
 
 -- Non-selectable tree heading (fx-section labels, group dividers): a dimmed label.
 --contract: gutter=true aligns text with a same-depth row label, not its chip; else flush indent
-local function treeHeading(opts)
+function chrome.treeHeading(opts)
   local indent = (opts.depth or 0) * TREE_INDENT + (opts.gutter and ARROW_GUTTER or 0)
   if indent > 0 then ImGui.Indent(ctx, indent) end
   ImGui.TextDisabled(ctx, opts.text)
   if indent > 0 then ImGui.Unindent(ctx, indent) end
 end
 
-return {
-  colour             = colour,
-  pushChromeStyles   = pushChromeStyles,
-  popChromeStyles    = popChromeStyles,
-  pushChromeWindow   = pushChromeWindow,
-  popChromeWindow    = popChromeWindow,
-  verticalSeparator  = verticalSeparator,
-  disabledIf         = disabledIf,
-  row                = row,
-  checkbox           = checkbox,
-  radio              = radio,
-  numberStepper      = numberStepper,
-  dropdown           = dropdown,
-  headingLabel       = headingLabel,
-  makeToolbar        = makeToolbar,
-  resetToolbar       = resetToolbar,
-  toolbarRects       = function() return lastToolbarRects end,
-  toolbarLineCount   = function() return toolbarLines end,
-  drawPicker         = drawPicker,
-  libPicker          = libPicker,
-  pickerIsActive     = pickerIsActive,
-  resetPickerActive  = resetPickerActive,
-  requestPickerOpen  = requestPickerOpen,
-  gridWidth          = gridWidth,
-  paletteHeader      = paletteHeader,
-  palettePane        = palettePane,
-  screenPainter      = screenPainter,
-  fitLabel           = fitLabel,
-  rowSelectable      = rowSelectable,
-  treeRow            = treeRow,
-  treeHeading        = treeHeading,
-}
+return chrome
 

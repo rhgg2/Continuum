@@ -8,6 +8,8 @@ local ImGui = require 'imgui' '0.10'
 local chrome, ctx = (...).chrome, (...).ctx
 local colour = chrome.colour
 
+local masterMix = {}
+
 local WIDTH      = 170
 local BAR_H      = 8
 local HANDLE_W   = 7      -- grab handle width, px
@@ -137,4 +139,6 @@ local function render()
   end
 end
 
-return { segment = { id = 'master', render = render } }
+masterMix.segment = { id = 'master', render = render }
+
+return masterMix
