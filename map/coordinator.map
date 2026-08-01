@@ -153,6 +153,11 @@
   @call pollExternalCommands  @ frame:146
   @call tick  @ frame:154
 
+# Bindings (by name)
+  @bind dispatch  @ frame:258
+  @bind drawSwitcher  @ 102
+  @bind frame  @ frame:285
+
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB

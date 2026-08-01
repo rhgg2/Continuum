@@ -70,6 +70,9 @@
   @call oklchToRgb  @ hueRGB:294
   @call rotatedTex  @ measureRotated:90 new:252
 
+# Bindings (by name)
+  @bind rasteriseRotated  @ rotatedTex:82
+
 # REAPER API surface
   @reaper JS_LICE_CreateBitmap, JS_GDI_CreateFont, JS_LICE_CreateFont, JS_LICE_SetFontFromGDI, JS_LICE_SetFontColor, JS_LICE_SetFontBkColor, JS_LICE_Clear, JS_LICE_DrawText, JS_LICE_GetPixel, JS_LICE_DestroyFont, JS_GDI_DeleteObject, JS_LICE_DestroyBitmap
   @reaper GetOS

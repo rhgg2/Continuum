@@ -254,6 +254,12 @@
   @call swapEnds  @ registerCommands:820
   @call topLaneIn  @ moveByLane:690
 
+# Bindings (by name)
+  @bind dropInstance  @ 751
+  @bind duplicate  @ 750
+  @bind exitMode  @ 747
+  @bind newInstance  @ 749
+
 # Fields (r read / w write incl. constructor keys)
   @field r anchor  @ sealMove:508,509,510,512 duplicate:560 moveBy:580 moveByChan:600,601 caretToBlock:657,658 moveByLane:676
   @field r anchor  @ moveByLane:680,695 hopInstance:783,790,791

@@ -240,6 +240,12 @@
   @call vnameGap  @ vname:304 drawTracker:551,552
   @call vnameSize  @ vname:309 drawTracker:551,558,561
 
+# Bindings (by name)
+  @bind renderCC  @ 175,176,177,178
+  @bind renderFx  @ 179
+  @bind renderNote  @ 173
+  @bind renderPB  @ 174
+
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB

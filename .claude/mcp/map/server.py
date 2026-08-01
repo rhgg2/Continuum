@@ -76,6 +76,11 @@ _FIELD = re.compile(
 _CALL = re.compile(
     r'^\s*@call\s+(?P<callee>\S+)\s+@\s+(?P<sites>.+?)\s*$'
 )
+# `@bind <name>  @ <sites>` — the by-name reference index. Same site grammar
+# as @use and @call, so _iter_use_sites parses it unchanged.
+_BIND = re.compile(
+    r'^\s*@bind\s+(?P<name>\S+)\s+@\s+(?P<sites>.+?)\s*$'
+)
 
 
 def _iter_use_sites(sites: str):
@@ -245,8 +250,9 @@ def _usedby_cross(module_pred, q_fn, raw_rx, reg, dirs) -> list[str]:
 
 
 def _usedby_intra(module_pred, q_fn, raw_rx, reg) -> list[str]:
-    """Intra-module half: each module map's own @call rows. MAP_DIR only —
-    spec maps carry no @call rows, and a spec's private helpers are out of
+    """Intra-module half: each module map's own @call and @bind rows — a helper
+    nothing calls is still reached, by the table that binds it. MAP_DIR only —
+    spec maps carry neither row kind, and a spec's private helpers are out of
     scope for "who calls this" anyway."""
     rows: list[str] = []
     for mp in sorted(MAP_DIR.glob("*.map")):
@@ -254,9 +260,13 @@ def _usedby_intra(module_pred, q_fn, raw_rx, reg) -> list[str]:
         src = _src_of(mp, text)
         for raw in text.splitlines():
             mc = _CALL.match(raw)
-            if not mc:
+            mb = None if mc else _BIND.match(raw)
+            if mc:
+                token, callee, sites = "@call", mc.group("callee"), mc.group("sites")
+            elif mb:
+                token, callee, sites = "@bind", mb.group("name"), mb.group("sites")
+            else:
                 continue
-            callee = mc.group("callee")
             t_module, t_fn = _canon_target(callee, reg)
             # A bare callee needs no resolution: the extractor spells methods
             # qualified, so a bare row is a call on a function of this very
@@ -269,9 +279,9 @@ def _usedby_intra(module_pred, q_fn, raw_rx, reg) -> list[str]:
                 continue
             if raw_rx and not raw_rx.search(callee):
                 continue
-            for caller, n in _iter_use_sites(mc.group("sites")):
+            for caller, n in _iter_use_sites(sites):
                 where = f"  (in {caller})" if caller else ""
-                rows.append(f"{src}:{n}  @call {callee}{where}")
+                rows.append(f"{src}:{n}  {token} {callee}{where}")
     return rows
 
 
@@ -369,10 +379,14 @@ def _uses_groups(mp: Path, query_rx, decls, reg) -> list:
 
     for raw in mp.read_text(encoding="utf-8", errors="replace").splitlines():
         mc = _CALL.match(raw)
-        mu = None if mc else _USE.match(raw)
+        mb = None if mc else _BIND.match(raw)
+        mu = None if (mc or mb) else _USE.match(raw)
         if mc:
             scope, ukind, target = "intra", "call", mc.group("callee")
             sites = mc.group("sites")
+        elif mb:
+            scope, ukind, target = "intra", "bind", mb.group("name")
+            sites = mb.group("sites")
         elif mu:
             scope, ukind, target = "cross", mu.group("ukind"), mu.group("target")
             sites = mu.group("sites")
@@ -388,8 +402,10 @@ def _uses_groups(mp: Path, query_rx, decls, reg) -> list:
             group = edges[i]
             key = (scope, ukind, target)
             if key not in group:
-                loc, head = (_callee_intra(target, index) if mc
+                loc, head = (_callee_intra(target, index) if scope == "intra"
                              else _callee_cross(ukind, target, decls, reg))
+                if ukind == "bind":
+                    head += "  (by name)"    # bound, not called
                 group[key] = (loc, head, [])
             group[key][2].append(line)
 
@@ -413,7 +429,7 @@ def _uses_render(groups, max_results) -> str:
             out.append("")
         loc, head = _decl_row(subject)
         out.append(f"{loc}  {head}  "
-                   + (f"calls {len(rows)}:" if rows else "no calls recorded"))
+                   + (f"reaches {len(rows)}:" if rows else "reaches nothing"))
         shown = rows[:budget]
         wide_loc = max((len(r[0]) for r in shown), default=0)
         wide_head = max((len(r[1]) for r in shown), default=0)
@@ -529,15 +545,19 @@ def map_query(
             both: `uses` is what the subject reaches, `usedby` what
             reaches it. `uses` groups by matching declaration and
             resolves each callee to *its own declaration*, so the answer
-            is jump-ready; with `module` and no `query` it falls back to
+            is jump-ready; what it reaches includes what it binds by
+            name (marked `(by name)`), not just what it calls; with
+            `module` and no `query` it falls back to
             that module's flat outbound edge list (calls / subs /
             forwards / requires).
             `usedby` answers in two labelled sections:
             cross-module `@use` edges, scanning every map (specs
             included, so it also answers "which specs exercise X";
             spec callers collapse to one summary row per spec file),
-            and the declaring file's own intra-module `@call` rows, so
-            a private helper's callers come back from the same query.
+            and the declaring file's own intra-module `@call` and
+            `@bind` rows, so a private helper's callers come back from
+            the same query — and so does the command or export table
+            that binds a helper nothing calls.
             Both halves resolve short instance names and `:`/`.`
             spellings so `cm:get`, `configManager.get`, and
             module='configManager' all match; a module-level target has

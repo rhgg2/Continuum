@@ -436,6 +436,15 @@
   @call trackLabel  @ currentTrackLabel:82 109
   @call typedChar  @ handleFxChainKeys:1110
 
+# Bindings (by name)
+  @bind addColumn  @ 1347
+  @bind duplicateUnpooledTake  @ 1339
+  @bind editFx  @ 1356
+  @bind focusParams  @ 1357
+  @bind openNewTakeModal  @ 1338
+  @bind removeOrHideCol  @ 1348
+  @bind resolveColType  @ addColumn:844
+
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB

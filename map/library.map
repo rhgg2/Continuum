@@ -1,10 +1,11 @@
-@module library  src=library.lua  loc=188  mode=namespace  self=lib
+@module library  src=library.lua  loc=188  mode=chunk  self=lib
+@deps cm, synthetic
 
 # Imports
-  @const util = 'util'  @ 4
+  @require util = 'util'  @ 4
 
-# Module-level constants
-  @const lib = {}  @ 9
+# Private state
+  @state lib = {}  @ 9
 
 # Private functions
   -- Tier reads
@@ -57,6 +58,9 @@
       @contract  remove name from tier level (project|global); synthetic names never  @ 176
 
 # Uses (outbound edges)
+  @use call    cm:defaultFor  @ factoryTier:16
+  @use call    cm:getAt  @ projectTier:14 libraryTier:15 writeTier:28 tidy:161 delete:182
+  @use call    cm:set  @ writeTier:30 seedIfEmpty:122 tidy:172 delete:185
   @use call    util.deepEq  @ modified:68 publishOverwrites:103 reloadPlan:134 factoryOverwrites:146 tidy:165
   @use require util  @ 4
 

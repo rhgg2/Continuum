@@ -333,6 +333,96 @@ on an empty result: `require` edge targets are bare module names, so a
 module name falling through to the raw-target regex comes back with the
 require rows alone — a partial answer wearing a complete one's clothes.
 
+**A binding is one kind, and the table it sits in is not the map's
+business** (2026-08-01). The tempting split is by family: an export table
+(`row = row`) declares a public surface, a command table (`arrangeDive =
+diveSelected`) names a verb, a callback argument (`table.sort(out,
+ciLess)`) hands over a comparator. Each is a different *reason* for the
+reference. None of them is a different fact about reachability, which is
+what the row records. Nor could a line-oriented pass draw the line if it
+wanted to — a return table, a command table and a config table are all `{
+key = value }` from where it stands. So one `@bind` kind; and the
+discriminator a reader actually wants arrives free in the caller field,
+since command and export bindings sit at file scope and render as bare
+line numbers while a callback argument renders under the function that
+passed it.
+
+**The pass is mostly filter** (2026-08-01, measured on a prototype). A bare
+name in value position is far commoner than a call, so the raw pass yields
+214 sites of which 60 are noise — and the two sources look nothing alike. A
+forward-declaration list is a name list rather than a reference, and
+`trackerManager`'s runs to three lines, so the scan has to know that a
+`local` statement wraps. A shadow is a different variable wearing the name:
+`local add = (mods & ImGui.Mod_Shift) ~= 0` in `gridPane` while `add` is
+also a helper, and `editCursor:868` does it with a comment saying so.
+Suppressing a name inside its enclosing captured function, from the `local`
+that declares it onward, removes exactly the eight shadowed sites and
+nothing else. What survives is 151 sites, 122 helpers, 123 rows, 20 modules
+— +1.1% on the module corpus, and every one of the 100 never-called
+helpers named.
+
+**The shadow filter reaches back into the call pass** (2026-08-01).
+Shadowing was measured at 0.07% of call sites and left to phase 3's oracle
+on that basis. The mechanism now exists for bindings, where the rate is
+sixty times higher, and a filter applied to one pass but not its neighbour
+is a distinction no reader of the corpus could account for. So both passes
+use it, and `midiManager:625 idOf` and `trackerManager:2010 snapshot` — a
+nested `local function` of the same name, each — leave the corpus. It is
+the one non-additive change in the phase, and two lines is a diff that can
+be audited by eye.
+
+**A call written `f{…}` is in no index at all** (2026-08-01, measured).
+`CALL_RE` and the bare pass both require an open paren, and Lua's sugar for
+a single table or string argument does not supply one. 98 qualified sites
+disappear on that account, and 13 bare ones. The loss falls where the house
+idiom is densest: command registration is written `cmgr:registerAll{…}`
+throughout, so the wiring the maps are most often asked about is the wiring
+they do not carry. The binding pass excludes the spelling rather than
+filing those sites as bindings, which leaves them where they already were;
+the repair is its own item.
+
+**A return table of privates leaves a module looking private**
+(2026-08-01). `chrome` is a chunk module whose last statement is `return {
+colour = colour, … }`, so all thirty of its public functions carry `@fn`
+rows under `# Private functions` and the map renders no `# Public API`
+section; `masterMix` does the same with one. The `@bind` rows will say the
+thirty are bound, which is true and is not the same claim as *exported*.
+That the querier resolves `chrome.row` today is luck: the key and the
+helper share a name. `fs.fileOps.copy = copyFile` is the same idiom with
+the luck removed, and it resolves to `(external)`.
+
+**A chunk is what takes deps, not what returns a table** (2026-08-01).
+The two modules above were restyled rather than worked around — `chrome`
+now declares `function chrome.foo`, `masterMix` assigns
+`masterMix.segment` — and `masterMix`'s map promptly lost its `@deps`
+line, its `@require` tags and its whole `# Private state` section. The
+return shape was `classify`'s only evidence of chunk-hood, and the
+restyle removed it; the evidence it wanted sat one line up, in the
+`local chrome, ctx = (...).chrome, (...).ctx` that is what instantiation
+actually looks like, but `discover_deps` runs only once mode is already
+decided. So a `(...)` deref now counts as chunk evidence ahead of
+publication shape, and the two rendering decisions that consulted mode
+stop doing so: a dot-function on the returned table is public API
+whatever the loading shape, and the `:`/`.` in a Public API header comes
+from how the members are declared. `library` had been in the same hole
+since it was written — `kind='require' module='library'` answered "no
+matches" for a file that requires `util` on line 4, and its calls into
+`cm` were missing from the uses index entirely, an unregistered dep
+dropping its edges. `paramAutomation`, which publishes both spellings,
+now renders a `pa.*` section beside its `pa:*` one.
+
+**The prototype's corpus was not the corpus** (2026-08-01). Two
+corrections, pulling opposite ways. The sweep missed
+`tests/support.lua`, a module map like any other, which exports
+`M.repr = repr`: two sites more. Then `chrome`'s restyle took 29 sites
+out, because a helper declared public is no longer a private reached by
+reference — the pass did not change, the corpus did. What is in the tree
+is 124 sites, 96 helpers, 97 rows, 20 modules. Of 1223 private fns, 81
+have no call site at all and 78 of those are named by a `@bind`; the
+remaining three — `editCursor resizeBy`, `trackerManager makeTailRules`
+and `reconcileDerived` — are called with brace sugar, so they wait on
+the item above rather than on this one.
+
 ### Vocabulary — unsettled
 
 The 197 kind-less consecutive `map_query` pairs say the agent frequently

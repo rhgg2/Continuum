@@ -51,6 +51,10 @@
   @call repr  @ repr:23,30 eq:45 deepEq:51 bagEq:72 truthy:77 falsy:81 eventsMatch:92
   @call toBase36  @ encodeSidecar:137
 
+# Bindings (by name)
+  @bind deepEq  @ 99
+  @bind repr  @ 98
+
 # REAPER API surface
   @reaper GetMediaItemTake_Item
   @reaper GetItemStateChunk

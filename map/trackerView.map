@@ -973,6 +973,32 @@
   @call visibleAt  @ deleteLaneEvent:1362 setLaneTension:1372 cycleLaneShape:1401
   @call writePlans  @ quantizeScope:1881 quantizeKeepRealisedScope:1911 scaleScope:1951 insertRowCore:2039 deleteRowCore:2086
 
+# Bindings (by name)
+  @bind allCols  @ insertRow:2170 deleteRow:2171
+  @bind curCol  @ insertRowCol:2172 deleteRowCol:2173
+  @bind currentRpb  @ 4024
+  @bind cursorRect  @ duplicate:2955
+  @bind deleteOrBackspace  @ 3564
+  @bind deleteRowCore  @ deleteRow:2171 deleteRowCol:2173
+  @bind duplicate  @ 3567
+  @bind followViewport  @ 4010
+  @bind freezeRegionAtCursor  @ 3626
+  @bind gatherFxRegions  @ 4018
+  @bind groupDuplicate  @ 3621
+  @bind groupPaste  @ 3622
+  @bind inputOctaveUp  @ 3568
+  @bind insertRowCore  @ insertRow:2170 insertRowCol:2172
+  @bind killAudition  @ 4047
+  @bind matchGridToCursor  @ 3620
+  @bind notDerived  @ insertRowCore:2027 deleteRowCore:2077
+  @bind notHidden  @ inheritedSign:839 editEvent:1065 addLaneEvent:1336 interpolate:1435
+  @bind noteOff  @ 3573
+  @bind pasteFxRegions  @ 4018
+  @bind queueDeleteCCs  @ 2642
+  @bind queueDeleteNotes  @ 2639
+  @bind queueResetDelays  @ 2641
+  @bind queueResetVelocities  @ 2640
+
 # REAPER API surface
   @reaper time_precise
   @reaper StuffMIDIMessage

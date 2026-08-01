@@ -225,6 +225,10 @@
   @call shelfItems  @ drawSave:366 drawLoad:374
   @call shelfMatches  @ shelfItems:355
 
+# Bindings (by name)
+  @bind acceptInput  @ 65
+  @bind writeThrough  @ 213
+
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB

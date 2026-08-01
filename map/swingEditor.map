@@ -265,6 +265,13 @@
   @call switchTo  @ 470,477,478,607 buildDescriptor:587 open:775,779
   @call tracker  @ meterQN:59 swingWrite:280 resolvedSlots:489 606
 
+# Bindings (by name)
+  @bind importFactory  @ buildDescriptor:593
+  @bind publish  @ buildDescriptor:589
+  @bind reloadFactory  @ buildDescriptor:592
+  @bind resetToSnapshot  @ buildDescriptor:596
+  @bind stepRpb  @ drawToolsRow:666
+
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB

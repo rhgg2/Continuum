@@ -271,6 +271,14 @@
   @call tokenBox  @ drawHeader:323 drawStepRow:353 drawStepTable:410
   @call viewedName  @ drawStepsTop:743
 
+# Bindings (by name)
+  @bind genKindSelector  @ drawGenerators:718
+  @bind importFactory  @ buildDescriptor:291
+  @bind publish  @ buildDescriptor:285
+  @bind reloadFactory  @ buildDescriptor:290
+  @bind resetToSnapshot  @ buildDescriptor:288
+  @bind setPeriodPitch  @ drawHeader:323 drawStepTable:410
+
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB

@@ -880,7 +880,7 @@
   @call setRaw  @ makeTailRules:3696,3732 stampSamples:4684
   @call shedLane  @ setCell:149 rebuildInternals:2288 rebuildExternals:2679 rebuildRegionPark:2784,2856 rebuildPA:3151,3169
   @call sliceCurve  @ foldSub:509,524 channelStreams:647,648
-  @call snapshot  @ seedEvent:1179 assignLowlevel:1197 tileLength:2010
+  @call snapshot  @ seedEvent:1179 assignLowlevel:1197
   @call snapshotSwingState  @ bindTake:5119
   @call sortByPPQ  @ channelStreams:645 fullRebuildChannelCCs:2491,2493 rebuildExternals:2659 realiseParked:2704 rebuildRegionPark:2991 rebuildFx:3312,3330 rebuildPbs:4224,4587,4628,4661
   @call sortByPPQ  @ rebuildPCs:4799
@@ -917,6 +917,15 @@
   @call walkable  @ findNoteColumnForPitch:3117 nearestNote:3870,3875 prevSamePitch:3894 nextSamePitch:3912 rebuildPbs:4116 stampSamples:4681 pcSeedSpans:4725 rebuildPCs:4756
   @call windowSeeded  @ buildCcExistingInWindows:2374 rebuildFx:3588
   @call withDeferredSort  @ mmBatch:2156 linearTails:3785 3994
+
+# Bindings (by name)
+  @bind fxKey  @ reconcileFx:889
+  @bind laneOne  @ detuneAt:915
+  @bind noteColumnLess  @ sortNoteColumn:122 insertNoteCell:127
+  @bind ppqLess  @ spliceCcCell:2359
+  @bind rawThenLogical  @ rawIndexInsert:996 withDeferredSort:1027 setRaw:1043 loadIndex:1122,1123,1124,1125,1126,1127 mergeIndexed:3095 linearTails:3796 3965
+  @bind rawThenLogical  @ 4005 rebuildPbs:4131
+  @bind walkable  @ rebuildTails:4081
 
 # REAPER API surface
   @reaper GetCursorPosition

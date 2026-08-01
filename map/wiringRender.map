@@ -540,6 +540,9 @@
   @call wr:focusState  @ renderBody:2554
   @call wrapLabel  @ drawNode:264 sourceTagLayout:1239
 
+# Bindings (by name)
+  @bind renderPaletteBody  @ renderBody:2550
+
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB

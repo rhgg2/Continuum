@@ -398,6 +398,12 @@
   @call wm:targetState  @ rememberApplied:2042 reconcile:2068
   @call wm:viewGraph  @ samplerReachable:426 paramTargets:454
 
+# Bindings (by name)
+  @bind parseJSFXBusAware  @ 349
+  @bind parseJSFXMidiTraits  @ 350
+  @bind readGraph  @ 1430
+  @bind srcTagKey  @ 246
+
 # REAPER API surface
   @reaper defer
   @reaper GetProjectStateChangeCount

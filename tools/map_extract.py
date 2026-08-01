@@ -6,9 +6,11 @@ The .map file is a derived view, not a source of truth. Regenerate after
 every change to the .lua. Read .map for orientation; open .lua before editing.
 
 Two module shapes:
-  - chunk      — file body IS the constructor; deps come from `(...)`;
-                 returns an instance built with `function self:method(...)`.
-                 Loaded via `util.instantiate('name', deps)`.
+  - chunk      — file body IS the constructor; deps come from `(...)`.
+                 Loaded via `util.instantiate('name', deps)`. Publishes
+                 however it likes: `function self:method(...)`, dot-functions
+                 on the returned table (chrome), or a plain descriptor
+                 (masterMix) — the deps are what make it a chunk.
   - namespace  — `local M = {}` … `function M.fn(...)` … `return M`.
                  Cached by `require`. Pure / stateless.
 
@@ -36,6 +38,12 @@ map_query kind='usedby' alongside the cross-module edges, so "who calls this
 method" reads off one query. The callee is spelled as its declaration head
 (`tm:byUuid`, `util.print`, bare name for a private fn) and always names a
 row in the same map; a `function tm:foo(` head is a declaration, not a site.
+
+Beside it, `# Bindings (by name)`: `@bind <name>  @ <sites>` rows for a private
+helper reached by reference rather than called — bound into a command or export
+table, or handed over as a callback. Roughly a hundred helpers have no call
+site at all, so for those this is the only index naming an entry point;
+map_query kind='usedby' returns these rows beside the `@call` ones.
 """
 
 from __future__ import annotations
@@ -94,6 +102,15 @@ FIELD_TOK_RE  = re.compile(
     r"|\b(?:function|do|then|repeat|elseif|end|until)\b"
     r"|(?<![.\w:])([A-Za-z_]\w*)\s*=(?!=)"
 )
+
+# A `local a, b, c` name list is a declaration, not a reference; the statement
+# can wrap, so the scan carries a continuation flag.
+DECL_LIST_OPEN = re.compile(r"^\s*local\s+([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*)\s*(,?)")
+DECL_LIST_CONT = re.compile(r"^\s*([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*)\s*(,?)")
+# A local of a helper's name is a different variable wearing it.
+SHADOW_DECL_RE = re.compile(r"^\s*local\s+(?:function\s+)?([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*)")
+# `row = row` in an export table: the key is a field, the value the reference.
+BIND_KEY_LHS   = re.compile(r"\s*=(?!=)")
 
 ATTACH_GAP = 3   # max line gap from annotation to following structural element
 
@@ -164,6 +181,10 @@ class MapFile:
     # declaration head (`tm:byUuid`, `util.print`); caller is the
     # enclosing fn name or None (top-level).
     calls: list[tuple[str, str, int]] = field(default_factory=list)
+    # By-name references: (name, caller, line). A private helper bound into a
+    # command or export table, or handed over as a callback -- reached without
+    # being called.
+    binds: list[tuple[str, str, int]] = field(default_factory=list)
     # Field accesses: (kind 'r'|'w', field, line, caller|None).
     fields: list[tuple[str, str, int, str]] = field(default_factory=list)
 
@@ -293,8 +314,9 @@ def collect_doc(lines: list[str], i: int) -> list[str]:
 
 
 def classify(lines: list[str]) -> tuple[str, str]:
-    """Return (mode, return_target). Chunks have ≥1 colon-method;
-    namespaces have dot-functions and `return M`. Otherwise script."""
+    """Return (mode, return_target). A chunk is instantiated with deps -- a
+    colon-method surface, a `(...)` deref, or a table-literal return; a
+    namespace has dot-functions and `return M`. Otherwise script."""
     return_target = ''
     has_method = False
     has_dotfn = False
@@ -309,12 +331,18 @@ def classify(lines: list[str]) -> tuple[str, str]:
         m = RETURN_RE.match(raw.lstrip())
         if m:
             return_target = m.group(1)
-    if has_method:
+    # A `(...)` deref is what instantiation actually looks like, so it outranks
+    # publication shape: chrome takes deps and publishes dot-functions,
+    # masterMix takes deps and publishes a descriptor table. Reading the return
+    # shape alone made those two a namespace and a script, and dropped the deps.
+    takes_deps = any(DEP_DEREF_RE.search(r) or DEPS_TABLE_RE.match(r.strip())
+                     for r in lines)
+    if has_method or takes_deps:
         return ('chunk', return_target)
     if has_dotfn and return_target:
         return ('namespace', return_target)
     if any(RETURN_TBL_RE.match(r.lstrip()) for r in lines):
-        return ('chunk', '')         # table-literal return, e.g. chrome.lua
+        return ('chunk', '')         # table-literal return
     return ('script', return_target)
 
 
@@ -397,7 +425,10 @@ def parse(path: Path) -> MapFile:
                 blk = Block(name=name, args=args.strip(),
                             line=i + 1, owner=owner, kind='dotfn',
                             doc=collect_doc(lines, i))
-                if cm.mode == 'namespace' and owner == cm.return_target:
+                # A dot-function on the returned table is public whatever the
+                # module's loading shape -- chrome is instantiated with deps and
+                # publishes this way.
+                if owner == cm.return_target:
                     cm.api.append(blk)
                 else:
                     cm.dotfns.append(blk)
@@ -492,28 +523,65 @@ def parse(path: Path) -> MapFile:
 
     # innermost captured function enclosing a 1-based line -- call attribution
     spans = sorted((b.line, b.end_line, b.name) for b in fn_blocks)
-    def caller_at(line: int):
+    def innermost(line: int):
         best = None
         for start, end, name in spans:
             if start <= line <= end and (best is None or start > best[0]):
                 best = (start, end, name)
-        return best[2] if best else None
+        return best
+
+    def caller_at(line: int):
+        hit = innermost(line)
+        return hit[2] if hit else None
+
+    # A `local` of a helper's name inside a function shadows it for the rest of
+    # that function, so every mention from there on belongs to the local.
+    # `editCursor:868` says so in a comment; `gridPane:971` does it silently.
+    # The depth guard is load-bearing: a module-scope `local function foo` *is*
+    # the helper, and would otherwise shadow itself out of existence.
+    shadows: dict[str, list[tuple[int, int]]] = {}
+    for i, code in enumerate(code_lines):
+        m = SHADOW_DECL_RE.match(code) if fn_depth[i] >= 1 else None
+        encl = innermost(i + 1) if m else None
+        if not encl:
+            continue
+        for nm in (n.strip() for n in m.group(1).split(',')):
+            shadows.setdefault(nm, []).append((i + 1, encl[1]))
+
+    def shadowed(name: str, line: int) -> bool:
+        return any(lo <= line <= hi for lo, hi in shadows.get(name, ()))
 
     attach_annotations(cm)
     for name, lns in cm.signal_lines.items():
         cm.signal_sites[name] = [(caller_at(ln), ln) for ln in lns]
-    extract_uses(cm, lines, code_lines, caller_at)
+    extract_uses(cm, lines, code_lines, caller_at, shadowed)
     cm.fields = [(kind, name, ln, caller_at(ln))
                  for kind, name, ln in extract_fields(code_lines)]
     return cm
 
 
+def decl_list_ends(code_lines: list[str]) -> list[int]:
+    """Per line, the offset where a `local a, b, c` name list ends (0 if the
+    line opens none). Forward-decl lists wrap -- `local addEvent, assignEvent,`
+    continues over two more lines in trackerManager -- so the flag carries."""
+    out, cont = [], False
+    for code in code_lines:
+        end = 0
+        m = (DECL_LIST_CONT if cont else DECL_LIST_OPEN).match(code)
+        if m and re.fullmatch(r'\s*(?:do\s*)?', code[m.end():]):
+            end, cont = m.end(1), bool(m.group(2))
+        else:
+            cont = False
+        out.append(end)
+    return out
+
+
 def extract_uses(cm: MapFile, lines: list[str], code_lines: list[str],
-                 caller_at) -> None:
+                 caller_at, shadowed) -> None:
     """Walk lines collecting outbound edges, and this file's own intra-file
     call graph alongside them -- the receiver-qualified sites the outbound
-    pass skips as intra-module, plus a bare-name pass over module-private
-    helpers.
+    pass skips as intra-module, a bare-name pass over module-private helpers,
+    and a by-name pass for the helpers reached by reference rather than call.
 
     Outbound edges store each receiver verbatim (source-faithful: `cm:get`,
     `util.deepClone`); the alias table is consulted only to drop unresolved
@@ -599,11 +667,34 @@ def extract_uses(cm: MapFile, lines: list[str], code_lines: list[str],
         rx = re.compile(rf"(?<![.:\w]){re.escape(name)}\s*\(")
         for i, code in enumerate(code_lines):
             for m in rx.finditer(code):
-                if not FN_DECL_PREFIX.fullmatch(code[:m.start()]):
+                if (not FN_DECL_PREFIX.fullmatch(code[:m.start()])
+                        and not shadowed(name, i + 1)):
                     add_call(name, i + 1)
+
+    # A helper reached by reference rather than called: bound into a command or
+    # export table, or handed over as a callback. 100 helpers have no call site
+    # at all, and for those this is the only index that names an entry point.
+    # The lookahead drops call sites, including the `f{...}` / `f"..."` sugar
+    # the call passes cannot see -- absent from both indexes rather than filed
+    # as a binding. See design/map-navigation.md § Intra-file call edges.
+    decl_ends = decl_list_ends(code_lines)
+    bind_seen: set[tuple[str, int]] = set()
+    for name in sorted({b.name for b in cm.private_fns}):
+        rx = re.compile(r"(?<![.:\w])" + re.escape(name) + r"\b(?!\s*[({'\"])")
+        for i, code in enumerate(code_lines):
+            for m in rx.finditer(code):
+                if m.start() < decl_ends[i] or shadowed(name, i + 1):
+                    continue
+                if BIND_KEY_LHS.match(code[m.end():]):
+                    continue
+                key = (name, i + 1)
+                if key not in bind_seen:
+                    bind_seen.add(key)
+                    cm.binds.append((name, caller_at(i + 1), i + 1))
 
     cm.uses.sort(key=lambda u: (u[0], u[1], u[2]))
     cm.calls.sort(key=lambda c: (c[0], c[2]))
+    cm.binds.sort(key=lambda b: (b[0], b[2]))
 
 
 def extract_fields(code_lines: list[str], skip_receiver: str = '') -> list[tuple[str, str, int]]:
@@ -899,8 +990,9 @@ def emit(cm: MapFile) -> str:
     if cm.methods or cm.dotfns:
         merged = sorted(cm.methods + cm.dotfns, key=lambda b: b.line)
         owners = sorted({m.owner for m in merged})
-        suffix = '*' if cm.mode == 'chunk' else '.*'
-        label = ' / '.join(o + (':' if any(b.kind == 'method' and b.owner == o for b in merged) else '.') + suffix
+        # `:` or `.` from how the owner's members are declared -- the module's
+        # mode says nothing about the spelling a caller uses.
+        label = ' / '.join(o + (':' if any(b.kind == 'method' and b.owner == o for b in merged) else '.') + '*'
                            for o in owners)
         add(f"# Public API ({label})")
         emit_items(out, sections, merged, '@api ')
@@ -950,6 +1042,18 @@ def emit(cm: MapFile) -> str:
             for j in range(0, len(pairs), SITE_ROW_CHUNK):
                 chunk = render_caller_groups(pairs[j:j + SITE_ROW_CHUNK])
                 add(f"  @call {callee}  @ {chunk}")
+        add('')
+
+    if cm.binds:
+        add("# Bindings (by name)")
+        by_name: dict[str, list[tuple[str, int]]] = {}
+        for name, caller, line in cm.binds:
+            by_name.setdefault(name, []).append((caller, line))
+        for name in sorted(by_name):
+            pairs = sorted(by_name[name], key=lambda p: p[1])
+            for j in range(0, len(pairs), SITE_ROW_CHUNK):
+                chunk = render_caller_groups(pairs[j:j + SITE_ROW_CHUNK])
+                add(f"  @bind {name}  @ {chunk}")
         add('')
 
     if cm.reaper_calls:

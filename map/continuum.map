@@ -32,6 +32,10 @@
   @call createImGui  @ Main:69
   @call run  @ 195
 
+# Bindings (by name)
+  @bind Main  @ 195
+  @bind err_handler  @ run:30 Main:192
+
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB

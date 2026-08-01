@@ -58,12 +58,14 @@
   -- Frecency + param cache
   @fn fxIdentAt(track, fxIdx)  @ 285-288
 
-# Public API (pa:*)
+# Public API (pa.*)
   @api pa.computeDesired(bindings)  @ 90-122
       -- Pure: bindings -> { [trackGuid] = trackSpec }. Pooled duplicates collapse
       -- via the seen-keys; slot order is sorted for a stable REAPER image.
   @api pa.frecencyOrder(params, fxScores)  @ 291-304
       @contract  pure, stable: decayed score desc, then param index; fxScores may be nil  @ 290
+
+# Public API (pa:*)
   @api pa:apply()  @ 309-323
       @contract  no-op (and no undo point) when every track's mirror already matches  @ 308
   @api pa:automate(chan, target)  @ 326-343

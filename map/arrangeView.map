@@ -276,6 +276,18 @@
   @call takeAtCursor  @ actionTargets:129 diveSelected:224
   @call tracker  @ diveSelected:226 selectedTakeProperties:233 duplicateUnpooledSelectedBelow:254 createSlot:596
 
+# Bindings (by name)
+  @bind clearLoop  @ 644
+  @bind deleteSelected  @ 634
+  @bind deleteSelectedAndAdvance  @ 635
+  @bind diveSelected  @ 636
+  @bind duplicateSelectedBelow  @ 638
+  @bind duplicateUnpooledSelectedBelow  @ 639
+  @bind playFromCursor  @ 643
+  @bind selectedTakeProperties  @ 637
+  @bind setLoopEndHere  @ 642
+  @bind setLoopStartHere  @ 641
+
 # REAPER API surface
   @reaper GetMediaItemTake_Item
 

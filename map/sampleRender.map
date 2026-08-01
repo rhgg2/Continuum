@@ -187,6 +187,9 @@
   @call sr:focusState  @ renderBody:556
   @call triggerPreviewInPlace  @ drawFiles:216
 
+# Bindings (by name)
+  @bind goUp  @ 591
+
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB

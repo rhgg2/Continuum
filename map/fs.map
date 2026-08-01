@@ -33,6 +33,10 @@
   @call copyFile  @ 113
   @call fs.isAudio  @ listAudioFiles:87
 
+# Bindings (by name)
+  @bind ciLess  @ listDirs:45 listAudioFiles:90
+  @bind copyFile  @ 109
+
 # REAPER API surface
   @reaper EnumerateSubdirectories
   @reaper EnumerateFiles

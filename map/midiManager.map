@@ -351,7 +351,7 @@
   @call flushTake  @ load:883 leaveNest:1048
   @call freeSlot  @ resolveCollisions:970 delete:1352,1354
   @call fullSortByPpq  @ stableByPpq:311
-  @call idOf  @ ccSidecarEncode:197 load:625
+  @call idOf  @ ccSidecarEncode:197
   @call identityOrder  @ rebuild:488 load:638
   @call indexDrop  @ resolveCollisions:968,977 assign:1327 delete:1346
   @call indexPut  @ resolveCollisions:979 addNote:1174 pushCC:1261 assign:1330
