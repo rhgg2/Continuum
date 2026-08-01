@@ -1,4 +1,4 @@
-@spec gm_bridge_spec  src=tests/specs/gm_bridge_spec.lua  loc=61  sha=840964c  cases=2
+@spec gm_bridge_spec  src=tests/specs/gm_bridge_spec.lua  loc=61  cases=2
 @exercises trackerView (h.vm), groupManager (gm), editCursor (h.ec)
 @surface   vm:selectionAsRect, vm:eventsInRect, gm:mark, gm:stamp, ec:setPos, vm:cursorAnchor
 @harness   mk{seed.notes}

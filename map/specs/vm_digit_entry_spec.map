@@ -1,4 +1,4 @@
-@spec vm_digit_entry_spec  src=tests/specs/vm_digit_entry_spec.lua  loc=176  sha=8a6d0a3  cases=7
+@spec vm_digit_entry_spec  src=tests/specs/vm_digit_entry_spec.lua  loc=176  cases=7
 @exercises trackerView (h.vm), editCursor (h.ec)
 @surface   vm:setGridSize, vm:digitsStrike, ec:setPos, vm:digitsCommit, ec:row, vm:digitsActive, ec:pos, vm:digitsBackspace, vm:rebuild
 @harness   mk{seed.ccs, seed.notes}

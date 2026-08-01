@@ -1,4 +1,4 @@
-@spec vm_row_shift_same_pitch_spec  src=tests/specs/vm_row_shift_same_pitch_spec.lua  loc=72  sha=4a6bfb0  cases=2
+@spec vm_row_shift_same_pitch_spec  src=tests/specs/vm_row_shift_same_pitch_spec.lua  loc=72  cases=2
 @exercises trackerView (h.vm), editCursor (h.ec), commandManager (h.cmgr), midiManager (h.fm)
 @surface   vm:setGridSize, ec:setPos, cmgr:invoke, fm:dump
 @harness   mk{seed.notes}

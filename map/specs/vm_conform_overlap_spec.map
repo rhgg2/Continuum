@@ -1,4 +1,4 @@
-@spec vm_conform_overlap_spec  src=tests/specs/vm_conform_overlap_spec.lua  loc=89  sha=1a88dca  cases=3
+@spec vm_conform_overlap_spec  src=tests/specs/vm_conform_overlap_spec.lua  loc=89  cases=3
 @exercises trackerView (h.vm), editCursor (h.ec), commandManager (h.cmgr), midiManager (h.fm)
 @surface   vm:setGridSize, ec:setPos, cmgr:invoke, fm:dump
 @harness   mk{seed.notes}

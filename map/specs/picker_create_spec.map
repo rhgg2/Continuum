@@ -1,4 +1,4 @@
-@spec picker_create_spec  src=tests/specs/picker_create_spec.lua  loc=72  sha=untracked  cases=2
+@spec picker_create_spec  src=tests/specs/picker_create_spec.lua  loc=72  cases=2
 @harness   mk
 
 # Intent

@@ -1,4 +1,4 @@
-@spec gm_metadata_propagate_spec  src=tests/specs/gm_metadata_propagate_spec.lua  loc=43  sha=f8aa484  cases=1
+@spec gm_metadata_propagate_spec  src=tests/specs/gm_metadata_propagate_spec.lua  loc=43  cases=1
 @exercises groupManager (gm)
 @surface   gm:markGroup, gm:newInstance
 

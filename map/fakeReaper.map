@@ -1,4 +1,4 @@
-@module fakeReaper  src=tests/fakeReaper.lua  loc=1397  sha=a2a3815  mode=namespace  self=M
+@module fakeReaper  src=tests/fakeReaper.lua  loc=1397  mode=namespace  self=M
 
 # Module-level constants
   @const M = {}  @ 5

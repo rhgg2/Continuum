@@ -1,4 +1,4 @@
-@spec mm_pa_assign_spec  src=tests/specs/mm_pa_assign_spec.lua  loc=50  sha=37ed80d  cases=1
+@spec mm_pa_assign_spec  src=tests/specs/mm_pa_assign_spec.lua  loc=50  cases=1
 @exercises midiManager (h.mm)
 @surface   mm:load, mm:ccs, mm:modify, mm:assign
 @harness   fakeReaper:bindTake, reaper:seedMidi

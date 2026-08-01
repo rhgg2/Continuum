@@ -1,4 +1,4 @@
-@spec tracker_page_spec  src=tests/specs/tracker_page_spec.lua  loc=274  sha=ef4e5a4  cases=9
+@spec tracker_page_spec  src=tests/specs/tracker_page_spec.lua  loc=274  cases=9
 @exercises configManager (h.cm), commandManager (h.cmgr), midiManager (h.mm), trackerManager (h.tm)
 @surface   cm:setContext, cmgr:push, cmgr:invoke, cm:getAt, mm:subscribe, mm:notes, tm:assignEvent, tm:byUuid, tm:flush
 @harness   mk, reaper:addItem, reaper:seedMidi

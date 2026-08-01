@@ -1,4 +1,4 @@
-@module routingManager  src=routingManager.lua  loc=1073  sha=e2be081  mode=chunk  self=rm
+@module routingManager  src=routingManager.lua  loc=1073  mode=chunk  self=rm
 @deps ds
 
 # Invariants & contracts

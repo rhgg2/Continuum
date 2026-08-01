@@ -1,4 +1,4 @@
-@spec mm_flush_spec  src=tests/specs/mm_flush_spec.lua  loc=165  sha=fbb26e9  cases=5
+@spec mm_flush_spec  src=tests/specs/mm_flush_spec.lua  loc=165  cases=5
 @exercises midiManager (h.mm)
 @surface   mm:load, mm:notes, mm:modify, mm:assign, mm:add
 @harness   fakeReaper:bindTake

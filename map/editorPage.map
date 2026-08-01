@@ -1,4 +1,4 @@
-@module editorPage  src=editorPage.lua  loc=43  sha=7ef043d  mode=chunk  self=ep
+@module editorPage  src=editorPage.lua  loc=43  mode=chunk  self=ep
 @deps cm, ds, cmgr, chrome, gui, modalHost, facade, lib
 
 # Imports

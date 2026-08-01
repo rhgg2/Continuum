@@ -1,4 +1,4 @@
-@spec vm_editing_spec  src=tests/specs/vm_editing_spec.lua  loc=538  sha=6fb5e8f  cases=15
+@spec vm_editing_spec  src=tests/specs/vm_editing_spec.lua  loc=538  cases=15
 @exercises trackerView (h.vm), editCursor (h.ec), commandManager (h.cmgr), midiManager (h.fm), trackerManager (h.tm)
 @surface   vm:setGridSize, ec:setPos, cmgr:invoke, fm:dump, tm:getChannel, vm:editEvent
 @harness   mk{seed.notes, seed.ccs}

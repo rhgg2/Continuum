@@ -1,4 +1,4 @@
-@spec eventMeta_spec  src=tests/specs/eventMeta_spec.lua  loc=138  sha=e441984  cases=10
+@spec eventMeta_spec  src=tests/specs/eventMeta_spec.lua  loc=138  cases=10
 @exercises eventMeta (em), pextStore (ps)
 @surface   em:flush, em:load, em:saveAll, em:copyPool, ps:assign, ps:get, em:dropPool
 

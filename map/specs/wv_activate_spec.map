@@ -1,4 +1,4 @@
-@spec wv_activate_spec  src=tests/specs/wv_activate_spec.lua  loc=49  sha=e2be081  cases=3
+@spec wv_activate_spec  src=tests/specs/wv_activate_spec.lua  loc=49  cases=3
 @exercises wiringView (wv)
 @surface   wv:nodeViews, wv:addFx, wv:graph
 @harness   mk, reaper:setFxIO

@@ -1,4 +1,4 @@
-@spec dag_allocate_midi_bracket_spec  src=tests/specs/dag_allocate_midi_bracket_spec.lua  loc=238  sha=986bc78  cases=10
+@spec dag_allocate_midi_bracket_spec  src=tests/specs/dag_allocate_midi_bracket_spec.lua  loc=238  cases=10
 @exercises DAG (DAG)
 @surface   DAG.allocate
 

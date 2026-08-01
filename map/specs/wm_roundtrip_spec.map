@@ -1,4 +1,4 @@
-@spec wm_roundtrip_spec  src=tests/specs/wm_roundtrip_spec.lua  loc=439  sha=e2be081  cases=1
+@spec wm_roundtrip_spec  src=tests/specs/wm_roundtrip_spec.lua  loc=439  cases=1
 @exercises wiringManager (wm)
 @surface   wm:load, wm:mutate, wm:targetState, wm.readGraph
 @harness   mk, r._state.projectTracks, r._state.trackGuids

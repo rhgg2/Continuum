@@ -1,4 +1,4 @@
-@module eventMeta  src=eventMeta.lua  loc=126  sha=54e469d  mode=chunk  self=eventMeta
+@module eventMeta  src=eventMeta.lua  loc=126  mode=chunk  self=eventMeta
 @deps ps
 
 # Invariants & contracts

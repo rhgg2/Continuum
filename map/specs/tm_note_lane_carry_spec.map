@@ -1,4 +1,4 @@
-@spec tm_note_lane_carry_spec  src=tests/specs/tm_note_lane_carry_spec.lua  loc=79  sha=untracked  cases=3
+@spec tm_note_lane_carry_spec  src=tests/specs/tm_note_lane_carry_spec.lua  loc=79  cases=3
 @exercises trackerManager (h.tm)
 @surface   tm:getChannel, tm:addEvent, tm:flush
 @harness   mk

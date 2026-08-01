@@ -1,4 +1,4 @@
-@spec pa_crosstrack_spec  src=tests/specs/pa_crosstrack_spec.lua  loc=45  sha=8d87c30  cases=2
+@spec pa_crosstrack_spec  src=tests/specs/pa_crosstrack_spec.lua  loc=45  cases=2
 @exercises paramAutomation (h.pa)
 @surface   pa:params
 @harness   mk, r:setTrackFX, r:setFxGuid, r:setFxParamNames, r._state.projectTracks, r._state.trackGuids, r._state.master

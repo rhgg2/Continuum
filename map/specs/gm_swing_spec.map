@@ -1,4 +1,4 @@
-@spec gm_swing_spec  src=tests/specs/gm_swing_spec.lua  loc=247  sha=37ed80d  cases=6
+@spec gm_swing_spec  src=tests/specs/gm_swing_spec.lua  loc=247  cases=6
 @exercises harness (harness), trackerView (h.vm), groupManager (gm), trackerManager (h.tm), midiManager (h.fm)
 @surface   harness.mk, vm:eventsInRect, gm:markGroup, gm:newInstance, tm:flush, fm:dump, tm:fromLogical, gm:resizeGroup, vm:setSwingSlot, tm:rebuild, gm:assignEvent, tm:byUuid, tm:assignEvent
 @harness   mk{seed.length, seed.resolution, seed.notes}

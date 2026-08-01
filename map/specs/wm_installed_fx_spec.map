@@ -1,4 +1,4 @@
-@spec wm_installed_fx_spec  src=tests/specs/wm_installed_fx_spec.lua  loc=62  sha=e2be081  cases=3
+@spec wm_installed_fx_spec  src=tests/specs/wm_installed_fx_spec.lua  loc=62  cases=3
 @exercises wiringManager (wm)
 @surface   wm:listInstalledFX
 @harness   mk

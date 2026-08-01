@@ -1,4 +1,4 @@
-@spec tm_dormant_config_spec  src=tests/specs/tm_dormant_config_spec.lua  loc=64  sha=c7fee67  cases=3
+@spec tm_dormant_config_spec  src=tests/specs/tm_dormant_config_spec.lua  loc=64  cases=3
 @exercises trackerManager (h.tm), configManager (h.cm), dataStore (h.ds)
 @surface   tm:subscribe, tm:bindTake, cm:set, ds:assign, tm:detach
 @harness   mk

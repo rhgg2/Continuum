@@ -1,4 +1,4 @@
-@module library  src=library.lua  loc=188  sha=18e9e47  mode=namespace  self=lib
+@module library  src=library.lua  loc=188  mode=namespace  self=lib
 
 # Imports
   @const util = 'util'  @ 4

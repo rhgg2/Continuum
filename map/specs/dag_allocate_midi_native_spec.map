@@ -1,4 +1,4 @@
-@spec dag_allocate_midi_native_spec  src=tests/specs/dag_allocate_midi_native_spec.lua  loc=101  sha=986bc78  cases=3
+@spec dag_allocate_midi_native_spec  src=tests/specs/dag_allocate_midi_native_spec.lua  loc=101  cases=3
 @exercises DAG (DAG)
 @surface   DAG.allocate
 

@@ -1,4 +1,4 @@
-@spec gm_wiring_spec  src=tests/specs/gm_wiring_spec.lua  loc=131  sha=f8aa484  cases=4
+@spec gm_wiring_spec  src=tests/specs/gm_wiring_spec.lua  loc=131  cases=4
 @exercises commandManager (cmgr), groupManager (gm), trackerManager (h.tm)
 @surface   cmgr:scope, gm:mark, gm:stamp, tm:flush, cmgr:doBefore, gm:clearActive, cmgr:push, cmgr:invoke, gm:activeGroup
 

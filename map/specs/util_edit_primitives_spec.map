@@ -1,4 +1,4 @@
-@spec util_edit_primitives_spec  src=tests/specs/util_edit_primitives_spec.lua  loc=199  sha=8a6d0a3  cases=18
+@spec util_edit_primitives_spec  src=tests/specs/util_edit_primitives_spec.lua  loc=199  cases=18
 @exercises commandManager (h.cmgr)
 @surface   cmgr:noteChars
 

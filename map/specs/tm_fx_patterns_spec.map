@@ -1,4 +1,4 @@
-@spec tm_fx_patterns_spec  src=tests/specs/tm_fx_patterns_spec.lua  loc=18  sha=6712376  cases=1
+@spec tm_fx_patterns_spec  src=tests/specs/tm_fx_patterns_spec.lua  loc=18  cases=1
 @exercises trackerManager (h.tm), dataStore (h.ds)
 @surface   tm:subscribe, ds:assign
 @harness   mk

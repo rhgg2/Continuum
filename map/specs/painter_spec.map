@@ -1,4 +1,4 @@
-@spec painter_spec  src=tests/specs/painter_spec.lua  loc=248  sha=1d2bf54  cases=17
+@spec painter_spec  src=tests/specs/painter_spec.lua  loc=248  cases=17
 @exercises painter (painter)
 @surface   painter.new, painter.hue
 

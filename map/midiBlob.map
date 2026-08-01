@@ -1,4 +1,4 @@
-@module midiBlob  src=midiBlob.lua  loc=440  sha=331000a  mode=namespace  self=midiBlob
+@module midiBlob  src=midiBlob.lua  loc=440  mode=namespace  self=midiBlob
 
 # Invariants & contracts
   @invariant  idx is the 0-based REAPER per-type index; note idx counts note-ons, text idx skips CCBZ  @ 13

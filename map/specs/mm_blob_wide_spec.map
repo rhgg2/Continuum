@@ -1,4 +1,4 @@
-@spec mm_blob_wide_spec  src=tests/specs/mm_blob_wide_spec.lua  loc=101  sha=6566d9f  cases=6
+@spec mm_blob_wide_spec  src=tests/specs/mm_blob_wide_spec.lua  loc=101  cases=6
 @exercises midiBlob (midiBlob)
 @surface   midiBlob.render, midiBlob.buildWire, midiBlob.parse
 

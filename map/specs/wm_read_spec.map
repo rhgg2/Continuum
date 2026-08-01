@@ -1,4 +1,4 @@
-@spec wm_read_spec  src=tests/specs/wm_read_spec.lua  loc=516  sha=e2be081  cases=20
+@spec wm_read_spec  src=tests/specs/wm_read_spec.lua  loc=516  cases=20
 @exercises wiringManager (wm)
 @surface   wm:load, wm:instantiateFxOnScratch, wm.readGraph, wm:mutate, wm:targetState, wm:enableLive, wm:moveNodes, wm:read, wm:setSourceTagPos, wm:graph, wm:trackNames
 @harness   mk, reaper.GetSetMediaTrackInfo_String, reaper.GetMediaTrackInfo_Value, r._state.projectTracks, r._state.trackGuids

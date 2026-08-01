@@ -1,4 +1,4 @@
-@module arrangeView  src=arrangeView.lua  loc=662  sha=34dd573  mode=chunk  self=av
+@module arrangeView  src=arrangeView.lua  loc=662  mode=chunk  self=av
 @deps cm, cmgr, facade, am
 
 # Invariants & contracts

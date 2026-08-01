@@ -1,4 +1,4 @@
-@module keyDispatch  src=keyDispatch.lua  loc=86  sha=65573d0  mode=namespace  self=keyDispatch
+@module keyDispatch  src=keyDispatch.lua  loc=86  mode=namespace  self=keyDispatch
 
 # Invariants & contracts
   @contract  returns early (no dispatch) when state.suppressKbd or not state.acceptCmds  @ 44

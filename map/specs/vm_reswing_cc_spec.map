@@ -1,4 +1,4 @@
-@spec vm_reswing_cc_spec  src=tests/specs/vm_reswing_cc_spec.lua  loc=251  sha=d415ad4  cases=8
+@spec vm_reswing_cc_spec  src=tests/specs/vm_reswing_cc_spec.lua  loc=251  cases=8
 @exercises dataStore (h.ds), trackerView (h.vm), midiManager (h.fm), trackerManager (h.tm), editCursor (h.ec)
 @surface   ds:delete, vm:setGridSize, fm:dump, tm:markSwingStale, tm:rebuild, tm:addEvent, tm:flush, ec:setPos, vm:editEvent, ds:assign, tm:getChannel
 @harness   mk{seed.ccs, seed.notes}

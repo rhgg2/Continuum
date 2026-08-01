@@ -1,4 +1,4 @@
-@module paramAutomation  src=paramAutomation.lua  loc=433  sha=d15eb89  mode=chunk  self=pa
+@module paramAutomation  src=paramAutomation.lua  loc=433  mode=chunk  self=pa
 @deps cm, ds, facade, ccm
 
 # Invariants & contracts

@@ -1,4 +1,4 @@
-@spec wm_persistence_spec  src=tests/specs/wm_persistence_spec.lua  loc=100  sha=e2be081  cases=6
+@spec wm_persistence_spec  src=tests/specs/wm_persistence_spec.lua  loc=100  cases=6
 @exercises wiringManager (wm)
 @surface   wm:graph, wm:load, wm:subscribe, wm:mutate
 @harness   mk, r._state.projectTracks, r._state.trackGuids

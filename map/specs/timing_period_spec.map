@@ -1,4 +1,4 @@
-@spec timing_period_spec  src=tests/specs/timing_period_spec.lua  loc=82  sha=fa4a61d  cases=8
+@spec timing_period_spec  src=tests/specs/timing_period_spec.lua  loc=82  cases=8
 @exercises timing (timing)
 @surface   timing.compositePeriodQN
 

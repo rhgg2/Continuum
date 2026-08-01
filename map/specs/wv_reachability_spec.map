@@ -1,4 +1,4 @@
-@spec wv_reachability_spec  src=tests/specs/wv_reachability_spec.lua  loc=107  sha=e2be081  cases=6
+@spec wv_reachability_spec  src=tests/specs/wv_reachability_spec.lua  loc=107  cases=6
 @exercises wiringView (wv)
 @surface   wv:addFx, wv:ancestorsOf, wv:descendantsOf
 @harness   mk

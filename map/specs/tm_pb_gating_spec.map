@@ -1,4 +1,4 @@
-@spec tm_pb_gating_spec  src=tests/specs/tm_pb_gating_spec.lua  loc=47  sha=76793d5  cases=2
+@spec tm_pb_gating_spec  src=tests/specs/tm_pb_gating_spec.lua  loc=47  cases=2
 @exercises trackerManager (h.tm), dataStore (h.ds)
 @surface   tm:getChannel, tm:rebuild, ds:assign
 @harness   mk{seed.ccs}

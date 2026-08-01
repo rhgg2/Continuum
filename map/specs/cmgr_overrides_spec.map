@@ -1,4 +1,4 @@
-@spec cmgr_overrides_spec  src=tests/specs/cmgr_overrides_spec.lua  loc=134  sha=884c6a9  cases=6
+@spec cmgr_overrides_spec  src=tests/specs/cmgr_overrides_spec.lua  loc=134  cases=6
 
 # Intent
   commandManager binding overrides (step 0): the token codec and the

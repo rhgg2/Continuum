@@ -1,4 +1,4 @@
-@module viewContext  src=viewContext.lua  loc=127  sha=fdb66b0  mode=chunk  self=ctx
+@module viewContext  src=viewContext.lua  loc=127  mode=chunk  self=ctx
 @deps length, numRows, rowPerBeat, ppqPerRow, timeSigs, temper
 
 # Shapes

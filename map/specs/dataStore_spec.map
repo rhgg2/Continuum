@@ -1,4 +1,4 @@
-@spec dataStore_spec  src=tests/specs/dataStore_spec.lua  loc=163  sha=6712376  cases=12
+@spec dataStore_spec  src=tests/specs/dataStore_spec.lua  loc=163  cases=12
 @exercises pextStore (ps), dataStore (ds)
 @surface   ps:setTake, ds:assign, ds:get, ds:delete, ds:assignAt, ds:getAt, ds:subscribe, ps:pollUndo
 @harness   fakeReaper.new

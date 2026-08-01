@@ -1,4 +1,4 @@
-@spec dag_srcset_spec  src=tests/specs/dag_srcset_spec.lua  loc=133  sha=1694e27  cases=8
+@spec dag_srcset_spec  src=tests/specs/dag_srcset_spec.lua  loc=133  cases=8
 @exercises DAG (DAG)
 @surface   DAG.compile
 

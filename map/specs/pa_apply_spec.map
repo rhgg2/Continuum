@@ -1,4 +1,4 @@
-@spec pa_apply_spec  src=tests/specs/pa_apply_spec.lua  loc=120  sha=672fb18  cases=4
+@spec pa_apply_spec  src=tests/specs/pa_apply_spec.lua  loc=120  cases=4
 @exercises paramAutomation (h.pa), ccManager (h.ccm)
 @surface   pa:automate, pa:apply, pa:unautomate, ccm:claim
 @harness   mk, r:setTrackFX, r:setFxGuid, r.TrackFX_GetNamedConfigParm, r.TrackFX_GetParam, r:clearCalls, r.GetSetMediaTrackInfo_String, r._state.projectTracks, r._state.trackGuids, r._state.projectItems, r._state.fxByTrack, r._state.sendsByTrack, r._state.calls

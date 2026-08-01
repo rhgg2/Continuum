@@ -1,4 +1,4 @@
-@spec vm_tracker_mode_spec  src=tests/specs/vm_tracker_mode_spec.lua  loc=354  sha=1747f65  cases=15
+@spec vm_tracker_mode_spec  src=tests/specs/vm_tracker_mode_spec.lua  loc=354  cases=15
 @exercises trackerView (h.vm), editCursor (h.ec), midiManager (h.fm), commandManager (h.cmgr), configManager (h.cm)
 @surface   vm:setGridSize, ec:setPos, vm:editEvent, fm:dump, cmgr:invoke, cm:get
 @harness   mk{seed.notes, seed.ccs}

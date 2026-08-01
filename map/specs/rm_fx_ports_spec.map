@@ -1,4 +1,4 @@
-@spec rm_fx_ports_spec  src=tests/specs/rm_fx_ports_spec.lua  loc=130  sha=e2be081  cases=8
+@spec rm_fx_ports_spec  src=tests/specs/rm_fx_ports_spec.lua  loc=130  cases=8
 @exercises harness (harness), routingManager (rm)
 @surface   harness.mk, rm:track, rm:addFx, rm:fx, rm:assignFx, rm:params, rm:setSendGain, rm:tracks, rm:addTrack, rm:reaperTrack, rm:deleteTrack
 @harness   mk, reaper.CountTracks, reaper.InsertTrackAtIndex, reaper.GetTrack, reaper.GetSetMediaTrackInfo_String, reaper.GetTrackGUID, reaper:setFxIO, reaper:setFxParamNames, reaper:addSend, reaper:setMissingFx, reaper:wantDefaultsOf, reaper.GetMediaTrackInfo_Value

@@ -1,4 +1,4 @@
-@spec scratch_spec  src=tests/specs/scratch_spec.lua  loc=40  sha=ca82072  cases=3
+@spec scratch_spec  src=tests/specs/scratch_spec.lua  loc=40  cases=3
 @exercises harness (harness), scratch (scratch)
 @surface   harness.mk, scratch.peek, scratch.id, scratch.track
 @harness   mk, reaper.CountTracks, reaper.GetProjExtState, reaper.GetTrackGUID, reaper.GetMediaTrackInfo_Value

@@ -1,4 +1,4 @@
-@spec cmgr_stack_spec  src=tests/specs/cmgr_stack_spec.lua  loc=287  sha=7e24684  cases=16
+@spec cmgr_stack_spec  src=tests/specs/cmgr_stack_spec.lua  loc=287  cases=16
 
 # Intent
   commandManager: scope stack + modal/passthrough resolution.

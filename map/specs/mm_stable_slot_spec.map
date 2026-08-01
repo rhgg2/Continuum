@@ -1,4 +1,4 @@
-@spec mm_stable_slot_spec  src=tests/specs/mm_stable_slot_spec.lua  loc=94  sha=untracked  cases=3
+@spec mm_stable_slot_spec  src=tests/specs/mm_stable_slot_spec.lua  loc=94  cases=3
 @exercises midiManager (h.mm)
 @surface   mm:notesRaw, mm:modify, mm:assign, mm:delete
 @harness   bareMM

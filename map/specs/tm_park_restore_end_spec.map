@@ -1,4 +1,4 @@
-@spec tm_park_restore_end_spec  src=tests/specs/tm_park_restore_end_spec.lua  loc=110  sha=8150247  cases=2
+@spec tm_park_restore_end_spec  src=tests/specs/tm_park_restore_end_spec.lua  loc=110  cases=2
 @exercises trackerManager (h.tm), midiManager (h.fm), dataStore (h.ds)
 @surface   tm:addEvent, tm:flush, fm:dump, ds:assign, tm:rebuild, tm:getChannel
 @harness   mk

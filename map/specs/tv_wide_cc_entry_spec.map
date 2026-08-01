@@ -1,4 +1,4 @@
-@spec tv_wide_cc_entry_spec  src=tests/specs/tv_wide_cc_entry_spec.lua  loc=72  sha=a17a7a7  cases=4
+@spec tv_wide_cc_entry_spec  src=tests/specs/tv_wide_cc_entry_spec.lua  loc=72  cases=4
 @exercises trackerView (h.vm), editCursor (h.ec), midiManager (h.fm)
 @surface   vm:setGridSize, ec:setPos, vm:editEvent, fm:dump
 @harness   mk{seed.ccs}

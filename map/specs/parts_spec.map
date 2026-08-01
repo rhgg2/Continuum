@@ -1,4 +1,4 @@
-@spec parts_spec  src=tests/specs/parts_spec.lua  loc=154  sha=a17a7a7  cases=10
+@spec parts_spec  src=tests/specs/parts_spec.lua  loc=154  cases=10
 @exercises editCursor (ec)
 @surface   ec:decorateCol
 

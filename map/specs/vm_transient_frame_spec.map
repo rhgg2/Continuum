@@ -1,4 +1,4 @@
-@spec vm_transient_frame_spec  src=tests/specs/vm_transient_frame_spec.lua  loc=106  sha=6fb5e8f  cases=5
+@spec vm_transient_frame_spec  src=tests/specs/vm_transient_frame_spec.lua  loc=106  cases=5
 @exercises trackerView (h.vm), editCursor (h.ec), commandManager (h.cmgr), configManager (h.cm)
 @surface   vm:setGridSize, ec:setPos, cmgr:invoke, cm:getAt, cm:get, cm:assign, cm:set, ec:row, vm:setRowPerBeat
 @harness   mk{seed.notes}

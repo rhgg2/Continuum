@@ -1,4 +1,4 @@
-@module arrangePage  src=arrangePage.lua  loc=68  sha=61aa319  mode=chunk  self=ap
+@module arrangePage  src=arrangePage.lua  loc=68  mode=chunk  self=ap
 @deps cm, ds, cmgr, chrome, gui, modalHost, facade, eventMeta
 
 # Imports

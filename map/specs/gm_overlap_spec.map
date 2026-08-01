@@ -1,4 +1,4 @@
-@spec gm_overlap_spec  src=tests/specs/gm_overlap_spec.lua  loc=82  sha=f8aa484  cases=4
+@spec gm_overlap_spec  src=tests/specs/gm_overlap_spec.lua  loc=82  cases=4
 @exercises groupManager (h.gm)
 @surface   gm:eachInstance, gm:mark, gm:duplicateInto, gm:newInstance
 

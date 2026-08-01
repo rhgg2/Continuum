@@ -1,4 +1,4 @@
-@spec wm_bus_node_spec  src=tests/specs/wm_bus_node_spec.lua  loc=270  sha=e2be081  cases=10
+@spec wm_bus_node_spec  src=tests/specs/wm_bus_node_spec.lua  loc=270  cases=10
 @exercises wiringManager (wm), routingManager (rm)
 @surface   wm:mutate, wm:instantiateFxOnScratch, wm:addBusNode, wm:graph, rm:meta, wm:moveNodes, wm:deleteBus, wm:load, wm:enableLive, wm:read, wm:pokeEdgeGain, wm:fastGainCommit, wm:diff, wm:targetState, wm:snapshot
 @harness   mk, r._state.projectTracks, r._state.trackGuids

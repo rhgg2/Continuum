@@ -1,4 +1,4 @@
-@spec wm_target_alloc_spec  src=tests/specs/wm_target_alloc_spec.lua  loc=139  sha=e2be081  cases=3
+@spec wm_target_alloc_spec  src=tests/specs/wm_target_alloc_spec.lua  loc=139  cases=3
 @exercises wiringManager (wm)
 @surface   wm:load, wm:mutate, wm:targetState
 @harness   mk, r._state.projectTracks, r._state.trackGuids

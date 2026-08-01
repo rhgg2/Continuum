@@ -1,4 +1,4 @@
-@spec tm_cc_gating_spec  src=tests/specs/tm_cc_gating_spec.lua  loc=155  sha=751e7cb  cases=4
+@spec tm_cc_gating_spec  src=tests/specs/tm_cc_gating_spec.lua  loc=155  cases=4
 @exercises midiManager (h.fm), dataStore (h.ds), trackerManager (h.tm)
 @surface   fm:dump, ds:assign, tm:fromLogical, tm:addEvent, tm:flush, tm:getChannel, tm:assignEvent, tm:deleteEvent
 @harness   mk{seed.ccs}

@@ -1,4 +1,4 @@
-@spec ec_regions_spec  src=tests/specs/ec_regions_spec.lua  loc=450  sha=9db4384  cases=21
+@spec ec_regions_spec  src=tests/specs/ec_regions_spec.lua  loc=450  cases=21
 @exercises trackerManager (h.tm), editCursor (ec), commandManager (cmgr), groupManager (gm)
 @surface   tm:length, tm:subscribe, tm:requestRebuild, tm:addEvent, tm:assignEvent, tm:deleteEvent, tm:flush, ec:decorateCol, cmgr:scope, cmgr:push, gm:eachInstance, ec:regionArm, ec:isInRegionMode, ec:regionCursor, ec:hasSelection, gm:mark, cmgr:invoke, gm:newInstance, ec:setPos, ec:row, ec:col
 

@@ -1,4 +1,4 @@
-@spec util_bucket_spec  src=tests/specs/util_bucket_spec.lua  loc=57  sha=fa4a61d  cases=5
+@spec util_bucket_spec  src=tests/specs/util_bucket_spec.lua  loc=57  cases=5
 
 # Intent
   (none)

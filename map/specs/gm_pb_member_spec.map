@@ -1,4 +1,4 @@
-@spec gm_pb_member_spec  src=tests/specs/gm_pb_member_spec.lua  loc=213  sha=f513b2b  cases=6
+@spec gm_pb_member_spec  src=tests/specs/gm_pb_member_spec.lua  loc=213  cases=6
 @exercises groupManager (gm), midiManager (h.fm), trackerManager (h.tm), trackerView (h.vm), dataStore (h.ds)
 @surface   gm:markGroup, gm:newInstance, fm:dump, tm:byUuid, vm:eventsInRect, tm:flush, gm:assignEvent, ds:get, B:eachInstance
 @harness   mk{seed.evType, seed.chan, seed.ppq, seed.shape, seed.val, seed.cents, seed.ccs, seed.notes}

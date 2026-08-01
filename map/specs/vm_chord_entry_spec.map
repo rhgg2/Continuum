@@ -1,4 +1,4 @@
-@spec vm_chord_entry_spec  src=tests/specs/vm_chord_entry_spec.lua  loc=345  sha=b9a99d6  cases=16
+@spec vm_chord_entry_spec  src=tests/specs/vm_chord_entry_spec.lua  loc=345  cases=16
 @exercises trackerView (h.vm), trackerManager (h.tm), editCursor (h.ec), midiManager (h.fm), commandManager (h.cmgr)
 @surface   vm:setGridSize, tm:getChannel, vm:chordStrike, ec:setPos, ec:row, vm:chordCommit, vm:chordActive, fm:dump, vm:chordNudgeVel, vm:chordBackspace, vm:rebuild, vm:tick, cmgr:invoke
 @harness   mk{seed.notes}, reaper:clearCalls, reaper:tick, r._state.calls

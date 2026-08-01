@@ -1,4 +1,4 @@
-@spec dag_absorption_spec  src=tests/specs/dag_absorption_spec.lua  loc=205  sha=8233379  cases=10
+@spec dag_absorption_spec  src=tests/specs/dag_absorption_spec.lua  loc=205  cases=10
 @exercises DAG (DAG)
 @surface   DAG.compile
 

@@ -1,4 +1,4 @@
-@spec mm_hole_iter_spec  src=tests/specs/mm_hole_iter_spec.lua  loc=98  sha=37ed80d  cases=3
+@spec mm_hole_iter_spec  src=tests/specs/mm_hole_iter_spec.lua  loc=98  cases=3
 @exercises midiManager (h.mm)
 @surface   mm:notes, mm:modify, mm:delete, mm:ccs, mm:ccsRaw, mm:events
 @harness   bareMM

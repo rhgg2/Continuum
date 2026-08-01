@@ -1,4 +1,4 @@
-@spec rm_metadata_spec  src=tests/specs/rm_metadata_spec.lua  loc=105  sha=e2be081  cases=5
+@spec rm_metadata_spec  src=tests/specs/rm_metadata_spec.lua  loc=105  cases=5
 @exercises harness (harness), configManager (h.cm)
 @surface   harness.mk, cm:pollUndo
 @harness   mk, reaper.CountTracks, reaper.InsertTrackAtIndex, reaper.GetTrack, reaper.GetSetMediaTrackInfo_String, reaper.GetTrackGUID, reaper:setFxIO, reaper.GetProjExtState, r._state.trackExt, r._state.projStateCount

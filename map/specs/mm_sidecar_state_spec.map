@@ -1,4 +1,4 @@
-@spec mm_sidecar_state_spec  src=tests/specs/mm_sidecar_state_spec.lua  loc=211  sha=untracked  cases=5
+@spec mm_sidecar_state_spec  src=tests/specs/mm_sidecar_state_spec.lua  loc=211  cases=5
 @exercises midiManager (h.mm)
 @surface   mm:notes, mm:ccs, mm:load, mm:modify, mm:delete, mm:assign, mm:add
 @harness   fakeReaper:bindTake

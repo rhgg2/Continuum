@@ -1,4 +1,4 @@
-@spec dag_validate_spec  src=tests/specs/dag_validate_spec.lua  loc=423  sha=1694e27  cases=32
+@spec dag_validate_spec  src=tests/specs/dag_validate_spec.lua  loc=423  cases=32
 @exercises DAG (DAG)
 @surface   DAG.validate
 

@@ -1,4 +1,4 @@
-@module support  src=tests/support.lua  loc=232  sha=f8aa484  mode=namespace  self=M
+@module support  src=tests/support.lua  loc=232  mode=namespace  self=M
 
 # Imports
   @const util = 'util'  @ 5

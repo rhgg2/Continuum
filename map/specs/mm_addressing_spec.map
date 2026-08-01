@@ -1,4 +1,4 @@
-@spec mm_addressing_spec  src=tests/specs/mm_addressing_spec.lua  loc=144  sha=37ed80d  cases=7
+@spec mm_addressing_spec  src=tests/specs/mm_addressing_spec.lua  loc=144  cases=7
 @exercises midiManager (h.fm)
 @surface   fm:notes, fm:byUuid, fm:ccs, fm:reload, fm:modify, fm:assign
 @harness   mk{seed.notes}, bareMM

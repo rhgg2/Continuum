@@ -1,4 +1,4 @@
-@spec gm_delay_propagate_spec  src=tests/specs/gm_delay_propagate_spec.lua  loc=98  sha=bb5e29b  cases=2
+@spec gm_delay_propagate_spec  src=tests/specs/gm_delay_propagate_spec.lua  loc=98  cases=2
 @exercises midiManager (h.fm), trackerView (h.vm), groupManager (gm), trackerManager (h.tm)
 @surface   fm:dump, vm:eventsInRect, gm:markGroup, gm:newInstance, tm:flush, gm:assignEvent
 @harness   mk{seed.length, seed.resolution, seed.notes}

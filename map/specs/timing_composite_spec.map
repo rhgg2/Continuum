@@ -1,4 +1,4 @@
-@spec timing_composite_spec  src=tests/specs/timing_composite_spec.lua  loc=213  sha=4a6bfb0  cases=11
+@spec timing_composite_spec  src=tests/specs/timing_composite_spec.lua  loc=213  cases=11
 @exercises timing (timing)
 @surface   timing.eval, timing.invert, timing.resolveComposite
 

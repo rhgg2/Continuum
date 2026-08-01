@@ -1,4 +1,4 @@
-@spec coordinator_spec  src=tests/specs/coordinator_spec.lua  loc=137  sha=e73ba95  cases=5
+@spec coordinator_spec  src=tests/specs/coordinator_spec.lua  loc=137  cases=5
 @exercises coordinator (coord)
 @surface   coord:register, coord:setActive, coord:returnToArrange, coord:reloadAfterExternalMutation
 @harness   mk

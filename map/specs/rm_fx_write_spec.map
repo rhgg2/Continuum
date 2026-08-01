@@ -1,4 +1,4 @@
-@spec rm_fx_write_spec  src=tests/specs/rm_fx_write_spec.lua  loc=157  sha=e2be081  cases=8
+@spec rm_fx_write_spec  src=tests/specs/rm_fx_write_spec.lua  loc=157  cases=8
 @exercises harness (harness), routingManager (rm)
 @surface   harness.mk, rm:tracks, rm:addFx, rm:deleteFx, rm:assignFx
 @harness   mk, reaper.CountTracks, reaper.InsertTrackAtIndex, reaper.GetTrack, reaper.GetSetMediaTrackInfo_String, reaper:setTrackFX, reaper.GetTrackGUID, reaper:setFxParamNames, reaper.TrackFX_GetParam

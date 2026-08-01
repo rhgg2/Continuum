@@ -1,4 +1,4 @@
-@spec util_serialise_spec  src=tests/specs/util_serialise_spec.lua  loc=66  sha=8e1d9ef  cases=5
+@spec util_serialise_spec  src=tests/specs/util_serialise_spec.lua  loc=66  cases=5
 
 # Intent
   (none)

@@ -1,4 +1,4 @@
-@spec tv_cascade_cancel_spec  src=tests/specs/tv_cascade_cancel_spec.lua  loc=82  sha=261b161  cases=2
+@spec tv_cascade_cancel_spec  src=tests/specs/tv_cascade_cancel_spec.lua  loc=82  cases=2
 @exercises midiManager (h.fm), trackerView (h.vm), editCursor (h.ec), commandManager (h.cmgr)
 @surface   fm:dump, vm:setGridSize, ec:setPos, ec:extendTo, cmgr:invoke, ec:selClear, vm:editEvent
 @harness   mk{seed.notes}

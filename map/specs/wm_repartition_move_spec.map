@@ -1,4 +1,4 @@
-@spec wm_repartition_move_spec  src=tests/specs/wm_repartition_move_spec.lua  loc=76  sha=e2be081  cases=1
+@spec wm_repartition_move_spec  src=tests/specs/wm_repartition_move_spec.lua  loc=76  cases=1
 @exercises wiringManager (wm)
 @surface   wm:load, wm:instantiateFxOnScratch, wm:applyOps, wm:diff, wm:targetState, wm:snapshot, wm:mutate, wm:graph, wm:fxTrack
 @harness   mk, r._state.projectTracks, r._state.trackGuids

@@ -1,4 +1,4 @@
-@spec rm_folders_spec  src=tests/specs/rm_folders_spec.lua  loc=60  sha=e2be081  cases=2
+@spec rm_folders_spec  src=tests/specs/rm_folders_spec.lua  loc=60  cases=2
 @exercises harness (harness)
 @surface   harness.mk
 @harness   mk, reaper.CountTracks, reaper.InsertTrackAtIndex, reaper.GetTrack, reaper.GetSetMediaTrackInfo_String, reaper.SetMediaTrackInfo_Value, reaper.GetTrackGUID

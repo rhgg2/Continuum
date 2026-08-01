@@ -1,4 +1,4 @@
-@spec vm_insert_delete_row_lane_spec  src=tests/specs/vm_insert_delete_row_lane_spec.lua  loc=106  sha=6fb5e8f  cases=3
+@spec vm_insert_delete_row_lane_spec  src=tests/specs/vm_insert_delete_row_lane_spec.lua  loc=106  cases=3
 @exercises trackerView (h.vm), editCursor (h.ec), commandManager (h.cmgr), trackerManager (h.tm)
 @surface   vm:setGridSize, ec:setPos, cmgr:invoke, tm:getChannel
 @harness   mk{seed.notes}

@@ -1,4 +1,4 @@
-@spec rm_midi_routing_spec  src=tests/specs/rm_midi_routing_spec.lua  loc=156  sha=e2be081  cases=9
+@spec rm_midi_routing_spec  src=tests/specs/rm_midi_routing_spec.lua  loc=156  cases=9
 @exercises harness (harness), routingManager (rm)
 @surface   harness.mk, rm:tracks, rm:assignFx, rm:writeChainMidi
 @harness   mk, reaper.CountTracks, reaper.InsertTrackAtIndex, reaper.GetTrack, reaper.GetSetMediaTrackInfo_String, reaper:setTrackFX, reaper.GetTrackGUID

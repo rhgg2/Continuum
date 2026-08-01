@@ -1,4 +1,4 @@
-@module trackerRender  src=trackerRender.lua  loc=1502  sha=5ecbe78  mode=chunk  self=tr
+@module trackerRender  src=trackerRender.lua  loc=1502  mode=chunk  self=tr
 @deps cm, ds, cmgr, chrome, gui, modalHost, facade, tv, help, pe
 
 # Invariants & contracts

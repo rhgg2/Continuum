@@ -1,4 +1,4 @@
-@spec wv_folder_spec  src=tests/specs/wv_folder_spec.lua  loc=49  sha=e2be081  cases=1
+@spec wv_folder_spec  src=tests/specs/wv_folder_spec.lua  loc=49  cases=1
 @exercises wiringManager (wm), wiringView (wv)
 @surface   wm:load, wv:nodeViews, wv:wireViews
 @harness   mk, reaper.SetMediaTrackInfo_Value, r._state.projectTracks, r._state.trackGuids

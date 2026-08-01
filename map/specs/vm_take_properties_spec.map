@@ -1,4 +1,4 @@
-@spec vm_take_properties_spec  src=tests/specs/vm_take_properties_spec.lua  loc=328  sha=4ae9c74  cases=11
+@spec vm_take_properties_spec  src=tests/specs/vm_take_properties_spec.lua  loc=328  cases=11
 @exercises midiManager (h.fm), configManager (h.cm)
 @surface   fm:setName, cm:get, fm:name, fm:length, fm:dump
 @harness   mk{seed.notes, seed.ccs}

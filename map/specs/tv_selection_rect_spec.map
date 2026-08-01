@@ -1,4 +1,4 @@
-@spec tv_selection_rect_spec  src=tests/specs/tv_selection_rect_spec.lua  loc=90  sha=4a6bfb0  cases=4
+@spec tv_selection_rect_spec  src=tests/specs/tv_selection_rect_spec.lua  loc=90  cases=4
 @exercises trackerView (h.vm)
 @surface   vm:selectionAsRect, vm:eventsInRect
 @harness   mk{seed.notes}

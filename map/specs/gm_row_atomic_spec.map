@@ -1,4 +1,4 @@
-@spec gm_row_atomic_spec  src=tests/specs/gm_row_atomic_spec.lua  loc=187  sha=bafaec0  cases=6
+@spec gm_row_atomic_spec  src=tests/specs/gm_row_atomic_spec.lua  loc=187  cases=6
 @exercises midiManager (h.fm), groupManager (h.gm), trackerView (h.vm), editCursor (h.ec), trackerManager (h.tm), commandManager (h.cmgr)
 @surface   fm:notes, gm:markGroup, vm:eventsInRect, vm:selectionAsRect, ec:selClear, gm:newInstance, tm:flush, ec:setPos, cmgr:invoke, gm:eachInstance
 @harness   mk{seed.notes}

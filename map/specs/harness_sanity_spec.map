@@ -1,4 +1,4 @@
-@spec harness_sanity_spec  src=tests/specs/harness_sanity_spec.lua  loc=192  sha=37ed80d  cases=10
+@spec harness_sanity_spec  src=tests/specs/harness_sanity_spec.lua  loc=192  cases=10
 @exercises trackerManager (h.tm), midiManager (h.fm), configManager (h.cm), trackerView (h.vm), editCursor (h.ec)
 @surface   tm:getChannel, fm:modify, fm:dump, fm:byUuid, fm:notes, cm:set, cm:get, fm:resolution, tm:resolution, fm:length, tm:length, tm:play, vm:setGridSize, ec:selectChannel, ec:col
 @harness   mk{seed.notes, seed.resolution, seed.length}, reaper:clearCalls, r._state.takeExt, r._state.calls

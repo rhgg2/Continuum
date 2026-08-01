@@ -1,4 +1,4 @@
-@spec gm_revive_delete_spec  src=tests/specs/gm_revive_delete_spec.lua  loc=105  sha=f8aa484  cases=2
+@spec gm_revive_delete_spec  src=tests/specs/gm_revive_delete_spec.lua  loc=105  cases=2
 @exercises groupManager (gm), trackerManager (h.tm)
 @surface   gm:markGroup, gm:newInstance, tm:flush, gm:setLocalMode, gm:deleteEvent, gm:addEvent, gm:deletedCells, gm:revertDelete
 

@@ -1,4 +1,4 @@
-@spec picker_delete_spec  src=tests/specs/picker_delete_spec.lua  loc=119  sha=untracked  cases=4
+@spec picker_delete_spec  src=tests/specs/picker_delete_spec.lua  loc=119  cases=4
 @harness   mk
 
 # Intent

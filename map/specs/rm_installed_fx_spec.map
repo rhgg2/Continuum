@@ -1,4 +1,4 @@
-@spec rm_installed_fx_spec  src=tests/specs/rm_installed_fx_spec.lua  loc=71  sha=e2be081  cases=4
+@spec rm_installed_fx_spec  src=tests/specs/rm_installed_fx_spec.lua  loc=71  cases=4
 @exercises harness (harness), routingManager (rm)
 @surface   harness.mk, rm:installedFx, rm:showFx
 @harness   mk, reaper.CountTracks, reaper.InsertTrackAtIndex, reaper.GetTrack, reaper.GetSetMediaTrackInfo_String, reaper:setInstalledFx, reaper:setTrackFX, reaper:setFxGuid, r._state.calls

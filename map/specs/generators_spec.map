@@ -1,4 +1,4 @@
-@spec generators_spec  src=tests/specs/generators_spec.lua  loc=585  sha=98099c8  cases=41
+@spec generators_spec  src=tests/specs/generators_spec.lua  loc=585  cases=41
 @exercises generators (generators), tuning (tuning)
 @surface   generators.retarget, generators.fieldRange, tuning.findTemper, tuning.transposeStep, tuning.stepsBetween, generators.thinCurve
 

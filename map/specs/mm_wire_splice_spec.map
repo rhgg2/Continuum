@@ -1,4 +1,4 @@
-@spec mm_wire_splice_spec  src=tests/specs/mm_wire_splice_spec.lua  loc=201  sha=untracked  cases=3
+@spec mm_wire_splice_spec  src=tests/specs/mm_wire_splice_spec.lua  loc=201  cases=3
 @exercises midiManager (h.mm)
 @surface   mm:notes, mm:ccs, mm:load, mm:modify, mm:assign
 @harness   fakeReaper:bindTake

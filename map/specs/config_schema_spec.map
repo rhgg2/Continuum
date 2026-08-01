@@ -1,4 +1,4 @@
-@spec config_schema_spec  src=tests/specs/config_schema_spec.lua  loc=440  sha=fe11d27  cases=28
+@spec config_schema_spec  src=tests/specs/config_schema_spec.lua  loc=440  cases=28
 @exercises configManager (h.cm)
 @surface   cm:get, cm:set, cm:setContext, cm:remove, cm:assign, cm:getAt, cm:clearTake, cm:setTrack, cm:subscribe
 @harness   mk, r._state.takeExt, r._state.trackExt

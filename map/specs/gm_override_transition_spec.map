@@ -1,4 +1,4 @@
-@spec gm_override_transition_spec  src=tests/specs/gm_override_transition_spec.lua  loc=257  sha=f8aa484  cases=7
+@spec gm_override_transition_spec  src=tests/specs/gm_override_transition_spec.lua  loc=257  cases=7
 @exercises groupManager (gm), trackerManager (h.tm)
 @surface   gm:newInstance, tm:flush, gm:markGroup, gm:setLocalMode, gm:assignEvent, gm:deleteEvent, gm:addEvent
 

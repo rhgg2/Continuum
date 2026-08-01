@@ -1,4 +1,4 @@
-@spec gm_create_delete_facade_spec  src=tests/specs/gm_create_delete_facade_spec.lua  loc=78  sha=1747f65  cases=3
+@spec gm_create_delete_facade_spec  src=tests/specs/gm_create_delete_facade_spec.lua  loc=78  cases=3
 @exercises midiManager (h.fm), trackerView (h.vm), groupManager (h.gm), editCursor (h.ec), trackerManager (h.tm), commandManager (h.cmgr)
 @surface   fm:notes, vm:selectionAsRect, gm:markGroup, vm:eventsInRect, ec:selClear, gm:newInstance, tm:flush, ec:setPos, vm:editEvent, cmgr:invoke, gm:setLocalMode
 @harness   mk{seed.notes}

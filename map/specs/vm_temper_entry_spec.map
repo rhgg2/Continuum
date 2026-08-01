@@ -1,4 +1,4 @@
-@spec vm_temper_entry_spec  src=tests/specs/vm_temper_entry_spec.lua  loc=136  sha=fdb66b0  cases=3
+@spec vm_temper_entry_spec  src=tests/specs/vm_temper_entry_spec.lua  loc=136  cases=3
 @exercises trackerView (h.vm), editCursor (h.ec), tuning (tuning), commandManager (h.cmgr)
 @surface   vm:setGridSize, ec:setPos, vm:editEvent, tuning.midiToStep, vm:noteProjection, cmgr:invoke
 @harness   mk{seed.notes}

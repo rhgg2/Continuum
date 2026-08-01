@@ -1,4 +1,4 @@
-@spec library_spec  src=tests/specs/library_spec.lua  loc=250  sha=36fee5b  cases=16
+@spec library_spec  src=tests/specs/library_spec.lua  loc=250  cases=16
 @exercises configManager (h.cm)
 @surface   cm:getAt, cm:set, cm:defaultFor
 @harness   mk

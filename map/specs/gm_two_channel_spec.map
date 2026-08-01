@@ -1,4 +1,4 @@
-@spec gm_two_channel_spec  src=tests/specs/gm_two_channel_spec.lua  loc=60  sha=f8aa484  cases=1
+@spec gm_two_channel_spec  src=tests/specs/gm_two_channel_spec.lua  loc=60  cases=1
 @exercises groupManager (gm), trackerManager (h.tm)
 @surface   gm:duplicateInto, tm:flush
 

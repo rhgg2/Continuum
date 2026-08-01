@@ -1,4 +1,4 @@
-@spec patternEditor_shelf_spec  src=tests/specs/patternEditor_shelf_spec.lua  loc=287  sha=4602222  cases=7
+@spec patternEditor_shelf_spec  src=tests/specs/patternEditor_shelf_spec.lua  loc=287  cases=7
 @exercises patternEditor (pe), dataStore (h.ds)
 @surface   pe:open, pe:draw, pe:handleInput, ds:get, ds:assign
 @harness   mk, reaper.GetMediaItemTake_Track

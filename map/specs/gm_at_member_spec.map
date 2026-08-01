@@ -1,4 +1,4 @@
-@spec gm_at_member_spec  src=tests/specs/gm_at_member_spec.lua  loc=56  sha=1e11bba  cases=2
+@spec gm_at_member_spec  src=tests/specs/gm_at_member_spec.lua  loc=56  cases=2
 @exercises groupManager (gm), midiManager (h.fm), trackerManager (h.tm)
 @surface   gm:markGroup, gm:newInstance, fm:dump, tm:byUuid
 @harness   mk{seed.evType, seed.chan, seed.ppq, seed.shape, seed.val, seed.ccs}

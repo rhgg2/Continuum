@@ -1,4 +1,4 @@
-@spec tv_event_shift_spec  src=tests/specs/tv_event_shift_spec.lua  loc=323  sha=1c5f224  cases=13
+@spec tv_event_shift_spec  src=tests/specs/tv_event_shift_spec.lua  loc=323  cases=13
 @exercises midiManager (h.fm), trackerView (h.vm), editCursor (h.ec), commandManager (h.cmgr)
 @surface   fm:dump, vm:setGridSize, ec:setPos, cmgr:invoke, ec:region, ec:col
 @harness   mk{seed.notes, seed.ccs, seed.length}

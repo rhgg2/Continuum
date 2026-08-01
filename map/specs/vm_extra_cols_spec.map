@@ -1,4 +1,4 @@
-@spec vm_extra_cols_spec  src=tests/specs/vm_extra_cols_spec.lua  loc=120  sha=947646b  cases=3
+@spec vm_extra_cols_spec  src=tests/specs/vm_extra_cols_spec.lua  loc=120  cases=3
 @exercises trackerView (h.vm), editCursor (h.ec), dataStore (h.ds)
 @surface   vm:setGridSize, ec:setPos, vm:hideExtraCol, ds:get
 @harness   mk{seed.notes}

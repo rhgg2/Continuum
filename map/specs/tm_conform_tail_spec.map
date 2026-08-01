@@ -1,4 +1,4 @@
-@spec tm_conform_tail_spec  src=tests/specs/tm_conform_tail_spec.lua  loc=169  sha=36ed5a5  cases=7
+@spec tm_conform_tail_spec  src=tests/specs/tm_conform_tail_spec.lua  loc=169  cases=7
 @exercises midiManager (h.fm), trackerManager (h.tm)
 @surface   fm:dump, tm:deleteEvent, tm:flush
 @harness   mk{seed.length, seed.notes}

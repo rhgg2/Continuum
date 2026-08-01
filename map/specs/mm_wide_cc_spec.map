@@ -1,4 +1,4 @@
-@spec mm_wide_cc_spec  src=tests/specs/mm_wide_cc_spec.lua  loc=143  sha=8cc9255  cases=6
+@spec mm_wide_cc_spec  src=tests/specs/mm_wide_cc_spec.lua  loc=143  cases=6
 @exercises midiManager (h.mm)
 @surface   mm:ccs, mm:modify, mm:delete
 @harness   fakeReaper:bindTake

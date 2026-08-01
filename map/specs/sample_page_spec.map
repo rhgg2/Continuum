@@ -1,4 +1,4 @@
-@spec sample_page_spec  src=tests/specs/sample_page_spec.lua  loc=73  sha=3848a7b  cases=4
+@spec sample_page_spec  src=tests/specs/sample_page_spec.lua  loc=73  cases=4
 @harness   mk
 
 # Intent

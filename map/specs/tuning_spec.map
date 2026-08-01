@@ -1,4 +1,4 @@
-@spec tuning_spec  src=tests/specs/tuning_spec.lua  loc=321  sha=d1f01c9  cases=26
+@spec tuning_spec  src=tests/specs/tuning_spec.lua  loc=321  cases=26
 @exercises tuning (tuning)
 @surface   tuning.stepToText, tuning.derive, tuning.scalaPitch, tuning.parseScalaFile, tuning.parseScalaPitches, tuning.scalaToTemper, tuning.genEqual, tuning.edoDegrees, tuning.degreesToSpec, tuning.genHarmonics, tuning.genSubharmonics, tuning.parseChord, tuning.genChord, tuning.genCPS, tuning.genRank2, tuning.nextMosSize, tuning.mosInfo
 

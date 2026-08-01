@@ -1,4 +1,4 @@
-@spec group_clear_zone_spec  src=tests/specs/group_clear_zone_spec.lua  loc=349  sha=fcf8d06  cases=11
+@spec group_clear_zone_spec  src=tests/specs/group_clear_zone_spec.lua  loc=349  cases=11
 @exercises midiManager (h.fm), trackerView (h.vm), trackerManager (h.tm), commandManager (h.cmgr), editCursor (h.ec), groupManager (h.gm)
 @surface   fm:dump, vm:clearRegionAt, tm:flush, tm:getChannel, cmgr:invoke, ec:setPos, gm:mark, vm:eventsInRect, ec:regionArm, ec:isInRegionMode, vm:clearMoveGap, vm:movePreview, gm:moveInstance
 @harness   mk{seed.notes, seed.ppq, seed.dur, seed.chanLo, seed.streams, seed.length}

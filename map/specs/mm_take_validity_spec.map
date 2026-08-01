@@ -1,4 +1,4 @@
-@spec mm_take_validity_spec  src=tests/specs/mm_take_validity_spec.lua  loc=46  sha=25dbe02  cases=1
+@spec mm_take_validity_spec  src=tests/specs/mm_take_validity_spec.lua  loc=46  cases=1
 @exercises midiManager (h.mm)
 @surface   mm:load, mm:take, mm:length, mm:resolution, mm:name
 @harness   fakeReaper:bindTake, fakeReaper:seedMidi

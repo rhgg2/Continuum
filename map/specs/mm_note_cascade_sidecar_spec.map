@@ -1,4 +1,4 @@
-@spec mm_note_cascade_sidecar_spec  src=tests/specs/mm_note_cascade_sidecar_spec.lua  loc=80  sha=4ae9c74  cases=1
+@spec mm_note_cascade_sidecar_spec  src=tests/specs/mm_note_cascade_sidecar_spec.lua  loc=80  cases=1
 @exercises midiManager (h.mm)
 @surface   mm:modify, mm:events, mm:delete
 @harness   fakeReaper:bindTake

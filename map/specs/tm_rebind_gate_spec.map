@@ -1,4 +1,4 @@
-@spec tm_rebind_gate_spec  src=tests/specs/tm_rebind_gate_spec.lua  loc=122  sha=285f562  cases=4
+@spec tm_rebind_gate_spec  src=tests/specs/tm_rebind_gate_spec.lua  loc=122  cases=4
 @exercises pextStore (ps), dataStore (ds), midiManager (h.fm), trackerManager (h.tm), configManager (h.cm)
 @surface   ps:setTake, ds:assign, fm:notesRaw, tm:getChannel, fm:dump, tm:addEvent, tm:flush, tm:currentTake, tm:bindTake, cm:set
 @harness   mk{seed.notes}

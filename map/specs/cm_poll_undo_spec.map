@@ -1,4 +1,4 @@
-@spec cm_poll_undo_spec  src=tests/specs/cm_poll_undo_spec.lua  loc=108  sha=e788faf  cases=5
+@spec cm_poll_undo_spec  src=tests/specs/cm_poll_undo_spec.lua  loc=108  cases=5
 @exercises configManager (h.cm)
 @surface   cm:set, cm:get, cm:pollUndo, cm:subscribe
 @harness   mk, r._state.takeExt

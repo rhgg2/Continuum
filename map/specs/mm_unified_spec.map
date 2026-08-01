@@ -1,4 +1,4 @@
-@spec mm_unified_spec  src=tests/specs/mm_unified_spec.lua  loc=173  sha=37ed80d  cases=9
+@spec mm_unified_spec  src=tests/specs/mm_unified_spec.lua  loc=173  cases=9
 @exercises midiManager (h.fm)
 @surface   fm:modify, fm:byUuid, fm:notes, fm:assign, fm:ccs, fm:delete, fm:events, fm:add
 @harness   mk{seed.notes, seed.ccs}, bareMM

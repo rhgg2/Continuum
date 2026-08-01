@@ -1,4 +1,4 @@
-@spec wm_diff_spec  src=tests/specs/wm_diff_spec.lua  loc=556  sha=e2be081  cases=35
+@spec wm_diff_spec  src=tests/specs/wm_diff_spec.lua  loc=556  cases=35
 @exercises wiringManager (wm)
 @surface   wm:load, wm:targetState, wm:mutate, wm:diff, wm:snapshot
 @harness   mk, reaper.SetMediaTrackInfo_Value, reaper.TrackFX_AddByName, reaper:setFxGuid, r._state.projectTracks, r._state.trackGuids

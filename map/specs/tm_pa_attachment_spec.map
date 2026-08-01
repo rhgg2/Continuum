@@ -1,4 +1,4 @@
-@spec tm_pa_attachment_spec  src=tests/specs/tm_pa_attachment_spec.lua  loc=96  sha=35eb990  cases=3
+@spec tm_pa_attachment_spec  src=tests/specs/tm_pa_attachment_spec.lua  loc=96  cases=3
 @exercises midiManager (h.mm), trackerManager (h.tm)
 @surface   mm:notes, mm:ccsRaw, tm:addEvent, tm:flush, tm:deleteEvent, tm:assignEvent
 @harness   mk

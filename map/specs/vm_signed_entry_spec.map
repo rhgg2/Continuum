@@ -1,4 +1,4 @@
-@spec vm_signed_entry_spec  src=tests/specs/vm_signed_entry_spec.lua  loc=290  sha=8a6d0a3  cases=18
+@spec vm_signed_entry_spec  src=tests/specs/vm_signed_entry_spec.lua  loc=290  cases=18
 @exercises trackerView (h.vm), editCursor (h.ec), midiManager (h.fm), commandManager (h.cmgr)
 @surface   vm:setGridSize, ec:setPos, vm:editEvent, ec:row, vm:entrySignAt, fm:dump, cmgr:invoke
 @harness   mk{seed.ccs, seed.notes}

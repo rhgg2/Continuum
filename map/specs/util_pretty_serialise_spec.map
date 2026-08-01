@@ -1,4 +1,4 @@
-@spec util_pretty_serialise_spec  src=tests/specs/util_pretty_serialise_spec.lua  loc=86  sha=a0856a6  cases=9
+@spec util_pretty_serialise_spec  src=tests/specs/util_pretty_serialise_spec.lua  loc=86  cases=9
 
 # Intent
   (none)

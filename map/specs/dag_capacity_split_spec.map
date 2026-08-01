@@ -1,4 +1,4 @@
-@spec dag_capacity_split_spec  src=tests/specs/dag_capacity_split_spec.lua  loc=66  sha=e3c39a1  cases=3
+@spec dag_capacity_split_spec  src=tests/specs/dag_capacity_split_spec.lua  loc=66  cases=3
 @exercises DAG (DAG)
 @surface   DAG.allocate
 

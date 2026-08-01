@@ -1,4 +1,4 @@
-@spec masterMix_spec  src=tests/specs/masterMix_spec.lua  loc=26  sha=4a6c156  cases=1
+@spec masterMix_spec  src=tests/specs/masterMix_spec.lua  loc=26  cases=1
 
 # Intent
   masterMix exposes a render-only toolbar segment (peak/loudness meter + master

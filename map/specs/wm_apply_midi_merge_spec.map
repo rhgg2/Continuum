@@ -1,4 +1,4 @@
-@spec wm_apply_midi_merge_spec  src=tests/specs/wm_apply_midi_merge_spec.lua  loc=180  sha=e2be081  cases=3
+@spec wm_apply_midi_merge_spec  src=tests/specs/wm_apply_midi_merge_spec.lua  loc=180  cases=3
 @exercises wiringManager (wm)
 @surface   wm:load, wm:instantiateFxOnScratch, wm:applyOps, wm:diff, wm:targetState, wm:snapshot, wm:graph, wm:mutate
 @harness   mk, reaper:setFxParamNames, reaper.TrackFX_GetCount, reaper.TrackFX_GetFXName, reaper.TrackFX_GetFXGUID, r._state.projectTracks, r._state.trackGuids, r._state.calls

@@ -1,4 +1,4 @@
-@spec mm_blob_serialise_spec  src=tests/specs/mm_blob_serialise_spec.lua  loc=403  sha=8bab28c  cases=18
+@spec mm_blob_serialise_spec  src=tests/specs/mm_blob_serialise_spec.lua  loc=403  cases=18
 @exercises midiBlob (midiBlob)
 @surface   midiBlob.render, midiBlob.buildWire, midiBlob.parse, midiBlob.putKey, midiBlob.dropKey, midiBlob.repackKey
 

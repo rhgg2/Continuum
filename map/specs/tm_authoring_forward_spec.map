@@ -1,4 +1,4 @@
-@spec tm_authoring_forward_spec  src=tests/specs/tm_authoring_forward_spec.lua  loc=182  sha=652cbb1  cases=8
+@spec tm_authoring_forward_spec  src=tests/specs/tm_authoring_forward_spec.lua  loc=182  cases=8
 @exercises trackerManager (h.tm), midiManager (h.fm)
 @surface   tm:addEvent, tm:flush, fm:dump, tm:getChannel, tm:assignEvent
 @harness   mk{seed.notes, seed.length}

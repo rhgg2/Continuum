@@ -1,4 +1,4 @@
-@spec tm_pb_interp_spec  src=tests/specs/tm_pb_interp_spec.lua  loc=151  sha=a2620db  cases=5
+@spec tm_pb_interp_spec  src=tests/specs/tm_pb_interp_spec.lua  loc=151  cases=5
 @exercises midiManager (h.fm), trackerManager (h.tm)
 @surface   fm:dump, tm:rebuild, tm:flush
 @harness   mk{seed.notes, seed.ccs}

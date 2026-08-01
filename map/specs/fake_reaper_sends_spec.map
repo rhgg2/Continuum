@@ -1,4 +1,4 @@
-@spec fake_reaper_sends_spec  src=tests/specs/fake_reaper_sends_spec.lua  loc=130  sha=2d8c907  cases=11
+@spec fake_reaper_sends_spec  src=tests/specs/fake_reaper_sends_spec.lua  loc=130  cases=11
 @harness   FR.new
 
 # Intent

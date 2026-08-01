@@ -1,4 +1,4 @@
-@spec tm_fx_region_spec  src=tests/specs/tm_fx_region_spec.lua  loc=2536  sha=d383dac  cases=92
+@spec tm_fx_region_spec  src=tests/specs/tm_fx_region_spec.lua  loc=2536  cases=92
 @exercises dataStore (h.ds), midiManager (h.fm), trackerManager (h.tm), generators (generators), trackerView (h.vm)
 @surface   ds:get, fm:dump, ds:assign, tm:rebuild, tm:getChannel, tm:addEvent, tm:flush, tm:assignParked, tm:deleteParked, tm:addParked, tm:subscribe, ds:subscribe, ds:unsubscribe, generators.retarget, vm:addFxStage, vm:noteFx, vm:removeFxStage, tm:freezeEligible, tm:freezeRegion, tm:byUuid, tm:freezeToGroup, tm:reloadFromReaper
 @harness   mk

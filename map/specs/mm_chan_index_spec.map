@@ -1,4 +1,4 @@
-@spec mm_chan_index_spec  src=tests/specs/mm_chan_index_spec.lua  loc=236  sha=37ed80d  cases=10
+@spec mm_chan_index_spec  src=tests/specs/mm_chan_index_spec.lua  loc=236  cases=10
 @exercises midiManager (h.mm)
 @surface   mm:notesRaw, mm:ccsRaw, mm:modify, mm:delete, mm:assign
 @harness   bareMM

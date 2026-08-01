@@ -1,4 +1,4 @@
-@spec editor_verbs_spec  src=tests/specs/editor_verbs_spec.lua  loc=316  sha=18e9e47  cases=13
+@spec editor_verbs_spec  src=tests/specs/editor_verbs_spec.lua  loc=316  cases=13
 @exercises swingEditor (se), configManager (h.cm), temperEditor (te)
 @surface   se:open, se:libraryDescriptor, cm:getAt, cm:defaultFor, te:libraryDescriptor
 @harness   mk

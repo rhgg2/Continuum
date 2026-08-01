@@ -1,4 +1,4 @@
-@spec tm_bind_skipguard_spec  src=tests/specs/tm_bind_skipguard_spec.lua  loc=56  sha=37a1053  cases=2
+@spec tm_bind_skipguard_spec  src=tests/specs/tm_bind_skipguard_spec.lua  loc=56  cases=2
 @exercises trackerManager (h.tm), dataStore (h.ds)
 @surface   tm:bindTake, ds:get
 @harness   mk, reaper.GetMediaTrackInfo_Value, reaper:setProjectTracks, reaper:bindTake, reaper.GetTrackGUID

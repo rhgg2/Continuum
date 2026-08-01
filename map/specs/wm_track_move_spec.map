@@ -1,4 +1,4 @@
-@spec wm_track_move_spec  src=tests/specs/wm_track_move_spec.lua  loc=102  sha=e2be081  cases=3
+@spec wm_track_move_spec  src=tests/specs/wm_track_move_spec.lua  loc=102  cases=3
 @exercises wiringManager (wm)
 @surface   wm:load, wm:enableLive, wm:addFxNode, wm:graph, wm:mutate, wm:isScratchTrack
 @harness   mk, reaper:setFxIO, reaper.GetTrack, reaper.TrackFX_GetCount, reaper.TrackFX_GetFXGUID, reaper.CountTracks, r._state.projectTracks, r._state.trackGuids

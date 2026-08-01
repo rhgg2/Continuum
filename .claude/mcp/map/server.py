@@ -48,7 +48,7 @@ def _glob_smell(pat: Optional[str]) -> Optional[str]:
 
 # ----- map_query ------------------------------------------------------------
 
-_MAP_HEADER = re.compile(r'^@(?:module|spec)\s+(\S+)\s+src=(\S+)\s+loc=(\d+)\s+sha=(\S+)')
+_MAP_HEADER = re.compile(r'^@(?:module|spec)\s+(\S+)\s+src=(\S+)\s+loc=(\d+)')
 _DECL = re.compile(
     r'^(?P<indent>\s*)@(?P<kind>fn|api|state|const|require|construct|case)\s+'
     r'(?P<head>.+?)\s*@\s*(?P<line>\d+)(?:-(?P<end>\d+))?\s*'

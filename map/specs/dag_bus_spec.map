@@ -1,4 +1,4 @@
-@spec dag_bus_spec  src=tests/specs/dag_bus_spec.lua  loc=325  sha=37a60a3  cases=10
+@spec dag_bus_spec  src=tests/specs/dag_bus_spec.lua  loc=325  cases=10
 @exercises DAG (DAG)
 @surface   DAG.compile, DAG.targetTracks, DAG.allocate
 

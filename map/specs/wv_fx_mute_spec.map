@@ -1,4 +1,4 @@
-@spec wv_fx_mute_spec  src=tests/specs/wv_fx_mute_spec.lua  loc=54  sha=e2be081  cases=2
+@spec wv_fx_mute_spec  src=tests/specs/wv_fx_mute_spec.lua  loc=54  cases=2
 @exercises wiringView (wv), routingManager (rm)
 @surface   wv:addFx, rm:fx, wv:muted, wv:setMuted, wv:bypassed, wv:setBypassed
 @harness   mk

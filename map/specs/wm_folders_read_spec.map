@@ -1,4 +1,4 @@
-@spec wm_folders_read_spec  src=tests/specs/wm_folders_read_spec.lua  loc=308  sha=e2be081  cases=11
+@spec wm_folders_read_spec  src=tests/specs/wm_folders_read_spec.lua  loc=308  cases=11
 @exercises wiringManager (wm), DAG (DAG)
 @surface   wm:load, wm.readGraph, DAG.validate
 @harness   mk

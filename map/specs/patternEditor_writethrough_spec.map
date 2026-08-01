@@ -1,4 +1,4 @@
-@spec patternEditor_writethrough_spec  src=tests/specs/patternEditor_writethrough_spec.lua  loc=296  sha=4602222  cases=11
+@spec patternEditor_writethrough_spec  src=tests/specs/patternEditor_writethrough_spec.lua  loc=296  cases=11
 @harness   mk, reaper.GetMediaItemTake_Track
 
 # Intent

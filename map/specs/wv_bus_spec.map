@@ -1,4 +1,4 @@
-@spec wv_bus_spec  src=tests/specs/wv_bus_spec.lua  loc=132  sha=e2be081  cases=9
+@spec wv_bus_spec  src=tests/specs/wv_bus_spec.lua  loc=132  cases=9
 @exercises wiringView (wv), wiringManager (wm)
 @surface   wv:addFx, wv:wireViews, wm:addBusNode, wv:busViews, wv:nodeViews, wv:deleteNode, wm:busRecords, wv:moveNodes
 @harness   mk

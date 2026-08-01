@@ -1,4 +1,4 @@
-@module realMidiManager  src=tests/realMidiManager.lua  loc=16  sha=3d3c2e3  mode=script
+@module realMidiManager  src=tests/realMidiManager.lua  loc=16  mode=script
 
 # Imports
   @const util = 'util'  @ 9

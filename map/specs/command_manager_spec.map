@@ -1,4 +1,4 @@
-@spec command_manager_spec  src=tests/specs/command_manager_spec.lua  loc=309  sha=1a1393f  cases=21
+@spec command_manager_spec  src=tests/specs/command_manager_spec.lua  loc=309  cases=21
 
 # Intent
   commandManager: doBefore/doAfter accept either a single name or a

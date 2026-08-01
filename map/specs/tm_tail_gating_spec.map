@@ -1,4 +1,4 @@
-@spec tm_tail_gating_spec  src=tests/specs/tm_tail_gating_spec.lua  loc=119  sha=285f562  cases=4
+@spec tm_tail_gating_spec  src=tests/specs/tm_tail_gating_spec.lua  loc=119  cases=4
 @exercises midiManager (h.fm), dataStore (h.ds), trackerManager (h.tm)
 @surface   fm:dump, ds:assign, tm:fromLogical, tm:rebuild, fm:setLength, fm:length, tm:setLength
 @harness   mk{seed.length, seed.notes, seed.ccs}

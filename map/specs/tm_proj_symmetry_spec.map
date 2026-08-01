@@ -1,4 +1,4 @@
-@spec tm_proj_symmetry_spec  src=tests/specs/tm_proj_symmetry_spec.lua  loc=95  sha=652cbb1  cases=2
+@spec tm_proj_symmetry_spec  src=tests/specs/tm_proj_symmetry_spec.lua  loc=95  cases=2
 @exercises harness (harness), trackerManager (h.tm)
 @surface   harness.mk, tm:getChannel
 @harness   mk{seed.length, seed.resolution, seed.notes}

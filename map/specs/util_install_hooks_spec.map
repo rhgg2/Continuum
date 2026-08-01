@@ -1,4 +1,4 @@
-@spec util_install_hooks_spec  src=tests/specs/util_install_hooks_spec.lua  loc=117  sha=fa4a61d  cases=7
+@spec util_install_hooks_spec  src=tests/specs/util_install_hooks_spec.lua  loc=117  cases=7
 
 # Intent
   Pin-tests for the signal-keyed util.installHooks. The contract:

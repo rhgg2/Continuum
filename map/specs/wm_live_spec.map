@@ -1,4 +1,4 @@
-@spec wm_live_spec  src=tests/specs/wm_live_spec.lua  loc=172  sha=f1b7084  cases=6
+@spec wm_live_spec  src=tests/specs/wm_live_spec.lua  loc=172  cases=6
 @exercises wiringManager (wm)
 @surface   wm:load, wm:instantiateFxOnScratch, wm:enableLive, wm:mutate, wm:graph, wm:diff, wm:targetState, wm:snapshot, wm:moveNodes
 @harness   mk, reaper.TrackFX_GetCount, reaper.TrackFX_Delete, r._state.projectTracks, r._state.trackGuids

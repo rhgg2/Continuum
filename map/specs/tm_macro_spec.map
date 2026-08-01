@@ -1,4 +1,4 @@
-@spec tm_macro_spec  src=tests/specs/tm_macro_spec.lua  loc=372  sha=37ed80d  cases=14
+@spec tm_macro_spec  src=tests/specs/tm_macro_spec.lua  loc=372  cases=14
 @exercises trackerManager (h.tm), midiManager (h.fm)
 @surface   tm:addEvent, tm:flush, tm:getChannel, fm:dump, tm:rebuild, tm:byUuid, tm:assignParked, tm:assignEvent, fm:notes, fm:modify, fm:assign
 @harness   mk{seed.length}

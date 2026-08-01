@@ -1,4 +1,4 @@
-@spec gm_persist_reload_spec  src=tests/specs/gm_persist_reload_spec.lua  loc=137  sha=f8aa484  cases=3
+@spec gm_persist_reload_spec  src=tests/specs/gm_persist_reload_spec.lua  loc=137  cases=3
 @exercises groupManager (A), dataStore (h.ds)
 @surface   A:markGroup, A:newInstance, B:eachInstance, B:stateOf, B:assignEvent, ds._rewind
 

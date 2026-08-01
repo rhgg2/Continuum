@@ -1,4 +1,4 @@
-@spec clipboard_spec  src=tests/specs/clipboard_spec.lua  loc=332  sha=37ed80d  cases=8
+@spec clipboard_spec  src=tests/specs/clipboard_spec.lua  loc=332  cases=8
 @exercises trackerView (h.vm), editCursor (h.ec), clipboard (h.clipboard), midiManager (h.fm), trackerManager (h.tm)
 @surface   vm:setGridSize, ec:setPos, ec:extendTo, ec:pos, clipboard:collect, clipboard:trimTop, fm:dump, clipboard:pasteClip, tm:deleteEvent, tm:flush, tm:addEvent, tm:getChannel
 @harness   mk{seed.notes, seed.length, seed.ccs}

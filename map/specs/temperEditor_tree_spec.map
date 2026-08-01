@@ -1,4 +1,4 @@
-@spec temperEditor_tree_spec  src=tests/specs/temperEditor_tree_spec.lua  loc=70  sha=3eaf95c  cases=2
+@spec temperEditor_tree_spec  src=tests/specs/temperEditor_tree_spec.lua  loc=70  cases=2
 @exercises library (lib)
 @surface   lib.seedIfEmpty
 @harness   mk

@@ -1,4 +1,4 @@
-@spec tm_rebuild_rule_spec  src=tests/specs/tm_rebuild_rule_spec.lua  loc=520  sha=37ed80d  cases=20
+@spec tm_rebuild_rule_spec  src=tests/specs/tm_rebuild_rule_spec.lua  loc=520  cases=20
 @exercises midiManager (h.fm), trackerManager (h.tm), dataStore (h.ds), configManager (h.cm)
 @surface   fm:dump, tm:markSwingStale, fm:notes, fm:modify, fm:assign, fm:ccs, tm:getChannel, tm:assignEvent, tm:flush, tm:rebuild, ds:assign, cm:set
 @harness   mk{seed.notes, seed.ccs}

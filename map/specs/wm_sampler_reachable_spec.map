@@ -1,4 +1,4 @@
-@spec wm_sampler_reachable_spec  src=tests/specs/wm_sampler_reachable_spec.lua  loc=90  sha=e2be081  cases=4
+@spec wm_sampler_reachable_spec  src=tests/specs/wm_sampler_reachable_spec.lua  loc=90  cases=4
 @exercises wiringManager (wm)
 @surface   wm:load, wm:mutate, wm:samplerReachable
 @harness   mk, r._state.projectTracks, r._state.trackGuids

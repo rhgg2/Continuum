@@ -1,4 +1,4 @@
-@module chrome  src=chrome.lua  loc=814  sha=29bee49  mode=chunk
+@module chrome  src=chrome.lua  loc=814  mode=chunk
 @deps cm, ctx, lib
 
 # Shapes

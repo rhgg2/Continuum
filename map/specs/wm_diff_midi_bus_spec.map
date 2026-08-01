@@ -1,4 +1,4 @@
-@spec wm_diff_midi_bus_spec  src=tests/specs/wm_diff_midi_bus_spec.lua  loc=148  sha=e2be081  cases=4
+@spec wm_diff_midi_bus_spec  src=tests/specs/wm_diff_midi_bus_spec.lua  loc=148  cases=4
 @exercises wiringManager (wm)
 @surface   wm:load, wm:instantiateFxOnScratch, wm:applyOps, wm:diff, wm:targetState, wm:snapshot, wm:mutate
 @harness   mk, reaper:setFxParamNames, reaper.GetTrackSendInfo_Value, r._state.projectTracks, r._state.trackGuids

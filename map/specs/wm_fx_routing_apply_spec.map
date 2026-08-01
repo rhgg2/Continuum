@@ -1,4 +1,4 @@
-@spec wm_fx_routing_apply_spec  src=tests/specs/wm_fx_routing_apply_spec.lua  loc=195  sha=e2be081  cases=5
+@spec wm_fx_routing_apply_spec  src=tests/specs/wm_fx_routing_apply_spec.lua  loc=195  cases=5
 @exercises wiringManager (wm)
 @surface   wm:load, wm:instantiateFxOnScratch, wm:applyOps, wm:diff, wm:targetState, wm:snapshot, wm:mutate
 @harness   mk, reaper.TrackFX_GetCount, reaper.TrackFX_GetFXName, reaper:setFxParamNames, r._state.projectTracks, r._state.trackGuids, r._state.fxByTrack

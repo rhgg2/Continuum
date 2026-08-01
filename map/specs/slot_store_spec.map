@@ -1,4 +1,4 @@
-@spec slot_store_spec  src=tests/specs/slot_store_spec.lua  loc=701  sha=93c0f56  cases=31
+@spec slot_store_spec  src=tests/specs/slot_store_spec.lua  loc=701  cases=31
 @exercises configManager (h.cm), dataStore (h.ds), pextStore (ps2)
 @surface   cm:setTrack, ds:assign, ds:get, ps2:setTake, ds:getAt, cm:set, cm:get
 @harness   mk, reaper:setTrackFX, reaper:setProjectTracks, reaper:setFxGuid, reaper.gmem_read, reaper.gmem_write, reaper.GetSetMediaTrackInfo_String, reaper:clearGmem, reaper:setProjectPath, r._state.calls

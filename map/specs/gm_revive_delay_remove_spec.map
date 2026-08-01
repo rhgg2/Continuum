@@ -1,4 +1,4 @@
-@spec gm_revive_delay_remove_spec  src=tests/specs/gm_revive_delay_remove_spec.lua  loc=54  sha=48499bd  cases=1
+@spec gm_revive_delay_remove_spec  src=tests/specs/gm_revive_delay_remove_spec.lua  loc=54  cases=1
 @exercises midiManager (h.fm), groupManager (gm), trackerView (h.vm), trackerManager (h.tm)
 @surface   fm:dump, gm:markGroup, vm:eventsInRect, gm:newInstance, tm:flush, gm:setLocalMode, gm:deleteEvent
 @harness   mk{seed.length, seed.resolution, seed.notes}

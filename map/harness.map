@@ -1,4 +1,4 @@
-@module harness  src=tests/harness.lua  loc=147  sha=f5042ce  mode=namespace  self=harness
+@module harness  src=tests/harness.lua  loc=147  mode=namespace  self=harness
 
 # Imports
   @const util = 'util'  @ 24

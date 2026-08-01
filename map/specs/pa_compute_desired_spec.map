@@ -1,4 +1,4 @@
-@spec pa_compute_desired_spec  src=tests/specs/pa_compute_desired_spec.lua  loc=59  sha=31b8f53  cases=3
+@spec pa_compute_desired_spec  src=tests/specs/pa_compute_desired_spec.lua  loc=59  cases=3
 
 # Intent
   pa.computeDesired: pure bindings -> per-track trackSpecs. Pins the

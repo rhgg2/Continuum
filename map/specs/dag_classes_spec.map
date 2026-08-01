@@ -1,4 +1,4 @@
-@spec dag_classes_spec  src=tests/specs/dag_classes_spec.lua  loc=137  sha=1694e27  cases=6
+@spec dag_classes_spec  src=tests/specs/dag_classes_spec.lua  loc=137  cases=6
 @exercises DAG (DAG)
 @surface   DAG.compile
 

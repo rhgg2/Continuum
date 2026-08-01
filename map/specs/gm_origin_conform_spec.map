@@ -1,4 +1,4 @@
-@spec gm_origin_conform_spec  src=tests/specs/gm_origin_conform_spec.lua  loc=153  sha=f8aa484  cases=2
+@spec gm_origin_conform_spec  src=tests/specs/gm_origin_conform_spec.lua  loc=153  cases=2
 @exercises groupManager (gm), trackerManager (h.tm)
 @surface   gm:markGroup, gm:newInstance, tm:flush, gm:assignEvent, gm:stamp, tm:getChannel
 @harness   mk{seed.length, seed.notes}

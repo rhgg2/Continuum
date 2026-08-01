@@ -1,4 +1,4 @@
-@spec gm_pitch_dupe_spec  src=tests/specs/gm_pitch_dupe_spec.lua  loc=61  sha=bb5e29b  cases=1
+@spec gm_pitch_dupe_spec  src=tests/specs/gm_pitch_dupe_spec.lua  loc=61  cases=1
 @exercises trackerManager (h.tm), trackerView (h.vm), groupManager (gm)
 @surface   tm:getChannel, vm:selectionAsRect, vm:eventsInRect, gm:markGroup, gm:newInstance, tm:flush, gm:assignEvent
 @harness   mk{seed.notes}

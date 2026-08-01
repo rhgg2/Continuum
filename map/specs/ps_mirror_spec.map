@@ -1,4 +1,4 @@
-@spec ps_mirror_spec  src=tests/specs/ps_mirror_spec.lua  loc=262  sha=37ed80d  cases=10
+@spec ps_mirror_spec  src=tests/specs/ps_mirror_spec.lua  loc=262  cases=10
 @exercises pextStore (ps), midiManager (h.mm)
 @surface   ps:watch, ps:assign, ps:pollUndo, ps:get, ps:subscribe, mm:modify, mm:add, mm:assign, mm:notes
 @harness   reaper:bindTake, reaper:setResolution, r._state.trackExt, r._state.projStateCount, r._state.projExt, r._state.projectTracks, r._state.trackGuids

@@ -1,4 +1,4 @@
-@spec tm_swing_spec  src=tests/specs/tm_swing_spec.lua  loc=166  sha=37ed80d  cases=9
+@spec tm_swing_spec  src=tests/specs/tm_swing_spec.lua  loc=166  cases=9
 @exercises trackerManager (h.tm), timing (timing), dataStore (h.ds), trackerView (h.vm), midiManager (h.fm)
 @surface   tm:fromLogical, tm:toLogical, tm:resolution, timing.resolveFactors, timing.applyFactors, ds:assign, vm:setSwingSlot, tm:rebuild, fm:dump, tm:byUuid
 @harness   mk{seed.length, seed.resolution, seed.notes}

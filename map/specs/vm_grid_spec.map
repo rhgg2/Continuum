@@ -1,4 +1,4 @@
-@spec vm_grid_spec  src=tests/specs/vm_grid_spec.lua  loc=419  sha=510a60e  cases=17
+@spec vm_grid_spec  src=tests/specs/vm_grid_spec.lua  loc=419  cases=17
 @exercises trackerView (h.vm), editCursor (h.ec), timing (timing), dataStore (h.ds), midiManager (h.fm)
 @surface   vm:setGridSize, ec:selectChannel, ec:col, vm:rowBeatInfo, vm:addExtraCol, timing.resolveFactors, timing.applyFactors, ds:assign, ec:setPos, vm:editEvent, fm:dump, timing.logPerRow
 @harness   mk{seed.notes, seed.ccs, seed.resolution, seed.length}

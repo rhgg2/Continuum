@@ -1,4 +1,4 @@
-@spec edit_cursor_spec  src=tests/specs/edit_cursor_spec.lua  loc=999  sha=5b72451  cases=35
+@spec edit_cursor_spec  src=tests/specs/edit_cursor_spec.lua  loc=999  cases=35
 @exercises trackerView (h.vm), editCursor (h.ec), commandManager (h.cmgr), midiManager (h.fm), trackerManager (h.tm), dataStore (h.ds)
 @surface   vm:setGridSize, ec:extendTo, ec:pos, ec:setPos, cmgr:invoke, fm:dump, ec:region, ec:row, tm:getChannel, ec:eachSelectedCol, vm:showDelay, ds:get, ec:hasSelection, tm:deleteEvent, tm:flush
 @harness   mk{seed.notes, seed.length, seed.ccs}

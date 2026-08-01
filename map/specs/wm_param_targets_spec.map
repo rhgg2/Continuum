@@ -1,4 +1,4 @@
-@spec wm_param_targets_spec  src=tests/specs/wm_param_targets_spec.lua  loc=86  sha=e2be081  cases=2
+@spec wm_param_targets_spec  src=tests/specs/wm_param_targets_spec.lua  loc=86  cases=2
 @exercises wiringManager (wm)
 @surface   wm:load, wm:mutate, wm:paramTargets
 @harness   mk, reaper:setTrackFX, reaper:setFxGuid, r._state.projectTracks, r._state.trackGuids

@@ -1,4 +1,4 @@
-@spec tm_pa_swung_translation_spec  src=tests/specs/tm_pa_swung_translation_spec.lua  loc=78  sha=5efc716  cases=2
+@spec tm_pa_swung_translation_spec  src=tests/specs/tm_pa_swung_translation_spec.lua  loc=78  cases=2
 @exercises dataStore (h.ds), trackerManager (h.tm), midiManager (h.mm)
 @surface   ds:assign, tm:addEvent, tm:flush, mm:notes, mm:ccsRaw, tm:assignEvent
 @harness   mk

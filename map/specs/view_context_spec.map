@@ -1,4 +1,4 @@
-@spec view_context_spec  src=tests/specs/view_context_spec.lua  loc=589  sha=9c29f58  cases=35
+@spec view_context_spec  src=tests/specs/view_context_spec.lua  loc=589  cases=35
 @exercises tuning (tuning), trackerView (h.vm), configManager (h.cm)
 @surface   tuning.stepToMidi, vm:activeTemper, cm:set
 @harness   mk{seed.ccs}

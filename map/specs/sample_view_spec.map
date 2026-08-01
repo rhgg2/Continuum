@@ -1,4 +1,4 @@
-@spec sample_view_spec  src=tests/specs/sample_view_spec.lua  loc=209  sha=1278d64  cases=15
+@spec sample_view_spec  src=tests/specs/sample_view_spec.lua  loc=209  cases=15
 @exercises configManager (h.cm), dataStore (h.ds)
 @surface   cm:set, cm:getAt, cm:setContext, ds:assign, cm:get
 @harness   mk, r._state.trackExt

@@ -1,4 +1,4 @@
-@spec gm_value_facade_spec  src=tests/specs/gm_value_facade_spec.lua  loc=64  sha=bb5e29b  cases=2
+@spec gm_value_facade_spec  src=tests/specs/gm_value_facade_spec.lua  loc=64  cases=2
 @exercises midiManager (h.fm), trackerView (h.vm), groupManager (h.gm), trackerManager (h.tm), commandManager (h.cmgr)
 @surface   fm:notes, vm:selectionAsRect, gm:markGroup, vm:eventsInRect, gm:newInstance, tm:flush, cmgr:invoke, gm:setLocalMode
 @harness   mk{seed.notes}

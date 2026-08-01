@@ -1,4 +1,4 @@
-@spec tm_seek_walk_spec  src=tests/specs/tm_seek_walk_spec.lua  loc=126  sha=ce2b16d  cases=4
+@spec tm_seek_walk_spec  src=tests/specs/tm_seek_walk_spec.lua  loc=126  cases=4
 @exercises midiManager (h.fm), trackerManager (h.tm)
 @surface   fm:notes, tm:addEvent, tm:flush, fm:dump, tm:deleteEvent
 @harness   mk{seed.length, seed.notes}

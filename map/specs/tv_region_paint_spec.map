@@ -1,4 +1,4 @@
-@spec tv_region_paint_spec  src=tests/specs/tv_region_paint_spec.lua  loc=99  sha=e25c39b  cases=4
+@spec tv_region_paint_spec  src=tests/specs/tv_region_paint_spec.lua  loc=99  cases=4
 @exercises groupManager (h.gm), trackerView (h.vm)
 @surface   gm:mark, vm:eventsInRect, gm:eachInstance, gm:stateOf, vm:paintRegionStream
 @harness   mk{seed.notes, seed.ppq, seed.dur, seed.chanLo, seed.streams}

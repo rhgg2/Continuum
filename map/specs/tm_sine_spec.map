@@ -1,4 +1,4 @@
-@spec tm_sine_spec  src=tests/specs/tm_sine_spec.lua  loc=230  sha=a17676d  cases=10
+@spec tm_sine_spec  src=tests/specs/tm_sine_spec.lua  loc=230  cases=10
 @exercises trackerManager (h.tm), midiManager (h.fm), configManager (h.cm), dataStore (h.ds)
 @surface   tm:addEvent, tm:flush, fm:dump, tm:rebuild, tm:getChannel, tm:assignEvent, cm:assign, fm:load, ds:get
 @harness   mk

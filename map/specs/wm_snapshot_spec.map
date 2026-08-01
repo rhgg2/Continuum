@@ -1,4 +1,4 @@
-@spec wm_snapshot_spec  src=tests/specs/wm_snapshot_spec.lua  loc=302  sha=e2be081  cases=15
+@spec wm_snapshot_spec  src=tests/specs/wm_snapshot_spec.lua  loc=302  cases=15
 @exercises wiringManager (wm)
 @surface   wm:mutate, wm:load, wm:snapshot
 @harness   mk, reaper.GetSetMediaTrackInfo_String, reaper.TrackFX_AddByName, reaper:setFxGuid, reaper:setFxParamNames, reaper:addSend, reaper.SetMediaTrackInfo_Value, reaper.SetTrackSendInfo_Value, reaper:setFxIO, reaper.TrackFX_SetPinMappings, r._state.projectTracks, r._state.trackGuids

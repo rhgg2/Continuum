@@ -1,4 +1,4 @@
-@spec wm_fx_locations_spec  src=tests/specs/wm_fx_locations_spec.lua  loc=92  sha=e2be081  cases=3
+@spec wm_fx_locations_spec  src=tests/specs/wm_fx_locations_spec.lua  loc=92  cases=3
 @exercises wiringManager (wm)
 @surface   wm:load, wm:instantiateFxOnScratch, wm:applyOps, wm:diff, wm:targetState, wm:snapshot, wm:mutate, wm:graph, wm:fxTrack
 @harness   mk, r._state.projectTracks, r._state.trackGuids

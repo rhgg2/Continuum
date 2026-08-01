@@ -1,4 +1,4 @@
-@spec mm_collision_backstop_spec  src=tests/specs/mm_collision_backstop_spec.lua  loc=107  sha=37ed80d  cases=4
+@spec mm_collision_backstop_spec  src=tests/specs/mm_collision_backstop_spec.lua  loc=107  cases=4
 @exercises midiManager (h.mm)
 @surface   mm:notes, mm:subscribe, mm:byUuid, mm:modify, mm:assign
 @harness   bareMM

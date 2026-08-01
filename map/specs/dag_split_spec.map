@@ -1,4 +1,4 @@
-@spec dag_split_spec  src=tests/specs/dag_split_spec.lua  loc=270  sha=1694e27  cases=13
+@spec dag_split_spec  src=tests/specs/dag_split_spec.lua  loc=270  cases=13
 @exercises DAG (DAG)
 @surface   DAG.compile, DAG.targetTracks, DAG.validate
 

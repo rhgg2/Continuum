@@ -1,4 +1,4 @@
-@spec wm_pin_grow_reassert_spec  src=tests/specs/wm_pin_grow_reassert_spec.lua  loc=106  sha=e2be081  cases=4
+@spec wm_pin_grow_reassert_spec  src=tests/specs/wm_pin_grow_reassert_spec.lua  loc=106  cases=4
 @exercises wiringManager (wm)
 @surface   wm:load, wm:instantiateFxOnScratch, wm:mutate, wm:applyOps, wm:diff, wm:targetState, wm:snapshot, wm:graph
 @harness   mk, reaper:setFxIO, reaper.TrackFX_GetPinMappings, reaper.TrackFX_SetPinMappings, r._state.projectTracks, r._state.trackGuids, r._state.deferred

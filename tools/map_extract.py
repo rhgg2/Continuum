@@ -34,7 +34,6 @@ keys count as writes), queried via map_query kind='reads'/'writes'.
 from __future__ import annotations
 
 import re
-import subprocess
 import sys
 from pathlib import Path
 from dataclasses import dataclass, field
@@ -119,7 +118,6 @@ class MapFile:
     module: str
     src: Path
     loc: int
-    sha: str
     mode: str = 'script'                          # chunk | namespace | script
     return_target: str = ''
     deps: list[str] = field(default_factory=list)
@@ -146,19 +144,6 @@ class MapFile:
     uses: list[tuple[str, str, int, str]] = field(default_factory=list)
     # Field accesses: (kind 'r'|'w', field, line, caller|None).
     fields: list[tuple[str, str, int, str]] = field(default_factory=list)
-
-
-# ----- Helpers
-
-def short_sha(path: Path) -> str:
-    try:
-        r = subprocess.run(
-            ['git', 'log', '-1', '--format=%h', '--', str(path)],
-            capture_output=True, text=True, cwd=path.parent,
-        )
-        return r.stdout.strip() or 'untracked'
-    except Exception:
-        return 'unknown'
 
 
 # ----- Block spans (string/comment-aware Lua block-depth)
@@ -346,7 +331,7 @@ def parse(path: Path) -> MapFile:
     deltas, level_after = block_levels(code_lines)
     fn_depth = function_depth_before(code_lines)
 
-    cm = MapFile(module=path.stem, src=path, loc=len(lines), sha=short_sha(path))
+    cm = MapFile(module=path.stem, src=path, loc=len(lines))
     cm.mode, cm.return_target = classify(lines)
     if cm.mode == 'chunk':
         cm.deps = discover_deps(lines)
@@ -774,7 +759,7 @@ def emit(cm: MapFile) -> str:
 
     src_rel = ('/'.join(cm.src.parts[-2:]) if cm.src.parent.name == 'tests'
                else cm.src.name)
-    head = f"@module {cm.module}  src={src_rel}  loc={cm.loc}  sha={cm.sha}  mode={cm.mode}"
+    head = f"@module {cm.module}  src={src_rel}  loc={cm.loc}  mode={cm.mode}"
     if cm.return_target:
         head += f"  self={cm.return_target}"
     add(head)
@@ -951,7 +936,6 @@ class SpecMap:
     module: str
     rel_src: str
     loc: int
-    sha: str
     intent: list[str] = field(default_factory=list)
     helpers: list[Block] = field(default_factory=list)
     cases: list[SpecCase] = field(default_factory=list)
@@ -1010,7 +994,7 @@ def parse_spec(path: Path) -> SpecMap:
     fn_depth = function_depth_before(code_lines)
 
     sm = SpecMap(module=path.stem, rel_src='/'.join(path.parts[-3:]),
-                 loc=len(lines), sha=short_sha(path))
+                 loc=len(lines))
     sm.intent = spec_intent(lines)
 
     # Alias table: harness members + instantiated / required modules + locals
@@ -1100,7 +1084,7 @@ def parse_spec(path: Path) -> SpecMap:
 def emit_spec(sm: SpecMap) -> str:
     out: list[str] = []
     add = out.append
-    add(f"@spec {sm.module}  src={sm.rel_src}  loc={sm.loc}  sha={sm.sha}  cases={len(sm.cases)}")
+    add(f"@spec {sm.module}  src={sm.rel_src}  loc={sm.loc}  cases={len(sm.cases)}")
     if sm.exercises:
         add("@exercises " + ', '.join(f"{mod} ({alias})" for mod, alias in sm.exercises))
     if sm.surface:

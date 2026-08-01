@@ -1,4 +1,4 @@
-@spec dag_folder_capacity_spec  src=tests/specs/dag_folder_capacity_spec.lua  loc=111  sha=22b4f02  cases=3
+@spec dag_folder_capacity_spec  src=tests/specs/dag_folder_capacity_spec.lua  loc=111  cases=3
 @exercises DAG (DAG)
 @surface   DAG.allocate, DAG.targetTracks, DAG.compile
 

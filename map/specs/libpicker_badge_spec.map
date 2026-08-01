@@ -1,4 +1,4 @@
-@spec libpicker_badge_spec  src=tests/specs/libpicker_badge_spec.lua  loc=65  sha=3ce3a15  cases=1
+@spec libpicker_badge_spec  src=tests/specs/libpicker_badge_spec.lua  loc=65  cases=1
 @harness   mk
 
 # Intent

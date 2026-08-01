@@ -1,4 +1,4 @@
-@spec tm_reseat_collision_spec  src=tests/specs/tm_reseat_collision_spec.lua  loc=87  sha=2c031b2  cases=3
+@spec tm_reseat_collision_spec  src=tests/specs/tm_reseat_collision_spec.lua  loc=87  cases=3
 @exercises dataStore (h.ds), midiManager (h.mm)
 @surface   ds:assign, mm:notes
 @harness   mk{seed.notes}

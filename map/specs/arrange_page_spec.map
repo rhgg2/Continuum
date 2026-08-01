@@ -1,4 +1,4 @@
-@spec arrange_page_spec  src=tests/specs/arrange_page_spec.lua  loc=743  sha=61aa319  cases=35
+@spec arrange_page_spec  src=tests/specs/arrange_page_spec.lua  loc=743  cases=35
 @exercises commandManager (h.cmgr), configManager (h.cm), arrangeManager (am)
 @surface   cmgr:push, cmgr:invoke, cm:set, am:tracksTakes, cm:get, am:resizeTake
 @harness   mk, reaper:setTrackName, reaper:addItem, reaper.SetMediaItemSelected, reaper:setCursor

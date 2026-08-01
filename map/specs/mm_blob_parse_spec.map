@@ -1,4 +1,4 @@
-@spec mm_blob_parse_spec  src=tests/specs/mm_blob_parse_spec.lua  loc=46  sha=52943e4  cases=2
+@spec mm_blob_parse_spec  src=tests/specs/mm_blob_parse_spec.lua  loc=46  cases=2
 @exercises midiBlob (midiBlob)
 @surface   midiBlob.parse
 

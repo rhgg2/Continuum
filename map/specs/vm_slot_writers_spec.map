@@ -1,4 +1,4 @@
-@spec vm_slot_writers_spec  src=tests/specs/vm_slot_writers_spec.lua  loc=207  sha=f5042ce  cases=18
+@spec vm_slot_writers_spec  src=tests/specs/vm_slot_writers_spec.lua  loc=207  cases=18
 @exercises trackerView (h.vm), configManager (h.cm), dataStore (h.ds)
 @surface   vm:setTemperSlot, cm:getAt, vm:setSwingSlot, ds:get, vm:setSwingComposite, vm:setColSwingSlot, vm:seedSharedSlots, cm:set
 @harness   mk

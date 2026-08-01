@@ -1,4 +1,4 @@
-@spec wm_reconcile_cache_spec  src=tests/specs/wm_reconcile_cache_spec.lua  loc=141  sha=e2be081  cases=7
+@spec wm_reconcile_cache_spec  src=tests/specs/wm_reconcile_cache_spec.lua  loc=141  cases=7
 @exercises wiringManager (wm)
 @surface   wm:load, wm:instantiateFxOnScratch, wm:mutate, wm:enableLive, wm:diff, wm:targetState, wm:snapshot, wm:graph, wm:fastGainCommit, wm:reconcile, wm:syncExternal
 @harness   mk, r._state.projectTracks, r._state.trackGuids, r._state.projStateCount

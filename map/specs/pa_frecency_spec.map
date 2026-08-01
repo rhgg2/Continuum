@@ -1,4 +1,4 @@
-@spec pa_frecency_spec  src=tests/specs/pa_frecency_spec.lua  loc=110  sha=d15eb89  cases=6
+@spec pa_frecency_spec  src=tests/specs/pa_frecency_spec.lua  loc=110  cases=6
 @exercises paramAutomation (pa), dataStore (h.ds)
 @surface   pa.frecencyOrder, pa:bumpFrecency, ds:get, pa:params
 @harness   mk, r:setTrackFX, r:setFxGuid, r:setFxParamNames, r:setFxParamSections, r._state.projectTracks, r._state.trackGuids

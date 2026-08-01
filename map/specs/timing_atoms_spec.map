@@ -1,4 +1,4 @@
-@spec timing_atoms_spec  src=tests/specs/timing_atoms_spec.lua  loc=363  sha=4a6bfb0  cases=19
+@spec timing_atoms_spec  src=tests/specs/timing_atoms_spec.lua  loc=363  cases=19
 @exercises timing (timing)
 @surface   timing.resolveFactors, timing.applyFactors, timing.unapplyFactors, timing.atomTilePeriod, timing.logPerRow
 

@@ -1,4 +1,4 @@
-@spec curveEditor_spec  src=tests/specs/curveEditor_spec.lua  loc=197  sha=9446a73  cases=5
+@spec curveEditor_spec  src=tests/specs/curveEditor_spec.lua  loc=197  cases=5
 
 # Intent
   curveEditor regression net, written BEFORE the painter migration so it

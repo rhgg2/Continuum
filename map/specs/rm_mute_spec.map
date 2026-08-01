@@ -1,4 +1,4 @@
-@spec rm_mute_spec  src=tests/specs/rm_mute_spec.lua  loc=136  sha=e2be081  cases=6
+@spec rm_mute_spec  src=tests/specs/rm_mute_spec.lua  loc=136  cases=6
 @exercises harness (harness), routingManager (rm2)
 @surface   harness.mk, rm2:muted, rm2:tracks
 @harness   mk, reaper:setFxIO, reaper.CountTracks, reaper.InsertTrackAtIndex, reaper.GetTrack, reaper.GetSetMediaTrackInfo_String, reaper:setTrackFX, reaper.TrackFX_GetPinMappings

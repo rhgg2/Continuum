@@ -1,4 +1,4 @@
-@spec fs_spec  src=tests/specs/fs_spec.lua  loc=86  sha=fa4a61d  cases=8
+@spec fs_spec  src=tests/specs/fs_spec.lua  loc=86  cases=8
 @exercises fs (fs)
 @surface   fs.isAudio, fs.basename, fs.parent, fs.join, fs.listDirs, fs.listAudioFiles
 @harness   mk

@@ -1,4 +1,4 @@
-@spec keyDispatch_spec  src=tests/specs/keyDispatch_spec.lua  loc=205  sha=65573d0  cases=10
+@spec keyDispatch_spec  src=tests/specs/keyDispatch_spec.lua  loc=205  cases=10
 @exercises commandManager (cmgr)
 @surface   cmgr:bind, cmgr:beginPrefix, cmgr:isPrefixActive, cmgr:scope, cmgr:push
 

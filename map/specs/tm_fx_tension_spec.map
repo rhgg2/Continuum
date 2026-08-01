@@ -1,4 +1,4 @@
-@spec tm_fx_tension_spec  src=tests/specs/tm_fx_tension_spec.lua  loc=101  sha=a17676d  cases=2
+@spec tm_fx_tension_spec  src=tests/specs/tm_fx_tension_spec.lua  loc=101  cases=2
 @exercises midiManager (h.fm), trackerManager (h.tm)
 @surface   fm:interpolate, tm:addEvent, tm:flush, fm:dump
 @harness   mk{seed.ccs}

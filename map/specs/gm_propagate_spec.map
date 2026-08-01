@@ -1,4 +1,4 @@
-@spec gm_propagate_spec  src=tests/specs/gm_propagate_spec.lua  loc=223  sha=f8aa484  cases=8
+@spec gm_propagate_spec  src=tests/specs/gm_propagate_spec.lua  loc=223  cases=8
 @exercises groupManager (gm), trackerManager (h.tm)
 @surface   gm:markGroup, gm:newInstance, tm:flush, gm:assignEvent, gm:addEvent, gm:setLocalMode
 

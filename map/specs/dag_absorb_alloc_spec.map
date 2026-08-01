@@ -1,4 +1,4 @@
-@spec dag_absorb_alloc_spec  src=tests/specs/dag_absorb_alloc_spec.lua  loc=168  sha=37a60a3  cases=5
+@spec dag_absorb_alloc_spec  src=tests/specs/dag_absorb_alloc_spec.lua  loc=168  cases=5
 @exercises DAG (DAG)
 @surface   DAG.compile, DAG.allocate, DAG.targetTracks
 

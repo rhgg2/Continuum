@@ -1,4 +1,4 @@
-@spec gm_block_shift_alias_spec  src=tests/specs/gm_block_shift_alias_spec.lua  loc=88  sha=b8c32e6  cases=2
+@spec gm_block_shift_alias_spec  src=tests/specs/gm_block_shift_alias_spec.lua  loc=88  cases=2
 @exercises midiManager (h.fm), groupManager (h.gm), trackerView (h.vm), editCursor (h.ec), trackerManager (h.tm), commandManager (h.cmgr)
 @surface   fm:notes, gm:markGroup, vm:eventsInRect, vm:selectionAsRect, ec:selClear, gm:newInstance, tm:flush, cmgr:invoke
 @harness   mk{seed.notes}

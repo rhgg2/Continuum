@@ -1,4 +1,4 @@
-@module masterMix  src=masterMix.lua  loc=140  sha=e32512e  mode=chunk
+@module masterMix  src=masterMix.lua  loc=140  mode=chunk
 @deps chrome, ctx
 
 # Shapes

@@ -1,4 +1,4 @@
-@spec groups_core_spec  src=tests/specs/groups_core_spec.lua  loc=351  sha=7dae3ed  cases=26
+@spec groups_core_spec  src=tests/specs/groups_core_spec.lua  loc=351  cases=26
 @exercises groups (groups)
 @surface   groups.project, groups.reconcile, groups.deriveAssign, groups.streamId, groups.inRect
 

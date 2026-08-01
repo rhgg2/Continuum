@@ -1,4 +1,4 @@
-@spec arrange_view_spec  src=tests/specs/arrange_view_spec.lua  loc=508  sha=1278d64  cases=29
+@spec arrange_view_spec  src=tests/specs/arrange_view_spec.lua  loc=508  cases=29
 @exercises configManager (h.cm), arrangeView (av), commandManager (h.cmgr), arrangeManager (am2)
 @surface   cm:set, av:cursorRow, av:cursorCol, av:setCursor, av:setGridSize, av:scroll, av:scrollBy, av:setMaxCol, av:beatPerRow, av:setBeatPerRow, cm:get, av:rowToQN, av:paletteSlot, av:setPaletteSlot, av:focus, av:setFocus, cmgr:push, cmgr:invoke, am2:tracksTakes, av:tracksTakes, av:lassoCandidate, av:selectionSet, av:toggleSelected, av:isSelected, av:dragCandidate, av:commitDrag, av:qnToRow
 @harness   mk, reaper:setTrackName, reaper:addItem, reaper:setProjectTracks

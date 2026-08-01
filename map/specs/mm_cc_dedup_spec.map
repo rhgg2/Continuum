@@ -1,4 +1,4 @@
-@spec mm_cc_dedup_spec  src=tests/specs/mm_cc_dedup_spec.lua  loc=374  sha=37ed80d  cases=12
+@spec mm_cc_dedup_spec  src=tests/specs/mm_cc_dedup_spec.lua  loc=374  cases=12
 @exercises midiManager (h.mm)
 @surface   mm:subscribe, mm:load, mm:ccs, mm:modify, mm:assign
 @harness   fakeReaper:bindTake, reaper:seedMidi, reaper:dumpMidi

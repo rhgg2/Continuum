@@ -1,4 +1,4 @@
-@spec vm_scale_spec  src=tests/specs/vm_scale_spec.lua  loc=48  sha=1a1393f  cases=2
+@spec vm_scale_spec  src=tests/specs/vm_scale_spec.lua  loc=48  cases=2
 @exercises trackerView (h.vm), midiManager (h.fm)
 @surface   vm:scaleSelection, fm:dump
 @harness   mk{seed.notes}

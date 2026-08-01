@@ -1,4 +1,4 @@
-@spec gm_active_spec  src=tests/specs/gm_active_spec.lua  loc=77  sha=f8aa484  cases=4
+@spec gm_active_spec  src=tests/specs/gm_active_spec.lua  loc=77  cases=4
 @exercises groupManager (h.gm)
 @surface   gm:mark, gm:activeGroup, gm:stamp, gm:clearActive
 

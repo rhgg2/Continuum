@@ -1,4 +1,4 @@
-@spec wv_edge_gain_spec  src=tests/specs/wv_edge_gain_spec.lua  loc=84  sha=e2be081  cases=6
+@spec wv_edge_gain_spec  src=tests/specs/wv_edge_gain_spec.lua  loc=84  cases=6
 @exercises wiringView (wv)
 @surface   wv:addFx, wv:edgeGain, wv:setEdgeGain, wv:graph
 @harness   mk

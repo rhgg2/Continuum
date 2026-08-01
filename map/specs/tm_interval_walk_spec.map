@@ -1,4 +1,4 @@
-@spec tm_interval_walk_spec  src=tests/specs/tm_interval_walk_spec.lua  loc=84  sha=untracked  cases=2
+@spec tm_interval_walk_spec  src=tests/specs/tm_interval_walk_spec.lua  loc=84  cases=2
 @exercises trackerManager (h.tm), dataStore (h.ds), midiManager (h.fm)
 @surface   tm:addEvent, tm:flush, ds:assign, tm:rebuild, fm:notes
 @harness   mk

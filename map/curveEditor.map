@@ -1,4 +1,4 @@
-@module curveEditor  src=curveEditor.lua  loc=343  sha=84c795b  mode=chunk  self=curveEditor
+@module curveEditor  src=curveEditor.lua  loc=343  mode=chunk  self=curveEditor
 @deps ctx, chrome, page
 
 # Invariants & contracts

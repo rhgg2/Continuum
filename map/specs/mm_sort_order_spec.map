@@ -1,4 +1,4 @@
-@spec mm_sort_order_spec  src=tests/specs/mm_sort_order_spec.lua  loc=171  sha=035a266  cases=7
+@spec mm_sort_order_spec  src=tests/specs/mm_sort_order_spec.lua  loc=171  cases=7
 @exercises midiManager (h.mm), midiBlob (midiBlob)
 @surface   mm:modify, mm:notesRaw, mm:ccsRaw, mm:assign, mm:delete, midiBlob.parse
 @harness   bareMM

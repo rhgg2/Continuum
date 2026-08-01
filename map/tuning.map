@@ -1,4 +1,4 @@
-@module tuning  src=tuning.lua  loc=464  sha=d013d39  mode=namespace  self=tuning
+@module tuning  src=tuning.lua  loc=464  mode=namespace  self=tuning
 
 # Invariants & contracts
   @invariant  pure coordinate-system module: no module state, no take state, no pb / detune realisation logic  @ 4

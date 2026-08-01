@@ -1,4 +1,4 @@
-@spec wm_delete_source_spec  src=tests/specs/wm_delete_source_spec.lua  loc=119  sha=e2be081  cases=5
+@spec wm_delete_source_spec  src=tests/specs/wm_delete_source_spec.lua  loc=119  cases=5
 @exercises wiringManager (wm)
 @surface   wm:load, wm:addFxNode, wm:mutate, wm:deleteSource, wm:graph, wm:isScratchTrack
 @harness   mk, reaper:setFxIO, reaper.CountTracks, reaper.GetTrack, reaper.GetTrackGUID, r._state.projectTracks, r._state.trackGuids, r._state.itemsByTrack

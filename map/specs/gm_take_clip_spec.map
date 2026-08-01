@@ -1,4 +1,4 @@
-@spec gm_take_clip_spec  src=tests/specs/gm_take_clip_spec.lua  loc=81  sha=f8aa484  cases=2
+@spec gm_take_clip_spec  src=tests/specs/gm_take_clip_spec.lua  loc=81  cases=2
 @exercises groupManager (gm), trackerManager (h.tm)
 @surface   gm:markGroup, gm:newInstance, tm:flush
 

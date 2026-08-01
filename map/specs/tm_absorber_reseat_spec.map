@@ -1,4 +1,4 @@
-@spec tm_absorber_reseat_spec  src=tests/specs/tm_absorber_reseat_spec.lua  loc=232  sha=37ed80d  cases=6
+@spec tm_absorber_reseat_spec  src=tests/specs/tm_absorber_reseat_spec.lua  loc=232  cases=6
 @exercises midiManager (h.fm), trackerManager (h.tm), dataStore (h.ds)
 @surface   fm:dump, tm:getChannel, ds:delete, tm:assignEvent, tm:flush, tm:addEvent
 @harness   mk{seed.notes, seed.ccs}

@@ -1,4 +1,4 @@
-@spec dag_target_tracks_spec  src=tests/specs/dag_target_tracks_spec.lua  loc=906  sha=8233379  cases=39
+@spec dag_target_tracks_spec  src=tests/specs/dag_target_tracks_spec.lua  loc=906  cases=39
 @exercises DAG (DAG)
 @surface   DAG.targetTracks, DAG.compile
 

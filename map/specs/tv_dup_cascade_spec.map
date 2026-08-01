@@ -1,4 +1,4 @@
-@spec tv_dup_cascade_spec  src=tests/specs/tv_dup_cascade_spec.lua  loc=148  sha=4a6bfb0  cases=8
+@spec tv_dup_cascade_spec  src=tests/specs/tv_dup_cascade_spec.lua  loc=148  cases=8
 @exercises trackerView (h.vm), editCursor (h.ec), midiManager (h.fm), commandManager (h.cmgr)
 @surface   vm:setGridSize, ec:setPos, fm:dump, cmgr:invoke, ec:selClear, ec:extendTo, ec:hasSelection
 @harness   mk{seed.notes}

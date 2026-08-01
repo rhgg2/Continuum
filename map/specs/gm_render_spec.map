@@ -1,4 +1,4 @@
-@spec gm_render_spec  src=tests/specs/gm_render_spec.lua  loc=67  sha=f8aa484  cases=4
+@spec gm_render_spec  src=tests/specs/gm_render_spec.lua  loc=67  cases=4
 @exercises groups (groups), groupManager (h.gm)
 @surface   groups.tintKey, groups.regionKey, groups.outlineKey, gm:mark, gm:newInstance, gm:eachInstance, gm:markGroup
 

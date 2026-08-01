@@ -1,4 +1,4 @@
-@spec gm_delete_conform_integration_spec  src=tests/specs/gm_delete_conform_integration_spec.lua  loc=82  sha=9e7e85d  cases=1
+@spec gm_delete_conform_integration_spec  src=tests/specs/gm_delete_conform_integration_spec.lua  loc=82  cases=1
 @exercises trackerManager (h.tm), groupManager (h.gm), midiManager (h.fm), editCursor (h.ec), commandManager (h.cmgr)
 @surface   tm:byUuid, gm:markGroup, gm:newInstance, tm:flush, fm:dump, ec:setPos, cmgr:invoke
 @harness   mk{seed.length, seed.resolution, seed.notes}

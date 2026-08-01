@@ -1,4 +1,4 @@
-@module temperEditor  src=temperEditor.lua  loc=811  sha=18e9e47  mode=chunk  self=temperEditor
+@module temperEditor  src=temperEditor.lua  loc=811  mode=chunk  self=temperEditor
 @deps cm, chrome, ctx, gui, modalHost, lib, facade
 
 # Imports

@@ -1,4 +1,4 @@
-@spec dag_classify_spec  src=tests/specs/dag_classify_spec.lua  loc=93  sha=b5bd4f7  cases=7
+@spec dag_classify_spec  src=tests/specs/dag_classify_spec.lua  loc=93  cases=7
 @exercises DAG (DAG)
 @surface   DAG.classify
 

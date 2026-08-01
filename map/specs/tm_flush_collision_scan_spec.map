@@ -1,4 +1,4 @@
-@spec tm_flush_collision_scan_spec  src=tests/specs/tm_flush_collision_scan_spec.lua  loc=164  sha=2c031b2  cases=7
+@spec tm_flush_collision_scan_spec  src=tests/specs/tm_flush_collision_scan_spec.lua  loc=164  cases=7
 @exercises midiManager (h.mm), trackerManager (h.tm), voicing (voicing)
 @surface   mm:notes, tm:addEvent, tm:flush, voicing.resolveGroup, voicing.resolveSorted
 @harness   mk{seed.notes}

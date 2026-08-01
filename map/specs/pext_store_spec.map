@@ -1,4 +1,4 @@
-@spec pext_store_spec  src=tests/specs/pext_store_spec.lua  loc=206  sha=13ebf25  cases=13
+@spec pext_store_spec  src=tests/specs/pext_store_spec.lua  loc=206  cases=13
 @exercises pextStore (ps)
 @surface   ps:setTake, ps:boundTake, ps:boundTrack, ps:assign, ps:get, ps:assignAt, ps:getAt, ps:watch, ps:pollUndo
 @harness   fakeReaper.new

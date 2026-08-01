@@ -1,4 +1,4 @@
-@spec tm_raw_index_order_spec  src=tests/specs/tm_raw_index_order_spec.lua  loc=159  sha=fbb26e9  cases=4
+@spec tm_raw_index_order_spec  src=tests/specs/tm_raw_index_order_spec.lua  loc=159  cases=4
 @exercises midiManager (h.mm), trackerManager (h.tm)
 @surface   mm:notes, fm:dump, tm:assignEvent, tm:flush, tm:addEvent, tm:byUuid
 @harness   mk{seed.notes}

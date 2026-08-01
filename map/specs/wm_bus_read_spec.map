@@ -1,4 +1,4 @@
-@spec wm_bus_read_spec  src=tests/specs/wm_bus_read_spec.lua  loc=166  sha=e2be081  cases=5
+@spec wm_bus_read_spec  src=tests/specs/wm_bus_read_spec.lua  loc=166  cases=5
 @exercises wiringManager (wm)
 @surface   wm:load, wm:mutate, wm:targetState, wm.readGraph
 @harness   mk, r._state.projectTracks, r._state.trackGuids

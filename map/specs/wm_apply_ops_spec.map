@@ -1,4 +1,4 @@
-@spec wm_apply_ops_spec  src=tests/specs/wm_apply_ops_spec.lua  loc=519  sha=e2be081  cases=18
+@spec wm_apply_ops_spec  src=tests/specs/wm_apply_ops_spec.lua  loc=519  cases=18
 @exercises wiringManager (wm)
 @surface   wm:load, wm:instantiateFxOnScratch, wm:applyOps, wm:diff, wm:targetState, wm:snapshot, wm:mutate, wm:graph, wm:subscribe
 @harness   mk, reaper.CountTracks, reaper.GetTrack, reaper.GetSetMediaTrackInfo_String, reaper.TrackFX_GetCount, reaper.TrackFX_GetFXName, reaper.TrackFX_GetFXGUID, reaper:setFxParamNames, reaper.GetTrackNumSends, reaper.GetTrackSendInfo_Value, reaper.GetMasterTrack, reaper.GetMediaTrackInfo_Value, reaper:setFxIO, reaper.TrackFX_GetPinMappings, reaper.TrackFX_SetPinMappings, r._state.projectTracks, r._state.trackGuids, r._state.calls

@@ -1,4 +1,4 @@
-@spec gm_dup_cascade_spec  src=tests/specs/gm_dup_cascade_spec.lua  loc=109  sha=f8aa484  cases=3
+@spec gm_dup_cascade_spec  src=tests/specs/gm_dup_cascade_spec.lua  loc=109  cases=3
 @exercises commandManager (cmgr), groupManager (gm)
 @surface   cmgr:scope, gm:duplicateInto, cmgr:doBefore, cmgr:push, cmgr:invoke
 

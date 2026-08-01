@@ -1,4 +1,4 @@
-@spec wm_jsfx_bus_aware_spec  src=tests/specs/wm_jsfx_bus_aware_spec.lua  loc=228  sha=e2be081  cases=17
+@spec wm_jsfx_bus_aware_spec  src=tests/specs/wm_jsfx_bus_aware_spec.lua  loc=228  cases=17
 @exercises wiringManager (wm)
 @surface   wm:load, wm:addFxNode, wm:graph
 @harness   mk, reaper:setFxIO, reaper.TrackFX_GetCount, reaper.GetTrack

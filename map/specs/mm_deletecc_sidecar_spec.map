@@ -1,4 +1,4 @@
-@spec mm_deletecc_sidecar_spec  src=tests/specs/mm_deletecc_sidecar_spec.lua  loc=123  sha=37ed80d  cases=1
+@spec mm_deletecc_sidecar_spec  src=tests/specs/mm_deletecc_sidecar_spec.lua  loc=123  cases=1
 @exercises midiManager (h.mm)
 @surface   mm:load, mm:ccs, mm:modify, mm:assign, mm:delete
 @harness   fakeReaper:bindTake, reaper:seedMidi

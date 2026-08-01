@@ -1,4 +1,4 @@
-@spec tv_param_learn_spec  src=tests/specs/tv_param_learn_spec.lua  loc=117  sha=1278d64  cases=5
+@spec tv_param_learn_spec  src=tests/specs/tv_param_learn_spec.lua  loc=117  cases=5
 @exercises trackerView (h.vm), dataStore (h.ds), editCursor (h.ec)
 @surface   vm:armLearn, vm:learnFxGuid, vm:cancelLearn, vm:pollLearn, vm:paletteParam, vm:listParams, ds:get, vm:setGridSize, ec:setPos, vm:automateParam, vm:paramBinding
 @harness   mk{seed.notes}, r:setTrackFX, r:setFxGuid, r:setFxParamNames, r.TrackFX_Show, r:clearCalls, r._state.projectTracks, r._state.trackGuids, r._state.projectItems, r._state.calls, r._state.lastTouched

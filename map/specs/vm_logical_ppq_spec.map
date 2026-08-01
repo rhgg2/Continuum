@@ -1,4 +1,4 @@
-@spec vm_logical_ppq_spec  src=tests/specs/vm_logical_ppq_spec.lua  loc=383  sha=a86b164  cases=12
+@spec vm_logical_ppq_spec  src=tests/specs/vm_logical_ppq_spec.lua  loc=383  cases=12
 @exercises trackerView (h.vm), editCursor (h.ec), midiManager (h.fm), commandManager (h.cmgr), trackerManager (h.tm)
 @surface   vm:setGridSize, ec:setPos, vm:editEvent, fm:dump, cmgr:invoke, tm:markSwingStale, tm:rebuild
 @harness   mk{seed.ccs, seed.notes}

@@ -1,4 +1,4 @@
-@spec vm_quantize_lane_stability_spec  src=tests/specs/vm_quantize_lane_stability_spec.lua  loc=67  sha=cbe9ac3  cases=1
+@spec vm_quantize_lane_stability_spec  src=tests/specs/vm_quantize_lane_stability_spec.lua  loc=67  cases=1
 @exercises trackerView (h.vm), midiManager (h.fm)
 @surface   vm:setGridSize, vm:quantizeAll, fm:dump
 @harness   mk{seed.notes}

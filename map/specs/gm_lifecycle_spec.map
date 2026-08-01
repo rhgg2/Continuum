@@ -1,4 +1,4 @@
-@spec gm_lifecycle_spec  src=tests/specs/gm_lifecycle_spec.lua  loc=267  sha=5c74b87  cases=16
+@spec gm_lifecycle_spec  src=tests/specs/gm_lifecycle_spec.lua  loc=267  cases=16
 @exercises groupManager (h.gm), trackerManager (h.tm)
 @surface   gm:eachInstance, gm:mark, gm:newInstance, tm:flush, gm:resizeGroup, gm:deleteInstance, gm:duplicateInto, gm:activeGroup, gm:moveInstance, gm:stateOf
 
