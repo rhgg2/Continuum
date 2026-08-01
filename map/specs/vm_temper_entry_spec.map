@@ -1,6 +1,6 @@
 @spec vm_temper_entry_spec  src=tests/specs/vm_temper_entry_spec.lua  loc=136  cases=3
-@exercises trackerView (h.vm), editCursor (h.ec), tuning (tuning), commandManager (h.cmgr)
-@surface   vm:setGridSize, ec:setPos, vm:editEvent, tuning.midiToStep, vm:noteProjection, cmgr:invoke
+@exercises tuning (tuning), trackerView (h.vm), editCursor (h.ec), commandManager (h.cmgr)
+@surface   tuning.derive, vm:setGridSize, ec:setPos, vm:editEvent, tuning.midiToStep, vm:noteProjection, cmgr:invoke
 @harness   mk{seed.notes}
 
 # Intent
@@ -23,6 +23,7 @@
   @case 'pitch nudge keeps a note in the addressable range (refuses past the ceiling)'  [harness]  @ 107-134
 
 # Uses (outbound edges)
+  @use call tuning.derive  @ 12
   @use call vm:setGridSize  @ 26
   @use call ec:setPos  @ 56,65,87,96,113,119
   @use call vm:editEvent  @ 57,66,88,97,114

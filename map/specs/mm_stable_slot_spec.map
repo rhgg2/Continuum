@@ -1,6 +1,6 @@
 @spec mm_stable_slot_spec  src=tests/specs/mm_stable_slot_spec.lua  loc=94  cases=3
 @exercises midiManager (h.mm)
-@surface   mm:notesRaw, mm:modify, mm:assign, mm:delete
+@surface   mm:notesRaw, mm:modify, mm:assign, mm:add, mm:delete
 @harness   bareMM
 
 # Intent
@@ -25,6 +25,7 @@
   @use call mm:notesRaw  @ 10,17,29
   @use call mm:modify  @ 41,45,61,75,84,88
   @use call mm:assign  @ 41,45,61
+  @use call mm:add  @ 76,89
   @use call mm:delete  @ 84
 
 # Fields (r read / w write incl. constructor keys)

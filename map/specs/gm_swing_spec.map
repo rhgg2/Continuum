@@ -36,7 +36,7 @@
   @case 'assignEvent: explicit rawTime threads caller raw unmodified'  [pure]  @ 221-245
 
 # Uses (outbound edges)
-  @use call harness.mk  @ 34
+  @use call harness.mk  @ 34,38,138
   @use call vm:eventsInRect  @ 69,102,150
   @use call gm:markGroup  @ 72,103,151
   @use call gm:newInstance  @ 73,104,152

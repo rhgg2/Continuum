@@ -1,6 +1,6 @@
 @spec vm_take_properties_spec  src=tests/specs/vm_take_properties_spec.lua  loc=328  cases=11
-@exercises midiManager (h.fm), configManager (h.cm)
-@surface   fm:setName, cm:get, fm:name, fm:length, fm:dump
+@exercises midiManager (h.fm), trackerView (h.vm), configManager (h.cm)
+@surface   fm:setName, vm:applyTakeProperties, cm:get, fm:name, fm:length, fm:dump
 @harness   mk{seed.notes, seed.ccs}
 
 # Intent
@@ -32,6 +32,7 @@
 
 # Uses (outbound edges)
   @use call fm:setName  @ 30
+  @use call vm:applyTakeProperties  @ 31,49,82,117,145,169,193,227,250,282,319
   @use call cm:get  @ 31
   @use call fm:name  @ 33,49,82,117,145,169,193,227,250,282,319
   @use call fm:length  @ 34,51,84,119,147,195,229,321

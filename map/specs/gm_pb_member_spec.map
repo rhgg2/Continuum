@@ -1,6 +1,6 @@
 @spec gm_pb_member_spec  src=tests/specs/gm_pb_member_spec.lua  loc=213  cases=6
 @exercises groupManager (gm), midiManager (h.fm), trackerManager (h.tm), trackerView (h.vm), dataStore (h.ds)
-@surface   gm:markGroup, gm:newInstance, fm:dump, tm:byUuid, vm:eventsInRect, tm:flush, gm:assignEvent, ds:get, B:eachInstance
+@surface   gm:markGroup, gm:newInstance, fm:dump, tm:byUuid, vm:eventsInRect, tm:flush, gm:assignEvent, gm:addEvent, ds:get, B:eachInstance
 @harness   mk{seed.evType, seed.chan, seed.ppq, seed.shape, seed.val, seed.cents, seed.ccs, seed.notes}
 
 # Intent
@@ -32,6 +32,7 @@
   @use call vm:eventsInRect  @ 86,128,194
   @use call tm:flush  @ 89,107,130,135,196
   @use call gm:assignEvent  @ 106
+  @use call gm:addEvent  @ 132
   @use call A:markGroup  @ 158
   @use call A:newInstance  @ 159
   @use call ds:get  @ 163

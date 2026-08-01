@@ -301,7 +301,7 @@
   @use call    DAG.validate  @ mutate:217
   @use call    fs.join  @ readJSFXContent:340
   @use call    rm:addFx  @ instantiateFxOnScratch:363 reconcileFXChain:1729
-  @use call    rm:addTrack  @ applyOps:1805
+  @use call    rm:addTrack  @ createSourceTrack:516 applyOps:1805
   @use call    rm:assignFx  @ persistNodeMeta:232 reconcileFXChain:1746,1756 applyOps:1831,1842 pokeGainTarget:1939
   @use call    rm:assignMeta  @ moveBus:276 moveNodes:291 mirrorBusTaps:317 deleteBus:631 addBusNode:693 rotateBus:711 insertBus:723,750 stampBusTracks:2060
   @use call    rm:assignTrack  @ persistNodeMeta:235,237 applyOps:1818,1822,1854 pokeGainTarget:1944
@@ -393,6 +393,7 @@
   @call stateEntry  @ refreshStateTrack:900 snapshot:937
   @call wm:applyOps  @ reconcile:2071
   @call wm:checkUserAddable  @ addFxNode:536
+  @call wm:createSourceTrack  @ addFxNode:546 addSourceNode:643
   @call wm:diff  @ reconcile:2070
   @call wm:edgeGain  @ crossingGain:1979
   @call wm:fxTrack  @ paramTargets:500

@@ -24,7 +24,7 @@
   @case 'a freshly-parked PA still renders once in the host lane under an arp region'  [harness]  @ 142-157
 
 # Uses (outbound edges)
-  @use call tm:addEvent  @ 42,57,58,73,81,145,146
+  @use call tm:addEvent  @ 40,42,57,58,73,81,98,100,115,122,145,146
   @use call tm:flush  @ 43,57,58,73,81,102,117,124,133,147
   @use call ds:get  @ 46,67,74,84
   @use call tm:getChannel  @ 50,69,76,82,107,129,153

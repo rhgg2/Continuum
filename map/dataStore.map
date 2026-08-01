@@ -65,6 +65,7 @@
   @use call    ps:assignAt  @ assignAt:193
   @use call    ps:boundTake  @ persist:100 assignAt:194
   @use call    ps:boundTrack  @ persist:97 assignAt:195
+  @use call    ps:declareUndoable  @ 131
   @use call    ps:get  @ loadScope:73,79 145
   @use call    ps:getAt  @ getAt:165
   @use call    ps:watch  @ 142

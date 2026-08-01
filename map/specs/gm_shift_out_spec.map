@@ -1,6 +1,6 @@
 @spec gm_shift_out_spec  src=tests/specs/gm_shift_out_spec.lua  loc=107  cases=2
-@exercises midiManager (h.fm), groupManager (h.gm), trackerView (h.vm), editCursor (h.ec), trackerManager (h.tm), commandManager (h.cmgr)
-@surface   fm:notes, gm:markGroup, vm:eventsInRect, vm:selectionAsRect, ec:selClear, gm:newInstance, tm:flush, ec:setPos, cmgr:invoke, gm:setLocalMode, gm:assignEvent
+@exercises midiManager (h.fm), editCursor (h.ec), groupManager (h.gm), trackerView (h.vm), trackerManager (h.tm), commandManager (h.cmgr)
+@surface   fm:notes, ec:setSelection, gm:markGroup, vm:eventsInRect, vm:selectionAsRect, ec:selClear, gm:newInstance, tm:flush, ec:setPos, cmgr:invoke, gm:setLocalMode, gm:assignEvent
 @harness   mk{seed.notes}
 
 # Intent
@@ -23,6 +23,7 @@
 
 # Uses (outbound edges)
   @use call fm:notes  @ 17
+  @use call ec:setSelection  @ 50
   @use call gm:markGroup  @ 51
   @use call vm:eventsInRect  @ 51
   @use call vm:selectionAsRect  @ 51

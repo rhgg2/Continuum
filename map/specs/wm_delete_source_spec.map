@@ -1,6 +1,6 @@
 @spec wm_delete_source_spec  src=tests/specs/wm_delete_source_spec.lua  loc=119  cases=5
 @exercises wiringManager (wm)
-@surface   wm:load, wm:addFxNode, wm:mutate, wm:deleteSource, wm:graph, wm:isScratchTrack
+@surface   wm:load, wm:addFxNode, wm:mutate, wm:deleteSource, wm:graph, wm:addSourceNode, wm:isScratchTrack
 @harness   mk, reaper:setFxIO, reaper.CountTracks, reaper.GetTrack, reaper.GetTrackGUID, r._state.projectTracks, r._state.trackGuids, r._state.itemsByTrack
 
 # Intent
@@ -30,6 +30,7 @@
   @use call wm:mutate  @ 28
   @use call wm:deleteSource  @ 51,68,83
   @use call wm:graph  @ 53,54,71,85,94,113
+  @use call wm:addSourceNode  @ 93
   @use call wm:isScratchTrack  @ 103
 
 # Fields (r read / w write incl. constructor keys)

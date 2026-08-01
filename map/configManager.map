@@ -103,6 +103,7 @@
   @use call    ps:boundTake  @ 363 boundTake:427
   @use call    ps:boundTrack  @ 358 boundTrack:430
   @use call    ps:clearTake  @ clearTake:420
+  @use call    ps:declareUndoable  @ 398
   @use call    ps:get  @ 347,348,349,350
   @use call    ps:getAt  @ valueFor:505
   @use call    ps:pollUndo  @ pollUndo:440

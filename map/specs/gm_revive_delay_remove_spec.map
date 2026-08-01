@@ -1,6 +1,6 @@
 @spec gm_revive_delay_remove_spec  src=tests/specs/gm_revive_delay_remove_spec.lua  loc=54  cases=1
-@exercises midiManager (h.fm), groupManager (gm), trackerView (h.vm), trackerManager (h.tm)
-@surface   fm:dump, gm:markGroup, vm:eventsInRect, gm:newInstance, tm:flush, gm:setLocalMode, gm:deleteEvent
+@exercises harness (harness), midiManager (h.fm), groupManager (gm), trackerView (h.vm), trackerManager (h.tm)
+@surface   harness.mk, fm:dump, gm:markGroup, vm:eventsInRect, gm:newInstance, tm:flush, gm:setLocalMode, gm:deleteEvent, gm:addEvent
 @harness   mk{seed.length, seed.resolution, seed.notes}
 
 # Intent
@@ -15,6 +15,7 @@
   @case 'global type-over a locally-deleted slot revives without choking on delay=REMOVE'  [pure]  @ 28-52
 
 # Uses (outbound edges)
+  @use call harness.mk  @ 8
   @use call fm:dump  @ 21
   @use call gm:markGroup  @ 32
   @use call vm:eventsInRect  @ 32
@@ -22,6 +23,7 @@
   @use call tm:flush  @ 34,40,47
   @use call gm:setLocalMode  @ 39,41
   @use call gm:deleteEvent  @ 40
+  @use call gm:addEvent  @ 45
 
 # Fields (r read / w write incl. constructor keys)
   @field w chan  @ 12,33,45

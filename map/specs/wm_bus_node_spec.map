@@ -1,6 +1,6 @@
 @spec wm_bus_node_spec  src=tests/specs/wm_bus_node_spec.lua  loc=270  cases=10
 @exercises wiringManager (wm), routingManager (rm)
-@surface   wm:mutate, wm:instantiateFxOnScratch, wm:addBusNode, wm:graph, rm:meta, wm:moveNodes, wm:deleteBus, wm:load, wm:enableLive, wm:read, wm:pokeEdgeGain, wm:fastGainCommit, wm:diff, wm:targetState, wm:snapshot
+@surface   wm:mutate, wm:instantiateFxOnScratch, wm:addBusNode, wm:graph, rm:meta, wm:moveNodes, wm:deleteBus, wm:load, wm:enableLive, wm:read, wm:pokeEdgeGain, wm:fastGainCommit, wm:diff, wm:targetState, wm:snapshot, wm:insertBus
 @harness   mk, r._state.projectTracks, r._state.trackGuids
 
 # Intent
@@ -43,6 +43,7 @@
   @use call wm:diff  @ 210
   @use call wm:targetState  @ 210
   @use call wm:snapshot  @ 210
+  @use call wm:insertBus  @ 226
 
 # Fields (r read / w write incl. constructor keys)
   @field w __label  @ 22

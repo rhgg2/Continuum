@@ -1,6 +1,6 @@
 @spec wv_reachability_spec  src=tests/specs/wv_reachability_spec.lua  loc=107  cases=6
 @exercises wiringView (wv)
-@surface   wv:addFx, wv:ancestorsOf, wv:descendantsOf
+@surface   wv:addFx, wv:ancestorsOf, wv:addWire, wv:descendantsOf
 @harness   mk
 
 # Intent
@@ -21,6 +21,7 @@
 # Uses (outbound edges)
   @use call wv:addFx  @ 30,38,39,50,51,62,63,64,78,79,80,96,97,98
   @use call wv:ancestorsOf  @ 31,42,54,66,84
+  @use call wv:addWire  @ 40,41,52,53,65,81,82,83,99,100,101
   @use call wv:descendantsOf  @ 102
 
 # Fields (r read / w write incl. constructor keys)

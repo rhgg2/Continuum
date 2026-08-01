@@ -1,6 +1,6 @@
 @spec mm_ppql_roundtrip_spec  src=tests/specs/mm_ppql_roundtrip_spec.lua  loc=125  cases=5
 @exercises midiManager (h.mm)
-@surface   mm:modify
+@surface   mm:modify, mm:add
 @harness   fakeReaper:bindTake
 
 # Intent
@@ -21,6 +21,7 @@
 
 # Uses (outbound edges)
   @use call mm:modify  @ 24,44,63,82,99
+  @use call mm:add  @ 25,45,64,83,100,101,102,103
 
 # Fields (r read / w write incl. constructor keys)
   @field w cc  @ 45,83,102,103

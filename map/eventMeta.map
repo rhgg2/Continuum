@@ -47,6 +47,7 @@
   @use call    perf.start  @ flush:67 saveAll:90
   @use call    perf.stop  @ flush:84 saveAll:108
   @use call    ps:assign  @ writeKb:24 flush:75,78 saveAll:99,103 dropPool:121,123
+  @use call    ps:declareUndoable  @ 31
   @use call    ps:get  @ readKb:20 readBucket:21
   @use call    util.installHooks  @ 28
   @use require perf  @ 9

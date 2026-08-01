@@ -1,6 +1,6 @@
 @spec tv_event_shift_spec  src=tests/specs/tv_event_shift_spec.lua  loc=323  cases=13
 @exercises midiManager (h.fm), trackerView (h.vm), editCursor (h.ec), commandManager (h.cmgr)
-@surface   fm:dump, vm:setGridSize, ec:setPos, cmgr:invoke, ec:region, ec:col
+@surface   fm:dump, vm:setGridSize, ec:setPos, cmgr:invoke, ec:setSelection, ec:region, ec:col
 @harness   mk{seed.notes, seed.ccs, seed.length}
 
 # Intent
@@ -37,6 +37,7 @@
   @use call vm:setGridSize  @ 47,65,82,102,119,136,164,184,207,232,260,287,311
   @use call ec:setPos  @ 49,67,84,104,121,187,210,234,264,313
   @use call cmgr:invoke  @ 50,68,85,105,122,141,170,188,211,235,265,292,314
+  @use call ec:setSelection  @ 139,168,290
   @use call ec:region  @ 150
   @use call ec:col  @ 153
 

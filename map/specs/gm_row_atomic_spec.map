@@ -1,6 +1,6 @@
 @spec gm_row_atomic_spec  src=tests/specs/gm_row_atomic_spec.lua  loc=187  cases=6
-@exercises midiManager (h.fm), groupManager (h.gm), trackerView (h.vm), editCursor (h.ec), trackerManager (h.tm), commandManager (h.cmgr)
-@surface   fm:notes, gm:markGroup, vm:eventsInRect, vm:selectionAsRect, ec:selClear, gm:newInstance, tm:flush, ec:setPos, cmgr:invoke, gm:eachInstance
+@exercises midiManager (h.fm), editCursor (h.ec), groupManager (h.gm), trackerView (h.vm), trackerManager (h.tm), commandManager (h.cmgr)
+@surface   fm:notes, ec:setSelection, gm:markGroup, vm:eventsInRect, vm:selectionAsRect, ec:selClear, gm:newInstance, tm:flush, ec:setPos, cmgr:invoke, gm:eachInstance
 @harness   mk{seed.notes}
 
 # Intent
@@ -32,6 +32,7 @@
 
 # Uses (outbound edges)
   @use call fm:notes  @ 22
+  @use call ec:setSelection  @ 45,113,142,171
   @use call gm:markGroup  @ 47,115,144,173
   @use call vm:eventsInRect  @ 47,115,144,173
   @use call vm:selectionAsRect  @ 47,48,115,116,144,145,173,174

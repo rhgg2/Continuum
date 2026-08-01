@@ -1,6 +1,6 @@
 @spec gm_origin_conform_spec  src=tests/specs/gm_origin_conform_spec.lua  loc=153  cases=2
 @exercises groupManager (gm), trackerManager (h.tm)
-@surface   gm:markGroup, gm:newInstance, tm:flush, gm:assignEvent, gm:stamp, tm:getChannel
+@surface   gm:markGroup, gm:newInstance, tm:flush, gm:assignEvent, gm:stamp, gm:addEvent, tm:getChannel
 @harness   mk{seed.length, seed.notes}
 
 # Intent
@@ -41,6 +41,7 @@
   @use call tm:flush  @ 63,77,116,122
   @use call gm:assignEvent  @ 75,76
   @use call gm:stamp  @ 115
+  @use call gm:addEvent  @ 120
   @use call tm:getChannel  @ 126,132
 
 # Fields (r read / w write incl. constructor keys)

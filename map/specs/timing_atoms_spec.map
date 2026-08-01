@@ -1,6 +1,6 @@
 @spec timing_atoms_spec  src=tests/specs/timing_atoms_spec.lua  loc=363  cases=19
 @exercises timing (timing)
-@surface   timing.resolveFactors, timing.applyFactors, timing.unapplyFactors, timing.atomTilePeriod, timing.logPerRow
+@surface   timing.atomTilePeriod, timing.resolveFactors, timing.applyFactors, timing.unapplyFactors, timing.logPerRow
 
 # Intent
   Atoms are pure unit-interval functions {forward, inverse}. forward
@@ -31,10 +31,10 @@
   @case 'logPerRow handles non-divisor rpbs (returns float, no truncation)'  [pure]  @ 357-361
 
 # Uses (outbound edges)
+  @use call timing.atomTilePeriod  @ 44,45,46,47,48,49,50,342
   @use call timing.resolveFactors  @ 180,197,199,209,217,232,250,265,280,293,295
   @use call timing.applyFactors  @ 183,201,202,210,220,236,253,268,272,283,298,299
   @use call timing.unapplyFactors  @ 253,283
-  @use call timing.atomTilePeriod  @ 342
   @use call timing.logPerRow  @ 359
 
 # Fields (r read / w write incl. constructor keys)

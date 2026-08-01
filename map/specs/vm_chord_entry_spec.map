@@ -1,6 +1,6 @@
 @spec vm_chord_entry_spec  src=tests/specs/vm_chord_entry_spec.lua  loc=345  cases=16
-@exercises trackerView (h.vm), trackerManager (h.tm), editCursor (h.ec), midiManager (h.fm), commandManager (h.cmgr)
-@surface   vm:setGridSize, tm:getChannel, vm:chordStrike, ec:setPos, ec:row, vm:chordCommit, vm:chordActive, fm:dump, vm:chordNudgeVel, vm:chordBackspace, vm:rebuild, vm:tick, cmgr:invoke
+@exercises trackerView (h.vm), trackerManager (h.tm), editCursor (h.ec), midiManager (h.fm), tuning (tuning), commandManager (h.cmgr)
+@surface   vm:setGridSize, tm:getChannel, vm:chordStrike, ec:setPos, ec:row, vm:chordCommit, vm:chordActive, fm:dump, vm:chordNudgeVel, vm:chordBackspace, vm:rebuild, tuning.derive, vm:tick, cmgr:invoke
 @harness   mk{seed.notes}, reaper:clearCalls, reaper:tick, r._state.calls
 
 # Intent
@@ -48,6 +48,7 @@
   @use call vm:chordNudgeVel  @ 131,133,134,139,144,148
   @use call vm:chordBackspace  @ 161,168,169,326
   @use call vm:rebuild  @ 198
+  @use call tuning.derive  @ 209
   @use call vm:tick  @ 242
   @use call cmgr:invoke  @ 340
 

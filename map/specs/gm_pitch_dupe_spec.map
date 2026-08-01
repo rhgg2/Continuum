@@ -1,6 +1,6 @@
 @spec gm_pitch_dupe_spec  src=tests/specs/gm_pitch_dupe_spec.lua  loc=61  cases=1
-@exercises trackerManager (h.tm), trackerView (h.vm), groupManager (gm)
-@surface   tm:getChannel, vm:selectionAsRect, vm:eventsInRect, gm:markGroup, gm:newInstance, tm:flush, gm:assignEvent
+@exercises trackerManager (h.tm), editCursor (h.ec), trackerView (h.vm), groupManager (gm)
+@surface   tm:getChannel, ec:setSelection, vm:selectionAsRect, vm:eventsInRect, gm:markGroup, gm:newInstance, tm:flush, gm:assignEvent
 @harness   mk{seed.notes}
 
 # Intent
@@ -17,6 +17,7 @@
 
 # Uses (outbound edges)
   @use call tm:getChannel  @ 15
+  @use call ec:setSelection  @ 37
   @use call vm:selectionAsRect  @ 39
   @use call vm:eventsInRect  @ 40
   @use call gm:markGroup  @ 43

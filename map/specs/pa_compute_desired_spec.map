@@ -1,4 +1,6 @@
 @spec pa_compute_desired_spec  src=tests/specs/pa_compute_desired_spec.lua  loc=59  cases=3
+@exercises paramAutomation (pa)
+@surface   pa.computeDesired
 
 # Intent
   pa.computeDesired: pure bindings -> per-track trackSpecs. Pins the
@@ -12,6 +14,9 @@
   @case 'same-track binding: filter + listen on one spec, no send'  [pure]  @ 21-30
   @case 'cross-track binding fans out by send; pooled duplicates collapse'  [pure]  @ 34-43
   @case 'slots sort by src code / bus code for a stable image'  [pure]  @ 47-56
+
+# Uses (outbound edges)
+  @use call pa.computeDesired  @ 23,37,49
 
 # Fields (r read / w write incl. constructor keys)
   @field r DST  @ 41,42,54,55

@@ -31,7 +31,7 @@
   @case 'open tail: endppq stays util.OPEN, endppqC is the clipped logical render position'  [pure]  @ 75-93
 
 # Uses (outbound edges)
-  @use call harness.mk  @ 27
+  @use call harness.mk  @ 27,30
   @use call tm:getChannel  @ 38
 
 # Fields (r read / w write incl. constructor keys)

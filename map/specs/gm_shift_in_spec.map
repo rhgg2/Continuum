@@ -1,6 +1,6 @@
 @spec gm_shift_in_spec  src=tests/specs/gm_shift_in_spec.lua  loc=136  cases=3
-@exercises midiManager (h.fm), groupManager (h.gm), trackerView (h.vm), editCursor (h.ec), trackerManager (h.tm), commandManager (h.cmgr)
-@surface   fm:notes, gm:markGroup, vm:eventsInRect, vm:selectionAsRect, ec:selClear, gm:newInstance, tm:flush, ec:setPos, cmgr:invoke, gm:setLocalMode
+@exercises midiManager (h.fm), editCursor (h.ec), groupManager (h.gm), trackerView (h.vm), trackerManager (h.tm), commandManager (h.cmgr)
+@surface   fm:notes, ec:setSelection, gm:markGroup, vm:eventsInRect, vm:selectionAsRect, ec:selClear, gm:newInstance, tm:flush, ec:setPos, cmgr:invoke, gm:setLocalMode, gm:addEvent
 @harness   mk{seed.notes}
 
 # Intent
@@ -28,6 +28,7 @@
 
 # Uses (outbound edges)
   @use call fm:notes  @ 20
+  @use call ec:setSelection  @ 43
   @use call gm:markGroup  @ 45
   @use call vm:eventsInRect  @ 45
   @use call vm:selectionAsRect  @ 45,46
@@ -37,6 +38,7 @@
   @use call ec:setPos  @ 68,95,126
   @use call cmgr:invoke  @ 69,96,127
   @use call gm:setLocalMode  @ 121,124
+  @use call gm:addEvent  @ 122
 
 # Fields (r read / w write incl. constructor keys)
   @field r cells  @ 36

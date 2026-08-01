@@ -131,12 +131,15 @@
   @use call    chrome.checkbox  @ 415,422
   @use call    chrome.colour  @ drawStrip:315,332,337,341,342,343 renderBody:455
   @use call    chrome.disabledIf  @ renderBody:460,480,495,533
+  @use call    chrome.drawPicker  @ 403
   @use call    chrome.gridWidth  @ renderBody:458
   @use call    chrome.paletteHeader  @ renderBody:478,494
+  @use call    chrome.palettePane  @ renderBody:529
   @use call    chrome.pickerIsActive  @ focusState:580
   @use call    chrome.popChromeStyles  @ renderBody:526
   @use call    chrome.pushChromeStyles  @ renderBody:463
   @use call    chrome.rowSelectable  @ drawFiles:209
+  @use call    chrome.treeRow  @ drawTree:145
   @use call    cm:get  @ triggerPreviewInPlace:53 drawFiles:216 drawSlots:227 drawStrip:289 416,423,606,610,614 renderBody:473,536,550 renderStatusBar:563
   @use call    cm:set  @ drawSlots:273 418,424,607,611
   @use call    cmgr:scope  @ 589

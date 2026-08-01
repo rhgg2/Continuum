@@ -1,6 +1,6 @@
 @spec tv_fx_region_spec  src=tests/specs/tv_fx_region_spec.lua  loc=1016  cases=51
 @exercises dataStore (h.ds), trackerManager (h.tm), midiManager (h.fm), trackerView (h.vm), editCursor (h.ec), commandManager (h.cmgr), clipboard (h.clipboard)
-@surface   ds:assign, tm:rebuild, ds:get, tm:flush, fm:dump, vm:setGridSize, vm:ppqToRow, ec:setPos, vm:fxHostForEdit, tm:addEvent, vm:noteFx, vm:setNoteFx, vm:removeFxStage, vm:addFxStage, vm:setFxField, vm:rowToPPQ, vm:fxHostAtCursor, cmgr:invoke, tm:getChannel, vm:editEvent, tm:subscribe, ec:row, ec:extendTo, clipboard:collect
+@surface   ds:assign, tm:rebuild, ds:get, tm:addEvent, tm:flush, fm:dump, vm:setGridSize, vm:ppqToRow, ec:setPos, vm:fxHostForEdit, vm:noteFx, vm:setNoteFx, vm:removeFxStage, vm:addFxStage, vm:setFxField, ec:setSelection, vm:rowToPPQ, vm:fxHostAtCursor, cmgr:invoke, tm:getChannel, vm:editEvent, tm:subscribe, ec:row, ec:extendTo, clipboard:collect
 @harness   mk
 
 # Intent
@@ -76,18 +76,19 @@
   @use call ds:assign  @ 14,104,136,516,607,633,656,680,717,745,780,909,981,1004
   @use call tm:rebuild  @ 15,82,108,140,178,266,284,405,442,520,611,637,660,685,721,749,784,914,985,1007
   @use call ds:get  @ 25,209,219,229,230,232,243,270,287,334,351,366,388,415,423,455,463,489,616,644,690,729,753,769,789,806,823,879,900,920,938,999,1002,1013
+  @use call tm:addEvent  @ 37,170,380,397,433,473,475,948
   @use call tm:flush  @ 39,170,382,397,433,477,950
   @use call fm:dump  @ 43,50
   @use call vm:setGridSize  @ 65,81,91,103,135,153,169,253,265,283,295,312,328,346,361,379,396,432,472,499,515,533,546,561,575,590,606,632,655,679,699,716,744,763,779,800,817,836,858,871,895,908,931,947,963,980
   @use call vm:ppqToRow  @ 73
   @use call ec:setPos  @ 124,126,256,299,301,303,315,317,332,349,364,385,412,419,452,459,502,522,536,549,564,578,593,613,642,665,687,702,727,751,766,786,804,821,839,861,874,877,898,916,936,952,966,987,1009
   @use call vm:fxHostForEdit  @ 125,127,257,268,316,318,624,647,671,736
-  @use call tm:addEvent  @ 170,397,433
   @use call vm:noteFx  @ 199,233,954
   @use call vm:setNoteFx  @ 208,218
   @use call vm:removeFxStage  @ 228
   @use call vm:addFxStage  @ 231
   @use call vm:setFxField  @ 242
+  @use call ec:setSelection  @ 267,285,484
   @use call vm:rowToPPQ  @ 273,274,566,885,886
   @use call vm:fxHostAtCursor  @ 286,300,302,304
   @use call cmgr:invoke  @ 333,350,386,413,420,460,486,503,523,537,550,565,579,581,594,614,615,643,666,667,688,703,728,752,767,768,787,805,822,876,878,899,918,937,953,967,1000,1010

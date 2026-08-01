@@ -1,6 +1,6 @@
 @spec mm_sort_order_spec  src=tests/specs/mm_sort_order_spec.lua  loc=171  cases=7
 @exercises midiManager (h.mm), midiBlob (midiBlob)
-@surface   mm:modify, mm:notesRaw, mm:ccsRaw, mm:assign, mm:delete, midiBlob.parse
+@surface   mm:modify, mm:add, mm:notesRaw, mm:ccsRaw, mm:assign, mm:delete, midiBlob.parse
 @harness   bareMM
 
 # Intent
@@ -30,6 +30,7 @@
 
 # Uses (outbound edges)
   @use call mm:modify  @ 42,54,60,71,96,115,132,156
+  @use call mm:add  @ 43,55,56,57,61,74,77,78,97,158
   @use call mm:notesRaw  @ 45,80,83,99,114,117,131,134,135,151,167
   @use call mm:ccsRaw  @ 63
   @use call mm:assign  @ 115,132

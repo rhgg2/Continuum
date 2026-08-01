@@ -164,6 +164,7 @@
   @use call    cmgr:invoke  @ handleMouse:1078,1085
   @use call    cmgr:isPrefixActive  @ handleKeys:1119
   @use call    cmgr:noteChars  @ handleKeys:1133
+  @use call    curveEditor:frame  @ curveEditorFrame:380
   @use call    groups.outlineKey  @ drawTracker:654
   @use call    groups.regionKey  @ drawTracker:620
   @use call    groups.tintKey  @ drawTracker:637,640

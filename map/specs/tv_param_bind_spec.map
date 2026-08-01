@@ -1,6 +1,6 @@
 @spec tv_param_bind_spec  src=tests/specs/tv_param_bind_spec.lua  loc=118  cases=4
 @exercises trackerView (h.vm), editCursor (h.ec), dataStore (h.ds)
-@surface   vm:setGridSize, ec:setPos, vm:automateParam, vm:paramBinding, ds:get, vm:rebuild, vm:unautomateParam, vm:hideExtraCol
+@surface   vm:setGridSize, ec:setPos, vm:setPaletteParam, vm:automateParam, vm:paramBinding, ds:get, vm:rebuild, vm:unautomateParam, vm:hideExtraCol
 @harness   mk{seed.notes, seed.ccs}, r:seedMidi, r._state.projectItems, r._state.takeIsMidi
 
 # Intent
@@ -22,6 +22,7 @@
 # Uses (outbound edges)
   @use call vm:setGridSize  @ 28,64,86,107
   @use call ec:setPos  @ 29,65,90,110
+  @use call vm:setPaletteParam  @ 30,43,66
   @use call vm:automateParam  @ 31,44,67
   @use call vm:paramBinding  @ 33,45,69,93,113
   @use call ds:get  @ 38,95

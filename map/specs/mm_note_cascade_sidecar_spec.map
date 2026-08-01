@@ -1,6 +1,6 @@
 @spec mm_note_cascade_sidecar_spec  src=tests/specs/mm_note_cascade_sidecar_spec.lua  loc=80  cases=1
 @exercises midiManager (h.mm)
-@surface   mm:modify, mm:events, mm:delete
+@surface   mm:modify, mm:add, mm:events, mm:delete
 @harness   fakeReaper:bindTake
 
 # Intent
@@ -28,6 +28,7 @@
 
 # Uses (outbound edges)
   @use call mm:modify  @ 40,61
+  @use call mm:add  @ 41,42,43,44,45,46
   @use call mm:events  @ 50,69
   @use call mm:delete  @ 62,63,64,65
 

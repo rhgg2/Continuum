@@ -1,6 +1,6 @@
 @spec gm_create_delete_facade_spec  src=tests/specs/gm_create_delete_facade_spec.lua  loc=78  cases=3
-@exercises midiManager (h.fm), trackerView (h.vm), groupManager (h.gm), editCursor (h.ec), trackerManager (h.tm), commandManager (h.cmgr)
-@surface   fm:notes, vm:selectionAsRect, gm:markGroup, vm:eventsInRect, ec:selClear, gm:newInstance, tm:flush, ec:setPos, vm:editEvent, cmgr:invoke, gm:setLocalMode
+@exercises midiManager (h.fm), editCursor (h.ec), trackerView (h.vm), groupManager (h.gm), trackerManager (h.tm), commandManager (h.cmgr)
+@surface   fm:notes, ec:setSelection, vm:selectionAsRect, gm:markGroup, vm:eventsInRect, ec:selClear, gm:newInstance, tm:flush, ec:setPos, vm:editEvent, cmgr:invoke, gm:setLocalMode
 @harness   mk{seed.notes}
 
 # Intent
@@ -22,6 +22,7 @@
 
 # Uses (outbound edges)
   @use call fm:notes  @ 14
+  @use call ec:setSelection  @ 34
   @use call vm:selectionAsRect  @ 35
   @use call gm:markGroup  @ 36
   @use call vm:eventsInRect  @ 36

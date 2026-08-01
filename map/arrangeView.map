@@ -271,7 +271,7 @@
   @call roundTo  @ groupDragCandidate:469 dragCandidate:493,497
   @call selectedTakes  @ actionTargets:126 selectionSet:374 groupDragCandidate:466 commitGroupDrag:548
   @call selectionIndex  @ isSelected:356 addToSelection:361 toggleSelected:367
-  @call setSelection  @ setFocus:353 setSelection:379 commitGroupDrag:556
+  @call setSelection  @ deleteSelected:217 setFocus:353 setSelection:379 clearSelection:380 commitGroupDrag:556 commitDrag:576 seedCursor:613 640
   @call singleTarget  @ selectedTakeProperties:232 duplicateSelectedBelow:238 duplicateUnpooledSelectedBelow:248
   @call takeAtCursor  @ actionTargets:129 diveSelected:224
   @call tracker  @ diveSelected:226 selectedTakeProperties:233 duplicateUnpooledSelectedBelow:254 createSlot:596

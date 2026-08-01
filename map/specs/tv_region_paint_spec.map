@@ -1,6 +1,6 @@
 @spec tv_region_paint_spec  src=tests/specs/tv_region_paint_spec.lua  loc=99  cases=4
-@exercises groupManager (h.gm), trackerView (h.vm)
-@surface   gm:mark, vm:eventsInRect, gm:eachInstance, gm:stateOf, vm:paintRegionStream
+@exercises trackerView (h.vm), groupManager (h.gm)
+@surface   vm:eventsInRect, gm:mark, gm:eachInstance, gm:stateOf, vm:paintRegionStream
 @harness   mk{seed.notes, seed.ppq, seed.dur, seed.chanLo, seed.streams}
 
 # Intent
@@ -22,8 +22,8 @@
   @case 'unknown group is a silent nil (ec carries no geometry)'  [harness]  @ 90-97
 
 # Uses (outbound edges)
+  @use call vm:eventsInRect  @ 17,34,57,78
   @use call gm:mark  @ 34,57,78
-  @use call vm:eventsInRect  @ 34,57,78
   @use call gm:eachInstance  @ 35,41,58,63,79,80,84
   @use call gm:stateOf  @ 38,44,60,65
   @use call vm:paintRegionStream  @ 40,62,82,96

@@ -1,6 +1,6 @@
 @spec gm_value_facade_spec  src=tests/specs/gm_value_facade_spec.lua  loc=64  cases=2
-@exercises midiManager (h.fm), trackerView (h.vm), groupManager (h.gm), trackerManager (h.tm), commandManager (h.cmgr)
-@surface   fm:notes, vm:selectionAsRect, gm:markGroup, vm:eventsInRect, gm:newInstance, tm:flush, cmgr:invoke, gm:setLocalMode
+@exercises midiManager (h.fm), editCursor (h.ec), trackerView (h.vm), groupManager (h.gm), trackerManager (h.tm), commandManager (h.cmgr)
+@surface   fm:notes, ec:setSelection, vm:selectionAsRect, gm:markGroup, vm:eventsInRect, gm:newInstance, tm:flush, cmgr:invoke, gm:setLocalMode
 @harness   mk{seed.notes}
 
 # Intent
@@ -23,6 +23,7 @@
 
 # Uses (outbound edges)
   @use call fm:notes  @ 16
+  @use call ec:setSelection  @ 31
   @use call vm:selectionAsRect  @ 32
   @use call gm:markGroup  @ 33
   @use call vm:eventsInRect  @ 33

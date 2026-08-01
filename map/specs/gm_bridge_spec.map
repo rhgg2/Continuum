@@ -1,6 +1,6 @@
 @spec gm_bridge_spec  src=tests/specs/gm_bridge_spec.lua  loc=61  cases=2
-@exercises trackerView (h.vm), groupManager (gm), editCursor (h.ec)
-@surface   vm:selectionAsRect, vm:eventsInRect, gm:mark, gm:stamp, ec:setPos, vm:cursorAnchor
+@exercises editCursor (h.ec), trackerView (h.vm), groupManager (gm)
+@surface   ec:setSelection, vm:selectionAsRect, vm:eventsInRect, gm:mark, gm:stamp, ec:setPos, vm:cursorAnchor
 @harness   mk{seed.notes}
 
 # Intent
@@ -17,6 +17,7 @@
   @case 'gm:stamp (mirrorDuplicate path) accepts real rect + cursor anchor'  [harness]  @ 39-59
 
 # Uses (outbound edges)
+  @use call ec:setSelection  @ 25,47
   @use call vm:selectionAsRect  @ 28,49
   @use call vm:eventsInRect  @ 29,50
   @use call gm:mark  @ 34

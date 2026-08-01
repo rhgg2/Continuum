@@ -1,6 +1,6 @@
 @spec keyDispatch_spec  src=tests/specs/keyDispatch_spec.lua  loc=205  cases=10
 @exercises commandManager (cmgr)
-@surface   cmgr:bind, cmgr:beginPrefix, cmgr:isPrefixActive, cmgr:scope, cmgr:push
+@surface   cmgr:registerAll, cmgr:bind, cmgr:beginPrefix, cmgr:isPrefixActive, cmgr:scope, cmgr:push
 
 # Intent
   keyDispatch: the prefix-capture + keychain walk extracted from coordinator
@@ -32,6 +32,7 @@
   @case 'held marking follows the live chord: bare binding unmarked while shift is down'  [pure]  @ 195-203
 
 # Uses (outbound edges)
+  @use call cmgr:registerAll  @ 45,168,183
   @use call cmgr:bind  @ 51,52,53,54,169,184
   @use call cmgr:beginPrefix  @ 102,116
   @use call cmgr:isPrefixActive  @ 106,123

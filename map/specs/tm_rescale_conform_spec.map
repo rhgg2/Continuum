@@ -1,6 +1,6 @@
 @spec tm_rescale_conform_spec  src=tests/specs/tm_rescale_conform_spec.lua  loc=39  cases=1
-@exercises midiManager (h.fm)
-@surface   fm:name, fm:length, fm:dump
+@exercises trackerView (h.vm), midiManager (h.fm)
+@surface   vm:applyTakeProperties, fm:name, fm:length, fm:dump
 @harness   mk{seed.notes}
 
 # Intent
@@ -19,6 +19,7 @@
   @case 'rescale grow 2x re-grows a trailing conform note raw tail'  [harness]  @ 16-37
 
 # Uses (outbound edges)
+  @use call vm:applyTakeProperties  @ 26
   @use call fm:name  @ 26
   @use call fm:length  @ 28
   @use call fm:dump  @ 30

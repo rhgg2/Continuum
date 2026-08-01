@@ -1,6 +1,6 @@
 @spec harness_sanity_spec  src=tests/specs/harness_sanity_spec.lua  loc=192  cases=10
-@exercises trackerManager (h.tm), midiManager (h.fm), configManager (h.cm), trackerView (h.vm), editCursor (h.ec)
-@surface   tm:getChannel, fm:modify, fm:dump, fm:byUuid, fm:notes, cm:set, cm:get, fm:resolution, tm:resolution, fm:length, tm:length, tm:play, vm:setGridSize, ec:selectChannel, ec:col
+@exercises midiManager (h.fm), trackerManager (h.tm), configManager (h.cm), trackerView (h.vm), editCursor (h.ec)
+@surface   fm:add, tm:getChannel, fm:modify, fm:dump, fm:byUuid, fm:notes, cm:set, cm:get, fm:resolution, tm:resolution, fm:length, tm:length, tm:play, vm:setGridSize, fm:seed, ec:selectChannel, ec:col
 @harness   mk{seed.notes, seed.resolution, seed.length}, reaper:clearCalls, r._state.takeExt, r._state.calls
 
 # Intent
@@ -21,6 +21,7 @@
   @case 'assertion helpers distinguish equal from unequal'  [harness]  @ 177-190
 
 # Uses (outbound edges)
+  @use call fm:add  @ 15,32
   @use call tm:getChannel  @ 29,36,93
   @use call fm:modify  @ 31
   @use call fm:dump  @ 49,89,92
@@ -34,6 +35,7 @@
   @use call tm:length  @ 127
   @use call tm:play  @ 138
   @use call vm:setGridSize  @ 152
+  @use call fm:seed  @ 156
   @use call ec:selectChannel  @ 164,166
   @use call ec:col  @ 165,167
 

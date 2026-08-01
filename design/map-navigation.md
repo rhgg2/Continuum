@@ -449,6 +449,52 @@ required it to. `map ≡ regen` is an equality, so it cannot distinguish a
 row that has become redundant from the only place a fact was written
 down. Removals are the half of the generated diff that has to be read.
 
+**The brace is the whole of the sugar here** (2026-08-01, measured). The
+note above pairs `f{…}` with `f"…"`, following Lua's grammar. The corpus
+does not: no qualified site is written `recv.fn'…'` at all, and the 124
+bare ones are `require 'util'`, an edge `REQUIRE_RE` has always owned.
+The quote is also much the more expensive spelling to see. `CALL_RE` runs
+over comment-stripped but unmasked lines, so widening it to a quote
+matches 1013 sites, nearly every one a string literal that happens to
+hold a dot — `'arrange.orphanFill'`, `'palette.base.zone0'` — and the
+masked lines cannot stand in for them, because `strip_code` blanks the
+quotes along with what they delimit. So the passes take `[({]` and stop.
+The one `[[…]]` call in the tree (`continuum.lua:7`) is on an
+unresolvable receiver and drops anyway.
+
+**`registerAll{…}` was missing twice over, and the paren was the smaller
+reason** (2026-08-01, measured). The brace item was motivated by command
+registration: the idiom is written `cmgr:registerAll{…}` throughout, so
+the wiring most often asked about was the wiring the maps did not carry.
+Teaching the passes the brace does not deliver it. Those 13 sites drop a
+step later, at alias resolution, because a scope handle is a plain local
+— `local trackerScope = cmgr:scope('tracker')` — and the alias table is
+built from imports, constructs and chunk deps. The spec maps get the same
+calls right, `cmgr` there being a `util.instantiate` result. Behind the 13
+sits a larger population: 2760 qualified sites drop for an unresolved
+receiver, and most of that is correct — `reaper` 607, `math` 583, `table`
+212, and the parameters and locals. But 147 are `ec`, which `trackerView`
+forward-declares at file scope and fills 3700 lines later with
+`util.instantiate('editCursor', …)`. That is the forward-decl idiom the
+declaration pass was taught last item, arriving in the alias table; it is
+its own item, and it is the bigger one.
+
+**The brace sites arrive without callers** (2026-08-01, measured). Both
+passes take `[({]` now, and the three helpers the corpus said nothing
+reached — `editCursor resizeBy`, `trackerManager makeTailRules` and
+`reconcileDerived` — gain call sites. That closes the thread: 84 private
+functions had no call site at all, 81 do now, and every one of the 81 is
+named by a `@bind`. What the new edges do not carry is attribution.
+`resizeBy` renders `@ 754,755` — bare line numbers — because both sites
+are `resizeBy{…}` inside a table of anonymous closures, and a closure has
+no declaration for `caller_at` to name. The spelling and the idiom
+co-occur, a table of one-line closures being exactly where dropping the
+parens pays, so the sites this item adds are systematically the least
+well labelled of any. That follows from a decision already taken rather
+than being a gap in it: column 0 is what separates a declaration from a
+table-constructor value, and `growNote = function(p) resizeBy{…} end` is
+the latter by construction.
+
 ### Vocabulary — unsettled
 
 The 197 kind-less consecutive `map_query` pairs say the agent frequently

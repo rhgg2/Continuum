@@ -1,6 +1,6 @@
 @spec gm_stamp_commit_spec  src=tests/specs/gm_stamp_commit_spec.lua  loc=89  cases=1
-@exercises trackerManager (h.tm), trackerView (h.vm), groupManager (gm)
-@surface   tm:getChannel, vm:selectionAsRect, vm:eventsInRect, gm:stamp, tm:flush, gm:assignEvent
+@exercises trackerManager (h.tm), editCursor (h.ec), trackerView (h.vm), groupManager (gm)
+@surface   tm:getChannel, ec:setSelection, vm:selectionAsRect, vm:eventsInRect, gm:stamp, tm:flush, gm:assignEvent
 @harness   mk{seed.notes}
 
 # Intent
@@ -28,6 +28,7 @@
 
 # Uses (outbound edges)
   @use call tm:getChannel  @ 26
+  @use call ec:setSelection  @ 52
   @use call vm:selectionAsRect  @ 54
   @use call vm:eventsInRect  @ 55
   @use call gm:stamp  @ 60

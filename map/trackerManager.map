@@ -807,6 +807,7 @@
   @call lookup  @ deleteEvent:1300 assignEvent:1371
   @call lowerBound  @ nearestNote:3866 nextSamePitch:3910 seatMatches:3930
   @call makeEntry  @ idxReconcile:1090 loadIndex:1114
+  @call makeTailRules  @ linearTails:3749 3943
   @call membersOf  @ rebuildFx:3551
   @call mergeIndexed  @ rebuildTails:4081
   @call mergeSpans  @ mergeWindows:289 rebuildPbs:4371 rawCoverSpans:4738
@@ -861,6 +862,7 @@
   @call rebuildPipeline  @ rebuild:4935
   @call rebuildRegionPark  @ rebuildPipeline:4866
   @call rebuildTails  @ rebuildPipeline:4871
+  @call reconcileDerived  @ reconcilePCsForChan:868 reconcileFx:889 rebuildFx:3659
   @call reconcileFx  @ rebuildFx:3628
   @call reconcilePCsForChan  @ rebuildPCs:4773
   @call refreshEntry  @ idxReconcile:1084

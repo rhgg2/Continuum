@@ -147,6 +147,7 @@
   @use call    ImGui.SetWindowSize  @ draw:424
   @use call    ImGui.Viewport_GetWorkSize  @ launch:493
   @use call    chrome.colour  @ draw:428
+  @use call    chrome.drawPicker  @ drawSave:366 drawLoad:374
   @use call    chrome.headingLabel  @ drawToolbar:395
   @use call    chrome.numberStepper  @ drawToolbar:397
   @use call    chrome.pickerIsActive  @ acceptInput:60 handleInput:473
@@ -161,6 +162,7 @@
   @use call    gridPane:cellHeight  @ launch:505
   @use call    gridPane:cellWidth  @ draw:436
   @use call    gridPane:draw  @ draw:442,445
+  @use call    gridPane:drawCurveEditor  @ draw:443
   @use call    gridPane:handleKeys  @ handleInput:470
   @use call    gridPane:handleMouse  @ handleInput:467
   @use call    gridPane:heightForRows  @ draw:424 launch:510
@@ -171,8 +173,10 @@
   @use call    mm:poolGuid  @ open:235
   @use call    mm:resolution  @ open:236
   @use call    mm:setLength  @ open:248
+  @use call    modalHost:open  @ launch:509
   @use call    modalHost:registerKind  @ 484
   @use call    scratch.track  @ open:232 close:297
+  @use call    tm:addEvent  @ materialiseNotes:117 materialiseCurve:142,145
   @use call    tm:bindTake  @ open:234 close:296
   @use call    tm:currentTake  @ currentTake:303
   @use call    tm:flush  @ open:284

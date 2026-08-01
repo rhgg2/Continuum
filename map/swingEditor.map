@@ -211,6 +211,8 @@
   @use call    lib.reloadPlan  @ reloadFactory:530
   @use call    lib.revert  @ 469
   @use call    lib.tidy  @ 524
+  @use call    modalHost:open  @ openNewModal:603
+  @use call    modalHost:openConfirm  @ publish:455 reloadFactory:537 importFactory:554
   @use call    modalHost:registerKind  @ 612
   @use call    painter.new  @ drawBandInto:196
   @use call    timing.applyFactors  @ drawSwingStrip:159

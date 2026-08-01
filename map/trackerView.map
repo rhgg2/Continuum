@@ -869,7 +869,7 @@
   @call eachMemberEvent  @ eventsInRect:3075 clearRegionAt:3099 clearMoveGap:3110
   @call effectiveSlot  @ currentSlotIdx:176 gotoTake:231
   @call eventsByCol  @ adjustDuration:1720 adjustPositionMulti:1749 quantizeSelection:1915 quantizeKeepRealisedSelection:1917 scaleSelection:1997 nudge:2275 deleteSelection:2681
-  @call findCol  @ shiftEvents:2821,2852
+  @call findCol  @ chordCell:1081 shiftEvents:2821,2852
   @call followViewport  @ rebuild:3934
   @call forEachRowOp  @ insertRow:2170 deleteRow:2171 insertRowCol:2172 deleteRowCol:2173
   @call fxColAtLane  @ shiftFxLane:1618
@@ -955,7 +955,7 @@
   @call tv:editEvent  @ digitsStrike:1248
   @call tv:endAllCascades  @ editEvent:883 settleTypedEdit:1089
   @call tv:entrySignAt  @ editEvent:874
-  @call tv:eventsInRect  @ groupDuplicate:3522 groupPaste:3538 3982
+  @call tv:eventsInRect  @ paintRegionStream:3244 groupDuplicate:3522 groupPaste:3538 3982
   @call tv:freezeEligible  @ freezeRegionAtCursor:2447
   @call tv:freezeRegion  @ freezeRegionAtCursor:2447
   @call tv:fxHostAtCursor  @ freezeRegionAtCursor:2446 fxHostForEdit:2481

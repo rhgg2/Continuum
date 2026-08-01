@@ -1,6 +1,6 @@
 @spec wv_bus_spec  src=tests/specs/wv_bus_spec.lua  loc=132  cases=9
 @exercises wiringView (wv), wiringManager (wm)
-@surface   wv:addFx, wv:wireViews, wm:addBusNode, wv:busViews, wv:nodeViews, wv:deleteNode, wm:busRecords, wv:moveNodes
+@surface   wv:addFx, wv:addWire, wv:insertBus, wv:wireViews, wm:addBusNode, wv:busViews, wv:nodeViews, wv:deleteNode, wm:busRecords, wv:moveNodes
 @harness   mk
 
 # Intent
@@ -24,6 +24,8 @@
 
 # Uses (outbound edges)
   @use call wv:addFx  @ 16,17
+  @use call wv:addWire  @ 18,53,71,72
+  @use call wv:insertBus  @ 28,40,83,112,126
   @use call wv:wireViews  @ 30,42,54,62,73
   @use call wm:addBusNode  @ 51,52,70,94
   @use call wv:busViews  @ 85,95

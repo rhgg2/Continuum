@@ -1,6 +1,6 @@
 @spec clipboard_spec  src=tests/specs/clipboard_spec.lua  loc=332  cases=8
 @exercises trackerView (h.vm), editCursor (h.ec), clipboard (h.clipboard), midiManager (h.fm), trackerManager (h.tm)
-@surface   vm:setGridSize, ec:setPos, ec:extendTo, ec:pos, clipboard:collect, clipboard:trimTop, fm:dump, clipboard:pasteClip, tm:deleteEvent, tm:flush, tm:addEvent, tm:getChannel
+@surface   vm:setGridSize, ec:setPos, ec:extendTo, ec:pos, clipboard:collect, clipboard:trimTop, fm:dump, clipboard:pasteClip, tm:deleteEvent, tm:flush, tm:addEvent, tm:getChannel, ec:setSelection
 @harness   mk{seed.notes, seed.length, seed.ccs}
 
 # Intent
@@ -33,6 +33,7 @@
   @use call tm:flush  @ 159,175
   @use call tm:addEvent  @ 173
   @use call tm:getChannel  @ 180
+  @use call ec:setSelection  @ 231,262,310
 
 # Fields (r read / w write incl. constructor keys)
   @field r cc  @ 304,323

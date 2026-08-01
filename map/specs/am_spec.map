@@ -1,7 +1,7 @@
 @spec am_spec  src=tests/specs/am_spec.lua  loc=1145  cases=68
 @exercises arrangeManager (am), scratch (scratch), dataStore (h.ds), configManager (h.cm)
 @surface   am:projectTracks, am:trackSlots, am:tracksTakes, am:hasPlacedTakes, am:mintParkedTake, am:createAndDropMidi, am:takeForSlot, scratch.peek, am:ownerTrack, am:renameSlot, am:deleteSlot, am:dropInstance, am:duplicateTake, am:startIsClear, am:keyForSlot, ds:assign, am:takesUsing, cm:set, am:tempersInUse, am:moveTake, am:deleteTake, am:resizeTake, ds:getAt, am:isParkedTake, am:findTake, am:initialCursor, am:editCursorQN, am:setEditCursorQN, am:loopRangeQN, am:setLoopRangeQN, am:clearLoopRange, am:playPositionQN, am:projectEndQN, am:duplicateBelow, am:duplicateUnpooledBelow, am:newTakeBelow
-@harness   mk, reaper:setTrackName, reaper:addItem, reaper:setProjectTracks, reaper.GetMediaItemTake_Track, reaper.GetTakeName, reaper.MIDI_SetAllEvts, reaper.MIDI_GetAllEvts, reaper.CountTrackMediaItems, reaper.SetMediaItemSelected, reaper:setCursor, reaper:setLoopRange, reaper:setPlay, reaper.GetMediaItemTakeInfo_Value, reaper.SetMediaItemTakeInfo_Value
+@harness   mk, reaper:setTrackName, reaper:addItem, reaper:setProjectTracks, reaper.GetMediaItemTake_Track, reaper.GetTakeName, reaper.MIDI_SetAllEvts, reaper.MIDI_GetAllEvts, reaper.CountTrackMediaItems, reaper.SetMediaItemSelected, reaper:setCursor, reaper:setSelectedTracks, reaper:setLoopRange, reaper:setPlay, reaper.GetMediaItemTakeInfo_Value, reaper.SetMediaItemTakeInfo_Value
 
 # Intent
   arrangeManager: discovery, slot auto-allocation, placement, reswing.

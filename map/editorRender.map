@@ -79,8 +79,10 @@
   @use call    chrome.colour  @ 190,191
   @use call    chrome.disabledIf  @ actionBar:55
   @use call    chrome.gridWidth  @ renderBody:232
+  @use call    chrome.palettePane  @ libraryTree:131
   @use call    chrome.pickerIsActive  @ focusState:250
   @use call    chrome.row  @ libraryTree:134
+  @use call    chrome.treeRow  @ libraryRow:111 libraryFolder:123
   @use call    cmgr:invoke  @ onClose:27
   @use call    modalHost:isOpen  @ renderBody:222 focusState:250
   @use call    swingEditor:isOpen  @ renderBody:226

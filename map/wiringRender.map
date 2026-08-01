@@ -401,18 +401,23 @@
   @use call    chrome.colour  @ drawSlot:328 drawWireEndLabel:972 renderCanvas:2325,2353,2405 pushBodyStyles:2432
   @use call    chrome.disabledIf  @ renderPaletteActions:2467
   @use call    chrome.gridWidth  @ renderBody:2537
+  @use call    chrome.palettePane  @ renderBody:2547
   @use call    chrome.pickerIsActive  @ focusState:2565
   @use call    chrome.popChromeWindow  @ renderCanvas:2344,2391,2413
   @use call    chrome.pushChromeWindow  @ renderCanvas:2324,2352,2404
   @use call    cmgr:invoke  @ renderCanvas:2076
   @use call    cmgr:scope  @ 2680
   @use call    facade.get  @ commitFx:2625,2626
+  @use call    modalHost:openConfirm  @ deleteSourceGuarded:2456
+  @use call    modalHost:openPrompt  @ openAddSourceModal:2441
   @use call    modalHost:wasOpenAtFrameStart  @ focusState:2571
   @use call    painter.new  @ renderCanvas:1706
   @use call    util.add  @ leastOccupiedDir:1266 sourceSegments:1301,1302 busSegments:1363,1389,1491 bussablePorts:1555 renderCanvas:1734,1768 renderPaletteBody:2508 openFxPicker:2604
   @use call    util.key  @ wireGroups:808
   @use call    wv:addBusNode  @ commitFx:2620
   @use call    wv:addFx  @ commitFx:2622
+  @use call    wv:addSource  @ openAddSourceModal:2446
+  @use call    wv:addWire  @ renderCanvas:2238
   @use call    wv:ancestorsOf  @ renderCanvas:2137,2185 renderPaletteList:2495
   @use call    wv:busViews  @ renderCanvas:1762
   @use call    wv:bypassed  @ renderCanvas:1930,2108
@@ -421,6 +426,7 @@
   @use call    wv:deleteSource  @ deleteSourceGuarded:2454,2460
   @use call    wv:descendantsOf  @ renderCanvas:2184
   @use call    wv:edgeGain  @ renderCanvas:1859,1986,2030
+  @use call    wv:insertBus  @ renderCanvas:2089
   @use call    wv:listInstalledFX  @ openFxPicker:2604
   @use call    wv:masterPos  @ sourceSegments:1305 sourcePosFor:2582
   @use call    wv:moveBus  @ renderCanvas:2276
@@ -439,7 +445,7 @@
   @use call    wv:setEdgePrimary  @ renderCanvas:2329
   @use call    wv:setHover  @ renderCanvas:1966
   @use call    wv:setMuted  @ renderCanvas:2107
-  @use call    wv:setSelection  @ renderCanvas:2291
+  @use call    wv:setSelection  @ renderCanvas:1720,2289,2291 2683
   @use call    wv:setSourceTagPos  @ renderCanvas:2268
   @use call    wv:wireViews  @ renderCanvas:1761
   @use call    wv:wiredPorts  @ layoutPortRow:453

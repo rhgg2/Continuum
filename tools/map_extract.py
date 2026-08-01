@@ -88,8 +88,9 @@ INVERSE_RE    = re.compile(
 EMITS_BODY_RE = re.compile(r"^(\w+)\s*(?:--\s*(.*))?$")
 
 # Outbound edges (Uses pass). Resolved against a per-file alias table built
-# from imports/constructs/self; unresolvable receivers drop.
-CALL_RE       = re.compile(r"\b([A-Za-z_]\w*)([.:])([A-Za-z_]\w*)\s*\(")
+# from imports/constructs/self; unresolvable receivers drop. `[({]` rather
+# than `\(`: a call whose one argument is a table literal drops the parens.
+CALL_RE       = re.compile(r"\b([A-Za-z_]\w*)([.:])([A-Za-z_]\w*)\s*[({]")
 # A declaration head (`function tm:foo(`) matches CALL_RE too. Fullmatch this
 # against the text before the match to tell a declaration from a call site.
 FN_DECL_PREFIX = re.compile(r'\s*(?:local\s+)?function\s+')
@@ -682,7 +683,7 @@ def extract_uses(cm: MapFile, lines: list[str], code_lines: list[str],
         # `tm:rawIndexFor(` would otherwise satisfy the bare pattern too and
         # emit a second edge keyed `rawIndexFor` for a site already keyed
         # `tm:rawIndexFor`, collapsing the private-fn/method distinction.
-        rx = re.compile(rf"(?<![.:\w]){re.escape(name)}\s*\(")
+        rx = re.compile(rf"(?<![.:\w]){re.escape(name)}\s*[({{]")
         for i, code in enumerate(code_lines):
             for m in rx.finditer(code):
                 if (not FN_DECL_PREFIX.fullmatch(code[:m.start()])
@@ -690,11 +691,11 @@ def extract_uses(cm: MapFile, lines: list[str], code_lines: list[str],
                     add_call(name, i + 1)
 
     # A helper reached by reference rather than called: bound into a command or
-    # export table, or handed over as a callback. 100 helpers have no call site
+    # export table, or handed over as a callback. 81 helpers have no call site
     # at all, and for those this is the only index that names an entry point.
-    # The lookahead drops call sites, including the `f{...}` / `f"..."` sugar
-    # the call passes cannot see -- absent from both indexes rather than filed
-    # as a binding. See design/map-navigation.md § Intra-file call edges.
+    # The lookahead drops call sites, `f{...}` among them now that the call
+    # passes see it; `f"..."` sugar would land in no index at all, and the
+    # corpus has none. See design/map-navigation.md § Intra-file call edges.
     decl_ends = decl_list_ends(code_lines)
     bind_seen: set[tuple[str, int]] = set()
     for name in sorted({b.name for b in cm.private_fns}):

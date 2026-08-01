@@ -244,6 +244,7 @@
   @call paintCell  @ 762,763
   @call partAt  @ cursorPart:70 selUpdate:123
   @call partsFor  @ decorateCol:860
+  @call resizeBy  @ 754,755
   @call sealMove  @ exitMode:519 newInstance:551 duplicate:556 regionArm:725
   @call selClear  @ moveRow:194 moveStop:205 moveUnit:232 reset:363 selClear:435 newFromSelection:537 761 registerCommands:813
   @call selStart  @ moveRow:193 moveStop:204 extendTo:440

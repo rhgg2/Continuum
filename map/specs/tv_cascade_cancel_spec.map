@@ -1,6 +1,6 @@
 @spec tv_cascade_cancel_spec  src=tests/specs/tv_cascade_cancel_spec.lua  loc=82  cases=2
 @exercises midiManager (h.fm), trackerView (h.vm), editCursor (h.ec), commandManager (h.cmgr)
-@surface   fm:dump, vm:setGridSize, ec:setPos, ec:extendTo, cmgr:invoke, ec:selClear, vm:editEvent
+@surface   fm:dump, vm:setGridSize, ec:setPos, ec:extendTo, cmgr:invoke, ec:selClear, vm:editEvent, ec:setSelection
 @harness   mk{seed.notes}
 
 # Intent
@@ -30,6 +30,7 @@
   @use call cmgr:invoke  @ 45,53,69,77
   @use call ec:selClear  @ 48,72
   @use call vm:editEvent  @ 49,73
+  @use call ec:setSelection  @ 66
 
 # Fields (r read / w write incl. constructor keys)
   @field w chan  @ 39,63

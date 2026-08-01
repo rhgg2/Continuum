@@ -1,6 +1,6 @@
 @spec generators_spec  src=tests/specs/generators_spec.lua  loc=585  cases=41
 @exercises generators (generators), tuning (tuning)
-@surface   generators.retarget, generators.fieldRange, tuning.findTemper, tuning.transposeStep, tuning.stepsBetween, generators.thinCurve
+@surface   generators.parksNotes, generators.parkWindows, generators.destOf, generators.fieldsFor, generators.retarget, generators.fieldRange, tuning.findTemper, tuning.transposeStep, tuning.stepsBetween, generators.thinCurve
 
 # Intent
   generators.lua: slide glide-in envelope.
@@ -61,6 +61,10 @@
   @case 'thinCurve gives a dual-point pair no special protection'  [pure]  @ 576-582
 
 # Uses (outbound edges)
+  @use call generators.parksNotes  @ 140,141,142
+  @use call generators.parkWindows  @ 150,230
+  @use call generators.destOf  @ 170,171,172
+  @use call generators.fieldsFor  @ 179,183,184
   @use call generators.retarget  @ 191,200,202,220,222
   @use call generators.fieldRange  @ 210,213
   @use call tuning.findTemper  @ 343,393

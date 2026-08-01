@@ -1,6 +1,6 @@
 @spec tv_selection_rect_spec  src=tests/specs/tv_selection_rect_spec.lua  loc=90  cases=4
-@exercises trackerView (h.vm)
-@surface   vm:selectionAsRect, vm:eventsInRect
+@exercises editCursor (h.ec), trackerView (h.vm)
+@surface   ec:setSelection, vm:selectionAsRect, vm:eventsInRect
 @harness   mk{seed.notes}
 
 # Intent
@@ -21,6 +21,7 @@
   @case 'no selection -> nil'  [harness]  @ 82-88
 
 # Uses (outbound edges)
+  @use call ec:setSelection  @ 24,47,70
   @use call vm:selectionAsRect  @ 27,50,73,87
   @use call vm:eventsInRect  @ 74
 

@@ -59,6 +59,7 @@
 
 # Calls (intra-file)
   @call label  @ open:26 draw:59,60,77
+  @call modalHost:open  @ openPrompt:30 openConfirm:42
   @call modalHost:registerKind  @ 109,118
 
 # REAPER API surface

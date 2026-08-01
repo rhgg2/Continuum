@@ -1,6 +1,6 @@
 @spec ec_regions_spec  src=tests/specs/ec_regions_spec.lua  loc=450  cases=21
 @exercises trackerManager (h.tm), editCursor (ec), commandManager (cmgr), groupManager (gm)
-@surface   tm:length, tm:subscribe, tm:requestRebuild, tm:addEvent, tm:assignEvent, tm:deleteEvent, tm:flush, ec:decorateCol, cmgr:scope, cmgr:push, gm:eachInstance, ec:regionArm, ec:isInRegionMode, ec:regionCursor, ec:hasSelection, gm:mark, cmgr:invoke, gm:newInstance, ec:setPos, ec:row, ec:col
+@surface   tm:length, tm:subscribe, tm:requestRebuild, tm:addEvent, tm:assignEvent, tm:deleteEvent, tm:flush, ec:decorateCol, cmgr:scope, cmgr:push, gm:eachInstance, ec:regionArm, ec:setSelection, ec:isInRegionMode, ec:regionCursor, ec:hasSelection, gm:mark, cmgr:invoke, gm:newInstance, ec:setPos, ec:row, ec:col
 
 # Intent
   ec group-authoring mode: real cmgr spring-loaded stack, real groupManager (fake tm/cm).
@@ -54,6 +54,7 @@
   @use call cmgr:push  @ 87
   @use call gm:eachInstance  @ 95
   @use call ec:regionArm  @ 110,124,151
+  @use call ec:setSelection  @ 121,163,178
   @use call ec:isInRegionMode  @ 125,140,152,166,181,194,212,228,244,405,435,446
   @use call ec:regionCursor  @ 127,141,142,153,167,182,315,316,320,321,338,339,351,352,359,415,447
   @use call ec:hasSelection  @ 130,168,183

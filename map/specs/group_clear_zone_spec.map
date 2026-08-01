@@ -1,6 +1,6 @@
 @spec group_clear_zone_spec  src=tests/specs/group_clear_zone_spec.lua  loc=349  cases=11
-@exercises midiManager (h.fm), trackerView (h.vm), trackerManager (h.tm), commandManager (h.cmgr), editCursor (h.ec), groupManager (h.gm)
-@surface   fm:dump, vm:clearRegionAt, tm:flush, tm:getChannel, cmgr:invoke, ec:setPos, gm:mark, vm:eventsInRect, ec:regionArm, ec:isInRegionMode, vm:clearMoveGap, vm:movePreview, gm:moveInstance
+@exercises midiManager (h.fm), trackerView (h.vm), trackerManager (h.tm), editCursor (h.ec), commandManager (h.cmgr), groupManager (h.gm)
+@surface   fm:dump, vm:clearRegionAt, tm:flush, tm:getChannel, ec:setSelection, cmgr:invoke, ec:setPos, gm:mark, vm:eventsInRect, ec:regionArm, ec:isInRegionMode, vm:clearMoveGap, vm:movePreview, gm:moveInstance
 @harness   mk{seed.notes, seed.ppq, seed.dur, seed.chanLo, seed.streams, seed.length}
 
 # Intent
@@ -37,6 +37,7 @@
   @use call vm:clearRegionAt  @ 54,84,107
   @use call tm:flush  @ 57,87,110,193
   @use call tm:getChannel  @ 90
+  @use call ec:setSelection  @ 129
   @use call cmgr:invoke  @ 131,133,165,166,172,215,216,217,218,227,228,248,274,284,309,320
   @use call ec:setPos  @ 132,161,213,225,244,272,307
   @use call gm:mark  @ 159,211,243,270,305,339,340

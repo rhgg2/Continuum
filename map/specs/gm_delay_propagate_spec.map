@@ -1,6 +1,6 @@
 @spec gm_delay_propagate_spec  src=tests/specs/gm_delay_propagate_spec.lua  loc=98  cases=2
-@exercises midiManager (h.fm), trackerView (h.vm), groupManager (gm), trackerManager (h.tm)
-@surface   fm:dump, vm:eventsInRect, gm:markGroup, gm:newInstance, tm:flush, gm:assignEvent
+@exercises harness (harness), midiManager (h.fm), trackerView (h.vm), groupManager (gm), trackerManager (h.tm)
+@surface   harness.mk, fm:dump, vm:eventsInRect, gm:markGroup, gm:newInstance, tm:flush, gm:assignEvent
 @harness   mk{seed.length, seed.resolution, seed.notes}
 
 # Intent
@@ -25,6 +25,7 @@
   @case 'a delay edit leaves the group onset logical (fresh instance lands on-grid)'  [pure]  @ 70-96
 
 # Uses (outbound edges)
+  @use call harness.mk  @ 21
   @use call fm:dump  @ 36
   @use call vm:eventsInRect  @ 49,51,74,76
   @use call gm:markGroup  @ 51,76

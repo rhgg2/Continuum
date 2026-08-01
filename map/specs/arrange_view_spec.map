@@ -1,6 +1,6 @@
 @spec arrange_view_spec  src=tests/specs/arrange_view_spec.lua  loc=508  cases=29
 @exercises configManager (h.cm), arrangeView (av), commandManager (h.cmgr), arrangeManager (am2)
-@surface   cm:set, av:cursorRow, av:cursorCol, av:setCursor, av:setGridSize, av:scroll, av:scrollBy, av:setMaxCol, av:beatPerRow, av:setBeatPerRow, cm:get, av:rowToQN, av:paletteSlot, av:setPaletteSlot, av:focus, av:setFocus, cmgr:push, cmgr:invoke, am2:tracksTakes, av:tracksTakes, av:lassoCandidate, av:selectionSet, av:toggleSelected, av:isSelected, av:dragCandidate, av:commitDrag, av:qnToRow
+@surface   cm:set, av:cursorRow, av:cursorCol, av:setCursor, av:setGridSize, av:scroll, av:scrollBy, av:setMaxCol, av:beatPerRow, av:setBeatPerRow, cm:get, av:rowToQN, av:paletteSlot, av:setPaletteSlot, av:focus, av:setFocus, cmgr:push, cmgr:invoke, am2:tracksTakes, av:tracksTakes, av:lassoCandidate, av:setSelection, av:selectionSet, av:addToSelection, av:toggleSelected, av:isSelected, av:dragCandidate, av:commitDrag, av:qnToRow
 @harness   mk, reaper:setTrackName, reaper:addItem, reaper:setProjectTracks
 
 # Intent
@@ -67,7 +67,9 @@
   @use call am2:tracksTakes  @ 244,265
   @use call av:tracksTakes  @ 281,301,302,303,321,340,360,379,395,410,427,445,466,482
   @use call av:lassoCandidate  @ 304
+  @use call av:setSelection  @ 322,341,361,380,395,411,428,446,467,483
   @use call av:selectionSet  @ 326,396,398,413,491
+  @use call av:addToSelection  @ 412
   @use call av:toggleSelected  @ 429,431
   @use call av:isSelected  @ 430,432,433
   @use call av:dragCandidate  @ 448,469,485

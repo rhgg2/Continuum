@@ -1,6 +1,6 @@
 @spec mm_wide_cc_spec  src=tests/specs/mm_wide_cc_spec.lua  loc=143  cases=6
 @exercises midiManager (h.mm)
-@surface   mm:ccs, mm:modify, mm:delete
+@surface   mm:ccs, mm:modify, mm:add, mm:delete
 @harness   fakeReaper:bindTake
 
 # Intent
@@ -24,6 +24,7 @@
 # Uses (outbound edges)
   @use call mm:ccs  @ 34
   @use call mm:modify  @ 48,70,90,120,135,139
+  @use call mm:add  @ 49,71,91,121,136
   @use call mm:delete  @ 139
 
 # Fields (r read / w write incl. constructor keys)

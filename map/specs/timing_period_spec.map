@@ -19,7 +19,7 @@
   @case 'pocket doubles: classic@1 + pocket@1 → lcm(1,2) = 2'  [pure]  @ 72-80
 
 # Uses (outbound edges)
-  @use call timing.compositePeriodQN  @ 13,14
+  @use call timing.compositePeriodQN  @ 13,14,20,28,36,45,55,65,76
 
 # Fields (r read / w write incl. constructor keys)
   @field w atom  @ 21,29,37,38,46,47,56,57,66,67,77,78

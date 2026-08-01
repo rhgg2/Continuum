@@ -116,6 +116,7 @@
   @call reduceCents  @ stepSpectrum:332 genRank2:358
   @call stackRatio  @ genRank2:357
   @call stepSpectrum  @ mosInfo:371 nextMosSize:381
+  @call tuning.derive  @ edo:89 scalaToTemper:169
   @call tuning.midiToStep  @ snap:432 transposeStep:437 stepsBetween:443,444
   @call tuning.scalaPitch  @ scalaPitch:57 derive:73,77 scalaToTemper:161,166 genCPS:296 genRank2:353 mosInfo:371 nextMosSize:378
   @call tuning.stepToMidi  @ snap:432 transposeStep:438

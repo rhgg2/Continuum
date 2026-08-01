@@ -1,6 +1,6 @@
 @spec wv_edge_gain_spec  src=tests/specs/wv_edge_gain_spec.lua  loc=84  cases=6
 @exercises wiringView (wv)
-@surface   wv:addFx, wv:edgeGain, wv:setEdgeGain, wv:graph
+@surface   wv:addFx, wv:addWire, wv:edgeGain, wv:setEdgeGain, wv:graph
 @harness   mk
 
 # Intent
@@ -20,6 +20,7 @@
 
 # Uses (outbound edges)
   @use call wv:addFx  @ 15,16,54,55,74,75
+  @use call wv:addWire  @ 17,56,76
   @use call wv:edgeGain  @ 27,36,58,81
   @use call wv:setEdgeGain  @ 35,46,57,66
   @use call wv:graph  @ 37,45,47,59,67,80

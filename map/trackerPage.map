@@ -63,6 +63,7 @@
   @use call    tm:reloadFromReaper  @ reloadFromReaper:84 bindFromSelection:103
   @use call    tm:restoreGuarded  @ 116
   @use call    tr:focusState  @ focusState:156
+  @use call    tr:openTakeProperties  @ 131
   @use call    tr:renderBody  @ renderBody:161
   @use call    tr:renderStatusBar  @ renderStatusBar:155
   @use call    tr:toolbarSegments  @ toolbarSegments:154

@@ -1,6 +1,6 @@
 @spec vm_logical_ppq_spec  src=tests/specs/vm_logical_ppq_spec.lua  loc=383  cases=12
 @exercises trackerView (h.vm), editCursor (h.ec), midiManager (h.fm), commandManager (h.cmgr), trackerManager (h.tm)
-@surface   vm:setGridSize, ec:setPos, vm:editEvent, fm:dump, cmgr:invoke, tm:markSwingStale, tm:rebuild
+@surface   vm:setGridSize, ec:setPos, vm:editEvent, fm:dump, cmgr:invoke, ec:setSelection, tm:markSwingStale, tm:rebuild
 @harness   mk{seed.ccs, seed.notes}
 
 # Intent
@@ -39,6 +39,7 @@
   @use call vm:editEvent  @ 36,60,87,123,343
   @use call fm:dump  @ 38,62,90,125,161,197,198,234,260,289,312,346,376
   @use call cmgr:invoke  @ 157,159,193,195,232,258
+  @use call ec:setSelection  @ 191
   @use call tm:markSwingStale  @ 310,374
   @use call tm:rebuild  @ 310,374
 

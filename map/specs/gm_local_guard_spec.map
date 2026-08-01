@@ -1,6 +1,6 @@
 @spec gm_local_guard_spec  src=tests/specs/gm_local_guard_spec.lua  loc=77  cases=2
-@exercises midiManager (h.fm), trackerView (h.vm), groupManager (h.gm), trackerManager (h.tm), commandManager (h.cmgr)
-@surface   fm:notes, vm:selectionAsRect, gm:markGroup, vm:eventsInRect, gm:newInstance, tm:flush, gm:setLocalMode, cmgr:invoke
+@exercises midiManager (h.fm), editCursor (h.ec), trackerView (h.vm), groupManager (h.gm), trackerManager (h.tm), commandManager (h.cmgr)
+@surface   fm:notes, ec:setSelection, vm:selectionAsRect, gm:markGroup, vm:eventsInRect, gm:newInstance, tm:flush, gm:setLocalMode, cmgr:invoke
 @harness   mk{seed.notes}
 
 # Intent
@@ -25,6 +25,7 @@
 
 # Uses (outbound edges)
   @use call fm:notes  @ 22
+  @use call ec:setSelection  @ 40,51
   @use call vm:selectionAsRect  @ 41
   @use call gm:markGroup  @ 42
   @use call vm:eventsInRect  @ 42

@@ -1,6 +1,6 @@
 @spec tuning_spec  src=tests/specs/tuning_spec.lua  loc=321  cases=26
 @exercises tuning (tuning)
-@surface   tuning.stepToText, tuning.derive, tuning.scalaPitch, tuning.parseScalaFile, tuning.parseScalaPitches, tuning.scalaToTemper, tuning.genEqual, tuning.edoDegrees, tuning.degreesToSpec, tuning.genHarmonics, tuning.genSubharmonics, tuning.parseChord, tuning.genChord, tuning.genCPS, tuning.genRank2, tuning.nextMosSize, tuning.mosInfo
+@surface   tuning.derive, tuning.stepToText, tuning.scalaPitch, tuning.parseScalaFile, tuning.parseScalaPitches, tuning.scalaToTemper, tuning.genEqual, tuning.edoDegrees, tuning.degreesToSpec, tuning.genHarmonics, tuning.genSubharmonics, tuning.parseChord, tuning.genChord, tuning.genCPS, tuning.genRank2, tuning.nextMosSize, tuning.mosInfo
 
 # Intent
   Pins tuning.lua's pure display + derivation layer: the Option-B nameless
@@ -40,8 +40,8 @@
   @case 'nextMosSize / mosInfo: pure-fifth ladder 2->3->5->7->12; 7 is 5L 2s'  [pure]  @ 307-319
 
 # Uses (outbound edges)
+  @use call tuning.derive  @ 10,65,76,80,88,117
   @use call tuning.stepToText  @ 31,32,43,44,45,56,69,90,91,92
-  @use call tuning.derive  @ 80
   @use call tuning.scalaPitch  @ 99,100,101,102,103,104,105,107,108,109,110
   @use call tuning.parseScalaFile  @ 140
   @use call tuning.parseScalaPitches  @ 152

@@ -1,6 +1,6 @@
 @spec vm_fx_ui_spec  src=tests/specs/vm_fx_ui_spec.lua  loc=353  cases=18
 @exercises trackerManager (h.tm), midiManager (h.fm), trackerView (h.vm), editCursor (h.ec)
-@surface   tm:flush, tm:getChannel, fm:dump, vm:setGridSize, ec:setPos, vm:fxHostAtCursor, vm:setNoteFx, vm:setFxField, vm:noteFx, vm:addFxStage, vm:removeFxStage, vm:moveFxStage, vm:fxHostForEdit, tm:addEvent
+@surface   tm:addEvent, tm:flush, tm:getChannel, fm:dump, vm:setGridSize, ec:setPos, vm:fxHostAtCursor, vm:setNoteFx, vm:setFxField, vm:noteFx, vm:addFxStage, vm:removeFxStage, vm:moveFxStage, vm:fxHostForEdit
 @harness   mk
 
 # Intent
@@ -37,6 +37,7 @@
   @case 'each chain verb mints one labelled undo point'  [harness]  @ 328-351
 
 # Uses (outbound edges)
+  @use call tm:addEvent  @ 9,45,67,69,307
   @use call tm:flush  @ 11,47,70,307
   @use call tm:getChannel  @ 23
   @use call fm:dump  @ 25,30,117,220,253
@@ -50,7 +51,6 @@
   @use call vm:removeFxStage  @ 160,164,346
   @use call vm:moveFxStage  @ 176,180
   @use call vm:fxHostForEdit  @ 291
-  @use call tm:addEvent  @ 307
 
 # Fields (r read / w write incl. constructor keys)
   @field r REMOVE  @ 88,272

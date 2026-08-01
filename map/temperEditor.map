@@ -204,9 +204,11 @@
   @use call    lib.reloadPlan  @ reloadFactory:195
   @use call    lib.revert  @ 248
   @use call    lib.tidy  @ 190
+  @use call    modalHost:open  @ openNewModal:431 openImportModal:443
+  @use call    modalHost:openConfirm  @ reloadFactory:202 importFactory:219 publish:234
   @use call    modalHost:registerKind  @ 454,484
   @use call    tuning.degreesToSpec  @ reseedEqual:567,568 drawEqualFields:589,595
-  @use call    tuning.derive  @ temperWrite:106
+  @use call    tuning.derive  @ temperWrite:106 openNewModal:435
   @use call    tuning.edoDegrees  @ drawEqualFields:588,594 buildGen:670
   @use call    tuning.findTemper  @ temperFor:55
   @use call    tuning.genCPS  @ buildGen:699

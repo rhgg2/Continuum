@@ -1,6 +1,6 @@
 @spec gm_paste_facade_spec  src=tests/specs/gm_paste_facade_spec.lua  loc=116  cases=5
-@exercises midiManager (h.fm), trackerView (h.vm), groupManager (h.gm), editCursor (h.ec), trackerManager (h.tm), commandManager (h.cmgr)
-@surface   fm:notes, vm:selectionAsRect, gm:markGroup, vm:eventsInRect, ec:selClear, gm:newInstance, tm:flush, ec:setPos, cmgr:invoke, gm:setLocalMode
+@exercises midiManager (h.fm), editCursor (h.ec), trackerView (h.vm), groupManager (h.gm), trackerManager (h.tm), commandManager (h.cmgr)
+@surface   fm:notes, ec:setSelection, vm:selectionAsRect, gm:markGroup, vm:eventsInRect, ec:selClear, gm:newInstance, tm:flush, ec:setPos, cmgr:invoke, gm:setLocalMode
 @harness   mk{seed.notes}
 
 # Intent
@@ -26,6 +26,7 @@
 
 # Uses (outbound edges)
   @use call fm:notes  @ 16
+  @use call ec:setSelection  @ 35,93,107
   @use call vm:selectionAsRect  @ 36
   @use call gm:markGroup  @ 37
   @use call vm:eventsInRect  @ 37

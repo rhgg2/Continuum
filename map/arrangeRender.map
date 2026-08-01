@@ -180,10 +180,14 @@
   @use call    chrome.disabledIf  @ renderPaletteActions:687,693
   @use call    chrome.gridWidth  @ renderBody:785
   @use call    chrome.numberStepper  @ 757
+  @use call    chrome.palettePane  @ renderBody:799
   @use call    chrome.pickerIsActive  @ focusState:820
   @use call    cm:get  @ openCreateModal:653,655 renderStatusBar:814
   @use call    cm:set  @ openCreateModal:656
   @use call    cmgr:scope  @ 832
+  @use call    modalHost:open  @ openCreateModal:649
+  @use call    modalHost:openConfirm  @ openDeleteModal:638
+  @use call    modalHost:openPrompt  @ openRenameModal:626 840
   @use call    modalHost:registerKind  @ 664
   @use call    modalHost:wasOpenAtFrameStart  @ focusState:825
   @use call    painter.hue  @ slotFill:88,89

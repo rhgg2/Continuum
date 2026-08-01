@@ -272,13 +272,17 @@
   @use call    chrome.checkbox  @ 190
   @use call    chrome.colour  @ renderBody:1443,1460
   @use call    chrome.disabledIf  @ 168 paletteActions:218,222 headerActions:1121,1130 drawChainStage:1197,1201
+  @use call    chrome.drawPicker  @ drawSampleDropdown:65 111,126,144,159,170 fxFieldWidget:965 drawAddChainStage:1160 drawChainStage:1188
   @use call    chrome.dropdown  @ fxFieldWidget:971
   @use call    chrome.gridWidth  @ renderBody:1450
   @use call    chrome.libPicker  @ 148,163,174
   @use call    chrome.numberStepper  @ 136 fxFieldWidget:977,984
+  @use call    chrome.palettePane  @ drawParamPalette:569
   @use call    chrome.pickerIsActive  @ drawFxChainBody:1251 focusState:1493
   @use call    chrome.requestPickerOpen  @ adjustRow:935 handleFxChainKeys:1090,1102,1111 editFx:1270 1353,1354
   @use call    chrome.screenPainter  @ drawFxChainBody:1238
+  @use call    chrome.treeHeading  @ drawTreeItem:439,441
+  @use call    chrome.treeRow  @ drawTreeItem:448,472
   @use call    cm:get  @ drawSampleDropdown:48 136,143,184,190,757 drawStatusBar:587,588,589,591,592 openNewTakeModal:1287,1289 openTakeProperties:1395
   @use call    cm:set  @ drawSampleDropdown:71 191 openNewTakeModal:1290
   @use call    cmgr:doAfter  @ 1360
@@ -302,6 +306,9 @@
   @use call    help:registerPage  @ 619
   @use call    help:wasOpenAtFrameStart  @ renderBody:1469,1475
   @use call    modalHost:isOpen  @ drawFxChainBody:1250 focusState:1493
+  @use call    modalHost:open  @ openNewTakeModal:1283 openTakeProperties:1403
+  @use call    modalHost:openConfirm  @ removeAutomation:201 openConfirm:744
+  @use call    modalHost:openPrompt  @ openPrompt:740
   @use call    modalHost:registerKind  @ 753,1296
   @use call    pe:launch  @ launchPattern:916
   @use call    tuning.findTemper  @ slideTemper:885
@@ -310,6 +317,7 @@
   @use call    tv:activeTemper  @ slideTemper:885
   @use call    tv:addExtraCol  @ addColumn:842 1346
   @use call    tv:addFxStage  @ drawAddChainStage:1163
+  @use call    tv:applyTakeProperties  @ openTakeProperties:1420,1425
   @use call    tv:armLearn  @ handlePaletteKeys:409 drawTreeItem:465
   @use call    tv:automateParam  @ paletteActions:219 handlePaletteKeys:415 drawTreeItem:482
   @use call    tv:barBeatSub  @ drawStatusBar:599
@@ -349,10 +357,11 @@
   @use call    tv:setFxExpanded  @ handlePaletteKeys:390,394,410,419 drawTreeItem:456
   @use call    tv:setFxField  @ launchPattern:916 adjustRow:938,944,952 fxFieldWidget:972,979,985
   @use call    tv:setNoteFx  @ cancelStrip:1062 headerActions:1119
-  @use call    tv:setPaletteCursor  @ handlePaletteKeys:416
+  @use call    tv:setPaletteCursor  @ handlePaletteKeys:379,405,416 drawTreeItem:453,477
   @use call    tv:setPaletteFilter  @ paletteFindBox:253 handlePaletteKeys:367,416
+  @use call    tv:setPaletteParam  @ selectParam:351 drawTreeItem:478
   @use call    tv:setRowPerBeat  @ 137,1333
-  @use call    tv:setStripCursor  @ handleFxChainKeys:1084,1113 drawFxChainBody:1239
+  @use call    tv:setStripCursor  @ handleFxChainKeys:1084,1113 enterStrip:1174 drawFxChainBody:1239 editFx:1269,1272
   @use call    tv:setSwingSlot  @ 36
   @use call    tv:setTemperSlot  @ 35
   @use call    tv:showDelay  @ addColumn:839
@@ -433,6 +442,7 @@
   @call stripColumns  @ stripPlan:1040
   @call stripPlan  @ renderBody:1452
   @call tr:focusState  @ 864 renderBody:1441,1474
+  @call tr:openTakeProperties  @ duplicateUnpooledTake:1318 1337
   @call trackLabel  @ currentTrackLabel:82 109
   @call typedChar  @ handleFxChainKeys:1110
 

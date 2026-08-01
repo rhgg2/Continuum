@@ -1,6 +1,6 @@
 @spec vm_editing_spec  src=tests/specs/vm_editing_spec.lua  loc=538  cases=15
 @exercises trackerView (h.vm), editCursor (h.ec), commandManager (h.cmgr), midiManager (h.fm), trackerManager (h.tm)
-@surface   vm:setGridSize, ec:setPos, cmgr:invoke, fm:dump, tm:getChannel, vm:editEvent
+@surface   vm:setGridSize, ec:setPos, cmgr:invoke, fm:dump, tm:getChannel, vm:editEvent, ec:setSelection
 @harness   mk{seed.notes, seed.ccs}
 
 # Intent
@@ -30,6 +30,7 @@
   @use call fm:dump  @ 34,162,210,247,283,314,341,377,408,443,500,509,532
   @use call tm:getChannel  @ 59,87,116
   @use call vm:editEvent  @ 160,207,440,478,487
+  @use call ec:setSelection  @ 373,404
 
 # Fields (r read / w write incl. constructor keys)
   @field r OPEN  @ 91,120,237,272
