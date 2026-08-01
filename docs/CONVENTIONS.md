@@ -40,6 +40,71 @@ Thematic prose, nothing else. Include only what applies:
 If the only thing a section can say is what a `--KIND:` annotation
 already says, drop the section. The `.map` is the API reference.
 
+## Register
+
+The doc layer is the only one with room to explain, so prose that
+merely *records* wastes it. Four habits carry a model across where
+recording doesn't:
+
+- **Ask the question before giving the answer.** A section opening on
+  its conclusion gives the reader nothing to attach it to. One sentence
+  of setup — what two things get confused, what the code has to decide,
+  what goes wrong without the rule — and everything after it lands
+  somewhere.
+- **Name the wrong view first.** The tempting-but-wrong reading is
+  usually the one the reader arrives holding. Left unnamed, the correct
+  account has to displace it silently, and it won't. This is
+  `CLAUDE.md` § "Thoughts on design narration" applied to docs: put the
+  traps back in, because the trap is generally *why* the rule has the
+  shape it has, and that is the only thing this layer is for.
+- **One claim per sentence.** Three claims joined by semicolons and
+  em-dashes are all present and arrive too fast to be taken. The facts
+  survive the split; only the density is lost.
+- **State a criterion as a criterion.** "Fake in virtue of its
+  provenance, not its constitution" is shorter than the two sentences
+  it replaces and settles more, because it tells the reader what to
+  check.
+
+This suits a section carrying a **model** — a lifecycle, an ownership
+rule, a transform, a distinction that gets confused. A section that is
+an inventory of mechanisms has no question worth staging, and the setup
+sentence becomes padding. Judge per section, not per file.
+
+### What the register is not
+
+An ordering of claims, not a licence to write prettily. Out however
+well it reads:
+
+- verse, epigraph, and any sentence that completes a figure rather than
+  a thought
+- allusion needing an outside reference to land — if the reader must
+  recognise a quotation, the sentence has failed cold
+- numbered prose remarks (`2.1`, `2.5.1`): headings already carry the
+  structure and the numbering is costume. Numbered **theses** are a
+  different thing — I1–I5 in `docs/tuning.md` are pinned by number in
+  the specs, so the numbers are addresses.
+- commentary on the document's own manner
+
+One test, and note that it catches only whole sentences: delete it. If
+only the tone changed, it was ornament.
+
+**Colour is not ornament.** The test above is blind to word choice,
+because a vivid word is not a separable sentence — so applying it and
+then having nothing to weigh diction against flattens the prose by
+reflex. Flattening is its own failure, not the safe default. Between two
+phrasings of a claim that has to be made anyway, prefer the concrete
+one; it costs the same and lands harder. What is out is the sentence
+carrying no claim, never the claim carried vividly.
+
+### Interaction with the annotation boundary
+
+The register compresses, and a rule stated as a criterion often lands
+on a single line — at which point § "The annotation/doc boundary"
+applies and it belongs in source as a `--KIND:`, with the doc keeping
+the paragraph that defends it. Expect a register pass to hand a few
+sentences to the annotation layer. That is the register working, not a
+failure of it.
+
 ## The annotation/doc boundary
 
 A non-obvious invariant is itself a kind of WHY, so the same fact has

@@ -12,6 +12,20 @@ lines. Newest first. `/commit` prompts for one at commit time.
 Entries below 2026-07-27 predate that split, so some of them also
 appear in their design docs.
 
+- **2026-08-01** — Adopted a stated prose register for docs/, recorded as docs/CONVENTIONS.md §
+  Register: ask the question before giving the answer, name the wrong view first, one claim per
+  sentence, state a criterion as a criterion. Scoped per section rather than per file — a section
+  that is an inventory of mechanisms has no question worth staging, and the setup sentence becomes
+  padding. Colour is explicitly not ornament: the delete-the-sentence test sees only whole
+  sentences, so without a companion rule for diction it flattens prose by reflex. Two constraints
+  found on the way. Section headings are load-bearing anchors cited from source comments, specs and
+  other docs, so a rewrite that renames them pulls .lua files and a map regen into what would
+  otherwise be a docs-only change; docs/tuning.md kept all of its. And the register's strongest move
+  — naming the trap — is an assertion about why code has the shape it has, which is the sentence
+  most likely to be composed from the argument rather than read off the mechanism, so it wants
+  checking against the code. docs/tuning.md is the worked example; the rest of docs/ converts as it
+  is touched, so § Register is for now a promise rather than a description.
+
 - **2026-08-01** — The implementation brief moves out of the plan file into an untracked
   plan/IMPL.md: /plan-next writes it, /implement-next works from it and gets nothing else injected,
   the landing bookkeeping deletes it, and Now keeps a one-line pointer so the tracked plan can still
