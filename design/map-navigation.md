@@ -643,6 +643,47 @@ in the first place, that mtimes stay put, to save 5ms.
 "all current" having declined to look at exactly the files likeliest to have
 drifted, and a gate whose cheap mode lies is worse than a gate with one mode.
 
+**The oracle's unit is the call site, not the edge** (2026-08-01,
+settled). The section above says "the same intra-file call graph", and §
+Intra-file call edges promises the oracle will report the 26 `ec:` sites
+the corpus drops. Only the first is deliverable. luac certifies that a
+call happened and how it was spelled; it cannot certify a target module,
+because `ec:row()` compiles to a call on a local whether `ec` is
+editCursor or anything else. A cross-module check could therefore report
+omissions and never correctness — half a check, and the half that does
+not bear on whether the cheap pass gets upgraded. So the diff is
+intra-file `@call` only. Those `ec:` sites stay dropped and now stay
+unreported: a known gap with no instrument pointed at it, worth saying
+plainly because the earlier note reads as though one were coming.
+
+**The phase's gate cannot fail, so it needs a control** (2026-08-01,
+settled). "The oracle is the spec" gave each phase-2 item the
+regeneration diff as its evidence. This phase writes no maps, so that
+gate passes trivially for every item in it — a probe that cannot hit,
+reading exactly like a clean run. And the failure it would hide is the
+phase's own: a listing parser that silently stops matching reports zero
+luac-side calls, which is to say zero disagreements, which is the answer
+the phase most wants to hear. So each item carries a positive control
+instead — a hand-counted function whose sites the tool must reproduce —
+and the discipline changes here deliberately rather than lapsing.
+
+**What a control covers is a fact about how it was broken** (2026-08-02,
+measured). The note above specifies the instrument and leaves its reach
+unstated, as though a hand-counted table were sound in proportion to its
+size. It is not: teeth are directional, and a green run is one undirected
+bit. Item 1's table pins `groups.lua` whole and five named sites, thirty-one
+records; broken in five directions it notices four — the singular `1
+instruction` header, the `(for state)` locals row, a dropped constant-key
+collapse, and a row read and then silently discarded. The fifth it misses.
+Widening `CALL`'s write range to the top of the frame, the hazard named as
+likeliest to misreport ordinary sites as `callresult`, leaves all eight kind
+counts identical and changes twenty-two record names; neither the control nor
+the corpus distribution moves at all. The defect the phase most feared is the
+one with no instrument pointed at it. One line closes the gap:
+`chrome.lua:337`, `seg.visible()` on a `for` variable, which the locals walk
+resolves only because 5.4 emits `TFORCALL` after the loop body — and which a
+widened `CALL` therefore steals.
+
 ## Open questions
 
 - What is the shadowing error rate of the cheap regex pass? Measurable
