@@ -297,6 +297,42 @@ assignments to a `local` forward-decl, missed only because
 end` spelling of the same idiom is captured. None of the nine is a
 global.
 
+**The forward direction is a query, not a row** (2026-08-01). The section
+above renders the edges twice — forward on the `@fn` row, reverse as the
+`@call` index — on the principle that neither question should need a
+query-time inversion. Measured, the forward *rendering* costs 1039
+continuation rows across 54 modules, half the declaration rows in those
+files, +6.3% on the corpus; and it buys nothing, because a site list
+(`sortByPPQ:4812`) points *inside the function the reader is already in*.
+What collapses the walk is the callee's **declaration**, and only the
+querier can supply it. The keying of the intra index by declaration head
+makes callee → declaration a total function within one map (1339 of
+1339), and the self-name registry extends it across maps for 2429 of the
+3525 caller-attributed cross sites — the remaining 1090 being `ImGui.*`
+and other externals with no map at all, which is an answer and not a
+failure. So no continuation row is emitted, and `uses` reads the caller
+field of rows the corpus already carries. Direct `.map` reads are ~18% of
+map consultation (245 read-ish calls against 1129 `map_query`), so the
+file-side rendering had a constituency; it is not enough to buy a
+rendering the querier now subsumes.
+
+**`query` names the subject, in both directions** (2026-08-01). The
+proposal that died first was a new `calls` kind beside `uses`: same
+relation, same direction, differing only in whether the subject was the
+file or the function — with `query` flipping between subject and object
+filter. Two kinds whose difference is which slot the query fills is §
+Vocabulary's discovery failure arriving in the tool's own surface. The
+rule that replaces it: `query` names the subject and `module` says which
+module the subject lives in, so `uses` takes a function, `usedby` takes a
+symbol, and `usedby`'s documented exception — `module` naming the used
+target — stops being one. Two readings are paid for it: `uses` with
+`query` as a target filter (5 corpus calls) and `usedby` with `query`
+naming a module (7 of 101), each becoming a pointer at the right
+spelling. The `usedby` pointer must fire *before* the search rather than
+on an empty result: `require` edge targets are bare module names, so a
+module name falling through to the raw-target regex comes back with the
+require rows alone — a partial answer wearing a complete one's clothes.
+
 ### Vocabulary — unsettled
 
 The 197 kind-less consecutive `map_query` pairs say the agent frequently

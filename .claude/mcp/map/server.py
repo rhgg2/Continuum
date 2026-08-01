@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Optional
+from typing import NamedTuple, Optional
 
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.utilities.func_metadata import ArgModelBase
@@ -180,7 +180,6 @@ def _usedby_selectors(query, module, reg):
     matches when its canonical module satisfies module_pred, its method equals
     `method`, and its raw text matches raw_regex — each constraint optional."""
     mod_preds = []
-    modules = set(reg.values())
 
     def want_module(tok):
         if re.escape(tok) != tok:
@@ -200,8 +199,6 @@ def _usedby_selectors(query, module, reg):
         if m:                                       # `cm:get`, `configManager.get`
             want_module(m.group(1))
             method = m.group(2)
-        elif query in reg or query in modules:      # bare module / self name
-            want_module(query)
         else:                                       # regex over raw target text
             raw_rx = re.compile(query, re.IGNORECASE)
 
@@ -276,6 +273,171 @@ def _usedby_intra(module_pred, q_fn, raw_rx, reg) -> list[str]:
                 where = f"  (in {caller})" if caller else ""
                 rows.append(f"{src}:{n}  @call {callee}{where}")
     return rows
+
+
+# `uses` reads the *caller* field of the @call and @use rows, which nothing else
+# does: what a named function reaches, with each callee resolved to its
+# declaration — the jump target the call site itself cannot give you.
+# See design/map-navigation.md § Intra-file call edges.
+_USES_NOTE = ("--- note: sites inside anonymous closures or unparsed declarations "
+              "carry no caller and are absent here; calls on runtime receivers "
+              "are dropped ---")
+
+
+class _Decl(NamedTuple):
+    kind: str    # 'fn' | 'api'
+    head: str    # as written: `rebuildPbs(fxOut, extraColumns)`
+    key: str     # head minus the arg list — the spelling @call rows use
+    bare: str    # the spelling call sites use for their caller
+    start: int
+    end: int
+    src: str
+
+
+def _decl_index(mp: Path) -> list[_Decl]:
+    """Every fn/api declaration in one map. A single-line declaration ends where
+    it starts, so the span test still places its call sites."""
+    text = mp.read_text(encoding="utf-8", errors="replace")
+    src = _src_of(mp, text)
+    index: list[_Decl] = []
+    for raw in text.splitlines():
+        md = _DECL.match(raw)
+        if not md or md.group("kind") not in ("fn", "api"):
+            continue
+        kind, head = md.group("kind"), md.group("head").strip()
+        start = int(md.group("line"))
+        index.append(_Decl(kind, head, head.split("(", 1)[0].strip(),
+                           _bare_name(kind, head), start,
+                           int(md.group("end") or start), src))
+    return index
+
+
+def _decl_indexer():
+    """stem -> declaration index, cached for one _map_query call only: the maps
+    regenerate on every source edit, so a cache outliving the call goes stale."""
+    cache: dict = {}
+
+    def get(stem):
+        if stem not in cache:
+            hit = next((p for p in (d / f"{stem}.map"
+                                    for d in (MAP_DIR, MAP_DIR / "specs"))
+                        if p.exists()), None)
+            cache[stem] = _decl_index(hit) if hit else []
+        return cache[stem]
+    return get
+
+
+def _decl_row(e: _Decl):
+    span = f"{e.start}-{e.end}" if e.end != e.start else f"{e.start}"
+    return f"{e.src}:{span}", f"@{e.kind} {e.head}"
+
+
+def _callee_intra(callee, index):
+    """@call keys its callee by declaration head, so the join is exact."""
+    hit = next((e for e in index if e.key == callee), None)
+    return _decl_row(hit) if hit else ("(external)", callee)
+
+
+def _callee_cross(ukind, target, decls, reg):
+    """A cross-module callee resolved in the target's own map. Targets with no
+    map at all (ImGui and friends) are `(external)` — a true answer, not a
+    failure. Non-call edges name a signal or a module, not a declaration."""
+    if ukind != "call":
+        return f"({ukind})", target
+    t_module, t_fn = _canon_target(target, reg)
+    # A cross-module call cannot reach a module-private @fn, so an @api
+    # candidate wins by construction rather than as a tiebreak.
+    cands = sorted((e for e in decls(t_module) if e.bare == t_fn),
+                   key=lambda e: e.kind != "api") if t_fn else []
+    return _decl_row(cands[0]) if cands else ("(external)", target)
+
+
+def _uses_groups(mp: Path, query_rx, decls, reg) -> list:
+    """[(subject, rows)] for each matching declaration in one map, rows being
+    (location, head, sites) per callee. The span test is load-bearing: sites
+    spell their caller bare, and a bare name can be claimed by two declarations
+    in one map (`addEvent` and `tm:addEvent`)."""
+    index = decls(mp.stem)
+    subjects = [e for e in index if query_rx.search(e.bare)]
+    if not subjects:
+        return []
+    edges: list[dict] = [{} for _ in subjects]
+
+    def owner(caller, line):
+        return next((i for i, e in enumerate(subjects)
+                     if e.bare == caller and e.start <= line <= e.end), None)
+
+    for raw in mp.read_text(encoding="utf-8", errors="replace").splitlines():
+        mc = _CALL.match(raw)
+        mu = None if mc else _USE.match(raw)
+        if mc:
+            scope, ukind, target = "intra", "call", mc.group("callee")
+            sites = mc.group("sites")
+        elif mu:
+            scope, ukind, target = "cross", mu.group("ukind"), mu.group("target")
+            sites = mu.group("sites")
+        else:
+            continue
+        for caller, n in _iter_use_sites(sites):
+            if caller is None:
+                continue
+            line = int(n)
+            i = owner(caller, line)
+            if i is None:
+                continue
+            group = edges[i]
+            key = (scope, ukind, target)
+            if key not in group:
+                loc, head = (_callee_intra(target, index) if mc
+                             else _callee_cross(ukind, target, decls, reg))
+                group[key] = (loc, head, [])
+            group[key][2].append(line)
+
+    # Callees ordered by first call site, so the list reads in the order the
+    # body executes.
+    return [(e, sorted(((loc, head, sorted(lines))
+                        for loc, head, lines in g.values()),
+                       key=lambda r: r[2][0]))
+            for e, g in zip(subjects, edges)]
+
+
+def _uses_render(groups, max_results) -> str:
+    out: list[str] = []
+    budget = max_results
+    truncated = False
+    for subject, rows in groups:
+        if rows and budget <= 0:
+            truncated = True
+            break
+        if out:
+            out.append("")
+        loc, head = _decl_row(subject)
+        out.append(f"{loc}  {head}  "
+                   + (f"calls {len(rows)}:" if rows else "no calls recorded"))
+        shown = rows[:budget]
+        wide_loc = max((len(r[0]) for r in shown), default=0)
+        wide_head = max((len(r[1]) for r in shown), default=0)
+        for r_loc, r_head, lines in shown:
+            out.append(f"  {r_loc:<{wide_loc}}  {r_head:<{wide_head}}  <- "
+                       + ",".join(str(n) for n in lines))
+        budget -= len(shown)
+        truncated = truncated or len(shown) < len(rows)
+    if truncated:
+        out.append(f"--- truncated at {max_results}; narrow the query ---")
+    out.append(_USES_NOTE)
+    return "\n".join(out)
+
+
+def _module_pointer(query, reg, kind_label):
+    """A query naming a module is a module-subject question, and both directions
+    take that subject through `module=`. usedby needs this guard before its
+    search rather than after: require-edge targets are bare module names, so a
+    module name falling through to the raw-target regex returns the require rows
+    only — a partial answer wearing a complete one's clothes."""
+    if not query or not (query in reg or query in set(reg.values())):
+        return None
+    return (f"({query!r} names a module, not a function; kind={kind_label!r} "
+            f"takes a module as module={reg.get(query, query)!r}, no query)")
 
 
 def _section(name, shown, total, na=None) -> str:
@@ -362,9 +524,15 @@ def map_query(
             ok): fn, api, state, const, require/import, construct,
             case (spec test cases), invariant, contract, shape,
             emits/signal, reaper, deps, uses/calls, usedby/calledby,
-            flow, reads/writes/fields. `uses` lists a module's own
-            outbound edges (calls / subs / forwards / requires).
-            `usedby` reverses it, answering in two labelled sections:
+            flow, reads/writes/fields. `uses` and `usedby` are the two
+            directions of one relation and `query` names the subject in
+            both: `uses` is what the subject reaches, `usedby` what
+            reaches it. `uses` groups by matching declaration and
+            resolves each callee to *its own declaration*, so the answer
+            is jump-ready; with `module` and no `query` it falls back to
+            that module's flat outbound edge list (calls / subs /
+            forwards / requires).
+            `usedby` answers in two labelled sections:
             cross-module `@use` edges, scanning every map (specs
             included, so it also answers "which specs exercise X";
             spec callers collapse to one summary row per spec file),
@@ -390,10 +558,12 @@ def map_query(
               Spec maps (map/specs/, one per
               tests/specs/*_spec.lua) join every query; their stems end
               `_spec`, so module='.*_spec' restricts to specs.
-              Exception: under kind='usedby' `module` names the *used*
-              target (the module whose callers you want), resolved via
-              the self-name registry — so usedby+module='eventMeta'
-              answers "who uses eventMeta", not eventMeta's own edges.
+              Under kind='uses' and kind='usedby' it says which module
+              the subject named by `query` lives in, resolved via the
+              self-name registry (`cm` and `configManager` are one
+              module); with no `query` the module is itself the subject,
+              so usedby+module='eventMeta' answers "who uses eventMeta"
+              and uses+module='eventMeta' its own outbound edges.
               Under kind='flow' it pins the origin emitter, same
               resolution.
       max_results: cap (default 60).
@@ -430,6 +600,9 @@ def _map_query(query, kind, module, max_results) -> str:
     # front — it needs neither `module` as a filename nor `query_rx`.
     if kind_filter == 'usedby':
         reg = _selfname_registry()
+        pointer = _module_pointer(query, reg, 'usedby')
+        if pointer:
+            return pointer
         module_pred, q_fn, raw_rx = _usedby_selectors(query, module, reg)
         if module_pred is None and q_fn is None and raw_rx is None:
             return ("(usedby needs a target: pass query= or module= naming "
@@ -549,11 +722,25 @@ def _map_query(query, kind, module, max_results) -> str:
     results: list[str] = []
     truncated = False
 
-    # `uses` walks a module's own outbound @use lines. (`usedby` handled above.)
-    # It does not read the @call index: that index's *caller* side would answer
-    # "what does this function call", which is a different field of the same
-    # rows and a different query — see design/map-navigation.md.
+    # `uses` names a function subject and answers what it reaches. Without a
+    # subject there is nothing to group by, so a bare module keeps the flat
+    # outbound listing of its own @use lines. (`usedby` handled above.)
     if kind_filter == 'uses':
+        if query_rx:
+            reg = _selfname_registry()
+            decls = _decl_indexer()
+            groups = [g for mp in module_files
+                      for g in _uses_groups(mp, query_rx, decls, reg)]
+            if groups:
+                return _uses_render(groups, max_results)
+            surface = (f"module={module!r} with no query" if module
+                       else "module='<stem>' with no query")
+            return _module_pointer(query, reg, 'uses') or (
+                f"(no declaration matching query={query!r}"
+                + (f" in module={module!r}" if module else "")
+                + f"; uses names a function — for a module's whole outbound "
+                f"surface use {surface})")
+
         for mp in module_files:
             text = mp.read_text(encoding="utf-8", errors="replace")
             src = _src_of(mp, text)
@@ -563,8 +750,6 @@ def _map_query(query, kind, module, max_results) -> str:
                     continue
                 ukind = mu.group("ukind")
                 target = mu.group("target")
-                if query_rx and not query_rx.search(target):
-                    continue
                 for caller, n in _iter_use_sites(mu.group("sites")):
                     if len(results) >= max_results:
                         truncated = True
