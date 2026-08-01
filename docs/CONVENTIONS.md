@@ -140,10 +140,14 @@ Three rules, applied hard:
 ## Workflow
 
 1. Source change first. Update or add `--KIND:` annotations alongside.
-2. The `.map` file regenerates via the post-edit hook — for the edited
-   `.lua` only. After a change to the generator (`tools/map_extract.py`),
-   regenerate every map by hand:
-   `for f in *.lua; do python3 tools/map_extract.py "$f" map/; done`.
+2. The `.map` file regenerates via the post-edit hook, which rebuilds every
+   source newer than its map. A change to the generator
+   (`tools/map_extract.py`) instead makes the whole corpus stale at once,
+   which no mtime shows — regenerate it with
+   `python3 tools/map_regen.py --write`, and check it with
+   `python3 tools/map_regen.py`, which exits non-zero if any committed `.map`
+   disagrees with a fresh regen. `map_regen.py` is also the single definition
+   of which `.lua` files have maps and where those maps live.
 3. If the change touches anything `docs/<file>.md` describes, update the
    doc in the same pass.
 

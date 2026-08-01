@@ -233,6 +233,28 @@ hooks were to run something like `--stale-only` on two grounds, speed and
 not rewriting 318 files per edit; the second is now true by construction,
 so `--stale-only` has to earn itself on the 1.6s alone.
 
+**It earned itself, on the 1.6s** (2026-08-01). Measured rather than argued:
+a blanket `--write` over a clean corpus is 1.55s, an mtime scan of all 318
+pairs is 25ms including interpreter start, and one map renders in about 5ms.
+Fifty-fold on the path that fires after every edit, for a six-line filter.
+So both hooks run `--write --stale-only`, and the third copy of the
+source-set mapping — 400 characters of inline `jq` and `bash` in
+`settings.json`, dispatching on path shape, and the copy that was wrong —
+is gone. Note what made the collapse possible: once staleness is the
+trigger, the tool that reports its file path and the tool that cannot need
+the same command, so the two hook entries became one on the matcher the
+luacheck hook already used.
+
+The filter is mtime and the write test is content, and they disagree in one
+direction: a source edited without changing its map stays mtime-stale and
+re-renders every run. Left that way deliberately. The repair — touch the map
+when the content is unchanged — would spend the property `--write` was given
+in the first place, that mtimes stay put, to save 5ms.
+
+`--check --stale-only` is refused rather than supported. It would report
+"all current" having declined to look at exactly the files likeliest to have
+drifted, and a gate whose cheap mode lies is worse than a gate with one mode.
+
 ## Open questions
 
 - What is the shadowing error rate of the cheap regex pass? Measurable

@@ -8,11 +8,15 @@ byte-identity with a fresh regen assertable at all. A .map that has drifted
 from its .lua is worse than no .map, because it still reads as current.
 
 This module owns the source-set definition -- which .lua files have maps, and
-where those maps live. Nothing else should re-derive it.
+where those maps live. Nothing else should re-derive it, which is why the
+post-edit hooks drive this rather than map_extract directly.
 
   map_regen.py           check: regenerate into memory, diff against disk,
                          report every difference, exit non-zero if any
   map_regen.py --write   write the maps whose content has changed
+  ... --write --stale-only
+                         the same, skipping sources no newer than their map:
+                         what the post-edit hooks run, ~25ms against 1.6s
 
 An orphan is a .map whose source no longer exists. It is reported in both
 modes and deleted in neither: a delete is not a regeneration.
@@ -72,7 +76,15 @@ def main() -> int:
                       help="report drift without writing anything (the default)")
     mode.add_argument('--write', action='store_true',
                       help="rewrite the maps whose content has changed")
+    ap.add_argument('--stale-only', action='store_true',
+                    help="with --write: skip sources no newer than their map")
     args = ap.parse_args()
+
+    # Refused rather than supported: an mtime-filtered check would report
+    # "all current" having declined to look at the files likeliest to drift.
+    if args.stale_only and not args.write:
+        ap.error("--stale-only is a --write filter; a check that skipped by "
+                 "mtime would pass without reading what it was asked about")
 
     sources = corpus()
     on_disk = maps_on_disk()
@@ -82,6 +94,12 @@ def main() -> int:
     written = 0
 
     for dest, src in sorted(sources.items()):
+        # mtime, not content: skipping the parse is the entire point. A source
+        # whose edit left its map identical stays mtime-stale and re-renders
+        # each run -- ~5ms, and it clears as soon as an edit does change it.
+        if (args.stale_only and dest in on_disk
+                and src.stat().st_mtime <= dest.stat().st_mtime):
+            continue
         try:
             fresh = render(src)
         except Exception as exc:
@@ -102,6 +120,8 @@ def main() -> int:
     problems = errors + stale + orphans
 
     headline = f"{len(sources)} sources, {len(on_disk)} maps on disk"
+    if args.stale_only:
+        headline += ", mtime-filtered"
     if args.write:
         headline += f" -- {written} written" if written else " -- all current"
     elif not problems:
