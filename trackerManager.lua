@@ -325,8 +325,8 @@ local function subtractSpanSet(span, spans)
   return rest
 end
 
--- Sum a held base curve and N macro curves onto the ccGridStep lattice over span [sL, eL) -- half-open,
--- so eL is never emitted. Macros anchor 0 at their own edges, so disjoint macros still sum correctly.
+-- Sum a held base curve and N macro curves over span [sL, eL) -- half-open, so eL is never emitted.
+-- Macros anchor 0 at their own edges, so disjoint macros still sum correctly.
 local function firstAfter(list, target)   -- first index with .ppq > target (binary; list ppq-sorted)
   local lo, hi = 1, #list + 1
   while lo < hi do
@@ -376,11 +376,9 @@ local function sumStreams(base, macros, span, opts)
   local grid   = ccGridStep()
   local curves = { base }
   for _, m in ipairs(macros) do util.add(curves, m) end
-  local function governingShape(curve, ppq)   -- shape at ppq: bp at-or-before; 'step' at/beyond the ends
+  local function segmentAt(curve, ppq)   -- the bp pair governing ppq; nil B at/beyond the end (held)
     local i = firstAfter(curve, ppq)
-    local A, B = curve[i - 1], curve[i]
-    if not A or not B then return 'step' end
-    return A.shape or 'linear'
+    return curve[i - 1], curve[i]
   end
   local function sumAt(ppq)
     local v = 0
@@ -401,23 +399,31 @@ local function sumStreams(base, macros, span, opts)
   end
   table.sort(fps)
 
-  -- emit each pair's left point; densify a pair only when some constituent curves through it (linear+linear
-  -- and step+step sum exactly at the union, no growth). eL bounds the final pair but is never emitted.
+  -- Emit each pair's left point; eL bounds the final pair but is never emitted. Densify only where the
+  -- sum has no single breakpoint for it: a sole mover keeps its whole segment. see design/note-macros-v2.md § The fx chain
   local pts = {}
   for idx = 1, #fps - 1 do
     local p, q = fps[idx], fps[idx + 1]
-    local anyCurved, allStep = false, true
+    local anyCurved, movers, sole = false, 0, nil
     for _, c in ipairs(curves) do
-      local s = governingShape(c, p)
-      if isCurved(s) then anyCurved = true end
-      if s ~= 'step' then allStep = false end
+      local A, B = segmentAt(c, p)
+      local s = (A and B) and (A.shape or 'linear') or 'step'
+      if s ~= 'step' then movers = movers + 1 end
+      if isCurved(s) then
+        anyCurved = true
+        if A.ppq == p and B.ppq == q then sole = A end
+      end
     end
-    util.add(pts, { ppq = p, val = sumAt(p), shape = allStep and 'step' or 'linear' })
-    if anyCurved then
-      local g = p + grid
-      while g < q do
-        util.add(pts, { ppq = g, val = sumAt(g), shape = 'linear' })
-        g = g + grid
+    if movers == 1 and sole then
+      util.add(pts, { ppq = p, val = sumAt(p), shape = sole.shape, tension = sole.tension })
+    else
+      util.add(pts, { ppq = p, val = sumAt(p), shape = movers == 0 and 'step' or 'linear' })
+      if anyCurved then
+        local g = p + grid
+        while g < q do
+          util.add(pts, { ppq = g, val = sumAt(g), shape = 'linear' })
+          g = g + grid
+        end
       end
     end
   end
@@ -521,23 +527,40 @@ local function foldSub(active, a, b, base, closeHere, opts)
 end
 
 -- Fold parallel chains covering `span` in storage order: whole-span records take the verbatim fast path,
--- otherwise sub-split at record edges so each layer folds only where it applies. see design/note-macros-v2.md § The fx chain
+-- otherwise sub-split at record edges. Folds over the records' extent; `span` selects the emission. see design/note-macros-v2.md § The fx chain
 local function foldChains(recs, span, base, opts)
   local covering = overlapping(recs, span)
   if #covering == 1 then return covering[1].curve end
-  local cuts = chainCuts(covering, span)
-  if #cuts == 2 then return foldWhole(covering, span, base, opts) end
-  local out = {}
-  for i = 1, #cuts - 1 do
-    local a, b = cuts[i], cuts[i + 1]
-    local active = {}
-    for _, rec in ipairs(covering) do
-      if rec.window[1] <= a and rec.window[2] >= b then util.add(active, rec) end
-    end
-    local closeHere = opts.closed and i == #cuts - 1
-    for _, point in ipairs(foldSub(active, a, b, base, closeHere, opts)) do util.add(out, point) end
+  -- A kept range and a full re-derive of the same material must agree point for point, which they only
+  -- do once the dirt cannot decide where segments fall. see design/note-macros-v2.md § The fx chain
+  local lo, hi = span[1], span[2]
+  for _, rec in ipairs(covering) do
+    lo = math.min(lo, rec.window[1]); hi = math.max(hi, rec.window[2])
   end
-  return out
+  local extent = { lo, hi }
+  local cuts   = chainCuts(covering, extent)
+  local out
+  if #cuts == 2 then
+    out = foldWhole(covering, extent, base, opts)
+  else
+    out = {}
+    for i = 1, #cuts - 1 do
+      local a, b = cuts[i], cuts[i + 1]
+      local active = {}
+      for _, rec in ipairs(covering) do
+        if rec.window[1] <= a and rec.window[2] >= b then util.add(active, rec) end
+      end
+      local closeHere = opts.closed and i == #cuts - 1
+      for _, point in ipairs(foldSub(active, a, b, base, closeHere, opts)) do util.add(out, point) end
+    end
+  end
+  if lo == span[1] and hi == span[2] then return out end
+  local emitted = {}
+  for _, point in ipairs(out) do
+    local inSpan = point.ppq >= span[1] and (point.ppq < span[2] or (opts.closed and point.ppq == span[2]))
+    if inSpan then util.add(emitted, point) end
+  end
+  return emitted
 end
 
 local function delayToPPQ(delay) return timing.delayToPPQ(delay, mm:resolution()) end

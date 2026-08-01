@@ -360,6 +360,41 @@ discipline of the canon fix and lane allocation. A segment-relative grid
 would be stable only while its bounding points are authored; a summed
 curve's are themselves derived, and would drift into permanent churn.
 
+**The rule is about sums, not about curves** (2026-08-01). The
+implementation sampled every curved segment, whether or not there was a
+second curve to sum it against — so a lone sine or LFO, which is the
+common case and the one every shipped continuous kind produces, reached
+the wire as ~33 linear breakpoints where 10 `slow` ones say the same
+thing exactly. A curve that is the only thing moving across a segment
+*is* its own sum plus a held constant, and `mm:interpolate` is affine in
+the endpoint values, so that offset shifts the curve and leaves its shape
+and tension untouched. It must be the *whole* segment: the shape function
+reads a normalised `t` over the segment's own span, so half a `slow`
+re-fitted across its own left half is a different curve — which is why
+the test is that the pair's ends coincide with the constituent's own
+breakpoints, at both ends and not just the far one.
+
+**Sparse output makes the fold's span load-bearing** (2026-08-01). While
+every curved segment went onto the absolute lattice, the fold's output
+was the same however its span was cut — the lattice is a global function
+of time, so every decomposition landed on identical ppqs. A verbatim
+segment is not: it depends on where its own ends fall relative to the
+cut. That put the gated rebuild and a full re-derive in disagreement
+wherever the dirt sliced a channel differently from its record edges,
+which is what `tm_gate_parity_spec` exists to catch. So `foldChains`
+folds over its covering records' own **extent** and treats `span` as a
+selection of what to emit. The idempotence argument above is unchanged —
+it simply stopped coming for free from the lattice, and the fold now pays
+for it by not letting the dirt decide where segments fall.
+
+The near miss worth marking: `sliceCurve` asks what looks like the same
+question and answers it differently on purpose. It carries a cut curve's
+shape *and* tension across the slice edge and accepts the re-fit, because
+an authored bezier is meant to keep its tension inside an fx window
+(`tm_fx_tension_spec` pins this). Summing and slicing are not one rule
+waiting to be unified; teaching the slicer to densify what it cuts breaks
+that spec immediately.
+
 **Detune folds in unchanged (I1).** Each pb seat's wire raw is
 `centsToRaw(curveValue + detune)`, splitting at detune onsets exactly as
 the replace-pb path seats — detune stays realisation on the pb wire, the

@@ -15,7 +15,8 @@ local function centsToRaw(cents, pbRange)
 end
 
 -- pb-augment seats a summed stream on the base lane (markerless, no carrier). A seat carries a raw
--- pb `val` (centsToRaw of summed cents + detune) and `shape`; densified linear between feature points.
+-- pb `val` (centsToRaw of summed cents + detune) and `shape`. A lone macro seats its own breakpoints;
+-- only a genuine sum densifies. see tm_curve_density_spec
 local function pbSeatsOf(dump, chan)
   local out = {}
   for _, c in ipairs(dump.ccs) do

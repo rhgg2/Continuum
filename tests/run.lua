@@ -92,6 +92,7 @@ local specs = {
   'tm_pc_synthesis_spec',
   'tm_macro_spec',
   'tm_sine_spec',
+  'tm_curve_density_spec',
   'tm_fx_tension_spec',
   'tm_fx_region_spec',
   'tm_park_restore_end_spec',
