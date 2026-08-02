@@ -174,6 +174,26 @@ def _entry_kind(raw_kind: str) -> str:
     return raw_kind.lstrip("?")
 
 
+# Scope selects the search domain by directory, which is what a spec map
+# actually is; the `_spec` stem is a convention that happens to agree today.
+# The corpus runs 64 module maps to 254 spec maps, so an unscoped answer is
+# mostly specs and the cap lands on them first.
+_SCOPES = {
+    'all': 'all', 'any': 'all', 'both': 'all',
+    'prod': 'prod', 'production': 'prod', 'src': 'prod', 'source': 'prod',
+    'module': 'prod', 'modules': 'prod',
+    'spec': 'spec', 'specs': 'spec', 'test': 'spec', 'tests': 'spec',
+}
+
+
+def _scope_dirs(canon: str) -> tuple:
+    if canon == 'prod':
+        return (MAP_DIR,)
+    if canon == 'spec':
+        return (MAP_DIR / "specs",)
+    return (MAP_DIR, MAP_DIR / "specs")
+
+
 # usedby is a reverse index over @use targets; resolving a target's short
 # receiver (`cm`) to its module (`configManager`) needs the self-name registry.
 _SELF_RX = re.compile(r'^@module\s+(?P<mod>\S+)\b.*\bself=(?P<self>\S+)')
@@ -559,7 +579,7 @@ _ANN_KINDS = frozenset({'invariant', 'contract', 'shape', 'emits', 'reaper',
 _INVENTORY_CHARS = 2500
 
 
-def _domain_note(seen_kinds, seen_names, label, module, scope) -> str:
+def _domain_note(seen_kinds, seen_names, label, module, domain) -> str:
     """What the scan walked, for an answer that found nothing. Its whole job
     is to separate 'absent from the code' from 'absent from the corpus', so
     it reports the domain rather than guessing at near misses."""
@@ -570,7 +590,7 @@ def _domain_note(seen_kinds, seen_names, label, module, scope) -> str:
         if module and n:
             return (f"{module} holds {n} {label} rows — bodies are prose, not "
                     f"names; drop query= to read them.")
-        return f"searched {scope} — {n} {label} rows, none matching."
+        return f"searched {domain} — {n} {label} rows, none matching."
 
     if module and label:
         names = sorted(set(seen_names))
@@ -591,9 +611,9 @@ def _domain_note(seen_kinds, seen_names, label, module, scope) -> str:
         return f"{module} holds: {kind_counts}\n  — re-query with kind= to list one"
 
     if label:
-        return (f"searched {scope} — {seen_kinds.get(label, 0)} {label} "
+        return (f"searched {domain} — {seen_kinds.get(label, 0)} {label} "
                 f"heads, none matching.")
-    return (f"searched {scope} — {sum(seen_kinds.values())} entries across "
+    return (f"searched {domain} — {sum(seen_kinds.values())} entries across "
             f"{len(seen_kinds)} kinds, none matching.")
 
 
@@ -603,13 +623,13 @@ def _domain_note(seen_kinds, seen_names, label, module, scope) -> str:
 _EMITS_ROW = re.compile(r'^\s*@\??emits\s+(?P<name>\S+)\s*(?P<rest>.*?)\s*$')
 
 
-def _signal_graph(reg):
-    """One scan over every map. Returns (emits, subs, forwards): emits maps
+def _signal_graph(reg, dirs):
+    """One scan over the scoped maps. Returns (emits, subs, forwards): emits maps
     (module, signal) -> (payload, fire-sites, src); subs and forwards map
     (owner module, signal) -> site lists. Owner short names resolve through
     the registry; a literal `self` owner is the map's own module."""
     emits, subs, forwards = {}, {}, {}
-    for d in (MAP_DIR, MAP_DIR / "specs"):
+    for d in dirs:
         for mp in sorted(d.glob("*.map")):
             try:
                 text = mp.read_text(encoding="utf-8", errors="replace")
@@ -650,6 +670,7 @@ def map_query(
     query: Optional[str] = None,
     kind: Optional[str] = None,
     module: Optional[str] = None,
+    scope: str = "all",
     max_results: int = 60,
 ) -> str:
     """Structured query over the project's .map semantic outlines.
@@ -727,6 +748,17 @@ def map_query(
               and uses+module='eventMeta' its own outbound edges.
               Under kind='flow' it pins the origin emitter, same
               resolution.
+      scope: which maps to search: 'all' (default), 'prod' for module
+             maps only, 'spec' for spec maps only. Selected by
+             directory (map/ vs map/specs/) rather than by stem, and
+             it composes with `module`. Spec maps outnumber module
+             maps four to one, so scope='prod' is how you ask a
+             question about the production code without spec sites
+             taking the cap; scope='spec' is the same question of the
+             suite. Under kind='usedby' it scopes the cross-module
+             half — the intra-module and dropped-receiver indexes
+             cover module maps only, so scope='spec' reports them n/a
+             rather than empty.
       max_results: cap (default 60).
 
     Returns:
@@ -744,12 +776,12 @@ def map_query(
                 return (f"--- ERROR: {pat!r} is not valid regex ({exc}). Queries "
                         "are regex, not glob: plain text substring-matches; use "
                         "'.*' where glob habits reach for '*' ---")
-    out = _map_query(query, kind, module, max_results)
+    out = _map_query(query, kind, module, scope, max_results)
     notes = [n for n in (_glob_smell(query), _glob_smell(module)) if n]
     return "\n".join([out, *notes]) if notes else out
 
 
-def _map_query(query, kind, module, max_results) -> str:
+def _map_query(query, kind, module, scope, max_results) -> str:
     if not MAP_DIR.exists():
         return f"--- ERROR: {MAP_DIR} not found ---"
 
@@ -759,7 +791,13 @@ def _map_query(query, kind, module, max_results) -> str:
         return (f"--- ERROR: kind={kind!r} is not a kind. Valid: "
                 f"{', '.join(sorted(_KINDS))} ---")
 
-    dirs = (MAP_DIR, MAP_DIR / "specs")
+    scoped = _SCOPES.get((scope or "all").strip().lower())
+    if scoped is None:
+        return (f"--- ERROR: scope={scope!r} is not a scope. Valid: "
+                f"{', '.join(sorted(set(_SCOPES.values())))} "
+                "(aliases: production/src/source/module(s), specs/test(s)) ---")
+    dirs = _scope_dirs(scoped)
+    scope_bit = f", scope={scoped!r}" if scoped != 'all' else ""
 
     # `usedby` is a reverse index: it scans EVERY map (a caller can live
     # anywhere) and matches the target through the self-name registry, so
@@ -776,15 +814,25 @@ def _map_query(query, kind, module, max_results) -> str:
                     "the used symbol or module, e.g. query='cm:get' or "
                     "module='configManager')")
         cross = _usedby_cross(module_pred, q_fn, raw_rx, reg, dirs)
+        # Both remaining halves read module maps only, so under scope='spec'
+        # they were not searched at all — a distinction `(none)` cannot draw.
+        spec_only = "(n/a — scope='spec'; this index covers module maps only)"
         # @call keys on functions, so a module-level target has no intra half:
         # trackerManager calling itself is not an answer to "who uses it".
-        intra = (None if q_fn is None and raw_rx is None
-                 else _usedby_intra(module_pred, q_fn, raw_rx, reg))
-        drops = _usedby_drops(module_pred, q_fn, raw_rx, reg)
-        if not cross and not drops and intra is not None and not intra:
-            return (f"(no callers found for query={query!r}, module={module!r}; "
-                    "the cross-module, intra-module and dropped-receiver "
-                    "indexes were all searched)")
+        intra_na = (spec_only if scoped == 'spec' else
+                    "(n/a — module-level target; the intra index keys on functions)"
+                    if q_fn is None and raw_rx is None else None)
+        intra = None if intra_na else _usedby_intra(module_pred, q_fn, raw_rx, reg)
+        drops_na = spec_only if scoped == 'spec' else None
+        drops = [] if drops_na else _usedby_drops(module_pred, q_fn, raw_rx, reg)
+        if not cross and not drops and not intra:
+            searched = ["cross-module"] + ([] if intra_na else ["intra-module"]) \
+                + ([] if drops_na else ["dropped-receiver"])
+            return (f"(no callers found for query={query!r}, module={module!r}"
+                    f"{scope_bit}; the "
+                    + ", ".join(searched) + " index"
+                    + ("es were" if len(searched) > 1 else " was")
+                    + " searched)")
 
         sizes = [len(cross), 0 if intra is None else len(intra), len(drops)]
         keep_cross, keep_intra, keep_drops = _split_budget(sizes, max_results)
@@ -793,12 +841,10 @@ def _map_query(query, kind, module, max_results) -> str:
         # copied out of context still says which index it came from.
         results = [_section("Cross-module", keep_cross, sizes[0])]
         results += [f"  {r}" for r in cross[:keep_cross]]
-        results.append(_section(
-            "Intra-module", keep_intra, sizes[1],
-            na=("(n/a — module-level target; the intra index keys on functions)"
-                if intra is None else None)))
+        results.append(_section("Intra-module", keep_intra, sizes[1], na=intra_na))
         results += [f"  {r}" for r in (intra or [])[:keep_intra]]
-        results.append(_section("Dropped receivers", keep_drops, sizes[2]))
+        results.append(_section("Dropped receivers", keep_drops, sizes[2],
+                                na=drops_na))
         if keep_drops:
             results.append("  (receiver unresolved by the extractor, matched "
                            "here by name — candidates, not confirmed edges)")
@@ -813,7 +859,7 @@ def _map_query(query, kind, module, max_results) -> str:
             return ("(flow needs query= naming the signal, e.g. "
                     "query='takeSwapped')")
         reg = _selfname_registry()
-        emits, subs, forwards = _signal_graph(reg)
+        emits, subs, forwards = _signal_graph(reg, dirs)
         selfof = {mod: name for name, mod in reg.items()}
 
         def owner_ok(mod):
@@ -865,7 +911,8 @@ def _map_query(query, kind, module, max_results) -> str:
             pending = unreached()
 
         if not lines_out:
-            return f"(no signal matching query={query!r}, module={module!r})"
+            return (f"(no signal matching query={query!r}, "
+                    f"module={module!r}{scope_bit})")
         if len(lines_out) > max_results:
             lines_out = lines_out[:max_results]
             lines_out.append(f"--- truncated at {max_results}; narrow the query ---")
@@ -881,14 +928,14 @@ def _map_query(query, kind, module, max_results) -> str:
     if not module_files:
         hint = ("; spec maps are stems ending _spec — try module='.*_spec'"
                 if module and re.match(r"(tests/)?specs?(/|$)", module) else "")
-        return f"(no .map files matched module={module!r}{hint})"
+        return f"(no .map files matched module={module!r}{scope_bit}{hint})"
 
     # Describes the list the scan is about to walk, not a fresh glob, so an
     # empty answer's stated domain cannot disagree with the pass that ran.
     n_mod = sum(1 for p in module_files if p.parent == MAP_DIR)
     n_spec = len(module_files) - n_mod
-    scope = (f"{n_mod} module maps"
-             + (f" and {n_spec} spec maps" if n_spec else ""))
+    domain = (f"{n_mod} module maps"
+              + (f" and {n_spec} spec maps" if n_spec else ""))
 
     results: list[str] = []
     truncated = False
@@ -938,7 +985,8 @@ def _map_query(query, kind, module, max_results) -> str:
                 break
 
         if not results:
-            return f"(no matches for kind={kind!r}, query={query!r}, module={module!r})"
+            return (f"(no matches for kind={kind!r}, query={query!r}, "
+                    f"module={module!r}{scope_bit})")
         if truncated:
             results.append(f"--- truncated at {max_results}; narrow the query ---")
         return "\n".join(results)
@@ -973,9 +1021,9 @@ def _map_query(query, kind, module, max_results) -> str:
 
         if not results:
             note = _domain_note(Counter({kind_filter: len(seen_fields)}),
-                                seen_fields, kind_filter, module, scope)
+                                seen_fields, kind_filter, module, domain)
             return (f"(no field matches for kind={kind!r}, query={query!r}, "
-                    f"module={module!r})") + (f"\n{note}" if note else "")
+                    f"module={module!r}{scope_bit})") + (f"\n{note}" if note else "")
         if truncated:
             results.append(f"--- truncated at {max_results}; narrow the query ---")
         return "\n".join(results)
@@ -1049,8 +1097,9 @@ def _map_query(query, kind, module, max_results) -> str:
         if query: bits.append(f"query={query!r}")
         if kind: bits.append(f"kind={kind!r}")
         if module: bits.append(f"module={module!r}")
+        if scoped != 'all': bits.append(f"scope={scoped!r}")
         q = ", ".join(bits) if bits else "<no filters>"
-        note = _domain_note(seen_kinds, seen_names, kind_filter, module, scope)
+        note = _domain_note(seen_kinds, seen_names, kind_filter, module, domain)
         return f"(no matches for {q})" + (f"\n{note}" if note else "")
 
     if truncated:

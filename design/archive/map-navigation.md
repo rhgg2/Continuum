@@ -1,10 +1,13 @@
 # map navigation — what the maps cost to read
 
-> opened: 2026-08-01 · status: in flight — `plan/map-navigation.md`
+> opened: 2026-08-01 · closed: 2026-08-02 · status: done —
+> `plan/archive/map-navigation.md`
 >
-> Working design doc. The measurement below is done and is reported in
-> full; it is the load-bearing part of this doc. The design that follows
-> it is a proposal awaiting a plan.
+> All five phases landed. The measurement is reported in full and the
+> design that follows it was built, so the dated notes under § Mechanism:
+> park the rewrite are the record of what was decided and what it cost.
+> § Open questions is the part still owing: four questions, none of them
+> looked at.
 
 ## Problem
 

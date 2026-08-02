@@ -1,7 +1,7 @@
 # map navigation — plan
 
-> source: `design/map-navigation.md` — synthesis compiled from there;
-> don't design here.
+> source: `design/archive/map-navigation.md` — synthesis compiled from
+> there; don't design here.
 
 ## Phases
 
