@@ -17,9 +17,10 @@ continuum_tests (lua_test_run). Batched writes are handled by the global
 from __future__ import annotations
 
 import re
+import sys
 from collections import Counter
 from pathlib import Path
-from typing import NamedTuple, Optional
+from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.utilities.func_metadata import ArgModelBase
@@ -28,8 +29,24 @@ from pydantic import ConfigDict
 # Strict input validation: reject unknown kwargs so silent param-name slips fail loudly.
 ArgModelBase.model_config = ConfigDict(arbitrary_types_allowed=True, extra='forbid')
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-MAP_DIR = PROJECT_ROOT / "map"
+# The declaration index and the call-site join live in tools/map_index.py so the
+# flow viewer can share them without taking on this server's `mcp` dependency.
+# The path insert is what lets a PEP 723 script reach a plain one; the imported
+# names keep their leading underscore so the call sites below read unchanged.
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools"))
+from map_index import (  # noqa: E402
+    MAP_DIR,
+    DECL_RE as _DECL,
+    TARGET_RX as _TARGET_RX,
+    bare_name as _bare_name,
+    callee_cross as _callee_cross,
+    callee_intra as _callee_intra,
+    canon_target as _canon_target,
+    decl_indexer as _decl_indexer,
+    decl_row as _decl_row,
+    selfname_registry as _selfname_registry,
+    src_of as _src_of,
+)
 
 mcp = FastMCP("continuum_map")
 
@@ -49,12 +66,6 @@ def _glob_smell(pat: Optional[str]) -> Optional[str]:
 
 # ----- map_query ------------------------------------------------------------
 
-_MAP_HEADER = re.compile(r'^@(?:module|spec)\s+(\S+)\s+src=(\S+)\s+loc=(\d+)')
-_DECL = re.compile(
-    r'^(?P<indent>\s*)@(?P<kind>fn|api|held|handler|state|const|require|construct|case)\s+'
-    r'(?P<head>.+?)\s*@\s*(?P<line>\d+)(?:-(?P<end>\d+))?\s*'
-    r'(?P<doc>(?:--|·).*)?$'
-)
 # Annotations: `@invariant`, `@contract`, `@shape`, `@emits`, `@reaper`,
 # any of which may carry a leading `?` (`@?invariant …`) for inferred-rather-
 # than-doc-grounded variants. `@deps` is rendered on its own line in the header.
@@ -111,33 +122,6 @@ def _iter_use_sites(sites: str):
                 yield caller, n
 
 
-def _src_of(mp: Path, text: str) -> str:
-    h = _MAP_HEADER.match(text.split("\n", 1)[0])
-    return h.group(2) if h else mp.stem + ".lua"
-
-
-def _bare_name(kind: str, head: str) -> str:
-    if kind == "fn":
-        m = re.match(r"^(\w+)\(", head)
-        return m.group(1) if m else head
-    if kind == "api":
-        m = re.match(r"^[\w]+[:.](\w+)\(", head)
-        return m.group(1) if m else head
-    # A held function is spelled table-qualified wherever it appears —
-    # declaration and call site alike — and a handler is spelled for the
-    # receiver holding it, so the qualifier is part of the name in both.
-    if kind in ("held", "handler"):
-        m = re.match(r"^[\w.:]+", head)
-        return m.group(0) if m else head
-    if kind in ("state", "const", "require", "construct"):
-        m = re.match(r"^(\w+)", head)
-        return m.group(1) if m else head
-    if kind == "case":
-        m = re.match(r"^'(.*)'", head)
-        return m.group(1) if m else head
-    return head
-
-
 def _normalize_kind(k: str) -> str:
     k = k.lower().lstrip("?")
     aliases = {
@@ -192,45 +176,6 @@ def _scope_dirs(canon: str) -> tuple:
     if canon == 'spec':
         return (MAP_DIR / "specs",)
     return (MAP_DIR, MAP_DIR / "specs")
-
-
-# usedby is a reverse index over @use targets; resolving a target's short
-# receiver (`cm`) to its module (`configManager`) needs the self-name registry.
-_SELF_RX = re.compile(r'^@module\s+(?P<mod>\S+)\b.*\bself=(?P<self>\S+)')
-_TARGET_RX = re.compile(r'^(\w+)[.:](\w+)$')
-
-
-def _selfname_registry() -> dict:
-    """Short instance name -> module, from each module map's `self=` header.
-    Namespace modules map their name to itself; wiring files without `self=`
-    are absent (they are never receivers, so never usedby targets). Names
-    claimed by more than one module (e.g. two files returning a local `M`)
-    are ambiguous and dropped."""
-    reg: dict = {}
-    ambiguous: set = set()
-    for mp in sorted(MAP_DIR.glob("*.map")):
-        try:
-            head = mp.read_text(encoding="utf-8", errors="replace").split("\n", 1)[0]
-        except OSError:
-            continue
-        m = _SELF_RX.match(head)
-        if m:
-            name, mod = m.group("self"), m.group("mod")
-            if reg.get(name, mod) != mod:
-                ambiguous.add(name)
-            reg[name] = mod
-    for name in ambiguous:
-        del reg[name]
-    return reg
-
-
-def _canon_target(target: str, reg: dict):
-    """(module, method|None) for a @use target, resolving the receiver's short
-    name to its module. A bare target (a require edge) carries no method."""
-    m = _TARGET_RX.match(target)
-    if m:
-        return reg.get(m.group(1), m.group(1)), m.group(2)
-    return reg.get(target, target), None
 
 
 def _usedby_selectors(query, module, reg):
@@ -377,77 +322,6 @@ _USES_NOTE = ("--- note: a subject here is a named declaration "
               "holding a literal, the wrapper call and the registrar call — have "
               "no subject to group under and are absent; calls on runtime "
               "receivers are dropped ---")
-
-
-class _Decl(NamedTuple):
-    kind: str    # 'fn' | 'api' | 'held' | 'handler'
-    head: str    # as written: `rebuildPbs(fxOut, extraColumns)`
-    key: str     # head minus the arg list — the spelling @call rows use
-    bare: str    # the spelling call sites use for their caller
-    start: int
-    end: int
-    src: str
-
-
-def _decl_index(mp: Path) -> list[_Decl]:
-    """Every fn/api/held/handler declaration in one map. A single-line
-    declaration ends where it starts, so the span test still places its call
-    sites. Held and handler rows enter wholesale: no @call row spells either as
-    its callee today, so the callee join simply never lands on one — and
-    resolves for free if the extractor ever closes that gap."""
-    text = mp.read_text(encoding="utf-8", errors="replace")
-    src = _src_of(mp, text)
-    index: list[_Decl] = []
-    for raw in text.splitlines():
-        md = _DECL.match(raw)
-        if not md or md.group("kind") not in ("fn", "api", "held", "handler"):
-            continue
-        kind, head = md.group("kind"), md.group("head").strip()
-        start = int(md.group("line"))
-        index.append(_Decl(kind, head, head.split("(", 1)[0].strip(),
-                           _bare_name(kind, head), start,
-                           int(md.group("end") or start), src))
-    return index
-
-
-def _decl_indexer():
-    """stem -> declaration index, cached for one _map_query call only: the maps
-    regenerate on every source edit, so a cache outliving the call goes stale."""
-    cache: dict = {}
-
-    def get(stem):
-        if stem not in cache:
-            hit = next((p for p in (d / f"{stem}.map"
-                                    for d in (MAP_DIR, MAP_DIR / "specs"))
-                        if p.exists()), None)
-            cache[stem] = _decl_index(hit) if hit else []
-        return cache[stem]
-    return get
-
-
-def _decl_row(e: _Decl):
-    span = f"{e.start}-{e.end}" if e.end != e.start else f"{e.start}"
-    return f"{e.src}:{span}", f"@{e.kind} {e.head}"
-
-
-def _callee_intra(callee, index):
-    """@call keys its callee by declaration head, so the join is exact."""
-    hit = next((e for e in index if e.key == callee), None)
-    return _decl_row(hit) if hit else ("(external)", callee)
-
-
-def _callee_cross(ukind, target, decls, reg):
-    """A cross-module callee resolved in the target's own map. Targets with no
-    map at all (ImGui and friends) are `(external)` — a true answer, not a
-    failure. Non-call edges name a signal or a module, not a declaration."""
-    if ukind != "call":
-        return f"({ukind})", target
-    t_module, t_fn = _canon_target(target, reg)
-    # A cross-module call cannot reach a module-private @fn, so an @api
-    # candidate wins by construction rather than as a tiebreak.
-    cands = sorted((e for e in decls(t_module) if e.bare == t_fn),
-                   key=lambda e: e.kind != "api") if t_fn else []
-    return _decl_row(cands[0]) if cands else ("(external)", target)
 
 
 def _uses_groups(mp: Path, query_rx, decls, reg) -> list:
