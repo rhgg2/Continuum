@@ -630,6 +630,20 @@ the histogram pays for itself — one real empty was `kind='fn',
 module='curveEditor'`, and curveEditor holds `state:8 require:3 api:1`,
 no `fn` at all.
 
+**The phase after this one was vocabulary, and it was not built**
+(2026-08-02, decided). The section opens on three candidate shapes and
+two of them are now ruled out by decisions taken since. Fuzzy matching
+is a tuned threshold with a ranking, which the paragraph above
+deliberately avoided; synonyms are a curated table of the corpus's own
+vocabulary, a second copy that goes stale unwatched, which is the ground
+on which the callee-based `@drop` filter was rejected. The third,
+near-misses, is the shape phase 4 delivered in its cheapest form — an
+empty answer that hands back the vocabulary it scanned. What is left is
+an argument by analogy and not a measurement, so the question is
+demoted rather than closed: it stays in § Open questions, alongside
+early-return guards and the subagent numbers, as a look nobody has
+taken.
+
 The inventory is bare names because rows are roughly ten times the cost
 and the modules that actually appear in the empty population are the three
 largest in the corpus: `midiManager`'s 53 `fn` heads are 660 characters as

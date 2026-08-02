@@ -79,6 +79,11 @@ NESTED_FN_RE  = re.compile(r"^(\s*)function\s+([a-z]\w*)\s*\(([^)]*)\)")
 # spelling is a table-constructor value (`add = function(evt)`, the whole
 # registerAll{...} idiom), not a declaration.
 ASSIGN_FN_RE  = re.compile(r"^([a-z]\w*)\s*=\s*function\s*\(([^)]*)\)")
+# A parameter list may wrap; the head regexes above are line-anchored, so a
+# wrapped head matched nothing and the declaration -- with every call site
+# inside its body -- vanished from the map. A Lua parameter list holds no
+# parens of its own, so the first `)` closes it.
+HEAD_OPEN_RE  = re.compile(r"^\s*(?:local\s+)?(?:[A-Za-z_]\w*\s*=\s*)?function\b[^(]*\(")
 LOCAL_DECL_RE = re.compile(
     r"^local\s+(\w+(?:\s*,\s*\w+)*)\s*(?:=\s*(.+?))?\s*(?:--.*)?$"
 )
@@ -404,15 +409,32 @@ def discover_deps(lines: list[str]) -> list[str]:
     return out
 
 
+def join_wrapped_heads(lines: list[str]) -> list[str]:
+    """`lines` with each wrapped declaration head joined onto its own line."""
+    out = list(lines)
+    for i, raw in enumerate(lines):
+        m = HEAD_OPEN_RE.match(raw)
+        if not m or ')' in raw[m.end():]:
+            continue
+        parts = [raw.rstrip()]
+        for nxt in lines[i + 1:]:
+            parts.append(nxt.strip())
+            if ')' in nxt:
+                break
+        out[i] = ' '.join(parts)
+    return out
+
+
 def parse(path: Path) -> MapFile:
     text = path.read_text()
     lines = text.splitlines()
+    head_lines = join_wrapped_heads(lines)
     code_lines = strip_code(text)
     deltas, level_after = block_levels(code_lines)
     fn_depth = function_depth_before(code_lines)
 
     cm = MapFile(module=path.stem, src=path, loc=len(lines))
-    cm.mode, cm.return_target = classify(lines)
+    cm.mode, cm.return_target = classify(head_lines)
     if cm.mode == 'chunk':
         cm.deps = discover_deps(lines)
 
@@ -436,9 +458,11 @@ def parse(path: Path) -> MapFile:
             cm.sections.append((i + 1, len(ms.group(1)), ms.group(2)))
             continue
 
+        head = head_lines[i]
+
         # methods on a table — colon receiver. Indented defs count only when the
         # owner is the module's own table; sub-instance methods stay private.
-        mm = METHOD_RE.match(raw)
+        mm = METHOD_RE.match(head)
         if mm:
             indent, owner, name, args = mm.groups()
             if indent == '' or owner == cm.return_target:
@@ -448,7 +472,7 @@ def parse(path: Path) -> MapFile:
             continue
 
         # dot functions on a table (no self). Same indent guard as methods.
-        md = DOT_FN_RE.match(raw)
+        md = DOT_FN_RE.match(head)
         if md:
             indent, owner, name, args = md.groups()
             if indent == '' or owner == cm.return_target:
@@ -467,7 +491,7 @@ def parse(path: Path) -> MapFile:
         # local function — private helper. Captured at module scope (function
         # depth 0) wherever a do/if wraps it; true nested closures (depth >=1)
         # are out of scope.
-        ml = LOCAL_FN_RE.match(raw)
+        ml = LOCAL_FN_RE.match(head)
         if ml and fn_depth[i] == 0:
             blk = Block(name=ml.group(2), args=ml.group(3).strip(),
                         line=i + 1, kind='fn',
@@ -477,7 +501,7 @@ def parse(path: Path) -> MapFile:
 
         # bare `function name(args)` filling a forward-declared local, inside a
         # `do` block or at file scope. Module scope only, same as local helpers.
-        mn = NESTED_FN_RE.match(raw)
+        mn = NESTED_FN_RE.match(head)
         if mn and fn_depth[i] == 0:
             blk = Block(name=mn.group(2), args=mn.group(3).strip(),
                         line=i + 1, kind='fn',
@@ -486,7 +510,7 @@ def parse(path: Path) -> MapFile:
             continue
 
         # the same fill written as an assignment.
-        ma = ASSIGN_FN_RE.match(raw)
+        ma = ASSIGN_FN_RE.match(head)
         if ma and fn_depth[i] == 0:
             blk = Block(name=ma.group(1), args=ma.group(2).strip(),
                         line=i + 1, kind='fn',
@@ -515,7 +539,7 @@ def parse(path: Path) -> MapFile:
         # like any other, it just is not module state.
         indented = raw.startswith((' ', '\t'))
         decl = LOCAL_DECL_RE.match(raw.lstrip() if indented else raw)
-        if decl and not LOCAL_FN_RE.match(raw):
+        if decl and not LOCAL_FN_RE.match(head):
             names = [n.strip() for n in decl.group(1).split(',')]
             init = (decl.group(2) or '').strip()
             inline_doc = ''
@@ -1305,8 +1329,11 @@ def parse_spec(path: Path) -> SpecMap:
     state_pokes: dict[str, None] = {}
     mk_forms: dict[str, None] = {}
 
+    head_lines = join_wrapped_heads(lines)
+
     for i, raw in enumerate(lines):
-        mfn = LOCAL_FN_RE.match(raw) or NESTED_FN_RE.match(raw)
+        head = head_lines[i]
+        mfn = LOCAL_FN_RE.match(head) or NESTED_FN_RE.match(head)
         if mfn and fn_depth[i] == 0:
             blk = Block(name=mfn.group(2), args=mfn.group(3).strip(),
                         line=i + 1, kind='fn', doc=collect_doc(lines, i))
