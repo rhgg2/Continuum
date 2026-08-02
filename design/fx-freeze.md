@@ -157,6 +157,26 @@ of loose events:
   curves. rect from the output footprint (note lanes used + curve
   streams × the region window); instance 1 anchored at the region
   origin.
+- **The rect is the region window exactly, and the conversion pulls
+  the closing pb seat inside it** (2026-08-02). A pb window folds
+  `closed`, so it seats its last breakpoint on `endppq` — one tick
+  outside a rect of the region's own span. Leaving it there is not
+  cosmetic: `tv:clearRegionAt` runs before the projection in
+  `groupDuplicate` and clears `[anchor, anchor+dur)`, so tiling a group
+  directly below itself deletes the copy above's closing member, and
+  nothing reports it — gm calls every remaining cell synced and a later
+  mirror edit reaches nothing. So `thinSeats` relocates that seat to
+  `endppq - 1`, displacing whatever survived the thin on that tick. Two
+  alternatives were measured and rejected. Widening the rect by a tick
+  drifts every frozen pb group: `duplicateCascade` advances by
+  `rect.dur`, so each copy in the cascade lands a tick further out.
+  Tagging the terminal seat `derived` so it hides hands ownership to
+  the pb pass, which re-derives what it owns — nothing predicts a
+  closing re-centre for an authored curve, and the reconcile deletes
+  the event outright. The move is the group verb's alone (freeze-to-raw
+  mints no rect, so the shift would be distortion bought for nothing)
+  and pb's alone (a cc window is half-open and seats nothing at its
+  end).
 - **Curves are re-seated sparse — by subtraction** (2026-07-31). The
   thin runs inside the raw conversion's own staging block: the doomed
   breakpoints are deleted along with everything else the conversion

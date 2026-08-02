@@ -1691,12 +1691,51 @@ function tm:requestRebuild() rebuildRequested = true end
 -- Defined with Rebuild Fx below; freeze's eligibility census needs the on-take host windows here.
 local computeFxWindows
 
--- Rebuild output, not a cache: settleWindows replaces it wholesale each rebuild from the settled
+-- Rebuild output, not a cache: buildFreezeMaps replaces them wholesale each rebuild from the settled
 -- census; absence = not a producer. see design/fx-freeze.md § Eligibility gates
 local freezeEligibleByUuid = {}
+local freezeRectByUuid     = {}   -- uuid -> the gm rect a freeze-to-group mint would claim
+
+-- Built at the pipeline tail, where the fx pass has already emitted this rebuild's derived notes:
+-- a rect's note lanes come off those notes, not window coverage, which is parked-over not produced-onto. see design/fx-freeze.md § Freeze to group
+local function buildFreezeMaps(census, windows)
+  local producerChans, lanesByUuid = {}, {}
+  for _, p in ipairs(census) do producerChans[p.chan] = true end
+  for chan in pairs(producerChans) do
+    for _, note in ipairs(rawIndexFor(chan).notes) do
+      -- A derived note carries its producer's uuid, so the bucketing needs no window arithmetic.
+      if note.derived then
+        local lanes = lanesByUuid[note.derived] or {}
+        lanes[note.lane] = true
+        lanesByUuid[note.derived] = lanes
+      end
+    end
+  end
+  local streamsByUuid = {}
+  for _, w in ipairs(windows) do
+    if w.evType ~= 'note' then
+      local streams = streamsByUuid[w.id] or {}
+      streams[w.evType == 'pb' and 'pb:0' or ('cc:' .. w.cc)] = true
+      streamsByUuid[w.id] = streams
+    end
+  end
+
+  local eligible, rects = {}, {}
+  for _, p in ipairs(census) do
+    eligible[p.uuid] = not freezeRefused(p, census, windows)
+    -- A husk producer (no fx, no output) claims an empty stream set rather than none: it is still
+    -- a producer, and whether an empty footprint is worth minting is the caller's question.
+    local streams = streamsByUuid[p.uuid] or {}
+    for lane in pairs(lanesByUuid[p.uuid] or {}) do streams['note:' .. lane] = true end
+    -- Single-channel by construction, so chanOffset 0 is the only key; span is the producer's own.
+    rects[p.uuid] = { ppq = p.startppq, dur = p.endppq - p.startppq, chanLo = p.chan,
+                      streams = { [0] = streams } }
+  end
+  freezeEligibleByUuid, freezeRectByUuid = eligible, rects
+end
 
 -- pb's seat window closes inclusive (the terminal re-centre sits on its end) where cc's is half-open:
--- rebuildPbs' inSeatWindow and rebuildCCs' rawSpanMap. Bounds arrive in the caller's own frame.
+-- rebuildPbs' inSeatWindow and rebuildCCs' rawSpanMap. Bounds arrive in the caller's own frame; thinSeats is the one consumer left, needing the closing seat in order to move it inside.
 local function inFreezeWindow(w, ppq, startAt, endAt)
   if ppq < startAt then return false end
   if w.evType == 'pb' then return ppq <= endAt end
@@ -1726,6 +1765,22 @@ local function thinSeats(chan, windows)
       end
       local kept = {}
       for _, p in ipairs(generators.thinCurve(points, tol)) do kept[p] = true end
+      -- A pb window folds closed, seating its last point at exactly endppq -- outside the rect a mint claims, where tiling the group directly below itself clears it away unnoticed. Pull it inside;
+      -- the destination tick's own point rides the delete loop below rather than a second write. see design/fx-freeze.md § Freeze to group
+      if isPb and w.endppq - 1 > w.startppq then
+        local destRaw = tm:fromLogical(chan, w.endppq - 1, 0)
+        local closing, occupant
+        for _, p in ipairs(points) do
+          if kept[p] then
+            if p.ppq == endRaw then closing = p elseif p.ppq == destRaw then occupant = p end
+          end
+        end
+        if closing then
+          if occupant then kept[occupant] = nil end
+          -- Logical bound: assignEvent's non-note arm takes the authored frame and stamps raw itself.
+          assignEvent(closing.evt, { ppq = w.endppq - 1 })
+        end
+      end
       -- By identity, not value: two breakpoints can carry the same number, and it is this one that
       -- lost its place.
       for _, p in ipairs(points) do
@@ -1749,8 +1804,9 @@ local function groupMembers(frozen, windows, promotedUuids)
     if w.evType ~= 'note' then
       local col = w.evType == 'pb' and columns.pb or (columns.ccs or {})[w.cc]
       for _, e in ipairs(col and col.events or {}) do
+        -- Half-open for pb too: the conversion pulls the closing seat inside the window, so nothing legitimate stands on endppq and every member lies inside the rect the mint claims.
         -- An absorber seated around a detune onset is hidden realisation, not group material.
-        if not e.hidden and inFreezeWindow(w, e.ppq, w.startppq, w.endppq) then util.add(members, e) end
+        if not e.hidden and e.ppq >= w.startppq and e.ppq < w.endppq then util.add(members, e) end
       end
     end
   end
@@ -1912,6 +1968,11 @@ function tm:freezeToGroup(uuid)       return freezeRegion(uuid, true) end
 --contract: reads the last rebuild's settled census; staged-not-flushed producers are invisible
 --contract: false for any uuid that is not a live producer; never computes, never stages
 function tm:freezeEligible(uuid)      return freezeEligibleByUuid[uuid] == true end
+--contract: reads the last rebuild's settled census; never computes, never stages
+--contract: nil for a non-producer uuid; a producer with no output gets empty streams
+--contract: every member tm:freezeToGroup hands back lies inside the rect
+-- A clone per call: gm:markGroup stores the rect by reference and tm replaces its map each rebuild.
+function tm:freezeRect(uuid)          local r = freezeRectByUuid[uuid]; return r and util.deepClone(r) end
 -- With no mm ops there is no reload->rebuild to ride, so the one rebuild is driven here.
 function tm:flush() if flush() then tm:rebuild(false) end end
 
@@ -4845,21 +4906,15 @@ local function rebuildPipeline(didReload)
   perf.stop('parkRegions')
 
   -- Post-settlement window pass, called by rebuildRegionPark between its note and cc/pb passes: fxWindow
-  -- feeds fx expansion's host set, settledWindows the continuous membership + persisted window set.
-  local fxWindow, settledWindows
+  -- feeds fx expansion's host set, settledWindows the continuous membership + persisted window set, and settledCensus rides out to the freeze maps the pipeline tail builds.
+  local fxWindow, settledWindows, settledCensus
   local function settleWindows(restoredCells, parkedNotes)
     local restoredFxChans = {}
     for _, cell in ipairs(restoredCells) do
       if cell.fx then restoredFxChans[cell.chan] = true end
     end
     fxWindow = computeFxWindows(restoredFxChans, parkedNotes)
-    local census
-    settledWindows, census = assembleParkWindows(fxWindow, parkedNotes)
-    local eligible = {}
-    for _, p in ipairs(census) do
-      eligible[p.uuid] = not freezeRefused(p, census, settledWindows)
-    end
-    freezeEligibleByUuid = eligible
+    settledWindows, settledCensus = assembleParkWindows(fxWindow, parkedNotes)
     return settledWindows
   end
 
@@ -4878,6 +4933,10 @@ local function rebuildPipeline(didReload)
     ds:assign('prevWindows', #settledWindows > 0 and settledWindows or util.REMOVE)
   end
   perf.stop('prevWindows')
+
+  -- Freeze's maps, after the fx pass: settleWindows runs before it, so a rect built there would carry
+  -- the previous rebuild's note lanes. Sibling maps, one site. see design/fx-freeze.md § Freeze to group
+  perf.start('freezeMaps'); buildFreezeMaps(settledCensus, settledWindows); perf.stop('freezeMaps')
 
   -- Drop un-flushed command-path staging; the index itself is already live (head reload on
   -- wholesale passes, incremental reconciliation otherwise). see docs § Incremental index reconciliation

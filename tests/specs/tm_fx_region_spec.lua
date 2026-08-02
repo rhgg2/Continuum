@@ -204,6 +204,24 @@ local function denseRamp()
   return { { kind = 'denseRamp' } }
 end
 
+-- A pb-replace stage seating distinguishable values on the window's last two ticks, so the closing
+-- seat's destination is already occupied when the conversion pulls it inside. Steps 40 cents apart:
+-- neither is droppable inside tolerance. Registers the kind; the caller clears it after the freeze.
+local function edgePair()
+  generators.kinds.edgePair = {
+    expand = function(stream)
+      local startL, endL = stream.window[1], stream.window[2]
+      return { notes = {}, delta = {
+        { ppq = startL,   val = 0,  shape = 'step' },
+        { ppq = endL - 1, val = 40, shape = 'step' },
+        { ppq = endL,     val = 80, shape = 'step' },
+      } }
+    end,
+    mode = 'replace', dest = 'pb', label = 'Edge Pair', defaults = {}, fields = {},
+  }
+  return { { kind = 'edgePair' } }
+end
+
 return {
 
   ----- N=0 -- a region with no host note still seats the channel pb stream
@@ -2419,6 +2437,61 @@ return {
     end,
   },
 
+  {
+    -- The rect a freeze-to-group mint would claim: the producer's own span, and one streamId per
+    -- stream its output actually stands on. see design/fx-freeze.md § Freeze to group
+    name = 'freeze rect: the footprint of a mixed note-and-curve output',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { pitch = 60, lane = 1 })
+      addNote(h, { pitch = 64, lane = 2 })   -- covered by the window, but nothing is produced onto it
+      injectArp(h, { fx = { arpUp[1], sine30[1] } })
+
+      t.deepEq(h.tm:freezeRect('fxr-1'),
+        { ppq = 0, dur = 240, chanLo = 1,
+          streams = { [0] = { ['note:1'] = true, ['pb:0'] = true } } },
+        'the lane the derived notes landed on plus the pb target, and lane 2 absent')
+    end,
+  },
+
+  {
+    name = 'freeze rect: a continuous-only host claims no note lane',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { fx = sine30 })
+      local uuid = h.tm:getChannel(1).columns.notes[1].events[1].uuid
+
+      t.deepEq(h.tm:freezeRect(uuid),
+        { ppq = 0, dur = 240, chanLo = 1, streams = { [0] = { ['pb:0'] = true } } },
+        'the host stays authored rather than becoming output, so its own lane is not in the rect')
+    end,
+  },
+
+  {
+    name = 'freeze rect: nil for a uuid that is not a producer',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h)
+      injectRegion(h)   -- a live producer over the same span must not answer for the note
+      local uuid = h.tm:getChannel(1).columns.notes[1].events[1].uuid
+      t.falsy(h.tm:freezeRect(uuid), 'a plain note has no footprint to claim')
+    end,
+  },
+
+  {
+    -- Rebuild output, not a cache with invalidation -- the same standing as the eligibility map.
+    name = 'freeze rect: the map moves with rebuild',
+    run = function(harness)
+      local h = harness.mk()
+      injectRegion(h)
+      t.truthy(h.tm:freezeRect('fxr-1'), 'the live producer has a rect')
+
+      h.ds:assign('fxRegions', util.REMOVE)
+      h.tm:rebuild()
+      t.falsy(h.tm:freezeRect('fxr-1'), 'and it is gone on the rebuild that drops the producer')
+    end,
+  },
+
   ----- Freeze to group: the conversion thins its curves, then hands back the mint material
 
   {
@@ -2437,8 +2510,29 @@ return {
       generators.kinds.denseRamp = nil
 
       t.eq(rebuilds, 1, 'one rebuild -- the thin rides the conversion rather than a pass of its own')
-      t.deepEq(wirePbs(h, 1, 0, 240), { before[1], before[RAMP_N] },
+      -- The closing seat keeps its value and lands one tick inside the window, where the rect a mint
+      -- claims can cover it. see design/fx-freeze.md § Freeze to group
+      t.deepEq(wirePbs(h, 1, 0, 240), { before[1], { ppq = 239, cents = before[RAMP_N].cents } },
         'a collinear run inside tolerance comes back as its two endpoints, values intact')
+    end,
+  },
+
+  {
+    -- The closing seat's destination tick can already be occupied by a survivor of the thin. The
+    -- move displaces it rather than doubling up. see design/fx-freeze.md § Freeze to group
+    name = 'freeze to group: the closing seat displaces the survivor on its destination tick',
+    run = function(harness)
+      local h = harness.mk()
+      injectRegion(h, { fx = edgePair() })
+      local members = h.tm:freezeToGroup('fxr-1')
+      generators.kinds.edgePair = nil
+      t.truthy(members, 'the freeze reports its members')
+
+      t.deepEq(wirePbs(h, 1, 230, 240), { { ppq = 239, cents = 80 } },
+        'one pb on the destination tick, carrying the closing value rather than the displaced one')
+      local atDest
+      for _, m in ipairs(members) do if m.ppq == 239 then atDest = m end end
+      t.truthy(atDest, 'and the moved seat is group material')
     end,
   },
 
@@ -2511,7 +2605,10 @@ return {
       local before = wirePbs(h, 1, 0, 240)
       local members = h.tm:freezeToGroup('fxr-1')
       t.truthy(members, 'the freeze reports its members')
-      t.deepEq(wirePbs(h, 1, 0, 240), before, 'a curved stream has nothing the thinner may drop')
+      -- Verbatim bar the closing seat, which the conversion pulls inside the window.
+      local expected = util.deepClone(before)
+      expected[#expected].ppq = 239
+      t.deepEq(wirePbs(h, 1, 0, 240), expected, 'a curved stream has nothing the thinner may drop')
       t.eq(#members, #before, 'and every breakpoint comes back as a member')
       local shapes = {}
       for _, m in ipairs(members) do shapes[m.shape] = (shapes[m.shape] or 0) + 1 end

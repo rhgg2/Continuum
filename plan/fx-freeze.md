@@ -20,23 +20,18 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-02 tm: compute the mint rect and pull the closing pb seat inside it (§ Freeze to group)
 - 2026-08-01 tm: add freezeToGroup -- thin the curves, hand back the members (§ Freeze to group)
 - 2026-07-31 tm: store freeze eligibility per rebuild; views decline before undo (§ Eligibility gates)
 - 2026-07-31 gen: add thinCurve, a bounded Douglas-Peucker over linear runs (§ Freeze to group)
-- 2026-07-30 tm: freeze eligibility gates, computed over the producer census (§ Eligibility gates)
 
 ## Now
 
-(empty — phase 3's conversion arm has landed: tm:freezeToGroup thins each continuous stream inside the conversion's own staging block and returns the column-event members. Queued 1 (the mint rect) and 2 (the tv verb, which owns the gm mint and the rect-conflict gate) are what remain of the phase. Run /plan-next to promote the next commit.)
+(empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
 
-1. tm: the mint rect — compute the output footprint (note lanes used
-   plus curve streams, crossed with the region window; instance 1
-   anchored at the region origin) once, pre-freeze, exposed so the tv
-   gate and the mint reuse the same rect. Spec: the footprint of a
-   mixed note-and-curve output.
-2. tv: the freeze-to-group verb — a second command and fx-tab button
+1. tv: the freeze-to-group verb — a second command and fx-tab button
    (Ctrl-Shift-E, mirroring Ctrl-Shift-D's duplicate-to-group; no
    modal), gating on gm's `regionConflict` against the mint rect
    before any mutation, then conversion, `gm:markGroup` over the
@@ -45,6 +40,7 @@
    rect-conflict input. Spec: group minted with note and thinned-curve
    members, each refusal declines before any mutation, one rebuild for
    the conversion and one for the mint.
-3. spec: the minted group is ordinary — instance 2 replays both note
-   and curve members, a mirror edit propagates, and deleting the
-   group works; pins "no frozen-ness survives the mint".
+2. spec: the minted group is ordinary — instance 2 replays both note
+   and curve members, a mirror edit propagates, deleting the group
+   works, and tiling a copy directly below leaves the copy above with
+   every member; pins "no frozen-ness survives the mint".
