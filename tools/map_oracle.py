@@ -63,7 +63,10 @@ class Proto:
     n_children: int
     ins: list[Ins] = field(default_factory=list)
     local_vars: list[tuple[str, int, int]] = field(default_factory=list)
-    upvals: list[str] = field(default_factory=list)
+    # (name, instack, idx). The last two are what let a callee's binding site be
+    # walked back up the chain, which is how a file-scope declaration is told
+    # from a nested one wearing the same name.
+    upvals: list[tuple[str, int, int]] = field(default_factory=list)
     children: list[Proto] = field(default_factory=list)
     parent: Proto | None = None
 
@@ -74,6 +77,7 @@ class Call:
     line: int               # the CALL instruction's line
     kind: str
     name: str               # the spelling
+    via: Ins | None = None  # the instruction that loaded the callee register
 
 
 # ----- The listing
@@ -144,7 +148,7 @@ def parse_row(proto: Proto, section: str, raw: str) -> None:
         if section == 'locals':
             proto.local_vars.append((m[2], int(m[3]), int(m[4])))
         else:
-            proto.upvals.append(m[2])
+            proto.upvals.append((m[2], int(m[3]), int(m[4])))
 
 
 def parse_listing(text: str, src: str) -> list[Proto]:
@@ -389,8 +393,13 @@ def calls(path: Path) -> tuple[list[Proto], list[Call]]:
     for proto in protos:
         for ins in proto.ins:
             if ins.op in CALL_OPS:
-                kind, name = spell(proto, reg(ins.args[0]), ins.pc)
-                found.append(Call(proto=proto, line=ins.line, kind=kind, name=name))
+                callee = reg(ins.args[0])
+                kind, name = spell(proto, callee, ins.pc)
+                # spell() computes the same writer on its way to the spelling.
+                # Recomputing it keeps spell() returning a pair, which is worth
+                # more here than the one scan it costs.
+                found.append(Call(proto=proto, line=ins.line, kind=kind, name=name,
+                                  via=writer_of(proto, callee, ins.pc)))
     return protos, found
 
 

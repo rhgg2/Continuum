@@ -684,11 +684,67 @@ one with no instrument pointed at it. One line closes the gap:
 resolves only because 5.4 emits `TFORCALL` after the loop body — and which a
 widened `CALL` therefore steals.
 
+**The rate is zero, and the classes are the finding** (2026-08-02,
+measured). `tools/map_diff.py` joins both corpora on the enclosing
+declaration's source span and classifies every intra-file call site. Of
+the 3026 `@call` sites the extractor attributes to a caller, 3026 have a
+bytecode call at the same span, spelling and line. Nothing is map-only —
+no edge with no call behind it. And nothing in scope is luac-only — no
+call the extractor should have caught and didn't, where *in scope* means
+a callee that is a declared name bound in the main chunk. Cross-module
+`@use` rows are excluded for the reason the note above gives, and `@bind`
+rows because a by-name reference is a `GETUPVAL` with no `CALL` after it.
+So the regex pass is not upgraded: the accuracy case for the AST rewrite
+is now answered by a measurement rather than by a guess about house style.
+
+**Agreement on a spelling is not agreement on identity**, which is what
+makes the zero worth anything. `midiManager` declares `idOf` at file
+scope and again at 624 inside `mm:load`. An edge to the inner one would
+carry the same caller span, the same name and the same line as an edge to
+the outer, so a diff on that triple alone scores the corpus's central
+hazard as agreement. Each agreement is therefore certified by walking the
+callee's upvalue chain to the prototype it is a local of: 2896 bind in
+the main chunk, 130 are a method's own `self` — identity by construction,
+since the enclosing `@api <recv>:<name>` row names that receiver — and
+none binds to a nested declaration wearing the same name. The corpus
+holds exactly two such shadows, `idOf` and `trackerManager`'s `snapshot`
+(declared 1174-1178, redeclared at 2000 inside `tm:tileLength`), and the
+extractor suppresses both.
+
+**One defect, and it is not a shadow.** `groups.lua:38` calls `resolve`,
+which line 25 binds as `local resolve = groups.resolve`. The map spells
+callees by declaration head, so the alias site produces no edge at all,
+and `groups.resolve` reads as having one caller fewer than it has. One
+site corpus-wide. It is reported as its own class rather than folded into
+out-of-scope, because the two are not the same finding: out of scope is a
+call the corpus never claimed, and this is a call it claims and does not
+carry.
+
+**The 250 unattributed sites are the corpus's real gap.** They are `@call`
+rows whose site carries no caller name, because no captured declaration
+encloses the line; the edge survives and the "who calls this" answer does
+not. The run names them by the luac prototype whose span owns each line —
+mostly one-line `function(...)` values in table constructors, plus 69 in
+the main chunk itself. That list is the declarations the extractor never
+captured, and it is actionable in a way an error rate of zero is not.
+
+**What a control covers is, again, a fact about how it was broken.** The
+table pins sixteen hand-derived rows over six modules — `groups.lua`
+whole, and six source lines each reaching a trap the others do not.
+Broken in six directions it notices six: dropping the closure lift,
+dropping the `self:` rewrite, skipping one-line declaration spans,
+deleting a `@call` site from a copied map, adding a bogus one, and
+forcing every binding to read as file scope. The last of those moves
+`idOf` and not `snapshot`. `snapshot` is excluded a step earlier, by luac
+spelling it a `local` rather than an upvalue, so the binding walk never
+sees it — the local-shadow class rests on `map_oracle`'s kind assignment
+and not on anything `map_diff` does, and it is the one direction the
+control cannot test. Measured instead of assumed: exactly one local-bound
+call in the corpus shares a name with a file-scope declaration, and it is
+`snapshot`.
+
 ## Open questions
 
-- What is the shadowing error rate of the cheap regex pass? Measurable
-  against luac before committing to it. House style (long descriptive
-  names, no gnomic abbreviations) suggests it is low; that is a guess.
 - Are early-return guards worth surfacing? "This function does nothing
   unless X" is a recurring answer when tracing why something *didn't*
   happen, and it is invisible until the body is read. Untested — it should
