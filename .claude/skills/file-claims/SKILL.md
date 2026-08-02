@@ -85,7 +85,12 @@ Three definitions the steps lean on:
      self-contained: a reader holding nothing else could apply it. Write it
      from the claim body, never from the previous hook — compressing a
      compression loses the codebook. Session-local vocabulary fails the test;
-     so does a pointer-shaped tail ("five shapes it takes here").
+     so does a pointer-shaped tail ("five shapes it takes here"); so does a
+     fragment that parses only with its incident in hand — that is provenance,
+     and it stays in the file. Absorbing a new instance means restating the
+     model so it covers the case, never splicing a rider onto the standing
+     line: a chain of "— and" clauses is the previous hook surviving. Past
+     ~100 words, suspect the line is carrying evidence, or is two claims.
    - **Facts** — concrete claims. The line must contain an anchor that
      resolves in the repo or a platform namespace (a symbol, an API name), so
      retrieval is lexical: the moment names itself and the file gets opened.

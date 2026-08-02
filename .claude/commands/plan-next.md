@@ -61,16 +61,6 @@ write-up, and we only start it when we're both happy to proceed.
    records the settlement, the design doc gets the dated note. That note
    is prose and follows `docs/STYLE.md`; the brief is not, because it is
    executed rather than read.
-
-   So that we can both be happy with the shape we've come up with,
-   we'll only continue to step 7 once your concerns are settled, and
-   I've communicated that I have no more concerns. I'll do this in
-   plain language by saying "proceed" or similar.
-
-   Now, it may look to you like we reach agreement early, at the point
-   where I've answered your questions. But the points I have responded
-   to are rarely all the points I have; so if you aren't sure, be sure
-   to check if there's anything else.
 7. Once we're ready and I have said go: write the settlement up as
    `plan/IMPL.md`. If something else comes up while writing, let's
    settle it together; bring it back to chat. The implementer gets the
