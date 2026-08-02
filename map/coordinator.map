@@ -60,6 +60,13 @@
       -- its open→closed edge (X button or F11) to reclaim OS focus from REAPER.
   @fn frame()  @ 144-286
 
+# Functions held in tables
+  @held facade.publish(name, iface)  @ 43
+  @held facade.get(name)  @ 44
+  @held facade.publishDebug(name, stack)  @ 46
+  @held env.facade(name)  @ 365
+  @held env.page(name)  @ 366
+
 # Public API (coord:*)
   @api coord:register(name, moduleName, extra)  @ 294-299
   @api coord:setActive(name)  @ 303-316
@@ -149,7 +156,7 @@
 
 # Calls (intra-file)
   @call anyFxFloating  @ frame:150
-  @call coord:getFacade  @ 365
+  @call coord:getFacade  @ env.facade:365
   @call coord:setActive  @ register:297 returnToArrange:321 togglePage:338
   @call frame  @ run:358
   @call pollExternalCommands  @ frame:146
@@ -225,9 +232,9 @@
   @field w eventMeta  @ 48,364
   @field r extKey  @ pollExternalCommands:121,122
   @field w extKey  @ onExternalCommand:353
-  @field w facade  @ 49,365
+  @field w facade  @ 49 env.facade:365
   @field r fontSize  @ 19
-  @field w get  @ 44
+  @field w get  @ facade.get:44
   @field r gui  @ 17
   @field w gui  @ 48
   @field w help  @ 49
@@ -235,12 +242,12 @@
   @field w identity  @ 22
   @field w lib  @ 27,49
   @field w modalHost  @ 49
-  @field w page  @ 366
+  @field w page  @ env.page:366
   @field w pageSuppressed  @ dispatch:108
   @field r path  @ 13
   @field w path  @ 13
-  @field w publish  @ 43
-  @field w publishDebug  @ 46
+  @field w publish  @ facade.publish:43
+  @field w publishDebug  @ facade.publishDebug:46
   @field w reaper  @ 363
   @field w render  @ 102
   @field r sample  @ tick:71

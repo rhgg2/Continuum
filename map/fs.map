@@ -14,6 +14,10 @@
   @fn copyFile(src, dst)  @ 95-105
       -- 64KB chunks so big samples don't allocate a Lua string the size of the file.
 
+# Functions held in tables
+  @held fileOps.move(src, dst)  @ 111-115
+  @held fileOps.mkdir(dir)  @ 116
+
 # Public API (fs.*)
   @api fs.isAudio(name)  @ 12-16
   @api fs.basename(path)  @ 18-20
@@ -30,7 +34,7 @@
   @api fs.listAudioFiles(path)  @ 82-92
 
 # Calls (intra-file)
-  @call copyFile  @ 113
+  @call copyFile  @ fileOps.move:113
   @call fs.isAudio  @ listAudioFiles:87
 
 # Bindings (by name)
@@ -76,8 +80,8 @@
   @field w listAudioFiles  @ listAudioFiles:82
   @field w listDirs  @ listDirs:37
   @field w m4a  @ 9
-  @field w mkdir  @ 116
-  @field w move  @ 111
+  @field w mkdir  @ fileOps.mkdir:116
+  @field w move  @ fileOps.move:111
   @field w mp3  @ 9
   @field w ogg  @ 9
   @field w opus  @ 9

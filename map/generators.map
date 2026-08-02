@@ -83,6 +83,9 @@
       -- A shape governs the segment to its *right*, so a point is safe to lose only if it and its
       -- predecessor both ride linearly; a missing shape counts as non-linear. see design/fx-freeze.md § Freeze to group
 
+# Functions held in tables
+  @held fields.when(e)  @ 382
+
 # Public API (generators.*)
   @api generators.destOf(params)  @ 425-428
   @api generators.destProfile(dest)  @ 432-439
@@ -285,7 +288,7 @@
   @field w startppq  @ parkWindows:546
   @field r step  @ trill:61
   @field w step  @ 336
-  @field r target  @ slide:215 382
+  @field r target  @ slide:215 fields.when:382
   @field w target  @ 376
   @field r tension  @ lfo:273,279
   @field w tension  @ lfo:273,279
@@ -300,7 +303,7 @@
   @field r vel  @ retrig:46 trill:70 arp:118 ostinato:143 chordStamp:171 velPattern:304
   @field w vel  @ retrig:46 trill:70 arp:118 ostinato:143 chordStamp:171 velPattern:304
   @field w velPattern  @ 385
-  @field w when  @ 382
+  @field w when  @ fields.when:382
   @field w widget  @ 330,331,338,339,346,347,354,361,368,369,371,378
   @field w widget  @ 379,381,389,397,398,399,401,466
   @field r window  @ retrig:34 trill:56 arp:106 ostinato:133 sine:181 slide:212

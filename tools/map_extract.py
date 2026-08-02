@@ -52,6 +52,14 @@ lost rather than absent. Stdlib tables and `reaper`/`gfx` are excluded: an
 unresolved `math.floor` is not a lost edge. The rows are candidates, not
 confirmed edges -- map_query kind='usedby' resolves the receiver
 speculatively and says so in the heading.
+
+Function literals held in a table field at file scope -- `render = function()`
+and the `registerAll{...}` command form -- get `# Functions held in tables`:
+`@held <table>.<field>(args)  @ <span>` rows. They are captured for attribution:
+a call site inside one otherwise renders as a bare line number, with no caller
+to name. The qualifier is the table holding the literal, because a bare field
+key collides with declarations elsewhere in the same file. The rows carry no
+doc comments and no annotations.
 """
 
 from __future__ import annotations
@@ -79,6 +87,18 @@ NESTED_FN_RE  = re.compile(r"^(\s*)function\s+([a-z]\w*)\s*\(([^)]*)\)")
 # spelling is a table-constructor value (`add = function(evt)`, the whole
 # registerAll{...} idiom), not a declaration.
 ASSIGN_FN_RE  = re.compile(r"^([a-z]\w*)\s*=\s*function\s*\(([^)]*)\)")
+# A function literal held in a table field: `render = function()` and the
+# registerAll{...} command form `deleteSel = { function() ... end, 'desc' }`.
+# Distinct from ASSIGN_FN_RE, which is the same spelling at column 0 filling
+# a forward-declared local -- a declaration, and captured as one.
+FIELD_LIT_RE  = re.compile(r"^\s*([A-Za-z_]\w*)\s*=\s*(?:\{\s*)?function\s*\(([^)]*)\)")
+# The name an open table constructor is known by: its assignment target or
+# field key, else the string that names the call it is an argument of
+# (`facade.publish('arrange', {` -- 'arrange' is the spelling call sites use,
+# where the receiver is only ever `facade`), else that call's receiver.
+QUAL_ASSIGN = re.compile(r"(?:local\s+)?([A-Za-z_]\w*)\s*(?:\[[^\]]*\])?\s*=\s*$")
+QUAL_STRARG = re.compile(r"""[A-Za-z_]\w*\s*[:.]\s*[A-Za-z_]\w*\s*\(\s*['"]([^'"]+)['"]\s*,\s*$""")
+QUAL_RECV   = re.compile(r"([A-Za-z_]\w*)\s*[:.]\s*[A-Za-z_]\w*\s*[({]?\s*$")
 # A parameter list may wrap; the head regexes above are line-anchored, so a
 # wrapped head matched nothing and the declaration -- with every call site
 # inside its body -- vanished from the map. A Lua parameter list holds no
@@ -157,7 +177,7 @@ class Block:
     line: int = 0
     end_line: int = 0       # span end (block-depth matched); functions only
     owner: str = ''         # for methods: the receiver
-    kind: str = 'fn'        # 'fn' | 'method' | 'dotfn'
+    kind: str = 'fn'        # 'fn' | 'method' | 'dotfn' | 'held'
     indent: int = 0
     doc: list[str] = field(default_factory=list)
     annotations: list[Annotation] = field(default_factory=list)
@@ -196,6 +216,7 @@ class MapFile:
     methods: list[Block] = field(default_factory=list)
     dotfns: list[Block] = field(default_factory=list)
     api: list[Block] = field(default_factory=list)   # namespace: NS.fn
+    held: list[Block] = field(default_factory=list)  # literals in table fields
     sections: list[tuple[int, int, str]] = field(default_factory=list)
     signals: list[str] = field(default_factory=list)
     signal_lines: dict[str, list[int]] = field(default_factory=dict)
@@ -425,6 +446,43 @@ def join_wrapped_heads(lines: list[str]) -> list[str]:
     return out
 
 
+def collect_held(lines: list[str], code_lines: list[str], fn_depth: list[int],
+                 declared: set[int]) -> list[Block]:
+    """Function literals held in a table field at file scope, named for the
+    field and the table holding it. Brace depth comes from the masked lines;
+    the qualifier is read off the raw ones, because strip_code blanks the
+    string that names a published facade. Masking preserves length, so the
+    offsets agree."""
+    def qualifier_of(prefix: str) -> str:
+        for rx in (QUAL_ASSIGN, QUAL_STRARG, QUAL_RECV):
+            m = rx.search(prefix)
+            if m:
+                return m.group(1)
+        return ''
+
+    held: list[Block] = []
+    quals: list[str] = []          # one entry per open `{`, '' when anonymous
+    for i, code in enumerate(code_lines):
+        m = FIELD_LIT_RE.match(code)
+        # Depth 0 only: a captured declaration opens a function, so these spans
+        # can neither contain nor sit inside one, and `innermost` cannot change
+        # an answer it already gives. Literals nested inside a declaration stay
+        # uncaptured, as nested `local function`s do.
+        if m and fn_depth[i] == 0 and (i + 1) not in declared:
+            # Read before this line's own braces are pushed: the `{` in
+            # `deleteSel = { function() ... end, 'desc' }` must not qualify
+            # `deleteSel` with itself.
+            qual = next((q for q in reversed(quals) if q), '')
+            held.append(Block(name=f'{qual}.{m.group(1)}' if qual else m.group(1),
+                              args=m.group(2).strip(), line=i + 1, kind='held'))
+        for j, ch in enumerate(code):
+            if ch == '{':
+                quals.append(qualifier_of(lines[i][:j]))
+            elif ch == '}' and quals:
+                quals.pop()
+    return held
+
+
 def parse(path: Path) -> MapFile:
     text = path.read_text()
     lines = text.splitlines()
@@ -624,11 +682,12 @@ def parse(path: Path) -> MapFile:
     cm.consts = [d for d in cm.consts if not is_shell(d)]
 
     fn_blocks = cm.private_fns + cm.methods + cm.dotfns + cm.api
-    for blk in fn_blocks:
+    cm.held = collect_held(lines, code_lines, fn_depth, {b.line for b in fn_blocks})
+    for blk in fn_blocks + cm.held:
         blk.end_line = span_end(deltas, level_after, blk.line - 1) + 1
 
     # innermost captured function enclosing a 1-based line -- call attribution
-    spans = sorted((b.line, b.end_line, b.name) for b in fn_blocks)
+    spans = sorted((b.line, b.end_line, b.name) for b in fn_blocks + cm.held)
     def innermost(line: int):
         best = None
         for start, end, name in spans:
@@ -1100,6 +1159,18 @@ def emit(cm: MapFile) -> str:
     if cm.private_fns:
         add("# Private functions")
         emit_items(out, sections, cm.private_fns, '@fn ')
+        add('')
+
+    if cm.held:
+        # A plain loop, not emit_items: `sections` there is a shared cursor
+        # consumed in emit order, and held items span the whole file, so
+        # routing them through it would swallow nearly every banner before
+        # `# Public API` ran.
+        add("# Functions held in tables")
+        for blk in cm.held:
+            loc = (f"{blk.line}-{blk.end_line}" if blk.end_line > blk.line
+                   else f"{blk.line}")
+            add(f"  @held {blk.name}{fmt_args(blk.args)}  @ {loc}")
         add('')
 
     if cm.api:

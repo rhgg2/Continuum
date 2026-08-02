@@ -58,8 +58,9 @@ class Site:
 # ----- The map side
 
 # Both rows are emitted by map_extract.emit; `@ n` is a one-liner, so its span
-# is (n, n). `@fn` and `@api` together are every function declaration.
-DECL_ROW = re.compile(r'^  @(?:fn|api) (\S+?)\((.*)\)  @ (\d+)(?:-(\d+))?$')
+# is (n, n). `@fn`, `@api` and `@held` together are every function the map
+# gives a span to, and so every caller a site row can name.
+DECL_ROW = re.compile(r'^  @(?:fn|api|held) (\S+?)\((.*)\)  @ (\d+)(?:-(\d+))?$')
 CALL_ROW = re.compile(r'^  @call (\S+)  @ (.+)$')
 SELF_MARK = re.compile(r'\bself=(\S+)')     # the @module header's marker
 
@@ -77,8 +78,10 @@ class MapSide:
 
 
 def bare(head: str) -> str:
-    """`groups.laneId` -> `laneId`. Caller names in `@call` sites are bare
-    (caller_at returns blk.name), so the declaration index must be too."""
+    """`groups.laneId` -> `laneId`. Callers in `@call` sites are bare for a
+    declaration (caller_at returns blk.name) and qualified for a held literal,
+    so the index and the lookup both go through here; a bare name is its own
+    bare()."""
     return re.split(r'[.:]', head)[-1]
 
 
@@ -99,16 +102,22 @@ def read_map(path: Path) -> MapSide:
         if raw.startswith('@module '):
             m = SELF_MARK.search(raw)
             ms.self_name = m[1] if m else None
-        elif raw.startswith('  @fn ') or raw.startswith('  @api '):
+        elif raw.startswith(('  @fn ', '  @api ', '  @held ')):
             m = DECL_ROW.match(raw)
             if not m:
                 raise ValueError(f"{path.name}: unparsed declaration row {raw!r}")
             span = (int(m[3]), int(m[4] or m[3]))
             ms.n_decls += 1
             ms.spans.add(span)
-            ms.heads.add(m[1])
-            ms.bare_heads.add(bare(m[1]))
             ms.by_name[bare(m[1])].append(span)
+            # `heads` is the map's *callee* vocabulary, and the `@call` pass
+            # does not yet spell a held literal as a callee. Admitting the name
+            # here would report every `edit.assign(...)` as an edge the map
+            # missed, when the map has never claimed to carry it -- a held row
+            # buys attribution (a caller with a span), not a new edge.
+            if not raw.startswith('  @held '):
+                ms.heads.add(m[1])
+                ms.bare_heads.add(bare(m[1]))
         elif raw.startswith('  @call '):
             m = CALL_ROW.match(raw)
             if not m:
@@ -127,7 +136,7 @@ def read_map(path: Path) -> MapSide:
                 if not sep:
                     ms.unattributed.append((callee, line))
                     continue
-                span = enclosing(ms.by_name.get(caller, ()), line)
+                span = enclosing(ms.by_name.get(bare(caller), ()), line)
                 if span is None:
                     raise ValueError(f"{path.name}: `@call {callee}` names caller "
                                      f"{caller!r} at {line}, which no declaration contains")

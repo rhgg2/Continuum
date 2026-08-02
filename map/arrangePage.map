@@ -15,6 +15,24 @@
 # Private state
   @state ap = {}  @ 27
 
+# Functions held in tables
+  @held arrange.currentTrackIdx()  @ 42
+  @held arrange.tracks()  @ 43
+  @held arrange.midiSlots(trackIdx)  @ 44
+  @held arrange.takeForSlot(trackIdx, slotIdx)  @ 45
+  @held arrange.trackIdxForGuid(guid)  @ 46
+  @held arrange.trackHandle(trackIdx)  @ 47
+  @held arrange.keyForSlot(slotIdx)  @ 48
+  @held arrange.nextFreeSlot(trackIdx)  @ 49
+  @held arrange.mintParkedTake(trackIdx, name, lengthQN, srcTake)  @ 50-52
+  @held arrange.dropSlot(trackIdx, slotIdx, qnPos)  @ 53
+  @held arrange.hasPlacedTakes()  @ 54
+  @held arrange.isParkedTake(take)  @ 55
+  @held arrange.ownerTrack(take)  @ 56
+  @held arrange.reswingAll(name)  @ 57
+  @held arrange.takesUsing(name)  @ 58
+  @held arrange.tempersInUse()  @ 59
+
 # Public API (ap:*)
   -- Page lifecycle — arrange is project-wide, so bind takes no take
   @api ap:bind()  @ 34
@@ -34,23 +52,23 @@
   @use call    ar:renderBody  @ renderBody:64
   @use call    ar:renderStatusBar  @ renderStatusBar:65
   @use call    ar:toolbarSegments  @ toolbarSegments:63
-  @use call    av:cursorCol  @ 42
-  @use call    av:dropSlot  @ 53
-  @use call    av:hasPlacedTakes  @ 54
-  @use call    av:isParkedTake  @ 55
-  @use call    av:keyForSlot  @ 48
-  @use call    av:midiSlots  @ 44
-  @use call    av:mintParkedTake  @ 51
-  @use call    av:nextFreeSlot  @ 49
-  @use call    av:ownerTrack  @ 56
-  @use call    av:projectTracks  @ 43
-  @use call    av:reswingAll  @ 57
+  @use call    av:cursorCol  @ arrange.currentTrackIdx:42
+  @use call    av:dropSlot  @ arrange.dropSlot:53
+  @use call    av:hasPlacedTakes  @ arrange.hasPlacedTakes:54
+  @use call    av:isParkedTake  @ arrange.isParkedTake:55
+  @use call    av:keyForSlot  @ arrange.keyForSlot:48
+  @use call    av:midiSlots  @ arrange.midiSlots:44
+  @use call    av:mintParkedTake  @ arrange.mintParkedTake:51
+  @use call    av:nextFreeSlot  @ arrange.nextFreeSlot:49
+  @use call    av:ownerTrack  @ arrange.ownerTrack:56
+  @use call    av:projectTracks  @ arrange.tracks:43
+  @use call    av:reswingAll  @ arrange.reswingAll:57
   @use call    av:seedCursor  @ seedCursorFromReaper:38
-  @use call    av:takeForSlot  @ 45
-  @use call    av:takesUsing  @ 58
-  @use call    av:tempersInUse  @ 59
-  @use call    av:trackHandle  @ 47
-  @use call    av:trackIdxForGuid  @ 46
+  @use call    av:takeForSlot  @ arrange.takeForSlot:45
+  @use call    av:takesUsing  @ arrange.takesUsing:58
+  @use call    av:tempersInUse  @ arrange.tempersInUse:59
+  @use call    av:trackHandle  @ arrange.trackHandle:47
+  @use call    av:trackIdxForGuid  @ arrange.trackIdxForGuid:46
   @use call    facade.publish  @ 41
   @use call    util.instantiate  @ 23,24,25
   @use require arrangeManager  @ 23
@@ -72,8 +90,8 @@
   @field w cm  @ 23,24,25
   @field r cmgr  @ 19
   @field w cmgr  @ 24,25
-  @field w currentTrackIdx  @ 42
-  @field w dropSlot  @ 53
+  @field w currentTrackIdx  @ arrange.currentTrackIdx:42
+  @field w dropSlot  @ arrange.dropSlot:53
   @field r ds  @ 19
   @field w ds  @ 23
   @field r eventMeta  @ 19
@@ -82,19 +100,19 @@
   @field w facade  @ 23,24
   @field r gui  @ 19
   @field w gui  @ 25
-  @field w hasPlacedTakes  @ 54
-  @field w isParkedTake  @ 55
-  @field w keyForSlot  @ 48
-  @field w midiSlots  @ 44
-  @field w mintParkedTake  @ 50
+  @field w hasPlacedTakes  @ arrange.hasPlacedTakes:54
+  @field w isParkedTake  @ arrange.isParkedTake:55
+  @field w keyForSlot  @ arrange.keyForSlot:48
+  @field w midiSlots  @ arrange.midiSlots:44
+  @field w mintParkedTake  @ arrange.mintParkedTake:50
   @field r modalHost  @ 19
   @field w modalHost  @ 25
-  @field w nextFreeSlot  @ 49
-  @field w ownerTrack  @ 56
-  @field w reswingAll  @ 57
-  @field w takeForSlot  @ 45
-  @field w takesUsing  @ 58
-  @field w tempersInUse  @ 59
-  @field w trackHandle  @ 47
-  @field w trackIdxForGuid  @ 46
-  @field w tracks  @ 43
+  @field w nextFreeSlot  @ arrange.nextFreeSlot:49
+  @field w ownerTrack  @ arrange.ownerTrack:56
+  @field w reswingAll  @ arrange.reswingAll:57
+  @field w takeForSlot  @ arrange.takeForSlot:45
+  @field w takesUsing  @ arrange.takesUsing:58
+  @field w tempersInUse  @ arrange.tempersInUse:59
+  @field w trackHandle  @ arrange.trackHandle:47
+  @field w trackIdxForGuid  @ arrange.trackIdxForGuid:46
+  @field w tracks  @ arrange.tracks:43

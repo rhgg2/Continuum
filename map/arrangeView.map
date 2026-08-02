@@ -108,6 +108,23 @@
       -- Commit a group drag: move all members by deltaQN (travel-ordered) or
       -- duplicate each at its shifted start and reselect the copies.
 
+# Functions held in tables
+  @held arrange.arrangeCursorUp()  @ 622
+  @held arrange.arrangeCursorDown()  @ 623
+  @held arrange.arrangeCursorLeft()  @ 624
+  @held arrange.arrangeCursorRight()  @ 625
+  @held arrange.arrangePageUp()  @ 626
+  @held arrange.arrangePageDown()  @ 627
+  @held arrange.arrangeHome()  @ 628
+  @held arrange.arrangeEnd()  @ 629
+  @held arrange.arrangeNudgeBack()  @ 630
+  @held arrange.arrangeNudgeForward()  @ 631
+  @held arrange.arrangeShrinkTake()  @ 632
+  @held arrange.arrangeGrowTake()  @ 633
+  @held arrange.arrangeClearSelection()  @ 640
+  @held arrange.arrangeZoomIn()  @ 645
+  @held arrange.arrangeZoomOut()  @ 646
+
 # Public API (av:*)
   @api av:cursorRow()  @ 301
   @api av:cursorCol()  @ 302
@@ -220,7 +237,7 @@
   @use call    am:ownerTrack  @ ownerTrack:430
   @use call    am:playFromQN  @ playFromCursor:292
   @use call    am:playPositionQN  @ followPlay:333 playPositionQN:434
-  @use call    am:projectEndQN  @ setLoopStartHere:281 629
+  @use call    am:projectEndQN  @ setLoopStartHere:281 arrange.arrangeEnd:629
   @use call    am:projectTracks  @ diveSelected:222 projectTracks:414 createSlot:595
   @use call    am:renameSlot  @ renameSlot:586
   @use call    am:resizeTake  @ resizeSelected:199 commitDrag:573
@@ -248,11 +265,11 @@
 # Calls (intra-file)
   @call actionTargets  @ singleTarget:134 nudgeSelected:184 resizeSelected:194 deleteSelected:212
   @call advanceCursorPastNewTake  @ duplicateSelectedBelow:243 duplicateUnpooledSelectedBelow:253
-  @call av:beatPerRow  @ takeAtCursor:66 advanceCursorPastNewTake:87 nudgeSelected:186 resizeSelected:196 qnToRow:397 rowToQN:398 groupDragCandidate:467 dragCandidate:488 gutterLoopCand:510 createCandidate:520 645,646
-  @call av:qnToRow  @ followPlay:338 createSlot:594 seedCursor:612 629
+  @call av:beatPerRow  @ takeAtCursor:66 advanceCursorPastNewTake:87 nudgeSelected:186 resizeSelected:196 qnToRow:397 rowToQN:398 groupDragCandidate:467 dragCandidate:488 gutterLoopCand:510 createCandidate:520 arrange.arrangeZoomIn:645 arrange.arrangeZoomOut:646
+  @call av:qnToRow  @ followPlay:338 createSlot:594 seedCursor:612 arrange.arrangeEnd:629
   @call av:rowToQN  @ takeAtCursor:65 dropAt:263 setLoopStartHere:278 setLoopEndHere:285 playFromCursor:292
-  @call av:setBeatPerRow  @ 645,646
-  @call av:setCursor  @ advanceCursorPastNewTake:88 moveCursorBy:140 createSlot:594 seedCursor:612 628,629
+  @call av:setBeatPerRow  @ arrange.arrangeZoomIn:645 arrange.arrangeZoomOut:646
+  @call av:setCursor  @ advanceCursorPastNewTake:88 moveCursorBy:140 createSlot:594 seedCursor:612 arrange.arrangeHome:628 arrange.arrangeEnd:629
   @call av:setFocus  @ duplicateSelectedBelow:242 duplicateUnpooledSelectedBelow:252
   @call av:setPaletteSlot  @ createSlot:593 deleteSlot:604
   @call commitGroupDrag  @ commitDrag:565
@@ -264,14 +281,14 @@
   @call groupDragCandidate  @ dragCandidate:486
   @call groupFits  @ nudgeSelected:187 groupDragCandidate:479
   @call midiSlots  @ midiSlots:440
-  @call moveCursorBy  @ nudgeSelected:189 resizeSelected:207 dropAt:264 deleteSelectedAndAdvance:270 622,623,624,625,626,627
+  @call moveCursorBy  @ nudgeSelected:189 resizeSelected:207 dropAt:264 deleteSelectedAndAdvance:270 arrange.arrangeCursorUp:622 arrange.arrangeCursorDown:623 arrange.arrangeCursorLeft:624 arrange.arrangeCursorRight:625 arrange.arrangePageUp:626 arrange.arrangePageDown:627
   @call moveTakesBy  @ nudgeSelected:188 commitGroupDrag:559
-  @call nudgeSelected  @ 630,631
-  @call resizeSelected  @ 632,633
+  @call nudgeSelected  @ arrange.arrangeNudgeBack:630 arrange.arrangeNudgeForward:631
+  @call resizeSelected  @ arrange.arrangeShrinkTake:632 arrange.arrangeGrowTake:633
   @call roundTo  @ groupDragCandidate:469 dragCandidate:493,497
   @call selectedTakes  @ actionTargets:126 selectionSet:374 groupDragCandidate:466 commitGroupDrag:548
   @call selectionIndex  @ isSelected:356 addToSelection:361 toggleSelected:367
-  @call setSelection  @ deleteSelected:217 setFocus:353 setSelection:379 clearSelection:380 commitGroupDrag:556 commitDrag:576 seedCursor:613 640
+  @call setSelection  @ deleteSelected:217 setFocus:353 setSelection:379 clearSelection:380 commitGroupDrag:556 commitDrag:576 seedCursor:613 arrange.arrangeClearSelection:640
   @call singleTarget  @ selectedTakeProperties:232 duplicateSelectedBelow:238 duplicateUnpooledSelectedBelow:248
   @call takeAtCursor  @ actionTargets:129 diveSelected:224
   @call tracker  @ diveSelected:226 selectedTakeProperties:233 duplicateUnpooledSelectedBelow:254 createSlot:596
@@ -298,30 +315,30 @@
 # Fields (r read / w write incl. constructor keys)
   @field r am  @ 16
   @field w arrangeClearLoop  @ 644
-  @field w arrangeClearSelection  @ 640
-  @field w arrangeCursorDown  @ 623
-  @field w arrangeCursorLeft  @ 624
-  @field w arrangeCursorRight  @ 625
-  @field w arrangeCursorUp  @ 622
+  @field w arrangeClearSelection  @ arrange.arrangeClearSelection:640
+  @field w arrangeCursorDown  @ arrange.arrangeCursorDown:623
+  @field w arrangeCursorLeft  @ arrange.arrangeCursorLeft:624
+  @field w arrangeCursorRight  @ arrange.arrangeCursorRight:625
+  @field w arrangeCursorUp  @ arrange.arrangeCursorUp:622
   @field w arrangeDeleteAdvance  @ 635
   @field w arrangeDeleteTake  @ 634
   @field w arrangeDive  @ 636
   @field w arrangeDuplicateBelow  @ 638
   @field w arrangeDuplicateUnpooledBelow  @ 639
-  @field w arrangeEnd  @ 629
-  @field w arrangeGrowTake  @ 633
-  @field w arrangeHome  @ 628
-  @field w arrangeNudgeBack  @ 630
-  @field w arrangeNudgeForward  @ 631
-  @field w arrangePageDown  @ 627
-  @field w arrangePageUp  @ 626
+  @field w arrangeEnd  @ arrange.arrangeEnd:629
+  @field w arrangeGrowTake  @ arrange.arrangeGrowTake:633
+  @field w arrangeHome  @ arrange.arrangeHome:628
+  @field w arrangeNudgeBack  @ arrange.arrangeNudgeBack:630
+  @field w arrangeNudgeForward  @ arrange.arrangeNudgeForward:631
+  @field w arrangePageDown  @ arrange.arrangePageDown:627
+  @field w arrangePageUp  @ arrange.arrangePageUp:626
   @field w arrangePlayFromCursor  @ 643
   @field w arrangeSetLoopEnd  @ 642
   @field w arrangeSetLoopStart  @ 641
-  @field w arrangeShrinkTake  @ 632
+  @field w arrangeShrinkTake  @ arrange.arrangeShrinkTake:632
   @field w arrangeTakeProperties  @ 637
-  @field w arrangeZoomIn  @ 645
-  @field w arrangeZoomOut  @ 646
+  @field w arrangeZoomIn  @ arrange.arrangeZoomIn:645
+  @field w arrangeZoomOut  @ arrange.arrangeZoomOut:646
   @field r cm  @ 16
   @field r cmgr  @ 16
   @field w colHi  @ lassoCandidate:541

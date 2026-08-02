@@ -870,6 +870,22 @@ pextStore. A dropped site is a known gap; a mis-resolved one is a
 confident wrong answer. So the sites stay out, named here so that a later
 reader finds a decision rather than an oversight.
 
+**A held row buys attribution, not an edge** (2026-08-02). Teaching
+`map_diff` to read `@held` rows put them through the whole declaration
+branch, `ms.heads` included, and `luac-only, in scope` went 0 → 45 — 43 of
+them `edit.assign` / `edit.add` / `edit.delete` in trackerView. The callers
+were never in doubt: `heads` is the map's *callee* vocabulary, and the
+`@call` pass spells no held literal as a callee, so admitting the names
+there faults the map for edges it has never claimed. A held row therefore
+contributes a span and a `by_name` entry and stops short of `heads`. The
+gap underneath is real and newly visible — by the contract in § Intra-file
+call edges a `@call` callee "always names a row in the same map", and a
+`@held` row now is one — but closing it adds `@call` row heads, which is
+what this phase's own evidence check forbids, so it is separate work.
+*Reopens* when the `@call` pass learns to spell a held callee; the symptom
+to expect first is these same 45 records, parked in `out of scope` until
+then.
+
 ## Open questions
 
 - Are early-return guards worth surfacing? "This function does nothing

@@ -50,6 +50,10 @@
   @fn findRampOff(factors, length, step)  @ 258-268
   @fn identityShape(length)  @ 270-272
 
+# Functions held in tables
+  @held id.forward(u, s)  @ 77
+  @held id.inverse(v, s)  @ 78
+
 # Public API (timing.*)
   @api timing.atomTilePeriod(factor)  @ 142-144
       @contract  returns QN, not PPQ; multiply by resolution at the swing-resolution boundary  @ 141
@@ -124,12 +128,12 @@
   @field w eval  @ eval:289
   @field r factors  @ isIdentity:149 compositePeriodQN:166 resolveFactors:184,187 eval:297 invert:309
   @field w factors  @ identityShape:271 resolveComposite:285
-  @field w forward  @ smooth:66 77
+  @field w forward  @ smooth:66 id.forward:77
   @field r huge  @ 133
   @field w id  @ 76,133
   @field r identity  @ eval:290 invert:302
   @field w identity  @ identityShape:271
-  @field w inverse  @ smooth:67 78
+  @field w inverse  @ smooth:67 id.inverse:78
   @field w invert  @ invert:301
   @field w isIdentity  @ isIdentity:147
   @field r length  @ eval:294 invert:306

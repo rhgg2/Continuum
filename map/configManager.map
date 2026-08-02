@@ -64,6 +64,18 @@
       -- Per-subkey union of a single key's tables across defaults→tiers; most-specific tier wins.
       -- Non-table contributions are skipped, so the result is always a table.
 
+# Functions held in tables
+  @held loaders.global()  @ 347
+  @held loaders.project()  @ 348
+  @held loaders.track()  @ 349
+  @held loaders.take()  @ 350
+  @held loaders.transient()  @ 351
+  @held savers.global(tbl)  @ 355
+  @held savers.project(tbl)  @ 356
+  @held savers.track(tbl)  @ 357-360
+  @held savers.take(tbl)  @ 363
+  @held savers.transient()  @ 364
+
 # Public API (cm:*)
   @api cm:setContext(newTake)  @ 412-417
       @contract  setContext(nil) clears take+track; setContext(take) derives track via GetMediaItemTrack  @ 410
@@ -99,12 +111,12 @@
   @emits configChanged   -- configChangedPayload.bulk   @ 407 setContext:416 clearTake:423 setTrack:436 set:527 remove:540 assign:558
 
 # Uses (outbound edges)
-  @use call    ps:assign  @ 355,356,359,363
-  @use call    ps:boundTake  @ 363 boundTake:427
-  @use call    ps:boundTrack  @ 358 boundTrack:430
+  @use call    ps:assign  @ savers.global:355 savers.project:356 savers.track:359 savers.take:363
+  @use call    ps:boundTake  @ savers.take:363 boundTake:427
+  @use call    ps:boundTrack  @ savers.track:358 boundTrack:430
   @use call    ps:clearTake  @ clearTake:420
   @use call    ps:declareUndoable  @ 398
-  @use call    ps:get  @ 347,348,349,350
+  @use call    ps:get  @ loaders.global:347 loaders.project:348 loaders.track:349 loaders.take:350
   @use call    ps:getAt  @ valueFor:505
   @use call    ps:pollUndo  @ pollUndo:440
   @use call    ps:setTake  @ setContext:413
@@ -118,7 +130,7 @@
   @use require util  @ 12
 
 # Calls (intra-file)
-  @call asTable  @ 347,348,349,350
+  @call asTable  @ loaders.global:347 loaders.project:348 loaders.track:349 loaders.take:350
   @call checkKey  @ get:482 getAt:493 valueFor:504 defaultFor:511 set:520 remove:533 assign:548
   @call checkLevel  @ getAt:489 set:519 remove:532 assign:547
   @call copy  @ get:483,484 getAt:494 valueFor:506 defaultFor:512 set:524 assign:554
@@ -128,8 +140,8 @@
   @call hex  @ 105,106,107,108,109,110,111,112,113,114,117,118
   @call hex  @ 119,120,121,122,123,124,125
   @call mergedKey  @ get:483
-  @call print  @ 358
-  @call pruneUnknown  @ 347,348,349,350
+  @call print  @ savers.track:358
+  @call pruneUnknown  @ loaders.global:347 loaders.project:348 loaders.track:349 loaders.take:350
   @call refreshCache  @ ensureCache:376 setContext:414
   @call resolveKey  @ get:484
 
@@ -148,14 +160,14 @@
   @field w conflicted  @ 263
   @field w factors  @ 79,80,81,82
   @field r global  @ ensureCache:376
-  @field w global  @ 74,273,320,347,355
+  @field w global  @ 74,273,320 loaders.global:347 savers.global:355
   @field w key  @ set:527 remove:540
   @field w level  @ set:527 remove:540 assign:558
   @field r mergeTiers  @ get:483
   @field w overridden  @ 263
   @field w period  @ 79,80,81,82
   @field r presets  @ 85
-  @field w project  @ 321,348,356
+  @field w project  @ 321 loaders.project:348 savers.project:356
   @field r ps  @ 16
   @field w sampler  @ 273
   @field r scope  @ 405
@@ -164,8 +176,8 @@
   @field w slot  @ 402,403
   @field w slots  @ 398
   @field w synced  @ 263
-  @field w take  @ 323,350,363 clearTake:421
-  @field w track  @ 322,349,357 setTrack:434
+  @field w take  @ 323 loaders.take:350 savers.take:363 clearTake:421
+  @field w track  @ 322 loaders.track:349 savers.track:357 setTrack:434
   @field w tracker  @ 273
-  @field w transient  @ 324,351,364
+  @field w transient  @ 324 loaders.transient:351 savers.transient:364
   @field w wiring  @ 274

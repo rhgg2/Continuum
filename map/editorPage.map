@@ -14,6 +14,9 @@
 # Private state
   @state ep = {}  @ 23
 
+# Functions held in tables
+  @held editor.edit(pane, name)  @ 30
+
 # Public API (ep:*)
   -- Page lifecycle — no take binding; pane state persists across visits
   @api ep:bind()  @ 34
@@ -25,7 +28,7 @@
   @api ep:focusState()  @ 41
 
 # Uses (outbound edges)
-  @use call    er:edit  @ 30
+  @use call    er:edit  @ editor.edit:30
   @use call    er:focusState  @ focusState:41
   @use call    er:renderBody  @ renderBody:39
   @use call    er:renderStatusBar  @ renderStatusBar:40
@@ -54,7 +57,7 @@
   @field w ctx  @ 15,17
   @field r ds  @ 13
   @field w ds  @ 15
-  @field w edit  @ 30
+  @field w edit  @ editor.edit:30
   @field r facade  @ 13
   @field w facade  @ 15,17
   @field r gui  @ 13

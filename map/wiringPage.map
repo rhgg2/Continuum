@@ -16,6 +16,11 @@
 # Private state
   @state wp = {}  @ 41
 
+# Functions held in tables
+  @held wiring.isWiringOwnedTrack(track)  @ 33
+  @held wiring.paramTargets(sourceTrack)  @ 34
+  @held wiring.samplerReachable(track)  @ 35
+
 # Public API (wp:*)
   -- Page lifecycle — wiring is project-wide, so bind takes no take
   @api wp:bind()  @ 48
@@ -35,9 +40,9 @@
   @use call    facade.publish  @ 32
   @use call    facade.publishDebug  @ 39
   @use call    util.instantiate  @ 23,24,25,27
-  @use call    wm:isWiringOwnedTrack  @ 33
-  @use call    wm:paramTargets  @ 34
-  @use call    wm:samplerReachable  @ 35
+  @use call    wm:isWiringOwnedTrack  @ wiring.isWiringOwnedTrack:33
+  @use call    wm:paramTargets  @ wiring.paramTargets:34
+  @use call    wm:samplerReachable  @ wiring.samplerReachable:35
   @use call    wr:closeTransients  @ unbind:49
   @use call    wr:focusState  @ focusState:61
   @use call    wr:renderBody  @ renderBody:59
@@ -69,11 +74,11 @@
   @field w facade  @ 28
   @field r gui  @ 19
   @field w gui  @ 28
-  @field w isWiringOwnedTrack  @ 33
+  @field w isWiringOwnedTrack  @ wiring.isWiringOwnedTrack:33
   @field r modalHost  @ 19
   @field w modalHost  @ 28
-  @field w paramTargets  @ 34
+  @field w paramTargets  @ wiring.paramTargets:34
   @field w rm  @ 24,39
-  @field w samplerReachable  @ 35
+  @field w samplerReachable  @ wiring.samplerReachable:35
   @field w wm  @ 25,39
   @field w wv  @ 28,39

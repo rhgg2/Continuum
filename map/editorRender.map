@@ -47,6 +47,13 @@
       -- so add/import scope to it, and now also toggles. Mirrors the sampler tree.
   @fn libraryTree(spec)  @ 130-161
 
+# Functions held in tables
+  @held toolbarSegments.render()  @ 186-199
+  @held toolbarSegments.visible()  @ 203
+  @held toolbarSegments.render()  @ 204
+  @held toolbarSegments.visible()  @ 208
+  @held toolbarSegments.render()  @ 209
+
 # Public API (er:*)
   @api er:edit(lib, name)  @ 169-176
       -- Fast path: set the pane + selection; the editTuning/editSwing commands
@@ -61,22 +68,22 @@
 
 # Uses (outbound edges)
   @use call    ImGui.AlignTextToFramePadding  @ libraryTree:141
-  @use call    ImGui.Button  @ actionBar:56 193,209
+  @use call    ImGui.Button  @ actionBar:56 toolbarSegments.render:193,209
   @use call    ImGui.GetCursorScreenPos  @ renderBody:231
   @use call    ImGui.IsAnyItemActive  @ renderBody:222 focusState:254
   @use call    ImGui.IsKeyPressed  @ renderBody:223
   @use call    ImGui.PopFont  @ renderBody:235
   @use call    ImGui.PopID  @ libraryRow:114 libraryTree:145
-  @use call    ImGui.PopStyleColor  @ 194
+  @use call    ImGui.PopStyleColor  @ toolbarSegments.render:194
   @use call    ImGui.PushFont  @ renderBody:233
   @use call    ImGui.PushID  @ libraryRow:109 libraryTree:140
-  @use call    ImGui.PushStyleColor  @ 190,191
-  @use call    ImGui.SameLine  @ actionBar:53 libraryTree:143 197
+  @use call    ImGui.PushStyleColor  @ toolbarSegments.render:190,191
+  @use call    ImGui.SameLine  @ actionBar:53 libraryTree:143 toolbarSegments.render:197
   @use call    ImGui.Separator  @ libraryTree:138
   @use call    ImGui.SmallButton  @ libraryTree:144
   @use call    ImGui.Text  @ renderStatusBar:244
   @use call    ImGui.TextDisabled  @ libraryTree:142
-  @use call    chrome.colour  @ 190,191
+  @use call    chrome.colour  @ toolbarSegments.render:190,191
   @use call    chrome.disabledIf  @ actionBar:55
   @use call    chrome.gridWidth  @ renderBody:232
   @use call    chrome.palettePane  @ libraryTree:131
@@ -93,14 +100,14 @@
 
 # Calls (intra-file)
   @call actionBar  @ projectActions:68 libraryActions:91
-  @call activePane  @ 203,204 renderBody:219
+  @call activePane  @ toolbarSegments.visible:203 toolbarSegments.render:204 renderBody:219
   @call er:focusState  @ renderBody:218
   @call has  @ shadowsSource:45
   @call libraryActions  @ libraryTree:135
   @call libraryFolder  @ libraryTree:147,154
   @call libraryRow  @ libraryTree:151,156
   @call libraryTree  @ renderBody:239
-  @call onClose  @ 209 renderBody:224
+  @call onClose  @ toolbarSegments.render:209 renderBody:224
   @call projectActions  @ libraryTree:136
   @call shadowsSource  @ projectActions:76
 
@@ -118,8 +125,8 @@
   @reaper MB
 
 # Fields (r read / w write incl. constructor keys)
-  @field r Col_Button  @ 190
-  @field r Col_ButtonHovered  @ 191
+  @field r Col_Button  @ toolbarSegments.render:190
+  @field r Col_ButtonHovered  @ toolbarSegments.render:191
   @field r ImGui_GetBuiltinPath  @ 11
   @field r Key_Escape  @ renderBody:223
   @field w acceptCmds  @ focusState:249,254
@@ -155,8 +162,8 @@
   @field w path  @ 14
   @field r project  @ libraryTree:148
   @field w project  @ 117
-  @field w render  @ 186,204,209
-  @field r renderToolbar  @ 203
+  @field w render  @ toolbarSegments.render:186,204,209
+  @field r renderToolbar  @ toolbarSegments.visible:203
   @field r sel  @ projectActions:64 libraryActions:87 libraryRow:110 libraryFolder:122 libraryTree:135
   @field r selected  @ libraryRow:113 libraryFolder:126
   @field w selected  @ libraryRow:112 libraryFolder:124
@@ -169,7 +176,7 @@
   @field r ui  @ 19
   @field r uiFont  @ 19
   @field r undeletable  @ projectActions:67 libraryActions:90
-  @field w visible  @ 203,208
+  @field w visible  @ toolbarSegments.visible:203,208
   @field r x  @ libraryTree:132 renderBody:238
   @field w x  @ libraryTree:132
   @field r y  @ libraryTree:132 renderBody:238

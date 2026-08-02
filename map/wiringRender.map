@@ -337,6 +337,9 @@
       -- recompile/reconcile stall — wm:addFxNode keeps its single Undo block.
   @fn renderFxPicker(pck)  @ 2636-2678
 
+# Functions held in tables
+  @held wiring.wiringClearSelection()  @ 2683
+
 # Public API (wr:*)
   @api wr:toolbarSegments()  @ 2522
   @api wr:closeTransients()  @ 2525-2529
@@ -445,7 +448,7 @@
   @use call    wv:setEdgePrimary  @ renderCanvas:2329
   @use call    wv:setHover  @ renderCanvas:1966
   @use call    wv:setMuted  @ renderCanvas:2107
-  @use call    wv:setSelection  @ renderCanvas:1720,2289,2291 2683
+  @use call    wv:setSelection  @ renderCanvas:1720,2289,2291 wiring.wiringClearSelection:2683
   @use call    wv:setSourceTagPos  @ renderCanvas:2268
   @use call    wv:wireViews  @ renderCanvas:1761
   @use call    wv:wiredPorts  @ layoutPortRow:453
@@ -913,7 +916,7 @@
   @field w wires  @ wireGroups:811
   @field r wiring  @ 2685
   @field w wiringAddFx  @ 2682
-  @field w wiringClearSelection  @ 2683
+  @field w wiringClearSelection  @ wiring.wiringClearSelection:2683
   @field r wv  @ 20
   @field r x  @ boxRect:141 nodeBox:155 drawHandle:296 drawSlot:312,316 layoutList:394 layoutPortRow:473 engagedHover:621 drawList:755
   @field r x  @ drawList:758 drawPortRow:783,791,792 wireSegments:995,1008,1009 drawDraftWire:1217 leastOccupiedDir:1272
