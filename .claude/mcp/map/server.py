@@ -51,7 +51,7 @@ def _glob_smell(pat: Optional[str]) -> Optional[str]:
 
 _MAP_HEADER = re.compile(r'^@(?:module|spec)\s+(\S+)\s+src=(\S+)\s+loc=(\d+)')
 _DECL = re.compile(
-    r'^(?P<indent>\s*)@(?P<kind>fn|api|state|const|require|construct|case)\s+'
+    r'^(?P<indent>\s*)@(?P<kind>fn|api|held|state|const|require|construct|case)\s+'
     r'(?P<head>.+?)\s*@\s*(?P<line>\d+)(?:-(?P<end>\d+))?\s*'
     r'(?P<doc>(?:--|·).*)?$'
 )
@@ -112,6 +112,11 @@ def _bare_name(kind: str, head: str) -> str:
     if kind == "api":
         m = re.match(r"^[\w]+[:.](\w+)\(", head)
         return m.group(1) if m else head
+    # A held function is spelled table-qualified wherever it appears —
+    # declaration and call site alike — so the qualifier is part of the name.
+    if kind == "held":
+        m = re.match(r"^[\w.]+", head)
+        return m.group(0) if m else head
     if kind in ("state", "const", "require", "construct"):
         m = re.match(r"^(\w+)", head)
         return m.group(1) if m else head
@@ -128,6 +133,7 @@ def _normalize_kind(k: str) -> str:
         "invariants": "invariant", "contracts": "contract", "shapes": "shape",
         "fns": "fn", "functions": "fn",
         "apis": "api",
+        "helds": "held",
         "states": "state", "consts": "const", "constants": "const",
         "requires": "require", "import": "require", "imports": "require",
         "constructs": "construct",
@@ -144,7 +150,7 @@ def _normalize_kind(k: str) -> str:
 # to the generic scan and return "(no matches …)", which reads as absence of
 # the thing rather than absence of the filter.
 _KINDS = frozenset({
-    'fn', 'api', 'state', 'const', 'require', 'construct', 'case',
+    'fn', 'api', 'held', 'state', 'const', 'require', 'construct', 'case',
     'invariant', 'contract', 'shape', 'emits', 'reaper', 'deps',
     'exercises', 'surface', 'harness',
     'uses', 'usedby', 'flow', 'reads', 'writes', 'fields',
@@ -335,13 +341,14 @@ def _usedby_drops(module_pred, q_fn, raw_rx, reg) -> list[str]:
 # does: what a named function reaches, with each callee resolved to its
 # declaration — the jump target the call site itself cannot give you.
 # See design/map-navigation.md § Intra-file call edges.
-_USES_NOTE = ("--- note: sites inside anonymous closures or unparsed declarations "
-              "carry no caller and are absent here; calls on runtime receivers "
-              "are dropped ---")
+_USES_NOTE = ("--- note: a site carries a caller only inside a named declaration "
+              "(@fn/@api/@held); sites at file scope, inside a literal passed to a "
+              "wrapper, or inside a handler registration are absent here; calls on "
+              "runtime receivers are dropped ---")
 
 
 class _Decl(NamedTuple):
-    kind: str    # 'fn' | 'api'
+    kind: str    # 'fn' | 'api' | 'held'
     head: str    # as written: `rebuildPbs(fxOut, extraColumns)`
     key: str     # head minus the arg list — the spelling @call rows use
     bare: str    # the spelling call sites use for their caller
@@ -351,14 +358,17 @@ class _Decl(NamedTuple):
 
 
 def _decl_index(mp: Path) -> list[_Decl]:
-    """Every fn/api declaration in one map. A single-line declaration ends where
-    it starts, so the span test still places its call sites."""
+    """Every fn/api/held declaration in one map. A single-line declaration ends
+    where it starts, so the span test still places its call sites. Held rows
+    enter wholesale: no @call row spells a held literal as its callee today, so
+    the callee join simply never lands on one — and resolves for free if the
+    extractor ever closes that gap."""
     text = mp.read_text(encoding="utf-8", errors="replace")
     src = _src_of(mp, text)
     index: list[_Decl] = []
     for raw in text.splitlines():
         md = _DECL.match(raw)
-        if not md or md.group("kind") not in ("fn", "api"):
+        if not md or md.group("kind") not in ("fn", "api", "held"):
             continue
         kind, head = md.group("kind"), md.group("head").strip()
         start = int(md.group("line"))
@@ -541,7 +551,7 @@ def _domain_note(seen_kinds, seen_names, label, module, scope) -> str:
     """What the scan walked, for an answer that found nothing. Its whole job
     is to separate 'absent from the code' from 'absent from the corpus', so
     it reports the domain rather than guessing at near misses."""
-    held = ' '.join(f"{k}:{v}" for k, v in seen_kinds.most_common())
+    kind_counts = ' '.join(f"{k}:{v}" for k, v in seen_kinds.most_common())
 
     if label in _ANN_KINDS:
         n = seen_kinds.get(label, 0)
@@ -553,7 +563,7 @@ def _domain_note(seen_kinds, seen_names, label, module, scope) -> str:
     if module and label:
         names = sorted(set(seen_names))
         if not names:
-            return f"{module} holds no {label}. It holds: {held}"
+            return f"{module} holds no {label}. It holds: {kind_counts}"
         shown, chars = [], 0
         for nm in names:
             if chars + len(nm) + 2 > _INVENTORY_CHARS:
@@ -566,7 +576,7 @@ def _domain_note(seen_kinds, seen_names, label, module, scope) -> str:
                 f"  {', '.join(shown)}{tail}")
 
     if module:
-        return f"{module} holds: {held}\n  — re-query with kind= to list one"
+        return f"{module} holds: {kind_counts}\n  — re-query with kind= to list one"
 
     if label:
         return (f"searched {scope} — {seen_kinds.get(label, 0)} {label} "
@@ -641,13 +651,16 @@ def map_query(
              ^$ for exact; alternation works: 'ppqL|endppqL'). NOT
              glob: plain text already substring-matches, so no
              wrapping stars. Matches bare symbol names for structural
-             entries (`@fn`, `@api`, `@state`, `@const`, `@require`,
-             `@construct`), full body text for annotations
+             entries (`@fn`, `@api`, `@held`, `@state`, `@const`,
+             `@require`, `@construct`) — a held name is qualified, so
+             it is matched as `table.field` — full body text for annotations
              (`@invariant`, `@contract`, `@shape`, `@emits`, `@reaper`),
              and field names for reads/writes/fields.
              Omit to return everything matching the other filters.
       kind: filter by entry kind. Accepted (case-insensitive, plurals
-            ok): fn, api, state, const, require/import, construct,
+            ok): fn, api, held (a function literal held in a table
+            field, named and queried `table.field`), state, const,
+            require/import, construct,
             case (spec test cases), invariant, contract, shape,
             emits/signal, reaper, deps, uses/calls, usedby/calledby,
             flow, reads/writes/fields. `uses` and `usedby` are the two
