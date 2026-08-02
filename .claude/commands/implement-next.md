@@ -16,6 +16,12 @@ exists — so neither the plan file nor the design doc named in its
 anchors the brief names, write the red spec first when it calls for
 one, implement, and get the suite green via `lua_test_run`.
 
+The brief's premises are inherited with their provenance, not
+re-derived: re-verification is bounded to the checks the brief
+explicitly names, each one command. Beyond that, re-derive on
+suspicion — a premise contradicting the code in front of you —
+never by default.
+
 When the brief turns out not to be sufficient, the response scales
 with the size of the gap:
 

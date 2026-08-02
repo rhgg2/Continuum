@@ -34,13 +34,19 @@ write-up, and we only start it when we're both happy to proceed.
    doesn't — a phaseless plan with an empty queue is finished work.
    Either way, say so and stop.
 4. With Queued non-empty, the goal is to promote its top entry and
-   compile it. Size check — two duties, before promoting:
+   compile it. Size check — three duties, before promoting:
    - **Commit-sized**: one landable change, spec included. An item
      that is really two or more commits gets split into ordered Queued
      lines; promote only the first.
    - **≤150k context**: the brief must name tight file/line ranges so
      an implementation session works from the brief plus those ranges
      alone. If it can't, split further.
+   - **Tree-runnable evidence**: any measurement that gates the item's
+     landing must come from a command runnable from the tree — an
+     existing tool, a spec, the suite. If the completion test would
+     have to be *built* to be stated, the harness is its own Queued
+     item and lands first; a scratchpad differential dies with the
+     session that built it, so it can inform but never gate.
 5. Study before proposing anything: the relevant sections of the design
    doc named in the `> source:` line, plus the relevant code (maps
    first), until you could implement the item without the doc. The
@@ -50,11 +56,13 @@ write-up, and we only start it when we're both happy to proceed.
 
    The scratchpad and spike worktree settle *design* questions here —
    a fork you can name before writing the code, whose answer changes
-   what the brief says. Writing the implementation there to make the
-   brief certain is the expensive way round: the code is discarded
-   with the scratchpad and `/implement-next` writes it all again. The
-   brief's anchors and shapes come from reading; certainty beyond
-   that is the implementation session's to earn.
+   what the brief says. The overreach test: if stating the completion
+   test requires building it, stop — a brief that predicts the
+   build's results makes this session the second owner of the
+   implementer's work. That finding changes the item's shape, not
+   just its brief: queue the harness as its own item (step 4) and
+   re-size. The brief's anchors and shapes come from reading;
+   certainty beyond that is the implementation session's to earn.
 6. Bring the search to chat: what the item turns out to involve, the
    forks the search exposed, what you'd do, what you're unsure of.
    Anything the design doc left open is settled here too — the brief
@@ -93,7 +101,11 @@ write-up, and we only start it when we're both happy to proceed.
    - red-spec-first when the item fixes observable behaviour, naming
      the target spec file and fixture;
    - what done looks like: suite green, plus the item's own evidence
-     (which walks are gone, what a probe should show).
+     as observables and directions — which measurement moves, which
+     way, and the tree-runnable command that produces it. Numbers
+     have one owner: the run the implementer makes. Sizing gathered
+     during the search may be stated as sizing, marked as such; it
+     is never a gate.
 
    It opens with a header, so a session that has only the brief can
    still locate itself:

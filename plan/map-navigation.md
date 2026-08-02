@@ -82,9 +82,10 @@ questions to sit with the other two unlooked-at ones.
    letting them read as an oversight.
 3. Re-run the oracle and record what the phase actually bought.
    `map_diff.py`'s unattributed count is this phase's own control: it
-   stood at 240 before the naming items, and each item above predicts
-   how far it should fall, so an item that lands without moving the count by its sized
-   amount has not done what it claimed. The closing run states the
+   stood at 240 before the naming items, and each item names the
+   direction it moves the count and the class of sites it removes —
+   the magnitude belongs to the run that lands it, reported with its
+   composition. The closing run states the
    residue and the classes it belongs to, and that finding — written
    into `design/map-navigation.md` § Mechanism: park the rewrite — is
    the programme's last piece of evidence before `/plan-close`.
