@@ -26,6 +26,7 @@ undocumented listing format is inherited whole.
   map_diff.py                  the whole corpus, per-class summary
   map_diff.py <module> ...     restrict to named modules, itemised
   map_diff.py --control        the hand-derived positive control
+  map_diff.py --sites          named vs bare site rows, every map
 """
 
 from __future__ import annotations
@@ -365,6 +366,111 @@ def summarise(stats: Counter, classes: Counter, kinds: Counter,
             print(f"    {module:<22} {owner:<12} {n}")
 
 
+# ----- The site census
+
+# The diff answers "does the corpus name the right caller", and can only ask it
+# of the 64 module maps, because luac certifies module bytecode and nothing
+# else. The prior question -- does the corpus name a caller at all -- is a
+# property of every map, so the census reads the corpus whole. That is the
+# whole point of having it: the 254 spec maps carry no named site anywhere, and
+# the diff cannot report that, never having looked at them.
+
+SITE_KINDS = ('call', 'use', 'drop', 'bind', 'field')
+FENCED = ('call', 'use', 'drop')    # where luac certifies a claimed caller
+SITE_KIND = re.compile(r'^  @(call|use|drop|bind|field)\b')
+SITE_ROW = re.compile(r'^  @(?:call|use|drop|bind|field)\b.*  @ (\S.*)$')
+CASE_ROW = re.compile(r"^  @case .*  @ (\d+)-(\d+)$")
+
+
+def census(map_path: Path) -> tuple[Counter, Counter]:
+    """One map's site rows, counted named against bare, plus its bare sites
+    classified by the span the map already carries. Rows that fail to parse
+    raise, for read_map's reason: an uncounted row's symptom is a smaller gap.
+    """
+    counts, enclosed = Counter(), Counter()
+    cases: list[Span] = []
+    decls: list[Span] = []
+    bare_lines: list[int] = []
+    for raw in map_path.read_text().splitlines():
+        m = CASE_ROW.match(raw)
+        if m:
+            cases.append((int(m[1]), int(m[2])))
+            continue
+        m = DECL_ROW.match(raw)
+        if m:
+            decls.append((int(m[3]), int(m[4] or m[3])))
+            continue
+        if not SITE_KIND.match(raw):
+            continue
+        kind = SITE_KIND.match(raw)[1]
+        m = SITE_ROW.match(raw)
+        if not m:
+            raise ValueError(f"{map_path.name}: unparsed site row {raw!r}")
+        for token in m[1].split():
+            # A token is a caller group, not a site: `flush:1916,1920` is one
+            # token and two sites, so counting tokens undercounts every hot
+            # caller -- and the spec corpus, whose groups are all bare, by 4x.
+            caller, sep, nums = token.rpartition(':')
+            lines = nums.split(',')
+            counts[(kind, 'named' if sep else 'bare')] += len(lines)
+            # Fenced rows only: the breakdown exists to size naming a *caller*,
+            # and a `@field` site is a read or a write, with no caller to name.
+            if not sep and kind in FENCED:
+                bare_lines.extend(int(n) for n in lines)
+    for line in bare_lines:
+        if enclosing(cases, line):
+            enclosed['case'] += 1
+        elif enclosing(decls, line):
+            enclosed['fn'] += 1
+        else:
+            enclosed['neither'] += 1
+    return counts, enclosed
+
+
+def census_report(modules: list[str]) -> int:
+    counts, enclosed, n_maps = Counter(), Counter(), Counter()
+    for map_path in sorted(map_regen.corpus()):
+        if modules and map_path.stem not in modules:
+            continue
+        where = 'spec' if map_path.parent.name == 'specs' else 'module'
+        n_maps[where] += 1
+        map_counts, map_enclosed = census(map_path)
+        for (kind, tag), n in map_counts.items():
+            counts[(where, kind, tag)] += n
+        # Only the spec side: a module map's bare sites are the handful the
+        # oracle already names one by one, so the breakdown would add nothing.
+        if where == 'spec':
+            enclosed.update(map_enclosed)
+        if modules:
+            for kind in SITE_KINDS:
+                named, unnamed = map_counts[(kind, 'named')], map_counts[(kind, 'bare')]
+                if named or unnamed:
+                    print(f"{map_path.stem}\t@{kind}\tnamed {named}\tbare {unnamed}")
+
+    total = n_maps['module'] + n_maps['spec']
+    print(f"\nSite attribution census -- {total} map{'' if total == 1 else 's'} "
+          f"({n_maps['module']} module, {n_maps['spec']} spec)\n")
+    print(f"  {'':<22}{'named':>8}{'bare':>8}")
+    for where in ('module', 'spec'):
+        if not n_maps[where]:
+            continue
+        print(f"  {where} maps")
+        for kind in SITE_KINDS:
+            named, unnamed = counts[(where, kind, 'named')], counts[(where, kind, 'bare')]
+            if not (named or unnamed):
+                continue
+            fence = '' if kind in FENCED else '   <- outside the fence'
+            print(f"    @{kind:<19}{named:>8}{unnamed:>8}{fence}")
+
+    if n_maps['spec']:
+        print("\n  Bare spec sites in fenced rows, by the span the map already carries")
+        for label, key in (('inside a @case span', 'case'),
+                           ('inside a helper @fn span', 'fn'),
+                           ('inside neither', 'neither')):
+            print(f"    {label:<24}{enclosed[key]:>8}")
+    return 0
+
+
 # ----- Positive control
 #
 # Hand-derived from the .lua and the .map. A table written from the tool's own
@@ -477,12 +583,19 @@ def main() -> int:
                     help="restrict to these modules and itemise every row")
     ap.add_argument('--control', action='store_true',
                     help="run the hand-derived positive control instead")
+    ap.add_argument('--sites', action='store_true',
+                    help="census named vs bare site rows across every map")
     args = ap.parse_args()
 
     if args.control:
         if args.modules:
             ap.error("--control reads its own fixed module set; drop the names")
+        if args.sites:
+            ap.error("--control and --sites are different instruments; pick one")
         return control()
+
+    if args.sites:
+        return census_report(args.modules)
 
     stats, classes, kinds, owners = Counter(), Counter(), Counter(), Counter()
     for map_path, src in sorted(corpus().items()):

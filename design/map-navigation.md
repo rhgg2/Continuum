@@ -991,6 +991,52 @@ the extractor never named, which is why depth alone would have lied about them:
 rather than as a name to look up, and the `uses` note says why such a site has
 no subject to group under.
 
+**What the phase bought, measured once at the end** (2026-08-02). The oracle's
+final state is 3,279 agreed, nothing map-only, nothing luac-only in scope, and
+one luac-only alias — `groups.lua:38`, unchanged since phase 3. Across the
+phase the corpus's bare fenced sites fell from 922 to 7, measured from phase
+4's tip at `9514c0b`: `@call` 250 → 1, `@use` 642 → 5, `@drop` 30 → 1. The
+seven are the ones § *The residue is seven sites of one class* already names,
+and they are now named by a second instrument as well as the first. The oracle
+reaches `@call` alone; a census over the corpus text reaches `@use` and `@drop`
+too, and arrives at the same seven. Two derivations of one fact is the standard
+this section set for itself at the outset, and it is the standard the closing
+number is held to.
+
+**A control's domain is a fact about the control, not about the corpus**
+(2026-08-02, measured). `unattributed: map 1` invites reading as a statement
+about the corpus. It is a statement about 64 maps of 318. `map_diff.corpus()`
+filters to `map/` because luac certifies module bytecode and nothing else — a
+sound restriction on a diff, and one the phase inherited without noticing when
+it took that number as its control. Beside those 64 sit 254 spec maps, and no
+site row in any of them has ever carried a caller: 6,271 bare `@use` sites and
+35,630 bare `@field` sites, identical before the phase and after it. `usedby
+tm:rebuild` shows the cost. A module site reads `trackerManager.lua:1916 (in
+flush)`, where a spec site collapses to `tests/specs/tm_fx_region_spec.lua: 59
+sites`, so the answer to "which test exercises this" stops at the file.
+
+**So the census is the instrument the phase lacked.** `map_diff.py --sites`
+counts named against bare, per site kind, module maps against spec maps, over
+all 318. It touches no bytecode, which is exactly what lets it reach where the
+diff cannot. `@bind` and `@field` are counted but marked outside the fence §
+*Claimed on a positive test, never as a fallback* draws, since their bare sites
+are the pre-existing reading that section declined to change rather than a debt
+this phase left. Its control is not a stored table: site counts move with every
+source edit, so a table of them would be stale by the next commit and would
+fail in the direction § *The gate needed `sha=` out of the header first* rules
+against. Two maps are hand-derived instead — `groups.map` at 37 named and 3
+bare `@field` sites, `tm_bind_skipguard_spec.map` at 5 bare `@use` sites over
+one helper and two cases — and the counter is broken in three directions.
+Counting tokens rather than sites, one token being `reconcile:77,79,84`, takes
+the spec `@use` figure to 1,505, which was this session's first and wrong
+answer. Scoring `<load>` as bare restores the pre-`<load>` state exactly, at 72
+bare `@call` sites. Dropping the module/spec split hides the finding entirely.
+The first break leaves the span breakdown standing, that being derived from the
+line list rather than from the counter, and the two are independent to just
+that extent. `map_regen --check` clean, `--control` green at 18 rows, the
+unchanged diff byte-identical, no `.map` and no `.lua` churn, suite green at
+2,227.
+
 ## Open questions
 
 - Are early-return guards worth surfacing? "This function does nothing
@@ -999,5 +1045,14 @@ no subject to group under.
   be checked against the corpus, not assumed.
 - Do these numbers hold for subagents? They were excluded as bulk readers
   by design; whether their navigation is also chain-shaped is unknown.
+- Does spec-side attribution earn itself? 6,271 `@use` sites across 254
+  spec maps carry a line number and no caller, and 5,851 of them already
+  sit inside a `@case` span the same map emits — so naming them is a join
+  nobody has written, not a parse nobody can do. It is not a rule the
+  extractor misses: `map_extract` routes a spec through a sibling grammar
+  with no attribution machinery in it at all. The unmeasured half is the
+  demand. `navigation_survey.py` reads real `map_query` traffic, and would
+  say whether "which case exercises this" is a question anyone asks,
+  before a rule gets built on the assumption that it is.
 - Does the vocabulary problem want synonyms, fuzziness, or better negative
   results? Unknown, and the three have very different costs.
