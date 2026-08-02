@@ -40,6 +40,9 @@
   @held tracker.cursorAnchor()  @ 148
   @held tracker.setSwingComposite(name, c)  @ 149
 
+# Handlers registered
+  @handler mm:flushed()  @ 62
+
 # Public API (tp:*)
   -- Take lifecycle (take ops on tm, view-state on tv)
   @api tp:currentTake()  @ 68
@@ -101,7 +104,7 @@
 # Calls (intra-file)
   @call arrange  @ samplerMode:25 bindFromSelection:92,93
   @call samplerMode  @ bind:73 tracker.reswingTakes:139,143
-  @call takeHash  @ 62 bindFromSelection:102 renderBody:162
+  @call takeHash  @ mm:flushed:62 bindFromSelection:102 renderBody:162
   @call tp:bind  @ bindFromSelection:99 tracker.openTakeProperties:130
   @call tp:bindFromSelection  @ bind:72 renderBody:160
   @call tp:currentTake  @ tracker.openTakeProperties:130

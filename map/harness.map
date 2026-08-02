@@ -32,6 +32,10 @@
       -- harness.bareMM hands back just this. The fiddly take-binding sequence lives
       -- in one place on purpose — a second copy would drift.
 
+# Functions held in tables
+  @held io.open(path, ...)  @ 16-22
+  @held util._stubs.midiManager(deps)  @ 34
+
 # Public API (harness.*)
   @api harness.bareMM(seed)  @ 90-94
       -- A real mm with NO tm/vm wired. mm_* contract specs pin behaviour on a plain
@@ -77,13 +81,13 @@
   @drop mm:modify  @ seedThrough:39
   @drop mm:notes  @ buildMM:80
   @drop mm:seed  @ bareMM:92
-  @drop path:find  @ 18,19
+  @drop path:find  @ io.open:18,19
 
 # REAPER API surface
   @reaper GetMediaItemTake_Track
 
 # Fields (r read / w write incl. constructor keys)
-  @field r _stubs  @ 34
+  @field r _stubs  @ util._stubs.midiManager:34
   @field w bareMM  @ bareMM:90
   @field w ccm  @ mk:137,143
   @field r ccs  @ seedThrough:50 mk:120
@@ -119,7 +123,7 @@
   @field w notes  @ buildMM:82
   @field r num  @ buildMM:73
   @field r open  @ 13
-  @field w open  @ 16
+  @field w open  @ io.open:16
   @field w ownerTrack  @ mk:133
   @field w pa  @ mk:140,143
   @field r ppq  @ seedThrough:42 buildMM:73
@@ -132,7 +136,7 @@
   @field w seed  @ buildMM:77 bareMM:91
   @field w swings  @ mk:139
   @field w synthetic  @ mk:139
-  @field r take  @ 34 buildMM:64
+  @field r take  @ util._stubs.midiManager:34 buildMM:64
   @field w tempers  @ mk:139
   @field r timeSigs  @ buildMM:72
   @field w tm  @ mk:128,140,143

@@ -65,6 +65,9 @@
       -- Ellipsis-fit to a fixed pane width; no horizontal scroll exists. Private: the
       -- trees fit their own labels, and no caller outside chrome has wanted it.
 
+# Handlers registered
+  @handler cm:configChanged()  @ 18
+
 # Public API (chrome.*)
   @api chrome.colour(name, scope)  @ 53-60
   @api chrome.screenPainter()  @ 67

@@ -16,6 +16,9 @@
 # Private state
   @state sp = {}  @ 28
 
+# Functions held in tables
+  @held sample.setTrack(track)  @ 63
+
 # Public API (sp:*)
   -- Page lifecycle (track ops on sv, JSFX poll on sm)
   @api sp:bind()  @ 37-44
@@ -56,7 +59,7 @@
   @use require util  @ 12
 
 # Calls (intra-file)
-  @call sp:setTrack  @ 63
+  @call sp:setTrack  @ sample.setTrack:63
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
@@ -77,7 +80,7 @@
   @field w fileOps  @ 23
   @field r gui  @ 19
   @field w gui  @ 26
-  @field w setTrack  @ 63
+  @field w setTrack  @ sample.setTrack:63
   @field w sm  @ 24
   @field w sv  @ 26
   @field r track  @ bind:41

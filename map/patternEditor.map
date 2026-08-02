@@ -109,6 +109,15 @@
       -- Mini toolbar: a copy of the tracker RPB ticker plus Commit/Cancel.
       -- see docs/patternEditor.md § Write-through commit for the button/pendingAction handoff.
 
+# Functions held in tables
+  @held nullPa.binding()  @ 33
+  @held nullPa.apply()  @ 33
+
+# Handlers registered
+  @handler miniScope:addNoteLane()  @ 98
+  @handler miniScope:hideExtraCol()  @ 99
+  @handler modalHost:patternEditor(_, close)  @ 484-487
+
 # Public API (pe:*)
   @api pe:open(body, commit, poly)  @ 228-287
       @contract  mint a checkout take on scratch, materialise `body`, bind the mini tm; `commit(newBody)` is the write-back  @ 225
@@ -181,8 +190,8 @@
   @use call    tm:currentTake  @ currentTake:303
   @use call    tm:flush  @ open:284
   @use call    tm:getChannel  @ readbackBody:158
-  @use call    tv:addExtraCol  @ 98
-  @use call    tv:hideExtraCol  @ 99
+  @use call    tv:addExtraCol  @ miniScope:addNoteLane:98
+  @use call    tv:hideExtraCol  @ miniScope:hideExtraCol:99
   @use call    tv:ppqToRow  @ draw:443
   @use call    tv:setRowPerBeat  @ drawToolbar:398
   @use call    util.add  @ readbackBody:164,168,181,192
@@ -219,8 +228,8 @@
   @call materialiseNotes  @ open:282
   @call maxLane  @ shelfMatches:334
   @call pe:close  @ loadShelf:344 launch:514
-  @call pe:draw  @ 485
-  @call pe:handleInput  @ 486
+  @call pe:draw  @ modalHost:patternEditor:485
+  @call pe:handleInput  @ modalHost:patternEditor:486
   @call pe:open  @ loadShelf:345 launch:491
   @call readbackBody  @ writeThrough:207 saveShelf:313 loadShelf:347
   @call saveShelf  @ handleInput:462
@@ -256,8 +265,8 @@
   @field w acceptCmds  @ 388 handleInput:468
   @field r addNoteLane  @ setLaneCommands:104
   @field w align  @ drawToolbar:397
-  @field w apply  @ 33
-  @field w binding  @ 33
+  @field w apply  @ nullPa.apply:33
+  @field w binding  @ nullPa.apply:33
   @field w bipolar  @ curveDisplay:135
   @field w buttonLabel  @ drawSave:366 drawLoad:374
   @field w cc  @ materialiseCurve:142

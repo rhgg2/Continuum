@@ -67,6 +67,9 @@
   @held env.facade(name)  @ 365
   @held env.page(name)  @ 366
 
+# Handlers registered
+  @handler cmgr:toggleHelp()  @ 37
+
 # Public API (coord:*)
   @api coord:register(name, moduleName, extra)  @ 294-299
   @api coord:setActive(name)  @ 303-316
@@ -136,11 +139,11 @@
   @use call    help:draw  @ frame:277
   @use call    help:isOpen  @ dispatch:107
   @use call    help:setPage  @ setActive:312
-  @use call    help:toggle  @ 37
+  @use call    help:toggle  @ cmgr:toggleHelp:37
   @use call    keyDispatch.dispatchKeys  @ dispatch:110
   @use call    lib.seedIfEmpty  @ 24
   @use call    modalHost:draw  @ frame:278
-  @use call    modalHost:isOpen  @ 37
+  @use call    modalHost:isOpen  @ cmgr:toggleHelp:37
   @use call    modalHost:tick  @ tick:70
   @use call    util.assign  @ register:295
   @use call    util.instantiate  @ 21,26,29,30,31,362 register:295

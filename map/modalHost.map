@@ -22,6 +22,10 @@
 # Private functions
   @fn label()  @ 18
 
+# Handlers registered
+  @handler modalHost:confirm(s, close)  @ 109-116
+  @handler modalHost:prompt(s, close)  @ 118-152
+
 # Public API (modalHost:*)
   @api modalHost:registerKind(kind, render)  @ 22
   @api modalHost:open(s)  @ 24-27
@@ -38,19 +42,19 @@
   @use call    ImGui.EndPopup  @ draw:98
   @use call    ImGui.GetStyleVar  @ draw:71
   @use call    ImGui.GetWindowViewport  @ draw:62
-  @use call    ImGui.InputText  @ 131,142
-  @use call    ImGui.IsKeyPressed  @ 111,113,135,136,138,146
+  @use call    ImGui.InputText  @ modalHost:prompt:131,142
+  @use call    ImGui.IsKeyPressed  @ modalHost:confirm:111,113 modalHost:prompt:135,136,138,146
   @use call    ImGui.IsPopupOpen  @ draw:59
-  @use call    ImGui.IsWindowAppearing  @ 119
+  @use call    ImGui.IsWindowAppearing  @ modalHost:prompt:119
   @use call    ImGui.OpenPopup  @ open:26 draw:60
   @use call    ImGui.PopStyleColor  @ draw:103
   @use call    ImGui.PopStyleVar  @ draw:78,102
   @use call    ImGui.PushStyleColor  @ draw:67
   @use call    ImGui.PushStyleVar  @ draw:68,72
-  @use call    ImGui.SetKeyboardFocusHere  @ 120
+  @use call    ImGui.SetKeyboardFocusHere  @ modalHost:prompt:120
   @use call    ImGui.SetNextWindowPos  @ draw:63
   @use call    ImGui.SetNextWindowSize  @ draw:75
-  @use call    ImGui.Text  @ 110,121,134
+  @use call    ImGui.Text  @ modalHost:confirm:110 modalHost:prompt:121,134
   @use call    ImGui.Viewport_GetCenter  @ draw:62
   @use call    chrome.colour  @ draw:67
   @use call    chrome.popChromeWindow  @ draw:104
@@ -63,8 +67,8 @@
   @call modalHost:registerKind  @ 109,118
 
 # Unresolved receivers
-  @drop s.onChord  @ 125
-  @drop s.resolve  @ 133
+  @drop s.onChord  @ modalHost:prompt:125
+  @drop s.resolve  @ modalHost:prompt:133
 
 # REAPER API surface
   @reaper ShowConsoleMsg
@@ -72,17 +76,17 @@
 # Fields (r read / w write incl. constructor keys)
   @field r Col_TitleBgActive  @ draw:67
   @field r Cond_Appearing  @ draw:63,75
-  @field r InputTextFlags_EnterReturnsTrue  @ 143
-  @field r Key_Enter  @ 111,135
-  @field r Key_Escape  @ 113,138,146
-  @field r Key_KeypadEnter  @ 136
-  @field r Key_N  @ 113
-  @field r Key_Y  @ 111
+  @field r InputTextFlags_EnterReturnsTrue  @ modalHost:prompt:143
+  @field r Key_Enter  @ modalHost:confirm:111 modalHost:prompt:135
+  @field r Key_Escape  @ modalHost:confirm:113 modalHost:prompt:138,146
+  @field r Key_KeypadEnter  @ modalHost:prompt:136
+  @field r Key_N  @ modalHost:confirm:113
+  @field r Key_Y  @ modalHost:confirm:111
   @field r StyleVar_FramePadding  @ draw:71,72
   @field r StyleVar_WindowRounding  @ draw:68
   @field r WindowFlags_AlwaysAutoResize  @ draw:76
-  @field r buf  @ openPrompt:37 131,142
-  @field w buf  @ openPrompt:37 132,149
+  @field r buf  @ openPrompt:37 modalHost:prompt:131,142
+  @field w buf  @ openPrompt:37 modalHost:prompt:132,149
   @field r callback  @ openPrompt:34 openConfirm:46 draw:80
   @field w callback  @ openPrompt:34 openConfirm:46
   @field r chrome  @ 10
@@ -90,12 +94,12 @@
   @field r flags  @ draw:76
   @field r kind  @ draw:95,97
   @field w kind  @ openPrompt:31 openConfirm:43
-  @field r onChord  @ openPrompt:36 124
+  @field r onChord  @ openPrompt:36 modalHost:prompt:124
   @field w onChord  @ openPrompt:36
   @field r onClose  @ draw:81
-  @field r prompt  @ openPrompt:33 openConfirm:45 110,121
+  @field r prompt  @ openPrompt:33 openConfirm:45 modalHost:confirm:110 modalHost:prompt:121
   @field w prompt  @ openPrompt:33 openConfirm:45
-  @field r resolve  @ openPrompt:35 128
+  @field r resolve  @ openPrompt:35 modalHost:prompt:128
   @field w resolve  @ openPrompt:35
   @field r size  @ draw:75,76
   @field r title  @ label:18 openPrompt:32 openConfirm:44,45

@@ -43,6 +43,10 @@
   -- Watcher
   @fn projectUndoable(name)  @ 123-125
 
+# Handlers registered
+  @handler ps:contextChanged()  @ 112-115
+  @handler ps:watch(diverged)  @ 142-149
+
 # Public API (ds:*)
   -- Reading
   @api ds:get(name)  @ 154-159
@@ -58,7 +62,7 @@
       -- the bound handle, so a write aimed at another take/track doesn't disturb the view.
 
 # Signals emitted (via util.installHooks)
-  @emits dataChanged   -- { scope, name }   @ 147 assign:183 assignAt:200
+  @emits dataChanged   -- { scope, name }   @ ps:watch:147 assign:183 assignAt:200
 
 # Uses (outbound edges)
   @use call    ps:assign  @ persist:93,95,98,101
@@ -66,7 +70,7 @@
   @use call    ps:boundTake  @ persist:100 assignAt:194
   @use call    ps:boundTrack  @ persist:97 assignAt:195
   @use call    ps:declareUndoable  @ 131
-  @use call    ps:get  @ loadScope:73,79 145
+  @use call    ps:get  @ loadScope:73,79 ps:watch:145
   @use call    ps:getAt  @ getAt:165
   @use call    ps:watch  @ 142
   @use call    util.deepClone  @ copy:58
@@ -79,7 +83,7 @@
   @call checkName  @ get:155 getAt:163 assign:172 assignAt:191
   @call copy  @ get:158 getAt:165 assign:179 assignAt:198
   @call ds:assign  @ delete:186
-  @call ensureScope  @ 144 get:157 assign:174 assignAt:197
+  @call ensureScope  @ ps:watch:144 get:157 assign:174 assignAt:197
   @call loadScope  @ ensureScope:86
   @call persist  @ assign:177,180
   @call print  @ persist:97,100
@@ -102,23 +106,23 @@
   @field w global  @ 66
   @field w groups  @ 21
   @field w guardedTrack  @ 39,121
-  @field w invalidate  @ 147
+  @field w invalidate  @ ps:watch:147
   @field w mutedChannels  @ 31
-  @field r name  @ 145,147
-  @field w name  @ 138,147 assign:183 assignAt:200
+  @field r name  @ ps:watch:145,147
+  @field w name  @ 138 ps:watch:147 assign:183 assignAt:200
   @field w noteDelay  @ 24
   @field w paramAutomation  @ 22
   @field w paramFrecency  @ 40
   @field w prevWindows  @ 29
   @field w project  @ 66
   @field r ps  @ 13
-  @field r scope  @ 144,145,147
-  @field w scope  @ 138,147 assign:183 assignAt:200
-  @field r slot  @ 145
+  @field r scope  @ ps:watch:144,145,147
+  @field w scope  @ 138 ps:watch:147 assign:183 assignAt:200
+  @field r slot  @ ps:watch:145
   @field w slot  @ 138
   @field w slotEntries  @ 33
   @field w slots  @ 131
   @field w soloedChannels  @ 32
   @field w swing  @ 25
-  @field w take  @ 66,113
-  @field w track  @ 66,114
+  @field w take  @ 66 ps:contextChanged:113
+  @field w track  @ 66 ps:contextChanged:114

@@ -40,6 +40,9 @@
   @fn firstReq()  @ 173-184
   @fn scanOnce()  @ 186-193
 
+# Functions held in tables
+  @held env.print(...)  @ 26-30
+
 # Public API (bridge:*)
   @api bridge:tick()  @ 201-209
 
@@ -87,7 +90,7 @@
   @field w ms  @ execute:157
   @field r n  @ execute:150,151
   @field r print  @ formatResponse:167
-  @field w print  @ 26 execute:158
+  @field w print  @ env.print:26 execute:158
   @field r source  @ defaultSpoolDir:18
   @field r spoolDir  @ 21
   @field r status  @ formatResponse:164

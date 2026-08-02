@@ -55,6 +55,9 @@
   @fn busTag(e, fromNode, toNode)  @ 348-352
       -- Edge → bus stamp: membership is structural — an endpoint on a bus node; `to` end wins.
 
+# Handlers registered
+  @handler wm:wiringChanged()  @ 419
+
 # Public API (wv:*)
   @api wv:graph()  @ 137
   @api wv:load()  @ 138
@@ -183,7 +186,7 @@
   @call nodeView  @ nodeViews:325
   @call reachSet  @ ancestorsOf:289 descendantsOf:295
   @call sourceCategory  @ nodeView:124 wireViews:373,387
-  @call wv:rebuild  @ 419
+  @call wv:rebuild  @ wm:wiringChanged:419
 
 # Unresolved receivers
   @drop trackId:sub  @ nodeLabel:60

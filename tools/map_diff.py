@@ -58,9 +58,9 @@ class Site:
 # ----- The map side
 
 # Both rows are emitted by map_extract.emit; `@ n` is a one-liner, so its span
-# is (n, n). `@fn`, `@api` and `@held` together are every function the map
-# gives a span to, and so every caller a site row can name.
-DECL_ROW = re.compile(r'^  @(?:fn|api|held) (\S+?)\((.*)\)  @ (\d+)(?:-(\d+))?$')
+# is (n, n). `@fn`, `@api`, `@held` and `@handler` together are every function
+# the map gives a span to, and so every caller a site row can name.
+DECL_ROW = re.compile(r'^  @(?:fn|api|held|handler) (\S+?)\((.*)\)  @ (\d+)(?:-(\d+))?$')
 CALL_ROW = re.compile(r'^  @call (\S+)  @ (.+)$')
 SELF_MARK = re.compile(r'\bself=(\S+)')     # the @module header's marker
 
@@ -102,7 +102,7 @@ def read_map(path: Path) -> MapSide:
         if raw.startswith('@module '):
             m = SELF_MARK.search(raw)
             ms.self_name = m[1] if m else None
-        elif raw.startswith(('  @fn ', '  @api ', '  @held ')):
+        elif raw.startswith(('  @fn ', '  @api ', '  @held ', '  @handler ')):
             m = DECL_ROW.match(raw)
             if not m:
                 raise ValueError(f"{path.name}: unparsed declaration row {raw!r}")
@@ -111,11 +111,12 @@ def read_map(path: Path) -> MapSide:
             ms.spans.add(span)
             ms.by_name[bare(m[1])].append(span)
             # `heads` is the map's *callee* vocabulary, and the `@call` pass
-            # does not yet spell a held literal as a callee. Admitting the name
-            # here would report every `edit.assign(...)` as an edge the map
-            # missed, when the map has never claimed to carry it -- a held row
-            # buys attribution (a caller with a span), not a new edge.
-            if not raw.startswith('  @held '):
+            # spells neither a held literal nor a registered handler as a
+            # callee. Admitting the name here would report every
+            # `edit.assign(...)` as an edge the map missed, when the map has
+            # never claimed to carry it -- those rows buy attribution (a caller
+            # with a span), not a new edge.
+            if not raw.startswith(('  @held ', '  @handler ')):
                 ms.heads.add(m[1])
                 ms.bare_heads.add(bare(m[1]))
         elif raw.startswith('  @call '):

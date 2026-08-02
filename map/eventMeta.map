@@ -26,6 +26,9 @@
   @fn readBucket(guid, b)  @ 21
   @fn writeKb(guid, kb)  @ 23-25
 
+# Handlers registered
+  @handler ps:projectRewound(slots)  @ 34-41
+
 # Public API (eventMeta:*)
   @api eventMeta:load(guid)  @ 44-51
       @contract  { [uuid:int] = fields }; empty table if the guid has no metadata  @ 43
@@ -40,7 +43,7 @@
       @contract  forever-deletes a pool's metadata (deleteSlot's keeper removal)  @ 117
 
 # Signals emitted (via util.installHooks)
-  @emits poolsRewound   -- { guids = set }; a REAPER undo rewound these pools' metadata slots   @ 40
+  @emits poolsRewound   -- { guids = set }; a REAPER undo rewound these pools' metadata slots   @ ps:projectRewound:40
 
 # Uses (outbound edges)
   @use call    perf.count  @ flush:83 saveAll:107
@@ -64,10 +67,10 @@
   @call writeKb  @ flush:82 saveAll:106
 
 # Unresolved receivers
-  @drop slot:match  @ 37
+  @drop slot:match  @ ps:projectRewound:37
 
 # Fields (r read / w write incl. constructor keys)
   @field r REMOVE  @ writeKb:24 flush:78 saveAll:99 dropPool:121,123
-  @field w guids  @ 40
+  @field w guids  @ ps:projectRewound:40
   @field w prefixes  @ 31
   @field r ps  @ 11

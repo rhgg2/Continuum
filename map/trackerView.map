@@ -532,6 +532,15 @@
   @held clipboard.getCtx()  @ 4025
   @held clipboard.getLength()  @ 4026
 
+# Handlers registered
+  @handler tracker:register()  @ 3630
+  @handler tm:takeSwapped()  @ 3957
+  @handler tm:rebuild()  @ 3958-3961
+  @handler cm:configChanged(change)  @ 3966-3968
+  @handler ds:dataChanged(change)  @ 3971-3973
+  @handler cmgr:doAfter()  @ 4039
+  @handler cmgr:doBefore()  @ 4063
+
 # Public API (tv:*)
   @api tv:currentTrackIdx()  @ 173
   @api tv:currentSlotIdx()  @ 174-177
@@ -556,6 +565,7 @@
   @api tv:duplicateBoundUnpooled()  @ 253-260
       @contract  clone the bound take (unpooled) into a fresh parked slot, select it, return slotIdx  @ 252
   @api tv:setRowPerBeat(n)  @ 505-515
+  @api tv:applyTakeProperties(props)  @ 519-530
   @api tv:setSwingSlot(name)  @ 547-553
       -- Take-wide swing: the take map's 'global' slot + project & track seed.
   @api tv:setColSwingSlot(chan, name)  @ 557-562
@@ -793,7 +803,7 @@
   @use call    cm:boundTrack  @ resolveSelectionTake:187
   @use call    cm:get  @ currentRpb:444 releaseTransientFrame:449,451 matchGridToCursor:500 setRowPerBeat:507,513 seedSharedSlots:575 sendBend:630 placeNewNote:753,756 pitchFromKey:783 strikePitch:798 editEvent:992 queueResetVelocities:2620 stepSample:2867 inputOctaveUp:3557 tracker.inputOctaveDown:3569 tracker.doubleRPB:3616 tracker.halveRPB:3617 tracker.incRPB:3618 tracker.decRPB:3619 rebuild:3675,3698,3699,3836
   @use call    cm:getAt  @ selectedTrackIdx:165 effectiveSlot:170 resolveSelectionTake:188 selectTrack:211 releaseTransientFrame:448 setDefaultSwing:541 setSwingComposite:581
-  @use call    cm:set  @ resolveSelectionTake:191 selectTrack:209,213 selectSlot:217 setRowPerBeat:514 setDefaultSwing:543 setTemperSlot:567,568,569 setSwingComposite:583 editEvent:942 scaleScope:1990 stepSample:2866 inputOctaveUp:3557 tracker.inputOctaveDown:3569 3630
+  @use call    cm:set  @ resolveSelectionTake:191 selectTrack:209,213 selectSlot:217 setRowPerBeat:514 setDefaultSwing:543 setTemperSlot:567,568,569 setSwingComposite:583 editEvent:942 scaleScope:1990 stepSample:2866 inputOctaveUp:3557 tracker.inputOctaveDown:3569 tracker:register:3630
   @use call    cm:setTrack  @ resolveSelectionTake:187 retargetTrackTier:202 selectTrack:210
   @use call    cmgr:doAfter  @ 4032,4039
   @use call    cmgr:doBefore  @ 4041,4063 wireGroupLifetime:4104,4110,4111
@@ -805,7 +815,7 @@
   @use call    ctx:barBeatSub  @ barBeatSub:2972
   @use call    ctx:noteProjection  @ noteProjection:2970
   @use call    ctx:placeRow  @ ppqRowOf:2718 rebuild:3854
-  @use call    ctx:ppqPerRow  @ rowBounds:299 522 adjustDurationCore:1707
+  @use call    ctx:ppqPerRow  @ rowBounds:299 applyTakeProperties:522 adjustDurationCore:1707
   @use call    ctx:ppqToRow  @ interpolateValues:1452,1453 regionAdjustDuration:1583,1584 regionAdjustPosition:1594,1595 adjustPositionMulti:1757,1776,1778 quantizeScope:1862,1867 gatherFxRegions:2389,2390 shiftEvents:2829,2836 ppqToRow:2973 rebuild:3869
   @use call    ctx:rowBeatInfo  @ rowBeatInfo:2971
   @use call    ctx:rowToPPQ  @ eventsByCol:403 moveLaneEvent:1322 interpolate:1413,1414,1435 interpolateValues:1456 cursorRegionBefore:1485 regionNoteOff:1572,1574 regionAdjustDuration:1585 regionAdjustPosition:1597 cursorNoteBefore:1638 noteOff:1664,1665,1691,1692 adjustDurationCore:1711,1712 quantizeScope:1864,1868 quantizeKeepRealisedScope:1892 scaleScope:1935 insertRowCore:2023 deleteRowCore:2059,2060 cursorRowEvent:2263 eachFxRegionInRect:2370,2371 pasteFxRegions:2413,2414 fxHostAtCursor:2464,2465 shiftEvents:2767,2768,2786 rowToPPQ:2974 tracker.playFromCursor:3614
@@ -830,7 +840,7 @@
   @use call    ec:rescaleRow  @ releaseTransientFrame:453 matchGridToCursor:501 setRowPerBeat:513 scaleScope:1989
   @use call    ec:reset  @ rebuild:3669
   @use call    ec:row  @ matchGridToCursor:496 followViewport:700 editEvent:868 interpolate:1431 cursorRegionBefore:1485 recentreOnRegion:1516 regionNoteOff:1571,1574 cursorNoteBefore:1638 noteOff:1690 adjustPosition:1802,1825 scaleScope:1930 forEachRowOp:2148 cursorRowEvent:2262 pasteFxRegions:2402 fxHostAtCursor:2464,2465 deleteEvent:2650 shiftEvents:2772,2859 cursorRect:2887 cursorAnchor:3123 instanceAtCursor:3139 tracker.playFromCursor:3614
-  @use call    ec:selClear  @ deleteSelection:2686 deleteOrBackspace:2692 duplicateCascade:3027 4039
+  @use call    ec:selClear  @ deleteSelection:2686 deleteOrBackspace:2692 duplicateCascade:3027 cmgr:doAfter:4039
   @use call    ec:setPos  @ digitsStrike:1251 digitsBackspace:1267 digitsCommit:1275 recentreOnRegion:1516 adjustPosition:1821,1833 shiftEvents:2859 selectRegionAt:2930 duplicate:2950
   @use call    ec:setSelection  @ scaleScope:1974 shiftEvents:2856 selectRegionAt:2931
   @use call    ec:shiftSelection  @ adjustPositionMulti:1783
@@ -885,15 +895,15 @@
   @use call    tm:freezeRegion  @ freezeRegion:2576
   @use call    tm:getChannel  @ rowBounds:303 parkedByUuid:2319
   @use call    tm:interpolate  @ interpolateValues:1456 sampleCurve:2976
-  @use call    tm:length  @ 523 duplicateCascade:3024,3029 groupPaste:3537 rebuild:3666
-  @use call    tm:name  @ 520 takeName:2966
+  @use call    tm:length  @ applyTakeProperties:523 duplicateCascade:3024,3029 groupPaste:3537 rebuild:3666
+  @use call    tm:name  @ applyTakeProperties:520 takeName:2966
   @use call    tm:playFrom  @ tracker.playFromTop:3611 tracker.playFromCursor:3614
-  @use call    tm:rescaleLength  @ 525
+  @use call    tm:rescaleLength  @ applyTakeProperties:525
   @use call    tm:resolution  @ rebuild:3665
-  @use call    tm:setLength  @ 527
+  @use call    tm:setLength  @ applyTakeProperties:527
   @use call    tm:setMutedChannels  @ pushMute:610
-  @use call    tm:setName  @ 520
-  @use call    tm:tileLength  @ 526
+  @use call    tm:setName  @ applyTakeProperties:520
+  @use call    tm:tileLength  @ applyTakeProperties:526
   @use call    tm:timeSigs  @ rebuild:3667
   @use call    tuning.findTemper  @ rebuild:3699
   @use call    tuning.midiToStep  @ editEvent:922
@@ -953,7 +963,7 @@
   @call colTypeOf  @ colFor:2730
   @call colsForAnchor  @ selectRegionAt:2921 duplicate:2948
   @call conformOverlaps  @ quantizeScope:1880 quantizeKeepRealisedScope:1899 scaleScope:1950 insertRowCore:2037 deleteRowCore:2084
-  @call currentRpb  @ assignStamp:462 assignTail:475 assignNoteMove:484 521 inheritedSign:839 editEvent:866,1001 chordStrike:1106 moveLaneEvent:1327 addLaneEvent:1341 applyNoteOff:1649 scaleScope:1981
+  @call currentRpb  @ assignStamp:462 assignTail:475 assignNoteMove:484 applyTakeProperties:521 inheritedSign:839 editEvent:866,1001 chordStrike:1106 moveLaneEvent:1327 addLaneEvent:1341 applyNoteOff:1649 scaleScope:1981
   @call currentRpb  @ insertRowCore:2022 deleteRowCore:2058 planInstanceMoves:2101 cursorRect:2886 selectRegionAt:2923 duplicate:2950 logPerRow:2975 selectionAsRect:3057 cursorAnchor:3123 instanceAtCursor:3139 movePreview:3193 editCursor.logPerRow:4009
   @call cursorNoteBefore  @ adjustDuration:1730 adjustPosition:1805
   @call cursorRegionBefore  @ regionNoteOff:1566 regionAdjustDuration:1580 regionAdjustPosition:1591 shiftFxLane:1614,1620 deleteFxRegionAtCursor:2426
@@ -981,7 +991,7 @@
   @call insertRowCol  @ tracker.insertRowCol:3595
   @call interpolate  @ tracker.interpolate:3565
   @call interpolateValues  @ rebuild:3929
-  @call isFrameChange  @ 3967
+  @call isFrameChange  @ cm:configChanged:3967
   @call killAudition  @ audition:666 tick:675 editEvent:886 chordAbandon:1206
   @call kindAt  @ kindOf:42 insertRowCore:2028,2049 deleteRowCore:2069,2078
   @call kindOf  @ edit.add:102 edit.delete:103 edit.assign:106,111
@@ -1009,7 +1019,7 @@
   @call planInstanceMoves  @ forEachRowOp:2152
   @call ppqRowOf  @ kindAt:2743 deletedCells:3174 rebuild:3892,3893,3908,3920
   @call projectionEpoch  @ rebuild:3836
-  @call pushMute  @ rebuild:3936 3972
+  @call pushMute  @ rebuild:3936 ds:dataChanged:3972
   @call quantizeKeepRealisedScope  @ quantizeKeepRealisedSelection:1917 quantizeKeepRealisedAll:1918
   @call quantizeScope  @ quantizeSelection:1915 quantizeAll:1916
   @call recentreOnRegion  @ applyRegionWindow:1560 shiftFxLane:1632
@@ -1018,7 +1028,7 @@
   @call regionAdjustPosition  @ adjustPosition:1800
   @call regionByUuid  @ eachFxRegionInRect:2373 noteFx:2455
   @call regionNoteOff  @ noteOff:1684
-  @call releaseTransientFrame  @ matchGridToCursor:493 setRowPerBeat:512 scaleScope:1988 3967
+  @call releaseTransientFrame  @ matchGridToCursor:493 setRowPerBeat:512 scaleScope:1988 cm:configChanged:3967
   @call relocate  @ edit.assign:109
   @call repinToRow  @ strikePitch:799 editEvent:890
   @call rewriteRegion  @ deleteFxRegionAtCursor:2427 setNoteFx:2514
@@ -1065,7 +1075,7 @@
   @call tv:localMode  @ deleteEvent:2655 localBlocked:3155
   @call tv:noteFx  @ setFxField:2523 addFxStage:2535 removeFxStage:2541 pruneEmptyRegion:2551 moveFxStage:2556 replaceFxStage:2567
   @call tv:paintRegionStream  @ groupBridge.paintStream:3986
-  @call tv:rebuild  @ releaseTransientFrame:454 hideExtraCol:3301,3340 unautomateParam:3491 3959,4126
+  @call tv:rebuild  @ releaseTransientFrame:454 hideExtraCol:3301,3340 unautomateParam:3491 tm:rebuild:3959 4126
   @call tv:rowToPPQ  @ mintRegionForSelection:2352,2353
   @call tv:scaleSelection  @ tracker.scaleHalf:3583,3584 tracker.scaleDouble:3590,3591
   @call tv:selectSlot  @ gotoTake:235 pickTake:242 newParkedTake:248 duplicateBoundUnpooled:258
@@ -1131,7 +1141,7 @@
   @field r anchor  @ colInInstance:2092,2093 planInstanceMoves:2119,2129,2130 forEachRowOp:2158 instanceAtCursor:3141,3142 movePreview:3194
   @field r anchor  @ movePreview:3197,3200,3208 tabOverride:3393 rebuild:3885,3890,3892,3893
   @field w anchor  @ planInstanceMoves:2129 3355 overrideTab:3396
-  @field w applyTakeProperties  @ 519
+  @field w applyTakeProperties  @ applyTakeProperties:519
   @field w assign  @ plain.assign:65 member.assign:71 parked.assign:79 edit.assign:104
   @field r at  @ hideExtraCol:3336 rebuild:3791
   @field w at  @ 1381,2713 rebuild:3659
@@ -1139,7 +1149,7 @@
   @field w away  @ armLearn:3432 pollLearn:3451
   @field r baseline  @ pollLearn:3457
   @field w baseline  @ armLearn:3432 pollLearn:3459
-  @field r beats  @ 521
+  @field r beats  @ applyTakeProperties:521
   @field r bipolar  @ entrySignAt:853 editEvent:1025 valueBounds:2193 rebuild:3724
   @field w bipolar  @ rebuild:3724
   @field r byFx  @ takeHoist:3366
@@ -1357,13 +1367,13 @@
   @field r midiChan  @ selectionAsRect:3043,3051 eachMemberEvent:3066 eventsInRect:3077 clearMoveGap:3111 cursorAnchor:3123 streamRefAt:3131 deletedCells:3174 addExtraCol:3262 hideExtraCol:3289 automateParam:3471,3477
   @field r midiChan  @ automateParam:3478 showDelay:3500,3503 tracker.playFromCursor:3614 rebuild:3851,3892,3893,3907,3908
   @field w midiChan  @ rebuild:3713
-  @field r mode  @ 524
+  @field r mode  @ applyTakeProperties:524
   @field r moveDelta  @ movePreview:3184
   @field r moveFxStage  @ 2587
   @field w moveFxStage  @ 2587
   @field w moveHook  @ 4010
   @field w mutedChannels  @ 3954
-  @field r name  @ 520,3972 pollLearn:3463
+  @field r name  @ applyTakeProperties:520 pollLearn:3463 ds:dataChanged:3972
   @field r newDelay  @ writePlans:385
   @field w newDelay  @ quantizeKeepRealisedScope:1907
   @field r newEndppq  @ writePlans:386

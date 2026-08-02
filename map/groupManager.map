@@ -98,6 +98,12 @@
       -- Local edit of an existing override, shared by localMode and the on-ov-in-global path;
       -- never touches group.events, so no sibling sees it -- see docs/groupManager.md § Override transitions.
 
+# Handlers registered
+  @handler tm:preflush()  @ 575-584
+  @handler tm:postflush()  @ 586-597
+  @handler tm:rebuild(takeChanged)  @ 601-614
+  @handler ds:dataChanged(change)  @ 617-619
+
 # Public API (gm:*)
   @api gm:markGroup(events, rect)  @ 369-388
       @contract  seeds a group from events+rect; anchor = region origin; nil,reason on collision.  @ 368
@@ -175,14 +181,14 @@
   @use call    groupsCore.resolve  @ absorbSiblingOverrides:301
   @use call    groupsCore.shiftStream  @ rectCells:333 regionConflict:357
   @use call    groupsCore.streamId  @ sameSlot:265
-  @use call    perf.start  @ 603
-  @use call    perf.stop  @ 613
+  @use call    perf.start  @ tm:rebuild:603
+  @use call    perf.stop  @ tm:rebuild:613
   @use call    tm:addEvent  @ newInstance:410 reproject:540 moveInstance:678
   @use call    tm:assignEvent  @ reproject:545 moveInstance:672
-  @use call    tm:byUuid  @ rehydrate:239 608
+  @use call    tm:byUuid  @ rehydrate:239 tm:rebuild:608
   @use call    tm:deleteEvent  @ reproject:550 deleteInstance:633 moveInstance:676,682
   @use call    tm:length  @ onTake:149
-  @use call    tm:requestRebuild  @ 583 deleteInstance:644 moveInstance:688 resizeGroup:853
+  @use call    tm:requestRebuild  @ tm:preflush:583 deleteInstance:644 moveInstance:688 resizeGroup:853
   @use call    util.assign  @ localAmend:569 assignEvent:774,791
   @use call    util.clone  @ rehydrate:242 markGroup:382 newInstance:411 reproject:542,548 moveInstance:679 assignEvent:773 resizeGroup:848
   @use require groups  @ 11
@@ -205,16 +211,16 @@
   @call gm:markGroup  @ mark:434 stamp:447 duplicateInto:456
   @call gm:newInstance  @ stamp:445,450 duplicateInto:460
   @call keyOf  @ toGroup:115 classifyCreate:316
-  @call link  @ rehydrate:242 markGroup:382 newInstance:411 reproject:541 591 moveInstance:679 resizeGroup:847
+  @call link  @ rehydrate:242 markGroup:382 newInstance:411 reproject:541 tm:postflush:591 moveInstance:679 resizeGroup:847
   @call localAmend  @ assignEvent:788
   @call nextKey  @ newInstance:402
   @call onTake  @ newInstance:409 reproject:539 moveInstance:669
-  @call persist  @ 596 deleteInstance:643 moveInstance:687 resizeGroup:852
+  @call persist  @ tm:postflush:596 deleteInstance:643 moveInstance:687 resizeGroup:852
   @call projOf  @ 60 rehydrate:237 markGroup:377 newInstance:405 reproject:532 deleteInstance:631 moveInstance:664 assignEvent:771 resizeGroup:838,847
   @call rectCells  @ regionConflict:346
   @call regionConflict  @ markGroup:370 newInstance:398 moveInstance:660 resizeGroup:820
-  @call rehydrate  @ 602,618
-  @call reproject  @ 578 resizeGroup:851
+  @call rehydrate  @ tm:rebuild:602 ds:dataChanged:618
+  @call reproject  @ tm:preflush:578 resizeGroup:851
   @call revivableVuid  @ addEvent:701
   @call sameSlot  @ revivableVuid:274 absorbSiblingOverrides:287
   @call spansOverlap  @ regionConflict:351
@@ -260,11 +266,11 @@
   @field w evType  @ 20 toGroup:113 toInstance:130 classifyCreate:316
   @field r events  @ revivableVuid:273 absorbSiblingOverrides:281 newInstance:394 deletedCells:502 localAmend:561 moveInstance:656 addEvent:713 deleteEvent:740 assignEvent:790 resizeGroup:829,836,846
   @field w events  @ markGroup:385
-  @field r evt  @ reproject:545,550 590,591,607 deleteInstance:633 moveInstance:670
+  @field r evt  @ reproject:545,550 tm:postflush:590,591 tm:rebuild:607 deleteInstance:633 moveInstance:670
   @field r evt  @ moveInstance:670,672,675,676,681,682 assignEvent:772,773
-  @field w evt  @ link:71 deletedCells:503 609
+  @field w evt  @ link:71 deletedCells:503 tm:rebuild:609
   @field r gained  @ resizeGroup:842
-  @field r groupEvt  @ currentOf:88 reproject:538,542,546,547,548 591
+  @field r groupEvt  @ currentOf:88 reproject:538,542,546,547,548 tm:postflush:591
   @field w groupEvt  @ link:71 currentOf:88 reproject:548
   @field r groupId  @ regionConflict:349 stateOf:470 deleteEvent:726 assignEvent:764,771,776,793
   @field w groupId  @ 63 link:73 eachInstance:484 moveInstance:660 resizeGroup:820
@@ -276,13 +282,13 @@
   @field r instances  @ rehydrate:235 absorbSiblingOverrides:283 classifyCreate:312 regionConflict:348 newInstance:402,404 stateOf:471 eachInstance:483 deletedCells:498 footprintAliases:516 reproject:530 deleteInstance:629
   @field r instances  @ deleteInstance:638,639 moveInstance:654 addEvent:699 deleteEvent:728 revertDelete:751 assignEvent:765 resizeGroup:803,818,825,837
   @field w instances  @ markGroup:386
-  @field r invalidate  @ 618
+  @field r invalidate  @ ds:dataChanged:618
   @field r key  @ toInstance:134,141 updToInstance:177,178
   @field w key  @ 20 toGroup:115 updToGroup:160,161 classifyCreate:316
   @field r lane  @ keyOf:96 updToGroup:160 moveInstance:670 assignEvent:770
   @field w lane  @ 20 toInstance:134 updToInstance:178
   @field r laneDelta  @ toInstance:134 rectCells:333 regionConflict:357
-  @field r name  @ 618
+  @field r name  @ ds:dataChanged:618
   @field r nextVuid  @ absorbSiblingOverrides:299 addEvent:705 resizeGroup:844
   @field w nextVuid  @ absorbSiblingOverrides:300 markGroup:385 addEvent:706 resizeGroup:845
   @field r op  @ reproject:535,544,549
@@ -299,7 +305,7 @@
   @field r streams  @ rectCells:328 regionConflict:353 resizeGroup:814
   @field w streams  @ resizeGroup:814
   @field r tm  @ 15
-  @field r uuid  @ unlink:80 currentOf:88 persist:215 markGroup:382 reproject:542 590,591,607 deleteInstance:634
+  @field r uuid  @ unlink:80 currentOf:88 persist:215 markGroup:382 reproject:542 tm:postflush:590,591 tm:rebuild:607 deleteInstance:634
   @field r uuid  @ deleteInstance:634 resizeGroup:848
   @field w uuid  @ 22,62 link:71 currentOf:88 assignEvent:773
   @field r uuids  @ 58 rehydrate:231

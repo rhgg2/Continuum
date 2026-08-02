@@ -53,13 +53,25 @@ unresolved `math.floor` is not a lost edge. The rows are candidates, not
 confirmed edges -- map_query kind='usedby' resolves the receiver
 speculatively and says so in the heading.
 
-Function literals held in a table field at file scope -- `render = function()`
-and the `registerAll{...}` command form -- get `# Functions held in tables`:
-`@held <table>.<field>(args)  @ <span>` rows. They are captured for attribution:
-a call site inside one otherwise renders as a bare line number, with no caller
-to name. The qualifier is the table holding the literal, because a bare field
-key collides with declarations elsewhere in the same file. The rows carry no
-doc comments and no annotations.
+A function literal at file scope is captured for attribution: a call site
+inside one otherwise renders as a bare line number, with no caller to name.
+Three named constructs hold one, told apart at the literal's own position.
+
+A table field -- `render = function()`, the `registerAll{...}` command form,
+a dotted assignment target -- gets `# Functions held in tables`:
+`@held <table>.<field>(args)  @ <span>`. The qualifier is the table holding
+the literal, because a bare field key collides with declarations elsewhere in
+the same file.
+
+A wrapper assignment -- `local revert = util.atomic('Revert swing', function(name)`
+-- earns a declaration row of its own, `@fn` bare or `@api` on the module's
+own table: the wrapper forwards its arguments, and the name is spelled bare at
+its use sites, which is what the bare-name @call and @bind passes read.
+
+A handler registration -- `tm:subscribe('rebuild', function(takeChanged)` --
+gets `# Handlers registered`: `@handler <recv>:<signal>(args)  @ <span>`, the
+spelling the `@use sub tm:rebuild` row already uses for the same object. Held
+and handler rows alike carry no doc comments and no annotations.
 """
 
 from __future__ import annotations
@@ -87,11 +99,30 @@ NESTED_FN_RE  = re.compile(r"^(\s*)function\s+([a-z]\w*)\s*\(([^)]*)\)")
 # spelling is a table-constructor value (`add = function(evt)`, the whole
 # registerAll{...} idiom), not a declaration.
 ASSIGN_FN_RE  = re.compile(r"^([a-z]\w*)\s*=\s*function\s*\(([^)]*)\)")
-# A function literal held in a table field: `render = function()` and the
+# A function literal, wherever on the line it sits. Which of the three named
+# constructs holds it is decided at its own position -- see collect_literals.
+LITERAL_RE    = re.compile(r"function\s*\(([^)]*)\)")
+# 1. A field key immediately before it: `render = function()` and the
 # registerAll{...} command form `deleteSel = { function() ... end, 'desc' }`.
-# Distinct from ASSIGN_FN_RE, which is the same spelling at column 0 filling
-# a forward-declared local -- a declaration, and captured as one.
-FIELD_LIT_RE  = re.compile(r"^\s*([A-Za-z_]\w*)\s*=\s*(?:\{\s*)?function\s*\(([^)]*)\)")
+# The lookbehind keeps `env.print = function` out -- that is a dotted
+# assignment target, which rule 2 reads whole.
+FIELD_KEY_RE  = re.compile(r"(?<![\w.:])([A-Za-z_]\w*)\s*=\s*(\{\s*)?$")
+# 2. An assignment target opening the statement. A string-literal index names a
+# field (`util._stubs['midiManager']`); a computed one names nothing static.
+ASSIGN_TGT_RE = re.compile(
+    r"""^\s*(?:local\s+)?([A-Za-z_]\w*(?:\.\w+)*)(?:\[\s*['"](\w+)['"]\s*\])?\s*=\s*""")
+# and the literal is the whole RHS or an argument of a call. A fallback --
+# `local moveHook = deps.moveHook or function() end` -- is neither: capturing
+# it would lose the "comes from deps" fact the @state row carries, and claim an
+# arity belonging to the fallback rather than to the injected function.
+CALL_OPEN_RE  = re.compile(r"^[A-Za-z_][\w.:]*\s*\(")
+DROP_SELF_RE  = re.compile(r"^self\s*(?:,\s*)?")
+# 3. A call opening the statement, the literal among its arguments. The signal
+# is the call's first argument when that is a whole string literal;
+# `tracker:register('advBy' .. i, ...)` is not one, and falls back to the method.
+HANDLER_RE     = re.compile(r"^\s*([A-Za-z_]\w*)\s*[:.]\s*([A-Za-z_]\w*)\s*\(")
+HANDLER_SIG_RE = re.compile(
+    r"""^\s*[A-Za-z_]\w*\s*[:.]\s*[A-Za-z_]\w*\s*\(\s*['"]([^'"]+)['"]\s*,""")
 # The name an open table constructor is known by: its assignment target or
 # field key, else the string that names the call it is an argument of
 # (`facade.publish('arrange', {` -- 'arrange' is the spelling call sites use,
@@ -177,7 +208,8 @@ class Block:
     line: int = 0
     end_line: int = 0       # span end (block-depth matched); functions only
     owner: str = ''         # for methods: the receiver
-    kind: str = 'fn'        # 'fn' | 'method' | 'dotfn' | 'held'
+    col: int = 0            # column the literal opens at, for attribution
+    kind: str = 'fn'        # 'fn' | 'method' | 'dotfn' | 'held' | 'handler'
     indent: int = 0
     doc: list[str] = field(default_factory=list)
     annotations: list[Annotation] = field(default_factory=list)
@@ -217,6 +249,7 @@ class MapFile:
     dotfns: list[Block] = field(default_factory=list)
     api: list[Block] = field(default_factory=list)   # namespace: NS.fn
     held: list[Block] = field(default_factory=list)  # literals in table fields
+    handlers: list[Block] = field(default_factory=list)  # literals handed to a registrar
     sections: list[tuple[int, int, str]] = field(default_factory=list)
     signals: list[str] = field(default_factory=list)
     signal_lines: dict[str, list[int]] = field(default_factory=dict)
@@ -446,13 +479,24 @@ def join_wrapped_heads(lines: list[str]) -> list[str]:
     return out
 
 
-def collect_held(lines: list[str], code_lines: list[str], fn_depth: list[int],
-                 declared: set[int]) -> list[Block]:
-    """Function literals held in a table field at file scope, named for the
-    field and the table holding it. Brace depth comes from the masked lines;
-    the qualifier is read off the raw ones, because strip_code blanks the
-    string that names a published facade. Masking preserves length, so the
-    offsets agree."""
+def collect_literals(lines: list[str], code_lines: list[str], fn_depth: list[int],
+                     declared: set[int], return_target: str
+                     ) -> tuple[list[Block], list[Block], list[Block]]:
+    """Function literals held at file scope by one of the three named
+    constructs -- a table field, a wrapper assignment, a handler registration.
+    Returns (held, handlers, named), `named` being the wrapper assignments that
+    earn a declaration row of their own.
+
+    Brace depth comes from the masked lines; the constructs are read off the raw
+    ones, because strip_code blanks the string that names a published facade or
+    a registered signal. Masking preserves length, so the offsets agree.
+
+    The tests interleave with the brace walk rather than preceding it, so each
+    fires with the qualifier stack current at the literal's own position. That
+    is what makes `facade.publish('sample', { setTrack = function(track) ... })`
+    come out `@held sample.setTrack` rather than a handler registered on facade:
+    the field key matches at the inner position, and the registration test never
+    sees the literal."""
     def qualifier_of(prefix: str) -> str:
         for rx in (QUAL_ASSIGN, QUAL_STRARG, QUAL_RECV):
             m = rx.search(prefix)
@@ -461,26 +505,72 @@ def collect_held(lines: list[str], code_lines: list[str], fn_depth: list[int],
         return ''
 
     held: list[Block] = []
-    quals: list[str] = []          # one entry per open `{`, '' when anonymous
+    handlers: list[Block] = []
+    named: list[Block] = []
+    quals: list[tuple[str, int, int]] = []   # (qualifier, line, col) per open `{`
+
+    def capture(i: int, j: int, args: str, statement: bool) -> None:
+        # `j` is the literal's own column, and rides on the Block: a site
+        # earlier on this line -- the wrapper call, the registrar call -- is
+        # made in the enclosing scope, not inside the literal it hands over.
+        prefix = lines[i][:j]
+        key = FIELD_KEY_RE.search(prefix)
+        if key:
+            # A `{` opening after the key belongs to the literal itself
+            # (`deleteSel = { function() ... end, 'desc' }`) and must not
+            # qualify the key with itself; the enclosing table does.
+            qual = next((q for q, li, lj in reversed(quals)
+                         if q and (li, lj) < (i, key.start(1))), '')
+            held.append(Block(name=f'{qual}.{key.group(1)}' if qual else key.group(1),
+                              args=args, line=i + 1, col=j, kind='held'))
+            return
+        if not statement:
+            return
+        tgt = ASSIGN_TGT_RE.match(prefix)
+        rhs = code_lines[i][tgt.end():j].strip() if tgt else ''
+        if tgt and (not rhs or (CALL_OPEN_RE.match(rhs)
+                                and rhs.count('(') > rhs.count(')'))):
+            target, index = tgt.group(1), tgt.group(2)
+            owner, _, member = target.rpartition('.')
+            if index:
+                held.append(Block(name=f'{target}.{index}', args=args,
+                                  line=i + 1, col=j, kind='held'))
+            elif not owner:
+                named.append(Block(name=target, args=args, line=i + 1, col=j, kind='fn'))
+            elif owner == return_target:
+                named.append(Block(name=member, args=DROP_SELF_RE.sub('', args),
+                                   line=i + 1, col=j, owner=owner, kind='method'))
+            else:
+                held.append(Block(name=target, args=args, line=i + 1, col=j, kind='held'))
+            return
+        reg = HANDLER_RE.match(prefix)
+        if reg and code_lines[i][:j].count('(') > code_lines[i][:j].count(')'):
+            sig = HANDLER_SIG_RE.match(prefix)
+            handlers.append(
+                Block(name=f"{reg.group(1)}:{sig.group(1) if sig else reg.group(2)}",
+                      args=args, line=i + 1, col=j, kind='handler'))
+
     for i, code in enumerate(code_lines):
-        m = FIELD_LIT_RE.match(code)
         # Depth 0 only: a captured declaration opens a function, so these spans
         # can neither contain nor sit inside one, and `innermost` cannot change
         # an answer it already gives. Literals nested inside a declaration stay
         # uncaptured, as nested `local function`s do.
-        if m and fn_depth[i] == 0 and (i + 1) not in declared:
-            # Read before this line's own braces are pushed: the `{` in
-            # `deleteSel = { function() ... end, 'desc' }` must not qualify
-            # `deleteSel` with itself.
-            qual = next((q for q in reversed(quals) if q), '')
-            held.append(Block(name=f'{qual}.{m.group(1)}' if qual else m.group(1),
-                              args=m.group(2).strip(), line=i + 1, kind='held'))
+        capturable = fn_depth[i] == 0 and (i + 1) not in declared
+        starts = {m.start(): m.group(1).strip() for m in LITERAL_RE.finditer(code)}
+        # Rules 2 and 3 read the whole line, so they answer for its first
+        # literal only: a second one is nested inside the first, not held by
+        # the construct the line opens with.
+        outermost = True
         for j, ch in enumerate(code):
+            if j in starts:
+                if capturable:
+                    capture(i, j, starts[j], outermost and not quals)
+                outermost = False
             if ch == '{':
-                quals.append(qualifier_of(lines[i][:j]))
+                quals.append((qualifier_of(lines[i][:j]), i, j))
             elif ch == '}' and quals:
                 quals.pop()
-    return held
+    return held, handlers, named
 
 
 def parse(path: Path) -> MapFile:
@@ -672,31 +762,49 @@ def parse(path: Path) -> MapFile:
     cm.imports.sort(key=lambda d: d.line)
     cm.constructs.sort(key=lambda d: d.line)
 
+    fn_blocks = cm.private_fns + cm.methods + cm.dotfns + cm.api
+    cm.held, cm.handlers, named = collect_literals(
+        lines, code_lines, fn_depth, {b.line for b in fn_blocks}, cm.return_target)
+    for blk in named:
+        (cm.private_fns if blk.kind == 'fn' else cm.methods).append(blk)
+    cm.private_fns.sort(key=lambda b: b.line)
+
     # Drop forward-decl shells like `local moveCol` that exist only to be filled
     # in below. A shared list (`local colFor, kindAt`) drops only when every name
-    # in it was captured; no partial list exists, so none is split.
+    # in it was captured; no partial list exists, so none is split. A wrapper
+    # assignment is the same object as the declaration row now carried on its
+    # line, with its init truncated mid-literal, so it drops on the line alone.
     fn_names = {b.name for b in cm.private_fns}
+    captured = {b.line for b in named}
     def is_shell(d: Decl) -> bool:
-        return not d.init and all(n.strip() in fn_names for n in d.name.split(','))
+        return (d.line in captured
+                or (not d.init and all(n.strip() in fn_names
+                                       for n in d.name.split(','))))
     cm.state = [d for d in cm.state if not is_shell(d)]
     cm.consts = [d for d in cm.consts if not is_shell(d)]
 
     fn_blocks = cm.private_fns + cm.methods + cm.dotfns + cm.api
-    cm.held = collect_held(lines, code_lines, fn_depth, {b.line for b in fn_blocks})
-    for blk in fn_blocks + cm.held:
+    for blk in fn_blocks + cm.held + cm.handlers:
         blk.end_line = span_end(deltas, level_after, blk.line - 1) + 1
 
-    # innermost captured function enclosing a 1-based line -- call attribution
-    spans = sorted((b.line, b.end_line, b.name) for b in fn_blocks + cm.held)
-    def innermost(line: int):
+    # innermost captured function enclosing a 1-based line -- call attribution.
+    # On a block's own first line, `col` splits the construct's head from the
+    # literal's body: `wm:subscribe('wiringChanged', function() wv:rebuild() end)`
+    # makes both the subscription and the call, and only one of them is inside
+    # the handler. A site with no column known is read as inside.
+    spans = sorted((b.line, b.end_line, b.name, b.col)
+                   for b in fn_blocks + cm.held + cm.handlers)
+    def innermost(line: int, col: int | None = None):
         best = None
-        for start, end, name in spans:
+        for start, end, name, start_col in spans:
             if start <= line <= end and (best is None or start > best[0]):
+                if line == start and col is not None and col < start_col:
+                    continue
                 best = (start, end, name)
         return best
 
-    def caller_at(line: int):
-        hit = innermost(line)
+    def caller_at(line: int, col: int | None = None):
+        hit = innermost(line, col)
         return hit[2] if hit else None
 
     # A `local` of a helper's name inside a function shadows it for the rest of
@@ -767,11 +875,11 @@ def extract_uses(cm: MapFile, lines: list[str], code_lines: list[str],
 
     # require edges fall out of imports/constructs — same data, no per-line scan.
     seen: set[tuple[str, str, int]] = set()
-    def add(kind: str, target: str, line: int) -> None:
+    def add(kind: str, target: str, line: int, col: int | None = None) -> None:
         key = (kind, target, line)
         if key not in seen:
             seen.add(key)
-            cm.uses.append((kind, target, line, caller_at(line)))
+            cm.uses.append((kind, target, line, caller_at(line, col)))
 
     for d in cm.imports:
         add('require', d.init, d.line)
@@ -783,18 +891,18 @@ def extract_uses(cm: MapFile, lines: list[str], code_lines: list[str],
     # so a private fn and a like-named method stay distinct rows.
     members = {b.name: decl_head(b) for b in cm.methods + cm.dotfns + cm.api}
     call_seen: set[tuple[str, int]] = set()
-    def add_call(callee: str, line: int) -> None:
+    def add_call(callee: str, line: int, col: int) -> None:
         key = (callee, line)
         if key not in call_seen:
             call_seen.add(key)
-            cm.calls.append((callee, caller_at(line), line))
+            cm.calls.append((callee, caller_at(line, col), line))
 
     drop_seen: set[tuple[str, int]] = set()
-    def add_drop(target: str, line: int) -> None:
+    def add_drop(target: str, line: int, col: int) -> None:
         key = (target, line)
         if key not in drop_seen:
             drop_seen.add(key)
-            cm.drops.append((target, caller_at(line), line))
+            cm.drops.append((target, caller_at(line, col), line))
 
     for i, raw in enumerate(lines):
         line = i + 1
@@ -809,22 +917,22 @@ def extract_uses(cm: MapFile, lines: list[str], code_lines: list[str],
                 # unresolved one was discarded either way.
                 if (recv not in GLOBAL_RECEIVERS
                         and not FN_DECL_PREFIX.fullmatch(code[:m.start()])):
-                    add_drop(f'{recv}{sep}{fn}', line)
+                    add_drop(f'{recv}{sep}{fn}', line, m.start())
                 continue
             if fn in ('subscribe', 'forward', 'unsubscribe'):
                 continue  # sub/forward are their own edge kinds
             if mod == cm.module and (recv == 'self' or recv == cm.return_target):
                 callee = members.get(fn)
                 if callee and not FN_DECL_PREFIX.fullmatch(code[:m.start()]):
-                    add_call(callee, line)
+                    add_call(callee, line, m.start())
                 continue  # intra-module call, not an outbound edge
-            add('call', f'{recv}{sep}{fn}', line)
+            add('call', f'{recv}{sep}{fn}', line, m.start())
 
         for m in SUB_RE.finditer(code):
             recv, sig = m.group(1), m.group(2)
             mod = aliases.get(recv)
             if mod:
-                add('sub', f'{recv}:{sig}', line)
+                add('sub', f'{recv}:{sig}', line, m.start())
 
         for m in FORWARD_RE.finditer(code):
             # forward(signal, source): outbound edge is to the SOURCE's signal —
@@ -833,7 +941,7 @@ def extract_uses(cm: MapFile, lines: list[str], code_lines: list[str],
             sig, source = m.group(1), m.group(2)
             mod = aliases.get(source)
             if mod:
-                add('forward', f'{source}:{sig}', line)
+                add('forward', f'{source}:{sig}', line, m.start())
 
     # A module-private helper is called with no receiver at all, so the
     # qualified pass above cannot see it. Masked code, not the `--`-stripped
@@ -848,7 +956,7 @@ def extract_uses(cm: MapFile, lines: list[str], code_lines: list[str],
             for m in rx.finditer(code):
                 if (not FN_DECL_PREFIX.fullmatch(code[:m.start()])
                         and not shadowed(name, i + 1)):
-                    add_call(name, i + 1)
+                    add_call(name, i + 1, m.start())
 
     # A helper reached by reference rather than called: bound into a command or
     # export table, or handed over as a callback. 81 helpers have no call site
@@ -869,7 +977,7 @@ def extract_uses(cm: MapFile, lines: list[str], code_lines: list[str],
                 key = (name, i + 1)
                 if key not in bind_seen:
                     bind_seen.add(key)
-                    cm.binds.append((name, caller_at(i + 1), i + 1))
+                    cm.binds.append((name, caller_at(i + 1, m.start()), i + 1))
 
     cm.uses.sort(key=lambda u: (u[0], u[1], u[2]))
     cm.calls.sort(key=lambda c: (c[0], c[2]))
@@ -1044,6 +1152,10 @@ def emit_anns(out: list[str], anns: list[Annotation], indent: str) -> None:
         out.append(f"{indent}{fmt_ann(a)}")
 
 
+def fmt_span(blk: Block) -> str:
+    return f"{blk.line}-{blk.end_line}" if blk.end_line > blk.line else f"{blk.line}"
+
+
 def emit_items(out: list[str], sections: list, items: list,
                label_prefix: str) -> None:
     """Render `items` (already line-sorted) interleaving section banners
@@ -1069,8 +1181,7 @@ def emit_items(out: list[str], sections: list, items: list,
             if sec[2] not in skip:
                 out.append(f"  -- {sec[2]}")
         head = f"  {label_prefix}{decl_head(m)}"
-        loc = f"{m.line}-{m.end_line}" if m.end_line > m.line else f"{m.line}"
-        out.append(f"{head}{fmt_args(m.args)}  @ {loc}")
+        out.append(f"{head}{fmt_args(m.args)}  @ {fmt_span(m)}")
         for d in m.doc:
             out.append(f"      -- {d}")
         emit_anns(out, m.annotations, '      ')
@@ -1168,9 +1279,14 @@ def emit(cm: MapFile) -> str:
         # `# Public API` ran.
         add("# Functions held in tables")
         for blk in cm.held:
-            loc = (f"{blk.line}-{blk.end_line}" if blk.end_line > blk.line
-                   else f"{blk.line}")
-            add(f"  @held {blk.name}{fmt_args(blk.args)}  @ {loc}")
+            add(f"  @held {blk.name}{fmt_args(blk.args)}  @ {fmt_span(blk)}")
+        add('')
+
+    if cm.handlers:
+        # A plain loop for the same reason as held, above.
+        add("# Handlers registered")
+        for blk in cm.handlers:
+            add(f"  @handler {blk.name}{fmt_args(blk.args)}  @ {fmt_span(blk)}")
         add('')
 
     if cm.api:

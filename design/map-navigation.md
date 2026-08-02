@@ -886,6 +886,47 @@ what this phase's own evidence check forbids, so it is separate work.
 to expect first is these same 45 records, parked in `out of scope` until
 then.
 
+**A handler is named for its receiver and its signal** (2026-08-02). The
+other two constructs holding a file-scope literal are captured now. A
+wrapper assignment — twelve of them, `local revert = util.atomic('Revert
+swing', function(name)` and kin — earns a declaration row of its own, `@fn`
+when the target is a bare local and `@api` when it is the module's own
+table, which is how `tv:applyTakeProperties` acquired the declaration it has
+never had. A handler registration — thirty-five — gets a new kind,
+`@handler tm:rebuild(takeChanged)`, in its own section. Not `@held
+tm.rebuild`: tm holds no `rebuild` field, it was handed the literal, and
+`tm:rebuild` is the spelling the `@use sub tm:rebuild` row already uses for
+the same object. Where the registration passes no string literal —
+`ps:watch(watched, …)`, `cmgr:doAfter({…}, …)` — the name falls back to
+`<recv>:<method>`, which keeps the rule total and reads as "the handler
+passed to `ps:watch`". The wrapper names enter `heads`, the map's callee
+vocabulary, because they are spelled bare at their use sites and the
+bare-name `@call` and `@bind` passes read exactly that — eleven edges the
+corpus was missing, and `luac-only, in scope` stayed 0, which is the check
+that earns the admission. Handler names stay out, for the reason § *A held
+row buys attribution, not an edge* gives. Unattributed `@call` sites fell
+125 → 72: 69 in the main chunk, one computed key at `arrangeView:658`, and
+two below.
+
+**A construct's head is file scope, and only a column says so**
+(2026-08-02). `wm:subscribe('wiringChanged', function() wv:rebuild() end)`
+makes two calls on one line: the subscription, made in the enclosing scope,
+and `wv:rebuild`, made inside the handler. Attribution was line-granular, so
+capturing the handler claimed both — and `map_diff` caught it as this
+phase's first map-only edges, the two where the registrar is the module
+itself (`modalHost:registerKind` at 109 and 118) and the false caller
+therefore surfaced as an intra-file `@call` rather than a `@use`. No
+line-granular rule separates them, so a block now carries the column its
+literal opens at, and a site on a block's first line belongs to it only from
+that column on. The defect was already in the corpus under the held rule —
+`facade.publish('sample', { setTrack = … })` attributed its own publish call
+to `sample.setTrack` — and this closes that too. The `@field` index is left
+with it: a write is still attributed by line, so `@field w
+applyTakeProperties  @ applyTakeProperties:519` names a declaration as its
+own writer. That reading is pre-existing and general — every `function
+recv.name(…)` head already reads that way — so it is a separate change, not
+a rider on this one.
+
 ## Open questions
 
 - Are early-return guards worth surfacing? "This function does nothing

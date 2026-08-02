@@ -95,6 +95,9 @@
   @held arrange.toggleFollowPlay()  @ 838
   @held arrange.arrangeSetBeatPerRow()  @ 839-848
 
+# Handlers registered
+  @handler modalHost:createSlot(s, close)  @ 664-681
+
 # Public API (ar:*)
   @api ar:toolbarSegments()  @ 764
   @api ar:renderBody(_, w, h, dispatch)  @ 769-807
@@ -108,7 +111,7 @@
 # Uses (outbound edges)
   @use call    ImGui.BeginChild  @ renderBody:788
   @use call    ImGui.BeginTable  @ renderPaletteList:708
-  @use call    ImGui.Button  @ 673,677 renderPaletteActions:688,694
+  @use call    ImGui.Button  @ modalHost:createSlot:673,677 renderPaletteActions:688,694
   @use call    ImGui.Dummy  @ renderGrid:603
   @use call    ImGui.EndChild  @ renderBody:796
   @use call    ImGui.EndTable  @ renderPaletteList:732
@@ -118,27 +121,27 @@
   @use call    ImGui.GetMousePos  @ handleGridMouse:224
   @use call    ImGui.GetMouseWheel  @ handleGridMouse:238
   @use call    ImGui.GetTextLineHeightWithSpacing  @ gridGeom:189
-  @use call    ImGui.InputText  @ 668,671
+  @use call    ImGui.InputText  @ modalHost:createSlot:668,671
   @use call    ImGui.IsAnyItemActive  @ focusState:824
-  @use call    ImGui.IsKeyPressed  @ 674,675,678
+  @use call    ImGui.IsKeyPressed  @ modalHost:createSlot:674,675,678
   @use call    ImGui.IsMouseClicked  @ handleGridMouse:232,249
   @use call    ImGui.IsMouseDoubleClicked  @ handleGridMouse:270
   @use call    ImGui.IsMouseDragging  @ handleGridMouse:280
   @use call    ImGui.IsMouseReleased  @ handleGridMouse:292
-  @use call    ImGui.IsWindowAppearing  @ 665
+  @use call    ImGui.IsWindowAppearing  @ modalHost:createSlot:665
   @use call    ImGui.IsWindowHovered  @ handleGridMouse:232,239,249
   @use call    ImGui.PopFont  @ renderPaletteList:723
   @use call    ImGui.PopStyleColor  @ popBodyStyles:69
   @use call    ImGui.PushFont  @ renderPaletteList:721
   @use call    ImGui.PushStyleColor  @ pushBodyStyles:62,63,64,65,66,67
-  @use call    ImGui.SameLine  @ 676 renderPaletteActions:692 renderPaletteList:720
+  @use call    ImGui.SameLine  @ modalHost:createSlot:676 renderPaletteActions:692 renderPaletteList:720
   @use call    ImGui.Selectable  @ renderPaletteList:716
   @use call    ImGui.Separator  @ renderPaletteBody:739
-  @use call    ImGui.SetKeyboardFocusHere  @ 667
+  @use call    ImGui.SetKeyboardFocusHere  @ modalHost:createSlot:667
   @use call    ImGui.TableNextRow  @ renderPaletteList:714
   @use call    ImGui.TableSetColumnIndex  @ renderPaletteList:715,725,728
   @use call    ImGui.TableSetupColumn  @ renderPaletteList:709,710,711
-  @use call    ImGui.Text  @ 666,670 renderPaletteList:722,726,729 renderBody:777 renderStatusBar:811
+  @use call    ImGui.Text  @ modalHost:createSlot:666,670 renderPaletteList:722,726,729 renderBody:777 renderStatusBar:811
   @use call    ImGui.TextDisabled  @ renderPaletteList:704
   @use call    av:addToSelection  @ handleGridMouse:298
   @use call    av:beatPerRow  @ handleGridMouse:226 toolbarSegments.render:757 renderStatusBar:813 arrange.arrangeSetBeatPerRow:843
@@ -269,9 +272,9 @@
   @field r Col_TableRowBgAlt  @ pushBodyStyles:65
   @field r Col_Text  @ pushBodyStyles:62
   @field r ImGui_GetBuiltinPath  @ 9
-  @field r Key_Enter  @ 674
-  @field r Key_Escape  @ 678
-  @field r Key_KeypadEnter  @ 675
+  @field r Key_Enter  @ modalHost:createSlot:674
+  @field r Key_Escape  @ modalHost:createSlot:678
+  @field r Key_KeypadEnter  @ modalHost:createSlot:675
   @field r Mod_Ctrl  @ handleGridMouse:259
   @field r Mod_Shift  @ handleGridMouse:228,258
   @field r SelectableFlags_SpanAllColumns  @ renderPaletteList:717
@@ -289,8 +292,8 @@
   @field r av  @ 18
   @field r availH  @ renderGrid:340,495
   @field w availH  @ gridGeom:203
-  @field r beatsBuf  @ 671,679
-  @field w beatsBuf  @ openCreateModal:653 672
+  @field r beatsBuf  @ modalHost:createSlot:671,679
+  @field w beatsBuf  @ openCreateModal:653 modalHost:createSlot:672
   @field r bodyBot  @ handleGridMouse:229
   @field w bodyBot  @ gridGeom:205
   @field r bodyTop  @ handleGridMouse:229
@@ -364,8 +367,8 @@
   @field r name  @ renderGrid:443,445,544,547,590,591 paletteTrackLabel:620 openDeleteModal:636
   @field r name  @ renderPaletteActions:689 renderPaletteList:729
   @field w name  @ renderGrid:445
-  @field r nameBuf  @ 668,679
-  @field w nameBuf  @ openCreateModal:652 669
+  @field r nameBuf  @ modalHost:createSlot:668,679
+  @field w nameBuf  @ openCreateModal:652 modalHost:createSlot:669
   @field r naturalLenQN  @ renderGrid:450
   @field r notes  @ renderGrid:406
   @field r offE  @ renderGrid:412

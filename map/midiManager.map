@@ -229,6 +229,9 @@
       -- Reposition the take's trailing end marker (CC 0x7B all-notes-off, or FF 2F meta) to targetPpq.
       -- Shrink assumes events past targetPpq are already deleted upstream (tm:setLength does this).
 
+# Handlers registered
+  @handler eventMeta:poolsRewound(payload)  @ 925-930
+
 # Public API (mm:*)
   @api mm:load(newTake)  @ 593-916
   @api mm:reload()  @ 918-921
@@ -363,7 +366,7 @@
   @call markWireAdded  @ add:1312
   @call metaFieldsOf  @ saveMetadatum:258
   @call mm:load  @ reload:920 1502
-  @call mm:reload  @ 928 setLength:1459
+  @call mm:reload  @ eventMeta:poolsRewound:928 setLength:1459
   @call mm:resolution  @ length:1406 setLength:1454
   @call noteCollision  @ assignNote:1137 addNote:1177
   @call noteSidecarDecode  @ load:643
@@ -442,7 +445,7 @@
   @field w events  @ load:900,902,904,906,908 leaveNest:1044
   @field r eventtype  @ load:642,646
   @field w eventtype  @ noteSidecarEntry:431 ccSidecarEntry:445
-  @field r guids  @ 926
+  @field r guids  @ eventMeta:poolsRewound:926
   @field r keepUuid  @ addNote:1159
   @field w keepUuid  @ addNote:1160,1164
   @field r key  @ cachedSeatKey:386
