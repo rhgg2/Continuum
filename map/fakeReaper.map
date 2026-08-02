@@ -6,6 +6,27 @@
 # Public API (M.*)
   @api M.new()  @ 7-1395
 
+# Unresolved receivers
+  @drop B64A:byte  @ new:310
+  @drop B64A:sub  @ new:319,325
+  @drop bytes:byte  @ new:420,421,422
+  @drop chunk:gmatch  @ new:382
+  @drop chunk:match  @ new:820
+  @drop ident:sub  @ new:243
+  @drop k:match  @ new:129
+  @drop k:sub  @ new:128
+  @drop ln:match  @ new:387,388
+  @drop msg:byte  @ new:1060,1063
+  @drop msg:match  @ new:1173
+  @drop msg:sub  @ new:1080,1081,1083,1086
+  @drop parm:match  @ new:230,231
+  @drop r.MIDI_GetAllEvts  @ new:1124
+  @drop r.MIDI_GetPPQPosFromProjQN  @ new:1104
+  @drop r.genGuid  @ new:761,1276
+  @drop s:byte  @ new:314,333
+  @drop s:match  @ new:398
+  @drop s:sub  @ new:396
+
 # REAPER API surface
   @reaper defer
 

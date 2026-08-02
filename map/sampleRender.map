@@ -193,6 +193,12 @@
 # Bindings (by name)
   @bind goUp  @ 591
 
+# Unresolved receivers
+  @drop buf.clear  @ peakFor:116
+  @drop p.segment  @ renderBody:523,524
+  @drop sampler:bindAll  @ 621
+  @drop sampler:registerAll  @ 590
+
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB

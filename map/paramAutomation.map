@@ -123,6 +123,9 @@
   @call writeBanks  @ applyTrack:213,220
   @call writeMirror  @ applyTrack:215,229
 
+# Unresolved receivers
+  @drop wiring.paramTargets  @ targets:364
+
 # REAPER API surface
   @reaper GetMasterTrack
   @reaper GetTrackGUID

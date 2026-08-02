@@ -193,6 +193,20 @@
   @bind audioValueCompare  @ allocateOnce:1373
   @bind midiValueCompare  @ allocateOnce:1540
 
+# Unresolved receivers
+  @drop base:adjacency  @ deriveMasterSplit:943
+  @drop base:classOf  @ deriveMasterSplit:1038
+  @drop base:masterTrackClass  @ deriveMasterSplit:1032
+  @drop base:trackKeyOf  @ deriveMasterSplit:997
+  @drop ctx:adjacency  @ buildCtx:242
+  @drop ctx:classOf  @ buildCtx:351
+  @drop ctx:conduit  @ buildConns:598
+  @drop ctx:gainHost  @ nativeGains:586 buildConns:597
+  @drop ctx:trackKeyOf  @ buildConns:600
+  @drop ctx:trackMembers  @ targetTracks:926
+  @drop fxIdent:sub  @ allocateOnce:1578,1590
+  @drop guid:sub  @ buildCtx:286
+
 # Fields (r read / w write incl. constructor keys)
   @field r N  @ allocateOnce:1435,1503 splitOverCap:1837,1838,1861
   @field w N  @ allocateOnce:1375,1376

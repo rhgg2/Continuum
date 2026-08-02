@@ -275,6 +275,23 @@
   @call writeTrackFields  @ addTrack:855 assignTrack:864
   @call writeTrackMeta  @ addTrack:857 assignTrack:866
 
+# Unresolved receivers
+  @drop b64alpha:sub  @ 172 b64encode:202,208
+  @drop body:gmatch  @ splitChunkLines:218
+  @drop bytes:byte  @ mutateByteInBase64Line:257
+  @drop bytes:sub  @ mutateByteInBase64Line:260,262
+  @drop content:match  @ fxBlockStream:271 patchStreamByte:284
+  @drop fxType:find  @ isRoutingFx:362
+  @drop ident:sub  @ fxIdentAt:354
+  @drop left:match  @ portNames:102
+  @drop line:match  @ mutateByteInBase64Line:253
+  @drop ln:match  @ findFxBlock:231
+  @drop right:match  @ portNames:102
+  @drop s:byte  @ b64decode:177 b64encode:197
+  @drop s:sub  @ splitChunkLines:215
+  @drop stream:byte  @ readFXMidiRouting:326,327,328
+  @drop stripped:sub  @ findFxBlock:239
+
 # REAPER API surface
   @reaper GetMasterTrack
   @reaper GetTrackGUID

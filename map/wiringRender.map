@@ -554,6 +554,32 @@
   @bind openFxPicker  @ 2682
   @bind renderPaletteBody  @ renderBody:2550
 
+# Unresolved receivers
+  @drop arrange.dropSlot  @ commitFx:2629
+  @drop arrange.hasPlacedTakes  @ commitFx:2627
+  @drop arrange.trackIdxForGuid  @ commitFx:2628
+  @drop buf:lower  @ renderFxPicker:2646
+  @drop cfg.eligible  @ engagedHover:633,647
+  @drop cfg.onConsume  @ engagedHover:613
+  @drop cfg.refine  @ engagedHover:617
+  @drop name:lower  @ renderFxPicker:2649
+  @drop p.border  @ renderCanvas:2422
+  @drop p.fill  @ drawNode:257 drawKeyboardIcon:289 drawSlot:310 drawBadge:358 drawList:751,755 drawPortRowBg:769 drawPortRow:782 drawWireEndLabel:960 drawFader:1194,1202 drawSourceTag:1252
+  @drop p.fill  @ renderCanvas:1709,2421
+  @drop p.fromScreen  @ renderCanvas:1707,1708,1712
+  @drop p.line  @ drawWiresPass:1097 drawWireEndHighlight:1131 drawFader:1198 drawDraftWire:1225 drawBusPass:1510,1512 drawBusBar:1530 renderCanvas:1945,1949
+  @drop p.measure  @ drawBadge:359 drawWireEndLabel:917 drawTagAt:1230 sourceTagLayout:1238,1240 drawSourceTag:1255
+  @drop p.stroke  @ strokeNodeRect:166 drawKeyboardIcon:284 drawList:752 drawPortRow:791 drawFader:1195,1203 drawBusBar:1533
+  @drop p.text  @ drawNode:270 drawBadge:360 drawList:758 drawWireEndLabel:961 drawFader:1206 drawTagAt:1231 drawSourceTag:1256
+  @drop p.toScreen  @ drawSlot:316 drawWireEndLabel:965,966 renderCanvas:2002,2322,2350
+  @drop p.tri  @ drawHandle:299,301 drawWireArrow:906
+  @drop s:sub  @ wrapLabel:208
+  @drop text:gmatch  @ atomise:191
+  @drop wiring:bindAll  @ 2685
+  @drop wiring:registerAll  @ 2681
+  @drop word:byte  @ camelSplit:176
+  @drop word:sub  @ camelSplit:178,182
+
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB

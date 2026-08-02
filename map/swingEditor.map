@@ -277,6 +277,16 @@
   @bind resetToSnapshot  @ buildDescriptor:596
   @bind stepRpb  @ drawToolsRow:666
 
+# Unresolved receivers
+  @drop geom.classify  @ drawSwingStrip:143,160
+  @drop p.border  @ drawSwingStrip:166
+  @drop p.circle  @ drawSwingStrip:163
+  @drop p.fill  @ drawSwingStrip:145,147
+  @drop p.popClip  @ drawBandInto:233
+  @drop p.pushClip  @ drawBandInto:198
+  @drop p.segment  @ drawSwingStrip:149
+  @drop p.text  @ drawBandInto:212
+
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB

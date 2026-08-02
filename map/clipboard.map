@@ -90,6 +90,11 @@
   @call save  @ copy:473 registerCommands:479
   @call trimTop  @ trimTop:475
 
+# Unresolved receivers
+  @drop ctx:ppqPerRow  @ collect:61 pasteSingle:235 pasteMulti:368
+  @drop ctx:rowToPPQ  @ collect:107,150 refusePaste:175 pasteSingle:232,233,241 pasteMulti:380,381,387
+  @drop scope:registerAll  @ registerCommands:478
+
 # REAPER API surface
   @reaper SetExtState
   @reaper GetExtState

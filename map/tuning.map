@@ -122,6 +122,15 @@
   @call tuning.stepToMidi  @ snap:432 transposeStep:438
   @call tuning.stepToParts  @ stepToText:460
 
+# Unresolved receivers
+  @drop equave:match  @ genCPS:276,277
+  @drop line:match  @ parseScalaPitches:132 parseScalaFile:143
+  @drop nm:sub  @ computeOctaveStep:19
+  @drop s:sub  @ parseScalaPitches:133
+  @drop spec:gmatch  @ edoDegrees:184 parseChord:239
+  @drop token:find  @ scalaPitch:62
+  @drop token:match  @ scalaPitch:50,52,53,63,65 asRatio:306,308
+
 # Fields (r read / w write incl. constructor keys)
   @field w cellWidth  @ derive:82
   @field r cents  @ computeCellWidth:38 derive:79 stepSpectrum:338,342 genRank2:363 midiToStep:397 stepToMidi:414 stepsBetween:445

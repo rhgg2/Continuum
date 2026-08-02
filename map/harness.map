@@ -71,6 +71,14 @@
   @call buildMM  @ bareMM:91 mk:102
   @call seedThrough  @ buildMM:77 mk:120
 
+# Unresolved receivers
+  @drop mm:add  @ seedThrough:48,50
+  @drop mm:ccs  @ buildMM:81
+  @drop mm:modify  @ seedThrough:39
+  @drop mm:notes  @ buildMM:80
+  @drop mm:seed  @ bareMM:92
+  @drop path:find  @ 18,19
+
 # REAPER API surface
   @reaper GetMediaItemTake_Track
 

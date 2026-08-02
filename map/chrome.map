@@ -227,6 +227,25 @@
   @call scopedKey  @ colour:54
   @call setCollapsed  @ drawSegment:318 makeToolbar:363
 
+# Unresolved receivers
+  @drop d.onCancel  @ drawPicker:612
+  @drop d.onCreate  @ drawPicker:608
+  @drop d.onDelete  @ drawPicker:631
+  @drop d.onPick  @ drawPicker:608
+  @drop filter:lower  @ drawPicker:567
+  @drop label:lower  @ drawPicker:570,581
+  @drop name:match  @ scopedKey:47
+  @drop opts.onStep  @ numberStepper:221
+  @drop p.line  @ deleteRowButton:478,479
+  @drop p.measure  @ paletteHeader:662 paletteTabsHeader:683
+  @drop p.segment  @ paletteHeader:664 paletteTabsHeader:686,690 palettePane:701
+  @drop p.text  @ deleteRowButton:483 paletteHeader:663 paletteTabsHeader:685
+  @drop seg.render  @ drawSegment:321,324
+  @drop seg.visible  @ makeToolbar:337,352,383
+  @drop spec.draw  @ palettePane:710
+  @drop text:byte  @ fitLabel:725
+  @drop text:sub  @ fitLabel:721,726
+
 # Fields (r read / w write incl. constructor keys)
   @field r ChildFlags_None  @ palettePane:705
   @field r Col_Border  @ pushChromeStyles:91

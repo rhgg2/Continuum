@@ -535,7 +535,8 @@ indented inside `newScope` (`commandManager.lua:96`), where an indented
 times and `trackerRender` twice, all genuinely editCursor, all bound by
 `local ec = tv:ec()` inside a function. Only the dangerous rule above
 reaches them, so they stay dropped — true edges the corpus does not
-carry, and phase 3's `luac` oracle should report every one.
+carry. § Mechanism: park the rewrite records what phase 3's oracle could
+and could not say about them.
 
 ### Vocabulary — unsettled
 
@@ -545,10 +546,64 @@ was on nobody's list before the corpus produced it. Candidate shapes:
 synonym/alias support, fuzzy matching, or returning near-misses instead of
 nothing. It wants its own look before anything is built.
 
-Relatedly and more cheaply: 380 empty results, and `map_query` cannot
-currently distinguish *no such thing* from *your regex was wrong* from
-*not indexed*. "0 matches; `module=` matched 0 of 66 modules; nearest:
-`trackerView`" would stop a wasted hop, or a false conclusion.
+Relatedly and more cheaply: `map_query` comes back empty on 207 of its
+1,135 calls, and cannot distinguish *no such thing* from *not indexed*.
+The notes below measure that population. The three-way split this
+paragraph first proposed, and the worked example it was built on, did not
+survive the measurement.
+
+**The 380 was navigation-wide, and `map_query`'s own rate is 207 of
+1,135** (2026-08-02, measured). § What the corpus says counts 380 empty
+*navigation* calls, and `NAV` spans reads, searches and shell greps
+besides map calls. The survey's empty detector compounds it: it matches
+`no matches found`, where the server emits `(no matches for …)`, so
+`map_query`'s own empties were largely invisible to the instrument that
+produced the figure. Re-measured over the transcript archive with a
+predicate matching what the server actually returns, the rate is 207 of
+1,135.
+
+**The three-way split names a population of zero** (2026-08-02,
+measured). Of the 207, 147 carry filters that are every one of them
+valid, 57 trip the glob-habit note the server already appends, 3 name a
+kind outside the vocabulary, one is invalid regex predating the guard —
+and not one passes a `module=` matching no map. The worked example that
+opened this section, `module=` matched 0 of 66 modules, therefore
+describes nothing that happened. What remains is the single distinction
+an index cannot draw about itself: whether a thing is absent from the
+corpus or absent from the code.
+
+**A caveat is worth having only where it is usually silent** (2026-08-02,
+measured). `usedby` accounts for 48 of the empties, and its early return
+asserts that both indexes were searched while dropping the
+incomplete-recall note every answer with content carries. The tempting
+repair is to move that note ahead of the return. The tempting refinement
+is to fire it when the queried symbol is declared somewhere, which fires
+on 40 of the 48 and is a blanket note wearing a condition. The trigger
+that separates is whether the source holds call sites the corpus does
+not: 10 of the 34 distinct symbols, against 24 for which *no callers* is
+true and also complete. So the drops are tagged in the corpus rather than
+disclaimed at query time, and the caveat's silence becomes readable.
+
+**The drop is tagged where it is made and judged where the corpus is
+visible** (2026-08-02, landed). Two filters were measured for what a
+`@drop` row should hold. The callee-based one keeps only a drop whose
+callee name heads a declaration somewhere in the corpus, and it is much
+the smaller — 141 rows against 373. It was rejected because it makes one
+file's map depend on another file's declaration list: 86 of its 141 rows
+hang on a name declared in exactly one other module, while the post-edit
+hook regenerates by mtime, so an edit that moves or renames that
+declaration leaves the dependent map wrong and silent until some
+unrelated commit fails the full check. It would also mean running the
+extractor over one file no longer produces what the corpus regen
+produces. The filter that landed is receiver-based and file-local: every
+unresolved receiver drops a row, bar the Lua stdlib tables and
+`reaper`/`gfx`. The corpus-wide judgement moves to query time, where the
+corpus-wide view already lives — and there the receiver *is* resolved
+speculatively through the self-name registry, the guess § A wrong alias
+does not drop, it lies refuses to make in the extractor. The asymmetry is
+the heading: in the corpus a wrong alias is a confident wrong answer
+nothing downstream can detect, while under a heading that says the
+receiver is unproven it is a candidate that did not pan out.
 
 ## Mechanism: park the rewrite
 
@@ -742,6 +797,28 @@ and not on anything `map_diff` does, and it is the one direction the
 control cannot test. Measured instead of assumed: exactly one local-bound
 call in the corpus shares a name with a file-scope declaration, and it is
 `snapshot`.
+
+**The `ec:` prediction was unsatisfiable, not merely unmet** (2026-08-02).
+§ Intra-file call edges left the 26 `ec:` sites for phase 3's oracle to
+report, and phase 3 did not report them. The tempting reading is that the
+diff was scoped too narrowly, and that a wider one would deliver them. It
+would not: `luac` certifies that a call happened and how it was spelled,
+never what module a receiver denotes, and the bytecode for `ec:row(…)` is
+a `SELF` on an upvalue that says nothing about editCursor. `@use` rows are
+not diffable this way at all, so the oracle is silent on the entire
+cross-module surface by construction.
+
+**One rule produces both alias findings, and no safe repair follows**
+(2026-08-02). The 26 `ec:` sites and the single `groups.lua:38` site read
+as a gap and a defect, but the map spells a callee by its declaration
+head, so a name bound to an alias carries no edge — the same rule at
+cross-module and at intra-file scale. The repair that suggests itself is
+to widen the alias table until it reaches `local ec = tv:ec()`, and
+§ Intra-file call edges has already priced it: that rule also matches
+`local ps = painter.new(…)` and enters 43 painter calls as edges to
+pextStore. A dropped site is a known gap; a mis-resolved one is a
+confident wrong answer. So the sites stay out, named here so that a later
+reader finds a decision rather than an oversight.
 
 ## Open questions
 

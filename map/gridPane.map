@@ -247,6 +247,45 @@
   @bind renderNote  @ 173
   @bind renderPB  @ 174
 
+# Unresolved receivers
+  @drop draw:box  @ drawLocalScrim:279,280,281,282,283 drawTracker:579,629,638,640,792,801
+  @drop draw:hLine  @ drawTracker:567
+  @drop draw:smallGlyph  @ drawTracker:742,745
+  @drop draw:text  @ drawTracker:525,585,738,805
+  @drop draw:textCentred  @ drawTracker:542,555
+  @drop draw:textCentredSmall  @ drawTracker:558,561
+  @drop draw:textVertical  @ drawTracker:552
+  @drop ec:extendTo  @ handleMouse:1031,1065
+  @drop ec:hasSelection  @ drawTracker:782
+  @drop ec:isInRegionMode  @ handleMouse:969,986 handleKeys:1136,1142
+  @drop ec:isSticky  @ handleKeys:1137,1143
+  @drop ec:pos  @ drawTracker:509 handleMouse:959 handleKeys:1121
+  @drop ec:region  @ drawTracker:783
+  @drop ec:regionCursor  @ handleMouse:968
+  @drop ec:regionExit  @ handleKeys:1136,1142
+  @drop ec:selClear  @ handleMouse:1033 handleKeys:1137,1143
+  @drop ec:selectChannel  @ handleMouse:1022
+  @drop ec:selectColumn  @ handleMouse:1023
+  @drop ec:selectionStopSpan  @ drawTracker:788,789
+  @drop ec:setPos  @ handleMouse:1034
+  @drop gridPainter.fromScreen  @ cellAt:817
+  @drop label:sub  @ vname:300,308
+  @drop p.border  @ drawTracker:656
+  @drop p.fill  @ printer:264 drawLaneStrip:441 drawCurveEditor:928
+  @drop p.measure  @ printer:219,249
+  @drop p.segment  @ printer:255,260 drawLaneStrip:443 drawCurveEditor:931
+  @drop p.stroke  @ drawLaneStrip:467 drawCurveEditor:946
+  @drop p.text  @ printer:212,232,241,251
+  @drop p.textUp  @ drawTracker:551
+  @drop screenPainter.line  @ drawTracker:767,769
+  @drop screenPainter.pathArcTo  @ drawTracker:677,680
+  @drop screenPainter.pathClear  @ drawTracker:676,682
+  @drop screenPainter.pathLineTo  @ drawTracker:678,679
+  @drop screenPainter.pathStroke  @ drawTracker:681
+  @drop text:gmatch  @ drawTracker:735
+  @drop text:sub  @ drawTracker:804
+  @drop txt:gmatch  @ printer:211,239
+
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB

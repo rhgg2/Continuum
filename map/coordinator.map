@@ -160,6 +160,15 @@
   @bind drawSwitcher  @ 102
   @bind frame  @ frame:285
 
+# Unresolved receivers
+  @drop facade.get  @ getFacade:325
+  @drop page:renderBody  @ frame:255
+  @drop page:renderStatusBar  @ frame:270
+  @drop page:toolbarSegments  @ frame:202
+  @drop sample:tick  @ tick:71
+  @drop tracker:reloadFromReaper  @ reloadAfterExternalMutation:347
+  @drop wiring:syncExternal  @ tick:72
+
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB

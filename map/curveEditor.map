@@ -52,6 +52,22 @@
   @use require painter  @ 20
   @use require util  @ 13
 
+# Unresolved receivers
+  @drop a.snap  @ frame:150,158
+  @drop cb.onCycleShape  @ frame:240
+  @drop cb.onDelete  @ frame:218
+  @drop cb.onInsert  @ frame:252
+  @drop cb.onMove  @ frame:333
+  @drop cb.onMoveFree  @ frame:316
+  @drop cb.onTension  @ frame:297
+  @drop pt.circle  @ frame:123,161
+  @drop pt.fromScreen  @ frame:74,75,134,234,306
+  @drop pt.polyline  @ frame:102,202
+  @drop pt.popClip  @ frame:205
+  @drop pt.pushClip  @ frame:76
+  @drop pt.segment  @ frame:69
+  @drop pt.toScreen  @ frame:61,62,105
+
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB

@@ -153,6 +153,11 @@
   @bind trill  @ 335
   @bind velPattern  @ 386
 
+# Unresolved receivers
+  @drop ctx.nextSameLaneNote  @ slide:217
+  @drop ctx.step  @ trill:61 chordStamp:169
+  @drop ctx.stepsBetween  @ chordStamp:167
+
 # Fields (r read / w write incl. constructor keys)
   @field w arp  @ 342
   @field w base  @ 331,339,369,371,399,401

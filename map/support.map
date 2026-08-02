@@ -55,6 +55,15 @@
   @bind deepEq  @ 99
   @bind repr  @ 98
 
+# Unresolved receivers
+  @drop B36:sub  @ toBase36:115
+  @drop body:byte  @ decodeSidecar:144,147,148,152,153
+  @drop body:sub  @ decodeSidecar:142,145
+  @drop chunk:match  @ poolGuidOf:169
+  @drop hooks.postflush  @ fakeTm:224
+  @drop hooks.preflush  @ fakeTm:220
+  @drop hooks.rebuild  @ fakeTm:227
+
 # REAPER API surface
   @reaper GetMediaItemTake_Item
   @reaper GetItemStateChunk

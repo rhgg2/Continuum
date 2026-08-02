@@ -455,6 +455,21 @@
   @bind removeOrHideCol  @ 1348
   @bind resolveColType  @ addColumn:844
 
+# Unresolved receivers
+  @drop a:sub  @ resolveColType:825
+  @drop args.onClose  @ openTakeProperties:1401,1421,1426
+  @drop e:col  @ caretKeyNow:246
+  @drop e:row  @ caretKeyNow:246
+  @drop ec:col  @ drawStatusBar:586
+  @drop ec:row  @ drawStatusBar:586
+  @drop fd.when  @ stripColumns:1019
+  @drop s:lower  @ resolveColType:823
+  @drop stripPaint.fill  @ rowHighlight:1143
+  @drop stripPaint.segment  @ drawFlowMarker:1229,1230
+  @drop stripPaint.text  @ drawFlowMarker:1231
+  @drop tracker:registerAll  @ 1330
+  @drop typeStr:lower  @ addColumn:836
+
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB

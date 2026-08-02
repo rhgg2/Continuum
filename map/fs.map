@@ -37,6 +37,23 @@
   @bind ciLess  @ listDirs:45 listAudioFiles:90
   @bind copyFile  @ 109
 
+# Unresolved receivers
+  @drop a:lower  @ ciLess:34
+  @drop a:sub  @ join:29
+  @drop b:lower  @ ciLess:34
+  @drop data:byte  @ hashFile:77
+  @drop ext:lower  @ isAudio:15
+  @drop f:close  @ exists:51 readText:57 hashFile:73
+  @drop f:read  @ readText:57 hashFile:67,71
+  @drop f:seek  @ hashFile:64,65,66,70
+  @drop fin:close  @ copyFile:97,103
+  @drop fin:read  @ copyFile:99
+  @drop fout:close  @ copyFile:103
+  @drop fout:write  @ copyFile:101
+  @drop name:match  @ isAudio:13
+  @drop path:match  @ basename:19 parent:24
+  @drop sub:sub  @ listDirs:42
+
 # REAPER API surface
   @reaper EnumerateSubdirectories
   @reaper EnumerateFiles

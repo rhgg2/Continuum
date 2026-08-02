@@ -81,6 +81,9 @@ _CALL = re.compile(
 _BIND = re.compile(
     r'^\s*@bind\s+(?P<name>\S+)\s+@\s+(?P<sites>.+?)\s*$'
 )
+# `@drop <target>  @ <sites>` — qualified call sites whose receiver the
+# extractor could not resolve. Same site grammar again.
+_DROP = re.compile(r'^\s*@drop\s+(?P<target>\S+)\s+@\s+(?P<sites>.+?)\s*$')
 
 
 def _iter_use_sites(sites: str):
@@ -134,6 +137,17 @@ def _normalize_kind(k: str) -> str:
         "read": "reads", "write": "writes", "field": "fields",
     }
     return aliases.get(k, k)
+
+
+# Every kind `_map_query` dispatches on. An unknown one used to fall through
+# to the generic scan and return "(no matches …)", which reads as absence of
+# the thing rather than absence of the filter.
+_KINDS = frozenset({
+    'fn', 'api', 'state', 'const', 'require', 'construct', 'case',
+    'invariant', 'contract', 'shape', 'emits', 'reaper', 'deps',
+    'exercises', 'surface', 'harness',
+    'uses', 'usedby', 'flow', 'reads', 'writes', 'fields',
+})
 
 
 def _entry_kind(raw_kind: str) -> str:
@@ -282,6 +296,37 @@ def _usedby_intra(module_pred, q_fn, raw_rx, reg) -> list[str]:
             for caller, n in _iter_use_sites(sites):
                 where = f"  (in {caller})" if caller else ""
                 rows.append(f"{src}:{n}  {token} {callee}{where}")
+    return rows
+
+
+def _usedby_drops(module_pred, q_fn, raw_rx, reg) -> list[str]:
+    """Dropped-receiver half: sites the extractor could not attribute. The
+    receiver is resolved here through the self-name registry — the guess the
+    extractor refuses to make, because a wrong alias in the corpus does not
+    drop, it lies. Under a heading that says the receiver is unproven it is
+    the recall the other two halves cannot give."""
+    rows: list[str] = []
+    for mp in sorted(MAP_DIR.glob("*.map")):
+        text = mp.read_text(encoding="utf-8", errors="replace")
+        src = _src_of(mp, text)
+        for raw in text.splitlines():
+            md = _DROP.match(raw)
+            if not md:
+                continue
+            target = md.group("target")
+            m = _TARGET_RX.match(target)
+            recv, fn = (m.group(1), m.group(2)) if m else (None, None)
+            # A module filter can only select a receiver the registry knows;
+            # an unknown one is not a silent pass, it is not this module.
+            if module_pred and not (recv in reg and module_pred(reg[recv])):
+                continue
+            if q_fn is not None and fn != q_fn:
+                continue
+            if raw_rx and not raw_rx.search(target):
+                continue
+            for caller, n in _iter_use_sites(md.group("sites")):
+                where = f"  (in {caller})" if caller else ""
+                rows.append(f"{src}:{n}  @drop {target}{where}")
     return rows
 
 
@@ -465,6 +510,21 @@ def _section(name, shown, total, na=None) -> str:
             else f"{name}  (showing {shown} of {total})")
 
 
+def _split_budget(sizes: list[int], budget: int) -> list[int]:
+    """Even share of `budget` across sections, each donating what it cannot
+    use to the others. Reproduces the two-section split it replaces."""
+    if sum(sizes) <= budget:
+        return list(sizes)
+    share = budget // len(sizes)
+    keep = [min(n, share) for n in sizes]
+    left = budget - sum(keep)
+    for i, n in enumerate(sizes):
+        take = min(n - keep[i], left)
+        keep[i] += take
+        left -= take
+    return keep
+
+
 # `flow` walks the signal rows already in the maps: `@emits` (owner = the
 # map's module, fire-sites in the tail), `@use sub owner:signal`, and
 # `@use forward source:signal` (the forwarder re-fires under its own name).
@@ -550,14 +610,18 @@ def map_query(
             `module` and no `query` it falls back to
             that module's flat outbound edge list (calls / subs /
             forwards / requires).
-            `usedby` answers in two labelled sections:
+            `usedby` answers in three labelled sections:
             cross-module `@use` edges, scanning every map (specs
             included, so it also answers "which specs exercise X";
             spec callers collapse to one summary row per spec file),
-            and the declaring file's own intra-module `@call` and
+            the declaring file's own intra-module `@call` and
             `@bind` rows, so a private helper's callers come back from
             the same query — and so does the command or export table
-            that binds a helper nothing calls.
+            that binds a helper nothing calls — and `@drop` sites,
+            whose receiver the extractor could not resolve and which
+            are matched here by name: candidates, not confirmed edges.
+            `(none)` under that heading is a real answer, that nothing
+            matching was dropped.
             Both halves resolve short instance names and `:`/`.`
             spellings so `cm:get`, `configManager.get`, and
             module='configManager' all match; a module-level target has
@@ -611,6 +675,9 @@ def _map_query(query, kind, module, max_results) -> str:
 
     query_rx = re.compile(query, re.IGNORECASE) if query else None
     kind_filter = _normalize_kind(kind) if kind else None
+    if kind_filter and kind_filter not in _KINDS:
+        return (f"--- ERROR: kind={kind!r} is not a kind. Valid: "
+                f"{', '.join(sorted(_KINDS))} ---")
 
     dirs = (MAP_DIR, MAP_DIR / "specs")
 
@@ -633,31 +700,29 @@ def _map_query(query, kind, module, max_results) -> str:
         # trackerManager calling itself is not an answer to "who uses it".
         intra = (None if q_fn is None and raw_rx is None
                  else _usedby_intra(module_pred, q_fn, raw_rx, reg))
-        if not cross and intra is not None and not intra:
+        drops = _usedby_drops(module_pred, q_fn, raw_rx, reg)
+        if not cross and not drops and intra is not None and not intra:
             return (f"(no callers found for query={query!r}, module={module!r}; "
-                    "both the cross-module and intra-module indexes were searched)")
+                    "the cross-module, intra-module and dropped-receiver "
+                    "indexes were all searched)")
 
-        n_intra = 0 if intra is None else len(intra)
-        if len(cross) + n_intra <= max_results:
-            keep_cross, keep_intra = len(cross), n_intra
-        else:                # even split, each half donating what it can't use
-            keep_cross = min(len(cross), max_results // 2)
-            keep_intra = min(n_intra, max_results // 2)
-            keep_cross += min(len(cross) - keep_cross,
-                              max_results - keep_cross - keep_intra)
-            keep_intra += min(n_intra - keep_intra,
-                              max_results - keep_cross - keep_intra)
+        sizes = [len(cross), 0 if intra is None else len(intra), len(drops)]
+        keep_cross, keep_intra, keep_drops = _split_budget(sizes, max_results)
 
-        # Rows keep their @use/@call token under the header, so a row copied
-        # out of context still says which index it came from.
-        results = [_section("Cross-module", keep_cross, len(cross))]
+        # Rows keep their @use/@call/@drop token under the header, so a row
+        # copied out of context still says which index it came from.
+        results = [_section("Cross-module", keep_cross, sizes[0])]
         results += [f"  {r}" for r in cross[:keep_cross]]
         results.append(_section(
-            "Intra-module", keep_intra, n_intra,
+            "Intra-module", keep_intra, sizes[1],
             na=("(n/a — module-level target; the intra index keys on functions)"
                 if intra is None else None)))
         results += [f"  {r}" for r in (intra or [])[:keep_intra]]
-        results.append("--- note: calls on runtime receivers (not import/construct/dep aliases) are dropped — recall is incomplete for those ---")
+        results.append(_section("Dropped receivers", keep_drops, sizes[2]))
+        if keep_drops:
+            results.append("  (receiver unresolved by the extractor, matched "
+                           "here by name — candidates, not confirmed edges)")
+        results += [f"  {r}" for r in drops[:keep_drops]]
         return "\n".join(results)
 
     # `flow` also scans every map (subscribers live anywhere): emitters first,

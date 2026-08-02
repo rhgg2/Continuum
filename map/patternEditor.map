@@ -233,6 +233,10 @@
   @bind acceptInput  @ 65
   @bind writeThrough  @ 213
 
+# Unresolved receivers
+  @drop miniScope:bind  @ 87,91 setLaneCommands:104,105
+  @drop miniScope:register  @ 98,99
+
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB

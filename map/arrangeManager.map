@@ -263,6 +263,12 @@
   @call writeColours  @ ensureColours:275
   @call writeSlots  @ ensureSlots:242 createAndDropMidi:732 mintParkedTake:899
 
+# Unresolved receivers
+  @drop chunk:find  @ chunkSetPool:636
+  @drop chunk:gsub  @ chunkSetPool:637,640
+  @drop chunk:match  @ takeIdOf:51 harvestPoolGuid:654
+  @drop wiring.isWiringOwnedTrack  @ isVisibleTrack:303
+
 # REAPER API surface
   @reaper TakeIsMIDI
   @reaper GetMediaItemTake_Item, GetMediaItemTake_Source, GetMediaItemTake_Track

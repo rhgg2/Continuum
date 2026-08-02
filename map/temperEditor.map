@@ -286,6 +286,10 @@
   @bind resetToSnapshot  @ buildDescriptor:288
   @bind setPeriodPitch  @ drawHeader:323 drawStepTable:410
 
+# Unresolved receivers
+  @drop equave:match  @ buildGen:691,694
+  @drop factors:gmatch  @ buildGen:683
+
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB

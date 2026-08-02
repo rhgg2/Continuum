@@ -65,6 +65,13 @@
   @bind Main  @ 195
   @bind err_handler  @ run:30 Main:192
 
+# Unresolved receivers
+  @drop ap:seedCursorFromReaper  @ Main:85
+  @drop osName:find  @ createImGui:41,43
+  @drop trackerScope:bindAll  @ Main:187
+  @drop trackerScope:registerAll  @ Main:186
+  @drop wp:enableLive  @ Main:84
+
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB

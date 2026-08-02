@@ -108,6 +108,16 @@
   @call util.serialise  @ serialise:405,406
   @call util.snapTo  @ nudgedScalar:285
 
+# Unresolved receivers
+  @drop c:find  @ escape_string:212
+  @drop choices:gmatch  @ oneOf:290
+  @drop input:sub  @ unserialise:425,429,451
+  @drop k:match  @ bareKey:547
+  @drop keys:gmatch  @ picker:84 pick:101
+  @drop s:byte  @ hash:317
+  @drop s:gsub  @ escape_string:211
+  @drop source:subscribe  @ installHooks:240
+
 # REAPER API surface
   @reaper ShowConsoleMsg
   @reaper Undo_BeginBlock, Undo_EndBlock

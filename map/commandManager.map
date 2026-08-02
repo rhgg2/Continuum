@@ -153,6 +153,16 @@
   @call newScope  @ 114 scope:227
   @call resolveKeys  @ keysFor:289
 
+# Unresolved receivers
+  @drop buf:match  @ finishPrefix:201,208
+  @drop global:bind  @ bind:129
+  @drop global:bindAll  @ bindAll:130
+  @drop global:register  @ register:123
+  @drop global:registerAll  @ registerAll:124
+  @drop prefixBuf:find  @ appendPrefix:189
+  @drop spring.onBail  @ invoke:264
+  @drop token:gmatch  @ specForToken:546
+
 # REAPER API surface
   @reaper GetOS
 

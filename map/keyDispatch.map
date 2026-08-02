@@ -41,6 +41,16 @@
   @call handlePrefixCapture  @ dispatchKeys:52
   @call isDigitMods  @ handlePrefixCapture:30,34
 
+# Unresolved receivers
+  @drop cmgr:appendPrefix  @ handlePrefixCapture:31,35
+  @drop cmgr:cancelPrefix  @ handlePrefixCapture:38
+  @drop cmgr:finishPrefix  @ dispatchKeys:71
+  @drop cmgr:invoke  @ dispatchKeys:73
+  @drop cmgr:isPrefixActive  @ handlePrefixCapture:27 dispatchKeys:70
+  @drop cmgr:keySpec  @ dispatchKeys:62
+  @drop cmgr:keychain  @ dispatchKeys:58
+  @drop cmgr:rootKeymap  @ dispatchKeys:58
+
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB

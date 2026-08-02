@@ -44,6 +44,14 @@ helper reached by reference rather than called — bound into a command or expor
 table, or handed over as a callback. Roughly a hundred helpers have no call
 site at all, so for those this is the only index naming an entry point;
 map_query kind='usedby' returns these rows beside the `@call` ones.
+
+After them, `# Unresolved receivers`: `@drop <target>  @ <sites>` rows for the
+qualified call sites *this file's* alias table cannot resolve -- a receiver
+bound at runtime (`local ec = tv:ec()`) names no known module, so the edge is
+lost rather than absent. Stdlib tables and `reaper`/`gfx` are excluded: an
+unresolved `math.floor` is not a lost edge. The rows are candidates, not
+confirmed edges -- map_query kind='usedby' resolves the receiver
+speculatively and says so in the heading.
 """
 
 from __future__ import annotations
@@ -99,6 +107,13 @@ CALL_RE       = re.compile(r"\b([A-Za-z_]\w*)([.:])([A-Za-z_]\w*)\s*[({]")
 # A declaration head (`function tm:foo(`) matches CALL_RE too. Fullmatch this
 # against the text before the match to tell a declaration from a call site.
 FN_DECL_PREFIX = re.compile(r'\s*(?:local\s+)?function\s+')
+# Receivers that are globals rather than instances: an unresolved `math.floor`
+# is not a lost edge. Mirrors .luacheckrc's `std = "lua54"` plus
+# `globals = { reaper, gfx }`; keep the two in step.
+GLOBAL_RECEIVERS = frozenset({
+    'coroutine', 'debug', 'io', 'math', 'os', 'package', 'string',
+    'table', 'utf8', 'reaper', 'gfx',
+})
 SUB_RE        = re.compile(r"\b([A-Za-z_]\w*):subscribe\(\s*['\"]([^'\"]+)['\"]")
 FORWARD_RE    = re.compile(
     r"\b[A-Za-z_]\w*:forward\(\s*['\"]([^'\"]+)['\"]\s*,\s*([A-Za-z_]\w*)\s*\)"
@@ -197,6 +212,9 @@ class MapFile:
     # command or export table, or handed over as a callback -- reached without
     # being called.
     binds: list[tuple[str, str, int]] = field(default_factory=list)
+    # Qualified call sites whose receiver resolved to nothing: (target, caller,
+    # line). Target verbatim, as @use spells it (`ec:setPos`, `batch.commit`).
+    drops: list[tuple[str, str, int]] = field(default_factory=list)
     # Field accesses: (kind 'r'|'w', field, line, caller|None).
     fields: list[tuple[str, str, int, str]] = field(default_factory=list)
 
@@ -688,6 +706,13 @@ def extract_uses(cm: MapFile, lines: list[str], code_lines: list[str],
             call_seen.add(key)
             cm.calls.append((callee, caller_at(line), line))
 
+    drop_seen: set[tuple[str, int]] = set()
+    def add_drop(target: str, line: int) -> None:
+        key = (target, line)
+        if key not in drop_seen:
+            drop_seen.add(key)
+            cm.drops.append((target, caller_at(line), line))
+
     for i, raw in enumerate(lines):
         line = i + 1
         # Strip line-comments to avoid harvesting calls quoted in prose.
@@ -696,7 +721,14 @@ def extract_uses(cm: MapFile, lines: list[str], code_lines: list[str],
         for m in CALL_RE.finditer(code):
             recv, sep, fn = m.group(1), m.group(2), m.group(3)
             mod = aliases.get(recv)
-            if not mod or fn in ('subscribe', 'forward', 'unsubscribe'):
+            if not mod:
+                # A declaration head matches CALL_RE too, and until now an
+                # unresolved one was discarded either way.
+                if (recv not in GLOBAL_RECEIVERS
+                        and not FN_DECL_PREFIX.fullmatch(code[:m.start()])):
+                    add_drop(f'{recv}{sep}{fn}', line)
+                continue
+            if fn in ('subscribe', 'forward', 'unsubscribe'):
                 continue  # sub/forward are their own edge kinds
             if mod == cm.module and (recv == 'self' or recv == cm.return_target):
                 callee = members.get(fn)
@@ -759,6 +791,7 @@ def extract_uses(cm: MapFile, lines: list[str], code_lines: list[str],
     cm.uses.sort(key=lambda u: (u[0], u[1], u[2]))
     cm.calls.sort(key=lambda c: (c[0], c[2]))
     cm.binds.sort(key=lambda b: (b[0], b[2]))
+    cm.drops.sort(key=lambda d: (d[0], d[2]))
 
 
 def extract_fields(code_lines: list[str], skip_receiver: str = '') -> list[tuple[str, str, int]]:
@@ -1118,6 +1151,18 @@ def emit(cm: MapFile) -> str:
             for j in range(0, len(pairs), SITE_ROW_CHUNK):
                 chunk = render_caller_groups(pairs[j:j + SITE_ROW_CHUNK])
                 add(f"  @bind {name}  @ {chunk}")
+        add('')
+
+    if cm.drops:
+        add("# Unresolved receivers")
+        by_target: dict[str, list[tuple[str, int]]] = {}
+        for target, caller, line in cm.drops:
+            by_target.setdefault(target, []).append((caller, line))
+        for target in sorted(by_target):
+            pairs = sorted(by_target[target], key=lambda p: p[1])
+            for j in range(0, len(pairs), SITE_ROW_CHUNK):
+                chunk = render_caller_groups(pairs[j:j + SITE_ROW_CHUNK])
+                add(f"  @drop {target}  @ {chunk}")
         add('')
 
     if cm.reaper_calls:

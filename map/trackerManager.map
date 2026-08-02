@@ -930,6 +930,39 @@
   @bind rawThenLogical  @ 4005 rebuildPbs:4131
   @bind walkable  @ rebuildTails:4081
 
+# Unresolved receivers
+  @drop a.key  @ reconcileDerived:816,818
+  @drop a.make  @ reconcileDerived:823
+  @drop a.match  @ reconcileDerived:819
+  @drop a.onKeep  @ reconcileDerived:821
+  @drop batch.add  @ rebuildRegionPark:2865,2935,2986,3053
+  @drop batch.commit  @ rebuildRegionPark:3078
+  @drop batch.del  @ rebuildRegionPark:2780,2913,3067
+  @drop ccWrites.assign  @ spliceCcCell:2344 fullRebuildChannelCCs:2460,2465
+  @drop ccWrites.commit  @ rebuildCCs:2522
+  @drop clampWrites.assign  @ makeTailRules:3704
+  @drop clampWrites.commit  @ rebuildTails:4094
+  @drop extWrites.assign  @ rebuildExternals:2682
+  @drop extWrites.commit  @ rebuildExternals:2684
+  @drop meta.expand  @ rebuildFx:3429
+  @drop pbWrites.add  @ rebuildPbs:4563,4567
+  @drop pbWrites.assign  @ rebuildPbs:4616
+  @drop pbWrites.commit  @ rebuildPbs:4669
+  @drop pbWrites.del  @ rebuildPbs:4576
+  @drop pcWrites.commit  @ rebuildPCs:4776
+  @drop replaceWins.inSeatWindow  @ rebuildPbs:4279
+  @drop reseats.assign  @ rebuildInternals:2282
+  @drop reseats.commit  @ rebuildInternals:2301
+  @drop sink.add  @ reconcileDerived:823
+  @drop sink.del  @ reconcileDerived:827
+  @drop stampWrites.assign  @ stampSamples:4686
+  @drop stampWrites.commit  @ stampSamples:4701
+  @drop tailWrites.add  @ rebuildTails:4044
+  @drop tailWrites.assign  @ makeTailRules:3731
+  @drop tailWrites.commit  @ rebuildTails:4096
+  @drop tailWrites.del  @ rebuildTails:4043
+  @drop wires.commit  @ rebuildFx:3667
+
 # REAPER API surface
   @reaper GetCursorPosition
   @reaper MIDI_GetPPQPosFromProjTime, MIDI_GetProjTimeFromPPQPos

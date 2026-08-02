@@ -137,6 +137,13 @@
   @call sm:setPrefix  @ watchPath:430
   @call writePath  @ previewPath:378
 
+# Unresolved receivers
+  @drop name:find  @ findSamplerFx:47
+  @drop nameBytes:byte  @ drain:185
+  @drop path:byte  @ writePath:40
+  @drop pathBytes:byte  @ drain:182
+  @drop srcBase:match  @ relForSrc:113
+
 # REAPER API surface
   @reaper gmem_write, gmem_read, gmem_attach
   @reaper TrackFX_GetCount, TrackFX_GetFXName, TrackFX_SetParam, TrackFX_GetFXGUID

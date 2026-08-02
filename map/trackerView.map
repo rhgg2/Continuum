@@ -1049,6 +1049,16 @@
   @bind queueResetDelays  @ 2641
   @bind queueResetVelocities  @ 2640
 
+# Unresolved receivers
+  @drop edit.add  @ placeNewNote:758 editEvent:995,1067 addLaneEvent:1346
+  @drop edit.assign  @ writePlans:387 assignStamp:466 assignTail:475 assignNoteMove:489 strikePitch:799 editEvent:929,938,972,983,988,1055 chordNudgeVel:1188
+  @drop edit.assign  @ digitsBackspace:1263 moveLaneEvent:1327 setLaneTension:1374 cycleShape:1393 applyNoteOff:1649 nudgePitch:2224 nudgeVel:2231 nudgeDelay:2241 nudgeValue:2248 setNoteFx:2496 queueResetDelays:2612 queueResetVelocities:2626
+  @drop edit.assign  @ deleteEvent:2670 shiftEvents:2848
+  @drop edit.delete  @ strikePitch:808,811 chordStrike:1117 chordBackspace:1172 digitsBackspace:1265 deleteLaneEvent:1364 applyNoteOff:1651 insertRowCore:2038 deleteRowCore:2085 queueDeleteNotes:2604 queueResetVelocities:2624 queueDeleteCCs:2635
+  @drop edit.delete  @ unautomateParam:3488
+  @drop tracker:register  @ 3630
+  @drop tracker:registerAll  @ 3562
+
 # REAPER API surface
   @reaper time_precise
   @reaper StuffMIDIMessage

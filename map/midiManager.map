@@ -387,6 +387,14 @@
   @call stableByPpq  @ rebuild:479
   @call touchesMetadata  @ assignNote:1116,1142 assignCC:1212
 
+# Unresolved receivers
+  @drop body:byte  @ ccSidecarDecode:208,211,212,216,217
+  @drop body:sub  @ ccSidecarDecode:205,209
+  @drop buf:sub  @ setEot:1432,1439
+  @drop chunk:match  @ setTakeGuid:36,37
+  @drop msg:byte  @ setEot:1433,1435,1436
+  @drop msg:match  @ noteSidecarDecode:171
+
 # REAPER API surface
   @reaper ValidatePtr2
   @reaper GetMediaItemTake_Item, GetMediaItemTake_Source

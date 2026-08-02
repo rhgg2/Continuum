@@ -148,6 +148,13 @@
   @call writeRaw  @ assign:379 assignAt:386
   @call zeroBaselines  @ dropStale:326,331
 
+# Unresolved receivers
+  @drop f:close  @ readRaw:64 writeRaw:265
+  @drop f:read  @ readRaw:63
+  @drop f:write  @ writeRaw:264
+  @drop group.onDiverge  @ pollUndo:429
+  @drop slot:sub  @ isUndoable:82
+
 # REAPER API surface
   @reaper GetResourcePath
   @reaper GetSetMediaItemTakeInfo_String

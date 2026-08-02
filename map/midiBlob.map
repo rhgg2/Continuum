@@ -118,6 +118,10 @@
   @call textChunk  @ chunkOf:251,253,255
   @call textRow  @ textChunk:189
 
+# Unresolved receivers
+  @drop msg:byte  @ parse:60,62
+  @drop msg:sub  @ parse:86,87,89,93
+
 # Fields (r read / w write incl. constructor keys)
   @field w __mode  @ 155
   @field w at  @ 27

@@ -15,6 +15,13 @@
 # Uses (outbound edges)
   @use require harness  @ 12
 
+# Unresolved receivers
+  @drop fullName:find  @ 279
+  @drop info:match  @ 4
+  @drop source:match  @ 3
+  @drop test.run  @ 284
+  @drop testDir:match  @ 5
+
 # Fields (r read / w write incl. constructor keys)
   @field r err  @ 302
   @field w err  @ 290

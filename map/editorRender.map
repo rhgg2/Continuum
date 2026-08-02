@@ -104,6 +104,15 @@
   @call projectActions  @ libraryTree:136
   @call shadowsSource  @ projectActions:76
 
+# Unresolved receivers
+  @drop p:libraryDescriptor  @ renderBody:237
+  @drop p:render  @ renderBody:234
+  @drop spec.onDelete  @ projectActions:70 libraryActions:93
+  @drop spec.onImportFactory  @ libraryActions:100
+  @drop spec.onPublish  @ projectActions:73
+  @drop spec.onRevert  @ projectActions:76 libraryActions:96
+  @drop spec.onSelect  @ libraryRow:113 libraryFolder:126 libraryTree:144
+
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath
   @reaper MB

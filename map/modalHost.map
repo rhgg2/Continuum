@@ -62,6 +62,10 @@
   @call modalHost:open  @ openPrompt:30 openConfirm:42
   @call modalHost:registerKind  @ 109,118
 
+# Unresolved receivers
+  @drop s.onChord  @ 125
+  @drop s.resolve  @ 133
+
 # REAPER API surface
   @reaper ShowConsoleMsg
 

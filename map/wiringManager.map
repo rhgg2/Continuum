@@ -415,6 +415,20 @@
   @bind readGraph  @ 1430
   @bind srcTagKey  @ 246
 
+# Unresolved receivers
+  @drop code:find  @ parseJSFXMidiTraits:131,132
+  @drop code:match  @ parseJSFXMidiTraits:130
+  @drop content:gmatch  @ parseJSFXMidiTraits:128
+  @drop ctx:gainHost  @ gainRouting:1911
+  @drop ctx:trackKeyOf  @ stampBusTracks:2057
+  @drop f:close  @ readJSFXContent:344
+  @drop f:read  @ readJSFXContent:343
+  @drop fxDisplay:find  @ isSamplerNode:420
+  @drop ident:sub  @ isJS:47 readJSFXContent:339,340 checkUserAddable:354
+  @drop line:gsub  @ parseJSFXMidiTraits:129
+  @drop s:gsub  @ shortFxName:525,526
+  @drop version:match  @ affectedByPinGrowBug:79
+
 # REAPER API surface
   @reaper defer
   @reaper GetProjectStateChangeCount

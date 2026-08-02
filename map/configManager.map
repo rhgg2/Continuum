@@ -133,6 +133,13 @@
   @call refreshCache  @ ensureCache:376 setContext:414
   @call resolveKey  @ get:484
 
+# Unresolved receivers
+  @drop key:match  @ 281
+  @drop loaders.track  @ setTrack:434
+  @drop ref:match  @ expandRef:276 292
+  @drop s:gsub  @ hex:23
+  @drop s:sub  @ hex:24,25,26
+
 # Fields (r read / w write incl. constructor keys)
   @field r REMOVE  @ assign:553
   @field w arrange  @ 274

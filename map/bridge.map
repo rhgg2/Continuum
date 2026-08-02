@@ -57,6 +57,18 @@
   @call scanOnce  @ tick:208
   @call writeAtomic  @ scanOnce:192
 
+# Unresolved receivers
+  @drop body:match  @ parseDirectives:125
+  @drop code:match  @ parseDirectives:122
+  @drop f:close  @ readAll:38 writeAtomic:44 dirExists:49
+  @drop f:match  @ firstReq:181
+  @drop f:read  @ readAll:38
+  @drop f:write  @ writeAtomic:44
+  @drop line:match  @ parseDirectives:123
+  @drop name:match  @ scanOnce:189
+  @drop source:match  @ defaultSpoolDir:18
+  @drop v:sub  @ render:100
+
 # REAPER API surface
   @reaper time_precise
   @reaper Undo_BeginBlock, Undo_EndBlock2

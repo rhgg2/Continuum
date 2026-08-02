@@ -288,6 +288,10 @@
   @bind setLoopEndHere  @ 642
   @bind setLoopStartHere  @ 641
 
+# Unresolved receivers
+  @drop arrange:register  @ 652
+  @drop arrange:registerAll  @ 621,660
+
 # REAPER API surface
   @reaper GetMediaItemTake_Item
 
