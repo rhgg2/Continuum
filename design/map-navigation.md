@@ -605,6 +605,42 @@ the heading: in the corpus a wrong alias is a confident wrong answer
 nothing downstream can detect, while under a heading that says the
 receiver is unproven it is a candidate that did not pan out.
 
+**An empty result now lists the domain it searched** (2026-08-02, landed).
+Replaying all 1,148 archived calls against today's server puts the
+still-unexplained empties at 91, down from the 147 above — the corpus
+itself improved in between. The replay only reads that way once the 469
+calls that now fail `re.compile` are set aside: they are pre-regex
+vocabulary glob habits (`*fx*`) the server already answers by naming the
+fix, so counting them charges a vocabulary change to the mechanism as a
+defect. Of the 678 that remain, 587 have content and 91 are empty: 69
+generic scans, 33 of them carrying a `module=`, then 9 `usedby`, 6 whose
+`module=` matched no map, 5 field and 2 `uses` naming no declaration. The
+figure is harness-sensitive rather than tree-sensitive — an earlier run of
+the same replay reported 86, while replaying against the corpus as it
+stood before that run's own last commit still gives 91, so the difference
+lives in how the replay counts and a bare total is not a reproducible
+control.
+
+The answer reports what the scan walked rather than guessing at near
+misses, and it is proportional to how far the caller narrowed: `kind` and
+`module` together list that kind's names, `module` alone gives the kind
+histogram and invites a `kind=`, and with neither the answer states the
+scope it scanned. That avoids both a tuned threshold and any ranking, and
+the histogram pays for itself — one real empty was `kind='fn',
+module='curveEditor'`, and curveEditor holds `state:8 require:3 api:1`,
+no `fn` at all.
+
+The inventory is bare names because rows are roughly ten times the cost
+and the modules that actually appear in the empty population are the three
+largest in the corpus: `midiManager`'s 53 `fn` heads are 660 characters as
+names and unprintable as rows. Annotation kinds are counted and never
+listed — `invariant`, `contract` and their kin are prose bodies, and 69
+contracts is not a vocabulary. The 2,500-character budget on a listing was
+measured rather than chosen: the largest module listing is under 2,600,
+while the six longest overall are spec `case` lists whose heads are
+sentences (`am_spec`, 68 cases, 4,840 characters). The cut therefore lands
+on prose and leaves every module listing whole.
+
 ## Mechanism: park the rewrite
 
 Nothing above needs tree-sitter. The winning change is small and additive

@@ -17,6 +17,7 @@ continuum_tests (lua_test_run). Batched writes are handled by the global
 from __future__ import annotations
 
 import re
+from collections import Counter
 from pathlib import Path
 from typing import NamedTuple, Optional
 
@@ -525,6 +526,55 @@ def _split_budget(sizes: list[int], budget: int) -> list[int]:
     return keep
 
 
+# Kinds whose payload is a prose body rather than a name. Mirrors the
+# alternation in `_ANN`; keep the two in step.
+_ANN_KINDS = frozenset({'invariant', 'contract', 'shape', 'emits', 'reaper',
+                        'deps', 'exercises', 'surface', 'harness'})
+
+# Chosen so every module map's listing survives whole: the largest is under
+# 2,600 chars, while spec `case` heads are sentences rather than identifiers
+# and run to 4,840 (am_spec, 68 cases). The cut lands on prose, not on names.
+_INVENTORY_CHARS = 2500
+
+
+def _domain_note(seen_kinds, seen_names, label, module, scope) -> str:
+    """What the scan walked, for an answer that found nothing. Its whole job
+    is to separate 'absent from the code' from 'absent from the corpus', so
+    it reports the domain rather than guessing at near misses."""
+    held = ' '.join(f"{k}:{v}" for k, v in seen_kinds.most_common())
+
+    if label in _ANN_KINDS:
+        n = seen_kinds.get(label, 0)
+        if module and n:
+            return (f"{module} holds {n} {label} rows — bodies are prose, not "
+                    f"names; drop query= to read them.")
+        return f"searched {scope} — {n} {label} rows, none matching."
+
+    if module and label:
+        names = sorted(set(seen_names))
+        if not names:
+            return f"{module} holds no {label}. It holds: {held}"
+        shown, chars = [], 0
+        for nm in names:
+            if chars + len(nm) + 2 > _INVENTORY_CHARS:
+                break
+            shown.append(nm)
+            chars += len(nm) + 2
+        rest = len(names) - len(shown)
+        tail = f"\n  … and {rest} more; narrow with query=" if rest else ""
+        return (f"{module} holds {len(names)} {label}:\n"
+                f"  {', '.join(shown)}{tail}")
+
+    if module:
+        return f"{module} holds: {held}\n  — re-query with kind= to list one"
+
+    if label:
+        return (f"searched {scope} — {seen_kinds.get(label, 0)} {label} "
+                f"heads, none matching.")
+    return (f"searched {scope} — {sum(seen_kinds.values())} entries across "
+            f"{len(seen_kinds)} kinds, none matching.")
+
+
 # `flow` walks the signal rows already in the maps: `@emits` (owner = the
 # map's module, fire-sites in the tail), `@use sub owner:signal`, and
 # `@use forward source:signal` (the forwarder re-fires under its own name).
@@ -654,7 +704,10 @@ def map_query(
 
     Returns:
       Lines of `<source>.lua:<line>  @kind <head>` for structural entries,
-      and `<source>.lua  @kind  <body>` for annotations.
+      and `<source>.lua  @kind  <body>` for annotations. An answer with no
+      matches names the domain it searched: a module's heads for that kind
+      where `module` and `kind` were both given, the kind histogram where
+      only `module` was, and the scope scanned otherwise.
     """
     for pat in (query, module):
         if pat:
@@ -804,8 +857,20 @@ def _map_query(query, kind, module, max_results) -> str:
                 if module and re.match(r"(tests/)?specs?(/|$)", module) else "")
         return f"(no .map files matched module={module!r}{hint})"
 
+    # Describes the list the scan is about to walk, not a fresh glob, so an
+    # empty answer's stated domain cannot disagree with the pass that ran.
+    n_mod = sum(1 for p in module_files if p.parent == MAP_DIR)
+    n_spec = len(module_files) - n_mod
+    scope = (f"{n_mod} module maps"
+             + (f" and {n_spec} spec maps" if n_spec else ""))
+
     results: list[str] = []
     truncated = False
+    seen_kinds: Counter = Counter()
+    seen_names: list[str] = []
+    # Names are only printable under a module: the un-narrowed corpus is
+    # 6,003 structural entries, so counts are all an unfiltered scan can use.
+    want_names = bool(module and kind_filter)
 
     # `uses` names a function subject and answers what it reaches. Without a
     # subject there is nothing to group by, so a bare module keeps the flat
@@ -856,6 +921,7 @@ def _map_query(query, kind, module, max_results) -> str:
     # map, specs included — field queries are blast-radius questions.
     if kind_filter in ('reads', 'writes', 'fields'):
         want = {'reads': 'r', 'writes': 'w', 'fields': None}[kind_filter]
+        seen_fields: list[str] = []
         for mp in module_files:
             text = mp.read_text(encoding="utf-8", errors="replace")
             src = _src_of(mp, text)
@@ -865,6 +931,7 @@ def _map_query(query, kind, module, max_results) -> str:
                     continue
                 if want and mf.group("fkind") != want:
                     continue
+                seen_fields.append(mf.group("name"))
                 if query_rx and not query_rx.search(mf.group("name")):
                     continue
                 for caller, n in _iter_use_sites(mf.group("sites")):
@@ -879,7 +946,10 @@ def _map_query(query, kind, module, max_results) -> str:
                 break
 
         if not results:
-            return f"(no field matches for kind={kind!r}, query={query!r}, module={module!r})"
+            note = _domain_note(Counter({kind_filter: len(seen_fields)}),
+                                seen_fields, kind_filter, module, scope)
+            return (f"(no field matches for kind={kind!r}, query={query!r}, "
+                    f"module={module!r})") + (f"\n{note}" if note else "")
         if truncated:
             results.append(f"--- truncated at {max_results}; narrow the query ---")
         return "\n".join(results)
@@ -904,6 +974,10 @@ def _map_query(query, kind, module, max_results) -> str:
                 end_line = md.group("end")
                 doc = (md.group("doc") or "").strip()
 
+                seen_kinds[k] += 1
+                if want_names and kind_filter == k:
+                    seen_names.append(_bare_name(k, head))
+
                 if kind_filter and kind_filter != k:
                     continue
                 if query_rx:
@@ -921,6 +995,10 @@ def _map_query(query, kind, module, max_results) -> str:
                 raw_kind = ma.group("kind")
                 ek = _entry_kind(raw_kind)
                 body = ma.group("body").strip()
+
+                # Counted ahead of the filters: the bare-scan skip below is a
+                # display rule and must not hide the kind from the inventory.
+                seen_kinds[ek] += 1
 
                 if kind_filter and kind_filter != ek:
                     continue
@@ -946,7 +1024,8 @@ def _map_query(query, kind, module, max_results) -> str:
         if kind: bits.append(f"kind={kind!r}")
         if module: bits.append(f"module={module!r}")
         q = ", ".join(bits) if bits else "<no filters>"
-        return f"(no matches for {q})"
+        note = _domain_note(seen_kinds, seen_names, kind_filter, module, scope)
+        return f"(no matches for {q})" + (f"\n{note}" if note else "")
 
     if truncated:
         results.append(f"--- truncated at {max_results}; narrow the query ---")

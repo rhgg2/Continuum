@@ -77,7 +77,26 @@ write-up, and we only start it when we're both happy to proceed.
    brief and nothing else — not this conversation, not the plan file,
    not the design doc — so it has to stand alone:
    - what and why, briefly;
-   - the decision context already settled;
+   - the decisions already settled — each carrying the reason it went
+     that way, and, where one exists, what would overturn it. A bare
+     instruction can only be complied with or not; a reason can be
+     found false, and that is the only way an implementer meeting a
+     surprise can tell a stale premise from a detail to absorb. The
+     shape:
+
+     ```markdown
+     **Bare names, not result rows.** A `src:line @kind head` row is
+     ~10× a bare name, and the modules in this population are the three
+     largest in the corpus. *Reopens if* the names turn out to need
+     their line numbers — the symptom is <what you would see>.
+     ```
+
+     Not every decision has a defeater; where there is none, omit the
+     clause rather than inventing one. This is a register for the
+     judgements only — anything naming an observable outcome ("zero
+     removed lines across all 44 maps") stays imperative, because that
+     is a check the implementer runs and gets a result back from rather
+     than an instruction to obey;
    - target shapes (data structures, fields) copied in, not pointed at;
    - file anchors — tight ranges, current line numbers (the plan will
      be implemented immediately, so no worries over drift);
