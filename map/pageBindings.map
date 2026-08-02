@@ -22,12 +22,12 @@
       -- Shift+letter. ImGui.Key_0 + n and Key_A + n are contiguous.
 
 # Uses (outbound edges)
-  @use call    util.toBase62  @ 173
-  @use require imgui  @ 10
-  @use require util  @ 11
+  @use call    util.toBase62  @ <load>:173
+  @use require imgui  @ <load>:10
+  @use require util  @ <load>:11
 
 # Calls (intra-file)
-  @call placeKey  @ 173
+  @call placeKey  @ <load>:173
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath

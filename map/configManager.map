@@ -115,19 +115,19 @@
   @use call    ps:boundTake  @ savers.take:363 boundTake:427
   @use call    ps:boundTrack  @ savers.track:358 boundTrack:430
   @use call    ps:clearTake  @ clearTake:420
-  @use call    ps:declareUndoable  @ 398
+  @use call    ps:declareUndoable  @ <load>:398
   @use call    ps:get  @ loaders.global:347 loaders.project:348 loaders.track:349 loaders.take:350
   @use call    ps:getAt  @ valueFor:505
   @use call    ps:pollUndo  @ pollUndo:440
   @use call    ps:setTake  @ setContext:413
   @use call    ps:setTrack  @ setTrack:433
-  @use call    ps:watch  @ 402
-  @use call    util.add  @ 258,259,267,268
-  @use call    util.deepClone  @ 85 copy:307 getAt:496
-  @use call    util.installHooks  @ 394
+  @use call    ps:watch  @ <load>:402
+  @use call    util.add  @ <load>:258,259,267,268
+  @use call    util.deepClone  @ <load>:85 copy:307 getAt:496
+  @use call    util.installHooks  @ <load>:394
   @use call    util.print  @ print:19
-  @use require tuning  @ 13
-  @use require util  @ 12
+  @use require tuning  @ <load>:13
+  @use require util  @ <load>:12
 
 # Calls (intra-file)
   @call asTable  @ loaders.global:347 loaders.project:348 loaders.track:349 loaders.take:350
@@ -135,10 +135,10 @@
   @call checkLevel  @ getAt:489 set:519 remove:532 assign:547
   @call copy  @ get:483,484 getAt:494 valueFor:506 defaultFor:512 set:524 assign:554
   @call ensureCache  @ resolveKey:448 mergedKey:462 getAt:490 set:521 remove:534 assign:549
-  @call expandRef  @ 285,287
-  @call hex  @ 93,94,95,96,97,98,99,100,101,102,103,104
-  @call hex  @ 105,106,107,108,109,110,111,112,113,114,117,118
-  @call hex  @ 119,120,121,122,123,124,125
+  @call expandRef  @ <load>:285,287
+  @call hex  @ <load>:93,94,95,96,97,98,99,100,101,102,103,104
+  @call hex  @ <load>:105,106,107,108,109,110,111,112,113,114,117,118
+  @call hex  @ <load>:119,120,121,122,123,124,125
   @call mergedKey  @ get:483
   @call print  @ savers.track:358
   @call pruneUnknown  @ loaders.global:347 loaders.project:348 loaders.track:349 loaders.take:350
@@ -146,9 +146,9 @@
   @call resolveKey  @ get:484
 
 # Unresolved receivers
-  @drop key:match  @ 281
+  @drop key:match  @ <load>:281
   @drop loaders.track  @ setTrack:434
-  @drop ref:match  @ expandRef:276 292
+  @drop ref:match  @ expandRef:276 <load>:292
   @drop s:gsub  @ hex:23
   @drop s:sub  @ hex:24,25,26
 

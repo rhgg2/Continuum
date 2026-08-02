@@ -409,7 +409,7 @@
   @use call    chrome.popChromeWindow  @ renderCanvas:2344,2391,2413
   @use call    chrome.pushChromeWindow  @ renderCanvas:2324,2352,2404
   @use call    cmgr:invoke  @ renderCanvas:2076
-  @use call    cmgr:scope  @ 2680
+  @use call    cmgr:scope  @ <load>:2680
   @use call    facade.get  @ commitFx:2625,2626
   @use call    modalHost:openConfirm  @ deleteSourceGuarded:2456
   @use call    modalHost:openPrompt  @ openAddSourceModal:2441
@@ -452,9 +452,9 @@
   @use call    wv:setSourceTagPos  @ renderCanvas:2268
   @use call    wv:wireViews  @ renderCanvas:1761
   @use call    wv:wiredPorts  @ layoutPortRow:453
-  @use require imgui  @ 16
-  @use require painter  @ 17
-  @use require util  @ 10
+  @use require imgui  @ <load>:16
+  @use require painter  @ <load>:17
+  @use require util  @ <load>:10
 
 # Calls (intra-file)
   @call arrowMidHit  @ renderCanvas:1843
@@ -578,8 +578,8 @@
   @drop p.tri  @ drawHandle:299,301 drawWireArrow:906
   @drop s:sub  @ wrapLabel:208
   @drop text:gmatch  @ atomise:191
-  @drop wiring:bindAll  @ 2685
-  @drop wiring:registerAll  @ 2681
+  @drop wiring:bindAll  @ <load>:2685
+  @drop wiring:registerAll  @ <load>:2681
   @drop word:byte  @ camelSplit:176
   @drop word:sub  @ camelSplit:178,182
 

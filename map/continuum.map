@@ -52,14 +52,14 @@
   @use require coordinator  @ Main:75
   @use require dataStore  @ Main:72
   @use require eventMeta  @ Main:73
-  @use require imgui  @ 17
-  @use require perf  @ 18
+  @use require imgui  @ <load>:17
+  @use require perf  @ <load>:18
   @use require pextStore  @ Main:70
-  @use require util  @ 16
+  @use require util  @ <load>:16
 
 # Calls (intra-file)
   @call createImGui  @ Main:69
-  @call run  @ 195
+  @call run  @ <load>:195
 
 # Bindings (by name)
   @bind Main  @ 195

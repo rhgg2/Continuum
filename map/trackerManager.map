@@ -669,7 +669,7 @@
   @use call    cm:setContext  @ bindTake:5107 detach:5126
   @use call    ds:assign  @ flushParked:1475 freezeRegion:1873 rebuildExtraColumns:2550 persistParked:2747 rebuildPipeline:4878 guardTrack:5084
   @use call    ds:delete  @ restoreGuarded:5094
-  @use call    ds:get  @ derivationInputs:243,244,245 flushParked:1456,1474 currentSwing:1640 freezeRegion:1767,1772,1864 rebuildPipeline:4822,4823,4824,4825 4957 snapshotSwingState:4961 channelsResolvingTo:4989 ds:dataChanged:5049,5059,5062 restoreGuarded:5090
+  @use call    ds:get  @ derivationInputs:243,244,245 flushParked:1456,1474 currentSwing:1640 freezeRegion:1767,1772,1864 rebuildPipeline:4822,4823,4824,4825 <load>:4957 snapshotSwingState:4961 channelsResolvingTo:4989 ds:dataChanged:5049,5059,5062 restoreGuarded:5090
   @use call    generators.chainDestType  @ rebuildFx:3452,3456,3581
   @use call    generators.continuousTargets  @ rebuildFx:3499,3512,3587
   @use call    generators.destOf  @ rebuildFx:3428
@@ -717,30 +717,30 @@
   @use call    util.bucket  @ allocateRegionLanes:655,661,673 reconcilePCsForChan:857 collisionKills:1144 seedEvent:1179 assignLowlevel:1199 flushParked:1461 realiseParked:2703 rebuildRegionPark:2801,2810,2955,3020 rebuildFx:3318,3325,3370,3454,3492,3607 linearTails:3768 frontierTails:3963 rebuildPbs:4351
   @use call    util.clamp  @ centsToRaw:258 sumStreams:387 rebuildFx:3648 rebuildPbs:4221
   @use call    util.clone  @ shedLane:140 soundingCell:687 makeEntry:1055 freezeRegion:1858 tileLength:2004,2030 setMutedChannels:2056 projectCC:2087 rebuildInternals:2252,2255 spliceCcCell:2346 spliceChannelCCs:2435 fullRebuildChannelCCs:2472 rebuildExternals:2675 parkSpec:2731 rebuildRegionPark:2854,2865,2875,2935,2974,2990,2999,3042,3053,3073 rebuildPbs:4349,4565
-  @use call    util.deepClone  @ flushParked:1456 rebuildPipeline:4888 4956,4957 snapshotSwingState:4960,4961 cm:configChanged:5034 ds:dataChanged:5055
+  @use call    util.deepClone  @ flushParked:1456 rebuildPipeline:4888 <load>:4956,4957 snapshotSwingState:4960,4961 cm:configChanged:5034 ds:dataChanged:5055
   @use call    util.deepEq  @ seedRegionEdit:208 flushParked:1474 freezeRegion:1872 persistParked:2746 rebuildPipeline:4877 changedSwingNames:4977 bindTake:5116
   @use call    util.insertSorted  @ insertNoteCell:127 rawIndexInsert:996 spliceCcCell:2359 externalLanePacker:2635
-  @use call    util.installHooks  @ 60
+  @use call    util.installHooks  @ <load>:60
   @use call    util.key  @ seedRegionEdit:196 seedParkedEdit:225 fxKey:882 rebuildRegionPark:2955,2964,3007,3010 rebuildFx:3320,3324,3661
   @use call    util.pick  @ membersOf:621 rebuildFx:3401
   @use call    util.round  @ centsToRaw:258 ccGridStep:267 sumStreams:386 rawToCents:437 fromLogical:1667 projectEvent:2102 rebuildRegionPark:2867 rebuildFx:3648 makeTailRules:3702,3728,3736
   @use call    util.seek  @ detuneAt:915 addEvent:1408 linearTails:3807,3808 rebuildPbs:4272,4273,4280,4281,4310 stampSamples:4682
   @use call    voicing.resolveSorted  @ collisionKills:1147
   @use call    voicing.separateOnset  @ makeTailRules:3692
-  @use forward mm:notesDeduped  @ 5005
-  @use forward mm:takeSwapped  @ 5007
-  @use forward mm:uuidsReassigned  @ 5006
-  @use require generators  @ 51
-  @use require perf  @ 52
-  @use require timing  @ 41
-  @use require tuning  @ 42
-  @use require util  @ 40
-  @use require voicing  @ 43
-  @use sub     cm:configChanged  @ 5026
-  @use sub     ds:dataChanged  @ 5043
-  @use sub     mm:collisionsResolved  @ 5010
-  @use sub     mm:reload  @ 5014
-  @use sub     mm:takeSwapped  @ 5013
+  @use forward mm:notesDeduped  @ <load>:5005
+  @use forward mm:takeSwapped  @ <load>:5007
+  @use forward mm:uuidsReassigned  @ <load>:5006
+  @use require generators  @ <load>:51
+  @use require perf  @ <load>:52
+  @use require timing  @ <load>:41
+  @use require tuning  @ <load>:42
+  @use require util  @ <load>:40
+  @use require voicing  @ <load>:43
+  @use sub     cm:configChanged  @ <load>:5026
+  @use sub     ds:dataChanged  @ <load>:5043
+  @use sub     mm:collisionsResolved  @ <load>:5010
+  @use sub     mm:reload  @ <load>:5014
+  @use sub     mm:takeSwapped  @ <load>:5013
 
 # Calls (intra-file)
   @call absorbReloadDirt  @ flush:1550 mm:reload:5019
@@ -814,7 +814,7 @@
   @call isCurved  @ sumStreams:412 rebuildPbs:4450,4474
   @call isSorted  @ rebuildInternals:2299
   @call linearTails  @ rebuildTails:4083
-  @call loadIndex  @ 1131 reload:1589
+  @call loadIndex  @ <load>:1131 reload:1589
   @call lookup  @ deleteEvent:1300 assignEvent:1371
   @call lowerBound  @ nearestNote:3866 nextSamePitch:3910 seatMatches:3930
   @call makeEntry  @ idxReconcile:1090 loadIndex:1114
@@ -857,7 +857,7 @@
   @call rawSpanMap  @ rebuildCCs:2510
   @call rawThenLogical  @ mergeIndexed:3099 nearestNote:3881,3882 prevSamePitch:3894,3899,3900 nextSamePitch:3912,3917,3918 rebuildPbs:4161,4177
   @call rawToCents  @ makeEntry:1056 refreshEntry:1073 rebuildPbs:4399,4410
-  @call readSwings  @ 4956 snapshotSwingState:4960 cm:configChanged:5030
+  @call readSwings  @ <load>:4956 snapshotSwingState:4960 cm:configChanged:5030
   @call realiseAddPpq  @ addEvent:1401,1404
   @call realiseNonNoteUpdate  @ assignEvent:1379
   @call realiseNoteUpdate  @ assignEvent:1376
@@ -920,9 +920,9 @@
   @call tm:fromLogical  @ makeTailRules:3721 rebuildTails:4061 rebuildPbs:4210,4211,4220
   @call tm:length  @ offTakeEnd:713 realiseNoteUpdate:1351 freezeRegion:1789 rebuildRegionPark:2849 computeFxWindows:3186 rebuildTails:4037
   @call tm:markSwingStale  @ cm:configChanged:5032 ds:dataChanged:5051,5053 bindTake:5116
-  @call tm:rebuild  @ flush:1916 mm:reload:5021 cm:configChanged:5038 ds:dataChanged:5056,5059,5062,5065,5069 5139
+  @call tm:rebuild  @ flush:1916 mm:reload:5021 cm:configChanged:5038 ds:dataChanged:5056,5059,5062,5065,5069 <load>:5139
   @call tm:requestRebuild  @ freezeRegion:1887 setLength:1941 ds:dataChanged:5069
-  @call tm:restoreGuarded  @ bindTake:5105 detach:5124 5138
+  @call tm:restoreGuarded  @ bindTake:5105 detach:5124 <load>:5138
   @call tm:setLength  @ tileLength:1998
   @call tm:toLogical  @ offTakeEnd:713 freezeRegion:1789 projectEvent:2107 spliceCcCell:2343 fullRebuildChannelCCs:2464 rebuildExternals:2669,2670 rebuildRegionPark:2882 computeFxWindows:3244 makeTailRules:3736 rebuildPbs:4456,4478
   @call trackByGuid  @ restoreGuarded:5092

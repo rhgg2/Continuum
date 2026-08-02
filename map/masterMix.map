@@ -65,7 +65,7 @@
   @use call    ImGui.IsItemActive  @ render:93
   @use call    ImGui.IsItemHovered  @ render:94
   @use call    ImGui.IsMouseDoubleClicked  @ render:94
-  @use require imgui  @ 6
+  @use require imgui  @ <load>:6
 
 # Calls (intra-file)
   @call ampToDb  @ loudnessDb:31 drawBar:56 render:111,112

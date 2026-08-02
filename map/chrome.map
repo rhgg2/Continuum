@@ -205,9 +205,9 @@
   @use call    cm:set  @ setCollapsed:295
   @use call    lib.modified  @ libPicker:438
   @use call    painter.new  @ screenPainter:67
-  @use require imgui  @ 10
-  @use require painter  @ 11
-  @use sub     cm:configChanged  @ 18
+  @use require imgui  @ <load>:10
+  @use require painter  @ <load>:11
+  @use sub     cm:configChanged  @ <load>:18
 
 # Calls (intra-file)
   @call chrome.colour  @ pushChromeStyles:76,77,80,81,82,85,86,87,88,89,90,91

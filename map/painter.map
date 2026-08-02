@@ -62,7 +62,7 @@
   @use call    ImGui.Image_SetPixels_Array  @ rasteriseRotated:72
   @use call    ImGui.PopFont  @ new:243
   @use call    ImGui.PushFont  @ new:241
-  @use require imgui  @ 24
+  @use require imgui  @ <load>:24
 
 # Calls (intra-file)
   @call gamma  @ oklchToRgb:286,287,288

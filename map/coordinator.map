@@ -123,39 +123,39 @@
   @use call    ImGui.Unindent  @ frame:259
   @use call    bridge:tick  @ tick:73
   @use call    chrome.colour  @ drawSwitcher:81,82 frame:159,160,161,162,163,233,264,265
-  @use call    chrome.makeToolbar  @ 28
+  @use call    chrome.makeToolbar  @ <load>:28
   @use call    chrome.popChromeStyles  @ frame:205
   @use call    chrome.pushChromeStyles  @ frame:199
   @use call    chrome.resetPickerActive  @ frame:232
   @use call    chrome.resetToolbar  @ setActive:308
   @use call    chrome.toolbarLineCount  @ frame:229
   @use call    cm:pollUndo  @ frame:145 reloadAfterExternalMutation:345
-  @use call    cmgr:bind  @ 38
+  @use call    cmgr:bind  @ <load>:38
   @use call    cmgr:invoke  @ drawSwitcher:85 pollExternalCommands:123
   @use call    cmgr:pop  @ setActive:309
   @use call    cmgr:push  @ setActive:313
-  @use call    cmgr:register  @ 37
+  @use call    cmgr:register  @ <load>:37
   @use call    help:beginFrame  @ frame:155
   @use call    help:draw  @ frame:277
   @use call    help:isOpen  @ dispatch:107
   @use call    help:setPage  @ setActive:312
   @use call    help:toggle  @ cmgr:toggleHelp:37
   @use call    keyDispatch.dispatchKeys  @ dispatch:110
-  @use call    lib.seedIfEmpty  @ 24
+  @use call    lib.seedIfEmpty  @ <load>:24
   @use call    modalHost:draw  @ frame:278
   @use call    modalHost:isOpen  @ cmgr:toggleHelp:37
   @use call    modalHost:tick  @ tick:70
   @use call    util.assign  @ register:295
-  @use call    util.instantiate  @ 21,26,29,30,31,362 register:295
-  @use require bridge  @ 362
-  @use require chrome  @ 26
-  @use require help  @ 30
-  @use require imgui  @ 14
-  @use require keyDispatch  @ 15
-  @use require library  @ 21
-  @use require masterMix  @ 31
-  @use require modalHost  @ 29
-  @use require util  @ 7
+  @use call    util.instantiate  @ <load>:21,26,29,30,31,362 register:295
+  @use require bridge  @ <load>:362
+  @use require chrome  @ <load>:26
+  @use require help  @ <load>:30
+  @use require imgui  @ <load>:14
+  @use require keyDispatch  @ <load>:15
+  @use require library  @ <load>:21
+  @use require masterMix  @ <load>:31
+  @use require modalHost  @ <load>:29
+  @use require util  @ <load>:7
 
 # Calls (intra-file)
   @call anyFxFloating  @ frame:150

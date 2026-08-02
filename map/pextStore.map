@@ -113,13 +113,13 @@
   @use call    scratch.peek  @ seedMirror:114 ensureScratch:174
   @use call    scratch.track  @ mirrorAssign:195
   @use call    util.hash  @ bucketOf:106 writeBucketAndRoot:131 remirrorMissing:157 mirrorAssign:202
-  @use call    util.installHooks  @ 338
+  @use call    util.installHooks  @ <load>:338
   @use call    util.prettySerialise  @ encode:294
   @use call    util.prettyUnserialise  @ decode:279
   @use call    util.print  @ print:13
   @use call    util.serialise  @ writeBucketAndRoot:127,133 encode:295
-  @use require scratch  @ 10
-  @use require util  @ 9
+  @use require scratch  @ <load>:10
+  @use require util  @ <load>:9
 
 # Calls (intra-file)
   @call blobKey  @ snapshotBaseline:307 zeroBaselines:317 watch:403 pollUndo:422

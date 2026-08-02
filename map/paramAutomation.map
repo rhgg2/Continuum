@@ -97,7 +97,7 @@
   @use call    util.key  @ computeDesired:97 applyTrack:201,203
   @use call    util.print  @ writeBanks:157
   @use call    util.serialise  @ writeMirror:134
-  @use require util  @ 10
+  @use require util  @ <load>:10
 
 # Calls (intra-file)
   @call allocBusCode  @ automate:331

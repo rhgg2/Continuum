@@ -320,17 +320,17 @@
   @use call    util.compact  @ rebuild:475,476
   @use call    util.fromBase36  @ noteSidecarDecode:173
   @use call    util.insertSorted  @ orderInsert:347
-  @use call    util.installHooks  @ 585
+  @use call    util.installHooks  @ <load>:585
   @use call    util.key  @ load:623,625,626,627,685 noteCollision:950
   @use call    util.pick  @ load:701,735,754,783,859
   @use call    util.print  @ print:42
   @use call    util.toBase36  @ noteSidecarEncode:167 ccSidecarEncode:200
   @use call    voicing.resolveGroup  @ load:692 resolveCollisions:962
-  @use require midiBlob  @ 9
-  @use require perf  @ 11
-  @use require util  @ 8
-  @use require voicing  @ 10
-  @use sub     eventMeta:poolsRewound  @ 925
+  @use require midiBlob  @ <load>:9
+  @use require perf  @ <load>:11
+  @use require util  @ <load>:8
+  @use require voicing  @ <load>:10
+  @use sub     eventMeta:poolsRewound  @ <load>:925
 
 # Calls (intra-file)
   @call addCC  @ add:1310
@@ -365,7 +365,7 @@
   @call markWire  @ markWireAdded:1014 assign:1323 delete:1345
   @call markWireAdded  @ add:1312
   @call metaFieldsOf  @ saveMetadatum:258
-  @call mm:load  @ reload:920 1502
+  @call mm:load  @ reload:920 <load>:1502
   @call mm:reload  @ eventMeta:poolsRewound:928 setLength:1459
   @call mm:resolution  @ length:1406 setLength:1454
   @call noteCollision  @ assignNote:1137 addNote:1177
@@ -384,7 +384,7 @@
   @call seatKey  @ cachedSeatKey:388 assignNote:1125,1135 addNote:1176 delete:1350
   @call seatSidecar  @ sidecarPut:460,461 sidecarDrop:465
   @call setEot  @ setLength:1454
-  @call setTakeGuid  @ load:611 1502
+  @call setTakeGuid  @ load:611 <load>:1502
   @call sidecarDrop  @ resolveCollisions:969 delete:1347
   @call sidecarPut  @ resolveCollisions:980 addNote:1175 addCC:1292 assign:1333
   @call stableByPpq  @ rebuild:479

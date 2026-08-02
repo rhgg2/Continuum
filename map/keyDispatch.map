@@ -35,7 +35,7 @@
   @use call    ImGui.GetKeyMods  @ handlePrefixCapture:28 dispatchKeys:57
   @use call    ImGui.IsKeyDown  @ dispatchKeys:64
   @use call    ImGui.IsKeyPressed  @ handlePrefixCapture:30,34,37 dispatchKeys:67
-  @use require imgui  @ 9
+  @use require imgui  @ <load>:9
 
 # Calls (intra-file)
   @call handlePrefixCapture  @ dispatchKeys:52

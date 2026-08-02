@@ -47,7 +47,7 @@
   @use call    util.add  @ reconcile:77,79,84
   @use call    util.clone  @ resolve:20 project:43
   @use call    util.deepEq  @ reconcile:78
-  @use require util  @ 14
+  @use require util  @ <load>:14
 
 # Calls (intra-file)
   @call groups.laneId  @ project:58

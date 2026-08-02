@@ -209,7 +209,7 @@
   @use call    cm:get  @ selUpdate:102 advance:459
   @use call    cmgr:pop  @ exitMode:520
   @use call    cmgr:push  @ enterArmed:527
-  @use call    cmgr:scope  @ 744
+  @use call    cmgr:scope  @ <load>:744
   @use call    groupBridge.clearAt  @ stampAt:545
   @use call    groupBridge.clearMoveGap  @ sealMove:512
   @use call    groupBridge.commit  @ sealMove:515 newFromSelection:538 stampAt:548 dropInstance:571 resizeBy:712 paintCell:719
@@ -220,7 +220,7 @@
   @use call    groupBridge.selectionAsRect  @ newFromSelection:532
   @use call    util.add  @ blockKeys:631 partsFor:844,845,846 decorateCol:876,877,878
   @use call    util.clamp  @ clampPos:55,59,60 shiftSelection:449,450,451 moveBy:582 moveByChan:599
-  @use require util  @ 25
+  @use require util  @ <load>:25
 
 # Calls (intra-file)
   @call blockFits  @ moveByLane:681,694
@@ -275,7 +275,7 @@
 
 # Unresolved receivers
   @drop gm:eachInstance  @ orderedInstances:313 hopInstance:780
-  @drop regionScope:registerAll  @ 759
+  @drop regionScope:registerAll  @ <load>:759
   @drop scope:registerAll  @ registerCommands:798
   @drop sid:match  @ blockKeys:630 laneWalkable:649
 

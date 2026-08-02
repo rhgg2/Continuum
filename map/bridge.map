@@ -47,7 +47,7 @@
   @api bridge:tick()  @ 201-209
 
 # Calls (intra-file)
-  @call defaultSpoolDir  @ 21
+  @call defaultSpoolDir  @ <load>:21
   @call dirExists  @ tick:205
   @call execute  @ scanOnce:192
   @call firstReq  @ scanOnce:187

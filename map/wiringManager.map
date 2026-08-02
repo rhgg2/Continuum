@@ -334,12 +334,12 @@
   @use call    util.clone  @ applyOps:1779
   @use call    util.deepClone  @ ensureCompiled:115 graph:170 mutate:215 busRecords:759 projectEntry:990 stampDecoration:1452
   @use call    util.deepEq  @ mirrorBusTaps:316 fxOrderEq:1479,1480 pinMapsEq:1517
-  @use call    util.installHooks  @ 30
+  @use call    util.installHooks  @ <load>:30
   @use call    util.key  @ readGraph:1374,1398 sendKey:1471
-  @use require DAG  @ 23
-  @use require fs  @ 24
-  @use require scratch  @ 25
-  @use require util  @ 22
+  @use require DAG  @ <load>:23
+  @use require fs  @ <load>:24
+  @use require scratch  @ <load>:25
+  @use require util  @ <load>:22
   @use sub     self:wiringChanged  @ enableLive:2082
 
 # Calls (intra-file)

@@ -217,7 +217,7 @@
   @use call    util.key  @ sendKey:481
   @use call    util.serialise  @ writeTrackMeta:574
   @use call    util.unserialise  @ decodeBlob:561
-  @use require util  @ 7
+  @use require util  @ <load>:7
 
 # Calls (intra-file)
   @call applyMuteReport  @ tracks:792 track:805 fx:989
@@ -276,7 +276,7 @@
   @call writeTrackMeta  @ addTrack:857 assignTrack:866
 
 # Unresolved receivers
-  @drop b64alpha:sub  @ 172 b64encode:202,208
+  @drop b64alpha:sub  @ <load>:172 b64encode:202,208
   @drop body:gmatch  @ splitChunkLines:218
   @drop bytes:byte  @ mutateByteInBase64Line:257
   @drop bytes:sub  @ mutateByteInBase64Line:260,262

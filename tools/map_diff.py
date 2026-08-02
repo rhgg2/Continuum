@@ -92,6 +92,11 @@ def enclosing(spans, line: int) -> Span | None:
     return max(hits) if hits else None
 
 
+# The chunk body's own span. `map_extract` writes `<load>` for a call made
+# there; luac gives the main chunk no line range, so both sides spell it 0-0.
+MAIN_CHUNK = (0, 0)
+
+
 def read_map(path: Path) -> MapSide:
     """Every declaration and every `@call` site in one map. Rows that fail to
     parse raise: a dropped row is a defect that cannot be counted, and its
@@ -136,6 +141,12 @@ def read_map(path: Path) -> MapSide:
                 line = int(num)
                 if not sep:
                     ms.unattributed.append((callee, line))
+                    continue
+                # Not a declaration, and deliberately unspellable as one, so it
+                # resolves against the chunk rather than through by_name.
+                if caller == '<load>':
+                    ms.sites.add(Site(MAIN_CHUNK, callee, line))
+                    ms.spans.add(MAIN_CHUNK)
                     continue
                 span = enclosing(ms.by_name.get(bare(caller), ()), line)
                 if span is None:
@@ -210,7 +221,17 @@ def identity_of(call) -> str:
             if writer.comment == 'self':
                 return 'self-receiver'
             return scope(binder(proto, reg(writer.args[1])))
+        # A receiver the loader does not name may still be a live local, and in
+        # the main chunk that settles identity: nothing encloses the chunk, so
+        # a local of it is the file-scope declaration the `@call` row claims.
+        if proto.parent is None and map_oracle.local_name(proto, r, via.pc):
+            return 'file-scope'
         return f'unresolved: receiver via {writer.op}'
+    # The same argument one register along: a callee MOVEd out of a main-chunk
+    # local cannot have come from an enclosing scope, there being none.
+    if via.op == 'MOVE' and proto.parent is None:
+        if map_oracle.local_name(proto, reg(via.args[1]), via.pc):
+            return 'file-scope'
     return f'unresolved: via {via.op}'
 
 
@@ -402,11 +423,18 @@ CONTROL_SITES = {
         ('1995-2035', 'mm:events', 'method', 'luac-only', 'out of scope'),
         ('1995-2035', 'snapshot',  'local',  'luac-only', 'out of scope'),
     ),
-    # The unattributed class: four genuine main-chunk calls inside the
-    # `tuning.presets` table constructor, outside every declared span.
+    # A chunk-body call: `edo(12, {…})` inside the `tuning.presets` table
+    # constructor, outside every declared span, carried by `<load>`.
     ('tuning', 98): (
-        ('-', 'edo', '-',     'unattributed', 'map, in 0-0'),
-        ('-', 'edo', 'local', 'unattributed', 'luac'),
+        ('0-0', 'edo', 'local', 'agreed', 'file-scope'),
+    ),
+    # What survives the chunk-body naming: `dropAt` sits inside a one-line
+    # `function() … end` under a computed key, so it is neither enclosed by a
+    # captured declaration nor at depth 0, and stays honestly unattributed.
+    ('arrangeView', 658): (
+        ('-', '<call result>.am:keyForSlot', 'method',  'unattributed', 'luac'),
+        ('-', 'dropAt',                      '-',       'unattributed', 'map, in 658-658'),
+        ('-', 'dropAt',                      'upvalue', 'unattributed', 'luac'),
     ),
 }
 

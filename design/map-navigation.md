@@ -924,8 +924,72 @@ to `sample.setTrack` — and this closes that too. The `@field` index is left
 with it: a write is still attributed by line, so `@field w
 applyTakeProperties  @ applyTakeProperties:519` names a declaration as its
 own writer. That reading is pre-existing and general — every `function
-recv.name(…)` head already reads that way — so it is a separate change, not
-a rider on this one.
+recv.name(…)` head already reads that way — so it is a separate change, not a
+rider on this one.
+
+**A chunk-body call is named for when it runs** (2026-08-02). The last
+unattributed class was not a construct the extractor misread: it was calls
+made in the module's own chunk body at load time — `hex('#1e1e15')` filling
+configManager's palette, `add(ImGui.Key_A + i, …)` in gridPane's `editKeys`
+block, `tv:rebuild(true)` on trackerView's last line. There is no function to
+name, so the choice read as a synthetic caller against leaving them bare and
+saying so elsewhere. The second is not available at zero cost, which is the
+finding that settled it: `map_query` reads the maps and nothing else, and a
+bare line number cannot distinguish load-time wiring from a literal the
+extractor could not name. Something had to land in the corpus either way, and
+the only open question was whether to mark the norm or the residue. The norm,
+spelled `<load>` — the default then fails safe, a future unattributable site
+reading as unknown rather than as confidently load-time, and being no
+identifier it cannot be mistaken for a declaration.
+
+**Claimed on a positive test, never as a fallback**, or it would assert
+load-time of exactly the sites it cannot name. The test is the previous note's
+column one line further on: `placeCmds['drop' .. am:keyForSlot(i)] = {
+function() dropAt(i) end, … }` makes one call in the chunk body and one inside
+the literal, on one line. So `function_depth_before` now returns each line's
+opening block stack beside its depth, and a query resumes that walk up to the
+site's column — a depth alone cannot answer, because an `end` before the column
+may close a frame the line never opened. The fence is where luac stops
+certifying: `@call`, `@drop` and `@use` take the name and `@bind` and `@field`
+do not. Not on size, though it is 287 row groups against 1,478 — those two
+answer "where is this referenced", not "who called this", and 1,789 of their
+sites have no bytecode call behind them, so the claim would be one nothing
+could check.
+
+**The oracle needed two repairs before it could read the answer.**
+`tv:rebuild(true)` at file scope arrived as `R33:rebuild`: `local tv = {}`
+compiles to `NEWTABLE`, which `spell` did not handle, so it fell through to the
+register number without ever asking the locals table that held the name — six
+map-only rows, this phase's own alarm, all six a module calling a method on its
+own table at load. And the 71 new agreements are calls whose callee is a local
+of the main chunk, which no upvalue walk reaches, so they landed inside
+`agreed` and outside every certified class. Nothing encloses the chunk, so a
+local of it *is* the file-scope declaration the row claims; `identity_of` now
+says so, through a `MOVE` and through a receiver its loader does not name.
+
+**Widening the instrument and then reporting that it agrees is one measurement,
+not two**, so the evidence is staged rather than final. The oracle repair alone
+moves no `map_diff` number whatever — every count and every out-of-scope kind
+identical, zero corpus churn — which is precisely why it cannot land on its own
+evidence, "nothing moved" and "the fix does nothing" being the same reading; its
+separate control is that records spelled with a raw register fall 63 → 34, the
+remainder temporaries with no local to name. The extractor change alone takes
+map-only 0 → 6 and names all six. Together: map-only 0, `luac-only, in scope`
+0, agreed 3,026 → 3,279 across the phase with the sub-buckets summing to the
+total for the first time, and map-side unattributed 72 → 1. 287 row groups over
+57 maps, 287 lines added and 287 removed, every added line carrying `<load>`
+and no other content moving. `map_regen --check` clean, no `.lua` churn, suite
+green at 2,227, and the hand-derived control now pins the residue at
+`arrangeView:658` in place of the `tuning:98` rows this change converts.
+
+**The residue is seven sites of one class** — a call inside a function literal
+the extractor never named, which is why depth alone would have lied about them:
+`dropAt` under the computed key at `arrangeView:658`, `test.run` inside
+`xpcall(function() … end)` at `tests/run.lua:284`, `cm:set`, `ec:unstick` and
+`tv:ec` in one-line handlers, and two inside `realMidiManager`'s uncaptured
+`return function(take)`. `usedby` renders a `<load>` site as `(at file scope)`
+rather than as a name to look up, and the `uses` note says why such a site has
+no subject to group under.
 
 ## Open questions
 

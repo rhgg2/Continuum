@@ -96,7 +96,7 @@
   @use call    swingEditor:open  @ edit:174 renderBody:226
   @use call    temperEditor:hasSelection  @ renderBody:227
   @use call    temperEditor:open  @ edit:172 renderBody:227
-  @use require imgui  @ 15
+  @use require imgui  @ <load>:15
 
 # Calls (intra-file)
   @call actionBar  @ projectActions:68 libraryActions:91

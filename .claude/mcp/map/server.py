@@ -63,7 +63,8 @@ _ANN = re.compile(
     r'(?P<body>.*?)(?:\s+@\s+(?P<line>\d+))?\s*$'
 )
 # `@use <kind> <target>  @ <caller>:<line>[,<line>] [<caller>:<line>...]`
-# Top-level edges (e.g. requires) appear as bare line numbers, no caller.
+# The caller is `<load>` where the edge is made in the module's chunk body at
+# load time; a bare line number is one the extractor could not attribute.
 _USE = re.compile(
     r'^\s*@use\s+(?P<ukind>\w+)\s+(?P<target>\S+)\s+@\s+(?P<sites>.+?)\s*$'
 )
@@ -85,6 +86,14 @@ _BIND = re.compile(
 # `@drop <target>  @ <sites>` — qualified call sites whose receiver the
 # extractor could not resolve. Same site grammar again.
 _DROP = re.compile(r'^\s*@drop\s+(?P<target>\S+)\s+@\s+(?P<sites>.+?)\s*$')
+
+
+def _where(caller: str | None) -> str:
+    """The `(in …)` suffix on a site row. `<load>` names no declaration, so it
+    renders as the fact it stands for rather than as something to look up."""
+    if caller is None:
+        return ""
+    return "  (at file scope)" if caller == "<load>" else f"  (in {caller})"
 
 
 def _iter_use_sites(sites: str):
@@ -262,8 +271,7 @@ def _usedby_cross(module_pred, q_fn, raw_rx, reg, dirs) -> list[str]:
                 ukind = mu.group("ukind")
                 targets.add(f"{ukind} {target}")
                 for caller, n in _iter_use_sites(mu.group("sites")):
-                    where = f"  (in {caller})" if caller else ""
-                    site_rows.append(f"{src}:{n}  @use {ukind} {target}{where}")
+                    site_rows.append(f"{src}:{n}  @use {ukind} {target}{_where(caller)}")
             # Spec callers collapse to one row per spec file — the file list
             # answers "which specs exercise X"; per-site rows drown production.
             if site_rows and mp.parent.name == "specs":
@@ -305,8 +313,7 @@ def _usedby_intra(module_pred, q_fn, raw_rx, reg) -> list[str]:
             if raw_rx and not raw_rx.search(callee):
                 continue
             for caller, n in _iter_use_sites(sites):
-                where = f"  (in {caller})" if caller else ""
-                rows.append(f"{src}:{n}  {token} {callee}{where}")
+                rows.append(f"{src}:{n}  {token} {callee}{_where(caller)}")
     return rows
 
 
@@ -336,8 +343,7 @@ def _usedby_drops(module_pred, q_fn, raw_rx, reg) -> list[str]:
             if raw_rx and not raw_rx.search(target):
                 continue
             for caller, n in _iter_use_sites(md.group("sites")):
-                where = f"  (in {caller})" if caller else ""
-                rows.append(f"{src}:{n}  @drop {target}{where}")
+                rows.append(f"{src}:{n}  @drop {target}{_where(caller)}")
     return rows
 
 
@@ -345,11 +351,12 @@ def _usedby_drops(module_pred, q_fn, raw_rx, reg) -> list[str]:
 # does: what a named function reaches, with each callee resolved to its
 # declaration — the jump target the call site itself cannot give you.
 # See design/map-navigation.md § Intra-file call edges.
-_USES_NOTE = ("--- note: a site carries a caller only inside a named declaration "
-              "(@fn/@api/@held/@handler); sites at file scope are absent here, and "
-              "the head of a construct holding a literal — the wrapper call, the "
-              "registrar call — is file scope; calls on runtime receivers are "
-              "dropped ---")
+_USES_NOTE = ("--- note: a subject here is a named declaration "
+              "(@fn/@api/@held/@handler), so sites whose caller is `<load>` — the "
+              "module's chunk body, which includes the head of a construct "
+              "holding a literal, the wrapper call and the registrar call — have "
+              "no subject to group under and are absent; calls on runtime "
+              "receivers are dropped ---")
 
 
 class _Decl(NamedTuple):
@@ -825,8 +832,7 @@ def _map_query(query, kind, module, max_results) -> str:
             visited.add((mod, sig))
             pad = '  ' * depth
             for src, n, caller in subs.get((mod, sig), ()):
-                where = f"  (in {caller})" if caller else ""
-                lines_out.append(f"{pad}  sub      {src}:{n}{where}")
+                lines_out.append(f"{pad}  sub      {src}:{n}{_where(caller)}")
             for fmod, fsrc, fn in forwards.get((mod, sig), ()):
                 lines_out.append(f"{pad}  forward  {fsrc}:{fn}  → {short(fmod)}:{sig}")
                 if (fmod, sig) not in visited:

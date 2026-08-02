@@ -9,7 +9,7 @@
 # Uses (outbound edges)
   @use call    util.instantiate  @ 13
   @use require eventMeta  @ 13
-  @use require util  @ 9
+  @use require util  @ <load>:9
 
 # Fields (r read / w write incl. constructor keys)
   @field w eventMeta  @ 14

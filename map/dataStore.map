@@ -69,15 +69,15 @@
   @use call    ps:assignAt  @ assignAt:193
   @use call    ps:boundTake  @ persist:100 assignAt:194
   @use call    ps:boundTrack  @ persist:97 assignAt:195
-  @use call    ps:declareUndoable  @ 131
+  @use call    ps:declareUndoable  @ <load>:131
   @use call    ps:get  @ loadScope:73,79 ps:watch:145
   @use call    ps:getAt  @ getAt:165
-  @use call    ps:watch  @ 142
+  @use call    ps:watch  @ <load>:142
   @use call    util.deepClone  @ copy:58
-  @use call    util.installHooks  @ 108
+  @use call    util.installHooks  @ <load>:108
   @use call    util.print  @ print:15
-  @use require util  @ 10
-  @use sub     ps:contextChanged  @ 112
+  @use require util  @ <load>:10
+  @use sub     ps:contextChanged  @ <load>:112
 
 # Calls (intra-file)
   @call checkName  @ get:155 getAt:163 assign:172 assignAt:191
@@ -87,8 +87,8 @@
   @call loadScope  @ ensureScope:86
   @call persist  @ assign:177,180
   @call print  @ persist:97,100
-  @call projectUndoable  @ 129,137
-  @call slotFor  @ loadScope:79 persist:95,98,101 129,138 getAt:165 assignAt:193
+  @call projectUndoable  @ <load>:129,137
+  @call slotFor  @ loadScope:79 persist:95,98,101 <load>:129,138 getAt:165 assignAt:193
 
 # Fields (r read / w write incl. constructor keys)
   @field r REMOVE  @ assign:175,177 delete:186 assignAt:198

@@ -13,14 +13,14 @@
   @const pendTail = pending > 0 and string.format(', %d pending', pending) or ''  @ 306
 
 # Uses (outbound edges)
-  @use require harness  @ 12
+  @use require harness  @ <load>:12
 
 # Unresolved receivers
-  @drop fullName:find  @ 279
-  @drop info:match  @ 4
-  @drop source:match  @ 3
+  @drop fullName:find  @ <load>:279
+  @drop info:match  @ <load>:4
+  @drop source:match  @ <load>:3
   @drop test.run  @ 284
-  @drop testDir:match  @ 5
+  @drop testDir:match  @ <load>:5
 
 # Fields (r read / w write incl. constructor keys)
   @field r err  @ 302

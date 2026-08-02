@@ -172,8 +172,8 @@
   @use call    wm:syncExternal  @ syncExternal:140
   @use call    wm:trackNames  @ ensureView:29
   @use call    wm:viewGraph  @ ensureView:23
-  @use require util  @ 8
-  @use sub     wm:wiringChanged  @ 419
+  @use require util  @ <load>:8
+  @use sub     wm:wiringChanged  @ <load>:419
 
 # Calls (intra-file)
   @call activation  @ nodeView:126

@@ -309,11 +309,11 @@
   @use call    chrome.treeRow  @ drawTreeItem:448,472
   @use call    cm:get  @ drawSampleDropdown:48 toolbarSegments.render:136,143,190 toolbarSegments.visible:184 drawStatusBar:587,588,589,591,592 modalHost:takeProps:757 openNewTakeModal:1287,1289 openTakeProperties:1395
   @use call    cm:set  @ drawSampleDropdown:71 toolbarSegments.render:191 openNewTakeModal:1290
-  @use call    cmgr:doAfter  @ 1360
+  @use call    cmgr:doAfter  @ <load>:1360
   @use call    cmgr:invoke  @ toolbarSegments.render:152,179
   @use call    cmgr:keySpec  @ modalHost:takeProps:765
   @use call    cmgr:keysFor  @ modalHost:takeProps:771,772
-  @use call    cmgr:scope  @ 614,1328,1367
+  @use call    cmgr:scope  @ <load>:614,1328,1367
   @use call    ds:get  @ drawSampleDropdown:49 toolbarSegments.render:158,169 drawStatusBar:593
   @use call    facade.get  @ arrange:25
   @use call    generators.destOf  @ destItems:923 adjustRow:950 fxFieldWidget:966,983
@@ -327,13 +327,13 @@
   @use call    gridPane:handleKeys  @ renderBody:1475
   @use call    gridPane:handleMouse  @ renderBody:1469
   @use call    help:anchor  @ renderBody:1464
-  @use call    help:registerPage  @ 619
+  @use call    help:registerPage  @ <load>:619
   @use call    help:wasOpenAtFrameStart  @ renderBody:1469,1475
   @use call    modalHost:isOpen  @ drawFxChainBody:1250 focusState:1493
   @use call    modalHost:open  @ openNewTakeModal:1283 openTakeProperties:1403
   @use call    modalHost:openConfirm  @ removeAutomation:201 openConfirm:744
   @use call    modalHost:openPrompt  @ openPrompt:740
-  @use call    modalHost:registerKind  @ 753,1296
+  @use call    modalHost:registerKind  @ <load>:753,1296
   @use call    pe:launch  @ launchPattern:916
   @use call    tuning.findTemper  @ slideTemper:885
   @use call    tuning.stepsBetween  @ centsToSteps:891
@@ -395,18 +395,18 @@
   @use call    tv:takeName  @ openTakeProperties:1406
   @use call    tv:tick  @ renderBody:1481
   @use call    tv:unautomateParam  @ removeAutomation:205,208
-  @use call    tv:wireGroupLifetime  @ 1372
-  @use call    util.atomic  @ 35,36,37 drawSampleDropdown:71 openNewTakeModal:1288
+  @use call    tv:wireGroupLifetime  @ <load>:1372
+  @use call    util.atomic  @ <load>:35,36,37 drawSampleDropdown:71 openNewTakeModal:1288
   @use call    util.clamp  @ adjustRow:937,951 clampCursor:1047,1049 handleFxChainKeys:1082,1099
   @use call    util.deepClone  @ launchPattern:914 enterStrip:1172 editFx:1264
   @use call    util.deepEq  @ choiceIndex:876
-  @use call    util.instantiate  @ 862
+  @use call    util.instantiate  @ <load>:862
   @use call    util.oneOf  @ addColumn:840
-  @use require generators  @ 10
-  @use require gridPane  @ 862
-  @use require imgui  @ 16
-  @use require tuning  @ 9
-  @use require util  @ 8
+  @use require generators  @ <load>:10
+  @use require gridPane  @ <load>:862
+  @use require imgui  @ <load>:16
+  @use require tuning  @ <load>:9
+  @use require util  @ <load>:8
 
 # Calls (intra-file)
   @call adjustRow  @ handleFxChainKeys:1104,1106
@@ -458,7 +458,7 @@
   @call removeAutomation  @ paletteActions:223 removeOrHideCol:852
   @call rowHighlight  @ drawAddChainStage:1159 drawChainStage:1186,1209
   @call rowIndexOf  @ handleFxChainKeys:1099
-  @call scopedAction  @ 1350,1351
+  @call scopedAction  @ <load>:1350,1351
   @call scrollFollow  @ drawTreeItem:451,475
   @call selectParam  @ handlePaletteKeys:406,415
   @call slideTemper  @ adjustRow:940 fxFieldWidget:974
@@ -494,7 +494,7 @@
   @drop stripPaint.fill  @ rowHighlight:1143
   @drop stripPaint.segment  @ drawFlowMarker:1229,1230
   @drop stripPaint.text  @ drawFlowMarker:1231
-  @drop tracker:registerAll  @ 1330
+  @drop tracker:registerAll  @ <load>:1330
   @drop typeStr:lower  @ addColumn:836
 
 # REAPER API surface

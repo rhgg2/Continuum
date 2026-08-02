@@ -212,16 +212,16 @@
   @use call    tv:toggleChannelMute  @ handleMouse:997
   @use call    util.add  @ curveEditorFrame:369
   @use call    util.clamp  @ drawTracker:766
-  @use call    util.instantiate  @ 73
+  @use call    util.instantiate  @ <load>:73
   @use call    util.round  @ curveEditorFrame:392 handleMouse:1075,1082
-  @use require curveEditor  @ 73
-  @use require groups  @ 25
-  @use require imgui  @ 31
-  @use require painter  @ 32
-  @use require util  @ 24
+  @use require curveEditor  @ <load>:73
+  @use require groups  @ <load>:25
+  @use require imgui  @ <load>:31
+  @use require painter  @ <load>:32
+  @use require util  @ <load>:24
 
 # Calls (intra-file)
-  @call add  @ 845,847,848,850,851,852,853,854,855
+  @call add  @ <load>:845,847,848,850,851,852,853,854,855
   @call cellAt  @ nearestStop:825 handleMouse:975,992,1005,1040
   @call computeLayout  @ draw:871,873
   @call curveEditorFrame  @ drawLaneStrip:461 drawCurveEditor:944

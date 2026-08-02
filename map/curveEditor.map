@@ -48,9 +48,9 @@
   @use call    painter.new  @ frame:53
   @use call    util.clamp  @ frame:100,153,200,296,311,315
   @use call    util.round  @ frame:153,311,321
-  @use require imgui  @ 19
-  @use require painter  @ 20
-  @use require util  @ 13
+  @use require imgui  @ <load>:19
+  @use require painter  @ <load>:20
+  @use require util  @ <load>:13
 
 # Unresolved receivers
   @drop a.snap  @ frame:150,158

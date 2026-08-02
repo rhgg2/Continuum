@@ -94,8 +94,8 @@
   @use call    util.clamp  @ splitWide:36
   @use call    util.print  @ buildWire:279
   @use call    util.round  @ splitWide:34
-  @use require perf  @ 18
-  @use require util  @ 17
+  @use require perf  @ <load>:18
+  @use require util  @ <load>:17
 
 # Calls (intra-file)
   @call ccDataBytes  @ ccWire:135

@@ -34,7 +34,7 @@
 
 # Uses (outbound edges)
   @use call    util.print  @ report:99 dump:106,118 toggle:128 line:134
-  @use require util  @ 21
+  @use require util  @ <load>:21
 
 # Calls (intra-file)
   @call marksOf  @ renderNode:85

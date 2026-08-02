@@ -109,7 +109,7 @@
   @call combinations  @ genCPS:280
   @call computeCellWidth  @ derive:82
   @call computeOctaveStep  @ derive:80
-  @call edo  @ 98,101,105,110
+  @call edo  @ <load>:98,101,105,110
   @call gcd  @ genCPS:292 stackRatio:324
   @call octaveFieldWidth  @ computeCellWidth:45 derive:81
   @call octaveLabel  @ octaveFieldWidth:33 stepToParts:455

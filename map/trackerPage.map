@@ -67,8 +67,8 @@
   @use call    cm:get  @ tracker.selectNewParkedTake:122
   @use call    cm:getAt  @ bindFromSelection:91
   @use call    facade.get  @ arrange:20 samplerMode:26
-  @use call    facade.publish  @ 112
-  @use call    facade.publishDebug  @ 108
+  @use call    facade.publish  @ <load>:112
+  @use call    facade.publishDebug  @ <load>:108
   @use call    pa:apply  @ bind:76
   @use call    tm:bindTake  @ bind:73 unbind:78 tracker.reswingTakes:139,143
   @use call    tm:currentTake  @ takeHash:55 currentTake:68 bindFromSelection:97 tracker.reswingTakes:136,142
@@ -89,17 +89,17 @@
   @use call    tv:selectTrack  @ bindFromSelection:94 tracker.diveTo:113 tracker.selectNewParkedTake:121
   @use call    tv:setSwingComposite  @ tracker.setSwingComposite:149
   @use call    tv:timeSig  @ tracker.timeSig:147
-  @use call    util.instantiate  @ 31,32,33,34,35,36,40,43
-  @use require ccManager  @ 34
-  @use require groupManager  @ 33
-  @use require midiManager  @ 31
-  @use require paramAutomation  @ 35
-  @use require patternEditor  @ 40
-  @use require trackerManager  @ 32
-  @use require trackerRender  @ 43
-  @use require trackerView  @ 36
-  @use require util  @ 11
-  @use sub     mm:flushed  @ 62
+  @use call    util.instantiate  @ <load>:31,32,33,34,35,36,40,43
+  @use require ccManager  @ <load>:34
+  @use require groupManager  @ <load>:33
+  @use require midiManager  @ <load>:31
+  @use require paramAutomation  @ <load>:35
+  @use require patternEditor  @ <load>:40
+  @use require trackerManager  @ <load>:32
+  @use require trackerRender  @ <load>:43
+  @use require trackerView  @ <load>:36
+  @use require util  @ <load>:11
+  @use sub     mm:flushed  @ <load>:62
 
 # Calls (intra-file)
   @call arrange  @ samplerMode:25 bindFromSelection:92,93

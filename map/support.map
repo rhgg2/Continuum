@@ -41,7 +41,7 @@
 
 # Uses (outbound edges)
   @use call    util.instantiate  @ newEventMeta:163
-  @use require util  @ 5
+  @use require util  @ <load>:5
 
 # Calls (intra-file)
   @call M.eq  @ eventsMatch:87

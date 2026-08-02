@@ -229,7 +229,7 @@
   @use call    am:hasPlacedTakes  @ hasPlacedTakes:432
   @use call    am:initialCursor  @ seedCursor:611
   @use call    am:isParkedTake  @ isParkedTake:429
-  @use call    am:keyForSlot  @ keyForSlot:424 658
+  @use call    am:keyForSlot  @ keyForSlot:424 <load>:658
   @use call    am:loopRangeQN  @ setLoopStartHere:279 setLoopEndHere:286 loopRangeQN:435
   @use call    am:mintParkedTake  @ mintParkedTake:427
   @use call    am:moveTake  @ moveTakesBy:179 commitDrag:578
@@ -256,11 +256,11 @@
   @use call    cm:get  @ dropAt:264 deleteSelectedAndAdvance:270 followsPlay:326 followPlay:332 beatPerRow:387 setBeatPerRow:391
   @use call    cm:set  @ setFollowPlay:327 setBeatPerRow:394 653
   @use call    cmgr:invoke  @ diveSelected:227 createSlot:597
-  @use call    cmgr:scope  @ 619
+  @use call    cmgr:scope  @ <load>:619
   @use call    facade.get  @ tracker:18
   @use call    util.atomic  @ nudgeSelected:188 resizeSelected:197 deleteSelected:214 commitGroupDrag:550,559 commitDrag:571
   @use call    util.clamp  @ followViewport:46,50 setBeatPerRow:390
-  @use require util  @ 14
+  @use require util  @ <load>:14
 
 # Calls (intra-file)
   @call actionTargets  @ singleTarget:134 nudgeSelected:184 resizeSelected:194 deleteSelected:212
@@ -306,8 +306,8 @@
   @bind setLoopStartHere  @ 641
 
 # Unresolved receivers
-  @drop arrange:register  @ 652
-  @drop arrange:registerAll  @ 621,660
+  @drop arrange:register  @ <load>:652
+  @drop arrange:registerAll  @ <load>:621,660
 
 # REAPER API surface
   @reaper GetMediaItemTake_Item

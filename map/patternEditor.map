@@ -163,9 +163,9 @@
   @use call    chrome.verticalSeparator  @ drawToolbar:399,403
   @use call    cm:get  @ materialiseNotes:115 materialiseCurve:139 readbackBody:173,200 drawToolbar:397
   @use call    cm:set  @ open:243,254,261,273
-  @use call    cmgr:loadOverrides  @ 93
-  @use call    cmgr:push  @ 94
-  @use call    cmgr:scope  @ 84
+  @use call    cmgr:loadOverrides  @ <load>:93
+  @use call    cmgr:push  @ <load>:94
+  @use call    cmgr:scope  @ <load>:84
   @use call    ds:assign  @ open:263,264,280
   @use call    eventMeta:dropPool  @ close:295
   @use call    gridPane:cellHeight  @ launch:505
@@ -183,7 +183,7 @@
   @use call    mm:resolution  @ open:236
   @use call    mm:setLength  @ open:248
   @use call    modalHost:open  @ launch:509
-  @use call    modalHost:registerKind  @ 484
+  @use call    modalHost:registerKind  @ <load>:484
   @use call    scratch.track  @ open:232 close:297
   @use call    tm:addEvent  @ materialiseNotes:117 materialiseCurve:142,145
   @use call    tm:bindTake  @ open:234 close:296
@@ -197,23 +197,23 @@
   @use call    util.add  @ readbackBody:164,168,181,192
   @use call    util.deepClone  @ open:238
   @use call    util.deepEq  @ writeThrough:208 cancel:219
-  @use call    util.instantiate  @ 35,36,37,38,39,40,41,42,43,63
-  @use require commandManager  @ 42
-  @use require configManager  @ 36
-  @use require dataStore  @ 37
-  @use require eventMeta  @ 38
-  @use require gridPane  @ 63
-  @use require groupManager  @ 41
-  @use require imgui  @ 21
-  @use require keyDispatch  @ 22
-  @use require midiManager  @ 39
-  @use require pageBindings  @ 23
-  @use require pextStore  @ 35
-  @use require scratch  @ 15
-  @use require trackerManager  @ 40
-  @use require trackerView  @ 43
-  @use require util  @ 14
-  @use sub     tm:rebuild  @ 213
+  @use call    util.instantiate  @ <load>:35,36,37,38,39,40,41,42,43,63
+  @use require commandManager  @ <load>:42
+  @use require configManager  @ <load>:36
+  @use require dataStore  @ <load>:37
+  @use require eventMeta  @ <load>:38
+  @use require gridPane  @ <load>:63
+  @use require groupManager  @ <load>:41
+  @use require imgui  @ <load>:21
+  @use require keyDispatch  @ <load>:22
+  @use require midiManager  @ <load>:39
+  @use require pageBindings  @ <load>:23
+  @use require pextStore  @ <load>:35
+  @use require scratch  @ <load>:15
+  @use require trackerManager  @ <load>:40
+  @use require trackerView  @ <load>:43
+  @use require util  @ <load>:14
+  @use sub     tm:rebuild  @ <load>:213
 
 # Calls (intra-file)
   @call acceptInput  @ handleInput:468
@@ -243,8 +243,8 @@
   @bind writeThrough  @ 213
 
 # Unresolved receivers
-  @drop miniScope:bind  @ 87,91 setLaneCommands:104,105
-  @drop miniScope:register  @ 98,99
+  @drop miniScope:bind  @ <load>:87,91 setLaneCommands:104,105
+  @drop miniScope:register  @ <load>:98,99
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath

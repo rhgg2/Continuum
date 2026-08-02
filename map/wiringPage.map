@@ -37,9 +37,9 @@
   @api wp:focusState()  @ 61
 
 # Uses (outbound edges)
-  @use call    facade.publish  @ 32
-  @use call    facade.publishDebug  @ 39
-  @use call    util.instantiate  @ 23,24,25,27
+  @use call    facade.publish  @ <load>:32
+  @use call    facade.publishDebug  @ <load>:39
+  @use call    util.instantiate  @ <load>:23,24,25,27
   @use call    wm:isWiringOwnedTrack  @ wiring.isWiringOwnedTrack:33
   @use call    wm:paramTargets  @ wiring.paramTargets:34
   @use call    wm:samplerReachable  @ wiring.samplerReachable:35
@@ -50,11 +50,11 @@
   @use call    wr:toolbarSegments  @ toolbarSegments:58
   @use call    wv:enableLive  @ enableLive:52
   @use call    wv:syncExternal  @ syncExternal:55
-  @use require routingManager  @ 23
-  @use require util  @ 12
-  @use require wiringManager  @ 24
-  @use require wiringRender  @ 27
-  @use require wiringView  @ 25
+  @use require routingManager  @ <load>:23
+  @use require util  @ <load>:12
+  @use require wiringManager  @ <load>:24
+  @use require wiringRender  @ <load>:27
+  @use require wiringView  @ <load>:25
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath

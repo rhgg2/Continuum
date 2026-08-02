@@ -130,7 +130,7 @@
   @use call    util.assign  @ seed:482 retarget:497
   @use call    util.clamp  @ velPattern:304
   @use call    util.round  @ lfo:268 velPattern:304 seed:486 retarget:501
-  @use require util  @ 22
+  @use require util  @ <load>:22
 
 # Calls (intra-file)
   @call arpIndex  @ arp:115

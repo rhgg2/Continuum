@@ -50,8 +50,8 @@
   @use call    tuning.stepToMidi  @ noteProjection:33
   @use call    tuning.stepToParts  @ noteProjection:32
   @use call    util.round  @ snapRow:63 placeRow:84
-  @use require tuning  @ 8
-  @use require util  @ 7
+  @use require tuning  @ <load>:8
+  @use require util  @ <load>:7
 
 # Calls (intra-file)
   @call ctx:ppqToRow  @ snapRow:63 placeRow:83 tsRow:99

@@ -797,7 +797,7 @@
   @use call    clipboard:collect  @ duplicate:2942
   @use call    clipboard:copy  @ deleteRow:2171 deleteRowCol:2173 tracker.cut:3563
   @use call    clipboard:pasteClip  @ duplicate:2952
-  @use call    clipboard:registerCommands  @ 4030
+  @use call    clipboard:registerCommands  @ <load>:4030
   @use call    cm:assign  @ releaseTransientFrame:450 matchGridToCursor:502
   @use call    cm:boundTake  @ takeHoist:3365
   @use call    cm:boundTrack  @ resolveSelectionTake:187
@@ -805,12 +805,12 @@
   @use call    cm:getAt  @ selectedTrackIdx:165 effectiveSlot:170 resolveSelectionTake:188 selectTrack:211 releaseTransientFrame:448 setDefaultSwing:541 setSwingComposite:581
   @use call    cm:set  @ resolveSelectionTake:191 selectTrack:209,213 selectSlot:217 setRowPerBeat:514 setDefaultSwing:543 setTemperSlot:567,568,569 setSwingComposite:583 editEvent:942 scaleScope:1990 stepSample:2866 inputOctaveUp:3557 tracker.inputOctaveDown:3569 tracker:register:3630
   @use call    cm:setTrack  @ resolveSelectionTake:187 retargetTrackTier:202 selectTrack:210
-  @use call    cmgr:doAfter  @ 4032,4039
-  @use call    cmgr:doBefore  @ 4041,4063 wireGroupLifetime:4104,4110,4111
+  @use call    cmgr:doAfter  @ <load>:4032,4039
+  @use call    cmgr:doBefore  @ <load>:4041,4063 wireGroupLifetime:4104,4110,4111
   @use call    cmgr:invoke  @ groupPaste:3544
   @use call    cmgr:noteChars  @ editEvent:902 chordStrike:1100
   @use call    cmgr:prefixRational  @ tracker.scaleHalf:3582 tracker.scaleDouble:3589
-  @use call    cmgr:scope  @ 3560
+  @use call    cmgr:scope  @ <load>:3560
   @use call    ctx:activeTemper  @ pitchFromKey:784 editEvent:919 pitchStep:2181 nudgePitch:2213 activeTemper:2967 cellWidth:2968 octaveWidth:2969
   @use call    ctx:barBeatSub  @ barBeatSub:2972
   @use call    ctx:noteProjection  @ noteProjection:2970
@@ -836,7 +836,7 @@
   @use call    ec:regionArm  @ tracker.regionArm:3624
   @use call    ec:regionCursor  @ movePreview:3183
   @use call    ec:regionStart  @ duplicate:2944
-  @use call    ec:registerCommands  @ 4029
+  @use call    ec:registerCommands  @ <load>:4029
   @use call    ec:rescaleRow  @ releaseTransientFrame:453 matchGridToCursor:501 setRowPerBeat:513 scaleScope:1989
   @use call    ec:reset  @ rebuild:3669
   @use call    ec:row  @ matchGridToCursor:496 followViewport:700 editEvent:868 interpolate:1431 cursorRegionBefore:1485 recentreOnRegion:1516 regionNoteOff:1571,1574 cursorNoteBefore:1638 noteOff:1690 adjustPosition:1802,1825 scaleScope:1930 forEachRowOp:2148 cursorRowEvent:2262 pasteFxRegions:2402 fxHostAtCursor:2464,2465 deleteEvent:2650 shiftEvents:2772,2859 cursorRect:2887 cursorAnchor:3123 instanceAtCursor:3139 tracker.playFromCursor:3614
@@ -912,14 +912,14 @@
   @use call    tuning.transposeStep  @ nudgePitch:2216
   @use call    util.add  @ conformOverlaps:325,336 eventsByCol:412 auditionAdd:650 notePAEvents:766 chordStrike:1142,1160 digitsStrike:1246 moveLaneEvent:1315 interpolateValues:1447 noteOff:1667 adjustPositionMulti:1752,1761 allGroups:1847 quantizeScope:1875 quantizeKeepRealisedScope:1894 scaleScope:1942 insertRowCore:2030,2031 deleteRowCore:2079,2080 planInstanceMoves:2126,2128 forEachRowOp:2146 shiftEvents:2769,2786 eventsInRect:3080 hideExtraCol:3318 rebuild:3729,3771,3772,3785,3786,3797,3803,3804,3814,3867
   @use call    util.assign  @ edit.assign:115 editEvent:1057,1058
-  @use call    util.atomic  @ 519,1285,1286,1287,1288,1289,1290,2583,2584,2585,2586,2587,2588,2589,2590
+  @use call    util.atomic  @ <load>:519,1285,1286,1287,1288,1289,1290,2583,2584,2585,2586,2587,2588,2589,2590
   @use call    util.between  @ eventsByCol:407 interpolate:1416 insertRowCore:2027 deleteRowCore:2077 shiftEvents:2769 eachMemberEvent:3068
   @use call    util.bucket  @ rebuild:3739,3754,3755,3780,3795
   @use call    util.clamp  @ setRowPerBeat:506 sendBend:631 followViewport:705,710 pitchFromKey:783 editEvent:927,936,960,964,979,1018,1021,1037 regionAdjustDuration:1584 adjustDurationCore:1710 nudgePitch:2221 stepSample:2867 inputOctaveUp:3557 tracker.inputOctaveDown:3569
   @use call    util.clone  @ toParkedUpdate:60 edit.assign:114 applyRegionWindow:1533 setNoteFx:2516 setFxField:2526
   @use call    util.deepClone  @ gatherFxRegions:2391 pasteFxRegions:2415 addFxStage:2536 replaceFxStage:2571
   @use call    util.gcd  @ scaleScope:1968
-  @use call    util.instantiate  @ rebuild:3826 4004,4014
+  @use call    util.instantiate  @ rebuild:3826 <load>:4004,4014
   @use call    util.isNote  @ notePreds:285,286 conformOverlaps:323,334 writePlans:386 strikePitch:796 editEvent:909,934,947 chordStrike:1117,1141 chordBackspace:1172 chordNudgeVel:1184 adjustPositionMulti:1756 adjustPosition:1813 quantizeScope:1866,1871,1874 quantizeKeepRealisedScope:1905 scaleScope:1939 shiftPlan:2012 nudge:2281,2291 colTypeOf:2725 shiftEvents:2773,2835
   @use call    util.nudgedScalar  @ chordNudgeVel:1185 scaledScalar:2206,2208
   @use call    util.oneOf  @ editEvent:1012 moveLaneEvent:1311 addLaneEvent:1334 deleteLaneEvent:1361 setLaneTension:1371
@@ -927,18 +927,18 @@
   @use call    util.round  @ sendBend:631 interpolateValues:1454,1457 adjustDurationCore:1710 quantizeScope:1863,1867 scaleScope:1937,1940
   @use call    util.seek  @ neighbourEvents:275,276 placeNewNote:752 strikePitch:805 inheritedSign:839 editEvent:993,1065 addLaneEvent:1336 interpolate:1435 cursorNoteBefore:1639 noteOff:1666,1694 insertRowCore:2048 deleteRowCore:2068 cursorRowEvent:2265
   @use call    util.setDigit  @ editEvent:937,960,964,979,1017,1021,1037,1041
-  @use require clipboard  @ 4014
-  @use require editCursor  @ 4004
-  @use require groups  @ 28
-  @use require perf  @ 29
-  @use require timing  @ 26
-  @use require tuning  @ 27
-  @use require util  @ 25
+  @use require clipboard  @ <load>:4014
+  @use require editCursor  @ <load>:4004
+  @use require groups  @ <load>:28
+  @use require perf  @ <load>:29
+  @use require timing  @ <load>:26
+  @use require tuning  @ <load>:27
+  @use require util  @ <load>:25
   @use require viewContext  @ rebuild:3826
-  @use sub     cm:configChanged  @ 3966
-  @use sub     ds:dataChanged  @ 3971
-  @use sub     tm:rebuild  @ 3958
-  @use sub     tm:takeSwapped  @ 3957
+  @use sub     cm:configChanged  @ <load>:3966
+  @use sub     ds:dataChanged  @ <load>:3971
+  @use sub     tm:rebuild  @ <load>:3958
+  @use sub     tm:takeSwapped  @ <load>:3957
 
 # Calls (intra-file)
   @call adjustDuration  @ tracker.growNote:3574 tracker.shrinkNote:3575
@@ -1075,7 +1075,7 @@
   @call tv:localMode  @ deleteEvent:2655 localBlocked:3155
   @call tv:noteFx  @ setFxField:2523 addFxStage:2535 removeFxStage:2541 pruneEmptyRegion:2551 moveFxStage:2556 replaceFxStage:2567
   @call tv:paintRegionStream  @ groupBridge.paintStream:3986
-  @call tv:rebuild  @ releaseTransientFrame:454 hideExtraCol:3301,3340 unautomateParam:3491 tm:rebuild:3959 4126
+  @call tv:rebuild  @ releaseTransientFrame:454 hideExtraCol:3301,3340 unautomateParam:3491 tm:rebuild:3959 <load>:4126
   @call tv:rowToPPQ  @ mintRegionForSelection:2352,2353
   @call tv:scaleSelection  @ tracker.scaleHalf:3583,3584 tracker.scaleDouble:3590,3591
   @call tv:selectSlot  @ gotoTake:235 pickTake:242 newParkedTake:248 duplicateBoundUnpooled:258
@@ -1124,8 +1124,8 @@
   @drop edit.assign  @ deleteEvent:2670 shiftEvents:2848
   @drop edit.delete  @ strikePitch:808,811 chordStrike:1117 chordBackspace:1172 digitsBackspace:1265 deleteLaneEvent:1364 applyNoteOff:1651 insertRowCore:2038 deleteRowCore:2085 queueDeleteNotes:2604 queueResetVelocities:2624 queueDeleteCCs:2635
   @drop edit.delete  @ unautomateParam:3488
-  @drop tracker:register  @ 3630
-  @drop tracker:registerAll  @ 3562
+  @drop tracker:register  @ <load>:3630
+  @drop tracker:registerAll  @ <load>:3562
 
 # REAPER API surface
   @reaper time_precise

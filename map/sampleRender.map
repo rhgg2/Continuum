@@ -151,7 +151,7 @@
   @use call    chrome.treeRow  @ drawTree:145
   @use call    cm:get  @ triggerPreviewInPlace:53 drawFiles:216 drawSlots:227 drawStrip:289 toolbarSegments.render:416,423 renderBody:473,536,550 renderStatusBar:563 sampler.slotNext:606 sampler.slotPrev:610 sampler.slotRename:614
   @use call    cm:set  @ drawSlots:273 toolbarSegments.render:418,424 sampler.slotNext:607 sampler.slotPrev:611
-  @use call    cmgr:scope  @ 589
+  @use call    cmgr:scope  @ <load>:589
   @use call    ds:get  @ drawSlots:226 drawStrip:290 renderBody:472 renderStatusBar:564 sampler.slotRename:616
   @use call    fs.join  @ drawTree:141 drawFiles:176,179
   @use call    fs.listAudioFiles  @ drawFiles:178
@@ -182,9 +182,9 @@
   @use call    sv:stageInto  @ triggerPreviewInPlace:55
   @use call    sv:stopAudition  @ renderBody:501,539
   @use call    sv:syncSlot  @ revertPreviewInPlace:45
-  @use require fs  @ 13
-  @use require imgui  @ 19
-  @use require painter  @ 20
+  @use require fs  @ <load>:13
+  @use require imgui  @ <load>:19
+  @use require painter  @ <load>:20
 
 # Calls (intra-file)
   @call boundTrackName  @ renderStatusBar:562
@@ -205,8 +205,8 @@
 # Unresolved receivers
   @drop buf.clear  @ peakFor:116
   @drop p.segment  @ renderBody:523,524
-  @drop sampler:bindAll  @ 621
-  @drop sampler:registerAll  @ 590
+  @drop sampler:bindAll  @ <load>:621
+  @drop sampler:registerAll  @ <load>:590
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath

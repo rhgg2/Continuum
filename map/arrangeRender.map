@@ -194,18 +194,18 @@
   @use call    chrome.pickerIsActive  @ focusState:820
   @use call    cm:get  @ openCreateModal:653,655 renderStatusBar:814
   @use call    cm:set  @ openCreateModal:656
-  @use call    cmgr:scope  @ 832
+  @use call    cmgr:scope  @ <load>:832
   @use call    modalHost:open  @ openCreateModal:649
   @use call    modalHost:openConfirm  @ openDeleteModal:638
   @use call    modalHost:openPrompt  @ openRenameModal:626 arrange.arrangeSetBeatPerRow:840
-  @use call    modalHost:registerKind  @ 664
+  @use call    modalHost:registerKind  @ <load>:664
   @use call    modalHost:wasOpenAtFrameStart  @ focusState:825
   @use call    painter.hue  @ slotFill:88,89
   @use call    painter.new  @ gridGeom:198 renderGrid:326
   @use call    util.atomic  @ openRenameModal:630 openDeleteModal:641 openCreateModal:654
-  @use require imgui  @ 13
-  @use require painter  @ 14
-  @use require util  @ 7
+  @use require imgui  @ <load>:13
+  @use require painter  @ <load>:14
+  @use require util  @ <load>:7
 
 # Calls (intra-file)
   @call ar:focusState  @ renderBody:780,806
@@ -230,8 +230,8 @@
   @call takeWindowSec  @ peaksFor:118 renderGrid:376
 
 # Unresolved receivers
-  @drop arrange:bindAll  @ 851
-  @drop arrange:registerAll  @ 834
+  @drop arrange:bindAll  @ <load>:851
+  @drop arrange:registerAll  @ <load>:834
   @drop buf.clear  @ peaksFor:150
   @drop pg.fromScreen  @ handleGridMouse:225
   @drop pg.segment  @ renderGrid:357

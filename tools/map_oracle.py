@@ -381,7 +381,11 @@ def spell(proto: Proto, r: int, pc: int) -> tuple[str, str]:
         return ('closure', '<closure>')
     if w.op in ('CALL', 'VARARG'):
         return ('callresult', '<call result>')
-    return ('unknown', f'R{r}')
+    # The writer names nothing — `local tv = {}` compiles to NEWTABLE — but a
+    # register holding a live local still wears that local's name, and at the
+    # main chunk that is how a module spells its own table at its call sites.
+    name = local_name(proto, r, pc)
+    return ('local', name) if name else ('unknown', f'R{r}')
 
 
 # ----- Public

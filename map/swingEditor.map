@@ -216,7 +216,7 @@
   @use call    lib.tidy  @ tidy:524
   @use call    modalHost:open  @ openNewModal:603
   @use call    modalHost:openConfirm  @ publish:455 reloadFactory:537 importFactory:554
-  @use call    modalHost:registerKind  @ 612
+  @use call    modalHost:registerKind  @ <load>:612
   @use call    painter.new  @ drawBandInto:196
   @use call    timing.applyFactors  @ drawSwingStrip:159
   @use call    timing.atomTilePeriod  @ shiftCap:92 drawFactorRow:366
@@ -224,13 +224,13 @@
   @use call    timing.periodQN  @ periodPresetIndex:68 phaseQN:250 compositesEqual:261 drawFactorRow:376,396 drawToolsRow:686
   @use call    timing.resolveFactors  @ materialise:106
   @use call    util.assign  @ patchFactor:294
-  @use call    util.atomic  @ 271,467,475,523
+  @use call    util.atomic  @ <load>:271,467,475,523
   @use call    util.deepClone  @ cloneForEdit:286 resetToSnapshot:566
   @use call    util.round  @ meterClassifier:124 bandLayout:179
-  @use require imgui  @ 22
-  @use require painter  @ 16
-  @use require timing  @ 15
-  @use require util  @ 14
+  @use require imgui  @ <load>:22
+  @use require painter  @ <load>:16
+  @use require timing  @ <load>:15
+  @use require util  @ <load>:14
 
 # Calls (intra-file)
   @call activeEntries  @ buildDescriptor:580

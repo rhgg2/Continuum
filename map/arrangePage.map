@@ -69,12 +69,12 @@
   @use call    av:tempersInUse  @ arrange.tempersInUse:59
   @use call    av:trackHandle  @ arrange.trackHandle:47
   @use call    av:trackIdxForGuid  @ arrange.trackIdxForGuid:46
-  @use call    facade.publish  @ 41
-  @use call    util.instantiate  @ 23,24,25
-  @use require arrangeManager  @ 23
-  @use require arrangeRender  @ 25
-  @use require arrangeView  @ 24
-  @use require util  @ 12
+  @use call    facade.publish  @ <load>:41
+  @use call    util.instantiate  @ <load>:23,24,25
+  @use require arrangeManager  @ <load>:23
+  @use require arrangeRender  @ <load>:25
+  @use require arrangeView  @ <load>:24
+  @use require util  @ <load>:12
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath

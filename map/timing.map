@@ -88,14 +88,14 @@
   @use call    util.gcd  @ compositePeriodQN:175
   @use call    util.lcm  @ compositePeriodQN:174
   @use call    util.round  @ delayToPPQ:323
-  @use require util  @ 16
+  @use require util  @ <load>:16
 
 # Calls (intra-file)
   @call findRampOff  @ resolveComposite:280
   @call findRampOn  @ resolveComposite:279
   @call identityShape  @ resolveComposite:276,284
   @call newton  @ smooth:67
-  @call smooth  @ 83,90,96,102,109
+  @call smooth  @ <load>:83,90,96,102,109
   @call tileApply  @ applyFactors:224
   @call tileUnapply  @ unapplyFactors:230
   @call timing.applyFactors  @ findRampOn:251,255 findRampOff:263,267 eval:297

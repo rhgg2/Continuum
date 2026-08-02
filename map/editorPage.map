@@ -34,12 +34,12 @@
   @use call    er:renderStatusBar  @ renderStatusBar:40
   @use call    er:toolbarSegments  @ toolbarSegments:38
   @use call    er:unbind  @ unbind:35
-  @use call    facade.publish  @ 29
-  @use call    util.instantiate  @ 14,16,19
-  @use require editorRender  @ 19
-  @use require swingEditor  @ 14
-  @use require temperEditor  @ 16
-  @use require util  @ 6
+  @use call    facade.publish  @ <load>:29
+  @use call    util.instantiate  @ <load>:14,16,19
+  @use require editorRender  @ <load>:19
+  @use require swingEditor  @ <load>:14
+  @use require temperEditor  @ <load>:16
+  @use require util  @ <load>:6
 
 # REAPER API surface
   @reaper ImGui_GetBuiltinPath

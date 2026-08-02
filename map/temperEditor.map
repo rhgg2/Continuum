@@ -210,7 +210,7 @@
   @use call    lib.tidy  @ tidy:190
   @use call    modalHost:open  @ openNewModal:431 openImportModal:443
   @use call    modalHost:openConfirm  @ reloadFactory:202 importFactory:219 publish:234
-  @use call    modalHost:registerKind  @ 454,484
+  @use call    modalHost:registerKind  @ <load>:454,484
   @use call    tuning.degreesToSpec  @ reseedEqual:567,568 drawEqualFields:589,595
   @use call    tuning.derive  @ temperWrite:106 openNewModal:435
   @use call    tuning.edoDegrees  @ drawEqualFields:588,594 buildGen:670
@@ -228,13 +228,13 @@
   @use call    tuning.parseScalaPitches  @ modalHost:temperImport:516
   @use call    tuning.scalaPitch  @ sortSteps:85 tokenBox:310 stepMos:628 drawRank2Fields:655 buildGen:672,702,703
   @use call    tuning.scalaToTemper  @ modalHost:temperImport:516
-  @use call    util.atomic  @ 96,190,246,252
+  @use call    util.atomic  @ <load>:96,190,246,252
   @use call    util.deepClone  @ selectTemper:75 cloneForEdit:117 resetToSnapshot:172
   @use call    util.deepEq  @ dirty:167
-  @use require fs  @ 5
-  @use require imgui  @ 11
-  @use require tuning  @ 4
-  @use require util  @ 3
+  @use require fs  @ <load>:5
+  @use require imgui  @ <load>:11
+  @use require tuning  @ <load>:4
+  @use require util  @ <load>:3
 
 # Calls (intra-file)
   @call activeTemper  @ open:805

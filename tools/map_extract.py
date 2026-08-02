@@ -38,6 +38,9 @@ map_query kind='usedby' alongside the cross-module edges, so "who calls this
 method" reads off one query. The callee is spelled as its declaration head
 (`tm:byUuid`, `util.print`, bare name for a private fn) and always names a
 row in the same map; a `function tm:foo(` head is a declaration, not a site.
+A site's caller is the innermost captured declaration enclosing it, `<load>`
+where the call is made in the module's own chunk body at load time, and a bare
+line number where the extractor could name neither.
 
 Beside it, `# Bindings (by name)`: `@bind <name>  @ <sites>` rows for a private
 helper reached by reference rather than called — bound into a command or export
@@ -359,28 +362,44 @@ def span_end(deltas: list[int], after: list[int], start: int) -> int:
 _BLOCK_TOK = re.compile(r'\b(function|do|then|repeat|elseif|end|until)\b')
 
 
-def function_depth_before(code_lines: list[str]) -> list[int]:
+def walk_block_tokens(code: str, stack: list[str], skip_then: int,
+                      stop_col: int | None = None) -> int:
+    """Apply one line's block tokens to `stack` in place, stopping at
+    `stop_col`. Returns the count of upcoming `then`s an `elseif` has already
+    spoken for."""
+    for m in _BLOCK_TOK.finditer(code):
+        if stop_col is not None and m.start() >= stop_col:
+            break
+        tok = m.group(1)
+        if tok == 'function':
+            stack.append('fn')
+        elif tok in ('do', 'repeat'):
+            stack.append('block')
+        elif tok == 'then':
+            if skip_then:
+                skip_then -= 1
+            else:
+                stack.append('block')
+        elif tok == 'elseif':
+            skip_then += 1
+        elif stack:                          # end | until
+            stack.pop()
+    return skip_then
+
+
+def function_depth_before(code_lines: list[str]) -> tuple[list[int], list[tuple]]:
     """Per-line count of enclosing *function* bodies, measured before the
     line's own tokens. Distinguishes module-scope helpers (depth 0, captured
-    wherever a do/if wraps them) from true nested closures (depth >=1)."""
-    depths, stack, skip_then = [], [], 0
+    wherever a do/if wraps them) from true nested closures (depth >=1). The
+    second return is each line's opening (stack, skip_then), which a
+    column-granular query resumes from: a depth alone cannot, because an `end`
+    before the column may close a frame the line never opened."""
+    depths, states, stack, skip_then = [], [], [], 0
     for code in code_lines:
         depths.append(sum(1 for frame in stack if frame == 'fn'))
-        for tok in _BLOCK_TOK.findall(code):
-            if tok == 'function':
-                stack.append('fn')
-            elif tok in ('do', 'repeat'):
-                stack.append('block')
-            elif tok == 'then':
-                if skip_then:
-                    skip_then -= 1
-                else:
-                    stack.append('block')
-            elif tok == 'elseif':
-                skip_then += 1
-            elif stack:                      # end | until
-                stack.pop()
-    return depths
+        states.append((tuple(stack), skip_then))
+        skip_then = walk_block_tokens(code, stack, skip_then)
+    return depths, states
 
 
 def collect_doc(lines: list[str], i: int) -> list[str]:
@@ -579,7 +598,7 @@ def parse(path: Path) -> MapFile:
     head_lines = join_wrapped_heads(lines)
     code_lines = strip_code(text)
     deltas, level_after = block_levels(code_lines)
-    fn_depth = function_depth_before(code_lines)
+    fn_depth, fn_states = function_depth_before(code_lines)
 
     cm = MapFile(module=path.stem, src=path, loc=len(lines))
     cm.mode, cm.return_target = classify(head_lines)
@@ -803,9 +822,30 @@ def parse(path: Path) -> MapFile:
                 best = (start, end, name)
         return best
 
-    def caller_at(line: int, col: int | None = None):
+    # Function depth at the site's own column, not at the line's start:
+    # `placeCmds[...] = { function() dropAt(i) end, 'Place pooled take' }` makes
+    # one call in the chunk body and one inside the literal, and the column is
+    # the only thing separating them.
+    def depth_at(line: int, col: int | None) -> int:
+        stack, skip_then = fn_states[line - 1]
+        stack = list(stack)
+        walk_block_tokens(code_lines[line - 1], stack, skip_then, col)
+        return sum(1 for frame in stack if frame == 'fn')
+
+    # A site no captured declaration encloses is either load-time wiring in the
+    # module's own chunk body or a literal the extractor could not name, and a
+    # bare line number cannot say which. `<load>` is claimed on the positive
+    # depth test above, never as a fallback, so the residue stays honestly
+    # unnamed; being no identifier, it also cannot be read as a declaration.
+    # `@bind` and `@field` opt out — they answer "where is this referenced",
+    # not "who called this", and luac certifies no claim they would carry.
+    def caller_at(line: int, col: int | None = None, load: bool = True):
         hit = innermost(line, col)
-        return hit[2] if hit else None
+        if hit:
+            return hit[2]
+        if load and depth_at(line, col) == 0:
+            return '<load>'
+        return None
 
     # A `local` of a helper's name inside a function shadows it for the rest of
     # that function, so every mention from there on belongs to the local.
@@ -828,7 +868,7 @@ def parse(path: Path) -> MapFile:
     for name, lns in cm.signal_lines.items():
         cm.signal_sites[name] = [(caller_at(ln), ln) for ln in lns]
     extract_uses(cm, lines, code_lines, caller_at, shadowed)
-    cm.fields = [(kind, name, ln, caller_at(ln))
+    cm.fields = [(kind, name, ln, caller_at(ln, None, load=False))
                  for kind, name, ln in extract_fields(code_lines)]
     return cm
 
@@ -977,7 +1017,7 @@ def extract_uses(cm: MapFile, lines: list[str], code_lines: list[str],
                 key = (name, i + 1)
                 if key not in bind_seen:
                     bind_seen.add(key)
-                    cm.binds.append((name, caller_at(i + 1, m.start()), i + 1))
+                    cm.binds.append((name, caller_at(i + 1, m.start(), load=False), i + 1))
 
     cm.uses.sort(key=lambda u: (u[0], u[1], u[2]))
     cm.calls.sort(key=lambda c: (c[0], c[2]))
@@ -1485,7 +1525,7 @@ def parse_spec(path: Path) -> SpecMap:
     lines = text.splitlines()
     code_lines = strip_code(text)
     deltas, level_after = block_levels(code_lines)
-    fn_depth = function_depth_before(code_lines)
+    fn_depth, _ = function_depth_before(code_lines)
 
     sm = SpecMap(module=path.stem, rel_src='/'.join(path.parts[-3:]),
                  loc=len(lines))

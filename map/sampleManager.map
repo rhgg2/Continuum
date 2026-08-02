@@ -114,7 +114,7 @@
   @use call    fileOps.mkdir  @ assign:285 stageInto:336 migrate:415
   @use call    fileOps.move  @ migrate:416
   @use call    fs.basename  @ assign:283,287 stageInto:334
-  @use require fs  @ 16
+  @use require fs  @ <load>:16
 
 # Calls (intra-file)
   @call absFor  @ rehydrateTrack:216 syncSlot:232 assign:297 loadSlot:304

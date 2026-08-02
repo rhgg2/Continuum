@@ -204,9 +204,9 @@
   @use call    scratch.peek  @ parkedItemFor:118 isVisibleTrack:300 deleteSlot:626 isParkedTake:769
   @use call    scratch.track  @ mintParkedTake:888 deleteTake:955
   @use call    util.toBase62  @ keyForSlot:585
-  @use require painter  @ 22
-  @use require scratch  @ 23
-  @use require util  @ 21
+  @use require painter  @ <load>:22
+  @use require scratch  @ <load>:23
+  @use require util  @ <load>:21
 
 # Calls (intra-file)
   @call am:createAndDropMidi  @ newTakeBelow:872

@@ -62,14 +62,14 @@
   @use require commandManager  @ mk:123
   @use require configManager  @ mk:110
   @use require dataStore  @ mk:111
-  @use require fakeReaper  @ 29
+  @use require fakeReaper  @ <load>:29
   @use require library  @ mk:138
   @use require paramAutomation  @ mk:137
   @use require pextStore  @ mk:109
-  @use require realMidiManager  @ 25
+  @use require realMidiManager  @ <load>:25
   @use require trackerManager  @ mk:122
   @use require trackerView  @ mk:140
-  @use require util  @ 24
+  @use require util  @ <load>:24
 
 # Calls (intra-file)
   @call buildMM  @ bareMM:91 mk:102
