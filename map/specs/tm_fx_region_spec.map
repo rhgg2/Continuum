@@ -1,4 +1,4 @@
-@spec tm_fx_region_spec  src=tests/specs/tm_fx_region_spec.lua  loc=2633  cases=97
+@spec tm_fx_region_spec  src=tests/specs/tm_fx_region_spec.lua  loc=2692  cases=100
 @exercises dataStore (h.ds), midiManager (h.fm), trackerManager (h.tm), generators (generators), trackerView (h.vm)
 @surface   ds:get, fm:dump, ds:assign, tm:rebuild, tm:getChannel, tm:addEvent, tm:flush, tm:assignParked, tm:deleteParked, tm:addParked, tm:subscribe, ds:subscribe, ds:unsubscribe, generators.retarget, vm:addFxStage, vm:noteFx, vm:removeFxStage, tm:freezeEligible, tm:freezeRegion, tm:byUuid, tm:freezeRect, tm:freezeToGroup, tm:reloadFromReaper
 @harness   mk
@@ -70,383 +70,392 @@
   @case 'chain [arp, velPattern]: the pattern accents the arp steps'  [harness]  @ 404-415
   @case 'chain [velPattern, arp]: the chord takes the pattern first, the arp reads the folded stream'  [harness]  @ 419-431
   @case 'velPattern alone owns the note stream: the chord parks and re-emits re-velocitied'  [harness]  @ 435-445
-  @case 'replace: a parked member tail is clipped by an on-take note after the region'  [harness]  @ 449-462
-  @case 'replace: a parked member tail is clipped by a parked note in a later region'  [harness]  @ 466-483
-  @case 'replace husk (no kinds) parks nothing -- its members keep sounding'  [harness]  @ 487-493
-  @case 'replace: removing the region restores the parked chord to the take'  [harness]  @ 497-512
-  @case 'G4: replace arp + parked chord are byte-identical across rebuild -> flush'  [harness]  @ 516-528
-  @case 'park identity (note): render cell carries chan+uuid; the fxParked stash is logical-only'  [harness]  @ 534-547
-  @case 'park round-trip carries arbitrary authored metadata, not just whitelisted fields'  [harness]  @ 551-563
-  @case 'park identity (cc): render cell carries chan+ppq; the fxParkedCC stash is logical-only'  [harness]  @ 567-587
-  @case 'assignParked (note): edit a parked pitch -> stash updated, still parked, renders the new pitch'  [harness]  @ 593-604
-  @case 'deleteParked (note): a parked note leaves the stash and is not restored while still covered'  [harness]  @ 608-617
-  @case 'addParked (note): typing into a replace window stashes a logical spec (minted uuid), off the take'  [harness]  @ 621-641
-  @case 'parked cc: assignParked then deleteParked edits the off-take cc stash symmetrically'  [harness]  @ 645-667
-  @case 'parked pb sharing a ppq with a parked note edits and deletes independently of it'  [harness]  @ 673-697
-  @case 'parked PAs sharing a ppq across lanes are addressed by pitch, not by onset alone'  [harness]  @ 704-734
-  @case 'shrinking a cc-replace window restores the authored cc value, not the fill it sat under'  [harness]  @ 740-780
-  @case 'one flush, one rebuild: a parked edit + a normal note land together (the multi-select guard)'  [harness]  @ 784-798
-  @case 'parked-only flush drives exactly one rebuild (no mm round-trip)'  [harness]  @ 802-814
-  @case 'fxParked dataChanged (undo rewind) rebuilds the grid'  [harness]  @ 818-827
-  @case 'an error escaping the parked flush leaves later ds changes still rebuilding'  [harness]  @ 831-846
-  @case 'augment by kind: a continuous (sine) region leaves its covered notes sounding'  [harness]  @ 852-859
-  @case 'arp over a span with no sounding notes emits nothing'  [harness]  @ 865-870
-  @case 'fx region: the producer hands the generator notes/pas/ccs/ats input streams'  [harness]  @ 876-906
-  @case 'fx region: an OPEN member clips to the next same-lane onset, not the window end'  [harness]  @ 910-933
-  @case 'fx region: host.pb carries authored pb breakpoints, excluding absorber fakes'  [harness]  @ 937-961
-  @case 'fx region: pb replace seats the absolute curve on the base lane, no carrier'  [harness]  @ 967-1000
-  @case 'fx region: pb replace with no authored base seats the curve verbatim'  [harness]  @ 1004-1023
-  @case 'fx chain (continuous): [replace, augment] -- the augment stage wobbles the replaced curve'  [harness]  @ 1029-1057
-  @case 'fx chain (continuous): [augment, replace] -- the replace stage overwrites the folded stream'  [harness]  @ 1061-1087
-  @case 'fx region (pb): two overlapping replace regions -- later storage wins pointwise, not summed'  [harness]  @ 1093-1119
-  @case 'fx region (pb): a later replace region wipes an earlier augment (storage = precedence)'  [harness]  @ 1123-1151
-  @case 'fx region (pb): overlapping replace regions with differing windows -- each owns its exclusive tail'  [harness]  @ 1155-1185
-  @case 'fx region (cc): two overlapping replace regions -- later storage wins, not the additive fold'  [harness]  @ 1189-1215
-  @case 'fx region (cc augment): overlapping differing windows -- each augment folds only in its own window'  [harness]  @ 1219-1250
-  @case 'fx region (pb): differing-window overlap seats are byte-stable across a no-change rebuild'  [harness]  @ 1254-1299
-  @case 'fx region: pb replace rides the curve over the detune -- I1 holds'  [harness]  @ 1303-1328
-  @case 'fx region: removing a pb replace region restores the authored wire'  [harness]  @ 1332-1357
-  @case 'fx region: pb replace densifies a curved segment split by a detune onset'  [harness]  @ 1361-1394
-  @case 'fx region: a dense pb replace curve seats markerless -- no uuid, no metadata sidecar'  [harness]  @ 1400-1427
-  @case 'fx region: removing a pb replace region sweeps its seats, leaving only the restored authored pb'  [harness]  @ 1431-1463
-  @case 'fx region (cc replace): the generated curve lands on the target cc lane; no carrier'  [harness]  @ 1469-1495
-  @case 'fx region (cc replace): removing the region restores the parked cc and drops the fill'  [harness]  @ 1499-1525
-  @case 'G4 (cc replace): the fill is byte-identical and re-adds nothing across a no-change rebuild'  [harness]  @ 1529-1555
-  @case 'cc replace: a dense fill curve seats markerlessly (no uuid, no eventMeta)'  [harness]  @ 1559-1579
-  @case 'fx region (cc augment): un-automated target seats base(rest) + macro, markerless, off columns'  [harness]  @ 1585-1607
-  @case 'fx region (cc augment): over authored automation the seat is authored-base + macro'  [harness]  @ 1611-1631
-  @case 'fx region (cc augment): two overlapping regions sum every stream (N-stream regression guard)'  [harness]  @ 1635-1663
-  @case 'fx region (cc augment): region.fx.rest overrides the default resting base'  [harness]  @ 1667-1685
-  @case 'fx region (cc): retargeting a stage restores the old controller and parks the new one'  [harness]  @ 1691-1719
-  @case 'note-host augment (cc): a sounding note drives summed seats like a degenerate region'  [harness]  @ 1723-1752
-  @case 'replace: a preceding on-take tail clips at the parked chord onset, not past it'  [harness]  @ 1758-1774
-  @case 'replace: a derived tile is not truncated by a parked member it replaced'  [harness]  @ 1778-1794
-  @case 'deleting a self-parked [trill, sine] host leaves no orphaned pb seats'  [harness]  @ 1800-1825
-  @case 'removing the note kind from a self-parked [sine, trill] host keeps its authored cc parked'  [harness]  @ 1831-1880
-  @case 'a same-pass note park widens a surviving host window and parks the exposed authored cc'  [harness]  @ 1887-1915
-  @case 'freeze: the derived chord is promoted to authored, and region + stash go with it'  [harness]  @ 1921-1941
-  @case 'freeze: the standing reconcile does not restore the destroyed members'  [harness]  @ 1945-1957
-  @case 'freeze: the seated pb curve stands as authored automation'  [harness]  @ 1961-1995
-  @case 'freeze: a promoted note keeps the tail the walk clipped for it'  [harness]  @ 1999-2025
-  @case 'freeze: the whole projection rides one flush and one rebuild'  [harness]  @ 2029-2038
-  @case 'freeze (mixed chain): the arp is authored and the cc seats keep their column'  [harness]  @ 2042-2064
-  @case 'freeze (parked host): the trill output is authored and the host leaves the stash'  [harness]  @ 2070-2107
-  @case 'freeze (on-take host): the cc curve is authored and the host keeps its note'  [harness]  @ 2111-2137
-  @case 'freeze (host parked by a region): the chain goes, the note stays parked'  [harness]  @ 2143-2162
-  @case 'freeze declines on a plain note and changes nothing'  [harness]  @ 2166-2176
-  @case 'park windows: a self-parking note host contributes one window, not two'  [harness]  @ 2184-2202
-  @case 'park windows: a self-parking note host runs its chain once, not twice'  [harness]  @ 2208-2225
-  @case 'freeze gate (overlapping regions): neither freezes, and nothing changes'  [harness]  @ 2233-2253
-  @case 'freeze gate (identical-window neighbour): mutual same-target overlap refuses both'  [harness]  @ 2259-2279
-  @case 'freeze gate (abutting windows): pb refuses on the shared boundary, cc does not'  [harness]  @ 2285-2308
-  @case 'freeze gate (covered fx host): the region waits for the host it parks'  [harness]  @ 2314-2331
-  @case 'freeze gate (inverse): a note-dest host under a region note window is refused'  [harness]  @ 2337-2351
-  @case 'freeze (disjoint same-target neighbour): the survivor keeps its window and its curve'  [harness]  @ 2357-2376
-  @case 'freeze gate (two stages, one target): a chain does not refuse itself'  [harness]  @ 2382-2390
-  @case 'freeze gate (staged host pending): freeze settles the take before reading the census'  [harness]  @ 2398-2415
-  @case 'freeze eligibility: the map moves with rebuild'  [harness]  @ 2421-2437
-  @case 'freeze rect: the footprint of a mixed note-and-curve output'  [harness]  @ 2443-2454
-  @case 'freeze rect: a continuous-only host claims no note lane'  [harness]  @ 2458-2467
-  @case 'freeze rect: nil for a uuid that is not a producer'  [harness]  @ 2471-2478
-  @case 'freeze rect: the map moves with rebuild'  [harness]  @ 2483-2492
-  @case 'freeze to group: the dense curve re-seats sparse in one flush'  [harness]  @ 2500-2517
-  @case 'freeze to group: the closing seat displaces the survivor on its destination tick'  [harness]  @ 2523-2536
-  @case 'freeze to group: the members come back in the authored frame'  [harness]  @ 2542-2574
-  @case 'freeze to group: a surviving breakpoint keeps its identity across a take reload'  [harness]  @ 2580-2595
-  @case 'freeze to group: a curved macro freezes exact'  [harness]  @ 2601-2617
-  @case 'freeze to group declines on a plain note and changes nothing'  [harness]  @ 2621-2630
+  @case 'bypass: a bypassed stage stays in the chain and contributes nothing'  [harness]  @ 449-461
+  @case 'bypass: a fully bypassed chain still parks its chord and re-seats it verbatim'  [harness]  @ 465-477
+  @case 'replace: a parked member tail is clipped by an on-take note after the region'  [harness]  @ 481-494
+  @case 'replace: a parked member tail is clipped by a parked note in a later region'  [harness]  @ 498-515
+  @case 'replace husk (no kinds) parks nothing -- its members keep sounding'  [harness]  @ 519-525
+  @case 'replace: removing the region restores the parked chord to the take'  [harness]  @ 529-544
+  @case 'G4: replace arp + parked chord are byte-identical across rebuild -> flush'  [harness]  @ 548-560
+  @case 'park identity (note): render cell carries chan+uuid; the fxParked stash is logical-only'  [harness]  @ 566-579
+  @case 'park round-trip carries arbitrary authored metadata, not just whitelisted fields'  [harness]  @ 583-595
+  @case 'park identity (cc): render cell carries chan+ppq; the fxParkedCC stash is logical-only'  [harness]  @ 599-619
+  @case 'assignParked (note): edit a parked pitch -> stash updated, still parked, renders the new pitch'  [harness]  @ 625-636
+  @case 'deleteParked (note): a parked note leaves the stash and is not restored while still covered'  [harness]  @ 640-649
+  @case 'addParked (note): typing into a replace window stashes a logical spec (minted uuid), off the take'  [harness]  @ 653-673
+  @case 'parked cc: assignParked then deleteParked edits the off-take cc stash symmetrically'  [harness]  @ 677-699
+  @case 'parked pb sharing a ppq with a parked note edits and deletes independently of it'  [harness]  @ 705-729
+  @case 'parked PAs sharing a ppq across lanes are addressed by pitch, not by onset alone'  [harness]  @ 736-766
+  @case 'shrinking a cc-replace window restores the authored cc value, not the fill it sat under'  [harness]  @ 772-812
+  @case 'one flush, one rebuild: a parked edit + a normal note land together (the multi-select guard)'  [harness]  @ 816-830
+  @case 'parked-only flush drives exactly one rebuild (no mm round-trip)'  [harness]  @ 834-846
+  @case 'fxParked dataChanged (undo rewind) rebuilds the grid'  [harness]  @ 850-859
+  @case 'an error escaping the parked flush leaves later ds changes still rebuilding'  [harness]  @ 863-878
+  @case 'augment by kind: a continuous (sine) region leaves its covered notes sounding'  [harness]  @ 884-891
+  @case 'arp over a span with no sounding notes emits nothing'  [harness]  @ 897-902
+  @case 'fx region: the producer hands the generator notes/pas/ccs/ats input streams'  [harness]  @ 908-938
+  @case 'fx region: an OPEN member clips to the next same-lane onset, not the window end'  [harness]  @ 942-965
+  @case 'fx region: host.pb carries authored pb breakpoints, excluding absorber fakes'  [harness]  @ 969-993
+  @case 'fx region: pb replace seats the absolute curve on the base lane, no carrier'  [harness]  @ 999-1032
+  @case 'bypass: a bypassed pb-replace stage parks its window and re-seats the authored base'  [harness]  @ 1036-1059
+  @case 'fx region: pb replace with no authored base seats the curve verbatim'  [harness]  @ 1063-1082
+  @case 'fx chain (continuous): [replace, augment] -- the augment stage wobbles the replaced curve'  [harness]  @ 1088-1116
+  @case 'fx chain (continuous): [augment, replace] -- the replace stage overwrites the folded stream'  [harness]  @ 1120-1146
+  @case 'fx region (pb): two overlapping replace regions -- later storage wins pointwise, not summed'  [harness]  @ 1152-1178
+  @case 'fx region (pb): a later replace region wipes an earlier augment (storage = precedence)'  [harness]  @ 1182-1210
+  @case 'fx region (pb): overlapping replace regions with differing windows -- each owns its exclusive tail'  [harness]  @ 1214-1244
+  @case 'fx region (cc): two overlapping replace regions -- later storage wins, not the additive fold'  [harness]  @ 1248-1274
+  @case 'fx region (cc augment): overlapping differing windows -- each augment folds only in its own window'  [harness]  @ 1278-1309
+  @case 'fx region (pb): differing-window overlap seats are byte-stable across a no-change rebuild'  [harness]  @ 1313-1358
+  @case 'fx region: pb replace rides the curve over the detune -- I1 holds'  [harness]  @ 1362-1387
+  @case 'fx region: removing a pb replace region restores the authored wire'  [harness]  @ 1391-1416
+  @case 'fx region: pb replace densifies a curved segment split by a detune onset'  [harness]  @ 1420-1453
+  @case 'fx region: a dense pb replace curve seats markerless -- no uuid, no metadata sidecar'  [harness]  @ 1459-1486
+  @case 'fx region: removing a pb replace region sweeps its seats, leaving only the restored authored pb'  [harness]  @ 1490-1522
+  @case 'fx region (cc replace): the generated curve lands on the target cc lane; no carrier'  [harness]  @ 1528-1554
+  @case 'fx region (cc replace): removing the region restores the parked cc and drops the fill'  [harness]  @ 1558-1584
+  @case 'G4 (cc replace): the fill is byte-identical and re-adds nothing across a no-change rebuild'  [harness]  @ 1588-1614
+  @case 'cc replace: a dense fill curve seats markerlessly (no uuid, no eventMeta)'  [harness]  @ 1618-1638
+  @case 'fx region (cc augment): un-automated target seats base(rest) + macro, markerless, off columns'  [harness]  @ 1644-1666
+  @case 'fx region (cc augment): over authored automation the seat is authored-base + macro'  [harness]  @ 1670-1690
+  @case 'fx region (cc augment): two overlapping regions sum every stream (N-stream regression guard)'  [harness]  @ 1694-1722
+  @case 'fx region (cc augment): region.fx.rest overrides the default resting base'  [harness]  @ 1726-1744
+  @case 'fx region (cc): retargeting a stage restores the old controller and parks the new one'  [harness]  @ 1750-1778
+  @case 'note-host augment (cc): a sounding note drives summed seats like a degenerate region'  [harness]  @ 1782-1811
+  @case 'replace: a preceding on-take tail clips at the parked chord onset, not past it'  [harness]  @ 1817-1833
+  @case 'replace: a derived tile is not truncated by a parked member it replaced'  [harness]  @ 1837-1853
+  @case 'deleting a self-parked [trill, sine] host leaves no orphaned pb seats'  [harness]  @ 1859-1884
+  @case 'removing the note kind from a self-parked [sine, trill] host keeps its authored cc parked'  [harness]  @ 1890-1939
+  @case 'a same-pass note park widens a surviving host window and parks the exposed authored cc'  [harness]  @ 1946-1974
+  @case 'freeze: the derived chord is promoted to authored, and region + stash go with it'  [harness]  @ 1980-2000
+  @case 'freeze: the standing reconcile does not restore the destroyed members'  [harness]  @ 2004-2016
+  @case 'freeze: the seated pb curve stands as authored automation'  [harness]  @ 2020-2054
+  @case 'freeze: a promoted note keeps the tail the walk clipped for it'  [harness]  @ 2058-2084
+  @case 'freeze: the whole projection rides one flush and one rebuild'  [harness]  @ 2088-2097
+  @case 'freeze (mixed chain): the arp is authored and the cc seats keep their column'  [harness]  @ 2101-2123
+  @case 'freeze (parked host): the trill output is authored and the host leaves the stash'  [harness]  @ 2129-2166
+  @case 'freeze (on-take host): the cc curve is authored and the host keeps its note'  [harness]  @ 2170-2196
+  @case 'freeze (host parked by a region): the chain goes, the note stays parked'  [harness]  @ 2202-2221
+  @case 'freeze declines on a plain note and changes nothing'  [harness]  @ 2225-2235
+  @case 'park windows: a self-parking note host contributes one window, not two'  [harness]  @ 2243-2261
+  @case 'park windows: a self-parking note host runs its chain once, not twice'  [harness]  @ 2267-2284
+  @case 'freeze gate (overlapping regions): neither freezes, and nothing changes'  [harness]  @ 2292-2312
+  @case 'freeze gate (identical-window neighbour): mutual same-target overlap refuses both'  [harness]  @ 2318-2338
+  @case 'freeze gate (abutting windows): pb refuses on the shared boundary, cc does not'  [harness]  @ 2344-2367
+  @case 'freeze gate (covered fx host): the region waits for the host it parks'  [harness]  @ 2373-2390
+  @case 'freeze gate (inverse): a note-dest host under a region note window is refused'  [harness]  @ 2396-2410
+  @case 'freeze (disjoint same-target neighbour): the survivor keeps its window and its curve'  [harness]  @ 2416-2435
+  @case 'freeze gate (two stages, one target): a chain does not refuse itself'  [harness]  @ 2441-2449
+  @case 'freeze gate (staged host pending): freeze settles the take before reading the census'  [harness]  @ 2457-2474
+  @case 'freeze eligibility: the map moves with rebuild'  [harness]  @ 2480-2496
+  @case 'freeze rect: the footprint of a mixed note-and-curve output'  [harness]  @ 2502-2513
+  @case 'freeze rect: a continuous-only host claims no note lane'  [harness]  @ 2517-2526
+  @case 'freeze rect: nil for a uuid that is not a producer'  [harness]  @ 2530-2537
+  @case 'freeze rect: the map moves with rebuild'  [harness]  @ 2542-2551
+  @case 'freeze to group: the dense curve re-seats sparse in one flush'  [harness]  @ 2559-2576
+  @case 'freeze to group: the closing seat displaces the survivor on its destination tick'  [harness]  @ 2582-2595
+  @case 'freeze to group: the members come back in the authored frame'  [harness]  @ 2601-2633
+  @case 'freeze to group: a surviving breakpoint keeps its identity across a take reload'  [harness]  @ 2639-2654
+  @case 'freeze to group: a curved macro freezes exact'  [harness]  @ 2660-2676
+  @case 'freeze to group declines on a plain note and changes nothing'  [harness]  @ 2680-2689
 
 # Uses (outbound edges)
-  @use call ds:get  @ 22,53,62,543,556,602,615,629,1823,1938,1939,1940,1956,2099,2106,2133,2134,2159,2175,2197,2243,2250,2251,2252,2268,2275,2365,2370,2374,2387,2413,2629
-  @use call fm:dump  @ 31,40,72,94,137,168,179,287,329,561,1457,1521,1696,1737,1789,1812,1851,1900,1912,1968,2015,2085,2221
-  @use call ds:assign  @ 104,129,292,347,471,508,558,577,655,760,766,825,844,893,923,951,985,1016,1048,1079,1110,1141,1174,1206,1240,1273,1317,1343,1351,1376,1416,1446,1452,1484,1509,1516,1539,1570,1596,1623,1654,1679,1765,1785,2237,2288,2300,2360,2424,2432,2489
-  @use call tm:rebuild  @ 105,130,273,293,348,368,475,509,525,559,579,657,895,925,953,987,1018,1050,1081,1114,1145,1178,1210,1244,1277,1287,1319,1345,1352,1378,1418,1448,1453,1486,1511,1517,1541,1550,1572,1598,1625,1658,1680,1749,1767,1787,1820,1953,2080,2104,2194,2216,2241,2292,2304,2344,2364,2428,2435,2490
-  @use call tm:getChannel  @ 109,155,334,456,477,539,581,598,599,613,614,638,659,661,663,665,688,693,718,791,796,810,813,838,998,1327,1349,1356,1606,1769,1818,1822,1843,1870,1982,1988,2054,2062,2093,2095,2100,2101,2121,2124,2135,2150,2151,2161,2171,2195,2200,2267,2277,2321,2345,2414,2462,2476,2565,2626
-  @use call tm:addEvent  @ 123,323,570,648,677,709,710,744,745,792,882,883,884,941,972,973,1307,1335,1434,1473,1474,1502,1614,1702,1703,1805,1835,1836,1839,1892,1898,2075,2115,2116,2117,2146,2189,2211,2263,2317,2340,2404
-  @use call tm:flush  @ 123,273,324,525,570,598,613,628,648,659,663,677,688,693,711,723,727,731,744,745,794,810,839,885,942,974,1308,1335,1365,1434,1475,1502,1614,1702,1703,1809,1822,1835,1836,1842,1895,1898,2079,2115,2116,2120,2148,2193,2215,2265,2319,2343
-  @use call tm:assignParked  @ 598,659,688,723,727,791,810,838
-  @use call tm:deleteParked  @ 613,663,693,731,1822
-  @use call tm:addParked  @ 626
-  @use call tm:subscribe  @ 790,808,809,824,843,2035,2508
-  @use call ds:subscribe  @ 837
-  @use call ds:unsubscribe  @ 841
-  @use call generators.retarget  @ 1711
-  @use call vm:addFxStage  @ 1869
-  @use call vm:noteFx  @ 1875
-  @use call vm:removeFxStage  @ 1877
-  @use call tm:freezeEligible  @ 1931,2172,2245,2246,2270,2271,2293,2294,2305,2306,2323,2324,2329,2348,2367,2388,2410,2429,2430,2436
-  @use call tm:freezeRegion  @ 1932,1951,1984,2019,2036,2058,2096,2127,2153,2173,2247,2248,2272,2273,2295,2296,2307,2325,2327,2330,2349,2368,2389,2411
-  @use call tm:byUuid  @ 2130,2588,2592
-  @use call tm:freezeRect  @ 2450,2464,2477,2487,2491
-  @use call tm:freezeToGroup  @ 2509,2527,2552,2584,2606,2627
-  @use call tm:reloadFromReaper  @ 2590
+  @use call ds:get  @ 22,53,62,575,588,634,647,661,1882,1997,1998,1999,2015,2158,2165,2192,2193,2218,2234,2256,2302,2309,2310,2311,2327,2334,2424,2429,2433,2446,2472,2688
+  @use call fm:dump  @ 31,40,72,94,137,168,179,287,329,593,1516,1580,1755,1796,1848,1871,1910,1959,1971,2027,2074,2144,2280
+  @use call ds:assign  @ 104,129,292,347,503,540,590,609,687,792,798,857,876,925,955,983,1017,1051,1075,1107,1138,1169,1200,1233,1265,1299,1332,1376,1402,1410,1435,1475,1505,1511,1543,1568,1575,1598,1629,1655,1682,1713,1738,1824,1844,2296,2347,2359,2419,2483,2491,2548
+  @use call tm:rebuild  @ 105,130,273,293,348,368,507,541,557,591,611,689,927,957,985,1019,1053,1077,1109,1140,1173,1204,1237,1269,1303,1336,1346,1378,1404,1411,1437,1477,1507,1512,1545,1570,1576,1600,1609,1631,1657,1684,1717,1739,1808,1826,1846,1879,2012,2139,2163,2253,2275,2300,2351,2363,2403,2423,2487,2494,2549
+  @use call tm:getChannel  @ 109,155,334,488,509,571,613,630,631,645,646,670,691,693,695,697,720,725,750,823,828,842,845,870,1030,1386,1408,1415,1665,1828,1877,1881,1902,1929,2041,2047,2113,2121,2152,2154,2159,2160,2180,2183,2194,2209,2210,2220,2230,2254,2259,2326,2336,2380,2404,2473,2521,2535,2624,2685
+  @use call tm:addEvent  @ 123,323,602,680,709,741,742,776,777,824,914,915,916,973,1004,1005,1039,1040,1366,1394,1493,1532,1533,1561,1673,1761,1762,1864,1894,1895,1898,1951,1957,2134,2174,2175,2176,2205,2248,2270,2322,2376,2399,2463
+  @use call tm:flush  @ 123,273,324,557,602,630,645,660,680,691,695,709,720,725,743,755,759,763,776,777,826,842,871,917,974,1006,1041,1367,1394,1424,1493,1534,1561,1673,1761,1762,1868,1881,1894,1895,1901,1954,1957,2138,2174,2175,2179,2207,2252,2274,2324,2378,2402
+  @use call tm:assignParked  @ 630,691,720,755,759,823,842,870
+  @use call tm:deleteParked  @ 645,695,725,763,1881
+  @use call tm:addParked  @ 658
+  @use call tm:subscribe  @ 822,840,841,856,875,2094,2567
+  @use call ds:subscribe  @ 869
+  @use call ds:unsubscribe  @ 873
+  @use call generators.retarget  @ 1770
+  @use call vm:addFxStage  @ 1928
+  @use call vm:noteFx  @ 1934
+  @use call vm:removeFxStage  @ 1936
+  @use call tm:freezeEligible  @ 1990,2231,2304,2305,2329,2330,2352,2353,2364,2365,2382,2383,2388,2407,2426,2447,2469,2488,2489,2495
+  @use call tm:freezeRegion  @ 1991,2010,2043,2078,2095,2117,2155,2186,2212,2232,2306,2307,2331,2332,2354,2355,2366,2384,2386,2389,2408,2427,2448,2470
+  @use call tm:byUuid  @ 2189,2647,2651
+  @use call tm:freezeRect  @ 2509,2523,2536,2546,2550
+  @use call tm:freezeToGroup  @ 2568,2586,2611,2643,2665,2686
+  @use call tm:reloadFromReaper  @ 2649
 
 # Fields (r read / w write incl. constructor keys)
-  @field r OPEN  @ 915
-  @field r REMOVE  @ 2489
-  @field r add  @ 1282,1545
-  @field w add  @ 1283,1288,1546,1551
-  @field r ats  @ 904
-  @field r bump  @ 1146
-  @field w bump  @ 1040,1051,1064,1082,1126
-  @field r capA  @ 1115,1179,1289
-  @field w capA  @ 1096,1160,1259
-  @field w capB  @ 1103,1115,1167,1179,1266,1289
-  @field w capDense  @ 1405,1419,1435,1454
-  @field r capRep  @ 1051,1082
-  @field w capRep  @ 977,988,1007,1019,1033,1072,1134,1146,1310,1320,1336,1353
-  @field w capRep  @ 1369,1379
-  @field w capture  @ 889,896,919,926,947,954
-  @field r cc  @ 73,95,1522,1547,1697,1708,1714,1738,1852,1901
-  @field w cc  @ 570,648,744,745,882,1473,1474,1502,1614,1702,1703,1835
-  @field w cc  @ 1836,1898,2115,2116
-  @field r ccA  @ 1211,1245,1659
-  @field w ccA  @ 1192,1224,1638
-  @field w ccB  @ 1199,1211,1232,1245,1646,1659
-  @field w ccCap  @ 1588,1599,1615,1626,1670,1681,1726,1750
-  @field w ccDense  @ 1562,1573
-  @field w ccRep  @ 571,580,649,664,748,768,1477,1487,1503,1512,1532,1552
-  @field w ccRep  @ 2047,2059
-  @field r ccs  @ 31,40,72,94,179,287,329,900,1457,1521,1606,1696
-  @field r ccs  @ 1737,1812,1851,1900,1912,1968,2054,2062,2085,2124,2135,2221
-  @field r cents  @ 2515,2588,2594
-  @field w cents  @ 181,2515,2531
-  @field r chan  @ 23,32,41,63,73,95,180,287,541,583,1458,1522
-  @field r chan  @ 1697,1738,1813,1852,1969,2086,2222
-  @field w chan  @ 102,120,127,323,472,473,570,577,626,648,655,677
-  @field w chan  @ 709,710,744,745,760,766,792,882,883,884,893,923
-  @field w chan  @ 941,951,972,973,985,1016,1048,1079,1111,1112,1142,1143
-  @field w chan  @ 1175,1176,1207,1208,1241,1242,1274,1275,1307,1317,1335,1343
-  @field w chan  @ 1376,1416,1434,1446,1473,1474,1484,1502,1509,1539,1570,1596
-  @field w chan  @ 1614,1623,1655,1656,1679,1702,1703,1765,1785,1805,1835,1836
-  @field w chan  @ 1839,1892,1898,2075,2115,2116,2117,2146,2189,2211,2238,2239
-  @field w chan  @ 2263,2289,2290,2301,2302,2317,2340,2361,2362,2404,2425,2426
-  @field w chan  @ 2433
-  @field w chanLo  @ 2451,2465
-  @field r columns  @ 109,155,334,1606,1769,1843,1982,1988,2054,2062,2093,2101
-  @field r columns  @ 2121,2124,2135,2161,2171,2267,2277,2414,2462,2476,2565,2626
-  @field w defaults  @ 202,220,575,653,682,756,891,921,949,983,1014,1038
-  @field w defaults  @ 1046,1070,1077,1101,1108,1132,1139,1165,1172,1197,1204,1230
-  @field w defaults  @ 1238,1264,1271,1315,1341,1374,1414,1444,1482,1507,1537,1568
-  @field w defaults  @ 1594,1621,1644,1652,1676,1732,2008,2051
-  @field w delay  @ 121,627,793,1806,1840,1893,2076,2118,2147,2190,2212,2264
-  @field w delay  @ 2318,2341,2405
-  @field w delta  @ 200,214,572,650,679,754,890,920,948,978,1009,1034
-  @field w delta  @ 1041,1065,1073,1097,1104,1127,1135,1161,1168,1193,1200,1225
-  @field w delta  @ 1233,1260,1267,1311,1337,1370,1412,1442,1478,1504,1533,1566
-  @field w delta  @ 1589,1616,1639,1647,1671,1727,2007,2048
-  @field w denseRamp  @ 193,2510,2553,2585
-  @field w depth  @ 9,1701,1808,1841,1894,2078,2119,2192,2214,2298,2386
-  @field r derived  @ 96,138,169,561,1790
-  @field w dest  @ 202,220,575,653,682,756,891,921,949,983,1014,1038
-  @field w dest  @ 1046,1070,1077,1101,1108,1132,1139,1165,1172,1197,1204,1230
-  @field w dest  @ 1238,1264,1271,1315,1341,1374,1414,1444,1482,1507,1537,1568
-  @field w dest  @ 1594,1621,1644,1652,1676,1701,1732,1841,1894,2008,2051,2119
-  @field w dest  @ 2298
-  @field w detune  @ 121,627,793,1306,1364,1806,1840,1893,2006,2076,2118,2147
-  @field w detune  @ 2190,2212,2264,2318,2341,2405,2549
-  @field w dir  @ 117,410,426
-  @field r ds  @ 2300
-  @field w dur  @ 2451,2465
-  @field w edgePair  @ 211,2528
-  @field r endppq  @ 23,63,545,931,932,1793,2017,2024
-  @field w endppq  @ 102,120,127,378,379,393,394,452,453,454,469,470
-  @field w endppq  @ 472,473,577,626,655,760,766,792,855,881,893,915
-  @field w endppq  @ 916,923,951,985,1016,1048,1079,1111,1112,1142,1143,1175
-  @field w endppq  @ 1176,1207,1208,1241,1242,1274,1275,1317,1343,1376,1416,1446
-  @field w endppq  @ 1484,1509,1539,1570,1596,1623,1655,1656,1679,1742,1763,1764
-  @field w endppq  @ 1765,1783,1784,1785,1805,1839,1891,1892,1908,2006,2010,2011
-  @field w endppq  @ 2012,2075,2117,2146,2189,2211,2238,2239,2263,2289,2290,2301
-  @field w endppq  @ 2302,2317,2340,2346,2361,2362,2404,2425,2426,2433,2549
-  @field r endppqC  @ 460,481,1773
+  @field r OPEN  @ 947
+  @field r REMOVE  @ 2548
+  @field r add  @ 1341,1604
+  @field w add  @ 1342,1347,1605,1610
+  @field r ats  @ 936
+  @field r bump  @ 1205
+  @field w bump  @ 1099,1110,1123,1141,1185
+  @field w bypass  @ 456,471,1052
+  @field r capA  @ 1174,1238,1348
+  @field w capA  @ 1155,1219,1318
+  @field w capB  @ 1162,1174,1226,1238,1325,1348
+  @field w capDense  @ 1464,1478,1494,1513
+  @field r capRep  @ 1110,1141
+  @field w capRep  @ 1009,1020,1043,1054,1066,1078,1092,1131,1193,1205,1369,1379
+  @field w capRep  @ 1395,1412,1428,1438
+  @field w capture  @ 921,928,951,958,979,986
+  @field r cc  @ 73,95,1581,1606,1756,1767,1773,1797,1911,1960
+  @field w cc  @ 602,680,776,777,914,1532,1533,1561,1673,1761,1762,1894
+  @field w cc  @ 1895,1957,2174,2175
+  @field r ccA  @ 1270,1304,1718
+  @field w ccA  @ 1251,1283,1697
+  @field w ccB  @ 1258,1270,1291,1304,1705,1718
+  @field w ccCap  @ 1647,1658,1674,1685,1729,1740,1785,1809
+  @field w ccDense  @ 1621,1632
+  @field w ccRep  @ 603,612,681,696,780,800,1536,1546,1562,1571,1591,1611
+  @field w ccRep  @ 2106,2118
+  @field r ccs  @ 31,40,72,94,179,287,329,932,1516,1580,1665,1755
+  @field r ccs  @ 1796,1871,1910,1959,1971,2027,2113,2121,2144,2183,2194,2280
+  @field r cents  @ 2574,2647,2653
+  @field w cents  @ 181,2574,2590
+  @field r chan  @ 23,32,41,63,73,95,180,287,573,615,1517,1581
+  @field r chan  @ 1756,1797,1872,1911,2028,2145,2281
+  @field w chan  @ 102,120,127,323,504,505,602,609,658,680,687,709
+  @field w chan  @ 741,742,776,777,792,798,824,914,915,916,925,955
+  @field w chan  @ 973,983,1004,1005,1017,1039,1040,1051,1075,1107,1138,1170
+  @field w chan  @ 1171,1201,1202,1234,1235,1266,1267,1300,1301,1333,1334,1366
+  @field w chan  @ 1376,1394,1402,1435,1475,1493,1505,1532,1533,1543,1561,1568
+  @field w chan  @ 1598,1629,1655,1673,1682,1714,1715,1738,1761,1762,1824,1844
+  @field w chan  @ 1864,1894,1895,1898,1951,1957,2134,2174,2175,2176,2205,2248
+  @field w chan  @ 2270,2297,2298,2322,2348,2349,2360,2361,2376,2399,2420,2421
+  @field w chan  @ 2463,2484,2485,2492
+  @field w chanLo  @ 2510,2524
+  @field r columns  @ 109,155,334,1665,1828,1902,2041,2047,2113,2121,2152,2160
+  @field r columns  @ 2180,2183,2194,2220,2230,2326,2336,2473,2521,2535,2624,2685
+  @field w defaults  @ 202,220,607,685,714,788,923,953,981,1015,1049,1073
+  @field w defaults  @ 1097,1105,1129,1136,1160,1167,1191,1198,1224,1231,1256,1263
+  @field w defaults  @ 1289,1297,1323,1330,1374,1400,1433,1473,1503,1541,1566,1596
+  @field w defaults  @ 1627,1653,1680,1703,1711,1735,1791,2067,2110
+  @field w delay  @ 121,659,825,1865,1899,1952,2135,2177,2206,2249,2271,2323
+  @field w delay  @ 2377,2400,2464
+  @field w delta  @ 200,214,604,682,711,786,922,952,980,1010,1044,1068
+  @field w delta  @ 1093,1100,1124,1132,1156,1163,1186,1194,1220,1227,1252,1259
+  @field w delta  @ 1284,1292,1319,1326,1370,1396,1429,1471,1501,1537,1563,1592
+  @field w delta  @ 1625,1648,1675,1698,1706,1730,1786,2066,2107
+  @field w denseRamp  @ 193,2569,2612,2644
+  @field w depth  @ 9,1760,1867,1900,1953,2137,2178,2251,2273,2357,2445
+  @field r derived  @ 96,138,169,593,1849
+  @field w dest  @ 202,220,607,685,714,788,923,953,981,1015,1049,1073
+  @field w dest  @ 1097,1105,1129,1136,1160,1167,1191,1198,1224,1231,1256,1263
+  @field w dest  @ 1289,1297,1323,1330,1374,1400,1433,1473,1503,1541,1566,1596
+  @field w dest  @ 1627,1653,1680,1703,1711,1735,1760,1791,1900,1953,2067,2110
+  @field w dest  @ 2178,2357
+  @field w detune  @ 121,659,825,1365,1423,1865,1899,1952,2065,2135,2177,2206
+  @field w detune  @ 2249,2271,2323,2377,2400,2464,2608
+  @field w dir  @ 117,410,426,455,471
+  @field r ds  @ 2359
+  @field w dur  @ 2510,2524
+  @field w edgePair  @ 211,2587
+  @field r endppq  @ 23,63,577,963,964,1852,2076,2083
+  @field w endppq  @ 102,120,127,378,379,393,394,484,485,486,501,502
+  @field w endppq  @ 504,505,609,658,687,792,798,824,887,913,925,947
+  @field w endppq  @ 948,955,983,1017,1051,1075,1107,1138,1170,1171,1201,1202
+  @field w endppq  @ 1234,1235,1266,1267,1300,1301,1333,1334,1376,1402,1435,1475
+  @field w endppq  @ 1505,1543,1568,1598,1629,1655,1682,1714,1715,1738,1801,1822
+  @field w endppq  @ 1823,1824,1842,1843,1844,1864,1898,1950,1951,1967,2065,2069
+  @field w endppq  @ 2070,2071,2134,2176,2205,2248,2270,2297,2298,2322,2348,2349
+  @field w endppq  @ 2360,2361,2376,2399,2405,2420,2421,2463,2484,2485,2492,2608
+  @field r endppqC  @ 492,513,1832
   @field r evType  @ 32,41,54,73,95,138,157,169,180,287,329,335
-  @field r evType  @ 1284,1458,1522,1547,1697,1738,1813,1852,1901,1969,2086,2199
-  @field r evType  @ 2222
-  @field w evType  @ 120,323,570,626,648,677,709,710,744,745,792,882
-  @field w evType  @ 883,884,941,972,973,1307,1335,1434,1473,1474,1502,1614
-  @field w evType  @ 1702,1703,1805,1835,1836,1839,1892,1898,2075,2115,2116,2117
-  @field w evType  @ 2146,2189,2211,2263,2317,2340,2404
-  @field r events  @ 110,156,335,1769,1843,1991,2063,2121,2125,2136,2171,2270
-  @field r events  @ 2271,2272,2273,2277,2414,2462,2476,2567,2626
-  @field w expand  @ 194,212,572,650,679,749,890,920,948,978,1008,1034
-  @field w expand  @ 1041,1065,1073,1097,1104,1127,1135,1161,1168,1193,1200,1225
-  @field w expand  @ 1233,1260,1267,1311,1337,1370,1406,1436,1478,1504,1533,1563
-  @field w expand  @ 1589,1616,1639,1647,1671,1727,2005,2048
-  @field w fields  @ 202,220,575,653,682,756,891,921,949,983,1014,1038
-  @field w fields  @ 1046,1070,1077,1101,1108,1132,1139,1165,1172,1197,1204,1230
-  @field w fields  @ 1238,1264,1271,1315,1341,1374,1414,1444,1482,1507,1537,1568
-  @field w fields  @ 1594,1621,1644,1652,1676,1732,2008,2051
-  @field r fx  @ 2132,2158,2277,2328,2350
-  @field w fx  @ 102,127,410,425,440,472,473,491,578,656,684,761
-  @field w fx  @ 767,894,924,952,986,1017,1049,1080,1111,1112,1142,1143
-  @field w fx  @ 1175,1176,1207,1208,1241,1242,1274,1275,1318,1344,1377,1417
-  @field w fx  @ 1447,1485,1510,1540,1571,1597,1624,1655,1656,1679,1705,1711
-  @field w fx  @ 1742,1766,1786,1807,1841,1894,2012,2053,2077,2119,2147,2191
-  @field w fx  @ 2213,2238,2239,2264,2289,2290,2301,2302,2318,2342,2361,2362
-  @field w fx  @ 2385,2405,2425,2426,2433,2448,2461,2503,2526,2550,2583
-  @field r glide  @ 556,562
-  @field w glide  @ 554
-  @field r hidden  @ 2569
-  @field r id  @ 2200,2372
-  @field r kind  @ 1876
-  @field w kind  @ 9,117,204,222,410,411,425,426,440,578,656,684
-  @field w kind  @ 761,767,894,924,952,986,1017,1049,1080,1111
-  @field w kind  @ 1112,1142,1143,1175,1176,1207,1208,1241,1242,1274,1275,1318
-  @field w kind  @ 1344,1377,1417,1447,1485,1510,1540,1571,1597,1624,1655,1656
-  @field w kind  @ 1678,1701,1742,1766,1786,1807,1808,1841,1869,1894,2012,2053
-  @field w kind  @ 2077,2078,2119,2191,2192,2213,2214,2298,2342,2386
-  @field r kinds  @ 193,211,571,580,649,664,678,694,748,768,889,896
-  @field r kinds  @ 919,926,947,954,977,988,1007,1019,1033,1040,1051
-  @field r kinds  @ 1064,1072,1082,1096,1103,1115,1126,1134,1146
-  @field r kinds  @ 1160,1167,1179,1192,1199,1211,1224,1232,1245
-  @field r kinds  @ 1259,1266,1289,1310,1320,1336,1353,1369,1379,1405,1419
-  @field r kinds  @ 1435,1454,1477,1487,1503,1512,1532,1552,1562,1573,1588,1599
-  @field r kinds  @ 1615,1626,1638,1646,1659,1670,1681,1726,1750,2004,2020
-  @field r kinds  @ 2047,2059,2510,2528,2553,2585
-  @field w label  @ 202,220,575,653,682,756,891,921,949,983,1014,1038
-  @field w label  @ 1046,1070,1077,1101,1108,1132,1139,1165,1172,1197,1204,1230
-  @field w label  @ 1238,1264,1271,1315,1341,1374,1414,1444,1482,1507,1537,1568
-  @field w label  @ 1594,1621,1644,1652,1676,1732,2008,2051
+  @field r evType  @ 1343,1517,1581,1606,1756,1797,1872,1911,1960,2028,2145,2258
+  @field r evType  @ 2281
+  @field w evType  @ 120,323,602,658,680,709,741,742,776,777,824,914
+  @field w evType  @ 915,916,973,1004,1005,1039,1040,1366,1394,1493,1532,1533
+  @field w evType  @ 1561,1673,1761,1762,1864,1894,1895,1898,1951,1957,2134,2174
+  @field w evType  @ 2175,2176,2205,2248,2270,2322,2376,2399,2463
+  @field r events  @ 110,156,335,1828,1902,2050,2122,2180,2184,2195,2230,2329
+  @field r events  @ 2330,2331,2332,2336,2473,2521,2535,2626,2685
+  @field w expand  @ 194,212,604,682,711,781,922,952,980,1010,1044,1067
+  @field w expand  @ 1093,1100,1124,1132,1156,1163,1186,1194,1220,1227,1252,1259
+  @field w expand  @ 1284,1292,1319,1326,1370,1396,1429,1465,1495,1537,1563,1592
+  @field w expand  @ 1622,1648,1675,1698,1706,1730,1786,2064,2107
+  @field w fields  @ 202,220,607,685,714,788,923,953,981,1015,1049,1073
+  @field w fields  @ 1097,1105,1129,1136,1160,1167,1191,1198,1224,1231,1256,1263
+  @field w fields  @ 1289,1297,1323,1330,1374,1400,1433,1473,1503,1541,1566,1596
+  @field w fields  @ 1627,1653,1680,1703,1711,1735,1791,2067,2110
+  @field r fx  @ 2191,2217,2336,2387,2409
+  @field w fx  @ 102,127,410,425,440,455,471,504,505,523,610,688
+  @field w fx  @ 716,793,799,926,956,984,1018,1052,1076,1108,1139,1170
+  @field w fx  @ 1171,1201,1202,1234,1235,1266,1267,1300,1301,1333,1334,1377
+  @field w fx  @ 1403,1436,1476,1506,1544,1569,1599,1630,1656,1683,1714,1715
+  @field w fx  @ 1738,1764,1770,1801,1825,1845,1866,1900,1953,2071,2112,2136
+  @field w fx  @ 2178,2206,2250,2272,2297,2298,2323,2348,2349,2360,2361,2377
+  @field w fx  @ 2401,2420,2421,2444,2464,2484,2485,2492,2507,2520,2562,2585
+  @field w fx  @ 2609,2642
+  @field r glide  @ 588,594
+  @field w glide  @ 586
+  @field r hidden  @ 2628
+  @field r id  @ 2259,2431
+  @field r kind  @ 1935
+  @field w kind  @ 9,117,204,222,410,411,425,426,440,455,456,471
+  @field w kind  @ 610,688,716,793,799,926,956,984,1018,1052,1076,1108
+  @field w kind  @ 1108,1139,1170,1171,1201,1202,1234,1235,1266,1267,1300
+  @field w kind  @ 1301,1333,1334,1377,1403,1436,1476,1506,1544,1569,1599,1630
+  @field w kind  @ 1656,1683,1714,1715,1737,1760,1801,1825,1845,1866,1867,1900
+  @field w kind  @ 1928,1953,2071,2112,2136,2137,2178,2250,2251,2272,2273,2357
+  @field w kind  @ 2401,2445
+  @field r kinds  @ 193,211,603,612,681,696,710,726,780,800,921,928
+  @field r kinds  @ 951,958,979,986,1009,1020,1043,1054,1066,1078,1092,1099
+  @field r kinds  @ 1110,1123,1131,1141,1155,1162,1174,1185,1193
+  @field r kinds  @ 1205,1219,1226,1238,1251,1258,1270,1283,1291
+  @field r kinds  @ 1304,1318,1325,1348,1369,1379,1395,1412,1428,1438
+  @field r kinds  @ 1464,1478,1494,1513,1536,1546,1562,1571,1591,1611,1621,1632
+  @field r kinds  @ 1647,1658,1674,1685,1697,1705,1718,1729,1740,1785,1809
+  @field r kinds  @ 2063,2079,2106,2118,2569,2587,2612,2644
+  @field w label  @ 202,220,607,685,714,788,923,953,981,1015,1049,1073
+  @field w label  @ 1097,1105,1129,1136,1160,1167,1191,1198,1224,1231,1256,1263
+  @field w label  @ 1289,1297,1323,1330,1374,1400,1433,1473,1503,1541,1566,1596
+  @field w label  @ 1627,1653,1680,1703,1711,1735,1791,2067,2110
   @field r lane  @ 139,144
   @field w lane  @ 121,139,304,305,306,322,323,362,363,364,378,379
   @field w lane  @ 393,394,407,408,409,422,423,424,438,439,452,453
-  @field w lane  @ 469,470,490,500,501,502,519,520,521,537,554,596
-  @field w lane  @ 611,624,626,676,707,708,709,710,787,793,805,821
-  @field w lane  @ 834,855,881,1364,1742,1763,1764,1783,1784,1806,1840,1893
-  @field w lane  @ 1924,1925,1926,1948,1949,2010,2011,2032,2045,2046,2076,2118
-  @field w lane  @ 2147,2190,2212,2264,2318,2341,2405,2446,2447,2545,2546,2549
-  @field w mode  @ 202,220,575,653,682,756,891,921,949,983,1014,1038
-  @field w mode  @ 1046,1070,1077,1101,1108,1132,1139,1165,1172,1197,1204,1230
-  @field w mode  @ 1238,1264,1271,1315,1341,1374,1414,1444,1482,1507,1537,1568
-  @field w mode  @ 1594,1621,1644,1652,1676,1732,2008,2051
-  @field r name  @ 836
+  @field w lane  @ 454,468,469,470,484,485,501,502,522,532,533,534
+  @field w lane  @ 551,552,553,569,586,628,643,656,658,708,739,740
+  @field w lane  @ 741,742,819,825,837,853,866,887,913,1423,1801,1822
+  @field w lane  @ 1823,1842,1843,1865,1899,1952,1983,1984,1985,2007,2008,2069
+  @field w lane  @ 2070,2091,2104,2105,2135,2177,2206,2249,2271,2323,2377,2400
+  @field w lane  @ 2464,2505,2506,2604,2605,2608
+  @field w mode  @ 202,220,607,685,714,788,923,953,981,1015,1049,1073
+  @field w mode  @ 1097,1105,1129,1136,1160,1167,1191,1198,1224,1231,1256,1263
+  @field w mode  @ 1289,1297,1323,1330,1374,1400,1433,1473,1503,1541,1566,1596
+  @field w mode  @ 1627,1653,1680,1703,1711,1735,1791,2067,2110
+  @field r name  @ 868
   @field w name  @ 230,246,261,281,301,319,359,375,390,404,419,435
-  @field w name  @ 449,466,487,497,516,534,551,567,593,608,621,645
-  @field w name  @ 673,704,740,784,802,818,831,852,865,876,910,937
-  @field w name  @ 967,1004,1029,1061,1093,1123,1155,1189,1219,1254,1303,1332
-  @field w name  @ 1361,1400,1431,1469,1499,1529,1559,1585,1611,1635,1667,1691
-  @field w name  @ 1723,1758,1778,1800,1831,1887,1921,1945,1961,1999,2029,2042
-  @field w name  @ 2070,2111,2143,2166,2184,2208,2233,2259,2285,2314,2337,2357
-  @field w name  @ 2382,2398,2421,2443,2458,2471,2483,2500,2523,2542,2580,2601
-  @field w name  @ 2621
-  @field r notes  @ 109,137,155,168,334,561,905,930,1769,1789,1843,2015
-  @field r notes  @ 2121,2171,2267,2277,2414,2462,2476,2626
-  @field w notes  @ 200,214,572,650,679,754,890,920,948,978,1009,1034
-  @field w notes  @ 1041,1065,1073,1097,1104,1127,1135,1161,1168,1193,1200,1225
-  @field w notes  @ 1233,1260,1267,1311,1337,1370,1412,1442,1478,1504,1533,1566
-  @field w notes  @ 1589,1616,1639,1647,1671,1727,2005,2048
-  @field w onset  @ 9,1808,2078,2192,2214,2386
-  @field w overrun  @ 2004,2020
-  @field r parked  @ 456,477,539,598,599,613,614,638,791,796,810,813
-  @field r parked  @ 838,1818,1822,1866,1870,2095,2100,2150,2151,2195,2200,2321
-  @field r parked  @ 2345
-  @field w parked  @ 1863
-  @field r parkedCC  @ 581,659,661,663,665
-  @field r parkedPA  @ 718
-  @field r parkedPb  @ 688,693,998,1327,1349,1356
-  @field r pas  @ 899
-  @field w pattern  @ 411,425,440
-  @field r pb  @ 957,1982,1988,2093,2101,2161,2565
-  @field w pbRep  @ 678,694
-  @field w period  @ 9,117,410,426,1701,1766,1786,1807,1808,1841,1869,1894
-  @field w period  @ 2077,2078,2119,2191,2192,2213,2214,2298,2342,2386
-  @field r pitch  @ 139,157,169,457,478,601,602,632,638,690,715,718
-  @field r pitch  @ 796,813,930,1770,2015,2559,2562
+  @field w name  @ 449,465,481,498,519,529,548,566,583,599,625,640
+  @field w name  @ 653,677,705,736,772,816,834,850,863,884,897,908
+  @field w name  @ 942,969,999,1036,1063,1088,1120,1152,1182,1214,1248,1278
+  @field w name  @ 1313,1362,1391,1420,1459,1490,1528,1558,1588,1618,1644,1670
+  @field w name  @ 1694,1726,1750,1782,1817,1837,1859,1890,1946,1980,2004,2020
+  @field w name  @ 2058,2088,2101,2129,2170,2202,2225,2243,2267,2292,2318,2344
+  @field w name  @ 2373,2396,2416,2441,2457,2480,2502,2517,2530,2542,2559,2582
+  @field w name  @ 2601,2639,2660,2680
+  @field r notes  @ 109,137,155,168,334,593,937,962,1828,1848,1902,2074
+  @field r notes  @ 2180,2230,2326,2336,2473,2521,2535,2685
+  @field w notes  @ 200,214,604,682,711,786,922,952,980,1010,1044,1068
+  @field w notes  @ 1093,1100,1124,1132,1156,1163,1186,1194,1220,1227,1252,1259
+  @field w notes  @ 1284,1292,1319,1326,1370,1396,1429,1471,1501,1537,1563,1592
+  @field w notes  @ 1625,1648,1675,1698,1706,1730,1786,2064,2107
+  @field w onset  @ 9,1867,2137,2251,2273,2445
+  @field w overrun  @ 2063,2079
+  @field r parked  @ 488,509,571,630,631,645,646,670,823,828,842,845
+  @field r parked  @ 870,1877,1881,1925,1929,2154,2159,2209,2210,2254,2259,2380
+  @field r parked  @ 2404
+  @field w parked  @ 1922
+  @field r parkedCC  @ 613,691,693,695,697
+  @field r parkedPA  @ 750
+  @field r parkedPb  @ 720,725,1030,1386,1408,1415
+  @field r pas  @ 931
+  @field w pattern  @ 411,425,440,456
+  @field r pb  @ 989,2041,2047,2152,2160,2220,2624
+  @field w pbRep  @ 710,726
+  @field w period  @ 9,117,410,426,455,471,1760,1825,1845,1866,1867,1900
+  @field w period  @ 1928,1953,2136,2137,2178,2250,2251,2272,2273,2357,2401,2445
+  @field r pitch  @ 139,157,169,489,510,633,634,664,670,722,747,750
+  @field r pitch  @ 828,845,962,1829,2074,2618,2621
   @field w pitch  @ 120,139,304,305,306,322,323,362,363,364,378,379
   @field w pitch  @ 393,394,407,408,409,422,423,424,438,439,452,453
-  @field w pitch  @ 469,470,490,500,501,502,519,520,521,537,554,596
-  @field w pitch  @ 598,611,624,627,676,707,708,709,710,787,791,792
-  @field w pitch  @ 805,810,821,834,838,855,881,884,899,915,916,1364
-  @field w pitch  @ 1742,1763,1764,1783,1784,1805,1839,1891,1892,1924,1925,1926
-  @field w pitch  @ 1948,1949,2006,2010,2011,2032,2045,2046,2075,2117,2146,2189
-  @field w pitch  @ 2211,2263,2317,2340,2404,2446,2447,2545,2546,2549
-  @field r plain  @ 1425,1577,1604
+  @field w pitch  @ 454,468,469,470,484,485,501,502,522,532,533,534
+  @field w pitch  @ 551,552,553,569,586,628,630,643,656,659,708,739
+  @field w pitch  @ 740,741,742,819,823,824,837,842,853,866,870,887
+  @field w pitch  @ 913,916,931,947,948,1423,1801,1822,1823,1842,1843,1864
+  @field w pitch  @ 1898,1950,1951,1983,1984,1985,2007,2008,2065,2069,2070,2091
+  @field w pitch  @ 2104,2105,2134,2176,2205,2248,2270,2322,2376,2399,2463,2505
+  @field w pitch  @ 2506,2604,2605,2608
+  @field r plain  @ 1484,1636,1663
   @field r ppq  @ 32,41,47,73,82,84,88,95,139,143
   @field r ppq  @ 143,180,181,184,251,253,267,268
-  @field r ppq  @ 268,457,478,544,584,586,635,763,779,998,1279
-  @field r ppq  @ 1293,1296,1383,1461,1738,1790,1853,1857
-  @field r ppq  @ 1857,1861,1862,1901,1911,1965,1969,1978,1991
-  @field r ppq  @ 2086,2534,2569
+  @field r ppq  @ 268,489,510,576,616,618,667,795,811,1030,1338
+  @field r ppq  @ 1352,1355,1442,1520,1797,1849,1912,1916
+  @field r ppq  @ 1916,1920,1921,1960,1970,2024,2028,2037,2050
+  @field r ppq  @ 2145,2593,2628
   @field w ppq  @ 82,120,139,181,197,215,216,217,267,323,378,379
-  @field w ppq  @ 393,394,452,453,469,470,570,573,626,648,651,677
-  @field w ppq  @ 680,709,710,744,745,752,792,855,881,882,883,884
-  @field w ppq  @ 899,900,901,902,904,915,916,941,957,958,959,972
-  @field w ppq  @ 973,979,980,981,1010,1011,1035,1036,1042,1043,1044,1066
-  @field w ppq  @ 1067,1068,1074,1075,1098,1099,1105,1106,1128,1129,1130,1136
-  @field w ppq  @ 1137,1162,1163,1169,1170,1194,1195,1201,1202,1226,1227,1228
-  @field w ppq  @ 1234,1235,1236,1261,1262,1268,1269,1307,1312,1313,1335,1338
-  @field w ppq  @ 1339,1364,1371,1372,1409,1434,1439,1473,1474,1479,1480,1502
-  @field w ppq  @ 1505,1534,1535,1565,1590,1591,1592,1614,1617,1618,1619,1640
-  @field w ppq  @ 1641,1642,1648,1649,1650,1672,1673,1674,1702,1703,1728,1729
-  @field w ppq  @ 1730,1742,1763,1764,1783,1784,1805,1835,1836,1839,1853,1861
-  @field w ppq  @ 1891,1892,1898,1978,1991,2006,2010,2011,2049,2075,2115,2116
-  @field w ppq  @ 2117,2146,2189,2211,2263,2317,2340,2404,2451,2465,2515,2531
-  @field w ppq  @ 2549,2610
-  @field r ppqL  @ 2558
-  @field w ramp  @ 1766,1786
-  @field w rest  @ 1678
+  @field w ppq  @ 393,394,484,485,501,502,602,605,658,680,683,709
+  @field w ppq  @ 712,741,742,776,777,784,824,887,913,914,915,916
+  @field w ppq  @ 931,932,933,934,936,947,948,973,989,990,991,1004
+  @field w ppq  @ 1005,1011,1012,1013,1039,1040,1045,1046,1047,1069,1070,1094
+  @field w ppq  @ 1095,1101,1102,1103,1125,1126,1127,1133,1134,1157,1158,1164
+  @field w ppq  @ 1165,1187,1188,1189,1195,1196,1221,1222,1228,1229,1253,1254
+  @field w ppq  @ 1260,1261,1285,1286,1287,1293,1294,1295,1320,1321,1327,1328
+  @field w ppq  @ 1366,1371,1372,1394,1397,1398,1423,1430,1431,1468,1493,1498
+  @field w ppq  @ 1532,1533,1538,1539,1561,1564,1593,1594,1624,1649,1650,1651
+  @field w ppq  @ 1673,1676,1677,1678,1699,1700,1701,1707,1708,1709,1731,1732
+  @field w ppq  @ 1733,1761,1762,1787,1788,1789,1801,1822,1823,1842,1843,1864
+  @field w ppq  @ 1894,1895,1898,1912,1920,1950,1951,1957,2037,2050,2065,2069
+  @field w ppq  @ 2070,2108,2134,2174,2175,2176,2205,2248,2270,2322,2376,2399
+  @field w ppq  @ 2463,2510,2524,2574,2590,2608,2669
+  @field r ppqL  @ 2617
+  @field w ramp  @ 1825,1845
+  @field w rest  @ 1737
   @field r rpb  @ 344,351
-  @field w rpb  @ 323,709,710
+  @field w rpb  @ 323,741,742
   @field w run  @ 231,247,262,282,302,320,360,376,391,405,420,436
-  @field w run  @ 450,467,488,498,517,535,552,568,594,609,622,646
-  @field w run  @ 674,705,741,785,803,819,832,853,866,877,911,938
-  @field w run  @ 968,1005,1030,1062,1094,1124,1156,1190,1220,1255,1304,1333
-  @field w run  @ 1362,1401,1432,1470,1500,1530,1560,1586,1612,1636,1668,1692
-  @field w run  @ 1724,1759,1779,1801,1832,1888,1922,1946,1962,2000,2030,2043
-  @field w run  @ 2071,2112,2144,2167,2185,2209,2234,2260,2286,2315,2338,2358
-  @field w run  @ 2383,2399,2422,2444,2459,2472,2484,2501,2524,2543,2581,2602
-  @field w run  @ 2622
-  @field w seats  @ 1863
-  @field r shape  @ 82,267,2614
-  @field w shape  @ 82,198,215,216,217,267,573,651,680,752,900,901
-  @field w shape  @ 902,957,958,959,979,980,981,1010,1011,1035,1036,1042
-  @field w shape  @ 1043,1044,1066,1067,1068,1074,1075,1098,1099,1105,1106,1128
-  @field w shape  @ 1129,1130,1136,1137,1162,1163,1169,1170,1194,1195,1201,1202
-  @field w shape  @ 1226,1227,1228,1234,1235,1236,1261,1262,1268,1269,1312,1313
-  @field w shape  @ 1338,1339,1371,1372,1410,1440,1479,1480,1505,1534,1535,1565
-  @field w shape  @ 1590,1591,1592,1617,1618,1619,1640,1641,1642,1648,1649,1650
-  @field w shape  @ 1672,1673,1674,1728,1729,1730,2049
-  @field r slow  @ 2615
+  @field w run  @ 450,466,482,499,520,530,549,567,584,600,626,641
+  @field w run  @ 654,678,706,737,773,817,835,851,864,885,898,909
+  @field w run  @ 943,970,1000,1037,1064,1089,1121,1153,1183,1215,1249,1279
+  @field w run  @ 1314,1363,1392,1421,1460,1491,1529,1559,1589,1619,1645,1671
+  @field w run  @ 1695,1727,1751,1783,1818,1838,1860,1891,1947,1981,2005,2021
+  @field w run  @ 2059,2089,2102,2130,2171,2203,2226,2244,2268,2293,2319,2345
+  @field w run  @ 2374,2397,2417,2442,2458,2481,2503,2518,2531,2543,2560,2583
+  @field w run  @ 2602,2640,2661,2681
+  @field w seats  @ 1922
+  @field r shape  @ 82,267,2673
+  @field w shape  @ 82,198,215,216,217,267,605,683,712,784,932,933
+  @field w shape  @ 934,989,990,991,1011,1012,1013,1045,1046,1047,1069,1070
+  @field w shape  @ 1094,1095,1101,1102,1103,1125,1126,1127,1133,1134,1157,1158
+  @field w shape  @ 1164,1165,1187,1188,1189,1195,1196,1221,1222,1228,1229,1253
+  @field w shape  @ 1254,1260,1261,1285,1286,1287,1293,1294,1295,1320,1321,1327
+  @field w shape  @ 1328,1371,1372,1397,1398,1430,1431,1469,1499,1538,1539,1564
+  @field w shape  @ 1593,1594,1624,1649,1650,1651,1676,1677,1678,1699,1700,1701
+  @field w shape  @ 1707,1708,1709,1731,1732,1733,1787,1788,1789,2108
+  @field r slow  @ 2674
   @field r startppq  @ 23,63
-  @field w startppq  @ 102,127,472,473,577,655,760,766,893,923,951,985
-  @field w startppq  @ 1016,1048,1079,1111,1112,1142,1143,1175,1176,1207,1208,1241
-  @field w startppq  @ 1242,1274,1275,1317,1343,1376,1416,1446,1484,1509,1539,1570
-  @field w startppq  @ 1596,1623,1655,1656,1679,1765,1785,1908,2238,2239,2289,2290
-  @field w startppq  @ 2301,2302,2346,2361,2362,2425,2426,2433
-  @field r step  @ 2616
-  @field w step  @ 1807,1869,2077,2191,2213,2342
-  @field w streams  @ 2452,2465
-  @field r tm  @ 2304,2305,2306,2307
-  @field r uuid  @ 542,546,634,1843,1901,1913,2095,2121,2151,2157,2171
-  @field r uuid  @ 2200,2270,2271,2272,2273,2321,2345,2462,2476,2587,2626
-  @field w uuid  @ 102,127,472,473,577,655,760,766,893,923,951,985
-  @field w uuid  @ 1016,1048,1079,1111,1112,1142,1143,1175,1176,1207,1208,1241
-  @field w uuid  @ 1242,1274,1275,1317,1343,1376,1416,1446,1484,1509,1539,1570
-  @field w uuid  @ 1596,1623,1655,1656,1679,1765,1785,2238,2239,2289,2290,2301
-  @field w uuid  @ 2302,2361,2362,2425,2426,2433
-  @field r val  @ 82,181,236,237,238,254,267,660,661,689,691,763
-  @field r val  @ 775,994,995,996,999,1021,1022,1053,1054,1055,1056,1084
-  @field r val  @ 1086,1117,1148,1181,1182,1183,1184,1213,1247,1248,1249,1297
-  @field r val  @ 1297,1325,1326,1327,1349,1354,1388,1389,1392,1393,1462,1490
-  @field r val  @ 1491,1519,1601,1602,1628,1629,1661,1662,1683,1684,1717,1738
-  @field r val  @ 1853,1858,1861,1978,1991,2222
-  @field w val  @ 82,198,215,216,217,267,570,573,648,651,659,677
-  @field w val  @ 680,688,744,745,752,882,883,900,901,902,904,941
-  @field w val  @ 957,958,959,972,973,979,980,981,1010,1011,1035,1036
-  @field w val  @ 1042,1043,1044,1066,1067,1068,1074,1075,1098,1099,1105,1106
-  @field w val  @ 1128,1129,1130,1136,1137,1162,1163,1169,1170,1194,1195,1201
-  @field w val  @ 1202,1226,1227,1228,1234,1235,1236,1261,1262,1268,1269,1307
-  @field w val  @ 1312,1313,1335,1338,1339,1371,1372,1410,1434,1440,1473,1474
-  @field w val  @ 1479,1480,1502,1505,1534,1535,1565,1590,1591,1592,1614,1617
-  @field w val  @ 1618,1619,1640,1641,1642,1648,1649,1650,1672,1673,1674,1702
-  @field w val  @ 1703,1728,1729,1730,1835,1836,1853,1861,1898,1978,1991,2049
-  @field w val  @ 2115,2116
-  @field r vel  @ 139,343,724,725,728,729,733
-  @field w vel  @ 121,139,323,627,709,710,723,727,793,884,899,1806
-  @field w vel  @ 1839,1892,2006,2076,2117,2146,2190,2212,2264,2317,2340,2404
-  @field r window  @ 195,213,573,651,680,751,979,981,1010
-  @field r window  @ 1011,1035,1036,1042,1066,1074,1075,1098,1099,1105,1106,1128
-  @field r window  @ 1136,1137,1162,1163,1169,1170,1194,1195,1201,1202,1226,1228
-  @field r window  @ 1234,1236,1261,1262,1268,1269,1312,1313,1338,1339,1371,1372
-  @field r window  @ 1407,1409,1437,1439,1479,1505,1534,1590,1592,1617
-  @field r window  @ 1619,1640,1642,1648,1650,1672,1674,1728,1730,2006,2049
+  @field w startppq  @ 102,127,504,505,609,687,792,798,925,955,983,1017
+  @field w startppq  @ 1051,1075,1107,1138,1170,1171,1201,1202,1234,1235,1266,1267
+  @field w startppq  @ 1300,1301,1333,1334,1376,1402,1435,1475,1505,1543,1568,1598
+  @field w startppq  @ 1629,1655,1682,1714,1715,1738,1824,1844,1967,2297,2298,2348
+  @field w startppq  @ 2349,2360,2361,2405,2420,2421,2484,2485,2492
+  @field r step  @ 2675
+  @field w step  @ 1866,1928,2136,2250,2272,2401
+  @field w streams  @ 2511,2524
+  @field r tm  @ 2363,2364,2365,2366
+  @field r uuid  @ 574,578,666,1902,1960,1972,2154,2180,2210,2216,2230
+  @field r uuid  @ 2259,2329,2330,2331,2332,2380,2404,2521,2535,2646,2685
+  @field w uuid  @ 102,127,504,505,609,687,792,798,925,955,983,1017
+  @field w uuid  @ 1051,1075,1107,1138,1170,1171,1201,1202,1234,1235,1266,1267
+  @field w uuid  @ 1300,1301,1333,1334,1376,1402,1435,1475,1505,1543,1568,1598
+  @field w uuid  @ 1629,1655,1682,1714,1715,1738,1824,1844,2297,2298,2348,2349
+  @field w uuid  @ 2360,2361,2420,2421,2484,2485,2492
+  @field r val  @ 82,181,236,237,238,254,267,692,693,721,723,795
+  @field r val  @ 807,1026,1027,1028,1031,1057,1058,1080,1081,1112,1113,1114
+  @field r val  @ 1115,1143,1145,1176,1207,1240,1241,1242,1243,1272,1306,1307
+  @field r val  @ 1308,1356,1384,1385,1386,1408,1413,1447,1448,1451,1452
+  @field r val  @ 1521,1549,1550,1578,1660,1661,1687,1688,1720,1721,1742,1743
+  @field r val  @ 1776,1797,1912,1917,1920,2037,2050,2281
+  @field w val  @ 82,198,215,216,217,267,602,605,680,683,691,709
+  @field w val  @ 712,720,776,777,784,914,915,932,933,934,936,973
+  @field w val  @ 989,990,991,1004,1005,1011,1012,1013,1039,1040,1045,1046
+  @field w val  @ 1047,1069,1070,1094,1095,1101,1102,1103,1125,1126,1127,1133
+  @field w val  @ 1134,1157,1158,1164,1165,1187,1188,1189,1195,1196,1221,1222
+  @field w val  @ 1228,1229,1253,1254,1260,1261,1285,1286,1287,1293,1294,1295
+  @field w val  @ 1320,1321,1327,1328,1366,1371,1372,1394,1397,1398,1430,1431
+  @field w val  @ 1469,1493,1499,1532,1533,1538,1539,1561,1564,1593,1594,1624
+  @field w val  @ 1649,1650,1651,1673,1676,1677,1678,1699,1700,1701,1707,1708
+  @field w val  @ 1709,1731,1732,1733,1761,1762,1787,1788,1789,1894,1895,1912
+  @field w val  @ 1920,1957,2037,2050,2108,2174,2175
+  @field r vel  @ 139,343,756,757,760,761,765
+  @field w vel  @ 121,139,323,659,741,742,755,759,825,916,931,1865
+  @field w vel  @ 1898,1951,2065,2135,2176,2205,2249,2271,2323,2376,2399,2463
+  @field r window  @ 195,213,605,683,712,783,1011,1013,1045
+  @field r window  @ 1047,1069,1070,1094,1095,1101,1125,1133,1134,1157,1158,1164
+  @field r window  @ 1165,1187,1195,1196,1221,1222,1228,1229,1253,1254,1260,1261
+  @field r window  @ 1285,1287,1293,1295,1320,1321,1327,1328,1371,1372,1397,1398
+  @field r window  @ 1430,1431,1466,1468,1496,1498,1538,1564,1593,1649
+  @field r window  @ 1651,1676,1678,1699,1701,1707,1709,1731,1733,1787,1789,2065
+  @field r window  @ 2108

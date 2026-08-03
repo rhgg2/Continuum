@@ -446,6 +446,38 @@ return {
   },
 
   {
+    name = 'bypass: a bypassed stage stays in the chain and contributes nothing',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { pitch = 60, lane = 1 })
+      addNote(h, { pitch = 64, lane = 2 })
+      addNote(h, { pitch = 67, lane = 3 })
+      injectArp(h, { fx = { { kind = 'arp', period = { 1, 4 }, dir = 'up' },
+                            { kind = 'velPattern', pattern = { 100, 50 }, bypass = true } } })
+      local ns = derivedNotes(h)
+      t.deepEq(field(ns, 'pitch'), { 60, 64, 67, 60 }, 'the live stage still runs')
+      t.deepEq(field(ns, 'vel'),   { 100, 100, 100, 100 },
+        'the arp keeps its own velocities -- the bypassed pattern folded nothing in')
+    end,
+  },
+
+  {
+    name = 'bypass: a fully bypassed chain still parks its chord and re-seats it verbatim',
+    run = function(harness)
+      local h = harness.mk()
+      addNote(h, { pitch = 60, lane = 1 })
+      addNote(h, { pitch = 64, lane = 2 })
+      addNote(h, { pitch = 67, lane = 3 })
+      injectArp(h, { fx = { { kind = 'arp', period = { 1, 4 }, dir = 'up', bypass = true } } })
+      t.deepEq(authoredPitches(h), {},
+        'the park predicates ignore the flag -- bypass changes the realisation, never the authored notes')
+      local ns = derivedNotes(h)
+      t.deepEq(field(ns, 'pitch'), { 60, 64, 67 }, 'the parked chord is re-seated as the chain output')
+      t.deepEq(field(ns, 'ppq'),   { 0, 0, 0 },    're-seated verbatim: one onset, not the arp cycle')
+    end,
+  },
+
+  {
     name = 'replace: a parked member tail is clipped by an on-take note after the region',
     run = function(harness)
       local h = harness.mk()
@@ -997,6 +1029,33 @@ return {
       local at120
       for _, p in ipairs(h.tm:getChannel(1).parkedPb) do if p.ppq == 120 then at120 = p end end
       t.eq(at120 and at120.val, 40, 'the authored 40c stays visible via the parkedPb render union')
+    end,
+  },
+
+  {
+    name = 'bypass: a bypassed pb-replace stage parks its window and re-seats the authored base',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent({ evType = 'pb', ppq = 0,   chan = 1, val = 0 })
+      h.tm:addEvent({ evType = 'pb', ppq = 120, chan = 1, val = 40 })
+      h.tm:flush()
+
+      generators.kinds.capRep = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppq = host.window[1], val = 50, shape = 'step' },
+          { ppq = 60,             val = 50, shape = 'step' },
+          { ppq = host.window[2], val = 0,  shape = 'step' },
+        } } end,
+        mode = 'replace', dest = 'pb', label = 'CapRep', defaults = {}, fields = {},
+      }
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+                                   fx = { { kind = 'capRep', bypass = true } } } })
+      h.tm:rebuild()
+      generators.kinds.capRep = nil
+
+      t.falsy(authoredPb(h, 1, 0),   'parkWindows ignores the flag -- the authored pb still parks off-take')
+      t.eq(derivedPb(h, 1, 0).val,   0,               'the seat carries the authored base, not the curve (0c)')
+      t.eq(derivedPb(h, 1, 120).val, centsToRaw(40), 'and the base breakpoint at 120 (40c)')
     end,
   },
 

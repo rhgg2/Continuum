@@ -5,7 +5,7 @@
 
 ## Phases
 
-1. **Phase 1 — per-stage bypass** (§ The chain surface) — `bypass` on the fx entry: the runner skips the stage, and the park predicates stop counting it so a fully-bypassed chain parks nothing  ← in flight
+1. **Phase 1 — per-stage bypass** (§ The chain surface) — `bypass` on the fx entry: the stage folds as its mode's identity and counts as augment for precedence, with the park predicates blind to the flag  ← in flight
 2. **Phase 2 — engine gaps** (§ Known gaps and accepted quirks) — the four independent fixes in the runner/park area Phase 1 has just been through; promotable out of order
 3. **Phase 3 — patches** (§ The chain surface) — named chains on the shelf idiom `fx-patterns` proved, stamped by copy from the fx tab's action row
 4. **Phase 4 — chain signature on the grid** (§ The chain surface) — stacked kind glyphs down the region's tail, plus a real glyph vocabulary
@@ -14,12 +14,30 @@
 
 ## Landed  (newest first; prune below ~4)
 
-(nothing yet)
+- 2026-08-03 tm: bypassed fx stage folds as the identity, keeping ownership (§ The chain surface)
 
 ## Now
 
-(empty — new plan; run /plan-phase to split phase 1 into Queued.)
+(empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
 
-(empty)
+1. **A bypassed stage yields precedence.** `chainDestType` counts a bypassed
+   stage as augment rather than replace, so a chain whose replace stage is
+   bypassed presents an augment record with a zero delta instead of a replace
+   record carrying the base. Without it the flag misfires sideways: bypassing a
+   stage in one chain flattens an *overlapping* chain's curve on the same target,
+   because a replace record wins pointwise in the overlap whether or not it has
+   anything to say. Cases in `tm_fx_region_spec`: two overlapping pb chains, the
+   later one's replace stage bypassed, the earlier one's curve intact across the
+   overlap — plus the both-live case, so the existing layering is held rather
+   than quietly relaxed.
+
+2. **The toggle on the fx tab.** A stage header row in `drawFxChainBody` gains a
+   bypass toggle and renders as bypassed, borrowing the wiring page's bypass-badge
+   chrome, and the toggle rides the transactional session so Esc reverts it with
+   everything else. It comes last deliberately: until the runner and the
+   predicates agree about the flag, nothing in the UI should be able to write one,
+   so there is no window in which a bypassed chain half-parks. The key and the
+   exact badge treatment are still open — settle them in `/plan-next`'s chat.
+   Cases in `vm_fx_ui_spec`.

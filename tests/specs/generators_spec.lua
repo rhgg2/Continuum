@@ -162,6 +162,20 @@ return {
     end,
   },
 
+  {
+    name = 'the ownership predicates ignore bypass: a bypassed chain still parks and still scopes its target',
+    run = function()
+      t.eq(generators.parksNotes{ fx = { { kind = 'arp', bypass = true } } }, true,
+        'bypass changes the realisation, never the authored notes -- the chord stays parked')
+      t.deepEq(generators.parkWindows{
+        { chan = 1, startppq = 0, endppq = 240, uuid = 'chord', fx = { { kind = 'arp', bypass = true } } },
+      }, { { evType = 'note', chan = 1, id = 'chord', startppq = 0, endppq = 240 } },
+        'the window stands: the chain re-seats the parked chord verbatim')
+      t.deepEq(generators.continuousTargets{ { kind = 'sine', bypass = true } }, { pb = true },
+        'a bypassed chain still emits a re-seat record, so the dirt gate must keep scoping the target')
+    end,
+  },
+
   ----- dest: a per-entry target, and what each target's numbers mean
 
   {

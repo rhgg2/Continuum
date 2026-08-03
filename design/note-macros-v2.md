@@ -896,12 +896,27 @@ What remains unbuilt, in `plan/chain-surface.md`:
 **Per-stage bypass.** A stage that stays in the chain with its params
 intact and contributes nothing — the A/B compare gesture, which today
 costs you the stage. It stores like `rest`: realisation metadata riding
-the fx entry, read directly and never passed through `expand`. The
-subtlety is that bypass must also drop the stage's **ownership** of its
-target, or the chain still emits a record and still parks; and a chain
-whose every stage is bypassed must behave as though it isn't there, which
-means `parksNotes`/`parkWindows` read bypass too (§ *Parked editing*, the
-DRY cut).
+the fx entry, read directly and never passed through `expand`. That
+storage is the whole rule — **bypass changes the realisation and never
+touches the authored notes.** A chain's parked chord stays parked whether
+or not its stages are bypassed, so the toggle moves nothing between take
+and stash and `parksNotes`/`parkWindows` never learn about the flag; a
+fully bypassed chain folds nothing and re-seats its parked base verbatim.
+What the flag *does* reach is the fold: the runner runs no bypassed
+stage, and `chainDestType` counts one as **augment**, so a bypassed
+replace stage stops overwriting a lower-precedence chain's curve on the
+same target.
+
+*Decision taken — demote, don't remove.* This first read "bypass drops the
+stage's **ownership**, so an all-bypassed chain behaves as though it isn't
+there", which contradicts the realisation-only storage a sentence above
+it: dropping ownership unparks, and unparking moves authored notes through
+the mm round trip on a keystroke built for repetition. Demotion — inert in
+the fold, augment for precedence — reaches the same neutrality with the
+park machinery untouched. Inert is the per-mode identity rather than an
+early skip: ownership is registered inside the fold, so a skipped stage
+emits no record at all and the parked chord and parked base it left behind
+are never re-seated — silence, not neutrality.
 
 **Chain signature on the grid.** The fx-column badge shows only the
 region's primary kind, so a three-stage chain and a one-stage chain look

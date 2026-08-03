@@ -3498,10 +3498,13 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
         local meta = generators.kinds[params.kind]
         if meta then
           local dest = generators.destOf(params)
-          local out = meta.expand(stream, host, params, chanCtx)
+          -- Ownership is registered below, so an early skip would drop the chain's record; both modes'
+          -- identity is augment-with-no-output. See design/note-macros-v2.md § Per-stage bypass.
+          local out  = params.bypass and { notes = {}, delta = {} } or meta.expand(stream, host, params, chanCtx)
+          local mode = params.bypass and 'augment' or meta.mode
           if dest == 'note' then
             ownsNotes = true
-            if meta.mode == 'replace' then stream.notes = out.notes
+            if mode == 'replace' then stream.notes = out.notes
             else
               local merged = {}
               for _, hit in ipairs(stream.notes) do util.add(merged, hit) end
@@ -3509,7 +3512,7 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
               stream.notes = merged
             end
           else
-            foldContinuous(dest, meta.mode, out)
+            foldContinuous(dest, mode, out)
           end
         end
       end
