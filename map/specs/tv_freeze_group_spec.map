@@ -1,0 +1,90 @@
+@spec tv_freeze_group_spec  src=tests/specs/tv_freeze_group_spec.lua  loc=176  cases=4
+@exercises dataStore (h.ds), trackerManager (h.tm), midiManager (h.fm), trackerView (h.vm), editCursor (h.ec), commandManager (h.cmgr), groupManager (h.gm)
+@surface   ds:assign, tm:rebuild, tm:addEvent, tm:flush, fm:dump, vm:setGridSize, ec:setPos, cmgr:invoke, ds:get, gm:eachInstance, gm:stateOf, tm:getChannel, tm:subscribe, gm:markGroup, tm:freezeRect, vm:freezeMode
+@harness   mk
+
+# Intent
+  Track B (fx freeze): the tv verb that converts a producer and mints a stock group over its
+  own output. tm_fx_region_spec pins the conversion and the thin; this spec is the wiring --
+  the gate, the mint, and the one undo block they share.
+  see design/fx-freeze.md § Freeze to group
+
+# Helpers
+  @fn injectMixed(h, over)  @ 13-19
+      -- A mixed chain over a note: the arp promotes derived notes, the sine leaves pb breakpoints,
+      -- so the one fixture yields both member kinds without registering a stub generator.
+  @fn addNote(h)  @ 21-25
+  @fn fxColFor(h, chan)  @ 27-31
+  @fn noteColIdx(h, chan)  @ 33-37
+  @fn authoredUuid(h)  @ 39-41
+  @fn authoredPitches(h)  @ 43-50
+  @fn blockCounter(h)  @ 54-62
+      -- util.atomic reads reaper.Undo_BeginBlock at call time, so a stub installed after the wrap still
+      -- counts. Outermost blocks only: inner blocks collapse into the verb's.
+
+# Cases
+  @case 'freeze to group: the conversion mints one group over its own output'  [harness]  @ 67-104
+  @case 'freeze to group: two rebuilds, one undo block'  [harness]  @ 111-130
+  @case 'freeze to group: a colliding footprint declines before anything moves'  [harness]  @ 137-156
+  @case 'freeze to group: a plain note at the caret is no producer'  [harness]  @ 160-174
+
+# Uses (outbound edges)
+  @use call ds:assign  @ 17
+  @use call tm:rebuild  @ 18
+  @use call tm:addEvent  @ 22
+  @use call tm:flush  @ 24
+  @use call fm:dump  @ 40,45,86
+  @use call vm:setGridSize  @ 70,114,140,163
+  @use call ec:setPos  @ 74,118,146,165
+  @use call cmgr:invoke  @ 76,124,150,169
+  @use call ds:get  @ 78,128,148,153
+  @use call gm:eachInstance  @ 79,154,172
+  @use call gm:stateOf  @ 89,100
+  @use call tm:getChannel  @ 94
+  @use call tm:subscribe  @ 121
+  @use call gm:markGroup  @ 143
+  @use call tm:freezeRect  @ 143
+  @use call vm:freezeMode  @ 155,166
+
+# Fields (r read / w write incl. constructor keys)
+  @field w Undo_BeginBlock  @ 56
+  @field w Undo_EndBlock  @ 60
+  @field r anchor  @ 81,82
+  @field r chan  @ 82
+  @field w chan  @ 14,22
+  @field r cols  @ 28,34
+  @field r columns  @ 94
+  @field w delay  @ 23
+  @field w depth  @ 8
+  @field r derived  @ 40,46,87
+  @field w detune  @ 23
+  @field w dir  @ 9
+  @field r dur  @ 83
+  @field w endppq  @ 14,22
+  @field w evType  @ 22
+  @field r events  @ 97
+  @field w fx  @ 15
+  @field r grid  @ 28,34
+  @field r groups  @ 128
+  @field w groups  @ 69,113,139,162
+  @field r hidden  @ 98
+  @field w kind  @ 8,9
+  @field r lane  @ 35
+  @field w lane  @ 23
+  @field r midiChan  @ 29,35
+  @field w name  @ 67,111,137,160
+  @field r notes  @ 40,45,86
+  @field w onset  @ 8
+  @field r pb  @ 94
+  @field w period  @ 8,9
+  @field r pitch  @ 46
+  @field w pitch  @ 22
+  @field r ppq  @ 81
+  @field w ppq  @ 22
+  @field r rect  @ 83
+  @field w run  @ 68,112,138,161
+  @field w startppq  @ 14
+  @field r type  @ 29,35
+  @field r uuid  @ 40,89,100
+  @field w uuid  @ 14
+  @field w vel  @ 23

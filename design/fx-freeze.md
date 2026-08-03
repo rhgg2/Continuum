@@ -210,7 +210,23 @@ of loose events:
   column cells, exactly what `tv:eventsInRect` hands `gm:mark`.
 - **Validate first.** `markGroup` refuses a footprint colliding with
   a live group — its `regionConflict` check must pass before any
-  mm/ds mutation, or freeze half-applies.
+  mm/ds mutation, or freeze half-applies. The gate is gm's own
+  predicate made public (2026-08-03): `gm:rectConflict(rect)`, which
+  `markGroup`'s guard routes through, so the anchor a caller asks
+  about and the anchor the mint seats instance 1 at cannot drift
+  apart. The view asks it live rather than from a per-rebuild map
+  beside `freezeEligible`. tm sits below gm and cannot read a group
+  footprint without inverting the layering; and a cached answer gone
+  stale in the permissive direction would run the conversion and only
+  then meet the refusal — the half-apply this bullet exists to
+  prevent. So the view's two questions collapse into one tri-state,
+  `tv:freezeMode(uuid)` → `nil` / `'raw'` / `'group'`, since a group
+  collision is none of freeze-to-raw's business. That last clause is
+  load-bearing at the call sites (2026-08-03): the raw keystroke gates
+  on `tm:freezeEligible` directly, and only the fx tab — which draws
+  both buttons from one hoisted answer — reads the tri-state. So gm
+  stays out of the raw door's dependencies, and `tv_fx_region_spec`,
+  which wires no gm at all, is the standing check that it does.
 - After the mint the group is ordinary: mirror-edit it, instance it,
   delete it. No frozen-ness survives.
 

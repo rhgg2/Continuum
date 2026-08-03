@@ -363,16 +363,23 @@ local function regionConflict(rect, anchor, exclude)
   end
 end
 
+-- markGroup seats instance 1 at the rect's own origin; a caller gating before it asks about the same anchor.
+local function originAnchor(rect) return { ppq = rect.ppq, chan = rect.chanLo } end
+
 ----------- PUBLIC
+
+-- A caller that would half-apply on a refusal gates here first. see docs/groupManager.md § Regions are disjoint
+--contract: the groupId markGroup would refuse this rect over, else nil
+function gm:rectConflict(rect) return regionConflict(rect, originAnchor(rect)) end
 
 --contract: seeds a group from events+rect; anchor = region origin; nil,reason on collision.
 function gm:markGroup(events, rect)
-  if regionConflict(rect, { ppq = rect.ppq, chan = rect.chanLo }) then
+  if self:rectConflict(rect) then
     return nil, 'overlaps an existing mirror group'
   end
   local groupId = nextGroupId
   nextGroupId = groupId + 1
-  local anchor = { ppq = rect.ppq, chan = rect.chanLo }
+  local anchor = originAnchor(rect)
 
   local evs, p, vuid = {}, projOf(groupId, 1), 0
   for _, e in ipairs(events) do

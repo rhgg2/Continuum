@@ -2444,7 +2444,14 @@ end
 -- a one-way conversion should act on what's visible. Runs before the util.atomic wrap, so a refusal opens no undo block; see design/fx-freeze.md § Eligibility gates.
 local function freezeRegionAtCursor()
   local uuid = tv:fxHostAtCursor()
-  if uuid and tv:freezeEligible(uuid) then tv:freezeRegion(uuid) end
+  if uuid and tm:freezeEligible(uuid) then tv:freezeRegion(uuid) end
+end
+
+-- The group door on the same host. Freeze-to-raw mints no rect, so a group collision is none of its
+-- business and it asks tm directly; only this verb needs the tri-state.
+local function freezeGroupAtCursor()
+  local uuid = tv:fxHostAtCursor()
+  if uuid and tv:freezeMode(uuid) == 'group' then tv:freezeToGroup(uuid) end
 end
 
 function tv:noteFx(uuid)
@@ -2575,8 +2582,29 @@ end
 --contract: a region or fx-carrying note host; any other uuid is a silent no-op
 function tv:freezeRegion(uuid) return tm:freezeRegion(uuid) end
 
+--contract: nil for a non-producer; 'raw' when a live group's footprint blocks it; else 'group'
 -- Not atomic: the whole point is a decline that opens no undo block.
-function tv:freezeEligible(uuid) return tm:freezeEligible(uuid) end
+function tv:freezeMode(uuid)
+  if not tm:freezeEligible(uuid) then return nil end
+  -- One census walk publishes both maps, so an eligible uuid always has a rect.
+  return gm:rectConflict(tm:freezeRect(uuid)) and 'raw' or 'group'
+end
+
+--contract: freezeRegion's conversion, plus a stock gm group over its output
+--contract: no members, no mint -- but the conversion still runs
+function tv:freezeToGroup(uuid)
+  -- Read the rect first: freezeRectByUuid is republished each rebuild from the census, so the
+  -- conversion drops the producer's own entry on its way out.
+  local rect    = tm:freezeRect(uuid)
+  local members = tm:freezeToGroup(uuid)
+  -- An empty group is a rect that blocks future placements and outlines nothing.
+  if not (members and next(members)) then return end
+  gm:markGroup(members, rect)
+  -- No mm ops of its own: the request carries the flush past its no-op gate, so gm's postflush
+  -- persist lands inside this undo block rather than the next edit's.
+  tm:requestRebuild()
+  tm:flush()
+end
 
 -- One undo block per chain verb: fx writes are undoable but mint no point of their own, so
 -- unwrapped they rewind with the next edit. Inner blocks (setNoteFx, pa:apply) collapse in.
@@ -2588,6 +2616,7 @@ tv.moveFxStage      = util.atomic('Move FX stage',    tv.moveFxStage)
 tv.replaceFxStage   = util.atomic('Swap FX stage',    tv.replaceFxStage)
 tv.pruneEmptyRegion = util.atomic('Delete FX region', tv.pruneEmptyRegion)
 tv.freezeRegion     = util.atomic('Freeze FX region', tv.freezeRegion)
+tv.freezeToGroup    = util.atomic('Freeze FX to group', tv.freezeToGroup)
 
 ----- Deletion
 
@@ -3624,6 +3653,7 @@ tracker:registerAll{
   regionArm               = function() ec:regionArm() end,
   -- No undoDesc: tv.freezeRegion carries its own block, shared with the fx tab's button.
   freezeFxRegion          = freezeRegionAtCursor,
+  freezeFxGroup           = freezeGroupAtCursor,
 }
 
 for i = 0, 9 do

@@ -1118,11 +1118,19 @@ local stripPlan do
   local function headerActions(plan)
     if ImGui.Button(ctx, 'clear') and plan.host then tv:setNoteFx(plan.host, util.REMOVE) end
     ImGui.SameLine(ctx, 0, 4)
-    chrome.disabledIf(not (plan.host and tv:freezeEligible(plan.host)), function()
+    -- The pinned host is gone after either freeze, and stripPlan keeps a pinned session alive on a
+    -- dead uuid (fx falls back to {}), so the vanished-host tidy at the sink never fires. Exit here.
+    local mode = plan.host and tv:freezeMode(plan.host)
+    chrome.disabledIf(not mode, function()
       if ImGui.Button(ctx, 'freeze') then
         tv:freezeRegion(plan.host)
-        -- The pinned host is gone, and stripPlan keeps a pinned session alive on a dead uuid
-        -- (fx falls back to {}), so the vanished-host tidy at the sink never fires. Exit here.
+        if stripHost == plan.host then stripExitReq = true end
+      end
+    end)
+    ImGui.SameLine(ctx, 0, 4)
+    chrome.disabledIf(mode ~= 'group', function()
+      if ImGui.Button(ctx, 'to group') then
+        tv:freezeToGroup(plan.host)
         if stripHost == plan.host then stripExitReq = true end
       end
     end)

@@ -139,6 +139,11 @@ bars on a different lane or channel do not collide, and an adjacent
 stack (`next = ppq + dur`, the cascade's normal step) does not either —
 the span test is strict.
 
+`markGroup`'s refusal arrives too late for a caller whose own work would
+already have half-applied — the fx freeze destroys its producer before it
+can mint. Such a caller asks `gm:rectConflict(rect)` first: the same
+predicate against the same origin anchor `markGroup` itself will use.
+
 ## The flush seam
 
 gm no longer sniffs tm's op stream. Every member edit arrives through an

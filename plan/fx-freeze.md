@@ -20,10 +20,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-03 tv: freeze an fx producer to a mirror group (§ Freeze to group)
 - 2026-08-02 tm: compute the mint rect and pull the closing pb seat inside it (§ Freeze to group)
 - 2026-08-01 tm: add freezeToGroup -- thin the curves, hand back the members (§ Freeze to group)
 - 2026-07-31 tm: store freeze eligibility per rebuild; views decline before undo (§ Eligibility gates)
-- 2026-07-31 gen: add thinCurve, a bounded Douglas-Peucker over linear runs (§ Freeze to group)
 
 ## Now
 
@@ -31,16 +31,7 @@
 
 ## Queued (current phase; one-liners)
 
-1. tv: the freeze-to-group verb — a second command and fx-tab button
-   (Ctrl-Shift-E, mirroring Ctrl-Shift-D's duplicate-to-group; no
-   modal), gating on gm's `regionConflict` against the mint rect
-   before any mutation, then conversion, `gm:markGroup` over the
-   column-event members `tm:freezeToGroup` returns, and the closing
-   flush inside the undo block; the eligibility predicate gains the
-   rect-conflict input. Spec: group minted with note and thinned-curve
-   members, each refusal declines before any mutation, one rebuild for
-   the conversion and one for the mint.
-2. spec: the minted group is ordinary — instance 2 replays both note
+1. spec: the minted group is ordinary — instance 2 replays both note
    and curve members, a mirror edit propagates, deleting the group
    works, and tiling a copy directly below leaves the copy above with
    every member; pins "no frozen-ness survives the mint".
