@@ -107,6 +107,24 @@ _LOCAL_FN = (re.compile(r'^\s*local\s+function\s+([A-Za-z_]\w*)\s*\('),
 _CALL_OF = r'(?<![\w.:])%s\s*[({\'"]'
 
 
+# `-----`, `----- Name`, `---------- PUBLIC`: structure rather than any one
+# declaration's prose, so a divider bounds a comment block instead of joining
+# it. See docs/CONVENTIONS.md for the divider grammar.
+_DIVIDER = re.compile(r'^\s*---')
+
+
+def comment_head(raw: list[str], n: int, floor: int = 1) -> int:
+    """Where the comment block written for the declaration at `n` begins. It is
+    the declaration's own documentation -- often its `--contract:` and
+    `--shape:` lines -- so it travels with the body wherever that is shown."""
+    while n - 1 >= floor:
+        line = raw[n - 2]
+        if not line.lstrip().startswith('--') or _DIVIDER.match(line):
+            break
+        n -= 1
+    return n
+
+
 def local_name(head: str) -> str | None:
     """The name a nested function frame binds, or None for the anonymous
     majority -- a callback passed inline has no call site to point a chip at."""
@@ -195,7 +213,7 @@ def resolve_root(payload: dict, spec: str) -> str | None:
 
 
 def emit(ctx: dict, kind: str, head: str, name: str, start: int, end: int,
-         scope: list[dict]) -> int:
+         scope: list[dict], floor: int = 1) -> int:
     """Add the declaration spanning [start, end] to the payload and recurse into
     each named nested local. Returns where our walk closed the declaration's own
     frame, which the caller checks against the map's span.
@@ -220,15 +238,6 @@ def emit(ctx: dict, kind: str, head: str, name: str, start: int, end: int,
               if not any(o['line'] < k['line'] and k['end'] <= o['end'] for o in kids)]
     for k in direct:
         k['to'] = f"{ctx['src']}:{k['line']}:{k['name']}"
-
-    def attached_comment(n: int) -> int:
-        """Where the comment block written for this definition begins. It is the
-        definition's own prose, so hiding the body and leaving `-- Which
-        window's curve prevails at a raw ppq` behind would attach it to whatever
-        statement followed."""
-        while n - 1 >= start and raw[n - 2].lstrip().startswith('--'):
-            n -= 1
-        return n
 
     def owned(n: int) -> bool:
         """Belongs to a lifted child. Its head line counts as the child's: the
@@ -269,11 +278,12 @@ def emit(ctx: dict, kind: str, head: str, name: str, start: int, end: int,
     ctx['payload']['decls'][did] = {
         'module': ctx['stem'], 'src': ctx['src'], 'kind': kind, 'head': head,
         'name': name, 'start': start, 'end': end,
+        'from': comment_head(raw, start, floor),
         'blocks': [f for f in frames if not owned(f['line'])],
         'marks': [m for m in marks if not owned(m['line'])],
         'calls': calls,
         'locals': [{'line': k['line'], 'end': k['end'], 'name': k['name'],
-                    'to': k['to'], 'from': attached_comment(k['line'])}
+                    'to': k['to'], 'from': comment_head(raw, k['line'], start)}
                    for k in direct]}
     report['decls'] += 1
     report['locals'] += len(direct)
@@ -282,7 +292,7 @@ def emit(ctx: dict, kind: str, head: str, name: str, start: int, end: int,
         # `local function f` binds f inside its own body, so a child sees itself
         # and everything declared above it -- but not a later sibling.
         emit(ctx, 'local', k['head'], k['name'], k['line'], k['end'],
-             [s for s in visible if s['line'] < k['line']] + [k])
+             [s for s in visible if s['line'] < k['line']] + [k], start)
     return close
 
 

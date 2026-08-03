@@ -208,7 +208,11 @@ function renderDecl(id, ancestors, bare) {
   // shows one level of nesting -- which is the default the page opens at.
   const state = d.blocks.map(f => ({ f, collapsed: f.depth > 1 }));
 
-  for (let n = d.start; n <= d.end; n++) {
+  // A declaration's comment block is its documentation and travels with it. The
+  // one exception is a local opened at its own definition: the parent is
+  // already showing both the comment and the head line directly above, so the
+  // fold-out starts at the body rather than restating them.
+  for (let n = bare ? d.start + 1 : d.from; n <= d.end; n++) {
     if (locals.some(h => n > h.line && n <= h.end)) continue;
     const row = document.createElement('div');
     row.className = 'ln';
@@ -394,7 +398,7 @@ const say = (msg) => { document.getElementById('status').textContent = msg; };
 // here and its body only where someone opens it.
 function declRows(id) {
   const d = D.decls[id];
-  let n = d.end - d.start + 1;
+  let n = d.end - d.from + 1;
   for (const h of (d.locals || [])) n -= h.end - h.line;
   return n;
 }
