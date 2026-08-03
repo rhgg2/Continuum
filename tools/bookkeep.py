@@ -1,27 +1,31 @@
 #!/usr/bin/env python3
-"""Apply commit-time bookkeeping from one manifest.
+"""Apply the memory store's mechanical bookkeeping from one manifest.
 
-The commit skill authors the content (decision prose, plan-landing note, jot
-verdicts) — this script owns only the mechanical application: JSON escaping,
-hanging-indent wrapping, section splicing, Landed prune, spool drain. Every
+The commit skill and the filing pass author the content (decision prose,
+plan-landing note, jot verdicts, drain verdicts) — this script owns only the
+mechanical application: JSON escaping, hanging-indent wrapping, section
+splicing, Landed prune, spool drain, unfiled drain. Every
 manifest key is optional; contents are computed for all present keys before
 any file is written, so a bad manifest or a missing plan file errors before
 touching anything.
 
 Usage: python3 tools/bookkeep.py [manifest.json]   # reads stdin when no path
+       python3 tools/bookkeep.py --due            # open entries due under the half-life
 
 Manifest:
   {
     "date": "2026-07-22",                       # optional; defaults to today
     "decision": "one-or-two-line prose; only for a decision with no design doc",
     "land": {"headline": "...", "ref": "§ 3", "now": "optional; overrides the empty Now"},
-    "wonder": ["keep", "drop", "replace: fuller text, under the jot's own date"]
+    "wonder": ["keep", "drop", "replace: fuller text, under the jot's own date"],
+    "drain": ["us", "claim: world_foo.md", "drop: a convention, not a claim", "keep"]
   }
 """
 
 import datetime
 import json
 import re
+import subprocess
 import sys
 import textwrap
 from pathlib import Path
@@ -30,17 +34,24 @@ REPO = Path(__file__).resolve().parent.parent
 DECISIONS = REPO / "design" / "decisions.md"
 PLAN_CURRENT = REPO / "plan" / "CURRENT"
 BRIEF = REPO / "plan" / "IMPL.md"
-OPEN_CLAIMS = REPO / ".claude" / "agent-memory" / "open.md"
-SPOOL = REPO / ".claude" / "agent-memory" / "spool.md"
+AGENT_MEMORY = REPO / ".claude" / "agent-memory"
+OPEN_CLAIMS = AGENT_MEMORY / "open.md"
+SPOOL = AGENT_MEMORY / "spool.md"
 
 DECISION_WIDTH = 100
 LANDED_KEEP = 4
 PLACEHOLDER = "(nothing unfiled)"
 NOW_EMPTY = "(empty — run /plan-next to compile the next brief.)"
 REPLACE = "replace:"
+CLAIM = "claim:"
+DROP = "drop"
+SUBJECTS = {"world": "World", "build": "Build", "us": "Us"}
+DECAY_HEADING = "**Decay log.**"
+HEADLINE_WIDTH = 72
 # wonder.py's output format, and what makes a jot's extent unambiguous: the
 # opener sits at column 0 where every continuation line is indented under it.
 BULLET = re.compile(r"- \[(\d{4}-\d{2}-\d{2})\] ")
+DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
 def die(msg):
@@ -230,16 +241,185 @@ def unfiled_digest(content):
     return "\n".join(lines[start - 1:end])
 
 
+# ----- unfiled drain
+
+def entry_blocks(body):
+    """A section's entries, one list of lines each, in order.
+
+    Same grammar as the spool: an entry opens on an unindented dated bullet
+    and runs to the next one. Trailing blanks belong to the boundary between
+    entries, not to the entry, so they are trimmed here.
+    """
+    blocks = []
+    for line in body:
+        if BULLET.match(line):
+            blocks.append([line])
+        elif blocks:
+            blocks[-1].append(line)
+        elif line.strip():
+            die(f"text before the section's first entry: {line!r}")
+    for block in blocks:
+        while block and not block[-1].strip():
+            block.pop()
+    return blocks
+
+
+def headline(block):
+    first = block[0]
+    return first if len(first) <= HEADLINE_WIDTH else first[:HEADLINE_WIDTH] + "…"
+
+
+def splice_into_section(lines, title, added):
+    """Append entries at the section's end, one blank line against each heading."""
+    start, end = section_bounds(lines, title, OPEN_CLAIMS.name)
+    body = lines[start:end]
+    while body and not body[0].strip():
+        body.pop(0)
+    while body and not body[-1].strip():
+        body.pop()
+    return lines[:start] + ["", *body, *added, ""] + lines[end:]
+
+
+def claim_append(name, added):
+    """The claim file with the entries spliced in, above the decay log if any.
+
+    A missing file is created holding the bare entries: frontmatter and body
+    are authorship, which is the pass's, so the caller is told to wrap what
+    landed rather than the tool guessing at either.
+    """
+    path = AGENT_MEMORY / name
+    if not path.exists():
+        return (path, "\n".join(added) + "\n"), (
+            f"created {name} with bare instances — wrap them in frontmatter and a body")
+    lines = path.read_text().splitlines()
+    while lines and not lines[-1].strip():
+        lines.pop()
+    cut = next((i for i, line in enumerate(lines) if line.startswith(DECAY_HEADING)), None)
+    if cut is None:
+        merged = lines + [""] + added
+    else:
+        merged = lines[:cut] + added + [""] + lines[cut:]
+    return (path, "\n".join(merged) + "\n"), None
+
+
+def apply_drain(verdicts):
+    """Move Unfiled entries to their verdicts' destinations, verbatim.
+
+    Positional like wonder verdicts, and the mismatch guard matters more here:
+    the store has recorded a jot arriving inside the section mid-pass, so the
+    count is the check that the pass's snapshot still holds at write time.
+    """
+    lines = OPEN_CLAIMS.read_text().splitlines()
+    start, end = section_bounds(lines, "Unfiled", OPEN_CLAIMS.name)
+    blocks = entry_blocks(unfiled_body(lines, start, end))
+    if not blocks:
+        die("Unfiled is empty — nothing to drain")
+    if len(verdicts) != len(blocks):
+        die(f"{len(verdicts)} verdicts for {len(blocks)} unfiled entries — re-read "
+            "the section and send one verdict per entry, in order; nothing was written")
+
+    kept, by_section, by_claim, summary = [], {}, {}, []
+    for verdict, block in zip(verdicts, blocks):
+        if verdict == "keep":
+            kept.extend(block)
+            dest = "kept"
+        elif verdict == DROP:
+            dest = "dropped"
+        elif verdict.startswith(DROP + ":"):
+            dest = "dropped — " + verdict[len(DROP) + 1:].strip()
+        elif verdict in SUBJECTS:
+            by_section.setdefault(SUBJECTS[verdict], []).extend(block)
+            dest = "→ " + SUBJECTS[verdict]
+        elif verdict.startswith(CLAIM):
+            name = verdict[len(CLAIM):].strip()
+            if not name:
+                die("a 'claim:' verdict needs a filename after the colon")
+            by_claim.setdefault(name, []).extend(block)
+            dest = "→ " + name
+        else:
+            die(f"verdict must be 'keep', 'drop[: why]', 'world', 'build', 'us' "
+                f"or 'claim: <file>', got {verdict!r}")
+        summary.append(f"{headline(block)}\n    {dest}")
+
+    lines = lines[:start] + ["", *(kept or [PLACEHOLDER]), ""] + lines[end:]
+    for title, added in by_section.items():
+        lines = splice_into_section(lines, title, added)
+
+    writes = [(OPEN_CLAIMS, "\n".join(lines) + "\n")]
+    for name, added in by_claim.items():
+        write, note = claim_append(name, added)
+        writes.append(write)
+        if note:
+            summary.append(note)
+    return writes, "\n".join(summary)
+
+
+# ----- half-life
+
+def pass_dates():
+    """Distinct author dates of `memory:` commits, newest first — the pass-days.
+
+    Passes cluster — often several in a day — and entry dates are day-granular,
+    so the half-life clock ticks in days a pass ran, never in passes: two
+    passes an hour apart give an entry no elapsed opportunity between them.
+    """
+    log = subprocess.run(["git", "log", "--format=%as%x09%s"],
+                         cwd=REPO, capture_output=True, text=True, check=True).stdout
+    dates = []
+    for line in log.splitlines():
+        date, _, subject = line.partition("\t")
+        if subject.startswith("memory:") and date not in dates:
+            dates.append(date)
+    return dates
+
+
+def report_due():
+    """Print entries whose newest dated line predates the pass before last.
+
+    The clock counts elapsed opportunity, not calendar time: a pass is the
+    only moment an entry can ripen or be struck against, so nothing comes
+    due over a fortnight nobody filed in.
+    """
+    passes = pass_dates()
+    if len(passes) < 2:
+        die("fewer than two 'memory:' passes in git history — nothing can be due")
+    cutoff = passes[1]
+
+    lines = OPEN_CLAIMS.read_text().splitlines()
+    total = 0
+    print(f"due — newest dated line predates the {cutoff} pass-day (latest: {passes[0]}):")
+    for title in SUBJECTS.values():
+        start, end = section_bounds(lines, title, OPEN_CLAIMS.name)
+        rows = []
+        for block in entry_blocks(lines[start:end]):
+            newest = max(DATE.findall("\n".join(block)))
+            if newest < cutoff:
+                rows.append(f"  {headline(block)}  (newest {newest})")
+        if rows:
+            print(f"{title}:")
+            print("\n".join(rows))
+            total += len(rows)
+    print(f"{total} due")
+
+
 # ----------- MAIN
 
 def main():
+    if sys.argv[1:] == ["--due"]:
+        report_due()
+        return
     if len(sys.argv) > 2:
-        die("usage: bookkeep.py [manifest.json]   (or pipe the JSON on stdin)")
+        die("usage: bookkeep.py [manifest.json | --due]   (or pipe the JSON on stdin)")
     source = Path(sys.argv[1]).read_text() if len(sys.argv) == 2 else sys.stdin.read()
     manifest = json.loads(source)
     date = manifest.get("date") or datetime.date.today().isoformat()
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
         die(f"date must be YYYY-MM-DD, got {date!r}")
+
+    if "wonder" in manifest and "drain" in manifest:
+        die("drain and wonder cannot share a manifest — each computes a full "
+            "open.md from one disk read, so the later write would drop the "
+            "earlier one; drain first, then triage the spool")
 
     writes, digests, retired = [], [], None
     if "decision" in manifest:
@@ -253,8 +433,12 @@ def main():
         unfiled, spool = apply_wonder(manifest["wonder"])
         writes += [unfiled, spool]
         digests.append(unfiled_digest(unfiled[1]))
+    if "drain" in manifest:
+        drain_writes, drain_summary = apply_drain(manifest["drain"])
+        writes += drain_writes
+        digests.append(drain_summary)
     if not writes:
-        die("manifest had none of: decision, land, wonder")
+        die("manifest had none of: decision, land, wonder, drain")
 
     for path, content in writes:
         path.write_text(content)
