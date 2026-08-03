@@ -1,6 +1,6 @@
 # projext undo — project scope rides REAPER undo
 
-> Split from design/fx-freeze.md after the 2026-07-12 round: F2's
+> Split from design/archive/fx-freeze.md after the 2026-07-12 round: F2's
 > "one undo reverts wholly" cannot hold while per-event metadata
 > lives in storage undo does not rewind. The bug class predates
 > freeze — undo across any derived-note edit already loses

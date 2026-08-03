@@ -1692,12 +1692,12 @@ function tm:requestRebuild() rebuildRequested = true end
 local computeFxWindows
 
 -- Rebuild output, not a cache: buildFreezeMaps replaces them wholesale each rebuild from the settled
--- census; absence = not a producer. see design/fx-freeze.md § Eligibility gates
+-- census; absence = not a producer. see design/archive/fx-freeze.md § Eligibility gates
 local freezeEligibleByUuid = {}
 local freezeRectByUuid     = {}   -- uuid -> the gm rect a freeze-to-group mint would claim
 
 -- Built at the pipeline tail, where the fx pass has already emitted this rebuild's derived notes:
--- a rect's note lanes come off those notes, not window coverage, which is parked-over not produced-onto. see design/fx-freeze.md § Freeze to group
+-- a rect's note lanes come off those notes, not window coverage, which is parked-over not produced-onto. see design/archive/fx-freeze.md § Freeze to group
 local function buildFreezeMaps(census, windows)
   local producerChans, lanesByUuid = {}, {}
   for _, p in ipairs(census) do producerChans[p.chan] = true end
@@ -1743,7 +1743,7 @@ local function inFreezeWindow(w, ppq, startAt, endAt)
 end
 
 -- Subtract the breakpoints a bounded thin can spare, raw frame, before freeze's own flush: this decides
--- which points get authored at all, rather than cutting a curve back. see design/fx-freeze.md § Freeze to group
+-- which points get authored at all, rather than cutting a curve back. see design/archive/fx-freeze.md § Freeze to group
 local function thinSeats(chan, windows)
   local index = rawIndexFor(chan)
   for _, w in ipairs(windows) do
@@ -1755,7 +1755,7 @@ local function thinSeats(chan, windows)
       local points   = {}
       for _, e in ipairs((isPb and index.pbs or index.ccs[w.cc]) or {}) do
         -- An absorber is realisation the pb pass owns and re-derives after the freeze: not curve material,
-        -- and not freeze's to delete. groupMembers' `hidden` is this partition. see design/fx-freeze.md § Freeze to group
+        -- and not freeze's to delete. groupMembers' `hidden` is this partition. see design/archive/fx-freeze.md § Freeze to group
         if not e.derived and inFreezeWindow(w, e.ppq, startRaw, endRaw) then
           -- A pb index entry's val is realisation, detune included, so the subtraction is what stops a
           -- mid-window detune step reading as a feature of the curve. A cc's val is the intent already.
@@ -1766,7 +1766,7 @@ local function thinSeats(chan, windows)
       local kept = {}
       for _, p in ipairs(generators.thinCurve(points, tol)) do kept[p] = true end
       -- A pb window folds closed, seating its last point at exactly endppq -- outside the rect a mint claims, where tiling the group directly below itself clears it away unnoticed. Pull it inside;
-      -- the destination tick's own point rides the delete loop below rather than a second write. see design/fx-freeze.md § Freeze to group
+      -- the destination tick's own point rides the delete loop below rather than a second write. see design/archive/fx-freeze.md § Freeze to group
       if isPb and w.endppq - 1 > w.startppq then
         local destRaw = tm:fromLogical(chan, w.endppq - 1, 0)
         local closing, occupant
@@ -1791,7 +1791,7 @@ local function thinSeats(chan, windows)
 end
 
 -- The material a caller mints a stock group from, gathered once the closing rebuild has settled it:
--- live column events, logical frame, no raw sidecar. see design/fx-freeze.md § Freeze to group
+-- live column events, logical frame, no raw sidecar. see design/archive/fx-freeze.md § Freeze to group
 local function groupMembers(frozen, windows, promotedUuids)
   local members = {}
   for _, uuid in ipairs(promotedUuids) do
@@ -1814,7 +1814,7 @@ local function groupMembers(frozen, windows, promotedUuids)
 end
 
 -- Freeze: a one-way projection out of the derived lifecycle -- notes, parked members, seats and
--- windows all convert to authored form in one flush. see design/fx-freeze.md § Atomicity
+-- windows all convert to authored form in one flush. see design/archive/fx-freeze.md § Atomicity
 local function freezeRegion(uuid, toGroup)
   -- Settle first: the census reads committed state, so a staged producer would be invisible to it
   -- and then committed by our own flush. see docs/trackerManager.md § Park window census
@@ -1897,7 +1897,7 @@ local function freezeRegion(uuid, toGroup)
   -- seeding it here is what carries its parked PAs along through hostDropped below.
   if hostSpec and destroysHost then droppedHosts[uuid] = true end
   -- A pa spec is anchored to a note spec, not to a window, so window coverage alone leaves it
-  -- behind. Host resolution is hostParked's, over live render cells. see design/fx-freeze.md § Freeze to raw
+  -- behind. Host resolution is hostParked's, over live render cells. see design/archive/fx-freeze.md § Freeze to raw
   local function hostDropped(pa)
     for _, cell in ipairs(channels[pa.chan].parked or {}) do
       if cell.pitch == pa.pitch and pa.ppq >= cell.ppq and pa.ppq < cell.endppqC then
@@ -4946,7 +4946,7 @@ local function rebuildPipeline(didReload)
   perf.stop('prevWindows')
 
   -- Freeze's maps, after the fx pass: settleWindows runs before it, so a rect built there would carry
-  -- the previous rebuild's note lanes. Sibling maps, one site. see design/fx-freeze.md § Freeze to group
+  -- the previous rebuild's note lanes. Sibling maps, one site. see design/archive/fx-freeze.md § Freeze to group
   perf.start('freezeMaps'); buildFreezeMaps(settledCensus, settledWindows); perf.stop('freezeMaps')
 
   -- Drop un-flushed command-path staging; the index itself is already live (head reload on

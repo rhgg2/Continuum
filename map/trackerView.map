@@ -384,7 +384,7 @@
       -- Delete-selection's fx arm: drop every region the rectangle catches (the copy rule) in one write.
   @fn freezeRegionAtCursor()  @ 2445-2448
       -- Addresses the host the caret's row brackets (the fx tab's rule), not delete's greatest-onset-before:
-      -- a one-way conversion should act on what's visible. Runs before the util.atomic wrap, so a refusal opens no undo block; see design/fx-freeze.md § Eligibility gates.
+      -- a one-way conversion should act on what's visible. Runs before the util.atomic wrap, so a refusal opens no undo block; see design/archive/fx-freeze.md § Eligibility gates.
   @fn freezeGroupAtCursor()  @ 2452-2455
       -- The group door on the same host. Freeze-to-raw mints no rect, so a group collision is none of its
       -- business and it asks tm directly; only this verb needs the tri-state.

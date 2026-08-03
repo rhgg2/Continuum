@@ -1,6 +1,7 @@
 # fx freeze — committing generator output
 
-> opened: 2026-07-11 · status: parked — `plan/fx-freeze.md`
+> opened: 2026-07-11 · status: **closed 2026-08-03** — the programme
+> landed in three phases; `plan/archive/fx-freeze.md`
 >
 > Working design doc, split from `design/note-macros-v2.md` § Freeze
 > after the 2026-07-11 design round (that section has since been

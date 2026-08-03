@@ -1,8 +1,9 @@
--- F1: channel aftertouch (`at`) as a first-class gm member. Unlike pb, at has
+-- channel aftertouch (`at`) as a first-class gm member. Unlike pb, at has
 -- no detune realisation frame -- its `val` IS the intent -- so it rides the
 -- fully generic seams (no special makeEntry/toGroup arm) with stream identity
 -- `at:0`. These pins would fire if someone grew an at-specific branch that
--- dropped its val or uuid. See design/fx-freeze.md § F1.
+-- dropped its val or uuid. See design/archive/fx-freeze.md § pb/at as
+-- first-class gm members.
 
 local t    = require('support')
 local util = require('util')

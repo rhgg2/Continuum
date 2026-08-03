@@ -973,7 +973,7 @@ return {
   {
     -- The keystroke consults tm's eligibility map before tv:freezeRegion's util.atomic wrap runs:
     -- refusals are silent, so a labelled empty undo entry would be the user's only signal that
-    -- anything happened. see design/fx-freeze.md § Eligibility gates
+    -- anything happened. see design/archive/fx-freeze.md § Eligibility gates
     name = 'fx freeze: a refused freeze opens no undo block; an eligible one opens exactly one',
     run = function(harness)
       local h = harness.mk()

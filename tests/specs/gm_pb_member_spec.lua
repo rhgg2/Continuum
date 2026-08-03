@@ -1,8 +1,9 @@
--- F1: pb as a first-class gm member. The group frame stores pb INTENT under
+-- pb as a first-class gm member. The group frame stores pb INTENT under
 -- `val`; toGroup sources it from evt.cents (frame-agnostic), never the um
 -- entry's realised val. A member sitting under governing detune must not bake
 -- that detune into the shared template -- else every sibling at a different
--- detune projects a stale wire. See design/fx-freeze.md § F1.
+-- detune projects a stale wire. See design/archive/fx-freeze.md § pb/at as
+-- first-class gm members.
 
 local t    = require('support')
 local util = require('util')
@@ -147,7 +148,8 @@ return {
     name = 'pb member: the persisted blob carries intent (not the wire) and rehydrates live',
     run = function()
       -- persist() copies group.events verbatim; the frame holds pb intent under
-      -- `val`, so a reload speaks intent, never a baked wire (design/fx-freeze.md § F1).
+      -- `val`, so a reload speaks intent, never a baked wire (design/archive/fx-freeze.md
+      -- § pb/at as first-class gm members).
       local ds = serialisingDs()
 
       local tmA, stagedA = t.fakeTm()

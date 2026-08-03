@@ -81,7 +81,7 @@
   -- Curve thinning (freeze to group)
   @fn ridesLinear(p)  @ 567
       -- A shape governs the segment to its *right*, so a point is safe to lose only if it and its
-      -- predecessor both ride linearly; a missing shape counts as non-linear. see design/fx-freeze.md § Freeze to group
+      -- predecessor both ride linearly; a missing shape counts as non-linear. see design/archive/fx-freeze.md § Freeze to group
 
 # Functions held in tables
   @held fields.when(e)  @ 382

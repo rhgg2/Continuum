@@ -2,7 +2,7 @@
 -- own output. tm_fx_region_spec pins the conversion and the thin; this spec is the wiring --
 -- the gate, the mint, the one undo block they share, and what the mint leaves behind: an
 -- ordinary group, which instances, mirrors and deletes like any other.
--- see design/fx-freeze.md § Freeze to group
+-- see design/archive/fx-freeze.md § Freeze to group
 local t    = require('support')
 local util = require('util')
 
@@ -170,7 +170,7 @@ return {
   {
     -- gm persists on tm's postflush and flush() returns early with nothing staged, so the mint's
     -- flush carries no mm ops of its own and needs tm:requestRebuild to get past that gate. Without
-    -- it the groups write rides the *next* edit's undo block. see design/fx-freeze.md § Freeze to group
+    -- it the groups write rides the *next* edit's undo block. see design/archive/fx-freeze.md § Freeze to group
     name = 'freeze to group: two rebuilds, one undo block',
     run = function(harness)
       local h = harness.mk{ groups = true }
@@ -196,7 +196,7 @@ return {
   {
     -- The gate runs before any mutation: markGroup's own refusal arrives after the conversion has
     -- already destroyed the producer, leaving a freeze with nothing minted over it.
-    -- see design/fx-freeze.md § Freeze to group
+    -- see design/archive/fx-freeze.md § Freeze to group
     name = 'freeze to group: a colliding footprint declines before anything moves',
     run = function(harness)
       local h = harness.mk{ groups = true }
@@ -241,7 +241,7 @@ return {
 
   {
     -- Directly below is the adjacency that bites: the caller's destination clear starts on the tick
-    -- a pb window used to seat its closing member. see design/fx-freeze.md § Freeze to group
+    -- a pb window used to seat its closing member. see design/archive/fx-freeze.md § Freeze to group
     name = 'freeze to group: a sibling tiled directly below replays both member kinds',
     run = function(harness)
       local h, inst = frozen(harness)
@@ -310,7 +310,7 @@ return {
     -- groupDuplicate over the group's own footprint seeds rather than instances, and markGroup
     -- refuses the overlap -- but tv:clearRegionAt has already emptied the destination by then, and
     -- the destination begins on the tick a pb window seats its closing member.
-    -- see design/fx-freeze.md § Freeze to group
+    -- see design/archive/fx-freeze.md § Freeze to group
     name = 'freeze to group: a refused tile below the mint leaves it whole',
     run = function(harness)
       local h = frozen(harness)

@@ -2441,7 +2441,7 @@ local function deleteFxRegionsInRect(r1, r2, c1, c2)
 end
 
 -- Addresses the host the caret's row brackets (the fx tab's rule), not delete's greatest-onset-before:
--- a one-way conversion should act on what's visible. Runs before the util.atomic wrap, so a refusal opens no undo block; see design/fx-freeze.md § Eligibility gates.
+-- a one-way conversion should act on what's visible. Runs before the util.atomic wrap, so a refusal opens no undo block; see design/archive/fx-freeze.md § Eligibility gates.
 local function freezeRegionAtCursor()
   local uuid = tv:fxHostAtCursor()
   if uuid and tm:freezeEligible(uuid) then tv:freezeRegion(uuid) end

@@ -403,19 +403,19 @@
   @fn clearSwing()  @ 1674-1676
   @fn buildFreezeMaps(census, windows)  @ 1701-1735
       -- Built at the pipeline tail, where the fx pass has already emitted this rebuild's derived notes:
-      -- a rect's note lanes come off those notes, not window coverage, which is parked-over not produced-onto. see design/fx-freeze.md § Freeze to group
+      -- a rect's note lanes come off those notes, not window coverage, which is parked-over not produced-onto. see design/archive/fx-freeze.md § Freeze to group
   @fn inFreezeWindow(w, ppq, startAt, endAt)  @ 1739-1743
       -- pb's seat window closes inclusive (the terminal re-centre sits on its end) where cc's is half-open:
       -- rebuildPbs' inSeatWindow and rebuildCCs' rawSpanMap. Bounds arrive in the caller's own frame; thinSeats is the one consumer left, needing the closing seat in order to move it inside.
   @fn thinSeats(chan, windows)  @ 1747-1791
       -- Subtract the breakpoints a bounded thin can spare, raw frame, before freeze's own flush: this decides
-      -- which points get authored at all, rather than cutting a curve back. see design/fx-freeze.md § Freeze to group
+      -- which points get authored at all, rather than cutting a curve back. see design/archive/fx-freeze.md § Freeze to group
   @fn groupMembers(frozen, windows, promotedUuids)  @ 1795-1814
       -- The material a caller mints a stock group from, gathered once the closing rebuild has settled it:
-      -- live column events, logical frame, no raw sidecar. see design/fx-freeze.md § Freeze to group
+      -- live column events, logical frame, no raw sidecar. see design/archive/fx-freeze.md § Freeze to group
   @fn freezeRegion(uuid, toGroup)  @ 1818-1947
       -- Freeze: a one-way projection out of the derived lifecycle -- notes, parked members, seats and
-      -- windows all convert to authored form in one flush. see design/fx-freeze.md § Atomicity
+      -- windows all convert to authored form in one flush. see design/archive/fx-freeze.md § Atomicity
   -- Mutation
   -- Length
   -- Transport

@@ -1,7 +1,7 @@
 # fx freeze — plan
 
-> source: `design/fx-freeze.md` — synthesis compiled from there;
-> don't design here.
+> source: `design/archive/fx-freeze.md` — synthesis compiled from
+> there; don't design here.
 
 ## Phases
 
@@ -27,8 +27,13 @@
 
 ## Now
 
-(empty — run /plan-next to compile the next brief.)
+(empty — closed 2026-08-03, all three phases landed. Two things the
+programme leaves open, both recorded in the design doc's § Freeze to
+group: whether the mint should make itself active, without which the
+group key cannot tile a frozen group; and `groupDuplicate` clearing its
+destination before it asks gm anything, which is older and wider than
+freeze.)
 
 ## Queued (current phase; one-liners)
 
-(empty — every phase has landed; run /plan-close.)
+(empty — every phase has landed.)

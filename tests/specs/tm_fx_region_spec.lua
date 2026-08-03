@@ -2139,7 +2139,7 @@ return {
 
   {
     -- assembleParkWindows runs every parked note spec carrying fx, so a continuous-only host parked by
-    -- *another* live region still produces. see design/fx-freeze.md § Freeze to raw
+    -- *another* live region still produces. see design/archive/fx-freeze.md § Freeze to raw
     name = 'freeze (host parked by a region): the chain goes, the note stays parked',
     run = function(harness)
       local h = harness.mk()
@@ -2180,7 +2180,7 @@ return {
 
   {
     -- The persisted window set is the seat-recognition baseline and the freeze gates' census both, so a
-    -- producer counted twice keeps an entry alive after its own freeze. see design/fx-freeze.md
+    -- producer counted twice keeps an entry alive after its own freeze. see design/archive/fx-freeze.md
     name = 'park windows: a self-parking note host contributes one window, not two',
     run = function(harness)
       local h = harness.mk()
@@ -2229,7 +2229,7 @@ return {
 
   {
     -- Same target, overlapping windows: freezing either would leave the other's producer standing
-    -- over raw output it did not make. Refusal is silent. see design/fx-freeze.md § Eligibility gates
+    -- over raw output it did not make. Refusal is silent. see design/archive/fx-freeze.md § Eligibility gates
     name = 'freeze gate (overlapping regions): neither freezes, and nothing changes',
     run = function(harness)
       local h = harness.mk()
@@ -2353,7 +2353,7 @@ return {
 
   {
     -- Freeze drops the frozen producer's own baseline entries by their stamped id: a same-target
-    -- neighbour whose window is disjoint keeps its entry and its curve. see design/fx-freeze.md
+    -- neighbour whose window is disjoint keeps its entry and its curve. see design/archive/fx-freeze.md
     name = 'freeze (disjoint same-target neighbour): the survivor keeps its window and its curve',
     run = function(harness)
       local h = harness.mk()
@@ -2394,7 +2394,7 @@ return {
     -- The census's three arms all answer "what is committed", while freeze's own closing flush commits
     -- whatever was staged: an unflushed host is invisible to the gate and then minted by the freeze,
     -- landing a live window over the seats just frozen. Freeze settles first.
-    -- see design/fx-freeze.md § Eligibility gates
+    -- see design/archive/fx-freeze.md § Eligibility gates
     name = 'freeze gate (staged host pending): freeze settles the take before reading the census',
     run = function(harness)
       local h = harness.mk()
@@ -2417,7 +2417,7 @@ return {
 
   {
     -- Rebuild output, not a cache with invalidation: the map is replaced wholesale at each rebuild's
-    -- coherence point, so it moves exactly when the census can. see design/fx-freeze.md § Eligibility gates
+    -- coherence point, so it moves exactly when the census can. see design/archive/fx-freeze.md § Eligibility gates
     name = 'freeze eligibility: the map moves with rebuild',
     run = function(harness)
       local h = harness.mk()
@@ -2439,7 +2439,7 @@ return {
 
   {
     -- The rect a freeze-to-group mint would claim: the producer's own span, and one streamId per
-    -- stream its output actually stands on. see design/fx-freeze.md § Freeze to group
+    -- stream its output actually stands on. see design/archive/fx-freeze.md § Freeze to group
     name = 'freeze rect: the footprint of a mixed note-and-curve output',
     run = function(harness)
       local h = harness.mk()
@@ -2496,7 +2496,7 @@ return {
 
   {
     -- The thin runs inside freeze's own staging block, so what it drops is never authored at all and
-    -- the closing rebuild back-derives cents on the survivors alone. see design/fx-freeze.md § Freeze to group
+    -- the closing rebuild back-derives cents on the survivors alone. see design/archive/fx-freeze.md § Freeze to group
     name = 'freeze to group: the dense curve re-seats sparse in one flush',
     run = function(harness)
       local h = harness.mk()
@@ -2511,7 +2511,7 @@ return {
 
       t.eq(rebuilds, 1, 'one rebuild -- the thin rides the conversion rather than a pass of its own')
       -- The closing seat keeps its value and lands one tick inside the window, where the rect a mint
-      -- claims can cover it. see design/fx-freeze.md § Freeze to group
+      -- claims can cover it. see design/archive/fx-freeze.md § Freeze to group
       t.deepEq(wirePbs(h, 1, 0, 240), { before[1], { ppq = 239, cents = before[RAMP_N].cents } },
         'a collinear run inside tolerance comes back as its two endpoints, values intact')
     end,
@@ -2519,7 +2519,7 @@ return {
 
   {
     -- The closing seat's destination tick can already be occupied by a survivor of the thin. The
-    -- move displaces it rather than doubling up. see design/fx-freeze.md § Freeze to group
+    -- move displaces it rather than doubling up. see design/archive/fx-freeze.md § Freeze to group
     name = 'freeze to group: the closing seat displaces the survivor on its destination tick',
     run = function(harness)
       local h = harness.mk()
@@ -2538,7 +2538,7 @@ return {
 
   {
     -- gm mints from column events: authored frame, no raw sidecar. A member carrying ppqL would put
-    -- the group's offsets in raw ticks against a logical anchor. see design/fx-freeze.md § Freeze to group
+    -- the group's offsets in raw ticks against a logical anchor. see design/archive/fx-freeze.md § Freeze to group
     name = 'freeze to group: the members come back in the authored frame',
     run = function(harness)
       local h = harness.mk()
@@ -2576,7 +2576,7 @@ return {
 
   {
     -- The discriminator between a durable member and a seat: a seat reaches the take as markerless
-    -- native MIDI, and mm re-mints its uuid in RAM on every load. see design/fx-freeze.md § Freeze to group
+    -- native MIDI, and mm re-mints its uuid in RAM on every load. see design/archive/fx-freeze.md § Freeze to group
     name = 'freeze to group: a surviving breakpoint keeps its identity across a take reload',
     run = function(harness)
       local h = harness.mk()

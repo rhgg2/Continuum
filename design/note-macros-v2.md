@@ -19,7 +19,7 @@
 > spectrum over one regions substrate (R7).
 >
 > **Companions.** `design/archive/fx-patterns.md` — generator params whose value
-> is a note pattern or a curve. `design/fx-freeze.md` — committing
+> is a note pattern or a curve. `design/archive/fx-freeze.md` — committing
 > generator output. `design/pipe-dreams.md` — param modulation and the
 > stepped feed, the gleam this doc used to carry. What remains to build
 > is queued in `plan/chain-surface.md`.
@@ -273,7 +273,7 @@ the mirror generator is invertible (so its output earns stable per-slot
 identity and user editability with override residue); retrig / vibrato
 are lossy (so G3 makes their output generator-owned and ephemeral).
 Aliases sit between. Freeze is this axis made a user-facing feature, and
-is owned by `design/fx-freeze.md` — where it resolved to one-way in both
+is owned by `design/archive/fx-freeze.md` — where it resolved to one-way in both
 directions, no unfreeze.
 
 gm decomposes three ways:
@@ -975,7 +975,7 @@ rebuild fault.
 ## Owned elsewhere — not this doc's work
 
 - **Params whose value is a pattern or a curve** → `design/archive/fx-patterns.md`.
-- **Freeze** → `design/fx-freeze.md`; one-way in both directions.
+- **Freeze** → `design/archive/fx-freeze.md`; one-way in both directions.
 - **Param modulation and the stepped feed** → `design/pipe-dreams.md`.
   The obligation those leave on today's work is a writing discipline
   only: keep `dest` a clean single axis, and shape new continuous kinds

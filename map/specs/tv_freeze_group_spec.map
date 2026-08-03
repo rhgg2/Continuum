@@ -8,7 +8,7 @@
   own output. tm_fx_region_spec pins the conversion and the thin; this spec is the wiring --
   the gate, the mint, the one undo block they share, and what the mint leaves behind: an
   ordinary group, which instances, mirrors and deletes like any other.
-  see design/fx-freeze.md § Freeze to group
+  see design/archive/fx-freeze.md § Freeze to group
 
 # Helpers
   @fn injectMixed(h, over)  @ 14-20

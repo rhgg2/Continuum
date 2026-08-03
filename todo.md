@@ -25,3 +25,9 @@
    signal why it went dark (feedback loop / bus-aware FX) and its
    recovery path in the wiring view.
    
+One loose thread I'd flag again, since it's now measured rather than
+suspected: swapping `groupDuplicate`'s destination clear to run *after*
+the projection is caught by nothing in the 2241-test suite. The
+ordering is real — a refused duplicate or paste empties the
+destination and mints nothing over it — and it belongs to
+`groupDuplicate`, not to freeze.

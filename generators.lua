@@ -563,7 +563,7 @@ end
 ----- Curve thinning (freeze to group)
 
 -- A shape governs the segment to its *right*, so a point is safe to lose only if it and its
--- predecessor both ride linearly; a missing shape counts as non-linear. see design/fx-freeze.md § Freeze to group
+-- predecessor both ride linearly; a missing shape counts as non-linear. see design/archive/fx-freeze.md § Freeze to group
 local function ridesLinear(p) return p.shape == 'linear' end
 
 -- Douglas-Peucker, measuring vertical deviation rather than perpendicular distance: perpendicular
