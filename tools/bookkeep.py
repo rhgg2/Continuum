@@ -15,10 +15,11 @@ Usage: python3 tools/bookkeep.py [manifest.json]   # reads stdin when no path
 Manifest:
   {
     "date": "2026-07-22",                       # optional; defaults to today
+    "dry": true,                                # optional; compute and report, write nothing
     "decision": "one-or-two-line prose; only for a decision with no design doc",
     "land": {"headline": "...", "ref": "§ 3", "now": "optional; overrides the empty Now"},
     "wonder": ["keep", "drop", "replace: fuller text, under the jot's own date"],
-    "drain": ["us", "claim: world_foo.md", "drop: a convention, not a claim", "keep"]
+    "drain": ["us", "claim: world_foo.md @ **The remedy.**", "drop: a convention", "keep"]
   }
 """
 
@@ -37,6 +38,8 @@ BRIEF = REPO / "plan" / "IMPL.md"
 AGENT_MEMORY = REPO / ".claude" / "agent-memory"
 OPEN_CLAIMS = AGENT_MEMORY / "open.md"
 SPOOL = AGENT_MEMORY / "spool.md"
+# Neither is a claim file, and both are written by the drain itself.
+RESERVED = {OPEN_CLAIMS.name, SPOOL.name}
 
 DECISION_WIDTH = 100
 LANDED_KEEP = 4
@@ -45,6 +48,7 @@ NOW_EMPTY = "(empty — run /plan-next to compile the next brief.)"
 REPLACE = "replace:"
 CLAIM = "claim:"
 DROP = "drop"
+ANCHOR = " @ "
 SUBJECTS = {"world": "World", "build": "Build", "us": "Us"}
 DECAY_HEADING = "**Decay log.**"
 HEADLINE_WIDTH = 72
@@ -265,23 +269,47 @@ def entry_blocks(body):
 
 
 def headline(block):
-    first = block[0]
-    return first if len(first) <= HEADLINE_WIDTH else first[:HEADLINE_WIDTH] + "…"
+    """The entry's opening words, with its shared bullet prefix out of the way.
+
+    `- [YYYY-MM-DD] ` is fifteen characters every entry has, so truncating with
+    it in place spends a fifth of the width on nothing that tells two entries
+    apart — and telling them apart is the whole job of a headline that a human
+    reads against a positional verdict list.
+    """
+    match = BULLET.match(block[0])
+    text = block[0][match.end():]
+    if len(text) > HEADLINE_WIDTH:
+        text = text[:HEADLINE_WIDTH] + "…"
+    return f"[{match.group(1)}] {text}"
 
 
 def splice_into_section(lines, title, added):
-    """Append entries at the section's end, one blank line against each heading."""
+    """Append entries at the section's end, one blank line against each heading.
+
+    The trailing blank separates the section from the next heading, so the last
+    section in the file must not have one: there is nothing to separate from,
+    and the file would grow a blank line at EOF on every pass that filed into
+    it.
+    """
     start, end = section_bounds(lines, title, OPEN_CLAIMS.name)
     body = lines[start:end]
     while body and not body[0].strip():
         body.pop(0)
     while body and not body[-1].strip():
         body.pop()
-    return lines[:start] + ["", *body, *added, ""] + lines[end:]
+    tail = lines[end:]
+    return lines[:start] + ["", *body, *added] + ([""] if tail else []) + tail
 
 
-def claim_append(name, added):
-    """The claim file with the entries spliced in, above the decay log if any.
+def claim_append(name, added, anchor=""):
+    """The claim file with the entries spliced in, above the line `anchor` names.
+
+    Claims close on synthesis — the general lesson, the remedy, the pointer to
+    a kin claim — and a decay log, where present, sits below that again. So
+    both landmarks the tool can find unaided put an instance *after* the
+    paragraph that concludes the claim, which is why the anchor exists and why
+    a miss dies rather than falling back: a silent fallback lands the entry in
+    exactly the wrong place, which is the defect being fixed.
 
     A missing file is created holding the bare entries: frontmatter and body
     are authorship, which is the pass's, so the caller is told to wrap what
@@ -289,12 +317,22 @@ def claim_append(name, added):
     """
     path = AGENT_MEMORY / name
     if not path.exists():
+        if anchor:
+            die(f"{name} does not exist, so there is no line for the anchor "
+                f"{anchor!r} to sit above")
         return (path, "\n".join(added) + "\n"), (
             f"created {name} with bare instances — wrap them in frontmatter and a body")
     lines = path.read_text().splitlines()
     while lines and not lines[-1].strip():
         lines.pop()
-    cut = next((i for i, line in enumerate(lines) if line.startswith(DECAY_HEADING)), None)
+    if anchor:
+        hits = [i for i, line in enumerate(lines) if line.startswith(anchor)]
+        if len(hits) != 1:
+            die(f"anchor {anchor!r} matches {len(hits)} lines in {name} — it must "
+                "name exactly one, the line the entries land above; nothing was written")
+        cut = hits[0]
+    else:
+        cut = next((i for i, line in enumerate(lines) if line.startswith(DECAY_HEADING)), None)
     if cut is None:
         merged = lines + [""] + added
     else:
@@ -331,14 +369,22 @@ def apply_drain(verdicts):
             by_section.setdefault(SUBJECTS[verdict], []).extend(block)
             dest = "→ " + SUBJECTS[verdict]
         elif verdict.startswith(CLAIM):
-            name = verdict[len(CLAIM):].strip()
+            name, _, anchor = verdict[len(CLAIM):].partition(ANCHOR)
+            name, anchor = name.strip(), anchor.strip()
             if not name:
                 die("a 'claim:' verdict needs a filename after the colon")
-            by_claim.setdefault(name, []).extend(block)
-            dest = "→ " + name
+            if name in RESERVED:
+                die(f"'claim: {name}' names a file the drain is already rewriting, "
+                    "so the later write would drop the earlier one")
+            slot = by_claim.setdefault(name, {"added": [], "anchor": anchor})
+            if slot["anchor"] != anchor:
+                die(f"two 'claim: {name}' verdicts give different anchors — one file "
+                    "takes one splice point per pass; nothing was written")
+            slot["added"].extend(block)
+            dest = "→ " + name + (f" above {anchor!r}" if anchor else " (above the decay log)")
         else:
             die(f"verdict must be 'keep', 'drop[: why]', 'world', 'build', 'us' "
-                f"or 'claim: <file>', got {verdict!r}")
+                f"or 'claim: <file>[ @ <line prefix>]', got {verdict!r}")
         summary.append(f"{headline(block)}\n    {dest}")
 
     lines = lines[:start] + ["", *(kept or [PLACEHOLDER]), ""] + lines[end:]
@@ -346,8 +392,8 @@ def apply_drain(verdicts):
         lines = splice_into_section(lines, title, added)
 
     writes = [(OPEN_CLAIMS, "\n".join(lines) + "\n")]
-    for name, added in by_claim.items():
-        write, note = claim_append(name, added)
+    for name, slot in by_claim.items():
+        write, note = claim_append(name, slot["added"], slot["anchor"])
         writes.append(write)
         if note:
             summary.append(note)
@@ -439,6 +485,17 @@ def main():
         digests.append(drain_summary)
     if not writes:
         die("manifest had none of: decision, land, wonder, drain")
+
+    if manifest.get("dry"):
+        for digest in digests:
+            print()
+            print(digest)
+        print()
+        print("dry run — nothing written. Would write "
+              + ", ".join(str(path.relative_to(REPO)) for path, _ in writes) + ".")
+        if retired:
+            print("would " + retired.replace("deleted", "delete", 1))
+        return
 
     for path, content in writes:
         path.write_text(content)

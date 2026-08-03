@@ -41,17 +41,23 @@ Three definitions the steps lean on:
    entry, in order, and hand the list to `tools/bookkeep.py` as a `drain`
    manifest; the tool moves the text verbatim and restores the
    `(nothing unfiled)` placeholder itself. Retyping an entry to move it is
-   the recorded failure mode this replaces — reshaping a moved entry happens
-   afterward, as an anchored edit in step 8's batch, never as a retype in
-   transit.
+   the recorded failure mode this replaces, so a moved entry lands verbatim
+   and stays verbatim: folding it into a claim's prose is a later pass's work
+   (step 3), and the only shaping this pass owes a moved entry is the
+   frontmatter and body of a claim file the drain had to create.
 
    - `world` / `build` / `us` — the subject section a promoted claim would
      land under;
-   - `claim: <file>` — appended as an instance above the claim's decay log;
-     on a `us` claim that is a firing, which step 6 will record. An entry
-     that is *already confirmed* takes the same verdict naming a new file:
-     the tool creates it holding the bare instances, and step 8's batch
-     wraps them in frontmatter and a body;
+   - `claim: <file> @ <line prefix>` — spliced in as an instance above the
+     line that prefix names; on a `us` claim that is a firing, which step 6
+     will record. The anchor is not decoration: claims close on synthesis —
+     the general lesson, the remedy, the pointer to a kin claim — and a decay
+     log sits below that again, so the bare `claim: <file>` form lands the
+     entry *after* the paragraph that concludes the claim. A prefix matching
+     zero or several lines dies rather than falling back, since the fallback
+     is the wrong place. An entry that is *already confirmed* takes the
+     verdict naming a new file and no anchor: the tool creates it holding the
+     bare instances, and step 8's batch wraps them in frontmatter and a body;
    - `drop: <why>` — the bin, with the why in the verdict itself so it
      survives in the command record;
    - `keep` — still unfiled, for an entry that arrived after step 1's read.
@@ -60,6 +66,29 @@ Three definitions the steps lean on:
    jot arriving mid-pass, and the count is the guard that step 1's snapshot
    still holds at write time.
 
+   Send the manifest with `"dry": true` first. It computes every destination
+   and prints each entry's headline against where it would go, writing
+   nothing. The count guard catches an entry *arriving*; it cannot catch a
+   transposition, which keeps the count and lands the wrong entry in the bin
+   — and `drop` is the one verdict only git can answer for afterwards. The
+   list is positional, so a verdict read on its own names a destination with
+   no visible subject; pairing headline with destination before the write is
+   the only reading that can see the error.
+
+   **Landing an instance pays for the one above it.** For each claim the drain
+   touched, fold the entry an *earlier* pass landed there verbatim into the
+   body — keeping whatever it sharpened about the model — and cut the incident
+   to one line naming its mechanism, in the shape of the short bullets at the
+   head of `world_vantage_not_neutral.md`. On a `us` claim that line already
+   exists: it is the `fired` line in the section step 6 keeps. One in, one
+   compressed, so a claim settles at the depth its drain rate sustains, and one
+   nothing lands on is one that is not growing. The trigger matters more than
+   the rule — a `claim:` verdict is a write already happening, where "compress
+   the old ones while you are here" is a judgement step, and only judgement
+   steps that present a decision fire at all (us_brief_horizon). It is also why
+   instances carry no date and want no blame archaeology: both were considered
+   and dropped, the second because a whole-file rewrite resets it.
+
 3. **Crystallise.** Follow `rising-sea.md` in this directory over the subject
    sections of `open.md`, with the bullets themselves as raw material — its step
    1 wants the text, not a summary of it. *Ripe* → a new `observed` claim
@@ -67,9 +96,8 @@ Three definitions the steps lean on:
    bullets themselves are deleted from `open.md` in the same batch: the
    landing commit's diff is the full text's archive, and quotation into the
    claim file is a second copy with no reader. Fresh text arrives whole; aged
-   text travels as a pointer — a drained jot lands on a claim verbatim, and a
-   later pass folds it into the body and cuts it to a dated line once
-   absorbed. *Not yet* or
+   text travels as a pointer, which is the fold step 2 owes each claim the
+   drain touched. *Not yet* or
    *no crystal* → change nothing else, say so, and append a `[<date>, filing:
    ...]` note to the entry the test was run over, carrying the verdict and — for
    a *not yet* — the specific thing that would ripen it. The note is where a
@@ -108,10 +136,14 @@ Three definitions the steps lean on:
      never firing.
 
 6. **Decay, `us` claims only.** Append one dated line to the claim's
-   `**Decay log.**` section — shape at the foot of
+   `**Instances and decay log.**` section — shape at the foot of
    `us_reconstruction_vs_retrieval.md` — reading `fired <date> — <incident>` or
-   `quiet <date>`. Two consecutive quiet lines from different days drop the
-   claim a rung — days, not passes, for the half-life's reason: passes
+   `quiet <date>`. That section is also the claim's instance record: a `fired`
+   line is where the incident lives, so write it to carry enough of the
+   mechanism that a later pass can rhyme a candidate against it, and do not
+   leave a second narration of the same incident in the body above. Two
+   consecutive quiet lines from different days drop the claim a rung — days,
+   not passes, for the half-life's reason: passes
    cluster, and quiet an hour apart is one opportunity, not two. Any firing
    cancels accumulated quiet. A claim that
    falls to `open` keeps its file and its body, with the frontmatter `standing:`
@@ -153,7 +185,8 @@ Three definitions the steps lean on:
    touch.
 
 8. **Stage the pass's authored writing as one `apply_patches` batch** — new
-   claim bodies, register lines, filing notes, decay lines, reshaping of
-   moved entries. The user reviews the pass as a pass, hunk by hunk; the
-   drain's verbatim moves have already landed through `bookkeep.py`,
-   reviewed as the verdict list and the diff it produced.
+   claim bodies, register lines, filing notes, decay lines, half-life
+   compressions and sweeps, and the frontmatter and body for any claim file
+   the drain created. The user reviews the pass as a pass, hunk by hunk; the
+   drain's verbatim moves have already landed through `bookkeep.py`, reviewed
+   as the dry run and the diff it produced.
