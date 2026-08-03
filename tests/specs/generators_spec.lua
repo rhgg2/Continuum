@@ -176,6 +176,20 @@ return {
     end,
   },
 
+  {
+    name = 'chainDestType demotes a bypassed replace stage to augment, and only that stage',
+    run = function()
+      generators.kinds.pbrep = { mode = 'replace', dest = 'pb' }   -- fixture: the built-in pb kinds all augment
+      t.eq(generators.chainDestType({ { kind = 'pbrep' } }, 'pb'), 'replace',
+        'a live replace stage sets the chain mode')
+      t.eq(generators.chainDestType({ { kind = 'pbrep', bypass = true } }, 'pb'), 'augment',
+        'bypassed it has nothing to say -- an augment record folds as a zero delta instead of painting the base')
+      t.eq(generators.chainDestType({ { kind = 'pbrep', bypass = true }, { kind = 'pbrep' } }, 'pb'), 'replace',
+        'one live replace stage still claims the chain: the demotion is per stage, not per chain')
+      generators.kinds.pbrep = nil
+    end,
+  },
+
   ----- dest: a per-entry target, and what each target's numbers mean
 
   {

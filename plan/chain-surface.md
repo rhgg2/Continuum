@@ -14,6 +14,7 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-03 generators: a bypassed stage yields precedence, folding as a zero augment (§ The chain surface)
 - 2026-08-03 tm: bypassed fx stage folds as the identity, keeping ownership (§ The chain surface)
 
 ## Now
@@ -22,18 +23,7 @@
 
 ## Queued (current phase; one-liners)
 
-1. **A bypassed stage yields precedence.** `chainDestType` counts a bypassed
-   stage as augment rather than replace, so a chain whose replace stage is
-   bypassed presents an augment record with a zero delta instead of a replace
-   record carrying the base. Without it the flag misfires sideways: bypassing a
-   stage in one chain flattens an *overlapping* chain's curve on the same target,
-   because a replace record wins pointwise in the overlap whether or not it has
-   anything to say. Cases in `tm_fx_region_spec`: two overlapping pb chains, the
-   later one's replace stage bypassed, the earlier one's curve intact across the
-   overlap — plus the both-live case, so the existing layering is held rather
-   than quietly relaxed.
-
-2. **The toggle on the fx tab.** A stage header row in `drawFxChainBody` gains a
+1. **The toggle on the fx tab.** A stage header row in `drawFxChainBody` gains a
    bypass toggle and renders as bypassed, borrowing the wiring page's bypass-badge
    chrome, and the toggle rides the transactional session so Esc reverts it with
    everything else. It comes last deliberately: until the runner and the

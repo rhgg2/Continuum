@@ -525,12 +525,14 @@ function generators.continuousTargets(fx)
   return targets
 end
 
--- The fold mode a chain presents for one continuous target: replace if any stage targeting it
--- replaces, else augment -- drives cross-chain layering (a later replace wins). see design/note-macros-v2.md § The fx chain
+-- The fold mode a chain presents for one continuous target: replace if any live stage targeting it
+-- replaces, else augment -- a bypassed stage never counts, so it can't paint an overlapping chain's curve. see design/note-macros-v2.md § Per-stage bypass
 function generators.chainDestType(fx, target)
   for _, params in ipairs(fx or {}) do
     local meta = generators.kinds[params.kind]
-    if meta and generators.destOf(params) == target and meta.mode == 'replace' then return 'replace' end
+    if meta and not params.bypass and generators.destOf(params) == target and meta.mode == 'replace' then
+      return 'replace'
+    end
   end
   return 'augment'
 end

@@ -1211,6 +1211,55 @@ return {
   },
 
   {
+    name = 'bypass: a bypassed replace stage yields precedence -- the earlier chain keeps the overlap',
+    run = function(harness)
+      local h = harness.mk()
+      -- The authored base is load-bearing: a bypassed chain re-seats it, and the fold skips a record
+      -- whose curve is empty, so with no base under the overlap a replace record has nothing to paint
+      -- with and the case passes either way.
+      h.tm:addEvent({ evType = 'pb', ppq = 0,   chan = 1, val = 0 })
+      h.tm:addEvent({ evType = 'pb', ppq = 120, chan = 1, val = 40 })
+      h.tm:flush()
+
+      generators.kinds.capA = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppq = host.window[1], val = 30, shape = 'step' },
+          { ppq = host.window[2], val = 0,  shape = 'step' },
+        } } end,
+        mode = 'replace', dest = 'pb', label = 'CapA', defaults = {}, fields = {},
+      }
+      generators.kinds.capRep = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppq = host.window[1], val = 50, shape = 'step' },
+          { ppq = host.window[2], val = 0,  shape = 'step' },
+        } } end,
+        mode = 'replace', dest = 'pb', label = 'CapRep', defaults = {}, fields = {},
+      }
+
+      -- One fixture, rebuilt twice: the flag is the only thing that moves between the two readings.
+      local function layer(bypass)
+        h.ds:assign('fxRegions', {
+          { uuid = 'r1', chan = 1, startppq = 0, endppq = 240, fx = { { kind = 'capA' } } },
+          { uuid = 'r2', chan = 1, startppq = 0, endppq = 240, fx = { { kind = 'capRep', bypass = bypass } } },
+        })
+        h.tm:rebuild()
+      end
+
+      layer(true)
+      local bypassedHead, bypassedMid = derivedPb(h, 1, 0).val, derivedPb(h, 1, 120).val
+      layer(false)
+      local liveHead = derivedPb(h, 1, 0).val
+      generators.kinds.capA, generators.kinds.capRep = nil, nil
+
+      t.eq(bypassedHead, centsToRaw(30), "r1's curve owns the overlap -- r2 folds as a zero augment")
+      t.eq(bypassedMid,  centsToRaw(30),
+        'and at the base breakpoint: 30c, not the 40c a replace record carrying the base would paint')
+      t.eq(liveHead, centsToRaw(50),
+        'flag off, same fixture: the later replace wins again -- the demotion is the flag, not a relaxed layering')
+    end,
+  },
+
+  {
     name = 'fx region (pb): overlapping replace regions with differing windows -- each owns its exclusive tail',
     run = function(harness)
       local h = harness.mk()
