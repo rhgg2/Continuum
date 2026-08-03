@@ -182,6 +182,25 @@ return {
   },
 
   {
+    -- Bypass is realisation metadata: the flag rides the entry and the fold takes the stage as
+    -- the identity, so the chain's output collapses to its parked base and comes back verbatim.
+    name = 'setFxBypass demotes a stage to the identity; unbypass restores it',
+    run = function(harness)
+      local h = harness.mk()
+      addHost(h, { { kind = 'retrig', period = { 1, 4 }, ramp = 0 } })
+      h.vm:setGridSize(80, 40)
+      local uuid = hostUuid(h)
+      t.eq(fxNoteCount(h, uuid), 4, 'baseline: the 1/4 retrig tiles the host window')
+      h.vm:setFxBypass(uuid, 1, true)
+      t.truthy(h.vm:noteFx(uuid)[1].bypass, 'the flag rides the entry')
+      t.eq(fxNoteCount(h, uuid), 1, 'the bypassed stage folds as the identity: the parked host re-seats alone')
+      h.vm:setFxBypass(uuid, 1, false)
+      t.eq(h.vm:noteFx(uuid)[1].bypass, nil, 'clearing removes the key rather than storing false')
+      t.eq(fxNoteCount(h, uuid), 4, 'the stage tiles again')
+    end,
+  },
+
+  {
     name = 'addFxStage appends a second stage of an existing kind (duplicates allowed)',
     run = function(harness)
       local h = harness.mk()
@@ -343,11 +362,13 @@ return {
 
       h.vm:addFxStage(uuid, { kind = 'retrig', period = { 1, 4 }, ramp = 0 })
       h.vm:setFxField(uuid, 1, 'ramp', 20)
+      h.vm:setFxBypass(uuid, 1, true)
       h.vm:removeFxStage(uuid, 1)
 
       h.reaper.Undo_BeginBlock, h.reaper.Undo_EndBlock = realBegin, realEnd
-      t.deepEq(points, { 'Continuum: Add FX stage', 'Continuum: Edit FX', 'Continuum: Delete FX stage' },
-               'add / edit / delete each land as their own labelled undo point')
+      t.deepEq(points, { 'Continuum: Add FX stage', 'Continuum: Edit FX',
+                         'Continuum: Bypass FX stage', 'Continuum: Delete FX stage' },
+               'add / edit / bypass / delete each land as their own labelled undo point')
     end,
   },
 }

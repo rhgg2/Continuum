@@ -5,7 +5,7 @@
 
 ## Phases
 
-1. **Phase 1 — per-stage bypass** (§ The chain surface) — `bypass` on the fx entry: the stage folds as its mode's identity and counts as augment for precedence, with the park predicates blind to the flag  ← in flight
+1. **Phase 1 — per-stage bypass** (§ The chain surface) — `bypass` on the fx entry: the stage folds as its mode's identity and counts as augment for precedence, with the park predicates blind to the flag
 2. **Phase 2 — engine gaps** (§ Known gaps and accepted quirks) — the four independent fixes in the runner/park area Phase 1 has just been through; promotable out of order
 3. **Phase 3 — patches** (§ The chain surface) — named chains on the shelf idiom `fx-patterns` proved, stamped by copy from the fx tab's action row
 4. **Phase 4 — chain signature on the grid** (§ The chain surface) — stacked kind glyphs down the region's tail, plus a real glyph vocabulary
@@ -14,6 +14,7 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-04 tv: bypass a stage from the fx tab -- byp button and Super+B (§ The chain surface)
 - 2026-08-03 generators: a bypassed stage yields precedence, folding as a zero augment (§ The chain surface)
 - 2026-08-03 tm: bypassed fx stage folds as the identity, keeping ownership (§ The chain surface)
 
@@ -23,11 +24,4 @@
 
 ## Queued (current phase; one-liners)
 
-1. **The toggle on the fx tab.** A stage header row in `drawFxChainBody` gains a
-   bypass toggle and renders as bypassed, borrowing the wiring page's bypass-badge
-   chrome, and the toggle rides the transactional session so Esc reverts it with
-   everything else. It comes last deliberately: until the runner and the
-   predicates agree about the flag, nothing in the UI should be able to write one,
-   so there is no window in which a bypassed chain half-parks. The key and the
-   exact badge treatment are still open — settle them in `/plan-next`'s chat.
-   Cases in `vm_fx_ui_spec`.
+(empty — the phase's last item is in flight.)

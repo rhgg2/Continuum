@@ -2535,6 +2535,13 @@ function tv:setFxField(uuid, index, field, value)
   self:setNoteFx(uuid, list)
 end
 
+-- Its own verb rather than a setFxField call at the renderer: an honest undo label, and the
+-- storage convention stays owned by the model layer rather than duplicated at the call site.
+--contract: bypass is realisation metadata on the entry -- true or absent, never false
+function tv:setFxBypass(uuid, index, on)
+  self:setFxField(uuid, index, 'bypass', on or nil)
+end
+
 -- The fx list is an ordered series (C1); stages are addressed by position, not kind (duplicates
 -- allowed). see docs/trackerView.md § Note FX stages
 function tv:addFxStage(uuid, entry)
@@ -2611,6 +2618,7 @@ end
 tv.setNoteFx        = util.atomic('Note FX',          tv.setNoteFx)
 tv.setFxField       = util.atomic('Edit FX',          tv.setFxField)
 tv.addFxStage       = util.atomic('Add FX stage',     tv.addFxStage)
+tv.setFxBypass      = util.atomic('Bypass FX stage', tv.setFxBypass)
 tv.removeFxStage    = util.atomic('Delete FX stage',  tv.removeFxStage)
 tv.moveFxStage      = util.atomic('Move FX stage',    tv.moveFxStage)
 tv.replaceFxStage   = util.atomic('Swap FX stage',    tv.replaceFxStage)

@@ -1020,7 +1020,7 @@ local stripPlan do
           util.add(fields, { fd = fd, entry = entry, index = i })
         end
       end
-      util.add(cols, { index = i, kind = entry.kind,
+      util.add(cols, { index = i, kind = entry.kind, bypass = entry.bypass,
                           label = generators.kinds[entry.kind].label, fields = fields })
     end
     return cols
@@ -1094,6 +1094,8 @@ local stripPlan do
       end
     elseif super and (up or down) and not col.isAdd then
       if tv:moveFxStage(plan.host, col.index, up and -1 or 1) then cur.stage = cur.stage + (up and -1 or 1) end
+    elseif super and press(ImGui.Key_B) and not col.isAdd then   -- toggle bypass from any of the stage's rows (mirrors Super+↑/↓)
+      tv:setFxBypass(plan.host, col.index, not col.bypass)
     elseif up or down then                                  -- walk the whole chain as one column
       local rows = chainRows(cols)
       local i    = util.clamp(rowIndexOf(rows, cur) + (down and 1 or -1), 1, #rows)
@@ -1186,6 +1188,23 @@ local stripPlan do
     if ImGui.IsItemClicked(ctx) then enterStrip(host, stage, param) end
   end
 
+  -- A bypassed stage dims its *labels* only. BeginDisabled would block the mouse while the keyboard
+  -- path (adjustRow → tv:setFxField) sailed past it, and the A/B gesture wants the stage editable.
+  local function withDim(dim, fn)
+    if dim then ImGui.PushStyleColor(ctx, ImGui.Col_Text, chrome.colour('tracker.inactive')) end
+    fn()
+    if dim then ImGui.PopStyleColor(ctx, 1) end
+  end
+
+  -- Per-stage bypass, riding the header cluster beside `del`. Idle it inherits the row's text
+  -- colour; lit it borrows the wiring page's bypass tint so the two bypasses read alike.
+  local function drawBypassBadge(host, col)
+    if col.bypass then ImGui.PushStyleColor(ctx, ImGui.Col_Text, chrome.colour('tracker.fx.bypassed')) end
+    -- No clickToCursor: applies live without entering the session, like del/↑/↓ and value edits.
+    if ImGui.Button(ctx, 'byp##fxbyp' .. col.index) then tv:setFxBypass(host, col.index, not col.bypass) end
+    if col.bypass then ImGui.PopStyleColor(ctx, 1) end
+  end
+
   -- One stage as tree rows: heading (swap-picker) with ↑/↓ reorder + del, then a field per row —
   -- label left, value column flush right. Cursor row highlights while the strip holds focus.
   local function drawChainStage(host, col, onStage, cur, isFirst, isLast)
@@ -1193,15 +1212,17 @@ local stripPlan do
 
     rowHighlight(onStage and cur.param == 0 and stripFocus)
     local headX, availW = ImGui.GetCursorPosX(ctx), select(1, ImGui.GetContentRegionAvail(ctx))
-    chrome.drawPicker{
-      kind = 'fxSwap_' .. col.index, buttonLabel = col.label, flat = true,
-      -- Grow to fit the label, but stop short of the reorder cluster (which sits at availW - VALUE_W).
-      minWidth = LABEL_W, maxWidth = availW - VALUE_W - LABEL_GAP,
-      items = kindItems(col.kind),
-      onPick = function(kind) tv:replaceFxStage(host, col.index, generators.seed(kind)) end,
-    }
+    withDim(col.bypass, function()
+      chrome.drawPicker{
+        kind = 'fxSwap_' .. col.index, buttonLabel = col.label, flat = true,
+        -- Grow to fit the label, but stop short of the reorder cluster (which sits at availW - VALUE_W).
+        minWidth = LABEL_W, maxWidth = availW - VALUE_W - LABEL_GAP,
+        items = kindItems(col.kind),
+        onPick = function(kind) tv:replaceFxStage(host, col.index, generators.seed(kind)) end,
+      }
+    end)
     -- No clickToCursor here: picking a kind applies live via onPick without grabbing strip focus (mirrors a value edit).
-    ImGui.SameLine(ctx); ImGui.SetCursorPosX(ctx, headX + availW - VALUE_W)   -- ↑/↓/del left-align with the value column
+    ImGui.SameLine(ctx); ImGui.SetCursorPosX(ctx, headX + availW - VALUE_W)   -- ↑/↓/byp/del left-align with the value column
     chrome.disabledIf(isFirst, function()
       if ImGui.Button(ctx, '\xe2\x86\x91##fxup' .. col.index, btnSide, btnSide) then tv:moveFxStage(host, col.index, -1) end
     end)
@@ -1210,13 +1231,16 @@ local stripPlan do
       if ImGui.Button(ctx, '\xe2\x86\x93##fxdn' .. col.index, btnSide, btnSide) then tv:moveFxStage(host, col.index, 1) end
     end)
     ImGui.SameLine(ctx, 0, DEL_GAP)
+    drawBypassBadge(host, col)
+    ImGui.SameLine(ctx, 0, BTN_GAP)
     if ImGui.Button(ctx, 'del##fxdel' .. col.index) then tv:removeFxStage(host, col.index) end
 
     for k, f in ipairs(col.fields) do
       ImGui.Indent(ctx, FIELD_INDENT)
       rowHighlight(onStage and cur.param == k and stripFocus)
       local labelX, rowW = ImGui.GetCursorPosX(ctx), select(1, ImGui.GetContentRegionAvail(ctx))
-      ImGui.AlignTextToFramePadding(ctx); ImGui.Text(ctx, f.fd.label)
+      ImGui.AlignTextToFramePadding(ctx)
+      withDim(col.bypass, function() ImGui.Text(ctx, f.fd.label) end)
       clickToCursor(host, col.index, k)
       ImGui.SameLine(ctx); ImGui.SetCursorPosX(ctx, labelX + rowW - VALUE_W)
       fxFieldWidget(host, col.index, f.fd, f.entry, VALUE_W)   -- edits apply live; a value edit never grabs strip focus

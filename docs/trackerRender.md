@@ -111,9 +111,9 @@ See design/note-macros-v2.md § The chain surface for the model. The chain draws
 *inside* the palette child (`drawFxChainBody`; the tab header and chrome styles
 are already pushed) as tree rows echoing the parameters tab: an action row
 (`clear` / `commit` / `cancel`), then each stage top-to-bottom — a heading (the
-swap picker, current kind flagged) with `↑`/`↓` reorder and `del` aligned to the
-value column's left edge, then one row per field: label left, `fxFieldWidget` in a
-fixed column flush to the right margin — with a `↓` flow marker (a crisp rule split
+swap picker, current kind flagged) with `↑`/`↓` reorder, `byp` and `del` aligned to
+the value column's left edge, then one row per field: label left, `fxFieldWidget` in
+a fixed column flush to the right margin — with a `↓` flow marker (a crisp rule split
 around the arrow) between stages and a terminal **add** row.
 `stripFocus` gates `handleFxChainKeys` and highlights the cursor's row up to the
 value column (the tree's selection fill, replacing the old ▸ marker).
@@ -124,12 +124,19 @@ value column (the tree's selection fill, replacing the old ▸ marker).
 run. **Left/Right** *edit* the current row — nudging a field value (as `−`/`=`
 do), or, on a header or the add row, opening the kind picker; the picker then
 cycles on Left/Right too (`drawPicker` treats them as Up/Down). **Super+Up/Down**
-reorder the stage; **Enter** activates the row — opening the kind picker on a
+reorder the stage and **Super+B** toggles its bypass — both act on the current stage
+from any of its rows, and a bare letter can't serve here because a header row hands
+every printable character to type-to-open; **Enter** activates the row — opening the kind picker on a
 header/add row, the pattern editor on a pattern field, inert on a plain value;
 **Super+X** commits from any row and leaves; **Delete/Backspace** removes a
 stage; typing on a header/add row opens the picker seeded with that character. No
 axis does double duty — the confusion of the old horizontal strip, where
 Left/Right meant *navigate* on a header but *edit* on a field, is gone.
+
+A bypassed stage **dims but never disables**: the kind label and the field labels go
+`tracker.inactive` while every widget stays live, because the A/B gesture wants the
+stage still editable — and `BeginDisabled` would block the mouse while the keyboard
+path (`adjustRow` → `tv:setFxField`) sailed straight past it.
 
 The keyboard session stays **transactional**: `editFx` (or a mouse click on a
 field-row label) snapshots the chain (`stripSnapshot`) on entry and takes strip

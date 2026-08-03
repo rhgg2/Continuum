@@ -155,6 +155,7 @@ local declarations = {
   { 'colour.tracker.ghost',         {'alt.zone5', 0.9} },
   { 'colour.tracker.ghostNegative', {'salmon',    0.9} },  -- faded warm ghost for negative delay
   { 'colour.tracker.swing.previewBorder', 'base.zone5' },  -- swing editor preview-pane frame
+  { 'colour.tracker.fx.bypassed', 'alt.zone6' },  -- lit per-stage bypass badge; mirrors colour.wiring.badge.bypassed so the two bypasses read alike
   -- Lane strip (CC/PB/AT envelope visualiser above the tracker grid).
   { 'colour.tracker.laneAxis',         {'base.zone5', 0.6 } },
   { 'colour.tracker.laneRowDivider',   {'base.zone5', 0.15} },
