@@ -61,6 +61,7 @@
   @use call    cm:defaultFor  @ factoryTier:16
   @use call    cm:getAt  @ projectTier:14 libraryTier:15 writeTier:28 tidy:161 delete:182
   @use call    cm:set  @ writeTier:30 seedIfEmpty:122 tidy:172 delete:185
+  @use call    util.add  @ sortedNames:38 reloadPlan:133,134 tidy:166
   @use call    util.deepEq  @ modified:68 publishOverwrites:103 reloadPlan:134 factoryOverwrites:146 tidy:165
   @use require util  @ <load>:4
 

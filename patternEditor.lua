@@ -352,11 +352,11 @@ end
 local function shelfItems()
   local names = {}
   for name, body in pairs(shelf()) do
-    if shelfMatches(body) then names[#names + 1] = name end
+    if shelfMatches(body) then util.add(names, name) end
   end
   table.sort(names)
   local items = {}
-  for _, name in ipairs(names) do items[#items + 1] = { label = name, key = name } end
+  for _, name in ipairs(names) do util.add(items, { label = name, key = name }) end
   return items
 end
 

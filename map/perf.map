@@ -33,6 +33,7 @@
   @api perf.line(...)  @ 134
 
 # Uses (outbound edges)
+  @use call    util.add  @ start:41 marksOf:76 renderNode:84,87 dump:110,115,117
   @use call    util.print  @ report:99 dump:106,118 toggle:128 line:134
   @use require util  @ <load>:21
 

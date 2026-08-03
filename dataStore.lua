@@ -126,7 +126,7 @@ end
 
 local undoable = {}
 for name in pairs(registry) do
-  if projectUndoable(name) then undoable[#undoable + 1] = slotFor('project', name) end
+  if projectUndoable(name) then util.add(undoable, slotFor('project', name)) end
 end
 ps:declareUndoable{ slots = undoable }
 
@@ -135,7 +135,7 @@ ps:declareUndoable{ slots = undoable }
 local watched = {}
 for name, scope in pairs(registry) do
   if scope == 'take' or scope == 'track' or projectUndoable(name) then
-    watched[#watched + 1] = { scope = scope, slot = slotFor(scope, name), name = name }
+    util.add(watched, { scope = scope, slot = slotFor(scope, name), name = name })
   end
 end
 

@@ -157,7 +157,7 @@ local function relayoutTrack(track)
   local rows = {}
   forEachActiveTake(track, function(take, item)
     local startQN = itemQNRange(item)
-    rows[#rows+1] = { take = take, item = item, startQN = startQN }
+    util.add(rows, { take = take, item = item, startQN = startQN })
   end)
   table.sort(rows, function(a, b) return a.startQN < b.startQN end)
 
@@ -210,7 +210,7 @@ local function ensureSlots(track)
     liveIds[id]      = true
     firstName[id]    = reaper.GetTakeName(take) or ''
     kindForId[id]    = takeKind(take)
-    idOrder[#idOrder+1] = id
+    util.add(idOrder, id)
   end)
 
   local slotForId, changed = {}, false
@@ -337,12 +337,12 @@ local function midiNotesOf(take, startQN)
   for i = 0, noteCount - 1 do
     local ok, _, _, startPpq, endPpq, chan, pitch = reaper.MIDI_GetNote(take, i)
     if ok then
-      notes[#notes + 1] = {
+      util.add(notes, {
         offS  = reaper.MIDI_GetProjQNFromPPQPos(take, startPpq) - startQN,
         offE  = reaper.MIDI_GetProjQNFromPPQPos(take, endPpq) - startQN,
         chan  = chan,
         pitch = pitch,
-      }
+      })
       chanMask = chanMask | (1 << chan)
     end
   end
@@ -378,14 +378,14 @@ local function slotRowsFor(dict, colourForId, firstName, liveIds)
   for i = 0, SLOT_MAX do
     local entry = dict[i]
     if entry then
-      out[#out+1] = {
+      util.add(out, {
         idx       = i,
         kind      = entry.kind,
         id        = entry.id,
         colourIdx = colourForId[entry.id],
         name      = firstName[entry.id] or '',
         parked    = not liveIds[entry.id],
-      }
+      })
     end
   end
   return out
@@ -420,16 +420,15 @@ local function buildState()
       local _, name = reaper.GetTrackName(track)
       local slotCount = 0
       for _ in pairs(dict) do slotCount = slotCount + 1 end
-      tracks[#tracks+1] = {
+      util.add(tracks, {
         idx = col, track = track, guid = reaper.GetTrackGUID(track), name = name or '',
         slotCount = slotCount,
         takeCount = reaper.CountTrackMediaItems(track),
-      }
+      })
       local takes = {}
       forEachActiveTake(track, function(take, item)
         local startQN, lengthQN = itemQNRange(item)
-        takes[#takes+1] =
-          buildTakeShape(take, item, col, startQN, lengthQN, slotForId, colourForId)
+        util.add(takes, buildTakeShape(take, item, col, startQN, lengthQN, slotForId, colourForId))
       end)
       takesByCol[col] = takes
       chanByCol[col]  = chanRangeOf(takes)
@@ -466,7 +465,7 @@ function am:visibleTakes(fromCol, toCol, qnLo, qnHi)
   for col = fromCol, toCol do
     for _, tk in ipairs(byCol[col] or {}) do
       if tk.startQN <= qnHi and tk.startQN + tk.lengthQN >= qnLo then
-        out[#out+1] = tk
+        util.add(out, tk)
       end
     end
   end
@@ -720,7 +719,7 @@ function am:createAndDropMidi(trackIdx, qnPos, lengthQN, name)
   -- Captured before placing: the new take starts at qnPos too, so it must not be in this list.
   local occupants = {}
   for _, other in ipairs(am:tracksTakes(trackIdx)) do
-    if other.startQN == qnPos then occupants[#occupants+1] = other end
+    if other.startQN == qnPos then util.add(occupants, other) end
   end
 
   local item = reaper.CreateNewMIDIItemInProj(track, qnPos, qnPos + lengthQN, true)
@@ -792,7 +791,7 @@ function am:dropInstance(trackIdx, slotIdx, qnPos, lengthQN)
   -- be in this list; for MIDI it also keeps the clone source alive until cloned.
   local occupants = {}
   for _, other in ipairs(am:tracksTakes(trackIdx)) do
-    if other.startQN == qnPos then occupants[#occupants+1] = other end
+    if other.startQN == qnPos then util.add(occupants, other) end
   end
 
   local take
@@ -967,7 +966,7 @@ local function projectMidiTakes()
     local track = reaper.GetTrack(0, ti)
     if isVisibleTrack(track) then
       forEachActiveTake(track, function(take)
-        if reaper.TakeIsMIDI(take) then takes[#takes+1] = take end
+        if reaper.TakeIsMIDI(take) then util.add(takes, take) end
       end)
     end
   end
@@ -981,7 +980,7 @@ function am:takesUsing(name)
     local sw = ds:getAt(take, 'swing')
     if sw then
       for _, used in pairs(sw) do
-        if used == name then hits[#hits + 1] = take; break end
+        if used == name then util.add(hits, take); break end
       end
     end
   end

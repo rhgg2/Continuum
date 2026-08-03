@@ -90,7 +90,7 @@
 # Uses (outbound edges)
   @use call    perf.start  @ buildWire:272,298,304 render:428
   @use call    perf.stop  @ buildWire:296,300,313 render:436
-  @use call    util.add  @ parse:70,83,89,93,96,117
+  @use call    util.add  @ parse:70,73,83,89,93,96,117 keysOfSlot:379 syncSlots:409,413
   @use call    util.clamp  @ splitWide:36
   @use call    util.print  @ buildWire:279
   @use call    util.round  @ splitWide:34

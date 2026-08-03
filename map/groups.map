@@ -44,7 +44,7 @@
   @api groups.outlineKey(state, colour)  @ 130-133
 
 # Uses (outbound edges)
-  @use call    util.add  @ reconcile:77,79,84
+  @use call    util.add  @ project:50 reconcile:77,79,84
   @use call    util.clone  @ resolve:20 project:43
   @use call    util.deepEq  @ reconcile:78
   @use require util  @ <load>:14

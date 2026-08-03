@@ -218,7 +218,7 @@
   @use call    groupBridge.instanceAt  @ regionArm:731 hopInstance:777
   @use call    groupBridge.paintStream  @ paintCell:717
   @use call    groupBridge.selectionAsRect  @ newFromSelection:532
-  @use call    util.add  @ blockKeys:631 partsFor:844,845,846 decorateCol:876,877,878
+  @use call    util.add  @ blockKeys:631 hopInstance:781 partsFor:844,845,846 decorateCol:876,877,878
   @use call    util.clamp  @ clampPos:55,59,60 shiftSelection:449,450,451 moveBy:582 moveByChan:599
   @use require util  @ <load>:25
 

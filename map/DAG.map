@@ -152,7 +152,7 @@
       -- until everything fits. The only entry point; allocateOnce is the inner pass.
 
 # Uses (outbound edges)
-  @use call    util.add  @ classify:193,212 buildCtx:301,450 topoIntraTrack:544,558,563,565,569 buildConns:602,622,661,662,711,721,742,752,765,772,775 routeByTrack:831,838,848 assembleTracks:867,869 deriveMasterSplit:974 spliceBusses:1064,1078,1079,1080,1088,1089,1090 orderedGroup:1197 ordAppend:1203 allocateOnce:1274,1284,1289,1294,1298,1321,1343,1347,1365,1401,1473,1481,1484,1487,1512,1525,1534,1617,1621,1627,1643 bisect:1699,1700,1707,1708,1711,1715 toExplicitFeed:1748 convertCrossing:1771 bisectOutOfFamily:1784 evictMember:1796
+  @use call    util.add  @ classify:193,212 buildCtx:301,450 topoIntraTrack:544,558,563,565,569 buildConns:602,622,661,662,711,721,742,752,765,772,775 routeByTrack:831,838,848 assembleTracks:867,869 deriveMasterSplit:950,974 spliceBusses:1064,1078,1079,1080,1088,1089,1090 orderedGroup:1197 ordAppend:1203 allocateOnce:1274,1284,1289,1294,1298,1321,1343,1347,1365,1401,1473,1481,1484,1487,1512,1525,1534,1617,1621,1627,1643 bisect:1699,1700,1707,1708,1711,1715 toExplicitFeed:1748 convertCrossing:1771 bisectOutOfFamily:1784 evictMember:1796
   @use call    util.assign  @ validate:93 buildCtx:520 buildConns:608 allocateOnce:1665,1666 evictMember:1794
   @use call    util.bucket  @ validate:141 buildCtx:234,235,304,471 buildConns:648 assembleTracks:862 allocStream:1154,1158 allocateOnce:1224,1232 splitOverCap:1843
   @use call    util.key  @ validate:130 buildCtx:303,499,502 nativeGains:587 buildConns:617 routeByTrack:842 allocateOnce:1339,1362,1642

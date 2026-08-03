@@ -481,10 +481,10 @@ function gm:eachInstance()
   local out = {}
   for groupId, group in pairs(groups) do
     for instId, inst in pairs(group.instances) do
-      out[#out + 1] = { groupId = groupId, instId = instId,
+      util.add(out, { groupId = groupId, instId = instId,
                         rect = group.rect, anchor = inst.anchor,
                         colour = (groupId - 1) % 8 + 1,
-                        active = groupId == activeGroup }
+                        active = groupId == activeGroup })
     end
   end
   return out
@@ -500,7 +500,7 @@ function gm:deletedCells(groupId, instId)
   local out = {}
   for vuid in pairs(inst.deletes) do
     local g = group.events[vuid]
-    if g then out[#out + 1] = { vuid = vuid, evt = toInstance(g, inst.anchor) } end
+    if g then util.add(out, { vuid = vuid, evt = toInstance(g, inst.anchor) }) end
   end
   return out
 end
@@ -829,7 +829,7 @@ function gm:resizeGroup(groupId, instId, edits)
   for vuid, g in pairs(group.events) do
     g.ppq = (g.ppq or 0) - startDelta
     if not groupsCore.inRect(newRect, g.ppq, g.chanDelta or 0, g) then
-      leaving[#leaving + 1] = vuid
+      util.add(leaving, vuid)
     end
   end
   for _, vuid in ipairs(leaving) do

@@ -96,8 +96,8 @@ function curveEditor:frame(a)
     local span = math.max(1, math.ceil(w))   -- ~one sample per screen px
     for k = 0, span do
       local tt = tMin + (tMax - tMin) * k / span
-      pts[#pts + 1] = tt
-      pts[#pts + 1] = util.clamp(evalAtT(tt), vMin, vMax)
+      util.add(pts, tt)
+      util.add(pts, util.clamp(evalAtT(tt), vMin, vMax))
     end
     pt.polyline(pts, cols.envelope, 1.5)
 
@@ -196,8 +196,8 @@ function curveEditor:frame(a)
     local hpts   = {}
     for k = 0, span do
       local tt = a0 + (a1 - a0) * k / span
-      hpts[#hpts + 1] = tt
-      hpts[#hpts + 1] = util.clamp(evalAtT(tt), vMin, vMax)
+      util.add(hpts, tt)
+      util.add(hpts, util.clamp(evalAtT(tt), vMin, vMax))
     end
     pt.polyline(hpts, cols.anchorActive, 2.5)
   end

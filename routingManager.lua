@@ -184,7 +184,7 @@ local function b64decode(s)
         bits = bits - 8
         local b = buf >> bits
         buf = buf - (b << bits)
-        bytes[#bytes + 1] = string.char(b)
+        util.add(bytes, string.char(b))
       end
     end
   end
@@ -199,15 +199,15 @@ local function b64encode(s)
     while bits >= 6 do
       bits = bits - 6
       local v = (buf >> bits) & 0x3F
-      out[#out + 1] = b64alpha:sub(v + 1, v + 1)
+      util.add(out, b64alpha:sub(v + 1, v + 1))
       buf = buf - (v << bits)
     end
   end
   if bits > 0 then
     local v = (buf << (6 - bits)) & 0x3F
-    out[#out + 1] = b64alpha:sub(v + 1, v + 1)
+    util.add(out, b64alpha:sub(v + 1, v + 1))
   end
-  while #out % 4 ~= 0 do out[#out + 1] = '=' end
+  while #out % 4 ~= 0 do util.add(out, '=') end
   return table.concat(out)
 end
 
@@ -215,7 +215,7 @@ local function splitChunkLines(s)
   local hasTrailing = s:sub(-1) == '\n'
   local body  = hasTrailing and s or s .. '\n'
   local lines = {}
-  for ln in body:gmatch('([^\n]*)\n') do lines[#lines + 1] = ln end
+  for ln in body:gmatch('([^\n]*)\n') do util.add(lines, ln) end
   return lines, hasTrailing
 end
 
@@ -269,7 +269,7 @@ local function fxBlockStream(lines, firstIdx, lastIdx)
   for i = firstIdx, lastIdx do
     local content = lines[i]:match('^%s*(%S*)%s*$')
     if content and content:match('^[A-Za-z0-9%+/=]+$') then
-      parts[#parts + 1] = b64decode(content)
+      util.add(parts, b64decode(content))
     end
   end
   return table.concat(parts)
@@ -667,7 +667,7 @@ local function stampParents(records)
     if not rec.isMaster then
       rec.parent = stack[#stack]
       local depth = rec.folderDepth or 0
-      if depth == 1 then stack[#stack + 1] = rec.id
+      if depth == 1 then util.add(stack, rec.id)
       elseif depth < 0 then for _ = 1, -depth do stack[#stack] = nil end end
     end
   end

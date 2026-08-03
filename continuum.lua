@@ -107,15 +107,15 @@ local function Main()
     eachFx(function(track)
       for fxIdx = 0, reaper.TrackFX_GetCount(track) - 1 do
         if reaper.TrackFX_GetFloatingWindow(track, fxIdx) then
-          open[#open + 1] = { track = track, fxIdx = fxIdx,
-                              guid = reaper.TrackFX_GetFXGUID(track, fxIdx) }
+          util.add(open, { track = track, fxIdx = fxIdx,
+                              guid = reaper.TrackFX_GetFXGUID(track, fxIdx) })
         end
       end
     end)
     if #open > 0 then
       local stash = {}
       for _, fx in ipairs(open) do
-        stash[#stash + 1] = fx.guid
+        util.add(stash, fx.guid)
         reaper.TrackFX_Show(fx.track, fx.fxIdx, 2)   -- 2 = hide floating
       end
       hiddenFxFloats = stash

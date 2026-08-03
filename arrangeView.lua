@@ -94,7 +94,7 @@ local function selectedTakes()
   local live, kept = {}, {}
   for _, handle in ipairs(selection) do
     local take = am:findTake(handle)
-    if take then live[#live + 1] = take; kept[#kept + 1] = handle end
+    if take then util.add(live, take); util.add(kept, handle) end
   end
   selection = kept
   return live
@@ -103,7 +103,7 @@ end
 local function setSelection(handles)
   local kept = {}
   for _, handle in ipairs(handles or {}) do
-    if handle then kept[#kept + 1] = handle end
+    if handle then util.add(kept, handle) end
   end
   selection = kept
 end
@@ -144,7 +144,7 @@ end
 local function midiSlots(trackIdx)
   local out = {}
   for _, slot in ipairs(am:trackSlots(trackIdx)) do
-    if slot.kind == 'midi' then out[#out + 1] = slot end
+    if slot.kind == 'midi' then util.add(out, slot) end
   end
   return out
 end
@@ -358,14 +358,14 @@ function av:isSelected(handle) return selectionIndex(handle) ~= nil end
 --contract: addToSelection unions handles in (already-present and nil handles skipped).
 function av:addToSelection(handles)
   for _, handle in ipairs(handles or {}) do
-    if handle and not selectionIndex(handle) then selection[#selection + 1] = handle end
+    if handle and not selectionIndex(handle) then util.add(selection, handle) end
   end
 end
 
 --contract: toggleSelected adds the handle if absent, removes it if present.
 function av:toggleSelected(handle)
   local i = selectionIndex(handle)
-  if i then table.remove(selection, i) else selection[#selection + 1] = handle end
+  if i then table.remove(selection, i) else util.add(selection, handle) end
 end
 
 --contract: selectionSet() = {[handle]=true} of live selected takes, for the renderer's highlight.
@@ -472,8 +472,7 @@ local function groupDragCandidate(press, mouseQN, snapped)
   deltaQN = math.max(deltaQN, -minStart)   -- clamp so the earliest member stays ≥ 0
   local ghosts = {}
   for _, take in ipairs(takes) do
-    ghosts[#ghosts + 1] =
-      { take = take, startQN = take.startQN + deltaQN, lengthQN = take.naturalLenQN }
+    util.add(ghosts, { take = take, startQN = take.startQN + deltaQN, lengthQN = take.naturalLenQN })
   end
   return { ghosts = ghosts, deltaQN = deltaQN,
            fits = groupFits(takes, deltaQN, not press.duplicate) }
@@ -532,7 +531,7 @@ function av:lassoCandidate(press, mcol, mqn)
     if trackIdx < colHi and trackIdx + 1 > colLo then
       for _, take in ipairs(am:tracksTakes(trackIdx)) do
         if take.startQN < qnHi and take.startQN + take.lengthQN > qnLo then
-          takes[#takes + 1] = take.take
+          util.add(takes, take.take)
           set[take.take]    = true
         end
       end
@@ -551,7 +550,7 @@ local function commitGroupDrag(press, cand)
       local copies = {}
       for _, take in ipairs(takes) do
         local copy = am:duplicateTake(take, take.startQN + cand.deltaQN)
-        if copy then copies[#copies + 1] = copy end
+        if copy then util.add(copies, copy) end
       end
       setSelection(copies)
     end)()

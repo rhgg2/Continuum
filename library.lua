@@ -35,7 +35,7 @@ end
 local function sortedNames(tier, drop)
   local out = {}
   for name in pairs(tier) do
-    if not drop[name] then out[#out + 1] = name end
+    if not drop[name] then util.add(out, name) end
   end
   table.sort(out)
   return out
@@ -130,8 +130,8 @@ function lib.reloadPlan(key)
   for name, value in pairs(factoryTier(key)) do
     if not drop[name] then
       local cur = libr[name]
-      if cur == nil then add[#add + 1] = name
-      elseif not util.deepEq(cur, value) then overwrite[#overwrite + 1] = name end
+      if cur == nil then util.add(add, name)
+      elseif not util.deepEq(cur, value) then util.add(overwrite, name) end
     end
   end
   table.sort(add); table.sort(overwrite)
@@ -163,7 +163,7 @@ function lib.tidy(key, inUse)
   for name, value in pairs(tier) do
     local src = sourceOf(key, name)
     if not inUse[name] and src ~= nil and util.deepEq(value, src) then
-      removed[#removed + 1] = name
+      util.add(removed, name)
     end
   end
   if #removed == 0 then return removed end

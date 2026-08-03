@@ -150,7 +150,7 @@ end
 local function addStep()
   local t = cloneForEdit(); if not t then return end
   local maxC = t.cents[#t.cents] or 0
-  t.pitches[#t.pitches + 1] = string.format('%.2f', math.min(maxC + 100, t.period))
+  util.add(t.pitches, string.format('%.2f', math.min(maxC + 100, t.period)))
   t.stepNames[#t.pitches]   = ''
   temperWrite(t, true)
 end
@@ -683,7 +683,7 @@ local function buildGen()
     for tok in g.cps.factors:gmatch('%S+') do
       local n = tonumber(tok)
       if not (n and n == math.floor(n) and n >= 1) then return nil, 'factors: whole numbers' end
-      factors[#factors + 1] = n
+      util.add(factors, n)
     end
     if #factors < 2 then return nil, 'need at least two factors' end
     local k = tonumber(g.cps.count)

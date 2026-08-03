@@ -38,7 +38,7 @@ function perf.start(name)
     if not node then
       node = newNode(name, cur)
       cur.kids[name] = node
-      cur.order[#cur.order + 1] = name
+      util.add(cur.order, name)
     end
   else
     node = newNode(name, nil)
@@ -73,7 +73,7 @@ function perf.closeFrame() end
 
 local function marksOf(node)
   local parts = {}
-  for k, v in pairs(node.marks) do parts[#parts + 1] = string.format('%s %d', k, v) end
+  for k, v in pairs(node.marks) do util.add(parts, string.format('%s %d', k, v)) end
   table.sort(parts)
   return #parts > 0 and (' {' .. table.concat(parts, ' ') .. '}') or ''
 end
@@ -81,10 +81,10 @@ end
 local function renderNode(node, depth, out)
   local calls = node.calls > 1 and (' x' .. node.calls) or ''
   local ms    = depth == 0 and 'ms' or ''
-  out[#out + 1] = string.format('%s%s %.1f%s%s%s',
-    string.rep('  ', depth), node.name, node.incl * 1000, ms, calls, marksOf(node))
+  util.add(out, string.format('%s%s %.1f%s%s%s',
+    string.rep('  ', depth), node.name, node.incl * 1000, ms, calls, marksOf(node)))
   local kids = {}
-  for _, nm in ipairs(node.order) do kids[#kids + 1] = node.kids[nm] end
+  for _, nm in ipairs(node.order) do util.add(kids, node.kids[nm]) end
   table.sort(kids, function(a, b) return a.incl > b.incl end)
   for _, kid in ipairs(kids) do renderNode(kid, depth + 1, out) end
 end
@@ -107,14 +107,14 @@ function perf.dump()
   end
   local function bySize(t)
     local keys = {}
-    for k in pairs(t) do keys[#keys + 1] = k end
+    for k in pairs(t) do util.add(keys, k) end
     table.sort(keys, function(a, b) return t[a] > t[b] end)
     return keys
   end
   local parts = {}
-  for _, k in ipairs(bySize(totSpan)) do parts[#parts + 1] = string.format('%s %.1f', k, totSpan[k] * 1000) end
+  for _, k in ipairs(bySize(totSpan)) do util.add(parts, string.format('%s %.1f', k, totSpan[k] * 1000)) end
   local tally = {}
-  for _, k in ipairs(bySize(totMark)) do tally[#tally + 1] = string.format('%s %d', k, totMark[k]) end
+  for _, k in ipairs(bySize(totMark)) do util.add(tally, string.format('%s %d', k, totMark[k])) end
   util.print(string.format('[perf] totals%s%s',
     #parts > 0 and (' | ' .. table.concat(parts, ' ')) or '',
     #tally > 0 and (' | ' .. table.concat(tally, ' ')) or ''))

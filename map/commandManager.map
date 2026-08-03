@@ -124,6 +124,7 @@
 # Uses (outbound edges)
   @use call    cm:get  @ noteChars:352 loadOverrides:565 rebind:586
   @use call    cm:set  @ rebind:591
+  @use call    util.add  @ push:238 keychain:295,303 keyLabel:448,450 keyLabelList:459 tokenForSpec:536,538 specForToken:546,555 loadOverrides:572 rebind:589
   @use call    util.atomic  @ newScope:91
   @use call    util.print  @ loadOverrides:573
   @use require util  @ <load>:15
@@ -227,6 +228,6 @@
   @field r scopes  @ 115 scope:225,228 asScope:233 loadOverrides:566 rebind:583
   @field w scopes  @ 53
   @field r springLoaded  @ invoke:257
-  @field r stack  @ isReachable:66,70,71 116 push:238 pop:245,246 invoke:256
-  @field r stack  @ resolveKeys:281,282 keychain:294,295,296,297,300 bindingSite:339,340
+  @field r stack  @ isReachable:66,70,71 116 push:238 pop:245,246 invoke:256 resolveKeys:281
+  @field r stack  @ resolveKeys:282 keychain:294,295,296,297,300 bindingSite:339,340
   @field w stack  @ 54

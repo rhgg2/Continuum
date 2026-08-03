@@ -47,7 +47,7 @@ function groups.project(group, instance)
   -- Sole conflict: two events at one (lane, onset). Group event (then lower vuid) holds the slot,
   -- the loser is dropped + conflicted; the sort makes that order-independent.
   local ordered = {}
-  for vuid in pairs(desired) do ordered[#ordered + 1] = vuid end
+  for vuid in pairs(desired) do util.add(ordered, vuid) end
   table.sort(ordered, function(a, b)
     if fromGroup[a] ~= fromGroup[b] then return fromGroup[a] == true end
     return a < b

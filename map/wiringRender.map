@@ -415,7 +415,7 @@
   @use call    modalHost:openPrompt  @ openAddSourceModal:2441
   @use call    modalHost:wasOpenAtFrameStart  @ focusState:2571
   @use call    painter.new  @ renderCanvas:1706
-  @use call    util.add  @ leastOccupiedDir:1266 sourceSegments:1301,1302 busSegments:1363,1389,1491 bussablePorts:1555 renderCanvas:1734,1768 renderPaletteBody:2508 openFxPicker:2604
+  @use call    util.add  @ camelSplit:178,182 atomise:194 wrapLabel:220,222,231,237 layoutPortRow:457,489,494 wireGroups:813,815 drawWireEndLabel:959 leastOccupiedDir:1266 sourceSegments:1301,1302 busSegments:1363,1389,1491 bussablePorts:1555 renderCanvas:1734,1768,1900 renderPaletteBody:2508 openFxPicker:2604 renderFxPicker:2650
   @use call    util.key  @ wireGroups:808
   @use call    wv:addBusNode  @ commitFx:2620
   @use call    wv:addFx  @ commitFx:2622

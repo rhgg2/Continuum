@@ -7,6 +7,8 @@
 --invariant: cents[1] is the unison (0); nameless step displays as degree-octave via stepToText
 --invariant: octave parameters are MIDI-relative (C4 → 4), not period-index
 --shape: Temper = {name, periodPitch=token, pitches=token[ascending], stepNames=string[], periodAsStep=bool, cents=number[derived], period=cents[derived], octaveStep=int, octaveWidth=int, cellWidth=int}
+local util = require 'util'
+
 local tuning = {}
 
 ----- Temperament presets
@@ -130,7 +132,7 @@ function tuning.parseScalaPitches(text)
   local lines = {}
   for line in (text .. '\n'):gmatch('(.-)\n') do
     local s = line:match('^%s*(.-)%s*$')
-    if s ~= '' and s:sub(1, 1) ~= '!' then lines[#lines + 1] = s end
+    if s ~= '' and s:sub(1, 1) ~= '!' then util.add(lines, s) end
   end
   return lines
 end
@@ -140,14 +142,14 @@ end
 function tuning.parseScalaFile(text)
   local lines = {}
   for line in (text .. '\n'):gmatch('(.-)\n') do
-    if not line:match('^%s*!') then lines[#lines + 1] = line end
+    if not line:match('^%s*!') then util.add(lines, line) end
   end
   local description = (lines[1] or ''):match('^%s*(.-)%s*$')
   local count       = tonumber((lines[2] or ''):match('%d+'))
   local pitches     = {}
   for i = 3, #lines do
     local s = lines[i]:match('^%s*(.-)%s*$')
-    if s ~= '' then pitches[#pitches + 1] = s end
+    if s ~= '' then util.add(pitches, s) end
     if count and #pitches >= count then break end
   end
   return pitches, description
@@ -165,7 +167,7 @@ function tuning.scalaToTemper(pitchLines, name)
   local sorted = { table.unpack(pitchLines) }
   table.sort(sorted, function(a, b) return tuning.scalaPitch(a) < tuning.scalaPitch(b) end)
   local pitches = { '1/1' }
-  for i = 1, #sorted - 1 do pitches[#pitches + 1] = sorted[i] end
+  for i = 1, #sorted - 1 do util.add(pitches, sorted[i]) end
   return tuning.derive{
     name         = name,
     periodPitch  = sorted[#sorted],
@@ -184,17 +186,17 @@ function tuning.edoDegrees(spec, mode)
   for tok in spec:gmatch('%S+') do
     local n = tonumber(tok)
     if not n or n ~= math.floor(n) or n < 1 then return nil end
-    nums[#nums + 1] = n
+    util.add(nums, n)
   end
   if #nums == 0 then return nil end
   if mode == 'relative' then
     local degs, acc = {}, 0
-    for _, step in ipairs(nums) do acc = acc + step; degs[#degs + 1] = acc end
+    for _, step in ipairs(nums) do acc = acc + step; util.add(degs, acc) end
     return degs
   end
   table.sort(nums)
   local degs = {}
-  for _, d in ipairs(nums) do if degs[#degs] ~= d then degs[#degs + 1] = d end end
+  for _, d in ipairs(nums) do if degs[#degs] ~= d then util.add(degs, d) end end
   return degs
 end
 
@@ -203,7 +205,7 @@ end
 function tuning.degreesToSpec(degrees, mode)
   if mode == 'absolute' then return table.concat(degrees, ' ') end
   local steps, prev = {}, 0
-  for _, d in ipairs(degrees) do steps[#steps + 1] = d - prev; prev = d end
+  for _, d in ipairs(degrees) do util.add(steps, d - prev); prev = d end
   return table.concat(steps, ' ')
 end
 
@@ -221,14 +223,14 @@ end
 -- top (hi/lo) the period.
 function tuning.genHarmonics(lo, hi)
   local pitches = {}
-  for m = lo, hi - 1 do pitches[#pitches + 1] = m .. '/' .. lo end
+  for m = lo, hi - 1 do util.add(pitches, m .. '/' .. lo) end
   return { pitches = pitches, periodPitch = hi .. '/' .. lo, periodAsStep = true }
 end
 
 -- Subharmonic (utonal) segment lo..hi: ratios hi/m ascending, top the period.
 function tuning.genSubharmonics(lo, hi)
   local pitches = {}
-  for m = hi, lo + 1, -1 do pitches[#pitches + 1] = hi .. '/' .. m end
+  for m = hi, lo + 1, -1 do util.add(pitches, hi .. '/' .. m) end
   return { pitches = pitches, periodPitch = hi .. '/' .. lo, periodAsStep = true }
 end
 
@@ -239,7 +241,7 @@ function tuning.parseChord(spec)
   for tok in spec:gmatch('[^%s:]+') do
     local n = tonumber(tok)
     if not n or n ~= math.floor(n) or n < 1 then return nil, 'chord needs whole numbers' end
-    members[#members + 1] = n
+    util.add(members, n)
   end
   if #members < 2 then return nil, 'chord needs at least two notes' end
   return members
@@ -262,7 +264,7 @@ local function gcd(a, b) while b ~= 0 do a, b = b, a % b end return a end
 local function combinations(n, k)
   local out, idx = {}, {}
   local function rec(start, depth)
-    if depth > k then out[#out + 1] = { table.unpack(idx) }; return end
+    if depth > k then util.add(out, { table.unpack(idx) }); return end
     for i = start, n do idx[depth] = i; rec(i + 1, depth + 1) end
   end
   rec(1, 1)
@@ -280,7 +282,7 @@ function tuning.genCPS(factors, k, equave)
   for _, subset in ipairs(combinations(#factors, k)) do
     local p = 1
     for _, i in ipairs(subset) do p = p * factors[i] end
-    products[#products + 1] = p
+    util.add(products, p)
   end
   local root = products[1]
   for _, p in ipairs(products) do if p < root then root = p end end
@@ -329,7 +331,7 @@ end
 -- reduced into `p`: {cents, count} per distinct size, large first.
 local function stepSpectrum(g, p, n)
   local pts = {}
-  for k = 0, n - 1 do pts[#pts + 1] = reduceCents(k * g, p) end
+  for k = 0, n - 1 do util.add(pts, reduceCents(k * g, p)) end
   table.sort(pts)
   local sizes = {}
   for i = 1, n do
@@ -337,7 +339,7 @@ local function stepSpectrum(g, p, n)
     local slot
     for _, s in ipairs(sizes) do if math.abs(s.cents - step) < 1e-6 then slot = s; break end end
     if slot then slot.count = slot.count + 1
-    else sizes[#sizes + 1] = { cents = step, count = 1 } end
+    else util.add(sizes, { cents = step, count = 1 }) end
   end
   table.sort(sizes, function(a, b) return a.cents > b.cents end)
   return sizes
@@ -358,7 +360,7 @@ function tuning.genRank2(generator, period, size, up)
     local cents = num and 1200 * math.log(num / den, 2) or reduceCents(k * g, p)
     local token = num and (num .. '/' .. den)
                   or ((cents < 1e-6) and '1/1' or string.format('%.4f', cents))
-    entries[#entries + 1] = { cents = cents, token = token }
+    util.add(entries, { cents = cents, token = token })
   end
   table.sort(entries, function(a, b) return a.cents < b.cents end)
   local pitches = {}

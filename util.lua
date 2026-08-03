@@ -23,13 +23,13 @@ function util.print_r(root)
     for k,v in pairs(t) do
       local key = tostring(k)
       if cache[v] then
-        temp[#temp+1] = '+' .. key .. ' {' .. cache[v]..'}'
+        util.add(temp, '+' .. key .. ' {' .. cache[v]..'}')
       elseif type(v) == 'table' then
         local new_key = name .. '.' .. key
         cache[v] = new_key
-        temp[#temp+1] = '+' .. key .. _dump(v,space .. (next(t,k) and '|' or ' ' ).. string.rep(' ',#key),new_key)
+        util.add(temp, '+' .. key .. _dump(v,space .. (next(t,k) and '|' or ' ' ).. string.rep(' ',#key),new_key))
       else
-        temp[#temp+1] = '+' .. key .. ' [' .. tostring(v)..']'
+        util.add(temp, '+' .. key .. ' [' .. tostring(v)..']')
       end
     end
     return table.concat(temp,'\n'..space)
@@ -82,7 +82,7 @@ end
 function util.picker(keys)
   local list = {}
   for k in keys:gmatch("%S+") do
-    list[#list + 1] = k
+    util.add(list, k)
   end
   return function(src, adds)
     local dst = {}
@@ -110,7 +110,7 @@ end
 function util.bucket(buckets, key, val)
   local b = buckets[key]
   if not b then b = {}; buckets[key] = b end
-  b[#b+1] = val
+  util.add(b, val)
   return b
 end
 
@@ -136,14 +136,14 @@ end
 
 function util.keys(t)
   local out = {}
-  for k in pairs(t) do out[#out+1] = k end
+  for k in pairs(t) do util.add(out, k) end
   return out
 end
 
 -- Sparse → dense; n is the pre-sparse length.
 function util.compact(t, n)
   local out = {}
-  for i = 1, n do if t[i] ~= nil then out[#out+1] = t[i] end end
+  for i = 1, n do if t[i] ~= nil then util.add(out, t[i]) end end
   return out
 end
 
@@ -404,7 +404,7 @@ function util.serialise(value, exclude, seen)
       if not exclude[k] then
         local key_str = util.serialise(k, nil, seen)
         local val_str = util.serialise(v, nil, seen)
-        parts[#parts+1] = key_str .. '=' .. val_str
+        util.add(parts, key_str .. '=' .. val_str)
       end
     end
 
@@ -442,7 +442,7 @@ function util.unserialise(input)
         local n = nextChar()
 
         if n == '{' or n == '}' or n == ',' or n == '=' or n == '\\' then
-          buf[#buf+1] = n
+          util.add(buf, n)
           hadEscape = true
         elseif n == 'e' then
           -- empty marker: forces string interpretation downstream
@@ -451,7 +451,7 @@ function util.unserialise(input)
           local byte = tonumber(input:sub(pos, pos + 1), 16)
           if not byte then error('invalid hex escape') end
           pos = pos + 2
-          buf[#buf+1] = string.char(byte)
+          util.add(buf, string.char(byte))
           hadEscape = true
         else
           error('invalid escape: \\' .. tostring(n))
@@ -462,7 +462,7 @@ function util.unserialise(input)
         break
 
       else
-        buf[#buf+1] = c
+        util.add(buf, c)
       end
     end
 
@@ -573,7 +573,7 @@ local function emitTable(tbl, indent, seen)
   local keyed = {}
   for k in pairs(tbl) do
     local inArray = type(k) == 'number' and k == math.floor(k) and k >= 1 and k <= arrLen
-    if not inArray then keyed[#keyed+1] = k end
+    if not inArray then util.add(keyed, k) end
   end
   table.sort(keyed, function(a, b) return tostring(a) < tostring(b) end)
 
@@ -591,12 +591,12 @@ local function emitTable(tbl, indent, seen)
 
   local pad, lines = string.rep('  ', indent + 1), {}
   for i = 1, arrLen do
-    lines[#lines+1] = pad .. prettyEmit(tbl[i], indent + 1, seen) .. ',' .. nonFiniteNote(tbl[i])
+    util.add(lines, pad .. prettyEmit(tbl[i], indent + 1, seen) .. ',' .. nonFiniteNote(tbl[i]))
   end
   for _, k in ipairs(keyed) do
     local keyStr = bareKey(k) and k or '[' .. prettyEmit(k, indent + 1, seen) .. ']'
     local v = tbl[k]
-    lines[#lines+1] = pad .. keyStr .. ' = ' .. prettyEmit(v, indent + 1, seen) .. ',' .. nonFiniteNote(v)
+    util.add(lines, pad .. keyStr .. ' = ' .. prettyEmit(v, indent + 1, seen) .. ',' .. nonFiniteNote(v))
   end
   seen[tbl] = nil
   return '{\n' .. table.concat(lines, '\n') .. '\n' .. string.rep('  ', indent) .. '}'

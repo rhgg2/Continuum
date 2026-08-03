@@ -202,6 +202,7 @@
   @use call    modalHost:wasOpenAtFrameStart  @ focusState:825
   @use call    painter.hue  @ slotFill:88,89
   @use call    painter.new  @ gridGeom:198 renderGrid:326
+  @use call    util.add  @ renderGrid:444,451
   @use call    util.atomic  @ openRenameModal:630 openDeleteModal:641 openCreateModal:654
   @use require imgui  @ <load>:13
   @use require painter  @ <load>:14

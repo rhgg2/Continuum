@@ -441,14 +441,14 @@ local function renderGrid(tracks, nTracks, dragCand, loopCand, createCand, lasso
     end
     ps.border(rect(rx0, ry0, rx1 + 1, ry1 + 1), border)
     if tk.name and tk.name ~= '' then
-      nameDraws[#nameDraws + 1] = {
+      util.add(nameDraws, {
         name = tk.name, rx0 = rx0, rx1 = rx1, ry0 = ry0, ry1 = ry1,
-      }
+      })
     end
     -- Truncation indicator: downstream take cuts this one short. Show only when box > 1 row
     -- so the ellipsis doesn't displace the name.
     if lengthQN + 1e-6 < tk.naturalLenQN and endRow - startRow > 1 then
-      truncDraws[#truncDraws + 1] = { rx0 = rx0, rx1 = rx1, ry1 = ry1 }
+      util.add(truncDraws, { rx0 = rx0, rx1 = rx1, ry1 = ry1 })
     end
   end
 

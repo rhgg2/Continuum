@@ -778,7 +778,7 @@ local function hopInstance(step)
   if not at then return end
   local sibs = {}
   for _, e in ipairs(gm:eachInstance()) do
-    if e.groupId == at.groupId then sibs[#sibs + 1] = e end
+    if e.groupId == at.groupId then util.add(sibs, e) end
   end
   table.sort(sibs, function(a, b) return a.anchor.ppq < b.anchor.ppq end)
   local i

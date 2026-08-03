@@ -236,7 +236,7 @@ local function printer(x0, y0)
   -- down, bottom-anchored where the horizontal labels sit.
   function pt:textVertical(xLo, xHi, yBottom, txt, font, size, colour)
     local glyphs = {}
-    for char in txt:gmatch(utf8.charpattern) do glyphs[#glyphs + 1] = char end
+    for char in txt:gmatch(utf8.charpattern) do util.add(glyphs, char) end
     for i, char in ipairs(glyphs) do
       p.text(centreX(xLo, xHi, char, font, size),
              yBottom - (#glyphs - i + 1) * size / cellH, colour, char, font, size)
@@ -495,9 +495,9 @@ local function notePartHeaders(col)
   while first <= #partAt do
     local name, last = partAt[first], first
     while last < #partAt and partAt[last + 1] == name do last = last + 1 end
-    headers[#headers + 1] = {
+    util.add(headers, {
       xLo = col.x + stopPos[first], xHi = col.x + stopPos[last], label = PART_LABEL[name],
-    }
+    })
     first = last + 1
   end
   return headers
@@ -841,7 +841,7 @@ end
 -- autorepeats every key uniformly; the char queue dropped repeats under macOS.
 local editKeys = {}
 do
-  local function add(key, byte, digit) editKeys[#editKeys + 1] = { key = key, char = byte, digit = digit } end
+  local function add(key, byte, digit) util.add(editKeys, { key = key, char = byte, digit = digit }) end
   for i = 0, 25 do add(ImGui.Key_A + i, string.byte('a') + i) end
   for d = 0, 9 do
     add(ImGui.Key_0 + d,       string.byte('0') + d, true)

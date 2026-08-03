@@ -199,7 +199,7 @@ local function frame()
       chrome.pushChromeStyles()
       ImGui.PushStyleVar(ctx, ImGui.StyleVar_FramePadding, 6, 2)
       local segs = { switcherSeg, masterMix.segment }
-      for _, s in ipairs(page:toolbarSegments()) do segs[#segs + 1] = s end
+      for _, s in ipairs(page:toolbarSegments()) do util.add(segs, s) end
       toolbar(segs)
       ImGui.PopStyleVar(ctx, 1)
       chrome.popChromeStyles()
@@ -350,7 +350,7 @@ end
 
 --contract: registers an ExtState key→command bridge polled each frame to fire Continuum commands
 function coord:onExternalCommand(extKey, command)
-  externalCommands[#externalCommands + 1] = { extKey = extKey, command = command }
+  util.add(externalCommands, { extKey = extKey, command = command })
 end
 
 function coord:quit()      quitting = true end

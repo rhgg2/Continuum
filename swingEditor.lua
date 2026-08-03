@@ -298,7 +298,7 @@ end
 --contract: default new factor is identity (atom='id', shift=0, period=1) — visually inert until edited
 local function addFactor()
   local c = cloneForEdit()
-  c.factors[#c.factors + 1] = { atom = 'id', shift = 0, period = 1 }
+  util.add(c.factors, { atom = 'id', shift = 0, period = 1 })
   swingWrite(c)
 end
 
@@ -366,8 +366,8 @@ local function drawFactorRow(i, f, numColW, n)
   local tileQN = timing.atomTilePeriod(f)
   local pIdx   = periodPresetIndex(tileQN)
   local items = {}
-  for _, p in ipairs(PERIOD_PRESETS) do items[#items+1] = p.label end
-  if pIdx == 0 then items[#items+1] = periodLabel(tileQN) end
+  for _, p in ipairs(PERIOD_PRESETS) do util.add(items, p.label) end
+  if pIdx == 0 then util.add(items, periodLabel(tileQN)) end
   local pickedPer = chrome.dropdown('per', periodLabel(tileQN), items)
   if pickedPer and pickedPer <= #PERIOD_PRESETS then
     -- Scale shift in QN by the period ratio so the resolved s = shift/tileQN
@@ -498,12 +498,12 @@ local function activeEntries()
   local out = {}
   local takeName = sw.global
   if takeName == 'identity' then takeName = nil end
-  if takeName then out[#out + 1] = { col = 'take', name = takeName } end
+  if takeName then util.add(out, { col = 'take', name = takeName }) end
   local chans = {}
-  for chan in pairs(sw) do if chan ~= 'global' then chans[#chans + 1] = chan end end
+  for chan in pairs(sw) do if chan ~= 'global' then util.add(chans, chan) end end
   table.sort(chans)
   for _, chan in ipairs(chans) do
-    out[#out + 1] = { col = 'ch' .. chan, name = sw[chan] }
+    util.add(out, { col = 'ch' .. chan, name = sw[chan] })
   end
   return out
 end

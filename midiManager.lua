@@ -370,7 +370,7 @@ end
 local function freeSlot(list, order, free, slot)
   orderRemove(list, order, slot)
   list[slot] = nil
-  free[#free + 1] = slot
+  util.add(free, slot)
 end
 
 

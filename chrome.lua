@@ -9,6 +9,7 @@
 --invariant: colour cache lives on the chrome instance and is invalidated on cm:configChanged
 local ImGui   = require 'imgui' '0.10'
 local painter = require 'painter'
+local util    = require 'util'
 
 local cm, ctx, lib  = (...).cm, (...).ctx, (...).lib
 
@@ -22,10 +23,10 @@ local function resolve(key)
   local seen, override = {}, nil
   while true do
     if seen[key] then
-      seen[#seen+1] = key
+      util.add(seen, key)
       error('colour cycle: ' .. table.concat(seen, ' → '))
     end
-    seen[#seen+1] = key; seen[key] = true
+    util.add(seen, key); seen[key] = true
     local v = cm:get(key)
     if v == nil then error('unknown colour: ' .. key) end
     if type(v) == 'string' then
@@ -432,22 +433,22 @@ function chrome.libPicker(key, current, excludeOthers)
   local items = { { label = 'Off', key = nil, group = 1, current = current == nil } }
 
   local projNames = {}
-  for k in pairs(proj) do projNames[#projNames+1] = k end
+  for k in pairs(proj) do util.add(projNames, k) end
   table.sort(projNames)
   for _, name in ipairs(projNames) do
     local label = lib.modified(key, name) and (name .. ' \xe2\x80\xa2') or name
-    items[#items+1] = { label = label, key = name, group = 2, current = current == name }
+    util.add(items, { label = label, key = name, group = 2, current = current == name })
   end
 
   local otherNames = {}
   for k in pairs(merged) do
     if not proj[k] and not excludeOthers[k] then
-      otherNames[#otherNames+1] = k
+      util.add(otherNames, k)
     end
   end
   table.sort(otherNames)
   for _, name in ipairs(otherNames) do
-    items[#items+1] = { label = '+ ' .. name, key = name, group = 3, current = false }
+    util.add(items, { label = '+ ' .. name, key = name, group = 3, current = false })
   end
   return items
 end
@@ -568,7 +569,7 @@ function chrome.drawPicker(d)
   local matches, currentMatch = {}, nil
   for _, it in ipairs(d.items) do
     if filter == '' or it.label:lower():find(lf, 1, true) then
-      matches[#matches + 1] = it
+      util.add(matches, it)
       if it.current then currentMatch = #matches end
     end
   end

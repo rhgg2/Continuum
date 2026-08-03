@@ -50,17 +50,17 @@ local function drawSampleDropdown()
   local curName = entries[cur] and entries[cur].name
   local indices = {}
   for idx, e in pairs(entries) do
-    if e.path then indices[#indices + 1] = idx end
+    if e.path then util.add(indices, idx) end
   end
   table.sort(indices)
   local items = {}
   for _, idx in ipairs(indices) do
-    items[#items + 1] = {
+    util.add(items, {
       label   = string.format('%02X  %s', idx, entries[idx].name or ''),
       key     = idx,
       group   = 1,
       current = idx == cur,
-    }
+    })
   end
   chrome.drawPicker {
     kind        = 'sample',
@@ -106,7 +106,7 @@ local toolbarSegments = {
       local curIdx = tv:currentTrackIdx()
       local items = {}
       for _, track in ipairs(arrange().tracks()) do
-        items[#items + 1] = { label = trackLabel(track), key = track.idx, group = 1, current = track.idx == curIdx }
+        util.add(items, { label = trackLabel(track), key = track.idx, group = 1, current = track.idx == curIdx })
       end
       chrome.drawPicker {
         kind        = 'track',
@@ -121,7 +121,7 @@ local toolbarSegments = {
       local curSlot = tv:currentSlotIdx()
       local items = {}
       for _, slot in ipairs(arrange().midiSlots(tv:currentTrackIdx())) do
-        items[#items + 1] = { label = slotLabel(slot), key = slot.idx, group = 1, current = slot.idx == curSlot }
+        util.add(items, { label = slotLabel(slot), key = slot.idx, group = 1, current = slot.idx == curSlot })
       end
       chrome.drawPicker {
         kind        = 'take',
@@ -271,22 +271,22 @@ local function emitParams(plan, row, params)
       if not groups[prm.section] then groups[prm.section] = {}; minIndex[prm.section] = prm.index end
       if prm.index < minIndex[prm.section] then minIndex[prm.section] = prm.index end
       local bucket = groups[prm.section]
-      bucket[#bucket + 1] = prm
+      util.add(bucket, prm)
     else
-      ungrouped[#ungrouped + 1] = prm
+      util.add(ungrouped, prm)
     end
   end
   local order = {}
-  for name in pairs(groups) do order[#order + 1] = name end
+  for name in pairs(groups) do util.add(order, name) end
   if #order == 0 then
-    for _, prm in ipairs(ungrouped) do plan[#plan + 1] = { kind = 'param', row = row, prm = prm } end
+    for _, prm in ipairs(ungrouped) do util.add(plan, { kind = 'param', row = row, prm = prm }) end
     return
   end
   table.sort(order, function(a, b) return minIndex[a] < minIndex[b] end)
   local function emitGroup(label, bucket)
-    plan[#plan + 1] = { kind = 'section', row = row, text = label }
+    util.add(plan, { kind = 'section', row = row, text = label })
     for _, prm in ipairs(bucket) do
-      plan[#plan + 1] = { kind = 'param', row = row, prm = prm }
+      util.add(plan, { kind = 'param', row = row, prm = prm })
     end
   end
   for _, label in ipairs(order) do emitGroup(label, groups[label]) end
@@ -308,7 +308,7 @@ local function buildPlan(rows, needle)
       shownParams = {}
       for _, prm in ipairs(tv:listParams(row.trackGuid, row.fxGuid)) do
         if (row.name .. ' ' .. (prm.section or '') .. ' ' .. prm.name):lower():find(needle, 1, true) then
-          shownParams[#shownParams + 1] = prm
+          util.add(shownParams, prm)
         end
       end
       shown, open = #shownParams > 0, true
@@ -316,9 +316,9 @@ local function buildPlan(rows, needle)
     if shown then
       if section ~= heading then
         heading = section
-        plan[#plan + 1] = { kind = 'heading', text = section }
+        util.add(plan, { kind = 'heading', text = section })
       end
-      plan[#plan + 1] = { kind = 'fx', row = row, open = open }
+      util.add(plan, { kind = 'fx', row = row, open = open })
       if open then emitParams(plan, row, shownParams) end
     end
   end
@@ -331,10 +331,10 @@ local function navRows(plan, paramsOnly)
   local nav = {}
   for _, it in ipairs(plan) do
     if it.kind == 'fx' and not paramsOnly then
-      nav[#nav + 1] = { fxGuid = it.row.fxGuid, param = nil, item = it, row = it.row }
+      util.add(nav, { fxGuid = it.row.fxGuid, param = nil, item = it, row = it.row })
     elseif it.kind == 'param' then
-      nav[#nav + 1] = { fxGuid = it.row.fxGuid, param = it.prm.index, item = it,
-                        row = it.row, prm = it.prm }
+      util.add(nav, { fxGuid = it.row.fxGuid, param = it.prm.index, item = it,
+                        row = it.row, prm = it.prm })
     end
   end
   return nav
@@ -922,8 +922,8 @@ local function destLabel(dest) return dest == 'pb' and 'Pitch Bend' or ('CC ' ..
 local function destItems(entry)
   local current, items = generators.destOf(entry), {}
   for _, dest in ipairs(generators.destsFor(entry.kind)) do
-    items[#items + 1] = { label = destLabel(dest), key = dest,
-                          group = dest == 'pb' and 1 or 2, current = dest == current }
+    util.add(items, { label = destLabel(dest), key = dest,
+                          group = dest == 'pb' and 1 or 2, current = dest == current })
   end
   return items
 end
@@ -1000,8 +1000,8 @@ local stripPlan do
   local function chainRows(cols)
     local rows = {}
     for si, col in ipairs(cols) do
-      rows[#rows + 1] = { stage = si, param = 0 }
-      for k = 1, #col.fields do rows[#rows + 1] = { stage = si, param = k } end
+      util.add(rows, { stage = si, param = 0 })
+      for k = 1, #col.fields do util.add(rows, { stage = si, param = k }) end
     end
     return rows
   end
@@ -1017,11 +1017,11 @@ local stripPlan do
       local fields = {}
       for _, fd in ipairs(generators.fieldsFor(entry)) do
         if not fd.when or fd.when(entry) then
-          fields[#fields + 1] = { fd = fd, entry = entry, index = i }
+          util.add(fields, { fd = fd, entry = entry, index = i })
         end
       end
-      cols[#cols + 1] = { index = i, kind = entry.kind,
-                          label = generators.kinds[entry.kind].label, fields = fields }
+      util.add(cols, { index = i, kind = entry.kind,
+                          label = generators.kinds[entry.kind].label, fields = fields })
     end
     return cols
   end
@@ -1038,7 +1038,7 @@ local stripPlan do
     local haveChain = fx and (#fx > 0 or pinned)
     if not haveChain and not fxChosen then return nil end
     local cols = haveChain and stripColumns(fx) or {}
-    cols[#cols + 1] = { isAdd = true, fields = {} }   -- terminal slot: arrow onto it, type/←→ opens the add picker
+    util.add(cols, { isAdd = true, fields = {} })   -- terminal slot: arrow onto it, type/←→ opens the add picker
     return { host = host, cols = cols }
   end
 
@@ -1149,7 +1149,7 @@ local stripPlan do
   local function kindItems(currentKind)
     local items = {}
     for _, kind in ipairs(FX_KINDS) do
-      items[#items + 1] = { label = generators.kinds[kind].label, key = kind, current = kind == currentKind }
+      util.add(items, { label = generators.kinds[kind].label, key = kind, current = kind == currentKind })
     end
     return items
   end

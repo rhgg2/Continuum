@@ -92,6 +92,7 @@
   @use call    ds:get  @ automate:333 unautomate:346 binding:355 params:386 bumpFrecency:396
   @use call    ds:getAt  @ gatherBindings:72 usedLanes:241,243 allocBusCode:266
   @use call    facade.get  @ arrange:15 targets:362
+  @use call    util.add  @ gatherBindings:77 apply:316
   @use call    util.atomic  @ apply:320
   @use call    util.deepEq  @ apply:315
   @use call    util.key  @ computeDesired:97 applyTrack:201,203

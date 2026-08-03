@@ -8,6 +8,8 @@
 --reaper: EnumerateFiles caches per-dir; each scan invalidates with idx -1, else stale/deleted reqs linger
 --shape: response = "status: ok|error\nms: N\n--- value ---\n<render>\n--- print ---\n<buffered>\n"
 
+local util = require 'util'
+
 local deps = ... or {}
 local env  = deps.env or {}
 -- Chunks need the Lua stdlib; _G supplies it (plus reaper) but not Continuum's
@@ -26,7 +28,7 @@ local printBuf = {}
 env.print = function(...)
   local parts = {}
   for i = 1, select('#', ...) do parts[i] = tostring((select(i, ...))) end
-  printBuf[#printBuf + 1] = table.concat(parts, '\t')
+  util.add(printBuf, table.concat(parts, '\t'))
 end
 
 ----- Small IO
@@ -74,7 +76,7 @@ local function render(value, opts)
   local function emit(s)
     total = total + #s
     if total > totalCap then error(CAP) end
-    out[#out + 1] = s
+    util.add(out, s)
   end
 
   local function go(v, depth)
@@ -108,7 +110,7 @@ local function render(value, opts)
 
   local ok, err = pcall(go, value, 0)
   if not ok then
-    if err == CAP then out[#out + 1] = ' …(truncated)'
+    if err == CAP then util.add(out, ' …(truncated)')
     else error(err) end
   end
   return table.concat(out)

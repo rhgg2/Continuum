@@ -194,7 +194,7 @@
   @use call    tv:hideExtraCol  @ miniScope:hideExtraCol:99
   @use call    tv:ppqToRow  @ draw:443
   @use call    tv:setRowPerBeat  @ drawToolbar:398
-  @use call    util.add  @ readbackBody:164,168,181,192
+  @use call    util.add  @ readbackBody:164,168,181,192 shelfItems:355,359
   @use call    util.deepClone  @ open:238
   @use call    util.deepEq  @ writeThrough:208 cancel:219
   @use call    util.instantiate  @ <load>:35,36,37,38,39,40,41,42,43,63

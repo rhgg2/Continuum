@@ -175,11 +175,11 @@ local function camelSplit(word)
   for i = 2, #word do
     local prev, cur = word:byte(i - 1), word:byte(i)
     if prev >= 97 and prev <= 122 and cur >= 65 and cur <= 90 then
-      pieces[#pieces + 1] = word:sub(last, i - 1)
+      util.add(pieces, word:sub(last, i - 1))
       last = i
     end
   end
-  pieces[#pieces + 1] = word:sub(last)
+  util.add(pieces, word:sub(last))
   return pieces
 end
 
@@ -191,7 +191,7 @@ local function atomise(text)
   for word in text:gmatch('%S+') do
     local pieces = camelSplit(word)
     for j, piece in ipairs(pieces) do
-      atoms[#atoms + 1] = piece
+      util.add(atoms, piece)
       if #atoms > 1 then
         seps[#atoms - 1] = (j == 1) and ' ' or ''
       end
@@ -217,9 +217,9 @@ local function wrapLabel(text, maxW, widthOf)
   local lines, lineStart, cur = {}, {}, nil
   for i, atom in ipairs(atoms) do
     if widthOf(atom) > maxW then
-      if cur then lines[#lines + 1] = cur; cur = nil end
+      if cur then util.add(lines, cur); cur = nil end
       lineStart[#lines + 1] = i
-      lines[#lines + 1] = ellipsise(atom)
+      util.add(lines, ellipsise(atom))
     elseif cur == nil then
       cur = atom
       lineStart[#lines + 1] = i
@@ -228,13 +228,13 @@ local function wrapLabel(text, maxW, widthOf)
       if widthOf(cand) <= maxW then
         cur = cand
       else
-        lines[#lines + 1] = cur
+        util.add(lines, cur)
         cur = atom
         lineStart[#lines + 1] = i
       end
     end
   end
-  if cur then lines[#lines + 1] = cur end
+  if cur then util.add(lines, cur) end
 
   if #lines <= LABEL_MAX_LINES then return lines end
 
@@ -454,7 +454,7 @@ local function layoutPortRow(nv, dir, mx, my, keep, forceSide)
     union(pinned[nv.id])
   end
   local chipPorts = {}
-  for k in pairs(chipSet) do chipPorts[#chipPorts + 1] = k end
+  for k in pairs(chipSet) do util.add(chipPorts, k) end
   table.sort(chipPorts)
 
   local handle
@@ -486,17 +486,17 @@ local function layoutPortRow(nv, dir, mx, my, keep, forceSide)
           w = PORT_SIZE, h = PORT_SIZE,
         }
         placeOnRow(s, r)
-        slots[#slots + 1] = s
+        util.add(slots, s)
       end
     end
   end
   if showMidi then
-    slots[#slots + 1] = {
+    util.add(slots, {
       kind = 'midi', name = midi[1], inBody = true,
       x = bx1 - MIDI_SLOT_W - MIDI_INSET,
       y = math.floor((by0 + by1 - MIDI_SLOT_H) / 2),
       w = MIDI_SLOT_W, h = MIDI_SLOT_H,
-    }
+    })
   end
 
   -- bandRect is the slot/handle bbox (with hit pad); the band-level bg
@@ -810,9 +810,9 @@ local function wireGroups(wireViews)
     if not g then
       g = { canonA = a, canonB = b, wires = {} }
       groups[key] = g
-      order[#order + 1] = key
+      util.add(order, key)
     end
-    g.wires[#g.wires + 1] = w
+    util.add(g.wires, w)
   end
   -- Sort audio wires by labelling cost so the cheap ones take the low slots
   -- near the node (1-1 < 1-n/n-1 < n-m); MIDI sorts after audio.
@@ -956,7 +956,7 @@ local function drawWireEndLabel(p, ax, ay, fx, fy, exitD, portIdx, portName, idS
   end
   local cx, cy = ax + labelDist * ux, ay + labelDist * uy
   local x0, y0, x1, y1 = cx - hw, cy - hh, cx + hw, cy + hh
-  placed[#placed + 1] = { cx = cx, cy = cy, hw = hw, hh = hh }
+  util.add(placed, { cx = cx, cy = cy, hw = hw, hh = hh })
   p.fill(rect(x0, y0, x1, y1), 'bg')
   p.text(math.floor(cx - tw / 2), math.floor(cy - th / 2),
          name, txt, wireFont, WIRE_LABEL_SIZE)
@@ -1897,7 +1897,7 @@ local function renderCanvas(w, h)
   local frontIds  = {}
   local function add(pick)
     if not pick or pick.viaBar or frontIds[pick.nv.id] then return end
-    overlays[#overlays + 1] = pick
+    util.add(overlays, pick)
     frontIds[pick.nv.id] = true
   end
   add(sourceHit)
@@ -2647,7 +2647,7 @@ renderFxPicker = function(pck)
   local matches = {}
   for _, fx in ipairs(pck.items) do
     if buf == '' or fx.name:lower():find(lf, 1, true) then
-      matches[#matches + 1] = fx
+      util.add(matches, fx)
     end
   end
   if ImGui.IsWindowAppearing(ctx) or buf ~= prev then pck.cursor = 1 end

@@ -70,7 +70,7 @@ function midiBlob.parse(blob)
       util.add(notes, note)
       local key = (status & 0x0F) * 128 + b2
       local q = pending[key]; if not q then q = {}; pending[key] = q end
-      q[#q + 1] = note
+      util.add(q, note)
     elseif hi == 0x80 or hi == 0x90 then   -- note-off (incl. note-on with vel 0)
       local q = pending[(status & 0x0F) * 128 + b2]
       if q and q[1] then table.remove(q, 1).endppq = ppq end
@@ -376,7 +376,7 @@ local function keysOfSlot(stream, slot, st)
   else
     keys[1] = packKey(st.ppq, 2, seq2)
     if st.shape == 'bezier' then keys[2] = packKey(st.ppq, 2, seq2 + 1) end   -- CCBZ rider
-    if st.sidePpq then keys[#keys + 1] = packKey(st.sidePpq, 4, seq2) end
+    if st.sidePpq then util.add(keys, packKey(st.sidePpq, 4, seq2)) end
   end
   return keys
 end
@@ -406,11 +406,11 @@ function midiBlob.syncSlots(wire, dirt)
       local old = keysOfSlot(stream, slot, before)
       local new = keysOfSlot(stream, slot, midiBlob.slotState(wire, stream, slot))
       for i = 1, #old do
-        if not holds(new, old[i]) then drops[#drops + 1] = old[i] end
+        if not holds(new, old[i]) then util.add(drops, old[i]) end
       end
       for i = 1, #new do
         local landing = holds(old, new[i]) and repacks or puts
-        landing[#landing + 1] = new[i]
+        util.add(landing, new[i])
       end
     end
   end

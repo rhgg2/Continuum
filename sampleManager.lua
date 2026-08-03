@@ -14,6 +14,7 @@
 --shape: trackState     = { fxGuid=string?, instanceId=number?, lastBootToken=number, slotSeq=number, pending={byOrder={int,...}, bySlot={[slot]=pendingEntry}} }
 --shape: mailboxHeader  = [seq, seq_ack, slot, op, start, end, pathLen, nameLen, <pathBytes...>, <nameBytes...>]   -- gmem words at SLOT_BASE+id*SLOT_STRIDE
 local fs   = require 'fs'
+local util = require 'util'
 
 local SAMPLER_FX            = 'Continuum Sampler'
 local GMEM_NS               = 'Continuum_sampler'
@@ -137,7 +138,7 @@ local function pushSlot(state, slot, opts)
   if not entry then
     entry = { slot = slot, op = 0 }
     state.pending.bySlot[slot] = entry
-    state.pending.byOrder[#state.pending.byOrder + 1] = slot
+    util.add(state.pending.byOrder, slot)
   end
   if opts.op == 1 then
     entry.op     = 1
@@ -391,9 +392,9 @@ function sm:listTracks()
     local t = reaper.GetTrack(0, i)
     if findSamplerFx(t) then
       local _, trackName = reaper.GetTrackName(t)
-      out[#out + 1] = { track      = t,
+      util.add(out, { track      = t,
                         name       = trackName ~= '' and trackName or '(unnamed)',
-                        instanceId = self:getInstanceId(t) }
+                        instanceId = self:getInstanceId(t) })
     end
   end
   return out

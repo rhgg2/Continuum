@@ -46,6 +46,7 @@
   @use call    coord:setActive  @ Main:145,146,147,148,149,150,151,152,153,154
   @use call    coord:togglePage  @ Main:155
   @use call    perf.toggle  @ Main:159
+  @use call    util.add  @ Main:110,118
   @use call    util.instantiate  @ Main:70,71,72,73,74,75
   @use require commandManager  @ Main:74
   @use require configManager  @ Main:71

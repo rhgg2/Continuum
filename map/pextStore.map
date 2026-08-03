@@ -112,6 +112,7 @@
 # Uses (outbound edges)
   @use call    scratch.peek  @ seedMirror:114 ensureScratch:174
   @use call    scratch.track  @ mirrorAssign:195
+  @use call    util.add  @ knownSlots:140 resyncMirror:229,243 declareUndoable:395 watch:401 pollUndo:426
   @use call    util.hash  @ bucketOf:106 writeBucketAndRoot:131 remirrorMissing:157 mirrorAssign:202
   @use call    util.installHooks  @ <load>:338
   @use call    util.prettySerialise  @ encode:294

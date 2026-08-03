@@ -99,6 +99,8 @@
   @call nonFiniteNote  @ emitTable:594,599
   @call prettyEmit  @ emitTable:587,594,597,599 prettySerialise:616
   @call print  @ print_r:37
+  @call util.add  @ print_r:26,30,32 picker:85 bucket:113 keys:139 compact:146 serialise:407 unserialise:445,454,465 emitTable:576
+  @call util.add  @ emitTable:594,599
   @call util.assign  @ picker:93 pick:105
   @call util.clamp  @ nudgedScalar:286
   @call util.clone  @ clone:192 deepClone:198

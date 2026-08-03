@@ -145,6 +145,7 @@
   @use call    modalHost:draw  @ frame:278
   @use call    modalHost:isOpen  @ cmgr:toggleHelp:37
   @use call    modalHost:tick  @ tick:70
+  @use call    util.add  @ frame:202 onExternalCommand:353
   @use call    util.assign  @ register:295
   @use call    util.instantiate  @ <load>:21,26,29,30,31,362 register:295
   @use require bridge  @ <load>:362

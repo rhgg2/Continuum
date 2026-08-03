@@ -1,62 +1,69 @@
-@module fs  src=fs.lua  loc=121  mode=namespace  self=fs
+@module fs  src=fs.lua  loc=123  mode=namespace  self=fs
 
 # Shapes
-  @shape  fileOps = { copy(src,dst)->bool, move(src,dst)->bool, mkdir(dir), exists(path)->bool, hash(path)->string }  @ 107
+  @shape  fileOps = { copy(src,dst)->bool, move(src,dst)->bool, mkdir(dir), exists(path)->bool, hash(path)->string }  @ 109
 
-# Module-level constants
-  @const fs = {}  @ 5
+# Imports
+  @const util = 'util'  @ 5
       @invariant  sole module touching reaper.Enumerate* and filesystem IO; UI/view layers route through here  @ 3
       @invariant  listDirs and listAudioFiles return case-insensitively sorted output (Finder/Explorer parity)  @ 4
-  @const AUDIO_EXTS = {  @ 7
+
+# Module-level constants
+  @const fs = {}  @ 7
+  @const AUDIO_EXTS = {  @ 9
 
 # Private functions
-  @fn ciLess(a, b)  @ 34
-  @fn copyFile(src, dst)  @ 95-105
+  @fn ciLess(a, b)  @ 36
+  @fn copyFile(src, dst)  @ 97-107
       -- 64KB chunks so big samples don't allocate a Lua string the size of the file.
 
 # Functions held in tables
-  @held fileOps.move(src, dst)  @ 111-115
-  @held fileOps.mkdir(dir)  @ 116
+  @held fileOps.move(src, dst)  @ 113-117
+  @held fileOps.mkdir(dir)  @ 118
 
 # Public API (fs.*)
-  @api fs.isAudio(name)  @ 12-16
-  @api fs.basename(path)  @ 18-20
-  @api fs.parent(path)  @ 23-25
-      @contract  returns '' if path has no separator; trailing separators on input are not stripped (caller passes canonical paths)  @ 22
-  @api fs.join(a, b)  @ 28-32
-      @contract  inserts '/' between a and b unless a already ends in '/' or '\\'; no path normalisation  @ 27
-  @api fs.listDirs(path)  @ 37-47
-      @contract  hides dotfile-prefixed entries (.git, .DS_Store, etc.)  @ 36
-  @api fs.exists(path)  @ 49-53
-  @api fs.readText(path)  @ 55-58
-  @api fs.hashFile(path)  @ 61-80
-      @contract  FNV-1a over (size, first 4KB, last 4KB); 8-char hex; non-cryptographic; see docs/fs.md  @ 60
-  @api fs.listAudioFiles(path)  @ 82-92
+  @api fs.isAudio(name)  @ 14-18
+  @api fs.basename(path)  @ 20-22
+  @api fs.parent(path)  @ 25-27
+      @contract  returns '' if path has no separator; trailing separators on input are not stripped (caller passes canonical paths)  @ 24
+  @api fs.join(a, b)  @ 30-34
+      @contract  inserts '/' between a and b unless a already ends in '/' or '\\'; no path normalisation  @ 29
+  @api fs.listDirs(path)  @ 39-49
+      @contract  hides dotfile-prefixed entries (.git, .DS_Store, etc.)  @ 38
+  @api fs.exists(path)  @ 51-55
+  @api fs.readText(path)  @ 57-60
+  @api fs.hashFile(path)  @ 63-82
+      @contract  FNV-1a over (size, first 4KB, last 4KB); 8-char hex; non-cryptographic; see docs/fs.md  @ 62
+  @api fs.listAudioFiles(path)  @ 84-94
+
+# Uses (outbound edges)
+  @use call    util.add  @ listDirs:44 listAudioFiles:89
+  @use require util  @ <load>:5
 
 # Calls (intra-file)
-  @call copyFile  @ fileOps.move:113
-  @call fs.isAudio  @ listAudioFiles:87
+  @call copyFile  @ fileOps.move:115
+  @call fs.isAudio  @ listAudioFiles:89
 
 # Bindings (by name)
-  @bind ciLess  @ listDirs:45 listAudioFiles:90
-  @bind copyFile  @ 109
+  @bind ciLess  @ listDirs:47 listAudioFiles:92
+  @bind copyFile  @ 111
 
 # Unresolved receivers
-  @drop a:lower  @ ciLess:34
-  @drop a:sub  @ join:29
-  @drop b:lower  @ ciLess:34
-  @drop data:byte  @ hashFile:77
-  @drop ext:lower  @ isAudio:15
-  @drop f:close  @ exists:51 readText:57 hashFile:73
-  @drop f:read  @ readText:57 hashFile:67,71
-  @drop f:seek  @ hashFile:64,65,66,70
-  @drop fin:close  @ copyFile:97,103
-  @drop fin:read  @ copyFile:99
-  @drop fout:close  @ copyFile:103
-  @drop fout:write  @ copyFile:101
-  @drop name:match  @ isAudio:13
-  @drop path:match  @ basename:19 parent:24
-  @drop sub:sub  @ listDirs:42
+  @drop a:lower  @ ciLess:36
+  @drop a:sub  @ join:31
+  @drop b:lower  @ ciLess:36
+  @drop data:byte  @ hashFile:79
+  @drop ext:lower  @ isAudio:17
+  @drop f:close  @ exists:53 readText:59 hashFile:75
+  @drop f:read  @ readText:59 hashFile:69,73
+  @drop f:seek  @ hashFile:66,67,68,72
+  @drop fin:close  @ copyFile:99,105
+  @drop fin:read  @ copyFile:101
+  @drop fout:close  @ copyFile:105
+  @drop fout:write  @ copyFile:103
+  @drop name:match  @ isAudio:15
+  @drop path:match  @ basename:21 parent:26
+  @drop sub:sub  @ listDirs:44
 
 # REAPER API surface
   @reaper EnumerateSubdirectories
@@ -64,27 +71,27 @@
   @reaper RecursiveCreateDirectory
 
 # Fields (r read / w write incl. constructor keys)
-  @field w aif  @ 8
-  @field w aiff  @ 8
-  @field w basename  @ basename:18
-  @field w copy  @ 109
-  @field r exists  @ 117
-  @field w exists  @ exists:49 117
-  @field w fileOps  @ 108
-  @field w flac  @ 8
-  @field w hash  @ 118
-  @field r hashFile  @ 118
-  @field w hashFile  @ hashFile:61
-  @field w isAudio  @ isAudio:12
-  @field w join  @ join:28
-  @field w listAudioFiles  @ listAudioFiles:82
-  @field w listDirs  @ listDirs:37
-  @field w m4a  @ 9
-  @field w mkdir  @ fileOps.mkdir:116
-  @field w move  @ fileOps.move:111
-  @field w mp3  @ 9
-  @field w ogg  @ 9
-  @field w opus  @ 9
-  @field w parent  @ parent:23
-  @field w readText  @ readText:55
-  @field w wav  @ 8
+  @field w aif  @ 10
+  @field w aiff  @ 10
+  @field w basename  @ basename:20
+  @field w copy  @ 111
+  @field r exists  @ 119
+  @field w exists  @ exists:51 119
+  @field w fileOps  @ 110
+  @field w flac  @ 10
+  @field w hash  @ 120
+  @field r hashFile  @ 120
+  @field w hashFile  @ hashFile:63
+  @field w isAudio  @ isAudio:14
+  @field w join  @ join:30
+  @field w listAudioFiles  @ listAudioFiles:84
+  @field w listDirs  @ listDirs:39
+  @field w m4a  @ 11
+  @field w mkdir  @ fileOps.mkdir:118
+  @field w move  @ fileOps.move:113
+  @field w mp3  @ 11
+  @field w ogg  @ 11
+  @field w opus  @ 11
+  @field w parent  @ parent:25
+  @field w readText  @ readText:57
+  @field w wav  @ 10

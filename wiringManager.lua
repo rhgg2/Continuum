@@ -1155,7 +1155,7 @@ local function readGraph(snap, busMeta)
     local indeg, children, keys = {}, {}, {}
     for k, e in pairs(snap) do
       if e.trackKind ~= 'master' and e.trackKind ~= 'scratch' then
-        keys[#keys + 1] = k; indeg[k] = 0; children[k] = {}
+        util.add(keys, k); indeg[k] = 0; children[k] = {}
       end
     end
     for _, k in ipairs(keys) do

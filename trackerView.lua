@@ -1414,9 +1414,9 @@ local interpolate, interpolateValues do
           local endppq   = ctx:rowToPPQ(r2 + 1, col.midiChan)
           local evts = {}
           for evt in util.between(col.events, startppq, endppq) do
-            if notHidden(evt) then evts[#evts + 1] = evt end
+            if notHidden(evt) then util.add(evts, evt) end
           end
-          plans[#plans + 1] = { col = col, evts = evts }
+          util.add(plans, { col = col, evts = evts })
         end
       end
       for _, p in ipairs(plans) do
@@ -1469,10 +1469,10 @@ local function rewriteRegion(uuid, mutate)
   local out = {}
   for _, region in ipairs(ds:get('fxRegions') or {}) do
     if region.uuid ~= uuid then
-      out[#out + 1] = region
+      util.add(out, region)
     else
       local updated = mutate(region)
-      if updated then out[#out + 1] = updated end
+      if updated then util.add(out, updated) end
     end
   end
   ds:assign('fxRegions', next(out) and out or util.REMOVE)
@@ -1540,20 +1540,20 @@ local noteOff, adjustDuration, adjustPosition, shiftFxLane do
     local out = {}
     if before <= lane - 1 then
       for _, region in ipairs(regions) do
-        out[#out + 1] = (region.uuid == uuid) and moved or region
+        util.add(out, (region.uuid == uuid) and moved or region)
       end
     else
       local seen, inserted = 0, false
       for _, region in ipairs(regions) do
         if region.uuid ~= uuid then
           if not inserted and overlaps(region) and seen >= lane - 1 then
-            out[#out + 1] = moved; inserted = true
+            util.add(out, moved); inserted = true
           end
           if not inserted and overlaps(region) then seen = seen + 1 end
-          out[#out + 1] = region
+          util.add(out, region)
         end
       end
-      if not inserted then out[#out + 1] = moved end
+      if not inserted then util.add(out, moved) end
     end
     ds:assign('fxRegions', out)
     pa:apply()
@@ -1620,7 +1620,7 @@ local noteOff, adjustDuration, adjustPosition, shiftFxLane do
     local sib = cursorRegionBefore(adjCol)
     if not sib or cell.ppq >= sib.endppqC or cell.endppqC <= sib.ppq then return end
     local out = {}
-    for _, region in ipairs(ds:get('fxRegions') or {}) do out[#out + 1] = region end
+    for _, region in ipairs(ds:get('fxRegions') or {}) do util.add(out, region) end
     local i, j
     for k, region in ipairs(out) do
       if     region.uuid == cell.uuid then i = k
@@ -2352,8 +2352,8 @@ local function mintRegionForSelection()
                    startppq = tv:rowToPPQ(row1, chan),
                    endppq   = tv:rowToPPQ(row2 + 1, chan), fx = {} }
   local out = {}
-  for _, existing in ipairs(ds:get('fxRegions') or {}) do out[#out + 1] = existing end
-  out[#out + 1] = region
+  for _, existing in ipairs(ds:get('fxRegions') or {}) do util.add(out, existing) end
+  util.add(out, region)
   ds:assign('fxRegions', out)
   return region.uuid, true
 end
@@ -2384,12 +2384,12 @@ end
 local function gatherFxRegions(r1, r2, c1, c2, anchorChan)
   local out = {}
   eachFxRegionInRect(r1, r2, c1, c2, function(region, chan)
-    out[#out + 1] = {
+    util.add(out, {
       chanDelta = chan - anchorChan,
       row       = ctx:ppqToRow(region.startppq, chan) - r1,
       endRow    = ctx:ppqToRow(region.endppq,   chan) - r1,
       fx        = util.deepClone(region.fx),
-    }
+    })
   end)
   return out
 end
@@ -2401,19 +2401,19 @@ local function pasteFxRegions(list)
   if not cursor then return end
   local cursorRow, cursorChan = ec:row(), cursor.midiChan
   local out = {}
-  for _, region in ipairs(ds:get('fxRegions') or {}) do out[#out + 1] = region end
+  for _, region in ipairs(ds:get('fxRegions') or {}) do util.add(out, region) end
   local nextN = maxFxRegionN(out)
   for _, entry in ipairs(list) do
     local chan = cursorChan + entry.chanDelta
     if chan >= 1 and chan <= 16 then
       nextN = nextN + 1
-      out[#out + 1] = {
+      util.add(out, {
         uuid     = 'fxr-' .. nextN,
         chan     = chan,
         startppq = ctx:rowToPPQ(cursorRow + entry.row,    chan),
         endppq   = ctx:rowToPPQ(cursorRow + entry.endRow, chan),
         fx       = util.deepClone(entry.fx),
-      }
+      })
     end
   end
   ds:assign('fxRegions', out)
@@ -2434,7 +2434,7 @@ local function deleteFxRegionsInRect(r1, r2, c1, c2)
   if not next(doomed) then return end
   local out = {}
   for _, region in ipairs(ds:get('fxRegions') or {}) do
-    if not doomed[region.uuid] then out[#out + 1] = region end
+    if not doomed[region.uuid] then util.add(out, region) end
   end
   ds:assign('fxRegions', next(out) and out or util.REMOVE)
   pa:apply()
@@ -2532,8 +2532,8 @@ end
 -- allowed). see docs/trackerView.md § Note FX stages
 function tv:addFxStage(uuid, entry)
   local list = {}
-  for _, e in ipairs(self:noteFx(uuid) or {}) do list[#list + 1] = e end
-  list[#list + 1] = util.deepClone(entry)
+  for _, e in ipairs(self:noteFx(uuid) or {}) do util.add(list, e) end
+  util.add(list, util.deepClone(entry))
   self:setNoteFx(uuid, list)
 end
 
@@ -2541,7 +2541,7 @@ function tv:removeFxStage(uuid, index)
   local fx = self:noteFx(uuid)
   if not (fx and fx[index]) then return end
   local list = {}
-  for i, e in ipairs(fx) do if i ~= index then list[#list + 1] = e end end
+  for i, e in ipairs(fx) do if i ~= index then util.add(list, e) end end
   self:setNoteFx(uuid, list)
 end
 
@@ -3171,7 +3171,7 @@ function tv:deletedCells(groupId, instId)
   for _, d in ipairs(gm:deletedCells(groupId, instId)) do
     local col, ix = colFor(d.evt)
     if col then
-      out[#out + 1] = { col = ix, row = ppqRowOf(d.evt.ppq, col.midiChan), vuid = d.vuid }
+      util.add(out, { col = ix, row = ppqRowOf(d.evt.ppq, col.midiChan), vuid = d.vuid })
     end
   end
   return out
@@ -3411,11 +3411,11 @@ function tv:listParams(trackGuid, fxGuid)
   for _, idx in ipairs(order) do hoisted[idx] = true end
   for _, idx in ipairs(order) do
     for _, prm in ipairs(params) do
-      if prm.index == idx then out[#out + 1] = prm; break end
+      if prm.index == idx then util.add(out, prm); break end
     end
   end
   for _, prm in ipairs(params) do
-    if not hoisted[prm.index] then out[#out + 1] = prm end
+    if not hoisted[prm.index] then util.add(out, prm) end
   end
   return out
 end
@@ -3640,7 +3640,7 @@ local lastEpochSig   -- projection-epoch signature carried from the last rebuild
 local function projectionEpoch(length, numRows, rpb, ppqPerRow, timeSigs, temperKey)  -- luacheck: ignore 431
   local parts = { length, numRows, rpb, ppqPerRow, temperKey }
   for _, ts in ipairs(timeSigs) do
-    parts[#parts + 1] = (ts.ppq or 0) .. ':' .. (ts.num or 0) .. '/' .. (ts.denom or 0)
+    util.add(parts, (ts.ppq or 0) .. ':' .. (ts.num or 0) .. '/' .. (ts.denom or 0))
   end
   return table.concat(parts, '|')
 end
@@ -4058,7 +4058,7 @@ do
   for i = 0, 9 do keep['advBy' .. i] = true end
   local clearOn = {}
   for name in pairs(tracker.registered) do
-    if not keep[name] then clearOn[#clearOn + 1] = name end
+    if not keep[name] then util.add(clearOn, name) end
   end
   cmgr:doBefore(clearOn, function() dupeState = nil end)
 end
@@ -4104,8 +4104,8 @@ function tv:wireGroupLifetime()
   cmgr:doBefore('copy', function() groupSrc = tv:selectionAsRect() end)
   local clearOn, dupClearOn = {}, {}
   for name in pairs(tracker.registered) do
-    if not GROUP_KEEP[name] then clearOn[#clearOn + 1]    = name end
-    if not DUP_KEEP[name]   then dupClearOn[#dupClearOn+1] = name end
+    if not GROUP_KEEP[name] then util.add(clearOn, name) end
+    if not DUP_KEEP[name]   then util.add(dupClearOn, name) end
   end
   cmgr:doBefore(clearOn, function() groupSrc = nil; gm:clearActive() end)
   cmgr:doBefore(dupClearOn, function() groupDupState = nil end)

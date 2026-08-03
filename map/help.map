@@ -129,7 +129,7 @@
   @use call    cmgr:keySpec  @ dropChord:391,394
   @use call    cmgr:keysFor  @ layoutBox:186 rebindWithout:381 dropChord:393
   @use call    cmgr:rebind  @ rebindWithout:385 dropChord:397
-  @use call    util.add  @ layoutCluster:84,97 drawTag:135 drawCluster:165 layoutBox:185 drawConflict:266 placePins:282,304 placeFlow:323 buildDismissKeys:332,343 draw:517,519
+  @use call    util.add  @ layoutCluster:84,97 drawTag:135 drawCluster:165 layoutBox:185 drawConflict:266 placePins:282,304 placeFlow:323 buildDismissKeys:332,343 buildSpec:373 rebindWithout:382,384 dropChord:395 draw:517,519
   @use require imgui  @ <load>:8
   @use require util  @ <load>:9
 

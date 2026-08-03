@@ -312,7 +312,7 @@
   @use call    perf.line  @ resolveCollisions:966,983
   @use call    perf.start  @ rebuild:473,474,478,481 flushTake:527,533,545 load:595,630 leaveNest:1045 modify:1061,1065
   @use call    perf.stop  @ rebuild:477,480,514,515 flushTake:540,543,554 load:605,634,915 leaveNest:1045 modify:1061,1065
-  @use call    util.add  @ rebuild:495,504 load:644,645,648,649,651,701,707,729,735,754,782,859,865,866 resolveCollisions:960,964,981 timeSigs:1495
+  @use call    util.add  @ freeSlot:373 rebuild:495,504 load:644,645,648,649,651,701,707,729,735,754,782,859,865,866 resolveCollisions:960,964,981 timeSigs:1495
   @use call    util.assign  @ rebuild:500,507 load:644,648,672,783 assignNote:1115,1131 assignCC:1217,1232
   @use call    util.bucket  @ load:661,686,698,723,770,771
   @use call    util.clamp  @ bezierSample:120

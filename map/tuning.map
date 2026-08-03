@@ -1,4 +1,4 @@
-@module tuning  src=tuning.lua  loc=464  mode=namespace  self=tuning
+@module tuning  src=tuning.lua  loc=466  mode=namespace  self=tuning
 
 # Invariants & contracts
   @invariant  pure coordinate-system module: no module state, no take state, no pb / detune realisation logic  @ 4
@@ -10,174 +10,181 @@
 # Shapes
   @shape  Temper = {name, periodPitch=token, pitches=token[ascending], stepNames=string[], periodAsStep=bool, cents=number[derived], period=cents[derived], octaveStep=int, octaveWidth=int, cellWidth=int}  @ 9
 
+# Imports
+  @const util = 'util'  @ 10
+
 # Module-level constants
-  @const tuning = {}  @ 10
-  @const RATIO_CAP = 1 << 40  @ 314
+  @const tuning = {}  @ 12
+  @const RATIO_CAP = 1 << 40  @ 316
 
 # Private functions
   -- Temperament presets
-  @fn computeOctaveStep(stepNames, n)  @ 16-22
+  @fn computeOctaveStep(stepNames, n)  @ 18-24
       -- octaveStep: first step whose label reads as the next octave's C. Scans from
       -- the end for the last non-C name; nameless scale → bump at period (n+1).
-  @fn octaveLabel(o)  @ 26-28
+  @fn octaveLabel(o)  @ 28-30
       -- Octave -1 renders as "M" so the bottom (the cents-0 anchor) stays one char,
       -- matching MIDI's C-1. See docs/tuning.md § Addressable range.
-  @fn octaveFieldWidth(temper)  @ 32-34
+  @fn octaveFieldWidth(temper)  @ 34-36
       -- octaveFieldWidth: char width of the octave field, fixed by the top of the
       -- natural [0,12700]¢ range (floor at -1 ⇒ "M"). See docs/tuning.md § Display.
-  @fn computeCellWidth(temper)  @ 37-46
+  @fn computeCellWidth(temper)  @ 39-48
       -- cellWidth: widest step label + the octave field; see docs/tuning.md § Display.
-  @fn edo(n, names)  @ 86-95
+  @fn edo(n, names)  @ 88-97
   -- Scala import
   -- Generators
-  @fn gcd(a, b)  @ 259
-  @fn combinations(n, k)  @ 262-270
+  @fn gcd(a, b)  @ 261
+  @fn combinations(n, k)  @ 264-272
       -- Every k-subset of 1..n as a list of 1-based index lists.
-  @fn reduceCents(c, period)  @ 301-303
+  @fn reduceCents(c, period)  @ 303-305
       -- Reduce a cents value into [0, period).
-  @fn asRatio(token)  @ 305-310
-  @fn stackRatio(gn, gd, pn, pd, k)  @ 315-326
-  @fn stepSpectrum(g, p, n)  @ 330-344
+  @fn asRatio(token)  @ 307-312
+  @fn stackRatio(gn, gd, pn, pd, k)  @ 317-328
+  @fn stepSpectrum(g, p, n)  @ 332-346
       -- Adjacent step sizes (incl. the wrap step) of an n-note chain of `g`
       -- reduced into `p`: {cents, count} per distinct size, large first.
 
 # Public API (tuning.*)
-  @api tuning.scalaPitch(token)  @ 49-67
-      @contract  token → cents or nil: n/d, int, '.'=cents, n\m, n\m<equave> step (equave dflt 2/1).  @ 48
-  @api tuning.derive(temper)  @ 70-84
-      @contract  pitches→cents, periodPitch→period; stamps octaveStep + cellWidth. Pure; returns temper.  @ 69
-  @api tuning.findTemper(name, userLib)  @ 120-123
-      @contract  userLib first, then presets; nil when unknown to both; '12EDO' resolves via presets  @ 119
-  @api tuning.parseScalaPitches(text)  @ 129-136
+  @api tuning.scalaPitch(token)  @ 51-69
+      @contract  token → cents or nil: n/d, int, '.'=cents, n\m, n\m<equave> step (equave dflt 2/1).  @ 50
+  @api tuning.derive(temper)  @ 72-86
+      @contract  pitches→cents, periodPitch→period; stamps octaveStep + cellWidth. Pure; returns temper.  @ 71
+  @api tuning.findTemper(name, userLib)  @ 122-125
+      @contract  userLib first, then presets; nil when unknown to both; '12EDO' resolves via presets  @ 121
+  @api tuning.parseScalaPitches(text)  @ 131-138
       -- Lenient: every non-blank, non-'!' line is a pitch token. Drives paste + the
       -- import Create button (which re-parses the box after any manual edits).
-  @api tuning.parseScalaFile(text)  @ 140-154
+  @api tuning.parseScalaFile(text)  @ 142-156
       -- Strict .scl: drop '!' comment lines, then [description, count, pitch x count].
       -- Returns pitch tokens + description (suggested name) for the Scala load path.
-  @api tuning.scalaToTemper(pitchLines, name)  @ 158-176
+  @api tuning.scalaToTemper(pitchLines, name)  @ 160-178
       -- Bridge Scala's convention (unison implicit, period last) to Continuum's
       -- (step 1 = 1/1, period separate): prepend unison, split off final as period.
-  @api tuning.edoDegrees(spec, mode)  @ 182-199
+  @api tuning.edoDegrees(spec, mode)  @ 184-201
       -- Equal-division subset spec -> ascending degrees; largest is the period.
       -- 'relative': cumulative step counts. 'absolute': sorted+deduped. nil on bad token.
-  @api tuning.degreesToSpec(degrees, mode)  @ 203-208
+  @api tuning.degreesToSpec(degrees, mode)  @ 205-210
       -- Inverse of edoDegrees: render a degree list back as a spec string in `mode`.
       -- Lets a mode switch convert the in-flight pattern rather than reset it.
-  @api tuning.genEqual(degrees, interval)  @ 212-218
+  @api tuning.genEqual(degrees, interval)  @ 214-220
       -- N-equal-divisions of `interval` subset to `degrees`; tokens are intensional
       -- (d\D<equave>, suffix omitted for octave). Base 0 implicit; last degree = period.
-  @api tuning.genHarmonics(lo, hi)  @ 222-226
+  @api tuning.genHarmonics(lo, hi)  @ 224-228
       -- Harmonic-series segment lo..hi: ratios m/lo rooted on the low harmonic, the
       -- top (hi/lo) the period.
-  @api tuning.genSubharmonics(lo, hi)  @ 229-233
+  @api tuning.genSubharmonics(lo, hi)  @ 231-235
       -- Subharmonic (utonal) segment lo..hi: ratios hi/m ascending, top the period.
-  @api tuning.parseChord(spec)  @ 237-246
+  @api tuning.parseChord(spec)  @ 239-248
       -- Colon/space-separated extended ratio (e.g. '4:5:6:7') -> positive integers,
       -- at least two. nil + message otherwise.
-  @api tuning.genChord(members, invert)  @ 250-257
+  @api tuning.genChord(members, invert)  @ 252-259
       -- Enumerate a chord as a scale rooted on its first note. otonal: ci/c1.
       -- inverted (utonal): ck/c(k+1-i). The last member is the period either way.
-  @api tuning.genCPS(factors, k, equave)  @ 274-298
+  @api tuning.genCPS(factors, k, equave)  @ 276-300
       -- Combination product set: every k-subset's product, rooted on the smallest
       -- product (so 1/1 is always present) and reduced into the equave; ascending.
-  @api tuning.genRank2(generator, period, size, up)  @ 348-367
+  @api tuning.genRank2(generator, period, size, up)  @ 350-369
       -- Rank-2 scale: stack the generator `up` above and `size-1-up` below 1/1,
       -- reduce into period, sort. up = mode. Exact ratios if inputs rational, else cents.
-  @api tuning.mosInfo(generator, period, n)  @ 370-374
-      @contract  {isMos, large, small} for an n-note chain; large/small are L/s step counts when isMos  @ 369
-  @api tuning.nextMosSize(generator, period, fromN, dir)  @ 377-385
-      @contract  next MOS size (two step sizes) from fromN, stepping dir (+/-1); nil past the cap  @ 376
+  @api tuning.mosInfo(generator, period, n)  @ 372-376
+      @contract  {isMos, large, small} for an n-note chain; large/small are L/s step counts when isMos  @ 371
+  @api tuning.nextMosSize(generator, period, fromN, dir)  @ 379-387
+      @contract  next MOS size (two step sizes) from fromN, stepping dir (+/-1); nil past the cap  @ 378
   -- Coordinate conversions
-  @api tuning.midiToStep(temper, midi, detune)  @ 391-410
-      @contract  detune optional (defaults 0); snaps to nearest scale point including the period boundary (rounds up to step 1 of next octave)  @ 389
-      @contract  returned octave is MIDI-relative (C-1 → -1)  @ 390
-  @api tuning.stepToMidi(temper, step, octave)  @ 413-429
-      @contract  wraps out-of-range step by adjusting octave; clamps midi to 0..127 by folding overflow into detune (never silently drops)  @ 412
-  @api tuning.snap(temper, midi, detune)  @ 431-433
-  @api tuning.transposeStep(temper, midi, detune, n)  @ 436-439
-      @contract  moves by n scale steps under temper, carrying the octave; n may be negative  @ 435
-  @api tuning.stepsBetween(temper, aMidi, aDetune, bMidi, bDetune)  @ 442-446
-      @contract  signed count of whole temper steps from note a to note b, each snapped to nearest step  @ 441
+  @api tuning.midiToStep(temper, midi, detune)  @ 393-412
+      @contract  detune optional (defaults 0); snaps to nearest scale point including the period boundary (rounds up to step 1 of next octave)  @ 391
+      @contract  returned octave is MIDI-relative (C-1 → -1)  @ 392
+  @api tuning.stepToMidi(temper, step, octave)  @ 415-431
+      @contract  wraps out-of-range step by adjusting octave; clamps midi to 0..127 by folding overflow into detune (never silently drops)  @ 414
+  @api tuning.snap(temper, midi, detune)  @ 433-435
+  @api tuning.transposeStep(temper, midi, detune, n)  @ 438-441
+      @contract  moves by n scale steps under temper, carrying the octave; n may be negative  @ 437
+  @api tuning.stepsBetween(temper, aMidi, aDetune, bMidi, bDetune)  @ 444-448
+      @contract  signed count of whole temper steps from note a to note b, each snapped to nearest step  @ 443
   -- Display
-  @api tuning.stepToParts(temper, step, octave)  @ 451-456
-      @contract  returns (note, octaveLabel); named ⇒ name, nameless ⇒ degree+'-'; octave+1 at octaveStep  @ 450
-  @api tuning.stepToText(temper, step, octave)  @ 459-462
-      @contract  name ⇒ name+octave (C-4); blank/absent ⇒ degree-octave (7-4). Octave +1 at octaveStep.  @ 458
+  @api tuning.stepToParts(temper, step, octave)  @ 453-458
+      @contract  returns (note, octaveLabel); named ⇒ name, nameless ⇒ degree+'-'; octave+1 at octaveStep  @ 452
+  @api tuning.stepToText(temper, step, octave)  @ 461-464
+      @contract  name ⇒ name+octave (C-4); blank/absent ⇒ degree-octave (7-4). Octave +1 at octaveStep.  @ 460
+
+# Uses (outbound edges)
+  @use call    util.add  @ parseScalaPitches:135 parseScalaFile:145,152 scalaToTemper:170 edoDegrees:189,194,199 degreesToSpec:208 genHarmonics:226 genSubharmonics:233 parseChord:244 combinations:267 genCPS:285 stepSpectrum:334,342 genRank2:363
+  @use require util  @ <load>:10
 
 # Calls (intra-file)
-  @call asRatio  @ genRank2:351,352
-  @call combinations  @ genCPS:280
-  @call computeCellWidth  @ derive:82
-  @call computeOctaveStep  @ derive:80
-  @call edo  @ <load>:98,101,105,110
-  @call gcd  @ genCPS:292 stackRatio:324
-  @call octaveFieldWidth  @ computeCellWidth:45 derive:81
-  @call octaveLabel  @ octaveFieldWidth:33 stepToParts:455
-  @call reduceCents  @ stepSpectrum:332 genRank2:358
-  @call stackRatio  @ genRank2:357
-  @call stepSpectrum  @ mosInfo:371 nextMosSize:381
-  @call tuning.derive  @ edo:89 scalaToTemper:169
-  @call tuning.midiToStep  @ snap:432 transposeStep:437 stepsBetween:443,444
-  @call tuning.scalaPitch  @ scalaPitch:57 derive:73,77 scalaToTemper:161,166 genCPS:296 genRank2:353 mosInfo:371 nextMosSize:378
-  @call tuning.stepToMidi  @ snap:432 transposeStep:438
-  @call tuning.stepToParts  @ stepToText:460
+  @call asRatio  @ genRank2:353,354
+  @call combinations  @ genCPS:282
+  @call computeCellWidth  @ derive:84
+  @call computeOctaveStep  @ derive:82
+  @call edo  @ <load>:100,103,107,112
+  @call gcd  @ genCPS:294 stackRatio:326
+  @call octaveFieldWidth  @ computeCellWidth:47 derive:83
+  @call octaveLabel  @ octaveFieldWidth:35 stepToParts:457
+  @call reduceCents  @ stepSpectrum:334 genRank2:360
+  @call stackRatio  @ genRank2:359
+  @call stepSpectrum  @ mosInfo:373 nextMosSize:383
+  @call tuning.derive  @ edo:91 scalaToTemper:171
+  @call tuning.midiToStep  @ snap:434 transposeStep:439 stepsBetween:445,446
+  @call tuning.scalaPitch  @ scalaPitch:59 derive:75,79 scalaToTemper:163,168 genCPS:298 genRank2:355 mosInfo:373 nextMosSize:380
+  @call tuning.stepToMidi  @ snap:434 transposeStep:440
+  @call tuning.stepToParts  @ stepToText:462
 
 # Unresolved receivers
-  @drop equave:match  @ genCPS:276,277
-  @drop line:match  @ parseScalaPitches:132 parseScalaFile:143
-  @drop nm:sub  @ computeOctaveStep:19
-  @drop s:sub  @ parseScalaPitches:133
-  @drop spec:gmatch  @ edoDegrees:184 parseChord:239
-  @drop token:find  @ scalaPitch:62
-  @drop token:match  @ scalaPitch:50,52,53,63,65 asRatio:306,308
+  @drop equave:match  @ genCPS:278,279
+  @drop line:match  @ parseScalaPitches:134 parseScalaFile:145
+  @drop nm:sub  @ computeOctaveStep:21
+  @drop s:sub  @ parseScalaPitches:135
+  @drop spec:gmatch  @ edoDegrees:186 parseChord:241
+  @drop token:find  @ scalaPitch:64
+  @drop token:match  @ scalaPitch:52,54,55,65,67 asRatio:308,310
 
 # Fields (r read / w write incl. constructor keys)
-  @field w cellWidth  @ derive:82
-  @field r cents  @ computeCellWidth:38 derive:79 stepSpectrum:338,342 genRank2:363 midiToStep:397 stepToMidi:414 stepsBetween:445
-  @field w cents  @ derive:74 stepSpectrum:340 genRank2:361
-  @field r count  @ stepSpectrum:339 mosInfo:373
-  @field w count  @ stepSpectrum:339,340
-  @field w degreesToSpec  @ degreesToSpec:203
-  @field w derive  @ derive:70
-  @field w edoDegrees  @ edoDegrees:182
-  @field w findTemper  @ findTemper:120
-  @field w genCPS  @ genCPS:274
-  @field w genChord  @ genChord:250
-  @field w genEqual  @ genEqual:212
-  @field w genHarmonics  @ genHarmonics:222
-  @field w genRank2  @ genRank2:348
-  @field w genSubharmonics  @ genSubharmonics:229
-  @field w isMos  @ mosInfo:372,373
-  @field w large  @ mosInfo:373
-  @field w midiToStep  @ midiToStep:391
-  @field w mosInfo  @ mosInfo:370
-  @field w name  @ edo:90 scalaToTemper:170
-  @field w nextMosSize  @ nextMosSize:377
-  @field r octaveStep  @ stepToParts:452
-  @field w octaveStep  @ derive:80
-  @field w octaveWidth  @ derive:81
-  @field w parseChord  @ parseChord:237
-  @field w parseScalaFile  @ parseScalaFile:140
-  @field w parseScalaPitches  @ parseScalaPitches:129
-  @field r period  @ octaveFieldWidth:33 derive:77 midiToStep:394 stepToMidi:418
-  @field w period  @ derive:77
-  @field w periodAsStep  @ scalaToTemper:174 genEqual:217 genHarmonics:225 genSubharmonics:232 genChord:256 genCPS:297 genRank2:366
-  @field r periodPitch  @ derive:76,77
-  @field w periodPitch  @ edo:91 scalaToTemper:171 genEqual:217 genHarmonics:225 genSubharmonics:232 genChord:256 genCPS:297 genRank2:366
-  @field r pitches  @ derive:71,73
-  @field w pitches  @ edo:92 scalaToTemper:172 genEqual:217 genHarmonics:225 genSubharmonics:232 genChord:256 genCPS:297 genRank2:366
-  @field r presets  @ findTemper:122
-  @field w presets  @ 97
-  @field w scalaPitch  @ scalaPitch:49
-  @field w scalaToTemper  @ scalaToTemper:158
-  @field w small  @ mosInfo:373
-  @field w snap  @ snap:431
-  @field r stepNames  @ computeCellWidth:38 derive:80 stepToParts:453
-  @field w stepNames  @ edo:93 scalaToTemper:173
-  @field w stepToMidi  @ stepToMidi:413
-  @field w stepToParts  @ stepToParts:451
-  @field w stepToText  @ stepToText:459
-  @field w stepsBetween  @ stepsBetween:442
-  @field r token  @ genRank2:365
-  @field w token  @ genRank2:361
-  @field w transposeStep  @ transposeStep:436
+  @field w cellWidth  @ derive:84
+  @field r cents  @ computeCellWidth:40 derive:81 stepSpectrum:340,344 genRank2:365 midiToStep:399 stepToMidi:416 stepsBetween:447
+  @field w cents  @ derive:76 stepSpectrum:342 genRank2:363
+  @field r count  @ stepSpectrum:341 mosInfo:375
+  @field w count  @ stepSpectrum:341,342
+  @field w degreesToSpec  @ degreesToSpec:205
+  @field w derive  @ derive:72
+  @field w edoDegrees  @ edoDegrees:184
+  @field w findTemper  @ findTemper:122
+  @field w genCPS  @ genCPS:276
+  @field w genChord  @ genChord:252
+  @field w genEqual  @ genEqual:214
+  @field w genHarmonics  @ genHarmonics:224
+  @field w genRank2  @ genRank2:350
+  @field w genSubharmonics  @ genSubharmonics:231
+  @field w isMos  @ mosInfo:374,375
+  @field w large  @ mosInfo:375
+  @field w midiToStep  @ midiToStep:393
+  @field w mosInfo  @ mosInfo:372
+  @field w name  @ edo:92 scalaToTemper:172
+  @field w nextMosSize  @ nextMosSize:379
+  @field r octaveStep  @ stepToParts:454
+  @field w octaveStep  @ derive:82
+  @field w octaveWidth  @ derive:83
+  @field w parseChord  @ parseChord:239
+  @field w parseScalaFile  @ parseScalaFile:142
+  @field w parseScalaPitches  @ parseScalaPitches:131
+  @field r period  @ octaveFieldWidth:35 derive:79 midiToStep:396 stepToMidi:420
+  @field w period  @ derive:79
+  @field w periodAsStep  @ scalaToTemper:176 genEqual:219 genHarmonics:227 genSubharmonics:234 genChord:258 genCPS:299 genRank2:368
+  @field r periodPitch  @ derive:78,79
+  @field w periodPitch  @ edo:93 scalaToTemper:173 genEqual:219 genHarmonics:227 genSubharmonics:234 genChord:258 genCPS:299 genRank2:368
+  @field r pitches  @ derive:73,75
+  @field w pitches  @ edo:94 scalaToTemper:174 genEqual:219 genHarmonics:227 genSubharmonics:234 genChord:258 genCPS:299 genRank2:368
+  @field r presets  @ findTemper:124
+  @field w presets  @ 99
+  @field w scalaPitch  @ scalaPitch:51
+  @field w scalaToTemper  @ scalaToTemper:160
+  @field w small  @ mosInfo:375
+  @field w snap  @ snap:433
+  @field r stepNames  @ computeCellWidth:40 derive:82 stepToParts:455
+  @field w stepNames  @ edo:95 scalaToTemper:175
+  @field w stepToMidi  @ stepToMidi:415
+  @field w stepToParts  @ stepToParts:453
+  @field w stepToText  @ stepToText:461
+  @field w stepsBetween  @ stepsBetween:444
+  @field r token  @ genRank2:367
+  @field w token  @ genRank2:363
+  @field w transposeStep  @ transposeStep:438

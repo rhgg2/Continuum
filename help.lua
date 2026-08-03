@@ -370,7 +370,7 @@ local function buildSpec(key, mods)
   if mods == ImGui.Mod_None then return key end
   local spec = { key }
   for _, mod in ipairs{ ImGui.Mod_Ctrl, ImGui.Mod_Shift, ImGui.Mod_Alt, ImGui.Mod_Super } do
-    if (mods & mod) ~= 0 then spec[#spec + 1] = mod end
+    if (mods & mod) ~= 0 then util.add(spec, mod) end
   end
   return spec
 end
@@ -379,9 +379,9 @@ end
 local function rebindWithout(cmd, drop, add)
   local specs = {}
   for _, spec in ipairs(cmgr:keysFor(cmd) or {}) do
-    if spec ~= drop then specs[#specs + 1] = spec end
+    if spec ~= drop then util.add(specs, spec) end
   end
-  if add then specs[#specs + 1] = add end
+  if add then util.add(specs, add) end
   cmgr:rebind(cmgr:bindingSite(cmd), cmd, specs, ImGui)
 end
 
@@ -392,7 +392,7 @@ local function dropChord(cmd, spec)
   local kept = {}
   for _, bound in ipairs(cmgr:keysFor(cmd) or {}) do
     local boundKey, boundMods = cmgr:keySpec(bound, ImGui)
-    if not (boundKey == key and boundMods == mods) then kept[#kept + 1] = bound end
+    if not (boundKey == key and boundMods == mods) then util.add(kept, bound) end
   end
   cmgr:rebind(cmgr:bindingSite(cmd), cmd, kept, ImGui)
 end

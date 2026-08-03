@@ -228,6 +228,7 @@
   @use call    tuning.parseScalaPitches  @ modalHost:temperImport:516
   @use call    tuning.scalaPitch  @ sortSteps:85 tokenBox:310 stepMos:628 drawRank2Fields:655 buildGen:672,702,703
   @use call    tuning.scalaToTemper  @ modalHost:temperImport:516
+  @use call    util.add  @ addStep:153 buildGen:686
   @use call    util.atomic  @ <load>:96,190,246,252
   @use call    util.deepClone  @ selectTemper:75 cloneForEdit:117 resetToSnapshot:172
   @use call    util.deepEq  @ dirty:167
@@ -411,8 +412,7 @@
   @field w periodAsStep  @ setPeriodAsStep:146 generateInto:181
   @field r periodPitch  @ generateInto:180 drawHeader:323 drawStepTable:410
   @field w periodPitch  @ setPeriodPitch:140 generateInto:180 openNewModal:435
-  @field r pitches  @ sortSteps:84,89 cloneForEdit:118,120 setStepPitch:128 addStep:153,154 removeStep:159,160 generateInto:179 drawStepRow:353
-  @field r pitches  @ drawStepTable:397
+  @field r pitches  @ sortSteps:84,89 cloneForEdit:118,120 setStepPitch:128 addStep:153,154 removeStep:159,160 generateInto:179 drawStepRow:353 drawStepTable:397
   @field w pitches  @ cloneForEdit:118 generateInto:179 openNewModal:435
   @field r project  @ buildDescriptor:271,277
   @field w project  @ buildDescriptor:277

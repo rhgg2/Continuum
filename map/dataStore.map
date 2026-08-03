@@ -73,6 +73,7 @@
   @use call    ps:get  @ loadScope:73,79 ps:watch:145
   @use call    ps:getAt  @ getAt:165
   @use call    ps:watch  @ <load>:142
+  @use call    util.add  @ <load>:129,138
   @use call    util.deepClone  @ copy:58
   @use call    util.installHooks  @ <load>:108
   @use call    util.print  @ print:15

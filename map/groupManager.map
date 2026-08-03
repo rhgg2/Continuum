@@ -189,6 +189,7 @@
   @use call    tm:deleteEvent  @ reproject:550 deleteInstance:633 moveInstance:676,682
   @use call    tm:length  @ onTake:149
   @use call    tm:requestRebuild  @ tm:preflush:583 deleteInstance:644 moveInstance:688 resizeGroup:853
+  @use call    util.add  @ eachInstance:484 deletedCells:503 resizeGroup:832
   @use call    util.assign  @ localAmend:569 assignEvent:774,791
   @use call    util.clone  @ rehydrate:242 markGroup:382 newInstance:411 reproject:542,548 moveInstance:679 assignEvent:773 resizeGroup:848
   @use require groups  @ <load>:11

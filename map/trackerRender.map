@@ -396,6 +396,7 @@
   @use call    tv:tick  @ renderBody:1481
   @use call    tv:unautomateParam  @ removeAutomation:205,208
   @use call    tv:wireGroupLifetime  @ <load>:1372
+  @use call    util.add  @ drawSampleDropdown:53,58 toolbarSegments.render:109,124 emitParams:274,276,280,282,287,289 buildPlan:311,319,321 navRows:334,336 destItems:925 chainRows:1003,1004 stripColumns:1020,1023 stripPlan:1041 kindItems:1152
   @use call    util.atomic  @ <load>:35,36,37 drawSampleDropdown:71 openNewTakeModal:1288
   @use call    util.clamp  @ adjustRow:937,951 clampCursor:1047,1049 handleFxChainKeys:1082,1099
   @use call    util.deepClone  @ launchPattern:914 enterStrip:1172 editFx:1264

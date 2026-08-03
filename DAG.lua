@@ -947,7 +947,7 @@ local function deriveMasterSplit(userGraph)
     while #stack > 0 do
       for _, nxt in ipairs(adj[table.remove(stack)] or {}) do
         if not seen[nxt] and not (blocked and blocked[nxt]) then
-          seen[nxt] = true; stack[#stack + 1] = nxt
+          seen[nxt] = true; util.add(stack, nxt)
         end
       end
     end

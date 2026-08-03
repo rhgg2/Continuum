@@ -276,13 +276,13 @@ local function lfo(stream, host, params, ctx)
     for _, p in ipairs(points) do
       local at = base + p.ppq * stretch
       if at > startL and at < endL and p.ppq < loop then
-        delta[#delta + 1] = { ppq = at, val = val(p.val), shape = p.shape, tension = p.tension }
+        util.add(delta, { ppq = at, val = val(p.val), shape = p.shape, tension = p.tension })
       end
     end
     base = base + period
   end
   local phaseEnd = ((endL - startL) % period) / stretch   -- authored ppq at the window's trailing edge
-  delta[#delta + 1] = { ppq = endL, val = val(curveAt(points, phaseEnd)), shape = 'linear' }
+  util.add(delta, { ppq = endL, val = val(curveAt(points, phaseEnd)), shape = 'linear' })
   return { notes = {}, delta = delta }
 end
 
@@ -449,7 +449,7 @@ function generators.destsFor(kind)
   if not declared then return {} end
   local dests = {}
   if declared ~= 'cc' then dests[1] = 'pb' end
-  if declared ~= 'pb' then for cc = 0, 127 do dests[#dests + 1] = cc end end
+  if declared ~= 'pb' then for cc = 0, 127 do util.add(dests, cc) end end
   return dests
 end
 
@@ -471,7 +471,7 @@ function generators.fieldsFor(entry)
   local fields = generators.kinds[entry.kind].fields
   if #generators.destsFor(entry.kind) < 2 then return fields end
   local rows = { DEST_FIELD }
-  for _, fd in ipairs(fields) do rows[#rows + 1] = fd end
+  for _, fd in ipairs(fields) do util.add(rows, fd) end
   return rows
 end
 

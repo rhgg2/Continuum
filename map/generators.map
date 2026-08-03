@@ -126,7 +126,7 @@
       @contract  tol bounds vertical error in the curve's own value unit; > tol keeps, == tol collapses  @ 572
 
 # Uses (outbound edges)
-  @use call    util.add  @ retrig:42 trill:66 playingAt:82 arp:116 ostinato:142 chordStamp:170 sine:194,198 slide:235 velPattern:293,303 parkWindows:544 thinCurve:585,610
+  @use call    util.add  @ retrig:42 trill:66 playingAt:82 arp:116 ostinato:142 chordStamp:170 sine:194,198 slide:235 lfo:279,285 velPattern:293,303 destsFor:452 fieldsFor:474 parkWindows:544 thinCurve:585,610
   @use call    util.assign  @ seed:482 retarget:497
   @use call    util.clamp  @ velPattern:304
   @use call    util.round  @ lfo:268 velPattern:304 seed:486 retarget:501

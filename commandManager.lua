@@ -235,7 +235,7 @@ local function asScope(s) return type(s) == 'string' and cmgr.scopes[s] or s end
 --contract: push(name|scope); creates a named scope if absent. Top-of-stack is the most recently pushed.
 function cmgr:push(s)
   s = type(s) == 'string' and self:scope(s) or s
-  self.stack[#self.stack + 1] = s
+  util.add(self.stack, s)
   return s
 end
 
@@ -292,7 +292,7 @@ function cmgr:keysFor(name) return resolveKeys(name) end
 function cmgr:keychain()
   local out = {}
   for i = #self.stack, 1, -1 do
-    out[#out + 1] = self.stack[i].keymap
+    util.add(out, self.stack[i].keymap)
     if self.stack[i].modal then
       local pass = self.stack[i].passthrough or {}
       for j = i - 1, 1, -1 do
@@ -300,7 +300,7 @@ function cmgr:keychain()
         for name, keys in pairs(self.stack[j].keymap) do
           if pass[name] then view[name] = keys end
         end
-        out[#out + 1] = view
+        util.add(out, view)
       end
       return out
     end
@@ -445,9 +445,9 @@ function cmgr:keyLabel(spec, ImGui)
   if mods == ImGui.Mod_Shift and shiftGlyph[key] then return shiftGlyph[key] end
   local parts = {}
   for _, m in ipairs(modOrder) do
-    if (mods & m[1]) ~= 0 then parts[#parts + 1] = m[2] end
+    if (mods & m[1]) ~= 0 then util.add(parts, m[2]) end
   end
-  parts[#parts + 1] = keyNames[key] or '?'
+  util.add(parts, keyNames[key] or '?')
   return table.concat(parts, modSep)
 end
 
@@ -456,7 +456,7 @@ function cmgr:keyLabelList(name, ImGui)
   local specs = self:keysFor(name)
   if not specs then return nil end
   local out = {}
-  for _, spec in ipairs(specs) do out[#out + 1] = self:keyLabel(spec, ImGui) end
+  for _, spec in ipairs(specs) do util.add(out, self:keyLabel(spec, ImGui)) end
   return out
 end
 
@@ -533,9 +533,9 @@ function cmgr:tokenForSpec(spec, ImGui)
   if not name then return nil end
   local parts = {}
   for _, entry in ipairs(modTokenList) do
-    if (mods & entry[1]) ~= 0 then parts[#parts + 1] = entry[2] end
+    if (mods & entry[1]) ~= 0 then util.add(parts, entry[2]) end
   end
-  parts[#parts + 1] = name
+  util.add(parts, name)
   return table.concat(parts, '+')
 end
 
@@ -543,7 +543,7 @@ end
 function cmgr:specForToken(token, ImGui)
   ensureTokenTables(ImGui)
   local parts = {}
-  for part in token:gmatch('[^+]+') do parts[#parts + 1] = part end
+  for part in token:gmatch('[^+]+') do util.add(parts, part) end
   if #parts == 0 then return nil, 'empty token' end
   local key = tokenKeys[parts[#parts]]
   if not key then return nil, 'unknown key "' .. parts[#parts] .. '"' end
@@ -552,7 +552,7 @@ function cmgr:specForToken(token, ImGui)
   for i = 1, #parts - 1 do
     local mod = modByName[parts[i]]
     if not mod then return nil, 'unknown modifier "' .. parts[i] .. '"' end
-    spec[#spec + 1] = mod
+    util.add(spec, mod)
   end
   return spec
 end
@@ -569,7 +569,7 @@ function cmgr:loadOverrides(ImGui)
         local specs = {}
         for _, token in ipairs(tokens) do
           local spec, err = self:specForToken(token, ImGui)
-          if spec then specs[#specs + 1] = spec
+          if spec then util.add(specs, spec)
           else util.print('keyBindings ' .. scopeName .. '.' .. name .. ': ' .. err .. ' - skipped') end
         end
         scope.keymap[name] = specs
@@ -586,7 +586,7 @@ function cmgr:rebind(scopeName, name, specs, ImGui)
   local overrides = cm:get('keyBindings')
   overrides[scopeName] = overrides[scopeName] or {}
   local tokens = {}
-  for _, spec in ipairs(specs) do tokens[#tokens + 1] = self:tokenForSpec(spec, ImGui) end
+  for _, spec in ipairs(specs) do util.add(tokens, self:tokenForSpec(spec, ImGui)) end
   overrides[scopeName][name] = tokens
   cm:set('global', 'keyBindings', overrides)
 end

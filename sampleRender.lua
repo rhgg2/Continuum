@@ -18,6 +18,7 @@ end
 package.path = reaper.ImGui_GetBuiltinPath() .. '/?.lua;' .. package.path
 local ImGui = require 'imgui' '0.10'
 local painter = require 'painter'
+local util    = require 'util'
 
 local cm, ds, cmgr, chrome, gui, sv = (...).cm, (...).ds, (...).cmgr, (...).chrome, (...).gui, (...).sv
 
@@ -169,17 +170,17 @@ end
 local function drawFiles(folder, root)
   local items = {}
   if folder ~= root then
-    items[#items+1] = { isFolder = true, name = '../', path = UP }
+    util.add(items, { isFolder = true, name = '../', path = UP })
   end
   for _, sub in ipairs(fs.listDirs(folder)) do
-    items[#items+1] = { isFolder = true,  name = sub .. '/',
-                        path = fs.join(folder, sub) }
+    util.add(items, { isFolder = true,  name = sub .. '/',
+                        path = fs.join(folder, sub) })
   end
   for _, file in ipairs(fs.listAudioFiles(folder)) do
     local p   = fs.join(folder, file)
     local d   = durFor(p)
     local nm  = d and string.format('%s  %.2fs', file, d) or file
-    items[#items+1] = { isFolder = false, name = nm, path = p }
+    util.add(items, { isFolder = false, name = nm, path = p })
   end
 
   local sel      = sv:getBrowserPath()
@@ -396,9 +397,9 @@ local toolbarSegments = {
       local items   = {}
       for _, e in ipairs(tracks) do
         if e.track == current then label = e.name end
-        items[#items + 1] = { label   = e.name,
+        util.add(items, { label   = e.name,
                               key     = e.track,
-                              current = e.track == current }
+                              current = e.track == current })
       end
       chrome.drawPicker {
         kind        = 'sampleTrack',

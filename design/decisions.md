@@ -12,6 +12,17 @@ lines. Newest first. `/commit` prompts for one at commit time.
 Entries below 2026-07-27 predate that split, so some of them also
 appear in their design docs.
 
+- **2026-08-03** — The raw append idiom `t[#t+1] = v` is gone from production in favour of
+  `util.add`, already the majority spelling by three to one. Tests keep the raw form: pulling util
+  into sixty spec files to normalise an idiom would hand production surface to the tests for no
+  behavioural gain. Three modules that previously required nothing — fs, tuning and bridge — now
+  depend on util; util is itself a leaf, so this widens the graph without risking a cycle. Four
+  sites keep the raw form deliberately: util.add's own body, and three in wiringRender where the
+  length comes from a different array than the one being appended to, which is how two arrays are
+  kept in step. The two spellings are not quite equivalent. Lua takes `#t` before evaluating the
+  right-hand side, where util.add evaluates its argument first, so they diverge wherever the value
+  expression mutates the same table. No production site does.
+
 - **2026-08-03** — `exciseNotes` seeks the seeded rows rather than scanning the channel: per row a
   binary seek into each note lane, collecting indices, then the one compacting pass that was already
   the shed — the note-path twin of `spliceChannelCCs`' seed-resolved excise. Sound because a seated

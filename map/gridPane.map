@@ -210,7 +210,7 @@
   @use call    tv:stateOf  @ drawTracker:635
   @use call    tv:streamRefAt  @ drawTracker:624
   @use call    tv:toggleChannelMute  @ handleMouse:997
-  @use call    util.add  @ curveEditorFrame:369
+  @use call    util.add  @ printer:239 curveEditorFrame:369 notePartHeaders:498 add:844
   @use call    util.clamp  @ drawTracker:766
   @use call    util.instantiate  @ <load>:73
   @use call    util.round  @ curveEditorFrame:392 handleMouse:1075,1082

@@ -137,7 +137,7 @@ end
 local function knownSlots()
   local known = {}
   for _, set in pairs(mirror.buckets) do
-    for slot in pairs(set) do known[#known + 1] = slot end
+    for slot in pairs(set) do util.add(known, slot) end
   end
   return known
 end
@@ -226,7 +226,7 @@ local function resyncMirror()
       for slot in pairs(actual)   do slots[slot] = true end
       for slot in pairs(expected) do slots[slot] = true end
       for slot in pairs(slots) do
-        if actual[slot] ~= expected[slot] then candidates[#candidates + 1] = slot end
+        if actual[slot] ~= expected[slot] then util.add(candidates, slot) end
       end
       mirror.buckets[b] = next(actual) and actual or nil
     end
@@ -240,7 +240,7 @@ local function resyncMirror()
     local raw = mirrorRead(strack, 's.' .. slot)
     if raw ~= readRaw('project', slot) then
       reaper.SetProjExtState(0, PROJEXT_SECTION, slot, raw)   -- direct: must not re-mirror
-      diverged[#diverged + 1] = slot
+      util.add(diverged, slot)
     end
   end
   if #diverged > 0 then return diverged end
@@ -392,13 +392,13 @@ end
 function ps:declareUndoable(spec)
   for _, slot in ipairs(spec.slots or {}) do undoableSlots[slot] = true end
   for _, prefix in ipairs(spec.prefixes or {}) do
-    undoablePrefixes[#undoablePrefixes + 1] = prefix
+    util.add(undoablePrefixes, prefix)
   end
 end
 
 --contract: blobs = { { scope, slot }, ... }; onDiverge(divergedBlobs) fires once per poll tick that diverges
 function ps:watch(blobs, onDiverge)
-  watchGroups[#watchGroups + 1] = { blobs = blobs, onDiverge = onDiverge }
+  util.add(watchGroups, { blobs = blobs, onDiverge = onDiverge })
   for _, blob in ipairs(blobs) do
     baseline[blobKey(blob)] = readRaw(blob.scope, blob.slot)
   end
@@ -423,7 +423,7 @@ function ps:pollUndo()
       local raw = readRaw(blob.scope, blob.slot)
       if raw ~= baseline[key] then
         baseline[key] = raw
-        diverged[#diverged + 1] = blob
+        util.add(diverged, blob)
       end
     end
     if #diverged > 0 then group.onDiverge(diverged) end

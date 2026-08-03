@@ -329,7 +329,7 @@
   @use call    rm:writeChainMidi  @ reconcileFXChain:1762
   @use call    scratch.id  @ instantiateFxOnScratch:363,368 snapshot:911 targetState:1020 read:1461 idForKey:1929
   @use call    scratch.peek  @ isScratchTrack:376
-  @use call    util.add  @ mirrorBusTaps:310,311 samplerReachable:439 paramTargets:467,483,487,491,504,505,509 addFxNode:572,575 deleteSource:606 deleteBus:627 insertBus:743,746 snapFxList:847 ownedSends:860 projectEntry:985,994 readGraph:1055,1070,1074,1093,1094,1124,1165,1170,1175,1178,1182,1194,1198,1237,1278,1287,1334,1367,1387,1408 diff:1539,1556,1571,1578,1583,1603,1608,1620,1622 reconcileFXChain:1699,1733,1760 applyOps:1850 authoredRouting:1889
+  @use call    util.add  @ mirrorBusTaps:310,311 samplerReachable:439 paramTargets:467,483,487,491,504,505,509 addFxNode:572,575 deleteSource:606 deleteBus:627 insertBus:743,746 snapFxList:847 ownedSends:860 projectEntry:985,994 readGraph:1055,1070,1074,1093,1094,1124,1158,1165,1170,1175,1178,1182,1194,1198,1237,1278,1287,1334,1367,1387,1408 diff:1539,1556,1571,1578,1583,1603,1608,1620,1622 reconcileFXChain:1699,1733,1760 applyOps:1850 authoredRouting:1889
   @use call    util.bucket  @ adjacencies:105,106 samplerReachable:431 paramTargets:459,460 readGraph:1374 applyOps:1832
   @use call    util.clone  @ applyOps:1779
   @use call    util.deepClone  @ ensureCompiled:115 graph:170 mutate:215 busRecords:759 projectEntry:990 stampDecoration:1452

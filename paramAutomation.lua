@@ -74,11 +74,11 @@ local function gatherBindings()
     local srcGuid = reaper.GetTrackGUID(ownerTrack(take))
     for chan, lanes in pairs(cfg) do
       for lane, b in pairs(lanes) do
-        bindings[#bindings + 1] = {
+        util.add(bindings, {
           srcTrackGuid = srcGuid, chan = chan, lane = lane,
           busCode = b.busCode, trackGuid = b.trackGuid, fxGuid = b.fxGuid,
           param = b.param, scale = b.scale, offset = b.offset, label = b.label,
-        }
+        })
       end
     end
   end)
@@ -313,7 +313,7 @@ function pa:apply()
     local track = reaper.GetTrack(0, i)
     local spec, mirror = specs[reaper.GetTrackGUID(track)], readMirror(track)
     if not util.deepEq(spec, mirror) then
-      dirty[#dirty + 1] = { track = track, spec = spec, mirror = mirror }
+      util.add(dirty, { track = track, spec = spec, mirror = mirror })
     end
   end
   if #dirty == 0 then return end

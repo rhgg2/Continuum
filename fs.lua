@@ -2,6 +2,8 @@
 
 --invariant: sole module touching reaper.Enumerate* and filesystem IO; UI/view layers route through here
 --invariant: listDirs and listAudioFiles return case-insensitively sorted output (Finder/Explorer parity)
+local util = require 'util'
+
 local fs = {}
 
 local AUDIO_EXTS = {
@@ -39,7 +41,7 @@ function fs.listDirs(path)
   while true do
     local sub = reaper.EnumerateSubdirectories(path, i)
     if not sub then break end
-    if sub:sub(1, 1) ~= '.' then out[#out + 1] = sub end
+    if sub:sub(1, 1) ~= '.' then util.add(out, sub) end
     i = i + 1
   end
   table.sort(out, ciLess)
@@ -84,7 +86,7 @@ function fs.listAudioFiles(path)
   while true do
     local f = reaper.EnumerateFiles(path, i)
     if not f then break end
-    if fs.isAudio(f) then out[#out + 1] = f end
+    if fs.isAudio(f) then util.add(out, f) end
     i = i + 1
   end
   table.sort(out, ciLess)
