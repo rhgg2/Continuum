@@ -2249,21 +2249,8 @@ local function seatKey(ppqL, lane, pitch)
   return tostring(ppqL) .. '\0' .. tostring(lane) .. '\0' .. tostring(pitch)
 end
 
--- Seed membership by logical row (snapshot ppqL, plus a survivor's live ppqL byUuid recovers) --
--- same ppqL any lane, so a deleted shadower re-materialises its row. see docs § Interval materialisation
-local function seedCovers(seedList)
-  if seedList == true then return function() return true end end
-  local rows = {}
-  for _, s in ipairs(seedList) do
-    rows[s.ppqL] = true
-    local live = s.uuid and tm:byUuid(s.uuid)
-    if live then rows[live.ppqL or live.ppq] = true end
-  end
-  return function(note) return rows[note.ppqL or note.ppq] or false end
-end
-
--- The seeds' dirty logical rows as a flat list (snapshot ppqL ∪ each survivor's live ppqL) -- the fx
--- producer window query wants a range test where seedCovers wants membership. see design § phase 5
+-- The seeds' dirty logical rows as a flat list (snapshot ppqL ∪ each survivor's live ppqL): the one
+-- derivation of what the dirt covers, so no consumer of it can drift. see design § phase 5
 local function seedRowsFor(seedList)
   local rows = {}
   for _, s in ipairs(seedList) do
@@ -2273,20 +2260,42 @@ local function seedRowsFor(seedList)
   end
   return rows
 end
+
+-- Seed membership by logical row -- same ppqL any lane, so a deleted shadower re-materialises its
+-- row. The fx producer query wants the same rows as a range test. see docs § Interval materialisation
+local function seedCovers(seedList)
+  if seedList == true then return function() return true end end
+  local rows = {}
+  for _, row in ipairs(seedRowsFor(seedList)) do rows[row] = true end
+  return function(note) return rows[note.ppqL or note.ppq] or false end
+end
 local function windowSeeded(rows, startL, endL)
   for _, row in ipairs(rows) do if row >= startL and row <= endL then return true end end
   return false
 end
 
--- Drop every cell a predicate claims from a channel's note lanes: the interval-dirt excise gates
--- notes and PAs alike on `covers`. see docs/trackerManager.md § The note-lane shed
-local function exciseNotes(chan, drop)
+-- Drop the cells the seeded rows claim from a channel's note lanes: a seek per row per lane, not a
+-- channel scan; `claims` refines within the cluster. see docs/trackerManager.md § The note-lane shed
+--invariant: a seated cell is projected (ppq == ppqL), so a seed row is the lane's sort key
+local function exciseNotes(chan, rows, claims)
   for _, col in ipairs(channels[chan].columns.notes) do
-    local kept, dropped = {}, false
-    for _, evt in ipairs(col.events) do
-      if drop(evt) then dropped = true else util.add(kept, evt) end
+    local events = col.events
+    local dropAt
+    for _, row in ipairs(rows) do
+      for i = firstAtOrAfter(events, row), #events do
+        local evt = events[i]
+        if evt.ppq ~= row then break end
+        if not claims or claims(evt) then
+          dropAt = dropAt or {}
+          dropAt[i] = true
+        end
+      end
     end
-    if dropped then
+    if dropAt then
+      local kept = {}
+      for i, evt in ipairs(events) do
+        if not dropAt[i] then util.add(kept, evt) end
+      end
       col.events = kept   -- kept is a fresh table: this assignment is the shed
       shedLanes[col] = true
     end
@@ -2305,7 +2314,7 @@ local function rebuildInternals()
     local dirt = dirtyChans[chan]
     if dirt then
       local covers = seedCovers(dirt)
-      if dirt ~= true then exciseNotes(chan, covers) end
+      if dirt ~= true then exciseNotes(chan, seedRowsFor(dirt)) end
       for _, raw in mm:notesRaw(chan) do
         -- Derived notes route to fx whole-channel whatever the dirt: a partial noteExisting
         -- reads as mass deletion until the fx reconcile goes interval-native. see design § phase 3
@@ -2973,7 +2982,7 @@ local function rebuildRegionPark(currentWindows, fxParked, prevWindows, hostWind
               seedDirty(cc.chan, rawSeed(cc, 'park'))
               batch.del({ uuid = cc.uuid })
               freshCells[cc.chan] = freshCells[cc.chan] or {}
-              freshCells[cc.chan][cc.uuid] = true
+              freshCells[cc.chan][cc.uuid] = cc.ppqL or cc.ppq   -- the row the excise seeks
               local spec = parkSpec(cc, { ppq = cc.ppqL or cc.ppq })   -- um index source: evType/chan/pitch/vel/rpb ride, ppq flips logical
               spec.uuid = nil                                           -- restore re-mints the rpb sidecar uuid
               util.add(newParked, spec)
@@ -2984,8 +2993,10 @@ local function rebuildRegionPark(currentWindows, fxParked, prevWindows, hostWind
     end
     -- The parking PA's on-take column cell rode past exciseNotes untouched -- its row seeds only here,
     -- after that pass ran -- so drop it now, or rebuildPA's parked projection doubles the carried cell.
-    for chan, uuids in pairs(freshCells) do
-      exciseNotes(chan, function(e) return e.evType == 'pa' and uuids[e.uuid] end)
+    for chan, rowByUuid in pairs(freshCells) do
+      local rows = {}
+      for _, row in pairs(rowByUuid) do util.add(rows, row) end
+      exciseNotes(chan, rows, function(e) return e.evType == 'pa' and rowByUuid[e.uuid] ~= nil end)
     end
     -- Prior parked PAs: host still parked -> carry; host returned on-take -> restore to the take.
     for _, spec in ipairs(priorByType.pa or {}) do

@@ -1,4 +1,4 @@
-@spec tm_note_lane_carry_spec  src=tests/specs/tm_note_lane_carry_spec.lua  loc=79  cases=3
+@spec tm_note_lane_carry_spec  src=tests/specs/tm_note_lane_carry_spec.lua  loc=98  cases=4
 @exercises trackerManager (h.tm)
 @surface   tm:getChannel, tm:addEvent, tm:flush
 @harness   mk
@@ -20,27 +20,28 @@
 # Cases
   @case 'a lane the edit never touched keeps its events table'  [harness]  @ 34-41
   @case 'the edited lane sheds its events table'  [harness]  @ 44-52
-  @case 'a nudge sheds the neighbour lane no seed covered'  [harness]  @ 55-77
+  @case 'a seeded row drops the co-row cell in a lane the seed never named'  [harness]  @ 55-71
+  @case 'a nudge sheds the neighbour lane no seed covered'  [harness]  @ 74-96
 
 # Uses (outbound edges)
   @use call tm:getChannel  @ 17
-  @use call tm:addEvent  @ 24,25,38,48,63,72
-  @use call tm:flush  @ 26,38,48,64,72
+  @use call tm:addEvent  @ 24,25,38,48,61,62,67,82,91
+  @use call tm:flush  @ 26,38,48,63,67,83,91
 
 # Fields (r read / w write incl. constructor keys)
   @field w chan  @ 10
   @field r columns  @ 17
-  @field w delay  @ 11,63
-  @field r delayC  @ 70,74
+  @field w delay  @ 11,82
+  @field r delayC  @ 89,93
   @field w detune  @ 11
   @field w endppq  @ 10
   @field w evType  @ 10
   @field r events  @ 17
   @field w lane  @ 11
-  @field w name  @ 34,44,55
+  @field w name  @ 34,44,55,74
   @field r notes  @ 17
   @field w pitch  @ 10
-  @field r ppq  @ 69
+  @field r ppq  @ 88
   @field w ppq  @ 10
-  @field w run  @ 35,45,56
+  @field w run  @ 35,45,56,75
   @field w vel  @ 11

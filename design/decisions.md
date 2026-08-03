@@ -12,6 +12,18 @@ lines. Newest first. `/commit` prompts for one at commit time.
 Entries below 2026-07-27 predate that split, so some of them also
 appear in their design docs.
 
+- **2026-08-03** — `exciseNotes` seeks the seeded rows rather than scanning the channel: per row a
+  binary seek into each note lane, collecting indices, then the one compacting pass that was already
+  the shed — the note-path twin of `spliceChannelCCs`' seed-resolved excise. Sound because a seated
+  cell is projected (`projectEvent` writes `ppq = ppqL`), so the predicate's key and the lane's sort
+  key are the same field; probed across the suite before landing, with a positive control to
+  establish the probe fired. `seedCovers` is now derived from `seedRowsFor`, so the rows the excise
+  seeks and the rows the raw re-clone accepts cannot drift apart. This does *not* make the rebuild
+  interval-native: `rebuildInternals`' `mm:notesRaw(chan)` walk sits three lines below in the same
+  branch and stays O(channel), pinned there by the derived-note arm that feeds fx wholesale, and it
+  is not seekable anyway — the raw index sorts by raw ppq while the seeds key on the logical row.
+  The saving is one of two co-located scans, and is unmeasured on a real take.
+
 - **2026-08-01** — chrome and masterMix were the only two modules ending in a bare `return {...}`
   literal, which put the public/private boundary several hundred lines away from the declarations
   that constitute it. Both now name the module table at the top and declare publics as `function

@@ -849,9 +849,14 @@ The shed is now precise, and every mutator of a seated lane owns it:
 - **membership** — `exciseNotes` assigns only when it actually dropped a
   cell; the splices (`rebuildInternals`, `rebuildExternals`, `rebuildPA`,
   the park restore) and the park unlink call `shedLane(chan, lane)` first.
-  Its predicate generalised from a row-`covers` test to any `drop(evt)`, so
-  the parking PA sweep reuses it (matching PA type + uuid) instead of
-  hand-rolling a second filtered copy.
+  It takes the seeded rows and seeks each one into each lane rather than
+  testing every cell against a predicate, so a lane holding no seeded row
+  costs a binary search and nothing else. A `claims` refinement narrows
+  within the row cluster, which is how the parking PA sweep reuses it
+  (matching PA type + uuid) instead of hand-rolling a second filtered copy.
+  The seek stands on cells being projected — `ppq` holds the logical row,
+  so a seed's row is the lane's own sort key, and the cluster at it is
+  contiguous whatever the note-before-PA tie-break does inside.
 - **content** — an in-place field write on an already-seated cell goes
   through `setCell(cell, field, value)`, which sheds only when the value
   moves. Writing unconditionally would shed every bounded lane on every

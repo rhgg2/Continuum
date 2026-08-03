@@ -52,6 +52,25 @@ return {
     end,
   },
   {
+    name = 'a seeded row drops the co-row cell in a lane the seed never named',
+    run = function(harness)
+      -- Lane 2 holds a cell at row 240; the edit adds a lane-1 note at that same row, seeding it.
+      -- The excise is keyed by row, not by lane, so lane 2's co-row cell must go too -- a survivor
+      -- alongside rebuildInternals' fresh clone of the same raw note would double the row.
+      local h = harness.mk{}
+      h.tm:addEvent(note(0, 60, 1))
+      h.tm:addEvent(note(240, 64, 2))
+      h.tm:flush()
+      local lane2 = laneEvents(h, 2)
+      t.eq(#lane2, 1, 'lane 2 seated its note at the shared row')
+
+      h.tm:addEvent(note(240, 61, 1)); h.tm:flush()
+
+      t.eq(#laneEvents(h, 2), 1, 'the co-row cell was dropped and re-cloned once, not doubled')
+      t.truthy(laneEvents(h, 2) ~= lane2, 'the co-row lane shed its events table')
+    end,
+  },
+  {
     name = 'a nudge sheds the neighbour lane no seed covered',
     run = function(harness)
       -- The lane-2 note sits at logical row 60 with a one-row negative delay, so its raw onset is
