@@ -230,6 +230,22 @@ of loose events:
 - After the mint the group is ordinary: mirror-edit it, instance it,
   delete it. No frozen-ness survives.
 
+**Ordinary, but the group key cannot tile it yet** (2026-08-03). The
+bullet above holds for instancing, mirror edits and deletion, all of
+which the spec now pins. It does not extend to Ctrl-Shift-D: the mint
+goes through `gm:markGroup`, which leaves `activeGroup` alone, so a
+duplicate over the frozen footprint seeds a group rather than instancing
+one — and the seed collides with the group it came from, so nothing is
+minted. Whether the mint should make itself active, the way `gm:mark`
+does, is open. What still runs is the destination clear `groupDuplicate`
+performs before it asks gm anything, and that zone begins on the tick a
+pb window used to seat its closing member — so the pull inside is
+load-bearing on the path where the tile is refused outright, not only on
+one where it lands. That a refused duplicate clears the destination at
+all is `groupDuplicate`'s own problem, older and wider than freeze: a
+whole-suite perturbation moving the clear after the projection is caught
+by nothing.
+
 **The thinner.** A tolerance-bounded simplification (Douglas-Peucker
 over the piecewise-linear runs; tolerance in the dest's own unit, which
 `generators.destProfile` already spells cents for pb and steps for cc —

@@ -1,6 +1,7 @@
 -- Track B (fx freeze): the tv verb that converts a producer and mints a stock group over its
 -- own output. tm_fx_region_spec pins the conversion and the thin; this spec is the wiring --
--- the gate, the mint, and the one undo block they share.
+-- the gate, the mint, the one undo block they share, and what the mint leaves behind: an
+-- ordinary group, which instances, mirrors and deletes like any other.
 -- see design/fx-freeze.md § Freeze to group
 local t    = require('support')
 local util = require('util')
@@ -59,6 +60,68 @@ local function blockCounter(h)
   end
   h.reaper.Undo_EndBlock = function() depth = depth - 1 end
   return function() return blocks end
+end
+
+-- The fixture frozen: producer converted, mint standing over its own output. Returns the
+-- harness and the instance the mint seated.
+local function frozen(harness)
+  local h = harness.mk{ groups = true }
+  h.vm:setGridSize(80, 40)
+  addNote(h)
+  injectMixed(h)
+  local _, ci = fxColFor(h, 1)
+  h.ec:setPos(0, ci, 1)
+  h.cmgr:invoke('freezeFxGroup')
+  return h, h.gm:eachInstance()[1]
+end
+
+-- The output standing in one region-length window, by offset from its start -- the shape a
+-- sibling instance has to reproduce. Says nothing about how many seats the thin left, which
+-- is tm_fx_region_spec's subject and free to move.
+local function outputAt(h, lo)
+  local dump, notes, seats = h.fm:dump(), {}, {}
+  for _, n in ipairs(dump.notes) do
+    if n.ppq >= lo and n.ppq < lo + 240 then util.add(notes, { off = n.ppq - lo, pitch = n.pitch }) end
+  end
+  for _, c in ipairs(dump.ccs) do
+    if c.evType == 'pb' and c.ppq >= lo and c.ppq < lo + 240 then
+      util.add(seats, { off = c.ppq - lo, cents = c.cents })
+    end
+  end
+  table.sort(notes, function(a, b) return a.off < b.off end)
+  table.sort(seats, function(a, b) return a.off < b.off end)
+  return { notes = notes, seats = seats }
+end
+
+-- The take keyed by uuid, so a comparison across an edit reads an event eaten rather than one
+-- merely moved -- the closing seat's whole hazard. Deliberately not filtered by gm membership:
+-- a seat left outside the rect is precisely the one a tile clears away, and filtering on
+-- stateOf would make the check blind to it.
+local function takeEvents(h)
+  local dump, out = h.fm:dump(), {}
+  for _, n in ipairs(dump.notes) do out[n.uuid] = { ppq = n.ppq, pitch = n.pitch } end
+  for _, c in ipairs(dump.ccs) do
+    if c.evType == 'pb' then out[c.uuid] = { ppq = c.ppq, cents = c.cents } end
+  end
+  return out
+end
+
+local function pbUuidAt(h, ppq)
+  for _, c in ipairs(h.fm:dump().ccs) do
+    if c.evType == 'pb' and c.ppq == ppq then return c.uuid end
+  end
+end
+
+local function noteUuidAt(h, ppq)
+  for _, n in ipairs(h.fm:dump().notes) do
+    if n.ppq == ppq then return n.uuid end
+  end
+end
+
+local function pbColIdx(h, chan)
+  for i, c in ipairs(h.vm.grid.cols) do
+    if c.type == 'pb' and c.midiChan == chan then return i end
+  end
 end
 
 return {
@@ -171,6 +234,99 @@ return {
       t.eq(blocks(), 0, 'so the verb is never reached')
       t.eq(#h.gm:eachInstance(), 0, 'nothing minted')
       t.deepEq(authoredPitches(h), { 60 }, 'and the note stands')
+    end,
+  },
+
+  ----- After the mint the group is ordinary: no frozen-ness survives it
+
+  {
+    -- Directly below is the adjacency that bites: the caller's destination clear starts on the tick
+    -- a pb window used to seat its closing member. see design/fx-freeze.md § Freeze to group
+    name = 'freeze to group: a sibling tiled directly below replays both member kinds',
+    run = function(harness)
+      local h, inst = frozen(harness)
+      local before = takeEvents(h)
+      t.truthy(next(before), 'the mint left output to tile past')
+
+      h.vm:clearRegionAt(inst.rect, { ppq = 240, chan = 1 })
+      t.truthy(h.gm:newInstance(inst.groupId, { ppq = 240, chan = 1 }),
+               'the copy seats immediately below the original')
+      h.tm:flush()
+
+      t.deepEq(outputAt(h, 240), outputAt(h, 0), 'the copy replays the notes and the curve alike')
+      local after = takeEvents(h)
+      for uuid, e in pairs(before) do
+        t.deepEq(after[uuid], e, 'and the copy above keeps every event it had')
+      end
+    end,
+  },
+
+  {
+    name = 'freeze to group: a mirror edit on either member kind reaches the sibling',
+    run = function(harness)
+      local h, inst = frozen(harness)
+      h.gm:newInstance(inst.groupId, { ppq = 240, chan = 1 })
+      h.tm:flush()
+
+      -- pb's group frame is intent, so the assign is in cents; 60 stays inside the bend range,
+      -- where a clamp cannot make two different intents read alike.
+      h.gm:assignEvent(pbUuidAt(h, 0), { val = 60 })
+      h.tm:flush()
+      h.gm:assignEvent(noteUuidAt(h, 0), { pitch = 72 })
+      h.tm:flush()
+
+      local sibling = outputAt(h, 240)
+      t.eq(sibling.seats[1].cents, 60, 'the sibling opens on the edited curve value')
+      t.eq(sibling.notes[1].pitch, 72, 'and on the edited pitch')
+      t.deepEq(sibling, outputAt(h, 0), 'the two instances read alike after both edits')
+    end,
+  },
+
+  {
+    -- The producer is gone, so nothing re-derives what the delete takes away -- the members are
+    -- ordinary authored events now.
+    name = 'freeze to group: deleting the group takes its output with it',
+    run = function(harness)
+      local h, inst = frozen(harness)
+      h.gm:newInstance(inst.groupId, { ppq = 240, chan = 1 })
+      h.tm:flush()
+
+      h.gm:deleteInstance(inst.groupId, inst.instId)
+      h.tm:flush()
+      t.deepEq(outputAt(h, 0), { notes = {}, seats = {} }, 'the origin instance took its own events')
+      t.truthy(#outputAt(h, 240).notes > 0, 'and the sibling stands')
+
+      for _, i in ipairs(h.gm:eachInstance()) do h.gm:deleteInstance(i.groupId, i.instId) end
+      h.tm:flush()
+      h.tm:rebuild()
+
+      t.deepEq(outputAt(h, 240), { notes = {}, seats = {} }, 'the last instance empties the take')
+      t.deepEq(outputAt(h, 0), { notes = {}, seats = {} }, 'and no rebuild brings the frozen output back')
+      t.falsy(next((h.ds:get('groups') or {}).groups or {}), 'the group is gone from the store')
+    end,
+  },
+
+  {
+    -- groupDuplicate over the group's own footprint seeds rather than instances, and markGroup
+    -- refuses the overlap -- but tv:clearRegionAt has already emptied the destination by then, and
+    -- the destination begins on the tick a pb window seats its closing member.
+    -- see design/fx-freeze.md § Freeze to group
+    name = 'freeze to group: a refused tile below the mint leaves it whole',
+    run = function(harness)
+      local h = frozen(harness)
+      h.ec:setSelection{ row1 = 0, row2 = 3, col1 = pbColIdx(h, 1), col2 = noteColIdx(h, 1),
+                         part1 = 'val', part2 = 'pitch' }
+      t.eq(h.vm:selectionAsRect().dur, 240, 'the selection spans the frozen footprint')
+      local before = takeEvents(h)
+      t.truthy(next(before), 'which has output to lose')
+
+      h.cmgr:invoke('groupDuplicate')
+
+      t.eq(#h.gm:eachInstance(), 1, 'the tile mints nothing -- the source footprint is the group itself')
+      local after = takeEvents(h)
+      for uuid, e in pairs(before) do
+        t.deepEq(after[uuid], e, 'and the destination clear reached none of the frozen output')
+      end
     end,
   },
 }

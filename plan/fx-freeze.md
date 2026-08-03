@@ -16,14 +16,14 @@
 3. **Phase 3 — freeze to group** (§ Freeze to group) — thin the
    curves subtractively inside the conversion's own flush, mint a stock
    gm group via `markGroup` on the resulting column events, gm
-   rect-conflict gate on the tv verb.  ← in flight
+   rect-conflict gate on the tv verb.  ← landed 2026-08-03 (4 commits)
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-03 spec: the minted group is ordinary -- instance, mirror, delete, tile (§ Freeze to group)
 - 2026-08-03 tv: freeze an fx producer to a mirror group (§ Freeze to group)
 - 2026-08-02 tm: compute the mint rect and pull the closing pb seat inside it (§ Freeze to group)
 - 2026-08-01 tm: add freezeToGroup -- thin the curves, hand back the members (§ Freeze to group)
-- 2026-07-31 tm: store freeze eligibility per rebuild; views decline before undo (§ Eligibility gates)
 
 ## Now
 
@@ -31,7 +31,4 @@
 
 ## Queued (current phase; one-liners)
 
-1. spec: the minted group is ordinary — instance 2 replays both note
-   and curve members, a mirror edit propagates, deleting the group
-   works, and tiling a copy directly below leaves the copy above with
-   every member; pins "no frozen-ness survives the mint".
+(empty — every phase has landed; run /plan-close.)
