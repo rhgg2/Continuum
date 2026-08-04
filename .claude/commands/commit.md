@@ -10,24 +10,22 @@ disable-model-invocation: true
 
 ## Commit bookkeeping
 
-The next steps assemble a commit bookkeeping JSON manifest (steps 3-5) and apply it via `tools/bookkeep.py` (step 6).
+The next steps assemble a commit bookkeeping JSON manifest (steps 3-4) and apply it via `tools/bookkeep.py` (step 5).
 
 3. Decision log (`decision` key). Any design decision needs recording. If the live task has a design doc, write a dated note **there**, by hand. If there is no design doc, write the decision as plain prose and place in the manifest's `decision` key; the script dates it, wraps it, and prepends it to `design/decisions.md`. Either way it is prose to be read cold later, so `docs/STYLE.md` applies. If a commit makes no design decision, omit the key.
 4. Plan (`land` key). If `plan/CURRENT` exists and this commit completes the live plan's Now entry, include `land: {headline, ref}`: the script prepends `- <date> <headline> (<ref>)` to Landed, prunes it below ~4, empties Now, and deletes the implementation brief `plan/IMPL.md`, echoing its title as it goes. An optional `now` overrides the empty placeholder, for a landing that leaves something behind. Commits unrelated to the live plan omit the key.
-5. Jot triage (`wonder` key). If `tools/wonder.py` spooled anything, the hook injects it; give each jot a verdict in the order shown, `keep` / `drop` / `replace: <the fuller text>`. The default is **keep**, unless the session went on to answer, refute or refine the thought. The array needs exactly one entry per jot, and a mismatch throws an error. For entries you didn't jot yourself (the spool is shared across sessions), **keep**. Jots that records an incident against a `us` claim signal its continuing relevance, so don't drop these. Nothing spooled: omit the key.
-6. If any of 3-5 fired, apply the bookkeeping. The manifest comprises whichever keys 3-5 produced: pipe it in on stdin as below and it writes the files directly. The **quoted** `<<'JSON'` delimiter is what stops the shell touching apostrophes, `"` and `$` in your prose, and the closing `JSON` must sit at column 0 or the heredoc never terminates.
+5. If 3 or 4 fired, apply the bookkeeping. The manifest comprises whichever keys 3-4 produced: pipe it in on stdin as below and it writes the files directly. The **quoted** `<<'JSON'` delimiter is what stops the shell touching apostrophes, `"` and `$` in your prose, and the closing `JSON` must sit at column 0 or the heredoc never terminates.
 
 ```sh
 python3 tools/bookkeep.py <<'JSON'
 {"date":"2026-07-22",
  "decision":"one or two lines of prose; the script formats it",
- "land":{"headline":"tm: …","ref":"§ 3"},
- "wonder":["keep","drop","replace: the fuller form, now that the session knows it"]}
+ "land":{"headline":"tm: …","ref":"§ 3"}}
 JSON
 ```
 
 ## The commit
 
-7. If you changed no `.lua` files, you may as well commit yourself: `git add <scope> && git commit -m "<headline>"`, no commit body.
+6. If you changed no `.lua` files, you may as well commit yourself: `git add <scope> && git commit -m "<headline>"`, no commit body.
 
-8. Otherwise, spawn a subagent — Agent tool, `subagent_type: commit-finisher` — and hand it the headline. The agent runs a comment hygiene pass then commits; its procedure lives in its definition (`.claude/agents/commit-finisher.md`), so the prompt needs only the headline, plus which paths to stage if the scope from step 1 is narrower than "all dirty files". When it returns, eyeball its summary; no need to re-audit.
+7. Otherwise, spawn a subagent — Agent tool, `subagent_type: commit-finisher` — and hand it the headline. The agent runs a comment hygiene pass then commits; its procedure lives in its definition (`.claude/agents/commit-finisher.md`), so the prompt needs only the headline, plus which paths to stage if the scope from step 1 is narrower than "all dirty files". When it returns, eyeball its summary; no need to re-audit.
