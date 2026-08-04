@@ -1,5 +1,6 @@
 ---
 description: Close or park the live plan — archive it, archive a finished design doc, pop the CURRENT stack.
+disable-model-invocation: true
 ---
 
 Pop the top of the CURRENT stack and put the files where a finished

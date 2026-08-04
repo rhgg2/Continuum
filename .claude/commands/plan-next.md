@@ -1,5 +1,6 @@
 ---
 description: Talk the next queued plan item through in chat; then compile to an implementation plan.
+disable-model-invocation: true
 ---
 
 This skill facilitates a conversation, with the next queued plan item

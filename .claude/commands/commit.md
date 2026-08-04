@@ -1,5 +1,6 @@
 ---
 description: Complete the commit bookkeeping, write a headline here, then spawn a subagent for the purely mechanical steps.
+disable-model-invocation: true
 ---
 
 ## Preliminaries

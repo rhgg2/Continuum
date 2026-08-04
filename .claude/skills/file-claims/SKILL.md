@@ -1,6 +1,7 @@
 ---
 name: file-claims
 description: "Run a filing pass over the memory store in .claude/agent-memory/: drain the unfiled jots onto claims or into the open end, test the open end for a crystal with the bundled rising-sea method, apply the half-life over the open end, the standing promotions and the us-claim decay rule, and rewrite MEMORY.md's two delivery registers (priors stated in full; lexically anchored facts). Produces one reviewable batch, or an honest 'no crystal, nothing decayed'."
+disable-model-invocation: true
 ---
 
 # The filing pass

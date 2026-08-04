@@ -1,5 +1,6 @@
 ---
 description: Split the live plan's in-flight phase into an ordered queue of commit-sized items.
+disable-model-invocation: true
 ---
 
 Decomposition step, at phase scope: turn the in-flight phase into

@@ -1,5 +1,6 @@
 ---
 description: Open a new plan — from an existing design doc, or writing a short one from conversation — and push it onto the CURRENT stack.
+disable-model-invocation: true
 ---
 
 Compile a design doc into a fresh plan file and make it live. The

@@ -1,5 +1,6 @@
 ---
 description: Comment-hygiene pass on the working-tree diff by default, or on named files (cleanup mode). Spawns a sonnet subagent that fixes every flagged violation.
+disable-model-invocation: true
 ---
 
 One pass. No iterative refinement.

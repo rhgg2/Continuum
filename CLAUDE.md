@@ -1,7 +1,6 @@
 # CLAUDE.md
 
-Hi Claude! This is Continuum, a Lua 5.4 tracker-style MIDI editor for
-REAPER. These notes are for your orientation.
+This is Continuum, a Lua 5.4 tracker-style MIDI editor for REAPER.
 
 ## Architecture
 
@@ -19,9 +18,7 @@ switches between pages. Each page manages a `page → view → manager →
 ...` stack (currently tracker, sampler, wiring, arrange, editor); it
 builds the substack and drives lifecycle on the layer that owns it. So
 the adjacent-layer guidance above governs calls *within* the chain,
-not the page's reach into it. There are also many cross-cutting
-services; the live module set and how they connect can be found using
-`mcp__continuum_map__map_query`.
+not the page's reach into it.
 
 Two critical concepts in the tracker stack:
 
@@ -44,18 +41,10 @@ Rationale, history or examples that wouldn't fit in a line live in
 docs/<file>.md § <section>`). The docs hold the current WHY, but don't
 describe the API surface or repeat annotations in the code.
 
-## Programme plans
-
 Ongoing work larger than a couple of commits has a design doc in
 `design/` and a plan in `plan/`: the design doc holds the intent and
 the decisions, the plan holds the machinery — phases, what landed,
-what's next. `plan/CURRENT` is a stack, newest first: the top line is
-live and the rest are parked. The in-flight item's implementation
-brief is `plan/IMPL.md` — untracked and short-lived: `/plan-next`
-writes it, `/implement-next` works from it, the landing bookkeeping
-deletes it.
-
-## Writing prose
+what's next.
 
 Docs, design docs and the decisions log share a stated register:
 `docs/STYLE.md` — the tone it is pitched at, how a section is ordered,
@@ -64,67 +53,37 @@ writing any of the three.
 
 ## Navigating the code
 
-- `map/<file>.map` answers "where does X live" in one screen and is
-  regenerated on every edit, so it's current even for a file you
-  opened weeks ago; `docs/<file>.md` for the WHY.
+`map/<file>.map` answers "where does X live" in one screen and is
+regenerated on every edit. For cross-file queries,
+`mcp__continuum_map__map_query` is faster and more complete than
+grepping `map/*.map`; its schema documents the filters, query syntax
+and return shape. `mcp__reaper_docs__reaper_doc_lookup` reads parsed
+ReaScript/ReaImGui entries.
 
-- `mcp__continuum_map__map_query` is faster and more complete than
-  grepping `map/*.map`; its schema documents the filters, query syntax
-  and return shape. Gotchas on top of the schema: `uses`/`usedby`
-  resolve receivers through the file's alias table, so targets read as
-  `tm:rebuild`, not `trackerManager:rebuild`; `usedby` answers in two
-  labelled sections, cross-module `@use` edges and the file's own
-  intra-module `@call` rows, so "who calls this private helper" is the
-  same one query; `forward` edges point at the **source's** signal,
-  not the receiver's, and kind='flow' follows the whole chain for you.
-  `query` and `module` are regex, not glob — `query`
-  substring-matched, `module` anchored.
-
-- **Field-shaped questions** — who reads or writes `.ppqL`, who
-  produces `endppqC` — are what kind='reads'/'writes' ('fields' for
-  both) is for: table-constructor keys and `function recv.name(...)`
-  declarations count as writes, so producer sites are covered.
-  Omitting `module` gives the repo-wide blast radius, specs included.
-
-- **Framework docs** — `mcp__reaper_docs__reaper_doc_lookup` reads
-  the parsed ReaScript/ReaImGui entries. Falling back to grep over the
-  bundled HTML is fine when a name is missing from them.
-
-- **Live REAPER — `mcp__reaper__reaper_eval`** runs a Lua chunk inside
-  the running Continuum instance, and needs it open in REAPER or it
-  times out. Confirm with me before anything destructive; undoable
-  edits route through mm/tm with an `undo_label`.
-  `docs/bridge-cookbook.md` has the recipes, `docs/bridge.md` the
-  model.
+`mcp__reaper__reaper_eval` runs a Lua chunk inside the running
+Continuum instance. Undoable edits route through mm/tm with an
+`undo_label`. `docs/bridge-cookbook.md` has the recipes,
+`docs/bridge.md` the model.
 
 ## Tests
 
-- **The basics** — `mcp__continuum_tests__lua_test_run`. Test specs
-  live in `tests/specs/` and register in `tests/run.lua`. Bugfixes go
-  red-first; refactors pin the invariant. For new features, an
-  effective red-first stubs the function, so the red comes from an
-  assertion rather than a nil call.
+`mcp__continuum_tests__lua_test_run`. Test specs live in
+`tests/specs/` and register in `tests/run.lua`. Bugfixes go red-first;
+refactors pin the invariant. For new features, an effective red-first
+stubs the function, so the red comes from an assertion rather than a
+nil call. `mcp__continuum_perturb__spec_perturb` applies authored
+breakages to throwaway copies of the tree and says which the spec
+noticed.
 
-- **Tooth-testing a green spec** — `mcp__continuum_perturb__spec_perturb`
-  applies authored breakages to throwaway copies of the tree and
-  reports which ones the spec noticed. Good for the tests a blunt
-  red-first can't prove effective.
-
-- **Test maps** — `map/specs/<spec>.map` outlines each spec (intent,
-  cases, harness surface) and `map_query`'s `usedby` includes them, so
-  "which specs exercise X" is askable before reading spec source.
-
-- **Wired-behaviour specs** — commands, hooks, lifetime, the UI path —
-  only earn their keep if they exercise the **real** production
-  wiring, so the tests stub ImGui and REAPER at the surface and leave
-  the behaviour under test alone.
+`map/specs/<spec>.map` outlines each spec (intent, cases, harness
+surface) and `map_query`'s `usedby` includes them, so "which specs
+exercise X" is askable before reading spec source.
 
 ## Commits
 
-- **`config:` is the scope for Claude Code's own machinery** — skills,
-  hooks, settings, agents, and tools whose only consumer is a skill
-  (e.g. `tools/comment_hygiene.py`). Changes that also touch product
-  code take on the product's scope.
+**`config:` is the scope for Claude Code's own machinery** — skills,
+hooks, settings, agents, and tools whose only consumer is a skill
+(e.g. `tools/comment_hygiene.py`).
 
 ## Coding style
 
@@ -135,10 +94,6 @@ matching them keeps the codebase reading as one voice.
   carries none of the OO furniture: no underscore-prefixed "private"
   names, no `setmetatable` inheritance or metatable-as-class, no
   `ClassName` UpperCamelCase for modules or constructors.
-- Tables that cross a function or pass boundary — layout plans,
-  geometry, results — get role-named fields: `xLo/xHi`, `chanLeft`,
-  `pitchWidth` rather than `x1/x2/hW`. Bare coordinate names are for
-  tight local math, where the role is visible a line away.
 - Things are scoped tightly, with private helpers wrapped in `local fn
   do ... end`.
 - Registry tables are one line per entry. The `registerAll{...}`

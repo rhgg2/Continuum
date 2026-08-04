@@ -1,5 +1,6 @@
 ---
 description: Implement the plan's Now brief — red spec first, brief kept current, suite green.
+disable-model-invocation: true
 ---
 
 The implementation brief `plan/IMPL.md` arrives injected by the
