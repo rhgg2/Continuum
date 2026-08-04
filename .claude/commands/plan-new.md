@@ -74,7 +74,7 @@ holds only the machinery.
 
    ## Now
 
-   (empty — new plan; run /plan-phase to split phase 1 into Queued.)
+   (empty — new plan; run /plan-next to split phase 1 into Queued.)
 
    ## Queued (current phase; one-liners)
 
@@ -82,17 +82,24 @@ holds only the machinery.
    ```
 
    Phaseless: drop the Phases section, and Now reads `(empty — new
-   plan; run /plan-next to promote the first Queued item.)`.
-5. Seed Queued according to step 3. A phased plan leaves it empty —
-   splitting phase 1 is `/plan-phase`'s job, and doing it here would
-   collapse the same two jobs the commands exist to keep apart. A
-   phaseless plan seeds it now with the whole job as ordered
-   commit-sized one-liners: there's no phase to refill from later,
-   which is exactly why an empty Queued in a phaseless plan means the
+   plan; run /plan-next to seed Queued.)`.
+5. Leave Queued empty either way. Filling it is `/plan-next`'s job —
+   phase 1's section for a phased plan, the whole doc for a phaseless
+   one — and doing it here would collapse the two jobs that command
+   exists to keep apart. It matters most on the no-argument path, where
+   the doc you'd be compiling from was written minutes ago by this same
+   session: seeding now means nothing ever reads it cold, and a doc
+   shaped around a decomposition already forming in conversation is the
+   one failure this separation exists to catch.
+
+   A phaseless plan is therefore seeded once, by its first `/plan-next`,
+   and that is what makes an empty Queued readable later: with Landed
+   empty the plan has never been queued, and with anything in Landed the
    work is done.
 6. Push the new filename onto the top of `plan/CURRENT`.
 7. Stage the new plan, the design doc if you wrote one, and the CURRENT
    edit as one `apply_patches` call, then stop and point at
-   `/plan-phase` (phased) or `/plan-next` (phaseless). Opening a plan is
-   not permission to start implementing it. Name the plan you pushed in
-   front of, if there was one.
+   `/plan-next`, which will fill Queued at whichever scope the plan you
+   just wrote calls for. Opening a plan is not permission to start
+   implementing it. Name the plan you pushed in front of, if there was
+   one.

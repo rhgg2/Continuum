@@ -74,6 +74,44 @@ emitPlanShelf() {
   ls -1 plan plan/archive design 2>/dev/null
 }
 
+# The doc <-> plan link is written by hand at both ends — the plan's `> source:`
+# line and the design doc's `status:` line — so it goes stale silently, which is
+# how a live doc came to read "parked" after a park-and-revive. Only the
+# mechanical half is checked: that the link resolves, and that "in flight" shows
+# up in the status of exactly the doc whose plan is live. The prose around it is
+# left alone — that vocabulary is deliberately free-form.
+emitPlanLinkage() {
+  local live plan slug doc status problems=
+  live=$(liveplanName)
+  for plan in plan/*.md; do
+    [[ -f $plan ]] || continue
+    slug=${plan#plan/}
+    doc=$(sed -n 's/^> source:.*`\(design\/[^`]*\)`.*/\1/p' "$plan" | head -1)
+    if [[ -z $doc ]]; then
+      problems+="  $plan names no design doc in a \`> source:\` line."$'\n'
+      continue
+    fi
+    if [[ ! -f $doc ]]; then
+      problems+="  $plan sources $doc, which does not exist."$'\n'
+      continue
+    fi
+    status=$(grep -m1 'status:' "$doc")
+    [[ $status == *"$slug"* ]] ||
+      problems+="  $doc's status line does not name $plan."$'\n'
+    if [[ $status == *"in flight"* && $slug != "$live" ]]; then
+      problems+="  $doc says \"in flight\", but $plan is parked, not live."$'\n'
+    elif [[ $status != *"in flight"* && $slug == "$live" ]]; then
+      problems+="  $doc does not say \"in flight\", but $plan is the live plan."$'\n'
+    fi
+  done
+  [[ -n $problems ]] || return
+  echo
+  echo "Plan/design linkage, checked by hook. These are hand-maintained claims, so"
+  echo "a disagreement means one end has drifted — fix it or ask before proceeding:"
+  echo
+  printf '%s' "$problems"
+}
+
 emitTreeState() {
   echo "Working-tree state, injected by hook — it is current, so don't re-run these:"
   echo
@@ -88,11 +126,11 @@ emitTreeState() {
 # whose parser reads a case pattern's `)` as closing the command substitution.
 emitContext() {
   case "$commandName" in
-    plan-next|plan-phase) emitLivePlan; emitBriefState ;;
-    implement-next)       emitBrief ;;
-    plan-new)             emitPlanShelf ;;
-    plan-close)           emitLivePlan; emitBriefState; echo; emitPlanShelf ;;
-    commit)               emitTreeState ;;
+    plan-next)      emitLivePlan; emitBriefState; emitPlanLinkage ;;
+    implement-next) emitBrief ;;
+    plan-new)       emitPlanShelf; emitPlanLinkage ;;
+    plan-close)     emitLivePlan; emitBriefState; echo; emitPlanShelf; emitPlanLinkage ;;
+    commit)         emitTreeState ;;
   esac
 }
 

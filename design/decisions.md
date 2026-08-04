@@ -12,6 +12,19 @@ lines. Newest first. `/commit` prompts for one at commit time.
 Entries below 2026-07-27 predate that split, so some of them also
 appear in their design docs.
 
+- **2026-08-05** — `/plan-phase` merges into `/plan-next` as a dispatch on plan state. The two
+  commands computed the same table from opposite ends — brief in flight, Queued empty or not,
+  phased or not — and exactly one of them could ever fire, so the cost was a human holding the
+  state machine in order to know which word to type. What merges is the entry point, not the work:
+  one job per invocation, and a run that splits a phase still stops rather than promoting its first
+  item. Phase-scope reading of the design doc and code-scope reading for a brief are different
+  kinds of reading, and back to back each bends to the other — the split sized to suit a brief
+  already half-written. The stop is also where the queue can be objected to before a large search
+  commits to its first item. The phaseless plan stops being a special branch on the way: an empty
+  Queued with no later phase means finished work whether or not there were ever phases. Rejected:
+  folding `/implement-next` in as well — it dispatches on state in the same way, but it is the verb
+  that writes code, and what would go is the context partition the 2026-07-28 entry pays for.
+
 - **2026-08-03** — The raw append idiom `t[#t+1] = v` is gone from production in favour of
   `util.add`, already the majority spelling by three to one. Tests keep the raw form: pulling util
   into sixty spec files to normalise an idiom would hand production surface to the tests for no

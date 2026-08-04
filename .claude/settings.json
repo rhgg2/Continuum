@@ -21,7 +21,7 @@
     ],
     "UserPromptExpansion": [
       {
-        "matcher": "plan-new|plan-next|plan-phase|plan-close|implement-next|commit",
+        "matcher": "plan-new|plan-next|plan-close|implement-next|commit",
         "hooks": [
           {
             "type": "command",
