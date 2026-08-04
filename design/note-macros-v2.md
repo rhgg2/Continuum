@@ -191,8 +191,10 @@ fill or an arp folding back onto a pitch.
 **PA binds to the region.** With no privileged host note, the replace
 gate the v1 doc flagged ("bind to the window, or to a regenerated first
 hit") resolves cleanly: PA binds to the region — channel × ppq, stable,
-persisted. The degenerate note host still binds PA to its note. Parking
-PAs out of a replace window is deferred (§ *Deferred — no consumer*).
+persisted. The degenerate note host still binds PA to its note. A PA
+parks with its host note, region-parked or self-parked; what stays
+deferred is PA *replace* — a generator consuming and re-emitting one —
+which is a different operation (§ *Deferred — no consumer*).
 
 ## Authoring and editing the fx
 
@@ -549,16 +551,16 @@ has *no* authored automation there is nothing to sum onto, so the fold
 seeds from a resting value:
 
 ```
-rest(target) = fx.rest ?? destProfile(target).rest
+rest(target) = destProfile(target).rest
 ```
 
 `destProfile` carries the per-dest defaults (`ccDefaultRest`: 64 for the
 bipolar family — pan 10, balance 8, sound controllers 71–79 — 127 for
 expression 11, else 0). Polarity is the controller's own, and its default
 rest says it: one resting mid-scale swings both ways, one at a rail only
-runs inward. `fx.rest` is an optional per-region override; it is
-realisation metadata riding the fx entry and does *not* flow through
-`expand`, leaving the generator contract untouched.
+runs inward. The base is per target and authored in the column — inside
+the window or governing from before it — deliberately not a per-region
+field, so two regions over one target cannot disagree about it.
 
 **Replace parks the authored cc and seats the curve.** Inside the window
 on the target cc, the authored cc is parked off-take and the generated
@@ -856,8 +858,10 @@ channel at flush — parked specs are producer input. The view tags only
 the parked cell's **onset row** `parked` (membership `{self}` is closed:
 adds elsewhere in the span stay plain, unlike a region window), and the
 fx-host lookups resolve parked uuids between mm and regions. PA display
-anchors to the parked cell's lane; the PA itself stays take-side and
-sounds against the derived same-pitch hits.
+anchors to the parked cell's lane, and the PA parks off-take with the
+host like any other — `rebuildRegionPark`'s PA pass keys on the host
+cell, not on how it came to be parked (corrected 2026-08-04; this read
+"stays take-side" from before PA parking landed).
 
 ## The chain surface
 
@@ -968,12 +972,18 @@ rebuild fault.
 - **A region-parked note's own fx stays suppressed** while the region
   covers it. It survives in the spec and returns when the region moves
   off, so this is a quirk rather than data loss.
-- **A replace region's parked PAs stay take-side**, sounding against the
-  derived hits — a latent orphan until the first PA-consuming generator,
-  which is when they should be parked out too.
-- **`fx.rest` is stored per region but is conceptually the target's.**
-  Two augment regions on one target with different overrides resolve
-  first/lowest-wins.
+- ~~**A replace region's parked PAs stay take-side**~~ — **withdrawn**
+  (2026-08-04, probed in a spike tree against `tm_fx_region_spec`'s
+  harness). A PA parks exactly when its host note parks, and that holds
+  for both host kinds: a region-parked chord's PAs leave the take (the
+  standing case at `tm_fx_region_spec.lua:319`), and so do a self-parked
+  trill host's — one parked cell, zero PAs on the wire, one PA in the
+  stash. Nor is the symptom reachable from the other side: a note whose
+  onset precedes the window is not parked, and a replace region's members
+  *are* its parked cells (`trackerManager.lua:3620`), so it derives
+  nothing to sound against. What remains is narrower and inert — a PA
+  inside the window but past its host cell's end stays take-side, on a
+  pitch where no derived tile reaches it.
 
 ## Deferred — no consumer
 

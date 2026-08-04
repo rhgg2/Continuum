@@ -674,13 +674,6 @@ local function allocateRegionLanes(chan, startL, endL, derived, emitted)
     spec.lane = lane
   end
 end
-local function firstRestOverride(recs)   -- earliest chain's explicit rest override wins
-  local rest, best = nil, math.huge
-  for _, rec in ipairs(recs) do
-    if rec.rest ~= nil and rec.window[1] < best then rest, best = rec.rest, rec.window[1] end
-  end
-  return rest
-end
 -- A parked cell as a generator stream note: it sounds to its render clip, never to the authored
 -- ceiling on endppq -- the field the view edits. Mirrors membersOf' shape for on-take notes.
 local function soundingCell(cell)
@@ -3485,7 +3478,7 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
           cur = out.delta
         else
           if #cur == 0 and target ~= 'pb' then
-            local rest = generators.restFor(target, producer.fx.rest)
+            local rest = generators.restFor(target)
             cur = { { ppq = startL, val = rest, shape = 'step' } }
           end
           cur = sumStreams(cur, { out.delta }, { startL, endL }, { closed = true })
@@ -3528,7 +3521,7 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
         else
           util.bucket(ccChains, target,
                       { window = { startL, endL }, curve = stream.ccs[target] or {},
-                        rest = producer.fx.rest, mode = generators.chainDestType(producer.fx, target) })
+                        mode = generators.chainDestType(producer.fx, target) })
         end
       end
       -- Only a note-dest stage's chain emits (parksNotes mirrors this). Region producers (lane
@@ -3710,7 +3703,7 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
     for cc, recs in pairs(ccChains) do
       local base = ccBases[cc] or {}
       if #base == 0 then
-        local rest, minStart = generators.restFor(cc, firstRestOverride(recs)), math.huge
+        local rest, minStart = generators.restFor(cc), math.huge
         for _, rec in ipairs(recs) do minStart = math.min(minStart, rec.window[1]) end
         base = { { ppq = minStart, val = rest, shape = 'step' } }
       end

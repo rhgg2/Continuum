@@ -1740,6 +1740,30 @@ return {
   },
 
   {
+    name = 'fx region (cc augment): a value authored before the window governs as the base',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent({ evType = 'cc', ppq = 0, chan = 1, cc = 10, val = 100 }); h.tm:flush()
+      generators.kinds.ccCap = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppq = host.window[1], val = 0,  shape = 'step' },
+          { ppq = 180,            val = 10, shape = 'step' },
+          { ppq = host.window[2], val = 0,  shape = 'step' },
+        } } end,
+        mode = 'augment', dest = 10, label = 'CcCap', defaults = {}, fields = {},   -- pan, default rest 64
+      }
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 120, endppq = 240,
+                                   fx = { { kind = 'ccCap' } } } })
+      h.tm:rebuild()
+      generators.kinds.ccCap = nil
+
+      t.eq(ccFillAt(h, 1, 10, 120).val, 100, 'the governing authored value, not ccDefaultRest 64, is the base')
+      t.eq(ccFillAt(h, 1, 10, 180).val, 110, 'governing base 100 + macro delta 10 at the peak')
+      t.truthy(authoredCC(h, 1, 10, 0), 'the authored cc stays on the take -- it lies outside the window')
+    end,
+  },
+
+  {
     name = 'fx region (cc augment): two overlapping regions sum every stream (N-stream regression guard)',
     run = function(harness)
       local h = harness.mk()
@@ -1768,28 +1792,6 @@ return {
 
       t.eq(ccFillAt(h, 1, 10, 60).val, 114, 'overlap sums rest 64 + macroA 40 + macroB 10 -- no stream dropped')
       t.eq(ccFillAt(h, 1, 10, 0).val,  64,  'both macros anchor 0 at the window edge -> base rest alone')
-    end,
-  },
-
-  {
-    name = 'fx region (cc augment): region.fx.rest overrides the default resting base',
-    run = function(harness)
-      local h = harness.mk()
-      generators.kinds.ccCap = {
-        expand = function(host) return { notes = {}, delta = {
-          { ppq = host.window[1], val = 0,  shape = 'step' },
-          { ppq = 60,             val = 10, shape = 'step' },
-          { ppq = host.window[2], val = 0,  shape = 'step' },
-        } } end,
-        mode = 'augment', dest = 10, label = 'CcCap', defaults = {}, fields = {},   -- pan, default rest 64
-      }
-      local fx = { { kind = 'ccCap' } }; fx.rest = 100
-      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = fx } })
-      h.tm:rebuild()
-      generators.kinds.ccCap = nil
-
-      t.eq(ccFillAt(h, 1, 10, 0).val,  100, 'region.fx.rest (100) overrides ccDefaultRest[10] (64) as the base')
-      t.eq(ccFillAt(h, 1, 10, 60).val, 110, 'the override base 100 + macro delta 10 at the peak')
     end,
   },
 

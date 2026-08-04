@@ -428,7 +428,7 @@ function generators.destOf(params)
 end
 
 -- Polarity is the controller's own, and its default rest says it: one resting mid-scale swings
--- both ways, one at a rail only runs inward. An fx.rest override steers the fold seed, never this.
+-- both ways, one at a rail only runs inward.
 function generators.destProfile(dest)
   if dest == 'pb' then return { unit = 'cents', rest = 0, bipolar = true, magScale = PB_REFERENCE } end
   if type(dest) ~= 'number' then return nil end
@@ -438,9 +438,10 @@ function generators.destProfile(dest)
            magScale = bipolar and math.min(rest, 127 - rest) or math.max(rest, 127 - rest) }
 end
 
--- The resting base a continuous augment sums onto: an authored override wins, else the dest's rest.
-function generators.restFor(dest, override)
-  return override or generators.destProfile(dest).rest
+-- The resting base a continuous augment sums onto when the target carries no authored automation.
+-- Named despite being one line: the per-chain seed and per-channel fold must agree on this value.
+function generators.restFor(dest)
+  return generators.destProfile(dest).rest
 end
 
 -- Every dest a kind can serve. Fewer than two is no choice at all, and earns no Dest row.
