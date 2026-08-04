@@ -1,9 +1,7 @@
 # CLAUDE.md
 
 Hi Claude! This is Continuum, a Lua 5.4 tracker-style MIDI editor for
-REAPER. These notes are for your orientation, and are conventions, not
-restrictions. If the guidance fights the work in front of you, I'm
-happy for you to trust your judgement.
+REAPER. These notes are for your orientation.
 
 ## Architecture
 
@@ -17,13 +15,13 @@ different pictures of the same state. That's why calls go through the
 public API of the adjacent layer rather than reaching past it.
 
 `continuum.lua` wires everything; `coordinator` owns the UI frame and
-switches between pages. Each page *coordinates* a `page → view →
-manager → ...` stack (currently tracker, sampler, wiring, arrange,
-editor) rather than sitting atop it: it builds the substack and drives
-lifecycle on the layer that owns it. So the adjacent-layer rule above
-governs calls *within* the chain, not the page's reach into it. There
-are also many cross-cutting services; the live module set and how
-they connect can be found using `mcp__continuum_map__map_query`.
+switches between pages. Each page manages a `page → view → manager →
+...` stack (currently tracker, sampler, wiring, arrange, editor); it
+builds the substack and drives lifecycle on the layer that owns it. So
+the adjacent-layer guidance above governs calls *within* the chain,
+not the page's reach into it. There are also many cross-cutting
+services; the live module set and how they connect can be found using
+`mcp__continuum_map__map_query`.
 
 Two critical concepts in the tracker stack:
 
@@ -39,30 +37,23 @@ Two critical concepts in the tracker stack:
 `--KIND:` annotations in source carry single-line invariants,
 contracts, shapes, emitted signals and REAPER touchpoints. They are
 one-liners, capped short (except `--shape`); `docs/CONVENTIONS.md` has
-the kind list, attachment rules, the `?`-prefix-for-inferred
-convention, the caps themselves, the contract/annotation/doc boundary
-and section-divider grammar.
+the full details.
 
-Anything that doesn't fit in a line is rationale, history or an
-example, and belongs in `docs/<file>.md` with a one-line pointer at the
-site (`-- see docs/<file>.md § <section>`). That file is the only layer
-with room for WHY — the model, the history, the incident that motivated
-a shape, the concern that spans files — and it doesn't restate API
-surface or repeat an annotation, because the reader already has those.
+Rationale, history or examples that wouldn't fit in a line live in
+`docs/<file>.md` with a one-line pointer at the site (`-- see
+docs/<file>.md § <section>`). The docs hold the current WHY, but don't
+describe the API surface or repeat annotations in the code.
 
 ## Programme plans
 
-Every piece of ongoing work larger than a couple of commits has a
-design doc in `design/` and a plan in `plan/`: the design doc holds the
-model and the decisions, the plan holds the machinery — phases, what
-landed, what's next. `plan/CURRENT` is a stack, newest first: the top
-line is live and the rest are parked. The in-flight item's
-implementation brief is `plan/IMPL.md` — untracked and short-lived:
-`/plan-next` writes it, `/implement-next` works from it, the landing
-bookkeeping deletes it.
-
-`design/` is intent, not current state — `docs/<file>.md` is what is
-true now.
+Ongoing work larger than a couple of commits has a design doc in
+`design/` and a plan in `plan/`: the design doc holds the intent and
+the decisions, the plan holds the machinery — phases, what landed,
+what's next. `plan/CURRENT` is a stack, newest first: the top line is
+live and the rest are parked. The in-flight item's implementation
+brief is `plan/IMPL.md` — untracked and short-lived: `/plan-next`
+writes it, `/implement-next` works from it, the landing bookkeeping
+deletes it.
 
 ## Writing prose
 
@@ -73,22 +64,20 @@ writing any of the three.
 
 ## Navigating the code
 
-- **Maps make things easier.** `map/<file>.map` answers "where does X
-  live" in one screen and is regenerated on every edit, so it's
-  current even for a file you opened weeks ago; `docs/<file>.md` for
-  the WHY.
+- `map/<file>.map` answers "where does X live" in one screen and is
+  regenerated on every edit, so it's current even for a file you
+  opened weeks ago; `docs/<file>.md` for the WHY.
 
-- **Symbol navigation — `mcp__continuum_map__map_query`.** Faster
-  and more complete than grepping `map/*.map`; its schema documents
-  the filters, query syntax and return shape. Gotchas on top of the
-  schema: `uses`/`usedby` resolve receivers through the file's alias
-  table, so targets read as `tm:rebuild`, not
-  `trackerManager:rebuild`; `usedby` answers in two labelled sections,
-  cross-module `@use` edges and the file's own intra-module `@call`
-  rows, so "who calls this private helper" is the same one query;
-  `forward` edges point at the **source's**
-  signal, not the receiver's, and kind='flow' follows the whole chain
-  for you. `query` and `module` are regex, not glob — `query`
+- `mcp__continuum_map__map_query` is faster and more complete than
+  grepping `map/*.map`; its schema documents the filters, query syntax
+  and return shape. Gotchas on top of the schema: `uses`/`usedby`
+  resolve receivers through the file's alias table, so targets read as
+  `tm:rebuild`, not `trackerManager:rebuild`; `usedby` answers in two
+  labelled sections, cross-module `@use` edges and the file's own
+  intra-module `@call` rows, so "who calls this private helper" is the
+  same one query; `forward` edges point at the **source's** signal,
+  not the receiver's, and kind='flow' follows the whole chain for you.
+  `query` and `module` are regex, not glob — `query`
   substring-matched, `module` anchored.
 
 - **Field-shaped questions** — who reads or writes `.ppqL`, who

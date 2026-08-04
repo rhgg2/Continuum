@@ -24,7 +24,7 @@
 - Quarantine UX (Open questions) — a darkened component still needs to
    signal why it went dark (feedback loop / bus-aware FX) and its
    recovery path in the wiring view.
-   
+- A region-parked note's own fx stays suppressed.
 One loose thread I'd flag again, since it's now measured rather than
 suspected: swapping `groupDuplicate`'s destination clear to run *after*
 the projection is caught by nothing in the 2241-test suite. The
