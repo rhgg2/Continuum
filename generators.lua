@@ -10,7 +10,7 @@
 --invariant: ctx binds resolution, pbRangeCents, nextSameLaneNote, step(p,d,n), stepsBetween(a,b)
 --invariant: periods are QN per the periodQN convention -- scalar or {num,den}
 --shape: result = { notes = { {ppq,endppq,pitch,vel,detune}, ... }, delta = { {ppq,val,shape,[tension]}, ... } }
---shape: kinds[kind] = { expand, mode='replace'|'augment', dest='note'|'pb'|<cc>, dests?='any'|'pb'|'cc', label, defaults, fields }
+--shape: kinds[kind] = { expand, mode='replace'|'augment', dest='note'|'pb'|<cc>, dests?='any'|'pb'|'cc', label, glyph, defaults, fields }
 --shape: field = { field, label, widget, base?, coarse?, min?, max?, options?, when?, kind?, poly?, quantity?='magnitude', signed?, frac? }
 --invariant: mode is the stream fold -- replace overwrites the dest channel, augment adds to it
 -- The copy shelf (design/fx-patterns.md § P4): named copies of pattern-param bodies, Save/Load
@@ -324,7 +324,7 @@ local VEL_PATTERNS  = { { l = '> .',     v = { 100, 55 } },
 
 generators.kinds = {
   retrig = {
-    expand = retrig, mode = 'replace', dest = 'note', label = 'Retrig',
+    expand = retrig, mode = 'replace', dest = 'note', label = 'Retrig', glyph = 'R',
     defaults = { period = { 1, 4 }, ramp = 0 },
     fields = {
       { field = 'period', label = 'Period', widget = 'choice', options = PERIODS },
@@ -332,7 +332,7 @@ generators.kinds = {
     },
   },
   trill = {
-    expand = trill, mode = 'replace', dest = 'note', label = 'Trill',
+    expand = trill, mode = 'replace', dest = 'note', label = 'Trill', glyph = 'T',
     defaults = { period = { 1, 4 }, step = 2 },
     fields = {
       { field = 'period', label = 'Period', widget = 'choice', options = PERIODS },
@@ -340,7 +340,7 @@ generators.kinds = {
     },
   },
   arp = {
-    expand = arp, mode = 'replace', dest = 'note', label = 'Arp',
+    expand = arp, mode = 'replace', dest = 'note', label = 'Arp', glyph = 'A',
     defaults = { period = { 1, 4 }, dir = 'up' },
     fields = {
       { field = 'period', label = 'Period', widget = 'choice', options = PERIODS },
@@ -348,21 +348,21 @@ generators.kinds = {
     },
   },
   ostinato = {
-    expand = ostinato, mode = 'replace', dest = 'note', label = 'Ostinato',
+    expand = ostinato, mode = 'replace', dest = 'note', label = 'Ostinato', glyph = 'O',
     defaults = { pattern = { kind = 'notes', specs = {} } },
     fields = {
       { field = 'pattern', label = 'Pattern', widget = 'pattern', kind = 'notes' },
     },
   },
   chordStamp = {
-    expand = chordStamp, mode = 'replace', dest = 'note', label = 'Chord',
+    expand = chordStamp, mode = 'replace', dest = 'note', label = 'Chord', glyph = 'C',
     defaults = { pattern = { kind = 'notes', specs = {} } },
     fields = {
       { field = 'pattern', label = 'Chord', widget = 'pattern', kind = 'notes', poly = true },
     },
   },
   sine = {
-    expand = sine, mode = 'augment', dest = 'pb', dests = 'any', label = 'Sine',
+    expand = sine, mode = 'augment', dest = 'pb', dests = 'any', label = 'Sine', glyph = '∿',
     defaults = { period = { 1, 2 }, onset = 1 },
     fields = {
       { field = 'period', label = 'Period', widget = 'choice', options = PERIODS },
@@ -372,7 +372,7 @@ generators.kinds = {
     },
   },
   slide = {
-    expand = slide, mode = 'augment', dest = 'pb', dests = 'pb', label = 'Slide',
+    expand = slide, mode = 'augment', dest = 'pb', dests = 'pb', label = 'Slide', glyph = '/',
     defaults = { over = { 1, 2 }, target = 'next' },
     fields = {
       { field = 'over',   label = 'Glide',    widget = 'choice', options = PERIODS },
@@ -383,14 +383,14 @@ generators.kinds = {
     },
   },
   velPattern = {
-    expand = velPattern, mode = 'replace', dest = 'note', label = 'Vel Pattern',
+    expand = velPattern, mode = 'replace', dest = 'note', label = 'Vel Pattern', glyph = 'V',
     defaults = { pattern = { 100, 55 } },
     fields = {
       { field = 'pattern', label = 'Pattern', widget = 'choice', options = VEL_PATTERNS },
     },
   },
   lfo = {
-    expand = lfo, mode = 'augment', dest = 'pb', dests = 'any', label = 'Curve LFO',
+    expand = lfo, mode = 'augment', dest = 'pb', dests = 'any', label = 'Curve LFO', glyph = '~',
     defaults = { period = { 1, 4 },
                  pattern = { kind = 'curve', domain = 'normalized', display = 'bipolar', points = {} } },
     fields = {
@@ -412,6 +412,13 @@ for cc = 71, 79 do generators.ccDefaultRest[cc] = 64 end
 -- Which kinds the fx palette offers, in order. Every kind works on either host: a region
 -- arpeggiates its covered chord, a single note degenerates cleanly (arp -> retrig, one voice).
 generators.modalOrder = { 'retrig', 'trill', 'arp', 'ostinato', 'chordStamp', 'velPattern', 'sine', 'slide', 'lfo' }
+
+-- One glyph per kind: a letter shapes notes, a wave mark paints a continuous stream. '?' is a
+-- kind the registry has lost. see design/note-macros-v2.md § The chain surface
+function generators.glyphOf(kind)
+  local meta = generators.kinds[kind]
+  return meta and meta.glyph or '?'
+end
 
 ----- Dest: a per-entry target, and what each target's numbers mean
 

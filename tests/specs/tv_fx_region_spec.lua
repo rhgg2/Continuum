@@ -68,7 +68,7 @@ return {
       t.truthy(col, 'an fx column exists on the region channel')
       local cell = col.cells[0]
       t.truthy(cell and cell.uuid == 'fxr-1', 'the badge cell at the window start carries the region uuid')
-      t.eq(cell.kind, 'sine', 'the badge shows the primary kind')
+      t.eq(cell.glyph, '∿', "the badge shows the primary kind's glyph, resolved at mint")
       t.eq(#col.tails, 1, 'one tail bracket spans the window')
       t.eq(col.tails[1].endRow, h.vm:ppqToRow(240, 1), 'the tail runs to the window end')
     end,

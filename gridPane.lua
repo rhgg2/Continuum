@@ -162,11 +162,9 @@ local function renderCC(evt, col)
   return wide and '····' or '··'
 end
 
--- One glyph per fx kind; the fx-region cell shows the region's primary kind.
-local FX_GLYPH = { retrig = 'R', trill = 'T', sine = '∿', slide = 'S', arp = 'A', fill = 'F' }
 local function renderFx(evt)
   if not evt then return '·' end   -- one-glyph column: empty cell is a single dot, like renderCC
-  return FX_GLYPH[evt.kind] or '~', 'accent'
+  return evt.glyph, 'accent'       -- the view resolves the kind's glyph off the registry as it mints the cell
 end
 
 local renderFns = {

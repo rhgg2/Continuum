@@ -926,9 +926,19 @@ are never re-seated — silence, not neutrality.
 region's primary kind, so a three-stage chain and a one-stage chain look
 alike. Stacking the stages' one-char glyphs in series order down the
 region's tail rows makes behaviour readable without opening anything, and
-matches the palette's own vertical stage order. It wants a real glyph
-vocabulary alongside: the current set is first-letter-ish plus one
-symbol, and one glyph now covers what used to be two kinds.
+matches the palette's own vertical stage order.
+
+The vocabulary landed first, on the registry (2026-08-04). A kind's glyph
+is a field on its `generators.kinds` entry, and `generators.glyphOf` is
+the one place a kind resolves to a character, so the view mints the badge
+already holding it and the grid renderer knows nothing of the set. The
+set divides by what a kind touches: a letter for one that shapes notes
+(`R` `T` `A` `O` `C` `V`), a wave mark for one that paints a continuous
+stream (`∿` sine, `/` slide, `~` lfo). Case would have drawn the same
+distinction and lost it, because at one cell a letter against a squiggle
+survives where upper against lower does not. A kind the registry has lost
+draws `?` — which is what a scripted kind that failed to load will look
+like.
 
 **Ghost-on-focus.** The ghost display mode of § *Authoring and editing*,
 defaulted on while the fx pane holds focus — "what does this chain

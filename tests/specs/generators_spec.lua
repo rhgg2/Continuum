@@ -41,6 +41,29 @@ end
 
 return {
 
+  ----- The glyph vocabulary: the fx column's one-character badge per kind
+
+  {
+    name = 'every registered kind carries a glyph, one codepoint, shared with no other kind',
+    run = function()
+      local seen = {}
+      for kind, meta in pairs(generators.kinds) do
+        t.truthy(meta.glyph, kind .. ' carries a glyph')
+        t.eq(utf8.len(meta.glyph), 1, kind .. "'s glyph is one codepoint -- the fx column is one cell wide")
+        t.falsy(seen[meta.glyph], ('%s cannot share a glyph with %s'):format(kind, tostring(seen[meta.glyph])))
+        seen[meta.glyph] = kind
+      end
+    end,
+  },
+
+  {
+    name = 'glyphOf resolves off the registry, and falls back for a kind the registry has lost',
+    run = function()
+      t.eq(generators.glyphOf('sine'), '∿', 'a registered kind draws as its own glyph')
+      t.eq(generators.glyphOf('nosuchkind'), '?', 'an unregistered kind draws as unknown')
+    end,
+  },
+
   ----- slide: glide-in envelope
 
   {

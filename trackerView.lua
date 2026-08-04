@@ -26,6 +26,7 @@ local util       = require 'util'
 local timing     = require 'timing'
 local tuning     = require 'tuning'
 local groupsCore = require 'groups'
+local generators = require 'generators'
 local perf       = require 'perf'
 
 local tm, cm, ds, cmgr, gm, pa, facade, lib =
@@ -3850,7 +3851,7 @@ function tv:rebuild(takeChanged)
           local kind = region.fx and region.fx[1] and region.fx[1].kind
           if kind then
             util.add(fxCells, { ppq = region.startppq, endppqC = region.endppq,
-                                kind = kind, uuid = region.uuid })
+                                glyph = generators.glyphOf(kind), uuid = region.uuid })
           end
         end
         if #fxCells > 0 then addGridCol(chan, 'fx', nil, fxCells) end
