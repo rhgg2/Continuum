@@ -14,10 +14,11 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-04 design: a straddling member parks whole -- withdrawn, not a gap (§ Known gaps and accepted quirks)
+
 - 2026-08-04 tm: nextSameLaneNote sees parked cells; a region has no lane (§ Known gaps and accepted quirks)
 - 2026-08-04 tm: delete fx.rest; the target column is the augment base (§ Continuous cc)
 - 2026-08-04 tv: bypass a stage from the fx tab -- byp button and Super+B (§ The chain surface)
-- 2026-08-03 generators: a bypassed stage yields precedence, folding as a zero augment (§ The chain surface)
 
 ## Now
 
@@ -25,15 +26,4 @@
 
 ## Queued (current phase; one-liners)
 
-1. **Split a member that straddles the window's end edge.** `covered()`
-   (`trackerManager.lua:2832`) is onset-based, so a note whose onset falls
-   inside the window parks whole and its sounding tail past the region's end
-   goes silent with it. The covered head should park as it does now, with the
-   remainder from the window end still sounding. The ownership fork is open and
-   belongs to the brief: either the park pass owns the remainder and re-derives
-   it each rebuild, reconciled like a derived spec and dropped on restore, or
-   the take is genuinely split at park time and restore rejoins head and
-   remainder. Design § *Parked editing*'s uuid rule — a restore keeps the
-   original, a relocation sheds it — constrains the second. Spec home
-   `tests/specs/tm_fx_region_spec.lua`, alongside the parked-tail realisation
-   cases at `:390` and `:481`.
+(empty — the phase's remaining bullets need sizing: run /plan-phase.)

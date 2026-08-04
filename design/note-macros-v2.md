@@ -972,8 +972,16 @@ rebuild fault.
   after the note it aimed at. Where the ceiling ends at the successor —
   the ordinary case — the glide is exact. That clip governs every kind's
   window, not slide's, so unioning it is its own change.
-- **A member straddling a window edge is parked whole.** No split, so the
-  part of the note outside the region goes silent with the rest of it.
+- **A member straddling a window edge is parked whole** — **accepted**
+  (2026-08-04, examined against a derived-remainder design and refused).
+  Membership is by onset, so the member belongs to the region entire.
+  Realising the uncovered tail would mean a note-on at the window edge:
+  an attack the author never wrote, standing in for a note the region
+  has already spoken for. Silence is the honest realisation, and the
+  authored note loses nothing by it — the parked cell is the whole of
+  it, visible and editable throughout. The rule reads the same in the
+  other direction: a note whose onset precedes the window is not a
+  member, and sustains through it.
 - **A region-parked note's own fx stays suppressed** while the region
   covers it. It survives in the spec and returns when the region moves
   off, so this is a quirk rather than data loss.
