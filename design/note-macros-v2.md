@@ -962,11 +962,16 @@ rebuild fault.
 
 ## Known gaps and accepted quirks
 
-- **Slide degrades on a parked host.** `ctx.nextSameLaneNote` searches
-  the take columns, and a self-parked host is off-take, so slide sharing
-  a chain with a discrete-replace kind emits no delta (`[trill, slide]`
-  gives the trill and nothing else). `target='fixed'` is unaffected. The
-  fix is in the ctx closure — search parked cells as well as columns.
+- **A slide into a parked successor arrives late when the host's tail
+  runs past it.** `ctx.nextSameLaneNote` reads lane occupancy as column ∪
+  parked (2026-08-04, replacing the wider gap where a parked host got no
+  successor at all and `[trill, slide]` gave the trill alone), so the
+  target is right. The host's *window* clip is still column-only
+  (`hostWindowEnd` → `nextLaneOnset`), so a host whose authored ceiling
+  runs past the parked cell glides across the whole tail and arrives
+  after the note it aimed at. Where the ceiling ends at the successor —
+  the ordinary case — the glide is exact. That clip governs every kind's
+  window, not slide's, so unioning it is its own change.
 - **A member straddling a window edge is parked whole.** No split, so the
   part of the note outside the region goes silent with the rest of it.
 - **A region-parked note's own fx stays suppressed** while the region

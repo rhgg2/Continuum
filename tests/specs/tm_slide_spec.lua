@@ -175,6 +175,70 @@ return {
     end,
   },
 
+  ----- Lane occupancy is column + parked: an off-take cell is a target like any other
+
+  {
+    name = 'a self-parked host still slides: [trill, slide] resolves its successor off-take',
+    run = function(harness)
+      local h = harness.mk()
+      -- trill is discrete-replace, so it parks its own host; slide shares the chain and must
+      -- still resolve the lane successor from off-take. see design/note-macros-v2.md § Known gaps
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
+                      detune = 0, delay = 0, lane = 1,
+                      fx = { { kind = 'trill', period = { 1, 4 }, step = 2 },
+                             { kind = 'slide', over = { 1, 2 }, target = 'next' } } })
+      h.tm:addEvent({ evType = 'note', ppq = 240, endppq = 480, chan = 1, pitch = 61, vel = 100,
+                      detune = 0, delay = 0, lane = 1 })
+      h.tm:flush()
+      t.eq(#h.tm:getChannel(1).parked, 1, 'the trill parked its own host (non-vacuous)')
+      local arrival = pbSeatAt(h.fm:dump(), 1, 225)
+      t.truthy(arrival, 'the chain seats a glide at all -- an off-take host is still a slide host')
+      t.eq(arrival.val, centsToRaw(100), 'and it finds the +100c lane successor')
+    end,
+  },
+
+  {
+    name = 'slide aims at a region-parked successor, not the on-take note beyond the region',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 120, chan = 1, pitch = 60, vel = 100,
+                      detune = 0, delay = 0, lane = 1,
+                      fx = { { kind = 'slide', over = { 1, 2 }, target = 'next' } } })
+      h.tm:flush()
+      h.tm:addEvent({ evType = 'note', ppq = 120, endppq = 240, chan = 1, pitch = 61, vel = 100,
+                      detune = 0, delay = 0, lane = 1 })     -- the real target: +100c, parked below
+      h.tm:flush()
+      h.tm:addEvent({ evType = 'note', ppq = 480, endppq = 600, chan = 1, pitch = 72, vel = 100,
+                      detune = 0, delay = 0, lane = 1 })     -- decoy past the region: +1200c
+      h.tm:flush()
+      h.ds:assign('fxRegions', { { uuid = 'fxr-a', chan = 1, startppq = 120, endppq = 240,
+                                   fx = { { kind = 'arp', period = { 1, 4 }, dir = 'up' } } } })
+      h.tm:rebuild(); h.tm:flush()
+      t.eq(#h.tm:getChannel(1).parked, 1, 'the region parked the successor off-take (non-vacuous)')
+      t.eq(pbSeatAt(h.fm:dump(), 1, 105).val, centsToRaw(100),
+        'glides +100c to the parked cell, not the +1200c decoy (which would clamp to the ceiling)')
+    end,
+  },
+
+  {
+    name = 'a region-hosted slide has no lane to resolve: no delta, no fault',
+    run = function(harness)
+      local h = harness.mk()
+      -- A region's members span lanes, so `next same-lane` has no subject; the pb is channel-wide
+      -- either way. The contract is the no-next one -- an empty delta, not a rebuild fault.
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 120, chan = 1, pitch = 60, vel = 100,
+                      detune = 0, delay = 0, lane = 1 })
+      h.tm:flush()
+      h.tm:addEvent({ evType = 'note', ppq = 240, endppq = 360, chan = 1, pitch = 64, vel = 100,
+                      detune = 0, delay = 0, lane = 1 })
+      h.tm:flush()
+      h.ds:assign('fxRegions', { { uuid = 'fxr-a', chan = 1, startppq = 0, endppq = 120,
+                                   fx = { { kind = 'slide', over = { 1, 2 }, target = 'next' } } } })
+      h.tm:rebuild(); h.tm:flush()
+      t.eq(#pbSeatsOf(h.fm:dump(), 1), 0, 'no lane, no target, no seats -- and no index fault')
+    end,
+  },
+
   ----- Disjoint windows each seat their own pb span
 
   {

@@ -14,10 +14,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-04 tm: nextSameLaneNote sees parked cells; a region has no lane (§ Known gaps and accepted quirks)
 - 2026-08-04 tm: delete fx.rest; the target column is the augment base (§ Continuous cc)
 - 2026-08-04 tv: bypass a stage from the fx tab -- byp button and Super+B (§ The chain surface)
 - 2026-08-03 generators: a bypassed stage yields precedence, folding as a zero augment (§ The chain surface)
-- 2026-08-03 tm: bypassed fx stage folds as the identity, keeping ownership (§ The chain surface)
 
 ## Now
 
@@ -25,18 +25,7 @@
 
 ## Queued (current phase; one-liners)
 
-1. **Teach `nextSameLaneNote` to see parked cells.** It seeks only in the
-   lane's on-take column and then confirms the host is seated there
-   (`trackerManager.lua:3417`), so a self-parked host has no successor and a
-   `target='next'` slide emits nothing — `[trill, slide]` gives the trill
-   alone. Union the lane's parked cells (`channels[chan].parked`, which carry
-   `lane` and a logical `ppq`) into both the seek and the seat check. The same
-   change settles the converse: an on-take host whose successor was parked by a
-   region currently slides to the note *after* the region, which is a wrong
-   interval rather than a missing one. Spec home
-   `tests/specs/tm_fx_region_spec.lua`, red-first on a self-parked
-   `[trill, slide]` host.
-2. **Split a member that straddles the window's end edge.** `covered()`
+1. **Split a member that straddles the window's end edge.** `covered()`
    (`trackerManager.lua:2832`) is onset-based, so a note whose onset falls
    inside the window parks whole and its sounding tail past the region's end
    goes silent with it. The covered head should park as it does now, with the

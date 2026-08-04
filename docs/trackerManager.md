@@ -623,10 +623,12 @@ via `tm:fromLogical` before the walk. "Authored" means the cents sidecar is pres
 foreign pbs carry none).
 
 `nextSameLaneNote(host)` looks up the strict next same-lane note by seeking directly in the host's
-lane column instead of building a per-channel map up front. A parked host is not the column's own
-cell (it was pulled out of it), so it has no successor in the column — the seat check (walking
-back from the found insertion point to confirm the note itself is still present there) preserves
-that.
+lane column instead of building a per-channel map up front, then takes the nearer of that and the
+lane's parked cells. Lane occupancy is column ∪ parked — the same union `renderUnion` puts on the
+grid — so a parked host has a successor despite being off-take, and a parked successor is the
+target a slide aims at. The subject is the *producer's* lane rather than the stream note's: a
+region spans lanes, carries none, and resolves to nil, which is also what keeps a region-hosted
+`target='next'` off a member record that carries no channel.
 
 `rebuildRegionPark`'s note/cc scans are span-covered the same way: `coverOnsets` walks each
 channel's window extents (merged per-channel for notes, per `(chan, cc)` for ccs) rather than the

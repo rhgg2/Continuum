@@ -3405,24 +3405,23 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
   local function stepsBetween(a, b)              -- chord-stamp: whole temper steps between two notes
     return tuning.stepsBetween(temper, a.pitch, a.detune or 0, b.pitch, b.detune or 0)
   end
-  -- Strict next same-lane note, sought directly in the host's lane column (slide's only consumer).
-  -- see docs/trackerManager.md § Span-covered fx scans
+  -- Strict next same-lane note (slide's only consumer): lane occupancy is column union parked, and
+  -- the subject is the producer's lane, so a region (no lane) resolves nil. see docs/trackerManager.md § Span-covered fx scans
   local function nextSameLaneNote(host)
     local note = host.notes[1]
-    local col = note and channels[note.chan].columns.notes[note.lane]
-    if not col then return nil end
-    local events = col.events
-    local from = firstAfter(events, note.ppq)
-    local seated = false
-    for j = from - 1, 1, -1 do
-      if events[j].ppq < note.ppq then break end
-      if events[j] == note then seated = true; break end
-    end
+    if not note or not host.lane then return nil end
     local found
-    if seated then
-      for j = from, #events do
-        if events[j].evType ~= 'pa' then found = events[j]; break end
+    local col = channels[host.chan].columns.notes[host.lane]
+    if col then
+      for j = firstAfter(col.events, note.ppq), #col.events do
+        if col.events[j].evType ~= 'pa' then found = col.events[j]; break end
       end
+    end
+    -- Parked cells left the column but keep their seat in the lane. A handful at most, asked only
+    -- for the nearer onset: scanned, not indexed (realiseParked's model).
+    for _, cell in ipairs(channels[host.chan].parked or {}) do
+      if cell.lane == host.lane and cell.ppq > note.ppq
+         and (not found or cell.ppq < found.ppq) then found = cell end
     end
     return found
   end
