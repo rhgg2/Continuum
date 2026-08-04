@@ -29,6 +29,24 @@ from pydantic import ConfigDict
 # Strict input validation: reject unknown kwargs so silent param-name slips fail loudly.
 ArgModelBase.model_config = ConfigDict(arbitrary_types_allowed=True, extra='forbid')
 
+# pydantic titles every field and model after the name it was derived from
+# ('Kind' for kind, '<tool>Arguments' for the model), which tool schemas then
+# carry into always-loaded context. Drop them at the one point every tool's
+# arg model shares.
+_base_json_schema = ArgModelBase.model_json_schema.__func__
+
+
+def _untitled(node):
+    if isinstance(node, dict):
+        return {k: _untitled(v) for k, v in node.items() if k != 'title'}
+    if isinstance(node, list):
+        return [_untitled(v) for v in node]
+    return node
+
+
+ArgModelBase.model_json_schema = classmethod(
+    lambda cls, *a, **kw: _untitled(_base_json_schema(cls, *a, **kw)))
+
 # The declaration index and the call-site join live in tools/map_index.py so the
 # flow viewer can share them without taking on this server's `mcp` dependency.
 # The path insert is what lets a PEP 723 script reach a plain one; the imported
@@ -539,6 +557,93 @@ def _signal_graph(reg, dirs):
     return emits, subs, forwards
 
 
+# The tool description is always-loaded context, so it carries what you need
+# to form a correct query and nothing else; the rest is one call away. Kept
+# here rather than in docs/ because it documents the tool's own surface.
+_HELP = """map_query reference — the detail the tool description leaves out.
+
+MATCHING
+  query is regex: case-insensitive, substring-matched, anchor with ^$ for
+  exact. Alternation works ('ppqL|endppqL'). It is NOT glob — plain text
+  already substring-matches, so no wrapping stars.
+
+  What a query matches depends on the kind:
+    bare symbol names   fn, api, held, handler, state, const, require,
+                        construct. A held name is qualified, so it is
+                        matched as `table.field`, a handler as `recv:signal`.
+    full body text      invariant, contract, shape, emits, reaper
+    field names         reads, writes, fields
+
+KINDS
+  held      a function literal held in a table field, queried `table.field`
+  handler   a literal handed to a registrar, queried `recv:signal`
+  case      spec test cases
+  Aliases: plurals throughout, signal for emits, import for require,
+  calls for uses, calledby/called-by/used-by for usedby.
+
+USES / USEDBY
+  Two directions of one relation, and `query` names the subject in both:
+  uses is what the subject reaches, usedby what reaches it.
+
+  uses groups by matching declaration and resolves each callee to *its own*
+  declaration, so the answer is jump-ready. What it reaches includes what it
+  binds by name (marked `(by name)`), not only what it calls. With `module`
+  and no `query` it falls back to that module's flat outbound edge list:
+  calls / subs / forwards / requires.
+
+  usedby answers in three labelled sections:
+    cross-module  @use edges, scanning every map — specs included, so this
+                  also answers "which specs exercise X". Spec callers
+                  collapse to one summary row per spec file.
+    intra-module  the declaring file's own @call and @bind rows, so a
+                  private helper's callers come back from the same query —
+                  and so does the command or export table that binds a
+                  helper nothing calls.
+    dropped       @drop sites, whose receiver the extractor could not
+                  resolve, matched here by name: candidates, not confirmed
+                  edges. `(none)` under this heading is a real answer, that
+                  nothing matching was dropped.
+
+  Both halves resolve short instance names and `:`/`.` spellings, so
+  `cm:get`, `configManager.get` and module='configManager' all match. A
+  module-level target has no intra half, since @call keys on functions.
+
+FLOW
+  Traces a signal end-to-end: emitters (@emits payload + fire-sites),
+  subscribers, and forward hops followed transitively. `query` names the
+  signal; `module` optionally pins the origin emitter.
+
+READS / WRITES / FIELDS
+  Walk the @field rows — every `.name` read or write site, where
+  table-constructor keys count as writes. `fields` returns both. query
+  substring-matches the field name (anchor `^name$` for one exact field);
+  omit `module` to sweep every module and spec for the blast radius.
+
+MODULE
+  A regex anchored on .map file stems. Spec maps (map/specs/, one per
+  tests/specs/*_spec.lua) join every query and their stems end `_spec`, so
+  module='.*_spec' restricts to specs.
+
+  Under uses/usedby it instead says which module the subject named by
+  `query` lives in, resolved via the self-name registry (`cm` and
+  `configManager` are one module). With no `query` the module is itself the
+  subject: usedby+module='eventMeta' answers "who uses eventMeta",
+  uses+module='eventMeta' its own outbound edges. Under flow it pins the
+  origin emitter, same resolution.
+
+SCOPE
+  Selected by directory (map/ vs map/specs/) rather than by stem, and it
+  composes with `module`. Under usedby it scopes the cross-module half only
+  — the intra-module and dropped-receiver indexes cover module maps alone,
+  so scope='spec' reports them n/a rather than empty.
+
+EMPTY ANSWERS
+  An answer with no matches names the domain it searched: a module's heads
+  for that kind where `module` and `kind` were both given, the kind
+  histogram where only `module` was, and the scope scanned otherwise.
+"""
+
+
 @mcp.tool(structured_output=False)
 def map_query(
     query: Optional[str] = None,
@@ -550,98 +655,40 @@ def map_query(
     """Structured query over the project's .map semantic outlines.
 
     Replaces `grep '@fn' map/*.map` and the follow-up read-the-source dance.
-    Results carry the originating .lua file:line so you can jump straight
-    to the declaration with Read offset/limit.
+    Results carry the originating .lua file:line, so you can jump straight to
+    the declaration with Read offset/limit.
+
+    `kind='help'` returns the full reference: what each kind matches, how
+    uses/usedby resolve names and lay out their sections, and what flow and
+    the field kinds walk.
 
     Args:
-      query: regex — case-insensitive, substring-matched (anchor with
-             ^$ for exact; alternation works: 'ppqL|endppqL'). NOT
-             glob: plain text already substring-matches, so no
-             wrapping stars. Matches bare symbol names for structural
-             entries (`@fn`, `@api`, `@held`, `@handler`, `@state`,
-             `@const`, `@require`, `@construct`) — a held name is qualified,
-             so it is matched as `table.field`, a handler as `recv:signal` —
-             full body text for annotations
-             (`@invariant`, `@contract`, `@shape`, `@emits`, `@reaper`),
-             and field names for reads/writes/fields.
+      query: regex — case-insensitive, substring-matched, anchor with ^$ for
+             exact. NOT glob: plain text already substring-matches, so no
+             wrapping stars. Matches symbol names for structural kinds, body
+             text for annotation kinds, field names for reads/writes/fields.
              Omit to return everything matching the other filters.
-      kind: filter by entry kind. Accepted (case-insensitive, plurals
-            ok): fn, api, held (a function literal held in a table
-            field, named and queried `table.field`), handler (a literal
-            handed to a registrar, queried `recv:signal`), state, const,
-            require/import, construct,
-            case (spec test cases), invariant, contract, shape,
-            emits/signal, reaper, deps, uses/calls, usedby/calledby,
-            flow, reads/writes/fields. `uses` and `usedby` are the two
-            directions of one relation and `query` names the subject in
-            both: `uses` is what the subject reaches, `usedby` what
-            reaches it. `uses` groups by matching declaration and
-            resolves each callee to *its own declaration*, so the answer
-            is jump-ready; what it reaches includes what it binds by
-            name (marked `(by name)`), not just what it calls; with
-            `module` and no `query` it falls back to
-            that module's flat outbound edge list (calls / subs /
-            forwards / requires).
-            `usedby` answers in three labelled sections:
-            cross-module `@use` edges, scanning every map (specs
-            included, so it also answers "which specs exercise X";
-            spec callers collapse to one summary row per spec file),
-            the declaring file's own intra-module `@call` and
-            `@bind` rows, so a private helper's callers come back from
-            the same query — and so does the command or export table
-            that binds a helper nothing calls — and `@drop` sites,
-            whose receiver the extractor could not resolve and which
-            are matched here by name: candidates, not confirmed edges.
-            `(none)` under that heading is a real answer, that nothing
-            matching was dropped.
-            Both halves resolve short instance names and `:`/`.`
-            spellings so `cm:get`, `configManager.get`, and
-            module='configManager' all match; a module-level target has
-            no intra half, since `@call` keys on functions.
-            `flow` traces a signal
-            end-to-end — emitters (`@emits` payload + fire-sites),
-            subscribers, and forward hops followed transitively;
-            query names the signal, `module` optionally pins the
-            origin emitter. `reads`/`writes` walk
-            the @field rows — every `.name` read or write site
-            (table-constructor keys count as writes); `fields`
-            returns both. query substring-matches the field name
-            (anchor `^name$` for one exact field); omit `module`
-            to sweep every module and spec for the blast radius.
-            Omit for any.
-      module: restrict to a module by stem — regex, anchored (it names
-              .map files): `trackerManager`, `tm_.*`, `.*Manager`.
-              Spec maps (map/specs/, one per
-              tests/specs/*_spec.lua) join every query; their stems end
-              `_spec`, so module='.*_spec' restricts to specs.
-              Under kind='uses' and kind='usedby' it says which module
-              the subject named by `query` lives in, resolved via the
-              self-name registry (`cm` and `configManager` are one
-              module); with no `query` the module is itself the subject,
-              so usedby+module='eventMeta' answers "who uses eventMeta"
-              and uses+module='eventMeta' its own outbound edges.
-              Under kind='flow' it pins the origin emitter, same
-              resolution.
-      scope: which maps to search: 'all' (default), 'prod' for module
-             maps only, 'spec' for spec maps only. Selected by
-             directory (map/ vs map/specs/) rather than by stem, and
-             it composes with `module`. Spec maps outnumber module
-             maps four to one, so scope='prod' is how you ask a
-             question about the production code without spec sites
-             taking the cap; scope='spec' is the same question of the
-             suite. Under kind='usedby' it scopes the cross-module
-             half — the intra-module and dropped-receiver indexes
-             cover module maps only, so scope='spec' reports them n/a
-             rather than empty.
+      kind: one entry kind — structural (fn, api, held, handler, state,
+            const, require, construct), annotation (invariant, contract,
+            shape, emits, reaper, deps), spec (case, exercises, surface,
+            harness) or relational (uses, usedby, flow, reads, writes,
+            fields). Plurals and calls/calledby accepted. Omit for any; a
+            kind that isn't one returns the valid list, so guessing is cheap.
+      module: restrict by .map stem — regex, anchored: `trackerManager`,
+              `tm_.*`, `.*Manager`. Under uses/usedby/flow it instead names
+              the subject itself, not a file to read.
+      scope: 'all' (default), 'prod' for module maps, 'spec' for spec maps.
+             Specs outnumber modules four to one, so scope='prod' is how you
+             keep them from taking the cap.
       max_results: cap (default 60).
 
     Returns:
       Lines of `<source>.lua:<line>  @kind <head>` for structural entries,
-      and `<source>.lua  @kind  <body>` for annotations. An answer with no
-      matches names the domain it searched: a module's heads for that kind
-      where `module` and `kind` were both given, the kind histogram where
-      only `module` was, and the scope scanned otherwise.
+      `<source>.lua  @kind  <body>` for annotations. An answer with no matches
+      names the domain it searched rather than only reporting none.
     """
+    if kind and kind.strip().lower().lstrip("?") in ('help', ''):
+        return _HELP
     for pat in (query, module):
         if pat:
             try:
@@ -663,7 +710,7 @@ def _map_query(query, kind, module, scope, max_results) -> str:
     kind_filter = _normalize_kind(kind) if kind else None
     if kind_filter and kind_filter not in _KINDS:
         return (f"--- ERROR: kind={kind!r} is not a kind. Valid: "
-                f"{', '.join(sorted(_KINDS))} ---")
+                f"{', '.join(sorted(_KINDS))} (or 'help' for the reference) ---")
 
     scoped = _SCOPES.get((scope or "all").strip().lower())
     if scoped is None:

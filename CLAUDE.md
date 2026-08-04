@@ -20,6 +20,17 @@ builds the substack and drives lifecycle on the layer that owns it. So
 the adjacent-layer guidance above governs calls *within* the chain,
 not the page's reach into it.
 
+**State has exactly one owner.** Each piece of state has exactly one
+home that owns it, so a special case is usually evidence of having
+located the wrong owner rather than a pragmatic shortcut. The page
+draws and the view stays logical — a view reaching for `ctx` means the
+split has drifted. `cm` is sole truth for config keys, `dataStore` for
+document data; unknowns raise, and cm deep-copies at its boundary so
+callers never clone. And Continuum is built to know what changed —
+dirt seeds, uuid-keyed hosts, stable seats — so a blanket recompute is
+not the conservative option, it discards information the system
+already holds. See `.claude/agent-memory/build_single_ownership.md`.
+
 Two critical concepts in the tracker stack:
 
 - **Time** — two frames (logical / realisation), connected by swing.

@@ -34,6 +34,24 @@ from pydantic import BaseModel, ConfigDict, Field
 # Strict input validation: reject unknown kwargs so silent param-name slips fail loudly.
 ArgModelBase.model_config = ConfigDict(arbitrary_types_allowed=True, extra='forbid')
 
+# pydantic titles every field and model after the name it was derived from
+# ('Kind' for kind, '<tool>Arguments' for the model), which tool schemas then
+# carry into always-loaded context. Drop them at the one point every tool's
+# arg model shares.
+_base_json_schema = ArgModelBase.model_json_schema.__func__
+
+
+def _untitled(node):
+    if isinstance(node, dict):
+        return {k: _untitled(v) for k, v in node.items() if k != 'title'}
+    if isinstance(node, list):
+        return [_untitled(v) for v in node]
+    return node
+
+
+ArgModelBase.model_json_schema = classmethod(
+    lambda cls, *a, **kw: _untitled(_base_json_schema(cls, *a, **kw)))
+
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 # One fixed workspace, cleared per batch: at most one batch's trees ever exist, so
@@ -164,8 +182,6 @@ def spec_perturb(
     generate mutants or emit a score.
 
     Args:
-      perturbations: list of {label, edits: [{path, old, new}]}. A perturbation's
-                     edits are applied all-or-nothing.
       filter: literal substring matched against `<spec> :: <test>`, as for
               lua_test_run. Applies to every perturbation in the batch.
       escalate: on SURVIVED, also run the whole suite to separate "nothing

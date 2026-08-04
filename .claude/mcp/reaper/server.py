@@ -28,6 +28,24 @@ from pydantic import ConfigDict
 # Strict input validation: reject unknown kwargs so silent param-name slips fail loudly.
 ArgModelBase.model_config = ConfigDict(arbitrary_types_allowed=True, extra='forbid')
 
+# pydantic titles every field and model after the name it was derived from
+# ('Kind' for kind, '<tool>Arguments' for the model), which tool schemas then
+# carry into always-loaded context. Drop them at the one point every tool's
+# arg model shares.
+_base_json_schema = ArgModelBase.model_json_schema.__func__
+
+
+def _untitled(node):
+    if isinstance(node, dict):
+        return {k: _untitled(v) for k, v in node.items() if k != 'title'}
+    if isinstance(node, list):
+        return [_untitled(v) for v in node]
+    return node
+
+
+ArgModelBase.model_json_schema = classmethod(
+    lambda cls, *a, **kw: _untitled(_base_json_schema(cls, *a, **kw)))
+
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 SPOOL = PROJECT_ROOT / ".claude" / "mcp" / "reaper" / "spool"
 
@@ -73,7 +91,8 @@ def reaper_eval(
 
     The chunk runs at the coordinator's per-frame tick — before the page draws,
     REAPER API legal, manager stack quiescent. `return <expr>` to get a value
-    back; it is rendered (cycle-safe, userdata via tostring, capped).
+    back; it is rendered cycle-safe, userdata via tostring, capped, to `depth`
+    levels (default 4).
 
     Environment (curated — Continuum modules are locals, not globals):
       reaper, util                   — REAPER API + shared helpers
@@ -95,12 +114,6 @@ def reaper_eval(
       - The chunk MUST terminate: it runs on REAPER's UI thread, so a hang or
         infinite loop freezes REAPER with no remedy from outside.
       - No ImGui calls — the chunk runs outside the draw pass.
-
-    Args:
-      code: the Lua chunk. `return` a value to render it.
-      timeout_s: give up waiting for the response after this long (default 5).
-      undo_label: wrap the chunk in an undo block with this label (mutations only).
-      depth: override the render depth (default 4).
 
     Returns:
       The bridge's response verbatim: `status: ok|error`, `ms:`, a `--- value ---`

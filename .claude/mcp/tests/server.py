@@ -32,6 +32,24 @@ from pydantic import ConfigDict
 # Strict input validation: reject unknown kwargs so silent param-name slips fail loudly.
 ArgModelBase.model_config = ConfigDict(arbitrary_types_allowed=True, extra='forbid')
 
+# pydantic titles every field and model after the name it was derived from
+# ('Kind' for kind, '<tool>Arguments' for the model), which tool schemas then
+# carry into always-loaded context. Drop them at the one point every tool's
+# arg model shares.
+_base_json_schema = ArgModelBase.model_json_schema.__func__
+
+
+def _untitled(node):
+    if isinstance(node, dict):
+        return {k: _untitled(v) for k, v in node.items() if k != 'title'}
+    if isinstance(node, list):
+        return [_untitled(v) for v in node]
+    return node
+
+
+ArgModelBase.model_json_schema = classmethod(
+    lambda cls, *a, **kw: _untitled(_base_json_schema(cls, *a, **kw)))
+
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 BASELINE_PATH = PROJECT_ROOT / ".claude" / "test-baseline.json"
 

@@ -25,7 +25,7 @@ Here's how we'll work with the Claude Code harness:
   harness, not me, except for [inflight guidance], which is my
   feedback via a hook.
 - Use the dedicated file/search tools over shell commands when one
-  fits. Independent tool calls can run in parallel in one response.
+  fits. 
 - Reference code as `file_path:line_number` — it's clickable.
 
 ## Care with actions
@@ -52,10 +52,3 @@ and asks nothing back; it classifies nothing, which is what keeps it to
 one call. A jot therefore costs nothing to be wrong about: the commit
 skill asks you which ones the session went on to answer, and anything
 that turns out to be nothing stops there.
-
-## Scratchpad
-
-A hook injects this session's scratchpad path at conversation start.
-Prefer it to `/tmp` for temporary files: it's session-scoped and free
-of permission prompts. If the path is missing from context, the hook
-has broken: let me know so we can fix it.
