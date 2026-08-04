@@ -20,7 +20,7 @@
 - cv-2
 - chord-stamp, roll, strum, echo
 - scales
-- Live/MIDI-in capture. 
+- Live/MIDI-in capture — promoted to `design/midi-capture.md`.
 - Quarantine UX (Open questions) — a darkened component still needs to
    signal why it went dark (feedback loop / bus-aware FX) and its
    recovery path in the wiring view.
