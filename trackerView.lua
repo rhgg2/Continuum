@@ -17,6 +17,7 @@
 --shape: gridCol core = { type, midiChan, [lane], [cc], label, events, width, [normalized], [bipolar], ['14bit'] }
 --shape: gridCol parts = { parts, stopPos, partAt, partStart, showDelay }
 --shape: gridCol render = { cells={[y]=evt}, overflow, offGrid, ghosts, [tails] }
+--shape: fx tail = { startRow, endRow, stack={[row]={glyph,[bypass]}}, [clipped] }
 --shape: selection = { row1, row2, col1, col2, part1, part2 }
 --invariant: selection part names: pitch/vel/delay on note; pb on pb; val on scalar
 --shape: plan = { col, e, [newppq], [newEndppq], [newDelay] }
@@ -3684,6 +3685,18 @@ local function projectionEpoch(length, numRows, rpb, ppqPerRow, timeSigs, temper
   return table.concat(parts, '|')
 end
 
+local CLIP_GLYPH = '\xe2\x80\xa6'   -- …: the chain has more stages than the region has rows
+
+-- The chain's glyphs down a region's rows, keyed by absolute grid row -- badge snaps via
+-- placeRow, tail startRow stays float. see design/note-macros-v2.md § The chain surface
+local function chainStack(stages, headRow, endRow)
+  local rows  = math.max(1, math.ceil(endRow) - headRow)
+  local stack = {}
+  for i = 1, math.min(#stages, rows) do stack[headRow + i - 1] = stages[i] end
+  if #stages > rows then stack[headRow + rows - 1] = { glyph = CLIP_GLYPH } end
+  return stack, #stages > rows or nil
+end
+
 --contract: reentrancy-guarded; bails on no-take (page shows placeholder)
 --contract: takeChanged=true resets ec and re-reads resolution/length/timeSigs
 --contract: grid + ctx rebuild each call; pushMute at end
@@ -3848,10 +3861,13 @@ function tv:rebuild(takeChanged)
       for _, regions in ipairs(packRegionLanes(fxByChan[chan] or {})) do
         local fxCells = {}
         for _, region in ipairs(regions) do
-          local kind = region.fx and region.fx[1] and region.fx[1].kind
-          if kind then
+          local stages = {}
+          for _, entry in ipairs(region.fx or {}) do
+            util.add(stages, { glyph = generators.glyphOf(entry.kind), bypass = entry.bypass })
+          end
+          if #stages > 0 then
             util.add(fxCells, { ppq = region.startppq, endppqC = region.endppq,
-                                glyph = generators.glyphOf(kind), uuid = region.uuid })
+                                uuid = region.uuid, stages = stages })
           end
         end
         if #fxCells > 0 then addGridCol(chan, 'fx', nil, fxCells) end
@@ -3903,10 +3919,10 @@ function tv:rebuild(takeChanged)
         -- when the authored endppq is util.OPEN); the tail render is its
         -- sole consumer.
         if evt.endppqC then
-          util.add(gridCol.tails, {
-            startRow = startRow,
-            endRow   = ctx:ppqToRow(evt.endppqC, chan),
-          })
+          local endRow = ctx:ppqToRow(evt.endppqC, chan)
+          local tail   = { startRow = startRow, endRow = endRow }
+          if evt.stages then tail.stack, tail.clipped = chainStack(evt.stages, y, endRow) end
+          util.add(gridCol.tails, tail)
         end
         ::continue::
       end

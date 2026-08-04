@@ -8,6 +8,11 @@ local generators = require('generators')
 local sine30 = { { kind = 'sine', period = { 1, 4 }, depth = 30, onset = 0 } }
 local arpUp = { { kind = 'arp', period = { 1, 4 }, dir = 'up' } }   -- discrete -> replace (parks)
 
+-- ∿ A V: three stages, one short of the default 240-ppq window's four rows
+local chain3 = { { kind = 'sine', period = { 1, 4 }, depth = 30, onset = 0 },
+                 { kind = 'arp',  period = { 1, 4 }, dir = 'up' },
+                 { kind = 'velPattern', pattern = { 100, 55 } } }
+
 local function injectRegion(h, over)
   local region = { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = sine30 }
   for k, v in pairs(over or {}) do region[k] = v end
@@ -68,9 +73,66 @@ return {
       t.truthy(col, 'an fx column exists on the region channel')
       local cell = col.cells[0]
       t.truthy(cell and cell.uuid == 'fxr-1', 'the badge cell at the window start carries the region uuid')
-      t.eq(cell.glyph, '∿', "the badge shows the primary kind's glyph, resolved at mint")
+      t.eq(col.tails[1].stack[0].glyph, '∿', "the badge shows the primary kind's glyph, resolved at mint")
       t.eq(#col.tails, 1, 'one tail bracket spans the window')
       t.eq(col.tails[1].endRow, h.vm:ppqToRow(240, 1), 'the tail runs to the window end')
+    end,
+  },
+
+  {
+    name = 'a chain stacks its glyphs down the region rows in series order',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      injectRegion(h, { fx = chain3 })
+      local col   = fxColFor(h, 1)
+      local stack = col.tails[1].stack
+      t.eq(stack[0].glyph, '∿', 'stage one stays on the badge row')
+      t.eq(stack[1].glyph, 'A', 'stage two takes the row below')
+      t.eq(stack[2].glyph, 'V', 'stage three the row below that')
+      t.falsy(stack[3], "the window's fourth row is past the end of a three-stage chain")
+      t.falsy(col.tails[1].clipped, 'a chain that fits is not clipped')
+      t.falsy(col.cells[1], 'the cell table holds one entry per region, not one per drawn row')
+    end,
+  },
+
+  {
+    name = 'a bypassed stage carries its flag down the stack',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      injectRegion(h, { fx = { chain3[1],
+                               { kind = 'arp', period = { 1, 4 }, dir = 'up', bypass = true },
+                               chain3[3] } })
+      local stack = fxColFor(h, 1).tails[1].stack
+      t.truthy(stack[1].bypass, "the bypassed stage's row is flagged")
+      t.falsy(stack[0].bypass, 'a live stage carries no flag')
+    end,
+  },
+
+  {
+    name = 'a chain longer than the region clips at the last row and marks it',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      injectRegion(h, { fx = chain3, endppq = 120 })   -- two rows for three stages
+      local col   = fxColFor(h, 1)
+      local stack = col.tails[1].stack
+      t.eq(stack[0].glyph, '∿', 'stage one still draws on the badge row')
+      t.eq(stack[1].glyph, '…', 'the last drawable row gives its glyph to the clip mark')
+      t.truthy(col.tails[1].clipped, 'the tail records that the chain overran')
+    end,
+  },
+
+  {
+    name = 'a one-row region gives the clip mark the badge row',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      injectRegion(h, { fx = chain3, endppq = 60 })
+      local col = fxColFor(h, 1)
+      t.eq(col.tails[1].stack[0].glyph, '…', 'the clip mark displaces the primary kind, rather than lying')
+      t.truthy(col.tails[1].clipped, 'the tail records that the chain overran')
     end,
   },
 

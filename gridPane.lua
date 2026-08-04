@@ -162,9 +162,14 @@ local function renderCC(evt, col)
   return wide and '····' or '··'
 end
 
-local function renderFx(evt)
-  if not evt then return '·' end   -- one-glyph column: empty cell is a single dot, like renderCC
-  return evt.glyph, 'accent'       -- the view resolves the kind's glyph off the registry as it mints the cell
+-- The region's chain, one stage per row from the badge down, resolved off the registry as the
+-- view minted the stack; live stages keep the cell's default colour, bypassed ones dim like the fx tab.
+local function renderFx(_, col, row)
+  for _, tail in ipairs(col.tails or {}) do
+    local stage = tail.stack and tail.stack[row]
+    if stage then return stage.glyph, stage.bypass and 'inactive' or nil end
+  end
+  return '·'   -- one-glyph column: empty cell is a single dot, like renderCC
 end
 
 local renderFns = {

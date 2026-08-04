@@ -940,6 +940,22 @@ survives where upper against lower does not. A kind the registry has lost
 draws `?` — which is what a scripted kind that failed to load will look
 like.
 
+**Row keying is absolute, not relative.** `chainStack` addresses each stage's
+row by absolute grid row rather than an offset from the badge, because the
+badge row and the tail's `startRow` aren't the same kind of number —
+`placeRow` snaps the badge to its integer row, but the tail's own `startRow`
+keeps sub-row float precision. Keying by absolute row lets the stack and the
+tail bracket share one row space without a snap-vs-float mismatch leaking
+into where a glyph lands.
+
+*Decision taken — the clip mark outranks the badge (2026-08-04).* A chain
+with more stages than the region has rows gives its last drawable row to
+`…`, and where the region is one row deep that row is the badge row, so the
+primary kind's glyph is what `…` displaces. Keeping the badge there would
+preserve today's reading at exactly the size where it lies: a one-row region
+carrying `[arp, humanize]` shows `A`, which is the misreading the stack
+exists to end. `…` says less and says it truthfully.
+
 **Ghost-on-focus.** The ghost display mode of § *Authoring and editing*,
 defaulted on while the fx pane holds focus — "what does this chain
 actually emit" becomes a live question the moment stages compose. Note
