@@ -3255,6 +3255,33 @@ function tv:movePreview()
            srcMember = srcMember, destSrc = destSrc }
 end
 
+-- Derived per frame rather than stored on the column: the gate is the caret and the window
+-- the viewport, and both move without a rebuild. Nothing enters col.cells, so no ghost edits.
+--contract: the derived notes to ghost while the caret sits on an fx host; a nil host answers nil
+--contract: the window is the viewport's rows, resolved per channel, not per column
+--contract: out[colIndex][row] = tm's record by reference; note columns only; first onset wins
+--invariant: a ghosted row may also carry a real cell; precedence is the draw arm's
+function tv:noteGhosts(host)
+  if not host then return nil end
+  local top, bot  = scrollRow, scrollRow + gridHeight + 1
+  local out, byChan = {}, {}
+  for x, col in ipairs(grid.cols) do
+    if col.type == 'note' then
+      local chan = col.midiChan
+      byChan[chan] = byChan[chan]
+        or tm:fxNotes(chan, ctx:rowToPPQ(top, chan), ctx:rowToPPQ(bot, chan))
+      for _, n in ipairs(byChan[chan]) do
+        if n.lane == col.lane then
+          local row = ppqRowOf(n.ppq, chan)
+          out[x] = out[x] or {}
+          if out[x][row] == nil then out[x][row] = n end
+        end
+      end
+    end
+  end
+  return out
+end
+
 --contract: extend hands newly-covered concretes in as `gained` (gm:resizeGroup never rescans)
 --contract: idempotent: re-painting an already on/off stream is a no-op true
 --invariant: group's live rect found by id off gm:eachInstance — ec carries no geometry

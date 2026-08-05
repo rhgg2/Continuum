@@ -506,7 +506,7 @@ local function notePartHeaders(col)
   return headers
 end
 
-local function drawTracker()
+local function drawTracker(host)
   local grid = tv.grid
   local ec = tv:ec()
   local cursorRow, cursorCol, cursorStop = ec:pos()
@@ -601,6 +601,7 @@ local function drawTracker()
   local inRegion  = tv:ec():isInRegionMode()
   local rc        = inRegion and tv:ec():regionCursor()
   local movePrev  = tv:movePreview()
+  local ghostNote = tv:noteGhosts(host) or {}   -- derived notes of the chain under the caret
   local isLocal   = tv:localMode()
   local localHole
   for _, inst in ipairs(tv:eachInstance()) do
@@ -708,11 +709,14 @@ local function drawTracker()
           end
         end
         local ghost = not evt and not previewGhost and col.ghosts and col.ghosts[row]
+        local noteGhost = not evt and not previewGhost and ghostNote[x] and ghostNote[x][row]
         local text, textCol, overrides, divergent
         if ghost then
           local cellCol
           text, cellCol = renderCell({ val = ghost.val }, col, row)
           textCol = cellCol == 'negative' and 'ghostNegative' or 'ghost'
+        elseif noteGhost then
+          text, textCol = renderCell(noteGhost, col, row), 'ghost'
         else
           text, textCol, overrides, divergent = renderCell(evt, col, row)
           if col.overflow and col.overflow[row] then textCol, overrides = 'overflow', nil end
@@ -868,13 +872,14 @@ local gridPane = {}
 
 -- Draw pass: computeLayout twice (lane-drag callbacks may rebuild grid.cols,
 -- so drawTracker needs a fresh layout), with the grid font pushed throughout.
+--contract: host (the frame's resolved fx host) ghosts its chain's derived notes into the grid
 --invariant: lane-strip drag callbacks may flush tv.grid.cols and clear col.x
-function gridPane:draw(gridW, gridH)
+function gridPane:draw(gridW, gridH, host)
   ImGui.PushFont(ctx, gridFont, gui.fontSize.grid)
   computeLayout(gridW, gridH)
   drawLaneStrip()
   computeLayout(gridW, gridH)
-  drawTracker()
+  drawTracker(host)
   ImGui.PopFont(ctx)
 end
 

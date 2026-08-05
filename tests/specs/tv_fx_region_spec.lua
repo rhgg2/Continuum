@@ -32,9 +32,9 @@ local function region(h, uuid)
   end
 end
 
-local function noteColIdx(h, chan)
+local function noteColIdx(h, chan, lane)
   for i, c in ipairs(h.vm.grid.cols) do
-    if c.type == 'note' and c.midiChan == chan and c.lane == 1 then return i end
+    if c.type == 'note' and c.midiChan == chan and c.lane == (lane or 1) then return i end
   end
 end
 
@@ -1073,6 +1073,101 @@ return {
       h.reaper.Undo_BeginBlock, h.reaper.Undo_EndBlock = realBegin, realEnd
       t.eq(blocks, 1, 'an eligible freeze opens exactly one block')
       t.eq(#(h.ds:get('fxRegions') or {}), 0, 'and it ran: the region is gone')
+    end,
+  },
+
+  ----- Ghost display: a chain's derived notes light up while the caret sits on its host
+
+  {
+    name = 'noteGhosts: no host under the caret returns nil, before any window query',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      addNote(h)
+      injectRegion(h, { fx = arpUp })
+      h.ec:setPos(20, noteColIdx(h, 1), 1)   -- below the region and the note alike
+      t.falsy(h.vm:fxHostAtCursor(), 'fixture check: nothing hostable down here')
+      t.eq(h.vm:noteGhosts(h.vm:fxHostAtCursor()), nil, 'the host is the gate: nil in, nil out')
+    end,
+  },
+
+  {
+    name = 'noteGhosts: a host lights its derived onsets on the lane column, with pitch and vel',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      addNote(h)                        -- C4 on lane 1
+      h.tm:addEvent{ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 67,
+                     vel = 90, detune = 0, delay = 0, lane = 2 }
+      h.tm:flush()
+      injectRegion(h, { fx = arpUp })   -- the arp interleaves both, all onto lane 1
+      local idx = noteColIdx(h, 1)
+      h.ec:setPos(0, idx, 1)
+      local ghosts = h.vm:noteGhosts(h.vm:fxHostAtCursor())
+      t.truthy(ghosts and ghosts[idx], 'the lane-1 column carries the ghosts')
+      local pitches, vels = {}, {}
+      for row = 0, 3 do
+        local g = ghosts[idx][row]
+        pitches[#pitches + 1] = g and g.pitch
+        vels[#vels + 1]       = g and g.vel
+      end
+      t.deepEq(pitches, { 60, 67, 60, 67 }, 'the four onsets sit on rows 0-3')
+      t.deepEq(vels, { 100, 90, 100, 90 }, 'each carrying the velocity it was given')
+      t.eq(ghosts[idx][4], nil, 'and they stop where the host does')
+      t.eq(ghosts[noteColIdx(h, 1, 2)], nil, 'lane 2 takes none -- the allocator put them all on lane 1')
+      local _, fxIdx = fxColFor(h, 1)
+      t.eq(ghosts[fxIdx], nil, 'note columns only')
+    end,
+  },
+
+  {
+    name = 'noteGhosts: a host whose onsets lie outside the window answers empty, not nil',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 4)
+      addNote(h)                                       -- the sole host note, [0,240)
+      injectRegion(h, { fx = arpUp, endppq = 3840 })    -- the region runs on well past it
+      local _, fxIdx = fxColFor(h, 1)
+      h.ec:setPos(30, fxIdx, 1)   -- still inside the region; the viewport has scrolled off the onsets
+      t.eq(h.vm:fxHostAtCursor(), 'fxr-1', 'fixture check: the region is still the host down here')
+      local ghosts = h.vm:noteGhosts(h.vm:fxHostAtCursor())
+      t.truthy(ghosts, 'a resolved host always answers with a table')
+      t.deepEq(ghosts, {}, 'empty, because every onset is above the window')
+    end,
+  },
+
+  {
+    name = 'noteGhosts: a row carrying a real cell still reports its ghost -- precedence is the draw arm\'s',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      addNote(h)
+      injectRegion(h, { fx = arpUp })
+      local idx = noteColIdx(h, 1)
+      h.ec:setPos(0, idx, 1)
+      t.truthy(h.vm.grid.cols[idx].cells[0], 'fixture check: row 0 carries the parked host cell')
+      local ghosts = h.vm:noteGhosts(h.vm:fxHostAtCursor())
+      t.truthy(ghosts and ghosts[idx], 'the lane column carries ghosts')
+      t.truthy(ghosts[idx][0], 'and reports one on the contested row too')
+    end,
+  },
+
+  {
+    name = 'noteGhosts: the window is the viewport -- onsets below it are absent',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 4)
+      h.tm:addEvent{ evType = 'note', ppq = 0, endppq = 960, chan = 1, pitch = 60,
+                     vel = 100, detune = 0, delay = 0, lane = 1 }
+      h.tm:flush()
+      injectRegion(h, { fx = arpUp, endppq = 960 })   -- sixteen onsets, rows 0-15
+      local idx = noteColIdx(h, 1)
+      h.ec:setPos(0, idx, 1)
+      local ghosts = h.vm:noteGhosts(h.vm:fxHostAtCursor())
+      t.truthy(ghosts and ghosts[idx], 'the lane column carries ghosts')
+      local rows = {}
+      for row = 0, 15 do if ghosts[idx][row] then rows[#rows + 1] = row end end
+      t.deepEq(rows, { 0, 1, 2, 3, 4 }, 'four visible rows plus one of slack; the other eleven stay out')
     end,
   },
 }

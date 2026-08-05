@@ -997,6 +997,29 @@ index of uuids resolved through `byUuid` keeps the hop without answering the
 frame. Storing the logical onset makes the window query a binary search on
 the field the query is about.
 
+*Decision taken — the ghosts are derived per frame, not stored on the column
+(2026-08-05).* Both of the display's inputs move without a rebuild: the gate
+is the caret and the window is the viewport, where `tv:rebuild` answers only
+to tm's signal, a column add or remove, and config. A table hanging off the
+column would therefore be stale on the first arrow key. The view derives the
+ghosts at read time instead, as it already derives the drag preview, and the
+frame hands the host in rather than resolving it a second time — the fx
+tab's own auto-raise resolves it five lines above the grid draw. Gating on
+that value costs nothing in the steady state, and it carries two properties
+a fresh lookup would not: the host stays pinned while the strip holds focus,
+so the ghosts survive the session in which the chain is being edited, and it
+is nil while the chain is empty, where there is nothing to ghost.
+
+*Decision taken — the host gates the display and does not filter it
+(2026-08-06).* A nil host answers nil; any other host turns on every derived
+onset the visible window holds, whatever produced it. The accessor never
+compares a note's `derived` uuid against the host it was handed. So two
+chains in view light together, from a caret on either. What the display
+shows is the realisation of the window the caret is in, and where two chains
+interleave their output that is one surface, not two; filtering by producer
+would show half of what is about to sound. The price is that the caret says
+which chain is being edited without saying which ghosts came from it.
+
 **Patches.** A patch is a *named chain* — an ordered `{kind, params}`
 list, pure data, no code — saved to a library and instantiated **by copy**
 onto a region or note. `design/archive/fx-patterns.md` has since proved the
