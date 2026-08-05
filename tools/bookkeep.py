@@ -35,6 +35,7 @@ REPO = Path(__file__).resolve().parent.parent
 DECISIONS = REPO / "design" / "decisions.md"
 PLAN_CURRENT = REPO / "plan" / "CURRENT"
 BRIEF = REPO / "plan" / "IMPL.md"
+SALVAGE = REPO / "plan" / "IMPL.diff"
 AGENT_MEMORY = REPO / ".claude" / "agent-memory"
 OPEN_CLAIMS = AGENT_MEMORY / "open.md"
 SPOOL = AGENT_MEMORY / "spool.md"
@@ -155,11 +156,15 @@ def retire_brief():
 
     The brief is untracked and holds a single item, so it has no history to fall
     back on — the landing says what it removed rather than removing it silently.
+    A salvaged spike diff beside it goes the same way: it is raw material for one
+    brief, and outliving that brief it would be read against an item it was never
+    written for.
     """
     if not BRIEF.exists():
         return None
     title = next((ln for ln in BRIEF.read_text().splitlines() if ln.startswith("# ")), None)
-    return f"deleted {BRIEF.relative_to(REPO)} — {title[2:].strip() if title else 'untitled'}"
+    line = f"deleted {BRIEF.relative_to(REPO)} — {title[2:].strip() if title else 'untitled'}"
+    return line + f", and {SALVAGE.relative_to(REPO)}" if SALVAGE.exists() else line
 
 
 # ----- jot triage
@@ -503,6 +508,7 @@ def main():
 
     if retired:
         BRIEF.unlink()
+        SALVAGE.unlink(missing_ok=True)
         print(retired)
 
     for digest in digests:

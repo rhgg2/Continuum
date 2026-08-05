@@ -1,10 +1,11 @@
 ---
-description: Close or park the live plan — archive it, archive a finished design doc, pop the CURRENT stack.
+name: plan-close
+description: Close the live plan and archive its documentation, pop the CURRENT stack.
 disable-model-invocation: true
 ---
 
 Pop the top of the CURRENT stack and put the files where a finished
-programme's files live. This is the only command that archives.
+programme's files live.
 
 1. The hook injects the live plan, the CURRENT stack and the plan and
    design listings — work from those.
