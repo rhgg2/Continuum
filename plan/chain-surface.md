@@ -14,10 +14,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-06 tv: suppress the parked originals while the ghosts are up (§ Authoring and editing the fx)
 - 2026-08-06 tv: ghost a chain's derived notes while the caret sits on its host (§ Authoring and editing the fx)
 - 2026-08-05 tm: add fxNotes, a windowed accessor for derived note onsets (§ Authoring and editing the fx)
 - 2026-08-05 tv: stack the region's chain down its tail rows (§ The chain surface)
-- 2026-08-04 generators: a glyph per kind; the fx badge prints what it is handed (§ The chain surface)
 
 ## Now
 
@@ -25,5 +25,4 @@
 
 ## Queued (current phase; one-liners)
 
-1. Parked cells drop out of their columns while the ghosts are showing, so the grid shows the realisation rather than both pictures of it at once. The suppression rides the same per-frame overlay the ghosts do — a `hidden` half beside the notes half — rather than the placement pass, which the caret cannot reach without a rebuild. That also keeps `col.cells` intact, so nothing that resolves an event through a cell loses its footing while the ghosts are up. The exception is the cell the caret is resolving its host from: a note hosting a replace chain parks itself, and the caret sitting on it is the very thing that turned the ghosts on, so hiding it would take away both the host and any way to edit the note. That cell stays visible, and its row shows no ghost because a real cell wins. Spec in `tv_fx_region_spec`, next to the parked-cell rendering tests.
-2. A provisional note column for a derived lane that carries nothing authored — the case an augment chain over an empty span produces, where the ghosts are the only thing there is to see and have nowhere to hang. Its lifecycle is data-derived, on the model of the fx column: it materialises whenever the derived notes need a lane no column covers, and stands empty until the ghosts are on. Deriving it from the caret instead would let the column set shift under the very caret that gates the ghosts, and `ec:col()` is an index. Spec in `vm_grid_spec`.
+1. A provisional note column for a derived lane that carries nothing authored — the case an augment chain over an empty span produces, where the ghosts are the only thing there is to see and have nowhere to hang. Its lifecycle is data-derived, on the model of the fx column: it materialises whenever the derived notes need a lane no column covers, and stands empty until the ghosts are on. Deriving it from the caret instead would let the column set shift under the very caret that gates the ghosts, and `ec:col()` is an index. Spec in `vm_grid_spec`.

@@ -506,6 +506,8 @@ local function notePartHeaders(col)
   return headers
 end
 
+local NO_OVERLAY = { notes = {}, hidden = {} }   -- the hostless frame: no ghosts, nothing suppressed
+
 local function drawTracker(host)
   local grid = tv.grid
   local ec = tv:ec()
@@ -601,7 +603,8 @@ local function drawTracker(host)
   local inRegion  = tv:ec():isInRegionMode()
   local rc        = inRegion and tv:ec():regionCursor()
   local movePrev  = tv:movePreview()
-  local ghostNote = tv:noteGhosts(host) or {}   -- derived notes of the chain under the caret
+  -- Derived notes of the chain under the caret, and the parked originals they stand in for.
+  local overlay   = tv:ghostOverlay(host) or NO_OVERLAY
   local isLocal   = tv:localMode()
   local localHole
   for _, inst in ipairs(tv:eachInstance()) do
@@ -672,7 +675,7 @@ local function drawTracker(host)
   for _, col in ipairs(grid.cols) do
     if col.x and col.tails then
       for _, tail in ipairs(col.tails) do
-        if tail.endRow > viewTop and tail.startRow < viewBot then
+        if tail.endRow > viewTop and tail.startRow < viewBot and not overlay.hidden[tail.evt] then
           local yTop = gridOriginY + math.max(tail.startRow - scrollRow, 0) * cellH
           local yBot = gridOriginY + math.min(tail.endRow - scrollRow, viewRows) * cellH
           local colX = gridOriginX + col.x * cellW
@@ -708,8 +711,9 @@ local function drawTracker(host)
             evt, previewGhost = nil, true
           end
         end
+        if overlay.hidden[evt] then evt = nil end   -- a suppressed cell falls through to its ghost
         local ghost = not evt and not previewGhost and col.ghosts and col.ghosts[row]
-        local noteGhost = not evt and not previewGhost and ghostNote[x] and ghostNote[x][row]
+        local noteGhost = not evt and not previewGhost and overlay.notes[x] and overlay.notes[x][row]
         local text, textCol, overrides, divergent
         if ghost then
           local cellCol
@@ -766,7 +770,7 @@ local function drawTracker(host)
           local row = scrollRow + y
           if row >= numRows then break end
           local evt = col.cells[row]
-          if evt and evt.pitch then
+          if evt and evt.pitch and not overlay.hidden[evt] then
             local _, _, gap, halfGap = tv:noteProjection(evt)
             if gap and gap ~= 0 and halfGap > 0 then
               local yTop = gridOriginY + y * cellH + 1

@@ -17,7 +17,7 @@
 --shape: gridCol core = { type, midiChan, [lane], [cc], label, events, width, [normalized], [bipolar], ['14bit'] }
 --shape: gridCol parts = { parts, stopPos, partAt, partStart, showDelay }
 --shape: gridCol render = { cells={[y]=evt}, overflow, offGrid, ghosts, [tails] }
---shape: fx tail = { startRow, endRow, stack={[row]={glyph,[bypass]}}, [clipped] }
+--shape: fx tail = { startRow, endRow, evt, stack={[row]={glyph,[bypass]}}, [clipped] }
 --shape: selection = { row1, row2, col1, col2, part1, part2 }
 --invariant: selection part names: pitch/vel/delay on note; pb on pb; val on scalar
 --shape: plan = { col, e, [newppq], [newEndppq], [newDelay] }
@@ -3257,14 +3257,15 @@ end
 
 -- Derived per frame rather than stored on the column: the gate is the caret and the window
 -- the viewport, and both move without a rebuild. Nothing enters col.cells, so no ghost edits.
---contract: the derived notes to ghost while the caret sits on an fx host; a nil host answers nil
+--contract: per-frame overlay while the caret sits on a host: notes to ghost, cells to suppress
 --contract: the window is the viewport's rows, resolved per channel, not per column
---contract: out[colIndex][row] = tm's record by reference; note columns only; first onset wins
+--contract: notes[colIndex][row] = tm's record by reference; note columns only; first onset wins
+--contract: hidden[cell] = true for every parked cell but the host's own; nil host answers nil
 --invariant: a ghosted row may also carry a real cell; precedence is the draw arm's
-function tv:noteGhosts(host)
+function tv:ghostOverlay(host)
   if not host then return nil end
   local top, bot  = scrollRow, scrollRow + gridHeight + 1
-  local out, byChan = {}, {}
+  local notes, byChan = {}, {}
   for x, col in ipairs(grid.cols) do
     if col.type == 'note' then
       local chan = col.midiChan
@@ -3273,13 +3274,21 @@ function tv:noteGhosts(host)
       for _, n in ipairs(byChan[chan]) do
         if n.lane == col.lane then
           local row = ppqRowOf(n.ppq, chan)
-          out[x] = out[x] or {}
-          if out[x][row] == nil then out[x][row] = n end
+          notes[x] = notes[x] or {}
+          if notes[x][row] == nil then notes[x][row] = n end
         end
       end
     end
   end
-  return out
+  -- Originals of a replace park would otherwise stand beside their own realisation; keyed by the
+  -- event, which answers for cell, tail and temper tick alike. see design/note-macros-v2.md § The chain surface
+  local hidden = {}
+  for _, channel in tm:channels() do
+    for _, cell in ipairs(channel.parked or {}) do
+      if cell.uuid ~= host then hidden[cell] = true end
+    end
+  end
+  return { notes = notes, hidden = hidden }
 end
 
 --contract: extend hands newly-covered concretes in as `gained` (gm:resizeGroup never rescans)
@@ -3947,7 +3956,7 @@ function tv:rebuild(takeChanged)
         -- sole consumer.
         if evt.endppqC then
           local endRow = ctx:ppqToRow(evt.endppqC, chan)
-          local tail   = { startRow = startRow, endRow = endRow }
+          local tail   = { startRow = startRow, endRow = endRow, evt = evt }
           if evt.stages then tail.stack, tail.clipped = chainStack(evt.stages, y, endRow) end
           util.add(gridCol.tails, tail)
         end

@@ -1079,7 +1079,7 @@ return {
   ----- Ghost display: a chain's derived notes light up while the caret sits on its host
 
   {
-    name = 'noteGhosts: no host under the caret returns nil, before any window query',
+    name = 'ghostOverlay: no host under the caret returns nil, before any window query',
     run = function(harness)
       local h = harness.mk()
       h.vm:setGridSize(80, 40)
@@ -1087,12 +1087,12 @@ return {
       injectRegion(h, { fx = arpUp })
       h.ec:setPos(20, noteColIdx(h, 1), 1)   -- below the region and the note alike
       t.falsy(h.vm:fxHostAtCursor(), 'fixture check: nothing hostable down here')
-      t.eq(h.vm:noteGhosts(h.vm:fxHostAtCursor()), nil, 'the host is the gate: nil in, nil out')
+      t.eq(h.vm:ghostOverlay(h.vm:fxHostAtCursor()), nil, 'the host is the gate: nil in, nil out')
     end,
   },
 
   {
-    name = 'noteGhosts: a host lights its derived onsets on the lane column, with pitch and vel',
+    name = 'ghostOverlay: a host lights its derived onsets on the lane column, with pitch and vel',
     run = function(harness)
       local h = harness.mk()
       h.vm:setGridSize(80, 40)
@@ -1103,7 +1103,7 @@ return {
       injectRegion(h, { fx = arpUp })   -- the arp interleaves both, all onto lane 1
       local idx = noteColIdx(h, 1)
       h.ec:setPos(0, idx, 1)
-      local ghosts = h.vm:noteGhosts(h.vm:fxHostAtCursor())
+      local ghosts = (h.vm:ghostOverlay(h.vm:fxHostAtCursor()) or {}).notes
       t.truthy(ghosts and ghosts[idx], 'the lane-1 column carries the ghosts')
       local pitches, vels = {}, {}
       for row = 0, 3 do
@@ -1121,7 +1121,7 @@ return {
   },
 
   {
-    name = 'noteGhosts: a host whose onsets lie outside the window answers empty, not nil',
+    name = 'ghostOverlay: a host whose onsets lie outside the window answers empty, not nil',
     run = function(harness)
       local h = harness.mk()
       h.vm:setGridSize(80, 4)
@@ -1130,14 +1130,14 @@ return {
       local _, fxIdx = fxColFor(h, 1)
       h.ec:setPos(30, fxIdx, 1)   -- still inside the region; the viewport has scrolled off the onsets
       t.eq(h.vm:fxHostAtCursor(), 'fxr-1', 'fixture check: the region is still the host down here')
-      local ghosts = h.vm:noteGhosts(h.vm:fxHostAtCursor())
+      local ghosts = (h.vm:ghostOverlay(h.vm:fxHostAtCursor()) or {}).notes
       t.truthy(ghosts, 'a resolved host always answers with a table')
       t.deepEq(ghosts, {}, 'empty, because every onset is above the window')
     end,
   },
 
   {
-    name = 'noteGhosts: a row carrying a real cell still reports its ghost -- precedence is the draw arm\'s',
+    name = 'ghostOverlay: a row carrying a real cell still reports its ghost -- precedence is the draw arm\'s',
     run = function(harness)
       local h = harness.mk()
       h.vm:setGridSize(80, 40)
@@ -1146,14 +1146,14 @@ return {
       local idx = noteColIdx(h, 1)
       h.ec:setPos(0, idx, 1)
       t.truthy(h.vm.grid.cols[idx].cells[0], 'fixture check: row 0 carries the parked host cell')
-      local ghosts = h.vm:noteGhosts(h.vm:fxHostAtCursor())
+      local ghosts = (h.vm:ghostOverlay(h.vm:fxHostAtCursor()) or {}).notes
       t.truthy(ghosts and ghosts[idx], 'the lane column carries ghosts')
       t.truthy(ghosts[idx][0], 'and reports one on the contested row too')
     end,
   },
 
   {
-    name = 'noteGhosts: the window is the viewport -- onsets below it are absent',
+    name = 'ghostOverlay: the window is the viewport -- onsets below it are absent',
     run = function(harness)
       local h = harness.mk()
       h.vm:setGridSize(80, 4)
@@ -1163,11 +1163,71 @@ return {
       injectRegion(h, { fx = arpUp, endppq = 960 })   -- sixteen onsets, rows 0-15
       local idx = noteColIdx(h, 1)
       h.ec:setPos(0, idx, 1)
-      local ghosts = h.vm:noteGhosts(h.vm:fxHostAtCursor())
+      local ghosts = (h.vm:ghostOverlay(h.vm:fxHostAtCursor()) or {}).notes
       t.truthy(ghosts and ghosts[idx], 'the lane column carries ghosts')
       local rows = {}
       for row = 0, 15 do if ghosts[idx][row] then rows[#rows + 1] = row end end
       t.deepEq(rows, { 0, 1, 2, 3, 4 }, 'four visible rows plus one of slack; the other eleven stay out')
+    end,
+  },
+
+
+  ----- Suppression: a replace park's originals give their rows to their own ghosts
+
+  {
+    name = 'ghostOverlay: a region host suppresses the parked chord it replaced, cells intact',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      addNote(h)                        -- C4 on lane 1
+      h.tm:addEvent{ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 67,
+                     vel = 90, detune = 0, delay = 0, lane = 2 }
+      h.tm:flush()
+      injectRegion(h, { fx = arpUp })   -- discrete replace: both notes park
+      local parked = h.tm:getChannel(1).parked
+      t.eq(#parked, 2, 'fixture check: the chord parked off-take')
+      local _, ci = fxColFor(h, 1)
+      h.ec:setPos(2, ci, 1)             -- caret in the fx column, mid-window
+      local overlay = h.vm:ghostOverlay(h.vm:fxHostAtCursor())
+      t.truthy(overlay.hidden[parked[1]], 'the lane-1 original is suppressed')
+      t.truthy(overlay.hidden[parked[2]], 'and so is the lane-2 one -- the whole picture, not one lane')
+      local col = h.vm.grid.cols[noteColIdx(h, 1)]
+      t.eq(col.cells[0], parked[1], 'col.cells is untouched: suppression is a draw-time overlay')
+      t.eq(col.tails[1].evt, parked[1], 'the tail names its event, so the bracket goes with the cell')
+    end,
+  },
+
+  {
+    name = 'ghostOverlay: the host\'s own parked cell stays visible',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      h.tm:addEvent{ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
+                     vel = 100, detune = 0, delay = 0, lane = 1, fx = arpUp }
+      h.tm:addEvent{ evType = 'note', ppq = 0, endppq = 240, chan = 2, pitch = 67,
+                     vel = 90, detune = 0, delay = 0, lane = 1, fx = arpUp }
+      h.tm:flush()
+      local mine, other = h.tm:getChannel(1).parked[1], h.tm:getChannel(2).parked[1]
+      t.truthy(mine and other, 'fixture check: both note hosts parked themselves')
+      h.ec:setPos(0, noteColIdx(h, 1), 1)   -- caret on the host cell
+      local host = h.vm:fxHostAtCursor()
+      t.eq(host, mine.uuid, 'fixture check: the caret resolves its host from that cell')
+      local overlay = h.vm:ghostOverlay(host)
+      t.falsy(overlay.hidden[mine], 'the host keeps its cell -- it is the only way to edit the note')
+      t.truthy(overlay.hidden[other], 'every other parked cell still goes')
+    end,
+  },
+
+  {
+    name = 'ghostOverlay: nothing on the take is ever suppressed',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      addNote(h)
+      injectRegion(h)                   -- sine: pb-augment, nothing parks
+      h.ec:setPos(0, noteColIdx(h, 1), 1)
+      local overlay = h.vm:ghostOverlay(h.vm:fxHostAtCursor())
+      t.deepEq(overlay.hidden, {}, 'an augment chain parks nothing, so it hides nothing')
     end,
   },
 }

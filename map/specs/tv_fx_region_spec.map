@@ -1,6 +1,6 @@
-@spec tv_fx_region_spec  src=tests/specs/tv_fx_region_spec.lua  loc=1173  cases=60
+@spec tv_fx_region_spec  src=tests/specs/tv_fx_region_spec.lua  loc=1233  cases=63
 @exercises dataStore (h.ds), trackerManager (h.tm), midiManager (h.fm), trackerView (h.vm), editCursor (h.ec), commandManager (h.cmgr), clipboard (h.clipboard)
-@surface   ds:assign, tm:rebuild, ds:get, tm:addEvent, tm:flush, fm:dump, vm:setGridSize, vm:ppqToRow, ec:setPos, vm:fxHostForEdit, vm:noteFx, vm:setNoteFx, vm:removeFxStage, vm:addFxStage, vm:setFxField, ec:setSelection, vm:rowToPPQ, vm:fxHostAtCursor, cmgr:invoke, tm:getChannel, vm:editEvent, tm:subscribe, ec:row, ec:extendTo, clipboard:collect, vm:noteGhosts
+@surface   ds:assign, tm:rebuild, ds:get, tm:addEvent, tm:flush, fm:dump, vm:setGridSize, vm:ppqToRow, ec:setPos, vm:fxHostForEdit, vm:noteFx, vm:setNoteFx, vm:removeFxStage, vm:addFxStage, vm:setFxField, ec:setSelection, vm:rowToPPQ, vm:fxHostAtCursor, cmgr:invoke, tm:getChannel, vm:editEvent, tm:subscribe, ec:row, ec:extendTo, clipboard:collect, vm:ghostOverlay
 @harness   mk
 
 # Intent
@@ -75,22 +75,25 @@
   @case 'fx freeze converts an fx-carrying note at the caret'  [harness]  @ 1006-1018
   @case 'fx freeze declines on a plain note (no chain to freeze)'  [harness]  @ 1022-1032
   @case 'fx freeze: a refused freeze opens no undo block; an eligible one opens exactly one'  [harness]  @ 1039-1076
-  @case 'noteGhosts: no host under the caret returns nil, before any window query'  [harness]  @ 1082-1091
-  @case 'noteGhosts: a host lights its derived onsets on the lane column, with pitch and vel'  [harness]  @ 1095-1120
-  @case 'noteGhosts: a host whose onsets lie outside the window answers empty, not nil'  [harness]  @ 1124-1136
-  @case 'noteGhosts: a row carrying a real cell still reports its ghost -- precedence is the draw arm\'s'  [harness]  @ 1140-1152
-  @case 'noteGhosts: the window is the viewport -- onsets below it are absent'  [harness]  @ 1156-1171
+  @case 'ghostOverlay: no host under the caret returns nil, before any window query'  [harness]  @ 1082-1091
+  @case 'ghostOverlay: a host lights its derived onsets on the lane column, with pitch and vel'  [harness]  @ 1095-1120
+  @case 'ghostOverlay: a host whose onsets lie outside the window answers empty, not nil'  [harness]  @ 1124-1136
+  @case 'ghostOverlay: a row carrying a real cell still reports its ghost -- precedence is the draw arm\'s'  [harness]  @ 1140-1152
+  @case 'ghostOverlay: the window is the viewport -- onsets below it are absent'  [harness]  @ 1156-1171
+  @case 'ghostOverlay: a region host suppresses the parked chord it replaced, cells intact'  [harness]  @ 1178-1197
+  @case 'ghostOverlay: the host\'s own parked cell stays visible'  [harness]  @ 1201-1218
+  @case 'ghostOverlay: nothing on the take is ever suppressed'  [harness]  @ 1222-1231
 
 # Uses (outbound edges)
   @use call ds:assign  @ 19,166,198,578,669,695,718,742,779,807,842,971,1043,1066
   @use call tm:rebuild  @ 20,144,170,202,240,328,346,467,504,582,673,699,722,747,783,811,846,976,1047,1069
   @use call ds:get  @ 30,271,281,291,292,294,305,332,349,396,413,428,450,477,485,517,525,551,678,706,752,791,815,831,851,868,885,941,962,982,1000,1061,1064,1075
-  @use call tm:addEvent  @ 42,232,442,459,495,535,537,1010,1100,1160
-  @use call tm:flush  @ 44,232,444,459,495,539,1012,1102,1162
+  @use call tm:addEvent  @ 42,232,442,459,495,535,537,1010,1100,1160,1183,1205,1207
+  @use call tm:flush  @ 44,232,444,459,495,539,1012,1102,1162,1185,1209
   @use call fm:dump  @ 48,55
-  @use call vm:setGridSize  @ 70,86,103,117,131,143,153,165,197,215,231,315,327,345,357,374,390,408,423,441,458,494,534,561,577,595,608,623,637,652,668,694,717,741,761,778,806,825,841,862,879,898,920,933,957,970,993,1009,1025,1042,1085,1098,1127,1143,1159
+  @use call vm:setGridSize  @ 70,86,103,117,131,143,153,165,197,215,231,315,327,345,357,374,390,408,423,441,458,494,534,561,577,595,608,623,637,652,668,694,717,741,761,778,806,825,841,862,879,898,920,933,957,970,993,1009,1025,1042,1085,1098,1127,1143,1159,1181,1204,1225
   @use call vm:ppqToRow  @ 78
-  @use call ec:setPos  @ 186,188,318,361,363,365,377,379,394,411,426,447,474,481,514,521,564,584,598,611,626,640,655,675,704,727,749,764,789,813,828,848,866,883,901,923,936,939,960,978,998,1014,1028,1049,1071,1088,1105,1131,1147,1165
+  @use call ec:setPos  @ 186,188,318,361,363,365,377,379,394,411,426,447,474,481,514,521,564,584,598,611,626,640,655,675,704,727,749,764,789,813,828,848,866,883,901,923,936,939,960,978,998,1014,1028,1049,1071,1088,1105,1131,1147,1165,1190,1212,1228
   @use call vm:fxHostForEdit  @ 187,189,319,330,378,380,686,709,733,798
   @use call vm:noteFx  @ 261,295,1016
   @use call vm:setNoteFx  @ 270,280
@@ -99,15 +102,15 @@
   @use call vm:setFxField  @ 304
   @use call ec:setSelection  @ 329,347,546
   @use call vm:rowToPPQ  @ 335,336,628,947,948
-  @use call vm:fxHostAtCursor  @ 348,362,364,366,1089,1090,1106,1132,1133,1149,1166
+  @use call vm:fxHostAtCursor  @ 348,362,364,366,1089,1090,1106,1132,1133,1149,1166,1191,1213,1229
   @use call cmgr:invoke  @ 395,412,448,475,482,522,548,565,585,599,612,627,641,643,656,676,677,705,728,729,750,765,790,814,829,830,849,867,884,938,940,961,980,999,1015,1029,1062,1072
-  @use call tm:getChannel  @ 400
+  @use call tm:getChannel  @ 400,1187,1210
   @use call vm:editEvent  @ 427,515
   @use call tm:subscribe  @ 544
   @use call ec:row  @ 660
   @use call ec:extendTo  @ 902,924,937,979
   @use call clipboard:collect  @ 903,925
-  @use call vm:noteGhosts  @ 1090,1106,1133,1149,1166
+  @use call vm:ghostOverlay  @ 1090,1106,1133,1149,1166,1191,1215,1229
 
 # Fields (r read / w write incl. constructor keys)
   @field r REMOVE  @ 280
@@ -120,28 +123,28 @@
   @field r cc  @ 245,471
   @field w cc  @ 232,459
   @field w ccRep  @ 233,241,460,483
-  @field r cells  @ 74,95,179,221,248,685,797,1148
+  @field r cells  @ 74,95,179,221,248,685,797,1148,1195
   @field r chan  @ 334,794,795
   @field w chan  @ 17,42,167,168,199,200,232,442,459,495,535,537
   @field w chan  @ 579,580,670,671,696,697,719,720,743,744,745,780
   @field w chan  @ 781,808,809,843,844,972,973,974,1010,1044,1045,1067
-  @field w chan  @ 1100,1160
+  @field w chan  @ 1100,1160,1183,1205,1207
   @field r chanDelta  @ 909
   @field r clipped  @ 94,123,135
   @field w col1  @ 329,347,546
   @field w col2  @ 329,347,546
   @field r cols  @ 24,36,173,177,204,221,244,360,427,470,507,511
-  @field r cols  @ 682,701,724,731,786,787,1148
+  @field r cols  @ 682,701,724,731,786,787,1148,1194
   @field w config  @ 422
   @field w currentOctave  @ 422
   @field w defaults  @ 237,464,501
-  @field w delay  @ 43,443,536,538,1011,1101,1161
+  @field w delay  @ 43,443,536,538,1011,1101,1161,1184,1206,1208
   @field w delta  @ 234,461,497
   @field r depth  @ 305
   @field w depth  @ 8,12
   @field r derived  @ 48,56
   @field w dest  @ 237,464,501
-  @field w detune  @ 43,443,536,538,1011,1101,1161
+  @field w detune  @ 43,443,536,538,1011,1101,1161,1184,1206,1208
   @field w dir  @ 9,13,105,270,293
   @field r endRow  @ 78,363,365,908
   @field r endppq  @ 336,569,586,587,600,615,628,642,644,659,768,870
@@ -149,10 +152,13 @@
   @field w endppq  @ 17,42,118,132,167,168,199,200,358,414,442,445
   @field w endppq  @ 535,537,540,579,580,596,653,670,671,696,697,719
   @field w endppq  @ 720,743,744,745,780,781,808,809,843,844,899,921
-  @field w endppq  @ 972,973,974,1010,1044,1045,1067,1100,1129,1160,1163
+  @field w endppq  @ 972,973,974,1010,1044,1045,1067,1100,1129,1160,1163,1183
+  @field w endppq  @ 1205,1207
   @field r evType  @ 477,485,517,525
-  @field w evType  @ 42,232,442,459,495,535,537,1010,1100,1160
+  @field w evType  @ 42,232,442,459,495,535,537,1010,1100,1160,1183,1205
+  @field w evType  @ 1207
   @field r events  @ 513
+  @field r evt  @ 1196
   @field w expand  @ 234,461,497
   @field w fields  @ 237,464,501
   @field r fx  @ 271,292,305,337,910,911,912,949
@@ -160,17 +166,18 @@
   @field w fx  @ 392,410,414,424,445,466,503,540,579,580,670,671
   @field w fx  @ 696,697,719,720,743,744,745,780,781,808,809,843
   @field w fx  @ 844,864,881,972,973,974,995,1011,1044,1045,1067,1087
-  @field w fx  @ 1103,1129,1145,1163
+  @field w fx  @ 1103,1129,1145,1163,1186,1206,1208
   @field r fxRegions  @ 904,905,906
   @field r glyph  @ 76,90,91,92,121,122,134
   @field r grid  @ 24,36,173,177,204,221,244,360,427,470,507,511
-  @field r grid  @ 628,682,701,724,731,786,787,1148
+  @field r grid  @ 628,682,701,724,731,786,787,1148,1194
+  @field r hidden  @ 1192,1193,1216,1217,1230
   @field r kind  @ 261,271,295,910,912,949
   @field w kind  @ 8,9,12,13,14,105,239,270,293,466,503,911
   @field r kinds  @ 233,241,460,483,496,523
   @field w label  @ 237,464,501
   @field r lane  @ 37
-  @field w lane  @ 43,443,536,538,1011,1101,1161
+  @field w lane  @ 43,443,536,538,1011,1101,1161,1184,1206,1208
   @field r midiChan  @ 25,37,173,204,245,471,508,683,702,725,731
   @field w mode  @ 237,464,501
   @field w name  @ 67,83,100,114,128,140,150,162,194,212,228,257
@@ -178,21 +185,22 @@
   @field w name  @ 438,455,491,531,558,574,592,605,620,634,649,665
   @field w name  @ 691,714,738,758,775,803,822,838,859,876,895,917
   @field w name  @ 930,954,967,990,1006,1022,1039,1082,1095,1124,1140,1156
-  @field r notes  @ 48,55
+  @field w name  @ 1178,1201,1222
+  @field r notes  @ 48,55,1106,1133,1149,1166
   @field w notes  @ 234,461,497
   @field r numRows  @ 628
   @field w onset  @ 8,12
-  @field r parked  @ 400
+  @field r parked  @ 400,1187,1210
   @field w part1  @ 329,347,547
   @field w part2  @ 329,347,547
   @field w pattern  @ 14
   @field w pbRep  @ 496,523
   @field w period  @ 8,9,12,13,105,270,293
   @field r pitch  @ 56,223,398,400,430,551,1111
-  @field w pitch  @ 42,442,535,537,1010,1100,1160
+  @field w pitch  @ 42,442,535,537,1010,1100,1160,1183,1205,1207
   @field r ppq  @ 431,513,887
   @field w ppq  @ 42,232,235,442,459,462,495,498,499,535,537,1010
-  @field w ppq  @ 1100,1160
+  @field w ppq  @ 1100,1160,1183,1205,1207
   @field r row  @ 907
   @field w row1  @ 329,347,546
   @field w row2  @ 329,347,546
@@ -201,6 +209,7 @@
   @field w run  @ 439,456,492,532,559,575,593,606,621,635,650,666
   @field w run  @ 692,715,739,759,776,804,823,839,860,877,896,918
   @field w run  @ 931,955,968,991,1007,1023,1040,1083,1096,1125,1141,1157
+  @field w run  @ 1179,1202,1223
   @field w shape  @ 235,462,498,499
   @field r stack  @ 76,89,107,120,134
   @field r startRow  @ 361
@@ -208,17 +217,17 @@
   @field w startppq  @ 17,167,168,199,200,579,580,653,670,671,696,697
   @field w startppq  @ 719,720,743,744,745,780,781,808,809,843,844,899
   @field w startppq  @ 921,972,973,974,1044,1045,1067
-  @field r tails  @ 76,77,78,89,94,107,120,123,134,135,360
+  @field r tails  @ 76,77,78,89,94,107,120,123,134,135,360,1196
   @field w take  @ 422
   @field r type  @ 25,37,173,178,204,245,471,508,683,702,725,731
   @field r type  @ 787
   @field r uuid  @ 31,48,75,179,333,432,679,680,685,707,708,752
-  @field r uuid  @ 792,793,797,816,817,833,851,982
+  @field r uuid  @ 792,793,797,816,817,833,851,982,1214
   @field w uuid  @ 17,167,168,199,200,579,580,670,671,696,697,719
   @field w uuid  @ 720,743,744,745,780,781,808,809,843,844,972,973
   @field w uuid  @ 974,1044,1045,1067
   @field r val  @ 250,479,519
   @field w val  @ 232,235,459,462,495,498,499
   @field r vel  @ 1112
-  @field w vel  @ 43,443,536,538,1011,1101,1161
+  @field w vel  @ 43,443,536,538,1011,1101,1161,1184,1206,1208
   @field r window  @ 235,462,498,499

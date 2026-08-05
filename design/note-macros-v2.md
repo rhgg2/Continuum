@@ -976,9 +976,8 @@ While the ghosts are up the parked cells drop out of their columns — showing
 both is showing one span twice, and the parked chord is the picture the
 ghosts exist to stand in for. The exception is the cell the caret resolves
 its host from: a note hosting a replace chain parks itself, so hiding it
-would take away both the host and the only way to edit the note, and the
-gate would lapse on the frame it took effect. That cell stays, and its row
-shows no ghost, because a real cell already outranks one.
+would take away both the host and the only way to edit the note. That cell
+stays, and its row shows no ghost, because a real cell already outranks one.
 
 *Decision taken — a ghost is an onset, and tm hands them over ready
 (2026-08-05).* Ghost notes carry no tail. A retrig ghosted with tails paints
@@ -1019,6 +1018,23 @@ shows is the realisation of the window the caret is in, and where two chains
 interleave their output that is one surface, not two; filtering by producer
 would show half of what is about to sound. The price is that the caret says
 which chain is being edited without saying which ghosts came from it.
+
+*Decision taken — the suppression is the overlay's second half, keyed by the
+cell (2026-08-06).* The read that answers the ghosts answers what they stand
+in for: one call on one host gate, a `notes` half and a `hidden` half. The
+placement pass was the alternative, and it is out of the caret's reach —
+placement runs on rebuild, the gate moves with an arrow key. Riding the
+overlay also leaves `col.cells` whole, so nothing that resolves an event
+through a cell — the host lookup, the leaf-edit facade, the caret — loses
+its footing while the ghosts are up: a suppressed cell is invisible, not
+absent, and stepping onto one restores it, because a parked member carries
+no chain for the tab to raise. `hidden` is keyed by the event table rather
+than by row, because a note's tail bracket is drawn from a second list that
+carries no row the cell loop would recognise (`startRow` is fractional for
+an off-grid onset), and one identity then answers for the cell, its tail and
+its temper tick alike. The suppression reads `channel.parked` alone, so
+parked ccs, pbs and PA stand: nothing ghosts them, and hiding them would
+take a picture away without offering one in its place.
 
 **Patches.** A patch is a *named chain* — an ordered `{kind, params}`
 list, pure data, no code — saved to a library and instantiated **by copy**
