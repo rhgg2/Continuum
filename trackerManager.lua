@@ -1689,6 +1689,12 @@ local computeFxWindows
 local freezeEligibleByUuid = {}
 local freezeRectByUuid     = {}   -- uuid -> the gm rect a freeze-to-group mint would claim
 
+-- Rebuild output too, built by the fx pass as it emits and behind the same dirtyChans gate: a clean
+-- channel carries its list untouched, a channel that ran gets its list replaced wholesale.
+--shape: fxNotesByChan[chan] = { { evType='note', chan, lane, ppq, pitch, vel, detune, delay, derived }, ... }
+--   ppq is the logical onset; derived is the producing region/host uuid; logical-onset order
+local fxNotesByChan = {}
+
 -- Built at the pipeline tail, where the fx pass has already emitted this rebuild's derived notes:
 -- a rect's note lanes come off those notes, not window coverage, which is parked-over not produced-onto. see design/archive/fx-freeze.md § Freeze to group
 local function buildFreezeMaps(census, windows)
@@ -1966,6 +1972,19 @@ function tm:freezeEligible(uuid)      return freezeEligibleByUuid[uuid] == true 
 --contract: every member tm:freezeToGroup hands back lies inside the rect
 -- A clone per call: gm:markGroup stores the rect by reference and tm replaces its map each rebuild.
 function tm:freezeRect(uuid)          local r = freezeRectByUuid[uuid]; return r and util.deepClone(r) end
+--contract: derived notes whose logical onset lies in [startL, endL) on chan, logical-onset order
+--contract: each carries derived = its producer's uuid and the lane the allocator gave it
+--contract: onset records -- a ghost is one row, so no tail field rides
+--invariant: read-only; tm rebuilds them each pass
+function tm:fxNotes(chan, startL, endL)
+  local list = fxNotesByChan[chan] or {}
+  local out = {}
+  for i = firstAtOrAfter(list, startL), #list do
+    if list[i].ppq >= endL then break end
+    util.add(out, list[i])
+  end
+  return out
+end
 -- With no mm ops there is no reload->rebuild to ride, so the one rebuild is driven here.
 function tm:flush() if flush() then tm:rebuild(false) end end
 
@@ -3693,9 +3712,21 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
     -- Reconcile existence (stamps kept specs with the mm handle + realised end); ops land on
     -- fxOut.noteOps. fxOut.noteLive holds the predicted specs; the tail walk clips them in place.
     reconcileFx(noteExisting[chan], predicted, noteOpsSink)
+    local fxNotes = {}
     for _, spec in ipairs(predicted) do
       util.add(fxOut.noteLive[chan], { evt = spec, lane = spec.lane, kept = keptFx[spec] or nil })
+      -- A copy, not the spec: the tail walk clamps raw onsets and clips ends in these in place below.
+      util.add(fxNotes, { evType = 'note', chan = chan, lane = spec.lane, ppq = spec.ppqL,
+                          pitch = spec.pitch, vel = spec.vel, detune = spec.detune,
+                          delay = spec.delay, derived = spec.derived })
     end
+    -- One sort per rebuild against many windowed reads; lane then pitch break onset collisions stably.
+    table.sort(fxNotes, function(a, b)
+      if a.ppq ~= b.ppq then return a.ppq < b.ppq end
+      if a.lane ~= b.lane then return a.lane < b.lane end
+      return a.pitch < b.pitch
+    end)
+    fxNotesByChan[chan] = fxNotes
 
     -- cc emission: fold (foldChains) into markerless seats, clipped to the emit scope; half-open --
     -- the closing value belongs to the kept side. see design/interval-dirt.md § Implementation plan, commit 3

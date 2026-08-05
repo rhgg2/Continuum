@@ -1,6 +1,6 @@
 # note macros v2 — region hosts and the generator spectrum
 
-> opened: 2026-06-26 · status: parked — `plan/chain-surface.md`
+> opened: 2026-06-26 · status: in flight — `plan/chain-surface.md`
 >
 > Working design doc. Supersedes the forward-looking half of
 > `design/archive/note-macros.md`, now the **frozen record of v1** — the
@@ -962,6 +962,40 @@ actually emit" becomes a live question the moment stages compose. Note
 ghosting is a new path rather than a reuse: the existing ghost mechanism
 is scalar (cc curve samples between breakpoints), so derived specs need
 surfacing to the view as non-editable cells sharing the ghost styling.
+
+*Decisions taken — the gate is the caret's host, and the parked cells give
+way (2026-08-05).* "Holds focus" resolves to the caret bracketing an fx host
+— `tv:fxHostAtCursor`, which the view already computes for the tab's own
+auto-raise — rather than keyboard focus inside the strip: with the strip
+focused the arrow keys walk chain fields, so gating there would light the
+ghosts only while the caret can't be moved across them. What shows is every
+derived note in view, not the caret host's alone, so a sibling chain
+colliding with yours is visible where the collision happens.
+
+While the ghosts are up the parked cells drop out of their columns — showing
+both is showing one span twice, and the parked chord is the picture the
+ghosts exist to stand in for. The exception is the cell the caret resolves
+its host from: a note hosting a replace chain parks itself, so hiding it
+would take away both the host and the only way to edit the note, and the
+gate would lapse on the frame it took effect. That cell stays, and its row
+shows no ghost, because a real cell already outranks one.
+
+*Decision taken — a ghost is an onset, and tm hands them over ready
+(2026-08-05).* Ghost notes carry no tail. A retrig ghosted with tails paints
+a wall of glyphs across the span the parked host's own tail already covers,
+and the scalar ghosts this borrows its styling from are a value on a row
+with no extent. That takes the end fields out of what the view needs, and
+with them the reason to reconstruct a derived note at read time: the fx pass
+knows every fact a ghost shows at the moment it emits the spec, so tm keeps
+a per-channel list of onset records in the logical frame and the view reads
+a window out of it. Two alternatives were priced first. A scan of the raw
+index per read pays a whole channel's notes to find a handful, and, that
+index being raw-sorted, has to carry the window into the raw frame to seek —
+where a note's onset carries its producer's delay, and delay reaches 9999
+millibeats, so the seek would need most of ten beats of slack to be safe. An
+index of uuids resolved through `byUuid` keeps the hop without answering the
+frame. Storing the logical onset makes the window query a binary search on
+the field the query is about.
 
 **Patches.** A patch is a *named chain* — an ordered `{kind, params}`
 list, pure data, no code — saved to a library and instantiated **by copy**

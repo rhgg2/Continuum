@@ -369,4 +369,45 @@ return {
     end,
   },
 
+  ----- tm:fxNotes -- the door onto the derived set the rebuild produced
+
+  {
+    name = 'tm:fxNotes hands back the derived onsets in the logical frame, windowed half-open',
+    run = function(harness)
+      local h = mkRetrigHost(harness)
+      local host = parkedHost(h)
+      local realised = fxNotesOf(h.fm:dump(), host.uuid)
+      t.eq(#realised, 4, 'expansion happened')
+
+      local all = h.tm:fxNotes(1, 0, 240)
+      t.eq(#all, #realised, 'a take-wide window returns every derived note the dump holds')
+
+      local onsets = {}
+      for _, fn in ipairs(all) do
+        t.eq(fn.derived, host.uuid, 'each record names its producer')
+        t.eq(fn.lane, host.lane, 'each record carries the lane the allocator gave it')
+        onsets[#onsets + 1] = fn.ppq
+      end
+      t.deepEq(onsets, { 0, 60, 120, 180 }, 'logical onsets tile at the retrig period')
+
+      -- Swing plus delay=500 means the raw onsets are elsewhere: a record reading
+      -- the realised frame could not produce this set.
+      local rawOnsets = {}
+      for _, n in ipairs(realised) do rawOnsets[n.ppq] = true end
+      local diverges = false
+      for _, ppq in ipairs(onsets) do diverges = diverges or not rawOnsets[ppq] end
+      t.truthy(diverges, 'at least one logical onset has no raw counterpart in the dump')
+
+      local narrowed = {}
+      for _, fn in ipairs(h.tm:fxNotes(1, 60, 180)) do narrowed[#narrowed + 1] = fn.ppq end
+      t.deepEq(narrowed, { 60, 120 }, 'the window is half-open at both ends')
+
+      for lane, column in ipairs(h.tm:getChannel(1).columns.notes) do
+        for _, evt in ipairs(column.events) do
+          t.falsy(evt.derived, 'lane ' .. lane .. ' column carries no derived event')
+        end
+      end
+    end,
+  },
+
 }
