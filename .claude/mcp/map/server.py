@@ -82,6 +82,94 @@ def _glob_smell(pat: Optional[str]) -> Optional[str]:
     return None
 
 
+# `^function tm:(channels|columns)` and `local function dirtyChan` are how a
+# declaration is searched for in Lua *source*; the map indexes the bare name.
+# A quarter of the grep fallbacks in the transcript corpus were spelled this
+# way, so reduce the pattern to the name rather than answering nothing.
+# Anchored at the head of an alternative so prose that merely contains the
+# word ("the function that clips") is left alone.
+_DECL_SYNTAX = re.compile(r'(?:^|\|)\s*\^?\s*(?:local\s+)?function\b')
+_DECL_WORDS = re.compile(r'\b(?:local\s+)?function\b')
+
+
+# Where a name's words begin and end: `_`/`.`/`:` separators and camel humps.
+# `chan` spans a whole word in `dirtyChan` and a fragment of one in
+# `changedSwingNames`, which is the difference between a hit and a false
+# positive — and a stronger signal than prefix-vs-substring, which ranks
+# those two the wrong way round.
+def _word_edges(name: str) -> tuple:
+    starts, ends = {0}, {len(name)}
+    for i in range(1, len(name)):
+        prev, cur = name[i - 1], name[i]
+        if prev in '_.:':
+            starts.add(i)
+        if cur in '_.:':
+            ends.add(i)
+        elif cur.isupper() and (prev.islower() or prev.isdigit()):
+            starts.add(i)
+            ends.add(i)
+    return starts, ends
+
+
+def _match_rank(hit, name: str) -> tuple:
+    """Sort key for a query's hit on a declaration name, best first: the whole
+    name, then a whole word inside it, then a word-initial fragment, then
+    anything. Ties break on how much of the name the query claimed."""
+    text = hit.group(0)
+    if text == name:
+        return (0, 0.0)
+    starts, ends = _word_edges(name)
+    at_start = hit.start() in starts
+    at_end = hit.end() in ends
+    tier = 1 if at_start and at_end else 2 if at_start else 3
+    return (tier, -len(text) / len(name))
+
+
+def _strip_decl_syntax(query):
+    """A Lua declaration pattern reduced to the names the map indexes.
+    Returns (rewritten, original) when it fired, else (query, None). The name
+    is the last identifier of each alternative, since a qualifier (`tm:`,
+    `M.`) precedes it."""
+    if not query or not _DECL_SYNTAX.search(query):
+        return query, None
+    names = []
+    for alt in query.split('|'):
+        # Escapes first: `function mm:add\b` otherwise yields the `b` of `\b`
+        # as the last identifier, and the name searched for is the escape.
+        alt = re.sub(r'\\.', ' ', _DECL_WORDS.sub(' ', alt))
+        ids = re.findall(r'[A-Za-z_][A-Za-z0-9_]*', alt)
+        if ids and ids[-1] not in ('local', 'function') and ids[-1] not in names:
+            names.append(ids[-1])
+    return ('|'.join(names), query) if names else (query, None)
+
+
+# `^tracks` finds nothing where the map spells the name `arrange.tracks`. A held
+# or handler carries its qualifier into the indexed name, unlike an api, whose
+# receiver is stripped — so the same anchor means two different things and the
+# caller cannot tell which without knowing the kind of the thing not yet found.
+# Retried rather than documented: the discrepancy only ever surfaces as an empty
+# answer, and an empty answer is the moment grep wins.
+_ANCHORED = re.compile(r'(?:^|\|)\^(?=[\w])')
+
+
+def _widen_anchors(query):
+    """Every `^` in the query allowed to skip one `table.`/`recv:` qualifier.
+    None when there is no anchor to widen."""
+    if not query or not _ANCHORED.search(query):
+        return None
+    widened = _ANCHORED.sub(lambda m: m.group(0)[:-1] + r'^(?:\w+[.:])?', query)
+    return widened if widened != query else None
+
+
+def _widen_module(module):
+    """A plain-word `module` allowed to match a stem it is only part of — `query`
+    substring-matches and the habit that types one types the other. None where
+    it is already a regex, whose author meant the anchoring."""
+    if not module or re.escape(module) != module:
+        return None
+    return f".*{module}.*"
+
+
 # ----- map_query ------------------------------------------------------------
 
 # Annotations: `@invariant`, `@contract`, `@shape`, `@emits`, `@reaper`,
@@ -143,6 +231,10 @@ def _iter_use_sites(sites: str):
 def _normalize_kind(k: str) -> str:
     k = k.lower().lstrip("?")
     aliases = {
+        "decls": "decl", "declaration": "decl", "declarations": "decl",
+        "name": "decl", "names": "decl",
+        "anns": "ann", "annotation": "ann", "annotations": "ann",
+        "prose": "ann", "body": "ann", "bodies": "ann",
         "signal": "emits", "signals": "emits",
         "invariants": "invariant", "contracts": "contract", "shapes": "shape",
         "fns": "fn", "functions": "fn",
@@ -164,12 +256,32 @@ def _normalize_kind(k: str) -> str:
 # Every kind `_map_query` dispatches on. An unknown one used to fall through
 # to the generic scan and return "(no matches …)", which reads as absence of
 # the thing rather than absence of the filter.
-_KINDS = frozenset({
+_DECL_KINDS = frozenset({
     'fn', 'api', 'held', 'handler', 'state', 'const', 'require', 'construct', 'case',
-    'invariant', 'contract', 'shape', 'emits', 'reaper', 'deps',
-    'exercises', 'surface', 'harness',
-    'uses', 'usedby', 'flow', 'reads', 'writes', 'fields',
 })
+
+# Kinds whose payload is a prose body rather than a name. Mirrors the
+# alternation in `_ANN`; keep the two in step.
+_ANN_KINDS = frozenset({'invariant', 'contract', 'shape', 'emits', 'reaper',
+                        'deps', 'exercises', 'surface', 'harness'})
+
+# Whether a declaration got written `api` or `held` is a fact about the row, and
+# the row says which — so asking for one means guessing an answer the map is
+# about to give. The groups are the two questions actually being asked: is this
+# thing declared somewhere, or is something asserted about it. Their union is
+# what a kindless scan covers, which is why that needs no group of its own.
+_KIND_GROUPS = {'decl': _DECL_KINDS, 'ann': _ANN_KINDS}
+
+_KINDS = (_DECL_KINDS | _ANN_KINDS | frozenset(_KIND_GROUPS)
+          | frozenset({'uses', 'usedby', 'flow', 'reads', 'writes', 'fields'}))
+
+
+def _wanted_kinds(kind_filter):
+    """The row kinds a `kind` argument selects: a group expands, anything else
+    matches only itself."""
+    if not kind_filter:
+        return None
+    return _KIND_GROUPS.get(kind_filter, frozenset({kind_filter}))
 
 
 def _entry_kind(raw_kind: str) -> str:
@@ -178,8 +290,9 @@ def _entry_kind(raw_kind: str) -> str:
 
 # Scope selects the search domain by directory, which is what a spec map
 # actually is; the `_spec` stem is a convention that happens to agree today.
-# The corpus runs 64 module maps to 254 spec maps, so an unscoped answer is
-# mostly specs and the cap lands on them first.
+# 'prod' is the default because the corpus runs 64 module maps to 254 spec
+# maps: an unscoped answer is mostly specs and the cap lands on them first,
+# so the majority of the index is not what the majority of questions want.
 _SCOPES = {
     'all': 'all', 'any': 'all', 'both': 'all',
     'prod': 'prod', 'production': 'prod', 'src': 'prod', 'source': 'prod',
@@ -196,11 +309,23 @@ def _scope_dirs(canon: str) -> tuple:
     return (MAP_DIR, MAP_DIR / "specs")
 
 
-def _usedby_selectors(query, module, reg):
+# One file selection for every kind, so `module` narrows where the answer comes
+# from and never what the answer is about. Under usedby that is where the
+# callers live; the target itself is named by `query`.
+def _scoped_maps(dirs, module) -> list:
+    files = [p for d in dirs for p in sorted(d.glob("*.map"))]
+    if not module:
+        return files
+    module_rx = re.compile(module, re.IGNORECASE)
+    return [p for p in files if module_rx.fullmatch(p.stem)]
+
+
+def _usedby_selectors(query, reg):
     """Selectors for a usedby scan, collapsing short names and `:`/`.` spellings.
     Returns (module_pred | None, method | None, raw_regex | None): a @use target
     matches when its canonical module satisfies module_pred, its method equals
-    `method`, and its raw text matches raw_regex — each constraint optional."""
+    `method`, and its raw text matches raw_regex — each constraint optional.
+    The target is named by `query` alone."""
     mod_preds = []
 
     def want_module(tok):
@@ -211,9 +336,6 @@ def _usedby_selectors(query, module, reg):
             canon = reg.get(tok, tok)
             mod_preds.append(lambda mod, canon=canon: mod == canon)
 
-    if module:
-        want_module(module)
-
     method = None
     raw_rx = None
     if query:
@@ -221,6 +343,8 @@ def _usedby_selectors(query, module, reg):
         if m:                                       # `cm:get`, `configManager.get`
             want_module(m.group(1))
             method = m.group(2)
+        elif query in reg or query in set(reg.values()):
+            want_module(query)                      # a module: all of its edges
         else:                                       # regex over raw target text
             raw_rx = re.compile(query, re.IGNORECASE)
 
@@ -230,48 +354,47 @@ def _usedby_selectors(query, module, reg):
 
 # Both halves of usedby gather without capping: the budget can't be split
 # until both totals are known, so neither may break out early.
-def _usedby_cross(module_pred, q_fn, raw_rx, reg, dirs) -> list[str]:
-    """Cross-module half: every map's @use edges aimed at the selected target."""
+def _usedby_cross(module_pred, q_fn, raw_rx, reg, files) -> list[str]:
+    """Cross-module half: @use edges aimed at the target, from each given map."""
     rows: list[str] = []
-    for d in dirs:
-        for mp in sorted(d.glob("*.map")):
-            text = mp.read_text(encoding="utf-8", errors="replace")
-            src = _src_of(mp, text)
-            site_rows: list[str] = []
-            targets: set[str] = set()
-            for raw in text.splitlines():
-                mu = _USE.match(raw)
-                if not mu:
-                    continue
-                target = mu.group("target")
-                t_module, t_fn = _canon_target(target, reg)
-                if module_pred and not module_pred(t_module):
-                    continue
-                if q_fn is not None and t_fn != q_fn:
-                    continue
-                if raw_rx and not raw_rx.search(target):
-                    continue
-                ukind = mu.group("ukind")
-                targets.add(f"{ukind} {target}")
-                for caller, n in _iter_use_sites(mu.group("sites")):
-                    site_rows.append(f"{src}:{n}  @use {ukind} {target}{_where(caller)}")
-            # Spec callers collapse to one row per spec file — the file list
-            # answers "which specs exercise X"; per-site rows drown production.
-            if site_rows and mp.parent.name == "specs":
-                plural = "s" if len(site_rows) != 1 else ""
-                site_rows = [f"{src}: {len(site_rows)} site{plural}"
-                             f"  @use {', '.join(sorted(targets))}"]
-            rows.extend(site_rows)
+    for mp in files:
+        text = mp.read_text(encoding="utf-8", errors="replace")
+        src = _src_of(mp, text)
+        site_rows: list[str] = []
+        targets: set[str] = set()
+        for raw in text.splitlines():
+            mu = _USE.match(raw)
+            if not mu:
+                continue
+            target = mu.group("target")
+            t_module, t_fn = _canon_target(target, reg)
+            if module_pred and not module_pred(t_module):
+                continue
+            if q_fn is not None and t_fn != q_fn:
+                continue
+            if raw_rx and not raw_rx.search(target):
+                continue
+            ukind = mu.group("ukind")
+            targets.add(f"{ukind} {target}")
+            for caller, n in _iter_use_sites(mu.group("sites")):
+                site_rows.append(f"{src}:{n}  @use {ukind} {target}{_where(caller)}")
+        # Spec callers collapse to one row per spec file — the file list
+        # answers "which specs exercise X"; per-site rows drown production.
+        if site_rows and mp.parent.name == "specs":
+            plural = "s" if len(site_rows) != 1 else ""
+            site_rows = [f"{src}: {len(site_rows)} site{plural}"
+                         f"  @use {', '.join(sorted(targets))}"]
+        rows.extend(site_rows)
     return rows
 
 
-def _usedby_intra(module_pred, q_fn, raw_rx, reg) -> list[str]:
-    """Intra-module half: each module map's own @call and @bind rows — a helper
-    nothing calls is still reached, by the table that binds it. MAP_DIR only —
-    spec maps carry neither row kind, and a spec's private helpers are out of
-    scope for "who calls this" anyway."""
+def _usedby_intra(module_pred, q_fn, raw_rx, reg, files) -> list[str]:
+    """Intra-module half: each map's own @call and @bind rows — a helper nothing
+    calls is still reached, by the table that binds it. Module maps only — spec
+    maps carry neither row kind, and a spec's private helpers are out of scope
+    for "who calls this" anyway."""
     rows: list[str] = []
-    for mp in sorted(MAP_DIR.glob("*.map")):
+    for mp in files:
         text = mp.read_text(encoding="utf-8", errors="replace")
         src = _src_of(mp, text)
         for raw in text.splitlines():
@@ -300,14 +423,14 @@ def _usedby_intra(module_pred, q_fn, raw_rx, reg) -> list[str]:
     return rows
 
 
-def _usedby_drops(module_pred, q_fn, raw_rx, reg) -> list[str]:
+def _usedby_drops(module_pred, q_fn, raw_rx, reg, files) -> list[str]:
     """Dropped-receiver half: sites the extractor could not attribute. The
     receiver is resolved here through the self-name registry — the guess the
     extractor refuses to make, because a wrong alias in the corpus does not
     drop, it lies. Under a heading that says the receiver is unproven it is
     the recall the other two halves cannot give."""
     rows: list[str] = []
-    for mp in sorted(MAP_DIR.glob("*.map")):
+    for mp in files:
         text = mp.read_text(encoding="utf-8", errors="replace")
         src = _src_of(mp, text)
         for raw in text.splitlines():
@@ -333,7 +456,7 @@ def _usedby_drops(module_pred, q_fn, raw_rx, reg) -> list[str]:
 # `uses` reads the *caller* field of the @call and @use rows, which nothing else
 # does: what a named function reaches, with each callee resolved to its
 # declaration — the jump target the call site itself cannot give you.
-# See design/map-navigation.md § Intra-file call edges.
+# See design/archive/map-navigation.md § Intra-file call edges.
 _USES_NOTE = ("--- note: a subject here is a named declaration "
               "(@fn/@api/@held/@handler), so sites whose caller is `<load>` — the "
               "module's chunk body, which includes the head of a construct "
@@ -424,16 +547,13 @@ def _uses_render(groups, max_results) -> str:
     return "\n".join(out)
 
 
-def _module_pointer(query, reg, kind_label):
-    """A query naming a module is a module-subject question, and both directions
-    take that subject through `module=`. usedby needs this guard before its
-    search rather than after: require-edge targets are bare module names, so a
-    module name falling through to the raw-target regex returns the require rows
-    only — a partial answer wearing a complete one's clothes."""
+def _module_pointer(query, reg):
+    """`uses` groups by declaration, so a query naming a module has no subject to
+    group under. Its outbound surface is the whole file's edge list instead."""
     if not query or not (query in reg or query in set(reg.values())):
         return None
-    return (f"({query!r} names a module, not a function; kind={kind_label!r} "
-            f"takes a module as module={reg.get(query, query)!r}, no query)")
+    return (f"({query!r} names a module, not a function; for its whole outbound "
+            f"surface use module={reg.get(query, query)!r} with no query)")
 
 
 def _section(name, shown, total, na=None) -> str:
@@ -460,25 +580,23 @@ def _split_budget(sizes: list[int], budget: int) -> list[int]:
     return keep
 
 
-# Kinds whose payload is a prose body rather than a name. Mirrors the
-# alternation in `_ANN`; keep the two in step.
-_ANN_KINDS = frozenset({'invariant', 'contract', 'shape', 'emits', 'reaper',
-                        'deps', 'exercises', 'surface', 'harness'})
-
 # Chosen so every module map's listing survives whole: the largest is under
 # 2,600 chars, while spec `case` heads are sentences rather than identifiers
 # and run to 4,840 (am_spec, 68 cases). The cut lands on prose, not on names.
 _INVENTORY_CHARS = 2500
 
 
-def _domain_note(seen_kinds, seen_names, label, module, domain) -> str:
+def _domain_note(seen_kinds, seen_names, label, wanted, module, domain,
+                 relational=None) -> str:
     """What the scan walked, for an answer that found nothing. Its whole job
     is to separate 'absent from the code' from 'absent from the corpus', so
     it reports the domain rather than guessing at near misses."""
     kind_counts = ' '.join(f"{k}:{v}" for k, v in seen_kinds.most_common())
+    # Summed over the wanted set, not looked up by label: the histogram keys
+    # concrete kinds, so a group label finds nothing under its own name.
+    n = sum(seen_kinds.get(k, 0) for k in wanted) if wanted else 0
 
-    if label in _ANN_KINDS:
-        n = seen_kinds.get(label, 0)
+    if wanted and wanted <= _ANN_KINDS:
         if module and n:
             return (f"{module} holds {n} {label} rows — bodies are prose, not "
                     f"names; drop query= to read them.")
@@ -500,13 +618,62 @@ def _domain_note(seen_kinds, seen_names, label, module, domain) -> str:
                 f"  {', '.join(shown)}{tail}")
 
     if module:
-        return f"{module} holds: {kind_counts}\n  — re-query with kind= to list one"
+        return (f"{module} holds: {kind_counts}"
+                f"\n  — re-query with kind= to list one"
+                + ("\n" + _unsearched_note(relational) if relational else ""))
 
     if label:
-        return (f"searched {domain} — {seen_kinds.get(label, 0)} {label} "
-                f"heads, none matching.")
+        return f"searched {domain} — {n} {label} heads, none matching."
     return (f"searched {domain} — {sum(seen_kinds.values())} entries across "
             f"{len(seen_kinds)} kinds, none matching.")
+
+
+# The histogram above counts what the bare scan walks, and it used to stop
+# there — so a module's `holds:` line inventoried declarations and annotations
+# while silently omitting its field and edge rows, naming a domain narrower
+# than the reader assumes in the very note whose job is to name the domain.
+def _unsearched_note(relational) -> str:
+    bits = []
+    if relational.get('field'):
+        bits.append(f"{relational['field']} @field rows (kind='fields')")
+    if relational.get('use'):
+        bits.append(f"{relational['use']} @use edges (kind='uses'/'usedby')")
+    return f"  — not walked by this scan: {', '.join(bits)}" if bits else ""
+
+
+# One row per field NAME, not per access site: per (module, field) a hot name
+# like `chan` still runs to 315 rows, per name it is 20. The site listing is
+# what kind='fields' is for, and each row carries the call that gets there.
+_FIELD_SUMMARY_ROWS = 10
+
+
+def _field_summaries(module_files, query_rx, limit) -> tuple:
+    """Matching field names, widest first: r/w, site total, declaring modules.
+    Returns (rows, names_dropped)."""
+    agg: dict = {}
+    for mp in module_files:
+        text = mp.read_text(encoding="utf-8", errors="replace")
+        src = _src_of(mp, text)
+        for raw in text.splitlines():
+            mf = _FIELD.match(raw)
+            if not mf or not query_rx.search(mf.group("name")):
+                continue
+            rec = agg.setdefault(mf.group("name"),
+                                 {'rw': set(), 'sites': 0, 'mods': Counter()})
+            rec['rw'].add(mf.group("fkind"))
+            n = sum(1 for _ in _iter_use_sites(mf.group("sites")))
+            rec['sites'] += n
+            rec['mods'][src] += n
+
+    rows = []
+    for name, rec in sorted(agg.items(), key=lambda kv: -kv[1]['sites'])[:limit]:
+        mods = [m for m, _ in rec['mods'].most_common()]
+        more = f" +{len(mods) - 3}" if len(mods) > 3 else ""
+        rows.append(f"  @field {''.join(sorted(rec['rw']))} {name}  "
+                    f"{rec['sites']} site{'' if rec['sites'] == 1 else 's'} in "
+                    f"{', '.join(mods[:3])}{more}  "
+                    f"[kind='fields', query='^{name}$']")
+    return rows, len(agg) - len(rows)
 
 
 # `flow` walks the signal rows already in the maps: `@emits` (owner = the
@@ -557,129 +724,63 @@ def _signal_graph(reg, dirs):
     return emits, subs, forwards
 
 
-# The tool description is always-loaded context, so it carries what you need
-# to form a correct query and nothing else; the rest is one call away. Kept
-# here rather than in docs/ because it documents the tool's own surface.
-_HELP = """map_query reference — the detail the tool description leaves out.
-
-MATCHING
-  query is regex: case-insensitive, substring-matched, anchor with ^$ for
-  exact. Alternation works ('ppqL|endppqL'). It is NOT glob — plain text
-  already substring-matches, so no wrapping stars.
-
-  What a query matches depends on the kind:
-    bare symbol names   fn, api, held, handler, state, const, require,
-                        construct. A held name is qualified, so it is
-                        matched as `table.field`, a handler as `recv:signal`.
-    full body text      invariant, contract, shape, emits, reaper
-    field names         reads, writes, fields
-
-KINDS
-  held      a function literal held in a table field, queried `table.field`
-  handler   a literal handed to a registrar, queried `recv:signal`
-  case      spec test cases
-  Aliases: plurals throughout, signal for emits, import for require,
-  calls for uses, calledby/called-by/used-by for usedby.
-
-USES / USEDBY
-  Two directions of one relation, and `query` names the subject in both:
-  uses is what the subject reaches, usedby what reaches it.
-
-  uses groups by matching declaration and resolves each callee to *its own*
-  declaration, so the answer is jump-ready. What it reaches includes what it
-  binds by name (marked `(by name)`), not only what it calls. With `module`
-  and no `query` it falls back to that module's flat outbound edge list:
-  calls / subs / forwards / requires.
-
-  usedby answers in three labelled sections:
-    cross-module  @use edges, scanning every map — specs included, so this
-                  also answers "which specs exercise X". Spec callers
-                  collapse to one summary row per spec file.
-    intra-module  the declaring file's own @call and @bind rows, so a
-                  private helper's callers come back from the same query —
-                  and so does the command or export table that binds a
-                  helper nothing calls.
-    dropped       @drop sites, whose receiver the extractor could not
-                  resolve, matched here by name: candidates, not confirmed
-                  edges. `(none)` under this heading is a real answer, that
-                  nothing matching was dropped.
-
-  Both halves resolve short instance names and `:`/`.` spellings, so
-  `cm:get`, `configManager.get` and module='configManager' all match. A
-  module-level target has no intra half, since @call keys on functions.
-
-FLOW
-  Traces a signal end-to-end: emitters (@emits payload + fire-sites),
-  subscribers, and forward hops followed transitively. `query` names the
-  signal; `module` optionally pins the origin emitter.
-
-READS / WRITES / FIELDS
-  Walk the @field rows — every `.name` read or write site, where
-  table-constructor keys count as writes. `fields` returns both. query
-  substring-matches the field name (anchor `^name$` for one exact field);
-  omit `module` to sweep every module and spec for the blast radius.
-
-MODULE
-  A regex anchored on .map file stems. Spec maps (map/specs/, one per
-  tests/specs/*_spec.lua) join every query and their stems end `_spec`, so
-  module='.*_spec' restricts to specs.
-
-  Under uses/usedby it instead says which module the subject named by
-  `query` lives in, resolved via the self-name registry (`cm` and
-  `configManager` are one module). With no `query` the module is itself the
-  subject: usedby+module='eventMeta' answers "who uses eventMeta",
-  uses+module='eventMeta' its own outbound edges. Under flow it pins the
-  origin emitter, same resolution.
-
-SCOPE
-  Selected by directory (map/ vs map/specs/) rather than by stem, and it
-  composes with `module`. Under usedby it scopes the cross-module half only
-  — the intra-module and dropped-receiver indexes cover module maps alone,
-  so scope='spec' reports them n/a rather than empty.
-
-EMPTY ANSWERS
-  An answer with no matches names the domain it searched: a module's heads
-  for that kind where `module` and `kind` were both given, the kind
-  histogram where only `module` was, and the scope scanned otherwise.
-"""
-
-
 @mcp.tool(structured_output=False)
 def map_query(
     query: Optional[str] = None,
     kind: Optional[str] = None,
     module: Optional[str] = None,
-    scope: str = "all",
+    scope: str = "prod",
     max_results: int = 60,
 ) -> str:
-    """Structured query over the project's .map semantic outlines.
+    """Structured query over the project's .map semantic outlines — a generated
+    index of every declaration, annotation, field access and call edge in the
+    repo, each row carrying the .lua file:line to jump to.
 
-    Replaces `grep '@fn' map/*.map` and the follow-up read-the-source dance.
-    Results carry the originating .lua file:line, so you can jump straight to
-    the declaration with Read offset/limit.
+    What it answers, commonest question first, with the call that does it:
 
-    `kind='help'` returns the full reference: what each kind matches, how
-    uses/usedby resolve names and lay out their sections, and what flow and
-    the field kinds walk.
+      where is field .f read or written?  query='^f$', kind='fields'
+      where is X declared (in module M)?  query='X' [, module='M']
+      what does module M hold?            module='M'   (no query → histogram)
+      the invariant or contract about Y?  query='Y', kind='invariant'
+      who calls X / what does X reach?    query='X', kind='usedby' | 'uses'
+                                          (X may name a module for usedby)
+      which specs exercise X?             query='X', kind='usedby', scope='all'
+      trace signal S end to end?          query='S', kind='flow'
+
+    A bare `query` with no `kind` searches declarations and annotations, and
+    summarises the field names it matched — kind='fields' for the access sites
+    themselves. Lua declaration syntax in a query (`^function tm:foo`) reduces
+    to the bare name the map indexes.
 
     Args:
       query: regex — case-insensitive, substring-matched, anchor with ^$ for
              exact. NOT glob: plain text already substring-matches, so no
-             wrapping stars. Matches symbol names for structural kinds, body
-             text for annotation kinds, field names for reads/writes/fields.
-             Omit to return everything matching the other filters.
-      kind: one entry kind — structural (fn, api, held, handler, state,
-            const, require, construct), annotation (invariant, contract,
-            shape, emits, reaper, deps), spec (case, exercises, surface,
-            harness) or relational (uses, usedby, flow, reads, writes,
-            fields). Plurals and calls/calledby accepted. Omit for any; a
-            kind that isn't one returns the valid list, so guessing is cheap.
-      module: restrict by .map stem — regex, anchored: `trackerManager`,
-              `tm_.*`, `.*Manager`. Under uses/usedby/flow it instead names
-              the subject itself, not a file to read.
-      scope: 'all' (default), 'prod' for module maps, 'spec' for spec maps.
-             Specs outnumber modules four to one, so scope='prod' is how you
-             keep them from taking the cap.
+             wrapping stars. What it matches depends on kind: the symbol name
+             for a declaration or spec kind, the body prose for an annotation,
+             the field name for fields/reads/writes, the subject named for
+             uses/usedby/flow. Omit it to return everything.
+      kind: any one kind, or 'decl' / 'ann' for a whole group.
+              decl   'fn' (local function) / 'api' (module method) / 'held'
+                     (literal in a table field) / 'handler' (literal given
+                     to a registrar) / 'state' (mutable local) / 'const' /
+                     'require' / 'construct' (table literal) / 'case' (a spec's
+                     test)
+              ann    'invariant' / 'contract' / 'shape' / 'emits' / 'deps'
+                     (the modules a file uses) / 'reaper' (the REAPER API
+                     functions a call site names); 'exercises' / 'surface' /
+                     'harness' on specs
+              index  'fields' / 'reads' / 'writes' (field access sites) |
+                     'uses' / 'usedby' (call edges, either direction) |
+                     'flow' (one signal from its emitter through the
+                     subscribers and forwards that carry it)
+            Omitted: decl + ann, and no index.
+      module: where the answer comes from — a regex matched whole
+              against .map stems: `trackerManager`, `tm_.*`,
+              `.*Manager`. For usedby, where the callers live; for
+              flow, which module's emitters root the trace. The
+              subject is always named by `query`.
+      scope: 'prod' (default) module maps only, 'spec' spec maps, 'all' both.
+             Specs outnumber modules four to one.
       max_results: cap (default 60).
 
     Returns:
@@ -687,8 +788,16 @@ def map_query(
       `<source>.lua  @kind  <body>` for annotations. An answer with no matches
       names the domain it searched rather than only reporting none.
     """
-    if kind and kind.strip().lower().lstrip("?") in ('help', ''):
-        return _HELP
+    # Annotation bodies are prose and may legitimately contain the word
+    # 'function', so the declaration-syntax rewrite is confined to the kinds
+    # that index names. Ahead of the regex check: the rewrite is what runs.
+    rewrite_note = None
+    if not kind or _normalize_kind(kind) not in _ANN_KINDS:
+        query, original = _strip_decl_syntax(query)
+        if original:
+            rewrite_note = (f"--- note: {original!r} is Lua declaration syntax; "
+                            f"searched the bare name(s) {query!r} that the map "
+                            "indexes ---")
     for pat in (query, module):
         if pat:
             try:
@@ -698,7 +807,32 @@ def map_query(
                         "are regex, not glob: plain text substring-matches; use "
                         "'.*' where glob habits reach for '*' ---")
     out = _map_query(query, kind, module, scope, max_results)
-    notes = [n for n in (_glob_smell(query), _glob_smell(module)) if n]
+    # Every empty answer opens with `(`, every hit with a source path or a
+    # section header, so this distinguishes the two without a second channel.
+    widen_note = None
+    if out.startswith("("):
+        args = dict(query=query, kind=kind, module=module, scope=scope,
+                    max_results=max_results)
+        # Both widenings are one trade: an argument written tighter than the
+        # index spells things. First that lands wins, and the note says which.
+        want = _wanted_kinds(_normalize_kind(kind)) if kind else None
+        anchorable = not want or not want <= _ANN_KINDS
+        for name, widened, why in (
+            ("query", _widen_anchors(query) if anchorable else None,
+             "a @held or @handler name carries its qualifier"),
+            ("module", _widen_module(module),
+             "module is matched whole against .map stems"),
+        ):
+            if not widened:
+                continue
+            retry = _map_query(**{**args, name: widened})
+            if not retry.startswith("("):
+                widen_note = (f"--- note: nothing matched {name}={args[name]!r}; "
+                              f"{why}, so it was widened to {widened} ---")
+                out = retry
+                break
+    notes = [n for n in (rewrite_note, widen_note,
+                         _glob_smell(query), _glob_smell(module)) if n]
     return "\n".join([out, *notes]) if notes else out
 
 
@@ -708,11 +842,12 @@ def _map_query(query, kind, module, scope, max_results) -> str:
 
     query_rx = re.compile(query, re.IGNORECASE) if query else None
     kind_filter = _normalize_kind(kind) if kind else None
+    wanted = _wanted_kinds(kind_filter)
     if kind_filter and kind_filter not in _KINDS:
         return (f"--- ERROR: kind={kind!r} is not a kind. Valid: "
-                f"{', '.join(sorted(_KINDS))} (or 'help' for the reference) ---")
+                f"{', '.join(sorted(_KINDS))} ---")
 
-    scoped = _SCOPES.get((scope or "all").strip().lower())
+    scoped = _SCOPES.get((scope or "prod").strip().lower())
     if scoped is None:
         return (f"--- ERROR: scope={scope!r} is not a scope. Valid: "
                 f"{', '.join(sorted(set(_SCOPES.values())))} "
@@ -720,21 +855,21 @@ def _map_query(query, kind, module, scope, max_results) -> str:
     dirs = _scope_dirs(scoped)
     scope_bit = f", scope={scoped!r}" if scoped != 'all' else ""
 
-    # `usedby` is a reverse index: it scans EVERY map (a caller can live
-    # anywhere) and matches the target through the self-name registry, so
-    # `module` here names the used target, not a file to read. Handled up
-    # front — it needs neither `module` as a filename nor `query_rx`.
+    # `usedby` is a reverse index: a caller can live in any map, so it matches
+    # the target through the self-name registry rather than by reading one file.
+    # Handled up front — it needs no `query_rx`.
     if kind_filter == 'usedby':
         reg = _selfname_registry()
-        pointer = _module_pointer(query, reg, 'usedby')
-        if pointer:
-            return pointer
-        module_pred, q_fn, raw_rx = _usedby_selectors(query, module, reg)
+        module_pred, q_fn, raw_rx = _usedby_selectors(query, reg)
         if module_pred is None and q_fn is None and raw_rx is None:
-            return ("(usedby needs a target: pass query= or module= naming "
-                    "the used symbol or module, e.g. query='cm:get' or "
-                    "module='configManager')")
-        cross = _usedby_cross(module_pred, q_fn, raw_rx, reg, dirs)
+            return ("(usedby needs a target: pass query= naming the used symbol "
+                    "or module, e.g. query='cm:get' or query='configManager'. "
+                    "module= narrows where the callers live.)")
+        files = _scoped_maps(dirs, module)
+        if not files:
+            return f"(no .map files matched module={module!r}{scope_bit})"
+        prod = [p for p in files if p.parent == MAP_DIR]
+        cross = _usedby_cross(module_pred, q_fn, raw_rx, reg, files)
         # Both remaining halves read module maps only, so under scope='spec'
         # they were not searched at all — a distinction `(none)` cannot draw.
         spec_only = "(n/a — scope='spec'; this index covers module maps only)"
@@ -743,9 +878,11 @@ def _map_query(query, kind, module, scope, max_results) -> str:
         intra_na = (spec_only if scoped == 'spec' else
                     "(n/a — module-level target; the intra index keys on functions)"
                     if q_fn is None and raw_rx is None else None)
-        intra = None if intra_na else _usedby_intra(module_pred, q_fn, raw_rx, reg)
+        intra = None if intra_na else _usedby_intra(module_pred, q_fn, raw_rx,
+                                                    reg, prod)
         drops_na = spec_only if scoped == 'spec' else None
-        drops = [] if drops_na else _usedby_drops(module_pred, q_fn, raw_rx, reg)
+        drops = [] if drops_na else _usedby_drops(module_pred, q_fn, raw_rx,
+                                                  reg, prod)
         if not cross and not drops and not intra:
             searched = ["cross-module"] + ([] if intra_na else ["intra-module"]) \
                 + ([] if drops_na else ["dropped-receiver"])
@@ -839,15 +976,10 @@ def _map_query(query, kind, module, scope, max_results) -> str:
             lines_out.append(f"--- truncated at {max_results}; narrow the query ---")
         return "\n".join(lines_out)
 
-    if module:
-        module_rx = re.compile(module, re.IGNORECASE)
-        module_files = [p for d in dirs for p in sorted(d.glob("*.map"))
-                        if module_rx.fullmatch(p.stem)]
-    else:
-        module_files = [p for d in dirs for p in sorted(d.glob("*.map"))]
+    module_files = _scoped_maps(dirs, module)
 
     if not module_files:
-        hint = ("; spec maps are stems ending _spec — try module='.*_spec'"
+        hint = ("; specs are selected by scope='spec', not by module="
                 if module and re.match(r"(tests/)?specs?(/|$)", module) else "")
         return f"(no .map files matched module={module!r}{scope_bit}{hint})"
 
@@ -861,7 +993,12 @@ def _map_query(query, kind, module, scope, max_results) -> str:
     results: list[str] = []
     truncated = False
     seen_kinds: Counter = Counter()
+    relational: Counter = Counter()
     seen_names: list[str] = []
+    # The bare scan's two row types are gathered apart so the budget can be
+    # split by usefulness at the end rather than by whichever came first.
+    decl_rows: list = []          # (rank, row) until sorted below
+    ann_rows: list[str] = []
     # Names are only printable under a module: the un-narrowed corpus is
     # 6,003 structural entries, so counts are all an unfiltered scan can use.
     want_names = bool(module and kind_filter)
@@ -879,7 +1016,7 @@ def _map_query(query, kind, module, scope, max_results) -> str:
                 return _uses_render(groups, max_results)
             surface = (f"module={module!r} with no query" if module
                        else "module='<stem>' with no query")
-            return _module_pointer(query, reg, 'uses') or (
+            return _module_pointer(query, reg) or (
                 f"(no declaration matching query={query!r}"
                 + (f" in module={module!r}" if module else "")
                 + f"; uses names a function — for a module's whole outbound "
@@ -942,7 +1079,7 @@ def _map_query(query, kind, module, scope, max_results) -> str:
 
         if not results:
             note = _domain_note(Counter({kind_filter: len(seen_fields)}),
-                                seen_fields, kind_filter, module, domain)
+                                seen_fields, kind_filter, wanted, module, domain)
             return (f"(no field matches for kind={kind!r}, query={query!r}, "
                     f"module={module!r}{scope_bit})") + (f"\n{note}" if note else "")
         if truncated:
@@ -960,9 +1097,6 @@ def _map_query(query, kind, module, scope, max_results) -> str:
 
             md = _DECL.match(raw)
             if md:
-                if len(results) >= max_results:
-                    truncated = True
-                    break
                 k = md.group("kind")
                 head = md.group("head").strip()
                 src_line = int(md.group("line"))
@@ -970,19 +1104,25 @@ def _map_query(query, kind, module, scope, max_results) -> str:
                 doc = (md.group("doc") or "").strip()
 
                 seen_kinds[k] += 1
-                if want_names and kind_filter == k:
+                if want_names and k in wanted:
                     seen_names.append(_bare_name(k, head))
 
-                if kind_filter and kind_filter != k:
+                if wanted and k not in wanted:
                     continue
+                # Ranked so query='chan' leads with `chan`, then `dirtyChan`,
+                # and not with `changedSwingNames`. Equal ranks keep file
+                # order, the sort being stable.
+                rank = (0, 0.0)
                 if query_rx:
                     bare = _bare_name(k, head)
-                    if not query_rx.search(bare):
+                    hit = query_rx.search(bare)
+                    if not hit:
                         continue
+                    rank = _match_rank(hit, bare)
 
                 loc = f"{src}:{src_line}-{end_line}" if end_line else f"{src}:{src_line}"
                 tail = f"  {doc}" if doc else ""
-                results.append(f"{loc}  @{k} {head}{tail}")
+                decl_rows.append((rank, f"{loc}  @{k} {head}{tail}"))
                 continue
 
             ma = _ANN.match(raw)
@@ -995,23 +1135,61 @@ def _map_query(query, kind, module, scope, max_results) -> str:
                 # display rule and must not hide the kind from the inventory.
                 seen_kinds[ek] += 1
 
-                if kind_filter and kind_filter != ek:
+                if wanted and ek not in wanted:
                     continue
                 if query_rx and not query_rx.search(body):
                     continue
                 if not kind_filter and not query_rx:
                     continue
 
-                if len(results) >= max_results:
-                    truncated = True
-                    break
                 ann_line = ma.group("line")
                 loc = f"{src}:{ann_line}" if ann_line else src
-                results.append(f"{loc}  @{raw_kind}  {body}")
+                ann_rows.append(f"{loc}  @{raw_kind}  {body}")
                 continue
 
-        if truncated:
-            break
+            # Counted, not searched: these rows answer to the kind= indexes,
+            # and the empty-answer note reports them rather than leaving the
+            # reader to read absence-from-the-scan as absence-from-the-repo.
+            if _FIELD.match(raw):
+                relational['field'] += 1
+                continue
+            if _USE.match(raw):
+                relational['use'] += 1
+                continue
+
+    # Ordered by usefulness, not by file position. A module's header
+    # @invariants sit at line 3 and its declarations run to line 3000, so a
+    # scan that capped in file order spent the whole budget on prose and
+    # truncated away the @api head the query was after. Gathering uncapped
+    # then splitting is what `usedby` does with its three sections, and for
+    # the same reason: no share can be sized until every total is known.
+    #
+    # A bare query is a "where is this" question, and a field name was the
+    # commonest one this scan could not answer — a quarter of the grep
+    # fallbacks in the corpus. Summaries take a share; the access sites stay
+    # behind kind='fields', which is what the rows point at.
+    decl_rows = [row for _, row in sorted(decl_rows, key=lambda r: r[0])]
+    field_rows, dropped = [], 0
+    if query_rx and not kind_filter:
+        field_rows, dropped = _field_summaries(module_files, query_rx,
+                                              _FIELD_SUMMARY_ROWS)
+    # Fields ahead of prose, in the split as well as the display: the order of
+    # `sizes` is the order surplus is handed back, and a field name was six
+    # times likelier than annotation prose to be what the query was after.
+    keep_d, keep_f, keep_a = _split_budget(
+        [len(decl_rows), len(field_rows), len(ann_rows)], max_results)
+    truncated = (len(decl_rows) > keep_d or len(ann_rows) > keep_a
+                 or len(field_rows) > keep_f)
+    results = decl_rows[:keep_d]
+    if keep_f:
+        results.append("--- field names matching "
+                       "(access sites behind kind='fields') ---")
+        results.extend(field_rows[:keep_f])
+        unshown = dropped + len(field_rows) - keep_f
+        if unshown:
+            results.append(f"  … and {unshown} more field "
+                           f"name{'' if unshown == 1 else 's'}; narrow the query")
+    results += ann_rows[:keep_a]
 
     if not results:
         bits = []
@@ -1020,7 +1198,8 @@ def _map_query(query, kind, module, scope, max_results) -> str:
         if module: bits.append(f"module={module!r}")
         if scoped != 'all': bits.append(f"scope={scoped!r}")
         q = ", ".join(bits) if bits else "<no filters>"
-        note = _domain_note(seen_kinds, seen_names, kind_filter, module, domain)
+        note = _domain_note(seen_kinds, seen_names, kind_filter, wanted, module,
+                            domain, relational=relational)
         return f"(no matches for {q})" + (f"\n{note}" if note else "")
 
     if truncated:

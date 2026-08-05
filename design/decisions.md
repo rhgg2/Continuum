@@ -12,6 +12,45 @@ lines. Newest first. `/commit` prompts for one at commit time.
 Entries below 2026-07-27 predate that split, so some of them also
 appear in their design docs.
 
+- **2026-08-06** — `map_query` gains `kind='decl'` and `kind='ann'`, and every
+  specific kind is glossed in the schema. Which of nine declaration kinds a
+  name was written as is a fact about the row, so requiring it as input asked
+  the caller to guess the answer before putting the question. Rejected: leaving
+  the specific kinds undescribed and steering toward the groups, which retires
+  nine working kinds rather than spend eight lines explaining them.
+
+- **2026-08-06** — `map_query` defaults to `scope='prod'`. The corpus holds 64
+  module maps to 254 spec maps, so an unscoped answer was mostly specs and the
+  result cap landed on them first — the bulk of the index is not what the bulk
+  of the questions want. `scope='all'` is how specs are asked for, and is what
+  "which specs exercise X" now takes.
+
+- **2026-08-06** — `map_query`'s `module` narrows where an answer comes from
+  on every path, and never what the answer is about. Under `usedby` it named
+  the used target instead, which inverted the parameter: for a declaration
+  query `module=M` meant answers from inside M, for `usedby` it meant answers
+  from everywhere else about M. The two readings were also ANDed into one
+  predicate, so `query='cm:get', module='trackerView'` asked for a target
+  owned by two modules at once and was answered "no callers found" — a
+  contradiction reported as an absence. The subject is now named by `query`
+  alone, which already accepted `cm:get`, `configManager.get` and a bare
+  module name; `module` under `usedby` says where the callers live, a filter
+  that was previously inexpressible. Rejected: detecting the unsatisfiable
+  conjunction and explaining it, which keeps a parameter meaning two things.
+
+- **2026-08-06** — `map_query`'s `kind='help'` reference is deleted rather
+  than kept in step. It was called once in 1368 transcripts, and that once
+  was the audit which found this. Deferred documentation loses to grep by
+  construction: at the moment you would reach for it you do not yet know
+  whether it holds your answer, so reading it is a gamble placed against a
+  certainty. Nothing went with it — every fact it held was already in the
+  schema, in the tool's own output, or in the `.map` file header. The one
+  fact that was in none of them is designed away instead: an anchored query
+  that finds nothing is retried past the qualifier a `@held` or `@handler`
+  name carries. The criterion adopted is that a tool fact belongs in the
+  schema if it changes which call you make, in the output if it explains a
+  result you are already reading, and nowhere else.
+
 - **2026-08-05** — `/plan-phase` merges into `/plan-next` as a dispatch on plan state. The two
   commands computed the same table from opposite ends — brief in flight, Queued empty or not,
   phased or not — and exactly one of them could ever fire, so the cost was a human holding the

@@ -4,6 +4,8 @@
 /.claude/precedent.json
 /.claude/test-baseline.json
 /.claude/agent-memory/spool.md
+/.claude/HANDOFF.md
+/.claude/HANDOFF.prev.md
 /plan/IMPL.md
 /plan/IMPL.diff
 /flow.html

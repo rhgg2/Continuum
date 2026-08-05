@@ -83,8 +83,8 @@ breakages to throwaway copies of the tree and says which the spec
 noticed.
 
 `map/specs/<spec>.map` outlines each spec (intent, cases, harness
-surface) and `map_query`'s `usedby` includes them, so "which specs
-exercise X" is askable before reading spec source.
+surface) and `map_query`'s `usedby` includes them under `scope='all'`, so
+"which specs exercise X" is askable before reading spec source.
 
 ## Commits
 
