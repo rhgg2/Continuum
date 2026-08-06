@@ -974,10 +974,14 @@ colliding with yours is visible where the collision happens.
 
 While the ghosts are up the parked cells drop out of their columns — showing
 both is showing one span twice, and the parked chord is the picture the
-ghosts exist to stand in for. The exception is the cell the caret resolves
-its host from: a note hosting a replace chain parks itself, so hiding it
-would take away both the host and the only way to edit the note. That cell
-stays, and its row shows no ghost, because a real cell already outranks one.
+ghosts exist to stand in for. The exception is a parked cell carrying a chain
+of its own. A note hosting a replace chain parks itself, so hiding it would
+take away both the host and the only way to edit the note; and that holds
+however the cell came to be parked, not only when the caret is on it
+(corrected 2026-08-06; this read "the cell the caret resolves its host from",
+which hid a note host a region's window had parked and took its chain out of
+reach with it). The criterion is the cell's own `fx`, so a host cell keeps
+its row, and that row shows no ghost, because a real cell already outranks one.
 
 *Decision taken — a ghost is an onset, and tm hands them over ready
 (2026-08-05).* Ghost notes carry no tail. A retrig ghosted with tails paints
@@ -1001,16 +1005,18 @@ the field the query is about.
 is the caret and the window is the viewport, where `tv:rebuild` answers only
 to tm's signal, a column add or remove, and config. A table hanging off the
 column would therefore be stale on the first arrow key. The view derives the
-ghosts at read time instead, as it already derives the drag preview, and the
-frame hands the host in rather than resolving it a second time — the fx
-tab's own auto-raise resolves it five lines above the grid draw. Gating on
-that value costs nothing in the steady state, and it carries two properties
-a fresh lookup would not: the host stays pinned while the strip holds focus,
-so the ghosts survive the session in which the chain is being edited, and it
-is nil while the chain is empty, where there is nothing to ghost.
+ghosts at read time instead, as it already derives the drag preview, and it
+resolves the host itself — `tv:fxHostAtCursor`, the same call the fx tab's
+auto-raise makes (corrected 2026-08-06; the render frame used to hand its
+host in, and that host is the fx strip's, which pins to a focused editing
+session and so could name a chain the caret had long since left). What the
+pin bought was ghosts that survive the session in which the chain is being
+edited; the price it charged was ghosts belonging to a chain the caret is
+nowhere near, and the caret is what the display is answering about.
 
 *Decision taken — the host gates the display and does not filter it
-(2026-08-06).* A nil host answers nil; any other host turns on every derived
+(2026-08-06; reversed below the same day, and kept for the reading it was
+rejected on).* A nil host answers nil; any other host turns on every derived
 onset the visible window holds, whatever produced it. The accessor never
 compares a note's `derived` uuid against the host it was handed. So two
 chains in view light together, from a caret on either. What the display
@@ -1018,6 +1024,31 @@ shows is the realisation of the window the caret is in, and where two chains
 interleave their output that is one surface, not two; filtering by producer
 would show half of what is about to sound. The price is that the caret says
 which chain is being edited without saying which ghosts came from it.
+
+*Decision taken — the overlay is one producer's realisation, and the caret
+names which (2026-08-06, superseding the above).* The price named there is
+not a price, it is the display losing its subject. A ghost says "this row is
+computed", and a reader looking at one wants to know by what; a surface
+lighting every chain at once answers that question for none of them. The
+rule was also wider in practice than on paper. `tv:fxHostAtCursor` answers
+with whatever uuid'd event sits under the caret, chain or no chain, so a
+caret resting on any plain note anywhere lit every derived note in the take.
+The gate is now that event's own chain, resolved through `tm:fxRealisation`:
+a cell running none answers nil, and a cell running one shows that chain's
+notes, the curve it claimed, and the originals it parked. Sibling collisions
+are read by moving the caret onto the sibling, which is also how you would
+ask which chain to edit.
+
+The filtering is not done at read time. A `derived == host` test in the draw
+loop would answer the question and leave the walks it answers it from in
+place: an accessor gathering every channel's derived notes, and a suppression
+pass gathering every parked cell in the document, both per frame, to discard
+nearly all of it. The rebuild already holds the answer — a derived spec
+carries its producer's uuid as it is emitted, a park window carries the id of
+the chain that opened it, and the census names every producer on the take. So
+tm keys those three outputs by producer as it builds them and gathers them
+into one entry per chain at the pipeline tail. The view's whole query is then
+a lookup, and what it walks is one chain's output rather than a take's.
 
 *Decision taken — the suppression is the overlay's second half, keyed by the
 cell (2026-08-06).* The read that answers the ghosts answers what they stand
@@ -1036,29 +1067,63 @@ its temper tick alike. The suppression reads `channel.parked` alone, so
 parked ccs, pbs and PA stand: nothing ghosts them, and hiding them would
 take a picture away without offering one in its place.
 
-*Decision taken — a derived lane with no column materialises one (2026-08-06).*
-A region chain that emits polyphony allocates lanes above the authored ones: a
-three-voice stamp over a single note on a one-lane channel derives lanes 1 to 3,
-and two thirds of its ghosts have nowhere to hang. The column that answers this
-is data-derived, on the fx column's model — it materialises whenever the derived
-notes need a lane no column covers, and stands empty until the ghosts are on.
-Deriving it from the caret was the tempting alternative and is the one thing it
-must not do: the column set would then shift under the very caret that gates the
-ghosts, and `ec:col()` is an index. Such a column is *provisional* — view-only,
-absent from `extraColumns`, and invisible to hide's bookkeeping, which reads its
-count off the grid and would otherwise write back a larger one and quietly stop
-working. Authoring into it is allowed and makes it real, because tm already grows
-a channel's columns for a note written above the count.
+*Decision taken — the ghosts land in the columns that exist, and claim no others
+(2026-08-06).* A region chain that emits polyphony allocates lanes above the
+authored ones: a three-voice stamp over a single note on a one-lane channel
+derives lanes 1 to 3, and two thirds of its ghosts have nowhere to hang. A chain
+claiming a pb or cc the channel has never carried has nowhere at all. The
+tempting answer is that the grid should show the claim — a column materialised
+from the data, on the fx column's model, standing empty until the ghosts are on.
+It was built twice and withdrawn twice, and for the same reason both times: such
+a column is not the user's, and everything the grid does with a column assumes
+that it is.
+
+Standing permanently, it cannot be put away. Hide reads a channel's lane count
+off the grid, so a derived lane had to be made invisible to that count or hide
+would write back a larger one and quietly stop working. A derived pb or cc column
+passed hide's empty check and then cleared nothing, so it returned from the data
+on the next rebuild. Every chain's claims stood open at once, addressed or not.
+
+Gating it on the caret is worse, and worse in a way worth naming, because
+`ec:col()` being an index sounds like a fact about the caret — which invites the
+obvious repair, of re-finding the caret's column after each rebuild by identity:
+channel, type, lane, cc. That rescues the caret only where its column survives
+the rebuild, and the motions that matter are the ones where it does not. Moving
+left off an fx host lands the caret on the claimed column immediately to its
+left. The move de-addresses the chain, so the column just landed on collapses,
+the fx column slides into the vacated index, and the caret arrives back on the
+host, which puts the column back; the keypress cannot be completed. The caret is
+also not the only holder of a column index. A selection is `col1, col2`, with no
+identity to re-find them by, so crossing an fx host with a selection live leaves
+it covering columns it was never dragged over.
+
+So columns follow the data and the user, as `extraColumns` and the authored lanes
+do, and the ghosts follow the caret within them. A derived note in a lane the
+channel does not carry does not show, and neither does a curve on a target
+nothing has authored. Adding the column by hand is what makes it visible, and tm
+already grows a channel's columns for a note written above the count, so
+authoring into the new lane is all it takes.
+
+What this costs is the claim itself. An lfo on a cc the channel has never carried
+leaves no mark on the grid, so nothing there distinguishes a chain that is
+working from one that is not, and the fx tab becomes the only place the target is
+written down. The glyph stack down the region's tail names the kinds in a chain
+but not what they address, so it narrows the question without answering it. Two
+things would close the gap and neither is taken here. The claim could add a real
+column once, when it is made, in the fx edit's own undo block — no new kind of
+column, hide working on it unchanged, at the price of a document write as a side
+effect of an fx edit. Or the caret-gated set could be made safe by holding the
+caret and the selection by column identity throughout, which is a piece of work
+in its own right rather than a fix to this one. The decision is to try the plain
+thing first and find out whether the invisibility bites.
 
 One neighbouring gap this does not close. A note host's derived notes ride the
 host's own lane by design, so a three-voice stamp on a *note* still shows one
 ghost of three — that is lane sharing, and no column answers it.
 
 *Decision taken — the continuous targets come off the census, not the emission
-(2026-08-06).* A pb or cc chain on a channel with nothing authored on that target
-has no column at all. There is then nowhere to author the base an augment sums
-onto, and nothing on the grid saying the target is claimed. The lifecycle is the
-note case's; the source cannot be. Emission is gated — a producer outside the
+(2026-08-06).* A curve can only be ghosted where the view knows which targets the
+chain claims, and over what spans. Emission is gated — a producer outside the
 dirty interval is kept rather than re-run, and a kept producer emits no record —
 so a column read off the emission vanishes on the first edit elsewhere in the
 channel and returns with the dirt. The note case could ride the emission because
@@ -1066,19 +1131,16 @@ the reconcile re-adds a kept producer's specs verbatim; nothing re-adds its curv
 What does not blink is the census: `parkWindows` already walks it for a cc window
 per continuous cc target and a pb window per pb target, blind to dirt and blind to
 bypass, so the target set is a fold of the window set the rebuild computes for
-parking anyway. Two things follow from taking the census whole. A note host claims
-its targets exactly as a region does, so a note carrying an lfo pops the cc column
-it modulates — the same claim, and the same place its base is authored.
+parking anyway. One thing follows from taking the census whole: a note host claims its
+targets exactly as a region does, so a note carrying an lfo ghosts into the cc
+column it modulates, wherever the channel carries one.
 
-*Decision taken — and it shows the chain's realisation (2026-08-06).* Landing the
-column alone answered the wrong half. An empty column is a claim and nothing more:
-the target is spoken for, but the grid says nothing about what the chain does to
-it, so the lane reads as broken rather than reserved — and it reads that way
-permanently, because the column cannot be caret-gated the way an overlay can
-(`ec:col()` is an index, and a column that vanished when the caret entered it
-would take the caret with it). The note case never had this problem: its derived
-notes ghost into the provisional lanes while the caret sits on the host. So the
-continuous case takes the same gate and the same styling. `tm:fxCurveAt` answers
+*Decision taken — the continuous case ghosts too (2026-08-06).* Knowing that a
+target is claimed is not yet seeing what the chain does to it. The note case
+shows its derived notes as ghosts while the caret sits on the host; a chain's
+contribution to a cc or pb column it shares with authored events is exactly as
+invisible without the same treatment. So the continuous case takes the same gate
+and the same styling. `tm:fxCurveAt` answers
 what a chain realises on one target at one logical ppq; `tv:ghostOverlay` samples
 it at every visible row of every claimed column; the draw arm renders it in the
 ghost colour ahead of the interpolation ghost, which describes the authored curve

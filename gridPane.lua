@@ -506,9 +506,9 @@ local function notePartHeaders(col)
   return headers
 end
 
-local NO_OVERLAY = { notes = {}, values = {}, hidden = {} }   -- the hostless frame: no ghosts, nothing suppressed
+local NO_OVERLAY = { notes = {}, values = {}, hidden = {} }   -- caret outside every chain: no ghosts, nothing suppressed
 
-local function drawTracker(host)
+local function drawTracker()
   local grid = tv.grid
   local ec = tv:ec()
   local cursorRow, cursorCol, cursorStop = ec:pos()
@@ -603,8 +603,8 @@ local function drawTracker(host)
   local inRegion  = tv:ec():isInRegionMode()
   local rc        = inRegion and tv:ec():regionCursor()
   local movePrev  = tv:movePreview()
-  -- Derived notes of the chain under the caret, and the parked originals they stand in for.
-  local overlay   = tv:ghostOverlay(host) or NO_OVERLAY
+  -- Derived notes of the chain the caret addresses, and the parked originals they stand in for.
+  local overlay   = tv:ghostOverlay() or NO_OVERLAY
   local isLocal   = tv:localMode()
   local localHole
   for _, inst in ipairs(tv:eachInstance()) do
@@ -879,14 +879,13 @@ local gridPane = {}
 
 -- Draw pass: computeLayout twice (lane-drag callbacks may rebuild grid.cols,
 -- so drawTracker needs a fresh layout), with the grid font pushed throughout.
---contract: host (the frame's resolved fx host) ghosts its chain's derived notes into the grid
 --invariant: lane-strip drag callbacks may flush tv.grid.cols and clear col.x
-function gridPane:draw(gridW, gridH, host)
+function gridPane:draw(gridW, gridH)
   ImGui.PushFont(ctx, gridFont, gui.fontSize.grid)
   computeLayout(gridW, gridH)
   drawLaneStrip()
   computeLayout(gridW, gridH)
-  drawTracker(host)
+  drawTracker()
   ImGui.PopFont(ctx)
 end
 

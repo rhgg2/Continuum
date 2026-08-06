@@ -14,10 +14,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-06 tv: scope the ghost overlay to the chain the caret addresses (§ The chain surface)
 - 2026-08-06 tv: ghost a chain's realised curve into the column it claimed (§ The chain surface)
 - 2026-08-06 tv: show a provisional column for a chain's pb/cc targets (§ The chain surface)
 - 2026-08-06 tv: show a provisional note column for a chain's derived lanes (§ The chain surface)
-- 2026-08-06 tv: suppress the parked originals while the ghosts are up (§ Authoring and editing the fx)
 
 ## Now
 
@@ -25,4 +25,4 @@
 
 ## Queued (current phase; one-liners)
 
-(empty — phase 5's items have all landed.)
+- tv: withdraw the provisional columns — a chain's derived lanes and its claimed pb/cc targets stop materialising columns of their own, so the ghosts land only where the channel already carries a column; `tm:fxLaneTop` and `tm:fxCtsTargets` go with them, as does hide's guard against counting a provisional lane, and the specs pinning a claim's column become specs pinning its absence (§ The chain surface)

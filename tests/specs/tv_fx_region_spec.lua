@@ -28,6 +28,25 @@ local function injectRegion(h, over)
   h.tm:rebuild()
 end
 
+-- Two producers, so a scoping case can ask which of them a ghost belongs to. Each entry
+-- overrides the defaults injectRegion uses; the uuid is positional ('fxr-1', 'fxr-2', ...).
+local function injectRegions(h, list)
+  local regions = {}
+  for i, over in ipairs(list) do
+    local region = { uuid = 'fxr-' .. i, chan = 1, startppq = 0, endppq = 240, fx = sine30 }
+    for k, v in pairs(over) do region[k] = v end
+    util.add(regions, region)
+  end
+  h.ds:assign('fxRegions', regions)
+  h.tm:rebuild()
+end
+
+local function noteAt(h, chan, ppq, pitch)
+  h.tm:addEvent{ evType = 'note', ppq = ppq, endppq = ppq + 240, chan = chan, pitch = pitch,
+                 vel = 100, detune = 0, delay = 0, lane = 1 }
+  h.tm:flush()
+end
+
 local function fxColFor(h, chan)
   for i, c in ipairs(h.vm.grid.cols) do
     if c.type == 'fx' and c.midiChan == chan then return c, i end
@@ -1100,8 +1119,7 @@ return {
       addNote(h)
       injectRegion(h, { fx = arpUp })
       h.ec:setPos(20, noteColIdx(h, 1), 1)   -- below the region and the note alike
-      t.falsy(h.vm:fxHostAtCursor(), 'fixture check: nothing hostable down here')
-      t.eq(h.vm:ghostOverlay(h.vm:fxHostAtCursor()), nil, 'the host is the gate: nil in, nil out')
+      t.eq(h.vm:ghostOverlay(), nil, 'nothing under the caret runs a chain, so there is nothing to overlay')
     end,
   },
 
@@ -1116,8 +1134,9 @@ return {
       h.tm:flush()
       injectRegion(h, { fx = arpUp })   -- the arp interleaves both, all onto lane 1
       local idx = noteColIdx(h, 1)
-      h.ec:setPos(0, idx, 1)
-      local ghosts = (h.vm:ghostOverlay(h.vm:fxHostAtCursor()) or {}).notes
+      local _, ci = fxColFor(h, 1)
+      h.ec:setPos(0, ci, 1)             -- on the region's own column: the chain there is what ghosts
+      local ghosts = (h.vm:ghostOverlay() or {}).notes
       t.truthy(ghosts and ghosts[idx], 'the lane-1 column carries the ghosts')
       local pitches, vels = {}, {}
       for row = 0, 3 do
@@ -1144,7 +1163,7 @@ return {
       local _, fxIdx = fxColFor(h, 1)
       h.ec:setPos(30, fxIdx, 1)   -- still inside the region; the viewport has scrolled off the onsets
       t.eq(h.vm:fxHostAtCursor(), 'fxr-1', 'fixture check: the region is still the host down here')
-      local ghosts = (h.vm:ghostOverlay(h.vm:fxHostAtCursor()) or {}).notes
+      local ghosts = (h.vm:ghostOverlay() or {}).notes
       t.truthy(ghosts, 'a resolved host always answers with a table')
       t.deepEq(ghosts, {}, 'empty, because every onset is above the window')
     end,
@@ -1158,9 +1177,10 @@ return {
       addNote(h)
       injectRegion(h, { fx = arpUp })
       local idx = noteColIdx(h, 1)
-      h.ec:setPos(0, idx, 1)
+      local _, ci = fxColFor(h, 1)
+      h.ec:setPos(0, ci, 1)
       t.truthy(h.vm.grid.cols[idx].cells[0], 'fixture check: row 0 carries the parked host cell')
-      local ghosts = (h.vm:ghostOverlay(h.vm:fxHostAtCursor()) or {}).notes
+      local ghosts = (h.vm:ghostOverlay() or {}).notes
       t.truthy(ghosts and ghosts[idx], 'the lane column carries ghosts')
       t.truthy(ghosts[idx][0], 'and reports one on the contested row too')
     end,
@@ -1176,8 +1196,9 @@ return {
       h.tm:flush()
       injectRegion(h, { fx = arpUp, endppq = 960 })   -- sixteen onsets, rows 0-15
       local idx = noteColIdx(h, 1)
-      h.ec:setPos(0, idx, 1)
-      local ghosts = (h.vm:ghostOverlay(h.vm:fxHostAtCursor()) or {}).notes
+      local _, ci = fxColFor(h, 1)
+      h.ec:setPos(0, ci, 1)
+      local ghosts = (h.vm:ghostOverlay() or {}).notes
       t.truthy(ghosts and ghosts[idx], 'the lane column carries ghosts')
       local rows = {}
       for row = 0, 15 do if ghosts[idx][row] then rows[#rows + 1] = row end end
@@ -1193,9 +1214,9 @@ return {
       h.vm:setGridSize(80, 40)
       addNote(h)                        -- the sole authored note, lane 1
       injectRegion(h, { fx = chord3 })   -- three voices: derived lanes 1-3, two of them provisional
-      local idx = noteColIdx(h, 1)
-      h.ec:setPos(0, idx, 1)
-      local ghosts = (h.vm:ghostOverlay(h.vm:fxHostAtCursor()) or {}).notes
+      local _, ci = fxColFor(h, 1)
+      h.ec:setPos(0, ci, 1)
+      local ghosts = (h.vm:ghostOverlay() or {}).notes
       local pitches = {}
       for lane = 1, 3 do
         local col = noteColIdx(h, 1, lane)
@@ -1219,7 +1240,7 @@ return {
 
       local pbIdx = ctsColIdx(h, 1, 'pb')
       t.truthy(h.vm.grid.cols[pbIdx].provisional, 'fixture check: the column is the chain\'s claim')
-      local values = (h.vm:ghostOverlay(h.vm:fxHostAtCursor()) or {}).values
+      local values = (h.vm:ghostOverlay() or {}).values
       t.truthy(values and values[pbIdx], 'the claimed column carries the curve')
       local rows = {}
       for row = 0, 6 do if values[pbIdx][row] then util.add(rows, row) end end
@@ -1239,7 +1260,7 @@ return {
       local _, fxIdx = fxColFor(h, 1)
       h.ec:setPos(0, fxIdx, 1)
 
-      local values = (h.vm:ghostOverlay(h.vm:fxHostAtCursor()) or {}).values
+      local values = (h.vm:ghostOverlay() or {}).values
       t.truthy(values[ctsColIdx(h, 1, 'cc', 10)], 'the claimed cc column carries the curve')
       t.eq(values[ctsColIdx(h, 1, 'cc', 74)], nil, 'the authored one the chain never touches stays dark')
     end,
@@ -1254,7 +1275,7 @@ return {
       injectRegion(h, { fx = sine30 })
       h.ec:setPos(0, ctsColIdx(h, 1, 'pb'), 1)   -- on the claimed column itself, which hosts nothing
       t.falsy(h.vm:fxHostAtCursor(), 'fixture check: a claimed column is not a host')
-      t.eq(h.vm:ghostOverlay(h.vm:fxHostAtCursor()), nil, 'so the column stands empty, as it did before')
+      t.eq(h.vm:ghostOverlay(), nil, 'so the column stands empty, as it did before')
     end,
   },
 
@@ -1274,7 +1295,7 @@ return {
       t.eq(#parked, 2, 'fixture check: the chord parked off-take')
       local _, ci = fxColFor(h, 1)
       h.ec:setPos(2, ci, 1)             -- caret in the fx column, mid-window
-      local overlay = h.vm:ghostOverlay(h.vm:fxHostAtCursor())
+      local overlay = h.vm:ghostOverlay()
       t.truthy(overlay.hidden[parked[1]], 'the lane-1 original is suppressed')
       t.truthy(overlay.hidden[parked[2]], 'and so is the lane-2 one -- the whole picture, not one lane')
       local col = h.vm.grid.cols[noteColIdx(h, 1)]
@@ -1296,11 +1317,9 @@ return {
       local mine, other = h.tm:getChannel(1).parked[1], h.tm:getChannel(2).parked[1]
       t.truthy(mine and other, 'fixture check: both note hosts parked themselves')
       h.ec:setPos(0, noteColIdx(h, 1), 1)   -- caret on the host cell
-      local host = h.vm:fxHostAtCursor()
-      t.eq(host, mine.uuid, 'fixture check: the caret resolves its host from that cell')
-      local overlay = h.vm:ghostOverlay(host)
+      local overlay = h.vm:ghostOverlay()
       t.falsy(overlay.hidden[mine], 'the host keeps its cell -- it is the only way to edit the note')
-      t.truthy(overlay.hidden[other], 'every other parked cell still goes')
+      t.falsy(overlay.hidden[other], "and the chan-2 host's cell is its own chain's business, not this one's")
     end,
   },
 
@@ -1311,9 +1330,87 @@ return {
       h.vm:setGridSize(80, 40)
       addNote(h)
       injectRegion(h)                   -- sine: pb-augment, nothing parks
-      h.ec:setPos(0, noteColIdx(h, 1), 1)
-      local overlay = h.vm:ghostOverlay(h.vm:fxHostAtCursor())
+      local _, ci = fxColFor(h, 1)
+      h.ec:setPos(0, ci, 1)
+      local overlay = h.vm:ghostOverlay()
       t.deepEq(overlay.hidden, {}, 'an augment chain parks nothing, so it hides nothing')
+    end,
+  },
+
+  ----- Scope: the overlay is one producer's realisation, not the take's
+
+  {
+    name = 'ghostOverlay: a chain on another channel keeps its ghosts to itself',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      noteAt(h, 1, 0, 60)
+      noteAt(h, 2, 0, 64)
+      injectRegions(h, { { fx = arpUp }, { chan = 2, fx = arpUp } })
+      local _, ci = fxColFor(h, 1)
+      h.ec:setPos(1, ci, 1)
+      local ghosts = (h.vm:ghostOverlay() or {}).notes
+      t.truthy(ghosts[noteColIdx(h, 1)], 'the chain the caret sits in lights its own lane column')
+      t.eq(ghosts[noteColIdx(h, 2)], nil, "the chan-2 chain's output is not this one's realisation")
+    end,
+  },
+
+  {
+    name = 'ghostOverlay: a second chain further down the same channel stays dark',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      noteAt(h, 1, 0, 60)
+      noteAt(h, 1, 960, 64)
+      injectRegions(h, { { fx = arpUp }, { startppq = 960, endppq = 1200, fx = arpUp } })
+      local _, ci = fxColFor(h, 1)
+      h.ec:setPos(1, ci, 1)
+      local ghosts = (h.vm:ghostOverlay() or {}).notes
+      local idx, rows = noteColIdx(h, 1), {}
+      for row = 0, 20 do
+        if ghosts[idx] and ghosts[idx][row] then util.add(rows, row) end
+      end
+      t.deepEq(rows, { 0, 1, 2, 3 }, "one window's worth: the arp at rows 16-19 belongs to the other region")
+    end,
+  },
+
+  {
+    name = "ghostOverlay: another chain's parked originals are not this one's to suppress",
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      noteAt(h, 1, 0, 60)
+      noteAt(h, 1, 960, 64)
+      injectRegions(h, { { fx = arpUp }, { startppq = 960, endppq = 1200, fx = arpUp } })
+      local mine, theirs
+      for _, cell in ipairs(h.tm:getChannel(1).parked) do
+        if cell.ppq == 0 then mine = cell else theirs = cell end
+      end
+      t.truthy(mine and theirs, 'fixture check: each region parked the note it covers')
+      local _, ci = fxColFor(h, 1)
+      h.ec:setPos(1, ci, 1)
+      local overlay = h.vm:ghostOverlay()
+      t.truthy(overlay.hidden[mine], 'the original this chain stands in for gives up its row')
+      t.falsy(overlay.hidden[theirs], 'the far one keeps its cell: no ghost is standing where it sits')
+    end,
+  },
+
+  {
+    name = "ghostOverlay: a second chain's curve claim does not light this one's column",
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      noteAt(h, 1, 0, 60)
+      noteAt(h, 1, 960, 64)
+      injectRegions(h, { { fx = sine30 }, { startppq = 960, endppq = 1200, fx = sine30 } })
+      local _, ci = fxColFor(h, 1)
+      h.ec:setPos(1, ci, 1)
+      local values = (h.vm:ghostOverlay() or {}).values
+      local pbIdx, rows = ctsColIdx(h, 1, 'pb'), {}
+      for row = 0, 20 do
+        if values[pbIdx] and values[pbIdx][row] then util.add(rows, row) end
+      end
+      t.deepEq(rows, { 0, 1, 2, 3 }, "the caret's own window; the far sine's rows stay empty")
     end,
   },
 }

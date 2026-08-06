@@ -1486,7 +1486,7 @@ function tr:renderBody(_, w, h, dispatch)
     if stripHost then tv:pruneEmptyRegion(stripHost) end   -- cull an emptied husk
     stripFocus, stripSnapshot, stripHost = false, nil, nil
   end
-  gridPane:draw(gridW, h, plan and plan.host)   -- half-row bottom breathing is built into gridPane; fx chain lives in the palette now
+  gridPane:draw(gridW, h)   -- half-row bottom breathing is built into gridPane; fx chain lives in the palette now
   if stripFocus or paletteFocus then   -- focus lives in the palette: wash the grid to disabled
     ImGui.DrawList_AddRectFilled(ImGui.GetWindowDrawList(ctx),
       ox, oy, ox + gridW, oy + h, chrome.colour('tracker.focusScrim'))

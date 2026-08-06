@@ -259,7 +259,10 @@ tm-specific facts:
   `rawIndex[chan].notes` (which holds every lane) through a lane-1
   filter. Higher lanes' detune is dead data for realisation
   purposes; it survives so display layers and any future
-  lane-promotion paths can read it back.
+  lane-promotion paths can read it back. The seek lands at-or-before
+  `P` by binary search, then walks back to the nearest lane-1 note,
+  because `tm:fxCurveAt` calls it once per row per frame and
+  `util.seek`'s head-of-list scan would cost `O(rows × channel notes)`.
 - **Absorber persistence.** Absorbers carry `derived='absorber'` as
   pb metadata via mm's lazy-sidecar path. They are hidden from the pb
   column unless an interp shape pulls them into view
@@ -528,6 +531,11 @@ runs it, with a pointer to its detail where one exists.
   scan loops before they clone a `parkSpec`, so a take with no fx
   windows builds an empty scan and pays nothing per event; it accepts a
   stash spec or a column event — both logical, so it keys `ppq` directly.
+  `covered()` wraps `coveredBy()`, which answers the parking producer's
+  uuid rather than a bare bool: a `currentWindows` entry is checked
+  first, and only then the spec's own `fx`, because a self-parking host
+  inside a region's window is that region's membership rather than its
+  own producer — the same reading `rebuildFx` takes.
   A `pa` rides its host note, so it parks exactly when the host does:
   deleted from the take (silent — a stale PA against a fresh derived
   stream is meaningless; the generator owns any new realisation PAs),

@@ -3257,34 +3257,37 @@ end
 
 -- Derived per frame rather than stored on the column: the gate is the caret and the window
 -- the viewport, and both move without a rebuild. Nothing enters col.cells, so no ghost edits.
---contract: per-frame overlay while the caret sits on a host: notes to ghost, cells to suppress
---contract: the window is the viewport's rows, resolved per channel, not per column
+--contract: per-frame overlay for the chain the caret addresses: notes to ghost, cells to suppress
+--contract: the gate is fxHostAtCursor -- a cell that runs no chain of its own answers nil
+--contract: the window is the viewport's rows, resolved on the producer's own channel
 --contract: notes[colIndex][row] = tm's record by reference; note columns only; first onset wins
---contract: values[colIndex][row] = { val }; continuous columns only, sampled where a chain claims
---contract: hidden[cell] = true for every parked cell but the host's own; nil host answers nil
+--contract: values[colIndex][row] = { val }; the producer's claimed targets only
+--contract: hidden[cell] = true for every plain original this chain parked; a host cell never hides
 --invariant: a ghosted row may also carry a real cell; precedence is the draw arm's
-function tv:ghostOverlay(host)
-  if not host then return nil end
-  local top, bot  = scrollRow, scrollRow + gridHeight + 1
-  local notes, values, byChan = {}, {}, {}
-  for x, col in ipairs(grid.cols) do
-    if col.type == 'note' then
-      local chan = col.midiChan
-      byChan[chan] = byChan[chan]
-        or tm:fxNotes(chan, ctx:rowToPPQ(top, chan), ctx:rowToPPQ(bot, chan))
-      for _, n in ipairs(byChan[chan]) do
-        if n.lane == col.lane then
-          local row = ppqRowOf(n.ppq, chan)
-          notes[x] = notes[x] or {}
-          if notes[x][row] == nil then notes[x][row] = n end
-        end
+function tv:ghostOverlay()
+  local fx = tm:fxRealisation(tv:fxHostAtCursor())
+  if not fx then return nil end
+
+  local top, bot      = scrollRow, scrollRow + gridHeight + 1
+  local notes, values = {}, {}
+  for _, n in ipairs(fx.notes) do
+    local row = ppqRowOf(n.ppq, fx.chan)
+    if row >= top and row < bot then   -- half-open: bot is already the viewport's row of slack
+      local _, x = colFor(n)
+      if x then
+        notes[x] = notes[x] or {}
+        if notes[x][row] == nil then notes[x][row] = n end
       end
-    elseif col.type == 'pb' or col.type == 'cc' then
-      -- A curve has no onsets to bucket, so it is sampled at each row the way the interpolation
-      -- ghosts are: what the chain realises there. see design/note-macros-v2.md § The chain surface
-      local chan, target = col.midiChan, col.type == 'pb' and 'pb' or col.cc
+    end
+  end
+  -- A curve has no onsets to bucket, so it is sampled at each row: what the chain realises there.
+  -- A locator record stands in for the column's own event, what colFor addresses. see design/note-macros-v2.md § The chain surface
+  for target in pairs(fx.targets) do
+    local _, x = colFor(target == 'pb' and { evType = 'pb', chan = fx.chan }
+                                        or { evType = 'cc', chan = fx.chan, cc = target })
+    if x then
       for row = top, bot do
-        local val = tm:fxCurveAt(chan, target, ctx:rowToPPQ(row, chan))
+        local val = tm:fxCurveAt(fx.uuid, target, ctx:rowToPPQ(row, fx.chan))
         if val then
           values[x] = values[x] or {}
           values[x][row] = { val = util.round(val) }
@@ -3292,13 +3295,11 @@ function tv:ghostOverlay(host)
       end
     end
   end
-  -- Originals of a replace park would otherwise stand beside their own realisation; keyed by the
-  -- event, which answers for cell, tail and temper tick alike. see design/note-macros-v2.md § The chain surface
+  -- Originals of a replace park stand beside their own realisation; keyed by the event, which
+  -- answers for cell, tail and temper tick. A host cell (own fx) always keeps its row. see design/note-macros-v2.md § The chain surface
   local hidden = {}
-  for _, channel in tm:channels() do
-    for _, cell in ipairs(channel.parked or {}) do
-      if cell.uuid ~= host then hidden[cell] = true end
-    end
+  for _, cell in ipairs(fx.parked) do
+    if not cell.fx then hidden[cell] = true end
   end
   return { notes = notes, values = values, hidden = hidden }
 end

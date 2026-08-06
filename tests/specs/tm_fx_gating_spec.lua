@@ -27,10 +27,17 @@ local function plainNote(chan, ppq)
 end
 
 -- The chain's realised curve sampled at each of a row's ppqs, as the ghost display reads it.
-local function curveAt(h, chan, target, ppqs)
+local function curveAt(h, uuid, target, ppqs)
   local out = {}
-  for _, ppq in ipairs(ppqs) do out[#out + 1] = h.tm:fxCurveAt(chan, target, ppq) end
+  for _, ppq in ipairs(ppqs) do out[#out + 1] = h.tm:fxCurveAt(uuid, target, ppq) end
   return out
+end
+
+-- A note carrying fx is its own producer, and an augment chain leaves it on the take.
+local function hostUuid(h, chan)
+  for _, e in ipairs(h.tm:getChannel(chan).columns.notes[1].events) do
+    if e.fx then return e.uuid end
+  end
 end
 
 return {
@@ -39,18 +46,42 @@ return {
     run = function(harness)
       local h = harness.mk()
       h.tm:addEvent(vibHost(1)); h.tm:flush()   -- sine, 30 cents, 1/4 QN period, over [0,240)
+      local host = hostUuid(h, 1)
 
       -- One cycle per 60 ppq: rest at the edges, extrema a quarter-cycle in.
-      local vals = curveAt(h, 1, 'pb', { 0, 15, 30, 45 })
+      local vals = curveAt(h, host, 'pb', { 0, 15, 30, 45 })
       t.eq(vals[1], 0, 'the sine rests where its window opens')
       -- Cents, as the pb column projects them; the same excursion in raw would be ~1200.
       t.truthy(math.abs(vals[2] - 30) <= 1,  'a quarter cycle in, the full 30-cent depth')
       t.truthy(math.abs(vals[3]) <= 1,       'back through the rest at the half cycle')
       t.truthy(math.abs(vals[4] + 30) <= 1,  'and the trough at three quarters')
 
-      t.eq(h.tm:fxCurveAt(1, 'pb', 300), nil, 'past the producer\'s window there is no curve')
-      t.eq(h.tm:fxCurveAt(1, 10, 0),     nil, 'nor on a target this chain never claimed')
-      t.eq(h.tm:fxCurveAt(2, 'pb', 0),   nil, 'nor on a channel with no chain at all')
+      t.eq(h.tm:fxCurveAt(host, 'pb', 300), nil, 'past the producer\'s window there is no curve')
+      t.eq(h.tm:fxCurveAt(host, 10, 0),     nil, 'nor on a target this chain never claimed')
+      t.eq(h.tm:fxRealisation('no-such-producer'), nil, 'and a uuid that runs no chain has nothing to sample')
+    end,
+  },
+
+  -- Pins detuneAt's lane walk where it is observable: the absorber pass re-derives flush's wire
+  -- values itself, so only this sample-time subtraction answers for the seek's lane filter.
+  {
+    name = 'fxCurveAt: pb projects back through the prevailing lane-1 detune, not a nearer lane-2 note',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
+                      vel = 100, detune = 50, delay = 0, lane = 1, fx = sine30 })
+      -- The interloper: nearer the sample points than the host, wrong lane, different detune. A
+      -- detuneAt landing at-or-before without walking back to lane 1 answers -30 for 50, and every
+      -- sample past its onset comes back 80 cents sharp.
+      h.tm:addEvent({ evType = 'note', ppq = 120, endppq = 240, chan = 1, pitch = 64,
+                      vel = 100, detune = -30, delay = 0, lane = 2 })
+      h.tm:flush()
+      local host = hostUuid(h, 1)
+
+      local vals = curveAt(h, host, 'pb', { 135, 150, 165 })
+      t.truthy(math.abs(vals[1] - 30) <= 1, 'crest a quarter cycle past the lane-2 onset')
+      t.truthy(math.abs(vals[2]) <= 1,      'rest at the half cycle')
+      t.truthy(math.abs(vals[3] + 30) <= 1, 'trough at three quarters')
     end,
   },
 
@@ -60,8 +91,9 @@ return {
       local h = harness.mk()
       h.tm:addEvent(vibHost(1)); h.tm:flush()
       h.tm:addEvent(plainNote(1, 1920)); h.tm:flush()
+      local host = hostUuid(h, 1)
       local rows = { 0, 15, 30, 45, 60, 120, 180 }
-      local before = curveAt(h, 1, 'pb', rows)
+      local before = curveAt(h, host, 'pb', rows)
       t.truthy(before[2] ~= nil, 'fixture check: the curve is up')
 
       -- The far note is the dirt; the producer at [0,240) is out of every emit scope, so it is
@@ -72,7 +104,7 @@ return {
       end
       h.tm:assignEvent(far, { pitch = 65 }); h.tm:flush()
 
-      t.deepEq(curveAt(h, 1, 'pb', rows), before, 'the kept producer\'s seats are still on the take')
+      t.deepEq(curveAt(h, host, 'pb', rows), before, 'the kept producer\'s seats are still on the take')
     end,
   },
 

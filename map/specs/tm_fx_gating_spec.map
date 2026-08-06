@@ -1,6 +1,6 @@
-@spec tm_fx_gating_spec  src=tests/specs/tm_fx_gating_spec.lua  loc=99  cases=3
+@spec tm_fx_gating_spec  src=tests/specs/tm_fx_gating_spec.lua  loc=131  cases=4
 @exercises trackerManager (h.tm), midiManager (h.fm)
-@surface   tm:fxCurveAt, tm:addEvent, tm:flush, tm:getChannel, tm:assignEvent, fm:dump
+@surface   tm:fxCurveAt, tm:getChannel, tm:addEvent, tm:flush, tm:fxRealisation, tm:assignEvent, fm:dump
 @harness   mk
 
 # Intent
@@ -11,48 +11,54 @@
   @fn pbSeatsOf(dump, chan)  @ 8-17
   @fn vibHost(chan)  @ 19-22
   @fn plainNote(chan, ppq)  @ 24-27
-  @fn curveAt(h, chan, target, ppqs)  @ 30-34
+  @fn curveAt(h, uuid, target, ppqs)  @ 30-34
       -- The chain's realised curve sampled at each of a row's ppqs, as the ghost display reads it.
+  @fn hostUuid(h, chan)  @ 37-41
+      -- A note carrying fx is its own producer, and an augment chain leaves it on the take.
 
 # Cases
-  @case 'fxCurveAt: a chain\'s pb curve samples back in the column\'s units, inside its window only'  [harness]  @ 38-54
-  @case 'fxCurveAt: a kept producer\'s curve stands, because it reads the take not the emission'  [harness]  @ 58-76
-  @case 'gating: a chan-1 edit freezes chan 2 fx and keeps its pb seat stream'  [harness]  @ 80-97
+  @case 'fxCurveAt: a chain\'s pb curve samples back in the column\'s units, inside its window only'  [harness]  @ 45-62
+  @case 'fxCurveAt: pb projects back through the prevailing lane-1 detune, not a nearer lane-2 note'  [harness]  @ 68-85
+  @case 'fxCurveAt: a kept producer\'s curve stands, because it reads the take not the emission'  [harness]  @ 89-108
+  @case 'gating: a chan-1 edit freezes chan 2 fx and keeps its pb seat stream'  [harness]  @ 112-129
 
 # Uses (outbound edges)
-  @use call tm:fxCurveAt  @ 32,51,52,53
-  @use call tm:addEvent  @ 41,61,62,83,84,91,92
-  @use call tm:flush  @ 41,61,62,73,83,84,91,92
-  @use call tm:getChannel  @ 70,94
-  @use call tm:assignEvent  @ 73
-  @use call fm:dump  @ 86,95
+  @use call tm:fxCurveAt  @ 32,59,60
+  @use call tm:getChannel  @ 38,102,126
+  @use call tm:addEvent  @ 48,71,76,92,93,115,116,123,124
+  @use call tm:flush  @ 48,78,92,93,105,115,116,123,124
+  @use call tm:fxRealisation  @ 61
+  @use call tm:assignEvent  @ 105
+  @use call fm:dump  @ 118,127
 
 # Fields (r read / w write incl. constructor keys)
   @field r ccs  @ 10
   @field r chan  @ 11
-  @field w chan  @ 20,25
-  @field r columns  @ 70,94
-  @field w delay  @ 21,26
+  @field w chan  @ 20,25,71,76
+  @field r columns  @ 38,102,126
+  @field w delay  @ 21,26,72,77
   @field w depth  @ 6
-  @field w detune  @ 21,26
-  @field w endppq  @ 20,25
+  @field w detune  @ 21,26,72,77
+  @field w endppq  @ 20,25,71,76
   @field r evType  @ 11
-  @field w evType  @ 20,25
-  @field r events  @ 70
-  @field w fx  @ 21
+  @field w evType  @ 20,25,71,76
+  @field r events  @ 38,102
+  @field r fx  @ 39
+  @field w fx  @ 21,72
   @field w kind  @ 6
-  @field w lane  @ 21,26
-  @field w name  @ 38,58,80
-  @field r notes  @ 70
+  @field w lane  @ 21,26,72,77
+  @field w name  @ 45,68,89,112
+  @field r notes  @ 38,102
   @field w onset  @ 6
-  @field r pb  @ 94
+  @field r pb  @ 126
   @field w period  @ 6
-  @field w pitch  @ 20,25,73
-  @field r ppq  @ 12,15,71
-  @field w ppq  @ 12,20,25
-  @field w run  @ 39,59,81
+  @field w pitch  @ 20,25,71,76,105
+  @field r ppq  @ 12,15,103
+  @field w ppq  @ 12,20,25,71,76
+  @field w run  @ 46,69,90,113
   @field r shape  @ 12
   @field w shape  @ 12
+  @field r uuid  @ 39
   @field r val  @ 12
   @field w val  @ 12
-  @field w vel  @ 21,26
+  @field w vel  @ 21,26,72,77
