@@ -1050,13 +1050,27 @@ count off the grid and would otherwise write back a larger one and quietly stop
 working. Authoring into it is allowed and makes it real, because tm already grows
 a channel's columns for a note written above the count.
 
-Two neighbouring gaps this does not close. A note host's derived notes ride the
+One neighbouring gap this does not close. A note host's derived notes ride the
 host's own lane by design, so a three-voice stamp on a *note* still shows one
-ghost of three — that is lane sharing, and no column answers it. And a chain's
-continuous targets get no provisional column yet: the honest source for "which
-targets do this channel's chains own" is the settled census, not the emission,
-which is gated — a kept producer contributes no record, so its column would
-vanish and return with the dirt.
+ghost of three — that is lane sharing, and no column answers it.
+
+*Decision taken — the continuous targets come off the census, not the emission
+(2026-08-06).* A pb or cc chain on a channel with nothing authored on that target
+has no column at all. There is then nowhere to author the base an augment sums
+onto, and nothing on the grid saying the target is claimed. The lifecycle is the
+note case's; the source cannot be. Emission is gated — a producer outside the
+dirty interval is kept rather than re-run, and a kept producer emits no record —
+so a column read off the emission vanishes on the first edit elsewhere in the
+channel and returns with the dirt. The note case could ride the emission because
+the reconcile re-adds a kept producer's specs verbatim; nothing re-adds its curve.
+What does not blink is the census: `parkWindows` already walks it for a cc window
+per continuous cc target and a pb window per pb target, blind to dirt and blind to
+bypass, so the target set is a fold of the window set the rebuild computes for
+parking anyway. Two things follow from taking the census whole. A note host claims
+its targets exactly as a region does, so a note carrying an lfo pops the cc column
+it modulates — the same claim, and the same place its base is authored. And the
+column stands empty, the chain's own seats being routed out of columns as derived
+notes are: what the lane shows is a separate question from the lane existing.
 
 **Patches.** A patch is a *named chain* — an ordered `{kind, params}`
 list, pure data, no code — saved to a library and instantiated **by copy**

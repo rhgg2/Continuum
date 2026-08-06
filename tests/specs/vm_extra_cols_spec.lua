@@ -11,6 +11,9 @@ local chord3 = { { kind = 'chordStamp', pattern = { kind = 'notes', specs = {
   { lane = 3, ppq = 0, endppq = 240, pitch = 67, vel = 100 },
 } } } }
 
+-- A one-stage chain aimed at cc 10: dest is a per-entry param, so sine (registry dest pb) claims a cc.
+local sineCc = { { kind = 'sine', period = { 1, 2 }, depth = 32, dest = 10 } }
+
 local function noteColsOn(h, chan)
   local out = {}
   for _, c in ipairs(h.vm.grid.cols) do
@@ -166,6 +169,38 @@ return {
       t.eq(#after, 3,                   'still three columns: the derived notes still need lanes 2 and 3')
       t.truthy(after[2].provisional,    'lane 2 came straight back as provisional')
       t.truthy(after[3].provisional,    'as did lane 3')
+    end,
+  },
+
+  {
+    name = 'hiding a provisional cc column is a no-op -- it comes straight back',
+    run = function(harness)
+      -- hideExtraCol's cc arm only clears an extraColumns force, and a chain-claimed column
+      -- has none: the write is inert and the column returns from the data.
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      h.tm:addEvent{ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
+                     detune = 0, delay = 0, lane = 1 }
+      h.tm:flush()
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = sineCc } })
+      h.tm:rebuild()
+
+      local claimed, idx
+      for i, c in ipairs(h.vm.grid.cols) do
+        if c.type == 'cc' and c.cc == 10 and c.midiChan == 1 then claimed, idx = c, i end
+      end
+      t.truthy(claimed and claimed.provisional, 'fixture check: cc 10 is provisional')
+
+      h.ec:setPos(0, idx, 1)
+      h.vm:hideExtraCol()
+
+      t.eq(h.ds:get('extraColumns'), nil, 'nothing was forced, so nothing is unforced')
+      local after
+      for _, c in ipairs(h.vm.grid.cols) do
+        if c.type == 'cc' and c.cc == 10 and c.midiChan == 1 then after = c end
+      end
+      t.truthy(after, 'the column is still there')
+      t.truthy(after.provisional, 'and still provisional')
     end,
   },
 

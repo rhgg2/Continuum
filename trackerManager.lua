@@ -1696,6 +1696,10 @@ local freezeRectByUuid     = {}   -- uuid -> the gm rect a freeze-to-group mint 
 local fxNotesByChan = {}
 local fxLaneTopByChan = {}   -- [chan] = highest lane its derived notes occupy; replaced beside the list above
 
+-- Continuous targets the channel's producers claim, census-sourced (so the emission gate can't blink
+-- one out): [chan] = { pb = true, [ccNum] = true }. Rebuild output, replaced wholesale.
+local fxTargetsByChan = {}
+
 -- Built at the pipeline tail, where the fx pass has already emitted this rebuild's derived notes:
 -- a rect's note lanes come off those notes, not window coverage, which is parked-over not produced-onto. see design/archive/fx-freeze.md § Freeze to group
 local function buildFreezeMaps(census, windows)
@@ -1732,6 +1736,20 @@ local function buildFreezeMaps(census, windows)
                       streams = { [0] = streams } }
   end
   freezeEligibleByUuid, freezeRectByUuid = eligible, rects
+end
+
+-- The continuous half of the same window set: which pb/cc targets each channel's chains own. Reads the
+-- census, not the emission -- a kept producer emits no record but still owns its target.
+local function buildFxTargets(windows)
+  local byChan = {}
+  for _, w in ipairs(windows) do
+    if w.evType ~= 'note' then
+      local targets = byChan[w.chan] or {}
+      targets[w.evType == 'pb' and 'pb' or w.cc] = true
+      byChan[w.chan] = targets
+    end
+  end
+  fxTargetsByChan = byChan
 end
 
 -- pb's seat window closes inclusive (the terminal re-centre sits on its end) where cc's is half-open:
@@ -1989,6 +2007,9 @@ end
 --contract: the highest lane this channel's derived notes occupy this rebuild; 0 if none
 --invariant: read-only; replaced wholesale beside fxNotesByChan, so a clean channel carries its own
 function tm:fxLaneTop(chan) return fxLaneTopByChan[chan] or 0 end
+--contract: continuous targets this channel's chains claim: set-keyed 'pb' | <cc number>, else empty
+--invariant: read-only; census-sourced, so a gated rebuild reports a kept producer's target too
+function tm:fxCtsTargets(chan) return fxTargetsByChan[chan] or {} end
 -- With no mm ops there is no reload->rebuild to ride, so the one rebuild is driven here.
 function tm:flush() if flush() then tm:rebuild(false) end end
 
@@ -4982,6 +5003,7 @@ local function rebuildPipeline(didReload)
   -- Freeze's maps, after the fx pass: settleWindows runs before it, so a rect built there would carry
   -- the previous rebuild's note lanes. Sibling maps, one site. see design/archive/fx-freeze.md § Freeze to group
   perf.start('freezeMaps'); buildFreezeMaps(settledCensus, settledWindows); perf.stop('freezeMaps')
+  buildFxTargets(settledWindows)
 
   -- Drop un-flushed command-path staging; the index itself is already live (head reload on
   -- wholesale passes, incremental reconciliation otherwise). see docs § Incremental index reconciliation

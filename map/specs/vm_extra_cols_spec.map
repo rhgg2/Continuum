@@ -1,6 +1,6 @@
-@spec vm_extra_cols_spec  src=tests/specs/vm_extra_cols_spec.lua  loc=172  cases=4
+@spec vm_extra_cols_spec  src=tests/specs/vm_extra_cols_spec.lua  loc=207  cases=5
 @exercises trackerView (h.vm), editCursor (h.ec), dataStore (h.ds), trackerManager (h.tm)
-@surface   vm:setGridSize, ec:setPos, vm:hideExtraCol, ds:get, ds:assign, tm:rebuild
+@surface   vm:setGridSize, ec:setPos, vm:hideExtraCol, ds:get, ds:assign, tm:rebuild, tm:addEvent, tm:flush
 @harness   mk{seed.notes}
 
 # Intent
@@ -8,49 +8,57 @@
   any lane. See docs/trackerView.md § Extra columns & delay sub-column.
 
 # Helpers
-  @fn noteColsOn(h, chan)  @ 14-20
+  @fn noteColsOn(h, chan)  @ 17-23
 
 # Cases
-  @case 'hideExtraCol on topmost empty note lane shrinks extraColumns'  [harness]  @ 25-58
-  @case 'hideExtraCol from a lower lane drops the topmost empty lane'  [harness]  @ 62-92
-  @case 'hideExtraCol with an occupied top lane is a no-op'  [harness]  @ 96-132
-  @case 'hideExtraCol drops the top authored lane past a provisional one'  [harness]  @ 136-169
+  @case 'hideExtraCol on topmost empty note lane shrinks extraColumns'  [harness]  @ 28-61
+  @case 'hideExtraCol from a lower lane drops the topmost empty lane'  [harness]  @ 65-95
+  @case 'hideExtraCol with an occupied top lane is a no-op'  [harness]  @ 99-135
+  @case 'hideExtraCol drops the top authored lane past a provisional one'  [harness]  @ 139-172
+  @case 'hiding a provisional cc column is a no-op -- it comes straight back'  [harness]  @ 176-204
 
 # Uses (outbound edges)
-  @use call vm:setGridSize  @ 36,75,109,149
-  @use call ec:setPos  @ 43,77,115,158
-  @use call vm:hideExtraCol  @ 44,78,116,159
-  @use call ds:get  @ 46,80,118,161
-  @use call ds:assign  @ 150
-  @use call tm:rebuild  @ 151
+  @use call vm:setGridSize  @ 39,78,112,152,181
+  @use call ec:setPos  @ 46,80,118,161,194
+  @use call vm:hideExtraCol  @ 47,81,119,162,195
+  @use call ds:get  @ 49,83,121,164,197
+  @use call ds:assign  @ 153,185
+  @use call tm:rebuild  @ 154,186
+  @use call tm:addEvent  @ 182
+  @use call tm:flush  @ 184
 
 # Fields (r read / w write incl. constructor keys)
-  @field w chan  @ 30,69,103,143,150
-  @field r cols  @ 16,39,51,85,111,123
-  @field w data  @ 34,73,107,147
-  @field w delay  @ 31,70,104,144
-  @field w detune  @ 31,70,104,144
-  @field w endppq  @ 9,10,11,30,69,103,143,150
-  @field r events  @ 41,57,91,113,130,131
-  @field w extraColumns  @ 34,73,107,147
-  @field w fx  @ 150
-  @field r grid  @ 16,39,51,85,111,123
-  @field w kind  @ 8
-  @field r lane  @ 40,112
-  @field w lane  @ 9,10,11,31,70,104,144
-  @field r midiChan  @ 17,52,86,124
-  @field w name  @ 25,62,96,136
-  @field r notes  @ 47,81,119,162
-  @field w notes  @ 29,34,68,73,102,107,142,147
+  @field r cc  @ 190,200
+  @field w chan  @ 33,72,106,146,153,182,185
+  @field r cols  @ 19,42,54,88,114,126,189,199
+  @field w data  @ 37,76,110,150
+  @field w delay  @ 34,73,107,147,183
+  @field w depth  @ 15
+  @field w dest  @ 15
+  @field w detune  @ 34,73,107,147,183
+  @field w endppq  @ 9,10,11,33,72,106,146,153,182,185
+  @field w evType  @ 182
+  @field r events  @ 44,60,94,116,133,134
+  @field w extraColumns  @ 37,76,110,150
+  @field w fx  @ 153,185
+  @field r grid  @ 19,42,54,88,114,126,189,199
+  @field w kind  @ 8,15
+  @field r lane  @ 43,115
+  @field w lane  @ 9,10,11,34,73,107,147,183
+  @field r midiChan  @ 20,55,89,127,190,200
+  @field w name  @ 28,65,99,139,176
+  @field r notes  @ 50,84,122,165
+  @field w notes  @ 32,37,71,76,105,110,145,150
   @field w pattern  @ 8
-  @field r pitch  @ 131
-  @field w pitch  @ 9,10,11,30,69,103,143
-  @field w ppq  @ 9,10,11,30,69,103,143
-  @field r provisional  @ 155,156,167,168
-  @field w run  @ 26,63,97,137
-  @field w seed  @ 28,67,101,141
+  @field w period  @ 15
+  @field r pitch  @ 134
+  @field w pitch  @ 9,10,11,33,72,106,146,182
+  @field w ppq  @ 9,10,11,33,72,106,146,182
+  @field r provisional  @ 158,159,170,171,192,203
+  @field w run  @ 29,66,100,140,177
+  @field w seed  @ 31,70,104,144
   @field w specs  @ 8
-  @field w startppq  @ 150
-  @field r type  @ 17,52,86,124
-  @field w uuid  @ 150
-  @field w vel  @ 9,10,11,30,69,103,143
+  @field w startppq  @ 153,185
+  @field r type  @ 20,55,89,127,190,200
+  @field w uuid  @ 153,185
+  @field w vel  @ 9,10,11,33,72,106,146,182

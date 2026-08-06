@@ -14,10 +14,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-06 tv: show a provisional column for a chain's pb/cc targets (§ The chain surface)
 - 2026-08-06 tv: show a provisional note column for a chain's derived lanes (§ The chain surface)
 - 2026-08-06 tv: suppress the parked originals while the ghosts are up (§ Authoring and editing the fx)
 - 2026-08-06 tv: ghost a chain's derived notes while the caret sits on its host (§ Authoring and editing the fx)
-- 2026-08-05 tm: add fxNotes, a windowed accessor for derived note onsets (§ Authoring and editing the fx)
 
 ## Now
 
@@ -25,4 +25,4 @@
 
 ## Queued (current phase; one-liners)
 
-1. Provisional columns for a chain's **continuous** targets. A pb or cc chain on a channel with nothing authored on that target has no column at all, so there is nowhere to author the base an augment sums onto and no sign on the grid that the target is claimed. The lifecycle is the note case's, but the target set must come from the settled census rather than from the emission: emission is gated, so a kept producer's target vanishes and returns with the dirt — `tm_gate_parity_spec` catches exactly this. Leaves untouched the separate question of whether the seated curve shows in the column.
+(empty — phase 5's items have all landed.)

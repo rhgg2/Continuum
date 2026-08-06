@@ -348,7 +348,11 @@ Columns beyond the data-driven ones are materialised by tm from
   on the next rebuild); hide from the right inwards to drop
   interior-adjacent lanes. A provisional column (one a chain's derived
   lanes materialised) is not the user's to hide, so it is invisible to
-  the count and hide still targets the topmost authored lane.
+  the count and hide still targets the topmost authored lane. The
+  continuous case needs no guard of its own: a provisional pb/cc column
+  (one a chain's claim on that target materialised) is empty, so hide
+  accepts it, but there is no `extraColumns` force to clear — the write
+  is inert and the column comes straight back from the data.
 - `showDelay()` — turns on the delay sub-column (via
   `cfg.noteDelay[chan][lane] = true`) on every note col in the active
   selection, or on the cursor col when no selection. Idempotent.

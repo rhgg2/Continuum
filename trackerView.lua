@@ -3855,6 +3855,7 @@ function tv:rebuild(takeChanged)
       -- Replace-region parked pbs left the take but stay the displayed automation, as the parked
       -- chord/cc are unioned below. see design/note-macros-v2.md § Route-by-window
       local parkedPb = channel.parkedPb or {}
+      local fxTargets = tm:fxCtsTargets(chan)
       if c.pb or #parkedPb > 0 then
         local events = c.pb and c.pb.events or {}
         if #parkedPb > 0 then
@@ -3864,6 +3865,10 @@ function tv:rebuild(takeChanged)
           table.sort(events, function(a, b) return (a.ppq or 0) < (b.ppq or 0) end)
         end
         addGridCol(chan, 'pb', nil, events)
+      elseif fxTargets.pb then
+        -- A chain claiming pb needs somewhere to author the base it sums onto, whether or not the
+        -- channel has a pb of its own. see design/note-macros-v2.md § The chain surface
+        addGridCol(chan, 'pb', nil, {}).provisional = true
       end
       -- Replace-region parked notes left the take so the arp packs to lane 1, but they remain
       -- the displayed chord: union each back into its lane. see design/note-macros-v2.md § Generator output
@@ -3891,16 +3896,23 @@ function tv:rebuild(takeChanged)
       for _, m in ipairs(channel.parkedCC or {}) do util.bucket(parkedCCByNum, m.cc, m) end
       local ccNums = {}
       for n in pairs(c.ccs) do util.add(ccNums, n) end
+      -- A cc a chain claims but nothing authored covers gets its column too, in cc-number order with
+      -- the authored ones. see design/note-macros-v2.md § The chain surface
+      for n in pairs(fxTargets) do
+        if n ~= 'pb' and not c.ccs[n] then util.add(ccNums, n) end
+      end
       table.sort(ccNums)
       for _, n in ipairs(ccNums) do
-        local events = c.ccs[n].events
+        local authored = c.ccs[n]
+        local events   = authored and authored.events or {}
         if parkedCCByNum[n] then
           events = {}
-          for _, e in ipairs(c.ccs[n].events)  do util.add(events, e) end
+          for _, e in ipairs(authored.events)  do util.add(events, e) end
           for _, e in ipairs(parkedCCByNum[n]) do util.add(events, e) end
           table.sort(events, function(a, b) return (a.ppq or 0) < (b.ppq or 0) end)
         end
-        addGridCol(chan, 'cc', n, events)
+        local col = addGridCol(chan, 'cc', n, events)
+        if not authored then col.provisional = true end   -- a target no authored cc covers
       end
       for _, regions in ipairs(packRegionLanes(fxByChan[chan] or {})) do
         local fxCells = {}
