@@ -1,43 +1,56 @@
-@spec vm_extra_cols_spec  src=tests/specs/vm_extra_cols_spec.lua  loc=120  cases=3
-@exercises trackerView (h.vm), editCursor (h.ec), dataStore (h.ds)
-@surface   vm:setGridSize, ec:setPos, vm:hideExtraCol, ds:get
+@spec vm_extra_cols_spec  src=tests/specs/vm_extra_cols_spec.lua  loc=172  cases=4
+@exercises trackerView (h.vm), editCursor (h.ec), dataStore (h.ds), trackerManager (h.tm)
+@surface   vm:setGridSize, ec:setPos, vm:hideExtraCol, ds:get, ds:assign, tm:rebuild
 @harness   mk{seed.notes}
 
 # Intent
   Pins hideExtraCol's contract: only the topmost empty lane drops, from
   any lane. See docs/trackerView.md § Extra columns & delay sub-column.
 
+# Helpers
+  @fn noteColsOn(h, chan)  @ 14-20
+
 # Cases
-  @case 'hideExtraCol on topmost empty note lane shrinks extraColumns'  [harness]  @ 10-43
-  @case 'hideExtraCol from a lower lane drops the topmost empty lane'  [harness]  @ 47-77
-  @case 'hideExtraCol with an occupied top lane is a no-op'  [harness]  @ 81-117
+  @case 'hideExtraCol on topmost empty note lane shrinks extraColumns'  [harness]  @ 25-58
+  @case 'hideExtraCol from a lower lane drops the topmost empty lane'  [harness]  @ 62-92
+  @case 'hideExtraCol with an occupied top lane is a no-op'  [harness]  @ 96-132
+  @case 'hideExtraCol drops the top authored lane past a provisional one'  [harness]  @ 136-169
 
 # Uses (outbound edges)
-  @use call vm:setGridSize  @ 21,60,94
-  @use call ec:setPos  @ 28,62,100
-  @use call vm:hideExtraCol  @ 29,63,101
-  @use call ds:get  @ 31,65,103
+  @use call vm:setGridSize  @ 36,75,109,149
+  @use call ec:setPos  @ 43,77,115,158
+  @use call vm:hideExtraCol  @ 44,78,116,159
+  @use call ds:get  @ 46,80,118,161
+  @use call ds:assign  @ 150
+  @use call tm:rebuild  @ 151
 
 # Fields (r read / w write incl. constructor keys)
-  @field w chan  @ 15,54,88
-  @field r cols  @ 24,36,70,96,108
-  @field w data  @ 19,58,92
-  @field w delay  @ 16,55,89
-  @field w detune  @ 16,55,89
-  @field w endppq  @ 15,54,88
-  @field r events  @ 26,42,76,98,115,116
-  @field w extraColumns  @ 19,58,92
-  @field r grid  @ 24,36,70,96,108
-  @field r lane  @ 25,97
-  @field w lane  @ 16,55,89
-  @field r midiChan  @ 37,71,109
-  @field w name  @ 10,47,81
-  @field r notes  @ 32,66,104
-  @field w notes  @ 14,19,53,58,87,92
-  @field r pitch  @ 116
-  @field w pitch  @ 15,54,88
-  @field w ppq  @ 15,54,88
-  @field w run  @ 11,48,82
-  @field w seed  @ 13,52,86
-  @field r type  @ 37,71,109
-  @field w vel  @ 15,54,88
+  @field w chan  @ 30,69,103,143,150
+  @field r cols  @ 16,39,51,85,111,123
+  @field w data  @ 34,73,107,147
+  @field w delay  @ 31,70,104,144
+  @field w detune  @ 31,70,104,144
+  @field w endppq  @ 9,10,11,30,69,103,143,150
+  @field r events  @ 41,57,91,113,130,131
+  @field w extraColumns  @ 34,73,107,147
+  @field w fx  @ 150
+  @field r grid  @ 16,39,51,85,111,123
+  @field w kind  @ 8
+  @field r lane  @ 40,112
+  @field w lane  @ 9,10,11,31,70,104,144
+  @field r midiChan  @ 17,52,86,124
+  @field w name  @ 25,62,96,136
+  @field r notes  @ 47,81,119,162
+  @field w notes  @ 29,34,68,73,102,107,142,147
+  @field w pattern  @ 8
+  @field r pitch  @ 131
+  @field w pitch  @ 9,10,11,30,69,103,143
+  @field w ppq  @ 9,10,11,30,69,103,143
+  @field r provisional  @ 155,156,167,168
+  @field w run  @ 26,63,97,137
+  @field w seed  @ 28,67,101,141
+  @field w specs  @ 8
+  @field w startppq  @ 150
+  @field r type  @ 17,52,86,124
+  @field w uuid  @ 150
+  @field w vel  @ 9,10,11,30,69,103,143

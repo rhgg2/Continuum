@@ -1694,6 +1694,7 @@ local freezeRectByUuid     = {}   -- uuid -> the gm rect a freeze-to-group mint 
 --shape: fxNotesByChan[chan] = { { evType='note', chan, lane, ppq, pitch, vel, detune, delay, derived }, ... }
 --   ppq is the logical onset; derived is the producing region/host uuid; logical-onset order
 local fxNotesByChan = {}
+local fxLaneTopByChan = {}   -- [chan] = highest lane its derived notes occupy; replaced beside the list above
 
 -- Built at the pipeline tail, where the fx pass has already emitted this rebuild's derived notes:
 -- a rect's note lanes come off those notes, not window coverage, which is parked-over not produced-onto. see design/archive/fx-freeze.md § Freeze to group
@@ -1985,6 +1986,9 @@ function tm:fxNotes(chan, startL, endL)
   end
   return out
 end
+--contract: the highest lane this channel's derived notes occupy this rebuild; 0 if none
+--invariant: read-only; replaced wholesale beside fxNotesByChan, so a clean channel carries its own
+function tm:fxLaneTop(chan) return fxLaneTopByChan[chan] or 0 end
 -- With no mm ops there is no reload->rebuild to ride, so the one rebuild is driven here.
 function tm:flush() if flush() then tm:rebuild(false) end end
 
@@ -3712,13 +3716,14 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
     -- Reconcile existence (stamps kept specs with the mm handle + realised end); ops land on
     -- fxOut.noteOps. fxOut.noteLive holds the predicted specs; the tail walk clips them in place.
     reconcileFx(noteExisting[chan], predicted, noteOpsSink)
-    local fxNotes = {}
+    local fxNotes, laneTop = {}, 0
     for _, spec in ipairs(predicted) do
       util.add(fxOut.noteLive[chan], { evt = spec, lane = spec.lane, kept = keptFx[spec] or nil })
       -- A copy, not the spec: the tail walk clamps raw onsets and clips ends in these in place below.
       util.add(fxNotes, { evType = 'note', chan = chan, lane = spec.lane, ppq = spec.ppqL,
                           pitch = spec.pitch, vel = spec.vel, detune = spec.detune,
                           delay = spec.delay, derived = spec.derived })
+      if spec.lane > laneTop then laneTop = spec.lane end
     end
     -- One sort per rebuild against many windowed reads; lane then pitch break onset collisions stably.
     table.sort(fxNotes, function(a, b)
@@ -3726,7 +3731,10 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
       if a.lane ~= b.lane then return a.lane < b.lane end
       return a.pitch < b.pitch
     end)
-    fxNotesByChan[chan] = fxNotes
+    fxNotesByChan[chan]   = fxNotes
+    -- Rides predicted, which reconcileFx re-adds kept specs to verbatim, so a channel whose
+    -- producers were kept rather than re-run still reports its full lane occupancy.
+    fxLaneTopByChan[chan] = laneTop
 
     -- cc emission: fold (foldChains) into markerless seats, clipped to the emit scope; half-open --
     -- the closing value belongs to the kept side. see design/interval-dirt.md § Implementation plan, commit 3

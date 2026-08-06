@@ -14,7 +14,7 @@
 --invariant: clipboard symmetry is on (row, chan), not absolute ppq
 --shape: grid = { cols, chanFirstCol, chanLastCol, lane1Col, numRows }
 --invariant: grid.chanFirst/Last/lane1Col are chan-keyed; numRows is int
---shape: gridCol core = { type, midiChan, [lane], [cc], label, events, width, [normalized], [bipolar], ['14bit'] }
+--shape: gridCol core = { type, midiChan, [lane], [cc], label, events, width, [provisional], [normalized], [bipolar], ['14bit'] }
 --shape: gridCol parts = { parts, stopPos, partAt, partStart, showDelay }
 --shape: gridCol render = { cells={[y]=evt}, overflow, offGrid, ghosts, [tails] }
 --shape: fx tail = { startRow, endRow, evt, stack={[row]={glyph,[bypass]}}, [clipped] }
@@ -3390,7 +3390,9 @@ function tv:hideExtraCol()
     local noteCols = {}
     for ci = grid.chanFirstCol[chan], grid.chanLastCol[chan] do
       local c = grid.cols[ci]
-      if c.type == 'note' then util.add(noteCols, c) end
+      -- A provisional column is data-derived, not the user's to hide: counting it would write
+      -- back a larger lane count than we started with, and hide would quietly stop working.
+      if c.type == 'note' and not c.provisional then util.add(noteCols, c) end
     end
     if #noteCols <= 1 then return end
     -- Only the topmost lane can drop (lane is rebuild-only at tm).
@@ -3818,6 +3820,7 @@ function tv:rebuild(takeChanged)
       grid.chanFirstCol[chan] = grid.chanFirstCol[chan] or #grid.cols
       grid.chanLastCol[chan]  = #grid.cols
       if type == 'note' and key == 1 then grid.lane1Col[chan] = gridCol end
+      return gridCol
     end
 
     -- fx-region columns are data-derived; overlapping regions on a channel pack into sibling fx
@@ -3875,6 +3878,11 @@ function tv:rebuild(takeChanged)
           table.sort(events, function(a, b) return (a.ppq or 0) < (b.ppq or 0) end)
         end
         addGridCol(chan, 'note', lane, events)
+      end
+      -- A chain's derived notes can pack into lanes no authored column covers; materialises
+      -- data-derived like the fx column. see design/note-macros-v2.md § The chain surface
+      for lane = #c.notes + 1, tm:fxLaneTop(chan) do
+        addGridCol(chan, 'note', lane, {}).provisional = true
       end
       if c.at then addGridCol(chan, 'at', nil,  c.at.events) end
       -- Replace-region parked ccs left the take but stay the displayed automation: union each

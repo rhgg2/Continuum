@@ -346,7 +346,9 @@ Columns beyond the data-driven ones are materialised by tm from
   interior holes can't be closed by shifting higher lanes down — a
   previous version tried and silently failed (the column reappeared
   on the next rebuild); hide from the right inwards to drop
-  interior-adjacent lanes.
+  interior-adjacent lanes. A provisional column (one a chain's derived
+  lanes materialised) is not the user's to hide, so it is invisible to
+  the count and hide still targets the topmost authored lane.
 - `showDelay()` — turns on the delay sub-column (via
   `cfg.noteDelay[chan][lane] = true`) on every note col in the active
   selection, or on the cursor col when no selection. Idempotent.

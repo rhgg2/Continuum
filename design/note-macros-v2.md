@@ -1036,6 +1036,28 @@ its temper tick alike. The suppression reads `channel.parked` alone, so
 parked ccs, pbs and PA stand: nothing ghosts them, and hiding them would
 take a picture away without offering one in its place.
 
+*Decision taken — a derived lane with no column materialises one (2026-08-06).*
+A region chain that emits polyphony allocates lanes above the authored ones: a
+three-voice stamp over a single note on a one-lane channel derives lanes 1 to 3,
+and two thirds of its ghosts have nowhere to hang. The column that answers this
+is data-derived, on the fx column's model — it materialises whenever the derived
+notes need a lane no column covers, and stands empty until the ghosts are on.
+Deriving it from the caret was the tempting alternative and is the one thing it
+must not do: the column set would then shift under the very caret that gates the
+ghosts, and `ec:col()` is an index. Such a column is *provisional* — view-only,
+absent from `extraColumns`, and invisible to hide's bookkeeping, which reads its
+count off the grid and would otherwise write back a larger one and quietly stop
+working. Authoring into it is allowed and makes it real, because tm already grows
+a channel's columns for a note written above the count.
+
+Two neighbouring gaps this does not close. A note host's derived notes ride the
+host's own lane by design, so a three-voice stamp on a *note* still shows one
+ghost of three — that is lane sharing, and no column answers it. And a chain's
+continuous targets get no provisional column yet: the honest source for "which
+targets do this channel's chains own" is the settled census, not the emission,
+which is gated — a kept producer contributes no record, so its column would
+vanish and return with the dirt.
+
 **Patches.** A patch is a *named chain* — an ordered `{kind, params}`
 list, pure data, no code — saved to a library and instantiated **by copy**
 onto a region or note. `design/archive/fx-patterns.md` has since proved the

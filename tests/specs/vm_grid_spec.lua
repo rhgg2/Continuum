@@ -4,6 +4,30 @@ local t = require('support')
 local util   = require('util')
 local timing = require('timing')
 
+-- A three-voice chord stamp: over one authored lane-1 note it emits derived lanes 1-3,
+-- so lanes 2 and 3 have no authored column to hang on.
+local chord3 = { { kind = 'chordStamp', pattern = { kind = 'notes', specs = {
+  { lane = 1, ppq = 0, endppq = 240, pitch = 60, vel = 100 },
+  { lane = 2, ppq = 0, endppq = 240, pitch = 64, vel = 100 },
+  { lane = 3, ppq = 0, endppq = 240, pitch = 67, vel = 100 },
+} } } }
+
+local function chordStampRegion(h)
+  h.tm:addEvent{ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
+                 vel = 100, detune = 0, delay = 0, lane = 1 }
+  h.tm:flush()
+  h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = chord3 } })
+  h.tm:rebuild()
+end
+
+local function noteColsOn(h, chan)
+  local out = {}
+  for i, c in ipairs(h.vm.grid.cols) do
+    if c.type == 'note' and c.midiChan == chan then util.add(out, { col = c, idx = i }) end
+  end
+  return out
+end
+
 return {
   {
     name = 'one note on channel 1 surfaces as one note col with that event',
@@ -414,6 +438,51 @@ return {
       t.truthy(col.cells[12],    'note snaps to row 12')
       t.eq(col.cells[11], nil,   'not floored onto row 11')
       t.eq(col.offGrid[12], nil, 'and not flagged off-grid')
+    end,
+  },
+
+  ----- Provisional note columns: a chain's derived lanes get somewhere to hang
+
+  {
+    name = 'a chain\'s derived lanes materialise provisional note columns',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      chordStampRegion(h)
+
+      local noteCols = noteColsOn(h, 1)
+      t.eq(#noteCols, 3, 'one column per derived lane, authored or not')
+      t.deepEq({ noteCols[1].col.lane, noteCols[2].col.lane, noteCols[3].col.lane }, { 1, 2, 3 },
+               'in lane order')
+      t.falsy(noteCols[1].col.provisional, 'lane 1 is the authored column')
+      t.truthy(noteCols[2].col.provisional, 'lane 2 is provisional')
+      t.truthy(noteCols[3].col.provisional, 'lane 3 is provisional')
+      t.eq(#noteCols[2].col.events, 0, 'and carries nothing authored')
+      t.eq(#noteCols[3].col.events, 0, 'nor does lane 3')
+
+      local fxIdx
+      for i, c in ipairs(h.vm.grid.cols) do
+        if c.type == 'fx' and c.midiChan == 1 then fxIdx = i end
+      end
+      t.truthy(fxIdx, 'fixture check: the region has its fx column')
+      t.truthy(noteCols[3].idx < fxIdx, 'the provisional columns keep the channel\'s kind order')
+    end,
+  },
+
+  {
+    name = 'the provisional columns go when the chain does',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      chordStampRegion(h)
+      t.eq(#noteColsOn(h, 1), 3, 'fixture check: three columns while the chain runs')
+
+      h.ds:assign('fxRegions', {})
+      h.tm:rebuild()
+
+      local noteCols = noteColsOn(h, 1)
+      t.eq(#noteCols, 1, 'the authored column is all that is left')
+      t.eq(#noteCols[1].col.events, 1, 'and it still holds the authored note')
     end,
   },
 }

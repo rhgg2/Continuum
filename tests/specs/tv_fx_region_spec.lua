@@ -9,6 +9,14 @@ local sine30 = { { kind = 'sine', period = { 1, 4 }, depth = 30, onset = 0 } }
 local arpUp = { { kind = 'arp', period = { 1, 4 }, dir = 'up' } }   -- discrete -> replace (parks)
 
 -- ∿ A V: three stages, one short of the default 240-ppq window's four rows
+-- Three voices stamped on each trigger: a chain that emits polyphony, so its derived
+-- notes pack into lanes above the channel's one authored column.
+local chord3 = { { kind = 'chordStamp', pattern = { kind = 'notes', specs = {
+  { lane = 1, ppq = 0, endppq = 240, pitch = 60, vel = 100 },
+  { lane = 2, ppq = 0, endppq = 240, pitch = 64, vel = 100 },
+  { lane = 3, ppq = 0, endppq = 240, pitch = 67, vel = 100 },
+} } } }
+
 local chain3 = { { kind = 'sine', period = { 1, 4 }, depth = 30, onset = 0 },
                  { kind = 'arp',  period = { 1, 4 }, dir = 'up' },
                  { kind = 'velPattern', pattern = { 100, 55 } } }
@@ -1171,6 +1179,25 @@ return {
     end,
   },
 
+
+  {
+    name = 'ghostOverlay: a polyphonic chain\'s ghosts land on the provisional lane columns',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      addNote(h)                        -- the sole authored note, lane 1
+      injectRegion(h, { fx = chord3 })   -- three voices: derived lanes 1-3, two of them provisional
+      local idx = noteColIdx(h, 1)
+      h.ec:setPos(0, idx, 1)
+      local ghosts = (h.vm:ghostOverlay(h.vm:fxHostAtCursor()) or {}).notes
+      local pitches = {}
+      for lane = 1, 3 do
+        local col = noteColIdx(h, 1, lane)
+        pitches[lane] = col and ghosts[col] and ghosts[col][0] and ghosts[col][0].pitch
+      end
+      t.deepEq(pitches, { 60, 64, 67 }, 'one voice per lane column, all on row 0')
+    end,
+  },
 
   ----- Suppression: a replace park's originals give their rows to their own ghosts
 
