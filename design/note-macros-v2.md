@@ -454,13 +454,23 @@ the win). Convert the *bounds* to raw once per `(chan, window)` via
 directly. Exact by construction: seats are placed by the same function,
 so bounds converted by it have zero round-trip drift. Round-tripping each
 *event* raw→logical instead — the inverse of seat placement — is the
-shape to avoid. Two predicates result: the curve interior stays
-**half-open** `[startRaw, endRaw)`, while pb seat *recognition* is
-**inclusive** of `endRaw` — the terminal re-centre seat sits exactly at
-the window end and must read as a seat, not as an authored pb. cc
-recognition is half-open throughout: cc curves carry no terminal
-re-centre, so it matches the park's own half-open `covered()` and an
-authored cc exactly at the boundary stays visible.
+shape to avoid. One predicate serves: `[startRaw, endRaw)`, half-open,
+for recognition and for coverage, on pb and cc alike.
+
+**The re-centre folds inward rather than the interval opening out.** A pb
+window must return the channel to centre before it exits, and the
+tempting place for that seat is the window end itself. That buys a closed
+interval for pb alone — and the cost is not the special case but what it
+does to the end row. Recognition, the sweep and the CC walk all read that
+row as seat territory; coverage and the view's edit routing read it as
+authored. A breakpoint landing there is claimed by both and protected by
+neither: it loses its `ppqL`, drops out of the column, and goes with the
+next sweep. So the re-centre seats at `endRaw - 1` instead, which is
+where it was always meant to act. A stage closing its own span on the end
+row folds the same way (`foldIntoWindow`), so nothing a producer emits
+can sit on the boundary. The end row belongs to whatever is authored on
+it. Abutting windows are then disjoint in fact as well as in the test,
+which is why the freeze gate carries no pb arm.
 
 **Transitions: diff windows, don't mirror.** A markerless seat is
 invisible to the park scan, so the scan cannot run every rebuild — it

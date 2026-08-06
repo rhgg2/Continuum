@@ -7,7 +7,7 @@
 local t = require('support')
 
 -- depth 30c, period 1/4 QN: at res 240 one cycle is 60 ticks, so the macro's own breakpoints are the
--- extrema at 15, 45, 75, ... plus 0 and the closed span's terminal re-centre.
+-- extrema at 15, 45, 75, ... plus 0 and the terminal re-centre, folded one tick inside the span end.
 local sine30 = { { kind = 'sine', period = { 1, 4 }, depth = 30, onset = 0 } }
 
 local function note(ppq, endppq, pitch, lane, fx)
@@ -52,12 +52,12 @@ return {
       h.tm:flush()
 
       local seats = pbSeats(h, 0, 1000)
-      t.deepEq(ppqsOf(seats), { 0, 15, 45, 75, 105, 135, 165, 195, 225, 240 },
+      t.deepEq(ppqsOf(seats), { 0, 15, 45, 75, 105, 135, 165, 195, 225, 239 },
         'the macro\'s own extrema, and nothing between them')
       for i = 1, #seats - 1 do
         t.eq(seats[i].shape, 'slow', 'the seat carries the macro\'s own shape, not a polyline leg')
       end
-      t.eq(seats[#seats].shape, 'step', 'the closed span\'s terminal re-centre')
+      t.eq(seats[#seats].shape, 'step', 'the terminal re-centre, folded one tick inside the span end')
     end,
   },
 
@@ -80,7 +80,8 @@ return {
       -- Past the overlap only sine B moves, so its own segments come back: the first is truncated by
       -- the cut at 240 and is sampled, the whole ones after it are not.
       local after = pbSeats(h, 240, 360)
-      t.eq(after[#after].shape, 'slow', 'a whole segment of the surviving curve rides out verbatim')
+      t.eq(after[#after].shape, 'step', 'the window closes with its re-centre, folded one tick inside')
+      t.eq(after[#after - 1].shape, 'slow', 'a whole segment of the surviving curve rides out verbatim')
     end,
   },
 

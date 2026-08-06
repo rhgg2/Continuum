@@ -80,8 +80,8 @@ return {
       h.tm:addEvent(host()); h.tm:flush()
       h.tm:addEvent(mate()); h.tm:flush()
 
-      t.eq(lastSeat(h, 1), 120,
-        'host window ends at the lane successor (ppqL 120), not its authored end (240)')
+      t.eq(lastSeat(h, 1), 119,
+        'host window ends at the lane successor (ppqL 120, re-centre folded inside), not its authored end (240)')
     end,
   },
 
@@ -95,7 +95,7 @@ return {
       -- successor at all. On the grid it is still the next note in the lane.
       h.tm:addEvent(mate(-300)); h.tm:flush()
 
-      t.eq(lastSeat(h, 1), 120,
+      t.eq(lastSeat(h, 1), 119,
         'window still ends at the successor grid onset -- delay must not unbound the host')
     end,
   },

@@ -56,7 +56,7 @@ return {
       t.eq(pbSeatAt(dump, 1, 0).val,   centsToRaw(0),   'window start -> centre (rest 0)')
       t.eq(pbSeatAt(dump, 1, 15).val,  centsToRaw(30),  'peak  -> +depth cents as raw pb')
       t.eq(pbSeatAt(dump, 1, 45).val,  centsToRaw(-30), 'trough -> -depth cents as raw pb')
-      t.eq(pbSeatAt(dump, 1, 240).val, centsToRaw(0),   'window end re-centres (closed span)')
+      t.eq(pbSeatAt(dump, 1, 239).val, centsToRaw(0),   'window end re-centres, folded one tick inside')
     end,
   },
 
@@ -69,7 +69,7 @@ return {
       addVibHost(h)
       local seats = pbSeatsOf(h.fm:dump(), 1)
       local last  = seats[#seats]
-      t.eq(last.ppq, 240, 'terminal seat sits at the host window end (closed span)')
+      t.eq(last.ppq, 239, 'terminal seat folds one tick inside the host window end')
       t.eq(last.val, centsToRaw(0), 'terminal value is centre -- summed 0, channel re-centred')
     end,
   },
@@ -209,7 +209,7 @@ return {
       shrinkTo(120)
       local seats = pbSeatsOf(h.fm:dump(), 1)
       t.truthy(#seats > 0, 'seats present (non-vacuous)')
-      t.eq(seats[#seats].ppq, 120, 'no stranded pb beyond the shrunk window')
+      t.eq(seats[#seats].ppq, 119, 'no stranded pb beyond the shrunk window')
       t.falsy(h.tm:getChannel(1).columns.pb, 'no phantom authored pbs surface in the pb column')
     end,
   },

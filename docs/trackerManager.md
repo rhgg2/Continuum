@@ -763,9 +763,8 @@ cannot see everything: an fx-carrying host *inside* the frozen producer's note w
 window to be caught by — `noteHost` suppresses a note-dest host's, and a continuous-only chain has no
 note arm to suppress in the first place — and a note-dest host emits no window at all, so it is
 tested the other way round — its own span against the neighbours' note windows. The overlap
-predicate is half-open for note and cc but inclusive for pb, because pb seat recognition is
-inclusive at `endppq`: two abutting pb windows share their boundary seat, and a half-open test would
-read them as disjoint and let one side freeze out from under the other. Refusal is silent and total
+predicate is half-open on every target: the pb re-centre seat folds at `endppq - 1`, so abutting
+windows share nothing and are disjoint in fact as well as in the test. Refusal is silent and total
 — false, computed before any gather, so nothing of freeze's own is staged.
 
 All three arms answer *what is committed* — `fxRegions`, the maintained fx-host index, the stash — so
@@ -1310,8 +1309,8 @@ A markerless pb seat (nil `ppqL`) inside a previous pb window skips this
 reconcile: it's a generated seat `deriveChan` owns, not foreign MIDI, so it
 stays markerless — and a genuine in-window pb from the user is
 indistinguishable, so it's absorbed the same way (design/note-macros-v2.md §
-Route-by-window). The window test is inclusive at the end, since pb windows
-carry a terminal re-centre seat at `endRaw` (mirrors `inSeatWindow`).
+Route-by-window). The window test is half-open, since the re-centre seat folds
+at `endRaw - 1` and the end row carries no seat (mirrors `inSeatWindow`).
 
 Derived events are handled separately: absorber pbs by the absorber pass
 (against the post-walk lane-1 layout); synthesised PCs by PC synthesis.

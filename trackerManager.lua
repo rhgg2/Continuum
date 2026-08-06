@@ -427,10 +427,28 @@ local function sumStreams(base, macros, span, opts)
       end
     end
   end
-  -- pb-augment closes the span: the terminal eL point re-centres the channel (macros anchor 0 there),
-  -- so it must land as a seat -- cc leaves eL to the next window/authored value. see § Continuous pb
-  if opts.closed then util.add(pts, { ppq = eL, val = sumAt(eL), shape = 'step' }) end
+  -- pb-augment closes the span: a terminal point re-centres the channel (macros anchor 0 there), folded
+  -- to eL-1, inside the window, so no seat lands on eL -- cc carries no re-centre yet. see § Continuous pb
+  if opts.closed and eL - 1 > sL then
+    if pts[#pts] and pts[#pts].ppq == eL - 1 then table.remove(pts) end   -- the re-centre owns the tick
+    util.add(pts, { ppq = eL - 1, val = sumAt(eL), shape = 'step' })      -- valued at the anchor it folds from
+  end
   return pts
+end
+
+-- A producer's output occupies [sL, eL): a stage closing its span on the end row folds one tick inside,
+-- where sumStreams' own re-centre goes, so nothing it emits reads as an authored boundary point. see design/note-macros-v2.md § Route-by-window
+local function foldIntoWindow(pts, sL, eL)
+  local out = {}
+  for _, p in ipairs(pts) do
+    if p.ppq >= sL and p.ppq < eL then
+      util.add(out, p)
+    elseif p.ppq == eL and eL - 1 >= sL then
+      if out[#out] and out[#out].ppq == eL - 1 then table.remove(out) end   -- the closer owns the tick
+      util.add(out, util.assign(util.clone(p), { ppq = eL - 1 }))
+    end
+  end
+  return out
 end
 
 local function rawToCents(raw)
@@ -557,7 +575,7 @@ local function foldChains(recs, span, base, opts)
   if lo == span[1] and hi == span[2] then return out end
   local emitted = {}
   for _, point in ipairs(out) do
-    local inSpan = point.ppq >= span[1] and (point.ppq < span[2] or (opts.closed and point.ppq == span[2]))
+    local inSpan = point.ppq >= span[1] and point.ppq < span[2]
     if inSpan then util.add(emitted, point) end
   end
   return emitted
@@ -745,10 +763,9 @@ local function freezeRefused(frozen, census, windows)
   local function sameTarget(a, b)
     return a.evType == b.evType and a.chan == b.chan and a.cc == b.cc
   end
-  -- pb seat recognition is inclusive at endppq, so abutting pb windows share their boundary seat;
-  -- note and cc coverage is half-open, where abutting is genuinely disjoint.
+  -- Half-open for every target: the pb re-centre seat folds at endppq-1, so abutting windows no longer
+  -- share a boundary seat and abutting is genuinely disjoint.
   local function overlaps(a, b)
-    if a.evType == 'pb' then return a.startppq <= b.endppq and b.startppq <= a.endppq end
     return a.startppq < b.endppq and b.startppq < a.endppq
   end
 
@@ -1789,14 +1806,6 @@ local function buildFxRealisation(census)
   fxRealisationByUuid = out
 end
 
--- pb's seat window closes inclusive (the terminal re-centre sits on its end) where cc's is half-open:
--- rebuildPbs' inSeatWindow and rebuildCCs' rawSpanMap. Bounds arrive in the caller's own frame; thinSeats is the one consumer left, needing the closing seat in order to move it inside.
-local function inFreezeWindow(w, ppq, startAt, endAt)
-  if ppq < startAt then return false end
-  if w.evType == 'pb' then return ppq <= endAt end
-  return ppq < endAt
-end
-
 -- Subtract the breakpoints a bounded thin can spare, raw frame, before freeze's own flush: this decides
 -- which points get authored at all, rather than cutting a curve back. see design/archive/fx-freeze.md § Freeze to group
 local function thinSeats(chan, windows)
@@ -1811,7 +1820,7 @@ local function thinSeats(chan, windows)
       for _, e in ipairs((isPb and index.pbs or index.ccs[w.cc]) or {}) do
         -- An absorber is realisation the pb pass owns and re-derives after the freeze: not curve material,
         -- and not freeze's to delete. groupMembers' `hidden` is this partition. see design/archive/fx-freeze.md § Freeze to group
-        if not e.derived and inFreezeWindow(w, e.ppq, startRaw, endRaw) then
+        if not e.derived and e.ppq >= startRaw and e.ppq < endRaw then
           -- A pb index entry's val is realisation, detune included, so the subtraction is what stops a
           -- mid-window detune step reading as a feature of the curve. A cc's val is the intent already.
           util.add(points, { ppq = e.ppq, shape = e.shape, tension = e.tension, evt = e,
@@ -1820,22 +1829,6 @@ local function thinSeats(chan, windows)
       end
       local kept = {}
       for _, p in ipairs(generators.thinCurve(points, tol)) do kept[p] = true end
-      -- A pb window folds closed, seating its last point at exactly endppq -- outside the rect a mint claims, where tiling the group directly below itself clears it away unnoticed. Pull it inside;
-      -- the destination tick's own point rides the delete loop below rather than a second write. see design/archive/fx-freeze.md § Freeze to group
-      if isPb and w.endppq - 1 > w.startppq then
-        local destRaw = tm:fromLogical(chan, w.endppq - 1, 0)
-        local closing, occupant
-        for _, p in ipairs(points) do
-          if kept[p] then
-            if p.ppq == endRaw then closing = p elseif p.ppq == destRaw then occupant = p end
-          end
-        end
-        if closing then
-          if occupant then kept[occupant] = nil end
-          -- Logical bound: assignEvent's non-note arm takes the authored frame and stamps raw itself.
-          assignEvent(closing.evt, { ppq = w.endppq - 1 })
-        end
-      end
       -- By identity, not value: two breakpoints can carry the same number, and it is this one that
       -- lost its place.
       for _, p in ipairs(points) do
@@ -2612,7 +2605,7 @@ local function fullRebuildChannelCCs(chan, fillWin, pbFillWin, ccWrites, ccExist
 
     -- Timing reconcile on the raw (read-only) record; capture what moved for the column clone.
     -- Markerless pb seats in a prior window skip it (inclusive end). see docs/trackerManager.md § Rebuild: CC walk
-    local pbSeat = cc.evType == 'pb' and cc.ppqL == nil and inSpan(pbFillWin, cc.chan, nil, cc.ppq, true)
+    local pbSeat = cc.evType == 'pb' and cc.ppqL == nil and inSpan(pbFillWin, cc.chan, nil, cc.ppq)
     local movedPpq, movedPpqL
     if not cc.derived and not pbSeat then
       if staleSwing[cc.chan] and cc.ppqL ~= nil then
@@ -3190,7 +3183,7 @@ local function rebuildRegionPark(currentWindows, fxParked, prevWindows, hostWind
     end
     local function seatByRegion(chan, ppq)
       for _, span in ipairs(prevSpans[chan] or {}) do
-        if ppq >= span[1] and ppq <= span[2] then return true end
+        if ppq >= span[1] and ppq < span[2] then return true end   -- half-open: the end row was never seat territory
       end
       return false
     end
@@ -3200,7 +3193,7 @@ local function rebuildRegionPark(currentWindows, fxParked, prevWindows, hostWind
       local pbs = rawIndexFor(win.chan).pbs
       for i = firstAtOrAfter(pbs, sRaw), #pbs do
         local cc = pbs[i]
-        if cc.ppq > eRaw then break end   -- inclusive upper, as the mm walk was
+        if cc.ppq >= eRaw then break end   -- half-open, as coverage and the mm walk are
         if not cc.derived and not seatByRegion(cc.chan, cc.ppq) then
           seedDirty(cc.chan, rawSeed(cc, 'park'))
           -- val: logical cents from the cents sidecar (restore maps back); entry.val is already the
@@ -3230,7 +3223,7 @@ local function rebuildRegionPark(currentWindows, fxParked, prevWindows, hostWind
       local pbs = rawIndexFor(win.chan).pbs
       for i = firstAtOrAfter(pbs, sRaw), #pbs do
         local cc = pbs[i]
-        if cc.ppq > eRaw then break end   -- inclusive upper, as the mm walk was
+        if cc.ppq >= eRaw then break end   -- half-open, as coverage and the mm walk are
         seedDirty(cc.chan, rawSeed(cc, 'delete'))
         batch.del({ uuid = cc.uuid })
       end
@@ -3577,7 +3570,7 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
         if #out.delta == 0 then return end
         local cur = target == 'pb' and stream.pb or stream.ccs[target] or {}
         if mode == 'replace' then
-          cur = out.delta
+          cur = foldIntoWindow(out.delta, startL, endL)
         else
           if #cur == 0 and target ~= 'pb' then
             local rest = generators.restFor(target)
@@ -4425,10 +4418,10 @@ local function rebuildPbs(fxOut, extraColumns)
       end
     end
     -- Seat recognition: exclusive ownership means everything on-take in a window is a generated seat
-    -- (authored pbs park off-take). Inclusive of endRaw to catch the terminal re-centre seat.
+    -- (authored pbs park off-take). Half-open -- the re-centre seat folds at endRaw-1, inside.
     local function inSeatWindow(ppq)
       for _, win in ipairs(wins) do
-        if ppq >= win.startRaw and ppq <= win.endRaw then return true end
+        if ppq >= win.startRaw and ppq < win.endRaw then return true end
       end
       return false
     end

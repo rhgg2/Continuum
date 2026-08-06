@@ -1280,3 +1280,15 @@ appear in their design docs.
 - **2026-07-10** — Per-file docs stay, as pointer-target overflow for
   the comment caps; rejected wholesale deletion (≈150 `see docs §`
   pointers pin dense WHY that can't compress to site comments).
+
+- **2026-08-07** — pb park windows are half-open `[startppq, endppq)`
+  like every other span, with the terminal re-centre seat folded to
+  `endppq - 1`; rejected the closed pb interval that let the re-centre
+  sit on the window end. Closed made the end row seat territory for
+  recognition, the sweep and the CC walk while coverage and the view's
+  edit routing still read it as authored, so a breakpoint landing there
+  lost its `ppqL` and went with the next sweep — the reported bug.
+  Folding inward also makes abutting pb windows disjoint (freeze's pb
+  arm goes) and retires the `thinSeats` block that dragged the closing
+  seat off the boundary by hand. cc carries no re-centre yet; when it
+  gains one it seats the same way.

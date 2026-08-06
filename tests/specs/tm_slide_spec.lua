@@ -53,7 +53,7 @@ return {
       t.eq(pbSeatAt(dump, 1, 0).val,   centsToRaw(0),   'starts flat at centre')
       t.eq(pbSeatAt(dump, 1, 225).val, centsToRaw(100), 'arrives at the +100c interval before the handoff')
       local last = seats[#seats]
-      t.eq(last.ppq, 240,           'terminal seat sits at the next-note onset (closed span)')
+      t.eq(last.ppq, 239,           'terminal seat folds one tick inside the next-note onset')
       t.eq(last.val, centsToRaw(0), 're-centred at the handoff (no residual channel bend)')
     end,
   },

@@ -44,8 +44,8 @@ return {
       t.truthy(maxPbPpq(h, 1) > 480, 'precondition: the OPEN host seats pb across the whole take')
 
       addNote(h, 1, 1, 480)
-      t.eq(maxPbPpq(h, 1), 480,
-        'the window clipped to the new lane-1 successor -- the seat stream ends at its onset')
+      t.eq(maxPbPpq(h, 1), 479,
+        'the window clipped to the new lane-1 successor -- the seat stream ends one tick inside its onset')
     end,
   },
 
