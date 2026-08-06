@@ -506,7 +506,7 @@ local function notePartHeaders(col)
   return headers
 end
 
-local NO_OVERLAY = { notes = {}, hidden = {} }   -- the hostless frame: no ghosts, nothing suppressed
+local NO_OVERLAY = { notes = {}, values = {}, hidden = {} }   -- the hostless frame: no ghosts, nothing suppressed
 
 local function drawTracker(host)
   local grid = tv.grid
@@ -712,7 +712,10 @@ local function drawTracker(host)
           end
         end
         if overlay.hidden[evt] then evt = nil end   -- a suppressed cell falls through to its ghost
-        local ghost = not evt and not previewGhost and col.ghosts and col.ghosts[row]
+        -- The chain's own realisation takes the row from the interpolation ghost, which describes
+        -- the authored curve alone. Both render the same way: a value, in the ghost colour.
+        local ghost = not evt and not previewGhost
+          and ((overlay.values[x] and overlay.values[x][row]) or (col.ghosts and col.ghosts[row]))
         local noteGhost = not evt and not previewGhost and overlay.notes[x] and overlay.notes[x][row]
         local text, textCol, overrides, divergent
         if ghost then

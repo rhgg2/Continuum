@@ -1,7 +1,7 @@
-@spec tv_fx_region_spec  src=tests/specs/tv_fx_region_spec.lua  loc=1260  cases=64
+@spec tv_fx_region_spec  src=tests/specs/tv_fx_region_spec.lua  loc=1319  cases=67
 @exercises dataStore (h.ds), trackerManager (h.tm), midiManager (h.fm), trackerView (h.vm), editCursor (h.ec), commandManager (h.cmgr), clipboard (h.clipboard)
 @surface   ds:assign, tm:rebuild, ds:get, tm:addEvent, tm:flush, fm:dump, vm:setGridSize, vm:ppqToRow, ec:setPos, vm:fxHostForEdit, vm:noteFx, vm:setNoteFx, vm:removeFxStage, vm:addFxStage, vm:setFxField, ec:setSelection, vm:rowToPPQ, vm:fxHostAtCursor, cmgr:invoke, tm:getChannel, vm:editEvent, tm:subscribe, ec:row, ec:extendTo, clipboard:collect, vm:ghostOverlay
-@harness   mk
+@harness   mk{seed.ccs}
 
 # Intent
   Track B (note macros v2): the fx-region column + Super-X addressing. A region
@@ -13,227 +13,235 @@
   @fn fxColFor(h, chan)  @ 31-35
   @fn region(h, uuid)  @ 37-41
   @fn noteColIdx(h, chan, lane)  @ 43-47
-  @fn addNote(h)  @ 49-53
-  @fn authoredUuid(h)  @ 55-57
-  @fn authoredPitches(h)  @ 61-68
+  @fn ctsColIdx(h, chan, type, cc)  @ 49-53
+  @fn addNote(h)  @ 55-59
+  @fn authoredUuid(h)  @ 61-63
+  @fn authoredPitches(h)  @ 67-74
       -- Pitches still sounding on the take (non-derived). Empty once a replace region has
       -- parked the covered chord off-take.
 
 # Cases
-  @case 'a region materialises a per-channel fx column with a badge + tail'  [harness]  @ 75-87
-  @case 'a chain stacks its glyphs down the region rows in series order'  [harness]  @ 91-104
-  @case 'a bypassed stage carries its flag down the stack'  [harness]  @ 108-118
-  @case 'a chain longer than the region clips at the last row and marks it'  [harness]  @ 122-132
-  @case 'a one-row region gives the clip mark the badge row'  [harness]  @ 136-144
-  @case 'no region -> no fx column'  [harness]  @ 148-154
-  @case 'an empty-fx region renders no column (it is an inert husk)'  [harness]  @ 158-164
-  @case 'two overlapping regions pack into separate fx columns, each addressable'  [harness]  @ 170-198
-  @case 'two disjoint regions share one fx column (packed into lane 1)'  [harness]  @ 202-214
-  @case 'replace region: a parked note still renders in its note column'  [harness]  @ 220-232
-  @case 'replace region: a parked cc still renders in its cc column'  [harness]  @ 236-259
-  @case 'noteFx resolves a region uuid to its fx list'  [harness]  @ 265-270
-  @case 'setNoteFx writes a region fx list back to ds'  [harness]  @ 274-280
-  @case 'setNoteFx REMOVE deletes the region (a region is its fx)'  [harness]  @ 284-290
-  @case 'region fx: deselecting the last kind keeps a husk the editor can repopulate'  [harness]  @ 294-304
-  @case 'setFxField edits one region fx field, leaving the region'  [harness]  @ 308-314
-  @case 'fxHostForEdit: caret on an fx cell returns the region uuid'  [harness]  @ 320-328
-  @case 'fxHostForEdit: a selection mints a replace region over its span'  [harness]  @ 332-346
-  @case 'fxHostAtCursor: a selection does not mint -- cursor movement has no side effect'  [harness]  @ 350-358
-  @case 'fxHostAtCursor: caret anywhere in an fx region returns its uuid, nil past the tail'  [harness]  @ 362-375
-  @case 'fxHostForEdit: off a note with no selection is nil; on a note, its uuid (v1)'  [harness]  @ 379-389
-  @case 'parked note: a pitch nudge edits the off-take stash and re-renders, still parked'  [harness]  @ 395-409
-  @case 'parked note: delete removes it from the stash and does not restore it when the window moves off'  [harness]  @ 413-424
-  @case 'parked add: typing a note into a replace window stashes a logical spec, off the take'  [harness]  @ 428-442
-  @case 'parked move-out: nudging a parked note past the window end restores it to the take'  [harness]  @ 446-459
-  @case 'parked cc: a value nudge edits the off-take cc stash; delete removes it'  [harness]  @ 463-495
-  @case 'parked pb: a value nudge edits the off-take pb stash; delete removes it'  [harness]  @ 499-535
-  @case 'multi-select spanning a parked note and a take note: both edit under one rebuild'  [harness]  @ 539-560
-  @case 'fx noteOff truncates the region tail to the cursor row'  [harness]  @ 566-578
-  @case 'fx noteOff finds the right region in its lane when cells are in storage, not ppq, order'  [harness]  @ 582-596
-  @case 'fx noteOff past the region tail grows it to the cursor row'  [harness]  @ 600-609
-  @case 'fx noteOff on the onset row is a no-op (deletion is the delete verb, not noteOff)'  [harness]  @ 613-624
-  @case 'fx noteOff on the window end row re-opens it to the pattern length'  [harness]  @ 628-638
-  @case 'fx growNote / shrinkNote resize the region from its end'  [harness]  @ 642-653
-  @case 'fx nudgeForward shifts the whole window and the caret follows'  [harness]  @ 657-669
-  @case 'fx nudge keeps the moved region in its lane; the newly-overlapped sibling displaces right'  [harness]  @ 673-695
-  @case 'fx nudge of an already-overlapping region keeps its own higher lane (no reorder)'  [harness]  @ 699-718
-  @case 'fx nudge that makes an overlap disjoint tracks the caret across the column merge'  [harness]  @ 722-742
-  @case 'fx window edit on a disjoint region does not churn storage order'  [harness]  @ 746-762
-  @case 'fx nudgeBack refuses at the top grid edge (window unchanged)'  [harness]  @ 766-777
-  @case 'fx eventShiftLeft swaps the region one lane left, flipping storage precedence'  [harness]  @ 783-807
-  @case 'fx eventShiftRight swaps the region one lane right (the inverse move)'  [harness]  @ 811-826
-  @case 'fx eventShift is a no-op at the grid edge (lone region, nothing beside it)'  [harness]  @ 830-842
-  @case 'fx eventShift no-ops when the adjacent lane is empty at the cursor row'  [harness]  @ 846-861
-  @case 'parked note: noteOff shortens its tail in the stash, stays parked'  [harness]  @ 867-880
-  @case 'parked note: a time nudge within the window retimes the stash, stays parked'  [harness]  @ 884-897
-  @case 'fx copy captures a region by onset; the whole window rides, tail spilling past the band'  [harness]  @ 903-921
-  @case 'fx copy skips a region that only passes through the band (onset above it)'  [harness]  @ 925-934
-  @case 'fx copy + paste stacks a duplicate region at the cursor row, original intact'  [harness]  @ 938-958
-  @case 'fx delete removes the region under the caret'  [harness]  @ 962-971
-  @case 'fx deleteSel drops every region the rectangle catches (onset in band), sparing the rest'  [harness]  @ 975-992
-  @case 'fx freeze promotes the region output to authored notes and drops the region'  [harness]  @ 998-1010
-  @case 'fx freeze converts an fx-carrying note at the caret'  [harness]  @ 1014-1026
-  @case 'fx freeze declines on a plain note (no chain to freeze)'  [harness]  @ 1030-1040
-  @case 'fx freeze: a refused freeze opens no undo block; an eligible one opens exactly one'  [harness]  @ 1047-1084
-  @case 'ghostOverlay: no host under the caret returns nil, before any window query'  [harness]  @ 1090-1099
-  @case 'ghostOverlay: a host lights its derived onsets on the lane column, with pitch and vel'  [harness]  @ 1103-1128
-  @case 'ghostOverlay: a host whose onsets lie outside the window answers empty, not nil'  [harness]  @ 1132-1144
-  @case 'ghostOverlay: a row carrying a real cell still reports its ghost -- precedence is the draw arm\'s'  [harness]  @ 1148-1160
-  @case 'ghostOverlay: the window is the viewport -- onsets below it are absent'  [harness]  @ 1164-1179
-  @case 'ghostOverlay: a polyphonic chain\'s ghosts land on the provisional lane columns'  [harness]  @ 1184-1199
-  @case 'ghostOverlay: a region host suppresses the parked chord it replaced, cells intact'  [harness]  @ 1205-1224
-  @case 'ghostOverlay: the host\'s own parked cell stays visible'  [harness]  @ 1228-1245
-  @case 'ghostOverlay: nothing on the take is ever suppressed'  [harness]  @ 1249-1258
+  @case 'a region materialises a per-channel fx column with a badge + tail'  [harness]  @ 81-93
+  @case 'a chain stacks its glyphs down the region rows in series order'  [harness]  @ 97-110
+  @case 'a bypassed stage carries its flag down the stack'  [harness]  @ 114-124
+  @case 'a chain longer than the region clips at the last row and marks it'  [harness]  @ 128-138
+  @case 'a one-row region gives the clip mark the badge row'  [harness]  @ 142-150
+  @case 'no region -> no fx column'  [harness]  @ 154-160
+  @case 'an empty-fx region renders no column (it is an inert husk)'  [harness]  @ 164-170
+  @case 'two overlapping regions pack into separate fx columns, each addressable'  [harness]  @ 176-204
+  @case 'two disjoint regions share one fx column (packed into lane 1)'  [harness]  @ 208-220
+  @case 'replace region: a parked note still renders in its note column'  [harness]  @ 226-238
+  @case 'replace region: a parked cc still renders in its cc column'  [harness]  @ 242-265
+  @case 'noteFx resolves a region uuid to its fx list'  [harness]  @ 271-276
+  @case 'setNoteFx writes a region fx list back to ds'  [harness]  @ 280-286
+  @case 'setNoteFx REMOVE deletes the region (a region is its fx)'  [harness]  @ 290-296
+  @case 'region fx: deselecting the last kind keeps a husk the editor can repopulate'  [harness]  @ 300-310
+  @case 'setFxField edits one region fx field, leaving the region'  [harness]  @ 314-320
+  @case 'fxHostForEdit: caret on an fx cell returns the region uuid'  [harness]  @ 326-334
+  @case 'fxHostForEdit: a selection mints a replace region over its span'  [harness]  @ 338-352
+  @case 'fxHostAtCursor: a selection does not mint -- cursor movement has no side effect'  [harness]  @ 356-364
+  @case 'fxHostAtCursor: caret anywhere in an fx region returns its uuid, nil past the tail'  [harness]  @ 368-381
+  @case 'fxHostForEdit: off a note with no selection is nil; on a note, its uuid (v1)'  [harness]  @ 385-395
+  @case 'parked note: a pitch nudge edits the off-take stash and re-renders, still parked'  [harness]  @ 401-415
+  @case 'parked note: delete removes it from the stash and does not restore it when the window moves off'  [harness]  @ 419-430
+  @case 'parked add: typing a note into a replace window stashes a logical spec, off the take'  [harness]  @ 434-448
+  @case 'parked move-out: nudging a parked note past the window end restores it to the take'  [harness]  @ 452-465
+  @case 'parked cc: a value nudge edits the off-take cc stash; delete removes it'  [harness]  @ 469-501
+  @case 'parked pb: a value nudge edits the off-take pb stash; delete removes it'  [harness]  @ 505-541
+  @case 'multi-select spanning a parked note and a take note: both edit under one rebuild'  [harness]  @ 545-566
+  @case 'fx noteOff truncates the region tail to the cursor row'  [harness]  @ 572-584
+  @case 'fx noteOff finds the right region in its lane when cells are in storage, not ppq, order'  [harness]  @ 588-602
+  @case 'fx noteOff past the region tail grows it to the cursor row'  [harness]  @ 606-615
+  @case 'fx noteOff on the onset row is a no-op (deletion is the delete verb, not noteOff)'  [harness]  @ 619-630
+  @case 'fx noteOff on the window end row re-opens it to the pattern length'  [harness]  @ 634-644
+  @case 'fx growNote / shrinkNote resize the region from its end'  [harness]  @ 648-659
+  @case 'fx nudgeForward shifts the whole window and the caret follows'  [harness]  @ 663-675
+  @case 'fx nudge keeps the moved region in its lane; the newly-overlapped sibling displaces right'  [harness]  @ 679-701
+  @case 'fx nudge of an already-overlapping region keeps its own higher lane (no reorder)'  [harness]  @ 705-724
+  @case 'fx nudge that makes an overlap disjoint tracks the caret across the column merge'  [harness]  @ 728-748
+  @case 'fx window edit on a disjoint region does not churn storage order'  [harness]  @ 752-768
+  @case 'fx nudgeBack refuses at the top grid edge (window unchanged)'  [harness]  @ 772-783
+  @case 'fx eventShiftLeft swaps the region one lane left, flipping storage precedence'  [harness]  @ 789-813
+  @case 'fx eventShiftRight swaps the region one lane right (the inverse move)'  [harness]  @ 817-832
+  @case 'fx eventShift is a no-op at the grid edge (lone region, nothing beside it)'  [harness]  @ 836-848
+  @case 'fx eventShift no-ops when the adjacent lane is empty at the cursor row'  [harness]  @ 852-867
+  @case 'parked note: noteOff shortens its tail in the stash, stays parked'  [harness]  @ 873-886
+  @case 'parked note: a time nudge within the window retimes the stash, stays parked'  [harness]  @ 890-903
+  @case 'fx copy captures a region by onset; the whole window rides, tail spilling past the band'  [harness]  @ 909-927
+  @case 'fx copy skips a region that only passes through the band (onset above it)'  [harness]  @ 931-940
+  @case 'fx copy + paste stacks a duplicate region at the cursor row, original intact'  [harness]  @ 944-964
+  @case 'fx delete removes the region under the caret'  [harness]  @ 968-977
+  @case 'fx deleteSel drops every region the rectangle catches (onset in band), sparing the rest'  [harness]  @ 981-998
+  @case 'fx freeze promotes the region output to authored notes and drops the region'  [harness]  @ 1004-1016
+  @case 'fx freeze converts an fx-carrying note at the caret'  [harness]  @ 1020-1032
+  @case 'fx freeze declines on a plain note (no chain to freeze)'  [harness]  @ 1036-1046
+  @case 'fx freeze: a refused freeze opens no undo block; an eligible one opens exactly one'  [harness]  @ 1053-1090
+  @case 'ghostOverlay: no host under the caret returns nil, before any window query'  [harness]  @ 1096-1105
+  @case 'ghostOverlay: a host lights its derived onsets on the lane column, with pitch and vel'  [harness]  @ 1109-1134
+  @case 'ghostOverlay: a host whose onsets lie outside the window answers empty, not nil'  [harness]  @ 1138-1150
+  @case 'ghostOverlay: a row carrying a real cell still reports its ghost -- precedence is the draw arm\'s'  [harness]  @ 1154-1166
+  @case 'ghostOverlay: the window is the viewport -- onsets below it are absent'  [harness]  @ 1170-1185
+  @case 'ghostOverlay: a polyphonic chain\'s ghosts land on the provisional lane columns'  [harness]  @ 1190-1205
+  @case 'ghostOverlay: a pb chain lights its curve on the column it claimed'  [harness]  @ 1211-1229
+  @case 'ghostOverlay: only the claimed target lights -- an authored cc beside it stays dark'  [harness]  @ 1233-1245
+  @case 'ghostOverlay: no host, no curve'  [harness]  @ 1249-1258
+  @case 'ghostOverlay: a region host suppresses the parked chord it replaced, cells intact'  [harness]  @ 1264-1283
+  @case 'ghostOverlay: the host\'s own parked cell stays visible'  [harness]  @ 1287-1304
+  @case 'ghostOverlay: nothing on the take is ever suppressed'  [harness]  @ 1308-1317
 
 # Uses (outbound edges)
-  @use call ds:assign  @ 27,174,206,586,677,703,726,750,787,815,850,979,1051,1074
-  @use call tm:rebuild  @ 28,152,178,210,248,336,354,475,512,590,681,707,730,755,791,819,854,984,1055,1077
-  @use call ds:get  @ 38,279,289,299,300,302,313,340,357,404,421,436,458,485,493,525,533,559,686,714,760,799,823,839,859,876,893,949,970,990,1008,1069,1072,1083
-  @use call tm:addEvent  @ 50,240,450,467,503,543,545,1018,1108,1168,1210,1232,1234
-  @use call tm:flush  @ 52,240,452,467,503,547,1020,1110,1170,1212,1236
-  @use call fm:dump  @ 56,63
-  @use call vm:setGridSize  @ 78,94,111,125,139,151,161,173,205,223,239,323,335,353,365,382,398,416,431,449,466,502,542,569,585,603,616,631,645,660,676,702,725,749,769,786,814,833,849,870,887,906,928,941,965,978,1001,1017,1033,1050,1093,1106,1135,1151,1167,1187,1208,1231,1252
-  @use call vm:ppqToRow  @ 86
-  @use call ec:setPos  @ 194,196,326,369,371,373,385,387,402,419,434,455,482,489,522,529,572,592,606,619,634,648,663,683,712,735,757,772,797,821,836,856,874,891,909,931,944,947,968,986,1006,1022,1036,1057,1079,1096,1113,1139,1155,1173,1191,1217,1239,1255
-  @use call vm:fxHostForEdit  @ 195,197,327,338,386,388,694,717,741,806
-  @use call vm:noteFx  @ 269,303,1024
-  @use call vm:setNoteFx  @ 278,288
-  @use call vm:removeFxStage  @ 298
-  @use call vm:addFxStage  @ 301
-  @use call vm:setFxField  @ 312
-  @use call ec:setSelection  @ 337,355,554
-  @use call vm:rowToPPQ  @ 343,344,636,955,956
-  @use call vm:fxHostAtCursor  @ 356,370,372,374,1097,1098,1114,1140,1141,1157,1174,1192,1218,1240,1256
-  @use call cmgr:invoke  @ 403,420,456,483,490,530,556,573,593,607,620,635,649,651,664,684,685,713,736,737,758,773,798,822,837,838,857,875,892,946,948,969,988,1007,1023,1037,1070,1080
-  @use call tm:getChannel  @ 408,1214,1237
-  @use call vm:editEvent  @ 435,523
-  @use call tm:subscribe  @ 552
-  @use call ec:row  @ 668
-  @use call ec:extendTo  @ 910,932,945,987
-  @use call clipboard:collect  @ 911,933
-  @use call vm:ghostOverlay  @ 1098,1114,1141,1157,1174,1192,1218,1242,1256
+  @use call ds:assign  @ 27,180,212,592,683,709,732,756,793,821,856,985,1057,1080
+  @use call tm:rebuild  @ 28,158,184,216,254,342,360,481,518,596,687,713,736,761,797,825,860,990,1061,1083
+  @use call ds:get  @ 38,285,295,305,306,308,319,346,363,410,427,442,464,491,499,531,539,565,692,720,766,805,829,845,865,882,899,955,976,996,1014,1075,1078,1089
+  @use call tm:addEvent  @ 56,246,456,473,509,549,551,1024,1114,1174,1269,1291,1293
+  @use call tm:flush  @ 58,246,458,473,509,553,1026,1116,1176,1271,1295
+  @use call fm:dump  @ 62,69
+  @use call vm:setGridSize  @ 84,100,117,131,145,157,167,179,211,229,245,329,341,359,371,388,404,422,437,455,472,508,548,575,591,609,622,637,651,666,682,708,731,755,775,792,820,839,855,876,893,912,934,947,971,984,1007,1023,1039,1056,1099,1112,1141,1157,1173,1193,1214,1236,1252,1267,1290,1311
+  @use call vm:ppqToRow  @ 92
+  @use call ec:setPos  @ 200,202,332,375,377,379,391,393,408,425,440,461,488,495,528,535,578,598,612,625,640,654,669,689,718,741,763,778,803,827,842,862,880,897,915,937,950,953,974,992,1012,1028,1042,1063,1085,1102,1119,1145,1161,1179,1197,1218,1240,1255,1276,1298,1314
+  @use call vm:fxHostForEdit  @ 201,203,333,344,392,394,700,723,747,812
+  @use call vm:noteFx  @ 275,309,1030
+  @use call vm:setNoteFx  @ 284,294
+  @use call vm:removeFxStage  @ 304
+  @use call vm:addFxStage  @ 307
+  @use call vm:setFxField  @ 318
+  @use call ec:setSelection  @ 343,361,560
+  @use call vm:rowToPPQ  @ 349,350,642,961,962
+  @use call vm:fxHostAtCursor  @ 362,376,378,380,1103,1104,1120,1146,1147,1163,1180,1198,1222,1242,1256,1257,1277,1299,1315
+  @use call cmgr:invoke  @ 409,426,462,489,496,536,562,579,599,613,626,641,655,657,670,690,691,719,742,743,764,779,804,828,843,844,863,881,898,952,954,975,994,1013,1029,1043,1076,1086
+  @use call tm:getChannel  @ 414,1273,1296
+  @use call vm:editEvent  @ 441,529
+  @use call tm:subscribe  @ 558
+  @use call ec:row  @ 674
+  @use call ec:extendTo  @ 916,938,951,993
+  @use call clipboard:collect  @ 917,939
+  @use call vm:ghostOverlay  @ 1104,1120,1147,1163,1180,1198,1222,1242,1257,1277,1301,1315
 
 # Fields (r read / w write incl. constructor keys)
-  @field r REMOVE  @ 288
-  @field r Undo_BeginBlock  @ 1062,1081
-  @field w Undo_BeginBlock  @ 1063
-  @field r Undo_EndBlock  @ 1062
-  @field w Undo_EndBlock  @ 1067,1081
-  @field r bypass  @ 116,117
-  @field w bypass  @ 113
-  @field r cc  @ 253,479
-  @field w cc  @ 240,467
-  @field w ccRep  @ 241,249,468,491
-  @field r cells  @ 82,103,187,229,256,693,805,1156,1222
-  @field r chan  @ 342,802,803
-  @field w chan  @ 25,50,175,176,207,208,240,450,467,503,543,545
-  @field w chan  @ 587,588,678,679,704,705,727,728,751,752,753,788
-  @field w chan  @ 789,816,817,851,852,980,981,982,1018,1052,1053,1075
-  @field w chan  @ 1108,1168,1210,1232,1234
-  @field r chanDelta  @ 917
-  @field r clipped  @ 102,131,143
-  @field w col1  @ 337,355,554
-  @field w col2  @ 337,355,554
-  @field r cols  @ 32,44,181,185,212,229,252,368,435,478,515,519
-  @field r cols  @ 690,709,732,739,794,795,1156,1221
-  @field w config  @ 430
-  @field w currentOctave  @ 430
-  @field w defaults  @ 245,472,509
-  @field w delay  @ 51,451,544,546,1019,1109,1169,1211,1233,1235
-  @field w delta  @ 242,469,505
-  @field r depth  @ 313
-  @field w depth  @ 8,20
-  @field r derived  @ 56,64
-  @field w dest  @ 245,472,509
-  @field w detune  @ 51,451,544,546,1019,1109,1169,1211,1233,1235
-  @field w dir  @ 9,21,113,278,301
-  @field r endRow  @ 86,371,373,916
-  @field r endppq  @ 344,577,594,595,608,623,636,650,652,667,776,878
-  @field r endppq  @ 952,956
-  @field w endppq  @ 15,16,17,25,50,126,140,175,176,207,208,366
-  @field w endppq  @ 422,450,453,543,545,548,587,588,604,661,678,679
-  @field w endppq  @ 704,705,727,728,751,752,753,788,789,816,817,851
-  @field w endppq  @ 852,907,929,980,981,982,1018,1052,1053,1075,1108,1137
-  @field w endppq  @ 1168,1171,1210,1232,1234
-  @field r evType  @ 485,493,525,533
-  @field w evType  @ 50,240,450,467,503,543,545,1018,1108,1168,1210,1232
-  @field w evType  @ 1234
-  @field r events  @ 521
-  @field r evt  @ 1223
-  @field w expand  @ 242,469,505
-  @field w fields  @ 245,472,509
-  @field r fx  @ 279,300,313,345,918,919,920,957
-  @field w fx  @ 25,95,112,126,140,162,175,176,207,208,225,247
-  @field w fx  @ 400,418,422,432,453,474,511,548,587,588,678,679
-  @field w fx  @ 704,705,727,728,751,752,753,788,789,816,817,851
-  @field w fx  @ 852,872,889,980,981,982,1003,1019,1052,1053,1075,1095
-  @field w fx  @ 1111,1137,1153,1171,1189,1213,1233,1235
-  @field r fxRegions  @ 912,913,914
-  @field r glyph  @ 84,98,99,100,129,130,142
-  @field r grid  @ 32,44,181,185,212,229,252,368,435,478,515,519
-  @field r grid  @ 636,690,709,732,739,794,795,1156,1221
-  @field r hidden  @ 1219,1220,1243,1244,1257
-  @field r kind  @ 269,279,303,918,920,957
-  @field w kind  @ 8,9,14,20,21,22,113,247,278,301,474
-  @field w kind  @ 511,919
-  @field r kinds  @ 241,249,468,491,504,531
-  @field w label  @ 245,472,509
+  @field r REMOVE  @ 294
+  @field r Undo_BeginBlock  @ 1068,1087
+  @field w Undo_BeginBlock  @ 1069
+  @field r Undo_EndBlock  @ 1068
+  @field w Undo_EndBlock  @ 1073,1087
+  @field r bypass  @ 122,123
+  @field w bypass  @ 119
+  @field r cc  @ 51,259,485
+  @field w cc  @ 246,473,1235
+  @field w ccRep  @ 247,255,474,497
+  @field w ccs  @ 1235
+  @field r cells  @ 88,109,193,235,262,699,811,1162,1228,1281
+  @field r chan  @ 348,808,809
+  @field w chan  @ 25,56,181,182,213,214,246,456,473,509,549,551
+  @field w chan  @ 593,594,684,685,710,711,733,734,757,758,759,794
+  @field w chan  @ 795,822,823,857,858,986,987,988,1024,1058,1059,1081
+  @field w chan  @ 1114,1174,1235,1269,1291,1293
+  @field r chanDelta  @ 923
+  @field r clipped  @ 108,137,149
+  @field w col1  @ 343,361,560
+  @field w col2  @ 343,361,560
+  @field r cols  @ 32,44,50,187,191,218,235,258,374,441,484,521
+  @field r cols  @ 525,696,715,738,745,800,801,1162,1221,1228,1280
+  @field w config  @ 436
+  @field w currentOctave  @ 436
+  @field w defaults  @ 251,478,515
+  @field w delay  @ 57,457,550,552,1025,1115,1175,1270,1292,1294
+  @field w delta  @ 248,475,511
+  @field r depth  @ 319
+  @field w depth  @ 8,20,1238
+  @field r derived  @ 62,70
+  @field w dest  @ 251,478,515,1238
+  @field w detune  @ 57,457,550,552,1025,1115,1175,1270,1292,1294
+  @field w dir  @ 9,21,119,284,307
+  @field r endRow  @ 92,377,379,922
+  @field r endppq  @ 350,583,600,601,614,629,642,656,658,673,782,884
+  @field r endppq  @ 958,962
+  @field w endppq  @ 15,16,17,25,56,132,146,181,182,213,214,372
+  @field w endppq  @ 428,456,459,549,551,554,593,594,610,667,684,685
+  @field w endppq  @ 710,711,733,734,757,758,759,794,795,822,823,857
+  @field w endppq  @ 858,913,935,986,987,988,1024,1058,1059,1081,1114,1143
+  @field w endppq  @ 1174,1177,1269,1291,1293
+  @field r evType  @ 491,499,531,539
+  @field w evType  @ 56,246,456,473,509,549,551,1024,1114,1174,1235,1269
+  @field w evType  @ 1291,1293
+  @field r events  @ 527
+  @field r evt  @ 1282
+  @field w expand  @ 248,475,511
+  @field w fields  @ 251,478,515
+  @field r fx  @ 285,306,319,351,924,925,926,963
+  @field w fx  @ 25,101,118,132,146,168,181,182,213,214,231,253
+  @field w fx  @ 406,424,428,438,459,480,517,554,593,594,684,685
+  @field w fx  @ 710,711,733,734,757,758,759,794,795,822,823,857
+  @field w fx  @ 858,878,895,986,987,988,1009,1025,1058,1059,1081,1101
+  @field w fx  @ 1117,1143,1159,1177,1195,1216,1238,1254,1272,1292,1294
+  @field r fxRegions  @ 918,919,920
+  @field r glyph  @ 90,104,105,106,135,136,148
+  @field r grid  @ 32,44,50,187,191,218,235,258,374,441,484,521
+  @field r grid  @ 525,642,696,715,738,745,800,801,1162,1221,1228,1280
+  @field r hidden  @ 1278,1279,1302,1303,1316
+  @field r kind  @ 275,285,309,924,926,963
+  @field w kind  @ 8,9,14,20,21,22,119,253,284,307,480
+  @field w kind  @ 517,925,1238
+  @field r kinds  @ 247,255,474,497,510,537
+  @field w label  @ 251,478,515
   @field r lane  @ 45
-  @field w lane  @ 15,16,17,51,451,544,546,1019,1109,1169,1211,1233
-  @field w lane  @ 1235
-  @field r midiChan  @ 33,45,181,212,253,479,516,691,710,733,739
-  @field w mode  @ 245,472,509
-  @field w name  @ 75,91,108,122,136,148,158,170,202,220,236,265
-  @field w name  @ 274,284,294,308,320,332,350,362,379,395,413,428
-  @field w name  @ 446,463,499,539,566,582,600,613,628,642,657,673
-  @field w name  @ 699,722,746,766,783,811,830,846,867,884,903,925
-  @field w name  @ 938,962,975,998,1014,1030,1047,1090,1103,1132,1148,1164
-  @field w name  @ 1184,1205,1228,1249
-  @field r notes  @ 56,63,1114,1141,1157,1174,1192
-  @field w notes  @ 242,469,505
-  @field r numRows  @ 636
-  @field w onset  @ 8,20
-  @field r parked  @ 408,1214,1237
-  @field w part1  @ 337,355,555
-  @field w part2  @ 337,355,555
+  @field w lane  @ 15,16,17,57,457,550,552,1025,1115,1175,1270,1292
+  @field w lane  @ 1294
+  @field r midiChan  @ 33,45,51,187,218,259,485,522,697,716,739,745
+  @field w mode  @ 251,478,515
+  @field w name  @ 81,97,114,128,142,154,164,176,208,226,242,271
+  @field w name  @ 280,290,300,314,326,338,356,368,385,401,419,434
+  @field w name  @ 452,469,505,545,572,588,606,619,634,648,663,679
+  @field w name  @ 705,728,752,772,789,817,836,852,873,890,909,931
+  @field w name  @ 944,968,981,1004,1020,1036,1053,1096,1109,1138,1154,1170
+  @field w name  @ 1190,1211,1233,1249,1264,1287,1308
+  @field r notes  @ 62,69,1120,1147,1163,1180,1198
+  @field w notes  @ 248,475,511
+  @field r numRows  @ 642
+  @field w onset  @ 8,20,1238
+  @field r parked  @ 414,1273,1296
+  @field w part1  @ 343,361,561
+  @field w part2  @ 343,361,561
   @field w pattern  @ 14,22
-  @field w pbRep  @ 504,531
-  @field w period  @ 8,9,20,21,113,278,301
-  @field r pitch  @ 64,231,406,408,438,559,1119,1196
-  @field w pitch  @ 15,16,17,50,450,543,545,1018,1108,1168,1210,1232
-  @field w pitch  @ 1234
-  @field r ppq  @ 439,521,895
-  @field w ppq  @ 15,16,17,50,240,243,450,467,470,503,506,507
-  @field w ppq  @ 543,545,1018,1108,1168,1210,1232,1234
-  @field r row  @ 915
-  @field w row1  @ 337,355,554
-  @field w row2  @ 337,355,554
-  @field w run  @ 76,92,109,123,137,149,159,171,203,221,237,266
-  @field w run  @ 275,285,295,309,321,333,351,363,380,396,414,429
-  @field w run  @ 447,464,500,540,567,583,601,614,629,643,658,674
-  @field w run  @ 700,723,747,767,784,812,831,847,868,885,904,926
-  @field w run  @ 939,963,976,999,1015,1031,1048,1091,1104,1133,1149,1165
-  @field w run  @ 1185,1206,1229,1250
-  @field w shape  @ 243,470,506,507
+  @field w pbRep  @ 510,537
+  @field w period  @ 8,9,20,21,119,284,307,1238
+  @field r pitch  @ 70,237,412,414,444,565,1125,1202
+  @field w pitch  @ 15,16,17,56,456,549,551,1024,1114,1174,1269,1291
+  @field w pitch  @ 1293
+  @field r ppq  @ 445,527,901
+  @field w ppq  @ 15,16,17,56,246,249,456,473,476,509,512,513
+  @field w ppq  @ 549,551,1024,1114,1174,1235,1269,1291,1293
+  @field r provisional  @ 1221
+  @field r row  @ 921
+  @field w row1  @ 343,361,560
+  @field w row2  @ 343,361,560
+  @field w run  @ 82,98,115,129,143,155,165,177,209,227,243,272
+  @field w run  @ 281,291,301,315,327,339,357,369,386,402,420,435
+  @field w run  @ 453,470,506,546,573,589,607,620,635,649,664,680
+  @field w run  @ 706,729,753,773,790,818,837,853,874,891,910,932
+  @field w run  @ 945,969,982,1005,1021,1037,1054,1097,1110,1139,1155,1171
+  @field w run  @ 1191,1212,1234,1250,1265,1288,1309
+  @field w seed  @ 1235
+  @field w shape  @ 249,476,512,513
   @field w specs  @ 14
-  @field r stack  @ 84,97,115,128,142
-  @field r startRow  @ 369
-  @field r startppq  @ 343,576,666,775,951,955
-  @field w startppq  @ 25,175,176,207,208,587,588,661,678,679,704,705
-  @field w startppq  @ 727,728,751,752,753,788,789,816,817,851,852,907
-  @field w startppq  @ 929,980,981,982,1052,1053,1075
-  @field r tails  @ 84,85,86,97,102,115,128,131,142,143,368,1223
-  @field w take  @ 430
-  @field r type  @ 33,45,181,186,212,253,479,516,691,710,733,739
-  @field r type  @ 795
-  @field r uuid  @ 39,56,83,187,341,440,687,688,693,715,716,760
-  @field r uuid  @ 800,801,805,824,825,841,859,990,1241
-  @field w uuid  @ 25,175,176,207,208,587,588,678,679,704,705,727
-  @field w uuid  @ 728,751,752,753,788,789,816,817,851,852,980,981
-  @field w uuid  @ 982,1052,1053,1075
-  @field r val  @ 258,487,527
-  @field w val  @ 240,243,467,470,503,506,507
-  @field r vel  @ 1120
-  @field w vel  @ 15,16,17,51,451,544,546,1019,1109,1169,1211,1233
-  @field w vel  @ 1235
-  @field r window  @ 243,470,506,507
+  @field r stack  @ 90,103,121,134,148
+  @field r startRow  @ 375
+  @field r startppq  @ 349,582,672,781,957,961
+  @field w startppq  @ 25,181,182,213,214,593,594,667,684,685,710,711
+  @field w startppq  @ 733,734,757,758,759,794,795,822,823,857,858,913
+  @field w startppq  @ 935,986,987,988,1058,1059,1081
+  @field r tails  @ 90,91,92,103,108,121,134,137,148,149,374,1282
+  @field w take  @ 436
+  @field r type  @ 33,45,51,187,192,218,259,485,522,697,716,739
+  @field r type  @ 745,801
+  @field r uuid  @ 39,62,89,193,347,446,693,694,699,721,722,766
+  @field r uuid  @ 806,807,811,830,831,847,865,996,1300
+  @field w uuid  @ 25,181,182,213,214,593,594,684,685,710,711,733
+  @field w uuid  @ 734,757,758,759,794,795,822,823,857,858,986,987
+  @field w uuid  @ 988,1058,1059,1081
+  @field r val  @ 264,493,533
+  @field w val  @ 246,249,473,476,509,512,513,1235
+  @field r values  @ 1222,1242
+  @field r vel  @ 1126
+  @field w vel  @ 15,16,17,57,457,550,552,1025,1115,1175,1270,1292
+  @field w vel  @ 1294
+  @field r window  @ 249,476,512,513

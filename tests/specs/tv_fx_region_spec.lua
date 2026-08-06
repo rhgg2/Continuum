@@ -46,6 +46,12 @@ local function noteColIdx(h, chan, lane)
   end
 end
 
+local function ctsColIdx(h, chan, type, cc)
+  for i, c in ipairs(h.vm.grid.cols) do
+    if c.type == type and c.midiChan == chan and c.cc == cc then return i end
+  end
+end
+
 local function addNote(h)
   h.tm:addEvent{ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60,
                  vel = 100, detune = 0, delay = 0, lane = 1 }
@@ -1196,6 +1202,59 @@ return {
         pitches[lane] = col and ghosts[col] and ghosts[col][0] and ghosts[col][0].pitch
       end
       t.deepEq(pitches, { 60, 64, 67 }, 'one voice per lane column, all on row 0')
+    end,
+  },
+
+  ----- Ghost display: a chain's continuous curve, on the target column it claimed
+
+  {
+    name = 'ghostOverlay: a pb chain lights its curve on the column it claimed',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      addNote(h)
+      injectRegion(h, { fx = sine30 })   -- sine -> pb over [0,240): rows 0-3
+      local _, fxIdx = fxColFor(h, 1)
+      h.ec:setPos(0, fxIdx, 1)
+
+      local pbIdx = ctsColIdx(h, 1, 'pb')
+      t.truthy(h.vm.grid.cols[pbIdx].provisional, 'fixture check: the column is the chain\'s claim')
+      local values = (h.vm:ghostOverlay(h.vm:fxHostAtCursor()) or {}).values
+      t.truthy(values and values[pbIdx], 'the claimed column carries the curve')
+      local rows = {}
+      for row = 0, 6 do if values[pbIdx][row] then util.add(rows, row) end end
+      t.deepEq(rows, { 0, 1, 2, 3 }, 'one value per row over the producer\'s window, and no further')
+      t.eq(values[noteColIdx(h, 1)], nil, 'note columns take note ghosts, not values')
+      t.eq(h.vm.grid.cols[pbIdx].cells[0], nil, 'and nothing entered the column: a ghost is not a cell')
+    end,
+  },
+
+  {
+    name = 'ghostOverlay: only the claimed target lights -- an authored cc beside it stays dark',
+    run = function(harness)
+      local h = harness.mk{ seed = { ccs = { { ppq = 0, chan = 1, evType = 'cc', cc = 74, val = 64 } } } }
+      h.vm:setGridSize(80, 40)
+      addNote(h)
+      injectRegion(h, { fx = { { kind = 'sine', period = { 1, 4 }, depth = 32, dest = 10, onset = 0 } } })
+      local _, fxIdx = fxColFor(h, 1)
+      h.ec:setPos(0, fxIdx, 1)
+
+      local values = (h.vm:ghostOverlay(h.vm:fxHostAtCursor()) or {}).values
+      t.truthy(values[ctsColIdx(h, 1, 'cc', 10)], 'the claimed cc column carries the curve')
+      t.eq(values[ctsColIdx(h, 1, 'cc', 74)], nil, 'the authored one the chain never touches stays dark')
+    end,
+  },
+
+  {
+    name = 'ghostOverlay: no host, no curve',
+    run = function(harness)
+      local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      addNote(h)
+      injectRegion(h, { fx = sine30 })
+      h.ec:setPos(0, ctsColIdx(h, 1, 'pb'), 1)   -- on the claimed column itself, which hosts nothing
+      t.falsy(h.vm:fxHostAtCursor(), 'fixture check: a claimed column is not a host')
+      t.eq(h.vm:ghostOverlay(h.vm:fxHostAtCursor()), nil, 'so the column stands empty, as it did before')
     end,
   },
 

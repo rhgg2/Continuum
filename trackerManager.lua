@@ -1697,7 +1697,8 @@ local fxNotesByChan = {}
 local fxLaneTopByChan = {}   -- [chan] = highest lane its derived notes occupy; replaced beside the list above
 
 -- Continuous targets the channel's producers claim, census-sourced (so the emission gate can't blink
--- one out): [chan] = { pb = true, [ccNum] = true }. Rebuild output, replaced wholesale.
+-- one out), each carrying the raw spans it claims them over. Rebuild output, replaced wholesale.
+--shape: fxTargetsByChan[chan] = { pb = { {startRaw, endRaw}, ... }, [ccNum] = { ... } } -- merged, ascending
 local fxTargetsByChan = {}
 
 -- Built at the pipeline tail, where the fx pass has already emitted this rebuild's derived notes:
@@ -1738,16 +1739,20 @@ local function buildFreezeMaps(census, windows)
   freezeEligibleByUuid, freezeRectByUuid = eligible, rects
 end
 
--- The continuous half of the same window set: which pb/cc targets each channel's chains own. Reads the
--- census, not the emission -- a kept producer emits no record but still owns its target.
+-- The continuous half of the same window set: which pb/cc targets each channel's chains own, and over
+-- what, raw framed to meet the raw index -- census-sourced, so a kept producer still claims its target. see design/note-macros-v2.md § The chain surface
 local function buildFxTargets(windows)
   local byChan = {}
   for _, w in ipairs(windows) do
     if w.evType ~= 'note' then
       local targets = byChan[w.chan] or {}
-      targets[w.evType == 'pb' and 'pb' or w.cc] = true
+      util.bucket(targets, w.evType == 'pb' and 'pb' or w.cc,
+                  { tm:fromLogical(w.chan, w.startppq, 0), tm:fromLogical(w.chan, w.endppq, 0) })
       byChan[w.chan] = targets
     end
+  end
+  for _, targets in pairs(byChan) do
+    for target, spans in pairs(targets) do targets[target] = mergeSpans(spans) end
   end
   fxTargetsByChan = byChan
 end
@@ -2007,9 +2012,30 @@ end
 --contract: the highest lane this channel's derived notes occupy this rebuild; 0 if none
 --invariant: read-only; replaced wholesale beside fxNotesByChan, so a clean channel carries its own
 function tm:fxLaneTop(chan) return fxLaneTopByChan[chan] or 0 end
---contract: continuous targets this channel's chains claim: set-keyed 'pb' | <cc number>, else empty
+--contract: continuous targets this channel's chains claim, keyed 'pb' | <cc number>; empty for none
 --invariant: read-only; census-sourced, so a gated rebuild reports a kept producer's target too
+--invariant: the value is the claim's raw spans -- callers read keys, tm:fxCurveAt reads spans
 function tm:fxCtsTargets(chan) return fxTargetsByChan[chan] or {} end
+--contract: the chain's realised value on chan's target at ppqL; nil outside its producers' windows
+--contract: cents-minus-detune for pb, the value itself for cc; interpolated between seats
+--invariant: read off the take, so a kept producer's curve stands where a re-run one's does
+function tm:fxCurveAt(chan, target, ppqL)
+  local spans = (fxTargetsByChan[chan] or {})[target]
+  if not spans then return nil end
+  local ppq, inside = tm:fromLogical(chan, ppqL, 0), false
+  for _, span in ipairs(spans) do
+    if ppq >= span[1] and ppq < span[2] then inside = true; break end
+  end
+  if not inside then return nil end
+  -- Inside a window every event on the target is realisation: the authored curve parked to make way
+  -- for it. So the seats are the take's own stream, read where it lies.
+  local index = rawIndexFor(chan)
+  local seats = target == 'pb' and index.pbs or index.ccs[target]
+  if not seats or #seats == 0 then return nil end
+  local val = evalCurve(seats, ppq)
+  -- A pb seat's val is realisation, detune included -- the same subtraction the column projection makes.
+  return target == 'pb' and val - detuneAt(chan, ppq) or val
+end
 -- With no mm ops there is no reload->rebuild to ride, so the one rebuild is driven here.
 function tm:flush() if flush() then tm:rebuild(false) end end
 

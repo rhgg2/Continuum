@@ -3260,12 +3260,13 @@ end
 --contract: per-frame overlay while the caret sits on a host: notes to ghost, cells to suppress
 --contract: the window is the viewport's rows, resolved per channel, not per column
 --contract: notes[colIndex][row] = tm's record by reference; note columns only; first onset wins
+--contract: values[colIndex][row] = { val }; continuous columns only, sampled where a chain claims
 --contract: hidden[cell] = true for every parked cell but the host's own; nil host answers nil
 --invariant: a ghosted row may also carry a real cell; precedence is the draw arm's
 function tv:ghostOverlay(host)
   if not host then return nil end
   local top, bot  = scrollRow, scrollRow + gridHeight + 1
-  local notes, byChan = {}, {}
+  local notes, values, byChan = {}, {}, {}
   for x, col in ipairs(grid.cols) do
     if col.type == 'note' then
       local chan = col.midiChan
@@ -3278,6 +3279,17 @@ function tv:ghostOverlay(host)
           if notes[x][row] == nil then notes[x][row] = n end
         end
       end
+    elseif col.type == 'pb' or col.type == 'cc' then
+      -- A curve has no onsets to bucket, so it is sampled at each row the way the interpolation
+      -- ghosts are: what the chain realises there. see design/note-macros-v2.md § The chain surface
+      local chan, target = col.midiChan, col.type == 'pb' and 'pb' or col.cc
+      for row = top, bot do
+        local val = tm:fxCurveAt(chan, target, ctx:rowToPPQ(row, chan))
+        if val then
+          values[x] = values[x] or {}
+          values[x][row] = { val = util.round(val) }
+        end
+      end
     end
   end
   -- Originals of a replace park would otherwise stand beside their own realisation; keyed by the
@@ -3288,7 +3300,7 @@ function tv:ghostOverlay(host)
       if cell.uuid ~= host then hidden[cell] = true end
     end
   end
-  return { notes = notes, hidden = hidden }
+  return { notes = notes, values = values, hidden = hidden }
 end
 
 --contract: extend hands newly-covered concretes in as `gained` (gm:resizeGroup never rescans)

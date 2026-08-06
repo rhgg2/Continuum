@@ -1,6 +1,6 @@
-@spec tm_fx_gating_spec  src=tests/specs/tm_fx_gating_spec.lua  loc=50  cases=1
+@spec tm_fx_gating_spec  src=tests/specs/tm_fx_gating_spec.lua  loc=99  cases=3
 @exercises trackerManager (h.tm), midiManager (h.fm)
-@surface   tm:addEvent, tm:flush, fm:dump, tm:getChannel
+@surface   tm:fxCurveAt, tm:addEvent, tm:flush, tm:getChannel, tm:assignEvent, fm:dump
 @harness   mk
 
 # Intent
@@ -11,38 +11,46 @@
   @fn pbSeatsOf(dump, chan)  @ 8-17
   @fn vibHost(chan)  @ 19-22
   @fn plainNote(chan, ppq)  @ 24-27
+  @fn curveAt(h, chan, target, ppqs)  @ 30-34
+      -- The chain's realised curve sampled at each of a row's ppqs, as the ghost display reads it.
 
 # Cases
-  @case 'gating: a chan-1 edit freezes chan 2 fx and keeps its pb seat stream'  [harness]  @ 31-48
+  @case 'fxCurveAt: a chain\'s pb curve samples back in the column\'s units, inside its window only'  [harness]  @ 38-54
+  @case 'fxCurveAt: a kept producer\'s curve stands, because it reads the take not the emission'  [harness]  @ 58-76
+  @case 'gating: a chan-1 edit freezes chan 2 fx and keeps its pb seat stream'  [harness]  @ 80-97
 
 # Uses (outbound edges)
-  @use call tm:addEvent  @ 34,35,42,43
-  @use call tm:flush  @ 34,35,42,43
-  @use call fm:dump  @ 37,46
-  @use call tm:getChannel  @ 45
+  @use call tm:fxCurveAt  @ 32,51,52,53
+  @use call tm:addEvent  @ 41,61,62,83,84,91,92
+  @use call tm:flush  @ 41,61,62,73,83,84,91,92
+  @use call tm:getChannel  @ 70,94
+  @use call tm:assignEvent  @ 73
+  @use call fm:dump  @ 86,95
 
 # Fields (r read / w write incl. constructor keys)
   @field r ccs  @ 10
   @field r chan  @ 11
   @field w chan  @ 20,25
-  @field r columns  @ 45
+  @field r columns  @ 70,94
   @field w delay  @ 21,26
   @field w depth  @ 6
   @field w detune  @ 21,26
   @field w endppq  @ 20,25
   @field r evType  @ 11
   @field w evType  @ 20,25
+  @field r events  @ 70
   @field w fx  @ 21
   @field w kind  @ 6
   @field w lane  @ 21,26
-  @field w name  @ 31
+  @field w name  @ 38,58,80
+  @field r notes  @ 70
   @field w onset  @ 6
-  @field r pb  @ 45
+  @field r pb  @ 94
   @field w period  @ 6
-  @field w pitch  @ 20,25
-  @field r ppq  @ 12,15
+  @field w pitch  @ 20,25,73
+  @field r ppq  @ 12,15,71
   @field w ppq  @ 12,20,25
-  @field w run  @ 32
+  @field w run  @ 39,59,81
   @field r shape  @ 12
   @field w shape  @ 12
   @field r val  @ 12

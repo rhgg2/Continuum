@@ -61,6 +61,15 @@ table are owned by midiManager.
 
 `pa` events are not ghosted — they live inside note columns.
 
+A chain's realisation is sampled the same way, but per frame rather than
+per rebuild: while the caret sits on an fx host, `tv:ghostOverlay` asks
+`tm:fxCurveAt` for the value on each claimed continuous target at every
+visible row, and the draw arm prefers it to the interpolation ghost —
+which describes the authored curve alone, and inside a producer's window
+the authored curve has been parked out of the way. The gate is the caret
+and the window the viewport, so neither can be precomputed into the
+column.
+
 ## Grid shape (vm's output to rm)
 
 ```

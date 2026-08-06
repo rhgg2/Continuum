@@ -1068,9 +1068,27 @@ per continuous cc target and a pb window per pb target, blind to dirt and blind 
 bypass, so the target set is a fold of the window set the rebuild computes for
 parking anyway. Two things follow from taking the census whole. A note host claims
 its targets exactly as a region does, so a note carrying an lfo pops the cc column
-it modulates — the same claim, and the same place its base is authored. And the
-column stands empty, the chain's own seats being routed out of columns as derived
-notes are: what the lane shows is a separate question from the lane existing.
+it modulates — the same claim, and the same place its base is authored.
+
+*Decision taken — and it shows the chain's realisation (2026-08-06).* Landing the
+column alone answered the wrong half. An empty column is a claim and nothing more:
+the target is spoken for, but the grid says nothing about what the chain does to
+it, so the lane reads as broken rather than reserved — and it reads that way
+permanently, because the column cannot be caret-gated the way an overlay can
+(`ec:col()` is an index, and a column that vanished when the caret entered it
+would take the caret with it). The note case never had this problem: its derived
+notes ghost into the provisional lanes while the caret sits on the host. So the
+continuous case takes the same gate and the same styling. `tm:fxCurveAt` answers
+what a chain realises on one target at one logical ppq; `tv:ghostOverlay` samples
+it at every visible row of every claimed column; the draw arm renders it in the
+ghost colour ahead of the interpolation ghost, which describes the authored curve
+alone and whose events, inside a producer's window, have been parked out of the
+way. Two things were decided against here. The source is the take, not the
+emission — the seats stand whether the producer ran this rebuild or was kept,
+which is the same reason the claim itself comes off the census. And the curve is
+sampled per row rather than bucketed by seat, as the interpolation ghosts already
+are: a curve has no onsets to bucket, and a 1/4-QN sine seated at the cc grid step
+would otherwise show its zero crossings and nothing else.
 
 **Patches.** A patch is a *named chain* — an ordered `{kind, params}`
 list, pure data, no code — saved to a library and instantiated **by copy**

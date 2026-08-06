@@ -14,10 +14,10 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-06 tv: ghost a chain's realised curve into the column it claimed (§ The chain surface)
 - 2026-08-06 tv: show a provisional column for a chain's pb/cc targets (§ The chain surface)
 - 2026-08-06 tv: show a provisional note column for a chain's derived lanes (§ The chain surface)
 - 2026-08-06 tv: suppress the parked originals while the ghosts are up (§ Authoring and editing the fx)
-- 2026-08-06 tv: ghost a chain's derived notes while the caret sits on its host (§ Authoring and editing the fx)
 
 ## Now
 
