@@ -452,55 +452,38 @@ return {
     end,
   },
 
-  ----- Provisional note columns: a chain's derived lanes get somewhere to hang
+  ----- A chain's claims materialise no columns of their own
 
   {
-    name = 'a chain\'s derived lanes materialise provisional note columns',
+    name = 'a chain\'s derived lanes claim no note columns',
     run = function(harness)
       local h = harness.mk()
+      h.vm:setGridSize(80, 40)
+      chordStampRegion(h)   -- three voices over one authored lane-1 note
+
+      local noteCols = noteColsOn(h, 1)
+      t.eq(#noteCols, 1, 'the authored lane is the whole of the channel\'s note columns')
+      t.eq(noteCols[1].col.lane, 1, 'lane 1')
+      t.eq(#noteCols[1].col.events, 1, 'still carrying the authored note')
+    end,
+  },
+
+  {
+    name = 'authoring the lanes is what gives the derived voices columns',
+    run = function(harness)
+      local h = harness.mk{ data = { extraColumns = { [1] = { notes = 3 } } } }
       h.vm:setGridSize(80, 40)
       chordStampRegion(h)
 
       local noteCols = noteColsOn(h, 1)
-      t.eq(#noteCols, 3, 'one column per derived lane, authored or not')
-      t.deepEq({ noteCols[1].col.lane, noteCols[2].col.lane, noteCols[3].col.lane }, { 1, 2, 3 },
-               'in lane order')
-      t.falsy(noteCols[1].col.provisional, 'lane 1 is the authored column')
-      t.truthy(noteCols[2].col.provisional, 'lane 2 is provisional')
-      t.truthy(noteCols[3].col.provisional, 'lane 3 is provisional')
-      t.eq(#noteCols[2].col.events, 0, 'and carries nothing authored')
+      t.eq(#noteCols, 3, 'three lanes, forced by the user rather than by the chain')
+      t.eq(#noteCols[2].col.events, 0, 'lane 2 carries no event: a derived note is a ghost, never a cell')
       t.eq(#noteCols[3].col.events, 0, 'nor does lane 3')
-
-      local fxIdx
-      for i, c in ipairs(h.vm.grid.cols) do
-        if c.type == 'fx' and c.midiChan == 1 then fxIdx = i end
-      end
-      t.truthy(fxIdx, 'fixture check: the region has its fx column')
-      t.truthy(noteCols[3].idx < fxIdx, 'the provisional columns keep the channel\'s kind order')
     end,
   },
 
   {
-    name = 'the provisional columns go when the chain does',
-    run = function(harness)
-      local h = harness.mk()
-      h.vm:setGridSize(80, 40)
-      chordStampRegion(h)
-      t.eq(#noteColsOn(h, 1), 3, 'fixture check: three columns while the chain runs')
-
-      h.ds:assign('fxRegions', {})
-      h.tm:rebuild()
-
-      local noteCols = noteColsOn(h, 1)
-      t.eq(#noteCols, 1, 'the authored column is all that is left')
-      t.eq(#noteCols[1].col.events, 1, 'and it still holds the authored note')
-    end,
-  },
-
-  ----- Provisional continuous columns: a chain's pb/cc targets get a lane
-
-  {
-    name = 'a pb chain materialises a provisional pb column, and it goes when the chain does',
+    name = 'a pb chain claims no pb column',
     run = function(harness)
       local h = harness.mk()
       h.vm:setGridSize(80, 40)
@@ -510,19 +493,12 @@ return {
       h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = sinePb } })
       h.tm:rebuild()
 
-      local pb = colOn(h, 1, 'pb')
-      t.truthy(pb, 'the chain\'s pb target has a column to author into')
-      t.truthy(pb.provisional, 'it is provisional -- nothing authored claims it')
-      t.eq(#pb.events, 0, 'and stands empty: the chain\'s own seats stay out of it')
-
-      h.ds:assign('fxRegions', {})
-      h.tm:rebuild()
-      t.falsy(colOn(h, 1, 'pb'), 'the column goes with the chain that claimed it')
+      t.falsy(colOn(h, 1, 'pb'), 'the claim leaves no mark on the grid')
     end,
   },
 
   {
-    name = 'a cc chain materialises a provisional cc column, in cc-number order',
+    name = 'a cc chain claims no cc column, and the authored ones stand',
     run = function(harness)
       local h = harness.mk{
         seed = { ccs = { { ppq = 0, chan = 1, evType = 'cc', cc = 74, val = 64 } } },
@@ -531,82 +507,8 @@ return {
       h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = sineCc } })
       h.tm:rebuild()
 
-      local claimed, claimedIdx  = colOn(h, 1, 'cc', 10)
-      local authored, authoredIdx = colOn(h, 1, 'cc', 74)
-      t.truthy(claimed, 'the chain\'s cc 10 target has a column')
-      t.truthy(claimed.provisional, 'which is provisional')
-      t.truthy(authored, 'fixture check: the authored cc 74 column is still there')
-      t.falsy(authored.provisional, 'and is not provisional')
-      t.truthy(claimedIdx < authoredIdx, 'the claimed number sorts in with the authored ones')
-    end,
-  },
-
-  {
-    name = 'a kept producer keeps its column across an edit elsewhere in the channel',
-    run = function(harness)
-      local h = harness.mk()
-      h.vm:setGridSize(80, 40)
-      -- a note under the region, and a far one to edit
-      h.tm:addEvent{ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
-                     detune = 0, delay = 0, lane = 1 }
-      h.tm:addEvent{ evType = 'note', ppq = 1920, endppq = 2160, chan = 1, pitch = 64, vel = 100,
-                     detune = 0, delay = 0, lane = 1 }
-      h.tm:flush()
-      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = sineCc } })
-      h.tm:rebuild()
-      t.truthy(colOn(h, 1, 'cc', 10), 'fixture check: the claimed column is up')
-
-      -- The far note is interval-dirt; the producer at [0,240) is out of every emit scope, so it
-      -- is kept rather than re-run and emits no cc record at all.
-      local far
-      for _, e in ipairs(h.tm:getChannel(1).columns.notes[1].events) do
-        if e.ppq == 1920 then far = e end
-      end
-      h.tm:assignEvent(far, { pitch = 65 })
-      h.tm:flush()
-
-      local claimed = colOn(h, 1, 'cc', 10)
-      t.truthy(claimed, 'a kept producer still owns its target, so the column stays')
-      t.truthy(claimed.provisional, 'still provisional')
-    end,
-  },
-
-  {
-    name = 'a note host claims its continuous target too',
-    run = function(harness)
-      local h = harness.mk()
-      h.vm:setGridSize(80, 40)
-      h.tm:addEvent{ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
-                     detune = 0, delay = 0, lane = 1, fx = sineCc }
-      h.tm:flush()
-
-      local claimed = colOn(h, 1, 'cc', 10)
-      t.truthy(claimed, 'the host\'s chain claims cc 10 as a region\'s would')
-      t.truthy(claimed.provisional, 'and provisionally')
-    end,
-  },
-
-  {
-    name = 'authoring into a provisional cc column makes it real',
-    run = function(harness)
-      local h = harness.mk()
-      h.vm:setGridSize(80, 40)
-      h.tm:addEvent{ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
-                     detune = 0, delay = 0, lane = 1 }
-      h.tm:flush()
-      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240, fx = sineCc } })
-      h.tm:rebuild()
-
-      local claimed, idx = colOn(h, 1, 'cc', 10)
-      t.truthy(claimed and claimed.provisional, 'fixture check: the column is provisional')
-      h.ec:setPos(0, idx, 1)
-      h.vm:editEvent(claimed, nil, 1, string.byte('5'), false)
-      h.tm:flush()
-
-      local real = colOn(h, 1, 'cc', 10)
-      t.falsy(real.provisional, 'an authored event makes the column data-backed')
-      t.eq(#real.events, 1, 'holding just the authored event -- the chain\'s seats stay out')
-      t.eq(real.events[1].val, 0x50, 'the value typed')
+      t.falsy(colOn(h, 1, 'cc', 10), 'nothing authored cc 10, so nothing shows it')
+      t.truthy(colOn(h, 1, 'cc', 74), 'and the authored cc keeps its column')
     end,
   },
 }

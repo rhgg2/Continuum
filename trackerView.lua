@@ -14,7 +14,7 @@
 --invariant: clipboard symmetry is on (row, chan), not absolute ppq
 --shape: grid = { cols, chanFirstCol, chanLastCol, lane1Col, numRows }
 --invariant: grid.chanFirst/Last/lane1Col are chan-keyed; numRows is int
---shape: gridCol core = { type, midiChan, [lane], [cc], label, events, width, [provisional], [normalized], [bipolar], ['14bit'] }
+--shape: gridCol core = { type, midiChan, [lane], [cc], label, events, width, [normalized], [bipolar], ['14bit'] }
 --shape: gridCol parts = { parts, stopPos, partAt, partStart, showDelay }
 --shape: gridCol render = { cells={[y]=evt}, overflow, offGrid, ghosts, [tails] }
 --shape: fx tail = { startRow, endRow, evt, stack={[row]={glyph,[bypass]}}, [clipped] }
@@ -3264,6 +3264,7 @@ end
 --contract: values[colIndex][row] = { val }; the producer's claimed targets only
 --contract: hidden[cell] = true for every plain original this chain parked; a host cell never hides
 --invariant: a ghosted row may also carry a real cell; precedence is the draw arm's
+--invariant: the overlay lands in the columns that exist; a claim materialises none of its own
 function tv:ghostOverlay()
   local fx = tm:fxRealisation(tv:fxHostAtCursor())
   if not fx then return nil end
@@ -3403,9 +3404,7 @@ function tv:hideExtraCol()
     local noteCols = {}
     for ci = grid.chanFirstCol[chan], grid.chanLastCol[chan] do
       local c = grid.cols[ci]
-      -- A provisional column is data-derived, not the user's to hide: counting it would write
-      -- back a larger lane count than we started with, and hide would quietly stop working.
-      if c.type == 'note' and not c.provisional then util.add(noteCols, c) end
+      if c.type == 'note' then util.add(noteCols, c) end
     end
     if #noteCols <= 1 then return end
     -- Only the topmost lane can drop (lane is rebuild-only at tm).
@@ -3868,7 +3867,6 @@ function tv:rebuild(takeChanged)
       -- Replace-region parked pbs left the take but stay the displayed automation, as the parked
       -- chord/cc are unioned below. see design/note-macros-v2.md § Route-by-window
       local parkedPb = channel.parkedPb or {}
-      local fxTargets = tm:fxCtsTargets(chan)
       if c.pb or #parkedPb > 0 then
         local events = c.pb and c.pb.events or {}
         if #parkedPb > 0 then
@@ -3878,10 +3876,6 @@ function tv:rebuild(takeChanged)
           table.sort(events, function(a, b) return (a.ppq or 0) < (b.ppq or 0) end)
         end
         addGridCol(chan, 'pb', nil, events)
-      elseif fxTargets.pb then
-        -- A chain claiming pb needs somewhere to author the base it sums onto, whether or not the
-        -- channel has a pb of its own. see design/note-macros-v2.md § The chain surface
-        addGridCol(chan, 'pb', nil, {}).provisional = true
       end
       -- Replace-region parked notes left the take so the arp packs to lane 1, but they remain
       -- the displayed chord: union each back into its lane. see design/note-macros-v2.md § Generator output
@@ -3897,11 +3891,6 @@ function tv:rebuild(takeChanged)
         end
         addGridCol(chan, 'note', lane, events)
       end
-      -- A chain's derived notes can pack into lanes no authored column covers; materialises
-      -- data-derived like the fx column. see design/note-macros-v2.md § The chain surface
-      for lane = #c.notes + 1, tm:fxLaneTop(chan) do
-        addGridCol(chan, 'note', lane, {}).provisional = true
-      end
       if c.at then addGridCol(chan, 'at', nil,  c.at.events) end
       -- Replace-region parked ccs left the take but stay the displayed automation: union each
       -- back into its cc column, as the parked chord is unioned above. see design/note-macros-v2.md § Continuous cc
@@ -3909,11 +3898,6 @@ function tv:rebuild(takeChanged)
       for _, m in ipairs(channel.parkedCC or {}) do util.bucket(parkedCCByNum, m.cc, m) end
       local ccNums = {}
       for n in pairs(c.ccs) do util.add(ccNums, n) end
-      -- A cc a chain claims but nothing authored covers gets its column too, in cc-number order with
-      -- the authored ones. see design/note-macros-v2.md § The chain surface
-      for n in pairs(fxTargets) do
-        if n ~= 'pb' and not c.ccs[n] then util.add(ccNums, n) end
-      end
       table.sort(ccNums)
       for _, n in ipairs(ccNums) do
         local authored = c.ccs[n]
@@ -3924,8 +3908,7 @@ function tv:rebuild(takeChanged)
           for _, e in ipairs(parkedCCByNum[n]) do util.add(events, e) end
           table.sort(events, function(a, b) return (a.ppq or 0) < (b.ppq or 0) end)
         end
-        local col = addGridCol(chan, 'cc', n, events)
-        if not authored then col.provisional = true end   -- a target no authored cc covers
+        addGridCol(chan, 'cc', n, events)
       end
       for _, regions in ipairs(packRegionLanes(fxByChan[chan] or {})) do
         local fxCells = {}

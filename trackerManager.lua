@@ -1714,13 +1714,11 @@ local freezeRectByUuid     = {}   -- uuid -> the gm rect a freeze-to-group mint 
 --shape: fxNotesByProducer[chan][uuid] = { { evType='note', chan, lane, ppq, pitch, vel, detune, delay, derived }, ... }
 --   ppq is the logical onset; derived is the producing region/host uuid; logical-onset order
 local fxNotesByProducer = {}
-local fxLaneTopByChan = {}   -- [chan] = highest lane its derived notes occupy; replaced beside the lists above
 
 -- Continuous targets producers claim, census-sourced (so the emission gate can't blink one out), each
 -- carrying the raw spans it claims them over. Rebuild output, both replaced wholesale.
---shape: fxTargetsByChan[chan] = { pb = { {startRaw, endRaw}, ... }, [ccNum] = { ... } } -- merged, ascending
---shape: fxTargetsByProducer[uuid] = the same map for one producer alone
-local fxTargetsByChan, fxTargetsByProducer = {}, {}
+--shape: fxTargetsByProducer[uuid] = { pb = { {startRaw, endRaw}, ... }, [ccNum] = { ... } } -- merged, ascending
+local fxTargetsByProducer = {}
 
 -- The originals each producer's chain parked, keyed by producer uuid; cells by reference, minted
 -- and replaced wholesale by rebuildRegionPark's render union.
@@ -1767,26 +1765,20 @@ end
 -- The continuous half of the same window set: which pb/cc targets each channel's chains own, and over
 -- what, raw framed to meet the raw index -- census-sourced, so a kept producer still claims its target. see design/note-macros-v2.md § The chain surface
 local function buildFxTargets(windows)
-  local byChan, byProducer = {}, {}
+  local byProducer = {}
   for _, w in ipairs(windows) do
     if w.evType ~= 'note' then
       local target = w.evType == 'pb' and 'pb' or w.cc
       local span   = { tm:fromLogical(w.chan, w.startppq, 0), tm:fromLogical(w.chan, w.endppq, 0) }
-      local chanTargets = byChan[w.chan] or {}
-      util.bucket(chanTargets, target, span)
-      byChan[w.chan] = chanTargets
       local ownTargets = byProducer[w.id] or {}
       util.bucket(ownTargets, target, span)
       byProducer[w.id] = ownTargets
     end
   end
-  -- mergeSpans copies, so neither view aliases a span into the other.
-  for _, view in ipairs({ byChan, byProducer }) do
-    for _, targets in pairs(view) do
-      for target, spans in pairs(targets) do targets[target] = mergeSpans(spans) end
-    end
+  for _, targets in pairs(byProducer) do
+    for target, spans in pairs(targets) do targets[target] = mergeSpans(spans) end
   end
-  fxTargetsByChan, fxTargetsByProducer = byChan, byProducer
+  fxTargetsByProducer = byProducer
 end
 
 -- One producer's whole output in one place, gathered at the tail where the census has settled: the
@@ -2028,13 +2020,6 @@ function tm:freezeRect(uuid)          local r = freezeRectByUuid[uuid]; return r
 function tm:fxRealisation(uuid)
   return uuid and fxRealisationByUuid[uuid] or nil
 end
---contract: the highest lane this channel's derived notes occupy this rebuild; 0 if none
---invariant: read-only; replaced wholesale beside fxNotesByChan, so a clean channel carries its own
-function tm:fxLaneTop(chan) return fxLaneTopByChan[chan] or 0 end
---contract: continuous targets this channel's chains claim, keyed 'pb' | <cc number>; empty for none
---invariant: read-only; census-sourced, so a gated rebuild reports a kept producer's target too
---invariant: the value is the claim's raw spans -- callers read keys, tm:fxCurveAt reads spans
-function tm:fxCtsTargets(chan) return fxTargetsByChan[chan] or {} end
 --contract: the producer's realised value on target at ppqL; nil outside the spans it claimed
 --contract: cents-minus-detune for pb, the value itself for cc; interpolated between seats
 --invariant: read off the take, so a kept producer's curve stands where a re-run one's does
@@ -3791,14 +3776,13 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
     -- Reconcile existence (stamps kept specs with the mm handle + realised end); ops land on
     -- fxOut.noteOps. fxOut.noteLive holds the predicted specs; the tail walk clips them in place.
     reconcileFx(noteExisting[chan], predicted, noteOpsSink)
-    local fxNotes, laneTop = {}, 0
+    local fxNotes = {}
     for _, spec in ipairs(predicted) do
       util.add(fxOut.noteLive[chan], { evt = spec, lane = spec.lane, kept = keptFx[spec] or nil })
       -- A copy, not the spec: the tail walk clamps raw onsets and clips ends in these in place below.
       util.add(fxNotes, { evType = 'note', chan = chan, lane = spec.lane, ppq = spec.ppqL,
                           pitch = spec.pitch, vel = spec.vel, detune = spec.detune,
                           delay = spec.delay, derived = spec.derived })
-      if spec.lane > laneTop then laneTop = spec.lane end
     end
     -- One sort per rebuild against many windowed reads; lane then pitch break onset collisions stably.
     table.sort(fxNotes, function(a, b)
@@ -3810,9 +3794,6 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
     local byProducer = {}
     for _, n in ipairs(fxNotes) do util.bucket(byProducer, n.derived, n) end
     fxNotesByProducer[chan] = byProducer
-    -- Rides predicted, which reconcileFx re-adds kept specs to verbatim, so a channel whose
-    -- producers were kept rather than re-run still reports its full lane occupancy.
-    fxLaneTopByChan[chan] = laneTop
 
     -- cc emission: fold (foldChains) into markerless seats, clipped to the emit scope; half-open --
     -- the closing value belongs to the kept side. see design/interval-dirt.md § Implementation plan, commit 3
