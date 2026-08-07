@@ -3,7 +3,7 @@
 /.claude/mcp/reaper/spool/
 /.claude/precedent.json
 /.claude/test-baseline.json
-/.claude/agent-memory/spool.md
+/.claude/agent-memory/
 /.claude/HANDOFF.md
 /.claude/HANDOFF.prev.md
 /plan/IMPL.md
