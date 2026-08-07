@@ -1,4 +1,4 @@
-@spec libpicker_badge_spec  src=tests/specs/libpicker_badge_spec.lua  loc=65  cases=1
+@spec libpicker_badge_spec  src=tests/specs/libpicker_badge_spec.lua  loc=69  cases=1
 @harness   mk
 
 # Intent
@@ -12,7 +12,7 @@
   @fn itemByKey(items, key)  @ 35-37
 
 # Cases
-  @case 'libPicker badges the divergent project row, leaves the pristine one bare'  [harness]  @ 41-63
+  @case 'libPicker badges the divergent project row, leaves the pristine one bare'  [harness]  @ 41-67
 
 # Fields (r read / w write incl. constructor keys)
   @field w ImGui_GetBuiltinPath  @ 21
@@ -31,10 +31,12 @@
   @field w global  @ 48
   @field w identity  @ 30
   @field r key  @ 36
+  @field w key  @ 55,64
   @field r label  @ 61,62
   @field w lib  @ 32
   @field r loaded  @ 20
   @field w name  @ 41
+  @field w off  @ 64
   @field r preload  @ 17
   @field w project  @ 44
   @field r reaper  @ 21

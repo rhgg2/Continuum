@@ -72,7 +72,7 @@
   @invariant  rebuild(∅) (no dirt/staleSwing/reload/takeChanged/request) short-circuits pre-nest  @ 5060
   @contract  rebuild fires at end of every non-degenerate rebuild after the um cache is reloaded  @ 5104
   @invariant  takeChanged is true only when rebuild followed bindTake; signals take-tier reload  @ 5105
-  @invariant  tvOnlyKeys skip the configChanged rebuild; defaultSwing is the sole remaining cm key  @ 5112
+  @invariant  tvOnlyKeys skip the configChanged rebuild; neither key feeds a derivation  @ 5112
   @invariant  dataChanged 'swing' → global change marks all 16, else only the diffed channels  @ 5115
   @invariant  configChanged 'swings' → channels resolving to names with diff body vs prevSwings  @ 5116
   @invariant  prev*-caches refresh after each event and on bindTake  @ 5117
@@ -1162,6 +1162,7 @@
   @field w fx  @ hostProducer:703 noteHostRegion:718 producerCensus:732 freezeRegion:1930,1954 rebuildFx:3704
   @field r fxParked  @ seedParkedEdit:228 rebuildPipeline:5009,5025
   @field w fxParked  @ derivationInputs:244 rebuildPipeline:4988
+  @field w fxPatches  @ 5113
   @field r fxRegions  @ seedRegionEdit:202 rebuildPipeline:5003,5028
   @field w fxRegions  @ derivationInputs:243 rebuildPipeline:4987
   @field r global  @ currentSwing:1654 channelsResolvingTo:5155 ds:dataChanged:5215

@@ -76,6 +76,21 @@ return {
     end,
   },
   {
+    name = 'save authors into project, leaving a same-named library copy standing',
+    run = function(harness)
+      local h = harness.mk{ config = {
+        global = { swings = { shared = { factors = { 'G' } } } },
+      } }
+      local L = mkLib(h)
+      L.save('swings', 'shared', { factors = { 'P' } })
+      t.deepEq(h.cm:getAt('project', 'swings')['shared'].factors, { 'P' }, 'the project copy carries the saved value')
+      t.deepEq(h.cm:getAt('global',  'swings')['shared'].factors, { 'G' }, 'the library copy it shadows still stands')
+      L.save('swings', 'identity', { factors = { 'X' } })
+      t.eq(h.cm:getAt('project', 'swings')['identity'], nil, 'a synthetic name never authors')
+    end,
+  },
+
+  {
     name = 'publish copies the project entry to the library tier',
     run = function(harness)
       local h = harness.mk{ config = {

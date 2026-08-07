@@ -1,0 +1,44 @@
+@spec tv_fx_patch_spec  src=tests/specs/tv_fx_patch_spec.lua  loc=62  cases=4
+@exercises dataStore (h.ds), trackerManager (h.tm), configManager (h.cm), trackerView (h.vm)
+@surface   ds:assign, tm:rebuild, cm:getAt, vm:saveFxPatch, vm:setFxField, tm:subscribe
+@harness   mk
+
+# Intent
+  Pin-tests for the fx patch catalogue: `tv:saveFxPatch` stamps the caret host's
+  chain into the project tier of `fxPatches` -- verbatim, by copy, and without
+  costing a re-derivation. see design/note-macros-v2.md § The chain surface
+
+# Helpers
+  @fn injectRegion(h, fx)  @ 12-15
+  @fn projectPatches(h)  @ 17
+
+# Cases
+  @case 'save stamps the host chain into the project tier, verbatim'  [harness]  @ 21-27
+  @case 'the catalogue holds a copy, not a live handle on the chain'  [harness]  @ 31-38
+  @case 'saving re-realises nothing'  [harness]  @ 42-50
+  @case 'a host with no chain saves nothing'  [harness]  @ 54-60
+
+# Uses (outbound edges)
+  @use call ds:assign  @ 13
+  @use call tm:rebuild  @ 14
+  @use call cm:getAt  @ 17
+  @use call vm:saveFxPatch  @ 25,35,48,58
+  @use call vm:setFxField  @ 36
+  @use call tm:subscribe  @ 47
+
+# Fields (r read / w write incl. constructor keys)
+  @field w bypass  @ 10
+  @field w chan  @ 13
+  @field w depth  @ 10
+  @field r dir  @ 37
+  @field w dir  @ 9
+  @field w endppq  @ 13
+  @field w fx  @ 13
+  @field w kind  @ 9,10
+  @field w name  @ 21,31,42,54
+  @field w onset  @ 10
+  @field w period  @ 9,10
+  @field w run  @ 22,32,43,55
+  @field w startppq  @ 13
+  @field w uuid  @ 13
+  @field r wobble  @ 26,37

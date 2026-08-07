@@ -1214,6 +1214,54 @@ picker on the fx tab's action row. Live patch *references* (edit the
 patch, instances follow) are the gm invertibility axis reappearing;
 deferred until wanted.
 
+*Decision taken — the catalogue is tiered, and a patch is authored into
+the project's (2026-08-07).* The idiom `fx-patterns` proved is a
+project-scoped ds shelf, and a patch stored that way cannot leave the
+project it was written in. That is a poor vocabulary for the one artifact
+whose whole argument is that a few spellings serve everywhere. So patches
+take `library.lua`'s tiers instead: `fxPatches`, a cm key with an empty
+default, resolved project over library. There is no factory floor — every
+patch is the user's.
+
+Half of the library machinery has no work here, and which half is worth
+naming. Tiers were built for artifacts held by *reference*: a take names a
+swing, so the project tier is the local editable copy of a name still
+pointing somewhere, and `modified`, `revert`, `tidy` and copy-on-use
+`localize` all serve that pointer. A patch is instantiated by copy, and
+nothing names it once it has landed. What survives is the pair of
+catalogues — the project's, which travels with the file, and the library,
+which travels with the user — plus publish, delete, and project-over-library
+resolution.
+
+`save` therefore writes into the project tier and `↑` on a row of the load
+picker publishes it to the library: local first, kept when it proves
+itself. The inverse is deferred. Localizing a library patch, so that it
+travels with the file, has no gesture of its own; until one is wanted it is
+done by loading the patch onto a host and saving it again.
+
+*Decision taken — the catalogue is not a derivation input (2026-08-07).*
+`fxPatches` joins tm's `tvOnlyKeys`. Its `configChanged` subscriber marks every
+channel dirty and rebuilds for any key outside that allowlist, so without the
+exemption each save costs a full re-derivation of the take for a write no
+realisation reads. One consequence is left standing rather than guarded: a save
+inside an uncommitted strip session stores what is on screen, and a later
+`cancel` reverts the host but not the catalogue. The user saw that chain and
+named it, which is a better answer than the surface adjudicating which of its
+own states was the real one.
+
+*Decisions taken — the load replaces, filters nothing, and keeps bypass
+(2026-08-07).* The pattern shelf filtered its offers on kind, curve domain
+and lane count, every one of them a fact about what its editor could
+materialise. A chain has no such fact: no `generators.kinds` entry declares
+a host it requires, so every patch loads onto every host. A patch naming a
+kind the registry has lost loads too, and that stage draws `?` — the same
+mark a scripted kind that failed to load will carry. Hiding the row would
+make the patch vanish with nothing said. The load then replaces the whole
+chain rather than appending to it, because a patch *is* the chain and
+appending is what the add row is for. And `bypass` rides the stored entry
+verbatim: it is a field like any other, and a stage saved inert returns
+inert.
+
 **Scripted kinds — an editor-page pane.** `generators.kinds` is already
 the seam: one registry entry per kind, user-extensible by construction. A
 scripted kind is a user Lua chunk evaluating to that entry-shape, edited

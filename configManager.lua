@@ -81,6 +81,8 @@ local declarations = {
       ['classic-62'] = { factors = { { atom = 'classic', shift = 0.12, period = 1 } } },
       ['classic-67'] = { factors = { { atom = 'classic', shift = 0.17, period = 1 } } },
     } },
+  -- Tiered chain catalogue: name -> the bare fx list. No factory floor -- every patch is the user's.
+  { 'fxPatches',       {} },
   -- Built-in temper catalogue (EDO presets); the personal global library seeds from it.
   { 'tempers',         util.deepClone(tuning.presets) },
 

@@ -1,4 +1,4 @@
-@module library  src=library.lua  loc=188  mode=chunk  self=lib
+@module library  src=library.lua  loc=196  mode=chunk  self=lib
 @deps cm, synthetic
 
 # Imports
@@ -35,64 +35,68 @@
       @contract  copy resolvable entry (library|factory floor) into project; no-op if synthetic/proj copy  @ 73
   @api lib.forkToProject(key, name)  @ 84-87
       @contract  localize then return the editable project copy  @ 83
+  -- Author
+  @api lib.save(key, name, value)  @ 92-95
+      @contract  write a name into the project tier (cm:set deep-copies); synthetic names never  @ 91
   -- Publish / revert
-  @api lib.publish(key, name)  @ 92-95
-      @contract  project copy -> library tier (deepClone via cm:set); no-op when there is no project copy  @ 91
-  @api lib.publishOverwrites(key, name)  @ 98-104
-      @contract  true iff publish would overwrite a divergent library copy (both tiers exist and differ)  @ 97
-  @api lib.revert(key, name)  @ 107-110
-      @contract  library source -> project, discarding drift; no-op if no library copy exists  @ 106
+  @api lib.publish(key, name)  @ 100-103
+      @contract  project copy -> library tier (deepClone via cm:set); no-op when there is no project copy  @ 99
+  @api lib.publishOverwrites(key, name)  @ 106-112
+      @contract  true iff publish would overwrite a divergent library copy (both tiers exist and differ)  @ 105
+  @api lib.revert(key, name)  @ 115-118
+      @contract  library source -> project, discarding drift; no-op if no library copy exists  @ 114
   -- Factory seed / reload
-  @api lib.seedIfEmpty(key)  @ 115-123
-      @contract  stock an empty library tier from the factory catalogue; no-op once it holds anything  @ 114
-  @api lib.reloadPlan(key)  @ 126-139
-      @contract  { add = names in factory not library, overwrite = present but divergent }; both sorted  @ 125
-  @api lib.factoryOverwrites(key, name)  @ 142-147
-      @contract  true iff a factory import would overwrite a divergent library copy (both exist, differ)  @ 141
-  @api lib.importFactory(key, name)  @ 150-154
-      @contract  copy one factory entry into the library tier (deep-clone via cm:set); synthetic never  @ 149
+  @api lib.seedIfEmpty(key)  @ 123-131
+      @contract  stock an empty library tier from the factory catalogue; no-op once it holds anything  @ 122
+  @api lib.reloadPlan(key)  @ 134-147
+      @contract  { add = names in factory not library, overwrite = present but divergent }; both sorted  @ 133
+  @api lib.factoryOverwrites(key, name)  @ 150-155
+      @contract  true iff a factory import would overwrite a divergent library copy (both exist, differ)  @ 149
+  @api lib.importFactory(key, name)  @ 158-162
+      @contract  copy one factory entry into the library tier (deep-clone via cm:set); synthetic never  @ 157
   -- Tidy / delete
-  @api lib.tidy(key, inUse)  @ 159-174
-      @contract  drop project entries deepEq their source and not in inUse; single cm:set; returns removed  @ 158
-  @api lib.delete(key, level, name)  @ 177-186
-      @contract  remove name from tier level (project|global); synthetic names never  @ 176
+  @api lib.tidy(key, inUse)  @ 167-182
+      @contract  drop project entries deepEq their source and not in inUse; single cm:set; returns removed  @ 166
+  @api lib.delete(key, level, name)  @ 185-194
+      @contract  remove name from tier level (project|global); synthetic names never  @ 184
 
 # Uses (outbound edges)
   @use call    cm:defaultFor  @ factoryTier:16
-  @use call    cm:getAt  @ projectTier:14 libraryTier:15 writeTier:28 tidy:161 delete:182
-  @use call    cm:set  @ writeTier:30 seedIfEmpty:122 tidy:172 delete:185
-  @use call    util.add  @ sortedNames:38 reloadPlan:133,134 tidy:166
-  @use call    util.deepEq  @ modified:68 publishOverwrites:103 reloadPlan:134 factoryOverwrites:146 tidy:165
+  @use call    cm:getAt  @ projectTier:14 libraryTier:15 writeTier:28 tidy:169 delete:190
+  @use call    cm:set  @ writeTier:30 seedIfEmpty:130 tidy:180 delete:193
+  @use call    util.add  @ sortedNames:38 reloadPlan:141,142 tidy:174
+  @use call    util.deepEq  @ modified:68 publishOverwrites:111 reloadPlan:142 factoryOverwrites:154 tidy:173
   @use require util  @ <load>:4
 
 # Calls (intra-file)
-  @call factoryTier  @ localize:79 seedIfEmpty:119 reloadPlan:130 factoryOverwrites:143 importFactory:152
+  @call factoryTier  @ localize:79 seedIfEmpty:127 reloadPlan:138 factoryOverwrites:151 importFactory:160
   @call lib.localize  @ forkToProject:85
-  @call libraryTier  @ sourceOf:21 names:49 get:59 localize:79 publishOverwrites:101 seedIfEmpty:116 reloadPlan:127 factoryOverwrites:144
-  @call projectTier  @ names:48 get:57 modified:64 localize:76 forkToProject:86 publish:93 publishOverwrites:100
+  @call libraryTier  @ sourceOf:21 names:49 get:59 localize:79 publishOverwrites:109 seedIfEmpty:124 reloadPlan:135 factoryOverwrites:152
+  @call projectTier  @ names:48 get:57 modified:64 localize:76 forkToProject:86 publish:101 publishOverwrites:108
   @call sortedNames  @ names:48,49
-  @call sourceOf  @ modified:66 revert:108 tidy:164
-  @call synth  @ names:46 localize:75 seedIfEmpty:117 reloadPlan:128 importFactory:151 delete:181
-  @call writeTier  @ localize:80 publish:94 revert:109 importFactory:153
+  @call sourceOf  @ modified:66 revert:116 tidy:172
+  @call synth  @ names:46 localize:75 save:93 seedIfEmpty:125 reloadPlan:136 importFactory:159 delete:189
+  @call writeTier  @ localize:80 save:94 publish:102 revert:117 importFactory:161
 
 # Fields (r read / w write incl. constructor keys)
-  @field w add  @ reloadPlan:138
+  @field w add  @ reloadPlan:146
   @field r cm  @ 6
-  @field w delete  @ delete:177
-  @field w factoryOverwrites  @ factoryOverwrites:142
+  @field w delete  @ delete:185
+  @field w factoryOverwrites  @ factoryOverwrites:150
   @field w forkToProject  @ forkToProject:84
   @field w get  @ get:56
-  @field w importFactory  @ importFactory:150
+  @field w importFactory  @ importFactory:158
   @field w library  @ names:49
   @field w localize  @ localize:74
   @field w modified  @ modified:63
   @field w names  @ names:45
-  @field w overwrite  @ reloadPlan:138
+  @field w overwrite  @ reloadPlan:146
   @field w project  @ names:48
-  @field w publish  @ publish:92
-  @field w publishOverwrites  @ publishOverwrites:98
-  @field w reloadPlan  @ reloadPlan:126
-  @field w revert  @ revert:107
-  @field w seedIfEmpty  @ seedIfEmpty:115
+  @field w publish  @ publish:100
+  @field w publishOverwrites  @ publishOverwrites:106
+  @field w reloadPlan  @ reloadPlan:134
+  @field w revert  @ revert:115
+  @field w save  @ save:92
+  @field w seedIfEmpty  @ seedIfEmpty:123
   @field r synthetic  @ 7
-  @field w tidy  @ tidy:159
+  @field w tidy  @ tidy:167

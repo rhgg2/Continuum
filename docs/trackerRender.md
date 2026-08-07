@@ -109,12 +109,16 @@ two panes never both wash the grid.
 
 See design/note-macros-v2.md § The chain surface for the model. The chain draws
 *inside* the palette child (`drawFxChainBody`; the tab header and chrome styles
-are already pushed) as tree rows echoing the parameters tab: an action row
-(`clear` / `commit` / `cancel`), then each stage top-to-bottom — a heading (the
+are already pushed) as tree rows echoing the parameters tab: two action rows
+(`clear` / `freeze` / `to group` / `commit` / `cancel`, then the catalogue's
+`save`), then each stage top-to-bottom — a heading (the
 swap picker, current kind flagged) with `↑`/`↓` reorder, `byp` and `del` aligned to
 the value column's left edge, then one row per field: label left, `fxFieldWidget` in
 a fixed column flush to the right margin — with a `↓` flow marker (a crisp rule split
-around the arrow) between stages and a terminal **add** row.
+around the arrow) between stages and a terminal **add** row. `save`
+(`tv:saveFxPatch`) names the host's chain into the project tier of `fxPatches`; it
+is disabled where the tab stands hostless or the chain is empty, and mints no host
+of its own — that is `add`'s job.
 `stripFocus` gates `handleFxChainKeys` and highlights the cursor's row up to the
 value column (the tree's selection fill, replacing the old ▸ marker).
 

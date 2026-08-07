@@ -1,4 +1,4 @@
-@spec library_spec  src=tests/specs/library_spec.lua  loc=250  cases=16
+@spec library_spec  src=tests/specs/library_spec.lua  loc=265  cases=17
 @exercises configManager (h.cm)
 @surface   cm:getAt, cm:set, cm:defaultFor
 @harness   mk
@@ -19,54 +19,55 @@
   @case 'localize copies a resolvable entry to project and is idempotent'  [harness]  @ 46-57
   @case 'localize skips synthetic names'  [harness]  @ 60-66
   @case 'forkToProject localizes then returns the project copy'  [harness]  @ 69-76
-  @case 'publish copies the project entry to the library tier'  [harness]  @ 79-87
-  @case 'publish no-ops without a project copy'  [harness]  @ 90-96
-  @case 'publishOverwrites is true only for a divergent library copy'  [harness]  @ 99-116
-  @case 'revert overwrites the project copy from its library source'  [harness]  @ 119-129
-  @case 'revert no-ops without a library source'  [harness]  @ 132-141
-  @case 'modified: false pristine, true divergent, false for a source-less entry'  [harness]  @ 144-161
-  @case 'tidy drops pristine unreferenced entries, keeps inUse and divergent ones'  [harness]  @ 164-187
-  @case 'delete removes from the named tier and refuses synthetic names'  [harness]  @ 190-203
-  @case 'seedIfEmpty stocks an empty library from the factory catalogue, once'  [harness]  @ 206-220
-  @case 'reloadPlan splits absent factory names from divergent library copies'  [harness]  @ 223-236
-  @case 'importFactory copies one entry into the library, refusing synthetic'  [harness]  @ 239-248
+  @case 'save authors into project, leaving a same-named library copy standing'  [harness]  @ 79-90
+  @case 'publish copies the project entry to the library tier'  [harness]  @ 94-102
+  @case 'publish no-ops without a project copy'  [harness]  @ 105-111
+  @case 'publishOverwrites is true only for a divergent library copy'  [harness]  @ 114-131
+  @case 'revert overwrites the project copy from its library source'  [harness]  @ 134-144
+  @case 'revert no-ops without a library source'  [harness]  @ 147-156
+  @case 'modified: false pristine, true divergent, false for a source-less entry'  [harness]  @ 159-176
+  @case 'tidy drops pristine unreferenced entries, keeps inUse and divergent ones'  [harness]  @ 179-202
+  @case 'delete removes from the named tier and refuses synthetic names'  [harness]  @ 205-218
+  @case 'seedIfEmpty stocks an empty library from the factory catalogue, once'  [harness]  @ 221-235
+  @case 'reloadPlan splits absent factory names from divergent library copies'  [harness]  @ 238-251
+  @case 'importFactory copies one entry into the library, refusing synthetic'  [harness]  @ 254-263
 
 # Uses (outbound edges)
-  @use call cm:getAt  @ 50,52,55,65,75,86,95,127,139,182,198,200,202,210,212,217,244,247
-  @use call cm:set  @ 53,155,174,215,228
-  @use call cm:defaultFor  @ 227,244
+  @use call cm:getAt  @ 50,52,55,65,75,86,87,89,101,110,142,154,197,213,215,217,225,227,232,259,262
+  @use call cm:set  @ 53,170,189,230,243
+  @use call cm:defaultFor  @ 242,259
 
 # Fields (r read / w write incl. constructor keys)
-  @field w a  @ 168,175
-  @field r add  @ 234
-  @field w b  @ 169,176,180
-  @field w c  @ 170,177
+  @field w a  @ 183,190
+  @field r add  @ 249
+  @field w b  @ 184,191,195
+  @field w c  @ 185,192
   @field w cm  @ 12
-  @field w config  @ 21,35,81,101,121,134,146,166,192
-  @field w drift  @ 105,109
-  @field r factors  @ 40,41,55,86,127,139
-  @field w factors  @ 22,23,36,37,53,82,103,104,105,108
-  @field w factors  @ 109,122,123,135,148,149,151,156,157,168,169,170
-  @field w factors  @ 175,176,177,178,193,194,215,230
+  @field w config  @ 21,35,81,96,116,136,149,161,181,207
+  @field w drift  @ 120,124
+  @field r factors  @ 40,41,55,86,87,101,142,154
+  @field w factors  @ 22,23,36,37,53,82,85,88,97,118
+  @field w factors  @ 119,120,123,124,137,138,150,163,164,166,171,172
+  @field w factors  @ 183,184,185,190,191,192,193,208,209,230,245
   @field r factory  @ 29
-  @field w fresh  @ 103
+  @field w fresh  @ 118
   @field w g  @ 37
-  @field w global  @ 23,37,107,123,151,167,194
-  @field w identity  @ 13,23,193
+  @field w global  @ 23,37,82,122,138,166,182,209
+  @field w identity  @ 13,23,208
   @field r library  @ 28
-  @field w mine  @ 22,82,135,148,156,178,193
-  @field w name  @ 19,33,46,60,69,79,90,99,119,132,144,164
-  @field w name  @ 190,206,223,239
-  @field w only  @ 215
-  @field r overwrite  @ 235
+  @field w mine  @ 22,97,150,163,171,193,208
+  @field w name  @ 19,33,46,60,69,79,94,105,114,134,147,159
+  @field w name  @ 179,205,221,238,254
+  @field w only  @ 230
+  @field r overwrite  @ 250
   @field w p  @ 36,37
   @field r project  @ 27
-  @field w project  @ 22,36,82,102,122,135,147,193
-  @field w run  @ 20,34,47,61,70,80,91,100,120,133,145,165
-  @field w run  @ 191,207,224,240
-  @field w same  @ 104,108
-  @field w shared  @ 23,122,123,149,151,157,194
-  @field w swings  @ 13,22,23,36,37,82,102,107,122,123,135,147
-  @field w swings  @ 151,167,193,194
+  @field w project  @ 22,36,97,117,137,150,162,208
+  @field w run  @ 20,34,47,61,70,80,95,106,115,135,148,160
+  @field w run  @ 180,206,222,239,255
+  @field w same  @ 119,123
+  @field w shared  @ 23,82,137,138,164,166,172,209
+  @field w swings  @ 13,22,23,36,37,82,97,117,122,137,138,150
+  @field w swings  @ 162,166,182,208,209
   @field w synthetic  @ 13
   @field w tempers  @ 13

@@ -86,6 +86,14 @@ function lib.forkToProject(key, name)
   return projectTier(key)[name]
 end
 
+----- Author
+
+--contract: write a name into the project tier (cm:set deep-copies); synthetic names never
+function lib.save(key, name, value)
+  if synth(key)[name] then return end
+  writeTier('project', key, name, value)
+end
+
 ----- Publish / revert
 
 --contract: project copy -> library tier (deepClone via cm:set); no-op when there is no project copy

@@ -1,7 +1,8 @@
 -- See docs/chrome.md for the model.
 
 --shape: chrome = { colour(name, scope?)->u32, pushChromeStyles(), popChromeStyles(), pushChromeWindow(), popChromeWindow(), verticalSeparator(), disabledIf(cond,fn), row(h?,fn), checkbox(label,v), radio(label,active), headingLabel(text), screenPainter()->painter}
---shape: chrome (pickers) = { makeToolbar()->fn(segments), drawPicker(d), libPicker(key, current, excludeOthers?)->items, pickerIsActive()->bool, resetPickerActive(), requestPickerOpen(kind) }
+--shape: chrome (pickers) = { makeToolbar()->fn(segments), drawPicker(d), libPicker(d)->items, pickerIsActive()->bool, resetPickerActive(), requestPickerOpen(kind) }
+--shape: libPickerSpec = { key: string, current?: any, excludeOthers?: {name->true}, off?: bool = true }
 --shape: chrome (shared row primitives) = { rowSelectable(label,sel,flags?)->clicked, treeRow(opts)->{toggled,selected,doubleClicked}, numberStepper(id,value,opts)->changed,value }
 --shape: pickerSpec = { kind: string, heading: string?, buttonLabel: string, items: [{label, key, group?=int, current?=bool}], onPick: fn(key), onCancel?: fn(), onCreate?: fn(text), onDelete?: fn(key), placement?: 'above', width?, minWidth?, maxWidth?, flat?: bool }
 --shape: palettePaneSpec = { x, y, h, label | {tabs=[{key,label}], activeTab, onTab}, draw = fn(childFocused) }
@@ -425,12 +426,17 @@ local CREATE = {}
 
 -- Build the picker-item list for a library-shaped cm key (e.g. 'swings',
 -- 'tempers'); groups, modified badge, excludeOthers — see docs/chrome.md § Picker.
-function chrome.libPicker(key, current, excludeOthers)
-  excludeOthers = excludeOthers or {}
+function chrome.libPicker(d)
+  local key, current = d.key, d.current
+  local excludeOthers = d.excludeOthers or {}
   local proj   = cm:getAt('project', key) or {}
   local merged = cm:get(key, { mergeTiers = true }) or {}
 
-  local items = { { label = 'Off', key = nil, group = 1, current = current == nil } }
+  local items = {}
+  -- A catalogue you read *from* offers Off; one you write *into* has nothing to turn off.
+  if d.off ~= false then
+    util.add(items, { label = 'Off', key = nil, group = 1, current = current == nil })
+  end
 
   local projNames = {}
   for k in pairs(proj) do util.add(projNames, k) end

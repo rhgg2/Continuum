@@ -5109,8 +5109,8 @@ end
 ----- Lifecycle
 
 do
-  --invariant: tvOnlyKeys skip the configChanged rebuild; defaultSwing is the sole remaining cm key
-  local tvOnlyKeys = { defaultSwing = true }
+  --invariant: tvOnlyKeys skip the configChanged rebuild; neither key feeds a derivation
+  local tvOnlyKeys = { defaultSwing = true, fxPatches = true }
 
   --invariant: dataChanged 'swing' → global change marks all 16, else only the diffed channels
   --invariant: configChanged 'swings' → channels resolving to names with diff body vs prevSwings

@@ -32,6 +32,10 @@ publish / import / delete verbs.
 One vocabulary across every named library, so the swing and temper editors
 share it:
 
+- **save** (`save`) — author a name into the project tier, overwriting any
+  project copy standing under it and leaving the library copy it shadows
+  alone. The only verb here that *creates*: every other one moves a name that
+  already exists. Synthetic names never author.
 - **localize** (`localize`, `forkToProject`) — copy-on-use: picking an entry
   for a take or channel copies it into project if absent. A synthetic name or
   an existing project copy is a no-op.

@@ -1,4 +1,4 @@
-@module run  src=tests/run.lua  loc=309  mode=script
+@module run  src=tests/run.lua  loc=310  mode=script
 
 # Imports
   @const harness = 'harness'  @ 12
@@ -9,26 +9,26 @@
   @const projectRoot = testDir:match('^(.*)/tests$') or testDir .. '/..'  @ 5
   @const filter = arg[1]  @ 14
   @const specs = {  @ 16
-  @const pass, fail, pending, failures = 0, 0, 0, {}  @ 274
-  @const pendTail = pending > 0 and string.format(', %d pending', pending) or ''  @ 307
+  @const pass, fail, pending, failures = 0, 0, 0, {}  @ 275
+  @const pendTail = pending > 0 and string.format(', %d pending', pending) or ''  @ 308
 
 # Uses (outbound edges)
   @use require harness  @ <load>:12
 
 # Unresolved receivers
-  @drop fullName:find  @ <load>:280
+  @drop fullName:find  @ <load>:281
   @drop info:match  @ <load>:4
   @drop source:match  @ <load>:3
-  @drop test.run  @ 285
+  @drop test.run  @ 286
   @drop testDir:match  @ <load>:5
 
 # Fields (r read / w write incl. constructor keys)
-  @field r err  @ 303
-  @field w err  @ 291
-  @field r name  @ 279,302
-  @field w name  @ 291
+  @field r err  @ 304
+  @field w err  @ 292
+  @field r name  @ 280,303
+  @field w name  @ 292
   @field r path  @ 10
   @field w path  @ 7
-  @field r pending  @ 281,283
+  @field r pending  @ 282,284
   @field r source  @ 3
-  @field r traceback  @ 285
+  @field r traceback  @ 286

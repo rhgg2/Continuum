@@ -2588,6 +2588,15 @@ function tv:replaceFxStage(uuid, index, entry)
   self:setNoteFx(uuid, list)
 end
 
+-- Stamp the host's chain into the project tier under `name`, verbatim -- bypass flags and
+-- inline pattern bodies included. A patch is instantiated by copy, so nothing points back here.
+--contract: no host, no chain, or a blank name is a silent no-op; never mints a host
+function tv:saveFxPatch(uuid, name)
+  local fx = self:noteFx(uuid)
+  if not (name and name ~= '' and fx and #fx > 0) then return end
+  lib.save('fxPatches', name, fx)
+end
+
 --contract: a region or fx-carrying note host; any other uuid is a silent no-op
 function tv:freezeRegion(uuid) return tm:freezeRegion(uuid) end
 
@@ -2627,6 +2636,8 @@ tv.replaceFxStage   = util.atomic('Swap FX stage',    tv.replaceFxStage)
 tv.pruneEmptyRegion = util.atomic('Delete FX region', tv.pruneEmptyRegion)
 tv.freezeRegion     = util.atomic('Freeze FX region', tv.freezeRegion)
 tv.freezeToGroup    = util.atomic('Freeze FX to group', tv.freezeToGroup)
+-- A project-tier cm write is undoable but mints no point either, so the catalogue verb wraps alike.
+tv.saveFxPatch      = util.atomic('Save FX patch',     tv.saveFxPatch)
 
 ----- Deletion
 

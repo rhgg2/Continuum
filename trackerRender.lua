@@ -145,7 +145,7 @@ local toolbarSegments = {
         kind        = 'temper',
         buttonLabel = cur or 'Off',
         width       = 120,
-        items       = chrome.libPicker('tempers', cur, TEMPER_PRESET_EXCLUDE),
+        items       = chrome.libPicker{ key = 'tempers', current = cur, excludeOthers = TEMPER_PRESET_EXCLUDE },
         onPick      = pickTemper,
       }
       ImGui.SameLine(ctx, 0, 6)
@@ -160,7 +160,7 @@ local toolbarSegments = {
         kind        = 'swing', heading = 'Take',
         buttonLabel = (not cur or cur == 'identity') and 'Off' or cur,
         width       = 120,
-        items       = chrome.libPicker('swings', cur, SWING_PRESET_EXCLUDE),
+        items       = chrome.libPicker{ key = 'swings', current = cur, excludeOthers = SWING_PRESET_EXCLUDE },
         onPick      = pickSwing,
       }
       local chan = cursorChan()
@@ -171,7 +171,7 @@ local toolbarSegments = {
           kind        = 'colSwing', heading = 'Ch',
           buttonLabel = chanCur or 'Off',
           width       = 120,
-          items       = chrome.libPicker('swings', chanCur, SWING_PRESET_EXCLUDE),
+          items       = chrome.libPicker{ key = 'swings', current = chanCur, excludeOthers = SWING_PRESET_EXCLUDE },
           onPick      = function(name) pickColSwing(chan, name) end,
         }
       end)
@@ -1144,6 +1144,21 @@ local stripPlan do
     end)
   end
 
+  -- The catalogue's own row under the action row: name the host's chain and it lands in the project
+  -- tier. Picking an existing row overwrites it; a `+ library` row writes a project copy shadowing it.
+  local function catalogueRow(plan)
+    local fx = plan.host and tv:noteFx(plan.host)
+    -- Hostless, or a host standing empty: there is no chain to name. `add` is what mints one.
+    chrome.disabledIf(not (fx and #fx > 0), function()
+      chrome.drawPicker{
+        kind = 'fxPatchSave', buttonLabel = 'save',
+        items    = chrome.libPicker{ key = 'fxPatches', off = false },
+        onPick   = function(name) tv:saveFxPatch(plan.host, name) end,
+        onCreate = function(name) tv:saveFxPatch(plan.host, name) end,
+      }
+    end)
+  end
+
   -- Fill behind the keyboard cursor's row (replacing the old ▸): drawn before the row content so it
   -- sits underneath; spans the current indent to the value column's left edge (not the margin).
   local function rowHighlight(active)
@@ -1271,6 +1286,7 @@ local stripPlan do
     local cur = clampCursor(plan.cols); tv:setStripCursor(cur)
     if fxFocusReq then enterStrip(plan.host, cur.stage, cur.param); fxFocusReq = false end
     headerActions(plan)
+    catalogueRow(plan)
     ImGui.Separator(ctx)
     local availW = select(1, ImGui.GetContentRegionAvail(ctx))
     ImGui.Dummy(ctx, availW, 2)

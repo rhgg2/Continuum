@@ -52,7 +52,7 @@ return {
       } }
       local chrome = mkChrome(h)
 
-      local items = chrome.libPicker('swings', nil)
+      local items = chrome.libPicker{ key = 'swings' }
       local pristine = itemByKey(items, 'alpha')
       local divergent = itemByKey(items, 'beta')
 
@@ -60,6 +60,10 @@ return {
       t.truthy(divergent, 'divergent project row is listed')
       t.eq(pristine.label, 'alpha', 'pristine project row keeps a bare label')
       t.eq(divergent.label, 'beta' .. BULLET, 'divergent project row carries the bullet')
+
+      local bare = chrome.libPicker{ key = 'swings', off = false }
+      t.eq(itemByKey(bare, nil), nil, 'off = false drops the Off row')
+      t.eq(#bare, #items - 1, 'and takes nothing else with it')
     end,
   },
 }
