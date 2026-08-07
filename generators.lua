@@ -176,15 +176,15 @@ end
 
 --contract: sine -> delta breakpoints in the dest's own units; depth at 1/period QN, unit-naive
 --contract: breakpoints at sine extrema, 'slow'-shaped; linear ramp-in over onset QN
---contract: returns to 0 (the delta's rest) at window end -- no residual offset on the channel
+--contract: a terminal 0 at window end eases the last extremum back -- shape, not reset (tm closes)
 local function sine(stream, host, params, ctx)
   local startL, endL = stream.window[1], stream.window[2]
   local period = periodTicks(params.period, ctx.resolution)   -- ticks per cycle
   local depth  = params.depth or 0
   local onset  = (params.onset or 0) * ctx.resolution          -- ramp-in, ticks
 
-  -- Extrema-only breakpoints; 'slow' bridges each pair as a half-cosine.
-  -- Anchored at 0 both ends; the terminal 0 re-centres the channel.
+  -- Extrema-only breakpoints; 'slow' bridges each pair as a half-cosine. Anchored at 0 both ends: the
+  -- terminal 0 is the half-cosine ease off the last extremum, not the re-centre (tm closes the window).
   local delta = { { ppq = startL, val = 0, shape = 'slow' } }
   local k  = 0
   local at = startL + period / 4
@@ -205,7 +205,7 @@ local function interval(a, b)
   return (b.pitch - a.pitch) * 100 + ((b.detune or 0) - (a.detune or 0))
 end
 
---contract: slide glide-in -> lane-1 pb-delta; slur to target over `over` QN; re-centres at end
+--contract: slide glide-in -> lane-1 pb-delta; slur to target over `over` QN (tm closes the window)
 --contract: target 'next' = interval to next same-lane note; 'fixed' = params.cents; pb-range clamps
 --contract: no next note or unison target -> empty delta (channel untouched)
 local function slide(stream, host, params, ctx)
@@ -235,8 +235,7 @@ local function slide(stream, host, params, ctx)
   local function bp(ppq, val, shape) util.add(delta, { ppq = ppq, val = val, shape = shape }) end
   bp(startL, 0, glideStart > startL and 'step' or 'slow')   -- hold true pitch until the slur
   if glideStart > startL then bp(glideStart, 0, 'slow') end   -- slur begins (half-cosine ease)
-  bp(arrive, target, 'step')                                -- arrived; hold to the handoff
-  bp(endL, 0, 'step')                                       -- re-centre: next note sounds true
+  bp(arrive, target, 'step')                                -- arrived; hold to tm's close at endL-1
   return { notes = {}, delta = delta }
 end
 

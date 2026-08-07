@@ -16,9 +16,10 @@ local function rawToCents(raw, pbRange)
   return util.round(raw * (pbRange or 2) * 100 / 8192)
 end
 
--- A seat is recognized purely by region membership: any pb inside a live region's span, half-open --
--- the re-centre folds at endppq-1, so the end row is never seat territory. see design/note-macros-v2.md § Route-by-window
-local function inPbWindow(h, chan, ppq)
+-- A seat is recognized purely by region membership, on pb and cc alike: anything inside a live region's
+-- span, half-open (as production's covered()). The close folds to endppq-1, so the end row is never
+-- seat territory. see design/note-macros-v2.md § Route-by-window
+local function inLiveRegion(h, chan, ppq)
   for _, r in ipairs(h.ds:get('fxRegions') or {}) do
     if r.chan == chan and ppq >= r.startppq and ppq < r.endppq then return true end
   end
@@ -29,7 +30,7 @@ end
 -- (centsToRaw of wire-cents + detune); `cents` the persisted intent. nil while a window parks it off.
 local function authoredPb(h, chan, ppq)
   for _, c in ipairs(h.fm:dump().ccs) do
-    if c.evType == 'pb' and c.chan == chan and c.ppq == ppq and not inPbWindow(h, chan, ppq) then return c end
+    if c.evType == 'pb' and c.chan == chan and c.ppq == ppq and not inLiveRegion(h, chan, ppq) then return c end
   end
 end
 
@@ -38,7 +39,7 @@ end
 local function derivedPbs(h, chan)
   local out = {}
   for _, c in ipairs(h.fm:dump().ccs) do
-    if c.evType == 'pb' and c.chan == chan and inPbWindow(h, chan, c.ppq) then out[#out + 1] = c end
+    if c.evType == 'pb' and c.chan == chan and inLiveRegion(h, chan, c.ppq) then out[#out + 1] = c end
   end
   return out
 end
@@ -64,21 +65,12 @@ local function stashOfType(h, evType)
   return out
 end
 
--- Half-open region membership on a channel (matches production's covered()): a cc-replace seat lives
--- in [startppq, endppq). see design/note-macros-v2.md § Route-by-window
-local function inCcSpan(h, chan, ppq)
-  for _, r in ipairs(h.ds:get('fxRegions') or {}) do
-    if r.chan == chan and ppq >= r.startppq and ppq < r.endppq then return true end
-  end
-  return false
-end
-
 -- The seated replace curve on a cc target, hidden from columns. Seats are markerless -- the live region
 -- span IS their identity; the authored cc it covers is parked off-take.
 local function fillRecords(h, chan, cc)
   local out = {}
   for _, c in ipairs(h.fm:dump().ccs) do
-    if c.evType == 'cc' and c.cc == cc and c.chan == chan and inCcSpan(h, chan, c.ppq) then
+    if c.evType == 'cc' and c.cc == cc and c.chan == chan and inLiveRegion(h, chan, c.ppq) then
       out[#out + 1] = c
     end
   end
@@ -101,7 +93,7 @@ end
 local function authoredCC(h, chan, cc, ppq)
   for _, c in ipairs(h.fm:dump().ccs) do
     if c.evType == 'cc' and c.cc == cc and c.chan == chan and c.ppq == ppq
-       and not c.derived and not inCcSpan(h, chan, ppq) then return c end
+       and not c.derived and not inLiveRegion(h, chan, ppq) then return c end
   end
 end
 
@@ -212,8 +204,8 @@ local function denseRamp()
   return { { kind = 'denseRamp' } }
 end
 
--- A pb-replace stage seating distinguishable values on the window's last two ticks, so the closing
--- seat's destination is already occupied when the conversion pulls it inside. Steps 40 cents apart:
+-- A pb-replace stage seating distinguishable values on the window's last two ticks, so both compete for
+-- the one tick material may hold once the close takes its own. Steps 40 cents apart:
 -- neither is droppable inside tolerance. Registers the kind; the caller clears it after the freeze.
 local function edgePair()
   generators.kinds.edgePair = {
@@ -248,7 +240,7 @@ return {
     end,
   },
 
-  ----- Window end re-centres (channel-wide, region-sourced)
+  ----- Window end: every target is handed back before it exits (pb to centre, cc to its own stream)
 
   {
     name = 'fx region: pb seats re-centre the channel at the region window end',
@@ -260,6 +252,55 @@ return {
       local last = seats[#seats]
       t.eq(last.ppq, 239, 'terminal seat folds one tick inside the region window end')
       t.eq(last.val, centsToRaw(0), 'terminal value is centre -- no residual channel bend')
+    end,
+  },
+
+  {
+    name = 'fx region (cc augment): the window end hands the target back to its authored base',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent({ evType = 'cc', ppq = 0, chan = 1, cc = 10, val = 20 }); h.tm:flush()
+      generators.kinds.ccCap = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppq = host.window[1], val = 0,  shape = 'step' },
+          { ppq = 60,             val = 30, shape = 'step' },
+          { ppq = host.window[2], val = 0,  shape = 'step' },
+        } } end,
+        mode = 'augment', dest = 10, label = 'CcCap', defaults = {}, fields = {},
+      }
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+                                   fx = { { kind = 'ccCap' } } } })
+      h.tm:rebuild()
+      generators.kinds.ccCap = nil
+
+      local fills = fillsOf(h, 1, 10)
+      local last  = fills[#fills]
+      t.eq(last.ppq, 239, 'the closing seat folds one tick inside the window end')
+      t.eq(last.val, 20,  'and returns the target to its authored base -- no residual macro offset')
+    end,
+  },
+
+  {
+    name = 'fx region (cc replace): the window end hands the target back to the stream it took over',
+    run = function(harness)
+      local h = harness.mk()
+      h.tm:addEvent({ evType = 'cc', ppq = 0, chan = 1, cc = 10, val = 20 }); h.tm:flush()
+      generators.kinds.ccRep = {
+        expand = function(host) return { notes = {}, delta = {
+          { ppq = host.window[1], val = 100, shape = 'step' },
+        } } end,
+        mode = 'replace', dest = 10, label = 'CcRep', defaults = {}, fields = {},
+      }
+      h.ds:assign('fxRegions', { { uuid = 'fxr-1', chan = 1, startppq = 0, endppq = 240,
+                                   fx = { { kind = 'ccRep' } } } })
+      h.tm:rebuild()
+      generators.kinds.ccRep = nil
+
+      local fills = fillsOf(h, 1, 10)
+      t.eq(fills[1].val, 100, 'the replace curve owns the window interior outright')
+      local last = fills[#fills]
+      t.eq(last.ppq, 239, 'the closing seat folds one tick inside the window end')
+      t.eq(last.val, 20,  'and restores the authored value the region took over')
     end,
   },
 
@@ -1033,7 +1074,7 @@ return {
       t.falsy(authoredPb(h, 1, 120), 'the authored pb mid-window parked off the take')
       t.eq(derivedPb(h, 1, 0).val,   centsToRaw(50), 'a derived seat carries the curve at the window start (50c)')
       t.eq(derivedPb(h, 1, 60).val,  centsToRaw(50), 'a derived seat carries the curve mid-window')
-      t.eq(derivedPb(h, 1, 239).val, 0,              'the terminal seat re-centres one tick inside the window end')
+      t.eq(derivedPb(h, 1, 239).val, centsToRaw(40), 'the close hands the channel back to the authored base the region parked')
       local at120
       for _, p in ipairs(h.tm:getChannel(1).parkedPb) do if p.ppq == 120 then at120 = p end end
       t.eq(at120 and at120.val, 40, 'the authored 40c stays visible via the parkedPb render union')
@@ -1439,7 +1480,9 @@ return {
       -- parks off-take (the curve owns the wire) and stays visible via parkedPb.
       t.falsy(authoredPb(h, 1, 60), 'the authored pb parked off the take')
       t.eq(derivedPb(h, 1, 0).val,   centsToRaw(55), 'the seat at the window start carries curve 30c + detune 25c')
-      t.eq(derivedPb(h, 1, 239).val, centsToRaw(25), 'curve re-centres to detune-only one tick inside the window end (I1)')
+      -- The region parks the authored 40c, so handing back detune alone would let the fx suppress an
+      -- authored value past its own end. The close is the wire as it reads with no region at all.
+      t.eq(derivedPb(h, 1, 239).val, centsToRaw(65), 'the close hands back authored 40c + detune 25c (I1)')
       t.eq(h.tm:getChannel(1).parkedPb[1].val, 40, 'the authored 40c stays visible via the parkedPb render union')
     end,
   },
@@ -1502,13 +1545,14 @@ return {
 
       -- Endpoints exact; the interior tracks the slow shape (30c at the midpoint).
       t.eq(derivedPb(h, 1, 0).val,   centsToRaw(0),  'start seat exact (0c, detune 0)')
-      t.eq(derivedPb(h, 1, 239).val, centsToRaw(80), 'end seat exact (60c curve + 20c detune)')
+      t.eq(derivedPb(h, 1, 238).val, centsToRaw(80), 'the curve reaches its full 60c + 20c detune on the last tick material holds')
+      t.eq(derivedPb(h, 1, 239).val, centsToRaw(20), 'and the close hands back detune alone -- 60c does not outlive the window')
 
       -- The detune step rides a dual point at the onset: same curve value, detune jumps 0 -> 20. The
-      -- closing control point folds to 239, so the segment spans [0,239] and its interior runs a
-      -- fraction ahead of the old [0,240] geometry -- 30.2c at 119, not a round 30c.
-      t.eq(derivedPb(h, 1, 119).val, 1237, 'just-before the onset: curve only, detune 0')
-      t.eq(derivedPb(h, 1, 120).val, 1237 + centsToRaw(20), 'at the onset: the same curve value + detune 20 -- the step is exact')
+      -- closing control point folds to 238 (239 is the close's), so the segment spans [0,238] and its
+      -- interior runs a fraction ahead of the authored [0,240] geometry -- 30.4c at 119, not a round 30c.
+      t.eq(derivedPb(h, 1, 119).val, 1244, 'just-before the onset: curve only, detune 0')
+      t.eq(derivedPb(h, 1, 120).val, 1244 + centsToRaw(20), 'at the onset: the same curve value + detune 20 -- the step is exact')
     end,
   },
 
@@ -2644,7 +2688,7 @@ return {
       local h = harness.mk()
       injectRegion(h, { fx = denseRamp() })
       local before = wirePbs(h, 1, 0, 240)
-      t.eq(#before, RAMP_N, 'the ramp seats a breakpoint every 10 ticks')
+      t.eq(#before, RAMP_N + 1, 'the ramp seats a breakpoint every 10 ticks, and tm closes above them')
 
       local rebuilds = 0
       h.tm:subscribe('rebuild', function() rebuilds = rebuilds + 1 end)
@@ -2652,17 +2696,17 @@ return {
       generators.kinds.denseRamp = nil
 
       t.eq(rebuilds, 1, 'one rebuild -- the thin rides the conversion rather than a pass of its own')
-      -- The closing seat is seated one tick inside the window to begin with, where the rect a mint
-      -- claims can cover it -- freeze no longer moves it. see design/note-macros-v2.md § Route-by-window
-      t.deepEq(wirePbs(h, 1, 0, 240), { before[1], { ppq = 239, cents = before[RAMP_N].cents } },
-        'a collinear run inside tolerance comes back as its two endpoints, values intact')
+      -- Every seat is inside the window to begin with, where the rect a mint claims can cover it --
+      -- freeze moves nothing. see design/note-macros-v2.md § Route-by-window
+      t.deepEq(wirePbs(h, 1, 0, 240), { before[1], before[RAMP_N], before[RAMP_N + 1] },
+        'a collinear run inside tolerance comes back as its endpoints, plus the close that breaks the run')
     end,
   },
 
   {
-    -- The closing seat's tick can already carry a point of the curve's own. The fold displaces it at
-    -- seating time rather than doubling up. see design/note-macros-v2.md § Route-by-window
-    name = 'freeze to group: the closing seat displaces the curve point on its own tick',
+    -- Two curve points can want the one tick material may hold. The fold collapses them there rather
+    -- than doubling up, below tm's close. see design/note-macros-v2.md § Route-by-window
+    name = 'freeze to group: material at the fold line collapses onto one tick, below the close',
     run = function(harness)
       local h = harness.mk()
       injectRegion(h, { fx = edgePair() })
@@ -2670,11 +2714,11 @@ return {
       generators.kinds.edgePair = nil
       t.truthy(members, 'the freeze reports its members')
 
-      t.deepEq(wirePbs(h, 1, 230, 240), { { ppq = 239, cents = 80 } },
-        'one pb on the destination tick, carrying the closing value rather than the displaced one')
+      t.deepEq(wirePbs(h, 1, 230, 240), { { ppq = 238, cents = 80 }, { ppq = 239, cents = 0 } },
+        'one pb on the fold line carrying the later of the two, and tm\'s close on the tick above it')
       local atDest
-      for _, m in ipairs(members) do if m.ppq == 239 then atDest = m end end
-      t.truthy(atDest, 'and the moved seat is group material')
+      for _, m in ipairs(members) do if m.ppq == 238 then atDest = m end end
+      t.truthy(atDest, 'and the collapsed seat is group material')
     end,
   },
 
@@ -2711,7 +2755,7 @@ return {
         if e.hidden and e.ppq >= 0 and e.ppq <= 240 then hiddenInWindow = hiddenInWindow + 1 end
       end
       t.truthy(hiddenInWindow > 0, 'the detune seats an absorber inside the window bounds')
-      t.eq(#curve, 2, 'and the curve members are the two survivors alone')
+      t.eq(#curve, 3, 'and the curve members are the thinned survivors alone')
       for _, m in ipairs(curve) do t.truthy(live[m], 'each member is the live column event itself') end
     end,
   },

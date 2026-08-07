@@ -467,10 +467,52 @@ authored. A breakpoint landing there is claimed by both and protected by
 neither: it loses its `ppqL`, drops out of the column, and goes with the
 next sweep. So the re-centre seats at `endRaw - 1` instead, which is
 where it was always meant to act. A stage closing its own span on the end
-row folds the same way (`foldIntoWindow`), so nothing a producer emits
+row folds inside as well (`foldIntoWindow`), so nothing a producer emits
 can sit on the boundary. The end row belongs to whatever is authored on
 it. Abutting windows are then disjoint in fact as well as in the test,
 which is why the freeze gate carries no pb arm.
+
+**A generator cannot be trusted to close its own window.** The tempting
+reading is that where a curve ends is the generator's own business: it
+authored the shape, so it authors the last point of the shape. Two of the
+three continuous kinds behaved exactly so, and said as much in their
+contracts — `sine` and `slide` each anchor zero at the window end. The
+third did not. `lfo` closes on whatever phase the window happens to end
+on, with `offset` added on top, so a curve LFO left the channel bent
+after its region for good. That is action at a distance: an effect of the
+fx legible past the span the fx owns. A promise two kinds in three keep
+is not an invariant, and nothing downstream can tell which kind wrote the
+breakpoint it is holding.
+
+**So the machinery closes, and the generator does not.** The last tick of
+every window — `endppq - 1` — carries the stream the stage *inherited*,
+evaluated at `endppq`: what the target would read with no fx there at
+all. One expression serves both fold modes, because both ask the same
+question of a different stream. A replace hands back what it took over.
+An augment hands back what it summed onto. The generator contracts then
+stop being promises and become consequences, and `lfo` is sealed without
+having to know it.
+
+**The handback costs a tick, and the tick comes from the stage.** A
+stage's own material folds into `[startppq, endppq - 1)`, and anything at
+or past that line collapses onto the last tick inside it
+(`foldIntoWindow`). Letting the close displace whatever already sits on
+its tick looks cheaper and is not: a curve whose geometry lives in its
+closing control point has that point eaten, and a lone interpolated
+segment rising to its target at `endppq` flattens to a straight line at
+nothing. Folding below the close keeps the control point. The price is
+that the curve's geometry compresses by two ticks — `N/(N-2)`, which at
+the working resolution is not a quantity anyone can hear, and would bite
+only on a window a few ticks long.
+
+**A parked value is handed back, not suppressed.** A pb region parks the
+authored pbs it covers, which makes it tempting to close on centre, or on
+detune alone: the parked value is not sounding, after all. But it is not
+sounding *because of the fx*. To close on anything less would let the
+region reach past `endppq` and silence something authored beyond it —
+the same action at a distance, in the other direction. The criterion is
+the counterfactual and nothing besides: past the window, the wire reads
+as it would read with no region at all.
 
 **Transitions: diff windows, don't mirror.** A markerless seat is
 invisible to the park scan, so the scan cannot run every rebuild — it

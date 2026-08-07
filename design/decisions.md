@@ -1290,5 +1290,19 @@ appear in their design docs.
   lost its `ppqL` and went with the next sweep — the reported bug.
   Folding inward also makes abutting pb windows disjoint (freeze's pb
   arm goes) and retires the `thinSeats` block that dragged the closing
-  seat off the boundary by hand. cc carries no re-centre yet; when it
-  gains one it seats the same way.
+  seat off the boundary by hand. cc gained the same close in this commit
+  without anyone intending it: its terminal point had always been emitted
+  at `endppq`, where the cc filter -- half-open already -- dropped it.
+
+- **2026-08-07** — An fx hands its target back at `endppq - 1`, closing
+  on the stream the stage inherited; rejected leaving the close to the
+  generator. `sine` and `slide` anchor zero at the window end and carried
+  contract lines promising it, but `lfo` closes on whatever phase the
+  window ends on, so a curve LFO bent the channel past its own region for
+  good — action at a distance that a per-generator promise cannot rule
+  out. One expression covers both fold modes, replace and augment. The
+  handback owns the last tick, so a stage's material folds into
+  `[startppq, endppq - 1)`: letting the close displace that tick instead
+  flattened any curve whose geometry lived in its closing control point.
+  Costs two ticks of a curve's geometry, inaudible at the working
+  resolution.

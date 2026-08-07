@@ -67,7 +67,7 @@ return {
   ----- slide: glide-in envelope
 
   {
-    name = 'slide glides in: flat hold, slur to the interval, re-centre at the window end',
+    name = 'slide glides in: flat hold, slur to the interval, then hand off to tm\'s close',
     run = function()
       -- res 240, over 1/2 QN: snap 15 -> arrive 225, glideStart 225-120 = 105.
       local out = expand('slide', slideHost(), slideP, slideCtx{ pitch = 62, detune = 0 })
@@ -77,7 +77,7 @@ return {
       t.eq(d[2].ppq, 105); t.eq(d[2].val, 0, 'slur begins after the flat hold')
       t.eq(d[2].shape, 'slow', 'slur eases (slow / half-cosine)')
       t.eq(d[3].ppq, 225); t.eq(d[3].val, 200, 'arrives at the +200c interval before the handoff')
-      t.eq(d[4].ppq, 240); t.eq(d[4].val, 0, 're-centres at the handoff -- next note sounds true')
+      t.eq(#d, 3, 'and stops -- tm closes the window, so the generator authors no handoff of its own')
     end,
   },
 

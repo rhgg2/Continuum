@@ -371,7 +371,16 @@ local function evalCurve(curve, ppq)
   return mm:interpolate(A, B, ppq, 'val')
 end
 
-local function sumStreams(base, macros, span, opts)
+-- A producer hands its target back before the window exits: one step point at eL-1, inside the
+-- half-open span, so no close ever lands on the boundary row. see design/note-macros-v2.md § Route-by-window
+local function closeAtWindowEnd(pts, val, sL, eL)
+  if eL - 1 <= sL then return pts end
+  if pts[#pts] and pts[#pts].ppq == eL - 1 then table.remove(pts) end   -- the close owns the tick
+  util.add(pts, { ppq = eL - 1, val = val, shape = 'step' })
+  return pts
+end
+
+local function sumStreams(base, macros, span)
   local sL, eL = span[1], span[2]
   local grid   = ccGridStep()
   local curves = { base }
@@ -383,9 +392,7 @@ local function sumStreams(base, macros, span, opts)
   local function sumAt(ppq)
     local v = 0
     for _, c in ipairs(curves) do v = v + evalCurve(c, ppq) end
-    if opts.round then v = util.round(v) end
-    if opts.lo then v = util.clamp(v, opts.lo, opts.hi) end
-    return v
+    return v                                   -- raw: each emission site rounds and clamps in its own units
   end
 
   -- feature points: span ends plus every constituent bp strictly within, deduped and sorted
@@ -427,25 +434,20 @@ local function sumStreams(base, macros, span, opts)
       end
     end
   end
-  -- pb-augment closes the span: a terminal point re-centres the channel (macros anchor 0 there), folded
-  -- to eL-1, inside the window, so no seat lands on eL -- cc carries no re-centre yet. see § Continuous pb
-  if opts.closed and eL - 1 > sL then
-    if pts[#pts] and pts[#pts].ppq == eL - 1 then table.remove(pts) end   -- the re-centre owns the tick
-    util.add(pts, { ppq = eL - 1, val = sumAt(eL), shape = 'step' })      -- valued at the anchor it folds from
-  end
   return pts
 end
 
--- A producer's output occupies [sL, eL): a stage closing its span on the end row folds one tick inside,
--- where sumStreams' own re-centre goes, so nothing it emits reads as an authored boundary point. see design/note-macros-v2.md § Route-by-window
+-- A stage's material stops short of the tick closeAtWindowEnd owns: anything at or past the line
+-- collapses onto that last tick, so a closing control point survives. see design/note-macros-v2.md § Route-by-window
 local function foldIntoWindow(pts, sL, eL)
-  local out = {}
+  local last, out = eL - 2, {}   -- eL-1 is the close's; eL-2 is the last tick material may hold
+  if last < sL then return out end
   for _, p in ipairs(pts) do
-    if p.ppq >= sL and p.ppq < eL then
+    if p.ppq >= sL and p.ppq < last then
       util.add(out, p)
-    elseif p.ppq == eL and eL - 1 >= sL then
-      if out[#out] and out[#out].ppq == eL - 1 then table.remove(out) end   -- the closer owns the tick
-      util.add(out, util.assign(util.clone(p), { ppq = eL - 1 }))
+    elseif p.ppq >= last then
+      if out[#out] and out[#out].ppq == last then table.remove(out) end   -- one point owns the tick
+      util.add(out, util.assign(util.clone(p), { ppq = last }))
     end
   end
   return out
@@ -488,7 +490,7 @@ end
 
 -- Fold records in storage order (later replace wins, painter fold); all-flat -> empty so stale seats sweep.
 -- Kept distinct from foldSub: a whole-span replace emits verbatim, no synthetic edge point. see design/note-macros-v2.md § The fx chain
-local function foldWhole(covering, span, base, opts)
+local function foldWhole(covering, span, base)
   local stream, any = base, false
   for _, rec in ipairs(covering) do
     if #rec.curve > 0 then
@@ -496,7 +498,7 @@ local function foldWhole(covering, span, base, opts)
       if rec.mode == 'replace' then
         stream = rec.curve
       else
-        stream = sumStreams(stream, { rec.curve, negated(base) }, span, opts)
+        stream = sumStreams(stream, { rec.curve, negated(base) }, span)
       end
     end
   end
@@ -521,9 +523,7 @@ end
 
 -- Fold the active records over one sub-span [a,b) with a constant active set; half-open unless closing.
 -- A curved replace clipped mid-segment re-interpolates from the slice edge (accepted fidelity loss). see design/note-macros-v2.md § The fx chain
-local function foldSub(active, a, b, base, closeHere, opts)
-  local subOpts = opts
-  if not closeHere then subOpts = util.assign({}, opts); subOpts.closed = false end
+local function foldSub(active, a, b, base, closeHere)
   local subBase = sliceCurve(base, a, b)
   local stream, streamed, touched = subBase, false, false
   for _, rec in ipairs(active) do
@@ -532,12 +532,12 @@ local function foldSub(active, a, b, base, closeHere, opts)
       if rec.mode == 'replace' then
         stream, streamed = rec.curve, false
       else
-        stream = sumStreams(stream, { rec.curve, negated(subBase) }, { a, b }, subOpts)
+        stream = sumStreams(stream, { rec.curve, negated(subBase) }, { a, b })
         streamed = true
       end
     end
   end
-  if streamed then return stream end                       -- sumStreams already emitted [a,b) or [a,b]
+  if streamed then return stream end                       -- [a,b): a rec's own close rides in as a breakpoint
   if not touched and not anyNonZero(subBase) then return {} end
   local pts = sliceCurve(stream, a, b)                     -- raw replace curve or held base: clip to [a,b]
   if not closeHere and #pts > 0 then table.remove(pts) end -- half-open: the edge belongs to the next sub-span
@@ -546,7 +546,7 @@ end
 
 -- Fold parallel chains covering `span` in storage order: whole-span records take the verbatim fast path,
 -- otherwise sub-split at record edges. Folds over the records' extent; `span` selects the emission. see design/note-macros-v2.md § The fx chain
-local function foldChains(recs, span, base, opts)
+local function foldChains(recs, span, base)
   local covering = overlapping(recs, span)
   if #covering == 1 then return covering[1].curve end
   -- A kept range and a full re-derive of the same material must agree point for point, which they only
@@ -559,7 +559,7 @@ local function foldChains(recs, span, base, opts)
   local cuts   = chainCuts(covering, extent)
   local out
   if #cuts == 2 then
-    out = foldWhole(covering, extent, base, opts)
+    out = foldWhole(covering, extent, base)
   else
     out = {}
     for i = 1, #cuts - 1 do
@@ -568,8 +568,8 @@ local function foldChains(recs, span, base, opts)
       for _, rec in ipairs(covering) do
         if rec.window[1] <= a and rec.window[2] >= b then util.add(active, rec) end
       end
-      local closeHere = opts.closed and i == #cuts - 1
-      for _, point in ipairs(foldSub(active, a, b, base, closeHere, opts)) do util.add(out, point) end
+      local closeHere = i == #cuts - 1   -- every window closes: only the last sub-span keeps its edge
+      for _, point in ipairs(foldSub(active, a, b, base, closeHere)) do util.add(out, point) end
     end
   end
   if lo == span[1] and hi == span[2] then return out end
@@ -763,7 +763,7 @@ local function freezeRefused(frozen, census, windows)
   local function sameTarget(a, b)
     return a.evType == b.evType and a.chan == b.chan and a.cc == b.cc
   end
-  -- Half-open for every target: the pb re-centre seat folds at endppq-1, so abutting windows no longer
+  -- Half-open for every target: a producer's close folds at endppq-1, so abutting windows no longer
   -- share a boundary seat and abutting is genuinely disjoint.
   local function overlaps(a, b)
     return a.startppq < b.endppq and b.startppq < a.endppq
@@ -3564,20 +3564,22 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
       local owned = {}   -- continuous target ('pb' | cc number) -> true once a stage folded a curve in
 
       -- Fold a continuous stage into its stream channel: replace overwrites, augment sums its delta on
-      -- (exact breakpoint-union; closed, so the curve stays absolute over the whole window).
+      -- (exact breakpoint-union). Either way the curve stays absolute over the whole window.
       local function foldContinuous(target, mode, out)
         if owned[target] == nil then owned[target] = false end
         if #out.delta == 0 then return end
         local cur = target == 'pb' and stream.pb or stream.ccs[target] or {}
-        if mode == 'replace' then
-          cur = foldIntoWindow(out.delta, startL, endL)
-        else
-          if #cur == 0 and target ~= 'pb' then
-            local rest = generators.restFor(target)
-            cur = { { ppq = startL, val = rest, shape = 'step' } }
-          end
-          cur = sumStreams(cur, { out.delta }, { startL, endL }, { closed = true })
+        -- The stream the stage meets, seeded where the target carries no automation: a cc rests at its
+        -- controller's rest, pb at centre (an empty curve evaluates 0, which is that rest).
+        if #cur == 0 and target ~= 'pb' then
+          cur = { { ppq = startL, val = generators.restFor(target), shape = 'step' } }
         end
+        local inherited = cur
+        if mode == 'replace' then cur = foldIntoWindow(out.delta, startL, endL)
+        else                      cur = sumStreams(cur, { out.delta }, { startL, endL }) end
+        -- One rule for both modes: whatever the stage did inside its window, the target leaves it reading
+        -- as the stage found it. A generator cannot bend the channel past its own end.
+        cur = closeAtWindowEnd(cur, evalCurve(inherited, endL), startL, endL)
         owned[target] = true
         if target == 'pb' then stream.pb = cur else stream.ccs[target] = cur end
       end
@@ -3823,7 +3825,7 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
       end
       for _, span in ipairs(mergeWindows(recs)) do
         for _, emitSpan in ipairs(gated and clipToSpanSet(span, emitScope[cc]) or { span }) do
-          for _, point in ipairs(foldChains(recs, emitSpan, base, { closed = true })) do
+          for _, point in ipairs(foldChains(recs, emitSpan, base)) do
             if point.ppq >= emitSpan[1] and point.ppq < emitSpan[2] then
               util.add(ccLive, { evType = 'cc', chan = chan, cc = cc,
                                  ppq = tm:fromLogical(chan, point.ppq, 0),
@@ -4395,7 +4397,7 @@ local function rebuildPbs(fxOut, extraColumns)
     for _, span in ipairs(mergeWindows(pbChains[chan])) do
       for _, sub in ipairs(emitSpans and clipToSpanSet(span, emitSpans) or { span }) do
         local bps = {}
-        for _, point in ipairs(foldChains(liveRecs, sub, pbBase[chan], { closed = true })) do
+        for _, point in ipairs(foldChains(liveRecs, sub, pbBase[chan])) do
           -- Fold fast paths return whole curves, and an interior closing edge belongs to the kept
           -- side (chain cuts align with window edges) -- clip half-open except at the span's true end.
           if point.ppq >= sub[1] and (point.ppq < sub[2] or sub[2] == span[2]) then
