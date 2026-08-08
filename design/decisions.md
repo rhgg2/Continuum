@@ -12,6 +12,13 @@ lines. Newest first. `/commit` prompts for one at commit time.
 Entries below 2026-07-27 predate that split, so some of them also
 appear in their design docs.
 
+- **2026-08-08** — `docs/` carries the WHY of live code, and a design doc archives as the record of
+  what was decided rather than as the reference the code cites. `generators.lua` had no doc at all
+  while forty of its comments reached into `design/note-macros-v2.md` for the operating model, which
+  left a shelf-bound doc doing a live doc's job. Rejected: leaving the citations pointed at the
+  archive, which the repo already does a hundred times over — tolerable for a settled mechanism,
+  wrong for the model a live module is written against.
+
 - **2026-08-06** — `map_query` gains `kind='decl'` and `kind='ann'`, and every
   specific kind is glossed in the schema. Which of nine declaration kinds a
   name was written as is a fact about the row, so requiring it as input asked
