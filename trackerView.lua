@@ -47,7 +47,7 @@ local function kindOf(evt) return kindAt(colFor(evt), evt.ppq) end
 local localBlocked
 
 -- A parked event edits the fx replace off-take. The stash is logical, and authoring ppq is already
--- logical at this layer (cursorppq = row·logPerRow), so it rides. see design/note-macros-v2.md § Parked editing
+-- logical at this layer (cursorppq = row·logPerRow), so it rides. see docs/trackerView.md § Backings and parked cells
 local function toParkedSpec(evt)
   if evt.evType == 'cc' then
     return util.pick(evt, "evType chan cc ppq val shape")
@@ -1563,7 +1563,7 @@ local noteOff, adjustDuration, adjustPosition, shiftFxLane do
   end
 
   -- noteOff shortens the region's tail to the cursor row; the onset row is a no-op -- deletion
-  -- belongs to the delete verb, not a duration edit. see design/note-macros-v2.md § The fx chain
+  -- belongs to the delete verb, not a duration edit. see docs/trackerView.md § Addressing a chain
   local function regionNoteOff(col)
     local cell = cursorRegionBefore(col)
     if not cell then return end
@@ -1611,7 +1611,7 @@ local noteOff, adjustDuration, adjustPosition, shiftFxLane do
   end
 
   -- Move the cursor's fx region one badge column toward dir, swapping storage precedence with the
-  -- sibling beside it at the cursor row. Nothing overlapping there -> no-op. see design/note-macros-v2.md § The fx chain
+  -- sibling beside it at the cursor row. Nothing overlapping there -> no-op. see docs/generators.md § Multiplicity
   function shiftFxLane(col, dir)
     local cell = cursorRegionBefore(col)
     if not cell then return end
@@ -2598,7 +2598,7 @@ function tv:saveFxPatch(uuid, tier, name)
 end
 
 -- Instantiate the named tier's chain onto the host, replacing whatever it held. The picker row
--- names its tier rather than the load resolving one; cm deep-copies on the way out. See design/note-macros-v2.md § The chain surface.
+-- names its tier rather than the load resolving one; cm deep-copies on the way out. See docs/trackerRender.md § FX chain.
 --contract: unknown host, or a name that tier does not hold, is a silent no-op; never mints a host
 function tv:loadFxPatch(uuid, tier, name)
   local patch = name and lib.getAt('fxPatches', tier, name)
@@ -3311,7 +3311,7 @@ function tv:ghostOverlay()
     end
   end
   -- A curve has no onsets to bucket, so it is sampled at each row: what the chain realises there.
-  -- A locator record stands in for the column's own event, what colFor addresses. see design/note-macros-v2.md § The chain surface
+  -- A locator record stands in for the column's own event, what colFor addresses. see docs/trackerView.md § Ghost sampling
   for target in pairs(fx.targets) do
     local _, x = colFor(target == 'pb' and { evType = 'pb', chan = fx.chan }
                                         or { evType = 'cc', chan = fx.chan, cc = target })
@@ -3326,7 +3326,7 @@ function tv:ghostOverlay()
     end
   end
   -- Originals of a replace park stand beside their own realisation; keyed by the event, which
-  -- answers for cell, tail and temper tick. A host cell (own fx) always keeps its row. see design/note-macros-v2.md § The chain surface
+  -- answers for cell, tail and temper tick. A host cell (own fx) always keeps its row. see docs/trackerView.md § Ghost sampling
   local hidden = {}
   for _, cell in ipairs(fx.parked) do
     if not cell.fx then hidden[cell] = true end
@@ -3767,7 +3767,7 @@ end
 local CLIP_GLYPH = '\xe2\x80\xa6'   -- …: the chain has more stages than the region has rows
 
 -- The chain's glyphs down a region's rows, keyed by absolute grid row -- badge snaps via
--- placeRow, tail startRow stays float. see design/note-macros-v2.md § The chain surface
+-- placeRow, tail startRow stays float. see docs/trackerView.md § Addressing a chain
 local function chainStack(stages, headRow, endRow)
   local rows  = math.max(1, math.ceil(endRow) - headRow)
   local stack = {}
@@ -3865,7 +3865,7 @@ function tv:rebuild(takeChanged)
     end
 
     -- fx-region columns are data-derived; overlapping regions on a channel pack into sibling fx
-    -- columns by storage order (= precedence), each a tailed kind-badge. see design/note-macros-v2.md § The fx chain
+    -- columns by storage order (= precedence), each a tailed kind-badge. see docs/trackerView.md § Addressing a chain
     local fxByChan = {}
     for _, region in ipairs(ds:get('fxRegions') or {}) do
       util.bucket(fxByChan, region.chan, region)
@@ -3894,7 +3894,7 @@ function tv:rebuild(takeChanged)
       local c = channel.columns
       if c.pc and not trackerMode then addGridCol(chan, 'pc', nil, c.pc.events) end
       -- Replace-region parked pbs left the take but stay the displayed automation, as the parked
-      -- chord/cc are unioned below. see design/note-macros-v2.md § Route-by-window
+      -- chord/cc are unioned below. see docs/trackerView.md § Backings and parked cells
       local parkedPb = channel.parkedPb or {}
       if c.pb or #parkedPb > 0 then
         local events = c.pb and c.pb.events or {}
@@ -3907,7 +3907,7 @@ function tv:rebuild(takeChanged)
         addGridCol(chan, 'pb', nil, events)
       end
       -- Replace-region parked notes left the take so the arp packs to lane 1, but they remain
-      -- the displayed chord: union each back into its lane. see design/note-macros-v2.md § Generator output
+      -- the displayed chord: union each back into its lane. see docs/trackerView.md § Backings and parked cells
       local parkedByLane = {}
       for _, m in ipairs(channel.parked or {}) do util.bucket(parkedByLane, m.lane, m) end
       for lane, col in ipairs(c.notes) do
@@ -3922,7 +3922,7 @@ function tv:rebuild(takeChanged)
       end
       if c.at then addGridCol(chan, 'at', nil,  c.at.events) end
       -- Replace-region parked ccs left the take but stay the displayed automation: union each
-      -- back into its cc column, as the parked chord is unioned above. see design/note-macros-v2.md § Continuous cc
+      -- back into its cc column, as the parked chord is unioned above. see docs/trackerView.md § Backings and parked cells
       local parkedCCByNum = {}
       for _, m in ipairs(channel.parkedCC or {}) do util.bucket(parkedCCByNum, m.cc, m) end
       local ccNums = {}

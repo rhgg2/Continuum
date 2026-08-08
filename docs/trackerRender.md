@@ -107,7 +107,18 @@ two panes never both wash the grid.
 
 ## FX chain — palette tab
 
-See design/note-macros-v2.md § The chain surface for the model. The chain draws
+See `docs/generators.md` § The chain for what a chain means; this section is
+its surface.
+
+**Resist the DAG.** The surface is a list because the semantics are a comb:
+sibling chains give parallel, the fold gives summing, order gives series. A
+node canvas — the wiring page's own idiom — invites exactly the fan-out and
+geometry-as-order those semantics forbid, and audio routing earns a DAG where
+note fx does not. So borrow the wiring page's *chrome*, bypass badges
+included, and never its canvas. No parallel blocks inside a chain either:
+sibling chains already express that.
+
+The chain draws
 *inside* the palette child (`drawFxChainBody`; the tab header and chrome styles
 are already pushed) as tree rows echoing the parameters tab: two action rows
 (`clear` / `freeze` / `to group` / `commit` / `cancel`, then the catalogue's
@@ -118,7 +129,13 @@ a fixed column flush to the right margin — with a `↓` flow marker (a crisp r
 around the arrow) between stages and a terminal **add** row. Both catalogue
 pickers list `fxPatches` through `chrome.tierPicker` under the `Project` and
 `Library` headings, in full and unresolved, so a name held in both tiers draws a
-row under each and a pick carries the tier its row was drawn from. `save`
+row under each and a pick carries the tier its row was drawn from. The
+alternative, `libPicker`, builds a *resolved* list — one row per name,
+answering "what will I get if I pick this" — which is the right question for an
+artifact held by reference, a take naming a swing. A patch is instantiated by
+copy and nothing names it once it has landed, so resolution serves no
+reference here, and the shadowing it does meant the hidden copy could not be
+picked, deleted, or told apart from a name with no twin at all. `save`
 (`tv:saveFxPatch`) names the host's chain into whichever tier you picked or
 created in — there is no separate publish, saving under `Library` being what
 putting a patch where it travels with you means. It is disabled where the tab

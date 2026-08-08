@@ -479,7 +479,7 @@ densifies exactly as an authored one does.
 derived seat — exclusive ownership. They stay visible in-column via the
 `parkedPb` render union and restore to the take when the region leaves.
 Each wire raw is `centsToRaw(curve + detune)` — no carrier, no add-bank
-slot. See `design/note-macros-v2.md` § Continuous pb replace.
+slot. See `docs/generators.md` § pb and cc.
 
 **6 In-window seats are markerless.** A replace seat writes native MIDI
 only (`{ppq, val, shape}`), so `addCC` mints no uuid and no `eventMeta`
@@ -496,7 +496,7 @@ marker + cents sidecar.
 
 **8** The create/remove transition — park authored in, sweep seats out —
 is diffed by tm's `fxRegions` observer, not carried as a standing
-record. See `design/note-macros-v2.md` § Route-by-window. Origin and the
+record. See `docs/generators.md` § Route-by-window. Origin and the
 replace path (generator curves reusing the same seats):
 `design/archive/pb-interpolation.md`.
 

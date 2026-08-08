@@ -2,7 +2,7 @@
 -- single-breakpoint representation, so it is sampled onto the ccGridStep lattice; a curve that is the
 -- only thing moving across a segment does have one, and rides out as its own breakpoint. That second
 -- rule only holds if the fold's segments are independent of how the dirt sliced the channel, which is
--- why foldChains folds over its records' extent. see design/note-macros-v2.md § The fx chain
+-- why foldChains folds over its records' extent. see docs/generators.md § Multiplicity
 
 local t = require('support')
 

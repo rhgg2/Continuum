@@ -225,7 +225,7 @@ local function slide(stream, host, params, ctx)
   if target == 0 then return { notes = {}, delta = {} } end
 
   -- snap keeps the arrival (target) and the handoff (0) on distinct wire ppqs --
-  -- the seat reconcile keys on ppq. see design/note-macros-v2.md § Continuous pb
+  -- the seat reconcile keys on ppq. see docs/generators.md § pb and cc
   local snap   = math.max(1, ctx.resolution / 16)
   local over   = periodTicks(params.over, ctx.resolution)
   local arrive = math.max(startL, endL - snap)
@@ -309,7 +309,7 @@ end
 ----- Generator registry
 
 -- One entry per kind: the realisation fn (`expand`) plus all metadata a kind ships with. see
--- design/note-macros-v2.md § The fx chain
+-- docs/generators.md § The chain
 
 -- Shared QN-fraction period ladder; every periodic kind tempo-syncs the same way.
 local PERIODS = { { l = '1/2', v = { 1, 2 } }, { l = '1/3', v = { 1, 3 } },
@@ -404,7 +404,7 @@ generators.kinds = {
 }
 
 -- Resting base for a cc-augment target with no authored automation: bipolar controllers
--- centre at 64, expression rests wide open, all else at 0. see design/note-macros-v2.md § Continuous cc
+-- centre at 64, expression rests wide open, all else at 0. see docs/generators.md § pb and cc
 generators.ccDefaultRest = { [8] = 64, [10] = 64, [11] = 127 }
 for cc = 71, 79 do generators.ccDefaultRest[cc] = 64 end
 
@@ -413,7 +413,7 @@ for cc = 71, 79 do generators.ccDefaultRest[cc] = 64 end
 generators.modalOrder = { 'retrig', 'trill', 'arp', 'ostinato', 'chordStamp', 'velPattern', 'sine', 'slide', 'lfo' }
 
 -- One glyph per kind: a letter shapes notes, a wave mark paints a continuous stream. '?' is a
--- kind the registry has lost. see design/note-macros-v2.md § The chain surface
+-- kind the registry has lost. see docs/generators.md § Conventions
 function generators.glyphOf(kind)
   local meta = generators.kinds[kind]
   return meta and meta.glyph or '?'
@@ -544,7 +544,7 @@ function generators.continuousTargets(fx)
 end
 
 -- The fold mode a chain presents for one continuous target: replace if any live stage targeting it
--- replaces, else augment -- a bypassed stage never counts, so it can't paint an overlapping chain's curve. see design/note-macros-v2.md § Per-stage bypass
+-- replaces, else augment -- a bypassed stage never counts, so it can't paint an overlapping chain's curve. see docs/generators.md § The chain
 function generators.chainDestType(fx, target)
   for _, params in ipairs(fx or {}) do
     local meta = generators.kinds[params.kind]
@@ -572,7 +572,7 @@ function generators.parkWindows(regions)
     for _, params in ipairs(region.fx or {}) do
       local dest = generators.kinds[params.kind] and generators.destOf(params)
       -- cc and pb both park for replace and augment: the summed base + macros seat on the target
-      -- lane (cc) or base lane (pb). see design/note-macros-v2.md § Continuous cc / § Continuous pb
+      -- lane (cc) or base lane (pb). see docs/generators.md § pb and cc
       if type(dest) == 'number' then window('cc', region, dest)
       elseif dest == 'pb' then window('pb', region) end
     end

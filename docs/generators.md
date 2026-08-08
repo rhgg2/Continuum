@@ -59,7 +59,14 @@ never changes what the user sees**, and it holds for every replace path — the
 note chord, the cc source, and pb. Whether a host parks is read from its
 kinds rather than from a mode toggle on the host.
 
-**6** **There is no dirty tracking to design.** The rebuild regenerates and
+**6** **A note host parks itself.** A note carrying a discrete-replace kind is
+its own membership, `{self}`, so it parks exactly as a region parks a covered
+chord: every hit is derived output, and the parked cell — the one carrying the
+`fx` — is the visible, editable surface. The two host kinds then differ only in
+membership and in where the fx is stored, which is the precondition for a stage
+behaving uniformly on both.
+
+**7** **There is no dirty tracking to design.** The rebuild regenerates and
 diffs unconditionally, so "membership changed → regenerate" is a non-problem:
 a region re-queries its covered notes each rebuild, and the output is stable
 so long as that query is a pure function of current note positions. The
@@ -108,6 +115,24 @@ breakpoints are placed by accumulated phase and resampling them loses
 coherence. Hence the line: value and discrete timing are chain stages, while
 rate, period and phase stay params inside the source. Moving one without
 resampling anything is `design/pipe-dreams.md` § Param modulation.
+
+**8** A **bypassed** stage stays in the chain with its params intact and
+contributes nothing — the A/B gesture, which otherwise costs you the stage.
+Its identity in the fold is augment-with-no-output rather than an early skip:
+ownership is registered inside the fold, so a skipped stage would emit no
+record at all and the parked chord and parked base it left behind would never
+be re-seated — silence, not neutrality. `chainDestType` reads the same rule
+from the other end, counting a bypassed stage as augment so that a bypassed
+replace stops overwriting a lower-precedence chain's curve on the same target.
+The flag is realisation metadata and reaches nothing else
+(`docs/trackerView.md` § Note FX stages).
+
+**9** Composition buys a *smaller* vocabulary rather than a larger one. Most
+wishes for a new kind turn out to be spellings of a few hard primitives —
+strum is `[arp, humanize]`, a gated arp is `[arp, densityGate]` — so the
+registry stays small and expressivity comes from the series. This is
+generators-as-config one level up: a kind is data when its body is arithmetic
+over ctx ops, and a chain is composition as data.
 
 ## Output
 
@@ -504,6 +529,11 @@ reaches it — is `docs/oddities.md`'s.
 - **pb values are cents; cc values are the controller's own 7-bit numbers.**
   A param declared as a magnitude scales into whichever wire its dest names,
   which is what lets one kind serve every target.
+- **The glyph set divides by what a kind touches** — a letter for one that
+  shapes notes (`R` `T` `A` `O` `C` `V`), a wave mark for one that paints a
+  continuous stream (`∿` sine, `/` slide, `~` lfo). Case would have drawn the
+  same distinction and lost it: at one cell a letter against a squiggle
+  survives where upper against lower does not.
 - **A kind resolves through the registry's own accessors**, never by indexing
   it bare, so a kind the registry has lost draws `?` instead of faulting its
   caller — the mark a user-authored kind that failed to load would carry.

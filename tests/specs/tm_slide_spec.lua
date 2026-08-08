@@ -1,5 +1,5 @@
 -- Slide spec (portamento, continuous pb-augment): the glide-in curve sums onto the authored pb base
--- and seats a markerless pb stream on the base lane. see design/note-macros-v2.md § Continuous pb
+-- and seats a markerless pb stream on the base lane. see docs/generators.md § pb and cc
 
 local t    = require('support')
 local util = require('util')
@@ -182,7 +182,8 @@ return {
     run = function(harness)
       local h = harness.mk()
       -- trill is discrete-replace, so it parks its own host; slide shares the chain and must
-      -- still resolve the lane successor from off-take. see design/note-macros-v2.md § Known gaps
+      -- still resolve the lane successor from off-take.
+      -- see docs/oddities.md § A slide into a parked successor arrives late
       h.tm:addEvent({ evType = 'note', ppq = 0, endppq = 240, chan = 1, pitch = 60, vel = 100,
                       detune = 0, delay = 0, lane = 1,
                       fx = { { kind = 'trill', period = { 1, 4 }, step = 2 },

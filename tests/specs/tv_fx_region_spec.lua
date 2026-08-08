@@ -1,6 +1,6 @@
 -- Track B (note macros v2): the fx-region column + Super-X addressing. A region
 -- renders as a tailed kind-badge in a per-channel fx column, and the v1 note-FX
--- editor addresses it by uuid. see design/note-macros-v2.md § Authoring and editing the fx
+-- editor addresses it by uuid. see docs/trackerView.md § Addressing a chain
 local t    = require('support')
 local util = require('util')
 local generators = require('generators')

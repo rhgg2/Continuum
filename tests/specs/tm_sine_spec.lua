@@ -1,5 +1,5 @@
 -- Note macros: sine (continuous pb-augment). Offline park-and-seat: the macro sums onto the
--- authored pb base and seats a markerless pb stream on the base lane (no carrier). see design/note-macros-v2.md § Continuous pb
+-- authored pb base and seats a markerless pb stream on the base lane (no carrier). see docs/generators.md § pb and cc
 
 local t    = require('support')
 local util = require('util')

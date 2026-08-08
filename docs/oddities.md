@@ -63,6 +63,27 @@ pinning on a mouse mint, which changes what Esc reverts, or moving the caret
 as a side effect of a picker pick; both are wider than the gesture that
 exposed them.
 
+### A chain's claim on a column the channel lacks shows nothing
+
+> **gap** · tv · 2026-08-06
+
+The ghost overlay lands only in columns that already exist
+(`docs/trackerView.md` § Ghost sampling), so an lfo on a cc the channel has
+never carried leaves no mark on the grid, and a region chain deriving three
+voices on a one-lane channel has two thirds of its ghosts with nowhere to
+hang. Nothing on the grid then distinguishes a chain that is working from one that is not, and the
+fx tab becomes the only place the target is written down — the glyph stack
+names a chain's kinds but not what they address, so it narrows the question
+without answering it. Adding the column by hand makes the claim visible. Two
+closures were priced and neither taken: the claim could add a real column
+once, when it is made, in the fx edit's own undo block, at the price of a
+document write as a side effect of an fx edit; or the caret-gated set could be
+made safe by holding caret and selection by column identity throughout, which
+is a piece of work in its own right. One neighbour this would not close: a
+note host's derived notes ride the host's own lane by design, so a three-voice
+stamp on a *note* shows one ghost of three whatever columns exist — that is
+lane sharing, and no column answers it.
+
 ### A note's own fx stays suppressed while a region parks it
 
 > **accepted** · tm · 2026-08-04

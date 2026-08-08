@@ -1,5 +1,5 @@
 -- Note macros v2: region hosts. The N=0 sine pb seat stream proves the generator-side substrate
--- (ds, 4.6 producer split, reconcile, G4 round-trip). see design/note-macros-v2.md
+-- (ds, 4.6 producer split, reconcile, G4 round-trip). see docs/generators.md
 local t          = require('support')
 local util       = require('util')
 local generators = require('generators')
@@ -18,7 +18,7 @@ end
 
 -- A seat is recognized purely by region membership, on pb and cc alike: anything inside a live region's
 -- span, half-open (as production's covered()). The close folds to endppq-1, so the end row is never
--- seat territory. see design/note-macros-v2.md § Route-by-window
+-- seat territory. see docs/generators.md § Route-by-window
 local function inLiveRegion(h, chan, ppq)
   for _, r in ipairs(h.ds:get('fxRegions') or {}) do
     if r.chan == chan and ppq >= r.startppq and ppq < r.endppq then return true end
@@ -1313,7 +1313,7 @@ return {
     run = function(harness)
       local h = harness.mk()
       -- r1 [120,360) at 30c, r2 [0,240) at 60c (later storage) wins the overlap [120,240); r1's exclusive
-      -- tail [240,360) must survive at 30c, not be wiped by r2's whole curve. see design/note-macros-v2.md § The fx chain
+      -- tail [240,360) must survive at 30c, not be wiped by r2's whole curve. see docs/generators.md § Multiplicity
       generators.kinds.capA = {
         expand = function(host) return { notes = {}, delta = {
           { ppq = host.window[1], val = 30, shape = 'step' },
@@ -1377,7 +1377,7 @@ return {
     run = function(harness)
       local h = harness.mk()
       -- r1 [0,240) peaks +40 at 60; r2 [120,360) peaks +10 at 180. Overlap [120,240) sums both; each
-      -- exclusive tail carries only its own delta (base rest 64). see design/note-macros-v2.md § The fx chain
+      -- exclusive tail carries only its own delta (base rest 64). see docs/generators.md § Multiplicity
       generators.kinds.ccA = {
         expand = function(host) return { notes = {}, delta = {
           { ppq = host.window[1], val = 0,  shape = 'step' },
@@ -2014,7 +2014,7 @@ return {
 
   {
     -- Removing the last note-dest kind un-parks the host, but a surviving continuous kind still governs
-    -- its cc target and must persist its window. see design/note-macros-v2.md § Route-by-window
+    -- its cc target and must persist its window. see docs/generators.md § Route-by-window
     name = 'removing the note kind from a self-parked [sine, trill] host keeps its authored cc parked',
     run = function(harness)
       local h = harness.mk()
@@ -2697,7 +2697,7 @@ return {
 
       t.eq(rebuilds, 1, 'one rebuild -- the thin rides the conversion rather than a pass of its own')
       -- Every seat is inside the window to begin with, where the rect a mint claims can cover it --
-      -- freeze moves nothing. see design/note-macros-v2.md § Route-by-window
+      -- freeze moves nothing. see docs/generators.md § Route-by-window
       t.deepEq(wirePbs(h, 1, 0, 240), { before[1], before[RAMP_N], before[RAMP_N + 1] },
         'a collinear run inside tolerance comes back as its endpoints, plus the close that breaks the run')
     end,
@@ -2705,7 +2705,7 @@ return {
 
   {
     -- Two curve points can want the one tick material may hold. The fold collapses them there rather
-    -- than doubling up, below tm's close. see design/note-macros-v2.md § Route-by-window
+    -- than doubling up, below tm's close. see docs/generators.md § Route-by-window
     name = 'freeze to group: material at the fold line collapses onto one tick, below the close',
     run = function(harness)
       local h = harness.mk()

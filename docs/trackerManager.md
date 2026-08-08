@@ -395,6 +395,16 @@ Semantics:
 - **Pb edits don't maintain absorbers.** Adding or deleting a real pb
   stages only that pb; the absorber set is reconciled wholesale by
   rebuild's absorber pass, never adjusted per-edit.
+- **Parked edits stage; they never write `ds` inline.** `ds:assign` fires
+  `dataChanged` → `tm:rebuild` synchronously, and a rebuild reloads the um
+  cache — so a parked edit writing `ds` mid-loop during a multi-select (a
+  transpose spanning a parked chord and normal notes) would rebuild and
+  discard the still-staged mm edits. That is a correctness hazard rather
+  than a deferrable nicety, so parked edits ride `flush` like every other
+  staged edit, through a `parkedEdits` buffer peer to `adds`/`assigns`/
+  `deletes`. Flush applies them to a cloned stash under a guard suppressing
+  the inline rebuild, then either rides the mm reload's rebuild or drives one
+  explicit rebuild where the edit was parked-only.
 - **Flush re-entrancy.** `flush` snapshots and clears `adds/assigns/
   deletes` **before** calling `mm:modify`, because mm's callbacks can
   reach back into the same um (e.g. via `setMutedChannels`). Without
@@ -430,8 +440,11 @@ Triggered by:
   index reconciliation). The take-swap flag travels via the separate mm
   `'takeSwapped'` signal, captured into a transient flag and consumed by
   the next reload (mm guarantees the firing order);
-- cm `'configChanged'` signal, except for `tvOnlyKeys` — `defaultSwing` is
-  its sole member — which tv consumes without a structural rebuild;
+- cm `'configChanged'` signal, except for `tvOnlyKeys` — `defaultSwing` and
+  `fxPatches` — which tv consumes without a structural rebuild. Neither feeds
+  a derivation: a patch catalogue is a vocabulary of chains to instantiate
+  from, so without the exemption each save would cost a full re-derivation of
+  the take for a write no realisation reads;
 - ds `'dataChanged'` on the project data tm derives from: `swing`,
   `fxRegions`, `fxParked`, `extraColumns` and `noteDelay`.
 
@@ -495,7 +508,7 @@ runs it, with a pointer to its detail where one exists.
 - **Region-replace parking** (`rebuildRegionPark`). Authored notes and
   ccs a replace-region covers leave the take — and so does any note
   hosting its own discrete-replace kind (note-host replace parks the
-  host; see `design/note-macros-v2.md` § Note-host replace parks). The
+  host; see `docs/generators.md` § Hosts and membership). The
   prior parked set splits into still-covered carry-forward and restores
   that re-enter their columns unrealised until the same stage's commit
   lands them, keeping their uuid and fx. A
@@ -522,7 +535,7 @@ runs it, with a pointer to its detail where one exists.
   member (mirrors `fxHostWin`). Lane bound only, never pitch: a parked cell never
   reaches mm, so it carries pure intent — the same extent
   `computeFxWindows` gives an on-take host. The note del/adds ride the
-  tail walk's atomic commit. See `design/note-macros-v2.md` § Generator output. Each pass's
+  tail walk's atomic commit. See `docs/generators.md` § Output. Each pass's
   `scan` builds its `spec` inline at the scan site, where that pass's
   `chan`/`lane`/`cc` are in scope; `reconcilePark`'s optional `onPark`
   callback fires only for specs newly parked this rebuild (e.g. marking
@@ -559,7 +572,7 @@ runs it, with a pointer to its detail where one exists.
   to the absorber pass. The note add/del leaves `rebuildFx` as data
   (`fxOut.noteOps`); the tail walk seeds its own batch with it and commits
   atomically. `fxOut.noteLive` (the predicted set) feeds the tail walk and
-  PC synthesis. See `design/note-macros-v2.md` § Offline continuous realisation.
+  PC synthesis. See `docs/generators.md` § Offline continuous realisation.
 - **Tail walk** (`rebuildTails`). Real notes, fixed externals, and the
   predicted fxNotes walk together: clamp same-pitch onset collisions
   (fixed onsets frozen), then clip each realised note-off against its
@@ -619,7 +632,7 @@ across a call by resuming from the last consumed index rather than rescanning fr
 governing onset at-or-before `startL` (its sounding tail may reach into the window) and walks
 forward through one closing onset past `endL`. Membership is still overlap, not storage —
 authored notes are re-queried each rebuild, one walk feeding both generator events and fixed lane
-occupancy. See `design/note-macros-v2.md` § The anchor generalized.
+occupancy. See `docs/generators.md` § Hosts and membership.
 
 `pbBaseFor(chan, spans)` / `ccBasesFor(chan, spans)` build the absolute authored base (ppq-keyed,
 logical) covering only the caller's merged producer windows, not the whole channel: every read of
@@ -922,6 +935,24 @@ needs. A spurious diff costs one derivation; a missed one writes stale output,
 which is why the diff is over values and not over a change counter that only
 ticks when someone remembered to tick it.
 
+## Fx is phases, not a layer
+
+tm is large, and the obvious relief is an `fxManager`. It is the wrong cut. Fx
+is not a layer but a set of phases woven into tm's one rebuild, sharing the
+`fx` accumulator and the deferred mmBatch, and the tail walk deliberately
+fuses authored, external and derived notes into one atomic commit. An
+`fxManager` would have to reach into tm's `channels`, `fx` and `deferred` —
+the cross-layer reach the architecture forbids, buying size-down at
+coupling-up. Parked edits have to coordinate with `adds`/`assigns`/`deletes`
+inside `flush` besides (§ Mutation contract), so splitting parking out is the
+wrong cut twice over.
+
+Pressure relief goes the other way: push *pure* fx logic into `generators`
+(`docs/generators.md` § The ctx discipline). If size ever does force a
+structural split, the honest seam is the whole rebuild pipeline lifted to a
+`trackerRebuild` file with `channels`/`fx`/`deferred` as an explicit ctx —
+not fx.
+
 ## PC synthesis under trackerMode
 
 `note.sample` is per-note authoring intent (which sample the note
@@ -1048,6 +1079,45 @@ cells on one `(chan, ppq)` — one per host note. It is `pitch` and not
 `lane` because lane is a display attribute, and keying on it would
 mint a distinction the take cannot hold: two parked PAs differing only
 by lane would collapse into one the moment they were restored.
+
+A stash spec is **logical only**. It drops realised `ppq`/`endppq` and derives
+them fresh on restore via `fromLogical` under current swing, so a swing change
+under a parked chord reaches it as it reaches everything else. What a parked
+cell carries besides is the fields its backing addresses it by (`chan` +
+`uuid` for notes, `chan` + `ppqL` for ccs) plus the authored ceiling as
+`endppq` — which is what lets the note move and resize machinery work on
+parked cells unchanged.
+
+## Realisation by producer
+
+**1** The ghost overlay asks one question — what does *this* chain realise —
+and asks it per frame, off a caret that moves without a rebuild
+(`docs/trackerView.md` § Ghost sampling). Answering at read time would mean
+walking every channel's derived notes and every parked cell in the document,
+per frame, to discard nearly all of both. The rebuild already holds the
+answer: a derived spec carries its producer's uuid as it is emitted, a park
+window carries the id of the chain that opened it, and the census names every
+producer on the take. So tm keys those three outputs by producer as it builds
+them and gathers them into one entry per chain at the pipeline tail;
+`tm:fxRealisation` hands a host its entry and the view's query is a lookup.
+
+**2** The claimed continuous targets come off the **census**, not the
+emission. Emission is dirt-gated — a producer outside the dirty interval is
+kept rather than re-run, and a kept producer emits no record — so a target set
+read off it would vanish on the first edit elsewhere in the channel and return
+with the dirt. The note half can ride the emission because the reconcile
+re-adds a kept producer's specs verbatim; nothing re-adds its curve. What does
+not blink is `parkWindows`, which already walks a window per continuous cc
+target and a pb window per pb target, blind to dirt and blind to bypass, so
+the target set is a fold of the window set the rebuild computes for parking
+anyway.
+
+**3** One thing follows from taking the census whole: a note host claims its
+targets exactly as a region does, so a note carrying an lfo ghosts into the cc
+column it modulates, wherever the channel carries one.
+
+**4** `tm:fxCurveAt` is the sampling half — what one chain realises on one
+claimed target at one logical ppq, called once per row per frame.
 
 ## Muting
 
@@ -1308,8 +1378,8 @@ the end of the walk.
 A markerless pb seat (nil `ppqL`) inside a previous pb window skips this
 reconcile: it's a generated seat `deriveChan` owns, not foreign MIDI, so it
 stays markerless — and a genuine in-window pb from the user is
-indistinguishable, so it's absorbed the same way (design/note-macros-v2.md §
-Route-by-window). The window test is half-open, since the re-centre seat folds
+indistinguishable, so it's absorbed the same way (docs/generators.md
+§ Route-by-window). The window test is half-open, since the re-centre seat folds
 at `endRaw - 1` and the end row carries no seat (mirrors `inSeatWindow`).
 
 Derived events are handled separately: absorber pbs by the absorber pass

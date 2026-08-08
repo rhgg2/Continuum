@@ -122,7 +122,7 @@
       -- chain -- phase 5's per-target scopes key off it. see design/interval-dirt.md § phase 5
   @api generators.chainDestType(fx, target)  @ 548-556
       -- The fold mode a chain presents for one continuous target: replace if any live stage targeting it
-      -- replaces, else augment -- a bypassed stage never counts, so it can't paint an overlapping chain's curve. see design/note-macros-v2.md § Per-stage bypass
+      -- replaces, else augment -- a bypassed stage never counts, so it can't paint an overlapping chain's curve. see docs/generators.md § The chain
   @api generators.parkWindows(regions)  @ 561-581
       -- The single source for "what 4.5 parks over": a note window for a discrete-replace chord, a cc window
       -- per continuous cc target and a pb window per continuous pb target (both replace or augment).

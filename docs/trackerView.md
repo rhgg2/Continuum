@@ -49,7 +49,7 @@ when a channel is marked stale — but it never reaches the columns.
 
 ## Ghost sampling
 
-For each consecutive scalar pair whose first event has a non-step
+**1** For each consecutive scalar pair whose first event has a non-step
 shape, `vm:rebuild` samples the curve at every row strictly between
 A and B (skipping occupied rows) and writes `{ val, fromEvt, toEvt }`
 into `gridCol.ghosts[y]` for rm to render. The sample point for row
@@ -59,21 +59,94 @@ traversed". Curve evaluation is delegated to `tm:interpolate` (which
 forwards to `mm:interpolate`); the shape / tension / bezier-handle
 table are owned by midiManager.
 
-`pa` events are not ghosted — they live inside note columns.
+**2** `pa` events are not ghosted — they live inside note columns.
 
-A chain's realisation is sampled the same way, but per frame rather than
-per rebuild: while the caret sits on an fx host, `tv:ghostOverlay` asks
-`tm:fxCurveAt` for the value on each claimed continuous target at every
-visible row, and the draw arm prefers it to the interpolation ghost —
-which describes the authored curve alone, and inside a producer's window
-the authored curve has been parked out of the way. The gate is the caret
-and the window the viewport, so neither can be precomputed into the
-column.
+**3** A chain's realisation ghosts too, and the borrowed styling is the point
+of the reuse: an interpolation ghost already says *computed, not editable*,
+which is exactly what a derived event is. It cannot be sampled per rebuild,
+though, because both of its inputs move without one — the gate is the caret
+and the window is the viewport, where `vm:rebuild` answers only to tm's
+signal, a column add or remove, and config. A table hanging off the column
+would be stale on the first arrow key, so `tv:ghostOverlay` derives the
+ghosts per frame, as the drag preview already is.
 
-The overlay lands only in columns the channel already carries; a claim
-materialises none of its own. So a derived voice in a lane past the
-authored ones, or a curve on a cc nothing has authored, shows nothing
-until the column is added by hand.
+**4** The overlay is **one producer's realisation, and the caret names which**.
+A ghost says this row is computed, and a reader looking at one wants to know
+by what; a surface lighting every chain in view at once answers that question
+for none of them. So the gate is the chain the caret's own event runs,
+resolved through `tm:fxRealisation`, and a cell running none answers nil.
+Sibling collisions are read by moving the caret onto the sibling, which is
+also how you would ask which chain to edit.
+
+**5** The filtering is not done at read time. A `derived == host` test in the
+draw loop would answer the question and leave the walks it answers from in
+place: every channel's derived notes gathered, and every parked cell in the
+document gathered, per frame, to discard nearly all of it. The rebuild already
+holds the answer, so tm keys those outputs by producer as it builds them
+(`docs/trackerManager.md` § Realisation by producer) and the view's whole
+query is a lookup.
+
+**6** The overlay has two halves, because what the ghosts show and what they
+stand in for are one question. `notes` are the chain's derived onsets, and
+they carry no tail: the scalar ghosts this borrows from are a value on a row
+with no extent, and a retrig ghosted with tails would paint a wall of glyphs
+across the span the parked host's own tail already covers. `hidden` is the
+parked cells the ghosts stand in for, showing both being showing one span
+twice.
+
+**7** `hidden` is keyed by the event table rather than by row, because a
+note's tail bracket is drawn from a second list carrying no row the cell loop
+would recognise — `startRow` is fractional for an off-grid onset — and one
+identity then answers for the cell, its tail and its temper tick alike. A
+hidden cell is invisible, not absent: `col.cells` stays whole, so the host
+lookup, the leaf-edit facade and the caret keep their footing, and stepping
+onto one restores it. The suppression reads `channel.parked` alone, so parked
+ccs, pbs and PAs stand — nothing ghosts them, and hiding them would take a
+picture away without offering one in its place.
+
+**8** One cell is never hidden: one carrying `fx` of its own. A note hosting a
+replace chain parks itself, so hiding it would take away both the host and the
+only way to edit the note, and that holds however the cell came to be parked
+rather than only when the caret is on it. Its row shows no ghost either, a
+real cell outranking one.
+
+**9** The continuous half asks `tm:fxCurveAt` what the chain realises on one
+claimed target at one logical ppq, samples it at every visible row of every
+claimed column, and the draw arm prefers it to the interpolation ghost — which
+describes the authored curve alone, and inside a producer's window that curve
+has been parked out of the way. Sampling is per row rather than bucketed by
+seat: a curve has no onsets to bucket, and a 1/4-QN sine seated at the cc grid
+step would show its zero crossings and nothing else.
+
+**10** The overlay lands only in columns the channel already carries, and a
+claim materialises none of its own. The tempting answer is the other one —
+that the grid should show the claim, as a column derived from the data on the
+fx column's model, standing empty until the ghosts are on. It was built twice
+and withdrawn twice, for the same reason both times: such a column is not the
+user's, and everything the grid does with a column assumes that it is.
+
+**11** Standing permanently, it cannot be put away. Hide reads a channel's
+lane count off the grid, so a derived lane has to be made invisible to that
+count or hide writes back a larger one and quietly stops working; a derived pb
+or cc column passes hide's empty check and then clears nothing, so it returns
+from the data on the next rebuild.
+
+**12** Gating it on the caret is worse, and worse in a way worth naming,
+because `ec:col()` being an index sounds like a fact about the caret. Moving
+left off an fx host lands the caret on the claimed column immediately to its
+left; the move de-addresses the chain, so that column collapses, the fx column
+slides into the vacated index, and the caret arrives back on the host, which
+puts the column back — the keypress cannot be completed. Nor is the caret the
+only holder of a column index: a selection is `col1, col2` with no identity to
+re-find them by.
+
+**13** So columns follow the data and the user, as `extraColumns` and the
+authored lanes do, and the ghosts follow the caret within them. A derived
+voice in a lane past the authored ones does not show, and neither does a curve
+on a cc nothing has authored; adding the column by hand is what makes it
+visible, and tm already grows a channel's columns for a note written above the
+count. What that costs is `docs/oddities.md` § A chain's claim on a column the
+channel lacks shows nothing.
 
 ## Grid shape (vm's output to rm)
 
@@ -263,6 +336,37 @@ logical duration is preserved exactly.
 After any edit, `commit` calls `tm:flush`, advances by `advanceBy`,
 and optionally auditions the new pitch.
 
+### Backings and parked cells
+
+**1** A parked event is the visible, editable surface of an fx replace, and it
+edits like any other cell — transpose, resize, retune, delete, type a new one
+into the window — with no second editing surface. The leaf-edit facade
+dispatches every edit to a `backing` strategy by `kindOf(evt)`: `member` (gm)
+when the cell sits inside a group region, `parked` (tm's off-take stash) when
+it sits in an fx region's parked zone, else `plain` (tm).
+
+**2** That an fx region *defines* a parked zone exactly as a gm region defines
+a member zone is what makes this a third backing rather than a branch bolted
+into `tm:assignEvent`. Two things follow that a branch could not buy. Typing
+into the zone gets a real `add` — a logical spec written straight to the
+stash, with no mm round trip. And move gets its semantics free from the
+facade's existing cross-kind relocate: move-out (`parked`→`plain`) is
+drop-spec plus take-add, move-in is take-delete plus stash, and an in-zone
+value edit or ppq nudge stays one kind and churns nothing.
+
+**3** A move-out sheds the uuid, a relocation being a new note rather than the
+old one returning. A **restore** — the fx removed, or the window moved off —
+hands the spec's original uuid back to `mm:addNote` under `keepUuid` instead,
+so fx-editor handles survive the round trip.
+
+**4** The view must tag a cell `parked` over exactly the spans the park pass
+parks over, or the tag and the parking disagree. Both read the same pure
+`generators` surface, `parksNotes` and `parkWindows`, and any new reason a
+host stops parking has to reach those predicates too, or the runner and the
+tagging drift apart. Bypass is deliberately not such a reason (§ Note FX
+stages). Where a gm group and an fx region ever cover the same cell, `parked`
+wins and we assert disjoint.
+
 ## Clipboard
 
 The clipboard lives in a `newClipboard` factory in `editCursor.lua`
@@ -383,15 +487,80 @@ kills stale auditions after `AUDITION_TIMEOUT` (0.8s). MIDI chan is
 0-indexed at the REAPER boundary only; everywhere else vm speaks
 1-indexed.
 
+## Addressing a chain
+
+**1** A chain hangs on a host, and a host is a channel × ppq span carrying an
+fx list (`docs/generators.md` § Hosts and membership). What authoring has to
+solve is therefore not what the fx does but how you reach a host that isn't a
+cell.
+
+**2** There is one gesture, and the selection decides which host it means.
+Select a span on a channel and edit its fx, and the selected channel × ppq
+span becomes — or re-opens — an explicit region, its contents irrelevant.
+With no selection the cursor's note is edited, because a note is a complete
+region by itself: it supplies channel, start and end. That is the law
+underneath, and it is the whole of it — no-selection authoring works only on a
+cell that is a complete region by itself, and only a note is one.
+
+**3** So fx on a cc column with no selection has no host. The cell gives the
+target for free, being a continuous target already, but it gives no window,
+and a target without extent is not a region. The tempting repair is to default
+the window to the whole take, which quietly reinstates the unbounded host the
+model spent its effort removing; "modulate this whole lane" is already spelled
+select-all → fx. A third storage site, `column.fx`, is the same mistake in
+other clothes: a whole-lane LFO is a region of column × take bounds.
+
+**4** An existing region is addressed the way a note is — by giving it a cell.
+The per-channel **fx column** carries each region as a tailed kind-badge:
+onset at `startppq`, a note-style tail to `endppq`, a glyph for the primary
+kind, and the caret lands on it as it lands on anything else. No second
+navigable object and no region mode. The column/cell/tail machinery is the
+most native thing the tracker has, so region editing borrows that rather than
+the group page's footprint idiom, and the column is cc-like in lifecycle —
+data-derived, materialising when the channel first carries a region with a
+kind, dropping when the last goes, never proximity-gated — and note-lane-like
+in render, overlapping regions packing into sibling columns in storage order,
+which is also their precedence (`docs/generators.md` § Multiplicity).
+
+**5** The badge names the primary kind only, which leaves a three-stage chain
+looking like a one-stage chain, so the stages' glyphs stack in series order
+down the region's tail rows — the palette's own vertical order, and behaviour
+readable without opening anything. A kind's glyph is a field on its
+`generators.kinds` entry and `generators.glyphOf` is the one place a kind
+resolves to a character, so the view mints the badge already holding it and
+the grid renderer knows nothing of the set.
+
+**6** `chainStack` keys each stage by absolute grid row rather than by an
+offset from the badge, because the badge row and the tail's `startRow` are not
+the same kind of number: `placeRow` snaps the badge to its integer row while
+the tail keeps sub-row float precision. Keying absolutely lets the stack and
+the tail bracket share one row space with no snap-versus-float mismatch
+leaking into where a glyph lands.
+
+**7** A chain with more stages than the region has rows gives its last
+drawable row to `…`, and where the region is one row deep that row is the
+badge's. The clip mark outranks the badge there, because keeping the badge
+would preserve today's reading at exactly the size where it lies — a one-row
+region carrying `[arp, humanize]` showing `A`, which is the misreading the
+stack exists to end. `…` says less and says it truthfully.
+
 ## Note FX stages
 
-The fx list is an ordered series (C1); the editor addresses stages by position, not kind, so
-duplicate kinds are expressible. `addFxStage` appends a seeded stage, `removeFxStage` drops the
-stage at `index`, `moveFxStage` swaps it with its neighbour (`dir` -1 earlier / +1 later, no-op
-past an edge). All three write the whole list through `setNoteFx`, which persists per host and
-collapses an empty list to none. `setFxBypass` delegates to `setFxField`, storing `bypass = true`
-or deleting the key — never `false`, so a chain with nothing bypassed serialises as it always did.
-See `design/note-macros-v2.md` § The fx chain.
+**1** The fx list is an ordered series (`docs/generators.md` § The chain); the
+editor addresses stages by position, not kind, so duplicate kinds are
+expressible. `addFxStage` appends a seeded stage, `removeFxStage` drops the
+stage at `index`, `moveFxStage` swaps it with its neighbour (`dir` -1 earlier
+/ +1 later, no-op past an edge). All three write the whole list through
+`setNoteFx`, which persists per host and collapses an empty list to none.
+
+**2** `setFxBypass` delegates to `setFxField`, storing `bypass = true` or
+deleting the key — never `false`, so a chain with nothing bypassed serialises
+as it always did. That storage is the criterion: **bypass changes the
+realisation and never touches the authored notes.** A chain's parked chord
+stays parked whether or not its stages are bypassed, so the toggle moves
+nothing between take and stash and `parksNotes` / `parkWindows` never learn
+about the flag. What it does reach is the fold (`docs/generators.md`
+§ The chain).
 
 ## Commands & wrappers
 

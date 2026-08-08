@@ -73,7 +73,7 @@ local derivedInputs
 -- Rebuilt chans re-read the wire, so muted flags need re-conforming; setMutedChannels consumes.
 local muteConform  = {}
 -- True while a tm-internal driver (parked flush, region freeze) writes ds; only suppressingRebuild
--- may set it, suppressing the inline dataChanged rebuild. see design/note-macros-v2.md § Parked editing
+-- may set it, suppressing the inline dataChanged rebuild. see docs/trackerManager.md § Mutation contract
 local flushingParked = false
 -- Set via tm:requestRebuild for geometry-only changes staging no mm ops: forces the flush
 -- past its no-op return AND the rebuild past the rebuild(∅) gate, which consumes it.
@@ -372,7 +372,7 @@ local function evalCurve(curve, ppq)
 end
 
 -- A producer hands its target back before the window exits: one step point at eL-1, inside the
--- half-open span, so no close ever lands on the boundary row. see design/note-macros-v2.md § Route-by-window
+-- half-open span, so no close ever lands on the boundary row. see docs/generators.md § Route-by-window
 local function closeAtWindowEnd(pts, val, sL, eL)
   if eL - 1 <= sL then return pts end
   if pts[#pts] and pts[#pts].ppq == eL - 1 then table.remove(pts) end   -- the close owns the tick
@@ -407,7 +407,7 @@ local function sumStreams(base, macros, span)
   table.sort(fps)
 
   -- Emit each pair's left point; eL bounds the final pair but is never emitted. Densify only where the
-  -- sum has no single breakpoint for it: a sole mover keeps its whole segment. see design/note-macros-v2.md § The fx chain
+  -- sum has no single breakpoint for it: a sole mover keeps its whole segment. see docs/generators.md § Multiplicity
   local pts = {}
   for idx = 1, #fps - 1 do
     local p, q = fps[idx], fps[idx + 1]
@@ -438,7 +438,7 @@ local function sumStreams(base, macros, span)
 end
 
 -- A stage's material stops short of the tick closeAtWindowEnd owns: anything at or past the line
--- collapses onto that last tick, so a closing control point survives. see design/note-macros-v2.md § Route-by-window
+-- collapses onto that last tick, so a closing control point survives. see docs/generators.md § Route-by-window
 local function foldIntoWindow(pts, sL, eL)
   local last, out = eL - 2, {}   -- eL-1 is the close's; eL-2 is the last tick material may hold
   if last < sL then return out end
@@ -489,7 +489,7 @@ local function sliceCurve(base, startL, endL)
 end
 
 -- Fold records in storage order (later replace wins, painter fold); all-flat -> empty so stale seats sweep.
--- Kept distinct from foldSub: a whole-span replace emits verbatim, no synthetic edge point. see design/note-macros-v2.md § The fx chain
+-- Kept distinct from foldSub: a whole-span replace emits verbatim, no synthetic edge point. see docs/generators.md § Multiplicity
 local function foldWhole(covering, span, base)
   local stream, any = base, false
   for _, rec in ipairs(covering) do
@@ -522,7 +522,7 @@ local function chainCuts(covering, span)
 end
 
 -- Fold the active records over one sub-span [a,b) with a constant active set; half-open unless closing.
--- A curved replace clipped mid-segment re-interpolates from the slice edge (accepted fidelity loss). see design/note-macros-v2.md § The fx chain
+-- A curved replace clipped mid-segment re-interpolates from the slice edge (accepted fidelity loss). see docs/generators.md § Multiplicity
 local function foldSub(active, a, b, base, closeHere)
   local subBase = sliceCurve(base, a, b)
   local stream, streamed, touched = subBase, false, false
@@ -545,12 +545,12 @@ local function foldSub(active, a, b, base, closeHere)
 end
 
 -- Fold parallel chains covering `span` in storage order: whole-span records take the verbatim fast path,
--- otherwise sub-split at record edges. Folds over the records' extent; `span` selects the emission. see design/note-macros-v2.md § The fx chain
+-- otherwise sub-split at record edges. Folds over the records' extent; `span` selects the emission. see docs/generators.md § Multiplicity
 local function foldChains(recs, span, base)
   local covering = overlapping(recs, span)
   if #covering == 1 then return covering[1].curve end
   -- A kept range and a full re-derive of the same material must agree point for point, which they only
-  -- do once the dirt cannot decide where segments fall. see design/note-macros-v2.md § The fx chain
+  -- do once the dirt cannot decide where segments fall. see docs/generators.md § Multiplicity
   local lo, hi = span[1], span[2]
   for _, rec in ipairs(covering) do
     lo = math.min(lo, rec.window[1]); hi = math.max(hi, rec.window[2])
@@ -606,7 +606,7 @@ local function coverInto(list, spans, admit, emit)
 end
 
 -- Membership is overlap, not storage: one walk feeds generator events + fixed lane occupancy.
--- Cover, not scan: see docs/trackerManager.md § Span-covered fx scans; design/note-macros-v2.md § The anchor generalized
+-- Cover, not scan: see docs/trackerManager.md § Span-covered fx scans; docs/generators.md § Hosts and membership
 local function eachWindowNote(chan, startL, endL, fn)
   for laneIdx, col in ipairs(channels[chan].columns.notes) do
     -- A lane is monophonic + ppq-sorted, so a note's sounding tail ends at the next note's onset
@@ -641,7 +641,7 @@ local function membersOf(chan, startL, endL)
   return out
 end
 -- cc-family streams a generator reads (notes via membersOf); pb/ccs are absolute curves sliced
--- from the per-chan bases with entering/closing edges. see design/note-macros-v2.md § The fx chain
+-- from the per-chan bases with entering/closing edges. see docs/generators.md § Input streams
 local function channelStreams(chan, startL, endL, pbBase, ccBases)
   local cols = channels[chan].columns
   local pas, ats = {}, {}
@@ -666,7 +666,7 @@ local function channelStreams(chan, startL, endL, pbBase, ccBases)
   return pas, ccs, ats, sliceCurve(pbBase, startL, endL)
 end
 -- Deterministic allocator: lowest lane free of overlap, authored notes seed occupancy;
--- emission order -> deterministic -> G4-stable. see design/note-macros-v2.md § Generator output
+-- emission order -> deterministic -> G4-stable. see docs/generators.md § Output
 local function allocateRegionLanes(chan, startL, endL, derived, emitted)
   local occupied = {}
   eachWindowNote(chan, startL, endL, function(laneIdx, lo, hi)
@@ -1763,7 +1763,7 @@ local function buildFreezeMaps(census, windows)
 end
 
 -- The continuous half of the same window set: which pb/cc targets each channel's chains own, and over
--- what, raw framed to meet the raw index -- census-sourced, so a kept producer still claims its target. see design/note-macros-v2.md § The chain surface
+-- what, raw framed to meet the raw index -- census-sourced, so a kept producer still claims its target. see docs/trackerManager.md § Realisation by producer
 local function buildFxTargets(windows)
   local byProducer = {}
   for _, w in ipairs(windows) do
@@ -2640,7 +2640,7 @@ local function rebuildCCs(prevWindows)
   local ccExisting = emptyChans()
 
   -- Seats are recognized against last rebuild's persisted windows: an on-take cc inside a prev cc window is a
-  -- seat; a just-created window's cc still parks, a removed one's orphans reconcile away. see design/note-macros-v2.md § Route-by-window
+  -- seat; a just-created window's cc still parks, a removed one's orphans reconcile away. see docs/generators.md § Route-by-window
   local ccWins, pbWins = {}, {}
   for _, w in ipairs(prevWindows or {}) do
     if w.evType == 'cc'     then util.add(ccWins, w)
@@ -2888,7 +2888,7 @@ local function persistParked(key, newParked, prior)
 end
 
 -- Region-replace parking: authored events a replace window covers leave the take;
--- the prior parked set carries still-covered forward, restores the rest. see design/note-macros-v2.md § Generator output
+-- the prior parked set carries still-covered forward, restores the rest. see docs/generators.md § Emission is ownership
 
 local function rebuildRegionPark(currentWindows, fxParked, prevWindows, hostWindows, settleWindows)
   local batch = mmBatch()
@@ -3404,7 +3404,7 @@ function computeFxWindows(extraFxChans, parkedNotes)
 end
 
 -- Fx expansion: fx-carrying notes / fx-regions -> derived notes, CCs; reconcile vs existing,
--- note existence ops leave as data on fxOut.noteOps. see design/note-macros-v2.md § Offline continuous realisation
+-- note existence ops leave as data on fxOut.noteOps. see docs/generators.md § Offline continuous realisation
 local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxRegions)
   -- Columns must be ppq-ordered here (eachWindowNote / allocateRegionLanes / membersOf read col.events
   -- directly); the writers seat in order and nothing since reorders. see design/decisions.md § 2026-07-19
@@ -3509,7 +3509,7 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
   local chanCtx = { resolution = res, pbRangeCents = pbRangeCents, step = stepOp,
                     stepsBetween = stepsBetween, nextSameLaneNote = nextSameLaneNote }
   -- Explicit fx-regions (channel x ppq span + fx, no host note), re-queried each
-  -- rebuild and bucketed by channel. see design/note-macros-v2.md § The anchor generalized
+  -- rebuild and bucketed by channel. see docs/generators.md § Hosts and membership
   local fxRegionsByChan = {}
   for _, region in ipairs(fxRegions or {}) do
     util.bucket(fxRegionsByChan, region.chan, region)
@@ -3527,19 +3527,19 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
                         add = function(spec) util.add(noteOps.adds, spec) end }
 
   -- Pass A: run every chain as a series -- each stage folds into the stream by mode x dest, and
-  -- the final owned channels emit. see design/note-macros-v2.md § The fx chain
+  -- the final owned channels emit. see docs/generators.md § The chain
   local function expandChannel(chan)
     local predicted, ccLive = {}, {}
     local pbBase, ccBases   -- assigned after producer enumeration: bases cover producer windows
     -- Per-chain continuous records: one absolute curve + fold mode per chain per owned cc target;
-    -- cross-chain overlap layers at emission by storage order (pb folds in rebuildPbs). see design/note-macros-v2.md § The fx chain
+    -- cross-chain overlap layers at emission by storage order (pb folds in rebuildPbs). see docs/generators.md § Multiplicity
     local ccChains = {}
     -- One producer interface, three sources: an on-take fx note, a parked fx cell, or an explicit
-    -- fxRegion; the generator sees none of them. see design/note-macros-v2.md § The anchor generalized
+    -- fxRegion; the generator sees none of them. see docs/generators.md § Hosts and membership
     local function runProducer(producer)
       local startL, endL = producer.window[1], producer.window[2]
       -- host: the untouched membership + windowed channel input streams, built once per chain;
-      -- stream seeds as its copy and folds forward stage by stage. see design/note-macros-v2.md § The fx chain
+      -- stream seeds as its copy and folds forward stage by stage. see docs/generators.md § The chain
       local pas, ccs, ats, pb = channelStreams(chan, startL, endL, pbBase, ccBases)
       local host = { window = { startL, endL }, chan = chan, lane = producer.lane, id = producer.id,
                      notes = producer.notes, pas = pas, ccs = ccs, ats = ats, pb = pb }
@@ -3574,7 +3574,7 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
         if meta then
           local dest = generators.destOf(params)
           -- Ownership is registered below, so an early skip would drop the chain's record; both modes'
-          -- identity is augment-with-no-output. See design/note-macros-v2.md § Per-stage bypass.
+          -- identity is augment-with-no-output. See docs/generators.md § The chain.
           local out  = params.bypass and { notes = {}, delta = {} } or meta.expand(stream, host, params, chanCtx)
           local mode = params.bypass and 'augment' or meta.mode
           if dest == 'note' then
@@ -3688,7 +3688,7 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
     end
 
     -- Region producers: no host note. A discrete-replace kind feeds the realised parked chord
-    -- (parking frees the lanes); else members still sound and feed the live overlap. see design/note-macros-v2.md § Generator output
+    -- (parking frees the lanes); else members still sound and feed the live overlap. see docs/generators.md § Emission is ownership
     for _, region in ipairs(fxRegionsByChan[chan] or {}) do
       local startL, endL = region.startppq, region.endppq
       local members
@@ -3820,7 +3820,7 @@ local function rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxR
 
     local wires = mmBatch()
     -- fx cc events: reconcile the summed/replace seats on the target lane; shape is part of the match --
-    -- it drives REAPER's interpolation. see design/note-macros-v2.md § Continuous cc
+    -- it drives REAPER's interpolation. see docs/generators.md § pb and cc
     reconcileDerived{
       existing = ccExisting[chan], predicted = ccLive, sink = wires,
       key   = function(x) return util.key(x.cc, x.ppq) end,
@@ -4998,7 +4998,7 @@ local function rebuildPipeline(didReload)
   perf.start('samples'); stampSamples(); perf.stop('samples')  -- bearing rule: stamp bare notes from the prevailing PC
 
   -- Park window set: fx-regions plus every on-take or still-producing parked note host, as a degenerate
-  -- region (note-is-a-region); assembled twice -- head set for notes, settled set for cc/pb + fx. see design/note-macros-v2.md § Offline continuous realisation
+  -- region (note-is-a-region); assembled twice -- head set for notes, settled set for cc/pb + fx. see docs/generators.md § Offline continuous realisation
   local function assembleParkWindows(hostWins, parkedNoteSpecs)
     local census = producerCensus(sources.fxRegions, hostWins, parkedNoteSpecs)
     return generators.parkWindows(census), census
