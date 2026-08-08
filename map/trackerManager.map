@@ -229,11 +229,11 @@
       -- Curve value at ppq: held both ways (first value before, last after), shape interp within.
   @fn closeAtWindowEnd(pts, val, sL, eL)  @ 376-381
       -- A producer hands its target back before the window exits: one step point at eL-1, inside the
-      -- half-open span, so no close ever lands on the boundary row. see design/note-macros-v2.md § Route-by-window
+      -- half-open span, so no close ever lands on the boundary row. see docs/generators.md § Route-by-window
   @fn sumStreams(base, macros, span)  @ 383-438
   @fn foldIntoWindow(pts, sL, eL)  @ 442-454
       -- A stage's material stops short of the tick closeAtWindowEnd owns: anything at or past the line
-      -- collapses onto that last tick, so a closing control point survives. see design/note-macros-v2.md § Route-by-window
+      -- collapses onto that last tick, so a closing control point survives. see docs/generators.md § Route-by-window
   @fn rawToCents(raw)  @ 456-458
   -- Continuous curves (fx chain)
   @fn negated(pts)  @ 462-468
@@ -243,16 +243,16 @@
       -- from the governing point so interpolation carries through), authored points strictly within.
   @fn foldWhole(covering, span, base)  @ 493-507
       -- Fold records in storage order (later replace wins, painter fold); all-flat -> empty so stale seats sweep.
-      -- Kept distinct from foldSub: a whole-span replace emits verbatim, no synthetic edge point. see design/note-macros-v2.md § The fx chain
+      -- Kept distinct from foldSub: a whole-span replace emits verbatim, no synthetic edge point. see docs/generators.md § Multiplicity
   @fn chainCuts(covering, span)  @ 511-522
       -- Boundaries within `span` where the covering set changes: span ends plus every record edge strictly
       -- inside. Between consecutive cuts the active set is constant, so foldWhole's fold is exact there.
   @fn foldSub(active, a, b, base, closeHere)  @ 526-545
       -- Fold the active records over one sub-span [a,b) with a constant active set; half-open unless closing.
-      -- A curved replace clipped mid-segment re-interpolates from the slice edge (accepted fidelity loss). see design/note-macros-v2.md § The fx chain
+      -- A curved replace clipped mid-segment re-interpolates from the slice edge (accepted fidelity loss). see docs/generators.md § Multiplicity
   @fn foldChains(recs, span, base)  @ 549-582
       -- Fold parallel chains covering `span` in storage order: whole-span records take the verbatim fast path,
-      -- otherwise sub-split at record edges. Folds over the records' extent; `span` selects the emission. see design/note-macros-v2.md § The fx chain
+      -- otherwise sub-split at record edges. Folds over the records' extent; `span` selects the emission. see docs/generators.md § Multiplicity
   @fn delayToPPQ(delay)  @ 584
   -- Fx expansion helpers
   @fn coverInto(list, spans, admit, emit)  @ 590-606
@@ -260,14 +260,14 @@
       -- see docs/trackerManager.md § Span-covered fx scans
   @fn eachWindowNote(chan, startL, endL, fn)  @ 610-635
       -- Membership is overlap, not storage: one walk feeds generator events + fixed lane occupancy.
-      -- Cover, not scan: see docs/trackerManager.md § Span-covered fx scans; design/note-macros-v2.md § The anchor generalized
+      -- Cover, not scan: see docs/trackerManager.md § Span-covered fx scans; docs/generators.md § Hosts and membership
   @fn membersOf(chan, startL, endL)  @ 636-642
   @fn channelStreams(chan, startL, endL, pbBase, ccBases)  @ 645-667
       -- cc-family streams a generator reads (notes via membersOf); pb/ccs are absolute curves sliced
-      -- from the per-chan bases with entering/closing edges. see design/note-macros-v2.md § The fx chain
+      -- from the per-chan bases with entering/closing edges. see docs/generators.md § Input streams
   @fn allocateRegionLanes(chan, startL, endL, derived, emitted)  @ 670-694
       -- Deterministic allocator: lowest lane free of overlap, authored notes seed occupancy;
-      -- emission order -> deterministic -> G4-stable. see design/note-macros-v2.md § Generator output
+      -- emission order -> deterministic -> G4-stable. see docs/generators.md § Output
   @fn soundingCell(cell)  @ 697-699
       -- A parked cell as a generator stream note: it sounds to its render clip, never to the authored
       -- ceiling on endppq -- the field the view edits. Mirrors membersOf' shape for on-take notes.
@@ -423,7 +423,7 @@
       -- a rect's note lanes come off those notes, not window coverage, which is parked-over not produced-onto. see design/archive/fx-freeze.md § Freeze to group
   @fn buildFxTargets(windows)  @ 1767-1782
       -- The continuous half of the same window set: which pb/cc targets each channel's chains own, and over
-      -- what, raw framed to meet the raw index -- census-sourced, so a kept producer still claims its target. see design/note-macros-v2.md § The chain surface
+      -- what, raw framed to meet the raw index -- census-sourced, so a kept producer still claims its target. see docs/trackerManager.md § Realisation by producer
   @fn buildFxRealisation(census)  @ 1790-1799
   @fn thinSeats(chan, windows)  @ 1803-1831
       -- Subtract the breakpoints a bounded thin can spare, raw frame, before freeze's own flush: this decides
@@ -542,7 +542,7 @@
   @fn computeFxWindows(extraFxChans, parkedNotes)  @ 3331-3404
   @fn rebuildFx(noteExisting, ccExisting, fxWindow, currentWindows, fxRegions)  @ 3408-3841
       -- Fx expansion: fx-carrying notes / fx-regions -> derived notes, CCs; reconcile vs existing,
-      -- note existence ops leave as data on fxOut.noteOps. see design/note-macros-v2.md § Offline continuous realisation
+      -- note existence ops leave as data on fxOut.noteOps. see docs/generators.md § Offline continuous realisation
   -- Rebuild tails
   @fn makeTailRules(ctx)  @ 3851-3908
       -- Unified tail/onset walk + atomic commit: real notes, fixed externals, noteLive

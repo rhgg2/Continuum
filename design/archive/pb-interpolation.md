@@ -3,7 +3,7 @@
 > Plan doc. Fixes a live bug in authored pitch-bend interpolation, and in
 > doing so builds the primitive the macro work needs for continuous-pb
 > replace. Step 1 (here) stands alone — no generators. Step 2 is owned by
-> `design/note-macros-v2.md` § Continuous pb replace and only consumes
+> `design/archive/note-macros-v2.md` § Continuous pb and only consumes
 > what Step 1 lands.
 
 ## The problem
@@ -138,8 +138,8 @@ the carrier is dropped: the curve rides the base lane through these same
 seats, so `centsToRaw(curve(ppq) + detune)` seats the replace stream with no
 add-bank slot. Retired one carrier per replace region and unified pb replace
 with the value-aware-seat model. Landed in `trackerManager`'s `rebuildFx`
-(producer split) + `rebuildPbs` (curve ingest + seats). See `design/note-macros-v2.md`
-§ Continuous pb replace.
+(producer split) + `rebuildPbs` (curve ingest + seats). See
+`design/archive/note-macros-v2.md` § Continuous pb.
 
 ## Files
 

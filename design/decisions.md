@@ -14,7 +14,7 @@ appear in their design docs.
 
 - **2026-08-08** — `docs/` carries the WHY of live code, and a design doc archives as the record of
   what was decided rather than as the reference the code cites. `generators.lua` had no doc at all
-  while forty of its comments reached into `design/note-macros-v2.md` for the operating model, which
+  while forty of its comments reached into `design/archive/note-macros-v2.md` for the operating model, which
   left a shelf-bound doc doing a live doc's job. Rejected: leaving the citations pointed at the
   archive, which the repo already does a hundred times over — tolerable for a settled mechanism,
   wrong for the model a live module is written against.

@@ -127,7 +127,7 @@
   @fn kindOf(evt)  @ 44
   @fn toParkedSpec(evt)  @ 51-58
       -- A parked event edits the fx replace off-take. The stash is logical, and authoring ppq is already
-      -- logical at this layer (cursorppq = row·logPerRow), so it rides. see design/note-macros-v2.md § Parked editing
+      -- logical at this layer (cursorppq = row·logPerRow), so it rides. see docs/trackerView.md § Backings and parked cells
   @fn toParkedUpdate(update)  @ 62
       -- Same view->stash normalisation for an assign update: the time verbs ride an rpb rebase the
       -- logical stash has no use for. Everything else -- ppq/endppq included -- passes through.
@@ -271,7 +271,7 @@
       -- before it (a lane bump) does it slide after the (lane-1)-th overlap; else storage is untouched.
   @fn regionNoteOff(col)  @ 1567-1579
       -- noteOff shortens the region's tail to the cursor row; the onset row is a no-op -- deletion
-      -- belongs to the delete verb, not a duration edit. see design/note-macros-v2.md § The fx chain
+      -- belongs to the delete verb, not a duration edit. see docs/trackerView.md § Addressing a chain
   @fn regionAdjustDuration(col, rowDelta)  @ 1581-1589
   @fn regionAdjustPosition(col, rowDelta)  @ 1592-1600
       -- Shift start and end together (duration fixed); fx regions may overlap, so no onset guard.
@@ -279,7 +279,7 @@
       -- The k-th fx column on the channel (nil past the last lane) -- the adjacent-lane badge column.
   @fn shiftFxLane(col, dir)  @ 1615-1635
       -- Move the cursor's fx region one badge column toward dir, swapping storage precedence with the
-      -- sibling beside it at the cursor row. Nothing overlapping there -> no-op. see design/note-macros-v2.md § The fx chain
+      -- sibling beside it at the cursor row. Nothing overlapping there -> no-op. see docs/generators.md § Multiplicity
   @fn cursorNoteBefore()  @ 1637-1642
   @fn applyNoteOff(col, last, targetppq, undo)  @ 1649-1657
       -- Undo reopens authored intent: the tail was OPEN before any noteOff
@@ -489,7 +489,7 @@
       -- column's built cells stay valid iff these hold. see design/archive/dirty-channels.md § Phase B
   @fn chainStack(stages, headRow, endRow)  @ 3771-3777
       -- The chain's glyphs down a region's rows, keyed by absolute grid row -- badge snaps via
-      -- placeRow, tail startRow stays float. see design/note-macros-v2.md § The chain surface
+      -- placeRow, tail startRow stays float. see docs/trackerView.md § Addressing a chain
 
 # Functions held in tables
   @held plain.add(evt)  @ 66
@@ -683,7 +683,7 @@
       @contract  no host, no chain, or a blank name is a silent no-op; never mints a host  @ 2593
   @api tv:loadFxPatch(uuid, tier, name)  @ 2603-2607
       -- Instantiate the named tier's chain onto the host, replacing whatever it held. The picker row
-      -- names its tier rather than the load resolving one; cm deep-copies on the way out. See design/note-macros-v2.md § The chain surface.
+      -- names its tier rather than the load resolving one; cm deep-copies on the way out. See docs/trackerRender.md § FX chain.
       @contract  unknown host, or a name that tier does not hold, is a silent no-op; never mints a host  @ 2602
   @api tv:deleteFxPatch(tier, name)  @ 2611-2614
       -- Delete the copy the picker row is showing; the same name in the other tier stands.

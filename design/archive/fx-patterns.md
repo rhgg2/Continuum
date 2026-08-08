@@ -3,7 +3,7 @@
 > opened: 2026-07-08 · closed: 2026-07-27 · status: built; P1–P4 landed,
 > Mini undo dropped. What is true now is `docs/patternEditor.md`.
 >
-> Closed design doc. Companion to `design/note-macros-v2.md` (the chain
+> Closed design doc. Companion to `design/archive/note-macros-v2.md` (the chain
 > surface): generator params whose **value is a note pattern or a curve**
 > — an ostinato source, an arbitrary-shape LFO — reusable by copy
 > through a project library, edited in a modal hosting a **second

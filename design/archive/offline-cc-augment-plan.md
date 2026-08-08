@@ -1,7 +1,7 @@
 # Offline continuous realisation — slice 1: cc-augment (impl plan)
 
 > Scratch build-plan, not a design doc. Delete once landed and fold the
-> outcome into `design/note-macros-v2.md` § *Offline continuous realisation*
+> outcome into `design/archive/note-macros-v2.md` § *Offline continuous realisation*
 > and § *Continuous cc*. Written 2026-07-04.
 
 ## Goal

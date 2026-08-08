@@ -5,7 +5,7 @@
 
 # Intent
   Note macros v2: region hosts. The N=0 sine pb seat stream proves the generator-side substrate
-  (ds, 4.6 producer split, reconcile, G4 round-trip). see design/note-macros-v2.md
+  (ds, 4.6 producer split, reconcile, G4 round-trip). see docs/generators.md
 
 # Helpers
   @fn centsToRaw(cents, pbRange)  @ 11-13
@@ -13,7 +13,7 @@
   @fn inLiveRegion(h, chan, ppq)  @ 22-27
       -- A seat is recognized purely by region membership, on pb and cc alike: anything inside a live region's
       -- span, half-open (as production's covered()). The close folds to endppq-1, so the end row is never
-      -- seat territory. see design/note-macros-v2.md § Route-by-window
+      -- seat territory. see docs/generators.md § Route-by-window
   @fn authoredPb(h, chan, ppq)  @ 31-35
       -- An authored pb on the wire: one no live pb window covers (a covered pb is a seat). `val` is raw
       -- (centsToRaw of wire-cents + detune); `cents` the persisted intent. nil while a window parks it off.

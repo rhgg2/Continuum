@@ -3,7 +3,7 @@
 > opened: 2026-07-11 · status: **closed 2026-08-03** — the programme
 > landed in three phases; `plan/archive/fx-freeze.md`
 >
-> Working design doc, split from `design/note-macros-v2.md` § Freeze
+> Working design doc, split from `design/archive/note-macros-v2.md` § Freeze
 > after the 2026-07-11 design round (that section has since been
 > removed there; this doc is the whole record). That section's framing —
 > freeze as the invertibility axis, unfreeze restoring the fx region —

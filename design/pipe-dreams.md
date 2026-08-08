@@ -14,8 +14,9 @@
 
 ## Param modulation — a stage that bends a sibling stage's parameter
 
-> From `design/note-macros-v2.md` § The chain surface. Read § The fx
-> chain first for the stream/stage/dest vocabulary this uses.
+> From `design/archive/note-macros-v2.md` § The chain surface. Read
+> `docs/generators.md` § The chain first for the stream/stage/dest
+> vocabulary this uses.
 
 "Bend the vibrato rate in flight" generalizes `dest` once more:
 `param:<stage>.<field>` — a continuous stage whose output targets a
@@ -84,8 +85,8 @@ threading in the runner, vibrato ported as the proving kind.
 
 ## Scripted kinds — a user-authored kind in a third editor pane
 
-> From `design/note-macros-v2.md` § The chain surface. Read § Generators
-> as config for the ctx discipline this rests on.
+> From `design/archive/note-macros-v2.md` § The chain surface. Read
+> `docs/generators.md` § The ctx discipline for what this rests on.
 
 `generators.kinds` is already the seam. There is one registry entry per
 kind, and nothing downstream asks where an entry came from, so a

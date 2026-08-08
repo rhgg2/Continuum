@@ -12,7 +12,7 @@ host. A **host** is the region or note the chain hangs on, and its **window**
 is the span that chain owns.
 
 The decisions behind all of this, and the readings dismantled on the way,
-are `design/note-macros-v2.md`, which archives when this programme closes.
+are `design/archive/note-macros-v2.md`.
 
 ## Hosts and membership
 

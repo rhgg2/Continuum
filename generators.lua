@@ -1,5 +1,6 @@
 -- Note-macro generators: pure expansions of per-note `fx` intent into derived realisation. They never
 -- touch swing, raw pb or REAPER -- the seam rounds ppq -> raw, cents -> pb. see design/archive/note-macros.md
+-- See docs/generators.md for the model.
 
 -- @noindex
 

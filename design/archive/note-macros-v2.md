@@ -1,9 +1,14 @@
 # note macros v2 — region hosts and the generator spectrum
 
-> opened: 2026-06-26 · status: built out — the programme's plan closed
-> 2026-08-08 as `plan/archive/chain-surface.md`; no live plan
+> opened: 2026-06-26 · status: complete, archived 2026-08-09 — the
+> programme's plan closed 2026-08-08 as `plan/archive/chain-surface.md`
 >
-> Working design doc. Supersedes the forward-looking half of
+> **Historical record of what was decided.** The model as built is
+> `docs/generators.md`, `docs/trackerManager.md`, `docs/trackerView.md`,
+> `docs/trackerRender.md` and `docs/tuning.md`; where this doc and those
+> disagree, those are right.
+>
+> Supersedes the forward-looking half of
 > `design/archive/note-macros.md`, now the **frozen record of v1** — the
 > shipped proving pair (retrig + vibrato), plus slide and trill, the
 > additive-delta mechanism, the carrier / add-bank, and the G1–G5

@@ -1,6 +1,6 @@
 # chain surface — plan
 
-> source: `design/note-macros-v2.md` — synthesis compiled from there;
+> source: `design/archive/note-macros-v2.md` — synthesis compiled from there;
 > don't design here.
 
 ## Phases

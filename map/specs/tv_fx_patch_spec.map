@@ -8,7 +8,7 @@
   chain into the tier it was handed -- verbatim, by copy, and without costing a
   re-derivation; `tv:loadFxPatch` copies a named chain back out onto a host,
   replacing what it held. Both name their tier rather than resolving one, a patch
-  being held by copy. see design/note-macros-v2.md § The chain surface
+  being held by copy. see docs/trackerRender.md § FX chain
 
 # Helpers
   @fn injectRegion(h, fx)  @ 14-17

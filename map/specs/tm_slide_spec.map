@@ -1,11 +1,11 @@
-@spec tm_slide_spec  src=tests/specs/tm_slide_spec.lua  loc=264  cases=12
+@spec tm_slide_spec  src=tests/specs/tm_slide_spec.lua  loc=265  cases=12
 @exercises trackerManager (h.tm), midiManager (h.fm), configManager (h.cm), dataStore (h.ds)
 @surface   tm:addEvent, tm:flush, fm:dump, cm:assign, tm:rebuild, tm:getChannel, ds:assign
 @harness   mk
 
 # Intent
   Slide spec (portamento, continuous pb-augment): the glide-in curve sums onto the authored pb base
-  and seats a markerless pb stream on the base lane. see design/note-macros-v2.md § Continuous pb
+  and seats a markerless pb stream on the base lane. see docs/generators.md § pb and cc
 
 # Helpers
   @fn centsToRaw(cents, pbRange)  @ 9-11
@@ -26,73 +26,73 @@
   @case 'G4: slide pb seat stream is byte-identical across flush -> rebuild -> flush (swing + delay)'  [harness]  @ 126-143
   @case 'slide seats never surface as a visible cc column'  [harness]  @ 149-154
   @case 'sine and slide on one host sum into a single pb seat stream (N-stream overlap)'  [harness]  @ 160-175
-  @case 'a self-parked host still slides: [trill, slide] resolves its successor off-take'  [harness]  @ 181-197
-  @case 'slide aims at a region-parked successor, not the on-take note beyond the region'  [harness]  @ 201-220
-  @case 'a region-hosted slide has no lane to resolve: no delta, no fault'  [harness]  @ 224-239
-  @case 'disjoint sine and slide windows each seat their own pb span'  [harness]  @ 245-261
+  @case 'a self-parked host still slides: [trill, slide] resolves its successor off-take'  [harness]  @ 181-198
+  @case 'slide aims at a region-parked successor, not the on-take note beyond the region'  [harness]  @ 202-221
+  @case 'a region-hosted slide has no lane to resolve: no delta, no fault'  [harness]  @ 225-240
+  @case 'disjoint sine and slide windows each seat their own pb span'  [harness]  @ 246-262
 
 # Uses (outbound edges)
-  @use call tm:addEvent  @ 32,35,79,82,84,115,132,135,163,167,186,190,204,208,211,229,232,248,251,254
-  @use call tm:flush  @ 37,86,118,137,141,169,192,207,210,213,216,231,234,237,256
-  @use call fm:dump  @ 49,68,87,99,104,119,139,142,171,194,218,238,258
+  @use call tm:addEvent  @ 32,35,79,82,84,115,132,135,163,167,187,191,205,209,212,230,233,249,252,255
+  @use call tm:flush  @ 37,86,118,137,141,169,193,208,211,214,217,232,235,238,257
+  @use call fm:dump  @ 49,68,87,99,104,119,139,142,171,195,219,239,259
   @use call cm:assign  @ 102
-  @use call tm:rebuild  @ 103,141,216,237
-  @use call tm:getChannel  @ 153,193,217
-  @use call ds:assign  @ 214,235
+  @use call tm:rebuild  @ 103,141,217,238
+  @use call tm:getChannel  @ 153,194,218
+  @use call ds:assign  @ 215,236
 
 # Fields (r read / w write incl. constructor keys)
   @field w atom  @ 7
   @field r ccs  @ 17,153
   @field r chan  @ 18
-  @field w chan  @ 32,35,79,82,84,115,132,135,163,167,186,190
-  @field w chan  @ 204,208,211,214,229,232,235,248,251,254
+  @field w chan  @ 32,35,79,82,84,115,132,135,163,167,187,191
+  @field w chan  @ 205,209,212,215,230,233,236,249,252,255
   @field r columns  @ 153
   @field w config  @ 129
   @field w data  @ 130
-  @field w delay  @ 33,36,80,83,85,116,133,136,164,168,187,191
-  @field w delay  @ 205,209,212,230,233,249,252,255
-  @field w depth  @ 165,250
-  @field w detune  @ 33,36,80,83,85,116,133,136,164,168,187,191
-  @field w detune  @ 205,209,212,230,233,249,252,255
-  @field w dir  @ 215
-  @field w endppq  @ 32,35,79,82,84,115,132,135,163,167,186,190
-  @field w endppq  @ 204,208,211,214,229,232,235,248,251,254
+  @field w delay  @ 33,36,80,83,85,116,133,136,164,168,188,192
+  @field w delay  @ 206,210,213,231,234,250,253,256
+  @field w depth  @ 165,251
+  @field w detune  @ 33,36,80,83,85,116,133,136,164,168,188,192
+  @field w detune  @ 206,210,213,231,234,250,253,256
+  @field w dir  @ 216
+  @field w endppq  @ 32,35,79,82,84,115,132,135,163,167,187,191
+  @field w endppq  @ 205,209,212,215,230,233,236,249,252,255
   @field r evType  @ 18
-  @field w evType  @ 32,35,79,82,84,115,132,135,163,167,186,190
-  @field w evType  @ 204,208,211,229,232,248,251,254
+  @field w evType  @ 32,35,79,82,84,115,132,135,163,167,187,191
+  @field w evType  @ 205,209,212,230,233,249,252,255
   @field w factors  @ 7
-  @field w fx  @ 34,81,117,134,165,188,206,215,236,250,253
+  @field w fx  @ 34,81,117,134,165,189,207,216,237,251,254
   @field w global  @ 130
-  @field w kind  @ 34,81,117,134,165,166,188,189,206,215,236,250
-  @field w kind  @ 253
-  @field w lane  @ 33,36,80,83,85,116,133,136,164,168,187,191
-  @field w lane  @ 205,209,212,230,233,249,252,255
-  @field w name  @ 45,64,75,95,112,126,149,160,181,201,224,245
-  @field w onset  @ 165,250
-  @field w over  @ 34,81,117,134,166,189,206,236,253
-  @field r parked  @ 193,217
+  @field w kind  @ 34,81,117,134,165,166,189,190,207,216,237,251
+  @field w kind  @ 254
+  @field w lane  @ 33,36,80,83,85,116,133,136,164,168,188,192
+  @field w lane  @ 206,210,213,231,234,250,253,256
+  @field w name  @ 45,64,75,95,112,126,149,160,181,202,225,246
+  @field w onset  @ 165,251
+  @field w over  @ 34,81,117,134,166,190,207,237,254
+  @field r parked  @ 194,218
   @field w pbRange  @ 102
-  @field w period  @ 7,165,188,215,250
-  @field w pitch  @ 32,35,79,82,84,115,132,135,163,167,186,190
-  @field w pitch  @ 204,208,211,229,232,248,251,254
+  @field w period  @ 7,165,189,216,251
+  @field w pitch  @ 32,35,79,82,84,115,132,135,163,167,187,191
+  @field w pitch  @ 205,209,212,230,233,249,252,255
   @field r plain  @ 19,52
   @field w plain  @ 19
   @field r ppq  @ 19,22,26,56
-  @field w ppq  @ 19,32,35,79,82,84,115,132,135,163,167,186
-  @field w ppq  @ 190,204,208,211,229,232,248,251,254
+  @field w ppq  @ 19,32,35,79,82,84,115,132,135,163,167,187
+  @field w ppq  @ 191,205,209,212,230,233,249,252,255
   @field w project  @ 129
-  @field w run  @ 46,65,76,96,113,127,150,161,182,202,225,246
+  @field w run  @ 46,65,76,96,113,127,150,161,182,203,226,247
   @field r shape  @ 19
   @field w shape  @ 19
   @field w shift  @ 7
-  @field w startppq  @ 214,235
-  @field w step  @ 188
+  @field w startppq  @ 215,236
+  @field w step  @ 189
   @field w swing  @ 130
   @field w swings  @ 129
-  @field w target  @ 34,81,117,134,166,189,206,236,253
-  @field w uuid  @ 214,235
-  @field r val  @ 19,53,54,57,68,87,99,104,173,174,196,218
-  @field r val  @ 259
+  @field w target  @ 34,81,117,134,166,190,207,237,254
+  @field w uuid  @ 215,236
+  @field r val  @ 19,53,54,57,68,87,99,104,173,174,197,219
+  @field r val  @ 260
   @field w val  @ 19
-  @field w vel  @ 32,35,79,82,84,115,132,135,163,167,186,190
-  @field w vel  @ 204,208,211,229,232,248,251,254
+  @field w vel  @ 32,35,79,82,84,115,132,135,163,167,187,191
+  @field w vel  @ 205,209,212,230,233,249,252,255
