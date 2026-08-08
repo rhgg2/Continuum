@@ -2597,6 +2597,15 @@ function tv:saveFxPatch(uuid, name)
   lib.save('fxPatches', name, fx)
 end
 
+-- Instantiate a named chain onto the host, replacing whatever it held (see design/note-macros-v2.md
+-- § The chain surface). cm deep-copies on the way out, so the loaded list aliases nothing.
+--contract: unknown host or unresolvable name is a silent no-op; never mints a host
+function tv:loadFxPatch(uuid, name)
+  local patch = name and lib.get('fxPatches', name)
+  if not (uuid and patch) then return end
+  self:setNoteFx(uuid, patch)
+end
+
 --contract: a region or fx-carrying note host; any other uuid is a silent no-op
 function tv:freezeRegion(uuid) return tm:freezeRegion(uuid) end
 
@@ -2638,6 +2647,7 @@ tv.freezeRegion     = util.atomic('Freeze FX region', tv.freezeRegion)
 tv.freezeToGroup    = util.atomic('Freeze FX to group', tv.freezeToGroup)
 -- A project-tier cm write is undoable but mints no point either, so the catalogue verb wraps alike.
 tv.saveFxPatch      = util.atomic('Save FX patch',     tv.saveFxPatch)
+tv.loadFxPatch      = util.atomic('Load FX patch',     tv.loadFxPatch)
 
 ----- Deletion
 

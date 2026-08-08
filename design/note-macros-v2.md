@@ -1262,6 +1262,18 @@ appending is what the add row is for. And `bypass` rides the stored entry
 verbatim: it is a field like any other, and a stage saved inert returns
 inert.
 
+*Decision taken — a lost kind has to survive the palette, not just the grid
+(2026-08-08).* `glyphOf` already answers `?` for a kind the registry has lost, but
+the fx tab indexes the registry bare for a stage's label and its field list, so
+loading such a patch would fault the tab's draw rather than draw anything — the
+row that says the patch loaded with the rest. So the strip resolves a kind through
+one accessor of its own, `labelOf`, standing to the heading as `glyphOf` does to
+the badge, and a lost kind's heading reads `? <kind>`: the name the patch called
+for stays legible, where a bare `?` would take it away. Its fields go with the
+registry entry that declared them, so the stage draws as a heading alone. It stays
+addressable, and that heading is the swap picker — pointing it at a live kind is
+the repair.
+
 **Scripted kinds — an editor-page pane.** `generators.kinds` is already
 the seam: one registry entry per kind, user-extensible by construction. A
 scripted kind is a user Lua chunk evaluating to that entry-shape, edited
@@ -1297,6 +1309,15 @@ rebuild fault.
   it, visible and editable throughout. The rule reads the same in the
   other direction: a note whose onset precedes the window is not a
   member, and sustains through it.
+- **A host minted by the mouse draws nowhere until the caret reaches it.**
+  `stripPlan` resolves its host as the pinned session's or `tv:fxHostAtCursor()`,
+  and a region minted from a selection sits in an fx column the caret is not in,
+  so a chain added or loaded that way is invisible until the caret moves onto the
+  region. The keyboard door pins the host it mints (`editFx`) and shows it at
+  once; only the mouse path is affected, and nothing is lost — the chain is
+  written, and one caret move shows it. Closing it means either pinning on a
+  mouse mint, which changes what Esc reverts, or moving the caret as a side
+  effect of a picker pick; both are wider than the gesture that exposed it.
 - **A region-parked note's own fx stays suppressed** while the region
   covers it. It survives in the spec and returns when the region moves
   off, so this is a quirk rather than data loss.

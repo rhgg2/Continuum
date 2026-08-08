@@ -419,6 +419,13 @@ function generators.glyphOf(kind)
   return meta and meta.glyph or '?'
 end
 
+-- One label per kind, and the one place a kind resolves to a name. A lost kind keeps its own
+-- name in the mark: `? arp` says which stage went missing where a bare `?` would not.
+function generators.labelOf(kind)
+  local meta = generators.kinds[kind]
+  return meta and meta.label or ('? ' .. tostring(kind))
+end
+
 ----- Dest: a per-entry target, and what each target's numbers mean
 
 --contract: dest is a per-entry param; registry dest is only its seed + note-vs-continuous marker
@@ -475,7 +482,11 @@ local DEST_FIELD = { field = 'dest', label = 'Dest', widget = 'dest' }
 -- The rows a stage shows: a synthesised Dest row where the kind can serve more than one target,
 -- then the kind's own fields. Synthesised once here rather than repeated per registry entry.
 function generators.fieldsFor(entry)
-  local fields = generators.kinds[entry.kind].fields
+  -- The fields are declared on the registry entry, so a kind the registry has lost has no rows --
+  -- the heading alone, which labelOf still names.
+  local meta = generators.kinds[entry.kind]
+  if not meta then return {} end
+  local fields = meta.fields
   if #generators.destsFor(entry.kind) < 2 then return fields end
   local rows = { DEST_FIELD }
   for _, fd in ipairs(fields) do util.add(rows, fd) end

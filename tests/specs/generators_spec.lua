@@ -64,6 +64,23 @@ return {
     end,
   },
 
+  {
+    name = 'labelOf resolves off the registry, and keeps a lost kind\'s name in the mark',
+    run = function()
+      t.eq(generators.labelOf('sine'), generators.kinds.sine.label, 'a registered kind reads its own label')
+      t.eq(generators.labelOf('nosuchkind'), '? nosuchkind',
+           'a lost kind says which stage went missing, where a bare ? would not')
+    end,
+  },
+
+  {
+    name = 'fieldsFor gives a lost kind no rows',
+    run = function()
+      t.eq(#generators.fieldsFor{ kind = 'nosuchkind' }, 0,
+           'the fields were declared on the registry entry, so a kind without one has none')
+    end,
+  },
+
   ----- slide: glide-in envelope
 
   {

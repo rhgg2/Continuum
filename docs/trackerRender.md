@@ -111,14 +111,22 @@ See design/note-macros-v2.md § The chain surface for the model. The chain draws
 *inside* the palette child (`drawFxChainBody`; the tab header and chrome styles
 are already pushed) as tree rows echoing the parameters tab: two action rows
 (`clear` / `freeze` / `to group` / `commit` / `cancel`, then the catalogue's
-`save`), then each stage top-to-bottom — a heading (the
+`save` / `load`), then each stage top-to-bottom — a heading (the
 swap picker, current kind flagged) with `↑`/`↓` reorder, `byp` and `del` aligned to
 the value column's left edge, then one row per field: label left, `fxFieldWidget` in
 a fixed column flush to the right margin — with a `↓` flow marker (a crisp rule split
 around the arrow) between stages and a terminal **add** row. `save`
 (`tv:saveFxPatch`) names the host's chain into the project tier of `fxPatches`; it
 is disabled where the tab stands hostless or the chain is empty, and mints no host
-of its own — that is `add`'s job.
+of its own — that is `add`'s job. `load` (`tv:loadFxPatch`) is the read half: it
+copies a named chain out of the catalogue onto the host, replacing whatever chain
+it held, and parks the strip cursor on stage 1. It is disabled only on an empty
+catalogue — where `save` refuses to mint, `load` mints through `tv:fxHostForEdit`
+just as `add` does, so a bare selection with the fx tab chosen loads onto a fresh
+region.
+Nothing filters the offered list: no kind declares a host it requires, so every
+patch offers onto every host — including one naming a kind the registry has lost,
+which draws a `? kind` heading with no field rows rather than faulting.
 `stripFocus` gates `handleFxChainKeys` and highlights the cursor's row up to the
 value column (the tree's selection fill, replacing the old ▸ marker).
 

@@ -1,44 +1,62 @@
-@spec tv_fx_patch_spec  src=tests/specs/tv_fx_patch_spec.lua  loc=62  cases=4
+@spec tv_fx_patch_spec  src=tests/specs/tv_fx_patch_spec.lua  loc=138  cases=10
 @exercises dataStore (h.ds), trackerManager (h.tm), configManager (h.cm), trackerView (h.vm)
-@surface   ds:assign, tm:rebuild, cm:getAt, vm:saveFxPatch, vm:setFxField, tm:subscribe
+@surface   ds:assign, tm:rebuild, cm:getAt, vm:saveFxPatch, vm:setFxField, tm:subscribe, vm:loadFxPatch, vm:noteFx
 @harness   mk
 
 # Intent
   Pin-tests for the fx patch catalogue: `tv:saveFxPatch` stamps the caret host's
   chain into the project tier of `fxPatches` -- verbatim, by copy, and without
-  costing a re-derivation. see design/note-macros-v2.md § The chain surface
+  costing a re-derivation; `tv:loadFxPatch` copies a named chain back out onto a
+  host, replacing what it held. see design/note-macros-v2.md § The chain surface
 
 # Helpers
-  @fn injectRegion(h, fx)  @ 12-15
-  @fn projectPatches(h)  @ 17
+  @fn injectRegion(h, fx)  @ 13-16
+  @fn projectPatches(h)  @ 18
+  @fn withCatalogue(harness, project, library)  @ 25-30
+      -- A region carrying `chain`, with the catalogue's two tiers seeded around it.
 
 # Cases
-  @case 'save stamps the host chain into the project tier, verbatim'  [harness]  @ 21-27
-  @case 'the catalogue holds a copy, not a live handle on the chain'  [harness]  @ 31-38
-  @case 'saving re-realises nothing'  [harness]  @ 42-50
-  @case 'a host with no chain saves nothing'  [harness]  @ 54-60
+  @case 'save stamps the host chain into the project tier, verbatim'  [harness]  @ 34-40
+  @case 'the catalogue holds a copy, not a live handle on the chain'  [harness]  @ 44-51
+  @case 'saving re-realises nothing'  [harness]  @ 55-63
+  @case 'a host with no chain saves nothing'  [harness]  @ 67-73
+  @case 'the load replaces the host chain rather than appending to it'  [harness]  @ 79-84
+  @case 'the host holds a copy, not a live handle on the catalogue'  [harness]  @ 88-94
+  @case 'bypass rides the patch onto the host'  [harness]  @ 98-104
+  @case 'project resolves over library, and a library-only name still loads'  [harness]  @ 108-115
+  @case 'a name in neither tier loads nothing'  [harness]  @ 119-124
+  @case 'the whole list lands in one write'  [harness]  @ 128-136
 
 # Uses (outbound edges)
-  @use call ds:assign  @ 13
-  @use call tm:rebuild  @ 14
-  @use call cm:getAt  @ 17
-  @use call vm:saveFxPatch  @ 25,35,48,58
-  @use call vm:setFxField  @ 36
-  @use call tm:subscribe  @ 47
+  @use call ds:assign  @ 14
+  @use call tm:rebuild  @ 15
+  @use call cm:getAt  @ 18
+  @use call vm:saveFxPatch  @ 38,48,61,71
+  @use call vm:setFxField  @ 49,92
+  @use call tm:subscribe  @ 60,133
+  @use call vm:loadFxPatch  @ 82,91,102,111,113,122,134
+  @use call vm:noteFx  @ 83,103,112,114,123
 
 # Fields (r read / w write incl. constructor keys)
-  @field w bypass  @ 10
-  @field w chan  @ 13
-  @field w depth  @ 10
-  @field r dir  @ 37
-  @field w dir  @ 9
-  @field w endppq  @ 13
-  @field w fx  @ 13
-  @field w kind  @ 9,10
-  @field w name  @ 21,31,42,54
-  @field w onset  @ 10
-  @field w period  @ 9,10
-  @field w run  @ 22,32,43,55
-  @field w startppq  @ 13
-  @field w uuid  @ 13
-  @field r wobble  @ 26,37
+  @field r bypass  @ 103
+  @field w bypass  @ 11
+  @field w chan  @ 14
+  @field w config  @ 26
+  @field w depth  @ 11
+  @field r dir  @ 50,93
+  @field w dir  @ 10,22
+  @field w endppq  @ 14
+  @field w fx  @ 14
+  @field w fxPatches  @ 26,27
+  @field w global  @ 27
+  @field w kind  @ 10,11,22
+  @field w name  @ 34,44,55,67,79,88,98,108,119,128
+  @field w onset  @ 11
+  @field w period  @ 10,11,22
+  @field w project  @ 26
+  @field w run  @ 35,45,56,68,80,89,99,109,120,129
+  @field w shelved  @ 110
+  @field w startppq  @ 14
+  @field w uuid  @ 14
+  @field r wobble  @ 39,50,93
+  @field w wobble  @ 81,90,100,110,121,130

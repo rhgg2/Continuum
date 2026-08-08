@@ -14,29 +14,16 @@
 
 ## Landed  (newest first; prune below ~4)
 
+- 2026-08-08 tv: load a patch from the fxPatches catalogue onto a host (§ The chain surface)
 - 2026-08-07 tv: save a host's chain into the fxPatches catalogue (§ The chain surface)
 - 2026-08-07 tv: withdraw the provisional columns (§ The chain surface)
 - 2026-08-06 tv: scope the ghost overlay to the chain the caret addresses (§ The chain surface)
-- 2026-08-06 tv: ghost a chain's realised curve into the column it claimed (§ The chain surface)
 
 ## Now
 
 (empty — run /plan-next to compile the next brief.)
 
 ## Queued (current phase; one-liners)
-
-- **Load.** A second button on that row, its picker grouped project
-  over library as `chrome.libPicker` already draws it, less the `Off`
-  row a catalogue you read *from* has no use for. A pick copies the
-  named chain onto the host and replaces whatever it held, through one
-  `util.atomic('Load FX patch', ...)` over a whole-list
-  `tv:setNoteFx`. Where the tab stands hostless the load mints the
-  host through `tv:fxHostForEdit()`, as the first `add` does, and the
-  strip cursor returns to the first stage. Nothing filters the list: a
-  patch naming a kind the registry has lost loads with the rest, its
-  stage drawing `?`. The spec pins that the load is a copy — editing
-  the host afterwards leaves the catalogue untouched — and that it
-  replaces rather than appends.
 
 - **Publish and delete on the load picker's rows.** `chrome.drawPicker`
   gains an `onPublish` hook beside `onDelete`, drawn as a `↑` on the

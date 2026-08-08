@@ -1021,7 +1021,7 @@ local stripPlan do
         end
       end
       util.add(cols, { index = i, kind = entry.kind, bypass = entry.bypass,
-                          label = generators.kinds[entry.kind].label, fields = fields })
+                          label = generators.labelOf(entry.kind), fields = fields })
     end
     return cols
   end
@@ -1144,8 +1144,8 @@ local stripPlan do
     end)
   end
 
-  -- The catalogue's own row under the action row: name the host's chain and it lands in the project
-  -- tier. Picking an existing row overwrites it; a `+ library` row writes a project copy shadowing it.
+  -- The catalogue's own row under the action row, both directions: `save` into the project tier,
+  -- `load` back onto the host, minting one where `save` refuses to. See docs/trackerRender.md § FX chain.
   local function catalogueRow(plan)
     local fx = plan.host and tv:noteFx(plan.host)
     -- Hostless, or a host standing empty: there is no chain to name. `add` is what mints one.
@@ -1155,6 +1155,21 @@ local stripPlan do
         items    = chrome.libPicker{ key = 'fxPatches', off = false },
         onPick   = function(name) tv:saveFxPatch(plan.host, name) end,
         onCreate = function(name) tv:saveFxPatch(plan.host, name) end,
+      }
+    end)
+    ImGui.SameLine(ctx, 0, 4)
+    local patches = chrome.libPicker{ key = 'fxPatches', off = false }
+    -- An empty catalogue offers nothing to load. No onCreate: you cannot create by loading; and no
+    -- current: nothing names a patch once it has landed, so no row is the current one.
+    chrome.disabledIf(#patches == 0, function()
+      chrome.drawPicker{
+        kind = 'fxPatchLoad', buttonLabel = 'load', items = patches,
+        -- Lazy mint, as the add row's own pick does: no host under the caret, materialise the
+        -- selection's region now. The cursor then lands on the loaded chain's first stage.
+        onPick = function(name)
+          local h = plan.host or tv:fxHostForEdit()
+          if h then tv:loadFxPatch(h, name); tv:setStripCursor{ stage = 1, param = 0 } end
+        end,
       }
     end)
   end
@@ -1174,7 +1189,7 @@ local stripPlan do
   local function kindItems(currentKind)
     local items = {}
     for _, kind in ipairs(FX_KINDS) do
-      util.add(items, { label = generators.kinds[kind].label, key = kind, current = kind == currentKind })
+      util.add(items, { label = generators.labelOf(kind), key = kind, current = kind == currentKind })
     end
     return items
   end
